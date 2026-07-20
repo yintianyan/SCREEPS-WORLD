@@ -1,5 +1,5 @@
 import type { CreepRole, Priority, TickContext } from "../kernel/contracts";
-import { ensureHome, flee, findEmptiestContainer, getFillTarget, getSource, moveToTarget, shouldFlee, updateMode } from "./helpers";
+import { ensureHome, flee, findEmptiestContainer, getAssignment, getFillTarget, getSource, moveToTarget, shouldFlee, updateMode } from "./helpers";
 
 /**
  * Harvester — P1 角色，固定 source 分配。
@@ -32,10 +32,17 @@ export const harvesterRole: CreepRole = {
     }
 
     updateMode(creep);
+    const assignment = getAssignment(creep, ctx);
 
     if (creep.memory.mode === "work") {
       // 运送能量。
-      const target = getFillTarget(creep, snapshot);
+      let target: AnyOwnedStructure | undefined;
+      if (assignment?.targetId) {
+        target = Game.getObjectById(assignment.targetId as Id<AnyOwnedStructure>) ?? undefined;
+      }
+      if (!target) {
+        target = getFillTarget(creep, snapshot);
+      }
       if (target) {
         const result = creep.transfer(target, RESOURCE_ENERGY);
         if (result === ERR_NOT_IN_RANGE) {
@@ -73,7 +80,14 @@ export const harvesterRole: CreepRole = {
     }
 
     // acquire 模式：从固定 source 采集。
-    const source = getSource(creep, snapshot);
+    let source: Source | undefined;
+    if (assignment?.sourceId) {
+      source = Game.getObjectById(assignment.sourceId) ?? undefined;
+      if (source) creep.memory.sourceId = assignment.sourceId as Id<Source>;
+    }
+    if (!source) {
+      source = getSource(creep, snapshot);
+    }
     if (source) {
       const result = creep.harvest(source);
       if (result === ERR_NOT_IN_RANGE) {

@@ -33,6 +33,7 @@ Object.assign(globalThis as Record<string, unknown>, {
   FIND_MY_CONSTRUCTION_SITES: 11,
   FIND_HOSTILE_CREEPS: 4,
   FIND_MY_CREEPS: 3,
+  FIND_MINERALS: 116,
 
   // 返回码
   OK: 0,

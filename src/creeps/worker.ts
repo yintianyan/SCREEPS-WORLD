@@ -1,5 +1,5 @@
 import type { CreepRole, Priority, TickContext } from "../kernel/contracts";
-import { ensureHome, flee, getFillTarget, getSource, moveToTarget, shouldFlee, updateMode } from "./helpers";
+import { ensureHome, flee, getAssignment, getFillTarget, getSource, moveToTarget, shouldFlee, updateMode } from "./helpers";
 
 /**
  * 恢复 Worker — P0 混合角色，用于启动期和灾后恢复。
@@ -30,10 +30,17 @@ export const workerRole: CreepRole = {
     }
 
     updateMode(creep);
+    const assignment = getAssignment(creep, ctx);
 
     if (creep.memory.mode === "work") {
       // 向 spawn/extension 运送能量。
-      const target = getFillTarget(creep, snapshot);
+      let target: AnyOwnedStructure | undefined;
+      if (assignment?.targetId) {
+        target = Game.getObjectById(assignment.targetId as Id<AnyOwnedStructure>) ?? undefined;
+      }
+      if (!target) {
+        target = getFillTarget(creep, snapshot);
+      }
       if (target) {
         const result = creep.transfer(target, RESOURCE_ENERGY);
         if (result === ERR_NOT_IN_RANGE) {
@@ -60,7 +67,14 @@ export const workerRole: CreepRole = {
     }
 
     // acquire 模式：从 source 采集。
-    const source = getSource(creep, snapshot);
+    let source: Source | undefined;
+    if (assignment?.sourceId) {
+      source = Game.getObjectById(assignment.sourceId) ?? undefined;
+      if (source) creep.memory.sourceId = assignment.sourceId as Id<Source>;
+    }
+    if (!source) {
+      source = getSource(creep, snapshot);
+    }
     if (source) {
       const result = creep.harvest(source);
       if (result === ERR_NOT_IN_RANGE) {

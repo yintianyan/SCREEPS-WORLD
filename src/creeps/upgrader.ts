@@ -1,6 +1,6 @@
 import { CONFIG } from "../config";
 import type { CreepRole, Priority, TickContext } from "../kernel/contracts";
-import { ensureHome, flee, findRichestContainer, getSource, moveToTarget, shouldFlee, updateMode } from "./helpers";
+import { ensureHome, flee, findRichestContainer, getAssignment, getSource, moveToTarget, shouldFlee, updateMode } from "./helpers";
 
 /**
  * Upgrader — P2 角色，用于控制器升级。
@@ -43,6 +43,7 @@ export const upgraderRole: CreepRole = {
     }
 
     updateMode(creep);
+    const assignment = getAssignment(creep, ctx);
 
     if (creep.memory.mode === "work") {
       if (controller && controller.my) {

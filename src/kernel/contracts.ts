@@ -57,6 +57,7 @@ export interface RoomSnapshot {
   readonly extensions: readonly StructureExtension[];
   readonly towers: readonly StructureTower[];
   readonly containers: readonly StructureContainer[];
+  readonly roads: readonly StructureRoad[];
   readonly storage: StructureStorage | undefined;
   readonly sources: readonly Source[];
   readonly constructionSites: readonly ConstructionSite[];
@@ -70,6 +71,8 @@ export interface RoomSnapshot {
   readonly needsRecovery: boolean;
   /** 每个.source ID 对应的已分配 creep 数量（用于免全局扫描的负载均衡）。 */
   readonly sourceOccupancy: ReadonlyMap<string, number>;
+  /** 房间内的 mineral（供布局验证使用）。 */
+  readonly minerals: readonly Mineral[];
 }
 
 /** 传递给每个系统和角色的不可变单 tick 上下文。 */

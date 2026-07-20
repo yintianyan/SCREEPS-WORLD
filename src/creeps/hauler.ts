@@ -1,5 +1,5 @@
 import type { CreepRole, Priority, TickContext } from "../kernel/contracts";
-import { ensureHome, flee, findRichestContainer, getFillTarget, moveToTarget, shouldFlee, updateMode } from "./helpers";
+import { ensureHome, flee, findRichestContainer, getAssignment, getFillTarget, moveToTarget, shouldFlee, updateMode } from "./helpers";
 
 /**
  * Hauler — P1 物流角色。
@@ -29,10 +29,17 @@ export const haulerRole: CreepRole = {
     }
 
     updateMode(creep);
+    const assignment = getAssignment(creep, ctx);
 
     if (creep.memory.mode === "work") {
       // 向填充目标运送能量。
-      const target = getFillTarget(creep, snapshot);
+      let target: AnyOwnedStructure | undefined;
+      if (assignment?.targetId) {
+        target = Game.getObjectById(assignment.targetId as Id<AnyOwnedStructure>) ?? undefined;
+      }
+      if (!target) {
+        target = getFillTarget(creep, snapshot);
+      }
       if (target) {
         const result = creep.transfer(target, RESOURCE_ENERGY);
         if (result === ERR_NOT_IN_RANGE) {
@@ -66,8 +73,14 @@ export const haulerRole: CreepRole = {
     }
 
     // acquire 模式：从 container 取出。
-    // 优先选择能量最多的 container。
-    const best = findRichestContainer(snapshot.containers);
+    // 优先使用 assignment 指定的 container。
+    let best: StructureContainer | undefined;
+    if (assignment?.sourceId) {
+      best = Game.getObjectById(assignment.sourceId as unknown as Id<StructureContainer>) ?? undefined;
+    }
+    if (!best) {
+      best = findRichestContainer(snapshot.containers);
+    }
 
     if (best) {
       const result = creep.withdraw(best, RESOURCE_ENERGY);

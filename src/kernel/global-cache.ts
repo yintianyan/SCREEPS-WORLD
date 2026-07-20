@@ -1,5 +1,23 @@
 import type { RoomSnapshot } from "./contracts";
 
+/** assignment-service 生成的任务条目。 */
+export interface AssignmentTaskEntry {
+  id: string;
+  kind: string;
+  targetId?: string;
+  sourceId?: string;
+  priority: number;
+  maxWorkers: number;
+  assignedCreeps: string[];
+}
+
+/** assignment-service 的单 tick 缓存。 */
+export interface AssignmentCache {
+  tick: number;
+  /** roomName -> 可用任务列表。 */
+  roomTasks: Map<string, AssignmentTaskEntry[]>;
+}
+
 /** Screeps 沙箱 `global` 对象的形态 — 所有字段可选且可重建。 */
 export interface GlobalCache {
   errorLog?: Map<string, number>;
@@ -16,8 +34,12 @@ export interface GlobalCache {
   };
   snapshots?: Map<string, RoomSnapshot>;
   roomTraffic?: Record<string, Record<string, number>>;
+  /** 上一个采样窗口的交通数据（用于道路策略的双窗口检查）。 */
+  prevRoomTraffic?: Record<string, Record<string, number>>;
   /** 单 tick 内累加的跳过原因计数，tick 末尾低频刷入 Memory。 */
   skipBuffer?: Record<string, number>;
+  /** assignment-service 的单 tick 任务缓存。 */
+  assignment?: AssignmentCache;
 }
 
 /**

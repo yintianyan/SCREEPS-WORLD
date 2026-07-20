@@ -1,7 +1,7 @@
 import type { CpuTier, Priority } from "../kernel/contracts";
 
 export const CONFIG = {
-  memory: { schemaVersion: 2 },
+  memory: { schemaVersion: 3 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -55,6 +55,28 @@ export const CONFIG = {
     maxCriticalSitesPerRoom: 1,
     /** 全局活跃 site 上限。 */
     maxGlobalSites: 5,
+  },
+
+  layout: {
+    /** 布局规划器的运行间隔（tick）。 */
+    planInterval: 50,
+    road: {
+      /** 采样窗口内位置被判定为高频的最小通行次数。 */
+      minTraffic: 10,
+      /** 每房最多返回的道路候选数。 */
+      maxCandidates: 5,
+      /** 道路采样窗口间隔。 */
+      sampleInterval: 50,
+    },
+  },
+
+  assignment: {
+    /** 本地任务租约时长（tick）。 */
+    leaseDuration: 20,
+    /** 每个 source 的目标 work parts 总数。 */
+    sourceTargetWorkParts: 5,
+    /** 能量低于此阈值时触发紧急抢占 — 释放普通任务转为 fill。 */
+    emergencyFillThreshold: 300,
   },
 
   economy: {

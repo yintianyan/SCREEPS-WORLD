@@ -39,6 +39,21 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
       }
     },
   },
+  {
+    from: 2,
+    to: 3,
+    run: () => {
+      // v3：扩展 LayoutMemory 添加 overrides 和 blocked 字段。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName];
+        if (!room) continue;
+        if (room.layout) {
+          room.layout.overrides ??= {};
+          room.layout.blocked ??= {};
+        }
+      }
+    },
+  },
 ];
 
 /**

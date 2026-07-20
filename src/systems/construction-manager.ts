@@ -1,6 +1,7 @@
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
-import { generateBuildTasks } from "../domain/construction/queue";
+// 任务生成已移至 layout-planner 系统（P3 低频）。
+// construction-manager 只消费 BuildQueue，不生成任务。
 
 /**
  * 建造管理器 — 唯一创建建造 site 的模块。
@@ -29,23 +30,13 @@ export const constructionManagerSystem: System = {
       // 1. 同步任务状态与实际 site。
       syncTaskStates(queue, snapshot);
 
-      // 2. 队列快空时生成新任务（低频）。
-      if (shouldGenerateTasks(snapshot, ctx.tick)) {
-        const newTasks = generateBuildTasks(snapshot);
-        for (const task of newTasks) {
-          if (!queue.some(t => t.key === task.key)) {
-            queue.push(task);
-          }
-        }
-      }
-
-      // 3. 清理完成 / 阻塞的任务。
+      // 2. 清理完成 / 阻塞的任务。
       cleanTasks(queue, ctx.tick);
 
-      // 4. 检查开发门禁。
+      // 3. 检查开发门禁。
       if (!developmentGate(snapshot, ctx)) continue;
 
-      // 5. 尝试从队列创建一个 site。
+      // 4. 尝试从队列创建一个 site。
       if (!createdThisTick) {
         const created = tryCreateSite(queue, snapshot);
         if (created) createdThisTick = true;
@@ -88,20 +79,6 @@ function syncTaskStates(queue: BuildTask[], snapshot: import("../kernel/contract
       }
     }
   }
-}
-
-/** 判断本 tick 是否应生成新建造任务（低频 + RCL 变化触发）。 */
-function shouldGenerateTasks(snapshot: import("../kernel/contracts").RoomSnapshot, tick: number): boolean {
-  // 每 25 tick 或 RCL 变化时生成。
-  if (tick % 25 === 0) return true;
-  const roomMem = Memory.rooms[snapshot.roomName];
-  if (!roomMem) return false;
-  if (roomMem.lastRcl !== undefined && roomMem.lastRcl !== snapshot.rcl) {
-    roomMem.lastRcl = snapshot.rcl;
-    return true;
-  }
-  roomMem.lastRcl = snapshot.rcl;
-  return false;
 }
 
 /** 移除已完成任务和过期阻塞任务。 */

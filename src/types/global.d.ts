@@ -60,6 +60,8 @@ declare global {
     retryAt: number;
     assignedTo?: string;
     leaseUntil?: number;
+    /** 此任务允许的最大同时工作 creep 数。 */
+    maxWorkers?: number;
   }
 
   interface RoomMemory {
@@ -72,9 +74,14 @@ declare global {
       version: number;
       templateId: string;
       state: "proposed" | "accepted" | "building" | "blocked" | "manual";
+      /** 锚点的 packed 位置（x * 50 + y）。 */
       anchor?: number;
       revision: number;
       nextPlanTick: number;
+      /** 仅保存偏移/替代位置（blueprint key -> packed pos）。 */
+      overrides?: Record<string, number>;
+      /** 永久冲突的 cell（blueprint key -> 失败信息）。 */
+      blocked?: Record<string, { code: number; retryAt: number }>;
     };
   }
 

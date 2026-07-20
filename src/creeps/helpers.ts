@@ -1,9 +1,24 @@
 import { CONFIG } from "../config";
-import type { RoomSnapshot } from "../kernel/contracts";
+import type { RoomSnapshot, TickContext } from "../kernel/contracts";
+import { requestAssignment, releaseFromTask } from "../domain/assignment/service";
+import { globalCache } from "../kernel/global-cache";
 
 /** 将 RoomPosition 压缩为单个数字：x * 50 + y。 */
 export function packPos(pos: RoomPosition): number {
   return pos.x * 50 + pos.y;
+}
+
+/**
+ * 记录 creep 当前位置的交通热度，供道路规划器使用。
+ * 在 creep 移动时调用，累加到 global.roomTraffic 缓存。
+ */
+function recordTraffic(creep: Creep): void {
+  const g = globalCache();
+  if (!g.roomTraffic) g.roomTraffic = {};
+  const roomName = creep.room.name;
+  if (!g.roomTraffic[roomName]) g.roomTraffic[roomName] = {};
+  const key = `${creep.pos.x},${creep.pos.y}`;
+  g.roomTraffic[roomName][key] = (g.roomTraffic[roomName][key] ?? 0) + 1;
 }
 
 /**
@@ -25,6 +40,7 @@ export function ensureHome(creep: Creep): boolean {
 
 /** 向目标房间方向移动（通过最近出口）。 */
 export function moveTowardRoom(creep: Creep, targetRoom: string): void {
+  recordTraffic(creep);
   const exitDir = creep.room.findExitTo(targetRoom) as number;
   if (exitDir < 0) return; // 错误码为负值
   const exit = creep.pos.findClosestByRange(exitDir as ExitConstant);
@@ -158,12 +174,18 @@ export function moveToTarget(
   };
 
   const result = creep.moveTo(pos, options);
+  // 记录交通热度（仅在成功移动或疲劳时记录——静止不记录）。
+  if (result === OK || result === ERR_TIRED) {
+    recordTraffic(creep);
+  }
   // ERR_TIRED 时不重置卡位计数 — 疲劳不应被误判为卡位。
   return result;
 }
 
 /** 清除 creep 的目标和分配，进入安全空闲。 */
 export function clearTarget(creep: Creep): void {
+  // 先从任务列表中移除 creep（releaseFromTask 读取 assignment），再清除 memory。
+  releaseFromTask(creep);
   creep.memory.targetId = undefined;
   creep.memory.assignment = undefined;
   creep.memory.stuckTicks = 0;
@@ -214,6 +236,7 @@ export function flee(creep: Creep, snapshot: RoomSnapshot): void {
     // 只有当 spawn 比敌人更近时才走向 spawn（spawn 在安全侧）。
     if (creepToSpawn < hostileToSpawn) {
       if (creepToSpawn > 3) {
+        recordTraffic(creep);
         creep.moveTo(spawn, { reusePath: 5, ignoreCreeps: false });
       }
       return;
@@ -229,7 +252,23 @@ export function flee(creep: Creep, snapshot: RoomSnapshot): void {
     // 已在 home 但 spawn 不安全 — 至少向 spawn 移动（比站着好）。
     const spawn = snapshot.spawns[0];
     if (spawn && creep.pos.getRangeTo(spawn) > 3) {
+      recordTraffic(creep);
       creep.moveTo(spawn, { reusePath: 5, ignoreCreeps: false });
     }
   }
+}
+
+/**
+ * 获取或续约 creep 的任务分配（plan §5.7.2）。
+ * 如果现有 assignment 有效则续约；否则从可用任务列表分配新的。
+ * 无可用任务时返回 undefined — 角色应进入 idle 或回退行为。
+ */
+export function getAssignment(creep: Creep, ctx: TickContext): CreepAssignment | undefined {
+  return requestAssignment(creep, ctx);
+}
+
+/** 释放 creep 的当前任务分配。 */
+export function releaseAssignment(creep: Creep): void {
+  releaseFromTask(creep);
+  creep.memory.assignment = undefined;
 }

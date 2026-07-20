@@ -1,6 +1,6 @@
 import { CONFIG } from "../config";
 import type { CreepRole, Priority, RoomSnapshot, TickContext } from "../kernel/contracts";
-import { ensureHome, flee, findCriticalRepair, findRichestContainer, getFillTarget, getSource, moveToTarget, shouldFlee, updateMode } from "./helpers";
+import { ensureHome, flee, findCriticalRepair, findRichestContainer, getAssignment, getFillTarget, getSource, moveToTarget, releaseAssignment, shouldFlee, updateMode } from "./helpers";
 
 /**
  * Builder — P2 建造角色。
@@ -35,8 +35,23 @@ export const builderRole: CreepRole = {
     }
 
     updateMode(creep);
+    const assignment = getAssignment(creep, ctx);
 
     if (creep.memory.mode === "work") {
+      // 优先建造 assignment 指定的 site。
+      if (assignment?.targetId) {
+        const site = Game.getObjectById(assignment.targetId as Id<ConstructionSite>);
+        if (site) {
+          const result = creep.build(site);
+          if (result === ERR_NOT_IN_RANGE) {
+            moveToTarget(creep, site);
+          } else if (result === ERR_INVALID_TARGET) {
+            releaseAssignment(creep);
+          }
+          return;
+        }
+      }
+
       // 尝试建造最近的建造 site。
       if (snapshot.myConstructionSites.length > 0) {
         const site = findClosestSite(creep, snapshot.myConstructionSites);

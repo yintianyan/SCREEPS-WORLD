@@ -24,9 +24,18 @@ export function buildRoomSnapshot(
   const containers = room.find(FIND_STRUCTURES, {
     filter: s => s.structureType === STRUCTURE_CONTAINER,
   });
+  const roads = room.find(FIND_STRUCTURES, {
+    filter: s => s.structureType === STRUCTURE_ROAD,
+  });
 
   const storage = room.storage ?? undefined;
   const sources = room.find(FIND_SOURCES);
+  let minerals: Mineral[] = [];
+  try {
+    minerals = room.find(FIND_MINERALS);
+  } catch {
+    // FIND_MINERALS 可能在测试环境未定义。
+  }
   const allSites = room.find(FIND_CONSTRUCTION_SITES);
   const mySites = room.find(FIND_MY_CONSTRUCTION_SITES);
   const hostileCreeps = room.find(FIND_HOSTILE_CREEPS);
@@ -53,6 +62,7 @@ export function buildRoomSnapshot(
     extensions,
     towers,
     containers,
+    roads,
     storage,
     sources,
     constructionSites: allSites,
@@ -63,6 +73,7 @@ export function buildRoomSnapshot(
     fillTargets,
     needsRecovery,
     sourceOccupancy,
+    minerals,
   };
 }
 
