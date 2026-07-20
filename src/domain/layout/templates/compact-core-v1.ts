@@ -64,7 +64,7 @@ export const COMPACT_CORE_V1: Blueprint = {
     cell("core.ext.19", 0, 3, STRUCTURE_EXTENSION, 4, "rcl4", 1, ["core"]),
     cell("core.ext.20", 0, -3, STRUCTURE_EXTENSION, 4, "rcl4", 1, ["core"]),
 
-    cell("core.storage.01", 0, 1, STRUCTURE_STORAGE, 4, "rcl4", 1, ["core", "logistics"]),
+    cell("core.storage.01", 0, 1, STRUCTURE_STORAGE, 4, "rcl4", 0, ["core", "logistics"]),
 
     // ── Late (RCL5+): 补充 extension（共 30），加 tower/link/spawn ──
     cell("core.ext.21", 3, 1, STRUCTURE_EXTENSION, 5, "late", 2, ["core"]),

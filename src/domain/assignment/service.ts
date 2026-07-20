@@ -110,6 +110,7 @@ export function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): voi
 
   // 4. build 任务 — 为每个 active site 生成。
   const ctrl = snapshot.controller;
+  const energyCrisis = Memory.rooms[roomName]?.energyCrisis === true;
   for (const site of snapshot.myConstructionSites) {
     const isCritical = site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
     // controller container 是站桩升级链路的核心基础设施 — 提升为 priority 1，
@@ -127,6 +128,10 @@ export function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): voi
         s => Math.abs(site.pos.x - s.pos.x) <= 1 && Math.abs(site.pos.y - s.pos.y) <= 1,
       );
     const isPriorityContainer = isControllerContainer || isSourceContainer;
+    // 能量危机：仅暂停道路（纯效率投入、无产能回报，是真正可推迟的 discretionary 建造）。
+    // 保留 extension —— 它提升能量容量→能孵更大 harvester→正是脱离危机的恢复路径，暂停反而固化螺旋。
+    const isRoad = site.structureType === STRUCTURE_ROAD;
+    if (energyCrisis && isRoad) continue;
     tasks.push({
       id: `build:${roomName}:${site.id}`,
       kind: "build",

@@ -67,6 +67,10 @@ declare global {
   interface RoomMemory {
     colonyState?: ColonyState;
     controllerDowngradeRisk?: boolean;
+    /** 能量危机标志（room-observer 带迟滞计算）。 */
+    energyCrisis?: boolean;
+    /** 能量危机分数（0..enterScore，用于迟滞）。 */
+    crisisScore?: number;
     spawnQueue?: SpawnRequest[];
     buildQueue?: BuildTask[];
     lastRcl?: number;

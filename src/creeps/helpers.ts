@@ -136,13 +136,33 @@ export function getFillTarget(
   return creep.pos.findClosestByRange(snapshot.fillTargets as AnyOwnedStructure[]) ?? undefined;
 }
 
+/** 可被 hauler 填充的结构类型。 */
+type FillTarget = StructureSpawn | StructureExtension | StructureTower | StructureContainer;
+
+/** 在 targets 中找最近的「未预约」目标；给定 types 时仅在这些结构类型中挑选。 */
+function pickFillTarget(
+  creep: Creep,
+  targets: readonly FillTarget[],
+  reserved: Set<string>,
+  types?: readonly string[],
+): FillTarget | undefined {
+  const pool = targets.filter(
+    s => !reserved.has(s.id) && (types === undefined || types.includes(s.structureType)),
+  );
+  if (pool.length === 0) return undefined;
+  return creep.pos.findClosestByRange(pool) ?? undefined;
+}
+
 /**
- * Hauler 专用的填充目标选择 — 带每 tick 预约去重。
+ * Hauler 专用的填充目标选择 — 带优先级与每 tick 预约去重。
  *
- * 多个 hauler 若都用裸 findClosestByRange 会同时扑向最近的同一个 extension，
- * 互相堵位浪费 tick。这里维护一个按 tick 惰性重置的预约集合：hauler 选中某目标后
- * 将其 id 记入预约，后续 hauler 优先选未被预约的目标，从而分散到不同结构。
- * 当所有目标都已被预约（如只有一个结构缺能）时回退到全集，避免死锁。
+ * 老玩家填充优先级：
+ *   0. controller container 低于半满时优先补 1 个 hauler（站桩升级供能核心，远离核心区易饿死）。
+ *   1. spawn / extension —— 孵化引擎，断能即停产，最高优先。
+ *   2. tower —— 防御/维修，次之。
+ *   3. 其余（如非紧急的 controller container）。
+ * 同级取最近未预约者；预约集合按 tick 惰性重置，避免多 hauler 抢同一目标互相堵位。
+ * 所有目标都被预约时回退到最近目标（允许共享），避免死锁。
  */
 export function getHaulFillTarget(
   creep: Creep,
@@ -155,25 +175,34 @@ export function getHaulFillTarget(
     g.fillReservations = new Set();
     g.fillReservationTick = Game.time;
   }
+  const reserved = g.fillReservations;
 
-  // 站桩升级保障：controller container 是升级引擎的供能核心，但远离核心区，
-  // 裸 findClosestByRange 会让 hauler 都挤在近处 extension 而饿死它（RCL3 曾因此掉速）。
-  // 当其能量低于半满时，优先派一个 hauler 补给；预约后其余 hauler 填别处。
+  // 0. 站桩升级保障：controller container 低于半满时优先派一个 hauler 补给。
   const cc = snapshot.controllerContainer;
   if (
     cc &&
     cc.store.getFreeCapacity(RESOURCE_ENERGY) > cc.store.getUsedCapacity(RESOURCE_ENERGY) &&
-    !g.fillReservations.has(cc.id)
+    !reserved.has(cc.id)
   ) {
-    g.fillReservations.add(cc.id);
+    reserved.add(cc.id);
     return cc as unknown as AnyOwnedStructure;
   }
 
-  const unreserved = snapshot.fillTargets.filter(s => !g.fillReservations!.has(s.id));
-  const pool = unreserved.length > 0 ? unreserved : snapshot.fillTargets;
-  const target = creep.pos.findClosestByRange(pool as AnyOwnedStructure[]) ?? undefined;
-  if (target) g.fillReservations!.add(target.id);
-  return target;
+  // 1→2→3 分级挑选最近未预约目标。
+  const target =
+    pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_SPAWN, STRUCTURE_EXTENSION]) ??
+    pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_TOWER]) ??
+    pickFillTarget(creep, snapshot.fillTargets, reserved);
+
+  if (target) {
+    reserved.add(target.id);
+    return target as unknown as AnyOwnedStructure;
+  }
+
+  // 全部已预约 — 回退最近目标（允许共享）避免死锁。
+  return (creep.pos.findClosestByRange(snapshot.fillTargets as FillTarget[]) ?? undefined) as
+    | AnyOwnedStructure
+    | undefined;
 }
 
 /** 找到能量最多的 container。 */

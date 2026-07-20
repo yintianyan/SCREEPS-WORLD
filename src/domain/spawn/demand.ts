@@ -69,6 +69,8 @@ export function evaluateDemand(
   const requests: SpawnRequest[] = [];
   const home = snapshot.roomName;
   const energyCapacity = snapshot.energyCapacityAvailable;
+  // 能量危机标志（room-observer 计算）— 危机时优先保 harvester、收缩升级等消耗。
+  const energyCrisis = Memory.rooms[home]?.energyCrisis === true;
 
   // 单次遍历获取所有角色计数。
   const counts = countAllCreeps(home);
@@ -125,8 +127,9 @@ export function evaluateDemand(
       }
       const key = spawnKey("harvester", home, i, sourceId as string | undefined);
       if (!hasKey(queue, key)) {
+        // 危机时 harvester 提为 P0：经济引擎优先于一切，尽快恢复采集。
         requests.push(
-          createRequest("harvester", home, 1, key, 1, energyCapacity, colonyState, snapshot.rcl, sourceId),
+          createRequest("harvester", home, 1, key, energyCrisis ? 0 : 1, energyCapacity, colonyState, snapshot.rcl, sourceId),
         );
       }
     }
@@ -144,8 +147,13 @@ export function evaluateDemand(
         Math.max(haulerConfig.minCount, Math.ceil(snapshot.containers.length * 1.5)),
       )
     : 0;
-  if (haulerTotal < dynamicHaulerTarget && hasLogistics) {
-    for (let i = haulerTotal; i < dynamicHaulerTarget; i++) {
+  // 能量危机：收缩 hauler 到 minCount —— 仅保留把能量搬回 spawn 供孵化 harvester 的最小力量，
+  // 避免孵出一堆无能量可搬的空闲 hauler，白白浪费孵化能量。
+  const haulerTarget = energyCrisis
+    ? Math.min(dynamicHaulerTarget, haulerConfig.minCount)
+    : dynamicHaulerTarget;
+  if (haulerTotal < haulerTarget && hasLogistics) {
+    for (let i = haulerTotal; i < haulerTarget; i++) {
       const key = spawnKey("hauler", home, i);
       if (!hasKey(queue, key)) {
         requests.push(createRequest("hauler", home, i, key, 1, energyCapacity, colonyState, snapshot.rcl));
@@ -169,8 +177,18 @@ export function evaluateDemand(
     // 无 container 时多 upgrader 都要长途自采，通勤浪费抵消数量优势，保持 minCount。
     // 降级紧急状态下即使无 container 也拉满（自采也要保级）。
     const stationUpgradeOnline = snapshot.controllerContainer !== undefined;
-    const upgraderTarget: number =
-      stationUpgradeOnline || hasDowngradeRisk ? upgraderConfig.maxCount : upgraderConfig.minCount;
+    // 能量危机：升级是最大的可自由支配能量汇，危机时停升级把能量让给孵化 harvester；
+    // 仅当控制器真正快降级（ticksToDowngrade < downgradeGuard）时保留 minCount 个 upgrader 保级。
+    const ctrl = snapshot.controller;
+    const crisisNeedsGuard =
+      energyCrisis && ctrl !== undefined && ctrl.ticksToDowngrade < CONFIG.economy.crisis.downgradeGuard;
+    let upgraderTarget: number;
+    if (energyCrisis) {
+      upgraderTarget = crisisNeedsGuard ? upgraderConfig.minCount : 0;
+    } else {
+      upgraderTarget =
+        stationUpgradeOnline || hasDowngradeRisk ? upgraderConfig.maxCount : upgraderConfig.minCount;
+    }
 
     if (upgraderTotal < upgraderTarget) {
       // 降级风险时提升为 P1 优先级，确保快速保级。
@@ -192,8 +210,11 @@ export function evaluateDemand(
         builderConfig.maxCount,
         Math.max(builderConfig.minCount, snapshot.myConstructionSites.length),
       );
-      if (builderTotal < dynamicBuilderTarget) {
-        for (let i = builderTotal; i < dynamicBuilderTarget; i++) {
+      // 能量危机：收缩 builder 到 minCount —— 仅留 1 个处理关键 source container 重建（恢复收入），
+      // 避免按 site 数孵出一堆无能量可建的空闲 builder 浪费孵化能量。
+      const builderTarget = energyCrisis ? builderConfig.minCount : dynamicBuilderTarget;
+      if (builderTotal < builderTarget) {
+        for (let i = builderTotal; i < builderTarget; i++) {
           const key = spawnKey("builder", home, i);
           if (!hasKey(queue, key)) {
             requests.push(createRequest("builder", home, i, key, 2, energyCapacity, colonyState, snapshot.rcl));
@@ -271,6 +292,8 @@ function createRequest(
     const fullBody = selectBody(role, energyCapacity, { rcl });
     const energyAvailable = Game.rooms[home]?.energyAvailable ?? 200;
     const requiredParts = ROLE_REQUIRED_PARTS[role];
+    // 优雅降级：孵化当前能量能负担的最大 body。宁可先出一个较小的 harvester（低效但维持 colony 存活），
+    // 也不要为等待大 body 而让 harvester 断档归零（曾因此陷入「无 harvester→无收入→永远孵不起」死锁）。
     body = degradeBody(fullBody, energyAvailable, requiredParts) ?? selectBody(role, energyAvailable, { rcl });
   } else {
     body = selectBody(role, energyCapacity, { rcl });

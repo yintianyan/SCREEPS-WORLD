@@ -25,8 +25,12 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
   ],
   harvester: [
     // 站桩矿工：5 WORK 恰好匹配 source 再生速率 (3000/300=10/tick)，1 MOVE 仅用于通勤到工位。
+    // 每多 1 WORK 成本 +100，按容量平滑降级（1W=200 / 2W=300 / 3W=400 / 4W=500 / 5W=600），
+    // 避免低容量时卡在 1 WORK（2/tick，远低于 source 再生）拖垮经济。
     { parts: ["work", "work", "work", "work", "work", "carry", "move"], minCapacity: 600 },
-    { parts: ["work", "work", "work", "carry", "move"], minCapacity: 350 },
+    { parts: ["work", "work", "work", "work", "carry", "move"], minCapacity: 500 },
+    { parts: ["work", "work", "work", "carry", "move"], minCapacity: 400 },
+    { parts: ["work", "work", "carry", "move"], minCapacity: 300 },
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   hauler: [

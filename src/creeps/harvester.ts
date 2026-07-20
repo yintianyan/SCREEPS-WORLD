@@ -50,6 +50,22 @@ export const harvesterRole: CreepRole = {
         }
       }
 
+      // 1.5 紧急恢复：身边有 container 在建 site（range <= 3）时优先建造它。
+      // source container 被毁后 harvester 与其 site 往往就挨着 source，直接 mine→build 0 通勤，
+      // 远比长途送能到 spawn 再等 builder 来得快，是经济塌方时最快的自愈路径。
+      if (snapshot.myConstructionSites.length > 0) {
+        const containerSite = creep.pos.findClosestByRange(
+          snapshot.myConstructionSites.filter(s => s.structureType === STRUCTURE_CONTAINER) as ConstructionSite[],
+        );
+        if (containerSite && creep.pos.getRangeTo(containerSite) <= 3) {
+          const result = creep.build(containerSite);
+          if (result === ERR_NOT_IN_RANGE) {
+            moveToTarget(creep, containerSite);
+          }
+          return;
+        }
+      }
+
       // 2. 无身边 container（早期未建好）— 直接送 spawn/extension/tower。
       let target: AnyOwnedStructure | undefined;
       if (assignment?.targetId) {

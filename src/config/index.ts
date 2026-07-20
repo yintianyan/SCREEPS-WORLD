@@ -122,6 +122,23 @@ export const CONFIG = {
     buildEnergySurplus: 200,
     /** 触发紧急升级的控制器 ticksToDowngrade 阈值。 */
     controllerDowngradeThreshold: 10000,
+    /** 能量危机检测与响应参数。 */
+    crisis: {
+      /** source 能量高于此比例视为采集不足（harvester 失效）。 */
+      sourceFullRatio: 0.85,
+      /** energyAvailable 低于 capacity×此比例视为储备低。 */
+      energyThresholdRatio: 0.4,
+      /** 储备阈值固定上限。 */
+      energyThresholdCap: 400,
+      /** 危机分数达到此值进入危机（scoreStep 10 → 需持续 ~50 tick）。 */
+      enterScore: 100,
+      /** 危机分数降到此值退出危机（迟滞）。 */
+      exitScore: 40,
+      /** 每次评估（room-observer 每 5 tick）的分数变化量。 */
+      scoreStep: 10,
+      /** 危机时仅当 ticksToDowngrade 低于此值才保留 1 个 upgrader 保级，否则停升级省能。 */
+      downgradeGuard: 3000,
+    },
   },
 
   defense: {

@@ -1,11 +1,13 @@
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
+import { evaluateEnergyCrisis } from "../domain/economy/crisis";
 
 /**
  * 房间观察器 — P3 房间级策略协调器。
  *
  * 低频运行用于：
  *   - 检测控制器降级风险并记录到房间 memory
+ *   - 检测能量危机（带迟滞）并记录到房间 memory，供 spawn/建造/分配收缩消耗
  *   - 触发布局规划（未来）
  *   - 协调防御响应（未来）
  *
@@ -28,6 +30,15 @@ export const roomObserverSystem: System = {
       } else {
         roomMem.controllerDowngradeRisk = false;
       }
+
+      // 能量危机检测（带迟滞）— 写入 memory 供 spawn/建造/分配在危机时收缩消耗、保 harvester。
+      const crisis = evaluateEnergyCrisis(
+        snapshot,
+        { crisisScore: roomMem.crisisScore ?? 0, energyCrisis: roomMem.energyCrisis ?? false },
+        CONFIG.economy.crisis,
+      );
+      roomMem.crisisScore = crisis.crisisScore;
+      roomMem.energyCrisis = crisis.energyCrisis;
     }
   },
 };
