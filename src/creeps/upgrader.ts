@@ -36,8 +36,13 @@ export const upgraderRole: CreepRole = {
       controller.my &&
       controller.ticksToDowngrade < CONFIG.economy.controllerDowngradeThreshold;
 
-    // 遵守能量下限 — 不与孵化填充竞争（紧急情况除外）。
-    if (!isEmergency && snapshot.energyAvailable < CONFIG.economy.upgradeEnergyFloor) {
+    // U-02：遵守能量下限 — 不与孵化填充竞争（紧急情况除外）。
+    // RCL1-3 基于 energyAvailable；RCL4+ 有 storage 时基于 storage 能量。
+    const hasStorage = snapshot.storage !== undefined;
+    const belowFloor = snapshot.rcl >= 4 && hasStorage
+      ? snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.economy.upgradeEnergyFloorStorage
+      : snapshot.energyAvailable < CONFIG.economy.upgradeEnergyFloor;
+    if (!isEmergency && belowFloor) {
       creep.memory.mode = "idle";
       return;
     }
@@ -57,8 +62,16 @@ export const upgraderRole: CreepRole = {
       return;
     }
 
-    // acquire 模式：从 source 采集或从 container 取出。
-    // 优先使用 container（让 harvester 专注于采集）。
+    // acquire 模式：R4-04 优先从 storage 取能量；不足时回退到 container 或直接采集。
+    if (snapshot.storage && snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+      const result = creep.withdraw(snapshot.storage, RESOURCE_ENERGY);
+      if (result === ERR_NOT_IN_RANGE) {
+        moveToTarget(creep, snapshot.storage);
+      }
+      return;
+    }
+
+    // 回退到 container（让 harvester 专注于采集）。
     if (snapshot.containers.length > 0) {
       const best = findRichestContainer(snapshot.containers);
       if (best) {

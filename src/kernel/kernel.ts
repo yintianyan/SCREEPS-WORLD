@@ -50,6 +50,18 @@ class Context implements TickContext {
   }
 }
 
+/**
+ * 同优先级角色内的执行顺序（约束 X-19）。
+ * harvester 在 hauler 之前执行，确保先填 container 再取，避免 hauler 空跑。
+ */
+const ROLE_EXECUTION_ORDER: Readonly<Record<string, number>> = {
+  worker: 0,
+  harvester: 1,
+  hauler: 2,
+  upgrader: 3,
+  builder: 4,
+};
+
 export class Kernel {
   private readonly roleMap: Map<string, CreepRole>;
   private readonly sortedSystems: readonly System[];
@@ -198,9 +210,13 @@ export class Kernel {
       creepEntries.push({ creep, role });
     }
 
-    // 按角色优先级升序排序（P0 在前），然后按 ticksToLive 升序排序。
+    // 按角色优先级升序排序（P0 在前），同优先级内按角色执行顺序排序
+    // （X-19：harvester 在 hauler 前），最后按 ticksToLive 升序排序。
     creepEntries.sort((a, b) => {
       if (a.role.priority !== b.role.priority) return a.role.priority - b.role.priority;
+      const aOrder = ROLE_EXECUTION_ORDER[a.role.name] ?? 99;
+      const bOrder = ROLE_EXECUTION_ORDER[b.role.name] ?? 99;
+      if (aOrder !== bOrder) return aOrder - bOrder;
       const aTtl = a.creep.ticksToLive ?? 1500;
       const bTtl = b.creep.ticksToLive ?? 1500;
       return aTtl - bTtl;

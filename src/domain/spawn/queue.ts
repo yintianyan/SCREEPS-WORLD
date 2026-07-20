@@ -26,10 +26,14 @@ export function removeRequest(queue: SpawnRequest[], key: string): void {
   if (idx >= 0) queue.splice(idx, 1);
 }
 
-/** 按优先级升序排序（P0 在前），然后按 createdAt 升序排序。 */
+/** 按优先级升序排序（P0 在前），有 replaceBy 的替换请求优先，然后按 createdAt 升序排序。 */
 export function sortQueue(queue: SpawnRequest[]): SpawnRequest[] {
   return queue.sort((a, b) => {
     if (a.priority !== b.priority) return a.priority - b.priority;
+    // X-17：有 replaceBy 的替换请求优先于普通请求。
+    const aReplace = a.replaceBy !== undefined ? 0 : 1;
+    const bReplace = b.replaceBy !== undefined ? 0 : 1;
+    if (aReplace !== bReplace) return aReplace - bReplace;
     return a.createdAt - b.createdAt;
   });
 }

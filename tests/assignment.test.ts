@@ -21,6 +21,8 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
     towers: [],
     containers: [],
     roads: [],
+    walls: [],
+    ramparts: [],
     storage: undefined,
     sources: [],
     constructionSites: [],

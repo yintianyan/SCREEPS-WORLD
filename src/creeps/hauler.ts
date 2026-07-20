@@ -83,7 +83,15 @@ export const haulerRole: CreepRole = {
     }
 
     if (best) {
-      const result = creep.withdraw(best, RESOURCE_ENERGY);
+      // X-20：预估 container 可用量，限量 withdraw 避免 ERR_NOT_ENOUGH_RESOURCES。
+      const available = best.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (available <= 0) {
+        creep.memory.mode = "idle";
+        return;
+      }
+      const carryFree = creep.store.getFreeCapacity(RESOURCE_ENERGY);
+      const amount = Math.min(available, carryFree);
+      const result = creep.withdraw(best, RESOURCE_ENERGY, amount);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(creep, best);
       } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
@@ -95,7 +103,11 @@ export const haulerRole: CreepRole = {
 
     // 无 container 或 container 空 — 回退到 storage（RCL4+）。
     if (snapshot.storage && snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-      const result = creep.withdraw(snapshot.storage, RESOURCE_ENERGY);
+      // X-20：预估 storage 可用量，限量 withdraw。
+      const available = snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY);
+      const carryFree = creep.store.getFreeCapacity(RESOURCE_ENERGY);
+      const amount = Math.min(available, carryFree);
+      const result = creep.withdraw(snapshot.storage, RESOURCE_ENERGY, amount);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(creep, snapshot.storage);
       }

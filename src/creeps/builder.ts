@@ -38,10 +38,21 @@ export const builderRole: CreepRole = {
     const assignment = getAssignment(creep, ctx);
 
     if (creep.memory.mode === "work") {
+      // B-07：recovery tier 下释放普通 task lease，转为送能或待命。
+      if (ctx.budget.tier === "recovery") {
+        releaseAssignment(creep);
+        return fallbackBuilder(creep, snapshot);
+      }
+
       // 优先建造 assignment 指定的 site。
       if (assignment?.targetId) {
         const site = Game.getObjectById(assignment.targetId as Id<ConstructionSite>);
         if (site) {
+          // B-06：conserve tier 下只执行 critical site（spawn/tower）。
+          if (ctx.budget.tier === "conserve" && !isCriticalSite(site)) {
+            releaseAssignment(creep);
+            return fallbackBuilder(creep, snapshot);
+          }
           const result = creep.build(site);
           if (result === ERR_NOT_IN_RANGE) {
             moveToTarget(creep, site);
@@ -54,16 +65,22 @@ export const builderRole: CreepRole = {
 
       // 尝试建造最近的建造 site。
       if (snapshot.myConstructionSites.length > 0) {
-        const site = findClosestSite(creep, snapshot.myConstructionSites);
-        if (site) {
-          const result = creep.build(site);
-          if (result === ERR_NOT_IN_RANGE) {
-            moveToTarget(creep, site);
-          } else if (result === ERR_INVALID_TARGET) {
-            // site 不再有效 — 清除并尝试下一个。
-            creep.memory.targetId = undefined;
+        // B-06：conserve tier 下只找 critical site。
+        const sites = ctx.budget.tier === "conserve"
+          ? snapshot.myConstructionSites.filter(isCriticalSite)
+          : snapshot.myConstructionSites;
+        if (sites.length > 0) {
+          const site = findClosestSite(creep, sites);
+          if (site) {
+            const result = creep.build(site);
+            if (result === ERR_NOT_IN_RANGE) {
+              moveToTarget(creep, site);
+            } else if (result === ERR_INVALID_TARGET) {
+              // site 不再有效 — 清除并尝试下一个。
+              creep.memory.targetId = undefined;
+            }
+            return;
           }
-          return;
         }
       }
 
@@ -79,6 +96,11 @@ export const builderRole: CreepRole = {
 /** 使用引擎原生 findClosestByRange 替代手动迭代，性能更优。 */
 function findClosestSite(creep: Creep, sites: readonly ConstructionSite[]): ConstructionSite | undefined {
   return creep.pos.findClosestByRange(sites as ConstructionSite[]) ?? undefined;
+}
+
+/** 判断 construction site 是否为 critical 类型（spawn/tower）。约束 X-04/B-06。 */
+function isCriticalSite(site: ConstructionSite): boolean {
+  return site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
 }
 
 function fallbackBuilder(creep: Creep, snapshot: RoomSnapshot): void {

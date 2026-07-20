@@ -58,6 +58,8 @@ export interface RoomSnapshot {
   readonly towers: readonly StructureTower[];
   readonly containers: readonly StructureContainer[];
   readonly roads: readonly StructureRoad[];
+  readonly walls: readonly StructureWall[];
+  readonly ramparts: readonly StructureRampart[];
   readonly storage: StructureStorage | undefined;
   readonly sources: readonly Source[];
   readonly constructionSites: readonly ConstructionSite[];

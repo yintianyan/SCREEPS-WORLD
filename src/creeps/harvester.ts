@@ -54,10 +54,11 @@ export const harvesterRole: CreepRole = {
         return;
       }
 
-      // 所有结构已满 — 尝试 container。
+      // 所有结构已满 — 尝试 container（X-21：预检查 freeCapacity）。
       if (snapshot.containers.length > 0) {
         const best = findEmptiestContainer(snapshot.containers);
-        if (best) {
+        // X-21：预估 container 可用空间，为 0 则跳过进入下一个交付目标。
+        if (best && best.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
           const result = creep.transfer(best, RESOURCE_ENERGY);
           if (result === ERR_NOT_IN_RANGE) {
             moveToTarget(creep, best);

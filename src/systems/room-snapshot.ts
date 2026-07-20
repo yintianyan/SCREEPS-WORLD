@@ -20,13 +20,13 @@ export function buildRoomSnapshot(
   const extensions = myStructures.filter(isExtension);
   const towers = myStructures.filter(isTower);
 
-  // 使用带 filter 的 find 让引擎在 C++ 层过滤，避免全量遍历。
-  const containers = room.find(FIND_STRUCTURES, {
-    filter: s => s.structureType === STRUCTURE_CONTAINER,
-  });
-  const roads = room.find(FIND_STRUCTURES, {
-    filter: s => s.structureType === STRUCTURE_ROAD,
-  });
+  // 一次 find 获取所有中性结构，在 JS 层按类型分组。
+  // 比多次带 filter 的 find 更高效（减少 C++ ↔ JS 边界穿越）。
+  const allStructures = room.find(FIND_STRUCTURES);
+  const containers = allStructures.filter(s => s.structureType === STRUCTURE_CONTAINER) as StructureContainer[];
+  const roads = allStructures.filter(s => s.structureType === STRUCTURE_ROAD) as StructureRoad[];
+  const walls = allStructures.filter(s => s.structureType === STRUCTURE_WALL) as StructureWall[];
+  const ramparts = allStructures.filter(s => s.structureType === STRUCTURE_RAMPART) as StructureRampart[];
 
   const storage = room.storage ?? undefined;
   const sources = room.find(FIND_SOURCES);
@@ -63,6 +63,8 @@ export function buildRoomSnapshot(
     towers,
     containers,
     roads,
+    walls,
+    ramparts,
     storage,
     sources,
     constructionSites: allSites,

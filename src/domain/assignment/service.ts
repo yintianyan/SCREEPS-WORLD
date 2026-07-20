@@ -1,4 +1,4 @@
-import { CONFIG } from "../../config";
+import { CONFIG, getSourceTargetWorkParts } from "../../config";
 import type { RoomSnapshot, TickContext } from "../../kernel/contracts";
 import {
   globalCache,
@@ -59,8 +59,8 @@ export function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): voi
   // 1. harvest 任务 — 每个 source 一个，带槽位数。
   for (const source of snapshot.sources) {
     const assignedCreeps = sourceToCreeps.get(source.id as string) ?? [];
-    // 每个 source 的目标 work parts / 每个 harvester 的 work parts（简化为 1）
-    const maxWorkers = Math.max(1, Math.ceil(CONFIG.assignment.sourceTargetWorkParts / 1));
+    // X-02：每个 source 的 maxWorkers 按 RCL 分级：RCL1-3: 5 / RCL4-6: 6 / RCL7-8: 8。
+    const maxWorkers = Math.max(1, getSourceTargetWorkParts(snapshot.rcl));
     tasks.push({
       id: `harvest:${roomName}:${source.id}`,
       kind: "harvest",

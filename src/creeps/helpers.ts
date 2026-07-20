@@ -40,12 +40,16 @@ export function ensureHome(creep: Creep): boolean {
 
 /** 向目标房间方向移动（通过最近出口）。 */
 export function moveTowardRoom(creep: Creep, targetRoom: string): void {
-  recordTraffic(creep);
   const exitDir = creep.room.findExitTo(targetRoom) as number;
   if (exitDir < 0) return; // 错误码为负值
   const exit = creep.pos.findClosestByRange(exitDir as ExitConstant);
   if (exit) {
-    creep.moveTo(exit, { reusePath: 10 });
+    // G-MV-03：reusePath 默认 5。
+    const result = creep.moveTo(exit, { reusePath: 5 });
+    // G-MV-05：移动后仅在 OK/ERR_TIRED 时记录交通热度。
+    if (result === OK || result === ERR_TIRED) {
+      recordTraffic(creep);
+    }
   }
 }
 
@@ -222,40 +226,106 @@ export function shouldFlee(snapshot: RoomSnapshot): boolean {
 }
 
 /**
- * 逃跑到安全位置 — 避免冲向敌人。
- * 策略：如果 spawn 比最近的敌人更远，则走向 spawn（spawn 通常在塔防范围内）；
- * 否则走向 home 方向的出口。
+ * 逃跑到安全位置 — 遵循约束 G-DF-02/03/09。
+ * 策略分三级：
+ *   1) spawn 比最近敌人更近时走向 spawn（塔防范围内）
+ *   2) spawn 不可达时，走向敌人反向出口（避免冲向敌人）
+ *   3) 无安全出口时走向任意最远出口
+ * flee 期间释放普通 assignment（G-SM-05），仅移动不执行经济动作。
  */
 export function flee(creep: Creep, snapshot: RoomSnapshot): void {
+  // G-SM-05: flee 期间释放普通 assignment，仅移动到安全位置。
+  if (creep.memory.assignment) {
+    releaseFromTask(creep);
+    creep.memory.assignment = undefined;
+  }
+
   const nearestHostile = creep.pos.findClosestByRange(snapshot.hostileCreeps as Creep[]);
 
+  // 策略 1：spawn 比最近敌人更近时走向 spawn（spawn 在安全侧、塔防范围内）。
   if (snapshot.spawns.length > 0 && nearestHostile) {
     const spawn = snapshot.spawns[0]!;
     const creepToSpawn = creep.pos.getRangeTo(spawn);
     const hostileToSpawn = nearestHostile.pos.getRangeTo(spawn);
-    // 只有当 spawn 比敌人更近时才走向 spawn（spawn 在安全侧）。
     if (creepToSpawn < hostileToSpawn) {
       if (creepToSpawn > 3) {
-        recordTraffic(creep);
-        creep.moveTo(spawn, { reusePath: 5, ignoreCreeps: false });
+        // G-DF-04: flee 期间使用 ignoreCreeps: false 以绕过阻挡。
+        const result = creep.moveTo(spawn, { reusePath: 5, ignoreCreeps: false });
+        if (result === OK || result === ERR_TIRED) recordTraffic(creep);
       }
       return;
     }
-    // spawn 比敌人远 — 走向反方向出口。
   }
 
-  // 无 spawn 或 spawn 不安全 — 逃向 home 方向的出口。
+  // 策略 2/3：spawn 不安全或不可达 — 走向敌人反向出口。
+  if (nearestHostile) {
+    const safeExit = findSafestExit(creep, nearestHostile.pos);
+    if (safeExit) {
+      const result = creep.moveTo(safeExit, { reusePath: 5, ignoreCreeps: false });
+      if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+      return;
+    }
+  }
+
+  // G-DF-03：已在 home 但 spawn 不安全且无安全出口时 —
+  // 优先走向敌人反向出口（上面已尝试）；无出口时至少向 spawn 移动（比站着好）。
   const home = creep.memory.home;
   if (home && creep.room.name !== home) {
     moveTowardRoom(creep, home);
-  } else if (snapshot.spawns.length > 0) {
-    // 已在 home 但 spawn 不安全 — 至少向 spawn 移动（比站着好）。
+    return;
+  }
+  if (snapshot.spawns.length > 0) {
     const spawn = snapshot.spawns[0];
     if (spawn && creep.pos.getRangeTo(spawn) > 3) {
-      recordTraffic(creep);
-      creep.moveTo(spawn, { reusePath: 5, ignoreCreeps: false });
+      const result = creep.moveTo(spawn, { reusePath: 5, ignoreCreeps: false });
+      if (result === OK || result === ERR_TIRED) recordTraffic(creep);
     }
   }
+}
+
+/**
+ * 查找最安全的出口 — 选择与敌人方向夹角最大的出口（约束 G-DF-09）。
+ * 以敌人位置为圆心，按 Game.map.describeExits 获取所有可用出口方向，
+ * 选择与敌人方向夹角最大的出口（即敌人反向出口）；
+ * 若所有出口都同向则选最远出口。
+ */
+function findSafestExit(creep: Creep, enemyPos: RoomPosition): RoomPosition | undefined {
+  const exits = Game.map.describeExits(creep.room.name);
+  if (!exits) return undefined;
+
+  const enemyDirX = enemyPos.x - 25;
+  const enemyDirY = enemyPos.y - 25;
+
+  const exitCandidates: { dir: number; dot: number }[] = [];
+  for (const dirStr of Object.keys(exits)) {
+    const dir = Number(dirStr);
+    let exitVecX = 0;
+    let exitVecY = 0;
+    switch (dir) {
+      case TOP: exitVecY = -1; break;                       // 1
+      case RIGHT: exitVecX = 1; break;                       // 3
+      case BOTTOM: exitVecY = 1; break;                      // 5
+      case LEFT: exitVecX = -1; break;                       // 7
+      default: continue; // 跳过对角出口（2,4,6,8）— findClosestByRange 不支持
+    }
+    // 点积越小 = 与敌人方向夹角越大 = 更安全。
+    const dot = enemyDirX * exitVecX + enemyDirY * exitVecY;
+    exitCandidates.push({ dir, dot });
+  }
+
+  if (exitCandidates.length === 0) return undefined;
+
+  // 按点积升序排列（最小 = 与敌人方向夹角最大 = 反方向）。
+  exitCandidates.sort((a, b) => a.dot - b.dot);
+
+  // 有反方向出口（点积 < 0）时选反向；否则选最远（点积最大）。
+  const hasOpposite = exitCandidates[0]!.dot < 0;
+  const chosenDir = hasOpposite
+    ? exitCandidates[0]!.dir
+    : exitCandidates[exitCandidates.length - 1]!.dir;
+
+  // chosenDir 此时一定是 1/3/5/7（正交方向）。
+  return creep.pos.findClosestByRange(chosenDir as ExitConstant) ?? undefined;
 }
 
 /**

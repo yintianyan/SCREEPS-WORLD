@@ -42,6 +42,15 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
   ],
 };
 
+/**
+ * 道路优化 body 变体（约束 HA-10）。
+ * RCL4+ 核心物流路已铺设时使用：1 MOVE 可在道路上带动 2 CARRY（fatigue-free）。
+ * 道路未覆盖时使用默认模板保证移动效率。
+ */
+const ROAD_OPTIMIZED_BODIES: Readonly<Record<string, readonly BodyPartConstant[]>> = {
+  hauler: ["carry", "carry", "carry", "carry", "move", "move"],
+};
+
 /** P0 恢复用的最小可用 body — 始终为 [WORK, CARRY, MOVE]，成本 200 能量。 */
 export const RECOVERY_BODY: BodyPartConstant[] = ["work", "carry", "move"];
 
@@ -64,11 +73,22 @@ export function bodyCost(body: readonly BodyPartConstant[]): number {
 /**
  * 选择适合 spawn 能量容量的最佳 body。
  * 最后回退到恢复 body，确保 P0 孵化不会因 body 选择而阻塞。
+ *
+ * options.rcl：RCL4+ 时 hauler 优先使用道路优化变体（约束 HA-10）。
  */
 export function selectBody(
   role: string,
   energyCapacityAvailable: number,
+  options?: { rcl?: number },
 ): BodyPartConstant[] {
+  // RCL4+ 核心物流路已铺设时，hauler 使用道路优化变体。
+  if (options?.rcl !== undefined && options.rcl >= 4) {
+    const roadOptimized = ROAD_OPTIMIZED_BODIES[role];
+    if (roadOptimized && bodyCost(roadOptimized) <= energyCapacityAvailable) {
+      return [...roadOptimized];
+    }
+  }
+
   const templates = BODY_TEMPLATES[role];
   if (templates) {
     for (const t of templates) {

@@ -1,5 +1,25 @@
 import type { CpuTier, Priority } from "../kernel/contracts";
 
+/**
+ * 根据 RCL 返回每个 source 的目标 work parts 总数（约束 X-02）。
+ * RCL1-3: 5 / RCL4-6: 6 / RCL7-8: 8。
+ */
+export function getSourceTargetWorkParts(rcl: number): number {
+  if (rcl >= 7) return CONFIG.assignment.sourceTargetWorkPartsByRcl.high;
+  if (rcl >= 4) return CONFIG.assignment.sourceTargetWorkPartsByRcl.mid;
+  return CONFIG.assignment.sourceTargetWorkPartsByRcl.low;
+}
+
+/**
+ * 根据 RCL 返回 wall/rampart 的目标维护血量（约束 G-DF-08）。
+ * RCL3-4: 100K / RCL5-6: 1M / RCL7-8: 10M。
+ */
+export function getWallTargetHits(rcl: number): number {
+  if (rcl >= 7) return CONFIG.defense.wallTargetHits.rcl7_8;
+  if (rcl >= 5) return CONFIG.defense.wallTargetHits.rcl5_6;
+  return CONFIG.defense.wallTargetHits.rcl3_4;
+}
+
 export const CONFIG = {
   memory: { schemaVersion: 3 },
 
@@ -73,20 +93,42 @@ export const CONFIG = {
   assignment: {
     /** 本地任务租约时长（tick）。 */
     leaseDuration: 20,
-    /** 每个 source 的目标 work parts 总数。 */
+    /** 每个 source 的目标 work parts 总数（向后兼容，优先使用分级配置）。 */
     sourceTargetWorkParts: 5,
+    /** 每个 source 的目标 work parts 总数，按 RCL 分级（约束 X-02）。 */
+    sourceTargetWorkPartsByRcl: {
+      low: 5, // RCL1-3
+      mid: 6, // RCL4-6
+      high: 8, // RCL7-8
+    },
     /** 能量低于此阈值时触发紧急抢占 — 释放普通任务转为 fill。 */
     emergencyFillThreshold: 300,
   },
 
   economy: {
     harvestWorkingParts: 5,
-    /** upgrader 允许工作前的最低能量水平。 */
+    /** upgrader 允许工作前的最低 extension 能量（RCL1-3）。 */
     upgradeEnergyFloor: 300,
+    /** upgrader 允许工作前的最低 storage 能量（RCL4+，约束 G-EN-03/U-02）。 */
+    upgradeEnergyFloorStorage: 1000,
     /** builder 允许工作前的最低能量盈余。 */
     buildEnergySurplus: 200,
     /** 触发紧急升级的控制器 ticksToDowngrade 阈值。 */
     controllerDowngradeThreshold: 10000,
+  },
+
+  defense: {
+    /** Tower 维修 wall/rampart 的目标血量，按 RCL 分级（约束 G-DF-08）。 */
+    wallTargetHits: {
+      rcl3_4: 100_000,
+      rcl5_6: 1_000_000,
+      rcl7_8: 10_000_000,
+    },
+    rampartTargetHits: {
+      rcl3_4: 100_000,
+      rcl5_6: 1_000_000,
+      rcl7_8: 10_000_000,
+    },
   },
 
   roles: {

@@ -90,7 +90,7 @@ export function evaluateDemand(
   if (harvesterCount === 0) {
     const key = spawnKey("worker", home, 0);
     if (!hasKey(queue, key)) {
-      requests.push(createRequest("worker", home, 0, key, 0, energyCapacity, colonyState));
+      requests.push(createRequest("worker", home, 0, key, 0, energyCapacity, colonyState, snapshot.rcl));
     }
     return { requests }; // P0 阻塞其他所有请求
   }
@@ -116,7 +116,7 @@ export function evaluateDemand(
       const key = spawnKey("harvester", home, i, sourceId as string | undefined);
       if (!hasKey(queue, key)) {
         requests.push(
-          createRequest("harvester", home, 1, key, 1, energyCapacity, colonyState, sourceId),
+          createRequest("harvester", home, 1, key, 1, energyCapacity, colonyState, snapshot.rcl, sourceId),
         );
       }
     }
@@ -130,7 +130,7 @@ export function evaluateDemand(
     for (let i = haulerTotal; i < haulerConfig.minCount; i++) {
       const key = spawnKey("hauler", home, i);
       if (!hasKey(queue, key)) {
-        requests.push(createRequest("hauler", home, i, key, 1, energyCapacity, colonyState));
+        requests.push(createRequest("hauler", home, i, key, 1, energyCapacity, colonyState, snapshot.rcl));
       }
     }
   }
@@ -150,7 +150,7 @@ export function evaluateDemand(
       for (let i = upgraderTotal; i < upgraderConfig.minCount; i++) {
         const key = spawnKey("upgrader", home, i);
         if (!hasKey(queue, key)) {
-          requests.push(createRequest("upgrader", home, i, key, upgraderPriority, energyCapacity, colonyState));
+          requests.push(createRequest("upgrader", home, i, key, upgraderPriority, energyCapacity, colonyState, snapshot.rcl));
         }
       }
     }
@@ -163,7 +163,7 @@ export function evaluateDemand(
         for (let i = builderTotal; i < builderConfig.minCount; i++) {
           const key = spawnKey("builder", home, i);
           if (!hasKey(queue, key)) {
-            requests.push(createRequest("builder", home, i, key, 2, energyCapacity, colonyState));
+            requests.push(createRequest("builder", home, i, key, 2, energyCapacity, colonyState, snapshot.rcl));
           }
         }
       }
@@ -181,9 +181,11 @@ export function evaluateDemand(
     const key = spawnKey(role, home, index, sourceId);
     if (!hasKey(queue, key)) {
       const priority = role === "harvester" || role === "worker" ? 1 : 2;
-      requests.push(
-        createRequest(role, home, index, key, priority, energyCapacity, colonyState, creep.memory.sourceId),
-      );
+      const req = createRequest(role, home, index, key, priority, energyCapacity, colonyState, snapshot.rcl, creep.memory.sourceId);
+      // X-17：设置 replaceBy 窗口（body.length * 3 + replaceBuffer），
+      // 替换请求在此时限前入队；普通请求不侵占其窗口。
+      req.replaceBy = Game.time + req.body.length * 3 + CONFIG.spawn.replaceBuffer;
+      requests.push(req);
     }
   }
 
@@ -202,17 +204,20 @@ function createRequest(
   priority: 0 | 1 | 2 | 3 | 4,
   energyCapacity: number,
   colonyState: string,
+  rcl: number,
   sourceId?: Id<Source>,
 ): SpawnRequest {
-  // P0 / bootstrap：根据 energyAvailable 使用降级 body。
+  // X-16：P0/P1 角色的 body 降级阈值基于 energyAvailable（当前可用能量），
+  // 而非 energyCapacityAvailable（容量上限）；当 extension 不满时，
+  // 优先使用最小可孵化 body 速出，避免等待 extension 充满。
   let body: BodyPartConstant[];
-  if (priority === 0 || colonyState === "bootstrap" || colonyState === "recovery") {
-    const fullBody = selectBody(role, energyCapacity);
+  if (priority <= 1 || colonyState === "bootstrap" || colonyState === "recovery") {
+    const fullBody = selectBody(role, energyCapacity, { rcl });
     const energyAvailable = Game.rooms[home]?.energyAvailable ?? 200;
     const requiredParts = ROLE_REQUIRED_PARTS[role];
-    body = degradeBody(fullBody, energyAvailable, requiredParts) ?? selectBody(role, energyAvailable);
+    body = degradeBody(fullBody, energyAvailable, requiredParts) ?? selectBody(role, energyAvailable, { rcl });
   } else {
-    body = selectBody(role, energyCapacity);
+    body = selectBody(role, energyCapacity, { rcl });
   }
 
   const memory: CreepMemory = {
