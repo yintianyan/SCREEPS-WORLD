@@ -24,6 +24,7 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
     walls: [],
     ramparts: [],
     storage: undefined,
+    controllerContainer: undefined,
     sources: [],
     constructionSites: [],
     myConstructionSites: [],
@@ -118,7 +119,7 @@ describe("Assignment — generateRoomTasks", () => {
     const snapshot = mockSnapshot({
       spawns: [spawn],
       fillTargets: [spawn],
-      energyAvailable: 200,
+      energyAvailable: 100,
     });
 
     initAssignment(100);
@@ -128,7 +129,7 @@ describe("Assignment — generateRoomTasks", () => {
     const tasks = g.assignment!.roomTasks.get("W1N1")!;
     const fillTasks = tasks.filter(t => t.kind === "fill");
     expect(fillTasks).toHaveLength(1);
-    // energyAvailable < 300 → priority 0
+    // energyAvailable(100) < 动态阈值(300*0.4=120) → priority 0
     expect(fillTasks[0]?.priority).toBe(0);
   });
 

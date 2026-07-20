@@ -128,8 +128,17 @@ export function createSourceContainerTasks(
 
   // 已有 container + site 数已达上限。
   if (existingContainers + containerSites >= maxContainers) return candidates;
-  // 已有 container + site 数已覆盖所有 source。
-  if (existingContainers + containerSites >= snapshot.sources.length) return candidates;
+
+  // 统计真正覆盖 source 的 container 数（紧邻某 source 的 container / site）。
+  // 不能用 existingContainers（含 controller container）对比 source 数 —— 否则
+  // controller container 会被误算进 source 覆盖，导致被毁的 source container 永不补建。
+  const adjacentToSource = (x: number, y: number): boolean =>
+    snapshot.sources.some(s => Math.abs(s.pos.x - x) <= 1 && Math.abs(s.pos.y - y) <= 1);
+  const sourceContainerCount = snapshot.containers.filter(c => adjacentToSource(c.pos.x, c.pos.y)).length;
+  const sourceContainerSites = snapshot.constructionSites.filter(
+    s => s.structureType === STRUCTURE_CONTAINER && adjacentToSource(s.pos.x, s.pos.y),
+  ).length;
+  if (sourceContainerCount + sourceContainerSites >= snapshot.sources.length) return candidates;
 
   for (const source of snapshot.sources) {
     // 检查 source 旁是否已有 container 或 site。
@@ -153,14 +162,18 @@ export function createSourceContainerTasks(
 }
 
 /**
- * 为 controller 生成 container 任务（RCL3+ 可选）。
+ * 为 controller 生成 container 任务。
+ *
+ * 老玩家关键认知：controller container 在 RCL2 就应建造（container RCL2 即解锁），
+ * 它让 upgrader 站桩升级（0 通勤），升级吞吐提升约 2 倍。RCL2→RCL3 是整个游戏
+ * 最漫长的 grind，越早建好 controller container 越早摆脱慢速升级。
  */
 export function createControllerContainerTask(
   snapshot: RoomSnapshot,
   room: Room,
   options: ValidationOptions,
 ): BuildTaskCandidate | undefined {
-  if (snapshot.rcl < 3) return undefined;
+  if (snapshot.rcl < 2) return undefined;
   if (!snapshot.controller) return undefined;
 
   const controller = snapshot.controller;
@@ -181,8 +194,9 @@ export function createControllerContainerTask(
     key: `logistics.container.controller`,
     pos: adjacentPos,
     structureType: STRUCTURE_CONTAINER,
-    priority: 2,
-    phase: "rcl3",
+    // 优先级 1：高于 extension（priority 2）。一旦有 site 名额空出立即插队建造。
+    priority: 1,
+    phase: "rcl2",
     validation: "ok",
   };
 }

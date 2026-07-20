@@ -83,6 +83,7 @@ export const workerRole: CreepRole = {
         // source 耗尽 — 短暂等待。
         creep.memory.mode = "idle";
       }
+      // 注：harvest() 不返回 ERR_FULL — 满载时 updateMode 已将模式切为 work。
       return;
     }
 

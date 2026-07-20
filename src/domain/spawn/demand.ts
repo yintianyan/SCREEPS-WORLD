@@ -96,23 +96,33 @@ export function evaluateDemand(
   }
 
   // P1：Harvester — 基于实际占用分配到最少拥挤的 source。
+  // 使用本地占用副本，确保同一轮多次孵化时后续迭代能看到前面的分配。
   const harvesterConfig = CONFIG.roles.harvester;
   const harvesterLiving = counts.harvester ?? 0;
   const harvesterTotal = harvesterLiving + pending.harvester;
 
   if (harvesterTotal < harvesterConfig.minCount) {
+    // 本地占用映射：从快照复制，循环内累加，避免同轮重复分配同一 source。
+    const localOccupancy = new Map<string, number>(
+      [...snapshot.sourceOccupancy.entries()].map(([k, v]) => [k, v] as [string, number]),
+    );
+
     for (let i = harvesterTotal; i < harvesterConfig.minCount; i++) {
       // 找到占用最少的 source。
       let bestSource: Source | undefined;
       let bestCount = Infinity;
       for (const source of snapshot.sources) {
-        const count = snapshot.sourceOccupancy.get(source.id) ?? 0;
+        const count = localOccupancy.get(source.id) ?? 0;
         if (count < bestCount) {
           bestCount = count;
           bestSource = source;
         }
       }
       const sourceId = bestSource?.id as Id<Source> | undefined;
+      // 累加本地占用，确保下一个 harvester 分配到不同 source。
+      if (sourceId) {
+        localOccupancy.set(sourceId as string, (localOccupancy.get(sourceId as string) ?? 0) + 1);
+      }
       const key = spawnKey("harvester", home, i, sourceId as string | undefined);
       if (!hasKey(queue, key)) {
         requests.push(
@@ -123,11 +133,19 @@ export function evaluateDemand(
   }
 
   // P1：Hauler — 仅在有 container 或 storage 时才创建（hauler 无 WORK，不能自采）。
+  // 动态数量：每个 container 需要 ~1.5 个 hauler 才能搬空运力（考虑往返时间）。
+  // 公式：ceil(containers * 1.5)，下限 minCount，上限 maxCount。
   const haulerConfig = CONFIG.roles.hauler;
   const haulerTotal = (counts.hauler ?? 0) + pending.hauler;
   const hasLogistics = snapshot.containers.length > 0 || snapshot.storage !== undefined;
-  if (haulerTotal < haulerConfig.minCount && harvesterTotal >= harvesterConfig.minCount && hasLogistics) {
-    for (let i = haulerTotal; i < haulerConfig.minCount; i++) {
+  const dynamicHaulerTarget = hasLogistics
+    ? Math.min(
+        haulerConfig.maxCount,
+        Math.max(haulerConfig.minCount, Math.ceil(snapshot.containers.length * 1.5)),
+      )
+    : 0;
+  if (haulerTotal < dynamicHaulerTarget && hasLogistics) {
+    for (let i = haulerTotal; i < dynamicHaulerTarget; i++) {
       const key = spawnKey("hauler", home, i);
       if (!hasKey(queue, key)) {
         requests.push(createRequest("hauler", home, i, key, 1, energyCapacity, colonyState, snapshot.rcl));
@@ -144,10 +162,20 @@ export function evaluateDemand(
   if (allowUpgrader) {
     const upgraderConfig = CONFIG.roles.upgrader;
     const upgraderTotal = (counts.upgrader ?? 0) + pending.upgrader;
-    if (upgraderTotal < upgraderConfig.minCount) {
+
+    // 动态 upgrader 数量 — 老玩家站桩升级策略：
+    // 一旦 controller container 建成，hauler 物流链（source container → controller container）
+    // 持续供能，upgrader 0 通勤站桩升级，此时数量即吞吐 —— 直接拉满 maxCount。
+    // 无 container 时多 upgrader 都要长途自采，通勤浪费抵消数量优势，保持 minCount。
+    // 降级紧急状态下即使无 container 也拉满（自采也要保级）。
+    const stationUpgradeOnline = snapshot.controllerContainer !== undefined;
+    const upgraderTarget: number =
+      stationUpgradeOnline || hasDowngradeRisk ? upgraderConfig.maxCount : upgraderConfig.minCount;
+
+    if (upgraderTotal < upgraderTarget) {
       // 降级风险时提升为 P1 优先级，确保快速保级。
       const upgraderPriority: 0 | 1 | 2 | 3 | 4 = hasDowngradeRisk ? 1 : 2;
-      for (let i = upgraderTotal; i < upgraderConfig.minCount; i++) {
+      for (let i = upgraderTotal; i < upgraderTarget; i++) {
         const key = spawnKey("upgrader", home, i);
         if (!hasKey(queue, key)) {
           requests.push(createRequest("upgrader", home, i, key, upgraderPriority, energyCapacity, colonyState, snapshot.rcl));
@@ -156,11 +184,16 @@ export function evaluateDemand(
     }
 
     // P2：Builder — 仅当存在建造 site 时。
+    // 动态数量：每个活跃 site 配 1 个 builder，上限 maxCount。
     if (snapshot.myConstructionSites.length > 0) {
       const builderConfig = CONFIG.roles.builder;
       const builderTotal = (counts.builder ?? 0) + pending.builder;
-      if (builderTotal < builderConfig.minCount) {
-        for (let i = builderTotal; i < builderConfig.minCount; i++) {
+      const dynamicBuilderTarget = Math.min(
+        builderConfig.maxCount,
+        Math.max(builderConfig.minCount, snapshot.myConstructionSites.length),
+      );
+      if (builderTotal < dynamicBuilderTarget) {
+        for (let i = builderTotal; i < dynamicBuilderTarget; i++) {
           const key = spawnKey("builder", home, i);
           if (!hasKey(queue, key)) {
             requests.push(createRequest("builder", home, i, key, 2, energyCapacity, colonyState, snapshot.rcl));
@@ -171,19 +204,42 @@ export function evaluateDemand(
   }
 
   // 即将死亡的 creep 的替换请求。
+  // 老玩家四重门禁，防止 creep 数量激增：
+  //   1. 角色存在性门禁（worker 有 harvester 时不替换，builder 无 site 不替换）
+  //   2. maxCount 硬上限（living + pending 已达上限不替换）
+  //   3. 盈余检查（living + pending > minCount 说明有多余，不替换）
+  //   4. 稳定 key（不含 sourceId，防止 assignment 重分配导致 key 漂移产生重复）
+  const roleConfigs = CONFIG.roles as Record<string, { minCount: number; maxCount: number }>;
+
   for (const creep of Object.values(Game.creeps)) {
     if ((creep.memory.home ?? creep.room.name) !== home) continue;
     if (!needsReplacement(creep)) continue;
     const role = creep.memory.role;
-    // 使用 memory 中的 spawnIndex（创建时设置）而非解析名称。
+    const config = roleConfigs[role];
+    if (!config) continue;
+
+    // 门禁 1：角色存在性 — worker 是紧急角色，harvester 建立后不再替换。
+    if (role === "worker" && (counts.harvester ?? 0) + (counts.worker ?? 0) > 1) continue;
+    // builder 无建造 site 时不替换（避免孵化无事可做的 builder）。
+    if (role === "builder" && snapshot.myConstructionSites.length === 0) continue;
+    // upgrader 在 colonyState 不允许时不替换。
+    if (role === "upgrader" && !allowUpgrader) continue;
+
+    // 门禁 2：maxCount 硬上限。
+    const livingCount = counts[role] ?? 0;
+    const pendingCount = countPending(queue, role) + requests.filter(r => r.role === role).length;
+    if (livingCount + pendingCount >= config.maxCount) continue;
+
+    // 门禁 3：盈余检查 — 如果去掉这个将死的 creep 后仍 >= minCount，说明有多余，不替换。
+    // 只有当 "将死 creep 是维持 minCount 的必要成员" 时才提前替换（利用 overlap 无缝衔接）。
+    if (livingCount - 1 + pendingCount >= config.minCount) continue;
+
+    // 门禁 4：稳定 key — 不含 sourceId，防止 assignment 重分配导致 key 漂移。
     const index = creep.memory.spawnIndex ?? 0;
-    const sourceId = creep.memory.sourceId as string | undefined;
-    const key = spawnKey(role, home, index, sourceId);
-    if (!hasKey(queue, key)) {
+    const key = spawnKey(role, home, index);
+    if (!hasKey(queue, key) && !requests.some(r => r.key === key)) {
       const priority = role === "harvester" || role === "worker" ? 1 : 2;
       const req = createRequest(role, home, index, key, priority, energyCapacity, colonyState, snapshot.rcl, creep.memory.sourceId);
-      // X-17：设置 replaceBy 窗口（body.length * 3 + replaceBuffer），
-      // 替换请求在此时限前入队；普通请求不侵占其窗口。
       req.replaceBy = Game.time + req.body.length * 3 + CONFIG.spawn.replaceBuffer;
       requests.push(req);
     }

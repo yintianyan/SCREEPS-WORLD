@@ -44,11 +44,19 @@ export const assignmentServiceSystem: System = {
 /**
  * 判断房间是否处于紧急状态需要触发任务抢占。
  * 紧急条件（任一满足）：
- *   - 能量低于 fill 阈值（300）— 需要所有非关键 creep 转为 fill
+ *   - 能量低于动态 fill 阈值 — 需要所有非关键 creep 转为 fill
  *   - 有敌对 creep — 非战斗 creep 应进入 flee
+ *
+ * 动态阈值：取 energyCapacityAvailable 的 40% 和固定上限的较小值。
+ * 修复：原固定 300 阈值在 RCL1（容量 300）下永久触发紧急状态，
+ * 导致 assignment 每 tick 被清空重建，creep 无法稳定工作。
  */
 function isEmergencyState(snapshot: import("../kernel/contracts").RoomSnapshot): boolean {
-  if (snapshot.energyAvailable < CONFIG.assignment.emergencyFillThreshold) return true;
+  const dynamicThreshold = Math.min(
+    Math.floor(snapshot.energyCapacityAvailable * 0.4),
+    CONFIG.assignment.emergencyFillThreshold,
+  );
+  if (snapshot.energyAvailable < dynamicThreshold) return true;
   if (snapshot.hostileCreeps.length > 0) return true;
   return false;
 }

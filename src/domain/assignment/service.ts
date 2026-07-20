@@ -11,7 +11,10 @@ const ROLE_TASK_KINDS: Readonly<Record<string, readonly string[]>> = {
   harvester: ["harvest", "fill"],
   hauler: ["haul", "fill"],
   upgrader: ["upgrade"],
-  builder: ["build", "fill"],
+  // builder 只接受 build 任务：其 work 模式对 assignment target 调用 creep.build()，
+  // 若拿到 fill 任务（target 是 spawn/extension 结构）会 ERR_INVALID_TARGET 死循环，
+  // 永远无法建造。填充/维修/升级由 builder.ts 的 fallback 链在无 build 目标时自行处理。
+  builder: ["build"],
 };
 
 /** 初始化 assignment 缓存（每 tick 开头调用）。 */
@@ -73,8 +76,12 @@ export function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): voi
 
   // 2. fill 任务 — 向 spawn/extension 送能。
   if (snapshot.fillTargets.length > 0) {
-    // 能量低于 300 时 fill 提升为 P0。
-    const priority = snapshot.energyAvailable < 300 ? 0 : 1;
+    // 动态阈值：容量 40% 与固定上限取较小值，避免 RCL1 永久 P0。
+    const fillThreshold = Math.min(
+      Math.floor(snapshot.energyCapacityAvailable * 0.4),
+      CONFIG.assignment.emergencyFillThreshold,
+    );
+    const priority = snapshot.energyAvailable < fillThreshold ? 0 : 1;
     tasks.push({
       id: `fill:${roomName}`,
       kind: "fill",
@@ -102,14 +109,31 @@ export function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): voi
   }
 
   // 4. build 任务 — 为每个 active site 生成。
+  const ctrl = snapshot.controller;
   for (const site of snapshot.myConstructionSites) {
     const isCritical = site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
+    // controller container 是站桩升级链路的核心基础设施 — 提升为 priority 1，
+    // 确保 builder 优先建造它而非远处的 extension（否则按数组序它会被 extension 挤占饿死）。
+    const isControllerContainer =
+      site.structureType === STRUCTURE_CONTAINER &&
+      ctrl !== undefined &&
+      Math.abs(site.pos.x - ctrl.pos.x) <= 1 &&
+      Math.abs(site.pos.y - ctrl.pos.y) <= 1;
+    // source container 同样是关键物流基础设施：缺失时该 source 的 harvester 只能长途送能到 spawn，
+    // 半个房间的收入瘫痪。故与 controller container 一样提升为 priority 1 优先建造/重建。
+    const isSourceContainer =
+      site.structureType === STRUCTURE_CONTAINER &&
+      snapshot.sources.some(
+        s => Math.abs(site.pos.x - s.pos.x) <= 1 && Math.abs(site.pos.y - s.pos.y) <= 1,
+      );
+    const isPriorityContainer = isControllerContainer || isSourceContainer;
     tasks.push({
       id: `build:${roomName}:${site.id}`,
       kind: "build",
       targetId: site.id as string,
-      priority: isCritical ? 1 : 2,
-      maxWorkers: isCritical ? 2 : 1,
+      structureType: site.structureType as string,
+      priority: isCritical || isPriorityContainer ? 1 : 2,
+      maxWorkers: isCritical || isPriorityContainer ? 2 : 1,
       assignedCreeps: taskToCreeps.get(`build:${roomName}:${site.id}`) ?? [],
     });
   }
@@ -171,25 +195,58 @@ export function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignme
     .filter(t => roleKinds.includes(t.kind))
     .sort((a, b) => a.priority - b.priority);
 
-  for (const task of sorted) {
-    if (task.assignedCreeps.length >= task.maxWorkers) continue;
+  const chosen = chooseBuildAwareTask(creep, sorted);
+  if (!chosen) return undefined;
 
-    const assignment: CreepAssignment = {
-      id: task.id,
-      kind: task.kind as CreepAssignment["kind"],
-      targetId: task.targetId as Id<_HasId> | undefined,
-      sourceId: task.sourceId as Id<Source> | undefined,
-      // 携带当前 layout.revision — 布局修订后此值不一致，validateAssignment 立即失效。
-      revision: getCurrentLayoutRevision(home),
-      assignedAt: ctx.tick,
-      leaseUntil: ctx.tick + CONFIG.assignment.leaseDuration,
-    };
+  const assignment: CreepAssignment = {
+    id: chosen.id,
+    kind: chosen.kind as CreepAssignment["kind"],
+    targetId: chosen.targetId as Id<_HasId> | undefined,
+    sourceId: chosen.sourceId as Id<Source> | undefined,
+    // 携带当前 layout.revision — 布局修订后此值不一致，validateAssignment 立即失效。
+    revision: getCurrentLayoutRevision(home),
+    assignedAt: ctx.tick,
+    leaseUntil: ctx.tick + CONFIG.assignment.leaseDuration,
+  };
 
-    creep.memory.assignment = assignment;
-    task.assignedCreeps.push(creep.name);
-    return assignment;
+  creep.memory.assignment = assignment;
+  chosen.assignedCreeps.push(creep.name);
+  return assignment;
+}
+
+/**
+ * 为 creep 选择任务（含 builder 修路保障）。
+ *
+ * builder 特殊处理：道路 build 任务 priority 与 extension 平局，按数组序排在后面会被永久饥饿。
+ * 这里预留 1 个 builder 给道路 —— 仅当「有道路任务待建」「尚无 builder 在修路」
+ * 「且无 critical（spawn/tower，priority≤1）缺口」时触发，把本 builder 指派给第一个道路任务。
+ * 这样既保证走廊路持续施工，又不会从关键防御/孵化结构抢夺 builder。
+ */
+function chooseBuildAwareTask(
+  creep: Creep,
+  sorted: AssignmentTaskEntry[],
+): AssignmentTaskEntry | undefined {
+  if (creep.memory.role === "builder") {
+    const roadTasks = sorted.filter(
+      t => t.kind === "build" && t.structureType === STRUCTURE_ROAD && t.assignedCreeps.length < t.maxWorkers,
+    );
+    if (roadTasks.length > 0) {
+      const buildersOnRoad = sorted
+        .filter(t => t.kind === "build" && t.structureType === STRUCTURE_ROAD)
+        .reduce((n, t) => n + t.assignedCreeps.length, 0);
+      const hasFreeCritical = sorted.some(
+        t => t.priority <= 1 && t.assignedCreeps.length < t.maxWorkers,
+      );
+      if (buildersOnRoad === 0 && !hasFreeCritical) {
+        return roadTasks[0];
+      }
+    }
   }
 
+  for (const task of sorted) {
+    if (task.assignedCreeps.length >= task.maxWorkers) continue;
+    return task;
+  }
   return undefined;
 }
 

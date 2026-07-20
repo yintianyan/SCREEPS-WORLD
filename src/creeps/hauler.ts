@@ -1,5 +1,5 @@
 import type { CreepRole, Priority, TickContext } from "../kernel/contracts";
-import { ensureHome, flee, findRichestContainer, getAssignment, getFillTarget, moveToTarget, shouldFlee, updateMode } from "./helpers";
+import { ensureHome, flee, findRichestContainer, getAssignment, getHaulFillTarget, moveToTarget, shouldFlee, updateMode } from "./helpers";
 
 /**
  * Hauler — P1 物流角色。
@@ -38,7 +38,7 @@ export const haulerRole: CreepRole = {
         target = Game.getObjectById(assignment.targetId as Id<AnyOwnedStructure>) ?? undefined;
       }
       if (!target) {
-        target = getFillTarget(creep, snapshot);
+        target = getHaulFillTarget(creep, snapshot);
       }
       if (target) {
         const result = creep.transfer(target, RESOURCE_ENERGY);

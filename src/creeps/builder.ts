@@ -1,6 +1,6 @@
 import { CONFIG } from "../config";
 import type { CreepRole, Priority, RoomSnapshot, TickContext } from "../kernel/contracts";
-import { ensureHome, flee, findCriticalRepair, findRichestContainer, getAssignment, getFillTarget, getSource, moveToTarget, releaseAssignment, shouldFlee, updateMode } from "./helpers";
+import { ensureHome, flee, findClosestContainerWithEnergy, findCriticalRepair, getAssignment, getFillTarget, getSource, moveToTarget, releaseAssignment, shouldFlee, updateMode } from "./helpers";
 
 /**
  * Builder — P2 建造角色。
@@ -141,9 +141,9 @@ function acquireEnergy(
   creep: Creep,
   snapshot: RoomSnapshot,
 ): void {
-  // 优先 container。
+  // 优先取最近且有能量的 container（减少远处工地的取能通勤）。
   if (snapshot.containers.length > 0) {
-    const best = findRichestContainer(snapshot.containers);
+    const best = findClosestContainerWithEnergy(creep, snapshot.containers);
     if (best) {
       const result = creep.withdraw(best, RESOURCE_ENERGY);
       if (result === ERR_NOT_IN_RANGE) {

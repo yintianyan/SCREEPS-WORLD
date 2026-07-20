@@ -19,11 +19,14 @@ interface BodyTemplate {
  */
 export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> = {
   worker: [
+    // 开局优化：RCL1 起始 300 能量直接用满，2 WORK 采集速度翻倍，大幅缩短 bootstrap。
+    { parts: ["work", "work", "carry", "move"], minCapacity: 300 },
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   harvester: [
-    { parts: ["work", "work", "carry", "move", "move"], minCapacity: 350 },
-    { parts: ["work", "carry", "move", "move"], minCapacity: 250 },
+    // 站桩矿工：5 WORK 恰好匹配 source 再生速率 (3000/300=10/tick)，1 MOVE 仅用于通勤到工位。
+    { parts: ["work", "work", "work", "work", "work", "carry", "move"], minCapacity: 600 },
+    { parts: ["work", "work", "work", "carry", "move"], minCapacity: 350 },
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   hauler: [

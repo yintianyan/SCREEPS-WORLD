@@ -40,7 +40,25 @@ export function buildRoomSnapshot(
   const mySites = room.find(FIND_MY_CONSTRUCTION_SITES);
   const hostileCreeps = room.find(FIND_HOSTILE_CREEPS);
 
-  const fillTargets = [...spawns, ...extensions].filter(
+  // 探测 controller 旁 1 格内的 container — upgrader 站桩升级的能量来源。
+  let controllerContainer: StructureContainer | undefined;
+  if (room.controller) {
+    const cx = room.controller.pos.x;
+    const cy = room.controller.pos.y;
+    controllerContainer = containers.find(
+      c => Math.abs(c.pos.x - cx) <= 1 && Math.abs(c.pos.y - cy) <= 1,
+    );
+  }
+
+  // 修复：tower 必须包含在 fillTargets 中，否则无 creep 给塔充能，RCL3+ 防御形同虚设。
+  // controller container 也纳入 fillTargets — hauler 顺手补能，保证 upgrader 不断粮。
+  const fillBase: (StructureSpawn | StructureExtension | StructureTower | StructureContainer)[] = [
+    ...spawns,
+    ...extensions,
+    ...towers,
+  ];
+  if (controllerContainer) fillBase.push(controllerContainer);
+  const fillTargets = fillBase.filter(
     s => s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
   );
 
@@ -66,6 +84,7 @@ export function buildRoomSnapshot(
     walls,
     ramparts,
     storage,
+    controllerContainer,
     sources,
     constructionSites: allSites,
     myConstructionSites: mySites,

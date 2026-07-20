@@ -10,6 +10,7 @@ import {
 } from "../domain/layout/task-factory";
 import { collectCompletedKeys, collectCompletedKeysFromStructures } from "../domain/layout/validation";
 import { evaluateRoadCandidates } from "../domain/layout/road-policy";
+import { planCorridorRoads } from "../domain/layout/corridor-roads";
 import { packPos, unpackPos } from "../domain/layout/types";
 
 /**
@@ -92,6 +93,8 @@ export const layoutPlannerSystem: System & {
       layout.overrides = {};
       layout.blocked = {};
       layout.revision++;
+      // 锚点变化意味着所有旧坐标失效 — 清空 buildQueue，由下次规划重建。
+      roomMem.buildQueue = [];
     }
 
     // 检查触发条件。
@@ -100,6 +103,7 @@ export const layoutPlannerSystem: System & {
     // 执行规划。
     layout.state = "building";
     const queue = roomMem.buildQueue ?? [];
+    let tasksAdded = false;
 
     // 收集已完成 key 集合（用于依赖检查）。
     // 合并队列状态和实际已建结构，避免 done 任务被清除后依赖检查失败。
@@ -137,6 +141,7 @@ export const layoutPlannerSystem: System & {
       if (candidate.validation !== "ok") continue;
       if (queue.some(t => t.key === candidate.key)) continue;
       queue.push(candidateToBuildTask(candidate));
+      tasksAdded = true;
     }
 
     // 2. Source container 任务。
@@ -148,6 +153,7 @@ export const layoutPlannerSystem: System & {
     for (const candidate of sourceContainerCandidates) {
       if (queue.some(t => t.key === candidate.key)) continue;
       queue.push(candidateToBuildTask(candidate));
+      tasksAdded = true;
     }
 
     // 3. Controller container 任务（RCL3+）。
@@ -159,6 +165,7 @@ export const layoutPlannerSystem: System & {
     if (controllerContainer) {
       if (!queue.some(t => t.key === controllerContainer.key)) {
         queue.push(candidateToBuildTask(controllerContainer));
+        tasksAdded = true;
       }
     }
 
@@ -186,6 +193,7 @@ export const layoutPlannerSystem: System & {
           attempts: 0,
           retryAt: 0,
         });
+        tasksAdded = true;
       }
 
       // 保存当前交通数据为上一个窗口。
@@ -200,11 +208,37 @@ export const layoutPlannerSystem: System & {
       }
     }
 
+    // 5. 确定性走廊路（source container↔核心↔controller container）。
+    // 流量采样修不到长走廊中段，这里用 PathFinder 沿最优路径直接铺路，
+    // hauler 移动成本减半 → 运力翻倍。priority 3 背景建造，不拖慢 RCL 冲刺。
+    {
+      const corridorRoads = planCorridorRoads(room, snapshot);
+      for (const pos of corridorRoads) {
+        const key = `road.${snapshot.roomName}.${pos.x}.${pos.y}`;
+        if (queue.some(t => t.key === key)) continue;
+        queue.push({
+          key,
+          pos: { x: pos.x, y: pos.y, roomName: snapshot.roomName },
+          structureType: STRUCTURE_ROAD,
+          priority: 3,
+          state: "queued",
+          attempts: 0,
+          retryAt: 0,
+        });
+        tasksAdded = true;
+      }
+    }
+
     roomMem.buildQueue = queue;
+
+    // 仅在实际有新任务入队时递增 revision — 避免无变化时使所有 assignment 失效。
+    // 修复：原实现无条件 revision++，导致每 50 tick 所有 creep assignment 失效一次。
+    if (tasksAdded) {
+      layout.revision++;
+    }
 
     // 更新规划时间戳和 RCL 跟踪。
     layout.nextPlanTick = ctx.tick + CONFIG.layout.planInterval;
-    layout.revision++;
     roomMem.lastRcl = snapshot.rcl;
   },
 };

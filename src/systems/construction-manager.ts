@@ -69,6 +69,12 @@ function syncTaskStates(queue: BuildTask[], snapshot: import("../kernel/contract
       // 检查该位置是否已存在 site。
       if (sites.has(key)) {
         task.state = "site";
+      } else {
+        // 检查该位置是否已建成目标结构 — 避免 layout planner 反复重添已完成任务。
+        const builtType = builtPositions.get(key);
+        if (builtType === task.structureType) {
+          task.state = "done";
+        }
       }
     } else if (task.state === "site") {
       // 检查 site 是否消失（完成或被毁）。
@@ -105,6 +111,25 @@ function cleanTasks(queue: BuildTask[], tick: number): void {
 }
 
 /**
+ * 是否有 source 缺少 container（且无在建 container site）—— 需要紧急重建。
+ * 缺失 source container 时该 source 的 harvester 只能长途送能到 spawn，经济瘫痪，
+ * 必须允许在低能量/恢复状态下重建，否则陷入「能量低→不建造→无法重建→能量更低」死锁。
+ */
+function needsSourceContainerRebuild(
+  snapshot: import("../kernel/contracts").RoomSnapshot,
+): boolean {
+  const adjacentContainer = (x: number, y: number): boolean =>
+    snapshot.containers.some(c => Math.abs(c.pos.x - x) <= 1 && Math.abs(c.pos.y - y) <= 1);
+  const adjacentContainerSite = (x: number, y: number): boolean =>
+    snapshot.constructionSites.some(
+      s => s.structureType === STRUCTURE_CONTAINER && Math.abs(s.pos.x - x) <= 1 && Math.abs(s.pos.y - y) <= 1,
+    );
+  return snapshot.sources.some(
+    s => !adjacentContainer(s.pos.x, s.pos.y) && !adjacentContainerSite(s.pos.x, s.pos.y),
+  );
+}
+
+/**
  * 开发门禁 — 创建任何新 site 前必须满足。
  * 返回 true 表示允许建造。
  */
@@ -112,22 +137,37 @@ function developmentGate(
   snapshot: import("../kernel/contracts").RoomSnapshot,
   ctx: TickContext,
 ): boolean {
-  // 恢复或启动期不建造。
-  if (ctx.colonyState === "recovery" || ctx.colonyState === "bootstrap") return false;
-  if (ctx.budget.tier === "recovery" || ctx.budget.tier === "conserve") return false;
+  // source container 紧急重建豁免离散性门禁（state/budget/P0/energy）—— 它是经济恢复的关键路径。
+  const emergencyRebuild = needsSourceContainerRebuild(snapshot);
+
+  if (!emergencyRebuild) {
+    // 恢复或启动期不建造。
+    if (ctx.colonyState === "recovery" || ctx.colonyState === "bootstrap") return false;
+    if (ctx.budget.tier === "recovery" || ctx.budget.tier === "conserve") return false;
+  }
 
   // 有敌对 creep 时不建造。
   if (snapshot.hostileCreeps.length > 0) return false;
 
-  // 检查 P0/P1 孵化队列缺口。
-  const roomMem = Memory.rooms[snapshot.roomName];
-  if (roomMem?.spawnQueue) {
-    const hasCriticalSpawn = roomMem.spawnQueue.some(r => r.priority <= 1);
-    if (hasCriticalSpawn) return false;
-  }
+  if (!emergencyRebuild) {
+    // 检查 P0 孵化队列缺口 — 仅 P0（紧急恢复 worker）阻塞建造。
+    // 修复：原逻辑 P0/P1 都阻塞，但 P1（harvester/hauler 替换）几乎始终存在，
+    // 导致 source container 永远无法建造，经济效率无法提升。
+    const roomMem = Memory.rooms[snapshot.roomName];
+    if (roomMem?.spawnQueue) {
+      const hasEmergencySpawn = roomMem.spawnQueue.some(r => r.priority === 0);
+      if (hasEmergencySpawn) return false;
+    }
 
-  // 检查能量盈余 + 预留恢复能量。
-  if (snapshot.energyAvailable < CONFIG.economy.buildEnergySurplus + CONFIG.spawn.recoveryEnergyReserve) return false;
+    // 检查能量盈余 — 动态阈值：容量 60% 与固定上限取较小值。
+    // 修复：原固定阈值 400（200+200）在 RCL1（容量 300）永远不可达，
+    // 导致 source container 等关键基础设施无法在早期建造。
+    const buildThreshold = Math.min(
+      Math.floor(snapshot.energyCapacityAvailable * 0.6),
+      CONFIG.economy.buildEnergySurplus + CONFIG.spawn.recoveryEnergyReserve,
+    );
+    if (snapshot.energyAvailable < buildThreshold) return false;
+  }
 
   // 使用已构建快照检查全局 site 限制（无 room.find 扫描）。
   let globalSites = 0;
@@ -150,9 +190,22 @@ function tryCreateSite(
     .filter(t => t.state === "queued" && Game.time >= t.retryAt)
     .sort((a, b) => a.priority - b.priority);
 
-  // 检查每房 site 限制。
+  // 检查每房 site 限制。道路与 source container 单独计额，避免被 extension 永久挤占。
+  const adjacentToSource = (x: number, y: number): boolean =>
+    snapshot.sources.some(s => Math.abs(s.pos.x - x) <= 1 && Math.abs(s.pos.y - y) <= 1);
+  const isSourceContainerSite = (s: ConstructionSite): boolean =>
+    s.structureType === STRUCTURE_CONTAINER && adjacentToSource(s.pos.x, s.pos.y);
+
+  const roadSites = snapshot.myConstructionSites.filter(
+    s => s.structureType === STRUCTURE_ROAD,
+  ).length;
+  const sourceContainerSites = snapshot.myConstructionSites.filter(isSourceContainerSite).length;
   const normalSites = snapshot.myConstructionSites.filter(
-    s => s.structureType !== STRUCTURE_SPAWN && s.structureType !== STRUCTURE_TOWER,
+    s =>
+      s.structureType !== STRUCTURE_SPAWN &&
+      s.structureType !== STRUCTURE_TOWER &&
+      s.structureType !== STRUCTURE_ROAD &&
+      !isSourceContainerSite(s),
   ).length;
   const criticalSites = snapshot.myConstructionSites.filter(
     s => s.structureType === STRUCTURE_TOWER || s.structureType === STRUCTURE_SPAWN,
@@ -160,10 +213,18 @@ function tryCreateSite(
 
   for (const task of sorted) {
     const isCritical = task.structureType === STRUCTURE_TOWER || task.structureType === STRUCTURE_SPAWN;
+    const isRoad = task.structureType === STRUCTURE_ROAD;
+    const isSourceContainer =
+      task.structureType === STRUCTURE_CONTAINER && adjacentToSource(task.pos.x, task.pos.y);
 
     // 检查每房限制。
     if (isCritical) {
       if (criticalSites >= CONFIG.construction.maxCriticalSitesPerRoom) continue;
+    } else if (isRoad) {
+      if (roadSites >= CONFIG.construction.maxRoadSitesPerRoom) continue;
+    } else if (isSourceContainer) {
+      // source container 是关键物流基础设施，复用 critical 名额（通常同时只需重建 1 个）。
+      if (sourceContainerSites >= CONFIG.construction.maxCriticalSitesPerRoom) continue;
     } else {
       if (normalSites >= CONFIG.construction.maxNormalSitesPerRoom) continue;
     }

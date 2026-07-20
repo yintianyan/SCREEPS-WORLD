@@ -42,12 +42,16 @@ export const upgraderRole: CreepRole = {
     const belowFloor = snapshot.rcl >= 4 && hasStorage
       ? snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.economy.upgradeEnergyFloorStorage
       : snapshot.energyAvailable < CONFIG.economy.upgradeEnergyFloor;
-    if (!isEmergency && belowFloor) {
+
+    updateMode(creep);
+
+    // 修复：belowFloor 仅阻止 acquire（从房间取能），不阻止已满载的 upgrader 交付。
+    // 原实现在 updateMode 之前 return，导致满载 upgrader 永久 idle。
+    if (!isEmergency && belowFloor && creep.memory.mode === "acquire") {
       creep.memory.mode = "idle";
       return;
     }
 
-    updateMode(creep);
     const assignment = getAssignment(creep, ctx);
 
     if (creep.memory.mode === "work") {
@@ -62,7 +66,21 @@ export const upgraderRole: CreepRole = {
       return;
     }
 
-    // acquire 模式：R4-04 优先从 storage 取能量；不足时回退到 container 或直接采集。
+    // acquire 模式：站桩升级核心 — 优先从 controller 旁 container 取能（0 通勤）。
+    // 这是老玩家的标准操作：upgrader 站在 controller 与 container 之间，
+    // withdraw + upgrade 循环，几乎 100% 时间都在升级，不再长途跋涉回 spawn 区取能。
+    if (
+      snapshot.controllerContainer &&
+      snapshot.controllerContainer.store.getUsedCapacity(RESOURCE_ENERGY) > 0
+    ) {
+      const result = creep.withdraw(snapshot.controllerContainer, RESOURCE_ENERGY);
+      if (result === ERR_NOT_IN_RANGE) {
+        moveToTarget(creep, snapshot.controllerContainer);
+      }
+      return;
+    }
+
+    // R4-04：无 controller container 时，优先从 storage 取能量。
     if (snapshot.storage && snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
       const result = creep.withdraw(snapshot.storage, RESOURCE_ENERGY);
       if (result === ERR_NOT_IN_RANGE) {

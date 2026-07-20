@@ -6,6 +6,8 @@ export interface AssignmentTaskEntry {
   kind: string;
   targetId?: string;
   sourceId?: string;
+  /** build 任务对应的结构类型 — 用于识别道路任务以预留 builder。 */
+  structureType?: string;
   priority: number;
   maxWorkers: number;
   assignedCreeps: string[];
@@ -40,6 +42,10 @@ export interface GlobalCache {
   skipBuffer?: Record<string, number>;
   /** assignment-service 的单 tick 任务缓存。 */
   assignment?: AssignmentCache;
+  /** 本 tick 已被 hauler 预约的填充目标结构 id 集合（防多 hauler 抢同一目标拥堵）。 */
+  fillReservations?: Set<string>;
+  /** fillReservations 上次重置所在的 tick（用于惰性按 tick 重置）。 */
+  fillReservationTick?: number;
 }
 
 /**

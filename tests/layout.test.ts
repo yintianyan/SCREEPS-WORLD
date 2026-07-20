@@ -55,6 +55,7 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
     walls: [],
     ramparts: [],
     storage: undefined,
+    controllerContainer: undefined,
     sources: [],
     constructionSites: [],
     myConstructionSites: [],
@@ -494,9 +495,9 @@ describe("Layout — createSourceContainerTasks", () => {
 
 // ── task-factory.ts — createControllerContainerTask ──
 describe("Layout — createControllerContainerTask", () => {
-  it("returns undefined when RCL < 3", () => {
+  it("returns undefined when RCL < 2", () => {
     const controller = { pos: { x: 30, y: 30, roomName: "W1N1" } } as unknown as StructureController;
-    const snapshot = mockSnapshot({ controller, rcl: 2 });
+    const snapshot = mockSnapshot({ controller, rcl: 1 });
     expect(createControllerContainerTask(snapshot, mockRoom(), defaultOptions)).toBeUndefined();
   });
 
@@ -518,7 +519,7 @@ describe("Layout — createControllerContainerTask", () => {
     expect(result).toBeDefined();
     expect(result!.structureType).toBe(STRUCTURE_CONTAINER);
     expect(result!.key).toBe("logistics.container.controller");
-    expect(result!.phase).toBe("rcl3");
+    expect(result!.phase).toBe("rcl2");
   });
 });
 

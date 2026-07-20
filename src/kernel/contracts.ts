@@ -61,14 +61,16 @@ export interface RoomSnapshot {
   readonly walls: readonly StructureWall[];
   readonly ramparts: readonly StructureRampart[];
   readonly storage: StructureStorage | undefined;
+  /** controller 旁 1 格内的 container（upgrader 站桩升级的能量来源）。无则 undefined。 */
+  readonly controllerContainer: StructureContainer | undefined;
   readonly sources: readonly Source[];
   readonly constructionSites: readonly ConstructionSite[];
   readonly myConstructionSites: readonly ConstructionSite[];
   readonly hostileCreeps: readonly Creep[];
   readonly energyAvailable: number;
   readonly energyCapacityAvailable: number;
-  /** 可接收能量的结构（有空闲容量的 spawn + extension）。 */
-  readonly fillTargets: readonly (StructureSpawn | StructureExtension)[];
+  /** 可接收能量的结构（有空闲容量的 spawn + extension + tower + controller container）。 */
+  readonly fillTargets: readonly (StructureSpawn | StructureExtension | StructureTower | StructureContainer)[];
   /** 当房间没有 spawn 或没有可采集的 creep 时为 true。 */
   readonly needsRecovery: boolean;
   /** 每个.source ID 对应的已分配 creep 数量（用于免全局扫描的负载均衡）。 */

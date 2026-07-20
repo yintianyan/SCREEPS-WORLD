@@ -69,12 +69,19 @@ export const CONFIG = {
   },
 
   construction: {
-    /** 每房最大活跃建造 site 数（普通）。 */
-    maxNormalSitesPerRoom: 2,
+    /** 每房最大活跃建造 site 数（普通）。
+     * 3：让 priority-1 的 controller container 无需等待 extension 完工即可插队入场，
+     * 加速 RCL2→RCL3 站桩升级链路成型。 */
+    maxNormalSitesPerRoom: 3,
+    /** 每房道路专用 site 名额 — 独立于普通名额，保证走廊路能与 extension 并行建造，
+     * 不被 priority 3 饥饿永久挤占。 */
+    maxRoadSitesPerRoom: 2,
     /** 每房额外允许的关键 site 数。 */
     maxCriticalSitesPerRoom: 1,
-    /** 全局活跃 site 上限。 */
-    maxGlobalSites: 5,
+    /** 全局活跃 site 上限。
+     * 7：容纳 3 extension + 2 road + 关键 container（source/controller）并行，
+     * 避免被毁的 source container 重建被道路/extension 占满名额而阻塞。 */
+    maxGlobalSites: 7,
   },
 
   layout: {
@@ -135,7 +142,7 @@ export const CONFIG = {
     harvester: { minCount: 2, maxCount: 4 },
     hauler: { minCount: 2, maxCount: 4 },
     upgrader: { minCount: 1, maxCount: 3 },
-    builder: { minCount: 1, maxCount: 2 },
+    builder: { minCount: 1, maxCount: 4 },
     worker: { minCount: 0, maxCount: 2 },
   },
 } as const;

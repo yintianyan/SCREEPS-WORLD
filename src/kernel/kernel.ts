@@ -106,8 +106,12 @@ export class Kernel {
 
   private buildSnapshots(ctx: Context): void {
     // 预构建全局 source 占用映射，避免每个房间独立遍历全部 Game.creeps。
+    // 仅统计实际采矿角色（harvester/worker），其他角色的 sourceId 仅用于 acquire 寻路，
+    // 不占用采矿位。
     const globalSourceOccupancy = new Map<string, number>();
     for (const creep of Object.values(Game.creeps)) {
+      const role = creep.memory.role;
+      if (role !== "harvester" && role !== "worker") continue;
       const sid = creep.memory.sourceId;
       if (sid) {
         globalSourceOccupancy.set(sid as string, (globalSourceOccupancy.get(sid as string) ?? 0) + 1);

@@ -35,7 +35,22 @@ export const harvesterRole: CreepRole = {
     const assignment = getAssignment(creep, ctx);
 
     if (creep.memory.mode === "work") {
-      // 运送能量。
+      // 老玩家核心策略：harvester 优先倒入身边 container（1 步距离），
+      // 让 hauler 负责长途运输。只有附近无 container 时才跑远路送 spawn。
+
+      // 1. 优先：身边 container（range <= 2）—  стационарный miner 模式。
+      if (snapshot.containers.length > 0) {
+        const nearby = creep.pos.findClosestByRange(snapshot.containers as StructureContainer[]);
+        if (nearby && creep.pos.getRangeTo(nearby) <= 2 && nearby.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+          const result = creep.transfer(nearby, RESOURCE_ENERGY);
+          if (result === ERR_NOT_IN_RANGE) {
+            moveToTarget(creep, nearby);
+          }
+          return;
+        }
+      }
+
+      // 2. 无身边 container（早期未建好）— 直接送 spawn/extension/tower。
       let target: AnyOwnedStructure | undefined;
       if (assignment?.targetId) {
         target = Game.getObjectById(assignment.targetId as Id<AnyOwnedStructure>) ?? undefined;
@@ -48,16 +63,14 @@ export const harvesterRole: CreepRole = {
         if (result === ERR_NOT_IN_RANGE) {
           moveToTarget(creep, target);
         } else if (result === ERR_FULL) {
-          // 目标已满 — 尝试下一个或回退。
           updateMode(creep);
         }
         return;
       }
 
-      // 所有结构已满 — 尝试 container（X-21：预检查 freeCapacity）。
+      // 3. spawn/extension 全满 — 尝试任意有空位的 container。
       if (snapshot.containers.length > 0) {
         const best = findEmptiestContainer(snapshot.containers);
-        // X-21：预估 container 可用空间，为 0 则跳过进入下一个交付目标。
         if (best && best.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
           const result = creep.transfer(best, RESOURCE_ENERGY);
           if (result === ERR_NOT_IN_RANGE) {
@@ -67,7 +80,19 @@ export const harvesterRole: CreepRole = {
         }
       }
 
-      // 全部已满 — 升级控制器作为回退。
+      // 4. 早期优化：全满时帮忙建造附近的 site（加速 container 建设）。
+      if (snapshot.myConstructionSites.length > 0) {
+        const site = creep.pos.findClosestByRange(snapshot.myConstructionSites as ConstructionSite[]);
+        if (site) {
+          const result = creep.build(site);
+          if (result === ERR_NOT_IN_RANGE) {
+            moveToTarget(creep, site);
+          }
+          return;
+        }
+      }
+
+      // 5. 全部已满且无建造目标 — 升级控制器作为回退。
       if (snapshot.controller && snapshot.controller.my) {
         const result = creep.upgradeController(snapshot.controller);
         if (result === ERR_NOT_IN_RANGE) {
@@ -81,14 +106,12 @@ export const harvesterRole: CreepRole = {
     }
 
     // acquire 模式：从固定 source 采集。
-    let source: Source | undefined;
-    if (assignment?.sourceId) {
-      source = Game.getObjectById(assignment.sourceId) ?? undefined;
-      if (source) creep.memory.sourceId = assignment.sourceId as Id<Source>;
+    // 始终通过 getSource() 选择 source — 内部处理拥挤检测和重分配。
+    // assignment 的 sourceId 仅在首次（memory 无 sourceId）时作为初始建议写入。
+    if (!creep.memory.sourceId && assignment?.sourceId) {
+      creep.memory.sourceId = assignment.sourceId as Id<Source>;
     }
-    if (!source) {
-      source = getSource(creep, snapshot);
-    }
+    const source = getSource(creep, snapshot);
     if (source) {
       const result = creep.harvest(source);
       if (result === ERR_NOT_IN_RANGE) {
@@ -97,6 +120,7 @@ export const harvesterRole: CreepRole = {
         // source 暂时耗尽 — 等待。
         creep.memory.mode = "idle";
       }
+      // 注：harvest() 不返回 ERR_FULL — 满载时 updateMode 已将模式切为 work。
       return;
     }
 
