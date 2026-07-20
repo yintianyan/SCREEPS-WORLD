@@ -1,20 +1,18 @@
 import type { CreepRole, Priority, TickContext } from "../kernel/contracts";
-import { ensureHome, flee, findEmptiestContainer, getFillTarget, getSource, moveToTarget, shouldFlee, updateMode } from "./helpers";
+import { ensureHome, flee, getFillTarget, getSource, moveToTarget, shouldFlee, updateMode } from "./helpers";
 
 /**
- * Harvester — P1 角色，固定 source 分配。
+ * 恢复 Worker — P0 混合角色，用于启动期和灾后恢复。
  *
- * 状态机：acquire（从固定 source 采集）→ work（运送到 spawn/extension）
+ * 状态机：acquire（采集）→ work（填充 spawn/extension）
  *
- * 与遗留 harvester 不同，此角色：
- *   - 使用 memory 中存储的固定 source（无需每 tick findClosestByPath）
- *   - 从 RoomSnapshot 读取填充目标
- *   - 使用带卡位检测的 moveTo
- *   - 所有结构满时回退到升级控制器
+ * 此角色在无专业 creep 存活时启动房间。
+ * 直接采集并运送到 spawn/extension，防止能量死锁。
+ * 当 harvester 和 hauler 建立后不再孵化 worker。
  */
-export const harvesterRole: CreepRole = {
-  name: "harvester",
-  priority: 1 as Priority,
+export const workerRole: CreepRole = {
+  name: "worker",
+  priority: 0 as Priority,
   run(creep: Creep, ctx: TickContext): void {
     if (!ensureHome(creep)) {
       creep.memory.mode = "idle";
@@ -34,32 +32,20 @@ export const harvesterRole: CreepRole = {
     updateMode(creep);
 
     if (creep.memory.mode === "work") {
-      // 运送能量。
+      // 向 spawn/extension 运送能量。
       const target = getFillTarget(creep, snapshot);
       if (target) {
         const result = creep.transfer(target, RESOURCE_ENERGY);
         if (result === ERR_NOT_IN_RANGE) {
           moveToTarget(creep, target);
-        } else if (result === ERR_FULL) {
-          // 目标已满 — 尝试下一个或回退。
+        } else if (result === ERR_FULL || result === ERR_NOT_ENOUGH_RESOURCES) {
+          // 目标已满或 creep 空 — 切换模式。
           updateMode(creep);
         }
         return;
       }
 
-      // 所有结构已满 — 尝试 container。
-      if (snapshot.containers.length > 0) {
-        const best = findEmptiestContainer(snapshot.containers);
-        if (best) {
-          const result = creep.transfer(best, RESOURCE_ENERGY);
-          if (result === ERR_NOT_IN_RANGE) {
-            moveToTarget(creep, best);
-          }
-          return;
-        }
-      }
-
-      // 全部已满 — 升级控制器作为回退。
+      // 无填充目标 — 尝试升级控制器作为回退。
       if (snapshot.controller && snapshot.controller.my) {
         const result = creep.upgradeController(snapshot.controller);
         if (result === ERR_NOT_IN_RANGE) {
@@ -68,18 +54,19 @@ export const harvesterRole: CreepRole = {
         return;
       }
 
+      // 无事可做 — 在 spawn 附近空闲。
       creep.memory.mode = "idle";
       return;
     }
 
-    // acquire 模式：从固定 source 采集。
+    // acquire 模式：从 source 采集。
     const source = getSource(creep, snapshot);
     if (source) {
       const result = creep.harvest(source);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(creep, source);
       } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
-        // source 暂时耗尽 — 等待。
+        // source 耗尽 — 短暂等待。
         creep.memory.mode = "idle";
       }
       return;

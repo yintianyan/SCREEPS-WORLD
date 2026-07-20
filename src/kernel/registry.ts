@@ -1,6 +1,6 @@
-import type { CreepRole, System } from "./contracts";
+import type { CreepRole, Priority, System } from "./contracts";
 
-/** Explicit registration prevents import-order coupling and makes extensions auditable. */
+/** 显式注册可防止 import 顺序耦合，使扩展可审计。 */
 export class Registry {
   private readonly systems = new Map<string, System>();
   private readonly roles = new Map<string, CreepRole>();
@@ -17,10 +17,30 @@ export class Registry {
     return this;
   }
 
-  getSystems(): Iterable<System> { return this.systems.values(); }
-  getRole(name: string): CreepRole | undefined { return this.roles.get(name); }
+  /** 系统按优先级升序排列（P0 在前）。 */
+  getSystems(): System[] {
+    return [...this.systems.values()].sort((a, b) => a.priority - b.priority);
+  }
+
+  /** 角色按优先级升序排列（P0 在前）。 */
+  getRoles(): CreepRole[] {
+    return [...this.roles.values()].sort((a, b) => a.priority - b.priority);
+  }
+
+  getRole(name: string): CreepRole | undefined {
+    return this.roles.get(name);
+  }
+
+  getSystem(name: string): System | undefined {
+    return this.systems.get(name);
+  }
 
   private assertUnique<T>(items: Map<string, T>, name: string, kind: string): void {
     if (items.has(name)) throw new Error(`Duplicate ${kind} registration: ${name}`);
   }
+}
+
+/** 用于定义优先级常量的辅助函数，提升可读性。 */
+export function P(priority: Priority): Priority {
+  return priority;
 }

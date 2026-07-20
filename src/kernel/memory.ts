@@ -1,16 +1,128 @@
 import { CONFIG } from "../config";
+import { globalCache } from "./global-cache";
 
+/** 从版本 N 到 N+1 的迁移函数。每个必须幂等。 */
+const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> = [
+  {
+    from: 0,
+    to: 1,
+    run: () => {
+      Memory.creeps ??= {};
+      Memory.rooms ??= {};
+    },
+  },
+  {
+    from: 1,
+    to: 2,
+    run: () => {
+      // v2：添加 kernel 跟踪，确保房间有孵化/建造队列。
+      Memory.kernel ??= {};
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName];
+        if (!room) continue;
+        room.spawnQueue ??= [];
+        room.buildQueue ??= [];
+        room.layout ??= {
+          version: 1,
+          templateId: "compact-core-v1",
+          state: "accepted",
+          revision: 0,
+          nextPlanTick: 0,
+        };
+      }
+      // 迁移遗留 creep memory：从 working 标志设置 mode。
+      for (const name in Memory.creeps) {
+        const creep = Memory.creeps[name];
+        if (creep && !creep.mode) {
+          creep.mode = creep.working ? "work" : "acquire";
+        }
+      }
+    },
+  },
+];
+
+/**
+ * 维护 Memory：执行版本化迁移、清理死亡 creep、初始化默认值。
+ * 每 tick 开头调用一次。
+ */
 export function maintainMemory(): void {
-  if (Memory.schemaVersion !== CONFIG.memory.schemaVersion) migrateMemory();
+  const current = Memory.schemaVersion ?? 0;
+  if (current < CONFIG.memory.schemaVersion) migrateMemory(current);
 
+  // 确保根结构存在。
+  Memory.creeps ??= {};
+  Memory.rooms ??= {};
+  Memory.kernel ??= {};
+
+  // 每 tick 清理死亡 creep memory（小帝国 — 安全且廉价）。
   for (const name in Memory.creeps) {
     if (!Game.creeps[name]) delete Memory.creeps[name];
   }
+
+  // 确保每个自有房间有 RoomMemory 条目。
+  for (const roomName in Game.rooms) {
+    const room = Game.rooms[roomName];
+    if (!room || !room.controller?.my) continue;
+    if (!Memory.rooms[roomName]) {
+      Memory.rooms[roomName] = { spawnQueue: [], buildQueue: [] };
+    } else {
+      const rm = Memory.rooms[roomName];
+      rm.spawnQueue ??= [];
+      rm.buildQueue ??= [];
+    }
+  }
 }
 
-function migrateMemory(): void {
-  // Add migrations here in ascending version order. Migrations must be idempotent.
-  Memory.creeps ??= {};
-  Memory.rooms ??= {};
+/** 按升序执行迁移。每个迁移都是幂等的。 */
+function migrateMemory(currentVersion: number): void {
+  let version = currentVersion;
+  for (const migration of MIGRATIONS) {
+    if (version === migration.from) {
+      migration.run();
+      version = migration.to;
+      Memory.schemaVersion = version;
+    }
+  }
+  // 如果没有迁移执行，强制将 schema 版本设为目标值。
   Memory.schemaVersion = CONFIG.memory.schemaVersion;
+}
+
+/**
+ * 记录跳过原因，用于遥测和诊断。
+ * 单 tick 内累加到 global 缓冲区，tick 末尾由 flushSkips 低频刷入 Memory，
+ * 避免在 CPU 压力下产生频繁 Memory 写入。
+ */
+export function recordSkip(reason: string): void {
+  const g = globalCache();
+  if (!g.skipBuffer) g.skipBuffer = {};
+  g.skipBuffer[reason] = (g.skipBuffer[reason] ?? 0) + 1;
+
+  // 同时递增单 tick 遥测计数器。
+  if (g.telemetry && g.telemetry.tick === Game.time) {
+    g.telemetry.skipped++;
+  }
+}
+
+/**
+ * 将 global 中的 skipBuffer 刷入 Memory，并执行低频清理。
+ * 由 Kernel 在 tick 末尾调用。
+ */
+export function flushSkips(): void {
+  const g = globalCache();
+  if (!g.skipBuffer) return;
+
+  if (!Memory.kernel) Memory.kernel = {};
+  if (!Memory.kernel.skipReasons) Memory.kernel.skipReasons = {};
+
+  for (const [reason, count] of Object.entries(g.skipBuffer)) {
+    // 累加但设上限，防止数字溢出。
+    const current = Memory.kernel.skipReasons[reason] ?? 0;
+    Memory.kernel.skipReasons[reason] = Math.min(current + count, 100000);
+  }
+  g.skipBuffer = {};
+
+  // 每 500 tick 重置统计窗口，保留最近数据，防止无限增长。
+  if (Game.time % 500 === 0) {
+    Memory.kernel.skipReasons = {};
+  }
 }
