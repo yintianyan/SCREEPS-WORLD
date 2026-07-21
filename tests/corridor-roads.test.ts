@@ -38,6 +38,7 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
     ramparts: [],
     storage: undefined,
     controllerContainer: undefined,
+    links: [],
     sources: [],
     constructionSites: [],
     myConstructionSites: [],

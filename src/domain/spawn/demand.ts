@@ -1,6 +1,6 @@
 import { CONFIG } from "../../config";
 import { degradeBody, selectBody } from "../../config/bodies";
-import type { RoomSnapshot } from "../../kernel/contracts";
+import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import { countPending, spawnKey } from "./queue";
 
 /** 各角色降级时必需保留的最小部件组合。hauler 无需 WORK。 */
@@ -8,42 +8,37 @@ const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConstant[]>>
   hauler: ["carry", "move"],
 };
 
-/** 单次遍历统计房间内所有角色的存活 creep 数（含孵化中）。 */
-export function countAllCreeps(roomName: string): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const creep of Object.values(Game.creeps)) {
-    const home = creep.memory.home ?? creep.room.name;
-    if (home !== roomName) continue;
-    const role = creep.memory.role ?? "unknown";
-    counts[role] = (counts[role] ?? 0) + 1;
-  }
-  // 包含本房间正在孵化中的 creep。
-  for (const spawn of Object.values(Game.spawns)) {
-    if (spawn.room.name !== roomName) continue;
-    const spawning = spawn.spawning;
-    if (!spawning) continue;
-    const mem = Memory.creeps[spawning.name];
-    if (!mem) continue;
-    const home = mem.home ?? spawn.room.name;
-    if (home !== roomName) continue;
-    const role = mem.role ?? "unknown";
-    counts[role] = (counts[role] ?? 0) + 1;
-  }
-  return counts;
+/**
+ * 单个 creep 的摘要信息 — 供纯函数消费，不持有 Creep 对象。
+ *
+ * 适配层（系统/角色层）从 `Game.creeps` 收集后传入。
+ */
+export interface CreepSummary {
+  name: string;
+  role: string;
+  home: string;
+  ticksToLive?: number;
+  bodyLength: number;
+  sourceId?: Id<Source>;
+  spawnIndex?: number;
 }
 
-/** 兼容旧调用方的单角色计数（内部走 countAllCreeps）。 */
-export function countCreeps(role: string, roomName: string): number {
-  return countAllCreeps(roomName)[role] ?? 0;
+/** 正在孵化中的 creep 摘要。 */
+export interface SpawningSummary {
+  name: string;
+  role: string;
+  home: string;
 }
 
-/** 判断 creep 是否即将需要替换（ticksToLive <= body.length * 3 + buffer）。 */
-export function needsReplacement(creep: Creep): boolean {
-  const ttl = creep.ticksToLive;
-  if (ttl === undefined) return false;
-  const bodySize = creep.body.length;
-  const threshold = bodySize * 3 + CONFIG.spawn.replaceBuffer;
-  return ttl <= threshold;
+/**
+ * 房间经济上下文 — 从 Memory/Game 收集的标志位，供纯函数消费。
+ *
+ * 适配层负责从 `Memory.rooms[roomName]` 和 `Game.rooms[roomName]` 读取后传入。
+ */
+export interface RoomDemandContext {
+  colonyState: ColonyState;
+  controllerDowngradeRisk: boolean;
+  energyAvailable: number;
 }
 
 interface DemandResult {
@@ -51,8 +46,47 @@ interface DemandResult {
 }
 
 /**
- * 评估房间快照的孵化需求。
- * 返回待提交的新 SpawnRequest 列表（已按 key 去重）。
+ * 统计指定房间内所有角色的存活 creep 数（含孵化中）。
+ *
+ * 纯函数 — 接收预收集的 creep 和 spawning 摘要列表，不访问 Game/Memory。
+ */
+export function countCreepsByRole(
+  creeps: readonly CreepSummary[],
+  spawning: readonly SpawningSummary[],
+  roomName: string,
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const creep of creeps) {
+    if (creep.home !== roomName) continue;
+    const role = creep.role ?? "unknown";
+    counts[role] = (counts[role] ?? 0) + 1;
+  }
+  for (const s of spawning) {
+    if (s.home !== roomName) continue;
+    const role = s.role ?? "unknown";
+    counts[role] = (counts[role] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * 判断 creep 是否即将需要替换（ticksToLive <= body.length * 3 + buffer）。
+ * 纯函数 — 接收显式参数，不访问 Creep 对象。
+ */
+export function needsReplacement(
+  ticksToLive: number | undefined,
+  bodyLength: number,
+): boolean {
+  if (ticksToLive === undefined) return false;
+  const threshold = bodyLength * 3 + CONFIG.spawn.replaceBuffer;
+  return ticksToLive <= threshold;
+}
+
+/**
+ * 评估房间孵化需求。
+ *
+ * 纯函数 — 接收预收集的所有数据（快照、队列、creep 摘要、房间上下文），
+ * 返回待提交的 SpawnRequest 列表。不访问 Game/Memory。
  *
  * 优先级顺序：
  *   P0 — 无 harvester 时的恢复 worker
@@ -64,16 +98,20 @@ interface DemandResult {
 export function evaluateDemand(
   snapshot: RoomSnapshot,
   queue: readonly SpawnRequest[],
-  colonyState: string,
+  colonyState: ColonyState,
+  creeps: readonly CreepSummary[],
+  spawning: readonly SpawningSummary[],
+  roomCtx: RoomDemandContext,
+  tick: number,
 ): DemandResult {
   const requests: SpawnRequest[] = [];
   const home = snapshot.roomName;
   const energyCapacity = snapshot.energyCapacityAvailable;
-  // 能量危机标志（room-observer 计算）— 危机时优先保 harvester、收缩升级等消耗。
-  const energyCrisis = Memory.rooms[home]?.energyCrisis === true;
+  // 统一经济状态：recovery 涵盖 crisis + recovery 相位，收缩非关键消耗。
+  const inCrisis = colonyState === "recovery";
 
   // 单次遍历获取所有角色计数。
-  const counts = countAllCreeps(home);
+  const counts = countCreepsByRole(creeps, spawning, home);
   const pending = {
     harvester: countPending(queue, "harvester"),
     worker: countPending(queue, "worker"),
@@ -92,7 +130,7 @@ export function evaluateDemand(
   if (harvesterCount === 0) {
     const key = spawnKey("worker", home, 0);
     if (!hasKey(queue, key)) {
-      requests.push(createRequest("worker", home, 0, key, 0, energyCapacity, colonyState, snapshot.rcl));
+      requests.push(createRequest("worker", home, 0, key, 0, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
     }
     return { requests }; // P0 阻塞其他所有请求
   }
@@ -129,7 +167,7 @@ export function evaluateDemand(
       if (!hasKey(queue, key)) {
         // 危机时 harvester 提为 P0：经济引擎优先于一切，尽快恢复采集。
         requests.push(
-          createRequest("harvester", home, 1, key, energyCrisis ? 0 : 1, energyCapacity, colonyState, snapshot.rcl, sourceId),
+          createRequest("harvester", home, 1, key, inCrisis ? 0 : 1, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick, sourceId),
         );
       }
     }
@@ -149,22 +187,21 @@ export function evaluateDemand(
     : 0;
   // 能量危机：收缩 hauler 到 minCount —— 仅保留把能量搬回 spawn 供孵化 harvester 的最小力量，
   // 避免孵出一堆无能量可搬的空闲 hauler，白白浪费孵化能量。
-  const haulerTarget = energyCrisis
+  const haulerTarget = inCrisis
     ? Math.min(dynamicHaulerTarget, haulerConfig.minCount)
     : dynamicHaulerTarget;
   if (haulerTotal < haulerTarget && hasLogistics) {
     for (let i = haulerTotal; i < haulerTarget; i++) {
       const key = spawnKey("hauler", home, i);
       if (!hasKey(queue, key)) {
-        requests.push(createRequest("hauler", home, i, key, 1, energyCapacity, colonyState, snapshot.rcl));
+        requests.push(createRequest("hauler", home, i, key, 1, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
       }
     }
   }
 
   // P2：Upgrader — 仅在 normal 状态下，不在 bootstrap/recovery。
   // 当控制器存在降级风险时，即使在 recovery/bootstrap 也允许生成 upgrader（P1 优先级）。
-  const roomMem = Memory.rooms[home];
-  const hasDowngradeRisk = roomMem?.controllerDowngradeRisk === true;
+  const hasDowngradeRisk = roomCtx.controllerDowngradeRisk;
   const allowUpgrader = colonyState === "normal" || hasDowngradeRisk;
 
   if (allowUpgrader) {
@@ -181,9 +218,9 @@ export function evaluateDemand(
     // 仅当控制器真正快降级（ticksToDowngrade < downgradeGuard）时保留 minCount 个 upgrader 保级。
     const ctrl = snapshot.controller;
     const crisisNeedsGuard =
-      energyCrisis && ctrl !== undefined && ctrl.ticksToDowngrade < CONFIG.economy.crisis.downgradeGuard;
+      inCrisis && ctrl !== undefined && ctrl.ticksToDowngrade < CONFIG.economy.crisis.downgradeGuard;
     let upgraderTarget: number;
-    if (energyCrisis) {
+    if (inCrisis) {
       upgraderTarget = crisisNeedsGuard ? upgraderConfig.minCount : 0;
     } else {
       upgraderTarget =
@@ -196,7 +233,7 @@ export function evaluateDemand(
       for (let i = upgraderTotal; i < upgraderTarget; i++) {
         const key = spawnKey("upgrader", home, i);
         if (!hasKey(queue, key)) {
-          requests.push(createRequest("upgrader", home, i, key, upgraderPriority, energyCapacity, colonyState, snapshot.rcl));
+          requests.push(createRequest("upgrader", home, i, key, upgraderPriority, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
         }
       }
     }
@@ -212,12 +249,12 @@ export function evaluateDemand(
       );
       // 能量危机：收缩 builder 到 minCount —— 仅留 1 个处理关键 source container 重建（恢复收入），
       // 避免按 site 数孵出一堆无能量可建的空闲 builder 浪费孵化能量。
-      const builderTarget = energyCrisis ? builderConfig.minCount : dynamicBuilderTarget;
+      const builderTarget = inCrisis ? builderConfig.minCount : dynamicBuilderTarget;
       if (builderTotal < builderTarget) {
         for (let i = builderTotal; i < builderTarget; i++) {
           const key = spawnKey("builder", home, i);
           if (!hasKey(queue, key)) {
-            requests.push(createRequest("builder", home, i, key, 2, energyCapacity, colonyState, snapshot.rcl));
+            requests.push(createRequest("builder", home, i, key, 2, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
           }
         }
       }
@@ -232,10 +269,10 @@ export function evaluateDemand(
   //   4. 稳定 key（不含 sourceId，防止 assignment 重分配导致 key 漂移产生重复）
   const roleConfigs = CONFIG.roles as Record<string, { minCount: number; maxCount: number }>;
 
-  for (const creep of Object.values(Game.creeps)) {
-    if ((creep.memory.home ?? creep.room.name) !== home) continue;
-    if (!needsReplacement(creep)) continue;
-    const role = creep.memory.role;
+  for (const creep of creeps) {
+    if (creep.home !== home) continue;
+    if (!needsReplacement(creep.ticksToLive, creep.bodyLength)) continue;
+    const role = creep.role;
     const config = roleConfigs[role];
     if (!config) continue;
 
@@ -256,12 +293,12 @@ export function evaluateDemand(
     if (livingCount - 1 + pendingCount >= config.minCount) continue;
 
     // 门禁 4：稳定 key — 不含 sourceId，防止 assignment 重分配导致 key 漂移。
-    const index = creep.memory.spawnIndex ?? 0;
+    const index = creep.spawnIndex ?? 0;
     const key = spawnKey(role, home, index);
     if (!hasKey(queue, key) && !requests.some(r => r.key === key)) {
       const priority = role === "harvester" || role === "worker" ? 1 : 2;
-      const req = createRequest(role, home, index, key, priority, energyCapacity, colonyState, snapshot.rcl, creep.memory.sourceId);
-      req.replaceBy = Game.time + req.body.length * 3 + CONFIG.spawn.replaceBuffer;
+      const req = createRequest(role, home, index, key, priority, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick, creep.sourceId);
+      req.replaceBy = tick + req.body.length * 3 + CONFIG.spawn.replaceBuffer;
       requests.push(req);
     }
   }
@@ -273,6 +310,11 @@ function hasKey(queue: readonly SpawnRequest[], key: string): boolean {
   return queue.some(r => r.key === key);
 }
 
+/**
+ * 创建孵化请求（纯函数）。
+ *
+ * energyAvailable 和 tick 由调用方显式传入，不从 Game/Memory 读取。
+ */
 function createRequest(
   role: string,
   home: string,
@@ -280,8 +322,10 @@ function createRequest(
   key: string,
   priority: 0 | 1 | 2 | 3 | 4,
   energyCapacity: number,
-  colonyState: string,
+  energyAvailable: number,
+  colonyState: ColonyState,
   rcl: number,
+  tick: number,
   sourceId?: Id<Source>,
 ): SpawnRequest {
   // X-16：P0/P1 角色的 body 降级阈值基于 energyAvailable（当前可用能量），
@@ -290,7 +334,6 @@ function createRequest(
   let body: BodyPartConstant[];
   if (priority <= 1 || colonyState === "bootstrap" || colonyState === "recovery") {
     const fullBody = selectBody(role, energyCapacity, { rcl });
-    const energyAvailable = Game.rooms[home]?.energyAvailable ?? 200;
     const requiredParts = ROLE_REQUIRED_PARTS[role];
     // 优雅降级：孵化当前能量能负担的最大 body。宁可先出一个较小的 harvester（低效但维持 colony 存活），
     // 也不要为等待大 body 而让 harvester 断档归零（曾因此陷入「无 harvester→无收入→永远孵不起」死锁）。
@@ -314,7 +357,7 @@ function createRequest(
     priority,
     body,
     memory,
-    createdAt: Game.time,
+    createdAt: tick,
     retries: 0,
   };
 }

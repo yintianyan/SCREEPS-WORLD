@@ -1,7 +1,8 @@
 import { CONFIG } from "../config";
 import { bodyCost, degradeBody, RECOVERY_BODY } from "../config/bodies";
 import type { Priority, System, TickContext } from "../kernel/contracts";
-import { evaluateDemand } from "../domain/spawn/demand";
+import { evaluateDemand, type CreepSummary, type SpawningSummary, type RoomDemandContext } from "../domain/spawn/demand";
+import type { ColonyState } from "../kernel/contracts";
 import { cleanQueue, sortQueue, submitRequest } from "../domain/spawn/queue";
 
 /**
@@ -25,8 +26,24 @@ export const spawnManagerSystem: System = {
 
       const queue = roomMem.spawnQueue ?? [];
 
-      // 1. 评估需求并提交新请求。
-      const { requests } = evaluateDemand(snapshot, queue, ctx.colonyState);
+      // 1. 从 Game/Memory 收集数据，调用纯函数评估需求。
+      const creeps = collectCreepSummaries();
+      const spawning = collectSpawningSummaries();
+      const colonyState: ColonyState = roomMem.colonyState ?? "normal";
+      const roomCtx: RoomDemandContext = {
+        colonyState,
+        controllerDowngradeRisk: roomMem.controllerDowngradeRisk === true,
+        energyAvailable: Game.rooms[snapshot.roomName]?.energyAvailable ?? 200,
+      };
+      const { requests } = evaluateDemand(
+        snapshot,
+        queue,
+        colonyState,
+        creeps,
+        spawning,
+        roomCtx,
+        ctx.tick,
+      );
       for (const req of requests) {
         submitRequest(queue, req);
       }
@@ -140,3 +157,43 @@ export const spawnManagerSystem: System = {
     ctx: TickContext,
   ): void;
 };
+
+/**
+ * 适配层：从 Game.creeps 收集所有 creep 摘要。
+ * 供纯函数 evaluateDemand 消费，避免领域层直接访问 Game。
+ */
+function collectCreepSummaries(): CreepSummary[] {
+  const result: CreepSummary[] = [];
+  for (const creep of Object.values(Game.creeps)) {
+    result.push({
+      name: creep.name,
+      role: creep.memory.role ?? "unknown",
+      home: creep.memory.home ?? creep.room.name,
+      ticksToLive: creep.ticksToLive,
+      bodyLength: creep.body.length,
+      sourceId: creep.memory.sourceId,
+      spawnIndex: creep.memory.spawnIndex,
+    });
+  }
+  return result;
+}
+
+/**
+ * 适配层：从 Game.spawns 收集正在孵化中的 creep 摘要。
+ * 供纯函数 evaluateDemand 消费，避免领域层直接访问 Game/Memory。
+ */
+function collectSpawningSummaries(): SpawningSummary[] {
+  const result: SpawningSummary[] = [];
+  for (const spawn of Object.values(Game.spawns)) {
+    const spawning = spawn.spawning;
+    if (!spawning) continue;
+    const mem = Memory.creeps[spawning.name];
+    if (!mem) continue;
+    result.push({
+      name: spawning.name,
+      role: mem.role ?? "unknown",
+      home: mem.home ?? spawn.room.name,
+    });
+  }
+  return result;
+}

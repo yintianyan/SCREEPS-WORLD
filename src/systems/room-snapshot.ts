@@ -19,6 +19,7 @@ export function buildRoomSnapshot(
   const spawns = myStructures.filter(isSpawn);
   const extensions = myStructures.filter(isExtension);
   const towers = myStructures.filter(isTower);
+  const links = myStructures.filter(isLink);
 
   // 一次 find 获取所有中性结构，在 JS 层按类型分组。
   // 比多次带 filter 的 find 更高效（减少 C++ ↔ JS 边界穿越）。
@@ -85,6 +86,7 @@ export function buildRoomSnapshot(
     ramparts,
     storage,
     controllerContainer,
+    links,
     sources,
     constructionSites: allSites,
     myConstructionSites: mySites,
@@ -109,6 +111,10 @@ function isExtension(s: AnyOwnedStructure): s is StructureExtension {
 
 function isTower(s: AnyOwnedStructure): s is StructureTower {
   return s.structureType === STRUCTURE_TOWER;
+}
+
+function isLink(s: AnyOwnedStructure): s is StructureLink {
+  return s.structureType === STRUCTURE_LINK;
 }
 
 

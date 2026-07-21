@@ -66,7 +66,22 @@ export const upgraderRole: CreepRole = {
       return;
     }
 
-    // acquire 模式：站桩升级核心 — 优先从 controller 旁 container 取能（0 通勤）。
+    // acquire 模式：站桩升级核心 — 优先从 controller 旁 link 取能（link 瞬移供能，0 通勤）。
+    // link 系统将 source link 的能量瞬移到 controller link，upgrader 直接 withdraw。
+    if (snapshot.links.length > 0 && snapshot.controller) {
+      const ctrlLink = snapshot.links.find(
+        l => l.pos.getRangeTo(snapshot.controller!) <= 2 && l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      );
+      if (ctrlLink) {
+        const result = creep.withdraw(ctrlLink, RESOURCE_ENERGY);
+        if (result === ERR_NOT_IN_RANGE) {
+          moveToTarget(creep, ctrlLink);
+        }
+        return;
+      }
+    }
+
+    // 回退：从 controller 旁 container 取能（0 通勤）。
     // 这是老玩家的标准操作：upgrader 站在 controller 与 container 之间，
     // withdraw + upgrade 循环，几乎 100% 时间都在升级，不再长途跋涉回 spawn 区取能。
     if (

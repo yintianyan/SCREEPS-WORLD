@@ -1,5 +1,5 @@
 import { CONFIG, getSourceTargetWorkParts } from "../../config";
-import type { RoomSnapshot, TickContext } from "../../kernel/contracts";
+import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import {
   globalCache,
   type AssignmentTaskEntry,
@@ -17,6 +17,33 @@ const ROLE_TASK_KINDS: Readonly<Record<string, readonly string[]>> = {
   builder: ["build"],
 };
 
+// ──────────────────────────────────────────────
+// 纯数据接口 — 适配层从 Game/Memory 收集后传入
+// ──────────────────────────────────────────────
+
+/**
+ * 单个 creep 的分配摘要 — 供纯函数消费，不持有 Creep 对象。
+ */
+export interface CreepAssignmentRef {
+  name: string;
+  home: string;
+  assignment?: {
+    id: string;
+    kind: string;
+    sourceId?: string;
+  };
+}
+
+/** 房间任务上下文标志 — 从 Memory 收集后传入。 */
+export interface RoomTaskFlags {
+  colonyState: ColonyState;
+  controllerDowngradeRisk: boolean;
+}
+
+// ──────────────────────────────────────────────
+// globalCache 操作（可接受 — globalCache 是可丢失的临时缓存，非 Game/Memory）
+// ──────────────────────────────────────────────
+
 /** 初始化 assignment 缓存（每 tick 开头调用）。 */
 export function initAssignment(tick: number): void {
   const g = globalCache();
@@ -26,36 +53,43 @@ export function initAssignment(tick: number): void {
   };
 }
 
-/**
- * 为单个房间生成本 tick 可用任务列表（plan §5.7.2）。
- * 根据 RoomSnapshot、colony 状态和当前人口计算。
- *
- * 性能优化：单次遍历 Game.creeps，按 assignment.id 分桶到 Map，
- * 所有任务共用同一份分桶结果，避免 O(N×M) 重复扫描（N=任务数, M=creep 数）。
- */
-export function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): void {
-  const g = globalCache();
-  if (!g.assignment || g.assignment.tick !== ctx.tick) return;
+// ──────────────────────────────────────────────
+// 纯函数 — 不访问 Game/Memory，接收显式数据参数
+// ──────────────────────────────────────────────
 
+/**
+ * 为单个房间生成本 tick 可用任务列表（纯函数）。
+ *
+ * 接收预收集的 creep 分配摘要和房间标志位，返回排序后的任务列表。
+ * 不访问 Game/Memory — 所有外部状态由参数传入。
+ *
+ * 性能优化：单次遍历 creep 摘要，按 assignment.id 分桶到 Map，
+ * 所有任务共用同一份分桶结果，避免 O(N×M) 重复扫描。
+ */
+export function buildRoomTasks(
+  snapshot: RoomSnapshot,
+  creeps: readonly CreepAssignmentRef[],
+  flags: RoomTaskFlags,
+): AssignmentTaskEntry[] {
   const tasks: AssignmentTaskEntry[] = [];
   const roomName = snapshot.roomName;
 
-  // 单次遍历 Game.creeps，按 home 过滤后分桶到两个 Map：
+  // 单次遍历 creep 摘要，按 home 过滤后分桶到两个 Map：
   //   taskToCreeps: assignment.id -> creep 名字列表（fill/haul/build/upgrade 共用）
   //   sourceToCreeps: sourceId -> creep 名字列表（仅 harvest 用）
   const taskToCreeps = new Map<string, string[]>();
   const sourceToCreeps = new Map<string, string[]>();
-  for (const creep of Object.values(Game.creeps)) {
-    if (creep.memory.home !== roomName) continue;
-    const a = creep.memory.assignment;
+  for (const creep of creeps) {
+    if (creep.home !== roomName) continue;
+    const a = creep.assignment;
     if (!a) continue;
     const taskList = taskToCreeps.get(a.id) ?? [];
     taskList.push(creep.name);
     taskToCreeps.set(a.id, taskList);
     if (a.kind === "harvest" && a.sourceId) {
-      const srcList = sourceToCreeps.get(a.sourceId as string) ?? [];
+      const srcList = sourceToCreeps.get(a.sourceId) ?? [];
       srcList.push(creep.name);
-      sourceToCreeps.set(a.sourceId as string, srcList);
+      sourceToCreeps.set(a.sourceId, srcList);
     }
   }
 
@@ -92,10 +126,8 @@ export function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): voi
   }
 
   // 3. haul 任务 — 从 container/storage 取能量。
-  // sourceId 指向 pickup 点（container 优先，storage 次选），让 hauler 确定性分配而非各自竞争。
   if (snapshot.containers.length > 0 || snapshot.storage) {
     const pickupId = selectHaulPickupId(snapshot);
-    // 找不到有能量的 pickup 点时不创建 haul 任务 — 避免分配无效任务。
     if (pickupId) {
       tasks.push({
         id: `haul:${roomName}`,
@@ -110,18 +142,17 @@ export function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): voi
 
   // 4. build 任务 — 为每个 active site 生成。
   const ctrl = snapshot.controller;
-  const energyCrisis = Memory.rooms[roomName]?.energyCrisis === true;
+  const inCrisis = flags.colonyState === "recovery";
   for (const site of snapshot.myConstructionSites) {
     const isCritical = site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
     // controller container 是站桩升级链路的核心基础设施 — 提升为 priority 1，
-    // 确保 builder 优先建造它而非远处的 extension（否则按数组序它会被 extension 挤占饿死）。
+    // 确保 builder 优先建造它而非远处的 extension。
     const isControllerContainer =
       site.structureType === STRUCTURE_CONTAINER &&
       ctrl !== undefined &&
       Math.abs(site.pos.x - ctrl.pos.x) <= 1 &&
       Math.abs(site.pos.y - ctrl.pos.y) <= 1;
-    // source container 同样是关键物流基础设施：缺失时该 source 的 harvester 只能长途送能到 spawn，
-    // 半个房间的收入瘫痪。故与 controller container 一样提升为 priority 1 优先建造/重建。
+    // source container 同样是关键物流基础设施。
     const isSourceContainer =
       site.structureType === STRUCTURE_CONTAINER &&
       snapshot.sources.some(
@@ -129,9 +160,8 @@ export function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): voi
       );
     const isPriorityContainer = isControllerContainer || isSourceContainer;
     // 能量危机：仅暂停道路（纯效率投入、无产能回报，是真正可推迟的 discretionary 建造）。
-    // 保留 extension —— 它提升能量容量→能孵更大 harvester→正是脱离危机的恢复路径，暂停反而固化螺旋。
     const isRoad = site.structureType === STRUCTURE_ROAD;
-    if (energyCrisis && isRoad) continue;
+    if (inCrisis && isRoad) continue;
     tasks.push({
       id: `build:${roomName}:${site.id}`,
       kind: "build",
@@ -145,8 +175,8 @@ export function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): voi
 
   // 5. upgrade 任务 — 仅在 normal 或有降级风险时。
   if (snapshot.controller && snapshot.controller.my) {
-    const hasDowngradeRisk = Memory.rooms[roomName]?.controllerDowngradeRisk === true;
-    const allowUpgrade = ctx.colonyState === "normal" || hasDowngradeRisk;
+    const hasDowngradeRisk = flags.controllerDowngradeRisk;
+    const allowUpgrade = flags.colonyState === "normal" || hasDowngradeRisk;
     if (allowUpgrade) {
       tasks.push({
         id: `upgrade:${roomName}`,
@@ -159,96 +189,74 @@ export function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): voi
     }
   }
 
-  g.assignment.roomTasks.set(roomName, tasks);
+  // 预排序：按 priority 升序，供 chooseTaskForRole 直接遍历选择。
+  tasks.sort((a, b) => a.priority - b.priority);
+  return tasks;
 }
 
 /**
- * 为 creep 获取或续约任务（plan §5.7.2）。
+ * 验证 assignment 是否仍然有效（纯函数）。
  *
- * 流程：
- *   1. 检查现有 assignment 是否有效（lease/target/source）
- *   2. 有效则续约 lease 并返回
- *   3. 无效则释放旧任务，从可用列表中分配新的
- *   4. 无可用任务返回 undefined（角色进入 idle）
+ * 无效条件：lease 过期、revision 变化、target 消失、source 消失。
+ * 所有外部状态由参数传入，不访问 Game/Memory。
  */
-export function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | undefined {
-  // 1. 检查现有 assignment。
-  if (validateAssignment(creep, ctx)) {
-    creep.memory.assignment!.leaseUntil = ctx.tick + CONFIG.assignment.leaseDuration;
-    return creep.memory.assignment;
-  }
+export function validateAssignmentRules(
+  assignment: CreepAssignment,
+  tick: number,
+  layoutRevision: number,
+  targetExists: boolean,
+  sourceExists: boolean,
+): boolean {
+  // lease 过期。
+  if (tick > assignment.leaseUntil) return false;
 
-  // 2. 释放旧 assignment。
-  if (creep.memory.assignment) {
-    releaseFromTask(creep);
-    creep.memory.assignment = undefined;
-  }
+  // revision 变化检查 — 布局修订后旧 assignment 立即失效。
+  if (assignment.revision !== layoutRevision) return false;
 
-  // 3. 从任务列表中找新任务。
-  const g = globalCache();
-  if (!g.assignment || g.assignment.tick !== ctx.tick) return undefined;
+  // target 存在检查。
+  if (assignment.targetId && !targetExists) return false;
 
-  const home = creep.memory.home ?? creep.room?.name ?? "";
-  const roomTasks = g.assignment.roomTasks.get(home);
-  if (!roomTasks) return undefined;
+  // source 存在检查。
+  if (assignment.sourceId && !sourceExists) return false;
 
-  const roleKinds = ROLE_TASK_KINDS[creep.memory.role] ?? [];
-  if (roleKinds.length === 0) return undefined;
-
-  // 按优先级排序任务。
-  const sorted = [...roomTasks]
-    .filter(t => roleKinds.includes(t.kind))
-    .sort((a, b) => a.priority - b.priority);
-
-  const chosen = chooseBuildAwareTask(creep, sorted);
-  if (!chosen) return undefined;
-
-  const assignment: CreepAssignment = {
-    id: chosen.id,
-    kind: chosen.kind as CreepAssignment["kind"],
-    targetId: chosen.targetId as Id<_HasId> | undefined,
-    sourceId: chosen.sourceId as Id<Source> | undefined,
-    // 携带当前 layout.revision — 布局修订后此值不一致，validateAssignment 立即失效。
-    revision: getCurrentLayoutRevision(home),
-    assignedAt: ctx.tick,
-    leaseUntil: ctx.tick + CONFIG.assignment.leaseDuration,
-  };
-
-  creep.memory.assignment = assignment;
-  chosen.assignedCreeps.push(creep.name);
-  return assignment;
+  return true;
 }
 
 /**
- * 为 creep 选择任务（含 builder 修路保障）。
+ * 为角色从预排序任务列表中选择任务（纯函数）。
+ *
+ * 任务列表已按 priority 升序排列。遍历选择第一个匹配角色且有空位的任务。
  *
  * builder 特殊处理：道路 build 任务 priority 与 extension 平局，按数组序排在后面会被永久饥饿。
  * 这里预留 1 个 builder 给道路 —— 仅当「有道路任务待建」「尚无 builder 在修路」
- * 「且无 critical（spawn/tower，priority≤1）缺口」时触发，把本 builder 指派给第一个道路任务。
- * 这样既保证走廊路持续施工，又不会从关键防御/孵化结构抢夺 builder。
+ * 「且无 critical（spawn/tower，priority≤1）缺口」时触发。
  */
-function chooseBuildAwareTask(
-  creep: Creep,
-  sorted: AssignmentTaskEntry[],
+export function chooseTaskForRole(
+  role: string,
+  tasks: readonly AssignmentTaskEntry[],
 ): AssignmentTaskEntry | undefined {
-  if (creep.memory.role === "builder") {
-    const roadTasks = sorted.filter(
-      t => t.kind === "build" && t.structureType === STRUCTURE_ROAD && t.assignedCreeps.length < t.maxWorkers,
-    );
-    if (roadTasks.length > 0) {
-      const buildersOnRoad = sorted
-        .filter(t => t.kind === "build" && t.structureType === STRUCTURE_ROAD)
-        .reduce((n, t) => n + t.assignedCreeps.length, 0);
-      const hasFreeCritical = sorted.some(
-        t => t.priority <= 1 && t.assignedCreeps.length < t.maxWorkers,
-      );
-      if (buildersOnRoad === 0 && !hasFreeCritical) {
-        return roadTasks[0];
+  const roleKinds = ROLE_TASK_KINDS[role];
+  if (!roleKinds || roleKinds.length === 0) return undefined;
+
+  // builder 道路预留：单次遍历同时统计道路任务和 critical 缺口。
+  if (role === "builder") {
+    let buildersOnRoad = 0;
+    let firstRoadTask: AssignmentTaskEntry | undefined;
+    let hasFreeCritical = false;
+    for (const t of tasks) {
+      if (t.kind !== "build") continue;
+      if (t.structureType === STRUCTURE_ROAD) {
+        buildersOnRoad += t.assignedCreeps.length;
+        if (!firstRoadTask && t.assignedCreeps.length < t.maxWorkers) firstRoadTask = t;
       }
+      if (t.priority <= 1 && t.assignedCreeps.length < t.maxWorkers) hasFreeCritical = true;
     }
+    if (firstRoadTask && buildersOnRoad === 0 && !hasFreeCritical) return firstRoadTask;
   }
 
-  for (const task of sorted) {
+  // 遍历预排序列表，选第一个匹配且有空位的（priority 升序 = 最高优先级优先）。
+  for (const task of tasks) {
+    if (!roleKinds.includes(task.kind)) continue;
     if (task.assignedCreeps.length >= task.maxWorkers) continue;
     return task;
   }
@@ -256,98 +264,47 @@ function chooseBuildAwareTask(
 }
 
 /**
- * 验证 creep 现有 assignment 是否仍然有效。
- * 无效条件：lease 过期、revision 变化、target 消失、source 消失。
+ * 收集需要被失效的 creep 名称列表（纯函数）。
+ *
+ * 返回所有分配到 priority >= minPriority 任务的 creep 名称。
+ * 适配层负责清除这些 creep 的 memory.assignment。
  */
-export function validateAssignment(creep: Creep, ctx: TickContext): boolean {
-  const assignment = creep.memory.assignment;
-  if (!assignment) return false;
-
-  // lease 过期。
-  if (ctx.tick > assignment.leaseUntil) return false;
-
-  // revision 变化检查 — 布局修订后旧 assignment 立即失效（plan §5.7.2 规则 4）。
-  // creep.room 可能未定义（如测试环境或刚出生未同步），用可选链避免崩溃。
-  const home = creep.memory.home ?? creep.room?.name ?? "";
-  if (assignment.revision !== getCurrentLayoutRevision(home)) return false;
-
-  // target 存在检查。
-  if (assignment.targetId) {
-    const target = Game.getObjectById(assignment.targetId);
-    if (!target) return false;
+export function getInvalidatedCreepNames(
+  tasks: readonly AssignmentTaskEntry[],
+  minPriority: number,
+): string[] {
+  const names: string[] = [];
+  for (const task of tasks) {
+    if (task.priority >= minPriority) {
+      names.push(...task.assignedCreeps);
+    }
   }
-
-  // source 存在检查。
-  if (assignment.sourceId) {
-    const source = Game.getObjectById(assignment.sourceId);
-    if (!source) return false;
-  }
-
-  return true;
+  return names;
 }
 
 /**
- * 获取指定房间的当前 layout.revision。
- * 无 layout 时返回 0 — 等价于所有 assignment 的 revision 必须为 0 才有效。
+ * 从任务的 assignedCreeps 列表中移除指定 creep（纯函数 — 操作传入的数据结构）。
+ *
+ * 适配层从 globalCache 获取任务列表后调用此函数。
  */
-function getCurrentLayoutRevision(roomName: string): number {
-  return Memory.rooms[roomName]?.layout?.revision ?? 0;
-}
-
-/** 释放 creep 当前任务 — 从任务的 assignedCreeps 列表中移除。 */
-export function releaseFromTask(creep: Creep): void {
-  const assignment = creep.memory.assignment;
-  if (!assignment) return;
-
-  const g = globalCache();
-  if (!g.assignment) return;
-
-  const home = creep.memory.home ?? creep.room?.name ?? "";
-  const roomTasks = g.assignment.roomTasks.get(home);
-  if (!roomTasks) return;
-
-  const task = roomTasks.find(t => t.id === assignment.id);
+export function removeCreepFromTask(
+  tasks: readonly AssignmentTaskEntry[],
+  taskId: string,
+  creepName: string,
+): void {
+  const task = tasks.find(t => t.id === taskId);
   if (task) {
-    const idx = task.assignedCreeps.indexOf(creep.name);
+    const idx = task.assignedCreeps.indexOf(creepName);
     if (idx >= 0) task.assignedCreeps.splice(idx, 1);
   }
 }
 
 /**
- * 紧急抢占 — 使指定房间的所有普通 assignment 失效（plan §5.7.2 规则 5）。
- * P0 fill/flee 可使普通 assignment 失效；角色不自行争抢。
- *
- * 不仅清空任务的 assignedCreeps 列表，还直接清除 creep memory 中的 assignment，
- * 确保 validateAssignment 在下一 tick 返回 false，强制角色重新请求任务。
- */
-export function invalidateAssignments(roomName: string, minPriority: number): void {
-  const g = globalCache();
-  if (!g.assignment) return;
-
-  const roomTasks = g.assignment.roomTasks.get(roomName);
-  if (!roomTasks) return;
-
-  for (const task of roomTasks) {
-    if (task.priority >= minPriority) {
-      // 清除分配到此任务的 creep 的 memory.assignment。
-      for (const creepName of task.assignedCreeps) {
-        const creep = Game.creeps[creepName];
-        if (creep) {
-          creep.memory.assignment = undefined;
-        }
-      }
-      // 清空已分配列表，强制角色重新请求。
-      task.assignedCreeps = [];
-    }
-  }
-}
-
-/**
- * 选择 haul 任务的 pickup 点 ID。
+ * 选择 haul 任务的 pickup 点 ID（纯函数）。
  * 优先选择能量最多的 container；若无 container 有能量则回退到 storage。
  * 返回 undefined 表示当前无可用 pickup 点。
  */
-function selectHaulPickupId(snapshot: RoomSnapshot): string | undefined {
+export function selectHaulPickupId(snapshot: RoomSnapshot): string | undefined {
   let bestContainer: StructureContainer | undefined;
   let bestEnergy = 0;
   for (const c of snapshot.containers) {

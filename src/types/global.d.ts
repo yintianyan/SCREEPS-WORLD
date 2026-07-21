@@ -67,10 +67,16 @@ declare global {
   interface RoomMemory {
     colonyState?: ColonyState;
     controllerDowngradeRisk?: boolean;
-    /** 能量危机标志（room-observer 带迟滞计算）。 */
-    energyCrisis?: boolean;
-    /** 能量危机分数（0..enterScore，用于迟滞）。 */
-    crisisScore?: number;
+    /** 殖民相位观测（约束层的「经济真相」）。 */
+    phase?: {
+      phase: "bootstrap" | "growth" | "crisis" | "recovery" | "steady";
+      reserve: number;
+      reserveDelta: number;
+      drainScore: number;
+      harvesterCount: number;
+      sourceCount: number;
+      rcl: number;
+    };
     spawnQueue?: SpawnRequest[];
     buildQueue?: BuildTask[];
     lastRcl?: number;

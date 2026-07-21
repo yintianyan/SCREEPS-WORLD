@@ -7,6 +7,8 @@ import {
   candidateToBuildTask,
   createSourceContainerTasks,
   createControllerContainerTask,
+  createSourceLinkTasks,
+  createControllerLinkTask,
 } from "../domain/layout/task-factory";
 import { collectCompletedKeys, collectCompletedKeysFromStructures } from "../domain/layout/validation";
 import { evaluateRoadCandidates } from "../domain/layout/road-policy";
@@ -165,6 +167,31 @@ export const layoutPlannerSystem: System & {
     if (controllerContainer) {
       if (!queue.some(t => t.key === controllerContainer.key)) {
         queue.push(candidateToBuildTask(controllerContainer));
+        tasksAdded = true;
+      }
+    }
+
+    // 3.5 Source link 任务（RCL5+）。
+    const sourceLinkCandidates = createSourceLinkTasks(
+      snapshot,
+      room,
+      validationOptions,
+    );
+    for (const candidate of sourceLinkCandidates) {
+      if (queue.some(t => t.key === candidate.key)) continue;
+      queue.push(candidateToBuildTask(candidate));
+      tasksAdded = true;
+    }
+
+    // 3.6 Controller link 任务（RCL5+）。
+    const controllerLink = createControllerLinkTask(
+      snapshot,
+      room,
+      validationOptions,
+    );
+    if (controllerLink) {
+      if (!queue.some(t => t.key === controllerLink.key)) {
+        queue.push(candidateToBuildTask(controllerLink));
         tasksAdded = true;
       }
     }

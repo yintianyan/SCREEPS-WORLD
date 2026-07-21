@@ -1,14 +1,12 @@
 import type {
   Budget,
-  ColonyState,
   CreepRole,
   RoomSnapshot,
   System,
   TickContext,
 } from "./contracts";
-import { CONFIG } from "../config";
-import { maintainMemory, recordSkip, flushSkips } from "./memory";
-import { measuredRun, safeRun } from "./safe-run";
+import { recordSkip, flushSkips, maintainMemory } from "./memory";
+import { measuredRun, safeRun, safeRunBuild } from "./safe-run";
 import { createBudget } from "./scheduler";
 import { emitSummary, initTelemetry } from "./telemetry";
 import { Registry } from "./registry";
@@ -18,17 +16,11 @@ import { buildRoomSnapshot } from "../systems/room-snapshot";
 class Context implements TickContext {
   readonly tick: number;
   readonly budget: Budget;
-  private _colonyState: ColonyState;
   private readonly _snapshots = new Map<string, RoomSnapshot>();
 
-  constructor(budget: Budget, colonyState: ColonyState) {
+  constructor(budget: Budget) {
     this.tick = Game.time;
     this.budget = budget;
-    this._colonyState = colonyState;
-  }
-
-  get colonyState(): ColonyState {
-    return this._colonyState;
   }
 
   getSnapshot(roomName: string): RoomSnapshot | undefined {
@@ -42,11 +34,6 @@ class Context implements TickContext {
   /** @internal */
   _addSnapshot(snapshot: RoomSnapshot): void {
     this._snapshots.set(snapshot.roomName, snapshot);
-  }
-
-  /** @internal */
-  _setColonyState(state: ColonyState): void {
-    this._colonyState = state;
   }
 }
 
@@ -82,25 +69,23 @@ export class Kernel {
     // 3. 遥测 — 初始化单 tick 计数器。
     initTelemetry(Game.time);
 
-    // 4. 构建上下文并设置初始殖民地状态。
-    const ctx = new Context(budget, "normal");
+    // 4. 构建上下文。
+    const ctx = new Context(budget);
 
     // 5. 构建房间快照（P0 — 必须在任何读取快照的系统之前运行）。
     this.buildSnapshots(ctx);
 
-    // 6. 从快照计算殖民地状态。
-    ctx._setColonyState(this.computeColonyState(ctx, budget));
-
-    // 7. 按优先级排序运行系统。
+    // 6. 按优先级排序运行系统。
+    //    room-state (P0) 在 spawn-manager (P0) 之前注册，先计算每房 ColonyState。
     this.runSystems(ctx);
 
-    // 8. 按优先级排序运行 creep 角色。
+    // 7. 按优先级排序运行 creep 角色。
     this.runCreeps(ctx);
 
-    // 9. 遥测摘要。
+    // 8. 遥测摘要。
     emitSummary(budget);
 
-    // 10. 将 skip 原因从 global 缓冲区刷入 Memory。
+    // 9. 将 skip 原因从 global 缓冲区刷入 Memory。
     safeRun("flush-skips", () => flushSkips(), true);
   }
 
@@ -125,40 +110,6 @@ export class Kernel {
       );
       if (snapshot) ctx._addSnapshot(snapshot);
     }
-  }
-
-  private computeColonyState(ctx: Context, budget: Budget): ColonyState {
-    // 检查任意自有房间是否有敌对单位。
-    for (const snap of ctx.snapshots()) {
-      if (snap.hostileCreeps.length > 0) return "defense";
-    }
-
-    // 检查是否需要启动期 / 恢复。
-    const creeps = Object.values(Game.creeps);
-    const harvesters = creeps.filter(
-      c => c.memory.role === "harvester" || c.memory.role === "worker",
-    );
-    const spawningHarvester = this.hasSpawningHarvester();
-
-    if (creeps.length === 0 || (harvesters.length === 0 && !spawningHarvester)) {
-      return "bootstrap";
-    }
-
-    if (budget.tier === "recovery" || harvesters.length === 0) {
-      return "recovery";
-    }
-
-    return "normal";
-  }
-
-  private hasSpawningHarvester(): boolean {
-    for (const spawn of Object.values(Game.spawns)) {
-      const spawning = spawn.spawning;
-      if (!spawning) continue;
-      const mem = Memory.creeps[spawning.name];
-      if (mem?.role === "harvester" || mem?.role === "worker") return true;
-    }
-    return false;
   }
 
   private runSystems(ctx: Context): void {
@@ -233,10 +184,13 @@ export class Kernel {
       }
       if (ctx.budget.isExhausted()) break;
 
-      // 殖民地状态门禁：在 recovery/bootstrap 时允许 P0 和 P1（能量链），
+      // 每房殖民地状态门禁：在 recovery/bootstrap 时允许 P0 和 P1（能量链），
       // 但跳过 P2+（发展角色如 upgrader/builder）。
+      // 状态由 room-state 系统每 tick 写入 RoomMemory.colonyState。
+      const home = creep.memory.home;
+      const roomState = home ? Memory.rooms[home]?.colonyState ?? "normal" : "normal";
       if (
-        (ctx.colonyState === "recovery" || ctx.colonyState === "bootstrap") &&
+        (roomState === "recovery" || roomState === "bootstrap") &&
         role.priority > 1
       ) {
         recordSkip(`creep/${role.name}/colony-state`);
@@ -252,21 +206,4 @@ export class Kernel {
       );
     }
   }
-}
-
-/** 构建快照并带错误隔离 — 失败时返回 undefined。 */
-function safeRunBuild<T>(label: string, action: () => T): T | undefined {
-  try {
-    return action();
-  } catch (error) {
-    if (CONFIG.kernel.logErrors) {
-      console.log(`[${Game.time}] snapshot/${label}: ${formatErr(error)}`);
-    }
-    return undefined;
-  }
-}
-
-function formatErr(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }

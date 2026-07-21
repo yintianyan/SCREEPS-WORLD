@@ -35,10 +35,23 @@ export const harvesterRole: CreepRole = {
     const assignment = getAssignment(creep, ctx);
 
     if (creep.memory.mode === "work") {
-      // 老玩家核心策略：harvester 优先倒入身边 container（1 步距离），
-      // 让 hauler 负责长途运输。只有附近无 container 时才跑远路送 spawn。
+      // 老玩家核心策略：harvester 优先倒入身边 link 或 container（1 步距离）。
+      // link 优先于 container：link 系统可瞬时传输到 controller/storage link，
+      // 消除 hauler 长途往返。container 仅在无 link 或 link 满时使用。
 
-      // 1. 优先：身边 container（range <= 2）—  стационарный miner 模式。
+      // 1. 最高优先：身边 link（range <= 2）— 瞬时传输到 controller/storage。
+      if (snapshot.links.length > 0) {
+        const link = creep.pos.findClosestByRange(snapshot.links as StructureLink[]);
+        if (link && creep.pos.getRangeTo(link) <= 2 && link.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+          const result = creep.transfer(link, RESOURCE_ENERGY);
+          if (result === ERR_NOT_IN_RANGE) {
+            moveToTarget(creep, link);
+          }
+          return;
+        }
+      }
+
+      // 1.5 回退：身边 container（range <= 2）— 站桩 miner 模式。
       if (snapshot.containers.length > 0) {
         const nearby = creep.pos.findClosestByRange(snapshot.containers as StructureContainer[]);
         if (nearby && creep.pos.getRangeTo(nearby) <= 2 && nearby.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {

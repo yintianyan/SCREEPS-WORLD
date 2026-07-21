@@ -60,6 +60,40 @@ export function safeRun(label: string, action: () => void, critical = false): vo
   }
 }
 
+/** safeRun 的返回值变体 — 用于构建快照等需要返回值的场景。 */
+export function safeRunBuild<T>(label: string, factory: () => T, critical = false): T | undefined {
+  const g = globalCache();
+
+  if (!critical) {
+    if (!g.pluginCooldowns) g.pluginCooldowns = new Map();
+    const cooldown = g.pluginCooldowns.get(label);
+    if (cooldown !== undefined && Game.time < cooldown) return undefined;
+  }
+
+  try {
+    return factory();
+  } catch (error) {
+    if (CONFIG.kernel.logErrors && !shouldSuppress(label, Game.time)) {
+      console.log(`[${Game.time}] ${label}: ${formatError(error)}`);
+    }
+    recordError();
+
+    if (!critical) {
+      if (!g.errorCounts) g.errorCounts = new Map();
+      const count = (g.errorCounts.get(label) ?? 0) + 1;
+      g.errorCounts.set(label, count);
+
+      if (count >= 3) {
+        if (!g.pluginCooldowns) g.pluginCooldowns = new Map();
+        const cooldownTicks = Math.min(50 + count * 10, 200);
+        g.pluginCooldowns.set(label, Game.time + cooldownTicks);
+        g.errorCounts.set(label, 0);
+      }
+    }
+    return undefined;
+  }
+}
+
 /** 执行操作并测量其 CPU 消耗用于遥测。 */
 export function measuredRun(label: string, action: () => void): void {
   const before = Game.cpu.getUsed();

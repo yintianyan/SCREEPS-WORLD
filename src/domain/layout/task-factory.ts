@@ -201,6 +201,78 @@ export function createControllerContainerTask(
   };
 }
 
+/**
+ * 为 source 生成 link 任务（RCL5+）。
+ * source link 紧邻 source 放置，harvester 采矿后直接 transfer 到 link，
+ * 由 link 系统瞬移到 controller/storage link，替代 hauler 长途往返。
+ */
+export function createSourceLinkTasks(
+  snapshot: RoomSnapshot,
+  room: Room,
+  options: ValidationOptions,
+): BuildTaskCandidate[] {
+  if (snapshot.rcl < 5) return [];
+  const candidates: BuildTaskCandidate[] = [];
+  const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
+  const existingLinks = snapshot.links.length;
+  const linkSites = snapshot.constructionSites.filter(
+    s => s.structureType === STRUCTURE_LINK,
+  ).length;
+  if (existingLinks + linkSites >= maxLinks) return candidates;
+
+  for (const source of snapshot.sources) {
+    if (hasAdjacentStructure(source.pos.x, source.pos.y, snapshot, STRUCTURE_LINK)) continue;
+    const adjacentPos = findAdjacentBuildable(source.pos, room, snapshot, options);
+    if (adjacentPos) {
+      candidates.push({
+        key: `logistics.link.source.${source.id}`,
+        pos: adjacentPos,
+        structureType: STRUCTURE_LINK,
+        priority: 2,
+        phase: "late",
+        validation: "ok",
+      });
+    }
+  }
+  return candidates;
+}
+
+/**
+ * 为 controller 生成 link 任务（RCL5+）。
+ * controller link 紧邻 controller 放置，upgrader 站桩 withdraw 取能，
+ * 能量由 source link 瞬移送入，实现 0 通勤站桩升级。
+ */
+export function createControllerLinkTask(
+  snapshot: RoomSnapshot,
+  room: Room,
+  options: ValidationOptions,
+): BuildTaskCandidate | undefined {
+  if (snapshot.rcl < 5) return undefined;
+  if (!snapshot.controller) return undefined;
+
+  const controller = snapshot.controller;
+  if (hasAdjacentStructure(controller.pos.x, controller.pos.y, snapshot, STRUCTURE_LINK)) return undefined;
+
+  const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
+  const existingLinks = snapshot.links.length;
+  const linkSites = snapshot.constructionSites.filter(
+    s => s.structureType === STRUCTURE_LINK,
+  ).length;
+  if (existingLinks + linkSites >= maxLinks) return undefined;
+
+  const adjacentPos = findAdjacentBuildable(controller.pos, room, snapshot, options);
+  if (!adjacentPos) return undefined;
+
+  return {
+    key: `logistics.link.controller`,
+    pos: adjacentPos,
+    structureType: STRUCTURE_LINK,
+    priority: 1,
+    phase: "late",
+    validation: "ok",
+  };
+}
+
 /** 检查指定位置附近 1 格内是否已有某类型结构。 */
 function hasAdjacentStructure(
   cx: number,
@@ -208,7 +280,7 @@ function hasAdjacentStructure(
   snapshot: RoomSnapshot,
   structureType: BuildableStructureConstant,
 ): boolean {
-  const structures = [...snapshot.containers, ...snapshot.constructionSites];
+  const structures = [...snapshot.containers, ...snapshot.links, ...snapshot.constructionSites];
   for (const s of structures) {
     if (s.structureType !== structureType) continue;
     if (Math.abs(s.pos.x - cx) <= 1 && Math.abs(s.pos.y - cy) <= 1) return true;
@@ -251,6 +323,7 @@ function buildOccupiedSet(
     ...snapshot.extensions,
     ...snapshot.containers,
     ...snapshot.towers,
+    ...snapshot.links,
     ...snapshot.constructionSites,
   ]) {
     set.add(`${s.pos.x},${s.pos.y}`);

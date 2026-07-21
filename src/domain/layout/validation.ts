@@ -80,6 +80,7 @@ function countExistingAndSites(
     snapshot.towers,
     snapshot.containers,
     snapshot.roads,
+    snapshot.links,
   ];
   let count = 0;
   for (const arr of typedArrays) {
@@ -123,6 +124,7 @@ function isOccupied(
     ...snapshot.extensions,
     ...snapshot.towers,
     ...snapshot.containers,
+    ...snapshot.links,
     ...snapshot.constructionSites,
   ];
   for (const s of structures) {
@@ -167,7 +169,7 @@ export function collectCompletedKeysFromStructures(
 
   // 预构建位置 → 结构类型映射。
   const structureMap = new Map<string, string>();
-  for (const s of [...snapshot.spawns, ...snapshot.extensions, ...snapshot.towers, ...snapshot.containers]) {
+  for (const s of [...snapshot.spawns, ...snapshot.extensions, ...snapshot.towers, ...snapshot.containers, ...snapshot.links]) {
     structureMap.set(`${s.pos.x},${s.pos.y}`, s.structureType);
   }
   if (snapshot.storage) {

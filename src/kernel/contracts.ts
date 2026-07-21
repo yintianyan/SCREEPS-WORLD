@@ -63,6 +63,8 @@ export interface RoomSnapshot {
   readonly storage: StructureStorage | undefined;
   /** controller 旁 1 格内的 container（upgrader 站桩升级的能量来源）。无则 undefined。 */
   readonly controllerContainer: StructureContainer | undefined;
+  /** 房间内所有 link 结构。RCL5+ 解锁，link 系统用于瞬时能量传输。 */
+  readonly links: readonly StructureLink[];
   readonly sources: readonly Source[];
   readonly constructionSites: readonly ConstructionSite[];
   readonly myConstructionSites: readonly ConstructionSite[];
@@ -83,7 +85,6 @@ export interface RoomSnapshot {
 export interface TickContext {
   readonly tick: number;
   readonly budget: Budget;
-  readonly colonyState: ColonyState;
   getSnapshot(roomName: string): RoomSnapshot | undefined;
   snapshots(): Iterable<RoomSnapshot>;
 }
