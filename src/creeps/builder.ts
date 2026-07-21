@@ -16,7 +16,7 @@ import {
   repairContainerDecay,
   repairCritical,
   upgradeControllerGated,
-  withdrawClosestNonSourceContainer,
+  withdrawClosestContainer,
 } from "./actions";
 import { releaseAssignment } from "./assignment-adapter";
 import { moveToTarget } from "./movement";
@@ -102,9 +102,9 @@ const policy: RolePolicy = {
   gate: builderGate,
 
   acquire: [
-    // 优先取最近有能量的非 source container（不抢 hauler 物流源，减少通勤）。
-    withdrawClosestNonSourceContainer(),
-    // 回退到直接采集。
+    // 优先取最近有能量的 container（含 source container — 主能量池）。
+    withdrawClosestContainer(),
+    // 兜底：所有 container 无能量时直接采集。
     harvestSource(),
   ],
 
