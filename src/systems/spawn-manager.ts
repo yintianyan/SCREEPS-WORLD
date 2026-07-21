@@ -34,6 +34,7 @@ export const spawnManagerSystem: System = {
         colonyState,
         controllerDowngradeRisk: roomMem.controllerDowngradeRisk === true,
         energyAvailable: Game.rooms[snapshot.roomName]?.energyAvailable ?? 200,
+        economyPressure: roomMem.economyPressure ?? 0,
       };
       const { requests } = evaluateDemand(
         snapshot,

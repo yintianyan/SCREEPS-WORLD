@@ -60,9 +60,12 @@ function developmentGate(
   const emergencyRebuild = needsSourceContainerRebuild(snapshot);
 
   if (!emergencyRebuild) {
-    // 恢复或启动期不建造。
-    const roomState = Memory.rooms[snapshot.roomName]?.colonyState ?? "normal";
-    if (roomState === "recovery" || roomState === "bootstrap") return false;
+    // 梯度门禁：用 economyPressure 替代二值 colonyState 开关。
+    // pressure 0.0–0.3: 正常建造（基础阈值）
+    // pressure 0.3–0.8: 线性提高能量阈值（从基础 → 90% 容量）
+    // pressure > 0.8: 完全阻塞非紧急建造
+    const pressure = Memory.rooms[snapshot.roomName]?.economyPressure ?? 0;
+    if (pressure > 0.8) return false;
     if (ctx.budget.tier === "recovery" || ctx.budget.tier === "conserve") return false;
   }
 
@@ -77,9 +80,17 @@ function developmentGate(
       if (hasEmergencySpawn) return false;
     }
 
-    // 检查能量盈余 — 动态阈值：容量 60% 与固定上限取较小值。
+    // 检查能量盈余 — 梯度阈值：随 economyPressure 线性提高。
+    // pressure 0.0–0.3: 基础阈值（容量 60%）
+    // pressure 0.3–0.8: 线性提高到容量 90%
+    const pressure = Memory.rooms[snapshot.roomName]?.economyPressure ?? 0;
+    const baseRatio = 0.6;
+    const maxRatio = 0.9;
+    const ratio = pressure <= 0.3
+      ? baseRatio
+      : baseRatio + ((pressure - 0.3) / 0.5) * (maxRatio - baseRatio);
     const buildThreshold = Math.min(
-      Math.floor(snapshot.energyCapacityAvailable * 0.6),
+      Math.floor(snapshot.energyCapacityAvailable * ratio),
       CONFIG.economy.buildEnergySurplus + CONFIG.spawn.recoveryEnergyReserve,
     );
     if (snapshot.energyAvailable < buildThreshold) return false;

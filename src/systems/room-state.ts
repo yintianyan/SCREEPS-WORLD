@@ -82,6 +82,15 @@ export const roomStateSystem: System = {
       const hasHostiles = snapshot.hostileCreeps.length > 0;
       roomMem.colonyState = phaseToColonyState(phaseResult.phase, hasHostiles);
 
+      // 5.5 经济压力梯度信号 (0.0–1.0)。
+      // drainScore 0→40 映射 pressure 0.0→0.5（健康→谨慎）
+      // drainScore 40→100 映射 pressure 0.5→1.0（紧张→危机）
+      // 各子系统用此信号做梯度缩放，替代二值 crisis/normal 开关。
+      const ds = phaseResult.drainScore;
+      roomMem.economyPressure = ds <= 40
+        ? (ds / 40) * 0.5
+        : 0.5 + ((ds - 40) / 60) * 0.5;
+
       // 6. 检测控制器降级风险。
       const controller = snapshot.controller;
       roomMem.controllerDowngradeRisk =

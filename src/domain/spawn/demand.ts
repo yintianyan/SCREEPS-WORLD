@@ -39,6 +39,8 @@ export interface RoomDemandContext {
   colonyState: ColonyState;
   controllerDowngradeRisk: boolean;
   energyAvailable: number;
+  /** 经济压力梯度信号 (0.0–1.0)。0=健康，1=危机。用于梯度缩放 P2 角色数量。 */
+  economyPressure: number;
 }
 
 interface DemandResult {
@@ -222,17 +224,33 @@ export function evaluateDemand(
     // 无 container 时多 upgrader 都要长途自采，通勤浪费抵消数量优势，保持 minCount。
     // 降级紧急状态下即使无 container 也拉满（自采也要保级）。
     const stationUpgradeOnline = snapshot.controllerContainer !== undefined;
-    // 能量危机：升级是最大的可自由支配能量汇，危机时停升级把能量让给孵化 harvester；
-    // 仅当控制器真正快降级（ticksToDowngrade < downgradeGuard）时保留 minCount 个 upgrader 保级。
     const ctrl = snapshot.controller;
     const crisisNeedsGuard =
       inCrisis && ctrl !== undefined && ctrl.ticksToDowngrade < CONFIG.economy.crisis.downgradeGuard;
+
+    // 梯度缩放：用 economyPressure 连续信号替代二值 crisis 开关。
+    // pressure 0.0–0.3: 满目标（健康）
+    // pressure 0.3–0.7: 线性从满目标缩到 minCount（谨慎→紧张）
+    // pressure 0.7–1.0: 线性从 minCount 缩到 0（危机，除非需要保级）
+    const pressure = roomCtx.economyPressure;
+    const fullTarget = stationUpgradeOnline || hasDowngradeRisk
+      ? upgraderConfig.maxCount
+      : upgraderConfig.minCount;
     let upgraderTarget: number;
-    if (inCrisis) {
-      upgraderTarget = crisisNeedsGuard ? upgraderConfig.minCount : 0;
+    if (pressure <= 0.3) {
+      upgraderTarget = fullTarget;
+    } else if (pressure <= 0.7) {
+      // 线性插值：fullTarget → minCount
+      const t = (pressure - 0.3) / 0.4;
+      upgraderTarget = Math.round(fullTarget + t * (upgraderConfig.minCount - fullTarget));
     } else {
-      upgraderTarget =
-        stationUpgradeOnline || hasDowngradeRisk ? upgraderConfig.maxCount : upgraderConfig.minCount;
+      // 线性插值：minCount → 0
+      const t = (pressure - 0.7) / 0.3;
+      upgraderTarget = Math.round(upgraderConfig.minCount * (1 - t));
+    }
+    // 保级覆盖：控制器快降级时至少保留 minCount。
+    if (crisisNeedsGuard || hasDowngradeRisk) {
+      upgraderTarget = Math.max(upgraderTarget, upgraderConfig.minCount);
     }
 
     if (upgraderTotal < upgraderTarget) {
@@ -260,9 +278,18 @@ export function evaluateDemand(
         economyCap,
         Math.max(builderConfig.minCount, snapshot.myConstructionSites.length),
       );
-      // 能量危机：收缩 builder 到 minCount —— 仅留 1 个处理关键 source container 重建（恢复收入），
-      // 避免按 site 数孵出一堆无能量可建的空闲 builder 浪费孵化能量。
-      const builderTarget = inCrisis ? builderConfig.minCount : dynamicBuilderTarget;
+      // 梯度缩放：用 economyPressure 连续信号替代二值 crisis 开关。
+      // pressure 0.0–0.3: 满目标（健康）
+      // pressure 0.3–1.0: 线性从满目标缩到 minCount（builder 始终保留 minCount 处理关键重建）
+      const builderPressure = roomCtx.economyPressure;
+      let builderTarget: number;
+      if (builderPressure <= 0.3) {
+        builderTarget = dynamicBuilderTarget;
+      } else {
+        const t = (builderPressure - 0.3) / 0.7;
+        builderTarget = Math.round(dynamicBuilderTarget + t * (builderConfig.minCount - dynamicBuilderTarget));
+        builderTarget = Math.max(builderTarget, builderConfig.minCount);
+      }
       if (builderTotal < builderTarget) {
         for (let i = builderTotal; i < builderTarget; i++) {
           const key = spawnKey("builder", home, i);

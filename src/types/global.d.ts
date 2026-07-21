@@ -66,6 +66,15 @@ declare global {
 
   interface RoomMemory {
     colonyState?: ColonyState;
+    /**
+     * 经济压力梯度信号 (0.0–1.0)，从 drainScore 派生。
+     * 0.0 = 完全健康，1.0 = 完全危机。
+     * 各子系统用此信号做梯度缩放，替代二值 crisis/normal 开关。
+     *   - demand: 缩放 upgrader/builder 目标数量
+     *   - construction: 调整建造能量门禁阈值
+     *   - tower: 调整修墙能量门槛
+     */
+    economyPressure?: number;
     controllerDowngradeRisk?: boolean;
     /** 殖民相位观测（约束层的「经济真相」）。 */
     phase?: {
