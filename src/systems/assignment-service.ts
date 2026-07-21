@@ -24,7 +24,7 @@ import { CONFIG } from "../config";
  *   3. 为每房生成任务列表存入缓存
  *   4. 角色通过 helpers.getAssignment 获取或续约任务
  *
- * 架构：领域层 buildRoomTasks / getInvalidatedCreepNames 是纯函数，
+ * 架构：领域层 buildRoomTasks 是纯函数，TaskPool 封装索引与原子操作。
  * 本模块（系统层）负责从 Game/Memory 收集数据、调用纯函数、写回缓存。
  *
  * 优先级：P1 — 失败时角色回退到无 assignment 行为，允许 safeRun 冷却避免刷屏。
