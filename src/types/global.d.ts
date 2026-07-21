@@ -88,9 +88,11 @@ declare global {
       anchor?: number;
       revision: number;
       nextPlanTick: number;
-      /** 仅保存偏移/替代位置（blueprint key -> packed pos）。 */
+      // 冷数据 overrides / blocked 已迁移到 RawMemory segment 0（见 kernel/segment-store.ts）。
+      // 保留可选字段用于 v3→v4 迁移兼容。
+      /** @deprecated 已迁移到 segment，仅迁移期间存在。 */
       overrides?: Record<string, number>;
-      /** 永久冲突的 cell（blueprint key -> 失败信息）。 */
+      /** @deprecated 已迁移到 segment，仅迁移期间存在。 */
       blocked?: Record<string, { code: number; retryAt: number }>;
     };
   }

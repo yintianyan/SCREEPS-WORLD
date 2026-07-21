@@ -40,6 +40,7 @@ describe("upgrader — work 模式", () => {
     const snap = mockSnapshot({ controller });
     const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
     creep.upgradeController.mockReturnValue(-9); // ERR_NOT_IN_RANGE
+    creep.pos.getRangeTo.mockReturnValue(5); // 不在范围内 → 走 moveTo 路径
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);

@@ -223,6 +223,7 @@ describe("harvester — work 模式优先级链", () => {
     const snap = mockSnapshot({ containers: [], links: [], fillTargets: [spawn], myConstructionSites: [] });
     const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
     creep.transfer.mockReturnValue(-9); // ERR_NOT_IN_RANGE
+    creep.pos.getRangeTo.mockReturnValue(5); // 不在范围内 → 走 moveTo 路径
     const ctx = mockContext(snap);
 
     harvesterRole.run(creep, ctx);

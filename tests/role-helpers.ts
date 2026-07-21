@@ -22,7 +22,19 @@ export function resetGlobals(): void {
     getObjectById: (id: string) => objectRegistry.get(id) ?? null,
     map: { describeExits: () => ({ "1": "W7N3", "3": "W6N4", "5": "W7N5", "7": "W8N4" }) },
     cpu: { getUsed: () => 0, limit: 20, tickLimit: 500 },
+    rooms: {},
   };
+
+  // PathFinder.CostMatrix mock（移动系统使用）。
+  if (!(globalThis as any).PathFinder) {
+    (globalThis as any).PathFinder = {
+      CostMatrix: class {
+        private _data = new Uint8Array(2500);
+        set(x: number, y: number, cost: number) { this._data[x * 50 + y] = cost; }
+        get(x: number, y: number) { return this._data[x * 50 + y] ?? 0; }
+      },
+    };
+  }
 
   (globalThis as any).Memory = {
     creeps: {},
@@ -55,6 +67,7 @@ export interface MockPos {
   y: number;
   roomName: string;
   getRangeTo: ReturnType<typeof vi.fn>;
+  getDirectionTo: ReturnType<typeof vi.fn>;
   findClosestByRange: ReturnType<typeof vi.fn>;
   findPathTo: ReturnType<typeof vi.fn>;
 }
@@ -65,6 +78,7 @@ export function mockPos(x = 25, y = 25, roomName = "W7N4"): MockPos {
     y,
     roomName,
     getRangeTo: vi.fn(() => 1),
+    getDirectionTo: vi.fn(() => 3), // RIGHT
     findClosestByRange: vi.fn((targets: any[]) => {
       if (!Array.isArray(targets) || targets.length === 0) return null;
       return targets[0];

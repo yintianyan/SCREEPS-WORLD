@@ -1,5 +1,6 @@
 import { CONFIG } from "../config";
 import { globalCache } from "./global-cache";
+import { readLayoutSegment, markLayoutDirty } from "./segment-store";
 
 /** 从版本 N 到 N+1 的迁移函数。每个必须幂等。 */
 const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> = [
@@ -52,6 +53,32 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
           room.layout.blocked ??= {};
         }
       }
+    },
+  },
+  {
+    from: 3,
+    to: 4,
+    run: () => {
+      // v4：将 layout 冷数据（overrides/blocked）从 Memory 迁移到 RawMemory segment 0。
+      // 减少每 tick JSON.stringify(Memory) 的体积。
+      const segData = readLayoutSegment();
+      let migrated = false;
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName];
+        if (!room?.layout) continue;
+        const overrides = room.layout.overrides;
+        const blocked = room.layout.blocked;
+        if (overrides || blocked) {
+          segData[roomName] = {
+            overrides: overrides ?? {},
+            blocked: blocked ?? {},
+          };
+          delete room.layout.overrides;
+          delete room.layout.blocked;
+          migrated = true;
+        }
+      }
+      if (migrated) markLayoutDirty();
     },
   },
 ];

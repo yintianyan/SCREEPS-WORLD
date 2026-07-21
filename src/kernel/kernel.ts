@@ -6,6 +6,7 @@ import type {
   TickContext,
 } from "./contracts";
 import { recordSkip, flushSkips, maintainMemory } from "./memory";
+import { requestSegments, flushSegments } from "./segment-store";
 import { measuredRun, safeRun, safeRunBuild } from "./safe-run";
 import { createBudget } from "./scheduler";
 import { emitSummary, initTelemetry } from "./telemetry";
@@ -66,6 +67,9 @@ export class Kernel {
     // 2. Memory — 迁移、清理、默认值。关键步骤：永不冷却。
     safeRun("memory", () => maintainMemory(), true);
 
+    // 2.5 Segment — 声明本 tick 需要激活的 RawMemory segment。
+    safeRun("segments-request", () => requestSegments(), true);
+
     // 3. 遥测 — 初始化单 tick 计数器。
     initTelemetry(Game.time);
 
@@ -87,6 +91,9 @@ export class Kernel {
 
     // 9. 将 skip 原因从 global 缓冲区刷入 Memory。
     safeRun("flush-skips", () => flushSkips(), true);
+
+    // 10. 将 dirty segment 数据刷写回 RawMemory。
+    safeRun("segments-flush", () => flushSegments(), true);
   }
 
   private buildSnapshots(ctx: Context): void {

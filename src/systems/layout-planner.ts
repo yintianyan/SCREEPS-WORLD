@@ -1,6 +1,7 @@
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
+import { getRoomLayoutData, markLayoutDirty } from "../kernel/segment-store";
 import { COMPACT_CORE_V1 } from "../domain/layout/templates/compact-core-v1";
 import {
   blueprintToTasks,
@@ -58,7 +59,7 @@ export const layoutPlannerSystem: System & {
     const roomMem = Memory.rooms[snapshot.roomName];
     if (!roomMem) return;
 
-    // 初始化 LayoutMemory。
+    // 初始化 LayoutMemory（热数据留 Memory，冷数据 overrides/blocked 在 segment）。
     if (!roomMem.layout) {
       roomMem.layout = {
         version: 1,
@@ -66,8 +67,6 @@ export const layoutPlannerSystem: System & {
         state: "accepted",
         revision: 0,
         nextPlanTick: ctx.tick,
-        overrides: {},
-        blocked: {},
       };
     }
 
@@ -86,14 +85,17 @@ export const layoutPlannerSystem: System & {
     const anchorPacked = packPos(spawn.pos.x, spawn.pos.y);
 
     // 首次设置锚点，或 spawn 重建在新位置时更新锚点。
-    // spawn 位置变化时清空 overrides 和 blocked（旧偏移记录失效）并递增 revision，
+    // spawn 位置变化时清空 segment 中的 overrides 和 blocked（旧偏移记录失效）并递增 revision，
     // 触发所有携带旧 revision 的 assignment 失效（见 validateAssignment 的 revision 检查）。
     if (layout.anchor === undefined) {
       layout.anchor = anchorPacked;
     } else if (layout.anchor !== anchorPacked) {
       layout.anchor = anchorPacked;
-      layout.overrides = {};
-      layout.blocked = {};
+      // 冷数据在 segment 中重置。
+      const segData = getRoomLayoutData(snapshot.roomName);
+      segData.overrides = {};
+      segData.blocked = {};
+      markLayoutDirty();
       layout.revision++;
       // 锚点变化意味着所有旧坐标失效 — 清空 buildQueue，由下次规划重建。
       roomMem.buildQueue = [];
