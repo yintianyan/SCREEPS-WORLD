@@ -54,6 +54,16 @@ Object.assign(globalThis as Record<string, unknown>, {
   // 资源常量
   RESOURCE_ENERGY: "energy",
 
+  // 方向常量
+  TOP: 1,
+  TOP_RIGHT: 2,
+  RIGHT: 3,
+  BOTTOM_RIGHT: 4,
+  BOTTOM: 5,
+  BOTTOM_LEFT: 6,
+  LEFT: 7,
+  TOP_LEFT: 8,
+
   // 地形常量
   TERRAIN_MASK_WALL: 1,
 

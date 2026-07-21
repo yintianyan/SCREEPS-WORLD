@@ -1,167 +1,124 @@
-import { CONFIG } from "../config";
-import type { CreepRole, Priority, RoomSnapshot, TickContext } from "../kernel/contracts";
-import { ensureHome, flee, findClosestContainerWithEnergy, findCriticalRepair, getAssignment, getFillTarget, getSource, moveToTarget, releaseAssignment, shouldFlee, updateMode } from "./helpers";
-
 /**
  * Builder — P2 建造角色。
  *
- * 状态机：acquire（采集/取出）→ work（建造 site）
+ * 策略声明：
+ *   gate:    recovery tier → 释放 assignment（不建造）
+ *   acquire: 最近有能量 container > harvest
+ *   work:    assignment site（tier 门禁）> 最近 site（tier 门禁）> fill > critical repair > 升级（gated）
  *
- * 无建造目标时的回退链：
- *   1. 填充 spawn/extension
- *   2. 关键修复（spawn/extension/container 生命值低于 50%）
- *   3. 升级控制器
- *   4. 空闲
- *
- * 在 Recovery/Conserve 状态下，builder 释放任务并回退到填充/空闲。
+ * CPU 门禁通过候选 predicate 内的 tier 判断实现，不再内嵌 if-else。
  */
-export const builderRole: CreepRole = {
-  name: "builder",
-  priority: 2 as Priority,
-  run(creep: Creep, ctx: TickContext): void {
-    if (!ensureHome(creep)) {
-      creep.memory.mode = "idle";
-      return;
+import type { Priority } from "../kernel/contracts";
+import type { ActionCandidate, ActionContext, RolePolicy } from "./action-types";
+import {
+  fillTarget,
+  harvestSource,
+  repairCritical,
+  upgradeControllerGated,
+  withdrawClosestContainer,
+} from "./actions";
+import { releaseAssignment } from "./assignment-adapter";
+import { moveToTarget } from "./movement";
+import { defineRole } from "./role-runner";
+
+/** recovery/conserve tier 门禁：释放不可用的 assignment。 */
+function builderGate(ac: ActionContext): boolean {
+  if (ac.budget.tier === "recovery") {
+    releaseAssignment(ac.creep);
+    return true;
+  }
+  // conserve: assignment 指向非 critical site 时释放（让 fallback 接管）。
+  if (ac.budget.tier === "conserve" && ac.assignment?.targetId) {
+    const site = Game.getObjectById(ac.assignment.targetId as Id<ConstructionSite>);
+    if (site && site.structureType !== STRUCTURE_SPAWN && site.structureType !== STRUCTURE_TOWER) {
+      releaseAssignment(ac.creep);
+      ac.creep.memory.assignment = undefined;
     }
+  }
+  return true;
+}
 
-    const snapshot = ctx.getSnapshot(creep.memory.home!);
-    if (!snapshot) return;
-
-    // 躲避敌对单位。
-    if (shouldFlee(snapshot)) {
-      creep.memory.mode = "flee";
-      flee(creep, snapshot);
-      return;
-    }
-
-    updateMode(creep);
-    const assignment = getAssignment(creep, ctx);
-
-    if (creep.memory.mode === "work") {
-      // B-07：recovery tier 下释放普通 task lease，转为送能或待命。
-      if (ctx.budget.tier === "recovery") {
-        releaseAssignment(creep);
-        return fallbackBuilder(creep, snapshot);
+/** 建造 assignment 指定的 site（带 conserve 门禁）。 */
+function buildAssignmentByTier(): ActionCandidate {
+  return {
+    name: "build:assignment-by-tier",
+    predicate: (ac) => {
+      if (ac.budget.tier === "recovery") return false;
+      if (!ac.assignment?.targetId) return false;
+      const site = Game.getObjectById(ac.assignment.targetId as Id<ConstructionSite>);
+      if (!site) return false;
+      if (ac.budget.tier === "conserve") {
+        return site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
       }
+      return true;
+    },
+    execute: (ac) => {
+      const site = Game.getObjectById(ac.assignment!.targetId as Id<ConstructionSite>)!;
+      const result = ac.creep.build(site);
+      if (result === ERR_NOT_IN_RANGE) {
+        moveToTarget(ac.creep, site);
+      } else if (result === ERR_INVALID_TARGET) {
+        releaseAssignment(ac.creep);
+        ac.creep.memory.assignment = undefined;
+      }
+    },
+  };
+}
 
-      // 优先建造 assignment 指定的 site。
-      if (assignment?.targetId) {
-        const site = Game.getObjectById(assignment.targetId as Id<ConstructionSite>);
-        if (site) {
-          // B-06：conserve tier 下只执行 critical site（spawn/tower）。
-          if (ctx.budget.tier === "conserve" && !isCriticalSite(site)) {
-            releaseAssignment(creep);
-            return fallbackBuilder(creep, snapshot);
-          }
-          const result = creep.build(site);
-          if (result === ERR_NOT_IN_RANGE) {
-            moveToTarget(creep, site);
-          } else if (result === ERR_INVALID_TARGET) {
-            releaseAssignment(creep);
-          }
-          return;
+/** 建造最近 site（带 tier 门禁：conserve 只建 critical）。 */
+function buildSiteByTier(): ActionCandidate {
+  return {
+    name: "build:site-by-tier",
+    predicate: (ac) => {
+      if (ac.budget.tier === "recovery") return false;
+      if (ac.budget.tier === "conserve") {
+        return ac.snapshot.myConstructionSites.some(
+          s => s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_TOWER,
+        );
+      }
+      return ac.snapshot.myConstructionSites.length > 0;
+    },
+    execute: (ac) => {
+      const sites = ac.budget.tier === "conserve"
+        ? ac.snapshot.myConstructionSites.filter(
+            s => s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_TOWER,
+          )
+        : ac.snapshot.myConstructionSites;
+      const site = ac.creep.pos.findClosestByRange(sites as ConstructionSite[]);
+      if (site) {
+        const result = ac.creep.build(site);
+        if (result === ERR_NOT_IN_RANGE) {
+          moveToTarget(ac.creep, site);
+        } else if (result === ERR_INVALID_TARGET) {
+          ac.creep.memory.targetId = undefined;
         }
       }
+    },
+  };
+}
 
-      // 尝试建造最近的建造 site。
-      if (snapshot.myConstructionSites.length > 0) {
-        // B-06：conserve tier 下只找 critical site。
-        const sites = ctx.budget.tier === "conserve"
-          ? snapshot.myConstructionSites.filter(isCriticalSite)
-          : snapshot.myConstructionSites;
-        if (sites.length > 0) {
-          const site = findClosestSite(creep, sites);
-          if (site) {
-            const result = creep.build(site);
-            if (result === ERR_NOT_IN_RANGE) {
-              moveToTarget(creep, site);
-            } else if (result === ERR_INVALID_TARGET) {
-              // site 不再有效 — 清除并尝试下一个。
-              creep.memory.targetId = undefined;
-            }
-            return;
-          }
-        }
-      }
+const policy: RolePolicy = {
+  gate: builderGate,
 
-      // 无建造目标 — 回退链。
-      return fallbackBuilder(creep, snapshot);
-    }
+  acquire: [
+    // 优先取最近有能量的 container（减少通勤）。
+    withdrawClosestContainer(),
+    // 回退到直接采集。
+    harvestSource(),
+  ],
 
-    // acquire 模式：获取能量。
-    return acquireEnergy(creep, snapshot);
-  },
+  work: [
+    // 建造 assignment 指定的 site（带 tier 门禁）。
+    buildAssignmentByTier(),
+    // 建造最近 site（带 tier 门禁）。
+    buildSiteByTier(),
+    // fallback: 填充 spawn/extension。
+    fillTarget(),
+    // fallback: 关键修复。
+    repairCritical(),
+    // fallback: 升级控制器（带能量门禁）。
+    upgradeControllerGated(),
+  ],
 };
 
-/** 使用引擎原生 findClosestByRange 替代手动迭代，性能更优。 */
-function findClosestSite(creep: Creep, sites: readonly ConstructionSite[]): ConstructionSite | undefined {
-  return creep.pos.findClosestByRange(sites as ConstructionSite[]) ?? undefined;
-}
-
-/** 判断 construction site 是否为 critical 类型（spawn/tower）。约束 X-04/B-06。 */
-function isCriticalSite(site: ConstructionSite): boolean {
-  return site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
-}
-
-function fallbackBuilder(creep: Creep, snapshot: RoomSnapshot): void {
-  // 1. 填充 spawn/extension。
-  const fillTarget = getFillTarget(creep, snapshot);
-  if (fillTarget) {
-    const result = creep.transfer(fillTarget, RESOURCE_ENERGY);
-    if (result === ERR_NOT_IN_RANGE) {
-      moveToTarget(creep, fillTarget);
-    }
-    return;
-  }
-
-  // 2. 关键修复。
-  const criticalStructure = findCriticalRepair(snapshot);
-  if (criticalStructure) {
-    const result = creep.repair(criticalStructure);
-    if (result === ERR_NOT_IN_RANGE) {
-      moveToTarget(creep, criticalStructure);
-    }
-    return;
-  }
-
-  // 3. 升级控制器。
-  if (snapshot.controller && snapshot.controller.my && snapshot.energyAvailable >= CONFIG.economy.upgradeEnergyFloor) {
-    const result = creep.upgradeController(snapshot.controller);
-    if (result === ERR_NOT_IN_RANGE) {
-      moveToTarget(creep, snapshot.controller);
-    }
-    return;
-  }
-
-  // 4. 空闲。
-  creep.memory.mode = "idle";
-}
-
-function acquireEnergy(
-  creep: Creep,
-  snapshot: RoomSnapshot,
-): void {
-  // 优先取最近且有能量的 container（减少远处工地的取能通勤）。
-  if (snapshot.containers.length > 0) {
-    const best = findClosestContainerWithEnergy(creep, snapshot.containers);
-    if (best) {
-      const result = creep.withdraw(best, RESOURCE_ENERGY);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(creep, best);
-      }
-      return;
-    }
-  }
-
-  // 回退到直接采集。
-  const source = getSource(creep, snapshot);
-  if (source) {
-    const result = creep.harvest(source);
-    if (result === ERR_NOT_IN_RANGE) {
-      moveToTarget(creep, source);
-    }
-    return;
-  }
-
-  creep.memory.mode = "idle";
-}
+export const builderRole = defineRole("builder", 2 as Priority, policy);
