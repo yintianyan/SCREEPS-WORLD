@@ -10,6 +10,7 @@ import type { RolePolicy } from "./action-types";
 import {
   buildNearbyContainerSite,
   buildNearestSite,
+  dumpMineralsToNearbyContainer,
   dumpToNearbyContainer,
   dumpToNearbyLink,
   fillEmptiestContainer,
@@ -29,6 +30,8 @@ const policy: RolePolicy = {
   ],
 
   work: [
+    // 0. 矿物优先卸载（不应占用 energy carry 空间）。
+    dumpMineralsToNearbyContainer(),
     // 1. 身边 link（range<=2）— 瞬时传输到 controller/storage。
     dumpToNearbyLink(),
     // 1.5 紧急：身边 container 血量 < 80% 时先修再倒（防止 container 坍塌断链）。

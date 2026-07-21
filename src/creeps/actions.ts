@@ -252,6 +252,33 @@ export function dumpToNearbyContainer(): ActionCandidate {
   };
 }
 
+/**
+ * 向身边 container 卸载矿物（range <= 2）。
+ * 当 harvester 采集了 mineral（非 energy 资源）时，倒入最近 container。
+ * 优先级高于 energy dump — 矿物不应占用 carry 空间。
+ */
+export function dumpMineralsToNearbyContainer(): ActionCandidate {
+  return {
+    name: "dump:minerals-to-container",
+    predicate: (ac) => {
+      // 检查 creep 是否 carrying 非 energy 资源
+      const hasMinerals = (Object.keys(ac.creep.store) as ResourceConstant[])
+        .some(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
+      if (!hasMinerals) return false;
+      if (ac.snapshot.containers.length === 0) return false;
+      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[]);
+      return nearby !== null && ac.creep.pos.getRangeTo(nearby) <= 2 && (nearby.store.getFreeCapacity() ?? 0) > 0;
+    },
+    execute: (ac) => {
+      const mineral = (Object.keys(ac.creep.store) as ResourceConstant[])
+        .find(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
+      if (!mineral) return;
+      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[])!;
+      actOrMove(ac.creep, nearby, () => ac.creep.transfer(nearby, mineral));
+    },
+  };
+}
+
 /** 建造身边 container site（range <= 3，经济自愈）。 */
 export function buildNearbyContainerSite(): ActionCandidate {
   return {
