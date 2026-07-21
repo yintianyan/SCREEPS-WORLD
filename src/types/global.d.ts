@@ -86,6 +86,8 @@ declare global {
       state: "proposed" | "accepted" | "building" | "blocked" | "manual";
       /** 锚点的 packed 位置（x * 50 + y）。 */
       anchor?: number;
+      /** 锚点质量分（candidate-score 评估，越高越好）。诊断用 + 未来多房间选址参考。 */
+      anchorScore?: number;
       revision: number;
       nextPlanTick: number;
       // 冷数据 overrides / blocked 已迁移到 RawMemory segment 0（见 kernel/segment-store.ts）。

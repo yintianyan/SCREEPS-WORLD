@@ -20,7 +20,10 @@ export interface RoadPolicyOptions {
 }
 
 export const DEFAULT_ROAD_OPTIONS: RoadPolicyOptions = {
-  minTraffic: 10,
+  // 修复：旧值 10 对 RCL2-3 太严（2 个 hauler 时每格每窗口仅 ~3-6 次通行），
+  // 导致最该修路的早期修不出路，hauler 白跑上万 tick plain。降到 5 让早期道路成型。
+  // 双窗口要求保留（防瞬时尖峰误判），仅降低阈值。
+  minTraffic: 5,
   maxCandidates: 5,
   maxDistanceToEndpoints: 10,
 };

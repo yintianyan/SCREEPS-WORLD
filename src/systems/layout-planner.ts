@@ -10,10 +10,17 @@ import {
   createControllerContainerTask,
   createSourceLinkTasks,
   createControllerLinkTask,
+  createDefenseTasks,
 } from "../domain/layout/task-factory";
-import { collectCompletedKeys, collectCompletedKeysFromStructures } from "../domain/layout/validation";
+import {
+  collectCompletedKeys,
+  collectCompletedKeysFromStructures,
+  precomputeStructureCounts,
+  buildOccupiedPositionSet,
+} from "../domain/layout/validation";
 import { evaluateRoadCandidates } from "../domain/layout/road-policy";
 import { planCorridorRoads } from "../domain/layout/corridor-roads";
+import { evaluateCandidate, scoreCandidate } from "../domain/layout/candidate-score";
 import { packPos, unpackPos } from "../domain/layout/types";
 
 /**
@@ -89,6 +96,12 @@ export const layoutPlannerSystem: System & {
     // 触发所有携带旧 revision 的 assignment 失效（见 validateAssignment 的 revision 检查）。
     if (layout.anchor === undefined) {
       layout.anchor = anchorPacked;
+      // 接通 candidate-score：评估所选锚点质量并存储（诊断 + 未来多房间选址参考）。
+      // 此前 evaluateCandidate/scoreCandidate 是死代码，现在在锚点确立时实际执行。
+      const candidateInput = evaluateCandidate(room, COMPACT_CORE_V1, spawn.pos.x, spawn.pos.y);
+      if (candidateInput) {
+        layout.anchorScore = scoreCandidate(candidateInput);
+      }
     } else if (layout.anchor !== anchorPacked) {
       layout.anchor = anchorPacked;
       // 冷数据在 segment 中重置。
@@ -121,13 +134,24 @@ export const layoutPlannerSystem: System & {
     // 中通过 room.find(FIND_MINERALS) 采集，此处无需重复调用（避免 CPU 浪费）。
     const minerals = snapshot.minerals as readonly { pos: { x: number; y: number } }[];
 
+    // 预计算结构计数与占用集合 — 每规划周期构建一次，供所有 cell 验证复用。
+    // 消除旧实现 O(cells × structures) 的重复扫描（50+ cells × 30+ structures）。
+    const structureCounts = precomputeStructureCounts(snapshot);
+    const occupiedSet = buildOccupiedPositionSet(snapshot, minerals);
+
     const globalSiteCount = countGlobalSites(ctx);
     const validationOptions = {
       completedKeys,
       globalSiteCount,
       maxGlobalSites: CONFIG.construction.maxGlobalSites,
       minerals,
+      structureCounts,
+      occupiedSet,
     };
+
+    // 预构建队列 key 集合 — O(1) 去重，替代旧实现每候选 O(queue) 的 some() 扫描。
+    const existingKeys = new Set<string>();
+    for (const t of queue) existingKeys.add(t.key);
 
     // 1. 核心模板任务。
     const coreCandidates = blueprintToTasks(
@@ -143,8 +167,9 @@ export const layoutPlannerSystem: System & {
 
     for (const candidate of coreCandidates) {
       if (candidate.validation !== "ok") continue;
-      if (queue.some(t => t.key === candidate.key)) continue;
+      if (existingKeys.has(candidate.key)) continue;
       queue.push(candidateToBuildTask(candidate));
+      existingKeys.add(candidate.key);
       tasksAdded = true;
     }
 
@@ -155,8 +180,9 @@ export const layoutPlannerSystem: System & {
       validationOptions,
     );
     for (const candidate of sourceContainerCandidates) {
-      if (queue.some(t => t.key === candidate.key)) continue;
+      if (existingKeys.has(candidate.key)) continue;
       queue.push(candidateToBuildTask(candidate));
+      existingKeys.add(candidate.key);
       tasksAdded = true;
     }
 
@@ -167,8 +193,9 @@ export const layoutPlannerSystem: System & {
       validationOptions,
     );
     if (controllerContainer) {
-      if (!queue.some(t => t.key === controllerContainer.key)) {
+      if (!existingKeys.has(controllerContainer.key)) {
         queue.push(candidateToBuildTask(controllerContainer));
+        existingKeys.add(controllerContainer.key);
         tasksAdded = true;
       }
     }
@@ -180,8 +207,9 @@ export const layoutPlannerSystem: System & {
       validationOptions,
     );
     for (const candidate of sourceLinkCandidates) {
-      if (queue.some(t => t.key === candidate.key)) continue;
+      if (existingKeys.has(candidate.key)) continue;
       queue.push(candidateToBuildTask(candidate));
+      existingKeys.add(candidate.key);
       tasksAdded = true;
     }
 
@@ -192,8 +220,26 @@ export const layoutPlannerSystem: System & {
       validationOptions,
     );
     if (controllerLink) {
-      if (!queue.some(t => t.key === controllerLink.key)) {
+      if (!existingKeys.has(controllerLink.key)) {
         queue.push(candidateToBuildTask(controllerLink));
+        existingKeys.add(controllerLink.key);
+        tasksAdded = true;
+      }
+    }
+
+    // 3.7 动态防御工事（RCL4+）— 出口方向感知的 rampart 核心盾。
+    {
+      const exitPositions = room.find(FIND_EXIT).map(p => ({ x: p.x, y: p.y }));
+      const defenseCandidates = createDefenseTasks(
+        snapshot,
+        exitPositions,
+        room,
+        validationOptions,
+      );
+      for (const candidate of defenseCandidates) {
+        if (existingKeys.has(candidate.key)) continue;
+        queue.push(candidateToBuildTask(candidate));
+        existingKeys.add(candidate.key);
         tasksAdded = true;
       }
     }
@@ -212,7 +258,7 @@ export const layoutPlannerSystem: System & {
       );
 
       for (const candidate of roadCandidates) {
-        if (queue.some(t => t.key === candidate.key)) continue;
+        if (existingKeys.has(candidate.key)) continue;
         queue.push({
           key: candidate.key,
           pos: candidate.pos,
@@ -222,6 +268,7 @@ export const layoutPlannerSystem: System & {
           attempts: 0,
           retryAt: 0,
         });
+        existingKeys.add(candidate.key);
         tasksAdded = true;
       }
 
@@ -241,10 +288,17 @@ export const layoutPlannerSystem: System & {
     // 流量采样修不到长走廊中段，这里用 PathFinder 沿最优路径直接铺路，
     // hauler 移动成本减半 → 运力翻倍。priority 3 背景建造，不拖慢 RCL 冲刺。
     {
-      const corridorRoads = planCorridorRoads(room, snapshot);
+      // 保护蓝图未来格 — 走廊路不得占用未来的 extension/结构位置，
+      // 否则该格会被 validateBuildCell 判定 "occupied" 导致 extension 永久消失。
+      const protectedPositions = new Set<number>();
+      for (const cell of COMPACT_CORE_V1.cells) {
+        protectedPositions.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
+      }
+
+      const corridorRoads = planCorridorRoads(room, snapshot, undefined, undefined, protectedPositions);
       for (const pos of corridorRoads) {
         const key = `road.${snapshot.roomName}.${pos.x}.${pos.y}`;
-        if (queue.some(t => t.key === key)) continue;
+        if (existingKeys.has(key)) continue;
         queue.push({
           key,
           pos: { x: pos.x, y: pos.y, roomName: snapshot.roomName },
@@ -254,6 +308,7 @@ export const layoutPlannerSystem: System & {
           attempts: 0,
           retryAt: 0,
         });
+        existingKeys.add(key);
         tasksAdded = true;
       }
     }

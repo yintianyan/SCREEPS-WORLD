@@ -84,5 +84,48 @@ export const COMPACT_CORE_V1: Blueprint = {
     cell("core.link.01", 1, 0, STRUCTURE_LINK, 5, "late", 2, ["core", "logistics"], ["core.storage.01"]),
 
     cell("core.spawn.02", -1, 0, STRUCTURE_SPAWN, 7, "late", 1, ["core"]),
+
+    // ── RCL6: 补充 10 个 extension（共 40）──
+    // 修复：旧模板仅 30 个 extension，RCL6 上限 40 导致能量容量永久卡在 1800。
+    cell("core.ext.31", 3, 3, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
+    cell("core.ext.32", -3, 3, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
+    cell("core.ext.33", 3, -3, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
+    cell("core.ext.34", -3, -3, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
+    cell("core.ext.35", -2, 3, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
+    cell("core.ext.36", 2, -3, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
+    cell("core.ext.37", -2, -3, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
+    cell("core.ext.38", 4, 0, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
+    cell("core.ext.39", -4, 0, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
+    cell("core.ext.40", 2, 4, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
+
+    // ── RCL7: 补充 10 个 extension（共 50），加第 2 个 hub link ──
+    cell("core.ext.41", 0, 4, STRUCTURE_EXTENSION, 7, "rcl7", 2, ["core"]),
+    cell("core.ext.42", 0, -4, STRUCTURE_EXTENSION, 7, "rcl7", 2, ["core"]),
+    cell("core.ext.43", 4, 1, STRUCTURE_EXTENSION, 7, "rcl7", 2, ["core"]),
+    cell("core.ext.44", -4, 1, STRUCTURE_EXTENSION, 7, "rcl7", 2, ["core"]),
+    cell("core.ext.45", 4, -1, STRUCTURE_EXTENSION, 7, "rcl7", 2, ["core"]),
+    cell("core.ext.46", -4, -1, STRUCTURE_EXTENSION, 7, "rcl7", 2, ["core"]),
+    cell("core.ext.47", 1, 4, STRUCTURE_EXTENSION, 7, "rcl7", 2, ["core"]),
+    cell("core.ext.48", -1, 4, STRUCTURE_EXTENSION, 7, "rcl7", 2, ["core"]),
+    cell("core.ext.49", 1, -4, STRUCTURE_EXTENSION, 7, "rcl7", 2, ["core"]),
+    cell("core.ext.50", -1, -4, STRUCTURE_EXTENSION, 7, "rcl7", 2, ["core"]),
+
+    // 第 2 个 hub link — RCL6 起 source link 增多，单 hub link 吞吐不足。
+    cell("core.link.02", 2, 3, STRUCTURE_LINK, 6, "rcl6", 2, ["core", "logistics"], ["core.storage.01"]),
+
+    // ── RCL8: 补充 10 个 extension（共 60），加第 3 个 spawn ──
+    cell("core.ext.51", 4, 2, STRUCTURE_EXTENSION, 8, "rcl8", 2, ["core"]),
+    cell("core.ext.52", -4, 2, STRUCTURE_EXTENSION, 8, "rcl8", 2, ["core"]),
+    cell("core.ext.53", 4, -2, STRUCTURE_EXTENSION, 8, "rcl8", 2, ["core"]),
+    cell("core.ext.54", -4, -2, STRUCTURE_EXTENSION, 8, "rcl8", 2, ["core"]),
+    cell("core.ext.55", -2, 4, STRUCTURE_EXTENSION, 8, "rcl8", 2, ["core"]),
+    cell("core.ext.56", 2, -4, STRUCTURE_EXTENSION, 8, "rcl8", 2, ["core"]),
+    cell("core.ext.57", -2, -4, STRUCTURE_EXTENSION, 8, "rcl8", 2, ["core"]),
+    cell("core.ext.58", 3, 4, STRUCTURE_EXTENSION, 8, "rcl8", 2, ["core"]),
+    cell("core.ext.59", -3, 4, STRUCTURE_EXTENSION, 8, "rcl8", 2, ["core"]),
+    cell("core.ext.60", 3, -4, STRUCTURE_EXTENSION, 8, "rcl8", 2, ["core"]),
+
+    // 第 3 个 spawn — RCL8 上限 3 个，紧邻主 spawn 便于孵化与防御。
+    cell("core.spawn.03", 0, -1, STRUCTURE_SPAWN, 8, "rcl8", 1, ["core"]),
   ],
 };

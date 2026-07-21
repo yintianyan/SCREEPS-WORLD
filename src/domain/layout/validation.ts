@@ -1,5 +1,5 @@
 import type { Blueprint, BlueprintCell, ValidationResult } from "./types";
-import { inBounds } from "./types";
+import { inBounds, packPos } from "./types";
 import type { RoomSnapshot } from "../../kernel/contracts";
 
 /** validateBuildCell 的选项参数。 */
@@ -12,6 +12,76 @@ export interface ValidationOptions {
   maxGlobalSites: number;
   /** 房间内的 mineral 位置（可选，由调用方提供）。 */
   minerals?: readonly { pos: { x: number; y: number } }[];
+  /** 预计算的结构计数（每规划周期构建一次，避免每 cell 重复扫描）。 */
+  structureCounts?: ReadonlyMap<string, number>;
+  /** 预计算的占用位置集合（packed x*50+y，每规划周期构建一次）。 */
+  occupiedSet?: ReadonlySet<number>;
+}
+
+/**
+ * 预计算房间内各结构类型的数量（已建 + site）。
+ * 每规划周期调用一次，供 validateBuildCell 复用 — 消除 O(cells × structures) 扫描。
+ */
+export function precomputeStructureCounts(snapshot: RoomSnapshot): Map<string, number> {
+  const counts = new Map<string, number>();
+  const typedArrays: ReadonlyArray<readonly AnyStructure[]> = [
+    snapshot.spawns,
+    snapshot.extensions,
+    snapshot.towers,
+    snapshot.containers,
+    snapshot.roads,
+    snapshot.links,
+  ];
+  for (const arr of typedArrays) {
+    for (const s of arr) {
+      counts.set(s.structureType, (counts.get(s.structureType) ?? 0) + 1);
+    }
+  }
+  if (snapshot.storage) {
+    counts.set(snapshot.storage.structureType, (counts.get(snapshot.storage.structureType) ?? 0) + 1);
+  }
+  for (const site of snapshot.constructionSites) {
+    counts.set(site.structureType, (counts.get(site.structureType) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * 预计算所有被占用位置（packed x*50+y）。
+ * 包括：source/controller/mineral/已有结构/site。
+ * 每规划周期调用一次，供 validateBuildCell 和 findAdjacentBuildable 复用。
+ */
+export function buildOccupiedPositionSet(
+  snapshot: RoomSnapshot,
+  minerals?: readonly { pos: { x: number; y: number } }[],
+): Set<number> {
+  const set = new Set<number>();
+  for (const s of snapshot.sources) {
+    set.add(packPos(s.pos.x, s.pos.y));
+  }
+  if (snapshot.controller) {
+    set.add(packPos(snapshot.controller.pos.x, snapshot.controller.pos.y));
+  }
+  if (minerals) {
+    for (const m of minerals) {
+      set.add(packPos(m.pos.x, m.pos.y));
+    }
+  }
+  const structures: readonly { pos: { x: number; y: number } }[] = [
+    ...snapshot.spawns,
+    ...snapshot.extensions,
+    ...snapshot.towers,
+    ...snapshot.containers,
+    ...snapshot.links,
+    ...snapshot.constructionSites,
+  ];
+  for (const s of structures) {
+    set.add(packPos(s.pos.x, s.pos.y));
+  }
+  if (snapshot.storage) {
+    set.add(packPos(snapshot.storage.pos.x, snapshot.storage.pos.y));
+  }
+  return set;
 }
 
 /**
@@ -26,6 +96,8 @@ export interface ValidationOptions {
  *   6. 全局 site 上限
  *
  * 返回 "ok" 或第一个失败原因。
+ * 传入 options.structureCounts / options.occupiedSet 时使用预计算数据（O(1) 查询），
+ * 否则回退到全量扫描（向后兼容）。
  */
 export function validateBuildCell(
   room: Room,
@@ -42,7 +114,9 @@ export function validateBuildCell(
   // 2. RCL 检查 — CONTROLLER_STRUCTURES 限制该类型的最大数量。
   const maxForType = CONTROLLER_STRUCTURES[cell.structureType]?.[snapshot.rcl] ?? 0;
   if (maxForType === 0) return "rcl";
-  const existingCount = countExistingAndSites(snapshot, cell.structureType);
+  const existingCount = options.structureCounts
+    ? (options.structureCounts.get(cell.structureType) ?? 0)
+    : countExistingAndSites(snapshot, cell.structureType);
   if (existingCount >= maxForType) return "rcl";
 
   // 3. 地形检查 — 不能在墙上建造。
@@ -50,7 +124,10 @@ export function validateBuildCell(
   if (terrain.get(x, y) === TERRAIN_MASK_WALL) return "terrain";
 
   // 4. 占用检查 — 不能与 source/controller/mineral/已有结构/site 重叠。
-  if (isOccupied(x, y, snapshot, options.minerals)) return "occupied";
+  const occupied = options.occupiedSet
+    ? options.occupiedSet.has(packPos(x, y))
+    : isOccupied(x, y, snapshot, options.minerals);
+  if (occupied) return "occupied";
 
   // 5. 依赖检查 — 前置 blueprint key 必须已完成。
   if (cell.requires) {
@@ -68,6 +145,7 @@ export function validateBuildCell(
 /**
  * 统计房间内某类型的已建结构 + 已有 site 数。
  * 通用扫描：覆盖所有 BuildableStructureConstant 类型，避免新增结构类型时遗漏。
+ * （回退路径 — 优先使用 precomputeStructureCounts。）
  */
 function countExistingAndSites(
   snapshot: RoomSnapshot,
@@ -97,7 +175,7 @@ function countExistingAndSites(
   return count;
 }
 
-/** 检查位置是否被 source/controller/mineral/已有结构/site 占用。 */
+/** 检查位置是否被 source/controller/mineral/已有结构/site 占用。（回退路径） */
 function isOccupied(
   x: number,
   y: number,
