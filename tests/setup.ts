@@ -25,6 +25,7 @@ Object.assign(globalThis as Record<string, unknown>, {
   STRUCTURE_LINK: "link",
 
   // find 常量
+  FIND_EXIT: 10,
   FIND_SOURCES: 1,
   FIND_SOURCES_ACTIVE: 2,
   FIND_MY_STRUCTURES: 6,

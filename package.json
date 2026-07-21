@@ -8,7 +8,9 @@
     "build": "rollup -c",
     "watch": "rollup -c -w",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run tests/integration/scenarios tests/integration/edge-cases --testTimeout=60000",
+    "test:unit": "vitest run --exclude 'tests/integration/**'"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^28.0.2",
