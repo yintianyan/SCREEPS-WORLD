@@ -223,6 +223,8 @@ describe("builder — acquire 模式", () => {
   it("优先从最近有能量的 container 取能", () => {
     const c1 = mockStructure("container", { id: "c1", energy: 500, capacity: 2000 });
     const c2 = mockStructure("container", { id: "c2", energy: 800, capacity: 2000 });
+    c1.pos.getRangeTo.mockReturnValue(5); // 非 source 相邻
+    c2.pos.getRangeTo.mockReturnValue(5);
     const snap = mockSnapshot({ containers: [c1, c2] });
     const creep = mockCreep({ name: "builder_1", role: "builder", used: 0, capacity: 50, mode: "acquire" });
     // c1 更近（getRangeTo 默认返回 1）。

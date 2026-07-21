@@ -132,17 +132,19 @@ describe("Corridor — planCorridorRoads", () => {
     expect(roads.map(r => `${r.x},${r.y}`)).toEqual(["20,20", "22,22"]);
   });
 
-  it("dedupes tiles shared across multiple corridor pairs", () => {
-    // 两条走廊都经过 20,20 — 只收录一次。
+  it("only plans the first (highest priority) corridor pair", () => {
+    // 新行为：每次只规划第一条走廊，不贪多。
+    // controller container 走廊优先（collectCorridorEndpoints 排序）。
     const pathFn: PathFn = from =>
       from.x === 38
-        ? [{ x: 20, y: 20 }, { x: 30, y: 30 }]
-        : [{ x: 20, y: 20 }, { x: 15, y: 15 }];
+        ? [{ x: 20, y: 20 }, { x: 30, y: 30 }]  // controller container 走廊
+        : [{ x: 20, y: 20 }, { x: 15, y: 15 }]; // source container 走廊
     const roads = planCorridorRoads(fakeRoom, corridorSnapshot(), DEFAULT_CORRIDOR_OPTIONS, pathFn);
     const keys = roads.map(r => `${r.x},${r.y}`);
-    expect(keys.filter(k => k === "20,20")).toHaveLength(1);
+    // 只包含第一条走廊的路径，不包含第二条走廊的 15,15。
+    expect(keys).toContain("20,20");
     expect(keys).toContain("30,30");
-    expect(keys).toContain("15,15");
+    expect(keys).not.toContain("15,15");
   });
 
   it("respects maxRoadsPerCycle for segmented building", () => {

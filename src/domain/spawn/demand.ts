@@ -174,17 +174,25 @@ export function evaluateDemand(
   }
 
   // P1：Hauler — 仅在有 container 或 storage 时才创建（hauler 无 WORK，不能自采）。
-  // 动态数量：每个 container 需要 ~1.5 个 hauler 才能搬空运力（考虑往返时间）。
-  // 公式：ceil(containers * 1.5)，下限 minCount，上限 maxCount。
+  // 能量驱动配额：根据 container 实际积压量决定 hauler 数量，而非固定乘数。
+  // 逻辑：container 能量 > 80% 容量 → 需要 2 个 hauler（严重积压，搬运能力不足）
+  //       container 能量 > 40% 容量 → 需要 1 个 hauler（正常物流压力）
+  //       container 能量 < 40% → 不需要额外 hauler（搬运能力过剩，不孵）
+  // 这确保 hauler 数量跟随实际物流压力动态调整，不会在 container 空时白孵。
   const haulerConfig = CONFIG.roles.hauler;
   const haulerTotal = (counts.hauler ?? 0) + pending.hauler;
   const hasLogistics = snapshot.containers.length > 0 || snapshot.storage !== undefined;
-  const dynamicHaulerTarget = hasLogistics
-    ? Math.min(
-        haulerConfig.maxCount,
-        Math.max(haulerConfig.minCount, Math.ceil(snapshot.containers.length * 1.5)),
-      )
-    : 0;
+  let dynamicHaulerTarget = 0;
+  if (hasLogistics) {
+    for (const c of snapshot.containers) {
+      const capacity = c.store.getCapacity(RESOURCE_ENERGY) || 1;
+      const fillRatio = c.store.getUsedCapacity(RESOURCE_ENERGY) / capacity;
+      if (fillRatio > 0.8) dynamicHaulerTarget += 2;
+      else if (fillRatio > 0.4) dynamicHaulerTarget += 1;
+    }
+    // 至少 minCount（保证基本物流不断），至多 maxCount。
+    dynamicHaulerTarget = Math.min(haulerConfig.maxCount, Math.max(haulerConfig.minCount, dynamicHaulerTarget));
+  }
   // 能量危机：收缩 hauler 到 minCount —— 仅保留把能量搬回 spawn 供孵化 harvester 的最小力量，
   // 避免孵出一堆无能量可搬的空闲 hauler，白白浪费孵化能量。
   const haulerTarget = inCrisis
@@ -239,12 +247,17 @@ export function evaluateDemand(
     }
 
     // P2：Builder — 仅当存在建造 site 时。
-    // 动态数量：每个活跃 site 配 1 个 builder，上限 maxCount。
+    // 动态数量：每个活跃 site 配 1 个 builder，但上限受经济承载力约束。
+    // 修复：旧实现 target=sites.length 导致 5 个 site 时孵 4 个 builder，
+    // 全部竞争有限能量（2 harvester 仅产 4/tick），大部分 builder 空闲在 acquire。
+    // 新上限：min(sites, harvester 存活数 + 1) — builder 数量不超过经济能供养的范围。
     if (snapshot.myConstructionSites.length > 0) {
       const builderConfig = CONFIG.roles.builder;
       const builderTotal = (counts.builder ?? 0) + pending.builder;
+      const economyCap = (counts.harvester ?? 0) + (counts.worker ?? 0) + 1;
       const dynamicBuilderTarget = Math.min(
         builderConfig.maxCount,
+        economyCap,
         Math.max(builderConfig.minCount, snapshot.myConstructionSites.length),
       );
       // 能量危机：收缩 builder 到 minCount —— 仅留 1 个处理关键 source container 重建（恢复收入），
@@ -328,11 +341,16 @@ function createRequest(
   tick: number,
   sourceId?: Id<Source>,
 ): SpawnRequest {
-  // X-16：P0/P1 角色的 body 降级阈值基于 energyAvailable（当前可用能量），
-  // 而非 energyCapacityAvailable（容量上限）；当 extension 不满时，
-  // 优先使用最小可孵化 body 速出，避免等待 extension 充满。
+  // X-16：body 选择策略按角色和状态分层：
+  //   P0（紧急 worker）/ crisis / recovery / bootstrap：基于 energyAvailable 降级，速出保命。
+  //   P1 harvester 在 normal 状态：使用 energyCapacity 满配 body，不降级。
+  //     原因：2W harvester（300 能量）产出 4/tick vs 1W（200 能量）产出 2/tick，
+  //     多等 100 能量（~50 tick）换来整个生命周期（1500 tick）双倍产出，ROI 极高。
+  //     trySpawn 对非 P0 请求会自动等待能量足够再孵化，无需在请求层面降级。
+  //   P2+（upgrader/builder）：使用 energyCapacity 满配。
   let body: BodyPartConstant[];
-  if (priority <= 1 || colonyState === "bootstrap" || colonyState === "recovery") {
+  const shouldDegrade = priority === 0 || colonyState === "bootstrap" || colonyState === "recovery";
+  if (shouldDegrade) {
     const fullBody = selectBody(role, energyCapacity, { rcl });
     const requiredParts = ROLE_REQUIRED_PARTS[role];
     // 优雅降级：孵化当前能量能负担的最大 body。宁可先出一个较小的 harvester（低效但维持 colony 存活），

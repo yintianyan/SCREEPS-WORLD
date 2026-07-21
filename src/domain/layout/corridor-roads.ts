@@ -135,7 +135,12 @@ export function defaultPathFn(
 }
 
 /**
- * 规划走廊路：沿各端点对的最优路径收集待建道路格。
+ * 规划走廊路：沿最高优先级走廊对的最优路径收集待建道路格。
+ *
+ * 每次只规划一条走廊（第一个 pair），前一条建完后才规划下一条。
+ * 原因：同时规划所有走廊会一次性涌入 30-40 条 road 淹没 buildQueue，
+ * 抢占 builder 工时导致 extension/container 建造停滞。
+ * 一条一条建，经济基础设施优先，道路是锦上添花。
  *
  * 去重规则：跳过已有 road / constructionSite / 结构 / source / controller 所在格，
  * 以及本批次已收录的格。受 maxRoadsPerCycle 上限约束分段返回。
@@ -172,16 +177,16 @@ export function planCorridorRoads(
   const seen = new Set<string>();
   const result: { x: number; y: number; roomName: string }[] = [];
 
-  for (const pair of pairs) {
-    const path = fn(pair.from, pair.to);
-    for (const step of path) {
-      if (step.x < 1 || step.x > 48 || step.y < 1 || step.y > 48) continue;
-      const key = `${step.x},${step.y}`;
-      if (occupied.has(key) || seen.has(key)) continue;
-      seen.add(key);
-      result.push({ x: step.x, y: step.y, roomName: snapshot.roomName });
-      if (result.length >= options.maxRoadsPerCycle) return result;
-    }
+  // 只规划第一条走廊（最高优先级），不贪多。
+  const pair = pairs[0]!;
+  const path = fn(pair.from, pair.to);
+  for (const step of path) {
+    if (step.x < 1 || step.x > 48 || step.y < 1 || step.y > 48) continue;
+    const key = `${step.x},${step.y}`;
+    if (occupied.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    result.push({ x: step.x, y: step.y, roomName: snapshot.roomName });
+    if (result.length >= options.maxRoadsPerCycle) break;
   }
 
   return result;

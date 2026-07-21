@@ -16,7 +16,7 @@ import {
   upgradeController,
   withdrawControllerContainer,
   withdrawControllerLink,
-  withdrawRichestContainer,
+  withdrawRichestNonSourceContainer,
   withdrawStorage,
 } from "./actions";
 import { defineRole } from "./role-runner";
@@ -58,8 +58,8 @@ const policy: RolePolicy = {
     withdrawControllerContainer(),
     // 3. storage（RCL4+）。
     withdrawStorage(),
-    // 4. 最满 container。
-    withdrawRichestContainer(),
+    // 4. 非 source 的最满 container（不抢 hauler 物流源）。
+    withdrawRichestNonSourceContainer(),
     // 5. 直接采集。
     harvestSource(),
   ],

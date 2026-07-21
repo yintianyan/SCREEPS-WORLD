@@ -398,20 +398,10 @@ export function moveToTarget(
     return result;
   }
 
-  // ── 固定路线短路：range 2-3 贪心移动（站桩升级/站桩采集的核心优化）。──
-  // controller container → controller 永远只有 1-2 格，source → container 同理。
-  // 这些静态结构之间不存在障碍（布局系统保证），贪心 getDirectionTo 即可。
-  // 省去 PathFinder + stuck detection + costCallback 的全部开销（~0.1ms/creep/tick）。
-  // 若贪心失败（ERR_NO_PATH — 极端情况如墙体塌陷）， fall through 到完整寻路。
-  if (range <= 3) {
-    const dir = creep.pos.getDirectionTo(pos);
-    const result = creep.move(dir);
-    if (result === OK || result === ERR_TIRED) {
-      recordTraffic(creep);
-      return result;
-    }
-    // ERR_NO_PATH / ERR_BUSY 等 → fall through 到完整寻路。
-  }
+  // 注意：旧实现有 range 2-3 贪心短路（creep.move(getDirectionTo)），已移除。
+  // 原因：creep.move 不忽略其他 creep，多 creep 同目标时全部挤入同一邻格 → 死锁。
+  // E1S9 实测：7 个 creep 卡在 Source1 旁 2 格处 500+ tick 无法采集。
+  // 完整 PathFinder + ignoreCreeps:true + range:1 能正确分散多 creep 到不同邻格。
 
   // ── 卡位检测（仅在值变化时写 Memory，减少 Proxy 开销）──
   const currentPacked = packPos(creep.pos);
@@ -479,6 +469,9 @@ export function moveToTarget(
     reusePath,
     maxRooms: 1,
     ignoreCreeps,
+    // 关键：range 1 = 走到目标相邻格即可（source/controller/结构格不可站立）。
+    // 缺少此项时 moveTo 默认 range=0，PathFinder 搜索不可行走格 → 永远找不到路径。
+    range: 1,
     // 道路优先：引擎默认 road=1，plain=2 使道路成本仅为 plain 的一半。
     plainCost: 2,
     // 疲劳感知：慢速 creep（MOVE 容量 < 总重量）完全避开沼泽。

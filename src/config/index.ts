@@ -157,7 +157,7 @@ export const CONFIG = {
 
   roles: {
     harvester: { minCount: 2, maxCount: 4 },
-    hauler: { minCount: 2, maxCount: 4 },
+    hauler: { minCount: 2, maxCount: 6 },
     upgrader: { minCount: 1, maxCount: 3 },
     builder: { minCount: 1, maxCount: 4 },
     worker: { minCount: 0, maxCount: 2 },

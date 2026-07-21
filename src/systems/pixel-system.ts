@@ -14,6 +14,8 @@ export const pixelSystem: System = {
   priority: 3 as Priority,
   interval: 10,
   run(): void {
+    // 私服无 generatePixel API — 安全检查避免每 10 tick 报 TypeError。
+    if (typeof Game.cpu.generatePixel !== "function") return;
     if ((Game.cpu.bucket ?? 0) >= 10000) {
       Game.cpu.generatePixel();
     }

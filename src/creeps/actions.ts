@@ -72,6 +72,57 @@ export function withdrawClosestContainer(): ActionCandidate {
   };
 }
 
+/**
+ * 判断 container 是否为 source container（紧邻任何 source）。
+ * source container 的能量应由 hauler 搬运到 spawn/extension，
+ * 非采集角色不应直接取用，否则 hauler 无事可做、物流链断裂。
+ */
+function isSourceContainer(c: StructureContainer, ac: ActionContext): boolean {
+  return ac.snapshot.sources.some(
+    s => c.pos.getRangeTo(s.pos) <= 1,
+  );
+}
+
+/** 从最满的非 source container 取能（upgrader 用，不抢 hauler 的物流源）。 */
+export function withdrawRichestNonSourceContainer(): ActionCandidate {
+  return {
+    name: "withdraw:richest-non-source-container",
+    predicate: (ac) => {
+      const candidates = ac.snapshot.containers.filter(
+        c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      );
+      return candidates.length > 0;
+    },
+    execute: (ac) => {
+      const candidates = ac.snapshot.containers.filter(
+        c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      );
+      const best = findRichestContainer(candidates);
+      if (best) actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
+    },
+  };
+}
+
+/** 从最近的非 source container 取能（builder 用，不抢 hauler 的物流源）。 */
+export function withdrawClosestNonSourceContainer(): ActionCandidate {
+  return {
+    name: "withdraw:closest-non-source-container",
+    predicate: (ac) => {
+      const candidates = ac.snapshot.containers.filter(
+        c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      );
+      return candidates.length > 0;
+    },
+    execute: (ac) => {
+      const candidates = ac.snapshot.containers.filter(
+        c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      );
+      const best = findClosestContainerWithEnergy(ac.creep, candidates);
+      if (best) actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
+    },
+  };
+}
+
 /** 从 controller 旁 container 取能（站桩升级）。 */
 export function withdrawControllerContainer(): ActionCandidate {
   return {
@@ -309,6 +360,57 @@ export function repairCritical(): ActionCandidate {
     execute: (ac) => {
       const target = findCriticalRepair(ac.snapshot)!;
       actOrMove(ac.creep, target, () => ac.creep.repair(target));
+    },
+  };
+}
+
+/**
+ * 修复衰减中的 container（血量 < 80%）。
+ * Container 每 tick 衰减 ~5000 hits，不修就会在 ~50 tick 内从 80% 降到 0 被摧毁。
+ * 失去 source container = 物流链断裂 = 经济崩溃，因此阈值设得比 repairCritical (50%) 更激进。
+ */
+export function repairContainerDecay(): ActionCandidate {
+  return {
+    name: "repair:container-decay",
+    predicate: (ac) => {
+      return ac.snapshot.containers.some(c => c.hits < c.hitsMax * 0.8);
+    },
+    execute: (ac) => {
+      // 修血量最低的 container。
+      let worst: StructureContainer | undefined;
+      let worstRatio = 1;
+      for (const c of ac.snapshot.containers) {
+        const ratio = c.hits / c.hitsMax;
+        if (ratio < 0.8 && ratio < worstRatio) {
+          worstRatio = ratio;
+          worst = c;
+        }
+      }
+      if (worst) {
+        actOrMove(ac.creep, worst, () => ac.creep.repair(worst));
+      }
+    },
+  };
+}
+
+/**
+ * 修复身边的 container（range <= 2，血量 < 80%）。
+ * Harvester 站桩专用：你正站在 container 旁边，它快塌了，先修再倒。
+ * 比 repairContainerDecay 更紧急 — 只修身边的，不需要跑远路。
+ */
+export function repairNearbyContainer(): ActionCandidate {
+  return {
+    name: "repair:nearby-container",
+    predicate: (ac) => {
+      if (ac.snapshot.containers.length === 0) return false;
+      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[]);
+      return nearby !== null
+        && ac.creep.pos.getRangeTo(nearby) <= 2
+        && nearby.hits < nearby.hitsMax * 0.8;
+    },
+    execute: (ac) => {
+      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[])!;
+      actOrMove(ac.creep, nearby, () => ac.creep.repair(nearby));
     },
   };
 }

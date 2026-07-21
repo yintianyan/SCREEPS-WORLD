@@ -252,8 +252,11 @@ export const layoutPlannerSystem: System & {
       }
     }
 
-    // 4. 道路候选（每次规划都评估 — interval 已控制运行频率）。
-    {
+    // 4. 流量道路候选 — RCL4+ 才启用。
+    // RCL2-3 阶段经济聚焦基础设施（extension/container），流量路是锦上添花，
+    // 过早启用会淹没 buildQueue 抢占 builder 工时。RCL4 有 storage 后物流压力增大，
+    // 此时按实际交通热度铺路才有意义。
+    if (snapshot.rcl >= 4) {
       const g = globalCache();
       const currentTraffic = g.roomTraffic?.[snapshot.roomName];
       const prevTraffic = g.prevRoomTraffic?.[snapshot.roomName];
@@ -279,14 +282,16 @@ export const layoutPlannerSystem: System & {
         existingKeys.add(candidate.key);
         tasksAdded = true;
       }
+    }
 
-      // 保存当前交通数据为上一个窗口。
+    // 交通数据轮换（无论 RCL 都执行，确保 RCL4 时已有 prevTraffic 可用）。
+    {
+      const g = globalCache();
+      const currentTraffic = g.roomTraffic?.[snapshot.roomName];
       if (currentTraffic) {
         if (!g.prevRoomTraffic) g.prevRoomTraffic = {};
         g.prevRoomTraffic[snapshot.roomName] = { ...currentTraffic };
       }
-
-      // 清空当前交通数据，开始新的采样窗口。
       if (g.roomTraffic) {
         g.roomTraffic[snapshot.roomName] = {};
       }
@@ -295,35 +300,39 @@ export const layoutPlannerSystem: System & {
     // 5. 确定性走廊路（source container↔核心↔controller container）。
     // 流量采样修不到长走廊中段，这里用 PathFinder 沿最优路径直接铺路，
     // hauler 移动成本减半 → 运力翻倍。priority 3 背景建造，不拖慢 RCL 冲刺。
+    //
+    // 前置门禁：当前队列中仍有 priority <= 1 的 "queued" 任务时不生成 road。
+    // 原因：extension/container 是经济基础设施，必须先建完；road 是锦上添花，
+    // 不能在基础设施未完成时淹没 buildQueue 抢占 builder 工时。
     {
-      // 保护蓝图未来格 — 走廊路不得占用未来的 extension/结构位置，
-      // 否则该格会被 validateBuildCell 判定 "occupied" 导致 extension 永久消失。
-      const protectedPositions = new Set<number>();
-      for (const cell of COMPACT_CORE_V1.cells) {
-        protectedPositions.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
-      }
+      const hasPendingInfrastructure = queue.some(
+        t => t.priority <= 1 && t.state === "queued",
+      );
 
-      // 早期加速：RCL2-3 时走廊路铺设速度翻倍（24 格/周期 vs 默认 12）。
-      // 早期 hauler 跑 plain 运力减半，RCL2→RCL3 是最长 grind，早铺路早受益。
-      const corridorOptions = snapshot.rcl <= 3
-        ? { maxRoadsPerCycle: 24 }
-        : undefined;
+      if (!hasPendingInfrastructure) {
+        // 保护蓝图未来格 — 走廊路不得占用未来的 extension/结构位置，
+        // 否则该格会被 validateBuildCell 判定 "occupied" 导致 extension 永久消失。
+        const protectedPositions = new Set<number>();
+        for (const cell of COMPACT_CORE_V1.cells) {
+          protectedPositions.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
+        }
 
-      const corridorRoads = planCorridorRoads(room, snapshot, corridorOptions, undefined, protectedPositions);
-      for (const pos of corridorRoads) {
-        const key = `road.${snapshot.roomName}.${pos.x}.${pos.y}`;
-        if (existingKeys.has(key)) continue;
-        queue.push({
-          key,
-          pos: { x: pos.x, y: pos.y, roomName: snapshot.roomName },
-          structureType: STRUCTURE_ROAD,
-          priority: 3,
-          state: "queued",
-          attempts: 0,
-          retryAt: 0,
-        });
-        existingKeys.add(key);
-        tasksAdded = true;
+        const corridorRoads = planCorridorRoads(room, snapshot, undefined, undefined, protectedPositions);
+        for (const pos of corridorRoads) {
+          const key = `road.${snapshot.roomName}.${pos.x}.${pos.y}`;
+          if (existingKeys.has(key)) continue;
+          queue.push({
+            key,
+            pos: { x: pos.x, y: pos.y, roomName: snapshot.roomName },
+            structureType: STRUCTURE_ROAD,
+            priority: 3,
+            state: "queued",
+            attempts: 0,
+            retryAt: 0,
+          });
+          existingKeys.add(key);
+          tasksAdded = true;
+        }
       }
     }
 

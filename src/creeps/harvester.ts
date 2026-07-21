@@ -15,6 +15,7 @@ import {
   fillEmptiestContainer,
   fillTarget,
   harvestSource,
+  repairNearbyContainer,
   upgradeController,
 } from "./actions";
 import { defineRole } from "./role-runner";
@@ -27,17 +28,19 @@ const policy: RolePolicy = {
   work: [
     // 1. 身边 link（range<=2）— 瞬时传输到 controller/storage。
     dumpToNearbyLink(),
-    // 1.5 身边 container（range<=2）— 站桩 miner。
+    // 1.5 紧急：身边 container 血量 < 80% 时先修再倒（防止 container 坍塌断链）。
+    repairNearbyContainer(),
+    // 2. 身边 container（range<=2）— 站桩 miner。
     dumpToNearbyContainer(),
-    // 1.5 紧急恢复：身边 container 在建 site（range<=3）。
+    // 2.5 紧急恢复：身边 container 在建 site（range<=3）。
     buildNearbyContainerSite(),
-    // 2. 直接送 spawn/extension/tower。
+    // 3. 直接送 spawn/extension/tower。
     fillTarget(),
-    // 3. 全满时倒入最空 container。
+    // 4. 全满时倒入最空 container。
     fillEmptiestContainer(),
-    // 4. 帮忙建造附近 site。
+    // 5. 帮忙建造附近 site。
     buildNearestSite(),
-    // 5. 全部已满 — 升级控制器。
+    // 6. 全部已满 — 升级控制器。
     upgradeController(),
   ],
 };

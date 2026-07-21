@@ -13,9 +13,10 @@ import type { ActionCandidate, ActionContext, RolePolicy } from "./action-types"
 import {
   fillTarget,
   harvestSource,
+  repairContainerDecay,
   repairCritical,
   upgradeControllerGated,
-  withdrawClosestContainer,
+  withdrawClosestNonSourceContainer,
 } from "./actions";
 import { releaseAssignment } from "./assignment-adapter";
 import { moveToTarget } from "./movement";
@@ -101,8 +102,8 @@ const policy: RolePolicy = {
   gate: builderGate,
 
   acquire: [
-    // 优先取最近有能量的 container（减少通勤）。
-    withdrawClosestContainer(),
+    // 优先取最近有能量的非 source container（不抢 hauler 物流源，减少通勤）。
+    withdrawClosestNonSourceContainer(),
     // 回退到直接采集。
     harvestSource(),
   ],
@@ -112,9 +113,12 @@ const policy: RolePolicy = {
     buildAssignmentByTier(),
     // 建造最近 site（带 tier 门禁）。
     buildSiteByTier(),
+    // 紧急：修复衰减中的 container（< 80% 血量）。
+    // 优先级高于 fill — 失去 container = 物流链断裂 = 经济崩溃。
+    repairContainerDecay(),
     // fallback: 填充 spawn/extension。
     fillTarget(),
-    // fallback: 关键修复。
+    // fallback: 关键修复（< 50% 血量）。
     repairCritical(),
     // fallback: 升级控制器（带能量门禁）。
     upgradeControllerGated(),

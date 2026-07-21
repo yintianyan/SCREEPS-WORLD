@@ -201,6 +201,7 @@ describe("upgrader — 站桩升级取能链", () => {
   it("优先级 4：回退到最满 container", () => {
     const controller = mockController();
     const c1 = mockStructure("container", { id: "c1", energy: 800, capacity: 2000 });
+    c1.pos.getRangeTo.mockReturnValue(5); // 非 source 相邻 container
     const snap = mockSnapshot({
       controller,
       controllerContainer: undefined,
