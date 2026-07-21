@@ -274,7 +274,7 @@ export function moveToTarget(
 ): ScreepsReturnCode {
   const pos = "pos" in target ? target.pos : target;
 
-  // ── 短路：range <= 1 时直接 move，跳过 PathFinder（0.05ms/creep 的纯浪费）。──
+  // ── 短路：range <= 1 时直接 move，跳过一切寻路逻辑。──
   const range = creep.pos.getRangeTo(pos);
   if (range <= 1) {
     const dir = creep.pos.getDirectionTo(pos);
@@ -283,6 +283,21 @@ export function moveToTarget(
       recordTraffic(creep);
     }
     return result;
+  }
+
+  // ── 固定路线短路：range 2-3 贪心移动（站桩升级/站桩采集的核心优化）。──
+  // controller container → controller 永远只有 1-2 格，source → container 同理。
+  // 这些静态结构之间不存在障碍（布局系统保证），贪心 getDirectionTo 即可。
+  // 省去 PathFinder + stuck detection + costCallback 的全部开销（~0.1ms/creep/tick）。
+  // 若贪心失败（ERR_NO_PATH — 极端情况如墙体塌陷）， fall through 到完整寻路。
+  if (range <= 3) {
+    const dir = creep.pos.getDirectionTo(pos);
+    const result = creep.move(dir);
+    if (result === OK || result === ERR_TIRED) {
+      recordTraffic(creep);
+      return result;
+    }
+    // ERR_NO_PATH / ERR_BUSY 等 → fall through 到完整寻路。
   }
 
   // ── 卡位检测 ──
