@@ -1,17 +1,5 @@
 import type { RoomSnapshot } from "./contracts";
-
-/** assignment-service 生成的任务条目。 */
-export interface AssignmentTaskEntry {
-  id: string;
-  kind: string;
-  targetId?: string;
-  sourceId?: string;
-  /** build 任务对应的结构类型 — 用于识别道路任务以预留 builder。 */
-  structureType?: string;
-  priority: number;
-  maxWorkers: number;
-  assignedCreeps: string[];
-}
+import type { AssignmentTaskEntry } from "../domain/assignment/service";
 
 /** assignment-service 的单 tick 缓存。 */
 export interface AssignmentCache {

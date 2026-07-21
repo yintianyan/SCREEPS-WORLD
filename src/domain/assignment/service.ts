@@ -1,9 +1,18 @@
 import { CONFIG, getSourceTargetWorkParts } from "../../config";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
-import {
-  globalCache,
-  type AssignmentTaskEntry,
-} from "../../kernel/global-cache";
+
+/** assignment-service 生成的任务条目。 */
+export interface AssignmentTaskEntry {
+  id: string;
+  kind: string;
+  targetId?: string;
+  sourceId?: string;
+  /** build 任务对应的结构类型 — 用于识别道路任务以预留 builder。 */
+  structureType?: string;
+  priority: number;
+  maxWorkers: number;
+  assignedCreeps: string[];
+}
 
 /** 各角色可接受的任务类型。 */
 const ROLE_TASK_KINDS: Readonly<Record<string, readonly string[]>> = {
@@ -41,20 +50,7 @@ export interface RoomTaskFlags {
 }
 
 // ──────────────────────────────────────────────
-// globalCache 操作（可接受 — globalCache 是可丢失的临时缓存，非 Game/Memory）
-// ──────────────────────────────────────────────
-
-/** 初始化 assignment 缓存（每 tick 开头调用）。 */
-export function initAssignment(tick: number): void {
-  const g = globalCache();
-  g.assignment = {
-    tick,
-    roomTasks: new Map(),
-  };
-}
-
-// ──────────────────────────────────────────────
-// 纯函数 — 不访问 Game/Memory，接收显式数据参数
+// 纯函数 — 不访问 Game/Memory/globalCache，接收显式数据参数
 // ──────────────────────────────────────────────
 
 /**

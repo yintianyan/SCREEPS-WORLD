@@ -1,3 +1,5 @@
+import type { ColonyState } from "../../kernel/contracts";
+
 /**
  * 殖民相位（Colony Phase）—— 每房经济状态的唯一权威来源。
  *
@@ -115,8 +117,3 @@ export function phaseToColonyState(
   if (phase === "crisis" || phase === "recovery") return "recovery";
   return "normal";
 }
-
-// ColonyState 类型在此导入以避免循环依赖：contracts.ts 被 phase.ts 的消费者导入，
-// 而 phase.ts 不应依赖 contracts.ts（领域层不依赖内核层）。
-// 使用类型别名保持纯领域层。
-type ColonyState = "bootstrap" | "recovery" | "normal" | "defense";

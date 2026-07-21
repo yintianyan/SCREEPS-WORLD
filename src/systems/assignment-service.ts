@@ -1,10 +1,10 @@
 import type { Priority, System, TickContext, RoomSnapshot, ColonyState } from "../kernel/contracts";
 import {
-  initAssignment,
   buildRoomTasks,
   getInvalidatedCreepNames,
   type CreepAssignmentRef,
   type RoomTaskFlags,
+  type AssignmentTaskEntry,
 } from "../domain/assignment/service";
 import { globalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
@@ -34,7 +34,7 @@ export const assignmentServiceSystem: System = {
   name: "assignment-service",
   priority: 1 as Priority,
   run(ctx: TickContext): void {
-    initAssignment(ctx.tick);
+    initAssignmentCache(ctx.tick);
     for (const snapshot of ctx.snapshots()) {
       // 紧急抢占（plan §5.7.2 规则 5）：能量低于 fill 阈值或有敌对单位时，
       // 释放 priority >= 1 的普通任务，强制 creep 重新请求 P0 fill 或进入 flee。
@@ -50,6 +50,18 @@ export const assignmentServiceSystem: System = {
 // ──────────────────────────────────────────────
 // 适配层 — 从 Game/Memory 收集数据，调用纯函数，写回缓存
 // ──────────────────────────────────────────────
+
+/**
+ * 初始化 assignment 缓存（每 tick 开头调用）。
+ * 缓存操作在适配层完成 — 领域层不访问 globalCache。
+ */
+function initAssignmentCache(tick: number): void {
+  const g = globalCache();
+  g.assignment = {
+    tick,
+    roomTasks: new Map(),
+  };
+}
 
 /**
  * 适配：为房间生成任务列表并写入 globalCache。

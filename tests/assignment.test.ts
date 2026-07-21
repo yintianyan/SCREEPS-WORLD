@@ -1,6 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
-  initAssignment,
   buildRoomTasks,
   validateAssignmentRules,
   chooseTaskForRole,
@@ -68,17 +67,6 @@ beforeEach(() => {
   g.errorCounts = undefined;
   g.pluginCooldowns = undefined;
   g.telemetry = undefined;
-});
-
-// ── initAssignment ──
-describe("Assignment — initAssignment", () => {
-  it("initializes global assignment cache", () => {
-    initAssignment(100);
-    const g = globalCache();
-    expect(g.assignment).toBeDefined();
-    expect(g.assignment!.tick).toBe(100);
-    expect(g.assignment!.roomTasks).toBeInstanceOf(Map);
-  });
 });
 
 // ── buildRoomTasks ──
