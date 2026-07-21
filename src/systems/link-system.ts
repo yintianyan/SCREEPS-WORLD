@@ -23,34 +23,35 @@ export const linkSystem: System = {
   run(ctx: TickContext): void {
     for (const snapshot of ctx.snapshots()) {
       if (snapshot.links.length === 0) continue;
-      this.runRoom(snapshot);
+      runRoomLinks(snapshot);
     }
   },
-
-  runRoom(snapshot: RoomSnapshot): void {
-    const links = snapshot.links;
-    const linkMap = new Map<string, StructureLink>();
-    for (const l of links) linkMap.set(l.id, l);
-
-    const infos: LinkInfo[] = links.map(l => ({
-      id: l.id,
-      energy: l.store.getUsedCapacity(RESOURCE_ENERGY),
-      energyCapacity: l.store.getCapacity(RESOURCE_ENERGY),
-      cooldown: l.cooldown,
-      role: classifyLink(l, snapshot),
-    }));
-
-    const transfers = planLinkTransfers(infos);
-    for (const t of transfers) {
-      const from = linkMap.get(t.fromId);
-      const to = linkMap.get(t.toId);
-      if (!from || !to) continue;
-      from.transferEnergy(to, t.amount);
-    }
-  },
-} as System & {
-  runRoom(snapshot: RoomSnapshot): void;
 };
+
+/**
+ * 执行单房 link 传输：分类 → 规划 → 执行。
+ */
+function runRoomLinks(snapshot: RoomSnapshot): void {
+  const links = snapshot.links;
+  const linkMap = new Map<string, StructureLink>();
+  for (const l of links) linkMap.set(l.id, l);
+
+  const infos: LinkInfo[] = links.map(l => ({
+    id: l.id,
+    energy: l.store.getUsedCapacity(RESOURCE_ENERGY),
+    energyCapacity: l.store.getCapacity(RESOURCE_ENERGY),
+    cooldown: l.cooldown,
+    role: classifyLink(l, snapshot),
+  }));
+
+  const transfers = planLinkTransfers(infos);
+  for (const t of transfers) {
+    const from = linkMap.get(t.fromId);
+    const to = linkMap.get(t.toId);
+    if (!from || !to) continue;
+    from.transferEnergy(to, t.amount);
+  }
+}
 
 /**
  * 根据 link 与 source/controller/storage 的距离分类。

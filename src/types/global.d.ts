@@ -1,12 +1,12 @@
+import type { CreepMode, ColonyState, TaskKind, CpuTier } from "../kernel/contracts";
+import type { ColonyPhase } from "../domain/economy/phase";
+
 export {};
 
 declare global {
-  type CreepMode = "acquire" | "work" | "idle" | "flee";
-  type ColonyState = "bootstrap" | "recovery" | "normal" | "defense";
-
   interface CreepAssignment {
     id: string;
-    kind: "harvest" | "haul" | "fill" | "upgrade" | "build" | "repair" | "reserve";
+    kind: TaskKind;
     targetId?: Id<_HasId>;
     sourceId?: Id<Source>;
     revision: number;
@@ -69,7 +69,7 @@ declare global {
     controllerDowngradeRisk?: boolean;
     /** 殖民相位观测（约束层的「经济真相」）。 */
     phase?: {
-      phase: "bootstrap" | "growth" | "crisis" | "recovery" | "steady";
+      phase: ColonyPhase;
       reserve: number;
       reserveDelta: number;
       drainScore: number;
@@ -96,7 +96,7 @@ declare global {
   }
 
   interface KernelMemory {
-    tier?: "healthy" | "guarded" | "conserve" | "recovery";
+    tier?: CpuTier;
     recoveryTicks?: number;
     skipReasons?: Record<string, number>;
   }
