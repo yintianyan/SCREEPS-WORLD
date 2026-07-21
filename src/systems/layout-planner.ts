@@ -121,6 +121,10 @@ export const layoutPlannerSystem: System & {
     layout.state = "building";
     const queue = roomMem.buildQueue ?? [];
     let tasksAdded = false;
+    // revision 语义收窄：只有影响 creep 目标选择的结构（container/link/spawn/storage）
+    // 入队时才递增 revision。road/extension 不改变 fillTargets/withdraw 目标，
+    // 不应让全员 assignment 失效（旧实现每 50 tick 加条路就全员重选任务，纯浪费）。
+    let targetingChanged = false;
 
     // 收集已完成 key 集合（用于依赖检查）。
     // 合并队列状态和实际已建结构，避免 done 任务被清除后依赖检查失败。
@@ -184,6 +188,7 @@ export const layoutPlannerSystem: System & {
       queue.push(candidateToBuildTask(candidate));
       existingKeys.add(candidate.key);
       tasksAdded = true;
+      targetingChanged = true; // container 影响 withdraw 目标
     }
 
     // 3. Controller container 任务（RCL3+）。
@@ -197,6 +202,7 @@ export const layoutPlannerSystem: System & {
         queue.push(candidateToBuildTask(controllerContainer));
         existingKeys.add(controllerContainer.key);
         tasksAdded = true;
+        targetingChanged = true; // container 影响 withdraw 目标
       }
     }
 
@@ -211,6 +217,7 @@ export const layoutPlannerSystem: System & {
       queue.push(candidateToBuildTask(candidate));
       existingKeys.add(candidate.key);
       tasksAdded = true;
+      targetingChanged = true; // link 影响能量传输目标
     }
 
     // 3.6 Controller link 任务（RCL5+）。
@@ -224,6 +231,7 @@ export const layoutPlannerSystem: System & {
         queue.push(candidateToBuildTask(controllerLink));
         existingKeys.add(controllerLink.key);
         tasksAdded = true;
+        targetingChanged = true; // link 影响能量传输目标
       }
     }
 
@@ -295,7 +303,13 @@ export const layoutPlannerSystem: System & {
         protectedPositions.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
       }
 
-      const corridorRoads = planCorridorRoads(room, snapshot, undefined, undefined, protectedPositions);
+      // 早期加速：RCL2-3 时走廊路铺设速度翻倍（24 格/周期 vs 默认 12）。
+      // 早期 hauler 跑 plain 运力减半，RCL2→RCL3 是最长 grind，早铺路早受益。
+      const corridorOptions = snapshot.rcl <= 3
+        ? { maxRoadsPerCycle: 24 }
+        : undefined;
+
+      const corridorRoads = planCorridorRoads(room, snapshot, corridorOptions, undefined, protectedPositions);
       for (const pos of corridorRoads) {
         const key = `road.${snapshot.roomName}.${pos.x}.${pos.y}`;
         if (existingKeys.has(key)) continue;
@@ -315,9 +329,9 @@ export const layoutPlannerSystem: System & {
 
     roomMem.buildQueue = queue;
 
-    // 仅在实际有新任务入队时递增 revision — 避免无变化时使所有 assignment 失效。
-    // 修复：原实现无条件 revision++，导致每 50 tick 所有 creep assignment 失效一次。
-    if (tasksAdded) {
+    // 仅在影响 creep 目标选择的结构入队时递增 revision — 避免道路/extension 入队
+    // 导致全员 assignment 无意义失效（旧实现每 50 tick 加条路就全员重选任务）。
+    if (targetingChanged) {
       layout.revision++;
     }
 

@@ -245,19 +245,19 @@ export function collectCompletedKeysFromStructures(
 ): Set<string> {
   const set = new Set<string>();
 
-  // 预构建位置 → 结构类型映射。
-  const structureMap = new Map<string, string>();
+  // 预构建位置 → 结构类型映射（packed numeric key，消除字符串分配）。
+  const structureMap = new Map<number, string>();
   for (const s of [...snapshot.spawns, ...snapshot.extensions, ...snapshot.towers, ...snapshot.containers, ...snapshot.links]) {
-    structureMap.set(`${s.pos.x},${s.pos.y}`, s.structureType);
+    structureMap.set(packPos(s.pos.x, s.pos.y), s.structureType);
   }
   if (snapshot.storage) {
-    structureMap.set(`${snapshot.storage.pos.x},${snapshot.storage.pos.y}`, STRUCTURE_STORAGE);
+    structureMap.set(packPos(snapshot.storage.pos.x, snapshot.storage.pos.y), STRUCTURE_STORAGE);
   }
 
   for (const cell of blueprint.cells) {
     const x = anchorX + cell.dx;
     const y = anchorY + cell.dy;
-    const existing = structureMap.get(`${x},${y}`);
+    const existing = structureMap.get(packPos(x, y));
     if (existing === cell.structureType) {
       set.add(cell.key);
     }
