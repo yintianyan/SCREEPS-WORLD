@@ -43,6 +43,31 @@ export function harvestSource(): ActionCandidate {
   };
 }
 
+/**
+ * 从 mineral 采集（需要 extractor）。
+ * 触发条件：房间有 extractor + mineral 有储量 + creep 有 carry 空间。
+ * 用于 source 再生期间的空闲利用（RCL6+）。
+ */
+export function harvestMineral(): ActionCandidate {
+  return {
+    name: "harvest:mineral",
+    predicate: (ac) => {
+      if (!ac.snapshot.extractor) return false;
+      if (ac.snapshot.minerals.length === 0) return false;
+      const mineral = ac.snapshot.minerals[0]!;
+      return mineral.mineralAmount > 0 && ac.creep.store.getFreeCapacity() > 0;
+    },
+    execute: (ac) => {
+      const mineral = ac.snapshot.minerals[0]!;
+      const result = actOrMove(ac.creep, mineral, () => ac.creep.harvest(mineral));
+      if (result === ERR_NOT_ENOUGH_RESOURCES || result === ERR_TIRED) {
+        // mineral 耗尽或冷却中 — 回 idle
+        ac.creep.memory.mode = "idle";
+      }
+    },
+  };
+}
+
 // ─── Withdraw ───────────────────────────────────────────────
 
 /** 从最满 container 取能。 */

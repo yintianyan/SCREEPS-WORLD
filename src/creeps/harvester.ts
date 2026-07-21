@@ -14,6 +14,7 @@ import {
   dumpToNearbyLink,
   fillEmptiestContainer,
   fillTarget,
+  harvestMineral,
   harvestSource,
   repairNearbyContainer,
   upgradeController,
@@ -23,6 +24,8 @@ import { defineRole } from "./role-runner";
 const policy: RolePolicy = {
   acquire: [
     harvestSource(),
+    // source 再生期间：如果 extractor 存在（RCL6+），采集 mineral。
+    harvestMineral(),
   ],
 
   work: [
