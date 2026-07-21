@@ -38,9 +38,12 @@ function upgraderGate(ac: ActionContext): boolean {
   if (ac.creep.memory.mode !== "acquire") return true;
 
   const hasStorage = ac.snapshot.storage !== undefined;
+  // RCL4+ 有 storage 时看 storage 能量；RCL1-3 看 spawn 能量。
+  // 修复：固定阈值 300 在 RCL1 等于容量上限（300），导致 upgrader 永久 idle。
+  // 改为动态阈值：min(固定值, 容量 × 0.4)，RCL1 时为 120，不与紧急孵化竞争但允许升级。
   const belowFloor = ac.snapshot.rcl >= 4 && hasStorage
     ? ac.snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.economy.upgradeEnergyFloorStorage
-    : ac.snapshot.energyAvailable < CONFIG.economy.upgradeEnergyFloor;
+    : ac.snapshot.energyAvailable < Math.min(CONFIG.economy.upgradeEnergyFloor, Math.floor(ac.snapshot.energyCapacityAvailable * 0.4));
 
   return !belowFloor; // belowFloor → 返回 false → idle
 }
