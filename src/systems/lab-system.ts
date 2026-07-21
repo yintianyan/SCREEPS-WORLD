@@ -177,7 +177,20 @@ export const labSystem: System = {
         DEFAULT_BOOST_POLICY,
       );
 
-      // ── 2. 反应规划 ──
+      // ── 2. 反应规划（含自动目标选择） ──
+      // 如果没有手动设定反应目标，根据 boost 需求自动决定。
+      if (!industryMem.reactionTarget) {
+        if (boostRequests.length > 0) {
+          // 优先生产 boost 需要的化合物
+          industryMem.reactionTarget = boostRequests[0]!.compound;
+          industryMem.reactionAmount = 300; // 一批 300 单位
+        } else {
+          // 默认生产 XGH2O（upgrade boost，最高价值）
+          industryMem.reactionTarget = "XGH2O";
+          industryMem.reactionAmount = 300;
+        }
+      }
+
       let reactionStep: { input1: Compound; input2: Compound; output: Compound } | null = null;
 
       if (industryMem.reactionTarget && industryMem.reactionAmount) {
@@ -194,6 +207,11 @@ export const labSystem: System = {
           const step = getNextExecutableStep(industryMem.reactionPlan, inventory);
           if (step) {
             reactionStep = step;
+          } else {
+            // 反应链完成，清除目标让下 tick 重新评估
+            industryMem.reactionTarget = undefined;
+            industryMem.reactionAmount = undefined;
+            industryMem.reactionPlan = undefined;
           }
         }
       }
@@ -213,14 +231,7 @@ export const labSystem: System = {
         const labStore = lab.store;
         const compoundAmount = labStore[assignment.boostCompound as ResourceConstant] ?? 0;
         if (compoundAmount < 30) {
-          // 需要从 storage 补充化合物到 lab
-          if (snapshot.storage) {
-            const storageAmount = snapshot.storage.store[assignment.boostCompound as ResourceConstant] ?? 0;
-            if (storageAmount >= 30) {
-              // 找到最近的 creep 来搬运（简化：跳过，等 hauler 系统扩展）
-              // TODO: 扩展 hauler 支持矿物搬运
-            }
-          }
+          // hauler 的 supplyLabs action 会自动从 storage 补充化合物到 lab
           continue;
         }
 

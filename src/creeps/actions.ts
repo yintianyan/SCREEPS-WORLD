@@ -442,6 +442,98 @@ export function upgradeControllerGated(): ActionCandidate {
   };
 }
 
+// ─── Industry（矿物/化合物搬运）─────────────────────────────
+
+/**
+ * 从 extractor 旁 container 搬运矿物到 storage/terminal。
+ * 触发条件：container 中有非 energy 资源。
+ */
+export function haulMineralsToStorage(): ActionCandidate {
+  return {
+    name: "haul:minerals-to-storage",
+    predicate: (ac) => {
+      if (!ac.snapshot.storage && !ac.snapshot.terminal) return false;
+      // 找到含有非 energy 资源的 container（extractor 旁的）
+      return ac.snapshot.containers.some(c => {
+        for (const res of Object.keys(c.store) as ResourceConstant[]) {
+          if (res !== RESOURCE_ENERGY && c.store[res]! > 0) return true;
+        }
+        return false;
+      });
+    },
+    execute: (ac) => {
+      // 找含矿物的 container
+      const source = ac.snapshot.containers.find(c => {
+        for (const res of Object.keys(c.store) as ResourceConstant[]) {
+          if (res !== RESOURCE_ENERGY && c.store[res]! > 0) return true;
+        }
+        return false;
+      });
+      if (!source) return;
+
+      // 如果 creep  carrying 非 energy 资源，送到 storage/terminal
+      const carriedMineral = (Object.keys(ac.creep.store) as ResourceConstant[])
+        .find(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
+
+      if (carriedMineral) {
+        const dest = ac.snapshot.terminal ?? ac.snapshot.storage;
+        if (dest) {
+          actOrMove(ac.creep, dest, () => ac.creep.transfer(dest, carriedMineral));
+        }
+      } else {
+        // 从 container 取矿物
+        const mineral = (Object.keys(source.store) as ResourceConstant[])
+          .find(r => r !== RESOURCE_ENERGY && source.store[r]! > 0);
+        if (mineral) {
+          actOrMove(ac.creep, source, () => ac.creep.withdraw(source, mineral));
+        }
+      }
+    },
+  };
+}
+
+/**
+ * 从 storage 搬运化合物到 lab（供料）。
+ * 触发条件：lab 中有空位且 storage 有对应化合物。
+ * 简化实现：搬运 lab 中缺少的资源。
+ */
+export function supplyLabs(): ActionCandidate {
+  return {
+    name: "haul:supply-labs",
+    predicate: (ac) => {
+      if (ac.snapshot.labs.length === 0) return false;
+      if (!ac.snapshot.storage) return false;
+      // 检查是否有 lab 需要供料（有空闲容量且 storage 有非 energy 资源）
+      const hasLabSpace = ac.snapshot.labs.some(l => (l.store.getFreeCapacity() ?? 0) > 0);
+      const hasCompounds = (Object.keys(ac.snapshot.storage.store) as ResourceConstant[])
+        .some(r => r !== RESOURCE_ENERGY && ac.snapshot.storage!.store[r]! > 0);
+      return hasLabSpace && hasCompounds;
+    },
+    execute: (ac) => {
+      const storage = ac.snapshot.storage!;
+
+      // 如果 creep 正在 carrying 化合物，送到 lab
+      const carriedCompound = (Object.keys(ac.creep.store) as ResourceConstant[])
+        .find(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
+
+      if (carriedCompound) {
+        // 找到有空闲容量的 lab
+        const targetLab = ac.snapshot.labs.find(l => (l.store.getFreeCapacity() ?? 0) > 0);
+        if (targetLab) {
+          actOrMove(ac.creep, targetLab, () => ac.creep.transfer(targetLab, carriedCompound));
+        }
+      } else {
+        // 从 storage 取化合物
+        const compound = (Object.keys(storage.store) as ResourceConstant[])
+          .find(r => r !== RESOURCE_ENERGY && storage.store[r]! > 0);
+        if (compound) {
+          actOrMove(ac.creep, storage, () => ac.creep.withdraw(storage, compound));
+        }
+      }
+    },
+  };
+}
+
 // ─── 内部辅助 ───────────────────────────────────────────────
 
 function isCriticalSite(site: ConstructionSite): boolean {

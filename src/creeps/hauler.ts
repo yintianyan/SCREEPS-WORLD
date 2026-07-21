@@ -12,6 +12,8 @@ import type { ActionCandidate, ActionContext, RolePolicy } from "./action-types"
 import {
   fillStorage,
   haulFillTarget,
+  haulMineralsToStorage,
+  supplyLabs,
   upgradeController,
   withdrawCapped,
 } from "./actions";
@@ -72,8 +74,12 @@ const policy: RolePolicy = {
   ],
 
   work: [
+    // 矿物优先搬运（高价值资源不应滞留在 container）。
+    haulMineralsToStorage(),
     // 带 reservation 去重的优先级填充。
     haulFillTarget(),
+    // 化合物供料到 lab。
+    supplyLabs(),
     // spawn/extension 全满 — 送 storage。
     fillStorage(),
     // 无处填充 — 升级。
