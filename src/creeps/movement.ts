@@ -141,16 +141,86 @@ function adaptiveReusePath(creep: Creep, target: RoomPosition): number {
 
 /**
  * 同 tick 内多 creep 走向同一目标时，共享序列化路径。
- * 首个 creep 计算路径后存入缓存，后续 creep 直接复用。
+ *
+ * 工作原理：
+ *   1. 首个 creep 到某目标：PathFinder.search → 序列化 → 存入 per-tick Map
+ *   2. 后续 creep 同目标：moveByPath(缓存路径) — O(1) 步进，跳过 PathFinder
+ *   3. moveByPath 返回 ERR_NOT_FOUND（creep 不在路径上）→ 回退到 moveTo
+ *
+ * 适用条件（仅 Level 0 正常移动时启用）：
+ *   - 非卡位状态（ignoreCreeps: true 时路径才有效）
+ *   - range > 3（短距离 PathFinder 开销可忽略）
+ *
  * key = `${roomName}:${packedTarget}`，每 tick 清空。
  */
-function getPathShareCache(): Map<string, string> {
+function getPathShareCache(): Map<string, RoomPosition[]> {
   const g = globalCache() as any;
   if (!g.__pathShare || g.__pathShareTick !== Game.time) {
     g.__pathShare = new Map();
     g.__pathShareTick = Game.time;
   }
-  return g.__pathShare as Map<string, string>;
+  return g.__pathShare as Map<string, RoomPosition[]>;
+}
+
+/**
+ * 尝试使用共享路径移动。
+ * 返回 ScreepsReturnCode 表示成功使用了共享路径；返回 undefined 表示不适用（需回退到 moveTo）。
+ */
+function trySharedPath(
+  creep: Creep,
+  cacheKey: string,
+): ScreepsReturnCode | undefined {
+  const cache = getPathShareCache();
+  const path = cache.get(cacheKey);
+  if (!path) return undefined;
+
+  const result = creep.moveByPath(path);
+  // ERR_NOT_FOUND = creep 不在缓存路径上 → 不适用，需回退。
+  // ERR_INVALID_ARGS = 路径格式异常 → 同上。
+  if (result === ERR_NOT_FOUND || result === ERR_INVALID_ARGS) {
+    return undefined;
+  }
+  return result;
+}
+
+/**
+ * 计算并缓存共享路径。
+ * 使用 PathFinder.search（与 moveTo 相同参数），路径数组直接存入 per-tick 缓存。
+ * moveByPath 接受 RoomPosition[]，无需序列化（per-tick 缓存无跨 tick 持久化需求）。
+ * 返回路径数组，失败返回 undefined。
+ */
+function computeAndCachePath(
+  creep: Creep,
+  pos: RoomPosition,
+  cacheKey: string,
+): RoomPosition[] | undefined {
+  const result = PathFinder.search(
+    creep.pos,
+    { pos, range: 1 },
+    {
+      plainCost: 2,
+      swampCost: 10,
+      maxRooms: 1,
+      roomCallback: (roomName: string): boolean | CostMatrix => {
+        const room = Game.rooms[roomName];
+        if (!room) return false;
+        const matrix = new PathFinder.CostMatrix();
+        const entry = ensureStructureCache(roomName);
+        if (entry) {
+          const positions = entry.positions;
+          for (let i = 0; i < positions.length; i += 3) {
+            matrix.set(positions[i]!, positions[i + 1]!, positions[i + 2]!);
+          }
+        }
+        return matrix;
+      },
+    },
+  );
+
+  if (result.incomplete || result.path.length === 0) return undefined;
+
+  getPathShareCache().set(cacheKey, result.path);
+  return result.path;
 }
 
 // ─── 核心移动函数 ─────────────────────────────────────────
@@ -232,6 +302,35 @@ export function moveToTarget(
     clearTarget(creep);
     creep.memory.mode = "idle";
     return ERR_NO_PATH;
+  }
+
+  // ── 同 tick 路径共享（仅 Level 0 正常移动 + 中远距离时启用）──
+  // 卡位时路径可能含 ignoreCreeps:false 的绕行，不适合共享。
+  // 短距离（<=3）PathFinder 开销可忽略，不值得序列化/反序列化。
+  if (stuckTicks === 0 && range > 3) {
+    const cacheKey = `${creep.room.name}:${packPos(pos)}`;
+
+    // 尝试复用已有共享路径。
+    const sharedResult = trySharedPath(creep, cacheKey);
+    if (sharedResult !== undefined) {
+      if (sharedResult === OK || sharedResult === ERR_TIRED) {
+        recordTraffic(creep);
+      }
+      return sharedResult;
+    }
+
+    // 首个到该目标的 creep — 计算并缓存路径。
+    const serialized = computeAndCachePath(creep, pos, cacheKey);
+    if (serialized) {
+      const result = creep.moveByPath(serialized);
+      if (result !== ERR_NOT_FOUND && result !== ERR_INVALID_ARGS) {
+        if (result === OK || result === ERR_TIRED) {
+          recordTraffic(creep);
+        }
+        return result;
+      }
+    }
+    // 路径计算失败或 creep 不在路径上 → 回退到 moveTo。
   }
 
   // ── 构建 MoveToOpts ──

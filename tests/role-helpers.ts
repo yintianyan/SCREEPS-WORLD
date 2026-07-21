@@ -33,6 +33,7 @@ export function resetGlobals(): void {
         set(x: number, y: number, cost: number) { this._data[x * 50 + y] = cost; }
         get(x: number, y: number) { return this._data[x * 50 + y] ?? 0; }
       },
+      search: vi.fn(() => ({ path: [], incomplete: true, ops: 0, cost: 0 })),
     };
   }
 
