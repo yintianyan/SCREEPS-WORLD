@@ -22,6 +22,64 @@ export function recordTraffic(creep: Creep): void {
   g.roomTraffic[roomName][key] = (g.roomTraffic[roomName][key] ?? 0) + 1;
 }
 
+// ─── Pull/Yield 让路机制 ─────────────────────────────────
+
+/** 方向 → (dx, dy) 偏移表。 */
+const DIR_DELTA: Record<number, [number, number]> = {
+  [TOP]: [0, -1], [TOP_RIGHT]: [1, -1], [RIGHT]: [1, 0], [BOTTOM_RIGHT]: [1, 1],
+  [BOTTOM]: [0, 1], [BOTTOM_LEFT]: [-1, 1], [LEFT]: [-1, 0], [TOP_LEFT]: [-1, -1],
+};
+
+/**
+ * 请求阻挡 creep 让路。
+ * 将让路请求存入 globalCache，目标 creep 在下一次 moveToTarget 调用时执行。
+ * 同 tick 内优先级低的 creep 请求优先级高的 creep 让路时，
+ * 由于高优先级 creep 已经执行过，请求会在下一 tick 生效。
+ */
+function requestYield(blockerName: string, dir: number): void {
+  const g = globalCache() as any;
+  if (!g.__yieldRequests) g.__yieldRequests = {};
+  g.__yieldRequests[blockerName] = dir;
+}
+
+/**
+ * 检查并执行让路请求。
+ * 在 moveToTarget 开头调用 — 如果其他 creep 请求本 creep 让路，
+ * 立即执行移动并返回 true（本 tick 不再执行其他移动逻辑）。
+ */
+export function checkAndExecuteYield(creep: Creep): boolean {
+  const g = globalCache() as any;
+  if (!g.__yieldRequests) return false;
+  const dir = g.__yieldRequests[creep.name] as number | undefined;
+  if (dir === undefined) return false;
+  delete g.__yieldRequests[creep.name];
+  const result = creep.move(dir as DirectionConstant);
+  if (result === OK || result === ERR_TIRED) {
+    recordTraffic(creep);
+  }
+  return true;
+}
+
+/**
+ * 尝试让阻挡 creep 让路。
+ * 在卡位 Level 1 时调用：找到目标方向上的 creep，请求它沿同方向移动。
+ */
+function tryPullBlocker(creep: Creep, targetPos: RoomPosition): void {
+  const dir = creep.pos.getDirectionTo(targetPos);
+  const delta = DIR_DELTA[dir];
+  if (!delta) return;
+  const nextX = creep.pos.x + delta[0];
+  const nextY = creep.pos.y + delta[1];
+  if (nextX < 0 || nextX > 49 || nextY < 0 || nextY > 49) return;
+
+  const blockers = creep.room.lookForAt(LOOK_CREEPS, nextX, nextY);
+  if (blockers.length > 0) {
+    const blocker = blockers[0]!;
+    // 请求阻挡者沿同方向移动（让出位置）。
+    requestYield(blocker.name, dir);
+  }
+}
+
 // ─── CostMatrix 缓存（结构层 — 叠加在引擎地形矩阵之上）────
 
 /**
@@ -137,13 +195,63 @@ function adaptiveReusePath(creep: Creep, target: RoomPosition): number {
   return 15;
 }
 
+// ─── 疲劳感知 swampCost ──────────────────────────────────
+
+/** 各部件重量表（Screeps 引擎值）。 */
+const PART_WEIGHT: Record<string, number> = {
+  [WORK]: 2, [CARRY]: 2, [MOVE]: 2,
+  [ATTACK]: 3, [RANGED_ATTACK]: 3, [HEAL]: 3,
+  [TOUGH]: 1, [CLAIM]: 5,
+};
+
+/**
+ * 根据 creep body 计算有效 swampCost。
+ *
+ * 原理：每个 MOVE 部件提供 2 点负重容量。若总重量 > MOVE 容量，
+ * creep 在 plain 上每 tick 都会积累疲劳（走 1 格停 1 格），
+ * 在 swamp 上疲劳 ×5 —  effectively 不可通行（走 1 格停 5+ tick）。
+ *
+ * 慢速 creep（MOVE 容量 < 总重量）：swampCost = 255（完全避开沼泽）。
+ * 正常 creep：swampCost = 10（标准惩罚，道路优先但仍可穿越）。
+ */
+function fatigueSwampCost(creep: Creep): number {
+  const body = creep.body;
+  let moveCapacity = 0;
+  let totalWeight = 0;
+  for (const part of body) {
+    const weight = PART_WEIGHT[part.type] ?? 2;
+    totalWeight += weight;
+    if (part.type === MOVE) moveCapacity += 2;
+  }
+  // 慢速 creep：沼泽 effectively 不可通行。
+  return moveCapacity < totalWeight ? 255 : 10;
+}
+
 // ─── 同 tick 路径共享 ─────────────────────────────────────
 
 /**
- * 同 tick 内多 creep 走向同一目标时，共享序列化路径。
+ * 将 Screeps 房间名压缩为唯一整数（W7N4 → -7004, E10S20 → 9980）。
+ * 用于构建纯数字 cache key，避免字符串分配。
+ */
+function packRoomName(roomName: string): number {
+  // 格式: [WE]\d+[NS]\d+
+  const match = roomName.match(/^([WE])(\d+)([NS])(\d+)$/);
+  if (!match) return 0;
+  const x = Number(match[2]) * (match[1] === "W" ? -1 : 1);
+  const y = Number(match[4]) * (match[3] === "N" ? -1 : 1);
+  return x * 1000 + y;
+}
+
+/** 构建路径共享的纯数字 key：roomHash * 2500 + packedPos。 */
+function pathShareKey(roomName: string, packedPos: number): number {
+  return packRoomName(roomName) * 2500 + packedPos;
+}
+
+/**
+ * 同 tick 内多 creep 走向同一目标时，共享路径数组。
  *
  * 工作原理：
- *   1. 首个 creep 到某目标：PathFinder.search → 序列化 → 存入 per-tick Map
+ *   1. 首个 creep 到某目标：PathFinder.search → 存入 per-tick Map
  *   2. 后续 creep 同目标：moveByPath(缓存路径) — O(1) 步进，跳过 PathFinder
  *   3. moveByPath 返回 ERR_NOT_FOUND（creep 不在路径上）→ 回退到 moveTo
  *
@@ -151,15 +259,15 @@ function adaptiveReusePath(creep: Creep, target: RoomPosition): number {
  *   - 非卡位状态（ignoreCreeps: true 时路径才有效）
  *   - range > 3（短距离 PathFinder 开销可忽略）
  *
- * key = `${roomName}:${packedTarget}`，每 tick 清空。
+ * key = roomHash * 2500 + packedTarget（纯数字，零字符串分配），每 tick 清空。
  */
-function getPathShareCache(): Map<string, RoomPosition[]> {
+function getPathShareCache(): Map<number, RoomPosition[]> {
   const g = globalCache() as any;
   if (!g.__pathShare || g.__pathShareTick !== Game.time) {
     g.__pathShare = new Map();
     g.__pathShareTick = Game.time;
   }
-  return g.__pathShare as Map<string, RoomPosition[]>;
+  return g.__pathShare as Map<number, RoomPosition[]>;
 }
 
 /**
@@ -168,7 +276,7 @@ function getPathShareCache(): Map<string, RoomPosition[]> {
  */
 function trySharedPath(
   creep: Creep,
-  cacheKey: string,
+  cacheKey: number,
 ): ScreepsReturnCode | undefined {
   const cache = getPathShareCache();
   const path = cache.get(cacheKey);
@@ -192,7 +300,7 @@ function trySharedPath(
 function computeAndCachePath(
   creep: Creep,
   pos: RoomPosition,
-  cacheKey: string,
+  cacheKey: number,
 ): RoomPosition[] | undefined {
   const result = PathFinder.search(
     creep.pos,
@@ -274,6 +382,11 @@ export function moveToTarget(
 ): ScreepsReturnCode {
   const pos = "pos" in target ? target.pos : target;
 
+  // ── Yield 检查：其他 creep 请求本 creep 让路时优先执行。──
+  if (checkAndExecuteYield(creep)) {
+    return OK;
+  }
+
   // ── 短路：range <= 1 时直接 move，跳过一切寻路逻辑。──
   const range = creep.pos.getRangeTo(pos);
   if (range <= 1) {
@@ -300,14 +413,19 @@ export function moveToTarget(
     // ERR_NO_PATH / ERR_BUSY 等 → fall through 到完整寻路。
   }
 
-  // ── 卡位检测 ──
+  // ── 卡位检测（仅在值变化时写 Memory，减少 Proxy 开销）──
   const currentPacked = packPos(creep.pos);
+  const prevStuck = creep.memory.stuckTicks ?? 0;
   if (creep.memory.lastPos === currentPacked) {
-    creep.memory.stuckTicks = (creep.memory.stuckTicks ?? 0) + 1;
-  } else {
+    if (prevStuck === 0) creep.memory.stuckTicks = 1;
+    else creep.memory.stuckTicks = prevStuck + 1;
+  } else if (prevStuck !== 0) {
+    // 位置变化且之前有卡位记录 — 才需要写 0。正常移动时跳过写入。
     creep.memory.stuckTicks = 0;
   }
-  creep.memory.lastPos = currentPacked;
+  if (creep.memory.lastPos !== currentPacked) {
+    creep.memory.lastPos = currentPacked;
+  }
 
   const stuckTicks = creep.memory.stuckTicks ?? 0;
   const { stuckThreshold, repathLimit } = CONFIG.kernel;
@@ -319,11 +437,16 @@ export function moveToTarget(
     return ERR_NO_PATH;
   }
 
+  // Level 1 首次触发：请求阻挡 creep 让路（比 ignoreCreeps:false 绕行更快）。
+  if (stuckTicks === stuckThreshold) {
+    tryPullBlocker(creep, pos);
+  }
+
   // ── 同 tick 路径共享（仅 Level 0 正常移动 + 中远距离时启用）──
   // 卡位时路径可能含 ignoreCreeps:false 的绕行，不适合共享。
   // 短距离（<=3）PathFinder 开销可忽略，不值得序列化/反序列化。
   if (stuckTicks === 0 && range > 3) {
-    const cacheKey = `${creep.room.name}:${packPos(pos)}`;
+    const cacheKey = pathShareKey(creep.room.name, packPos(pos));
 
     // 尝试复用已有共享路径。
     const sharedResult = trySharedPath(creep, cacheKey);
@@ -358,7 +481,8 @@ export function moveToTarget(
     ignoreCreeps,
     // 道路优先：引擎默认 road=1，plain=2 使道路成本仅为 plain 的一半。
     plainCost: 2,
-    swampCost: 10,
+    // 疲劳感知：慢速 creep（MOVE 容量 < 总重量）完全避开沼泽。
+    swampCost: fatigueSwampCost(creep),
     // 叠加结构层（不可通行结构 + road 覆写）。修改传入矩阵，不 return 新矩阵。
     costCallback: structureCostCallback,
   };

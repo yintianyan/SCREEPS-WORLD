@@ -143,8 +143,15 @@ export function mockCreep(opts: MockCreepOpts = {}): any {
     memory,
     store: mockStore(used, capacity),
     pos,
-    room: { name: home, findExitTo: vi.fn(() => 3) },
+    room: { name: home, findExitTo: vi.fn(() => 3), lookForAt: vi.fn(() => []) },
     ticksToLive,
+    // 默认平衡 body（MOVE 容量 >= 总重量，非慢速 creep）。
+    body: [
+      { type: "work", hits: 100 },
+      { type: "carry", hits: 100 },
+      { type: "move", hits: 100 },
+      { type: "move", hits: 100 },
+    ],
     // Actions — 默认 OK，测试可覆盖。
     harvest: vi.fn(() => 0),
     transfer: vi.fn(() => 0),
@@ -154,6 +161,7 @@ export function mockCreep(opts: MockCreepOpts = {}): any {
     repair: vi.fn(() => 0),
     moveTo: vi.fn(() => 0),
     move: vi.fn(() => 0),
+    moveByPath: vi.fn(() => -11), // ERR_NOT_FOUND — 默认不命中共享路径
   };
 }
 
