@@ -56,6 +56,12 @@ export const towerDefenseSystem: System = {
       // 预选 wall/rampart 维护目标（所有 tower 共用，避免重复查找）。
       let wallRepairTarget = findWallRepairTarget(snapshot, wallTarget);
 
+      // 房间状态门禁：wall 维护只在经济平稳时执行。
+      // recovery/bootstrap 期间保留 tower 能量应对突发，不浪费在墙上。
+      const roomMem = Memory.rooms[snapshot.roomName];
+      const colonyState = roomMem?.colonyState ?? "normal";
+      const wallMaintenanceAllowed = colonyState === "normal";
+
       for (const tower of snapshot.towers) {
         // G-DF-07：能量 < 50 时不维修（保留攻击能量）；能量 = 0 时跳过。
         if (tower.store.getUsedCapacity(RESOURCE_ENERGY) < 50) continue;
@@ -68,8 +74,12 @@ export const towerDefenseSystem: System = {
         }
 
         // G-DF-08：wall/rampart 维护（最低优先级）。
-        if (wallRepairTarget) {
-          tower.repair(wallRepairTarget);
+        // 门禁：colonyState 必须 normal + tower 能量 > 70%（保留应急储备）。
+        if (wallRepairTarget && wallMaintenanceAllowed) {
+          const towerEnergyRatio = tower.store.getUsedCapacity(RESOURCE_ENERGY) / tower.store.getCapacity(RESOURCE_ENERGY);
+          if (towerEnergyRatio > 0.7) {
+            tower.repair(wallRepairTarget);
+          }
         }
       }
     }
