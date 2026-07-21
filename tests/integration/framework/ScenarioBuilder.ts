@@ -34,6 +34,7 @@ export class ScenarioBuilder {
   private _containerDecay = 0;
   private _cpuBucket = 10000;
   private _cpuLimit = 20;
+  private _preseedRoomState = false;
 
   constructor(roomName = "W1N1") {
     this._roomName = roomName;
@@ -190,6 +191,12 @@ export class ScenarioBuilder {
     return this;
   }
 
+  /** 预设房间 Memory 为 normal/steady（防止 room-state 首 tick 计算 bootstrap 阻塞 P2 角色）。 */
+  preseedRoomState(enabled = true): this {
+    this._preseedRoomState = enabled;
+    return this;
+  }
+
   /** 构建 TestWorld。 */
   build(): TestWorld {
     return new TestWorld({
@@ -214,6 +221,7 @@ export class ScenarioBuilder {
       containerDecayPerTick: this._containerDecay,
       cpuBucket: this._cpuBucket,
       cpuLimit: this._cpuLimit,
+      preseedRoomState: this._preseedRoomState,
     });
   }
 }

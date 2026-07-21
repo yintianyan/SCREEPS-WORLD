@@ -58,6 +58,8 @@ export interface WorldConfig {
   cpuBucket?: number;
   /** CPU limit（默认 20） */
   cpuLimit?: number;
+  /** 预设房间 Memory 为 normal/steady 状态（防止 room-state 首 tick 计算 bootstrap 阻塞 P2 角色） */
+  preseedRoomState?: boolean;
 }
 
 // ─── 内部实体类 ─────────────────────────────────────────────
@@ -1224,6 +1226,21 @@ export class TestWorld {
     }
     mem.creeps = creepMem;
 
+    // 预设房间 Memory（可选）— 避免 room-state 首 tick 计算 "bootstrap" 阻塞 P2 角色。
+    // 仅在 config.preseedRoomState 为 true 时启用，默认让 room-state 自然计算。
+    const roomMem = (mem.rooms ?? {}) as Record<string, unknown>;
+    if (this.config.preseedRoomState) {
+      roomMem[this._room.name] = {
+        colonyState: "normal",
+        phase: "steady",
+        spawnQueue: [],
+        buildQueue: [],
+        layout: { version: 1, state: "idle", revision: 1 },
+        lastRcl: this._room.controller?.level ?? 1,
+      };
+    }
+    mem.rooms = roomMem;
+
     // 清除 global cache（kernel 单例跨测试持久化，必须清理瞬态状态）。
     const g = globalThis as Record<string, unknown>;
     delete g.errorLog;
@@ -1343,6 +1360,28 @@ export class TestWorld {
     const hostile = new MockHostileCreep(name, this._room._pos(pos.x, pos.y), body, this._room);
     this._hostiles.push(hostile);
     this._registerObject(hostile.id, hostile);
+  }
+
+  /** 注入我方 creep（用于预设人口）。 */
+  addCreep(
+    name: string,
+    role: string,
+    x: number,
+    y: number,
+    body: Array<{ type: string }>,
+    memoryOverrides?: Record<string, unknown>,
+  ): void {
+    const memory = { role, home: this._room.name, ...memoryOverrides };
+    const creep = new MockCreep(name, this._room._pos(x, y), body, this._room, this, 0, 1500, memory);
+    this._creeps.push(creep);
+    this._registerObject(creep.id, creep);
+  }
+
+  /** 注入 tower（用于多 tower 防御测试）。 */
+  addTower(x: number, y: number, energy = 0): void {
+    const tower = new MockTower(genId("tower"), this._room._pos(x, y), this._room, energy);
+    this._towers.push(tower);
+    this._registerObject(tower.id, tower);
   }
 
   /** 移除敌方 creep。 */
