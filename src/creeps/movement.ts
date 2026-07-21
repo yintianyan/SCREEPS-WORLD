@@ -24,18 +24,12 @@ export function recordTraffic(creep: Creep): void {
 
 // ─── CostMatrix 缓存（结构层 — 叠加在引擎地形矩阵之上）────
 
-interface CostMatrixCache {
-  matrix: CostMatrix;
-  /** 结构数量 hash — 数量变化时重建（比 tick 轮询精确且廉价）。 */
-  structureCount: number;
-}
-
 /**
- * 获取房间的结构层 CostMatrix — 仅标记结构/工地的通行性。
+ * 结构层缓存 — 每房间维护一个 CostMatrix + 位置扁平数组。
  *
- * 设计：不替代引擎地形矩阵，而是叠加。
- * 引擎 moveTo 的 costCallback 接收已含地形成本的矩阵（plain=1, swamp=5, wall=255），
- * 我们在其上修改结构成本后返回 void（不 return 新矩阵），保留地形。
+ * 失效策略：结构 + 工地总数变化 → 重建。
+ * 每房间每 tick 最多做一次 room.find 计数检查（per-tick flag），
+ * 避免 N 个 creep 移动时重复调用 room.find（旧实现每 creep 2 次）。
  *
  * 权重：
  *   road         = 1  （覆盖地形，最低成本）
@@ -43,99 +37,47 @@ interface CostMatrixCache {
  *   自有 rampart = 2  （可通行）
  *   其他结构     = 255（不可通行）
  *   非 road/container 工地 = 255（不可通行）
- *
- * 失效策略：结构数量变化 → 重建（O(1) 检查，比 100 tick 轮询精确）。
  */
-function getStructureMatrix(roomName: string): CostMatrix | undefined {
+interface StructureCacheEntry {
+  /** 结构数量 hash — 数量变化时重建。 */
+  count: number;
+  /** 扁平位置数组 [x, y, cost, x, y, cost, ...]，供 costCallback 快速叠加。 */
+  positions: number[];
+  /** 本 tick 是否已做过计数检查（避免同 tick 多 creep 重复 room.find）。 */
+  checkedTick: number;
+}
+
+/**
+ * 确保房间的结构缓存是最新的。
+ * 每房间每 tick 最多调用一次 room.find（通过 checkedTick 去重）。
+ * 结构数量变化时重建 positions 数组。
+ */
+function ensureStructureCache(roomName: string): StructureCacheEntry | undefined {
   const g = globalCache() as any;
-  if (!g.__costMatrices) g.__costMatrices = {};
+  if (!g.__structCache) g.__structCache = {};
+
+  let entry: StructureCacheEntry | undefined = g.__structCache[roomName];
+
+  // 本 tick 已检查过 → 直接返回（O(1)）。
+  if (entry && entry.checkedTick === Game.time) {
+    return entry;
+  }
 
   const room = Game.rooms[roomName];
   if (!room) return undefined;
 
-  // 廉价 hash：结构 + 工地总数。数量变化 → 缓存失效。
+  // 每房间每 tick 仅此处调用 room.find（一次）。
   const structures = room.find(FIND_STRUCTURES);
   const sites = room.find(FIND_MY_CONSTRUCTION_SITES);
   const count = structures.length + sites.length;
 
-  const cached: CostMatrixCache | undefined = g.__costMatrices[roomName];
-  if (cached && cached.structureCount === count) {
-    return cached.matrix;
+  // 数量未变 → 标记已检查，复用缓存。
+  if (entry && entry.count === count) {
+    entry.checkedTick = Game.time;
+    return entry;
   }
 
-  // 重建结构层矩阵。
-  const matrix = new PathFinder.CostMatrix();
-
-  for (const s of structures) {
-    if (s.structureType === STRUCTURE_ROAD) {
-      matrix.set(s.pos.x, s.pos.y, 1);
-    } else if (s.structureType === STRUCTURE_CONTAINER) {
-      matrix.set(s.pos.x, s.pos.y, 2);
-    } else if (s.structureType === STRUCTURE_RAMPART && (s as StructureRampart).my) {
-      matrix.set(s.pos.x, s.pos.y, 2);
-    } else {
-      matrix.set(s.pos.x, s.pos.y, 255);
-    }
-  }
-
-  for (const site of sites) {
-    if (site.structureType !== STRUCTURE_ROAD && site.structureType !== STRUCTURE_CONTAINER) {
-      matrix.set(site.pos.x, site.pos.y, 255);
-    }
-  }
-
-  g.__costMatrices[roomName] = { matrix, structureCount: count };
-  return matrix;
-}
-
-/**
- * costCallback — 将结构层成本叠加到引擎传入的地形矩阵上。
- * 不 return 新矩阵（返回 void），引擎继续使用修改后的原矩阵（保留地形成本）。
- */
-function structureCostCallback(roomName: string, matrix: CostMatrix): void {
-  const structMatrix = getStructureMatrix(roomName);
-  if (!structMatrix) return;
-
-  // 将结构层非零值叠加到地形矩阵。
-  // CostMatrix 没有遍历 API，但我们的结构数量有限（RCL3 ~30 个），
-  // 逐 cell 检查 50x50 太贵。改为：只在结构位置覆写。
-  // 由于我们无法遍历 structMatrix，改用缓存的结构位置列表。
-  const g = globalCache() as any;
-  if (!g.__structPositions) g.__structPositions = {};
-  const positions: number[] | undefined = g.__structPositions[roomName];
-  if (!positions) return;
-
-  for (let i = 0; i < positions.length; i += 3) {
-    const x = positions[i]!;
-    const y = positions[i + 1]!;
-    const cost = positions[i + 2]!;
-    matrix.set(x, y, cost);
-  }
-}
-
-/**
- * 获取房间的结构层 CostMatrix 并缓存结构位置列表（供 costCallback 快速叠加）。
- * 在 getStructureMatrix 重建时同步更新位置列表。
- */
-function getStructureMatrixWithPositions(roomName: string): CostMatrix | undefined {
-  const g = globalCache() as any;
-  if (!g.__costMatrices) g.__costMatrices = {};
-  if (!g.__structPositions) g.__structPositions = {};
-
-  const room = Game.rooms[roomName];
-  if (!room) return undefined;
-
-  const structures = room.find(FIND_STRUCTURES);
-  const sites = room.find(FIND_MY_CONSTRUCTION_SITES);
-  const count = structures.length + sites.length;
-
-  const cached: CostMatrixCache | undefined = g.__costMatrices[roomName];
-  if (cached && cached.structureCount === count) {
-    return cached.matrix;
-  }
-
-  // 重建。
-  const matrix = new PathFinder.CostMatrix();
+  // 重建 positions 扁平数组。
   const positions: number[] = [];
 
   for (const s of structures) {
@@ -149,20 +91,34 @@ function getStructureMatrixWithPositions(roomName: string): CostMatrix | undefin
     } else {
       cost = 255;
     }
-    matrix.set(s.pos.x, s.pos.y, cost);
     positions.push(s.pos.x, s.pos.y, cost);
   }
 
   for (const site of sites) {
     if (site.structureType !== STRUCTURE_ROAD && site.structureType !== STRUCTURE_CONTAINER) {
-      matrix.set(site.pos.x, site.pos.y, 255);
       positions.push(site.pos.x, site.pos.y, 255);
     }
   }
 
-  g.__costMatrices[roomName] = { matrix, structureCount: count };
-  g.__structPositions[roomName] = positions;
-  return matrix;
+  entry = { count, positions, checkedTick: Game.time };
+  g.__structCache[roomName] = entry;
+  return entry;
+}
+
+/**
+ * costCallback — 将结构层成本叠加到引擎传入的地形矩阵上。
+ * 不 return 新矩阵（返回 void），引擎继续使用修改后的原矩阵（保留地形成本）。
+ *
+ * 零 room.find 调用 — 直接读取 ensureStructureCache 维护的 positions 数组。
+ */
+function structureCostCallback(roomName: string, matrix: CostMatrix): void {
+  const entry = ensureStructureCache(roomName);
+  if (!entry) return;
+
+  const positions = entry.positions;
+  for (let i = 0; i < positions.length; i += 3) {
+    matrix.set(positions[i]!, positions[i + 1]!, positions[i + 2]!);
+  }
 }
 
 // ─── 自适应 reusePath ─────────────────────────────────────
@@ -281,9 +237,6 @@ export function moveToTarget(
   // ── 构建 MoveToOpts ──
   const reusePath = stuckTicks >= stuckThreshold + 1 ? 0 : adaptiveReusePath(creep, pos);
   const ignoreCreeps = stuckTicks < stuckThreshold;
-
-  // 确保结构位置列表已缓存（供 costCallback 使用）。
-  getStructureMatrixWithPositions(creep.room.name);
 
   const options: MoveToOpts = {
     reusePath,
