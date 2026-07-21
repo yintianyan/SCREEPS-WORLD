@@ -8,6 +8,7 @@ import { Registry } from "./kernel/registry";
 import { assignmentServiceSystem } from "./systems/assignment-service";
 import { constructionManagerSystem } from "./systems/construction-manager";
 import { layoutPlannerSystem } from "./systems/layout-planner";
+import { labSystem } from "./systems/lab-system";
 import { linkSystem } from "./systems/link-system";
 import { pixelSystem } from "./systems/pixel-system";
 import { roomObserverSystem } from "./systems/room-observer";
@@ -47,6 +48,8 @@ const registry = new Registry()
   .registerSystem(assignmentServiceSystem)
   // P1：link 能量传输（source→controller/storage 瞬移，替代 hauler 往返）
   .registerSystem(linkSystem)
+  // P1：lab 反应 + boost（化合物生产、creep 强化）
+  .registerSystem(labSystem)
   // P2：建造（消费 BuildQueue，受 site 限流）
   .registerSystem(constructionManagerSystem)
   // P3：布局规划（低频生成 BuildTask 推入 BuildQueue）

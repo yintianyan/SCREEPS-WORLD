@@ -79,6 +79,12 @@ export interface RoomSnapshot {
   readonly sourceOccupancy: ReadonlyMap<string, number>;
   /** 房间内的 mineral（供布局验证使用）。 */
   readonly minerals: readonly Mineral[];
+  /** 房间内所有 lab 结构。RCL6+ 解锁，用于化合物反应和 creep boost。 */
+  readonly labs: readonly StructureLab[];
+  /** 房间 terminal（RCL6+ 解锁）。用于多房间资源调度。 */
+  readonly terminal: StructureTerminal | undefined;
+  /** 房间 extractor（RCL6+ 解锁）。用于 mineral 采集。 */
+  readonly extractor: StructureExtractor | undefined;
 }
 
 /** 传递给每个系统和角色的不可变单 tick 上下文。 */

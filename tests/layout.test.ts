@@ -67,6 +67,9 @@ sources: [],
     needsRecovery: false,
     sourceOccupancy: new Map(),
     minerals: [],
+    labs: [],
+    terminal: undefined,
+    extractor: undefined,
     ...overrides,
   };
 }

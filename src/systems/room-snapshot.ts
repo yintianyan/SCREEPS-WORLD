@@ -20,6 +20,7 @@ export function buildRoomSnapshot(
   const extensions = myStructures.filter(isExtension);
   const towers = myStructures.filter(isTower);
   const links = myStructures.filter(isLink);
+  const labs = myStructures.filter(isLab);
 
   // 一次 find 获取所有中性结构，在 JS 层按类型分组。
   // 比多次带 filter 的 find 更高效（减少 C++ ↔ JS 边界穿越）。
@@ -28,8 +29,10 @@ export function buildRoomSnapshot(
   const roads = allStructures.filter(s => s.structureType === STRUCTURE_ROAD) as StructureRoad[];
   const walls = allStructures.filter(s => s.structureType === STRUCTURE_WALL) as StructureWall[];
   const ramparts = allStructures.filter(s => s.structureType === STRUCTURE_RAMPART) as StructureRampart[];
+  const extractor = allStructures.find(s => s.structureType === STRUCTURE_EXTRACTOR) as StructureExtractor | undefined;
 
   const storage = room.storage ?? undefined;
+  const terminal = room.terminal ?? undefined;
   const sources = room.find(FIND_SOURCES);
   let minerals: Mineral[] = [];
   try {
@@ -97,6 +100,9 @@ export function buildRoomSnapshot(
     needsRecovery,
     sourceOccupancy,
     minerals,
+    labs,
+    terminal,
+    extractor,
   };
 }
 
@@ -115,6 +121,10 @@ function isTower(s: AnyOwnedStructure): s is StructureTower {
 
 function isLink(s: AnyOwnedStructure): s is StructureLink {
   return s.structureType === STRUCTURE_LINK;
+}
+
+function isLab(s: AnyOwnedStructure): s is StructureLab {
+  return s.structureType === STRUCTURE_LAB;
 }
 
 

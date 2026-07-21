@@ -23,6 +23,10 @@ Object.assign(globalThis as Record<string, unknown>, {
   STRUCTURE_WALL: "constructedWall",
   STRUCTURE_RAMPART: "rampart",
   STRUCTURE_LINK: "link",
+  STRUCTURE_LAB: "lab",
+  STRUCTURE_TERMINAL: "terminal",
+  STRUCTURE_EXTRACTOR: "extractor",
+  STRUCTURE_FACTORY: "factory",
 
   // find 常量
   FIND_EXIT: 10,
@@ -81,5 +85,9 @@ Object.assign(globalThis as Record<string, unknown>, {
     tower: [0, 0, 0, 1, 1, 2, 2, 3, 3],
     storage: [0, 0, 0, 0, 1, 1, 1, 1, 1],
     link: [0, 0, 0, 0, 0, 2, 3, 4, 6],
+    lab: [0, 0, 0, 0, 0, 0, 3, 6, 10],
+    terminal: [0, 0, 0, 0, 0, 0, 1, 1, 1],
+    extractor: [0, 0, 0, 0, 0, 0, 1, 1, 1],
+    factory: [0, 0, 0, 0, 0, 0, 0, 1, 1],
   },
 });

@@ -49,6 +49,9 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
     needsRecovery: false,
     sourceOccupancy: new Map(),
     minerals: [],
+    labs: [],
+    terminal: undefined,
+    extractor: undefined,
     ...overrides,
   };
 }

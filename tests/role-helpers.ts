@@ -231,6 +231,9 @@ export function mockSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapsho
     needsRecovery: false,
     sourceOccupancy: new Map(),
     minerals: [],
+    labs: [],
+    terminal: undefined,
+    extractor: undefined,
     ...overrides,
   };
 }
