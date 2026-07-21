@@ -279,23 +279,6 @@ export function getInvalidatedCreepNames(
 }
 
 /**
- * 从任务的 assignedCreeps 列表中移除指定 creep（纯函数 — 操作传入的数据结构）。
- *
- * 适配层从 globalCache 获取任务列表后调用此函数。
- */
-export function removeCreepFromTask(
-  tasks: readonly AssignmentTaskEntry[],
-  taskId: string,
-  creepName: string,
-): void {
-  const task = tasks.find(t => t.id === taskId);
-  if (task) {
-    const idx = task.assignedCreeps.indexOf(creepName);
-    if (idx >= 0) task.assignedCreeps.splice(idx, 1);
-  }
-}
-
-/**
  * 选择 haul 任务的 pickup 点 ID（纯函数）。
  * 优先选择能量最多的 container；若无 container 有能量则回退到 storage。
  * 返回 undefined 表示当前无可用 pickup 点。

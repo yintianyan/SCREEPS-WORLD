@@ -1,11 +1,10 @@
 import type { Priority, System, TickContext, RoomSnapshot, ColonyState } from "../kernel/contracts";
 import {
   buildRoomTasks,
-  getInvalidatedCreepNames,
   type CreepAssignmentRef,
   type RoomTaskFlags,
-  type AssignmentTaskEntry,
 } from "../domain/assignment/service";
+import { TaskPool } from "../domain/assignment/task-pool";
 import { globalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
 
@@ -34,15 +33,15 @@ export const assignmentServiceSystem: System = {
   name: "assignment-service",
   priority: 1 as Priority,
   run(ctx: TickContext): void {
-    initAssignmentCache(ctx.tick);
+    const pool = initAssignmentCache(ctx.tick);
     for (const snapshot of ctx.snapshots()) {
       // 紧急抢占（plan §5.7.2 规则 5）：能量低于 fill 阈值或有敌对单位时，
       // 释放 priority >= 1 的普通任务，强制 creep 重新请求 P0 fill 或进入 flee。
       // 必须在 generateRoomTasks 之前执行，确保本 tick 任务列表反映抢占后状态。
       if (isEmergencyState(snapshot)) {
-        invalidateAssignments(snapshot.roomName, 1);
+        invalidateAssignments(pool, snapshot.roomName, 1);
       }
-      generateRoomTasks(snapshot, ctx);
+      generateRoomTasks(pool, snapshot, ctx);
     }
   },
 };
@@ -55,22 +54,21 @@ export const assignmentServiceSystem: System = {
  * 初始化 assignment 缓存（每 tick 开头调用）。
  * 缓存操作在适配层完成 — 领域层不访问 globalCache。
  */
-function initAssignmentCache(tick: number): void {
+function initAssignmentCache(tick: number): TaskPool {
+  const pool = new TaskPool();
+  pool.init(tick);
   const g = globalCache();
-  g.assignment = {
-    tick,
-    roomTasks: new Map(),
-  };
+  g.assignment = { tick, pool };
+  return pool;
 }
 
 /**
- * 适配：为房间生成任务列表并写入 globalCache。
+ * 适配：为房间生成任务列表并写入 TaskPool。
  * 从 Game.creeps 收集 creep 分配摘要，从 Memory 读取房间标志位，
- * 调用纯函数 buildRoomTasks 后将结果存入缓存。
+ * 调用纯函数 buildRoomTasks 后将结果存入任务池。
  */
-function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): void {
-  const g = globalCache();
-  if (!g.assignment || g.assignment.tick !== ctx.tick) return;
+function generateRoomTasks(pool: TaskPool, snapshot: RoomSnapshot, ctx: TickContext): void {
+  if (pool.tick !== ctx.tick) return;
 
   const roomName = snapshot.roomName;
   const roomMem = Memory.rooms[roomName];
@@ -100,35 +98,22 @@ function generateRoomTasks(snapshot: RoomSnapshot, ctx: TickContext): void {
   };
 
   const tasks = buildRoomTasks(snapshot, creepRefs, flags);
-  g.assignment.roomTasks.set(roomName, tasks);
+  pool.setRoomTasks(roomName, tasks);
 }
 
 /**
  * 适配：失效指定房间内 priority >= minPriority 的所有任务。
- * 调用纯函数 getInvalidatedCreepNames 获取需要清除的 creep 列表，
- * 然后清除这些 creep 的 memory.assignment 并清空任务的 assignedCreeps。
+ * 使用 TaskPool.invalidate() 单次遍历收集 creep 名并清空 assignedCreeps，
+ * 然后清除这些 creep 的 memory.assignment。
  */
-function invalidateAssignments(roomName: string, minPriority: number): void {
-  const g = globalCache();
-  if (!g.assignment) return;
-
-  const roomTasks = g.assignment.roomTasks.get(roomName);
-  if (!roomTasks) return;
-
-  const creepNames = getInvalidatedCreepNames(roomTasks, minPriority);
+function invalidateAssignments(pool: TaskPool, roomName: string, minPriority: number): void {
+  const creepNames = pool.invalidate(roomName, minPriority);
 
   // 清除 creep memory 中的 assignment。
   for (const name of creepNames) {
     const creep = Game.creeps[name];
     if (creep) {
       creep.memory.assignment = undefined;
-    }
-  }
-
-  // 清空已失效任务的 assignedCreeps 列表。
-  for (const task of roomTasks) {
-    if (task.priority >= minPriority) {
-      task.assignedCreeps = [];
     }
   }
 }

@@ -4,11 +4,11 @@ import {
   validateAssignmentRules,
   chooseTaskForRole,
   getInvalidatedCreepNames,
-  removeCreepFromTask,
   selectHaulPickupId,
   type CreepAssignmentRef,
   type RoomTaskFlags,
 } from "../src/domain/assignment/service";
+import { TaskPool } from "../src/domain/assignment/task-pool";
 import { globalCache } from "../src/kernel/global-cache";
 import type { RoomSnapshot, ColonyState } from "../src/kernel/contracts";
 
@@ -314,27 +314,102 @@ describe("Assignment — getInvalidatedCreepNames (pure)", () => {
   });
 });
 
-// ── removeCreepFromTask (pure) ──
-describe("Assignment — removeCreepFromTask (pure)", () => {
+// ── removeCreepFromTask → TaskPool.releaseCreep ──
+describe("Assignment — TaskPool.releaseCreep", () => {
   it("removes creep from task.assignedCreeps list", () => {
+    const pool = new TaskPool();
+    pool.init(100);
     const tasks = [
       { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1", priority: 1, maxWorkers: 5, assignedCreeps: ["c1", "c2", "c3"], structureType: undefined },
     ];
-    removeCreepFromTask(tasks, "harvest:W1N1:src1", "c2");
+    pool.setRoomTasks("W1N1", tasks);
+    pool.releaseCreep("harvest:W1N1:src1", "c2");
     expect(tasks[0]!.assignedCreeps).toEqual(["c1", "c3"]);
   });
 
   it("does nothing when creep not in assignedCreeps", () => {
+    const pool = new TaskPool();
+    pool.init(100);
     const tasks = [
       { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1", priority: 1, maxWorkers: 5, assignedCreeps: ["c1", "c3"], structureType: undefined },
     ];
-    removeCreepFromTask(tasks, "harvest:W1N1:src1", "c99");
+    pool.setRoomTasks("W1N1", tasks);
+    pool.releaseCreep("harvest:W1N1:src1", "c99");
     expect(tasks[0]!.assignedCreeps).toEqual(["c1", "c3"]);
   });
 
   it("does nothing when task not found", () => {
-    const tasks: any[] = [];
-    expect(() => removeCreepFromTask(tasks, "nonexistent", "c1")).not.toThrow();
+    const pool = new TaskPool();
+    pool.init(100);
+    expect(() => pool.releaseCreep("nonexistent", "c1")).not.toThrow();
+  });
+
+  it("uses O(1) index lookup instead of linear scan", () => {
+    const pool = new TaskPool();
+    pool.init(100);
+    // 创建大量任务以验证索引查找
+    const tasks = Array.from({ length: 100 }, (_, i) => ({
+      id: `task:${i}`,
+      kind: "harvest",
+      priority: 1,
+      maxWorkers: 5,
+      assignedCreeps: [`creep:${i}`],
+      structureType: undefined,
+    }));
+    pool.setRoomTasks("W1N1", tasks);
+    // 最后一个任务应能 O(1) 查到
+    const result = pool.releaseCreep("task:99", "creep:99");
+    expect(result).toBe(true);
+    expect(tasks[99]!.assignedCreeps).toEqual([]);
+  });
+});
+
+// ── TaskPool.invalidate (single pass) ──
+describe("Assignment — TaskPool.invalidate", () => {
+  it("collects creep names and clears assignedCreeps in single pass", () => {
+    const pool = new TaskPool();
+    pool.init(100);
+    const tasks = [
+      { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1", priority: 1, maxWorkers: 5, assignedCreeps: ["c1", "c2"], structureType: undefined },
+      { id: "fill:W1N1", kind: "fill", priority: 0, maxWorkers: 3, assignedCreeps: ["c3"], structureType: undefined },
+      { id: "upgrade:W1N1", kind: "upgrade", priority: 2, maxWorkers: 3, assignedCreeps: ["c4", "c5"], structureType: undefined },
+    ];
+    pool.setRoomTasks("W1N1", tasks);
+    const names = pool.invalidate("W1N1", 1);
+    // priority >= 1 → harvest (c1,c2) + upgrade (c4,c5)，不含 fill (priority=0)。
+    expect(names).toEqual(expect.arrayContaining(["c1", "c2", "c4", "c5"]));
+    expect(names).toHaveLength(4);
+    expect(names).not.toContain("c3");
+    // assignedCreeps 已清空
+    expect(tasks[0]!.assignedCreeps).toEqual([]);
+    expect(tasks[2]!.assignedCreeps).toEqual([]);
+    // fill 任务不受影响
+    expect(tasks[1]!.assignedCreeps).toEqual(["c3"]);
+  });
+});
+
+// ── TaskPool.assignCreep (dedup) ──
+describe("Assignment — TaskPool.assignCreep", () => {
+  it("assigns creep to task", () => {
+    const pool = new TaskPool();
+    pool.init(100);
+    pool.setRoomTasks("W1N1", [
+      { id: "fill:W1N1", kind: "fill", priority: 0, maxWorkers: 3, assignedCreeps: [], structureType: undefined },
+    ]);
+    expect(pool.assignCreep("fill:W1N1", "c1")).toBe(true);
+    const task = pool.findTask("fill:W1N1")!;
+    expect(task.assignedCreeps).toEqual(["c1"]);
+  });
+
+  it("prevents duplicate assignment", () => {
+    const pool = new TaskPool();
+    pool.init(100);
+    pool.setRoomTasks("W1N1", [
+      { id: "fill:W1N1", kind: "fill", priority: 0, maxWorkers: 3, assignedCreeps: ["c1"], structureType: undefined },
+    ]);
+    expect(pool.assignCreep("fill:W1N1", "c1")).toBe(false);
+    const task = pool.findTask("fill:W1N1")!;
+    expect(task.assignedCreeps).toEqual(["c1"]); // 未重复添加
   });
 });
 

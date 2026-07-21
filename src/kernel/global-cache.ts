@@ -1,11 +1,11 @@
 import type { RoomSnapshot } from "./contracts";
-import type { AssignmentTaskEntry } from "../domain/assignment/service";
+import { TaskPool } from "../domain/assignment/task-pool";
 
 /** assignment-service 的单 tick 缓存。 */
 export interface AssignmentCache {
   tick: number;
-  /** roomName -> 可用任务列表。 */
-  roomTasks: Map<string, AssignmentTaskEntry[]>;
+  /** 封装的任务池 — 提供索引查找和原子操作。 */
+  pool: TaskPool;
 }
 
 /** Screeps 沙箱 `global` 对象的形态 — 所有字段可选且可重建。 */

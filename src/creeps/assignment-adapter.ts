@@ -1,29 +1,34 @@
 import { CONFIG } from "../config";
 import type { TickContext } from "../kernel/contracts";
-import { chooseTaskForRole, validateAssignmentRules, removeCreepFromTask } from "../domain/assignment/service";
+import { chooseTaskForRole, validateAssignmentRules } from "../domain/assignment/service";
+import type { TaskPool } from "../domain/assignment/task-pool";
 import { globalCache } from "../kernel/global-cache";
 
 // ──────────────────────────────────────────────
 // 适配层 — 从 Game/Memory/creep 读取数据，调用纯函数，写回状态
 // ──────────────────────────────────────────────
 
+/** 获取当前 tick 的 TaskPool，不存在或过期时返回 undefined。 */
+function getPool(ctx?: TickContext): TaskPool | undefined {
+  const g = globalCache();
+  if (!g.assignment) return undefined;
+  const tick = ctx?.tick ?? Game.time;
+  if (g.assignment.tick !== tick) return undefined;
+  return g.assignment.pool;
+}
+
 /**
  * 适配：释放 creep 的当前任务分配。
- * 从 creep.memory 读取 assignment，在 globalCache 中找到对应任务列表，
- * 调用纯函数 removeCreepFromTask 移除 creep 名字。
+ * 通过 TaskPool 的 O(1) 索引查找任务，移除 creep 名字。
  */
 export function releaseFromTask(creep: Creep): void {
   const assignment = creep.memory.assignment;
   if (!assignment) return;
 
-  const g = globalCache();
-  if (!g.assignment) return;
+  const pool = getPool();
+  if (!pool) return;
 
-  const home = creep.memory.home ?? creep.room?.name ?? "";
-  const roomTasks = g.assignment.roomTasks.get(home);
-  if (!roomTasks) return;
-
-  removeCreepFromTask(roomTasks, assignment.id, creep.name);
+  pool.releaseCreep(assignment.id, creep.name);
 }
 
 /**
@@ -58,11 +63,11 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
   }
 
   // 2. 从预排序列表中选择新任务。
-  const g = globalCache();
-  if (!g.assignment || g.assignment.tick !== ctx.tick) return undefined;
+  const pool = getPool(ctx);
+  if (!pool) return undefined;
 
   const home = creep.memory.home ?? creep.room?.name ?? "";
-  const roomTasks = g.assignment.roomTasks.get(home);
+  const roomTasks = pool.getRoomTasks(home);
   if (!roomTasks) return undefined;
 
   const role = creep.memory.role ?? "unknown";
@@ -81,7 +86,7 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
   };
 
   creep.memory.assignment = assignment;
-  chosen.assignedCreeps.push(creep.name);
+  pool.assignCreep(chosen.id, creep.name);
   return assignment;
 }
 
