@@ -1,4 +1,4 @@
-import type { CreepRole, Priority, System } from "./contracts";
+import type { CreepRole, System } from "./contracts";
 
 /** 显式注册可防止 import 顺序耦合，使扩展可审计。 */
 export class Registry {
@@ -38,9 +38,4 @@ export class Registry {
   private assertUnique<T>(items: Map<string, T>, name: string, kind: string): void {
     if (items.has(name)) throw new Error(`Duplicate ${kind} registration: ${name}`);
   }
-}
-
-/** 用于定义优先级常量的辅助函数，提升可读性。 */
-export function P(priority: Priority): Priority {
-  return priority;
 }

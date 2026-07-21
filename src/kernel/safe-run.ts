@@ -16,6 +16,53 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
+// ──────────────────────────────────────────────
+// 共享的错误处理逻辑 — safeRun 和 safeRunBuild 共用
+// ──────────────────────────────────────────────
+
+/** 检查非关键 label 是否处于冷却期。 */
+function isCoolingDown(label: string, critical: boolean): boolean {
+  if (critical) return false;
+  const g = globalCache();
+  if (!g.pluginCooldowns) g.pluginCooldowns = new Map();
+  const cooldown = g.pluginCooldowns.get(label);
+  return cooldown !== undefined && Game.time < cooldown;
+}
+
+/** 成功时重置错误计数。 */
+function resetErrorCount(label: string): void {
+  const g = globalCache();
+  if (g.errorCounts) g.errorCounts.delete(label);
+}
+
+/** 处理错误：限频日志、遥测计数、非关键插件冷却。 */
+function handleError(label: string, error: unknown, critical: boolean): void {
+  const g = globalCache();
+
+  if (CONFIG.kernel.logErrors && !shouldSuppress(label, Game.time)) {
+    console.log(`[${Game.time}] ${label}: ${formatError(error)}`);
+  }
+  recordError();
+
+  // 跟踪连续错误并为非关键插件设置冷却。
+  if (!critical) {
+    if (!g.errorCounts) g.errorCounts = new Map();
+    const count = (g.errorCounts.get(label) ?? 0) + 1;
+    g.errorCounts.set(label, count);
+
+    if (count >= 3) {
+      if (!g.pluginCooldowns) g.pluginCooldowns = new Map();
+      const cooldownTicks = Math.min(50 + count * 10, 200);
+      g.pluginCooldowns.set(label, Game.time + cooldownTicks);
+      g.errorCounts.set(label, 0); // 进入冷却后重置计数。
+    }
+  }
+}
+
+// ──────────────────────────────────────────────
+// 公共 API
+// ──────────────────────────────────────────────
+
 /**
  * 系统和 creep 角色的错误边界。
  * 一个错误不能终止剩余 tick。相同错误按频率限流以避免日志刷屏
@@ -25,71 +72,24 @@ function formatError(error: unknown): string {
  * 关键（P0）插件不会被冷却 — 只有日志限流。
  */
 export function safeRun(label: string, action: () => void, critical = false): void {
-  const g = globalCache();
-
-  // 检查非关键 label 的冷却状态。
-  if (!critical) {
-    if (!g.pluginCooldowns) g.pluginCooldowns = new Map();
-    const cooldown = g.pluginCooldowns.get(label);
-    if (cooldown !== undefined && Game.time < cooldown) return;
-  }
-
+  if (isCoolingDown(label, critical)) return;
   try {
     action();
-    // 成功时重置错误计数。
-    if (g.errorCounts) g.errorCounts.delete(label);
+    resetErrorCount(label);
   } catch (error) {
-    if (CONFIG.kernel.logErrors && !shouldSuppress(label, Game.time)) {
-      console.log(`[${Game.time}] ${label}: ${formatError(error)}`);
-    }
-    recordError();
-
-    // 跟踪连续错误并为非关键插件设置冷却。
-    if (!critical) {
-      if (!g.errorCounts) g.errorCounts = new Map();
-      const count = (g.errorCounts.get(label) ?? 0) + 1;
-      g.errorCounts.set(label, count);
-
-      if (count >= 3) {
-        if (!g.pluginCooldowns) g.pluginCooldowns = new Map();
-        const cooldownTicks = Math.min(50 + count * 10, 200);
-        g.pluginCooldowns.set(label, Game.time + cooldownTicks);
-        g.errorCounts.set(label, 0); // 进入冷却后重置计数。
-      }
-    }
+    handleError(label, error, critical);
   }
 }
 
 /** safeRun 的返回值变体 — 用于构建快照等需要返回值的场景。 */
 export function safeRunBuild<T>(label: string, factory: () => T, critical = false): T | undefined {
-  const g = globalCache();
-
-  if (!critical) {
-    if (!g.pluginCooldowns) g.pluginCooldowns = new Map();
-    const cooldown = g.pluginCooldowns.get(label);
-    if (cooldown !== undefined && Game.time < cooldown) return undefined;
-  }
-
+  if (isCoolingDown(label, critical)) return undefined;
   try {
-    return factory();
+    const result = factory();
+    resetErrorCount(label);
+    return result;
   } catch (error) {
-    if (CONFIG.kernel.logErrors && !shouldSuppress(label, Game.time)) {
-      console.log(`[${Game.time}] ${label}: ${formatError(error)}`);
-    }
-    recordError();
-
-    if (!critical) {
-      if (!g.errorCounts) g.errorCounts = new Map();
-      const count = (g.errorCounts.get(label) ?? 0) + 1;
-      g.errorCounts.set(label, count);
-
-      if (count >= 3) {
-        if (!g.pluginCooldowns) g.pluginCooldowns = new Map();
-        const cooldownTicks = Math.min(50 + count * 10, 200);
-        g.pluginCooldowns.set(label, Game.time + cooldownTicks);
-        g.errorCounts.set(label, 0);
-      }
-    }
+    handleError(label, error, critical);
     return undefined;
   }
 }
