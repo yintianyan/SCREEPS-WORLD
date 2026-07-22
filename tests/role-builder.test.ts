@@ -266,4 +266,106 @@ describe("builder — flee", () => {
     expect(creep.memory.mode).toBe("flee");
     expect(creep.build).not.toHaveBeenCalled();
   });
+
+  it("入侵期间不修墙（fortifications 被威胁门禁拦截）", () => {
+    const hostile = mockHostile();
+    const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
+    const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
+    const snap = mockSnapshot({
+      hostileCreeps: [hostile],
+      myConstructionSites: [],
+      fillTargets: [],
+      ramparts: [rampart],
+      storage,
+    });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    builderRole.run(creep, ctx);
+
+    expect(creep.repair).not.toHaveBeenCalled();
+  });
+});
+
+describe("builder — B3 防御工事维修（维修权从塔移交 creep）", () => {
+  it("盈余门禁满足时修复血量最低的 rampart", () => {
+    const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
+    const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      fillTargets: [],
+      ramparts: [rampart],
+      storage,
+      rcl: 3, // wallTargetHits rcl3_4 = 100K，rampart 50K 低于目标
+      energyAvailable: 100,
+    });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    builderRole.run(creep, ctx);
+
+    expect(creep.repair).toHaveBeenCalledWith(rampart);
+  });
+
+  it("storage 能量不足（< 10k）不修墙，走升级回退", () => {
+    const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
+    const storage = mockStructure("storage", { id: "st", energy: 5000, capacity: 1000000 });
+    const controller = mockController();
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      fillTargets: [],
+      ramparts: [rampart],
+      storage,
+      controller,
+      energyAvailable: 500, // >= upgradeEnergyFloor → 升级兜底
+    });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    builderRole.run(creep, ctx);
+
+    expect(creep.repair).not.toHaveBeenCalled();
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
+
+  it("conserve tier 不修墙（低 CPU 冻结发展性维修）", () => {
+    const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
+    const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
+    const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      fillTargets: [spawn],
+      ramparts: [rampart],
+      storage,
+    });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap, mockBudget("conserve"));
+
+    builderRole.run(creep, ctx);
+
+    expect(creep.repair).not.toHaveBeenCalled();
+    expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
+  });
+
+  it("rampart 已达目标血量不修（无目标 → 走后续回退）", () => {
+    const rampart = mockStructure("rampart", { id: "r1", hits: 150000, hitsMax: 300000 });
+    const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
+    const controller = mockController();
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      fillTargets: [],
+      ramparts: [rampart],
+      storage,
+      controller,
+      rcl: 3, // 目标 100K，rampart 150K 已达标
+      energyAvailable: 500,
+    });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    builderRole.run(creep, ctx);
+
+    expect(creep.repair).not.toHaveBeenCalled();
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
 });

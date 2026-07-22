@@ -72,16 +72,35 @@ export function countCreepsByRole(
 }
 
 /**
- * 判断 creep 是否即将需要替换（ticksToLive <= body.length * 3 + buffer）。
+ * 判断 creep 是否即将需要替换。
+ * 阈值 = body.length * 3（孵化耗时）+ buffer（安全余量）+ travelTicks（通勤路程）。
  * 纯函数 — 接收显式参数，不访问 Creep 对象。
  */
 export function needsReplacement(
   ticksToLive: number | undefined,
   bodyLength: number,
+  travelTicks = 0,
 ): boolean {
   if (ticksToLive === undefined) return false;
-  const threshold = bodyLength * 3 + CONFIG.spawn.replaceBuffer;
+  const threshold = bodyLength * 3 + CONFIG.spawn.replaceBuffer + travelTicks;
   return ticksToLive <= threshold;
+}
+
+/**
+ * 估算 harvester 从 spawn 到其 source 的通勤 tick 数（Chebyshev 距离 × 1.5 地形系数，上限 50）。
+ * 用于提前替补的替换阈值，防止「替补走完路程前矿工已死」的采集断档。
+ */
+export function estimateTravelTicks(
+  snapshot: RoomSnapshot,
+  sourceId: Id<Source> | undefined,
+): number {
+  if (!sourceId) return 0;
+  const spawn = snapshot.spawns[0];
+  if (!spawn) return 0;
+  const source = snapshot.sources.find(s => s.id === sourceId);
+  if (!source) return 0;
+  const range = spawn.pos.getRangeTo(source.pos);
+  return Math.min(50, Math.ceil(range * 1.5));
 }
 
 /**
@@ -218,35 +237,57 @@ export function evaluateDemand(
     const upgraderConfig = CONFIG.roles.upgrader;
     const upgraderTotal = (counts.upgrader ?? 0) + pending.upgrader;
 
-    // 动态 upgrader 数量 — 老玩家站桩升级策略：
-    // 一旦 controller container 建成，hauler 物流链（source container → controller container）
-    // 持续供能，upgrader 0 通勤站桩升级，此时数量即吞吐 —— 直接拉满 maxCount。
-    // 无 container 时多 upgrader 都要长途自采，通勤浪费抵消数量优势，保持 minCount。
-    // 降级紧急状态下即使无 container 也拉满（自采也要保级）。
+    // A2：升级功率改由「storage 水位 + 大 body WORK 数」驱动，替代固定小 body 数量梯度。
+    // 老玩家认知：防御与 spawn 供能之外，盈余能量应优先灌 controller —— RCL 是复利。
+    // 大 body 站桩（15W@1650）让 1 个 upgrader 即可跑满 ≈15/tick，creep 数更少、CPU 更省。
     const stationUpgradeOnline = snapshot.controllerContainer !== undefined;
     const ctrl = snapshot.controller;
     const crisisNeedsGuard =
       inCrisis && ctrl !== undefined && ctrl.ticksToDowngrade < CONFIG.economy.crisis.downgradeGuard;
 
-    // 梯度缩放：用 economyPressure 连续信号替代二值 crisis 开关。
-    // pressure 0.0–0.3: 满目标（健康）
-    // pressure 0.3–0.7: 线性从满目标缩到 minCount（谨慎→紧张）
-    // pressure 0.7–1.0: 线性从 minCount 缩到 0（危机，除非需要保级）
     const pressure = roomCtx.economyPressure;
-    const fullTarget = stationUpgradeOnline || hasDowngradeRisk
-      ? upgraderConfig.maxCount
-      : upgraderConfig.minCount;
+    const upgradeCfg = CONFIG.economy.upgrade;
+    const workPerBody =
+      selectBody("upgrader", energyCapacity, { rcl: snapshot.rcl }).filter(p => p === "work").length || 1;
+    const hasStorage = snapshot.storage !== undefined;
+    const storageEnergy = hasStorage ? snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) : 0;
+
     let upgraderTarget: number;
-    if (pressure <= 0.3) {
-      upgraderTarget = fullTarget;
-    } else if (pressure <= 0.7) {
-      // 线性插值：fullTarget → minCount
-      const t = (pressure - 0.3) / 0.4;
-      upgraderTarget = Math.round(fullTarget + t * (upgraderConfig.minCount - fullTarget));
+    if (hasDowngradeRisk || crisisNeedsGuard) {
+      // 保级紧急：拉满（自采也要保级）。
+      upgraderTarget = upgraderConfig.maxCount;
+    } else if (!stationUpgradeOnline) {
+      // 无 controller container：多 upgrader 长途自采，通勤浪费抵消数量优势，保持 minCount。
+      upgraderTarget = pressure <= 0.7 ? upgraderConfig.minCount : 0;
+    } else if (hasStorage && storageEnergy >= upgradeCfg.sprintStorage && pressure <= 0.3) {
+      // 冲刺：库存充足且经济健康，烧库存换 RCL 复利（2 个满 body 站桩）。
+      upgraderTarget = Math.min(upgraderConfig.maxCount, 2);
+    } else if (hasStorage && storageEnergy >= upgradeCfg.sustainedStorage) {
+      // 维持：1 个大 body 站桩 ≈ 15/tick，盈余全喂 controller。
+      upgraderTarget = 1;
+    } else if (!hasStorage) {
+      // RCL1-3 早期猛冲（无 storage，能量不升级也是浪费）：沿用 pressure 梯度。
+      // pressure 0.0–0.3 满目标；0.3–0.7 线性缩到 minCount；0.7–1.0 缩到 0。
+      const fullTarget = stationUpgradeOnline ? upgraderConfig.maxCount : upgraderConfig.minCount;
+      if (pressure <= 0.3) {
+        upgraderTarget = fullTarget;
+      } else if (pressure <= 0.7) {
+        const t = (pressure - 0.3) / 0.4;
+        upgraderTarget = Math.round(fullTarget + t * (upgraderConfig.minCount - fullTarget));
+      } else {
+        const t = (pressure - 0.7) / 0.3;
+        upgraderTarget = Math.round(upgraderConfig.minCount * (1 - t));
+      }
     } else {
-      // 线性插值：minCount → 0
-      const t = (pressure - 0.7) / 0.3;
-      upgraderTarget = Math.round(upgraderConfig.minCount * (1 - t));
+      // storage 低水位（< sustained）：最多 1 个大 body，pressure 高则停升级攒库存。
+      upgraderTarget = pressure <= 0.5 ? 1 : 0;
+    }
+
+    // RCL8 官方限速：controller 每 tick 最多吃 15 能量升级。
+    // 按当前 body 的 WORK 数折算 creep 数上限（15W body → 1 个，恰好顶满）。
+    if (snapshot.rcl >= 8) {
+      const maxCountByWork = Math.max(1, Math.floor(upgradeCfg.rcl8MaxWorkParts / workPerBody));
+      upgraderTarget = Math.min(upgraderTarget, maxCountByWork);
     }
     // 保级覆盖：控制器快降级时至少保留 minCount。
     if (crisisNeedsGuard || hasDowngradeRisk) {
@@ -311,7 +352,10 @@ export function evaluateDemand(
 
   for (const creep of creeps) {
     if (creep.home !== home) continue;
-    if (!needsReplacement(creep.ticksToLive, creep.bodyLength)) continue;
+    // A4：harvester 的替换阈值计入 spawn→source 通勤路程，
+    // 防止替补还没走到矿位老矿工已死、采集断档。
+    const travelTicks = creep.role === "harvester" ? estimateTravelTicks(snapshot, creep.sourceId) : 0;
+    if (!needsReplacement(creep.ticksToLive, creep.bodyLength, travelTicks)) continue;
     const role = creep.role;
     const config = roleConfigs[role];
     if (!config) continue;
@@ -338,7 +382,7 @@ export function evaluateDemand(
     if (!hasKey(queue, key) && !requests.some(r => r.key === key)) {
       const priority = role === "harvester" || role === "worker" ? 1 : 2;
       const req = createRequest(role, home, index, key, priority, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick, creep.sourceId);
-      req.replaceBy = tick + req.body.length * 3 + CONFIG.spawn.replaceBuffer;
+      req.replaceBy = tick + req.body.length * 3 + CONFIG.spawn.replaceBuffer + travelTicks;
       requests.push(req);
     }
   }

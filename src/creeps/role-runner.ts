@@ -39,6 +39,12 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
       const snapshot = ctx.getSnapshot(creep.memory.home!);
       if (!snapshot) return;
 
+      // ── 2.5 B1：已标记回收的 creep 停止一切角色工作（移动由 spawn-manager 接管）──
+      if (creep.memory.recycle) {
+        creep.memory.mode = "idle";
+        return;
+      }
+
       // ── 3. 敌人检测 → flee ──
       if (shouldFlee(snapshot)) {
         creep.memory.mode = "flee";

@@ -16,6 +16,7 @@ import {
   pickupDroppedEnergy,
   repairContainerDecay,
   repairCritical,
+  repairFortifications,
   upgradeControllerGated,
   withdrawClosestContainer,
 } from "./actions";
@@ -123,6 +124,9 @@ const policy: RolePolicy = {
     fillTarget(),
     // fallback: 关键修复（< 50% 血量）。
     repairCritical(),
+    // fallback: 防御工事维修（B3：盈余门禁 + 无威胁时，修 wall/rampart 至分级血量）。
+    // 维修权从塔移交 creep —— 塔修墙是能量黑洞，creep 修是 1 energy/100 hits/WORK。
+    repairFortifications(),
     // fallback: 升级控制器（带能量门禁）。
     upgradeControllerGated(),
   ],

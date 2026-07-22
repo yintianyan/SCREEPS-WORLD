@@ -87,6 +87,7 @@ tests/
 | --- | --- | --- | --- |
 | 本 tick 房间快照、对象索引 | room-snapshot | 所有系统与角色 | TickContext / global |
 | 房间长期战略和建造意图 | 房间或建造系统 | Spawn、角色 | Memory.rooms |
+| 邻居房情报（出口/房态/SK 分类/资源） | room-observer | 未来远矿/扩张选址 | Memory.rooms 的 intel |
 | Spawn 请求及状态 | spawn-manager | Spawn、遥测 | Memory.rooms 的 spawnQueue |
 | creep 的 role、home、状态、目标 | Spawn 初始化和对应角色 | 对应角色 | CreepMemory |
 | 路径、CostMatrix、临时索引 | movement 缓存 | 角色 | global，可丢失 |
@@ -202,6 +203,8 @@ interface RootMemory {
 5. 死亡 creep Memory 小帝国可每 tick 清；规模变大后按 cursor 每 10 tick 清理。
 6. 每次版本升级必须有空 Memory、旧版本、重复执行和中断恢复的 Vitest 用例。
 
+当前版本：v5（CreepMemory.recycle? 回收标记 + RoomMemory.intel? 邻居情报，均为可选字段、畸形自愈）。
+
 ## 4. 插件注册规范
 
 bootstrap.ts 是唯一组合根。新增角色或系统时，只改 bootstrap 和新增模块，不改 Kernel。
@@ -302,10 +305,13 @@ interface SpawnRequest {
 
 - 请求按 key 幂等合并，spawn.spawning 和已提交请求必须计入人口，避免重复孵化。
 - body 不能超过 energyCapacityAvailable。P0 可以按 energyAvailable 降级立即出生；普通角色可等待合理体型，但有最长等待时间。
-- 关键替换在 ticksToLive 不大于 body.length 乘 3、预计路程与 15 tick 安全缓冲之和时入队。
+- 关键替换在 ticksToLive 不大于 body.length 乘 3、预计路程与 15 tick 安全缓冲之和时入队（harvester 计入 spawn→source 通勤估算，其余角色路程为 0）。
 - 同类 creep 生成需错峰，避免同 tick 集体寿终。普通请求不得侵占关键替补的最晚开工窗口。
 - ERR_BUSY 不算失败；能量不足保留请求；body 不合法等配置错误隔离该请求并限流报警。
 - colony 状态由 Spawn/Room 服务统一计算：BOOTSTRAP、RECOVERY、NORMAL、DEFENSE。角色只读取状态。
+- 升级功率由 storage 水位驱动：storage ≥ 50k 且经济健康时冲刺（2 个大 body 站桩烧库存换 RCL）；≥ 10k 时 1 个大 body 满功率（≈15/tick）；低水位按 pressure 停升级攒库存；无 storage 时保留早期猛冲梯度。RCL8 显式封顶 15 WORK（官方 15 energy/tick 上限）。
+- body 模板随 RCL 容量放大：upgrader 至 15W@1650、builder 至 8W4C6M@1300、hauler 道路变体至 16C8M@1200；P0/bootstrap/recovery 降级路径不变。
+- 回收通道：废弃角色与富余 worker（harvester 满编后超出 1 只）由 spawn-manager 标记 recycle 并引导至最近 spawn recycleCreep，回收残值并释放 CPU；被标记 creep 的角色逻辑短路 idle。
 
 官服中若全员死亡且 spawn 无法再积累 200 能量，通常无法自救。因此提前替补最后一名采集者和保留恢复能源是不可妥协的硬约束。
 
@@ -330,6 +336,9 @@ construction-manager 是唯一创建 construction site 的模块。它消费版�
 - builder 早期最多一名。没有高优先级 site、P0/P1 不足、能量低于生存水位或 CPU Recovery 时，停止新 builder。
 - builder 无可建目标时按顺序回退为 spawn/extension 填能、关键维修、控制器升级；不得空转。
 - 维修顺序为 spawn/extension/container/tower、高流量道路、其他结构。墙和 rampart 只进入防御插件的明确计划。
+- 维修权归属：日常结构与工事维修由 creep（builder/worker）承担；本房存在维修 creep 时塔只开火，不做结构/工事维修（塔修成本高且占用防御弹药）；无维修 creep 时塔保留维修作灾后安全网。
+- builder 的防御工事维修（wall/rampart 至 RCL 分级血量）必须同时满足：tier 非 recovery/conserve、无威胁 creep、storage 能量 ≥ 10k（真盈余）。
+- extractor 由 layout-planner 以动态任务生成（RCL6+，矿位上，优先级 3），不走静态模板。
 - 道路依据实测交通热度逐段添加，绝不预铺全房或远程路线。
 
 ### 5.6 布局与建造的技术实施方案
@@ -679,7 +688,7 @@ function moveToTarget(
 移动规则：
 
 - 角色只在主动作返回 ERR_NOT_IN_RANGE 时调用移动，不在一个 tick 反复选目标和重算。
-- 本地路径设置 maxRooms 为 1；远程路径由 route/remote 插件低频预计算，角色只消费 route waypoint。
+- 本地路径设置 maxRooms 为 1（CONFIG.movement.localMaxRooms，配置化以便 remote 角色未来经 route/waypoint 跨房而不动内核）；远程路径由 route/remote 插件低频预计算，角色只消费 route waypoint。
 - PathFinder 仅可由 movement service 或低频 planner 调用，并有 maxOps、maxRooms、缓存 key 和失败冷却；禁止 role 直接调用。
 - 缓存 key 包含目标、移动类型、room 路网 revision；道路或关键阻塞变化后递增 revision 使旧缓存自然失效。
 - creep Memory 仅保存 packed lastPos、stuckTicks 和短 pathKey；完整路径放 global。global reset 后回退一次原生 moveTo。

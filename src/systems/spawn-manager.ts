@@ -4,6 +4,8 @@ import type { Priority, System, TickContext } from "../kernel/contracts";
 import { evaluateDemand, type CreepSummary, type SpawningSummary, type RoomDemandContext } from "../domain/spawn/demand";
 import type { ColonyState } from "../kernel/contracts";
 import { cleanQueue, sortQueue, submitRequest } from "../domain/spawn/queue";
+import { selectRecycleCandidates } from "../domain/spawn/recycle";
+import { moveToTarget } from "../creeps/movement";
 
 /**
  * 孵化管理器 — 唯一调用 spawnCreep 的模块。
@@ -58,9 +60,61 @@ export const spawnManagerSystem: System = {
 
       // 4. 尝试孵化最高优先级的请求。
       trySpawn(snapshot, queue);
+
+      // 5. B1：回收通道 — 标记退役 creep，引导至最近 spawn 回收残值能量。
+      recyclePass(snapshot, creeps);
     }
   },
 };
+
+/** 当前注册的角色集合（CONFIG.roles 是唯一权威）。 */
+const KNOWN_ROLES: ReadonlySet<string> = new Set(Object.keys(CONFIG.roles));
+
+/**
+ * B1 回收通道。
+ *
+ * 标记规则（保守白名单，不做全量配额对账）：
+ *   1. 废弃角色：role 不在 CONFIG.roles 中（角色已下线，creep 永远闲置）；
+ *   2. 富余 worker：harvester 满编时，worker 保留 1 只作灾后保险，其余回收
+ *      （与 demand 的存在性门禁语义一致：worker 是过渡角色，不是常备军）。
+ *
+ * 执行：被标记 creep 走向本房最近 spawn（role-runner 对其短路 idle，不抢移动权），
+ * 相邻时 spawn.recycleCreep 回收残值能量；spawn 忙碌时等待下一 tick。
+ */
+function recyclePass(
+  snapshot: import("../kernel/contracts").RoomSnapshot,
+  summaries: readonly CreepSummary[],
+): void {
+  const home = snapshot.roomName;
+
+  // ── 标记（纯函数决策）──
+  const marked = selectRecycleCandidates(
+    summaries,
+    home,
+    KNOWN_ROLES,
+    CONFIG.roles.harvester.minCount,
+  );
+  for (const name of marked) {
+    const creep = Game.creeps[name];
+    if (creep && !creep.memory.recycle) creep.memory.recycle = true;
+  }
+
+  // ── 执行：引导至最近 spawn 并回收 ──
+  if (snapshot.spawns.length === 0) return;
+  for (const name in Game.creeps) {
+    const creep = Game.creeps[name];
+    if (!creep?.memory.recycle) continue;
+    if ((creep.memory.home ?? creep.room.name) !== home) continue;
+    const spawn = creep.pos.findClosestByRange(snapshot.spawns as StructureSpawn[]);
+    if (!spawn) continue;
+    if (creep.pos.getRangeTo(spawn) <= 1) {
+      // ERR_BUSY（spawn 孵化中）时静默等待下一 tick，不算失败。
+      spawn.recycleCreep(creep);
+    } else {
+      moveToTarget(creep, spawn);
+    }
+  }
+}
 /**
  * 尝试从队列中孵化最高优先级的 creep。
  * 处理 P0 降级、body 容量校验和错误重试。

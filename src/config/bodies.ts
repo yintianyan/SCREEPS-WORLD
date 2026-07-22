@@ -34,15 +34,52 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   hauler: [
+    // RCL3+ 大运力档：同样吞吐用更少 creep，省 CPU/寻路/spawn 孵化窗。
+    {
+      parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"],
+      minCapacity: 600,
+    },
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
   upgrader: [
+    // 站桩升级：1 CARRY 承接 withdraw，2 MOVE 通勤，其余全 WORK。
+    // [15W] @1650：RCL5(1800) 起可孵；RCL8 时单 creep 恰好顶满官方 15 energy/tick 上限。
+    {
+      parts: [
+        "work", "work", "work", "work", "work", "work", "work", "work",
+        "work", "work", "work", "work", "work", "work", "work",
+        "carry", "move", "move",
+      ],
+      minCapacity: 1650,
+    },
+    // [8W,1C,2M] @950：RCL4(1300) 主力档。
+    {
+      parts: ["work", "work", "work", "work", "work", "work", "work", "work", "carry", "move", "move"],
+      minCapacity: 950,
+    },
+    // [4W] @500：RCL2-3(550/800) 过渡档。
+    { parts: ["work", "work", "work", "work", "carry", "move"], minCapacity: 500 },
     { parts: ["work", "work", "carry", "move", "move"], minCapacity: 350 },
     { parts: ["work", "carry", "move", "move"], minCapacity: 250 },
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   builder: [
+    // [8W,4C,6M] @1300：RCL4 主力档。MOVE ≥ 非 MOVE/2，道路上满速；
+    // 大工地（storage/tower）几下拍完，减少往返取能次数。
+    {
+      parts: [
+        "work", "work", "work", "work", "work", "work", "work", "work",
+        "carry", "carry", "carry", "carry",
+        "move", "move", "move", "move", "move", "move",
+      ],
+      minCapacity: 1300,
+    },
+    // [4W,2C,3M] @650：RCL3(800) 过渡档。
+    {
+      parts: ["work", "work", "work", "work", "carry", "carry", "move", "move", "move"],
+      minCapacity: 650,
+    },
     { parts: ["work", "work", "carry", "move", "move"], minCapacity: 350 },
     { parts: ["work", "carry", "move", "move"], minCapacity: 250 },
     { parts: ["work", "carry", "move"], minCapacity: 200 },
@@ -53,9 +90,26 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
  * 道路优化 body 变体（约束 HA-10）。
  * RCL4+ 核心物流路已铺设时使用：1 MOVE 可在道路上带动 2 CARRY（fatigue-free）。
  * 道路未覆盖时使用默认模板保证移动效率。
+ * 按容量从高到低选档：同样吞吐用更少 creep，省 CPU 与 spawn 孵化窗。
  */
-const ROAD_OPTIMIZED_BODIES: Readonly<Record<string, readonly BodyPartConstant[]>> = {
-  hauler: ["carry", "carry", "carry", "carry", "move", "move"],
+const ROAD_OPTIMIZED_BODIES: Readonly<Record<string, readonly BodyTemplate[]>> = {
+  hauler: [
+    // [16C,8M] @1200：RCL4(1300) 顶档。
+    {
+      parts: [
+        "carry", "carry", "carry", "carry", "carry", "carry", "carry", "carry",
+        "carry", "carry", "carry", "carry", "carry", "carry", "carry", "carry",
+        "move", "move", "move", "move", "move", "move", "move", "move",
+      ],
+      minCapacity: 1200,
+    },
+    // [8C,4M] @600：RCL3(800) 档。
+    {
+      parts: ["carry", "carry", "carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move"],
+      minCapacity: 600,
+    },
+    { parts: ["carry", "carry", "carry", "carry", "move", "move"], minCapacity: 300 },
+  ],
 };
 
 /** P0 恢复用的最小可用 body — 始终为 [WORK, CARRY, MOVE]，成本 200 能量。 */
@@ -90,9 +144,11 @@ export function selectBody(
 ): BodyPartConstant[] {
   // RCL4+ 核心物流路已铺设时，hauler 使用道路优化变体。
   if (options?.rcl !== undefined && options.rcl >= 4) {
-    const roadOptimized = ROAD_OPTIMIZED_BODIES[role];
-    if (roadOptimized && bodyCost(roadOptimized) <= energyCapacityAvailable) {
-      return [...roadOptimized];
+    const roadTiers = ROAD_OPTIMIZED_BODIES[role];
+    if (roadTiers) {
+      for (const t of roadTiers) {
+        if (energyCapacityAvailable >= t.minCapacity) return [...t.parts];
+      }
     }
   }
 

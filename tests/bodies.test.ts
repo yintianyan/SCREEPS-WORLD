@@ -95,3 +95,59 @@ describe("Bodies — BODY_TEMPLATES", () => {
     }
   });
 });
+
+describe("Bodies — A1 大 body 档位（随 RCL 容量放大）", () => {
+  it("upgrader RCL6(2300) 选 15W 站桩 body，RCL8 恰好顶满 15/tick 上限", () => {
+    const body = selectBody("upgrader", 2300, { rcl: 6 });
+    expect(body.filter(p => p === "work")).toHaveLength(15);
+    expect(bodyCost(body)).toBe(1650);
+  });
+
+  it("upgrader RCL4(1300) 选 8W body；RCL2(550) 选 4W 过渡档", () => {
+    const rcl4 = selectBody("upgrader", 1300, { rcl: 4 });
+    expect(rcl4.filter(p => p === "work")).toHaveLength(8);
+    expect(bodyCost(rcl4)).toBe(950);
+
+    const rcl2 = selectBody("upgrader", 550, { rcl: 2 });
+    expect(rcl2.filter(p => p === "work")).toHaveLength(4);
+    expect(bodyCost(rcl2)).toBe(500);
+  });
+
+  it("builder RCL4(1300) 选 8W4C6M；RCL3(800) 选 4W2C3M", () => {
+    const rcl4 = selectBody("builder", 1300, { rcl: 4 });
+    expect(rcl4.filter(p => p === "work")).toHaveLength(8);
+    expect(bodyCost(rcl4)).toBe(1300);
+
+    const rcl3 = selectBody("builder", 800, { rcl: 3 });
+    expect(rcl3.filter(p => p === "work")).toHaveLength(4);
+    expect(bodyCost(rcl3)).toBe(650);
+  });
+
+  it("hauler RCL4+ 道路变体按容量选档：1300→16C8M，800→8C4M，300→4C2M", () => {
+    const top = selectBody("hauler", 1300, { rcl: 4 });
+    expect(top.filter(p => p === "carry")).toHaveLength(16);
+    expect(top.filter(p => p === "move")).toHaveLength(8);
+
+    const mid = selectBody("hauler", 800, { rcl: 4 });
+    expect(mid.filter(p => p === "carry")).toHaveLength(8);
+
+    const low = selectBody("hauler", 300, { rcl: 4 });
+    expect(low).toEqual(["carry", "carry", "carry", "carry", "move", "move"]);
+  });
+
+  it("hauler 低 RCL（无道路假设）新增 6C6M 顶档", () => {
+    const body = selectBody("hauler", 600, { rcl: 2 });
+    expect(body.filter(p => p === "carry")).toHaveLength(6);
+    expect(body.filter(p => p === "move")).toHaveLength(6);
+  });
+
+  it("所有新档位成本 ≤ 其 minCapacity 对应的容量", () => {
+    // selectBody 只在 capacity >= minCapacity 时选中，成本绝不超过容量。
+    for (const capacity of [550, 800, 1300, 1800, 2300]) {
+      for (const role of ["upgrader", "builder", "hauler"]) {
+        const body = selectBody(role, capacity, { rcl: 8 });
+        expect(bodyCost(body)).toBeLessThanOrEqual(capacity);
+      }
+    }
+  });
+});

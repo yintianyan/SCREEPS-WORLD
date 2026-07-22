@@ -35,6 +35,8 @@ declare global {
     assignment?: CreepAssignment;
     /** 用于稳定孵化 key 生成和替换跟踪的索引。 */
     spawnIndex?: number;
+    /** B1：标记为待回收 — spawn-manager 引导其走向最近 spawn 并 recycleCreep。 */
+    recycle?: boolean;
   }
 
   interface SpawnRequest {
@@ -89,6 +91,8 @@ declare global {
     spawnQueue?: SpawnRequest[];
     buildQueue?: BuildTask[];
     lastRcl?: number;
+    /** C2：邻居房情报（room-observer 每 50 tick 刷新，M7 远矿/扩张选址数据源）。 */
+    intel?: Record<string, import("../domain/intel").RoomIntel>;
     layout?: {
       version: number;
       templateId: string;

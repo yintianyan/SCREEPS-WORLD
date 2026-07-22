@@ -10,6 +10,7 @@ import {
   createControllerContainerTask,
   createSourceLinkTasks,
   createControllerLinkTask,
+  createExtractorTask,
   createDefenseTasks,
 } from "../domain/layout/task-factory";
 import {
@@ -235,7 +236,17 @@ export const layoutPlannerSystem: System & {
       }
     }
 
-    // 3.7 动态防御工事（RCL4+）— 出口方向感知的 rampart 核心盾。
+    // 3.7 Extractor 任务（RCL6+）— 矿位上，补齐矿物产业链第一环。
+    {
+      const extractor = createExtractorTask(snapshot);
+      if (extractor && !existingKeys.has(extractor.key)) {
+        queue.push(candidateToBuildTask(extractor));
+        existingKeys.add(extractor.key);
+        tasksAdded = true;
+      }
+    }
+
+    // 3.8 动态防御工事（RCL4+）— 出口方向感知的 rampart 核心盾。
     {
       const exitPositions = room.find(FIND_EXIT).map(p => ({ x: p.x, y: p.y }));
       const defenseCandidates = createDefenseTasks(

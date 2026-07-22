@@ -21,7 +21,7 @@ export function getWallTargetHits(rcl: number): number {
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 4 },
+  memory: { schemaVersion: 5 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -60,12 +60,17 @@ export const CONFIG = {
   },
 
   spawn: {
-    /** body 替换窗口：ticksToLive <= body.length * 3 + 15。 */
+    /** body 替换窗口：ticksToLive <= body.length * 3 + 15（+ 路程项，见 demand.needsReplacement）。 */
     replaceBuffer: 15,
     /** 孵化请求被隔离前的最大重试次数。 */
     maxRetries: 5,
     /** 为 P0 恢复 body 预留的最低能量。 */
     recoveryEnergyReserve: 200,
+  },
+
+  movement: {
+    /** 本地寻路的 maxRooms。remote 角色未来通过 route/waypoint 跨房，本地任务始终为 1。 */
+    localMaxRooms: 1,
   },
 
   construction: {
@@ -126,6 +131,15 @@ export const CONFIG = {
     buildEnergySurplus: 200,
     /** 触发紧急升级的控制器 ticksToDowngrade 阈值。 */
     controllerDowngradeThreshold: 10000,
+    /** 升级功率控制（A2：storage 水位驱动 + RCL8 显式限速）。 */
+    upgrade: {
+      /** storage 能量 ≥ 此值且 pressure ≤ 0.3 时进入升级冲刺（燃烧库存换 RCL 复利）。 */
+      sprintStorage: 50000,
+      /** storage 能量 ≥ 此值时维持大 body 满功率升级（≈ 盈余全喂 controller）。 */
+      sustainedStorage: 10000,
+      /** RCL8 官方升级功率上限（energy/tick），换算为 WORK 部件数。 */
+      rcl8MaxWorkParts: 15,
+    },
     /** 能量危机检测与响应参数。 */
     crisis: {
       /** source 能量高于此比例视为采集不足（harvester 失效）。 */

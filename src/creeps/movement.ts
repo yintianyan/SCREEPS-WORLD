@@ -308,7 +308,7 @@ function computeAndCachePath(
     {
       plainCost: 2,
       swampCost: 10,
-      maxRooms: 1,
+      maxRooms: CONFIG.movement.localMaxRooms,
       roomCallback: (roomName: string): boolean | CostMatrix => {
         const room = Game.rooms[roomName];
         if (!room) return false;
@@ -467,7 +467,8 @@ export function moveToTarget(
 
   const options: MoveToOpts = {
     reusePath,
-    maxRooms: 1,
+    // 本地任务锁定单房（C1：配置化，remote 角色未来经 route/waypoint 跨房，不动内核）。
+    maxRooms: CONFIG.movement.localMaxRooms,
     ignoreCreeps,
     // 关键：range 1 = 走到目标相邻格即可（source/controller/结构格不可站立）。
     // 缺少此项时 moveTo 默认 range=0，PathFinder 搜索不可行走格 → 永远找不到路径。

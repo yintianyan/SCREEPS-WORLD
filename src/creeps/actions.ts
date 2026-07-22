@@ -13,7 +13,8 @@
  *   - repairXxx    — 维修
  *   - upgradeXxx   — 升级控制器
  */
-import { CONFIG } from "../config";
+import { CONFIG, getWallTargetHits } from "../config";
+import type { RoomSnapshot } from "../kernel/contracts";
 import type { ActionCandidate, ActionContext } from "./action-types";
 import { moveToTarget } from "./movement";
 import { actOrMove } from "./role-runner";
@@ -580,6 +581,63 @@ export function repairNearbyContainer(): ActionCandidate {
       actOrMove(ac.creep, nearby, () => ac.creep.repair(nearby));
     },
   };
+}
+
+// ─── Fortification Repair（防御工事维修）─────────────────────
+
+/**
+ * 修复 wall/rampart 到 RCL 分级目标血量（B3：维修权从塔移交给 creep）。
+ *
+ * 老玩家认知：塔修墙是能量黑洞（10 能量/次 + 距离衰减 + 与开火争弹药），
+ * creep 维修是 1 energy/100 hits/WORK —— 日常工事维护必须由 builder 承担。
+ *
+ * 门禁（全部满足才启用， predicate 内判断）：
+ *   - tier 非 recovery/conserve（低 CPU 不修墙）；
+ *   - 无威胁 creep（入侵期间修墙是白送能量，优先开火/保命）；
+ *   - 有 storage 且能量 ≥ sustainedStorage（真盈余才修，早期不堆 rampart）。
+ */
+export function repairFortifications(): ActionCandidate {
+  return {
+    name: "repair:fortifications",
+    predicate: (ac) => {
+      if (ac.budget.tier === "recovery" || ac.budget.tier === "conserve") return false;
+      if (ac.snapshot.threatCreeps.length > 0) return false;
+      const storage = ac.snapshot.storage;
+      if (!storage) return false;
+      if (storage.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.economy.upgrade.sustainedStorage) {
+        return false;
+      }
+      return findFortificationTarget(ac.snapshot) !== undefined;
+    },
+    execute: (ac) => {
+      const target = findFortificationTarget(ac.snapshot);
+      if (target) {
+        actOrMove(ac.creep, target, () => ac.creep.repair(target));
+      }
+    },
+  };
+}
+
+/** 查找血量最低且低于 RCL 分级目标血量的 wall/rampart。 */
+function findFortificationTarget(
+  snapshot: RoomSnapshot,
+): StructureWall | StructureRampart | undefined {
+  const targetHits = getWallTargetHits(snapshot.rcl);
+  let best: StructureWall | StructureRampart | undefined;
+  let bestHits = Infinity;
+  for (const wall of snapshot.walls) {
+    if (wall.hits < targetHits && wall.hits < bestHits) {
+      bestHits = wall.hits;
+      best = wall;
+    }
+  }
+  for (const rampart of snapshot.ramparts) {
+    if (rampart.hits < targetHits && rampart.hits < bestHits) {
+      bestHits = rampart.hits;
+      best = rampart;
+    }
+  }
+  return best;
 }
 
 // ─── Upgrade ────────────────────────────────────────────────

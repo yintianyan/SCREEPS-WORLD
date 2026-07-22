@@ -81,6 +81,28 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
       if (migrated) markLayoutDirty();
     },
   },
+  {
+    from: 4,
+    to: 5,
+    run: () => {
+      // v5：建档 CreepMemory.recycle? 与 RoomMemory.intel?（B1 回收通道 / C2 邻居情报）。
+      // 两者均为可选字段，无需回填；此处仅做畸形数据自愈（幂等）。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName];
+        if (!room) continue;
+        if (room.intel !== undefined && typeof room.intel !== "object") {
+          delete room.intel;
+        }
+      }
+      for (const name in Memory.creeps) {
+        const creep = Memory.creeps[name];
+        if (!creep) continue;
+        if (creep.recycle !== undefined && typeof creep.recycle !== "boolean") {
+          delete creep.recycle;
+        }
+      }
+    },
+  },
 ];
 
 /**

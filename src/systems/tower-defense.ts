@@ -2,6 +2,7 @@ import { CONFIG, getWallTargetHits } from "../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import { findCriticalRepair } from "../creeps/helpers";
 import { selectTowerTarget, type TowerThreat } from "../domain/defense/tower-target";
+import { globalCache } from "../kernel/global-cache";
 
 /**
  * Tower 防御系统 — P0 系统，负责所有 Tower 操作和安全模式。
@@ -53,6 +54,13 @@ export const towerDefenseSystem: System = {
       }
 
       // 无敌人 — 维修逻辑。
+      // A3/B3：维修权移交 creep —— 塔修 1 次 10 能量且有距离衰减，creep 修是
+      // 1 energy/100 hits/WORK。本房存在 builder/worker 时塔只保留开火职责，
+      // 省下的能量是真实的防御弹药；无维修 creep 时保留塔修作为灾后安全网。
+      if (hasRepairCreep(snapshot.roomName)) {
+        continue;
+      }
+
       // G-DF-08：wall/rampart 目标血量按 RCL 分级。
       const wallTarget = getWallTargetHits(snapshot.rcl);
       // 预选 wall/rampart 维护目标（所有 tower 共用，避免重复查找）。
@@ -87,6 +95,28 @@ export const towerDefenseSystem: System = {
     }
   },
 };
+
+/**
+ * 本房是否存在可承担维修的 creep（builder 或 worker）。
+ * A3：存在时塔让出全部非战斗维修，只保留开火职责。
+ * 每 tick 全局最多遍历一次 Game.creeps（globalCache 缓存），
+ * 不破坏「Kernel 单次遍历」的扫描纪律。
+ */
+function hasRepairCreep(roomName: string): boolean {
+  const g = globalCache() as any;
+  if (g.__repairCreepTick !== Game.time || !g.__repairCreep) {
+    const map: Record<string, boolean> = {};
+    for (const creep of Object.values(Game.creeps)) {
+      const role = creep.memory.role;
+      if (role === "builder" || role === "worker") {
+        map[creep.memory.home ?? creep.room.name] = true;
+      }
+    }
+    g.__repairCreep = map;
+    g.__repairCreepTick = Game.time;
+  }
+  return (g.__repairCreep as Record<string, boolean>)[roomName] === true;
+}
 
 /**
  * 为全塔集火选择目标（P1-3）。

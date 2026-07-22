@@ -279,6 +279,38 @@ export function createControllerLinkTask(
   };
 }
 
+/**
+ * 为 mineral 生成 extractor 任务（RCL6+）。
+ *
+ * extractor 必须建在 mineral 矿位上——矿位本身就是合法建造点，
+ * 因此不走 validateBuildCell 的 occupied 检查（矿会被误判为占用）。
+ * 补齐「extractor → harvestMineral → hauler 运回」产业链的第一环。
+ */
+export function createExtractorTask(
+  snapshot: RoomSnapshot,
+): BuildTaskCandidate | undefined {
+  if (snapshot.rcl < 6) return undefined;
+  const mineral = snapshot.minerals[0];
+  if (!mineral) return undefined;
+
+  // 已有 extractor 或 extractor site 则不再生成（每房上限 1）。
+  const maxExtractors = CONTROLLER_STRUCTURES[STRUCTURE_EXTRACTOR]?.[snapshot.rcl] ?? 0;
+  const existingExtractors = snapshot.extractor !== undefined ? 1 : 0;
+  const extractorSites = snapshot.constructionSites.filter(
+    s => s.structureType === STRUCTURE_EXTRACTOR,
+  ).length;
+  if (existingExtractors + extractorSites >= maxExtractors) return undefined;
+
+  return {
+    key: `industry.extractor.${mineral.id}`,
+    pos: { x: mineral.pos.x, y: mineral.pos.y, roomName: snapshot.roomName },
+    structureType: STRUCTURE_EXTRACTOR,
+    priority: 3,
+    phase: "rcl6",
+    validation: "ok",
+  };
+}
+
 /** 检查指定位置附近 1 格内是否已有某类型结构（直接遍历，零数组分配）。 */
 function hasAdjacentStructure(
   cx: number,
