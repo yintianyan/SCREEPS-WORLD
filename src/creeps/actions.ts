@@ -68,6 +68,34 @@ export function harvestMineral(): ActionCandidate {
   };
 }
 
+// ─── Pickup ────────────────────────────────────────────────
+
+/**
+ * 拾取地上掉落的能量。
+ *
+ * 掉落能量来源：creep 死亡掉落、harvester 溢出、container 被摧毁残留等。
+ * 掉落能量会随时间衰减（每 tick 减少一定量），因此应尽快拾取。
+ * predicate 仅检查快照中是否存在掉落能量；execute 中取最近的执行 pickup。
+ */
+export function pickupDroppedEnergy(): ActionCandidate {
+  return {
+    name: "pickup:dropped-energy",
+    predicate: (ac) => ac.snapshot.droppedEnergy.length > 0,
+    execute: (ac) => {
+      const dropped = ac.creep.pos.findClosestByRange(
+        [...ac.snapshot.droppedEnergy],
+      );
+      if (!dropped) return;
+      // findClosestByRange 传入 Resource[] 时返回 Resource | null，但 TS 推断为联合类型。
+      const resource = dropped as Resource;
+      const result = actOrMove(ac.creep, resource, () => ac.creep.pickup(resource));
+      if (result === ERR_FULL) {
+        ac.creep.memory.mode = "work";
+      }
+    },
+  };
+}
+
 // ─── Withdraw ───────────────────────────────────────────────
 
 /** 从最满 container 取能。 */

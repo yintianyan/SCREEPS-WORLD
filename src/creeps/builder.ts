@@ -13,6 +13,7 @@ import type { ActionCandidate, ActionContext, RolePolicy } from "./action-types"
 import {
   fillTarget,
   harvestSource,
+  pickupDroppedEnergy,
   repairContainerDecay,
   repairCritical,
   upgradeControllerGated,
@@ -104,6 +105,8 @@ const policy: RolePolicy = {
   acquire: [
     // 优先取最近有能量的 container（含 source container — 主能量池）。
     withdrawClosestContainer(),
+    // 拾取地上掉落能量（衰减资源，优先于采集）。
+    pickupDroppedEnergy(),
     // 兜底：所有 container 无能量时直接采集。
     harvestSource(),
   ],

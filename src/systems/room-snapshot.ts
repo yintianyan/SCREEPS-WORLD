@@ -44,6 +44,11 @@ export function buildRoomSnapshot(
   const mySites = room.find(FIND_MY_CONSTRUCTION_SITES);
   const hostileCreeps = room.find(FIND_HOSTILE_CREEPS);
 
+  // 掉落资源：采集地上散落的能量（creep 死亡掉落、harvester 溢出等）。
+  const droppedEnergy = room.find(FIND_DROPPED_RESOURCES).filter(
+    r => r.resourceType === RESOURCE_ENERGY,
+  );
+
   // 探测 controller 旁 1 格内的 container — upgrader 站桩升级的能量来源。
   let controllerContainer: StructureContainer | undefined;
   if (room.controller) {
@@ -103,6 +108,7 @@ export function buildRoomSnapshot(
     labs,
     terminal,
     extractor,
+    droppedEnergy,
   };
 }
 

@@ -13,6 +13,7 @@ import {
   fillStorage,
   haulFillTarget,
   haulMineralsToStorage,
+  pickupDroppedEnergy,
   supplyLabs,
   upgradeController,
   withdrawCapped,
@@ -65,6 +66,8 @@ function withdrawStorageCapped(): ActionCandidate {
 
 const policy: RolePolicy = {
   acquire: [
+    // 0. 拾取地上掉落能量 — 衰减资源，最高优先回收。
+    pickupDroppedEnergy(),
     // 优先使用 assignment 指定的 container。
     withdrawAssignmentContainer(),
     // 回退到最满 container。

@@ -70,6 +70,7 @@ sources: [],
     labs: [],
     terminal: undefined,
     extractor: undefined,
+    droppedEnergy: [],
     ...overrides,
   };
 }

@@ -52,6 +52,7 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
     labs: [],
     terminal: undefined,
     extractor: undefined,
+    droppedEnergy: [],
     ...overrides,
   };
 }

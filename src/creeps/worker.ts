@@ -12,6 +12,7 @@ import type { ActionCandidate, RolePolicy } from "./action-types";
 import {
   fillTarget,
   harvestSource,
+  pickupDroppedEnergy,
   upgradeController,
 } from "./actions";
 import { moveToTarget } from "./movement";
@@ -64,6 +65,8 @@ const policy: RolePolicy = {
   acquire: [
     // 优先使用 assignment 指定的 source。
     harvestAssignmentSource(),
+    // 拾取地上掉落能量（衰减资源，优先于采集）。
+    pickupDroppedEnergy(),
     // 回退到 getSource（含拥挤迁移）。
     harvestSource(),
   ],

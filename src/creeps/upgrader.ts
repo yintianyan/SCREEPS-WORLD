@@ -13,6 +13,7 @@ import type { Priority } from "../kernel/contracts";
 import type { ActionContext, RolePolicy } from "./action-types";
 import {
   harvestSource,
+  pickupDroppedEnergy,
   upgradeController,
   withdrawControllerContainer,
   withdrawControllerLink,
@@ -60,7 +61,9 @@ const policy: RolePolicy = {
     withdrawStorage(),
     // 4. 最满 container（含 source container — 主能量池）。
     withdrawRichestContainer(),
-    // 5. 兜底：所有 container 无能量时直接采集。
+    // 5. 拾取地上掉落能量（衰减资源，优先于采集）。
+    pickupDroppedEnergy(),
+    // 6. 兜底：所有 container 无能量时直接采集。
     harvestSource(),
   ],
 

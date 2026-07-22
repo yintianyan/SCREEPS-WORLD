@@ -156,6 +156,7 @@ export function mockCreep(opts: MockCreepOpts = {}): any {
     harvest: vi.fn(() => 0),
     transfer: vi.fn(() => 0),
     withdraw: vi.fn(() => 0),
+    pickup: vi.fn(() => 0),
     build: vi.fn(() => 0),
     upgradeController: vi.fn(() => 0),
     repair: vi.fn(() => 0),
@@ -234,6 +235,7 @@ export function mockSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapsho
     labs: [],
     terminal: undefined,
     extractor: undefined,
+    droppedEnergy: [],
     ...overrides,
   };
 }
