@@ -90,6 +90,9 @@ export const CONFIG = {
   },
 
   layout: {
+    /** 布局模式：template = 固定模板（compact-core-v2），constraint = 约束推导放置。
+     * Phase 4 默认 template（现有行为不变）；设为 constraint 启用新算法。 */
+    mode: "template" as "template" | "constraint",
     /** 布局规划器的运行间隔（tick）。 */
     planInterval: 50,
     road: {

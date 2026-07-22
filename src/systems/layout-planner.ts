@@ -192,60 +192,76 @@ export const layoutPlannerSystem: System & {
     const existingKeys = new Set<string>();
     for (const t of queue) existingKeys.add(t.key);
 
-    // 1. 核心模板任务（应用 segment 中的重定位 overrides：墙/占用导致搬家的 cell
-    // 直接使用替代坐标，不必每周期重新搜索）。
-    const segData = getRoomLayoutData(snapshot.roomName);
-    const overrides = new Map<string, number>(Object.entries(segData.overrides ?? {}));
-    const coreCandidates = blueprintToTasks(
-      COMPACT_CORE_V2,
-      anchor.x,
-      anchor.y,
-      snapshot.roomName,
-      room,
-      snapshot,
-      snapshot.rcl,
-      validationOptions,
-      overrides,
-    );
+    // 1. 核心结构任务 — 按 CONFIG.layout.mode 分支。
+    if (CONFIG.layout.mode === "constraint") {
+      // ── 约束推导模式：从地形约束推导结构位置 ──
+      const terrain = room.getTerrain();
+      const getTerrain = (x: number, y: number): boolean => terrain.get(x, y) === TERRAIN_MASK_WALL;
+      const field = computeDistanceField(getTerrain);
+      const placements = placeStructures(anchor, field, getTerrain, snapshot.rcl, occupiedSet);
+      const constraintCandidates = placementsToCandidates(placements, snapshot.roomName);
 
-    // 禁止落子集合：全部蓝图 cell 绝对坐标 + 队列任务坐标，
-    // 防止重定位把两个 cell 搬到同一格。
-    const forbidden = new Set<number>();
-    for (const cell of COMPACT_CORE_V2.cells) {
-      forbidden.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
-    }
-    for (const t of queue) {
-      forbidden.add(packPos(t.pos.x, t.pos.y));
-    }
-    const cellByKey = new Map(COMPACT_CORE_V2.cells.map(c => [c.key, c]));
-    // 可重定位的永久失败（墙/占用/密封；rcl/dependency/site-limit 是瞬态，不搬家）。
-    const RELOCATABLE_FAILURES: ReadonlySet<string> = new Set(["terrain", "occupied", "seal"]);
-
-    for (const candidate of coreCandidates) {
-      if (candidate.validation !== "ok") {
-        // fallback relocation：extension 可搬到同 parity 的邻近格。
-        if (RELOCATABLE_FAILURES.has(candidate.validation) && !existingKeys.has(candidate.key)) {
-          const cell = cellByKey.get(candidate.key);
-          const relocated = cell
-            ? relocateCandidate(candidate, cell, room, snapshot, validationOptions, forbidden)
-            : undefined;
-          if (relocated) {
-            queue.push(candidateToBuildTask(relocated));
-            existingKeys.add(relocated.key);
-            forbidden.add(packPos(relocated.pos.x, relocated.pos.y));
-            // 持久化替代位置到 segment，后续周期直接复用。
-            segData.overrides ??= {};
-            segData.overrides[relocated.key] = packPos(relocated.pos.x, relocated.pos.y);
-            markLayoutDirty();
-            tasksAdded = true;
-          }
-        }
-        continue;
+      for (const candidate of constraintCandidates) {
+        if (existingKeys.has(candidate.key)) continue;
+        queue.push(candidateToBuildTask(candidate));
+        existingKeys.add(candidate.key);
+        tasksAdded = true;
       }
-      if (existingKeys.has(candidate.key)) continue;
-      queue.push(candidateToBuildTask(candidate));
-      existingKeys.add(candidate.key);
-      tasksAdded = true;
+    } else {
+      // ── 模板模式（默认）：固定蓝图偏移 + relocation ──
+      const segData = getRoomLayoutData(snapshot.roomName);
+      const overrides = new Map<string, number>(Object.entries(segData.overrides ?? {}));
+      const coreCandidates = blueprintToTasks(
+        COMPACT_CORE_V2,
+        anchor.x,
+        anchor.y,
+        snapshot.roomName,
+        room,
+        snapshot,
+        snapshot.rcl,
+        validationOptions,
+        overrides,
+      );
+
+      // 禁止落子集合：全部蓝图 cell 绝对坐标 + 队列任务坐标，
+      // 防止重定位把两个 cell 搬到同一格。
+      const forbidden = new Set<number>();
+      for (const cell of COMPACT_CORE_V2.cells) {
+        forbidden.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
+      }
+      for (const t of queue) {
+        forbidden.add(packPos(t.pos.x, t.pos.y));
+      }
+      const cellByKey = new Map(COMPACT_CORE_V2.cells.map(c => [c.key, c]));
+      // 可重定位的永久失败（墙/占用/密封；rcl/dependency/site-limit 是瞬态，不搬家）。
+      const RELOCATABLE_FAILURES: ReadonlySet<string> = new Set(["terrain", "occupied", "seal"]);
+
+      for (const candidate of coreCandidates) {
+        if (candidate.validation !== "ok") {
+          // fallback relocation：extension 可搬到同 parity 的邻近格。
+          if (RELOCATABLE_FAILURES.has(candidate.validation) && !existingKeys.has(candidate.key)) {
+            const cell = cellByKey.get(candidate.key);
+            const relocated = cell
+              ? relocateCandidate(candidate, cell, room, snapshot, validationOptions, forbidden)
+              : undefined;
+            if (relocated) {
+              queue.push(candidateToBuildTask(relocated));
+              existingKeys.add(relocated.key);
+              forbidden.add(packPos(relocated.pos.x, relocated.pos.y));
+              // 持久化替代位置到 segment，后续周期直接复用。
+              segData.overrides ??= {};
+              segData.overrides[relocated.key] = packPos(relocated.pos.x, relocated.pos.y);
+              markLayoutDirty();
+              tasksAdded = true;
+            }
+          }
+          continue;
+        }
+        if (existingKeys.has(candidate.key)) continue;
+        queue.push(candidateToBuildTask(candidate));
+        existingKeys.add(candidate.key);
+        tasksAdded = true;
+      }
     }
 
     // 2. Source container 任务。
