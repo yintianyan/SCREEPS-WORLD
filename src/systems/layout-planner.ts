@@ -22,6 +22,9 @@ import {
 import { planRoads, rotateTraffic } from "../domain/layout/road-planner";
 import { evaluateCandidate, scoreCandidate } from "../domain/layout/candidate-score";
 import { packPos, unpackPos } from "../domain/layout/types";
+import { computeDistanceField } from "../domain/layout/terrain-analysis";
+import { diagnoseAnchor } from "../domain/layout/anchor-selection";
+import { placeStructures, placementsToCandidates } from "../domain/layout/constraint-placer";
 
 /**
  * 布局规划器 — P3 低频系统，负责生成和维护建造计划。
@@ -101,6 +104,35 @@ export const layoutPlannerSystem: System & {
       const candidateInput = evaluateCandidate(room, COMPACT_CORE_V2, spawn.pos.x, spawn.pos.y);
       if (candidateInput) {
         layout.anchorScore = scoreCandidate(candidateInput);
+      }
+
+      // Phase 3 诊断：Distance Transform 锚点质量评估（不改变运行时行为）。
+      // 计算地形开放度，评估当前 spawn 位置在所有候选中的排名。
+      // 结果仅输出日志，供人工判断锚点质量；Phase 4 才启用约束推导放置。
+      {
+        const terrain = room.getTerrain();
+        const getTerrain = (x: number, y: number): boolean => terrain.get(x, y) === TERRAIN_MASK_WALL;
+        const field = computeDistanceField(getTerrain);
+        const exits = room.find(FIND_EXIT).map(p => ({ x: p.x, y: p.y }));
+        const sources = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
+        const controller = snapshot.controller
+          ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
+          : undefined;
+        const mineral = snapshot.minerals[0]
+          ? { x: snapshot.minerals[0].pos.x, y: snapshot.minerals[0].pos.y }
+          : undefined;
+
+        const diagnosis = diagnoseAnchor(spawn.pos.x, spawn.pos.y, {
+          field, sources, controller, exits, mineral, getTerrain,
+        });
+        console.log(
+          `[layout] anchor diagnosis ${snapshot.roomName}: ` +
+          `rank ${diagnosis.rank}/${diagnosis.total}, ` +
+          `score ${diagnosis.candidate.score.toFixed(1)}, ` +
+          `openness ${diagnosis.candidate.openness}, ` +
+          `blocked ${diagnosis.candidate.blockedCells}, ` +
+          `srcDist ${diagnosis.candidate.avgSourceDist.toFixed(1)}`,
+        );
       }
     } else if (layout.anchor !== anchorPacked) {
       layout.anchor = anchorPacked;
