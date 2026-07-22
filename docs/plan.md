@@ -203,7 +203,7 @@ interface RootMemory {
 5. 死亡 creep Memory 小帝国可每 tick 清；规模变大后按 cursor 每 10 tick 清理。
 6. 每次版本升级必须有空 Memory、旧版本、重复执行和中断恢复的 Vitest 用例。
 
-当前版本：v5（CreepMemory.recycle? 回收标记 + RoomMemory.intel? 邻居情报，均为可选字段、畸形自愈）。
+当前版本：v6（核心模板 compact-core-v1 → v2 偶校验棋盘格；v5 = CreepMemory.recycle? + RoomMemory.intel?）。
 
 ## 4. 插件注册规范
 
@@ -360,7 +360,7 @@ src/
   domain/layout/
     types.ts                  # Blueprint、LayoutState、BuildTask、packing
     templates/
-      compact-core-v1.ts      # 与锚点相对的静态核心
+      compact-core-v2.ts      # 与锚点相对的静态核心
     candidate-score.ts        # 新房锚点评分，纯函数
     validation.ts             # 地形/RCL/占位/依赖校验，纯函数
     task-factory.ts           # 蓝图单元转 BuildTask
@@ -393,7 +393,7 @@ interface BlueprintCell {
 }
 
 interface Blueprint {
-  id: string;                          // 例：compact-core-v1
+  id: string;                          // 例：compact-core-v2
   anchorKind: "primary-spawn" | "planned-spawn";
   cells: readonly BlueprintCell[];
 }
@@ -446,9 +446,9 @@ layout-planner 是 P3 工作；只有 Green 或 Guarded 且房间不处于 BOOTS
 
 现有 spawn 房的算法：
 
-1. 以主 spawn 作为 anchor，加载 compact-core-v1。
+1. 以主 spawn 作为 anchor，加载 compact-core-v2（偶校验棋盘格：结构只落在 dx+dy 偶数格，奇数格永远留作走道，几何上不可能形成密封）。
 2. 将每个相对单元转为绝对坐标，过滤越界、墙、source、controller、mineral 和不可兼容建筑。
-3. 对于可小范围移动的 extension、road、container，按预定义 fallback offset 列表寻找第一个合法格；不可移动的核心单元直接标记 blocked。
+3. 对于可移动结构（extension），墙/占用/密封失败时按同 parity（偶校验）的 Chebyshev-2 fallback offset 列表寻找第一个通过完整验证（含密封守卫）的替代格，替代坐标持久化到 segment overrides，后续周期直接复用；不可移动的核心单元（spawn/storage/tower/link）直接标记 blocked。
 4. 为 source 和 controller 生成外圈任务：container 坐标优先选相邻 walkable 格，且路线成本、现有道路和安全性评分更好。
 5. 只把当前 RCL 和 phase 允许的任务送入 BuildQueue，其余留在蓝图中等待。
 
@@ -475,12 +475,15 @@ function validateBuildCell(
   cell: BlueprintCell,
   pos: RoomPosition,
   snapshot: RoomSnapshot,
-): "ok" | "rcl" | "terrain" | "occupied" | "site-limit" | "dependency" {
+): "ok" | "rcl" | "terrain" | "occupied" | "site-limit" | "dependency" | "seal" {
   // 1. 使用 CONTROLLER_STRUCTURES 检查当前 RCL 可建数量
   // 2. room.getTerrain 检查墙和边界
   // 3. 使用 snapshot 检查 source/controller/mineral 与已有结构/site
-  // 4. 检查 BuildTask 的前置 key 是否为 done
-  // 5. 检查 per-room / global 活跃 site 上限
+  // 4. 密封守卫（v1 实心块教训）：障碍结构出生即密封、或夺走邻居最后一个
+  //    可站格时返回 "seal"（permanent → blocked）。transfer/spawnCreep 射程为 1，
+  //    每个障碍结构必须保留 ≥1 个相邻可站格。
+  // 5. 检查 BuildTask 的前置 key 是否为 done
+  // 6. 检查 per-room / global 活跃 site 上限
   return "ok";
 }
 ~~~
@@ -541,7 +544,7 @@ return fallbackBuilder(creep, ctx); // 填 spawn/extension -> critical repair ->
 
 | 步骤 | 前置 | 实施内容 | 验收 |
 | --- | --- | --- | --- |
-| L1 类型与模板 | M2 | 新增 layout 类型、compact-core-v1、坐标 packing、静态校验 | 纯函数测试覆盖越界、冲突、RCL 和依赖 |
+| L1 类型与模板 | M2 | 新增 layout 类型、compact-core-v2、坐标 packing、静态校验 | 纯函数测试覆盖越界、冲突、RCL 和依赖 |
 | L2 快照与验证器 | L1 | RoomSnapshot 中加入 terrain、结构、site 索引；实现 validateBuildCell | 同一格不会被重复入队或重复建 site |
 | L3 队列执行器 | L2、Spawn Manager | BuildTask 状态机、退避、site 限流、发展门禁 | P0 缺口时不创建普通 site；错误不刷屏 |
 | L4 builder 接入 | L3、assignment-service | builder lease、建造回退、低 CPU 释放任务 | 空队列 builder 正确填能/待命 |

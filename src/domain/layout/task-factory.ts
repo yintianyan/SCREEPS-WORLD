@@ -1,7 +1,7 @@
 import type { Blueprint, BlueprintCell, BuildPriority, LayoutPhase, ValidationResult } from "./types";
-import { absPos, packPos } from "./types";
+import { absPos, packPos, unpackPos } from "./types";
 import type { RoomSnapshot } from "../../kernel/contracts";
-import { validateBuildCell, type ValidationOptions } from "./validation";
+import { validateBuildCell, wouldSeal, type ValidationOptions } from "./validation";
 
 /** 蓝图单元转任务候选 — 包含验证结果。 */
 export interface BuildTaskCandidate {
@@ -45,6 +45,10 @@ export function phaseAllowed(phase: LayoutPhase, rcl: number): boolean {
  *
  * 只生成当前 RCL 允许的 phase 的任务；
  * 越界或验证失败的候选仍返回（带失败原因），供调试和 blocked 记录。
+ *
+ * overrides：cell.key → packed 替代位置（重定位持久化，存 segment）。
+ * 命中时直接使用替代坐标而非蓝图偏移 —— 墙/占用导致 cell 搬家后，
+ * 后续规划周期不必重新搜索。
  */
 export function blueprintToTasks(
   blueprint: Blueprint,
@@ -55,6 +59,7 @@ export function blueprintToTasks(
   snapshot: RoomSnapshot,
   rcl: number,
   options: ValidationOptions,
+  overrides?: ReadonlyMap<string, number>,
 ): BuildTaskCandidate[] {
   const candidates: BuildTaskCandidate[] = [];
 
@@ -62,7 +67,10 @@ export function blueprintToTasks(
     // 只处理当前 RCL 允许的 phase。
     if (!phaseAllowed(cell.phase, rcl)) continue;
 
-    const pos = absPos(anchorX, anchorY, cell, roomName);
+    const override = overrides?.get(cell.key);
+    const pos = override !== undefined
+      ? { ...unpackPos(override), roomName }
+      : absPos(anchorX, anchorY, cell, roomName);
     const validation = validateBuildCell(room, cell, pos, snapshot, options);
 
     candidates.push({
@@ -79,9 +87,55 @@ export function blueprintToTasks(
   return candidates;
 }
 
+/** 可重定位的结构类型 — 核心锚定结构（spawn/storage/tower/link）不可搬家。 */
+export const RELOCATABLE_TYPES: ReadonlySet<string> = new Set(["extension"]);
+
+/**
+ * 重定位候选偏移 — 全部为偶校验（dx+dy 偶数），保持 v2 棋盘格不变量：
+ * 新位置的 4 个正交邻居仍是奇校验走道格，密封安全由几何保证。
+ */
+const RELOCATE_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+  [2, 0], [-2, 0], [0, 2], [0, -2],
+  [2, 2], [-2, 2], [2, -2], [-2, -2],
+];
+
+/**
+ * 为验证失败的可移动 cell 寻找替代位置（fallback relocation）。
+ *
+ * 适用：cell 落在墙/占用/密封格。依次尝试同 parity 的 Chebyshev-2 邻居，
+ * 第一个通过完整验证（含密封守卫）且不与蓝图/队列位置冲突的位置胜出。
+ *
+ * forbidden：禁止落子的 packed 位置（全部蓝图 cell 绝对坐标 + 队列任务坐标），
+ * 防止两个 cell 被重定位到同一格。
+ *
+ * 返回新候选（key 不变、pos 更新），找不到返回 undefined。
+ */
+export function relocateCandidate(
+  candidate: BuildTaskCandidate,
+  cell: BlueprintCell,
+  room: Room,
+  snapshot: RoomSnapshot,
+  options: ValidationOptions,
+  forbidden: ReadonlySet<number>,
+): BuildTaskCandidate | undefined {
+  if (!RELOCATABLE_TYPES.has(candidate.structureType)) return undefined;
+
+  for (const [dx, dy] of RELOCATE_OFFSETS) {
+    const x = candidate.pos.x + dx;
+    const y = candidate.pos.y + dy;
+    if (forbidden.has(packPos(x, y))) continue;
+    const pos = { x, y, roomName: candidate.pos.roomName };
+    const validation = validateBuildCell(room, cell, pos, snapshot, options);
+    if (validation === "ok") {
+      return { ...candidate, pos, validation };
+    }
+  }
+  return undefined;
+}
+
 /**
  * 从候选列表中筛选可立即入队的安全任务。
- * 过滤掉 terrain/occupied 等永久失败的任务。
+ * 过滤掉 terrain/occupied/seal 等永久失败的任务。
  */
 export function filterValidCandidates(
   candidates: readonly BuildTaskCandidate[],
@@ -91,11 +145,12 @@ export function filterValidCandidates(
 
 /**
  * 从候选列表中提取永久失败的任务（用于 blocked 记录）。
+ * seal（建筑孤岛）属永久失败：除非邻居结构消失，否则永不放行。
  */
 export function extractBlockedCandidates(
   candidates: readonly BuildTaskCandidate[],
 ): BuildTaskCandidate[] {
-  return candidates.filter(c => c.validation === "terrain" || c.validation === "occupied");
+  return candidates.filter(c => c.validation === "terrain" || c.validation === "occupied" || c.validation === "seal");
 }
 
 /**
@@ -229,6 +284,10 @@ export function createSourceLinkTasks(
   for (const source of snapshot.sources) {
     if (hasAdjacentStructure(source.pos.x, source.pos.y, snapshot, STRUCTURE_LINK)) continue;
     const adjacentPos = findAdjacentBuildable(source.pos, room, snapshot, options);
+    // 密封守卫：link 是障碍结构，出生即密封或封死邻居的位置不放。
+    if (adjacentPos && options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
+      continue;
+    }
     if (adjacentPos) {
       candidates.push({
         key: `logistics.link.source.${source.id}`,
@@ -268,6 +327,10 @@ export function createControllerLinkTask(
 
   const adjacentPos = findAdjacentBuildable(controller.pos, room, snapshot, options);
   if (!adjacentPos) return undefined;
+  // 密封守卫：link 是障碍结构。
+  if (options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
+    return undefined;
+  }
 
   return {
     key: `logistics.link.controller`,
@@ -433,22 +496,30 @@ function buildOccupiedSet(
 export interface DefenseOptions {
   /** 开始建造防御工事的最低 RCL（早期靠 tower 裸防即可）。 */
   minRcl: number;
-  /** 防御盾半径 — 核心向外第几格放置 rampart。 */
+  /** 防御线半径 — 核心向外第几格放置 rampart 线（越大 = 敌人越早被拦截）。 */
   defenseRadius: number;
-  /** 单次规划最多生成的 rampart 数（分段铺设，不拖慢 RCL 冲刺）。 */
-  maxRampartsPerCycle: number;
+  /** 每条防御线的 rampart 数量（垂直于出口方向排列）。 */
+  lineLength: number;
+  /** 单次规划最多生成的防御线数（每线 lineLength 个 rampart）。 */
+  maxLinesPerCycle: number;
 }
 
 export const DEFAULT_DEFENSE_OPTIONS: DefenseOptions = {
   minRcl: 4,
-  defenseRadius: 5,
-  maxRampartsPerCycle: 2,
+  defenseRadius: 7,
+  lineLength: 3,
+  maxLinesPerCycle: 1,
 };
 
 /** 8 方向单位向量（对应 atan2 的 8 个 45° 扇区，0 = 东，顺时针）。 */
 const OCTANT_VECTORS: ReadonlyArray<readonly [number, number]> = [
   [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1],
 ];
+
+/** 垂直方向（逆时针旋转 90°）：(dx,dy) → (-dy,dx)。 */
+function perpendicular(vec: readonly [number, number]): readonly [number, number] {
+  return [-vec[1], vec[0]];
+}
 
 /** 将 (dx, dy) 方向归一到 8 扇区索引。 */
 function octantIndex(dx: number, dy: number): number {
@@ -458,13 +529,18 @@ function octantIndex(dx: number, dy: number): number {
 }
 
 /**
- * 为房间生成防御工事任务（rampart 核心盾）。
+ * 为房间生成防御工事任务（出口走廊封堵线）。
  *
- * 老玩家认知：静态蓝图无法预知出口方向，防御必须动态生成。
- * 策略：把房间出口按相对核心的方位归入 8 个扇区，对暴露扇区（出口最多的优先）
- * 在 核心 + 方向 × defenseRadius 处放 rampart，吸附到最近可建造空格。
- * 这不是密封墙（那是后期 bunker 的事），而是早期方向性盾牌——
- * 迫使入侵者绕路，为 tower 争取输出时间，RCL4 有 storage 后开始部署。
+ * 老玩家认知：单个 rampart 不挡路，敌人直接绕过去。
+ * 有意义的防御 = 垂直于出口方向的连续 rampart 线（3-5 个），
+ * 迫使入侵者必须摧毁或绕路，为 tower 争取 5-10 tick 输出窗口。
+ *
+ * 策略：
+ *   1. 把出口按相对核心的方位归入 8 个扇区
+ *   2. 对暴露扇区（出口最多的优先），在 核心 + 方向 × radius 处
+ *      沿垂直方向铺设 lineLength 个 rampart
+ *   3. 每个 rampart 吸附到最近可建造空格（避免落在墙上）
+ *   4. 每周期最多生成 maxLinesPerCycle 条线（不拖慢 RCL 冲刺）
  *
  * 纯函数 — 出口位置由调用方通过 room.find(FIND_EXIT) 采集后传入。
  */
@@ -499,10 +575,10 @@ export function createDefenseTasks(
   }
   if (exitCountByOctant.size === 0) return candidates;
 
-  // 暴露扇区按出口数量降序，取前 N 个。
+  // 暴露扇区按出口数量降序，取前 N 条线。
   const exposedOctants = [...exitCountByOctant.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, config.maxRampartsPerCycle)
+    .slice(0, config.maxLinesPerCycle)
     .map(([octant]) => octant);
 
   const terrain = room.getTerrain();
@@ -510,20 +586,33 @@ export function createDefenseTasks(
 
   for (const octant of exposedOctants) {
     const vec = OCTANT_VECTORS[octant]!;
-    const idealX = core.pos.x + vec[0] * config.defenseRadius;
-    const idealY = core.pos.y + vec[1] * config.defenseRadius;
+    const perp = perpendicular(vec);
 
-    const pos = findBuildableNear(idealX, idealY, terrain, occupiedSet);
-    if (!pos) continue;
+    // 线的中心点：核心 + 出口方向 × radius。
+    const centerX = core.pos.x + vec[0] * config.defenseRadius;
+    const centerY = core.pos.y + vec[1] * config.defenseRadius;
 
-    candidates.push({
-      key: `defense.rampart.${octant}`,
-      pos: { ...pos, roomName: snapshot.roomName },
-      structureType: STRUCTURE_RAMPART,
-      priority: 2,
-      phase: "rcl4",
-      validation: "ok",
-    });
+    // 沿垂直方向铺设 lineLength 个 rampart（居中分布）。
+    const halfLen = Math.floor(config.lineLength / 2);
+    for (let i = -halfLen; i <= halfLen; i++) {
+      const idealX = centerX + perp[0] * i;
+      const idealY = centerY + perp[1] * i;
+
+      const pos = findBuildableNear(idealX, idealY, terrain, occupiedSet);
+      if (!pos) continue;
+
+      // 标记为已占用，防止同线内重复落子。
+      occupiedSet.add(packPos(pos.x, pos.y));
+
+      candidates.push({
+        key: `defense.rampart.${octant}.${i + halfLen}`,
+        pos: { ...pos, roomName: snapshot.roomName },
+        structureType: STRUCTURE_RAMPART,
+        priority: 2,
+        phase: "rcl4",
+        validation: "ok",
+      });
+    }
   }
 
   return candidates;
@@ -546,7 +635,7 @@ function findBuildableNear(
     for (let dy = -2; dy <= 2; dy++) {
       const x = Math.round(idealX) + dx;
       const y = Math.round(idealY) + dy;
-      if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+      if (x < 1 || x > 48 || y > 48 || y < 1) continue;
       if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
       if (occupiedSet.has(packPos(x, y))) continue;
       const dist = (x - idealX) ** 2 + (y - idealY) ** 2;

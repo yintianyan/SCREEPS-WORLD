@@ -2,7 +2,7 @@
 
 > 适用范围：Screeps: World 官服 / 20 CPU 配额 / 单房至多房演进  
 > 与 `plan.md` §5（Creep 行为约束与紧急发展）和 `src/creeps/` 实现对齐  
-> 版本：v1 — 对应 `compact-core-v1` 模板和当前角色实现
+> 版本：v1 — 对应 `compact-core-v2` 模板和当前角色实现
 
 ---
 
@@ -246,7 +246,7 @@
 | 约束 ID | 约束内容 |
 |---------|---------|
 | R2-B-01 | 建造优先级：第一批 5 个 extension（`core.ext.01-05`）> source container > 道路 |
-| R2-B-02 | extension 使用 `compact-core-v1` 模板相对 spawn 的偏移位置 |
+| R2-B-02 | extension 使用 `compact-core-v2` 模板相对 spawn 的偏移位置 |
 | R2-B-03 | source container 由 `layout-planner` 动态生成位置（选相邻 walkable 格） |
 | R2-B-04 | 道路仅在交通热度超过 `minTraffic`（10）且连续两个采样窗口都超标时创建 |
 | R2-B-05 | 每房最多 2 个 normal site + 1 个 critical site；全局最多 5 个 active site |

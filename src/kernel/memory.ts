@@ -103,6 +103,30 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
       }
     },
   },
+  {
+    from: 5,
+    to: 6,
+    run: () => {
+      // v6：核心模板 compact-core-v1 → v2（偶校验棋盘格，修复全密封实心块）。
+      // v1 的 cell 坐标全部作废：清理 buildQueue 中未开工的 core.* 任务
+      // （site/done 的已建结构保留，不拆不改），版本号+1、revision+1 触发重规划。
+      // 幂等：仅当 templateId 仍为 v1 时执行，重复运行不再递增 revision。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName];
+        if (!room?.layout) continue;
+        if (room.layout.templateId === "compact-core-v2") continue;
+        room.layout.templateId = "compact-core-v2";
+        room.layout.version = 2;
+        room.layout.revision = (room.layout.revision ?? 0) + 1;
+        room.layout.nextPlanTick = 0;
+        if (Array.isArray(room.buildQueue)) {
+          room.buildQueue = room.buildQueue.filter(
+            t => !(t.key.startsWith("core.") && (t.state === "queued" || t.state === "blocked")),
+          );
+        }
+      }
+    },
+  },
 ];
 
 /**

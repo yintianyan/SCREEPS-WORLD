@@ -2,10 +2,11 @@ import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
 import { getRoomLayoutData, markLayoutDirty } from "../kernel/segment-store";
-import { COMPACT_CORE_V1 } from "../domain/layout/templates/compact-core-v1";
+import { COMPACT_CORE_V2 } from "../domain/layout/templates/compact-core-v2";
 import {
   blueprintToTasks,
   candidateToBuildTask,
+  relocateCandidate,
   createSourceContainerTasks,
   createControllerContainerTask,
   createSourceLinkTasks,
@@ -18,6 +19,7 @@ import {
   collectCompletedKeysFromStructures,
   precomputeStructureCounts,
   buildOccupiedPositionSet,
+  buildObstaclePositionSet,
 } from "../domain/layout/validation";
 import { evaluateRoadCandidates } from "../domain/layout/road-policy";
 import { planCorridorRoads } from "../domain/layout/corridor-roads";
@@ -70,8 +72,8 @@ export const layoutPlannerSystem: System & {
     // 初始化 LayoutMemory（热数据留 Memory，冷数据 overrides/blocked 在 segment）。
     if (!roomMem.layout) {
       roomMem.layout = {
-        version: 1,
-        templateId: COMPACT_CORE_V1.id,
+        version: 2,
+        templateId: COMPACT_CORE_V2.id,
         state: "accepted",
         revision: 0,
         nextPlanTick: ctx.tick,
@@ -99,7 +101,7 @@ export const layoutPlannerSystem: System & {
       layout.anchor = anchorPacked;
       // 接通 candidate-score：评估所选锚点质量并存储（诊断 + 未来多房间选址参考）。
       // 此前 evaluateCandidate/scoreCandidate 是死代码，现在在锚点确立时实际执行。
-      const candidateInput = evaluateCandidate(room, COMPACT_CORE_V1, spawn.pos.x, spawn.pos.y);
+      const candidateInput = evaluateCandidate(room, COMPACT_CORE_V2, spawn.pos.x, spawn.pos.y);
       if (candidateInput) {
         layout.anchorScore = scoreCandidate(candidateInput);
       }
@@ -131,7 +133,7 @@ export const layoutPlannerSystem: System & {
     // 合并队列状态和实际已建结构，避免 done 任务被清除后依赖检查失败。
     const completedKeys = collectCompletedKeys(queue);
     const anchor = unpackPos(layout.anchor);
-    for (const key of collectCompletedKeysFromStructures(COMPACT_CORE_V1, anchor.x, anchor.y, snapshot)) {
+    for (const key of collectCompletedKeysFromStructures(COMPACT_CORE_V2, anchor.x, anchor.y, snapshot)) {
       completedKeys.add(key);
     }
 
@@ -143,6 +145,8 @@ export const layoutPlannerSystem: System & {
     // 消除旧实现 O(cells × structures) 的重复扫描（50+ cells × 30+ structures）。
     const structureCounts = precomputeStructureCounts(snapshot);
     const occupiedSet = buildOccupiedPositionSet(snapshot, minerals);
+    // 障碍集合（仅不可通行结构/工地）— 密封守卫：拒绝制造建筑孤岛的建造。
+    const obstacleSet = buildObstaclePositionSet(snapshot);
 
     const globalSiteCount = countGlobalSites(ctx);
     const validationOptions = {
@@ -152,15 +156,19 @@ export const layoutPlannerSystem: System & {
       minerals,
       structureCounts,
       occupiedSet,
+      obstacleSet,
     };
 
     // 预构建队列 key 集合 — O(1) 去重，替代旧实现每候选 O(queue) 的 some() 扫描。
     const existingKeys = new Set<string>();
     for (const t of queue) existingKeys.add(t.key);
 
-    // 1. 核心模板任务。
+    // 1. 核心模板任务（应用 segment 中的重定位 overrides：墙/占用导致搬家的 cell
+    // 直接使用替代坐标，不必每周期重新搜索）。
+    const segData = getRoomLayoutData(snapshot.roomName);
+    const overrides = new Map<string, number>(Object.entries(segData.overrides ?? {}));
     const coreCandidates = blueprintToTasks(
-      COMPACT_CORE_V1,
+      COMPACT_CORE_V2,
       anchor.x,
       anchor.y,
       snapshot.roomName,
@@ -168,10 +176,43 @@ export const layoutPlannerSystem: System & {
       snapshot,
       snapshot.rcl,
       validationOptions,
+      overrides,
     );
 
+    // 禁止落子集合：全部蓝图 cell 绝对坐标 + 队列任务坐标，
+    // 防止重定位把两个 cell 搬到同一格。
+    const forbidden = new Set<number>();
+    for (const cell of COMPACT_CORE_V2.cells) {
+      forbidden.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
+    }
+    for (const t of queue) {
+      forbidden.add(packPos(t.pos.x, t.pos.y));
+    }
+    const cellByKey = new Map(COMPACT_CORE_V2.cells.map(c => [c.key, c]));
+    // 可重定位的永久失败（墙/占用/密封；rcl/dependency/site-limit 是瞬态，不搬家）。
+    const RELOCATABLE_FAILURES: ReadonlySet<string> = new Set(["terrain", "occupied", "seal"]);
+
     for (const candidate of coreCandidates) {
-      if (candidate.validation !== "ok") continue;
+      if (candidate.validation !== "ok") {
+        // fallback relocation：extension 可搬到同 parity 的邻近格。
+        if (RELOCATABLE_FAILURES.has(candidate.validation) && !existingKeys.has(candidate.key)) {
+          const cell = cellByKey.get(candidate.key);
+          const relocated = cell
+            ? relocateCandidate(candidate, cell, room, snapshot, validationOptions, forbidden)
+            : undefined;
+          if (relocated) {
+            queue.push(candidateToBuildTask(relocated));
+            existingKeys.add(relocated.key);
+            forbidden.add(packPos(relocated.pos.x, relocated.pos.y));
+            // 持久化替代位置到 segment，后续周期直接复用。
+            segData.overrides ??= {};
+            segData.overrides[relocated.key] = packPos(relocated.pos.x, relocated.pos.y);
+            markLayoutDirty();
+            tasksAdded = true;
+          }
+        }
+        continue;
+      }
       if (existingKeys.has(candidate.key)) continue;
       queue.push(candidateToBuildTask(candidate));
       existingKeys.add(candidate.key);
@@ -324,7 +365,7 @@ export const layoutPlannerSystem: System & {
         // 保护蓝图未来格 — 走廊路不得占用未来的 extension/结构位置，
         // 否则该格会被 validateBuildCell 判定 "occupied" 导致 extension 永久消失。
         const protectedPositions = new Set<number>();
-        for (const cell of COMPACT_CORE_V1.cells) {
+        for (const cell of COMPACT_CORE_V2.cells) {
           protectedPositions.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
         }
 
