@@ -188,6 +188,36 @@ export function findEmptiestContainer(
 }
 
 /**
+ * 选择下一个要拾取的掉落能量堆（考虑拾取范围与衰减）。
+ *
+ * 游戏机制：pickup 需相邻（range ≤ 1），每 tick 只能拾取一堆；掉落能量按
+ * ceil(amount/1000)/tick 衰减，堆越大衰减越快。因此在“装满前持续拾取”时：
+ *   - 若身边（range ≤ 1）有可拾取的堆，优先拾取能量最多的一堆
+ *     （先拿大堆，减少剩余堆的衰减损耗）。
+ *   - 否则走向最近的一堆去拾取。
+ * “未装满则继续拾取”的跨 tick 循环由 FSM（updateMode：free>0 时保持 acquire）保证。
+ */
+export function selectDroppedEnergy(
+  creep: Creep,
+  dropped: readonly Resource[],
+): Resource | undefined {
+  if (dropped.length === 0) return undefined;
+
+  // 优先拾取身边（range ≤ 1）能量最多的一堆。
+  let richestAdjacent: Resource | undefined;
+  for (const r of dropped) {
+    if (creep.pos.getRangeTo(r) > 1) continue;
+    if (!richestAdjacent || r.amount > richestAdjacent.amount) {
+      richestAdjacent = r;
+    }
+  }
+  if (richestAdjacent) return richestAdjacent;
+
+  // 身边无可拾取 — 走向最近的一堆。
+  return creep.pos.findClosestByRange([...dropped] as Resource[]) ?? undefined;
+}
+
+/**
  * 查找紧急维修目标：按优先级检查 spawn/extension、tower、container。
  * 血量低于 50% 的第一个结构被返回。
  * 供 builder 回退和 tower-defense 共享，避免重复逻辑。

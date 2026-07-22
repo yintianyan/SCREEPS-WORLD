@@ -25,6 +25,7 @@ import {
   getFillTarget,
   getHaulFillTarget,
   getSource,
+  selectDroppedEnergy,
 } from "./targeting";
 
 // ─── Harvest ────────────────────────────────────────────────
@@ -160,20 +161,20 @@ export function harvestMineral(): ActionCandidate {
  * 拾取地上掉落的能量。
  *
  * 掉落能量来源：creep 死亡掉落、harvester 溢出、container 被摧毁残留等。
- * 掉落能量会随时间衰减（每 tick 减少一定量），因此应尽快拾取。
- * predicate 仅检查快照中是否存在掉落能量；execute 中取最近的执行 pickup。
+ * 掉落能量会随时间衰减（每 tick 减少 ceil(amount/1000)），因此应尽快拾取。
+ * 目标选择由 selectDroppedEnergy 统一处理（优先身边最大堆，否则走向最近堆）。
+ *
+ * “未装满则继续拾取”：本动作位于 acquire 候选链，而 updateMode 仅在 free===0 时才切
+ * work。因此只要背包未满且快照中还有掉落能量，creep 会逐 tick 继续拾取不同的堆，
+ * 直到装满才转入 work。
  */
 export function pickupDroppedEnergy(): ActionCandidate {
   return {
     name: "pickup:dropped-energy",
     predicate: (ac) => ac.snapshot.droppedEnergy.length > 0,
     execute: (ac) => {
-      const dropped = ac.creep.pos.findClosestByRange(
-        [...ac.snapshot.droppedEnergy],
-      );
-      if (!dropped) return;
-      // findClosestByRange 传入 Resource[] 时返回 Resource | null，但 TS 推断为联合类型。
-      const resource = dropped as Resource;
+      const resource = selectDroppedEnergy(ac.creep, ac.snapshot.droppedEnergy);
+      if (!resource) return;
       const result = actOrMove(ac.creep, resource, () => ac.creep.pickup(resource));
       if (result === ERR_FULL) {
         ac.creep.memory.mode = "work";
