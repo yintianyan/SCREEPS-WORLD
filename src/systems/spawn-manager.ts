@@ -1,7 +1,7 @@
 import { CONFIG } from "../config";
 import { bodyCost, degradeBody, RECOVERY_BODY } from "../config/bodies";
 import type { Priority, System, TickContext } from "../kernel/contracts";
-import { evaluateDemand, type CreepSummary, type SpawningSummary, type RoomDemandContext } from "../domain/spawn/demand";
+import { evaluateDemand, ROLE_REQUIRED_PARTS, type CreepSummary, type SpawningSummary, type RoomDemandContext } from "../domain/spawn/demand";
 import type { ColonyState } from "../kernel/contracts";
 import { cleanQueue, sortQueue, submitRequest } from "../domain/spawn/queue";
 import { selectRecycleCandidates } from "../domain/spawn/recycle";
@@ -28,7 +28,12 @@ export const spawnManagerSystem: System = {
 
       const queue = roomMem.spawnQueue ?? [];
 
-      // 1. 从 Game/Memory 收集数据，调用纯函数评估需求。
+      // 1. 先清理过期 / 隔离的请求 — 必须在 evaluateDemand 之前运行。
+      //    否则已达到 maxRetries 的 stale 请求仍被 evaluateDemand 计入 pending，
+      //    导致 harvesterCount > 0 → P0 worker 恢复请求不创建 → 死锁。
+      cleanQueue(queue, ctx.tick, CONFIG.spawn.maxRetries);
+
+      // 2. 从 Game/Memory 收集数据，调用纯函数评估需求。
       const creeps = collectCreepSummaries();
       const spawning = collectSpawningSummaries();
       const colonyState: ColonyState = roomMem.colonyState ?? "normal";
@@ -51,9 +56,6 @@ export const spawnManagerSystem: System = {
         submitRequest(queue, req);
       }
       roomMem.spawnQueue = queue;
-
-      // 2. 清理过期 / 隔离的请求。
-      cleanQueue(queue, ctx.tick, CONFIG.spawn.maxRetries);
 
       // 3. 按优先级排序。
       sortQueue(queue);
@@ -155,8 +157,17 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
       const allowDegrade = req.priority === 0 ||
         (req.priority === 1 && (roomState === "bootstrap" || roomState === "recovery"));
       if (allowDegrade) {
-        const degraded = degradeBody(req.body, energyAvailable);
-        if (!degraded) continue;
+        // 使用角色正确的 requiredParts，避免 hauler（无 WORK）降级时
+        // 因默认要求 WORK 而返回 undefined。
+        const requiredParts = ROLE_REQUIRED_PARTS[req.role];
+        const degraded = degradeBody(req.body, energyAvailable, requiredParts);
+        if (!degraded) {
+          // 降级失败说明能量连最小 body 都负担不起。
+          // 必须递增 retries，否则请求永远留在队列中不被 cleanQueue 清除，
+          // 持续阻塞 P0 worker 恢复请求的创建 → 永久死锁。
+          req.retries++;
+          continue;
+        }
         body = degraded;
       } else {
         continue;

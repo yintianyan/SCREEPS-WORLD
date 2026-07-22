@@ -4,7 +4,7 @@ import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import { countPending, spawnKey } from "./queue";
 
 /** 各角色降级时必需保留的最小部件组合。hauler 无需 WORK。 */
-const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConstant[]>> = {
+export const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConstant[]>> = {
   hauler: ["carry", "move"],
 };
 
@@ -141,18 +141,14 @@ export function evaluateDemand(
     builder: countPending(queue, "builder"),
   };
 
-  // P0：恢复 worker — 当完全没有 harvester/worker 时。
-  const harvesterCount =
-    (counts.harvester ?? 0) +
-    (counts.worker ?? 0) +
-    pending.harvester +
-    pending.worker;
+  // P0：恢复 worker — 当没有存活 harvester/worker 时。
+  // 仅看存活数（counts），不看 pending — pending 中的 stale 请求可能永远无法孵化
+  // （如能量不足降级失败），若计入会导致 harvesterCount > 0 → P0 worker 不创建 → 死锁。
+  const livingHarvesters = (counts.harvester ?? 0) + (counts.worker ?? 0);
 
-  if (harvesterCount === 0) {
+  if (livingHarvesters === 0) {
     const key = spawnKey("worker", home, 0);
-    if (!hasKey(queue, key)) {
-      requests.push(createRequest("worker", home, 0, key, 0, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
-    }
+    requests.push(createRequest("worker", home, 0, key, 0, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
     return { requests }; // P0 阻塞其他所有请求
   }
 
