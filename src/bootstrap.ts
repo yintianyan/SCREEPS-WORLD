@@ -7,6 +7,7 @@ import { Kernel } from "./kernel/kernel";
 import { Registry } from "./kernel/registry";
 import { assignmentServiceSystem } from "./systems/assignment-service";
 import { constructionManagerSystem } from "./systems/construction-manager";
+import { defensePlannerSystem } from "./systems/defense-planner";
 import { layoutPlannerSystem } from "./systems/layout-planner";
 import { labSystem } from "./systems/lab-system";
 import { linkSystem } from "./systems/link-system";
@@ -54,6 +55,8 @@ const registry = new Registry()
   .registerSystem(constructionManagerSystem)
   // P3：布局规划（低频生成 BuildTask 推入 BuildQueue）
   .registerSystem(layoutPlannerSystem)
+  // P3：防御规划（rampart/wall 生成，独立于核心布局）
+  .registerSystem(defensePlannerSystem)
   // P3：房间观察（低频策略）
   .registerSystem(roomObserverSystem)
   // P3：pixel 生成（bucket 满载时生成 pixel）

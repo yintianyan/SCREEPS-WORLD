@@ -1,6 +1,5 @@
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
-import { globalCache } from "../kernel/global-cache";
 import { getRoomLayoutData, markLayoutDirty } from "../kernel/segment-store";
 import { COMPACT_CORE_V2 } from "../domain/layout/templates/compact-core-v2";
 import {
@@ -12,8 +11,6 @@ import {
   createSourceLinkTasks,
   createControllerLinkTask,
   createExtractorTask,
-  createDefenseTasks,
-  createCoreRoadTasks,
 } from "../domain/layout/task-factory";
 import {
   collectCompletedKeys,
@@ -22,8 +19,7 @@ import {
   buildOccupiedPositionSet,
   buildObstaclePositionSet,
 } from "../domain/layout/validation";
-import { evaluateRoadCandidates } from "../domain/layout/road-policy";
-import { planCorridorRoads } from "../domain/layout/corridor-roads";
+import { planRoads, rotateTraffic } from "../domain/layout/road-planner";
 import { evaluateCandidate, scoreCandidate } from "../domain/layout/candidate-score";
 import { packPos, unpackPos } from "../domain/layout/types";
 
@@ -288,132 +284,29 @@ export const layoutPlannerSystem: System & {
       }
     }
 
-    // 3.8 动态防御工事（RCL4+）— 出口方向感知的 rampart 核心盾。
+    // 3.8 防御工事已提取到独立系统 defense-planner.ts（Phase 2 重构）。
+
+    // 3.9-5. 道路规划（核心棋盘格路 + 流量采样路 + 确定性走廊路）。
+    // 提取到 domain/layout/road-planner.ts — 行为等价，含基础设施门禁和去重。
     {
-      const exitPositions = room.find(FIND_EXIT).map(p => ({ x: p.x, y: p.y }));
-      const defenseCandidates = createDefenseTasks(
+      const roadTasks = planRoads({
         snapshot,
-        exitPositions,
         room,
-        validationOptions,
-      );
-      for (const candidate of defenseCandidates) {
-        if (existingKeys.has(candidate.key)) continue;
-        queue.push(candidateToBuildTask(candidate));
-        existingKeys.add(candidate.key);
-        tasksAdded = true;
-      }
-    }
-
-    // 3.9 核心预规划道路（RCL2+）— 棋盘格走道格铺 road。
-    // 让 hauler 从第一天就 cost 1 移动，不必等 100+ tick 流量采样。
-    // 与走廊路共享门禁：基础设施未完成时不生成（避免淹没 buildQueue）。
-    {
-      const hasPendingInfra = queue.some(
-        t => t.priority <= 1 && t.state === "queued",
-      );
-      if (!hasPendingInfra) {
-        const coreRoadCandidates = createCoreRoadTasks(
-          COMPACT_CORE_V2,
-          anchor.x,
-          anchor.y,
-          snapshot.roomName,
-          room,
-          snapshot,
-          occupiedSet,
-        );
-        for (const candidate of coreRoadCandidates) {
-          if (existingKeys.has(candidate.key)) continue;
-          queue.push(candidateToBuildTask(candidate));
-          existingKeys.add(candidate.key);
-          tasksAdded = true;
-        }
-      }
-    }
-
-    // 4. 流量道路候选 — RCL4+ 才启用。
-    // RCL2-3 阶段经济聚焦基础设施（extension/container），流量路是锦上添花，
-    // 过早启用会淹没 buildQueue 抢占 builder 工时。RCL4 有 storage 后物流压力增大，
-    // 此时按实际交通热度铺路才有意义。
-    if (snapshot.rcl >= 4) {
-      const g = globalCache();
-      const currentTraffic = g.roomTraffic?.[snapshot.roomName];
-      const prevTraffic = g.prevRoomTraffic?.[snapshot.roomName];
-
-      const roadCandidates = evaluateRoadCandidates(
-        snapshot.roomName,
-        snapshot,
-        currentTraffic,
-        prevTraffic,
-      );
-
-      for (const candidate of roadCandidates) {
-        if (existingKeys.has(candidate.key)) continue;
-        queue.push({
-          key: candidate.key,
-          pos: candidate.pos,
-          structureType: STRUCTURE_ROAD,
-          priority: candidate.priority as 0 | 1 | 2 | 3,
-          state: "queued",
-          attempts: 0,
-          retryAt: 0,
-        });
-        existingKeys.add(candidate.key);
+        blueprint: COMPACT_CORE_V2,
+        anchor,
+        occupiedSet,
+        queue,
+        existingKeys,
+      });
+      for (const task of roadTasks) {
+        queue.push(task);
+        existingKeys.add(task.key);
         tasksAdded = true;
       }
     }
 
     // 交通数据轮换（无论 RCL 都执行，确保 RCL4 时已有 prevTraffic 可用）。
-    {
-      const g = globalCache();
-      const currentTraffic = g.roomTraffic?.[snapshot.roomName];
-      if (currentTraffic) {
-        if (!g.prevRoomTraffic) g.prevRoomTraffic = {};
-        g.prevRoomTraffic[snapshot.roomName] = { ...currentTraffic };
-      }
-      if (g.roomTraffic) {
-        g.roomTraffic[snapshot.roomName] = {};
-      }
-    }
-
-    // 5. 确定性走廊路（source container↔核心↔controller container）。
-    // 流量采样修不到长走廊中段，这里用 PathFinder 沿最优路径直接铺路，
-    // hauler 移动成本减半 → 运力翻倍。priority 3 背景建造，不拖慢 RCL 冲刺。
-    //
-    // 前置门禁：当前队列中仍有 priority <= 1 的 "queued" 任务时不生成 road。
-    // 原因：extension/container 是经济基础设施，必须先建完；road 是锦上添花，
-    // 不能在基础设施未完成时淹没 buildQueue 抢占 builder 工时。
-    {
-      const hasPendingInfrastructure = queue.some(
-        t => t.priority <= 1 && t.state === "queued",
-      );
-
-      if (!hasPendingInfrastructure) {
-        // 保护蓝图未来格 — 走廊路不得占用未来的 extension/结构位置，
-        // 否则该格会被 validateBuildCell 判定 "occupied" 导致 extension 永久消失。
-        const protectedPositions = new Set<number>();
-        for (const cell of COMPACT_CORE_V2.cells) {
-          protectedPositions.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
-        }
-
-        const corridorRoads = planCorridorRoads(room, snapshot, undefined, undefined, protectedPositions);
-        for (const pos of corridorRoads) {
-          const key = `road.${snapshot.roomName}.${pos.x}.${pos.y}`;
-          if (existingKeys.has(key)) continue;
-          queue.push({
-            key,
-            pos: { x: pos.x, y: pos.y, roomName: snapshot.roomName },
-            structureType: STRUCTURE_ROAD,
-            priority: 3,
-            state: "queued",
-            attempts: 0,
-            retryAt: 0,
-          });
-          existingKeys.add(key);
-          tasksAdded = true;
-        }
-      }
-    }
+    rotateTraffic(snapshot.roomName);
 
     roomMem.buildQueue = queue;
 
