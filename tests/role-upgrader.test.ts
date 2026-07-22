@@ -81,13 +81,15 @@ describe("upgrader — 能量地板门禁（U-02）", () => {
     expect(creep.withdraw).not.toHaveBeenCalled();
   });
 
-  it("RCL4+：storage 能量 < floorStorage 时 acquire 被阻止", () => {
+  it("RCL4+：storage 能量 < floorStorage 且无 container 能量时 acquire 被阻止", () => {
     const controller = mockController();
     const storage = mockStructure("storage", { id: "st1", energy: 500, capacity: 100000 }); // < 1000
     const snap = mockSnapshot({
       controller,
       rcl: 4,
       storage,
+      containers: [], // 无替代能量源 — upgrader 只能直接采集，应被阻止
+      links: [],
       energyAvailable: 800,
     });
     const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });

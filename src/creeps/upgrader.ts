@@ -25,6 +25,10 @@ import { defineRole } from "./role-runner";
 /**
  * 能量地板门禁 — 仅阻止 acquire 模式取能，不阻止已满载的 upgrader 交付。
  * 紧急状态（ticksToDowngrade < threshold）时豁免。
+ *
+ * 关键修复：门禁只在 upgrader 需要直接采集时才阻止。
+ * 如果 controller container / 任何 container 有能量，upgrader 不与 spawn 竞争，
+ * 不应被 energyAvailable 地板阻止。
  */
 function upgraderGate(ac: ActionContext): boolean {
   const controller = ac.snapshot.controller;
@@ -38,10 +42,18 @@ function upgraderGate(ac: ActionContext): boolean {
   // 仅阻止 acquire 模式。
   if (ac.creep.memory.mode !== "acquire") return true;
 
+  // 如果有替代能量源（container/link 有能量），upgrader 不与 spawn 竞争，放行。
+  // 注意：storage 不在此列 — storage 低于 floor 时正是要保护它不被 upgrader 抽干。
+  const hasContainerEnergy = ac.snapshot.containers.some(
+    c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+  );
+  const hasLinkEnergy = ac.snapshot.links.some(
+    l => l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+  );
+  if (hasContainerEnergy || hasLinkEnergy) return true;
+
+  // 无替代能量源 — upgrader 只能直接采集，此时用能量地板门禁防止与孵化竞争。
   const hasStorage = ac.snapshot.storage !== undefined;
-  // RCL4+ 有 storage 时看 storage 能量；RCL1-3 看 spawn 能量。
-  // 修复：固定阈值 300 在 RCL1 等于容量上限（300），导致 upgrader 永久 idle。
-  // 改为动态阈值：min(固定值, 容量 × 0.4)，RCL1 时为 120，不与紧急孵化竞争但允许升级。
   const belowFloor = ac.snapshot.rcl >= 4 && hasStorage
     ? ac.snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.economy.upgradeEnergyFloorStorage
     : ac.snapshot.energyAvailable < Math.min(CONFIG.economy.upgradeEnergyFloor, Math.floor(ac.snapshot.energyCapacityAvailable * 0.4));
