@@ -163,7 +163,8 @@ export function selectBody(
 
 /**
  * 将 body 降级以适应当前可用能量。
- * 从末尾移除部件直到成本满足，至少保留 requiredParts 中列出的部件。
+ * 每次移除最贵的可移除部件（优先砍 WORK=100，保留 CARRY/MOVE），
+ * 直到成本满足或无可移除部件。至少保留 requiredParts 中每种各一个。
  * 默认要求 [WORK, CARRY, MOVE]；hauler 等纯 CARRY+MOVE 角色可传入 ["carry", "move"]。
  * 如果连最小 body 也无法满足，返回 undefined（调用方应推迟请求）。
  */
@@ -172,11 +173,32 @@ export function degradeBody(
   energyAvailable: number,
   requiredParts: readonly BodyPartConstant[] = ["work", "carry", "move"],
 ): BodyPartConstant[] | undefined {
-  const minLen = requiredParts.length;
   const parts = [...body];
-  while (bodyCost(parts) > energyAvailable && parts.length > minLen) {
-    parts.pop();
+
+  while (bodyCost(parts) > energyAvailable) {
+    // 统计每种部件当前数量。
+    const counts = new Map<string, number>();
+    for (const p of parts) counts.set(p, (counts.get(p) ?? 0) + 1);
+
+    // 找最贵的可移除部件（移除后该类型数量仍 >= 所需最低数量）。
+    let worstIdx = -1;
+    let worstCost = -1;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i]!;
+      const cost = PART_COST[p] ?? 0;
+      if (cost < worstCost) continue;
+      // 检查移除后是否仍满足 requiredParts 约束。
+      const isRequired = requiredParts.includes(p);
+      const currentCount = counts.get(p) ?? 0;
+      if (isRequired && currentCount <= 1) continue; // 最后一个不可移除
+      worstIdx = i;
+      worstCost = cost;
+    }
+
+    if (worstIdx === -1) break; // 无可移除部件
+    parts.splice(worstIdx, 1);
   }
+
   // 确保最小可用组合：包含所有 requiredParts。
   for (const part of requiredParts) {
     if (!parts.includes(part)) return undefined;

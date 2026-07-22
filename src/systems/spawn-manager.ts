@@ -147,9 +147,14 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
     const energyAvailable = spawn.room.energyAvailable;
 
     // P0：降级 body 以适应当前能量（最小 [WORK, CARRY, MOVE]）。
+    // P1 在 bootstrap/recovery 时也允许降级 — 此时 harvester 是关键路径，
+    // 等待满额能量会造成死锁（无 harvester → 无收入 → 永远凑不够能量）。
     let body = req.body;
     if (cost > energyAvailable) {
-      if (req.priority === 0) {
+      const roomState = Memory.rooms[snapshot.roomName]?.colonyState ?? "normal";
+      const allowDegrade = req.priority === 0 ||
+        (req.priority === 1 && (roomState === "bootstrap" || roomState === "recovery"));
+      if (allowDegrade) {
         const degraded = degradeBody(req.body, energyAvailable);
         if (!degraded) continue;
         body = degraded;

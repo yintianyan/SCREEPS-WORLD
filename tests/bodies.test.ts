@@ -41,8 +41,9 @@ describe("Bodies — degradeBody", () => {
 
   it("degrades [work, work, carry, move, move] to fit 300 energy", () => {
     const body = ["work", "work", "carry", "move", "move"] as BodyPartConstant[];
+    // 成本 350 > 300，移除最贵的可移除部件 WORK(100) → [work, carry, move, move] = 250 ≤ 300
     const result = degradeBody(body, 300);
-    expect(result).toEqual(["work", "work", "carry", "move"]);
+    expect(result).toEqual(["work", "carry", "move", "move"]);
   });
 
   it("returns same body when it already fits", () => {
@@ -56,10 +57,11 @@ describe("Bodies — degradeBody", () => {
     expect(degradeBody(["work", "carry", "move"], 150)).toBeUndefined();
   });
 
-  it("returns undefined when stripping leaves no carry/move", () => {
-    // [work, work, work, carry, move] = 400，降到 3 部件 -> [work, work, work] 无 carry/move
+  it("degrades [work, work, work, carry, move] to fit 200 energy (preserves required parts)", () => {
+    // [work, work, work, carry, move] = 400，移除两个 WORK(100) → [work, carry, move] = 200
+    // 旧算法从末尾 pop 会先移除 carry/move 导致 undefined（这正是修复的 bug）。
     const body = ["work", "work", "work", "carry", "move"] as BodyPartConstant[];
-    expect(degradeBody(body, 200)).toBeUndefined();
+    expect(degradeBody(body, 200)).toEqual(["work", "carry", "move"]);
   });
 
   it("degrades hauler body with requiredParts=[carry,move] to fit 200", () => {
