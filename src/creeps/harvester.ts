@@ -40,12 +40,13 @@ const policy: RolePolicy = {
     dumpMineralsToNearbyContainer(),
     // 2. 身边 link（range<=2）— 瞬时传输到 controller/storage。
     dumpToNearbyLink(),
-    // 2.5 紧急：身边 container 血量 < 80% 时先修再倒（防止 container 坍塌断链）。
-    repairNearbyContainer(),
-    // 3. 身边 container（range<=2）— 站桩 miner。
+    // 3. 身边 container（range<=2）— 站桩 miner 倒能（经济第一优先级）。
     dumpToNearbyContainer(),
     // 3.5 紧急恢复：身边 container 在建 site（range<=3）。
     buildNearbyContainerSite(),
+    // 3.6 身边 container 血量 < 80% 时修复（仅在倒能后仍有剩余能量时触发，
+    //     即 container 已满无法接收更多能量 — 避免修复抢占倒能导致经济断流）。
+    repairNearbyContainer(),
     // 4. 直接送 spawn/extension/tower（早期无 container 的矿工物流回退）。
     fillTarget(),
     // 5. 全满时倒入最空 container。
