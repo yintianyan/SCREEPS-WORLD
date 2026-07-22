@@ -1,6 +1,7 @@
 import type { RoomSnapshot } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { classifyThreats } from "../domain/defense/threat";
+import { globalCache } from "../kernel/global-cache";
 
 /**
  * 为单个自有房间构建 RoomSnapshot。
@@ -86,6 +87,35 @@ export function buildRoomSnapshot(
   const sourceOccupancy = new Map<string, number>();
   for (const source of sources) {
     sourceOccupancy.set(source.id, globalSourceOccupancy?.get(source.id as string) ?? 0);
+  }
+
+  // ── 预热移动模块的结构缓存 ──
+  // movement.ts 的 ensureStructureCache 原本每房间每 tick 额外调用
+  // room.find(FIND_STRUCTURES) + room.find(FIND_MY_CONSTRUCTION_SITES)。
+  // 此处利用 snapshot 已采集的数据直接构建缓存，消除冗余 find。
+  // ensureStructureCache 检测 checkedTick === Game.time 后直接返回，不再 find。
+  {
+    const g = globalCache() as any;
+    if (!g.__structCache) g.__structCache = {};
+    const positions: number[] = [];
+    for (const s of allStructures) {
+      let cost: number;
+      if (s.structureType === STRUCTURE_ROAD) cost = 1;
+      else if (s.structureType === STRUCTURE_CONTAINER) cost = 2;
+      else if (s.structureType === STRUCTURE_RAMPART && (s as StructureRampart).my) cost = 2;
+      else cost = 255;
+      positions.push(s.pos.x, s.pos.y, cost);
+    }
+    for (const site of mySites) {
+      if (site.structureType !== STRUCTURE_ROAD && site.structureType !== STRUCTURE_CONTAINER) {
+        positions.push(site.pos.x, site.pos.y, 255);
+      }
+    }
+    g.__structCache[room.name] = {
+      count: allStructures.length + mySites.length,
+      positions,
+      checkedTick: Game.time,
+    };
   }
 
   return {

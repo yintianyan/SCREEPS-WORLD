@@ -35,6 +35,10 @@ const DIR_DELTA: Record<number, [number, number]> = {
  * 将让路请求存入 globalCache，目标 creep 在下一次 moveToTarget 调用时执行。
  * 同 tick 内优先级低的 creep 请求优先级高的 creep 让路时，
  * 由于高优先级 creep 已经执行过，请求会在下一 tick 生效。
+ *
+ * 设计意图：对静止 creep（如 harvester 站桩采矿）请求无效是正确行为——
+ * 它们不调用 moveToTarget，请求自然过期。站桩矿工不应让出矿位，
+ * 否则会导致采集效率崩塌。绕行 creep 应通过 ignoreCreeps:false 自行绕路。
  */
 function requestYield(blockerName: string, dir: number): void {
   const g = globalCache() as any;
@@ -291,23 +295,77 @@ function trySharedPath(
   return result;
 }
 
+// ─── 跨 tick 路径持久化（堆缓存）─────────────────────────
+
 /**
- * 计算并缓存共享路径。
- * 使用 PathFinder.search（与 moveTo 相同参数），路径数组直接存入 per-tick 缓存。
- * moveByPath 接受 RoomPosition[]，无需序列化（per-tick 缓存无跨 tick 持久化需求）。
- * 返回路径数组，失败返回 undefined。
+ * 每 creep 的路径缓存 — 存 globalCache（堆），Global Reset 后重算一次。
+ *
+ * 适用场景：hauler 在 source↔core 走廊上跑 1500 tick（整个寿命），
+ * 每 tick 都走同一条路。没有持久化时靠 reusePath:15 缓存 15 tick，
+ * 之后重算 → 1500 tick 寿命 ≈ 100 次 PathFinder.search。
+ * 有持久化后：目标不变 + 结构不变 → 整个寿命只算 1 次。
+ *
+ * 失效条件：
+ *   - 目标位置变化（assignment 切换）
+ *   - 结构数量变化（新建筑/建筑被毁 → 路径可能不通）
+ *   - moveByPath 返回 ERR_NOT_FOUND（creep 偏离路径）
+ *   - 卡位（stuckTicks > 0 → 需要绕行，旧路径无效）
  */
-function computeAndCachePath(
+interface CreepPathEntry {
+  /** 目标 packed pos（x*50+y）。 */
+  targetKey: number;
+  /** 计算路径时的结构数量（变化则失效）。 */
+  structCount: number;
+  /** 缓存的路径。 */
+  path: RoomPosition[];
+}
+
+function getCreepPathCache(): Record<string, CreepPathEntry> {
+  const g = globalCache() as any;
+  if (!g.__creepPathCache) g.__creepPathCache = {};
+  return g.__creepPathCache;
+}
+
+/**
+ * 尝试使用持久化路径移动。
+ * 返回 ScreepsReturnCode 表示成功；undefined 表示不适用（需回退到正常寻路）。
+ */
+function tryPersistedPath(
+  creep: Creep,
+  targetPacked: number,
+  structCount: number,
+): ScreepsReturnCode | undefined {
+  const cache = getCreepPathCache();
+  const entry = cache[creep.name];
+  if (!entry) return undefined;
+  if (entry.targetKey !== targetPacked) return undefined;
+  if (entry.structCount !== structCount) return undefined;
+
+  const result = creep.moveByPath(entry.path);
+  if (result === ERR_NOT_FOUND || result === ERR_INVALID_ARGS) {
+    // creep 偏离路径 — 失效缓存，回退到正常寻路。
+    delete cache[creep.name];
+    return undefined;
+  }
+  return result;
+}
+
+/**
+ * 计算路径并存入持久化缓存。
+ * 使用 PathFinder.search（与 moveTo 相同参数），路径存入堆。
+ */
+function computeAndPersistPath(
   creep: Creep,
   pos: RoomPosition,
-  cacheKey: number,
+  targetPacked: number,
+  structCount: number,
 ): RoomPosition[] | undefined {
   const result = PathFinder.search(
     creep.pos,
     { pos, range: 1 },
     {
       plainCost: 2,
-      swampCost: 10,
+      swampCost: fatigueSwampCost(creep),
       maxRooms: CONFIG.movement.localMaxRooms,
       roomCallback: (roomName: string): boolean | CostMatrix => {
         const room = Game.rooms[roomName];
@@ -327,7 +385,11 @@ function computeAndCachePath(
 
   if (result.incomplete || result.path.length === 0) return undefined;
 
-  getPathShareCache().set(cacheKey, result.path);
+  getCreepPathCache()[creep.name] = {
+    targetKey: targetPacked,
+    structCount,
+    path: result.path,
+  };
   return result.path;
 }
 
@@ -432,13 +494,26 @@ export function moveToTarget(
     tryPullBlocker(creep, pos);
   }
 
-  // ── 同 tick 路径共享（仅 Level 0 正常移动 + 中远距离时启用）──
-  // 卡位时路径可能含 ignoreCreeps:false 的绕行，不适合共享。
-  // 短距离（<=3）PathFinder 开销可忽略，不值得序列化/反序列化。
+  // ── 路径缓存（仅 Level 0 正常移动 + 中远距离时启用）──
+  // 优先级：持久化路径（跨 tick）→ 同 tick 共享路径 → 新计算 + 持久化
+  // 卡位时路径可能含 ignoreCreeps:false 的绕行，不适合复用。
+  // 短距离（<=3）PathFinder 开销可忽略，不值得缓存。
   if (stuckTicks === 0 && range > 3) {
-    const cacheKey = pathShareKey(creep.room.name, packPos(pos));
+    const targetPacked = packPos(pos);
+    const structEntry = ensureStructureCache(creep.room.name);
+    const structCount = structEntry?.count ?? -1;
 
-    // 尝试复用已有共享路径。
+    // 1. 尝试跨 tick 持久化路径（hauler 走廊 1500 tick 只算 1 次）。
+    const persistedResult = tryPersistedPath(creep, targetPacked, structCount);
+    if (persistedResult !== undefined) {
+      if (persistedResult === OK || persistedResult === ERR_TIRED) {
+        recordTraffic(creep);
+      }
+      return persistedResult;
+    }
+
+    // 2. 尝试同 tick 共享路径（多 creep 同目标时复用）。
+    const cacheKey = pathShareKey(creep.room.name, targetPacked);
     const sharedResult = trySharedPath(creep, cacheKey);
     if (sharedResult !== undefined) {
       if (sharedResult === OK || sharedResult === ERR_TIRED) {
@@ -447,10 +522,11 @@ export function moveToTarget(
       return sharedResult;
     }
 
-    // 首个到该目标的 creep — 计算并缓存路径。
-    const serialized = computeAndCachePath(creep, pos, cacheKey);
-    if (serialized) {
-      const result = creep.moveByPath(serialized);
+    // 3. 首个到该目标的 creep — 计算路径，同时持久化 + 放入同 tick 共享。
+    const path = computeAndPersistPath(creep, pos, targetPacked, structCount);
+    if (path) {
+      getPathShareCache().set(cacheKey, path);
+      const result = creep.moveByPath(path);
       if (result !== ERR_NOT_FOUND && result !== ERR_INVALID_ARGS) {
         if (result === OK || result === ERR_TIRED) {
           recordTraffic(creep);
