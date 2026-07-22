@@ -2,10 +2,11 @@
  * Worker — P0 恢复混合角色。
  *
  * 策略声明：
- *   acquire: assignment source > getSource（含拥挤迁移）
+ *   acquire: getSource（含拥挤迁移，source 分配统一入口）> 拾取掉落能量
  *   work:    assignment target > fillTarget > 升级
  *
  * 启动期和灾后恢复的最后防线。直接采集 + 填充，防止能量死锁。
+ * source 分配不经 assignment 系统（P1-1）— 与 harvester 一致走 getSource 公平份额。
  */
 import type { Priority } from "../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "./action-types";
@@ -16,29 +17,7 @@ import {
   upgradeController,
 } from "./actions";
 import { moveToTarget } from "./movement";
-import { getSource } from "./targeting";
 import { defineRole } from "./role-runner";
-
-/** 使用 assignment 指定的 source 采集。 */
-function harvestAssignmentSource(): ActionCandidate {
-  return {
-    name: "harvest:assignment-source",
-    predicate: (ac) => {
-      if (!ac.assignment?.sourceId) return false;
-      return Game.getObjectById(ac.assignment.sourceId) !== null;
-    },
-    execute: (ac) => {
-      const source = Game.getObjectById(ac.assignment!.sourceId!)!;
-      ac.creep.memory.sourceId = ac.assignment!.sourceId as Id<Source>;
-      const result = ac.creep.harvest(source);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, source);
-      } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
-        ac.creep.memory.mode = "idle";
-      }
-    },
-  };
-}
 
 /** 向 assignment 指定的 target 送能。 */
 function fillAssignmentTarget(): ActionCandidate {
@@ -63,11 +42,9 @@ function fillAssignmentTarget(): ActionCandidate {
 
 const policy: RolePolicy = {
   acquire: [
-    // 优先使用 assignment 指定的 source。
-    harvestAssignmentSource(),
     // 拾取地上掉落能量（衰减资源，优先于采集）。
     pickupDroppedEnergy(),
-    // 回退到 getSource（含拥挤迁移）。
+    // 采集 — getSource 公平份额分配（含拥挤迁移），source 分配统一入口。
     harvestSource(),
   ],
 

@@ -1,4 +1,4 @@
-import { CONFIG, getSourceTargetWorkParts } from "../../config";
+import { CONFIG } from "../../config";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 
 /** assignment-service 生成的任务条目。 */
@@ -14,10 +14,15 @@ export interface AssignmentTaskEntry {
   assignedCreeps: string[];
 }
 
-/** 各角色可接受的任务类型。 */
+/** 各角色可接受的任务类型。
+ *
+ * source 分配统一归 targeting.getSource()（基于 sourceOccupancy 的公平份额），
+ * 不经过 assignment 系统 — harvester/worker 采集均走 getSource，故无 "harvest" 任务类型。
+ * 这消除了旧实现中「assignment harvest 槽位」与「targeting fairShare」的双轨制（P1-1）。
+ */
 const ROLE_TASK_KINDS: Readonly<Record<string, readonly string[]>> = {
-  worker: ["harvest", "fill"],
-  harvester: ["harvest", "fill"],
+  worker: ["fill"],
+  harvester: ["fill"],
   hauler: ["haul", "fill"],
   upgrader: ["upgrade"],
   // builder 只接受 build 任务：其 work 模式对 assignment target 调用 creep.build()，
@@ -70,11 +75,9 @@ export function buildRoomTasks(
   const tasks: AssignmentTaskEntry[] = [];
   const roomName = snapshot.roomName;
 
-  // 单次遍历 creep 摘要，按 home 过滤后分桶到两个 Map：
+  // 单次遍历 creep 摘要，按 home 过滤后分桶到 Map：
   //   taskToCreeps: assignment.id -> creep 名字列表（fill/haul/build/upgrade 共用）
-  //   sourceToCreeps: sourceId -> creep 名字列表（仅 harvest 用）
   const taskToCreeps = new Map<string, string[]>();
-  const sourceToCreeps = new Map<string, string[]>();
   for (const creep of creeps) {
     if (creep.home !== roomName) continue;
     const a = creep.assignment;
@@ -82,31 +85,9 @@ export function buildRoomTasks(
     const taskList = taskToCreeps.get(a.id) ?? [];
     taskList.push(creep.name);
     taskToCreeps.set(a.id, taskList);
-    if (a.kind === "harvest" && a.sourceId) {
-      const srcList = sourceToCreeps.get(a.sourceId) ?? [];
-      srcList.push(creep.name);
-      sourceToCreeps.set(a.sourceId, srcList);
-    }
   }
 
-  // 1. harvest 任务 — 每个 source 一个，带槽位数。
-  for (const source of snapshot.sources) {
-    const assignedCreeps = sourceToCreeps.get(source.id as string) ?? [];
-    // P2-6：maxWorkers 表示「可分配到该 source 的 creep 数上限」（而非目标 WORK 数）。
-    // 旧实现误用 getSourceTargetWorkParts（5/6/8，本意为目标 WORK 总数）当 creep 数，
-    // 一旦调大矿工数即允许 5-8 个 5W 矿工挤一个只需 5W 的 source，严重过采/堵位。
-    const maxWorkers = computeHarvestMaxWorkers(snapshot.rcl);
-    tasks.push({
-      id: `harvest:${roomName}:${source.id}`,
-      kind: "harvest",
-      sourceId: source.id as string,
-      priority: 1,
-      maxWorkers,
-      assignedCreeps,
-    });
-  }
-
-  // 2. fill 任务 — 向 spawn/extension 送能。
+  // 1. fill 任务 — 向 spawn/extension 送能。
   if (snapshot.fillTargets.length > 0) {
     // 动态阈值：容量 40% 与固定上限取较小值，避免 RCL1 永久 P0。
     const fillThreshold = Math.min(
@@ -123,7 +104,7 @@ export function buildRoomTasks(
     });
   }
 
-  // 3. haul 任务 — 从 container/storage 取能量。
+  // 2. haul 任务 — 从 container/storage 取能量。
   if (snapshot.containers.length > 0 || snapshot.storage) {
     const pickupId = selectHaulPickupId(snapshot);
     if (pickupId) {
@@ -138,7 +119,7 @@ export function buildRoomTasks(
     }
   }
 
-  // 4. build 任务 — 为每个 active site 生成。
+  // 3. build 任务 — 为每个 active site 生成。
   const ctrl = snapshot.controller;
   const inCrisis = flags.colonyState === "recovery";
   for (const site of snapshot.myConstructionSites) {
@@ -171,7 +152,7 @@ export function buildRoomTasks(
     });
   }
 
-  // 5. upgrade 任务 — 仅在 normal 或有降级风险时。
+  // 4. upgrade 任务 — 仅在 normal 或有降级风险时。
   if (snapshot.controller && snapshot.controller.my) {
     const hasDowngradeRisk = flags.controllerDowngradeRisk;
     const allowUpgrade = flags.colonyState === "normal" || hasDowngradeRisk;
@@ -190,19 +171,6 @@ export function buildRoomTasks(
   // 预排序：按 priority 升序，供 chooseTaskForRole 直接遍历选择。
   tasks.sort((a, b) => a.priority - b.priority);
   return tasks;
-}
-
-/**
- * 计算单个 source 的 harvest 任务 maxWorkers（可分配 creep 数上限，纯函数，P2-6）。
- *
- * 语义修正：maxWorkers 是「能站几个矿工」而非「目标 WORK 数」。
- * 取「可站矿位近似上限（CONFIG.assignment.maxMinersPerSource）」与「目标 WORK 数」中的较小者：
- *   - 上限封顶杜绝 RCL7-8 时 5-8 个大矿工挤一个 source（过采/堵位）；
- *   - 早期目标 WORK 数（5/6/8）均 ≥ 上限，故保留足够槽位容纳多个小矿工。
- * getSourceTargetWorkParts 恢复原义，仅用于决定单矿工 body 大小 / 是否需要第二矿工。
- */
-export function computeHarvestMaxWorkers(rcl: number): number {
-  return Math.max(1, Math.min(CONFIG.assignment.maxMinersPerSource, getSourceTargetWorkParts(rcl)));
 }
 
 /**

@@ -78,36 +78,17 @@ beforeEach(() => {
 
 // ── buildRoomTasks ──
 describe("Assignment — buildRoomTasks (pure)", () => {
-  it("generates harvest tasks for each source", () => {
+  it("does not generate harvest tasks (source 分配统一归 targeting.getSource, P1-1)", () => {
     const source1 = { id: "src1", pos: { x: 10, y: 10, roomName: "W1N1" } } as unknown as Source;
     const source2 = { id: "src2", pos: { x: 40, y: 40, roomName: "W1N1" } } as unknown as Source;
     const snapshot = mockSnapshot({ sources: [source1, source2] });
 
     const tasks = buildRoomTasks(snapshot, [], mockFlags());
 
+    // harvest 任务已移除 — source 拥挤控制由 targeting.getSource 的公平份额完成，
+    // 不再经 assignment 系统（消除双轨制）。
     const harvestTasks = tasks.filter(t => t.kind === "harvest");
-    expect(harvestTasks).toHaveLength(2);
-    expect(harvestTasks[0]?.sourceId).toBe("src1");
-    expect(harvestTasks[1]?.sourceId).toBe("src2");
-  });
-
-  it("harvest maxWorkers 受 maxMinersPerSource 封顶（P2-6：RCL7-8 不接受 5-8 creep）", () => {
-    const source = { id: "src1", pos: { x: 10, y: 10, roomName: "W1N1" } } as unknown as Source;
-    // RCL7 目标 WORK=8，旧实现会许 8 个 creep；新实现封顶到 maxMinersPerSource。
-    const snapshot = mockSnapshot({ sources: [source], rcl: 7 });
-    const tasks = buildRoomTasks(snapshot, [], mockFlags());
-    const harvest = tasks.find(t => t.kind === "harvest")!;
-    expect(harvest.maxWorkers).toBe(CONFIG.assignment.maxMinersPerSource);
-    expect(harvest.maxWorkers).toBeLessThan(8);
-  });
-
-  it("harvest maxWorkers 在低 RCL 仍受 maxMinersPerSource 封顶", () => {
-    const source = { id: "src1", pos: { x: 10, y: 10, roomName: "W1N1" } } as unknown as Source;
-    const snapshot = mockSnapshot({ sources: [source], rcl: 2 });
-    const tasks = buildRoomTasks(snapshot, [], mockFlags());
-    const harvest = tasks.find(t => t.kind === "harvest")!;
-    // min(maxMinersPerSource=3, 目标 WORK=5) = 3。
-    expect(harvest.maxWorkers).toBe(CONFIG.assignment.maxMinersPerSource);
+    expect(harvestTasks).toHaveLength(0);
   });
 
   it("generates fill task when fillTargets exist", () => {
@@ -158,26 +139,26 @@ describe("Assignment — buildRoomTasks (pure)", () => {
   });
 
   it("aggregates assigned creeps across multiple task types in single pass", () => {
-    const source = { id: "src1", pos: { x: 10, y: 10, roomName: "W1N1" } } as unknown as Source;
+    const site = { id: "site1", pos: { x: 20, y: 20 }, structureType: STRUCTURE_EXTENSION } as unknown as ConstructionSite;
     const snapshot = mockSnapshot({
-      sources: [source],
+      myConstructionSites: [site],
       fillTargets: [{ id: "ext1" } as unknown as StructureExtension],
     });
 
     const creeps: CreepAssignmentRef[] = [
-      creepRef("h1", "W1N1", { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1" }),
-      creepRef("h2", "W1N1", { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1" }),
+      creepRef("b1", "W1N1", { id: "build:W1N1:site1", kind: "build" }),
+      creepRef("b2", "W1N1", { id: "build:W1N1:site1", kind: "build" }),
       creepRef("f1", "W1N1", { id: "fill:W1N1", kind: "fill" }),
       // 其他房的 creep 应被过滤掉。
-      creepRef("other", "W2N2", { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1" }),
+      creepRef("other", "W2N2", { id: "build:W1N1:site1", kind: "build" }),
     ];
 
     const tasks = buildRoomTasks(snapshot, creeps, mockFlags());
 
-    const harvestTask = tasks.find(t => t.id === "harvest:W1N1:src1")!;
-    expect(harvestTask.assignedCreeps).toEqual(expect.arrayContaining(["h1", "h2"]));
-    expect(harvestTask.assignedCreeps).toHaveLength(2);
-    expect(harvestTask.assignedCreeps).not.toContain("other");
+    const buildTask = tasks.find(t => t.id === "build:W1N1:site1")!;
+    expect(buildTask.assignedCreeps).toEqual(expect.arrayContaining(["b1", "b2"]));
+    expect(buildTask.assignedCreeps).toHaveLength(2);
+    expect(buildTask.assignedCreeps).not.toContain("other");
 
     const fillTask = tasks.find(t => t.id === "fill:W1N1")!;
     expect(fillTask.assignedCreeps).toEqual(["f1"]);
@@ -268,23 +249,26 @@ describe("Assignment — validateAssignmentRules (pure)", () => {
 
 // ── chooseTaskForRole (pure) ──
 describe("Assignment — chooseTaskForRole (pure)", () => {
-  it("assigns harvest task to harvester", () => {
+  it("harvester gets no assignment tasks (source 统一归 getSource, P1-1)", () => {
+    // 即使存在 fill 之外的任务，harvester 也只接受 fill；
+    // source 分配不经 assignment，故无 harvest 任务可选。
     const tasks = [
-      { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1", priority: 1, maxWorkers: 5, assignedCreeps: [], structureType: undefined },
+      { id: "haul:W1N1", kind: "haul", sourceId: "c1", priority: 1, maxWorkers: 3, assignedCreeps: [], structureType: undefined },
+      { id: "upgrade:W1N1", kind: "upgrade", priority: 2, maxWorkers: 3, assignedCreeps: [], structureType: undefined },
     ];
     const chosen = chooseTaskForRole("harvester", tasks);
-    expect(chosen).toBeDefined();
-    expect(chosen!.kind).toBe("harvest");
-    expect(chosen!.sourceId).toBe("src1");
+    expect(chosen).toBeUndefined();
   });
 
-  it("does not exceed maxWorkers for harvest", () => {
-    const tasks = [
-      { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1", priority: 1, maxWorkers: 5, assignedCreeps: ["c1", "c2", "c3", "c4", "c5"], structureType: undefined },
-    ];
-    const chosen = chooseTaskForRole("harvester", tasks);
-    // harvest 满了 → 不返回 harvest（若无其他任务则返回 undefined）。
-    expect(chosen).toBeUndefined();
+  it("hauler selects haul task and respects maxWorkers", () => {
+    const haulTask = { id: "haul:W1N1", kind: "haul", sourceId: "c1", priority: 1, maxWorkers: 3, assignedCreeps: [] as string[], structureType: undefined };
+    const chosen = chooseTaskForRole("hauler", [haulTask]);
+    expect(chosen).toBeDefined();
+    expect(chosen!.kind).toBe("haul");
+
+    // 满载后不再分配。
+    haulTask.assignedCreeps = ["c1", "c2", "c3"];
+    expect(chooseTaskForRole("hauler", [haulTask])).toBeUndefined();
   });
 
   it("returns undefined when no matching task", () => {
