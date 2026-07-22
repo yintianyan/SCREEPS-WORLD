@@ -97,6 +97,8 @@ export interface RoomSnapshot {
   readonly terminal: StructureTerminal | undefined;
   /** 房间 extractor（RCL6+ 解锁）。用于 mineral 采集。 */
   readonly extractor: StructureExtractor | undefined;
+  /** 房间 factory（RCL7+ 解锁）。用于商品压缩/生产。 */
+  readonly factory: StructureFactory | undefined;
   /** 地上掉落的能量资源（FIND_DROPPED_RESOURCES 中类型为 energy 的）。 */
   readonly droppedEnergy: readonly Resource[];
 }

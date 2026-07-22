@@ -6,7 +6,7 @@ import {
   absPos,
   type BlueprintCell,
 } from "../src/domain/layout/types";
-import { COMPACT_CORE_V1 } from "../src/domain/layout/templates/compact-core-v1";
+import { COMPACT_CORE_V2 } from "../src/domain/layout/templates/compact-core-v2";
 import {
   scoreCandidate,
   selectBestCandidate,
@@ -71,6 +71,7 @@ sources: [],
     labs: [],
     terminal: undefined,
     extractor: undefined,
+    factory: undefined,
     droppedEnergy: [],
     ...overrides,
   };
@@ -128,75 +129,75 @@ describe("Layout — absPos", () => {
   });
 });
 
-// ── compact-core-v1.ts ──
-describe("Layout — COMPACT_CORE_V1", () => {
+// ── compact-core-v2.ts ──
+describe("Layout — COMPACT_CORE_V2", () => {
   it("has correct id and anchorKind", () => {
-    expect(COMPACT_CORE_V1.id).toBe("compact-core-v1");
-    expect(COMPACT_CORE_V1.anchorKind).toBe("primary-spawn");
+    expect(COMPACT_CORE_V2.id).toBe("compact-core-v2");
+    expect(COMPACT_CORE_V2.anchorKind).toBe("primary-spawn");
   });
 
   it("has no duplicate cell keys", () => {
-    const keys = COMPACT_CORE_V1.cells.map(c => c.key);
+    const keys = COMPACT_CORE_V2.cells.map(c => c.key);
     const unique = new Set(keys);
     expect(unique.size).toBe(keys.length);
   });
 
   it("has no duplicate positions (dx,dy)", () => {
-    const positions = COMPACT_CORE_V1.cells.map(c => `${c.dx},${c.dy}`);
+    const positions = COMPACT_CORE_V2.cells.map(c => `${c.dx},${c.dy}`);
     const unique = new Set(positions);
     expect(unique.size).toBe(positions.length);
   });
 
   it("has 5 extensions for rcl2 phase", () => {
-    const rcl2Exts = COMPACT_CORE_V1.cells.filter(
+    const rcl2Exts = COMPACT_CORE_V2.cells.filter(
       c => c.phase === "rcl2" && c.structureType === STRUCTURE_EXTENSION,
     );
     expect(rcl2Exts).toHaveLength(5);
   });
 
   it("has 10 extensions for rcl3 phase (total 10)", () => {
-    const rcl3Exts = COMPACT_CORE_V1.cells.filter(
+    const rcl3Exts = COMPACT_CORE_V2.cells.filter(
       c => c.phase === "rcl3" && c.structureType === STRUCTURE_EXTENSION,
     );
     expect(rcl3Exts).toHaveLength(5);
   });
 
   it("has 10 extensions for rcl4 phase (total 20)", () => {
-    const rcl4Exts = COMPACT_CORE_V1.cells.filter(
+    const rcl4Exts = COMPACT_CORE_V2.cells.filter(
       c => c.phase === "rcl4" && c.structureType === STRUCTURE_EXTENSION,
     );
     expect(rcl4Exts).toHaveLength(10);
   });
 
   it("has 1 tower for rcl3", () => {
-    const rcl3Towers = COMPACT_CORE_V1.cells.filter(
+    const rcl3Towers = COMPACT_CORE_V2.cells.filter(
       c => c.phase === "rcl3" && c.structureType === STRUCTURE_TOWER,
     );
     expect(rcl3Towers).toHaveLength(1);
   });
 
   it("has 1 storage for rcl4", () => {
-    const rcl4Storage = COMPACT_CORE_V1.cells.filter(
+    const rcl4Storage = COMPACT_CORE_V2.cells.filter(
       c => c.phase === "rcl4" && c.structureType === STRUCTURE_STORAGE,
     );
     expect(rcl4Storage).toHaveLength(1);
   });
 
   it("tower has priority 0 (critical)", () => {
-    const towers = COMPACT_CORE_V1.cells.filter(c => c.structureType === STRUCTURE_TOWER);
+    const towers = COMPACT_CORE_V2.cells.filter(c => c.structureType === STRUCTURE_TOWER);
     for (const t of towers) {
       expect(t.priority).toBe(0);
     }
   });
 
   it("storage depends on nothing (no requires)", () => {
-    const storage = COMPACT_CORE_V1.cells.find(c => c.structureType === STRUCTURE_STORAGE);
+    const storage = COMPACT_CORE_V2.cells.find(c => c.structureType === STRUCTURE_STORAGE);
     expect(storage).toBeDefined();
     expect(storage?.requires ?? []).toHaveLength(0);
   });
 
   it("link depends on storage", () => {
-    const link = COMPACT_CORE_V1.cells.find(c => c.structureType === STRUCTURE_LINK);
+    const link = COMPACT_CORE_V2.cells.find(c => c.structureType === STRUCTURE_LINK);
     expect(link).toBeDefined();
     expect(link?.requires).toContain("core.storage.01");
   });
@@ -372,7 +373,7 @@ describe("Layout — blueprintToTasks", () => {
   it("only generates tasks for allowed phases", () => {
     const snapshot = mockSnapshot({ rcl: 2 });
     const candidates = blueprintToTasks(
-      COMPACT_CORE_V1,
+      COMPACT_CORE_V2,
       25, 25,
       "W1N1",
       mockRoom(),
@@ -392,7 +393,7 @@ describe("Layout — blueprintToTasks", () => {
   it("generates rcl3 tasks at RCL3", () => {
     const snapshot = mockSnapshot({ rcl: 3 });
     const candidates = blueprintToTasks(
-      COMPACT_CORE_V1,
+      COMPACT_CORE_V2,
       25, 25,
       "W1N1",
       mockRoom(),
@@ -546,20 +547,19 @@ describe("Layout — extractBlockedCandidates", () => {
 // ── validation.ts — collectCompletedKeysFromStructures ──
 describe("Layout — collectCompletedKeysFromStructures", () => {
   it("matches structures at blueprint offsets", () => {
-    // 锚点 (20,20)，cell key="ext.01" dx=1 dy=0 — 应匹配 (21,20) 上的 extension。
+    // 锚点 (20,20)，v2 中 dx=2 dy=0 的 cell（core.ext.04）— 应匹配 (22,20) 上的 extension。
     const anchor = { x: 20, y: 20 };
     const extension = {
       structureType: STRUCTURE_EXTENSION,
-      pos: { x: 21, y: 20, roomName: "W1N1" },
+      pos: { x: 22, y: 20, roomName: "W1N1" },
     } as unknown as StructureExtension;
     const snapshot = mockSnapshot({ extensions: [extension] });
 
-    const result = collectCompletedKeysFromStructures(COMPACT_CORE_V1, anchor.x, anchor.y, snapshot);
-    // 找出 COMPACT_CORE_V1 中 dx=1, dy=0 的 cell
-    const matchingCell = COMPACT_CORE_V1.cells.find(c => c.dx === 1 && c.dy === 0);
-    if (matchingCell && matchingCell.structureType === STRUCTURE_EXTENSION) {
-      expect(result.has(matchingCell.key)).toBe(true);
-    }
+    const result = collectCompletedKeysFromStructures(COMPACT_CORE_V2, anchor.x, anchor.y, snapshot);
+    // 找出 COMPACT_CORE_V2 中 dx=2, dy=0 的 cell
+    const matchingCell = COMPACT_CORE_V2.cells.find(c => c.dx === 2 && c.dy === 0);
+    expect(matchingCell?.structureType).toBe(STRUCTURE_EXTENSION);
+    expect(result.has(matchingCell!.key)).toBe(true);
   });
 
   it("returns empty when no structures match blueprint offsets", () => {
@@ -571,7 +571,7 @@ describe("Layout — collectCompletedKeysFromStructures", () => {
     } as unknown as StructureExtension;
     const snapshot = mockSnapshot({ extensions: [extension] });
 
-    const result = collectCompletedKeysFromStructures(COMPACT_CORE_V1, anchor.x, anchor.y, snapshot);
+    const result = collectCompletedKeysFromStructures(COMPACT_CORE_V2, anchor.x, anchor.y, snapshot);
     expect(result.size).toBe(0);
   });
 
@@ -585,9 +585,9 @@ describe("Layout — collectCompletedKeysFromStructures", () => {
     } as unknown as StructureExtension;
     const snapshot = mockSnapshot({ extensions: [extension] });
 
-    const result = collectCompletedKeysFromStructures(COMPACT_CORE_V1, newAnchor.x, newAnchor.y, snapshot);
+    const result = collectCompletedKeysFromStructures(COMPACT_CORE_V2, newAnchor.x, newAnchor.y, snapshot);
     // 不应包含任何 extension cell — 验证 anchor 变化后旧结构不会被误识别。
-    for (const cell of COMPACT_CORE_V1.cells.filter(c => c.structureType === STRUCTURE_EXTENSION)) {
+    for (const cell of COMPACT_CORE_V2.cells.filter(c => c.structureType === STRUCTURE_EXTENSION)) {
       expect(result.has(cell.key)).toBe(false);
     }
   });

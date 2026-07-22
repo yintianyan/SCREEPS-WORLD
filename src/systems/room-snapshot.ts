@@ -34,6 +34,7 @@ export function buildRoomSnapshot(
   const walls = allStructures.filter(s => s.structureType === STRUCTURE_WALL) as StructureWall[];
   const ramparts = allStructures.filter(s => s.structureType === STRUCTURE_RAMPART) as StructureRampart[];
   const extractor = allStructures.find(s => s.structureType === STRUCTURE_EXTRACTOR) as StructureExtractor | undefined;
+  const factory = allStructures.find(s => s.structureType === STRUCTURE_FACTORY) as StructureFactory | undefined;
 
   const storage = room.storage ?? undefined;
   const terminal = room.terminal ?? undefined;
@@ -116,6 +117,7 @@ export function buildRoomSnapshot(
     labs,
     terminal,
     extractor,
+    factory,
     droppedEnergy,
   };
 }

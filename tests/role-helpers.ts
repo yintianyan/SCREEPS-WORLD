@@ -238,6 +238,7 @@ export function mockSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapsho
     labs: [],
     terminal: undefined,
     extractor: undefined,
+    factory: undefined,
     droppedEnergy: [],
     ...overrides,
   };

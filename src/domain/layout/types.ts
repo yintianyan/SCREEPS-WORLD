@@ -5,7 +5,7 @@ export type LayoutPhase = "bootstrap" | "rcl2" | "rcl3" | "rcl4" | "late" | "rcl
 export type BuildPriority = 0 | 1 | 2 | 3;
 
 /** 结构标签 — 用于分类和过滤。 */
-export type StructureTag = "core" | "logistics" | "defense" | "road";
+export type StructureTag = "core" | "logistics" | "defense" | "road" | "industry";
 
 /**
  * 蓝图单元 — 模板中一个格子的声明。
@@ -45,7 +45,9 @@ export type ValidationResult =
   | "terrain"
   | "occupied"
   | "site-limit"
-  | "dependency";
+  | "dependency"
+  /** 密封守卫：建成后自身无相邻可站格，或会把相邻已有障碍结构封死（建筑孤岛）。 */
+  | "seal";
 
 /** 将坐标编码为单个数字：x * 50 + y，范围 0-2499。 */
 export function packPos(x: number, y: number): number {

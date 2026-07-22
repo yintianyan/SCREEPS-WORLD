@@ -16,6 +16,122 @@ export interface ValidationOptions {
   structureCounts?: ReadonlyMap<string, number>;
   /** 预计算的占用位置集合（packed x*50+y，每规划周期构建一次）。 */
   occupiedSet?: ReadonlySet<number>;
+  /** 预计算的障碍位置集合（packed x*50+y，仅不可通行结构/工地）。供密封守卫使用。 */
+  obstacleSet?: ReadonlySet<number>;
+}
+
+/**
+ * 障碍结构类型（不可通行）。使用字符串字面量而非 Screeps 常量，
+ * 使模块在无 Screeps 运行时（Vitest）也可加载。
+ * road/container/自有 rampart 可通行，不在此列。
+ */
+export const OBSTACLE_TYPES: ReadonlySet<string> = new Set([
+  "spawn",
+  "extension",
+  "tower",
+  "storage",
+  "link",
+  "lab",
+  "terminal",
+  "factory",
+  "nuker",
+  "observer",
+  "powerSpawn",
+  "extractor",
+]);
+
+/**
+ * 预计算障碍位置集合（packed x*50+y）——仅不可通行结构与障碍工地。
+ * 每规划周期调用一次，供密封守卫（wouldSeal）复用。
+ */
+export function buildObstaclePositionSet(snapshot: RoomSnapshot): Set<number> {
+  const set = new Set<number>();
+  const arrays: ReadonlyArray<readonly { pos: { x: number; y: number } }[]> = [
+    snapshot.spawns,
+    snapshot.extensions,
+    snapshot.towers,
+    snapshot.links,
+    snapshot.labs,
+  ];
+  for (const arr of arrays) {
+    for (const s of arr) {
+      set.add(packPos(s.pos.x, s.pos.y));
+    }
+  }
+  if (snapshot.storage) set.add(packPos(snapshot.storage.pos.x, snapshot.storage.pos.y));
+  if (snapshot.terminal) set.add(packPos(snapshot.terminal.pos.x, snapshot.terminal.pos.y));
+  if (snapshot.extractor) set.add(packPos(snapshot.extractor.pos.x, snapshot.extractor.pos.y));
+  if (snapshot.factory) set.add(packPos(snapshot.factory.pos.x, snapshot.factory.pos.y));
+  for (const site of snapshot.constructionSites) {
+    if (OBSTACLE_TYPES.has(site.structureType)) {
+      set.add(packPos(site.pos.x, site.pos.y));
+    }
+  }
+  return set;
+}
+
+/** 可站格 = 边界内、非墙、无障碍结构/工地的格子。 */
+function isServiceTile(
+  x: number,
+  y: number,
+  terrain: RoomTerrain,
+  obstacleSet: ReadonlySet<number>,
+): boolean {
+  if (x < 1 || x > 48 || y < 1 || y > 48) return false;
+  if (terrain.get(x, y) === TERRAIN_MASK_WALL) return false;
+  return !obstacleSet.has(packPos(x, y));
+}
+
+/**
+ * 密封守卫 —「建筑孤岛」检测（v1 实心块教训：29 个结构 8 邻居全堵死）。
+ *
+ * transfer / spawnCreep / repair 射程均为 1，任何障碍结构都必须保留
+ * ≥1 个相邻可站格（服务格），否则永远无法填充/维修/孵化。
+ *
+ * 在 (x,y) 放置障碍结构前检查：
+ *   1. 自身仍有 ≥1 个相邻可站格（否则出生即密封）；
+ *   2. 不夺走任何相邻障碍结构的最后一个可站格（否则把邻居封死）。
+ *
+ * 返回 true = 会造成密封，必须拒绝。
+ */
+export function wouldSeal(
+  x: number,
+  y: number,
+  terrain: RoomTerrain,
+  obstacleSet: ReadonlySet<number>,
+): boolean {
+  // 1. 自身服务格检查。
+  let selfFree = false;
+  for (let dx = -1; dx <= 1 && !selfFree; dx++) {
+    for (let dy = -1; dy <= 1 && !selfFree; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      if (isServiceTile(x + dx, y + dy, terrain, obstacleSet)) selfFree = true;
+    }
+  }
+  if (!selfFree) return true;
+
+  // 2. 邻居服务格检查：我们占掉 (x,y) 后，邻居必须仍有 ≥1 个可站格。
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!obstacleSet.has(packPos(nx, ny))) continue;
+      // 邻居当前的可站格（排除我们将占据的 (x,y)）。
+      let neighborFree = 0;
+      for (let tx = -1; tx <= 1; tx++) {
+        for (let ty = -1; ty <= 1; ty++) {
+          if (tx === 0 && ty === 0) continue;
+          const cx = nx + tx;
+          const cy = ny + ty;
+          if (cx === x && cy === y) continue; // 我们即将占据的格子
+          if (isServiceTile(cx, cy, terrain, obstacleSet)) neighborFree++;
+        }
+      }
+      if (neighborFree === 0) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -128,6 +244,12 @@ export function validateBuildCell(
     ? options.occupiedSet.has(packPos(x, y))
     : isOccupied(x, y, snapshot, options.minerals);
   if (occupied) return "occupied";
+
+  // 4.5 密封守卫 — 障碍结构不得出生即密封，也不得把邻居封死（v1 实心块教训）。
+  // 仅在提供 obstacleSet 时启用（planner 每周期预计算）。
+  if (options.obstacleSet && OBSTACLE_TYPES.has(cell.structureType)) {
+    if (wouldSeal(x, y, terrain, options.obstacleSet)) return "seal";
+  }
 
   // 5. 依赖检查 — 前置 blueprint key 必须已完成。
   if (cell.requires) {
