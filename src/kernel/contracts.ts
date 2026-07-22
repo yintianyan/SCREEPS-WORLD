@@ -69,6 +69,12 @@ export interface RoomSnapshot {
   readonly constructionSites: readonly ConstructionSite[];
   readonly myConstructionSites: readonly ConstructionSite[];
   readonly hostileCreeps: readonly Creep[];
+  /**
+   * 真正的威胁 creep（hostileCreeps 中具备 ATTACK/RANGED_ATTACK/HEAL/WORK/CLAIM 且非联盟者）。
+   * 防御决策（逃跑 / 停建造 / 抢占 / 开火 / safe mode）应消费此字段而非 hostileCreeps，
+   * 避免过境 scout / reserver 冻结经济。
+   */
+  readonly threatCreeps: readonly Creep[];
   readonly energyAvailable: number;
   readonly energyCapacityAvailable: number;
   /** 可接收能量的结构（有空闲容量的 spawn + extension + tower + controller container）。 */
@@ -77,6 +83,12 @@ export interface RoomSnapshot {
   readonly needsRecovery: boolean;
   /** 每个.source ID 对应的已分配 creep 数量（用于免全局扫描的负载均衡）。 */
   readonly sourceOccupancy: ReadonlyMap<string, number>;
+  /**
+   * 本房 creep 身上携带的能量总和（memory.home 归属本房）。
+   * 用于让 room-state 的 reserve 计入在途能量，避免物流搬运造成危机信号抖动（P1-5 ①）。
+   * 由 Kernel 复用 Game.creeps 遍历结果预构建；缺省视为 0。
+   */
+  readonly creepEnergy?: number;
   /** 房间内的 mineral（供布局验证使用）。 */
   readonly minerals: readonly Mineral[];
   /** 房间内所有 lab 结构。RCL6+ 解锁，用于化合物反应和 creep boost。 */

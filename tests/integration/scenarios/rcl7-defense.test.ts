@@ -156,8 +156,12 @@ describe("RCL7 Defense — 防御系统", () => {
   });
 
   it("无 tower 时激活 safe mode", () => {
-    const world = rcl7World({ towers: 0, hostiles: 1, safeModeAvailable: 1 });
+    const world = rcl7World({ towers: 0, hostiles: 0, safeModeAvailable: 1 });
     addRcl7Population(world);
+    // 威胁已突入核心区（spawn 25,25 旁 range 1 <= safeModeTriggerRange）→ 应烧 safe mode。
+    world.addHostile("breacher", { x: 26, y: 26 }, [
+      { type: "attack" }, { type: "attack" }, { type: "move" }, { type: "move" },
+    ]);
 
     const runner = new TickRunner();
     runner.setLoop(loop);

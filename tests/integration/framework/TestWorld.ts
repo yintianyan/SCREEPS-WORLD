@@ -469,6 +469,8 @@ class MockHostileCreep {
   owner: { username: string };
   room: MockRoom;
   my = false;
+  hits: number;
+  hitsMax: number;
 
   constructor(name: string, pos: MockRoomPosition, body: Array<{ type: string }>, room: MockRoom, owner = "Enemy") {
     this.id = genId("hostile");
@@ -477,6 +479,9 @@ class MockHostileCreep {
     this.body = body;
     this.room = room;
     this.owner = { username: owner };
+    // 每个部件 100 血（引擎常量），供 tower 目标选择的有效血量评估使用。
+    this.hitsMax = body.length * 100;
+    this.hits = this.hitsMax;
   }
 }
 
@@ -558,6 +563,14 @@ class MockCreep {
     const amt = Math.min(amount ?? Infinity, carried, free);
     this.store.energy -= amt;
     (target as { store: MockStore }).store.energy += amt;
+    return 0;
+  }
+
+  drop(_resource?: string, amount?: number): number {
+    const carried = this.store.getUsedCapacity();
+    if (carried <= 0) return -6; // ERR_NOT_ENOUGH_RESOURCES
+    const amt = Math.min(amount ?? carried, carried);
+    this.store.energy -= amt;
     return 0;
   }
 

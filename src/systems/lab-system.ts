@@ -17,7 +17,7 @@
 import type { RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import type { Compound, LabAssignment, LabPlan, ReactionPlan } from "../domain/industry/types";
 import { evaluateBoostRequests, DEFAULT_BOOST_POLICY } from "../domain/industry/boost";
-import { getNextExecutableStep, planReactionChain, LAB_REACTION_AMOUNT } from "../domain/industry/reactions";
+import { getNextExecutableStep, planReactionChain, selectReactionTrio, LAB_REACTION_AMOUNT } from "../domain/industry/reactions";
 
 // ─── RoomMemory 扩展 ────────────────────────────────────────
 
@@ -112,23 +112,34 @@ function planLabs(
     labIndex++;
   }
 
-  // 2. Reaction labs（需要 3 个：2 input + 1 output）
+  // 2. Reaction labs（需要 3 个相邻的：2 input + 1 output）。
+  // runReaction 要求两个 input lab 均在 output lab 的 range≤2 内，
+  // 因此不能任意取 3 个——须挑选满足相邻约束的三元组，否则本 tick 不反应（P2-8）。
   const remainingLabs = labs.slice(labIndex);
   if (reactionStep && remainingLabs.length >= 3) {
-    const input1Lab = remainingLabs[0]!;
-    const input2Lab = remainingLabs[1]!;
-    const outputLab = remainingLabs[2]!;
-
-    assignments.push(
-      { labId: input1Lab.id, role: "input1" },
-      { labId: input2Lab.id, role: "input2" },
-      { labId: outputLab.id, role: "output" },
+    const trio = selectReactionTrio(
+      remainingLabs.map(l => ({ id: l.id as string, x: l.pos.x, y: l.pos.y })),
     );
+    if (trio) {
+      assignments.push(
+        { labId: trio.input1, role: "input1" },
+        { labId: trio.input2, role: "input2" },
+        { labId: trio.output, role: "output" },
+      );
 
-    return {
-      assignments,
-      reaction: { ...reactionStep, amount: LAB_REACTION_AMOUNT },
-    };
+      // 未参与反应的剩余 lab 标记 idle。
+      for (const lab of remainingLabs) {
+        if (!assignments.some(a => a.labId === lab.id)) {
+          assignments.push({ labId: lab.id, role: "idle" });
+        }
+      }
+
+      return {
+        assignments,
+        reaction: { ...reactionStep, amount: LAB_REACTION_AMOUNT },
+      };
+    }
+    // 找不到相邻三元组：lab 分散布局，本 tick 不反应，全部 idle（走下方 fallback）。
   }
 
   // 3. 剩余 idle
@@ -159,6 +170,14 @@ export const labSystem: System = {
 
       const industryMem = getIndustryMemory(snapshot.roomName);
       const inventory = collectCompoundInventory(snapshot);
+
+      // P2-9：清理已死亡 creep 的名字，防止 boostedCreeps 无限累积。
+      // 复用 Game.creeps 判断存活，去重后仅保留仍在世的名字（无需 schema 迁移）。
+      if (industryMem.boostedCreeps && industryMem.boostedCreeps.length > 0) {
+        industryMem.boostedCreeps = industryMem.boostedCreeps.filter(
+          name => Game.creeps[name] !== undefined,
+        );
+      }
 
       // ── 1. Boost 决策 ──
       const creepSummaries = Object.values(Game.creeps)

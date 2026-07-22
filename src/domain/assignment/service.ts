@@ -92,8 +92,10 @@ export function buildRoomTasks(
   // 1. harvest 任务 — 每个 source 一个，带槽位数。
   for (const source of snapshot.sources) {
     const assignedCreeps = sourceToCreeps.get(source.id as string) ?? [];
-    // X-02：每个 source 的 maxWorkers 按 RCL 分级：RCL1-3: 5 / RCL4-6: 6 / RCL7-8: 8。
-    const maxWorkers = Math.max(1, getSourceTargetWorkParts(snapshot.rcl));
+    // P2-6：maxWorkers 表示「可分配到该 source 的 creep 数上限」（而非目标 WORK 数）。
+    // 旧实现误用 getSourceTargetWorkParts（5/6/8，本意为目标 WORK 总数）当 creep 数，
+    // 一旦调大矿工数即允许 5-8 个 5W 矿工挤一个只需 5W 的 source，严重过采/堵位。
+    const maxWorkers = computeHarvestMaxWorkers(snapshot.rcl);
     tasks.push({
       id: `harvest:${roomName}:${source.id}`,
       kind: "harvest",
@@ -188,6 +190,19 @@ export function buildRoomTasks(
   // 预排序：按 priority 升序，供 chooseTaskForRole 直接遍历选择。
   tasks.sort((a, b) => a.priority - b.priority);
   return tasks;
+}
+
+/**
+ * 计算单个 source 的 harvest 任务 maxWorkers（可分配 creep 数上限，纯函数，P2-6）。
+ *
+ * 语义修正：maxWorkers 是「能站几个矿工」而非「目标 WORK 数」。
+ * 取「可站矿位近似上限（CONFIG.assignment.maxMinersPerSource）」与「目标 WORK 数」中的较小者：
+ *   - 上限封顶杜绝 RCL7-8 时 5-8 个大矿工挤一个 source（过采/堵位）；
+ *   - 早期目标 WORK 数（5/6/8）均 ≥ 上限，故保留足够槽位容纳多个小矿工。
+ * getSourceTargetWorkParts 恢复原义，仅用于决定单矿工 body 大小 / 是否需要第二矿工。
+ */
+export function computeHarvestMaxWorkers(rcl: number): number {
+  return Math.max(1, Math.min(CONFIG.assignment.maxMinersPerSource, getSourceTargetWorkParts(rcl)));
 }
 
 /**

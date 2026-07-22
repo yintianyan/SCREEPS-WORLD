@@ -138,6 +138,6 @@ function isEmergencyState(snapshot: RoomSnapshot): boolean {
     CONFIG.assignment.emergencyFillThreshold,
   );
   if (snapshot.energyAvailable < dynamicThreshold) return true;
-  if (snapshot.hostileCreeps.length > 0) return true;
+  if (snapshot.threatCreeps.length > 0) return true;
   return false;
 }

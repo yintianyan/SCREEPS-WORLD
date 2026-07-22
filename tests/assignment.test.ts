@@ -10,6 +10,7 @@ import {
 } from "../src/domain/assignment/service";
 import { TaskPool } from "../src/domain/assignment/task-pool";
 import { globalCache } from "../src/kernel/global-cache";
+import { CONFIG } from "../src/config";
 import type { RoomSnapshot, ColonyState } from "../src/kernel/contracts";
 
 // ── mock 辅助函数 ──
@@ -32,6 +33,7 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
     constructionSites: [],
     myConstructionSites: [],
     hostileCreeps: [],
+    threatCreeps: [],
     energyAvailable: 300,
     energyCapacityAvailable: 300,
     fillTargets: [],
@@ -86,6 +88,25 @@ describe("Assignment — buildRoomTasks (pure)", () => {
     expect(harvestTasks).toHaveLength(2);
     expect(harvestTasks[0]?.sourceId).toBe("src1");
     expect(harvestTasks[1]?.sourceId).toBe("src2");
+  });
+
+  it("harvest maxWorkers 受 maxMinersPerSource 封顶（P2-6：RCL7-8 不接受 5-8 creep）", () => {
+    const source = { id: "src1", pos: { x: 10, y: 10, roomName: "W1N1" } } as unknown as Source;
+    // RCL7 目标 WORK=8，旧实现会许 8 个 creep；新实现封顶到 maxMinersPerSource。
+    const snapshot = mockSnapshot({ sources: [source], rcl: 7 });
+    const tasks = buildRoomTasks(snapshot, [], mockFlags());
+    const harvest = tasks.find(t => t.kind === "harvest")!;
+    expect(harvest.maxWorkers).toBe(CONFIG.assignment.maxMinersPerSource);
+    expect(harvest.maxWorkers).toBeLessThan(8);
+  });
+
+  it("harvest maxWorkers 在低 RCL 仍受 maxMinersPerSource 封顶", () => {
+    const source = { id: "src1", pos: { x: 10, y: 10, roomName: "W1N1" } } as unknown as Source;
+    const snapshot = mockSnapshot({ sources: [source], rcl: 2 });
+    const tasks = buildRoomTasks(snapshot, [], mockFlags());
+    const harvest = tasks.find(t => t.kind === "harvest")!;
+    // min(maxMinersPerSource=3, 目标 WORK=5) = 3。
+    expect(harvest.maxWorkers).toBe(CONFIG.assignment.maxMinersPerSource);
   });
 
   it("generates fill task when fillTargets exist", () => {

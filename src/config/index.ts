@@ -110,6 +110,10 @@ export const CONFIG = {
     },
     /** 能量低于此阈值时触发紧急抢占 — 释放普通任务转为 fill。 */
     emergencyFillThreshold: 300,
+    /** 单个 source 最多可同时分配的矿工数（P2-6：maxWorkers 语义 = creep 数而非目标 WORK 数）。
+     * 近似「可站矿位」上限：一个饱和矿工即可采空 source（10/tick），3 为安全上限，
+     * 既容纳早期小矿工多开，又杜绝 RCL7-8 时 5-8 个大矿工挤一个 source 过采/堵位。 */
+    maxMinersPerSource: 3,
   },
 
   economy: {
@@ -139,9 +143,18 @@ export const CONFIG = {
       /** 危机时仅当 ticksToDowngrade 低于此值才保留 1 个 upgrader 保级，否则停升级省能。 */
       downgradeGuard: 3000,
     },
+    /** Link 传输参数。 */
+    link: {
+      /** source link 发起传输的最小能量阈值（P1-4：攒够再发，避免小额传输占冷却致 source link 溢出）。 */
+      minTransfer: 400,
+    },
   },
 
   defense: {
+    /** 联盟白名单：owner 命中者一律视为非威胁（不逃跑 / 不开火 / 不停经济）。 */
+    allies: [] as readonly string[],
+    /** 无塔时，威胁 creep 靠近 spawn/controller 至此 range 内才激活 safe mode（避免过境 scout 误烧）。 */
+    safeModeTriggerRange: 5,
     /** Tower 维修 wall/rampart 的目标血量，按 RCL 分级（约束 G-DF-08）。 */
     wallTargetHits: {
       rcl3_4: 100_000,

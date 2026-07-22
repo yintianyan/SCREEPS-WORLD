@@ -34,7 +34,8 @@ export const roomStateSystem: System = {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
 
-      // 1. 计算总储备 = energyAvailable + containers + storage。
+      // 1. 计算总储备 = energyAvailable + containers + storage + 在途 creep 携带能量。
+      // 计入 creep 身上能量（P1-5 ①）：hauler 取/送不再改变 reserve，避免物流搬运制造假危机信号。
       let reserve = snapshot.energyAvailable;
       for (const c of snapshot.containers) {
         reserve += c.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -42,6 +43,7 @@ export const roomStateSystem: System = {
       if (snapshot.storage) {
         reserve += snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY);
       }
+      reserve += snapshot.creepEnergy ?? 0;
 
       // 2. 统计有效采集者（已分配 source 的 harvester/worker）。
       // 复用 Kernel 预构建的 sourceOccupancy 求和，避免遍历全部 Game.creeps。
@@ -79,7 +81,7 @@ export const roomStateSystem: System = {
       };
 
       // 5. 映射为 ColonyState 并写入 RoomMemory。
-      const hasHostiles = snapshot.hostileCreeps.length > 0;
+      const hasHostiles = snapshot.threatCreeps.length > 0;
       roomMem.colonyState = phaseToColonyState(phaseResult.phase, hasHostiles);
 
       // 5.5 经济压力梯度信号 (0.0–1.0)。

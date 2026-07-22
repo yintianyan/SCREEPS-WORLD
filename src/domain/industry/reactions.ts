@@ -114,3 +114,46 @@ export function estimateTicks(plan: ReactionPlan): number {
     return total + batches;
   }, 0);
 }
+
+// ─── Lab 相邻校验（反应执行前置约束） ───────────────────────
+
+/** Lab 的位置信息（用于相邻校验，纯数据）。 */
+export interface LabPos {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** 反应三元组：一个 output lab + 两个 input lab 的 id。 */
+export interface ReactionTrio {
+  readonly input1: string;
+  readonly input2: string;
+  readonly output: string;
+}
+
+/** runReaction 要求两个 input lab 均在 output lab 的 range≤2 内。 */
+export const REACTION_RANGE = 2;
+
+/** 切比雪夫距离（Screeps 的 getRangeTo 语义）。 */
+function chebyshev(a: LabPos, b: LabPos): number {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+}
+
+/**
+ * 从候选 lab 中挑选一个满足相邻约束的反应三元组（纯函数）。
+ *
+ * runReaction 要求两个 input lab 均在 output lab 的 range≤2 内；
+ * RCL7-8 的 lab 若分散布置，任意取 3 个可能永远无法反应。此函数扫描每个
+ * 候选 output lab，找到至少两个在其 range≤2 内的其它 lab 作为 input。
+ *
+ * @returns 满足约束的三元组；若无任何 output lab 能凑齐两个相邻 input，返回 undefined。
+ */
+export function selectReactionTrio(labs: readonly LabPos[]): ReactionTrio | undefined {
+  for (const output of labs) {
+    const inputs = labs.filter(l => l.id !== output.id && chebyshev(l, output) <= REACTION_RANGE);
+    if (inputs.length >= 2) {
+      return { output: output.id, input1: inputs[0]!.id, input2: inputs[1]!.id };
+    }
+  }
+  return undefined;
+}

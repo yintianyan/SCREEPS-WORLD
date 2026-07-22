@@ -1,6 +1,7 @@
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import type { LinkInfo, LinkRole } from "../domain/economy/links";
 import { planLinkTransfers } from "../domain/economy/links";
+import { CONFIG } from "../config";
 
 /**
  * Link 能量传输系统 — P1 系统，管理 link 间瞬时能量传输。
@@ -44,7 +45,7 @@ function runRoomLinks(snapshot: RoomSnapshot): void {
     role: classifyLink(l, snapshot),
   }));
 
-  const transfers = planLinkTransfers(infos);
+  const transfers = planLinkTransfers(infos, { minTransfer: CONFIG.economy.link.minTransfer });
   for (const t of transfers) {
     const from = linkMap.get(t.fromId);
     const to = linkMap.get(t.toId);

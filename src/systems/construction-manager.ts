@@ -69,8 +69,8 @@ function developmentGate(
     if (ctx.budget.tier === "recovery" || ctx.budget.tier === "conserve") return false;
   }
 
-  // 有敌对 creep 时不建造。
-  if (snapshot.hostileCreeps.length > 0) return false;
+  // 有威胁 creep 时不建造（过境 scout 不影响建造）。
+  if (snapshot.threatCreeps.length > 0) return false;
 
   if (!emergencyRebuild) {
     // 检查 P0 孵化队列缺口 — 仅 P0（紧急恢复 worker）阻塞建造。

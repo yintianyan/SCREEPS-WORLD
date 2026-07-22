@@ -118,12 +118,12 @@ describe("harvester — work 模式优先级链", () => {
     expect(creep.transfer).not.toHaveBeenCalledWith(spawn, "energy");
   });
 
-  it("优先级 1.5：link 满时回退到身边 container（range<=2）", () => {
+  it("优先级 1.5：link 满时回退到身边 container", () => {
     const link = mockStructure("link", { id: "link_1", energy: 800, capacity: 800 }); // 满
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
     const snap = mockSnapshot({ links: [link], containers: [container] });
     const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
-    creep.pos.getRangeTo.mockReturnValue(2); // range <= 2
+    creep.pos.getRangeTo.mockReturnValue(1); // 站在 source container 上（range<=1）
     const ctx = mockContext(snap);
 
     harvesterRole.run(creep, ctx);
@@ -168,6 +168,9 @@ describe("harvester — work 模式优先级链", () => {
   it("优先级 3：fillTargets 全满时倒入最空 container", () => {
     const c1 = mockStructure("container", { id: "c1", energy: 1500, capacity: 2000 });
     const c2 = mockStructure("container", { id: "c2", energy: 200, capacity: 2000 });
+    // 两个 container 均远离 source（range 5），关闭站桩采集拦截，走通用倒能链。
+    c1.pos.getRangeTo.mockReturnValue(5);
+    c2.pos.getRangeTo.mockReturnValue(5);
     const snap = mockSnapshot({
       containers: [c1, c2],
       links: [],

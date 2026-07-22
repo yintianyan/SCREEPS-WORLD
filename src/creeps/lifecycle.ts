@@ -22,9 +22,9 @@ export function updateMode(creep: Creep): void {
   }
 }
 
-/** 检查 creep 是否应逃跑（有敌对单位且非战斗单位）。 */
+/** 检查 creep 是否应逃跑（有威胁单位且非战斗单位）。 */
 export function shouldFlee(snapshot: RoomSnapshot): boolean {
-  return snapshot.hostileCreeps.length > 0;
+  return snapshot.threatCreeps.length > 0;
 }
 
 /**
@@ -42,7 +42,7 @@ export function flee(creep: Creep, snapshot: RoomSnapshot): void {
     creep.memory.assignment = undefined;
   }
 
-  const nearestHostile = creep.pos.findClosestByRange(snapshot.hostileCreeps as Creep[]);
+  const nearestHostile = creep.pos.findClosestByRange(snapshot.threatCreeps as Creep[]);
 
   // 策略 1：spawn 比最近敌人更近时走向 spawn（spawn 在安全侧、塔防范围内）。
   if (snapshot.spawns.length > 0 && nearestHostile) {

@@ -101,7 +101,17 @@ export class Kernel {
     // 仅统计实际采矿角色（harvester/worker），其他角色的 sourceId 仅用于 acquire 寻路，
     // 不占用采矿位。
     const globalSourceOccupancy = new Map<string, number>();
+    // 同时汇总每房 creep 身上携带的能量（按 memory.home 归属），
+    // 供 room-state 的 reserve 计入在途能量，避免物流搬运造成危机信号抖动（P1-5 ①）。
+    const globalCreepEnergy = new Map<string, number>();
     for (const creep of Object.values(Game.creeps)) {
+      const home = creep.memory.home;
+      if (home) {
+        const carried = creep.store.getUsedCapacity(RESOURCE_ENERGY);
+        if (carried > 0) {
+          globalCreepEnergy.set(home, (globalCreepEnergy.get(home) ?? 0) + carried);
+        }
+      }
       const role = creep.memory.role;
       if (role !== "harvester" && role !== "worker") continue;
       const sid = creep.memory.sourceId;
@@ -113,7 +123,7 @@ export class Kernel {
     for (const room of Object.values(Game.rooms)) {
       if (!room.controller?.my) continue;
       const snapshot = safeRunBuild(room.name, () =>
-        buildRoomSnapshot(room, globalSourceOccupancy),
+        buildRoomSnapshot(room, globalSourceOccupancy, globalCreepEnergy),
       );
       if (snapshot) ctx._addSnapshot(snapshot);
     }

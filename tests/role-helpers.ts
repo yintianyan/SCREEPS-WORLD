@@ -157,6 +157,7 @@ export function mockCreep(opts: MockCreepOpts = {}): any {
     transfer: vi.fn(() => 0),
     withdraw: vi.fn(() => 0),
     pickup: vi.fn(() => 0),
+    drop: vi.fn(() => 0),
     build: vi.fn(() => 0),
     upgradeController: vi.fn(() => 0),
     repair: vi.fn(() => 0),
@@ -226,6 +227,8 @@ export function mockSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapsho
     constructionSites: [],
     myConstructionSites: [],
     hostileCreeps: [],
+    // 默认 threatCreeps 镜像 hostileCreeps（除非显式覆盖），保持旧 flee 测试行为不变。
+    threatCreeps: overrides.threatCreeps ?? overrides.hostileCreeps ?? [],
     energyAvailable: 500,
     energyCapacityAvailable: 800,
     fillTargets: [],

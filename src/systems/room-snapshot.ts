@@ -1,4 +1,6 @@
 import type { RoomSnapshot } from "../kernel/contracts";
+import { CONFIG } from "../config";
+import { classifyThreats } from "../domain/defense/threat";
 
 /**
  * 为单个自有房间构建 RoomSnapshot。
@@ -10,10 +12,12 @@ import type { RoomSnapshot } from "../kernel/contracts";
  *
  * @param globalSourceOccupancy 由 Kernel 预构建的全局 source 占用映射，
  *   避免每个房间独立遍历全部 Game.creeps。
+ * @param globalCreepEnergy 由 Kernel 预构建的全局“房间 → creep 携带能量”映射（P1-5 ①）。
  */
 export function buildRoomSnapshot(
   room: Room,
   globalSourceOccupancy?: ReadonlyMap<string, number>,
+  globalCreepEnergy?: ReadonlyMap<string, number>,
 ): RoomSnapshot {
   const myStructures = room.find(FIND_MY_STRUCTURES);
   const spawns = myStructures.filter(isSpawn);
@@ -43,6 +47,8 @@ export function buildRoomSnapshot(
   const allSites = room.find(FIND_CONSTRUCTION_SITES);
   const mySites = room.find(FIND_MY_CONSTRUCTION_SITES);
   const hostileCreeps = room.find(FIND_HOSTILE_CREEPS);
+  // 威胁分级：仅具备攻击/治疗/拆迁/claim 部件且非联盟者才算威胁（P0-2）。
+  const threatCreeps = classifyThreats(hostileCreeps, CONFIG.defense.allies);
 
   // 掉落资源：采集地上散落的能量（creep 死亡掉落、harvester 溢出等）。
   const droppedEnergy = room.find(FIND_DROPPED_RESOURCES).filter(
@@ -99,11 +105,13 @@ export function buildRoomSnapshot(
     constructionSites: allSites,
     myConstructionSites: mySites,
     hostileCreeps,
+    threatCreeps,
     energyAvailable: room.energyAvailable,
     energyCapacityAvailable: room.energyCapacityAvailable,
     fillTargets,
     needsRecovery,
     sourceOccupancy,
+    creepEnergy: globalCreepEnergy?.get(room.name) ?? 0,
     minerals,
     labs,
     terminal,

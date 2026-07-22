@@ -1,6 +1,7 @@
-import { getWallTargetHits } from "../config";
+import { CONFIG, getWallTargetHits } from "../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import { findCriticalRepair } from "../creeps/helpers";
+import { selectTowerTarget, type TowerThreat } from "../domain/defense/tower-target";
 
 /**
  * Tower 防御系统 — P0 系统，负责所有 Tower 操作和安全模式。
@@ -19,8 +20,9 @@ export const towerDefenseSystem: System = {
   run(ctx: TickContext): void {
     for (const snapshot of ctx.snapshots()) {
       if (snapshot.towers.length === 0) {
-        // 无 Tower — 考虑安全模式。
-        if (snapshot.hostileCreeps.length > 0) {
+        // 无 Tower — 收紧 safe mode：仅当威胁 creep 靠近核心区（spawn，无 spawn 时退到 controller）
+        // 至 safeModeTriggerRange 内才激活，避免无害过境 scout 误烧珍贵的 safe mode。
+        if (snapshot.threatCreeps.length > 0 && isCoreBreached(snapshot)) {
           const controller = snapshot.controller;
           if (
             controller?.my &&
@@ -35,11 +37,11 @@ export const towerDefenseSystem: System = {
       }
 
       // 有 Tower — G-DF-06：攻击敌人 > 紧急维修 > wall/rampart 维护。
-      if (snapshot.hostileCreeps.length > 0) {
-        // R7-02：所有 tower 协同攻击同一目标（以第一个可用 tower 为参考选最近敌人）。
+      if (snapshot.threatCreeps.length > 0) {
+        // R7-02 / P1-3：所有 tower 集火同一目标 —— 奶妈优先、最脆优先、近距优先。
         const firstTower = snapshot.towers.find(t => t.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
         if (firstTower) {
-          const target = firstTower.pos.findClosestByRange(snapshot.hostileCreeps as Creep[]);
+          const target = selectFocusTarget(firstTower, snapshot.threatCreeps as Creep[]);
           if (target) {
             for (const tower of snapshot.towers) {
               if (tower.store.getUsedCapacity(RESOURCE_ENERGY) === 0) continue;
@@ -85,6 +87,37 @@ export const towerDefenseSystem: System = {
     }
   },
 };
+
+/**
+ * 为全塔集火选择目标（P1-3）。
+ * 用纯函数 selectTowerTarget 按「奶妈优先 / 最脆优先 / 近距优先」排序；
+ * 异常或选不出时回退到 findClosestByRange，保证防御不因选择逻辑失效而停火。
+ */
+function selectFocusTarget(referenceTower: StructureTower, threats: readonly Creep[]): Creep | undefined {
+  const summaries: TowerThreat[] = threats.map(c => ({
+    id: c.id as string,
+    healParts: c.body.filter(p => p.type === HEAL).length,
+    hits: c.hits,
+    hitsMax: c.hitsMax,
+    rangeToTower: referenceTower.pos.getRangeTo(c.pos),
+  }));
+  const targetId = selectTowerTarget(summaries);
+  const target = targetId ? Game.getObjectById<Creep>(targetId as Id<Creep>) : undefined;
+  // 回退：目标已消失或无法解析时退回最近目标。
+  return target ?? referenceTower.pos.findClosestByRange(threats as Creep[]) ?? undefined;
+}
+
+/**
+ * 核心区是否被威胁 creep 突破（无塔时的 safe mode 触发判据）。
+ * 任一威胁 creep 距 spawn（无 spawn 时退到 controller）range <= safeModeTriggerRange 即视为突破。
+ * 避免仅因房间边缘出现威胁就误烧 safe mode。
+ */
+function isCoreBreached(snapshot: RoomSnapshot): boolean {
+  const anchor = snapshot.spawns[0] ?? snapshot.controller;
+  if (!anchor) return true; // 既无 spawn 也无 controller — 无参考点，保守视为突破。
+  const range = CONFIG.defense.safeModeTriggerRange;
+  return snapshot.threatCreeps.some(c => c.pos.getRangeTo(anchor.pos) <= range);
+}
 
 /**
  * 找到需要维修的 wall/rampart（血量低于目标值）。

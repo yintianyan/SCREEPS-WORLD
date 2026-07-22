@@ -135,3 +135,52 @@ describe("Links — planLinkTransfers", () => {
     expect(transfers).toHaveLength(0);
   });
 });
+
+// ── P1-4 最小传输阈值 ──
+describe("Links — minTransfer 阈值（P1-4）", () => {
+  it("低于阈值且远未满时不传输", () => {
+    const links = [
+      link("s1", "source", 300, { capacity: 800 }), // 300 < 400 且 300 < 720(90%)
+      link("c1", "controller", 700, { capacity: 800 }), // needs 100 但不急（700 >= 400）
+    ];
+    const transfers = planLinkTransfers(links, { minTransfer: 400 });
+    expect(transfers).toHaveLength(0);
+  });
+
+  it("达阈值即传输", () => {
+    const links = [
+      link("s1", "source", 400, { capacity: 800 }),
+      link("c1", "controller", 700, { capacity: 800 }), // needs 100
+    ];
+    const transfers = planLinkTransfers(links, { minTransfer: 400 });
+    expect(transfers).toEqual([{ fromId: "s1", toId: "c1", amount: 100 }]);
+  });
+
+  it("接近满（>=90%）即便低于阈值也传输（防溢出）", () => {
+    const links = [
+      link("s1", "source", 200, { capacity: 200 }), // 满，200 >= 180(90%)
+      link("c1", "controller", 700, { capacity: 800 }), // needs 100
+    ];
+    const transfers = planLinkTransfers(links, { minTransfer: 400 });
+    expect(transfers).toEqual([{ fromId: "s1", toId: "c1", amount: 100 }]);
+  });
+
+  it("controller 急需（能量低于阈值）时豁免小额 source 传输", () => {
+    const links = [
+      link("s1", "source", 100, { capacity: 800 }), // 100 < 400 且未满
+      link("c1", "controller", 100, { capacity: 800 }), // 100 < 400 → 急需
+    ];
+    const transfers = planLinkTransfers(links, { minTransfer: 400 });
+    expect(transfers).toEqual([{ fromId: "s1", toId: "c1", amount: 100 }]);
+  });
+
+  it("低于阈值的 source 不向 storage 溢出回收", () => {
+    const links = [
+      link("s1", "source", 300, { capacity: 800 }), // < 400 且未满
+      link("c1", "controller", 800, { capacity: 800 }), // 满，不急需
+      link("st", "storage", 200, { capacity: 800 }),
+    ];
+    const transfers = planLinkTransfers(links, { minTransfer: 400 });
+    expect(transfers).toHaveLength(0);
+  });
+});
