@@ -87,8 +87,8 @@ export function blueprintToTasks(
   return candidates;
 }
 
-/** 可重定位的结构类型 — 核心锚定结构（spawn/storage/tower/link）不可搬家。 */
-export const RELOCATABLE_TYPES: ReadonlySet<string> = new Set(["extension"]);
+/** 可重定位的结构类型 — spawn/storage 是锚定结构不可搬家，其余核心结构可微调。 */
+export const RELOCATABLE_TYPES: ReadonlySet<string> = new Set(["extension", "tower", "link"]);
 
 /**
  * 重定位候选偏移 — 全部为偶校验（dx+dy 偶数），保持 v2 棋盘格不变量：
@@ -490,6 +490,87 @@ function buildOccupiedSet(
   return set;
 }
 
+// ─── 核心预规划道路 ─────────────────────────────────────────
+
+/**
+ * 为棋盘格走道生成预规划道路。
+ *
+ * 老玩家认知：v2 棋盘格中结构在偶校验格，奇校验格是天然走道。
+ * 如果等流量采样（100+ tick 窗口 × 2）再铺路，前 200 tick hauler 在 plain 上走
+ * （cost 2），效率减半。预规划走道格铺 road 让 hauler 从第一天就 cost 1。
+ *
+ * 策略：找到所有奇校验格（dx+dy 为奇数），且正交相邻 ≥ 2 个已建/已规划结构位置，
+ * 这些格子一定是高频通行路径。生成 priority 3 道路任务（背景建造，不拖慢 RCL 冲刺）。
+ *
+ * 只在 RCL2+ 生成（至少有第一批 extension 后走道才有意义）。
+ * 每周期最多生成 maxRoadsPerCycle 条（避免淹没 buildQueue）。
+ */
+export function createCoreRoadTasks(
+  blueprint: Blueprint,
+  anchorX: number,
+  anchorY: number,
+  roomName: string,
+  room: Room,
+  snapshot: RoomSnapshot,
+  occupiedSet: ReadonlySet<number>,
+  maxRoadsPerCycle = 4,
+): BuildTaskCandidate[] {
+  const candidates: BuildTaskCandidate[] = [];
+  if (snapshot.rcl < 2) return candidates;
+
+  const terrain = room.getTerrain();
+
+  // 收集当前 RCL 已建/已规划的结构绝对位置（偶校验格）。
+  const structurePositions = new Set<number>();
+  for (const cell of blueprint.cells) {
+    if (cell.minRcl > snapshot.rcl) continue;
+    structurePositions.add(packPos(anchorX + cell.dx, anchorY + cell.dy));
+  }
+  // 加入已有结构位置。
+  for (const s of [...snapshot.spawns, ...snapshot.extensions, ...snapshot.towers, ...snapshot.containers, ...snapshot.links]) {
+    structurePositions.add(packPos(s.pos.x, s.pos.y));
+  }
+  if (snapshot.storage) structurePositions.add(packPos(snapshot.storage.pos.x, snapshot.storage.pos.y));
+
+  // 扫描核心区域（±7）内的奇校验格，找正交相邻 ≥ 2 个结构的走道格。
+  let generated = 0;
+  for (let dx = -7; dx <= 7 && generated < maxRoadsPerCycle; dx++) {
+    for (let dy = -7; dy <= 7 && generated < maxRoadsPerCycle; dy++) {
+      // 只要奇校验格（走道格）。
+      if ((dx + dy) % 2 === 0) continue;
+
+      const x = anchorX + dx;
+      const y = anchorY + dy;
+      if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+      if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+      if (occupiedSet.has(packPos(x, y))) continue;
+
+      // 计算正交相邻（4 方向）的结构数量。
+      let adjacentStructures = 0;
+      const orthogonal: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (const [ox, oy] of orthogonal) {
+        if (structurePositions.has(packPos(x + ox, y + oy))) {
+          adjacentStructures++;
+        }
+      }
+
+      if (adjacentStructures >= 2) {
+        candidates.push({
+          key: `road.core.${x}.${y}`,
+          pos: { x, y, roomName },
+          structureType: STRUCTURE_ROAD,
+          priority: 3,
+          phase: "rcl2",
+          validation: "ok",
+        });
+        generated++;
+      }
+    }
+  }
+
+  return candidates;
+}
+
 // ─── 动态防御工事 ─────────────────────────────────────────
 
 /** 防御工事生成选项。 */
@@ -582,7 +663,8 @@ export function createDefenseTasks(
     .map(([octant]) => octant);
 
   const terrain = room.getTerrain();
-  const occupiedSet = options.occupiedSet ?? buildOccupiedSet(snapshot, options.minerals);
+  // 本地可变副本：防止同线内重复落子（ReadonlySet 不可修改）。
+  const localOccupied = new Set<number>(options.occupiedSet ?? buildOccupiedSet(snapshot, options.minerals));
 
   for (const octant of exposedOctants) {
     const vec = OCTANT_VECTORS[octant]!;
@@ -598,11 +680,11 @@ export function createDefenseTasks(
       const idealX = centerX + perp[0] * i;
       const idealY = centerY + perp[1] * i;
 
-      const pos = findBuildableNear(idealX, idealY, terrain, occupiedSet);
+      const pos = findBuildableNear(idealX, idealY, terrain, localOccupied);
       if (!pos) continue;
 
       // 标记为已占用，防止同线内重复落子。
-      occupiedSet.add(packPos(pos.x, pos.y));
+      localOccupied.add(packPos(pos.x, pos.y));
 
       candidates.push({
         key: `defense.rampart.${octant}.${i + halfLen}`,

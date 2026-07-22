@@ -130,14 +130,32 @@ describe("layout — fallback relocation", () => {
     expect([result!.pos.x, result!.pos.y]).not.toEqual([27, 25]);
   });
 
-  it("不可移动类型（tower）不重定位", () => {
-    const towerCell = COMPACT_CORE_V2.cells.find(c => c.key === "core.tower.01")!;
+  it("不可移动类型（spawn）不重定位", () => {
     const terrain = wallTerrain([[25, 25]]);
+    const room = roomWith(terrain);
+    const snap = mockSnapshot({ rcl: 8, sources: [], controller: undefined });
+    const spawnCandidate: BuildTaskCandidate = {
+      key: "core.spawn.02",
+      pos: { x: 25, y: 25, roomName: "W7N4" },
+      structureType: "spawn",
+      priority: 1,
+      phase: "late",
+      validation: "terrain",
+    };
+    const spawnCell = { ...spawnCandidate, minRcl: 7, tags: ["core"] as const, requires: undefined, dx: -2, dy: 0 };
+
+    const result = relocateCandidate(spawnCandidate, spawnCell as any, room, snap, options(snap), new Set());
+    expect(result).toBeUndefined();
+  });
+
+  it("tower 可重定位（不规则地形不永久丢失结构）", () => {
+    const towerCell = COMPACT_CORE_V2.cells.find(c => c.key === "core.tower.01")!;
+    const terrain = wallTerrain([[27, 27]]);
     const room = roomWith(terrain);
     const snap = mockSnapshot({ rcl: 8, sources: [], controller: undefined });
     const towerCandidate: BuildTaskCandidate = {
       key: towerCell.key,
-      pos: { x: 25, y: 25, roomName: "W7N4" },
+      pos: { x: 27, y: 27, roomName: "W7N4" },
       structureType: "tower",
       priority: 0,
       phase: "rcl3",
@@ -145,7 +163,10 @@ describe("layout — fallback relocation", () => {
     };
 
     const result = relocateCandidate(towerCandidate, towerCell, room, snap, options(snap), new Set());
-    expect(result).toBeUndefined();
+    expect(result).toBeDefined();
+    expect(result!.validation).toBe("ok");
+    // 重定位后不在原位置。
+    expect([result!.pos.x, result!.pos.y]).not.toEqual([27, 27]);
   });
 
   it("全部 fallback 失败 → undefined（安全跳过，下周期再试）", () => {

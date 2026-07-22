@@ -13,6 +13,7 @@ import {
   createControllerLinkTask,
   createExtractorTask,
   createDefenseTasks,
+  createCoreRoadTasks,
 } from "../domain/layout/task-factory";
 import {
   collectCompletedKeys,
@@ -301,6 +302,32 @@ export const layoutPlannerSystem: System & {
         queue.push(candidateToBuildTask(candidate));
         existingKeys.add(candidate.key);
         tasksAdded = true;
+      }
+    }
+
+    // 3.9 核心预规划道路（RCL2+）— 棋盘格走道格铺 road。
+    // 让 hauler 从第一天就 cost 1 移动，不必等 100+ tick 流量采样。
+    // 与走廊路共享门禁：基础设施未完成时不生成（避免淹没 buildQueue）。
+    {
+      const hasPendingInfra = queue.some(
+        t => t.priority <= 1 && t.state === "queued",
+      );
+      if (!hasPendingInfra) {
+        const coreRoadCandidates = createCoreRoadTasks(
+          COMPACT_CORE_V2,
+          anchor.x,
+          anchor.y,
+          snapshot.roomName,
+          room,
+          snapshot,
+          occupiedSet,
+        );
+        for (const candidate of coreRoadCandidates) {
+          if (existingKeys.has(candidate.key)) continue;
+          queue.push(candidateToBuildTask(candidate));
+          existingKeys.add(candidate.key);
+          tasksAdded = true;
+        }
       }
     }
 
