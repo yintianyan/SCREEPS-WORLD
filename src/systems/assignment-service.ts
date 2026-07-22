@@ -38,7 +38,17 @@ export const assignmentServiceSystem: System = {
       // 紧急抢占（plan §5.7.2 规则 5）：能量低于 fill 阈值或有敌对单位时，
       // 释放 priority >= 1 的普通任务，强制 creep 重新请求 P0 fill 或进入 flee。
       // 必须在 generateRoomTasks 之前执行，确保本 tick 任务列表反映抢占后状态。
-      if (isEmergencyState(snapshot)) {
+      //
+      // P1-2 边沿触发：仅在「正常 → 紧急」上升沿失效一次。持续紧急期间不重复失效——
+      // 旧实现每 tick 清空所有 assignment 并写 memory.assignment=undefined，
+      // 使 lease 机制在持续敌袭/低能量期间形同虚设，且产生大量 Memory 写入抖动。
+      // flee 由 role-runner 每 tick 独立处理（shouldFlee），不依赖 assignment 失效。
+      const roomMem = Memory.rooms[snapshot.roomName];
+      const emergency = isEmergencyState(snapshot);
+      const wasEmergency = roomMem?.wasEmergency === true;
+      if (roomMem) roomMem.wasEmergency = emergency;
+
+      if (shouldPreemptAssignments(emergency, wasEmergency)) {
         invalidateAssignments(pool, snapshot.roomName, 1);
       }
       generateRoomTasks(pool, snapshot, ctx);
@@ -140,4 +150,15 @@ function isEmergencyState(snapshot: RoomSnapshot): boolean {
   if (snapshot.energyAvailable < dynamicThreshold) return true;
   if (snapshot.threatCreeps.length > 0) return true;
   return false;
+}
+
+/**
+ * 判断是否应触发任务抢占（纯函数，P1-2 边沿触发）。
+ *
+ * 仅在「正常 → 紧急」上升沿返回 true（emergency=true 且 wasEmergency=false）。
+ * 持续紧急（true,true）、持续正常（false,false）、紧急缓解（false,true）均返回 false。
+ * 这保证一次紧急事件只失效一次 assignment，避免持续期间每 tick 抖动。
+ */
+export function shouldPreemptAssignments(emergency: boolean, wasEmergency: boolean): boolean {
+  return emergency && !wasEmergency;
 }

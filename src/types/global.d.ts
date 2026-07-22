@@ -78,6 +78,12 @@ declare global {
      */
     economyPressure?: number;
     controllerDowngradeRisk?: boolean;
+    /**
+     * 上一 tick 是否处于紧急状态（P1-2 边沿触发用）。
+     * assignment-service 仅在「正常 → 紧急」上升沿失效普通任务，
+     * 持续紧急期间不重复失效，避免每 tick 清空 assignment 抖动。
+     */
+    wasEmergency?: boolean;
     /** 殖民相位观测（约束层的「经济真相」）。 */
     phase?: {
       phase: ColonyPhase;
