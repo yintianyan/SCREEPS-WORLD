@@ -106,6 +106,17 @@ export function getHaulFillTarget(
   }
   const reserved = g.fillReservations;
 
+  // P1-3: 威胁存在时 tower 提升到最高优先级 — 防御弹药是生存关键。
+  // tower 每次攻击消耗 10 能量，hauler 必须在威胁期间优先补给 tower 保持防御火力。
+  const hasThreats = snapshot.threatCreeps.length > 0;
+  if (hasThreats) {
+    const tower = pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_TOWER]);
+    if (tower) {
+      reserved.add(tower.id);
+      return tower as unknown as AnyOwnedStructure;
+    }
+  }
+
   // 0. 站桩升级保障：controller container 低于半满时优先派一个 hauler 补给。
   const cc = snapshot.controllerContainer;
   if (

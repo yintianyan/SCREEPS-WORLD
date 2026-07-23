@@ -86,6 +86,10 @@ export interface EconomySample {
   sc: number;
   /** 殖民相位 (0=bootstrap 1=growth 2=crisis 3=recovery 4=steady)。 */
   ph: number;
+  /** Container 总能量（所有 container 的 energy 之和）。*/
+  cte?: number;
+  /** Controller container 能量（站桩升级供能链健康度）。*/
+  cce?: number;
 }
 
 // ─── 人口普查快照 ────────────────────────────────────────────
@@ -186,6 +190,8 @@ export function sampleEconomy(
     energyAvailable: number;
     energyCapacityAvailable: number;
     storageEnergy: number;
+    containerEnergy?: number;
+    controllerContainerEnergy?: number;
   },
 ): EconomySample {
   const phaseRank = phase.phase === "bootstrap" ? 0
@@ -207,5 +213,7 @@ export function sampleEconomy(
     hc: phase.harvesterCount,
     sc: phase.sourceCount,
     ph: phaseRank,
+    cte: snapshot.containerEnergy,
+    cce: snapshot.controllerContainerEnergy,
   };
 }

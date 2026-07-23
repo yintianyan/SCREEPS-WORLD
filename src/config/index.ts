@@ -183,6 +183,8 @@ export const CONFIG = {
       /** source link 发起传输的最小能量阈值（P1-4：攒够再发，避免小额传输占冷却致 source link 溢出）。 */
       minTransfer: 400,
     },
+    /** Storage 满仓阈值 — 超过此比例时触发限采 + 加速消费。 */
+    storageFullThreshold: 0.9,
   },
 
   defense: {

@@ -3,10 +3,12 @@
  *
  * 策略声明：
  *   gate:    能量地板门禁（仅阻止 acquire，不阻止 work）；紧急防降级覆盖
- *   acquire: 身边掉落能量 > controller link > controller container > storage(限量) > 最满非物流 container > harvest
+ *   acquire: 身边掉落能量 > controller link > controller container > storage(动态限量) > 最满非物流 container > harvest
  *   work:    升级控制器
  *
  * 站桩升级核心：upgrader 站在 controller 旁，从 link/container 取能 + 升级，0 通勤。
+ * P1-1: storage 取能上限按水位动态缩放 — 高水位时放开上限加速消化库存，
+ * 低水位时收紧防止 storage 突降触发 economyPressure 连锁降级。
  */
 import { CONFIG } from "../../config";
 import type { Priority } from "../../kernel/contracts";
@@ -64,6 +66,25 @@ function upgraderGate(ac: ActionContext): boolean {
   return !belowFloor; // belowFloor → 返回 false → idle
 }
 
+/**
+ * P1-1: 动态计算 storage 取能上限 — 按 storage 水位缩放。
+ *
+ * - 高水位 (>50%)：放开到 carry 满载（库存盈余应被快速消化）
+ * - 中水位 (15%-50%)：用固定配置值（平衡消化速度与突降风险）
+ * - 低水位 (<15%)：收紧到 200（保护 storage 触发 economyPressure 连锁降级）
+ */
+function dynamicStorageLimit(ac: ActionContext): number {
+  const st = ac.snapshot.storage;
+  if (!st) return CONFIG.economy.upgrade.perTickWithdrawLimit;
+  const energy = st.store.getUsedCapacity(RESOURCE_ENERGY);
+  const capacity = st.store.getCapacity(RESOURCE_ENERGY);
+  if (capacity === 0) return CONFIG.economy.upgrade.perTickWithdrawLimit;
+  const ratio = energy / capacity;
+  if (ratio > 0.5) return ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
+  if (ratio > 0.15) return CONFIG.economy.upgrade.perTickWithdrawLimit;
+  return 200;
+}
+
 const policy: RolePolicy = {
   gate: upgraderGate,
 
@@ -74,8 +95,9 @@ const policy: RolePolicy = {
     withdrawControllerLink(),
     // 2. controller 旁 container（0 通勤）。
     withdrawControllerContainer(),
-    // 3. storage（限量取能，防止 storage 突降触发 economyPressure 连锁降级）。
-    withdrawStorageCapped(CONFIG.economy.upgrade.perTickWithdrawLimit),
+    // 3. storage（动态限量取能 — 按 storage 水位缩放，防止突降触发 economyPressure 连锁降级）。
+    // P1-1: 高水位(>50%)时放开到 carry 满载；低水位(<15%)时收紧到 200，中间用固定值。
+    withdrawStorageCapped(dynamicStorageLimit),
     // 4. 最满非物流 container（不抢 hauler 的物流源）。
     withdrawRichestNonSourceContainer(),
     // 5. 兜底：所有 container 无能量时直接采集。

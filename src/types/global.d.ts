@@ -93,6 +93,11 @@ declare global {
       sourceCount: number;
       rcl: number;
     };
+    /**
+     * Storage 能量超过 storageFullThreshold 时为 true。
+     * 由 room-state 每 tick 计算，供 spawn-manager 限采 + demand 加速消费。
+     */
+    storageNearFull?: boolean;
     spawnQueue?: SpawnRequest[];
     buildQueue?: BuildTask[];
     lastRcl?: number;

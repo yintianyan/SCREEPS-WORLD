@@ -354,8 +354,12 @@ export function withdrawStorage(): ActionCandidate {
  *
  * 防止 upgrader 一次取走大量能量导致 storage 突降、触发 economyPressure
  * 连锁降级。单次取 min(可用, 空闲, limit)。
+ *
+ * P1-1: limit 可为固定值或动态函数 — 动态函数允许按 storage 水位缩放取能上限。
  */
-export function withdrawStorageCapped(limit: number): ActionCandidate {
+export function withdrawStorageCapped(
+  limit: number | ((ac: ActionContext) => number),
+): ActionCandidate {
   return {
     name: "withdraw:storage-capped",
     predicate: (ac) => {
@@ -366,7 +370,8 @@ export function withdrawStorageCapped(limit: number): ActionCandidate {
       const st = ac.snapshot.storage!;
       const available = st.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
-      const amount = Math.min(available, carryFree, limit);
+      const effectiveLimit = typeof limit === "function" ? limit(ac) : limit;
+      const amount = Math.min(available, carryFree, effectiveLimit);
       const result = actOrMove(ac.creep, st, () => ac.creep.withdraw(st, RESOURCE_ENERGY, amount));
       if (result === ERR_NOT_ENOUGH_RESOURCES) {
         ac.creep.memory.mode = "idle";

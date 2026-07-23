@@ -96,6 +96,17 @@ export const roomStateSystem: System = {
         ? (ds / 40) * 0.5
         : 0.5 + ((ds - 40) / 60) * 0.5;
 
+      // 6. Storage 满仓检测 — 超过阈值时标记，供 demand 限采 + 加速消费。
+      // 满仓 = 能量在源头被浪费（harvester drop），必须加速升级/建造消化盈余。
+      if (snapshot.storage) {
+        const storageEnergy = snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY);
+        const storageCapacity = snapshot.storage.store.getCapacity(RESOURCE_ENERGY);
+        roomMem.storageNearFull = storageCapacity > 0
+          && storageEnergy / storageCapacity >= CONFIG.economy.storageFullThreshold;
+      } else {
+        roomMem.storageNearFull = false;
+      }
+
       // 6. 检测控制器降级风险。
       const controller = snapshot.controller;
       roomMem.controllerDowngradeRisk =

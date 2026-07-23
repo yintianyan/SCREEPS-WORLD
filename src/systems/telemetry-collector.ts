@@ -97,6 +97,17 @@ function sampleEconomyData(tick: number, ctx: TickContext): void {
       ? snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY)
       : 0;
 
+    // P0-2: 采集 container 级别能量流数据，用于诊断物流瓶颈。
+    // - containerEnergy: 所有 container 的能量总和（物流缓冲健康度）
+    // - controllerContainerEnergy: controller 旁 container 的能量（站桩升级供能链健康度）
+    let containerEnergy = 0;
+    for (const c of snapshot.containers) {
+      containerEnergy += c.store.getUsedCapacity(RESOURCE_ENERGY);
+    }
+    const controllerContainerEnergy = snapshot.controllerContainer
+      ? snapshot.controllerContainer.store.getUsedCapacity(RESOURCE_ENERGY)
+      : 0;
+
     const sample = sampleEconomy(
       tick,
       snapshot.roomName,
@@ -106,6 +117,8 @@ function sampleEconomyData(tick: number, ctx: TickContext): void {
         energyAvailable: snapshot.energyAvailable,
         energyCapacityAvailable: snapshot.energyCapacityAvailable,
         storageEnergy,
+        containerEnergy,
+        controllerContainerEnergy,
       },
     );
     ringPush(seg.economy, sample);

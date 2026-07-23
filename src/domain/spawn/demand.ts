@@ -44,6 +44,8 @@ export interface RoomDemandContext {
   energyAvailable: number;
   /** 经济压力梯度信号 (0.0–1.0)。0=健康，1=危机。用于梯度缩放 P2 角色数量。 */
   economyPressure: number;
+  /** Storage 能量超过满仓阈值时为 true。触发限采 + 加速消费。 */
+  storageNearFull?: boolean;
 }
 
 interface DemandResult {
@@ -133,6 +135,8 @@ export function evaluateDemand(
   const energyCapacity = snapshot.energyCapacityAvailable;
   // 统一经济状态：recovery 涵盖 crisis + recovery 相位，收缩非关键消耗。
   const inCrisis = colonyState === "recovery";
+  // Storage 满仓信号 — 限采 + 加速消费。
+  const storageNearFull = roomCtx.storageNearFull === true;
 
   // 单次遍历获取所有角色计数。
   const counts = countCreepsByRole(creeps, spawning, home);
@@ -161,13 +165,18 @@ export function evaluateDemand(
   const harvesterLiving = counts.harvester ?? 0;
   const harvesterTotal = harvesterLiving + pending.harvester;
 
-  if (harvesterTotal < harvesterConfig.minCount) {
+  // P0-1: Storage 满仓时限采 — 有效目标降为 source 数（每 source 1 个矿工保底），
+  // 不再补到 minCount。满仓时 harvester 产出被 drop 浪费，省下孵化能量给 upgrader/builder 消化库存。
+  const harvesterTarget = storageNearFull
+    ? Math.min(snapshot.sources.length, harvesterConfig.minCount)
+    : harvesterConfig.minCount;
+  if (harvesterTotal < harvesterTarget) {
     // 本地占用映射：从快照复制，循环内累加，避免同轮重复分配同一 source。
     const localOccupancy = new Map<string, number>(
       [...snapshot.sourceOccupancy.entries()].map(([k, v]) => [k, v] as [string, number]),
     );
 
-    for (let i = harvesterTotal; i < harvesterConfig.minCount; i++) {
+    for (let i = harvesterTotal; i < harvesterTarget; i++) {
       // 找到占用最少的 source。
       let bestSource: Source | undefined;
       let bestCount = Infinity;
@@ -260,7 +269,10 @@ export function evaluateDemand(
       upgraderTarget = pressure <= 0.7 ? upgraderConfig.minCount : 0;
     } else if (hasStorage && storageEnergy >= upgradeCfg.sprintStorage && pressure <= 0.3) {
       // 冲刺：库存充足且经济健康，烧库存换 RCL 复利（2 个满 body 站桩）。
-      upgraderTarget = Math.min(upgraderConfig.maxCount, 2);
+      // P0-1: Storage 满仓时拉满 maxCount — 盈余能量必须被消化，否则在源头被浪费。
+      upgraderTarget = storageNearFull
+        ? upgraderConfig.maxCount
+        : Math.min(upgraderConfig.maxCount, 2);
     } else if (hasStorage && storageEnergy >= upgradeCfg.sustainedStorage) {
       // 维持：1 个大 body 站桩 ≈ 15/tick，盈余全喂 controller。
       upgraderTarget = 1;
