@@ -1,0 +1,60 @@
+# ─── Screeps GitHub 自动部署 ─────────────────────────────────────
+# 当 push 到 main/dev 分支时，自动编译 TypeScript 并将
+# dist/main.js 推送到 screeps 分支。
+# 在 Screeps 账户设置中绑定本仓库并选择 screeps 分支即可自动同步。
+name: Deploy to Screeps
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch: # 也支持手动触发
+
+permissions:
+  contents: write # 需要写权限来推送 screeps 分支
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Push compiled code to screeps branch
+        run: |
+          # 配置 git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 获取触发 workflow 的分支名
+          SOURCE_BRANCH="${{ github.ref_name }}"
+
+          # 创建或切换到 screeps 分支
+          git checkout -B screeps
+
+          # 清空工作区（保留 .git），确保 screeps 分支只有编译产物
+          # 注意：不能用 git rm -rf . 因为会删掉 .git
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name 'dist' -exec rm -rf {} +
+
+          # 将 dist/main.js 移到根目录作为 main.js（Screeps 入口）
+          cp dist/main.js main.js
+          rm -rf dist
+
+          # 添加并提交
+          git add -A
+          git commit -m "deploy: build from ${SOURCE_BRANCH}@${{ github.sha }}" --allow-empty
+
+          # 强制推送到 screeps 分支
+          git push origin screeps --force
