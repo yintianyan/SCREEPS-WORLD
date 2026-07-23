@@ -22,6 +22,8 @@ export interface CreepSummary {
   bodyLength: number;
   sourceId?: Id<Source>;
   spawnIndex?: number;
+  /** B1：是否已标记为待回收（上一 tick 或更早被 recyclePass 标记）。 */
+  recycle?: boolean;
 }
 
 /** 正在孵化中的 creep 摘要。 */

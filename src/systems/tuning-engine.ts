@@ -103,10 +103,12 @@ function safeRunTuning(ctx: TickContext, roomName: string): void {
       }
     }
 
-    // 6. 保存诊断快照
-    Memory.kernel!.tuning!.lastEval = {
+    // 6. 保存诊断快照（per-room，避免多房间评估时互相覆盖）
+    if (!Memory.kernel!.tuning!.lastEval) {
+      Memory.kernel!.tuning!.lastEval = {};
+    }
+    Memory.kernel!.tuning!.lastEval[roomName] = {
       tick: ctx.tick,
-      room: roomName,
       adjustments: evaluation.adjustments.map(a => `${a.param}=${a.oldValue}→${a.newValue}`),
       signals: evaluation.signals,
       skipped: evaluation.skipped,

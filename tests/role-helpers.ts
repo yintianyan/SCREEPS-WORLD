@@ -23,6 +23,8 @@ export function resetGlobals(): void {
     map: { describeExits: () => ({ "1": "W7N3", "3": "W6N4", "5": "W7N5", "7": "W8N4" }) },
     cpu: { getUsed: () => 0, limit: 20, tickLimit: 500 },
     rooms: {},
+    creeps: {},
+    spawns: {},
   };
 
   // PathFinder.CostMatrix mock（移动系统使用）。
@@ -103,6 +105,7 @@ export function mockStore(used: number, capacity: number) {
   return {
     getUsedCapacity: vi.fn((_r?: string) => used),
     getFreeCapacity: vi.fn((_r?: string) => capacity - used),
+    getCapacity: vi.fn((_r?: string) => capacity),
     energy: used,
   };
 }

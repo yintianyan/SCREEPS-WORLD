@@ -22,8 +22,6 @@ declare global {
     home?: string;
     /** 行为模式 — 所有角色共享的有限状态。 */
     mode?: CreepMode;
-    /** 遗留 working 标志 — 保留用于迁移兼容。 */
-    working?: boolean;
     /** 稳定工作目标 id；目标不存在时清除。 */
     targetId?: Id<_HasId>;
     /** harvester/miner 绑定的 source。 */
@@ -152,14 +150,13 @@ declare global {
     lastTuned: number;
     /** 每房间的调优覆盖值。key = 房间名。 */
     rooms: Record<string, RoomTuningState>;
-    /** 最近一次评估的诊断快照（供控制台查看）。 */
-    lastEval?: {
+    /** 每房间最近一次评估的诊断快照（供控制台查看）。key = 房间名。 */
+    lastEval?: Record<string, {
       tick: number;
-      room: string;
       adjustments: string[];
       signals: Record<string, number>;
       skipped?: string;
-    };
+    }>;
   }
 
   interface Memory {

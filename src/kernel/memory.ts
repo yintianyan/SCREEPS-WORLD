@@ -33,7 +33,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
       }
       // 迁移遗留 creep memory：从 working 标志设置 mode。
       for (const name in Memory.creeps) {
-        const creep = Memory.creeps[name];
+        const creep = Memory.creeps[name] as any;
         if (creep && !creep.mode) {
           creep.mode = creep.working ? "work" : "acquire";
         }
@@ -143,6 +143,40 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
         } else {
           if (typeof t.lastTuned !== "number") t.lastTuned = 0;
           if (typeof t.rooms !== "object" || t.rooms === null) t.rooms = {};
+          // lastEval 从 v7 早期的单对象格式迁移为 Record<string, {...}>。
+          // 旧格式有 room 字段，新格式以 room 为 key。
+          if (t.lastEval !== undefined && typeof t.lastEval === "object" && !Array.isArray(t.lastEval)) {
+            const oldEval = t.lastEval as any;
+            if (typeof oldEval.room === "string" && typeof oldEval.tick === "number") {
+              // 旧格式：单对象 { tick, room, adjustments, signals, skipped }
+              const room = oldEval.room;
+              const migrated: Record<string, any> = {};
+              migrated[room] = {
+                tick: oldEval.tick,
+                adjustments: oldEval.adjustments ?? [],
+                signals: oldEval.signals ?? {},
+                skipped: oldEval.skipped,
+              };
+              t.lastEval = migrated;
+            }
+            // 如果已经是 Record 格式（无 room 字段），保持不变。
+          }
+        }
+      }
+    },
+  },
+  {
+    from: 7,
+    to: 8,
+    run: () => {
+      // v8：清除 CreepMemory.working 遗留字段。
+      // v1→v2 迁移已将 working 转为 mode，但字段本身从未被删除。
+      // 此迁移幂等地删除所有 creep 的 working 字段；
+      // 如果 creep 没有 working 字段，delete 无副作用。
+      for (const name in Memory.creeps) {
+        const creep = Memory.creeps[name] as any;
+        if (creep && creep.working !== undefined) {
+          delete creep.working;
         }
       }
     },

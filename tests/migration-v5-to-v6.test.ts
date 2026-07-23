@@ -1,7 +1,7 @@
 /**
  * v5 → v6 迁移测试（compact-core-v1 → v2 模板切换）。
  *
- * 注意：迁移链路为 v5→v6→v7，最终 schemaVersion === 7。
+ * 注意：迁移链路为 v5→v6→v7→v8，最终 schemaVersion === 8。
  * 本测试聚焦 v5→v6 的模板切换逻辑；v6→v7 的独立测试见 migration-v6-to-v7.test.ts。
  *
  * 覆盖：
@@ -55,7 +55,7 @@ describe("migration v5 → v6（模板 v1 → v2）", () => {
     expect(layout.version).toBe(2);
     expect(layout.revision).toBe(4); // 3 + 1
     expect(layout.nextPlanTick).toBe(0);
-    expect((globalThis as any).Memory.schemaVersion).toBe(7);
+    expect((globalThis as any).Memory.schemaVersion).toBe(8);
   });
 
   it("未开工的 core.* 任务被清理，site/done 与非 core 任务保留", () => {
@@ -90,6 +90,6 @@ describe("migration v5 → v6（模板 v1 → v2）", () => {
       rooms: { W9N9: { spawnQueue: [], buildQueue: [] } },
     };
     expect(() => maintainMemory()).not.toThrow();
-    expect((globalThis as any).Memory.schemaVersion).toBe(7);
+    expect((globalThis as any).Memory.schemaVersion).toBe(8);
   });
 });

@@ -29,6 +29,15 @@ export const spawnManagerSystem: System = {
     const creeps = collectCreepSummaries();
     const spawning = collectSpawningSummaries();
 
+    // P3-3：预建 per-room 索引，避免 recyclePass 每房全量扫描 Game.creeps。
+    // O(M) 一次构建，N 房间各取自己的子集 → 总计 O(M) 而非 O(N×M)。
+    const creepsByRoom = new Map<string, CreepSummary[]>();
+    for (const s of creeps) {
+      const arr = creepsByRoom.get(s.home);
+      if (arr) arr.push(s);
+      else creepsByRoom.set(s.home, [s]);
+    }
+
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
@@ -69,7 +78,8 @@ export const spawnManagerSystem: System = {
       trySpawn(snapshot, queue);
 
       // 5. B1：回收通道 — 标记退役 creep，引导至最近 spawn 回收残值能量。
-      recyclePass(snapshot, creeps);
+      //    P3-3：传入预建的本房 creep 子集，避免全量 Game.creeps 扫描。
+      recyclePass(snapshot, creepsByRoom.get(snapshot.roomName) ?? []);
     }
   },
 };
@@ -90,28 +100,33 @@ const KNOWN_ROLES: ReadonlySet<string> = new Set(Object.keys(CONFIG.roles));
  */
 function recyclePass(
   snapshot: import("../kernel/contracts").RoomSnapshot,
-  summaries: readonly CreepSummary[],
+  roomCreeps: readonly CreepSummary[],
 ): void {
   const home = snapshot.roomName;
 
   // ── 标记（纯函数决策）──
+  // roomCreeps 已按 home 预过滤，selectRecycleCandidates 内部的 home 过滤为冗余 no-op，
+  // 但保留以维护纯函数的自包含契约。
   const marked = selectRecycleCandidates(
-    summaries,
+    roomCreeps,
     home,
     KNOWN_ROLES,
     getRoleBounds("harvester", home).minCount,
   );
+  const markedSet = new Set(marked);
   for (const name of marked) {
     const creep = Game.creeps[name];
     if (creep && !creep.memory.recycle) creep.memory.recycle = true;
   }
 
   // ── 执行：引导至最近 spawn 并回收 ──
+  // P3-3：仅遍历本房 creep 列表（来自预建索引），不再全量扫描 Game.creeps。
+  // 待处理集合 = summary 中已有 recycle 标记的（旧标记）∪ 本 tick 新标记的（markedSet）。
   if (snapshot.spawns.length === 0) return;
-  for (const name in Game.creeps) {
-    const creep = Game.creeps[name];
-    if (!creep?.memory.recycle) continue;
-    if ((creep.memory.home ?? creep.room.name) !== home) continue;
+  for (const s of roomCreeps) {
+    if (!s.recycle && !markedSet.has(s.name)) continue;
+    const creep = Game.creeps[s.name];
+    if (!creep) continue; // creep 可能在本 tick 死亡
     const spawn = creep.pos.findClosestByRange(snapshot.spawns as StructureSpawn[]);
     if (!spawn) continue;
     if (creep.pos.getRangeTo(spawn) <= 1) {
@@ -231,6 +246,7 @@ function collectCreepSummaries(): CreepSummary[] {
       bodyLength: creep.body.length,
       sourceId: creep.memory.sourceId,
       spawnIndex: creep.memory.spawnIndex,
+      recycle: creep.memory.recycle === true,
     });
   }
   return result;

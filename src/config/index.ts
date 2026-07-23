@@ -21,7 +21,7 @@ export function getWallTargetHits(rcl: number): number {
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 7 },
+  memory: { schemaVersion: 8 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
