@@ -47,10 +47,19 @@ function withdrawAssignmentContainer(): ActionCandidate {
   };
 }
 
-/** 从最满 container 限量取能。 */
+/** 从最满的非 controller container 限量取能。
+ *
+ * 禁止从 controller container 取能：hauler 的 work 链会向 controller container 倒能
+ * （haulFillTarget 将低于半满的 controller container 列为最高优先级填充目标）。
+ * 如果 acquire 链同时从 controller container 取能，会形成「取→倒→取→倒」振荡。
+ */
 function withdrawRichestCapped(): ActionCandidate {
   return withdrawCapped((ac: ActionContext) => {
-    const best = findRichestContainer(ac.snapshot.containers);
+    // 排除 controller container — 它是 hauler 的填充目标，不是取能来源。
+    const candidates = ac.snapshot.controllerContainer
+      ? ac.snapshot.containers.filter(c => c.id !== ac.snapshot.controllerContainer!.id)
+      : ac.snapshot.containers;
+    const best = findRichestContainer(candidates);
     if (!best || best.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
     return best;
   });
