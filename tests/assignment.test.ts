@@ -38,6 +38,7 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
     fillTargets: [],
     needsRecovery: false,
     sourceOccupancy: new Map(),
+    pendingHarvesters: 0,
     minerals: [],
     labs: [],
     terminal: undefined,

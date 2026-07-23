@@ -71,13 +71,37 @@ describe("Phase — evaluateColonyPhase", () => {
     // 先进入 crisis。
     const inCrisis = runDrain(FRESH, 2000, -100, 6);
     expect(inCrisis.phase).toBe("crisis");
-    // 储备回升（delta>0），drainScore 递减：100→80→60→40(crisis)→20(recovery)→0(脱离)。
-    const recover = runDrain(inCrisis, 1500, 100, 4); // →20
-    expect(recover.drainScore).toBe(20);
-    expect(recover.phase).toBe("recovery");
-    const cleared = runDrain(inCrisis, 1500, 100, 5); // →0
+    // P0-2：非对称步长（recoveryStep=30 > scoreStep=20），恢复比进入更快。
+    // drainScore 递减：100→70→40(crisis)→10(exits)→0。
+    const recover2 = runDrain(inCrisis, 1500, 100, 3); // →10
+    expect(recover2.drainScore).toBe(10);
+    // 10 > recoveryClearScore(10)? No → 直接退出到 growth（跳过 recovery 相位）。
+    expect(recover2.phase).toBe("growth");
+    const cleared = runDrain(inCrisis, 1500, 100, 4); // →0
     expect(cleared.drainScore).toBe(0);
     expect(cleared.phase).toBe("growth");
+  });
+
+  it("breaks oscillation with asymmetric recovery step (P0-2)", () => {
+    // 交替赤字/盈余：旧对称步长下净变化=0，永远卡在 crisis。
+    // 新非对称步长（recoveryStep=30 > scoreStep=20）每轮净 -10，最终退出。
+    let state = runDrain(FRESH, 2000, -100, 6); // 进入 crisis, drainScore=100
+    expect(state.phase).toBe("crisis");
+
+    // 交替 8 轮（1赤字+1盈余）
+    for (let i = 0; i < 8; i++) {
+      state = evaluateColonyPhase(
+        input({ reserve: (state.prevReserve ?? 1500) - 100 }),
+        state,
+      );
+      state = evaluateColonyPhase(
+        input({ reserve: (state.prevReserve ?? 1400) + 100 }),
+        state,
+      );
+    }
+    // drainScore 从 100 下降到 0，振荡被打破。
+    expect(state.drainScore).toBe(0);
+    expect(state.phase).toBe("growth");
   });
 
   it("clamps drainScore to [0, enterScore]", () => {

@@ -108,6 +108,9 @@ export class Kernel {
     // P1-3：预构建拥有维修 creep（builder/worker）的房间集合，
     // 供 tower-defense 消费，避免塔防系统独立全量扫描 Game.creeps。
     const globalRepairRooms = new Set<string>();
+    // P0-1：预构建每房「待计入」harvester/worker 数量。
+    // 包括已存活但尚未分配 sourceId 的 + 正在孵化中的，避免替换期间的假 bootstrap。
+    const globalPendingHarvesters = new Map<string, number>();
     for (const creep of Object.values(Game.creeps)) {
       const home = creep.memory.home;
       if (home) {
@@ -125,6 +128,24 @@ export class Kernel {
       const sid = creep.memory.sourceId;
       if (sid) {
         globalSourceOccupancy.set(sid as string, (globalSourceOccupancy.get(sid as string) ?? 0) + 1);
+      } else {
+        // 已存活但尚未分配 sourceId 的新 harvester — 计入 pending。
+        const pendingHome = home ?? creep.room.name;
+        if (pendingHome) {
+          globalPendingHarvesters.set(pendingHome, (globalPendingHarvesters.get(pendingHome) ?? 0) + 1);
+        }
+      }
+    }
+
+    // 统计孵化中的 harvester/worker，同样计入 pending。
+    for (const spawn of Object.values(Game.spawns)) {
+      const spawning = spawn.spawning;
+      if (!spawning) continue;
+      const mem = Memory.creeps[spawning.name];
+      if (!mem) continue;
+      if (mem.role === "harvester" || mem.role === "worker") {
+        const pendingHome = mem.home ?? spawn.room.name;
+        globalPendingHarvesters.set(pendingHome, (globalPendingHarvesters.get(pendingHome) ?? 0) + 1);
       }
     }
 
@@ -134,7 +155,7 @@ export class Kernel {
     for (const room of Object.values(Game.rooms)) {
       if (!room.controller?.my) continue;
       const snapshot = safeRunBuild(room.name, () =>
-        buildRoomSnapshot(room, globalSourceOccupancy, globalCreepEnergy),
+        buildRoomSnapshot(room, globalSourceOccupancy, globalCreepEnergy, globalPendingHarvesters),
       );
       if (snapshot) ctx._addSnapshot(snapshot);
     }

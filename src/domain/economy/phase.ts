@@ -46,8 +46,11 @@ export interface PhaseOptions {
   drainExitScore: number;
   /** recovery 降到此值彻底脱离（进入 growth/bootstrap/steady）。 */
   recoveryClearScore: number;
-  /** 每次评估赤字分数变化量。 */
+  /** 赤字时每次评估的分数增加量（进入 crisis 的步长）。 */
   scoreStep: number;
+  /** 盈余时每次评估的分数减少量（退出 crisis 的步长，P0-2）。
+   * 默认大于 scoreStep，使恢复比下降更快，打破临界振荡。 */
+  recoveryStep: number;
 }
 
 export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
@@ -55,6 +58,7 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   drainExitScore: 40,
   recoveryClearScore: 10,
   scoreStep: 20,
+  recoveryStep: 30,
 };
 
 /**
@@ -73,7 +77,8 @@ export function evaluateColonyPhase(
   const reserveDelta = prev.prevReserve === undefined ? 0 : input.reserve - prev.prevReserve;
 
   const draining = reserveDelta < 0;
-  const delta = draining ? options.scoreStep : -options.scoreStep;
+  // P0-2：非对称步长 — 盈余时用 recoveryStep（> scoreStep）加速退出，打破临界振荡。
+  const delta = draining ? options.scoreStep : -options.recoveryStep;
   const drainScore = Math.max(0, Math.min(options.drainEnterScore, prev.drainScore + delta));
 
   const understaffed = input.harvesterCount < Math.max(1, input.sourceCount);

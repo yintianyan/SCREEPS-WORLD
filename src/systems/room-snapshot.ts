@@ -14,11 +14,13 @@ import { preloadStructureCache } from "../creeps/movement";
  * @param globalSourceOccupancy 由 Kernel 预构建的全局 source 占用映射，
  *   避免每个房间独立遍历全部 Game.creeps。
  * @param globalCreepEnergy 由 Kernel 预构建的全局“房间 → creep 携带能量”映射（P1-5 ①）。
+ * @param globalPendingHarvesters 由 Kernel 预构建的全局“房间 → 待计入 harvester”映射（P0-1）。
  */
 export function buildRoomSnapshot(
   room: Room,
   globalSourceOccupancy?: ReadonlyMap<string, number>,
   globalCreepEnergy?: ReadonlyMap<string, number>,
+  globalPendingHarvesters?: ReadonlyMap<string, number>,
 ): RoomSnapshot {
   const myStructures = room.find(FIND_MY_STRUCTURES);
   const spawns = myStructures.filter(isSpawn);
@@ -120,6 +122,7 @@ export function buildRoomSnapshot(
     fillTargets,
     needsRecovery,
     sourceOccupancy,
+    pendingHarvesters: globalPendingHarvesters?.get(room.name) ?? 0,
     creepEnergy: globalCreepEnergy?.get(room.name) ?? 0,
     minerals,
     labs,

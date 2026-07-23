@@ -84,6 +84,12 @@ export interface RoomSnapshot {
   /** 每个.source ID 对应的已分配 creep 数量（用于免全局扫描的负载均衡）。 */
   readonly sourceOccupancy: ReadonlyMap<string, number>;
   /**
+   * 已存在但尚未计入 sourceOccupancy 的 harvester/worker 数量。
+   * 包括：(1) 已存活但尚未分配 sourceId 的新 harvester，(2) 正在孵化中的 harvester/worker。
+   * 由 Kernel 预构建，供 room-state 的 harvesterCount 使用，避免替换期间的假 bootstrap。
+   */
+  readonly pendingHarvesters: number;
+  /**
    * 本房 creep 身上携带的能量总和（memory.home 归属本房）。
    * 用于让 room-state 的 reserve 计入在途能量，避免物流搬运造成危机信号抖动（P1-5 ①）。
    * 由 Kernel 复用 Game.creeps 遍历结果预构建；缺省视为 0。

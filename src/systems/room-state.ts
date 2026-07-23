@@ -47,10 +47,13 @@ export const roomStateSystem: System = {
 
       // 2. 统计有效采集者（已分配 source 的 harvester/worker）。
       // 复用 Kernel 预构建的 sourceOccupancy 求和，避免遍历全部 Game.creeps。
+      // P0-1：加入 pendingHarvesters（已存活但未分配 sourceId 的 + 孵化中的），
+      // 避免替换期间的假 bootstrap 导致 P2 角色被冻结。
       let harvesterCount = 0;
       for (const count of snapshot.sourceOccupancy.values()) {
         harvesterCount += count;
       }
+      harvesterCount += snapshot.pendingHarvesters ?? 0;
 
       // 3. 评估殖民相位（带迟滞的纯函数）。
       const prevPhase: PhaseState = {

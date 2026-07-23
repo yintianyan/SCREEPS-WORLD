@@ -3,7 +3,7 @@
  *
  * 策略声明：
  *   gate:    能量地板门禁（仅阻止 acquire，不阻止 work）；紧急防降级覆盖
- *   acquire: controller link > controller container > storage > 最满 container > harvest
+ *   acquire: controller link > controller container > storage > 最满非 source container > harvest
  *   work:    升级控制器
  *
  * 站桩升级核心：upgrader 站在 controller 旁，从 link/container 取能 + 升级，0 通勤。
@@ -17,7 +17,7 @@ import {
   upgradeController,
   withdrawControllerContainer,
   withdrawControllerLink,
-  withdrawRichestContainer,
+  withdrawRichestNonSourceContainer,
   withdrawStorage,
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
@@ -42,15 +42,18 @@ function upgraderGate(ac: ActionContext): boolean {
   // 仅阻止 acquire 模式。
   if (ac.creep.memory.mode !== "acquire") return true;
 
-  // 如果有替代能量源（container/link 有能量），upgrader 不与 spawn 竞争，放行。
+  // 如果有替代能量源（非 source container / link 有能量），upgrader 不与 spawn 竞争，放行。
+  // P0-3：仅检查非 source container — upgrader 不再从 source container 取能，
+  // 若只有 source container 有能量，upgrader 会落到 harvestSource 与 spawn 竞争。
   // 注意：storage 不在此列 — storage 低于 floor 时正是要保护它不被 upgrader 抽干。
-  const hasContainerEnergy = ac.snapshot.containers.some(
-    c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+  const hasNonSourceContainerEnergy = ac.snapshot.containers.some(
+    c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0 &&
+      !ac.snapshot.sources.some(s => c.pos.getRangeTo(s.pos) <= 1),
   );
   const hasLinkEnergy = ac.snapshot.links.some(
     l => l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
   );
-  if (hasContainerEnergy || hasLinkEnergy) return true;
+  if (hasNonSourceContainerEnergy || hasLinkEnergy) return true;
 
   // 无替代能量源 — upgrader 只能直接采集，此时用能量地板门禁防止与孵化竞争。
   const hasStorage = ac.snapshot.storage !== undefined;
@@ -71,8 +74,8 @@ const policy: RolePolicy = {
     withdrawControllerContainer(),
     // 3. storage（RCL4+）。
     withdrawStorage(),
-    // 4. 最满 container（含 source container — 主能量池）。
-    withdrawRichestContainer(),
+    // 4. 最满非 source container（P0-3：不抢 hauler 的物流源）。
+    withdrawRichestNonSourceContainer(),
     // 5. 拾取地上掉落能量（衰减资源，优先于采集）。
     pickupDroppedEnergy(),
     // 6. 兜底：所有 container 无能量时直接采集。

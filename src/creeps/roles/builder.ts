@@ -3,7 +3,7 @@
  *
  * 策略声明：
  *   gate:    recovery tier → 释放 assignment（不建造）
- *   acquire: 最近有能量 container > harvest
+ *   acquire: 最近非 source container 有能量 > harvest
  *   work:    assignment site（tier 门禁）> 最近 site（tier 门禁）> fill > critical repair > 升级（gated）
  *
  * CPU 门禁通过候选 predicate 内的 tier 判断实现，不再内嵌 if-else。
@@ -18,7 +18,7 @@ import {
   repairCritical,
   repairFortifications,
   upgradeControllerGated,
-  withdrawClosestContainer,
+  withdrawClosestNonSourceContainer,
 } from "../engine/actions";
 import { releaseAssignment } from "../support/assignment-adapter";
 import { moveToTarget } from "../movement";
@@ -105,8 +105,8 @@ const policy: RolePolicy = {
   gate: builderGate,
 
   acquire: [
-    // 优先取最近有能量的 container（含 source container — 主能量池）。
-    withdrawClosestContainer(),
+    // 优先取最近非 source container 的能量（P0-3：不抢 hauler 的物流源）。
+    withdrawClosestNonSourceContainer(),
     // 拾取地上掉落能量（衰减资源，优先于采集）。
     pickupDroppedEnergy(),
     // 兜底：所有 container 无能量时直接采集。
