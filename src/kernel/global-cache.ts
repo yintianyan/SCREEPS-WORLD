@@ -28,6 +28,8 @@ export interface GlobalCache {
   prevRoomTraffic?: Record<string, Record<string, number>>;
   /** 单 tick 内累加的跳过原因计数，tick 末尾低频刷入 Memory。 */
   skipBuffer?: Record<string, number>;
+  /** per-tick 事件缓冲区 — 任意系统可通过 recordEvent() 写入，telemetry-collector flush。 */
+  eventBuffer?: { events: import("./event-log").GameEvent[] };
   /** assignment-service 的单 tick 任务缓存。 */
   assignment?: AssignmentCache;
   /** 本 tick 已被 hauler 预约的填充目标结构 id 集合（防多 hauler 抢同一目标拥堵）。 */

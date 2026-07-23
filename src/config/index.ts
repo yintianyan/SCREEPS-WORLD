@@ -35,6 +35,17 @@ export const CONFIG = {
     repathLimit: 2,
   },
 
+  telemetry: {
+    /** CPU 时序采样间隔（tick）。10 tick 一次 → 500 条 = 5000 tick 窗口。 */
+    cpuSampleInterval: 10,
+    /** 经济时序采样间隔（tick）。50 tick 一次 → 300 条 = 15000 tick 窗口。 */
+    economySampleInterval: 50,
+    /** 人口普查间隔（tick）。100 tick 一次，仅保留最新快照。 */
+    populationInterval: 100,
+    /** 差分事件检测间隔（tick）。与 cpuSampleInterval 对齐。 */
+    eventDetectionInterval: 10,
+  },
+
   cpu: {
     /** 各档位 bucket 阈值（降级立即生效）。 */
     tiers: {

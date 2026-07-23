@@ -11,6 +11,17 @@ export function initTelemetry(tick: number): void {
     skipped: 0,
     errors: 0,
   };
+  // 初始化 per-tick 事件缓冲区 — 任意系统可通过 recordEvent() 写入，
+  // telemetry-collector 在 tick 末尾 flush 到 segment 2。
+  if (!g.eventBuffer) {
+    g.eventBuffer = { events: [] };
+  } else {
+    // 上一 tick 的残留事件（如果 telemetry-collector 未运行，如 recovery tier）
+    // 保留最多 50 条，防止无限增长。正常情况下 collector 每 10 tick flush。
+    if (g.eventBuffer.events.length > 50) {
+      g.eventBuffer.events = g.eventBuffer.events.slice(-50);
+    }
+  }
 }
 
 /** 输出轻量的 tick 末尾摘要。仅在有值得关注的内容时才记录日志。 */

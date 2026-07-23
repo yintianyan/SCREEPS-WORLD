@@ -9,13 +9,29 @@
  *
  * Segment 分配表：
  *   0 — layout 冷数据（overrides / blocked per room）
- *   1-9 — 预留（多房间 intel / market / 路径缓存）
+ *   1 — 时序数据环形缓冲（CPU + 经济 + 人口，供事后趋势分析）
+ *   2 — 事件日志环形缓冲（Phase/Tier/ColonyState 转换等离散事件）
+ *   3-9 — 预留（多房间 intel / market / 路径缓存）
  */
 import { globalCache } from "./global-cache";
+import type { TimeseriesSegmentData, CpuSample, EconomySample } from "./timeseries";
+import type { EventLogSegmentData, GameEvent } from "./event-log";
+import { createRingBuffer } from "./ring-buffer";
 
 // ─── Segment ID 常量 ────────────────────────────────────────
 
 export const SEGMENT_LAYOUT = 0;
+export const SEGMENT_TIMESERIES = 1;
+export const SEGMENT_EVENT_LOG = 2;
+
+// ─── 容量常量 ───────────────────────────────────────────────
+
+/** CPU 时序环形缓冲容量（每 10 tick 采样 → 500 条 = 5000 tick 窗口）。 */
+const CPU_RING_CAPACITY = 500;
+/** 经济时序环形缓冲容量（每 50 tick 采样 → 300 条 = 15000 tick 窗口）。 */
+const ECONOMY_RING_CAPACITY = 300;
+/** 事件日志环形缓冲容量（保留最近 500 条事件）。 */
+const EVENT_RING_CAPACITY = 500;
 
 // ─── 数据类型 ───────────────────────────────────────────────
 
@@ -34,6 +50,14 @@ interface SegmentCache {
   layout?: LayoutSegmentData;
   /** 是否有未刷写的修改。 */
   layoutDirty?: boolean;
+  /** 时序 segment 数据缓存。 */
+  timeseries?: TimeseriesSegmentData;
+  /** 时序 segment 是否有未刷写的修改。 */
+  timeseriesDirty?: boolean;
+  /** 事件日志 segment 数据缓存。 */
+  eventLog?: EventLogSegmentData;
+  /** 事件日志 segment 是否有未刷写的修改。 */
+  eventLogDirty?: boolean;
   /** 本 tick 是否已请求激活 segment。 */
   requested?: boolean;
 }
@@ -51,12 +75,18 @@ function segCache(): SegmentCache {
  * RawMemory.setActiveSegments 必须在 tick 早期调用，数据在下一 tick 可用。
  * 但由于 Screeps 的 segment 在 setActiveSegments 后同 tick 即可读取（如果之前已激活），
  * 我们每 tick 都调用以确保连续性。
+ *
+ * 激活 3 个 segment（layout + timeseries + eventLog）仍在 10 个上限内 [Facts]。
  */
 export function requestSegments(): void {
   const cache = segCache();
   if (cache.requested) return;
   cache.requested = true;
-  RawMemory.setActiveSegments([SEGMENT_LAYOUT]);
+  RawMemory.setActiveSegments([
+    SEGMENT_LAYOUT,
+    SEGMENT_TIMESERIES,
+    SEGMENT_EVENT_LOG,
+  ]);
 }
 
 /**
@@ -99,14 +129,103 @@ export function markLayoutDirty(): void {
   segCache().layoutDirty = true;
 }
 
+// ─── 时序 segment (Segment 1) ───────────────────────────────
+
 /**
- * 在 tick 末尾调用 — 将 dirty segment 刷写回 RawMemory。
+ * 读取时序 segment 数据（带缓存）。
+ * 首次调用时从 RawMemory.segments 解析；global reset 后自动重建。
+ * 如果 segment 不存在或解析失败，返回空环形缓冲区。
+ */
+export function readTimeseriesSegment(): TimeseriesSegmentData {
+  const cache = segCache();
+  if (cache.timeseries) return cache.timeseries;
+
+  const raw = RawMemory.segments[SEGMENT_TIMESERIES];
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as TimeseriesSegmentData;
+      // 验证环形缓冲区结构完整性（global reset 后可能拿到畸形数据）
+      if (parsed.cpu && parsed.economy) {
+        cache.timeseries = parsed;
+      } else {
+        cache.timeseries = createEmptyTimeseries();
+      }
+    } catch {
+      cache.timeseries = createEmptyTimeseries();
+    }
+  } else {
+    cache.timeseries = createEmptyTimeseries();
+  }
+  return cache.timeseries;
+}
+
+/** 标记时序 segment 为 dirty — tick 末尾 flush 时写回。 */
+export function markTimeseriesDirty(): void {
+  segCache().timeseriesDirty = true;
+}
+
+/** 创建带空环形缓冲区的初始时序 segment 数据。 */
+function createEmptyTimeseries(): TimeseriesSegmentData {
+  return {
+    cpu: createRingBuffer<CpuSample>(CPU_RING_CAPACITY),
+    economy: createRingBuffer<EconomySample>(ECONOMY_RING_CAPACITY),
+  };
+}
+
+// ─── 事件日志 segment (Segment 2) ───────────────────────────
+
+/**
+ * 读取事件日志 segment 数据（带缓存）。
+ * 首次调用时从 RawMemory.segments 解析；global reset 后自动重建。
+ * 如果 segment 不存在或解析失败，返回空环形缓冲区。
+ */
+export function readEventLogSegment(): EventLogSegmentData {
+  const cache = segCache();
+  if (cache.eventLog) return cache.eventLog;
+
+  const raw = RawMemory.segments[SEGMENT_EVENT_LOG];
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as EventLogSegmentData;
+      if (parsed.events) {
+        cache.eventLog = parsed;
+      } else {
+        cache.eventLog = { events: createRingBuffer<GameEvent>(EVENT_RING_CAPACITY) };
+      }
+    } catch {
+      cache.eventLog = { events: createRingBuffer<GameEvent>(EVENT_RING_CAPACITY) };
+    }
+  } else {
+    cache.eventLog = { events: createRingBuffer<GameEvent>(EVENT_RING_CAPACITY) };
+  }
+  return cache.eventLog;
+}
+
+/** 标记事件日志 segment 为 dirty — tick 末尾 flush 时写回。 */
+export function markEventLogDirty(): void {
+  segCache().eventLogDirty = true;
+}
+
+/**
+ * 在 tick 末尾调用 — 将所有 dirty segment 刷写回 RawMemory。
  * 仅在有新写入时执行 JSON.stringify（避免无变化时的 CPU 浪费）。
+ * 多个 dirty segment 分开 stringify，避免一次性序列化大对象。
  */
 export function flushSegments(): void {
   const cache = segCache();
-  if (!cache.layoutDirty || !cache.layout) return;
 
-  RawMemory.segments[SEGMENT_LAYOUT] = JSON.stringify(cache.layout);
-  cache.layoutDirty = false;
+  if (cache.layoutDirty && cache.layout) {
+    RawMemory.segments[SEGMENT_LAYOUT] = JSON.stringify(cache.layout);
+    cache.layoutDirty = false;
+  }
+
+  if (cache.timeseriesDirty && cache.timeseries) {
+    RawMemory.segments[SEGMENT_TIMESERIES] = JSON.stringify(cache.timeseries);
+    cache.timeseriesDirty = false;
+  }
+
+  if (cache.eventLogDirty && cache.eventLog) {
+    RawMemory.segments[SEGMENT_EVENT_LOG] = JSON.stringify(cache.eventLog);
+    cache.eventLogDirty = false;
+  }
 }

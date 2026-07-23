@@ -122,6 +122,25 @@ declare global {
     tier?: CpuTier;
     recoveryTicks?: number;
     skipReasons?: Record<string, number>;
+    /** 运行时摘要 — 每 10 tick 更新，供控制台快速诊断。 */
+    stats?: {
+      /** 上次采样 tick。 */
+      lastSample: number;
+      /** 最近 10 采样点平均 CPU。 */
+      cpuAvg10: number;
+      /** 最近 10 采样点峰值 CPU。 */
+      cpuMax10: number;
+      /** 最近 10 采样点最低 bucket。 */
+      bucketMin10: number;
+      /** 累计进入 crisis 的次数。 */
+      crisisCount: number;
+      /** 累计 tier 转换次数。 */
+      tierTransitions: number;
+      /** 最频繁出错的 label。 */
+      errorHotspot: string;
+      /** 最频繁的 skip 原因。 */
+      skipHotspot: string;
+    };
   }
 
   interface Memory {

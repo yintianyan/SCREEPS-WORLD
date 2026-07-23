@@ -15,6 +15,7 @@ import { pixelSystem } from "./systems/pixel-system";
 import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
+import { telemetryCollectorSystem } from "./systems/telemetry-collector";
 import { towerDefenseSystem } from "./systems/tower-defense";
 
 /**
@@ -25,7 +26,7 @@ import { towerDefenseSystem } from "./systems/tower-defense";
  *   P0: room-state → spawn-manager → tower-defense
  *   P1: assignment-service（任务列表生成 + 紧急抢占）→ link-manager（link 能量瞬移）
  *   P2: construction-manager
- *   P3: layout-planner → room-observer → pixel-generator
+ *   P3: layout-planner → room-observer → pixel-generator → telemetry-collector
  *
  * 角色优先级：
  *   P0: worker（启动期/灾后恢复）
@@ -61,6 +62,8 @@ const registry = new Registry()
   .registerSystem(roomObserverSystem)
   // P3：pixel 生成（bucket 满载时生成 pixel）
   .registerSystem(pixelSystem)
+  // P3：遥测采集（时序数据 + 事件日志 + 运行时摘要，低频采样）
+  .registerSystem(telemetryCollectorSystem)
   // P0：恢复 worker（启动期 / 灾后）
   .registerRole(workerRole)
   // P1：harvester 和 hauler（能量链）
