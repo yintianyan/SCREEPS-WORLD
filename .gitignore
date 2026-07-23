@@ -7,3 +7,5 @@ coverage/
 .qoder/
 .workbuddy/
 .trae/
+
+.env

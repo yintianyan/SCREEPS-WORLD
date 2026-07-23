@@ -20,7 +20,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const ScreepsAPI = require("screeps-api");
+const { ScreepsAPI } = require("screeps-api");
 
 // ─── Configuration ────────────────────────────────────────────
 
