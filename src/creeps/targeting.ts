@@ -1,11 +1,12 @@
 import type { RoomSnapshot } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
+import { getObjectById } from "./obj-cache";
 
 /** 获取或分配 creep 的 source。将 sourceId 存入 memory。 */
 export function getSource(creep: Creep, snapshot: RoomSnapshot): Source | undefined {
   // 先尝试缓存的 source。
   if (creep.memory.sourceId) {
-    const source = Game.getObjectById(creep.memory.sourceId);
+    const source = getObjectById(creep.memory.sourceId);
     if (source) {
       // 拥挤检测：如果当前 source 占用超过公平份额，且存在更空闲的 source，则重分配。
       // 公平份额 = ceil(总占用 / source 数量)。例如 2 harvester + 2 source → 每个最多 1。

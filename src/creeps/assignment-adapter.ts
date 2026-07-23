@@ -3,6 +3,7 @@ import type { TickContext } from "../kernel/contracts";
 import { chooseTaskForRole, validateAssignmentRules } from "../domain/assignment/service";
 import type { TaskPool } from "../domain/assignment/task-pool";
 import { globalCache } from "../kernel/global-cache";
+import { getObjectById } from "./obj-cache";
 
 // ──────────────────────────────────────────────
 // 适配层 — 从 Game/Memory/creep 读取数据，调用纯函数，写回状态
@@ -48,9 +49,9 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
     const layoutRevision = Memory.rooms[home]?.layout?.revision ?? 0;
     const assignment = creep.memory.assignment;
 
-    // 通过 Game.getObjectById 检查 target/source 存在性。
-    const targetExists = !assignment.targetId || Game.getObjectById(assignment.targetId) !== null;
-    const sourceExists = !assignment.sourceId || Game.getObjectById(assignment.sourceId) !== null;
+    // 通过缓存版 getObjectById 检查 target/source 存在性（P2-6 去重）。
+    const targetExists = !assignment.targetId || getObjectById(assignment.targetId) !== null;
+    const sourceExists = !assignment.sourceId || getObjectById(assignment.sourceId) !== null;
 
     if (validateAssignmentRules(assignment, ctx.tick, layoutRevision, targetExists, sourceExists)) {
       assignment.leaseUntil = ctx.tick + CONFIG.assignment.leaseDuration;
@@ -71,7 +72,7 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
   if (!roomTasks) return undefined;
 
   const role = creep.memory.role ?? "unknown";
-  const chosen = chooseTaskForRole(role, roomTasks);
+  const chosen = chooseTaskForRole(role, roomTasks, { x: creep.pos.x, y: creep.pos.y });
   if (!chosen) return undefined;
 
   const layoutRevision = Memory.rooms[home]?.layout?.revision ?? 0;

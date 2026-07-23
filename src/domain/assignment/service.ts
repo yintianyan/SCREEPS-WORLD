@@ -12,6 +12,11 @@ export interface AssignmentTaskEntry {
   priority: number;
   maxWorkers: number;
   assignedCreeps: string[];
+  /**
+   * 任务代表位置（P2-4 距离感知选择用）：build=工地、haul=取能点、upgrade=controller。
+   * fill 任务无固定位置（实际目标在执行期按就近/预约选择），故为 undefined。
+   */
+  pos?: { x: number; y: number };
 }
 
 /** 各角色可接受的任务类型。
@@ -104,19 +109,36 @@ export function buildRoomTasks(
     });
   }
 
-  // 2. haul 任务 — 从 container/storage 取能量。
-  if (snapshot.containers.length > 0 || snapshot.storage) {
-    const pickupId = selectHaulPickupId(snapshot);
-    if (pickupId) {
+  // 2. haul 任务 — 为每个含能量的 container 生成独立任务（P2-5 拆分单点聚合）。
+  // 旧实现每房只生成 1 个 haul 任务（pickup=最满 container），3 个 hauler 全挤向同一处，
+  // 其余 container 饿死。拆分后配合 P2-4 距离感知，hauler 自然分散到不同 container。
+  // maxWorkers=1：每个 container 至少分配 1 个 hauler 即可，多余 hauler 走自身回退链。
+  const haulContainers = snapshot.containers.filter(
+    c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+  );
+  if (haulContainers.length > 0) {
+    for (const c of haulContainers) {
       tasks.push({
-        id: `haul:${roomName}`,
+        id: `haul:${roomName}:${c.id}`,
         kind: "haul",
-        sourceId: pickupId,
+        sourceId: c.id as string,
         priority: 1,
-        maxWorkers: 3,
-        assignedCreeps: taskToCreeps.get(`haul:${roomName}`) ?? [],
+        maxWorkers: 1,
+        assignedCreeps: taskToCreeps.get(`haul:${roomName}:${c.id}`) ?? [],
+        pos: { x: c.pos.x, y: c.pos.y },
       });
     }
+  } else if (snapshot.storage && snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+    // 无 container 有能量 — 回退到 storage（RCL4+ 储备供能）。
+    tasks.push({
+      id: `haul:${roomName}:${snapshot.storage.id}`,
+      kind: "haul",
+      sourceId: snapshot.storage.id as string,
+      priority: 1,
+      maxWorkers: 2,
+      assignedCreeps: taskToCreeps.get(`haul:${roomName}:${snapshot.storage.id}`) ?? [],
+      pos: { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y },
+    });
   }
 
   // 3. build 任务 — 为每个 active site 生成。
@@ -149,6 +171,7 @@ export function buildRoomTasks(
       priority: isCritical || isPriorityContainer ? 1 : 2,
       maxWorkers: isCritical || isPriorityContainer ? 2 : 1,
       assignedCreeps: taskToCreeps.get(`build:${roomName}:${site.id}`) ?? [],
+      pos: { x: site.pos.x, y: site.pos.y },
     });
   }
 
@@ -164,6 +187,7 @@ export function buildRoomTasks(
         priority: hasDowngradeRisk ? 1 : 2,
         maxWorkers: 3,
         assignedCreeps: taskToCreeps.get(`upgrade:${roomName}`) ?? [],
+        pos: { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y },
       });
     }
   }
@@ -204,15 +228,20 @@ export function validateAssignmentRules(
 /**
  * 为角色从预排序任务列表中选择任务（纯函数）。
  *
- * 任务列表已按 priority 升序排列。遍历选择第一个匹配角色且有空位的任务。
+ * 任务列表已按 priority 升序排列。优先级主导选择；同优先级内按距离 creep 最近选取（P2-4）。
+ *
+ * 距离感知（P2-4）：传入 creepPos 时，在最高优先级（最小 priority 值）的候选中选曼哈顿距离最近者，
+ * 减少 50 creep 规模下的穿房通勤。无 pos 的任务（如 fill）在距离比较中排后（视为 Infinity），
+ * 仅当无更近的有位置任务时入选。不传 creepPos 时退化为原「首个匹配」行为（向后兼容）。
  *
  * builder 特殊处理：道路 build 任务 priority 与 extension 平局，按数组序排在后面会被永久饥饿。
  * 这里预留 1 个 builder 给道路 —— 仅当「有道路任务待建」「尚无 builder 在修路」
- * 「且无 critical（spawn/tower，priority≤1）缺口」时触发。
+ * 「且无 critical（spawn/tower，priority≤1）缺口」时触发，并选最近的待建道路。
  */
 export function chooseTaskForRole(
   role: string,
   tasks: readonly AssignmentTaskEntry[],
+  creepPos?: { x: number; y: number },
 ): AssignmentTaskEntry | undefined {
   const roleKinds = ROLE_TASK_KINDS[role];
   if (!roleKinds || roleKinds.length === 0) return undefined;
@@ -220,26 +249,68 @@ export function chooseTaskForRole(
   // builder 道路预留：单次遍历同时统计道路任务和 critical 缺口。
   if (role === "builder") {
     let buildersOnRoad = 0;
-    let firstRoadTask: AssignmentTaskEntry | undefined;
     let hasFreeCritical = false;
+    const roadCandidates: AssignmentTaskEntry[] = [];
     for (const t of tasks) {
       if (t.kind !== "build") continue;
       if (t.structureType === STRUCTURE_ROAD) {
         buildersOnRoad += t.assignedCreeps.length;
-        if (!firstRoadTask && t.assignedCreeps.length < t.maxWorkers) firstRoadTask = t;
+        if (t.assignedCreeps.length < t.maxWorkers) roadCandidates.push(t);
       }
       if (t.priority <= 1 && t.assignedCreeps.length < t.maxWorkers) hasFreeCritical = true;
     }
-    if (firstRoadTask && buildersOnRoad === 0 && !hasFreeCritical) return firstRoadTask;
+    if (roadCandidates.length > 0 && buildersOnRoad === 0 && !hasFreeCritical) {
+      return closestTask(roadCandidates, creepPos);
+    }
   }
 
-  // 遍历预排序列表，选第一个匹配且有空位的（priority 升序 = 最高优先级优先）。
+  // 1. 找最高优先级（最小 priority 值）且有匹配角色、有空位的任务。
+  let bestPriority = Infinity;
   for (const task of tasks) {
     if (!roleKinds.includes(task.kind)) continue;
     if (task.assignedCreeps.length >= task.maxWorkers) continue;
-    return task;
+    if (task.priority < bestPriority) bestPriority = task.priority;
   }
-  return undefined;
+  if (bestPriority === Infinity) return undefined;
+
+  // 2. 收集该优先级的所有候选，距离感知选最近。
+  const candidates: AssignmentTaskEntry[] = [];
+  for (const task of tasks) {
+    if (!roleKinds.includes(task.kind)) continue;
+    if (task.assignedCreeps.length >= task.maxWorkers) continue;
+    if (task.priority === bestPriority) candidates.push(task);
+  }
+  return closestTask(candidates, creepPos);
+}
+
+/**
+ * 在候选任务中选距离 creep 最近者（曼哈顿距离，P2-4）。
+ * 无 creepPos 或仅一个候选时回退数组首个（保持确定性）。
+ * 无 pos 的任务距离视为 Infinity —— 有位置任务优先，全无位置时回退首个。
+ */
+function closestTask(
+  candidates: readonly AssignmentTaskEntry[],
+  creepPos?: { x: number; y: number },
+): AssignmentTaskEntry | undefined {
+  if (candidates.length === 0) return undefined;
+  if (!creepPos || candidates.length === 1) return candidates[0];
+
+  let best = candidates[0]!;
+  let bestDist = taskDistance(best, creepPos);
+  for (let i = 1; i < candidates.length; i++) {
+    const d = taskDistance(candidates[i]!, creepPos);
+    if (d < bestDist) {
+      bestDist = d;
+      best = candidates[i]!;
+    }
+  }
+  return best;
+}
+
+/** 任务代表位置到 creep 的曼哈顿距离；任务无 pos 时返回 Infinity。 */
+function taskDistance(task: AssignmentTaskEntry, pos: { x: number; y: number }): number {
+  if (!task.pos) return Infinity;
+  return Math.abs(task.pos.x - pos.x) + Math.abs(task.pos.y - pos.y);
 }
 
 /**
@@ -259,29 +330,4 @@ export function getInvalidatedCreepNames(
     }
   }
   return names;
-}
-
-/**
- * 选择 haul 任务的 pickup 点 ID（纯函数）。
- * 优先选择能量最多的 container；若无 container 有能量则回退到 storage。
- * 返回 undefined 表示当前无可用 pickup 点。
- */
-export function selectHaulPickupId(snapshot: RoomSnapshot): string | undefined {
-  let bestContainer: StructureContainer | undefined;
-  let bestEnergy = 0;
-  for (const c of snapshot.containers) {
-    const energy = c.store.getUsedCapacity(RESOURCE_ENERGY);
-    if (energy > bestEnergy) {
-      bestEnergy = energy;
-      bestContainer = c;
-    }
-  }
-  if (bestContainer) {
-    return bestContainer.id as string;
-  }
-  // 无 container 或所有 container 都空 — 尝试 storage（RCL4+）。
-  if (snapshot.storage && snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-    return snapshot.storage.id as string;
-  }
-  return undefined;
 }

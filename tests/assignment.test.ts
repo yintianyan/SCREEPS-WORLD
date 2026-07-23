@@ -4,7 +4,6 @@ import {
   validateAssignmentRules,
   chooseTaskForRole,
   getInvalidatedCreepNames,
-  selectHaulPickupId,
   type CreepAssignmentRef,
   type RoomTaskFlags,
 } from "../src/domain/assignment/service";
@@ -298,6 +297,39 @@ describe("Assignment — chooseTaskForRole (pure)", () => {
     const chosen2 = chooseTaskForRole("builder", [criticalTask, roadTask]);
     expect(chosen2!.id).toBe("build:W1N1:r1");
   });
+
+  // ── P2-4 距离感知选择 ──
+  it("同优先级中选距离 creep 最近的任务", () => {
+    const near = { id: "build:W1N1:near", kind: "build", targetId: "near", structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 10, y: 10 } };
+    const far = { id: "build:W1N1:far", kind: "build", targetId: "far", structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 40, y: 40 } };
+    // creep 在 (8,8) — 距 near 4，距 far 64。
+    const chosen = chooseTaskForRole("builder", [far, near], { x: 8, y: 8 });
+    expect(chosen!.id).toBe("build:W1N1:near");
+  });
+
+  it("优先级主导：高优先级任务即使更远也优先", () => {
+    const criticalFar = { id: "build:W1N1:crit", kind: "build", targetId: "crit", structureType: STRUCTURE_TOWER, priority: 1, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 45, y: 45 } };
+    const normalNear = { id: "build:W1N1:norm", kind: "build", targetId: "norm", structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 10, y: 10 } };
+    // creep 在 (10,10) — normal 更近，但 critical 优先级更高。
+    const chosen = chooseTaskForRole("builder", [normalNear, criticalFar], { x: 10, y: 10 });
+    expect(chosen!.id).toBe("build:W1N1:crit");
+  });
+
+  it("不传 creepPos 时退化为首个匹配（向后兼容）", () => {
+    const a = { id: "build:W1N1:a", kind: "build", targetId: "a", structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 40, y: 40 } };
+    const b = { id: "build:W1N1:b", kind: "build", targetId: "b", structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 10, y: 10 } };
+    // 无 creepPos → 返回数组首个。
+    const chosen = chooseTaskForRole("builder", [a, b]);
+    expect(chosen!.id).toBe("build:W1N1:a");
+  });
+
+  it("同优先级下无 pos 任务排后有 pos 任务", () => {
+    const noPos = { id: "fill:W1N1", kind: "fill", priority: 1, maxWorkers: 3, assignedCreeps: [] as string[] };
+    const withPos = { id: "haul:W1N1", kind: "haul", sourceId: "c1", priority: 1, maxWorkers: 3, assignedCreeps: [] as string[], pos: { x: 20, y: 20 } };
+    // hauler 在 (20,20)：haul 有位置（距离 0），fill 无位置（Infinity）→ 选 haul。
+    const chosen = chooseTaskForRole("hauler", [noPos, withPos], { x: 20, y: 20 });
+    expect(chosen!.id).toBe("haul:W1N1");
+  });
 });
 
 // ── getInvalidatedCreepNames (pure) ──
@@ -423,33 +455,76 @@ describe("Assignment — TaskPool.assignCreep", () => {
   });
 });
 
-// ── selectHaulPickupId (pure) ──
-describe("Assignment — selectHaulPickupId (pure)", () => {
-  it("sets sourceId to richest container when containers have energy", () => {
-    const c1 = { id: "c1", structureType: STRUCTURE_CONTAINER, store: { getUsedCapacity: () => 100 } } as unknown as StructureContainer;
-    const c2 = { id: "c2", structureType: STRUCTURE_CONTAINER, store: { getUsedCapacity: () => 300 } } as unknown as StructureContainer;
-    const c3 = { id: "c3", structureType: STRUCTURE_CONTAINER, store: { getUsedCapacity: () => 50 } } as unknown as StructureContainer;
-    const snapshot = mockSnapshot({ containers: [c1, c2, c3] });
+// ── haul 任务拆分 (P2-5) ──
+describe("Assignment — haul task split (P2-5)", () => {
+  function container(id: string, energy: number, x: number, y: number): StructureContainer {
+    return {
+      id,
+      structureType: STRUCTURE_CONTAINER,
+      pos: { x, y, roomName: "W1N1" },
+      store: { getUsedCapacity: () => energy },
+    } as unknown as StructureContainer;
+  }
 
-    const pickupId = selectHaulPickupId(snapshot);
-    expect(pickupId).toBe("c2"); // 选能量最多的
+  it("为每个含能量的 container 生成独立 haul 任务", () => {
+    const c1 = container("c1", 100, 10, 10);
+    const c2 = container("c2", 300, 40, 40);
+    const snapshot = mockSnapshot({ containers: [c1, c2] });
+
+    const tasks = buildRoomTasks(snapshot, [], mockFlags());
+    const haulTasks = tasks.filter(t => t.kind === "haul");
+
+    expect(haulTasks).toHaveLength(2);
+    expect(haulTasks.map(t => t.sourceId).sort()).toEqual(["c1", "c2"]);
+    // 每个任务 maxWorkers=1（促分散），且有独立 id 和 pos。
+    for (const t of haulTasks) {
+      expect(t.maxWorkers).toBe(1);
+      expect(t.id).toMatch(/^haul:W1N1:c\d$/);
+      expect(t.pos).toBeDefined();
+    }
   });
 
-  it("sets sourceId to storage when no container has energy", () => {
-    const emptyContainer = { id: "c1", structureType: STRUCTURE_CONTAINER, store: { getUsedCapacity: () => 0 } } as unknown as StructureContainer;
-    const storage = { id: "store1", structureType: STRUCTURE_STORAGE, store: { getUsedCapacity: () => 500 } } as unknown as StructureStorage;
-    const snapshot = mockSnapshot({ containers: [emptyContainer], storage });
+  it("空 container 不生成 haul 任务", () => {
+    const empty = container("c1", 0, 10, 10);
+    const full = container("c2", 200, 40, 40);
+    const snapshot = mockSnapshot({ containers: [empty, full] });
 
-    const pickupId = selectHaulPickupId(snapshot);
-    expect(pickupId).toBe("store1");
+    const tasks = buildRoomTasks(snapshot, [], mockFlags());
+    const haulTasks = tasks.filter(t => t.kind === "haul");
+
+    expect(haulTasks).toHaveLength(1);
+    expect(haulTasks[0]?.sourceId).toBe("c2");
   });
 
-  it("returns undefined when no pickup point has energy", () => {
-    const emptyContainer = { id: "c1", structureType: STRUCTURE_CONTAINER, store: { getUsedCapacity: () => 0 } } as unknown as StructureContainer;
-    const emptyStorage = { id: "store1", structureType: STRUCTURE_STORAGE, store: { getUsedCapacity: () => 0 } } as unknown as StructureStorage;
-    const snapshot = mockSnapshot({ containers: [emptyContainer], storage: emptyStorage });
+  it("无 container 有能量时回退到 storage", () => {
+    const empty = container("c1", 0, 10, 10);
+    const storage = {
+      id: "store1",
+      structureType: STRUCTURE_STORAGE,
+      pos: { x: 25, y: 25, roomName: "W1N1" },
+      store: { getUsedCapacity: () => 500 },
+    } as unknown as StructureStorage;
+    const snapshot = mockSnapshot({ containers: [empty], storage });
 
-    const pickupId = selectHaulPickupId(snapshot);
-    expect(pickupId).toBeUndefined();
+    const tasks = buildRoomTasks(snapshot, [], mockFlags());
+    const haulTasks = tasks.filter(t => t.kind === "haul");
+
+    expect(haulTasks).toHaveLength(1);
+    expect(haulTasks[0]?.sourceId).toBe("store1");
+    expect(haulTasks[0]?.maxWorkers).toBe(2);
+  });
+
+  it("container 和 storage 都无能量时不生成 haul 任务", () => {
+    const empty = container("c1", 0, 10, 10);
+    const emptyStorage = {
+      id: "store1",
+      structureType: STRUCTURE_STORAGE,
+      pos: { x: 25, y: 25, roomName: "W1N1" },
+      store: { getUsedCapacity: () => 0 },
+    } as unknown as StructureStorage;
+    const snapshot = mockSnapshot({ containers: [empty], storage: emptyStorage });
+
+    const tasks = buildRoomTasks(snapshot, [], mockFlags());
+    expect(tasks.filter(t => t.kind === "haul")).toHaveLength(0);
   });
 });

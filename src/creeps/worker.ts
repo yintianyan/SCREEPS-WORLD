@@ -17,6 +17,7 @@ import {
   upgradeController,
 } from "./actions";
 import { moveToTarget } from "./movement";
+import { getObjectById } from "./obj-cache";
 import { defineRole } from "./role-runner";
 
 /** 向 assignment 指定的 target 送能。 */
@@ -25,10 +26,10 @@ function fillAssignmentTarget(): ActionCandidate {
     name: "fill:assignment-target",
     predicate: (ac) => {
       if (!ac.assignment?.targetId) return false;
-      return Game.getObjectById(ac.assignment.targetId as Id<AnyOwnedStructure>) !== null;
+      return getObjectById(ac.assignment.targetId as Id<AnyOwnedStructure>) !== null;
     },
     execute: (ac) => {
-      const target = Game.getObjectById(ac.assignment!.targetId as Id<AnyOwnedStructure>)!;
+      const target = getObjectById(ac.assignment!.targetId as Id<AnyOwnedStructure>)!;
       const result = ac.creep.transfer(target, RESOURCE_ENERGY);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, target);

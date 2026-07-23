@@ -22,6 +22,7 @@ import {
 } from "./actions";
 import { releaseAssignment } from "./assignment-adapter";
 import { moveToTarget } from "./movement";
+import { getObjectById } from "./obj-cache";
 import { defineRole } from "./role-runner";
 
 /** recovery/conserve tier 门禁：释放不可用的 assignment。 */
@@ -32,7 +33,7 @@ function builderGate(ac: ActionContext): boolean {
   }
   // conserve: assignment 指向非 critical site 时释放（让 fallback 接管）。
   if (ac.budget.tier === "conserve" && ac.assignment?.targetId) {
-    const site = Game.getObjectById(ac.assignment.targetId as Id<ConstructionSite>);
+    const site = getObjectById(ac.assignment.targetId as Id<ConstructionSite>);
     if (site && site.structureType !== STRUCTURE_SPAWN && site.structureType !== STRUCTURE_TOWER) {
       releaseAssignment(ac.creep);
       ac.creep.memory.assignment = undefined;
@@ -48,7 +49,7 @@ function buildAssignmentByTier(): ActionCandidate {
     predicate: (ac) => {
       if (ac.budget.tier === "recovery") return false;
       if (!ac.assignment?.targetId) return false;
-      const site = Game.getObjectById(ac.assignment.targetId as Id<ConstructionSite>);
+      const site = getObjectById(ac.assignment.targetId as Id<ConstructionSite>);
       if (!site) return false;
       if (ac.budget.tier === "conserve") {
         return site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
@@ -56,7 +57,7 @@ function buildAssignmentByTier(): ActionCandidate {
       return true;
     },
     execute: (ac) => {
-      const site = Game.getObjectById(ac.assignment!.targetId as Id<ConstructionSite>)!;
+      const site = getObjectById(ac.assignment!.targetId as Id<ConstructionSite>)!;
       const result = ac.creep.build(site);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, site);

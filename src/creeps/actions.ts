@@ -28,6 +28,7 @@ import {
   getSource,
   selectDroppedEnergy,
 } from "./targeting";
+import { getObjectById } from "./obj-cache";
 
 // ─── Harvest ────────────────────────────────────────────────
 
@@ -481,10 +482,10 @@ export function buildAssignmentSite(): ActionCandidate {
     name: "build:assignment-site",
     predicate: (ac) => {
       if (!ac.assignment?.targetId) return false;
-      return Game.getObjectById(ac.assignment.targetId as Id<ConstructionSite>) !== null;
+      return getObjectById(ac.assignment.targetId as Id<ConstructionSite>) !== null;
     },
     execute: (ac) => {
-      const site = Game.getObjectById(ac.assignment!.targetId as Id<ConstructionSite>)!;
+      const site = getObjectById(ac.assignment!.targetId as Id<ConstructionSite>)!;
       const result = actOrMove(ac.creep, site, () => ac.creep.build(site));
       if (result === ERR_INVALID_TARGET) {
         ac.creep.memory.assignment = undefined;

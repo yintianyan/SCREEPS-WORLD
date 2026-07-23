@@ -21,6 +21,7 @@ import {
 import { findRichestContainer } from "./targeting";
 import { defineRole } from "./role-runner";
 import { moveToTarget } from "./movement";
+import { getObjectById } from "./obj-cache";
 
 /** 从 assignment 指定的 container 限量取能。 */
 function withdrawAssignmentContainer(): ActionCandidate {
@@ -28,11 +29,11 @@ function withdrawAssignmentContainer(): ActionCandidate {
     name: "withdraw:assignment-container",
     predicate: (ac) => {
       if (!ac.assignment?.sourceId) return false;
-      const obj = Game.getObjectById(ac.assignment.sourceId as unknown as Id<StructureContainer>);
+      const obj = getObjectById(ac.assignment.sourceId as unknown as Id<StructureContainer>);
       return obj !== null && (obj as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0;
     },
     execute: (ac) => {
-      const target = Game.getObjectById(ac.assignment!.sourceId as unknown as Id<StructureContainer>) as StructureContainer;
+      const target = getObjectById(ac.assignment!.sourceId as unknown as Id<StructureContainer>) as StructureContainer;
       const available = target.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
