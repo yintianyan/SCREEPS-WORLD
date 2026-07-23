@@ -49,6 +49,8 @@ export const enum EventKind {
   CreepStuck = 11,
   /** 建造完成。 */
   BuildComplete = 12,
+  /** 关键结构被毁（spawn/tower/container 数量减少）。d = [structureTypeCode, prevCount, currCount]。 */
+  StructureDestroyed = 13,
 }
 
 // ─── 事件数据结构 ────────────────────────────────────────────

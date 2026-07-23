@@ -26,6 +26,7 @@ import { packPos, unpackPos } from "../domain/layout/types";
 import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { diagnoseAnchor } from "../domain/layout/anchor-selection";
 import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG } from "../domain/layout/constraint-placer";
+import { assessEmergencyRebuild, isEmergencyTask } from "../domain/construction/queue";
 
 /**
  * 布局规划器 — P3 低频系统，负责生成和维护建造计划。
@@ -86,66 +87,67 @@ export const layoutPlannerSystem: System & {
     // 人工 manual 状态不自动规划。
     if (layout.state === "manual") return;
 
-    // 确定锚点 — 主 spawn 位置。
-    if (snapshot.spawns.length === 0) {
-      // 无 spawn — 无法以 spawn 为锚点规划核心。
+    // 确定锚点 — 优先使用 live spawn 位置；spawn 被毁时回退到存储锚点（紧急重建）。
+    if (snapshot.spawns.length > 0) {
+      const spawn = snapshot.spawns[0]!;
+      const anchorPacked = packPos(spawn.pos.x, spawn.pos.y);
+
+      // 首次设置锚点，或 spawn 重建在新位置时更新锚点。
+      // spawn 位置变化时清空 segment 中的 overrides 和 blocked（旧偏移记录失效）并递增 revision，
+      // 触发所有携带旧 revision 的 assignment 失效（见 validateAssignment 的 revision 检查）。
+      if (layout.anchor === undefined) {
+        layout.anchor = anchorPacked;
+        // 接通 candidate-score：评估所选锚点质量并存储（诊断 + 未来多房间选址参考）。
+        // 此前 evaluateCandidate/scoreCandidate 是死代码，现在在锚点确立时实际执行。
+        const candidateInput = evaluateCandidate(room, COMPACT_CORE_V2, spawn.pos.x, spawn.pos.y);
+        if (candidateInput) {
+          layout.anchorScore = scoreCandidate(candidateInput);
+        }
+
+        // Phase 3 诊断：Distance Transform 锚点质量评估（不改变运行时行为）。
+        // 计算地形开放度，评估当前 spawn 位置在所有候选中的排名。
+        // 结果仅输出日志，供人工判断锚点质量；Phase 4 才启用约束推导放置。
+        {
+          const terrain = room.getTerrain();
+          const getTerrain = (x: number, y: number): boolean => terrain.get(x, y) === TERRAIN_MASK_WALL;
+          const field = computeDistanceField(getTerrain);
+          const exits = room.find(FIND_EXIT).map(p => ({ x: p.x, y: p.y }));
+          const sources = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
+          const controller = snapshot.controller
+            ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
+            : undefined;
+          const mineral = snapshot.minerals[0]
+            ? { x: snapshot.minerals[0].pos.x, y: snapshot.minerals[0].pos.y }
+            : undefined;
+
+          const diagnosis = diagnoseAnchor(spawn.pos.x, spawn.pos.y, {
+            field, sources, controller, exits, mineral, getTerrain,
+          });
+          console.log(
+            `[layout] anchor diagnosis ${snapshot.roomName}: ` +
+            `rank ${diagnosis.rank}/${diagnosis.total}, ` +
+            `score ${diagnosis.candidate.score.toFixed(1)}, ` +
+            `openness ${diagnosis.candidate.openness}, ` +
+            `blocked ${diagnosis.candidate.blockedCells}, ` +
+            `srcDist ${diagnosis.candidate.avgSourceDist.toFixed(1)}`,
+          );
+        }
+      } else if (layout.anchor !== anchorPacked) {
+        layout.anchor = anchorPacked;
+        // 冷数据在 segment 中重置。
+        const segData = getRoomLayoutData(snapshot.roomName);
+        segData.overrides = {};
+        segData.blocked = {};
+        markLayoutDirty();
+        layout.revision++;
+        // 锚点变化意味着所有旧坐标失效 — 清空 buildQueue，由下次规划重建。
+        roomMem.buildQueue = [];
+      }
+    } else if (layout.anchor === undefined) {
+      // 无 spawn 且无存储锚点 — 初始 bootstrap 前的正常状态，无法规划。
       return;
     }
-
-    const spawn = snapshot.spawns[0]!;
-    const anchorPacked = packPos(spawn.pos.x, spawn.pos.y);
-
-    // 首次设置锚点，或 spawn 重建在新位置时更新锚点。
-    // spawn 位置变化时清空 segment 中的 overrides 和 blocked（旧偏移记录失效）并递增 revision，
-    // 触发所有携带旧 revision 的 assignment 失效（见 validateAssignment 的 revision 检查）。
-    if (layout.anchor === undefined) {
-      layout.anchor = anchorPacked;
-      // 接通 candidate-score：评估所选锚点质量并存储（诊断 + 未来多房间选址参考）。
-      // 此前 evaluateCandidate/scoreCandidate 是死代码，现在在锚点确立时实际执行。
-      const candidateInput = evaluateCandidate(room, COMPACT_CORE_V2, spawn.pos.x, spawn.pos.y);
-      if (candidateInput) {
-        layout.anchorScore = scoreCandidate(candidateInput);
-      }
-
-      // Phase 3 诊断：Distance Transform 锚点质量评估（不改变运行时行为）。
-      // 计算地形开放度，评估当前 spawn 位置在所有候选中的排名。
-      // 结果仅输出日志，供人工判断锚点质量；Phase 4 才启用约束推导放置。
-      {
-        const terrain = room.getTerrain();
-        const getTerrain = (x: number, y: number): boolean => terrain.get(x, y) === TERRAIN_MASK_WALL;
-        const field = computeDistanceField(getTerrain);
-        const exits = room.find(FIND_EXIT).map(p => ({ x: p.x, y: p.y }));
-        const sources = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
-        const controller = snapshot.controller
-          ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
-          : undefined;
-        const mineral = snapshot.minerals[0]
-          ? { x: snapshot.minerals[0].pos.x, y: snapshot.minerals[0].pos.y }
-          : undefined;
-
-        const diagnosis = diagnoseAnchor(spawn.pos.x, spawn.pos.y, {
-          field, sources, controller, exits, mineral, getTerrain,
-        });
-        console.log(
-          `[layout] anchor diagnosis ${snapshot.roomName}: ` +
-          `rank ${diagnosis.rank}/${diagnosis.total}, ` +
-          `score ${diagnosis.candidate.score.toFixed(1)}, ` +
-          `openness ${diagnosis.candidate.openness}, ` +
-          `blocked ${diagnosis.candidate.blockedCells}, ` +
-          `srcDist ${diagnosis.candidate.avgSourceDist.toFixed(1)}`,
-        );
-      }
-    } else if (layout.anchor !== anchorPacked) {
-      layout.anchor = anchorPacked;
-      // 冷数据在 segment 中重置。
-      const segData = getRoomLayoutData(snapshot.roomName);
-      segData.overrides = {};
-      segData.blocked = {};
-      markLayoutDirty();
-      layout.revision++;
-      // 锚点变化意味着所有旧坐标失效 — 清空 buildQueue，由下次规划重建。
-      roomMem.buildQueue = [];
-    }
+    // spawn 被毁但 layout.anchor 已设置时，使用存储锚点继续规划（紧急重建路径）。
 
     // 检查触发条件。
     if (!shouldPlan(layout, ctx.tick, snapshot)) return;
@@ -365,6 +367,29 @@ export const layoutPlannerSystem: System & {
       }
     }
 
+    // ── 紧急 spawn 重建 ──
+    // spawn 不在 RCL_BATCHES 中（初始 spawn 由玩家放置），
+    // 因此正常规划流程不会为其生成任务。spawn 被毁时在此手动入队。
+    if (snapshot.spawns.length === 0 && layout.anchor !== undefined) {
+      const anchorPos = unpackPos(layout.anchor);
+      const spawnKey = `constraint.spawn.01`;
+      if (!existingKeys.has(spawnKey)) {
+        queue.push({
+          key: spawnKey,
+          pos: { x: anchorPos.x, y: anchorPos.y, roomName: snapshot.roomName },
+          structureType: STRUCTURE_SPAWN,
+          priority: 0,
+          state: "queued",
+          attempts: 0,
+          retryAt: 0,
+        });
+        existingKeys.add(spawnKey);
+        existingPositions.add(`${anchorPos.x},${anchorPos.y}`);
+        tasksAdded = true;
+        targetingChanged = true;
+      }
+    }
+
     // 交通数据轮换（无论 RCL 都执行，确保 RCL4 时已有 prevTraffic 可用）。
     rotateTraffic(snapshot.roomName);
 
@@ -398,6 +423,21 @@ function shouldPlan(
   const roomMem = Memory.rooms[snapshot.roomName];
   if (roomMem?.lastRcl !== undefined && roomMem.lastRcl !== snapshot.rcl) {
     return true;
+  }
+
+  // 紧急重建：关键基建缺失时立即触发规划，不等 50 tick 周期。
+  // 仅当房间已规划过（anchor 已设置）时检查 — 初始 bootstrap 不触发。
+  // 额外检查队列中是否已有待建任务：已有则无需重复规划，避免每 tick 跑规划浪费 CPU。
+  if (layout.anchor !== undefined) {
+    const emergency = assessEmergencyRebuild(snapshot);
+    if (emergency.any) {
+      const queue = roomMem?.buildQueue ?? [];
+      const hasPendingTask = queue.some(
+        t => (t.state === "queued" || t.state === "site") &&
+          isEmergencyTask(t, snapshot, emergency),
+      );
+      if (!hasPendingTask) return true;
+    }
   }
 
   return false;

@@ -1,6 +1,12 @@
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext, RoomSnapshot } from "../kernel/contracts";
-import { syncTaskStates, cleanTasks, needsSourceContainerRebuild } from "../domain/construction/queue";
+import {
+  syncTaskStates,
+  cleanTasks,
+  assessEmergencyRebuild,
+  isEmergencyTask,
+  type EmergencyRebuildStatus,
+} from "../domain/construction/queue";
 
 /**
  * 建造管理器 — 唯一创建建造 site 的模块。
@@ -20,7 +26,8 @@ export const constructionManagerSystem: System = {
   priority: 2 as Priority,
   interval: 1,
   run(ctx: TickContext): void {
-    let createdThisTick = false;
+    let normalCreatedThisTick = false;
+    let emergencyCreatedThisTick = false;
 
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
@@ -34,13 +41,21 @@ export const constructionManagerSystem: System = {
       // 2. 清理完成 / 阻塞的任务（纯函数 — domain/construction/queue）。
       cleanTasks(queue, ctx.tick);
 
-      // 3. 检查开发门禁。
-      if (!developmentGate(snapshot, ctx)) continue;
+      // 3. 评估紧急重建状态。
+      const emergency = assessEmergencyRebuild(snapshot);
 
-      // 4. 尝试从队列创建一个 site。
-      if (!createdThisTick) {
-        const created = tryCreateSite(queue, snapshot);
-        if (created) createdThisTick = true;
+      // 4. 检查开发门禁。
+      if (!developmentGate(snapshot, ctx, emergency)) continue;
+
+      // 5. 尝试从队列创建一个 site。
+      // 紧急重建独立计额 — 允许每 tick 创建 1 个紧急 + 1 个普通 site，
+      // 避免普通建造任务挤占关键基建重建窗口。
+      if (emergency.any && !emergencyCreatedThisTick) {
+        const created = tryCreateSite(queue, snapshot, emergency);
+        if (created) emergencyCreatedThisTick = true;
+      } else if (!normalCreatedThisTick) {
+        const created = tryCreateSite(queue, snapshot, emergency);
+        if (created) normalCreatedThisTick = true;
       }
 
       roomMem.buildQueue = queue;
@@ -51,15 +66,16 @@ export const constructionManagerSystem: System = {
 /**
  * 开发门禁 — 创建任何新 site 前必须满足。
  * 返回 true 表示允许建造。
+ *
+ * 紧急重建（source container / tower / spawn 缺失）豁免 economyPressure / budget /
+ * P0 队列 / 能量门禁，但不豁免威胁检测 — 敌人脚下不建工地。
  */
 function developmentGate(
   snapshot: RoomSnapshot,
   ctx: TickContext,
+  emergency: EmergencyRebuildStatus,
 ): boolean {
-  // source container 紧急重建豁免离散性门禁（state/budget/P0/energy）—— 它是经济恢复的关键路径。
-  const emergencyRebuild = needsSourceContainerRebuild(snapshot);
-
-  if (!emergencyRebuild) {
+  if (!emergency.any) {
     // 梯度门禁：用 economyPressure 替代二值 colonyState 开关。
     // pressure 0.0–0.3: 正常建造（基础阈值）
     // pressure 0.3–0.8: 线性提高能量阈值（从基础 → 90% 容量）
@@ -70,9 +86,10 @@ function developmentGate(
   }
 
   // 有威胁 creep 时不建造（过境 scout 不影响建造）。
+  // 紧急重建也不豁免此条 — 敌人脚下建工地 = 送钱。
   if (snapshot.threatCreeps.length > 0) return false;
 
-  if (!emergencyRebuild) {
+  if (!emergency.any) {
     // 检查 P0 孵化队列缺口 — 仅 P0（紧急恢复 worker）阻塞建造。
     const roomMem = Memory.rooms[snapshot.roomName];
     if (roomMem?.spawnQueue) {
@@ -96,8 +113,8 @@ function developmentGate(
     if (snapshot.energyAvailable < buildThreshold) return false;
   }
 
-  // 使用 Context 预计算的 globalSiteCount，避免 O(rooms²) 遍历。
-  if (ctx.globalSiteCount >= CONFIG.construction.maxGlobalSites) return false;
+  // 全局 site 上限 — 紧急重建豁免自设限额（仍受游戏硬上限约束）。
+  if (!emergency.any && ctx.globalSiteCount >= CONFIG.construction.maxGlobalSites) return false;
 
   return true;
 }
@@ -106,11 +123,17 @@ function developmentGate(
 function tryCreateSite(
   queue: BuildTask[],
   snapshot: RoomSnapshot,
+  emergency: EmergencyRebuildStatus,
 ): boolean {
-  // 按优先级排序。
+  // 按紧急重建 + 优先级排序：紧急任务排到最前，确保关键基建第一时间创建 site。
   const sorted = queue
     .filter(t => t.state === "queued" && Game.time >= t.retryAt)
-    .sort((a, b) => a.priority - b.priority);
+    .sort((a, b) => {
+      const aEmergency = isEmergencyTask(a, snapshot, emergency);
+      const bEmergency = isEmergencyTask(b, snapshot, emergency);
+      if (aEmergency !== bEmergency) return aEmergency ? -1 : 1;
+      return a.priority - b.priority;
+    });
 
   // 检查每房 site 限制。道路与 source container 单独计额，避免被 extension 永久挤占。
   const adjacentToSource = (x: number, y: number): boolean =>

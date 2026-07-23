@@ -133,3 +133,79 @@ export function needsSourceContainerRebuild(
     s => !adjacentContainer(s.pos.x, s.pos.y) && !adjacentContainerSite(s.pos.x, s.pos.y),
   );
 }
+
+/**
+ * 紧急重建状态 — 检测关键基建缺失情况。
+ *
+ * 三类关键结构被毁时触发紧急重建路径：
+ *   - sourceContainer: harvester 无法高效存能，经济链路断裂
+ *   - tower: RCL3+ 房间无塔 = 无防御纵深，被拆只是时间问题
+ *   - spawn: 无法孵化新 creep，人口只减不增
+ *
+ * 紧急状态触发三件事（在 construction-manager 和 layout-planner 中消费）：
+ *   1. developmentGate 豁免 economyPressure / budget / P0 队列 / 能量门禁
+ *   2. shouldPlan 立即触发规划（不等 50 tick 周期）
+ *   3. tryCreateSite 排序加权 — 紧急任务排到队列最前
+ *
+ * 纯函数 — 从 snapshot 读取只读数据，不访问 Game/Memory。
+ */
+export interface EmergencyRebuildStatus {
+  /** Source container 缺失 — harvester 无法就地存能。 */
+  readonly sourceContainer: boolean;
+  /** Tower 缺失（RCL3+ 已解锁但无塔）— 防御真空。 */
+  readonly tower: boolean;
+  /** Spawn 缺失 — 无法孵化，人口只减不增。 */
+  readonly spawn: boolean;
+  /** 任一关键结构缺失。 */
+  readonly any: boolean;
+}
+
+/**
+ * 评估房间的紧急重建需求。
+ *
+ * 注意：spawn 缺失在初始 bootstrap 时也是 true（房间刚建立还没有 spawn）。
+ * 调用方应结合 layout.anchor 是否已设置来区分「从未建造」与「被毁重建」。
+ * construction-manager 的 developmentGate 不做此区分 —— 无论初始还是重建，
+ * 缺 spawn 时都必须豁免门禁以尽快恢复。
+ *
+ * 纯函数 — 从 snapshot 读取只读数据。
+ */
+export function assessEmergencyRebuild(
+  snapshot: RoomSnapshot,
+): EmergencyRebuildStatus {
+  const sourceContainer = needsSourceContainerRebuild(snapshot);
+  // RCL3 才解锁 tower；RCL < 3 时无塔是正常的，不算紧急。
+  const tower = snapshot.rcl >= 3 && snapshot.towers.length === 0;
+  // spawn 缺失 = 无法孵化，最严重的紧急状态。
+  const spawn = snapshot.spawns.length === 0;
+  return {
+    sourceContainer,
+    tower,
+    spawn,
+    any: sourceContainer || tower || spawn,
+  };
+}
+
+/**
+ * 判断一个 BuildTask 是否属于紧急重建任务。
+ *
+ * 用于 tryCreateSite 排序加权：紧急任务排到队列最前，
+ * 确保关键基建在被毁后第一时间创建 site。
+ *
+ * 纯函数 — 从 task + snapshot + emergency 状态推断。
+ */
+export function isEmergencyTask(
+  task: BuildTask,
+  snapshot: RoomSnapshot,
+  emergency: EmergencyRebuildStatus,
+): boolean {
+  if (emergency.tower && task.structureType === STRUCTURE_TOWER) return true;
+  if (emergency.spawn && task.structureType === STRUCTURE_SPAWN) return true;
+  if (emergency.sourceContainer && task.structureType === STRUCTURE_CONTAINER) {
+    // 仅 source 旁的 container 才算紧急 — controller container 不在此列。
+    return snapshot.sources.some(
+      s => Math.abs(s.pos.x - task.pos.x) <= 1 && Math.abs(s.pos.y - task.pos.y) <= 1,
+    );
+  }
+  return false;
+}

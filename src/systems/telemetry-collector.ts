@@ -203,6 +203,7 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
       rcl?: number;
       hadThreats?: boolean;
       downgradeRisk?: boolean;
+      structures?: { sp: number; tw: number; ct: number };
     }>;
   };
 
@@ -300,6 +301,26 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
       pushEventDirect(EventKind.ControllerDowngradeRisk, roomName, [ticks]);
     }
     prev.rooms[roomName].downgradeRisk = downgradeRisk;
+
+    // 关键结构被毁检测 — spawn/tower/container 数量减少时记录事件。
+    // structureTypeCode: 0=spawn, 1=tower, 2=container
+    const currStructures = {
+      sp: snapshot.spawns.length,
+      tw: snapshot.towers.length,
+      ct: snapshot.containers.length,
+    };
+    if (prevRoom.structures) {
+      if (currStructures.sp < prevRoom.structures.sp) {
+        pushEventDirect(EventKind.StructureDestroyed, roomName, [0, prevRoom.structures.sp, currStructures.sp]);
+      }
+      if (currStructures.tw < prevRoom.structures.tw) {
+        pushEventDirect(EventKind.StructureDestroyed, roomName, [1, prevRoom.structures.tw, currStructures.tw]);
+      }
+      if (currStructures.ct < prevRoom.structures.ct) {
+        pushEventDirect(EventKind.StructureDestroyed, roomName, [2, prevRoom.structures.ct, currStructures.ct]);
+      }
+    }
+    prev.rooms[roomName].structures = currStructures;
   }
 
   // 3. Flush per-tick 事件缓冲区中的显式事件
