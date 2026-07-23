@@ -23,6 +23,12 @@ export const spawnManagerSystem: System = {
   name: "spawn-manager",
   priority: 0 as Priority,
   run(ctx: TickContext): void {
+    // P1-1：在循环外预构建全量摘要，避免 O(rooms × creeps) 重复遍历。
+    // collectCreepSummaries / collectSpawningSummaries 遍历全部 Game.creeps / Game.spawns，
+    // 原先在每房间循环内调用，N 房间 × M creep = O(N×M)。现改为 O(M) 一次构建。
+    const creeps = collectCreepSummaries();
+    const spawning = collectSpawningSummaries();
+
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
@@ -35,8 +41,6 @@ export const spawnManagerSystem: System = {
       cleanQueue(queue, ctx.tick, CONFIG.spawn.maxRetries);
 
       // 2. 从 Game/Memory 收集数据，调用纯函数评估需求。
-      const creeps = collectCreepSummaries();
-      const spawning = collectSpawningSummaries();
       const colonyState: ColonyState = roomMem.colonyState ?? "normal";
       const roomCtx: RoomDemandContext = {
         colonyState,

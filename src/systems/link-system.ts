@@ -19,7 +19,7 @@ import { CONFIG } from "../config";
  * 且直接关系升级吞吐，在能量链中优先级仅次于孵化。
  */
 export const linkSystem: System = {
-  name: "link-manager",
+  name: "link-system",
   priority: 1 as Priority,
   run(ctx: TickContext): void {
     for (const snapshot of ctx.snapshots()) {

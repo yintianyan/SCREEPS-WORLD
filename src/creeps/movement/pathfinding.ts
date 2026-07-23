@@ -24,6 +24,47 @@ interface StructureCacheEntry {
 }
 
 /**
+ * 从结构和工地数组构建 CostMatrix 位置数组。
+ * 提取为共享辅助函数，消除 preloadStructureCache 与 ensureStructureCache 回退路径之间的重复。
+ */
+function buildStructurePositions(
+  structures: readonly AnyStructure[],
+  sites: readonly ConstructionSite[],
+): { count: number; positions: number[] } {
+  const positions: number[] = [];
+  for (const s of structures) {
+    let cost: number;
+    if (s.structureType === STRUCTURE_ROAD) cost = 1;
+    else if (s.structureType === STRUCTURE_CONTAINER) cost = 2;
+    else if (s.structureType === STRUCTURE_RAMPART && (s as StructureRampart).my) cost = 2;
+    else cost = 255;
+    positions.push(s.pos.x, s.pos.y, cost);
+  }
+  for (const site of sites) {
+    if (site.structureType !== STRUCTURE_ROAD && site.structureType !== STRUCTURE_CONTAINER) {
+      positions.push(site.pos.x, site.pos.y, 255);
+    }
+  }
+  return { count: structures.length + sites.length, positions };
+}
+
+/**
+ * 预热结构缓存 — 由 room-snapshot 调用，利用已采集的数据避免冗余 room.find。
+ * movement 模块拥有自己的缓存结构（__structCache），外部通过此函数写入，
+ * 不再直接操作 globalCache as any（P1-2：消除隐式耦合）。
+ */
+export function preloadStructureCache(
+  roomName: string,
+  structures: readonly AnyStructure[],
+  sites: readonly ConstructionSite[],
+): void {
+  const g = globalCache() as any;
+  if (!g.__structCache) g.__structCache = {};
+  const { count, positions } = buildStructurePositions(structures, sites);
+  g.__structCache[roomName] = { count, positions, checkedTick: Game.time };
+}
+
+/**
  * 确保房间的结构缓存是最新的。
  * 优先读取 room-snapshot 预热的缓存（零 room.find）；
  * 仅在预热缺失时回退到 room.find（向后兼容）。
@@ -52,22 +93,8 @@ function ensureStructureCache(roomName: string): StructureCacheEntry | undefined
     return entry;
   }
 
-  const positions: number[] = [];
-  for (const s of structures) {
-    let cost: number;
-    if (s.structureType === STRUCTURE_ROAD) cost = 1;
-    else if (s.structureType === STRUCTURE_CONTAINER) cost = 2;
-    else if (s.structureType === STRUCTURE_RAMPART && (s as StructureRampart).my) cost = 2;
-    else cost = 255;
-    positions.push(s.pos.x, s.pos.y, cost);
-  }
-  for (const site of sites) {
-    if (site.structureType !== STRUCTURE_ROAD && site.structureType !== STRUCTURE_CONTAINER) {
-      positions.push(site.pos.x, site.pos.y, 255);
-    }
-  }
-
-  entry = { count, positions, checkedTick: Game.time };
+  const built = buildStructurePositions(structures, sites);
+  entry = { count: built.count, positions: built.positions, checkedTick: Game.time };
   g.__structCache[roomName] = entry;
   return entry;
 }

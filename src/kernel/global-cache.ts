@@ -36,6 +36,11 @@ export interface GlobalCache {
   fillReservations?: Set<string>;
   /** fillReservations 上次重置所在的 tick（用于惰性按 tick 重置）。 */
   fillReservationTick?: number;
+  /**
+   * 本 tick 拥有 builder/worker creep 的房间名集合（P1-3：由 Kernel.buildSnapshots 预构建）。
+   * tower-defense 消费此集合判断本房是否有维修 creep，避免独立全量 Game.creeps 扫描。
+   */
+  repairRooms?: ReadonlySet<string>;
 }
 
 /**

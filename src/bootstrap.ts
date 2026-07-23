@@ -25,9 +25,9 @@ import { towerDefenseSystem } from "./systems/tower-defense";
  *
  * 系统注册顺序（同优先级内按注册顺序执行）：
  *   P0: room-state → spawn-manager → tower-defense
- *   P1: assignment-service（任务列表生成 + 紧急抢占）→ link-manager（link 能量瞬移）
+ *   P1: assignment-service（任务列表生成 + 紧急抢占）→ link-system（link 能量瞬移）→ lab-system（lab 反应 + boost）
  *   P2: construction-manager
- *   P3: layout-planner → room-observer → pixel-generator → telemetry-collector
+ *   P3: layout-planner → defense-planner → room-observer → pixel-generator → telemetry-collector → tuning-engine
  *
  * 角色优先级：
  *   P0: worker（启动期/灾后恢复）

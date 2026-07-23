@@ -1,6 +1,9 @@
 /**
  * v5 → v6 迁移测试（compact-core-v1 → v2 模板切换）。
  *
+ * 注意：迁移链路为 v5→v6→v7，最终 schemaVersion === 7。
+ * 本测试聚焦 v5→v6 的模板切换逻辑；v6→v7 的独立测试见 migration-v6-to-v7.test.ts。
+ *
  * 覆盖：
  *   - v1 布局升级到 v2（templateId/version/revision/nextPlanTick）
  *   - 未开工的 core.* 任务（queued/blocked）被清理；site/done 保留

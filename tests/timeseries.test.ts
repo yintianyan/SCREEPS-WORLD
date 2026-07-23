@@ -33,7 +33,7 @@ beforeEach(() => {
 describe("Timeseries — sampleCpu", () => {
   it("captures core CPU metrics", () => {
     const sample = sampleCpu(12345, mockBudget, {
-      systemCpu: { "spawn-manager": 2.1, "room-state": 1.5, "link-manager": 0.8 },
+      systemCpu: { "spawn-manager": 2.1, "room-state": 1.5, "link-system": 0.8 },
       roleCpu: { harvester: 1.2, hauler: 0.9 },
       skipped: 2,
       errors: 0,
@@ -63,7 +63,7 @@ describe("Timeseries — sampleCpu", () => {
       systemCpu: {
         "spawn-manager": 2.1,
         "room-state": 1.5,
-        "link-manager": 0.8,
+        "link-system": 0.8,
         "construction-manager": 0.3,
       },
       roleCpu: {},
@@ -71,12 +71,12 @@ describe("Timeseries — sampleCpu", () => {
       errors: 0,
     });
 
-    // Top-3 should be spawn-manager, room-state, link-manager
+    // Top-3 should be spawn-manager, room-state, link-system
     expect(sample.s1).toBe("spawn-manager");
     expect(sample.v1).toBe(2.1);
     expect(sample.s2).toBe("room-state");
     expect(sample.v2).toBe(1.5);
-    expect(sample.s3).toBe("link-manager");
+    expect(sample.s3).toBe("link-system");
     expect(sample.v3).toBe(0.8);
   });
 

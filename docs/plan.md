@@ -44,41 +44,59 @@
 ~~~
 src/
   main.ts                         # 仅导出 loop
-  bootstrap.ts                    # 唯一插件组合入口
+  bootstrap.ts                    # 唯一插件组合入口（注册 13 系统 + 5 角色）
   config/
     index.ts                      # 集中策略、CPU 阈值、功能开关
     bodies.ts                     # body 模板和生成约束
+    tuned.ts                      # 运行时参数覆盖层（tuning-engine 写入）
   kernel/
     kernel.ts                     # tick 生命周期与调度
-    contracts.ts                  # System、CreepRole、TickContext
+    contracts.ts                  # System、CreepRole、TickContext、RoomSnapshot
     registry.ts                   # 显式注册表
     scheduler.ts                  # 优先级、预算与降级层
     memory.ts                     # 清理与版本化迁移
     safe-run.ts                   # 错误边界与日志限流
     telemetry.ts                  # 轻量指标
+    global-cache.ts               # global 对象类型安全访问器
+    segment-store.ts              # RawMemory segment 管理
+    timeseries.ts                 # 时序数据 ring buffer
+    event-log.ts                  # 事件日志
+    ring-buffer.ts                # 环形缓冲区实现
   domain/
-    economy/                      # 配额、body、需求等纯逻辑
-    spawn/                        # SpawnRequest、队列、替换计算
+    economy/                      # 经济信号、link 规划、phase 计算
+    spawn/                        # SpawnRequest、队列、需求评估、回收
     construction/                 # 建造优先级和计划校验
-    movement/                     # 路径键与缓存失效规则
+    layout/                       # 蓝图、约束推导、min-cut 防御
+    assignment/                   # 任务分配、槽位、lease
+    defense/                      # 威胁分级、tower 目标选择
+    industry/                     # lab/boost/terminal 工业逻辑
+    tuning/                       # 参数自调优纯逻辑
+    intel.ts                      # 邻居房情报类型定义（RoomIntel）
   systems/
-    room-snapshot.ts              # 每房每 tick 一次扫描
-    spawn-manager.ts              # 需求、队列、孵化、重试
-    construction-manager.ts       # 建造队列与 site 限流
-    room-observer.ts              # 房间策略入口
-    defense.ts                    # 未来防御，属于 critical
+    room-snapshot.ts              # 每房每 tick 一次扫描（函数，非 System）
+    room-state.ts                 # P0：每房 ColonyState + ColonyPhase 迟滞
+    spawn-manager.ts              # P0：需求、队列、孵化、重试、回收
+    tower-defense.ts              # P0：塔防 + safe mode
+    assignment-service.ts         # P1：任务列表生成 + 紧急抢占
+    link-system.ts                # P1：link 能量瞬移
+    lab-system.ts                 # P1：lab 反应 + boost
+    construction-manager.ts       # P2：建造队列与 site 限流
+    layout-planner.ts             # P3：低频布局规划
+    defense-planner.ts            # P3：防御布局规划（rampart/wall）
+    room-observer.ts              # P3：低频房间策略
+    pixel-system.ts               # P3：pixel 生成
+    telemetry-collector.ts        # P3：遥测采集
+    tuning-engine.ts              # P3：参数自调优
   creeps/
-    harvester.ts
-    hauler.ts
-    upgrader.ts
-    builder.ts
-    repairer.ts
-    worker.ts                     # 仅早期/灾后混合角色
+    engine/                       # 角色引擎（RolePolicy + Action-Candidate）
+    movement/                     # 寻路、交通热度、卡位恢复
+    roles/                        # harvester、hauler、upgrader、builder、worker
+    support/                      # 公共辅助（维修目标查找等）
   types/
     global.d.ts
 tests/
-  unit/
-  fixtures/
+  *.test.ts                       # 单元测试
+  integration/                    # 场景/边界测试
 ~~~
 
 ### 2.3 数据所有权
@@ -187,12 +205,14 @@ function runGuarded(job: Job, budget: Budget): void {
 
 ~~~ts
 interface RootMemory {
-  schemaVersion: number;
-  migration?: { from: number; to: number; cursor?: string; startedAt: number };
+  schemaVersion?: number;           // 首次 tick 可能不存在，迁移后补设
   rooms: Record<string, RoomMemory>;
   creeps: Record<string, CreepMemory>;
+  kernel?: KernelMemory;            // 内核跟踪：skipReasons、tuning 等
 }
 ~~~
+
+> 注意：plan.md 早期设计中有 `migration` 字段，但实际实现中迁移状态由 `schemaVersion` 隐式管理，无需独立字段。`kernel` 字段在实际代码中已存在（v2 迁移引入）。
 
 迁移规范：
 
@@ -203,7 +223,7 @@ interface RootMemory {
 5. 死亡 creep Memory 小帝国可每 tick 清；规模变大后按 cursor 每 10 tick 清理。
 6. 每次版本升级必须有空 Memory、旧版本、重复执行和中断恢复的 Vitest 用例。
 
-当前版本：v6（核心模板 compact-core-v1 → v2 偶校验棋盘格；v5 = CreepMemory.recycle? + RoomMemory.intel?）。
+当前版本：v7（v6→v7：添加 `Memory.kernel.tuning` 参数自调优结构；v5→v6 = 核心模板 compact-core-v1 → v2 偶校验棋盘格；v5 = CreepMemory.recycle? + RoomMemory.intel?）。
 
 ## 4. 插件注册规范
 
@@ -211,12 +231,29 @@ bootstrap.ts 是唯一组合根。新增角色或系统时，只改 bootstrap �
 
 ~~~ts
 const registry = new Registry()
-  .registerSystem(roomSnapshotSystem)
+  // P0
+  .registerSystem(roomStateSystem)
   .registerSystem(spawnManagerSystem)
+  .registerSystem(towerDefenseSystem)
+  // P1
+  .registerSystem(assignmentServiceSystem)
+  .registerSystem(linkSystem)
+  .registerSystem(labSystem)
+  // P2
   .registerSystem(constructionManagerSystem)
+  // P3
+  .registerSystem(layoutPlannerSystem)
+  .registerSystem(defensePlannerSystem)
+  .registerSystem(roomObserverSystem)
+  .registerSystem(pixelSystem)
+  .registerSystem(telemetryCollectorSystem)
+  .registerSystem(tuningEngineSystem)
+  // Roles
+  .registerRole(workerRole)
   .registerRole(harvesterRole)
   .registerRole(haulerRole)
-  .registerRole(upgraderRole);
+  .registerRole(upgraderRole)
+  .registerRole(builderRole);
 
 export const kernel = new Kernel(registry);
 ~~~
@@ -308,7 +345,8 @@ interface SpawnRequest {
 - 关键替换在 ticksToLive 不大于 body.length 乘 3、预计路程与 15 tick 安全缓冲之和时入队（harvester 计入 spawn→source 通勤估算，其余角色路程为 0）。
 - 同类 creep 生成需错峰，避免同 tick 集体寿终。普通请求不得侵占关键替补的最晚开工窗口。
 - ERR_BUSY 不算失败；能量不足保留请求；body 不合法等配置错误隔离该请求并限流报警。
-- colony 状态由 Spawn/Room 服务统一计算：BOOTSTRAP、RECOVERY、NORMAL、DEFENSE。角色只读取状态。
+- colony 状态由 room-state P0 系统每 tick 计算：BOOTSTRAP、RECOVERY、NORMAL、DEFENSE。角色只读取状态。状态机使用 ColonyPhase 迟滞（bootstrap/growth/steady/crisis/recovery），避免在阈值附近频繁切换。
+- economyPressure 是 0.0 至 1.0 的梯度信号（存储在 RoomMemory），由 room-state 每 tick 写入。各子系统消费此信号实现平滑缩放：construction-manager 用作建造门禁、demand 用作 upgrader/builder 数量缩放、tuning-engine 用作调优输入。梯度信号取代了二值 crisis/normal 开关，避免抖动。
 - 升级功率由 storage 水位驱动：storage ≥ 50k 且经济健康时冲刺（2 个大 body 站桩烧库存换 RCL）；≥ 10k 时 1 个大 body 满功率（≈15/tick）；低水位按 pressure 停升级攒库存；无 storage 时保留早期猛冲梯度。RCL8 显式封顶 15 WORK（官方 15 energy/tick 上限）。
 - body 模板随 RCL 容量放大：upgrader 至 15W@1650、builder 至 8W4C6M@1300、hauler 道路变体至 16C8M@1200；P0/bootstrap/recovery 降级路径不变。
 - 回收通道：废弃角色与富余 worker（harvester 满编后超出 1 只）由 spawn-manager 标记 recycle 并引导至最近 spawn recycleCreep，回收残值并释放 CPU；被标记 creep 的角色逻辑短路 idle。
@@ -553,6 +591,35 @@ return fallbackBuilder(creep, ctx); // 填 spawn/extension -> critical repair ->
 
 布局测试除纯函数外，必须覆盖：初始 spawn 造成模板冲突、RCL 变化、site 已存在、controller 结构数量上限、建筑被毁、低 CPU 冻结、global reset、任务重试和人工 manual 状态。
 
+#### 5.6.8 约束推导布局模式（Phase 6 新增）
+
+Phase 6 引入了基于 Distance Transform + 约束推导的布局模式（`constraint`），作为默认布局策略。原有的固定模板模式（`template`，compact-core-v2）保留为极端地形下的回退选项。
+
+~~~ts
+// config/index.ts
+layout: {
+  mode: "constraint" as "template" | "constraint",
+}
+~~~
+
+**constraint 模式**（`domain/layout/constraint-placer.ts`）：
+- 使用 Distance Transform 找到最大空闲区域，从地形推导最优放置位置
+- 约束驱动：source 位置、controller 位置、mineral 位置、出口距离、地形墙
+- 适应不同房间地形，无需人工调参
+- 比固定模板更灵活，但计算成本更高（已通过预计算 structureCounts/occupiedSet 优化）
+
+**template 模式**（`domain/layout/templates/compact-core-v2.ts`）：
+- 固定蓝图偏移 + relocation（§5.6.1-5.6.7 描述的方案）
+- 计算成本低，适合标准地形
+- 极端地形下可能产生过多 blocked 格
+
+**min-cut 防御规划**（`domain/layout/min-cut-defense.ts`）：
+- 基于最小割算法计算最优 rampart 覆盖
+- 独立于核心布局，由 `defense-planner.ts` P3 系统驱动
+- 目标：用最少的 rampart 覆盖所有可攻击路径
+
+模式切换通过 `CONFIG.layout.mode` 配置，模板改动须递增 `templateId`/`layout.version` 并写迁移。
+
 ### 5.7 Creep 行为约束的技术实施方案
 
 角色实现采用“角色壳 + 任务分配 + 任务执行 + 移动服务”四层。这样新增角色只需注册新的 role 壳和任务执行器，而无需复制一套扫描、移动、错误处理和状态清理逻辑。
@@ -569,7 +636,7 @@ CreepRole.run
 
 #### 5.7.1 契约、任务和 Memory
 
-Kernel 将角色调用逐步从 run(creep) 升级为 run(creep, ctx)。迁移期间 ctx 可选，待所有角色切换后再将其设为必填；不得一次性破坏现有 harvester。
+角色调用签名为 `run(creep: Creep, ctx: TickContext): void`，ctx 已为必选参数（迁移已完成）。
 
 ~~~ts
 type CreepMode = "acquire" | "work" | "idle" | "flee";
@@ -884,5 +951,38 @@ M4 与 M5 可并行实现；两者均完成后才宣称 RCL2 至 RCL4 稳定闭�
 4. 完成 harvester/worker 状态机和测试，再引入 hauler 与保级 upgrader。
 5. 实现严格限流的 construction-manager，先覆盖 RCL2 container/extension，再覆盖 RCL3 tower 和 RCL4 storage。
 6. 完成 500 tick dry simulation 和官服 smoke test。只有 CPU、恢复和无界 Memory 验收通过后，才开始远矿或多房。
+
+## 12. 二期实施清单（M7-M8 完成状态）
+
+首次实施清单（§11）已全部完成。以下记录 M7-M8 阶段的实际完成情况：
+
+### 已完成
+
+| 功能 | 实现文件 | 说明 |
+| --- | --- | --- |
+| Link 能量传输 | `systems/link-system.ts` + `domain/economy/links.ts` | source→controller/storage 瞬移，替代 hauler 往返 |
+| Lab 反应 + boost | `systems/lab-system.ts` + `domain/industry/` | 化合物生产、creep 强化 |
+| Tower 防御 | `systems/tower-defense.ts` + `domain/defense/` | 攻击、维修、safe mode、集火逻辑 |
+| 防御布局规划 | `systems/defense-planner.ts` + `domain/layout/min-cut-defense.ts` | 最小割 rampart 覆盖 |
+| 约束推导布局 | `domain/layout/constraint-placer.ts` | Distance Transform + 约束推导，替代纯模板 |
+| Pixel 生成 | `systems/pixel-system.ts` | bucket 满载时生成 pixel |
+| 遥测系统 | `systems/telemetry-collector.ts` + `kernel/timeseries.ts` + `kernel/event-log.ts` | CPU/经济时序采样、事件日志 |
+| 参数自调优 | `systems/tuning-engine.ts` + `domain/tuning/` + `config/tuned.ts` | 遥测驱动角色边界调整 |
+| ColonyPhase 迟滞 | `domain/economy/phase.ts` + `systems/room-state.ts` | 殖民相位状态机，防止频繁切换 |
+| economyPressure 梯度 | `systems/room-state.ts` → `RoomMemory.economyPressure` | 0.0-1.0 梯度信号，替代二值开关 |
+| 回收通道 | `domain/spawn/recycle.ts` + `systems/spawn-manager.ts` | 废弃角色/富余 worker 回收 |
+| 邻居情报 | `systems/room-observer.ts` → `RoomMemory.intel` | 出口/房态/SK 分类 |
+| RawMemory segment | `kernel/segment-store.ts` | layout 冷数据外迁，减少 Memory 体积 |
+| 声明式角色引擎 | `creeps/engine/` | RolePolicy + Action-Candidate，新增角色只需声明 policy |
+| 移动系统重构 | `creeps/movement/` | 路径持久化、走廊共享、跨房间缓存、卡位恢复 |
+
+### 架构演进记录
+
+1. **防御系统拆分**：原 `defense.ts` 拆分为 `tower-defense.ts`（P0 攻击/维修）+ `defense-planner.ts`（P3 布局）+ `domain/defense/`（纯逻辑），优先级分离更合理。
+2. **布局双模式**：从纯模板演化为 constraint（默认）+ template（回退），适应不同地形。
+3. **梯度信号**：economyPressure 取代二值 crisis/normal，各子系统平滑缩放避免抖动。
+4. **声明式角色**：从独立状态机演化为 RolePolicy 声明式引擎，新增角色无需复制生命周期代码。
+5. **升级功率控制**：从固定数量梯度改为 storage 水位 + RCL8 限速 + 大 body 站桩。
+6. **参数自调优**：tuning-engine 基于遥测数据自动调整角色边界，系统自适应不同房间/经济状态。
 
 首个版本的成功标准不是扩张速度，而是在 global reset、低 bucket、单模块异常和全员死亡边缘时，始终先守住采能、孵化、供能、保级的最小闭环，并把扩张安全地降级。

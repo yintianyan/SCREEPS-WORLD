@@ -76,7 +76,6 @@ function safeRunTuning(ctx: TickContext, roomName: string): void {
     if (!signals) return;
 
     // 2. 获取当前生效的角色边界（CONFIG + 现有覆盖）
-    const currentBounds = getRoleBounds("", roomName);
     // 转为 evaluator 需要的格式
     const boundsMap: Record<string, { minCount: number; maxCount: number }> = {};
     for (const role of ["hauler", "harvester", "upgrader", "builder"] as const) {

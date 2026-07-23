@@ -34,6 +34,11 @@ export const assignmentServiceSystem: System = {
   priority: 1 as Priority,
   run(ctx: TickContext): void {
     const pool = initAssignmentCache(ctx.tick);
+
+    // P1-1：在循环外预构建全量 creep 分配摘要，避免 O(rooms × creeps) 重复遍历。
+    // 原先 generateRoomTasks 在每房间循环内遍历全部 Game.creeps，N 房间 × M creep = O(N×M)。
+    const allCreepRefs = collectAllCreepRefs();
+
     for (const snapshot of ctx.snapshots()) {
       // 紧急抢占（plan §5.7.2 规则 5）：能量低于 fill 阈值或有敌对单位时，
       // 释放 priority >= 1 的普通任务，强制 creep 重新请求 P0 fill 或进入 flee。
@@ -51,7 +56,7 @@ export const assignmentServiceSystem: System = {
       if (shouldPreemptAssignments(emergency, wasEmergency)) {
         invalidateAssignments(pool, snapshot.roomName, 1);
       }
-      generateRoomTasks(pool, snapshot, ctx);
+      generateRoomTasks(pool, snapshot, ctx, allCreepRefs);
     }
   },
 };
@@ -73,23 +78,16 @@ function initAssignmentCache(tick: number): TaskPool {
 }
 
 /**
- * 适配：为房间生成任务列表并写入 TaskPool。
- * 从 Game.creeps 收集 creep 分配摘要，从 Memory 读取房间标志位，
- * 调用纯函数 buildRoomTasks 后将结果存入任务池。
+ * 适配：遍历全部 Game.creeps 一次，收集 creep 分配摘要。
+ * P1-1：从 generateRoomTasks 提取到循环外，避免每房间重复遍历。
  */
-function generateRoomTasks(pool: TaskPool, snapshot: RoomSnapshot, ctx: TickContext): void {
-  if (pool.tick !== ctx.tick) return;
-
-  const roomName = snapshot.roomName;
-  const roomMem = Memory.rooms[roomName];
-
-  // 从 Game.creeps 收集 creep 分配摘要。
-  const creepRefs: CreepAssignmentRef[] = [];
+function collectAllCreepRefs(): CreepAssignmentRef[] {
+  const refs: CreepAssignmentRef[] = [];
   for (const creep of Object.values(Game.creeps)) {
     const home = creep.memory.home ?? creep.room?.name;
     if (!home) continue;
     const a = creep.memory.assignment;
-    creepRefs.push({
+    refs.push({
       name: creep.name,
       home,
       assignment: a
@@ -100,6 +98,30 @@ function generateRoomTasks(pool: TaskPool, snapshot: RoomSnapshot, ctx: TickCont
           }
         : undefined,
     });
+  }
+  return refs;
+}
+
+/**
+ * 适配：为房间生成任务列表并写入 TaskPool。
+ * 从预构建的全量 creepRefs 中筛选本房 creep，
+ * 从 Memory 读取房间标志位，调用纯函数 buildRoomTasks 后将结果存入任务池。
+ */
+function generateRoomTasks(
+  pool: TaskPool,
+  snapshot: RoomSnapshot,
+  ctx: TickContext,
+  allCreepRefs: readonly CreepAssignmentRef[],
+): void {
+  if (pool.tick !== ctx.tick) return;
+
+  const roomName = snapshot.roomName;
+  const roomMem = Memory.rooms[roomName];
+
+  // 从预构建的全量摘要中筛选本房 creep。
+  const creepRefs: CreepAssignmentRef[] = [];
+  for (const ref of allCreepRefs) {
+    if (ref.home === roomName) creepRefs.push(ref);
   }
 
   const flags: RoomTaskFlags = {

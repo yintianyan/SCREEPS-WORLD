@@ -12,6 +12,7 @@ import { createBudget } from "./scheduler";
 import { emitSummary, initTelemetry } from "./telemetry";
 import { Registry } from "./registry";
 import { buildRoomSnapshot } from "../systems/room-snapshot";
+import { globalCache } from "./global-cache";
 
 /** 具体 TickContext，包含用于内核设置的内部变更方法。 */
 class Context implements TickContext {
@@ -104,6 +105,9 @@ export class Kernel {
     // 同时汇总每房 creep 身上携带的能量（按 memory.home 归属），
     // 供 room-state 的 reserve 计入在途能量，避免物流搬运造成危机信号抖动（P1-5 ①）。
     const globalCreepEnergy = new Map<string, number>();
+    // P1-3：预构建拥有维修 creep（builder/worker）的房间集合，
+    // 供 tower-defense 消费，避免塔防系统独立全量扫描 Game.creeps。
+    const globalRepairRooms = new Set<string>();
     for (const creep of Object.values(Game.creeps)) {
       const home = creep.memory.home;
       if (home) {
@@ -113,12 +117,19 @@ export class Kernel {
         }
       }
       const role = creep.memory.role;
+      if (role === "builder" || role === "worker") {
+        const repairHome = home ?? creep.room.name;
+        if (repairHome) globalRepairRooms.add(repairHome);
+      }
       if (role !== "harvester" && role !== "worker") continue;
       const sid = creep.memory.sourceId;
       if (sid) {
         globalSourceOccupancy.set(sid as string, (globalSourceOccupancy.get(sid as string) ?? 0) + 1);
       }
     }
+
+    // 将 repairRooms 写入 globalCache，供 tower-defense 读取。
+    globalCache().repairRooms = globalRepairRooms;
 
     for (const room of Object.values(Game.rooms)) {
       if (!room.controller?.my) continue;

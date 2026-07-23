@@ -10,7 +10,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { towerDefenseSystem } from "../src/systems/tower-defense";
 import {
   mockContext,
-  mockCreep,
   mockSnapshot,
   mockStructure,
   registerObject,
@@ -20,10 +19,8 @@ import {
 beforeEach(() => {
   resetGlobals();
   vi.clearAllMocks();
-  // hasRepairCreep 的 per-tick 缓存不随 resetGlobals 清理，手动清。
-  const g = globalThis as any;
-  delete g.__repairCreep;
-  delete g.__repairCreepTick;
+  // P1-3：repairRooms 由 Kernel.buildSnapshots 预构建，测试中手动清除。
+  delete (globalThis as any).repairRooms;
 });
 
 function makeTower(id: string): any {
@@ -49,8 +46,8 @@ function makeThreat(id: string): any {
 
 describe("A3 — tower-defense 维修权收窄", () => {
   it("有 builder 时塔不维修（让位 creep，省弹药）", () => {
-    const builder = mockCreep({ name: "b1", role: "builder", home: "W7N4" });
-    (globalThis as any).Game.creeps = { b1: builder };
+    // P1-3：模拟 Kernel.buildSnapshots 预构建的 repairRooms。
+    (globalThis as any).repairRooms = new Set(["W7N4"]);
 
     const tower = makeTower("t1");
     const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 300, hits: 400, hitsMax: 1000 });
@@ -62,8 +59,8 @@ describe("A3 — tower-defense 维修权收窄", () => {
   });
 
   it("有 worker 时塔同样不维修", () => {
-    const worker = mockCreep({ name: "w1", role: "worker", home: "W7N4" });
-    (globalThis as any).Game.creeps = { w1: worker };
+    // P1-3：模拟 Kernel.buildSnapshots 预构建的 repairRooms。
+    (globalThis as any).repairRooms = new Set(["W7N4"]);
 
     const tower = makeTower("t1");
     const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 300, hits: 400, hitsMax: 1000 });
@@ -75,7 +72,7 @@ describe("A3 — tower-defense 维修权收窄", () => {
   });
 
   it("无维修 creep 时塔保留维修安全网（灾后兜底）", () => {
-    (globalThis as any).Game.creeps = {};
+    // repairRooms 未设置 → hasRepairCreep 返回 false。
 
     const tower = makeTower("t1");
     const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 300, hits: 400, hitsMax: 1000 });
@@ -87,8 +84,8 @@ describe("A3 — tower-defense 维修权收窄", () => {
   });
 
   it("他房的 builder 不算数（只认 home 归属）", () => {
-    const outsider = mockCreep({ name: "b1", role: "builder", home: "W8N4" });
-    (globalThis as any).Game.creeps = { b1: outsider };
+    // P1-3：repairRooms 包含他房，不含本房 W7N4。
+    (globalThis as any).repairRooms = new Set(["W8N4"]);
 
     const tower = makeTower("t1");
     const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 300, hits: 400, hitsMax: 1000 });
@@ -100,8 +97,8 @@ describe("A3 — tower-defense 维修权收窄", () => {
   });
 
   it("威胁存在时：即使有 builder 也开火（开火职责不被让渡）", () => {
-    const builder = mockCreep({ name: "b1", role: "builder", home: "W7N4" });
-    (globalThis as any).Game.creeps = { b1: builder };
+    // P1-3：模拟 Kernel.buildSnapshots 预构建的 repairRooms。
+    (globalThis as any).repairRooms = new Set(["W7N4"]);
 
     const tower = makeTower("t1");
     const threat = makeThreat("threat_1");

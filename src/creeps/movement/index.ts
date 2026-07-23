@@ -26,4 +26,5 @@ export {
   moveToTarget,
   moveTowardRoom,
   ensureHome,
+  preloadStructureCache,
 } from "./pathfinding";

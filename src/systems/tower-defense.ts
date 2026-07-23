@@ -99,23 +99,11 @@ export const towerDefenseSystem: System = {
 /**
  * 本房是否存在可承担维修的 creep（builder 或 worker）。
  * A3：存在时塔让出全部非战斗维修，只保留开火职责。
- * 每 tick 全局最多遍历一次 Game.creeps（globalCache 缓存），
- * 不破坏「Kernel 单次遍历」的扫描纪律。
+ * P1-3：从 Kernel.buildSnapshots 预构建的 globalCache.repairRooms 读取，
+ * 不再独立全量扫描 Game.creeps。
  */
 function hasRepairCreep(roomName: string): boolean {
-  const g = globalCache() as any;
-  if (g.__repairCreepTick !== Game.time || !g.__repairCreep) {
-    const map: Record<string, boolean> = {};
-    for (const creep of Object.values(Game.creeps)) {
-      const role = creep.memory.role;
-      if (role === "builder" || role === "worker") {
-        map[creep.memory.home ?? creep.room.name] = true;
-      }
-    }
-    g.__repairCreep = map;
-    g.__repairCreepTick = Game.time;
-  }
-  return (g.__repairCreep as Record<string, boolean>)[roomName] === true;
+  return globalCache().repairRooms?.has(roomName) === true;
 }
 
 /**
