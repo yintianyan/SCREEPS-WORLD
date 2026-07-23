@@ -3,10 +3,16 @@
  *
  * 策略声明：
  *   gate:    recovery tier → 释放 assignment（不建造）
- *   acquire: 拾取掉落能量 > 最近非物流 container 有能量 > harvest
+ *   acquire: 拾取掉落能量 > storage（RCL4+ 主力源）> 最近非物流 container > harvest
  *   work:    assignment site（tier 门禁）> 最近 site（tier 门禁）> fill > critical repair > 升级（gated）
  *
  * CPU 门禁通过候选 predicate 内的 tier 判断实现，不再内嵌 if-else。
+ *
+ * RCL4+ 取能策略：storage 建成后成为 builder 的主力能量源。
+ *   - storage 由 hauler 持续填充，是最可靠的中央能量库；
+ *   - builder body [8W,4C,6M] 满载 200 能量 / 8 WORK = 25 tick 建造，往返一趟效率高；
+ *   - storage 水位低于 10% 时收紧取能上限，让 hauler 优先补给 spawn/extension。
+ *   - 无 storage（RCL1-3）时自动跳过，回退到 container / harvest。
  */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
@@ -19,6 +25,7 @@ import {
   repairFortifications,
   upgradeControllerGated,
   withdrawClosestNonSourceContainer,
+  withdrawStorageCapped,
 } from "../engine/actions";
 import { releaseAssignment } from "../support/assignment-adapter";
 import { moveToTarget } from "../movement";
@@ -101,15 +108,38 @@ function buildSiteByTier(): ActionCandidate {
   };
 }
 
+/**
+ * P1-1: 动态计算 builder 从 storage 取能上限 — 按 storage 水位缩放。
+ *
+ * - 高水位 (>10%)：放开到 carry 满载（库存充足，builder 全速建造）
+ * - 低水位 (<=10%)：收紧到 100（保护 storage，让 hauler 优先补给 spawn/extension）
+ *
+ * 比 upgrader 的阈值更宽松：builder 是 P2，只在有工地时运行，
+ * storage 水位低时 tier 系统会门禁建造（recovery 跳过，conserve 只建 critical）。
+ */
+function builderStorageLimit(ac: ActionContext): number {
+  const st = ac.snapshot.storage;
+  if (!st) return 0;
+  const energy = st.store.getUsedCapacity(RESOURCE_ENERGY);
+  const capacity = st.store.getCapacity(RESOURCE_ENERGY);
+  if (capacity === 0) return 0;
+  const ratio = energy / capacity;
+  if (ratio > 0.1) return ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
+  return 100;
+}
+
 const policy: RolePolicy = {
   gate: builderGate,
 
   acquire: [
     // 0. 拾取地上掉落能量（衰减资源，最优先回收）。
     pickupDroppedEnergy(),
-    // 1. 取最近非物流 container 的能量（不抢 hauler/upgrader 的物流源）。
+    // 1. 从 storage 取能（RCL4+ 主力源 — hauler 持续填充，最可靠）。
+    //    无 storage 时 predicate=false，自动跳过。
+    withdrawStorageCapped(builderStorageLimit),
+    // 2. 取最近非物流 container 的能量（不抢 hauler/upgrader 的物流源）。
     withdrawClosestNonSourceContainer(),
-    // 2. 兜底：所有 container 无能量时直接采集。
+    // 3. 兜底：所有 container 无能量时直接采集。
     harvestSource(),
   ],
 

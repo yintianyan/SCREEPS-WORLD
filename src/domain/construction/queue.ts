@@ -137,10 +137,11 @@ export function needsSourceContainerRebuild(
 /**
  * 紧急重建状态 — 检测关键基建缺失情况。
  *
- * 三类关键结构被毁时触发紧急重建路径：
+ * 四类关键结构被毁时触发紧急重建路径：
  *   - sourceContainer: harvester 无法高效存能，经济链路断裂
  *   - tower: RCL3+ 房间无塔 = 无防御纵深，被拆只是时间问题
  *   - spawn: 无法孵化新 creep，人口只减不增
+ *   - storage: RCL4+ 无 storage = hauler 无处倒能 + builder/upgrader 无中央能量源
  *
  * 紧急状态触发三件事（在 construction-manager 和 layout-planner 中消费）：
  *   1. developmentGate 豁免 economyPressure / budget / P0 队列 / 能量门禁
@@ -156,6 +157,8 @@ export interface EmergencyRebuildStatus {
   readonly tower: boolean;
   /** Spawn 缺失 — 无法孵化，人口只减不增。 */
   readonly spawn: boolean;
+  /** Storage 缺失（RCL4+ 已解锁但无 storage）— 经济中枢断裂。 */
+  readonly storage: boolean;
   /** 任一关键结构缺失。 */
   readonly any: boolean;
 }
@@ -178,11 +181,15 @@ export function assessEmergencyRebuild(
   const tower = snapshot.rcl >= 3 && snapshot.towers.length === 0;
   // spawn 缺失 = 无法孵化，最严重的紧急状态。
   const spawn = snapshot.spawns.length === 0;
+  // RCL4 才解锁 storage；RCL < 4 时无 storage 是正常的，不算紧急。
+  // storage 被毁 = hauler 无处倒能 + builder/upgrader 无中央能量源 → 经济死循环。
+  const storage = snapshot.rcl >= 4 && snapshot.storage === undefined;
   return {
     sourceContainer,
     tower,
     spawn,
-    any: sourceContainer || tower || spawn,
+    storage,
+    any: sourceContainer || tower || spawn || storage,
   };
 }
 
@@ -201,6 +208,7 @@ export function isEmergencyTask(
 ): boolean {
   if (emergency.tower && task.structureType === STRUCTURE_TOWER) return true;
   if (emergency.spawn && task.structureType === STRUCTURE_SPAWN) return true;
+  if (emergency.storage && task.structureType === STRUCTURE_STORAGE) return true;
   if (emergency.sourceContainer && task.structureType === STRUCTURE_CONTAINER) {
     // 仅 source 旁的 container 才算紧急 — controller container 不在此列。
     return snapshot.sources.some(

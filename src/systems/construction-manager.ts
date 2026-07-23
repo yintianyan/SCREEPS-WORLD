@@ -67,7 +67,7 @@ export const constructionManagerSystem: System = {
  * 开发门禁 — 创建任何新 site 前必须满足。
  * 返回 true 表示允许建造。
  *
- * 紧急重建（source container / tower / spawn 缺失）豁免 economyPressure / budget /
+ * 紧急重建（source container / tower / spawn / storage 缺失）豁免 economyPressure / budget /
  * P0 队列 / 能量门禁，但不豁免威胁检测 — 敌人脚下不建工地。
  */
 function developmentGate(
@@ -155,16 +155,24 @@ function tryCreateSite(
   const criticalSites = snapshot.myConstructionSites.filter(
     s => s.structureType === STRUCTURE_TOWER || s.structureType === STRUCTURE_SPAWN,
   ).length;
+  // storage 独立计额 — 不与 extension 竞争 normal 名额，也不与 tower/spawn 竞争 critical 名额。
+  // storage 是单例结构（每房最多 1 个），独立计数避免被 3 个 extension site 永久挤占。
+  const storageSites = snapshot.myConstructionSites.filter(
+    s => s.structureType === STRUCTURE_STORAGE,
+  ).length;
 
   for (const task of sorted) {
     const isCritical = task.structureType === STRUCTURE_TOWER || task.structureType === STRUCTURE_SPAWN;
     const isRoad = task.structureType === STRUCTURE_ROAD;
+    const isStorage = task.structureType === STRUCTURE_STORAGE;
     const isSourceContainer =
       task.structureType === STRUCTURE_CONTAINER && adjacentToSource(task.pos.x, task.pos.y);
 
     // 检查每房限制。
     if (isCritical) {
       if (criticalSites >= CONFIG.construction.maxCriticalSitesPerRoom) continue;
+    } else if (isStorage) {
+      if (storageSites >= 1) continue;
     } else if (isRoad) {
       if (roadSites >= CONFIG.construction.maxRoadSitesPerRoom) continue;
     } else if (isSourceContainer) {

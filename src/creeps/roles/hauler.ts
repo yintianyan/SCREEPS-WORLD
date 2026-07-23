@@ -3,9 +3,10 @@
  *
  * 策略声明：
  *   acquire: assignment container > 最满 container（限量）> storage（限量）
- *   work:    haul fillTarget（带 reservation）> storage > 升级
+ *   work:    haul fillTarget（带 reservation）> storage > 待命
  *
- * hauler 没有 WORK 部件，不能采集。无能量来源时 idle 等待。
+ * hauler 没有 WORK 部件，不能采集或升级。无能量来源时 idle 等待。
+ * 所有 sink 满时原地待命 — 供给 > 需求是正确信号，demand 系统会减少 hauler 孵化。
  */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
@@ -15,7 +16,6 @@ import {
   haulMineralsToStorage,
   pickupDroppedEnergy,
   supplyLabs,
-  upgradeController,
   withdrawCapped,
 } from "../engine/actions";
 import { findRichestContainer } from "../support/targeting";
@@ -95,8 +95,10 @@ const policy: RolePolicy = {
     supplyLabs(),
     // spawn/extension 全满 — 送 storage。
     fillStorage(),
-    // 无处填充 — 升级。
-    upgradeController(),
+    // 所有 sink 均满 — 原地待命。
+    // hauler 无 WORK 部件，不能升级控制器（upgradeController 会 ERR_NO_BODYPART）。
+    // 空闲是正确信号：供给 > 需求，demand 系统会据此减少 hauler 孵化数量。
+    // 下一 tick sink 释放容量后自然恢复填充。
   ],
 };
 

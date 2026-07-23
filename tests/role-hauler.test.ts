@@ -142,7 +142,7 @@ describe("hauler — work 模式", () => {
     expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
   });
 
-  it("无 storage 时回退到升级控制器", () => {
+  it("无 storage 且所有 sink 满时原地待命（不升级控制器）", () => {
     const controller = mockController();
     const snap = mockSnapshot({ fillTargets: [], storage: undefined, controller });
     const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
@@ -150,7 +150,10 @@ describe("hauler — work 模式", () => {
 
     haulerRole.run(creep, ctx);
 
-    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    // hauler 无 WORK 部件，不应调用 upgradeController（会 ERR_NO_BODYPART）。
+    expect(creep.upgradeController).not.toHaveBeenCalled();
+    // 所有 sink 满且无 storage — hauler 待命，不切换 mode（保持 work 等待 sink 释放容量）。
+    expect(creep.memory.mode).not.toBe("acquire");
   });
 
   it("无任何目标时 idle", () => {
