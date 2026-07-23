@@ -66,6 +66,10 @@ export const telemetryCollectorSystem: System = {
 
     // 5. 更新 Memory.kernel.stats 摘要
     updateStatsSummary(tick);
+
+    // 6. 输出结构化遥测行供外部采集器（WebSocket console 订阅）接收。
+    // 格式：@TELEMETRY {json} — 前缀过滤，不影响游戏控制台可读性。
+    emitTelemetryLine(tick, ctx);
   },
 };
 
@@ -373,6 +377,52 @@ function updateStatsSummary(tick: number): void {
     }
     stats.errorHotspot = hotspot;
   }
+}
+
+// ─── 结构化 console 输出（外部采集通道）──────────────────────
+
+/**
+ * 输出一行 @TELEMETRY 前缀的 JSON，供外部 WebSocket console 订阅器接收。
+ *
+ * 格式：@TELEMETRY {"t":12345,"cpu":8.2,"bk":8500,...}
+ *
+ * 外部采集脚本按 @TELEMETRY 前缀过滤，写入 telemetry.jsonl 供事后分析。
+ * 此行同时出现在游戏控制台 — 前缀使其可辨识但不干扰人类阅读。
+ *
+ * CPU 开销：单次 console.log 约 0.02-0.05 CPU [Experience]。
+ * 每 10 tick 一次，在 P3 budget 下可接受。
+ */
+function emitTelemetryLine(tick: number, ctx: TickContext): void {
+  const tel = globalCache().telemetry!;
+  const stats = Memory.kernel?.stats;
+
+  // 仅在有值得关注的信号时输出，避免健康 tick 刷屏。
+  // 始终输出：CPU > softLimit*0.7、有错误、有 skip、有事件、有 stats。
+  const cpu = Game.cpu.getUsed();
+  const hasSignal = cpu > ctx.budget.softLimit * 0.7
+    || tel.errors > 0
+    || tel.skipped > 0
+    || stats != null;
+
+  if (!hasSignal) return;
+
+  const payload = {
+    t: tick,
+    cpu: Math.round(cpu * 10) / 10,
+    bk: Game.cpu.bucket ?? 0,
+    tier: ctx.budget.tier,
+    sk: tel.skipped,
+    er: tel.errors,
+    // 摘要指标（如果已更新）
+    avg: stats?.cpuAvg10 ?? 0,
+    max: stats?.cpuMax10 ?? 0,
+    bkm: stats?.bucketMin10 ?? 0,
+    crisis: stats?.crisisCount ?? 0,
+    errHot: stats?.errorHotspot ?? "",
+    skipHot: stats?.skipHotspot ?? "",
+  };
+
+  console.log(`@TELEMETRY ${JSON.stringify(payload)}`);
 }
 
 // ─── 辅助函数 ───────────────────────────────────────────────
