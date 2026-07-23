@@ -16,6 +16,7 @@ import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
 import { telemetryCollectorSystem } from "./systems/telemetry-collector";
+import { tuningEngineSystem } from "./kernel/tuning-engine";
 import { towerDefenseSystem } from "./systems/tower-defense";
 
 /**
@@ -64,6 +65,8 @@ const registry = new Registry()
   .registerSystem(pixelSystem)
   // P3：遥测采集（时序数据 + 事件日志 + 运行时摘要，低频采样）
   .registerSystem(telemetryCollectorSystem)
+  // P3：参数自调优（每 500 tick 读取遥测 → 调整角色边界覆盖值）
+  .registerSystem(tuningEngineSystem)
   // P0：恢复 worker（启动期 / 灾后）
   .registerRole(workerRole)
   // P1：harvester 和 hauler（能量链）

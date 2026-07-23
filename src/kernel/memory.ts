@@ -127,6 +127,26 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
       }
     },
   },
+  {
+    from: 6,
+    to: 7,
+    run: () => {
+      // v7：添加参数自调优 Memory 结构（Memory.kernel.tuning）。
+      // tuning 字段可选——tuning-engine 首次运行时自动初始化。
+      // 此迁移仅做畸形数据自愈（幂等）：如果 tuning 存在但结构不完整，修正它。
+      if (!Memory.kernel) Memory.kernel = {};
+      if (Memory.kernel.tuning !== undefined) {
+        // 确保必要子字段存在。
+        const t = Memory.kernel.tuning as any;
+        if (typeof t !== "object" || t === null) {
+          delete Memory.kernel.tuning;
+        } else {
+          if (typeof t.lastTuned !== "number") t.lastTuned = 0;
+          if (typeof t.rooms !== "object" || t.rooms === null) t.rooms = {};
+        }
+      }
+    },
+  },
 ];
 
 /**

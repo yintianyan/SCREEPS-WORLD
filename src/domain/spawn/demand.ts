@@ -1,5 +1,6 @@
 import { CONFIG } from "../../config";
 import { degradeBody, selectBody } from "../../config/bodies";
+import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import { countPending, spawnKey } from "./queue";
 
@@ -154,7 +155,7 @@ export function evaluateDemand(
 
   // P1：Harvester — 基于实际占用分配到最少拥挤的 source。
   // 使用本地占用副本，确保同一轮多次孵化时后续迭代能看到前面的分配。
-  const harvesterConfig = CONFIG.roles.harvester;
+  const harvesterConfig = getRoleBounds("harvester", home);
   const harvesterLiving = counts.harvester ?? 0;
   const harvesterTotal = harvesterLiving + pending.harvester;
 
@@ -196,7 +197,7 @@ export function evaluateDemand(
   //       container 能量 > 40% 容量 → 需要 1 个 hauler（正常物流压力）
   //       container 能量 < 40% → 不需要额外 hauler（搬运能力过剩，不孵）
   // 这确保 hauler 数量跟随实际物流压力动态调整，不会在 container 空时白孵。
-  const haulerConfig = CONFIG.roles.hauler;
+  const haulerConfig = getRoleBounds("hauler", home);
   const haulerTotal = (counts.hauler ?? 0) + pending.hauler;
   const hasLogistics = snapshot.containers.length > 0 || snapshot.storage !== undefined;
   let dynamicHaulerTarget = 0;
@@ -230,7 +231,7 @@ export function evaluateDemand(
   const allowUpgrader = colonyState === "normal" || hasDowngradeRisk;
 
   if (allowUpgrader) {
-    const upgraderConfig = CONFIG.roles.upgrader;
+    const upgraderConfig = getRoleBounds("upgrader", home);
     const upgraderTotal = (counts.upgrader ?? 0) + pending.upgrader;
 
     // A2：升级功率改由「storage 水位 + 大 body WORK 数」驱动，替代固定小 body 数量梯度。
@@ -307,7 +308,7 @@ export function evaluateDemand(
     // 全部竞争有限能量（2 harvester 仅产 4/tick），大部分 builder 空闲在 acquire。
     // 新上限：min(sites, harvester 存活数 + 1) — builder 数量不超过经济能供养的范围。
     if (snapshot.myConstructionSites.length > 0) {
-      const builderConfig = CONFIG.roles.builder;
+      const builderConfig = getRoleBounds("builder", home);
       const builderTotal = (counts.builder ?? 0) + pending.builder;
       const economyCap = (counts.harvester ?? 0) + (counts.worker ?? 0) + 1;
       const dynamicBuilderTarget = Math.min(
@@ -344,7 +345,7 @@ export function evaluateDemand(
   //   2. maxCount 硬上限（living + pending 已达上限不替换）
   //   3. 盈余检查（living + pending > minCount 说明有多余，不替换）
   //   4. 稳定 key（不含 sourceId，防止 assignment 重分配导致 key 漂移产生重复）
-  const roleConfigs = CONFIG.roles as Record<string, { minCount: number; maxCount: number }>;
+  const roleConfigs = getAllRoleBounds(home);
 
   for (const creep of creeps) {
     if (creep.home !== home) continue;

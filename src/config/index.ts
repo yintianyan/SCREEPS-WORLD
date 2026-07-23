@@ -21,7 +21,7 @@ export function getWallTargetHits(rcl: number): number {
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 6 },
+  memory: { schemaVersion: 7 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -44,6 +44,11 @@ export const CONFIG = {
     populationInterval: 100,
     /** 差分事件检测间隔（tick）。与 cpuSampleInterval 对齐。 */
     eventDetectionInterval: 10,
+  },
+
+  tuning: {
+    /** 调优引擎评估间隔（tick）。500 tick = 10 次 economy 采样窗口。 */
+    evalInterval: 500,
   },
 
   cpu: {

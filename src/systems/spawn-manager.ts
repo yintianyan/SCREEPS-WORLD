@@ -1,5 +1,6 @@
 import { CONFIG } from "../config";
 import { bodyCost, degradeBody, RECOVERY_BODY } from "../config/bodies";
+import { getRoleBounds } from "../config/tuned";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { evaluateDemand, ROLE_REQUIRED_PARTS, type CreepSummary, type SpawningSummary, type RoomDemandContext } from "../domain/spawn/demand";
 import type { ColonyState } from "../kernel/contracts";
@@ -94,7 +95,7 @@ function recyclePass(
     summaries,
     home,
     KNOWN_ROLES,
-    CONFIG.roles.harvester.minCount,
+    getRoleBounds("harvester", home).minCount,
   );
   for (const name of marked) {
     const creep = Game.creeps[name];

@@ -1,5 +1,6 @@
 import type { CreepMode, ColonyState, TaskKind, CpuTier } from "../kernel/contracts";
 import type { ColonyPhase } from "../domain/economy/phase";
+import type { RoomTuningState } from "../domain/tuning/types";
 
 export {};
 
@@ -140,6 +141,24 @@ declare global {
       errorHotspot: string;
       /** 最频繁的 skip 原因。 */
       skipHotspot: string;
+    };
+    /** 参数自调优状态（v7+）。tuning-engine 每 500 tick 更新。 */
+    tuning?: TuningMemory;
+  }
+
+  /** 参数自调优的持久化状态。 */
+  interface TuningMemory {
+    /** 上次调优 tick。 */
+    lastTuned: number;
+    /** 每房间的调优覆盖值。key = 房间名。 */
+    rooms: Record<string, RoomTuningState>;
+    /** 最近一次评估的诊断快照（供控制台查看）。 */
+    lastEval?: {
+      tick: number;
+      room: string;
+      adjustments: string[];
+      signals: Record<string, number>;
+      skipped?: string;
     };
   }
 
