@@ -117,15 +117,30 @@ export interface PopulationSnapshot {
   p0: number; // P0 请求数量
 }
 
-// ─── Segment 1 数据结构 ──────────────────────────────────────
+// ─── Segment 1 数据结构（CPU + 人口）──────────────────────────
 
-/** Segment 1 的顶层结构：时序数据环形缓冲区。 */
-export interface TimeseriesSegmentData {
+/** Segment 1 的顶层结构：CPU 时序 + 人口普查。 */
+export interface CpuSegmentData {
   /** CPU 时序环形缓冲（全局，每 10 tick 一条）。 */
   cpu: RingBuffer<CpuSample>;
+  /** 最新人口普查快照（仅保留最后一份）。 */
+  population?: PopulationSnapshot;
+}
+
+// ─── Segment 3 数据结构（经济）──────────────────────────────
+
+/** Segment 3 的顶层结构：经济时序环形缓冲。 */
+export interface EconomySegmentData {
   /** 经济时序环形缓冲（按房间混合，每 50 tick 一条）。 */
   economy: RingBuffer<EconomySample>;
-  /** 最新人口普查快照（仅保留最后一份）。 */
+}
+
+// ─── 兼容类型（迁移用）──────────────────────────────────────
+
+/** 旧 Segment 1 的合并结构 — 仅用于迁移检测。 */
+export interface LegacyTimeseriesData {
+  cpu: RingBuffer<CpuSample>;
+  economy: RingBuffer<EconomySample>;
   population?: PopulationSnapshot;
 }
 

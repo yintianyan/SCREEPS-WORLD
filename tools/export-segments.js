@@ -28,7 +28,7 @@ const { ScreepsAPI } = require("screeps-api");
 
 const EXPORT_DIR = process.env.EXPORT_DIR || "./data/export";
 const EXPORT_INTERVAL = parseInt(process.env.EXPORT_INTERVAL || "300000", 10);
-const SEGMENTS = [1, 2]; // Segment 1 = timeseries, Segment 2 = event log
+const SEGMENTS = [1, 2, 3]; // Segment 1 = CPU/population, Segment 2 = event log, Segment 3 = economy
 
 function buildConfig() {
   if (process.env.SCREEPS_HOST) {
@@ -119,7 +119,7 @@ async function exportOnce(api) {
   for (const segId of SEGMENTS) {
     const data = await fetchSegment(api, segId);
     if (data) {
-      const name = segId === 1 ? "timeseries" : "events";
+      const name = segId === 1 ? "cpu" : segId === 2 ? "events" : "economy";
       saveJson(data, `${name}.json`);
       saveJson(data, `archive/${name}-${timestamp}.json`);
     } else {

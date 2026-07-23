@@ -29,6 +29,8 @@ import type { RoomSnapshot, TickContext, Budget } from "../src/kernel/contracts"
 beforeEach(() => {
   resetGlobals();
   delete (globalThis as any).__segStore;
+  // Mock RawMemory for segment-store migration checks.
+  (globalThis as any).RawMemory = { segments: {}, setActiveSegments: () => {} };
 });
 
 // ─── Ring buffer builders ───────────────────────────────────
@@ -86,7 +88,9 @@ function setupTimeseries(
   cpu: RingBuffer<CpuSample>,
 ): void {
   (globalThis as any).__segStore = {
-    timeseries: { cpu, economy: econ },
+    cpuSeg: { cpu },
+    economySeg: { economy: econ },
+    migrated: true, // 跳过迁移检查
   };
 }
 

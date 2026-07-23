@@ -20,9 +20,11 @@ import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { globalCache } from "../kernel/global-cache";
 import {
-  readTimeseriesSegment,
+  readCpuSegment,
+  readEconomySegment,
   readEventLogSegment,
-  markTimeseriesDirty,
+  markCpuDirty,
+  markEconomyDirty,
   markEventLogDirty,
 } from "../kernel/segment-store";
 import {
@@ -79,15 +81,15 @@ function sampleCpuData(tick: number, ctx: TickContext): void {
   const tel = globalCache().telemetry!;
   const sample = sampleCpu(tick, ctx.budget, tel);
 
-  const seg = readTimeseriesSegment();
+  const seg = readCpuSegment();
   ringPush(seg.cpu, sample);
-  markTimeseriesDirty();
+  markCpuDirty();
 }
 
 // ─── 经济时序采样 ────────────────────────────────────────────
 
 function sampleEconomyData(tick: number, ctx: TickContext): void {
-  const seg = readTimeseriesSegment();
+  const seg = readEconomySegment();
 
   for (const snapshot of ctx.snapshots()) {
     const roomMem = Memory.rooms[snapshot.roomName];
@@ -123,7 +125,7 @@ function sampleEconomyData(tick: number, ctx: TickContext): void {
     );
     ringPush(seg.economy, sample);
   }
-  markTimeseriesDirty();
+  markEconomyDirty();
 }
 
 // ─── 人口普查 ───────────────────────────────────────────────
@@ -177,9 +179,9 @@ function samplePopulationData(tick: number): void {
     p0,
   };
 
-  const seg = readTimeseriesSegment();
+  const seg = readCpuSegment();
   seg.population = snapshot;
-  markTimeseriesDirty();
+  markCpuDirty();
 }
 
 // ─── 差分事件检测 + 事件 flush ───────────────────────────────
@@ -364,7 +366,7 @@ function updateStatsSummary(tick: number): void {
   }
 
   const stats = Memory.kernel.stats!;
-  const seg = readTimeseriesSegment();
+  const seg = readCpuSegment();
   const cpuSamples = ringToArray(seg.cpu);
 
   // 取最近 10 个采样点

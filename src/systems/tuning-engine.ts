@@ -27,7 +27,7 @@ import { CONFIG } from "../config";
 import { getRoleBounds } from "../config/tuned";
 import { evaluateTuning } from "../domain/tuning/evaluator";
 import type { TuningSignals, RoomTuningState } from "../domain/tuning/types";
-import { readTimeseriesSegment } from "../kernel/segment-store";
+import { readCpuSegment, readEconomySegment } from "../kernel/segment-store";
 import { ringToArray } from "../kernel/ring-buffer";
 import type { EconomySample, CpuSample } from "../kernel/timeseries";
 import { recordEvent, EventKind } from "../kernel/event-log";
@@ -128,10 +128,11 @@ function safeRunTuning(ctx: TickContext, roomName: string): void {
  * 返回 null 表示数据不足，调用方应跳过评估。
  */
 function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | null {
-  const seg = readTimeseriesSegment();
+  const cpuSeg = readCpuSegment();
+  const econSeg = readEconomySegment();
 
   // ── 经济趋势信号（从 economy ring buffer）──
-  const allEconomy = ringToArray(seg.economy) as EconomySample[];
+  const allEconomy = ringToArray(econSeg.economy) as EconomySample[];
   const roomEconomy = allEconomy.filter(s => s.r === roomName);
   const recentEconomy = roomEconomy.slice(-EVAL_WINDOW_SIZE);
 
@@ -144,7 +145,7 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
   const avgStorageEnergy = avg(recentEconomy.map(s => s.se));
 
   // ── CPU 信号（从 CPU ring buffer，全局）──
-  const cpuSamples = ringToArray(seg.cpu) as CpuSample[];
+  const cpuSamples = ringToArray(cpuSeg.cpu) as CpuSample[];
   const recentCpu = cpuSamples.slice(-EVAL_WINDOW_SIZE);
   const tierRank = recentCpu.length > 0
     ? Math.round(avg(recentCpu.map(s => s.ti)))
