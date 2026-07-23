@@ -213,13 +213,15 @@ export class Kernel {
       if (ctx.budget.isExhausted()) break;
 
       // 每房殖民地状态门禁：在 recovery/bootstrap 时允许 P0 和 P1（能量链），
-      // 但跳过 P2+（发展角色如 upgrader/builder）。
+      // 但跳过 P2+（发展角色如 upgrader）。
+      // 例外：recovery 时允许 builder——重建被毁基建是生存行为，不是发展。
       // 状态由 room-state 系统每 tick 写入 RoomMemory.colonyState。
       const home = creep.memory.home;
       const roomState = home ? Memory.rooms[home]?.colonyState ?? "normal" : "normal";
       if (
         (roomState === "recovery" || roomState === "bootstrap") &&
-        role.priority > 1
+        role.priority > 1 &&
+        !(roomState === "recovery" && role.name === "builder")
       ) {
         recordSkip(`creep/${role.name}/colony-state`);
         continue;

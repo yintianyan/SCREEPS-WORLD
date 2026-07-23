@@ -54,18 +54,6 @@ export interface CpuSample {
   s3: string;
   /** Top-3 系统 CPU。 */
   v3: number;
-  /** Top-1 角色名。 */
-  r1: string;
-  /** Top-1 角色 CPU。 */
-  w1: number;
-  /** Top-2 角色名。 */
-  r2: string;
-  /** Top-2 角色 CPU。 */
-  w2: number;
-  /** Top-3 角色名。 */
-  r3: string;
-  /** Top-3 角色 CPU。 */
-  w3: number;
 }
 
 // ─── 经济时序采样点 ──────────────────────────────────────────
@@ -161,10 +149,6 @@ export function sampleCpu(
   const sys = Object.entries(telemetry.systemCpu)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
-  // Top-3 角色按 CPU 降序
-  const roles = Object.entries(telemetry.roleCpu)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3);
 
   return {
     t: tick,
@@ -181,12 +165,6 @@ export function sampleCpu(
     v2: sys[1]?.[1] ? Math.round(sys[1][1] * 10) / 10 : 0,
     s3: sys[2]?.[0] ?? "",
     v3: sys[2]?.[1] ? Math.round(sys[2][1] * 10) / 10 : 0,
-    r1: roles[0]?.[0] ?? "",
-    w1: roles[0]?.[1] ? Math.round(roles[0][1] * 10) / 10 : 0,
-    r2: roles[1]?.[0] ?? "",
-    w2: roles[1]?.[1] ? Math.round(roles[1][1] * 10) / 10 : 0,
-    r3: roles[2]?.[0] ?? "",
-    w3: roles[2]?.[1] ? Math.round(roles[2][1] * 10) / 10 : 0,
   };
 }
 

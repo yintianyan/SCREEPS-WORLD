@@ -304,38 +304,40 @@ export function evaluateDemand(
       }
     }
 
-    // P2：Builder — 仅当存在建造 site 时。
-    // 动态数量：每个活跃 site 配 1 个 builder，但上限受经济承载力约束。
-    // 修复：旧实现 target=sites.length 导致 5 个 site 时孵 4 个 builder，
-    // 全部竞争有限能量（2 harvester 仅产 4/tick），大部分 builder 空闲在 acquire。
-    // 新上限：min(sites, harvester 存活数 + 1) — builder 数量不超过经济能供养的范围。
-    if (snapshot.myConstructionSites.length > 0) {
-      const builderConfig = getRoleBounds("builder", home);
-      const builderTotal = (counts.builder ?? 0) + pending.builder;
-      const economyCap = (counts.harvester ?? 0) + (counts.worker ?? 0) + 1;
-      const dynamicBuilderTarget = Math.min(
-        builderConfig.maxCount,
-        economyCap,
-        Math.max(builderConfig.minCount, snapshot.myConstructionSites.length),
-      );
-      // 梯度缩放：用 economyPressure 连续信号替代二值 crisis 开关。
-      // pressure 0.0–0.3: 满目标（健康）
-      // pressure 0.3–1.0: 线性从满目标缩到 minCount（builder 始终保留 minCount 处理关键重建）
-      const builderPressure = roomCtx.economyPressure;
-      let builderTarget: number;
-      if (builderPressure <= 0.3) {
-        builderTarget = dynamicBuilderTarget;
-      } else {
-        const t = (builderPressure - 0.3) / 0.7;
-        builderTarget = Math.round(dynamicBuilderTarget + t * (builderConfig.minCount - dynamicBuilderTarget));
-        builderTarget = Math.max(builderTarget, builderConfig.minCount);
-      }
-      if (builderTotal < builderTarget) {
-        for (let i = builderTotal; i < builderTarget; i++) {
-          const key = spawnKey("builder", home, i);
-          if (!hasKey(queue, key)) {
-            requests.push(createRequest("builder", home, i, key, 2, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
-          }
+  }
+
+  // P2：Builder — 独立于 upgrader 门禁。
+  // 灾后重建（recovery）时 builder 是生存角色，不是发展角色——必须允许 spawn。
+  // bootstrap 时不孵 builder（新手房优先建立能量链）。
+  // 动态数量：每个活跃 site 配 1 个 builder，但上限受经济承载力约束。
+  if (colonyState !== "bootstrap" && snapshot.myConstructionSites.length > 0) {
+    const builderConfig = getRoleBounds("builder", home);
+    const builderTotal = (counts.builder ?? 0) + pending.builder;
+    const economyCap = (counts.harvester ?? 0) + (counts.worker ?? 0) + 1;
+    const dynamicBuilderTarget = Math.min(
+      builderConfig.maxCount,
+      economyCap,
+      Math.max(builderConfig.minCount, snapshot.myConstructionSites.length),
+    );
+    // 梯度缩放：用 economyPressure 连续信号替代二值 crisis 开关。
+    // pressure 0.0–0.3: 满目标（健康）
+    // pressure 0.3–1.0: 线性从满目标缩到 minCount（builder 始终保留 minCount 处理关键重建）
+    const builderPressure = roomCtx.economyPressure;
+    let builderTarget: number;
+    if (builderPressure <= 0.3) {
+      builderTarget = dynamicBuilderTarget;
+    } else {
+      const t = (builderPressure - 0.3) / 0.7;
+      builderTarget = Math.round(dynamicBuilderTarget + t * (builderConfig.minCount - dynamicBuilderTarget));
+      builderTarget = Math.max(builderTarget, builderConfig.minCount);
+    }
+    if (builderTotal < builderTarget) {
+      // recovery 时提升为 P1（重建被毁基建是生存行为）；normal 时保持 P2（发展）。
+      const builderPriority: 0 | 1 | 2 | 3 | 4 = inCrisis ? 1 : 2;
+      for (let i = builderTotal; i < builderTarget; i++) {
+        const key = spawnKey("builder", home, i);
+        if (!hasKey(queue, key)) {
+          requests.push(createRequest("builder", home, i, key, builderPriority, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
         }
       }
     }

@@ -90,8 +90,6 @@ describe("Timeseries — sampleCpu", () => {
 
     expect(sample.s1).toBe("");
     expect(sample.v1).toBe(0);
-    expect(sample.r1).toBe("");
-    expect(sample.w1).toBe(0);
   });
 
   it("rounds CPU values to 1 decimal", () => {

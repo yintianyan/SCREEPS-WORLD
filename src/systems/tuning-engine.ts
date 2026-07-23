@@ -150,23 +150,9 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
     ? Math.round(avg(recentCpu.map(s => s.ti)))
     : 0;
 
-  // hauler CPU share：从 top-3 角色中查找 hauler
-  let totalRoleCpu = 0;
-  let haulerCpu = 0;
-  for (const s of recentCpu) {
-    const roles = [
-      { name: s.r1, cpu: s.w1 },
-      { name: s.r2, cpu: s.w2 },
-      { name: s.r3, cpu: s.w3 },
-    ];
-    for (const r of roles) {
-      if (r.name && r.cpu > 0) {
-        totalRoleCpu += r.cpu;
-        if (r.name === "hauler") haulerCpu += r.cpu;
-      }
-    }
-  }
-  const haulerCpuShare = totalRoleCpu > 0 ? haulerCpu / totalRoleCpu : 0;
+  // hauler CPU share：角色级 CPU 遥测暂未启用（roleCpu 始终为空），
+  // 待未来启用 per-role 计时后恢复。当前固定 0 不影响调参逻辑。
+  const haulerCpuShare = 0;
 
   // ── 活快照信号 ──
   const snapshot = ctx.getSnapshot(roomName);

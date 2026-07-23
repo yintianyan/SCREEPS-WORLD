@@ -75,9 +75,6 @@ function buildCpuRing(
       sk: 0,
       er: 0,
       s1: "", v1: 0, s2: "", v2: 0, s3: "", v3: 0,
-      r1: "hauler", w1: 2,
-      r2: "harvester", w2: 1.5,
-      r3: "", w3: 0,
       ...overrides,
     });
   }

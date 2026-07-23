@@ -26,10 +26,10 @@ export const SEGMENT_EVENT_LOG = 2;
 
 // ─── 容量常量 ───────────────────────────────────────────────
 
-/** CPU 时序环形缓冲容量（每 10 tick 采样 → 500 条 = 5000 tick 窗口）。 */
-const CPU_RING_CAPACITY = 500;
-/** 经济时序环形缓冲容量（每 50 tick 采样 → 300 条 = 15000 tick 窗口）。 */
-const ECONOMY_RING_CAPACITY = 300;
+/** CPU 时序环形缓冲容量（每 10 tick 采样 → 300 条 = 3000 tick 窗口）。 */
+const CPU_RING_CAPACITY = 300;
+/** 经济时序环形缓冲容量（每 50 tick 采样 → 200 条 = 10000 tick 窗口）。 */
+const ECONOMY_RING_CAPACITY = 200;
 /** 事件日志环形缓冲容量（保留最近 500 条事件）。 */
 const EVENT_RING_CAPACITY = 500;
 
@@ -220,7 +220,20 @@ export function flushSegments(): void {
   }
 
   if (cache.timeseriesDirty && cache.timeseries) {
-    RawMemory.segments[SEGMENT_TIMESERIES] = JSON.stringify(cache.timeseries);
+    let serialized = JSON.stringify(cache.timeseries);
+    // Size guard：segment 上限 100KB [Facts]，留 5KB 余量。
+    // 超限时裁剪 CPU 缓冲区最老 25% 数据（CPU 是体积大户）。
+    if (serialized.length > 95 * 1024) {
+      const buf = cache.timeseries.cpu;
+      const trimCount = Math.max(1, Math.floor(buf.c * 0.25));
+      for (let i = 0; i < trimCount; i++) {
+        const oldest = buf.h < buf.c ? (buf.h - buf.c + buf.d.length) % buf.d.length : (buf.h + i) % buf.d.length;
+        buf.d[oldest] = undefined;
+      }
+      buf.c = Math.max(0, buf.c - trimCount);
+      serialized = JSON.stringify(cache.timeseries);
+    }
+    RawMemory.segments[SEGMENT_TIMESERIES] = serialized;
     cache.timeseriesDirty = false;
   }
 
