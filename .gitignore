@@ -32,10 +32,8 @@ coverage/
 .screeps.json
 
 # Screeps telemetry & export data (generated, not source)
-tools/data/export/
-tools/data/*.jsonl
-tools/data/*.json
-tools/data/archive/
+tools/data
+data/
 
 # TypeScript
 *.tsbuildinfo

@@ -11,6 +11,7 @@ import {
   createSourceLinkTasks,
   createControllerLinkTask,
   createExtractorTask,
+  type BuildTaskCandidate,
 } from "../domain/layout/task-factory";
 import {
   collectCompletedKeys,
@@ -177,7 +178,7 @@ export const layoutPlannerSystem: System & {
     // 障碍集合（仅不可通行结构/工地）— 密封守卫：拒绝制造建筑孤岛的建造。
     const obstacleSet = buildObstaclePositionSet(snapshot);
 
-    const globalSiteCount = countGlobalSites(ctx);
+    const globalSiteCount = ctx.globalSiteCount;
     const validationOptions = {
       completedKeys,
       globalSiteCount,
@@ -189,10 +190,27 @@ export const layoutPlannerSystem: System & {
     };
 
     // 预构建队列 key 集合 — O(1) 去重，替代旧实现每候选 O(queue) 的 some() 扫描。
+    // 同时构建位置集合 — 防止不同 key 的任务占据同一格子（P0 修复：
+    // 旧实现只按 key 去重，constraint.extension.* 和 core.ext.* 两个命名空间
+    // 会在同一位置生成重复任务，导致 buildQueue 中同位置多任务相互阻塞）。
     const existingKeys = new Set<string>();
-    for (const t of queue) existingKeys.add(t.key);
+    const existingPositions = new Set<string>();
+    for (const t of queue) {
+      existingKeys.add(t.key);
+      existingPositions.add(`${t.pos.x},${t.pos.y}`);
+    }
 
     // 1. 核心结构任务 — 按 CONFIG.layout.mode 分支。
+    // tryAddTask 统一封装 key + position 双重去重，防止同位置多任务。
+    const tryAddTask = (candidate: BuildTaskCandidate): boolean => {
+      if (existingKeys.has(candidate.key)) return false;
+      const posKey = `${candidate.pos.x},${candidate.pos.y}`;
+      if (existingPositions.has(posKey)) return false;
+      queue.push(candidateToBuildTask(candidate));
+      existingKeys.add(candidate.key);
+      existingPositions.add(posKey);
+      return true;
+    };
     if (CONFIG.layout.mode === "constraint") {
       // ── 约束推导模式：从地形约束推导结构位置 ──
       const terrain = room.getTerrain();
@@ -202,10 +220,7 @@ export const layoutPlannerSystem: System & {
       const constraintCandidates = placementsToCandidates(placements, snapshot.roomName);
 
       for (const candidate of constraintCandidates) {
-        if (existingKeys.has(candidate.key)) continue;
-        queue.push(candidateToBuildTask(candidate));
-        existingKeys.add(candidate.key);
-        tasksAdded = true;
+        if (tryAddTask(candidate)) tasksAdded = true;
       }
     } else {
       // ── 模板模式（默认）：固定蓝图偏移 + relocation ──
@@ -247,6 +262,7 @@ export const layoutPlannerSystem: System & {
             if (relocated) {
               queue.push(candidateToBuildTask(relocated));
               existingKeys.add(relocated.key);
+              existingPositions.add(`${relocated.pos.x},${relocated.pos.y}`);
               forbidden.add(packPos(relocated.pos.x, relocated.pos.y));
               // 持久化替代位置到 segment，后续周期直接复用。
               segData.overrides ??= {};
@@ -257,10 +273,7 @@ export const layoutPlannerSystem: System & {
           }
           continue;
         }
-        if (existingKeys.has(candidate.key)) continue;
-        queue.push(candidateToBuildTask(candidate));
-        existingKeys.add(candidate.key);
-        tasksAdded = true;
+        if (tryAddTask(candidate)) tasksAdded = true;
       }
     }
 
@@ -271,11 +284,10 @@ export const layoutPlannerSystem: System & {
       validationOptions,
     );
     for (const candidate of sourceContainerCandidates) {
-      if (existingKeys.has(candidate.key)) continue;
-      queue.push(candidateToBuildTask(candidate));
-      existingKeys.add(candidate.key);
-      tasksAdded = true;
-      targetingChanged = true; // container 影响 withdraw 目标
+      if (tryAddTask(candidate)) {
+        tasksAdded = true;
+        targetingChanged = true;
+      }
     }
 
     // 3. Controller container 任务（RCL3+）。
@@ -285,11 +297,9 @@ export const layoutPlannerSystem: System & {
       validationOptions,
     );
     if (controllerContainer) {
-      if (!existingKeys.has(controllerContainer.key)) {
-        queue.push(candidateToBuildTask(controllerContainer));
-        existingKeys.add(controllerContainer.key);
+      if (tryAddTask(controllerContainer)) {
         tasksAdded = true;
-        targetingChanged = true; // container 影响 withdraw 目标
+        targetingChanged = true;
       }
     }
 
@@ -300,11 +310,10 @@ export const layoutPlannerSystem: System & {
       validationOptions,
     );
     for (const candidate of sourceLinkCandidates) {
-      if (existingKeys.has(candidate.key)) continue;
-      queue.push(candidateToBuildTask(candidate));
-      existingKeys.add(candidate.key);
-      tasksAdded = true;
-      targetingChanged = true; // link 影响能量传输目标
+      if (tryAddTask(candidate)) {
+        tasksAdded = true;
+        targetingChanged = true;
+      }
     }
 
     // 3.6 Controller link 任务（RCL5+）。
@@ -314,21 +323,17 @@ export const layoutPlannerSystem: System & {
       validationOptions,
     );
     if (controllerLink) {
-      if (!existingKeys.has(controllerLink.key)) {
-        queue.push(candidateToBuildTask(controllerLink));
-        existingKeys.add(controllerLink.key);
+      if (tryAddTask(controllerLink)) {
         tasksAdded = true;
-        targetingChanged = true; // link 影响能量传输目标
+        targetingChanged = true;
       }
     }
 
     // 3.7 Extractor 任务（RCL6+）— 矿位上，补齐矿物产业链第一环。
     {
       const extractor = createExtractorTask(snapshot);
-      if (extractor && !existingKeys.has(extractor.key)) {
-        queue.push(candidateToBuildTask(extractor));
-        existingKeys.add(extractor.key);
-        tasksAdded = true;
+      if (extractor) {
+        if (tryAddTask(extractor)) tasksAdded = true;
       }
     }
 
@@ -347,8 +352,11 @@ export const layoutPlannerSystem: System & {
         existingKeys,
       });
       for (const task of roadTasks) {
+        const posKey = `${task.pos.x},${task.pos.y}`;
+        if (existingKeys.has(task.key) || existingPositions.has(posKey)) continue;
         queue.push(task);
         existingKeys.add(task.key);
+        existingPositions.add(posKey);
         tasksAdded = true;
       }
     }
@@ -391,11 +399,3 @@ function shouldPlan(
   return false;
 }
 
-/** 统计全局活跃 site 数。 */
-function countGlobalSites(ctx: TickContext): number {
-  let count = 0;
-  for (const snap of ctx.snapshots()) {
-    count += snap.myConstructionSites.length;
-  }
-  return count;
-}

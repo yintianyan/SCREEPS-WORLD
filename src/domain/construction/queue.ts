@@ -28,6 +28,9 @@ export function syncTaskStates(
   queue: BuildTask[],
   snapshot: RoomSnapshot,
 ): void {
+  // 按位置 → site 映射，用于 queued→site 转换。
+  // 注意：同一位置只可能有一个 site，但不同结构类型的任务可能指向同一位置。
+  // 下面的匹配会额外检查 structureType，防止误匹配。
   const sites = new Map<string, ConstructionSite>();
   for (const site of snapshot.myConstructionSites) {
     sites.set(`${site.pos.x},${site.pos.y}`, site);
@@ -52,8 +55,11 @@ export function syncTaskStates(
   for (const task of queue) {
     const key = `${task.pos.x},${task.pos.y}`;
     if (task.state === "queued") {
-      // 检查该位置是否已存在 site。
-      if (sites.has(key)) {
+      // 检查该位置是否存在**匹配结构类型**的 site。
+      // P0 修复：旧实现只检查位置不检查类型，导致 storage 的 site 被误匹配给
+      // 同位置的 extension 任务，extension 永远不会变成 site 也不会被创建。
+      const site = sites.get(key);
+      if (site && site.structureType === task.structureType) {
         task.state = "site";
       } else {
         // 检查该位置是否已建成目标结构 — 避免 layout planner 反复重添已完成任务。
@@ -63,8 +69,9 @@ export function syncTaskStates(
         }
       }
     } else if (task.state === "site") {
-      // 检查 site 是否消失（完成或被毁）。
-      if (!sites.has(key)) {
+      // 检查 site 是否消失（完成或被毁）或类型不匹配。
+      const site = sites.get(key);
+      if (!site || site.structureType !== task.structureType) {
         // 从快照结构数据检查是否已建成，避免 lookForAt。
         const builtType = builtPositions.get(key);
         task.state = builtType === task.structureType ? "done" : "queued";
