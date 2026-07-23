@@ -165,10 +165,12 @@ export function readCpuSegment(): CpuSegmentData {
         // 检测旧格式（包含 economy 字段）— 触发迁移。
         if (parsed.economy && !cache.migrated) {
           migrateLegacyTimeseries(parsed as LegacyTimeseriesData);
+          // 迁移已重建 cpuSeg，直接返回。
+          if (cache.cpuSeg) return cache.cpuSeg;
         }
-        // 使用 cpu + population（忽略可能残留的 economy 字段）。
+        // 非迁移路径：清理可能残留的 null 空洞（JSON 往返后 undefined → null）。
         cache.cpuSeg = {
-          cpu: parsed.cpu,
+          cpu: rebuildRingBuffer(parsed.cpu, CPU_RING_CAPACITY),
           population: parsed.population,
         };
       } else {
@@ -249,7 +251,10 @@ export function readEconomySegment(): EconomySegmentData {
     try {
       const parsed = JSON.parse(raw3) as EconomySegmentData;
       if (parsed && parsed.economy) {
-        cache.economySeg = parsed;
+        // 清理可能残留的 null 空洞。
+        cache.economySeg = {
+          economy: rebuildRingBuffer(parsed.economy, ECONOMY_RING_CAPACITY),
+        };
       } else {
         cache.economySeg = createEmptyEconomySegment();
       }
@@ -288,21 +293,37 @@ function migrateLegacyTimeseries(legacy: LegacyTimeseriesData): void {
   if (cache.migrated) return;
   cache.migrated = true;
 
-  // 将 economy 数据放入 segment 3 缓存。
+  console.log("[segment] migrating legacy segment 1 → segment 1 (cpu) + segment 3 (economy)");
+
+  // 重建 economy ring buffer — 过滤旧裁剪逻辑留下的 null/undefined 空洞。
   if (legacy.economy) {
-    cache.economySeg = { economy: legacy.economy };
+    const cleanEconomy = rebuildRingBuffer(legacy.economy, ECONOMY_RING_CAPACITY);
+    cache.economySeg = { economy: cleanEconomy };
     cache.economyDirty = true;
-    console.log("[segment] migrating economy data from segment 1 → segment 3");
   }
 
-  // 从 segment 1 缓存中移除 economy（仅保留 cpu + population）。
+  // 重建 cpu ring buffer — 同样过滤空洞。
   if (legacy.cpu) {
+    const cleanCpu = rebuildRingBuffer(legacy.cpu, CPU_RING_CAPACITY);
     cache.cpuSeg = {
-      cpu: legacy.cpu,
+      cpu: cleanCpu,
       population: legacy.population,
     };
     cache.cpuDirty = true;
   }
+}
+
+/**
+ * 从可能包含 null/undefined 空洞的旧 ring buffer 重建干净的新 ring buffer。
+ * 保留所有有效数据和时间顺序。
+ */
+function rebuildRingBuffer<T>(old: RingBuffer<T>, capacity: number): RingBuffer<T> {
+  const clean = createRingBuffer<T>(capacity);
+  const valid = ringToArray(old); // ringToArray 已过滤 null/undefined
+  for (const item of valid) {
+    ringPush(clean, item);
+  }
+  return clean;
 }
 
 // ─── 事件日志 segment (Segment 2) ───────────────────────────
@@ -319,7 +340,10 @@ export function readEventLogSegment(): EventLogSegmentData {
     try {
       const parsed = JSON.parse(raw) as EventLogSegmentData;
       if (parsed.events) {
-        cache.eventLog = parsed;
+        // 清理可能残留的 null 空洞。
+        cache.eventLog = {
+          events: rebuildRingBuffer(parsed.events, EVENT_RING_CAPACITY),
+        };
       } else {
         cache.eventLog = { events: createRingBuffer<GameEvent>(EVENT_RING_CAPACITY) };
       }

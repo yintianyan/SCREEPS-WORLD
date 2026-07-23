@@ -42,7 +42,10 @@ export function ringToArray<T>(buf: RingBuffer<T>): T[] {
   for (let i = 0; i < buf.c; i++) {
     const idx = (start + i) % cap;
     const val = buf.d[idx];
-    if (val !== undefined) result.push(val);
+    // 同时过滤 undefined 和 null：
+    // JSON.stringify 将 undefined 转为 null，反序列化后 null 残留在 d 数组中。
+    // 旧裁剪逻辑可能留下 undefined 空洞，经 segment 往返后变为 null。
+    if (val != null) result.push(val);
   }
   return result;
 }
