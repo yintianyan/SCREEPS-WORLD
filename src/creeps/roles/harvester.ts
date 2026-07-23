@@ -5,8 +5,8 @@
  *   acquire: 站桩采集并同 tick 倒能（有 source container/link 时）> 通用采集（含拥挤迁移）
  *   work:    站桩采集同 tick 倒能（拦截站桩矿工，防离岗）> 矿物卸载 > link/container 倒能 > 建身边 site > fill > 最空 container > 建造 > 升级
  */
-import type { Priority } from "../kernel/contracts";
-import type { RolePolicy } from "./action-types";
+import type { Priority } from "../../kernel/contracts";
+import type { RolePolicy } from "../engine/action-types";
 import {
   buildNearbyContainerSite,
   buildNearestSite,
@@ -20,8 +20,8 @@ import {
   repairNearbyContainer,
   stationaryMine,
   upgradeController,
-} from "./actions";
-import { defineRole } from "./role-runner";
+} from "../engine/actions";
+import { defineRole } from "../engine/role-runner";
 
 const policy: RolePolicy = {
   acquire: [

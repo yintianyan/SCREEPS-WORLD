@@ -7,7 +7,7 @@
  *   - RoleRunner 按序评估，第一个 predicate=true 的候选被执行。
  *   - 新增/调整行为 = 增删/排序候选，不修改其他候选。
  */
-import type { Budget, RoomSnapshot, TickContext } from "../kernel/contracts";
+import type { Budget, RoomSnapshot, TickContext } from "../../kernel/contracts";
 
 /** 传递给每个 ActionCandidate 的只读决策上下文。 */
 export interface ActionContext {

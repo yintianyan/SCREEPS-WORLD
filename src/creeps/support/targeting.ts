@@ -1,5 +1,5 @@
-import type { RoomSnapshot } from "../kernel/contracts";
-import { globalCache } from "../kernel/global-cache";
+import type { RoomSnapshot } from "../../kernel/contracts";
+import { globalCache } from "../../kernel/global-cache";
 import { getObjectById } from "./obj-cache";
 
 /** 获取或分配 creep 的 source。将 sourceId 存入 memory。 */

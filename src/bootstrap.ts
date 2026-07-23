@@ -1,8 +1,8 @@
-import { builderRole } from "./creeps/builder";
-import { harvesterRole } from "./creeps/harvester";
-import { haulerRole } from "./creeps/hauler";
-import { upgraderRole } from "./creeps/upgrader";
-import { workerRole } from "./creeps/worker";
+import { builderRole } from "./creeps/roles/builder";
+import { harvesterRole } from "./creeps/roles/harvester";
+import { haulerRole } from "./creeps/roles/hauler";
+import { upgraderRole } from "./creeps/roles/upgrader";
+import { workerRole } from "./creeps/roles/worker";
 import { Kernel } from "./kernel/kernel";
 import { Registry } from "./kernel/registry";
 import { assignmentServiceSystem } from "./systems/assignment-service";
@@ -16,7 +16,7 @@ import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
 import { telemetryCollectorSystem } from "./systems/telemetry-collector";
-import { tuningEngineSystem } from "./kernel/tuning-engine";
+import { tuningEngineSystem } from "./systems/tuning-engine";
 import { towerDefenseSystem } from "./systems/tower-defense";
 
 /**

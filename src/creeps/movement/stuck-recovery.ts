@@ -8,9 +8,9 @@
  *   Level 3（stuckTicks >= threshold+repathLimit）：放弃目标，idle
  */
 
-import { CONFIG } from "../config";
-import { globalCache } from "../kernel/global-cache";
-import { releaseFromTask } from "./assignment-adapter";
+import { CONFIG } from "../../config";
+import { globalCache } from "../../kernel/global-cache";
+import { releaseFromTask } from "../support/assignment-adapter";
 import { recordTraffic } from "./traffic";
 
 /** 方向 → (dx, dy) 偏移表。 */

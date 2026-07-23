@@ -8,9 +8,9 @@
  *
  * 站桩升级核心：upgrader 站在 controller 旁，从 link/container 取能 + 升级，0 通勤。
  */
-import { CONFIG } from "../config";
-import type { Priority } from "../kernel/contracts";
-import type { ActionContext, RolePolicy } from "./action-types";
+import { CONFIG } from "../../config";
+import type { Priority } from "../../kernel/contracts";
+import type { ActionContext, RolePolicy } from "../engine/action-types";
 import {
   harvestSource,
   pickupDroppedEnergy,
@@ -19,8 +19,8 @@ import {
   withdrawControllerLink,
   withdrawRichestContainer,
   withdrawStorage,
-} from "./actions";
-import { defineRole } from "./role-runner";
+} from "../engine/actions";
+import { defineRole } from "../engine/role-runner";
 
 /**
  * 能量地板门禁 — 仅阻止 acquire 模式取能，不阻止已满载的 upgrader 交付。

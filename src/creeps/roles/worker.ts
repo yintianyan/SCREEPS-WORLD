@@ -8,17 +8,17 @@
  * 启动期和灾后恢复的最后防线。直接采集 + 填充，防止能量死锁。
  * source 分配不经 assignment 系统（P1-1）— 与 harvester 一致走 getSource 公平份额。
  */
-import type { Priority } from "../kernel/contracts";
-import type { ActionCandidate, RolePolicy } from "./action-types";
+import type { Priority } from "../../kernel/contracts";
+import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import {
   fillTarget,
   harvestSource,
   pickupDroppedEnergy,
   upgradeController,
-} from "./actions";
-import { moveToTarget } from "./movement";
-import { getObjectById } from "./obj-cache";
-import { defineRole } from "./role-runner";
+} from "../engine/actions";
+import { moveToTarget } from "../movement";
+import { getObjectById } from "../support/obj-cache";
+import { defineRole } from "../engine/role-runner";
 
 /** 向 assignment 指定的 target 送能。 */
 function fillAssignmentTarget(): ActionCandidate {

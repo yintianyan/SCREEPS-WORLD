@@ -1,6 +1,6 @@
-import type { RoomSnapshot } from "../kernel/contracts";
-import { moveTowardRoom, recordTraffic, findSafestExit } from "./movement";
-import { releaseFromTask } from "./assignment-adapter";
+import type { RoomSnapshot } from "../../kernel/contracts";
+import { moveTowardRoom, recordTraffic, findSafestExit } from "../movement";
+import { releaseFromTask } from "../support/assignment-adapter";
 
 /** 根据能量存储更新 creep 模式。仅在阈值跨越时写入。 */
 export function updateMode(creep: Creep): void {

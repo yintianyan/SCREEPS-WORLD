@@ -1,5 +1,5 @@
 /**
- * Movement barrel — 保持消费者导入路径不变（`from "./movement"`）。
+ * Movement barrel — 保持消费者导入路径不变（`from "../movement"`）。
  *
  * 实际实现拆分为三个子模块（Phase 6 重构）：
  *   - traffic.ts         — 交通热度记录（recordTraffic, packPos）
@@ -8,7 +8,7 @@
  *
  * 依赖方向（无循环）：
  *   traffic → globalCache
- *   stuck-recovery → traffic + assignment-adapter
+ *   stuck-recovery → traffic + support/assignment-adapter
  *   pathfinding → traffic + stuck-recovery + config + globalCache
  */
 

@@ -5,7 +5,7 @@
  * fallback 链（storage → upgrade → idle）、无 WORK 部件不采集、flee。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { haulerRole } from "../src/creeps/hauler";
+import { haulerRole } from "../src/creeps/roles/hauler";
 import {
   mockContext,
   mockController,

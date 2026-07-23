@@ -22,15 +22,15 @@
  *   - 经济不稳定时完全锁定。
  */
 
-import type { Priority, System, TickContext } from "./contracts";
+import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { getRoleBounds } from "../config/tuned";
 import { evaluateTuning } from "../domain/tuning/evaluator";
 import type { TuningSignals, RoomTuningState } from "../domain/tuning/types";
-import { readTimeseriesSegment } from "./segment-store";
-import { ringToArray } from "./ring-buffer";
-import type { EconomySample, CpuSample } from "./timeseries";
-import { recordEvent, EventKind } from "./event-log";
+import { readTimeseriesSegment } from "../kernel/segment-store";
+import { ringToArray } from "../kernel/ring-buffer";
+import type { EconomySample, CpuSample } from "../kernel/timeseries";
+import { recordEvent, EventKind } from "../kernel/event-log";
 
 // ─── 自定义事件类型（扩展 EventKind）──
 // 使用现有 EventKind 的 PluginCooldown 槽位不太合适，

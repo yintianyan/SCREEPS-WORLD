@@ -13,10 +13,10 @@
  *   - repairXxx    — 维修
  *   - upgradeXxx   — 升级控制器
  */
-import { CONFIG, getWallTargetHits } from "../config";
-import type { RoomSnapshot } from "../kernel/contracts";
+import { CONFIG, getWallTargetHits } from "../../config";
+import type { RoomSnapshot } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext } from "./action-types";
-import { moveToTarget } from "./movement";
+import { moveToTarget } from "../movement";
 import { actOrMove } from "./role-runner";
 import {
   findClosestContainerWithEnergy,
@@ -27,8 +27,8 @@ import {
   getHaulFillTarget,
   getSource,
   selectDroppedEnergy,
-} from "./targeting";
-import { getObjectById } from "./obj-cache";
+} from "../support/targeting";
+import { getObjectById } from "../support/obj-cache";
 
 // ─── Harvest ────────────────────────────────────────────────
 

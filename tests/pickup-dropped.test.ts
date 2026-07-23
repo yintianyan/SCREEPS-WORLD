@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { resetGlobals, mockCreep, mockSnapshot, mockContext } from "./role-helpers";
-import { selectDroppedEnergy } from "../src/creeps/targeting";
-import { haulerRole } from "../src/creeps/hauler";
+import { selectDroppedEnergy } from "../src/creeps/support/targeting";
+import { haulerRole } from "../src/creeps/roles/hauler";
 
 /** 构造掉落能量 mock：__range 供 creep.pos.getRangeTo 读取距该堆的距离。 */
 function droppedRes(id: string, amount: number, range: number): any {

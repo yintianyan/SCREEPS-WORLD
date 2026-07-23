@@ -1,8 +1,8 @@
-import { CONFIG } from "../config";
-import type { TickContext } from "../kernel/contracts";
-import { chooseTaskForRole, validateAssignmentRules } from "../domain/assignment/service";
-import type { TaskPool } from "../domain/assignment/task-pool";
-import { globalCache } from "../kernel/global-cache";
+import { CONFIG } from "../../config";
+import type { TickContext } from "../../kernel/contracts";
+import { chooseTaskForRole, validateAssignmentRules } from "../../domain/assignment/service";
+import type { TaskPool } from "../../domain/assignment/task-pool";
+import { globalCache } from "../../kernel/global-cache";
 import { getObjectById } from "./obj-cache";
 
 // ──────────────────────────────────────────────

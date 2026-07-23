@@ -6,7 +6,7 @@
  * 满载 upgrader 不被地板阻止、flee。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { upgraderRole } from "../src/creeps/upgrader";
+import { upgraderRole } from "../src/creeps/roles/upgrader";
 import {
   mockContext,
   mockController,

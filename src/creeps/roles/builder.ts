@@ -8,8 +8,8 @@
  *
  * CPU 门禁通过候选 predicate 内的 tier 判断实现，不再内嵌 if-else。
  */
-import type { Priority } from "../kernel/contracts";
-import type { ActionCandidate, ActionContext, RolePolicy } from "./action-types";
+import type { Priority } from "../../kernel/contracts";
+import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
   fillTarget,
   harvestSource,
@@ -19,11 +19,11 @@ import {
   repairFortifications,
   upgradeControllerGated,
   withdrawClosestContainer,
-} from "./actions";
-import { releaseAssignment } from "./assignment-adapter";
-import { moveToTarget } from "./movement";
-import { getObjectById } from "./obj-cache";
-import { defineRole } from "./role-runner";
+} from "../engine/actions";
+import { releaseAssignment } from "../support/assignment-adapter";
+import { moveToTarget } from "../movement";
+import { getObjectById } from "../support/obj-cache";
+import { defineRole } from "../engine/role-runner";
 
 /** recovery/conserve tier 门禁：释放不可用的 assignment。 */
 function builderGate(ac: ActionContext): boolean {

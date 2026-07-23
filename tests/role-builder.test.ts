@@ -5,7 +5,7 @@
  *（fill → repair → upgrade → idle）、ERR_INVALID_TARGET 处理、acquire 取能策略。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { builderRole } from "../src/creeps/builder";
+import { builderRole } from "../src/creeps/roles/builder";
 import {
   mockBudget,
   mockConstructionSite,

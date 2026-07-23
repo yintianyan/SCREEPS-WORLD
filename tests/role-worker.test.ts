@@ -5,7 +5,7 @@
  * assignment sourceId 使用、flee、边界情况。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { workerRole } from "../src/creeps/worker";
+import { workerRole } from "../src/creeps/roles/worker";
 import {
   mockContext,
   mockController,

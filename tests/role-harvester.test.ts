@@ -5,7 +5,7 @@
  * flee 与恢复、source 拥挤迁移、assignment 过期重分配、source 耗尽。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { harvesterRole } from "../src/creeps/harvester";
+import { harvesterRole } from "../src/creeps/roles/harvester";
 import {
   mockBudget,
   mockConstructionSite,

@@ -13,9 +13,9 @@
  *
  * 角色文件只需声明 RolePolicy，不再包含生命周期样板。
  */
-import type { CreepRole, Priority, TickContext } from "../kernel/contracts";
+import type { CreepRole, Priority, TickContext } from "../../kernel/contracts";
 import type { ActionContext, RolePolicy } from "./action-types";
-import { ensureHome, flee, getAssignment, moveToTarget, shouldFlee, updateMode } from "./helpers";
+import { ensureHome, flee, getAssignment, moveToTarget, shouldFlee, updateMode } from "../support";
 
 /**
  * 创建一个由 RolePolicy 驱动的 CreepRole。

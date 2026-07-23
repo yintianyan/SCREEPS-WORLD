@@ -13,7 +13,7 @@
  * 类型签名与 Game.getObjectById 完全一致（双重载），调用点零类型改动。
  */
 
-import { globalCache } from "../kernel/global-cache";
+import { globalCache } from "../../kernel/global-cache";
 
 function getCache(): Map<string, unknown> {
   const g = globalCache() as any;

@@ -1,6 +1,6 @@
 import { CONFIG, getWallTargetHits } from "../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
-import { findCriticalRepair } from "../creeps/helpers";
+import { findCriticalRepair } from "../creeps/support";
 import { selectTowerTarget, type TowerThreat } from "../domain/defense/tower-target";
 import { globalCache } from "../kernel/global-cache";
 

@@ -5,7 +5,7 @@
  * 数据存 globalCache().roomTraffic，每规划周期由 road-planner 轮换。
  */
 
-import { globalCache } from "../kernel/global-cache";
+import { globalCache } from "../../kernel/global-cache";
 
 /** 将 RoomPosition 压缩为单个数字：x * 50 + y。 */
 export function packPos(pos: RoomPosition): number {

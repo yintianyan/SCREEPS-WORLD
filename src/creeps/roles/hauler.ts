@@ -7,8 +7,8 @@
  *
  * hauler 没有 WORK 部件，不能采集。无能量来源时 idle 等待。
  */
-import type { Priority } from "../kernel/contracts";
-import type { ActionCandidate, ActionContext, RolePolicy } from "./action-types";
+import type { Priority } from "../../kernel/contracts";
+import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
   fillStorage,
   haulFillTarget,
@@ -17,11 +17,11 @@ import {
   supplyLabs,
   upgradeController,
   withdrawCapped,
-} from "./actions";
-import { findRichestContainer } from "./targeting";
-import { defineRole } from "./role-runner";
-import { moveToTarget } from "./movement";
-import { getObjectById } from "./obj-cache";
+} from "../engine/actions";
+import { findRichestContainer } from "../support/targeting";
+import { defineRole } from "../engine/role-runner";
+import { moveToTarget } from "../movement";
+import { getObjectById } from "../support/obj-cache";
 
 /** 从 assignment 指定的 container 限量取能。 */
 function withdrawAssignmentContainer(): ActionCandidate {

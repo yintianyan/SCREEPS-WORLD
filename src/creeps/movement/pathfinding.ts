@@ -10,8 +10,8 @@
  *   出口到出口的路径存 globalCache，地形不变则永不失效。
  */
 
-import { CONFIG } from "../config";
-import { globalCache } from "../kernel/global-cache";
+import { CONFIG } from "../../config";
+import { globalCache } from "../../kernel/global-cache";
 import { packPos, recordTraffic } from "./traffic";
 import { checkAndExecuteYield, tryPullBlocker, updateStuckTicks, clearTarget } from "./stuck-recovery";
 
