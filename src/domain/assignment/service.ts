@@ -144,8 +144,14 @@ export function buildRoomTasks(
   // 3. build 任务 — 为每个 active site 生成。
   const ctrl = snapshot.controller;
   const inCrisis = flags.colonyState === "recovery";
+  // Storage 尚未建成时视为关键基建 — 与 spawn/tower 同优先级。
+  // RCL4+ 无 storage = hauler 无处倒能 + builder/upgrader 无中央能量源，
+  // construction-manager 的 assessEmergencyRebuild 已将其标记为 emergency，
+  // assignment 层必须对齐：集中 builder 工时优先完工，而非与 extension 平分。
+  const needsStorage = snapshot.rcl >= 4 && snapshot.storage === undefined;
   for (const site of snapshot.myConstructionSites) {
     const isCritical = site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
+    const isStorageSite = needsStorage && site.structureType === STRUCTURE_STORAGE;
     // controller container 是站桩升级链路的核心基础设施 — 提升为 priority 1，
     // 确保 builder 优先建造它而非远处的 extension。
     const isControllerContainer =
@@ -160,6 +166,7 @@ export function buildRoomTasks(
         s => Math.abs(site.pos.x - s.pos.x) <= 1 && Math.abs(site.pos.y - s.pos.y) <= 1,
       );
     const isPriorityContainer = isControllerContainer || isSourceContainer;
+    const isPriority = isCritical || isPriorityContainer || isStorageSite;
     // 能量危机：仅暂停道路（纯效率投入、无产能回报，是真正可推迟的 discretionary 建造）。
     const isRoad = site.structureType === STRUCTURE_ROAD;
     if (inCrisis && isRoad) continue;
@@ -168,8 +175,10 @@ export function buildRoomTasks(
       kind: "build",
       targetId: site.id as string,
       structureType: site.structureType as string,
-      priority: isCritical || isPriorityContainer ? 1 : 2,
-      maxWorkers: isCritical || isPriorityContainer ? 2 : 1,
+      // storage 在建时 maxWorkers=3（全部 builder 集中完工）；
+      // spawn/tower/priority-container maxWorkers=2；普通 site maxWorkers=1。
+      priority: isPriority ? 1 : 2,
+      maxWorkers: isStorageSite ? 3 : isPriority ? 2 : 1,
       assignedCreeps: taskToCreeps.get(`build:${roomName}:${site.id}`) ?? [],
       pos: { x: site.pos.x, y: site.pos.y },
     });
