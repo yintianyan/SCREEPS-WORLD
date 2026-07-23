@@ -51,13 +51,20 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
     existingKeys.has(key) || batchKeys.has(key);
   const markAdded = (key: string): void => { batchKeys.add(key); };
 
-  // 基础设施门禁：priority <= 1 的 queued 任务存在时，不生成核心路和走廊路。
-  const hasPendingInfra = queue.some(
-    t => t.priority <= 1 && t.state === "queued",
+  // 基础设施门禁：仅当 priority === 0（tower/storage）的 queued 任务存在时，
+  // 不生成核心路和走廊路。
+  //
+  // 旧实现用 priority <= 1，导致 RCL2-4 阶段 buildQueue 中几乎总有
+  // priority 1 的 extension 排队，道路被永久冻结——恰是 hauler 最需要路的时期。
+  // 道路本身是 priority 3 + 独立 site 名额（maxRoadSitesPerRoom），
+  // 不会挤占 extension/container 的建造名额，门禁只需保护 tower/storage 这种
+  // 真正关键的 priority 0 结构即可。
+  const hasPendingCritical = queue.some(
+    t => t.priority === 0 && t.state === "queued",
   );
 
   // ── 1. 核心棋盘格路（RCL2+）──
-  if (!hasPendingInfra) {
+  if (!hasPendingCritical) {
     const coreRoadCandidates = createCoreRoadTasks(
       blueprint,
       anchor.x,
@@ -103,7 +110,7 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
   }
 
   // ── 3. 确定性走廊路（source↔core↔controller）──
-  if (!hasPendingInfra) {
+  if (!hasPendingCritical) {
     // 保护蓝图未来格 — 走廊路不得占用未来的 extension/结构位置。
     const protectedPositions = new Set<number>();
     for (const cell of blueprint.cells) {
