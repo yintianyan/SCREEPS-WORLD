@@ -255,6 +255,25 @@ describe("harvester — flee 与恢复", () => {
     expect(creep.transfer).not.toHaveBeenCalled();
   });
 
+  it("远端威胁不触发 flee（P1-1 距离分级）", () => {
+    const hostile = mockHostile();
+    const snap = mockSnapshot({ hostileCreeps: [hostile] });
+    const creep = mockCreep({
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+      sourceId: "s1",
+    });
+    // 威胁在 fleeRange(10) 之外 — 不应逃跑。
+    creep.pos.getRangeTo.mockReturnValue(15);
+    const ctx = mockContext(snap);
+
+    harvesterRole.run(creep, ctx);
+
+    expect(creep.memory.mode).not.toBe("flee");
+    expect(creep.harvest).toHaveBeenCalled();
+  });
+
   it("敌人离开后 flee 恢复为 work（有能量时）", () => {
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
     const snap = mockSnapshot({ hostileCreeps: [], containers: [container] });

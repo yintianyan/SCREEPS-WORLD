@@ -1,6 +1,7 @@
 import type {
   Budget,
   CreepRole,
+  Priority,
   RoomSnapshot,
   System,
   TickContext,
@@ -227,26 +228,34 @@ export class Kernel {
     });
 
     for (const { creep, role } of creepEntries) {
-      if (!ctx.budget.canStart(role.priority)) {
-        recordSkip(`creep/${role.name}/budget`);
-        continue;
-      }
-      if (ctx.budget.isExhausted()) break;
-
       // 每房殖民地状态门禁：在 recovery/bootstrap 时允许 P0 和 P1（能量链），
       // 但跳过 P2+（发展角色如 upgrader）。
       // 例外：recovery 时允许 builder——重建被毁基建是生存行为，不是发展。
       // 状态由 room-state 系统每 tick 写入 RoomMemory.colonyState。
+      //
+      // P1-2（CPU 死亡螺旋修复）：colony-state 门禁在 budget 检查之前执行。
+      // 原先 budget.canStart 先于 colony-state 检查，recovery tier 的 maxPriority=1
+      // 会先挡住 P2 builder，使 colony-state 中的 builder 豁免形同虚设。
+      // 现在：先计算 colony-state 豁免，被豁免的 builder 用 P1 等效优先级通过 budget。
       const home = creep.memory.home;
       const roomState = home ? Memory.rooms[home]?.colonyState ?? "normal" : "normal";
+      const isBuilderRecoveryExempt = roomState === "recovery" && role.name === "builder";
       if (
         (roomState === "recovery" || roomState === "bootstrap") &&
         role.priority > 1 &&
-        !(roomState === "recovery" && role.name === "builder")
+        !isBuilderRecoveryExempt
       ) {
         recordSkip(`creep/${role.name}/colony-state`);
         continue;
       }
+
+      // Budget 检查 — 被豁免的 builder 用 P1 等效优先级，获得 CPU 逃生通道。
+      const budgetPriority = isBuilderRecoveryExempt ? (1 as Priority) : role.priority;
+      if (!ctx.budget.canStart(budgetPriority)) {
+        recordSkip(`creep/${role.name}/budget`);
+        continue;
+      }
+      if (ctx.budget.isExhausted()) break;
 
       measuredRun(`creep/${creep.name}/${role.name}`, () =>
         safeRun(

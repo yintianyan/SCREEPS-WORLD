@@ -1,4 +1,5 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
+import { CONFIG } from "../../config";
 import { moveTowardRoom, recordTraffic, findSafestExit } from "../movement";
 import { releaseFromTask } from "../support/assignment-adapter";
 
@@ -22,9 +23,15 @@ export function updateMode(creep: Creep): void {
   }
 }
 
-/** 检查 creep 是否应逃跑（有威胁单位且非战斗单位）。 */
-export function shouldFlee(snapshot: RoomSnapshot): boolean {
-  return snapshot.threatCreeps.length > 0;
+/**
+ * 检查 creep 是否应逃跑（P1-1：距离分级）。
+ * 仅当威胁 creep 在 fleeRange 范围内时才触发逃跑。
+ * 远端过境的威胁（如 scout / reserver 穿越房间边缘）不会中断经济。
+ */
+export function shouldFlee(creep: Creep, snapshot: RoomSnapshot): boolean {
+  if (snapshot.threatCreeps.length === 0) return false;
+  const range = CONFIG.defense.fleeRange;
+  return snapshot.threatCreeps.some(t => creep.pos.getRangeTo(t.pos) <= range);
 }
 
 /**

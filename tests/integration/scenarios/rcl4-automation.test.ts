@@ -64,7 +64,9 @@ function rcl4World(opts?: {
 
   // 敌方 creep
   if (opts?.hostiles) {
-    world.addHostile("invader_1", { x: 5, y: 5 }, [
+    // P1-1：hostile 放置在 creep 活动区域附近（~7 格），
+    // 确保 fleeRange(10) 内触发逃跑，而非远端过境不触发。
+    world.addHostile("invader_1", { x: 19, y: 19 }, [
       { type: "attack" }, { type: "attack" }, { type: "move" }, { type: "move" },
     ]);
   }

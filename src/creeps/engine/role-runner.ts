@@ -46,7 +46,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
       }
 
       // ── 3. 敌人检测 → flee ──
-      if (shouldFlee(snapshot)) {
+      if (shouldFlee(creep, snapshot)) {
         creep.memory.mode = "flee";
         flee(creep, snapshot);
         return;

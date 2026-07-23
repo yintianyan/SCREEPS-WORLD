@@ -188,6 +188,9 @@ export const CONFIG = {
     allies: [] as readonly string[],
     /** 无塔时，威胁 creep 靠近 spawn/controller 至此 range 内才激活 safe mode（避免过境 scout 误烧）。 */
     safeModeTriggerRange: 5,
+    /** 非战斗 creep 的逃跑触发距离：威胁 creep 在此范围内才逃跑（P1-1）。
+     * 远端过境的威胁不会中断经济；靠近时才触发 flee。 */
+    fleeRange: 10,
     /** Tower 维修 wall/rampart 的目标血量，按 RCL 分级（约束 G-DF-08）。 */
     wallTargetHits: {
       rcl3_4: 100_000,
