@@ -129,19 +129,23 @@ function planDefense(
   const existingKeys = new Set<string>();
   for (const t of queue) existingKeys.add(t.key);
 
-  // 快速检查：如果 buildQueue 中已有足够的 mincut rampart key，跳过计算。
+  // 快速检查：如果 buildQueue 中已有未完成的 mincut rampart key，跳过计算。
   // min-cut rampart key 格式: defense.mincut.{x}.{y}
   const mincutKeyCount = queue.filter(
     t => t.key.startsWith("defense.mincut.") && t.state !== "done",
   ).length;
-  // 如果已有 mincut rampart 任务，且缓存存在，则跳过（无需重算）。
-  const cached = getMinCutCache(snapshot.roomName);
-  const coreSig = computeCoreSignature(snapshot);
 
-  // 缓存命中且核心结构未变 — 跳过 min-cut 计算。
-  if (cached && cached.signature === coreSig && mincutKeyCount > 0) {
+  // P0 修复：如果 buildQueue 中已有未完成的 mincut rampart 任务，跳过全部计算。
+  // 这些任务存于 Memory（跨 global reset 存活），无需因 global cache 清空而重算。
+  // 如果核心结构已变，旧 rampart 位置会因 ERR_INVALID_TARGET 被标记为 blocked，
+  // cleanTasks 清理后 mincutKeyCount 归零，自然触发重算。
+  if (mincutKeyCount > 0) {
     return; // rampart 任务已在队列中，无需重算
   }
+
+  // mincutKeyCount == 0：所有 rampart 已建成或从未创建 — 检查缓存决定是否重算。
+  const cached = getMinCutCache(snapshot.roomName);
+  const coreSig = computeCoreSignature(snapshot);
 
   // 使用缓存的出口位置。
   const exitPositions = getCachedExits(room, snapshot.roomName);

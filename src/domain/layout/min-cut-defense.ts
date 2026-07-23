@@ -141,43 +141,30 @@ export function computeMinCutDefense(
   }
 
   // 5. Edmonds-Karp 最大流（BFS 增广）
+  // 优化：预分配 typed arrays + head pointer queue，避免每次增广重新分配。
   const totalNodes = nodeCount;
   let maxFlow = 0;
 
-  function bfs(): number[] | null {
-    const parent = new Int32Array(totalNodes).fill(-1);
-    const parentEdge = new Int32Array(totalNodes).fill(-1);
-    const queue: number[] = [SUPER_SOURCE];
-    parent[SUPER_SOURCE] = SUPER_SOURCE;
+  // 预分配 BFS 工作区（在所有增广间复用，避免反复 GC 压力）。
+  const parent = new Int32Array(totalNodes);
+  const parentEdgeIdx = new Int32Array(totalNodes);
+  const visited = new Uint8Array(totalNodes);
+  const bfsQueue = new Int32Array(totalNodes); // 预分配队列容量
 
-    while (queue.length > 0) {
-      const u = queue.shift()!;
-      const edges = adj[u]!;
-      for (let i = 0; i < edges.length; i++) {
-        const e = edges[i]!;
-        if (e.cap <= 0 || parent[e.to] !== -1) continue;
-        parent[e.to] = u;
-        parentEdge[e.to] = i;
-        if (e.to === SUPER_SINK) {
-          // 找到增广路径，回溯
-          return Array.from(parent).map((_, idx) => idx === SUPER_SINK ? i : parentEdge[idx]!) as unknown as number[];
-        }
-        queue.push(e.to);
-      }
-    }
-    return null; // 无增广路径
-  }
-
-  // 简化版 BFS + 增广
   function augment(): boolean {
-    const parent = new Array<number>(totalNodes).fill(-1);
-    const parentEdgeIdx = new Array<number>(totalNodes).fill(-1);
-    const visited = new Uint8Array(totalNodes);
-    const queue: number[] = [SUPER_SOURCE];
+    // 重置工作区（typed array fill 比 regular array 快）。
+    visited.fill(0);
+    parent.fill(-1);
+    parentEdgeIdx.fill(-1);
+
+    // 使用 head/tail 指针替代 shift()（shift 是 O(N)）。
+    let head = 0;
+    let tail = 0;
+    bfsQueue[tail++] = SUPER_SOURCE;
     visited[SUPER_SOURCE] = 1;
 
-    while (queue.length > 0) {
-      const u = queue.shift()!;
+    while (head < tail) {
+      const u = bfsQueue[head++]!;
       if (u === SUPER_SINK) break;
       const edges = adj[u]!;
       for (let i = 0; i < edges.length; i++) {
@@ -186,7 +173,7 @@ export function computeMinCutDefense(
         visited[e.to] = 1;
         parent[e.to] = u;
         parentEdgeIdx[e.to] = i;
-        queue.push(e.to);
+        bfsQueue[tail++] = e.to;
       }
     }
 
@@ -218,15 +205,19 @@ export function computeMinCutDefense(
     return { rampartPositions: [], cutSize: maxFlow, complete: false };
   }
 
-  const reachable = new Uint8Array(totalNodes);
-  const bfsQueue: number[] = [SUPER_SOURCE];
+  // 复用预分配的 bfsQueue 和 visited（重置为 reachable）。
+  const reachable = visited;
+  reachable.fill(0);
+  let rHead = 0;
+  let rTail = 0;
+  bfsQueue[rTail++] = SUPER_SOURCE;
   reachable[SUPER_SOURCE] = 1;
-  while (bfsQueue.length > 0) {
-    const u = bfsQueue.shift()!;
+  while (rHead < rTail) {
+    const u = bfsQueue[rHead++]!;
     for (const e of adj[u]!) {
       if (e.cap > 0 && !reachable[e.to]) {
         reachable[e.to] = 1;
-        bfsQueue.push(e.to);
+        bfsQueue[rTail++] = e.to;
       }
     }
   }
