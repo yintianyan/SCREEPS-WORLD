@@ -113,14 +113,25 @@ interface CandidateTile {
 
 /**
  * 预计算候选格列表 — 偶校验、边界内、非墙、开放度 >= minOpenness。
- * 评分 = openness × 2 - distFromAnchor（越平坦越靠近核心越好）。
+ *
+ * 评分 = openness × 2 - distFromAnchor - energyPenalty
+ *
+ * - openness：周围走道越多越好（棋盘格不变量保证）
+ * - distFromAnchor：离核心越近越好（减少 hauler 通勤）
+ * - energyPenalty：离能量端点（source/controller）越远越好，
+ *   让 storage/link 等物流结构优先落在靠近能量流转路径的位置。
+ *
  * 按评分降序排列。
+ *
+ * @param energyEndpoints 能量端点位置（source/controller），用于计算能量流转距离惩罚。
+ *   为空时退化为纯几何评分（向后兼容）。
  */
 function buildCandidateGrid(
   anchor: { x: number; y: number },
   field: DistanceField,
   getTerrain: (x: number, y: number) => boolean,
   config: PlacerConfig,
+  energyEndpoints: readonly { x: number; y: number }[] = [],
 ): CandidateTile[] {
   const candidates: CandidateTile[] = [];
   const { maxRadius, minOpenness } = config;
@@ -142,7 +153,20 @@ function buildCandidateGrid(
       if (openness < minOpenness) continue;
 
       const dist = Math.abs(dx) + Math.abs(dy);
-      candidates.push({ x, y, score: openness * 2 - dist });
+
+      // 能量端点距离惩罚：到最近端点的曼哈顿距离 × 0.5。
+      // 权重 0.5 让它不会压倒 openness/anchor 距离，只在同等条件下偏好靠近能量端点的格子。
+      let energyPenalty = 0;
+      if (energyEndpoints.length > 0) {
+        let minEnergyDist = Infinity;
+        for (const ep of energyEndpoints) {
+          const d = Math.abs(ep.x - x) + Math.abs(ep.y - y);
+          if (d < minEnergyDist) minEnergyDist = d;
+        }
+        energyPenalty = minEnergyDist * 0.5;
+      }
+
+      candidates.push({ x, y, score: openness * 2 - dist - energyPenalty });
     }
   }
 
@@ -231,6 +255,8 @@ function placeLabCluster(
  * @param rcl 目标 RCL 等级
  * @param preOccupied 预占用位置（source/controller/mineral/已有结构）
  * @param config 放置配置
+ * @param energyEndpoints 能量端点位置（source/controller），用于评分加权。
+ *   传入时结构放置偏好靠近能量流转路径；不传时退化为纯几何评分。
  */
 export function placeStructures(
   anchor: { x: number; y: number },
@@ -239,8 +265,9 @@ export function placeStructures(
   rcl: number,
   preOccupied: ReadonlySet<number>,
   config: PlacerConfig = DEFAULT_PLACER_CONFIG,
+  energyEndpoints: readonly { x: number; y: number }[] = [],
 ): ConstraintPlacement[] {
-  const candidates = buildCandidateGrid(anchor, field, getTerrain, config);
+  const candidates = buildCandidateGrid(anchor, field, getTerrain, config, energyEndpoints);
   const occupied = new Set<number>(preOccupied);
   // 锚点本身被 spawn 占用
   occupied.add(packPos(anchor.x, anchor.y));

@@ -25,7 +25,7 @@ import { evaluateCandidate, scoreCandidate } from "../domain/layout/candidate-sc
 import { packPos, unpackPos } from "../domain/layout/types";
 import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { diagnoseAnchor } from "../domain/layout/anchor-selection";
-import { placeStructures, placementsToCandidates } from "../domain/layout/constraint-placer";
+import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG } from "../domain/layout/constraint-placer";
 
 /**
  * 布局规划器 — P3 低频系统，负责生成和维护建造计划。
@@ -216,7 +216,11 @@ export const layoutPlannerSystem: System & {
       const terrain = room.getTerrain();
       const getTerrain = (x: number, y: number): boolean => terrain.get(x, y) === TERRAIN_MASK_WALL;
       const field = computeDistanceField(getTerrain);
-      const placements = placeStructures(anchor, field, getTerrain, snapshot.rcl, occupiedSet);
+      // 能量端点：source + controller 位置，用于评分加权（让物流结构偏好靠近能量流转路径）。
+      const energyEndpoints: { x: number; y: number }[] = [];
+      for (const s of snapshot.sources) energyEndpoints.push({ x: s.pos.x, y: s.pos.y });
+      if (snapshot.controller) energyEndpoints.push({ x: snapshot.controller.pos.x, y: snapshot.controller.pos.y });
+      const placements = placeStructures(anchor, field, getTerrain, snapshot.rcl, occupiedSet, DEFAULT_PLACER_CONFIG, energyEndpoints);
       const constraintCandidates = placementsToCandidates(placements, snapshot.roomName);
 
       for (const candidate of constraintCandidates) {

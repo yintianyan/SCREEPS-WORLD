@@ -37,9 +37,12 @@ function isSourceContainer(c: StructureContainer, snapshot: RoomSnapshot): boole
 /**
  * 收集需要连通的物流走廊端点对（纯函数，便于单测）。
  *
- * 排序：controller container 走廊优先——它是站桩升级链路的供能线，当前 hauler 供能最吃紧；
- * 其后是各 source container 走廊（能量源头）。配合 maxRoadsPerCycle 分段铺设时，
- * 优先保证最关键的供能走廊先成型。
+ * 排序（按物流优先级从高到低）：
+ *   1. controller container → core — 站桩升级供能线，hauler 供能最吃紧
+ *   2. source container → core — 能量源头到孵化点
+ *   3. storage → core — storage(RCL4+) 建成后 hauler 需 storage↔spawn 往返送能
+ *
+ * 配合 maxRoadsPerCycle 分段铺设时，优先保证最关键的供能走廊先成型。
  */
 export function collectCorridorEndpoints(snapshot: RoomSnapshot): CorridorPair[] {
   const spawn = snapshot.spawns[0];
@@ -58,6 +61,12 @@ export function collectCorridorEndpoints(snapshot: RoomSnapshot): CorridorPair[]
   for (const c of snapshot.containers) {
     if (!isSourceContainer(c, snapshot)) continue;
     pairs.push({ from: { x: c.pos.x, y: c.pos.y, roomName: snapshot.roomName }, to: core });
+  }
+
+  // storage → 核心（RCL4+，storage 建成后 hauler 的核心通勤路段）。
+  if (snapshot.storage) {
+    const st = snapshot.storage;
+    pairs.push({ from: { x: st.pos.x, y: st.pos.y, roomName: snapshot.roomName }, to: core });
   }
 
   return pairs;

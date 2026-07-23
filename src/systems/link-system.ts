@@ -57,16 +57,21 @@ function runRoomLinks(snapshot: RoomSnapshot): void {
 /**
  * 根据 link 与 source/controller/storage 的距离分类。
  * range <= 2 视为紧邻（harvester 可在采矿位直接 transfer）。
+ *
+ * 优先级判定：当一个 link 同时紧邻多个目标时（如 source 和 storage 都在 range 2 内），
+ * 按物流角色重要性判定 — source > controller > storage > hub。
+ * 防止 source link 被误判为 storage link 导致 planLinkTransfers 不把它的能量送到 controller。
  */
 function classifyLink(link: StructureLink, snapshot: RoomSnapshot): LinkRole {
-  for (const src of snapshot.sources) {
-    if (link.pos.getRangeTo(src) <= 2) return "source";
-  }
-  if (snapshot.controller && link.pos.getRangeTo(snapshot.controller) <= 2) {
-    return "controller";
-  }
-  if (snapshot.storage && link.pos.getRangeTo(snapshot.storage) <= 2) {
-    return "storage";
-  }
+  // 逐一检查所有匹配，收集后按优先级选择。
+  const isNearSource = snapshot.sources.some(src => link.pos.getRangeTo(src) <= 2);
+  if (isNearSource) return "source";
+
+  const isNearController = snapshot.controller != null && link.pos.getRangeTo(snapshot.controller) <= 2;
+  if (isNearController) return "controller";
+
+  const isNearStorage = snapshot.storage != null && link.pos.getRangeTo(snapshot.storage) <= 2;
+  if (isNearStorage) return "storage";
+
   return "hub";
 }
