@@ -229,12 +229,11 @@ function isSourceContainer(c: StructureContainer, ac: ActionContext): boolean {
 export function withdrawRichestNonSourceContainer(): ActionCandidate {
   return {
     name: "withdraw:richest-non-source-container",
-    predicate: (ac) => {
-      const candidates = ac.snapshot.containers.filter(
+    // 使用 .some() 短路求值，在第一个匹配项即返回 true，避免完整 filter 遍历。
+    predicate: (ac) =>
+      ac.snapshot.containers.some(
         c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
-      );
-      return candidates.length > 0;
-    },
+      ),
     execute: (ac) => {
       const candidates = ac.snapshot.containers.filter(
         c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
@@ -249,12 +248,11 @@ export function withdrawRichestNonSourceContainer(): ActionCandidate {
 export function withdrawClosestNonSourceContainer(): ActionCandidate {
   return {
     name: "withdraw:closest-non-source-container",
-    predicate: (ac) => {
-      const candidates = ac.snapshot.containers.filter(
+    // 使用 .some() 短路求值，在第一个匹配项即返回 true，避免完整 filter 遍历。
+    predicate: (ac) =>
+      ac.snapshot.containers.some(
         c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
-      );
-      return candidates.length > 0;
-    },
+      ),
     execute: (ac) => {
       const candidates = ac.snapshot.containers.filter(
         c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
@@ -341,14 +339,14 @@ export function withdrawCapped(target: (ac: ActionContext) => StructureContainer
 export function dumpToNearbyLink(): ActionCandidate {
   return {
     name: "dump:nearby-link",
-    predicate: (ac) => {
-      if (ac.snapshot.links.length === 0) return false;
-      const link = ac.creep.pos.findClosestByRange(ac.snapshot.links as StructureLink[]);
-      return link !== null && ac.creep.pos.getRangeTo(link) <= 2 && link.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
-    },
+    // 使用 .some() 短路求值替代 findClosestByRange，避免 predicate 与 execute 重复调用。
+    predicate: (ac) =>
+      ac.snapshot.links.some(
+        l => ac.creep.pos.getRangeTo(l) <= 2 && l.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+      ),
     execute: (ac) => {
-      const link = ac.creep.pos.findClosestByRange(ac.snapshot.links as StructureLink[])!;
-      actOrMove(ac.creep, link, () => ac.creep.transfer(link, RESOURCE_ENERGY));
+      const link = ac.creep.pos.findClosestByRange(ac.snapshot.links as StructureLink[]);
+      if (link) actOrMove(ac.creep, link, () => ac.creep.transfer(link, RESOURCE_ENERGY));
     },
   };
 }
@@ -357,14 +355,14 @@ export function dumpToNearbyLink(): ActionCandidate {
 export function dumpToNearbyContainer(): ActionCandidate {
   return {
     name: "dump:nearby-container",
-    predicate: (ac) => {
-      if (ac.snapshot.containers.length === 0) return false;
-      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[]);
-      return nearby !== null && ac.creep.pos.getRangeTo(nearby) <= 2 && nearby.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
-    },
+    // 使用 .some() 短路求值替代 findClosestByRange，避免 predicate 与 execute 重复调用。
+    predicate: (ac) =>
+      ac.snapshot.containers.some(
+        c => ac.creep.pos.getRangeTo(c) <= 2 && c.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+      ),
     execute: (ac) => {
-      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[])!;
-      actOrMove(ac.creep, nearby, () => ac.creep.transfer(nearby, RESOURCE_ENERGY));
+      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[]);
+      if (nearby) actOrMove(ac.creep, nearby, () => ac.creep.transfer(nearby, RESOURCE_ENERGY));
     },
   };
 }
@@ -521,14 +519,16 @@ export function buildNearestSite(criticalOnly = false): ActionCandidate {
 
 // ─── Repair ─────────────────────────────────────────────────
 
-/** 修复 critical 结构（血量 < 50%）。 */
+/** 修复 critical 结构（血量 < 50%）。findCriticalRepair 优先使用快照预计算值。 */
 export function repairCritical(): ActionCandidate {
   return {
     name: "repair:critical",
+    // findCriticalRepair 内部优先读 snapshot.criticalRepairTarget（O(1)），
+    // 仅在快照未预计算时回退到实时遍历（向后兼容测试 mock）。
     predicate: (ac) => findCriticalRepair(ac.snapshot) !== undefined,
     execute: (ac) => {
-      const target = findCriticalRepair(ac.snapshot)!;
-      actOrMove(ac.creep, target, () => ac.creep.repair(target));
+      const target = findCriticalRepair(ac.snapshot);
+      if (target) actOrMove(ac.creep, target, () => ac.creep.repair(target));
     },
   };
 }
@@ -570,16 +570,14 @@ export function repairContainerDecay(): ActionCandidate {
 export function repairNearbyContainer(): ActionCandidate {
   return {
     name: "repair:nearby-container",
-    predicate: (ac) => {
-      if (ac.snapshot.containers.length === 0) return false;
-      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[]);
-      return nearby !== null
-        && ac.creep.pos.getRangeTo(nearby) <= 2
-        && nearby.hits < nearby.hitsMax * 0.8;
-    },
+    // 使用 .some() 短路求值替代 findClosestByRange，避免 predicate 与 execute 重复调用。
+    predicate: (ac) =>
+      ac.snapshot.containers.some(
+        c => ac.creep.pos.getRangeTo(c) <= 2 && c.hits < c.hitsMax * 0.8,
+      ),
     execute: (ac) => {
-      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[])!;
-      actOrMove(ac.creep, nearby, () => ac.creep.repair(nearby));
+      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[]);
+      if (nearby) actOrMove(ac.creep, nearby, () => ac.creep.repair(nearby));
     },
   };
 }

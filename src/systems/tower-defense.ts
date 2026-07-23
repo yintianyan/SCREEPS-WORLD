@@ -65,6 +65,8 @@ export const towerDefenseSystem: System = {
       const wallTarget = getWallTargetHits(snapshot.rcl);
       // 预选 wall/rampart 维护目标（所有 tower 共用，避免重复查找）。
       let wallRepairTarget = findWallRepairTarget(snapshot, wallTarget);
+      // 关键维修目标预计算值，提升到 tower 循环外避免重复调用。
+      const repairTarget = snapshot.criticalRepairTarget ?? findCriticalRepair(snapshot);
 
       // 房间状态门禁：wall 维护只在经济平稳时执行。
       // recovery/bootstrap 期间保留 tower 能量应对突发，不浪费在墙上。
@@ -77,7 +79,6 @@ export const towerDefenseSystem: System = {
         if (tower.store.getUsedCapacity(RESOURCE_ENERGY) < 50) continue;
 
         // R3-07：维修优先级 spawn/extension → tower → container → wall/rampart。
-        const repairTarget = findCriticalRepair(snapshot);
         if (repairTarget) {
           tower.repair(repairTarget);
           continue;

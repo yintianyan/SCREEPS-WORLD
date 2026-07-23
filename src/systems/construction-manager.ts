@@ -96,12 +96,8 @@ function developmentGate(
     if (snapshot.energyAvailable < buildThreshold) return false;
   }
 
-  // 使用已构建快照检查全局 site 限制（无 room.find 扫描）。
-  let globalSites = 0;
-  for (const snap of ctx.snapshots()) {
-    globalSites += snap.myConstructionSites.length;
-  }
-  if (globalSites >= CONFIG.construction.maxGlobalSites) return false;
+  // 使用 Context 预计算的 globalSiteCount，避免 O(rooms²) 遍历。
+  if (ctx.globalSiteCount >= CONFIG.construction.maxGlobalSites) return false;
 
   return true;
 }

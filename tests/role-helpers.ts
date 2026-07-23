@@ -278,6 +278,7 @@ export function mockContext(snapshot?: RoomSnapshot, budget?: Budget): TickConte
   return {
     tick: (globalThis as any).Game.time,
     budget: b,
+    globalSiteCount: snap.myConstructionSites.length,
     getSnapshot: vi.fn((_room: string) => snap),
     snapshots: vi.fn(function* () { yield snap; }),
   };

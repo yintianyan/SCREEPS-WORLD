@@ -136,6 +136,7 @@ function buildContext(
   return {
     tick,
     budget,
+    globalSiteCount: snapshots.reduce((sum, s) => sum + s.myConstructionSites.length, 0),
     getSnapshot: vi.fn((room: string) =>
       snapshots.find(s => s.roomName === room),
     ),

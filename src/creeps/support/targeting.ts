@@ -219,14 +219,17 @@ export function selectDroppedEnergy(
 }
 
 /**
- * 查找紧急维修目标：按优先级检查 spawn/extension、tower、container。
- * 血量低于 50% 的第一个结构被返回。
- * 供 builder 回退和 tower-defense 共享，避免重复逻辑。
+ * 查找紧急维修目标：血量低于 50% 的 spawn/extension/tower/container。
+ * 优先使用快照预计算的 criticalRepairTarget（零重复迭代）；
+ * 快照未提供时回退到实时遍历（向后兼容）。
  */
 export function findCriticalRepair(
   snapshot: RoomSnapshot,
 ): AnyStructure | undefined {
-  // 按优先级分组检查：spawn/extension 优先，然后 tower，最后 container。
+  if (snapshot.criticalRepairTarget !== undefined) {
+    return snapshot.criticalRepairTarget;
+  }
+  // 回退路径：快照未预计算时实时遍历。
   const groups: readonly (readonly AnyStructure[])[] = [
     snapshot.spawns,
     snapshot.extensions,

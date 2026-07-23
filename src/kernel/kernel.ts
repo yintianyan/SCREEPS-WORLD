@@ -20,10 +20,15 @@ class Context implements TickContext {
   readonly tick: number;
   readonly budget: Budget;
   private readonly _snapshots = new Map<string, RoomSnapshot>();
+  private _globalSiteCount = 0;
 
   constructor(budget: Budget) {
     this.tick = Game.time;
     this.budget = budget;
+  }
+
+  get globalSiteCount(): number {
+    return this._globalSiteCount;
   }
 
   getSnapshot(roomName: string): RoomSnapshot | undefined {
@@ -37,6 +42,7 @@ class Context implements TickContext {
   /** @internal */
   _addSnapshot(snapshot: RoomSnapshot): void {
     this._snapshots.set(snapshot.roomName, snapshot);
+    this._globalSiteCount += snapshot.myConstructionSites.length;
   }
 }
 

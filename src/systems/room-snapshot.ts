@@ -98,6 +98,28 @@ export function buildRoomSnapshot(
   // ensureStructureCache 检测 checkedTick === Game.time 后直接返回，不再 find。
   preloadStructureCache(room.name, allStructures, mySites);
 
+  // ── 预计算关键维修目标（血量 < 50% 的 spawn/extension/tower/container）──
+  // 供 tower-defense 和 builder actions 复用，避免各模块重复迭代。
+  let criticalRepairTarget: AnyStructure | undefined;
+  for (const s of spawns) {
+    if (s.hits < s.hitsMax * 0.5) { criticalRepairTarget = s; break; }
+  }
+  if (!criticalRepairTarget) {
+    for (const s of extensions) {
+      if (s.hits < s.hitsMax * 0.5) { criticalRepairTarget = s; break; }
+    }
+  }
+  if (!criticalRepairTarget) {
+    for (const s of towers) {
+      if (s.hits < s.hitsMax * 0.5) { criticalRepairTarget = s; break; }
+    }
+  }
+  if (!criticalRepairTarget) {
+    for (const s of containers) {
+      if (s.hits < s.hitsMax * 0.5) { criticalRepairTarget = s; break; }
+    }
+  }
+
   return {
     roomName: room.name,
     rcl: room.controller?.level ?? 0,
@@ -130,6 +152,7 @@ export function buildRoomSnapshot(
     extractor,
     factory,
     droppedEnergy,
+    criticalRepairTarget,
   };
 }
 

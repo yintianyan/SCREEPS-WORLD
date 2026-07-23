@@ -107,12 +107,20 @@ export interface RoomSnapshot {
   readonly factory: StructureFactory | undefined;
   /** 地上掉落的能量资源（FIND_DROPPED_RESOURCES 中类型为 energy 的）。 */
   readonly droppedEnergy: readonly Resource[];
+  /**
+   * 预计算的关键维修目标（血量 < 50% 的 spawn/extension/tower/container）。
+   * 在 buildRoomSnapshot 中一次遍历得出，供 tower-defense 和 builder actions 复用，
+   * 避免各模块重复迭代 snapshot.spawns/extensions/towers/containers。
+   */
+  readonly criticalRepairTarget?: AnyStructure | undefined;
 }
 
 /** 传递给每个系统和角色的不可变单 tick 上下文。 */
 export interface TickContext {
   readonly tick: number;
   readonly budget: Budget;
+  /** 全局活跃建造 site 总数 — 在 buildSnapshots 阶段预计算，供 construction-manager 消费。 */
+  readonly globalSiteCount: number;
   getSnapshot(roomName: string): RoomSnapshot | undefined;
   snapshots(): Iterable<RoomSnapshot>;
 }
