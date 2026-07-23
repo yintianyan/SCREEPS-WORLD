@@ -185,6 +185,36 @@ export function pickupDroppedEnergy(): ActionCandidate {
   };
 }
 
+/**
+ * 拾取身边的掉落能量（仅 range 内，不离开站桩位）。
+ *
+ * 专供 upgrader 等站桩角色使用：衰减资源应优先回收，但不能为了捡远处
+ * 的掉落能量离开 controller 旁的站桩位。range 默认 2 — 覆盖站桩位
+ * 周围一圈，足够捡起 harvester 溢出到 controller container 旁的能量。
+ */
+export function pickupNearbyDroppedEnergy(range = 2): ActionCandidate {
+  return {
+    name: "pickup:nearby-dropped-energy",
+    predicate: (ac) =>
+      ac.snapshot.droppedEnergy.some(
+        r => ac.creep.pos.getRangeTo(r) <= range,
+      ),
+    execute: (ac) => {
+      const nearby = ac.snapshot.droppedEnergy.filter(
+        r => ac.creep.pos.getRangeTo(r) <= range,
+      );
+      const resource = selectDroppedEnergy(ac.creep, nearby);
+      if (!resource) return;
+      const result = ac.creep.pickup(resource);
+      if (result === ERR_NOT_IN_RANGE) {
+        moveToTarget(ac.creep, resource);
+      } else if (result === ERR_FULL) {
+        ac.creep.memory.mode = "work";
+      }
+    },
+  };
+}
+
 // ─── Withdraw ───────────────────────────────────────────────
 
 /** 从最满 container 取能。 */
@@ -215,28 +245,35 @@ export function withdrawClosestContainer(): ActionCandidate {
 }
 
 /**
- * 判断 container 是否为 source container（紧邻任何 source）。
- * source container 的能量应由 hauler 搬运到 spawn/extension，
- * 非采集角色不应直接取用，否则 hauler 无事可做、物流链断裂。
+ * 判断 container 是否为物流关键 container（source container 或 controller container）。
+ *
+ * - source container：紧邻 source，是 hauler 的物流源。非采集角色直接取用会导致
+ *   hauler 无事可做、物流链断裂。
+ * - controller container：紧邻 controller，是 upgrader 的站桩能量源。builder 取用
+ *   会导致 upgrader 断粮，站桩升级链路崩溃。
+ *
+ * builder 等非物流角色应从非物流 container（如 mineral container）取能。
  */
-function isSourceContainer(c: StructureContainer, ac: ActionContext): boolean {
-  return ac.snapshot.sources.some(
-    s => c.pos.getRangeTo(s.pos) <= 1,
-  );
+function isLogisticsContainer(c: StructureContainer, ac: ActionContext): boolean {
+  // source container
+  if (ac.snapshot.sources.some(s => c.pos.getRangeTo(s.pos) <= 1)) return true;
+  // controller container
+  if (ac.snapshot.controllerContainer?.id === c.id) return true;
+  return false;
 }
 
-/** 从最满的非 source container 取能（upgrader 用，不抢 hauler 的物流源）。 */
+/** 从最满的非物流 container 取能（upgrader 用，不抢 hauler/upgrader 的物流源）。 */
 export function withdrawRichestNonSourceContainer(): ActionCandidate {
   return {
     name: "withdraw:richest-non-source-container",
     // 使用 .some() 短路求值，在第一个匹配项即返回 true，避免完整 filter 遍历。
     predicate: (ac) =>
       ac.snapshot.containers.some(
-        c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+        c => !isLogisticsContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       ),
     execute: (ac) => {
       const candidates = ac.snapshot.containers.filter(
-        c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+        c => !isLogisticsContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
       const best = findRichestContainer(candidates);
       if (best) actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
@@ -244,18 +281,18 @@ export function withdrawRichestNonSourceContainer(): ActionCandidate {
   };
 }
 
-/** 从最近的非 source container 取能（builder 用，不抢 hauler 的物流源）。 */
+/** 从最近的非物流 container 取能（builder 用，不抢 hauler/upgrader 的物流源）。 */
 export function withdrawClosestNonSourceContainer(): ActionCandidate {
   return {
     name: "withdraw:closest-non-source-container",
     // 使用 .some() 短路求值，在第一个匹配项即返回 true，避免完整 filter 遍历。
     predicate: (ac) =>
       ac.snapshot.containers.some(
-        c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+        c => !isLogisticsContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       ),
     execute: (ac) => {
       const candidates = ac.snapshot.containers.filter(
-        c => !isSourceContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+        c => !isLogisticsContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
       const best = findClosestContainerWithEnergy(ac.creep, candidates);
       if (best) actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
@@ -308,6 +345,32 @@ export function withdrawStorage(): ActionCandidate {
     execute: (ac) => {
       const st = ac.snapshot.storage!;
       actOrMove(ac.creep, st, () => ac.creep.withdraw(st, RESOURCE_ENERGY));
+    },
+  };
+}
+
+/**
+ * 从 storage 限量取能（upgrader 专用）。
+ *
+ * 防止 upgrader 一次取走大量能量导致 storage 突降、触发 economyPressure
+ * 连锁降级。单次取 min(可用, 空闲, limit)。
+ */
+export function withdrawStorageCapped(limit: number): ActionCandidate {
+  return {
+    name: "withdraw:storage-capped",
+    predicate: (ac) => {
+      const st = ac.snapshot.storage;
+      return st !== undefined && st.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
+    },
+    execute: (ac) => {
+      const st = ac.snapshot.storage!;
+      const available = st.store.getUsedCapacity(RESOURCE_ENERGY);
+      const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
+      const amount = Math.min(available, carryFree, limit);
+      const result = actOrMove(ac.creep, st, () => ac.creep.withdraw(st, RESOURCE_ENERGY, amount));
+      if (result === ERR_NOT_ENOUGH_RESOURCES) {
+        ac.creep.memory.mode = "idle";
+      }
     },
   };
 }

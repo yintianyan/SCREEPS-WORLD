@@ -158,6 +158,8 @@ export const CONFIG = {
       sustainedStorage: 10000,
       /** RCL8 官方升级功率上限（energy/tick），换算为 WORK 部件数。 */
       rcl8MaxWorkParts: 15,
+      /** upgrader 单次从 storage 取能上限（防止 storage 突降触发 economyPressure）。 */
+      perTickWithdrawLimit: 500,
     },
     /** 能量危机检测与响应参数。 */
     crisis: {

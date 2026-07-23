@@ -197,7 +197,7 @@ describe("upgrader — 站桩升级取能链", () => {
 
     upgraderRole.run(creep, ctx);
 
-    expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy");
+    expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 50);
   });
 
   it("优先级 4：回退到最满 container", () => {

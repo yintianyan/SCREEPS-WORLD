@@ -3,7 +3,7 @@
  *
  * 策略声明：
  *   gate:    能量地板门禁（仅阻止 acquire，不阻止 work）；紧急防降级覆盖
- *   acquire: controller link > controller container > storage > 最满非 source container > harvest
+ *   acquire: 身边掉落能量 > controller link > controller container > storage(限量) > 最满非物流 container > harvest
  *   work:    升级控制器
  *
  * 站桩升级核心：upgrader 站在 controller 旁，从 link/container 取能 + 升级，0 通勤。
@@ -13,12 +13,12 @@ import type { Priority } from "../../kernel/contracts";
 import type { ActionContext, RolePolicy } from "../engine/action-types";
 import {
   harvestSource,
-  pickupDroppedEnergy,
+  pickupNearbyDroppedEnergy,
   upgradeController,
   withdrawControllerContainer,
   withdrawControllerLink,
   withdrawRichestNonSourceContainer,
-  withdrawStorage,
+  withdrawStorageCapped,
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
 
@@ -68,17 +68,17 @@ const policy: RolePolicy = {
   gate: upgraderGate,
 
   acquire: [
+    // 0. 拾取身边的掉落能量（range<=2，不离开站桩位）。
+    pickupNearbyDroppedEnergy(2),
     // 1. controller 旁 link（0 通勤，link 瞬移供能）。
     withdrawControllerLink(),
     // 2. controller 旁 container（0 通勤）。
     withdrawControllerContainer(),
-    // 3. storage（RCL4+）。
-    withdrawStorage(),
-    // 4. 最满非 source container（P0-3：不抢 hauler 的物流源）。
+    // 3. storage（限量取能，防止 storage 突降触发 economyPressure 连锁降级）。
+    withdrawStorageCapped(CONFIG.economy.upgrade.perTickWithdrawLimit),
+    // 4. 最满非物流 container（不抢 hauler 的物流源）。
     withdrawRichestNonSourceContainer(),
-    // 5. 拾取地上掉落能量（衰减资源，优先于采集）。
-    pickupDroppedEnergy(),
-    // 6. 兜底：所有 container 无能量时直接采集。
+    // 5. 兜底：所有 container 无能量时直接采集。
     harvestSource(),
   ],
 

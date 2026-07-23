@@ -3,7 +3,7 @@
  *
  * 策略声明：
  *   gate:    recovery tier → 释放 assignment（不建造）
- *   acquire: 最近非 source container 有能量 > harvest
+ *   acquire: 拾取掉落能量 > 最近非物流 container 有能量 > harvest
  *   work:    assignment site（tier 门禁）> 最近 site（tier 门禁）> fill > critical repair > 升级（gated）
  *
  * CPU 门禁通过候选 predicate 内的 tier 判断实现，不再内嵌 if-else。
@@ -105,11 +105,11 @@ const policy: RolePolicy = {
   gate: builderGate,
 
   acquire: [
-    // 优先取最近非 source container 的能量（P0-3：不抢 hauler 的物流源）。
-    withdrawClosestNonSourceContainer(),
-    // 拾取地上掉落能量（衰减资源，优先于采集）。
+    // 0. 拾取地上掉落能量（衰减资源，最优先回收）。
     pickupDroppedEnergy(),
-    // 兜底：所有 container 无能量时直接采集。
+    // 1. 取最近非物流 container 的能量（不抢 hauler/upgrader 的物流源）。
+    withdrawClosestNonSourceContainer(),
+    // 2. 兜底：所有 container 无能量时直接采集。
     harvestSource(),
   ],
 
