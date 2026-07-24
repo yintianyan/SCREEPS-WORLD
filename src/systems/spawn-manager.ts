@@ -169,14 +169,22 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
     const cost = bodyCost(req.body);
     const energyAvailable = spawn.room.energyAvailable;
 
-    // P0：降级 body 以适应当前能量（最小 [WORK, CARRY, MOVE]）。
-    // P1 在 bootstrap/recovery 时也允许降级 — 此时 harvester 是关键路径，
-    // 等待满额能量会造成死锁（无 harvester → 无收入 → 永远凑不够能量）。
+    // 降级策略（三层）：
+    //   1. P0 始终降级（紧急恢复）。
+    //   2. P1 在 bootstrap/recovery 时降级（关键路径死锁防护）。
+    //   3. P1 饥饿超时降级：请求等待超过 2× 孵化耗时仍未孵化，说明 spawn 实际饥饿
+    //      但 colonyState 可能仍为 "normal"（worker 维持 reserve 稳定，相位系统检测不到危机）。
+    //      此时必须降级，否则陷入「等满额能量 → 永远凑不够 → 请求永远排队」死锁。
+    //      线上 W37S58 实测：crisisCount=93 但 colonyState=normal，hauler 请求排队 4000+ tick 未孵化。
     let body = req.body;
     if (cost > energyAvailable) {
       const roomState = Memory.rooms[snapshot.roomName]?.colonyState ?? "normal";
+      const starvationTicks = req.body.length * 3 * 2; // 2× 孵化耗时
+      const waitTicks = Game.time - (req.createdAt ?? Game.time);
+      const starved = req.priority === 1 && waitTicks >= starvationTicks;
       const allowDegrade = req.priority === 0 ||
-        (req.priority === 1 && (roomState === "bootstrap" || roomState === "recovery"));
+        (req.priority === 1 && (roomState === "bootstrap" || roomState === "recovery")) ||
+        starved;
       if (allowDegrade) {
         // 使用角色正确的 requiredParts，避免 hauler（无 WORK）降级时
         // 因默认要求 WORK 而返回 undefined。

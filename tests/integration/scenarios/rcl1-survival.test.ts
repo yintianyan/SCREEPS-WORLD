@@ -54,8 +54,9 @@ describe("RCL1 Survival — 新手生存", () => {
     // 必须有采集行为
     expect(result.finalSnapshot.stats.totalHarvested).toBeGreaterThan(0);
 
-    // Controller 进度必须增长
-    expect(result.finalSnapshot.progress).toBeGreaterThan(0);
+    // Controller 进度必须增长（或已完成升级到 RCL2，此时 progress 重置为 0）
+    const leveledUp = (world.controller?.level ?? 1) >= 2;
+    expect(leveledUp || result.finalSnapshot.progress > 0).toBe(true);
 
     // Spawn 不能长期空闲
     assertions.assertSpawnActive(150, "RCL1 spawn should not idle > 150 ticks");
