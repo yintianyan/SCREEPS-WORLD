@@ -1267,6 +1267,9 @@ export class TestWorld {
     delete g.assignment;
     delete g.fillReservations;
     delete g.fillReservationTick;
+    delete g.__parkRoomData;
+    delete g.__parkReservations;
+    delete g.__parkReservationsTick;
 
     // RawMemory
     (globalThis as Record<string, unknown>).RawMemory = {

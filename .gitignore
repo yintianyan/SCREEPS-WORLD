@@ -26,6 +26,7 @@ coverage/
 .qoder/
 .workbuddy/
 .trae/
+.meituan-catpaw/
 
 # Screeps
 *.screeps

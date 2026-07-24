@@ -78,6 +78,7 @@ function withdrawRichestCapped(): ActionCandidate {
 }
 
 const policy: RolePolicy = {
+  park: true,
   acquire: [
     // 0. 拾取地上掉落能量 — 衰减资源，最高优先回收。
     pickupDroppedEnergy(),

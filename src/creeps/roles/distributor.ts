@@ -83,6 +83,7 @@ function withdrawStorageForDistribution(): ActionCandidate {
 }
 
 const policy: RolePolicy = {
+  park: true,
   acquire: [
     // 唯一取能源：storage（带需求门禁）。
     // 没有 fillTarget 时 predicate=false → idle → demand 系统不补孵。

@@ -47,4 +47,10 @@ export interface RolePolicy {
   acquire: readonly ActionCandidate[];
   /** work 模式候选（消耗能量）。 */
   work: readonly ActionCandidate[];
+  /**
+   * idle 归位：无匹配候选（即将 idle）时，是否主动离开关键格/道路到安全格待命。
+   * 站桩角色（harvester/upgrader）不设此项——它们的 idle 是守在矿位/controller 旁，本就正确。
+   * 移动角色（hauler/distributor/builder/worker）设 true，避免 idle 时堵塞交通。
+   */
+  park?: boolean;
 }

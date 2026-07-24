@@ -151,6 +151,7 @@ function builderStorageLimit(ac: ActionContext): number {
 }
 
 const policy: RolePolicy = {
+  park: true,
   gate: builderGate,
 
   acquire: [

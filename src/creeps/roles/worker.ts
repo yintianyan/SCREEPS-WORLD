@@ -42,6 +42,7 @@ function fillAssignmentTarget(): ActionCandidate {
 }
 
 const policy: RolePolicy = {
+  park: true,
   acquire: [
     // 拾取地上掉落能量（衰减资源，优先于采集）。
     pickupDroppedEnergy(),

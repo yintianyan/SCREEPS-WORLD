@@ -16,6 +16,7 @@
 import type { CreepRole, Priority, TickContext } from "../../kernel/contracts";
 import type { ActionContext, RolePolicy } from "./action-types";
 import { ensureHome, flee, getAssignment, moveToTarget, shouldFlee, updateMode } from "../support";
+import { parkIdleCreep } from "../movement";
 
 /**
  * 创建一个由 RolePolicy 驱动的 CreepRole。
@@ -82,7 +83,10 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         }
       }
 
-      // ── 9. 无匹配候选 → idle ──
+      // ── 9. 无匹配候选 → idle（移动角色先归位再 idle）──
+      if (policy.park) {
+        parkIdleCreep(creep, snapshot);
+      }
       creep.memory.mode = "idle";
     },
   };
