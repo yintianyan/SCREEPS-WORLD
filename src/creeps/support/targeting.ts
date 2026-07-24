@@ -145,6 +145,71 @@ export function getHaulFillTarget(
     | undefined;
 }
 
+/**
+ * Distributor 专用的填充目标选择 — 与 hauler 的 getHaulFillTarget 职责分离。
+ *
+ * 角色边界（修复角色错配）：
+ *   distributor 的职责是 storage → 生产 sink。spawn/extension 是生产引擎，
+ *   断能即停产 = 全盘崩溃，是绝对最高优先——即使敌袭期间也不让位 tower，
+ *   因为 spawn 没能量就产不出防御 creep，等于釜底抽薪。
+ *
+ *   旧实现复用 hauler 专用的 getHaulFillTarget，其 #0 优先是 controller container
+ *   （< 半满即派），导致 distributor 被持续 divert 去喂升级无底洞，spawn/extension
+ *   长期排第二；且与 link 网络的 source/storage→controller 供能冗余，形成
+ *   storage→distributor→controller container 的回流环路。本函数根治该错配。
+ *
+ * 优先级：
+ *   1. spawn / extension —— 生产引擎，绝对最高（威胁下也不让位）。
+ *   2. tower —— 防御/维修。
+ *   3. controller container —— 仅当房间无 controller link 时兜底（RCL4 有 storage 但
+ *      link 未建成的窗口期）。有 controller link 时由 link 网络独占供能（零通勤），
+ *      distributor 完全不碰，避免冗余回流。
+ *
+ * 同级取最近未预约者；预约集合与 hauler 共享（fillReservations，按 tick 惰性重置），
+ * 避免 distributor 与 hauler 抢同一目标。所有目标都被预约时回退最近目标避免死锁。
+ */
+export function getDistributorFillTarget(
+  creep: Creep,
+  snapshot: RoomSnapshot,
+): AnyOwnedStructure | undefined {
+  if (snapshot.fillTargets.length === 0) return undefined;
+
+  const g = globalCache();
+  if (!g.fillReservations || g.fillReservationTick !== Game.time) {
+    g.fillReservations = new Set();
+    g.fillReservationTick = Game.time;
+  }
+  const reserved = g.fillReservations;
+
+  // 1. spawn / extension —— 生产引擎，最高优先（威胁下也不让位 tower）。
+  // 2. tower —— 防御。
+  const target =
+    pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_SPAWN, STRUCTURE_EXTENSION]) ??
+    pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_TOWER]);
+  if (target) {
+    reserved.add(target.id);
+    return target as unknown as AnyOwnedStructure;
+  }
+
+  // 3. controller container 兜底 —— 仅当无 controller link 时。
+  // controller link 判定与 link-system.classifyLink 一致：link 距 controller <= 2。
+  const hasControllerLink =
+    snapshot.controller != null &&
+    snapshot.links.some(l => l.pos.getRangeTo(snapshot.controller!) <= 2);
+  if (!hasControllerLink) {
+    const cc = snapshot.controllerContainer;
+    if (cc && !reserved.has(cc.id) && cc.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+      reserved.add(cc.id);
+      return cc as unknown as AnyOwnedStructure;
+    }
+  }
+
+  // 全部已预约 — 回退最近目标（允许共享）避免死锁。
+  return (creep.pos.findClosestByRange(snapshot.fillTargets as FillTarget[]) ?? undefined) as
+    | AnyOwnedStructure
+    | undefined;
+}
+
 /** 找到能量最多的 container。 */
 export function findRichestContainer(
   containers: readonly StructureContainer[],

@@ -46,7 +46,7 @@
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
-  haulFillTarget,
+  distributorFillTarget,
   supplyLabs,
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
@@ -91,8 +91,9 @@ const policy: RolePolicy = {
   ],
 
   work: [
-    // 带 reservation 去重的优先级填充。
-    haulFillTarget(),
+    // distributor 专用填充：spawn/extension 绝对优先 > tower > controller container（仅无 link 兜底）。
+    // 不复用 hauler 的 haulFillTarget——避免被 divert 去喂 controller container 而饿死 spawn。
+    distributorFillTarget(),
     // 化合物供料到 lab。
     supplyLabs(),
     // 所有 sink 均满 — 原地待命。

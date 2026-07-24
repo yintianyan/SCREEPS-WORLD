@@ -26,6 +26,7 @@ export {
   getSource,
   getFillTarget,
   getHaulFillTarget,
+  getDistributorFillTarget,
   findRichestContainer,
   findClosestContainerWithEnergy,
   findEmptiestContainer,

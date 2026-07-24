@@ -24,6 +24,7 @@ import {
   findEmptiestContainer,
   findRichestContainer,
   getFillTarget,
+  getDistributorFillTarget,
   getHaulFillTarget,
   getSource,
   selectDroppedEnergy,
@@ -589,6 +590,26 @@ export function haulFillTarget(): ActionCandidate {
     predicate: (ac) => ac.snapshot.fillTargets.length > 0,
     execute: (ac) => {
       const target = getHaulFillTarget(ac.creep, ac.snapshot);
+      if (!target) return;
+      const result = actOrMove(ac.creep, target, () => ac.creep.transfer(target, RESOURCE_ENERGY));
+      if (result === ERR_FULL) updateModeLocal(ac);
+    },
+  };
+}
+
+/**
+ * Distributor 专用填充目标 — 用 getDistributorFillTarget（spawn/extension 绝对优先）。
+ *
+ * 与 haulFillTarget 的区别：distributor 的职责是 storage → 生产 sink，spawn/extension
+ * 断能即停产，优先级高于 tower 与 controller container；controller container 仅在无
+ * controller link 时兜底（link 网络在场时独占升级供能）。详见 getDistributorFillTarget。
+ */
+export function distributorFillTarget(): ActionCandidate {
+  return {
+    name: "fill:distributor-target",
+    predicate: (ac) => ac.snapshot.fillTargets.length > 0,
+    execute: (ac) => {
+      const target = getDistributorFillTarget(ac.creep, ac.snapshot);
       if (!target) return;
       const result = actOrMove(ac.creep, target, () => ac.creep.transfer(target, RESOURCE_ENERGY));
       if (result === ERR_FULL) updateModeLocal(ac);
