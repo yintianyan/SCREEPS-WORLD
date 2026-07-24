@@ -97,13 +97,15 @@ const policy: RolePolicy = {
   work: [
     // 矿物优先搬运（高价值资源不应滞留在 container）。
     haulMineralsToStorage(),
-    // 带 reservation 去重的优先级填充。
-    // hauler 从 container 取能后直接填充 spawn/extension — 短路路径，跳过 storage 中转。
+    // RCL4+: 优先填充 storage（distributor 从 storage 分发到 spawn/extension）。
+    // RCL1-3: 无 storage → predicate=false → fallthrough 到 haulFillTarget。
+    // 这修复了 storage 空置死锁：旧顺序 haulFillTarget 在前，spawn 不满时 hauler
+    // 永远直送 spawn，storage 永远空，distributor 永远 idle。
+    fillStorage(),
+    // spawn/extension 紧急回退：storage 满或无 storage 时直送。
     haulFillTarget(),
     // 化合物供料到 lab。
     supplyLabs(),
-    // spawn/extension 全满 — 送 storage（收集者的最终归宿）。
-    fillStorage(),
     // 所有 sink 均满 — 原地待命。
     // hauler 无 WORK 部件，不能升级控制器（upgradeController 会 ERR_NO_BODYPART）。
     // 空闲是正确信号：供给 > 需求，demand 系统会据此减少 hauler 孵化数量。

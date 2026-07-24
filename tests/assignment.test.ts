@@ -118,6 +118,76 @@ describe("Assignment — buildRoomTasks (pure)", () => {
     expect(buildTasks[0]?.targetId).toBe("site1");
   });
 
+  // ── Storage 建造优先级（P0 修复：经济中枢断裂）──
+  // 根因：RCL4+ 无 storage 时 lease 机制让 builder 保持旧 extension assignment，
+  // storage site 无人建造。修复：buildRoomTasks 将 storage site 标记为 priority=1, maxWorkers=3。
+  it("RCL4+ 无 storage 时 storage site 提升为 priority=1, maxWorkers=3", () => {
+    const storageSite = { id: "site-storage", pos: { x: 24, y: 23 }, structureType: STRUCTURE_STORAGE } as unknown as ConstructionSite;
+    const extSite = { id: "site-ext", pos: { x: 20, y: 20 }, structureType: STRUCTURE_EXTENSION } as unknown as ConstructionSite;
+    const snapshot = mockSnapshot({
+      rcl: 5,
+      storage: undefined,
+      myConstructionSites: [storageSite, extSite],
+    });
+
+    const tasks = buildRoomTasks(snapshot, [], mockFlags());
+
+    const storageTask = tasks.find(t => t.targetId === "site-storage");
+    const extTask = tasks.find(t => t.targetId === "site-ext");
+
+    // storage 是经济中枢，priority=1（与 critical 同级），maxWorkers=3（集中全部 builder）
+    expect(storageTask).toBeDefined();
+    expect(storageTask!.priority).toBe(1);
+    expect(storageTask!.maxWorkers).toBe(3);
+
+    // extension 是普通建造，priority=2, maxWorkers=1
+    expect(extTask).toBeDefined();
+    expect(extTask!.priority).toBe(2);
+    expect(extTask!.maxWorkers).toBe(1);
+
+    // storage 优先级严格高于 extension — builder 会优先选 storage
+    expect(storageTask!.priority).toBeLessThan(extTask!.priority);
+  });
+
+  it("RCL3 不对 storage site 特殊处理（未解锁 storage）", () => {
+    const storageSite = { id: "site-storage", pos: { x: 24, y: 23 }, structureType: STRUCTURE_STORAGE } as unknown as ConstructionSite;
+    const snapshot = mockSnapshot({
+      rcl: 3,
+      storage: undefined,
+      myConstructionSites: [storageSite],
+    });
+
+    const tasks = buildRoomTasks(snapshot, [], mockFlags());
+
+    const storageTask = tasks.find(t => t.targetId === "site-storage");
+    // RCL3 未解锁 storage，needsStorage=false → 不特殊处理
+    expect(storageTask).toBeDefined();
+    expect(storageTask!.priority).toBe(2);
+    expect(storageTask!.maxWorkers).toBe(1);
+  });
+
+  it("storage 已建成时 storage site 不特殊处理", () => {
+    const storageSite = { id: "site-storage", pos: { x: 24, y: 23 }, structureType: STRUCTURE_STORAGE } as unknown as ConstructionSite;
+    const builtStorage = {
+      id: "built-storage",
+      pos: { x: 25, y: 25 },
+      structureType: STRUCTURE_STORAGE,
+      store: { getUsedCapacity: () => 0 },
+    } as unknown as StructureStorage;
+    const snapshot = mockSnapshot({
+      rcl: 5,
+      storage: builtStorage,
+      myConstructionSites: [storageSite],
+    });
+
+    const tasks = buildRoomTasks(snapshot, [], mockFlags());
+
+    const storageTask = tasks.find(t => t.targetId === "site-storage");
+    // storage 已建成，needsStorage=false → 不特殊处理
+    expect(storageTask).toBeDefined();
+    expect(storageTask!.priority).toBe(2);
+  });
+
   it("generates upgrade task in normal state", () => {
     const controller = { id: "ctrl1", my: true, pos: { x: 30, y: 30 } } as unknown as StructureController;
     const snapshot = mockSnapshot({ controller });
@@ -297,6 +367,25 @@ describe("Assignment — chooseTaskForRole (pure)", () => {
     criticalTask.assignedCreeps = ["c1", "c2"];
     const chosen2 = chooseTaskForRole("builder", [criticalTask, roadTask]);
     expect(chosen2!.id).toBe("build:W1N1:r1");
+  });
+
+  it("builder 优先选 storage site 而非 extension（storage 建造优先）", () => {
+    // P0 修复验证：storage 未建成时，storage site priority=1 > extension priority=2。
+    // builder 即使离 extension 更近，也应选 priority 更高的 storage。
+    const storageTask = {
+      id: "build:W1N1:storage1", kind: "build", targetId: "storage1",
+      structureType: STRUCTURE_STORAGE, priority: 1, maxWorkers: 3, assignedCreeps: [] as string[],
+      pos: { x: 24, y: 23 },
+    };
+    const extTask = {
+      id: "build:W1N1:ext1", kind: "build", targetId: "ext1",
+      structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[],
+      pos: { x: 20, y: 20 },
+    };
+    // creep 在 (20,20) — 离 ext 更近，但 storage priority=1 优先
+    const chosen = chooseTaskForRole("builder", [storageTask, extTask], { x: 20, y: 20 });
+    expect(chosen).toBeDefined();
+    expect(chosen!.targetId).toBe("storage1");
   });
 
   // ── P2-4 距离感知选择 ──

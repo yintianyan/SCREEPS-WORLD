@@ -166,6 +166,58 @@ describe("hauler — work 模式", () => {
     expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
   });
 
+  // ── P0 修复回归：storage 优先填充（消除 storage 空置死锁）──
+  // 根因：旧顺序 haulFillTarget 在 fillStorage 之前，spawn 不满时 hauler 永远直送 spawn，
+  // storage 永远空，distributor 永远 idle。修复：fillStorage 移到 haulFillTarget 之前。
+  it("storage 存在且有空闲容量时，优先送 storage 而非 spawn（RCL4+ storage 优先）", () => {
+    const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
+    const storage = mockStructure("storage", { id: "storage_1", energy: 500, capacity: 100000 });
+    const snap = mockSnapshot({
+      fillTargets: [spawn], // spawn 不满，haulFillTarget predicate = true
+      storage,              // storage 有空闲容量，fillStorage predicate = true
+    });
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    // fillStorage 在 haulFillTarget 之前 → hauler 优先送 storage
+    // distributor 负责 storage → spawn 分发
+    expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
+    expect(creep.transfer).not.toHaveBeenCalledWith(spawn, "energy");
+  });
+
+  it("storage 满时 fallthrough 到 haulFillTarget（spawn 直送回退）", () => {
+    const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
+    const storage = mockStructure("storage", { id: "storage_1", energy: 100000, capacity: 100000 }); // 满
+    const snap = mockSnapshot({
+      fillTargets: [spawn],
+      storage,
+    });
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    // storage 满 → fillStorage predicate=false → fallthrough 到 haulFillTarget
+    expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
+  });
+
+  it("无 storage 时直送 spawn（RCL1-3 降级路径不变）", () => {
+    const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
+    const snap = mockSnapshot({
+      fillTargets: [spawn],
+      storage: undefined, // RCL1-3 无 storage
+    });
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    // 无 storage → fillStorage predicate=false → fallthrough 到 haulFillTarget
+    expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
+  });
+
   it("无 storage 且所有 sink 满时原地待命（不升级控制器）", () => {
     const controller = mockController();
     const snap = mockSnapshot({ fillTargets: [], storage: undefined, controller });

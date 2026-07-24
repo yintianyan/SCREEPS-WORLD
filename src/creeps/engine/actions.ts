@@ -612,11 +612,20 @@ export function fillEmptiestContainer(): ActionCandidate {
   };
 }
 
-/** 向 storage 送能。 */
+/** 向 storage 送能。
+ *
+ * RCL4+ 有 storage 时，这是 hauler 的首选 sink（优先于 haulFillTarget）。
+ * 设计意图：hauler 负责 container → storage（收集），distributor 负责 storage → spawn/extension（分发）。
+ * storage 空闲时优先填充，建立中央能量储备；storage 满后 fallthrough 到 haulFillTarget。
+ */
 export function fillStorage(): ActionCandidate {
   return {
     name: "fill:storage",
-    predicate: (ac) => ac.snapshot.storage !== undefined,
+    predicate: (ac) => {
+      if (!ac.snapshot.storage) return false;
+      // storage 有空闲容量时才送 — 满了则 fallthrough 到 haulFillTarget
+      return ac.snapshot.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
+    },
     execute: (ac) => {
       actOrMove(ac.creep, ac.snapshot.storage!, () => ac.creep.transfer(ac.snapshot.storage!, RESOURCE_ENERGY));
     },

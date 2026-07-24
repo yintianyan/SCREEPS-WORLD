@@ -165,6 +165,8 @@ declare global {
       adjustments: string[];
       signals: Record<string, number>;
       skipped?: string;
+      /** 本次评估产生的趋势记录（P1-1 调整置信度）。 */
+      trend?: Record<string, "up" | "down" | "none">;
     }>;
   }
 

@@ -35,6 +35,12 @@ export interface TuningSignals {
   // ── 活快照信号（来自当前 TickContext）──
   /** 当前 container 平均填充率 (0.0–1.0)。无 container 时为 0。 */
   containerFillRatio: number;
+  /**
+   * 评估窗口内 spawn+extension 平均填充率 (0.0–1.0)。
+   * 消费端饱和度指标——高值表示消费端已满，加 hauler 无益。
+   * 从 EconomySample.ea/ec 的平均值计算。
+   */
+  spawnFillRatio: number;
   /** 当前 hauler 存活数。 */
   haulerCount: number;
   /** 当前 harvester 存活数。 */
@@ -71,7 +77,21 @@ export interface RoomTuningState {
   roleBounds: Record<string, RoleBoundsOverride>;
   /** 每个参数路径上次调整的 tick。key = "hauler.maxCount" 等。 */
   lastAdjusted: Record<string, number>;
+  /**
+   * 每个参数上次评估的期望方向，用于趋势确认（P1-1 调整置信度）。
+   * 机制：连续 2 次同方向信号才触发实际调整，防止单次噪声驱动决策。
+   * 调整后重置为 "none"，确保下次调整需要重新积累 2 次同方向确认。
+   */
+  lastTrend?: Record<string, TrendDirection>;
 }
+
+/**
+ * 参数调整方向。
+ * - "up": 信号倾向于增加参数值
+ * - "down": 信号倾向于减少参数值
+ * - "none": 无调整倾向（条件不满足或已调整后重置）
+ */
+export type TrendDirection = "up" | "down" | "none";
 
 // ─── 评估结果 ───────────────────────────────────────────────
 
@@ -95,4 +115,10 @@ export interface TuningEvaluation {
   signals: Record<string, number>;
   /** 如果评估被跳过，记录原因。 */
   skipped?: string;
+  /**
+   * 本次评估产生的最新趋势记录（每个参数的期望方向）。
+   * 调用方需将其写回 RoomTuningState.lastTrend，供下次评估确认。
+   * 调整触发的参数重置为 "none"；未触发的保留当前方向供下次确认。
+   */
+  newTrend: Record<string, TrendDirection>;
 }

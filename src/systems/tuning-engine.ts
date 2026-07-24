@@ -58,8 +58,21 @@ export const tuningEngineSystem: System = {
       Memory.kernel.tuning = { lastTuned: 0, rooms: {} };
     }
 
-    for (const snapshot of ctx.snapshots()) {
-      safeRunTuning(ctx, snapshot.roomName);
+    // 快照所有房间的当前 bounds —— 评估期间使用快照，避免多房循环中
+    // 房间 A 的 applyAdjustment 写入 Memory 后污染房间 B 的 getRoleBounds 读取。
+    // 这是"读-写隔离"原则：评估基于 tick 开头的世界状态，调整在 tick 内缓冲。
+    const snapshots = [...ctx.snapshots()];
+    const roomBoundsSnapshot = new Map<string, Record<string, { minCount: number; maxCount: number }>>();
+    for (const snap of snapshots) {
+      const boundsMap: Record<string, { minCount: number; maxCount: number }> = {};
+      for (const role of ["hauler", "harvester", "upgrader", "builder"] as const) {
+        boundsMap[role] = getRoleBounds(role, snap.roomName);
+      }
+      roomBoundsSnapshot.set(snap.roomName, boundsMap);
+    }
+
+    for (const snapshot of snapshots) {
+      safeRunTuning(ctx, snapshot.roomName, roomBoundsSnapshot.get(snapshot.roomName)!);
     }
 
     Memory.kernel.tuning.lastTuned = ctx.tick;
@@ -68,29 +81,37 @@ export const tuningEngineSystem: System = {
 
 // ─── 核心逻辑 ───────────────────────────────────────────────
 
-/** 单房间调优评估（包裹在 safeRun 语义中）。 */
-function safeRunTuning(ctx: TickContext, roomName: string): void {
+/**
+ * 单房间调优评估（包裹在 safeRun 语义中）。
+ *
+ * @param ctx          Tick 上下文
+ * @param roomName     被评估房间
+ * @param boundsSnapshot 本 tick 开头快照的角色边界——防止多房读-写污染
+ */
+function safeRunTuning(
+  ctx: TickContext,
+  roomName: string,
+  boundsSnapshot: Record<string, { minCount: number; maxCount: number }>,
+): void {
   try {
     // 1. 聚合信号
     const signals = aggregateSignals(ctx, roomName);
     if (!signals) return;
 
-    // 2. 获取当前生效的角色边界（CONFIG + 现有覆盖）
-    // 转为 evaluator 需要的格式
-    const boundsMap: Record<string, { minCount: number; maxCount: number }> = {};
-    for (const role of ["hauler", "harvester", "upgrader", "builder"] as const) {
-      boundsMap[role] = getRoleBounds(role, roomName);
-    }
+    // 2. 使用 tick 开头的 bounds 快照（而非实时 getRoleBounds）
+    const boundsMap = boundsSnapshot;
 
-    // 3. 获取当前调优状态
+    // 3. 获取当前调优状态（含上次趋势记录，用于 P1-1 趋势确认）
     const roomTuning = getOrCreateRoomTuning(roomName);
+    const prevTrend = roomTuning.lastTrend ?? {};
 
-    // 4. 调用纯函数评估
+    // 4. 调用纯函数评估（传入上次趋势，获取新趋势）
     const evaluation = evaluateTuning(
       signals,
       boundsMap,
       roomTuning.lastAdjusted,
       ctx.tick,
+      prevTrend,
     );
 
     // 5. 应用调整
@@ -103,7 +124,10 @@ function safeRunTuning(ctx: TickContext, roomName: string): void {
       }
     }
 
-    // 6. 保存诊断快照（per-room，避免多房间评估时互相覆盖）
+    // 6. 保存新趋势记录（P1-1：连续 2 次同方向才调整，单次只记录方向）
+    roomTuning.lastTrend = evaluation.newTrend;
+
+    // 7. 保存诊断快照（per-room，避免多房间评估时互相覆盖）
     if (!Memory.kernel!.tuning!.lastEval) {
       Memory.kernel!.tuning!.lastEval = {};
     }
@@ -112,6 +136,7 @@ function safeRunTuning(ctx: TickContext, roomName: string): void {
       adjustments: evaluation.adjustments.map(a => `${a.param}=${a.oldValue}→${a.newValue}`),
       signals: evaluation.signals,
       skipped: evaluation.skipped,
+      trend: evaluation.newTrend,
     };
   } catch (error) {
     // 调优错误不得中断 tick——静默记录，下次再试。
@@ -143,6 +168,14 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
   const avgDrainScore = avg(recentEconomy.map(s => s.ds));
   const crisisRatio = recentEconomy.filter(s => s.ph === 2 || s.ph === 3).length / recentEconomy.length;
   const avgStorageEnergy = avg(recentEconomy.map(s => s.se));
+
+  // 消费端饱和度：spawn+extension 平均填充率。
+  // 从 EconomySample.ea/ec 计算，反映评估窗口内的趋势而非瞬时值。
+  // ec 为 0（无 spawn）的采样点跳过，避免除零。
+  const fillSamples = recentEconomy.filter(s => s.ec > 0);
+  const avgSpawnFillRatio = fillSamples.length > 0
+    ? avg(fillSamples.map(s => s.ea / s.ec))
+    : 0;
 
   // ── CPU 信号（从 CPU ring buffer，全局）──
   const cpuSamples = ringToArray(cpuSeg.cpu) as CpuSample[];
@@ -182,6 +215,7 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
     crisisRatio,
     avgStorageEnergy,
     containerFillRatio,
+    spawnFillRatio: avgSpawnFillRatio,
     haulerCount: counts.hauler ?? 0,
     harvesterCount: counts.harvester ?? 0,
     upgraderCount: counts.upgrader ?? 0,

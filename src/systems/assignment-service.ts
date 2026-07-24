@@ -56,6 +56,16 @@ export const assignmentServiceSystem: System = {
       if (shouldPreemptAssignments(emergency, wasEmergency)) {
         invalidateAssignments(pool, snapshot.roomName, 1);
       }
+
+      // Storage 优先：RCL4+ 无 storage 且有 storage site 时，强制释放 builder 的非 storage assignment。
+      // 根因：lease 机制（50 tick）让 builder 保持旧的 extension assignment 不切换，
+      // 导致 storage site 无人建造，经济中枢断裂。此函数每 tick 主动失效非 storage build assignment，
+      // 强制 builder 在 chooseTaskForRole 中重新选 priority=1 的 storage site。
+      const needsStorage = snapshot.rcl >= 4 && snapshot.storage === undefined;
+      if (needsStorage) {
+        releaseNonStorageBuilderAssignments(snapshot);
+      }
+
       generateRoomTasks(pool, snapshot, ctx, allCreepRefs);
     }
   },
@@ -145,6 +155,38 @@ function invalidateAssignments(pool: TaskPool, roomName: string, minPriority: nu
   for (const name of creepNames) {
     const creep = Game.creeps[name];
     if (creep) {
+      creep.memory.assignment = undefined;
+    }
+  }
+}
+
+/**
+ * 适配：强制释放绑定在非 storage site 的 builder assignment。
+ *
+ * 触发条件：RCL4+ 无 storage 且存在 storage construction site。
+ * storage 是经济中枢——haul 无处倒能、builder/upgrader 无中央能量源。
+ * assignment-service 已将 storage site 标记为 priority=1, maxWorkers=3，
+ * 但 lease 机制（50 tick）让 builder 保持旧的 extension assignment 不切换。
+ * 此函数每 tick 主动失效非 storage build assignment，强制 builder 重新选 storage。
+ *
+ * 当 storage site 不存在（被 block 或未规划）时不释放——避免 builder 永久 idle。
+ * 已在建 storage 的 builder 不受影响（target 是 storage site，不释放）。
+ */
+function releaseNonStorageBuilderAssignments(snapshot: RoomSnapshot): void {
+  // 必须存在 storage construction site 才释放——否则 builder 无 storage 可建。
+  const hasStorageSite = snapshot.myConstructionSites.some(
+    s => s.structureType === STRUCTURE_STORAGE,
+  );
+  if (!hasStorageSite) return;
+
+  for (const creep of Object.values(Game.creeps)) {
+    if (creep.memory.home !== snapshot.roomName) continue;
+    if (creep.memory.role !== "builder") continue;
+    const a = creep.memory.assignment;
+    if (!a || a.kind !== "build" || !a.targetId) continue;
+
+    const site = Game.getObjectById(a.targetId as Id<ConstructionSite>);
+    if (site && site.structureType !== STRUCTURE_STORAGE) {
       creep.memory.assignment = undefined;
     }
   }

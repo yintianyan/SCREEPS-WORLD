@@ -37,6 +37,7 @@ function healthySignals(overrides: Partial<TuningSignals> = {}): TuningSignals {
     crisisRatio: 0,
     avgStorageEnergy: 20000,
     containerFillRatio: 0.3,
+    spawnFillRatio: 0.5, // 默认消费端未饱和
     haulerCount: 2,
     harvesterCount: 2,
     upgraderCount: 1,
@@ -55,6 +56,24 @@ const DEFAULT_BOUNDS: Record<string, { minCount: number; maxCount: number }> = {
   upgrader: { minCount: 1, maxCount: 3 },
   builder: { minCount: 1, maxCount: 4 },
 };
+
+/**
+ * 双次评估辅助（P1-1 趋势确认机制）。
+ * 调优引擎要求连续 2 次评估窗口显示同方向信号才触发调整。
+ * 第一次评估记录方向，第二次评估触发调整。
+ * @returns 第二次评估的结果（含实际调整）
+ */
+function evaluateTwice(
+  signals: TuningSignals,
+  bounds: Record<string, { minCount: number; maxCount: number }> = DEFAULT_BOUNDS,
+  lastAdjusted: Record<string, number> = {},
+  tick = 1000,
+): ReturnType<typeof evaluateTuning> {
+  // 第一次评估——记录趋势方向，不产生调整
+  const first = evaluateTuning(signals, bounds, lastAdjusted, tick, {});
+  // 第二次评估——同方向信号触发调整
+  return evaluateTuning(signals, bounds, lastAdjusted, tick + 500, first.newTrend);
+}
 
 // ─── Bounds 测试 ─────────────────────────────────────────────
 
@@ -96,7 +115,7 @@ describe("Tuning Bounds", () => {
 
 describe("Tuning Evaluator — 全局门禁", () => {
   it("CPU tier conserve 跳过所有调优", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({ tierRank: 2 }),
       DEFAULT_BOUNDS,
       {},
@@ -107,7 +126,7 @@ describe("Tuning Evaluator — 全局门禁", () => {
   });
 
   it("CPU tier recovery 跳过所有调优", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({ tierRank: 3 }),
       DEFAULT_BOUNDS,
       {},
@@ -117,7 +136,7 @@ describe("Tuning Evaluator — 全局门禁", () => {
   });
 
   it("危机比例过高跳过所有调优", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({ crisisRatio: 0.4 }),
       DEFAULT_BOUNDS,
       {},
@@ -127,7 +146,7 @@ describe("Tuning Evaluator — 全局门禁", () => {
   });
 
   it("RCL < 2 跳过所有调优", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({ rcl: 1 }),
       DEFAULT_BOUNDS,
       {},
@@ -137,7 +156,7 @@ describe("Tuning Evaluator — 全局门禁", () => {
   });
 
   it("健康状态不跳过", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals(),
       DEFAULT_BOUNDS,
       {},
@@ -151,7 +170,7 @@ describe("Tuning Evaluator — 全局门禁", () => {
 
 describe("Tuning Evaluator — hauler.maxCount", () => {
   it("container 持续满 + hauler 已达上限 → 增加", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         containerFillRatio: 0.75,
         haulerCount: 6,
@@ -168,7 +187,7 @@ describe("Tuning Evaluator — hauler.maxCount", () => {
   });
 
   it("container 持续空 + hauler > minCount → 减少", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         containerFillRatio: 0.15,
         haulerCount: 4,
@@ -185,7 +204,7 @@ describe("Tuning Evaluator — hauler.maxCount", () => {
   });
 
   it("container 满 但 hauler 未达上限 → 不调整", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         containerFillRatio: 0.75,
         haulerCount: 3,
@@ -200,7 +219,7 @@ describe("Tuning Evaluator — hauler.maxCount", () => {
   });
 
   it("经济不健康时不增加", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         containerFillRatio: 0.75,
         haulerCount: 6,
@@ -217,7 +236,7 @@ describe("Tuning Evaluator — hauler.maxCount", () => {
 
   it("已达 ceiling 不再增加", () => {
     const bounds = { ...DEFAULT_BOUNDS, hauler: { minCount: 2, maxCount: 8 } };
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         containerFillRatio: 0.75,
         haulerCount: 8,
@@ -232,6 +251,7 @@ describe("Tuning Evaluator — hauler.maxCount", () => {
   });
 
   it("冷却期内不调整", () => {
+    // 冷却期测试用单次调用——evaluateTwice 第二次会跳过冷却期
     const result = evaluateTuning(
       healthySignals({
         containerFillRatio: 0.75,
@@ -240,6 +260,7 @@ describe("Tuning Evaluator — hauler.maxCount", () => {
       DEFAULT_BOUNDS,
       { "hauler.maxCount": 1000 },
       1500, // 500 tick 后，冷却期 1000 tick 未过
+      {},
     );
 
     const adj = result.adjustments.find(a => a.param === "hauler.maxCount");
@@ -251,7 +272,7 @@ describe("Tuning Evaluator — hauler.maxCount", () => {
 
 describe("Tuning Evaluator — hauler.minCount", () => {
   it("container 持续半满 + 经济健康 → 增加", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         containerFillRatio: 0.55,
       }),
@@ -266,7 +287,7 @@ describe("Tuning Evaluator — hauler.minCount", () => {
   });
 
   it("container 极空 + hauler ≤ minCount → 减少", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         containerFillRatio: 0.1,
         haulerCount: 2,
@@ -286,7 +307,7 @@ describe("Tuning Evaluator — hauler.minCount", () => {
 
 describe("Tuning Evaluator — harvester.maxCount", () => {
   it("储备持续下降 + harvester 已达上限 → 增加", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         avgReserveDelta: -80,
         harvesterCount: 4,
@@ -303,7 +324,7 @@ describe("Tuning Evaluator — harvester.maxCount", () => {
   });
 
   it("储备持续增长 + harvester > minCount → 减少", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         avgReserveDelta: 150,
         harvesterCount: 3,
@@ -323,7 +344,7 @@ describe("Tuning Evaluator — harvester.maxCount", () => {
 
 describe("Tuning Evaluator — upgrader.maxCount", () => {
   it("storage 持续高位 + upgrader 已达上限 → 增加", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         avgStorageEnergy: 60000,
         upgraderCount: 3,
@@ -339,7 +360,7 @@ describe("Tuning Evaluator — upgrader.maxCount", () => {
   });
 
   it("storage 低位 → 减少", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         avgStorageEnergy: 5000,
         upgraderCount: 2,
@@ -355,7 +376,7 @@ describe("Tuning Evaluator — upgrader.maxCount", () => {
   });
 
   it("经济压力高 → 减少", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         avgStorageEnergy: 30000,
         avgPressure: 0.6,
@@ -375,7 +396,7 @@ describe("Tuning Evaluator — upgrader.maxCount", () => {
 
 describe("Tuning Evaluator — builder.maxCount", () => {
   it("buildQueue 积压 + builder 已达上限 → 增加", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         buildQueueBacklog: 5,
         builderCount: 4,
@@ -391,7 +412,7 @@ describe("Tuning Evaluator — builder.maxCount", () => {
   });
 
   it("buildQueue 空 → 减少", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         buildQueueBacklog: 0,
       }),
@@ -406,7 +427,7 @@ describe("Tuning Evaluator — builder.maxCount", () => {
   });
 
   it("经济压力高 → 减少", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         buildQueueBacklog: 2,
         avgPressure: 0.5,
@@ -426,7 +447,7 @@ describe("Tuning Evaluator — builder.maxCount", () => {
 
 describe("Tuning Evaluator — 多参数联动", () => {
   it("多个参数可同 tick 调整", () => {
-    const result = evaluateTuning(
+    const result = evaluateTwice(
       healthySignals({
         containerFillRatio: 0.75, // hauler.maxCount ↑
         haulerCount: 6,
