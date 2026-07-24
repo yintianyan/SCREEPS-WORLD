@@ -1,5 +1,6 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
+import { globalCache } from "../../kernel/global-cache";
 import { moveTowardRoom, recordTraffic, findSafestExit } from "../movement";
 import { releaseFromTask } from "../support/assignment-adapter";
 
@@ -32,6 +33,78 @@ export function shouldFlee(creep: Creep, snapshot: RoomSnapshot): boolean {
   if (snapshot.threatCreeps.length === 0) return false;
   const range = CONFIG.defense.fleeRange;
   return snapshot.threatCreeps.some(t => creep.pos.getRangeTo(t.pos) <= range);
+}
+
+// ─── 远矿角色威胁检测 ──────────────────────────────────────
+
+/**
+ * 获取指定房间的 hostile creep 列表（per-tick per-room 缓存）。
+ * 用于远矿角色在无 snapshot 的房间（远矿房 / 过境中间房）检测威胁。
+ * 缓存生命周期：单 tick，globalCache 自动重置。
+ */
+function getRoomThreats(roomName: string): Creep[] {
+  const g = globalCache() as any;
+  if (!g.__remoteThreats) g.__remoteThreats = {};
+  if (g.__remoteThreats[roomName]?.tick === Game.time) {
+    return g.__remoteThreats[roomName].creeps as Creep[];
+  }
+  const room = Game.rooms[roomName];
+  if (!room) return [];
+  const hostiles = room.find(FIND_HOSTILE_CREEPS, {
+    filter: (c) => {
+      // 联盟白名单过滤。
+      const allies = CONFIG.defense.allies;
+      return !allies.includes(c.owner.username);
+    },
+  });
+  // 过滤出真正有威胁的 creep（有攻击部件）。
+  const threats = hostiles.filter(c =>
+    c.body.some(p =>
+      p.type === ATTACK || p.type === RANGED_ATTACK ||
+      p.type === HEAL || p.type === WORK || p.type === CLAIM,
+    ),
+  );
+  g.__remoteThreats[roomName] = { tick: Game.time, creeps: threats };
+  return threats;
+}
+
+/**
+ * 远矿角色威胁检测 — 在任意「非 home 房」检查当前房间的敌人。
+ *
+ * 覆盖范围（修复 transit 盲区）：
+ *   - 在 remoteTarget 房间作业时
+ *   - 在 home ↔ remoteTarget 之间的过境中间房通勤时
+ * 旧实现仅在 creep.room.name === remoteTarget 时检测，导致过境中间房遇袭不逃跑。
+ *
+ * 仅对设置了 remoteTarget 的远矿角色生效；本地角色由 shouldFlee（home snapshot）处理。
+ * 与 shouldFlee 的区别：直接从 Game.rooms 扫描当前房（远矿房/中间房均无 snapshot）。
+ */
+export function shouldFleeForeignRoom(creep: Creep): boolean {
+  if (!creep.memory.remoteTarget) return false;
+  const home = creep.memory.home;
+  // 在 home 房时由 shouldFlee（home snapshot）处理，此处只负责外部房间。
+  if (home && creep.room.name === home) return false;
+  const threats = getRoomThreats(creep.room.name);
+  if (threats.length === 0) return false;
+  const range = CONFIG.defense.fleeRange;
+  return threats.some(t => creep.pos.getRangeTo(t.pos) <= range);
+}
+
+/**
+ * 远矿角色逃跑 — 向 home 方向移动（无 snapshot 可用，简化路径）。
+ * 释放 assignment（如有），然后直接 moveTowardRoom 到 home。
+ * 不使用 flee() 中的 spawn/exit 逻辑 — 远矿房/中间房无 snapshot，
+ * 且最快逃生路径是回到 home 房的塔防范围。
+ */
+export function fleeToHome(creep: Creep): void {
+  if (creep.memory.assignment) {
+    releaseFromTask(creep);
+    creep.memory.assignment = undefined;
+  }
+  const home = creep.memory.home;
+  if (home && creep.room.name !== home) {
+    moveTowardRoom(creep, home);
+  }
 }
 
 /**

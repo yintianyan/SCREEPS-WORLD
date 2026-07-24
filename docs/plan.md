@@ -975,6 +975,7 @@ M4 与 M5 可并行实现；两者均完成后才宣称 RCL2 至 RCL4 稳定闭�
 | RawMemory segment | `kernel/segment-store.ts` | layout 冷数据外迁，减少 Memory 体积 |
 | 声明式角色引擎 | `creeps/engine/` | RolePolicy + Action-Candidate，新增角色只需声明 policy |
 | 移动系统重构 | `creeps/movement/` | 路径持久化、走廊共享、跨房间缓存、卡位恢复 |
+| 远矿运营 | `systems/remote-mining-manager.ts` + `domain/remote/` + `creeps/roles/remote-*.ts` | 目标评选、remoteOps 生命周期、远矿角色（remoteHarvester/remoteHauler/reserver）跨房作业，详见 §12.1 |
 
 ### 架构演进记录
 
@@ -984,5 +985,82 @@ M4 与 M5 可并行实现；两者均完成后才宣称 RCL2 至 RCL4 稳定闭�
 4. **声明式角色**：从独立状态机演化为 RolePolicy 声明式引擎，新增角色无需复制生命周期代码。
 5. **升级功率控制**：从固定数量梯度改为 storage 水位 + RCL8 限速 + 大 body 站桩。
 6. **参数自调优**：tuning-engine 基于遥测数据自动调整角色边界，系统自适应不同房间/经济状态。
+7. **远矿威胁检测前置**：role-runner 管线将威胁检测重排到 `ensureHome` 导航之前。远矿角色在过境中间房遇袭时，`ensureHome` 会短路导航（返回 false 提前 return），威胁检测若在其后则永不触发——故必须先检测威胁再导航（详见 §12.1）。
 
 首个版本的成功标准不是扩张速度，而是在 global reset、低 bucket、单模块异常和全员死亡边缘时，始终先守住采能、孵化、供能、保级的最小闭环，并把扩张安全地降级。
+
+### 12.1 远矿运营架构（Remote Mining）
+
+远矿运营已实现（`remote-mining-manager.ts` + `domain/remote/` + `creeps/roles/remote-*.ts`），schema v10。本节记录其 Memory 结构与关键架构决策。
+
+#### 基础约束：快照仅覆盖自有房
+
+`kernel.buildSnapshots` 仅为 `controller.my` 的房间构建 `RoomSnapshot`（`kernel.ts` 的 `if (!room.controller?.my) continue`）。**远矿房无快照**——这是整个远矿架构的根本约束，决定了：
+
+- 远矿角色在远矿房**绕过快照**，直接读 `Game.rooms[...]` / `creep.room.find(...)`。
+- 威胁检测在外部房间直接扫 `Game.rooms`（`shouldFleeForeignRoom`），不依赖快照。
+- `role-runner` 始终按 `creep.memory.home`（自有房）取快照，远矿角色只在 home 房消费快照（如 remoteHauler 回 home 存能）。
+
+#### home / remoteTarget 二元分离
+
+| 字段 | 归属 | 含义 | 写入方 |
+| --- | --- | --- | --- |
+| `CreepMemory.home` | `CreepMemory` | 孵化房 / 服务房（恒为自有房，必有快照） | spawn 时由 `createRequest` / `createRemoteRequest` 显式写入 |
+| `CreepMemory.remoteTarget` | `CreepMemory` | 远矿作业房（无快照） | `createRemoteRequest` 写入 |
+
+**没有任何角色把 `home` 设为非孵化房。** `ensureHome` 的 `home = creep.room.name` 回退仅在 `home` 缺失时触发（正常孵化的 creep 不会走到）。远矿 creep 的物理位置与 `home` 解耦：它可能站在 `remoteTarget` 或过境中间房，但 `home` 始终指向孵化房。
+
+#### Memory 结构
+
+```ts
+// RoomMemory.remoteOps — 从本房管理的远程采矿运营，key = 目标房名。
+// 由 remote-mining-manager 每 10 tick 评估/更新。遵循 Memory 规范：短字段、有界。
+interface RemoteOp {
+  state: "scout" | "active" | "paused" | "abandoned";  // 运营生命周期
+  sources?: number;     // 源数量（有视野时记录）
+  createdAt: number;    // 创建 tick
+  lastSeen: number;     // 最近可见 tick（creep 进入或 observer 扫描时更新）
+}
+```
+
+生命周期：`active`（采集中）→ 超期无 creep → `paused`（暂停）→ 长期废弃 → `abandoned` → 超过 `staleThreshold × 6` 从 Memory 删除（防膨胀）。`paused` 期间有新视野/creep 到达则恢复 `active`。
+
+#### 威胁检测（transit 盲区修复）
+
+`role-runner` 管线顺序：**威胁检测先于 `ensureHome` 导航**。
+
+```
+getSnapshot(home) → recycle 检查 → 威胁检测 → ensureHome 导航 → updateMode → ...
+```
+
+- **外部房间**（`creep.room.name !== home`，含 remoteTarget 与过境中间房）：`shouldFleeForeignRoom(creep)` 直接扫 `Game.rooms[当前房]` 的 hostile（带攻击部件 + 非联盟白名单），per-tick per-room 缓存（`__remoteThreats`）。触发则 `fleeToHome`（释放 assignment + `moveTowardRoom(home)`）。
+- **home 房**：`shouldFlee(creep, snapshot)` 用 home 快照的 `threatCreeps`，触发则 `flee`（塔防/出口策略）。
+
+**为何必须前置**：远矿角色在过境中间房时，`ensureHome` 会调用 `moveTowardRoom` 并返回 false（未达目的地），role-runner 提前 return。若威胁检测排在 `ensureHome` 之后，过境 creep 永远轮不到威胁检测——遇袭不逃跑。生存优先于导航，故威胁检测前置。
+
+#### ensureHome 远程导航规则
+
+`remoteTarget` 存在时，按 mode 决定导航目的地：
+
+| mode | 目的地 | 说明 |
+| --- | --- | --- |
+| `idle` / `flee` | home | 回安全区 |
+| `work`（仅 remoteHauler） | home | 回 home 存能 |
+| 其余（acquire/work） | remoteTarget | 去远矿作业 |
+
+到达目的地返回 true（进入候选评估），否则 `moveTowardRoom` 并返回 false（本 tick 仅移动）。
+
+#### 孵化与计数归属
+
+- `collectCreepSummaries`：`home = memory.home ?? room.name`。远矿 creep 的 `home` 由 `createRemoteRequest` 显式设为孵化房。
+- `countCreepsByRole`：按 `home` + 角色名过滤。远矿角色名（`remoteHarvester` / `remoteHauler` / `reserver`）与本地角色名（`harvester` / `hauler`）**不冲突**，远矿 creep 不会虚增本地角色计数。
+- `recyclePass` / `creepsByRoom`：按 `home` 索引，远矿 creep 在其孵化房的回收轮次处理；远矿角色在 `CONFIG.roles`（非废弃），且富余回收规则只针对 `worker`，远矿 creep 不会被误回收。
+- 远矿需求由 `remote-mining-manager`（P2，每 10 tick）按 `remoteTarget` 独立评估（`evaluateRemoteDemand`），不走本地任务池。
+
+#### 安全门禁
+
+- RCL ≥ `CONFIG.remote.minRcl` 才启动远矿。
+- `colonyState !== "normal"` 暂停新远矿孵化。
+- CPU tier conserve 以下不孵化远矿。
+- 远矿目标数 ≤ `CONFIG.remote.maxOperations`。
+- 远矿 creep 必须有 TTL 与撤退条件；`recovery` 时经 `ensureHome`（flee→home）撤回（约束 R5-05 / R8-06）。

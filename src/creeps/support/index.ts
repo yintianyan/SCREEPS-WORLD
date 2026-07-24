@@ -40,5 +40,7 @@ export {
 export {
   updateMode,
   shouldFlee,
+  shouldFleeForeignRoom,
   flee,
+  fleeToHome,
 } from "../engine/lifecycle";

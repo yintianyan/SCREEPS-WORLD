@@ -66,6 +66,7 @@ export function resetGlobals(): void {
   delete g.__coreCenter;
   delete g.__creepPathCache;
   delete g.__yieldRequests;
+  delete g.__remoteThreats;
 }
 
 /** 注册一个可被 Game.getObjectById 找到的对象。 */
