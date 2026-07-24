@@ -469,12 +469,34 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
 /**
  * 确保 creep 已设置 home 房间；不在 home 时尝试向 home 方向移动。
  * 只有 creep 实际在 home 房间内时才返回 true。
+ *
+ * 远程角色（remoteTarget 已设置）的导航规则：
+ *   - remoteHauler work 模式 → 回 home 存能（穿梭行为）
+ *   - 其他远程角色 → 常驻 remoteTarget
+ *   - idle/flee 模式 → 回 home（安全）
  */
 export function ensureHome(creep: Creep): boolean {
   if (!creep.memory.home) {
     creep.memory.home = creep.room.name;
   }
   const home = creep.memory.home;
+
+  // 远程角色导航
+  const remoteTarget = creep.memory.remoteTarget;
+  if (remoteTarget) {
+    const mode = creep.memory.mode ?? "acquire";
+    // idle/flee → 回 home（安全）
+    // remoteHauler work → 回 home（存能）
+    // 其余 → remoteTarget
+    const goHome = mode === "idle" || mode === "flee" ||
+      (mode === "work" && creep.memory.role === "remoteHauler");
+    const dest = goHome ? home : remoteTarget;
+    if (creep.room.name === dest) return true;
+    moveTowardRoom(creep, dest);
+    return false;
+  }
+
+  // 本地角色：原行为
   if (creep.room.name === home) return true;
   moveTowardRoom(creep, home);
   return false;

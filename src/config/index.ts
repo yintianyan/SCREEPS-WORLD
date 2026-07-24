@@ -21,7 +21,7 @@ export function getWallTargetHits(rcl: number): number {
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 9 },
+  memory: { schemaVersion: 10 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -222,6 +222,27 @@ export const CONFIG = {
     upgrader: { minCount: 1, maxCount: 3 },
     builder: { minCount: 1, maxCount: 4 },
     worker: { minCount: 0, maxCount: 2 },
+    // 远矿角色：每远矿目标 1 harvester + 1 hauler + 1 reserver
+    remoteHarvester: { minCount: 0, maxCount: 6 },
+    remoteHauler: { minCount: 0, maxCount: 6 },
+    reserver: { minCount: 0, maxCount: 3 },
+  },
+
+  remote: {
+    /** 远矿管理器运行间隔（tick）。 */
+    managerInterval: 10,
+    /** 最大同时运营远矿目标数（CPU 预算保护）。 */
+    maxOperations: 2,
+    /** 每个远矿目标的 harvester 数。 */
+    harvestersPerTarget: 1,
+    /** 每个远矿目标的 hauler 数。 */
+    haulersPerTarget: 1,
+    /** 是否启用 reserver（RCL3+ 才有意义，CLAIM 部件 600 能量）。 */
+    enableReserver: true,
+    /** 远矿目标过期 tick 数（lastSeen 超过此值则暂停运营）。 */
+    staleThreshold: 5000,
+    /** 远矿启用 RCL 门限（低于此 RCL 不开远矿，集中能量发展本房）。 */
+    minRcl: 4,
   },
 } as const;
 

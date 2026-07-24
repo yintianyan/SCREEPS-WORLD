@@ -8,6 +8,9 @@ import { countPending, spawnKey } from "./queue";
 export const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConstant[]>> = {
   hauler: ["carry", "move"],
   distributor: ["carry", "move"],
+  remoteHarvester: ["work", "carry", "move"],
+  remoteHauler: ["carry", "move"],
+  reserver: ["claim", "move"],
 };
 
 /**

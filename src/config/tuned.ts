@@ -27,6 +27,9 @@ const ROLE_PARAM_MAP: Readonly<Record<string, { min: string; max: string }>> = {
   harvester: { min: "harvester.minCount", max: "harvester.maxCount" },
   upgrader: { min: "upgrader.minCount", max: "upgrader.maxCount" },
   builder: { min: "builder.minCount", max: "builder.maxCount" },
+  remoteHarvester: { min: "remoteHarvester.minCount", max: "remoteHarvester.maxCount" },
+  remoteHauler: { min: "remoteHauler.minCount", max: "remoteHauler.maxCount" },
+  reserver: { min: "reserver.minCount", max: "reserver.maxCount" },
 };
 
 /**

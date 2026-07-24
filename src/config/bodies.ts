@@ -94,6 +94,28 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["work", "carry", "move", "move"], minCapacity: 250 },
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
+  remoteHarvester: [
+    // [5W,1C,3M] @750：与本地 harvester 相同的 5W 站桩矿工配置，
+    // 加 2 个额外 MOVE 保证跨房通勤效率（无道路时仍可移动）。
+    { parts: ["work", "work", "work", "work", "work", "carry", "move", "move", "move"], minCapacity: 750 },
+    // [3W,1C,2M] @450：中容量档。
+    { parts: ["work", "work", "work", "carry", "move", "move"], minCapacity: 450 },
+    // [2W,1C,2M] @350：低容量回退。
+    { parts: ["work", "work", "carry", "move", "move"], minCapacity: 350 },
+    { parts: ["work", "carry", "move"], minCapacity: 200 },
+  ],
+  remoteHauler: [
+    // 与 hauler 相同的 CARRY+MOVE 配置，但额外 MOVE 保证跨房无道路时可行进。
+    { parts: ["carry", "carry", "carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move", "move", "move"], minCapacity: 800 },
+    { parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"], minCapacity: 600 },
+    { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
+    { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
+  ],
+  reserver: [
+    // [CLAIM,MOVE] @650：最小占领配置。1 CLAIM = 600 能量。
+    // reserveController 每 tick 续期 1 tick，1 个 CLAIM 部件即满足需求。
+    { parts: ["claim", "move"], minCapacity: 650 },
+  ],
 };
 
 /**

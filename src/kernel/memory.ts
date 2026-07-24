@@ -197,6 +197,29 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
       }
     },
   },
+  {
+    from: 9,
+    to: 10,
+    run: () => {
+      // v10：远矿运营 — 为每个自有房间初始化 remoteOps 字段。
+      // remoteOps 是可选字段，无需回填；此处仅做畸形数据自愈（幂等）。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as any;
+        if (!room) continue;
+        if (room.remoteOps !== undefined && typeof room.remoteOps !== "object") {
+          delete room.remoteOps;
+        }
+      }
+      // 清理死亡 creep 的 remoteTarget 遗留（creep 死亡后 memory 已被清理，
+      // 但防御性检查不伤害）。
+      for (const name in Memory.creeps) {
+        const creep = Memory.creeps[name] as any;
+        if (creep && creep.remoteTarget !== undefined && typeof creep.remoteTarget !== "string") {
+          delete creep.remoteTarget;
+        }
+      }
+    },
+  },
 ];
 
 /**

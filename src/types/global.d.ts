@@ -40,6 +40,13 @@ declare global {
     spawnIndex?: number;
     /** B1：标记为待回收 — spawn-manager 引导其走向最近 spawn 并 recycleCreep。 */
     recycle?: boolean;
+    /**
+     * 远程角色目标房 — 远矿/扩张时的工作房间。
+     * 设置后 ensureHome 根据 mode + role 决定导航目标：
+     *   remoteHauler work 模式 → home（存能），acquire 模式 → remoteTarget（取能）
+     *   remoteHarvester/reserver → 始终 remoteTarget
+     */
+    remoteTarget?: string;
   }
 
   interface SpawnRequest {
@@ -135,6 +142,11 @@ declare global {
       /** min-cut 是否完成。 */
       complete: boolean;
     };
+    /**
+     * 远矿运营 — 从本房管理的远程采矿操作。key = 目标房名。
+     * 由 remote-mining-manager 每 10 tick 评估/更新。
+     */
+    remoteOps?: Record<string, RemoteOp>;
   }
 
   interface KernelMemory {
@@ -179,6 +191,21 @@ declare global {
       /** 本次评估产生的趋势记录（P1-1 调整置信度）。 */
       trend?: Record<string, "up" | "down" | "none">;
     }>;
+  }
+
+  /**
+   * 单个远矿运营记录（存 RoomMemory.remoteOps，短字段、有界）。
+   * 遵循 Memory 规范：只存 ID、枚举、少量数字和短 key。
+   */
+  interface RemoteOp {
+    /** 运营状态：scout（待侦察）→ active（采集中）→ paused（暂停）→ abandoned（废弃）。 */
+    state: "scout" | "active" | "paused" | "abandoned";
+    /** 源数量（有视野时记录，来自 intel 或实地观察）。 */
+    sources?: number;
+    /** 创建 tick。 */
+    createdAt: number;
+    /** 最近可见 tick（creep 进入或 observer 扫描时更新）。 */
+    lastSeen: number;
   }
 
   interface Memory {
