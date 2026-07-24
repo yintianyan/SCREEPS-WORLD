@@ -4,9 +4,10 @@ import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import { countPending, spawnKey } from "./queue";
 
-/** 各角色降级时必需保留的最小部件组合。hauler 无需 WORK。 */
+/** 各角色降级时必需保留的最小部件组合。hauler/distributor 无需 WORK。 */
 export const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConstant[]>> = {
   hauler: ["carry", "move"],
+  distributor: ["carry", "move"],
 };
 
 /**
@@ -144,6 +145,7 @@ export function evaluateDemand(
     harvester: countPending(queue, "harvester"),
     worker: countPending(queue, "worker"),
     hauler: countPending(queue, "hauler"),
+    distributor: countPending(queue, "distributor"),
     upgrader: countPending(queue, "upgrader"),
     builder: countPending(queue, "builder"),
   };
@@ -232,6 +234,32 @@ export function evaluateDemand(
       const key = spawnKey("hauler", home, i);
       if (!hasKey(queue, key)) {
         requests.push(createRequest("hauler", home, i, key, 1, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
+      }
+    }
+  }
+
+  // P1：Distributor — 仅在有 storage 时才创建（RCL4+）。
+  // 职责：从 storage 取能分发给 spawn/extension/tower/lab。
+  // 与 hauler 的职责分离：hauler 是收集者（源→storage），distributor 是分发者（storage→sink）。
+  // 无 storage 时不存在 distributor 的需求 — hauler 直接 container→sink 直送。
+  // 数量：基于 fillTarget 需求量。spawn/extension/tower 未满时需要 distributor。
+  const distConfig = getRoleBounds("distributor", home);
+  const distTotal = (counts.distributor ?? 0) + pending.distributor;
+  const hasStorage = snapshot.storage !== undefined;
+  let distTarget = 0;
+  if (hasStorage) {
+    // fillTarget 数量决定需求：每 2 个 fillTarget 配 1 个 distributor。
+    // fillTargets 含 spawn/extension/tower 等未满 sink。
+    const fillCount = snapshot.fillTargets.length;
+    distTarget = Math.min(distConfig.maxCount, Math.max(distConfig.minCount, Math.ceil(fillCount / 2)));
+    // 危机时收缩到 minCount。
+    if (inCrisis) distTarget = Math.min(distTarget, distConfig.minCount);
+  }
+  if (distTotal < distTarget && hasStorage) {
+    for (let i = distTotal; i < distTarget; i++) {
+      const key = spawnKey("distributor", home, i);
+      if (!hasKey(queue, key)) {
+        requests.push(createRequest("distributor", home, i, key, 1, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
       }
     }
   }

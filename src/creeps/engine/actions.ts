@@ -350,6 +350,51 @@ export function withdrawStorage(): ActionCandidate {
 }
 
 /**
+ * 从 storage 旁 link 取能 — link 物流链的「最后一公里」。
+ *
+ * Link 网络能量流：
+ *   Harvester → Source Link →(link-system 瞬移)→ Storage Link →(本 action)→ Hauler → Storage
+ *
+ * 如果没有 creep 定期排空 storage link，link 网络会堵死：
+ * storage link 满后 planLinkTransfers 的 storageFree=0，
+ * source link 无法再向其传输，整条链路背压瘫痪。
+ *
+ * 优先级：link-system (P1) 在 creep 之前运行，会先将 storage link → controller link
+ * 传输（如果 controller 缺能），hauler 排空的是剩余部分 — 不影响升级链供能。
+ *
+ * 限量取能：与 withdrawCapped 一致，取 min(可用, 空闲)，避免 ERR_NOT_ENOUGH_RESOURCES。
+ */
+export function withdrawStorageLink(): ActionCandidate {
+  return {
+    name: "withdraw:storage-link",
+    predicate: (ac) => {
+      const st = ac.snapshot.storage;
+      if (!st) return false;
+      return ac.snapshot.links.some(
+        l => l.pos.getRangeTo(st) <= 2 && l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      );
+    },
+    execute: (ac) => {
+      const st = ac.snapshot.storage!;
+      // 找到 storage 旁有能量的 link（range ≤ 2）。
+      const link = ac.snapshot.links.find(
+        l => l.pos.getRangeTo(st) <= 2 && l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      );
+      if (!link) return;
+      const available = link.store.getUsedCapacity(RESOURCE_ENERGY);
+      const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
+      const amount = Math.min(available, carryFree);
+      const result = ac.creep.withdraw(link, RESOURCE_ENERGY, amount);
+      if (result === ERR_NOT_IN_RANGE) {
+        moveToTarget(ac.creep, link);
+      } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
+        ac.creep.memory.mode = "idle";
+      }
+    },
+  };
+}
+
+/**
  * 从 storage 限量取能（upgrader 专用）。
  *
  * 防止 upgrader 一次取走大量能量导致 storage 突降、触发 economyPressure
@@ -495,15 +540,39 @@ export function buildNearbyContainerSite(): ActionCandidate {
 
 // ─── Fill ───────────────────────────────────────────────────
 
-/** 向 fillTarget 送能（通用，使用 getFillTarget）。 */
+/** 向 fillTarget 送能（通用，使用 getFillTarget）。
+ *
+ * 目标持久化：优先复用上一 tick 选定的 fillTarget（creep.memory.fillTargetId），
+ * 仅在目标满/消失时重新选择。消除多个等距目标间的摇摆。
+ */
 export function fillTarget(): ActionCandidate {
   return {
     name: "fill:target",
     predicate: (ac) => getFillTarget(ac.creep, ac.snapshot) !== undefined,
     execute: (ac) => {
-      const target = getFillTarget(ac.creep, ac.snapshot)!;
-      const result = actOrMove(ac.creep, target, () => ac.creep.transfer(target, RESOURCE_ENERGY));
-      if (result === ERR_FULL) updateModeLocal(ac);
+      // 优先复用持久化目标 — 验证它仍需填充。
+      // fillTargets 类型为 (StructureSpawn | StructureExtension | StructureTower | StructureContainer)，
+      // 全部拥有 store 属性，但 getFillTarget 返回 AnyOwnedStructure，需用类型守卫收窄。
+      let target: AnyOwnedStructure | undefined;
+      if (ac.creep.memory.fillTargetId) {
+        const cached = getObjectById(ac.creep.memory.fillTargetId as Id<AnyOwnedStructure>);
+        if (cached && "store" in cached && cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+          target = cached;
+        }
+      }
+      // 无有效缓存目标 — 重新选择。
+      if (!target) {
+        target = getFillTarget(ac.creep, ac.snapshot);
+        if (target) {
+          ac.creep.memory.fillTargetId = target.id;
+        }
+      }
+      if (!target) return;
+      const result = actOrMove(ac.creep, target, () => ac.creep.transfer(target!, RESOURCE_ENERGY));
+      if (result === ERR_FULL) {
+        ac.creep.memory.fillTargetId = undefined;
+        updateModeLocal(ac);
+      }
     },
   };
 }
@@ -574,7 +643,11 @@ export function buildAssignmentSite(): ActionCandidate {
   };
 }
 
-/** 建造最近 site（可选 critical-only 过滤）。 */
+/** 建造最近 site（可选 critical-only 过滤）。
+ *
+ * 目标持久化：复用 creep.memory.targetId 缓存的 site，
+ * 仅在目标消失或不再满足 criticalOnly 过滤时重新选择。
+ */
 export function buildNearestSite(criticalOnly = false): ActionCandidate {
   return {
     name: criticalOnly ? "build:nearest-critical-site" : "build:nearest-site",
@@ -588,7 +661,24 @@ export function buildNearestSite(criticalOnly = false): ActionCandidate {
       const sites = criticalOnly
         ? ac.snapshot.myConstructionSites.filter(isCriticalSite)
         : ac.snapshot.myConstructionSites;
-      const site = ac.creep.pos.findClosestByRange(sites as ConstructionSite[]);
+
+      // 优先复用持久化目标 — 验证它仍在当前候选列表中。
+      let site: ConstructionSite | null = null;
+      if (ac.creep.memory.targetId) {
+        const cached = getObjectById(ac.creep.memory.targetId as Id<ConstructionSite>);
+        if (cached && sites.some(s => s.id === cached.id)) {
+          site = cached;
+        }
+      }
+
+      // 无有效缓存目标 — 重新选择最近的。
+      if (!site) {
+        site = ac.creep.pos.findClosestByRange(sites as ConstructionSite[]);
+        if (site) {
+          ac.creep.memory.targetId = site.id as Id<ConstructionSite>;
+        }
+      }
+
       if (site) {
         const result = actOrMove(ac.creep, site, () => ac.creep.build(site));
         if (result === ERR_INVALID_TARGET) {
@@ -619,6 +709,9 @@ export function repairCritical(): ActionCandidate {
  * 修复衰减中的 container（血量 < 80%）。
  * Container 每 tick 衰减 ~5000 hits，不修就会在 ~50 tick 内从 80% 降到 0 被摧毁。
  * 失去 source container = 物流链断裂 = 经济崩溃，因此阈值设得比 repairCritical (50%) 更激进。
+ *
+ * 目标持久化：优先复用上一 tick 选定的 container（creep.memory.repairTargetId），
+ * 仅在目标修好/消失时重新选择。消除多个衰减 container 间的摇摆。
  */
 export function repairContainerDecay(): ActionCandidate {
   return {
@@ -627,18 +720,35 @@ export function repairContainerDecay(): ActionCandidate {
       return ac.snapshot.containers.some(c => c.hits < c.hitsMax * 0.8);
     },
     execute: (ac) => {
-      // 修血量最低的 container。
+      // 优先复用持久化目标 — 验证它仍需修复。
       let worst: StructureContainer | undefined;
-      let worstRatio = 1;
-      for (const c of ac.snapshot.containers) {
-        const ratio = c.hits / c.hitsMax;
-        if (ratio < 0.8 && ratio < worstRatio) {
-          worstRatio = ratio;
-          worst = c;
+      if (ac.creep.memory.repairTargetId) {
+        const cached = getObjectById(ac.creep.memory.repairTargetId as Id<StructureContainer>);
+        if (cached && (cached as StructureContainer).hits < (cached as StructureContainer).hitsMax * 0.8) {
+          worst = cached as StructureContainer;
+        }
+      }
+      // 无有效缓存目标 — 修血量最低的 container。
+      if (!worst) {
+        let worstRatio = 1;
+        for (const c of ac.snapshot.containers) {
+          const ratio = c.hits / c.hitsMax;
+          if (ratio < 0.8 && ratio < worstRatio) {
+            worstRatio = ratio;
+            worst = c;
+          }
+        }
+        if (worst) {
+          ac.creep.memory.repairTargetId = worst.id as Id<StructureContainer>;
         }
       }
       if (worst) {
-        actOrMove(ac.creep, worst, () => ac.creep.repair(worst));
+        const result = ac.creep.repair(worst);
+        if (result === ERR_NOT_IN_RANGE) {
+          moveToTarget(ac.creep, worst);
+        } else if (result === ERR_INVALID_TARGET) {
+          ac.creep.memory.repairTargetId = undefined;
+        }
       }
     },
   };
@@ -695,9 +805,36 @@ export function repairFortifications(): ActionCandidate {
       return findFortificationTarget(ac.snapshot) !== undefined;
     },
     execute: (ac) => {
-      const target = findFortificationTarget(ac.snapshot);
+      const targetHits = getWallTargetHits(ac.snapshot.rcl);
+
+      // 优先复用持久化目标 — 验证它仍是墙/城防且仍需修复。
+      let target: StructureWall | StructureRampart | undefined;
+      if (ac.creep.memory.repairTargetId) {
+        const cached = getObjectById(ac.creep.memory.repairTargetId as Id<StructureWall | StructureRampart>);
+        if (cached) {
+          const s = cached as StructureWall | StructureRampart;
+          if ((s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART)
+            && s.hits < targetHits) {
+            target = s;
+          }
+        }
+      }
+
+      // 无有效缓存目标 — 重新扫描最低血量的墙/城防。
+      if (!target) {
+        target = findFortificationTarget(ac.snapshot);
+        if (target) {
+          ac.creep.memory.repairTargetId = target.id as Id<StructureWall | StructureRampart>;
+        }
+      }
+
       if (target) {
-        actOrMove(ac.creep, target, () => ac.creep.repair(target));
+        const result = ac.creep.repair(target);
+        if (result === ERR_NOT_IN_RANGE) {
+          moveToTarget(ac.creep, target);
+        } else if (result === ERR_INVALID_TARGET) {
+          ac.creep.memory.repairTargetId = undefined;
+        }
       }
     },
   };

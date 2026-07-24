@@ -1,4 +1,5 @@
 import { builderRole } from "./creeps/roles/builder";
+import { distributorRole } from "./creeps/roles/distributor";
 import { harvesterRole } from "./creeps/roles/harvester";
 import { haulerRole } from "./creeps/roles/hauler";
 import { upgraderRole } from "./creeps/roles/upgrader";
@@ -72,6 +73,8 @@ const registry = new Registry()
   // P1：harvester 和 hauler（能量链）
   .registerRole(harvesterRole)
   .registerRole(haulerRole)
+  // P1：distributor（storage → sink 分发，RCL4+）
+  .registerRole(distributorRole)
   // P2：upgrader 和 builder（发展）
   .registerRole(upgraderRole)
   .registerRole(builderRole);

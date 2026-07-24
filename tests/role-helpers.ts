@@ -63,6 +63,7 @@ export function resetGlobals(): void {
   delete g.__pathShare;
   delete g.__pathShareTick;
   delete g.__structCache;
+  delete g.__coreCenter;
   delete g.__creepPathCache;
   delete g.__yieldRequests;
 }

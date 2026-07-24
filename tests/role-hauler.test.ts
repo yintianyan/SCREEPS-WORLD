@@ -61,7 +61,7 @@ describe("hauler — acquire 模式", () => {
     expect(creep.harvest).not.toHaveBeenCalled();
   });
 
-  it("无 container 时回退到 storage 取能", () => {
+  it("无 container 时不从 storage 取能（hauler 是收集者，storage 取能由 distributor 负责）", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
     const snap = mockSnapshot({ containers: [], storage });
     const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
@@ -69,7 +69,9 @@ describe("hauler — acquire 模式", () => {
 
     haulerRole.run(creep, ctx);
 
-    expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 100);
+    // hauler 永不从 storage 取能 — 这是 distributor 的职责。
+    expect(creep.withdraw).not.toHaveBeenCalled();
+    expect(creep.memory.mode).toBe("idle");
   });
 
   it("无任何能量来源时 idle", () => {

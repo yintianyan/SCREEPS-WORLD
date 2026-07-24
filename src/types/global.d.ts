@@ -22,8 +22,12 @@ declare global {
     home?: string;
     /** 行为模式 — 所有角色共享的有限状态。 */
     mode?: CreepMode;
-    /** 稳定工作目标 id；目标不存在时清除。 */
+    /** 稳定工作目标 id；目标不存在时清除。用于 build site 持久化。 */
     targetId?: Id<_HasId>;
+    /** fillTarget 持久化 — 避免每 tick 在多个等距目标间摇摆。 */
+    fillTargetId?: Id<_HasId>;
+    /** repair 目标持久化 — 避免每 tick 在多个衰减 container 间摇摆。 */
+    repairTargetId?: Id<_HasId>;
     /** harvester/miner 绑定的 source。 */
     sourceId?: Id<Source>;
     /** 压缩的上次位置（x * 50 + y）用于卡位检测。 */

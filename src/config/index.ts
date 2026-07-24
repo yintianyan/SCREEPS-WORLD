@@ -122,8 +122,11 @@ export const CONFIG = {
   },
 
   assignment: {
-    /** 本地任务租约时长（tick）。 */
-    leaseDuration: 20,
+    /** 本地任务租约时长（tick）。
+     * 50 tick：builder 从 storage 取能走到工地可能需要 20+ tick，
+     * 20 tick 的 lease 会在通勤途中过期，导致每 tick 重新分配任务 — creep 在"摇摆"。
+     * 50 tick 给足单趟通勤 + 工作的时间，仅在条件真正变化时（site 消失/container 空）才重分配。 */
+    leaseDuration: 50,
     /** 每个 source 的目标 work parts 总数（向后兼容，优先使用分级配置）。 */
     sourceTargetWorkParts: 5,
     /** 每个 source 的目标 work parts 总数，按 RCL 分级（约束 X-02）。 */
@@ -211,6 +214,7 @@ export const CONFIG = {
   roles: {
     harvester: { minCount: 2, maxCount: 4 },
     hauler: { minCount: 2, maxCount: 6 },
+    distributor: { minCount: 1, maxCount: 3 },
     upgrader: { minCount: 1, maxCount: 3 },
     builder: { minCount: 1, maxCount: 4 },
     worker: { minCount: 0, maxCount: 2 },

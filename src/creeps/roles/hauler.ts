@@ -1,12 +1,23 @@
 /**
- * Hauler — P1 物流角色。
+ * Hauler — P1 收集者角色。
+ *
+ * 职责：将能量从源（container/dropped/link）搬运到 sink（spawn/extension/storage）。
+ * 数据流方向：源 → Storage/Sink（单向，永不从 storage 取能）。
+ *
+ * 与 distributor 的职责分离：
+ *   - Hauler（收集者）：container/dropped/link → storage/sink
+ *   - Distributor（分发者）：storage → spawn/extension/tower/lab
+ *
+ * 架构约束：hauler 永不从 storage 取能。
+ * 这消除了旧架构中 hauler 同时从 storage 取能又存回 storage 的循环依赖。
+ * storage → sink 的分发由 distributor 角色负责。
+ *
+ * 无 storage 时（RCL1-3）：hauler 直接 container → spawn/extension 直送，
+ * 不需要 distributor。
  *
  * 策略声明：
- *   acquire: assignment container > 最满 container（限量）> storage（限量）
- *   work:    haul fillTarget（带 reservation）> storage > 待命
- *
- * hauler 没有 WORK 部件，不能采集或升级。无能量来源时 idle 等待。
- * 所有 sink 满时原地待命 — 供给 > 需求是正确信号，demand 系统会减少 hauler 孵化。
+ *   acquire: droppedEnergy > assignment container > storage link（排空 link 网络）> 最满 container（限量）
+ *   work:    haul fillTarget（带 reservation）> minerals → storage > labs > storage > 待命
  */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
@@ -17,6 +28,7 @@ import {
   pickupDroppedEnergy,
   supplyLabs,
   withdrawCapped,
+  withdrawStorageLink,
 } from "../engine/actions";
 import { findRichestContainer } from "../support/targeting";
 import { defineRole } from "../engine/role-runner";
@@ -65,40 +77,36 @@ function withdrawRichestCapped(): ActionCandidate {
   });
 }
 
-/** 从 storage 限量取能（RCL4+ 回退）。 */
-function withdrawStorageCapped(): ActionCandidate {
-  return withdrawCapped((ac: ActionContext) => {
-    const st = ac.snapshot.storage;
-    if (!st || st.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
-    return st;
-  });
-}
-
 const policy: RolePolicy = {
   acquire: [
     // 0. 拾取地上掉落能量 — 衰减资源，最高优先回收。
     pickupDroppedEnergy(),
     // 优先使用 assignment 指定的 container。
     withdrawAssignmentContainer(),
+    // 排空 storage link — link 物流链的「最后一公里」。
+    // 必须在 container 之前：storage link 是 link 网络的排水口，
+    // 不排空则 source link 背压瘫痪，整条 link 网络堵死。
+    withdrawStorageLink(),
     // 回退到最满 container。
     withdrawRichestCapped(),
-    // RCL4+ 回退到 storage。
-    withdrawStorageCapped(),
+    // 注意：hauler 永不从 storage 取能。
+    // storage → sink 的分发由 distributor 角色负责。
+    // 这从架构上消除了 storage→storage 循环。
   ],
 
   work: [
     // 矿物优先搬运（高价值资源不应滞留在 container）。
     haulMineralsToStorage(),
     // 带 reservation 去重的优先级填充。
+    // hauler 从 container 取能后直接填充 spawn/extension — 短路路径，跳过 storage 中转。
     haulFillTarget(),
     // 化合物供料到 lab。
     supplyLabs(),
-    // spawn/extension 全满 — 送 storage。
+    // spawn/extension 全满 — 送 storage（收集者的最终归宿）。
     fillStorage(),
     // 所有 sink 均满 — 原地待命。
     // hauler 无 WORK 部件，不能升级控制器（upgradeController 会 ERR_NO_BODYPART）。
     // 空闲是正确信号：供给 > 需求，demand 系统会据此减少 hauler 孵化数量。
-    // 下一 tick sink 释放容量后自然恢复填充。
   ],
 };
 

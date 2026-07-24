@@ -76,7 +76,12 @@ function buildAssignmentByTier(): ActionCandidate {
   };
 }
 
-/** 建造最近 site（带 tier 门禁：conserve 只建 critical）。 */
+/** 建造最近 site（带 tier 门禁：conserve 只建 critical）。
+ *
+ * 目标持久化：优先复用上一 tick 选定的 site（creep.memory.targetId），
+ * 仅在目标消失或不满足 tier 门禁时重新选择。
+ * 这消除了 builder 在两个等距工地间每 tick 切换的"摇摆"行为。
+ */
 function buildSiteByTier(): ActionCandidate {
   return {
     name: "build:site-by-tier",
@@ -95,7 +100,24 @@ function buildSiteByTier(): ActionCandidate {
             s => s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_TOWER,
           )
         : ac.snapshot.myConstructionSites;
-      const site = ac.creep.pos.findClosestByRange(sites as ConstructionSite[]);
+
+      // 优先复用持久化目标 — 验证它仍在当前候选列表中。
+      let site: ConstructionSite | null = null;
+      if (ac.creep.memory.targetId) {
+        const cached = getObjectById(ac.creep.memory.targetId as Id<ConstructionSite>);
+        if (cached && sites.some(s => s.id === cached.id)) {
+          site = cached;
+        }
+      }
+
+      // 无有效缓存目标 — 重新选择最近的。
+      if (!site) {
+        site = ac.creep.pos.findClosestByRange(sites as ConstructionSite[]);
+        if (site) {
+          ac.creep.memory.targetId = site.id as Id<ConstructionSite>;
+        }
+      }
+
       if (site) {
         const result = ac.creep.build(site);
         if (result === ERR_NOT_IN_RANGE) {

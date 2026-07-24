@@ -42,6 +42,16 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
+  distributor: [
+    // 与 hauler 相同的 body — 纯 CARRY+MOVE 物流角色。
+    // 从 storage 取能分发给 spawn/extension/tower，同样需要大运力 + 道路满速。
+    {
+      parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"],
+      minCapacity: 600,
+    },
+    { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
+    { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
+  ],
   upgrader: [
     // 站桩升级：1 CARRY 承接 withdraw，2 MOVE 通勤，其余全 WORK。
     // [15W] @1650：RCL5(1800) 起可孵；RCL8 时单 creep 恰好顶满官方 15 energy/tick 上限。
@@ -104,6 +114,22 @@ const ROAD_OPTIMIZED_BODIES: Readonly<Record<string, readonly BodyTemplate[]>> =
       minCapacity: 1200,
     },
     // [8C,4M] @600：RCL3(800) 档。
+    {
+      parts: ["carry", "carry", "carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move"],
+      minCapacity: 600,
+    },
+    { parts: ["carry", "carry", "carry", "carry", "move", "move"], minCapacity: 300 },
+  ],
+  distributor: [
+    // 与 hauler 相同的道路优化 body。
+    {
+      parts: [
+        "carry", "carry", "carry", "carry", "carry", "carry", "carry", "carry",
+        "carry", "carry", "carry", "carry", "carry", "carry", "carry", "carry",
+        "move", "move", "move", "move", "move", "move", "move", "move",
+      ],
+      minCapacity: 1200,
+    },
     {
       parts: ["carry", "carry", "carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move"],
       minCapacity: 600,

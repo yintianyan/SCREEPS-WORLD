@@ -190,13 +190,35 @@ function trySharedPath(creep: Creep, cacheKey: number): ScreepsReturnCode | unde
  * 未来可扩展为多走廊（source 走廊、controller 走廊）。
  */
 
-/** 获取房间的核心区域中心（spawn 位置）。 */
-function getCoreCenter(roomName: string): { x: number; y: number } | undefined {
+/**
+ * 获取房间的核心区域中心（spawn 位置）。
+ *
+ * tick 级 globalCache 缓存：
+ *   - spawn 位置在单 tick 内不变，多 creep 共享同一缓存项。
+ *   - 命中条件：cached.tick === Game.time。
+ *   - 未命中：执行 room.find + 写缓存 → 后续 creep 直接读缓存。
+ *   - 跨 tick 失效：Game.time 变化后首次调用重新 find。
+ *
+ * 缓存不耦合 layout revision — spawn 位置变化是极低频事件（layout 重建），
+ * 且 movement 层不应感知 layout 系统。即使每 tick 重新 find 一次也只是 1 次 find，
+ * 相比每 creep 都 find 的原实现已是数量级优化。
+ *
+ * @internal 仅供 pathfinding 内部 + 单元测试使用。外部消费者应通过
+ *            moveToTarget 间接依赖走廊共享能力，不直接调用此函数。
+ */
+export function getCoreCenter(roomName: string): { x: number; y: number } | undefined {
+  const g = globalCache() as any;
+  if (!g.__coreCenter) g.__coreCenter = {};
+  const cached = g.__coreCenter[roomName];
+  if (cached && cached.tick === Game.time) return cached.pos;
+
   const room = Game.rooms[roomName];
   if (!room) return undefined;
   const spawns = room.find(FIND_MY_SPAWNS);
   if (spawns.length === 0) return undefined;
-  return { x: spawns[0]!.pos.x, y: spawns[0]!.pos.y };
+  const pos = { x: spawns[0]!.pos.x, y: spawns[0]!.pos.y };
+  g.__coreCenter[roomName] = { tick: Game.time, pos };
+  return pos;
 }
 
 /** 走廊共享缓存 key：roomHash * 2500 + packedZoneCenter。 */

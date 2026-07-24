@@ -51,7 +51,16 @@ function rcl5World(opts?: {
     // source link（source 旁，range ≤ 2）
     .link(14, 12, opts?.sourceLinkEnergy ?? 600)
     // controller link（controller 旁，range ≤ 2）
-    .link(29, 38, opts?.controllerLinkEnergy ?? 0)
+    .link(29, 38, opts?.controllerLinkEnergy ?? 0);
+
+  // storage link（storage 旁，range ≤ 2）— 仅在指定 energy 时创建。
+  // RCL5 有 2 个 link 槽位，storage link 需要 RCL6 的第 3 个槽位。
+  // 但测试框架不限制 link 数量，此处用于验证 hauler 排空 storage link 的行为。
+  if (opts?.storageLinkEnergy !== undefined) {
+    builder.link(27, 25, opts.storageLinkEnergy);
+  }
+
+  builder
     // 30 extensions（RCL5 上限）
     .extensions(
       Array.from({ length: 30 }, (_, i) => ({
@@ -228,5 +237,42 @@ describe("RCL5 Links — Link 系统", () => {
     // link-system 应该优雅跳过（links.length === 0）
     assertions.assertNoRuntimeError("RCL5 no links");
     assertions.assertEmpireAlive("RCL5 no links");
+  });
+
+  it("storage link → hauler → storage 闭环（link 物流链最后一公里）", () => {
+    // 场景：storage link 预填 800 能量，spawn/extension 全满，
+    // hauler 应从 storage link 取能并存入 storage。
+    const world = rcl5World({
+      sourceLinkEnergy: 0,
+      controllerLinkEnergy: 0,
+      storageLinkEnergy: 800,
+    });
+
+    // hauler 站在 storage link 旁
+    world.addCreep("haul1", "hauler", 27, 26, [
+      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
+    ], { mode: "acquire" });
+
+    // spawn/extension 全满 — hauler 无需 fill，直接走 fillStorage
+    world.spawns[0]!.store.energy = 300;
+    for (const ext of world.extensions) ext.store.energy = 50;
+    world.room._recalcEnergy();
+
+    const initialStorage = world.storage!.store.getUsedCapacity(RESOURCE_ENERGY);
+
+    const runner = new TickRunner();
+    runner.setLoop(loop);
+
+    // 运行 100 tick — hauler 应已排空 storage link 并存入 storage
+    runner.run(world, 100);
+
+    const storageLink = world.links.find(l => l.pos.x === 27 && l.pos.y === 25);
+    expect(storageLink).toBeDefined();
+    // storage link 应被排空（hauler 取走能量）
+    expect(storageLink!.store.getUsedCapacity(RESOURCE_ENERGY)).toBeLessThan(800);
+
+    // storage 能量应增加（hauler 存入了从 storage link 取的能量）
+    const finalStorage = world.storage!.store.getUsedCapacity(RESOURCE_ENERGY);
+    expect(finalStorage).toBeGreaterThan(initialStorage);
   });
 });

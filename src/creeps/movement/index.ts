@@ -27,4 +27,6 @@ export {
   moveTowardRoom,
   ensureHome,
   preloadStructureCache,
+  // @internal — 仅供单元测试访问缓存行为，业务代码不直接调用
+  getCoreCenter,
 } from "./pathfinding";
