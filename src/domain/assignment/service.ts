@@ -113,8 +113,12 @@ export function buildRoomTasks(
   // 旧实现每房只生成 1 个 haul 任务（pickup=最满 container），3 个 hauler 全挤向同一处，
   // 其余 container 饿死。拆分后配合 P2-4 距离感知，hauler 自然分散到不同 container。
   // maxWorkers=1：每个 container 至少分配 1 个 hauler 即可，多余 hauler 走自身回退链。
+  // 排除 controller container：它是 haulFillTarget 的填充目标（priority 0），
+  // 若同时作为 haul 取能源，hauler A 倒入 → 生成 haul 任务 → hauler B 取出 → 乒乓振荡。
+  // 与 hauler.ts withdrawRichestCapped 的排除逻辑对齐。
+  const ccId = snapshot.controllerContainer?.id;
   const haulContainers = snapshot.containers.filter(
-    c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+    c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0 && c.id !== ccId,
   );
   if (haulContainers.length > 0) {
     for (const c of haulContainers) {

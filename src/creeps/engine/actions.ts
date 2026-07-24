@@ -407,13 +407,17 @@ export function withdrawCapped(target: (ac: ActionContext) => StructureContainer
 export function dumpToNearbyLink(): ActionCandidate {
   return {
     name: "dump:nearby-link",
-    // 使用 .some() 短路求值替代 findClosestByRange，避免 predicate 与 execute 重复调用。
     predicate: (ac) =>
       ac.snapshot.links.some(
         l => ac.creep.pos.getRangeTo(l) <= 2 && l.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
       ),
     execute: (ac) => {
-      const link = ac.creep.pos.findClosestByRange(ac.snapshot.links as StructureLink[]);
+      // 必须与 predicate 使用相同的过滤条件，否则可能选到满 link —
+      // transfer 返回 ERR_FULL，creep 站着不动，看起来在"发呆"。
+      const candidates = ac.snapshot.links.filter(
+        l => ac.creep.pos.getRangeTo(l) <= 2 && l.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+      );
+      const link = ac.creep.pos.findClosestByRange(candidates as StructureLink[]);
       if (link) actOrMove(ac.creep, link, () => ac.creep.transfer(link, RESOURCE_ENERGY));
     },
   };
@@ -423,13 +427,16 @@ export function dumpToNearbyLink(): ActionCandidate {
 export function dumpToNearbyContainer(): ActionCandidate {
   return {
     name: "dump:nearby-container",
-    // 使用 .some() 短路求值替代 findClosestByRange，避免 predicate 与 execute 重复调用。
     predicate: (ac) =>
       ac.snapshot.containers.some(
         c => ac.creep.pos.getRangeTo(c) <= 2 && c.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
       ),
     execute: (ac) => {
-      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[]);
+      // 必须与 predicate 使用相同的过滤条件，否则可能选到满 container。
+      const candidates = ac.snapshot.containers.filter(
+        c => ac.creep.pos.getRangeTo(c) <= 2 && c.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+      );
+      const nearby = ac.creep.pos.findClosestByRange(candidates as StructureContainer[]);
       if (nearby) actOrMove(ac.creep, nearby, () => ac.creep.transfer(nearby, RESOURCE_ENERGY));
     },
   };
@@ -444,20 +451,24 @@ export function dumpMineralsToNearbyContainer(): ActionCandidate {
   return {
     name: "dump:minerals-to-container",
     predicate: (ac) => {
-      // 检查 creep 是否 carrying 非 energy 资源
       const hasMinerals = (Object.keys(ac.creep.store) as ResourceConstant[])
         .some(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
       if (!hasMinerals) return false;
-      if (ac.snapshot.containers.length === 0) return false;
-      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[]);
-      return nearby !== null && ac.creep.pos.getRangeTo(nearby) <= 2 && (nearby.store.getFreeCapacity() ?? 0) > 0;
+      // 必须同时检查 range 和 freeCapacity，与 execute 保持一致。
+      return ac.snapshot.containers.some(
+        c => ac.creep.pos.getRangeTo(c) <= 2 && (c.store.getFreeCapacity() ?? 0) > 0,
+      );
     },
     execute: (ac) => {
       const mineral = (Object.keys(ac.creep.store) as ResourceConstant[])
         .find(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
       if (!mineral) return;
-      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[])!;
-      actOrMove(ac.creep, nearby, () => ac.creep.transfer(nearby, mineral));
+      // 与 predicate 相同的过滤条件，确保选到的是有容量的 container。
+      const candidates = ac.snapshot.containers.filter(
+        c => ac.creep.pos.getRangeTo(c) <= 2 && (c.store.getFreeCapacity() ?? 0) > 0,
+      );
+      const nearby = ac.creep.pos.findClosestByRange(candidates as StructureContainer[]);
+      if (nearby) actOrMove(ac.creep, nearby, () => ac.creep.transfer(nearby, mineral));
     },
   };
 }
@@ -501,9 +512,12 @@ export function fillTarget(): ActionCandidate {
 export function haulFillTarget(): ActionCandidate {
   return {
     name: "fill:haul-target",
-    // 纯检查：有潜在填充目标即可（不触发 reservation 副作用）。
-    predicate: (ac) =>
-      ac.snapshot.fillTargets.length > 0 || ac.snapshot.controllerContainer !== undefined,
+    // 纯检查：fillTargets 已包含所有需填充的 spawn/extension/tower/controller container
+    // （room-snapshot.ts 按是否有空闲容量过滤）。
+    // 严禁添加 `|| controllerContainer !== undefined` — controllerContainer 存在不等于需要填充。
+    // 该条件会导致 predicate 返回 true 而 execute 内 getHaulFillTarget 返回 undefined，
+    // FSM 在此 return 不再 fallthrough，hauler 永远无法到达 fillStorage() — storage 空置死锁。
+    predicate: (ac) => ac.snapshot.fillTargets.length > 0,
     execute: (ac) => {
       const target = getHaulFillTarget(ac.creep, ac.snapshot);
       if (!target) return;
@@ -638,13 +652,17 @@ export function repairContainerDecay(): ActionCandidate {
 export function repairNearbyContainer(): ActionCandidate {
   return {
     name: "repair:nearby-container",
-    // 使用 .some() 短路求值替代 findClosestByRange，避免 predicate 与 execute 重复调用。
     predicate: (ac) =>
       ac.snapshot.containers.some(
         c => ac.creep.pos.getRangeTo(c) <= 2 && c.hits < c.hitsMax * 0.8,
       ),
     execute: (ac) => {
-      const nearby = ac.creep.pos.findClosestByRange(ac.snapshot.containers as StructureContainer[]);
+      // 必须与 predicate 使用相同的过滤条件，否则可能选到健康 container —
+      // repair 返回 OK 但修复 0 hits，creep 看起来在"工作"但实际浪费 tick。
+      const candidates = ac.snapshot.containers.filter(
+        c => ac.creep.pos.getRangeTo(c) <= 2 && c.hits < c.hitsMax * 0.8,
+      );
+      const nearby = ac.creep.pos.findClosestByRange(candidates as StructureContainer[]);
       if (nearby) actOrMove(ac.creep, nearby, () => ac.creep.repair(nearby));
     },
   };

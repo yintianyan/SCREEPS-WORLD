@@ -85,26 +85,40 @@ async function main() {
     console.log("Memory is empty or null");
   }
 
-  // 2. Fetch segment 1
-  console.log("\n=== Fetching Segment 1 (timeseries) ===");
+  // 2. Fetch segment 1 (CPU + population)
+  console.log("\n=== Fetching Segment 1 (CPU + population) ===");
   const seg1 = await apiGet(`/api/user/memory-segment?segment=1&shard=${SHARD}`);
   const s1 = decodeData(seg1);
   if (s1) {
-    saveJson(s1, "timeseries.json");
+    saveJson(s1, "cpu.json");
+    saveJson(s1, `archive/cpu-${Date.now()}.json`);
     console.log("Segment 1 data loaded");
   } else {
     console.log("Segment 1 is empty or not yet populated");
   }
 
-  // 3. Fetch segment 2
+  // 3. Fetch segment 2 (event log)
   console.log("\n=== Fetching Segment 2 (event log) ===");
   const seg2 = await apiGet(`/api/user/memory-segment?segment=2&shard=${SHARD}`);
   const s2 = decodeData(seg2);
   if (s2) {
     saveJson(s2, "events.json");
+    saveJson(s2, `archive/events-${Date.now()}.json`);
     console.log("Segment 2 data loaded");
   } else {
     console.log("Segment 2 is empty or not yet populated");
+  }
+
+  // 3b. Fetch segment 3 (economy)
+  console.log("\n=== Fetching Segment 3 (economy) ===");
+  const seg3 = await apiGet(`/api/user/memory-segment?segment=3&shard=${SHARD}`);
+  const s3 = decodeData(seg3);
+  if (s3) {
+    saveJson(s3, "economy.json");
+    saveJson(s3, `archive/economy-${Date.now()}.json`);
+    console.log("Segment 3 data loaded");
+  } else {
+    console.log("Segment 3 is empty or not yet populated");
   }
 
   // 4. Fetch segment 0 (layout)

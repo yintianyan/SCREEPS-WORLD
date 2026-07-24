@@ -169,13 +169,32 @@ export class Kernel {
   }
 
   private runSystems(ctx: Context): void {
+    // 检查是否有任何自有房间处于 recovery 状态。
+    // recovery 时 colonyState="recovery"，意味着关键基建缺失或经济断裂。
+    // 此时 construction-manager (P2) 和 layout-planner (P3) 必须能够运行：
+    //   - layout-planner: 重新将被毁的关键结构任务推入 buildQueue
+    //   - construction-manager: 为紧急任务创建 construction site
+    // 这与 runCreeps 中 builder 的 recovery 豁免同理（P2 builder 在 recovery 时
+    // 以 P1 等效优先级运行），确保灾后重建路径不被 budget tier 完全冻结。
+    const anyRecovery = Object.values(Memory.rooms).some(
+      r => r?.colonyState === "recovery",
+    );
+
     // 使用缓存的已排序 systems 列表（构造时构建）。
     for (const system of this.sortedSystems) {
       if (!this.shouldRunSystem(system, ctx)) {
         recordSkip(`system/${system.name}/interval`);
         continue;
       }
-      if (!ctx.budget.canStart(system.priority)) {
+      // Recovery 豁免：construction-manager 和 layout-planner 在 recovery 时
+      // 以 P1 等效优先级通过 budget 检查，确保紧急重建路径可达。
+      const isConstructionCritical =
+        anyRecovery &&
+        (system.name === "construction-manager" || system.name === "layout-planner");
+      const effectivePriority = isConstructionCritical
+        ? (1 as Priority)
+        : system.priority;
+      if (!ctx.budget.canStart(effectivePriority)) {
         recordSkip(`system/${system.name}/budget`);
         continue;
       }

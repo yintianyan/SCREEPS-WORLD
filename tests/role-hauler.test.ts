@@ -142,6 +142,27 @@ describe("hauler — work 模式", () => {
     expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
   });
 
+  it("controllerContainer 存在但已满时仍回退到 storage（不卡在 haulFillTarget）", () => {
+    // 回归测试：haulFillTarget 的 predicate 曾包含 `|| controllerContainer !== undefined`，
+    // 导致 controllerContainer 存在（即便已满、不在 fillTargets 中）时 predicate 返回 true，
+    // execute 内 getHaulFillTarget 返回 undefined 后静默返回，
+    // FSM 不再 fallthrough → fillStorage 永远不被执行 → storage 空置死锁。
+    const cc = mockStructure("container", { id: "cc1", energy: 2000, capacity: 2000 }); // 满
+    const storage = mockStructure("storage", { id: "storage_1", energy: 0, capacity: 100000 });
+    const snap = mockSnapshot({
+      controllerContainer: cc,
+      fillTargets: [], // cc 已满，不在 fillTargets 中
+      storage,
+    });
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    // 必须穿透 haulFillTarget 到达 fillStorage。
+    expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
+  });
+
   it("无 storage 且所有 sink 满时原地待命（不升级控制器）", () => {
     const controller = mockController();
     const snap = mockSnapshot({ fillTargets: [], storage: undefined, controller });
