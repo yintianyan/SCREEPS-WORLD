@@ -93,6 +93,8 @@ declare global {
       reserve: number;
       reserveDelta: number;
       drainScore: number;
+      /** 流动性危机分数 (0-100)，方案 C：检测能量冻在 container 的物流死锁。 */
+      liquidityScore: number;
       harvesterCount: number;
       sourceCount: number;
       rcl: number;

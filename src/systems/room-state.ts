@@ -55,16 +55,35 @@ export const roomStateSystem: System = {
       }
       harvesterCount += snapshot.pendingHarvesters ?? 0;
 
+      // 2.5 流动性信号（方案 C）—— 检测「富得流油却花不出去」的物流死锁。
+      // spendableRatio：spawn 口袋的可达能量占容量比。低 = spawn 实际破产。
+      const spendableRatio = snapshot.energyCapacityAvailable > 0
+        ? snapshot.energyAvailable / snapshot.energyCapacityAvailable
+        : 0;
+      // frozenRatio：最满 container 的填充率。高 = 能量积压在 container 搬不走。
+      // 两者同时极端（spawn 空 + container 满）= 搬运能力缺失 = 真死锁，而非正常物流中转。
+      let frozenRatio = 0;
+      for (const c of snapshot.containers) {
+        const cap = c.store.getCapacity(RESOURCE_ENERGY);
+        if (cap > 0) {
+          const fill = c.store.getUsedCapacity(RESOURCE_ENERGY) / cap;
+          if (fill > frozenRatio) frozenRatio = fill;
+        }
+      }
+
       // 3. 评估殖民相位（带迟滞的纯函数）。
       const prevPhase: PhaseState = {
         phase: roomMem.phase?.phase ?? "growth",
         prevReserve: roomMem.phase?.reserve,
         drainScore: roomMem.phase?.drainScore ?? 0,
+        liquidityScore: roomMem.phase?.liquidityScore ?? 0,
       };
       const phaseResult = evaluateColonyPhase(
         {
           reserve,
           spendable: snapshot.energyAvailable,
+          spendableRatio,
+          frozenRatio,
           harvesterCount,
           sourceCount: snapshot.sources.length,
           rcl: snapshot.rcl,
@@ -78,6 +97,7 @@ export const roomStateSystem: System = {
         reserve,
         reserveDelta: phaseResult.reserveDelta,
         drainScore: phaseResult.drainScore,
+        liquidityScore: phaseResult.liquidityScore,
         harvesterCount,
         sourceCount: snapshot.sources.length,
         rcl: snapshot.rcl,
@@ -88,13 +108,14 @@ export const roomStateSystem: System = {
       roomMem.colonyState = phaseToColonyState(phaseResult.phase, hasHostiles);
 
       // 5.5 经济压力梯度信号 (0.0–1.0)。
-      // drainScore 0→40 映射 pressure 0.0→0.5（健康→谨慎）
-      // drainScore 40→100 映射 pressure 0.5→1.0（紧张→危机）
-      // 各子系统用此信号做梯度缩放，替代二值 crisis/normal 开关。
-      const ds = phaseResult.drainScore;
-      roomMem.economyPressure = ds <= 40
-        ? (ds / 40) * 0.5
-        : 0.5 + ((ds - 40) / 60) * 0.5;
+      // 取双维度最大值（方案 C）：偿付危机（drainScore）与流动性危机（liquidityScore）
+      // 任一升高都推高压力，使建造门禁 / P2 缩放对「富得流油却花不出去」也做出反应。
+      // score 0→40 映射 pressure 0.0→0.5（健康→谨慎）
+      // score 40→100 映射 pressure 0.5→1.0（紧张→危机）
+      const score = Math.max(phaseResult.drainScore, phaseResult.liquidityScore);
+      roomMem.economyPressure = score <= 40
+        ? (score / 40) * 0.5
+        : 0.5 + ((score - 40) / 60) * 0.5;
 
       // 6. Storage 满仓检测 — 超过阈值时标记，供 demand 限采 + 加速消费。
       // 满仓 = 能量在源头被浪费（harvester drop），必须加速升级/建造消化盈余。

@@ -57,6 +57,8 @@ export const spawnManagerSystem: System = {
         energyAvailable: Game.rooms[snapshot.roomName]?.energyAvailable ?? 200,
         economyPressure: roomMem.economyPressure ?? 0,
         storageNearFull: roomMem.storageNearFull === true,
+        liquidityScore: roomMem.phase?.liquidityScore ?? 0,
+        drainScore: roomMem.phase?.drainScore ?? 0,
       };
       const { requests } = evaluateDemand(
         snapshot,

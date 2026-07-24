@@ -47,6 +47,13 @@ export interface RoomDemandContext {
   economyPressure: number;
   /** Storage 能量超过满仓阈值时为 true。触发限采 + 加速消费。 */
   storageNearFull?: boolean;
+  /**
+   * 流动性危机分数 (0-100)，方案 C。高值 = 能量冻在 container、spawn 破产的物流死锁。
+   * 用于区分流动性危机（需要更多 hauler 搬运冻结能量）与偿付危机（收缩 hauler 节能）。
+   */
+  liquidityScore?: number;
+  /** 偿付危机分数 (0-100)。与 liquidityScore 比较以判定危机由哪个维度主导。 */
+  drainScore?: number;
 }
 
 interface DemandResult {
@@ -224,9 +231,15 @@ export function evaluateDemand(
     // 至少 minCount（保证基本物流不断），至多 maxCount。
     dynamicHaulerTarget = Math.min(haulerConfig.maxCount, Math.max(haulerConfig.minCount, dynamicHaulerTarget));
   }
-  // 能量危机：收缩 hauler 到 minCount —— 仅保留把能量搬回 spawn 供孵化 harvester 的最小力量，
-  // 避免孵出一堆无能量可搬的空闲 hauler，白白浪费孵化能量。
-  const haulerTarget = inCrisis
+  // 能量危机收缩（仅偿付危机适用）：收缩 hauler 到 minCount —— 仅保留把能量搬回 spawn
+  // 供孵化 harvester 的最小力量，避免孵出一堆无能量可搬的空闲 hauler，白白浪费孵化能量。
+  // 方案 C：流动性危机例外 —— 能量冻在 container（liquidityScore 主导）时 hauler 是解药，
+  // 必须按 dynamicTarget 满量孵化才能搬空积压、打破「spawn 破产」死锁。
+  // 此时收缩 hauler 会让死锁永久化（W37S58 根因之一）。
+  const liquidityScore = roomCtx.liquidityScore ?? 0;
+  const drainScore = roomCtx.drainScore ?? 0;
+  const liquidityDriven = liquidityScore >= 40 && liquidityScore >= drainScore;
+  const haulerTarget = (inCrisis && !liquidityDriven)
     ? Math.min(dynamicHaulerTarget, haulerConfig.minCount)
     : dynamicHaulerTarget;
   if (haulerTotal < haulerTarget && hasLogistics) {

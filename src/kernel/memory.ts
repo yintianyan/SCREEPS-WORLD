@@ -181,6 +181,22 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
       }
     },
   },
+  {
+    from: 8,
+    to: 9,
+    run: () => {
+      // v9：方案 C 流动性维度 — 为每个房间的 phase 回填 liquidityScore 字段。
+      // 旧 Memory 的 phase 无此字段；缺失时默认 0（不假定存在流动性危机，
+      // 分数随后由 room-state 每 tick 从 spendableRatio/frozenRatio 实时信号累加）。
+      // 幂等：仅当字段缺失时写入。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as any;
+        if (room?.phase && room.phase.liquidityScore === undefined) {
+          room.phase.liquidityScore = 0;
+        }
+      }
+    },
+  },
 ];
 
 /**
