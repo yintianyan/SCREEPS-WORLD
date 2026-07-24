@@ -1,7 +1,7 @@
 import type { RoomSnapshot } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { classifyThreats } from "../domain/defense/threat";
-import { preloadStructureCache } from "../creeps/movement";
+import { preloadStructureCache, preloadStaticBlockers } from "../creeps/movement";
 
 /**
  * 为单个自有房间构建 RoomSnapshot。
@@ -97,6 +97,21 @@ export function buildRoomSnapshot(
   // 此处利用 snapshot 已采集的数据直接构建缓存，消除冗余 find。
   // ensureStructureCache 检测 checkedTick === Game.time 后直接返回，不再 find。
   preloadStructureCache(room.name, allStructures, mySites);
+
+  // ── 预热静态占位缓存（方案 B：根治路径缓存撞墙）──
+  // 站桩位置 = source 旁 range<=1 的 container（harvester 矿位）+ controllerContainer（upgrader 站桩位）。
+  // pathfinding 的 roomCallback 读取并标 255，使 PathFinder 算路径时天然绕开站桩矿工。
+  // 复用已采集的 containers/sources/controllerContainer，零额外 find。
+  const staticBlockerPositions: number[] = [];
+  for (const c of containers) {
+    if (sources.some(s => c.pos.getRangeTo(s.pos) <= 1)) {
+      staticBlockerPositions.push(c.pos.x, c.pos.y);
+    }
+  }
+  if (controllerContainer) {
+    staticBlockerPositions.push(controllerContainer.pos.x, controllerContainer.pos.y);
+  }
+  preloadStaticBlockers(room.name, staticBlockerPositions);
 
   // ── 预计算关键维修目标（血量 < 50% 的 spawn/extension/tower/container）──
   // 供 tower-defense 和 builder actions 复用，避免各模块重复迭代。

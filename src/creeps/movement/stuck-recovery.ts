@@ -13,8 +13,8 @@ import { globalCache } from "../../kernel/global-cache";
 import { releaseFromTask } from "../support/assignment-adapter";
 import { recordTraffic } from "./traffic";
 
-/** 方向 → (dx, dy) 偏移表。 */
-const DIR_DELTA: Record<number, [number, number]> = {
+/** 方向 → (dx, dy) 偏移表。供 pathfinding 的前置绕路检测复用。 */
+export const DIR_DELTA: Record<number, [number, number]> = {
   [TOP]: [0, -1], [TOP_RIGHT]: [1, -1], [RIGHT]: [1, 0], [BOTTOM_RIGHT]: [1, 1],
   [BOTTOM]: [0, 1], [BOTTOM_LEFT]: [-1, 1], [LEFT]: [-1, 0], [TOP_LEFT]: [-1, -1],
 };

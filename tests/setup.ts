@@ -76,6 +76,7 @@ Object.assign(globalThis as Record<string, unknown>, {
 
   // look 常量
   LOOK_STRUCTURES: "structure",
+  LOOK_CREEPS: "creep",
 
   CONTROLLER_STRUCTURES: {
     spawn: [0, 1, 1, 1, 1, 1, 1, 1, 1],

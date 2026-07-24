@@ -13,7 +13,7 @@
 import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
 import { packPos, recordTraffic } from "./traffic";
-import { checkAndExecuteYield, tryPullBlocker, updateStuckTicks, clearTarget } from "./stuck-recovery";
+import { checkAndExecuteYield, tryPullBlocker, updateStuckTicks, clearTarget, DIR_DELTA } from "./stuck-recovery";
 
 // ─── CostMatrix 缓存（结构层）────────────────────────────
 
@@ -64,6 +64,44 @@ export function preloadStructureCache(
   g.__structCache[roomName] = { count, positions, checkedTick: Game.time };
 }
 
+// ─── 静态占位缓存（站桩 creep 位置）────────────────────────
+// 方案 B：RoomSnapshot 采集站桩位置（source container + controller container），
+// 预加载到 movement 缓存。pathfinding 的 roomCallback 读取并标 255，
+// 使 PathFinder 算路径时天然绕开站桩矿工，根治缓存撞墙问题。
+interface StaticBlockerEntry {
+  positions: number[]; // 扁平 [x1, y1, x2, y2, ...]
+  checkedTick: number;
+}
+
+/**
+ * 预热静态占位缓存 — 由 room-snapshot 调用，利用已采集的 container/source 数据。
+ * 站桩位置 = source 旁 range<=1 的 container（harvester 矿位）+ controllerContainer（upgrader 站桩位）。
+ * 这些位置每 tick 重算（creep 可能消失），只存 globalCache 不进 Memory。
+ */
+export function preloadStaticBlockers(
+  roomName: string,
+  positions: number[],
+): void {
+  const g = globalCache() as any;
+  if (!g.__staticBlockersCache) g.__staticBlockersCache = {};
+  g.__staticBlockersCache[roomName] = { positions, checkedTick: Game.time };
+}
+
+/**
+ * 将静态占位标记到 CostMatrix — 在所有 roomCallback 末尾调用。
+ * 命中条件：checkedTick === Game.time（本 tick 已预加载）。
+ * 未命中则跳过（该房间无站桩数据时路径仍可正常计算，只是不会绕开站桩 creep）。
+ */
+function applyStaticBlockers(matrix: CostMatrix, roomName: string): void {
+  const g = globalCache() as any;
+  const entry: StaticBlockerEntry | undefined = g.__staticBlockersCache?.[roomName];
+  if (!entry || entry.checkedTick !== Game.time) return;
+  const positions = entry.positions;
+  for (let i = 0; i < positions.length; i += 2) {
+    matrix.set(positions[i]!, positions[i + 1]!, 255);
+  }
+}
+
 /**
  * 确保房间的结构缓存是最新的。
  * 优先读取 room-snapshot 预热的缓存（零 room.find）；
@@ -110,6 +148,7 @@ function structureCostCallback(roomName: string, matrix: CostMatrix): void {
   for (let i = 0; i < positions.length; i += 3) {
     matrix.set(positions[i]!, positions[i + 1]!, positions[i + 2]!);
   }
+  applyStaticBlockers(matrix, roomName);
 }
 
 // ─── 自适应 reusePath ─────────────────────────────────────
@@ -276,6 +315,7 @@ function tryCorridorPath(creep: Creep, target: RoomPosition): ScreepsReturnCode 
             matrix.set(positions[i]!, positions[i + 1]!, positions[i + 2]!);
           }
         }
+        applyStaticBlockers(matrix, roomName);
         return matrix;
       },
     },
@@ -347,6 +387,7 @@ function computeAndPersistPath(
             matrix.set(positions[i]!, positions[i + 1]!, positions[i + 2]!);
           }
         }
+        applyStaticBlockers(matrix, roomName);
         return matrix;
       },
     },
@@ -483,6 +524,36 @@ export function moveToTarget(
   // Level 1：pull。
   if (stuckTicks === stuckThreshold) {
     tryPullBlocker(creep, pos);
+  }
+
+  // ── 方案 A：前置检测前方一格有 creep 时立即绕路（不等 stuckTicks 累积）──
+  // 根因：PathFinder 的 roomCallback 默认不把 creep 当障碍，新算路径会穿过 creep，
+  // 后续 creep 复用 __pathShare 缓存导致火车排队。
+  // 仅在 stuckTicks === 0 时检测——一旦卡住（stuckTicks > 0），Level 1/2 脱困接管。
+  if (stuckTicks === 0 && range > 1) {
+    const dir = creep.pos.getDirectionTo(pos);
+    const delta = DIR_DELTA[dir];
+    if (delta) {
+      const nextX = creep.pos.x + delta[0];
+      const nextY = creep.pos.y + delta[1];
+      if (nextX >= 0 && nextX <= 49 && nextY >= 0 && nextY <= 49) {
+        const blockers = creep.room.lookForAt(LOOK_CREEPS, nextX, nextY);
+        if (blockers.length > 0) {
+          // 前方一格有 creep，跳过缓存直接让引擎绕路。
+          const result = creep.moveTo(pos, {
+            reusePath: 0,
+            ignoreCreeps: false,
+            maxRooms: CONFIG.movement.localMaxRooms,
+            range: 1,
+            plainCost: 2,
+            swampCost: fatigueSwampCost(creep),
+            costCallback: structureCostCallback,
+          });
+          if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+          return result;
+        }
+      }
+    }
   }
 
   // ── 路径缓存（Level 0 + 中远距离）──
