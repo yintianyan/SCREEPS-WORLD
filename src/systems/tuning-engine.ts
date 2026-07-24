@@ -151,10 +151,6 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
     ? Math.round(avg(recentCpu.map(s => s.ti)))
     : 0;
 
-  // hauler CPU share：角色级 CPU 遥测暂未启用（roleCpu 始终为空），
-  // 待未来启用 per-role 计时后恢复。当前固定 0 不影响调参逻辑。
-  const haulerCpuShare = 0;
-
   // ── 活快照信号 ──
   const snapshot = ctx.getSnapshot(roomName);
   if (!snapshot) return null;
@@ -191,7 +187,6 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
     upgraderCount: counts.upgrader ?? 0,
     builderCount: counts.builder ?? 0,
     buildQueueBacklog,
-    haulerCpuShare,
     tierRank,
     rcl: snapshot.rcl,
   };

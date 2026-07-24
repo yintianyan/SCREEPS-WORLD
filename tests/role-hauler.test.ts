@@ -6,6 +6,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { haulerRole } from "../src/creeps/roles/hauler";
+import { harvesterRole } from "../src/creeps/roles/harvester";
 import {
   mockContext,
   mockController,
@@ -238,5 +239,241 @@ describe("hauler — flee", () => {
     expect(creep.memory.mode).toBe("flee");
     expect(creep.transfer).not.toHaveBeenCalled();
     expect(creep.withdraw).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * P0-2 修复：hauler 在 flee 状态下的"防御圈内安全充能"。
+ *
+ * 场景：战斗中 Tower 能量耗尽，hauler 全部 flee 到 spawn 旁。
+ * 修复后：hauler 距 spawn ≤ safeRefuelRange(3) 且携带能量时，
+ *         允许向防御圈内的需能量结构（threat 时 tower 优先）执行 transfer。
+ *
+ * 测试位置布局约束：
+ *   - hostile 距 hauler ≤ fleeRange(10) → 触发 shouldFlee
+ *   - hauler 距 spawn ≤ safeRefuelRange(3) → 在安全区内
+ *   - hostile 距 spawn > safeRefuelRange(3) → 不在安全区
+ *   - 目标(tower) 距 hostile > hauler 距 hostile → 目标不在敌人侧
+ *
+ * 设计要点：
+ *   - G-SM-05 细化：移动阶段不动作，到达安全区后允许关键补给
+ *   - 目标必须在防御圈内（距 spawn ≤ safeRange）
+ *   - 目标不能在敌人侧（目标距敌人 < hauler 距敌人 → 不安全）
+ *   - 优先级与 getHaulFillTarget 对齐：threat 时 tower 优先
+ */
+describe("hauler — flee 安全充能（P0-2）", () => {
+  /**
+   * 构造精确距离的 pos mock。
+   * distances 是 "x,y" → 距离的映射，用于 getRangeTo(target) 的返回值。
+   * target 的位置通过 target.pos.x/pos.y 推断。
+   */
+  function mockPosWithDistances(x: number, y: number, distances: Record<string, number>) {
+    return {
+      x,
+      y,
+      roomName: "W7N4",
+      getRangeTo: vi.fn((target: { pos?: { x: number; y: number }; x?: number; y?: number }) => {
+        const tx = target?.pos?.x ?? target?.x;
+        const ty = target?.pos?.y ?? target?.y;
+        const key = `${tx},${ty}`;
+        return distances[key] ?? 1;
+      }),
+      getDirectionTo: vi.fn(() => 3),
+      findClosestByRange: vi.fn((targets: any[]) => targets[0] ?? null),
+      findPathTo: vi.fn(() => []),
+    };
+  }
+
+  it("hauler 距 spawn ≤3 且携带能量时，threat 存在优先给 tower 充能", () => {
+    // 布局：spawn(20,20) | hauler(21,21) | tower(22,22) | hostile(15,15)
+    // hauler 距 spawn=1(安全区内), 距 tower=1, 距 hostile=8(≤fleeRange=10 触发 flee)
+    // tower 距 spawn=2(安全区内), 距 hostile=10(>hauler 距 hostile=8, 不在敌人侧)
+    // hostile 距 spawn=7(安全区外)
+    const spawn = mockStructure("spawn", { id: "spawn_1", energy: 0, capacity: 300 });
+    spawn.pos = mockPosWithDistances(20, 20, { "22,22": 2, "15,15": 7 });
+
+    const tower = mockStructure("tower", { id: "tower_1", energy: 0, capacity: 1000 });
+    tower.pos = mockPosWithDistances(22, 22, { "20,20": 2, "15,15": 10 });
+
+    const hostile = mockHostile("hostile_1");
+    hostile.pos = mockPosWithDistances(15, 15, { "20,20": 7, "22,22": 10 });
+
+    const haulerPos = mockPosWithDistances(21, 21, { "20,20": 1, "22,22": 1, "15,15": 8 });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 50,
+      capacity: 100,
+      mode: "work",
+      pos: haulerPos,
+    });
+
+    const snap = mockSnapshot({
+      spawns: [spawn],
+      towers: [tower],
+      hostileCreeps: [hostile],
+      threatCreeps: [hostile],
+      fillTargets: [spawn, tower],
+    });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    // 应进入 flee 模式但执行了 transfer（安全充能）
+    expect(creep.memory.mode).toBe("flee");
+    // threat 存在时 tower 优先，应给 tower transfer
+    expect(creep.transfer).toHaveBeenCalledWith(tower, "energy");
+  });
+
+  it("hauler 距 spawn >3 时不执行安全充能（仍在移动到安全区）", () => {
+    // 布局：spawn(20,20) | hauler(25,25) | hostile(28,28)
+    // hauler 距 spawn=7(>3 不在安全区), 距 hostile=6(≤fleeRange 触发 flee)
+    const spawn = mockStructure("spawn", { id: "spawn_1", energy: 0, capacity: 300 });
+    spawn.pos = mockPosWithDistances(20, 20, { "25,25": 7, "28,28": 11 });
+
+    const tower = mockStructure("tower", { id: "tower_1", energy: 0, capacity: 1000 });
+    tower.pos = mockPosWithDistances(22, 22, { "20,20": 2 });
+
+    const hostile = mockHostile("hostile_1");
+    hostile.pos = mockPosWithDistances(28, 28, { "20,20": 11, "25,25": 6 });
+
+    const haulerPos = mockPosWithDistances(25, 25, { "20,20": 7, "22,22": 5, "28,28": 6 });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 50,
+      capacity: 100,
+      mode: "work",
+      pos: haulerPos,
+    });
+
+    const snap = mockSnapshot({
+      spawns: [spawn],
+      towers: [tower],
+      hostileCreeps: [hostile],
+      threatCreeps: [hostile],
+      fillTargets: [spawn, tower],
+    });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    expect(creep.memory.mode).toBe("flee");
+    // 距 spawn >3，不应执行充能
+    expect(creep.transfer).not.toHaveBeenCalled();
+  });
+
+  it("目标在敌人侧时不执行安全充能（避免向敌人移动）", () => {
+    // 布局：spawn(20,20) | hauler(21,21) | hostile(22,22) | tower(25,25)
+    // hauler 距 spawn=1(安全区), 距 hostile=1(触发 flee)
+    // tower 距 spawn=5(>3 安全区外), 不应被选中
+    const spawn = mockStructure("spawn", { id: "spawn_1", energy: 0, capacity: 300 });
+    spawn.pos = mockPosWithDistances(20, 20, { "21,21": 1, "25,25": 7 });
+
+    const tower = mockStructure("tower", { id: "tower_1", energy: 0, capacity: 1000 });
+    tower.pos = mockPosWithDistances(25, 25, { "20,20": 7 });
+
+    const hostile = mockHostile("hostile_1");
+    hostile.pos = mockPosWithDistances(22, 22, { "20,20": 2, "21,21": 1, "25,25": 3 });
+
+    const haulerPos = mockPosWithDistances(21, 21, { "20,20": 1, "22,22": 1, "25,25": 4 });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 50,
+      capacity: 100,
+      mode: "work",
+      pos: haulerPos,
+    });
+
+    const snap = mockSnapshot({
+      spawns: [spawn],
+      towers: [tower],
+      hostileCreeps: [hostile],
+      threatCreeps: [hostile],
+      fillTargets: [tower], // 只有 tower 在 fillTargets，spawn 已满
+    });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    expect(creep.memory.mode).toBe("flee");
+    // tower 距 spawn=7 > safeRange=3，不在防御圈内，不应被选中
+    expect(creep.transfer).not.toHaveBeenCalled();
+  });
+
+  it("hauler 空载时不执行安全充能", () => {
+    // 布局同测试 1，但 hauler 空载
+    const spawn = mockStructure("spawn", { id: "spawn_1", energy: 0, capacity: 300 });
+    spawn.pos = mockPosWithDistances(20, 20, { "22,22": 2, "15,15": 7 });
+
+    const tower = mockStructure("tower", { id: "tower_1", energy: 0, capacity: 1000 });
+    tower.pos = mockPosWithDistances(22, 22, { "20,20": 2, "15,15": 10 });
+
+    const hostile = mockHostile("hostile_1");
+    hostile.pos = mockPosWithDistances(15, 15, { "20,20": 7, "22,22": 10 });
+
+    const haulerPos = mockPosWithDistances(21, 21, { "20,20": 1, "22,22": 1, "15,15": 8 });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0, // 空载
+      capacity: 100,
+      mode: "work",
+      pos: haulerPos,
+    });
+
+    const snap = mockSnapshot({
+      spawns: [spawn],
+      towers: [tower],
+      hostileCreeps: [hostile],
+      threatCreeps: [hostile],
+      fillTargets: [spawn, tower],
+    });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    expect(creep.memory.mode).toBe("flee");
+    // 空载，不应执行 transfer
+    expect(creep.transfer).not.toHaveBeenCalled();
+  });
+
+  it("非 hauler 角色不执行安全充能（harvester 仍只移动）", () => {
+    // 布局同测试 1，但 creep 角色是 harvester
+    const spawn = mockStructure("spawn", { id: "spawn_1", energy: 0, capacity: 300 });
+    spawn.pos = mockPosWithDistances(20, 20, { "22,22": 2, "15,15": 7 });
+
+    const tower = mockStructure("tower", { id: "tower_1", energy: 0, capacity: 1000 });
+    tower.pos = mockPosWithDistances(22, 22, { "20,20": 2, "15,15": 10 });
+
+    const hostile = mockHostile("hostile_1");
+    hostile.pos = mockPosWithDistances(15, 15, { "20,20": 7, "22,22": 10 });
+
+    const haulerPos = mockPosWithDistances(21, 21, { "20,20": 1, "22,22": 1, "15,15": 8 });
+    const creep = mockCreep({
+      name: "harvester_1",
+      role: "harvester", // 非 hauler
+      used: 50,
+      capacity: 100,
+      mode: "work",
+      pos: haulerPos,
+    });
+
+    const snap = mockSnapshot({
+      spawns: [spawn],
+      towers: [tower],
+      hostileCreeps: [hostile],
+      threatCreeps: [hostile],
+      fillTargets: [spawn, tower],
+    });
+    const ctx = mockContext(snap);
+
+    // 用 harvester 角色运行
+    harvesterRole.run(creep, ctx);
+
+    expect(creep.memory.mode).toBe("flee");
+    // 非 hauler 不执行安全充能
+    expect(creep.transfer).not.toHaveBeenCalled();
   });
 });

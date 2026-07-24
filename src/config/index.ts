@@ -198,6 +198,10 @@ export const CONFIG = {
     /** 非战斗 creep 的逃跑触发距离：威胁 creep 在此范围内才逃跑（P1-1）。
      * 远端过境的威胁不会中断经济；靠近时才触发 flee。 */
     fleeRange: 10,
+    /** Hauler 在 flee 状态下的"防御圈内安全充能"半径（P0-2 修复）。
+     * 当 hauler 距 spawn ≤ 此值且携带能量时，允许向防御圈内的需能量结构（tower 优先）充能。
+     * 解决战斗中 Tower 能量耗尽无人补给的死局，细化 G-SM-05 的语义。 */
+    safeRefuelRange: 3,
     /** Tower 维修 wall/rampart 的目标血量，按 RCL 分级（约束 G-DF-08）。 */
     wallTargetHits: {
       rcl3_4: 100_000,

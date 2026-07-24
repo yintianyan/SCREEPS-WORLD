@@ -47,8 +47,6 @@ export interface TuningSignals {
   buildQueueBacklog: number;
 
   // ── CPU 信号（来自 CPU ring buffer，全局聚合）──
-  /** hauler 角色 CPU 占总角色 CPU 的比例 (0.0–1.0)。 */
-  haulerCpuShare: number;
   /** 当前 CPU tier rank (0=healthy, 1=guarded, 2=conserve, 3=recovery)。 */
   tierRank: number;
 

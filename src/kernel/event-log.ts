@@ -18,6 +18,7 @@
  */
 
 import type { RingBuffer } from "./ring-buffer";
+import { globalCache } from "./global-cache";
 
 // ─── 事件类型枚举 ────────────────────────────────────────────
 
@@ -102,7 +103,7 @@ export function recordEvent(
   roomName: string,
   data: number[],
 ): void {
-  const g = globalThis as any;
+  const g = globalCache();
   if (!g.eventBuffer) g.eventBuffer = { events: [] };
   g.eventBuffer.events.push({
     t: Game.time,
@@ -114,7 +115,7 @@ export function recordEvent(
 
 /** 获取并清空 per-tick 事件缓冲区。返回的事件由调用者持久化到 segment。 */
 export function drainEventBuffer(): GameEvent[] {
-  const g = globalThis as any;
+  const g = globalCache();
   if (!g.eventBuffer || !g.eventBuffer.events || g.eventBuffer.events.length === 0) {
     return [];
   }

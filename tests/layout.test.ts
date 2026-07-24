@@ -24,7 +24,9 @@ import {
   candidateToBuildTask,
   createSourceContainerTasks,
   createControllerContainerTask,
+  createDefenseTasks,
   extractBlockedCandidates,
+  DEFAULT_DEFENSE_OPTIONS,
 } from "../src/domain/layout/task-factory";
 import {
   collectCompletedKeysFromStructures,
@@ -653,5 +655,70 @@ describe("Layout — countExistingAndSites via validateBuildCell (road coverage)
       defaultOptions,
     );
     expect(result).toBe("rcl");
+  });
+});
+
+// ── task-factory.ts — createDefenseTasks（P0-3：RCL3 兜底防御）──
+describe("Layout — createDefenseTasks RCL3 兜底（P0-3）", () => {
+  /**
+   * P0-3 修复：RCL3 是"刚有 Tower 但无 rampart"的最脆弱窗口期。
+   * 修复前：DEFAULT_DEFENSE_OPTIONS.minRcl = 4，RCL3 完全不生成 rampart。
+   * 修复后：minRcl = 3，RCL3 时扇区防御 fallback 生成包围核心的 rampart。
+   *
+   * defense-planner.ts 侧的 min-cut 块也加了 RCL4 门禁，RCL3 走扇区防御主路径。
+   */
+  it("DEFAULT_DEFENSE_OPTIONS.minRcl 应为 3（P0-3 修复）", () => {
+    expect(DEFAULT_DEFENSE_OPTIONS.minRcl).toBe(3);
+  });
+
+  it("RCL2 时返回空（minRcl 门禁未通过）", () => {
+    const spawn = {
+      pos: { x: 25, y: 25, roomName: "W1N1" },
+    } as unknown as StructureSpawn;
+    const snapshot = mockSnapshot({ rcl: 2, spawns: [spawn] });
+    // 东侧出口
+    const exits = [{ x: 49, y: 25 }];
+    const result = createDefenseTasks(snapshot, exits, mockRoom(), defaultOptions);
+    expect(result).toEqual([]);
+  });
+
+  it("RCL3 + spawn 存在 + 有出口时生成 rampart 任务（P0-3 核心修复）", () => {
+    const spawn = {
+      pos: { x: 25, y: 25, roomName: "W1N1" },
+    } as unknown as StructureSpawn;
+    const tower = {
+      pos: { x: 26, y: 25, roomName: "W1N1" },
+    } as unknown as StructureTower;
+    const snapshot = mockSnapshot({
+      rcl: 3,
+      spawns: [spawn],
+      towers: [tower],
+      ramparts: [],
+      constructionSites: [],
+    });
+    // 东侧出口 — 敌人从东边来
+    const exits = [{ x: 49, y: 25 }];
+    const result = createDefenseTasks(snapshot, exits, mockRoom(), defaultOptions);
+    // 应生成至少 1 个 rampart 任务（lineLength=3）
+    expect(result.length).toBeGreaterThan(0);
+    // 所有任务应为 STRUCTURE_RAMPART
+    expect(result.every(c => c.structureType === STRUCTURE_RAMPART)).toBe(true);
+  });
+
+  it("无 spawn 时返回空（无核心可保护）", () => {
+    const snapshot = mockSnapshot({ rcl: 3, spawns: [] });
+    const exits = [{ x: 49, y: 25 }];
+    const result = createDefenseTasks(snapshot, exits, mockRoom(), defaultOptions);
+    expect(result).toEqual([]);
+  });
+
+  it("RCL3 无出口时返回空（房间被完全包围，无需防御）", () => {
+    const spawn = {
+      pos: { x: 25, y: 25, roomName: "W1N1" },
+    } as unknown as StructureSpawn;
+    const snapshot = mockSnapshot({ rcl: 3, spawns: [spawn] });
+    const exits: { x: number; y: number }[] = [];
+    const result = createDefenseTasks(snapshot, exits, mockRoom(), defaultOptions);
+    expect(result).toEqual([]);
   });
 });

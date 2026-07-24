@@ -36,7 +36,7 @@
 | G-SM-02 | 状态切换仅在以下时机发生：背包空↔满翻转、任务完成/失效、威胁出现/消失、CPU 降级触发 | 每 tick 抖动，CPU 浪费 |
 | G-SM-03 | 只有阈值跨越时写 `memory.mode`，不能每 tick 写相同状态 | Memory 写入开销累积 |
 | G-SM-04 | `idle` 是合法状态 — 无任务时进入 idle 或定义的回退行为，不进行无界搜索 | CPU 爆炸 |
-| G-SM-05 | `flee` 期间释放普通 assignment，仅移动到安全位置，不执行任何经济动作 | creep 被击杀 |
+| G-SM-05 | `flee` 期间释放普通 assignment，仅移动到安全位置，不执行任何经济动作（例外：hauler 到达 spawn 安全区后允许执行防御圈内 tower/spawn 充能，见 P0-2 修复） | creep 被击杀 |
 | G-SM-06 | 所有角色先经过统一 guard 链：`ensureHome → shouldFlee → updateMode → getAssignment` | 行为不一致 |
 
 ### 1.2 Memory 约束

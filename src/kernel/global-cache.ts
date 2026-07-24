@@ -1,4 +1,3 @@
-import type { RoomSnapshot } from "./contracts";
 import { TaskPool } from "../domain/assignment/task-pool";
 
 /** assignment-service 的单 tick 缓存。 */
@@ -22,7 +21,6 @@ export interface GlobalCache {
     skipped: number;
     errors: number;
   };
-  snapshots?: Map<string, RoomSnapshot>;
   roomTraffic?: Record<string, Record<string, number>>;
   /** 上一个采样窗口的交通数据（用于道路策略的双窗口检查）。 */
   prevRoomTraffic?: Record<string, Record<string, number>>;

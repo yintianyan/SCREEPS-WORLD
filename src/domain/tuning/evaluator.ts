@@ -355,7 +355,6 @@ function toSignalRecord(s: TuningSignals): Record<string, number> {
     upgraderCount: s.upgraderCount,
     builderCount: s.builderCount,
     buildQueueBacklog: s.buildQueueBacklog,
-    haulerCpuShare: Math.round(s.haulerCpuShare * 100) / 100,
     tierRank: s.tierRank,
     rcl: s.rcl,
   };

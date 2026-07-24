@@ -117,7 +117,10 @@ function getCachedExits(room: Room, roomName: string): { x: number; y: number }[
 function planDefense(
   snapshot: import("../kernel/contracts").RoomSnapshot,
 ): void {
-  if (snapshot.rcl < 4) return;
+  // P0-3 修复：RCL 门禁从 4 降为 3。
+  // RCL3 是"刚有 Tower 但无 rampart"的最脆弱窗口期 — 一波突袭就破。
+  // RCL3 时跳过昂贵的 min-cut，走扇区防御 fallback（少量 rampart 包围核心）。
+  if (snapshot.rcl < 3) return;
 
   const room = Game.rooms[snapshot.roomName];
   if (!room) return;
@@ -160,52 +163,56 @@ function planDefense(
   let added = false;
 
   // ── 策略 1：Min-Cut（最少 rampart 完全封锁）──
-  // 仅在缓存 miss 时执行昂贵的 min-cut 计算。
-  let cutResult: { rampartPositions: { x: number; y: number }[]; complete: boolean };
+  // P0-3：RCL3 跳过 min-cut — 核心结构少，扇区防御更快且够用。
+  // min-cut 计算昂贵（图论算法），RCL3 的简单布局不值得这个成本。
+  if (snapshot.rcl >= 4) {
+    // 仅在缓存 miss 时执行昂贵的 min-cut 计算。
+    let cutResult: { rampartPositions: { x: number; y: number }[]; complete: boolean };
 
-  if (cached && cached.signature === coreSig) {
-    // 核心结构未变但 mincut key 为 0（可能任务被清理了）— 用缓存结果重新生成任务。
-    cutResult = cached.result;
-  } else {
-    // 缓存 miss 或核心结构已变 — 执行 min-cut 计算。
-    const terrain = room.getTerrain();
-    const getTerrain = (x: number, y: number): boolean => terrain.get(x, y) === TERRAIN_MASK_WALL;
-    const computed = computeMinCutDefense(getTerrain, corePositions, exitPositions, MAX_CUT_RAMPARTS);
-    cutResult = {
-      rampartPositions: computed.rampartPositions,
-      complete: computed.complete,
-    };
-    // 缓存结果。
-    setMinCutCache(snapshot.roomName, {
-      signature: coreSig,
-      result: cutResult,
-      tick: Game.time,
-    });
-  }
-
-  if (cutResult.complete) {
-    // Min-cut 成功：使用割集位置生成 rampart 任务。
-    for (let i = 0; i < cutResult.rampartPositions.length; i++) {
-      const pos = cutResult.rampartPositions[i]!;
-      const key = `defense.mincut.${pos.x}.${pos.y}`;
-      if (existingKeys.has(key)) continue;
-      queue.push({
-        key,
-        pos: { x: pos.x, y: pos.y, roomName: snapshot.roomName },
-        structureType: STRUCTURE_RAMPART,
-        priority: 2,
-        state: "queued",
-        attempts: 0,
-        retryAt: 0,
+    if (cached && cached.signature === coreSig) {
+      // 核心结构未变但 mincut key 为 0（可能任务被清理了）— 用缓存结果重新生成任务。
+      cutResult = cached.result;
+    } else {
+      // 缓存 miss 或核心结构已变 — 执行 min-cut 计算。
+      const terrain = room.getTerrain();
+      const getTerrain = (x: number, y: number): boolean => terrain.get(x, y) === TERRAIN_MASK_WALL;
+      const computed = computeMinCutDefense(getTerrain, corePositions, exitPositions, MAX_CUT_RAMPARTS);
+      cutResult = {
+        rampartPositions: computed.rampartPositions,
+        complete: computed.complete,
+      };
+      // 缓存结果。
+      setMinCutCache(snapshot.roomName, {
+        signature: coreSig,
+        result: cutResult,
+        tick: Game.time,
       });
-      existingKeys.add(key);
-      added = true;
     }
-    if (added) { roomMem.buildQueue = queue; }
-    return; // min-cut 成功，不需要 fallback
+
+    if (cutResult.complete) {
+      // Min-cut 成功：使用割集位置生成 rampart 任务。
+      for (let i = 0; i < cutResult.rampartPositions.length; i++) {
+        const pos = cutResult.rampartPositions[i]!;
+        const key = `defense.mincut.${pos.x}.${pos.y}`;
+        if (existingKeys.has(key)) continue;
+        queue.push({
+          key,
+          pos: { x: pos.x, y: pos.y, roomName: snapshot.roomName },
+          structureType: STRUCTURE_RAMPART,
+          priority: 2,
+          state: "queued",
+          attempts: 0,
+          retryAt: 0,
+        });
+        existingKeys.add(key);
+        added = true;
+      }
+      if (added) { roomMem.buildQueue = queue; }
+      return; // min-cut 成功，不需要 fallback
+    }
   }
 
-  // ── 策略 2：扇区防御（fallback）──
+  // ── 策略 2：扇区防御（RCL3 的主路径 / RCL4+ 的 fallback）──
   const minerals = snapshot.minerals as readonly { pos: { x: number; y: number } }[];
   const occupiedSet = buildOccupiedPositionSet(snapshot, minerals);
   const validationOptions: ValidationOptions = {

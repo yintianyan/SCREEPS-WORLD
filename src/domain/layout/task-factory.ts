@@ -586,7 +586,8 @@ export interface DefenseOptions {
 }
 
 export const DEFAULT_DEFENSE_OPTIONS: DefenseOptions = {
-  minRcl: 4,
+  // P0-3：从 4 降为 3 — RCL3 是"刚有 Tower 但无 rampart"的最脆弱窗口期。
+  minRcl: 3,
   defenseRadius: 7,
   lineLength: 3,
   maxLinesPerCycle: 1,

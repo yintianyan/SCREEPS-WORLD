@@ -78,7 +78,9 @@ export const telemetryCollectorSystem: System = {
 // ─── CPU 时序采样 ────────────────────────────────────────────
 
 function sampleCpuData(tick: number, ctx: TickContext): void {
-  const tel = globalCache().telemetry!;
+  // 显式守卫：不依赖外部调用顺序，Global Reset 后 telemetry 未重建时直接跳过。
+  const tel = globalCache().telemetry;
+  if (!tel || tel.tick !== tick) return;
   const sample = sampleCpu(tick, ctx.budget, tel);
 
   const seg = readCpuSegment();
@@ -429,7 +431,9 @@ function updateStatsSummary(tick: number): void {
  * 每 10 tick 一次，在 P3 budget 下可接受。
  */
 function emitTelemetryLine(tick: number, ctx: TickContext): void {
-  const tel = globalCache().telemetry!;
+  // 显式守卫：不依赖外部调用顺序，Global Reset 后 telemetry 未重建时直接跳过。
+  const tel = globalCache().telemetry;
+  if (!tel || tel.tick !== tick) return;
   const stats = Memory.kernel?.stats;
 
   // 仅在有值得关注的信号时输出，避免健康 tick 刷屏。
