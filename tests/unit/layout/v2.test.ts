@@ -8,7 +8,7 @@
  *   2. 无任何密封结构（每个障碍结构 ≥1 个相邻空格）；
  *   3. 每个 spawn ≥2 个出生格；
  *   4. extension 各 RCL 批次数量与 CONTROLLER_STRUCTURES 上限一致；
- *   5. 模板占地 ≤±6（锚点适配性）。
+ *   5. 模板占地 ≤±7（锚点适配性）。
  */
 import { describe, expect, it } from "vitest";
 import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-core-v2";
@@ -86,10 +86,10 @@ describe("compact-core-v2 — 几何不变量", () => {
     expect(byType("spawn")).toHaveLength(2); // 锚点外 2 个
   });
 
-  it("模板占地 ≤±6（锚点适配性：中心房不会越界）", () => {
+  it("模板占地 ≤±7（锚点适配性：中心房不会越界）", () => {
     for (const c of COMPACT_CORE_V2.cells) {
-      expect(Math.abs(c.dx)).toBeLessThanOrEqual(6);
-      expect(Math.abs(c.dy)).toBeLessThanOrEqual(6);
+      expect(Math.abs(c.dx)).toBeLessThanOrEqual(7);
+      expect(Math.abs(c.dy)).toBeLessThanOrEqual(7);
     }
   });
 

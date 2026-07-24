@@ -27,6 +27,9 @@ Object.assign(globalThis as Record<string, unknown>, {
   STRUCTURE_TERMINAL: "terminal",
   STRUCTURE_EXTRACTOR: "extractor",
   STRUCTURE_FACTORY: "factory",
+  STRUCTURE_OBSERVER: "observer",
+  STRUCTURE_POWER_SPAWN: "powerSpawn",
+  STRUCTURE_NUKER: "nuker",
 
   // find 常量
   FIND_EXIT: 10,

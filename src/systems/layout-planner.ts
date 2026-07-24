@@ -370,23 +370,44 @@ export const layoutPlannerSystem: System & {
     // ── 紧急 spawn 重建 ──
     // spawn 不在 RCL_BATCHES 中（初始 spawn 由玩家放置），
     // 因此正常规划流程不会为其生成任务。spawn 被毁时在此手动入队。
+    // P0 修复：原位被占时在锚点附近找替代位置，避免 createConstructionSite 死循环。
     if (snapshot.spawns.length === 0 && layout.anchor !== undefined) {
       const anchorPos = unpackPos(layout.anchor);
       const spawnKey = `constraint.spawn.01`;
       if (!existingKeys.has(spawnKey)) {
-        queue.push({
-          key: spawnKey,
-          pos: { x: anchorPos.x, y: anchorPos.y, roomName: snapshot.roomName },
-          structureType: STRUCTURE_SPAWN,
-          priority: 0,
-          state: "queued",
-          attempts: 0,
-          retryAt: 0,
-        });
-        existingKeys.add(spawnKey);
-        existingPositions.add(`${anchorPos.x},${anchorPos.y}`);
-        tasksAdded = true;
-        targetingChanged = true;
+        // 确定重建位置：优先锚点，被占时螺旋搜索替代位置
+        let buildPos: { x: number; y: number } | undefined;
+        if (isPositionBuildable(room, anchorPos.x, anchorPos.y, occupiedSet)) {
+          buildPos = { x: anchorPos.x, y: anchorPos.y };
+        } else {
+          buildPos = findSpawnRelocationPosition(room, anchorPos, occupiedSet);
+          if (buildPos) {
+            console.log(
+              `[layout] spawn rebuild: anchor (${anchorPos.x},${anchorPos.y}) blocked, ` +
+              `relocating to (${buildPos.x},${buildPos.y}) in ${snapshot.roomName}`,
+            );
+          } else {
+            console.log(
+              `[layout] WARN: spawn rebuild stuck in ${snapshot.roomName}, ` +
+              `no relocation position found near anchor`,
+            );
+          }
+        }
+        if (buildPos) {
+          queue.push({
+            key: spawnKey,
+            pos: { x: buildPos.x, y: buildPos.y, roomName: snapshot.roomName },
+            structureType: STRUCTURE_SPAWN,
+            priority: 0,
+            state: "queued",
+            attempts: 0,
+            retryAt: 0,
+          });
+          existingKeys.add(spawnKey);
+          existingPositions.add(`${buildPos.x},${buildPos.y}`);
+          tasksAdded = true;
+          targetingChanged = true;
+        }
       }
     }
 
@@ -441,5 +462,50 @@ function shouldPlan(
   }
 
   return false;
+}
+
+// ─── Spawn 重建 relocation（P0 修复：避免原位被占时死循环）──
+
+/**
+ * 检测位置是否可建建筑（地形非墙 + 无已有结构占用）。
+ * spawn 不能建在出口格（0 或 49），边界限制 1-48。
+ */
+function isPositionBuildable(
+  room: Room,
+  x: number,
+  y: number,
+  occupiedSet: Set<number>,
+): boolean {
+  if (x < 1 || x > 48 || y < 1 || y > 48) return false;
+  const terrain = room.getTerrain();
+  if (terrain.get(x, y) === TERRAIN_MASK_WALL) return false;
+  if (occupiedSet.has(packPos(x, y))) return false;
+  return true;
+}
+
+/**
+ * 在锚点附近螺旋搜索可建 spawn 的替代位置。
+ * 搜索范围 ±3 格（避免 spawn 离核心太远）。
+ * 返回第一个可建位置，无则 undefined。
+ */
+function findSpawnRelocationPosition(
+  room: Room,
+  anchor: { x: number; y: number },
+  occupiedSet: Set<number>,
+): { x: number; y: number } | undefined {
+  for (let radius = 1; radius <= 3; radius++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        // 只搜索当前半径的边缘（螺旋外扩）
+        if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+        const x = anchor.x + dx;
+        const y = anchor.y + dy;
+        if (isPositionBuildable(room, x, y, occupiedSet)) {
+          return { x, y };
+        }
+      }
+    }
+  }
+  return undefined;
 }
 

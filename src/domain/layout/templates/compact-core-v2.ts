@@ -153,5 +153,13 @@ export const COMPACT_CORE_V2: Blueprint = {
     cell("core.lab.08", -6, -4, STRUCTURE_LAB, 8, "rcl8", 2, ["core", "industry"]),
     cell("core.lab.09", -6, -6, STRUCTURE_LAB, 8, "rcl8", 2, ["core", "industry"]),
     cell("core.lab.10", -4, -6, STRUCTURE_LAB, 8, "rcl8", 2, ["core", "industry"]),
+
+    // ── RCL8 终局建筑（Empire 阶段）──
+    // observer: 侦察远程房间（无需 creep 在场），Empire 情报系统基础。
+    cell("core.observer.01", 7, 1, STRUCTURE_OBSERVER, 8, "rcl8", 2, ["core", "defense"]),
+    // powerSpawn: 处理 power（creep power 使用前提），开启 power 体系。
+    cell("core.powerSpawn.01", -7, 1, STRUCTURE_POWER_SPAWN, 8, "rcl8", 1, ["core", "industry"]),
+    // nuker: 跨房核打击，PvP 终局威慑武器。
+    cell("core.nuker.01", 1, 7, STRUCTURE_NUKER, 8, "rcl8", 2, ["core", "defense"]),
   ],
 };

@@ -1,5 +1,5 @@
 import { CONFIG } from "../config";
-import type { Priority, System, TickContext } from "../kernel/contracts";
+import type { Priority, System, TickContext, RoomSnapshot } from "../kernel/contracts";
 import {
   createDefenseTasks,
   candidateToBuildTask,
@@ -73,14 +73,49 @@ interface ExitCache {
  */
 function getMinCutCache(roomName: string): MinCutCache | undefined {
   const g = globalCache() as any;
-  if (!g.__minCutCache) return undefined;
-  return g.__minCutCache[roomName];
+  // 优先读 global heap（快）
+  if (g.__minCutCache?.[roomName]) return g.__minCutCache[roomName];
+
+  // Global Reset 后从 Memory 恢复 — 避免 bucket < 5000 时防御真空
+  const roomMem = Memory.rooms[roomName];
+  if (roomMem?.minCut) {
+    const stored = roomMem.minCut;
+    const positions: { x: number; y: number }[] = [];
+    for (let i = 0; i < stored.positions.length; i += 2) {
+      positions.push({ x: stored.positions[i]!, y: stored.positions[i + 1]! });
+    }
+    const cache: MinCutCache = {
+      signature: stored.sig,
+      result: { rampartPositions: positions, complete: stored.complete },
+      tick: 0,
+    };
+    // 写回 global heap
+    if (!g.__minCutCache) g.__minCutCache = {};
+    g.__minCutCache[roomName] = cache;
+    return cache;
+  }
+
+  return undefined;
 }
 
 function setMinCutCache(roomName: string, cache: MinCutCache): void {
   const g = globalCache() as any;
   if (!g.__minCutCache) g.__minCutCache = {};
   g.__minCutCache[roomName] = cache;
+
+  // 同步到 Memory（跨 Global Reset 存活）
+  const roomMem = Memory.rooms[roomName];
+  if (roomMem) {
+    const positions: number[] = [];
+    for (const pos of cache.result.rampartPositions) {
+      positions.push(pos.x, pos.y);
+    }
+    roomMem.minCut = {
+      sig: cache.signature,
+      positions,
+      complete: cache.result.complete,
+    };
+  }
 }
 
 /**
@@ -132,7 +167,14 @@ function planDefense(
   const existingKeys = new Set<string>();
   for (const t of queue) existingKeys.add(t.key);
 
-  // 快速检查：如果 buildQueue 中已有未完成的 mincut rampart key，跳过计算。
+  let added = false;
+
+  // ── 核心结构 rampart 覆盖（P1：保护建筑不被直接攻击）──
+  // rampart 可与建筑共格 — 在每个核心结构位置叠加 rampart，
+  // 使敌方必须先拆 rampart 才能攻击建筑。独立于 min-cut/扇区路径封锁逻辑。
+  added = addCoreRampartCoverage(queue, snapshot, existingKeys) || added;
+
+  // 快速检查：如果 buildQueue 中已有未完成的 mincut rampart key，跳过 min-cut 计算。
   // min-cut rampart key 格式: defense.mincut.{x}.{y}
   const mincutKeyCount = queue.filter(
     t => t.key.startsWith("defense.mincut.") && t.state !== "done",
@@ -143,7 +185,8 @@ function planDefense(
   // 如果核心结构已变，旧 rampart 位置会因 ERR_INVALID_TARGET 被标记为 blocked，
   // cleanTasks 清理后 mincutKeyCount 归零，自然触发重算。
   if (mincutKeyCount > 0) {
-    return; // rampart 任务已在队列中，无需重算
+    if (added) roomMem.buildQueue = queue;
+    return; // rampart 任务已在队列中，无需重算 min-cut
   }
 
   // mincutKeyCount == 0：所有 rampart 已建成或从未创建 — 检查缓存决定是否重算。
@@ -159,8 +202,6 @@ function planDefense(
   for (const s of snapshot.extensions) corePositions.push({ x: s.pos.x, y: s.pos.y });
   if (snapshot.storage) corePositions.push({ x: snapshot.storage.pos.x, y: snapshot.storage.pos.y });
   for (const s of snapshot.towers) corePositions.push({ x: s.pos.x, y: s.pos.y });
-
-  let added = false;
 
   // ── 策略 1：Min-Cut（最少 rampart 完全封锁）──
   // P0-3：RCL3 跳过 min-cut — 核心结构少，扇区防御更快且够用。
@@ -242,4 +283,57 @@ function planDefense(
   if (added) {
     roomMem.buildQueue = queue;
   }
+}
+
+/**
+ * 核心结构 rampart 覆盖 — 在每个核心结构位置生成 rampart 任务。
+ *
+ * rampart 可与建筑共格，使敌方必须先拆 rampart 才能攻击建筑。
+ * 用 snapshot.ramparts 去重，避免对已有 rampart 的位置重复入队。
+ *
+ * 覆盖范围：spawn / extension / storage / tower / link / container —
+ * 这些是敌方优先攻击的高价值目标。
+ *
+ * 返回是否新增了任务。
+ */
+function addCoreRampartCoverage(
+  queue: BuildTask[],
+  snapshot: RoomSnapshot,
+  existingKeys: Set<string>,
+): boolean {
+  // 构建已有 rampart 位置集合（去重）
+  const existingRampartPositions = new Set<number>();
+  for (const r of snapshot.ramparts) {
+    existingRampartPositions.add(r.pos.x * 50 + r.pos.y);
+  }
+
+  // 核心结构位置集合
+  const corePositions: { x: number; y: number }[] = [];
+  for (const s of snapshot.spawns) corePositions.push({ x: s.pos.x, y: s.pos.y });
+  for (const s of snapshot.extensions) corePositions.push({ x: s.pos.x, y: s.pos.y });
+  if (snapshot.storage) corePositions.push({ x: snapshot.storage.pos.x, y: snapshot.storage.pos.y });
+  for (const s of snapshot.towers) corePositions.push({ x: s.pos.x, y: s.pos.y });
+  for (const s of snapshot.links) corePositions.push({ x: s.pos.x, y: s.pos.y });
+  for (const s of snapshot.containers) corePositions.push({ x: s.pos.x, y: s.pos.y });
+
+  let added = false;
+  for (const pos of corePositions) {
+    const packed = pos.x * 50 + pos.y;
+    // 跳过已有 rampart 的位置
+    if (existingRampartPositions.has(packed)) continue;
+    const key = `defense.core.rampart.${pos.x}.${pos.y}`;
+    if (existingKeys.has(key)) continue;
+    queue.push({
+      key,
+      pos: { x: pos.x, y: pos.y, roomName: snapshot.roomName },
+      structureType: STRUCTURE_RAMPART,
+      priority: 2,
+      state: "queued",
+      attempts: 0,
+      retryAt: 0,
+    });
+    existingKeys.add(key);
+    added = true;
+  }
+  return added;
 }

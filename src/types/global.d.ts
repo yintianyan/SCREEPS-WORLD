@@ -124,6 +124,15 @@ declare global {
       /** @deprecated 已迁移到 segment，仅迁移期间存在。 */
       blocked?: Record<string, { code: number; retryAt: number }>;
     };
+    /** min-cut 防御规划结果持久化（跨 Global Reset 存活）。 */
+    minCut?: {
+      /** 核心结构签名（检测是否需要重算）。 */
+      sig: string;
+      /** 扁平化 rampart 位置 [x1, y1, x2, y2, ...]。 */
+      positions: number[];
+      /** min-cut 是否完成。 */
+      complete: boolean;
+    };
   }
 
   interface KernelMemory {
