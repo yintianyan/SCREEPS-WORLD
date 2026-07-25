@@ -7,7 +7,7 @@
  */
 import { CONFIG } from "../../../config";
 import type { ActionCandidate } from "../action-types";
-import { actOrMove } from "./helpers";
+import { runAction } from "./helpers";
 
 /** 升级控制器（无能量门禁）。 */
 export function upgradeController(): ActionCandidate<StructureController> {
@@ -19,7 +19,7 @@ export function upgradeController(): ActionCandidate<StructureController> {
       return ctrl;
     },
     execute: (ac, ctrl) => {
-      actOrMove(ac.creep, ctrl, () => ac.creep.upgradeController(ctrl));
+      runAction(ac.creep, ctrl, () => ac.creep.upgradeController(ctrl));
     },
   };
 }
@@ -35,7 +35,7 @@ export function upgradeControllerGated(): ActionCandidate<StructureController> {
       return ctrl;
     },
     execute: (ac, ctrl) => {
-      actOrMove(ac.creep, ctrl, () => ac.creep.upgradeController(ctrl));
+      runAction(ac.creep, ctrl, () => ac.creep.upgradeController(ctrl));
     },
   };
 }

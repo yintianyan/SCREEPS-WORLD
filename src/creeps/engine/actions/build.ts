@@ -10,7 +10,7 @@
  *   - criticalOnly 可为 boolean 或 (ac) => boolean — 允许按 tier 动态过滤
  */
 import type { ActionContext, ActionCandidate } from "../action-types";
-import { actOrMove } from "./helpers";
+import { runAction } from "./helpers";
 import { getObjectById } from "../../support/obj-cache";
 import { releaseAssignment } from "../../support/assignment-adapter";
 
@@ -39,10 +39,9 @@ export function buildAssignmentSite(
       return site;
     },
     execute: (ac, site) => {
-      const result = actOrMove(ac.creep, site, () => ac.creep.build(site));
-      if (result === ERR_INVALID_TARGET) {
-        releaseAssignment(ac.creep);
-      }
+      runAction(ac.creep, site, () => ac.creep.build(site), {
+        [ERR_INVALID_TARGET]: () => releaseAssignment(ac.creep),
+      });
     },
   };
 }
@@ -87,10 +86,9 @@ export function buildNearestSite(
       return undefined;
     },
     execute: (ac, site) => {
-      const result = actOrMove(ac.creep, site, () => ac.creep.build(site));
-      if (result === ERR_INVALID_TARGET) {
-        ac.creep.memory.targetId = undefined;
-      }
+      runAction(ac.creep, site, () => ac.creep.build(site), {
+        [ERR_INVALID_TARGET]: () => { ac.creep.memory.targetId = undefined; },
+      });
     },
   };
 }

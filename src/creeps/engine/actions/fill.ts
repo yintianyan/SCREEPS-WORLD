@@ -8,7 +8,7 @@
  * 缓存的上一 tick 目标 ID，仅在目标满/消失时重新选择，消除等距目标摇摆。
  */
 import type { ActionCandidate } from "../action-types";
-import { actOrMove } from "./helpers";
+import { runAction } from "./helpers";
 import { updateMode } from "../lifecycle";
 import {
   findEmptiestContainer,
@@ -43,11 +43,12 @@ export function fillTarget(): ActionCandidate<AnyOwnedStructure> {
       return target;
     },
     execute: (ac, t) => {
-      const result = actOrMove(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY));
-      if (result === ERR_FULL) {
-        ac.creep.memory.fillTargetId = undefined;
-        updateMode(ac.creep);
-      }
+      runAction(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY), {
+        [ERR_FULL]: () => {
+          ac.creep.memory.fillTargetId = undefined;
+          updateMode(ac.creep);
+        },
+      });
     },
   };
 }
@@ -66,8 +67,9 @@ export function haulFillTarget(): ActionCandidate<AnyOwnedStructure> {
       return getHaulFillTarget(ac.creep, ac.snapshot);
     },
     execute: (ac, t) => {
-      const result = actOrMove(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY));
-      if (result === ERR_FULL) updateMode(ac.creep);
+      runAction(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY), {
+        [ERR_FULL]: () => updateMode(ac.creep),
+      });
     },
   };
 }
@@ -87,8 +89,9 @@ export function distributorFillTarget(): ActionCandidate<AnyOwnedStructure> {
       return getDistributorFillTarget(ac.creep, ac.snapshot);
     },
     execute: (ac, t) => {
-      const result = actOrMove(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY));
-      if (result === ERR_FULL) updateMode(ac.creep);
+      runAction(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY), {
+        [ERR_FULL]: () => updateMode(ac.creep),
+      });
     },
   };
 }
@@ -104,7 +107,7 @@ export function fillEmptiestContainer(): ActionCandidate<StructureContainer> {
       return best;
     },
     execute: (ac, best) => {
-      actOrMove(ac.creep, best, () => ac.creep.transfer(best, RESOURCE_ENERGY));
+      runAction(ac.creep, best, () => ac.creep.transfer(best, RESOURCE_ENERGY));
     },
   };
 }
@@ -125,7 +128,7 @@ export function fillStorage(): ActionCandidate<StructureStorage> {
       return ac.snapshot.storage;
     },
     execute: (ac, st) => {
-      actOrMove(ac.creep, st, () => ac.creep.transfer(st, RESOURCE_ENERGY));
+      runAction(ac.creep, st, () => ac.creep.transfer(st, RESOURCE_ENERGY));
     },
   };
 }

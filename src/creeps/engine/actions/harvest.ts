@@ -3,7 +3,7 @@
  */
 import type { ActionCandidate, ActionContext } from "../action-types";
 import { moveToTarget } from "../../movement";
-import { actOrMove } from "./helpers";
+import { runAction } from "./helpers";
 import { getSource } from "../../support/targeting";
 
 /**
@@ -26,7 +26,7 @@ export function harvestSource(): ActionCandidate<Source> {
       return source;
     },
     execute: (ac, source) => {
-      actOrMove(ac.creep, source, () => ac.creep.harvest(source));
+      runAction(ac.creep, source, () => ac.creep.harvest(source));
     },
   };
 }
@@ -145,11 +145,10 @@ export function harvestMineral(): ActionCandidate<MineralTarget> {
     },
     execute: (ac, target) => {
       const { mineral } = target;
-      const result = actOrMove(ac.creep, mineral, () => ac.creep.harvest(mineral));
-      if (result === ERR_NOT_ENOUGH_RESOURCES || result === ERR_TIRED) {
-        // mineral 耗尽或冷却中 — 回 idle
-        ac.creep.memory.mode = "idle";
-      }
+      runAction(ac.creep, mineral, () => ac.creep.harvest(mineral), {
+        [ERR_NOT_ENOUGH_RESOURCES]: () => { ac.creep.memory.mode = "idle"; },
+        [ERR_TIRED]: () => { ac.creep.memory.mode = "idle"; },
+      });
     },
   };
 }

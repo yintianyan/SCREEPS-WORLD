@@ -12,8 +12,7 @@
 import { CONFIG, getWallTargetHits } from "../../../config";
 import type { RoomSnapshot } from "../../../kernel/contracts";
 import type { ActionCandidate } from "../action-types";
-import { moveToTarget } from "../../movement";
-import { actOrMove } from "./helpers";
+import { runAction } from "./helpers";
 import { findCriticalRepair } from "../../support/targeting";
 import { getObjectById } from "../../support/obj-cache";
 
@@ -25,7 +24,7 @@ export function repairCritical(): ActionCandidate<AnyStructure> {
     name: "repair:critical",
     resolve: (ac) => findCriticalRepair(ac.snapshot),
     execute: (ac, t) => {
-      actOrMove(ac.creep, t, () => ac.creep.repair(t));
+      runAction(ac.creep, t, () => ac.creep.repair(t));
     },
   };
 }
@@ -65,12 +64,9 @@ export function repairContainerDecay(): ActionCandidate<StructureContainer> {
       return worst;
     },
     execute: (ac, worst) => {
-      const result = ac.creep.repair(worst);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, worst);
-      } else if (result === ERR_INVALID_TARGET) {
-        ac.creep.memory.repairTargetId = undefined;
-      }
+      runAction(ac.creep, worst, () => ac.creep.repair(worst), {
+        [ERR_INVALID_TARGET]: () => { ac.creep.memory.repairTargetId = undefined; },
+      });
     },
   };
 }
@@ -91,7 +87,7 @@ export function repairNearbyContainer(): ActionCandidate<StructureContainer> {
       return ac.creep.pos.findClosestByRange(candidates as StructureContainer[]) ?? undefined;
     },
     execute: (ac, nearby) => {
-      actOrMove(ac.creep, nearby, () => ac.creep.repair(nearby));
+      runAction(ac.creep, nearby, () => ac.creep.repair(nearby));
     },
   };
 }
@@ -142,12 +138,9 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       return target;
     },
     execute: (ac, t) => {
-      const result = ac.creep.repair(t);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, t);
-      } else if (result === ERR_INVALID_TARGET) {
-        ac.creep.memory.repairTargetId = undefined;
-      }
+      runAction(ac.creep, t, () => ac.creep.repair(t), {
+        [ERR_INVALID_TARGET]: () => { ac.creep.memory.repairTargetId = undefined; },
+      });
     },
   };
 }

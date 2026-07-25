@@ -4,7 +4,7 @@
  * 触发条件均基于 snapshot 预计算的结构状态，不做实时 find。
  */
 import type { ActionCandidate } from "../action-types";
-import { actOrMove } from "./helpers";
+import { runAction } from "./helpers";
 
 /** haulMineralsToStorage 的 resolve 返回类型。 */
 type MineralHaulTarget =
@@ -48,9 +48,9 @@ export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
-        actOrMove(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.mineral));
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.mineral));
       } else {
-        actOrMove(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.mineral));
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.mineral));
       }
     },
   };
@@ -96,9 +96,9 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
-        actOrMove(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.compound));
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.compound));
       } else {
-        actOrMove(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.compound));
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.compound));
       }
     },
   };

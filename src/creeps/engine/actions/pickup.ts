@@ -2,8 +2,7 @@
  * Pickup actions — 拾取地上掉落的资源。
  */
 import type { ActionCandidate } from "../action-types";
-import { moveToTarget } from "../../movement";
-import { actOrMove } from "./helpers";
+import { runAction } from "./helpers";
 import { selectDroppedEnergy } from "../../support/targeting";
 
 /**
@@ -22,10 +21,9 @@ export function pickupDroppedEnergy(): ActionCandidate<Resource> {
     name: "pickup:dropped-energy",
     resolve: (ac) => selectDroppedEnergy(ac.creep, ac.snapshot.droppedEnergy),
     execute: (ac, resource) => {
-      const result = actOrMove(ac.creep, resource, () => ac.creep.pickup(resource));
-      if (result === ERR_FULL) {
-        ac.creep.memory.mode = "work";
-      }
+      runAction(ac.creep, resource, () => ac.creep.pickup(resource), {
+        [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
+      });
     },
   };
 }
@@ -47,12 +45,9 @@ export function pickupNearbyDroppedEnergy(range = 2): ActionCandidate<Resource> 
       return selectDroppedEnergy(ac.creep, nearby);
     },
     execute: (ac, resource) => {
-      const result = ac.creep.pickup(resource);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, resource);
-      } else if (result === ERR_FULL) {
-        ac.creep.memory.mode = "work";
-      }
+      runAction(ac.creep, resource, () => ac.creep.pickup(resource), {
+        [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
+      });
     },
   };
 }

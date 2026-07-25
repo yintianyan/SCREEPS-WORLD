@@ -9,8 +9,7 @@
  *   - withdrawCapped      — 限量取（避免 ERR_NOT_ENOUGH_RESOURCES）
  */
 import type { ActionCandidate, ActionContext } from "../action-types";
-import { moveToTarget } from "../../movement";
-import { actOrMove } from "./helpers";
+import { runAction } from "./helpers";
 import {
   findClosestContainerWithEnergy,
   findRichestContainer,
@@ -26,7 +25,7 @@ export function withdrawRichestContainer(): ActionCandidate<StructureContainer> 
       return best;
     },
     execute: (ac, best) => {
-      actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
+      runAction(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
     },
   };
 }
@@ -37,7 +36,7 @@ export function withdrawClosestContainer(): ActionCandidate<StructureContainer> 
     name: "withdraw:closest-container",
     resolve: (ac) => findClosestContainerWithEnergy(ac.creep, ac.snapshot.containers),
     execute: (ac, best) => {
-      actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
+      runAction(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
     },
   };
 }
@@ -71,7 +70,7 @@ export function withdrawRichestNonSourceContainer(): ActionCandidate<StructureCo
       return findRichestContainer(candidates);
     },
     execute: (ac, best) => {
-      actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
+      runAction(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
     },
   };
 }
@@ -87,7 +86,7 @@ export function withdrawClosestNonSourceContainer(): ActionCandidate<StructureCo
       return findClosestContainerWithEnergy(ac.creep, candidates);
     },
     execute: (ac, best) => {
-      actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
+      runAction(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
     },
   };
 }
@@ -102,7 +101,7 @@ export function withdrawControllerContainer(): ActionCandidate<StructureContaine
       return cc;
     },
     execute: (ac, cc) => {
-      actOrMove(ac.creep, cc, () => ac.creep.withdraw(cc, RESOURCE_ENERGY));
+      runAction(ac.creep, cc, () => ac.creep.withdraw(cc, RESOURCE_ENERGY));
     },
   };
 }
@@ -118,7 +117,7 @@ export function withdrawControllerLink(): ActionCandidate<StructureLink> {
       );
     },
     execute: (ac, ctrlLink) => {
-      actOrMove(ac.creep, ctrlLink, () => ac.creep.withdraw(ctrlLink, RESOURCE_ENERGY));
+      runAction(ac.creep, ctrlLink, () => ac.creep.withdraw(ctrlLink, RESOURCE_ENERGY));
     },
   };
 }
@@ -133,7 +132,7 @@ export function withdrawStorage(): ActionCandidate<StructureStorage> {
       return st;
     },
     execute: (ac, st) => {
-      actOrMove(ac.creep, st, () => ac.creep.withdraw(st, RESOURCE_ENERGY));
+      runAction(ac.creep, st, () => ac.creep.withdraw(st, RESOURCE_ENERGY));
     },
   };
 }
@@ -167,12 +166,9 @@ export function withdrawStorageLink(): ActionCandidate<StructureLink> {
       const available = link.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
-      const result = ac.creep.withdraw(link, RESOURCE_ENERGY, amount);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, link);
-      } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
-        ac.creep.memory.mode = "idle";
-      }
+      runAction(ac.creep, link, () => ac.creep.withdraw(link, RESOURCE_ENERGY, amount), {
+        [ERR_NOT_ENOUGH_RESOURCES]: () => { ac.creep.memory.mode = "idle"; },
+      });
     },
   };
 }
@@ -207,10 +203,9 @@ export function withdrawStorageCapped(
       const available = storage.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree, effectiveLimit);
-      const result = actOrMove(ac.creep, storage, () => ac.creep.withdraw(storage, RESOURCE_ENERGY, amount));
-      if (result === ERR_NOT_ENOUGH_RESOURCES) {
-        ac.creep.memory.mode = "idle";
-      }
+      runAction(ac.creep, storage, () => ac.creep.withdraw(storage, RESOURCE_ENERGY, amount), {
+        [ERR_NOT_ENOUGH_RESOURCES]: () => { ac.creep.memory.mode = "idle"; },
+      });
     },
   };
 }
@@ -230,10 +225,9 @@ export function withdrawCapped(
       const available = t.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
-      const result = actOrMove(ac.creep, t, () => ac.creep.withdraw(t, RESOURCE_ENERGY, amount));
-      if (result === ERR_NOT_ENOUGH_RESOURCES) {
-        ac.creep.memory.mode = "idle";
-      }
+      runAction(ac.creep, t, () => ac.creep.withdraw(t, RESOURCE_ENERGY, amount), {
+        [ERR_NOT_ENOUGH_RESOURCES]: () => { ac.creep.memory.mode = "idle"; },
+      });
     },
   };
 }
