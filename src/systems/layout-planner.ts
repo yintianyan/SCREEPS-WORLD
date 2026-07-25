@@ -9,6 +9,7 @@ import {
   createSourceContainerTasks,
   createControllerContainerTask,
   createSourceLinkTasks,
+  createStorageLinkTask,
   createControllerLinkTask,
   createExtractorTask,
   type BuildTaskCandidate,
@@ -309,27 +310,80 @@ export const layoutPlannerSystem: System & {
       }
     }
 
-    // 3.5 Source link 任务（RCL5+）。
-    const sourceLinkCandidates = createSourceLinkTasks(
+    // 3.5 Link 任务（RCL5+）— 按角色优先级分配有限的 link 槽位。
+    //
+    // RCL 分配策略（CONTROLLER_STRUCTURES link 上限：RCL5=2, RCL6=3, RCL7=4, RCL8=6）:
+    //   RCL5 (2 links): source(1) + storage   → 最小可用 link 网络
+    //   RCL6 (3 links): + controller           → 站桩升级链打通
+    //   RCL7 (4 links): + source(2)            → 双 source 全覆盖
+    //   RCL8 (6 links): + 2 hub                 → 终局枢纽
+    //
+    // 队列感知：统计 BuildQueue 中已有的 link 任务数，防止超额分配。
+    // 每放置一个 link 任务后递增 queuedLinks，后续函数据此判断剩余槽位。
+    let queuedLinks = queue.filter(
+      t => t.structureType === STRUCTURE_LINK,
+    ).length;
+
+    // 3.5a Source link（第一趟，maxNew=1）— 保证至少 1 个 source link。
+    //    优先放第一个 source，不消费所有槽位。
+    const sourceLinkFirst = createSourceLinkTasks(
       snapshot,
       room,
       validationOptions,
+      queuedLinks,
+      1, // maxNew=1：只放 1 个 source link，给 storage 留槽位。
     );
-    for (const candidate of sourceLinkCandidates) {
+    for (const candidate of sourceLinkFirst) {
       if (tryAddTask(candidate)) {
+        queuedLinks++;
         tasksAdded = true;
         targetingChanged = true;
       }
     }
 
-    // 3.6 Controller link 任务（RCL5+）。
+    // 3.5b Storage link — link 网络的「最后一公里」：source→storage 物流打通。
+    //    RCL5 仅 2 个槽位时，storage link 优先于第二个 source link。
+    const storageLink = createStorageLinkTask(
+      snapshot,
+      room,
+      validationOptions,
+      queuedLinks,
+    );
+    if (storageLink) {
+      if (tryAddTask(storageLink)) {
+        queuedLinks++;
+        tasksAdded = true;
+        targetingChanged = true;
+      }
+    }
+
+    // 3.5c Controller link — 站桩升级链：source→controller 0 通勤升级。
+    //    RCL6+ 才有第 3 个槽位（RCL5 的 2 槽位已被 source + storage 占用）。
     const controllerLink = createControllerLinkTask(
       snapshot,
       room,
       validationOptions,
+      queuedLinks,
     );
     if (controllerLink) {
       if (tryAddTask(controllerLink)) {
+        queuedLinks++;
+        tasksAdded = true;
+        targetingChanged = true;
+      }
+    }
+
+    // 3.5d Source link（第二趟，maxNew=∞）— 放置剩余 source link。
+    //    RCL7+ 有第 4 个槽位时，为第二个 source 也放置 link。
+    const sourceLinkRest = createSourceLinkTasks(
+      snapshot,
+      room,
+      validationOptions,
+      queuedLinks,
+    );
+    for (const candidate of sourceLinkRest) {
+      if (tryAddTask(candidate)) {
+        queuedLinks++;
         tasksAdded = true;
         targetingChanged = true;
       }

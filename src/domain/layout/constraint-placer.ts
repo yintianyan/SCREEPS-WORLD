@@ -70,11 +70,13 @@ const RCL_BATCHES: Record<number, StructureBatch[]> = {
   5: [
     { type: STRUCTURE_EXTENSION, count: 10, priority: 2, phase: "late" },
     { type: STRUCTURE_TOWER, count: 1, priority: 0, phase: "late" },
-    { type: STRUCTURE_LINK, count: 1, priority: 2, phase: "late" },
+    // LINK 不在此放置 — constraint-placer 的评分算法不理解 link 角色
+    // （source/storage/controller），随机放置会导致 RCL5 仅有的 2 个 link
+    // 分配为 2 个 source link 或 2 个 storage link，link 网络失效。
+    // 所有 link 由 task-factory 的 create*LinkTask 按角色优先级放置。
   ],
   6: [
     { type: STRUCTURE_EXTENSION, count: 10, priority: 2, phase: "rcl6" },
-    { type: STRUCTURE_LINK, count: 1, priority: 2, phase: "rcl6" },
     { type: STRUCTURE_TERMINAL, count: 1, priority: 1, phase: "rcl6" },
     { type: STRUCTURE_LAB, count: 3, priority: 2, phase: "rcl6" },
   ],

@@ -101,7 +101,10 @@ export const COMPACT_CORE_V2: Blueprint = {
     cell("core.ext.39", 5, 3, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
     cell("core.ext.40", 3, 5, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),
 
-    cell("core.link.02", -2, 2, STRUCTURE_LINK, 6, "rcl6", 2, ["core", "logistics"], ["core.storage.01"]),
+    // core.link.02 已移除 — 原位置 (-2,2) 与 storage (0,2) Chebyshev 距离 = 2，
+    // classifyLink 会将其误判为第二个 storage link，导致 RCL6 的 3 个 link 槽位
+    // 分配为 2 storage + 1 source，controller link 永远无法创建。
+    // 所有非核心 link 由 task-factory 按角色优先级放置（source→storage→controller）。
 
     // ── RCL7: 补充 10 个 extension（共 50），加 tower3 / spawn2 ──
     cell("core.ext.41", -5, 3, STRUCTURE_EXTENSION, 7, "rcl7", 2, ["core"]),

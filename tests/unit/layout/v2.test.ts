@@ -78,11 +78,15 @@ describe("compact-core-v2 — 几何不变量", () => {
     }
   });
 
-  it("关键结构数量：3 tower / 1 storage / 2 link / 2 额外 spawn", () => {
+  it("关键结构数量：3 tower / 1 storage / 1 link / 2 额外 spawn", () => {
+    // 模板仅保留 core.link.01 作为 storage link 种子（紧邻 storage）。
+    // core.link.02 已移除：原位置与 storage Chebyshev 距离 = 2，
+    // classifyLink 会将其误判为第二个 storage link。
+    // 其余 link 由 task-factory 按角色优先级放置（source→storage→controller）。
     const byType = (t: string) => COMPACT_CORE_V2.cells.filter(c => c.structureType === t);
     expect(byType("tower")).toHaveLength(3);
     expect(byType("storage")).toHaveLength(1);
-    expect(byType("link")).toHaveLength(2);
+    expect(byType("link")).toHaveLength(1); // 仅 core.link.01（storage 种子）
     expect(byType("spawn")).toHaveLength(2); // 锚点外 2 个
   });
 

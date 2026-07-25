@@ -266,11 +266,20 @@ export function createControllerContainerTask(
  * 为 source 生成 link 任务（RCL5+）。
  * source link 紧邻 source 放置，harvester 采矿后直接 transfer 到 link，
  * 由 link 系统瞬移到 controller/storage link，替代 hauler 长途往返。
+ *
+ * 队列感知：`queuedLinkCount` 传入当前 BuildQueue 中已有的 link 任务数
+ * （含所有角色的 link 任务），防止超额分配 RCL 上限内的 link 槽位。
+ *
+ * 数量限制：`maxNew` 限制本次调用最多创建的新 source link 数。
+ * layout-planner 分两趟调用：第一趟 maxNew=1 保证 storage link 有槽位；
+ * 第二趟 maxNew=Infinity 放置剩余 source link。
  */
 export function createSourceLinkTasks(
   snapshot: RoomSnapshot,
   room: Room,
   options: ValidationOptions,
+  queuedLinkCount = 0,
+  maxNew = Infinity,
 ): BuildTaskCandidate[] {
   if (snapshot.rcl < 5) return [];
   const candidates: BuildTaskCandidate[] = [];
@@ -279,9 +288,14 @@ export function createSourceLinkTasks(
   const linkSites = snapshot.constructionSites.filter(
     s => s.structureType === STRUCTURE_LINK,
   ).length;
-  if (existingLinks + linkSites >= maxLinks) return candidates;
+  // 队列中的 link 任务也算占用槽位 — 防止超额分配。
+  if (existingLinks + linkSites + queuedLinkCount >= maxLinks) return candidates;
+
+  const remainingSlots = maxLinks - existingLinks - linkSites - queuedLinkCount;
+  const limit = Math.min(maxNew, remainingSlots);
 
   for (const source of snapshot.sources) {
+    if (candidates.length >= limit) break;
     if (hasAdjacentStructure(source.pos.x, source.pos.y, snapshot, STRUCTURE_LINK)) continue;
     const adjacentPos = findAdjacentBuildable(source.pos, room, snapshot, options);
     // 密封守卫：link 是障碍结构，出生即密封或封死邻居的位置不放。
@@ -306,11 +320,14 @@ export function createSourceLinkTasks(
  * 为 controller 生成 link 任务（RCL5+）。
  * controller link 紧邻 controller 放置，upgrader 站桩 withdraw 取能，
  * 能量由 source link 瞬移送入，实现 0 通勤站桩升级。
+ *
+ * 队列感知：`queuedLinkCount` 传入当前 BuildQueue 中已有的 link 任务数。
  */
 export function createControllerLinkTask(
   snapshot: RoomSnapshot,
   room: Room,
   options: ValidationOptions,
+  queuedLinkCount = 0,
 ): BuildTaskCandidate | undefined {
   if (snapshot.rcl < 5) return undefined;
   if (!snapshot.controller) return undefined;
@@ -323,7 +340,7 @@ export function createControllerLinkTask(
   const linkSites = snapshot.constructionSites.filter(
     s => s.structureType === STRUCTURE_LINK,
   ).length;
-  if (existingLinks + linkSites >= maxLinks) return undefined;
+  if (existingLinks + linkSites + queuedLinkCount >= maxLinks) return undefined;
 
   const adjacentPos = findAdjacentBuildable(controller.pos, room, snapshot, options);
   if (!adjacentPos) return undefined;
@@ -336,6 +353,63 @@ export function createControllerLinkTask(
     key: `logistics.link.controller`,
     pos: adjacentPos,
     structureType: STRUCTURE_LINK,
+    priority: 1,
+    phase: "late",
+    validation: "ok",
+  };
+}
+
+/**
+ * 为 storage 生成 link 任务（RCL5+）。
+ * storage link 紧邻 storage 放置（range <= 2），作为 link 网络的「最后一公里」：
+ * source link 能量瞬移到 storage link，hauler 从 storage link 排空到 storage。
+ *
+ * 优先级 = 1（与 controller link 同级）：在 RCL5 仅 2 个 link 槽位时，
+ * storage link 的优先级高于第二个 source link —— 因为 source + storage
+ * 是最小可用 link 网络（source→storage 物流打通），而双 source 无 storage
+ * 意味着 link 网络无法卸载能量。
+ *
+ * 队列感知：`queuedLinkCount` 传入当前 BuildQueue 中已有的 link 任务数。
+ */
+export function createStorageLinkTask(
+  snapshot: RoomSnapshot,
+  room: Room,
+  options: ValidationOptions,
+  queuedLinkCount = 0,
+): BuildTaskCandidate | undefined {
+  if (snapshot.rcl < 5) return undefined;
+  if (!snapshot.storage) return undefined;
+
+  // 检查 storage 附近是否已有 link 或 link 工地。
+  if (hasAdjacentStructure(
+    snapshot.storage.pos.x,
+    snapshot.storage.pos.y,
+    snapshot,
+    STRUCTURE_LINK,
+  )) return undefined;
+
+  const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
+  const existingLinks = snapshot.links.length;
+  const linkSites = snapshot.constructionSites.filter(
+    s => s.structureType === STRUCTURE_LINK,
+  ).length;
+  if (existingLinks + linkSites + queuedLinkCount >= maxLinks) return undefined;
+
+  // 在 storage 附近 1 格内寻找可建造位置（link 不需要站桩位，只需紧邻 storage）。
+  const adjacentPos = findAdjacentBuildable(snapshot.storage.pos, room, snapshot, options);
+  if (!adjacentPos) return undefined;
+  // 密封守卫：link 是障碍结构。
+  if (options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
+    return undefined;
+  }
+
+  return {
+    key: `logistics.link.storage`,
+    pos: adjacentPos,
+    structureType: STRUCTURE_LINK,
+    // 优先级 1：与 controller link 同级，高于第二个 source link（priority 2）。
+    // layout-planner 在 source(1) 之后、controller 之前调用，保证 RCL5
+    // 仅有的 2 个槽位分配为 source + storage。
     priority: 1,
     phase: "late",
     validation: "ok",
