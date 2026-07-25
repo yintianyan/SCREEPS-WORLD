@@ -197,7 +197,7 @@ describe("builder — fallback 链", () => {
     expect(creep.upgradeController).toHaveBeenCalledWith(controller);
   });
 
-  it("能量低于 floor 时不升级，进入 idle", () => {
+  it("能量低于 floor 时仍升级（builder 用自身携带的能量，不消耗 extension）", () => {
     const controller = mockController();
     const snap = mockSnapshot({
       myConstructionSites: [],
@@ -207,15 +207,15 @@ describe("builder — fallback 链", () => {
       towers: [],
       containers: [],
       controller,
-      energyAvailable: 100, // < upgradeEnergyFloor (300)
+      energyAvailable: 100, // < upgradeEnergyFloor (300)，但 builder 已携能，无更好去向
     });
     const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
 
-    expect(creep.upgradeController).not.toHaveBeenCalled();
-    expect(creep.memory.mode).toBe("idle");
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    expect(creep.memory.mode).not.toBe("idle");
   });
 });
 

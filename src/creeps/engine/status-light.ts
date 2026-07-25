@@ -54,7 +54,7 @@ export function drawStatusLight(creep: Creep): void {
 
   creep.room.visual.circle(creep.pos.x, y, {
     fill: color,
-    radius: 0.35,
+    radius: 0.2,
     opacity: 1,
   });
 }

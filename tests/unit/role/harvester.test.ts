@@ -38,15 +38,15 @@ describe("harvester — acquire 模式", () => {
     expect(creep.memory.mode).toBe("acquire");
   });
 
-  it("source 耗尽时进入 idle", () => {
-    const source = mockSource("s1");
+  it("source 能量为 0 时不尝试采集，进入 idle", () => {
+    const source = mockSource("s1", 0);
     const snap = mockSnapshot({ sources: [source], sourceOccupancy: new Map([["s1", 1]]) });
     const creep = mockCreep({ used: 0, capacity: 50, sourceId: "s1" });
-    creep.harvest.mockReturnValue(-6); // ERR_NOT_ENOUGH_RESOURCES
     const ctx = mockContext(snap);
 
     harvesterRole.run(creep, ctx);
 
+    expect(creep.harvest).not.toHaveBeenCalled();
     expect(creep.memory.mode).toBe("idle");
   });
 

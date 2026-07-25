@@ -33,17 +33,28 @@ import { getObjectById } from "../support/obj-cache";
 
 // ─── Harvest ────────────────────────────────────────────────
 
-/** 从 source 采集（通用）。 */
+/**
+ * 从 source 采集（通用）。
+ *
+ * predicate 检查 source.energy > 0：source 再生期间（energy === 0）不触发采集，
+ * 避免 harvest → ERR_NOT_ENOUGH_RESOURCES → mode=idle 的无限振荡。
+ * source 空时角色 fallthrough 到后续候选或 idle+park（离开矿位不堵路）。
+ *
+ * execute 中 ERR_NOT_ENOUGH_RESOURCES 不再设 idle：predicate 已过滤空 source，
+ * 此处仅为跨 tick 竞态（predicate 通过后 source 被其他 creep 采空）。
+ * 竞态是瞬时的，保持 acquire 模式下 tick 自动重试比切 idle 更快恢复。
+ */
 export function harvestSource(): ActionCandidate {
   return {
     name: "harvest:source",
-    predicate: (ac) => getSource(ac.creep, ac.snapshot) !== undefined,
+    predicate: (ac) => {
+      const source = getSource(ac.creep, ac.snapshot);
+      if (!source) return false;
+      return source.energy > 0;
+    },
     execute: (ac) => {
       const source = getSource(ac.creep, ac.snapshot)!;
-      const result = actOrMove(ac.creep, source, () => ac.creep.harvest(source));
-      if (result === ERR_NOT_ENOUGH_RESOURCES) {
-        ac.creep.memory.mode = "idle";
-      }
+      actOrMove(ac.creep, source, () => ac.creep.harvest(source));
     },
   };
 }

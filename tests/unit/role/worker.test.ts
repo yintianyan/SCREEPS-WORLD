@@ -54,15 +54,15 @@ describe("worker — acquire 模式", () => {
     expect(creep.memory.sourceId).toBe("s2");
   });
 
-  it("source 耗尽时 idle", () => {
-    const source = mockSource("s1");
+  it("source 能量为 0 时不尝试采集，进入 idle", () => {
+    const source = mockSource("s1", 0);
     const snap = mockSnapshot({ sources: [source], sourceOccupancy: new Map([["s1", 1]]) });
     const creep = mockCreep({ name: "worker_1", role: "worker", used: 0, capacity: 50, mode: "acquire" });
-    creep.harvest.mockReturnValue(-6); // ERR_NOT_ENOUGH_RESOURCES
     const ctx = mockContext(snap);
 
     workerRole.run(creep, ctx);
 
+    expect(creep.harvest).not.toHaveBeenCalled();
     expect(creep.memory.mode).toBe("idle");
   });
 

@@ -4,7 +4,7 @@
  * 策略声明：
  *   gate:    recovery tier → 释放 assignment（不建造）
  *   acquire: 拾取掉落能量 > storage（RCL4+ 主力源）> 最近非物流 container > harvest
- *   work:    assignment site（tier 门禁）> 最近 site（tier 门禁）> fill > critical repair > 升级（gated）
+ *   work:    assignment site（tier 门禁）> 最近 site（tier 门禁）> fill > critical repair > 升级
  *
  * CPU 门禁通过候选 predicate 内的 tier 判断实现，不再内嵌 if-else。
  *
@@ -23,7 +23,7 @@ import {
   repairContainerDecay,
   repairCritical,
   repairFortifications,
-  upgradeControllerGated,
+  upgradeController,
   withdrawClosestNonSourceContainer,
   withdrawStorageCapped,
 } from "../engine/actions";
@@ -181,8 +181,9 @@ const policy: RolePolicy = {
     // fallback: 防御工事维修（B3：盈余门禁 + 无威胁时，修 wall/rampart 至分级血量）。
     // 维修权从塔移交 creep —— 塔修墙是能量黑洞，creep 修是 1 energy/100 hits/WORK。
     repairFortifications(),
-    // fallback: 升级控制器（带能量门禁）。
-    upgradeControllerGated(),
+    // fallback: 升级控制器（无能量门禁 — builder 用自身携带的能量升级，不消耗 extension）。
+    // 仅当所有建造/填充/维修候选均不匹配时触发，此时能量无更好去向。
+    upgradeController(),
   ],
 };
 
