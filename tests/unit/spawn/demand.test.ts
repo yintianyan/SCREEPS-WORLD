@@ -135,3 +135,122 @@ describe("A4 — 替换阈值计入通勤路程", () => {
     expect(requests.some(r => r.role === "harvester" && r.replaceBy !== undefined)).toBe(true);
   });
 });
+
+describe("P3 — RCL5+ Link-aware hauler 需求", () => {
+  /** 造一个 storage + storage link（紧邻 storage）的场景。 */
+  function linkSnapshot(opts: {
+    storageEnergy?: number;
+    storageLinkEnergy?: number;
+    storageLinkCapacity?: number;
+    containers?: { energy: number; capacity: number }[];
+    rcl?: number;
+  }): ReturnType<typeof mockSnapshot> {
+    const storage = mockStructure("storage", {
+      id: "st",
+      energy: opts.storageEnergy ?? 50000,
+      capacity: 1000000,
+    });
+    // storage link 紧邻 storage（range <= 2）
+    const storageLink = mockStructure("link", {
+      id: "slink",
+      energy: opts.storageLinkEnergy ?? 0,
+      capacity: opts.storageLinkCapacity ?? 800,
+    });
+    storageLink.pos.getRangeTo = () => 1;
+    storage.pos.getRangeTo = () => 1;
+
+    const containers = (opts.containers ?? []).map((c, i) =>
+      mockStructure("container", { id: `c${i}`, energy: c.energy, capacity: c.capacity }),
+    );
+
+    return mockSnapshot({
+      storage,
+      links: [storageLink],
+      containers,
+      rcl: opts.rcl ?? 5,
+      energyCapacityAvailable: 2300,
+      controller: mockController({ level: opts.rcl ?? 5 }),
+    });
+  }
+
+  it("storage link > 80% 满 → 贡献 +2 hauler 需求（link 网络需要排空）", () => {
+    const snap = linkSnapshot({ storageLinkEnergy: 700, storageLinkCapacity: 800 });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+
+    const haulers = requests.filter(r => r.role === "hauler");
+    // 无 container 积压 + storage link > 80% → +2 → clamp to minCount=2
+    expect(haulers).toHaveLength(2);
+  });
+
+  it("storage link 40-80% 满 → 贡献 +1 hauler 需求", () => {
+    const snap = linkSnapshot({ storageLinkEnergy: 400, storageLinkCapacity: 800 });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+
+    const haulers = requests.filter(r => r.role === "hauler");
+    // storage link 50% → +1 → clamp to minCount=2
+    expect(haulers).toHaveLength(2);
+  });
+
+  it("storage link < 40% + 无 container 积压 → 仅 minCount 兜底（link 在线，工作量减少）", () => {
+    const snap = linkSnapshot({ storageLinkEnergy: 100, storageLinkCapacity: 800 });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+
+    const haulers = requests.filter(r => r.role === "hauler");
+    // storage link 12.5% → +0 → clamp to minCount=2
+    expect(haulers).toHaveLength(2);
+  });
+
+  it("container 积压 + storage link 积压 → 信号叠加（两处都需要 hauler）", () => {
+    const snap = linkSnapshot({
+      storageLinkEnergy: 700, // > 80% → +2
+      containers: [
+        { energy: 1700, capacity: 2000 }, // > 80% → +2
+      ],
+    });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+
+    const haulers = requests.filter(r => r.role === "hauler");
+    // container +2 + storage link +2 = 4 → clamp to maxCount=6
+    expect(haulers).toHaveLength(4);
+  });
+
+  it("无 storage link（RCL4 以下）→ 仅看 container 信号，行为不变", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    const snap = mockSnapshot({
+      storage,
+      links: [], // 无 link
+      containers: [
+        mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 }),
+      ],
+      rcl: 4,
+      energyCapacityAvailable: 1300,
+      controller: mockController({ level: 4 }),
+    });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+
+    const haulers = requests.filter(r => r.role === "hauler");
+    // 仅 container > 80% → +2 → clamp to minCount=2
+    expect(haulers).toHaveLength(2);
+  });
+
+  it("storage link 不紧邻 storage（range > 2）→ 不计入信号（非 storage link）", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    const farLink = mockStructure("link", { id: "farlink", energy: 700, capacity: 800 });
+    farLink.pos.getRangeTo = () => 5; // 太远，不算 storage link
+    storage.pos.getRangeTo = () => 5;
+
+    const snap = mockSnapshot({
+      storage,
+      links: [farLink],
+      containers: [],
+      rcl: 5,
+      energyCapacityAvailable: 2300,
+      controller: mockController({ level: 5 }),
+    });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+
+    const haulers = requests.filter(r => r.role === "hauler");
+    // 非 storage link → 不贡献 → clamp to minCount=2
+    expect(haulers).toHaveLength(2);
+  });
+});

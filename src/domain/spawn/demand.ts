@@ -220,16 +220,40 @@ export function evaluateDemand(
   //       container 能量 > 40% 容量 → 需要 1 个 hauler（正常物流压力）
   //       container 能量 < 40% → 不需要额外 hauler（搬运能力过剩，不孵）
   // 这确保 hauler 数量跟随实际物流压力动态调整，不会在 container 空时白孵。
+  //
+  // RCL5+ Link-aware 物流：
+  //   当 source link 在线时，harvester 优先倒能到 link（而非 container），
+  //   source container 几乎不填 → container 贡献自然降为 0（反馈 loop 正常工作）。
+  //   但 link 网络把能量瞬移到 storage link，需要 hauler 排空（withdrawStorageLink）。
+  //   这是 RCL5+ 的新物流任务，必须纳入需求信号，否则 storage link 积压无人搬。
+  //   同时，storage link 排空后需求降到 0 → minCount 地板兜底 → tuning-engine
+  //   观测到 hauler 空闲 → 降低 minCount → hauler 数量自然减少。
+  //   这就是「RCL5 后 link 参与物流，hauler 数量慢慢减少」的机制。
   const haulerConfig = getRoleBounds("hauler", home);
   const haulerTotal = (counts.hauler ?? 0) + pending.hauler;
   const hasLogistics = snapshot.containers.length > 0 || snapshot.storage !== undefined;
   let dynamicHaulerTarget = 0;
   if (hasLogistics) {
+    // 1. Source container 积压信号（RCL1-4 主物流路径）。
     for (const c of snapshot.containers) {
       const capacity = c.store.getCapacity(RESOURCE_ENERGY) || 1;
       const fillRatio = c.store.getUsedCapacity(RESOURCE_ENERGY) / capacity;
       if (fillRatio > 0.8) dynamicHaulerTarget += 2;
       else if (fillRatio > 0.4) dynamicHaulerTarget += 1;
+    }
+    // 2. Storage link 积压信号（RCL5+ link 网络的「最后一公里」）。
+    //    link-system 将 source link 能量瞬移到 storage link，hauler 需排空到 storage。
+    //    无 storage 时不存在 storage link（classifyLink 回退为 hub）。
+    if (snapshot.storage) {
+      const storageLink = snapshot.links.find(
+        l => l.pos.getRangeTo(snapshot.storage!) <= 2,
+      );
+      if (storageLink) {
+        const linkCap = storageLink.store.getCapacity(RESOURCE_ENERGY) || 1;
+        const linkFillRatio = storageLink.store.getUsedCapacity(RESOURCE_ENERGY) / linkCap;
+        if (linkFillRatio > 0.8) dynamicHaulerTarget += 2;
+        else if (linkFillRatio > 0.4) dynamicHaulerTarget += 1;
+      }
     }
     // 至少 minCount（保证基本物流不断），至多 maxCount。
     dynamicHaulerTarget = Math.min(haulerConfig.maxCount, Math.max(haulerConfig.minCount, dynamicHaulerTarget));
