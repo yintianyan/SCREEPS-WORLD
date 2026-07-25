@@ -73,14 +73,15 @@ function findSourceContainer(creep: Creep, source: Source): StructureContainer |
 function remoteStationaryMine(): ActionCandidate {
   return {
     name: "remote-harvest:stationary-mine",
-    predicate: (ac) => {
+    resolve: (ac) => {
       const source = getRemoteSource(ac.creep);
-      if (!source) return false;
+      if (!source) return undefined;
       // 检查是否在采集范围内。
-      return ac.creep.pos.getRangeTo(source) <= 1;
+      if (ac.creep.pos.getRangeTo(source) > 1) return undefined;
+      return source;
     },
-    execute: (ac) => {
-      const source = getRemoteSource(ac.creep)!;
+    execute: (ac, target) => {
+      const source = target as Source;
       // 采集。
       const harvestResult = ac.creep.harvest(source);
       if (harvestResult === ERR_NOT_IN_RANGE) {
@@ -105,9 +106,9 @@ function remoteStationaryMine(): ActionCandidate {
 function remoteHarvestSource(): ActionCandidate {
   return {
     name: "remote-harvest:move-and-mine",
-    predicate: (ac) => getRemoteSource(ac.creep) !== undefined,
-    execute: (ac) => {
-      const source = getRemoteSource(ac.creep)!;
+    resolve: (ac) => getRemoteSource(ac.creep),
+    execute: (ac, target) => {
+      const source = target as Source;
       const result = ac.creep.harvest(source);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, source);
@@ -122,19 +123,26 @@ function remoteHarvestSource(): ActionCandidate {
 function dropEnergy(): ActionCandidate {
   return {
     name: "remote-harvest:drop",
-    predicate: (ac) => ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0,
-    execute: (ac) => {
+    resolve: (ac) => {
+      if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return undefined;
       // 检查旁边是否有 container 可倒入。
       const source = getRemoteSource(ac.creep);
       if (source) {
         const container = findSourceContainer(ac.creep, source);
         if (container && container.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-          ac.creep.transfer(container, RESOURCE_ENERGY);
-          return;
+          return { type: "transfer" as const, container };
         }
       }
-      // 无 container 或 container 满 → drop 在地上（hauler 会拾取）。
-      ac.creep.drop(RESOURCE_ENERGY);
+      // 无 container 或 container 满 → drop
+      return { type: "drop" as const };
+    },
+    execute: (ac, target) => {
+      const resolved = target as { type: "transfer"; container: StructureContainer } | { type: "drop" };
+      if (resolved.type === "transfer") {
+        ac.creep.transfer(resolved.container, RESOURCE_ENERGY);
+      } else {
+        ac.creep.drop(RESOURCE_ENERGY);
+      }
     },
   };
 }

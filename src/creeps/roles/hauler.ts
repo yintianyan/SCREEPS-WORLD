@@ -15,6 +15,12 @@
  * 无 storage 时（RCL1-3）：hauler 直接 container → spawn/extension 直送，
  * 不需要 distributor。
  *
+ * onFlee 钩子（P0-2 修复）：
+ *   hauler 在 flee 状态下的"防御圈内安全充能"逻辑从 lifecycle.ts 移到此处。
+ *   仅当 hauler 携带能量且已在 spawn 安全区内时触发，
+ *   向防御圈内的需能量结构（threat 时 tower 优先）转移能量。
+ *   解决战斗中 Tower 能量耗尽、hauler 全部 flee 导致无人补给的防御死局。
+ *
  * 策略声明：
  *   acquire: assignment container > storage link（排空 link 网络）> 最满 container（主取能）> droppedEnergy（残余清理）
  *   work:    haul fillTarget（带 reservation）> minerals → storage > labs > storage > 待命
@@ -23,6 +29,7 @@
  * 若先捡 drop 会让 hauler 半满离开、来回空转而抽不干满 container（溢出根源未除）；
  * 先抽最满 container 既满载搬运又从源头止住溢出。详见 acquire 链内注释。
  */
+import { CONFIG } from "../../config";
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
@@ -43,19 +50,22 @@ import { getObjectById } from "../support/obj-cache";
 function withdrawAssignmentContainer(): ActionCandidate {
   return {
     name: "withdraw:assignment-container",
-    predicate: (ac) => {
-      if (!ac.assignment?.sourceId) return false;
+    resolve: (ac) => {
+      if (!ac.assignment?.sourceId) return undefined;
       const obj = getObjectById(ac.assignment.sourceId as unknown as Id<StructureContainer>);
-      return obj !== null && (obj as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0;
+      if (obj === null) return undefined;
+      const container = obj as StructureContainer;
+      if (container.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
+      return container;
     },
-    execute: (ac) => {
-      const target = getObjectById(ac.assignment!.sourceId as unknown as Id<StructureContainer>) as StructureContainer;
-      const available = target.store.getUsedCapacity(RESOURCE_ENERGY);
+    execute: (ac, target) => {
+      const container = target as StructureContainer;
+      const available = container.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
-      const result = ac.creep.withdraw(target, RESOURCE_ENERGY, amount);
+      const result = ac.creep.withdraw(container, RESOURCE_ENERGY, amount);
       if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, target);
+        moveToTarget(ac.creep, container);
       } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
         ac.creep.memory.mode = "idle";
       }
@@ -81,8 +91,103 @@ function withdrawRichestCapped(): ActionCandidate {
   });
 }
 
+// ─── onFlee：防御圈内安全充能（P0-2 从 lifecycle.ts 迁移）─────────
+
+/**
+ * Hauler 在 flee 状态下的"防御圈内安全充能"。
+ *
+ * 触发条件（全部满足）：
+ *   1. hauler 已在 spawn 安全区内（距 spawn ≤ safeRefuelRange）
+ *   2. 存在需能量结构（fillTargets）且该结构也在防御圈内
+ *   3. 目标不在敌人侧（目标距敌人 ≥ hauler 距敌人，避免向敌人移动）
+ *
+ * 执行：
+ *   - 在 transfer 范围内（≤ 1）→ 执行 transfer
+ *   - 否则 → 移动到目标（仍在防御圈内）
+ *
+ * 优先级与 getHaulFillTarget 对齐：threat 存在时 tower 优先。
+ * 返回 true 表示已执行充能（transfer 或移动），flee 函数应跳过原移动逻辑。
+ * 返回 false 表示未处理，需要通用 flee 移动逻辑接管。
+ */
+function haulerOnFlee(ac: ActionContext): boolean {
+  const creep = ac.creep;
+  const snapshot = ac.snapshot;
+
+  // 仅携带能量的 hauler 才执行安全充能。
+  if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return false;
+  if (snapshot.spawns.length === 0) return false;
+  if (snapshot.fillTargets.length === 0) return false;
+
+  const spawn = snapshot.spawns[0]!;
+  const safeRange = CONFIG.defense.safeRefuelRange;
+
+  // hauler 必须已在 spawn 安全区内
+  if (creep.pos.getRangeTo(spawn.pos) > safeRange) return false;
+
+  const nearestHostile = creep.pos.findClosestByRange(snapshot.threatCreeps as Creep[]) ?? undefined;
+
+  // 找最近的需能量结构（优先级与 getHaulFillTarget 对齐）
+  const target = findClosestRefuelTarget(creep, snapshot, spawn.pos, safeRange);
+  if (!target) return false;
+
+  // 安全检查：目标不能在敌人侧（目标距敌人 < hauler 距敌人 = 向敌人移动）
+  if (nearestHostile) {
+    const hostileToTarget = nearestHostile.pos.getRangeTo(target.pos);
+    const creepToHostile = creep.pos.getRangeTo(nearestHostile.pos);
+    if (hostileToTarget < creepToHostile) return false;
+  }
+
+  const dist = creep.pos.getRangeTo(target.pos);
+  if (dist <= 1) {
+    // fillTargets 类型为 StructureSpawn | StructureExtension | StructureTower | StructureContainer，
+    // 均支持 transfer；用 AnyStructure 断言以匹配 creep.transfer 的目标签名。
+    creep.transfer(target as unknown as AnyStructure, RESOURCE_ENERGY);
+    return true;
+  }
+
+  // 移动到目标（仍在防御圈内）
+  creep.moveTo(target, { reusePath: 5, ignoreCreeps: false });
+  return true;
+}
+
+/**
+ * 在 spawn 安全区内找最近的需能量结构。
+ * 优先级与 getHaulFillTarget 对齐：threat 存在时 tower 优先，
+ * 否则 spawn/extension 优先。结构必须在 spawn 的 safeRange 范围内。
+ */
+function findClosestRefuelTarget(
+  creep: Creep,
+  snapshot: { threatCreeps: readonly Creep[]; fillTargets: readonly (StructureSpawn | StructureExtension | StructureTower | StructureContainer)[] },
+  spawnPos: RoomPosition,
+  safeRange: number,
+): StructureSpawn | StructureExtension | StructureTower | StructureContainer | undefined {
+  const hasThreats = snapshot.threatCreeps.length > 0;
+  // 优先级分组：threat 时 [tower] → [spawn/extension] → [其余]；
+  // 无 threat 时 [spawn/extension] → [tower] → [其余]。
+  const typeBuckets: readonly string[][] = hasThreats
+    ? [[STRUCTURE_TOWER], [STRUCTURE_SPAWN, STRUCTURE_EXTENSION], []]
+    : [[STRUCTURE_SPAWN, STRUCTURE_EXTENSION], [STRUCTURE_TOWER], []];
+
+  for (const types of typeBuckets) {
+    let best: StructureSpawn | StructureExtension | StructureTower | StructureContainer | undefined;
+    let bestDist = Infinity;
+    for (const t of snapshot.fillTargets) {
+      if (types.length > 0 && !types.includes(t.structureType)) continue;
+      if (t.pos.getRangeTo(spawnPos) > safeRange) continue;
+      const d = creep.pos.getRangeTo(t.pos);
+      if (d < bestDist) {
+        bestDist = d;
+        best = t;
+      }
+    }
+    if (best) return best;
+  }
+  return undefined;
+}
+
 const policy: RolePolicy = {
   park: true,
+  onFlee: haulerOnFlee,
   acquire: [
     // 0. 优先使用 assignment 指定的 container（任务驱动，定向搬运）。
     withdrawAssignmentContainer(),

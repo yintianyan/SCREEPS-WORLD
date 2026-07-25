@@ -21,21 +21,19 @@ import {
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
-import { getObjectById } from "../support/obj-cache";
 
 /** 从远矿 container 取能。 */
 function withdrawRemoteContainer(): ActionCandidate {
   return {
     name: "remote-hauler:withdraw-container",
-    predicate: (ac) => {
+    resolve: (ac) => {
       // 只在 remoteTarget 房间内执行（ensureHome 保证已到达）。
       const remoteTarget = ac.creep.memory.remoteTarget;
-      if (!remoteTarget || ac.creep.room.name !== remoteTarget) return false;
-      return findRemoteContainer(ac.creep) !== undefined;
+      if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
+      return findRemoteContainer(ac.creep);
     },
-    execute: (ac) => {
-      const container = findRemoteContainer(ac.creep);
-      if (!container) return;
+    execute: (ac, target) => {
+      const container = target as StructureContainer;
       const available = container.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
@@ -62,14 +60,13 @@ function withdrawRemoteContainer(): ActionCandidate {
 function pickupRemoteDropped(): ActionCandidate {
   return {
     name: "remote-hauler:pickup-dropped",
-    predicate: (ac) => {
+    resolve: (ac) => {
       const remoteTarget = ac.creep.memory.remoteTarget;
-      if (!remoteTarget || ac.creep.room.name !== remoteTarget) return false;
-      return findDroppedEnergy(ac.creep) !== undefined;
+      if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
+      return findDroppedEnergy(ac.creep);
     },
-    execute: (ac) => {
-      const dropped = findDroppedEnergy(ac.creep);
-      if (!dropped) return;
+    execute: (ac, target) => {
+      const dropped = target as Resource;
       const result = ac.creep.pickup(dropped);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, dropped);

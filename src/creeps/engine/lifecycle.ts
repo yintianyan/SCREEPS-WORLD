@@ -115,10 +115,9 @@ export function fleeToHome(creep: Creep): void {
  *   3) 无安全出口时走向任意最远出口
  * flee 期间释放普通 assignment（G-SM-05），仅移动不执行经济动作。
  *
- * P0-2 修复：hauler 已到达安全位置（距 spawn ≤ safeRefuelRange）时，
- * 允许执行"防御圈内安全充能"——向最近的需能量结构（tower 优先）转移能量。
- * 这细化了 G-SM-05 的语义：移动阶段不动作（防被击杀），到达安全区后允许关键补给。
- * 解决战斗中 Tower 能量耗尽、hauler 全部 flee 导致无人补给的防御死局。
+ * P0-2 修复：haul 的"防御圈内安全充能"逻辑已从此函数移除，
+ * 改由 RolePolicy.onFlee 钩子在角色层实现。
+ * flee() 现在只负责通用移动逻辑，不感知任何具体角色。
  */
 export function flee(creep: Creep, snapshot: RoomSnapshot): void {
   // G-SM-05: flee 期间释放普通 assignment，仅移动到安全位置。
@@ -128,17 +127,6 @@ export function flee(creep: Creep, snapshot: RoomSnapshot): void {
   }
 
   const nearestHostile = creep.pos.findClosestByRange(snapshot.threatCreeps as Creep[]) ?? undefined;
-
-  // ── P0-2 修复：hauler 已到达安全位置时执行防御圈内充能 ──
-  // 仅当 hauler 携带能量且已在 spawn 防御圈内时触发。
-  // 目标也必须在防御圈内，且不在敌人侧（避免 hauler 向敌人移动）。
-  if (
-    creep.memory.role === "hauler" &&
-    creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0 &&
-    trySafeRefuel(creep, snapshot, nearestHostile)
-  ) {
-    return;
-  }
 
   // 策略 1：spawn 比最近敌人更近时走向 spawn（spawn 在安全侧、塔防范围内）。
   if (snapshot.spawns.length > 0 && nearestHostile) {
@@ -179,92 +167,4 @@ export function flee(creep: Creep, snapshot: RoomSnapshot): void {
       if (result === OK || result === ERR_TIRED) recordTraffic(creep);
     }
   }
-}
-
-/**
- * Hauler 在 flee 状态下的"防御圈内安全充能"尝试。
- *
- * 触发条件（全部满足）：
- *   1. hauler 已在 spawn 安全区内（距 spawn ≤ safeRefuelRange）
- *   2. 存在需能量结构（fillTargets）且该结构也在防御圈内
- *   3. 目标不在敌人侧（目标距敌人 ≥ hauler 距敌人，避免向敌人移动）
- *
- * 执行：
- *   - 在 transfer 范围内（≤ 1）→ 执行 transfer
- *   - 否则 → 移动到目标（仍在防御圈内）
- *
- * 优先级与 getHaulFillTarget 对齐：threat 存在时 tower 优先。
- * 返回 true 表示已执行充能（transfer 或移动），flee 函数应跳过原移动逻辑。
- */
-function trySafeRefuel(
-  creep: Creep,
-  snapshot: RoomSnapshot,
-  nearestHostile: Creep | undefined,
-): boolean {
-  if (snapshot.spawns.length === 0) return false;
-  if (snapshot.fillTargets.length === 0) return false;
-
-  const spawn = snapshot.spawns[0]!;
-  const safeRange = CONFIG.defense.safeRefuelRange;
-
-  // hauler 必须已在 spawn 安全区内
-  if (creep.pos.getRangeTo(spawn.pos) > safeRange) return false;
-
-  // 找最近的需能量结构（优先级与 getHaulFillTarget 对齐）
-  const target = findClosestRefuelTarget(creep, snapshot, spawn.pos, safeRange);
-  if (!target) return false;
-
-  // 安全检查：目标不能在敌人侧（目标距敌人 < hauler 距敌人 = 向敌人移动）
-  if (nearestHostile) {
-    const hostileToTarget = nearestHostile.pos.getRangeTo(target.pos);
-    const creepToHostile = creep.pos.getRangeTo(nearestHostile.pos);
-    if (hostileToTarget < creepToHostile) return false;
-  }
-
-  const dist = creep.pos.getRangeTo(target.pos);
-  if (dist <= 1) {
-    // fillTargets 类型为 StructureSpawn | StructureExtension | StructureTower | StructureContainer，
-    // 均支持 transfer；用 AnyStructure 断言以匹配 creep.transfer 的目标签名。
-    creep.transfer(target as unknown as AnyStructure, RESOURCE_ENERGY);
-    return true;
-  }
-
-  // 移动到目标（仍在防御圈内）
-  creep.moveTo(target, { reusePath: 5, ignoreCreeps: false });
-  return true;
-}
-
-/**
- * 在 spawn 安全区内找最近的需能量结构。
- * 优先级与 getHaulFillTarget 对齐：threat 存在时 tower 优先，
- * 否则 spawn/extension 优先。结构必须在 spawn 的 safeRange 范围内。
- */
-function findClosestRefuelTarget(
-  creep: Creep,
-  snapshot: RoomSnapshot,
-  spawnPos: RoomPosition,
-  safeRange: number,
-): StructureSpawn | StructureExtension | StructureTower | StructureContainer | undefined {
-  const hasThreats = snapshot.threatCreeps.length > 0;
-  // 优先级分组：threat 时 [tower] → [spawn/extension] → [其余]；
-  // 无 threat 时 [spawn/extension] → [tower] → [其余]。
-  const typeBuckets: readonly string[][] = hasThreats
-    ? [[STRUCTURE_TOWER], [STRUCTURE_SPAWN, STRUCTURE_EXTENSION], []]
-    : [[STRUCTURE_SPAWN, STRUCTURE_EXTENSION], [STRUCTURE_TOWER], []];
-
-  for (const types of typeBuckets) {
-    let best: StructureSpawn | StructureExtension | StructureTower | StructureContainer | undefined;
-    let bestDist = Infinity;
-    for (const t of snapshot.fillTargets) {
-      if (types.length > 0 && !types.includes(t.structureType)) continue;
-      if (t.pos.getRangeTo(spawnPos) > safeRange) continue;
-      const d = creep.pos.getRangeTo(t.pos);
-      if (d < bestDist) {
-        bestDist = d;
-        best = t;
-      }
-    }
-    if (best) return best;
-  }
-  return undefined;
 }

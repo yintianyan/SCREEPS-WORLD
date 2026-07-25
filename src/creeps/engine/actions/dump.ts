@@ -1,0 +1,90 @@
+/**
+ * Dump actions — harvester 站桩倒能（向身边结构卸载能量/矿物）。
+ *
+ * 与 fill actions 的区别：dump 是站桩矿工向 range<=2 的身边结构倒能，
+ * fill 是移动角色向 fillTarget 送能。
+ */
+import type { ActionCandidate } from "../action-types";
+import { actOrMove } from "./helpers";
+
+/** 向身边 link 倒能（range <= 2）。 */
+export function dumpToNearbyLink(): ActionCandidate {
+  return {
+    name: "dump:nearby-link",
+    resolve: (ac) => {
+      const candidates = ac.snapshot.links.filter(
+        l => ac.creep.pos.getRangeTo(l) <= 2 && l.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+      );
+      if (candidates.length === 0) return undefined;
+      return ac.creep.pos.findClosestByRange(candidates as StructureLink[]) ?? undefined;
+    },
+    execute: (ac, target) => {
+      const link = target as StructureLink;
+      actOrMove(ac.creep, link, () => ac.creep.transfer(link, RESOURCE_ENERGY));
+    },
+  };
+}
+
+/** 向身边 container 倒能（range <= 2，站桩 miner）。 */
+export function dumpToNearbyContainer(): ActionCandidate {
+  return {
+    name: "dump:nearby-container",
+    resolve: (ac) => {
+      const candidates = ac.snapshot.containers.filter(
+        c => ac.creep.pos.getRangeTo(c) <= 2 && c.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+      );
+      if (candidates.length === 0) return undefined;
+      return ac.creep.pos.findClosestByRange(candidates as StructureContainer[]) ?? undefined;
+    },
+    execute: (ac, target) => {
+      const nearby = target as StructureContainer;
+      actOrMove(ac.creep, nearby, () => ac.creep.transfer(nearby, RESOURCE_ENERGY));
+    },
+  };
+}
+
+/**
+ * 向身边 container 卸载矿物（range <= 2）。
+ * 当 harvester 采集了 mineral（非 energy 资源）时，倒入最近 container。
+ * 优先级高于 energy dump — 矿物不应占用 carry 空间。
+ */
+export function dumpMineralsToNearbyContainer(): ActionCandidate {
+  return {
+    name: "dump:minerals-to-container",
+    resolve: (ac) => {
+      const mineral = (Object.keys(ac.creep.store) as ResourceConstant[])
+        .find(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
+      if (!mineral) return undefined;
+      const candidates = ac.snapshot.containers.filter(
+        c => ac.creep.pos.getRangeTo(c) <= 2 && (c.store.getFreeCapacity() ?? 0) > 0,
+      );
+      if (candidates.length === 0) return undefined;
+      const container = ac.creep.pos.findClosestByRange(candidates as StructureContainer[]) ?? undefined;
+      if (!container) return undefined;
+      return { container, mineral };
+    },
+    execute: (ac, target) => {
+      const { container, mineral } = target as { container: StructureContainer; mineral: ResourceConstant };
+      actOrMove(ac.creep, container, () => ac.creep.transfer(container, mineral));
+    },
+  };
+}
+
+/** 建造身边 container site（range <= 3，经济自愈）。 */
+export function buildNearbyContainerSite(): ActionCandidate {
+  return {
+    name: "build:nearby-container-site",
+    resolve: (ac) => {
+      if (ac.snapshot.myConstructionSites.length === 0) return undefined;
+      const site = ac.creep.pos.findClosestByRange(
+        ac.snapshot.myConstructionSites.filter(s => s.structureType === STRUCTURE_CONTAINER) as ConstructionSite[],
+      );
+      if (!site || ac.creep.pos.getRangeTo(site) > 3) return undefined;
+      return site;
+    },
+    execute: (ac, target) => {
+      const site = target as ConstructionSite;
+      actOrMove(ac.creep, site, () => ac.creep.build(site));
+    },
+  };
+}

@@ -15,6 +15,13 @@
  * 威胁检测排在导航之前是关键：远矿角色在过境中间房遇袭时，ensureHome 会短路导航
  * （返回 false 提前 return），若威胁检测在其后则永远轮不到——故必须先检测威胁再导航。
  *
+ * onFlee 钩子（P0-2 修复）：
+ *   威胁检测后、通用 flee 移动之前调用 policy.onFlee。
+ *   角色可在此实现"安全区行为"（如 hauler 在防御圈内安全充能）。
+ *   返回 true 表示已处理，跳过通用 flee；返回 false 表示需要通用 flee 接管。
+ *   这将 flee 的角色专属逻辑从引擎层（lifecycle.ts）移回角色层（RolePolicy），
+ *   消除引擎层对具体角色的硬编码。
+ *
  * 状态指示灯（drawStatusLight）：在 try/finally 的 finally 块统一绘制，
  * 覆盖所有 return 路径（含异常）——出错 creep 也会亮灯，便于定位故障单位。
  *
@@ -22,7 +29,7 @@
  */
 import type { CreepRole, Priority, TickContext } from "../../kernel/contracts";
 import type { ActionContext, RolePolicy } from "./action-types";
-import { ensureHome, flee, getAssignment, moveToTarget, shouldFlee, shouldFleeForeignRoom, fleeToHome, updateMode } from "../support";
+import { ensureHome, flee, getAssignment, shouldFlee, shouldFleeForeignRoom, fleeToHome, updateMode, releaseAssignment } from "../support";
 import { parkIdleCreep } from "../movement";
 import { drawStatusLight } from "./status-light";
 
@@ -65,7 +72,22 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         }
         if (!inForeignRoom && shouldFlee(creep, snapshot)) {
           creep.memory.mode = "flee";
-          flee(creep, snapshot);
+          // G-SM-05: flee 期间释放普通 assignment，仅移动到安全位置。
+          if (creep.memory.assignment) {
+            releaseAssignment(creep);
+          }
+          // P0-2: 调用角色级 onFlee 钩子 — 角色可自行处理安全区行为（如防御圈内充能）。
+          // 返回 true 表示已处理，跳过通用 flee 移动；返回 false 表示需要通用 flee 接管。
+          const fleeAc: ActionContext = {
+            creep,
+            snapshot,
+            assignment: undefined,
+            budget: ctx.budget,
+            ctx,
+          };
+          if (!policy.onFlee?.(fleeAc)) {
+            flee(creep, snapshot);
+          }
           return;
         }
 
@@ -97,9 +119,18 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         }
 
         // ── 9. 按 mode 选择候选列表并评估 ──
+        // resolve 模式（优先）：resolve 返回非 undefined 即执行，目标传入 execute。
+        // predicate 模式（兼容）：predicate 返回 true 即执行。
+        // resolve 模式消除 predicate-execute 重复计算——目标只解析一次。
         const candidates = creep.memory.mode === "work" ? policy.work : policy.acquire;
         for (const candidate of candidates) {
-          if (candidate.predicate(ac)) {
+          if (candidate.resolve) {
+            const target = candidate.resolve(ac);
+            if (target !== undefined) {
+              candidate.execute(ac, target);
+              return;
+            }
+          } else if (candidate.predicate?.(ac)) {
             candidate.execute(ac);
             return;
           }
@@ -115,19 +146,4 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
       }
     },
   };
-}
-
-// ─── 通用 execute 辅助 ──────────────────────────────────────
-
-/** 对目标执行操作；ERR_NOT_IN_RANGE 时移动。返回操作结果码。 */
-export function actOrMove(
-  creep: Creep,
-  target: RoomPosition | { pos: RoomPosition },
-  action: () => number,
-): number {
-  const result = action();
-  if (result === ERR_NOT_IN_RANGE) {
-    moveToTarget(creep, target);
-  }
-  return result;
 }

@@ -26,16 +26,17 @@ import { moveToTarget } from "../movement";
 function reserveControllerAction(): ActionCandidate {
   return {
     name: "reserver:reserve-controller",
-    predicate: (ac) => {
+    resolve: (ac) => {
       // 只在 remoteTarget 房间内执行。
       const remoteTarget = ac.creep.memory.remoteTarget;
-      if (!remoteTarget || ac.creep.room.name !== remoteTarget) return false;
+      if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       // 房间必须有 controller。
-      return ac.creep.room.controller !== undefined;
-    },
-    execute: (ac) => {
       const controller = ac.creep.room.controller;
-      if (!controller) return;
+      if (!controller) return undefined;
+      return controller;
+    },
+    execute: (ac, target) => {
+      const controller = target as StructureController;
 
       // controller 有主且非自己 → 攻击 controller（降级敌方控制）。
       if (controller.owner && !controller.my) {

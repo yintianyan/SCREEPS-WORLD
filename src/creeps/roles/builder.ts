@@ -6,7 +6,7 @@
  *   acquire: 拾取掉落能量 > storage（RCL4+ 主力源）> 最近非物流 container > harvest
  *   work:    assignment site（tier 门禁）> 最近 site（tier 门禁）> fill > critical repair > 升级
  *
- * CPU 门禁通过候选 predicate 内的 tier 判断实现，不再内嵌 if-else。
+ * CPU 门禁通过候选 resolve 内的 tier 判断实现，不再内嵌 if-else。
  *
  * RCL4+ 取能策略：storage 建成后成为 builder 的主力能量源。
  *   - storage 由 hauler 持续填充，是最可靠的中央能量库；
@@ -53,18 +53,18 @@ function builderGate(ac: ActionContext): boolean {
 function buildAssignmentByTier(): ActionCandidate {
   return {
     name: "build:assignment-by-tier",
-    predicate: (ac) => {
-      if (ac.budget.tier === "recovery") return false;
-      if (!ac.assignment?.targetId) return false;
+    resolve: (ac) => {
+      if (ac.budget.tier === "recovery") return undefined;
+      if (!ac.assignment?.targetId) return undefined;
       const site = getObjectById(ac.assignment.targetId as Id<ConstructionSite>);
-      if (!site) return false;
+      if (!site) return undefined;
       if (ac.budget.tier === "conserve") {
-        return site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
+        if (site.structureType !== STRUCTURE_SPAWN && site.structureType !== STRUCTURE_TOWER) return undefined;
       }
-      return true;
+      return site;
     },
-    execute: (ac) => {
-      const site = getObjectById(ac.assignment!.targetId as Id<ConstructionSite>)!;
+    execute: (ac, target) => {
+      const site = target as ConstructionSite;
       const result = ac.creep.build(site);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, site);
@@ -85,46 +85,37 @@ function buildAssignmentByTier(): ActionCandidate {
 function buildSiteByTier(): ActionCandidate {
   return {
     name: "build:site-by-tier",
-    predicate: (ac) => {
-      if (ac.budget.tier === "recovery") return false;
-      if (ac.budget.tier === "conserve") {
-        return ac.snapshot.myConstructionSites.some(
-          s => s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_TOWER,
-        );
-      }
-      return ac.snapshot.myConstructionSites.length > 0;
-    },
-    execute: (ac) => {
+    resolve: (ac) => {
+      if (ac.budget.tier === "recovery") return undefined;
       const sites = ac.budget.tier === "conserve"
         ? ac.snapshot.myConstructionSites.filter(
             s => s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_TOWER,
           )
         : ac.snapshot.myConstructionSites;
+      if (sites.length === 0) return undefined;
 
       // 优先复用持久化目标 — 验证它仍在当前候选列表中。
-      let site: ConstructionSite | null = null;
       if (ac.creep.memory.targetId) {
         const cached = getObjectById(ac.creep.memory.targetId as Id<ConstructionSite>);
         if (cached && sites.some(s => s.id === cached.id)) {
-          site = cached;
+          return cached;
         }
       }
 
       // 无有效缓存目标 — 重新选择最近的。
-      if (!site) {
-        site = ac.creep.pos.findClosestByRange(sites as ConstructionSite[]);
-        if (site) {
-          ac.creep.memory.targetId = site.id as Id<ConstructionSite>;
-        }
-      }
-
+      const site = ac.creep.pos.findClosestByRange(sites as ConstructionSite[]);
       if (site) {
-        const result = ac.creep.build(site);
-        if (result === ERR_NOT_IN_RANGE) {
-          moveToTarget(ac.creep, site);
-        } else if (result === ERR_INVALID_TARGET) {
-          ac.creep.memory.targetId = undefined;
-        }
+        ac.creep.memory.targetId = site.id as Id<ConstructionSite>;
+      }
+      return site ?? undefined;
+    },
+    execute: (ac, target) => {
+      const site = target as ConstructionSite;
+      const result = ac.creep.build(site);
+      if (result === ERR_NOT_IN_RANGE) {
+        moveToTarget(ac.creep, site);
+      } else if (result === ERR_INVALID_TARGET) {
+        ac.creep.memory.targetId = undefined;
       }
     },
   };

@@ -44,7 +44,7 @@
  *   work:    haul fillTarget（带 reservation）> supply labs > 待命
  */
 import type { Priority } from "../../kernel/contracts";
-import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
+import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import {
   distributorFillTarget,
   supplyLabs,
@@ -61,14 +61,15 @@ import { moveToTarget } from "../movement";
 function withdrawStorageForDistribution(): ActionCandidate {
   return {
     name: "withdraw:storage-for-distribution",
-    predicate: (ac) => {
+    resolve: (ac) => {
       const st = ac.snapshot.storage;
-      if (!st || st.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return false;
+      if (!st || st.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       // 需求门禁：没有下游 fillTarget 时禁止从 storage 取能。
-      return ac.snapshot.fillTargets.length > 0;
+      if (ac.snapshot.fillTargets.length === 0) return undefined;
+      return st;
     },
-    execute: (ac) => {
-      const st = ac.snapshot.storage!;
+    execute: (ac, target) => {
+      const st = target as StructureStorage;
       const available = st.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);

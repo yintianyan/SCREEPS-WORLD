@@ -24,15 +24,16 @@ import { defineRole } from "../engine/role-runner";
 function fillAssignmentTarget(): ActionCandidate {
   return {
     name: "fill:assignment-target",
-    predicate: (ac) => {
-      if (!ac.assignment?.targetId) return false;
-      return getObjectById(ac.assignment.targetId as Id<AnyOwnedStructure>) !== null;
+    resolve: (ac) => {
+      if (!ac.assignment?.targetId) return undefined;
+      const target = getObjectById(ac.assignment.targetId as Id<AnyOwnedStructure>);
+      return target ?? undefined;
     },
-    execute: (ac) => {
-      const target = getObjectById(ac.assignment!.targetId as Id<AnyOwnedStructure>)!;
-      const result = ac.creep.transfer(target, RESOURCE_ENERGY);
+    execute: (ac, target) => {
+      const t = target as AnyOwnedStructure;
+      const result = ac.creep.transfer(t, RESOURCE_ENERGY);
       if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, target);
+        moveToTarget(ac.creep, t);
       } else if (result === ERR_FULL || result === ERR_NOT_ENOUGH_RESOURCES) {
         const used = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY);
         if (used === 0) ac.creep.memory.mode = "acquire";
