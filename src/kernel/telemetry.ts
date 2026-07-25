@@ -1,5 +1,7 @@
 import type { Budget } from "./contracts";
+import { CONFIG } from "../config";
 import { globalCache } from "./global-cache";
+import { getActionCpuSnapshot } from "./safe-run";
 
 /** 在 global 中初始化单 tick 遥测对象。 */
 export function initTelemetry(tick: number): void {
@@ -43,6 +45,23 @@ export function emitSummary(budget: Budget): void {
   if (t.skipped > 0) parts.push(`skipped=${t.skipped}`);
   for (const [name, cpu] of topSystems) {
     parts.push(`${name}=${cpu.toFixed(1)}`);
+  }
+
+  // actionProfiling 开启时输出 top 5 action 热点。
+  // 仅在 CPU 偏高或有错误时输出（与外层日志门禁一致），避免健康 tick 刷屏。
+  if (CONFIG.debug.actionProfiling) {
+    const actionData = getActionCpuSnapshot();
+    if (actionData && actionData.size > 0) {
+      const topActions = [...actionData.entries()]
+        .sort((a, b) => b[1].totalCpu - a[1].totalCpu)
+        .slice(0, 5);
+      if (topActions.length > 0) {
+        parts.push("topActions:");
+        for (const [key, entry] of topActions) {
+          parts.push(`  ${key}=${entry.totalCpu.toFixed(2)}(×${entry.count},max=${entry.maxCpu.toFixed(2)})`);
+        }
+      }
+    }
   }
 
   // 仅在 CPU 偏高或有错误时记录日志 — 避免健康 tick 的控制台刷屏。

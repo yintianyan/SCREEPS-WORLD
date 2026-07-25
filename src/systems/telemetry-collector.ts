@@ -35,6 +35,7 @@ import {
 } from "../kernel/timeseries";
 import { drainEventBuffer, EventKind } from "../kernel/event-log";
 import { ringPush, ringToArray } from "../kernel/ring-buffer";
+import { getActionCpuSnapshot } from "../kernel/safe-run";
 
 // ─── 系统定义 ───────────────────────────────────────────────
 
@@ -461,6 +462,21 @@ function emitTelemetryLine(tick: number, ctx: TickContext): void {
     errHot: stats?.errorHotspot ?? "",
     skipHot: stats?.skipHotspot ?? "",
   };
+
+  // actionProfiling 开启时附挂 top 3 action 热点（按 totalCpu 降序）。
+  // 格式："actionKey=totalCpu|count|maxCpu"，逗号分隔。
+  // 外部采集脚本可解析此字段定位 CPU 热点 action。
+  if (CONFIG.debug.actionProfiling) {
+    const actionData = getActionCpuSnapshot();
+    if (actionData && actionData.size > 0) {
+      const topActions = [...actionData.entries()]
+        .sort((a, b) => b[1].totalCpu - a[1].totalCpu)
+        .slice(0, 3);
+      (payload as Record<string, unknown>).act = topActions.map(([key, e]) =>
+        `${key}=${e.totalCpu.toFixed(2)}|${e.count}|${e.maxCpu.toFixed(2)}`,
+      ).join(",");
+    }
+  }
 
   console.log(`@TELEMETRY ${JSON.stringify(payload)}`);
 }

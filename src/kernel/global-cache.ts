@@ -7,6 +7,16 @@ export interface AssignmentCache {
   pool: TaskPool;
 }
 
+/** Action 级 CPU profiling 单条记录。 */
+export interface ActionCpuEntry {
+  /** 调用次数。 */
+  count: number;
+  /** 累计 CPU 开销。 */
+  totalCpu: number;
+  /** 单次最大 CPU 开销（离群值检测）。 */
+  maxCpu: number;
+}
+
 /** Screeps 沙箱 `global` 对象的形态 — 所有字段可选且可重建。 */
 export interface GlobalCache {
   errorLog?: Map<string, number>;
@@ -45,6 +55,12 @@ export interface GlobalCache {
   __parkReservations?: Set<number>;
   /** 归位：__parkReservations 上次重置所在的 tick（惰性按 tick 重置）。 */
   __parkReservationsTick?: number;
+  /** Action 级 CPU profiling 数据（仅当 CONFIG.debug.actionProfiling 为 true 时写入）。
+   * key = "roleName/actionName/resolve" | "roleName/actionName/execute" | "roleName/onFlee"。
+   * 按 tick 惰性重置。 */
+  actionCpu?: Map<string, ActionCpuEntry>;
+  /** actionCpu 上次重置所在的 tick（惰性按 tick 重置）。 */
+  actionCpuTick?: number;
 }
 
 /**

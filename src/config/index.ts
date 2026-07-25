@@ -233,6 +233,11 @@ export const CONFIG = {
      * 纯诊断功能，默认关闭。开启时每 creep 每 tick 约 0.001-0.005 CPU。
      * 用法：需要诊断时把此值改 true 重新构建上传即可，无需改其他代码。 */
     statusLight: false,
+    /** Action 级 CPU profiling 开关。
+     * 开启时每个 creep 的每个 action 的 resolve/execute 调用都会用 Game.cpu.getUsed() 测量。
+     * 每次测量约 0.001 CPU，50 creep × 5 actions × 2 calls = ~0.5 CPU/tick 额外开销。
+     * 仅在需要定位 CPU 热点时开启，平时关闭。数据在 globalCache 中按 tick 聚合。 */
+    actionProfiling: false,
   },
 
   remote: {

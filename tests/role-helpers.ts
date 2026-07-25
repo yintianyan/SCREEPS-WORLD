@@ -67,6 +67,9 @@ export function resetGlobals(): void {
   delete g.__creepPathCache;
   delete g.__yieldRequests;
   delete g.__remoteThreats;
+  // action profiling 缓存
+  delete g.actionCpu;
+  delete g.actionCpuTick;
 }
 
 /** 注册一个可被 Game.getObjectById 找到的对象。 */

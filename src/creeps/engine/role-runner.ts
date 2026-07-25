@@ -32,6 +32,8 @@ import type { ActionContext, RolePolicy } from "./action-types";
 import { ensureHome, flee, getAssignment, shouldFlee, shouldFleeForeignRoom, fleeToHome, updateMode, releaseAssignment } from "../support";
 import { parkIdleCreep } from "../movement";
 import { drawStatusLight } from "./status-light";
+import { CONFIG } from "../../config";
+import { recordActionCpu } from "../../kernel/safe-run";
 
 /**
  * 创建一个由 RolePolicy 驱动的 CreepRole。
@@ -85,7 +87,16 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
             budget: ctx.budget,
             ctx,
           };
-          if (!policy.onFlee?.(fleeAc)) {
+          if (policy.onFlee) {
+            if (CONFIG.debug.actionProfiling) {
+              const before = Game.cpu.getUsed();
+              const handled = policy.onFlee(fleeAc);
+              recordActionCpu(`${name}/onFlee`, Game.cpu.getUsed() - before);
+              if (!handled) flee(creep, snapshot);
+            } else {
+              if (!policy.onFlee(fleeAc)) flee(creep, snapshot);
+            }
+          } else {
             flee(creep, snapshot);
           }
           return;
@@ -121,12 +132,33 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         // ── 9. 按 mode 选择候选列表并评估 ──
         // resolve 模式：resolve 返回非 undefined 即执行，目标传入 execute。
         // 目标只解析一次，消除 predicate-execute 重复计算。
+        //
+        // actionProfiling 分支：开关关闭时走原始路径（零开销）；
+        // 开启时每个 resolve/execute 调用用 Game.cpu.getUsed() 测量并记录到 globalCache。
         const candidates = creep.memory.mode === "work" ? policy.work : policy.acquire;
-        for (const candidate of candidates) {
-          const target = candidate.resolve?.(ac);
-          if (target !== undefined) {
-            candidate.execute(ac, target);
-            return;
+        if (CONFIG.debug.actionProfiling) {
+          for (const candidate of candidates) {
+            const key = `${name}/${candidate.name}`;
+            let target: unknown;
+            {
+              const before = Game.cpu.getUsed();
+              target = candidate.resolve?.(ac);
+              recordActionCpu(`${key}/resolve`, Game.cpu.getUsed() - before);
+            }
+            if (target !== undefined) {
+              const before = Game.cpu.getUsed();
+              candidate.execute(ac, target);
+              recordActionCpu(`${key}/execute`, Game.cpu.getUsed() - before);
+              return;
+            }
+          }
+        } else {
+          for (const candidate of candidates) {
+            const target = candidate.resolve?.(ac);
+            if (target !== undefined) {
+              candidate.execute(ac, target);
+              return;
+            }
           }
         }
 

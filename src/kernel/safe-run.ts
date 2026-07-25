@@ -1,5 +1,5 @@
 import { CONFIG } from "../config";
-import { globalCache } from "./global-cache";
+import { globalCache, type ActionCpuEntry } from "./global-cache";
 
 /** 如果此 label 在限频窗口内已记录过日志则返回 true。 */
 function shouldSuppress(label: string, tick: number): boolean {
@@ -122,4 +122,32 @@ function recordCpu(label: string, cost: number): void {
     const role = parts[2] ?? "unknown";
     g.telemetry.roleCpu[role] = (g.telemetry.roleCpu[role] ?? 0) + cost;
   }
+}
+
+/**
+ * 记录 Action 级 CPU profiling 数据。
+ * 仅当 CONFIG.debug.actionProfiling 为 true 时调用 — 调用方负责门禁。
+ * key 格式："roleName/actionName/resolve" | "roleName/actionName/execute" | "roleName/onFlee"。
+ * 按 tick 惰性重置 Map。 */
+export function recordActionCpu(key: string, cost: number): void {
+  const g = globalCache();
+  if (!g.actionCpu || g.actionCpuTick !== Game.time) {
+    g.actionCpu = new Map();
+    g.actionCpuTick = Game.time;
+  }
+  const entry = g.actionCpu.get(key);
+  if (entry) {
+    entry.count++;
+    entry.totalCpu += cost;
+    if (cost > entry.maxCpu) entry.maxCpu = cost;
+  } else {
+    g.actionCpu.set(key, { count: 1, totalCpu: cost, maxCpu: cost });
+  }
+}
+
+/** 获取当前 tick 的 action profiling 数据（按 totalCpu 降序排序）。 */
+export function getActionCpuSnapshot(): ReadonlyMap<string, ActionCpuEntry> | undefined {
+  const g = globalCache();
+  if (!g.actionCpu || g.actionCpuTick !== Game.time) return undefined;
+  return g.actionCpu;
 }
