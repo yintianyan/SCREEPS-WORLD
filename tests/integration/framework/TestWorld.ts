@@ -50,6 +50,8 @@ export interface WorldConfig {
     body: Array<{ type: string }>;
     owner?: string;
   }>;
+  /** 地上掉落的能量资源（测试 hauler 捡 drop vs 抽 container 优先级用） */
+  droppedResources?: Array<{ pos: WorldPos; amount: number }>;
   /** 每 tick source 再生量（默认 10 = 3000/300） */
   sourceRegenPerTick?: number;
   /** 每 tick container 衰减 hits（默认 0 = 不衰减） */
@@ -67,6 +69,22 @@ export interface WorldConfig {
 let nextId = 1;
 function genId(prefix: string): string {
   return `${prefix}_${nextId++}`;
+}
+
+/**
+ * 全局递增的 Game.time 基准 — 每个 TestWorld 实例分配唯一基准（100000 的倍数）。
+ *
+ * 根因：per-tick 缓存（objCache/structCache/pathShare/assignment 池/remoteThreats 等）
+ * 以 Game.time 为 key。若每个 TestWorld 都从 Game.time=0 起，跨测试文件会撞值，
+ * 后一个 TestWorld 在 installGlobals 前会读到前一个测试残留的缓存（如 tick=3 的
+ * assignment 池），导致 creep 看到陈旧状态而"什么都不做"的跨测试污染。
+ * 唯一基准让 per-tick 缓存永不撞值。_tick 仍从 0 计（相对 tick），tick getter 返回相对值，
+ * 故依赖 w.tick 的测试断言（如 stopWhen w.tick>100）不受影响。
+ */
+let nextTickBase = 0;
+function allocateTickBase(): number {
+  nextTickBase += 100000;
+  return nextTickBase;
 }
 
 /** 模拟 Store — 支持 getUsedCapacity/getFreeCapacity/getCapacity */
@@ -197,6 +215,22 @@ class MockMineral {
     this.pos = pos;
     this.mineralType = type;
     this.mineralAmount = 100000;
+    this.room = room;
+  }
+}
+
+/** 掉落的能量资源 — hauler pickupDroppedEnergy 的回收目标。 */
+class MockDroppedResource {
+  id: string;
+  pos: MockRoomPosition;
+  resourceType = "energy";
+  amount: number;
+  room: MockRoom;
+
+  constructor(id: string, pos: MockRoomPosition, amount: number, room: MockRoom) {
+    this.id = id;
+    this.pos = pos;
+    this.amount = amount;
     this.room = room;
   }
 }
@@ -574,6 +608,20 @@ class MockCreep {
     return 0;
   }
 
+  pickup(resource: MockDroppedResource): number {
+    if (this.pos.getRangeTo(resource.pos) > 1) return -9; // ERR_NOT_IN_RANGE
+    const free = this.store.getFreeCapacity();
+    if (free <= 0) return -8; // ERR_FULL
+    const amt = Math.min(resource.amount, free);
+    resource.amount -= amt;
+    this.store.energy += amt;
+    // 资源被捡空 → 从世界移除。
+    if (resource.amount <= 0) {
+      this._world._dropped = this._world._dropped.filter(d => d !== resource);
+    }
+    return 0;
+  }
+
   build(site: MockConstructionSite): number {
     const workParts = this.body.filter(p => p.type === "work").length;
     if (workParts === 0) return -12;
@@ -780,6 +828,8 @@ class MockRoom {
         return w._sites.filter(s => s.room === this);
       case FIND_HOSTILE_CREEPS:
         return w._hostiles.filter(h => h.room === this);
+      case FIND_DROPPED_RESOURCES:
+        return w._dropped.filter(d => d.room === this);
       case FIND_EXIT: {
         const exits: MockRoomPosition[] = [];
         for (let i = 0; i < 50; i++) {
@@ -884,6 +934,7 @@ export class TestWorld {
   _sites: MockConstructionSite[] = [];
   _creeps: MockCreep[] = [];
   _hostiles: MockHostileCreep[] = [];
+  _dropped: MockDroppedResource[] = [];
   _pendingSpawns: Array<{
     name: string;
     body: Array<{ type: string }>;
@@ -894,6 +945,7 @@ export class TestWorld {
 
   private _room: MockRoom;
   private _objectRegistry = new Map<string, unknown>();
+  private _tickBase = allocateTickBase();
   private _tick = 0;
   private _cpuUsed = 0;
 
@@ -1024,6 +1076,13 @@ export class TestWorld {
       const hostile = new MockHostileCreep(h.name, room._pos(h.pos.x, h.pos.y), h.body, room, h.owner);
       this._hostiles.push(hostile);
       this._registerObject(hostile.id, hostile);
+    }
+
+    // Dropped resources
+    for (const d of cfg.droppedResources ?? []) {
+      const dropped = new MockDroppedResource(genId("dropped"), room._pos(d.pos.x, d.pos.y), d.amount, room);
+      this._dropped.push(dropped);
+      this._registerObject(dropped.id, dropped);
     }
 
     room._recalcEnergy();
@@ -1207,7 +1266,7 @@ export class TestWorld {
 
     // Game 对象
     (globalThis as Record<string, unknown>).Game = {
-      time: this._tick,
+      time: this._tickBase + this._tick,
       rooms: { [room.name]: room },
       creeps: this._buildCreepMap(),
       spawns: this._buildSpawnMap(),
@@ -1270,6 +1329,18 @@ export class TestWorld {
     delete g.__parkRoomData;
     delete g.__parkReservations;
     delete g.__parkReservationsTick;
+    // per-tick 移动/对象缓存（Game.time 跨测试文件可能撞值，必须清理防陈旧对象泄漏，
+    // 与 role-helpers.resetGlobals 覆盖对齐）：
+    delete g.__objCache;
+    delete g.__objCacheTick;
+    delete g.__structCache;
+    delete g.__staticBlockersCache;
+    delete g.__pathShare;
+    delete g.__pathShareTick;
+    delete g.__coreCenter;
+    delete g.__creepPathCache;
+    delete g.__yieldRequests;
+    delete g.__remoteThreats;
 
     // RawMemory
     (globalThis as Record<string, unknown>).RawMemory = {
@@ -1321,7 +1392,7 @@ export class TestWorld {
   /** 每 tick 更新 Game 对象的可变状态。 */
   refreshGameGlobals(): void {
     const game = (globalThis as Record<string, unknown>).Game as Record<string, unknown>;
-    game.time = this._tick;
+    game.time = this._tickBase + this._tick;
     game.creeps = this._buildCreepMap();
     game.spawns = this._buildSpawnMap();
     game.rooms = { [this._room.name]: this._room };
@@ -1353,6 +1424,7 @@ export class TestWorld {
   get links(): MockLink[] { return this._links; }
   get storage(): MockStorage | null { return this._storage; }
   get hostiles(): MockHostileCreep[] { return this._hostiles; }
+  get droppedResources(): MockDroppedResource[] { return this._dropped; }
   get controller(): MockController | null { return this._room.controller; }
 
   creepsByRole(role: string): MockCreep[] {

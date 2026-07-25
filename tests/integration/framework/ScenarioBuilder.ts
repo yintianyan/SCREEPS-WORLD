@@ -30,6 +30,7 @@ export class ScenarioBuilder {
   private _constructionSites: NonNullable<WorldConfig["constructionSites"]> = [];
   private _creeps: NonNullable<WorldConfig["creeps"]> = [];
   private _hostiles: NonNullable<WorldConfig["hostiles"]> = [];
+  private _droppedResources: NonNullable<WorldConfig["droppedResources"]> = [];
   private _sourceRegen = 10;
   private _containerDecay = 0;
   private _cpuBucket = 10000;
@@ -143,7 +144,8 @@ export class ScenarioBuilder {
       body,
       energy: opts?.energy ?? 0,
       ticksToLive: opts?.ticksToLive ?? 1500,
-      memory: opts?.memory ?? { role, home: this._roomName },
+      // 合并而非替换：role/home 始终存在，opts.memory 覆盖/追加字段（与 TestWorld.addCreep 一致）。
+      memory: { role, home: this._roomName, ...(opts?.memory ?? {}) },
     });
     return this;
   }
@@ -151,6 +153,12 @@ export class ScenarioBuilder {
   /** 添加敌方 creep。 */
   hostile(name: string, x: number, y: number, body: Array<{ type: string }> = [{ type: "attack" }]): this {
     this._hostiles.push({ name, pos: { x, y }, body });
+    return this;
+  }
+
+  /** 添加地上掉落的能量资源。 */
+  droppedResource(x: number, y: number, amount: number): this {
+    this._droppedResources.push({ pos: { x, y }, amount });
     return this;
   }
 
@@ -217,6 +225,7 @@ export class ScenarioBuilder {
       constructionSites: this._constructionSites,
       creeps: this._creeps,
       hostiles: this._hostiles,
+      droppedResources: this._droppedResources,
       sourceRegenPerTick: this._sourceRegen,
       containerDecayPerTick: this._containerDecay,
       cpuBucket: this._cpuBucket,

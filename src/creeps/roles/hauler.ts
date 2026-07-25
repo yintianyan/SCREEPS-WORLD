@@ -16,8 +16,12 @@
  * 不需要 distributor。
  *
  * 策略声明：
- *   acquire: droppedEnergy > assignment container > storage link（排空 link 网络）> 最满 container（限量）
+ *   acquire: assignment container > storage link（排空 link 网络）> 最满 container（主取能）> droppedEnergy（残余清理）
  *   work:    haul fillTarget（带 reservation）> minerals → storage > labs > storage > 待命
+ *
+ * acquire 顺序要点：droppedEnergy 排最后。container 满溢时 harvester 会 drop 溢出能量，
+ * 若先捡 drop 会让 hauler 半满离开、来回空转而抽不干满 container（溢出根源未除）；
+ * 先抽最满 container 既满载搬运又从源头止住溢出。详见 acquire 链内注释。
  */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
@@ -80,16 +84,21 @@ function withdrawRichestCapped(): ActionCandidate {
 const policy: RolePolicy = {
   park: true,
   acquire: [
-    // 0. 拾取地上掉落能量 — 衰减资源，最高优先回收。
-    pickupDroppedEnergy(),
-    // 优先使用 assignment 指定的 container。
+    // 0. 优先使用 assignment 指定的 container（任务驱动，定向搬运）。
     withdrawAssignmentContainer(),
-    // 排空 storage link — link 物流链的「最后一公里」。
-    // 必须在 container 之前：storage link 是 link 网络的排水口，
-    // 不排空则 source link 背压瘫痪，整条 link 网络堵死。
+    // 1. 排空 storage link — link 物流链的「最后一公里」。
+    //    必须在 container 之前：storage link 是 link 网络的排水口，
+    //    不排空则 source link 背压瘫痪，整条 link 网络堵死。
     withdrawStorageLink(),
-    // 回退到最满 container。
+    // 2. 回退到最满 container —— 主取能源。
+    //    必须排在 pickupDroppedEnergy 之前：container 满溢时 harvester 会 drop 溢出能量，
+    //    若先捡 drop（小堆、衰减），hauler 背包没装满就离开去卸货，回来时 harvester 又 drop，
+    //    于是「捡零头→半满离开→返回→再捡零头」来回空转，满 container 始终没被抽干（溢出根源未除）。
+    //    先抽最满 container：一口装满背包（满载搬运），且抽干 container 即消除溢出根源。
     withdrawRichestCapped(),
+    // 3. 拾取地上掉落能量 —— 残余清理（死亡掉落 / container 被毁残留 / 已无 container 可抽时的溢出）。
+    //    降至最后：仅当无 assignment / link / container 需要搬运时才触发，避免劫持主取能。
+    pickupDroppedEnergy(),
     // 注意：hauler 永不从 storage 取能。
     // storage → sink 的分发由 distributor 角色负责。
     // 这从架构上消除了 storage→storage 循环。
