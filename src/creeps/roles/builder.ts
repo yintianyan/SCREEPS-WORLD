@@ -6,7 +6,7 @@
  *   acquire: 拾取掉落能量 > storage（RCL4+ 主力源）> 最近非物流 container > harvest
  *   work:    assignment site（tier 门禁）> 最近 site（tier 门禁）> fill > critical repair > 升级
  *
- * CPU 门禁通过候选 resolve 内的 tier 判断实现，不再内嵌 if-else。
+ * CPU 门禁通过 build.ts 的 tier 选项实现，不再内嵌 if-else。
  *
  * RCL4+ 取能策略：storage 建成后成为 builder 的主力能量源。
  *   - storage 由 hauler 持续填充，是最可靠的中央能量库；
@@ -15,8 +15,10 @@
  *   - 无 storage（RCL1-3）时自动跳过，回退到 container / harvest。
  */
 import type { Priority } from "../../kernel/contracts";
-import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
+import type { ActionContext, RolePolicy } from "../engine/action-types";
 import {
+  buildAssignmentSite,
+  buildNearestSite,
   fillTarget,
   harvestSource,
   pickupDroppedEnergy,
@@ -28,7 +30,6 @@ import {
   withdrawStorageCapped,
 } from "../engine/actions";
 import { releaseAssignment } from "../support/assignment-adapter";
-import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 import { defineRole } from "../engine/role-runner";
 
@@ -47,78 +48,6 @@ function builderGate(ac: ActionContext): boolean {
     }
   }
   return true;
-}
-
-/** 建造 assignment 指定的 site（带 conserve 门禁）。 */
-function buildAssignmentByTier(): ActionCandidate {
-  return {
-    name: "build:assignment-by-tier",
-    resolve: (ac) => {
-      if (ac.budget.tier === "recovery") return undefined;
-      if (!ac.assignment?.targetId) return undefined;
-      const site = getObjectById(ac.assignment.targetId as Id<ConstructionSite>);
-      if (!site) return undefined;
-      if (ac.budget.tier === "conserve") {
-        if (site.structureType !== STRUCTURE_SPAWN && site.structureType !== STRUCTURE_TOWER) return undefined;
-      }
-      return site;
-    },
-    execute: (ac, target) => {
-      const site = target as ConstructionSite;
-      const result = ac.creep.build(site);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, site);
-      } else if (result === ERR_INVALID_TARGET) {
-        releaseAssignment(ac.creep);
-        ac.creep.memory.assignment = undefined;
-      }
-    },
-  };
-}
-
-/** 建造最近 site（带 tier 门禁：conserve 只建 critical）。
- *
- * 目标持久化：优先复用上一 tick 选定的 site（creep.memory.targetId），
- * 仅在目标消失或不满足 tier 门禁时重新选择。
- * 这消除了 builder 在两个等距工地间每 tick 切换的"摇摆"行为。
- */
-function buildSiteByTier(): ActionCandidate {
-  return {
-    name: "build:site-by-tier",
-    resolve: (ac) => {
-      if (ac.budget.tier === "recovery") return undefined;
-      const sites = ac.budget.tier === "conserve"
-        ? ac.snapshot.myConstructionSites.filter(
-            s => s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_TOWER,
-          )
-        : ac.snapshot.myConstructionSites;
-      if (sites.length === 0) return undefined;
-
-      // 优先复用持久化目标 — 验证它仍在当前候选列表中。
-      if (ac.creep.memory.targetId) {
-        const cached = getObjectById(ac.creep.memory.targetId as Id<ConstructionSite>);
-        if (cached && sites.some(s => s.id === cached.id)) {
-          return cached;
-        }
-      }
-
-      // 无有效缓存目标 — 重新选择最近的。
-      const site = ac.creep.pos.findClosestByRange(sites as ConstructionSite[]);
-      if (site) {
-        ac.creep.memory.targetId = site.id as Id<ConstructionSite>;
-      }
-      return site ?? undefined;
-    },
-    execute: (ac, target) => {
-      const site = target as ConstructionSite;
-      const result = ac.creep.build(site);
-      if (result === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, site);
-      } else if (result === ERR_INVALID_TARGET) {
-        ac.creep.memory.targetId = undefined;
-      }
-    },
-  };
 }
 
 /**
@@ -158,10 +87,10 @@ const policy: RolePolicy = {
   ],
 
   work: [
-    // 建造 assignment 指定的 site（带 tier 门禁）。
-    buildAssignmentByTier(),
-    // 建造最近 site（带 tier 门禁）。
-    buildSiteByTier(),
+    // 建造 assignment 指定的 site（recovery 跳过，conserve 仅建 critical）。
+    buildAssignmentSite({ recoverySkip: true, conserveCriticalOnly: true }),
+    // 建造最近 site（recovery 跳过，conserve 仅建 critical site）。
+    buildNearestSite(ac => ac.budget.tier === "conserve", { recoverySkip: true }),
     // 紧急：修复衰减中的 container（< 80% 血量）。
     // 优先级高于 fill — 失去 container = 物流链断裂 = 经济崩溃。
     repairContainerDecay(),

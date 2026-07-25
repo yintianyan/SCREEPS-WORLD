@@ -7,9 +7,9 @@
  * 目标持久化：fillTarget / buildNearestSite 等动作复用 creep.memory 中
  * 缓存的上一 tick 目标 ID，仅在目标满/消失时重新选择，消除等距目标摇摆。
  */
-import type { ActionCandidate, ActionContext } from "../action-types";
+import type { ActionCandidate } from "../action-types";
 import { actOrMove } from "./helpers";
-import { moveToTarget } from "../../movement";
+import { updateMode } from "../lifecycle";
 import {
   findEmptiestContainer,
   getDistributorFillTarget,
@@ -24,7 +24,7 @@ import { getObjectById } from "../../support/obj-cache";
  * 目标持久化：优先复用上一 tick 选定的 fillTarget（creep.memory.fillTargetId），
  * 仅在目标满/消失时重新选择。消除多个等距目标间的摇摆。
  */
-export function fillTarget(): ActionCandidate {
+export function fillTarget(): ActionCandidate<AnyOwnedStructure> {
   return {
     name: "fill:target",
     resolve: (ac) => {
@@ -42,19 +42,18 @@ export function fillTarget(): ActionCandidate {
       }
       return target;
     },
-    execute: (ac, target) => {
-      const t = target as AnyOwnedStructure;
+    execute: (ac, t) => {
       const result = actOrMove(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY));
       if (result === ERR_FULL) {
         ac.creep.memory.fillTargetId = undefined;
-        updateModeLocal(ac);
+        updateMode(ac.creep);
       }
     },
   };
 }
 
 /** Hauler 专用填充（带 reservation 去重 + 优先级）。 */
-export function haulFillTarget(): ActionCandidate {
+export function haulFillTarget(): ActionCandidate<AnyOwnedStructure> {
   return {
     name: "fill:haul-target",
     // 纯检查：fillTargets 已包含所有需填充的 spawn/extension/tower/controller container
@@ -66,10 +65,9 @@ export function haulFillTarget(): ActionCandidate {
       if (ac.snapshot.fillTargets.length === 0) return undefined;
       return getHaulFillTarget(ac.creep, ac.snapshot);
     },
-    execute: (ac, target) => {
-      const t = target as AnyOwnedStructure;
+    execute: (ac, t) => {
       const result = actOrMove(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY));
-      if (result === ERR_FULL) updateModeLocal(ac);
+      if (result === ERR_FULL) updateMode(ac.creep);
     },
   };
 }
@@ -81,23 +79,22 @@ export function haulFillTarget(): ActionCandidate {
  * 断能即停产，优先级高于 tower 与 controller container；controller container 仅在无
  * controller link 时兜底（link 网络在场时独占升级供能）。详见 getDistributorFillTarget。
  */
-export function distributorFillTarget(): ActionCandidate {
+export function distributorFillTarget(): ActionCandidate<AnyOwnedStructure> {
   return {
     name: "fill:distributor-target",
     resolve: (ac) => {
       if (ac.snapshot.fillTargets.length === 0) return undefined;
       return getDistributorFillTarget(ac.creep, ac.snapshot);
     },
-    execute: (ac, target) => {
-      const t = target as AnyOwnedStructure;
+    execute: (ac, t) => {
       const result = actOrMove(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY));
-      if (result === ERR_FULL) updateModeLocal(ac);
+      if (result === ERR_FULL) updateMode(ac.creep);
     },
   };
 }
 
 /** 向最空 container 倒能。 */
-export function fillEmptiestContainer(): ActionCandidate {
+export function fillEmptiestContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "fill:emptiest-container",
     resolve: (ac) => {
@@ -106,8 +103,7 @@ export function fillEmptiestContainer(): ActionCandidate {
       if (!best || best.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return best;
     },
-    execute: (ac, target) => {
-      const best = target as StructureContainer;
+    execute: (ac, best) => {
       actOrMove(ac.creep, best, () => ac.creep.transfer(best, RESOURCE_ENERGY));
     },
   };
@@ -119,7 +115,7 @@ export function fillEmptiestContainer(): ActionCandidate {
  * 设计意图：hauler 负责 container → storage（收集），distributor 负责 storage → spawn/extension（分发）。
  * storage 空闲时优先填充，建立中央能量储备；storage 满后 fallthrough 到 haulFillTarget。
  */
-export function fillStorage(): ActionCandidate {
+export function fillStorage(): ActionCandidate<StructureStorage> {
   return {
     name: "fill:storage",
     resolve: (ac) => {
@@ -128,16 +124,8 @@ export function fillStorage(): ActionCandidate {
       if (ac.snapshot.storage.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return ac.snapshot.storage;
     },
-    execute: (ac, target) => {
-      const st = target as StructureStorage;
+    execute: (ac, st) => {
       actOrMove(ac.creep, st, () => ac.creep.transfer(st, RESOURCE_ENERGY));
     },
   };
 }
-
-/** 局部 updateMode — 用于 ERR_FULL 后重新评估。 */
-function updateModeLocal(ac: ActionContext): void {
-  const used = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY);
-  if (used === 0) ac.creep.memory.mode = "acquire";
-}
-

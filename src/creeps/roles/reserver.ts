@@ -23,7 +23,7 @@ import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 
 /** 占领/攻击 controller。 */
-function reserveControllerAction(): ActionCandidate {
+function reserveControllerAction(): ActionCandidate<StructureController> {
   return {
     name: "reserver:reserve-controller",
     resolve: (ac) => {
@@ -35,9 +35,7 @@ function reserveControllerAction(): ActionCandidate {
       if (!controller) return undefined;
       return controller;
     },
-    execute: (ac, target) => {
-      const controller = target as StructureController;
-
+    execute: (ac, controller) => {
       // controller 有主且非自己 → 攻击 controller（降级敌方控制）。
       if (controller.owner && !controller.my) {
         const result = ac.creep.attackController(controller);

@@ -23,7 +23,7 @@ import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 
 /** 从远矿 container 取能。 */
-function withdrawRemoteContainer(): ActionCandidate {
+function withdrawRemoteContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "remote-hauler:withdraw-container",
     resolve: (ac) => {
@@ -32,8 +32,7 @@ function withdrawRemoteContainer(): ActionCandidate {
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       return findRemoteContainer(ac.creep);
     },
-    execute: (ac, target) => {
-      const container = target as StructureContainer;
+    execute: (ac, container) => {
       const available = container.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
@@ -57,7 +56,7 @@ function withdrawRemoteContainer(): ActionCandidate {
 }
 
 /** 拾取远矿房地上掉落的能量（remoteHarvester drop 的）。 */
-function pickupRemoteDropped(): ActionCandidate {
+function pickupRemoteDropped(): ActionCandidate<Resource> {
   return {
     name: "remote-hauler:pickup-dropped",
     resolve: (ac) => {
@@ -65,8 +64,7 @@ function pickupRemoteDropped(): ActionCandidate {
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       return findDroppedEnergy(ac.creep);
     },
-    execute: (ac, target) => {
-      const dropped = target as Resource;
+    execute: (ac, dropped) => {
       const result = ac.creep.pickup(dropped);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, dropped);

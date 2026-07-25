@@ -6,11 +6,16 @@
 import type { ActionCandidate } from "../action-types";
 import { actOrMove } from "./helpers";
 
+/** haulMineralsToStorage 的 resolve 返回类型。 */
+type MineralHaulTarget =
+  | { dest: StructureStorage | StructureTerminal; mineral: ResourceConstant; phase: "deposit" }
+  | { source: StructureContainer; mineral: ResourceConstant; phase: "withdraw" };
+
 /**
  * 从 extractor 旁 container 搬运矿物到 storage/terminal。
  * 触发条件：container 中有非 energy 资源。
  */
-export function haulMineralsToStorage(): ActionCandidate {
+export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
   return {
     name: "haul:minerals-to-storage",
     resolve: (ac) => {
@@ -41,11 +46,7 @@ export function haulMineralsToStorage(): ActionCandidate {
 
       return { source, mineral, phase: "withdraw" as const };
     },
-    execute: (ac, target) => {
-      const t = target as
-        | { dest: StructureStorage | StructureTerminal; mineral: ResourceConstant; phase: "deposit" }
-        | { source: StructureContainer; mineral: ResourceConstant; phase: "withdraw" };
-
+    execute: (ac, t) => {
       if (t.phase === "deposit") {
         actOrMove(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.mineral));
       } else {
@@ -55,12 +56,17 @@ export function haulMineralsToStorage(): ActionCandidate {
   };
 }
 
+/** supplyLabs 的 resolve 返回类型。 */
+type LabSupplyTarget =
+  | { dest: StructureLab; compound: ResourceConstant; phase: "deposit" }
+  | { source: StructureStorage; compound: ResourceConstant; phase: "withdraw" };
+
 /**
  * 从 storage 搬运化合物到 lab（供料）。
  * 触发条件：lab 中有空位且 storage 有对应化合物。
  * 简化实现：搬运 lab 中缺少的资源。
  */
-export function supplyLabs(): ActionCandidate {
+export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
   return {
     name: "haul:supply-labs",
     resolve: (ac) => {
@@ -88,11 +94,7 @@ export function supplyLabs(): ActionCandidate {
 
       return { source: storage, compound, phase: "withdraw" as const };
     },
-    execute: (ac, target) => {
-      const t = target as
-        | { dest: StructureLab; compound: ResourceConstant; phase: "deposit" }
-        | { source: StructureStorage; compound: ResourceConstant; phase: "withdraw" };
-
+    execute: (ac, t) => {
       if (t.phase === "deposit") {
         actOrMove(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.compound));
       } else {

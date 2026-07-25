@@ -17,7 +17,7 @@ import { getSource } from "../../support/targeting";
  * 此处仅为跨 tick 竞态（resolve 通过后 source 被其他 creep 采空）。
  * 竞态是瞬时的，保持 acquire 模式下 tick 自动重试比切 idle 更快恢复。
  */
-export function harvestSource(): ActionCandidate {
+export function harvestSource(): ActionCandidate<Source> {
   return {
     name: "harvest:source",
     resolve: (ac) => {
@@ -25,11 +25,17 @@ export function harvestSource(): ActionCandidate {
       if (!source || source.energy === 0) return undefined;
       return source;
     },
-    execute: (ac, target) => {
-      const source = target as Source;
+    execute: (ac, source) => {
       actOrMove(ac.creep, source, () => ac.creep.harvest(source));
     },
   };
+}
+
+/** stationaryMine 的 resolve 返回类型。 */
+interface StationaryMineTarget {
+  source: Source;
+  container: StructureContainer | undefined;
+  link: StructureLink | undefined;
 }
 
 /**
@@ -47,7 +53,7 @@ export function harvestSource(): ActionCandidate {
  *   - 无论 FSM 处于哪个 mode 都执行，绕开「单 tick 只跑一条链」的限制；
  *   - 作为 work[0] 拦截站桩矿工，使其永不落到 fill/build/upgrade 而离岗（P2-7）。
  */
-export function stationaryMine(): ActionCandidate {
+export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
   return {
     name: "harvest:stationary-mine",
     resolve: (ac) => {
@@ -59,11 +65,7 @@ export function stationaryMine(): ActionCandidate {
       return { source, container, link };
     },
     execute: (ac, target) => {
-      const { source, container, link } = target as {
-        source: Source;
-        container: StructureContainer | undefined;
-        link: StructureLink | undefined;
-      };
+      const { source, container, link } = target;
       // 站位：优先站到 source container 之上（range 0 倒能，0 通勤）；否则站到 source 旁。
       const standTarget: RoomPosition | { pos: RoomPosition } = container ?? source;
 
@@ -121,12 +123,17 @@ function sourceAdjacentLink(ac: ActionContext, source: Source): StructureLink | 
   return ac.snapshot.links.find(l => l.pos.getRangeTo(source.pos) <= 1);
 }
 
+/** harvestMineral 的 resolve 返回类型。 */
+interface MineralTarget {
+  mineral: Mineral;
+}
+
 /**
  * 从 mineral 采集（需要 extractor）。
  * 触发条件：房间有 extractor + mineral 有储量 + creep 有 carry 空间。
  * 用于 source 再生期间的空闲利用（RCL6+）。
  */
-export function harvestMineral(): ActionCandidate {
+export function harvestMineral(): ActionCandidate<MineralTarget> {
   return {
     name: "harvest:mineral",
     resolve: (ac) => {
@@ -134,10 +141,10 @@ export function harvestMineral(): ActionCandidate {
       if (ac.snapshot.minerals.length === 0) return undefined;
       const mineral = ac.snapshot.minerals[0]!;
       if (mineral.mineralAmount <= 0 || ac.creep.store.getFreeCapacity() <= 0) return undefined;
-      return mineral;
+      return { mineral };
     },
     execute: (ac, target) => {
-      const mineral = target as Mineral;
+      const { mineral } = target;
       const result = actOrMove(ac.creep, mineral, () => ac.creep.harvest(mineral));
       if (result === ERR_NOT_ENOUGH_RESOURCES || result === ERR_TIRED) {
         // mineral 耗尽或冷却中 — 回 idle
@@ -146,3 +153,4 @@ export function harvestMineral(): ActionCandidate {
     },
   };
 }
+

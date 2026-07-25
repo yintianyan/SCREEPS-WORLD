@@ -119,19 +119,13 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         }
 
         // ── 9. 按 mode 选择候选列表并评估 ──
-        // resolve 模式（优先）：resolve 返回非 undefined 即执行，目标传入 execute。
-        // predicate 模式（兼容）：predicate 返回 true 即执行。
-        // resolve 模式消除 predicate-execute 重复计算——目标只解析一次。
+        // resolve 模式：resolve 返回非 undefined 即执行，目标传入 execute。
+        // 目标只解析一次，消除 predicate-execute 重复计算。
         const candidates = creep.memory.mode === "work" ? policy.work : policy.acquire;
         for (const candidate of candidates) {
-          if (candidate.resolve) {
-            const target = candidate.resolve(ac);
-            if (target !== undefined) {
-              candidate.execute(ac, target);
-              return;
-            }
-          } else if (candidate.predicate?.(ac)) {
-            candidate.execute(ac);
+          const target = candidate.resolve?.(ac);
+          if (target !== undefined) {
+            candidate.execute(ac, target);
             return;
           }
         }

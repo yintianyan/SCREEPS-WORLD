@@ -17,12 +17,11 @@ import { selectDroppedEnergy } from "../../support/targeting";
  * work。因此只要背包未满且快照中还有掉落能量，creep 会逐 tick 继续拾取不同的堆，
  * 直到装满才转入 work。
  */
-export function pickupDroppedEnergy(): ActionCandidate {
+export function pickupDroppedEnergy(): ActionCandidate<Resource> {
   return {
     name: "pickup:dropped-energy",
     resolve: (ac) => selectDroppedEnergy(ac.creep, ac.snapshot.droppedEnergy),
-    execute: (ac, target) => {
-      const resource = target as Resource;
+    execute: (ac, resource) => {
       const result = actOrMove(ac.creep, resource, () => ac.creep.pickup(resource));
       if (result === ERR_FULL) {
         ac.creep.memory.mode = "work";
@@ -38,7 +37,7 @@ export function pickupDroppedEnergy(): ActionCandidate {
  * 的掉落能量离开 controller 旁的站桩位。range 默认 2 — 覆盖站桩位
  * 周围一圈，足够捡起 harvester 溢出到 controller container 旁的能量。
  */
-export function pickupNearbyDroppedEnergy(range = 2): ActionCandidate {
+export function pickupNearbyDroppedEnergy(range = 2): ActionCandidate<Resource> {
   return {
     name: "pickup:nearby-dropped-energy",
     resolve: (ac) => {
@@ -47,8 +46,7 @@ export function pickupNearbyDroppedEnergy(range = 2): ActionCandidate {
       );
       return selectDroppedEnergy(ac.creep, nearby);
     },
-    execute: (ac, target) => {
-      const resource = target as Resource;
+    execute: (ac, resource) => {
       const result = ac.creep.pickup(resource);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, resource);

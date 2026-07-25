@@ -47,7 +47,7 @@ import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 
 /** 从 assignment 指定的 container 限量取能。 */
-function withdrawAssignmentContainer(): ActionCandidate {
+function withdrawAssignmentContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:assignment-container",
     resolve: (ac) => {
@@ -58,8 +58,7 @@ function withdrawAssignmentContainer(): ActionCandidate {
       if (container.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return container;
     },
-    execute: (ac, target) => {
-      const container = target as StructureContainer;
+    execute: (ac, container) => {
       const available = container.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);

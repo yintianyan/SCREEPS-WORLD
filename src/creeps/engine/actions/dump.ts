@@ -8,7 +8,7 @@ import type { ActionCandidate } from "../action-types";
 import { actOrMove } from "./helpers";
 
 /** 向身边 link 倒能（range <= 2）。 */
-export function dumpToNearbyLink(): ActionCandidate {
+export function dumpToNearbyLink(): ActionCandidate<StructureLink> {
   return {
     name: "dump:nearby-link",
     resolve: (ac) => {
@@ -18,15 +18,14 @@ export function dumpToNearbyLink(): ActionCandidate {
       if (candidates.length === 0) return undefined;
       return ac.creep.pos.findClosestByRange(candidates as StructureLink[]) ?? undefined;
     },
-    execute: (ac, target) => {
-      const link = target as StructureLink;
+    execute: (ac, link) => {
       actOrMove(ac.creep, link, () => ac.creep.transfer(link, RESOURCE_ENERGY));
     },
   };
 }
 
 /** 向身边 container 倒能（range <= 2，站桩 miner）。 */
-export function dumpToNearbyContainer(): ActionCandidate {
+export function dumpToNearbyContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "dump:nearby-container",
     resolve: (ac) => {
@@ -36,11 +35,16 @@ export function dumpToNearbyContainer(): ActionCandidate {
       if (candidates.length === 0) return undefined;
       return ac.creep.pos.findClosestByRange(candidates as StructureContainer[]) ?? undefined;
     },
-    execute: (ac, target) => {
-      const nearby = target as StructureContainer;
+    execute: (ac, nearby) => {
       actOrMove(ac.creep, nearby, () => ac.creep.transfer(nearby, RESOURCE_ENERGY));
     },
   };
+}
+
+/** dumpMineralsToNearbyContainer 的 resolve 返回类型。 */
+interface MineralDumpTarget {
+  container: StructureContainer;
+  mineral: ResourceConstant;
 }
 
 /**
@@ -48,7 +52,7 @@ export function dumpToNearbyContainer(): ActionCandidate {
  * 当 harvester 采集了 mineral（非 energy 资源）时，倒入最近 container。
  * 优先级高于 energy dump — 矿物不应占用 carry 空间。
  */
-export function dumpMineralsToNearbyContainer(): ActionCandidate {
+export function dumpMineralsToNearbyContainer(): ActionCandidate<MineralDumpTarget> {
   return {
     name: "dump:minerals-to-container",
     resolve: (ac) => {
@@ -64,14 +68,13 @@ export function dumpMineralsToNearbyContainer(): ActionCandidate {
       return { container, mineral };
     },
     execute: (ac, target) => {
-      const { container, mineral } = target as { container: StructureContainer; mineral: ResourceConstant };
-      actOrMove(ac.creep, container, () => ac.creep.transfer(container, mineral));
+      actOrMove(ac.creep, target.container, () => ac.creep.transfer(target.container, target.mineral));
     },
   };
 }
 
 /** 建造身边 container site（range <= 3，经济自愈）。 */
-export function buildNearbyContainerSite(): ActionCandidate {
+export function buildNearbyContainerSite(): ActionCandidate<ConstructionSite> {
   return {
     name: "build:nearby-container-site",
     resolve: (ac) => {
@@ -82,8 +85,7 @@ export function buildNearbyContainerSite(): ActionCandidate {
       if (!site || ac.creep.pos.getRangeTo(site) > 3) return undefined;
       return site;
     },
-    execute: (ac, target) => {
-      const site = target as ConstructionSite;
+    execute: (ac, site) => {
       actOrMove(ac.creep, site, () => ac.creep.build(site));
     },
   };

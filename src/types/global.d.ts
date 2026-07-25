@@ -30,6 +30,8 @@ declare global {
     repairTargetId?: Id<_HasId>;
     /** harvester/miner 绑定的 source。 */
     sourceId?: Id<Source>;
+    /** remote-harvester 缓存的 source 旁 container ID（避免每 tick lookForAtArea）。 */
+    sourceContainerId?: Id<_HasId>;
     /** 压缩的上次位置（x * 50 + y）用于卡位检测。 */
     lastPos?: number;
     /** 连续未移动的 tick 数。 */

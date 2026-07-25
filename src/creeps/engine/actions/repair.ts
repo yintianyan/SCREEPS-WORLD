@@ -17,13 +17,14 @@ import { actOrMove } from "./helpers";
 import { findCriticalRepair } from "../../support/targeting";
 import { getObjectById } from "../../support/obj-cache";
 
+type Fortification = StructureWall | StructureRampart;
+
 /** 修复 critical 结构（血量 < 50%）。findCriticalRepair 优先使用快照预计算值。 */
-export function repairCritical(): ActionCandidate {
+export function repairCritical(): ActionCandidate<AnyStructure> {
   return {
     name: "repair:critical",
     resolve: (ac) => findCriticalRepair(ac.snapshot),
-    execute: (ac, target) => {
-      const t = target as Structure;
+    execute: (ac, t) => {
       actOrMove(ac.creep, t, () => ac.creep.repair(t));
     },
   };
@@ -37,15 +38,15 @@ export function repairCritical(): ActionCandidate {
  * 目标持久化：优先复用上一 tick 选定的 container（creep.memory.repairTargetId），
  * 仅在目标修好/消失时重新选择。消除多个衰减 container 间的摇摆。
  */
-export function repairContainerDecay(): ActionCandidate {
+export function repairContainerDecay(): ActionCandidate<StructureContainer> {
   return {
     name: "repair:container-decay",
     resolve: (ac) => {
       // 优先复用持久化目标 — 验证它仍需修复。
       if (ac.creep.memory.repairTargetId) {
         const cached = getObjectById(ac.creep.memory.repairTargetId as Id<StructureContainer>);
-        if (cached && (cached as StructureContainer).hits < (cached as StructureContainer).hitsMax * 0.8) {
-          return cached as StructureContainer;
+        if (cached && cached.hits < cached.hitsMax * 0.8) {
+          return cached;
         }
       }
       // 无有效缓存目标 — 修血量最低的 container。
@@ -63,8 +64,7 @@ export function repairContainerDecay(): ActionCandidate {
       }
       return worst;
     },
-    execute: (ac, target) => {
-      const worst = target as StructureContainer;
+    execute: (ac, worst) => {
       const result = ac.creep.repair(worst);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, worst);
@@ -80,7 +80,7 @@ export function repairContainerDecay(): ActionCandidate {
  * Harvester 站桩专用：你正站在 container 旁边，它快塌了，先修再倒。
  * 比 repairContainerDecay 更紧急 — 只修身边的，不需要跑远路。
  */
-export function repairNearbyContainer(): ActionCandidate {
+export function repairNearbyContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "repair:nearby-container",
     resolve: (ac) => {
@@ -90,8 +90,7 @@ export function repairNearbyContainer(): ActionCandidate {
       if (candidates.length === 0) return undefined;
       return ac.creep.pos.findClosestByRange(candidates as StructureContainer[]) ?? undefined;
     },
-    execute: (ac, target) => {
-      const nearby = target as StructureContainer;
+    execute: (ac, nearby) => {
       actOrMove(ac.creep, nearby, () => ac.creep.repair(nearby));
     },
   };
@@ -108,7 +107,7 @@ export function repairNearbyContainer(): ActionCandidate {
  *   - 无威胁 creep（入侵期间修墙是白送能量，优先开火/保命）；
  *   - 有 storage 且能量 ≥ sustainedStorage（真盈余才修，早期不堆 rampart）。
  */
-export function repairFortifications(): ActionCandidate {
+export function repairFortifications(): ActionCandidate<Fortification> {
   return {
     name: "repair:fortifications",
     resolve: (ac) => {
@@ -124,12 +123,13 @@ export function repairFortifications(): ActionCandidate {
 
       // 优先复用持久化目标 — 验证它仍是墙/城防且仍需修复。
       if (ac.creep.memory.repairTargetId) {
-        const cached = getObjectById(ac.creep.memory.repairTargetId as Id<StructureWall | StructureRampart>);
+        const cached = getObjectById(ac.creep.memory.repairTargetId as Id<Fortification>);
         if (cached) {
-          const s = cached as StructureWall | StructureRampart;
-          if ((s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART)
-            && s.hits < targetHits) {
-            return s;
+          if (
+            (cached.structureType === STRUCTURE_WALL || cached.structureType === STRUCTURE_RAMPART)
+            && cached.hits < targetHits
+          ) {
+            return cached;
           }
         }
       }
@@ -137,12 +137,11 @@ export function repairFortifications(): ActionCandidate {
       // 无有效缓存目标 — 重新扫描最低血量的墙/城防。
       const target = findFortificationTarget(ac.snapshot, targetHits);
       if (target) {
-        ac.creep.memory.repairTargetId = target.id as Id<StructureWall | StructureRampart>;
+        ac.creep.memory.repairTargetId = target.id as Id<Fortification>;
       }
       return target;
     },
-    execute: (ac, target) => {
-      const t = target as StructureWall | StructureRampart;
+    execute: (ac, t) => {
       const result = ac.creep.repair(t);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, t);
@@ -157,8 +156,8 @@ export function repairFortifications(): ActionCandidate {
 function findFortificationTarget(
   snapshot: RoomSnapshot,
   targetHits: number,
-): StructureWall | StructureRampart | undefined {
-  let best: StructureWall | StructureRampart | undefined;
+): Fortification | undefined {
+  let best: Fortification | undefined;
   let bestHits = Infinity;
   for (const wall of snapshot.walls) {
     if (wall.hits < targetHits && wall.hits < bestHits) {

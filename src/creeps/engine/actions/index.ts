@@ -32,6 +32,7 @@ export {
   fillStorage,
 } from "./fill";
 export { buildAssignmentSite, buildNearestSite } from "./build";
+export type { BuildAssignmentOptions } from "./build";
 export {
   repairCritical,
   repairContainerDecay,

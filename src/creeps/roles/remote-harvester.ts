@@ -14,7 +14,7 @@
  * 架构约束：ensureHome 已适配 remoteTarget，本角色常驻 remoteTarget 房间。
  */
 import type { Priority } from "../../kernel/contracts";
-import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
+import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
@@ -51,8 +51,26 @@ function getRemoteSource(creep: Creep): Source | undefined {
   return best;
 }
 
-/** 查找 source 旁的 container（range <= 1）。 */
+/**
+ * 查找 source 旁的 container（range <= 1）。
+ *
+ * P2 优化：缓存 containerId 到 creep.memory.sourceContainerId，
+ * 避免每 tick 调用 lookForAtArea（0.05-0.1 CPU/次）。
+ * 缓存失效条件：container 被摧毁（getObjectById 返回 null）。
+ */
 function findSourceContainer(creep: Creep, source: Source): StructureContainer | undefined {
+  // 优先使用缓存的 containerId。
+  if (creep.memory.sourceContainerId) {
+    const cached = getObjectById(creep.memory.sourceContainerId as Id<StructureContainer>);
+    if (cached) {
+      // 验证仍在 source 旁（防御性：container 可能被回收后在别处重建）。
+      if (cached.pos.getRangeTo(source.pos) <= 1) return cached;
+    }
+    // 缓存失效 — 清除并重新扫描。
+    creep.memory.sourceContainerId = undefined;
+  }
+
+  // 首次或缓存失效：lookForAtArea 扫描 source 周围 3x3 区域。
   const structures = creep.room.lookForAtArea(
     LOOK_STRUCTURES,
     Math.max(0, source.pos.y - 1),
@@ -63,14 +81,17 @@ function findSourceContainer(creep: Creep, source: Source): StructureContainer |
   );
   for (const entry of structures) {
     if (entry.structure.structureType === STRUCTURE_CONTAINER) {
-      return entry.structure as StructureContainer;
+      const container = entry.structure as StructureContainer;
+      // 缓存 containerId，后续 tick 直接用 getObjectById 取回。
+      creep.memory.sourceContainerId = container.id as Id<StructureContainer>;
+      return container;
     }
   }
   return undefined;
 }
 
 /** 远矿采集 + 站桩倒能。 */
-function remoteStationaryMine(): ActionCandidate {
+function remoteStationaryMine(): ActionCandidate<Source> {
   return {
     name: "remote-harvest:stationary-mine",
     resolve: (ac) => {
@@ -80,8 +101,7 @@ function remoteStationaryMine(): ActionCandidate {
       if (ac.creep.pos.getRangeTo(source) > 1) return undefined;
       return source;
     },
-    execute: (ac, target) => {
-      const source = target as Source;
+    execute: (ac, source) => {
       // 采集。
       const harvestResult = ac.creep.harvest(source);
       if (harvestResult === ERR_NOT_IN_RANGE) {
@@ -103,12 +123,11 @@ function remoteStationaryMine(): ActionCandidate {
 }
 
 /** 移动到 source 并采集（未到达站桩位时）。 */
-function remoteHarvestSource(): ActionCandidate {
+function remoteHarvestSource(): ActionCandidate<Source> {
   return {
     name: "remote-harvest:move-and-mine",
     resolve: (ac) => getRemoteSource(ac.creep),
-    execute: (ac, target) => {
-      const source = target as Source;
+    execute: (ac, source) => {
       const result = ac.creep.harvest(source);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, source);
@@ -119,8 +138,13 @@ function remoteHarvestSource(): ActionCandidate {
   };
 }
 
+/** dropEnergy 的 resolve 返回类型。 */
+type DropEnergyTarget =
+  | { type: "transfer"; container: StructureContainer }
+  | { type: "drop" };
+
 /** 采满且无 container 时 drop 能量（避免产能停滞）。 */
-function dropEnergy(): ActionCandidate {
+function dropEnergy(): ActionCandidate<DropEnergyTarget> {
   return {
     name: "remote-harvest:drop",
     resolve: (ac) => {
@@ -136,8 +160,7 @@ function dropEnergy(): ActionCandidate {
       // 无 container 或 container 满 → drop
       return { type: "drop" as const };
     },
-    execute: (ac, target) => {
-      const resolved = target as { type: "transfer"; container: StructureContainer } | { type: "drop" };
+    execute: (ac, resolved) => {
       if (resolved.type === "transfer") {
         ac.creep.transfer(resolved.container, RESOURCE_ENERGY);
       } else {

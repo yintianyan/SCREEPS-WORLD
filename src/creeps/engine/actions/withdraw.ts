@@ -17,7 +17,7 @@ import {
 } from "../../support/targeting";
 
 /** 从最满 container 取能。 */
-export function withdrawRichestContainer(): ActionCandidate {
+export function withdrawRichestContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:richest-container",
     resolve: (ac) => {
@@ -25,20 +25,18 @@ export function withdrawRichestContainer(): ActionCandidate {
       if (!best || best.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return best;
     },
-    execute: (ac, target) => {
-      const best = target as StructureContainer;
+    execute: (ac, best) => {
       actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
     },
   };
 }
 
 /** 从最近有能量的 container 取能（builder 减少通勤）。 */
-export function withdrawClosestContainer(): ActionCandidate {
+export function withdrawClosestContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:closest-container",
     resolve: (ac) => findClosestContainerWithEnergy(ac.creep, ac.snapshot.containers),
-    execute: (ac, target) => {
-      const best = target as StructureContainer;
+    execute: (ac, best) => {
       actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
     },
   };
@@ -63,7 +61,7 @@ function isLogisticsContainer(c: StructureContainer, ac: ActionContext): boolean
 }
 
 /** 从最满的非物流 container 取能（upgrader 用，不抢 hauler/upgrader 的物流源）。 */
-export function withdrawRichestNonSourceContainer(): ActionCandidate {
+export function withdrawRichestNonSourceContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:richest-non-source-container",
     resolve: (ac) => {
@@ -72,15 +70,14 @@ export function withdrawRichestNonSourceContainer(): ActionCandidate {
       );
       return findRichestContainer(candidates);
     },
-    execute: (ac, target) => {
-      const best = target as StructureContainer;
+    execute: (ac, best) => {
       actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
     },
   };
 }
 
 /** 从最近的非物流 container 取能（builder 用，不抢 hauler/upgrader 的物流源）。 */
-export function withdrawClosestNonSourceContainer(): ActionCandidate {
+export function withdrawClosestNonSourceContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:closest-non-source-container",
     resolve: (ac) => {
@@ -89,15 +86,14 @@ export function withdrawClosestNonSourceContainer(): ActionCandidate {
       );
       return findClosestContainerWithEnergy(ac.creep, candidates);
     },
-    execute: (ac, target) => {
-      const best = target as StructureContainer;
+    execute: (ac, best) => {
       actOrMove(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
     },
   };
 }
 
 /** 从 controller 旁 container 取能（站桩升级）。 */
-export function withdrawControllerContainer(): ActionCandidate {
+export function withdrawControllerContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:controller-container",
     resolve: (ac) => {
@@ -105,15 +101,14 @@ export function withdrawControllerContainer(): ActionCandidate {
       if (!cc || cc.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return cc;
     },
-    execute: (ac, target) => {
-      const cc = target as StructureContainer;
+    execute: (ac, cc) => {
       actOrMove(ac.creep, cc, () => ac.creep.withdraw(cc, RESOURCE_ENERGY));
     },
   };
 }
 
 /** 从 controller 旁 link 取能（link 站桩升级，0 通勤）。 */
-export function withdrawControllerLink(): ActionCandidate {
+export function withdrawControllerLink(): ActionCandidate<StructureLink> {
   return {
     name: "withdraw:controller-link",
     resolve: (ac) => {
@@ -122,15 +117,14 @@ export function withdrawControllerLink(): ActionCandidate {
         l => l.pos.getRangeTo(ac.snapshot.controller!) <= 2 && l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
     },
-    execute: (ac, target) => {
-      const ctrlLink = target as StructureLink;
+    execute: (ac, ctrlLink) => {
       actOrMove(ac.creep, ctrlLink, () => ac.creep.withdraw(ctrlLink, RESOURCE_ENERGY));
     },
   };
 }
 
 /** 从 storage 取能。 */
-export function withdrawStorage(): ActionCandidate {
+export function withdrawStorage(): ActionCandidate<StructureStorage> {
   return {
     name: "withdraw:storage",
     resolve: (ac) => {
@@ -138,8 +132,7 @@ export function withdrawStorage(): ActionCandidate {
       if (!st || st.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return st;
     },
-    execute: (ac, target) => {
-      const st = target as StructureStorage;
+    execute: (ac, st) => {
       actOrMove(ac.creep, st, () => ac.creep.withdraw(st, RESOURCE_ENERGY));
     },
   };
@@ -160,7 +153,7 @@ export function withdrawStorage(): ActionCandidate {
  *
  * 限量取能：与 withdrawCapped 一致，取 min(可用, 空闲)，避免 ERR_NOT_ENOUGH_RESOURCES。
  */
-export function withdrawStorageLink(): ActionCandidate {
+export function withdrawStorageLink(): ActionCandidate<StructureLink> {
   return {
     name: "withdraw:storage-link",
     resolve: (ac) => {
@@ -170,8 +163,7 @@ export function withdrawStorageLink(): ActionCandidate {
         l => l.pos.getRangeTo(st) <= 2 && l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
     },
-    execute: (ac, target) => {
-      const link = target as StructureLink;
+    execute: (ac, link) => {
       const available = link.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
@@ -185,6 +177,12 @@ export function withdrawStorageLink(): ActionCandidate {
   };
 }
 
+/** withdrawStorageCapped 的 resolve 返回类型。 */
+interface StorageCappedTarget {
+  storage: StructureStorage;
+  limit: number;
+}
+
 /**
  * 从 storage 限量取能（upgrader 专用）。
  *
@@ -195,7 +193,7 @@ export function withdrawStorageLink(): ActionCandidate {
  */
 export function withdrawStorageCapped(
   limit: number | ((ac: ActionContext) => number),
-): ActionCandidate {
+): ActionCandidate<StorageCappedTarget> {
   return {
     name: "withdraw:storage-capped",
     resolve: (ac) => {
@@ -205,7 +203,7 @@ export function withdrawStorageCapped(
       return { storage: st, limit: effectiveLimit };
     },
     execute: (ac, target) => {
-      const { storage, limit: effectiveLimit } = target as { storage: StructureStorage; limit: number };
+      const { storage, limit: effectiveLimit } = target;
       const available = storage.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree, effectiveLimit);
@@ -218,7 +216,9 @@ export function withdrawStorageCapped(
 }
 
 /** 限量 withdraw（hauler 专用，避免 ERR_NOT_ENOUGH_RESOURCES）。 */
-export function withdrawCapped(target: (ac: ActionContext) => StructureContainer | StructureStorage | undefined): ActionCandidate {
+export function withdrawCapped(
+  target: (ac: ActionContext) => StructureContainer | StructureStorage | undefined,
+): ActionCandidate<StructureContainer | StructureStorage> {
   return {
     name: "withdraw:capped",
     resolve: (ac) => {
@@ -226,8 +226,7 @@ export function withdrawCapped(target: (ac: ActionContext) => StructureContainer
       if (!t || t.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return t;
     },
-    execute: (ac, target) => {
-      const t = target as StructureContainer | StructureStorage;
+    execute: (ac, t) => {
       const available = t.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);

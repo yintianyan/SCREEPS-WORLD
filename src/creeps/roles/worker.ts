@@ -21,7 +21,7 @@ import { getObjectById } from "../support/obj-cache";
 import { defineRole } from "../engine/role-runner";
 
 /** 向 assignment 指定的 target 送能。 */
-function fillAssignmentTarget(): ActionCandidate {
+function fillAssignmentTarget(): ActionCandidate<AnyOwnedStructure> {
   return {
     name: "fill:assignment-target",
     resolve: (ac) => {
@@ -29,8 +29,7 @@ function fillAssignmentTarget(): ActionCandidate {
       const target = getObjectById(ac.assignment.targetId as Id<AnyOwnedStructure>);
       return target ?? undefined;
     },
-    execute: (ac, target) => {
-      const t = target as AnyOwnedStructure;
+    execute: (ac, t) => {
       const result = ac.creep.transfer(t, RESOURCE_ENERGY);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, t);

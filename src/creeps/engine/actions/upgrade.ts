@@ -10,7 +10,7 @@ import type { ActionCandidate } from "../action-types";
 import { actOrMove } from "./helpers";
 
 /** 升级控制器（无能量门禁）。 */
-export function upgradeController(): ActionCandidate {
+export function upgradeController(): ActionCandidate<StructureController> {
   return {
     name: "upgrade:controller",
     resolve: (ac) => {
@@ -18,15 +18,14 @@ export function upgradeController(): ActionCandidate {
       if (!ctrl || !ctrl.my) return undefined;
       return ctrl;
     },
-    execute: (ac, target) => {
-      const ctrl = target as StructureController;
+    execute: (ac, ctrl) => {
       actOrMove(ac.creep, ctrl, () => ac.creep.upgradeController(ctrl));
     },
   };
 }
 
 /** 升级控制器（带能量门禁：energyAvailable >= floor）。 */
-export function upgradeControllerGated(): ActionCandidate {
+export function upgradeControllerGated(): ActionCandidate<StructureController> {
   return {
     name: "upgrade:controller-gated",
     resolve: (ac) => {
@@ -35,8 +34,7 @@ export function upgradeControllerGated(): ActionCandidate {
       if (ac.snapshot.energyAvailable < CONFIG.economy.upgradeEnergyFloor) return undefined;
       return ctrl;
     },
-    execute: (ac, target) => {
-      const ctrl = target as StructureController;
+    execute: (ac, ctrl) => {
       actOrMove(ac.creep, ctrl, () => ac.creep.upgradeController(ctrl));
     },
   };

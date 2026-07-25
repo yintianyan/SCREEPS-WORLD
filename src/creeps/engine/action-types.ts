@@ -3,17 +3,17 @@
  *
  * 设计原则：
  *   - 每个 role 的行为被拆解为有序的 ActionCandidate 列表。
- *   - resolve 只读判断"能不能做"并返回目标，execute 执行"怎么做"。
+ *   - resolve 解析目标（返回 undefined 表示不触发），execute 接收该目标执行。
  *   - RoleRunner 按序评估，第一个 resolve 非 undefined 的候选被执行。
  *   - 新增/调整行为 = 增删/排序候选，不修改其他候选。
  *
- * resolve 模式（推荐）：
- *   resolve 返回目标对象（或 undefined 表示不触发），execute 接收该目标。
- *   消除 predicate-execute 重复计算——目标只解析一次。
+ * resolve 模式（唯一模式）：
+ *   resolve 返回目标对象（T | undefined），execute 接收类型安全的 T。
+ *   消除了 predicate-execute 重复计算——目标只解析一次。
  *
- * predicate 模式（兼容）：
- *   仅返回 boolean，execute 不接收 target。适用于无昂贵目标计算的简单 action。
- *   至少定义 resolve 或 predicate 之一。
+ * 注意：resolve 允许写入 creep.memory（持久化缓存目标 ID），
+ * 这是有意为之的务实设计——Screeps 的 memory 持久化是必须的。
+ * 但 resolve 禁止执行游戏 API 副作用（harvest/transfer/build 等）。
  */
 import type { Budget, RoomSnapshot, TickContext } from "../../kernel/contracts";
 
@@ -29,21 +29,22 @@ export interface ActionContext {
 /**
  * 单个行为候选 — role 行为的最小可组合单元。
  *
- * resolve: 纯判断 + 目标解析，不产生副作用。返回非 undefined 表示此行为可执行。
- *          存在时优先使用，跳过 predicate。消除 predicate-execute 重复计算。
- * predicate: 纯判断，不产生副作用。返回 true 表示此行为可执行。
- *            仅在 resolve 不存在时使用。
- * execute: 执行行为（移动 + 操作）。使用 resolve 模式时 target 为 resolve 返回值。
+ * 泛型参数 T 表示 resolve 返回的目标类型，execute 接收同类型的 target。
+ * 工厂函数声明具体类型（如 ActionCandidate<StructureContainer>），
+ * 消除 execute 内的 `as Type` 无检查转换。
+ * RolePolicy 的候选列表使用 ActionCandidate<any>[] 保持异构性。
+ *
+ * resolve: 解析目标 + 可选 memory 缓存。返回 undefined 表示此行为不触发。
+ *          允许写 creep.memory（持久化缓存），但禁止执行游戏 API 副作用。
+ * execute: 执行行为（移动 + 操作）。target 类型安全，由泛型参数 T 保证。
  */
-export interface ActionCandidate {
+export interface ActionCandidate<T = unknown> {
   /** 调试标识（telemetry / 日志用）。 */
   readonly name: string;
-  /** 解析目标。返回 undefined 表示此行为不触发。存在时优先于 predicate 使用。 */
-  readonly resolve?: (ac: ActionContext) => unknown;
-  /** 判断当前上下文是否满足此行为的触发条件。resolve 不存在时使用。 */
-  readonly predicate?: (ac: ActionContext) => boolean;
-  /** 执行行为。使用 resolve 模式时 target 为 resolve 返回值。 */
-  execute(ac: ActionContext, target?: unknown): void;
+  /** 解析目标。返回 undefined 表示此行为不触发。 */
+  readonly resolve?: (ac: ActionContext) => T | undefined;
+  /** 执行行为。target 为 resolve 返回值，类型由泛型 T 保证。 */
+  execute(ac: ActionContext, target: T): void;
 }
 
 /**
@@ -62,10 +63,10 @@ export interface ActionCandidate {
 export interface RolePolicy {
   /** 门禁：在 mode 分支之前评估。返回 false → idle。 */
   gate?(ac: ActionContext): boolean;
-  /** acquire 模式候选（取能）。 */
-  acquire: readonly ActionCandidate[];
-  /** work 模式候选（消耗能量）。 */
-  work: readonly ActionCandidate[];
+  /** acquire 模式候选（取能）。异构列表，使用 any 宽化。 */
+  acquire: readonly ActionCandidate<any>[];
+  /** work 模式候选（消耗能量）。异构列表，使用 any 宽化。 */
+  work: readonly ActionCandidate<any>[];
   /**
    * flee 钩子：威胁检测后、通用 flee 移动之前调用。
    * 返回 true 表示角色已自行处理（如 hauler 在防御圈内安全充能），跳过通用 flee。
