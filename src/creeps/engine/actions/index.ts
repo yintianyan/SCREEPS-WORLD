@@ -37,6 +37,7 @@ export {
   repairCritical,
   repairContainerDecay,
   repairNearbyContainer,
+  repairRoads,
   repairFortifications,
 } from "./repair";
 export { upgradeController, upgradeControllerGated } from "./upgrade";

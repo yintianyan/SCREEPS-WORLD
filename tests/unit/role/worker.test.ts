@@ -93,6 +93,36 @@ describe("worker — work 模式", () => {
     expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
   });
 
+  // P0 修复：worker 被 kernel 计入 repairRooms，必须有实际 repair action。
+  it("修复血量 < 50% 的关键结构（无 fillTarget 时）", () => {
+    const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 300, capacity: 300, hits: 400, hitsMax: 1000 });
+    const snap = mockSnapshot({
+      fillTargets: [],
+      spawns: [damagedSpawn],
+    });
+    const creep = mockCreep({ name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    workerRole.run(creep, ctx);
+
+    expect(creep.repair).toHaveBeenCalledWith(damagedSpawn);
+  });
+
+  it("repairCritical 优先于 fillTarget（结构快塌了比填能量更紧急）", () => {
+    const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300, hits: 400, hitsMax: 1000 });
+    const snap = mockSnapshot({
+      fillTargets: [damagedSpawn],
+      spawns: [damagedSpawn],
+    });
+    const creep = mockCreep({ name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    workerRole.run(creep, ctx);
+
+    expect(creep.repair).toHaveBeenCalledWith(damagedSpawn);
+    expect(creep.transfer).not.toHaveBeenCalled();
+  });
+
   it("使用 assignment targetId 指定的目标", () => {
     const ext = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });

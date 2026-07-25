@@ -25,6 +25,7 @@ import {
   repairContainerDecay,
   repairCritical,
   repairFortifications,
+  repairRoads,
   upgradeController,
   withdrawClosestNonSourceContainer,
   withdrawStorageCapped,
@@ -94,10 +95,14 @@ const policy: RolePolicy = {
     // 紧急：修复衰减中的 container（< 80% 血量）。
     // 优先级高于 fill — 失去 container = 物流链断裂 = 经济崩溃。
     repairContainerDecay(),
+    // 紧急：修复血量 < 50% 的关键结构（spawn/tower/extension/container）。
+    // P2 修复：原位于 fillTarget 之后，现提前 — 结构快塌了比填能量更紧急。
+    repairCritical(),
     // fallback: 填充 spawn/extension。
     fillTarget(),
-    // fallback: 关键修复（< 50% 血量）。
-    repairCritical(),
+    // fallback: 修复衰减中的道路（< 40% 血量）。
+    // P1 修复：原先道路无任何维修覆盖，塌毁后交通变慢浪费 CPU。
+    repairRoads(),
     // fallback: 防御工事维修（B3：盈余门禁 + 无威胁时，修 wall/rampart 至分级血量）。
     // 维修权从塔移交 creep —— 塔修墙是能量黑洞，creep 修是 1 energy/100 hits/WORK。
     repairFortifications(),

@@ -208,11 +208,6 @@ export const CONFIG = {
       rcl5_6: 1_000_000,
       rcl7_8: 10_000_000,
     },
-    rampartTargetHits: {
-      rcl3_4: 100_000,
-      rcl5_6: 1_000_000,
-      rcl7_8: 10_000_000,
-    },
   },
 
   roles: {
