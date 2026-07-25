@@ -228,6 +228,13 @@ export const CONFIG = {
     reserver: { minCount: 0, maxCount: 3 },
   },
 
+  debug: {
+    /** 在 creep 头顶绘制状态指示灯（work=绿 / acquire=黄 / idle=红 / flee=橙）。
+     * 纯诊断功能，默认关闭。开启时每 creep 每 tick 约 0.001-0.005 CPU。
+     * 用法：需要诊断时把此值改 true 重新构建上传即可，无需改其他代码。 */
+    statusLight: true,
+  },
+
   remote: {
     /** 远矿管理器运行间隔（tick）。 */
     managerInterval: 10,
