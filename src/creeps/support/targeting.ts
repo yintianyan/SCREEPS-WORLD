@@ -66,7 +66,26 @@ export function getFillTarget(
 }
 
 /** 可被 hauler 填充的结构类型。 */
-type FillTarget = StructureSpawn | StructureExtension | StructureTower | StructureContainer;
+export type FillTarget = StructureSpawn | StructureExtension | StructureTower | StructureContainer;
+
+/**
+ * Hauler 填充目标的优先级层级（threat 感知）。
+ *
+ * 返回有序的类型桶 — 调用者按序遍历，第一个有匹配的桶中取最近目标。
+ * threat 存在时 tower 提升到最高优先（防御弹药是生存关键）。
+ * 末尾空桶匹配所有剩余类型（回退兜底）。
+ *
+ * 注意：controller container 的特殊优先级（< 半满时插队）
+ * 由 getHaulFillTarget 在调用此函数之前自行处理，不包含在此通用层级中 —
+ * flee 场景不需要补给 controller container（非生存关键）。
+ */
+export function haulerFillTiers(
+  hasThreats: boolean,
+): readonly (readonly string[])[] {
+  return hasThreats
+    ? [[STRUCTURE_TOWER], [STRUCTURE_SPAWN, STRUCTURE_EXTENSION], []]
+    : [[STRUCTURE_SPAWN, STRUCTURE_EXTENSION], [STRUCTURE_TOWER], []];
+}
 
 /** 在 targets 中找最近的「未预约」目标；给定 types 时仅在这些结构类型中挑选。 */
 function pickFillTarget(
@@ -106,9 +125,10 @@ export function getHaulFillTarget(
   }
   const reserved = g.fillReservations;
 
+  const hasThreats = snapshot.threatCreeps.length > 0;
+
   // P1-3: 威胁存在时 tower 提升到最高优先级 — 防御弹药是生存关键。
   // tower 每次攻击消耗 10 能量，hauler 必须在威胁期间优先补给 tower 保持防御火力。
-  const hasThreats = snapshot.threatCreeps.length > 0;
   if (hasThreats) {
     const tower = pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_TOWER]);
     if (tower) {
@@ -128,15 +148,20 @@ export function getHaulFillTarget(
     return cc as unknown as AnyOwnedStructure;
   }
 
-  // 1→2→3 分级挑选最近未预约目标。
-  const target =
-    pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_SPAWN, STRUCTURE_EXTENSION]) ??
-    pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_TOWER]) ??
-    pickFillTarget(creep, snapshot.fillTargets, reserved);
-
-  if (target) {
-    reserved.add(target.id);
-    return target as unknown as AnyOwnedStructure;
+  // 1→2→3 按 haulerFillTiers 优先级层级遍历（与 flee 逻辑共享同一层级定义）。
+  // threat 时首个 [TOWER] 层级已在上方处理，此处为冗余遍历但无副作用 —
+  // 已预留的 tower 会被 pickFillTarget 的 reserved 过滤排除。
+  for (const types of haulerFillTiers(hasThreats)) {
+    const target = pickFillTarget(
+      creep,
+      snapshot.fillTargets,
+      reserved,
+      types.length > 0 ? types : undefined,
+    );
+    if (target) {
+      reserved.add(target.id);
+      return target as unknown as AnyOwnedStructure;
+    }
   }
 
   // 全部已预约 — 回退最近目标（允许共享）避免死锁。
@@ -208,6 +233,42 @@ export function getDistributorFillTarget(
   return (creep.pos.findClosestByRange(snapshot.fillTargets as FillTarget[]) ?? undefined) as
     | AnyOwnedStructure
     | undefined;
+}
+
+/**
+ * 在 spawn 安全区内、按 hauler 填充优先级选择最近的需能量结构。
+ *
+ * 供 flee 等特殊场景使用 — 与 getHaulFillTarget 共享优先级层级（haulerFillTiers），
+ * 但不使用预约系统（flee 是临时行为，不应消耗正常 hauler 的预约配额），
+ * 且增加空间约束（仅选择 spawnPos safeRange 范围内的结构）。
+ *
+ * 不包含 controller container 优先级 — flee 是生存行为，
+ * controller container 供能是效率行为，不应在威胁期间占优先。
+ */
+export function pickHaulFillTargetInRange(
+  creep: Creep,
+  snapshot: RoomSnapshot,
+  spawnPos: RoomPosition,
+  safeRange: number,
+): FillTarget | undefined {
+  if (snapshot.fillTargets.length === 0) return undefined;
+
+  const hasThreats = snapshot.threatCreeps.length > 0;
+  for (const types of haulerFillTiers(hasThreats)) {
+    let best: FillTarget | undefined;
+    let bestDist = Infinity;
+    for (const t of snapshot.fillTargets) {
+      if (types.length > 0 && !types.includes(t.structureType)) continue;
+      if (t.pos.getRangeTo(spawnPos) > safeRange) continue;
+      const d = creep.pos.getRangeTo(t.pos);
+      if (d < bestDist) {
+        bestDist = d;
+        best = t;
+      }
+    }
+    if (best) return best;
+  }
+  return undefined;
 }
 
 /** 找到能量最多的 container。 */

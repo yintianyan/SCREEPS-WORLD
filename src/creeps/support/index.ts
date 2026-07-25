@@ -27,11 +27,13 @@ export {
   getFillTarget,
   getHaulFillTarget,
   getDistributorFillTarget,
+  pickHaulFillTargetInRange,
   findRichestContainer,
   findClosestContainerWithEnergy,
   findEmptiestContainer,
   findCriticalRepair,
 } from "./targeting";
+export type { FillTarget } from "./targeting";
 
 export {
   getAssignment,

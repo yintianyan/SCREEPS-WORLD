@@ -41,7 +41,7 @@ import {
   withdrawCapped,
   withdrawStorageLink,
 } from "../engine/actions";
-import { findRichestContainer } from "../support/targeting";
+import { findRichestContainer, pickHaulFillTargetInRange } from "../support/targeting";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
@@ -125,8 +125,9 @@ function haulerOnFlee(ac: ActionContext): boolean {
 
   const nearestHostile = creep.pos.findClosestByRange(snapshot.threatCreeps as Creep[]) ?? undefined;
 
-  // 找最近的需能量结构（优先级与 getHaulFillTarget 对齐）
-  const target = findClosestRefuelTarget(creep, snapshot, spawn.pos, safeRange);
+  // 复用 getHaulFillTarget 的优先级层级（haulerFillTiers）选择防御圈内最近的需能量结构。
+  // 不使用预约系统 — flee 是临时行为，不应消耗正常 hauler 的预约配额。
+  const target = pickHaulFillTargetInRange(creep, snapshot, spawn.pos, safeRange);
   if (!target) return false;
 
   // 安全检查：目标不能在敌人侧（目标距敌人 < hauler 距敌人 = 向敌人移动）
@@ -138,50 +139,13 @@ function haulerOnFlee(ac: ActionContext): boolean {
 
   const dist = creep.pos.getRangeTo(target.pos);
   if (dist <= 1) {
-    // fillTargets 类型为 StructureSpawn | StructureExtension | StructureTower | StructureContainer，
-    // 均支持 transfer；用 AnyStructure 断言以匹配 creep.transfer 的目标签名。
-    creep.transfer(target as unknown as AnyStructure, RESOURCE_ENERGY);
+    creep.transfer(target, RESOURCE_ENERGY);
     return true;
   }
 
   // 移动到目标（仍在防御圈内）
   creep.moveTo(target, { reusePath: 5, ignoreCreeps: false });
   return true;
-}
-
-/**
- * 在 spawn 安全区内找最近的需能量结构。
- * 优先级与 getHaulFillTarget 对齐：threat 存在时 tower 优先，
- * 否则 spawn/extension 优先。结构必须在 spawn 的 safeRange 范围内。
- */
-function findClosestRefuelTarget(
-  creep: Creep,
-  snapshot: { threatCreeps: readonly Creep[]; fillTargets: readonly (StructureSpawn | StructureExtension | StructureTower | StructureContainer)[] },
-  spawnPos: RoomPosition,
-  safeRange: number,
-): StructureSpawn | StructureExtension | StructureTower | StructureContainer | undefined {
-  const hasThreats = snapshot.threatCreeps.length > 0;
-  // 优先级分组：threat 时 [tower] → [spawn/extension] → [其余]；
-  // 无 threat 时 [spawn/extension] → [tower] → [其余]。
-  const typeBuckets: readonly string[][] = hasThreats
-    ? [[STRUCTURE_TOWER], [STRUCTURE_SPAWN, STRUCTURE_EXTENSION], []]
-    : [[STRUCTURE_SPAWN, STRUCTURE_EXTENSION], [STRUCTURE_TOWER], []];
-
-  for (const types of typeBuckets) {
-    let best: StructureSpawn | StructureExtension | StructureTower | StructureContainer | undefined;
-    let bestDist = Infinity;
-    for (const t of snapshot.fillTargets) {
-      if (types.length > 0 && !types.includes(t.structureType)) continue;
-      if (t.pos.getRangeTo(spawnPos) > safeRange) continue;
-      const d = creep.pos.getRangeTo(t.pos);
-      if (d < bestDist) {
-        bestDist = d;
-        best = t;
-      }
-    }
-    if (best) return best;
-  }
-  return undefined;
 }
 
 const policy: RolePolicy = {
