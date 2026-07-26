@@ -258,6 +258,10 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
 function collectCreepSummaries(): CreepSummary[] {
   const result: CreepSummary[] = [];
   for (const creep of Object.values(Game.creeps)) {
+    // 跳过孵化中的 creep — 它们由 collectSpawningSummaries 单独收集。
+    // Screeps 中孵化中的 creep 已存在于 Game.creeps（spawning=true），
+    // 若两个列表各计一次，countCreepsByRole 会双重计数，孵化期间抑制真实需求。
+    if (creep.spawning) continue;
     result.push({
       name: creep.name,
       role: creep.memory.role ?? "unknown",

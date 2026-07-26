@@ -79,6 +79,8 @@ interface SegmentCache {
   eventLogDirty?: boolean;
   /** 本 tick 是否已请求激活 segment。 */
   requested?: boolean;
+  /** 首次请求激活 segment 的 tick（global reset 后重建）— 可用性守卫用。 */
+  requestedAt?: number;
   /** 迁移是否已完成（防止重复迁移）。 */
   migrated?: boolean;
 }
@@ -87,6 +89,26 @@ function segCache(): SegmentCache {
   const g = globalCache() as any;
   if (!g.__segStore) g.__segStore = {};
   return g.__segStore as SegmentCache;
+}
+
+/**
+ * P1-2 可用性守卫：判断 segment 数据本 tick 是否尚不可读。
+ *
+ * setActiveSegments 下一 tick 才生效 [Facts] — global reset 后的首 tick，
+ * RawMemory.segments[N] 为 undefined（未激活），并非 segment 真的没有数据。
+ * 此时若照常创建空结构并缓存，采样/写入会把空数据 flush 回 RawMemory，
+ * **整体覆盖历史 segment**（时序清零、layout 冷数据丢失）。
+ *
+ * 判定：raw 为 undefined 且本 tick 恰是首次请求激活的 tick（requestedAt === Game.time）。
+ * 从下一 tick 起 undefined 视为「segment 从未写入」（全新服务器），照常初始化 —
+ * 避免把真空 segment 误判为未加载而永久阻塞写入。
+ * 未调用过 requestSegments 的环境（单元测试）requestedAt 为 undefined，守卫不生效。
+ */
+function segmentUnavailable(segmentId: number): boolean {
+  return (
+    RawMemory.segments[segmentId] === undefined &&
+    segCache().requestedAt === Game.time
+  );
 }
 
 // ─── 公共 API ───────────────────────────────────────────────
@@ -99,6 +121,7 @@ export function requestSegments(): void {
   const cache = segCache();
   if (cache.requested) return;
   cache.requested = true;
+  cache.requestedAt = Game.time;
   RawMemory.setActiveSegments([
     SEGMENT_LAYOUT,
     SEGMENT_CPU,
@@ -114,6 +137,10 @@ export function requestSegments(): void {
 export function readLayoutSegment(): LayoutSegmentData {
   const cache = segCache();
   if (cache.layout) return cache.layout;
+
+  // reset 后首 tick segment 未加载 — 返回临时空结构且不缓存，
+  // flush 因 cache.layout 为空跳过写入，防止空数据覆盖历史 segment。
+  if (segmentUnavailable(SEGMENT_LAYOUT)) return {};
 
   const raw = RawMemory.segments[SEGMENT_LAYOUT];
   if (raw) {
@@ -156,6 +183,9 @@ export function markLayoutDirty(): void {
 export function readCpuSegment(): CpuSegmentData {
   const cache = segCache();
   if (cache.cpuSeg) return cache.cpuSeg;
+
+  // reset 后首 tick segment 未加载 — 返回临时空结构且不缓存（见 segmentUnavailable）。
+  if (segmentUnavailable(SEGMENT_CPU)) return createEmptyCpuSegment();
 
   const raw = RawMemory.segments[SEGMENT_CPU];
   if (raw) {
@@ -227,6 +257,9 @@ function createEmptyCpuSegment(): CpuSegmentData {
 export function readEconomySegment(): EconomySegmentData {
   const cache = segCache();
   if (cache.economySeg) return cache.economySeg;
+
+  // reset 后首 tick segment 未加载 — 返回临时空结构且不缓存（见 segmentUnavailable）。
+  if (segmentUnavailable(SEGMENT_ECONOMY)) return createEmptyEconomySegment();
 
   // 触发迁移检查（如果 segment 1 有旧格式数据）。
   if (!cache.migrated) {
@@ -334,6 +367,11 @@ function rebuildRingBuffer<T>(old: RingBuffer<T>, capacity: number): RingBuffer<
 export function readEventLogSegment(): EventLogSegmentData {
   const cache = segCache();
   if (cache.eventLog) return cache.eventLog;
+
+  // reset 后首 tick segment 未加载 — 返回临时空结构且不缓存（见 segmentUnavailable）。
+  if (segmentUnavailable(SEGMENT_EVENT_LOG)) {
+    return { events: createRingBuffer<GameEvent>(EVENT_RING_CAPACITY) };
+  }
 
   const raw = RawMemory.segments[SEGMENT_EVENT_LOG];
   if (raw) {

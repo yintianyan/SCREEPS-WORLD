@@ -144,17 +144,11 @@ export class Kernel {
       }
     }
 
-    // 统计孵化中的 harvester/worker，同样计入 pending。
-    for (const spawn of Object.values(Game.spawns)) {
-      const spawning = spawn.spawning;
-      if (!spawning) continue;
-      const mem = Memory.creeps[spawning.name];
-      if (!mem) continue;
-      if (mem.role === "harvester" || mem.role === "worker") {
-        const pendingHome = mem.home ?? spawn.room.name;
-        globalPendingHarvesters.set(pendingHome, (globalPendingHarvesters.get(pendingHome) ?? 0) + 1);
-      }
-    }
+    // 孵化中的 creep 已存在于 Game.creeps（spawning=true），上方循环已覆盖：
+    // 有 sourceId → 计入 occupancy；无 sourceId → 计入 pending。
+    // 因此无需再遍历 Game.spawns 单独统计孵化中的 harvester/worker —
+    // 那样会把同一 creep 第二次计入 pending，虚增 room-state 的 harvesterCount、
+    // 掩盖真实 bootstrap 信号。
 
     // 将 repairRooms 写入 globalCache，供 tower-defense 读取。
     globalCache().repairRooms = globalRepairRooms;

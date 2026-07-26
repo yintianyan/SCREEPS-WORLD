@@ -83,6 +83,10 @@ export const remoteMiningManagerSystem: System = {
       // 收集远矿 creep 摘要（从 Game.creeps 遍历一次）。
       const remoteCreeps = collectRemoteCreeps(snapshot.roomName);
 
+      // 收集远矿房威胁（有视野的 active 运营房）— evaluateRemoteDemand 据此
+      // 生成 remoteDefender 请求；缺少此输入时 defender 分支永不触发。
+      const remoteThreats = collectRemoteThreats(remoteOps);
+
       const { requests } = evaluateRemoteDemand({
         homeRoom: snapshot.roomName,
         colonyState,
@@ -91,6 +95,7 @@ export const remoteMiningManagerSystem: System = {
         remoteOps,
         remoteCreeps,
         spawnQueue: queue,
+        remoteThreats,
       });
 
       // 推入 spawnQueue。

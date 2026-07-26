@@ -82,6 +82,18 @@ export const CONFIG = {
     maxRetries: 5,
     /** 为 P0 恢复 body 预留的最低能量。 */
     recoveryEnergyReserve: 200,
+    /**
+     * 孵化请求 TTL：cleanQueue 按 expiresAt 清除超期请求，
+     * 防止需求消失后的 stale 请求永久排队直至孵化（过量 creep 浪费能量）。
+     * 需求仍在时 demand 下一 tick 会以同 key 重建请求（hasKey 守卫解除）。
+     *
+     * 硬约束：必须大于 trySpawn 的饥饿降级窗口——
+     *   P1 饥饿 = 2 × 孵化时长（≈100 tick @ 16 部件），
+     *   P2 饥饿 = 10 × 孵化时长（≈540 tick @ 18 部件 upgrader）。
+     * 若 TTL 小于该窗口，请求在降级触发前被清除重建、createdAt 重置，
+     * 饥饿计时器永远归零 → 重新引入「等满配 → 永远凑不够」死锁（W37S58）。
+     */
+    requestTtl: 1000,
   },
 
   movement: {

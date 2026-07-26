@@ -106,7 +106,10 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       // 替换逻辑：检查即将死亡的 remoteHarvester。
       const replacement = findReplacement(remoteCreeps, "remoteHarvester", targetRoom, tick);
       if (replacement) {
-        const key = spawnKey("remoteHarvester", homeRoom, harvesterTotal, targetRoom);
+        // 替补 key 绑定濒死 creep 名而非 total 索引：total = 存活 + pending，
+        // 随替补请求入队而增长，同一濒死 creep 会在每个评估周期产生新 key 的重复请求；
+        // 稳定 key 使 submitRequest 按 key 幂等合并，替换窗口内始终只有一条替补请求。
+        const key = replacementKey("remoteHarvester", homeRoom, targetRoom, replacement);
         const body = selectBody("remoteHarvester", energyCapacityAvailable);
         requests.push(createRemoteRequest(
           "remoteHarvester", homeRoom, targetRoom, harvesterTotal,
@@ -128,7 +131,8 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     } else {
       const replacement = findReplacement(remoteCreeps, "remoteHauler", targetRoom, tick);
       if (replacement) {
-        const key = spawnKey("remoteHauler", homeRoom, haulerTotal, targetRoom);
+        // 稳定替补 key（同 harvester 分支）。
+        const key = replacementKey("remoteHauler", homeRoom, targetRoom, replacement);
         const body = selectBody("remoteHauler", energyCapacityAvailable);
         requests.push(createRemoteRequest(
           "remoteHauler", homeRoom, targetRoom, haulerTotal,
@@ -154,7 +158,8 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       } else {
         const replacement = findReplacement(remoteCreeps, "reserver", targetRoom, tick);
         if (replacement) {
-          const key = spawnKey("reserver", homeRoom, reserverTotal, targetRoom);
+          // 稳定替补 key（同 harvester 分支）。
+          const key = replacementKey("reserver", homeRoom, targetRoom, replacement);
           const body = selectBody("reserver", energyCapacityAvailable);
           if (body.includes("claim" as BodyPartConstant)) {
             requests.push(createRemoteRequest(
@@ -242,6 +247,17 @@ function findReplacement(
   return undefined;
 }
 
+/**
+ * 替补请求的稳定去重 key — 绑定被替换 creep 的名字。
+ *
+ * 不使用 spawnKey(role, home, total, target)：total = 存活 + pending 之和，
+ * 每个评估周期随 pending 增长而漂移，同一濒死 creep 会产生一串不同 key 的
+ * 重复请求（P1-5）。creep 名在其生命周期内唯一且稳定，天然幂等。
+ */
+function replacementKey(role: string, home: string, target: string, dyingCreepName: string): string {
+  return `${role}:${home}:${target}:repl:${dyingCreepName}`;
+}
+
 /** 创建远矿 SpawnRequest。 */
 function createRemoteRequest(
   role: string,
@@ -268,6 +284,9 @@ function createRemoteRequest(
       remoteTarget: target,
     },
     createdAt: tick,
+    // 请求带 TTL：需求消失（运营 paused/abandoned）后的 stale 请求
+    // 由 cleanQueue 按 expiresAt 清除，不会永久排队直至孵化。
+    expiresAt: tick + CONFIG.spawn.requestTtl,
     retries: 0,
   };
   if (replaceBy) {

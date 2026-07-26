@@ -529,6 +529,11 @@ function createRequest(
     body,
     memory,
     createdAt: tick,
+    // 请求带 TTL：需求消失后的 stale 请求由 cleanQueue 清除；
+    // 需求仍在时下一 tick 以同 key 重建（hasKey 守卫解除）。
+    // 副作用收益：重建时按当时容量重选 body，避免入队后 body 长期冻结。
+    // TTL(1000) > 饥饿降级窗口（见 CONFIG.spawn.requestTtl 注释），不干扰降级计时。
+    expiresAt: tick + CONFIG.spawn.requestTtl,
     retries: 0,
   };
 }

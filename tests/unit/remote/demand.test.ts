@@ -192,4 +192,91 @@ describe("remote demand — evaluateRemoteDemand", () => {
     const harvesterReqs = requests.filter((r) => r.role === "remoteHarvester");
     expect(harvesterReqs).toHaveLength(0);
   });
+
+  // ── 回归：替补 key 必须稳定，pending 累积不得产生新 key ──
+
+  it("替补请求 key 绑定濒死 creep 名，pending 累积后 key 不漂移", () => {
+    const dyingCreep: RemoteCreepSummary = {
+      name: "remoteHarvester-dying",
+      role: "remoteHarvester",
+      remoteTarget: targetRoom,
+      ticksToLive: 50,
+      bodyLength: 5,
+    };
+
+    // 第一轮评估：生成替补请求。
+    const first = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: [dyingCreep],
+    });
+    const firstReq = first.requests.find((r) => r.role === "remoteHarvester");
+    expect(firstReq).toBeDefined();
+
+    // 第二轮评估：替补请求已 pending（total = 存活 1 + pending 1 = 2），
+    // findReplacement 仍命中同一濒死 creep — 生成的请求 key 必须与第一轮一致，
+    // 由 submitRequest 幂等合并，而非堆积新请求（旧 bug：index 漂移产生新 key）。
+    const second = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: [dyingCreep],
+      spawnQueue: [firstReq!],
+    });
+    const secondReq = second.requests.find((r) => r.role === "remoteHarvester");
+    expect(secondReq).toBeDefined();
+    expect(secondReq!.key).toBe(firstReq!.key);
+  });
+
+  it("请求携带 expiresAt TTL", () => {
+    const { requests } = evaluateRemoteDemand(baseInput);
+    expect(requests.length).toBeGreaterThan(0);
+    for (const req of requests) {
+      expect(req.expiresAt).toBeGreaterThan(tick);
+    }
+  });
+});
+
+// ── 回归：remoteThreats → remoteDefender 孵化链 ──
+
+describe("remote demand — remoteDefender 威胁响应", () => {
+  const fullStaff = [
+    ...makeCreeps("remoteHarvester", 1, 1000),
+    ...makeCreeps("remoteHauler", 1, 1000),
+    ...makeCreeps("reserver", 1, 1000),
+  ];
+
+  it("远矿房有威胁时生成 remoteDefender 请求", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: fullStaff,
+      remoteThreats: { [targetRoom]: true },
+    });
+    const defenderReqs = requests.filter((r) => r.role === "remoteDefender");
+    expect(defenderReqs).toHaveLength(1);
+    expect(defenderReqs[0]!.memory.remoteTarget).toBe(targetRoom);
+  });
+
+  it("无威胁时不生成 remoteDefender", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: fullStaff,
+      remoteThreats: { [targetRoom]: false },
+    });
+    expect(requests.filter((r) => r.role === "remoteDefender")).toHaveLength(0);
+  });
+
+  it("remoteThreats 未提供时不生成 remoteDefender（向后兼容）", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: fullStaff,
+    });
+    expect(requests.filter((r) => r.role === "remoteDefender")).toHaveLength(0);
+  });
+
+  it("已有存活 defender 时不重复孵化", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: [...fullStaff, ...makeCreeps("remoteDefender", 1, 1000)],
+      remoteThreats: { [targetRoom]: true },
+    });
+    expect(requests.filter((r) => r.role === "remoteDefender")).toHaveLength(0);
+  });
 });
