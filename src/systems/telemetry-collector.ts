@@ -136,6 +136,7 @@ function sampleEconomyData(tick: number, ctx: TickContext): void {
 function samplePopulationData(tick: number): void {
   const counts: Record<string, number> = {};
   const ttls: Record<string, number[]> = {};
+  const modeCounts = { acquire: 0, work: 0, idle: 0, flee: 0 };
 
   for (const creep of Object.values(Game.creeps)) {
     const role = creep.memory.role ?? "unknown";
@@ -143,6 +144,9 @@ function samplePopulationData(tick: number): void {
     const ttl = creep.ticksToLive ?? 1500;
     if (!ttls[role]) ttls[role] = [];
     ttls[role].push(ttl);
+    // mode 分布采集
+    const mode = creep.memory.mode ?? "idle";
+    if (mode in modeCounts) modeCounts[mode as keyof typeof modeCounts]++;
   }
 
   // 孵化状态
@@ -180,6 +184,10 @@ function samplePopulationData(tick: number): void {
     sq,
     sp,
     p0,
+    ma: modeCounts.acquire,
+    mw: modeCounts.work,
+    mi: modeCounts.idle,
+    mf: modeCounts.flee,
   };
 
   const seg = readCpuSegment();

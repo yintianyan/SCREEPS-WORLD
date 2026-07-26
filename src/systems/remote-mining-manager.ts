@@ -184,7 +184,7 @@ function recycleExcessRemoteCreeps(
   remoteOps: Readonly<Record<string, RemoteOp>>,
 ): void {
   // 收集每个 active 目标的远矿 creep，按角色分组。
-  const byTarget = new Map<string, { harvester: Creep[]; hauler: Creep[]; reserver: Creep[] }>();
+  const byTarget = new Map<string, { harvester: Creep[]; hauler: Creep[]; reserver: Creep[]; defender: Creep[] }>();
 
   for (const creep of Object.values(Game.creeps)) {
     if (creep.memory.home !== homeRoom) continue;
@@ -196,13 +196,14 @@ function recycleExcessRemoteCreeps(
 
     let entry = byTarget.get(target);
     if (!entry) {
-      entry = { harvester: [], hauler: [], reserver: [] };
+      entry = { harvester: [], hauler: [], reserver: [], defender: [] };
       byTarget.set(target, entry);
     }
     const role = creep.memory.role;
     if (role === "remoteHarvester") entry.harvester.push(creep);
     else if (role === "remoteHauler") entry.hauler.push(creep);
     else if (role === "reserver") entry.reserver.push(creep);
+    else if (role === "remoteDefender") entry.defender.push(creep);
   }
 
   // 对每个目标，检查是否超额。
@@ -228,6 +229,13 @@ function recycleExcessRemoteCreeps(
         entry.reserver[i]!.memory.recycle = true;
       }
     }
+    // defender 超额（目标 1 个 — 威胁清除后多余的 defender 回收）。
+    if (entry.defender.length > 1) {
+      entry.defender.sort((a, b) => (b.ticksToLive ?? 0) - (a.ticksToLive ?? 0));
+      for (let i = 1; i < entry.defender.length; i++) {
+        entry.defender[i]!.memory.recycle = true;
+      }
+    }
   }
 }
 
@@ -238,7 +246,7 @@ function collectRemoteCreeps(homeRoom: string): RemoteCreepSummary[] {
     if (creep.memory.home !== homeRoom) continue;
     const role = creep.memory.role ?? "unknown";
     // 只收集远矿角色。
-    if (role !== "remoteHarvester" && role !== "remoteHauler" && role !== "reserver") {
+    if (role !== "remoteHarvester" && role !== "remoteHauler" && role !== "reserver" && role !== "remoteDefender") {
       continue;
     }
     result.push({
@@ -250,4 +258,25 @@ function collectRemoteCreeps(homeRoom: string): RemoteCreepSummary[] {
     });
   }
   return result;
+}
+
+/**
+ * 收集远矿房威胁信息 — 检测 active 运营的远矿房是否有 hostile creep。
+ * 用于触发 remoteDefender 孵化需求。
+ */
+function collectRemoteThreats(remoteOps: Readonly<Record<string, RemoteOp>>): Record<string, boolean> {
+  const threats: Record<string, boolean> = {};
+  for (const [roomName, op] of Object.entries(remoteOps)) {
+    if (op.state !== "active") continue;
+    const room = Game.rooms[roomName];
+    if (!room) continue;
+    const hostiles = room.find(FIND_HOSTILE_CREEPS, {
+      filter: (c) => {
+        const allies = CONFIG.defense.allies;
+        return !allies.includes(c.owner.username);
+      },
+    });
+    threats[roomName] = hostiles.length > 0;
+  }
+  return threats;
 }

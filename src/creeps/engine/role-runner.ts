@@ -102,6 +102,15 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
           return;
         }
 
+        // ── 3.5 威胁消除后重置 flee mode ──
+        // ensureHome 在 updateMode 之前执行。如果 mode=flee（上一 tick 残留），
+        // ensureHome 看到 flee → goHome=true → 导航回 home → return false → updateMode 不执行 →
+        // mode 永远不被重置。导致 remoteHarvester 到达 source 后不采集（mode=flee → 一直走回 home）。
+        // 修复：shouldFleeForeignRoom/shouldFlee 返回 false = 当前无威胁 → 重置 flee mode。
+        if (creep.memory.mode === "flee") {
+          creep.memory.mode = undefined;
+        }
+
         // ── 4. 确认在目标房间（home 或 remoteTarget）──
         if (!ensureHome(creep)) {
           // 远矿角色通勤中保持原 mode（acquire/work）——ensureHome 对 idle 模式

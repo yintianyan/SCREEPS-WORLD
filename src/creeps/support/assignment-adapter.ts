@@ -3,6 +3,7 @@ import type { TickContext } from "../../kernel/contracts";
 import { chooseTaskForRole, validateAssignmentRules } from "../../domain/assignment/service";
 import type { TaskPool } from "../../domain/assignment/task-pool";
 import { globalCache } from "../../kernel/global-cache";
+import { recordEvent, EventKind } from "../../kernel/event-log";
 import { getObjectById } from "./obj-cache";
 
 // ──────────────────────────────────────────────
@@ -58,6 +59,15 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
       return assignment;
     }
 
+    // 无效 — 确定失效原因并记录事件。
+    // failReasonCode: 0=lease 过期 1=revision 变化 2=target 消失 3=source 消失
+    let failReason = 0;
+    if (ctx.tick > assignment.leaseUntil) failReason = 0;
+    else if (assignment.revision !== layoutRevision) failReason = 1;
+    else if (assignment.targetId && !targetExists) failReason = 2;
+    else if (assignment.sourceId && !sourceExists) failReason = 3;
+    recordEvent(EventKind.AssignmentExpired, home, [failReason]);
+
     // 无效 — 释放旧 assignment。
     releaseFromTask(creep);
     creep.memory.assignment = undefined;
@@ -88,6 +98,7 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
 
   creep.memory.assignment = assignment;
   pool.assignCreep(chosen.id, creep.name);
+  recordEvent(EventKind.AssignmentAssigned, home, [chosen.priority]);
   return assignment;
 }
 

@@ -525,7 +525,11 @@ export function ensureHome(creep: Creep): boolean {
     // idle/flee → 回 home（安全）
     // remoteHauler work → 回 home（存能）
     // 其余 → remoteTarget
-    const goHome = mode === "idle" || mode === "flee" ||
+    // Bug 2 修复：remoteHauler 在 remoteTarget idle（container 空）时不导航回 home，
+    // 保持在 remoteTarget 等待 container 恢复。否则会在 home↔remoteTarget 之间震荡：
+    // remoteTarget idle → goHome → home → acquire → remoteTarget → idle → goHome → ...震荡
+    const goHome = mode === "flee" ||
+      (mode === "idle" && !(creep.memory.role === "remoteHauler" && creep.room.name === remoteTarget)) ||
       (mode === "work" && creep.memory.role === "remoteHauler");
     const dest = goHome ? home : remoteTarget;
     if (creep.room.name === dest) return true;

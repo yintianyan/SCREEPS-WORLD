@@ -11,6 +11,7 @@ export const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConst
   remoteHarvester: ["work", "carry", "move"],
   remoteHauler: ["carry", "move"],
   reserver: ["claim", "move"],
+  remoteDefender: ["attack", "move"],
 };
 
 /**

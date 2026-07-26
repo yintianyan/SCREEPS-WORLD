@@ -52,6 +52,12 @@ export const enum EventKind {
   BuildComplete = 12,
   /** 关键结构被毁（spawn/tower/container 数量减少）。d = [structureTypeCode, prevCount, currCount]。 */
   StructureDestroyed = 13,
+  /** Assignment 续约成功（lease 有效 → 续约）。d = []。 */
+  AssignmentRenewed = 14,
+  /** Assignment 新分配（从任务池选择新任务）。d = [priority]。 */
+  AssignmentAssigned = 15,
+  /** Assignment 失效（lease 过期/revision 变化/target 消失/source 消失）。d = [failReasonCode]。 */
+  AssignmentExpired = 16,
 }
 
 // ─── 事件数据结构 ────────────────────────────────────────────

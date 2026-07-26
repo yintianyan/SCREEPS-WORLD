@@ -116,6 +116,13 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     // reserveController 每 tick 续期 1 tick，1 个 CLAIM 部件即满足需求。
     { parts: ["claim", "move"], minCapacity: 650 },
   ],
+  remoteDefender: [
+    // [ATTACK,ATTACK,MOVE,MOVE] @520：20 damage/tick，10 tick 击杀 NPC reserver（200 hits）。
+    // NPC reserver 通常只有 [CLAIM,MOVE]，无攻击能力 → defender 不会受伤。
+    { parts: ["attack", "attack", "move", "move"], minCapacity: 520 },
+    // [ATTACK,MOVE] @130：最小配置，10 damage/tick，20 tick 击杀 NPC reserver。
+    { parts: ["attack", "move"], minCapacity: 130 },
+  ],
 };
 
 /**

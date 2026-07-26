@@ -49,6 +49,8 @@ export interface RemoteDemandInput {
   remoteCreeps: readonly RemoteCreepSummary[];
   /** 孵化队列（用于 pending 计数）。 */
   spawnQueue: readonly SpawnRequest[];
+  /** 远矿房威胁信息（从 Game.rooms 检测，key = 房间名，value = 是否有威胁）。 */
+  remoteThreats?: Readonly<Record<string, boolean>>;
 }
 
 /** 远矿需求评估结果。 */
@@ -160,6 +162,23 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
               key, 2, body, tick, replacement,
             ));
           }
+        }
+      }
+    }
+
+    // 4. Remote Defender — 有威胁时生成。
+    if (CONFIG.remote.enableDefender) {
+      const hasThreats = input.remoteThreats?.[targetRoom] ?? false;
+      if (hasThreats) {
+        const defenderPending = countRemotePending(spawnQueue, "remoteDefender", targetRoom);
+        const defenderTotal = (counts.remoteDefender ?? 0) + defenderPending;
+        if (defenderTotal < 1) {
+          const key = spawnKey("remoteDefender", homeRoom, defenderTotal, targetRoom);
+          const body = selectBody("remoteDefender", energyCapacityAvailable);
+          requests.push(createRemoteRequest(
+            "remoteDefender", homeRoom, targetRoom, defenderTotal,
+            key, 1, body, tick,
+          ));
         }
       }
     }

@@ -115,6 +115,11 @@ export interface PopulationSnapshot {
   sq: number; // spawnQueue 总长度
   sp: number; // spawning 数量
   p0: number; // P0 请求数量
+  // mode 分布（全局 creep 状态概览）
+  ma: number; // acquire（采集中）
+  mw: number; // work（工作中）
+  mi: number; // idle（待命）
+  mf: number; // flee（逃跑中）
 }
 
 // ─── Segment 1 数据结构（CPU + 人口）──────────────────────────

@@ -100,6 +100,10 @@ function analyzeCpu() {
     console.log(`    harvester=${pop.hv} hauler=${pop.ha} upgrader=${pop.up} builder=${pop.bd} worker=${pop.wk}`);
     console.log(`    TTL: hv=${pop.hvTtl} ha=${pop.haTtl} up=${pop.upTtl} bd=${pop.bdTtl}`);
     console.log(`    spawnQueue=${pop.sq} spawning=${pop.sp} p0=${pop.p0}`);
+    // mode 分布（P1 遥测改进）
+    const total = pop.hv + pop.ha + pop.up + pop.bd + pop.wk;
+    const idlePct = total > 0 ? Math.round(pop.mi / total * 100) : 0;
+    console.log(`    Mode: acquire=${pop.ma ?? 0} work=${pop.mw ?? 0} idle=${pop.mi ?? 0} (${idlePct}% idle) flee=${pop.mf ?? 0}`);
   }
   console.log();
 }
@@ -283,9 +287,23 @@ function analyzeEvents() {
   console.log(`=== Events: ${valid.length} total ===`);
 
   const kindNames = [
-    "TierDown", "TierUp", "PhaseChange", "ColonyChange",
-    "RclUp", "Invasion", "EnemyCleared", "DowngradeRisk",
-    "StructureDestroyed",
+    "PhaseTransition",      // 0
+    "TierDowngrade",       // 1
+    "TierUpgrade",         // 2
+    "ColonyStateChange",   // 3
+    "ControllerLevelUp",   // 4
+    "DowngradeRisk",       // 5
+    "P0Spawn",             // 6
+    "EnemyInvasion",       // 7
+    "EnemyCleared",        // 8
+    "SafeMode",            // 9
+    "PluginCooldown",      // 10
+    "CreepStuck",          // 11
+    "BuildComplete",       // 12
+    "StructureDestroyed",  // 13
+    "AssignmentRenewed",   // 14
+    "AssignmentAssigned",  // 15
+    "AssignmentExpired",   // 16
   ];
 
   const byKind = {};
@@ -301,10 +319,17 @@ function analyzeEvents() {
   for (const e of valid.slice(-15)) {
     const kindName = kindNames[e.k] || e.k;
     let extra = "";
-    if (e.k === 8 && e.d) {
+    if (e.k === 13 && e.d) {
       // StructureDestroyed: [typeCode, oldCount, newCount]
       const typeNames = ["spawn", "tower", "container"];
       extra = ` ${typeNames[e.d[0]] || e.d[0]}: ${e.d[1]}→${e.d[2]}`;
+    } else if (e.k === 16 && e.d) {
+      // AssignmentExpired: [failReasonCode]
+      const reasons = ["lease", "revision", "target", "source"];
+      extra = ` reason=${reasons[e.d[0]] || e.d[0]}`;
+    } else if (e.k === 15 && e.d) {
+      // AssignmentAssigned: [priority]
+      extra = ` priority=${e.d[0]}`;
     }
     console.log(`    t=${e.t} ${kindName} room=${e.r || ""}${extra} data=${JSON.stringify(e.d || [])}`);
   }

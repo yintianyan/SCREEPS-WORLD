@@ -4,6 +4,7 @@ import { harvesterRole } from "./creeps/roles/harvester";
 import { haulerRole } from "./creeps/roles/hauler";
 import { remoteHarvesterRole } from "./creeps/roles/remote-harvester";
 import { remoteHaulerRole } from "./creeps/roles/remote-hauler";
+import { remoteDefenderRole } from "./creeps/roles/remote-defender";
 import { reserverRole } from "./creeps/roles/reserver";
 import { upgraderRole } from "./creeps/roles/upgrader";
 import { workerRole } from "./creeps/roles/worker";
@@ -88,6 +89,8 @@ const registry = new Registry()
   .registerRole(upgraderRole)
   .registerRole(builderRole)
   // P2：reserver（远矿 controller 占领）
-  .registerRole(reserverRole);
+  .registerRole(reserverRole)
+  // P1：remoteDefender（远矿防御者，杀 NPC reserver/Invader）
+  .registerRole(remoteDefenderRole);
 
 export const kernel = new Kernel(registry);

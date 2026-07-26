@@ -246,6 +246,8 @@ export const CONFIG = {
     haulersPerTarget: 1,
     /** 是否启用 reserver（RCL3+ 才有意义，CLAIM 部件 600 能量）。 */
     enableReserver: true,
+    /** 是否启用 remoteDefender（远矿防御者，杀 NPC reserver/Invader）。 */
+    enableDefender: true,
     /** 远矿目标过期 tick 数（lastSeen 超过此值则暂停运营）。 */
     staleThreshold: 5000,
     /** 远矿启用 RCL 门限（低于此 RCL 不开远矿，集中能量发展本房）。 */
