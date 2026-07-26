@@ -200,6 +200,21 @@ declare global {
     /** 扩张失败目标黑名单（v11+）：房名 → 冷却到期 tick。 */
     expansionBlacklist?: Record<string, number>;
     /**
+     * 帝国姿态（v13+，empire-strategy 每 tick 评估写入）。
+     * Strategy 层的全局真相源：执行系统（扩张/远矿/未来进攻）只消费
+     * 此处的指令，不得自行裁决「是否该扩张/开战」。
+     */
+    strategy?: {
+      /** 当前姿态：develop 固本 / expand 扩张 / fortify 设防 / war 战争。 */
+      posture: "develop" | "expand" | "fortify" | "war";
+      /** 当前姿态的起始 tick（滞回与耐心窗口的基准）。 */
+      since: number;
+      /** 指令：是否允许启动新的扩张行动。 */
+      expansionAllowed: boolean;
+      /** 指令：是否允许开辟新的远矿点（现役运营不受影响）。 */
+      newRemoteOpsAllowed: boolean;
+    };
+    /**
      * 失守房间记录（v11+）：房名 → 首次检测到失守的 tick。
      * maintainMemory 据此在宽限期后清除 Memory.rooms 条目，
      * 防止失守房的队列/布局/情报数据永久滞留。

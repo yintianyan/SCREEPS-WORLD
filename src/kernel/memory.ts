@@ -266,6 +266,19 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
       }
     },
   },
+  {
+    from: 12,
+    to: 13,
+    run: () => {
+      // v13：帝国姿态 — kernel.strategy 为可选字段，empire-strategy 每 tick
+      // 重建，无需回填；此处仅做畸形数据自愈（幂等）。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+      if (kernel.strategy !== undefined && typeof kernel.strategy !== "object") {
+        delete kernel.strategy;
+      }
+    },
+  },
 ];
 
 /**

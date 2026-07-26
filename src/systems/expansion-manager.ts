@@ -44,9 +44,16 @@ export const expansionManagerSystem: System = {
     const expansion = Memory.kernel.expansion;
 
     if (!expansion) {
+      // 战略门禁：是否扩张由 empire-strategy 的姿态裁决（Strategy 层），
+      // 本系统只在获得授权时评选目标 — 不自行判断「现在是不是好时机」。
+      // 姿态未就绪（reset 首 tick）默认不扩张：固本是安全缺省。
+      if (Memory.kernel.strategy?.expansionAllowed !== true) return;
       tryStartExpansion(ctx);
       return;
     }
+
+    // 进行中的扩张行动不因姿态回落而中断 — claimer/拓荒编队已是沉没投资，
+    // 半途而废比完成更贵；姿态只裁决「是否开启新行动」。
 
     switch (expansion.state) {
       case "claiming":

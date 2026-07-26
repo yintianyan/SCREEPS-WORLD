@@ -1117,3 +1117,35 @@ Phase 4 防御切片已实现（boost 映射修正 + defender boost + 威胁情�
 - **防御深度用真实威胁校准**：墙体目标血量平时按 RCL 分级，受袭记忆窗口（10000 tick）内 ×5 —
   和平期修墙的能量就是少升的 RCL。
 - **进攻编队明确押后**：无第二房间与 boost 生产线支撑前，进攻是负期望投资（战争即经济）。
+
+### 12.4 帝国姿态层（Empire Strategy，schema v13）
+
+Strategy 层已实现（`empire-strategy.ts` + `domain/strategy/posture.ts`）— 补齐 6 层模型中
+此前缺位的战略层：「何时扩张 / 何时收缩 / 何时备战」由统一姿态状态机裁决，
+执行系统只消费指令，功能上线不再等于行为开启。
+
+#### Memory 结构（v13 新增）
+
+`Memory.kernel.strategy = { posture, since, expansionAllowed, newRemoteOpsAllowed }`
+— empire-strategy 每 tick 重建（reset 安全），迁移仅畸形自愈。
+
+#### 姿态状态机
+
+| 姿态 | 进入条件 | 指令效果 |
+| --- | --- | --- |
+| develop（默认） | 兜底 | 不扩张；允许新远矿点 |
+| expand | GCL 余量 + 全房 normal + bucket≥7000 + 平均压力≤0.4 | 允许扩张与新远矿点 |
+| fortify | 任一房近期受袭（**立即生效，紧急旁路**） | 关停扩张与新远矿点 |
+| war | fortify 持续超耐心窗口（5000 tick）且敌情未消且平均压力≤0.4 | 同 fortify；未来进攻执行器的唯一授权来源 |
+
+降级（fortify/war → develop）需静默 + 最短驻留期 1000 tick（滞回防抖）；
+war 回落不直接跳 expand，先经 develop 确认经济节奏。
+
+#### 关键决策
+
+- **执行器不得自行裁决战略**：expansion-manager 的「是否开启新行动」、remote-mining-manager
+  的「是否铺新点」均改为消费姿态指令；局部安全门禁（RCL/bucket）只能收紧不能放宽。
+- **进行中的行动不因姿态回落中断**：claimer/拓荒编队是沉没投资，半途而废比完成更贵。
+- **war 的授权来自证据链**（持续被打 + 打得起），与进攻代码是否存在无关 —
+  未来 quad 等进攻执行器必须从此姿态取授权，禁止「代码写完即开战」。
+- **姿态未就绪默认固本**：reset 首 tick 无 strategy 时扩张不启动 — 安全缺省。

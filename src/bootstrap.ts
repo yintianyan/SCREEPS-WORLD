@@ -15,6 +15,7 @@ import { Registry } from "./kernel/registry";
 import { assignmentServiceSystem } from "./systems/assignment-service";
 import { constructionManagerSystem } from "./systems/construction-manager";
 import { defensePlannerSystem } from "./systems/defense-planner";
+import { empireStrategySystem } from "./systems/empire-strategy";
 import { expansionManagerSystem } from "./systems/expansion-manager";
 import { factoryManagerSystem } from "./systems/factory-manager";
 import { layoutPlannerSystem } from "./systems/layout-planner";
@@ -58,6 +59,8 @@ const registry = new Registry()
   .registerSystem(spawnManagerSystem)
   // P0：塔防（攻击、维修、安全模式）
   .registerSystem(towerDefenseSystem)
+  // P1：帝国姿态（Strategy 层 — 在所有战术消费者之前裁决扩张/收缩/备战）
+  .registerSystem(empireStrategySystem)
   // P1：任务分配（生成任务列表 + 紧急抢占，在 P1 角色之前运行）
   .registerSystem(assignmentServiceSystem)
   // P1：link 能量传输（source→controller/storage 瞬移，替代 hauler 往返）

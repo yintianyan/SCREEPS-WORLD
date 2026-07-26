@@ -49,8 +49,11 @@ export const remoteMiningManagerSystem: System = {
       maintainExistingOps(remoteOps, ctx.tick);
 
       // 2. 如果 active 运营数不足，从 intel 评选新目标。
+      //    战略门禁：开辟新远矿点须获 empire-strategy 姿态授权
+      //    （fortify/war 时收缩战线不铺新点）；现役运营不受影响。
       const activeCount = countActiveOps(remoteOps);
-      if (activeCount < CONFIG.remote.maxOperations) {
+      const newOpsAllowed = Memory.kernel?.strategy?.newRemoteOpsAllowed === true;
+      if (newOpsAllowed && activeCount < CONFIG.remote.maxOperations) {
         const candidates = selectRemoteTargets({
           homeRoom: snapshot.roomName,
           intel: roomMem.intel,
