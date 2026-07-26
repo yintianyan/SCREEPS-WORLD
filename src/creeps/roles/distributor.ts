@@ -47,6 +47,7 @@ import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
   distributorFillTarget,
+  stockFactoryEnergy,
   stockTerminalEnergy,
   supplyLabs,
 } from "../engine/actions";
@@ -111,6 +112,8 @@ const policy: RolePolicy = {
     // terminal 能量备货（storage 富余时）— 无 fillTarget 需求时的低优先级取能，
     // 保证市场 deal 的运费储备不断供。
     stockTerminalEnergy(),
+    // factory 压缩原料备货（仅 storage 满仓时触发）。
+    stockFactoryEnergy(),
   ],
 
   work: [
@@ -120,6 +123,8 @@ const policy: RolePolicy = {
     // terminal 能量备货（deposit 相）— 排在经济 sink 之后、lab 供料之前：
     // 携能状态下 supplyLabs 的取料相无法执行（背包已满），先卸给 terminal。
     stockTerminalEnergy(),
+    // factory 压缩原料备货（deposit 相，仅满仓时触发）。
+    stockFactoryEnergy(),
     // 化合物供料到 lab。
     supplyLabs(),
     // 所有 sink 均满 — 原地待命。

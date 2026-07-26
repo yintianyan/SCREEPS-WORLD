@@ -105,6 +105,10 @@ export interface RoomSnapshot {
   readonly extractor: StructureExtractor | undefined;
   /** 房间 factory（RCL7+ 解锁）。用于商品压缩/生产。 */
   readonly factory: StructureFactory | undefined;
+  /** 房间 observer（RCL8 解锁，可选 — 多数房间/测试快照不存在）。用于远程房间视野（intel 采集）。 */
+  readonly observer?: StructureObserver | undefined;
+  /** 房间 powerSpawn（RCL8 解锁，可选 — 多数房间/测试快照不存在）。用于 processPower 积累 GPL。 */
+  readonly powerSpawn?: StructurePowerSpawn | undefined;
   /** 地上掉落的能量资源（FIND_DROPPED_RESOURCES 中类型为 energy 的）。 */
   readonly droppedEnergy: readonly Resource[];
   /**

@@ -158,3 +158,39 @@ export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
     },
   };
 }
+
+/** stockFactoryEnergy 的 resolve 返回类型。 */
+type FactoryStockTarget =
+  | { dest: StructureFactory; phase: "deposit" }
+  | { source: StructureStorage; phase: "withdraw" };
+
+/**
+ * 为 factory 补给压缩原料能量（storage → factory）。
+ * 仅在 storage 满仓信号下触发 — factory 压缩是对「必然浪费」的能量回收，
+ * 正常水位下能量应流向 upgrade/build，不喂 factory。
+ * 双相候选：空载取 storage、满载送 factory。
+ */
+export function stockFactoryEnergy(): ActionCandidate<FactoryStockTarget> {
+  return {
+    name: "haul:stock-factory-energy",
+    resolve: (ac) => {
+      const factory = ac.snapshot.factory;
+      const storage = ac.snapshot.storage;
+      if (!factory || !storage) return undefined;
+      if (Memory.rooms[ac.snapshot.roomName]?.storageNearFull !== true) return undefined;
+      const need = CONFIG.factory.stockTarget - factory.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (need <= 0) return undefined;
+
+      const carrying = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (carrying > 0) return { dest: factory, phase: "deposit" as const };
+      return { source: storage, phase: "withdraw" as const };
+    },
+    execute: (ac, t) => {
+      if (t.phase === "deposit") {
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, RESOURCE_ENERGY));
+      } else {
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, RESOURCE_ENERGY));
+      }
+    },
+  };
+}

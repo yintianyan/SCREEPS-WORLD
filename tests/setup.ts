@@ -63,6 +63,8 @@ Object.assign(globalThis as Record<string, unknown>, {
 
   // 资源常量
   RESOURCE_ENERGY: "energy",
+  RESOURCE_POWER: "power",
+  RESOURCE_BATTERY: "battery",
 
   // 方向常量
   TOP: 1,

@@ -38,6 +38,8 @@ export function buildRoomSnapshot(
   const ramparts = allStructures.filter(s => s.structureType === STRUCTURE_RAMPART) as StructureRampart[];
   const extractor = allStructures.find(s => s.structureType === STRUCTURE_EXTRACTOR) as StructureExtractor | undefined;
   const factory = allStructures.find(s => s.structureType === STRUCTURE_FACTORY) as StructureFactory | undefined;
+  const observer = allStructures.find(s => s.structureType === STRUCTURE_OBSERVER) as StructureObserver | undefined;
+  const powerSpawn = allStructures.find(s => s.structureType === STRUCTURE_POWER_SPAWN) as StructurePowerSpawn | undefined;
 
   const storage = room.storage ?? undefined;
   const terminal = room.terminal ?? undefined;
@@ -166,6 +168,8 @@ export function buildRoomSnapshot(
     terminal,
     extractor,
     factory,
+    observer,
+    powerSpawn,
     droppedEnergy,
     criticalRepairTarget,
   };

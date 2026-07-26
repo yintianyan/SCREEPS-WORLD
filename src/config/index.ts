@@ -273,6 +273,15 @@ export const CONFIG = {
     minRcl: 4,
   },
 
+  factory: {
+    /** 运行间隔（tick）— battery 生产冷却即为 10，更高频率无收益。 */
+    interval: 10,
+    /** battery 单批配方能量（COMMODITIES battery: 600 energy → 50 battery）。 */
+    batchEnergy: 600,
+    /** distributor 为 factory 维持的能量库存目标（5 批缓冲）。 */
+    stockTarget: 3000,
+  },
+
   market: {
     /** 交易系统运行间隔（tick）— getAllOrders 是重调用，必须低频。 */
     interval: 200,
