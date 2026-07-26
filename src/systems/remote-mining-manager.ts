@@ -98,6 +98,9 @@ export const remoteMiningManagerSystem: System = {
         submitRequest(queue, req);
       }
       roomMem.spawnQueue = queue;
+
+      // 5. 回收过量远矿 creep（超过配置上限的旧 creep 标记回收，节省 CPU）。
+      recycleExcessRemoteCreeps(snapshot.roomName, remoteOps);
     }
   },
 };
@@ -167,6 +170,65 @@ function hasCreepInRoom(roomName: string): boolean {
   return Object.values(Game.creeps).some(
     (c) => c.room.name === roomName && c.my,
   );
+}
+
+/**
+ * 回收过量远矿 creep。
+ *
+ * 当某远矿目标的存活 creep 数超过配置上限时，标记最老的 creep 回收。
+ * 回收标记由 spawn-manager 的 recyclePass 实际执行（spawn.recycleCreep）。
+ * 只标记超额部分，保留配置上限数量的 creep 继续工作。
+ */
+function recycleExcessRemoteCreeps(
+  homeRoom: string,
+  remoteOps: Readonly<Record<string, RemoteOp>>,
+): void {
+  // 收集每个 active 目标的远矿 creep，按角色分组。
+  const byTarget = new Map<string, { harvester: Creep[]; hauler: Creep[]; reserver: Creep[] }>();
+
+  for (const creep of Object.values(Game.creeps)) {
+    if (creep.memory.home !== homeRoom) continue;
+    if (creep.memory.recycle) continue; // 已标记回收的跳过。
+    const target = creep.memory.remoteTarget;
+    if (!target) continue;
+    const op = remoteOps[target];
+    if (!op || op.state !== "active") continue;
+
+    let entry = byTarget.get(target);
+    if (!entry) {
+      entry = { harvester: [], hauler: [], reserver: [] };
+      byTarget.set(target, entry);
+    }
+    const role = creep.memory.role;
+    if (role === "remoteHarvester") entry.harvester.push(creep);
+    else if (role === "remoteHauler") entry.hauler.push(creep);
+    else if (role === "reserver") entry.reserver.push(creep);
+  }
+
+  // 对每个目标，检查是否超额。
+  for (const [, entry] of byTarget) {
+    // harvester 超额：保留 harvestersPerTarget 个最年轻的，回收其余。
+    if (entry.harvester.length > CONFIG.remote.harvestersPerTarget) {
+      entry.harvester.sort((a, b) => (b.ticksToLive ?? 0) - (a.ticksToLive ?? 0));
+      for (let i = CONFIG.remote.harvestersPerTarget; i < entry.harvester.length; i++) {
+        entry.harvester[i]!.memory.recycle = true;
+      }
+    }
+    // hauler 超额。
+    if (entry.hauler.length > CONFIG.remote.haulersPerTarget) {
+      entry.hauler.sort((a, b) => (b.ticksToLive ?? 0) - (a.ticksToLive ?? 0));
+      for (let i = CONFIG.remote.haulersPerTarget; i < entry.hauler.length; i++) {
+        entry.hauler[i]!.memory.recycle = true;
+      }
+    }
+    // reserver 超额（目标 1 个）。
+    if (entry.reserver.length > 1) {
+      entry.reserver.sort((a, b) => (b.ticksToLive ?? 0) - (a.ticksToLive ?? 0));
+      for (let i = 1; i < entry.reserver.length; i++) {
+        entry.reserver[i]!.memory.recycle = true;
+      }
+    }
+  }
 }
 
 /** 收集归属于本房的所有远矿 creep 摘要。 */

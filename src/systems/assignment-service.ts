@@ -161,14 +161,16 @@ function invalidateAssignments(pool: TaskPool, roomName: string, minPriority: nu
 }
 
 /**
- * 适配：强制释放绑定在非 storage site 的 builder assignment。
+ * 适配：强制释放绑定在非 storage/extension site 的 builder assignment。
  *
  * 触发条件：RCL4+ 无 storage 且存在 storage construction site。
  * storage 是经济中枢——haul 无处倒能、builder/upgrader 无中央能量源。
- * assignment-service 已将 storage site 标记为 priority=1, maxWorkers=3，
- * 但 lease 机制（50 tick）让 builder 保持旧的 extension assignment 不切换。
- * 此函数每 tick 主动失效非 storage build assignment，强制 builder 重新选 storage。
+ * assignment-service 已将 storage site 标记为 priority=1, maxWorkers=2，
+ * 但 lease 机制（50 tick）让 builder 保持旧的 road/rampart assignment 不切换。
+ * 此函数每 tick 主动失效非 storage/extension build assignment，强制 builder 重新选 storage。
  *
+ * 不释放 extension site 上的 builder——extension 建成后提升 energyCapacityAvailable，
+ * 解锁更大 builder body，整体建造速率翻倍。全压 storage 反而拖慢 extension 重建。
  * 当 storage site 不存在（被 block 或未规划）时不释放——避免 builder 永久 idle。
  * 已在建 storage 的 builder 不受影响（target 是 storage site，不释放）。
  */
@@ -186,7 +188,8 @@ function releaseNonStorageBuilderAssignments(snapshot: RoomSnapshot): void {
     if (!a || a.kind !== "build" || !a.targetId) continue;
 
     const site = Game.getObjectById(a.targetId as Id<ConstructionSite>);
-    if (site && site.structureType !== STRUCTURE_STORAGE) {
+    // 保留 storage 和 extension site 上的 builder；释放其他（road/rampart/link 等）。
+    if (site && site.structureType !== STRUCTURE_STORAGE && site.structureType !== STRUCTURE_EXTENSION) {
       creep.memory.assignment = undefined;
     }
   }

@@ -179,10 +179,15 @@ export function buildRoomTasks(
       kind: "build",
       targetId: site.id as string,
       structureType: site.structureType as string,
-      // storage 在建时 maxWorkers=3（全部 builder 集中完工）；
+      // storage 在建时 maxWorkers=2（集中主力完工，但留 1 个 builder 给 extension）；
       // spawn/tower/priority-container maxWorkers=2；普通 site maxWorkers=1。
+      // 不全压 storage 的原因：extension 只需 200 progress，建成立即提升 energyCapacityAvailable，
+      // 解锁更大 builder body（[2W,1C,2M]@350），整体建造速率翻倍。
+      // 全压 storage（10,000 progress）时 3 builder × [1W] = 15 progress/tick，
+      // 而先建 extension 再建 storage：1 builder × 200 progress ≈ 40 tick → 容量 350 →
+      // builder body [2W] → 20 progress/tick，ROI 远高于全压 storage。
       priority: isPriority ? 1 : 2,
-      maxWorkers: isStorageSite ? 3 : isPriority ? 2 : 1,
+      maxWorkers: isStorageSite ? 2 : isPriority ? 2 : 1,
       assignedCreeps: taskToCreeps.get(`build:${roomName}:${site.id}`) ?? [],
       pos: { x: site.pos.x, y: site.pos.y },
     });

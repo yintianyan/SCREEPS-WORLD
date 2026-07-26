@@ -434,10 +434,45 @@ function getCachedInterRoomExit(fromRoom: string, toRoom: string): InterRoomCach
   return getInterRoomCache()[`${fromRoom}:${toRoom}`];
 }
 
+/** 清除缓存的跨房间出口信息（卡位脱困时调用，强制下次重新选出口）。 */
+function clearInterRoomExit(fromRoom: string, toRoom: string): void {
+  delete getInterRoomCache()[`${fromRoom}:${toRoom}`];
+}
+
 // ─── 核心移动函数 ─────────────────────────────────────────
 
-/** 向目标房间方向移动（通过最近出口），带道路优先 + 跨房间缓存。 */
+/**
+ * 向目标房间方向移动（通过最近出口），带道路优先 + 跨房间缓存 + 卡位脱困。
+ *
+ * 卡位脱困（与 moveToTarget 对齐但精简）：
+ *   Level 0（正常）：reusePath: 5 + ignoreCreeps: true
+ *   Level 1（stuck >= threshold）：reusePath: 0 强制重算路径
+ *   Level 2（stuck >= threshold + repathLimit）：清出口缓存 + 换出口位置
+ */
 export function moveTowardRoom(creep: Creep, targetRoom: string): void {
+  // 卡位检测 — 确保 ensureHome 提前 return 时仍能追踪 stuck 状态。
+  const stuckTicks = updateStuckTicks(creep);
+  const { stuckThreshold, repathLimit } = CONFIG.kernel;
+
+  // Level 2：严重卡位 → 清出口缓存，下次重新选出口。
+  if (stuckTicks >= stuckThreshold + repathLimit) {
+    clearInterRoomExit(creep.room.name, targetRoom);
+    // 强制 repath + ignoreCreeps: false 绕过阻挡 creep。
+    const exitDir = creep.room.findExitTo(targetRoom) as number;
+    if (exitDir < 0) return;
+    const exit = creep.pos.findClosestByRange(exitDir as ExitConstant);
+    if (exit) {
+      creep.moveTo(exit, {
+        reusePath: 0,
+        plainCost: 2,
+        swampCost: 10,
+        ignoreCreeps: false,
+        costCallback: structureCostCallback,
+      });
+    }
+    return;
+  }
+
   // 尝试使用缓存的出口信息（避免每 tick 调用 findExitTo + findClosestByRange）。
   const cached = getCachedInterRoomExit(creep.room.name, targetRoom);
   let exit: RoomPosition | null = null;
@@ -454,8 +489,10 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
   }
 
   if (exit) {
+    // Level 1：卡位 → reusePath: 0 强制重算路径。
+    const reusePath = stuckTicks >= stuckThreshold ? 0 : 5;
     const result = creep.moveTo(exit, {
-      reusePath: 5,
+      reusePath,
       plainCost: 2,
       swampCost: 10,
       costCallback: structureCostCallback,

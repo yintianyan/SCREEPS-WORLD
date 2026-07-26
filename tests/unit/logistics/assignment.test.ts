@@ -135,10 +135,10 @@ describe("Assignment — buildRoomTasks (pure)", () => {
     const storageTask = tasks.find(t => t.targetId === "site-storage");
     const extTask = tasks.find(t => t.targetId === "site-ext");
 
-    // storage 是经济中枢，priority=1（与 critical 同级），maxWorkers=3（集中全部 builder）
+    // storage 是经济中枢，priority=1（与 critical 同级），maxWorkers=2（集中主力但留 1 给 extension）
     expect(storageTask).toBeDefined();
     expect(storageTask!.priority).toBe(1);
-    expect(storageTask!.maxWorkers).toBe(3);
+    expect(storageTask!.maxWorkers).toBe(2);
 
     // extension 是普通建造，priority=2, maxWorkers=1
     expect(extTask).toBeDefined();

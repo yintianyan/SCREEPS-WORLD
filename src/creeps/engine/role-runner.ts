@@ -104,7 +104,12 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
 
         // ── 4. 确认在目标房间（home 或 remoteTarget）──
         if (!ensureHome(creep)) {
-          creep.memory.mode = "idle";
+          // 远矿角色通勤中保持原 mode（acquire/work）——ensureHome 对 idle 模式
+          // 会导航回 home，导致 remote creep 在 home↔remoteTarget 之间振荡，
+          // 永远到不了目标房。本地角色（无 remoteTarget）仍切 idle 防止在异房作业。
+          if (!creep.memory.remoteTarget) {
+            creep.memory.mode = "idle";
+          }
           return;
         }
 
@@ -166,7 +171,15 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         if (policy.park) {
           parkIdleCreep(creep, snapshot);
         }
-        creep.memory.mode = "idle";
+        // 远矿角色不在目标房间时不切 idle——idle 会导致 ensureHome 导航回 home，
+        // 形成 idle→updateMode→acquire→action fail→idle 死循环，永远到不了 remoteTarget。
+        // remoteHauler work 模式在 home 房无 action 时可以 idle（ensureHome 会保持在家）。
+        const remoteTarget = creep.memory.remoteTarget;
+        const haulerWorkAtHome = remoteTarget && creep.memory.role === "remoteHauler" &&
+          creep.memory.mode === "work" && creep.room.name === creep.memory.home;
+        if (!remoteTarget || creep.room.name === remoteTarget || haulerWorkAtHome) {
+          creep.memory.mode = "idle";
+        }
       } finally {
         drawStatusLight(creep);
       }

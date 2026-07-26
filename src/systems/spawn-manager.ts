@@ -178,15 +178,24 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
     //      但 colonyState 可能仍为 "normal"（worker 维持 reserve 稳定，相位系统检测不到危机）。
     //      此时必须降级，否则陷入「等满额能量 → 永远凑不够 → 请求永远排队」死锁。
     //      线上 W37S58 实测：crisisCount=93 但 colonyState=normal，hauler 请求排队 4000+ tick 未孵化。
+    //   4. P2 饥饿超时 + 经济压力降级：P2（发展角色）仅在同时满足以下条件时降级——
+    //      a) 请求等待超过 10× 孵化耗时（给发展角色充足等待窗口）
+    //      b) economyPressure > 0.5（确认经济确实紧张，而非仅是能量积累慢）
+    //      双条件避免 bootstrap/正常低速增长阶段 P2 过早出小 body 导致人口配额被低效 creep 占满
+    //      （rcl1-survival / live-anomaly-reproduction 测试回归）。
     let body = req.body;
     if (cost > energyAvailable) {
-      const roomState = Memory.rooms[snapshot.roomName]?.colonyState ?? "normal";
-      const starvationTicks = req.body.length * 3 * 2; // 2× 孵化耗时
+      const roomMem = Memory.rooms[snapshot.roomName];
+      const roomState = roomMem?.colonyState ?? "normal";
+      const economyPressure = roomMem?.economyPressure ?? 0;
+      const spawnTime = req.body.length * 3;
       const waitTicks = Game.time - (req.createdAt ?? Game.time);
-      const starved = req.priority === 1 && waitTicks >= starvationTicks;
+      const starvedP1 = req.priority === 1 && waitTicks >= spawnTime * 2;
+      const starvedP2 = req.priority === 2 && waitTicks >= spawnTime * 10 && economyPressure > 0.5;
       const allowDegrade = req.priority === 0 ||
         (req.priority === 1 && (roomState === "bootstrap" || roomState === "recovery")) ||
-        starved;
+        starvedP1 ||
+        starvedP2;
       if (allowDegrade) {
         // 使用角色正确的 requiredParts，避免 hauler（无 WORK）降级时
         // 因默认要求 WORK 而返回 undefined。
