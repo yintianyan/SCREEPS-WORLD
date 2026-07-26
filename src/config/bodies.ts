@@ -123,6 +123,27 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     // [ATTACK,MOVE] @130：最小配置，10 damage/tick，20 tick 击杀 NPC reserver。
     { parts: ["attack", "move"], minCapacity: 130 },
   ],
+  defender: [
+    // 本房防御者：与塔协同贴脸输出。1:1 ATTACK:MOVE 保证无路面也能追击。
+    // [10A,10M] @1300：RCL5+ 主力档，300 damage/tick。
+    {
+      parts: [
+        "attack", "attack", "attack", "attack", "attack",
+        "attack", "attack", "attack", "attack", "attack",
+        "move", "move", "move", "move", "move",
+        "move", "move", "move", "move", "move",
+      ],
+      minCapacity: 1300,
+    },
+    // [6A,6M] @780：RCL3-4 档。
+    { parts: ["attack", "attack", "attack", "attack", "attack", "attack", "move", "move", "move", "move", "move", "move"], minCapacity: 780 },
+    // [4A,4M] @520：RCL2-3 档。
+    { parts: ["attack", "attack", "attack", "attack", "move", "move", "move", "move"], minCapacity: 520 },
+    // [2A,2M] @260：早期最小可用防御。
+    { parts: ["attack", "attack", "move", "move"], minCapacity: 260 },
+    // [A,M] @130：绝境档 — 有防御总比没有强。
+    { parts: ["attack", "move"], minCapacity: 130 },
+  ],
 };
 
 /**

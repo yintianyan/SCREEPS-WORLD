@@ -1341,6 +1341,7 @@ export class TestWorld {
     delete g.__creepPathCache;
     delete g.__yieldRequests;
     delete g.__remoteThreats;
+    delete g.__remoteDropped;
 
     // RawMemory
     (globalThis as Record<string, unknown>).RawMemory = {

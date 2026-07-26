@@ -88,9 +88,14 @@ export function syncTaskStates(
  *   blocked + attempts >= 3   → 删除（永久冲突，避免内存泄漏）
  *   blocked + retryAt 过期    → 转回 queued（保留 attempts 历史）
  *
+ * 返回因永久冲突被删除的任务 key 列表 — 调用方应将其记入阻塞黑名单，
+ * 否则布局规划器下个周期会按同 key 重新入队，形成
+ * 「入队 → blocked → 删除 → 再入队」的无限空转循环。
+ *
  * 纯函数 — 只操作 queue 数据结构 + tick 参数。
  */
-export function cleanTasks(queue: BuildTask[], tick: number): void {
+export function cleanTasks(queue: BuildTask[], tick: number): string[] {
+  const purgedKeys: string[] = [];
   for (let i = queue.length - 1; i >= 0; i--) {
     const task = queue[i];
     if (!task) continue;
@@ -101,6 +106,7 @@ export function cleanTasks(queue: BuildTask[], tick: number): void {
     if (task.state === "blocked") {
       // 超过 3 次重试的永久冲突任务直接删除，避免内存泄漏。
       if (task.attempts >= 3) {
+        purgedKeys.push(task.key);
         queue.splice(i, 1);
         continue;
       }
@@ -110,6 +116,7 @@ export function cleanTasks(queue: BuildTask[], tick: number): void {
       }
     }
   }
+  return purgedKeys;
 }
 
 /**

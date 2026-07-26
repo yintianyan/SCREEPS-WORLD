@@ -60,6 +60,9 @@ function attackHostileAction(): ActionCandidate<Creep> {
 }
 
 const policy: RolePolicy = {
+  // 战斗角色 — 豁免 flee 检测，否则到达远矿房看到敌人立刻逃回 home，
+  // 攻击候选永远轮不到执行。
+  combat: true,
   acquire: [
     attackHostileAction(),
   ],

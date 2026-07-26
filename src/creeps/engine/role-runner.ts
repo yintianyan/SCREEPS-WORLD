@@ -61,18 +61,19 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         }
 
         // ── 3. 敌人检测 → flee（先于导航：遇袭即逃，无论是否在通勤途中）──
+        // 战斗角色（policy.combat）豁免 — 它们的职责就是接敌，逃跑检测只适用于经济角色。
         // 按 creep 实际所在房间选择威胁来源：
         //   - 外部房间（远矿房 / 过境中间房）：无 snapshot，直接扫描当前房（shouldFleeForeignRoom）。
         //     修复 transit 盲区——必须排在 ensureHome 之前，否则过境 creep 被 ensureHome
         //     短路导航（返回 false 提前 return），永远轮不到威胁检测。
         //   - home 房：使用 home snapshot 的 threatCreeps（shouldFlee）。
         const inForeignRoom = creep.room.name !== creep.memory.home;
-        if (inForeignRoom && shouldFleeForeignRoom(creep)) {
+        if (!policy.combat && inForeignRoom && shouldFleeForeignRoom(creep)) {
           creep.memory.mode = "flee";
           fleeToHome(creep);
           return;
         }
-        if (!inForeignRoom && shouldFlee(creep, snapshot)) {
+        if (!policy.combat && !inForeignRoom && shouldFlee(creep, snapshot)) {
           creep.memory.mode = "flee";
           // G-SM-05: flee 期间释放普通 assignment，仅移动到安全位置。
           if (creep.memory.assignment) {

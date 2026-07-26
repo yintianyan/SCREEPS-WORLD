@@ -85,8 +85,9 @@ describe("Bodies — BODY_TEMPLATES", () => {
   it("has a 200-energy tier for all roles except reserver (CLAIM costs 600)", () => {
     for (const [role, templates] of Object.entries(BODY_TEMPLATES)) {
       // reserver 需要 CLAIM 部件（600 能量），无法降级到 200。
-      // remoteDefender 的最低档 [ATTACK,MOVE] = 130（ATTACK 80 + MOVE 50）。
-      if (role === "reserver" || role === "remoteDefender") continue;
+      // remoteDefender / defender 的最低档 [ATTACK,MOVE] = 130（ATTACK 80 + MOVE 50），
+      // 战斗角色的绝境档刻意低于 200 — 有防御总比没有强。
+      if (role === "reserver" || role === "remoteDefender" || role === "defender") continue;
       const lastTemplate = templates[templates.length - 1];
       expect(lastTemplate?.minCapacity).toBe(200);
     }

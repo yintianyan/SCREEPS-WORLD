@@ -67,6 +67,7 @@ export function resetGlobals(): void {
   delete g.__creepPathCache;
   delete g.__yieldRequests;
   delete g.__remoteThreats;
+  delete g.__remoteDropped;
   // action profiling 缓存
   delete g.actionCpu;
   delete g.actionCpuTick;

@@ -12,6 +12,7 @@ export const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConst
   remoteHauler: ["carry", "move"],
   reserver: ["claim", "move"],
   remoteDefender: ["attack", "move"],
+  defender: ["attack", "move"],
 };
 
 /**
@@ -170,6 +171,25 @@ export function evaluateDemand(
     const key = spawnKey("worker", home, 0);
     requests.push(createRequest("worker", home, 0, key, 0, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
     return { requests }; // P0 阻塞其他所有请求
+  }
+
+  // P1：Defender — 房内出现威胁时的防御响应（防御优先于经济扩员）。
+  // 塔负责远程集火，defender 贴脸补刀；无塔窗口期（RCL1-2 / 塔被打空）
+  // defender 是唯一主动防线。数量按威胁数缩放、受 maxCount 封顶；
+  // 威胁清除后不再补充，存量 defender 自然到期（minCount=0，替换门禁不触发）。
+  if (snapshot.threatCreeps.length > 0) {
+    const defenderConfig = getRoleBounds("defender", home);
+    const defenderPending = countPending(queue, "defender");
+    const defenderTotal = (counts.defender ?? 0) + defenderPending;
+    const defenderTarget = Math.min(snapshot.threatCreeps.length, defenderConfig.maxCount);
+    for (let i = defenderTotal; i < defenderTarget; i++) {
+      const key = spawnKey("defender", home, i);
+      if (!hasKey(queue, key)) {
+        requests.push(
+          createRequest("defender", home, i, key, 1, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick),
+        );
+      }
+    }
   }
 
   // P1：Harvester — 基于实际占用分配到最少拥挤的 source。
@@ -502,7 +522,13 @@ function createRequest(
   //     trySpawn 对非 P0 请求会自动等待能量足够再孵化，无需在请求层面降级。
   //   P2+（upgrader/builder）：使用 energyCapacity 满配。
   let body: BodyPartConstant[];
-  const shouldDegrade = priority === 0 || colonyState === "bootstrap" || colonyState === "recovery";
+  // defender 始终降级：防御是时间敏感的 — 敌人正在拆家时，
+  // 30 tick 后出场的满配不如现在就出场的半配（塔在补足火力差）。
+  const shouldDegrade =
+    priority === 0 ||
+    role === "defender" ||
+    colonyState === "bootstrap" ||
+    colonyState === "recovery";
   if (shouldDegrade) {
     const fullBody = selectBody(role, energyCapacity, { rcl });
     const requiredParts = ROLE_REQUIRED_PARTS[role];

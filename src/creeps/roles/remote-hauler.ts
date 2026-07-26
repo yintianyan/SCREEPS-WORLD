@@ -21,6 +21,7 @@ import {
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
+import { globalCache } from "../../kernel/global-cache";
 
 /** 从远矿 container 取能。 */
 function withdrawRemoteContainer(): ActionCandidate<StructureContainer> {
@@ -99,11 +100,25 @@ function findRemoteContainer(creep: Creep): StructureContainer | undefined {
   return closest;
 }
 
-/** 在远矿房查找最近的掉落能量。 */
+/** 在远矿房查找最近的掉落能量。
+ *
+ * 掉落资源列表走 per-tick per-room 缓存：远矿房无 RoomSnapshot 预热，
+ * 若每 tick 直接 room.find，container 空档期内 acquire 链每 tick 都会全房扫描，
+ * 违反「角色禁止全房 find」硬约束。缓存生命周期单 tick，同房多 hauler 共享。
+ */
 function findDroppedEnergy(creep: Creep): Resource | undefined {
-  const resources = creep.room.find(FIND_DROPPED_RESOURCES, {
-    filter: (r) => r.resourceType === RESOURCE_ENERGY,
-  });
+  const g = globalCache() as { __remoteDropped?: Record<string, { tick: number; list: Resource[] }> };
+  if (!g.__remoteDropped) g.__remoteDropped = {};
+  const cached = g.__remoteDropped[creep.room.name];
+  let resources: Resource[];
+  if (cached && cached.tick === Game.time) {
+    resources = cached.list;
+  } else {
+    resources = creep.room.find(FIND_DROPPED_RESOURCES, {
+      filter: (r) => r.resourceType === RESOURCE_ENERGY,
+    });
+    g.__remoteDropped[creep.room.name] = { tick: Game.time, list: resources };
+  }
   if (resources.length === 0) return undefined;
   return creep.pos.findClosestByRange(resources) ?? resources[0];
 }

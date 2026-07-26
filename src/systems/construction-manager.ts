@@ -7,6 +7,7 @@ import {
   isEmergencyTask,
   type EmergencyRebuildStatus,
 } from "../domain/construction/queue";
+import { getRoomLayoutData, markLayoutDirty } from "../kernel/segment-store";
 
 /**
  * 建造管理器 — 唯一创建建造 site 的模块。
@@ -39,7 +40,20 @@ export const constructionManagerSystem: System = {
       syncTaskStates(queue, snapshot);
 
       // 2. 清理完成 / 阻塞的任务（纯函数 — domain/construction/queue）。
-      cleanTasks(queue, ctx.tick);
+      //    永久冲突（3 次 ERR_INVALID_TARGET）被清除的 key 记入 segment 黑名单，
+      //    layout-planner 在冷却期内不会按同 key 重新入队。
+      const purgedKeys = cleanTasks(queue, ctx.tick);
+      if (purgedKeys.length > 0) {
+        const segData = getRoomLayoutData(snapshot.roomName);
+        segData.blocked ??= {};
+        for (const key of purgedKeys) {
+          segData.blocked[key] = {
+            code: 1, // ERR_INVALID_TARGET 类永久冲突
+            retryAt: ctx.tick + CONFIG.construction.blockedRetryDelay,
+          };
+        }
+        markLayoutDirty();
+      }
 
       // 3. 评估紧急重建状态。
       const emergency = assessEmergencyRebuild(snapshot);

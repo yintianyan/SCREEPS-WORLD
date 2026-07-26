@@ -254,3 +254,43 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
     expect(haulers).toHaveLength(2);
   });
 });
+
+describe("防御响应 — 威胁触发 defender 孵化", () => {
+  /** 造 n 个最小威胁 creep 摘要（demand 只消费 threatCreeps.length）。 */
+  const threats = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ id: `hostile_${i}` }) as unknown as Creep);
+
+  it("房内出现威胁时按威胁数生成 P1 defender 请求", () => {
+    const snap = mockSnapshot({ threatCreeps: threats(1) });
+    const { requests } = evaluateDemand(snap, [], "defense", livingHarvester(), [], normalCtx(0), 1000);
+
+    const defenders = requests.filter(r => r.role === "defender");
+    expect(defenders).toHaveLength(1);
+    expect(defenders[0]!.priority).toBe(1);
+    expect(defenders[0]!.body).toContain("attack");
+  });
+
+  it("defender 数量受 maxCount 封顶（威胁再多也不超编）", () => {
+    const snap = mockSnapshot({ threatCreeps: threats(5) });
+    const { requests } = evaluateDemand(snap, [], "defense", livingHarvester(), [], normalCtx(0), 1000);
+
+    // CONFIG.roles.defender.maxCount = 2
+    expect(requests.filter(r => r.role === "defender")).toHaveLength(2);
+  });
+
+  it("无威胁时不生成 defender", () => {
+    const snap = mockSnapshot({});
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "defender")).toHaveLength(0);
+  });
+
+  it("存活 defender 计入总数，不重复孵化", () => {
+    const snap = mockSnapshot({ threatCreeps: threats(1) });
+    const living = [
+      ...livingHarvester(),
+      { name: "defender_1", role: "defender", home: "W7N4", ticksToLive: 1000, bodyLength: 4, spawnIndex: 0 },
+    ];
+    const { requests } = evaluateDemand(snap, [], "defense", living, [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "defender")).toHaveLength(0);
+  });
+});

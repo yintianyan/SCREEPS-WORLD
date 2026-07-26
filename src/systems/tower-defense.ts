@@ -2,6 +2,7 @@ import { CONFIG, getWallTargetHits } from "../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import { findCriticalRepair } from "../creeps/support";
 import { selectTowerTarget, type TowerThreat } from "../domain/defense/tower-target";
+import { assessEngagement, type TowerSummary } from "../domain/defense/tower-engagement";
 import { globalCache } from "../kernel/global-cache";
 
 /**
@@ -24,31 +25,51 @@ export const towerDefenseSystem: System = {
         // 无 Tower — 收紧 safe mode：仅当威胁 creep 靠近核心区（spawn，无 spawn 时退到 controller）
         // 至 safeModeTriggerRange 内才激活，避免无害过境 scout 误烧珍贵的 safe mode。
         if (snapshot.threatCreeps.length > 0 && isCoreBreached(snapshot)) {
-          const controller = snapshot.controller;
-          if (
-            controller?.my &&
-            !controller.safeMode &&
-            !controller.safeModeCooldown &&
-            controller.safeModeAvailable > 0
-          ) {
-            controller.activateSafeMode();
-          }
+          tryActivateSafeMode(snapshot);
         }
         continue;
       }
 
       // 有 Tower — G-DF-06：攻击敌人 > 紧急维修 > wall/rampart 维护。
       if (snapshot.threatCreeps.length > 0) {
-        // R7-02 / P1-3：所有 tower 集火同一目标 —— 奶妈优先、最脆优先、近距优先。
+        // 所有 tower 集火同一目标 —— 奶妈优先、最脆优先、近距优先。
         const firstTower = snapshot.towers.find(t => t.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
+        const breachingCore = isCoreBreached(snapshot);
+        let fired = false;
         if (firstTower) {
           const target = selectFocusTarget(firstTower, snapshot.threatCreeps as Creep[]);
           if (target) {
-            for (const tower of snapshot.towers) {
-              if (tower.store.getUsedCapacity(RESOURCE_ENERGY) === 0) continue;
-              tower.attack(target);
+            // 交战盈亏判定：全塔合计伤害（含距离衰减）必须超过敌方编队
+            // 合计治疗量才开火，否则每发炮弹都被 HEAL 奶回、白耗能量
+            // （heal-tank 骗塔战术）。敌人突入核心区时无条件开火。
+            const towerSummaries: TowerSummary[] = snapshot.towers.map(t => ({
+              energy: t.store.getUsedCapacity(RESOURCE_ENERGY),
+              rangeToTarget: t.pos.getRangeTo(target.pos),
+            }));
+            const totalHealParts = (snapshot.threatCreeps as Creep[]).reduce(
+              (sum, c) => sum + c.body.filter(p => p.type === HEAL).length,
+              0,
+            );
+            const decision = assessEngagement(towerSummaries, {
+              totalHealParts,
+              breachingCore,
+            });
+            if (decision.engage) {
+              for (const tower of snapshot.towers) {
+                if (tower.store.getUsedCapacity(RESOURCE_ENERGY) === 0) continue;
+                tower.attack(target);
+                fired = true;
+              }
             }
           }
+        }
+
+        // 最后防线：敌人已突入核心区，但所有塔打不出火力
+        //（能量耗尽 / 被奶穿打不动）— 塔防线事实失效，激活 safe mode。
+        // 官方定位 safe mode 为「defense tactic of last resort」，
+        // 此前它只在「无塔」分支触发，塔被打空时反而没有兜底。
+        if (!fired && breachingCore) {
+          tryActivateSafeMode(snapshot);
         }
         continue;
       }
@@ -136,6 +157,23 @@ function isCoreBreached(snapshot: RoomSnapshot): boolean {
   if (!anchor) return true; // 既无 spawn 也无 controller — 无参考点，保守视为突破。
   const range = CONFIG.defense.safeModeTriggerRange;
   return snapshot.threatCreeps.some(c => c.pos.getRangeTo(anchor.pos) <= range);
+}
+
+/**
+ * 激活 safe mode（带完整前置校验）。
+ * 触发场景：① 无塔且核心被突破；② 有塔但全部打不出火力且核心被突破。
+ * safe mode 是最后防线 — 校验 controller 归属 / 未激活 / 无冷却 / 有可用次数。
+ */
+function tryActivateSafeMode(snapshot: RoomSnapshot): void {
+  const controller = snapshot.controller;
+  if (
+    controller?.my &&
+    !controller.safeMode &&
+    !controller.safeModeCooldown &&
+    controller.safeModeAvailable > 0
+  ) {
+    controller.activateSafeMode();
+  }
 }
 
 /**

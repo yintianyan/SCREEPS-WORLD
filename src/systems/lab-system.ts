@@ -30,6 +30,8 @@ interface IndustryMemory {
   reactionPlan?: ReactionPlan;
   /** 已 boost 的 creep 名列表（防止重复 boost）。 */
   boostedCreeps?: string[];
+  /** 原料断供休眠截止 tick — 休眠期内跳过本房 lab 规划（见 run 内注释）。 */
+  idleUntil?: number;
 }
 
 function getIndustryMemory(roomName: string): IndustryMemory {
@@ -169,6 +171,15 @@ export const labSystem: System = {
       if (!room) continue;
 
       const industryMem = getIndustryMemory(snapshot.roomName);
+
+      // 原料断供休眠：单房间只产一种矿物，多矿种原料在市场/跨房补给接入前
+      // 不会自行出现。此时每 tick「规划反应链 → 无可执行步骤 → 清除 → 再规划」
+      // 是纯 CPU 空转。休眠期内跳过本房全部 lab 逻辑，到期后重新评估
+      //（休眠由下方「无反应可执行且无 boost 需求」时设置）。
+      if (industryMem.idleUntil !== undefined && ctx.tick < industryMem.idleUntil) {
+        continue;
+      }
+
       const inventory = collectCompoundInventory(snapshot);
 
       // P2-9：清理已死亡 creep 的名字，防止 boostedCreeps 无限累积。
@@ -233,6 +244,13 @@ export const labSystem: System = {
             industryMem.reactionPlan = undefined;
           }
         }
+      }
+
+      // 无可执行反应且无 boost 需求 → 进入休眠，等原料库存变化后再评估。
+      // 500 tick ≈ 一个 tuning 评估窗口，对 boost 时效的影响可忽略。
+      if (!reactionStep && boostRequests.length === 0) {
+        industryMem.idleUntil = ctx.tick + 500;
+        continue;
       }
 
       // ── 3. Lab 分配 ──

@@ -82,4 +82,10 @@ export interface RolePolicy {
    * 移动角色（hauler/distributor/builder/worker）设 true，避免 idle 时堵塞交通。
    */
   park?: boolean;
+  /**
+   * 战斗角色标志：true 时 role-runner 跳过威胁逃跑检测（shouldFlee/shouldFleeForeignRoom）。
+   * 战斗角色的职责就是接敌 — 若不豁免，defender 看到敌人会立刻逃回 home，
+   * 攻击候选永远轮不到执行，角色形同虚设。
+   */
+  combat?: boolean;
 }

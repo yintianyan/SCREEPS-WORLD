@@ -120,6 +120,16 @@ function maintainExistingOps(
   for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state === "abandoned") continue;
 
+    // 归属校验（需视野）：目标房已被其他玩家占有 → 立即废弃。
+    // intel 对从未有视野的房间记录不到 owner（盲选是远矿自举的必经之路 —
+    // 第一只远矿 creep 进房才产生视野），因此把校验放在获得视野之后，
+    // 而非在候选筛选阶段排除所有未知房。
+    const targetRoom = Game.rooms[roomName];
+    if (targetRoom?.controller?.owner && !targetRoom.controller.my) {
+      op.state = "abandoned";
+      continue;
+    }
+
     // 检查是否有 creep 在该远矿房（有则更新 lastSeen）。
     const hasCreep = hasCreepInRoom(roomName);
     if (hasCreep) {

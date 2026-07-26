@@ -1,4 +1,5 @@
 import { builderRole } from "./creeps/roles/builder";
+import { defenderRole } from "./creeps/roles/defender";
 import { distributorRole } from "./creeps/roles/distributor";
 import { harvesterRole } from "./creeps/roles/harvester";
 import { haulerRole } from "./creeps/roles/hauler";
@@ -77,6 +78,8 @@ const registry = new Registry()
   .registerSystem(tuningEngineSystem)
   // P0：恢复 worker（启动期 / 灾后）
   .registerRole(workerRole)
+  // P1：defender（本房防御响应 — 房内出现威胁时孵化，与塔协同）
+  .registerRole(defenderRole)
   // P1：harvester 和 hauler（能量链）
   .registerRole(harvesterRole)
   .registerRole(haulerRole)

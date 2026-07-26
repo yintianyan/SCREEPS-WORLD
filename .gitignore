@@ -27,6 +27,7 @@ coverage/
 .workbuddy/
 .trae/
 .meituan-catpaw/
+.catpaw/
 
 # Screeps
 *.screeps

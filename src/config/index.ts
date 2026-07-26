@@ -115,6 +115,11 @@ export const CONFIG = {
      * 7：容纳 3 extension + 2 road + 关键 container（source/controller）并行，
      * 避免被毁的 source container 重建被道路/extension 占满名额而阻塞。 */
     maxGlobalSites: 7,
+    /** 永久位置冲突任务的黑名单冷却（tick）。
+     * blocked 任务连续 3 次 ERR_INVALID_TARGET 被清除后，其 key 进入黑名单，
+     * 冷却期内规划器不得重新入队 — 否则「入队 → blocked → 删除 → 再入队」
+     * 无限空转。冷却给足 10000 tick：冲突源（如玩家手工建筑）可能被移除。 */
+    blockedRetryDelay: 10000,
   },
 
   layout: {
@@ -229,6 +234,8 @@ export const CONFIG = {
     upgrader: { minCount: 1, maxCount: 3 },
     builder: { minCount: 1, maxCount: 4 },
     worker: { minCount: 0, maxCount: 2 },
+    // 本房防御者：仅在房内出现威胁时按威胁数孵化（见 demand 的防御响应块）。
+    defender: { minCount: 0, maxCount: 2 },
     // 远矿角色：每远矿目标 1 harvester + 1 hauler + 1 reserver
     remoteHarvester: { minCount: 0, maxCount: 6 },
     remoteHauler: { minCount: 0, maxCount: 6 },

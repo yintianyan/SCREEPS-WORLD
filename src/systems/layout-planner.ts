@@ -203,10 +203,23 @@ export const layoutPlannerSystem: System & {
       existingPositions.add(`${t.pos.x},${t.pos.y}`);
     }
 
+    // 阻塞黑名单：连续 ERR_INVALID_TARGET 被清除的任务 key 在冷却期内禁止重新入队，
+    // 打破「入队 → blocked → 删除 → 重规划再入队」的无限空转（如玩家手工建筑占位）。
+    // 冷却到期的条目顺手清理，防止 segment 黑名单无限累积。
+    const segBlocked = getRoomLayoutData(snapshot.roomName).blocked ?? {};
+    for (const [blockedKey, entry] of Object.entries(segBlocked)) {
+      if (ctx.tick >= entry.retryAt) {
+        delete segBlocked[blockedKey];
+        markLayoutDirty();
+      }
+    }
+    const isBlacklisted = (key: string): boolean => segBlocked[key] !== undefined;
+
     // 1. 核心结构任务 — 按 CONFIG.layout.mode 分支。
     // tryAddTask 统一封装 key + position 双重去重，防止同位置多任务。
     const tryAddTask = (candidate: BuildTaskCandidate): boolean => {
       if (existingKeys.has(candidate.key)) return false;
+      if (isBlacklisted(candidate.key)) return false;
       const posKey = `${candidate.pos.x},${candidate.pos.y}`;
       if (existingPositions.has(posKey)) return false;
       queue.push(candidateToBuildTask(candidate));
@@ -414,6 +427,7 @@ export const layoutPlannerSystem: System & {
       for (const task of roadTasks) {
         const posKey = `${task.pos.x},${task.pos.y}`;
         if (existingKeys.has(task.key) || existingPositions.has(posKey)) continue;
+        if (isBlacklisted(task.key)) continue;
         queue.push(task);
         existingKeys.add(task.key);
         existingPositions.add(posKey);
