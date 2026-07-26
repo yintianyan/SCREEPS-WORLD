@@ -9,7 +9,6 @@ import type { Priority } from "../../kernel/contracts";
 import type { RolePolicy } from "../engine/action-types";
 import {
   buildNearbyContainerSite,
-  buildNearestSite,
   dumpMineralsToNearbyContainer,
   dumpToNearbyContainer,
   dumpToNearbyLink,
@@ -19,7 +18,6 @@ import {
   harvestSource,
   repairNearbyContainer,
   stationaryMine,
-  upgradeController,
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
 
@@ -51,10 +49,9 @@ const policy: RolePolicy = {
     fillTarget(),
     // 5. 全满时倒入最空 container。
     fillEmptiestContainer(),
-    // 6. 帮忙建造附近 site。
-    buildNearestSite(),
-    // 7. 全部已满 — 升级控制器。
-    upgradeController(),
+    // 所有倒能/填充候选均不匹配 → park 待命。
+    // harvester 不 fallback 到建造/升级 — 这些是 builder/upgrader 的职责。
+    // harvester 留在矿位等待 container 有空间，stationaryMine 会拦截。
   ],
 };
 

@@ -87,15 +87,21 @@ export interface PhaseOptions {
 }
 
 export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
-  drainEnterScore: 100,
-  drainExitScore: 40,
-  recoveryClearScore: 10,
-  scoreStep: 20,
-  recoveryStep: 30,
-  liquiditySpendableRatio: 0.3,
-  liquidityFrozenRatio: 0.6,
-  liquidityStep: 25,
-  liquidityRecoveryStep: 30,
+  // 迟滞带加宽：进入 crisis 需 150 分（10 tick @step15），退出需降到 30（4 tick @step40）。
+  // 旧值 100/40 在 ec=300 时 4 tick 即触发，导致 phase 在 growth↔crisis 间高频振荡。
+  drainEnterScore: 150,
+  drainExitScore: 30,
+  recoveryClearScore: 5,
+  // 非对称步长：进入慢（15/tick），退出快（40/tick）——交替场景下净 -25/tick，快速脱困。
+  scoreStep: 15,
+  recoveryStep: 40,
+  // 流动性陷阱收紧：ec=300 时 spendableRatio<0.3 太容易触发（spawn 空=常态）。
+  // 0.15 → ec=300 时需 spendable<45 才触发；0.8 → container 80%+ 才算积压。
+  liquiditySpendableRatio: 0.15,
+  liquidityFrozenRatio: 0.8,
+  // 非对称步长：陷阱累积慢（15/tick），恢复快（50/tick）——交替场景下净 -35/tick。
+  liquidityStep: 15,
+  liquidityRecoveryStep: 50,
 };
 
 /**

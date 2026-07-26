@@ -26,7 +26,6 @@ import {
   repairCritical,
   repairFortifications,
   repairRoads,
-  upgradeController,
   withdrawClosestNonSourceContainer,
   withdrawStorageCapped,
 } from "../engine/actions";
@@ -34,20 +33,15 @@ import { releaseAssignment } from "../support/assignment-adapter";
 import { getObjectById } from "../support/obj-cache";
 import { defineRole } from "../engine/role-runner";
 
-/** recovery/conserve tier 门禁：释放不可用的 assignment。 */
+/** recovery tier 门禁：释放 assignment（不建造）。 */
 function builderGate(ac: ActionContext): boolean {
   if (ac.budget.tier === "recovery") {
     releaseAssignment(ac.creep);
     return true;
   }
-  // conserve: assignment 指向非 critical site 时释放（让 fallback 接管）。
-  if (ac.budget.tier === "conserve" && ac.assignment?.targetId) {
-    const site = getObjectById(ac.assignment.targetId as Id<ConstructionSite>);
-    if (site && site.structureType !== STRUCTURE_SPAWN && site.structureType !== STRUCTURE_TOWER) {
-      releaseAssignment(ac.creep);
-      ac.creep.memory.assignment = undefined;
-    }
-  }
+  // conserve 下不释放 assignment — construction-manager 的 developmentGate
+  // 已在 conserve 下做了建造门禁（emergency 豁免），builder 不需要二次过滤。
+  // 如果 site 存在，说明 construction-manager 认为可以建，builder 就应该去建它。
   return true;
 }
 
@@ -88,10 +82,12 @@ const policy: RolePolicy = {
   ],
 
   work: [
-    // 建造 assignment 指定的 site（recovery 跳过，conserve 仅建 critical）。
-    buildAssignmentSite({ recoverySkip: true, conserveCriticalOnly: true }),
-    // 建造最近 site（recovery 跳过，conserve 仅建 critical site）。
-    buildNearestSite(ac => ac.budget.tier === "conserve", { recoverySkip: true }),
+    // 建造 assignment 指定的 site（recovery 跳过）。
+    buildAssignmentSite({ recoverySkip: true }),
+    // 建造最近 site（recovery 跳过）。
+    // conserve 下不再过滤 criticalOnly — construction-manager 的 developmentGate
+    // 已控制哪些 site 应该存在，builder 只需去建它们。
+    buildNearestSite(false, { recoverySkip: true }),
     // 紧急：修复衰减中的 container（< 80% 血量）。
     // 优先级高于 fill — 失去 container = 物流链断裂 = 经济崩溃。
     repairContainerDecay(),
@@ -106,9 +102,9 @@ const policy: RolePolicy = {
     // fallback: 防御工事维修（B3：盈余门禁 + 无威胁时，修 wall/rampart 至分级血量）。
     // 维修权从塔移交 creep —— 塔修墙是能量黑洞，creep 修是 1 energy/100 hits/WORK。
     repairFortifications(),
-    // fallback: 升级控制器（无能量门禁 — builder 用自身携带的能量升级，不消耗 extension）。
-    // 仅当所有建造/填充/维修候选均不匹配时触发，此时能量无更好去向。
-    upgradeController(),
+    // 所有建造/填充/维修候选均不匹配 → park 待命。
+    // builder 不 fallback 到升级 — 升级是 upgrader 的职责。
+    // builder 等待新 construction site 出现，而不是消耗能量去升级。
   ],
 };
 

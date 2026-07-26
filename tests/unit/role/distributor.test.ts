@@ -63,7 +63,7 @@ describe("distributor — acquire 模式", () => {
     expect(creep.memory.mode).toBe("idle");
   });
 
-  it("无 storage 时 idle", () => {
+  it("无 storage 时降级为 hauler", () => {
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage: undefined, fillTargets: [spawn] });
     const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 100, mode: "acquire" });
@@ -71,8 +71,9 @@ describe("distributor — acquire 模式", () => {
 
     distributorRole.run(creep, ctx);
 
+    // 无 storage → gate 将 role 改为 hauler，跳过本 tick。
     expect(creep.withdraw).not.toHaveBeenCalled();
-    expect(creep.memory.mode).toBe("idle");
+    expect(creep.memory.role).toBe("hauler");
   });
 
   it("storage 可用量 < carryFree 时取可用量", () => {
@@ -91,8 +92,9 @@ describe("distributor — acquire 模式", () => {
 
 describe("distributor — work 模式", () => {
   it("向 fillTarget 运送能量", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
-    const snap = mockSnapshot({ fillTargets: [spawn] });
+    const snap = mockSnapshot({ storage, fillTargets: [spawn] });
     const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
     const ctx = mockContext(snap);
 
@@ -135,9 +137,10 @@ describe("distributor — work 模式", () => {
 
 describe("distributor — reservation 去重", () => {
   it("两个 distributor 不抢同一 fillTarget", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const ext = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
-    const snap = mockSnapshot({ fillTargets: [spawn, ext] });
+    const snap = mockSnapshot({ storage, fillTargets: [spawn, ext] });
 
     const dist1 = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
     const dist2 = mockCreep({ name: "dist_2", role: "distributor", used: 80, capacity: 100, mode: "work" });

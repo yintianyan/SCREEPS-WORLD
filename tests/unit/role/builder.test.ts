@@ -100,7 +100,7 @@ describe("builder — CPU 门禁", () => {
     expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
   });
 
-  it("conserve tier：assignment 指向非 critical site 时释放并走 fallback", () => {
+  it("conserve tier：assignment 指向非 critical site 时继续建造（不过滤）", () => {
     const extSite = mockConstructionSite("extension", { id: "ext_site" });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ myConstructionSites: [extSite], fillTargets: [spawn] });
@@ -117,13 +117,13 @@ describe("builder — CPU 门禁", () => {
 
     builderRole.run(creep, ctx);
 
-    // conserve + 非 critical → 释放 → fallback → fill。
-    expect(creep.memory.assignment).toBeUndefined();
-    expect(creep.build).not.toHaveBeenCalled();
-    expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
+    // conserve 下不释放 assignment — construction-manager 的 developmentGate 已控制建造门禁。
+    expect(creep.memory.assignment).toBeDefined();
+    expect(creep.build).toHaveBeenCalledWith(extSite);
+    expect(creep.transfer).not.toHaveBeenCalled();
   });
 
-  it("conserve tier：无 assignment 时只建造 critical site（spawn/tower）", () => {
+  it("conserve tier：无 assignment 时建造最近 site（不过滤 critical）", () => {
     const spawnSite = mockConstructionSite("spawn", { id: "spawn_site" });
     const extSite = mockConstructionSite("extension", { id: "ext_site" });
     const snap = mockSnapshot({ myConstructionSites: [extSite, spawnSite] });
@@ -133,11 +133,11 @@ describe("builder — CPU 门禁", () => {
 
     builderRole.run(creep, ctx);
 
-    // 无 assignment → 过滤 critical → 只建 spawn site。
-    expect(creep.build).toHaveBeenCalledWith(spawnSite);
+    // conserve 下不再过滤 criticalOnly — builder 建任何 construction-manager 创建的 site。
+    expect(creep.build).toHaveBeenCalled();
   });
 
-  it("conserve tier：无 critical site 时走 fallback", () => {
+  it("conserve tier：有 site 时建造（不再走 fallback）", () => {
     const extSite = mockConstructionSite("extension", { id: "ext_site" });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ myConstructionSites: [extSite], fillTargets: [spawn] });
@@ -147,8 +147,9 @@ describe("builder — CPU 门禁", () => {
 
     builderRole.run(creep, ctx);
 
-    expect(creep.build).not.toHaveBeenCalled();
-    expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
+    // conserve 下不再过滤 criticalOnly — builder 建任何可用 site。
+    expect(creep.build).toHaveBeenCalledWith(extSite);
+    expect(creep.transfer).not.toHaveBeenCalled();
   });
 
   // P2 修复：repairRoads 现在有 tier 门禁，与 repairFortifications 对齐。
@@ -168,7 +169,7 @@ describe("builder — CPU 门禁", () => {
     builderRole.run(creep, ctx);
 
     expect(creep.repair).not.toHaveBeenCalled();
-    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    expect(creep.upgradeController).not.toHaveBeenCalled();
   });
 
   it("conserve tier 不修路（低 CPU 冻结非关键维修）", () => {
@@ -187,7 +188,7 @@ describe("builder — CPU 门禁", () => {
     builderRole.run(creep, ctx);
 
     expect(creep.repair).not.toHaveBeenCalled();
-    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    expect(creep.upgradeController).not.toHaveBeenCalled();
   });
 });
 
@@ -267,7 +268,7 @@ describe("builder — fallback 链", () => {
     builderRole.run(creep, ctx);
 
     expect(creep.repair).not.toHaveBeenCalled();
-    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    expect(creep.upgradeController).not.toHaveBeenCalled();
   });
 
   it("道路维修目标持久化（复用 repairTargetId）", () => {
@@ -325,7 +326,7 @@ describe("builder — fallback 链", () => {
 
     builderRole.run(creep, ctx);
 
-    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    expect(creep.upgradeController).not.toHaveBeenCalled();
   });
 
   it("能量低于 floor 时仍升级（builder 用自身携带的能量，不消耗 extension）", () => {
@@ -338,15 +339,15 @@ describe("builder — fallback 链", () => {
       towers: [],
       containers: [],
       controller,
-      energyAvailable: 100, // < upgradeEnergyFloor (300)，但 builder 已携能，无更好去向
+      energyAvailable: 100, // < upgradeEnergyFloor (300)，但 builder 已携能
     });
     const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
 
-    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
-    expect(creep.memory.mode).not.toBe("idle");
+    // builder 不再 fallback 到升级 — park 是正确行为。
+    expect(creep.upgradeController).not.toHaveBeenCalled();
   });
 });
 
@@ -474,7 +475,7 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
     builderRole.run(creep, ctx);
 
     expect(creep.repair).not.toHaveBeenCalled();
-    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    expect(creep.upgradeController).not.toHaveBeenCalled();
   });
 
   it("conserve tier 不修墙（低 CPU 冻结发展性维修）", () => {
@@ -515,7 +516,7 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
     builderRole.run(creep, ctx);
 
     expect(creep.repair).not.toHaveBeenCalled();
-    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    expect(creep.upgradeController).not.toHaveBeenCalled();
   });
 
   // P2 修复：rampart 优先于 wall — rampart 被摧毁暴露同格所有结构。

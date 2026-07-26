@@ -179,6 +179,11 @@ export class Kernel {
     const anyRecovery = Object.values(Memory.rooms).some(
       r => r?.colonyState === "recovery",
     );
+    // 关键基建缺失检测：storage/tower/spawn 在 buildQueue 中 P0 queued 但从未建成。
+    // 此场景下 colonyState 可能为 "normal"（phase=growth），不触发 anyRecovery，
+    // 但 construction-manager 仍被 budget tier 拦截 → 关键基建永远建不成 → 死锁。
+    // anyCriticalGap 扩展豁免范围，覆盖"从未建成"与"被毁重建"两种情况。
+    const anyCriticalGap = hasCriticalStructureGap(Memory.rooms);
 
     // 使用缓存的已排序 systems 列表（构造时构建）。
     for (const system of this.sortedSystems) {
@@ -186,10 +191,11 @@ export class Kernel {
         recordSkip(`system/${system.name}/interval`);
         continue;
       }
-      // Recovery 豁免：construction-manager 和 layout-planner 在 recovery 时
-      // 以 P1 等效优先级通过 budget 检查，确保紧急重建路径可达。
+      // Recovery / 关键基建缺失豁免：construction-manager 和 layout-planner
+      // 在 anyRecovery 或 anyCriticalGap 时以 P1 等效优先级通过 budget 检查，
+      // 确保紧急重建路径可达。
       const isConstructionCritical =
-        anyRecovery &&
+        (anyRecovery || anyCriticalGap) &&
         (system.name === "construction-manager" || system.name === "layout-planner");
       const effectivePriority = isConstructionCritical
         ? (1 as Priority)
@@ -291,4 +297,27 @@ export class Kernel {
       );
     }
   }
+}
+
+// ─── 纯函数（可独立测试）────────────────────────────────────
+
+/**
+ * 检测是否有任何房间的 buildQueue 中存在 P0 queued 的关键基建任务。
+ *
+ * 关键基建 = storage / tower / spawn — 这三类结构缺失时经济链路断裂，
+ * 必须让 construction-manager 在任何 budget tier 下都能运行（以 P1 等效优先级）。
+ *
+ * 纯函数 — 不访问 Game/Memory，接收显式参数，可在 Vitest 中独立测试。
+ */
+export function hasCriticalStructureGap(
+  rooms: Record<string, { buildQueue?: Array<{ priority: number; state: string; structureType: string }> } | undefined>,
+): boolean {
+  return Object.values(rooms).some(
+    r => r?.buildQueue?.some(
+      t => t.priority === 0 && t.state === "queued" &&
+        (t.structureType === STRUCTURE_STORAGE ||
+          t.structureType === STRUCTURE_TOWER ||
+          t.structureType === STRUCTURE_SPAWN),
+    ),
+  );
 }

@@ -73,16 +73,30 @@ function pickupRemoteDropped(): ActionCandidate<Resource> {
   };
 }
 
-/** 在远矿房查找有能量的 container。 */
+/** 在远矿房查找有能量的 container（缓存 containerId 避免每 tick find）。 */
 function findRemoteContainer(creep: Creep): StructureContainer | undefined {
+  // 优先使用缓存的 containerId — 避免每 tick room.find。
+  if (creep.memory.remoteContainerId) {
+    const cached = Game.getObjectById(creep.memory.remoteContainerId as Id<StructureContainer>);
+    if (cached && cached.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+      return cached;
+    }
+    // 缓存失效 — container 被摧毁或空了，清除并重新 find。
+    creep.memory.remoteContainerId = undefined;
+  }
+
+  // 首次或缓存失效：find 有能量的 container。
   const containers = creep.room.find(FIND_STRUCTURES, {
     filter: (s) =>
       s.structureType === STRUCTURE_CONTAINER &&
       s.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
   }) as StructureContainer[];
   if (containers.length === 0) return undefined;
-  // 选最近的。
-  return creep.pos.findClosestByRange(containers) ?? containers[0];
+
+  const closest = (creep.pos.findClosestByRange(containers) ?? containers[0])!;
+  // 缓存 containerId，后续 tick 直接用 getObjectById 取回。
+  creep.memory.remoteContainerId = closest.id as Id<StructureContainer>;
+  return closest;
 }
 
 /** 在远矿房查找最近的掉落能量。 */

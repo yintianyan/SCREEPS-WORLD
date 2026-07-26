@@ -85,7 +85,8 @@ describe("harvester — acquire 模式", () => {
 
   it("满载时 updateMode 切为 work（不执行 harvest）", () => {
     const source = mockSource("s1");
-    const snap = mockSnapshot({ sources: [source], sourceOccupancy: new Map([["s1", 1]]) });
+    const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
+    const snap = mockSnapshot({ sources: [source], sourceOccupancy: new Map([["s1", 1]]), fillTargets: [spawn] });
     const creep = mockCreep({ used: 50, capacity: 50, sourceId: "s1", mode: "acquire" });
     const ctx = mockContext(snap);
 
@@ -188,7 +189,7 @@ describe("harvester — work 模式优先级链", () => {
     expect(creep.transfer).toHaveBeenCalledWith(c2, "energy");
   });
 
-  it("优先级 4：全满无 container 时建造最近 site", () => {
+  it("优先级 4：全满无 container 时 park（不建 site）", () => {
     const site = mockConstructionSite("extension", { id: "ext_site" });
     const snap = mockSnapshot({
       containers: [],
@@ -201,10 +202,11 @@ describe("harvester — work 模式优先级链", () => {
 
     harvesterRole.run(creep, ctx);
 
-    expect(creep.build).toHaveBeenCalledWith(site);
+    // harvester 不再 fallback 到建造 — 这是 builder 的职责。
+    expect(creep.build).not.toHaveBeenCalled();
   });
 
-  it("优先级 5：全部已满且无 site 时升级控制器", () => {
+  it("优先级 5：全部已满且无 site 时 park（不升级）", () => {
     const controller = mockController();
     const snap = mockSnapshot({
       controller,
@@ -218,7 +220,8 @@ describe("harvester — work 模式优先级链", () => {
 
     harvesterRole.run(creep, ctx);
 
-    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    // harvester 不再 fallback 到升级 — park 等待 container 有空间。
+    expect(creep.upgradeController).not.toHaveBeenCalled();
   });
 
   it("ERR_NOT_IN_RANGE 时调用 moveToTarget", () => {

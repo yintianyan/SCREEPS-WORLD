@@ -52,13 +52,13 @@ describe("Phase — evaluateColonyPhase", () => {
   });
 
   it("enters crisis after sustained reserve drain", () => {
-    // scoreStep 20, enter 100 → 需 5 次持续赤字。
-    const after4 = runDrain(FRESH, 2000, -100, 5); // 第1次 delta=0，之后 4 次赤字 = 80
-    expect(after4.drainScore).toBe(80);
-    expect(after4.phase).not.toBe("crisis");
-    const after5 = runDrain(FRESH, 2000, -100, 6); // 5 次赤字 = 100
-    expect(after5.drainScore).toBe(100);
-    expect(after5.phase).toBe("crisis");
+    // scoreStep 15, enter 150 → 需 10 次持续赤字。
+    const after9 = runDrain(FRESH, 2000, -100, 10); // 第1次 delta=0，之后 9 次赤字 = 135
+    expect(after9.drainScore).toBe(135);
+    expect(after9.phase).not.toBe("crisis");
+    const after10 = runDrain(FRESH, 2000, -100, 11); // 10 次赤字 = 150
+    expect(after10.drainScore).toBe(150);
+    expect(after10.phase).toBe("crisis");
   });
 
   it("does not enter crisis when reserve is stable or growing", () => {
@@ -71,23 +71,22 @@ describe("Phase — evaluateColonyPhase", () => {
 
   it("exits crisis through recovery with hysteresis", () => {
     // 先进入 crisis。
-    const inCrisis = runDrain(FRESH, 2000, -100, 6);
+    const inCrisis = runDrain(FRESH, 2000, -100, 11);
     expect(inCrisis.phase).toBe("crisis");
-    // P0-2：非对称步长（recoveryStep=30 > scoreStep=20），恢复比进入更快。
-    // drainScore 递减：100→70→40(crisis)→10(exits)→0。
-    const recover2 = runDrain(inCrisis, 1500, 100, 3); // →10
-    expect(recover2.drainScore).toBe(10);
-    // 10 > recoveryClearScore(10)? No → 直接退出到 growth（跳过 recovery 相位）。
-    expect(recover2.phase).toBe("growth");
-    const cleared = runDrain(inCrisis, 1500, 100, 4); // →0
-    expect(cleared.drainScore).toBe(0);
-    expect(cleared.phase).toBe("growth");
+    // 非对称步长（recoveryStep=40 > scoreStep=15），恢复比进入更快。
+    // drainScore 递减：150→110→70→30(crisis 迟滞)→0(exits)。
+    const recover3 = runDrain(inCrisis, 1500, 100, 3); // →30, 仍在 crisis 迟滞带
+    expect(recover3.drainScore).toBe(30);
+    expect(recover3.phase).toBe("crisis");
+    const recover4 = runDrain(inCrisis, 1500, 100, 4); // →0, 退出
+    expect(recover4.drainScore).toBe(0);
+    expect(recover4.phase).toBe("growth");
   });
 
   it("breaks oscillation with asymmetric recovery step (P0-2)", () => {
     // 交替赤字/盈余：旧对称步长下净变化=0，永远卡在 crisis。
-    // 新非对称步长（recoveryStep=30 > scoreStep=20）每轮净 -10，最终退出。
-    let state = runDrain(FRESH, 2000, -100, 6); // 进入 crisis, drainScore=100
+    // 非对称步长（recoveryStep=40 > scoreStep=15）每轮净 -25，最终退出。
+    let state = runDrain(FRESH, 2000, -100, 11); // 进入 crisis, drainScore=150
     expect(state.phase).toBe("crisis");
 
     // 交替 8 轮（1赤字+1盈余）
@@ -133,15 +132,15 @@ describe("Phase — evaluateColonyPhase", () => {
   }
 
   it("liquidity trap drives crisis even while reserve is growing (W37S58)", () => {
-    // liquidityStep 25，enter 100 → 需 4 次持续陷阱。
-    const after3 = runLiquidityTrap(FRESH, 3); // 3 次 = 75
-    expect(after3.liquidityScore).toBe(75);
-    expect(after3.drainScore).toBe(0); // 偿付维度健康（reserve 在涨）
-    expect(after3.phase).not.toBe("crisis");
-    const after4 = runLiquidityTrap(FRESH, 4); // 4 次 = 100
-    expect(after4.liquidityScore).toBe(100);
-    expect(after4.drainScore).toBe(0); // 关键：drainScore 仍为 0，纯靠流动性维度入危机
-    expect(after4.phase).toBe("crisis");
+    // liquidityStep 15，enter 150 → 需 10 次持续陷阱。
+    const after9 = runLiquidityTrap(FRESH, 9); // 9 次 = 135
+    expect(after9.liquidityScore).toBe(135);
+    expect(after9.drainScore).toBe(0); // 偿付维度健康（reserve 在涨）
+    expect(after9.phase).not.toBe("crisis");
+    const after10 = runLiquidityTrap(FRESH, 10); // 10 次 = 150
+    expect(after10.liquidityScore).toBe(150);
+    expect(after10.drainScore).toBe(0); // 关键：drainScore 仍为 0，纯靠流动性维度入危机
+    expect(after10.phase).toBe("crisis");
   });
 
   it("container full alone (normal logistics transit) does not trigger crisis", () => {
@@ -165,15 +164,15 @@ describe("Phase — evaluateColonyPhase", () => {
   });
 
   it("exits liquidity crisis through recovery with hysteresis", () => {
-    const inCrisis = runLiquidityTrap(FRESH, 4);
+    const inCrisis = runLiquidityTrap(FRESH, 10);
     expect(inCrisis.phase).toBe("crisis");
     // 物流恢复（hauler 补上了）：spendableRatio 回升 → 陷阱解除 → liquidityScore 递减。
-    // liquidityRecoveryStep 30：100→70→40(crisis 迟滞)→10(脱离)。
+    // liquidityRecoveryStep 50：150→100→50→0(脱离)。
     let s = inCrisis;
     for (let i = 0; i < 3; i++) {
       s = evaluateColonyPhase(input({ reserve: 6100, spendableRatio: 0.8, frozenRatio: 0.2 }), s);
     }
-    expect(s.liquidityScore).toBe(10);
+    expect(s.liquidityScore).toBe(0);
     expect(s.phase).toBe("growth");
   });
 
@@ -184,8 +183,8 @@ describe("Phase — evaluateColonyPhase", () => {
 
   it("solvency drain still works independently when liquidity is healthy", () => {
     // 偿付崩溃（reserve 持续下跌）但流动性健康 → 仍由 drainScore 驱动危机。
-    const drained = runDrain(FRESH, 2000, -100, 6);
-    expect(drained.drainScore).toBe(100);
+    const drained = runDrain(FRESH, 2000, -100, 11);
+    expect(drained.drainScore).toBe(150);
     expect(drained.liquidityScore).toBe(0);
     expect(drained.phase).toBe("crisis");
   });

@@ -44,7 +44,7 @@
  *   work:    haul fillTarget（带 reservation）> supply labs > 待命
  */
 import type { Priority } from "../../kernel/contracts";
-import type { ActionCandidate, RolePolicy } from "../engine/action-types";
+import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
   distributorFillTarget,
   supplyLabs,
@@ -83,8 +83,26 @@ function withdrawStorageForDistribution(): ActionCandidate {
   };
 }
 
+/** 无 storage 时降级为 hauler — 处理 storage 被毁后 distributor 残留的场景。
+ *
+ * demand 系统在无 storage 时不会孵化新 distributor（正确），
+ * 但已有的 distributor 无 storage 可取能 → acquire 返回 undefined → idle → 空转。
+ * 降级为 hauler 后，creep 从 container 取能、填充 spawn/extension，继续工作。
+ * 当 storage 重建后，demand 系统会孵化新的 distributor。
+ *
+ * body 兼容：distributor 和 hauler 都是纯 CARRY+MOVE，角色转换安全。
+ */
+function distributorGate(ac: ActionContext): boolean {
+  if (!ac.snapshot.storage) {
+    ac.creep.memory.role = "hauler";
+    return false; // 跳过本 tick，下一 tick 以 hauler 角色运行
+  }
+  return true;
+}
+
 const policy: RolePolicy = {
   park: true,
+  gate: distributorGate,
   acquire: [
     // 唯一取能源：storage（带需求门禁）。
     // 没有 fillTarget 时 predicate=false → idle → demand 系统不补孵。

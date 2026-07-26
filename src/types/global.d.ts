@@ -49,6 +49,8 @@ declare global {
      *   remoteHarvester/reserver → 始终 remoteTarget
      */
     remoteTarget?: string;
+    /** remoteHauler 缓存的远矿 containerId — 避免 每 tick room.find。 */
+    remoteContainerId?: Id<StructureContainer>;
   }
 
   interface SpawnRequest {

@@ -6,7 +6,7 @@
  *
  * tier 门禁（可选）：
  *   - recoverySkip: recovery tier 时跳过（builder 用 — 低 CPU 不建造）
- *   - conserveCriticalOnly: conserve tier 时仅建 spawn/tower（critical site）
+ *   - conserveCriticalOnly: conserve tier 时仅建 spawn/tower/storage（critical site）
  *   - criticalOnly 可为 boolean 或 (ac) => boolean — 允许按 tier 动态过滤
  */
 import type { ActionContext, ActionCandidate } from "../action-types";
@@ -18,7 +18,7 @@ import { releaseAssignment } from "../../support/assignment-adapter";
 export interface BuildAssignmentOptions {
   /** recovery tier 时跳过此候选。 */
   readonly recoverySkip?: boolean;
-  /** conserve tier 时仅建 critical site（spawn/tower）。 */
+  /** conserve tier 时仅建 critical site（spawn/tower/storage）。 */
   readonly conserveCriticalOnly?: boolean;
 }
 
@@ -34,7 +34,9 @@ export function buildAssignmentSite(
       const site = getObjectById(ac.assignment.targetId as Id<ConstructionSite>);
       if (!site) return undefined;
       if (options?.conserveCriticalOnly && ac.budget.tier === "conserve") {
-        if (site.structureType !== STRUCTURE_SPAWN && site.structureType !== STRUCTURE_TOWER) return undefined;
+        if (site.structureType !== STRUCTURE_SPAWN
+          && site.structureType !== STRUCTURE_TOWER
+          && site.structureType !== STRUCTURE_STORAGE) return undefined;
       }
       return site;
     },
@@ -94,5 +96,7 @@ export function buildNearestSite(
 }
 
 function isCriticalSite(site: ConstructionSite): boolean {
-  return site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
+  return site.structureType === STRUCTURE_SPAWN
+    || site.structureType === STRUCTURE_TOWER
+    || site.structureType === STRUCTURE_STORAGE;
 }
