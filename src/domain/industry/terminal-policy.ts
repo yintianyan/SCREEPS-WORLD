@@ -1,15 +1,14 @@
 /**
- * Terminal 基础策略 — 预留多房间扩展接口。
+ * Terminal 交易与备货策略 — 纯函数层。
  *
- * 当前阶段（单房间）：
- *   - 不主动发送资源
- *   - 接收来自其他房间的资源（被动）
- *   - 维持基础矿物库存平衡（缺什么买什么 — 未来接入市场）
+ * 单房间只产一种矿物，lab 反应链需要多矿种原料 — terminal 市场交易是
+ * 多房间/跨帝国补给接入前唯一的原料来源，也是 credits 的唯一收入
+ *（卖出本房盈余矿物 → 买入缺口矿物，形成自给的贸易闭环）。
  *
- * 未来扩展：
- *   - 多房间资源调度（W1N9/W7S8/W7N4 互补）
- *   - 市场交易（买入缺少的基础矿物）
- *   - 化合物供应链（A 房间产 H，B 房间产 O，互相发送）
+ * 分工：
+ *   - 本文件：库存缺口计算、订单挑选（纯函数，Vitest 可测）
+ *   - systems/terminal-manager.ts：getAllOrders/deal 等 Game.market 调用
+ *   - distributor 的 stockTerminalEnergy action：维持 terminal 能量（交易运费）
  */
 import type { TerminalPolicy, TerminalTransfer } from "./types";
 
@@ -36,7 +35,7 @@ export const singleRoomTerminalPolicy: TerminalPolicy = {
 };
 
 /**
- * 检查房间是否缺少某种基础矿物（用于未来市场采购决策）。
+ * 检查房间是否缺少某种基础矿物（用于市场采购决策）。
  *
  * @param available 当前库存
  * @returns 缺少的矿物列表及缺口量
@@ -52,4 +51,54 @@ export function getMineralDeficits(
     }
   }
   return deficits;
+}
+
+// ─── 市场订单挑选（纯函数） ─────────────────────────────────
+
+/** 订单摘要 — 只保留决策所需字段，不持有 Game.market 的 Order 对象。 */
+export interface MarketOrderSummary {
+  id: string;
+  /** 单价（credits/单位）。 */
+  price: number;
+  /** 剩余可成交量。 */
+  amount: number;
+  /** 对方 terminal 所在房（计算能量运费用）。 */
+  roomName?: string;
+}
+
+/**
+ * 从卖单中挑最优买入目标：单价不超上限，价低者优先，同价量大者优先
+ *（一次 deal 吃满批量，摊薄能量运费）。
+ */
+export function pickBestSellOrder(
+  orders: readonly MarketOrderSummary[],
+  maxPrice: number,
+): MarketOrderSummary | undefined {
+  let best: MarketOrderSummary | undefined;
+  for (const o of orders) {
+    if (o.price > maxPrice) continue;
+    if (o.amount <= 0 || !o.roomName) continue;
+    if (!best || o.price < best.price || (o.price === best.price && o.amount > best.amount)) {
+      best = o;
+    }
+  }
+  return best;
+}
+
+/**
+ * 从买单中挑最优卖出目标：单价不低于底线，价高者优先，同价量大者优先。
+ */
+export function pickBestBuyOrder(
+  orders: readonly MarketOrderSummary[],
+  minPrice: number,
+): MarketOrderSummary | undefined {
+  let best: MarketOrderSummary | undefined;
+  for (const o of orders) {
+    if (o.price < minPrice) continue;
+    if (o.amount <= 0 || !o.roomName) continue;
+    if (!best || o.price > best.price || (o.price === best.price && o.amount > best.amount)) {
+      best = o;
+    }
+  }
+  return best;
 }

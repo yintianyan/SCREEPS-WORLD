@@ -1342,6 +1342,7 @@ export class TestWorld {
     delete g.__yieldRequests;
     delete g.__remoteThreats;
     delete g.__remoteDropped;
+    delete g.boostAssignments;
 
     // RawMemory
     (globalThis as Record<string, unknown>).RawMemory = {

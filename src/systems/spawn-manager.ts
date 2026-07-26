@@ -141,22 +141,32 @@ function recyclePass(
   }
 }
 /**
- * 尝试从队列中孵化最高优先级的 creep。
+ * 尝试从队列孵化 creep — 遍历所有空闲 spawn，多 spawn 房间可同 tick 并行开工。
+ *
+ * 能量记账：room.energyAvailable 是 tick 开始的快照，同 tick 多次 spawnCreep
+ * 的扣费引擎在意图执行阶段才结算 — 若都按快照校验，第二个意图可能超支失败。
+ * 因此用本地 energyBudget 逐次扣减，保证每个意图都在真实可用额度内。
  * 处理 P0 降级、body 容量校验和错误重试。
  */
 function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: SpawnRequest[]): void {
   if (queue.length === 0) return;
   if (snapshot.spawns.length === 0) return;
 
-  // 查找可用 spawn。
-  const spawn = snapshot.spawns.find(s => !s.spawning);
-  if (!spawn) return; // 所有 spawn 忙 — 不是错误。
+  // 收集所有空闲 spawn — RCL7-8 有 2-3 个 spawn，逐个消费队列请求。
+  const freeSpawns = snapshot.spawns.filter(s => !s.spawning);
+  if (freeSpawns.length === 0) return; // 所有 spawn 忙 — 不是错误。
+
+  let spawnIdx = 0;
+  let energyBudget = freeSpawns[0]!.room.energyAvailable;
 
   // 如果有待处理的 P0 请求，不处理更低优先级的请求。
   const hasP0 = queue.some(r => r.priority === 0);
 
-  // 按优先级顺序处理请求。
-  for (const req of queue) {
+  // 按优先级顺序处理请求（queue 已排序；splice 会改数组，倒序快照遍历不可行 —
+  // 这里遍历副本，出队用 indexOf 定位）。
+  for (const req of [...queue]) {
+    if (spawnIdx >= freeSpawns.length) return; // 空闲 spawn 用尽。
+    const spawn = freeSpawns[spawnIdx]!;
     if (!req) continue;
 
     // P0 阻塞：如果存在 P0 请求但暂时无法满足，不孵化非 P0 creep。
@@ -169,7 +179,6 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
     }
 
     const cost = bodyCost(req.body);
-    const energyAvailable = spawn.room.energyAvailable;
 
     // 降级策略（三层）：
     //   1. P0 始终降级（紧急恢复）。
@@ -184,7 +193,7 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
     //      双条件避免 bootstrap/正常低速增长阶段 P2 过早出小 body 导致人口配额被低效 creep 占满
     //      （rcl1-survival / live-anomaly-reproduction 测试回归）。
     let body = req.body;
-    if (cost > energyAvailable) {
+    if (cost > energyBudget) {
       const roomMem = Memory.rooms[snapshot.roomName];
       const roomState = roomMem?.colonyState ?? "normal";
       const economyPressure = roomMem?.economyPressure ?? 0;
@@ -200,7 +209,7 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
         // 使用角色正确的 requiredParts，避免 hauler（无 WORK）降级时
         // 因默认要求 WORK 而返回 undefined。
         const requiredParts = ROLE_REQUIRED_PARTS[req.role];
-        const degraded = degradeBody(req.body, energyAvailable, requiredParts);
+        const degraded = degradeBody(req.body, energyBudget, requiredParts);
         if (!degraded) {
           // 降级失败说明能量连最小 body 都负担不起。
           // 必须递增 retries，否则请求永远留在队列中不被 cleanQueue 清除，
@@ -225,8 +234,8 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
     }
 
     // 生成包含 spawnIndex 的唯一 creep 名以供追踪。
-    const spawnIdx = req.memory.spawnIndex ?? 0;
-    const name = `${req.role}-${snapshot.roomName}-${spawnIdx}-${Game.time}-${Math.random().toString(36).slice(2, 6)}`;
+    const memSpawnIndex = req.memory.spawnIndex ?? 0;
+    const name = `${req.role}-${snapshot.roomName}-${memSpawnIndex}-${Game.time}-${Math.random().toString(36).slice(2, 6)}`;
 
     const result = spawn.spawnCreep(body, name, {
       memory: { ...req.memory },
@@ -235,10 +244,17 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
     if (result === OK) {
       const queueIdx = queue.indexOf(req);
       if (queueIdx >= 0) queue.splice(queueIdx, 1);
-      return;
+      // 扣减本地能量预算，换下一个空闲 spawn 继续消费队列。
+      energyBudget -= bodyCost(body);
+      spawnIdx++;
+      continue;
     }
 
-    if (result === ERR_BUSY) return;
+    if (result === ERR_BUSY) {
+      // 该 spawn 意外忙碌 — 换下一个空闲 spawn 重试当前请求所在队列。
+      spawnIdx++;
+      continue;
+    }
     if (result === ERR_NOT_ENOUGH_ENERGY) continue;
 
     // 所有其他错误：递增重试次数并可能隔离。

@@ -23,6 +23,7 @@ import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
 import { telemetryCollectorSystem } from "./systems/telemetry-collector";
+import { terminalManagerSystem } from "./systems/terminal-manager";
 import { tuningEngineSystem } from "./systems/tuning-engine";
 import { towerDefenseSystem } from "./systems/tower-defense";
 
@@ -72,6 +73,8 @@ const registry = new Registry()
   .registerSystem(roomObserverSystem)
   // P3：pixel 生成（bucket 满载时生成 pixel）
   .registerSystem(pixelSystem)
+  // P3：terminal 市场贸易（卖盈余矿物换 credits → 买缺口原料喂反应链）
+  .registerSystem(terminalManagerSystem)
   // P3：遥测采集（时序数据 + 事件日志 + 运行时摘要，低频采样）
   .registerSystem(telemetryCollectorSystem)
   // P3：参数自调优（每 500 tick 读取遥测 → 调整角色边界覆盖值）

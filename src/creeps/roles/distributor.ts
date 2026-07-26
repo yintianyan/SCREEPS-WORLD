@@ -47,6 +47,7 @@ import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
   distributorFillTarget,
+  stockTerminalEnergy,
   supplyLabs,
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
@@ -107,12 +108,18 @@ const policy: RolePolicy = {
     // 唯一取能源：storage（带需求门禁）。
     // 没有 fillTarget 时 predicate=false → idle → demand 系统不补孵。
     withdrawStorageForDistribution(),
+    // terminal 能量备货（storage 富余时）— 无 fillTarget 需求时的低优先级取能，
+    // 保证市场 deal 的运费储备不断供。
+    stockTerminalEnergy(),
   ],
 
   work: [
     // distributor 专用填充：spawn/extension 绝对优先 > tower > controller container（仅无 link 兜底）。
     // 不复用 hauler 的 haulFillTarget——避免被 divert 去喂 controller container 而饿死 spawn。
     distributorFillTarget(),
+    // terminal 能量备货（deposit 相）— 排在经济 sink 之后、lab 供料之前：
+    // 携能状态下 supplyLabs 的取料相无法执行（背包已满），先卸给 terminal。
+    stockTerminalEnergy(),
     // 化合物供料到 lab。
     supplyLabs(),
     // 所有 sink 均满 — 原地待命。

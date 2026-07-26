@@ -32,6 +32,7 @@ import type { ActionContext, RolePolicy } from "./action-types";
 import { ensureHome, flee, getAssignment, shouldFlee, shouldFleeForeignRoom, fleeToHome, updateMode, releaseAssignment } from "../support";
 import { parkIdleCreep } from "../movement";
 import { drawStatusLight } from "./status-light";
+import { interceptForBoost } from "./boost-report";
 import { CONFIG } from "../../config";
 import { recordActionCpu } from "../../kernel/safe-run";
 
@@ -111,6 +112,12 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         if (creep.memory.mode === "flee") {
           creep.memory.mode = undefined;
         }
+
+        // ── 3.7 Boost 报到 ──
+        // 新生 creep（报到窗口内）若被 lab-system 分配了 boost lab，
+        // 引导其到 lab 旁等待 boostCreep 执行。排在 flee 之后（安全优先）、
+        // 正常工作流之前（boost 是即时战力放大，先强化再上岗）。
+        if (interceptForBoost(creep)) return;
 
         // ── 4. 确认在目标房间（home 或 remoteTarget）──
         if (!ensureHome(creep)) {

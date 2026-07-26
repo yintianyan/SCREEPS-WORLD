@@ -272,6 +272,32 @@ export const CONFIG = {
     /** 远矿启用 RCL 门限（低于此 RCL 不开远矿，集中能量发展本房）。 */
     minRcl: 4,
   },
+
+  market: {
+    /** 交易系统运行间隔（tick）— getAllOrders 是重调用，必须低频。 */
+    interval: 200,
+    /** bucket 低于此值不做市场操作（贸易不是生存关键）。 */
+    minBucket: 8000,
+    /**
+     * 各基础矿物最高买入价（credits/单位）— 高于此价宁可等待。
+     * 基础矿物市价常年低于 1，X 稀缺溢价更高；价格随赛季波动，按需调整。
+     */
+    maxBuyPrice: {
+      H: 1.5, O: 1.5, U: 1.5, L: 1.5, K: 1.5, Z: 1.5, X: 5,
+    } as Readonly<Record<string, number>>,
+    /** 本房矿物最低卖出价 — 低于此价不贱卖（宁可囤着等行情）。 */
+    minSellPrice: 0.3,
+    /** 卖出保留量：本房矿物合计低于此量不卖（留作自用反应原料）。 */
+    sellReserve: 3000,
+    /** 单笔 deal 最大成交量 — 控制单笔运费与坏单风险。 */
+    maxDealAmount: 1000,
+    /** terminal 能量储备目标 — deal 双向都从本方 terminal 扣能量运费。 */
+    energyTarget: 10000,
+    /** storage 能量低于此值时不给 terminal 备能（经济优先于贸易）。 */
+    storageEnergyFloor: 20000,
+    /** credits 低于此值暂停买入（保留应急余额）。 */
+    creditFloor: 100,
+  },
 } as const;
 
 /** 类型安全的档位上限查询。 */

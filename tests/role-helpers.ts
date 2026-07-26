@@ -68,6 +68,7 @@ export function resetGlobals(): void {
   delete g.__yieldRequests;
   delete g.__remoteThreats;
   delete g.__remoteDropped;
+  delete g.boostAssignments;
   // action profiling 缓存
   delete g.actionCpu;
   delete g.actionCpuTick;

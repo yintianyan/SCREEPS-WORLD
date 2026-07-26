@@ -18,6 +18,7 @@ import type { RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import type { Compound, LabAssignment, LabPlan, ReactionPlan } from "../domain/industry/types";
 import { evaluateBoostRequests, DEFAULT_BOOST_POLICY } from "../domain/industry/boost";
 import { getNextExecutableStep, planReactionChain, selectReactionTrio, LAB_REACTION_AMOUNT } from "../domain/industry/reactions";
+import { globalCache } from "../kernel/global-cache";
 
 // ─── RoomMemory 扩展 ────────────────────────────────────────
 
@@ -255,6 +256,19 @@ export const labSystem: System = {
 
       // ── 3. Lab 分配 ──
       const labPlan = planLabs(snapshot, boostRequests, reactionStep);
+
+      // ── 3.5 发布 boost 报到分配 ──
+      // 把「creep → boost lab」写入 globalCache，供 role-runner 引导新生 creep
+      // 走到 lab 旁（boostCreep 要求相邻）。系统先于角色运行，同 tick 数据可达。
+      // 没有这一步，boost 决策与执行之间缺「就位」环节，boostCreep 永远打不中。
+      for (const assignment of labPlan.assignments) {
+        if (assignment.role !== "boost" || !assignment.boostTarget) continue;
+        const g = globalCache();
+        if (!g.boostAssignments || g.boostAssignments.tick !== ctx.tick) {
+          g.boostAssignments = { tick: ctx.tick, byCreep: {} };
+        }
+        g.boostAssignments.byCreep[assignment.boostTarget] = assignment.labId;
+      }
 
       // ── 4. 执行 boost ──
       for (const assignment of labPlan.assignments) {

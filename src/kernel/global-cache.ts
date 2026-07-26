@@ -49,6 +49,13 @@ export interface GlobalCache {
    * tower-defense 消费此集合判断本房是否有维修 creep，避免独立全量 Game.creeps 扫描。
    */
   repairRooms?: ReadonlySet<string>;
+  /**
+   * 本 tick 的 boost 报到分配表（lab-system 每 tick 写入）。
+   * key = creep 名，value = 该 creep 应报到的 boost lab id。
+   * role-runner 据此把报到窗口内的新生 creep 引导到 lab 旁，
+   * lab-system 在相邻时执行 boostCreep — 缺此环节则 boost 决策永远无法落地。
+   */
+  boostAssignments?: { tick: number; byCreep: Record<string, string> };
   /** 归位：每房每 tick 推导的关键格/道路/阻挡格集合（parking.ts 构建）。 */
   __parkRoomData?: Record<string, { tick: number; data: unknown }>;
   /** 归位：本 tick 已被预约的停车位（packed pos 集合，防聚堆）。 */

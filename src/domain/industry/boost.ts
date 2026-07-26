@@ -28,6 +28,13 @@ const ROLE_BOOST_PRIORITY: Readonly<Record<string, number>> = {
 };
 
 /**
+ * 新生 creep 的 boost 报到窗口：ticksToLive 高于此值视为刚出生（约 100 tick 内）。
+ * 请求生成与 creep 的「去 lab 报到」拦截共用此阈值 —
+ * 窗口一过，请求不再生成、creep 也不再被引导去 lab，天然防止在 lab 旁永久等待。
+ */
+export const BOOST_REPORT_TTL = 1400;
+
+/**
  * 计算当前 tick 的 boost 请求列表。
  *
  * @param creeps      当前存活 creep 摘要
@@ -50,8 +57,8 @@ export function evaluateBoostRequests(
     // 已经 boost 过的不再请求
     if (creep.boosted) continue;
 
-    // 只 boost 新生 creep（TTL > 1400，即刚出生 100 tick 内）
-    if (creep.ticksToLive < 1400) continue;
+    // 只 boost 新生 creep（报到窗口内，即刚出生 100 tick 内）
+    if (creep.ticksToLive < BOOST_REPORT_TTL) continue;
 
     const targetCompound = policy.roleBoosts[creep.role];
     if (!targetCompound) continue;

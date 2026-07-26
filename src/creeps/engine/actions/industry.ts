@@ -5,6 +5,7 @@
  */
 import type { ActionCandidate } from "../action-types";
 import { runAction } from "./helpers";
+import { CONFIG } from "../../../config";
 
 /** haulMineralsToStorage 的 resolve 返回类型。 */
 type MineralHaulTarget =
@@ -59,11 +60,13 @@ export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
 /** supplyLabs 的 resolve 返回类型。 */
 type LabSupplyTarget =
   | { dest: StructureLab; compound: ResourceConstant; phase: "deposit" }
-  | { source: StructureStorage; compound: ResourceConstant; phase: "withdraw" };
+  | { source: StructureStorage | StructureTerminal; compound: ResourceConstant; phase: "withdraw" };
 
 /**
- * 从 storage 搬运化合物到 lab（供料）。
- * 触发条件：lab 中有空位且 storage 有对应化合物。
+ * 从 storage/terminal 搬运化合物到 lab（供料）。
+ * 触发条件：lab 中有空位且 storage/terminal 有对应化合物。
+ * 取料顺序：storage 优先，terminal 回退 — 市场买入的矿物落在 terminal，
+ * 没有回退则贸易补给的原料永远进不了反应链。
  * 简化实现：搬运 lab 中缺少的资源。
  */
 export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
@@ -84,21 +87,73 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
         return undefined;
       }
 
-      // 从 storage 取化合物
+      // 从 storage/terminal 取化合物
       const hasLabSpace = ac.snapshot.labs.some(l => (l.store.getFreeCapacity() ?? 0) > 0);
       if (!hasLabSpace) return undefined;
 
-      const compound = (Object.keys(storage.store) as ResourceConstant[])
-        .find(r => r !== RESOURCE_ENERGY && storage.store[r]! > 0);
-      if (!compound) return undefined;
+      const findCompound = (store: StoreDefinition): ResourceConstant | undefined =>
+        (Object.keys(store) as ResourceConstant[])
+          .find(r => r !== RESOURCE_ENERGY && store[r]! > 0);
 
-      return { source: storage, compound, phase: "withdraw" as const };
+      const storageCompound = findCompound(storage.store);
+      if (storageCompound) {
+        return { source: storage, compound: storageCompound, phase: "withdraw" as const };
+      }
+
+      const terminal = ac.snapshot.terminal;
+      if (terminal) {
+        const terminalCompound = findCompound(terminal.store);
+        if (terminalCompound) {
+          return { source: terminal, compound: terminalCompound, phase: "withdraw" as const };
+        }
+      }
+      return undefined;
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
         runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.compound));
       } else {
         runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.compound));
+      }
+    },
+  };
+}
+
+/** stockTerminalEnergy 的 resolve 返回类型。 */
+type TerminalStockTarget =
+  | { dest: StructureTerminal; phase: "deposit" }
+  | { source: StructureStorage; phase: "withdraw" };
+
+/**
+ * 维持 terminal 能量储备（storage → terminal）。
+ * 市场 deal 无论买卖都从本方 terminal 扣能量运费 — terminal 没能量，
+ * 贸易系统就是摆设。仅在 storage 能量高于地板值时搬运（经济优先于贸易）。
+ * 双相候选：空载取 storage、满载送 terminal，可同时放入 acquire/work 链。
+ */
+export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
+  return {
+    name: "haul:stock-terminal-energy",
+    resolve: (ac) => {
+      const terminal = ac.snapshot.terminal;
+      const storage = ac.snapshot.storage;
+      if (!terminal || !storage) return undefined;
+      const need = CONFIG.market.energyTarget - terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (need <= 0) return undefined;
+
+      const carrying = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (carrying > 0) return { dest: terminal, phase: "deposit" as const };
+
+      // 空载：storage 有富余才为 terminal 抽血。
+      if (storage.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.market.storageEnergyFloor) {
+        return undefined;
+      }
+      return { source: storage, phase: "withdraw" as const };
+    },
+    execute: (ac, t) => {
+      if (t.phase === "deposit") {
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, RESOURCE_ENERGY));
+      } else {
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, RESOURCE_ENERGY));
       }
     },
   };
