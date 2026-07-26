@@ -1090,3 +1090,30 @@ getSnapshot(home) → recycle 检查 → 威胁检测 → ensureHome 导航 → 
   `countPending` 的 home 过滤（demand 全部调用点）将其排除在 sponsor 人口预算之外。
 - **失守清理带宽限期**：`maintainMemory` 对不在拥有集合的 `Memory.rooms` 条目记录失守 tick，
   20000 tick 宽限后连同 tuning 覆盖值一并清除 — 防边界抖动误删，也防失守房数据慢性泄漏。
+
+### 12.3 威胁情报与防御姿态（schema v12）
+
+Phase 4 防御切片已实现（boost 映射修正 + defender boost + 威胁情报 + 动态墙体）。
+
+#### Memory 结构（v12 新增，均为可选字段，惰性写入）
+
+| 字段 | 含义 | 写入方 | 消费方 |
+| --- | --- | --- | --- |
+| `RoomMemory.lastHostileAt` | 最近一次房内出现威胁的 tick（受袭记忆） | room-state（每 tick） | getWallTargetHits 的受袭升档（tower-defense / repairFortifications） |
+| `RoomIntel.towers` | 邻房敌方 tower 数 | room-observer（有视野时） | expansion evaluator（有塔房不 claim） |
+| `RoomIntel.dangerUntil` | 危险冷却到期 tick | remote-mining-manager（远矿房出现威胁时） | selectRemoteTargets / expansion evaluator（冷却期内不选） |
+
+迁移 v11→v12 仅做畸形数据自愈（幂等）。
+
+#### 关键决策
+
+- **boost 化合物映射与引擎对齐**：BOOST_EFFECTS 原表半数线路错位（UH 线是 attack 而非 harvest、
+  ZH 线是 dismantle 而非 attack 等），roleBoosts 的 harvester 因此指向攻击强化 — 已全表按引擎
+  BOOSTS 常量修正；defender 接入 XUH2O（attack ×4），boost 优先级防御最高。
+- **boost 报到只在备料就位后触发**（ready 标记）：creep 在 lab 旁等 supplyLabs 搬运是浪费，
+  对 defender 这类威胁窗口角色等待即战力真空。
+- **危险标记跨刷新存活**：scanNeighborIntel 增加 prev 参数 — dangerUntil 由威胁事件独立管理，
+  常规情报刷新不得冲掉；无视野刷新不再前移 lastSeen（视野新鲜度语义修正）。
+- **防御深度用真实威胁校准**：墙体目标血量平时按 RCL 分级，受袭记忆窗口（10000 tick）内 ×5 —
+  和平期修墙的能量就是少升的 RCL。
+- **进攻编队明确押后**：无第二房间与 boost 生产线支撑前，进攻是负期望投资（战争即经济）。

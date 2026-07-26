@@ -98,6 +98,12 @@ declare global {
      * 持续紧急期间不重复失效，避免每 tick 清空 assignment 抖动。
      */
     wasEmergency?: boolean;
+    /**
+     * 最近一次房内出现威胁 creep 的 tick（v12+，room-state 写入）。
+     * 受袭记忆：驱动防御姿态（如 wall/rampart 目标血量升档）—
+     * 防御深度用真实威胁校准，而非静态假设。
+     */
+    lastHostileAt?: number;
     /** 殖民相位观测（约束层的「经济真相」）。 */
     phase?: {
       phase: ColonyPhase;

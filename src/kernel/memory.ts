@@ -240,6 +240,32 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
       }
     },
   },
+  {
+    from: 11,
+    to: 12,
+    run: () => {
+      // v12：威胁情报与受袭记忆 — roomMem.lastHostileAt 与
+      // intel 条目的 towers/dangerUntil 均为可选数字字段，惰性写入，
+      // 无需回填；此处仅做畸形数据自愈（幂等）。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
+        if (!room) continue;
+        if (room.lastHostileAt !== undefined && typeof room.lastHostileAt !== "number") {
+          delete room.lastHostileAt;
+        }
+        const intel = room.intel as Record<string, Record<string, unknown>> | undefined;
+        if (!intel) continue;
+        for (const entry of Object.values(intel)) {
+          if (entry.towers !== undefined && typeof entry.towers !== "number") {
+            delete entry.towers;
+          }
+          if (entry.dangerUntil !== undefined && typeof entry.dangerUntil !== "number") {
+            delete entry.dangerUntil;
+          }
+        }
+      }
+    },
+  },
 ];
 
 /**

@@ -145,7 +145,9 @@ function captureObservedIntel(tick: number): void {
       sources: room.find(FIND_SOURCES).length,
       mineralType: room.find(FIND_MINERALS)[0]?.mineralType,
       owner: room.controller?.owner?.username,
+      towers: countHostileTowers(room),
     },
+    roomMem.intel[pending.targetRoom], // prev — 保留危险冷却。
   );
 }
 
@@ -172,11 +174,20 @@ function refreshNeighborIntel(roomName: string, roomMem: RoomMemory, tick: numbe
             sources: visible.find(FIND_SOURCES).length,
             mineralType: visible.find(FIND_MINERALS)[0]?.mineralType,
             owner: visible.controller?.owner?.username,
+            towers: countHostileTowers(visible),
           }
         : undefined,
+      intel[neighbor], // prev — 保留危险冷却与上次观测值。
     );
   }
   roomMem.intel = intel;
+}
+
+/** 统计房间内敌方 tower 数（进攻/远矿风险评估的核心变量）。 */
+function countHostileTowers(room: Room): number {
+  return room
+    .find(FIND_HOSTILE_STRUCTURES)
+    .filter(s => s.structureType === STRUCTURE_TOWER).length;
 }
 
 /**

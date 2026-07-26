@@ -12,6 +12,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { maintainMemory } from "../../../src/kernel/memory";
+import { CONFIG } from "../../../src/config";
 import { resetGlobals } from "../../role-helpers";
 
 beforeEach(() => {
@@ -55,7 +56,7 @@ describe("migration v5 → v6（模板 v1 → v2）", () => {
     expect(layout.version).toBe(2);
     expect(layout.revision).toBe(4); // 3 + 1
     expect(layout.nextPlanTick).toBe(0);
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 
   it("未开工的 core.* 任务被清理，site/done 与非 core 任务保留", () => {
@@ -90,6 +91,6 @@ describe("migration v5 → v6（模板 v1 → v2）", () => {
       rooms: { W9N9: { spawnQueue: [], buildQueue: [] } },
     };
     expect(() => maintainMemory()).not.toThrow();
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 });

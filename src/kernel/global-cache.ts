@@ -51,11 +51,11 @@ export interface GlobalCache {
   repairRooms?: ReadonlySet<string>;
   /**
    * 本 tick 的 boost 报到分配表（lab-system 每 tick 写入）。
-   * key = creep 名，value = 该 creep 应报到的 boost lab id。
-   * role-runner 据此把报到窗口内的新生 creep 引导到 lab 旁，
-   * lab-system 在相邻时执行 boostCreep — 缺此环节则 boost 决策永远无法落地。
+   * key = creep 名；ready 表示 lab 内化合物已备足（≥ 单次 boost 用量）—
+   * 报到拦截仅在 ready 时生效，避免 creep 在 lab 旁罚站等 supplyLabs 搬运
+   *（对 defender 这类威胁窗口角色，等待就是战力真空）。
    */
-  boostAssignments?: { tick: number; byCreep: Record<string, string> };
+  boostAssignments?: { tick: number; byCreep: Record<string, { labId: string; ready: boolean }> };
   /** 归位：每房每 tick 推导的关键格/道路/阻挡格集合（parking.ts 构建）。 */
   __parkRoomData?: Record<string, { tick: number; data: unknown }>;
   /** 归位：本 tick 已被预约的停车位（packed pos 集合，防聚堆）。 */

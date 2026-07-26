@@ -22,6 +22,10 @@ export interface RoomIntel {
   mineral?: string;
   /** 有视野且房间有主时记录的 owner 名。 */
   owner?: string;
+  /** 有视野时记录的敌方 tower 数（进攻/远矿风险评估的核心变量）。 */
+  towers?: number;
+  /** 危险冷却到期 tick：远矿房出现威胁时标记，冷却期内不作为远矿/扩张候选。 */
+  dangerUntil?: number;
   /** 最近更新 tick。 */
   lastSeen: number;
 }
@@ -46,7 +50,12 @@ export function classifyRoomByName(roomName: string): RoomKind {
   return "normal";
 }
 
-/** 扫描单个邻房的情报。visibleRoom 为 undefined 时只落房名分类与房态。 */
+/** 扫描单个邻房的情报。visibleRoom 为 undefined 时只落房名分类与房态。
+ *
+ * prev：既有条目 — 跨刷新保留的字段（dangerUntil；无视野时还保留上次的
+ * sources/mineral/owner/towers 观测值）。不传则视为首次建档。
+ * 危险标记必须跨刷新存活：它由威胁事件写入，常规情报刷新不得冲掉。
+ */
 export function scanNeighborIntel(
   roomName: string,
   status: string,
@@ -55,7 +64,9 @@ export function scanNeighborIntel(
     sources: number;
     mineralType?: string;
     owner?: string;
+    towers?: number;
   },
+  prev?: RoomIntel,
 ): RoomIntel {
   const intel: RoomIntel = {
     kind: classifyRoomByName(roomName),
@@ -66,6 +77,19 @@ export function scanNeighborIntel(
     intel.sources = visibleRoom.sources;
     if (visibleRoom.mineralType) intel.mineral = visibleRoom.mineralType;
     if (visibleRoom.owner) intel.owner = visibleRoom.owner;
+    if (visibleRoom.towers !== undefined) intel.towers = visibleRoom.towers;
+  } else if (prev) {
+    // 无视野：沿用上次观测值（数据会随 lastSeen 保持但陈旧度由消费方判断）。
+    if (prev.sources !== undefined) intel.sources = prev.sources;
+    if (prev.mineral !== undefined) intel.mineral = prev.mineral;
+    if (prev.owner !== undefined) intel.owner = prev.owner;
+    if (prev.towers !== undefined) intel.towers = prev.towers;
+    // 无视野时 lastSeen 不应前移（视野数据没有更新）。
+    intel.lastSeen = prev.lastSeen;
+  }
+  // 危险冷却：未到期则保留（与视野无关 — 由威胁事件独立管理）。
+  if (prev?.dangerUntil !== undefined && tick < prev.dangerUntil) {
+    intel.dangerUntil = prev.dangerUntil;
   }
   return intel;
 }

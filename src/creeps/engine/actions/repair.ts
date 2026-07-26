@@ -128,7 +128,11 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       }
       // 无 storage（RCL1-4）— 放宽门禁，靠 work chain 优先级保证不抢生存行为。
 
-      const targetHits = getWallTargetHits(ac.snapshot.rcl);
+      // 受袭姿态：近期有敌对活动 → 墙体目标升档（防御深度用真实威胁校准）。
+      const lastHostileAt = Memory.rooms[ac.snapshot.roomName]?.lastHostileAt;
+      const underSiege = lastHostileAt !== undefined &&
+        Game.time - lastHostileAt < CONFIG.defense.siegeMemoryTicks;
+      const targetHits = getWallTargetHits(ac.snapshot.rcl, underSiege);
 
       // 优先复用持久化目标 — 验证它仍是墙/城防且仍需修复。
       if (ac.creep.memory.repairTargetId) {

@@ -106,6 +106,10 @@ export const roomStateSystem: System = {
       // 5. 映射为 ColonyState 并写入 RoomMemory。
       const hasHostiles = snapshot.threatCreeps.length > 0;
       roomMem.colonyState = phaseToColonyState(phaseResult.phase, hasHostiles);
+      // 受袭记忆：威胁出现即刷新时间戳 — 供防御姿态判断（动态墙体目标等）。
+      if (hasHostiles) {
+        roomMem.lastHostileAt = ctx.tick;
+      }
 
       // 5.5 经济压力梯度信号 (0.0–1.0)。
       // 取双维度最大值（方案 C）：偿付危机（drainScore）与流动性危机（liquidityScore）

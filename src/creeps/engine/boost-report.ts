@@ -26,10 +26,13 @@ export function interceptForBoost(creep: Creep): boolean {
   const assignments = globalCache().boostAssignments;
   if (!assignments || assignments.tick !== Game.time) return false;
 
-  const labId = assignments.byCreep[creep.name];
-  if (!labId) return false;
+  const entry = assignments.byCreep[creep.name];
+  if (!entry) return false;
+  // lab 化合物未就位 — 不去罚站（尤其 defender：威胁在场时等待即战力真空）。
+  // supplyLabs 备料完成后的分配周期会重新给出 ready 标记。
+  if (!entry.ready) return false;
 
-  const lab = getObjectById(labId as Id<StructureLab>);
+  const lab = getObjectById(entry.labId as Id<StructureLab>);
   if (!lab) return false;
 
   if (creep.pos.getRangeTo(lab.pos) > 1) {

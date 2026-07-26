@@ -260,14 +260,21 @@ export const labSystem: System = {
       // ── 3.5 发布 boost 报到分配 ──
       // 把「creep → boost lab」写入 globalCache，供 role-runner 引导新生 creep
       // 走到 lab 旁（boostCreep 要求相邻）。系统先于角色运行，同 tick 数据可达。
-      // 没有这一步，boost 决策与执行之间缺「就位」环节，boostCreep 永远打不中。
+      // ready = lab 内化合物已备足：未备足时不引导报到（creep 先正常干活，
+      // supplyLabs 搬运到位后的评估周期再来），防止在 lab 旁空等。
       for (const assignment of labPlan.assignments) {
         if (assignment.role !== "boost" || !assignment.boostTarget) continue;
         const g = globalCache();
         if (!g.boostAssignments || g.boostAssignments.tick !== ctx.tick) {
           g.boostAssignments = { tick: ctx.tick, byCreep: {} };
         }
-        g.boostAssignments.byCreep[assignment.boostTarget] = assignment.labId;
+        const boostLab = Game.getObjectById(assignment.labId as Id<StructureLab>);
+        const stocked = assignment.boostCompound !== undefined &&
+          ((boostLab?.store[assignment.boostCompound as ResourceConstant] ?? 0) >= 30);
+        g.boostAssignments.byCreep[assignment.boostTarget] = {
+          labId: assignment.labId,
+          ready: stocked,
+        };
       }
 
       // ── 4. 执行 boost ──

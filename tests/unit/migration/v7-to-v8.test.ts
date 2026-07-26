@@ -12,6 +12,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { maintainMemory } from "../../../src/kernel/memory";
+import { CONFIG } from "../../../src/config";
 import { resetGlobals } from "../../role-helpers";
 
 beforeEach(() => {
@@ -35,7 +36,7 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
     };
     maintainMemory();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const creeps = (globalThis as any).Memory.creeps;
     expect(creeps["harvester-W1N1-0-1000-abc"].working).toBeUndefined();
     expect(creeps["hauler-W1N1-1-1001-def"].working).toBeUndefined();
@@ -57,7 +58,7 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
     };
     maintainMemory();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const creep = (globalThis as any).Memory.creeps["harvester-W1N1-0-1000-abc"];
     expect(creep.role).toBe("harvester");
     expect(creep.mode).toBe("work");
@@ -78,7 +79,7 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
     maintainMemory();
     maintainMemory();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect((globalThis as any).Memory.creeps.creep1.working).toBeUndefined();
     expect((globalThis as any).Memory.creeps.creep1.mode).toBe("work");
   });
@@ -91,7 +92,7 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
       rooms: {},
     };
     expect(() => maintainMemory()).not.toThrow();
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 
   it("tuning 结构在 v8 中保持不变", () => {
@@ -113,7 +114,7 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
     };
     maintainMemory();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const tuning = (globalThis as any).Memory.kernel.tuning;
     expect(tuning.lastTuned).toBe(1000);
     expect(tuning.rooms.W1N1.roleBounds.hauler.maxCount).toBe(7);

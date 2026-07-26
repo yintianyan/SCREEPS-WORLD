@@ -12,9 +12,14 @@ import { BOOST_EFFECTS, type BoostPolicy, type BoostRequest, type Compound } fro
 /** 默认 boost 策略：RCL6+ 启用，优先 upgrader。 */
 export const DEFAULT_BOOST_POLICY: BoostPolicy = {
   roleBoosts: {
-    upgrader: "XGH2O",   // +400% upgrade power
-    harvester: "XUH2O",  // +400% harvest power
-    builder: "XLH2O",    // +400% repair/build power
+    // 化合物线路与引擎 BOOSTS 对齐（见 types.ts 的 BOOST_EFFECTS）：
+    // GH 线 = upgradeController，UO 线 = harvest（UH 线是 attack，不要混），
+    // LH 线 = build/repair，UH 线 = attack。倍率均为 X 系 T3（最高档）。
+    upgrader: "XGH2O",   // upgradeController ×2
+    harvester: "XUHO2",  // harvest ×7
+    builder: "XLH2O",    // build/repair ×2
+    // 防御战力放大：defender 是威胁触发的短窗口角色，boost 即时兑现。
+    defender: "XUH2O",   // attack ×4
   },
   minRcl: 6,
   reserveAmount: 100, // 保留 100 单位化合物用于反应链
@@ -22,6 +27,8 @@ export const DEFAULT_BOOST_POLICY: BoostPolicy = {
 
 /** 角色 boost 优先级（越高越先执行）。 */
 const ROLE_BOOST_PRIORITY: Readonly<Record<string, number>> = {
+  // 防御最高：defender 只在房内有威胁时存在，boost 是即时战力而非长期投资。
+  defender: 20,
   upgrader: 10,
   harvester: 8,
   builder: 5,

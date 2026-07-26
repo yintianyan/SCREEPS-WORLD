@@ -152,16 +152,26 @@ export const REACTIONS: Readonly<Record<string, readonly [Compound, Compound]>> 
   XGHO2: ["X", "GHO2"],
 };
 
-/** Boost 化合物 → 效果类别映射（用于决策）。 */
+/** Boost 化合物 → 效果类别映射（用于决策）。
+ *
+ * 与引擎 BOOSTS 常量逐行对齐 — 化合物线路与效果的对应关系容易记错
+ *（例如 UH 线是 attack 而非 harvest，harvest 是 UO 线），
+ * 映射错误会让整条 lab 反应链产出无用化合物。
+ */
 export const BOOST_EFFECTS: Readonly<Record<string, BoostEffect>> = {
-  UH: "harvest", UH2O: "harvest", XUH2O: "harvest",
+  // U 线：UH = attack，UO = harvest。
+  UH: "attack", UH2O: "attack", XUH2O: "attack",
   UO: "harvest", UHO2: "harvest", XUHO2: "harvest",
+  // G 线：GH = upgrade，GO = tough（承伤减免）。
   GH: "upgrade", GH2O: "upgrade", XGH2O: "upgrade",
-  GO: "upgrade", GHO2: "upgrade", XGHO2: "upgrade",
+  GO: "tough", GHO2: "tough", XGHO2: "tough",
+  // L 线：LH = build/repair，LO = heal。
   LH: "repair", LH2O: "repair", XLH2O: "repair",
-  LO: "repair", LHO2: "repair", XLHO2: "repair",
-  ZH: "attack", ZH2O: "attack", XZH2O: "attack",
-  ZO: "attack", ZHO2: "attack", XZHO2: "attack",
+  LO: "heal", LHO2: "heal", XLHO2: "heal",
+  // Z 线：ZH = dismantle，ZO = move（疲劳减免）。
+  ZH: "dismantle", ZH2O: "dismantle", XZH2O: "dismantle",
+  ZO: "move", ZHO2: "move", XZHO2: "move",
+  // K 线：KH = carry，KO = rangedAttack。
   KH: "carry", KH2O: "carry", XKH2O: "carry",
-  KO: "carry", KHO2: "carry", XKHO2: "carry",
+  KO: "rangedAttack", KHO2: "rangedAttack", XKHO2: "rangedAttack",
 };

@@ -14,14 +14,21 @@ export function getSourceTargetWorkParts(rcl: number): number {
  * 根据 RCL 返回 wall/rampart 的目标维护血量（约束 G-DF-08）。
  * RCL3-4: 100K / RCL5-6: 1M / RCL7-8: 10M。
  */
-export function getWallTargetHits(rcl: number): number {
-  if (rcl >= 7) return CONFIG.defense.wallTargetHits.rcl7_8;
-  if (rcl >= 5) return CONFIG.defense.wallTargetHits.rcl5_6;
-  return CONFIG.defense.wallTargetHits.rcl3_4;
+export function getWallTargetHits(rcl: number, underSiege = false): number {
+  const base = rcl >= 7
+    ? CONFIG.defense.wallTargetHits.rcl7_8
+    : rcl >= 5
+      ? CONFIG.defense.wallTargetHits.rcl5_6
+      : CONFIG.defense.wallTargetHits.rcl3_4;
+  if (!underSiege) return base;
+  // 受袭姿态：近期有真实敌对活动时抬高目标 — 防御深度用实际威胁校准，
+  // 和平期不为假想敌过度投资墙体（修墙能量 = 少升的 RCL）。
+  // 官方墙体血量上限 300M，封顶防溢出。
+  return Math.min(base * CONFIG.defense.siegeWallMultiplier, 300_000_000);
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 11 },
+  memory: { schemaVersion: 12 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -225,6 +232,10 @@ export const CONFIG = {
       rcl5_6: 1_000_000,
       rcl7_8: 10_000_000,
     },
+    /** 受袭记忆窗口（tick）：lastHostileAt 距今小于此值视为受袭姿态。 */
+    siegeMemoryTicks: 10000,
+    /** 受袭姿态下 wall/rampart 目标血量的放大倍数。 */
+    siegeWallMultiplier: 5,
   },
 
   roles: {
@@ -273,6 +284,8 @@ export const CONFIG = {
     staleThreshold: 5000,
     /** 远矿启用 RCL 门限（低于此 RCL 不开远矿，集中能量发展本房）。 */
     minRcl: 4,
+    /** 远矿房威胁的危险冷却（tick）— 冷却期内不作为新远矿/扩张候选。 */
+    dangerCooldown: 2000,
   },
 
   expansion: {

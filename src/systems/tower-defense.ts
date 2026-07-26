@@ -82,8 +82,11 @@ export const towerDefenseSystem: System = {
         continue;
       }
 
-      // G-DF-08：wall/rampart 目标血量按 RCL 分级。
-      const wallTarget = getWallTargetHits(snapshot.rcl);
+      // G-DF-08：wall/rampart 目标血量按 RCL 分级；受袭姿态（近期有敌对活动）升档。
+      const roomMemForSiege = Memory.rooms[snapshot.roomName];
+      const underSiege = roomMemForSiege?.lastHostileAt !== undefined &&
+        Game.time - roomMemForSiege.lastHostileAt < CONFIG.defense.siegeMemoryTicks;
+      const wallTarget = getWallTargetHits(snapshot.rcl, underSiege);
       // 预选 wall/rampart 维护目标（所有 tower 共用，避免重复查找）。
       let wallRepairTarget = findWallRepairTarget(snapshot, wallTarget);
       // 关键维修目标预计算值，提升到 tower 循环外避免重复调用。

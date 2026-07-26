@@ -68,6 +68,10 @@ export function selectExpansionTarget(input: ExpansionInput): ExpansionCandidate
       // 情报过期不可信。
       const age = tick - info.lastSeen;
       if (age > maxIntelAge) continue;
+      // 危险冷却中的房不选（威胁刚出现过 — 拓荒编队会被白吃）。
+      if (info.dangerUntil !== undefined && tick < info.dangerUntil) continue;
+      // 有敌塔的房不选：塔会点杀 claimer 与拓荒者，claim 变成送葬。
+      if ((info.towers ?? 0) > 0) continue;
       // 黑名单冷却。
       const retryAt = blacklist?.[roomName];
       if (retryAt !== undefined && tick < retryAt) continue;

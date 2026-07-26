@@ -87,6 +87,19 @@ export const remoteMiningManagerSystem: System = {
       // 生成 remoteDefender 请求；缺少此输入时 defender 分支永不触发。
       const remoteThreats = collectRemoteThreats(remoteOps);
 
+      // 威胁写入情报层：出现威胁的远矿房打上危险冷却标记 —
+      // 冷却期内该房不作为新的远矿/扩张候选（止损：不给对手送兵）。
+      // 现役运营不因此暂停 — defender 已接通，先应战再评估。
+      if (roomMem.intel) {
+        for (const [threatRoom, hasThreat] of Object.entries(remoteThreats)) {
+          if (!hasThreat) continue;
+          const info = roomMem.intel[threatRoom];
+          if (info) {
+            info.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
+          }
+        }
+      }
+
       const { requests } = evaluateRemoteDemand({
         homeRoom: snapshot.roomName,
         colonyState,

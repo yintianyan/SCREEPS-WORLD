@@ -72,6 +72,8 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
     if (info.owner) continue;
     // 排除非正常状态的房间（novice/respawn/closed）。
     if (info.status !== "normal") continue;
+    // 排除危险冷却中的房间 — 威胁刚出现过的房不送兵（止损）。
+    if (info.dangerUntil !== undefined && tick < info.dangerUntil) continue;
 
     const hasRecentVision = tick - info.lastSeen < staleThreshold;
     candidates.push({

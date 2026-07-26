@@ -13,6 +13,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { maintainMemory } from "../../../src/kernel/memory";
+import { CONFIG } from "../../../src/config";
 import { resetGlobals } from "../../role-helpers";
 
 beforeEach(() => {
@@ -28,7 +29,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       rooms: {},
     };
     expect(() => maintainMemory()).not.toThrow();
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     // tuning 字段可选——tuning-engine 首次运行时自动初始化，迁移不强建。
     expect((globalThis as any).Memory.kernel.tuning).toBeUndefined();
   });
@@ -47,7 +48,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
     };
     maintainMemory();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const tuning = (globalThis as any).Memory.kernel.tuning;
     expect(tuning.lastTuned).toBe(0);
     expect(tuning.rooms).toEqual({});
@@ -67,7 +68,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
     };
     maintainMemory();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const tuning = (globalThis as any).Memory.kernel.tuning;
     expect(tuning.lastTuned).toBe(500);
     expect(tuning.rooms).toEqual({});
@@ -84,7 +85,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
     };
     maintainMemory();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect((globalThis as any).Memory.kernel.tuning).toBeUndefined();
   });
 
@@ -99,7 +100,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
     };
     maintainMemory();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect((globalThis as any).Memory.kernel.tuning).toBeUndefined();
   });
 
@@ -124,7 +125,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
     maintainMemory();
     maintainMemory();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const tuning = (globalThis as any).Memory.kernel.tuning;
     expect(tuning.lastTuned).toBe(1000);
     expect(tuning.rooms.W7N4.roleBounds.hauler.maxCount).toBe(5);
@@ -138,7 +139,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       rooms: {},
     };
     expect(() => maintainMemory()).not.toThrow();
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     // maintainMemory 会惰性初始化失守房记录（lostRooms）— kernel 不再是纯空对象。
     expect((globalThis as any).Memory.kernel).toEqual({ lostRooms: {} });
   });
@@ -162,7 +163,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
     };
     maintainMemory();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(11);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const tuning = (globalThis as any).Memory.kernel.tuning;
     expect(tuning.lastTuned).toBe(2000);
     expect(tuning.rooms.W7N4.roleBounds.hauler.minCount).toBe(2);
