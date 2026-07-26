@@ -1,4 +1,5 @@
 import { builderRole } from "./creeps/roles/builder";
+import { claimerRole } from "./creeps/roles/claimer";
 import { defenderRole } from "./creeps/roles/defender";
 import { distributorRole } from "./creeps/roles/distributor";
 import { harvesterRole } from "./creeps/roles/harvester";
@@ -14,6 +15,7 @@ import { Registry } from "./kernel/registry";
 import { assignmentServiceSystem } from "./systems/assignment-service";
 import { constructionManagerSystem } from "./systems/construction-manager";
 import { defensePlannerSystem } from "./systems/defense-planner";
+import { expansionManagerSystem } from "./systems/expansion-manager";
 import { factoryManagerSystem } from "./systems/factory-manager";
 import { layoutPlannerSystem } from "./systems/layout-planner";
 import { labSystem } from "./systems/lab-system";
@@ -78,6 +80,8 @@ const registry = new Registry()
   .registerSystem(terminalManagerSystem)
   // P3：factory/powerSpawn 最小运营（满仓能量压缩 battery + GPL 涓流）
   .registerSystem(factoryManagerSystem)
+  // P3：扩张管理（GCL 有余量时 claim 新房 + 拓荒编队投送）
+  .registerSystem(expansionManagerSystem)
   // P3：遥测采集（时序数据 + 事件日志 + 运行时摘要，低频采样）
   .registerSystem(telemetryCollectorSystem)
   // P3：参数自调优（每 500 tick 读取遥测 → 调整角色边界覆盖值）
@@ -99,6 +103,8 @@ const registry = new Registry()
   .registerRole(builderRole)
   // P2：reserver（远矿 controller 占领）
   .registerRole(reserverRole)
+  // P2：claimer（扩张占领新房 controller）
+  .registerRole(claimerRole)
   // P1：remoteDefender（远矿防御者，杀 NPC reserver/Invader）
   .registerRole(remoteDefenderRole);
 

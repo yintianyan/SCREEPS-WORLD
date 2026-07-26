@@ -220,6 +220,26 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
       }
     },
   },
+  {
+    from: 10,
+    to: 11,
+    run: () => {
+      // v11：扩张系统 — expansion / expansionBlacklist / lostRooms 均为
+      // Memory.kernel 下的可选字段，惰性创建，无需回填；
+      // 此处仅做畸形数据自愈（幂等）。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+      if (kernel.expansion !== undefined && typeof kernel.expansion !== "object") {
+        delete kernel.expansion;
+      }
+      if (kernel.expansionBlacklist !== undefined && typeof kernel.expansionBlacklist !== "object") {
+        delete kernel.expansionBlacklist;
+      }
+      if (kernel.lostRooms !== undefined && typeof kernel.lostRooms !== "object") {
+        delete kernel.lostRooms;
+      }
+    },
+  },
 ];
 
 /**
@@ -241,15 +261,42 @@ export function maintainMemory(): void {
   }
 
   // 确保每个自有房间有 RoomMemory 条目。
+  const ownedRooms = new Set<string>();
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (!room || !room.controller?.my) continue;
+    ownedRooms.add(roomName);
     if (!Memory.rooms[roomName]) {
       Memory.rooms[roomName] = { spawnQueue: [], buildQueue: [] };
     } else {
       const rm = Memory.rooms[roomName];
       rm.spawnQueue ??= [];
       rm.buildQueue ??= [];
+    }
+  }
+
+  // 失守房间清理：Memory.rooms 中不再拥有的房间条目延迟清除。
+  // 自有房恒有视野（结构提供视野），条目房不在拥有集合即为失守/放弃。
+  // 宽限期防止 claim 边界抖动误删布局与队列数据；到期后连同
+  // tuning 覆盖值一并清除，避免失守房数据永久滞留（慢性泄漏）。
+  const LOST_ROOM_GRACE = 20000;
+  Memory.kernel.lostRooms ??= {};
+  const lostRooms = Memory.kernel.lostRooms;
+  for (const roomName in Memory.rooms) {
+    if (ownedRooms.has(roomName)) {
+      if (lostRooms[roomName] !== undefined) delete lostRooms[roomName];
+      continue;
+    }
+    const lostAt = lostRooms[roomName] ??= Game.time;
+    if (Game.time - lostAt > LOST_ROOM_GRACE) {
+      delete Memory.rooms[roomName];
+      delete lostRooms[roomName];
+      if (Memory.kernel.tuning?.rooms[roomName]) {
+        delete Memory.kernel.tuning.rooms[roomName];
+      }
+      if (Memory.kernel.tuning?.lastEval?.[roomName]) {
+        delete Memory.kernel.tuning.lastEval[roomName];
+      }
     }
   }
 }

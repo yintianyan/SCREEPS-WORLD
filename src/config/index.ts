@@ -21,7 +21,7 @@ export function getWallTargetHits(rcl: number): number {
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 10 },
+  memory: { schemaVersion: 11 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -240,6 +240,8 @@ export const CONFIG = {
     remoteHarvester: { minCount: 0, maxCount: 6 },
     remoteHauler: { minCount: 0, maxCount: 6 },
     reserver: { minCount: 0, maxCount: 3 },
+    // 扩张占领：同一时刻至多一个扩张行动（见 expansion-manager）。
+    claimer: { minCount: 0, maxCount: 1 },
   },
 
   debug: {
@@ -271,6 +273,22 @@ export const CONFIG = {
     staleThreshold: 5000,
     /** 远矿启用 RCL 门限（低于此 RCL 不开远矿，集中能量发展本房）。 */
     minRcl: 4,
+  },
+
+  expansion: {
+    /** 扩张管理器运行间隔（tick）。 */
+    interval: 100,
+    /** sponsor 房最低 RCL — 经济未成熟不供养殖民行动。 */
+    sponsorMinRcl: 5,
+    /** 拓荒编队规模：worker（采集/填充/升级）+ builder（建 spawn）。 */
+    pioneerWorkers: 2,
+    pioneerBuilders: 2,
+    /** claim 阶段超时（claimer 寿命 600 + 通勤 + 重派余量）。 */
+    claimTimeout: 6000,
+    /** 拓荒阶段超时 — 到期仅停止编队补充，房间保留自治。 */
+    pioneerTimeout: 20000,
+    /** 失败目标的黑名单冷却。 */
+    blacklistCooldown: 20000,
   },
 
   factory: {

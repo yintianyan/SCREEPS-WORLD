@@ -11,6 +11,7 @@ export const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConst
   remoteHarvester: ["work", "carry", "move"],
   remoteHauler: ["carry", "move"],
   reserver: ["claim", "move"],
+  claimer: ["claim", "move"],
   remoteDefender: ["attack", "move"],
   defender: ["attack", "move"],
 };
@@ -152,14 +153,16 @@ export function evaluateDemand(
   const storageNearFull = roomCtx.storageNearFull === true;
 
   // 单次遍历获取所有角色计数。
+  // pending 计数带 home 过滤 — sponsor 房代孵的拓荒请求（home 指向新房）
+  // 寄宿在本房队列，不得计入本房人口预算。
   const counts = countCreepsByRole(creeps, spawning, home);
   const pending = {
-    harvester: countPending(queue, "harvester"),
-    worker: countPending(queue, "worker"),
-    hauler: countPending(queue, "hauler"),
-    distributor: countPending(queue, "distributor"),
-    upgrader: countPending(queue, "upgrader"),
-    builder: countPending(queue, "builder"),
+    harvester: countPending(queue, "harvester", home),
+    worker: countPending(queue, "worker", home),
+    hauler: countPending(queue, "hauler", home),
+    distributor: countPending(queue, "distributor", home),
+    upgrader: countPending(queue, "upgrader", home),
+    builder: countPending(queue, "builder", home),
   };
 
   // P0：恢复 worker — 当没有存活 harvester/worker 时。
@@ -179,7 +182,7 @@ export function evaluateDemand(
   // 威胁清除后不再补充，存量 defender 自然到期（minCount=0，替换门禁不触发）。
   if (snapshot.threatCreeps.length > 0) {
     const defenderConfig = getRoleBounds("defender", home);
-    const defenderPending = countPending(queue, "defender");
+    const defenderPending = countPending(queue, "defender", home);
     const defenderTotal = (counts.defender ?? 0) + defenderPending;
     const defenderTarget = Math.min(snapshot.threatCreeps.length, defenderConfig.maxCount);
     for (let i = defenderTotal; i < defenderTarget; i++) {
@@ -471,7 +474,7 @@ export function evaluateDemand(
 
     // 门禁 2：maxCount 硬上限。
     const livingCount = counts[role] ?? 0;
-    const pendingCount = countPending(queue, role) + requests.filter(r => r.role === role).length;
+    const pendingCount = countPending(queue, role, home) + requests.filter(r => r.role === role).length;
     if (livingCount + pendingCount >= config.maxCount) continue;
 
     // 门禁 3：盈余检查 — 如果去掉这个将死的 creep 后仍 >= minCount，说明有多余，不替换。

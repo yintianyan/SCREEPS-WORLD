@@ -1064,3 +1064,29 @@ getSnapshot(home) → recycle 检查 → 威胁检测 → ensureHome 导航 → 
 - CPU tier conserve 以下不孵化远矿。
 - 远矿目标数 ≤ `CONFIG.remote.maxOperations`。
 - 远矿 creep 必须有 TTL 与撤退条件；`recovery` 时经 `ensureHome`（flee→home）撤回（约束 R5-05 / R8-06）。
+
+### 12.2 扩张系统架构（Expansion，schema v11）
+
+扩张已实现（`expansion-manager.ts` + `domain/expansion/evaluator.ts` + `creeps/roles/claimer.ts`）。
+
+#### Memory 结构（v11 新增，均为 `Memory.kernel` 下可选字段）
+
+| 字段 | 含义 | 生命周期 |
+| --- | --- | --- |
+| `kernel.expansion` | 当前扩张行动状态机（`claiming` → `pioneering`），同一时刻至多一个 | 行动结束/中止即清除 |
+| `kernel.expansionBlacklist` | 失败目标冷却表（房名 → 到期 tick） | 到期由 pruneBlacklist 清除 |
+| `kernel.lostRooms` | 失守房间首次检测 tick | 重新拥有或条目清除时移除 |
+
+迁移 v10→v11 仅做畸形数据自愈（字段惰性创建，幂等）。
+
+#### 关键架构决策
+
+- **殖民复用灾后恢复机器**：占领成功后只写入 `layout.anchor`（约束推导：distance field + `selectAnchors`），
+  其余交给既有链路 — layout-planner 的 spawn 重建路径推 P0 任务 → construction-manager 紧急豁免建 site →
+  拓荒 builder 建造 → spawn 建成后新房 demand/bootstrap 闭环自治。不新建第二条建造管线。
+- **claim 禁止盲选**：候选必须有过视野（intel.sources 已知）。与远矿的盲选自举刻意不同 —
+  远矿失败损失一只 creep，扩张失败损失一个 GCL 窗口。
+- **sponsor 代孵不污染本房预算**：拓荒请求 `home` 指向新房、寄宿 sponsor 队列，
+  `countPending` 的 home 过滤（demand 全部调用点）将其排除在 sponsor 人口预算之外。
+- **失守清理带宽限期**：`maintainMemory` 对不在拥有集合的 `Memory.rooms` 条目记录失守 tick，
+  20000 tick 宽限后连同 tuning 覆盖值一并清除 — 防边界抖动误删，也防失守房数据慢性泄漏。

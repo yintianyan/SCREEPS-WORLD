@@ -116,6 +116,12 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     // reserveController 每 tick 续期 1 tick，1 个 CLAIM 部件即满足需求。
     { parts: ["claim", "move"], minCapacity: 650 },
   ],
+  claimer: [
+    // [CLAIM,MOVE,MOVE] @700：扩张占领投送。多 1 MOVE 加速跨房长途通勤 —
+    // CLAIM creep 寿命仅 600 tick，路上每省 1 tick 都是占领窗口。
+    { parts: ["claim", "move", "move"], minCapacity: 700 },
+    { parts: ["claim", "move"], minCapacity: 650 },
+  ],
   remoteDefender: [
     // [ATTACK,ATTACK,MOVE,MOVE] @520：20 damage/tick，10 tick 击杀 NPC reserver（200 hits）。
     // NPC reserver 通常只有 [CLAIM,MOVE]，无攻击能力 → defender 不会受伤。

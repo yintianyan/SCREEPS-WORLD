@@ -58,9 +58,13 @@ export function cleanQueue(queue: SpawnRequest[], tick: number, maxRetries: numb
   }
 }
 
-/** 统计房间内某角色的待处理请求数（不含孵化中）。 */
-export function countPending(queue: readonly SpawnRequest[], role: string): number {
-  return queue.filter(r => r.role === role).length;
+/** 统计房间内某角色的待处理请求数（不含孵化中）。
+ *
+ * 可选 home 过滤：sponsor 房代孵他房 creep（扩张拓荒）时，请求寄宿在
+ * sponsor 队列但 home 指向目标房 — 不过滤会污染 sponsor 自身的人口预算。
+ */
+export function countPending(queue: readonly SpawnRequest[], role: string, home?: string): number {
+  return queue.filter(r => r.role === role && (home === undefined || r.home === home)).length;
 }
 
 /** 构建稳定去重 key：role:room:source?:index */

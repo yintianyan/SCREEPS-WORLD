@@ -139,6 +139,18 @@ describe("SpawnQueue — countPending", () => {
     expect(countPending(queue, "hauler")).toBe(1);
     expect(countPending(queue, "upgrader")).toBe(0);
   });
+
+  it("home 过滤排除代孵请求（sponsor 队列中 home 指向他房的拓荒请求）", () => {
+    const queue: SpawnRequest[] = [
+      makeRequest("a"), // 本房请求
+      { ...makeRequest("b"), home: "W9N9" }, // 代孵：home 指向扩张目标房
+    ];
+    // 不带 home：全队列计数（向后兼容）。
+    expect(countPending(queue, "harvester")).toBe(2);
+    // 带 home：只计本房请求，代孵请求不污染本房人口预算。
+    expect(countPending(queue, "harvester", "W1N1")).toBe(1);
+    expect(countPending(queue, "harvester", "W9N9")).toBe(1);
+  });
 });
 
 describe("SpawnQueue — spawnKey", () => {

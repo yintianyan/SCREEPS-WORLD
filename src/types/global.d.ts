@@ -178,6 +178,27 @@ declare global {
     };
     /** 参数自调优状态（v7+）。tuning-engine 每 500 tick 更新。 */
     tuning?: TuningMemory;
+    /**
+     * 当前扩张行动（v11+，同一时刻至多一个）。
+     * expansion-manager 的状态机：claiming（claimer 在途）→ pioneering（拓荒编队建 spawn）。
+     */
+    expansion?: {
+      state: "claiming" | "pioneering";
+      /** 扩张目标房名。 */
+      target: string;
+      /** 孵化 claimer 与拓荒编队的 sponsor 房名。 */
+      sponsor: string;
+      /** 当前状态的起始 tick（超时判定基准）。 */
+      startedAt: number;
+    };
+    /** 扩张失败目标黑名单（v11+）：房名 → 冷却到期 tick。 */
+    expansionBlacklist?: Record<string, number>;
+    /**
+     * 失守房间记录（v11+）：房名 → 首次检测到失守的 tick。
+     * maintainMemory 据此在宽限期后清除 Memory.rooms 条目，
+     * 防止失守房的队列/布局/情报数据永久滞留。
+     */
+    lostRooms?: Record<string, number>;
   }
 
   /** 参数自调优的持久化状态。 */
