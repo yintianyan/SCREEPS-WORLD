@@ -600,3 +600,52 @@ describe("Distributor 升编趋势确认 — 防孵化尖峰催生过量编制",
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
   });
 });
+
+describe("矿位分配 — 专职矿工口径（防 worker 挂名误导 + 平局错配）", () => {
+  const twoSources = () => [mockSource("srcA"), mockSource("srcB")];
+
+  it("worker 挂名的 source 不计入占用 — 新 harvester 分到真正空缺的源", () => {
+    // 线上实测场景：worker（流动临时工）挂名 srcB，一只专职 harvester 在 srcA。
+    // 旧口径把 worker 计入占用 → {A:1, B:1} 平局 → 偏向 sources[0]=A → 两矿工挤 A。
+    // 新口径只数专职 harvester → {A:1, B:0} → 新矿工正确分到 B。
+    const snap = mockSnapshot({ sources: twoSources(), energyCapacityAvailable: 800 });
+    const living = [
+      { name: "h1", role: "harvester", home: "W7N4", ticksToLive: 1200, bodyLength: 7, sourceId: "srcA" as Id<Source>, spawnIndex: 0 },
+      { name: "w1", role: "worker", home: "W7N4", ticksToLive: 1200, bodyLength: 3, sourceId: "srcB" as Id<Source>, spawnIndex: 0 },
+    ];
+    const { requests } = evaluateDemand(snap, [], "normal", living, [], normalCtx(0), 1000);
+
+    const harvesters = requests.filter(r => r.role === "harvester");
+    expect(harvesters).toHaveLength(1);
+    expect(harvesters[0]!.memory.sourceId).toBe("srcB");
+  });
+
+  it("替换纠偏：两矿工挤同源时，垂死者的替补分到荒废源而非盲目继承", () => {
+    // 历史错配：h1/h2 都在 srcA。h1 垂死 → 替补按「排除垂死者」的占用重挑：
+    // {A:1(h2), B:0} → 分到 B — 错配随代际更替自动愈合。
+    const snap = mockSnapshot({ sources: twoSources(), energyCapacityAvailable: 800 });
+    const living = [
+      { name: "h1", role: "harvester", home: "W7N4", ticksToLive: 30, bodyLength: 7, sourceId: "srcA" as Id<Source>, spawnIndex: 0 },
+      { name: "h2", role: "harvester", home: "W7N4", ticksToLive: 1200, bodyLength: 7, sourceId: "srcA" as Id<Source>, spawnIndex: 1 },
+    ];
+    const { requests } = evaluateDemand(snap, [], "normal", living, [], normalCtx(0), 1000);
+
+    const replacement = requests.filter(r => r.role === "harvester" && r.replaceBy !== undefined);
+    expect(replacement).toHaveLength(1);
+    expect(replacement[0]!.memory.sourceId).toBe("srcB");
+  });
+
+  it("常态替换保留无缝接班：矿工分居两源时，替补选回垂死者的原矿位", () => {
+    // h1@A 垂死、h2@B 健康 → 排除 h1 后占用 {A:0, B:1} → 替补分回 A。
+    const snap = mockSnapshot({ sources: twoSources(), energyCapacityAvailable: 800 });
+    const living = [
+      { name: "h1", role: "harvester", home: "W7N4", ticksToLive: 30, bodyLength: 7, sourceId: "srcA" as Id<Source>, spawnIndex: 0 },
+      { name: "h2", role: "harvester", home: "W7N4", ticksToLive: 1200, bodyLength: 7, sourceId: "srcB" as Id<Source>, spawnIndex: 1 },
+    ];
+    const { requests } = evaluateDemand(snap, [], "normal", living, [], normalCtx(0), 1000);
+
+    const replacement = requests.filter(r => r.role === "harvester" && r.replaceBy !== undefined);
+    expect(replacement).toHaveLength(1);
+    expect(replacement[0]!.memory.sourceId).toBe("srcA");
+  });
+});

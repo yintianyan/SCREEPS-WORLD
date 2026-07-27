@@ -156,6 +156,58 @@ export function countBodyParts(
   return Math.max(1, body.filter(p => p === part).length);
 }
 
+// ─── 矿位分配（专职矿工口径）───────────────────────────────
+
+/**
+ * 构建专职 harvester 的矿位占用映射 — 只统计 harvester（存活 + 队列 pending），
+ * 排除 worker 等流动角色。
+ *
+ * 口径原因：worker 是灾后万金油，采集只是它的临时行为（随后去填充/升级、
+ * 最终退役），把它的 sourceId 计入占用会误导分配 — 团灭恢复期实测：
+ * worker 挂名南源 → 两只专职 harvester 因「平局偏向 sources[0]」全被
+ * 分到北源，南源满血荒废，恢复期采集吞吐减半。
+ *
+ * @param excludeName 排除的 creep 名（替换场景：垂死者矿位视为已空出）
+ */
+export function buildHarvesterOccupancy(
+  creeps: readonly CreepSummary[],
+  queue: readonly SpawnRequest[],
+  home: string,
+  excludeName?: string,
+): Map<string, number> {
+  const occupancy = new Map<string, number>();
+  for (const c of creeps) {
+    if (c.home !== home || c.role !== "harvester") continue;
+    if (excludeName !== undefined && c.name === excludeName) continue;
+    if (!c.sourceId) continue;
+    occupancy.set(c.sourceId as string, (occupancy.get(c.sourceId as string) ?? 0) + 1);
+  }
+  // 队列中未孵化的 harvester 请求同样占用矿位（防同轮/跨轮重复分配）。
+  for (const req of queue) {
+    if (req.role !== "harvester" || req.home !== home) continue;
+    const sid = req.memory.sourceId as string | undefined;
+    if (sid) occupancy.set(sid, (occupancy.get(sid) ?? 0) + 1);
+  }
+  return occupancy;
+}
+
+/** 从占用映射中选最少拥挤的 source（平局取遍历序第一个）。 */
+export function pickLeastCrowdedSource(
+  sources: readonly Source[],
+  occupancy: ReadonlyMap<string, number>,
+): Source | undefined {
+  let best: Source | undefined;
+  let bestCount = Infinity;
+  for (const source of sources) {
+    const count = occupancy.get(source.id) ?? 0;
+    if (count < bestCount) {
+      bestCount = count;
+      best = source;
+    }
+  }
+  return best;
+}
+
 /**
  * 评估房间孵化需求。
  *
@@ -253,22 +305,12 @@ export function evaluateDemand(
     ? Math.min(snapshot.sources.length, harvesterConfig.minCount)
     : Math.min(harvesterConfig.minCount, saturationTarget);
   if (harvesterTotal < harvesterTarget) {
-    // 本地占用映射：从快照复制，循环内累加，避免同轮重复分配同一 source。
-    const localOccupancy = new Map<string, number>(
-      [...snapshot.sourceOccupancy.entries()].map(([k, v]) => [k, v] as [string, number]),
-    );
+    // 专职矿工口径的占用映射（排除 worker 等流动角色），循环内累加，
+    // 避免同轮重复分配同一 source。
+    const localOccupancy = buildHarvesterOccupancy(creeps, queue, home);
 
     for (let i = harvesterTotal; i < harvesterTarget; i++) {
-      // 找到占用最少的 source。
-      let bestSource: Source | undefined;
-      let bestCount = Infinity;
-      for (const source of snapshot.sources) {
-        const count = localOccupancy.get(source.id) ?? 0;
-        if (count < bestCount) {
-          bestCount = count;
-          bestSource = source;
-        }
-      }
+      const bestSource = pickLeastCrowdedSource(snapshot.sources, localOccupancy);
       const sourceId = bestSource?.id as Id<Source> | undefined;
       // 累加本地占用，确保下一个 harvester 分配到不同 source。
       if (sourceId) {
@@ -609,7 +651,17 @@ export function evaluateDemand(
     const key = spawnKey(role, home, index);
     if (!hasKey(queue, key) && !requests.some(r => r.key === key)) {
       const priority = role === "harvester" || role === "worker" ? 1 : 2;
-      const req = createRequest(role, home, index, key, priority, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick, creep.sourceId);
+      // harvester 替补重选矿位：垂死者的矿位视为已空出，按专职口径重挑。
+      // 常态下会选回原矿位（无缝接班语义不变）；但当历史错配存在
+      // （如两只矿工挤同源）时，替补会自动纠偏到最空的 source，
+      // 而不是盲目继承垂死者矿位让错配永续。
+      let assignSourceId = creep.sourceId;
+      if (role === "harvester" && snapshot.sources.length > 0) {
+        const occ = buildHarvesterOccupancy(creeps, queue, home, creep.name);
+        assignSourceId =
+          (pickLeastCrowdedSource(snapshot.sources, occ)?.id as Id<Source> | undefined) ?? creep.sourceId;
+      }
+      const req = createRequest(role, home, index, key, priority, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick, assignSourceId);
       req.replaceBy = tick + req.body.length * 3 + CONFIG.spawn.replaceBuffer + travelTicks;
       requests.push(req);
     }
