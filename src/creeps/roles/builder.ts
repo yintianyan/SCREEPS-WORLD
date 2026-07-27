@@ -11,7 +11,8 @@
  * RCL4+ 取能策略：storage 建成后成为 builder 的主力能量源。
  *   - storage 由 hauler 持续填充，是最可靠的中央能量库；
  *   - builder body [8W,4C,6M] 满载 200 能量 / 8 WORK = 25 tick 建造，往返一趟效率高；
- *   - storage 水位低于 10% 时收紧取能上限，让 hauler 优先补给 spawn/extension。
+ *   - storage 水位低于 20% 时收紧取能上限（200），低于 10% 时进一步收紧（50），
+ *     与 distributor 水位分级对齐，让 hauler 优先补给 spawn/extension。
  *   - 无 storage（RCL1-3）时自动跳过，回退到 container / harvest。
  */
 import type { Priority } from "../../kernel/contracts";
@@ -46,13 +47,15 @@ function builderGate(ac: ActionContext): boolean {
 }
 
 /**
- * P1-1: 动态计算 builder 从 storage 取能上限 — 按 storage 水位缩放。
+ * 动态计算 builder 从 storage 取能上限 — 按 storage 水位分档缩放。
  *
- * - 高水位 (>10%)：放开到 carry 满载（库存充足，builder 全速建造）
- * - 低水位 (<=10%)：收紧到 100（保护 storage，让 hauler 优先补给 spawn/extension）
+ * 与 distributor 水位分级对齐，确保低水位时 builder 不抢高优先级消费者的能量：
+ *   - 高水位 (>20%)：放开到 carry 满载（库存充足，builder 全速建造）
+ *   - 中水位 (10%-20%)：限 200/tick（节流但维持基本建造）
+ *   - 低水位 (<10%)：限 50/tick（仅维持最低建造，让 hauler 优先补给 spawn/extension）
  *
- * 比 upgrader 的阈值更宽松：builder 是 P2，只在有工地时运行，
- * storage 水位低时 tier 系统会门禁建造（recovery 跳过，conserve 只建 critical）。
+ * 比 distributor 的阈值更保守：builder 是 P2，storage 水位低时 tier 系统会门禁建造
+ * （recovery 跳过，conserve 只建 critical），取能也应同步收紧。
  */
 function builderStorageLimit(ac: ActionContext): number {
   const st = ac.snapshot.storage;
@@ -61,8 +64,9 @@ function builderStorageLimit(ac: ActionContext): number {
   const capacity = st.store.getCapacity(RESOURCE_ENERGY);
   if (capacity === 0) return 0;
   const ratio = energy / capacity;
-  if (ratio > 0.1) return ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
-  return 100;
+  if (ratio > 0.2) return ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
+  if (ratio > 0.1) return 200;
+  return 50;
 }
 
 const policy: RolePolicy = {

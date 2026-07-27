@@ -563,3 +563,44 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
     expect(creep.repair).toHaveBeenCalledWith(wall);
   });
 });
+
+describe("builder — storage 水位分级取能", () => {
+  it("水位 > 20%：满载取能", () => {
+    // storage 25000/100000 = 25% → 满载
+    const storage = mockStructure("storage", { id: "st1", energy: 25000, capacity: 100000 });
+    const snap = mockSnapshot({ storage });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 0, capacity: 50, mode: "acquire" });
+    const ctx = mockContext(snap);
+
+    builderRole.run(creep, ctx);
+
+    // 满载取能：min(25000, 50) = 50
+    expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 50);
+  });
+
+  it("水位 10%-20%：限取 200/tick", () => {
+    // storage 15000/100000 = 15% → 限 200
+    const storage = mockStructure("storage", { id: "st1", energy: 15000, capacity: 100000 });
+    const snap = mockSnapshot({ storage });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 0, capacity: 300, mode: "acquire" });
+    const ctx = mockContext(snap);
+
+    builderRole.run(creep, ctx);
+
+    // 限取 200：min(15000, 300, 200) = 200
+    expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 200);
+  });
+
+  it("水位 < 10%：限取 50/tick", () => {
+    // storage 5000/100000 = 5% → 限 50
+    const storage = mockStructure("storage", { id: "st1", energy: 5000, capacity: 100000 });
+    const snap = mockSnapshot({ storage });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 0, capacity: 300, mode: "acquire" });
+    const ctx = mockContext(snap);
+
+    builderRole.run(creep, ctx);
+
+    // 限取 50：min(5000, 300, 50) = 50
+    expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 50);
+  });
+});

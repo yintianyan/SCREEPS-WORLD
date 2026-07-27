@@ -171,6 +171,36 @@ export function getHaulFillTarget(
 }
 
 /**
+ * Distributor 水位分级档位。
+ *
+ * 由 distributor gate 每 tick 根据 storage 水位计算并写入 creep.memory.distributorTier。
+ * getDistributorFillTarget 读取该值过滤目标类型，withdrawStorageForDistribution 读取该值限制取能量。
+ *
+ * 档位定义：
+ *   0 — 水位 > 50%：满载取能，所有 fillTarget 正常服务
+ *   1 — 水位 20%-50%：满载取能，仅服务 spawn/extension（跳过 tower）
+ *   2 — 水位 10%-20%：限取 400/tick，仅服务 spawn/extension
+ *   3 — 水位 < 10%：限取 200/tick，仅服务 spawn（不含 extension）
+ */
+export type DistributorTier = 0 | 1 | 2 | 3;
+
+/**
+ * 根据 storage 水位计算 distributor 调度档位。
+ * 无 storage 或容量为零时返回 0（不限制）。
+ */
+export function computeDistributorTier(storage: StructureStorage | undefined): DistributorTier {
+  if (!storage) return 0;
+  const energy = storage.store.getUsedCapacity(RESOURCE_ENERGY);
+  const capacity = storage.store.getCapacity(RESOURCE_ENERGY);
+  if (capacity === 0) return 0;
+  const ratio = energy / capacity;
+  if (ratio > 0.5) return 0;
+  if (ratio > 0.2) return 1;
+  if (ratio > 0.1) return 2;
+  return 3;
+}
+
+/**
  * Distributor 专用的填充目标选择 — 与 hauler 的 getHaulFillTarget 职责分离。
  *
  * 角色边界（修复角色错配）：
@@ -185,17 +215,20 @@ export function getHaulFillTarget(
  *
  * 优先级：
  *   1. spawn / extension —— 生产引擎，绝对最高（威胁下也不让位）。
- *   2. tower —— 防御/维修。
+ *   2. tower —— 防御/维修（tier >= 3 时跳过）。
  *   3. controller container —— 仅当房间无 controller link 时兜底（RCL4 有 storage 但
  *      link 未建成的窗口期）。有 controller link 时由 link 网络独占供能（零通勤），
  *      distributor 完全不碰，避免冗余回流。
  *
  * 同级取最近未预约者；预约集合与 hauler 共享（fillReservations，按 tick 惰性重置），
  * 避免 distributor 与 hauler 抢同一目标。所有目标都被预约时回退最近目标避免死锁。
+ *
+ * @param tier distributor 水位档位，控制允许填充的结构类型范围。
  */
 export function getDistributorFillTarget(
   creep: Creep,
   snapshot: RoomSnapshot,
+  tier: DistributorTier = 0,
 ): AnyOwnedStructure | undefined {
   if (snapshot.fillTargets.length === 0) return undefined;
 
@@ -206,31 +239,48 @@ export function getDistributorFillTarget(
   }
   const reserved = g.fillReservations;
 
-  // 1. spawn / extension —— 生产引擎，最高优先（威胁下也不让位 tower）。
-  // 2. tower —— 防御。
-  const target =
-    pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_SPAWN, STRUCTURE_EXTENSION]) ??
-    pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_TOWER]);
-  if (target) {
-    reserved.add(target.id);
-    return target as unknown as AnyOwnedStructure;
+  // tier 3: 仅填充 spawn（不含 extension），极端节水模式。
+  const spawnTypes: string[] =
+    tier === 3 ? [STRUCTURE_SPAWN] : [STRUCTURE_SPAWN, STRUCTURE_EXTENSION];
+
+  // 1. spawn / extension（或仅 spawn）—— 生产引擎，最高优先。
+  const primary = pickFillTarget(creep, snapshot.fillTargets, reserved, spawnTypes);
+  if (primary) {
+    reserved.add(primary.id);
+    return primary as unknown as AnyOwnedStructure;
   }
 
-  // 3. controller container 兜底 —— 仅当无 controller link 时。
-  // controller link 判定与 link-system.classifyLink 一致：link 距 controller <= 2。
-  const hasControllerLink =
-    snapshot.controller != null &&
-    snapshot.links.some(l => l.pos.getRangeTo(snapshot.controller!) <= 2);
-  if (!hasControllerLink) {
-    const cc = snapshot.controllerContainer;
-    if (cc && !reserved.has(cc.id) && cc.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-      reserved.add(cc.id);
-      return cc as unknown as AnyOwnedStructure;
+  // tier >= 1: 跳过 tower，保护低水位下的能量储备。
+  if (tier < 1) {
+    // 2. tower —— 防御。
+    const tower = pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_TOWER]);
+    if (tower) {
+      reserved.add(tower.id);
+      return tower as unknown as AnyOwnedStructure;
     }
   }
 
-  // 全部已预约 — 回退最近目标（允许共享）避免死锁。
-  return (creep.pos.findClosestByRange(snapshot.fillTargets as FillTarget[]) ?? undefined) as
+  // 3. controller container 兜底 —— 仅当无 controller link 时（tier < 1 才允许）。
+  if (tier < 1) {
+    const hasControllerLink =
+      snapshot.controller != null &&
+      snapshot.links.some(l => l.pos.getRangeTo(snapshot.controller!) <= 2);
+    if (!hasControllerLink) {
+      const cc = snapshot.controllerContainer;
+      if (cc && !reserved.has(cc.id) && cc.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        reserved.add(cc.id);
+        return cc as unknown as AnyOwnedStructure;
+      }
+    }
+  }
+
+  // 全部已预约 — 回退最近目标（允许共享）避免死锁，但须符合 tier 类型约束。
+  const fallbackPool = (snapshot.fillTargets as FillTarget[]).filter(t => {
+    if (tier === 3) return t.structureType === STRUCTURE_SPAWN;
+    if (tier >= 1) return t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION;
+    return true;
+  });
+  return (creep.pos.findClosestByRange(fallbackPool) ?? undefined) as
     | AnyOwnedStructure
     | undefined;
 }

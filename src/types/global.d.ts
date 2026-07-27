@@ -51,6 +51,12 @@ declare global {
     remoteTarget?: string;
     /** remoteHauler 缓存的远矿 containerId — 避免 每 tick room.find。 */
     remoteContainerId?: Id<StructureContainer>;
+    /**
+     * Distributor 水位分级档位（0-3）。
+     * 由 distributor gate 每 tick 根据 storage 水位计算，
+     * 供 withdrawStorageForDistribution 限取和 getDistributorFillTarget 过滤目标使用。
+     */
+    distributorTier?: 0 | 1 | 2 | 3;
   }
 
   interface SpawnRequest {

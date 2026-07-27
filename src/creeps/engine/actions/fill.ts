@@ -86,7 +86,9 @@ export function distributorFillTarget(): ActionCandidate<AnyOwnedStructure> {
     name: "fill:distributor-target",
     resolve: (ac) => {
       if (ac.snapshot.fillTargets.length === 0) return undefined;
-      return getDistributorFillTarget(ac.creep, ac.snapshot);
+      // 读取 distributor gate 每 tick 计算的水位档位，用于过滤目标类型。
+      const tier = (ac.creep.memory.distributorTier as 0 | 1 | 2 | 3) ?? 0;
+      return getDistributorFillTarget(ac.creep, ac.snapshot, tier);
     },
     execute: (ac, t) => {
       runAction(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY), {

@@ -53,12 +53,27 @@ import {
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
+import { computeDistributorTier } from "../support/targeting";
 
-/** 从 storage 限量取能 — 仅当存在下游 fillTarget 时。
+/** 各档位对应的单次最大取能量。tier 0 = 满载（carry 容量）。 */
+const TIER_WITHDRAW_CAP: readonly [number, number, number, number] = [
+  Infinity, // tier 0: 满载
+  Infinity, // tier 1: 满载（但目标类型受限）
+  400,      // tier 2: 限取 400/tick
+  200,      // tier 3: 限取 200/tick
+];
+
+/** 从 storage 限量取能 — 带水位分级节流。
  *
  * 需求门禁是本角色的核心设计：
  * 没有 fillTarget（spawn/extension/tower 全满）时禁止从 storage 取能。
  * 这从架构上消除了 storage→storage 循环的可能性。
+ *
+ * 水位分级（由 gate 写入 creep.memory.distributorTier）：
+ *   tier 0 (>50%)：满载取能，所有 fillTarget 正常服务
+ *   tier 1 (20-50%)：满载取能，fillTarget 仅 spawn/extension
+ *   tier 2 (10-20%)：限取 400/tick，fillTarget 仅 spawn/extension
+ *   tier 3 (<10%)：限取 200/tick，fillTarget 仅 spawn
  */
 function withdrawStorageForDistribution(): ActionCandidate {
   return {
@@ -74,7 +89,10 @@ function withdrawStorageForDistribution(): ActionCandidate {
       const st = target as StructureStorage;
       const available = st.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
-      const amount = Math.min(available, carryFree);
+      // 水位分级限取：tier 由 gate 每 tick 计算并持久化到 memory。
+      const tier = (ac.creep.memory.distributorTier as 0 | 1 | 2 | 3) ?? 0;
+      const cap = TIER_WITHDRAW_CAP[tier];
+      const amount = Math.min(available, carryFree, cap);
       const result = ac.creep.withdraw(st, RESOURCE_ENERGY, amount);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, st);
@@ -93,12 +111,17 @@ function withdrawStorageForDistribution(): ActionCandidate {
  * 当 storage 重建后，demand 系统会孵化新的 distributor。
  *
  * body 兼容：distributor 和 hauler 都是纯 CARRY+MOVE，角色转换安全。
+ *
+ * 水位分级计算：每 tick 根据 storage 水位计算 distributorTier 并写入 memory，
+ * 供 withdrawStorageForDistribution（限取）和 distributorFillTarget（过滤目标）使用。
  */
 function distributorGate(ac: ActionContext): boolean {
   if (!ac.snapshot.storage) {
     ac.creep.memory.role = "hauler";
     return false; // 跳过本 tick，下一 tick 以 hauler 角色运行
   }
+  // 每 tick 重新计算水位档位，供本 tick 的 acquire/work 阶段读取。
+  ac.creep.memory.distributorTier = computeDistributorTier(ac.snapshot.storage);
   return true;
 }
 

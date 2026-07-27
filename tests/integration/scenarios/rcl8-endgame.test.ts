@@ -215,7 +215,18 @@ describe("RCL8 End Game — 终局", () => {
 
     assertions.assertNoRuntimeError("RCL8 multi-role");
     assertions.assertEmpireAlive("RCL8 multi-role");
-    assertions.assertEconomyHealthy("RCL8 multi-role");
+
+    // 水位分级架构下 storage 允许有序下降（消费 > 收入时），
+    // 因此不检查 deathSpiral（基于 totalEnergy 含 storage），
+    // 改为检查 spawn/extension 是否有能量（Tier 0 服务正常）。
+    const spawnExtEnergy =
+      world.spawns.reduce((s, sp) => s + sp.store.getUsedCapacity(RESOURCE_ENERGY), 0) +
+      world.extensions.reduce((s, e) => s + e.store.getUsedCapacity(RESOURCE_ENERGY), 0);
+    const spawnExtCapacity =
+      world.spawns.reduce((s, sp) => s + sp.store.getCapacity(RESOURCE_ENERGY), 0) +
+      world.extensions.reduce((s, e) => s + e.store.getCapacity(RESOURCE_ENERGY), 0);
+    expect(spawnExtEnergy, "spawn/extension 应有能量（水位分级 Tier 0 服务正常）")
+      .toBeGreaterThan(spawnExtCapacity * 0.5);
 
     // 各角色都在工作
     expect(result.finalSnapshot.stats.totalHarvested).toBeGreaterThan(3000);
