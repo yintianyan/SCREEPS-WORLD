@@ -1,3 +1,4 @@
+import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 
 /**
@@ -20,6 +21,9 @@ export const pixelSystem: System = {
   priority: 3 as Priority,
   interval: 10,
   run(ctx: TickContext): void {
+    // 总开关：默认关闭 — 放血清零 bucket 与 global reset 撞车会触发
+    // reload death loop（详见 CONFIG.pixel.enabled 注释），收益抵不上风险。
+    if (!CONFIG.pixel.enabled) return;
     // 只在 healthy tier 下生成 — 保证放血起点是满 bucket + 低负载。
     if (ctx.budget.tier !== "healthy") return;
     // 私服无 generatePixel API — 安全检查避免每 10 tick 报 TypeError。

@@ -100,6 +100,18 @@ export const CONFIG = {
     pixelGraceTicks: 700,
   },
 
+  pixel: {
+    /** Pixel 收割总开关 — 默认关闭。
+     * generatePixel 吃光整个 bucket（10000 → 0），若清零时刻恰逢 global reset
+     * （代码部署 / 服务器迁移），bundle 加载成本 > tickLimit(≈20) 会触发
+     * reload death loop：每 tick 加载即被杀 → 被杀 tick 按 tickLimit 计费 →
+     * bucket 永不回充 → 主循环永久死亡（线上实测：心跳停摆 187+ tick，
+     * 全房 creep 冻结，靠上传空 loop 急救才恢复）。
+     * 开启前置条件：bundle 经压缩后加载成本 ≪ 20 CPU，且接受放血后
+     * ~600 tick 的 P3 降档窗口。 */
+    enabled: false,
+  },
+
   spawn: {
     /** body 替换窗口：ticksToLive <= body.length * 3 + 15（+ 路程项，见 demand.needsReplacement）。 */
     replaceBuffer: 15,
