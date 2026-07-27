@@ -177,8 +177,10 @@ export const CONFIG = {
     upgradeEnergyFloorStorage: 1000,
     /** builder 允许工作前的最低能量盈余。 */
     buildEnergySurplus: 200,
-    /** 触发紧急升级的控制器 ticksToDowngrade 阈值。 */
+    /** 触发紧急升级的控制器 ticksToDowngrade 阈值（迟滞进入阈值）。 */
     controllerDowngradeThreshold: 10000,
+    /** controllerDowngradeRisk 迟滞退出阈值 —— ticksToDowngrade 回升到此值以上才退出风险状态。 */
+    controllerDowngradeExitThreshold: 15000,
     /** 升级功率控制（A2：storage 水位驱动 + RCL8 显式限速）。 */
     upgrade: {
       /** storage 能量 ≥ 此值且 pressure ≤ 0.3 时进入升级冲刺（燃烧库存换 RCL 复利）。 */
@@ -192,17 +194,35 @@ export const CONFIG = {
     },
     /** 能量危机检测与响应参数。 */
     crisis: {
-      /** source 能量高于此比例视为采集不足（harvester 失效）。 */
+      /**
+       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS.drainEnterScore。
+       * 保留此字段仅为避免破坏性变更，全库无其他引用。
+       */
       sourceFullRatio: 0.85,
-      /** energyAvailable 低于 capacity×此比例视为储备低。 */
+      /**
+       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS。
+       * 保留此字段仅为避免破坏性变更，全库无其他引用。
+       */
       energyThresholdRatio: 0.4,
-      /** 储备阈值固定上限。 */
+      /**
+       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS。
+       * 保留此字段仅为避免破坏性变更，全库无其他引用。
+       */
       energyThresholdCap: 400,
-      /** 危机分数达到此值进入危机（scoreStep 10 → 需持续 ~50 tick）。 */
+      /**
+       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS.drainEnterScore。
+       * 保留此字段仅为避免破坏性变更，全库无其他引用。
+       */
       enterScore: 100,
-      /** 危机分数降到此值退出危机（迟滞）。 */
+      /**
+       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS.drainExitScore。
+       * 保留此字段仅为避免破坏性变更，全库无其他引用。
+       */
       exitScore: 40,
-      /** 每次评估（room-observer 每 5 tick）的分数变化量。 */
+      /**
+       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS.scoreStep。
+       * 保留此字段仅为避免破坏性变更，全库无其他引用。
+       */
       scoreStep: 10,
       /** 危机时仅当 ticksToDowngrade 低于此值才保留 1 个 upgrader 保级，否则停升级省能。 */
       downgradeGuard: 3000,
@@ -214,6 +234,13 @@ export const CONFIG = {
     },
     /** Storage 满仓阈值 — 超过此比例时触发限采 + 加速消费。 */
     storageFullThreshold: 0.9,
+    /** economyPressure 分段映射参数（room-state.ts 使用）。 */
+    economyPressure: {
+      /** 健康→谨慎的分界点（score 0..midpoint 映射 pressure 0.0..0.5）。 */
+      midpoint: 40,
+      /** 谨慎→危机的区间宽度（score midpoint..midpoint+range 映射 pressure 0.5..1.0）。 */
+      range: 60,
+    },
   },
 
   defense: {

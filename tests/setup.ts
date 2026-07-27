@@ -3,6 +3,9 @@
 // 将 Screeps 常量赋值到 globalThis 而不重新声明
 // （它们已在 @types/screeps 中声明但运行时未定义）。
 Object.assign(globalThis as Record<string, unknown>, {
+  // Memory 全局 mock（防止 "Memory is not defined" 错误）
+  Memory: { rooms: {}, creep: {}, flags: {} },
+
   // body 部件常量
   WORK: "work",
   CARRY: "carry",

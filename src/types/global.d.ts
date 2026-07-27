@@ -99,6 +99,12 @@ declare global {
      */
     wasEmergency?: boolean;
     /**
+     * 上次触发任务抢占的 tick（TD-018 冷却机制）。
+     * assignment-service 在抢占触发后写入，距上次抢占至少间隔 20 tick 才能再次触发，
+     * 防止房间在紧急/正常之间快速交替时每个上升沿都 invalidate assignment。
+     */
+    lastPreemptTick?: number;
+    /**
      * 最近一次房内出现威胁 creep 的 tick（v12+，room-state 写入）。
      * 受袭记忆：驱动防御姿态（如 wall/rampart 目标血量升档）—
      * 防御深度用真实威胁校准，而非静态假设。
@@ -154,6 +160,12 @@ declare global {
       /** min-cut 是否完成。 */
       complete: boolean;
     };
+    /**
+     * Builder pressure 迟滞状态（TD-016）。
+     * full: 经济健康，builder 满目标；shrinking: 经济承压，builder 线性收缩。
+     * 进入收缩：pressure > 0.35；退出收缩：pressure <= 0.25；带内保持不变。
+     */
+    builderPressureState?: 'full' | 'shrinking';
     /**
      * 远矿运营 — 从本房管理的远程采矿操作。key = 目标房名。
      * 由 remote-mining-manager 每 10 tick 评估/更新。

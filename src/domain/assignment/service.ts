@@ -132,18 +132,10 @@ export function buildRoomTasks(
         pos: { x: c.pos.x, y: c.pos.y },
       });
     }
-  } else if (snapshot.storage && snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-    // 无 container 有能量 — 回退到 storage（RCL4+ 储备供能）。
-    tasks.push({
-      id: `haul:${roomName}:${snapshot.storage.id}`,
-      kind: "haul",
-      sourceId: snapshot.storage.id as string,
-      priority: 1,
-      maxWorkers: 2,
-      assignedCreeps: taskToCreeps.get(`haul:${roomName}:${snapshot.storage.id}`) ?? [],
-      pos: { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y },
-    });
   }
+  // 无含能量的 container 时不生成 haul 任务（TD-013）。
+  // hauler 永不从 storage 取能 — storage → sink 的分发由 distributor 负责。
+  // container 全空时 hauler 应等待 harvester 产出，而非隐蔽绕过架构约束从 storage 取能。
 
   // 3. build 任务 — 为每个 active site 生成。
   const ctrl = snapshot.controller;

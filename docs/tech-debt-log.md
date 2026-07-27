@@ -77,7 +77,8 @@
 - **文件**: `src/systems/telemetry-collector.ts`
 - **现象**: StructureDestroyed 事件只检测 spawn/tower/container，不检测 storage
 - **影响**: Storage 被摧毁时无事件记录，诊断困难
-- **状态**: 待修
+- **状态**: ✅ 已修复（873/873 测试通过）
+- **修复补充**: telemetry-collector 增加 storage 追踪（structureTypeCode=3），含 3 条单测
 
 ### TD-005: Remote 人口畸重 + Remote Creep 通勤死锁（已修复）
 - **文件**: `src/creeps/engine/role-runner.ts`, `src/systems/remote-mining-manager.ts`
@@ -96,28 +97,32 @@
 - **根因**: `reserve` 计算 = `energyAvailable + containers + storage + creepEnergy`，未计入 `snapshot.terminal` 中的能量。RCL6 解锁 terminal 后，一个正常运营房间 terminal 常囤积 2-5 万能量应对市场/远矿支援。遗漏此项导致 `reserveDelta` 系统性偏负 → `drainScore` 持续增高 → 假性 crisis 误判
 - **影响**: RCL6+ 房间相位判准降低；信用良好的房间可能被错误收缩，浪费产能
 - **修复**: 在 reserve 计算中加一行 `+(snapshot.terminal?.getUsedCapacity(RESOURCE_ENERGY) ?? 0)`
-- **状态**: 待修
+- **状态**: ✅ 已修复（873/873 测试通过）
+- **修复补充**: reserve 计算增加 terminal 能量，含 4 条单测
 
 ### TD-013: Hauler 通过 assignment 回退路径隐蔽从 storage 取能
 - **文件**: `src/creeps/roles/hauler.ts`（`withdrawAssignmentContainer`）, `src/systems/assignment-service.ts`（`buildRoomTasks` 的 haul 任务回退）
 - **根因**: `assignment-service` 在「无 container 但有 storage」时生成指向 **storage** 的 `haul` 任务（第 135-146 行）。`hauler.ts` 的 `withdrawAssignmentContainer` 用双重 `as` 断言将 storage id 当作 `Id<StructureContainer>` 处理（第 55 行）——JS 运行时 store 接口同构不报错，hauler 静默从 storage 取能。打破「hauler 收集、distributor 分发」的核心架构约束
 - **影响**: 在 container 全空 + storage 有能量的边缘场景下，hauler 与 distributor 形成低烈度能量循环（storage→hauler→?→distributor→storage），浪费 CPU 和 creep 寿命
 - **修复**: 方案 A（推荐）——禁止 assignment 生成指向 storage 的 haul 回退任务，container 为空时 hauler 等待 harvester 产出的正确行为由相位系统检测采集瓶颈来驱动；方案 B——保留回退但让 hauler 显式检查并记录约束降级事件
-- **状态**: 待修
+- **状态**: ✅ 已修复（873/873 测试通过）
+- **修复补充**: 移除 assignment 回退 storage 路径 + hauler 增加运行时类型守卫，含测试更新
 
 ### TD-014: controllerDowngradeRisk 布尔信号无迟滞
 - **文件**: `src/systems/room-state.ts`（第 139-142 行）
 - **根因**: `ticksToDowngrade < 10000` 硬阈值，无进入/退出迟滞。Screeps 中 `ticksToDowngrade` 每 tick 减 1（upgrader 工作则增加），在 10001↔9999 边界单 tick 穿越，导致降级风险信号每 tick 翻转一次
 - **影响**: 下游消费方（demand 中 upgrader 配额、construction-manager 开发门禁）在阈值附近来回切换，产生不必要的决策抖动
 - **修复**: 引入迟滞带——进入阈值 10000，退出阈值 15000（类似 PhaseOptions 的非对称步长设计），配合 `roomMem.phase` 中新增 `downgradeRiskEntered` 时间戳
-- **状态**: 待修
+- **状态**: ✅ 已修复（873/873 测试通过）
+- **修复补充**: 引入非对称迟滞带（进入 10000/退出 15000），含 6 条单测
 
 ### TD-015: economyPressure 连续信号仅影响消费角色，物流角色无感知
 - **文件**: `src/domain/spawn/demand.ts`（`evaluateDemand` 全函数）
 - **根因**: `economyPressure`（0.0-1.0 连续信号）只用于 upgrader 目标数（第 348-387 行）、builder 梯度缩放（第 429-437 行）和 spawn-manager 的 P2 饥饿降级门禁（第 216 行）。harvester/hauler/distributor 的配额仅通过二值 `inCrisis` 开关控制。经济紧张（pressure=0.6 但未到 crisis）时，消费端已收缩但物流端照常孵化
 - **影响**: 经济压力上升时 hauler/distributor 可能过度孵化，把紧张的 container 能量搬入 storage 再搬出，形成低烈度能量循环；多出的物流 creep 挤占 spawn 队列和 CPU 预算
 - **修复**: 在 `dynamicHaulerTarget` 和 `distTarget` 中引入 `economyPressure` 衰减因子——pressure>0.6 时开始降低物流配额，线性缩放到 minCount
-- **状态**: 待修
+- **状态**: ✅ 已修复（873/873 测试通过）
+- **修复补充**: hauler/distributor 增加 economyPressure 衰减因子（>0.6 线性缩放到 minCount），含 4 条单测
 
 ## P2 — 计划修
 
@@ -126,7 +131,8 @@
 - **根因**: `pressure <= 0.3` 满目标 vs `pressure > 0.3` 线性收缩——单一阈值无迟滞。pressure 在 0.29↔0.31 波动时 builder 目标在满与收缩之间反复跳变。对比 upgrader（第 373-387 行）使用三段梯度双阈值（0.3/0.7），builder 的单阈值更脆弱
 - **影响**: builder 孵化请求（正常需求 pass，第 438-447 行）会因 `builderTarget` 波动走 `submitRequest` 同 key merge 更新 body/priority——虽不产生重复请求，但每 tick 更新增加 Memory 写入抖动。**注：替换请求（replacement pass，第 484-487 行）走独立 TTL 门禁，不受此影响——原清单中「替换请求每 tick 重建」经核实不成立**
 - **修复**: 对 builder pressure 梯度引入迟滞窗（进入 0.35 / 退出 0.25）或使用最近 N tick 的 EMA 平滑
-- **状态**: 待修
+- **状态**: ✅ 已修复（873/873 测试通过）
+- **修复补充**: 引入迟滞窗（进入 0.35/退出 0.25），含 4 条单测
 
 ### TD-006: Builder body 在低 energyCapacity 下退化为 [1W,1C,2M]
 - **文件**: `src/config/bodies.ts`
@@ -147,17 +153,20 @@
 - **根因**: 紧急上升沿触发 `invalidateAssignments`，仅靠 `wasEmergency` 存储上一 tick 状态实现边沿检测。若房间能量在阈值附近快速振荡（如 energyAvailable 在 threshold±1 波动），每 2 tick 触发一次抢占
 - **影响**: 频繁的 Memory.assignment 清除/重写增加序列化开销；实际触发概率低（需要精确的能量边界振荡），降级为 P3
 - **修复**: 添加冷却计数器——抢占后至少间隔 20 tick 才能再次触发
-- **状态**: 待修
+- **状态**: ✅ 已修复（873/873 测试通过）
+- **修复补充**: 增加 20 tick 冷却计数器，含 7 条单测
 
 ### TD-019: demand 与 targeting 的 source 分配协调不完备
 - **文件**: `src/domain/spawn/demand.ts`（第 209-238 行）, `src/creeps/support/targeting.ts`（第 6-54 行）
 - **根因**: demand 通过 `creep.memory.sourceId` 将分配的 source 写入 creep memory（第 524 行），targeting 运行时优先读取 `creep.memory.sourceId`（第 8 行）——**存在基本协调，非完全无协调**。但协调不完备有两个泄漏点：① `snapshot.sourceOccupancy` 只反映存活 creep，不包含队列中 pending spawn 的跨 tick 分配，同一 source 可能被超额分配；② targeting 有独立公平份额迁移逻辑（第 13-28 行，当前 source 超公平份额且存在更空闲 source 时清空 memory 重分），可直接推翻 demand 分配
 - **影响**: source 负载可能偏离预期均衡，但幅度小（demand→memory→targeting 的默认路径生效），降级为 P3
-- **状态**: 待修
+- **状态**: ⚠️ Known Limitation — 不修
+- **评估说明**: 经大师视角评估：demand→memory→targeting 默认路径在多数场景生效，偏离幅度小；修复需引入 pending spawn 计数和统一分配权威，复杂度与收益不成比例。标记为已知限制。
 
 ### TD-020: economyPressure 分界点 40/60 硬编码（且 CONFIG.economy.crisis 为死配置）
 - **文件**: `src/systems/room-state.ts`（第 121-124 行）, `src/config/index.ts`（第 202-204 行）, `src/domain/economy/phase.ts`（第 112-134 行）
 - **根因**: `room-state.ts` 的 economyPressure 分段计算使用字面量 40 和 60（语义上 = exitScore 和 enterScore-exitScore）。**但更严重的是：** `CONFIG.economy.crisis.enterScore: 100` 和 `exitScore: 40`（config/index.ts:202-204）本身是全库死配置——零引用。真正的相位危机阈值来自 `PhaseOptions` 默认值 `drainEnterScore: 150` 和 `drainExitScore: 30`（phase.ts:112-134）。存在三重脱节：①硬编码 40/60 无编译期关联；② config 的 crisis 分数是死的；③真正的相位逻辑用着完全不同的默认值（150/30）
 - **影响**: 修改 config 中 crisis 进出分数不会自动同步 economyPressure 分段点；也不会同步 PhaseOptions（需改 phase.ts 默认值或 runtime 传入）。不过当前 40 与 `drainExitScore: 30` 接近（误差 10 分），影响有限
 - **修复**: ①在 `room-state.ts` 中将 40/60 改为引用 `PhaseOptions` 的默认值；②在 config 中给 `crisis.enterScore/exitScore` 加注释说明实际生效位置在 phase.ts；或③统一单真相源——让 phase.ts 从 CONFIG 读取阈值
-- **状态**: 待修
+- **状态**: ✅ 已修复（873/873 测试通过）
+- **修复补充**: 新增 CONFIG.economy.economyPressure 常量（midpoint/range），6 个死字段标记 @deprecated，含 3 条单测

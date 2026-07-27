@@ -281,6 +281,14 @@ export function evaluateDemand(
     }
     // 至少 minCount（保证基本物流不断），至多 maxCount。
     dynamicHaulerTarget = Math.min(haulerConfig.maxCount, Math.max(haulerConfig.minCount, dynamicHaulerTarget));
+
+    // TD-015：economyPressure 梯度衰减 — pressure > 0.6 时线性降低 hauler 配额，
+    // 让物流端平滑感知经济压力（而非仅靠 inCrisis 二值开关突然砍）。
+    // pressure=0.6 无衰减，pressure=1.0 缩至 minCount。
+    const haulerPressure = roomCtx.economyPressure;
+    if (haulerPressure > 0.6) {
+      dynamicHaulerTarget = Math.max(haulerConfig.minCount, Math.round(dynamicHaulerTarget * (1 - (haulerPressure - 0.6) / 0.4)));
+    }
   }
   // 能量危机收缩（仅偿付危机适用）：收缩 hauler 到 minCount —— 仅保留把能量搬回 spawn
   // 供孵化 harvester 的最小力量，避免孵出一堆无能量可搬的空闲 hauler，白白浪费孵化能量。
@@ -316,6 +324,11 @@ export function evaluateDemand(
     // fillTargets 含 spawn/extension/tower 等未满 sink。
     const fillCount = snapshot.fillTargets.length;
     distTarget = Math.min(distConfig.maxCount, Math.max(distConfig.minCount, Math.ceil(fillCount / 2)));
+    // TD-015：economyPressure 梯度衰减 — 与 hauler 同公式，pressure > 0.6 时线性降低 distributor 配额。
+    const distPressure = roomCtx.economyPressure;
+    if (distPressure > 0.6) {
+      distTarget = Math.max(distConfig.minCount, Math.round(distTarget * (1 - (distPressure - 0.6) / 0.4)));
+    }
     // 危机时收缩到 minCount。
     if (inCrisis) distTarget = Math.min(distTarget, distConfig.minCount);
   }
@@ -423,15 +436,25 @@ export function evaluateDemand(
       economyCap,
       Math.max(builderConfig.minCount, snapshot.myConstructionSites.length),
     );
-    // 梯度缩放：用 economyPressure 连续信号替代二值 crisis 开关。
-    // pressure 0.0–0.3: 满目标（健康）
-    // pressure 0.3–1.0: 线性从满目标缩到 minCount（builder 始终保留 minCount 处理关键重建）
+    // 梯度缩放：用 economyPressure 迟滞带替代单阈值开关（TD-016）。
+    // 迟滞窗：进入收缩 > 0.35，退出收缩 <= 0.25，带内保持当前状态。
+    // 消除 pressure 在阈值附近波动时 builder 目标反复跳变的振荡。
     const builderPressure = roomCtx.economyPressure;
+    const roomMem = Memory.rooms[home];
+    let state = roomMem?.builderPressureState ?? 'full';
+    if (state === 'full' && builderPressure > 0.35) {
+      state = 'shrinking';
+      if (roomMem) roomMem.builderPressureState = state;
+    } else if (state === 'shrinking' && builderPressure <= 0.25) {
+      state = 'full';
+      if (roomMem) roomMem.builderPressureState = state;
+    }
     let builderTarget: number;
-    if (builderPressure <= 0.3) {
+    if (state === 'full') {
       builderTarget = dynamicBuilderTarget;
     } else {
-      const t = (builderPressure - 0.3) / 0.7;
+      // shrinking：从 0.35 开始线性收缩，到 1.0 缩至 minCount。
+      const t = Math.min(1, (builderPressure - 0.35) / 0.65);
       builderTarget = Math.round(dynamicBuilderTarget + t * (builderConfig.minCount - dynamicBuilderTarget));
       builderTarget = Math.max(builderTarget, builderConfig.minCount);
     }

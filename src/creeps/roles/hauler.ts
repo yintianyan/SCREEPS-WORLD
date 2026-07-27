@@ -46,7 +46,12 @@ import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 
-/** 从 assignment 指定的 container 限量取能。 */
+/** 从 assignment 指定的 container 限量取能。
+ *
+ * TD-013 修复：增加运行时结构类型检查。
+ * assignment service 已不再将 storage 作为 haul source，但防御性检查仍保留，
+ * 防止未来回退路径 reintroduction 导致 hauler 隐蔽从 storage 取能。
+ */
 function withdrawAssignmentContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:assignment-container",
@@ -54,6 +59,9 @@ function withdrawAssignmentContainer(): ActionCandidate<StructureContainer> {
       if (!ac.assignment?.sourceId) return undefined;
       const obj = getObjectById(ac.assignment.sourceId as unknown as Id<StructureContainer>);
       if (obj === null) return undefined;
+      // 运行时类型守卫：仅允许 StructureContainer，拒绝 storage 等其他结构。
+      // hauler 架构约束：永不从 storage 取能（storage → sink 由 distributor 负责）。
+      if (obj.structureType !== STRUCTURE_CONTAINER) return undefined;
       const container = obj as StructureContainer;
       if (container.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return container;

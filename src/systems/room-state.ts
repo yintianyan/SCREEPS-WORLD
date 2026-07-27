@@ -34,7 +34,7 @@ export const roomStateSystem: System = {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
 
-      // 1. 计算总储备 = energyAvailable + containers + storage + 在途 creep 携带能量。
+      // 1. 计算总储备 = energyAvailable + containers + storage + terminal + 在途 creep 携带能量。
       // 计入 creep 身上能量（P1-5 ①）：hauler 取/送不再改变 reserve，避免物流搬运制造假危机信号。
       let reserve = snapshot.energyAvailable;
       for (const c of snapshot.containers) {
@@ -43,6 +43,7 @@ export const roomStateSystem: System = {
       if (snapshot.storage) {
         reserve += snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY);
       }
+      reserve += snapshot.terminal?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
       reserve += snapshot.creepEnergy ?? 0;
 
       // 2. 统计有效采集者（已分配 source 的 harvester/worker）。
@@ -116,12 +117,13 @@ export const roomStateSystem: System = {
       // 5.5 经济压力梯度信号 (0.0–1.0)。
       // 取双维度最大值（方案 C）：偿付危机（drainScore）与流动性危机（liquidityScore）
       // 任一升高都推高压力，使建造门禁 / P2 缩放对「富得流油却花不出去」也做出反应。
-      // score 0→40 映射 pressure 0.0→0.5（健康→谨慎）
-      // score 40→100 映射 pressure 0.5→1.0（紧张→危机）
+      // score 0→midpoint 映射 pressure 0.0→0.5（健康→谨慎）
+      // score midpoint→midpoint+range 映射 pressure 0.5→1.0（紧张→危机）
+      const { midpoint, range } = CONFIG.economy.economyPressure;
       const score = Math.max(phaseResult.drainScore, phaseResult.liquidityScore);
-      roomMem.economyPressure = score <= 40
-        ? (score / 40) * 0.5
-        : 0.5 + ((score - 40) / 60) * 0.5;
+      roomMem.economyPressure = score <= midpoint
+        ? (score / midpoint) * 0.5
+        : 0.5 + ((score - midpoint) / range) * 0.5;
 
       // 6. Storage 满仓检测 — 超过阈值时标记，供 demand 限采 + 加速消费。
       // 满仓 = 能量在源头被浪费（harvester drop），必须加速升级/建造消化盈余。
@@ -134,12 +136,23 @@ export const roomStateSystem: System = {
         roomMem.storageNearFull = false;
       }
 
-      // 6. 检测控制器降级风险。
+      // 6. 检测控制器降级风险（非对称迟滞带）。
+      // 进入阈值 = controllerDowngradeThreshold (10000)：低于此值进入风险。
+      // 退出阈值 = controllerDowngradeExitThreshold (15000)：高于此值才退出风险。
+      // 利用 roomMem.controllerDowngradeRisk 旧值作为状态记忆，无需额外字段。
       const controller = snapshot.controller;
-      roomMem.controllerDowngradeRisk =
-        controller != null &&
-        controller.my &&
-        controller.ticksToDowngrade < CONFIG.economy.controllerDowngradeThreshold;
+      if (controller != null && controller.my) {
+        const ttd = controller.ticksToDowngrade;
+        if (roomMem.controllerDowngradeRisk) {
+          // 当前已在风险状态：需回升到退出阈值以上才解除
+          roomMem.controllerDowngradeRisk = ttd < CONFIG.economy.controllerDowngradeExitThreshold;
+        } else {
+          // 当前不在风险状态：低于进入阈值才触发
+          roomMem.controllerDowngradeRisk = ttd < CONFIG.economy.controllerDowngradeThreshold;
+        }
+      } else {
+        roomMem.controllerDowngradeRisk = false;
+      }
     }
   },
 };

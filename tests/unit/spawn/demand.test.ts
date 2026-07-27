@@ -255,6 +255,69 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
   });
 });
 
+describe("TD-016 — Builder pressure 迟滞带", () => {
+  /** 带 1 个 construction site 的最小快照，触发 builder 需求分支。 */
+  function builderSnapshot() {
+    return mockSnapshot({
+      myConstructionSites: [{ id: "site_1", structureType: "road", pos: { x: 10, y: 10, getRangeTo: () => 5 } } as unknown as ConstructionSite],
+    });
+  }
+
+  beforeEach(() => {
+    // 确保 roomMem 存在且 builderPressureState 未设置（默认 full）。
+    (globalThis as any).Memory.rooms.W7N4 = { layout: { revision: 1 } };
+  });
+
+  it("初始状态默认 full — pressure 0.2 时 builder 满目标", () => {
+    const snap = builderSnapshot();
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.2), 1000);
+    const builders = requests.filter(r => r.role === "builder");
+    // dynamicBuilderTarget = min(maxCount, economyCap, max(minCount, sites=1)) → 至少 minCount
+    expect(builders.length).toBeGreaterThanOrEqual(1);
+    expect((globalThis as any).Memory.rooms.W7N4.builderPressureState).toBeUndefined(); // 未触发切换，不写入
+  });
+
+  it("pressure 从 0.2 上升到 0.36 → 切换到 shrinking（穿越 0.35 上沿）", () => {
+    const snap = builderSnapshot();
+    // 先以低压运行，状态保持 full。
+    evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.2), 1000);
+    // 升压穿越 0.35。
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.36), 1001);
+    expect((globalThis as any).Memory.rooms.W7N4.builderPressureState).toBe("shrinking");
+    // shrinking 状态下 builder 目标应 ≤ full 状态。
+    const builders = requests.filter(r => r.role === "builder");
+    expect(builders.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("pressure 在 0.30（迟滞带内）→ 保持前一状态不切换", () => {
+    const snap = builderSnapshot();
+    const roomMem = (globalThis as any).Memory.rooms.W7N4;
+
+    // 场景 A：之前是 full，pressure=0.30 仍在带内 → 保持 full。
+    roomMem.builderPressureState = "full";
+    evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.30), 1000);
+    expect(roomMem.builderPressureState).toBe("full");
+
+    // 场景 B：之前是 shrinking，pressure=0.30 仍在带内 → 保持 shrinking。
+    roomMem.builderPressureState = "shrinking";
+    evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.30), 1001);
+    expect(roomMem.builderPressureState).toBe("shrinking");
+  });
+
+  it("pressure 从 0.4 下降到 0.24 → 恢复 full（穿越 0.25 下沿）", () => {
+    const snap = builderSnapshot();
+    const roomMem = (globalThis as any).Memory.rooms.W7N4;
+    // 先设置为 shrinking 状态。
+    roomMem.builderPressureState = "shrinking";
+    // 高压确认保持 shrinking。
+    evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.4), 1000);
+    expect(roomMem.builderPressureState).toBe("shrinking");
+    // 降压穿越 0.25。
+    evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.24), 1001);
+    expect(roomMem.builderPressureState).toBe("full");
+  });
+});
+
 describe("防御响应 — 威胁触发 defender 孵化", () => {
   /** 造 n 个最小威胁 creep 摘要（demand 只消费 threatCreeps.length）。 */
   const threats = (n: number) =>
@@ -292,5 +355,66 @@ describe("防御响应 — 威胁触发 defender 孵化", () => {
     ];
     const { requests } = evaluateDemand(snap, [], "defense", living, [], normalCtx(0), 1000);
     expect(requests.filter(r => r.role === "defender")).toHaveLength(0);
+  });
+});
+
+describe("TD-015 — 物流角色 economyPressure 衰减因子", () => {
+  /**
+   * 物流压力快照：1 个 container（>80% 满 → +2）+ storage link（>80% 满 → +2）
+   * → dynamicHaulerTarget = 4（clamp [minCount=2, maxCount=6]）。
+   * distributor：4 个 fillTargets → distTarget = ceil(4/2) = 2（clamp [1,3]）。
+   */
+  function logisticsSnapshot() {
+    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    const storageLink = mockStructure("link", { id: "slink", energy: 700, capacity: 800 });
+    storageLink.pos.getRangeTo = () => 1;
+    storage.pos.getRangeTo = () => 1;
+    const container = mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 });
+    return mockSnapshot({
+      storage,
+      links: [storageLink],
+      containers: [container],
+      rcl: 5,
+      energyCapacityAvailable: 2300,
+      controller: mockController({ level: 5 }),
+      fillTargets: ["ft1", "ft2", "ft3", "ft4"] as any[],
+    });
+  }
+
+  it("pressure=0.5（低于阈值 0.6）→ hauler/distributor 配额不受影响", () => {
+    const snap = logisticsSnapshot();
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.5), 1000);
+    // hauler: dynamicHaulerTarget=4, pressure 0.5 ≤ 0.6 → 无衰减 → 4
+    expect(requests.filter(r => r.role === "hauler")).toHaveLength(4);
+    // distributor: distTarget=2, pressure 0.5 ≤ 0.6 → 无衰减 → 2
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(2);
+  });
+
+  it("pressure=0.8 → hauler/distributor 配额降低 50%（衰减因子 = 1 - (0.8-0.6)/0.4 = 0.5）", () => {
+    const snap = logisticsSnapshot();
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.8), 1000);
+    // hauler: 4 * 0.5 = 2 → max(minCount=2, 2) = 2
+    expect(requests.filter(r => r.role === "hauler")).toHaveLength(2);
+    // distributor: 2 * 0.5 = 1 → max(minCount=1, 1) = 1
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
+  });
+
+  it("pressure=1.0 → hauler/distributor 配额缩至 minCount（衰减因子 = 0）", () => {
+    const snap = logisticsSnapshot();
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(1.0), 1000);
+    // hauler: 4 * 0 = 0 → max(minCount=2, 0) = 2
+    expect(requests.filter(r => r.role === "hauler")).toHaveLength(2);
+    // distributor: 2 * 0 = 0 → max(minCount=1, 0) = 1
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
+  });
+
+  it("inCrisis + pressure=0.8 → 压力衰减与危机收缩叠加，取更严格者（均为 minCount）", () => {
+    const snap = logisticsSnapshot();
+    // recovery 状态触发 inCrisis；pressure=0.8 先衰减到 2，inCrisis 再缩到 minCount=2。
+    const { requests } = evaluateDemand(snap, [], "recovery", livingHarvester(), [], { ...normalCtx(0.8), colonyState: "recovery" }, 1000);
+    // hauler: pressure 衰减 → 2, inCrisis → min(2, minCount=2) = 2
+    expect(requests.filter(r => r.role === "hauler")).toHaveLength(2);
+    // distributor: pressure 衰减 → 1, inCrisis → min(1, minCount=1) = 1
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
   });
 });

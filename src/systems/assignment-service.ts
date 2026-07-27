@@ -68,8 +68,12 @@ export const assignmentServiceSystem: System = {
       // 整个抢占退化为 no-op（曾因此静默失效）。任务生成后，
       // invalidate 同时清空 task.assignedCreeps 与 creep.memory.assignment，
       // 角色在其后的 runCreeps 阶段重新请求任务，本 tick 即转向 P0 fill/flee。
-      if (shouldPreemptAssignments(emergency, wasEmergency)) {
+      //
+      // TD-018 冷却：传入 lastPreemptTick 与当前 tick，抢占触发后记录 tick，
+      // 防止房间在紧急/正常之间快速交替时每个上升沿都触发 invalidate。
+      if (shouldPreemptAssignments(emergency, wasEmergency, roomMem?.lastPreemptTick, ctx.tick)) {
         invalidateAssignments(pool, snapshot.roomName, 1);
+        if (roomMem) roomMem.lastPreemptTick = ctx.tick;
       }
     }
   },
@@ -224,12 +228,24 @@ function isEmergencyState(snapshot: RoomSnapshot): boolean {
 }
 
 /**
- * 判断是否应触发任务抢占（纯函数，P1-2 边沿触发）。
+ * 判断是否应触发任务抢占（纯函数，P1-2 边沿触发 + TD-018 冷却机制）。
  *
  * 仅在「正常 → 紧急」上升沿返回 true（emergency=true 且 wasEmergency=false）。
  * 持续紧急（true,true）、持续正常（false,false）、紧急缓解（false,true）均返回 false。
  * 这保证一次紧急事件只失效一次 assignment，避免持续期间每 tick 抖动。
+ *
+ * TD-018 冷却：上升沿触发后需距上次抢占至少 20 tick，防止房间在紧急/正常之间
+ * 快速交替时每个上升沿都触发 invalidateAssignments，导致 creep 频繁丢失任务。
+ * 首次抢占（lastPreemptTick 为 undefined 或距今超过 20 tick）不受冷却限制。
  */
-export function shouldPreemptAssignments(emergency: boolean, wasEmergency: boolean): boolean {
-  return emergency && !wasEmergency;
+export function shouldPreemptAssignments(
+  emergency: boolean,
+  wasEmergency: boolean,
+  lastPreemptTick: number | undefined,
+  currentTick: number,
+): boolean {
+  if (!emergency || wasEmergency) return false;
+  // 冷却判断：距上次抢占至少间隔 20 tick
+  if (lastPreemptTick !== undefined && currentTick - lastPreemptTick < 20) return false;
+  return true;
 }

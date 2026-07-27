@@ -586,7 +586,9 @@ describe("Assignment — haul task split (P2-5)", () => {
     expect(haulTasks[0]?.sourceId).toBe("c2");
   });
 
-  it("无 container 有能量时回退到 storage", () => {
+  // TD-013 修复：container 全空 + storage 有能量时，不生成指向 storage 的 haul 任务。
+  // hauler 永不从 storage 取能 — storage → sink 的分发由 distributor 负责。
+  it("无 container 有能量时不生成指向 storage 的 haul 任务（TD-013）", () => {
     const empty = container("c1", 0, 10, 10);
     const storage = {
       id: "store1",
@@ -599,9 +601,15 @@ describe("Assignment — haul task split (P2-5)", () => {
     const tasks = buildRoomTasks(snapshot, [], mockFlags());
     const haulTasks = tasks.filter(t => t.kind === "haul");
 
-    expect(haulTasks).toHaveLength(1);
-    expect(haulTasks[0]?.sourceId).toBe("store1");
-    expect(haulTasks[0]?.maxWorkers).toBe(2);
+    // hauler 架构约束：永不从 storage 取能。container 全空时应等待 harvester 产出。
+    expect(haulTasks).toHaveLength(0);
+  });
+
+  it("无 container 且无 storage 时不生成 haul 任务", () => {
+    const snapshot = mockSnapshot({ containers: [], storage: undefined });
+
+    const tasks = buildRoomTasks(snapshot, [], mockFlags());
+    expect(tasks.filter(t => t.kind === "haul")).toHaveLength(0);
   });
 
   it("container 和 storage 都无能量时不生成 haul 任务", () => {

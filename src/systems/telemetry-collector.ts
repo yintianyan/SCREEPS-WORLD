@@ -216,7 +216,7 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
       rcl?: number;
       hadThreats?: boolean;
       downgradeRisk?: boolean;
-      structures?: { sp: number; tw: number; ct: number };
+      structures?: { sp: number; tw: number; ct: number; st: number };
     }>;
   };
 
@@ -315,12 +315,13 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
     }
     prev.rooms[roomName].downgradeRisk = downgradeRisk;
 
-    // 关键结构被毁检测 — spawn/tower/container 数量减少时记录事件。
-    // structureTypeCode: 0=spawn, 1=tower, 2=container
+    // 关键结构被毁检测 — spawn/tower/container/storage 数量减少时记录事件。
+    // structureTypeCode: 0=spawn, 1=tower, 2=container, 3=storage
     const currStructures = {
       sp: snapshot.spawns.length,
       tw: snapshot.towers.length,
       ct: snapshot.containers.length,
+      st: snapshot.storage ? 1 : 0,
     };
     if (prevRoom.structures) {
       if (currStructures.sp < prevRoom.structures.sp) {
@@ -331,6 +332,9 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
       }
       if (currStructures.ct < prevRoom.structures.ct) {
         pushEventDirect(EventKind.StructureDestroyed, roomName, [2, prevRoom.structures.ct, currStructures.ct]);
+      }
+      if (currStructures.st < prevRoom.structures.st) {
+        pushEventDirect(EventKind.StructureDestroyed, roomName, [3, prevRoom.structures.st, currStructures.st]);
       }
     }
     prev.rooms[roomName].structures = currStructures;
