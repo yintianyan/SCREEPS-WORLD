@@ -3,6 +3,7 @@ import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/cont
 import { findCriticalRepair } from "../creeps/support";
 import { selectTowerTarget, type TowerThreat } from "../domain/defense/tower-target";
 import { assessEngagement, type TowerSummary } from "../domain/defense/tower-engagement";
+import { buildFortificationContext, classifyFortification, type FortificationContext } from "../domain/defense/fortification";
 import { globalCache } from "../kernel/global-cache";
 
 /**
@@ -82,13 +83,15 @@ export const towerDefenseSystem: System = {
         continue;
       }
 
-      // G-DF-08：wall/rampart 目标血量按 RCL 分级；受袭姿态（近期有敌对活动）升档。
+      // G-DF-08：wall/rampart 目标血量按角色分层 + RCL 分级；受袭姿态升档。
       const roomMemForSiege = Memory.rooms[snapshot.roomName];
       const underSiege = roomMemForSiege?.lastHostileAt !== undefined &&
         Game.time - roomMemForSiege.lastHostileAt < CONFIG.defense.siegeMemoryTicks;
-      const wallTarget = getWallTargetHits(snapshot.rcl, underSiege);
+      // 分层分类上下文（与 repairFortifications 同口径）：
+      // 周界全额 / 核心折扣 / container 仅地板 — 塔安全网不为低值盾浪费弹药。
+      const fortCtx = buildFortificationContext(snapshot, roomMemForSiege?.minCut?.positions);
       // 预选 wall/rampart 维护目标（所有 tower 共用，避免重复查找）。
-      let wallRepairTarget = findWallRepairTarget(snapshot, wallTarget);
+      let wallRepairTarget = findWallRepairTarget(snapshot, snapshot.rcl, underSiege, fortCtx);
       // 关键维修目标预计算值，提升到 tower 循环外避免重复调用。
       const repairTarget = snapshot.criticalRepairTarget ?? findCriticalRepair(snapshot);
 
@@ -180,24 +183,28 @@ function tryActivateSafeMode(snapshot: RoomSnapshot): void {
 }
 
 /**
- * 找到需要维修的 wall/rampart（血量低于目标值）。
+ * 找到需要维修的 wall/rampart（血量低于自身档位目标值）。
  * 选择血量最低的优先维修，避免一个 wall 满了其他还没修。
- * 约束 G-DF-08：目标血量按 RCL 分级。
+ * 约束 G-DF-08：目标血量按角色分层（perimeter/core/utility）+ RCL 分级。
  */
 function findWallRepairTarget(
   snapshot: RoomSnapshot,
-  targetHits: number,
+  rcl: number,
+  underSiege: boolean,
+  fortCtx: FortificationContext,
 ): StructureWall | StructureRampart | undefined {
   let best: StructureWall | StructureRampart | undefined;
   let bestHits = Infinity;
   for (const wall of snapshot.walls) {
-    if (wall.hits < targetHits && wall.hits < bestHits) {
+    const target = getWallTargetHits(rcl, underSiege, classifyFortification(wall.pos.x, wall.pos.y, true, fortCtx));
+    if (wall.hits < target && wall.hits < bestHits) {
       bestHits = wall.hits;
       best = wall;
     }
   }
   for (const rampart of snapshot.ramparts) {
-    if (rampart.hits < targetHits && rampart.hits < bestHits) {
+    const target = getWallTargetHits(rcl, underSiege, classifyFortification(rampart.pos.x, rampart.pos.y, false, fortCtx));
+    if (rampart.hits < target && rampart.hits < bestHits) {
       bestHits = rampart.hits;
       best = rampart;
     }

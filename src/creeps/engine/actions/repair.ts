@@ -17,6 +17,7 @@ import type { ActionCandidate } from "../action-types";
 import { runAction } from "./helpers";
 import { findCriticalRepair } from "../../support/targeting";
 import { getObjectById } from "../../support/obj-cache";
+import { buildFortificationContext, classifyFortification } from "../../../domain/defense/fortification";
 
 /** 道路维修阈值 — 血量低于此比例才修（与 builder 维修需求信号共用 CONFIG 口径）。 */
 const ROAD_REPAIR_THRESHOLD: number = CONFIG.construction.roadRepairThreshold;
@@ -102,15 +103,23 @@ export function repairNearbyContainer(): ActionCandidate<StructureContainer> {
 }
 
 /**
- * 修复 wall/rampart 到 RCL 分级目标血量（B3：维修权从塔移交给 creep）。
+ * 修复 wall/rampart 到分层目标血量（B3：维修权从塔移交给 creep）。
  *
  * 老玩家认知：塔修墙是能量黑洞（10 能量/次 + 距离衰减 + 与开火争弹药），
  * creep 维修是 1 energy/100 hits/WORK —— 日常工事维护必须由 builder 承担。
  *
+ * 分层目标（消除统一目标的维护经济黑洞）：
+ *   perimeter（min-cut 割集 / wall / 扇区封锁）→ RCL 全额；
+ *   core（结构叠盾）→ 全额 × coreRampartFactor；
+ *   utility（container 叠盾）→ 仅新生急救地板。
+ *
  * 门禁（全部满足才启用，resolve 内判断）：
  *   - tier 非 recovery/conserve（低 CPU 不修墙）；
  *   - 无威胁 creep（入侵期间修墙是白送能量，优先开火/保命）；
- *   - 有 storage 且能量 ≥ sustainedStorage（真盈余才修，早期不堆 rampart）。
+ *   - 盈余门槛按姿态分档：和平期需 storage ≥ sprintStorage（50k）— 墙是死资本，
+ *     RCL 是复利，储备不足时能量优先灌 controller（10k-50k 区间由
+ *     repairFreshRampart 维持地板）；受袭姿态放宽到 sustainedStorage（10k）—
+ *     有真实威胁时墙体优先级高于发展。
  *   - 无 storage（RCL3-4）时放宽门禁 — 靠 work chain 优先级保证不抢生存行为。
  */
 export function repairFortifications(): ActionCandidate<Fortification> {
@@ -119,28 +128,44 @@ export function repairFortifications(): ActionCandidate<Fortification> {
     resolve: (ac) => {
       if (ac.budget.tier === "recovery" || ac.budget.tier === "conserve") return undefined;
       if (ac.snapshot.threatCreeps.length > 0) return undefined;
+
+      // 受袭姿态：近期有敌对活动 → 墙体目标升档 + 盈余门槛放宽。
+      const roomMemory = Memory.rooms[ac.snapshot.roomName];
+      const lastHostileAt = roomMemory?.lastHostileAt;
+      const underSiege = lastHostileAt !== undefined &&
+        Game.time - lastHostileAt < CONFIG.defense.siegeMemoryTicks;
+
       const storage = ac.snapshot.storage;
       if (storage) {
-        // 有 storage — 检查真盈余。
-        if (storage.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.economy.upgrade.sustainedStorage) {
+        // 和平期全额灌墙要求真盈余（sprintStorage）；受袭期放宽（sustainedStorage）。
+        const surplusGate = underSiege
+          ? CONFIG.economy.upgrade.sustainedStorage
+          : CONFIG.economy.upgrade.sprintStorage;
+        if (storage.store.getUsedCapacity(RESOURCE_ENERGY) < surplusGate) {
           return undefined;
         }
       }
       // 无 storage（RCL1-4）— 放宽门禁，靠 work chain 优先级保证不抢生存行为。
 
-      // 受袭姿态：近期有敌对活动 → 墙体目标升档（防御深度用真实威胁校准）。
-      const lastHostileAt = Memory.rooms[ac.snapshot.roomName]?.lastHostileAt;
-      const underSiege = lastHostileAt !== undefined &&
-        Game.time - lastHostileAt < CONFIG.defense.siegeMemoryTicks;
-      const targetHits = getWallTargetHits(ac.snapshot.rcl, underSiege);
+      // 分层分类上下文：min-cut 割集来自 Memory 持久化数据。
+      const fortCtx = buildFortificationContext(
+        ac.snapshot,
+        roomMemory?.minCut?.positions,
+      );
+      const targetOf = (f: Fortification): number =>
+        getWallTargetHits(
+          ac.snapshot.rcl,
+          underSiege,
+          classifyFortification(f.pos.x, f.pos.y, f.structureType === STRUCTURE_WALL, fortCtx),
+        );
 
-      // 优先复用持久化目标 — 验证它仍是墙/城防且仍需修复。
+      // 优先复用持久化目标 — 验证它仍是墙/城防且仍低于自身档位目标。
       if (ac.creep.memory.repairTargetId) {
         const cached = getObjectById(ac.creep.memory.repairTargetId as Id<Fortification>);
         if (cached) {
           if (
             (cached.structureType === STRUCTURE_WALL || cached.structureType === STRUCTURE_RAMPART)
-            && cached.hits < targetHits
+            && cached.hits < targetOf(cached)
           ) {
             return cached;
           }
@@ -148,7 +173,7 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       }
 
       // 无有效缓存目标 — 重新扫描最低血量的墙/城防。
-      const target = findFortificationTarget(ac.snapshot, targetHits);
+      const target = findFortificationTarget(ac.snapshot, targetOf);
       if (target) {
         ac.creep.memory.repairTargetId = target.id as Id<Fortification>;
       }
@@ -163,20 +188,20 @@ export function repairFortifications(): ActionCandidate<Fortification> {
 }
 
 /**
- * 查找血量最低且低于 RCL 分级目标血量的 wall/rampart。
+ * 查找血量最低且低于自身档位目标血量的 wall/rampart。
  *
  * P2 修复：rampart 优先于 wall — rampart 被摧毁会暴露同格所有结构（spawn/tower/extension），
  * wall 被摧毁只产生缺口。先扫 rampart，只有当所有 rampart 都达标时才修 wall。
  */
 function findFortificationTarget(
   snapshot: RoomSnapshot,
-  targetHits: number,
+  targetOf: (f: Fortification) => number,
 ): Fortification | undefined {
   // 先扫 rampart — 被摧毁后果更严重（同格结构全裸）。
   let best: Fortification | undefined;
   let bestHits = Infinity;
   for (const rampart of snapshot.ramparts) {
-    if (rampart.hits < targetHits && rampart.hits < bestHits) {
+    if (rampart.hits < targetOf(rampart) && rampart.hits < bestHits) {
       bestHits = rampart.hits;
       best = rampart;
     }
@@ -184,7 +209,7 @@ function findFortificationTarget(
   // 所有 rampart 都达标后才扫 wall。
   if (!best) {
     for (const wall of snapshot.walls) {
-      if (wall.hits < targetHits && wall.hits < bestHits) {
+      if (wall.hits < targetOf(wall) && wall.hits < bestHits) {
         bestHits = wall.hits;
         best = wall;
       }

@@ -422,13 +422,16 @@ describe("builder — flee", () => {
 describe("builder — B3 防御工事维修（维修权从塔移交 creep）", () => {
   it("盈余门禁满足时修复血量最低的 rampart", () => {
     const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
-    const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
+    // 独立坐标（不与 storage 同格）→ 无 min-cut 情报时按 perimeter 全额维护。
+    rampart.pos.x = 40; rampart.pos.y = 40;
+    // 和平期全额灌墙门槛为 sprintStorage(50k)。
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = mockSnapshot({
       myConstructionSites: [],
       fillTargets: [],
       ramparts: [rampart],
       storage,
-      rcl: 3, // wallTargetHits rcl3_4 = 100K，rampart 50K 低于目标
+      rcl: 3, // wallTargetHits rcl3_4 = 100K，rampart 50K 低于 perimeter 目标
       energyAvailable: 100,
     });
     const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
@@ -523,7 +526,8 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
   it("rampart 优先于 wall — wall 血量更低仍修 rampart（P2 修复）", () => {
     const wall = mockStructure("wall", { id: "w1", hits: 500, hitsMax: 10000 }); // 5%
     const rampart = mockStructure("rampart", { id: "r1", hits: 5000, hitsMax: 300000 }); // ~1.7% 但高于 wall
-    const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
+    // 和平期全额灌墙门槛已提升至 sprintStorage(50k)。
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = mockSnapshot({
       myConstructionSites: [],
       fillTargets: [],
@@ -545,7 +549,8 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
   it("所有 rampart 达标后修 wall（rampart 优先级的回退路径）", () => {
     const wall = mockStructure("wall", { id: "w1", hits: 500, hitsMax: 10000 });
     const rampart = mockStructure("rampart", { id: "r1", hits: 150000, hitsMax: 300000 }); // > 100K target
-    const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
+    // 和平期全额灌墙门槛已提升至 sprintStorage(50k)。
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = mockSnapshot({
       myConstructionSites: [],
       fillTargets: [],
@@ -658,5 +663,68 @@ describe("builder — 新生 rampart 急救（防「建了就塌」死循环）"
 
     expect(creep.repair).toHaveBeenCalledWith(r2);
     expect(creep.repair).not.toHaveBeenCalledWith(r1);
+  });
+});
+
+describe("builder — 防御工事分层维护", () => {
+  it("和平期 storage 低于 sprintStorage(50k)：全额灌墙停摆（地板由急救链兜底）", () => {
+    // rampart 50k 已过急救线但低于全额目标 — 和平期储备不足不灌墙，能量留给 RCL。
+    const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
+    const storage = mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
+    const snap = mockSnapshot({ myConstructionSites: [], fillTargets: [], ramparts: [rampart], storage });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+
+    builderRole.run(creep, mockContext(snap));
+
+    expect(creep.repair).not.toHaveBeenCalled();
+  });
+
+  it("受袭姿态：盈余门槛放宽至 sustainedStorage(10k)，立即灌墙", () => {
+    const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
+    const storage = mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
+    const snap = mockSnapshot({ myConstructionSites: [], fillTargets: [], ramparts: [rampart], storage });
+    // 近期有敌对活动 → underSiege。
+    (globalThis as any).Memory.rooms.W7N4 = { lastHostileAt: 900 };
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+
+    builderRole.run(creep, mockContext(snap));
+
+    expect(creep.repair).toHaveBeenCalledWith(rampart);
+  });
+
+  it("container 叠盾（utility 档）只保地板：过线后不再灌注", () => {
+    // rampart 与 container 同格 → utility 档，目标 = 急救地板 10k；50k 已远超 → 不修。
+    const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
+    container.pos.x = 30; container.pos.y = 30;
+    const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
+    rampart.pos.x = 30; rampart.pos.y = 30;
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
+    const snap = mockSnapshot({
+      myConstructionSites: [], fillTargets: [],
+      ramparts: [rampart], containers: [container], storage,
+    });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+
+    builderRole.run(creep, mockContext(snap));
+
+    expect(creep.repair).not.toHaveBeenCalled();
+  });
+
+  it("core 档（结构叠盾）按折扣目标维护：低于 30% 全额时修，高于则达标", () => {
+    // rampart 与 storage 同格 → core 档。RCL3 全额 100k × 0.3 = 30k 目标。
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
+    storage.pos.x = 20; storage.pos.y = 20;
+    const belowCore = mockStructure("rampart", { id: "r1", hits: 20000, hitsMax: 300000 });
+    belowCore.pos.x = 20; belowCore.pos.y = 20;
+    const snap = mockSnapshot({
+      myConstructionSites: [], fillTargets: [],
+      ramparts: [belowCore], storage, rcl: 3,
+    });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+
+    builderRole.run(creep, mockContext(snap));
+
+    // 20k < 30k core 目标 → 修。
+    expect(creep.repair).toHaveBeenCalledWith(belowCore);
   });
 });

@@ -11,6 +11,16 @@ export type ColonyState = "bootstrap" | "recovery" | "normal" | "defense";
 /** 所有角色共享的 creep 行为模式。 */
 export type CreepMode = "acquire" | "work" | "idle" | "flee";
 
+/**
+ * 防御工事角色分层 — 决定 wall/rampart 的维护目标档位。
+ * perimeter: min-cut 割集 / 出口封锁线 — 敌人必啃的门，全额目标；
+ * core:      核心结构叠盾（spawn/extension/storage/tower/link）— 只需撑过
+ *            「周界已破 → 塔与 defender 处理」的窗口，全额的一个折扣档；
+ * utility:   低值资产叠盾（container 等）— 保护对象本身价值低于全额维护成本，
+ *            仅维持新生急救地板。
+ */
+export type FortificationRole = "perimeter" | "core" | "utility";
+
 /** assignment-service 可分发的任务类型。 */
 export type TaskKind =
   | "harvest"

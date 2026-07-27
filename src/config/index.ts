@@ -14,17 +14,29 @@ export function getSourceTargetWorkParts(rcl: number): number {
  * 根据 RCL 返回 wall/rampart 的目标维护血量（约束 G-DF-08）。
  * RCL3-4: 100K / RCL5-6: 1M / RCL7-8: 10M。
  */
-export function getWallTargetHits(rcl: number, underSiege = false): number {
+export function getWallTargetHits(
+  rcl: number,
+  underSiege = false,
+  role: import("../kernel/contracts").FortificationRole = "perimeter",
+): number {
+  // utility（container 等低值资产叠盾）：保护对象价值低于全额维护成本，
+  // 只维持新生急救地板 — 受袭也不升档（该格塌了损失有限，能量留给周界）。
+  if (role === "utility") return CONFIG.defense.rampartBootstrapHits;
   const base = rcl >= 7
     ? CONFIG.defense.wallTargetHits.rcl7_8
     : rcl >= 5
       ? CONFIG.defense.wallTargetHits.rcl5_6
       : CONFIG.defense.wallTargetHits.rcl3_4;
-  if (!underSiege) return base;
+  // core（结构叠盾）：只需撑过「周界已破 → 塔/defender 处理」的窗口，
+  // 全额目标的折扣档 — 消除内圈盾与周界同价维护的经济黑洞。
+  const scaled = role === "core"
+    ? Math.round(base * CONFIG.defense.coreRampartFactor)
+    : base;
+  if (!underSiege) return scaled;
   // 受袭姿态：近期有真实敌对活动时抬高目标 — 防御深度用实际威胁校准，
   // 和平期不为假想敌过度投资墙体（修墙能量 = 少升的 RCL）。
   // 官方墙体血量上限 300M，封顶防溢出。
-  return Math.min(base * CONFIG.defense.siegeWallMultiplier, 300_000_000);
+  return Math.min(scaled * CONFIG.defense.siegeWallMultiplier, 300_000_000);
 }
 
 export const CONFIG = {
@@ -318,6 +330,11 @@ export const CONFIG = {
     siegeMemoryTicks: 10000,
     /** 受袭姿态下 wall/rampart 目标血量的放大倍数。 */
     siegeWallMultiplier: 5,
+    /** core 档（核心结构叠盾）目标血量相对周界全额的折扣系数。
+     * 内圈盾只需撑过「周界已破 → 塔/defender 接战」的窗口，不承担第一道门的
+     * 消耗职责。0.3 在 RCL5-6 = 30 万（塔火力下足够拖垮一支拆迁队），
+     * 却把 ~40 个 extension 叠盾的灌注成本砍掉 70% — 释放的能量是 RCL 复利。 */
+    coreRampartFactor: 0.3,
   },
 
   roles: {
