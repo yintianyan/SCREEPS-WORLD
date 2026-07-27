@@ -22,6 +22,7 @@
 
 const fs = require("fs");
 const path = require("path");
+require("./load-env"); // 加载 tools/.env（README 指引的凭据位置，原先从未被读取）
 const { ScreepsAPI } = require("screeps-api");
 
 // ─── Configuration ────────────────────────────────────────────
@@ -50,10 +51,13 @@ function buildConfig() {
 
 // ─── Helpers ────────────────────────────────────────────────────
 
+/** 官服 raw API 需要显式 shard；私服传 undefined（单 shard）。 */
+const SHARD = process.env.SCREEPS_HOST ? undefined : (process.env.SCREEPS_SHARD || "shard3");
+
 /** Fetch a RawMemory segment by ID. Returns parsed JSON or null. */
 async function fetchSegment(api, segmentId) {
   try {
-    const resp = await api.raw.user.memory.segment.get(segmentId);
+    const resp = await api.raw.user.memory.segment.get(segmentId, SHARD);
     const raw = resp.data ?? resp;
     if (!raw) return null;
 
@@ -80,13 +84,18 @@ async function fetchSegment(api, segmentId) {
 /** Fetch Memory at a specific path (e.g., kernel.stats). */
 async function fetchMemoryPath(api, memPath) {
   try {
-    const resp = await api.raw.user.memory.get(memPath);
+    const resp = await api.raw.user.memory.get(memPath, SHARD);
     const data = resp.data ?? resp;
     if (!data) return null;
 
-    // Memory API returns { data: base64-encoded-string, ok: 1 }
+    // Memory API returns { data: "gz:<base64-gzip>" } on official server.
     let content = typeof data === "string" ? data : (data.data ?? data);
-    if (typeof content === "string" && /^[A-Za-z0-9+/]+=*$/.test(content)) {
+    // 已是解析好的对象（部分 API 版本直接返回 JSON）— 直接使用。
+    if (typeof content === "object" && content !== null) return content;
+    if (typeof content === "string" && content.startsWith("gz:")) {
+      const zlib = require("zlib");
+      content = zlib.gunzipSync(Buffer.from(content.slice(3), "base64")).toString("utf8");
+    } else if (typeof content === "string" && /^[A-Za-z0-9+/]+=*$/.test(content)) {
       try {
         content = Buffer.from(content, "base64").toString("utf8");
       } catch {

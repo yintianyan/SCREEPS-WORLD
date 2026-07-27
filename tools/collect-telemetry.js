@@ -20,6 +20,7 @@
 
 const fs = require("fs");
 const path = require("path");
+require("./load-env"); // 加载 tools/.env（README 指引的凭据位置，原先从未被读取）
 const { ScreepsAPI } = require("screeps-api");
 
 // ─── Configuration ────────────────────────────────────────────
