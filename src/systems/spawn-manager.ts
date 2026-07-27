@@ -4,7 +4,7 @@ import { getRoleBounds } from "../config/tuned";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { evaluateDemand, ROLE_REQUIRED_PARTS, type CreepSummary, type SpawningSummary, type RoomDemandContext } from "../domain/spawn/demand";
 import type { ColonyState } from "../kernel/contracts";
-import { cleanQueue, sortQueue, submitRequest } from "../domain/spawn/queue";
+import { cleanQueue, removeRequestsByRole, sortQueue, submitRequest } from "../domain/spawn/queue";
 import { selectRecycleCandidates } from "../domain/spawn/recycle";
 import { moveToTarget } from "../creeps/movement";
 
@@ -49,8 +49,21 @@ export const spawnManagerSystem: System = {
       //    导致 harvesterCount > 0 → P0 worker 恢复请求不创建 → 死锁。
       cleanQueue(queue, ctx.tick, CONFIG.spawn.maxRetries);
 
-      // 2. 从 Game/Memory 收集数据，调用纯函数评估需求。
+      // 1.5 请求撤销通道：需求前提消失时立即出队，不等 TTL（幽灵需求回收）。
+      //     trySpawn 消费队列时不复核当前世界状态 — 按旧状态入队的请求
+      //     在 TTL 窗口（最长 1000 tick）内仍会被孵化，浪费能量。
       const colonyState: ColonyState = roomMem.colonyState ?? "normal";
+      //     defender：威胁清除后不再需要（存量 defender 自然到期，见 demand 注释）。
+      if (snapshot.threatCreeps.length === 0) {
+        removeRequestsByRole(queue, "defender", snapshot.roomName);
+      }
+      //     upgrader：非 normal 且无降级风险时 demand 不再生成（allowUpgrader 门禁），
+      //     与之对称地撤销残留请求，避免 recovery 期间孵出发展角色加剧赤字。
+      if (colonyState !== "normal" && roomMem.controllerDowngradeRisk !== true) {
+        removeRequestsByRole(queue, "upgrader", snapshot.roomName);
+      }
+
+      // 2. 从 Game/Memory 收集数据，调用纯函数评估需求。
       const roomCtx: RoomDemandContext = {
         colonyState,
         controllerDowngradeRisk: roomMem.controllerDowngradeRisk === true,

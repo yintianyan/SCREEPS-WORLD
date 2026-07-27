@@ -112,6 +112,8 @@ declare global {
       drainScore: number;
       /** 流动性危机分数 (0-100)，方案 C：检测能量冻在 container 的物流死锁。 */
       liquidityScore: number;
+      /** 危机带（crisis/recovery）驻留评估次数（v14+，最短驻留防极限环）。 */
+      bandTicks?: number;
       harvesterCount: number;
       sourceCount: number;
       rcl: number;

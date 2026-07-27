@@ -72,13 +72,17 @@ export class Kernel {
     // 1. 预算 — 根据 bucket 带滞回地确定 CPU 档位。
     const budget = createBudget();
 
-    // 2. Memory — 迁移、清理、默认值。关键步骤：永不冷却。
-    safeRun("memory", () => maintainMemory(), true);
-
-    // 2.5 Segment — 声明本 tick 需要激活的 RawMemory segment。
+    // 2. Segment — 声明本 tick 需要激活的 RawMemory segment。
+    //    必须在 maintainMemory 之前：迁移（如 v4）会调用 readLayoutSegment，
+    //    而 segmentUnavailable 守卫依赖 requestSegments 写入的 requestedAt 判断
+    //    「reset 首 tick segment 未加载」。若迁移先执行，守卫失效，
+    //    空结构可能被缓存并在 flush 时整体覆盖 segment 历史数据。
     safeRun("segments-request", () => requestSegments(), true);
 
-    // 3. 遥测 — 初始化单 tick 计数器。
+    // 3. Memory — 迁移、清理、默认值。关键步骤：永不冷却。
+    safeRun("memory", () => maintainMemory(), true);
+
+    // 3.5 遥测 — 初始化单 tick 计数器。
     initTelemetry(Game.time);
 
     // 4. 构建上下文。

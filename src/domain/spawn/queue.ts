@@ -26,6 +26,26 @@ export function removeRequest(queue: SpawnRequest[], key: string): void {
   if (idx >= 0) queue.splice(idx, 1);
 }
 
+/**
+ * 撤销指定房间内某角色的所有待处理请求，返回移除数量。
+ *
+ * 请求撤销通道：队列请求的常规出队路径只有孵化成功 / TTL 过期 / 重试隔离，
+ * 需求前提消失（如威胁清除后的 defender、状态翻转后的 upgrader）时，
+ * 残留请求会在 TTL 窗口（最长 1000 tick）内继续被孵化 — 幽灵需求浪费能量。
+ * 调用方在每 tick 需求评估前按当前世界状态主动撤销。
+ */
+export function removeRequestsByRole(queue: SpawnRequest[], role: string, home: string): number {
+  let removed = 0;
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const req = queue[i];
+    if (req && req.role === role && req.home === home) {
+      queue.splice(i, 1);
+      removed++;
+    }
+  }
+  return removed;
+}
+
 /** 按优先级升序排序（P0 在前），有 replaceBy 的替换请求优先，然后按 createdAt 升序排序。 */
 export function sortQueue(queue: SpawnRequest[]): SpawnRequest[] {
   return queue.sort((a, b) => {

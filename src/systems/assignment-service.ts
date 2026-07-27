@@ -42,7 +42,6 @@ export const assignmentServiceSystem: System = {
     for (const snapshot of ctx.snapshots()) {
       // 紧急抢占（plan §5.7.2 规则 5）：能量低于 fill 阈值或有敌对单位时，
       // 释放 priority >= 1 的普通任务，强制 creep 重新请求 P0 fill 或进入 flee。
-      // 必须在 generateRoomTasks 之前执行，确保本 tick 任务列表反映抢占后状态。
       //
       // P1-2 边沿触发：仅在「正常 → 紧急」上升沿失效一次。持续紧急期间不重复失效——
       // 旧实现每 tick 清空所有 assignment 并写 memory.assignment=undefined，
@@ -52,10 +51,6 @@ export const assignmentServiceSystem: System = {
       const emergency = isEmergencyState(snapshot);
       const wasEmergency = roomMem?.wasEmergency === true;
       if (roomMem) roomMem.wasEmergency = emergency;
-
-      if (shouldPreemptAssignments(emergency, wasEmergency)) {
-        invalidateAssignments(pool, snapshot.roomName, 1);
-      }
 
       // Storage 优先：RCL4+ 无 storage 且有 storage site 时，强制释放 builder 的非 storage assignment。
       // 根因：lease 机制（50 tick）让 builder 保持旧的 extension assignment 不切换，
@@ -67,6 +62,15 @@ export const assignmentServiceSystem: System = {
       }
 
       generateRoomTasks(pool, snapshot, ctx, allCreepRefs);
+
+      // 抢占必须在 generateRoomTasks 之后执行 — TaskPool 每 tick 重建为空，
+      // 任务写入前调用 invalidate 只会读到空列表、返回空 creep 名单，
+      // 整个抢占退化为 no-op（曾因此静默失效）。任务生成后，
+      // invalidate 同时清空 task.assignedCreeps 与 creep.memory.assignment，
+      // 角色在其后的 runCreeps 阶段重新请求任务，本 tick 即转向 P0 fill/flee。
+      if (shouldPreemptAssignments(emergency, wasEmergency)) {
+        invalidateAssignments(pool, snapshot.roomName, 1);
+      }
     }
   },
 };

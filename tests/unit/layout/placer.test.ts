@@ -15,7 +15,7 @@ describe("constraint-placer — placeStructures", () => {
   it("RCL2：放置 5 个 extension", () => {
     const field = computeDistanceField(noWalls);
     const occupied = new Set<number>();
-    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 2, occupied);
+    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 2, occupied, new Map());
 
     const extensions = result.filter(p => p.structureType === STRUCTURE_EXTENSION);
     expect(extensions.length).toBe(5);
@@ -28,7 +28,7 @@ describe("constraint-placer — placeStructures", () => {
 
   it("RCL4：累计 20 extension + 1 storage + 1 tower", () => {
     const field = computeDistanceField(noWalls);
-    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 4, new Set());
+    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 4, new Set(), new Map());
 
     const extensions = result.filter(p => p.structureType === STRUCTURE_EXTENSION);
     const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
@@ -44,7 +44,7 @@ describe("constraint-placer — placeStructures", () => {
     // source link 或 2 个 storage link，link 网络失效。
     // 所有 link 由 task-factory 的 create*LinkTask 按角色优先级放置。
     const field = computeDistanceField(noWalls);
-    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set());
+    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set(), new Map());
 
     const count = (type: string) => result.filter(p => p.structureType === type).length;
     expect(count(STRUCTURE_EXTENSION)).toBe(60);
@@ -59,7 +59,7 @@ describe("constraint-placer — placeStructures", () => {
 
   it("无重叠：所有位置唯一", () => {
     const field = computeDistanceField(noWalls);
-    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set());
+    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set(), new Map());
 
     const positions = new Set<number>();
     for (const p of result) {
@@ -72,7 +72,7 @@ describe("constraint-placer — placeStructures", () => {
   it("偶校验：所有结构在偶校验格（dx+dy 偶数）", () => {
     const field = computeDistanceField(noWalls);
     const anchor = { x: 25, y: 25 };
-    const result = placeStructures(anchor, field, noWalls, 8, new Set());
+    const result = placeStructures(anchor, field, noWalls, 8, new Set(), new Map());
 
     for (const p of result) {
       const dx = p.pos.x - anchor.x;
@@ -83,7 +83,7 @@ describe("constraint-placer — placeStructures", () => {
 
   it("边界内：所有结构在 [2,47] 范围", () => {
     const field = computeDistanceField(noWalls);
-    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set());
+    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set(), new Map());
 
     for (const p of result) {
       expect(p.pos.x).toBeGreaterThanOrEqual(2);
@@ -102,7 +102,7 @@ describe("constraint-placer — placeStructures", () => {
         preOccupied.add(packPos(25 + dx, 25 + dy));
       }
     }
-    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 4, preOccupied);
+    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 4, preOccupied, new Map());
 
     for (const p of result) {
       expect(preOccupied.has(packPos(p.pos.x, p.pos.y))).toBe(false);
@@ -111,7 +111,7 @@ describe("constraint-placer — placeStructures", () => {
 
   it("不密封：每个障碍结构至少有 1 个正交可站邻居", () => {
     const field = computeDistanceField(noWalls);
-    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set());
+    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set(), new Map());
 
     // 构建最终占用集
     const occupied = new Set<number>();
@@ -136,7 +136,7 @@ describe("constraint-placer — placeStructures", () => {
     const wallTerrain = centerBlock(25, 25, 2);
     const field = computeDistanceField(wallTerrain);
     // 锚点不在墙上
-    const result = placeStructures({ x: 25, y: 20 }, field, wallTerrain, 4, new Set());
+    const result = placeStructures({ x: 25, y: 20 }, field, wallTerrain, 4, new Set(), new Map());
 
     for (const p of result) {
       expect(wallTerrain(p.pos.x, p.pos.y)).toBe(false);
@@ -145,7 +145,7 @@ describe("constraint-placer — placeStructures", () => {
 
   it("Lab 集群：相互 Chebyshev <= 2", () => {
     const field = computeDistanceField(noWalls);
-    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 6, new Set());
+    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 6, new Set(), new Map());
 
     const labs = result.filter(p => p.structureType === STRUCTURE_LAB);
     expect(labs.length).toBe(3);
@@ -162,7 +162,7 @@ describe("constraint-placer — placeStructures", () => {
 
   it("key 唯一", () => {
     const field = computeDistanceField(noWalls);
-    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set());
+    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set(), new Map());
 
     const keys = new Set<string>();
     for (const p of result) {
@@ -175,7 +175,7 @@ describe("constraint-placer — placeStructures", () => {
 describe("constraint-placer — placementsToCandidates", () => {
   it("转换格式正确", () => {
     const field = computeDistanceField(noWalls);
-    const placements = placeStructures({ x: 25, y: 25 }, field, noWalls, 2, new Set());
+    const placements = placeStructures({ x: 25, y: 25 }, field, noWalls, 2, new Set(), new Map());
     const candidates = placementsToCandidates(placements, "W1N1");
 
     expect(candidates.length).toBe(placements.length);
@@ -192,7 +192,7 @@ describe("constraint-placer — 极端地形", () => {
     // 只有 y=23..27 开放，其余全墙
     const corridor = (_x: number, y: number): boolean => y < 23 || y > 27;
     const field = computeDistanceField(corridor);
-    const result = placeStructures({ x: 25, y: 25 }, field, corridor, 2, new Set());
+    const result = placeStructures({ x: 25, y: 25 }, field, corridor, 2, new Set(), new Map());
 
     // 走廊 5 格宽，偶校验格有限，但至少能放几个 extension
     const extensions = result.filter(p => p.structureType === STRUCTURE_EXTENSION);
@@ -206,7 +206,7 @@ describe("constraint-placer — 极端地形", () => {
 
   it("锚点偏角（8,8）：结构不越界", () => {
     const field = computeDistanceField(noWalls);
-    const result = placeStructures({ x: 8, y: 8 }, field, noWalls, 4, new Set());
+    const result = placeStructures({ x: 8, y: 8 }, field, noWalls, 4, new Set(), new Map());
 
     for (const p of result) {
       expect(p.pos.x).toBeGreaterThanOrEqual(2);

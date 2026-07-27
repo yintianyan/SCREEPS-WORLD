@@ -111,6 +111,15 @@ function segmentUnavailable(segmentId: number): boolean {
   );
 }
 
+/**
+ * layout segment 本 tick 是否可安全读写 — 供依赖 segment 的迁移做就绪门禁。
+ * reset 首 tick segment 未加载时返回 false，迁移链应在此中断、下 tick 重试，
+ * 否则迁移数据会被写进 readLayoutSegment 返回的临时空结构后随源字段删除而丢失。
+ */
+export function layoutSegmentReady(): boolean {
+  return !segmentUnavailable(SEGMENT_LAYOUT);
+}
+
 // ─── 公共 API ───────────────────────────────────────────────
 
 /**

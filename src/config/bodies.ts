@@ -39,6 +39,10 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
       parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"],
       minCapacity: 600,
     },
+    // 300–599 补档：RCL2（容量 550）正是流动性陷阱高发期，
+    // 卡在 3C 档只有 150 运力是搬运短板 — 断档会放大 colonyState 振荡。
+    { parts: ["carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move"], minCapacity: 500 },
+    { parts: ["carry", "carry", "carry", "carry", "move", "move", "move", "move"], minCapacity: 400 },
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
@@ -49,6 +53,8 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
       parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"],
       minCapacity: 600,
     },
+    { parts: ["carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move"], minCapacity: 500 },
+    { parts: ["carry", "carry", "carry", "carry", "move", "move", "move", "move"], minCapacity: 400 },
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],

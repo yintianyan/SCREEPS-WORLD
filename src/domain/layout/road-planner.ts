@@ -1,6 +1,7 @@
 import type { Blueprint } from "./types";
 import { packPos } from "./types";
 import type { RoomSnapshot } from "../../kernel/contracts";
+import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
 import { createCoreRoadTasks, candidateToBuildTask } from "./task-factory";
 import { evaluateRoadCandidates } from "./road-policy";
@@ -87,11 +88,14 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
     const currentTraffic = g.roomTraffic?.[snapshot.roomName];
     const prevTraffic = g.prevRoomTraffic?.[snapshot.roomName];
 
+    // 显式传入 CONFIG.layout.road — 不传则 road-policy 内置默认生效，
+    // config 沦为无人消费的死配置（调参静默不生效）。
     const roadCandidates = evaluateRoadCandidates(
       snapshot.roomName,
       snapshot,
       currentTraffic,
       prevTraffic,
+      CONFIG.layout.road,
     );
 
     for (const candidate of roadCandidates) {

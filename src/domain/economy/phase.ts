@@ -51,6 +51,11 @@ export interface PhaseState {
    * 与 drainScore 独立：W37S58 的 drainScore=0（总储备还在涨）但 liquidityScore 爆表。
    */
   liquidityScore: number;
+  /**
+   * 危机带（crisis/recovery）内已持续的评估次数 — 最短驻留时间用。
+   * 进带时从 1 起计，出带归 0。旧 Memory 无此字段时按 0 处理（v14 迁移回填）。
+   */
+  bandTicks?: number;
 }
 
 /** evaluateColonyPhase 的返回值：新状态 + 本次观测信号（供记录/调参）。 */
@@ -84,6 +89,24 @@ export interface PhaseOptions {
   liquidityStep: number;
   /** 流动性恢复时每次评估的分数减少量（> liquidityStep，非对称迟滞防振荡）。 */
   liquidityRecoveryStep: number;
+  /**
+   * 偿付赤字计分门槛：仅当 spendableRatio 低于此值时，储备下降才累加 drainScore。
+   * spawn 口袋健康（extension 基本满员）时的储备下降是升级/建造的主动投资，
+   * 不是生产崩溃 — 把两者同等计为赤字正是 TD-003 极限环的根因之一：
+   * normal 恢复支出 → 记赤字 → 入 recovery → 收缩支出 → 记盈余 → 秒退 → 循环。
+   * 真正的生产崩溃（采集断档）最终必然拖垮 spawn 口袋，届时计分照常启动；
+   * 采集者直接死绝的场景由 understaffed → bootstrap 兜底，不依赖本分数。
+   */
+  drainSpendableFloor: number;
+  /**
+   * 危机带最短驻留评估次数：进入 crisis/recovery 后至少停留此久才能回 normal。
+   * 打破极限环的第二道闸：recovery 收缩支出后分数快速清零（recoveryStep=40，
+   * 最快 4 次评估从 150 → 0），若立即回 normal 则支出立刻恢复、赤字重新累积。
+   * 驻留窗口强制殖民地在 recovery 中攒出能量缓冲，回 normal 后有垫层可烧。
+   * 副作用：真危机的恢复期至少 minBandTicks tick — 这是刻意的保守取舍。
+   * 同时它保证 crisis 退出必经 recovery 带，不再出现 30→0 直切 normal。
+   */
+  minBandTicks: number;
 }
 
 export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
@@ -102,6 +125,12 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   // 非对称步长：陷阱累积慢（15/tick），恢复快（50/tick）——交替场景下净 -35/tick。
   liquidityStep: 15,
   liquidityRecoveryStep: 50,
+  // 主动消费豁免：spendableRatio ≥ 0.5（spawn 口袋过半）时储备下降不计赤字。
+  // 0.5 给 spawn 补能延迟留余量：孵化脉冲后 hauler 回填需数 tick，健康房常态在 0.5 以上。
+  drainSpendableFloor: 0.5,
+  // 最短驻留 100 次评估（room-state 每 tick 评估 → 100 tick）：
+  // 覆盖一轮 creep 孵化 + 通勤周期，让 recovery 期真正攒出缓冲，而非形式性过场。
+  minBandTicks: 100,
 };
 
 /**
@@ -128,7 +157,9 @@ export function evaluateColonyPhase(
   const reserveDelta = prev.prevReserve === undefined ? 0 : input.reserve - prev.prevReserve;
 
   // ── 偿付能力维度：drainScore ──
-  const draining = reserveDelta < 0;
+  // 主动消费豁免（TD-003 根因 A）：spawn 口袋健康时的储备下降是升级/建造投资，
+  // 只有「储备下降 且 可孵化能量吃紧」才视为生产端失血。
+  const draining = reserveDelta < 0 && input.spendableRatio < options.drainSpendableFloor;
   // P0-2：非对称步长 — 盈余时用 recoveryStep（> scoreStep）加速退出，打破临界振荡。
   const delta = draining ? options.scoreStep : -options.recoveryStep;
   const drainScore = Math.max(0, Math.min(options.drainEnterScore, prev.drainScore + delta));
@@ -150,13 +181,19 @@ export function evaluateColonyPhase(
 
   const understaffed = input.harvesterCount < Math.max(1, input.sourceCount);
   const inCrisisBand = prev.phase === "crisis" || prev.phase === "recovery";
+  // 危机带驻留计数（TD-003 根因 B）：带内每次评估 +1，用于最短驻留判定。
+  const bandTicksSoFar = inCrisisBand ? (prev.bandTicks ?? 0) : 0;
+  const dwellSatisfied = bandTicksSoFar >= options.minBandTicks;
 
   let phase: ColonyPhase;
   if (crisisScore >= options.drainEnterScore) {
     phase = "crisis";
   } else if (inCrisisBand && crisisScore >= options.drainExitScore) {
     phase = "crisis";
-  } else if (inCrisisBand && crisisScore > options.recoveryClearScore) {
+  } else if (inCrisisBand && (crisisScore > options.recoveryClearScore || !dwellSatisfied)) {
+    // 分数已清但驻留未满 → 停在 recovery 攒缓冲，防止秒退回 normal 后
+    // 支出立刻恢复、赤字重新累积的极限环；同时兜住 recoveryStep 过大
+    // 导致分数从迟滞带直接跳 0、crisis 直切 normal 的路径。
     phase = "recovery";
   } else if (input.rcl >= 8 && !understaffed) {
     phase = "steady";
@@ -166,7 +203,10 @@ export function evaluateColonyPhase(
     phase = "growth";
   }
 
-  return { phase, prevReserve: input.reserve, drainScore, liquidityScore, reserveDelta };
+  const stillInBand = phase === "crisis" || phase === "recovery";
+  const bandTicks = stillInBand ? bandTicksSoFar + 1 : 0;
+
+  return { phase, prevReserve: input.reserve, drainScore, liquidityScore, bandTicks, reserveDelta };
 }
 
 /**

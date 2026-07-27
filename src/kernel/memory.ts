@@ -1,9 +1,11 @@
 import { CONFIG } from "../config";
 import { globalCache } from "./global-cache";
-import { readLayoutSegment, markLayoutDirty } from "./segment-store";
+import { readLayoutSegment, markLayoutDirty, layoutSegmentReady } from "./segment-store";
 
-/** 从版本 N 到 N+1 的迁移函数。每个必须幂等。 */
-const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> = [
+/** 从版本 N 到 N+1 的迁移函数。每个必须幂等。
+ * ready（可选）：迁移依赖的外部资源（如 RawMemory segment）是否就绪 —
+ * 未就绪时迁移链在此中断，版本停在断点，下 tick 重试。 */
+const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolean; run: () => void }> = [
   {
     from: 0,
     to: 1,
@@ -58,6 +60,10 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
   {
     from: 3,
     to: 4,
+    // 就绪门禁：reset 首 tick segment 未加载时 readLayoutSegment 返回不缓存的
+    // 临时空结构 — 若照常迁移，overrides/blocked 会被写进临时对象后随 Memory
+    // 删除而永久丢失。segment 就绪（下一 tick）后再执行。
+    ready: () => layoutSegmentReady(),
     run: () => {
       // v4：将 layout 冷数据（overrides/blocked）从 Memory 迁移到 RawMemory segment 0。
       // 减少每 tick JSON.stringify(Memory) 的体积。
@@ -279,6 +285,22 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; run: () => void }> =
       }
     },
   },
+  {
+    from: 13,
+    to: 14,
+    run: () => {
+      // v14：相位驻留计数 — 为已有 phase 状态回填 bandTicks。
+      // 缺失时按 0（未入危机带）处理；处于危机带的房间从 0 重新计驻留，
+      // 最坏情况是本次危机多停留一个驻留窗口，安全方向的保守默认。
+      // 幂等：仅当字段缺失时写入。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName];
+        if (room?.phase && room.phase.bandTicks === undefined) {
+          room.phase.bandTicks = 0;
+        }
+      }
+    },
+  },
 ];
 
 /**
@@ -340,18 +362,23 @@ export function maintainMemory(): void {
   }
 }
 
-/** 按升序执行迁移。每个迁移都是幂等的。 */
+/** 按升序执行迁移。每个迁移都是幂等的。
+ *
+ * 迁移链中断语义：某步的 ready() 未就绪时停在断点、保留当前版本，
+ * 下 tick 从断点续跑 — 幂等性保证重复执行安全。
+ * 版本号只随实际执行的迁移递增，不做无条件盖章：
+ * 若未来 MIGRATIONS 出现断号，版本会停在缺口处暴露问题，
+ * 而不是被盖章静默掩盖、永久丢失缺口步骤。
+ */
 function migrateMemory(currentVersion: number): void {
   let version = currentVersion;
   for (const migration of MIGRATIONS) {
-    if (version === migration.from) {
-      migration.run();
-      version = migration.to;
-      Memory.schemaVersion = version;
-    }
+    if (version !== migration.from) continue;
+    if (migration.ready && !migration.ready()) break;
+    migration.run();
+    version = migration.to;
+    Memory.schemaVersion = version;
   }
-  // 如果没有迁移执行，强制将 schema 版本设为目标值。
-  Memory.schemaVersion = CONFIG.memory.schemaVersion;
 }
 
 /**

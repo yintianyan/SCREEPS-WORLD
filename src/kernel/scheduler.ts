@@ -1,12 +1,14 @@
 import { CONFIG, tierLimits, tierMaxPriority } from "../config";
 import type { Budget, CpuTier, Priority } from "./contracts";
 
-/** 各档位的 bucket 阈值（降级立即生效）。 */
+/** 各档位的 bucket 阈值（降级立即生效）。
+ * 单一真相源：CONFIG.cpu.tiers[*].min — 此处仅做按档位索引的视图，
+ * 避免 config 与 scheduler 双源漂移（调 config 不生效的静默陷阱）。 */
 const TIER_BUCKET_MIN: Readonly<Record<CpuTier, number>> = {
-  healthy: 7000,
-  guarded: 3000,
-  conserve: 1000,
-  recovery: 0,
+  healthy: CONFIG.cpu.tiers.healthy.min,
+  guarded: CONFIG.cpu.tiers.guarded.min,
+  conserve: CONFIG.cpu.tiers.conserve.min,
+  recovery: CONFIG.cpu.tiers.recovery.min,
 };
 
 /** 从高到低排列的档位顺序，用于扫描。 */

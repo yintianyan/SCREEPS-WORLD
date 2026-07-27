@@ -163,6 +163,42 @@ export function precomputeStructureCounts(snapshot: RoomSnapshot): Map<string, n
 }
 
 /**
+ * 各结构类型的「承诺数量」= 已建结构 + 我方在建 site + 队列中未完成任务。
+ *
+ * 供 constraint 放置器做批次抵扣（代际稳定性）：placeStructures 只为
+ * 真实缺口生成放置，已被承诺的数量不再排位 — 消除「已建格进 occupied →
+ * 贪心顺延到次优格 → 同一逻辑结构在新格重复排队」的代际漂移与幽灵任务
+ * （幽灵任务最终 ERR_RCL_NOT_ENOUGH → blocked → 黑名单 churn）。
+ *
+ * 队列口径：仅计 queued/blocked 任务 — site 状态的任务对应实体 site
+ * （已由 site 计数覆盖），done 任务对应已建结构（已由结构计数覆盖），
+ * 重复计入会高估承诺、导致缺口放置不足。
+ *
+ * 纯函数 — 从 snapshot 与队列读取只读数据。
+ */
+export function computeCommittedCounts(
+  snapshot: RoomSnapshot,
+  queue: readonly BuildTask[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  const add = (type: string): void => {
+    counts.set(type, (counts.get(type) ?? 0) + 1);
+  };
+  for (const s of snapshot.spawns) add(s.structureType);
+  for (const s of snapshot.extensions) add(s.structureType);
+  for (const s of snapshot.towers) add(s.structureType);
+  for (const s of snapshot.labs) add(s.structureType);
+  if (snapshot.storage) add(snapshot.storage.structureType);
+  if (snapshot.terminal) add(snapshot.terminal.structureType);
+  if (snapshot.factory) add(snapshot.factory.structureType);
+  for (const site of snapshot.myConstructionSites) add(site.structureType);
+  for (const task of queue) {
+    if (task.state === "queued" || task.state === "blocked") add(task.structureType);
+  }
+  return counts;
+}
+
+/**
  * 预计算所有被占用位置（packed x*50+y）。
  * 包括：source/controller/mineral/已有结构/site。
  * 每规划周期调用一次，供 validateBuildCell 和 findAdjacentBuildable 复用。

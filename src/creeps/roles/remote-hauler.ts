@@ -74,8 +74,15 @@ function pickupRemoteDropped(): ActionCandidate<Resource> {
   };
 }
 
-/** 在远矿房查找有能量的 container（缓存 containerId 避免每 tick find）。 */
-function findRemoteContainer(creep: Creep): StructureContainer | undefined {
+/** 在远矿房查找有能量的 container（双层缓存避免每 tick find）。
+ *
+ * 第一层 per-creep：remoteContainerId 仍有能量时直接复用。
+ * 第二层 per-tick per-room 共享：container 空窗期内，若无共享缓存，
+ * 每只 remoteHauler 每 tick 会各自全房 FIND_STRUCTURES，
+ * 违反「角色禁止全房 find」硬约束（与 findDroppedEnergy 同一约束、同一模式）。
+ * 导出仅供接线测试验证共享缓存行为。
+ */
+export function findRemoteContainer(creep: Creep): StructureContainer | undefined {
   // 优先使用缓存的 containerId — 避免每 tick room.find。
   if (creep.memory.remoteContainerId) {
     const cached = Game.getObjectById(creep.memory.remoteContainerId as Id<StructureContainer>);
@@ -86,12 +93,21 @@ function findRemoteContainer(creep: Creep): StructureContainer | undefined {
     creep.memory.remoteContainerId = undefined;
   }
 
-  // 首次或缓存失效：find 有能量的 container。
-  const containers = creep.room.find(FIND_STRUCTURES, {
-    filter: (s) =>
-      s.structureType === STRUCTURE_CONTAINER &&
-      s.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
-  }) as StructureContainer[];
+  // 首次或缓存失效：走 per-tick per-room 共享列表（同房多 hauler 一次 find）。
+  const g = globalCache() as { __remoteContainers?: Record<string, { tick: number; list: StructureContainer[] }> };
+  if (!g.__remoteContainers) g.__remoteContainers = {};
+  const roomCached = g.__remoteContainers[creep.room.name];
+  let containers: StructureContainer[];
+  if (roomCached && roomCached.tick === Game.time) {
+    containers = roomCached.list;
+  } else {
+    containers = creep.room.find(FIND_STRUCTURES, {
+      filter: (s) =>
+        s.structureType === STRUCTURE_CONTAINER &&
+        s.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+    }) as StructureContainer[];
+    g.__remoteContainers[creep.room.name] = { tick: Game.time, list: containers };
+  }
   if (containers.length === 0) return undefined;
 
   const closest = (creep.pos.findClosestByRange(containers) ?? containers[0])!;

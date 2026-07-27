@@ -28,6 +28,7 @@ coverage/
 .trae/
 .meituan-catpaw/
 .catpaw/
+.reasonix/
 
 # Screeps
 *.screeps

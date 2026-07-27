@@ -1149,3 +1149,29 @@ war 回落不直接跳 expand，先经 develop 确认经济节奏。
 - **war 的授权来自证据链**（持续被打 + 打得起），与进攻代码是否存在无关 —
   未来 quad 等进攻执行器必须从此姿态取授权，禁止「代码写完即开战」。
 - **姿态未就绪默认固本**：reset 首 tick 无 strategy 时扩张不启动 — 安全缺省。
+
+### 12.5 相位极限环治理（TD-003，schema v14）
+
+colonyState 在 recovery↔normal 间高频振荡的根因不是阈值抖动，而是负反馈极限环：
+drainScore 把「刻意消费」（孵化/升级/建造）与「生产崩溃」同等计为赤字 —
+进 recovery 收缩支出 → 盈余 → 秒退 → normal 恢复支出 → 再入。两道闸修复：
+
+- **主动消费豁免**（`drainSpendableFloor: 0.5`）：仅当储备下降**且** spendableRatio
+  低于地板时才计赤字；spawn 口袋健康时的储备下降是投资。采集者死绝的场景
+  由 understaffed → bootstrap 兜底，不依赖本分数。
+- **危机带最短驻留**（`minBandTicks: 100`）：进入 crisis/recovery 后至少驻留
+  100 次评估才能回 normal；分数清零后停在 recovery 攒能量缓冲，
+  同时保证 crisis 退出必经 recovery 带（修复 recoveryStep 过大导致的 30→0 直切）。
+
+#### Memory 结构（v14 新增）
+
+`RoomMemory.phase.bandTicks?: number` — 危机带驻留计数，room-state 每 tick 写入；
+迁移 v13→v14 仅当字段缺失时回填 0（幂等）。
+
+#### 配套：spawn 请求撤销通道
+
+队列请求原本只能靠孵化/TTL/重试隔离出队 — 需求前提消失后的幽灵请求
+在 TTL 窗口（最长 1000 tick）内仍被孵化。`removeRequestsByRole` 在
+spawn-manager 每 tick 需求评估前撤销：威胁清除后的 defender、
+非 normal 且无降级风险时的 upgrader（与 demand 的 allowUpgrader 门禁对称）。
+

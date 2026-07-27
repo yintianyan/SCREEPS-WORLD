@@ -256,9 +256,12 @@ function placeLabCluster(
  * @param getTerrain 地形查询（是否墙）
  * @param rcl 目标 RCL 等级
  * @param preOccupied 预占用位置（source/controller/mineral/已有结构）
+ * @param committed 各结构类型的承诺数量（已建 + 在建 site + 队列任务）—
+ *   放置时按批次抵扣，只为真实缺口生成放置（代际稳定性核心）。
  * @param config 放置配置
  * @param energyEndpoints 能量端点位置（source/controller），用于评分加权。
  *   传入时结构放置偏好靠近能量流转路径；不传时退化为纯几何评分。
+ * @param existingLabPositions 已建 lab 位置 — 新增 lab 续接既有集群（相邻约束）。
  */
 export function placeStructures(
   anchor: { x: number; y: number },
@@ -266,8 +269,10 @@ export function placeStructures(
   getTerrain: (x: number, y: number) => boolean,
   rcl: number,
   preOccupied: ReadonlySet<number>,
+  committed: ReadonlyMap<string, number>,
   config: PlacerConfig = DEFAULT_PLACER_CONFIG,
   energyEndpoints: readonly { x: number; y: number }[] = [],
+  existingLabPositions: readonly { x: number; y: number }[] = [],
 ): ConstraintPlacement[] {
   const candidates = buildCandidateGrid(anchor, field, getTerrain, config, energyEndpoints);
   const occupied = new Set<number>(preOccupied);
@@ -275,8 +280,27 @@ export function placeStructures(
   occupied.add(packPos(anchor.x, anchor.y));
 
   const placements: ConstraintPlacement[] = [];
-  const counters: Record<string, number> = {}; // 结构类型计数器（用于 key 生成）
-  const labPositions: { x: number; y: number }[] = []; // 已放置的 lab 位置
+  // Lab 集群续接：已建 lab 位置作为集群种子 — 抵扣后新增的 lab
+  // 必须落在既有集群 range<=2 内，否则反应 trio 相邻约束被代际漂移破坏。
+  const labPositions: { x: number; y: number }[] = [...existingLabPositions];
+
+  // 承诺抵扣（代际稳定性核心）：已建结构 + 在建 site + 队列任务
+  // 已经覆盖的数量不再生成放置。旧实现每周期放置 RCL 累计全量、
+  // 只跳过被占格子 — 已建结构把自己的格子占掉后，放置顺延到次优格，
+  // 产生「同一逻辑结构在新格子再排一次」的幽灵任务与代际位置漂移。
+  const remaining: Record<string, number> = {};
+  for (const [type, n] of committed) remaining[type] = n;
+  // 初始 spawn（锚点位）由玩家/扩张放置，不在 RCL_BATCHES 内 —
+  // 从 spawn 承诺中扣除 1，避免误抵扣掉 RCL7/8 批次的 spawn #2/#3。
+  if ((remaining[STRUCTURE_SPAWN] ?? 0) > 0) {
+    remaining[STRUCTURE_SPAWN]! -= 1;
+  }
+  /** 消耗某类型的承诺额度，返回本批次还需放置的数量。 */
+  const deductBatch = (type: string, count: number): number => {
+    const deduct = Math.min(count, remaining[type] ?? 0);
+    if (deduct > 0) remaining[type] = (remaining[type] ?? 0) - deduct;
+    return count - deduct;
+  };
 
   // 收集所有 RCL 批次并按放置优先级排序
   const batches: StructureBatch[] = [];
@@ -288,16 +312,16 @@ export function placeStructures(
 
   for (const batch of batches) {
     const { type, count, priority, phase } = batch;
+    const need = deductBatch(type, count);
+    if (need <= 0) continue;
 
     // Lab 特殊处理：集群放置
     if (type === STRUCTURE_LAB) {
-      const labResult = placeLabCluster(count, candidates, occupied, getTerrain, labPositions);
+      const labResult = placeLabCluster(need, candidates, occupied, getTerrain, labPositions);
       for (const pos of labResult) {
-        const idx = (counters[type] ?? 0) + 1;
-        counters[type] = idx;
         labPositions.push(pos);
         placements.push({
-          key: `constraint.lab.${String(idx).padStart(2, "0")}`,
+          key: placementKey(type, pos.x, pos.y),
           pos,
           structureType: type,
           priority,
@@ -310,7 +334,7 @@ export function placeStructures(
     // 通用贪心放置
     let placed = 0;
     for (const c of candidates) {
-      if (placed >= count) break;
+      if (placed >= need) break;
       const packed = packPos(c.x, c.y);
       if (occupied.has(packed)) continue;
 
@@ -319,10 +343,8 @@ export function placeStructures(
       if (isObstacle && wouldSealLocal(c.x, c.y, getTerrain, occupied)) continue;
 
       occupied.add(packed);
-      const idx = (counters[type] ?? 0) + 1;
-      counters[type] = idx;
       placements.push({
-        key: `constraint.${type}.${String(idx).padStart(2, "0")}`,
+        key: placementKey(type, c.x, c.y),
         pos: { x: c.x, y: c.y },
         structureType: type,
         priority,
@@ -333,6 +355,18 @@ export function placeStructures(
   }
 
   return placements;
+}
+
+/**
+ * 放置任务 key — 坐标绑定：`constraint.<type>.<x>.<y>`。
+ *
+ * 旧实现用递增计数器命名（constraint.extension.01），key 与坐标零绑定 —
+ * 已建格进入 occupied 后贪心顺延，同一 key 代际间指向不同格子，
+ * existingKeys 去重 / 黑名单 / done 判定全部失去锚定。
+ * 坐标绑定后同一格永远同 key，重推导天然幂等。
+ */
+function placementKey(type: string, x: number, y: number): string {
+  return `constraint.${type}.${x}.${y}`;
 }
 
 /**

@@ -28,7 +28,7 @@ export function getWallTargetHits(rcl: number, underSiege = false): number {
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 13 },
+  memory: { schemaVersion: 14 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -136,12 +136,14 @@ export const CONFIG = {
     /** 布局规划器的运行间隔（tick）。 */
     planInterval: 50,
     road: {
-      /** 采样窗口内位置被判定为高频的最小通行次数。 */
-      minTraffic: 10,
+      /** 采样窗口内位置被判定为高频的最小通行次数。
+       * 5：RCL2-3 仅 2-3 个 hauler 时每格每窗口约 3-6 次通行，
+       * 阈值 10 会让最该修路的早期修不出路；双窗口要求防瞬时尖峰误判。 */
+      minTraffic: 5,
       /** 每房最多返回的道路候选数。 */
       maxCandidates: 5,
-      /** 道路采样窗口间隔。 */
-      sampleInterval: 50,
+      /** 候选位置到高价值端点（source/spawn/storage/controller）的最大曼哈顿距离。 */
+      maxDistanceToEndpoints: 10,
     },
   },
 

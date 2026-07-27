@@ -77,6 +77,7 @@ export const roomStateSystem: System = {
         prevReserve: roomMem.phase?.reserve,
         drainScore: roomMem.phase?.drainScore ?? 0,
         liquidityScore: roomMem.phase?.liquidityScore ?? 0,
+        bandTicks: roomMem.phase?.bandTicks ?? 0,
       };
       const phaseResult = evaluateColonyPhase(
         {
@@ -98,6 +99,7 @@ export const roomStateSystem: System = {
         reserveDelta: phaseResult.reserveDelta,
         drainScore: phaseResult.drainScore,
         liquidityScore: phaseResult.liquidityScore,
+        bandTicks: phaseResult.bandTicks,
         harvesterCount,
         sourceCount: snapshot.sources.length,
         rcl: snapshot.rcl,

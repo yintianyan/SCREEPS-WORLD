@@ -18,6 +18,7 @@ import {
   collectCompletedKeys,
   collectCompletedKeysFromStructures,
   precomputeStructureCounts,
+  computeCommittedCounts,
   buildOccupiedPositionSet,
   buildObstaclePositionSet,
 } from "../domain/layout/validation";
@@ -236,7 +237,20 @@ export const layoutPlannerSystem: System & {
       const energyEndpoints: { x: number; y: number }[] = [];
       for (const s of snapshot.sources) energyEndpoints.push({ x: s.pos.x, y: s.pos.y });
       if (snapshot.controller) energyEndpoints.push({ x: snapshot.controller.pos.x, y: snapshot.controller.pos.y });
-      const placements = placeStructures(anchor, field, getTerrain, snapshot.rcl, occupiedSet, DEFAULT_PLACER_CONFIG, energyEndpoints);
+      const placements = placeStructures(
+        anchor,
+        field,
+        getTerrain,
+        snapshot.rcl,
+        occupiedSet,
+        // 承诺抵扣：已建 + 在建 site + 队列任务不再排位 — 只为真实缺口放置，
+        // 消除全拆重建期间的代际位置漂移与幽灵任务（详见 computeCommittedCounts）。
+        computeCommittedCounts(snapshot, queue),
+        DEFAULT_PLACER_CONFIG,
+        energyEndpoints,
+        // Lab 集群续接：新增 lab 必须落在既有集群 range<=2 内（反应 trio 约束）。
+        snapshot.labs.map(l => ({ x: l.pos.x, y: l.pos.y })),
+      );
       const constraintCandidates = placementsToCandidates(placements, snapshot.roomName);
 
       for (const candidate of constraintCandidates) {
