@@ -1,7 +1,12 @@
 # ─── Screeps GitHub 自动部署 ─────────────────────────────────────
-# 当 push 到 main/dev 分支时，自动编译 TypeScript 并将
-# dist/main.js 推送到 screeps 分支。
-# 在 Screeps 账户设置中绑定本仓库并选择 screeps 分支即可自动同步。
+# 当 push 到 main/dev 分支时，自动编译 TypeScript 并通过 Screeps API
+# 直接上传 dist/main.js 进游戏 —— 无需在 Screeps 端手动同步或绑定分支 pull。
+#
+# 前置：在仓库 Settings → Secrets and variables → Actions 添加：
+#   - Secret  SCREEPS_TOKEN   官服 token（screeps.com/a/#!/account/auth）
+#   - Variable SCREEPS_BRANCH  可选，目标代码分支（默认 default）
+# 缺 SCREEPS_TOKEN 时上传步骤会失败（API 是唯一部署路径，缺凭据即响亮报错，
+# 不做静默绿灯）。
 name: Deploy to Screeps
 
 on:
@@ -10,7 +15,7 @@ on:
   workflow_dispatch: # 也支持手动触发
 
 permissions:
-  contents: write # 需要写权限来推送 screeps 分支
+  contents: read # 仅读取源码；API 直传不需要写仓库
 
 jobs:
   build-and-deploy:
@@ -24,40 +29,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           # 跟随 .nvmrc（22.23.1）— 单一真相源，防版本漂移。
-          # 依赖树中 screeps-server-mockup → screeps → isolated-vm（git 原生插件）
-          # 要求 Node ≥22（v8::SourceLocation 头文件），Node 20 下 node-gyp 编译必败。
           node-version-file: '.nvmrc'
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # --ignore-scripts 跳过原生插件编译：deploy 只需 rollup + typescript，
+        # 用不到 isolated-vm（那是 E2E 测试用的 screeps-server-mockup 依赖）。
+        # 跳过后既省 2-4 分钟编译，又彻底规避 isolated-vm 的 node-gyp 编译失败。
+        run: npm ci --ignore-scripts
 
       - name: Build
         run: npm run build
 
-      - name: Push compiled code to screeps branch
-        run: |
-          # 配置 git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # 获取触发 workflow 的分支名
-          SOURCE_BRANCH="${{ github.ref_name }}"
-
-          # 创建或切换到 screeps 分支
-          git checkout -B screeps
-
-          # 清空工作区（保留 .git），确保 screeps 分支只有编译产物
-          # 注意：不能用 git rm -rf . 因为会删掉 .git
-          find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name 'dist' -exec rm -rf {} +
-
-          # 将 dist/main.js 移到根目录作为 main.js（Screeps 入口）
-          cp dist/main.js main.js
-          rm -rf dist
-
-          # 添加并提交
-          git add -A
-          git commit -m "deploy: build from ${SOURCE_BRANCH}@${{ github.sha }}" --allow-empty
-
-          # 强制推送到 screeps 分支
-          git push origin screeps --force
+      - name: Upload code to Screeps (API)
+        env:
+          SCREEPS_TOKEN: ${{ secrets.SCREEPS_TOKEN }}
+          SCREEPS_BRANCH: ${{ vars.SCREEPS_BRANCH || 'default' }}
+        run: node tools/deploy-screeps.js
