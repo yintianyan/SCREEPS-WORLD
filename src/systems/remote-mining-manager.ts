@@ -94,9 +94,31 @@ export const remoteMiningManagerSystem: System = {
       // 核心 100,000 hits，defender/reserver 均无力处理 — 该房进入止损模式：
       // 打上危险冷却 + 暂停孵化 + 回收现役 creep，等核心自然 decay 后自动恢复。
       const remoteBlockers = collectRemoteBlockers(remoteOps);
-      const blockedRooms = new Set<string>(
-        Object.entries(remoteBlockers).filter(([, blocked]) => blocked).map(([r]) => r),
-      );
+      // 压制状态持久化：瞬时视野检测 + Memory 冷却双轨合并。
+      // 只用瞬时集合的死角：回收 creep 后该房失明 → 检测集合清空 → 孵化恢复
+      // → 新 creep 抵达发现核心 → 再回收 — 死循环，每轮白送整编 creep。
+      // 规则：有视野见核心 → 写/续期 blockedUntil；有视野确认消失 → 立即清除；
+      // 无视野 → 冷却未到期即视为仍被压制（宁可少采 5000 tick，不送一轮兵）。
+      const blockedRooms = new Set<string>();
+      for (const [rn, op] of Object.entries(remoteOps)) {
+        if (op.state !== "active") continue;
+        const observed = remoteBlockers[rn];
+        if (observed === true) {
+          // 有视野且核心在场 — 写入/续期压制冷却。
+          op.blockedUntil = ctx.tick + CONFIG.remote.coreBlockCooldown;
+          blockedRooms.add(rn);
+        } else if (observed === false) {
+          // 有视野且确认核心消失 — 提前解封。
+          if (op.blockedUntil !== undefined) op.blockedUntil = undefined;
+        } else if (op.blockedUntil !== undefined) {
+          // 无视野 — 冷却期内维持压制；到期后放行（恢复孵化以重获视野再评估）。
+          if (ctx.tick < op.blockedUntil) {
+            blockedRooms.add(rn);
+          } else {
+            op.blockedUntil = undefined;
+          }
+        }
+      }
 
       // 威胁写入情报层：出现威胁的远矿房打上危险冷却标记 —
       // 冷却期内该房不作为新的远矿/扩张候选（止损：不给对手送兵）。

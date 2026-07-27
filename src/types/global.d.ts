@@ -278,6 +278,15 @@ declare global {
     createdAt: number;
     /** 最近可见 tick（creep 进入或 observer 扫描时更新）。 */
     lastSeen: number;
+    /**
+     * InvaderCore 压制冷却截止 tick。
+     * 压制判定不能只依赖当 tick 视野：发现核心 → 回收 creep → 视野消失 →
+     * 瞬时检测集合清空 → 孵化恢复 → 新 creep 送死，形成
+     * 「孵化→发现→回收→失明→再孵化」死循环。持久化后冷却期内孵化保持冻结；
+     * 到期恢复孵化探测，若核心仍在（新 creep 带回视野）则续期。
+     * 有视野且确认核心消失时立即清除（提前解封）。
+     */
+    blockedUntil?: number;
   }
 
   interface Memory {

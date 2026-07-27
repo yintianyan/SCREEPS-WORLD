@@ -385,6 +385,11 @@ export const CONFIG = {
     minRcl: 4,
     /** 远矿房威胁的危险冷却（tick）— 冷却期内不作为新远矿/扩张候选。 */
     dangerCooldown: 2000,
+    /** InvaderCore 压制冷却（tick）— 发现核心后孵化冻结的持续时长。
+     * 这是重新探测节奏而非核心寿命估计：到期后恢复孵化，首个抵达的 creep
+     * 带回视野 — 核心仍在则续期冷却，已消失则运营恢复。
+     * 5000 tick 把「送死探测」的频率压到每 5000 tick 一只 creep 的成本。 */
+    coreBlockCooldown: 5000,
   },
 
   expansion: {

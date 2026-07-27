@@ -59,6 +59,68 @@ describe("upgrader — work 模式", () => {
   });
 });
 
+describe("upgrader — 空闲归站（不在 spawn 出口石化挡路）", () => {
+  it("controller container 存在但空 + 远离站桩位 → 移动到 container 待命", () => {
+    // container 空 → withdraw 链落空；无 link/storage；source 由 gate 的
+    // 替代能量源判定放行（energyAvailable 达标）→ harvestSource 也无 source 可用。
+    const controller = mockController();
+    const emptyCC = mockStructure("container", { id: "cc", energy: 0, capacity: 2000 });
+    const snap = mockSnapshot({
+      controller,
+      controllerContainer: emptyCC,
+      containers: [emptyCC],
+      sources: [], // 无 source → harvestSource 落空 → 归站兜底触发
+      energyAvailable: 500, // 高于地板 → gate 放行
+    });
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    creep.pos.getRangeTo.mockReturnValue(10); // 远离站桩位
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    expect(creep.moveTo).toHaveBeenCalled();
+  });
+
+  it("已在站桩位（range ≤ 3）→ 原地 idle 等补给，不再移动", () => {
+    const controller = mockController();
+    const emptyCC = mockStructure("container", { id: "cc", energy: 0, capacity: 2000 });
+    const snap = mockSnapshot({
+      controller,
+      controllerContainer: emptyCC,
+      containers: [emptyCC],
+      sources: [],
+      energyAvailable: 500,
+    });
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    creep.pos.getRangeTo.mockReturnValue(1); // 已在站桩位
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    expect(creep.moveTo).not.toHaveBeenCalled();
+    expect(creep.memory.mode).toBe("idle");
+  });
+
+  it("能量地板门禁拦截时同样归站，不石化在原地", () => {
+    // 无任何替代能量源 + energyAvailable 低于地板 → gate 返回 false。
+    // 修复前：直接 idle 石化；修复后：先移动到站桩位再 idle。
+    const controller = mockController();
+    const snap = mockSnapshot({
+      controller,
+      energyAvailable: 100, // 低于地板
+      energyCapacityAvailable: 800,
+    });
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    creep.pos.getRangeTo.mockReturnValue(10);
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    expect(creep.moveTo).toHaveBeenCalled();
+    expect(creep.memory.mode).toBe("idle");
+  });
+});
+
 describe("upgrader — 能量地板门禁（U-02）", () => {
   it("RCL1-3：energyAvailable < floor 时 acquire 被阻止 → idle", () => {
     const controller = mockController();

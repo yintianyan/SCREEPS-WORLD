@@ -114,7 +114,12 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
   }
 
   // ── 3. 确定性走廊路（source↔core↔controller）──
-  if (!hasPendingCritical) {
+  // 不受 hasPendingCritical 冻结：重建期（P0 任务排队时）恰恰是走廊路
+  // 最需要恢复的窗口 — source↔core 无路时 hauler 通勤减速，重建反而更慢。
+  // 走廊路安全性：PathFinder 确定性生成（不依赖交通数据）、priority 3 +
+  // 独立 road site 名额（maxRoadSitesPerRoom）、每周期仅一条走廊 ≤12 格，
+  // 且 tryCreateSite 按 priority 排序 — P0 关键结构永远先建，走廊只补空档。
+  {
     // 保护蓝图未来格 — 走廊路不得占用未来的 extension/结构位置。
     const protectedPositions = new Set<number>();
     for (const cell of blueprint.cells) {

@@ -525,11 +525,14 @@ export function ensureHome(creep: Creep): boolean {
     // idle/flee → 回 home（安全）
     // remoteHauler work → 回 home（存能）
     // 其余 → remoteTarget
-    // Bug 2 修复：remoteHauler 在 remoteTarget idle（container 空）时不导航回 home，
-    // 保持在 remoteTarget 等待 container 恢复。否则会在 home↔remoteTarget 之间震荡：
-    // remoteTarget idle → goHome → home → acquire → remoteTarget → idle → goHome → ...震荡
+    // Bug 2 修复（扩展到全部远矿角色）：在 remoteTarget idle（container 空 /
+    // source 被压制 / 无事可做）时不导航回 home，留在目标房等待条件恢复。
+    // 否则 home↔remoteTarget 振荡：remoteTarget idle → goHome → home →
+    // updateMode 转 acquire → 导航回 remoteTarget → 又 idle → goHome → ...
+    // creep 在两房边界来回穿梭直至寿终（remoteHarvester 在 InvaderCore 压制房
+    // 正是这个症状；被 recycle 标记的 creep 由 recyclePass 接管移动，不受此影响）。
     const goHome = mode === "flee" ||
-      (mode === "idle" && !(creep.memory.role === "remoteHauler" && creep.room.name === remoteTarget)) ||
+      (mode === "idle" && creep.room.name !== remoteTarget) ||
       (mode === "work" && creep.memory.role === "remoteHauler");
     const dest = goHome ? home : remoteTarget;
     if (creep.room.name === dest) return true;

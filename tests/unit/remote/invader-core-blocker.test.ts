@@ -152,3 +152,85 @@ describe("reserver — roomHasInvaderCore 兜底自检", () => {
     expect(roomHasInvaderCore(room as unknown as Room)).toBe(false);
   });
 });
+
+describe("remote-mining-manager — 压制状态持久化（防失明解封死循环）", () => {
+  /** 构造带 remoteOps 的 home 房 Memory，返回 roomMem 引用。 */
+  function setupHome(op: Record<string, unknown>) {
+    const g = globalThis as any;
+    g.Memory.rooms.W7N4 = {
+      colonyState: "normal",
+      spawnQueue: [],
+      remoteOps: { [targetRoom]: op },
+      intel: { [targetRoom]: { kind: "normal", status: "normal", lastSeen: g.Game.time } },
+    };
+    return g.Memory.rooms.W7N4;
+  }
+
+  it("有视野发现核心 → 写入 blockedUntil 冷却", () => {
+    const g = globalThis as any;
+    const now = g.Game.time as number;
+    g.Game.rooms[targetRoom] = makeBlockedRoom(targetRoom);
+    const roomMem = setupHome({ state: "active", createdAt: now - 500, lastSeen: now });
+
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5 })));
+
+    expect(roomMem.remoteOps[targetRoom].blockedUntil).toBeGreaterThan(now);
+  });
+
+  it("失明期间（无视野 + 冷却未到期）孵化保持冻结 — 旧实现的死循环场景", () => {
+    const g = globalThis as any;
+    const now = g.Game.time as number;
+    // 无视野：Game.rooms 不含目标房（creep 已被回收撤离）。
+    const roomMem = setupHome({
+      state: "active", createdAt: now - 500, lastSeen: now - 100,
+      blockedUntil: now + 3000, // 冷却未到期
+    });
+
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5 })));
+
+    // 孵化仍冻结 — 队列中无任何指向压制房的请求。
+    const remoteReqs = (roomMem.spawnQueue as SpawnRequest[]).filter(
+      r => r.memory.remoteTarget === targetRoom,
+    );
+    expect(remoteReqs).toHaveLength(0);
+    // 冷却保留（无视野不清除）。
+    expect(roomMem.remoteOps[targetRoom].blockedUntil).toBe(now + 3000);
+  });
+
+  it("有视野确认核心消失 → 立即清除冷却，孵化恢复", () => {
+    const g = globalThis as any;
+    const now = g.Game.time as number;
+    // 有视野且无核心。
+    g.Game.rooms[targetRoom] = { name: targetRoom, find: vi.fn(() => []) };
+    const roomMem = setupHome({
+      state: "active", sources: 2, createdAt: now - 500, lastSeen: now,
+      blockedUntil: now + 3000,
+    });
+
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5 })));
+
+    expect(roomMem.remoteOps[targetRoom].blockedUntil).toBeUndefined();
+    // 孵化恢复。
+    const remoteReqs = (roomMem.spawnQueue as SpawnRequest[]).filter(
+      r => r.memory.remoteTarget === targetRoom,
+    );
+    expect(remoteReqs.length).toBeGreaterThan(0);
+  });
+
+  it("冷却到期 + 无视野 → 解封（恢复孵化以重获视野再评估）", () => {
+    const g = globalThis as any;
+    const now = g.Game.time as number;
+    const roomMem = setupHome({
+      state: "active", sources: 2, createdAt: now - 8000, lastSeen: now - 100,
+      blockedUntil: now - 1, // 已到期
+    });
+
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5 })));
+
+    expect(roomMem.remoteOps[targetRoom].blockedUntil).toBeUndefined();
+    const remoteReqs = (roomMem.spawnQueue as SpawnRequest[]).filter(
+      r => r.memory.remoteTarget === targetRoom,
+    );
+    expect(remoteReqs.length).toBeGreaterThan(0);
+  });
+});

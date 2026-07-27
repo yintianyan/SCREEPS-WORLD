@@ -144,6 +144,15 @@ export const layoutPlannerSystem: System & {
         layout.revision++;
         // 锚点变化意味着所有旧坐标失效 — 清空 buildQueue，由下次规划重建。
         roomMem.buildQueue = [];
+        // 同步移除按旧锚点创建的 construction site（孤儿 site 根治）。
+        // 只清队列不清 site 的后果：builder 的建造目标取自快照 site 而非队列
+        // （buildNearestSite 直接扫 myConstructionSites），旧 site 会被照常
+        // 建成在错误位置；且孤儿 site 占用每房 site 限额，新队列任务被
+        // tryCreateSite 反复跳过 — 「不在 buildQueue 的位置被建造 + 队列积压」
+        // 两个症状同源于此。
+        for (const site of snapshot.myConstructionSites) {
+          site.remove();
+        }
       }
     } else if (layout.anchor === undefined) {
       // 无 spawn 且无存储锚点 — 初始 bootstrap 前的正常状态，无法规划。
