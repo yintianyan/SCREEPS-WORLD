@@ -65,6 +65,14 @@
 - **兼容性**: 旧计数器 key 的存量任务无需迁移——计入承诺抵扣防重复放置、位置去重防同格双任务，建成后自然出队；旧 key 黑名单条目到期自清
 - **状态**: ✅ 已修复（833/833 测试通过），待线上验证：重建期 buildQueue 中 blocked extension 任务数应归零
 
+### TD-013: InvaderCore 压制远矿房完全漏报（线上实证）
+- **文件**: `src/systems/remote-mining-manager.ts`, `src/domain/remote/demand.ts`, `src/creeps/roles/reserver.ts`
+- **现象**: 远矿房只有一个 InvaderCore、无 Invader creep 时，harvester 采集受压制（source 被敌方预约压在 1500 容量）、reserver 空耗整个生命周期，运营持续送兵不止损
+- **根因**: 威胁检测只扫 `FIND_HOSTILE_CREEPS`——InvaderCore 是敌对结构不是 creep，全链路（dangerUntil / defender / 撤回）对其零感知；且 reserver 的 attackController（-1/次，1 CLAIM）永远磨不过核心的预约续期（+2/tick，INVADER_CORE_CONTROLLER_POWER），defender [2A,2M] 20 dmg/tick 对 100,000 hits（INVADER_CORE_HITS）核心需 5000 tick > 1500 寿命，硬扛全是负期望
+- **修复**（止损而非硬扛）: ①`collectRemoteBlockers` 检测 active 房的 InvaderCore；②压制房写 dangerUntil（targeting 不选新点）+ `blockedRooms` 传入 demand 暂停一切孵化（含 defender）+ 回收现役远矿 creep；③reserver 自检核心即放弃回家（manager 10-tick 间隔内的即时兜底，per-tick per-room 缓存 find）；核心自然 decay 后孵化自动恢复，remoteOps/intel 保留不重建
+- **状态**: ✅ 已修复（841/841 测试通过），待线上验证：压制房 creep 应在 1-2 个评估周期内全部标记 recycle，spawnQueue 无该房新请求
+
+
 ### TD-004: 事件检测不追踪 Storage 被毁
 - **文件**: `src/systems/telemetry-collector.ts`
 - **现象**: StructureDestroyed 事件只检测 spawn/tower/container，不检测 storage

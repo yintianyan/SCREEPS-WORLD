@@ -90,18 +90,31 @@ export const remoteMiningManagerSystem: System = {
       // 生成 remoteDefender 请求；缺少此输入时 defender 分支永不触发。
       const remoteThreats = collectRemoteThreats(remoteOps);
 
+      // 收集 InvaderCore 压制房（结构不是 creep，FIND_HOSTILE_CREEPS 检测不到）。
+      // 核心 100,000 hits，defender/reserver 均无力处理 — 该房进入止损模式：
+      // 打上危险冷却 + 暂停孵化 + 回收现役 creep，等核心自然 decay 后自动恢复。
+      const remoteBlockers = collectRemoteBlockers(remoteOps);
+      const blockedRooms = new Set<string>(
+        Object.entries(remoteBlockers).filter(([, blocked]) => blocked).map(([r]) => r),
+      );
+
       // 威胁写入情报层：出现威胁的远矿房打上危险冷却标记 —
       // 冷却期内该房不作为新的远矿/扩张候选（止损：不给对手送兵）。
       // 现役运营不因此暂停 — defender 已接通，先应战再评估。
+      // InvaderCore 压制房同样打冷却 — 核心存续期间不重复选点。
       if (roomMem.intel) {
         for (const [threatRoom, hasThreat] of Object.entries(remoteThreats)) {
-          if (!hasThreat) continue;
+          if (!hasThreat && !blockedRooms.has(threatRoom)) continue;
           const info = roomMem.intel[threatRoom];
           if (info) {
             info.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
           }
         }
       }
+
+      // InvaderCore 压制房的现役远矿 creep 全部标记回收 —
+      // harvester 采集被压制、reserver 空耗寿命，留守是持续净亏损。
+      recycleBlockedRoomCreeps(snapshot.roomName, blockedRooms);
 
       const { requests } = evaluateRemoteDemand({
         homeRoom: snapshot.roomName,
@@ -112,6 +125,7 @@ export const remoteMiningManagerSystem: System = {
         remoteCreeps,
         spawnQueue: queue,
         remoteThreats,
+        blockedRooms,
       });
 
       // 推入 spawnQueue。
@@ -310,4 +324,45 @@ function collectRemoteThreats(remoteOps: Readonly<Record<string, RemoteOp>>): Re
     threats[roomName] = hostiles.length > 0;
   }
   return threats;
+}
+
+/**
+ * 收集 InvaderCore 压制信息 — 检测 active 运营的远矿房是否被 InvaderCore 占据。
+ *
+ * InvaderCore 是敌对结构而非 creep，FIND_HOSTILE_CREEPS 检测不到 —
+ * 「房里只有一个核心、没有 Invader creep」的场景在旧实现中完全漏报，
+ * 运营继续送 harvester/reserver 空耗。检测需要视野（active 房通常有驻场 creep）。
+ * 导出供接线测试验证检测链路。
+ */
+export function collectRemoteBlockers(remoteOps: Readonly<Record<string, RemoteOp>>): Record<string, boolean> {
+  const blockers: Record<string, boolean> = {};
+  for (const [roomName, op] of Object.entries(remoteOps)) {
+    if (op.state !== "active") continue;
+    const room = Game.rooms[roomName];
+    if (!room) continue;
+    const cores = room.find(FIND_HOSTILE_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_INVADER_CORE,
+    });
+    blockers[roomName] = cores.length > 0;
+  }
+  return blockers;
+}
+
+/**
+ * 回收 InvaderCore 压制房的现役远矿 creep。
+ *
+ * 核心压制期间该房是净亏损：source 被敌方预约压在 1500 容量、
+ * reserver 打不动核心持续续期的预约。标记 recycle 后 role-runner 短路停工，
+ * spawn-manager 的 recyclePass 引导回收；孵化冻结由 blockedRooms 负责，
+ * 核心 decay 后运营自动恢复（remoteOps 状态与 intel 均保留）。
+ */
+function recycleBlockedRoomCreeps(homeRoom: string, blockedRooms: ReadonlySet<string>): void {
+  if (blockedRooms.size === 0) return;
+  for (const creep of Object.values(Game.creeps)) {
+    if (creep.memory.home !== homeRoom) continue;
+    if (creep.memory.recycle) continue;
+    const target = creep.memory.remoteTarget;
+    if (!target || !blockedRooms.has(target)) continue;
+    creep.memory.recycle = true;
+  }
 }

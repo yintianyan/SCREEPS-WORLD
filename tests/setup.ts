@@ -30,6 +30,7 @@ Object.assign(globalThis as Record<string, unknown>, {
   STRUCTURE_OBSERVER: "observer",
   STRUCTURE_POWER_SPAWN: "powerSpawn",
   STRUCTURE_NUKER: "nuker",
+  STRUCTURE_INVADER_CORE: "invaderCore",
 
   // find 常量
   FIND_EXIT: 10,

@@ -22,7 +22,32 @@
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
+import { globalCache } from "../../kernel/global-cache";
 import { moveToTarget } from "../movement";
+
+/**
+ * 检测房间是否被 InvaderCore 占据（per-tick per-room 共享缓存）。
+ *
+ * InvaderCore 持续为 controller 续期预约（每 tick +2），reserver 的
+ * attackController 每次仅 -1（1 CLAIM）— 永远磨不过，留守是纯空耗。
+ * 检测到核心即放弃动作，role-runner 走 idle → ensureHome 导航回 home；
+ * 孵化冻结与回收由 remote-mining-manager 负责，此处是其 10-tick
+ * 评估间隔内的即时兜底。缓存单 tick 生命周期，同房多 creep 共享一次 find。
+ * 导出供接线测试验证检测与缓存行为。
+ */
+export function roomHasInvaderCore(room: Room): boolean {
+  const g = globalCache() as { __remoteInvaderCore?: Record<string, { tick: number; blocked: boolean }> };
+  if (!g.__remoteInvaderCore) g.__remoteInvaderCore = {};
+  const cached = g.__remoteInvaderCore[room.name];
+  if (cached && cached.tick === Game.time) return cached.blocked;
+
+  const cores = room.find(FIND_HOSTILE_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_INVADER_CORE,
+  });
+  const blocked = cores.length > 0;
+  g.__remoteInvaderCore[room.name] = { tick: Game.time, blocked };
+  return blocked;
+}
 
 /** 占领/攻击 controller。 */
 function reserveControllerAction(): ActionCandidate<StructureController> {
@@ -35,6 +60,9 @@ function reserveControllerAction(): ActionCandidate<StructureController> {
       // 房间必须有 controller。
       const controller = ac.creep.room.controller;
       if (!controller) return undefined;
+      // InvaderCore 压制房：放弃动作 — attackController 磨不过核心续期，
+      // 返回 undefined 走 idle → 回 home 等待回收，不在此空耗寿命。
+      if (roomHasInvaderCore(ac.creep.room)) return undefined;
       return controller;
     },
     execute: (ac, controller) => {

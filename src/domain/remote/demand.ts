@@ -51,6 +51,15 @@ export interface RemoteDemandInput {
   spawnQueue: readonly SpawnRequest[];
   /** 远矿房威胁信息（从 Game.rooms 检测，key = 房间名，value = 是否有威胁）。 */
   remoteThreats?: Readonly<Record<string, boolean>>;
+  /**
+   * 被 InvaderCore 压制的远矿房集合 — 该房暂停一切孵化（含 defender）。
+   *
+   * InvaderCore 是 100,000 hits 的结构（INVADER_CORE_HITS），remoteDefender
+   * [2A,2M] 仅 20 dmg/tick、寿命 1500 tick — 拆核需 5000 tick，派 defender
+   * 是纯送死；reserver 的 attackController 对核心持续续期的预约也无效。
+   * 正确策略是止损：停孵化、撤现役、等核心自然 decay 或冷却后重评估。
+   */
+  blockedRooms?: ReadonlySet<string>;
 }
 
 /** 远矿需求评估结果。 */
@@ -83,6 +92,11 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
 
   for (const [targetRoom, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") continue;
+
+    // InvaderCore 压制的房：暂停一切孵化（含 defender）— 打不动就不送兵。
+    // 现役 creep 由 remote-mining-manager 的 recycle 通道撤回；
+    // 核心消失（自然 decay / 视野确认清空）后本集合不再包含该房，孵化自动恢复。
+    if (input.blockedRooms?.has(targetRoom)) continue;
 
     // 统计该远矿目标已分配的各角色数量。
     const counts = countRemoteCreepsByRole(remoteCreeps, targetRoom);
