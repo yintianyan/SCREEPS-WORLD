@@ -10,6 +10,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { distributorRole } from "../../../src/creeps/roles/distributor";
+import { CONFIG } from "../../../src/config";
 import {
   mockContext,
   mockCreep,
@@ -159,10 +160,15 @@ describe("distributor — reservation 去重", () => {
   });
 });
 
-describe("distributor — 水位分级调度", () => {
-  it("tier 0（水位 > 50%）：满载取能，所有 fillTarget 可服务", () => {
-    // storage 60000/100000 = 60% → tier 0
-    const storage = mockStructure("storage", { id: "storage_1", energy: 60000, capacity: 100000 });
+describe("distributor — 水位分级调度（绝对能量阈值）", () => {
+  // 刻度口径的教训：分级曾用 energy/capacity 比例，而真实 storage 容量是
+  // 1,000,000（本文件旧 mock 用 capacity:100000，与引擎常量脱节 10 倍，
+  // 测试全绿掩盖了「发展期房间永久 tier 3、extension 断供」的线上事故）。
+  // 现改为绝对阈值（CONFIG.economy.distributorTiers），断言输入引用 CONFIG 防漂移。
+  const TIERS = CONFIG.economy.distributorTiers;
+
+  it("tier 0（库存 ≥ full）：满载取能，所有 fillTarget 可服务", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: TIERS.full + 10000, capacity: 1000000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn, tower] });
@@ -171,14 +177,13 @@ describe("distributor — 水位分级调度", () => {
 
     distributorRole.run(creep, ctx);
 
-    // 满载取能：min(60000, 200) = 200
+    // 满载取能：min(库存, 200) = 200
     expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 200);
-    // tier 0 写入 memory
     expect(creep.memory.distributorTier).toBe(0);
   });
 
-  it("tier 0（水位 > 50%）：work 阶段可填充 tower", () => {
-    const storage = mockStructure("storage", { id: "storage_1", energy: 60000, capacity: 100000 });
+  it("tier 0：work 阶段可填充 tower", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: TIERS.full, capacity: 1000000 });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const snap = mockSnapshot({ storage, fillTargets: [tower] });
     const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
@@ -190,9 +195,8 @@ describe("distributor — 水位分级调度", () => {
     expect(creep.transfer).toHaveBeenCalledWith(tower, "energy");
   });
 
-  it("tier 1（水位 20%-50%）：满载取能，work 只填充 spawn/extension，跳过 tower", () => {
-    // storage 30000/100000 = 30% → tier 1
-    const storage = mockStructure("storage", { id: "storage_1", energy: 30000, capacity: 100000 });
+  it("tier 1（sustained ≤ 库存 < full）：满载取能，work 跳过 tower 只填 spawn", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: 30000, capacity: 1000000 });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const snap = mockSnapshot({ storage, fillTargets: [tower] });
     const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 200, mode: "acquire" });
@@ -205,8 +209,8 @@ describe("distributor — 水位分级调度", () => {
     expect(creep.memory.distributorTier).toBe(1);
   });
 
-  it("tier 1（水位 20%-50%）：work 阶段跳过 tower，只填充 spawn", () => {
-    const storage = mockStructure("storage", { id: "storage_1", energy: 30000, capacity: 100000 });
+  it("tier 1：work 阶段跳过 tower，填充 spawn", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: TIERS.sustained, capacity: 1000000 });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [tower, spawn] });
@@ -215,13 +219,12 @@ describe("distributor — 水位分级调度", () => {
 
     distributorRole.run(creep, ctx);
 
-    // tier 1 跳过 tower，填充 spawn
     expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
   });
 
-  it("tier 2（水位 10%-20%）：限取 400/tick", () => {
-    // storage 15000/100000 = 15% → tier 2
-    const storage = mockStructure("storage", { id: "storage_1", energy: 15000, capacity: 100000 });
+  it("tier 2（low ≤ 库存 < sustained）：限取 400/tick，extension 仍可服务（发展期回归 — 用户症状）", () => {
+    // 5000 库存在旧比例口径下是 tier 3（extension 断供），绝对口径下应为 tier 2。
+    const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 1000000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn] });
     const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 500, mode: "acquire" });
@@ -229,28 +232,27 @@ describe("distributor — 水位分级调度", () => {
 
     distributorRole.run(creep, ctx);
 
-    // 限取 400：min(15000, 500, 400) = 400
+    // 限取 400：min(5000, 500, 400) = 400
     expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 400);
     expect(creep.memory.distributorTier).toBe(2);
   });
 
-  it("tier 2（水位 10%-20%）：work 只填充 spawn/extension，跳过 tower", () => {
-    const storage = mockStructure("storage", { id: "storage_1", energy: 15000, capacity: 100000 });
+  it("tier 2：work 填充 extension（不再被锁死在仅 spawn 模式）", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: TIERS.low, capacity: 1000000 });
+    const extension = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
-    const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
-    const snap = mockSnapshot({ storage, fillTargets: [tower, spawn] });
+    const snap = mockSnapshot({ storage, fillTargets: [tower, extension] });
     const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
 
-    // tier 2 跳过 tower，填充 spawn
-    expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
+    // tier 2 跳过 tower，但 extension 正常服务。
+    expect(creep.transfer).toHaveBeenCalledWith(extension, "energy");
   });
 
-  it("tier 3（水位 < 10%）：限取 200/tick", () => {
-    // storage 5000/100000 = 5% → tier 3
-    const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
+  it("tier 3（库存 < low）：限取 200/tick", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: TIERS.low - 500, capacity: 1000000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn] });
     const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 500, mode: "acquire" });
@@ -258,13 +260,13 @@ describe("distributor — 水位分级调度", () => {
 
     distributorRole.run(creep, ctx);
 
-    // 限取 200：min(5000, 500, 200) = 200
+    // 限取 200：min(1500, 500, 200) = 200
     expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 200);
     expect(creep.memory.distributorTier).toBe(3);
   });
 
-  it("tier 3（水位 < 10%）：work 仅填充 spawn，跳过 extension 和 tower", () => {
-    const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
+  it("tier 3：work 仅填充 spawn，跳过 extension 和 tower（真保命水位）", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: 1500, capacity: 1000000 });
     const extension = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
@@ -274,7 +276,6 @@ describe("distributor — 水位分级调度", () => {
 
     distributorRole.run(creep, ctx);
 
-    // tier 3 仅填充 spawn，跳过 extension 和 tower
     expect(creep.transfer).toHaveBeenCalledWith(spawn, "energy");
   });
 });

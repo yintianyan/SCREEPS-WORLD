@@ -235,6 +235,23 @@ export const CONFIG = {
     /** Storage 满仓阈值 — 超过此比例时触发限采 + 加速消费。 */
     storageFullThreshold: 0.9,
     /**
+     * Distributor 水位分级的绝对能量阈值（storage 库存，单位：能量）。
+     *
+     * 必须用绝对值而非容量比例：storage 总容量 1,000,000（STORAGE_CAPACITY），
+     * 按比例分级时 10% 档 = 10 万能量 — 发展期房间（库存常年数百到数万）
+     * 永久卡在最低档，distributor 被锁死在「仅填 spawn」模式，extension 断供。
+     * 与 upgrade.sprintStorage(50000)/sustainedStorage(10000) 同一参照系，
+     * 两套 storage 调度共用一种刻度。
+     */
+    distributorTiers: {
+      /** ≥ 此值为 tier 0：满载取能，全目标（含 tower/controller container）。 */
+      full: 50000,
+      /** ≥ 此值为 tier 1：满载取能，仅 spawn/extension。 */
+      sustained: 10000,
+      /** ≥ 此值为 tier 2：限取 400/tick，仅 spawn/extension；低于则 tier 3（限取 200，仅 spawn 保命）。 */
+      low: 2000,
+    },
+    /**
      * 遗留能量（掉落堆/坟墓/废墟）值得 hauler 专程回收的最小数量。
      * 达到阈值的堆优先于 container 取货 — 遗留能量在衰减/限时灭失，
      * container 能量不衰减；低于阈值的零头仍走链尾兜底（container 空时顺手清理），

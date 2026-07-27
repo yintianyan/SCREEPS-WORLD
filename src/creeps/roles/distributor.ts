@@ -69,11 +69,12 @@ const TIER_WITHDRAW_CAP: readonly [number, number, number, number] = [
  * 没有 fillTarget（spawn/extension/tower 全满）时禁止从 storage 取能。
  * 这从架构上消除了 storage→storage 循环的可能性。
  *
- * 水位分级（由 gate 写入 creep.memory.distributorTier）：
- *   tier 0 (>50%)：满载取能，所有 fillTarget 正常服务
- *   tier 1 (20-50%)：满载取能，fillTarget 仅 spawn/extension
- *   tier 2 (10-20%)：限取 400/tick，fillTarget 仅 spawn/extension
- *   tier 3 (<10%)：限取 200/tick，fillTarget 仅 spawn
+ * 水位分级（由 gate 写入 creep.memory.distributorTier，
+ * 阈值为绝对能量值 — CONFIG.economy.distributorTiers）：
+ *   tier 0 (≥50k)：满载取能，所有 fillTarget 正常服务
+ *   tier 1 (≥10k)：满载取能，fillTarget 仅 spawn/extension
+ *   tier 2 (≥2k)：限取 400/tick，fillTarget 仅 spawn/extension
+ *   tier 3 (<2k)：限取 200/tick，fillTarget 仅 spawn
  */
 function withdrawStorageForDistribution(): ActionCandidate {
   return {

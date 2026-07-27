@@ -170,3 +170,10 @@
 - **修复**: ①在 `room-state.ts` 中将 40/60 改为引用 `PhaseOptions` 的默认值；②在 config 中给 `crisis.enterScore/exitScore` 加注释说明实际生效位置在 phase.ts；或③统一单真相源——让 phase.ts 从 CONFIG 读取阈值
 - **状态**: ✅ 已修复（873/873 测试通过）
 - **修复补充**: 新增 CONFIG.economy.economyPressure 常量（midpoint/range），6 个死字段标记 @deprecated，含 3 条单测
+
+### TD-021: Distributor 水位分级用容量比例口径，发展期永久锁死 tier 3（线上实证）
+- **文件**: `src/creeps/support/targeting.ts`（computeDistributorTier）, `src/config/index.ts`, `tests/unit/role/distributor.test.ts`
+- **现象**: distributor 只填 spawn 不填 extension（用户线上观察）
+- **根因**: 水位分级用 `energy / storage.getCapacity()` 比例，而 STORAGE_CAPACITY = 1,000,000——tier 3 的「<10%」= 10 万能量，发展期房间（线上实测库存均值 138）永久处于 tier 3「仅填 spawn」模式。测试未暴露：mock storage 用 capacity:100000，与引擎常量脱节 10 倍，比例口径在测试世界里看似合理
+- **修复**: 分级改为绝对能量阈值（CONFIG.economy.distributorTiers: full 50k / sustained 10k / low 2k），与 upgrade 调度（sprintStorage/sustainedStorage）同一参照系；tier 边界不加迟滞（仅影响单车取量与目标类型，抖动代价小）；测试 mock 容量对齐 1,000,000，边界断言引用 CONFIG 防双源漂移，新增「5k 库存 = tier 2、extension 恢复服务」的用户症状回归用例
+- **状态**: ✅ 已修复（890/890 测试通过），待线上验证：storage ≥ 2000 后 extension 应恢复被 distributor 填充

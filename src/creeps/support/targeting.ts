@@ -1,4 +1,5 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
+import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
 import { getObjectById } from "./obj-cache";
 
@@ -176,27 +177,34 @@ export function getHaulFillTarget(
  * 由 distributor gate 每 tick 根据 storage 水位计算并写入 creep.memory.distributorTier。
  * getDistributorFillTarget 读取该值过滤目标类型，withdrawStorageForDistribution 读取该值限制取能量。
  *
- * 档位定义：
- *   0 — 水位 > 50%：满载取能，所有 fillTarget 正常服务
- *   1 — 水位 20%-50%：满载取能，仅服务 spawn/extension（跳过 tower）
- *   2 — 水位 10%-20%：限取 400/tick，仅服务 spawn/extension
- *   3 — 水位 < 10%：限取 200/tick，仅服务 spawn（不含 extension）
+ * 档位定义（阈值见 CONFIG.economy.distributorTiers，绝对能量值）：
+ *   0 — 库存 ≥ full(50k)：满载取能，所有 fillTarget 正常服务
+ *   1 — 库存 ≥ sustained(10k)：满载取能，仅服务 spawn/extension（跳过 tower）
+ *   2 — 库存 ≥ low(2k)：限取 400/tick，仅服务 spawn/extension
+ *   3 — 库存 < low(2k)：限取 200/tick，仅服务 spawn（不含 extension）
  */
 export type DistributorTier = 0 | 1 | 2 | 3;
 
 /**
- * 根据 storage 水位计算 distributor 调度档位。
- * 无 storage 或容量为零时返回 0（不限制）。
+ * 根据 storage 库存的**绝对能量值**计算 distributor 调度档位。
+ *
+ * 刻度口径（曾经的教训）：不能用 energy/capacity 比例 — storage 总容量
+ * 1,000,000，比例 10% = 10 万能量，发展期房间（库存数百到数万）永久卡在
+ * tier 3「仅填 spawn」模式，extension 断供。绝对阈值来自
+ * CONFIG.economy.distributorTiers，与 upgrade 调度（sprintStorage/
+ * sustainedStorage）同一参照系。
+ *
+ * 边界不加迟滞：tier 只影响单车取量与目标类型，抖动代价小
+ * （不像 colonyState 有全房爆炸半径），不值得引入驻留状态。
+ * 无 storage 时返回 0（不限制）。
  */
 export function computeDistributorTier(storage: StructureStorage | undefined): DistributorTier {
   if (!storage) return 0;
   const energy = storage.store.getUsedCapacity(RESOURCE_ENERGY);
-  const capacity = storage.store.getCapacity(RESOURCE_ENERGY);
-  if (capacity === 0) return 0;
-  const ratio = energy / capacity;
-  if (ratio > 0.5) return 0;
-  if (ratio > 0.2) return 1;
-  if (ratio > 0.1) return 2;
+  const tiers = CONFIG.economy.distributorTiers;
+  if (energy >= tiers.full) return 0;
+  if (energy >= tiers.sustained) return 1;
+  if (energy >= tiers.low) return 2;
   return 3;
 }
 
