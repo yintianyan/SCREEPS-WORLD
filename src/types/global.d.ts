@@ -189,6 +189,13 @@ declare global {
     tier?: CpuTier;
     recoveryTicks?: number;
     skipReasons?: Record<string, number>;
+    /**
+     * 最近一次 generatePixel 的 tick（自愿放血协议）。
+     * pixel 吃光整个 bucket（10000），宽限窗口内 scheduler 把 tier 地板
+     * 抬到 conserve — 防止看门狗把自愿放血误判为 CPU 失控进入 recovery，
+     * 冻结 P2 经济角色数百 tick。
+     */
+    pixelAt?: number;
     /** 运行时摘要 — 每 10 tick 更新，供控制台快速诊断。 */
     stats?: {
       /** 上次采样 tick。 */

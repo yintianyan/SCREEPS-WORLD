@@ -20,8 +20,31 @@ const TIER_ORDER: readonly CpuTier[] = ["healthy", "guarded", "conserve", "recov
  * 降级立即生效 — bucket 低时必须马上限流。
  * 升级需要 bucket 超过下一档阈值至少 `recoveryHysteresis`，
  * 并持续 `recoveryTicks` 个 tick，避免频繁抖动。
+ *
+ * @param voluntaryDrain 自愿放血宽限（generatePixel 后的窗口期）：
+ *   tier 地板抬到 conserve — pixel 清零 bucket 只损失突发容量，
+ *   每 tick 限额不变，P2 经济角色不应被 recovery 档冻结。
+ *   仅影响 recovery 判定；真实 CPU 超支仍由逐 tick 硬上限兜底。
  */
-export function resolveTier(prevTier: CpuTier | undefined, prevRecoveryTicks: number, bucket: number): {
+export function resolveTier(
+  prevTier: CpuTier | undefined,
+  prevRecoveryTicks: number,
+  bucket: number,
+  voluntaryDrain = false,
+): {
+  tier: CpuTier;
+  recoveryTicks: number;
+} {
+  const result = resolveTierNatural(prevTier, prevRecoveryTicks, bucket);
+  // 自愿放血宽限：recovery 地板抬到 conserve。
+  // 不影响 recoveryTicks 记账 — 滞回升级逻辑照常从真实档位爬升。
+  if (voluntaryDrain && result.tier === "recovery") {
+    return { tier: "conserve", recoveryTicks: result.recoveryTicks };
+  }
+  return result;
+}
+
+function resolveTierNatural(prevTier: CpuTier | undefined, prevRecoveryTicks: number, bucket: number): {
   tier: CpuTier;
   recoveryTicks: number;
 } {
@@ -103,7 +126,13 @@ export function createBudget(): Budget {
   const prevTier = Memory.kernel?.tier;
   const prevTicks = Memory.kernel?.recoveryTicks ?? 0;
 
-  const { tier, recoveryTicks } = resolveTier(prevTier, prevTicks, bucket);
+  // 自愿放血宽限：generatePixel 清零 bucket 后的窗口期内，
+  // recovery 地板抬到 conserve（P2 经济角色照常运行）。
+  const pixelAt = Memory.kernel?.pixelAt;
+  const voluntaryDrain =
+    pixelAt !== undefined && Game.time - pixelAt < CONFIG.cpu.pixelGraceTicks;
+
+  const { tier, recoveryTicks } = resolveTier(prevTier, prevTicks, bucket, voluntaryDrain);
 
   // 持久化档位跟踪，供下一 tick 使用。
   if (!Memory.kernel) Memory.kernel = {};

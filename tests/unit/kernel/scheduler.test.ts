@@ -93,3 +93,31 @@ describe("Scheduler — resolveTier", () => {
     expect(result.recoveryTicks).toBe(0);
   });
 });
+
+describe("Scheduler — 自愿放血宽限（generatePixel 后 recovery 地板抬到 conserve）", () => {
+  it("宽限期内 bucket=0 → conserve 而非 recovery（P2 经济角色不冻结）", () => {
+    const result = resolveTier("healthy", 0, 0, true);
+    expect(result.tier).toBe("conserve");
+  });
+
+  it("无宽限时 bucket=0 → recovery（真实 CPU 失控的原有语义不变）", () => {
+    const result = resolveTier("healthy", 0, 0, false);
+    expect(result.tier).toBe("recovery");
+  });
+
+  it("宽限只抬 recovery 地板 — 自然档位为 guarded/conserve 时不受影响", () => {
+    // bucket 5000 → 自然 guarded，宽限不改变。
+    expect(resolveTier(undefined, 0, 5000, true).tier).toBe("guarded");
+    // bucket 1500 → 自然 conserve，宽限不改变。
+    expect(resolveTier(undefined, 0, 1500, true).tier).toBe("conserve");
+  });
+
+  it("宽限期内滞回爬升记账照常 — 从 conserve 向 guarded 的恢复不被干扰", () => {
+    // 宽限地板下 tier=conserve，bucket 爬回 3600（> guarded.min+滞回）开始计数。
+    const r1 = resolveTier("conserve", 0, 3600, true);
+    expect(r1.tier).toBe("conserve");
+    expect(r1.recoveryTicks).toBe(1);
+    const r2 = resolveTier("conserve", 19, 3600, true);
+    expect(r2.tier).toBe("guarded");
+  });
+});

@@ -92,6 +92,12 @@ export const CONFIG = {
       conserve: 2 as Priority,
       recovery: 1 as Priority,
     },
+    /** 自愿放血宽限窗口（tick）— generatePixel 后 tier 地板抬到 conserve 的时长。
+     * pixel 吃光整个 bucket（10000），但每 tick 20 CPU 限额不受影响：
+     * 常态负载 ~2-5 CPU 时降到 recovery（冻结 P2 经济角色）是看门狗误判。
+     * 700 覆盖 0 → conserve 阈值(1000+滞回) 的自然爬升（~+15/tick ≈ 100 tick）
+     * 加数轮滞回等待；窗口内若 CPU 真实超支，逐 tick 硬上限仍然兜底。 */
+    pixelGraceTicks: 700,
   },
 
   spawn: {
