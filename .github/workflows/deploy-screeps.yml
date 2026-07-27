@@ -23,7 +23,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 跟随 .nvmrc（22.23.1）— 单一真相源，防版本漂移。
+          # 依赖树中 screeps-server-mockup → screeps → isolated-vm（git 原生插件）
+          # 要求 Node ≥22（v8::SourceLocation 头文件），Node 20 下 node-gyp 编译必败。
+          node-version-file: '.nvmrc'
           cache: npm
 
       - name: Install dependencies
