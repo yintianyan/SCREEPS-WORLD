@@ -75,6 +75,35 @@ function blacklistTarget(roomName: string, tick: number): void {
   Memory.kernel.expansionBlacklist[roomName] = tick + CONFIG.expansion.blacklistCooldown;
 }
 
+/**
+ * 召回扩张行动的存活 creep（claimer + 拓荒编队）。
+ *
+ * abort 只清 Memory 不触碰 creep 会留下孤儿：拓荒者 home=新房，
+ * 失守后 home 房无 snapshot → role-runner 每 tick 静默 return，
+ * recyclePass 按自有房遍历也覆盖不到 — 整支编队原地呆立至寿终。
+ * 把 home 改回 sponsor 并标记 recycle，让既有回收链（role-runner 停工 +
+ * spawn-manager recyclePass 归航）接管；同时清掉 sponsor 队列中
+ * 尚未孵化的本目标请求，防止 abort 后继续送兵。
+ *
+ * @internal 导出仅供接线级单元测试使用，业务代码经由 abort 路径调用。
+ */
+export function reclaimExpeditionCreeps(target: string, sponsor: string): void {
+  for (const creep of Object.values(Game.creeps)) {
+    const mem = creep.memory;
+    if (mem.home !== target && !(mem.remoteTarget === target && mem.role === "claimer")) continue;
+    mem.home = sponsor;
+    mem.remoteTarget = undefined;
+    mem.assignment = undefined;
+    mem.recycle = true;
+  }
+  const queue = Memory.rooms[sponsor]?.spawnQueue;
+  if (queue) {
+    for (let i = queue.length - 1; i >= 0; i--) {
+      if (queue[i]!.home === target) queue.splice(i, 1);
+    }
+  }
+}
+
 /** 清理已到期的黑名单条目（防无限累积）。 */
 function pruneBlacklist(tick: number): void {
   const bl = Memory.kernel?.expansionBlacklist;
@@ -164,6 +193,7 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState): void {
       // 无可行锚点 — 极罕见（开阔度门槛已带回退），放弃并冷却。
       console.log(`[${ctx.tick}] expansion: no viable anchor in ${expansion.target}, aborting`);
       blacklistTarget(expansion.target, ctx.tick);
+      reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
       Memory.kernel!.expansion = undefined;
     }
     return;
@@ -173,6 +203,7 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState): void {
   if (targetRoom?.controller?.owner && !targetRoom.controller.my) {
     console.log(`[${ctx.tick}] expansion: ${expansion.target} taken by ${targetRoom.controller.owner.username}, aborting`);
     blacklistTarget(expansion.target, ctx.tick);
+    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
     Memory.kernel!.expansion = undefined;
     return;
   }
@@ -181,6 +212,7 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState): void {
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.claimTimeout) {
     console.log(`[${ctx.tick}] expansion: claim ${expansion.target} timed out, aborting`);
     blacklistTarget(expansion.target, ctx.tick);
+    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
     Memory.kernel!.expansion = undefined;
     return;
   }
@@ -242,6 +274,7 @@ function advancePioneering(ctx: TickContext, expansion: ExpansionState): void {
   if (!targetRoom?.controller?.my) {
     console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during pioneering, aborting`);
     blacklistTarget(expansion.target, ctx.tick);
+    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
     Memory.kernel!.expansion = undefined;
     return;
   }

@@ -36,24 +36,41 @@ export function syncTaskStates(
     sites.set(`${site.pos.x},${site.pos.y}`, site);
   }
 
-  // 预构建已建成结构的位置 → 类型映射，避免 lookForAt 调用。
-  const builtPositions = new Map<string, string>();
+  // 预构建已建成结构的「位置:类型」集合，避免 lookForAt 调用。
+  // 两个要点（幽灵任务循环的根因修复）：
+  //   1. 必须含 rampart/wall/road/lab 等全部可入队类型 — 缺谁，谁的任务
+  //      建成后就永远无法转 done，而是 site 消失 → 回退 queued → 重复建
+  //      site 失败 → blocked → purge → 规划器再生成，无限 churn。
+  //   2. key 必须带结构类型 — rampart 与建筑共格（core rampart 覆盖正是
+  //      这么设计的），pos→单类型映射会让两者互相覆盖、判定失真。
+  const builtPositions = new Set<string>();
   const builtStructures: StructurePosRef[] = [
     ...snapshot.spawns,
     ...snapshot.extensions,
     ...snapshot.towers,
     ...snapshot.containers,
     ...snapshot.links,
+    ...snapshot.ramparts,
+    ...snapshot.walls,
+    ...snapshot.roads,
+    ...snapshot.labs,
   ];
   if (snapshot.storage) {
     builtStructures.push(snapshot.storage);
   }
+  if (snapshot.terminal) {
+    builtStructures.push(snapshot.terminal);
+  }
+  if (snapshot.extractor) {
+    builtStructures.push(snapshot.extractor);
+  }
   for (const s of builtStructures) {
-    builtPositions.set(`${s.pos.x},${s.pos.y}`, s.structureType);
+    builtPositions.add(`${s.pos.x},${s.pos.y}:${s.structureType}`);
   }
 
   for (const task of queue) {
     const key = `${task.pos.x},${task.pos.y}`;
+    const builtKey = `${key}:${task.structureType}`;
     if (task.state === "queued") {
       // 检查该位置是否存在**匹配结构类型**的 site。
       // P0 修复：旧实现只检查位置不检查类型，导致 storage 的 site 被误匹配给
@@ -61,20 +78,16 @@ export function syncTaskStates(
       const site = sites.get(key);
       if (site && site.structureType === task.structureType) {
         task.state = "site";
-      } else {
-        // 检查该位置是否已建成目标结构 — 避免 layout planner 反复重添已完成任务。
-        const builtType = builtPositions.get(key);
-        if (builtType === task.structureType) {
-          task.state = "done";
-        }
+      } else if (builtPositions.has(builtKey)) {
+        // 该位置已建成目标结构 — 避免 layout planner 反复重添已完成任务。
+        task.state = "done";
       }
     } else if (task.state === "site") {
       // 检查 site 是否消失（完成或被毁）或类型不匹配。
       const site = sites.get(key);
       if (!site || site.structureType !== task.structureType) {
         // 从快照结构数据检查是否已建成，避免 lookForAt。
-        const builtType = builtPositions.get(key);
-        task.state = builtType === task.structureType ? "done" : "queued";
+        task.state = builtPositions.has(builtKey) ? "done" : "queued";
       }
     }
   }

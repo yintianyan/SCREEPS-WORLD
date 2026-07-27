@@ -56,6 +56,12 @@ export interface GlobalCache {
    *（对 defender 这类威胁窗口角色，等待就是战力真空）。
    */
   boostAssignments?: { tick: number; byCreep: Record<string, { labId: string; ready: boolean }> };
+  /**
+   * 本 tick 的 lab 搬运需求表（lab-system 每 tick 写入，supplyLabs 消费）。
+   * lab 角色分配只有 lab-system 知道 — 此表把「哪个 lab 缺哪种资源多少量 /
+   * 哪个 lab 该清空什么」告诉搬运 creep，是供料链的唯一化合物-lab 绑定通道。
+   */
+  labDemands?: { tick: number; byRoom: Record<string, import("../domain/industry/types").LabDemandTable> };
   /** 归位：每房每 tick 推导的关键格/道路/阻挡格集合（parking.ts 构建）。 */
   __parkRoomData?: Record<string, { tick: number; data: unknown }>;
   /** 归位：本 tick 已被预约的停车位（packed pos 集合，防聚堆）。 */

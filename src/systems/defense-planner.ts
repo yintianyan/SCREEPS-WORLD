@@ -232,8 +232,16 @@ function planDefense(
 
     if (cutResult.complete) {
       // Min-cut 成功：使用割集位置生成 rampart 任务。
+      // 已建 rampart 位置跳过 — 缓存命中的再生成路径若不对照实建结构去重，
+      // 会为已建成的割集位置重复入队（建 site 必失败 → blocked → purge →
+      // 下周期再生成，幽灵任务无限 churn；core 覆盖路径同款去重，此处补齐）。
+      const builtRamparts = new Set<number>();
+      for (const r of snapshot.ramparts) {
+        builtRamparts.add(r.pos.x * 50 + r.pos.y);
+      }
       for (let i = 0; i < cutResult.rampartPositions.length; i++) {
         const pos = cutResult.rampartPositions[i]!;
+        if (builtRamparts.has(pos.x * 50 + pos.y)) continue;
         const key = `defense.mincut.${pos.x}.${pos.y}`;
         if (existingKeys.has(key)) continue;
         queue.push({

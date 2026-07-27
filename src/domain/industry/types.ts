@@ -61,6 +61,8 @@ export interface LabAssignment {
   readonly boostTarget?: string;
   /** boost 模式下使用的化合物。 */
   readonly boostCompound?: Compound;
+  /** boost 模式下计划强化的部件数（决定备料量与执行上限）。 */
+  readonly boostParts?: number;
 }
 
 /** 完整的 lab 分配方案（单 tick）。 */
@@ -68,6 +70,32 @@ export interface LabPlan {
   readonly assignments: readonly LabAssignment[];
   /** 本 tick 应执行的反应（如果有）。 */
   readonly reaction?: ReactionStep;
+}
+
+// ─── Lab 搬运需求（lab-system 发布 → 供料 action 消费） ─────
+
+/** 装料需求：某 lab 需要装入某资源到目标量。 */
+export interface LabLoadDemand {
+  readonly labId: string;
+  readonly resource: string;
+  /** 还缺多少（目标量 - 当前量）。 */
+  readonly amount: number;
+}
+
+/** 卸料需求：某 lab 中的某资源应搬回 storage（错矿清位 / 产物回收）。 */
+export interface LabUnloadDemand {
+  readonly labId: string;
+  readonly resource: string;
+}
+
+/**
+ * 单房间 lab 搬运需求表 — lab 角色分配（input/output/boost）只有 lab-system
+ * 知道，搬运 creep 不知道；此表是两者之间唯一的化合物-lab 绑定通道。
+ * 没有它，供料只能盲搬（任意化合物倒进任意 lab），错矿占位后永久死锁。
+ */
+export interface LabDemandTable {
+  readonly loads: readonly LabLoadDemand[];
+  readonly unloads: readonly LabUnloadDemand[];
 }
 
 // ─── Boost 决策 ─────────────────────────────────────────────

@@ -6,6 +6,8 @@
 import type { ActionCandidate } from "../action-types";
 import { runAction } from "./helpers";
 import { CONFIG } from "../../../config";
+import { globalCache } from "../../../kernel/global-cache";
+import { getObjectById } from "../../support/obj-cache";
 
 /** haulMineralsToStorage 的 resolve 返回类型。 */
 type MineralHaulTarget =
@@ -59,15 +61,29 @@ export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
 
 /** supplyLabs 的 resolve 返回类型。 */
 type LabSupplyTarget =
-  | { dest: StructureLab; compound: ResourceConstant; phase: "deposit" }
-  | { source: StructureStorage | StructureTerminal; compound: ResourceConstant; phase: "withdraw" };
+  | { dest: StructureLab; resource: ResourceConstant; phase: "deposit" }
+  | { dest: StructureStorage | StructureTerminal; resource: ResourceConstant; phase: "dump" }
+  | { source: StructureStorage | StructureTerminal; resource: ResourceConstant; amount: number; phase: "withdraw" }
+  | { source: StructureLab; resource: ResourceConstant; phase: "unload" };
+
+/** storage 能量低于此值时不为 lab 抽能 — boost 能量不与 spawn/tower 补给抢血。 */
+const LAB_ENERGY_STORAGE_FLOOR = 1000;
 
 /**
- * 从 storage/terminal 搬运化合物到 lab（供料）。
- * 触发条件：lab 中有空位且 storage/terminal 有对应化合物。
- * 取料顺序：storage 优先，terminal 回退 — 市场买入的矿物落在 terminal，
- * 没有回退则贸易补给的原料永远进不了反应链。
- * 简化实现：搬运 lab 中缺少的资源。
+ * 按 lab-system 发布的需求表搬运（storage/terminal ↔ lab）。
+ *
+ * 需求表（globalCache.labDemands）是化合物-lab 绑定的唯一真相源：
+ * lab 角色分配（input1/input2/output/boost）只有 lab-system 知道，
+ * 搬运端绝不自行猜测「哪个 lab 该装什么」——盲搬会让错矿占位、反应死锁。
+ *
+ * 四相：
+ *   deposit  — 携带的资源正是某 lab 的装料需求 → 送入该 lab
+ *   dump     — 携带化合物但无 lab 需要 → 倒回 storage 解堵
+ *   unload   — 空载且有卸料需求（错矿清位/产物回收）→ 从 lab 取出
+ *   withdraw — 空载且有装料需求 → 从 storage（优先）/terminal（市场买入回退）取料
+ *
+ * 注意容量判断必须带资源参数：lab 是受限 store，
+ * 无参 getFreeCapacity() 返回 null——正是旧实现全链断路的根因。
  */
 export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
   return {
@@ -77,43 +93,77 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
       const storage = ac.snapshot.storage;
       if (!storage) return undefined;
 
-      // 如果 creep 正在 carrying 化合物，送到 lab
-      const carriedCompound = (Object.keys(ac.creep.store) as ResourceConstant[])
-        .find(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
+      const demands = globalCache().labDemands;
+      const table = demands?.tick === Game.time ? demands.byRoom[ac.snapshot.roomName] : undefined;
+      if (!table) return undefined;
 
+      const store = ac.creep.store;
+      const carriedCompound = (Object.keys(store) as ResourceConstant[])
+        .find(r => r !== RESOURCE_ENERGY && store[r]! > 0);
+
+      // 1. 携带化合物：送到需要它的 lab；无需求方则倒回 storage 解堵。
       if (carriedCompound) {
-        const targetLab = ac.snapshot.labs.find(l => (l.store.getFreeCapacity() ?? 0) > 0);
-        if (targetLab) return { dest: targetLab, compound: carriedCompound, phase: "deposit" as const };
+        for (const load of table.loads) {
+          if (load.resource !== carriedCompound) continue;
+          const lab = getObjectById(load.labId as Id<StructureLab>);
+          if (lab && (lab.store.getFreeCapacity(carriedCompound) ?? 0) > 0) {
+            return { dest: lab, resource: carriedCompound, phase: "deposit" as const };
+          }
+        }
+        return { dest: storage, resource: carriedCompound, phase: "dump" as const };
+      }
+
+      // 2. 携带能量且 lab 有能量缺口：直接投喂（boostCreep 每部件消耗 20 能量）。
+      if (store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+        for (const load of table.loads) {
+          if (load.resource !== RESOURCE_ENERGY) continue;
+          const lab = getObjectById(load.labId as Id<StructureLab>);
+          if (lab && (lab.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0) > 0) {
+            return { dest: lab, resource: RESOURCE_ENERGY, phase: "deposit" as const };
+          }
+        }
         return undefined;
       }
 
-      // 从 storage/terminal 取化合物
-      const hasLabSpace = ac.snapshot.labs.some(l => (l.store.getFreeCapacity() ?? 0) > 0);
-      if (!hasLabSpace) return undefined;
-
-      const findCompound = (store: StoreDefinition): ResourceConstant | undefined =>
-        (Object.keys(store) as ResourceConstant[])
-          .find(r => r !== RESOURCE_ENERGY && store[r]! > 0);
-
-      const storageCompound = findCompound(storage.store);
-      if (storageCompound) {
-        return { source: storage, compound: storageCompound, phase: "withdraw" as const };
+      // 3. 空载：先清（错矿/产物回收）再装 — 清位不完成，装料就会 ERR_FULL 空转。
+      for (const unload of table.unloads) {
+        const lab = getObjectById(unload.labId as Id<StructureLab>);
+        const resource = unload.resource as ResourceConstant;
+        if (lab && (lab.store[resource] ?? 0) > 0) {
+          return { source: lab, resource, phase: "unload" as const };
+        }
       }
 
       const terminal = ac.snapshot.terminal;
-      if (terminal) {
-        const terminalCompound = findCompound(terminal.store);
-        if (terminalCompound) {
-          return { source: terminal, compound: terminalCompound, phase: "withdraw" as const };
+      for (const load of table.loads) {
+        const resource = load.resource as ResourceConstant;
+        if (resource === RESOURCE_ENERGY) {
+          if (storage.store.getUsedCapacity(RESOURCE_ENERGY) > LAB_ENERGY_STORAGE_FLOOR) {
+            return { source: storage, resource, amount: load.amount, phase: "withdraw" as const };
+          }
+          continue;
+        }
+        // 化合物：storage 优先，terminal 回退 — 市场买入的矿物落在 terminal，
+        // 没有回退则贸易补给的原料永远进不了反应链。
+        if ((storage.store[resource] ?? 0) > 0) {
+          return { source: storage, resource, amount: load.amount, phase: "withdraw" as const };
+        }
+        if (terminal && (terminal.store[resource] ?? 0) > 0) {
+          return { source: terminal, resource, amount: load.amount, phase: "withdraw" as const };
         }
       }
       return undefined;
     },
     execute: (ac, t) => {
-      if (t.phase === "deposit") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.compound));
+      if (t.phase === "deposit" || t.phase === "dump") {
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resource));
+      } else if (t.phase === "unload") {
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resource));
       } else {
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.compound));
+        const available = t.source.store[t.resource] ?? 0;
+        const amount = Math.min(t.amount, available, ac.creep.store.getFreeCapacity() ?? 0);
+        if (amount <= 0) return;
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resource, amount));
       }
     },
   };

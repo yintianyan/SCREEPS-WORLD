@@ -6,7 +6,7 @@ import { evaluateDemand, ROLE_REQUIRED_PARTS, type CreepSummary, type SpawningSu
 import type { ColonyState } from "../kernel/contracts";
 import { cleanQueue, removeRequestsByRole, sortQueue, submitRequest } from "../domain/spawn/queue";
 import { selectRecycleCandidates } from "../domain/spawn/recycle";
-import { moveToTarget } from "../creeps/movement";
+import { moveToTarget, moveTowardRoom } from "../creeps/movement";
 
 /**
  * 孵化管理器 — 唯一调用 spawnCreep 的模块。
@@ -143,6 +143,12 @@ function recyclePass(
     if (!s.recycle && !markedSet.has(s.name)) continue;
     const creep = Game.creeps[s.name];
     if (!creep) continue; // creep 可能在本 tick 死亡
+    // 跨房归航：回收 creep 可能身处远矿房/失守的扩张房 —
+    // findClosestByRange 只在同房有效（跨房返回 null 会让 creep 原地卡死）。
+    if (creep.room.name !== home) {
+      moveTowardRoom(creep, home);
+      continue;
+    }
     const spawn = creep.pos.findClosestByRange(snapshot.spawns as StructureSpawn[]);
     if (!spawn) continue;
     if (creep.pos.getRangeTo(spawn) <= 1) {

@@ -15,10 +15,27 @@
  *   - 反应链状态持久化在 RoomMemory.industry 中
  */
 import type { RoomSnapshot, System, TickContext } from "../kernel/contracts";
-import type { Compound, LabAssignment, LabPlan, ReactionPlan } from "../domain/industry/types";
+import type { BoostEffect, Compound, LabAssignment, LabDemandTable, LabLoadDemand, LabPlan, LabUnloadDemand, ReactionPlan } from "../domain/industry/types";
+import { BOOST_EFFECTS } from "../domain/industry/types";
 import { evaluateBoostRequests, DEFAULT_BOOST_POLICY } from "../domain/industry/boost";
 import { getNextExecutableStep, planReactionChain, selectReactionTrio, LAB_REACTION_AMOUNT } from "../domain/industry/reactions";
 import { globalCache } from "../kernel/global-cache";
+
+// ─── Boost/装料常量（引擎数值：boostCreep 每部件 30 矿物 + 20 能量）────
+
+const LAB_BOOST_MINERAL = 30;
+const LAB_BOOST_ENERGY = 20;
+/** 反应 input lab 的装料目标 — 一个批次量，避免一次抽干 storage。 */
+const REACTION_LOAD_TARGET = 300;
+/** output lab 产物积累到此量即发布回收需求（攒批搬运，减少往返）。 */
+const OUTPUT_RECLAIM_THRESHOLD = 100;
+
+/** boost 效果 → 对应 body part（用于封顶实际可强化的部件数）。 */
+const EFFECT_PART: Readonly<Record<BoostEffect, BodyPartConstant>> = {
+  harvest: WORK, upgrade: WORK, repair: WORK, dismantle: WORK,
+  attack: ATTACK, rangedAttack: RANGED_ATTACK, heal: HEAL,
+  carry: CARRY, move: MOVE, tough: TOUGH,
+};
 
 // ─── RoomMemory 扩展 ────────────────────────────────────────
 
@@ -90,7 +107,7 @@ function collectCompoundInventory(snapshot: RoomSnapshot): Record<string, number
  */
 function planLabs(
   snapshot: RoomSnapshot,
-  boostRequests: readonly { creepName: string; compound: Compound }[],
+  boostRequests: readonly { creepName: string; compound: Compound; bodyParts: number }[],
   reactionStep: { input1: Compound; input2: Compound; output: Compound } | null,
 ): LabPlan {
   const labs = snapshot.labs;
@@ -111,6 +128,7 @@ function planLabs(
       role: "boost",
       boostTarget: req.creepName,
       boostCompound: req.compound,
+      boostParts: req.bodyParts,
     });
     labIndex++;
   }
@@ -154,6 +172,81 @@ function planLabs(
   }
 
   return { assignments };
+}
+
+// ─── 搬运需求推导 ───────────────────────────────────────────
+
+/** lab 当前装载的矿物（能量除外；空 lab 返回 undefined）。 */
+function heldMineral(lab: StructureLab): ResourceConstant | undefined {
+  return (Object.keys(lab.store) as ResourceConstant[])
+    .find(r => r !== RESOURCE_ENERGY && (lab.store[r] ?? 0) > 0);
+}
+
+/**
+ * 依据 lab 分配推导本 tick 的装/卸料需求表。
+ *
+ * 规则：
+ *   boost lab   — 需要 boostCompound（parts×30）+ 能量（parts×20）；装错矿先清位
+ *   input lab   — 需要对应反应原料至批次目标量；装错矿先清位
+ *   output lab  — 装着非本反应产物立即回收；产物积攒到阈值后攒批回收
+ *   idle lab    — 任何残留矿物回收
+ *
+ * 错矿 lab 在清位完成前不发装料需求 — 否则搬运端会对满仓 lab 反复 ERR_FULL 空转。
+ *
+ * @internal 导出仅供接线级单元测试使用，业务代码不直接调用。
+ */
+export function computeLabDemands(labPlan: LabPlan): LabDemandTable {
+  const loads: LabLoadDemand[] = [];
+  const unloads: LabUnloadDemand[] = [];
+  const reaction = labPlan.reaction;
+
+  for (const assignment of labPlan.assignments) {
+    const lab = Game.getObjectById(assignment.labId as Id<StructureLab>);
+    if (!lab) continue;
+    const held = heldMineral(lab);
+
+    let want: ResourceConstant | undefined;
+    let target = 0;
+    if (assignment.role === "boost" && assignment.boostCompound) {
+      want = assignment.boostCompound as ResourceConstant;
+      const parts = assignment.boostParts ?? 5;
+      target = parts * LAB_BOOST_MINERAL;
+      const energyMissing = parts * LAB_BOOST_ENERGY - lab.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (energyMissing > 0) {
+        loads.push({ labId: assignment.labId, resource: RESOURCE_ENERGY, amount: energyMissing });
+      }
+    } else if (assignment.role === "input1" && reaction) {
+      want = reaction.input1 as ResourceConstant;
+      target = REACTION_LOAD_TARGET;
+    } else if (assignment.role === "input2" && reaction) {
+      want = reaction.input2 as ResourceConstant;
+      target = REACTION_LOAD_TARGET;
+    }
+
+    if (want) {
+      if (held && held !== want) {
+        unloads.push({ labId: assignment.labId, resource: held });
+        continue;
+      }
+      const missing = target - (lab.store[want] ?? 0);
+      if (missing > 0) {
+        loads.push({ labId: assignment.labId, resource: want, amount: missing });
+      }
+      continue;
+    }
+
+    if (!held) continue;
+    if (assignment.role === "output" && reaction && held === (reaction.output as ResourceConstant)) {
+      // 本反应的正常产出 — 攒批回收，避免每 5 单位跑一趟。
+      if ((lab.store[held] ?? 0) >= OUTPUT_RECLAIM_THRESHOLD) {
+        unloads.push({ labId: assignment.labId, resource: held });
+      }
+    } else {
+      // idle 残留 / output 装着往期产物 — 立即回收清位。
+      unloads.push({ labId: assignment.labId, resource: held });
+    }
+  }
+  return { loads, unloads };
 }
 
 // ─── 系统实现 ───────────────────────────────────────────────
@@ -257,11 +350,25 @@ export const labSystem: System = {
       // ── 3. Lab 分配 ──
       const labPlan = planLabs(snapshot, boostRequests, reactionStep);
 
+      // ── 3.2 发布搬运需求表 ──
+      // lab 角色分配只有本系统知道 — 不发布需求表，supplyLabs 只能盲搬，
+      // 化合物永远进不了正确的 lab（工业链断路的第二层根因）。
+      // 系统先于角色运行，同 tick 数据可达。
+      const demandTable = computeLabDemands(labPlan);
+      {
+        const g = globalCache();
+        if (!g.labDemands || g.labDemands.tick !== ctx.tick) {
+          g.labDemands = { tick: ctx.tick, byRoom: {} };
+        }
+        g.labDemands.byRoom[snapshot.roomName] = demandTable;
+      }
+
       // ── 3.5 发布 boost 报到分配 ──
       // 把「creep → boost lab」写入 globalCache，供 role-runner 引导新生 creep
       // 走到 lab 旁（boostCreep 要求相邻）。系统先于角色运行，同 tick 数据可达。
-      // ready = lab 内化合物已备足：未备足时不引导报到（creep 先正常干活，
-      // supplyLabs 搬运到位后的评估周期再来），防止在 lab 旁空等。
+      // ready = lab 内化合物与能量均已备足（boostCreep 每部件 30 矿物 + 20 能量，
+      // 缺任一项都会 ERR_NOT_ENOUGH_RESOURCES）：未备足时不引导报到
+      //（creep 先正常干活，supplyLabs 搬运到位后的评估周期再来），防止在 lab 旁空等。
       for (const assignment of labPlan.assignments) {
         if (assignment.role !== "boost" || !assignment.boostTarget) continue;
         const g = globalCache();
@@ -270,7 +377,8 @@ export const labSystem: System = {
         }
         const boostLab = Game.getObjectById(assignment.labId as Id<StructureLab>);
         const stocked = assignment.boostCompound !== undefined &&
-          ((boostLab?.store[assignment.boostCompound as ResourceConstant] ?? 0) >= 30);
+          ((boostLab?.store[assignment.boostCompound as ResourceConstant] ?? 0) >= LAB_BOOST_MINERAL) &&
+          ((boostLab?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) >= LAB_BOOST_ENERGY);
         g.boostAssignments.byCreep[assignment.boostTarget] = {
           labId: assignment.labId,
           ready: stocked,
@@ -285,16 +393,23 @@ export const labSystem: System = {
         const creep = Game.creeps[assignment.boostTarget];
         if (!lab || !creep) continue;
 
-        // 确保 lab 中有正确的化合物
-        const labStore = lab.store;
-        const compoundAmount = labStore[assignment.boostCompound as ResourceConstant] ?? 0;
-        if (compoundAmount < 30) {
-          // hauler 的 supplyLabs action 会自动从 storage 补充化合物到 lab
+        // 部件数按三重约束封顶：矿物存量 / 能量存量 / creep 实际可强化的部件数。
+        // 不封顶直接 boostCreep 会尝试强化全部匹配部件 — 备料只够 5 个部件时
+        // 必然 ERR_NOT_ENOUGH_RESOURCES，boost 永不成功。
+        const compound = assignment.boostCompound as ResourceConstant;
+        const effect = BOOST_EFFECTS[assignment.boostCompound];
+        const partType = effect ? EFFECT_PART[effect] : undefined;
+        if (!partType) continue;
+        const matchedParts = creep.body.filter(p => p.type === partType && !p.boost).length;
+        const byMineral = Math.floor((lab.store[compound] ?? 0) / LAB_BOOST_MINERAL);
+        const byEnergy = Math.floor(lab.store.getUsedCapacity(RESOURCE_ENERGY) / LAB_BOOST_ENERGY);
+        const parts = Math.min(matchedParts, byMineral, byEnergy);
+        if (parts <= 0) {
+          // 备料未到位 — supplyLabs 依据需求表补给后，下一评估周期执行。
           continue;
         }
 
-        // 执行 boost
-        const result = lab.boostCreep(creep);
+        const result = lab.boostCreep(creep, parts);
         if (result === OK) {
           if (!industryMem.boostedCreeps) industryMem.boostedCreeps = [];
           industryMem.boostedCreeps.push(creep.name);

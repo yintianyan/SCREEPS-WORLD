@@ -138,6 +138,10 @@ const policy: RolePolicy = {
     stockTerminalEnergy(),
     // factory 压缩原料备货（仅 storage 满仓时触发）。
     stockFactoryEnergy(),
+    // lab 供料（取料/卸料相）— 必须挂在 acquire 链：work 模式要求满载进入，
+    // 空载的「从 storage 取化合物 / 从 lab 清错矿」只有 acquire 阶段能执行。
+    // 只挂 work 链时取料相永不可达，需求表沦为无消费者的死数据。
+    supplyLabs(),
   ],
 
   work: [
