@@ -604,3 +604,59 @@ describe("builder — storage 水位分级取能", () => {
     expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 50);
   });
 });
+
+describe("builder — 新生 rampart 急救（防「建了就塌」死循环）", () => {
+  it("1 hit 新生 rampart 优先于建造 site — 急救插队 build 链", () => {
+    // rampart 建成仅 1 hit，100 tick 内死于衰减；若先去建 site（上百 tick）rampart 必死。
+    const rampart = mockStructure("rampart", { id: "r1", hits: 1, hitsMax: 300000 });
+    const site = mockConstructionSite("extension", { id: "site_1" });
+    const snap = mockSnapshot({ myConstructionSites: [site], ramparts: [rampart] });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    builderRole.run(creep, ctx);
+
+    expect(creep.repair).toHaveBeenCalledWith(rampart);
+    expect(creep.build).not.toHaveBeenCalled();
+  });
+
+  it("血量已过急救线（≥ rampartBootstrapHits）→ 不插队，正常建造", () => {
+    const rampart = mockStructure("rampart", { id: "r1", hits: 10000, hitsMax: 300000 });
+    const site = mockConstructionSite("extension", { id: "site_1" });
+    const snap = mockSnapshot({ myConstructionSites: [site], ramparts: [rampart] });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    builderRole.run(creep, ctx);
+
+    expect(creep.build).toHaveBeenCalledWith(site);
+    expect(creep.repair).not.toHaveBeenCalled();
+  });
+
+  it("急救无盈余门禁 — storage 低水位时 fortifications 停摆，急救仍执行", () => {
+    // storage 500 << sustainedStorage：repairFortifications 的盈余门禁会拦截，
+    // 但新生 rampart 急救是止损（保住刚投入的建造资产），必须绕过。
+    const rampart = mockStructure("rampart", { id: "r1", hits: 300, hitsMax: 300000 });
+    const storage = mockStructure("storage", { id: "st", energy: 500, capacity: 1000000 });
+    const snap = mockSnapshot({ myConstructionSites: [], fillTargets: [], ramparts: [rampart], storage });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    builderRole.run(creep, ctx);
+
+    expect(creep.repair).toHaveBeenCalledWith(rampart);
+  });
+
+  it("多个低血 rampart → 先救血量最低的", () => {
+    const r1 = mockStructure("rampart", { id: "r1", hits: 5000, hitsMax: 300000 });
+    const r2 = mockStructure("rampart", { id: "r2", hits: 1, hitsMax: 300000 });
+    const snap = mockSnapshot({ myConstructionSites: [], fillTargets: [], ramparts: [r1, r2] });
+    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    builderRole.run(creep, ctx);
+
+    expect(creep.repair).toHaveBeenCalledWith(r2);
+    expect(creep.repair).not.toHaveBeenCalledWith(r1);
+  });
+});

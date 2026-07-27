@@ -89,6 +89,13 @@ export const CONFIG = {
     maxRetries: 5,
     /** 为 P0 恢复 body 预留的最低能量。 */
     recoveryEnergyReserve: 200,
+    /** Distributor 升编趋势确认窗口（tick）。
+     * spawn 孵化瞬间抽干 spawn/extension → fillTargets 尖峰，这是 distributor 的
+     * 日常工作信号而非缺员信号（在途 distributor 一两趟即可补满）。
+     * 扩编（超出现有编制）必须等需求持续此窗口才生效 — 150 tick 足够现有编制
+     * 跑 2-3 趟补满尖峰；补足 minCount 地板与缩编不受确认约束。
+     * 防止一次 50 tick 的瞬时尖峰换来多个活 1500 tick 的常驻编制。 */
+    distributorScaleUpDelay: 150,
     /**
      * 孵化请求 TTL：cleanQueue 按 expiresAt 清除超期请求，
      * 防止需求消失后的 stale 请求永久排队直至孵化（过量 creep 浪费能量）。
@@ -127,6 +134,16 @@ export const CONFIG = {
      * 冷却期内规划器不得重新入队 — 否则「入队 → blocked → 删除 → 再入队」
      * 无限空转。冷却给足 10000 tick：冲突源（如玩家手工建筑）可能被移除。 */
     blockedRetryDelay: 10000,
+    /** 道路维修判定的血量比例阈值 — 低于此比例的道路视为待修。
+     * repairRoads 动作与 builder 维修需求信号共用，保证「何时算需要修」口径一致。
+     * 0.4 在任何地形下给约 20000 tick 修复窗口，足够 builder 响应。 */
+    roadRepairThreshold: 0.4,
+    /** 维修驱动 builder 的道路数门槛 — 待修道路达到此数量时，
+     * 即使无建造 site 也维持 1 个 builder 巡修。
+     * 成熟房布局建成后 site 归零 → builder 消亡，而塔不修路（只修 critical 与
+     * wall/rampart），道路只能塌毁重建 — 重建耗能约为持续维修的 6 倍，
+     * 且塌毁窗口期物流减速。3 条起孵避免为单条路专门养一个 builder。 */
+    roadRepairBuilderFloor: 3,
   },
 
   layout: {
@@ -171,6 +188,11 @@ export const CONFIG = {
 
   economy: {
     harvestWorkingParts: 5,
+    /** 物流配额归一化的基准运力（6 CARRY = 300）。
+     * hauler 的 container 积压启发式（+1/+2 档）与 distributor 的 fillTarget 折算
+     * 均按此运力标定；实际 body 运力更大时头数按比例折减，更小时按比例扩编。
+     * 消除「body 随容量长大而配额公式不变」的头数浪费。 */
+    referenceCarryCapacity: 300,
     /** upgrader 允许工作前的最低 extension 能量（RCL1-3）。 */
     upgradeEnergyFloor: 300,
     /** upgrader 允许工作前的最低 storage 能量（RCL4+，约束 G-EN-03/U-02）。 */
@@ -286,6 +308,12 @@ export const CONFIG = {
       rcl5_6: 1_000_000,
       rcl7_8: 10_000_000,
     },
+    /** 新生 rampart 急救线（hits）。
+     * rampart 建成时仅 1 hit，且每 100 tick 衰减 300 hits — 不灌血必死于首个衰减周期，
+     * 塌毁后规划器重新入队 site → builder 重建 → 又 1 hit，形成「建了就塌」死循环。
+     * 低于此线的 rampart 由 repairFreshRampart 无门禁急救（绕过 fortification 的
+     * 盈余门禁），灌到 10k ≈ 3300 tick 存活余量，足够常规维修链或塔接管。 */
+    rampartBootstrapHits: 10_000,
     /** 受袭记忆窗口（tick）：lastHostileAt 距今小于此值视为受袭姿态。 */
     siegeMemoryTicks: 10000,
     /** 受袭姿态下 wall/rampart 目标血量的放大倍数。 */

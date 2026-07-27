@@ -4,7 +4,7 @@
  * 策略声明：
  *   gate:    recovery tier → 释放 assignment（不建造）
  *   acquire: 拾取掉落能量 > storage（RCL4+ 主力源）> 最近非物流 container > harvest
- *   work:    assignment site（tier 门禁）> 最近 site（tier 门禁）> fill > critical repair > 升级
+ *   work:    新生 rampart 急救 > assignment site（tier 门禁）> 最近 site（tier 门禁）> fill > critical repair > 升级
  *
  * CPU 门禁通过 build.ts 的 tier 选项实现，不再内嵌 if-else。
  *
@@ -26,6 +26,7 @@ import {
   repairContainerDecay,
   repairCritical,
   repairFortifications,
+  repairFreshRampart,
   repairRoads,
   withdrawClosestNonSourceContainer,
   withdrawStorageCapped,
@@ -86,6 +87,10 @@ const policy: RolePolicy = {
   ],
 
   work: [
+    // 急救：新生 rampart 灌血过生存线（建成仅 1 hit，100 tick 内必死于衰减）。
+    // 必须排在 build 之前 — 灌血十几 tick，建 site 上百 tick；
+    // 顺序反了就是「建了就塌、塌了再建」死循环，防线永远立不起来。
+    repairFreshRampart(),
     // 建造 assignment 指定的 site（recovery 跳过）。
     buildAssignmentSite({ recoverySkip: true }),
     // 建造最近 site（recovery 跳过）。

@@ -122,6 +122,40 @@ export function estimateTravelTicks(
   return Math.min(50, Math.ceil(range * 1.5));
 }
 
+// ─── Body 感知配额（数量 × body 大小 = 能力，配额按能力而非头数计）───
+
+/**
+ * 估算「本 tick 若孵化该角色，实际会得到的 body」。
+ * 与 createRequest 的降级路径同口径：bootstrap/recovery 按 energyAvailable 降级
+ * （速出保命的小 body），normal 按 energyCapacity 满配。
+ * 口径不一致的后果：危机时按满配 body 折算数量 → 头数偏少 + 实际孵出小 body
+ * → 能力双重缺口。
+ */
+export function estimatePlannedBody(
+  role: string,
+  energyCapacity: number,
+  energyAvailable: number,
+  colonyState: ColonyState,
+  rcl: number,
+): BodyPartConstant[] {
+  const fullBody = selectBody(role, energyCapacity, { rcl });
+  if (colonyState === "bootstrap" || colonyState === "recovery") {
+    return (
+      degradeBody(fullBody, energyAvailable, ROLE_REQUIRED_PARTS[role]) ??
+      selectBody(role, energyAvailable, { rcl })
+    );
+  }
+  return fullBody;
+}
+
+/** 统计 body 中指定部件的数量（至少 1，防除零）。 */
+export function countBodyParts(
+  body: readonly BodyPartConstant[],
+  part: BodyPartConstant,
+): number {
+  return Math.max(1, body.filter(p => p === part).length);
+}
+
 /**
  * 评估房间孵化需求。
  *
@@ -203,9 +237,21 @@ export function evaluateDemand(
 
   // P0-1: Storage 满仓时限采 — 有效目标降为 source 数（每 source 1 个矿工保底），
   // 不再补到 minCount。满仓时 harvester 产出被 drop 浪费，省下孵化能量给 upgrader/builder 消化库存。
+  //
+  // Body 感知饱和封顶：source 再生 10/tick，harvestWorkingParts(5) 个 WORK 即采空。
+  // 每 source 所需矿工数 = ceil(5 / 单体 WORK 数)，受 maxMinersPerSource 站位上限约束。
+  // 5W 时代（600 容量+）每 source 1 个矿工即饱和 — 超出饱和线的头数无产出可采，
+  // 纯属浪费孵化能量与 CPU（tuned minCount 是头数思维，body 长大后不会自动缩）。
+  const harvesterBody = estimatePlannedBody("harvester", energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl);
+  const workPerHarvester = countBodyParts(harvesterBody, "work");
+  const minersPerSource = Math.min(
+    CONFIG.assignment.maxMinersPerSource,
+    Math.ceil(CONFIG.economy.harvestWorkingParts / workPerHarvester),
+  );
+  const saturationTarget = snapshot.sources.length * minersPerSource;
   const harvesterTarget = storageNearFull
     ? Math.min(snapshot.sources.length, harvesterConfig.minCount)
-    : harvesterConfig.minCount;
+    : Math.min(harvesterConfig.minCount, saturationTarget);
   if (harvesterTotal < harvesterTarget) {
     // 本地占用映射：从快照复制，循环内累加，避免同轮重复分配同一 source。
     const localOccupancy = new Map<string, number>(
@@ -251,7 +297,8 @@ export function evaluateDemand(
   //   但 link 网络把能量瞬移到 storage link，需要 hauler 排空（withdrawStorageLink）。
   //   这是 RCL5+ 的新物流任务，必须纳入需求信号，否则 storage link 积压无人搬。
   //   同时，storage link 排空后需求降到 0 → minCount 地板兜底 → tuning-engine
-  //   观测到 hauler 空闲 → 降低 minCount → hauler 数量自然减少。
+  //   观测到 container/link 持续空置（containerFillRatio 代理信号，无 container 时按 0 计）
+  //   → 降低 minCount → hauler 数量自然减少。
   //   这就是「RCL5 后 link 参与物流，hauler 数量慢慢减少」的机制。
   const haulerConfig = getRoleBounds("hauler", home);
   const haulerTotal = (counts.hauler ?? 0) + pending.hauler;
@@ -278,6 +325,17 @@ export function evaluateDemand(
         if (linkFillRatio > 0.8) dynamicHaulerTarget += 2;
         else if (linkFillRatio > 0.4) dynamicHaulerTarget += 1;
       }
+    }
+    // 运力归一化：积压档位（+1/+2）按基准运力（referenceCarryCapacity = 6 CARRY）标定。
+    // body 随容量长大（RCL4 道路档 16C = 800 运力）后，同样积压需要的头数按比例折减；
+    // 早期小 body（2C = 100 运力）则按比例扩编。头数 × 单体运力 ≈ 恒定总运力，
+    // 消除「配额公式不随 body 变化」的浪费（大 body 时代多孵的每一头都是纯闲置）。
+    if (dynamicHaulerTarget > 0) {
+      const haulerBody = estimatePlannedBody("hauler", energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl);
+      const carryPerHauler = countBodyParts(haulerBody, "carry") * 50;
+      dynamicHaulerTarget = Math.ceil(
+        (dynamicHaulerTarget * CONFIG.economy.referenceCarryCapacity) / carryPerHauler,
+      );
     }
     // 至少 minCount（保证基本物流不断），至多 maxCount。
     dynamicHaulerTarget = Math.min(haulerConfig.maxCount, Math.max(haulerConfig.minCount, dynamicHaulerTarget));
@@ -320,10 +378,14 @@ export function evaluateDemand(
   const hasStorage = snapshot.storage !== undefined;
   let distTarget = 0;
   if (hasStorage) {
-    // fillTarget 数量决定需求：每 2 个 fillTarget 配 1 个 distributor。
+    // fillTarget 数量决定需求，按单体运力折算头数：每 150 运力承接 1 个 fillTarget
+    // （基准 body 6C=300 运力 → 2 个/头，与原「每 2 个 fillTarget 配 1 个」口径一致；
+    // RCL4 道路档 16C=800 运力 → 5 个/头，大 body 时代自动减员）。
     // fillTargets 含 spawn/extension/tower 等未满 sink。
     const fillCount = snapshot.fillTargets.length;
-    distTarget = Math.min(distConfig.maxCount, Math.max(distConfig.minCount, Math.ceil(fillCount / 2)));
+    const distBody = estimatePlannedBody("distributor", energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl);
+    const fillPerDistributor = Math.max(2, Math.floor((countBodyParts(distBody, "carry") * 50) / 150));
+    distTarget = Math.min(distConfig.maxCount, Math.max(distConfig.minCount, Math.ceil(fillCount / fillPerDistributor)));
     // TD-015：economyPressure 梯度衰减 — 与 hauler 同公式，pressure > 0.6 时线性降低 distributor 配额。
     const distPressure = roomCtx.economyPressure;
     if (distPressure > 0.6) {
@@ -331,6 +393,29 @@ export function evaluateDemand(
     }
     // 危机时收缩到 minCount。
     if (inCrisis) distTarget = Math.min(distTarget, distConfig.minCount);
+
+    // 升编趋势确认：spawn 孵化瞬间抽干 spawn/extension → fillTargets 尖峰，
+    // 这是 distributor 的日常工作信号而非缺员信号（在途编制一两趟即可补满）。
+    // 扩编（超出现有编制且超出 minCount 地板）必须等需求持续
+    // distributorScaleUpDelay tick 才放行；补足 minCount 与缩编即时生效。
+    // 不确认的后果：一次 50 tick 的尖峰入队的请求活在队列里直至孵化，
+    // 换来多个活 1500 tick 的常驻编制（与 builderPressureState 同为 Memory 短 key 迟滞先例）。
+    const distMem = Memory.rooms[home];
+    if (distTarget > distTotal && distTarget > distConfig.minCount) {
+      const since = distMem?.distScaleUpSince;
+      if (since === undefined) {
+        // 需求首现 — 记录起点，本轮压回地板（现有编制或 minCount 的较大者）。
+        if (distMem) distMem.distScaleUpSince = tick;
+        distTarget = Math.min(distTarget, Math.max(distTotal, distConfig.minCount));
+      } else if (tick - since < CONFIG.spawn.distributorScaleUpDelay) {
+        // 确认窗口未满 — 继续压回地板。
+        distTarget = Math.min(distTarget, Math.max(distTotal, distConfig.minCount));
+      }
+      // 窗口已满 → 需求真实持续，放行扩编（distTarget 保持折算值）。
+    } else if (distMem?.distScaleUpSince !== undefined) {
+      // 需求回落或编制已满足 — 尖峰未获确认，重置计时器。
+      distMem.distScaleUpSince = undefined;
+    }
   }
   if (distTotal < distTarget && hasStorage) {
     for (let i = distTotal; i < distTarget; i++) {
@@ -427,14 +512,29 @@ export function evaluateDemand(
   // 灾后重建（recovery）时 builder 是生存角色，不是发展角色——必须允许 spawn。
   // bootstrap 时不孵 builder（新手房优先建立能量链）。
   // 动态数量：每个活跃 site 配 1 个 builder，但上限受经济承载力约束。
-  if (colonyState !== "bootstrap" && snapshot.myConstructionSites.length > 0) {
+  //
+  // 道路维修需求信号：成熟房布局建成后 site 归零 → builder 消亡，
+  // 但道路持续衰减且塔不修路（只修 critical 与 wall/rampart）——
+  // 无此信号时道路只能塌毁重建（重建耗能约为维修 6 倍 + 塌毁窗口期物流减速）。
+  // 待修道路达到门槛时，即使无 site 也维持 1 个 builder 巡修
+  //（builder work 链自带 repairRoads，无需新增行为）。
+  const roadsNeedingRepair = snapshot.roads.filter(
+    r => r.hits < r.hitsMax * CONFIG.construction.roadRepairThreshold,
+  ).length;
+  const roadRepairDemand = roadsNeedingRepair >= CONFIG.construction.roadRepairBuilderFloor;
+  if (colonyState !== "bootstrap" && (snapshot.myConstructionSites.length > 0 || roadRepairDemand)) {
     const builderConfig = getRoleBounds("builder", home);
     const builderTotal = (counts.builder ?? 0) + pending.builder;
     const economyCap = (counts.harvester ?? 0) + (counts.worker ?? 0) + 1;
     const dynamicBuilderTarget = Math.min(
       builderConfig.maxCount,
       economyCap,
-      Math.max(builderConfig.minCount, snapshot.myConstructionSites.length),
+      Math.max(
+        builderConfig.minCount,
+        snapshot.myConstructionSites.length,
+        // 纯维修需求保底 1 个 — minCount 可能为 0（成熟房 tuning 收缩后）。
+        roadRepairDemand ? 1 : 0,
+      ),
     );
     // 梯度缩放：用 economyPressure 迟滞带替代单阈值开关（TD-016）。
     // 迟滞窗：进入收缩 > 0.35，退出收缩 <= 0.25，带内保持当前状态。
@@ -490,8 +590,8 @@ export function evaluateDemand(
 
     // 门禁 1：角色存在性 — worker 是紧急角色，harvester 建立后不再替换。
     if (role === "worker" && (counts.harvester ?? 0) + (counts.worker ?? 0) > 1) continue;
-    // builder 无建造 site 时不替换（避免孵化无事可做的 builder）。
-    if (role === "builder" && snapshot.myConstructionSites.length === 0) continue;
+    // builder 无建造 site 且无道路维修需求时不替换（避免孵化无事可做的 builder）。
+    if (role === "builder" && snapshot.myConstructionSites.length === 0 && !roadRepairDemand) continue;
     // upgrader 在 colonyState 不允许时不替换。
     if (role === "upgrader" && !allowUpgrader) continue;
 

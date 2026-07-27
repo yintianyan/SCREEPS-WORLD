@@ -110,4 +110,55 @@ describe("spawn-manager — 请求撤销接线（幽灵需求回收）", () => {
     const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(r => r.role);
     expect(roles).toContain("upgrader");
   });
+
+  /** 在 Game.creeps 中放一个存活 distributor（供 collectCreepSummaries 收集）。 */
+  function addLivingDistributor(): void {
+    (globalThis as any).Game.creeps.dist_1 = {
+      name: "dist_1",
+      spawning: false,
+      ticksToLive: 1000,
+      body: [1, 2, 3, 4],
+      memory: { role: "distributor", home: "W7N4" },
+      room: { name: "W7N4" },
+    };
+  }
+
+  it("填充需求清零且编制达地板时撤销 pending distributor 请求（尖峰残留回收）", () => {
+    const queue = [
+      makeRequest("distributor", "W7N4", { key: "distributor:W7N4:1", body: ["carry", "move"] as BodyPartConstant[] }),
+      makeRequest("hauler", "W7N4"),
+    ];
+    (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: queue, colonyState: "normal" };
+    addLivingDistributor();
+
+    // fillTargets 空 = 孵化尖峰已被在途编制消化 → 扩编请求是幽灵需求。
+    spawnManagerSystem.run(mockContext(mockSnapshot({ fillTargets: [] })));
+
+    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(r => r.role);
+    expect(roles).not.toContain("distributor");
+    expect(roles).toContain("hauler");
+  });
+
+  it("填充需求仍在时 distributor 请求保留", () => {
+    const queue = [makeRequest("distributor", "W7N4", { key: "distributor:W7N4:1", body: ["carry", "move"] as BodyPartConstant[] })];
+    (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: queue, colonyState: "normal" };
+    addLivingDistributor();
+
+    const spawn = { id: "sp1", structureType: "spawn", store: { getUsedCapacity: () => 100, getCapacity: () => 300, getFreeCapacity: () => 200 }, pos: { x: 25, y: 25, getRangeTo: () => 5 } };
+    spawnManagerSystem.run(mockContext(mockSnapshot({ fillTargets: [spawn as any] })));
+
+    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(r => r.role);
+    expect(roles).toContain("distributor");
+  });
+
+  it("存活编制低于 minCount 时不撤销（保护 storage 刚建成的首个 distributor 请求）", () => {
+    const queue = [makeRequest("distributor", "W7N4", { body: ["carry", "move"] as BodyPartConstant[] })];
+    (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: queue, colonyState: "normal" };
+    // Game.creeps 无 distributor → 存活 0 < minCount 1 → 保留。
+
+    spawnManagerSystem.run(mockContext(mockSnapshot({ fillTargets: [] })));
+
+    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(r => r.role);
+    expect(roles).toContain("distributor");
+  });
 });

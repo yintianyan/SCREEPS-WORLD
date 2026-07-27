@@ -18,8 +18,8 @@ import { runAction } from "./helpers";
 import { findCriticalRepair } from "../../support/targeting";
 import { getObjectById } from "../../support/obj-cache";
 
-/** 道路维修阈值 — 血量低于此比例才修。 */
-const ROAD_REPAIR_THRESHOLD = 0.4;
+/** 道路维修阈值 — 血量低于此比例才修（与 builder 维修需求信号共用 CONFIG 口径）。 */
+const ROAD_REPAIR_THRESHOLD: number = CONFIG.construction.roadRepairThreshold;
 
 type Fortification = StructureWall | StructureRampart;
 
@@ -191,6 +191,43 @@ function findFortificationTarget(
     }
   }
   return best;
+}
+
+/**
+ * 新生 rampart 急救 — 血量低于 rampartBootstrapHits 的 rampart 无条件优先灌血。
+ *
+ * rampart 建成时仅 1 hit，每 100 tick 衰减 300 hits [事实：官方常量
+ * RAMPART_DECAY_AMOUNT/RAMPART_DECAY_TIME]，不灌血必死于首个衰减周期。
+ * 塌毁 → 规划器重新入队 site → builder 重建 → 又 1 hit，
+ * builder 被永久锁死在「建了就塌、塌了再建」循环，防线永远立不起来。
+ *
+ * 与 repairFortifications 的区别：
+ *   - 无盈余/tier/威胁门禁 — 急救的是刚投入建造的资产，属止损而非发展性投资；
+ *     威胁期间尤其要灌（rampart 正是防御工事，塌了同格结构全裸）。
+ *   - 必须排在 build 动作之前 — 灌 10k 血只需十几 tick，建一个 site 要上百 tick，
+ *     顺序反了新 rampart 必死在建造队列后面。
+ *   - 目标持久化独立于 repairTargetId 链（避免与 fortifications 的缓存互踩），
+ *     每 tick 直接扫 snapshot.ramparts — 数组已在快照预建，低于急救线的通常 0-2 个。
+ */
+export function repairFreshRampart(): ActionCandidate<StructureRampart> {
+  return {
+    name: "repair:fresh-rampart",
+    resolve: (ac) => {
+      const threshold = CONFIG.defense.rampartBootstrapHits;
+      let worst: StructureRampart | undefined;
+      let worstHits: number = threshold;
+      for (const rampart of ac.snapshot.ramparts) {
+        if (rampart.hits < worstHits) {
+          worstHits = rampart.hits;
+          worst = rampart;
+        }
+      }
+      return worst;
+    },
+    execute: (ac, t) => {
+      runAction(ac.creep, t, () => ac.creep.repair(t));
+    },
+  };
 }
 
 /**

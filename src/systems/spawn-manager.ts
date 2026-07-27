@@ -62,6 +62,17 @@ export const spawnManagerSystem: System = {
       if (colonyState !== "normal" && roomMem.controllerDowngradeRisk !== true) {
         removeRequestsByRole(queue, "upgrader", snapshot.roomName);
       }
+      //     distributor：填充需求已清零（fillTargets 空 = 尖峰已被在途编制消化）
+      //     且存活编制达 minCount 地板时，撤销尖峰期入队的扩编请求。
+      //     不撤销的后果：请求在 TTL 窗口内仍会孵化 — 需求早已消失的常驻编制。
+      //     minCount 守卫保证不误伤「storage 刚建成、首个 distributor 待孵」的请求。
+      if (snapshot.fillTargets.length === 0) {
+        const livingDist = (creepsByRoom.get(snapshot.roomName) ?? [])
+          .filter(c => c.role === "distributor").length;
+        if (livingDist >= getRoleBounds("distributor", snapshot.roomName).minCount) {
+          removeRequestsByRole(queue, "distributor", snapshot.roomName);
+        }
+      }
 
       // 2. 从 Game/Memory 收集数据，调用纯函数评估需求。
       const roomCtx: RoomDemandContext = {

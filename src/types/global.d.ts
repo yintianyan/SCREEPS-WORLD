@@ -173,6 +173,12 @@ declare global {
      */
     builderPressureState?: 'full' | 'shrinking';
     /**
+     * Distributor 扩编需求首次出现的 tick（升编趋势确认）。
+     * 需求持续超过 CONFIG.spawn.distributorScaleUpDelay 才允许超出现有编制扩编；
+     * 需求回落即清除。防止 spawn 孵化瞬间的 fillTargets 尖峰催生过量 distributor。
+     */
+    distScaleUpSince?: number;
+    /**
      * 远矿运营 — 从本房管理的远程采矿操作。key = 目标房名。
      * 由 remote-mining-manager 每 10 tick 评估/更新。
      */

@@ -144,6 +144,8 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
     storageLinkCapacity?: number;
     containers?: { energy: number; capacity: number }[];
     rcl?: number;
+    /** 覆盖容量以控制 body 档位（默认 2300 → 道路档 16C=800 运力）。 */
+    energyCapacityAvailable?: number;
   }): ReturnType<typeof mockSnapshot> {
     const storage = mockStructure("storage", {
       id: "st",
@@ -168,7 +170,7 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
       links: [storageLink],
       containers,
       rcl: opts.rcl ?? 5,
-      energyCapacityAvailable: 2300,
+      energyCapacityAvailable: opts.energyCapacityAvailable ?? 2300,
       controller: mockController({ level: opts.rcl ?? 5 }),
     });
   }
@@ -201,17 +203,20 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
   });
 
   it("container 积压 + storage link 积压 → 信号叠加（两处都需要 hauler）", () => {
+    // 容量 600 → 道路档 8C=400 运力，保持叠加信号在归一化后仍可区分：
+    // 单信号 +2 → ceil(2×300/400)=2（= minCount 地板）；叠加 4 → ceil(4×300/400)=3。
     const snap = linkSnapshot({
       storageLinkEnergy: 700, // > 80% → +2
       containers: [
         { energy: 1700, capacity: 2000 }, // > 80% → +2
       ],
+      energyCapacityAvailable: 600,
     });
     const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
 
     const haulers = requests.filter(r => r.role === "hauler");
-    // container +2 + storage link +2 = 4 → clamp to maxCount=6
-    expect(haulers).toHaveLength(4);
+    // container +2 + storage link +2 = 4 单位 → 8C 运力归一化 → 3（clamp [2,6]）
+    expect(haulers).toHaveLength(3);
   });
 
   it("无 storage link（RCL4 以下）→ 仅看 container 信号，行为不变", () => {
@@ -361,8 +366,10 @@ describe("防御响应 — 威胁触发 defender 孵化", () => {
 describe("TD-015 — 物流角色 economyPressure 衰减因子", () => {
   /**
    * 物流压力快照：1 个 container（>80% 满 → +2）+ storage link（>80% 满 → +2）
-   * → dynamicHaulerTarget = 4（clamp [minCount=2, maxCount=6]）。
-   * distributor：4 个 fillTargets → distTarget = ceil(4/2) = 2（clamp [1,3]）。
+   * → 积压 4 单位（基准运力 300 标定）。
+   * 容量 600 @ RCL5 → 道路档 8C body = 400 运力 → 归一化 ceil(4×300/400) = 3
+   * （clamp [minCount=2, maxCount=6]）。
+   * distributor：8C = 400 运力 → 每头承接 2 个 fillTarget → 4 个 → distTarget = 2（clamp [1,3]）。
    */
   function logisticsSnapshot() {
     const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
@@ -375,17 +382,19 @@ describe("TD-015 — 物流角色 economyPressure 衰减因子", () => {
       links: [storageLink],
       containers: [container],
       rcl: 5,
-      energyCapacityAvailable: 2300,
+      energyCapacityAvailable: 600,
       controller: mockController({ level: 5 }),
       fillTargets: ["ft1", "ft2", "ft3", "ft4"] as any[],
     });
   }
 
   it("pressure=0.5（低于阈值 0.6）→ hauler/distributor 配额不受影响", () => {
+    // 预置已满的升编确认窗口 — 本测试验证压力衰减，不验证升编时序。
+    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 };
     const snap = logisticsSnapshot();
     const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.5), 1000);
-    // hauler: dynamicHaulerTarget=4, pressure 0.5 ≤ 0.6 → 无衰减 → 4
-    expect(requests.filter(r => r.role === "hauler")).toHaveLength(4);
+    // hauler: 归一化后 dynamicHaulerTarget=3, pressure 0.5 ≤ 0.6 → 无衰减 → 3
+    expect(requests.filter(r => r.role === "hauler")).toHaveLength(3);
     // distributor: distTarget=2, pressure 0.5 ≤ 0.6 → 无衰减 → 2
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(2);
   });
@@ -393,7 +402,7 @@ describe("TD-015 — 物流角色 economyPressure 衰减因子", () => {
   it("pressure=0.8 → hauler/distributor 配额降低 50%（衰减因子 = 1 - (0.8-0.6)/0.4 = 0.5）", () => {
     const snap = logisticsSnapshot();
     const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.8), 1000);
-    // hauler: 4 * 0.5 = 2 → max(minCount=2, 2) = 2
+    // hauler: round(3 * 0.5) = 2 → max(minCount=2, 2) = 2
     expect(requests.filter(r => r.role === "hauler")).toHaveLength(2);
     // distributor: 2 * 0.5 = 1 → max(minCount=1, 1) = 1
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
@@ -402,7 +411,7 @@ describe("TD-015 — 物流角色 economyPressure 衰减因子", () => {
   it("pressure=1.0 → hauler/distributor 配额缩至 minCount（衰减因子 = 0）", () => {
     const snap = logisticsSnapshot();
     const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(1.0), 1000);
-    // hauler: 4 * 0 = 0 → max(minCount=2, 0) = 2
+    // hauler: 3 * 0 = 0 → max(minCount=2, 0) = 2
     expect(requests.filter(r => r.role === "hauler")).toHaveLength(2);
     // distributor: 2 * 0 = 0 → max(minCount=1, 0) = 1
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
@@ -415,6 +424,179 @@ describe("TD-015 — 物流角色 economyPressure 衰减因子", () => {
     // hauler: pressure 衰减 → 2, inCrisis → min(2, minCount=2) = 2
     expect(requests.filter(r => r.role === "hauler")).toHaveLength(2);
     // distributor: pressure 衰减 → 1, inCrisis → min(1, minCount=1) = 1
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
+  });
+});
+
+describe("道路维修需求驱动 builder（成熟房无 site 场景）", () => {
+  /** 造 n 条待修道路（血量 30%，低于 roadRepairThreshold 0.4）。 */
+  function decayedRoads(n: number) {
+    return Array.from({ length: n }, (_, i) =>
+      mockStructure("road", { id: `road_${i}`, hits: 1500, hitsMax: 5000 }),
+    );
+  }
+
+  it("无 site + 待修道路达到门槛（3 条）→ 维持 1 个 builder 巡修", () => {
+    const snap = mockSnapshot({ roads: decayedRoads(3), myConstructionSites: [] });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "builder")).toHaveLength(1);
+  });
+
+  it("无 site + 待修道路低于门槛（2 条）→ 不孵 builder", () => {
+    const snap = mockSnapshot({ roads: decayedRoads(2), myConstructionSites: [] });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "builder")).toHaveLength(0);
+  });
+
+  it("无 site + 道路血量健康（80%）→ 不计入维修需求，不孵 builder", () => {
+    const healthy = Array.from({ length: 5 }, (_, i) =>
+      mockStructure("road", { id: `road_${i}`, hits: 4000, hitsMax: 5000 }),
+    );
+    const snap = mockSnapshot({ roads: healthy, myConstructionSites: [] });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "builder")).toHaveLength(0);
+  });
+
+  it("bootstrap 状态下即使有维修需求也不孵 builder（新手房优先能量链）", () => {
+    const snap = mockSnapshot({ roads: decayedRoads(5), myConstructionSites: [] });
+    const { requests } = evaluateDemand(
+      snap, [], "bootstrap", livingHarvester(), [],
+      { ...normalCtx(0), colonyState: "bootstrap" }, 1000,
+    );
+    expect(requests.filter(r => r.role === "builder")).toHaveLength(0);
+  });
+
+  it("维修需求存在时，将死的 builder 允许替换（不因无 site 被门禁拦截）", () => {
+    const snap = mockSnapshot({ roads: decayedRoads(3), myConstructionSites: [] });
+    const dyingBuilder = {
+      name: "builder_old",
+      role: "builder",
+      home: "W7N4",
+      ticksToLive: 20, // 低于替换阈值 bodyLength*3 + buffer
+      bodyLength: 4,
+      spawnIndex: 0,
+    };
+    const { requests } = evaluateDemand(
+      snap, [], "normal", [...livingHarvester(), dyingBuilder], [], normalCtx(0), 1000,
+    );
+    // 需求块（builder 存活计数 1 ≥ 目标 1，不加员）+ 替换块（将死触发替换）→ 恰好 1 个替换请求。
+    const builders = requests.filter(r => r.role === "builder");
+    expect(builders).toHaveLength(1);
+    expect(builders[0]!.replaceBy).toBeDefined();
+  });
+});
+
+describe("Body 感知配额 — 数量按单体能力折算，防大 body 时代头数浪费", () => {
+  it("harvester：5W body（600 容量）+ 1 source → 饱和封顶 1 个（minCount=2 被压缩）", () => {
+    // 默认 mockSnapshot 只有 1 个 source；容量 800 → 5W body → ceil(5/5)=1 矿工/source。
+    // 存活 worker 绕过 P0 恢复短路，单独观察 harvester 目标。
+    const snap = mockSnapshot({ energyCapacityAvailable: 800 });
+    const living = [{ name: "w1", role: "worker", home: "W7N4", ticksToLive: 1200, bodyLength: 3, spawnIndex: 0 }];
+    const { requests } = evaluateDemand(snap, [], "normal", living, [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "harvester")).toHaveLength(1);
+  });
+
+  it("harvester：1W body（200 容量）→ 饱和线放宽，维持 minCount 头数", () => {
+    // 容量 200 → 1W body → ceil(5/1)=5，受 maxMinersPerSource=3 封顶 → 1 source × 3 = 3。
+    // target = min(minCount=2, 3) = 2 — 小 body 时代头数不缩。
+    const snap = mockSnapshot({ energyCapacityAvailable: 200 });
+    const living = [{ name: "w1", role: "worker", home: "W7N4", ticksToLive: 1200, bodyLength: 3, spawnIndex: 0 }];
+    const { requests } = evaluateDemand(snap, [], "normal", living, [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "harvester")).toHaveLength(2);
+  });
+
+  it("hauler：大运力 body（RCL4+ 道路档 16C）→ 同样积压头数折半", () => {
+    // 容量 1300 @ RCL5 → 道路档 16C = 800 运力。
+    // 积压 4 单位 × 300 基准 / 800 = ceil(1.5) = 2（原头数思维会孵 4 个）。
+    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    const storageLink = mockStructure("link", { id: "slink", energy: 700, capacity: 800 });
+    storageLink.pos.getRangeTo = () => 1;
+    const container = mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 });
+    const snap = mockSnapshot({
+      storage, links: [storageLink], containers: [container],
+      rcl: 5, energyCapacityAvailable: 1300, controller: mockController({ level: 5 }),
+    });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "hauler")).toHaveLength(2);
+  });
+
+  it("distributor：大运力 body → 单头承接更多 fillTarget，头数减员", () => {
+    // 容量 1300 @ RCL5 → 16C = 800 运力 → 每头承接 floor(800/150)=5 个 fillTarget。
+    // 6 个 fillTarget → ceil(6/5) = 2（原口径 ceil(6/2)=3）。
+    // 预置已满的升编确认窗口 — 本测试验证运力折算，不验证升编时序。
+    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 };
+    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    const snap = mockSnapshot({
+      storage, rcl: 5, energyCapacityAvailable: 1300, controller: mockController({ level: 5 }),
+      fillTargets: ["f1", "f2", "f3", "f4", "f5", "f6"] as any[],
+    });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(2);
+  });
+
+  it("危机口径对齐：recovery 时按 energyAvailable 降级 body 估算，头数随之放宽", () => {
+    // recovery + energyAvailable=300：harvester 实际孵出 2W body（非满配 5W）。
+    // ceil(5/2)=3 矿工/source → 1 source → target = min(minCount=2, 3) = 2。
+    // 若误用满配 5W 估算会得 target=1 — 头数与实际 body 能力双重缺口。
+    const snap = mockSnapshot({ energyCapacityAvailable: 800 });
+    const living = [{ name: "w1", role: "worker", home: "W7N4", ticksToLive: 1200, bodyLength: 3, spawnIndex: 0 }];
+    const ctx = { ...normalCtx(0), colonyState: "recovery" as const, energyAvailable: 300 };
+    const { requests } = evaluateDemand(snap, [], "recovery", living, [], ctx, 1000);
+    expect(requests.filter(r => r.role === "harvester")).toHaveLength(2);
+  });
+});
+
+describe("Distributor 升编趋势确认 — 防孵化尖峰催生过量编制", () => {
+  beforeEach(() => {
+    // 计时器持久化在 RoomMemory 短 key（与 builderPressureState 同先例）。
+    (globalThis as any).Memory.rooms.W7N4 = {};
+  });
+
+  /** 6 个 fillTarget 尖峰快照（容量 600 → 6C=300 运力 → 每头承接 2 个 → want=3）。 */
+  function spikeSnapshot(fillCount = 6) {
+    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    return mockSnapshot({
+      storage,
+      energyCapacityAvailable: 600,
+      fillTargets: Array.from({ length: fillCount }, (_, i) => `ft${i}`) as any[],
+    });
+  }
+
+  const livingDist = () => [
+    ...livingHarvester(),
+    { name: "dist_1", role: "distributor", home: "W7N4", ticksToLive: 1000, bodyLength: 8, spawnIndex: 0 },
+  ];
+
+  it("尖峰首现：不扩编，压回现有编制并记录计时起点", () => {
+    const { requests } = evaluateDemand(spikeSnapshot(), [], "normal", livingDist(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(0);
+    expect((globalThis as any).Memory.rooms.W7N4.distScaleUpSince).toBe(1000);
+  });
+
+  it("确认窗口未满（<150 tick）：持续压回，不扩编", () => {
+    (globalThis as any).Memory.rooms.W7N4.distScaleUpSince = 1000;
+    const { requests } = evaluateDemand(spikeSnapshot(), [], "normal", livingDist(), [], normalCtx(0), 1100);
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(0);
+  });
+
+  it("确认窗口已满（≥150 tick）：需求真实持续，放行扩编", () => {
+    (globalThis as any).Memory.rooms.W7N4.distScaleUpSince = 1000;
+    const { requests } = evaluateDemand(spikeSnapshot(), [], "normal", livingDist(), [], normalCtx(0), 1150);
+    // want=3，存活 1 → 扩编 2 个。
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(2);
+  });
+
+  it("需求回落：计时器重置 — 下次尖峰重新计时", () => {
+    (globalThis as any).Memory.rooms.W7N4.distScaleUpSince = 1000;
+    // fillTargets 清零 → want 落回 minCount=1 ≤ 存活 1 → 重置。
+    evaluateDemand(spikeSnapshot(0), [], "normal", livingDist(), [], normalCtx(0), 1100);
+    expect((globalThis as any).Memory.rooms.W7N4.distScaleUpSince).toBeUndefined();
+  });
+
+  it("minCount 地板不受确认约束：零编制时首个 distributor 立即孵化", () => {
+    // storage 刚建成、无存活 distributor：确认窗口只拦「超出 minCount 的扩编」，
+    // 地板补足即时生效 — 否则 storage 上线后 150 tick 无人分发。
+    const { requests } = evaluateDemand(spikeSnapshot(), [], "normal", livingHarvester(), [], normalCtx(0), 1000);
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
   });
 });
