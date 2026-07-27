@@ -76,6 +76,8 @@ sources: [],
     extractor: undefined,
     factory: undefined,
     droppedEnergy: [],
+    tombstones: [],
+    ruins: [],
     ...overrides,
   };
 }

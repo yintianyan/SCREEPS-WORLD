@@ -61,6 +61,22 @@ export function buildRoomSnapshot(
     r => r.resourceType === RESOURCE_ENERGY,
   );
 
+  // 遗留能量容器：坟墓（creep 死亡）与废墟（建筑被毁/拆除）。
+  // 两者都在衰减/限时灭失，是 hauler 优先回收的对象。
+  // try/catch 防御：FIND_TOMBSTONES/FIND_RUINS 可能在精简测试环境未定义。
+  let tombstones: Tombstone[] = [];
+  let ruins: Ruin[] = [];
+  try {
+    tombstones = room.find(FIND_TOMBSTONES).filter(
+      t => t.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+    );
+    ruins = room.find(FIND_RUINS).filter(
+      r => r.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+    );
+  } catch {
+    // 常量未定义的环境（旧测试 mock）— 视为无遗留资源。
+  }
+
   // 探测 controller 旁 1 格内的 container — upgrader 站桩升级的能量来源。
   let controllerContainer: StructureContainer | undefined;
   if (room.controller) {
@@ -171,6 +187,8 @@ export function buildRoomSnapshot(
     observer,
     powerSpawn,
     droppedEnergy,
+    tombstones,
+    ruins,
     criticalRepairTarget,
   };
 }

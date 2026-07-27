@@ -112,6 +112,16 @@ export interface RoomSnapshot {
   /** 地上掉落的能量资源（FIND_DROPPED_RESOURCES 中类型为 energy 的）。 */
   readonly droppedEnergy: readonly Resource[];
   /**
+   * 含能量的坟墓（creep 死亡遗留）。坟墓消失后能量转为掉落堆继续衰减 —
+   * 与掉落能量同属「衰减中的遗留资源」，hauler 应优先于 container 回收大额堆。
+   */
+  readonly tombstones: readonly Tombstone[];
+  /**
+   * 含能量的废墟（建筑被毁/拆除遗留，如全拆重建时 storage 的库存整体进入 ruin）。
+   * 有 decay 期限，到期资源灭失 — 大额废墟是限时可回收的库存。
+   */
+  readonly ruins: readonly Ruin[];
+  /**
    * 预计算的关键维修目标（血量 < 50% 的 spawn/extension/tower/container）。
    * 在 buildRoomSnapshot 中一次遍历得出，供 tower-defense 和 builder actions 复用，
    * 避免各模块重复迭代 snapshot.spawns/extensions/towers/containers。

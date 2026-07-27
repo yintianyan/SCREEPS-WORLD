@@ -22,12 +22,15 @@
  *   解决战斗中 Tower 能量耗尽、hauler 全部 flee 导致无人补给的防御死局。
  *
  * 策略声明：
- *   acquire: assignment container > storage link（排空 link 网络）> 最满 container（主取能）> droppedEnergy（残余清理）
+ *   acquire: assignment container > storage link（排空 link 网络）> 大额遗留能量
+ *            （坟墓/废墟/掉落堆 ≥ lootThreshold，衰减资源优先）> 最满 container（主取能）
+ *            > 零头遗留兜底
  *   work:    haul fillTarget（带 reservation）> minerals → storage > labs > storage > 待命
  *
- * acquire 顺序要点：droppedEnergy 排最后。container 满溢时 harvester 会 drop 溢出能量，
- * 若先捡 drop 会让 hauler 半满离开、来回空转而抽不干满 container（溢出根源未除）；
- * 先抽最满 container 既满载搬运又从源头止住溢出。详见 acquire 链内注释。
+ * acquire 顺序要点：零头 droppedEnergy 排最后。container 满溢时 harvester 会 drop 溢出能量，
+ * 若先捡零头 drop 会让 hauler 半满离开、来回空转而抽不干满 container（溢出根源未除）；
+ * 先抽最满 container 既满载搬运又从源头止住溢出。大额遗留（≥ lootThreshold）例外插队 —
+ * 它们在衰减/限时灭失，container 能量不会。详见 acquire 链内注释。
  */
 import { CONFIG } from "../../config";
 import type { Priority } from "../../kernel/contracts";
@@ -36,6 +39,7 @@ import {
   fillStorage,
   haulFillTarget,
   haulMineralsToStorage,
+  lootRemains,
   pickupDroppedEnergy,
   supplyLabs,
   withdrawCapped,
@@ -166,14 +170,24 @@ const policy: RolePolicy = {
     //    必须在 container 之前：storage link 是 link 网络的排水口，
     //    不排空则 source link 背压瘫痪，整条 link 网络堵死。
     withdrawStorageLink(),
-    // 2. 回退到最满 container —— 主取能源。
-    //    必须排在 pickupDroppedEnergy 之前：container 满溢时 harvester 会 drop 溢出能量，
-    //    若先捡 drop（小堆、衰减），hauler 背包没装满就离开去卸货，回来时 harvester 又 drop，
+    // 2. 大额遗留能量优先于 container —— 衰减资源优先原则。
+    //    坟墓/废墟/掉落堆都在衰减或限时灭失，container 能量不衰减：
+    //    同样一车运力，先救会消失的。阈值（lootThreshold）挡住零头，
+    //    保住下方「先抽满 container 防溢出空转」的既有取舍——
+    //    只有值得专程的大额遗留（满载 creep 死亡、拆除建筑的库存）才插队。
+    //    container 能量不足装满一车时，FSM（free>0 保持 acquire）会自然
+    //    继续走这些候选凑满，无需显式「凑单」逻辑。
+    lootRemains(CONFIG.economy.lootThreshold),
+    pickupDroppedEnergy(CONFIG.economy.lootThreshold),
+    // 3. 回退到最满 container —— 主取能源。
+    //    必须排在零头拾取之前：container 满溢时 harvester 会 drop 溢出能量，
+    //    若先捡零头 drop（小堆、衰减），hauler 背包没装满就离开去卸货，回来时 harvester 又 drop，
     //    于是「捡零头→半满离开→返回→再捡零头」来回空转，满 container 始终没被抽干（溢出根源未除）。
     //    先抽最满 container：一口装满背包（满载搬运），且抽干 container 即消除溢出根源。
     withdrawRichestCapped(),
-    // 3. 拾取地上掉落能量 —— 残余清理（死亡掉落 / container 被毁残留 / 已无 container 可抽时的溢出）。
-    //    降至最后：仅当无 assignment / link / container 需要搬运时才触发，避免劫持主取能。
+    // 4. 零头兜底 —— 残余清理（死亡掉落零头 / container 被毁残留 / 溢出小堆）。
+    //    降至最后：仅当无 assignment / link / 大额遗留 / container 可取时才触发。
+    lootRemains(1),
     pickupDroppedEnergy(),
     // 注意：hauler 永不从 storage 取能。
     // storage → sink 的分发由 distributor 角色负责。

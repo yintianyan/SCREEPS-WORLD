@@ -234,6 +234,14 @@ export const CONFIG = {
     },
     /** Storage 满仓阈值 — 超过此比例时触发限采 + 加速消费。 */
     storageFullThreshold: 0.9,
+    /**
+     * 遗留能量（掉落堆/坟墓/废墟）值得 hauler 专程回收的最小数量。
+     * 达到阈值的堆优先于 container 取货 — 遗留能量在衰减/限时灭失，
+     * container 能量不衰减；低于阈值的零头仍走链尾兜底（container 空时顺手清理），
+     * 避免「捡零头→半载往返」的空转（hauler 链注释里的历史教训）。
+     * 100 ≈ 衰减损失开始可感知的规模（ceil(amount/1000)/tick）。
+     */
+    lootThreshold: 100,
     /** economyPressure 分段映射参数（room-state.ts 使用）。 */
     economyPressure: {
       /** 健康→谨慎的分界点（score 0..midpoint 映射 pressure 0.0..0.5）。 */

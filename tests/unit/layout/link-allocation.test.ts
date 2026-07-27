@@ -96,6 +96,8 @@ function snapshotAt(rcl: number, overrides: Partial<RoomSnapshot> = {}): RoomSna
     extractor: undefined,
     factory: undefined,
     droppedEnergy: [],
+    tombstones: [],
+    ruins: [],
     ...overrides,
   };
   return snap;

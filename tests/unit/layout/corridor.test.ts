@@ -56,6 +56,8 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
     extractor: undefined,
     factory: undefined,
     droppedEnergy: [],
+    tombstones: [],
+    ruins: [],
     ...overrides,
   };
 }

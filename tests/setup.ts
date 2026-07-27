@@ -49,6 +49,8 @@ Object.assign(globalThis as Record<string, unknown>, {
   FIND_MY_CREEPS: 3,
   FIND_MINERALS: 116,
   FIND_DROPPED_RESOURCES: 106,
+  FIND_TOMBSTONES: 118,
+  FIND_RUINS: 123,
 
   // 返回码
   OK: 0,

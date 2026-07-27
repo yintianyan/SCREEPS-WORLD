@@ -5,7 +5,7 @@
  * 无需感知内部分文件结构。
  */
 export { harvestSource, stationaryMine, harvestMineral } from "./harvest";
-export { pickupDroppedEnergy, pickupNearbyDroppedEnergy } from "./pickup";
+export { pickupDroppedEnergy, pickupNearbyDroppedEnergy, lootRemains } from "./pickup";
 export {
   withdrawRichestContainer,
   withdrawClosestContainer,
