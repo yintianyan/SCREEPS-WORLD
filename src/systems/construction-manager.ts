@@ -215,6 +215,9 @@ function tryCreateSite(
     }
 
     if (result === ERR_RCL_NOT_ENOUGH) {
+      // 瞬态重试：仅覆盖 controller 降级后配额缩水、等待回升的场景。
+      // 「类型已在别处建满配额」的幽灵任务不会走到这里 —
+      // syncTaskStates 的类型饱和判定已在同步阶段将其转 done 清除。
       task.retryAt = Game.time + 50;
       continue;
     }

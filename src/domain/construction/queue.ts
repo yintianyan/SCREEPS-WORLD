@@ -64,22 +64,52 @@ export function syncTaskStates(
   if (snapshot.extractor) {
     builtStructures.push(snapshot.extractor);
   }
+  if (snapshot.factory) {
+    builtStructures.push(snapshot.factory);
+  }
+  if (snapshot.observer) {
+    builtStructures.push(snapshot.observer);
+  }
+  if (snapshot.powerSpawn) {
+    builtStructures.push(snapshot.powerSpawn);
+  }
   for (const s of builtStructures) {
     builtPositions.add(`${s.pos.x},${s.pos.y}:${s.structureType}`);
   }
+
+  // 类型饱和判定 — 幽灵任务的唯一出口。
+  // 布局代际漂移的遗留任务坐标为空、同类结构已在其他坐标建满当前 RCL 配额：
+  // 逐格判定永远不会转 done，createConstructionSite 只会返回 ERR_RCL_NOT_ENOUGH
+  // （瞬态重试语义，不 blocked 不进黑名单）→ 任务永久 queued 空转。
+  // 危害三重：承诺计数虚高压制真实补建、RCL 升级瞬间在过时坐标真的建出结构、
+  // Memory 常驻泄漏。饱和的类型直接转 done 清除 — RCL 提升产生真实缺口时，
+  // 规划器按当前布局重新生成任务，队列不需要囤积过时坐标。
+  // 结构被毁则计数下降、判定自动解除，不影响紧急重建路径。
+  const builtCountByType = new Map<string, number>();
+  for (const s of builtStructures) {
+    builtCountByType.set(s.structureType, (builtCountByType.get(s.structureType) ?? 0) + 1);
+  }
+  const typeSaturated = (type: string): boolean => {
+    const max = CONTROLLER_STRUCTURES[type as BuildableStructureConstant]?.[snapshot.rcl];
+    if (max === undefined) return false;
+    return (builtCountByType.get(type) ?? 0) >= max;
+  };
 
   for (const task of queue) {
     const key = `${task.pos.x},${task.pos.y}`;
     const builtKey = `${key}:${task.structureType}`;
     if (task.state === "queued") {
       // 检查该位置是否存在**匹配结构类型**的 site。
-      // P0 修复：旧实现只检查位置不检查类型，导致 storage 的 site 被误匹配给
-      // 同位置的 extension 任务，extension 永远不会变成 site 也不会被创建。
+      // 位置匹配必须检查类型：storage 的 site 若被误匹配给同位置的 extension
+      // 任务，extension 永远不会变成 site 也不会被创建。
       const site = sites.get(key);
       if (site && site.structureType === task.structureType) {
         task.state = "site";
       } else if (builtPositions.has(builtKey)) {
         // 该位置已建成目标结构 — 避免 layout planner 反复重添已完成任务。
+        task.state = "done";
+      } else if (typeSaturated(task.structureType)) {
+        // 同类结构已在其他坐标建满配额 — 本任务是漂移遗留的幽灵，转 done 清除。
         task.state = "done";
       }
     } else if (task.state === "site") {

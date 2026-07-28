@@ -168,7 +168,7 @@ export function precomputeStructureCounts(snapshot: RoomSnapshot): Map<string, n
  * 供 constraint 放置器做批次抵扣（代际稳定性）：placeStructures 只为
  * 真实缺口生成放置，已被承诺的数量不再排位 — 消除「已建格进 occupied →
  * 贪心顺延到次优格 → 同一逻辑结构在新格重复排队」的代际漂移与幽灵任务
- * （幽灵任务最终 ERR_RCL_NOT_ENOUGH → blocked → 黑名单 churn）。
+ * （存量幽灵任务由 syncTaskStates 的类型饱和判定转 done 清除）。
  *
  * 队列口径：仅计 queued/blocked 任务 — site 状态的任务对应实体 site
  * （已由 site 计数覆盖），done 任务对应已建结构（已由结构计数覆盖），
