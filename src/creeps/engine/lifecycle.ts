@@ -1,7 +1,7 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
-import { moveTowardRoom, recordTraffic, findSafestExit } from "../movement";
+import { moveTowardRoom, stepToward, findSafestExit } from "../movement";
 import { releaseFromTask } from "../support/assignment-adapter";
 
 /** 根据能量存储更新 creep 模式。仅在阈值跨越时写入。 */
@@ -135,9 +135,9 @@ export function flee(creep: Creep, snapshot: RoomSnapshot): void {
     const hostileToSpawn = nearestHostile.pos.getRangeTo(spawn);
     if (creepToSpawn < hostileToSpawn) {
       if (creepToSpawn > 3) {
-        // G-DF-04: flee 期间使用 ignoreCreeps: false 以绕过阻挡。
-        const result = creep.moveTo(spawn, { reusePath: 5, ignoreCreeps: false });
-        if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+        // G-DF-04: flee 期间绕过阻挡（stepToward 双模出口：traffic 关闭时
+        // 即 moveTo(ignoreCreeps:false)；开启时 flee 优先级在解算中最高）。
+        stepToward(creep, spawn);
       }
       return;
     }
@@ -147,8 +147,7 @@ export function flee(creep: Creep, snapshot: RoomSnapshot): void {
   if (nearestHostile) {
     const safeExit = findSafestExit(creep, nearestHostile.pos);
     if (safeExit) {
-      const result = creep.moveTo(safeExit, { reusePath: 5, ignoreCreeps: false });
-      if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+      stepToward(creep, safeExit);
       return;
     }
   }
@@ -163,8 +162,7 @@ export function flee(creep: Creep, snapshot: RoomSnapshot): void {
   if (snapshot.spawns.length > 0) {
     const spawn = snapshot.spawns[0];
     if (spawn && creep.pos.getRangeTo(spawn) > 3) {
-      const result = creep.moveTo(spawn, { reusePath: 5, ignoreCreeps: false });
-      if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+      stepToward(creep, spawn);
     }
   }
 }

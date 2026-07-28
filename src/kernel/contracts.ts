@@ -36,6 +36,12 @@ export interface System {
   readonly priority: Priority;
   /** 最多每 N tick 运行一次（1 = 每 tick）。 */
   readonly interval?: number;
+  /**
+   * 执行阶段：main（缺省）在 creep 角色之前运行；post 在所有角色之后运行。
+   * post 阶段是通用运行秩序能力，供「消费角色执行期产出的 per-tick 数据」
+   * 的系统使用（如 traffic-manager 解算角色登记的移动意图）。
+   */
+  readonly phase?: "main" | "post";
   run(ctx: TickContext): void;
 }
 

@@ -28,6 +28,7 @@ import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
 import { telemetryCollectorSystem } from "./systems/telemetry-collector";
 import { terminalManagerSystem } from "./systems/terminal-manager";
+import { trafficManagerSystem } from "./systems/traffic-manager";
 import { tuningEngineSystem } from "./systems/tuning-engine";
 import { towerDefenseSystem } from "./systems/tower-defense";
 
@@ -89,6 +90,9 @@ const registry = new Registry()
   .registerSystem(telemetryCollectorSystem)
   // P3：参数自调优（每 500 tick 读取遥测 → 调整角色边界覆盖值）
   .registerSystem(tuningEngineSystem)
+  // P0（post 阶段）：交通解算 — 在所有角色之后消费移动意图账本，
+  // 按房仲裁/换位/推挤后统一签发 move（CONFIG.movement.trafficManager 开关）
+  .registerSystem(trafficManagerSystem)
   // P0：恢复 worker（启动期 / 灾后）
   .registerRole(workerRole)
   // P1：defender（本房防御响应 — 房内出现威胁时孵化，与塔协同）

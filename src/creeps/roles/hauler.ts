@@ -47,7 +47,7 @@ import {
 } from "../engine/actions";
 import { findRichestContainer, pickHaulFillTargetInRange } from "../support/targeting";
 import { defineRole } from "../engine/role-runner";
-import { moveToTarget } from "../movement";
+import { moveToTarget, stepToward } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 
 /** 从 assignment 指定的 container 限量取能。
@@ -155,8 +155,8 @@ function haulerOnFlee(ac: ActionContext): boolean {
     return true;
   }
 
-  // 移动到目标（仍在防御圈内）
-  creep.moveTo(target, { reusePath: 5, ignoreCreeps: false });
+  // 移动到目标（仍在防御圈内，双模出口 — traffic 关闭时即 ignoreCreeps:false 绕行）
+  stepToward(creep, target);
   return true;
 }
 

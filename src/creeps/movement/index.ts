@@ -26,6 +26,7 @@ export {
   moveToTarget,
   moveTowardRoom,
   ensureHome,
+  stepToward,
   preloadStructureCache,
   preloadStaticBlockers,
   // @internal — 仅供单元测试访问缓存行为，业务代码不直接调用
@@ -33,3 +34,5 @@ export {
 } from "./pathfinding";
 
 export { parkIdleCreep, isSafeSpot } from "./parking";
+
+export { registerAnchor, registerMove, movePriorityFor, trafficEnabled } from "./intent";

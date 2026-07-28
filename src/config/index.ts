@@ -149,6 +149,35 @@ export const CONFIG = {
   movement: {
     /** 本地寻路的 maxRooms。remote 角色未来通过 route/waypoint 跨房，本地任务始终为 1。 */
     localMaxRooms: 1,
+    /**
+     * Traffic Manager 总开关。
+     * 开启：角色执行期只登记移动意图，tick 末 traffic-manager 后置系统
+     * 按房集中解算（同格仲裁/对向换位/推挤静止者/锚定豁免）后统一签发 move；
+     * yield/pull 旧让路机制同时短路禁用（双仲裁并存会互相打架）。
+     * 关闭：登记函数直通引擎 move（完全恢复旧行为），后置系统空转 —
+     * 单开关双向切换，是本机制的唯一回滚通道。
+     */
+    trafficManager: true,
+    /**
+     * 移动/锚定优先级表 — 数值越大越优先。
+     * 同格争抢高优者胜；推挤仅当移动方优先级严格大于阻挡方时发生。
+     *   flee：逃命高于一切（被堵住 = 死亡）。
+     *   anchorMiner：站桩矿工锚 — 让出矿位 = 采集吞吐崩塌，仅次于逃命。
+     *   work/anchorStation：携能交付与站桩升级/等 boost 同档 —
+     *     交付方绕行代价（1-2 格）远小于把工作位让出去的代价。
+     *   acquire：取能途中，空载被挤一格无损失。
+     *   commute：跨房通勤等其他移动。
+     *   parked：待命 creep 无任务在身，是最该被推开的对象。
+     */
+    trafficPriority: {
+      flee: 100,
+      anchorMiner: 90,
+      work: 60,
+      anchorStation: 60,
+      acquire: 40,
+      commute: 30,
+      parked: 0,
+    },
   },
 
   construction: {

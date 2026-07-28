@@ -31,8 +31,10 @@
 
 import { globalCache } from "../../kernel/global-cache";
 import type { RoomSnapshot } from "../../kernel/contracts";
-import { packPos, recordTraffic } from "./traffic";
+import { CONFIG } from "../../config";
+import { packPos } from "./traffic";
 import { DIR_DELTA, checkAndExecuteYield } from "./stuck-recovery";
+import { registerMove, trafficEnabled } from "./intent";
 
 /** 归位预约缓存：本 tick 已被占用的目标格（packed pos 集合），每 tick 重置。 */
 function getParkReservations(): Set<number> {
@@ -45,7 +47,7 @@ function getParkReservations(): Set<number> {
 }
 
 /** 每房每 tick 的归位推导数据：关键格、road 格、阻挡结构格。从快照一次构建。 */
-interface ParkRoomData {
+export interface ParkRoomData {
   critical: Set<number>;
   roads: Set<number>;
   blocking: Set<number>;
@@ -60,8 +62,9 @@ interface ParkRoomData {
  * - blocking：不可站立的阻挡结构格（墙/extension/tower 等；road/container/rampart 可站立不算）。
  *
  * 全部从 per-room 快照推导，对任意房间地形自适应，不依赖预设位置表。
+ * 导出供 traffic-manager 复用同一套「可站立/关键格」口径挑选推挤落格。
  */
-function getParkRoomData(snapshot: RoomSnapshot): ParkRoomData {
+export function getParkRoomData(snapshot: RoomSnapshot): ParkRoomData {
   const g = globalCache() as any;
   if (!g.__parkRoomData) g.__parkRoomData = {};
   const cached = g.__parkRoomData[snapshot.roomName];
@@ -226,7 +229,8 @@ export function parkIdleCreep(creep: Creep, snapshot: RoomSnapshot): void {
   // 是最该让路的对象。原先 yield 只在 moveToTarget 开头检查，
   // parked creep 不走该入口 → 让路请求对静止目标永不生效，
   // 挡路只能靠移动方 ignoreCreeps:false 绕行。
-  if (checkAndExecuteYield(creep)) return;
+  // traffic 开启时禁用 — 静止 creep 的让路由集中解算的推挤机制接管。
+  if (!trafficEnabled() && checkAndExecuteYield(creep)) return;
 
   const reserved = getParkReservations();
   const currentPacked = packPos(creep.pos);
@@ -245,6 +249,6 @@ export function parkIdleCreep(creep: Creep, snapshot: RoomSnapshot): void {
   const spotPos = room.getPositionAt(spot.x, spot.y);
   if (!spotPos) return;
   const dir = creep.pos.getDirectionTo(spotPos);
-  const result = creep.move(dir as DirectionConstant);
-  if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+  // parked 优先级最低 — 归位移动可被任何在途任务挤掉一 tick，无损失。
+  registerMove(creep, dir as DirectionConstant, CONFIG.movement.trafficPriority.parked);
 }

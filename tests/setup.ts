@@ -1,5 +1,14 @@
 /** 测试设置：为测试环境定义 Screeps 全局常量。 */
 
+import { CONFIG } from "../src/config";
+
+// Traffic Manager 在单元/集成测试中默认关闭 — 存量行为断言针对引擎直发出口
+// （creep.moveTo / creep.move 调用）。traffic-on 行为由专属测试
+// （tests/unit/movement/traffic-*.test.ts）显式开启覆盖；
+// E2E 跑真实构建，走生产默认值（开启）。
+// CONFIG 声明为 as const（深只读），测试环境通过断言写入运行时对象。
+(CONFIG.movement as { trafficManager: boolean }).trafficManager = false;
+
 // 将 Screeps 常量赋值到 globalThis 而不重新声明
 // （它们已在 @types/screeps 中声明但运行时未定义）。
 Object.assign(globalThis as Record<string, unknown>, {
@@ -47,6 +56,7 @@ Object.assign(globalThis as Record<string, unknown>, {
   FIND_HOSTILE_CREEPS: 4,
   FIND_HOSTILE_STRUCTURES: 109,
   FIND_MY_CREEPS: 3,
+  FIND_CREEPS: 101,
   FIND_MINERALS: 116,
   FIND_DROPPED_RESOURCES: 106,
   FIND_TOMBSTONES: 118,

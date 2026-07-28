@@ -764,6 +764,13 @@ function moveToTarget(
 - creep Memory 仅保存 packed lastPos、stuckTicks 和短 pathKey；完整路径放 global。global reset 后回退一次原生 moveTo。
 - 停滞时先等待一个 tick或调整优先级，再有限重寻路；连续失败进入 idle/flee，不能持续消耗 CPU。
 
+Traffic Manager（意图集中解算，`CONFIG.movement.trafficManager` 开关）：
+
+- 开启时 movement 层所有移动出口不直发引擎指令，改为把「本 tick 想走哪一格」登记到 per-tick 意图账本（`creeps/movement/intent.ts`）；站桩矿工/等 boost/站桩 upgrader 登记「锚定」声明拒绝被推挤（同 tick 存在移动意图时锚自动失效）。
+- 所有 creep 角色执行完毕后，`traffic-manager` 后置系统（System.phase = "post"，kernel 在 runCreeps 之后运行 post 阶段，复用同一 budget/safeRun 管线）按房调用纯函数解算器（`traffic-resolver.ts`）：同格仲裁（高优先级胜）→ 跟车放行 → 对向换位 → 推挤静止者（链深上限 2，落格复用 parking 的关键格/road 口径）→ 疲劳与敌方 creep 视为硬墙；解算后统一签发 `creep.move` 并记录交通热度。
+- 移动优先级表在 `CONFIG.movement.trafficPriority`：flee 100 > 站桩矿工锚 90 > work/站桩锚 60 > acquire 40 > 通勤 30 > parked 0。
+- 开启期间旧 yield/pull 让路机制与前置绕路检测短路禁用（双仲裁并存会互相打架）；stuckTicks/Level-3 弃标保留为不可达目标安全网。关闭开关即整体回退旧行为（登记函数直通引擎 move），是唯一回滚通道。
+
 #### 5.7.6 Creep 实施顺序与验收
 
 | 步骤 | 前置 | 实施内容 | 验收 |

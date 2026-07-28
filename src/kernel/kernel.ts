@@ -62,11 +62,16 @@ const ROLE_EXECUTION_ORDER: Readonly<Record<string, number>> = {
 export class Kernel {
   private readonly roleMap: Map<string, CreepRole>;
   private readonly sortedSystems: readonly System[];
+  private readonly postSystems: readonly System[];
 
   constructor(private readonly registry: Registry) {
     // 缓存 roleMap 和 sortedSystems — Registry 内容在 tick 间不变，避免每 tick 重建和排序。
     this.roleMap = new Map(registry.getRoles().map(r => [r.name, r] as const));
-    this.sortedSystems = registry.getSystems();
+    // 按执行阶段拆分：main 在角色之前，post 在所有角色之后
+    // （post 系统消费角色执行期产出的 per-tick 数据，如移动意图账本）。
+    const all = registry.getSystems();
+    this.sortedSystems = all.filter(s => (s.phase ?? "main") === "main");
+    this.postSystems = all.filter(s => s.phase === "post");
   }
 
   run(): void {
@@ -101,6 +106,10 @@ export class Kernel {
 
     // 7. 按优先级排序运行 creep 角色。
     this.runCreeps(ctx);
+
+    // 7.5 后置系统 — 消费角色执行期产出的 per-tick 数据
+    //     （如 traffic-manager 集中解算移动意图并统一签发 move）。
+    this.runPostSystems(ctx);
 
     // 8. 遥测摘要。
     emitSummary(budget);
@@ -235,6 +244,29 @@ export class Kernel {
       if (ctx.tick % system.interval !== phase) return false;
     }
     return true;
+  }
+
+  /**
+   * 后置系统 — 在所有 creep 角色之后运行，消费角色执行期产出的
+   * per-tick 数据（如 traffic-manager 解算移动意图账本并统一签发 move）。
+   * 复用 main 阶段的 budget / safeRun / measuredRun 管线。
+   */
+  private runPostSystems(ctx: Context): void {
+    for (const system of this.postSystems) {
+      if (!this.shouldRunSystem(system, ctx)) continue;
+      if (!ctx.budget.canStart(system.priority)) {
+        recordSkip(`system/${system.name}/budget`);
+        continue;
+      }
+      measuredRun(`system/${system.name}`, () =>
+        safeRun(
+          `system/${system.name}`,
+          () => system.run(ctx),
+          system.priority === 0, // P0 系统是关键的 — 永不冷却。
+        ),
+      );
+      if (ctx.budget.isExhausted()) break;
+    }
   }
 
   private runCreeps(ctx: Context): void {

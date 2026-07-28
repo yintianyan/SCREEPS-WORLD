@@ -11,9 +11,10 @@
  * creep 转入正常工作 — 即使化合物迟迟不到位也不会在 lab 旁永久罚站。
  */
 import { globalCache } from "../../kernel/global-cache";
+import { CONFIG } from "../../config";
 import { BOOST_REPORT_TTL } from "../../domain/industry/boost";
 import { getObjectById } from "../support/obj-cache";
-import { moveToTarget } from "../movement";
+import { moveToTarget, registerAnchor } from "../movement";
 
 /**
  * 检查 creep 是否需要去 boost lab 报到。
@@ -37,6 +38,9 @@ export function interceptForBoost(creep: Creep): boolean {
 
   if (creep.pos.getRangeTo(lab.pos) > 1) {
     moveToTarget(creep, lab);
+  } else {
+    // 已在 lab 旁 — 登记锚定，等待 boostCreep 期间不被过路 creep 推离工位。
+    registerAnchor(creep, CONFIG.movement.trafficPriority.anchorStation);
   }
   // 已在 lab 旁 — 原地等待 lab-system 执行 boostCreep（化合物由 supplyLabs 补给）。
   return true;

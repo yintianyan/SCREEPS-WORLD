@@ -2,7 +2,8 @@
  * Harvest actions — 从 source / mineral 采集。
  */
 import type { ActionCandidate, ActionContext } from "../action-types";
-import { moveToTarget } from "../../movement";
+import { CONFIG } from "../../../config";
+import { moveToTarget, registerAnchor } from "../../movement";
 import { runAction } from "./helpers";
 import { getSource } from "../../support/targeting";
 
@@ -68,6 +69,12 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       const { source, container, link } = target;
       // 站位：优先站到 source container 之上（range 0 倒能，0 通勤）；否则站到 source 旁。
       const standTarget: RoomPosition | { pos: RoomPosition } = container ?? source;
+
+      // 已在矿位 → 登记高优先级锚：站桩矿工让出矿位 = 采集吞吐崩塌，
+      // 集中解算时拒绝被低优先级移动方推挤（若本 tick 又登记了移动意图，锚自动失效）。
+      if (ac.creep.pos.getRangeTo(source) <= 1) {
+        registerAnchor(ac.creep, CONFIG.movement.trafficPriority.anchorMiner);
+      }
 
       // 站桩维护：站立的 source container 血量 < 80%（与 repairNearbyContainer 阈值一致）时先修再采。
       // harvest 与 repair 互斥（不能同 tick），故空手时先采一 tick 攒能量、本 tick 不倒，

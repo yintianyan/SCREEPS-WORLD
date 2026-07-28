@@ -23,7 +23,7 @@ import {
   withdrawStorageCapped,
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
-import { moveToTarget } from "../movement";
+import { moveToTarget, registerAnchor } from "../movement";
 
 /** upgrader 视为「已在站桩位」的最大距离（controller container/controller 周边）。 */
 const STATION_RANGE = 3;
@@ -55,7 +55,12 @@ function resolveStationAnchor(ac: ActionContext): StructureContainer | Structure
   const ctrl = ac.snapshot.controller;
   const anchor = ac.snapshot.controllerContainer ?? (ctrl?.my ? ctrl : undefined);
   if (!anchor) return undefined;
-  if (ac.creep.pos.getRangeTo(anchor.pos) <= STATION_RANGE) return undefined;
+  if (ac.creep.pos.getRangeTo(anchor.pos) <= STATION_RANGE) {
+    // 已在站桩位（含等补给的 idle 期）— 登记交通锚，防被过路 creep 推离取能位。
+    // 幂等副作用：本 tick 若又登记了移动意图，解算器以意图为准。
+    registerAnchor(ac.creep, CONFIG.movement.trafficPriority.anchorStation);
+    return undefined;
+  }
   return anchor;
 }
 
@@ -138,6 +143,24 @@ function dynamicStorageLimit(ac: ActionContext): number {
   return 200;
 }
 
+/**
+ * 升级动作的锚定包装 — 站桩升级中（range≤3 免通勤）登记交通锚，
+ * 防止被过路 creep 从取能位/升级位推开；仍需通勤时不锚（移动意图优先）。
+ */
+function upgradeAnchored(): ActionCandidate<StructureController> {
+  const inner = upgradeController();
+  return {
+    name: inner.name,
+    resolve: inner.resolve,
+    execute: (ac, ctrl) => {
+      if (ac.creep.pos.getRangeTo(ctrl.pos) <= STATION_RANGE) {
+        registerAnchor(ac.creep, CONFIG.movement.trafficPriority.anchorStation);
+      }
+      inner.execute(ac, ctrl);
+    },
+  };
+}
+
 const policy: RolePolicy = {
   gate: upgraderGate,
 
@@ -161,7 +184,7 @@ const policy: RolePolicy = {
   ],
 
   work: [
-    upgradeController(),
+    upgradeAnchored(),
   ],
 };
 

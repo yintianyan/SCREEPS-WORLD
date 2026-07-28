@@ -14,6 +14,7 @@ import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
 import { packPos, recordTraffic } from "./traffic";
 import { checkAndExecuteYield, tryPullBlocker, updateStuckTicks, clearTarget, DIR_DELTA } from "./stuck-recovery";
+import { movePriorityFor, nextDirFromPath, registerMove, trafficEnabled } from "./intent";
 
 // ─── CostMatrix 缓存（结构层）────────────────────────────
 
@@ -215,6 +216,24 @@ function fatigueSwampCost(creep: Creep): number {
 
 // ─── 同 tick 路径共享 ─────────────────────────────────────
 
+/**
+ * 沿缓存路径走一步 — moveByPath 的双模出口。
+ * traffic 开启：提取下一步方向登记意图（不发引擎指令）；
+ * traffic 关闭：引擎 moveByPath + recordTraffic（旧行为）。
+ * 返回 undefined 表示 creep 不在路径上（等价 ERR_NOT_FOUND，调用方失效缓存）。
+ */
+function issuePathStep(creep: Creep, path: readonly RoomPosition[]): ScreepsReturnCode | undefined {
+  if (trafficEnabled()) {
+    const nd = nextDirFromPath(creep, path);
+    if (nd === undefined) return undefined;
+    return registerMove(creep, nd, movePriorityFor(creep));
+  }
+  const result = creep.moveByPath(path as RoomPosition[]);
+  if (result === ERR_NOT_FOUND || result === ERR_INVALID_ARGS) return undefined;
+  if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+  return result;
+}
+
 function packRoomName(roomName: string): number {
   const match = roomName.match(/^([WE])(\d+)([NS])(\d+)$/);
   if (!match) return 0;
@@ -240,9 +259,7 @@ function trySharedPath(creep: Creep, cacheKey: number): ScreepsReturnCode | unde
   const cache = getPathShareCache();
   const path = cache.get(cacheKey);
   if (!path) return undefined;
-  const result = creep.moveByPath(path);
-  if (result === ERR_NOT_FOUND || result === ERR_INVALID_ARGS) return undefined;
-  return result;
+  return issuePathStep(creep, path);
 }
 
 // ─── 走廊共享（主干路径 + 末端分歧）─────────────────────
@@ -324,8 +341,8 @@ function tryCorridorPath(creep: Creep, target: RoomPosition): ScreepsReturnCode 
 
   if (trunkPath) {
     // 复用主干路径。
-    const result = creep.moveByPath(trunkPath);
-    if (result !== ERR_NOT_FOUND && result !== ERR_INVALID_ARGS) return result;
+    const result = issuePathStep(creep, trunkPath);
+    if (result !== undefined) return result;
   }
 
   // 首个到该走廊的 creep — 计算主干路径（到区域边缘 range = CORRIDOR_ZONE_RADIUS+1）。
@@ -356,8 +373,8 @@ function tryCorridorPath(creep: Creep, target: RoomPosition): ScreepsReturnCode 
 
   if (!result.incomplete && result.path.length > 0) {
     cache.set(cKey, result.path);
-    const moveResult = creep.moveByPath(result.path);
-    if (moveResult !== ERR_NOT_FOUND && moveResult !== ERR_INVALID_ARGS) return moveResult;
+    const moveResult = issuePathStep(creep, result.path);
+    if (moveResult !== undefined) return moveResult;
   }
 
   return undefined;
@@ -389,8 +406,8 @@ function tryPersistedPath(
   if (entry.targetKey !== targetPacked) return undefined;
   if (entry.structRevision !== structRevision) return undefined;
 
-  const result = creep.moveByPath(entry.path);
-  if (result === ERR_NOT_FOUND || result === ERR_INVALID_ARGS) {
+  const result = issuePathStep(creep, entry.path);
+  if (result === undefined) {
     delete cache[creep.name];
     return undefined;
   }
@@ -402,10 +419,11 @@ function computeAndPersistPath(
   pos: RoomPosition,
   targetPacked: number,
   structRevision: number,
+  range = 1,
 ): RoomPosition[] | undefined {
   const result = PathFinder.search(
     creep.pos,
-    { pos, range: 1 },
+    { pos, range },
     {
       plainCost: 2,
       swampCost: fatigueSwampCost(creep),
@@ -431,6 +449,60 @@ function computeAndPersistPath(
 
   getCreepPathCache()[creep.name] = { targetKey: targetPacked, structRevision, path: result.path };
   return result.path;
+}
+
+/**
+ * Traffic 开启时的统一单步出口：持久化路径缓存 → PathFinder 重算 → 意图登记。
+ * 引擎 moveTo 的意图化替身 — reusePath 语义由持久化缓存（目标 + 路网 revision
+ * 不变即复用）等价实现，forceRepath 对应 reusePath: 0。
+ * 消除引擎内部直发 move 意图的旁路，保证所有移动都经过 tick 末集中解算。
+ */
+function registerStepViaPathfinder(
+  creep: Creep,
+  pos: RoomPosition,
+  priority: number,
+  forceRepath: boolean,
+  range = 1,
+): ScreepsReturnCode {
+  // 紧邻目标：单步直走，不值得进 PathFinder。
+  if (creep.pos.getRangeTo(pos) <= 1) {
+    if (creep.pos.isEqualTo(pos)) return OK;
+    return registerMove(creep, creep.pos.getDirectionTo(pos), priority);
+  }
+  const targetPacked = packPos(pos);
+  const structEntry = ensureStructureCache(creep.room.name);
+  const rev = structEntry?.revision ?? -1;
+  const cache = getCreepPathCache();
+  if (forceRepath) delete cache[creep.name];
+  const cached = cache[creep.name];
+  const path =
+    cached && cached.targetKey === targetPacked && cached.structRevision === rev
+      ? cached.path
+      : computeAndPersistPath(creep, pos, targetPacked, rev, range);
+  if (path) {
+    const nd = nextDirFromPath(creep, path);
+    if (nd !== undefined) return registerMove(creep, nd, priority);
+    delete cache[creep.name]; // 掉出路径 — 缓存失效，下 tick 重算。
+  }
+  return ERR_NO_PATH;
+}
+
+/**
+ * 简单移动出口 — flee / 回收归航等「moveTo(reusePath:5, ignoreCreeps:false)」
+ * 场景的双模替身。traffic 关闭走引擎 moveTo（旧行为）；开启走统一单步出口。
+ * 供 lifecycle / 角色 onFlee 等 movement 层外的调用点使用。
+ */
+export function stepToward(
+  creep: Creep,
+  target: RoomPosition | { pos: RoomPosition },
+): ScreepsReturnCode {
+  const pos = "pos" in target ? target.pos : target;
+  if (!trafficEnabled()) {
+    const result = creep.moveTo(pos, { reusePath: 5, ignoreCreeps: false });
+    if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+    return result;
+  }
+  return registerStepViaPathfinder(creep, pos, movePriorityFor(creep), false);
 }
 
 // ─── 跨房间路径缓存（remote mining 前置）────────────────
@@ -511,6 +583,11 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
     if (exitDir < 0) return;
     const exit = creep.pos.findClosestByRange(exitDir as ExitConstant);
     if (exit) {
+      // traffic 开启：出口是边界格，range 0 才会真正踏上出口。
+      if (trafficEnabled()) {
+        registerStepViaPathfinder(creep, exit, movePriorityFor(creep), true, 0);
+        return;
+      }
       creep.moveTo(exit, {
         reusePath: 0,
         plainCost: 2,
@@ -538,6 +615,11 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
   }
 
   if (exit) {
+    // traffic 开启：统一单步出口（卡位时强制重算 = reusePath: 0 等价语义）。
+    if (trafficEnabled()) {
+      registerStepViaPathfinder(creep, exit, movePriorityFor(creep), stuckTicks >= stuckThreshold, 0);
+      return;
+    }
     // Level 1：卡位 → reusePath: 0 强制重算路径。
     const reusePath = stuckTicks >= stuckThreshold ? 0 : 5;
     const result = creep.moveTo(exit, {
@@ -581,7 +663,7 @@ function stepOffEdge(creep: Creep): boolean {
       if (nx <= 0 || nx >= 49 || ny <= 0 || ny >= 49) continue; // 仍是边界格不算逃离
       if (terrain.get(nx, ny) === TERRAIN_MASK_WALL) continue;
       const dir = creep.pos.getDirectionTo(nx, ny);
-      creep.move(dir as DirectionConstant);
+      registerMove(creep, dir as DirectionConstant, movePriorityFor(creep));
       return true;
     }
   }
@@ -656,16 +738,15 @@ export function moveToTarget(
 ): ScreepsReturnCode {
   const pos = "pos" in target ? target.pos : target;
 
-  // Yield 检查。
-  if (checkAndExecuteYield(creep)) return OK;
+  // Yield 检查（traffic 开启时禁用 — 让路职责移交集中解算的推挤机制，
+  // 双仲裁并存会互相打架）。
+  if (!trafficEnabled() && checkAndExecuteYield(creep)) return OK;
 
   // 短路：range <= 1。
   const range = creep.pos.getRangeTo(pos);
   if (range <= 1) {
     const dir = creep.pos.getDirectionTo(pos);
-    const result = creep.move(dir);
-    if (result === OK || result === ERR_TIRED) recordTraffic(creep);
-    return result;
+    return registerMove(creep, dir, movePriorityFor(creep));
   }
 
   // 卡位检测。
@@ -684,8 +765,8 @@ export function moveToTarget(
     return ERR_NO_PATH;
   }
 
-  // Level 1：pull。
-  if (stuckTicks === stuckThreshold) {
+  // Level 1：pull（traffic 开启时禁用 — 推挤已覆盖其全部场景）。
+  if (!trafficEnabled() && stuckTicks === stuckThreshold) {
     tryPullBlocker(creep, pos);
   }
 
@@ -693,7 +774,8 @@ export function moveToTarget(
   // 根因：PathFinder 的 roomCallback 默认不把 creep 当障碍，新算路径会穿过 creep，
   // 后续 creep 复用 __pathShare 缓存导致火车排队。
   // 仅在 stuckTicks === 0 时检测——一旦卡住（stuckTicks > 0），Level 1/2 脱困接管。
-  if (stuckTicks === 0 && range > 1) {
+  // traffic 开启时禁用 — 挡路 creep 由解算器仲裁/推挤，提前绕路反而放弃了直线路权。
+  if (!trafficEnabled() && stuckTicks === 0 && range > 1) {
     const dir = creep.pos.getDirectionTo(pos);
     const delta = DIR_DELTA[dir];
     if (delta) {
@@ -720,6 +802,7 @@ export function moveToTarget(
   }
 
   // ── 路径缓存（Level 0 + 中远距离）──
+  // 交通热度记录已下沉到 issuePathStep / registerMove，调用点不再重复记录。
   if (stuckTicks === 0 && range > 3) {
     const targetPacked = packPos(pos);
     const structEntry = ensureStructureCache(creep.room.name);
@@ -728,14 +811,12 @@ export function moveToTarget(
     // 1. 跨 tick 持久化。
     const persistedResult = tryPersistedPath(creep, targetPacked, structRevision);
     if (persistedResult !== undefined) {
-      if (persistedResult === OK || persistedResult === ERR_TIRED) recordTraffic(creep);
       return persistedResult;
     }
 
     // 2. 走廊共享（主干路径到核心区域边缘）。
     const corridorResult = tryCorridorPath(creep, pos);
     if (corridorResult !== undefined) {
-      if (corridorResult === OK || corridorResult === ERR_TIRED) recordTraffic(creep);
       return corridorResult;
     }
 
@@ -743,7 +824,6 @@ export function moveToTarget(
     const cacheKey = pathShareKey(creep.room.name, targetPacked);
     const sharedResult = trySharedPath(creep, cacheKey);
     if (sharedResult !== undefined) {
-      if (sharedResult === OK || sharedResult === ERR_TIRED) recordTraffic(creep);
       return sharedResult;
     }
 
@@ -751,12 +831,17 @@ export function moveToTarget(
     const path = computeAndPersistPath(creep, pos, targetPacked, structRevision);
     if (path) {
       getPathShareCache().set(cacheKey, path);
-      const result = creep.moveByPath(path);
-      if (result !== ERR_NOT_FOUND && result !== ERR_INVALID_ARGS) {
-        if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+      const result = issuePathStep(creep, path);
+      if (result !== undefined) {
         return result;
       }
     }
+  }
+
+  // ── 回退（traffic 开启）：统一单步出口 — 消除引擎 moveTo 直发意图的旁路。
+  // 卡位（Level 1+）时强制重算路径，与 reusePath: 0 等价。
+  if (trafficEnabled()) {
+    return registerStepViaPathfinder(creep, pos, movePriorityFor(creep), stuckTicks >= stuckThreshold);
   }
 
   // ── 回退：moveTo（引擎内置缓存）──

@@ -74,6 +74,8 @@ export interface GlobalCache {
   actionCpu?: Map<string, ActionCpuEntry>;
   /** actionCpu 上次重置所在的 tick（惰性按 tick 重置）。 */
   actionCpuTick?: number;
+  /** Traffic Manager 的 per-tick 移动意图/锚定账本（intent.ts 构建，traffic-manager 消费）。 */
+  __moveIntents?: import("../creeps/movement/intent").IntentLedger;
 }
 
 /**
