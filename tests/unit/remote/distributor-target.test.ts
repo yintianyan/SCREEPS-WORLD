@@ -151,13 +151,44 @@ describe("getDistributorFillTarget — 水位档位过滤", () => {
     expect(target?.id).toBe(ext.id);
   });
 
-  it("tier 1-3 跳过 tower（低水位保护储备）", () => {
-    const tower = struct("tower", 20, 20, 0, 1000);
+  it("tier 1-2 战备线：tower 低于弹药地板时补给（战后弹药真空解除不等满仓）", () => {
+    const tower = struct("tower", 20, 20, 70, 1000); // 70 < 地板 500
+    const snap = mockSnapshot({ fillTargets: [tower] as any, links: [] });
+    const creep = mockCreep({ pos: mockPos(25, 25) });
+
+    expect(getDistributorFillTarget(creep as any, snap, 1)?.id).toBe(tower.id);
+    expect(getDistributorFillTarget(creep as any, snap, 2)?.id).toBe(tower.id);
+  });
+
+  it("tier 1-2 战备线：tower 已达地板则不补（补满是 tier 0 的事）", () => {
+    const tower = struct("tower", 20, 20, 600, 1000); // 600 ≥ 地板 500
     const snap = mockSnapshot({ fillTargets: [tower] as any, links: [] });
     const creep = mockCreep({ pos: mockPos(25, 25) });
 
     expect(getDistributorFillTarget(creep as any, snap, 1)).toBeUndefined();
+  });
+
+  it("tier 3 跳过 tower（生存优先，即使低于地板）", () => {
+    const tower = struct("tower", 20, 20, 0, 1000);
+    const snap = mockSnapshot({ fillTargets: [tower] as any, links: [] });
+    const creep = mockCreep({ pos: mockPos(25, 25) });
+
     expect(getDistributorFillTarget(creep as any, snap, 3)).toBeUndefined();
+  });
+
+  it("tier 1 兜底 controller container（与 upgrader 的 sustainedStorage 调度对齐）", () => {
+    const cc = struct("container", 10, 10, 0, 2000);
+    const snap = mockSnapshot({
+      controller: { pos: mockPos(10, 10) } as any,
+      fillTargets: [cc] as any,
+      controllerContainer: cc as any,
+      links: [],
+    });
+    const creep = mockCreep({ pos: mockPos(25, 25) });
+
+    expect(getDistributorFillTarget(creep as any, snap, 1)?.id).toBe(cc.id);
+    // tier 2（storage < sustained）不再兜底 — 该水位不该养站桩升级。
+    expect(getDistributorFillTarget(creep as any, snap, 2)).toBeUndefined();
   });
 });
 
@@ -170,16 +201,21 @@ describe("hasDistributorFillDemand — 取能门禁口径", () => {
     expect(hasDistributorFillDemand(snap, 3)).toBe(true);
   });
 
-  it("仅 tower 需求：tier 0 成立，tier 1+ 不成立（与投放过滤一致）", () => {
-    const tower = struct("tower", 20, 20, 0, 1000);
-    const snap = mockSnapshot({ fillTargets: [tower] as any, links: [] });
+  it("仅 tower 需求：tier 0 恒成立；tier 1-2 按弹药地板判定；tier 3 不成立", () => {
+    const emptyTower = struct("tower", 20, 20, 70, 1000); // 70 < 地板 500
+    const armedTower = struct("tower", 22, 22, 600, 1000); // 600 ≥ 地板
+    const belowFloor = mockSnapshot({ fillTargets: [emptyTower] as any, links: [] });
+    const atFloor = mockSnapshot({ fillTargets: [armedTower] as any, links: [] });
 
-    expect(hasDistributorFillDemand(snap, 0)).toBe(true);
-    expect(hasDistributorFillDemand(snap, 1)).toBe(false);
-    expect(hasDistributorFillDemand(snap, 3)).toBe(false);
+    expect(hasDistributorFillDemand(belowFloor, 0)).toBe(true);
+    expect(hasDistributorFillDemand(belowFloor, 1)).toBe(true);
+    expect(hasDistributorFillDemand(belowFloor, 3)).toBe(false);
+    // 已达战备线：tier 0 仍要补满，tier 1-2 无需求（不为满弹塔取能防携能 idle）。
+    expect(hasDistributorFillDemand(atFloor, 0)).toBe(true);
+    expect(hasDistributorFillDemand(atFloor, 1)).toBe(false);
   });
 
-  it("controller container 兜底需求：仅 tier 0 且无 controller link 时成立", () => {
+  it("controller container 兜底需求：tier 0-1 且无 controller link 时成立", () => {
     const cc = struct("container", 10, 10, 0, 2000);
     const controllerLink = struct("link", 11, 11, 0, 800);
     const noLinkSnap = mockSnapshot({
@@ -196,7 +232,9 @@ describe("hasDistributorFillDemand — 取能门禁口径", () => {
     });
 
     expect(hasDistributorFillDemand(noLinkSnap, 0)).toBe(true);
-    expect(hasDistributorFillDemand(noLinkSnap, 1)).toBe(false);
+    expect(hasDistributorFillDemand(noLinkSnap, 1)).toBe(true);
+    // tier 2（storage < sustained）不兜底 — 与 upgrader 调度水位对齐。
+    expect(hasDistributorFillDemand(noLinkSnap, 2)).toBe(false);
     // 有 controller link 时 container 由 link 网络独占供能，不构成需求。
     expect(hasDistributorFillDemand(linkedSnap, 0)).toBe(false);
   });

@@ -209,16 +209,29 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
     expect(creep.memory.distributorTier).toBe(1);
   });
 
-  it("tier 1：仅剩 tower 需求时不取能（取能与投放同一口径，防携能 idle）", () => {
+  it("tier 1：tower 低于弹药地板时取能补给（战备线口径）", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 30000, capacity: 1000000 });
-    const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
+    const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 }); // 100 < 地板 500
     const snap = mockSnapshot({ storage, fillTargets: [tower] });
     const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 200, mode: "acquire" });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
 
-    // tier 1 投放阶段会跳过 tower — 若此处取能，能量将滞留背包。
+    // 战后弹药真空：tier 1 对低于战备线的塔构成取能需求（投放同口径）。
+    expect(creep.withdraw).toHaveBeenCalled();
+    expect(creep.memory.distributorTier).toBe(1);
+  });
+
+  it("tier 1：tower 已达弹药地板时不取能（补满是 tier 0 的事，防携能 idle）", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: 30000, capacity: 1000000 });
+    const tower = mockStructure("tower", { id: "tw1", energy: 600, capacity: 1000 }); // 600 ≥ 地板 500
+    const snap = mockSnapshot({ storage, fillTargets: [tower] });
+    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 200, mode: "acquire" });
+    const ctx = mockContext(snap);
+
+    distributorRole.run(creep, ctx);
+
     expect(creep.withdraw).not.toHaveBeenCalled();
   });
 

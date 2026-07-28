@@ -342,12 +342,20 @@ export const CONFIG = {
      * builder 编制（demand B-5）同样按本表封顶。
      */
     distributorTiers: {
-      /** ≥ 此值为 tier 0：满载取能，全目标（含 tower/controller container）。 */
+      /** ≥ 此值为 tier 0：满载取能，全目标（含 tower 补满/controller container）。 */
       full: 50000,
-      /** ≥ 此值为 tier 1：满载取能，仅 spawn/extension。 */
+      /** ≥ 此值为 tier 1：满载取能，spawn/extension + tower 战备线 + controller container 兜底。 */
       sustained: 10000,
-      /** ≥ 此值为 tier 2：限取 400/tick，仅 spawn/extension；低于则 tier 3（限取 200/tick，仍服务 spawn/extension — 节流靠限额而非裁剪目标）。 */
+      /** ≥ 此值为 tier 2：限取 400/tick，spawn/extension + tower 战备线；低于则 tier 3（限取 200/tick，仍服务 spawn/extension — 节流靠限额而非裁剪目标）。 */
       low: 2000,
+      /**
+       * Tower 弹药战备线：tier 1-2 时 tower 能量低于此值才触发补给（补满由 tier 0 负责）。
+       * 塔是威慑资产，威慑资产必须平时有弹 — 战后弹药真空 + 只靠威胁在场时的
+       * 反应式补弹（hauler 战时让位）意味着下次袭击的前几十 tick 塔是哑的。
+       * 500 = 50 发，低于 tower-defense 烧墙门槛（70% 能量），战备能量不会被
+       * 墙体维护黑洞消耗；触发线语义（低于才补）保证低水位期投入有上界。
+       */
+      towerAmmoFloor: 500,
     },
     /**
      * 遗留能量（掉落堆/坟墓/废墟）值得 hauler 专程回收的最小数量。

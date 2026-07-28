@@ -279,18 +279,32 @@ export function getDistributorFillTarget(
     return primary as unknown as AnyOwnedStructure;
   }
 
-  // tier >= 1: 跳过 tower，保护低水位下的能量储备。
-  if (tier < 1) {
-    // 2. tower —— 防御。
-    const tower = pickFillTarget(creep, snapshot.fillTargets, reserved, [STRUCTURE_TOWER]);
+  // 2. tower —— 威慑资产，平时必须有弹。
+  //    tier 0：补满；tier 1-2：只补低于战备线（towerAmmoFloor）的塔 —
+  //    战后弹药真空不能等 storage 攒到 full 才解除（发展期房间可能长期 < 50k，
+  //    「只在威胁在场时反应式补弹」意味着下次袭击的前几十 tick 塔是哑的）；
+  //    tier 3（< low）：生存优先，跳过。触发线语义保证低水位投入有上界。
+  if (tier < 3) {
+    const ammoFloor = CONFIG.economy.distributorTiers.towerAmmoFloor;
+    const towerPool = tier < 1
+      ? snapshot.fillTargets
+      : (snapshot.fillTargets as FillTarget[]).filter(
+          t => t.structureType !== STRUCTURE_TOWER ||
+            t.store.getUsedCapacity(RESOURCE_ENERGY) < ammoFloor,
+        );
+    const tower = pickFillTarget(creep, towerPool, reserved, [STRUCTURE_TOWER]);
     if (tower) {
       reserved.add(tower.id);
       return tower as unknown as AnyOwnedStructure;
     }
   }
 
-  // 3. controller container 兜底 —— 仅当无 controller link 时（tier < 1 才允许）。
-  if (tier < 1) {
+  // 3. controller container 兜底 —— 仅当无 controller link 时。
+  //    档位与 upgrader 调度对齐（tier < 2 ⇔ storage ≥ sustained）：
+  //    upgrade.sustainedStorage 允许养 upgrader 的水位，就必须允许给它的
+  //    供能站送能 — 否则两套水位裁决互相矛盾，cc 沦为死资产、
+  //    upgrader 退化为往返 storage 限量取能（站桩 0 通勤设计失效）。
+  if (tier < 2) {
     const hasControllerLink =
       snapshot.controller != null &&
       snapshot.links.some(l => l.pos.getRangeTo(snapshot.controller!) <= 2);
@@ -304,9 +318,14 @@ export function getDistributorFillTarget(
   }
 
   // 全部已预约 — 回退最近目标（允许共享）避免死锁，但须符合 tier 类型约束。
+  const fallbackAmmoFloor = CONFIG.economy.distributorTiers.towerAmmoFloor;
   const fallbackPool = (snapshot.fillTargets as FillTarget[]).filter(t => {
-    if (tier >= 1) return t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION;
-    return true;
+    if (tier < 1) return true;
+    if (t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION) return true;
+    // tier 1-2 的 tower 战备线口径与主路径一致。
+    return tier < 3 &&
+      t.structureType === STRUCTURE_TOWER &&
+      t.store.getUsedCapacity(RESOURCE_ENERGY) < fallbackAmmoFloor;
   });
   return (creep.pos.findClosestByRange(fallbackPool) ?? undefined) as
     | AnyOwnedStructure
@@ -332,18 +351,28 @@ export function hasDistributorFillDemand(snapshot: RoomSnapshot, tier: Distribut
   ) {
     return true;
   }
-  if (tier >= 1) return false;
 
-  // tier 0 额外服务 tower。
-  if (snapshot.fillTargets.some(t => t.structureType === STRUCTURE_TOWER)) return true;
+  // tower：tier 0 补满口径，tier 1-2 战备线口径（低于 towerAmmoFloor 才算需求），
+  // tier 3 不服务 — 与 getDistributorFillTarget 的过滤规则逐条对应。
+  if (tier < 3) {
+    const ammoFloor = CONFIG.economy.distributorTiers.towerAmmoFloor;
+    const towerDemand = snapshot.fillTargets.some(
+      t => t.structureType === STRUCTURE_TOWER &&
+        (tier < 1 || t.store.getUsedCapacity(RESOURCE_ENERGY) < ammoFloor),
+    );
+    if (towerDemand) return true;
+  }
 
-  // tier 0 且无 controller link 时兜底 controller container。
-  const hasControllerLink =
-    snapshot.controller != null &&
-    snapshot.links.some(l => l.pos.getRangeTo(snapshot.controller!) <= 2);
-  if (!hasControllerLink) {
-    const cc = snapshot.controllerContainer;
-    if (cc && cc.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return true;
+  // controller container 兜底：tier < 2（与 upgrader 的 sustainedStorage 调度对齐）
+  // 且无 controller link 时。
+  if (tier < 2) {
+    const hasControllerLink =
+      snapshot.controller != null &&
+      snapshot.links.some(l => l.pos.getRangeTo(snapshot.controller!) <= 2);
+    if (!hasControllerLink) {
+      const cc = snapshot.controllerContainer;
+      if (cc && cc.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return true;
+    }
   }
   return false;
 }

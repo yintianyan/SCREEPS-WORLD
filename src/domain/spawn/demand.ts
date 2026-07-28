@@ -458,14 +458,20 @@ export function evaluateDemand(
     // 否则「按含 tower 的缺口扩编 → 扩出来的编制不服务 tower」，
     // 信号虚高一档，尖峰期多孵的每一头都是常驻浪费。
     const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
-    const servesTower = storageEnergy >= CONFIG.economy.distributorTiers.full;
-    // SN-1 连带：编制信号排除 controllerContainer — 它容量 2000 几乎恒有
-    // 空位，计入会把需求信号抬高一个常量；tier≥1 时 distributor 也不服务它。
-    const fillCount = servesTower
+    const servesTowerFully = storageEnergy >= CONFIG.economy.distributorTiers.full;
+    const towerAmmoFloor = CONFIG.economy.distributorTiers.towerAmmoFloor;
+    // SN-1 连带：非 full 档编制信号排除 controllerContainer — 它容量 2000
+    // 几乎恒有空位，计入会把需求信号抬高一个常量（cc 由既有编制顺路服务）。
+    // tower 与服务范围同口径：full 档全量计入；战备线档（≥ low）只计
+    // 低于弹药地板的塔 — 该信号是瞬态的（补到地板即消失），不会常驻虚高。
+    const fillCount = servesTowerFully
       ? snapshot.fillTargets.length
-      : snapshot.fillTargets.filter(
-          t => t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION,
-        ).length;
+      : snapshot.fillTargets.filter(t => {
+          if (t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION) return true;
+          return t.structureType === STRUCTURE_TOWER &&
+            storageEnergy >= CONFIG.economy.distributorTiers.low &&
+            t.store.getUsedCapacity(RESOURCE_ENERGY) < towerAmmoFloor;
+        }).length;
     const distBody = estimatePlannedBody("distributor", energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl);
     const fillPerDistributor = Math.max(2, Math.floor((countBodyParts(distBody, "carry") * 50) / 150));
     distTarget = Math.min(distConfig.maxCount, Math.max(distConfig.minCount, Math.ceil(fillCount / fillPerDistributor)));
