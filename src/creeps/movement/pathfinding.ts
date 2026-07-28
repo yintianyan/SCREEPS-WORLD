@@ -41,9 +41,16 @@ function buildStructurePositions(
     positions.push(s.pos.x, s.pos.y, cost);
   }
   for (const site of sites) {
-    if (site.structureType !== STRUCTURE_ROAD && site.structureType !== STRUCTURE_CONTAINER) {
-      positions.push(site.pos.x, site.pos.y, 255);
-    }
+    const t = site.structureType;
+    // rampart/road/container site 完全可通行（与建成后形态一致）— 不加成本。
+    // 曾把 rampart site 设为 255：防御规划器给矿位 container 与核心通道叠盾时，
+    // 这些格瞬间变虚假实墙 → harvester 上不了矿位（双源满血采集归零）、
+    // distributor 被困核心区（满载卡死）→ storage 只出不进烧干，全房停滞。
+    if (t === STRUCTURE_ROAD || t === STRUCTURE_CONTAINER || t === STRUCTURE_RAMPART) continue;
+    // 实体结构 site（extension/spawn/tower 等）：强避而非禁行 —
+    // site 阶段本可通行，255 会在密集建造期封锁通道；50 让路径强烈绕开
+    // （避免挡住结构落成），但被围困时仍可穿过逃生。
+    positions.push(site.pos.x, site.pos.y, 50);
   }
   return { count: structures.length + sites.length, positions };
 }
@@ -580,9 +587,14 @@ export function moveToTarget(
   const stuckTicks = updateStuckTicks(creep);
   const { stuckThreshold, repathLimit } = CONFIG.kernel;
 
-  // Level 3：放弃。
+  // Level 3：放弃当前目标。
+  // 必须重置 stuckTicks：放弃是「对这个目标认输」，不是永久瘫痪。
+  // 不重置的后果（线上实测）：放弃分支不执行移动 → 位置不变 → stuckTicks
+  // 只增不减 → 每 tick 直接进本分支 → 吸收态，虚假障碍消失后也永远出不来，
+  // 全房 creep 集体静止。重置后角色逻辑重选目标，下一目标从零开始计数。
   if (stuckTicks >= stuckThreshold + repathLimit) {
     clearTarget(creep);
+    creep.memory.stuckTicks = 0;
     creep.memory.mode = "idle";
     return ERR_NO_PATH;
   }

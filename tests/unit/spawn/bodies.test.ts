@@ -66,11 +66,14 @@ describe("Bodies — degradeBody", () => {
 
   it("degrades hauler body with requiredParts=[carry,move] to fit 200", () => {
     const body = ["carry", "carry", "carry", "move", "move", "move"] as BodyPartConstant[];
-    // 成本 300，使用 requiredParts=[carry,move] 降级
-    // 移除 move -> [carry, carry, carry, move, move] = 250 > 200
-    // 移除 move -> [carry, carry, carry, move] = 200，含 carry+move
+    // 成本 300 → 需降到 200（砍 2 个部件）。MOVE 配比守卫：移除后须 move >= ceil(nonMove/2)。
+    // 砍 1 个 CARRY → [2C,3M]=250；再砍 1 个 → 砍 MOVE 需 move>=1 满足 → [2C,2M]=200。
+    // 结果满足 C/M=1，满载平原可动 —— 不再是独腿 body。
     const result = degradeBody(body, 200, ["carry", "move"]);
-    expect(result).toEqual(["carry", "carry", "carry", "move"]);
+    const c = result!.filter((p) => p === "carry").length;
+    const m = result!.filter((p) => p === "move").length;
+    expect(bodyCost(result!)).toBeLessThanOrEqual(200);
+    expect(m).toBeGreaterThanOrEqual(Math.ceil(c / 2)); // 配比守卫：满载可动
   });
 
   it("returns undefined for hauler body with default requiredParts (requires WORK)", () => {
@@ -78,6 +81,22 @@ describe("Bodies — degradeBody", () => {
     const body = ["carry", "carry", "carry", "move", "move", "move"] as BodyPartConstant[];
     const result = degradeBody(body, 200);
     expect(result).toBeUndefined();
+  });
+
+  it("MOVE 配比守卫：大 CARRY body 降级不产出独腿 nC1M（线上全房停摆根因）", () => {
+    // RCL4+ 道路优化 distributor 模板 [16C,8M]。任何能量档降级后，
+    // MOVE 数必须 >= ceil(CARRY数/2)，保证满载平原可动，不卡 ERR_NOT_IN_RANGE。
+    const tmpl: BodyPartConstant[] = [];
+    for (let i = 0; i < 16; i++) tmpl.push("carry");
+    for (let i = 0; i < 8; i++) tmpl.push("move");
+    for (const energy of [300, 450, 600, 800, 1000]) {
+      const result = degradeBody(tmpl, energy, ["carry", "move"]);
+      if (!result) continue;
+      const c = result.filter((p) => p === "carry").length;
+      const m = result.filter((p) => p === "move").length;
+      expect(bodyCost(result)).toBeLessThanOrEqual(energy);
+      expect(m).toBeGreaterThanOrEqual(Math.ceil(c / 2));
+    }
   });
 });
 

@@ -255,6 +255,12 @@ export function selectBody(
  * 直到成本满足或无可移除部件。至少保留 requiredParts 中每种各一个。
  * 默认要求 [WORK, CARRY, MOVE]；hauler 等纯 CARRY+MOVE 角色可传入 ["carry", "move"]。
  * 如果连最小 body 也无法满足，返回 undefined（调用方应推迟请求）。
+ *
+ * MOVE 配比守卫（关键）：CARRY 与 MOVE 同价（各 50），朴素「砍最贵」会把
+ * MOVE 一路砍到只剩 1 个 —— 产出 nC1M 独腿 body，满载后 fatigue 恢复趋零，
+ * 无路时寸步难移，transfer 永远 ERR_NOT_IN_RANGE 卡死（线上实测全房停摆根因）。
+ * 因此移除时对 MOVE 施加地板：保证 MOVE 数 ≥ 其余部件数的一半（向上取整），
+ * 即满载在平原上仍可移动（2 非MOVE : 1 MOVE 是平原 fatigue-free 的临界配比）。
  */
 export function degradeBody(
   body: readonly BodyPartConstant[],
@@ -268,22 +274,32 @@ export function degradeBody(
     const counts = new Map<string, number>();
     for (const p of parts) counts.set(p, (counts.get(p) ?? 0) + 1);
 
-    // 找最贵的可移除部件（移除后该类型数量仍 >= 所需最低数量）。
+    const moveCount = counts.get("move") ?? 0;
+    const nonMoveCount = parts.length - moveCount;
+
+    // 找最贵的可移除部件（移除后仍满足 requiredParts 与 MOVE 配比约束）。
     let worstIdx = -1;
     let worstCost = -1;
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i]!;
       const cost = PART_COST[p] ?? 0;
       if (cost < worstCost) continue;
-      // 检查移除后是否仍满足 requiredParts 约束。
+      // requiredParts 最后一个不可移除。
       const isRequired = requiredParts.includes(p);
       const currentCount = counts.get(p) ?? 0;
-      if (isRequired && currentCount <= 1) continue; // 最后一个不可移除
+      if (isRequired && currentCount <= 1) continue;
+      // MOVE 配比守卫：移除 MOVE 后必须仍满足 move >= ceil(nonMove/2)，
+      // 否则宁可停在此处（跳过该 MOVE）也不产出独腿 body。
+      if (p === "move") {
+        const moveAfter = moveCount - 1;
+        const needed = Math.ceil(nonMoveCount / 2);
+        if (moveAfter < needed) continue;
+      }
       worstIdx = i;
       worstCost = cost;
     }
 
-    if (worstIdx === -1) break; // 无可移除部件
+    if (worstIdx === -1) break; // 无可移除部件（保配比后卡住）
     parts.splice(worstIdx, 1);
   }
 
