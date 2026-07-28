@@ -469,7 +469,14 @@ function computeAndPersistPath(
     },
   );
 
-  if (result.incomplete || result.path.length === 0) return undefined;
+  if (result.path.length === 0) return undefined;
+
+  // incomplete 部分路径可用但不持久化 — PathFinder 找不到完整路径时返回
+  // 「朝目标推进的最优前缀」。丢弃它会造成行为回归（引擎 moveTo 对 incomplete
+  // 就是沿部分路径走近）：线上实测 controller 唯一 range1 落点被站桩静态阻挡
+  // 标 255 时，upgrader 满载石化在 range5 — 走近到 range3 即可开工，
+  // 站着永远不行。不持久化：路况随时变化，逐 tick 重算保留自愈能力。
+  if (result.incomplete) return result.path;
 
   getCreepPathCache()[creep.name] = { targetKey: targetPacked, structRevision, path: result.path };
   return result.path;
@@ -759,6 +766,7 @@ export function ensureHome(creep: Creep): boolean {
 export function moveToTarget(
   creep: Creep,
   target: RoomPosition | { pos: RoomPosition },
+  moveRange = 1,
 ): ScreepsReturnCode {
   const pos = "pos" in target ? target.pos : target;
 
@@ -852,7 +860,7 @@ export function moveToTarget(
     }
 
     // 4. 新计算 + 持久化 + 共享。
-    const path = computeAndPersistPath(creep, pos, targetPacked, structRevision);
+    const path = computeAndPersistPath(creep, pos, targetPacked, structRevision, moveRange);
     if (path) {
       getPathShareCache().set(cacheKey, path);
       const result = issuePathStep(creep, path);
@@ -864,8 +872,10 @@ export function moveToTarget(
 
   // ── 回退（traffic 开启）：统一单步出口 — 消除引擎 moveTo 直发意图的旁路。
   // 卡位（Level 1+）时强制重算路径，与 reusePath: 0 等价。
+  // moveRange 透传：动作交互距离 > 1（如 upgrade/build 的 range 3）时按实际
+  // 距离求路 — range1 落点可能被静态阻挡/结构全部遮蔽，而 range3 有大把落点。
   if (trafficEnabled()) {
-    return registerStepViaPathfinder(creep, pos, movePriorityFor(creep), stuckTicks >= stuckThreshold);
+    return registerStepViaPathfinder(creep, pos, movePriorityFor(creep), stuckTicks >= stuckThreshold, moveRange);
   }
 
   // ── 回退：moveTo（引擎内置缓存）──
@@ -876,7 +886,7 @@ export function moveToTarget(
     reusePath,
     maxRooms: CONFIG.movement.localMaxRooms,
     ignoreCreeps,
-    range: 1,
+    range: moveRange,
     plainCost: 2,
     swampCost: fatigueSwampCost(creep),
     costCallback: structureCostCallback,
