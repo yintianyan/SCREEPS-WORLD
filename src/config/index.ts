@@ -300,7 +300,7 @@ export const CONFIG = {
       full: 50000,
       /** ≥ 此值为 tier 1：满载取能，仅 spawn/extension。 */
       sustained: 10000,
-      /** ≥ 此值为 tier 2：限取 400/tick，仅 spawn/extension；低于则 tier 3（限取 200，仅 spawn 保命）。 */
+      /** ≥ 此值为 tier 2：限取 400/tick，仅 spawn/extension；低于则 tier 3（限取 200/tick，仍服务 spawn/extension — 节流靠限额而非裁剪目标）。 */
       low: 2000,
     },
     /**

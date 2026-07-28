@@ -9,7 +9,10 @@
  *   3. controller container（仅当无 controller link 时兜底）
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { getDistributorFillTarget } from "../../../src/creeps/support/targeting";
+import {
+  getDistributorFillTarget,
+  hasDistributorFillDemand,
+} from "../../../src/creeps/support/targeting";
 import { resetGlobals, mockSnapshot, mockStructure, mockCreep, mockPos } from "../../role-helpers";
 
 beforeEach(() => {
@@ -134,5 +137,72 @@ describe("getDistributorFillTarget — 优先级", () => {
     const snap = mockSnapshot({ fillTargets: [] as any });
     const creep = mockCreep({ pos: mockPos(25, 25) });
     expect(getDistributorFillTarget(creep as any, snap)).toBeUndefined();
+  });
+});
+
+describe("getDistributorFillTarget — 水位档位过滤", () => {
+  it("tier 3 仍服务 extension（extension 与 spawn 同属孵化能量池）", () => {
+    const ext = struct("extension", 28, 28, 0, 50);
+    const tower = struct("tower", 20, 20, 0, 1000);
+    const snap = mockSnapshot({ fillTargets: [tower, ext] as any, links: [] });
+    const creep = mockCreep({ pos: mockPos(25, 25) });
+
+    const target = getDistributorFillTarget(creep as any, snap, 3);
+    expect(target?.id).toBe(ext.id);
+  });
+
+  it("tier 1-3 跳过 tower（低水位保护储备）", () => {
+    const tower = struct("tower", 20, 20, 0, 1000);
+    const snap = mockSnapshot({ fillTargets: [tower] as any, links: [] });
+    const creep = mockCreep({ pos: mockPos(25, 25) });
+
+    expect(getDistributorFillTarget(creep as any, snap, 1)).toBeUndefined();
+    expect(getDistributorFillTarget(creep as any, snap, 3)).toBeUndefined();
+  });
+});
+
+describe("hasDistributorFillDemand — 取能门禁口径", () => {
+  it("spawn/extension 需求在所有档位都成立", () => {
+    const ext = struct("extension", 28, 28, 0, 50);
+    const snap = mockSnapshot({ fillTargets: [ext] as any, links: [] });
+
+    expect(hasDistributorFillDemand(snap, 0)).toBe(true);
+    expect(hasDistributorFillDemand(snap, 3)).toBe(true);
+  });
+
+  it("仅 tower 需求：tier 0 成立，tier 1+ 不成立（与投放过滤一致）", () => {
+    const tower = struct("tower", 20, 20, 0, 1000);
+    const snap = mockSnapshot({ fillTargets: [tower] as any, links: [] });
+
+    expect(hasDistributorFillDemand(snap, 0)).toBe(true);
+    expect(hasDistributorFillDemand(snap, 1)).toBe(false);
+    expect(hasDistributorFillDemand(snap, 3)).toBe(false);
+  });
+
+  it("controller container 兜底需求：仅 tier 0 且无 controller link 时成立", () => {
+    const cc = struct("container", 10, 10, 0, 2000);
+    const controllerLink = struct("link", 11, 11, 0, 800);
+    const noLinkSnap = mockSnapshot({
+      controller: { pos: mockPos(10, 10) } as any,
+      fillTargets: [] as any,
+      controllerContainer: cc as any,
+      links: [],
+    });
+    const linkedSnap = mockSnapshot({
+      controller: { pos: mockPos(10, 10) } as any,
+      fillTargets: [] as any,
+      controllerContainer: cc as any,
+      links: [controllerLink] as any,
+    });
+
+    expect(hasDistributorFillDemand(noLinkSnap, 0)).toBe(true);
+    expect(hasDistributorFillDemand(noLinkSnap, 1)).toBe(false);
+    // 有 controller link 时 container 由 link 网络独占供能，不构成需求。
+    expect(hasDistributorFillDemand(linkedSnap, 0)).toBe(false);
+  });
+
+  it("无任何需求时不成立", () => {
+    const snap = mockSnapshot({ fillTargets: [] as any, links: [] });
+    expect(hasDistributorFillDemand(snap, 0)).toBe(false);
   });
 });

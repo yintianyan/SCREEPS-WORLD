@@ -53,7 +53,8 @@ import {
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
-import { computeDistributorTier } from "../support/targeting";
+import { computeDistributorTier, hasDistributorFillDemand } from "../support/targeting";
+import type { DistributorTier } from "../support/targeting";
 
 /** 各档位对应的单次最大取能量。tier 0 = 满载（carry 容量）。 */
 const TIER_WITHDRAW_CAP: readonly [number, number, number, number] = [
@@ -66,15 +67,19 @@ const TIER_WITHDRAW_CAP: readonly [number, number, number, number] = [
 /** 从 storage 限量取能 — 带水位分级节流。
  *
  * 需求门禁是本角色的核心设计：
- * 没有 fillTarget（spawn/extension/tower 全满）时禁止从 storage 取能。
+ * 没有本档位可服务的 fillTarget 时禁止从 storage 取能。
  * 这从架构上消除了 storage→storage 循环的可能性。
+ * 门禁必须与投放阶段（distributorFillTarget）用同一套 tier 过滤口径 —
+ * 否则会为档位内拒绝服务的目标（如 tier≥1 时的 tower）取能，
+ * 随后携能 idle，能量滞留在背包里出不去。
  *
  * 水位分级（由 gate 写入 creep.memory.distributorTier，
  * 阈值为绝对能量值 — CONFIG.economy.distributorTiers）：
  *   tier 0 (≥50k)：满载取能，所有 fillTarget 正常服务
  *   tier 1 (≥10k)：满载取能，fillTarget 仅 spawn/extension
  *   tier 2 (≥2k)：限取 400/tick，fillTarget 仅 spawn/extension
- *   tier 3 (<2k)：限取 200/tick，fillTarget 仅 spawn
+ *   tier 3 (<2k)：限取 200/tick，fillTarget 仅 spawn/extension
+ * 低水位靠取能限额节流；spawn/extension 是同一孵化能量池，任何档位都不裁剪。
  */
 function withdrawStorageForDistribution(): ActionCandidate {
   return {
@@ -82,8 +87,9 @@ function withdrawStorageForDistribution(): ActionCandidate {
     resolve: (ac) => {
       const st = ac.snapshot.storage;
       if (!st || st.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
-      // 需求门禁：没有下游 fillTarget 时禁止从 storage 取能。
-      if (ac.snapshot.fillTargets.length === 0) return undefined;
+      // 需求门禁：本档位无可服务的 fillTarget 时禁止从 storage 取能。
+      const tier = (ac.creep.memory.distributorTier as DistributorTier) ?? 0;
+      if (!hasDistributorFillDemand(ac.snapshot, tier)) return undefined;
       return st;
     },
     execute: (ac, target) => {

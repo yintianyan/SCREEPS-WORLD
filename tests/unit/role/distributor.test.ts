@@ -138,7 +138,7 @@ describe("distributor — work 模式", () => {
 
 describe("distributor — reservation 去重", () => {
   it("两个 distributor 不抢同一 fillTarget", () => {
-    // storage 水位需 > 50% 以确保 tier 0（允许 spawn + extension），否则 tier 3 仅允许 spawn 导致两 creep 抢同一目标。
+    // spawn/extension 在所有水位档位都可服务，两 creep 应通过预约各占一个目标。
     const storage = mockStructure("storage", { id: "storage_1", energy: 60000, capacity: 100000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const ext = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
@@ -195,10 +195,10 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
     expect(creep.transfer).toHaveBeenCalledWith(tower, "energy");
   });
 
-  it("tier 1（sustained ≤ 库存 < full）：满载取能，work 跳过 tower 只填 spawn", () => {
+  it("tier 1（sustained ≤ 库存 < full）：满载取能", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 30000, capacity: 1000000 });
-    const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
-    const snap = mockSnapshot({ storage, fillTargets: [tower] });
+    const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
+    const snap = mockSnapshot({ storage, fillTargets: [spawn] });
     const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 200, mode: "acquire" });
     const ctx = mockContext(snap);
 
@@ -207,6 +207,19 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
     // 满载取能（tier 1 不限制取能量）
     expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 200);
     expect(creep.memory.distributorTier).toBe(1);
+  });
+
+  it("tier 1：仅剩 tower 需求时不取能（取能与投放同一口径，防携能 idle）", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: 30000, capacity: 1000000 });
+    const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
+    const snap = mockSnapshot({ storage, fillTargets: [tower] });
+    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 200, mode: "acquire" });
+    const ctx = mockContext(snap);
+
+    distributorRole.run(creep, ctx);
+
+    // tier 1 投放阶段会跳过 tower — 若此处取能，能量将滞留背包。
+    expect(creep.withdraw).not.toHaveBeenCalled();
   });
 
   it("tier 1：work 阶段跳过 tower，填充 spawn", () => {
@@ -265,12 +278,42 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
     expect(creep.memory.distributorTier).toBe(3);
   });
 
-  it("tier 3：work 仅填充 spawn，跳过 extension 和 tower（真保命水位）", () => {
+  it("tier 3：仅剩 extension 需求时仍取能（低水位 extension 断供回归 — 用户症状）", () => {
+    // 曾经 tier 3 目标集排除 extension：门禁看到 extension 需求放行取能，
+    // 投放阶段却拒绝服务 → 携能 idle，extension 长期断供、energyAvailable 锁死。
+    const storage = mockStructure("storage", { id: "storage_1", energy: 1600, capacity: 1000000 });
+    const extension = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
+    const snap = mockSnapshot({ storage, fillTargets: [extension] });
+    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 500, mode: "acquire" });
+    const ctx = mockContext(snap);
+
+    distributorRole.run(creep, ctx);
+
+    // extension 属于孵化能量池，tier 3 仍需服务：限取 min(1600, 500, 200) = 200。
+    expect(creep.withdraw).toHaveBeenCalledWith(storage, "energy", 200);
+    expect(creep.memory.distributorTier).toBe(3);
+  });
+
+  it("tier 3：work 填充 extension，仅跳过 tower（节流靠限额而非裁剪目标）", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 1500, capacity: 1000000 });
     const extension = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
+    const snap = mockSnapshot({ storage, fillTargets: [tower, extension] });
+    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
+    const ctx = mockContext(snap);
+
+    distributorRole.run(creep, ctx);
+
+    // extension 里的能量只能被 spawnCreep 消费，与 spawn 同池 —
+    // 排除它不保护储备，只会把孵化能量上限锁死在 spawn 容量。
+    expect(creep.transfer).toHaveBeenCalledWith(extension, "energy");
+  });
+
+  it("tier 3：work 仍优先填充 spawn", () => {
+    const storage = mockStructure("storage", { id: "storage_1", energy: 1500, capacity: 1000000 });
+    const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
-    const snap = mockSnapshot({ storage, fillTargets: [extension, tower, spawn] });
+    const snap = mockSnapshot({ storage, fillTargets: [tower, spawn] });
     const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
     const ctx = mockContext(snap);
 

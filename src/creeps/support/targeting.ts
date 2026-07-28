@@ -181,7 +181,14 @@ export function getHaulFillTarget(
  *   0 — 库存 ≥ full(50k)：满载取能，所有 fillTarget 正常服务
  *   1 — 库存 ≥ sustained(10k)：满载取能，仅服务 spawn/extension（跳过 tower）
  *   2 — 库存 ≥ low(2k)：限取 400/tick，仅服务 spawn/extension
- *   3 — 库存 < low(2k)：限取 200/tick，仅服务 spawn（不含 extension）
+ *   3 — 库存 < low(2k)：限取 200/tick，仅服务 spawn/extension
+ *
+ * spawn 与 extension 在所有档位都同池服务：extension 里的能量只能被
+ * spawnCreep 消费，与 spawn 本体同属孵化能量池 — 把能量从 storage 挪到
+ * extension 不是消耗，只是换口袋。曾经 tier 3 排除 extension，导致
+ * energyAvailable 被锁死在 spawn 容量上限 → 成本超限的 body 永不孵化 →
+ * 采集编制萎缩 → storage 持续低水位 → tier 3 永续的自锁吸收态。
+ * 低水位的真正节流手段是取能限额（200/tick），不是目标类型裁剪。
  */
 export type DistributorTier = 0 | 1 | 2 | 3;
 
@@ -190,7 +197,7 @@ export type DistributorTier = 0 | 1 | 2 | 3;
  *
  * 刻度口径（曾经的教训）：不能用 energy/capacity 比例 — storage 总容量
  * 1,000,000，比例 10% = 10 万能量，发展期房间（库存数百到数万）永久卡在
- * tier 3「仅填 spawn」模式，extension 断供。绝对阈值来自
+ * 最低档，extension 长期断供。绝对阈值来自
  * CONFIG.economy.distributorTiers，与 upgrade 调度（sprintStorage/
  * sustainedStorage）同一参照系。
  *
@@ -222,8 +229,8 @@ export function computeDistributorTier(storage: StructureStorage | undefined): D
  *   storage→distributor→controller container 的回流环路。本函数根治该错配。
  *
  * 优先级：
- *   1. spawn / extension —— 生产引擎，绝对最高（威胁下也不让位）。
- *   2. tower —— 防御/维修（tier >= 3 时跳过）。
+ *   1. spawn / extension —— 生产引擎，绝对最高（威胁下也不让位），所有档位服务。
+ *   2. tower —— 防御/维修（tier >= 1 时跳过，保护低水位储备）。
  *   3. controller container —— 仅当房间无 controller link 时兜底（RCL4 有 storage 但
  *      link 未建成的窗口期）。有 controller link 时由 link 网络独占供能（零通勤），
  *      distributor 完全不碰，避免冗余回流。
@@ -247,11 +254,11 @@ export function getDistributorFillTarget(
   }
   const reserved = g.fillReservations;
 
-  // tier 3: 仅填充 spawn（不含 extension），极端节水模式。
-  const spawnTypes: string[] =
-    tier === 3 ? [STRUCTURE_SPAWN] : [STRUCTURE_SPAWN, STRUCTURE_EXTENSION];
+  // spawn/extension 是同一孵化能量池，所有档位都完整服务 —
+  // 低水位的节流由取能限额（withdrawStorageForDistribution）承担。
+  const spawnTypes: string[] = [STRUCTURE_SPAWN, STRUCTURE_EXTENSION];
 
-  // 1. spawn / extension（或仅 spawn）—— 生产引擎，最高优先。
+  // 1. spawn / extension —— 生产引擎，最高优先。
   const primary = pickFillTarget(creep, snapshot.fillTargets, reserved, spawnTypes);
   if (primary) {
     reserved.add(primary.id);
@@ -284,13 +291,47 @@ export function getDistributorFillTarget(
 
   // 全部已预约 — 回退最近目标（允许共享）避免死锁，但须符合 tier 类型约束。
   const fallbackPool = (snapshot.fillTargets as FillTarget[]).filter(t => {
-    if (tier === 3) return t.structureType === STRUCTURE_SPAWN;
     if (tier >= 1) return t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION;
     return true;
   });
   return (creep.pos.findClosestByRange(fallbackPool) ?? undefined) as
     | AnyOwnedStructure
     | undefined;
+}
+
+/**
+ * 判断当前水位档位下 distributor 是否存在可服务的填充需求。
+ *
+ * 供取能门禁使用 — 取能与投放必须用同一套目标口径：
+ * 若门禁只看未过滤的 fillTargets（如仅剩 tower 需求但档位跳过 tower），
+ * distributor 会为它拒绝服务的目标取能，随后携能 idle，能量滞留在背包里。
+ *
+ * 判定与 getDistributorFillTarget 的过滤规则一一对应（不含预约状态 —
+ * 门禁关心的是需求存在性，预约只是同 tick 内的分工去重）。
+ */
+export function hasDistributorFillDemand(snapshot: RoomSnapshot, tier: DistributorTier): boolean {
+  // spawn/extension：所有档位都服务。
+  if (
+    snapshot.fillTargets.some(
+      t => t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION,
+    )
+  ) {
+    return true;
+  }
+  if (tier >= 1) return false;
+
+  // tier 0 额外服务 tower。
+  if (snapshot.fillTargets.some(t => t.structureType === STRUCTURE_TOWER)) return true;
+
+  // tier 0 且无 controller link 时兜底 controller container。
+  const hasControllerLink =
+    snapshot.controller != null &&
+    snapshot.links.some(l => l.pos.getRangeTo(snapshot.controller!) <= 2);
+  if (!hasControllerLink) {
+    const cc = snapshot.controllerContainer;
+    if (cc && cc.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return true;
+  }
+  return false;
 }
 
 /**
