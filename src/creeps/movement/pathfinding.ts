@@ -45,19 +45,38 @@ function fingerprintPositions(positions: readonly number[]): number {
 /**
  * 从结构和工地数组构建 CostMatrix 位置数组。
  * 提取为共享辅助函数，消除 preloadStructureCache 与 ensureStructureCache 回退路径之间的重复。
+ *
+ * 同格多结构合并（关键）：rampart 可叠在 spawn/extension/tower/storage 之上，
+ * 朴素「后写覆盖先写」会让己方 rampart 的 cost 2 洗掉障碍结构的 255 —
+ * 整圈核心叠盾格在矩阵里变成虚假可走格，路径穿 spawn、move 被引擎逐 tick
+ * 拒绝，物流车队在核心区集体冻结（W37S58 线上实测全房停摆根因）。
+ * 合并规则：任一结构为障碍（255）则整格 255；否则取最小通行成本
+ * （road 1 优于 container/rampart 2 — 叠盾道路仍按道路计费）。
+ *
+ * @internal 导出仅供单元测试（tests/unit/movement/structure-matrix.test.ts）。
  */
-function buildStructurePositions(
+export function buildStructurePositions(
   structures: readonly AnyStructure[],
   sites: readonly ConstructionSite[],
 ): { count: number; positions: number[] } {
-  const positions: number[] = [];
+  const merged = new Map<number, number>();
+  const put = (x: number, y: number, cost: number): void => {
+    const key = x * 50 + y;
+    const prev = merged.get(key);
+    if (prev === undefined) {
+      merged.set(key, cost);
+    } else {
+      merged.set(key, prev === 255 || cost === 255 ? 255 : Math.min(prev, cost));
+    }
+  };
+
   for (const s of structures) {
     let cost: number;
     if (s.structureType === STRUCTURE_ROAD) cost = 1;
     else if (s.structureType === STRUCTURE_CONTAINER) cost = 2;
     else if (s.structureType === STRUCTURE_RAMPART && (s as StructureRampart).my) cost = 2;
     else cost = 255;
-    positions.push(s.pos.x, s.pos.y, cost);
+    put(s.pos.x, s.pos.y, cost);
   }
   for (const site of sites) {
     const t = site.structureType;
@@ -69,7 +88,12 @@ function buildStructurePositions(
     // 实体结构 site（extension/spawn/tower 等）：强避而非禁行 —
     // site 阶段本可通行，255 会在密集建造期封锁通道；50 让路径强烈绕开
     // （避免挡住结构落成），但被围困时仍可穿过逃生。
-    positions.push(site.pos.x, site.pos.y, 50);
+    put(site.pos.x, site.pos.y, 50);
+  }
+
+  const positions: number[] = [];
+  for (const [key, cost] of merged) {
+    positions.push(Math.floor(key / 50), key % 50, cost);
   }
   return { count: structures.length + sites.length, positions };
 }

@@ -114,7 +114,11 @@ function resolveAndDispatch(roomName: string, batch: RoomBatch, snapshot: RoomSn
   };
 
   const { moves } = resolveTraffic({
-    intents: batch.intents,
+    // 防御纵深：意图目标格是不可站立结构格（如 rampart 叠盾下的 spawn —
+    // 路径矩阵一旦有洞，穿结构的意图会被解算器放行、引擎逐 tick 拒绝，
+    // 车队在其身后永久冻结）时在入口剔除。被剔除的 creep 本 tick 原地，
+    // 位置不变 → stuckTicks 累积 → Level 1+ 强制重算路径自愈。
+    intents: batch.intents.filter(it => !parkData?.blocking.has(it.to)),
     anchors: batch.anchors,
     occupancy: batch.occupancy,
     immovable: batch.immovable,
