@@ -31,8 +31,10 @@ describe("Hauler 取能优先级 — 抽 container 优先于捡溢出 drop", () 
       .source("s1", 15, 15)
       // 满 source container（2000，harvester 持续溢出）
       .container(16, 15, 2000)
-      // harvester 溢出的小堆 drop（100），紧贴 container
-      .droppedResource(17, 15, 100)
+      // harvester 溢出的零头 drop（99 < lootThreshold=100），紧贴 container。
+      // 注意必须严格小于阈值 — 达到阈值的堆属于「大额遗留」，
+      // 按衰减资源优先原则合法插队（含 assignment 之前），不属本用例语义。
+      .droppedResource(17, 15, 99)
       .extensions([
         { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
         { x: 26, y: 23 }, { x: 27, y: 24 },
@@ -53,7 +55,7 @@ describe("Hauler 取能优先级 — 抽 container 优先于捡溢出 drop", () 
     const containerBefore = container.store.getUsedCapacity("energy");
     const dropBefore = world.droppedResources[0]?.amount ?? 0;
     expect(containerBefore).toBe(2000);
-    expect(dropBefore).toBe(100);
+    expect(dropBefore).toBe(99);
 
     const runner = new TickRunner();
     runner.setLoop(loop);

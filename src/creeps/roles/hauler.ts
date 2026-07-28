@@ -164,21 +164,22 @@ const policy: RolePolicy = {
   park: true,
   onFlee: haulerOnFlee,
   acquire: [
-    // 0. 优先使用 assignment 指定的 container（任务驱动，定向搬运）。
-    withdrawAssignmentContainer(),
-    // 1. 排空 storage link — link 物流链的「最后一公里」。
-    //    必须在 container 之前：storage link 是 link 网络的排水口，
-    //    不排空则 source link 背压瘫痪，整条 link 网络堵死。
+    // 0. 排空 storage link — link 物流链的「最后一公里」，永远最先。
+    //    storage link 不排空则 source link 背压瘫痪：矿工向 source link
+    //    倒能失败转而 drop，地面衰减堆越积越多 — 排水是溢出的止血源头。
     withdrawStorageLink(),
-    // 2. 大额遗留能量优先于 container —— 衰减资源优先原则。
+    // 1. 大额遗留能量 — 衰减资源优先原则的执行点，必须在 assignment 之前。
     //    坟墓/废墟/掉落堆都在衰减或限时灭失，container 能量不衰减：
-    //    同样一车运力，先救会消失的。阈值（lootThreshold）挡住零头，
-    //    保住下方「先抽满 container 防溢出空转」的既有取舍——
-    //    只有值得专程的大额遗留（满载 creep 死亡、拆除建筑的库存）才插队。
-    //    container 能量不足装满一车时，FSM（free>0 保持 acquire）会自然
-    //    继续走这些候选凑满，无需显式「凑单」逻辑。
+    //    同样一车运力，先救会消失的。任务池只为 container 生成 haul 任务
+    //    （任务层看不见地面能量），若 assignment 排在前面，持有任务的 hauler
+    //    会被钉死在 container 上 — 线上实测：矿位 2500+ 的溢出堆每 tick 白丢
+    //    3 能量，hauler 站在堆旁抽同格 container 的零头。阈值（lootThreshold）
+    //    挡住零头，只有值得专程的大额遗留才插队；assignment 租约仍在身上，
+    //    捡满卸货后下一趟自然回到任务 container。
     lootRemains(CONFIG.economy.lootThreshold),
     pickupDroppedEnergy(CONFIG.economy.lootThreshold),
+    // 2. assignment 指定的 container（任务驱动，定向搬运）。
+    withdrawAssignmentContainer(),
     // 3. 回退到最满 container —— 主取能源。
     //    必须排在零头拾取之前：container 满溢时 harvester 会 drop 溢出能量，
     //    若先捡零头 drop（小堆、衰减），hauler 背包没装满就离开去卸货，回来时 harvester 又 drop，
@@ -186,7 +187,7 @@ const policy: RolePolicy = {
     //    先抽最满 container：一口装满背包（满载搬运），且抽干 container 即消除溢出根源。
     withdrawRichestCapped(),
     // 4. 零头兜底 —— 残余清理（死亡掉落零头 / container 被毁残留 / 溢出小堆）。
-    //    降至最后：仅当无 assignment / link / 大额遗留 / container 可取时才触发。
+    //    降至最后：仅当无 link / 大额遗留 / assignment / container 可取时才触发。
     lootRemains(1),
     pickupDroppedEnergy(),
     // 注意：hauler 永不从 storage 取能。

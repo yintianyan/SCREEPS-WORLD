@@ -37,6 +37,23 @@ beforeEach(() => {
 });
 
 describe("hauler — 遗留能量优先回收（衰减资源优先）", () => {
+  it("大额掉落堆优先于 assignment 指定的 container（任务钉死不得绕过衰减优先）", () => {
+    // 线上实测画像：矿位溢出堆 2500+ 每 tick 衰减 3，持有 haul 任务的 hauler
+    // 却被钉死在同点位 container 上抽零头。大额遗留必须排在 assignment 之前。
+    const c1 = mockStructure("container", { id: "c1", energy: 370, capacity: 2000 });
+    const bigDrop = mockDropped("d1", 2500);
+    const snap = mockSnapshot({ containers: [c1], droppedEnergy: [bigDrop] as any });
+    const creep = mockCreep({
+      name: "hauler_1", role: "hauler", used: 0, capacity: 300, mode: "acquire",
+      assignment: { id: "t1", kind: "haul", sourceId: "c1", revision: 1, assignedAt: 900, leaseUntil: 2000 },
+    });
+
+    haulerRole.run(creep, mockContext(snap));
+
+    expect(creep.pickup).toHaveBeenCalledWith(bigDrop);
+    expect(creep.withdraw).not.toHaveBeenCalled();
+  });
+
   it("大额坟墓（≥ lootThreshold）优先于有能量的 container", () => {
     const c1 = mockStructure("container", { id: "c1", energy: 800, capacity: 2000 });
     const tomb = mockRemains("tomb1", 300);

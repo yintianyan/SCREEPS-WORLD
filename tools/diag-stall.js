@@ -1,16 +1,11 @@
-// distributor 填充链约束探针：档位/storage/tower 弹药/controller link 与 container 水位。
+// hauler 取货链诊断：地面堆 vs container vs assignment 钉死。
 Memory.__diag=JSON.stringify((function(){
 var r=Game.rooms.W37S58;
-var d;for(var n in Game.creeps){if(Game.creeps[n].memory.role==="distributor")d=Game.creeps[n];}
-var tw=r.find(FIND_MY_STRUCTURES,{filter:function(s){return s.structureType==="tower";}});
-var ct=r.controller;
-var links=r.find(FIND_MY_STRUCTURES,{filter:function(s){return s.structureType==="link";}});
-var ctlLink=links.some(function(l){return l.pos.getRangeTo(ct)<=2;});
-var cc=ct.pos.findInRange(FIND_STRUCTURES,1,{filter:function(s){return s.structureType==="container";}})[0];
-return{t:Game.time,stE:r.storage?r.storage.store.energy:null,
-tier:d?d.memory.distributorTier:null,
-towers:tw.map(function(s){return s.store.energy+"/"+s.store.getCapacity(RESOURCE_ENERGY);}),
-ctlLink:ctlLink,links:links.length,
-cc:cc?cc.store.energy+"/2000":null,
-eA:r.energyAvailable};
+var drops=r.find(FIND_DROPPED_RESOURCES).map(function(d){return d.resourceType.slice(0,2)+d.amount+"@"+d.pos.x+","+d.pos.y;});
+var conts=r.find(FIND_STRUCTURES,{filter:function(s){return s.structureType==="container";}}).map(function(c){return c.store.energy+"@"+c.pos.x+","+c.pos.y;});
+var hs=[];for(var n in Game.creeps){var c=Game.creeps[n];
+if(c.memory.role==="hauler"&&c.memory.home==="W37S58"){
+hs.push({n:n.slice(-4),pos:c.pos.x+","+c.pos.y,e:c.store.energy,mode:c.memory.mode,
+asg:c.memory.assignment?{k:c.memory.assignment.kind,src:String(c.memory.assignment.sourceId||"").slice(-4)}:null});}}
+return{t:Game.time,drops:drops,conts:conts,haulers:hs};
 })());
