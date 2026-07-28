@@ -50,6 +50,15 @@ export interface GlobalCache {
    */
   repairRooms?: ReadonlySet<string>;
   /**
+   * 上 tick 各 creep 的最后已知位置（Kernel.buildSnapshots 预构建，
+   * key = creep 名，value = { r: 房名, x, y }）。
+   * 战斗黑匣子（M9）消费：maintainMemory 清理死者 memory 时，死者已不在
+   * Game.creeps — 本缓存是死亡位置的唯一来源（maintainMemory 先于
+   * buildSnapshots 运行，读到的恰是死者生前最后一 tick 的位置）。
+   * global reset 后首 tick 为空 — 死亡事件降级为无位置记录，可接受。
+   */
+  creepLastSeen?: ReadonlyMap<string, { r: string; x: number; y: number }>;
+  /**
    * 本 tick 拥有存活 distributor 的房间名集合（Kernel.buildSnapshots 预构建）。
    * hauler 的 fillStorage 消费：分发泵断供（本房不在集合中）且 spawn/extension
    * 有填充缺口时跳过囤积 storage，直送核心 sink — 否则能量被锁进无人能取的

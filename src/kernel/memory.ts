@@ -1,5 +1,6 @@
 import { CONFIG } from "../config";
 import { globalCache } from "./global-cache";
+import { recordCreepDeath } from "./event-log";
 import { readLayoutSegment, markLayoutDirty, layoutSegmentReady } from "./segment-store";
 
 /** 从版本 N 到 N+1 的迁移函数。每个必须幂等。
@@ -324,8 +325,12 @@ export function maintainMemory(): void {
   Memory.kernel ??= {};
 
   // 每 tick 清理死亡 creep memory（小帝国 — 安全且廉价）。
+  // 清理前记录死亡事件（战斗黑匣子 M9）— 这是死亡的唯一系统性检测点。
   for (const name in Memory.creeps) {
-    if (!Game.creeps[name]) delete Memory.creeps[name];
+    if (!Game.creeps[name]) {
+      recordCreepDeath(name);
+      delete Memory.creeps[name];
+    }
   }
 
   // 确保每个自有房间有 RoomMemory 条目。

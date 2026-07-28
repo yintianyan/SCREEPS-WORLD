@@ -58,6 +58,44 @@ export const enum EventKind {
   AssignmentAssigned = 15,
   /** Assignment 失效（lease 过期/revision 变化/target 消失/source 消失）。d = [failReasonCode]。 */
   AssignmentExpired = 16,
+  /** Creep 死亡（战斗黑匣子）。d = [roleCode, x, y, age, natural(0/1)]。
+   * 位置来自 creepLastSeen 缓存，缺位时 x=y=-1；natural = 寿终正寝
+   * （age 达到寿命阈值），非 natural 死亡是战损/事故的复盘线索。 */
+  CreepDeath = 17,
+  /** 塔齐射（战斗黑匣子）。d = [firedCount, targetX, targetY, targetHealParts, floor(targetHits/100)]。
+   * 每 tick 每房至多一条（全塔集火同一目标），战斗期形成连续弹道记录。 */
+  TowerVolley = 18,
+}
+
+// ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────
+
+/** 角色名 → 稳定整数编码。新增角色只能追加，不得重排（历史事件依赖）。 */
+const ROLE_CODES: Record<string, number> = {
+  harvester: 0,
+  hauler: 1,
+  distributor: 2,
+  upgrader: 3,
+  builder: 4,
+  worker: 5,
+  defender: 6,
+  remoteHarvester: 7,
+  remoteHauler: 8,
+  reserver: 9,
+  claimer: 10,
+  remoteDefender: 11,
+};
+
+/** 角色名编码；未知角色返回 99。 */
+export function roleCode(role: string): number {
+  return ROLE_CODES[role] ?? 99;
+}
+
+/** roleCode 反查（离线分析用）。 */
+export function roleName(code: number): string {
+  for (const [name, c] of Object.entries(ROLE_CODES)) {
+    if (c === code) return name;
+  }
+  return "unknown";
 }
 
 // ─── 事件数据结构 ────────────────────────────────────────────
@@ -117,6 +155,36 @@ export function recordEvent(
     r: roomName,
     d: data,
   });
+}
+
+/**
+ * 记录 creep 死亡事件（战斗黑匣子 M9）。
+ *
+ * 由 maintainMemory 在清理死者 memory 时调用 — 此刻死者已不在 Game.creeps，
+ * 位置取自上 tick 预构建的 creepLastSeen 缓存（时序保证：maintainMemory
+ * 先于 buildSnapshots，读到的是死者生前最后位置）。
+ * 出生 tick 从 creep 名解析（命名格式 role-home-idx-birthTick-rand），
+ * age 含孵化期；natural 阈值留 60 tick 余量吸收孵化时长与位置滞后。
+ * 非标准命名（手工注入/外部 creep）静默跳过。
+ */
+export function recordCreepDeath(name: string): void {
+  const parts = name.split("-");
+  if (parts.length < 5) return;
+  const role = parts[0]!;
+  const birth = Number(parts[parts.length - 2]);
+  if (!Number.isFinite(birth)) return;
+  const age = Game.time - birth;
+  // CLAIM 部件角色寿命 600，其余 1500。
+  const lifespan = role === "reserver" || role === "claimer" ? 600 : 1500;
+  const natural = age >= lifespan - 60 ? 1 : 0;
+  const seen = globalCache().creepLastSeen?.get(name);
+  recordEvent(EventKind.CreepDeath, seen?.r ?? "", [
+    roleCode(role),
+    seen?.x ?? -1,
+    seen?.y ?? -1,
+    age,
+    natural,
+  ]);
 }
 
 /** 获取并清空 per-tick 事件缓冲区。返回的事件由调用者持久化到 segment。 */

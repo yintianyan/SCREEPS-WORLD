@@ -139,7 +139,11 @@ export class Kernel {
     // P0-1：预构建每房「待计入」harvester/worker 数量。
     // 包括已存活但尚未分配 sourceId 的 + 正在孵化中的，避免替换期间的假 bootstrap。
     const globalPendingHarvesters = new Map<string, number>();
+    // 战斗黑匣子（M9）：记录每个 creep 的当前位置，供下 tick 死亡事件取
+    // 生前最后位置（maintainMemory 先于本函数运行，死者读到的是旧 Map）。
+    const creepLastSeen = new Map<string, { r: string; x: number; y: number }>();
     for (const creep of Object.values(Game.creeps)) {
+      creepLastSeen.set(creep.name, { r: creep.room.name, x: creep.pos.x, y: creep.pos.y });
       const home = creep.memory.home;
       if (home) {
         const carried = creep.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -179,6 +183,8 @@ export class Kernel {
     globalCache().repairRooms = globalRepairRooms;
     // distributorRooms 供 hauler fillStorage 的泵断供兜底判据。
     globalCache().distributorRooms = globalDistributorRooms;
+    // creepLastSeen 供下 tick 的死亡事件（战斗黑匣子）取生前最后位置。
+    globalCache().creepLastSeen = creepLastSeen;
 
     for (const room of Object.values(Game.rooms)) {
       if (!room.controller?.my) continue;

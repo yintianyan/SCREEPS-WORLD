@@ -305,7 +305,19 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
     const hasThreats = snapshot.threatCreeps.length > 0;
     if (prevRoom.hadThreats !== undefined) {
       if (hasThreats && !prevRoom.hadThreats) {
-        pushEventDirect(EventKind.EnemyInvasion, roomName, [snapshot.threatCreeps.length]);
+        // 战斗黑匣子（M9）：入侵事件附带敌方编队构成（数量/治疗/远程/近战
+        // 部件合计），供事后复盘敌方火力与杀伤链。
+        let heals = 0, ranged = 0, melee = 0;
+        for (const h of snapshot.threatCreeps as Creep[]) {
+          for (const p of h.body) {
+            if (p.type === HEAL) heals++;
+            else if (p.type === RANGED_ATTACK) ranged++;
+            else if (p.type === ATTACK) melee++;
+          }
+        }
+        pushEventDirect(EventKind.EnemyInvasion, roomName, [
+          snapshot.threatCreeps.length, heals, ranged, melee,
+        ]);
       } else if (!hasThreats && prevRoom.hadThreats) {
         pushEventDirect(EventKind.EnemyCleared, roomName, []);
       }

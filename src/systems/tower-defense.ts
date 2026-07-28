@@ -1,5 +1,6 @@
 import { CONFIG, getWallTargetHits } from "../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
+import { EventKind, recordEvent } from "../kernel/event-log";
 import { findCriticalRepair } from "../creeps/support";
 import { selectTowerTarget, type TowerThreat } from "../domain/defense/tower-target";
 import { assessEngagement, type TowerSummary } from "../domain/defense/tower-engagement";
@@ -56,10 +57,23 @@ export const towerDefenseSystem: System = {
               breachingCore,
             });
             if (decision.engage) {
+              let firedCount = 0;
               for (const tower of snapshot.towers) {
                 if (tower.store.getUsedCapacity(RESOURCE_ENERGY) === 0) continue;
                 tower.attack(target);
-                fired = true;
+                firedCount++;
+              }
+              fired = firedCount > 0;
+              // 战斗黑匣子（M9）：记录齐射弹道 — 每 tick 每房至多一条
+              // （全塔集火同一目标），战斗期连成弹道序列供事后复盘杀伤链。
+              if (fired) {
+                recordEvent(EventKind.TowerVolley, snapshot.roomName, [
+                  firedCount,
+                  target.pos.x,
+                  target.pos.y,
+                  target.body.filter(p => p.type === HEAL).length,
+                  Math.floor(target.hits / 100),
+                ]);
               }
             }
           }
