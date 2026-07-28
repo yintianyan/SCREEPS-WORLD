@@ -44,6 +44,7 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
     myConstructionSites: [],
     hostileCreeps: [],
     threatCreeps: [],
+    squadThreat: false,
     energyAvailable: 300,
     energyCapacityAvailable: 300,
     fillTargets: [],

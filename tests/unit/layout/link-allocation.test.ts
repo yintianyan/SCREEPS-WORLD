@@ -84,6 +84,7 @@ function snapshotAt(rcl: number, overrides: Partial<RoomSnapshot> = {}): RoomSna
     myConstructionSites: [],
     hostileCreeps: [],
     threatCreeps: [],
+    squadThreat: false,
     energyAvailable: 1800,
     energyCapacityAvailable: 1800,
     fillTargets: [],

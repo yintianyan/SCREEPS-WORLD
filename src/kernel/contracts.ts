@@ -91,6 +91,9 @@ export interface RoomSnapshot {
    * 避免过境 scout / reserver 冻结经济。
    */
   readonly threatCreeps: readonly Creep[];
+  /** 小队威胁在场（M11 威胁分级：≥2 武装或武装+治疗组合）。
+   * 触发战时集结避险与 defender 双编制 P0 响应。 */
+  readonly squadThreat: boolean;
   readonly energyAvailable: number;
   readonly energyCapacityAvailable: number;
   /** 可接收能量的结构（有空闲容量的 spawn + extension + tower + controller container）。 */

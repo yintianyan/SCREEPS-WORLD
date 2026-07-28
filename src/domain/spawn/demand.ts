@@ -296,16 +296,23 @@ export function evaluateDemand(
   // 塔负责远程集火，defender 贴脸补刀；无塔窗口期（RCL1-2 / 塔被打空）
   // defender 是唯一主动防线。数量按威胁数缩放、受 maxCount 封顶；
   // 威胁清除后不再补充，存量 defender 自然到期（minCount=0，替换门禁不触发）。
+  // M11 威胁分级：小队威胁（≥2 武装或武装+治疗）升级响应 — 编制保底 2 只
+  // 且优先级升至 P0（与灾后恢复同级，插队所有经济孵化）。defender 的定位
+  // 是威胁离场后的清剿与护航复工，不是救火 — 救火由塔与集结避险承担。
   if (snapshot.threatCreeps.length > 0) {
     const defenderConfig = getRoleBounds("defender", home);
     const defenderPending = countPending(queue, "defender", home);
     const defenderTotal = (counts.defender ?? 0) + defenderPending;
-    const defenderTarget = Math.min(snapshot.threatCreeps.length, defenderConfig.maxCount);
+    const squad = snapshot.squadThreat;
+    const defenderTarget = squad
+      ? Math.min(Math.max(2, snapshot.threatCreeps.length), defenderConfig.maxCount)
+      : Math.min(snapshot.threatCreeps.length, defenderConfig.maxCount);
+    const defenderPriority = squad ? 0 : 1;
     for (let i = defenderTotal; i < defenderTarget; i++) {
       const key = spawnKey("defender", home, i);
       if (!hasKey(queue, key)) {
         requests.push(
-          createRequest("defender", home, i, key, 1, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick),
+          createRequest("defender", home, i, key, defenderPriority, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick),
         );
       }
     }

@@ -59,6 +59,13 @@ export interface GlobalCache {
    */
   creepLastSeen?: ReadonlyMap<string, { r: string; x: number; y: number }>;
   /**
+   * 近期战损记录（recordCreepDeath 对 natural=0 的死亡追加，惰性清理）。
+   * safe mode 舰队伤亡熔断（M11）消费：窗口内本房战损数达阈值且威胁
+   * 在场即触发。heap 存储 — global reset 丢失计数可接受（reset 极少，
+   * 且威胁持续在场时计数会快速重建）。
+   */
+  recentCombatDeaths?: { t: number; r: string }[];
+  /**
    * 本 tick 拥有存活 distributor 的房间名集合（Kernel.buildSnapshots 预构建）。
    * hauler 的 fillStorage 消费：分发泵断供（本房不在集合中）且 spawn/extension
    * 有填充缺口时跳过囤积 storage，直送核心 sink — 否则能量被锁进无人能取的

@@ -1,6 +1,6 @@
 import type { RoomSnapshot } from "../kernel/contracts";
 import { CONFIG } from "../config";
-import { classifyThreats } from "../domain/defense/threat";
+import { classifyThreats, isSquadThreatCreeps } from "../domain/defense/threat";
 import { preloadStructureCache, preloadStaticBlockers } from "../creeps/movement";
 
 /**
@@ -183,6 +183,7 @@ export function buildRoomSnapshot(
     myConstructionSites: mySites,
     hostileCreeps,
     threatCreeps,
+    squadThreat: isSquadThreatCreeps(threatCreeps),
     energyAvailable: room.energyAvailable,
     energyCapacityAvailable: room.energyCapacityAvailable,
     fillTargets,

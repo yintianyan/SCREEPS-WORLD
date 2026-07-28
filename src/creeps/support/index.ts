@@ -46,4 +46,5 @@ export {
   shouldFleeForeignRoom,
   flee,
   fleeToHome,
+  shelterAtCore,
 } from "../engine/lifecycle";

@@ -382,6 +382,15 @@ export const CONFIG = {
     /** 非战斗 creep 的逃跑触发距离：威胁 creep 在此范围内才逃跑（P1-1）。
      * 远端过境的威胁不会中断经济；靠近时才触发 flee。 */
     fleeRange: 10,
+    /** M11 战时集结半径：小队威胁在场时非战斗 creep 撤至核心锚点
+     * （storage/spawn）此范围内 — 塔在核心区，圈内即塔火力覆盖圈，
+     * 追进来的敌人吃满塔伤，不追则收割失败。 */
+    shelterRadius: 5,
+    /** M11 safe mode 舰队伤亡熔断：窗口内战损（非自然死亡）达到阈值
+     * 且威胁仍在场 → 激活 safe mode。触发条件必须保守 — safe mode 是
+     * 消耗品（RCL 每级仅送一次，ghodium 制造需 RCL7+），3 只 ≈ 舰队
+     * 四分之一，已是「不烧就真团灭」的证据水位。 */
+    fleetLossFuse: { windowTicks: 200, deaths: 3 },
     /** Hauler 在 flee 状态下的"防御圈内安全充能"半径（P0-2 修复）。
      * 当 hauler 距 spawn ≤ 此值且携带能量时，允许向防御圈内的需能量结构（tower 优先）充能。
      * 解决战斗中 Tower 能量耗尽无人补给的死局，细化 G-SM-05 的语义。 */

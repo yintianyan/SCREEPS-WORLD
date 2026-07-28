@@ -29,7 +29,7 @@
  */
 import type { CreepRole, Priority, TickContext } from "../../kernel/contracts";
 import type { ActionContext, RolePolicy } from "./action-types";
-import { ensureHome, flee, getAssignment, shouldFlee, shouldFleeForeignRoom, fleeToHome, updateMode, releaseAssignment } from "../support";
+import { ensureHome, flee, getAssignment, shouldFlee, shouldFleeForeignRoom, fleeToHome, shelterAtCore, updateMode, releaseAssignment } from "../support";
 import { parkIdleCreep } from "../movement";
 import { drawStatusLight } from "./status-light";
 import { interceptForBoost } from "./boost-report";
@@ -72,6 +72,14 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         if (!policy.combat && inForeignRoom && shouldFleeForeignRoom(creep)) {
           creep.memory.mode = "flee";
           fleeToHome(creep);
+          return;
+        }
+        // M11 战时集结避险：小队威胁在场时非战斗角色全员撤入核心集结区。
+        // 不限 fleeRange — 小队会主动追猎，散布全房各自逃跑就是被逐个点名；
+        // 撤入塔火力圈后敌人追进来吃满塔伤，不追则收割失败。
+        if (!policy.combat && !inForeignRoom && snapshot.squadThreat) {
+          creep.memory.mode = "flee";
+          shelterAtCore(creep, snapshot);
           return;
         }
         if (!policy.combat && !inForeignRoom && shouldFlee(creep, snapshot)) {

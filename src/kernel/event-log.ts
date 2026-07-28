@@ -19,6 +19,7 @@
 
 import type { RingBuffer } from "./ring-buffer";
 import { globalCache } from "./global-cache";
+import { CONFIG } from "../config";
 
 // ─── 事件类型枚举 ────────────────────────────────────────────
 
@@ -185,6 +186,15 @@ export function recordCreepDeath(name: string): void {
     age,
     natural,
   ]);
+  // M11 safe mode 熔断的战损计数：仅非自然死亡入账（寿终不是战损）。
+  // 惰性清理两倍窗口前的旧记录，防止数组无界增长。
+  if (natural === 0) {
+    const g = globalCache();
+    const fuseWindow = CONFIG.defense.fleetLossFuse.windowTicks;
+    const list = (g.recentCombatDeaths ?? []).filter(d => Game.time - d.t <= fuseWindow * 2);
+    list.push({ t: Game.time, r: seen?.r ?? "" });
+    g.recentCombatDeaths = list;
+  }
 }
 
 /** 获取并清空 per-tick 事件缓冲区。返回的事件由调用者持久化到 segment。 */

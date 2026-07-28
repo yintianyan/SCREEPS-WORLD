@@ -253,6 +253,8 @@ export function mockSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapsho
     hostileCreeps: [],
     // 默认 threatCreeps 镜像 hostileCreeps（除非显式覆盖），保持旧 flee 测试行为不变。
     threatCreeps: overrides.threatCreeps ?? overrides.hostileCreeps ?? [],
+    // 小队威胁默认关闭 — 集结避险行为仅在显式开启的用例中断言。
+    squadThreat: overrides.squadThreat ?? false,
     energyAvailable: 500,
     energyCapacityAvailable: 800,
     fillTargets: [],

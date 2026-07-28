@@ -29,6 +29,11 @@ export const towerDefenseSystem: System = {
         if (snapshot.threatCreeps.length > 0 && isCoreBreached(snapshot)) {
           tryActivateSafeMode(snapshot);
         }
+        // M11 舰队伤亡熔断（无塔房是重灾区：拓荒房/塔未建成期无火力反制，
+        // 收割型小队可以零风险屠戮编队）— 判据与有塔分支同口径。
+        if (snapshot.threatCreeps.length > 0 && fleetLossFuseTripped(snapshot.roomName)) {
+          tryActivateSafeMode(snapshot);
+        }
         continue;
       }
 
@@ -84,6 +89,15 @@ export const towerDefenseSystem: System = {
         // 官方定位 safe mode 为「defense tactic of last resort」，
         // 此前它只在「无塔」分支触发，塔被打空时反而没有兜底。
         if (!fired && breachingCore) {
+          tryActivateSafeMode(snapshot);
+        }
+
+        // M11 舰队伤亡熔断：塔防线只保建筑不保舰队 — 收割型小队专杀
+        // 外围 creep 不碰 spawn，近核触发条件永不满足。窗口内战损
+        // （非自然死亡，黑匣子计数）达阈值且威胁仍在场 = 舰队正被屠戮，
+        // safe mode 使敌方攻击全部无效化，是止住团灭的最后手段。
+        // 阈值保守（3 只 ≈ 舰队四分之一）— safe mode 是消耗品。
+        if (fleetLossFuseTripped(snapshot.roomName)) {
           tryActivateSafeMode(snapshot);
         }
         continue;
@@ -194,6 +208,19 @@ function tryActivateSafeMode(snapshot: RoomSnapshot): void {
   ) {
     controller.activateSafeMode();
   }
+}
+
+/**
+ * M11 舰队伤亡熔断判据 — 窗口内本房战损（非自然死亡，黑匣子计数）达阈值。
+ * 调用方保证威胁在场才检查；计数存 heap（global reset 丢失可接受 —
+ * 威胁持续在场时计数快速重建）。
+ */
+function fleetLossFuseTripped(roomName: string): boolean {
+  const fuse = CONFIG.defense.fleetLossFuse;
+  const losses = (globalCache().recentCombatDeaths ?? []).filter(
+    d => d.r === roomName && Game.time - d.t <= fuse.windowTicks,
+  ).length;
+  return losses >= fuse.deaths;
 }
 
 /**

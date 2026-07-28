@@ -50,3 +50,30 @@ export function classifyThreats(
     ),
   );
 }
+
+/**
+ * 小队威胁判定（M11 威胁分级）— 威胁量级决定响应姿态。
+ *
+ * 小队 = ≥2 个武装单位（ATTACK/RANGED_ATTACK），或 ≥1 武装 + 治疗组合
+ * （heal-tank 编队：有效血量翻倍，单 defender 与塔的独立杀伤都可能被
+ * 奶回，必须升级响应）。单个武装单位（独狼 invader）不算小队 —
+ * 塔集火即可处理，不值得全员避险打断经济。
+ * 纯拆迁/纯治疗/纯 CLAIM 编队（无武装）不算小队 — 无杀伤能力，
+ * 各自 flee 已足够。
+ */
+export function isSquadThreat(threats: readonly ThreatInput[]): boolean {
+  let armed = 0;
+  let hasHeal = false;
+  for (const t of threats) {
+    if (t.bodyParts.some(p => p === ATTACK || p === RANGED_ATTACK)) armed++;
+    if (t.bodyParts.some(p => p === HEAL)) hasHeal = true;
+  }
+  return armed >= 2 || (armed >= 1 && hasHeal);
+}
+
+/** Creep 列表版本的小队判定（snapshot 构建处使用）。 */
+export function isSquadThreatCreeps(threats: readonly Creep[]): boolean {
+  return isSquadThreat(
+    threats.map(c => ({ owner: c.owner.username, bodyParts: c.body.map(b => b.type) })),
+  );
+}

@@ -1,7 +1,7 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
-import { moveTowardRoom, stepToward, findSafestExit } from "../movement";
+import { moveTowardRoom, stepToward, findSafestExit, moveToTarget, registerAnchor } from "../movement";
 import { releaseFromTask } from "../support/assignment-adapter";
 
 /** 根据能量存储更新 creep 模式。仅在阈值跨越时写入。 */
@@ -119,6 +119,39 @@ export function fleeToHome(creep: Creep): void {
  * 改由 RolePolicy.onFlee 钩子在角色层实现。
  * flee() 现在只负责通用移动逻辑，不感知任何具体角色。
  */
+/**
+ * 战时集结避险（M11）— 小队威胁在场时非战斗 creep 的统一避险动作。
+ *
+ * 与各自 flee 的区别：flee 是局部逃离（散布全房被小队逐个点名的根源），
+ * 集结是撤入核心锚点（storage 优先，无则 spawn）shelterRadius 圈内 —
+ * 塔在核心区，圈内即塔火力覆盖：敌人追进来吃满塔伤，不追则收割失败。
+ *
+ * rampart 掩体：已站在自家 rampart 格上则原地锚定（掩体内近战打不到），
+ * 不主动寻找空 rampart 格 — 核心区 rampart 几乎都叠在建筑格上
+ * （creep 不可站立），逐格 lookFor 找空位是徒劳的 CPU 开销。
+ *
+ * 无核心设施（拓荒房/灾后废墟）退回通用 flee。
+ * mode 置 flee — 威胁清除后 updateMode 的既有分支自动恢复工作状态。
+ */
+export function shelterAtCore(creep: Creep, snapshot: RoomSnapshot): void {
+  if (creep.memory.assignment) {
+    releaseFromTask(creep);
+    creep.memory.assignment = undefined;
+  }
+  const anchor = snapshot.storage ?? snapshot.spawns[0];
+  if (!anchor) {
+    flee(creep, snapshot);
+    return;
+  }
+  const radius = CONFIG.defense.shelterRadius;
+  if (creep.pos.getRangeTo(anchor.pos) <= radius) {
+    // 已在集结圈内 — 锚定站位（防被过路 creep 推出塔火力圈）。
+    registerAnchor(creep, CONFIG.movement.trafficPriority.anchorStation);
+    return;
+  }
+  moveToTarget(creep, anchor, radius);
+}
+
 export function flee(creep: Creep, snapshot: RoomSnapshot): void {
   // G-SM-05: flee 期间释放普通 assignment，仅移动到安全位置。
   if (creep.memory.assignment) {
