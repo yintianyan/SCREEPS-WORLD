@@ -36,6 +36,10 @@ import { towerDefenseSystem } from "./systems/tower-defense";
  * Bootstrap — 唯一组合根。
  * 新增系统或角色只需修改此文件并添加对应模块，无需修改 Kernel。
  *
+ * 硬约束：注册的每个角色名必须同时存在于 CONFIG.roles —
+ * roles 表兼任 recyclePass 的「在役角色」白名单，漏配的角色
+ * 孵出即被判废弃回收（role-config-parity 测试强制此一致性）。
+ *
  * 系统注册顺序（同优先级内按注册顺序执行）：
  *   P0: room-state → spawn-manager → tower-defense
  *   P1: assignment-service（任务列表生成 + 紧急抢占）→ link-system（link 能量瞬移）→ lab-system（lab 反应 + boost）
@@ -53,7 +57,8 @@ import { towerDefenseSystem } from "./systems/tower-defense";
  *   失败时角色回退到无 assignment 行为，避免 P0 永不冷却刷屏。
  *   worker(P0) 可能在第一 tick 早于 assignment 运行，回退行为正确。
  */
-const registry = new Registry()
+/** 组合根注册表 — 导出仅供一致性测试（role-config-parity）检视注册清单。 */
+export const registry = new Registry()
   // P0：房间状态（每房 ColonyState + downgradeRisk，必须在所有其他系统之前运行）
   .registerSystem(roomStateSystem)
   // P0：孵化管理（紧急恢复、队列处理）

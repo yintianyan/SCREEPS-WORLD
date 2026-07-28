@@ -1,11 +1,10 @@
-// hauler 取货链诊断：地面堆 vs container vs assignment 钉死。
+// remoteDefender 回收误杀验证：远矿威胁窗口 + remote 角色存活与 recycle 标记。
 Memory.__diag=JSON.stringify((function(){
-var r=Game.rooms.W37S58;
-var drops=r.find(FIND_DROPPED_RESOURCES).map(function(d){return d.resourceType.slice(0,2)+d.amount+"@"+d.pos.x+","+d.pos.y;});
-var conts=r.find(FIND_STRUCTURES,{filter:function(s){return s.structureType==="container";}}).map(function(c){return c.store.energy+"@"+c.pos.x+","+c.pos.y;});
-var hs=[];for(var n in Game.creeps){var c=Game.creeps[n];
-if(c.memory.role==="hauler"&&c.memory.home==="W37S58"){
-hs.push({n:n.slice(-4),pos:c.pos.x+","+c.pos.y,e:c.store.energy,mode:c.memory.mode,
-asg:c.memory.assignment?{k:c.memory.assignment.kind,src:String(c.memory.assignment.sourceId||"").slice(-4)}:null});}}
-return{t:Game.time,drops:drops,conts:conts,haulers:hs};
+var ops={};var m=Memory.rooms.W37S58;
+Object.entries(m.remoteOps||{}).forEach(function(e){
+ops[e[1]&&e[0]]={s:e[1].state,thr:e[1].threatUntil?e[1].threatUntil-Game.time:null};});
+var rc=[];for(var n in Game.creeps){var c=Game.creeps[n];
+if(c.memory.role&&c.memory.role.indexOf("remote")===0||c.memory.role==="reserver"){
+rc.push([n.slice(0,14),c.memory.role,c.memory.recycle?1:0,c.ticksToLive]);}}
+return{t:Game.time,ops:ops,remotes:rc};
 })());

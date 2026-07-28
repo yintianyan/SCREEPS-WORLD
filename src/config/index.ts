@@ -422,6 +422,11 @@ export const CONFIG = {
     remoteHarvester: { minCount: 0, maxCount: 6 },
     remoteHauler: { minCount: 0, maxCount: 6 },
     reserver: { minCount: 0, maxCount: 3 },
+    // 远矿防御者：远矿房出现威胁时按需孵化（见 remote demand）。
+    // 必须在此表注册 — roles 表同时是 recyclePass 的「在役角色」白名单，
+    // 漏配会让该角色孵出即被判「废弃角色」回收，形成孵化→回收→再孵化
+    // 的烧能循环，且远矿威胁永远无人处理。
+    remoteDefender: { minCount: 0, maxCount: 2 },
     // 扩张占领：同一时刻至多一个扩张行动（见 expansion-manager）。
     claimer: { minCount: 0, maxCount: 1 },
   },

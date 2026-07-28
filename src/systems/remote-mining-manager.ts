@@ -278,11 +278,26 @@ function hasCreepInRoom(roomName: string): boolean {
 /**
  * 回收过量远矿 creep。
  *
- * 当某远矿目标的存活 creep 数超过配置上限时，标记最老的 creep 回收。
+ * 当某远矿目标的存活 creep 数超过配置上限时，标记多余的 creep 回收。
  * 回收标记由 spawn-manager 的 recyclePass 实际执行（spawn.recycleCreep）。
- * 只标记超额部分，保留配置上限数量的 creep 继续工作。
+ *
+ * 交接豁免（关键）：demand 的 findReplacement 会在老 creep 进入替换窗口时
+ * 提前孵化替补 — 交接重叠期同角色 2 只并存是**设计行为**，不是超额。
+ * 无豁免的后果（线上实测的孵化→秒杀→再孵化循环）：
+ *   1. 孵化中的替补 ticksToLive 为 undefined，按 ?? 0 排序被当成「最老」
+ *      标记回收 — 替补出场即走向 spawn 消融；
+ *   2. collectRemoteCreeps 排除 recycle 标记者 → demand 视角编制归零 →
+ *      立即再孵 → 新替补再次与垂死者并存 → 再被标记，能量无限空烧
+ *      （reserver 因 CLAIM 寿命仅 600 tick 替换最频繁，观感最明显）。
+ * 因此：孵化中的不参与判定；替换窗口内的垂死者豁免（交接退场方，
+ * 任其自然寿终 — 远矿角色被标记后跨房走回家的路程往往长于余命，
+ * 回收残值拿不到还白丢交接期产出）；只有多只健康成员并存（双孵事故）
+ * 才是真超额，保留最年轻、回收其余。
+ *
+ * @internal 导出仅供单元测试（tests/unit/remote/recycle-excess.test.ts）—
+ *           业务代码唯一入口是 remoteMiningManagerSystem.run。
  */
-function recycleExcessRemoteCreeps(
+export function recycleExcessRemoteCreeps(
   homeRoom: string,
   remoteOps: Readonly<Record<string, RemoteOp>>,
 ): void {
@@ -292,6 +307,7 @@ function recycleExcessRemoteCreeps(
   for (const creep of Object.values(Game.creeps)) {
     if (creep.memory.home !== homeRoom) continue;
     if (creep.memory.recycle) continue; // 已标记回收的跳过。
+    if (creep.spawning) continue; // 孵化中的替补未上岗，不参与配额判定。
     const target = creep.memory.remoteTarget;
     if (!target) continue;
     const op = remoteOps[target];
@@ -309,36 +325,26 @@ function recycleExcessRemoteCreeps(
     else if (role === "remoteDefender") entry.defender.push(creep);
   }
 
-  // 对每个目标，检查是否超额。
+  // 替换窗口判定 — 与 demand 的 findReplacement 完全同口径。
+  const inReplacementWindow = (c: Creep): boolean =>
+    c.ticksToLive !== undefined &&
+    c.ticksToLive <= c.body.length * 3 + CONFIG.spawn.replaceBuffer + 50;
+
+  // 组内标记：豁免垂死交接者后，健康成员超出配额的部分回收（保留最年轻）。
+  const markExcess = (creeps: Creep[], quota: number): void => {
+    const healthy = creeps.filter(c => !inReplacementWindow(c));
+    if (healthy.length <= quota) return;
+    healthy.sort((a, b) => (b.ticksToLive ?? 0) - (a.ticksToLive ?? 0));
+    for (let i = quota; i < healthy.length; i++) {
+      healthy[i]!.memory.recycle = true;
+    }
+  };
+
   for (const [, entry] of byTarget) {
-    // harvester 超额：保留 harvestersPerTarget 个最年轻的，回收其余。
-    if (entry.harvester.length > CONFIG.remote.harvestersPerTarget) {
-      entry.harvester.sort((a, b) => (b.ticksToLive ?? 0) - (a.ticksToLive ?? 0));
-      for (let i = CONFIG.remote.harvestersPerTarget; i < entry.harvester.length; i++) {
-        entry.harvester[i]!.memory.recycle = true;
-      }
-    }
-    // hauler 超额。
-    if (entry.hauler.length > CONFIG.remote.haulersPerTarget) {
-      entry.hauler.sort((a, b) => (b.ticksToLive ?? 0) - (a.ticksToLive ?? 0));
-      for (let i = CONFIG.remote.haulersPerTarget; i < entry.hauler.length; i++) {
-        entry.hauler[i]!.memory.recycle = true;
-      }
-    }
-    // reserver 超额（目标 1 个）。
-    if (entry.reserver.length > 1) {
-      entry.reserver.sort((a, b) => (b.ticksToLive ?? 0) - (a.ticksToLive ?? 0));
-      for (let i = 1; i < entry.reserver.length; i++) {
-        entry.reserver[i]!.memory.recycle = true;
-      }
-    }
-    // defender 超额（目标 1 个 — 威胁清除后多余的 defender 回收）。
-    if (entry.defender.length > 1) {
-      entry.defender.sort((a, b) => (b.ticksToLive ?? 0) - (a.ticksToLive ?? 0));
-      for (let i = 1; i < entry.defender.length; i++) {
-        entry.defender[i]!.memory.recycle = true;
-      }
-    }
+    markExcess(entry.harvester, CONFIG.remote.harvestersPerTarget);
+    markExcess(entry.hauler, CONFIG.remote.haulersPerTarget);
+    markExcess(entry.reserver, 1);
+    markExcess(entry.defender, 1);
   }
 }
 
