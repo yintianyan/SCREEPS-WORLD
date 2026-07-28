@@ -34,6 +34,7 @@
  */
 import { CONFIG } from "../../config";
 import type { Priority } from "../../kernel/contracts";
+import { globalCache } from "../../kernel/global-cache";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
   fillStorage,
@@ -160,8 +161,38 @@ function haulerOnFlee(ac: ActionContext): boolean {
   return true;
 }
 
+/**
+ * 顺路卸能（伴随动作，不占候选链）— acquire 途中携带上一趟残余能量、
+ * 恰好路过 storage（range<=1）时顺手存入。transfer 与 move 是独立 intent，
+ * 同 tick 可并行执行：零通勤成本把背包里的滞留能量变成 storage 可分发库存，
+ * 半载凑单的长途路上能量不再是死资金。位置触发天然「顺路才卸」，
+ * 不顺路自动不发生 — 绝不产生专程往返（半载专程卸货违背满载搬运原则）。
+ *
+ * 让位守卫（与 work 链 fillStorage 的让位逻辑同口径，防止把本该直送的
+ * 能量提前锁仓）：
+ *   - 威胁在场：能量应直送 tower（战时 fillStorage 同款让位）；
+ *   - 泵断供（本房无存活 distributor）：能量应直送 spawn/extension —
+ *     此时锁进 storage 即无人能取，会对冲掉泵断供兜底；
+ *   - storage 满：transfer 必然失败，不发无效意图。
+ * 恒返回 true — 这是副作用钩子，不拦截正常候选链。
+ */
+function haulerGate(ac: ActionContext): boolean {
+  const creep = ac.creep;
+  if (creep.memory.mode !== "acquire") return true;
+  if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return true;
+  const st = ac.snapshot.storage;
+  if (!st || st.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return true;
+  if (creep.pos.getRangeTo(st) > 1) return true;
+  if (ac.snapshot.threatCreeps.length > 0) return true;
+  const pumpRooms = globalCache().distributorRooms;
+  if (pumpRooms && !pumpRooms.has(creep.memory.home ?? creep.room.name)) return true;
+  creep.transfer(st, RESOURCE_ENERGY);
+  return true;
+}
+
 const policy: RolePolicy = {
   park: true,
+  gate: haulerGate,
   onFlee: haulerOnFlee,
   acquire: [
     // 0. 排空 storage link — link 物流链的「最后一公里」，永远最先。
