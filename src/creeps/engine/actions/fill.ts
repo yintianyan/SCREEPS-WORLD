@@ -8,6 +8,7 @@
  * 缓存的上一 tick 目标 ID，仅在目标满/消失时重新选择，消除等距目标摇摆。
  */
 import type { ActionCandidate } from "../action-types";
+import { globalCache } from "../../../kernel/global-cache";
 import { runAction } from "./helpers";
 import { updateMode } from "../lifecycle";
 import {
@@ -137,6 +138,20 @@ export function fillStorage(): ActionCandidate<StructureStorage> {
           t => t.structureType === STRUCTURE_TOWER,
         );
         if (towerStarved) return undefined;
+      }
+      // 泵断供兜底：本房无存活 distributor（storage→spawn/extension 的唯一分发泵）
+      // 且核心 sink 有缺口时跳过囤积 — 否则能量被锁进无人能取的仓库，
+      // energyAvailable 卡死在 spawn 自充值 300，满配 distributor 永远凑不齐，
+      // 全部替补孵化走饥饿降级、舰队 body 集体缩水（断供死锁）。
+      // 让位后 haulFillTarget 直送 spawn/extension；extension 回满 → 满配泵
+      // 孵出 → distributorRooms 恢复 → 本兜底自动退出。
+      // 集合缺失（reset 首 tick / 精简测试环境）时默认泵在岗，维持原行为。
+      const pumpRooms = globalCache().distributorRooms;
+      if (pumpRooms && !pumpRooms.has(ac.creep.memory.home ?? ac.creep.room.name)) {
+        const coreFillDemand = ac.snapshot.fillTargets.some(
+          t => t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION,
+        );
+        if (coreFillDemand) return undefined;
       }
       return ac.snapshot.storage;
     },

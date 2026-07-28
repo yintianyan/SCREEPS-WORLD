@@ -50,6 +50,13 @@ export interface GlobalCache {
    */
   repairRooms?: ReadonlySet<string>;
   /**
+   * 本 tick 拥有存活 distributor 的房间名集合（Kernel.buildSnapshots 预构建）。
+   * hauler 的 fillStorage 消费：分发泵断供（本房不在集合中）且 spawn/extension
+   * 有填充缺口时跳过囤积 storage，直送核心 sink — 否则能量被锁进无人能取的
+   * 仓库，energyAvailable 卡死在 spawn 自充值，全舰队孵化饥饿降级。
+   */
+  distributorRooms?: ReadonlySet<string>;
+  /**
    * 本 tick 的 boost 报到分配表（lab-system 每 tick 写入）。
    * key = creep 名；ready 表示 lab 内化合物已备足（≥ 单次 boost 用量）—
    * 报到拦截仅在 ready 时生效，避免 creep 在 lab 旁罚站等 supplyLabs 搬运

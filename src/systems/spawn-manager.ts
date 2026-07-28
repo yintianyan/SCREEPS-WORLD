@@ -135,9 +135,12 @@ export const spawnManagerSystem: System = {
       // 4. 尝试孵化最高优先级的请求。
       //    SP-1：房内存活采集者（harvester/worker）数传入 — 采集链濒临
       //    断裂（≤1 只）时为 P0 恢复预留 recoveryEnergyReserve。
-      const collectorCount = (creepsByRoom.get(snapshot.roomName) ?? [])
+      //    存活 distributor 数传入 — 泵断供时 distributor 请求立即降级速出。
+      const roomCreeps = creepsByRoom.get(snapshot.roomName) ?? [];
+      const collectorCount = roomCreeps
         .filter(c => c.role === "harvester" || c.role === "worker").length;
-      trySpawn(snapshot, queue, collectorCount);
+      const distributorCount = roomCreeps.filter(c => c.role === "distributor").length;
+      trySpawn(snapshot, queue, collectorCount, distributorCount);
 
       // 5. B1：回收通道 — 标记退役 creep，引导至最近 spawn 回收残值能量。
       //    P3-3：传入预建的本房 creep 子集，避免全量 Game.creeps 扫描。
@@ -225,6 +228,7 @@ export function trySpawn(
   snapshot: import("../kernel/contracts").RoomSnapshot,
   queue: SpawnRequest[],
   collectorCount: number,
+  distributorCount = 1,
 ): void {
   if (queue.length === 0) return;
   if (snapshot.spawns.length === 0) return;
@@ -282,6 +286,9 @@ export function trySpawn(
     //      （rcl1-survival / live-anomaly-reproduction 测试回归）。
     //   5. 饥饿降级成本地板：3/4 的 starved 路径产物须 ≥ starvationDegradeFloor，
     //      低于地板继续排队（不算失败）；生存路径（P0/bootstrap/recovery）豁免。
+    //   6. 泵断供降级：distributor 是 storage→spawn/extension 的唯一分发泵，
+    //      断供（存活数 0）时 extension 无人填、满配永远凑不齐 — 等待即死锁，
+    //      立即降级速出小泵重启能量循环（成本地板仍适用，不铸 1C 残废）。
     let body = req.body;
     if (cost > effectiveBudget) {
       const roomMem = Memory.rooms[snapshot.roomName];
@@ -291,10 +298,12 @@ export function trySpawn(
       const waitTicks = Game.time - (req.createdAt ?? Game.time);
       const starvedP1 = req.priority === 1 && waitTicks >= spawnTime * 2;
       const starvedP2 = req.priority === 2 && waitTicks >= spawnTime * 10 && economyPressure > 0.5;
+      const pumpOutage = req.role === "distributor" && distributorCount === 0;
       const allowDegrade = req.priority === 0 ||
         (req.priority === 1 && (roomState === "bootstrap" || roomState === "recovery")) ||
         starvedP1 ||
-        starvedP2;
+        starvedP2 ||
+        pumpOutage;
       if (allowDegrade) {
         // 使用角色正确的 requiredParts，避免 hauler（无 WORK）降级时
         // 因默认要求 WORK 而返回 undefined。

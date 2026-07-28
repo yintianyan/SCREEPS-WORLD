@@ -132,6 +132,10 @@ export class Kernel {
     // P1-3：预构建拥有维修 creep（builder/worker）的房间集合，
     // 供 tower-defense 消费，避免塔防系统独立全量扫描 Game.creeps。
     const globalRepairRooms = new Set<string>();
+    // 预构建拥有存活 distributor 的房间集合，供 hauler 的 fillStorage 消费：
+    // 分发泵断供时 hauler 不得继续把能量锁进 storage（角色层禁止全局扫描，
+    // 由 kernel 复用本遍历一次构建）。孵化中的也计入 — 泵即将上岗，防止兜底抖动。
+    const globalDistributorRooms = new Set<string>();
     // P0-1：预构建每房「待计入」harvester/worker 数量。
     // 包括已存活但尚未分配 sourceId 的 + 正在孵化中的，避免替换期间的假 bootstrap。
     const globalPendingHarvesters = new Map<string, number>();
@@ -147,6 +151,10 @@ export class Kernel {
       if (role === "builder" || role === "worker") {
         const repairHome = home ?? creep.room.name;
         if (repairHome) globalRepairRooms.add(repairHome);
+      }
+      if (role === "distributor") {
+        const pumpHome = home ?? creep.room.name;
+        if (pumpHome) globalDistributorRooms.add(pumpHome);
       }
       if (role !== "harvester" && role !== "worker") continue;
       const sid = creep.memory.sourceId;
@@ -169,6 +177,8 @@ export class Kernel {
 
     // 将 repairRooms 写入 globalCache，供 tower-defense 读取。
     globalCache().repairRooms = globalRepairRooms;
+    // distributorRooms 供 hauler fillStorage 的泵断供兜底判据。
+    globalCache().distributorRooms = globalDistributorRooms;
 
     for (const room of Object.values(Game.rooms)) {
       if (!room.controller?.my) continue;

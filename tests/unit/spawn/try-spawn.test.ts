@@ -219,3 +219,49 @@ describe("trySpawn — SP-10 饥饿降级成本地板", () => {
     expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("trySpawn — 泵断供降级（distributor 存活数 0）", () => {
+  // 满配 distributor 6C6M = 600；createdAt = 当前 tick（非饥饿）。
+  function freshDistributor(): SpawnRequest {
+    return makeRequest({
+      key: "distributor:W7N4:0",
+      role: "distributor",
+      body: [
+        "carry", "carry", "carry", "carry", "carry", "carry",
+        "move", "move", "move", "move", "move", "move",
+      ] as BodyPartConstant[],
+      memory: { role: "distributor", home: "W7N4", mode: "acquire" } as CreepMemory,
+    });
+  }
+
+  it("断供（存活 0）：不等饥饿窗口立即降级孵化", () => {
+    // 能量 350 → 降级产物 4C3M = 350 ≥ 地板 → 速出小泵。
+    const spawn = mockSpawn(350);
+    const queue = [freshDistributor()];
+
+    trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 3, 0);
+
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+  });
+
+  it("泵在岗（存活 ≥1）：非饥饿不降级，等满配能量", () => {
+    const spawn = mockSpawn(350);
+    const queue = [freshDistributor()];
+
+    trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 3, 1);
+
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(queue).toHaveLength(1);
+  });
+
+  it("断供降级仍受成本地板约束：产物 < 300 继续排队等能量", () => {
+    // 能量 250 → 降级产物 250 < 地板 300 → 不孵化不 retries（不铸残废泵）。
+    const spawn = mockSpawn(250);
+    const queue = [freshDistributor()];
+
+    trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 3, 0);
+
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(queue[0]!.retries).toBe(0);
+  });
+});
