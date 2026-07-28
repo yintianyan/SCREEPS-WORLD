@@ -119,6 +119,11 @@ export const CONFIG = {
     maxRetries: 5,
     /** 为 P0 恢复 body 预留的最低能量。 */
     recoveryEnergyReserve: 200,
+    /** 饥饿超时降级的最低 body 成本地板。
+     * 饥饿降级若无地板，会在能量池低谷按瞬时能量铸出残废 body（如 1C1M distributor），
+     * 该 creep 存活整个生命周期无提前替换 → 吞吐塌方 → 水位持续低迷 →
+     * 后续请求同样饥饿降级，形成自强化回路。降级产物低于地板时继续排队等能量；
+     * 生存降级路径（P0 / bootstrap / recovery）豁免，保「速出保命」语义。 */
     starvationDegradeFloor: 300,
     /** Distributor 升编趋势确认窗口（tick）。
      * spawn 孵化瞬间抽干 spawn/extension → fillTargets 尖峰，这是 distributor 的

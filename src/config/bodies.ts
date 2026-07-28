@@ -250,6 +250,22 @@ export function selectBody(
 }
 
 /**
+ * 角色最低档模板 body（无视能量约束）。
+ *
+ * selectBody 的 RECOVERY_BODY 兜底对「必需部件不同于 WORK/CARRY/MOVE」的角色
+ * 是陷阱：energyAvailable < 最低档时 defender 会拿到无 ATTACK 的 [W,C,M]——
+ * 一只不能攻击的"防御者"，紧急时刻白烧 200 能量 + 一个孵化窗；
+ * hauler 则平白多买一个用不上的 WORK（100 能量死重）。
+ * 调用方在回退产物缺必需部件时改用本函数：请求带最低档 body 排队，
+ * 能量一到位即孵出真正可用的单位（如 [ATTACK,MOVE] @130）。
+ */
+export function minimalBodyFor(role: string): BodyPartConstant[] {
+  const templates = BODY_TEMPLATES[role];
+  const last = templates?.[templates.length - 1];
+  return last ? [...last.parts] : [...RECOVERY_BODY];
+}
+
+/**
  * 将 body 降级以适应当前可用能量。
  * 每次移除最贵的可移除部件（优先砍 WORK=100，保留 CARRY/MOVE），
  * 直到成本满足或无可移除部件。至少保留 requiredParts 中每种各一个。
@@ -259,8 +275,10 @@ export function selectBody(
  * MOVE 配比守卫（关键）：CARRY 与 MOVE 同价（各 50），朴素「砍最贵」会把
  * MOVE 一路砍到只剩 1 个 —— 产出 nC1M 独腿 body，满载后 fatigue 恢复趋零，
  * 无路时寸步难移，transfer 永远 ERR_NOT_IN_RANGE 卡死（线上实测全房停摆根因）。
- * 因此移除时对 MOVE 施加地板：保证 MOVE 数 ≥ 其余部件数的一半（向上取整），
- * 即满载在平原上仍可移动（2 非MOVE : 1 MOVE 是平原 fatigue-free 的临界配比）。
+ * 因此移除时对 MOVE 施加地板：保证 MOVE 数 ≥ 其余部件数的一半（向上取整）。
+ * 引擎疲劳机制：非 MOVE 部件平原产 2 fatigue/格、道路 1、沼泽 10，每 MOVE 消 2/tick —
+ * 2 非MOVE : 1 MOVE 是道路 fatigue-free 的临界配比，平原为半速（隔 tick 一格），
+ * 仍保有可用机动性，不会退化为独腿卡死。
  */
 export function degradeBody(
   body: readonly BodyPartConstant[],

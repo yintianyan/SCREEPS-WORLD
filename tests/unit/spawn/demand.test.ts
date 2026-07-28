@@ -9,7 +9,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { evaluateDemand, estimateTravelTicks, needsReplacement } from "../../../src/domain/spawn/demand";
-import { mockController, mockCreep, mockSnapshot, mockSource, mockStructure, resetGlobals } from "../../role-helpers";
+import { mockController, mockCreep, mockHostile, mockSnapshot, mockSource, mockStructure, resetGlobals } from "../../role-helpers";
 
 beforeEach(() => {
   resetGlobals();
@@ -647,5 +647,39 @@ describe("矿位分配 — 专职矿工口径（防 worker 挂名误导 + 平局
     const replacement = requests.filter(r => r.role === "harvester" && r.replaceBy !== undefined);
     expect(replacement).toHaveLength(1);
     expect(replacement[0]!.memory.sourceId).toBe("srcA");
+  });
+});
+
+describe("SP-11 — 降级回退守卫（RECOVERY_BODY 兜底不得铸出缺必需部件的废件）", () => {
+  it("团灭现场 + 能量 < 130：P0 defender 拿最低档 [ATTACK,MOVE]，而非无攻击的 [W,C,M]", () => {
+    // 修复前：degradeBody 失败 → selectBody(100) 无档可选 → RECOVERY_BODY —
+    // 能量回升到 200 时孵出一只不能攻击的"防御者"，紧急时刻白烧 200 能量。
+    const snap = mockSnapshot({ threatCreeps: [mockHostile()] as any });
+    const ctx = { ...normalCtx(0), energyAvailable: 100 };
+    const { requests } = evaluateDemand(snap, [], "normal", [], [], ctx, 1000);
+
+    const defender = requests.find(r => r.role === "defender");
+    expect(defender).toBeDefined();
+    expect(defender!.body).toContain("attack");
+    // 最低档 [ATTACK,MOVE]：能量到 130 即孵出真正可用的单位。
+    expect(defender!.body).toEqual(["attack", "move"]);
+  });
+
+  it("bootstrap 极低能量：hauler 拿最低档 [2C,2M]，不含用不上的 WORK 死重", () => {
+    // 能量 80 < 最小 hauler [C,M]=100 → 降级失败 → 回退守卫换最低档模板。
+    const container = mockStructure("container", { id: "c1", energy: 1800, capacity: 2000 });
+    const snap = mockSnapshot({ containers: [container], energyCapacityAvailable: 300 });
+    const ctx = {
+      colonyState: "bootstrap" as const,
+      controllerDowngradeRisk: false,
+      energyAvailable: 80,
+      economyPressure: 0,
+    };
+    const { requests } = evaluateDemand(snap, [], "bootstrap", livingHarvester(), [], ctx, 1000);
+
+    const haulers = requests.filter(r => r.role === "hauler");
+    expect(haulers.length).toBeGreaterThan(0);
+    expect(haulers[0]!.body).not.toContain("work");
+    expect(haulers[0]!.body).toEqual(["carry", "carry", "move", "move"]);
   });
 });

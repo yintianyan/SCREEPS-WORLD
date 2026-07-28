@@ -280,6 +280,8 @@ export function trySpawn(
     //      b) economyPressure > 0.5（确认经济确实紧张，而非仅是能量积累慢）
     //      双条件避免 bootstrap/正常低速增长阶段 P2 过早出小 body 导致人口配额被低效 creep 占满
     //      （rcl1-survival / live-anomaly-reproduction 测试回归）。
+    //   5. 饥饿降级成本地板：3/4 的 starved 路径产物须 ≥ starvationDegradeFloor，
+    //      低于地板继续排队（不算失败）；生存路径（P0/bootstrap/recovery）豁免。
     let body = req.body;
     if (cost > effectiveBudget) {
       const roomMem = Memory.rooms[snapshot.roomName];
@@ -303,6 +305,16 @@ export function trySpawn(
           // 必须递增 retries，否则请求永远留在队列中不被 cleanQueue 清除，
           // 持续阻塞 P0 worker 恢复请求的创建 → 永久死锁。
           req.retries++;
+          continue;
+        }
+        // 饥饿降级成本地板：starved 路径的降级产物低于地板时继续排队等能量。
+        // 无地板的后果（线上实测回路）：能量低谷铸出 1C1M 残废 → 吞吐塌方 →
+        // 水位持续低迷 → 后续请求同样饥饿降级，自强化直至人工干预。
+        // 等能量不是失败 — 不递增 retries（避免烧穿 maxRetries 进黑名单）。
+        // 生存路径（P0 / bootstrap / recovery）豁免：速出保命优先于体格质量。
+        const survivalPath =
+          req.priority === 0 || roomState === "bootstrap" || roomState === "recovery";
+        if (!survivalPath && bodyCost(degraded) < CONFIG.spawn.starvationDegradeFloor) {
           continue;
         }
         body = degraded;

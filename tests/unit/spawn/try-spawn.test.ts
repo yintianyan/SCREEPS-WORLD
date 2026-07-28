@@ -155,3 +155,67 @@ describe("trySpawn — 管线本体基线（补测试债）", () => {
     expect(queue[0]!.retries).toBe(1);
   });
 });
+
+describe("trySpawn — SP-10 饥饿降级成本地板", () => {
+  // 满配 hauler 6C6M = 600 能量；createdAt 提前 500 tick，
+  // 远超 P1 饥饿窗口（2 × 12 部件 × 3 = 72 tick）→ starvedP1 成立。
+  function starvedHauler(): SpawnRequest {
+    return makeRequest({
+      body: [
+        "carry", "carry", "carry", "carry", "carry", "carry",
+        "move", "move", "move", "move", "move", "move",
+      ] as BodyPartConstant[],
+      createdAt: (globalThis as any).Game.time - 500,
+    });
+  }
+
+  it("饥饿 P1 降级产物低于地板：不孵化、不递增 retries（等能量，不是失败）", () => {
+    // 能量 250 → 降级产物 3C2M = 250 < 地板 300 → 继续排队。
+    const spawn = mockSpawn(250);
+    const queue = [starvedHauler()];
+
+    trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 3);
+
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(queue).toHaveLength(1);
+    // retries 不递增 — 烧穿 maxRetries 会把「等能量」变成 1000 tick 黑名单隔离。
+    expect(queue[0]!.retries).toBe(0);
+  });
+
+  it("饥饿 P1 降级产物达到地板：照常孵化", () => {
+    // 能量 350 → 降级产物 4C3M = 350 ≥ 地板 300 → 放行。
+    const spawn = mockSpawn(350);
+    const queue = [starvedHauler()];
+
+    trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 3);
+
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+    expect(queue).toHaveLength(0);
+  });
+
+  it("P0 生存路径豁免地板：降级产物 200 < 300 也速出保命", () => {
+    // [3W,C,M] = 400，能量 250 → 降到 [W,C,M] = 200 < 地板，但 P0 豁免。
+    const spawn = mockSpawn(250);
+    const queue = [makeRequest({
+      key: "worker:W7N4:0",
+      role: "worker",
+      priority: 0,
+      body: ["work", "work", "work", "carry", "move"] as BodyPartConstant[],
+      memory: { role: "worker", home: "W7N4", mode: "acquire" } as CreepMemory,
+    })];
+
+    trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 0);
+
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+  });
+
+  it("bootstrap 生存路径豁免地板：小 body 建链优先于体格质量", () => {
+    (globalThis as any).Memory.rooms.W7N4.colonyState = "bootstrap";
+    const spawn = mockSpawn(250); // 降级产物 250 < 300
+    const queue = [starvedHauler()];
+
+    trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 3);
+
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+  });
+});

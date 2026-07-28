@@ -1,5 +1,5 @@
 import { CONFIG } from "../../config";
-import { degradeBody, selectBody } from "../../config/bodies";
+import { degradeBody, minimalBodyFor, RECOVERY_BODY, selectBody } from "../../config/bodies";
 import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import { countPending, spawnKey } from "./queue";
@@ -125,6 +125,26 @@ export function estimateTravelTicks(
 // ─── Body 感知配额（数量 × body 大小 = 能力，配额按能力而非头数计）───
 
 /**
+ * 降级回退守卫：降级失败后 selectBody(energyAvailable) 的回退产物若缺
+ * 角色必需部件（RECOVERY_BODY 兜底对非 W/C/M 角色是陷阱 — defender 会
+ * 拿到无 ATTACK 的假防御者），或干脆就是 RECOVERY_BODY 本身
+ * （hauler 平白多买 WORK 死重 — carry/move 恰好齐备骗过缺件检查），
+ * 改用角色最低档模板：请求带最低档 body 排队等能量，而非孵出不可用单位。
+ * 仅对显式声明 requiredParts 的专职角色生效 — worker/harvester 等
+ * W/C/M 角色的 RECOVERY_BODY 兜底是正确语义，不动。
+ */
+function guardRoleFallback(role: string, body: BodyPartConstant[]): BodyPartConstant[] {
+  const required = ROLE_REQUIRED_PARTS[role];
+  if (!required) return body;
+  const isRecoveryFallback =
+    body.length === RECOVERY_BODY.length && body.every((p, i) => p === RECOVERY_BODY[i]);
+  if (isRecoveryFallback || !required.every(p => body.includes(p))) {
+    return minimalBodyFor(role);
+  }
+  return body;
+}
+
+/**
  * 估算「本 tick 若孵化该角色，实际会得到的 body」。
  * 与 createRequest 的降级路径同口径：bootstrap/recovery 按 energyAvailable 降级
  * （速出保命的小 body），normal 按 energyCapacity 满配。
@@ -142,7 +162,7 @@ export function estimatePlannedBody(
   if (colonyState === "bootstrap" || colonyState === "recovery") {
     return (
       degradeBody(fullBody, energyAvailable, ROLE_REQUIRED_PARTS[role]) ??
-      selectBody(role, energyAvailable, { rcl })
+      guardRoleFallback(role, selectBody(role, energyAvailable, { rcl }))
     );
   }
   return fullBody;
@@ -748,7 +768,11 @@ function createRequest(
     const requiredParts = ROLE_REQUIRED_PARTS[role];
     // 优雅降级：孵化当前能量能负担的最大 body。宁可先出一个较小的 harvester（低效但维持 colony 存活），
     // 也不要为等待大 body 而让 harvester 断档归零（曾因此陷入「无 harvester→无收入→永远孵不起」死锁）。
-    body = degradeBody(fullBody, energyAvailable, requiredParts) ?? selectBody(role, energyAvailable, { rcl });
+    // 回退产物过 guardRoleFallback：能量连最低档都不够时（如 defender @130），
+    // 宁可带最低档 body 排队等能量，也不铸出缺必需部件的废件。
+    body =
+      degradeBody(fullBody, energyAvailable, requiredParts) ??
+      guardRoleFallback(role, selectBody(role, energyAvailable, { rcl }));
   } else {
     body = selectBody(role, energyCapacity, { rcl });
   }
