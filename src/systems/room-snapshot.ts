@@ -9,7 +9,8 @@ import { preloadStructureCache, preloadStaticBlockers } from "../creeps/movement
  * 都消费快照以避免重复扫描。
  *
  * 成本：每房每 tick O(structures + sources + sites + hostiles)。
- * 必须保持廉价：此处不使用 PathFinder、lookAt 或地形扫描。
+ * 必须保持廉价：此处不使用 PathFinder、全房 lookAt 或地形扫描；
+ * 唯一例外是站桩阻挡的在位核验（≤4 个单格 lookForAt，O(1)/格）。
  *
  * @param globalSourceOccupancy 由 Kernel 预构建的全局 source 占用映射，
  *   避免每个房间独立遍历全部 Game.creeps。
@@ -120,13 +121,23 @@ export function buildRoomSnapshot(
   // 站桩位置 = source 旁 range<=1 的 container（harvester 矿位）+ controllerContainer（upgrader 站桩位）。
   // pathfinding 的 roomCallback 读取并标 255，使 PathFinder 算路径时天然绕开站桩矿工。
   // 复用已采集的 containers/sources/controllerContainer，零额外 find。
+  //
+  // 仅登记「当前确有己方 creep 在位」的格 — 阻挡语义是「绕开在位的站桩
+  // creep」，不是「预留站桩位」。无条件标 255 的教训（线上实测）：拓荒房
+  // 继承远矿时代的 source container 但没有矿工，空格变虚假实墙 — 矿旁狭窄
+  // 地形下该格常是唯一采集位，builder 求路 incomplete 原地徘徊；upgrader
+  // 想站上 controller container（0 通勤最优位）同样被自家阻挡拒之门外。
+  // 换班空窗期格子放开无害：新路径穿过后若矿工到位，traffic 推挤/绕行接管。
+  // 成本：每房 ≤4 格的单格 lookForAt（非全房 lookAt），O(1)/格。
   const staticBlockerPositions: number[] = [];
+  const occupiedByMyCreep = (x: number, y: number): boolean =>
+    room.lookForAt(LOOK_CREEPS, x, y).some(c => c.my);
   for (const c of containers) {
-    if (sources.some(s => c.pos.getRangeTo(s.pos) <= 1)) {
+    if (sources.some(s => c.pos.getRangeTo(s.pos) <= 1) && occupiedByMyCreep(c.pos.x, c.pos.y)) {
       staticBlockerPositions.push(c.pos.x, c.pos.y);
     }
   }
-  if (controllerContainer) {
+  if (controllerContainer && occupiedByMyCreep(controllerContainer.pos.x, controllerContainer.pos.y)) {
     staticBlockerPositions.push(controllerContainer.pos.x, controllerContainer.pos.y);
   }
   preloadStaticBlockers(room.name, staticBlockerPositions);
