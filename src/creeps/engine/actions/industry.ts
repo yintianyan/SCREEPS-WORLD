@@ -34,6 +34,13 @@ export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
         return undefined;
       }
 
+      // H-2 修复：withdraw 相必须有空余容量才放行。
+      // 满载能量的 hauler（无矿物 → 不走 deposit 相）对矿物 container
+      // withdraw 必得 ERR_FULL — 未注册错误码静默空转，且 execute 已被调用
+      // 即终止候选链 → 排他性全链阻塞（fillStorage 等后续候选永远轮不到）。
+      // 资格检查前置到 resolve（EN-1 公理），满载放行后续候选先卸货。
+      if (ac.creep.store.getFreeCapacity() === 0) return undefined;
+
       // 找含矿物的 container
       const source = ac.snapshot.containers.find(c => {
         for (const res of Object.keys(c.store) as ResourceConstant[]) {
@@ -67,7 +74,11 @@ type LabSupplyTarget =
   | { source: StructureLab; resource: ResourceConstant; phase: "unload" };
 
 /** storage 能量低于此值时不为 lab 抽能 — boost 能量不与 spawn/tower 补给抢血。 */
-const LAB_ENERGY_STORAGE_FLOOR = 1000;
+/** storage 能量地板：低于此值不为 lab 抽能 — boost 能量不与 spawn/tower 补给抢血。
+ * D-2 修复：地板对齐水位权限表刻度（distributorTiers.low = 2000）—
+ * 原私有常量 1000 低于 distributor 的最低档位线，lab 供料会在
+ * distributor 已进入 tier 3 极限节流时仍照常抽血，口径脱节。 */
+const labEnergyStorageFloor = (): number => CONFIG.economy.distributorTiers.low;
 
 /**
  * 按 lab-system 发布的需求表搬运（storage/terminal ↔ lab）。
@@ -138,7 +149,7 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
       for (const load of table.loads) {
         const resource = load.resource as ResourceConstant;
         if (resource === RESOURCE_ENERGY) {
-          if (storage.store.getUsedCapacity(RESOURCE_ENERGY) > LAB_ENERGY_STORAGE_FLOOR) {
+          if (storage.store.getUsedCapacity(RESOURCE_ENERGY) > labEnergyStorageFloor()) {
             return { source: storage, resource, amount: load.amount, phase: "withdraw" as const };
           }
           continue;
@@ -191,12 +202,15 @@ export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
       if (need <= 0) return undefined;
 
       const carrying = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY);
-      if (carrying > 0) return { dest: terminal, phase: "deposit" as const };
-
-      // 空载：storage 有富余才为 terminal 抽血。
+      // D-1 修复：deposit 相同样受水位门禁 — 原先只有 withdraw 相检查 floor，
+      // 携能 creep 在 storage 跌破地板后仍会把背包能量喂给 terminal（贸易
+      // 储备侵占经济能量）。低水位时返回 undefined，放行后续候选把能量
+      // 送回经济 sink（distributorFillTarget 等）。
       if (storage.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.market.storageEnergyFloor) {
         return undefined;
       }
+      if (carrying > 0) return { dest: terminal, phase: "deposit" as const };
+
       return { source: storage, phase: "withdraw" as const };
     },
     execute: (ac, t) => {

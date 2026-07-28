@@ -63,12 +63,21 @@ export function hasRequest(queue: readonly SpawnRequest[], key: string): boolean
   return queue.some(r => r.key === key);
 }
 
-/** 移除过期请求（createdAt + TTL < now）和隔离请求（retries > max）。 */
-export function cleanQueue(queue: SpawnRequest[], tick: number, maxRetries: number): void {
+/** 移除过期请求（expiresAt 已过）和达到重试上限的请求。
+ *
+ * SP-2：返回因重试上限被清除的 key 列表 — 调用方应将其记入黑名单冷却，
+ * 否则 demand 下一 tick 以同 key 重建（retries 归零），持久性配置错误
+ * （如 body 超容量）形成「5 次失败 → 删除 → 重建 → 再 5 次」的无限翻炒，
+ * plan §5.4 的「隔离该请求」沦为周期性日志噪音。TTL 过期不入黑名单 —
+ * 过期是正常生命周期，需求仍在时重建是设计行为。
+ */
+export function cleanQueue(queue: SpawnRequest[], tick: number, maxRetries: number): string[] {
+  const purgedKeys: string[] = [];
   for (let i = queue.length - 1; i >= 0; i--) {
     const req = queue[i];
     if (!req) continue;
     if (req.retries >= maxRetries) {
+      purgedKeys.push(req.key);
       queue.splice(i, 1);
       continue;
     }
@@ -76,6 +85,7 @@ export function cleanQueue(queue: SpawnRequest[], tick: number, maxRetries: numb
       queue.splice(i, 1);
     }
   }
+  return purgedKeys;
 }
 
 /** 统计房间内某角色的待处理请求数（不含孵化中）。

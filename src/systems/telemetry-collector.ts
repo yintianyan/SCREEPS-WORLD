@@ -19,6 +19,7 @@
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { globalCache } from "../kernel/global-cache";
+import { systemPhase } from "../kernel/phase";
 import {
   readCpuSegment,
   readEconomySegment,
@@ -54,13 +55,18 @@ export const telemetryCollectorSystem: System = {
     // 1. CPU 时序采样（每 interval tick = 每 10 tick）
     sampleCpuData(tick, ctx);
 
+    // K-6 相位适配：本系统被 kernel 错峰到 tick ≡ phase (mod interval)，
+    // 内部二级采样门必须用相位相对判定 — 绝对对齐 tick % 50 === 0 与
+    // 运行 tick 无交集，经济/人口采样会静默永久失效（tuning 输入断供）。
+    const phase = systemPhase("telemetry-collector", CONFIG.telemetry.cpuSampleInterval);
+
     // 2. 经济时序采样（每 economySampleInterval tick = 每 50 tick）
-    if (tick % CONFIG.telemetry.economySampleInterval === 0) {
+    if ((tick - phase) % CONFIG.telemetry.economySampleInterval === 0) {
       sampleEconomyData(tick, ctx);
     }
 
     // 3. 人口普查（每 populationInterval tick = 每 100 tick）
-    if (tick % CONFIG.telemetry.populationInterval === 0) {
+    if ((tick - phase) % CONFIG.telemetry.populationInterval === 0) {
       samplePopulationData(tick);
     }
 

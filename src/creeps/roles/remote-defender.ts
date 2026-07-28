@@ -34,6 +34,15 @@ function attackHostileAction(): ActionCandidate<Creep> {
   return {
     name: "remote-defender:attack-hostile",
     resolve: (ac) => {
+      // RD-1：血量护栏 — 注释「NPC reserver 无攻击能力 → defender 不会受伤」
+      // 只对 reserver 成立；带 ATTACK/RANGED 的 Invader（demand 触发场景
+      // 就包含它）会站桩互殴。半血即撤：标记 recycle，role-runner 下 tick
+      // 短路 idle，spawn-manager recyclePass 归航回收残值。
+      // collectRemoteCreeps 跳过 recycle 中的 creep → demand 会孵接替者。
+      if (ac.creep.hits < ac.creep.hitsMax * 0.5) {
+        ac.creep.memory.recycle = true;
+        return undefined;
+      }
       // 只在 remoteTarget 房间内执行。
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;

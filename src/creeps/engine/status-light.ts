@@ -39,7 +39,7 @@ const STATUS_COLORS: Record<string, string> = {
  * 在 creep 头顶绘制状态指示灯。
  *
  * 仅当 CONFIG.debug.statusLight 开启时绘制；关闭时直接 return，零开销。
- * 在 creep 上方一格画半径 0.35 的小圆（不遮挡 creep 本体）。
+ * 在 creep 上方一格画半径 0.2 的小圆（不遮挡 creep 本体）。
  * y 坐标 clamp 到 [0, 49]，防止越界到相邻房间。
  */
 export function drawStatusLight(creep: Creep): void {

@@ -257,6 +257,16 @@ export function evaluateDemand(
   const livingHarvesters = (counts.harvester ?? 0) + (counts.worker ?? 0);
 
   if (livingHarvesters === 0) {
+    // W-3：P0 恢复不无视 defense 态 — 团灭现场若威胁仍在，先孵的 worker
+    // 出门即被杀（200 能量白送）。威胁在场时先入队 P0 defender 清场，
+    // worker 请求同队跟进（sortQueue 同优先级按 createdAt，defender 先孵）。
+    // 塔健在的房威胁通常已被塔压制（threatCreeps 有像才成立），不受影响。
+    if (snapshot.threatCreeps.length > 0) {
+      const defKey = spawnKey("defender", home, 0);
+      if (!hasKey(queue, defKey)) {
+        requests.push(createRequest("defender", home, 0, defKey, 0, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
+      }
+    }
     const key = spawnKey("worker", home, 0);
     requests.push(createRequest("worker", home, 0, key, 0, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
     return { requests }; // P0 阻塞其他所有请求
@@ -423,8 +433,19 @@ export function evaluateDemand(
     // fillTarget 数量决定需求，按单体运力折算头数：每 150 运力承接 1 个 fillTarget
     // （基准 body 6C=300 运力 → 2 个/头，与原「每 2 个 fillTarget 配 1 个」口径一致；
     // RCL4 道路档 16C=800 运力 → 5 个/头，大 body 时代自动减员）。
-    // fillTargets 含 spawn/extension/tower 等未满 sink。
-    const fillCount = snapshot.fillTargets.length;
+    // D-3 修复：编制信号与服务范围同口径 — tier ≥ 1（storage < full 50k）时
+    // distributor 拒服 tower（水位节流），tower 就不得计入需求信号；
+    // 否则「按含 tower 的缺口扩编 → 扩出来的编制不服务 tower」，
+    // 信号虚高一档，尖峰期多孵的每一头都是常驻浪费。
+    const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+    const servesTower = storageEnergy >= CONFIG.economy.distributorTiers.full;
+    // SN-1 连带：编制信号排除 controllerContainer — 它容量 2000 几乎恒有
+    // 空位，计入会把需求信号抬高一个常量；tier≥1 时 distributor 也不服务它。
+    const fillCount = servesTower
+      ? snapshot.fillTargets.length
+      : snapshot.fillTargets.filter(
+          t => t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION,
+        ).length;
     const distBody = estimatePlannedBody("distributor", energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl);
     const fillPerDistributor = Math.max(2, Math.floor((countBodyParts(distBody, "carry") * 50) / 150));
     distTarget = Math.min(distConfig.maxCount, Math.max(distConfig.minCount, Math.ceil(fillCount / fillPerDistributor)));
@@ -568,7 +589,7 @@ export function evaluateDemand(
     const builderConfig = getRoleBounds("builder", home);
     const builderTotal = (counts.builder ?? 0) + pending.builder;
     const economyCap = (counts.harvester ?? 0) + (counts.worker ?? 0) + 1;
-    const dynamicBuilderTarget = Math.min(
+    let dynamicBuilderTarget = Math.min(
       builderConfig.maxCount,
       economyCap,
       Math.max(
@@ -578,6 +599,21 @@ export function evaluateDemand(
         roadRepairDemand ? 1 : 0,
       ),
     );
+    // B-5：编制感知取能供给（水位权限表）— site 数是需求信号，
+    // 但编制不得超过能量供给可承载的数量：
+    //   storage < low(2k)：builderStorageLimit 已拒绝取能，builder 只能
+    //     container/直采 → 封顶 minCount（多孵的每一头都在排队等能量）；
+    //   storage < sustained(10k)：50/趟 的涓流供给只养得起 1 个。
+    // 无 storage（RCL1-3）时直采供给由 economyCap（harvester+worker+1）近似。
+    if (snapshot.storage) {
+      const builderStorageEnergy = snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY);
+      const supplyTiers = CONFIG.economy.distributorTiers;
+      if (builderStorageEnergy < supplyTiers.low) {
+        dynamicBuilderTarget = Math.min(dynamicBuilderTarget, builderConfig.minCount);
+      } else if (builderStorageEnergy < supplyTiers.sustained) {
+        dynamicBuilderTarget = Math.min(dynamicBuilderTarget, Math.max(builderConfig.minCount, 1));
+      }
+    }
     // 梯度缩放：用 economyPressure 迟滞带替代单阈值开关（TD-016）。
     // 迟滞窗：进入收缩 > 0.35，退出收缩 <= 0.25，带内保持当前状态。
     // 消除 pressure 在阈值附近波动时 builder 目标反复跳变的振荡。

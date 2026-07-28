@@ -47,7 +47,27 @@ export const spawnManagerSystem: System = {
       // 1. 先清理过期 / 隔离的请求 — 必须在 evaluateDemand 之前运行。
       //    否则已达到 maxRetries 的 stale 请求仍被 evaluateDemand 计入 pending，
       //    导致 harvesterCount > 0 → P0 worker 恢复请求不创建 → 死锁。
-      cleanQueue(queue, ctx.tick, CONFIG.spawn.maxRetries);
+      //    SP-2：达重试上限的 key 记入黑名单冷却（1 个 TTL 窗口）—
+      //    持久性配置错误不再「删除 → demand 重建 → 再失败」无限翻炒。
+      const purgedKeys = cleanQueue(queue, ctx.tick, CONFIG.spawn.maxRetries);
+      if (purgedKeys.length > 0) {
+        roomMem.spawnBlacklist ??= {};
+        for (const key of purgedKeys) {
+          // 采集角色豁免隔离（与 SP-1 同款）：它们的 retries 烧穿几乎总是
+          // 「能量不足 → 降级失败」的暂时性资源问题（bootstrap 常态），
+          // 不是隔离语义针对的持久性配置错误 — 隔离采集请求 1000 tick
+          // 会把「等能量」变成真死锁（rcl1-survival 回归）。
+          if (key.startsWith("worker:") || key.startsWith("harvester:")) continue;
+          roomMem.spawnBlacklist[key] = ctx.tick + CONFIG.spawn.requestTtl;
+          console.log(`[${ctx.tick}] spawn/${snapshot.roomName}: quarantined ${key} for ${CONFIG.spawn.requestTtl} ticks`);
+        }
+      }
+      // 到期条目顺手清理 — 防黑名单泄漏为永久封禁。
+      if (roomMem.spawnBlacklist) {
+        for (const [key, until] of Object.entries(roomMem.spawnBlacklist)) {
+          if (ctx.tick >= until) delete roomMem.spawnBlacklist[key];
+        }
+      }
 
       // 1.5 请求撤销通道：需求前提消失时立即出队，不等 TTL（幽灵需求回收）。
       //     trySpawn 消费队列时不复核当前世界状态 — 按旧状态入队的请求
@@ -62,11 +82,19 @@ export const spawnManagerSystem: System = {
       if (colonyState !== "normal" && roomMem.controllerDowngradeRisk !== true) {
         removeRequestsByRole(queue, "upgrader", snapshot.roomName);
       }
-      //     distributor：填充需求已清零（fillTargets 空 = 尖峰已被在途编制消化）
+      //     distributor：填充需求已清零（尖峰已被在途编制消化）
       //     且存活编制达 minCount 地板时，撤销尖峰期入队的扩编请求。
       //     不撤销的后果：请求在 TTL 窗口内仍会孵化 — 需求早已消失的常驻编制。
       //     minCount 守卫保证不误伤「storage 刚建成、首个 distributor 待孵」的请求。
-      if (snapshot.fillTargets.length === 0) {
+      //     SN-1 修复：口径按 spawn/extension/tower 维度判空 — fillTargets 含
+      //     controllerContainer（容量 2000 几乎永远有空位），按整表判空时
+      //     撤单条件在有 controller container 的房间近乎永不成立。
+      const coreFillDemand = snapshot.fillTargets.some(
+        t => t.structureType === STRUCTURE_SPAWN ||
+          t.structureType === STRUCTURE_EXTENSION ||
+          t.structureType === STRUCTURE_TOWER,
+      );
+      if (!coreFillDemand) {
         const livingDist = (creepsByRoom.get(snapshot.roomName) ?? [])
           .filter(c => c.role === "distributor").length;
         if (livingDist >= getRoleBounds("distributor", snapshot.roomName).minCount) {
@@ -94,6 +122,9 @@ export const spawnManagerSystem: System = {
         ctx.tick,
       );
       for (const req of requests) {
+        // SP-2：黑名单冷却中的 key 不重建（比较到期 tick — prune 已在
+        // 步骤 1 执行，此处防御同 tick 新写入的条目）。
+        if ((roomMem.spawnBlacklist?.[req.key] ?? 0) > ctx.tick) continue;
         submitRequest(queue, req);
       }
       roomMem.spawnQueue = queue;
@@ -102,7 +133,11 @@ export const spawnManagerSystem: System = {
       sortQueue(queue);
 
       // 4. 尝试孵化最高优先级的请求。
-      trySpawn(snapshot, queue);
+      //    SP-1：房内存活采集者（harvester/worker）数传入 — 采集链濒临
+      //    断裂（≤1 只）时为 P0 恢复预留 recoveryEnergyReserve。
+      const collectorCount = (creepsByRoom.get(snapshot.roomName) ?? [])
+        .filter(c => c.role === "harvester" || c.role === "worker").length;
+      trySpawn(snapshot, queue, collectorCount);
 
       // 5. B1：回收通道 — 标记退役 creep，引导至最近 spawn 回收残值能量。
       //    P3-3：传入预建的本房 creep 子集，避免全量 Game.creeps 扫描。
@@ -177,8 +212,20 @@ function recyclePass(
  * 的扣费引擎在意图执行阶段才结算 — 若都按快照校验，第二个意图可能超支失败。
  * 因此用本地 energyBudget 逐次扣减，保证每个意图都在真实可用额度内。
  * 处理 P0 降级、body 容量校验和错误重试。
+ *
+ * SP-1（plan.md「保留恢复能源」硬约束落地）：采集链濒临断裂
+ * （collectorCount ≤ 1）时，非 P0 请求的预算扣除 recoveryEnergyReserve —
+ * 低优先级孵化不得把能量花到 P0 团灭恢复无法立即出生的程度。
+ * 常态（采集者充足）不预留，避免浪费容量。
+ *
+ * @internal 导出仅供单元测试（tests/unit/spawn/try-spawn.test.ts）—
+ *           业务代码不得直接调用，唯一入口是 spawnManagerSystem.run。
  */
-function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: SpawnRequest[]): void {
+export function trySpawn(
+  snapshot: import("../kernel/contracts").RoomSnapshot,
+  queue: SpawnRequest[],
+  collectorCount: number,
+): void {
   if (queue.length === 0) return;
   if (snapshot.spawns.length === 0) return;
 
@@ -188,6 +235,8 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
 
   let spawnIdx = 0;
   let energyBudget = freeSpawns[0]!.room.energyAvailable;
+  // SP-1：非 P0 请求可用的预算（P0 本身可动用全部能量）。
+  const reserve = collectorCount <= 1 ? CONFIG.spawn.recoveryEnergyReserve : 0;
 
   // 如果有待处理的 P0 请求，不处理更低优先级的请求。
   const hasP0 = queue.some(r => r.priority === 0);
@@ -210,6 +259,15 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
 
     const cost = bodyCost(req.body);
 
+    // SP-1：非 P0 请求按预留后的额度校验 — P0 恢复能量不被低优先级侵占。
+    // 采集角色（harvester/worker）豁免：它们本身就是恢复路径 —
+    // 拦住采集者扩编会让「1 采集者 + 满能量」的房间永远孵不出第二只
+    // （rcl1-survival 回归：预留挡住 harvester → spawn 永久 idle）。
+    const isCollectorRole = req.role === "harvester" || req.role === "worker";
+    const effectiveBudget = req.priority === 0 || isCollectorRole
+      ? energyBudget
+      : energyBudget - reserve;
+
     // 降级策略（三层）：
     //   1. P0 始终降级（紧急恢复）。
     //   2. P1 在 bootstrap/recovery 时降级（关键路径死锁防护）。
@@ -223,7 +281,7 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
     //      双条件避免 bootstrap/正常低速增长阶段 P2 过早出小 body 导致人口配额被低效 creep 占满
     //      （rcl1-survival / live-anomaly-reproduction 测试回归）。
     let body = req.body;
-    if (cost > energyBudget) {
+    if (cost > effectiveBudget) {
       const roomMem = Memory.rooms[snapshot.roomName];
       const roomState = roomMem?.colonyState ?? "normal";
       const economyPressure = roomMem?.economyPressure ?? 0;
@@ -239,7 +297,7 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
         // 使用角色正确的 requiredParts，避免 hauler（无 WORK）降级时
         // 因默认要求 WORK 而返回 undefined。
         const requiredParts = ROLE_REQUIRED_PARTS[req.role];
-        const degraded = degradeBody(req.body, energyBudget, requiredParts);
+        const degraded = degradeBody(req.body, effectiveBudget, requiredParts);
         if (!degraded) {
           // 降级失败说明能量连最小 body 都负担不起。
           // 必须递增 retries，否则请求永远留在队列中不被 cleanQueue 清除，
@@ -281,7 +339,9 @@ function trySpawn(snapshot: import("../kernel/contracts").RoomSnapshot, queue: S
     }
 
     if (result === ERR_BUSY) {
-      // 该 spawn 意外忙碌 — 换下一个空闲 spawn 重试当前请求所在队列。
+      // SP-3 注释修正：防御性分支 — freeSpawns 已过滤 !spawning 且成功后
+      // 换 spawn，正常流程不可达。命中时跳过本请求（下 tick 重试），
+      // 换下一个空闲 spawn 处理后续请求。
       spawnIdx++;
       continue;
     }
@@ -341,3 +401,4 @@ function collectSpawningSummaries(): SpawningSummary[] {
   }
   return result;
 }
+

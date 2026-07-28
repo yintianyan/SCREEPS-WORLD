@@ -90,6 +90,25 @@ describe("SpawnQueue — sortQueue", () => {
     expect(sorted[0]?.key).toBe("early");
     expect(sorted[1]?.key).toBe("late");
   });
+
+  // X-17：替换请求优先于普通请求（补测试债 — 该规则此前零覆盖）。
+  it("X-17：同优先级下 replaceBy 请求排在普通请求之前", () => {
+    const normal = makeRequest("normal", 1, 100);
+    const replacement = makeRequest("replacement", 1, 200);
+    replacement.replaceBy = 500;
+    const sorted = sortQueue([normal, replacement]);
+    // replacement 虽 createdAt 更晚，仍排前 — 关键替补不得被普通请求侵占窗口。
+    expect(sorted[0]?.key).toBe("replacement");
+    expect(sorted[1]?.key).toBe("normal");
+  });
+
+  it("X-17：优先级仍高于 replaceBy（P0 普通请求先于 P1 替补）", () => {
+    const p0 = makeRequest("p0", 0, 200);
+    const p1Replacement = makeRequest("p1r", 1, 100);
+    p1Replacement.replaceBy = 500;
+    const sorted = sortQueue([p1Replacement, p0]);
+    expect(sorted[0]?.key).toBe("p0");
+  });
 });
 
 describe("SpawnQueue — hasRequest", () => {
@@ -111,6 +130,16 @@ describe("SpawnQueue — cleanQueue", () => {
     cleanQueue(queue, 100, 5);
     expect(queue).toHaveLength(1);
     expect(queue[0]?.key).toBe("b");
+  });
+
+  // SP-2：达重试上限的 key 返回给调用方入黑名单 — 打破删除-重建翻炒。
+  it("SP-2：返回被隔离的 key 列表（TTL 过期不入列）", () => {
+    const queue: SpawnRequest[] = [makeRequest("failed"), makeRequest("expired"), makeRequest("ok")];
+    queue[0]!.retries = 5;
+    queue[1]!.expiresAt = 50;
+    const purged = cleanQueue(queue, 100, 5);
+    expect(purged).toEqual(["failed"]);
+    expect(queue.map(r => r.key)).toEqual(["ok"]);
   });
 
   it("removes expired requests", () => {

@@ -32,6 +32,9 @@ declare global {
     sourceId?: Id<Source>;
     /** remote-harvester 缓存的 source 旁 container ID（避免每 tick lookForAtArea）。 */
     sourceContainerId?: Id<_HasId>;
+    /** 远矿自建 container 的建 site 失败冷却到期 tick（RM-1）—
+     * ERR_FULL/位置冲突等持久失败时放行 dropEnergy，冷却后重试。 */
+    containerSiteCooldown?: number;
     /** 压缩的上次位置（x * 50 + y）用于卡位检测。 */
     lastPos?: number;
     /** 连续未移动的 tick 数。 */
@@ -136,6 +139,13 @@ declare global {
      */
     storageNearFull?: boolean;
     spawnQueue?: SpawnRequest[];
+    /**
+     * 孵化请求黑名单（SP-2）：key → 冷却到期 tick。
+     * cleanQueue 因重试上限清除的请求 key 在冷却期内不得重建 —
+     * 打破「5 次失败 → 删除 → demand 重建 → 再 5 次」的翻炒循环。
+     * 与 construction 的 segment blocked 黑名单同型（范本先例）。
+     */
+    spawnBlacklist?: Record<string, number>;
     buildQueue?: BuildTask[];
     lastRcl?: number;
     /** C2：邻居房情报（room-observer 每 50 tick 刷新，M7 远矿/扩张选址数据源）。 */
@@ -294,6 +304,12 @@ declare global {
      * 有视野且确认核心消失时立即清除（提前解封）。
      */
     blockedUntil?: number;
+    /**
+     * 普通威胁冷却截止 tick（RM-2，与 blockedUntil 同款双轨）。
+     * 有视野见威胁写入/续期；有视野确认清空立即清除；无视野时冷却期内
+     * 维持威胁态 — 防「威胁 → 失明 → 恢复孵化 → 送死」循环送兵。
+     */
+    threatUntil?: number;
   }
 
   interface Memory {

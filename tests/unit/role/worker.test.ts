@@ -174,6 +174,42 @@ describe("worker — work 模式", () => {
 
     expect(creep.transfer).toHaveBeenCalled();
   });
+
+  // W-1 回归：assignment 目标已满时 resolve 放行 fallthrough，不携能活锁。
+  it("W-1：assignment 目标已满时释放并 fallthrough 到 repairCritical", () => {
+    const fullSpawn = mockStructure("spawn", {
+      id: "sp1", energy: 300, capacity: 300, hits: 400, hitsMax: 1000,
+    });
+    const snap = mockSnapshot({ fillTargets: [], spawns: [fullSpawn] });
+    const creep = mockCreep({
+      name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work",
+      assignment: { id: "t1", kind: "fill", targetId: "sp1", leaseUntil: 2000, revision: 1, assignedAt: 990 },
+    });
+    const ctx = mockContext(snap);
+
+    workerRole.run(creep, ctx);
+
+    // 目标满 → 不 transfer；assignment 释放；fallthrough 到 repairCritical（结构 40% 血）。
+    expect(creep.transfer).not.toHaveBeenCalled();
+    expect(creep.memory.assignment).toBeUndefined();
+    expect(creep.repair).toHaveBeenCalledWith(fullSpawn);
+  });
+
+  // W-1 回归：目标未满时正常填充（不误伤正常路径）。
+  it("W-1：assignment 目标未满时正常 transfer", () => {
+    const ext = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
+    const snap = mockSnapshot({ fillTargets: [ext] });
+    const creep = mockCreep({
+      name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work",
+      assignment: { id: "t1", kind: "fill", targetId: "ext1", leaseUntil: 2000, revision: 1, assignedAt: 990 },
+    });
+    const ctx = mockContext(snap);
+
+    workerRole.run(creep, ctx);
+
+    expect(creep.transfer).toHaveBeenCalledWith(ext, "energy");
+    expect(creep.memory.assignment).toBeDefined();
+  });
 });
 
 describe("worker — flee", () => {

@@ -170,6 +170,73 @@ function dropEnergy(): ActionCandidate<DropEnergyTarget> {
   };
 }
 
+/** buildSourceContainer 的 resolve 返回类型。 */
+type ContainerBuildTarget =
+  | { kind: "build"; site: ConstructionSite }
+  | { kind: "create" };
+
+/**
+ * RM-1：满载时自建 source container — 终结 drop-mining 衰减税。
+ *
+ * 线上实测（W37S57）：无 container 的 active 远矿房地面堆积 3300+ 能量，
+ * 稳态衰减 ~4/tick ≈ 单源产出的 40% — 远超「补建造链」决策阈值（5%）。
+ *
+ * 行为：满载 + 站桩位 + 无 container 时，把背包能量投入建造而非溢出：
+ *   有 container site → build（5 energy/WORK/tick 转化为进度，零衰减）；
+ *   无 site → 在脚下创建（站桩位即 container 位）。
+ * 建成后 findSourceContainer 缓存接手，倒能路径与 hauler 的 container
+ * withdraw 链自然激活。
+ *
+ * 架构注记：construction-manager 的「唯一 site 创建者」约束针对自有房
+ * 布局管线（它只遍历自有房快照，远矿房不在管辖域）— 本 action 是远矿
+ * source container 的唯一豁免点，不做任何其他类型的 site。
+ */
+function buildSourceContainer(): ActionCandidate<ContainerBuildTarget> {
+  return {
+    name: "remote-harvest:build-container",
+    resolve: (ac) => {
+      // 仅满载时投入建造 — 半载继续采集（建造用的是必然溢出的能量）。
+      if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return undefined;
+      // 建 site 失败冷却（100 site 全局上限 / 位置冲突等持久失败）：
+      // 冷却期内放行后续候选（dropEnergy）— 否则本候选每 tick 命中、
+      // execute 静默失败、候选链终止，creep 满载永久停摆（比 drop 更差）。
+      const cooldown = ac.creep.memory.containerSiteCooldown;
+      if (cooldown !== undefined && Game.time < cooldown) return undefined;
+      const source = getRemoteSource(ac.creep);
+      if (!source || ac.creep.pos.getRangeTo(source) > 1) return undefined;
+      if (findSourceContainer(ac.creep, source)) return undefined;
+      // 已有 container site → 建造它。
+      const sites = ac.creep.room.lookForAtArea(
+        LOOK_CONSTRUCTION_SITES,
+        Math.max(0, source.pos.y - 1),
+        Math.max(0, source.pos.x - 1),
+        Math.min(49, source.pos.y + 1),
+        Math.min(49, source.pos.x + 1),
+        true,
+      );
+      for (const entry of sites) {
+        if (entry.constructionSite.structureType === STRUCTURE_CONTAINER) {
+          return { kind: "build" as const, site: entry.constructionSite };
+        }
+      }
+      // 无 site → 在脚下创建（resolve 禁止游戏 API 副作用，交给 execute）。
+      return { kind: "create" as const };
+    },
+    execute: (ac, target) => {
+      if (target.kind === "build") {
+        ac.creep.build(target.site);
+      } else {
+        const result = ac.creep.room.createConstructionSite(ac.creep.pos, STRUCTURE_CONTAINER);
+        if (result !== OK) {
+          // 持久失败（ERR_FULL 全局 site 上限 / ERR_INVALID_TARGET 占位冲突）：
+          // 写冷却让 resolve 放行 dropEnergy，100 tick 后重试。
+          ac.creep.memory.containerSiteCooldown = Game.time + 100;
+        }
+      }
+    },
+  };
+}
+
 const policy: RolePolicy = {
   acquire: [
     // 站桩采集 + 同 tick 倒能（到达矿位后）。
@@ -178,6 +245,9 @@ const policy: RolePolicy = {
     remoteHarvestSource(),
   ],
   work: [
+    // RM-1：满载且无 container → 自建（必须在 stationaryMine 之前 —
+    // stationaryMine 的 resolve 只查在位与否，满载时会继续采集溢出）。
+    buildSourceContainer(),
     // 站桩采集 + 同 tick 倒能（work 模式也继续采）。
     remoteStationaryMine(),
     // 采满无处倒 → drop 释放产能。

@@ -36,14 +36,14 @@ export const expansionManagerSystem: System = {
   priority: 3 as Priority,
   interval: CONFIG.expansion.interval,
   run(ctx: TickContext): void {
-    // 扩张是纯发展行为：CPU 紧张时整体挂起。
-    if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;
-    if ((Game.cpu.bucket ?? 0) < 5000) return;
-
     if (!Memory.kernel) Memory.kernel = {};
     const expansion = Memory.kernel.expansion;
 
     if (!expansion) {
+      // C-1：CPU 门禁只裁决「是否开启新行动」— 扩张是纯发展行为，
+      // CPU 紧张时不开新局。
+      if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;
+      if ((Game.cpu.bucket ?? 0) < 5000) return;
       // 战略门禁：是否扩张由 empire-strategy 的姿态裁决（Strategy 层），
       // 本系统只在获得授权时评选目标 — 不自行判断「现在是不是好时机」。
       // 姿态未就绪（reset 首 tick）默认不扩张：固本是安全缺省。
@@ -54,13 +54,21 @@ export const expansionManagerSystem: System = {
 
     // 进行中的扩张行动不因姿态回落而中断 — claimer/拓荒编队已是沉没投资，
     // 半途而废比完成更贵；姿态只裁决「是否开启新行动」。
+    // C-1 修复：状态机推进不受 CPU 门禁 — 原先门禁在函数入口，
+    // conserve/recovery 期间整个状态机冻结：超时判定、被抢占检测、
+    // 威胁止损全部停摆，abort 分支恰恰是 CPU 紧张时最需要跑的止损路径。
+    // 审查修正：孵化补充（submitPioneers/claimer 重派）仍属新增投资，
+    // 与「开新行动」同类 — 传入 CPU 门禁位，低 tier 下只判定不送兵。
+    const spawningAllowed =
+      (ctx.budget.tier === "healthy" || ctx.budget.tier === "guarded") &&
+      (Game.cpu.bucket ?? 0) >= 5000;
 
     switch (expansion.state) {
       case "claiming":
-        advanceClaiming(ctx, expansion);
+        advanceClaiming(ctx, expansion, spawningAllowed);
         break;
       case "pioneering":
-        advancePioneering(ctx, expansion);
+        advancePioneering(ctx, expansion, spawningAllowed);
         break;
     }
   },
@@ -179,7 +187,7 @@ function submitClaimer(sponsor: string, target: string, tick: number): void {
 
 // ─── claiming → pioneering ──────────────────────────────────
 
-function advanceClaiming(ctx: TickContext, expansion: ExpansionState): void {
+function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
   const targetRoom = Game.rooms[expansion.target];
 
   // 占领成功 → 选锚点、写 layout、进入拓荒。
@@ -218,10 +226,23 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState): void {
   }
 
   // claimer 阵亡且无 pending → 幂等重派。
+  // C-2：重派前查危险情报 — 目标房 dangerUntil 冷却未过（claimer 大概率
+  // 死于威胁）时不再送兵，直接止损。无此闸的后果：claimer 被杀 → 重派 →
+  // 再被杀 — 送兵循环最长跑满 claimTimeout。
   const claimerAlive = Object.values(Game.creeps).some(
     c => c.memory.role === "claimer" && c.memory.remoteTarget === expansion.target,
   );
   if (!claimerAlive) {
+    const intel = Memory.rooms[expansion.sponsor]?.intel?.[expansion.target];
+    if (intel?.dangerUntil !== undefined && ctx.tick < intel.dangerUntil) {
+      console.log(`[${ctx.tick}] expansion: ${expansion.target} hostile (claimer lost), aborting`);
+      blacklistTarget(expansion.target, ctx.tick);
+      reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
+      Memory.kernel!.expansion = undefined;
+      return;
+    }
+    // 低 tier 下不重派（止损判定已在上方照常运行 — 送兵是新增投资）。
+    if (!spawningAllowed) return;
     submitClaimer(expansion.sponsor, expansion.target, ctx.tick);
   }
 }
@@ -267,7 +288,7 @@ function seedLayoutAnchor(room: Room): boolean {
 
 // ─── pioneering → done ──────────────────────────────────────
 
-function advancePioneering(ctx: TickContext, expansion: ExpansionState): void {
+function advancePioneering(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
   const targetRoom = Game.rooms[expansion.target];
 
   // 房间失守（被抢/降级）→ 结束行动并冷却。
@@ -286,6 +307,29 @@ function advancePioneering(ctx: TickContext, expansion: ExpansionState): void {
     return;
   }
 
+  // C-2：拓荒期威胁止损 — 拓荒编队零战力，威胁在场时全员 flee，
+  // 补充的每一批都是给对手送经验。判据：目标房有威胁且编队已全灭
+  // （worker+builder 存活 0）→ 放弃 + 黑名单冷却 + 撤单。
+  // 审查修正：编队存活时只暂停补充，超时/完成判定继续运行 —
+  // 原先直接 return 会让长期骚扰无限推迟超时判定。
+  const hostiles = targetRoom.find(FIND_HOSTILE_CREEPS, {
+    filter: c => !CONFIG.defense.allies.includes(c.owner.username) &&
+      c.body.some(p => p.type === ATTACK || p.type === RANGED_ATTACK),
+  });
+  if (hostiles.length > 0) {
+    const squadAlive = Object.values(Game.creeps).some(
+      c => c.memory.home === expansion.target &&
+        (c.memory.role === "worker" || c.memory.role === "builder"),
+    );
+    if (!squadAlive) {
+      console.log(`[${ctx.tick}] expansion: ${expansion.target} squad wiped by hostiles, aborting`);
+      blacklistTarget(expansion.target, ctx.tick);
+      reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
+      Memory.kernel!.expansion = undefined;
+      return;
+    }
+  }
+
   // 超时：房已占下，仅停止编队补充（残余拓荒者继续干活至寿终）。
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.pioneerTimeout) {
     console.log(`[${ctx.tick}] expansion: pioneering ${expansion.target} timed out, squad replenishment stopped`);
@@ -293,7 +337,10 @@ function advancePioneering(ctx: TickContext, expansion: ExpansionState): void {
     return;
   }
 
-  submitPioneers(ctx, expansion);
+  // 补充编队：威胁在场（不送新兵进战场）或低 CPU tier（新增投资暂停）时跳过。
+  if (hostiles.length === 0 && spawningAllowed) {
+    submitPioneers(ctx, expansion);
+  }
 }
 
 /** 维持拓荒编队规模（sponsor 队列代孵，稳定 key 幂等）。 */

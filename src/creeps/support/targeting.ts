@@ -38,9 +38,23 @@ export function getSource(creep: Creep, snapshot: RoomSnapshot): Source | undefi
   }
 
   // 使用快照数据分配占用最少的 source（无需全局扫描）。
+  // B-4 平局去偏置：sourceOccupancy 只统计采矿角色（harvester/worker），
+  // builder/upgrader 直采互相不可见 — 占用计数恒平局时旧实现的严格小于
+  // 比较永远选中 sources[0]，全员涌向同一 source 排队。
+  // 以 creep 名哈希决定遍历起点：平局时各 creep 稳定散布到不同 source
+  // （同一 creep 每 tick 起点一致，不抖动）；占用有差异时仍选最空者。
+  // 刻意不把非采矿角色计入占用表 — room-state 的 harvesterCount 直接对
+  // 占用表求和，扩表会虚增采集编制、掩盖真实 bootstrap 信号。
+  let nameHash = 0;
+  for (let i = 0; i < creep.name.length; i++) {
+    nameHash = (nameHash * 31 + creep.name.charCodeAt(i)) | 0;
+  }
+  const sourceCount = snapshot.sources.length;
+  const offset = sourceCount > 0 ? Math.abs(nameHash) % sourceCount : 0;
   let best: Source | undefined;
   let bestCount = Infinity;
-  for (const source of snapshot.sources) {
+  for (let i = 0; i < sourceCount; i++) {
+    const source = snapshot.sources[(offset + i) % sourceCount]!;
     const count = snapshot.sourceOccupancy.get(source.id) ?? 0;
     if (count < bestCount) {
       bestCount = count;

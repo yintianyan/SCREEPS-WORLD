@@ -119,11 +119,15 @@ export const roomStateSystem: System = {
       // 任一升高都推高压力，使建造门禁 / P2 缩放对「富得流油却花不出去」也做出反应。
       // score 0→midpoint 映射 pressure 0.0→0.5（健康→谨慎）
       // score midpoint→midpoint+range 映射 pressure 0.5→1.0（紧张→危机）
+      // RS-1：clamp 到 1.0 — score 上限（drainEnterScore=150）大于
+      // midpoint+range(100)，无 clamp 时深度危机输出 ~1.42，而所有消费端
+      // （demand 衰减/建造门禁/P2 饥饿判定）都假设 0..1 闭区间，
+      // 超界会让线性衰减公式产生负乘数等语义失真。
       const { midpoint, range } = CONFIG.economy.economyPressure;
       const score = Math.max(phaseResult.drainScore, phaseResult.liquidityScore);
-      roomMem.economyPressure = score <= midpoint
+      roomMem.economyPressure = Math.min(1, score <= midpoint
         ? (score / midpoint) * 0.5
-        : 0.5 + ((score - midpoint) / range) * 0.5;
+        : 0.5 + ((score - midpoint) / range) * 0.5);
 
       // 6. Storage 满仓检测 — 超过阈值时标记，供 demand 限采 + 加速消费。
       // 满仓 = 能量在源头被浪费（harvester drop），必须加速升级/建造消化盈余。

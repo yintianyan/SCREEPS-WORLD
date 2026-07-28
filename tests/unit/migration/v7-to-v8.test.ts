@@ -11,7 +11,7 @@
  *   - mode 字段不受影响
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { maintainMemory } from "../../../src/kernel/memory";
+import { maintainMemory, runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";
 import { resetGlobals } from "../../role-helpers";
 
@@ -34,7 +34,7 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
       kernel: { tuning: { lastTuned: 500, rooms: {} } },
       rooms: {},
     };
-    maintainMemory();
+    runMigrations();
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const creeps = (globalThis as any).Memory.creeps;
@@ -56,7 +56,7 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
       kernel: {},
       rooms: {},
     };
-    maintainMemory();
+    runMigrations();
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const creep = (globalThis as any).Memory.creeps["harvester-W1N1-0-1000-abc"];
@@ -75,9 +75,9 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
       kernel: {},
       rooms: {},
     };
-    maintainMemory();
-    maintainMemory();
-    maintainMemory();
+    runMigrations();
+    runMigrations();
+    runMigrations();
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect((globalThis as any).Memory.creeps.creep1.working).toBeUndefined();
@@ -91,7 +91,7 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
       kernel: {},
       rooms: {},
     };
-    expect(() => maintainMemory()).not.toThrow();
+    expect(() => runMigrations()).not.toThrow();
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 
@@ -112,7 +112,7 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
       },
       rooms: {},
     };
-    maintainMemory();
+    runMigrations();
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const tuning = (globalThis as any).Memory.kernel.tuning;

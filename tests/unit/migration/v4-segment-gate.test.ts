@@ -11,7 +11,7 @@
  *   - 次 tick segment 可用 → 迁移续跑至最新版本，数据落入 segment
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { maintainMemory } from "../../../src/kernel/memory";
+import { maintainMemory, runMigrations } from "../../../src/kernel/memory";
 import { requestSegments, getRoomLayoutData } from "../../../src/kernel/segment-store";
 import { CONFIG } from "../../../src/config";
 
@@ -64,7 +64,7 @@ describe("memory — v4 迁移 segment 就绪门禁", () => {
   it("reset 首 tick：segment 未就绪时迁移链停在 v3，overrides 不丢失", () => {
     // kernel.run 的真实顺序：requestSegments 先于 maintainMemory。
     requestSegments();
-    maintainMemory();
+    runMigrations();
 
     const mem = (globalThis as any).Memory;
     // 版本停在断点 — 不被无条件盖章掩盖。
@@ -76,12 +76,12 @@ describe("memory — v4 迁移 segment 就绪门禁", () => {
   it("次 tick segment 就绪：迁移续跑至最新版本，overrides 落入 segment", () => {
     // 首 tick：门禁中断。
     requestSegments();
-    maintainMemory();
+    runMigrations();
     expect((globalThis as any).Memory.schemaVersion).toBe(3);
 
     // 次 tick：requestedAt !== Game.time → segment 视为可用（真空 = 全新服务器）。
     mockState.time = 101;
-    maintainMemory();
+    runMigrations();
 
     const mem = (globalThis as any).Memory;
     expect(mem.schemaVersion).toBe(CONFIG.memory.schemaVersion);
@@ -92,7 +92,7 @@ describe("memory — v4 迁移 segment 就绪门禁", () => {
   });
 
   it("非 reset 环境（未调用 requestSegments）：迁移直接完成，向后兼容", () => {
-    maintainMemory();
+    runMigrations();
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 });

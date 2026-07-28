@@ -162,3 +162,56 @@ describe("spawn-manager — 请求撤销接线（幽灵需求回收）", () => {
     expect(roles).toContain("distributor");
   });
 });
+
+describe("spawn-manager — SP-2 黑名单闭环（隔离 → 冷却拒重建 → 到期放行）", () => {
+  /** 存活 harvester 防 P0 短路（P0 分支只出 worker/defender）。 */
+  function addLivingHarvester(): void {
+    (globalThis as any).Game.creeps.h_1 = {
+      name: "h_1",
+      spawning: false,
+      ticksToLive: 1000,
+      body: [1, 2, 3],
+      store: { getUsedCapacity: () => 0, getFreeCapacity: () => 50 },
+      memory: { role: "harvester", home: "W7N4", sourceId: "source_1" },
+      room: { name: "W7N4" },
+    };
+  }
+
+  it("达重试上限的请求被隔离入黑名单，冷却期内 demand 同 key 重建被拒", () => {
+    const hostile = { id: "h1", name: "h1", pos: { x: 10, y: 10 }, owner: { username: "enemy" } };
+    // 预置一个已烧穿重试的 defender 请求。
+    const failed = makeRequest("defender", "W7N4");
+    failed.retries = 5;
+    (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: [failed], colonyState: "normal" };
+    addLivingHarvester();
+
+    // 威胁在场 → demand 会尝试重建 defender:W7N4:0（同 key）。
+    const snapshot = mockSnapshot({ threatCreeps: [hostile as any] });
+    spawnManagerSystem.run(mockContext(snapshot));
+
+    const roomMem = (globalThis as any).Memory.rooms.W7N4;
+    // 黑名单已写入（冷却 = requestTtl）。
+    expect(roomMem.spawnBlacklist["defender:W7N4:0"]).toBeGreaterThan((globalThis as any).Game.time);
+    // 冷却期内重建被拒 — 队列中无 defender（翻炒循环被打破）。
+    const roles = (roomMem.spawnQueue as SpawnRequest[]).map(r => r.role);
+    expect(roles).not.toContain("defender");
+  });
+
+  it("冷却到期后条目被清理，重建放行", () => {
+    const hostile = { id: "h1", name: "h1", pos: { x: 10, y: 10 }, owner: { username: "enemy" } };
+    (globalThis as any).Memory.rooms.W7N4 = {
+      spawnQueue: [],
+      colonyState: "normal",
+      spawnBlacklist: { "defender:W7N4:0": (globalThis as any).Game.time - 1 }, // 已过期
+    };
+    addLivingHarvester();
+
+    const snapshot = mockSnapshot({ threatCreeps: [hostile as any] });
+    spawnManagerSystem.run(mockContext(snapshot));
+
+    const roomMem = (globalThis as any).Memory.rooms.W7N4;
+    expect(roomMem.spawnBlacklist["defender:W7N4:0"]).toBeUndefined(); // prune 生效
+    const roles = (roomMem.spawnQueue as SpawnRequest[]).map(r => r.role);
+    expect(roles).toContain("defender"); // 放行重建
+  });
+});

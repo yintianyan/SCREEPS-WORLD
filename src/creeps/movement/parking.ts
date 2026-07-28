@@ -32,7 +32,7 @@
 import { globalCache } from "../../kernel/global-cache";
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { packPos, recordTraffic } from "./traffic";
-import { DIR_DELTA } from "./stuck-recovery";
+import { DIR_DELTA, checkAndExecuteYield } from "./stuck-recovery";
 
 /** 归位预约缓存：本 tick 已被占用的目标格（packed pos 集合），每 tick 重置。 */
 function getParkReservations(): Set<number> {
@@ -221,6 +221,12 @@ export function parkIdleCreep(creep: Creep, snapshot: RoomSnapshot): void {
   if (typeof room.getTerrain !== "function" || typeof room.lookForAt !== "function") {
     return;
   }
+
+  // MV-3：parked creep 优先响应让路请求 — idle creep 无任务在身，
+  // 是最该让路的对象。原先 yield 只在 moveToTarget 开头检查，
+  // parked creep 不走该入口 → 让路请求对静止目标永不生效，
+  // 挡路只能靠移动方 ignoreCreeps:false 绕行。
+  if (checkAndExecuteYield(creep)) return;
 
   const reserved = getParkReservations();
   const currentPacked = packPos(creep.pos);

@@ -57,7 +57,7 @@
 |---------|---------|---------|
 | G-MV-01 | 角色只在主动作返回 `ERR_NOT_IN_RANGE` 时调用 `moveToTarget`，不在一个 tick 反复选目标和重算 | CPU 浪费 |
 | G-MV-02 | 本地任务默认 `maxRooms: 1`；跨房移动使用 `moveTowardRoom` 走出口 | 跨房寻路 CPU 爆炸 |
-| G-MV-03 | `reusePath` 默认 5；卡位超过 `stuckThreshold`（2 tick）后关闭 `ignoreCreeps` 绕行 | 每 tick 重算路径 |
+| G-MV-03 | `reusePath` 按距离自适应（近 3 / 中 5 / 远 15）；卡位达 `stuckThreshold`（2 tick）后关闭 `ignoreCreeps` 绕行，`stuckThreshold+1` 起 `reusePath: 0` | 每 tick 重算路径 |
 | G-MV-04 | 卡位超过 `stuckThreshold + repathLimit`（4 tick）后清除目标并进入 `idle` | 永久卡死 |
 | G-MV-05 | 移动后仅在 `result === OK || result === ERR_TIRED` 时记录交通热度 | 丢失交通数据 |
 | G-MV-06 | `ERR_TIRED` 是正常疲劳机制，不触发卡位计数，不重寻路 | 误判疲劳为卡位 |
@@ -1099,15 +1099,30 @@ idle → 等待下一 tick 重新分配
 | `replaceBuffer` | 15 | `CONFIG.spawn` | body 替换窗口的额外 tick 缓冲 |
 | `maxRetries` | 5 | `CONFIG.spawn` | 孵化请求隔离前的最大重试次数 |
 | `recoveryEnergyReserve` | 200 | `CONFIG.spawn` | P0 恢复 body 预留的最低能量 |
-| `maxNormalSitesPerRoom` | 2 | `CONFIG.construction` | 每房最大活跃 normal site 数 |
-| `maxCriticalSitesPerRoom` | 1 | `CONFIG.construction` | 每房额外允许的 critical site 数 |
-| `maxGlobalSites` | 5 | `CONFIG.construction` | 全局活跃 site 上限 |
+| `maxNormalSitesPerRoom` | 3 | `CONFIG.construction` | 每房最大活跃 normal site 数 |
+| `maxCriticalSitesPerRoom` | 1 | `CONFIG.construction` | 每房额外允许的 critical site 数（source container 借用此额度；storage/road 另有独立计额） |
+| `maxGlobalSites` | 7 | `CONFIG.construction` | 全局活跃 site 上限（紧急重建豁免） |
 | `planInterval` | 50 | `CONFIG.layout` | 布局规划器运行间隔 |
 | `minTraffic` | 10 | `CONFIG.layout.road` | 道路候选最小通行次数 |
 | `maxCandidates` | 5 | `CONFIG.layout.road` | 每房最多道路候选数 |
-| `leaseDuration` | 20 | `CONFIG.assignment` | 本地任务租约时长 |
+| `leaseDuration` | 50 | `CONFIG.assignment` | 本地任务租约时长（builder 通勤 20+ tick，20 会在途中过期导致摇摆） |
 | `sourceTargetWorkParts` | 5 / 6 / 8 | `CONFIG.assignment` | 每个 source 目标 work parts 总数，按 RCL 分级：RCL1-3: 5 / RCL4-6: 6 / RCL7-8: 8 |
 | `upgradeEnergyFloor` | 300 | `CONFIG.economy` | upgrader 允许工作的最低 extension 能量（RCL1-3） |
 | `upgradeEnergyFloorStorage` | 1000 | `CONFIG.economy` | upgrader 允许工作的最低 storage 能量（RCL4+）；避免与 spawn 孵化竞争 extension 能量 |
 | `buildEnergySurplus` | 200 | `CONFIG.economy` | builder 允许工作的最低能量盈余 |
 | `controllerDowngradeThreshold` | 10000 | `CONFIG.economy` | 触发紧急升级的 ticksToDowngrade 阈值 |
+
+## 附录 D：Distributor 角色约束（补章）
+
+Distributor 是 RCL4+ 的分发者（storage → 生产 sink），与 hauler（收集者：源 → storage）构成双泵物流。核心约束：
+
+| 约束 ID | 约束内容 | 违反后果 |
+|---------|---------|---------|
+| G-DS-01 | distributor 是唯一从 storage 常态取能分发的角色；hauler 永不取 storage | storage→storage 循环 |
+| G-DS-02 | 水位档位由 `computeDistributorTier` 按 storage **绝对能量**分四档（full 50k / sustained 10k / low 2k），禁止容量比例刻度 | 发展期永久卡最低档 |
+| G-DS-03 | spawn/extension 在所有档位都同池服务 — 低水位节流靠取能限额（400/200 per trip），不靠裁剪目标类型 | tier 3 自锁吸收态（D-0 事故） |
+| G-DS-04 | 取能门禁与投放过滤同口径（`hasDistributorFillDemand` 按 tier 过滤）— 不得为拒绝服务的目标取能 | 携能 idle，能量滞留背包 |
+| G-DS-05 | tier ≥ 1 跳过 tower/controller container；编制信号（demand distTarget）与撤单口径同样只按 spawn/extension（+tier 0 tower）计 | 信号虚高、幽灵编制 |
+| G-DS-06 | 扩编须经 `distScaleUpSince` 150 tick 趋势确认；补 minCount 与缩编即时 | 孵化尖峰换来常驻编制 |
+| G-DS-07 | 无 storage 时自动降级为 hauler（gate 改写 role）；work 链永不含 fillStorage | 空转 / storage 循环 |
+| G-DS-08 | terminal/factory/lab 备货受水位权限表门禁（terminal ≥20k 双相、factory 仅满仓、lab ≥low 2k） | 贸易/工业侵占经济能量 |

@@ -41,8 +41,10 @@ export interface ActionContext {
 export interface ActionCandidate<T = unknown> {
   /** 调试标识（telemetry / 日志用）。 */
   readonly name: string;
-  /** 解析目标。返回 undefined 表示此行为不触发。 */
-  readonly resolve?: (ac: ActionContext) => T | undefined;
+  /** 解析目标。返回 undefined 表示此行为不触发。
+   * EN-3：必填 — 可选时「无 resolve 的候选」永远返回 undefined、
+   * 静默死亡（编译期零防护的契约陷阱）。resolve 是唯一放行闸门（EN-1）。 */
+  readonly resolve: (ac: ActionContext) => T | undefined;
   /** 执行行为。target 为 resolve 返回值，类型由泛型 T 保证。 */
   execute(ac: ActionContext, target: T): void;
 }

@@ -46,7 +46,8 @@ export const remoteMiningManagerSystem: System = {
       const remoteOps = roomMem.remoteOps ?? {};
 
       // 1. 评估现有运营：暂停过期、清理废弃。
-      maintainExistingOps(remoteOps, ctx.tick);
+      //    RM-3：返回被自己 claim 的房 — 现役远矿 creep 一并回收。
+      const selfClaimedRooms = maintainExistingOps(remoteOps, ctx.tick);
 
       // 2. 如果 active 运营数不足，从 intel 评选新目标。
       //    战略门禁：开辟新远矿点须获 empire-strategy 姿态授权
@@ -89,6 +90,28 @@ export const remoteMiningManagerSystem: System = {
       // 收集远矿房威胁（有视野的 active 运营房）— evaluateRemoteDemand 据此
       // 生成 remoteDefender 请求；缺少此输入时 defender 分支永不触发。
       const remoteThreats = collectRemoteThreats(remoteOps);
+
+      // RM-2：威胁失明持久化 — 与 InvaderCore blockedUntil 同款双轨。
+      // 只用瞬时集合的死角：威胁在场 → 经济 creep 被杀/flee 回家 → 房间失明
+      // → 检测集合空 → 经济孵化恢复 → 新 creep 抵达送死 — 循环送兵。
+      // 规则：有视野见威胁 → 写/续期 threatUntil；有视野确认清空 → 清除；
+      // 无视野 → 冷却未到期即维持威胁态（宁可少采一轮，不送一批兵）。
+      // collectRemoteThreats 只对有视野的房写键 — 键缺失即无视野。
+      for (const [rn, op] of Object.entries(remoteOps)) {
+        if (op.state !== "active") continue;
+        const observed = rn in remoteThreats ? remoteThreats[rn] : undefined;
+        if (observed === true) {
+          op.threatUntil = ctx.tick + CONFIG.remote.threatBlindHold;
+        } else if (observed === false) {
+          if (op.threatUntil !== undefined) op.threatUntil = undefined;
+        } else if (op.threatUntil !== undefined) {
+          if (ctx.tick < op.threatUntil) {
+            remoteThreats[rn] = true; // 失明期间维持威胁态。
+          } else {
+            op.threatUntil = undefined;
+          }
+        }
+      }
 
       // 收集 InvaderCore 压制房（结构不是 creep，FIND_HOSTILE_CREEPS 检测不到）。
       // 核心 100,000 hits，defender/reserver 均无力处理 — 该房进入止损模式：
@@ -136,7 +159,13 @@ export const remoteMiningManagerSystem: System = {
 
       // InvaderCore 压制房的现役远矿 creep 全部标记回收 —
       // harvester 采集被压制、reserver 空耗寿命，留守是持续净亏损。
-      recycleBlockedRoomCreeps(snapshot.roomName, blockedRooms);
+      // RM-3：被自己 claim 的房同样回收（运营已废弃，该房转本地闭环）。
+      recycleBlockedRoomCreeps(
+        snapshot.roomName,
+        selfClaimedRooms.length > 0
+          ? new Set([...blockedRooms, ...selfClaimedRooms])
+          : blockedRooms,
+      );
 
       const { requests } = evaluateRemoteDemand({
         homeRoom: snapshot.roomName,
@@ -168,17 +197,23 @@ export const remoteMiningManagerSystem: System = {
 function maintainExistingOps(
   remoteOps: Record<string, RemoteOp>,
   tick: number,
-): void {
+): string[] {
+  // RM-3：被自己 claim 的远矿房（扩张升级为正式殖民地）— 返回给调用方回收现役 creep。
+  const selfClaimed: string[] = [];
   for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state === "abandoned") continue;
 
-    // 归属校验（需视野）：目标房已被其他玩家占有 → 立即废弃。
+    // 归属校验（需视野）：目标房已有 owner → 废弃运营。
     // intel 对从未有视野的房间记录不到 owner（盲选是远矿自举的必经之路 —
     // 第一只远矿 creep 进房才产生视野），因此把校验放在获得视野之后，
     // 而非在候选筛选阶段排除所有未知房。
+    // RM-3 修复：原判定 `owner && !my` 漏掉「被自己 claim」— 该房已转入
+    // 本地经济闭环，远矿角色继续运营会与本地 harvester 抢矿位、
+    // reserver 对自有 controller 空耗 CLAIM 寿命 — 同样废弃并回收。
     const targetRoom = Game.rooms[roomName];
-    if (targetRoom?.controller?.owner && !targetRoom.controller.my) {
+    if (targetRoom?.controller?.owner) {
       op.state = "abandoned";
+      if (targetRoom.controller.my) selfClaimed.push(roomName);
       continue;
     }
 
@@ -218,6 +253,7 @@ function maintainExistingOps(
       delete remoteOps[roomName];
     }
   }
+  return selfClaimed;
 }
 
 /** 统计 active 状态的运营数。 */
@@ -311,6 +347,9 @@ function collectRemoteCreeps(homeRoom: string): RemoteCreepSummary[] {
   const result: RemoteCreepSummary[] = [];
   for (const creep of Object.values(Game.creeps)) {
     if (creep.memory.home !== homeRoom) continue;
+    // RD-1：回收中的 creep 不算编制 — 半血撤退的 defender / 被撤回的
+    // 经济 creep 已退出战斗力序列，计入会挡住接替者的孵化。
+    if (creep.memory.recycle === true) continue;
     const role = creep.memory.role ?? "unknown";
     // 只收集远矿角色。
     if (role !== "remoteHarvester" && role !== "remoteHauler" && role !== "reserver" && role !== "remoteDefender") {
@@ -388,3 +427,4 @@ function recycleBlockedRoomCreeps(homeRoom: string, blockedRooms: ReadonlySet<st
     creep.memory.recycle = true;
   }
 }
+

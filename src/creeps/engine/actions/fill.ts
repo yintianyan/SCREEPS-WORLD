@@ -127,6 +127,17 @@ export function fillStorage(): ActionCandidate<StructureStorage> {
       if (!ac.snapshot.storage) return undefined;
       // storage 有空闲容量时才送 — 满了则 fallthrough 到 haulFillTarget
       if (ac.snapshot.storage.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return undefined;
+      // HL-1 修复：战时 tower 补给优先于囤积。
+      // 威胁在场且存在缺能 tower 时返回 undefined，放行 haulFillTarget
+      // （其内部把 tower 置顶）。原先 fillStorage 排在 haulFillTarget 之前
+      // 无条件命中 — 入侵期间 hauler 照常把能量囤进 storage，而 distributor
+      // 在 tier≥1 时跳过 tower（水位节流）→ 双泵同时缺位，tower 断能真空。
+      if (ac.snapshot.threatCreeps.length > 0) {
+        const towerStarved = ac.snapshot.fillTargets.some(
+          t => t.structureType === STRUCTURE_TOWER,
+        );
+        if (towerStarved) return undefined;
+      }
       return ac.snapshot.storage;
     },
     execute: (ac, st) => {

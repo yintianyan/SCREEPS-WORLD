@@ -21,6 +21,24 @@ interface StructureCacheEntry {
   count: number;
   positions: number[];
   checkedTick: number;
+  /** MV-2：路网 revision — 结构布局指纹变化时递增（plan §5.7.5 原设计）。
+   * 持久化路径按 revision 失效而非「结构总数」：总数键有两个缺陷 —
+   * a) 任一 site 创建/完工使全房所有 creep 的路径同 tick 集体失效
+   *    （建造期每 tick 1 site → 高频全量重算，CPU 突刺）… 其实总数变化
+   *    本就该失效；真正的缺陷是 b) 一拆一建总数不变 → 路径穿新墙不失效。
+   * 指纹 = 位置数组的轻量散列，捕捉「布局变化」而非「数量变化」。 */
+  revision: number;
+  /** 位置数组指纹（内部用，revision 递增判据）。 */
+  fingerprint: number;
+}
+
+/** 位置数组轻量指纹 — O(n) 求和散列，捕捉布局变化。 */
+function fingerprintPositions(positions: readonly number[]): number {
+  let h = positions.length;
+  for (let i = 0; i < positions.length; i++) {
+    h = (h * 31 + positions[i]!) | 0;
+  }
+  return h;
 }
 
 /**
@@ -68,7 +86,13 @@ export function preloadStructureCache(
   const g = globalCache() as any;
   if (!g.__structCache) g.__structCache = {};
   const { count, positions } = buildStructurePositions(structures, sites);
-  g.__structCache[roomName] = { count, positions, checkedTick: Game.time };
+  // MV-2：布局指纹变化才 bump revision — 持久化路径按 revision 失效。
+  const fp = fingerprintPositions(positions);
+  const prev: StructureCacheEntry | undefined = g.__structCache[roomName];
+  const revision = prev === undefined || prev.fingerprint !== fp
+    ? (prev?.revision ?? 0) + 1
+    : prev.revision;
+  g.__structCache[roomName] = { count, positions, checkedTick: Game.time, revision, fingerprint: fp };
 }
 
 // ─── 静态占位缓存（站桩 creep 位置）────────────────────────
@@ -131,15 +155,17 @@ function ensureStructureCache(roomName: string): StructureCacheEntry | undefined
 
   const structures = room.find(FIND_STRUCTURES);
   const sites = room.find(FIND_MY_CONSTRUCTION_SITES);
-  const count = structures.length + sites.length;
 
-  if (entry && entry.count === count) {
-    entry.checkedTick = Game.time;
-    return entry;
-  }
-
+  // 审查修正（MV-2）：删除旧的「count 相等即续期」短路 — 一拆一建总数
+  // 不变正是 revision 机制要捕捉的场景，短路会让指纹/revision 永不更新；
+  // 且部署前残留条目缺 revision 字段，短路续期会返回畸形条目。
+  // 回退路径与 preload 走完全相同的指纹/revision 计算。
   const built = buildStructurePositions(structures, sites);
-  entry = { count: built.count, positions: built.positions, checkedTick: Game.time };
+  const fp = fingerprintPositions(built.positions);
+  const revision = entry === undefined || entry.fingerprint !== fp
+    ? (entry?.revision ?? 0) + 1
+    : entry.revision;
+  entry = { count: built.count, positions: built.positions, checkedTick: Game.time, revision, fingerprint: fp };
   g.__structCache[roomName] = entry;
   return entry;
 }
@@ -341,7 +367,8 @@ function tryCorridorPath(creep: Creep, target: RoomPosition): ScreepsReturnCode 
 
 interface CreepPathEntry {
   targetKey: number;
-  structCount: number;
+  /** MV-2：路网 revision — 布局变化时失效（替代旧 structCount 总数键）。 */
+  structRevision: number;
   path: RoomPosition[];
 }
 
@@ -354,13 +381,13 @@ function getCreepPathCache(): Record<string, CreepPathEntry> {
 function tryPersistedPath(
   creep: Creep,
   targetPacked: number,
-  structCount: number,
+  structRevision: number,
 ): ScreepsReturnCode | undefined {
   const cache = getCreepPathCache();
   const entry = cache[creep.name];
   if (!entry) return undefined;
   if (entry.targetKey !== targetPacked) return undefined;
-  if (entry.structCount !== structCount) return undefined;
+  if (entry.structRevision !== structRevision) return undefined;
 
   const result = creep.moveByPath(entry.path);
   if (result === ERR_NOT_FOUND || result === ERR_INVALID_ARGS) {
@@ -374,7 +401,7 @@ function computeAndPersistPath(
   creep: Creep,
   pos: RoomPosition,
   targetPacked: number,
-  structCount: number,
+  structRevision: number,
 ): RoomPosition[] | undefined {
   const result = PathFinder.search(
     creep.pos,
@@ -402,7 +429,7 @@ function computeAndPersistPath(
 
   if (result.incomplete || result.path.length === 0) return undefined;
 
-  getCreepPathCache()[creep.name] = { targetKey: targetPacked, structCount, path: result.path };
+  getCreepPathCache()[creep.name] = { targetKey: targetPacked, structRevision, path: result.path };
   return result.path;
 }
 
@@ -420,7 +447,14 @@ function computeAndPersistPath(
 interface InterRoomCacheEntry {
   exitDir: ExitConstant;
   exitPos: { x: number; y: number };
+  /** MV-4：缓存写入 tick — 出口缓存加 TTL，避免出口格被新结构/敌方封堵后
+   * 永不刷新（原实现仅严重卡位才清）。 */
+  cachedAt: number;
 }
+
+/** MV-4：跨房出口缓存 TTL。房间地形静态，但出口最近格随 creep 位置/
+ * 封堵变化 — 给一个中等窗口平衡「避免每 tick findExitTo」与「不长期用陈旧出口」。 */
+const INTER_ROOM_CACHE_TTL = 100;
 
 function getInterRoomCache(): Record<string, InterRoomCacheEntry> {
   const g = globalCache() as any;
@@ -433,12 +467,19 @@ function cacheInterRoomExit(fromRoom: string, toRoom: string, exitDir: ExitConst
   getInterRoomCache()[`${fromRoom}:${toRoom}`] = {
     exitDir,
     exitPos: { x: exitPos.x, y: exitPos.y },
+    cachedAt: Game.time,
   };
 }
 
-/** 查询缓存的跨房间出口信息。 */
+/** 查询缓存的跨房间出口信息（MV-4：TTL 过期视为未命中）。 */
 function getCachedInterRoomExit(fromRoom: string, toRoom: string): InterRoomCacheEntry | undefined {
-  return getInterRoomCache()[`${fromRoom}:${toRoom}`];
+  const entry = getInterRoomCache()[`${fromRoom}:${toRoom}`];
+  if (!entry) return undefined;
+  if (Game.time - (entry.cachedAt ?? 0) > INTER_ROOM_CACHE_TTL) {
+    delete getInterRoomCache()[`${fromRoom}:${toRoom}`];
+    return undefined;
+  }
+  return entry;
 }
 
 /** 清除缓存的跨房间出口信息（卡位脱困时调用，强制下次重新选出口）。 */
@@ -452,7 +493,8 @@ function clearInterRoomExit(fromRoom: string, toRoom: string): void {
  * 向目标房间方向移动（通过最近出口），带道路优先 + 跨房间缓存 + 卡位脱困。
  *
  * 卡位脱困（与 moveToTarget 对齐但精简）：
- *   Level 0（正常）：reusePath: 5 + ignoreCreeps: true
+ *   Level 0（正常）：reusePath: 5（ignoreCreeps 引擎默认 false — 跨房长途
+ *     把 creep 当障碍更稳妥，MV-4 修正原注释「ignoreCreeps: true」的漂移）
  *   Level 1（stuck >= threshold）：reusePath: 0 强制重算路径
  *   Level 2（stuck >= threshold + repathLimit）：清出口缓存 + 换出口位置
  */
@@ -472,7 +514,7 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
       creep.moveTo(exit, {
         reusePath: 0,
         plainCost: 2,
-        swampCost: 10,
+        swampCost: fatigueSwampCost(creep),
         ignoreCreeps: false,
         costCallback: structureCostCallback,
       });
@@ -501,13 +543,49 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
     const result = creep.moveTo(exit, {
       reusePath,
       plainCost: 2,
-      swampCost: 10,
+      // MV-4：与 moveToTarget 一致用疲劳感知 swamp 成本 — 重载跨房 creep
+      // （remote-hauler 满载回家）不再被固定 10 引进沼泽泥潭。
+      swampCost: fatigueSwampCost(creep),
       costCallback: structureCostCallback,
     });
     if (result === OK || result === ERR_TIRED) {
       recordTraffic(creep);
     }
   }
+}
+
+/**
+ * MV-4：到达目标房但站在边界格（exit tile）— 内移一步防引擎弹回。
+ * 停在 exit tile 上的 creep 下 tick 会被引擎弹回邻房，若角色当 tick idle
+ * 则形成「进房 → 弹回 → 再进房」横跳。返回 true 表示已处理（本 tick 内移）。
+ *
+ * 审查修正：不再盲移向 (25,25) — 内侧恰为地形墙时 move 静默失败，
+ * creep 卡边界 + 角色管线被抑制，形成比修复前更差的弹房死循环。
+ * 改为扫内侧邻格选可走者；全不可走则返回 false 交还角色管线
+ * （角色自己的寻路会绕行进房）。
+ */
+function stepOffEdge(creep: Creep): boolean {
+  const { x, y } = creep.pos;
+  if (x !== 0 && x !== 49 && y !== 0 && y !== 49) return false;
+  // mock 环境无 getTerrain 时不处理（归位同款能力守卫）。
+  if (typeof creep.room.getTerrain !== "function") return false;
+  const terrain = creep.room.getTerrain();
+  // 内移方向：先算指向房心的粗方向分量，再枚举含斜向的内侧候选。
+  const dxs = x === 0 ? [1] : x === 49 ? [-1] : [0, 1, -1];
+  const dys = y === 0 ? [1] : y === 49 ? [-1] : [0, 1, -1];
+  for (const dx of dxs) {
+    for (const dy of dys) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx <= 0 || nx >= 49 || ny <= 0 || ny >= 49) continue; // 仍是边界格不算逃离
+      if (terrain.get(nx, ny) === TERRAIN_MASK_WALL) continue;
+      const dir = creep.pos.getDirectionTo(nx, ny);
+      creep.move(dir as DirectionConstant);
+      return true;
+    }
+  }
+  return false; // 无可走内侧格 — 交还角色管线，由其寻路绕行。
 }
 
 /**
@@ -542,13 +620,20 @@ export function ensureHome(creep: Creep): boolean {
       (mode === "idle" && creep.room.name !== remoteTarget) ||
       (mode === "work" && creep.memory.role === "remoteHauler");
     const dest = goHome ? home : remoteTarget;
-    if (creep.room.name === dest) return true;
+    if (creep.room.name === dest) {
+      // MV-4：边界格防弹回 — 先内移一步再交还角色管线。
+      if (stepOffEdge(creep)) return false;
+      return true;
+    }
     moveTowardRoom(creep, dest);
     return false;
   }
 
   // 本地角色：原行为
-  if (creep.room.name === home) return true;
+  if (creep.room.name === home) {
+    if (stepOffEdge(creep)) return false;
+    return true;
+  }
   moveTowardRoom(creep, home);
   return false;
 }
@@ -638,10 +723,10 @@ export function moveToTarget(
   if (stuckTicks === 0 && range > 3) {
     const targetPacked = packPos(pos);
     const structEntry = ensureStructureCache(creep.room.name);
-    const structCount = structEntry?.count ?? -1;
+    const structRevision = structEntry?.revision ?? -1;
 
     // 1. 跨 tick 持久化。
-    const persistedResult = tryPersistedPath(creep, targetPacked, structCount);
+    const persistedResult = tryPersistedPath(creep, targetPacked, structRevision);
     if (persistedResult !== undefined) {
       if (persistedResult === OK || persistedResult === ERR_TIRED) recordTraffic(creep);
       return persistedResult;
@@ -663,7 +748,7 @@ export function moveToTarget(
     }
 
     // 4. 新计算 + 持久化 + 共享。
-    const path = computeAndPersistPath(creep, pos, targetPacked, structCount);
+    const path = computeAndPersistPath(creep, pos, targetPacked, structRevision);
     if (path) {
       getPathShareCache().set(cacheKey, path);
       const result = creep.moveByPath(path);

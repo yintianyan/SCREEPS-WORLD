@@ -11,7 +11,7 @@
  *   - 幂等：重复执行不再递增 revision
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { maintainMemory } from "../../../src/kernel/memory";
+import { maintainMemory, runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";
 import { resetGlobals } from "../../role-helpers";
 
@@ -49,7 +49,7 @@ function setupV5Memory(): void {
 describe("migration v5 → v6（模板 v1 → v2）", () => {
   it("v1 布局升级到 v2 并触发重规划", () => {
     setupV5Memory();
-    maintainMemory();
+    runMigrations();
 
     const layout = (globalThis as any).Memory.rooms.W7N4.layout;
     expect(layout.templateId).toBe("compact-core-v2");
@@ -61,7 +61,7 @@ describe("migration v5 → v6（模板 v1 → v2）", () => {
 
   it("未开工的 core.* 任务被清理，site/done 与非 core 任务保留", () => {
     setupV5Memory();
-    maintainMemory();
+    runMigrations();
 
     const queue = (globalThis as any).Memory.rooms.W7N4.buildQueue as any[];
     const keys = queue.map(t => `${t.key}:${t.state}`);
@@ -74,9 +74,9 @@ describe("migration v5 → v6（模板 v1 → v2）", () => {
 
   it("幂等：重复执行不再修改 revision", () => {
     setupV5Memory();
-    maintainMemory();
-    maintainMemory();
-    maintainMemory();
+    runMigrations();
+    runMigrations();
+    runMigrations();
 
     const layout = (globalThis as any).Memory.rooms.W7N4.layout;
     expect(layout.revision).toBe(4); // 只递增一次
@@ -90,7 +90,7 @@ describe("migration v5 → v6（模板 v1 → v2）", () => {
       kernel: {},
       rooms: { W9N9: { spawnQueue: [], buildQueue: [] } },
     };
-    expect(() => maintainMemory()).not.toThrow();
+    expect(() => runMigrations()).not.toThrow();
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 });

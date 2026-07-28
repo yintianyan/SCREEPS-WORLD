@@ -88,6 +88,7 @@ Object.assign(globalThis as Record<string, unknown>, {
 
   // look 常量
   LOOK_STRUCTURES: "structure",
+  LOOK_CONSTRUCTION_SITES: "constructionSite",
   LOOK_CREEPS: "creep",
 
   CONTROLLER_STRUCTURES: {

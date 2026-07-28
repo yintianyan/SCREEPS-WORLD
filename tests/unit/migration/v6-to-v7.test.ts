@@ -12,7 +12,7 @@
  *   - 无 kernel 字段时正常初始化
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { maintainMemory } from "../../../src/kernel/memory";
+import { maintainMemory, runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";
 import { resetGlobals } from "../../role-helpers";
 
@@ -28,7 +28,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       kernel: {},
       rooms: {},
     };
-    expect(() => maintainMemory()).not.toThrow();
+    expect(() => runMigrations()).not.toThrow();
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     // tuning 字段可选——tuning-engine 首次运行时自动初始化，迁移不强建。
     expect((globalThis as any).Memory.kernel.tuning).toBeUndefined();
@@ -46,7 +46,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       },
       rooms: {},
     };
-    maintainMemory();
+    runMigrations();
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const tuning = (globalThis as any).Memory.kernel.tuning;
@@ -66,7 +66,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       },
       rooms: {},
     };
-    maintainMemory();
+    runMigrations();
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const tuning = (globalThis as any).Memory.kernel.tuning;
@@ -83,7 +83,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       },
       rooms: {},
     };
-    maintainMemory();
+    runMigrations();
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect((globalThis as any).Memory.kernel.tuning).toBeUndefined();
@@ -98,7 +98,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       },
       rooms: {},
     };
-    maintainMemory();
+    runMigrations();
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect((globalThis as any).Memory.kernel.tuning).toBeUndefined();
@@ -121,9 +121,9 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       },
       rooms: {},
     };
-    maintainMemory();
-    maintainMemory();
-    maintainMemory();
+    runMigrations();
+    runMigrations();
+    runMigrations();
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const tuning = (globalThis as any).Memory.kernel.tuning;
@@ -138,6 +138,8 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       creeps: {},
       rooms: {},
     };
+    // K-5 后 kernel 真实顺序：runMigrations（独立错误边界）→ maintainMemory。
+    expect(() => runMigrations()).not.toThrow();
     expect(() => maintainMemory()).not.toThrow();
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     // maintainMemory 会惰性初始化失守房记录（lostRooms）— kernel 不再是纯空对象。
@@ -161,7 +163,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       },
       rooms: {},
     };
-    maintainMemory();
+    runMigrations();
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const tuning = (globalThis as any).Memory.kernel.tuning;
@@ -189,7 +191,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       },
       rooms: {},
     };
-    maintainMemory();
+    runMigrations();
 
     const tuning = (globalThis as any).Memory.kernel.tuning;
     // lastEval 应从单对象格式迁移为 Record 格式
@@ -218,7 +220,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       },
       rooms: {},
     };
-    maintainMemory();
+    runMigrations();
 
     const tuning = (globalThis as any).Memory.kernel.tuning;
     expect(Object.keys(tuning.lastEval)).toHaveLength(2);

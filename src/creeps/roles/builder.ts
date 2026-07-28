@@ -17,6 +17,7 @@
  */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionContext, RolePolicy } from "../engine/action-types";
+import { CONFIG } from "../../config";
 import {
   buildAssignmentSite,
   buildNearestSite,
@@ -48,26 +49,27 @@ function builderGate(ac: ActionContext): boolean {
 }
 
 /**
- * 动态计算 builder 从 storage 取能上限 — 按 storage 水位分档缩放。
+ * 动态计算 builder 从 storage 取能上限 — 水位权限表（绝对能量刻度）。
  *
- * 与 distributor 水位分级对齐，确保低水位时 builder 不抢高优先级消费者的能量：
- *   - 高水位 (>20%)：放开到 carry 满载（库存充足，builder 全速建造）
- *   - 中水位 (10%-20%)：限 200/tick（节流但维持基本建造）
- *   - 低水位 (<10%)：限 50/tick（仅维持最低建造，让 hauler 优先补给 spawn/extension）
- *
- * 比 distributor 的阈值更保守：builder 是 P2，storage 水位低时 tier 系统会门禁建造
- * （recovery 跳过，conserve 只建 critical），取能也应同步收紧。
+ * B-1 修复：原比例制（>20%/>10% 折合 20 万/10 万能量）在发展期房间
+ * 永远落在最低两档（8 万库存都只给 50/趟）— 与 distributorTiers 的
+ * 历史教训同型（比例刻度系统性错误）。现改用同一参照系的绝对阈值，
+ * 且比 distributor 保守一档（builder 是 P2 发展角色）：
+ *   ≥ full(50k)：carry 满载（库存充足全速建造）
+ *   ≥ sustained(10k)：200/趟（节流但维持建造）
+ *   ≥ low(2k)：50/趟（最低限度，让 distributor 优先喂 spawn/extension）
+ *   <  low(2k)：0 — withdrawStorageCapped 的 resolve 拒绝，
+ *      fallthrough 到 container/harvest（floor 下沉，与 upgrader 同手法）。
  */
 function builderStorageLimit(ac: ActionContext): number {
   const st = ac.snapshot.storage;
   if (!st) return 0;
   const energy = st.store.getUsedCapacity(RESOURCE_ENERGY);
-  const capacity = st.store.getCapacity(RESOURCE_ENERGY);
-  if (capacity === 0) return 0;
-  const ratio = energy / capacity;
-  if (ratio > 0.2) return ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
-  if (ratio > 0.1) return 200;
-  return 50;
+  const tiers = CONFIG.economy.distributorTiers;
+  if (energy >= tiers.full) return ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
+  if (energy >= tiers.sustained) return 200;
+  if (energy >= tiers.low) return 50;
+  return 0;
 }
 
 const policy: RolePolicy = {

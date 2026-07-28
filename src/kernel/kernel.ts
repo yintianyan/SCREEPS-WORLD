@@ -6,7 +6,8 @@ import type {
   System,
   TickContext,
 } from "./contracts";
-import { recordSkip, flushSkips, maintainMemory } from "./memory";
+import { recordSkip, flushSkips, maintainMemory, runMigrations } from "./memory";
+import { systemPhase } from "./phase";
 import { requestSegments, flushSegments } from "./segment-store";
 import { measuredRun, safeRun, safeRunBuild } from "./safe-run";
 import { createBudget } from "./scheduler";
@@ -79,7 +80,10 @@ export class Kernel {
     //    空结构可能被缓存并在 flush 时整体覆盖 segment 历史数据。
     safeRun("segments-request", () => requestSegments(), true);
 
-    // 3. Memory — 迁移、清理、默认值。关键步骤：永不冷却。
+    // 3. Memory — 迁移与日常维护拆分为两个错误边界（K-5）：
+    //    迁移 throw 不连坐死 creep 清理/房间兜底（防 Memory.creeps 慢性泄漏）。
+    //    关键步骤：永不冷却。
+    safeRun("memory-migrate", () => runMigrations(), true);
     safeRun("memory", () => maintainMemory(), true);
 
     // 3.5 遥测 — 初始化单 tick 计数器。
@@ -161,6 +165,11 @@ export class Kernel {
       if (!room.controller?.my) continue;
       const snapshot = safeRunBuild(room.name, () =>
         buildRoomSnapshot(room, globalSourceOccupancy, globalCreepEnergy, globalPendingHarvesters),
+        // K-1：快照是 P0 级基础设施 — 构建失败通常是确定性代码 bug，
+        // 非 critical 会在连续 3 次失败后冷却 80 tick，该房对所有消费
+        // 快照的系统/角色隐身（spawn/塔防/全角色停摆）。critical=true
+        // 让失败走限流日志暴露而非静默冷却，与 maintainMemory 同待遇。
+        true,
       );
       if (snapshot) ctx._addSnapshot(snapshot);
     }
@@ -186,7 +195,9 @@ export class Kernel {
     // 使用缓存的已排序 systems 列表（构造时构建）。
     for (const system of this.sortedSystems) {
       if (!this.shouldRunSystem(system, ctx)) {
-        recordSkip(`system/${system.name}/interval`);
+        // K-6：interval 跳过是计划内行为，不记 skipReason —
+        // 与 budget/colony-state 等异常跳过混入同一表会让遥测
+        // skipHotspot 长期被百级 interval 计数淹没，真实信号不可见。
         continue;
       }
       // Recovery / 关键基建缺失豁免：construction-manager 和 layout-planner
@@ -215,8 +226,13 @@ export class Kernel {
 
   private shouldRunSystem(system: System, ctx: Context): boolean {
     // 间隔检查：最多每 N tick 运行一次。
+    // K-6：按系统名哈希做相位偏移 — 原先 tick % interval === 0 使同
+    // interval 的系统全部在同一 tick 扎堆运行（每 10 tick 一个 CPU
+    // 尖峰节律），plan「错峰」原则未落实到系统层。
+    // 内部有二级取模调度的系统必须用 systemPhase() 做相位相对判定。
     if (system.interval && system.interval > 1) {
-      if (ctx.tick % system.interval !== 0) return false;
+      const phase = systemPhase(system.name, system.interval);
+      if (ctx.tick % system.interval !== phase) return false;
     }
     return true;
   }

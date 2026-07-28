@@ -182,6 +182,9 @@ export function mockCreep(opts: MockCreepOpts = {}): any {
     build: vi.fn(() => 0),
     upgradeController: vi.fn(() => 0),
     repair: vi.fn(() => 0),
+    attack: vi.fn(() => 0),
+    hits: 1000,
+    hitsMax: 1000,
     moveTo: vi.fn(() => 0),
     move: vi.fn(() => 0),
     moveByPath: vi.fn(() => -11), // ERR_NOT_FOUND — 默认不命中共享路径

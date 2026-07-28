@@ -1,5 +1,7 @@
 import { CONFIG } from "../config";
 import { globalCache, type ActionCpuEntry } from "./global-cache";
+import { recordSkip } from "./memory";
+import { EventKind, recordEvent } from "./event-log";
 
 /** 如果此 label 在限频窗口内已记录过日志则返回 true。 */
 function shouldSuppress(label: string, tick: number): boolean {
@@ -20,13 +22,19 @@ function formatError(error: unknown): string {
 // 共享的错误处理逻辑 — safeRun 和 safeRunBuild 共用
 // ──────────────────────────────────────────────
 
-/** 检查非关键 label 是否处于冷却期。 */
+/** 检查非关键 label 是否处于冷却期。
+ *
+ * K-2a：冷却跳过必须记 skipReason（plan §3.2「不能静默丢失」）—
+ * 原实现静默 return，被冷却的 P1 系统在遥测中完全不可见。
+ */
 function isCoolingDown(label: string, critical: boolean): boolean {
   if (critical) return false;
   const g = globalCache();
   if (!g.pluginCooldowns) g.pluginCooldowns = new Map();
   const cooldown = g.pluginCooldowns.get(label);
-  return cooldown !== undefined && Game.time < cooldown;
+  const cooling = cooldown !== undefined && Game.time < cooldown;
+  if (cooling) recordSkip(`${label}/cooldown`);
+  return cooling;
 }
 
 /** 成功时重置错误计数。 */
@@ -52,9 +60,15 @@ function handleError(label: string, error: unknown, critical: boolean): void {
 
     if (count >= 3) {
       if (!g.pluginCooldowns) g.pluginCooldowns = new Map();
+      // K-2b：计数不清零 — 冷却期满后再失败从上次计数继续递增，
+      // 冷却时长 80→90→…→200 真递增（plan §3.3「50 至 200 tick」）。
+      // 原实现进冷却即清零 → 每轮从 3 重新触发，时长恒为 80（死代码）。
+      // 成功一次仍由 resetErrorCount 归零（自愈路径不变）。
       const cooldownTicks = Math.min(50 + count * 10, 200);
       g.pluginCooldowns.set(label, Game.time + cooldownTicks);
-      g.errorCounts.set(label, 0); // 进入冷却后重置计数。
+      // K-2c：冷却是插件被禁用的帝国级事件 — 写入事件日志（此前
+      // EventKind.PluginCooldown 枚举存在但从未被记录，观测链断）。
+      recordEvent(EventKind.PluginCooldown, label, [cooldownTicks]);
     }
   }
 }

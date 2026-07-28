@@ -23,6 +23,7 @@ import {
 } from "../engine/actions";
 import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
+import { releaseAssignment } from "../support";
 import { defineRole } from "../engine/role-runner";
 
 /** 向 assignment 指定的 target 送能。 */
@@ -32,13 +33,25 @@ function fillAssignmentTarget(): ActionCandidate<AnyOwnedStructure> {
     resolve: (ac) => {
       if (!ac.assignment?.targetId) return undefined;
       const target = getObjectById(ac.assignment.targetId as Id<AnyOwnedStructure>);
-      return target ?? undefined;
+      if (!target) return undefined;
+      // W-1 修复：目标已满时释放 assignment 并返回 undefined，
+      // 放行 work 链 fallthrough（repairCritical / fillTarget / upgradeController）。
+      // 原先容量检查缺失 → 携能 worker 对满目标每 tick transfer 得 ERR_FULL，
+      // execute 已被调用即终止候选链 — 携能活锁，能量冻结在背包里。
+      // 资格检查前置到 resolve 是唯一放行闸门（EN-1 公理）。
+      const store = (target as AnyStoreStructure).store;
+      if (store && store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+        releaseAssignment(ac.creep);
+        return undefined;
+      }
+      return target;
     },
     execute: (ac, t) => {
       const result = ac.creep.transfer(t, RESOURCE_ENERGY);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, t);
       } else if (result === ERR_FULL || result === ERR_NOT_ENOUGH_RESOURCES) {
+        // 残余竞态防护：同 tick 他人抢先填满 — 空载时切回 acquire。
         const used = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY);
         if (used === 0) ac.creep.memory.mode = "acquire";
       }

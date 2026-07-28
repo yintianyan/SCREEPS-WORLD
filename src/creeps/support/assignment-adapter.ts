@@ -54,15 +54,33 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
     const targetExists = !assignment.targetId || getObjectById(assignment.targetId) !== null;
     const sourceExists = !assignment.sourceId || getObjectById(assignment.sourceId) !== null;
 
-    if (validateAssignmentRules(assignment, ctx.tick, layoutRevision, targetExists, sourceExists)) {
+    // AS-1（HL-2 机制根源）：任务必须仍在本 tick 任务池中。
+    // 原四条规则都不查池 — haul 任务只为「含能量 container」生成，
+    // container 被抽空后任务下 tick 消失，但持有者的校验仍通过
+    // （container 对象还在）→ 每 tick 无条件续约 → 僵尸 assignment
+    // 永不释放，占据 memory 且逃逸抢占（invalidate 只清池内任务）。
+    // 保守放行两种情况（防误杀）：pool 缺失（reset 首 tick）；
+    // 本房任务列表整体缺失（单房快照构建失败 → 该房任务未生成，
+    // 不代表任务真消失 — 审查修正，防单次快照异常放大为全房重分配）。
+    const validationPool = getPool(ctx);
+    const roomTaskList = validationPool?.getRoomTasks(home);
+    const taskAlive = validationPool === undefined ||
+      roomTaskList === undefined ||
+      validationPool.findTask(assignment.id) !== undefined;
+
+    if (
+      taskAlive &&
+      validateAssignmentRules(assignment, ctx.tick, layoutRevision, targetExists, sourceExists)
+    ) {
       assignment.leaseUntil = ctx.tick + CONFIG.assignment.leaseDuration;
       return assignment;
     }
 
     // 无效 — 确定失效原因并记录事件。
-    // failReasonCode: 0=lease 过期 1=revision 变化 2=target 消失 3=source 消失
+    // failReasonCode: 0=lease 过期 1=revision 变化 2=target 消失 3=source 消失 4=任务已出池
     let failReason = 0;
-    if (ctx.tick > assignment.leaseUntil) failReason = 0;
+    if (!taskAlive) failReason = 4;
+    else if (ctx.tick > assignment.leaseUntil) failReason = 0;
     else if (assignment.revision !== layoutRevision) failReason = 1;
     else if (assignment.targetId && !targetExists) failReason = 2;
     else if (assignment.sourceId && !sourceExists) failReason = 3;

@@ -304,13 +304,20 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
 ];
 
 /**
- * 维护 Memory：执行版本化迁移、清理死亡 creep、初始化默认值。
- * 每 tick 开头调用一次。
+ * 执行版本化迁移（K-5：与日常维护拆分为独立错误边界）。
+ * 迁移中途 throw 不再连坐死 creep 清理/房间兜底 — 持续失败的迁移
+ * 曾使 maintainMemory 后半段整 tick 跳过，Memory.creeps 慢性泄漏。
  */
-export function maintainMemory(): void {
+export function runMigrations(): void {
   const current = Memory.schemaVersion ?? 0;
   if (current < CONFIG.memory.schemaVersion) migrateMemory(current);
+}
 
+/**
+ * 维护 Memory：清理死亡 creep、初始化默认值、失守房宽限清理。
+ * 每 tick 开头调用一次（迁移由 runMigrations 独立执行，见 K-5）。
+ */
+export function maintainMemory(): void {
   // 确保根结构存在。
   Memory.creeps ??= {};
   Memory.rooms ??= {};

@@ -529,3 +529,88 @@ describe("hauler — flee 安全充能（P0-2）", () => {
     expect(creep.transfer).not.toHaveBeenCalled();
   });
 });
+
+describe("hauler — H-2 满载矿物搬运活锁修复", () => {
+  it("满载能量的 hauler 遇矿物 container 不再抢占 — 放行 fillStorage", () => {
+    const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
+    (container.store as any).H = 500; // container 含矿物
+    const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
+    const snap = mockSnapshot({ rcl: 4, containers: [container], storage });
+    // 满载能量：free=0 → withdraw 相 resolve 必须返回 undefined。
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    // 修复前：withdraw(container, "H") 得 ERR_FULL 静默空转，全链阻塞。
+    expect(creep.withdraw).not.toHaveBeenCalled();
+    expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
+  });
+
+  it("有空间的 hauler 照常搬运矿物（回归保护）", () => {
+    const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
+    (container.store as any).H = 500;
+    const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
+    const snap = mockSnapshot({ rcl: 4, containers: [container], storage });
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 25, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    expect(creep.withdraw).toHaveBeenCalledWith(container, "H");
+  });
+});
+
+describe("hauler — HL-1 战时 tower 补给优先于囤积", () => {
+  /** 威胁在场但在 fleeRange(10) 外（不触发 flee）。 */
+  function farThreatCreep(): any {
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 50, capacity: 50, mode: "work" });
+    creep.pos.getRangeTo = vi.fn(() => 15); // 威胁距离 15 > fleeRange 10
+    return creep;
+  }
+
+  it("威胁在场且 tower 缺能 → 跳过 fillStorage 直填 tower", () => {
+    const hostile = mockHostile();
+    const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
+    const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
+    const snap = mockSnapshot({
+      rcl: 4, storage, towers: [tower],
+      fillTargets: [tower], hostileCreeps: [hostile],
+    });
+    const creep = farThreatCreep();
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    // 修复前：fillStorage 无条件命中 → 能量囤 storage，tower 断能真空。
+    expect(creep.transfer).toHaveBeenCalledWith(tower, "energy");
+  });
+
+  it("威胁在场但无缺能 tower → 照常囤 storage", () => {
+    const hostile = mockHostile();
+    const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
+    const snap = mockSnapshot({
+      rcl: 4, storage, fillTargets: [], hostileCreeps: [hostile],
+    });
+    const creep = farThreatCreep();
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
+  });
+
+  it("和平时期 fillStorage 优先于 tower（现有行为不回归）", () => {
+    const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
+    const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
+    const snap = mockSnapshot({
+      rcl: 4, storage, towers: [tower], fillTargets: [tower], hostileCreeps: [],
+    });
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
+  });
+});

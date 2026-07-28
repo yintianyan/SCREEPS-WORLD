@@ -25,7 +25,17 @@ function attackNearestThreat(): ActionCandidate<Creep> {
     resolve: (ac) => {
       const threats = ac.snapshot.threatCreeps;
       if (threats.length === 0) return undefined;
-      return ac.creep.pos.findClosestByRange(threats as Creep[]) ?? (threats[0] as Creep);
+      // DF-1：追击边界 — 参照 remote-defender 的房内限定模式。
+      // a) defender 自己被挤/弹出 home 房时不接敌（ensureHome 会导航回来）；
+      // b) 贴出口（边界 1 格内）的敌人不追 — exit kiting 会把 defender
+      //    反复拉到边界格被引擎弹房。放弃的目标交给塔处理（塔无射程死角），
+      //    全部威胁都贴边时 resolve miss → park 待命。
+      if (ac.creep.room.name !== ac.creep.memory.home) return undefined;
+      const engageable = (threats as Creep[]).filter(
+        t => t.pos.x > 1 && t.pos.x < 48 && t.pos.y > 1 && t.pos.y < 48,
+      );
+      if (engageable.length === 0) return undefined;
+      return ac.creep.pos.findClosestByRange(engageable) ?? engageable[0];
     },
     execute: (ac, target) => {
       const result = ac.creep.attack(target);

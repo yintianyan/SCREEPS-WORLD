@@ -106,6 +106,26 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       reserver: countRemotePending(spawnQueue, "reserver", targetRoom),
     };
 
+    // Remote Defender — 有威胁时生成（先应战）。
+    const hasThreats = input.remoteThreats?.[targetRoom] ?? false;
+    if (CONFIG.remote.enableDefender && hasThreats) {
+      const defenderPending = countRemotePending(spawnQueue, "remoteDefender", targetRoom);
+      const defenderTotal = (counts.remoteDefender ?? 0) + defenderPending;
+      if (defenderTotal < 1) {
+        const key = spawnKey("remoteDefender", homeRoom, defenderTotal, targetRoom);
+        const body = selectBody("remoteDefender", energyCapacityAvailable);
+        requests.push(createRemoteRequest(
+          "remoteDefender", homeRoom, targetRoom, defenderTotal,
+          key, 1, body, tick,
+        ));
+      }
+    }
+
+    // RM-2：威胁在场（含失明冷却期 — 系统层已把 threatUntil 合并进
+    // remoteThreats）时暂停经济孵化：经济 creep 零战力，威胁未清时
+    // 补充的每一批都是送死。defender 已在上方评估（先应战再恢复运营）。
+    if (hasThreats) continue;
+
     // 1. Remote Harvester — 每目标 1 个（可配置）。
     const harvesterTarget = CONFIG.remote.harvestersPerTarget;
     const harvesterTotal = (counts.remoteHarvester ?? 0) + pending.remoteHarvester;
@@ -185,22 +205,8 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       }
     }
 
-    // 4. Remote Defender — 有威胁时生成。
-    if (CONFIG.remote.enableDefender) {
-      const hasThreats = input.remoteThreats?.[targetRoom] ?? false;
-      if (hasThreats) {
-        const defenderPending = countRemotePending(spawnQueue, "remoteDefender", targetRoom);
-        const defenderTotal = (counts.remoteDefender ?? 0) + defenderPending;
-        if (defenderTotal < 1) {
-          const key = spawnKey("remoteDefender", homeRoom, defenderTotal, targetRoom);
-          const body = selectBody("remoteDefender", energyCapacityAvailable);
-          requests.push(createRemoteRequest(
-            "remoteDefender", homeRoom, targetRoom, defenderTotal,
-            key, 1, body, tick,
-          ));
-        }
-      }
-    }
+    // 4. Remote Defender — 已前置到经济孵化之前评估（RM-2：先应战，
+    //    威胁未清时经济孵化整体暂停，见循环顶部 hasThreats 分支）。
   }
 
   return { requests };

@@ -119,6 +119,7 @@ export const CONFIG = {
     maxRetries: 5,
     /** 为 P0 恢复 body 预留的最低能量。 */
     recoveryEnergyReserve: 200,
+    starvationDegradeFloor: 300,
     /** Distributor 升编趋势确认窗口（tick）。
      * spawn 孵化瞬间抽干 spawn/extension → fillTargets 尖峰，这是 distributor 的
      * 日常工作信号而非缺员信号（在途 distributor 一两趟即可补满）。
@@ -294,6 +295,17 @@ export const CONFIG = {
      * 永久卡在最低档，distributor 被锁死在「仅填 spawn」模式，extension 断供。
      * 与 upgrade.sprintStorage(50000)/sustainedStorage(10000) 同一参照系，
      * 两套 storage 调度共用一种刻度。
+     *
+     * ── 水位权限表（Batch 2 统一刻度 — 全部 storage 消费者按此表取能）──
+     * | storage 水位      | distributor      | upgrader        | builder   | lab  | terminal |
+     * | ≥ full(50k)       | 全目标满载        | 冲刺(=sprint)   | 满载      | 放行 | ≥20k 放行 |
+     * | ≥ sustained(10k)  | 仅 spawn/ext 满载 | 500/趟          | 200/趟    | 放行 | <20k 拒   |
+     * | ≥ low(2k)         | 限额 400          | 200/趟(≥1k)     | 50/趟     | 放行 | 拒       |
+     * | < low(2k)         | 限额 200          | 拒取(<1k floor) | 拒取      | 拒   | 拒       |
+     * 消费端实现：upgrader/builder 经 withdrawStorageCapped（限额 ≤0 时
+     * resolve 拒绝，fallthrough 到 container/直采）；lab/terminal 在
+     * industry.ts 双相门禁；distributor 经 computeDistributorTier。
+     * builder 编制（demand B-5）同样按本表封顶。
      */
     distributorTiers: {
       /** ≥ 此值为 tier 0：满载取能，全目标（含 tower/controller container）。 */
@@ -403,6 +415,13 @@ export const CONFIG = {
     minRcl: 4,
     /** 远矿房威胁的危险冷却（tick）— 冷却期内不作为新远矿/扩张候选。 */
     dangerCooldown: 2000,
+    /** 普通威胁的失明保持窗口（tick，RM-2）— 有视野见威胁后，失明期间
+     * 维持威胁态（暂停经济孵化）的时长。按 Invader 寿命尺度取短值：
+     * 审查修正 — 复用 dangerCooldown(2000) 会在 enableDefender=false 时
+     * 让单次威胁目击变成 2000 tick 收入黑洞（无 defender 重获视野解封）。
+     * defender 在场时通常数十 tick 内清场并确认解除；300 覆盖一轮
+     * defender 孵化 + 通勤 + 交战。 */
+    threatBlindHold: 300,
     /** InvaderCore 压制冷却（tick）— 发现核心后孵化冻结的持续时长。
      * 这是重新探测节奏而非核心寿命估计：到期后恢复孵化，首个抵达的 creep
      * 带回视野 — 核心仍在则续期冷却，已消失则运营恢复。

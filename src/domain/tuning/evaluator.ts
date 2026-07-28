@@ -306,9 +306,12 @@ function evaluateUpgraderMaxCount(
     desired = "up";
     reason = `Storage ${s.avgStorageEnergy.toFixed(0)} energy with upgraders at max ${current}, burning surplus`;
   }
-  // ↓ 减少：storage 低位 OR 经济压力高
+  // ↓ 减少：storage 低位（仅 RCL4+，storage 已解锁）OR 经济压力高。
+  // TU-1 修复：无 storage 的 RCL2-3 房间 avgStorageEnergy 恒 0 —
+  // 原条件对它们永久成立，每 2000 tick 棘轮式把 upgrader 压到地板 1，
+  // 早期升级产能被系统性压制。「storage 未解锁」≠「storage 枯竭」。
   else if (
-    (s.avgStorageEnergy < STORAGE_LOW || economyStressed) &&
+    ((s.avgStorageEnergy < STORAGE_LOW && s.rcl >= 4) || economyStressed) &&
     current > boundsDef.floor
   ) {
     desired = "down";

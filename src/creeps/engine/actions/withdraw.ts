@@ -196,6 +196,10 @@ export function withdrawStorageCapped(
       const st = ac.snapshot.storage;
       if (!st || st.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       const effectiveLimit = typeof limit === "function" ? limit(ac) : limit;
+      // U-1/B-1（floor 下沉，D-0 同手法）：限额 ≤0 表示水位表拒绝本次取能 —
+      // resolve 返回 undefined 放行后续候选（container/harvest），
+      // 而不是 execute 里 withdraw(0) 空转占链。
+      if (effectiveLimit <= 0) return undefined;
       return { storage: st, limit: effectiveLimit };
     },
     execute: (ac, target) => {

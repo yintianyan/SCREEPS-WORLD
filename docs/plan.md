@@ -162,7 +162,7 @@ interface System {
 | 模式 | bucket 条件 | 20 CPU 下软截止 / 硬截止 | 允许工作 | 跳过工作 |
 | --- | ---: | ---: | --- | --- |
 | Healthy | 不低于 7,000 | 17.5 / 19.2 | P0 至 P3，P4 仅剩余预算 | 全局重规划 |
-| Guarded | 3,000 至 6,999 | 16 / 18.5 | P0 至 P3，后台频率减半 | P4 |
+| Guarded | 3,000 至 6,999 | 16 / 18.5 | P0 至 P3（interval 系统按名称哈希错峰） | P4 |
 | Conserve | 1,000 至 2,999 | 14 / 17 | P0 至 P2，限制升级/建造 | P3、P4 |
 | Recovery | 低于 1,000 | 12 / 15.5 | 防御、孵化、能源链、必要移动 | 建造、升级、侦察、分析 |
 
@@ -196,8 +196,8 @@ function runGuarded(job: Job, budget: Budget): void {
 - 日志格式为 [tick] stage/name: message；相同 label 和错误签名每 25 tick 最多输出一次。
 - 预期返回码，例如不在范围、目标耗尽，不是异常；它们驱动状态机转移。
 - 未知角色、失效 target ID、无效建造请求先尝试自愈：清理目标、标记请求失败、应用 body 回退。
-- 非关键插件连续报错时冷却 50 至 200 tick；P0 只限流日志，不盲目禁用。
-- 开发环境可打开 throwOnError，官服生产默认隔离；长堆栈不重复写入 Memory。
+- 非关键插件连续报错时冷却 80 至 200 tick（错误计数跨冷却轮次累积，时长真递增）；冷却跳过必须记 skip reason 并写 PluginCooldown 事件；P0 只限流日志，不盲目禁用。
+- 生产默认错误隔离（safeRun 捕获 + 限流日志）；长堆栈不重复写入 Memory。
 
 ### 3.4 版本化 Memory
 
@@ -223,7 +223,7 @@ interface RootMemory {
 5. 死亡 creep Memory 小帝国可每 tick 清；规模变大后按 cursor 每 10 tick 清理。
 6. 每次版本升级必须有空 Memory、旧版本、重复执行和中断恢复的 Vitest 用例。
 
-当前版本：v7（v6→v7：添加 `Memory.kernel.tuning` 参数自调优结构；v5→v6 = 核心模板 compact-core-v1 → v2 偶校验棋盘格；v5 = CreepMemory.recycle? + RoomMemory.intel?）。
+当前版本：v14（v8 删除遗留 working 字段；v9 phase.liquidityScore 回填；v10 remoteOps 自愈；v11 expansion/expansionBlacklist/lostRooms 自愈；v12 lastHostileAt 与 intel.towers/dangerUntil 自愈；v13 kernel.strategy 自愈；v14 phase.bandTicks 回填。更早：v7 tuning 结构；v6 核心模板 v2；v5 recycle/intel）。
 
 ## 4. 插件注册规范
 
@@ -329,22 +329,22 @@ interface SpawnRequest {
 }
 ~~~
 
-孵化优先级：
+孵化优先级（实现映射：P0 恢复 worker / P1 defender·harvester·hauler·distributor·远矿经济 / P2 upgrader·builder·reserver·claimer；P3/P4 保留在类型中供未来战略角色使用）：
 
-1. P0 灾后恢复：没有存活或正在生成的可采集且可送能 creep 时，暂停一切非 P0；可用能量达到 200 就立即生成 [WORK,CARRY,MOVE]。
+1. P0 灾后恢复：没有存活或正在生成的可采集且可送能 creep 时，暂停一切非 P0；可用能量达到 200 就立即生成 [WORK,CARRY,MOVE]。威胁在场时先入队 P0 defender 清场（W-3）。低优先级孵化不得侵占恢复能量：采集链濒临断裂（存活采集者 ≤1）时非 P0 请求按 energyAvailable − recoveryEnergyReserve 校验（采集角色豁免 — 它们本身是恢复路径）。
 2. P1 能量入口：每个安全本地 source 至少有采集覆盖；container 未就绪前采集者必须带 CARRY。
 3. P1 能量配送：当 miner 正常但 spawn/extension 长时间缺能时，补充最小 hauler。
 4. P2 保级与关键维修：只保留避免控制器降级和关键结构失效的能力。
-5. P3 发展：upgrader、常规 builder 只在 P0/P1 齐备、无敌袭、CPU 非 Recovery 且留有紧急 body 能量时生成。
-6. P4 战略：侦察、远矿、reserve、战斗和实验角色只在长期健康后开放。
+5. P2 发展：upgrader、常规 builder 只在 P0/P1 齐备、无敌袭、CPU 非 Recovery 且留有紧急 body 能量时生成（饥饿超时降级见 trySpawn 三层降级）。
+6. 远矿/扩张角色由 remote-mining-manager / expansion-manager 独立评估后直接入队（P1/P2），受 empire-strategy 姿态与止损链门禁。
 
 队列和替换规则：
 
 - 请求按 key 幂等合并，spawn.spawning 和已提交请求必须计入人口，避免重复孵化。
 - body 不能超过 energyCapacityAvailable。P0 可以按 energyAvailable 降级立即出生；普通角色可等待合理体型，但有最长等待时间。
 - 关键替换在 ticksToLive 不大于 body.length 乘 3、预计路程与 15 tick 安全缓冲之和时入队（harvester 计入 spawn→source 通勤估算，其余角色路程为 0）。
-- 同类 creep 生成需错峰，避免同 tick 集体寿终。普通请求不得侵占关键替补的最晚开工窗口。
-- ERR_BUSY 不算失败；能量不足保留请求；body 不合法等配置错误隔离该请求并限流报警。
+- 普通请求不得侵占关键替补的最晚开工窗口（sortQueue 的 replaceBy 优先规则 X-17）。
+- ERR_BUSY 不算失败；能量不足保留请求；body 不合法等配置错误达重试上限后隔离 — key 进入黑名单冷却（1 个 TTL 窗口），期间 demand 不得重建，防止「失败 → 删除 → 重建」翻炒。
 - colony 状态由 room-state P0 系统每 tick 计算：BOOTSTRAP、RECOVERY、NORMAL、DEFENSE。角色只读取状态。状态机使用 ColonyPhase 迟滞（bootstrap/growth/steady/crisis/recovery），避免在阈值附近频繁切换。
 - economyPressure 是 0.0 至 1.0 的梯度信号（存储在 RoomMemory），由 room-state 每 tick 写入。各子系统消费此信号实现平滑缩放：construction-manager 用作建造门禁、demand 用作 upgrader/builder 数量缩放、tuning-engine 用作调优输入。梯度信号取代了二值 crisis/normal 开关，避免抖动。
 - 升级功率由 storage 水位驱动：storage ≥ 50k 且经济健康时冲刺（2 个大 body 站桩烧库存换 RCL）；≥ 10k 时 1 个大 body 满功率（≈15/tick）；低水位按 pressure 停升级攒库存；无 storage 时保留早期猛冲梯度。RCL8 显式封顶 15 WORK（官方 15 energy/tick 上限）。
@@ -368,7 +368,7 @@ construction-manager 是唯一创建 construction site 的模块。它消费版�
 
 强制规则：
 
-- 初始全局活跃 site 不超过 5；每房每阶段只创建一个依赖满足的 site。推荐 1 个 critical 加 2 个 normal 的并发上限。
+- 初始全局活跃 site 上限 7（3 extension + 2 road + 关键 container 并行，紧急重建豁免）；每房五类独立计额：critical(tower/spawn) 1、storage 1、road 2、source container 1、normal 3。
 - 队列项包含 priority、依赖、重试次数、失败原因、冷却和完成判定。地形冲突、RCL 不足、不可达等错误必须退避或删除。
 - 规划器仅在 RCL 变化、关键建筑完成、布局失效或每 25 至 50 tick 执行；执行器每 tick 只消费已有队列。
 - builder 早期最多一名。没有高优先级 site、P0/P1 不足、能量低于生存水位或 CPU Recovery 时，停止新 builder。
@@ -545,7 +545,7 @@ construction-manager 是每 tick 运行但成本受限的执行器；layout-plan
 2. 清理失效 lease，移除已完成或已不存在的目标。
 3. 检查 colony 状态、CPU tier、P0/P1 Spawn 缺口和紧急能量地板。
 4. 仅选择一个最高优先级、验证通过、到期可重试的 queued task。
-5. 全局每 tick最多创建一个 site；每房最多同时 1 个 critical 和 2 个 normal site。若低 CPU 或发展门禁未通过，保持队列但不创建。
+5. 全局每 tick 最多创建 1 个紧急 + 1 个普通 site（紧急重建独立计额，不被普通建造挤占）；每房限额见 §5.5 五类独立计额。若低 CPU 或发展门禁未通过，保持队列但不创建。P0 孵化缺口（紧急恢复 worker 在队）时阻塞普通建造。
 6. 创建成功后标记 site；创建失败写入标准失败码和 retryAt。
 
 发展门禁必须同时满足：
@@ -747,7 +747,7 @@ function moveToTarget(
   options: MoveToOpts,
   ctx: TickContext,
 ): CreepMoveReturnCode | ERR_NO_PATH | ERR_INVALID_TARGET | ERR_NOT_FOUND {
-  // 本地任务默认 maxRooms: 1，reusePath: 5 到 20
+  // 本地任务默认 maxRooms: 1，reusePath 自适应（近 3 / 中 5 / 远 15）
   // 目标、移动模式、房间道路修订组成缓存 key
   // 检测 lastPos；不因 ERR_TIRED 误判卡住
   // 连续 2 到 3 tick 未移动才尝试有限重算

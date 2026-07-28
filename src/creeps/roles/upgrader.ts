@@ -115,21 +115,26 @@ function upgraderGate(ac: ActionContext): boolean {
 }
 
 /**
- * P1-1: 动态计算 storage 取能上限 — 按 storage 水位缩放。
+ * 动态计算 storage 取能上限 — 水位权限表（绝对能量刻度）。
  *
- * - 高水位 (>50%)：放开到 carry 满载（库存盈余应被快速消化）
- * - 中水位 (15%-50%)：用固定配置值（平衡消化速度与突降风险）
- * - 低水位 (<15%)：收紧到 200（保护 storage 触发 economyPressure 连锁降级）
+ * U-2 修复：原比例制三档（>50%/>15% 折合 50 万/15 万能量）在发展期房间
+ * 永远落在最低档 — 与 distributorTiers 的历史教训同型（比例刻度系统性错误）。
+ * 现改用与 distributorTiers/upgrade 调度同一参照系的绝对阈值：
+ *   ≥ sprintStorage(50k)：carry 满载（库存盈余快速消化）
+ *   ≥ sustainedStorage(10k)：perTickWithdrawLimit(500)
+ *   ≥ upgradeEnergyFloorStorage(1k)：200（低水位节流）
+ *   <  upgradeEnergyFloorStorage(1k)：0 — U-1 floor 下沉：
+ *      withdrawStorageCapped 的 resolve 对 limit≤0 返回 undefined（D-0 同手法），
+ *      彻底封死「gate 因 container 有能量放行 → storage 被抽穿地板」的旁路。
  */
 function dynamicStorageLimit(ac: ActionContext): number {
   const st = ac.snapshot.storage;
   if (!st) return CONFIG.economy.upgrade.perTickWithdrawLimit;
   const energy = st.store.getUsedCapacity(RESOURCE_ENERGY);
-  const capacity = st.store.getCapacity(RESOURCE_ENERGY);
-  if (capacity === 0) return CONFIG.economy.upgrade.perTickWithdrawLimit;
-  const ratio = energy / capacity;
-  if (ratio > 0.5) return ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
-  if (ratio > 0.15) return CONFIG.economy.upgrade.perTickWithdrawLimit;
+  const cfg = CONFIG.economy;
+  if (energy < cfg.upgradeEnergyFloorStorage) return 0;
+  if (energy >= cfg.upgrade.sprintStorage) return ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
+  if (energy >= cfg.upgrade.sustainedStorage) return cfg.upgrade.perTickWithdrawLimit;
   return 200;
 }
 
