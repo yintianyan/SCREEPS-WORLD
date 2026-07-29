@@ -20,6 +20,33 @@ function makeIntel(overrides: Partial<RoomIntel> = {}): RoomIntel {
 }
 
 describe("remote targeting — selectRemoteTargets", () => {
+  it("跨房去重：兄弟房已运营的目标不入选（双编队抢矿是纯亏损）", () => {
+    const result = selectRemoteTargets({
+      homeRoom: "W38S58",
+      intel: {
+        W37S57: makeIntel(), // 主房 W37S58 正在运营。
+        W36S58: makeIntel(),
+      },
+      existingOps: undefined, // 本房无运营 — 修复前 W37S57 会被选中。
+      tick,
+      staleThreshold,
+      globalActiveTargets: new Set(["W37S57"]),
+    });
+    expect(result.map(c => c.roomName)).toEqual(["W36S58"]);
+  });
+
+  it("跨房去重：兄弟房已 abandoned 的目标可入选（调用方只汇总非 abandoned）", () => {
+    const result = selectRemoteTargets({
+      homeRoom: "W38S58",
+      intel: { W36S58: makeIntel() },
+      existingOps: undefined,
+      tick,
+      staleThreshold,
+      globalActiveTargets: new Set(), // abandoned 不入集合。
+    });
+    expect(result.map(c => c.roomName)).toEqual(["W36S58"]);
+  });
+
   it("无 intel 时返回空列表", () => {
     const result = selectRemoteTargets({
       homeRoom: "W1N1",

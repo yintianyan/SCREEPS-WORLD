@@ -36,6 +36,18 @@ export const remoteMiningManagerSystem: System = {
   priority: 2 as Priority,
   interval: CONFIG.remote.managerInterval,
   run(ctx: TickContext): void {
+    // 跨房去重：汇总全帝国已运营的远矿目标（非 abandoned）。
+    // 每个 home 房独立评选时必须排除兄弟房的现役目标 — 双编队抢同一
+    // source 收益不变成本翻倍（见 RemoteTargetingInput.globalActiveTargets）。
+    const globalActiveTargets = new Set<string>();
+    for (const rn of Object.keys(Memory.rooms)) {
+      const ops = Memory.rooms[rn]?.remoteOps;
+      if (!ops) continue;
+      for (const [target, op] of Object.entries(ops)) {
+        if (op.state !== "abandoned") globalActiveTargets.add(target);
+      }
+    }
+
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
@@ -61,6 +73,7 @@ export const remoteMiningManagerSystem: System = {
           existingOps: remoteOps,
           tick: ctx.tick,
           staleThreshold: CONFIG.remote.staleThreshold,
+          globalActiveTargets,
         });
         // 只补充到 maxOperations。
         const needed = CONFIG.remote.maxOperations - activeCount;

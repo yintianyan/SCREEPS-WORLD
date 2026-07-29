@@ -37,6 +37,12 @@ export interface RemoteTargetingInput {
   tick: number;
   /** 视觉新鲜度阈值（超过此 tick 数视为旧情报）。 */
   staleThreshold: number;
+  /** 全帝国已运营的远矿目标（跨房去重）。
+   * 缺此参数的教训：existingOps 只含本房运营，双主房时代第二个房达到
+   * RCL4 后会把兄弟房正在运营的远矿当合格候选 — 双编队抢同一 source
+   * （产能固定 1500/300tick），双 reserver 各烧 1300 能量，收益不变
+   * 成本翻倍，远矿利润腰斩。 */
+  globalActiveTargets?: ReadonlySet<string>;
 }
 
 /**
@@ -66,6 +72,8 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
     if (roomName === homeRoom) continue;
     // 排除已有运营的房间。
     if (activeTargets.has(roomName)) continue;
+    // 排除他房已运营的目标（跨房去重 — 双编队抢矿是纯亏损）。
+    if (input.globalActiveTargets?.has(roomName)) continue;
     // 只选普通房（有 controller，可 reserve）。
     if (info.kind !== "normal") continue;
     // 排除有主的房间。
