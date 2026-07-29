@@ -55,6 +55,27 @@ describe("recycleExcessRemoteCreeps — 交接豁免", () => {
     expect(fresh.memory.recycle).toBe(false);
   });
 
+  it("2-source 房 2 个健康 harvester 均不回收（配额随 sources，与 demand 同口径 B-1）", () => {
+    const ops = { W7N5: { state: "active", lastSeen: 0, sources: 2 } } as any;
+    const h1 = remoteCreep("rh_1", "remoteHarvester", { ttl: 1400 });
+    const h2 = remoteCreep("rh_2", "remoteHarvester", { ttl: 1300 });
+    (globalThis as any).Game.creeps = { rh_1: h1, rh_2: h2 };
+    recycleExcessRemoteCreeps("W7N4", ops);
+    // 配额=min(sources 2, max 2)=2 → 2 只都在编制内，不回收（修复前第 2 只被误杀）。
+    expect(h1.memory.recycle).toBe(false);
+    expect(h2.memory.recycle).toBe(false);
+  });
+
+  it("单源房第 2 个 harvester 仍回收（配额=1，不因上限放开而虚增）", () => {
+    const ops = { W7N5: { state: "active", lastSeen: 0, sources: 1 } } as any;
+    const h1 = remoteCreep("rh_1", "remoteHarvester", { ttl: 1400 });
+    const h2 = remoteCreep("rh_2", "remoteHarvester", { ttl: 1300 });
+    (globalThis as any).Game.creeps = { rh_1: h1, rh_2: h2 };
+    recycleExcessRemoteCreeps("W7N4", ops);
+    // 配额=min(sources 1, max 2)=1 → 保留最年轻，回收较老的 1 只。
+    expect([h1, h2].filter(h => h.memory.recycle)).toHaveLength(1);
+  });
+
   it("孵化中的替补不参与配额判定，绝不被标记（修复前被当最老误杀）", () => {
     const dying = remoteCreep("res_old", "reserver", { ttl: 30 });
     const spawning = remoteCreep("res_new", "reserver", { spawning: true, ttl: undefined });

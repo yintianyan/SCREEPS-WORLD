@@ -226,6 +226,42 @@ describe("remote demand — evaluateRemoteDemand", () => {
     expect(harvesterReqs[0]!.replaceBy).toBe(tick);
   });
 
+  it("濒死者 + 已有健康替补并存时不再补（防替换风暴）", () => {
+    // target=1（单源）。濒死者在窗口内，但已有 1 只健康替补 → 健康数达标，不补。
+    const dying: RemoteCreepSummary = {
+      name: "remoteHarvester-dying", role: "remoteHarvester",
+      remoteTarget: targetRoom, ticksToLive: 50, bodyLength: 5, // <80 窗口内
+    };
+    const healthy: RemoteCreepSummary = {
+      name: "remoteHarvester-fresh", role: "remoteHarvester",
+      remoteTarget: targetRoom, ticksToLive: 1400, bodyLength: 5,
+    };
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteOps: makeRemoteOps("active", 1), // 单源 → target 1
+      remoteCreeps: [dying, healthy],
+    });
+    expect(requests.filter((r) => r.role === "remoteHarvester")).toHaveLength(0);
+  });
+
+  it("reserver 濒死者 + 孵化中替补（ttl 未定义）并存时不再补（防替换风暴根因）", () => {
+    // 线上根因：单个 dying reserver 每周期反复触发替换，live 飙到 5。
+    // 孵化中的替补 ttl 未定义 → 计为健康 → 健康数达标 → 不再重复补。
+    const dying: RemoteCreepSummary = {
+      name: "reserver-dying", role: "reserver",
+      remoteTarget: targetRoom, ticksToLive: 30, bodyLength: 2,
+    };
+    const spawningRepl: RemoteCreepSummary = {
+      name: "reserver-fresh", role: "reserver",
+      remoteTarget: targetRoom, ticksToLive: undefined, bodyLength: 2,
+    };
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: [dying, spawningRepl],
+    });
+    expect(requests.filter((r) => r.role === "reserver")).toHaveLength(0);
+  });
+
   it("creep 寿命充足时不生成替换请求", () => {
     const healthyCreep: RemoteCreepSummary = {
       name: "remoteHarvester-healthy",
@@ -244,7 +280,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
 
   // ── 回归：替补 key 必须稳定，pending 累积不得产生新 key ──
 
-  it("替补请求 key 绑定濒死 creep 名，pending 累积后 key 不漂移", () => {
+  it("替补请求 pending 后不再重复生成（防替换风暴：pending 计入健康数达标即止）", () => {
     const dyingCreep: RemoteCreepSummary = {
       name: "remoteHarvester-dying",
       role: "remoteHarvester",
@@ -253,7 +289,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       bodyLength: 5,
     };
 
-    // 第一轮评估：生成替补请求。
+    // 第一轮评估：健康数 0 + pending 0 < target 1 → 生成替补请求。
     const first = evaluateRemoteDemand({
       ...baseInput,
       remoteCreeps: [dyingCreep],
@@ -261,17 +297,15 @@ describe("remote demand — evaluateRemoteDemand", () => {
     const firstReq = first.requests.find((r) => r.role === "remoteHarvester");
     expect(firstReq).toBeDefined();
 
-    // 第二轮评估：替补请求已 pending（total = 存活 1 + pending 1 = 2），
-    // findReplacement 仍命中同一濒死 creep — 生成的请求 key 必须与第一轮一致，
-    // 由 submitRequest 幂等合并，而非堆积新请求（旧 bug：index 漂移产生新 key）。
+    // 第二轮评估：替补已 pending（健康 0 + pending 1 = target 1）→ 不再生成。
+    // 修复前：findReplacement 仍命中濒死者 → 每周期重复生成替换（依赖队列内 key
+    // 幂等，但请求孵出离队后失效）→ 替换风暴。守卫后 pending 达标即止。
     const second = evaluateRemoteDemand({
       ...baseInput,
       remoteCreeps: [dyingCreep],
       spawnQueue: [firstReq!],
     });
-    const secondReq = second.requests.find((r) => r.role === "remoteHarvester");
-    expect(secondReq).toBeDefined();
-    expect(secondReq!.key).toBe(firstReq!.key);
+    expect(second.requests.find((r) => r.role === "remoteHarvester")).toBeUndefined();
   });
 
   it("请求携带 expiresAt TTL", () => {

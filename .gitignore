@@ -35,7 +35,7 @@ coverage/
 .screeps.json
 
 # Screeps telemetry & export data (generated, not source)
-tools/data
+tools/data/
 data/
 
 # TypeScript

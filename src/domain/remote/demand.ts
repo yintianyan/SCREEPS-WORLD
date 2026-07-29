@@ -144,10 +144,12 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     } else {
       // 替换逻辑：检查即将死亡的 remoteHarvester。
       const replacement = findReplacement(remoteCreeps, "remoteHarvester", targetRoom, tick);
-      if (replacement) {
-        // 替补 key 绑定濒死 creep 名而非 total 索引：total = 存活 + pending，
-        // 随替补请求入队而增长，同一濒死 creep 会在每个评估周期产生新 key 的重复请求；
-        // 稳定 key 使 submitRequest 按 key 幂等合并，替换窗口内始终只有一条替补请求。
+      // 守卫：仅当健康数（含孵化中替补）+ pending 不足编制时才补，防同一濒死者
+      // 每周期反复触发替换风暴（见 countHealthyByRole 注释）。
+      const healthy = countHealthyByRole(remoteCreeps, "remoteHarvester", targetRoom);
+      if (replacement && healthy + pending.remoteHarvester < harvesterTarget) {
+        // 替补 key 绑定濒死 creep 名而非 total 索引：稳定 key 使 submitRequest
+        // 按 key 幂等合并，队列内始终只有一条替补请求。
         const key = replacementKey("remoteHarvester", homeRoom, targetRoom, replacement);
         const body = selectBody("remoteHarvester", energyCapacityAvailable);
         requests.push(createRemoteRequest(
@@ -170,7 +172,8 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       ));
     } else {
       const replacement = findReplacement(remoteCreeps, "remoteHauler", targetRoom, tick);
-      if (replacement) {
+      const healthy = countHealthyByRole(remoteCreeps, "remoteHauler", targetRoom);
+      if (replacement && healthy + pending.remoteHauler < haulerTarget) {
         // 稳定替补 key（同 harvester 分支）。
         const key = replacementKey("remoteHauler", homeRoom, targetRoom, replacement);
         const body = selectBody("remoteHauler", energyCapacityAvailable);
@@ -197,7 +200,8 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
         }
       } else {
         const replacement = findReplacement(remoteCreeps, "reserver", targetRoom, tick);
-        if (replacement) {
+        const healthy = countHealthyByRole(remoteCreeps, "reserver", targetRoom);
+        if (replacement && healthy + pending.reserver < 1) {
           // 稳定替补 key（同 harvester 分支）。
           const key = replacementKey("reserver", homeRoom, targetRoom, replacement);
           const body = selectBody("reserver", energyCapacityAvailable);
@@ -252,23 +256,52 @@ function countRemotePending(
 }
 
 /**
- * 查找需要替换的远矿 creep。
- * 阈值 = body.length * 3 + replaceBuffer + travelTicks（跨房通勤更远，加 50 tick 余量）。
+ * creep 是否在替换窗口内（即将死亡，不计入有效编制）。
+ * 阈值 = body.length * 3 + replaceBuffer + 50（跨房通勤更远，加 50 tick 余量）。
+ * 孵化中/新生 creep（ticksToLive 未定义）视为满编制，不在窗口内。
+ */
+function inReplacementWindow(creep: RemoteCreepSummary): boolean {
+  if (creep.ticksToLive === undefined) return false;
+  const threshold = (creep.bodyLength ?? 3) * 3 + CONFIG.spawn.replaceBuffer + 50;
+  return creep.ticksToLive <= threshold;
+}
+
+/**
+ * 统计某角色"健康"存活数 — 排除替换窗口内的濒死者，计入孵化中的替补。
+ *
+ * 替换风暴根因守卫：原替换分支只要 findReplacement 找到窗口内濒死者就补，
+ * 无编制上限判定；replacement 孵出后离开队列、pending 归零，而濒死者仍在
+ * 窗口 → 每个 manager 周期重复触发替换（线上实测：单个 dying reserver 连续
+ * 生成 6 个替换，live 数飙到 5，配额仅 1）。以"健康数 + pending < target"
+ * 为闸：健康数含孵化中的替补，补足一个后即达标停止，濒死者自然寿终不再重复补。
+ */
+function countHealthyByRole(
+  creeps: readonly RemoteCreepSummary[],
+  role: string,
+  targetRoom: string,
+): number {
+  let n = 0;
+  for (const c of creeps) {
+    if (c.role !== role || c.remoteTarget !== targetRoom) continue;
+    if (inReplacementWindow(c)) continue;
+    n++;
+  }
+  return n;
+}
+
+/**
+ * 查找需要替换的远矿 creep（返回第一个进入替换窗口的濒死者名）。
  */
 function findReplacement(
   creeps: readonly RemoteCreepSummary[],
   role: string,
   targetRoom: string,
-  tick: number,
+  _tick: number,
 ): string | undefined {
   for (const creep of creeps) {
     if (creep.role !== role) continue;
     if (creep.remoteTarget !== targetRoom) continue;
-    if (creep.ticksToLive === undefined) continue;
-    const threshold = (creep.bodyLength ?? 3) * 3 + CONFIG.spawn.replaceBuffer + 50;
-    if (creep.ticksToLive <= threshold) {
-      return creep.name;
-    }
+    if (inReplacementWindow(creep)) return creep.name;
   }
   return undefined;
 }

@@ -466,7 +466,17 @@ export function recycleExcessRemoteCreeps(
   };
 
   for (const [target, entry] of byTarget) {
-    markExcess(entry.harvester, CONFIG.remote.harvestersPerTarget);
+    // harvester 配额必须与 demand 侧同口径（B-1：按 op.sources 孵化，上限
+    // harvestersMaxPerTarget）。若此处仍用固定 harvestersPerTarget=1，则
+    // demand 孵 2（2-source）、回收判超额杀 1 — 与下方 hauler 曾经的口径分裂
+    // 同源，形成孵化→回收→重孵死循环。
+    markExcess(
+      entry.harvester,
+      Math.min(
+        remoteOps[target]?.sources ?? CONFIG.remote.harvestersPerTarget,
+        CONFIG.remote.harvestersMaxPerTarget,
+      ),
+    );
     // hauler 配额必须与 demand 侧同口径（op.haulerNeed 动态编制，回退
     // haulersPerTarget）。远矿 2.0 引入动态编制时此处漏改，口径分裂成
     // 「孵化按 haulerNeed=2-3、回收按固定值 1」— 编制内的健康 hauler
