@@ -29,6 +29,7 @@ import {
   repairFortifications,
   repairFreshRampart,
   repairRoads,
+  repairUrgentRoads,
   withdrawClosestNonSourceContainer,
   withdrawStorageCapped,
 } from "../engine/actions";
@@ -93,6 +94,11 @@ const policy: RolePolicy = {
     // 必须排在 build 之前 — 灌血十几 tick，建 site 上百 tick；
     // 顺序反了就是「建了就塌、塌了再建」死循环，防线永远立不起来。
     repairFreshRampart(),
+    // 急救：血量 < 15% 的危路（塌毁重建耗能 6 倍 + site 占建造名额）。
+    // 与 rampart 急救同层排在 build 之前 — construction 流水线持续放行 site
+    // 时建造动作永远命中，链尾的常规修路被饿死（线上实测 16 条路 8 条破
+    // 40%、最烂 4%）。急救只拉出险区（40%）即放手，不霸占建造工时。
+    repairUrgentRoads(),
     // 建造 assignment 指定的 site（recovery 跳过）。
     buildAssignmentSite({ recoverySkip: true }),
     // 建造最近 site（recovery 跳过）。

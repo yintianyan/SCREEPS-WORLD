@@ -38,6 +38,7 @@ export {
   repairContainerDecay,
   repairNearbyContainer,
   repairRoads,
+  repairUrgentRoads,
   repairFortifications,
   repairFreshRampart,
 } from "./repair";

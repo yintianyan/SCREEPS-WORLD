@@ -28,6 +28,9 @@ declare global {
     fillTargetId?: Id<_HasId>;
     /** repair 目标持久化 — 避免每 tick 在多个衰减 container 间摇摆。 */
     repairTargetId?: Id<_HasId>;
+    /** 危路急救锁定目标（与 repairTargetId 分离 — 共享缓存会被常规修路/
+     * 工事维修写入非危路目标，急救接手会越过链上更紧急的修复）。 */
+    urgentRoadId?: Id<_HasId>;
     /** harvester/miner 绑定的 source。 */
     sourceId?: Id<Source>;
     /** remote-harvester 缓存的 source 旁 container ID（避免每 tick lookForAtArea）。 */

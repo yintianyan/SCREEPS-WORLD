@@ -22,6 +22,15 @@ import { buildFortificationContext, classifyFortification } from "../../../domai
 /** 道路维修阈值 — 血量低于此比例才修（与 builder 维修需求信号共用 CONFIG 口径）。 */
 const ROAD_REPAIR_THRESHOLD: number = CONFIG.construction.roadRepairThreshold;
 
+/** 危路急救线 — 低于此比例的路提级到建造之前修（塌毁重建耗能 ≈ 维修 6 倍）。 */
+const ROAD_EMERGENCY_THRESHOLD = 0.15;
+
+/** 修复放手线 — 一旦开修就修到此比例才换目标（hysteresis）。
+ * 原先修到 threshold(40%) 即弃：全路群永远贴线抖动、从不真正修满，
+ * demand 的修路信号随之抖动，builder 编制孵了退退了孵。修满一条再换，
+ * 路群从 90% 衰减回 40% 的窗口长达数万 tick，孵化次数大幅下降。 */
+const ROAD_REPAIR_CEILING = 0.9;
+
 type Fortification = StructureWall | StructureRampart;
 
 /** 修复 critical 结构（血量 < 50%）。findCriticalRepair 优先使用快照预计算值。 */
@@ -238,14 +247,33 @@ export function repairFreshRampart(): ActionCandidate<StructureRampart> {
   return {
     name: "repair:fresh-rampart",
     resolve: (ac) => {
-      const threshold = CONFIG.defense.rampartBootstrapHits;
+      // 进场线/放手线分离（hysteresis）：
+      //   进场 = bootstrapHits 的 15%（1500 ≈ 500 tick 死亡余量，真濒死）；
+      //   放手 = bootstrapHits（10k，原「灌到安全水位」语义）。
+      // 教训（线上实测两轮）：以 10k 为进场线时，22 个 9.4k-9.9k 的亚健康
+      // rampart（3000+ tick 才塌）永久占据链首急救层 — 贴线轮询或双倍灌血
+      // 都改变不了「亚健康挤占急救通道」的本质，链后的危路急救（2% 血量、
+      // ~1000 tick 塌毁）反而被饿死。急救层只救真濒死；亚健康群体由链尾
+      // repairFortifications 按分层目标常规抬升。
+      const ceiling = CONFIG.defense.rampartBootstrapHits;
+      const entry = Math.floor(ceiling * 0.15);
+      // 已锁定的灌血目标未到放手线则继续灌（一次灌满，防半途而废）。
+      if (ac.creep.memory.repairTargetId) {
+        const cached = getObjectById(ac.creep.memory.repairTargetId as Id<StructureRampart>);
+        if (cached && cached.structureType === STRUCTURE_RAMPART && cached.hits < ceiling) {
+          return cached;
+        }
+      }
       let worst: StructureRampart | undefined;
-      let worstHits: number = threshold;
+      let worstHits: number = entry;
       for (const rampart of ac.snapshot.ramparts) {
         if (rampart.hits < worstHits) {
           worstHits = rampart.hits;
           worst = rampart;
         }
+      }
+      if (worst) {
+        ac.creep.memory.repairTargetId = worst.id as Id<StructureRampart>;
       }
       return worst;
     },
@@ -274,25 +302,54 @@ export function repairFreshRampart(): ActionCandidate<StructureRampart> {
  * 目标持久化：复用 creep.memory.repairTargetId（与 fortifications 共享）。
  */
 export function repairRoads(): ActionCandidate<StructureRoad> {
+  return roadRepairAction("repair:roads", ROAD_REPAIR_THRESHOLD, false);
+}
+
+/**
+ * 危路急救 — 血量 < 15% 的道路提级维修（builder 链中排在建造之前）。
+ *
+ * 背景（线上实测）：construction 流水线持续放行 site 时，建造动作永远命中，
+ * 链尾的常规修路被饿死 — 主房 16 条路 8 条破 40%、最烂 4% 濒临塌毁。
+ * 塌毁的代价不只是重建耗能 6 倍：重建 site 还要占用建造名额与 builder 工时，
+ * 挤掉真正的新建任务。急救线兜住塌毁风险，常规维修仍礼让建造。
+ * 与常规修路的门禁差异：conserve 不跳过（省小钱赔大钱），recovery/威胁仍跳过。
+ */
+export function repairUrgentRoads(): ActionCandidate<StructureRoad> {
+  return roadRepairAction("repair:roads-urgent", ROAD_EMERGENCY_THRESHOLD, true);
+}
+
+/** 道路维修动作工厂 — threshold 为进场线；急救修到脱险线（threshold=40%）
+ * 即放手回去建造，常规修到 ROAD_REPAIR_CEILING（90%）才换目标。 */
+function roadRepairAction(
+  name: string,
+  threshold: number,
+  urgent: boolean,
+): ActionCandidate<StructureRoad> {
+  const ceiling = urgent ? ROAD_REPAIR_THRESHOLD : ROAD_REPAIR_CEILING;
   return {
-    name: "repair:roads",
+    name,
     resolve: (ac) => {
-      // P2 修复：加 tier/threat 门禁，与 repairFortifications 对齐。
-      if (ac.budget.tier === "recovery" || ac.budget.tier === "conserve") return undefined;
+      // 门禁：recovery 恒跳过；conserve 仅常规跳过（急救不省这个钱）；威胁在场恒跳过。
+      if (ac.budget.tier === "recovery") return undefined;
+      if (!urgent && ac.budget.tier === "conserve") return undefined;
       if (ac.snapshot.threatCreeps.length > 0) return undefined;
 
-      // 优先复用持久化目标 — 验证它仍是道路且仍需修复。
-      if (ac.creep.memory.repairTargetId) {
-        const cached = getObjectById(ac.creep.memory.repairTargetId as Id<StructureRoad>);
-        if (cached && cached.structureType === STRUCTURE_ROAD) {
-          if (cached.hits < cached.hitsMax * ROAD_REPAIR_THRESHOLD) {
-            return cached;
-          }
+      // 目标缓存：急救用独立字段 urgentRoadId（共享 repairTargetId 会被
+      // 常规修路/工事维修写入非危路目标，急救接手会越过链上更紧急的修复）；
+      // 常规用共享 repairTargetId。两者都修到各自放手线才换（hysteresis）：
+      // 急救到脱险线 40% 放手回去建造，常规到 90% 消除贴线抖动。
+      const cacheKey = urgent ? "urgentRoadId" : "repairTargetId";
+      const cachedId = ac.creep.memory[cacheKey];
+      if (cachedId) {
+        const cached = getObjectById(cachedId as Id<StructureRoad>);
+        if (cached && cached.structureType === STRUCTURE_ROAD && cached.hits < cached.hitsMax * ceiling) {
+          return cached;
         }
+        ac.creep.memory[cacheKey] = undefined;
       }
-      // 无有效缓存目标 — 修血量最低的道路。
+      // 无有效缓存目标 — 修血量最低且低于进场线的道路。
       let worst: StructureRoad | undefined;
-      let worstRatio = ROAD_REPAIR_THRESHOLD;
+      let worstRatio = threshold;
       for (const r of ac.snapshot.roads) {
         const ratio = r.hits / r.hitsMax;
         if (ratio < worstRatio) {
@@ -301,7 +358,7 @@ export function repairRoads(): ActionCandidate<StructureRoad> {
         }
       }
       if (worst) {
-        ac.creep.memory.repairTargetId = worst.id as Id<StructureRoad>;
+        ac.creep.memory[cacheKey] = worst.id as Id<StructureRoad>;
       }
       return worst;
     },
