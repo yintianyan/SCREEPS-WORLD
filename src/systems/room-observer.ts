@@ -148,6 +148,7 @@ function captureObservedIntel(tick: number): void {
       sources: room.find(FIND_SOURCES).length,
       mineralType: room.find(FIND_MINERALS)[0]?.mineralType,
       owner: room.controller?.owner?.username,
+      reservation: room.controller?.reservation?.username,
       towers: countHostileTowers(room),
     },
     roomMem.intel[pending.targetRoom], // prev — 保留危险冷却。
@@ -177,6 +178,7 @@ function refreshNeighborIntel(roomName: string, roomMem: RoomMemory, tick: numbe
             sources: visible.find(FIND_SOURCES).length,
             mineralType: visible.find(FIND_MINERALS)[0]?.mineralType,
             owner: visible.controller?.owner?.username,
+            reservation: visible.controller?.reservation?.username,
             towers: countHostileTowers(visible),
           }
         : undefined,

@@ -316,6 +316,13 @@ declare global {
      * 维持威胁态 — 防「威胁 → 失明 → 恢复孵化 → 送死」循环送兵。
      */
     threatUntil?: number;
+    /**
+     * 经济重估：netScore 首次跌破门槛的 tick（A-3/B-6）。
+     * active op 每轮维护重算 netScore/haulerNeed（用当前 pathCost + body 运力）；
+     * 连续低于门槛超过宽限期才废弃 —— 抗抖动，防单次波动误撤边际 op。
+     * netScore 回升到门槛以上时清除。
+     */
+    lowScoreSince?: number;
   }
 
   interface Memory {

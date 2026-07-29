@@ -65,7 +65,7 @@ describe("RM-2 — 远矿威胁失明持久化（threatUntil 双轨）", () => {
   }
 
   function run(): void {
-    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5 })));
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
   }
 
   it("有视野威胁：写 threatUntil + 冻结经济孵化 + 孵 defender", () => {
@@ -134,7 +134,7 @@ describe("RM-3 — 远矿房被自己 claim 后运营关停", () => {
       memory: { role: "remoteHarvester", home: "W7N4", remoteTarget: target },
     };
 
-    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5 })));
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
 
     expect(g().Memory.rooms.W7N4.remoteOps[target].state).toBe("abandoned");
     expect(g().Game.creeps.rh_1.memory.recycle).toBe(true);

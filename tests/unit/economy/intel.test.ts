@@ -63,4 +63,24 @@ describe("intel — scanNeighborIntel 情报扫描", () => {
     expect(intel.sources).toBe(1);
     expect(intel.owner).toBeUndefined();
   });
+
+  it("有视野且被预定时记录 reservedBy", () => {
+    const intel = scanNeighborIntel("W7N3", "normal", 1000, {
+      sources: 2,
+      reservation: "enemyPlayer",
+    });
+    expect(intel.reservedBy).toBe("enemyPlayer");
+  });
+
+  it("有视野确认无预定 → 清除旧 reservedBy（预定已失效）", () => {
+    const prev = scanNeighborIntel("W7N3", "normal", 1000, { sources: 2, reservation: "enemy" });
+    const next = scanNeighborIntel("W7N3", "normal", 2000, { sources: 2 }, prev);
+    expect(next.reservedBy).toBeUndefined();
+  });
+
+  it("无视野时沿用上次的 reservedBy（陈旧度由消费方判断）", () => {
+    const prev = scanNeighborIntel("W7N3", "normal", 1000, { sources: 2, reservation: "enemy" });
+    const next = scanNeighborIntel("W7N3", "normal", 2000, undefined, prev);
+    expect(next.reservedBy).toBe("enemy");
+  });
 });

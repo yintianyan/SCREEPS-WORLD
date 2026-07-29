@@ -100,6 +100,38 @@ describe("remote targeting — selectRemoteTargets", () => {
     expect(result.map((c) => c.roomName)).toEqual(["W1N2"]);
   });
 
+  it("排除被他人预定的房，己方续期中的房仍可选", () => {
+    const result = selectRemoteTargets({
+      homeRoom: "W1N1",
+      intel: {
+        W2N1: makeIntel({ reservedBy: "enemy" }), // 敌方预定 → 排除。
+        W1N2: makeIntel({ reservedBy: "me" }),    // 己方续期 → 保留。
+        W2N2: makeIntel({ reservedBy: undefined }), // 无预定 → 保留。
+      },
+      existingOps: undefined,
+      tick,
+      staleThreshold,
+      haulerCapacity: 800,
+      myUsername: "me",
+    });
+    expect(result.map((c) => c.roomName).sort()).toEqual(["W1N2", "W2N2"]);
+  });
+
+  it("无 myUsername 时任何 reservedBy 都视为他人预定（保守排除）", () => {
+    const result = selectRemoteTargets({
+      homeRoom: "W1N1",
+      intel: {
+        W2N1: makeIntel({ reservedBy: "someone" }),
+        W1N2: makeIntel({ reservedBy: undefined }),
+      },
+      existingOps: undefined,
+      tick,
+      staleThreshold,
+      haulerCapacity: 800,
+    });
+    expect(result.map((c) => c.roomName)).toEqual(["W1N2"]);
+  });
+
   it("排除非正常状态房间（novice/respawn/closed）", () => {
     const result = selectRemoteTargets({
       homeRoom: "W1N1",
@@ -284,14 +316,54 @@ describe("remote targeting — 净收益评分与剔除", () => {
     });
     expect(netScore).toBe(known.netScore); // undefined 等价于 1。
   });
+
+  it("A-2 账本：计入 defender 后 netScore 下降", () => {
+    const withDefender = scoreRemoteCandidate({
+      pathCost: 50, linearDistance: 1, sources: 2, haulerCapacity: 800, withDefender: true,
+    });
+    const noDefender = scoreRemoteCandidate({
+      pathCost: 50, linearDistance: 1, sources: 2, haulerCapacity: 800, withDefender: false,
+    });
+    expect(withDefender.netScore).toBeLessThan(noDefender.netScore);
+  });
+
+  it("A-2 账本：道路维护随 pathCost 增长（远房 netScore 更低）", () => {
+    const near = scoreRemoteCandidate({
+      pathCost: 50, linearDistance: 1, sources: 2, haulerCapacity: 800,
+    });
+    const far = scoreRemoteCandidate({
+      pathCost: 300, linearDistance: 5, sources: 2, haulerCapacity: 800,
+    });
+    expect(far.netScore).toBeLessThan(near.netScore);
+  });
+
+  it("B-3 未预定：收益减半且不计 reserver 摊销", () => {
+    const reserved = scoreRemoteCandidate({
+      pathCost: 50, linearDistance: 1, sources: 2, haulerCapacity: 800, reserved: true,
+    });
+    const unreserved = scoreRemoteCandidate({
+      pathCost: 50, linearDistance: 1, sources: 2, haulerCapacity: 800, reserved: false,
+    });
+    // 未预定单源收益 5 vs 10 → 吞吐减半，即便省了 reserver 摊销，净分仍更低。
+    expect(unreserved.netScore).toBeLessThan(reserved.netScore);
+  });
 });
 
 describe("remote targeting — effectiveMaxOperations", () => {
-  it("有 storage：放开到 maxOperations(2)", () => {
-    expect(effectiveMaxOperations(true)).toBe(2);
+  it("有 storage + 双 spawn：放开到 maxOperations(2)", () => {
+    expect(effectiveMaxOperations(true, 2)).toBe(2);
   });
-  it("无 storage：收缩到 maxOperationsNoStorage(1)", () => {
-    expect(effectiveMaxOperations(false)).toBe(1);
+  it("无 storage + 双 spawn：收缩到 maxOperationsNoStorage(1)", () => {
+    expect(effectiveMaxOperations(false, 2)).toBe(1);
+  });
+  it("有 storage 但单 spawn：生产能力约束到 1（防远程编制挤占唯一孵化位）", () => {
+    expect(effectiveMaxOperations(true, 1)).toBe(1);
+  });
+  it("三 spawn（RCL8）：仍受消化侧 maxOperations(2) 封顶", () => {
+    expect(effectiveMaxOperations(true, 3)).toBe(2);
+  });
+  it("零 spawn（灾后无孵化能力）：上限为 0", () => {
+    expect(effectiveMaxOperations(true, 0)).toBe(0);
   });
 });
 

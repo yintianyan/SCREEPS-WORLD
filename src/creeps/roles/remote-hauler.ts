@@ -23,6 +23,10 @@ import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { globalCache } from "../../kernel/global-cache";
 
+/** container 选择的距离权重（与本地 HAUL_CONTAINER_DISTANCE_WEIGHT 一致）：
+ * 每格距离折算 10 能量。满溢的远 container 仍优先于近乎空的近 container。 */
+const REMOTE_CONTAINER_DISTANCE_WEIGHT = 10;
+
 /** 从远矿 container 取能。 */
 function withdrawRemoteContainer(): ActionCandidate<StructureContainer> {
   return {
@@ -110,10 +114,28 @@ export function findRemoteContainer(creep: Creep): StructureContainer | undefine
   }
   if (containers.length === 0) return undefined;
 
-  const closest = (creep.pos.findClosestByRange(containers) ?? containers[0])!;
+  // 加权分散（E-2 修复）：原纯 findClosestByRange 在 2-source 房（两 container）
+  // 会让所有 hauler 挤最近那个、远 container 积压溢出（羊群）。改为"能量 - 距离×权重"
+  // 打分 + 名哈希起点散布，照本地 selectHaulSourceContainer 的已验证手法。
+  let nameHash = 0;
+  for (let i = 0; i < creep.name.length; i++) {
+    nameHash = (nameHash * 31 + creep.name.charCodeAt(i)) | 0;
+  }
+  const offset = Math.abs(nameHash) % containers.length;
+  let best = containers[offset]!;
+  let bestScore = -Infinity;
+  for (let i = 0; i < containers.length; i++) {
+    const c = containers[(offset + i) % containers.length]!;
+    const energy = c.store.getUsedCapacity(RESOURCE_ENERGY);
+    const score = energy - creep.pos.getRangeTo(c) * REMOTE_CONTAINER_DISTANCE_WEIGHT;
+    if (score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
   // 缓存 containerId，后续 tick 直接用 getObjectById 取回。
-  creep.memory.remoteContainerId = closest.id as Id<StructureContainer>;
-  return closest;
+  creep.memory.remoteContainerId = best.id as Id<StructureContainer>;
+  return best;
 }
 
 /** 在远矿房查找最近的掉落能量。

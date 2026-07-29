@@ -39,6 +39,8 @@ export interface ExpansionInput {
   blacklist?: Readonly<Record<string, number>>;
   /** 情报陈旧上限（超过则不可信，不入选）。默认 10000。 */
   maxIntelAge?: number;
+  /** 本帝国用户名 — 排除被他人预定的房（claim 会 ERR_INVALID_TARGET 白费一个 claimer + 超时窗口）。 */
+  myUsername?: string;
 }
 
 /**
@@ -46,7 +48,7 @@ export interface ExpansionInput {
  * 返回最优候选；无可行目标（或 GCL 无余量）返回 undefined。
  */
 export function selectExpansionTarget(input: ExpansionInput): ExpansionCandidate | undefined {
-  const { ownedRoomNames, gclLevel, intelBySponsor, tick, blacklist, maxIntelAge = 10000 } = input;
+  const { ownedRoomNames, gclLevel, intelBySponsor, tick, blacklist, maxIntelAge = 10000, myUsername } = input;
 
   // GCL 余量门禁：可占房数 = GCL 等级。
   if (gclLevel <= ownedRoomNames.length) return undefined;
@@ -62,6 +64,9 @@ export function selectExpansionTarget(input: ExpansionInput): ExpansionCandidate
       if (info.status !== "normal") continue;
       // 有主房不碰（占领 ≠ 宣战）。
       if (info.owner) continue;
+      // 被他人预定的房不碰：claimController 对敌方预定返 ERR_INVALID_TARGET，
+      // 白费一个 claimer + 一个 claimTimeout 窗口才 blacklist。己方续期房不排除。
+      if (info.reservedBy && info.reservedBy !== myUsername) continue;
       // 必须有过视野 — sources 未知即盲区，claim 不赌。
       if (info.sources === undefined) continue;
       if (info.sources < 1) continue;

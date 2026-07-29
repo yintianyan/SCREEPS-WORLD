@@ -3,6 +3,7 @@ import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
 import { moveTowardRoom, stepToward, findSafestExit, moveToTarget, registerAnchor } from "../movement";
 import { releaseFromTask } from "../support/assignment-adapter";
+import { classifyThreats } from "../../domain/defense/threat";
 
 /** 根据能量存储更新 creep 模式。仅在阈值跨越时写入。 */
 export function updateMode(creep: Creep): void {
@@ -50,20 +51,10 @@ function getRoomThreats(roomName: string): Creep[] {
   }
   const room = Game.rooms[roomName];
   if (!room) return [];
-  const hostiles = room.find(FIND_HOSTILE_CREEPS, {
-    filter: (c) => {
-      // 联盟白名单过滤。
-      const allies = CONFIG.defense.allies;
-      return !allies.includes(c.owner.username);
-    },
-  });
-  // 过滤出真正有威胁的 creep（有攻击部件）。
-  const threats = hostiles.filter(c =>
-    c.body.some(p =>
-      p.type === ATTACK || p.type === RANGED_ATTACK ||
-      p.type === HEAL || p.type === WORK || p.type === CLAIM,
-    ),
-  );
+  const hostiles = room.find(FIND_HOSTILE_CREEPS);
+  // body-aware 威胁判定 — 与远矿 manager 的 collectRemoteThreats 共用同一
+  // classifyThreats（同一 THREAT_PARTS），消除"两个威胁探测器口径分裂"（F-2）。
+  const threats = classifyThreats(hostiles, CONFIG.defense.allies);
   g.__remoteThreats[roomName] = { tick: Game.time, creeps: threats };
   return threats;
 }

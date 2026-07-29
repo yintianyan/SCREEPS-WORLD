@@ -22,6 +22,8 @@ export interface RoomIntel {
   mineral?: string;
   /** 有视野且房间有主时记录的 owner 名。 */
   owner?: string;
+  /** 有视野且 controller 被预定时记录的预定者名（区分己方/敌方续期与拉锯）。 */
+  reservedBy?: string;
   /** 有视野时记录的敌方 tower 数（进攻/远矿风险评估的核心变量）。 */
   towers?: number;
   /** 危险冷却到期 tick：远矿房出现威胁时标记，冷却期内不作为远矿/扩张候选。 */
@@ -68,6 +70,7 @@ export function scanNeighborIntel(
     sources: number;
     mineralType?: string;
     owner?: string;
+    reservation?: string;
     towers?: number;
   },
   prev?: RoomIntel,
@@ -81,12 +84,16 @@ export function scanNeighborIntel(
     intel.sources = visibleRoom.sources;
     if (visibleRoom.mineralType) intel.mineral = visibleRoom.mineralType;
     if (visibleRoom.owner) intel.owner = visibleRoom.owner;
+    // reservedBy 与 owner 同模式：有视野且被预定则记录，否则不设（=清除）——
+    // 有视野确认无预定即视为预定已失效，让评选/维护立即恢复该房资格。
+    if (visibleRoom.reservation) intel.reservedBy = visibleRoom.reservation;
     if (visibleRoom.towers !== undefined) intel.towers = visibleRoom.towers;
   } else if (prev) {
     // 无视野：沿用上次观测值（数据会随 lastSeen 保持但陈旧度由消费方判断）。
     if (prev.sources !== undefined) intel.sources = prev.sources;
     if (prev.mineral !== undefined) intel.mineral = prev.mineral;
     if (prev.owner !== undefined) intel.owner = prev.owner;
+    if (prev.reservedBy !== undefined) intel.reservedBy = prev.reservedBy;
     if (prev.towers !== undefined) intel.towers = prev.towers;
     // 无视野时 lastSeen 不应前移（视野数据没有更新）。
     intel.lastSeen = prev.lastSeen;

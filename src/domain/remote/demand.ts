@@ -126,8 +126,13 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     // 补充的每一批都是送死。defender 已在上方评估（先应战再恢复运营）。
     if (hasThreats) continue;
 
-    // 1. Remote Harvester — 每目标 1 个（可配置）。
-    const harvesterTarget = CONFIG.remote.harvestersPerTarget;
+    // 1. Remote Harvester — 每 source 1 个（2-source 房需 2 只，否则第二源白费）。
+    //    op.sources 缺失（无视野自举）时回退 harvestersPerTarget；上限
+    //    harvestersMaxPerTarget 防未知房 sources 异常虚增编制。
+    const harvesterTarget = Math.min(
+      op.sources ?? CONFIG.remote.harvestersPerTarget,
+      CONFIG.remote.harvestersMaxPerTarget,
+    );
     const harvesterTotal = (counts.remoteHarvester ?? 0) + pending.remoteHarvester;
     if (harvesterTotal < harvesterTarget) {
       const key = spawnKey("remoteHarvester", homeRoom, harvesterTotal, targetRoom);

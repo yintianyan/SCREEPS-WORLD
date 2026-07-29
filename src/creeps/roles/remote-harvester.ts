@@ -20,10 +20,18 @@ import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 
 /**
- * 获取远矿 source — 从缓存的 sourceId 或直接 find。
+ * 获取远矿 source — 从缓存的 sourceId 或占用感知分配。
  * 首次进入远矿房时执行一次 room.find，之后复用 sourceId。
+ *
+ * 占用感知（E-1 修复）：远矿房无 RoomSnapshot/sourceOccupancy，改为扫描同房
+ * 同 target 的兄弟 remoteHarvester 已绑 sourceId 统计占用。原实现单纯选最近 +
+ * 入房位置偏置 → 2-source 房两只 harvester 挤同一 source，第二源白白再生浪费。
+ * 现选占用最少的 source；平局用名哈希决定遍历起点（同 creep 每 tick 稳定、
+ * 不抖动），把多只稳定散布到不同 source。
+ *
+ * 导出仅供接线测试验证占用分散行为。
  */
-function getRemoteSource(creep: Creep): Source | undefined {
+export function getRemoteSource(creep: Creep): Source | undefined {
   // 优先使用缓存的 sourceId。
   if (creep.memory.sourceId) {
     const source = getObjectById(creep.memory.sourceId);
@@ -36,15 +44,36 @@ function getRemoteSource(creep: Creep): Source | undefined {
   const room = creep.room;
   const sources = room.find(FIND_SOURCES);
   if (sources.length === 0) return undefined;
+  if (sources.length === 1) {
+    creep.memory.sourceId = sources[0]!.id;
+    return sources[0]!;
+  }
 
-  // 选最近的 source（远矿房通常 2 个 source，选近的减少通勤）。
-  let best = sources[0]!;
-  let bestDist = creep.pos.getRangeTo(best);
+  // 统计兄弟 remoteHarvester（同房同 target）已绑各 source 的占用数。
+  const target = creep.memory.remoteTarget;
+  const occupancy = new Map<Id<Source>, number>();
+  for (const other of Object.values(Game.creeps)) {
+    if (other.name === creep.name) continue;
+    if (other.memory.role !== "remoteHarvester") continue;
+    if (other.memory.remoteTarget !== target) continue;
+    const sid = other.memory.sourceId as Id<Source> | undefined;
+    if (sid) occupancy.set(sid, (occupancy.get(sid) ?? 0) + 1);
+  }
+
+  // 名哈希决定遍历起点：占用平局时稳定散布到不同 source。
+  let nameHash = 0;
+  for (let i = 0; i < creep.name.length; i++) {
+    nameHash = (nameHash * 31 + creep.name.charCodeAt(i)) | 0;
+  }
+  const offset = Math.abs(nameHash) % sources.length;
+  let best = sources[offset]!;
+  let bestCount = occupancy.get(best.id) ?? 0;
   for (let i = 1; i < sources.length; i++) {
-    const dist = creep.pos.getRangeTo(sources[i]!);
-    if (dist < bestDist) {
-      best = sources[i]!;
-      bestDist = dist;
+    const s = sources[(offset + i) % sources.length]!;
+    const count = occupancy.get(s.id) ?? 0;
+    if (count < bestCount) {
+      bestCount = count;
+      best = s;
     }
   }
   creep.memory.sourceId = best.id;

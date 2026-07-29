@@ -25,6 +25,9 @@ Object.assign(globalThis as Record<string, unknown>, {
   CLAIM: "claim",
   TOUGH: "tough",
 
+  // 部件容量常量
+  CARRY_CAPACITY: 50,
+
   // 结构常量
   STRUCTURE_SPAWN: "spawn",
   STRUCTURE_EXTENSION: "extension",

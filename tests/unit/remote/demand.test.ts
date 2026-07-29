@@ -11,11 +11,11 @@ const tick = 100000;
 const homeRoom = "W1N1";
 const targetRoom = "W2N1";
 
-function makeRemoteOps(state: "active" | "paused" = "active") {
+function makeRemoteOps(state: "active" | "paused" = "active", sources = 1) {
   return {
     [targetRoom]: {
       state,
-      sources: 2,
+      sources,
       createdAt: tick - 1000,
       lastSeen: tick,
     },
@@ -71,6 +71,32 @@ describe("remote demand — evaluateRemoteDemand", () => {
     });
     const harvesterReqs = requests.filter((r) => r.role === "remoteHarvester");
     expect(harvesterReqs).toHaveLength(0);
+  });
+
+  it("2-source 房孵 2 个 harvester，单源房仍只孵 1（B-1）", () => {
+    // 2-source：已有 1 只 → 仍补第 2 只（第二源否则白费）。
+    const twoSource = evaluateRemoteDemand({
+      ...baseInput,
+      remoteOps: makeRemoteOps("active", 2),
+      remoteCreeps: makeCreeps("remoteHarvester", 1),
+    });
+    expect(twoSource.requests.filter((r) => r.role === "remoteHarvester")).toHaveLength(1);
+
+    // 2-source：已有 2 只 → 满足，不再补。
+    const twoSourceFull = evaluateRemoteDemand({
+      ...baseInput,
+      remoteOps: makeRemoteOps("active", 2),
+      remoteCreeps: makeCreeps("remoteHarvester", 2),
+    });
+    expect(twoSourceFull.requests.filter((r) => r.role === "remoteHarvester")).toHaveLength(0);
+
+    // 单源：已有 1 只 → 满足，不再补。
+    const oneSource = evaluateRemoteDemand({
+      ...baseInput,
+      remoteOps: makeRemoteOps("active", 1),
+      remoteCreeps: makeCreeps("remoteHarvester", 1),
+    });
+    expect(oneSource.requests.filter((r) => r.role === "remoteHarvester")).toHaveLength(0);
   });
 
   it("已有足够的 hauler 时不重复孵化", () => {

@@ -132,8 +132,10 @@ function tryStartExpansion(ctx: TickContext): void {
   // sponsor 候选：经济成熟（RCL 门槛）且状态健康的自有房。
   const ownedRoomNames: string[] = [];
   const intelBySponsor: Record<string, Readonly<Record<string, RoomIntel>>> = {};
+  let myUsername: string | undefined;
   for (const snapshot of ctx.snapshots()) {
     ownedRoomNames.push(snapshot.roomName);
+    myUsername ??= snapshot.controller?.owner?.username;
     if (snapshot.rcl < CONFIG.expansion.sponsorMinRcl) continue;
     const roomMem = Memory.rooms[snapshot.roomName];
     if (roomMem?.colonyState !== "normal") continue;
@@ -147,6 +149,7 @@ function tryStartExpansion(ctx: TickContext): void {
     intelBySponsor,
     tick: ctx.tick,
     blacklist: Memory.kernel?.expansionBlacklist,
+    myUsername,
   });
   if (!target) return;
 

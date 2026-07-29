@@ -50,16 +50,25 @@ export interface RemoteTargetingInput {
   globalActiveTargets?: ReadonlySet<string>;
   /** remoteHauler 单只运力（carry 容量，调用方按当前 body 档位计算）。 */
   haulerCapacity: number;
+  /** 本帝国用户名 — 排除被他人预定的房（己方续期中的房仍可选）。 */
+  myUsername?: string;
 }
 
 // ─── 远矿经济模型（评分公式的具名常量）────────────────────────
-// 收益：reserve 后单 source 3000/300tick = 10 e/tick。
+// 收益：reserve 后单 source 3000/300tick = 10 e/tick；未预定仅 1500/300 = 5。
 const SOURCE_INCOME = 10;
+const SOURCE_INCOME_UNRESERVED = 5;
 // 摊销：body 成本 / 寿命（e/tick）。harvester ~550/1500、hauler ~600/1500、
 // reserver 1300/600（CLAIM 寿命仅 600，是编队里最贵的门票）。
 const HARVESTER_UPKEEP = 0.4;
 const HAULER_UPKEEP = 0.4;
 const RESERVER_UPKEEP = 2.2;
+// A-2 账本补全：defender 摊销（[2A,2M] ~520/1500 ≈ 0.35 e/tick，enableDefender
+// 时计入 — 远矿房需常备/周期性防御）；道路维护随通勤里程缩放（road 每 tick 持续
+// 衰减，里程越长维护越贵；系数含沼泽路 5× 衰减的保守放大）。二者原缺失 →
+// 频繁被扰/远程房 netScore 虚高。
+const DEFENDER_UPKEEP = 0.35;
+const ROAD_UPKEEP_PER_PATHCOST = 0.002;
 
 /** 房名解析坐标（纯函数，不依赖 Game.map）。 */
 function parseRoomCoord(roomName: string): { x: number; y: number } | undefined {
@@ -85,35 +94,61 @@ export function roomLinearDistance(a: string, b: string): number {
  * 等效路程）；intel 缺失时回退线性距离 × 70（约一个房的对角穿越 + 余量，
  * 偏保守 — 宁可低估陌生房，不高估）。
  * 吞吐 = min(需求, 编制 × 单 hauler 往返运力)；净分 = 吞吐 - 编队摊销。
+ *
+ * A-2 账本补全：upkeep 计入 defender（enableDefender 时）与道路维护；
+ * reserved=false（无 CLAIM body / 未启用 reserver）时单源收益减半（5 e/tick），
+ * 且不计 reserver 摊销 —— 评估口径与实际执行一致（B-3）。
  */
 export function scoreRemoteCandidate(input: {
   pathCost: number | undefined;
   linearDistance: number;
   sources: number | undefined;
   haulerCapacity: number;
+  /** 是否预定该房（默认 true）。false → 收益减半 + 不计 reserver 摊销。 */
+  reserved?: boolean;
+  /** 是否为该房配 defender（默认 CONFIG.remote.enableDefender）。 */
+  withDefender?: boolean;
 }): { netScore: number; haulerNeed: number } {
   const pathCost = input.pathCost ?? input.linearDistance * 70;
   const sources = input.sources ?? 1; // 无视野保守估 1。
-  const demand = sources * SOURCE_INCOME;
+  const reserved = input.reserved ?? true;
+  const withDefender = input.withDefender ?? CONFIG.remote.enableDefender;
+  const perSource = reserved ? SOURCE_INCOME : SOURCE_INCOME_UNRESERVED;
+  const demand = sources * perSource;
   const perHauler = input.haulerCapacity / (2 * Math.max(1, pathCost));
   const haulerNeed = Math.min(
     CONFIG.remote.haulersMax,
     Math.max(1, Math.ceil(demand / Math.max(0.01, perHauler))),
   );
   const throughput = Math.min(demand, haulerNeed * perHauler);
-  const upkeep = HARVESTER_UPKEEP * sources + HAULER_UPKEEP * haulerNeed + RESERVER_UPKEEP;
+  // 编队摊销：harvester（每源）+ hauler（动态编制）+ reserver（仅预定时）+
+  // defender（启用时）+ 道路维护（随通勤里程缩放）。
+  const upkeep =
+    HARVESTER_UPKEEP * sources +
+    HAULER_UPKEEP * haulerNeed +
+    (reserved ? RESERVER_UPKEEP : 0) +
+    (withDefender ? DEFENDER_UPKEEP : 0) +
+    ROAD_UPKEEP_PER_PATHCOST * pathCost;
   return { netScore: throughput - upkeep, haulerNeed };
 }
 
 /**
- * 有效开点上限 — 无 storage 时收缩为 1（消化保护）。
+ * 有效开点上限 — 消化能力与生产能力的双重约束取最小。
  *
- * 本房 sink（spawn/ext/tower/controller container ≈ 4300 容量）在无 storage
- * 时是远矿能量的唯一归宿，多点并发流入必然背压空转（远矿 container 溢出
- * drop 衰减）。storage 建成后自动放开。
+ * 消化侧：无 storage 时收缩为 1。本房 sink（spawn/ext/tower/controller
+ * container ≈ 4300 容量）在无 storage 时是远矿能量的唯一归宿，多点并发
+ * 流入必然背压空转（远矿 container 溢出 drop 衰减）。storage 建成后放开。
+ *
+ * 生产侧：上限不超过 spawn 数。每个远矿操作的稳态编制 3-5 只（harvester +
+ * 动态 hauler + reserver，reserver 因 CLAIM 寿命 600 以 2.5 倍频率轮换），
+ * 一个 spawn 一次只能孵一只 — 单 spawn 房开双远矿时远程请求持续占用孵化位，
+ * 本地 upgrader/builder/distributor 寿终后永远排不到队首，经济脊柱萎缩
+ * （线上实测：远程吃掉 50% 孵化产出，upgrader/builder/distributor 全饿死）。
+ * spawn 数是稳定输入（建筑不抖动），上限不震荡。
  */
-export function effectiveMaxOperations(hasStorage: boolean): number {
-  return hasStorage ? CONFIG.remote.maxOperations : CONFIG.remote.maxOperationsNoStorage;
+export function effectiveMaxOperations(hasStorage: boolean, spawnCount: number): number {
+  const digestCap = hasStorage ? CONFIG.remote.maxOperations : CONFIG.remote.maxOperationsNoStorage;
+  return Math.min(digestCap, Math.max(0, spawnCount));
 }
 
 /**
@@ -149,6 +184,10 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
     if (info.kind !== "normal") continue;
     // 排除有主的房间。
     if (info.owner) continue;
+    // 排除被他人预定的房（己方续期中的房 reservedBy===myUsername 仍可选）。
+    // 敌方预定意味着对方在争这块矿 — 派 reserver 去只能打无谓 attackController
+    // 拉锯（单只对抗持续续期数学上磨不过），纯烧 CLAIM body + 占孵化位。止损：不去。
+    if (info.reservedBy && info.reservedBy !== input.myUsername) continue;
     // 排除非正常状态的房间（novice/respawn/closed）。
     if (info.status !== "normal") continue;
     // 排除危险冷却中的房间 — 威胁刚出现过的房不送兵（止损）。

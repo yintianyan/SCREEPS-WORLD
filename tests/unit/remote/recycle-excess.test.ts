@@ -75,6 +75,35 @@ describe("recycleExcessRemoteCreeps — 交接豁免", () => {
     expect(older.memory.recycle).toBe(true);
   });
 
+  it("hauler 配额与 demand 同口径：haulerNeed=2 时 2 只健康 hauler 均不被标记", () => {
+    // 口径分裂回归（远矿 2.0 漏改）：demand 按 op.haulerNeed=2 孵化，
+    // recycle 若按固定 haulersPerTarget=1 回收，编制内第 2 只被反复
+    // 标记 → 排除出编制 → 缺编再孵 → 孵化→回收死循环。
+    (OPS.W7N5 as { haulerNeed?: number }).haulerNeed = 2;
+    const h1 = remoteCreep("rh_a", "remoteHauler", { ttl: 900 });
+    const h2 = remoteCreep("rh_b", "remoteHauler", { ttl: 1200 });
+
+    runWith(h1, h2);
+
+    expect(h1.memory.recycle).toBe(false);
+    expect(h2.memory.recycle).toBe(false);
+    delete (OPS.W7N5 as { haulerNeed?: number }).haulerNeed;
+  });
+
+  it("hauler 超出 haulerNeed 的健康冗余仍回收（保留最年轻的 2 只）", () => {
+    (OPS.W7N5 as { haulerNeed?: number }).haulerNeed = 2;
+    const h1 = remoteCreep("rh_a", "remoteHauler", { ttl: 600 });
+    const h2 = remoteCreep("rh_b", "remoteHauler", { ttl: 900 });
+    const h3 = remoteCreep("rh_c", "remoteHauler", { ttl: 1200 });
+
+    runWith(h1, h2, h3);
+
+    expect(h3.memory.recycle).toBe(false);
+    expect(h2.memory.recycle).toBe(false);
+    expect(h1.memory.recycle).toBe(true);
+    delete (OPS.W7N5 as { haulerNeed?: number }).haulerNeed;
+  });
+
   it("harvester 按配额（harvestersPerTarget=1）同规则：健康超额回收、垂死豁免", () => {
     // remoteHarvester 9 部件 → 窗口 = 27 + 15 + 50 = 92。
     const dying = remoteCreep("rh_old", "remoteHarvester", { ttl: 80, bodyLen: 9 });

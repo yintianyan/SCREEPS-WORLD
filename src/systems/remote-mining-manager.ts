@@ -28,8 +28,9 @@
 import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext, ColonyState } from "../kernel/contracts";
-import { selectRemoteTargets, shouldPauseOperation, effectiveMaxOperations } from "../domain/remote/targeting";
+import { selectRemoteTargets, shouldPauseOperation, effectiveMaxOperations, scoreRemoteCandidate, roomLinearDistance } from "../domain/remote/targeting";
 import { evaluateRemoteDemand, type RemoteCreepSummary } from "../domain/remote/demand";
+import { classifyThreats } from "../domain/defense/threat";
 import { submitRequest } from "../domain/spawn/queue";
 
 export const remoteMiningManagerSystem: System = {
@@ -58,21 +59,63 @@ export const remoteMiningManagerSystem: System = {
 
       const remoteOps = roomMem.remoteOps ?? {};
 
-      // 1. 评估现有运营：暂停过期、清理废弃。
-      //    RM-3：返回被自己 claim 的房 — 现役远矿 creep 一并回收。
-      const selfClaimedRooms = maintainExistingOps(remoteOps, ctx.tick);
+      // 1. 评估现有运营：暂停过期、清理废弃、检测敌占/敌方预定。
+      //    RM-3：被自己 claim 的房 + 敌方预定的房 — 现役远矿 creep 一并回收。
+      const { selfClaimed: selfClaimedRooms, hostileReserved: hostileReservedRooms } =
+        maintainExistingOps(remoteOps, ctx.tick, snapshot.controller?.owner?.username);
 
       // 2. 如果 active 运营数不足，从 intel 评选新目标。
       //    战略门禁：开辟新远矿点须获 empire-strategy 姿态授权
       //    （fortify/war 时收缩战线不铺新点）；现役运营不受影响。
       const activeCount = countActiveOps(remoteOps);
       const newOpsAllowed = Memory.kernel?.strategy?.newRemoteOpsAllowed === true;
-      // 无 storage 时收缩开点上限（消化保护）；现役运营不砍。
-      const maxOps = effectiveMaxOperations(snapshot.storage !== undefined);
+      // 上限 = 消化能力（storage 有无）与生产能力（spawn 数）取最小。
+      const maxOps = effectiveMaxOperations(
+        snapshot.storage !== undefined,
+        snapshot.spawns.length,
+      );
+
+      // 2a. 超额收缩：active 数超过上限时废弃通勤最贵的。排序键优先用
+      //     intel 实测 pathCost（越远越先砍 — 直接对应编制成本与孵化位占用），
+      //     无 intel 时回退 haulerNeed（评选期按 pathCost 算出的代理值）；
+      //     全平局按房名字典序保证确定性。线上教训：仅用 haulerNeed 时
+      //     双远矿动态重估后同为 3 形成平局，字典序误砍了更近的房。
+      //     历史场景：单 spawn 房在 storage 建成时上限被放开到 2 开了双远矿，
+      //     远程编制 ~11 只把唯一 spawn 占满，本地 upgrader/builder/
+      //     distributor 饿死。收缩用 abandoned 而非 paused — paused 会被
+      //     maintainExistingOps 在 creep 尚在房内时自动复活（震荡）；
+      //     abandoned 停止一切孵化，现役 creep 不召回（沉没成本已付，
+      //     自然寿终榨干残值）。上限输入都是建筑级稳定量，不会抖动。
+      if (activeCount > maxOps) {
+        const costOf = (roomName: string, op: RemoteOp): number =>
+          roomMem.intel?.[roomName]?.pathCost ?? (op.haulerNeed ?? 1) * 20;
+        const active = Object.entries(remoteOps)
+          .filter(([, op]) => op.state === "active")
+          .sort((a, b) =>
+            costOf(b[0], b[1]) - costOf(a[0], a[1]) ||
+            a[0].localeCompare(b[0]),
+          );
+        for (let i = 0; i < activeCount - maxOps; i++) {
+          const [roomName, op] = active[i]!;
+          op.state = "abandoned";
+          console.log(
+            `[${ctx.tick}] remote/${snapshot.roomName}: 超额收缩，废弃 ${roomName}` +
+            `（active ${activeCount} > 上限 ${maxOps}，通勤成本=${costOf(roomName, op)}）`,
+          );
+        }
+      }
+
+      // remoteHauler 单只运力：按当前能量档位的 body carry 数 ×50。
+      // 提前计算：既供新开点评选，也供现役 op 周期重估（A-3/B-6）。
+      const haulerBody = selectBody("remoteHauler", snapshot.energyCapacityAvailable);
+      const haulerCapacity = haulerBody.filter(p => p === CARRY).length * CARRY_CAPACITY;
+
+      // 现役 op 周期重估：用当前 pathCost + 当前 body 运力重算 netScore/haulerNeed。
+      // 一次性快照的反面 —— 开点时勉强达标、后续变差（路况恶化/source 被抢）的
+      // 边际 op 若不重估会永续；body 变大后 haulerNeed 也需缩编避免过配。
+      reevaluateActiveOps(remoteOps, roomMem, snapshot.roomName, haulerCapacity, ctx.tick);
+
       if (newOpsAllowed && activeCount < maxOps) {
-        // remoteHauler 单只运力：按当前能量档位的 body carry 数 ×50。
-        const haulerBody = selectBody("remoteHauler", snapshot.energyCapacityAvailable);
-        const haulerCapacity = haulerBody.filter(p => p === CARRY).length * CARRY_CAPACITY;
         const candidates = selectRemoteTargets({
           homeRoom: snapshot.roomName,
           intel: roomMem.intel,
@@ -81,6 +124,7 @@ export const remoteMiningManagerSystem: System = {
           staleThreshold: CONFIG.remote.staleThreshold,
           globalActiveTargets,
           haulerCapacity,
+          myUsername: snapshot.controller?.owner?.username,
         });
         // 只补充到有效上限。
         const needed = maxOps - activeCount;
@@ -181,12 +225,17 @@ export const remoteMiningManagerSystem: System = {
       // InvaderCore 压制房的现役远矿 creep 全部标记回收 —
       // harvester 采集被压制、reserver 空耗寿命，留守是持续净亏损。
       // RM-3：被自己 claim 的房同样回收（运营已废弃，该房转本地闭环）。
-      recycleBlockedRoomCreeps(
-        snapshot.roomName,
-        selfClaimedRooms.length > 0
-          ? new Set([...blockedRooms, ...selfClaimedRooms])
-          : blockedRooms,
-      );
+      // 敌方预定房同样回收现役 creep，并写 dangerUntil 冷却防止评选侧立即重开
+      // （照 InvaderCore 双轨止损：视野消失后靠冷却维持"该房已被占"判断）。
+      for (const rn of hostileReservedRooms) {
+        const info = roomMem.intel?.[rn];
+        if (info) info.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
+      }
+      const recycleRooms =
+        selfClaimedRooms.length > 0 || hostileReservedRooms.length > 0
+          ? new Set([...blockedRooms, ...selfClaimedRooms, ...hostileReservedRooms])
+          : blockedRooms;
+      recycleBlockedRoomCreeps(snapshot.roomName, recycleRooms);
 
       const { requests } = evaluateRemoteDemand({
         homeRoom: snapshot.roomName,
@@ -213,14 +262,59 @@ export const remoteMiningManagerSystem: System = {
 };
 
 /**
- * 维护现有远矿运营：暂停过期运营、更新 lastSeen、清理废弃。
+ * 现役 op 周期经济重估（A-3/B-6）。用当前 intel.pathCost + 当前 body 运力重算
+ * netScore/haulerNeed：haulerNeed 写回（body 变大→缩编，防过配）；netScore 连续
+ * 低于门槛超过宽限期 → 废弃（防边际 op 永续）。抗抖动：单次波动不撤，回升即清零。
+ */
+function reevaluateActiveOps(
+  remoteOps: Record<string, RemoteOp>,
+  roomMem: RoomMemory,
+  homeRoom: string,
+  haulerCapacity: number,
+  tick: number,
+): void {
+  for (const [roomName, op] of Object.entries(remoteOps)) {
+    if (op.state !== "active") continue;
+    const info = roomMem.intel?.[roomName];
+    const { netScore, haulerNeed } = scoreRemoteCandidate({
+      pathCost: info?.pathCost,
+      linearDistance: roomLinearDistance(homeRoom, roomName),
+      sources: op.sources ?? info?.sources,
+      haulerCapacity,
+    });
+    // 写回最新 haulerNeed（body 档位提升后单只运力增大 → 需要的 hauler 数下降）。
+    op.haulerNeed = haulerNeed;
+    if (netScore < CONFIG.remote.minNetScore) {
+      if (op.lowScoreSince === undefined) {
+        op.lowScoreSince = tick; // 首次跌破 — 起算宽限期。
+      } else if (tick - op.lowScoreSince > CONFIG.remote.lowScoreGrace) {
+        op.state = "abandoned";
+        console.log(
+          `[${tick}] remote/${homeRoom}: 经济重估废弃 ${roomName}` +
+          `（netScore=${netScore.toFixed(1)} < ${CONFIG.remote.minNetScore}，` +
+          `持续 ${tick - op.lowScoreSince} tick）`,
+        );
+      }
+    } else if (op.lowScoreSince !== undefined) {
+      op.lowScoreSince = undefined; // 回升到门槛以上 — 清除低分计时。
+    }
+  }
+}
+
+/**
+ * 维护现有远矿运营：暂停过期运营、更新 lastSeen、清理废弃、检测敌占/敌方预定。
+ * 返回需回收现役 creep 的房：selfClaimed（转本地）+ hostileReserved（敌方预定，需写冷却）。
  */
 function maintainExistingOps(
   remoteOps: Record<string, RemoteOp>,
   tick: number,
-): string[] {
+  myUsername?: string,
+): { selfClaimed: string[]; hostileReserved: string[] } {
   // RM-3：被自己 claim 的远矿房（扩张升级为正式殖民地）— 返回给调用方回收现役 creep。
   const selfClaimed: string[] = [];
+  // 敌方预定房 — 派 reserver 去只能打无谓拉锯，运行时退出（评选侧已挡新开点，
+  // 此处处理"开点后目标房被敌方预定"的运行时发现，照 InvaderCore 止损链模板）。
+  const hostileReserved: string[] = [];
   for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state === "abandoned") continue;
 
@@ -235,6 +329,16 @@ function maintainExistingOps(
     if (targetRoom?.controller?.owner) {
       op.state = "abandoned";
       if (targetRoom.controller.my) selfClaimed.push(roomName);
+      continue;
+    }
+
+    // 敌方预定检测（需视野）：controller 被他人预定 → 废弃 + 回收 + 打冷却。
+    // 与 owner 检测同层，覆盖"开点后目标房被敌方 reserver 占据"的运行时场景。
+    // 己方续期（reservation.username === myUsername）不触发。
+    const reservedBy = targetRoom?.controller?.reservation?.username;
+    if (reservedBy && reservedBy !== myUsername) {
+      op.state = "abandoned";
+      hostileReserved.push(roomName);
       continue;
     }
 
@@ -274,7 +378,7 @@ function maintainExistingOps(
       delete remoteOps[roomName];
     }
   }
-  return selfClaimed;
+  return { selfClaimed, hostileReserved };
 }
 
 /** 统计 active 状态的运营数。 */
@@ -361,9 +465,15 @@ export function recycleExcessRemoteCreeps(
     }
   };
 
-  for (const [, entry] of byTarget) {
+  for (const [target, entry] of byTarget) {
     markExcess(entry.harvester, CONFIG.remote.harvestersPerTarget);
-    markExcess(entry.hauler, CONFIG.remote.haulersPerTarget);
+    // hauler 配额必须与 demand 侧同口径（op.haulerNeed 动态编制，回退
+    // haulersPerTarget）。远矿 2.0 引入动态编制时此处漏改，口径分裂成
+    // 「孵化按 haulerNeed=2-3、回收按固定值 1」— 编制内的健康 hauler
+    // 被反复标记回收，collectRemoteCreeps 又排除被标记者，demand 视角
+    // 缺编再孵，形成孵化→回收死循环（线上实测：W7N3 编制 2 只，第 2 只
+    // 永远 recycle=true，每轮白烧一具 body + 跨房返程）。
+    markExcess(entry.hauler, remoteOps[target]?.haulerNeed ?? CONFIG.remote.haulersPerTarget);
     markExcess(entry.reserver, 1);
     markExcess(entry.defender, 1);
   }
@@ -395,21 +505,19 @@ function collectRemoteCreeps(homeRoom: string): RemoteCreepSummary[] {
 
 /**
  * 收集远矿房威胁信息 — 检测 active 运营的远矿房是否有 hostile creep。
- * 用于触发 remoteDefender 孵化需求。
+ * 用于触发 remoteDefender 孵化需求。导出供接线测试验证 body-aware 口径。
  */
-function collectRemoteThreats(remoteOps: Readonly<Record<string, RemoteOp>>): Record<string, boolean> {
+export function collectRemoteThreats(remoteOps: Readonly<Record<string, RemoteOp>>): Record<string, boolean> {
   const threats: Record<string, boolean> = {};
   for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") continue;
     const room = Game.rooms[roomName];
     if (!room) continue;
-    const hostiles = room.find(FIND_HOSTILE_CREEPS, {
-      filter: (c) => {
-        const allies = CONFIG.defense.allies;
-        return !allies.includes(c.owner.username);
-      },
-    });
-    threats[roomName] = hostiles.length > 0;
+    // F-2：body-aware 威胁判定，与经济角色 flee 的 getRoomThreats 同口径
+    // （classifyThreats 用同一 THREAT_PARTS）。原实现"任何非盟友即威胁"会为
+    // 纯 MOVE 斥候空孵 defender（追不上也杀不了）+ 停产 300t，口径与 flee 分裂。
+    const hostiles = room.find(FIND_HOSTILE_CREEPS);
+    threats[roomName] = classifyThreats(hostiles, CONFIG.defense.allies).length > 0;
   }
   return threats;
 }

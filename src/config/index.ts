@@ -461,8 +461,11 @@ export const CONFIG = {
      * 消化能力有限，多点并发流入会背压空转（远矿 container 溢出 drop 衰减）。
      * storage 建成后自动放开到 maxOperations。 */
     maxOperationsNoStorage: 1,
-    /** 每个远矿目标的 harvester 数。 */
+    /** 每个远矿目标的 harvester 数（op.sources 缺失时的回退值）。 */
     harvestersPerTarget: 1,
+    /** 每个远矿目标的 harvester 数上限 — 按 source 数孵化（2-source 房需 2 只，
+     * 否则第二源白白再生浪费）；上限防未知房 sources 异常虚增编制、占满孵化位。 */
+    harvestersMaxPerTarget: 2,
     /** 每个远矿目标的 hauler 数（评选期未算出 haulerNeed 时的回退值）。 */
     haulersPerTarget: 1,
     /** 动态 hauler 编制上限 — 需要更多说明目标太远，评分门槛应已剔除它。 */
@@ -470,6 +473,10 @@ export const CONFIG = {
     /** 净收益门槛（e/tick）— 评选评分低于此值的候选剔除：
      * 名额只有 maxOperations 个，烂目标（沼泽远房）占位比空置更亏。 */
     minNetScore: 3,
+    /** 现役 op 经济重估宽限期（tick，A-3/B-6）— netScore 连续低于 minNetScore
+     * 超过此时长才废弃。抗抖动：防路况/source 瞬时波动误撤边际 op。按 manager
+     * interval(10) 计约 100 轮评估，足够区分持久劣化与短暂波动。 */
+    lowScoreGrace: 1000,
     /** 是否启用 reserver（RCL3+ 才有意义，CLAIM 部件 600 能量）。 */
     enableReserver: true,
     /** 是否启用 remoteDefender（远矿防御者，杀 NPC reserver/Invader）。 */

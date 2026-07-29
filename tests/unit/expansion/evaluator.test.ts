@@ -62,6 +62,20 @@ describe("expansion — selectExpansionTarget", () => {
     expect(selectExpansionTarget(input)).toBeUndefined();
   });
 
+  it("被他人预定的房被剔除，己方续期房仍可选", () => {
+    const enemyReserved = baseInput({
+      intelBySponsor: { W1N1: { W2N1: intel({ reservedBy: "enemy" }) } },
+      myUsername: "me",
+    });
+    expect(selectExpansionTarget(enemyReserved)).toBeUndefined();
+
+    const selfReserved = baseInput({
+      intelBySponsor: { W1N1: { W2N1: intel({ reservedBy: "me" }) } },
+      myUsername: "me",
+    });
+    expect(selectExpansionTarget(selfReserved)?.roomName).toBe("W2N1");
+  });
+
   it("黑名单冷却期内的目标被剔除，到期后恢复", () => {
     const blacklisted = baseInput({ blacklist: { W2N1: tick + 1000 } });
     expect(selectExpansionTarget(blacklisted)).toBeUndefined();

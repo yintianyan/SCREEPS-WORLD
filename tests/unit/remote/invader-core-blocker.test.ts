@@ -122,7 +122,7 @@ describe("remote-mining-manager — 压制房止损接线（run 级副作用）"
       },
     };
 
-    const snapshot = mockSnapshot({ rcl: 5 });
+    const snapshot = mockSnapshot({ rcl: 5, spawns: [{} as never] });
     remoteMiningManagerSystem.run(mockContext(snapshot));
 
     const roomMem = g.Memory.rooms.W7N4;
@@ -172,7 +172,7 @@ describe("remote-mining-manager — 压制状态持久化（防失明解封死�
     g.Game.rooms[targetRoom] = makeBlockedRoom(targetRoom);
     const roomMem = setupHome({ state: "active", createdAt: now - 500, lastSeen: now });
 
-    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5 })));
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
 
     expect(roomMem.remoteOps[targetRoom].blockedUntil).toBeGreaterThan(now);
   });
@@ -186,7 +186,7 @@ describe("remote-mining-manager — 压制状态持久化（防失明解封死�
       blockedUntil: now + 3000, // 冷却未到期
     });
 
-    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5 })));
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
 
     // 孵化仍冻结 — 队列中无任何指向压制房的请求。
     const remoteReqs = (roomMem.spawnQueue as SpawnRequest[]).filter(
@@ -207,7 +207,7 @@ describe("remote-mining-manager — 压制状态持久化（防失明解封死�
       blockedUntil: now + 3000,
     });
 
-    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5 })));
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
 
     expect(roomMem.remoteOps[targetRoom].blockedUntil).toBeUndefined();
     // 孵化恢复。
@@ -225,7 +225,7 @@ describe("remote-mining-manager — 压制状态持久化（防失明解封死�
       blockedUntil: now - 1, // 已到期
     });
 
-    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5 })));
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
 
     expect(roomMem.remoteOps[targetRoom].blockedUntil).toBeUndefined();
     const remoteReqs = (roomMem.spawnQueue as SpawnRequest[]).filter(
