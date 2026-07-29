@@ -3,6 +3,23 @@ import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
 import { getObjectById } from "./obj-cache";
 
+/**
+ * 掉落堆选择的距离权重：每格距离折算的能量机会成本（往返运力代价）。
+ * selectDroppedEnergy 用 score = amount − dist × 此值 在「堆大小 vs 取货距离」
+ * 间权衡。20 ≈ 往返 2 格的运力损耗量级，使远处溢出大堆（损失更大）压过近处
+ * 小堆，避免多 hauler 被身边小堆截胡而涌向同侧、冷落另一侧持续溢出的大堆。
+ */
+const DROP_DISTANCE_WEIGHT = 20;
+
+/**
+ * hauler 取能 container 选择的距离权重：每格距离折算的能量。
+ * selectHaulSourceContainer 用 score = energy − dist × 此值 在「满溢程度 vs 距离」
+ * 间权衡。10 使两侧同为满仓（2000）时按距离分流（近者优先），但满溢程度差距明显
+ * 时（如 2000 vs 1000）仍优先疏解更满者（距离项 ≤200 不足以翻转千级能量差），
+ * 兼顾防溢出与就近，配合名字哈希散布消除「全员涌向数组首个」的羊群偏置。
+ */
+const HAUL_CONTAINER_DISTANCE_WEIGHT = 10;
+
 /** 获取或分配 creep 的 source。将 sourceId 存入 memory。 */
 export function getSource(creep: Creep, snapshot: RoomSnapshot): Source | undefined {
   // 先尝试缓存的 source。
@@ -413,6 +430,47 @@ export function pickHaulFillTargetInRange(
   return undefined;
 }
 
+/**
+ * hauler 取能 container 选择：在「满溢程度 vs 取货距离」间权衡，防止羊群偏置。
+ *
+ * 旧实现 findRichestContainer 纯选最满：两侧 source container 同为满仓（2000）时
+ * 严格大于比较恒选数组首个 → 所有空载 hauler 每趟都涌向同一个 container，另一侧
+ * 持续溢出无人疏解（线上实测：一侧 container 满溢地面堆积 5000+，hauler 全挤对侧）。
+ *
+ * score = energy − dist × HAUL_CONTAINER_DISTANCE_WEIGHT：
+ *   - 越满的 container 越该优先疏解（防溢出，能量项主导）；
+ *   - 越近成本越低（距离项微调，避免舍近求远空跑）；
+ *   - 权重远小于满仓能量差，仅在满溢程度接近时由距离打破平局，实现两侧自然分流。
+ * 平局（score 相同，如两侧同为满仓且等距）时用 creep 名哈希散布，避免全员选同一个
+ * （参照 getSource 的 B-4 去偏置手法）。
+ */
+export function selectHaulSourceContainer(
+  creep: Creep,
+  containers: readonly StructureContainer[],
+): StructureContainer | undefined {
+  let best: StructureContainer | undefined;
+  let bestScore = -Infinity;
+  // 名字哈希决定遍历起点：平局时各 creep 稳定散布到不同 container（同一 creep 每 tick 一致）。
+  let nameHash = 0;
+  for (let i = 0; i < creep.name.length; i++) {
+    nameHash = (nameHash * 31 + creep.name.charCodeAt(i)) | 0;
+  }
+  const n = containers.length;
+  if (n === 0) return undefined;
+  const offset = Math.abs(nameHash) % n;
+  for (let i = 0; i < n; i++) {
+    const c = containers[(offset + i) % n]!;
+    const energy = c.store.getUsedCapacity(RESOURCE_ENERGY);
+    if (energy <= 0) continue;
+    const score = energy - creep.pos.getRangeTo(c) * HAUL_CONTAINER_DISTANCE_WEIGHT;
+    if (score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return best;
+}
+
 /** 找到能量最多的 container。 */
 export function findRichestContainer(
   containers: readonly StructureContainer[],
@@ -468,13 +526,17 @@ export function findEmptiestContainer(
 }
 
 /**
- * 选择下一个要拾取的掉落能量堆（考虑拾取范围与衰减）。
+ * 选择下一个要拾取的掉落能量堆（考虑拾取范围、衰减与堆大小）。
  *
  * 游戏机制：pickup 需相邻（range ≤ 1），每 tick 只能拾取一堆；掉落能量按
- * ceil(amount/1000)/tick 衰减，堆越大衰减越快。因此在“装满前持续拾取”时：
+ * ceil(amount/1000)/tick 衰减，堆越大衰减越快（绝对损失越大）。因此：
  *   - 若身边（range ≤ 1）有可拾取的堆，优先拾取能量最多的一堆
  *     （先拿大堆，减少剩余堆的衰减损耗）。
- *   - 否则走向最近的一堆去拾取。
+ *   - 否则在「大小 vs 取货成本」间权衡：score = amount − dist × DROP_DISTANCE_WEIGHT。
+ *     纯最近（旧实现）会让多个 hauler 被身边小堆反复截胡、涌向同一侧，冷落
+ *     另一侧持续溢出的大堆（线上实测：一侧 container 满溢地面堆积 7000+ 无人问津，
+ *     另一侧 3 hauler 抢几十能量的小堆）。按抢救价值加权后，远处大堆的吸引力
+ *     压过近处小堆，hauler 自然被拉向溢出最严重处，两侧自平衡。
  * “未装满则继续拾取”的跨 tick 循环由 FSM（updateMode：free>0 时保持 acquire）保证。
  */
 export function selectDroppedEnergy(
@@ -493,8 +555,19 @@ export function selectDroppedEnergy(
   }
   if (richestAdjacent) return richestAdjacent;
 
-  // 身边无可拾取 — 走向最近的一堆。
-  return creep.pos.findClosestByRange([...dropped] as Resource[]) ?? undefined;
+  // 身边无可拾取 — 在「堆大小 vs 取货距离」间权衡选最高抢救价值者。
+  // DROP_DISTANCE_WEIGHT：每格距离折算的能量机会成本（往返运力代价）。
+  // 大堆即使稍远也优先，避免多 hauler 被近处小堆截胡而冷落远处溢出大堆。
+  let best: Resource | undefined;
+  let bestScore = -Infinity;
+  for (const r of dropped) {
+    const score = r.amount - creep.pos.getRangeTo(r) * DROP_DISTANCE_WEIGHT;
+    if (score > bestScore) {
+      bestScore = score;
+      best = r;
+    }
+  }
+  return best;
 }
 
 /**

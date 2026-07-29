@@ -46,7 +46,7 @@ import {
   withdrawCapped,
   withdrawStorageLink,
 } from "../engine/actions";
-import { findRichestContainer, pickHaulFillTargetInRange } from "../support/targeting";
+import { selectHaulSourceContainer, pickHaulFillTargetInRange } from "../support/targeting";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget, stepToward } from "../movement";
 import { getObjectById } from "../support/obj-cache";
@@ -85,11 +85,15 @@ function withdrawAssignmentContainer(): ActionCandidate<StructureContainer> {
   };
 }
 
-/** 从最满的非 controller container 限量取能。
+/** 从最值得疏解的非 controller container 限量取能（满溢程度 + 距离权衡）。
  *
  * 禁止从 controller container 取能：hauler 的 work 链会向 controller container 倒能
  * （haulFillTarget 将低于半满的 controller container 列为最高优先级填充目标）。
  * 如果 acquire 链同时从 controller container 取能，会形成「取→倒→取→倒」振荡。
+ *
+ * 选择器由 findRichestContainer（纯最满、平局恒选首个）改为 selectHaulSourceContainer
+ * （满溢程度 vs 距离权衡 + 名字哈希散布）：修复两侧 source container 同为满仓时
+ * 所有 hauler 涌向同一个、另一侧持续溢出无人疏解的羊群偏置。
  */
 function withdrawRichestCapped(): ActionCandidate {
   return withdrawCapped((ac: ActionContext) => {
@@ -97,7 +101,7 @@ function withdrawRichestCapped(): ActionCandidate {
     const candidates = ac.snapshot.controllerContainer
       ? ac.snapshot.containers.filter(c => c.id !== ac.snapshot.controllerContainer!.id)
       : ac.snapshot.containers;
-    const best = findRichestContainer(candidates);
+    const best = selectHaulSourceContainer(ac.creep, candidates);
     if (!best || best.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
     return best;
   });
