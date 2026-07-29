@@ -26,6 +26,10 @@ export interface RoomIntel {
   towers?: number;
   /** 危险冷却到期 tick：远矿房出现威胁时标记，冷却期内不作为远矿/扩张候选。 */
   dangerUntil?: number;
+  /** home 锚点到该房中心的 PathFinder 实测成本（swampCost:5 计入地形）。
+   * 远矿评选的通勤账本 — 地形静态，算一次终身缓存（room-observer 逐 tick
+   * 补算）；缺失时评选方回退线性距离估算。 */
+  pathCost?: number;
   /** 最近更新 tick。 */
   lastSeen: number;
 }
@@ -90,6 +94,10 @@ export function scanNeighborIntel(
   // 危险冷却：未到期则保留（与视野无关 — 由威胁事件独立管理）。
   if (prev?.dangerUntil !== undefined && tick < prev.dangerUntil) {
     intel.dangerUntil = prev.dangerUntil;
+  }
+  // 通勤成本：地形静态，终身保留（由 room-observer 一次性计算，刷新不冲掉）。
+  if (prev?.pathCost !== undefined) {
+    intel.pathCost = prev.pathCost;
   }
   return intel;
 }

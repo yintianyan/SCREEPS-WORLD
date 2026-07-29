@@ -1025,12 +1025,32 @@ M4 与 M5 可并行实现；两者均完成后才宣称 RCL2 至 RCL4 稳定闭�
 interface RemoteOp {
   state: "scout" | "active" | "paused" | "abandoned";  // 运营生命周期
   sources?: number;     // 源数量（有视野时记录）
+  haulerNeed?: number;  // 动态 hauler 编制（评选期按通勤成本算出，1-haulersMax）
   createdAt: number;    // 创建 tick
   lastSeen: number;     // 最近可见 tick（creep 进入或 observer 扫描时更新）
 }
 ```
 
 生命周期：`active`（采集中）→ 超期无 creep → `paused`（暂停）→ 长期废弃 → `abandoned` → 超过 `staleThreshold × 6` 从 Memory 删除（防膨胀）。`paused` 期间有新视野/creep 到达则恢复 `active`。
+
+#### 性价比评选与容量感知（远矿 2.0）
+
+评选从「数 source」升级为**净收益评分**（`domain/remote/targeting.ts`）：
+
+```
+pathCost   = intel.pathCost ?? roomLinearDistance × 70   // room-observer 逐 tick 补算，PathFinder swampCost:5 计入沼泽
+demand     = sources × 10                                // reserve 后单 source 10 e/tick
+perHauler  = haulerCapacity / (2 × pathCost)             // 单只往返运力
+haulerNeed = clamp(ceil(demand / perHauler), 1, haulersMax)
+throughput = min(demand, haulerNeed × perHauler)
+netScore   = throughput − (0.4×sources + 0.4×haulerNeed + 2.2)  // 减编队摊销（reserver 2.2 最贵）
+```
+
+- `netScore < minNetScore(3)` 的候选**剔除**（沼泽/超远房占名额比空置更亏）；排序按 netScore 降序 > 有视野 > 房名字母序。
+- `intel.pathCost`（`domain/intel.ts`）：home 锚点（storage 优先，无则 spawn）到邻房中心 range 15 的 PathFinder 实测成本，地形静态一次性缓存，room-observer 每次 intel 刷新至多补算 1 个（分摊 CPU），刷新不冲掉（与 dangerUntil 同待遇）。
+- **动态 hauler 编制**：评选算出的 `haulerNeed` 写入 `RemoteOp`，`demand.ts` 消费（缺失回退 `haulersPerTarget=1`，存量运营兼容）。
+- **无 storage 开点节流**：`effectiveMaxOperations(hasStorage)` — 无 storage 时开点上限收缩为 `maxOperationsNoStorage(1)`，本房 sink（≈4300 容量）消化有限防背压空转；storage 建成自动放开到 `maxOperations(2)`。现役运营不砍。
+- **跨房去重**：`globalActiveTargets`（manager 汇总全帝国非 abandoned 目标）传入评选，防双主房抢同一 source（双编队收益不变成本翻倍）。
 
 #### 威胁检测（transit 盲区修复）
 

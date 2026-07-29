@@ -457,10 +457,19 @@ export const CONFIG = {
     managerInterval: 10,
     /** 最大同时运营远矿目标数（CPU 预算保护）。 */
     maxOperations: 2,
+    /** 无 storage 时的开点上限 — 本房 sink（spawn/ext/tower/cc ≈ 4300 容量）
+     * 消化能力有限，多点并发流入会背压空转（远矿 container 溢出 drop 衰减）。
+     * storage 建成后自动放开到 maxOperations。 */
+    maxOperationsNoStorage: 1,
     /** 每个远矿目标的 harvester 数。 */
     harvestersPerTarget: 1,
-    /** 每个远矿目标的 hauler 数。 */
+    /** 每个远矿目标的 hauler 数（评选期未算出 haulerNeed 时的回退值）。 */
     haulersPerTarget: 1,
+    /** 动态 hauler 编制上限 — 需要更多说明目标太远，评分门槛应已剔除它。 */
+    haulersMax: 3,
+    /** 净收益门槛（e/tick）— 评选评分低于此值的候选剔除：
+     * 名额只有 maxOperations 个，烂目标（沼泽远房）占位比空置更亏。 */
+    minNetScore: 3,
     /** 是否启用 reserver（RCL3+ 才有意义，CLAIM 部件 600 能量）。 */
     enableReserver: true,
     /** 是否启用 remoteDefender（远矿防御者，杀 NPC reserver/Invader）。 */

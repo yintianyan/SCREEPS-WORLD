@@ -294,6 +294,9 @@ declare global {
     state: "scout" | "active" | "paused" | "abandoned";
     /** 源数量（有视野时记录，来自 intel 或实地观察）。 */
     sources?: number;
+    /** 动态 hauler 编制（评选期按通勤成本算出，1-haulersMax）。
+     * 缺失时回退 CONFIG.remote.haulersPerTarget（存量运营兼容）。 */
+    haulerNeed?: number;
     /** 创建 tick。 */
     createdAt: number;
     /** 最近可见 tick（creep 进入或 observer 扫描时更新）。 */

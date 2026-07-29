@@ -4,7 +4,7 @@
  * 覆盖：候选筛选（kind/owner/status）、排序优先级、去重、过期暂停。
  */
 import { describe, expect, it } from "vitest";
-import { selectRemoteTargets, shouldPauseOperation } from "../../../src/domain/remote/targeting";
+import { selectRemoteTargets, shouldPauseOperation, scoreRemoteCandidate, effectiveMaxOperations, roomLinearDistance } from "../../../src/domain/remote/targeting";
 import type { RoomIntel } from "../../../src/domain/intel";
 
 const tick = 100000;
@@ -30,6 +30,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       existingOps: undefined, // 本房无运营 — 修复前 W37S57 会被选中。
       tick,
       staleThreshold,
+      haulerCapacity: 800,
       globalActiveTargets: new Set(["W37S57"]),
     });
     expect(result.map(c => c.roomName)).toEqual(["W36S58"]);
@@ -42,6 +43,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       existingOps: undefined,
       tick,
       staleThreshold,
+      haulerCapacity: 800,
       globalActiveTargets: new Set(), // abandoned 不入集合。
     });
     expect(result.map(c => c.roomName)).toEqual(["W36S58"]);
@@ -54,6 +56,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       existingOps: undefined,
       tick,
       staleThreshold,
+      haulerCapacity: 800,
     });
     expect(result).toEqual([]);
   });
@@ -72,6 +75,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       existingOps: undefined,
       tick,
       staleThreshold,
+      haulerCapacity: 800,
     });
     const names = result.map((c) => c.roomName);
     expect(names).toContain("W2N1");
@@ -91,6 +95,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       existingOps: undefined,
       tick,
       staleThreshold,
+      haulerCapacity: 800,
     });
     expect(result.map((c) => c.roomName)).toEqual(["W1N2"]);
   });
@@ -106,6 +111,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       existingOps: undefined,
       tick,
       staleThreshold,
+      haulerCapacity: 800,
     });
     expect(result.map((c) => c.roomName)).toEqual(["W2N2"]);
   });
@@ -120,6 +126,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       existingOps: undefined,
       tick,
       staleThreshold,
+      haulerCapacity: 800,
     });
     expect(result.map((c) => c.roomName)).toEqual(["W2N1"]);
   });
@@ -136,6 +143,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       },
       tick,
       staleThreshold,
+      haulerCapacity: 800,
     });
     // W2N1 已有 active 运营，不应被再次选中
     expect(result.map((c) => c.roomName)).toEqual(["W1N2"]);
@@ -151,6 +159,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       existingOps: undefined,
       tick,
       staleThreshold,
+      haulerCapacity: 800,
     });
     expect(result[0]!.roomName).toBe("W2N1");
     expect(result[0]!.hasRecentVision).toBe(true);
@@ -168,6 +177,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       existingOps: undefined,
       tick,
       staleThreshold,
+      haulerCapacity: 800,
     });
     expect(result[0]!.roomName).toBe("W1N2");
     expect(result[1]!.roomName).toBe("W2N1");
@@ -184,6 +194,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       },
       tick,
       staleThreshold,
+      haulerCapacity: 800,
     });
     expect(result.map((c) => c.roomName)).toEqual(["W2N1"]);
   });
@@ -204,5 +215,89 @@ describe("remote targeting — shouldPauseOperation", () => {
     expect(
       shouldPauseOperation({ state: "active", lastSeen: tick - 100 }, tick, staleThreshold),
     ).toBe(false);
+  });
+});
+
+describe("remote targeting — 净收益评分与剔除", () => {
+  // W1N1 的邻房，pathCost 显式给定隔离线性估算，聚焦评分逻辑。
+  it("超近房 2-source（pathCost 20）：入选，haulerNeed=1", () => {
+    const result = selectRemoteTargets({
+      homeRoom: "W1N1",
+      intel: { W2N1: makeIntel({ sources: 2, pathCost: 20 }) },
+      existingOps: undefined,
+      tick,
+      staleThreshold,
+      haulerCapacity: 800,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]!.haulerNeed).toBe(1); // 800/(2×20)=20 e/tick 单只够 2 source。
+    expect(result[0]!.netScore).toBeGreaterThan(3);
+  });
+
+  it("沼泽远房 1-source（pathCost 400）：netScore < 门槛被剔除", () => {
+    const result = selectRemoteTargets({
+      homeRoom: "W1N1",
+      intel: { W2N1: makeIntel({ sources: 1, pathCost: 400 }) },
+      existingOps: undefined,
+      tick,
+      staleThreshold,
+      haulerCapacity: 800,
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it("中距 2-source（pathCost 150）：haulerNeed≥2 且排序低于近房", () => {
+    const result = selectRemoteTargets({
+      homeRoom: "W1N1",
+      intel: {
+        W2N1: makeIntel({ sources: 2, pathCost: 150 }), // 中距
+        W1N2: makeIntel({ sources: 2, pathCost: 50 }),  // 近房
+      },
+      existingOps: undefined,
+      tick,
+      staleThreshold,
+      haulerCapacity: 800,
+    });
+    expect(result[0]!.roomName).toBe("W1N2"); // 近房评分高，排前。
+    const mid = result.find(c => c.roomName === "W2N1")!;
+    expect(mid.haulerNeed).toBeGreaterThanOrEqual(2);
+  });
+
+  it("pathCost 缺失时回退线性估算，近邻房仍可入选（不抛错）", () => {
+    const result = selectRemoteTargets({
+      homeRoom: "W1N1",
+      intel: { W2N1: makeIntel({ sources: 2 }) }, // 无 pathCost。
+      existingOps: undefined,
+      tick,
+      staleThreshold,
+      haulerCapacity: 800,
+    });
+    expect(result).toHaveLength(1); // linear=1 → pathCost≈70，仍过门槛。
+  });
+
+  it("无视野候选按 sources=1 保守评分", () => {
+    const { netScore } = scoreRemoteCandidate({
+      pathCost: 50, linearDistance: 1, sources: undefined, haulerCapacity: 800,
+    });
+    const known = scoreRemoteCandidate({
+      pathCost: 50, linearDistance: 1, sources: 1, haulerCapacity: 800,
+    });
+    expect(netScore).toBe(known.netScore); // undefined 等价于 1。
+  });
+});
+
+describe("remote targeting — effectiveMaxOperations", () => {
+  it("有 storage：放开到 maxOperations(2)", () => {
+    expect(effectiveMaxOperations(true)).toBe(2);
+  });
+  it("无 storage：收缩到 maxOperationsNoStorage(1)", () => {
+    expect(effectiveMaxOperations(false)).toBe(1);
+  });
+});
+
+describe("remote targeting — roomLinearDistance", () => {
+  it("相邻房距离 1", () => {
+    expect(roomLinearDistance("W1N1", "W2N1")).toBe(1);
+    expect(roomLinearDistance("W1N1", "W1N2")).toBe(1);
   });
 });

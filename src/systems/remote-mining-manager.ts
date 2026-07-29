@@ -26,8 +26,9 @@
  *   - 远矿目标数不超过 maxOperations
  */
 import { CONFIG } from "../config";
+import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext, ColonyState } from "../kernel/contracts";
-import { selectRemoteTargets, shouldPauseOperation } from "../domain/remote/targeting";
+import { selectRemoteTargets, shouldPauseOperation, effectiveMaxOperations } from "../domain/remote/targeting";
 import { evaluateRemoteDemand, type RemoteCreepSummary } from "../domain/remote/demand";
 import { submitRequest } from "../domain/spawn/queue";
 
@@ -66,7 +67,12 @@ export const remoteMiningManagerSystem: System = {
       //    （fortify/war 时收缩战线不铺新点）；现役运营不受影响。
       const activeCount = countActiveOps(remoteOps);
       const newOpsAllowed = Memory.kernel?.strategy?.newRemoteOpsAllowed === true;
-      if (newOpsAllowed && activeCount < CONFIG.remote.maxOperations) {
+      // 无 storage 时收缩开点上限（消化保护）；现役运营不砍。
+      const maxOps = effectiveMaxOperations(snapshot.storage !== undefined);
+      if (newOpsAllowed && activeCount < maxOps) {
+        // remoteHauler 单只运力：按当前能量档位的 body carry 数 ×50。
+        const haulerBody = selectBody("remoteHauler", snapshot.energyCapacityAvailable);
+        const haulerCapacity = haulerBody.filter(p => p === CARRY).length * CARRY_CAPACITY;
         const candidates = selectRemoteTargets({
           homeRoom: snapshot.roomName,
           intel: roomMem.intel,
@@ -74,14 +80,16 @@ export const remoteMiningManagerSystem: System = {
           tick: ctx.tick,
           staleThreshold: CONFIG.remote.staleThreshold,
           globalActiveTargets,
+          haulerCapacity,
         });
-        // 只补充到 maxOperations。
-        const needed = CONFIG.remote.maxOperations - activeCount;
+        // 只补充到有效上限。
+        const needed = maxOps - activeCount;
         for (let i = 0; i < Math.min(needed, candidates.length); i++) {
           const candidate = candidates[i]!;
           remoteOps[candidate.roomName] = {
             state: "active",
             sources: candidate.sources,
+            haulerNeed: candidate.haulerNeed,
             createdAt: ctx.tick,
             lastSeen: ctx.tick,
           };

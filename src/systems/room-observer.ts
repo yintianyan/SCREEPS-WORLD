@@ -58,6 +58,9 @@ export const roomObserverSystem: System = {
       // 邻居房情报 — 远矿/扩张选址的数据源。
       if (ctx.tick % INTEL_SCAN_INTERVAL === 0) {
         refreshNeighborIntel(snapshot.roomName, roomMem, ctx.tick);
+        // 补算通勤成本：每次刷新至多为 1 个 pathCost 缺失的 normal 邻房计算，
+        // 逐次分摊 PathFinder 开销（地形静态，算一次终身缓存）。
+        backfillPathCost(snapshot.roomName, roomMem);
       }
 
       // Observer 视野调度：挑最陈旧的邻房请求视野，下一 tick 捕获。
@@ -188,6 +191,40 @@ function countHostileTowers(room: Room): number {
   return room
     .find(FIND_HOSTILE_STRUCTURES)
     .filter(s => s.structureType === STRUCTURE_TOWER).length;
+}
+
+/**
+ * 为一个 pathCost 缺失的 normal 邻房补算通勤成本（远矿评选的距离账本）。
+ *
+ * 锚点 = 本房 storage（无则首个 spawn）；目标 = 邻房中心 (25,25) range 15
+ * （无视野时不知 source 位置，用房中心近似）。swampCost:5 让沼泽自然折算
+ * 成等效路程。PathFinder incomplete（跨房无路）时写线性距离 ×70 保守估算，
+ * 不重试 — 地形静态，一次定终身。
+ *
+ * 每次刷新至多算 1 个（PathFinder 是 CPU 大户，逐次分摊）；只算 normal 房
+ * （只有它能做远矿候选）。
+ */
+function backfillPathCost(homeRoom: string, roomMem: RoomMemory): void {
+  const intel = roomMem.intel;
+  if (!intel) return;
+  const home = Game.rooms[homeRoom];
+  if (!home) return;
+  const anchor = home.storage ?? home.find(FIND_MY_SPAWNS)[0];
+  if (!anchor) return;
+
+  for (const neighbor in intel) {
+    const info = intel[neighbor]!;
+    if (info.kind !== "normal" || info.pathCost !== undefined) continue;
+    const result = PathFinder.search(
+      anchor.pos,
+      { pos: new RoomPosition(25, 25, neighbor), range: 15 },
+      { plainCost: 1, swampCost: 5, maxRooms: 2, maxOps: 4000 },
+    );
+    info.pathCost = result.incomplete
+      ? Game.map.getRoomLinearDistance(homeRoom, neighbor) * 70
+      : result.cost;
+    return; // 每次只算一个，分摊 CPU。
+  }
 }
 
 /**

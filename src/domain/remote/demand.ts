@@ -44,7 +44,7 @@ export interface RemoteDemandInput {
   /** 当前 tick。 */
   tick: number;
   /** 远矿运营列表（key = 目标房名）。 */
-  remoteOps: Readonly<Record<string, { state: string; sources?: number; lastSeen: number }>>;
+  remoteOps: Readonly<Record<string, { state: string; sources?: number; haulerNeed?: number; lastSeen: number }>>;
   /** 所有存活 + 孵化中的远矿 creep 摘要。 */
   remoteCreeps: readonly RemoteCreepSummary[];
   /** 孵化队列（用于 pending 计数）。 */
@@ -152,8 +152,9 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       }
     }
 
-    // 2. Remote Hauler — 每目标 1 个（可配置）。
-    const haulerTarget = CONFIG.remote.haulersPerTarget;
+    // 2. Remote Hauler — 编制按评选期算出的 haulerNeed（通勤越远配越多）；
+    //    存量运营无此字段时回退 haulersPerTarget（兼容，行为同现状）。
+    const haulerTarget = op.haulerNeed ?? CONFIG.remote.haulersPerTarget;
     const haulerTotal = (counts.remoteHauler ?? 0) + pending.remoteHauler;
     if (haulerTotal < haulerTarget) {
       const key = spawnKey("remoteHauler", homeRoom, haulerTotal, targetRoom);

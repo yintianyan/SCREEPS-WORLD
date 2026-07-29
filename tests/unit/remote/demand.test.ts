@@ -82,6 +82,29 @@ describe("remote demand — evaluateRemoteDemand", () => {
     expect(haulerReqs).toHaveLength(0);
   });
 
+  it("op.haulerNeed=2 时已有 1 只仍继续补第 2 只（动态编制放大目标）", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteOps: {
+        [targetRoom]: { state: "active", sources: 2, haulerNeed: 2, lastSeen: tick },
+      },
+      remoteCreeps: makeCreeps("remoteHauler", 1), // 已有 1 只。
+    });
+    // 回退档（target=1）时这 1 只已满足、不再补；haulerNeed=2 时仍补第 2 只。
+    const haulerReqs = requests.filter((r) => r.role === "remoteHauler");
+    expect(haulerReqs).toHaveLength(1);
+  });
+
+  it("op 无 haulerNeed 时回退 haulersPerTarget=1（存量运营兼容）", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: makeCreeps("remoteHauler", 1), // 已有 1 只。
+    });
+    // 回退 target=1，已满足 → 不再补。
+    const haulerReqs = requests.filter((r) => r.role === "remoteHauler");
+    expect(haulerReqs).toHaveLength(0);
+  });
+
   it("已有足够的 reserver 时不重复孵化", () => {
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
