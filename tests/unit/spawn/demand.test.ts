@@ -725,3 +725,33 @@ describe("distributor cc 排空反馈（镜像 hauler 积压反馈，方向相�
   });
 });
 
+describe("hauler 积压信号接收端可达性闸门（无 storage 防移动仓库过孵）", () => {
+  // 无 storage 时 source container 堆积可能是 sink 饱和而非运力不足；
+  // sink 全满（无 fillTarget）时加 hauler 只会满载 idle 充当移动仓库。
+  function noStorageSnap(fillTargets: any[]) {
+    return mockSnapshot({
+      links: [],
+      containers: [
+        mockStructure("container", { id: "c0", energy: 1900, capacity: 2000 }), // >80%
+        mockStructure("container", { id: "c1", energy: 1900, capacity: 2000 }), // >80%
+      ],
+      fillTargets,
+      rcl: 3,
+      energyCapacityAvailable: 550,
+      controller: mockController({ level: 3 }),
+    });
+  }
+
+  it("sink 全满(无 fillTarget) → container 堆积不加 hauler；有空位 sink → 正常加", () => {
+    const saturated = noStorageSnap([]); // 所有 sink 满 → 无处投放
+    const deliverable = noStorageSnap(["ft1", "ft2"] as any[]); // 有空位 sink
+    const satHaulers = evaluateDemand(saturated, [], "normal", livingHarvester(), [], normalCtx(0), 1000)
+      .requests.filter(r => r.role === "hauler").length;
+    const delHaulers = evaluateDemand(deliverable, [], "normal", livingHarvester(), [], normalCtx(0), 1000)
+      .requests.filter(r => r.role === "hauler").length;
+    // 饱和态：堆积不计入 → 回落 minCount；可投放态：堆积计入 → 更多 hauler。
+    expect(satHaulers).toBeLessThan(delHaulers);
+  });
+});
+
+

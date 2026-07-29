@@ -384,12 +384,21 @@ export function evaluateDemand(
   const hasLogistics = snapshot.containers.length > 0 || snapshot.storage !== undefined;
   let dynamicHaulerTarget = 0;
   if (hasLogistics) {
-    // 1. Source container 积压信号（RCL1-4 主物流路径）。
-    for (const c of snapshot.containers) {
-      const capacity = c.store.getCapacity(RESOURCE_ENERGY) || 1;
-      const fillRatio = c.store.getUsedCapacity(RESOURCE_ENERGY) / capacity;
-      if (fillRatio > 0.8) dynamicHaulerTarget += 2;
-      else if (fillRatio > 0.4) dynamicHaulerTarget += 1;
+    // 接收端可达性闸门：source container 堆积可能是「运力不足」或「sink 饱和」。
+    // 有 storage 时 storage 是无限 sink，堆积必为运力不足 → 加人正确。
+    // 无 storage 时若所有 sink（spawn/ext/tower/cc）均满（无有空位的 fillTarget），
+    // 堆积是消费瓶颈而非运力瓶颈 —— 加 hauler 只会满载 idle 充当移动仓库（单边
+    // 积压反馈的盲点）。此时不把 container 堆积计入加人信号，回落 minCount；
+    // sink 一旦开口 fillTargets 重现，backlog 信号自动恢复 —— 安全、自愈。
+    const canDeliver = snapshot.storage !== undefined || snapshot.fillTargets.length > 0;
+    // 1. Source container 积压信号（RCL1-4 主物流路径；仅当可投放时才算运力不足）。
+    if (canDeliver) {
+      for (const c of snapshot.containers) {
+        const capacity = c.store.getCapacity(RESOURCE_ENERGY) || 1;
+        const fillRatio = c.store.getUsedCapacity(RESOURCE_ENERGY) / capacity;
+        if (fillRatio > 0.8) dynamicHaulerTarget += 2;
+        else if (fillRatio > 0.4) dynamicHaulerTarget += 1;
+      }
     }
     // 2. Storage link 积压信号（RCL5+ link 网络的「最后一公里」）。
     //    link-system 将 source link 能量瞬移到 storage link，hauler 需排空到 storage。
