@@ -482,6 +482,30 @@ export function evaluateDemand(
     const distBody = estimatePlannedBody("distributor", energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl);
     const fillPerDistributor = Math.max(2, Math.floor((countBodyParts(distBody, "carry") * 50) / 150));
     distTarget = Math.min(distConfig.maxCount, Math.max(distConfig.minCount, Math.ceil(fillCount / fillPerDistributor)));
+    // 高耗远距 sink 排空反馈（镜像 hauler 的 container 积压反馈，方向相反）：
+    // 上面的 fillCount 把 controller container 当「1 个待填结构」，但 cc 是高抽取率
+    // sink（upgrader 连续抽）且常远离 storage，缺的是并行运力（多头轮流跑），不是
+    // 「多算 1 个目标」（大 body 的 fillPerDistributor 会把它稀释掉）。无 controller
+    // link 时 cc 见底即「供能不足」症状 —— 按 hauler 同款 +1/+2 档补 distributor 头数；
+    // 有 link 则由 link 供能、不补。距离/速率由 fill 症状隐式覆盖（补了仍低 = 更远/更耗）。
+    // 只在 storage 够养升级（tier<2 口径，≥sustained）时补，crisis/pressure 仍在下方裁剪。
+    if (
+      snapshot.controllerContainer !== undefined &&
+      snapshot.controller?.my === true &&
+      storageEnergy >= CONFIG.economy.distributorTiers.sustained
+    ) {
+      const hasControllerLink = snapshot.links.some(
+        l => snapshot.controller != null && l.pos.getRangeTo(snapshot.controller) <= 2,
+      );
+      if (!hasControllerLink) {
+        const ccCap = snapshot.controllerContainer.store.getCapacity(RESOURCE_ENERGY) || 1;
+        const ccFill = snapshot.controllerContainer.store.getUsedCapacity(RESOURCE_ENERGY) / ccCap;
+        // fill 低 = 被抽干 = 运力不足；不做运力归一化 —— 远距 sink 要并行头数而非大 body。
+        if (ccFill < 0.2) distTarget += 2;
+        else if (ccFill < 0.5) distTarget += 1;
+        distTarget = Math.min(distConfig.maxCount, distTarget);
+      }
+    }
     // TD-015：economyPressure 梯度衰减 — 与 hauler 同公式，pressure > 0.6 时线性降低 distributor 配额。
     const distPressure = roomCtx.economyPressure;
     if (distPressure > 0.6) {

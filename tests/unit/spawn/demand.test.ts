@@ -683,3 +683,45 @@ describe("SP-11 — 降级回退守卫（RECOVERY_BODY 兜底不得铸出缺必�
     expect(haulers[0]!.body).toEqual(["carry", "carry", "move", "move"]);
   });
 });
+
+describe("distributor cc 排空反馈（镜像 hauler 积压反馈，方向相反）", () => {
+  // storage≥sustained + 无 controller link + controllerContainer 见底 →
+  // distributor 头数加成（并行运力喂高耗远距 sink）；有 link 则不加。
+  function ccSnapshot(ccEnergy: number, links: any[] = []) {
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
+    const cc = mockStructure("container", { id: "cc", energy: ccEnergy, capacity: 2000 });
+    return mockSnapshot({
+      controller: mockController({ level: 6 }),
+      controllerContainer: cc,
+      storage,
+      links,
+      rcl: 6,
+      energyCapacityAvailable: 2300,
+    });
+  }
+
+  it("cc 见底(<20%) + 无 controller link → distributor 加 2（并行运力）", () => {
+    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 }; // 绕过升编延迟确认
+    const snap = ccSnapshot(200); // 10% → +2
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    // 基线 distTarget=1（minCount）+ 2 = 3（clamp maxCount 3）。
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(3);
+  });
+
+  it("cc 充足(≥50%) → 不加成（供能正常，无需并行）", () => {
+    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 };
+    const snap = ccSnapshot(1500); // 75% → 不触发
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
+  });
+
+  it("有 controller link → 即使 cc 见底也不加成（link 供能，非 distributor 职责）", () => {
+    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 };
+    const ctrlLink = mockStructure("link", { id: "clink", energy: 0, capacity: 800 });
+    // 默认 mockPos.getRangeTo 返回 1 ≤ 2 → 判定为 controller link。
+    const snap = ccSnapshot(200, [ctrlLink]);
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
+  });
+});
+
