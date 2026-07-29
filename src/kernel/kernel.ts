@@ -136,6 +136,10 @@ export class Kernel {
     // 分发泵断供时 hauler 不得继续把能量锁进 storage（角色层禁止全局扫描，
     // 由 kernel 复用本遍历一次构建）。孵化中的也计入 — 泵即将上岗，防止兜底抖动。
     const globalDistributorRooms = new Set<string>();
+    // 拥有存活 hauler 的房间集合：source container 的「物流源」身份以此为前提 —
+    // 拓荒爬坡期无 hauler，container 无物流消费者，builder/upgrader 应可直取
+    // （withdraw.ts 的 isLogisticsContainer 消费）。
+    const globalHaulerRooms = new Set<string>();
     // P0-1：预构建每房「待计入」harvester/worker 数量。
     // 包括已存活但尚未分配 sourceId 的 + 正在孵化中的，避免替换期间的假 bootstrap。
     const globalPendingHarvesters = new Map<string, number>();
@@ -160,6 +164,10 @@ export class Kernel {
         const pumpHome = home ?? creep.room.name;
         if (pumpHome) globalDistributorRooms.add(pumpHome);
       }
+      if (role === "hauler") {
+        const haulHome = home ?? creep.room.name;
+        if (haulHome) globalHaulerRooms.add(haulHome);
+      }
       if (role !== "harvester" && role !== "worker") continue;
       const sid = creep.memory.sourceId;
       if (sid) {
@@ -183,6 +191,8 @@ export class Kernel {
     globalCache().repairRooms = globalRepairRooms;
     // distributorRooms 供 hauler fillStorage 的泵断供兜底判据。
     globalCache().distributorRooms = globalDistributorRooms;
+    // haulerRooms 供 isLogisticsContainer 判定 source container 是否真有物流消费者。
+    globalCache().haulerRooms = globalHaulerRooms;
     // creepLastSeen 供下 tick 的死亡事件（战斗黑匣子）取生前最后位置。
     globalCache().creepLastSeen = creepLastSeen;
 

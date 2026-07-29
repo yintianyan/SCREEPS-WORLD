@@ -10,6 +10,7 @@
  */
 import type { ActionCandidate, ActionContext } from "../action-types";
 import { runAction } from "./helpers";
+import { globalCache } from "../../../kernel/global-cache";
 import {
   findClosestContainerWithEnergy,
   findRichestContainer,
@@ -45,16 +46,20 @@ export function withdrawClosestContainer(): ActionCandidate<StructureContainer> 
  * 判断 container 是否为物流关键 container（source container 或 controller container）。
  *
  * - source container：紧邻 source，是 hauler 的物流源。非采集角色直接取用会导致
- *   hauler 无事可做、物流链断裂。
+ *   hauler 无事可做、物流链断裂。**前提是本房确有存活 hauler** — 拓荒爬坡期
+ *   编制里还没有 hauler 时，container 能量没有任何物流消费者，礼让的对象不存在，
+ *   builder/upgrader 应可直取（满载 withdraw 1 tick vs harvest 慢采 25 tick）。
  * - controller container：紧邻 controller，是 upgrader 的站桩能量源。builder 取用
- *   会导致 upgrader 断粮，站桩升级链路崩溃。
+ *   会导致 upgrader 断粮，站桩升级链路崩溃（此约束与 hauler 无关，恒生效）。
  *
  * builder 等非物流角色应从非物流 container（如 mineral container）取能。
  */
 function isLogisticsContainer(c: StructureContainer, ac: ActionContext): boolean {
-  // source container
-  if (ac.snapshot.sources.some(s => c.pos.getRangeTo(s.pos) <= 1)) return true;
-  // controller container
+  // source container — 仅当本房确有存活 hauler 消费时才礼让。
+  const haulerRooms = globalCache().haulerRooms;
+  const hasHauler = haulerRooms ? haulerRooms.has(ac.snapshot.roomName) : true;
+  if (hasHauler && ac.snapshot.sources.some(s => c.pos.getRangeTo(s.pos) <= 1)) return true;
+  // controller container — upgrader 站桩源，恒礼让。
   if (ac.snapshot.controllerContainer?.id === c.id) return true;
   return false;
 }

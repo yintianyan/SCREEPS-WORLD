@@ -50,6 +50,14 @@ export interface GlobalCache {
    */
   repairRooms?: ReadonlySet<string>;
   /**
+   * 本 tick 拥有存活 hauler 的房间名集合（Kernel.buildSnapshots 预构建）。
+   * isLogisticsContainer 消费：source container 的「物流源」身份以本房确有
+   * hauler 为前提 — 拓荒爬坡期编制里还没有 hauler 时，container 能量没有
+   * 任何物流消费者，builder/upgrader 礼让的对象不存在，应可直取
+   * （withdraw 满载 1 tick vs harvest 慢采 25 tick，差一个量级）。
+   */
+  haulerRooms?: ReadonlySet<string>;
+  /**
    * 上 tick 各 creep 的最后已知位置（Kernel.buildSnapshots 预构建，
    * key = creep 名，value = { r: 房名, x, y }）。
    * 战斗黑匣子（M9）消费：maintainMemory 清理死者 memory 时，死者已不在
