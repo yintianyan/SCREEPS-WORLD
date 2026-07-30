@@ -65,6 +65,11 @@ export function haulFillTarget(): ActionCandidate<AnyOwnedStructure> {
     // FSM 在此 return 不再 fallthrough，hauler 永远无法到达 fillStorage() — storage 空置死锁。
     resolve: (ac) => {
       if (ac.snapshot.fillTargets.length === 0) return undefined;
+      // 携非能量 cargo 但无能量时放行后续候选先卸货（同 distributorFillTarget）：
+      // execute 只 transfer(RESOURCE_ENERGY)，携矿物会静默失败并终止候选链 →
+      // 配 updateMode 总量口径 hauler 永久冻结。EN-1 公理：资格检查前置 resolve。
+      if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0 &&
+          ac.creep.store.getUsedCapacity() > 0) return undefined;
       return getHaulFillTarget(ac.creep, ac.snapshot);
     },
     execute: (ac, t) => {
@@ -87,6 +92,12 @@ export function distributorFillTarget(): ActionCandidate<AnyOwnedStructure> {
     name: "fill:distributor-target",
     resolve: (ac) => {
       if (ac.snapshot.fillTargets.length === 0) return undefined;
+      // 携非能量 cargo（如从 lab unload 的化合物）但无能量时放行后续候选先卸货：
+      // 本动作 execute 只 transfer(RESOURCE_ENERGY)，携化合物会 ERR_NOT_ENOUGH_RESOURCES
+      // 静默失败并终止候选链，supplyLabs 卸货相永远轮不到 → 配 updateMode 总量口径
+      // （used>0 恒 work）distributor 永久冻结（EN-1 公理：资格检查前置 resolve）。
+      if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0 &&
+          ac.creep.store.getUsedCapacity() > 0) return undefined;
       // 读取 distributor gate 每 tick 计算的水位档位，用于过滤目标类型。
       const tier = (ac.creep.memory.distributorTier as 0 | 1 | 2 | 3) ?? 0;
       return getDistributorFillTarget(ac.creep, ac.snapshot, tier);

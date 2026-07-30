@@ -72,7 +72,8 @@ describe("lootRemains — 搬运尸体内矿物（不只搬能量）", () => {
 
   it("尸体只有矿物(Z=200,无能量)→ withdraw 矿物 Z（旧 bug：只搬 energy 忽略矿物）", () => {
     const t = tomb({ Z: 200 });
-    const snap = mockSnapshot({ tombstones: [t] as never });
+    // 需有 storage/terminal 作矿物卸货出口，否则门禁不取矿物（防无处倒而冻结）。
+    const snap = mockSnapshot({ tombstones: [t] as never, storage: mockStructure("storage", { id: "st", energy: 0, capacity: 1000000 }) });
     const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 800, mode: "acquire" });
     const ctx = mockContext(snap);
 

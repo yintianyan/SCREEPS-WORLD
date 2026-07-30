@@ -86,6 +86,10 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
       let available = remains.store.getUsedCapacity(RESOURCE_ENERGY);
       if (available <= 0) {
         // 无能量 — 挑尸体内存量最多的一种资源（矿物/化合物）。
+        // 门禁：无 storage 且无 terminal 时不取矿物 —— 矿物唯一卸货出口
+        // haulMineralsToStorage 需 storage/terminal，否则捡了无处倒，配
+        // updateMode 总量口径 hauler 会冻结（RCL1-3/新占房常有含矿 ruins）。
+        if (!ac.snapshot.storage && !ac.snapshot.terminal) return;
         let best: ResourceConstant | undefined;
         let bestAmt = 0;
         for (const res of Object.keys(remains.store) as ResourceConstant[]) {

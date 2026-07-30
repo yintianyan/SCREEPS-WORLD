@@ -10,7 +10,10 @@ export function updateMode(creep: Creep): void {
   // 总量口径（不限 RESOURCE_ENERGY）：满/空判断须计入矿物等非能量资源，
   // 否则满背包矿物的 creep（如 mineralMiner 采满 Z）被误判"空载"——work 模式
   // 只活 1 tick 即被踢回 acquire，采不动也倒不掉，永久冻结至老死（线上实证）。
-  // 对纯能量角色 used(total)===used(energy)，行为完全等价；仅修正携矿场景。
+  // 注意：携非能量 cargo 的角色（distributor 从 lab unload 化合物、hauler loot 矿物）
+  // 在总量口径下会保持 work 直到卸空 —— 这些角色的 fill 动作（transfer energy）必须
+  // 在 resolve 前置"携非能量则放行后续候选卸货"门禁，否则转能量静默失败终止候选链、
+  // 卸货相永远轮不到而冻结（见 fill.ts distributorFillTarget/haulFillTarget）。
   const used = creep.store.getUsedCapacity();
   const free = creep.store.getFreeCapacity();
   const mode = creep.memory.mode ?? "acquire";
