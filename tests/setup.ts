@@ -15,6 +15,23 @@ Object.assign(globalThis as Record<string, unknown>, {
   // Memory 全局 mock（防止 "Memory is not defined" 错误）
   Memory: { rooms: {}, creep: {}, flags: {} },
 
+  // RoomPosition 构造器 mock（单元测试用；源码 new RoomPosition 需要它）。
+  RoomPosition: class {
+    x: number;
+    y: number;
+    roomName: string;
+    constructor(x: number, y: number, roomName: string) {
+      this.x = x;
+      this.y = y;
+      this.roomName = roomName;
+    }
+    getRangeTo(t: { x?: number; y?: number; pos?: { x: number; y: number } }): number {
+      const tx = t.x ?? t.pos?.x ?? 0;
+      const ty = t.y ?? t.pos?.y ?? 0;
+      return Math.max(Math.abs(this.x - tx), Math.abs(this.y - ty));
+    }
+  },
+
   // body 部件常量
   WORK: "work",
   CARRY: "carry",

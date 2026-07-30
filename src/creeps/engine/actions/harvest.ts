@@ -67,8 +67,16 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
     },
     execute: (ac, target) => {
       const { source, container, link } = target;
-      // 站位：优先站到 source container 之上（range 0 倒能，0 通勤）；否则站到 source 旁。
-      const standTarget: RoomPosition | { pos: RoomPosition } = container ?? source;
+      // 站位选择：默认站 container 之上（range 0 倒能）或 source 旁。
+      // 特例——source link 与 container 分居 source 两侧、站 container 够不到 link（range>1）时：
+      // 改站到「贴 source 且贴 link（均 range<=1）」的格，让 harvester 同 tick 倒进 link，
+      // 能量经 link 网络瞬移入库/入 controller link，免去远距离 hauler 往返（source#1 病灶）。
+      const linkStand = link
+        && ac.creep.pos.getRangeTo(link.pos) > 1
+        && !(container && container.pos.getRangeTo(link.pos) <= 1)
+        ? findSourceLinkStand(ac, source, link)
+        : undefined;
+      const standTarget: RoomPosition | { pos: RoomPosition } = linkStand ?? container ?? source;
 
       // 已在矿位 → 登记高优先级锚：站桩矿工让出矿位 = 采集吞吐崩塌，
       // 集中解算时拒绝被低优先级移动方推挤（若本 tick 又登记了移动意图，锚自动失效）。
@@ -97,6 +105,12 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
         moveToTarget(ac.creep, standTarget);
         return;
       }
+      // 已在采集范围。若选定了 link 站位而尚未站上去，同 tick 移动过去 ——
+      // harvest 与 move 是独立 intent，重定位期间照常采集，零吞吐损失；
+      // 到位后（range 1 到 source 且 range 1 到 link）即开始同 tick 倒进 link。
+      if (linkStand && (ac.creep.pos.x !== linkStand.x || ac.creep.pos.y !== linkStand.y)) {
+        moveToTarget(ac.creep, linkStand);
+      }
       // 同 tick 倒能：link 优先，其次 container（均需 range<=1 且有空位）。
       if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
         const sink = link
@@ -118,6 +132,47 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       }
     },
   };
+}
+
+/**
+ * 找一个「贴 source 且贴 link（均 range<=1）」的可站格，供 harvester 开 link 挖矿。
+ *
+ * 背景：当 source container 与 source link 分居 source 两侧时，站 container 上够不到 link，
+ * harvester 只能灌 container → 满仓 → 靠 hauler 远搬。改站到同时贴 source 与 link 的格后，
+ * harvester 可同 tick 倒进 link，能量瞬移入库、免远搬。
+ * 扫 source 八邻域：非墙 + 距 link range<=1 + 非 link 本格 + 无阻挡结构 → 首个命中即返回。
+ * 找不到（几何无解）返回 undefined，调用方回退 container 站位。
+ */
+function findSourceLinkStand(ac: ActionContext, source: Source, link: StructureLink): RoomPosition | undefined {
+  // 防御：无 getTerrain（异常上下文）时放弃 link 站位、回退 container，不抛错。
+  if (typeof ac.creep.room.getTerrain !== "function") return undefined;
+  const terrain = ac.creep.room.getTerrain();
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const x = source.pos.x + dx;
+      const y = source.pos.y + dy;
+      if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+      if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+      if (x === link.pos.x && y === link.pos.y) continue; // link 本格不可站
+      if (Math.max(Math.abs(x - link.pos.x), Math.abs(y - link.pos.y)) > 1) continue; // 须够到 link
+      if (tileHasObstacleStructure(ac, x, y)) continue; // 跳过被障碍结构占用的格
+      return new RoomPosition(x, y, ac.creep.room.name);
+    }
+  }
+  return undefined;
+}
+
+/** (x,y) 是否被障碍型结构占用（container/road/rampart 可站，其余结构阻挡）。 */
+function tileHasObstacleStructure(ac: ActionContext, x: number, y: number): boolean {
+  const s = ac.snapshot;
+  for (const list of [s.spawns, s.extensions, s.towers, s.links, s.labs]) {
+    for (const st of list) if (st.pos.x === x && st.pos.y === y) return true;
+  }
+  for (const single of [s.storage, s.terminal, s.factory, s.observer, s.powerSpawn]) {
+    if (single && single.pos.x === x && single.pos.y === y) return true;
+  }
+  return false;
 }
 
 /** 找到与 source 相邻（range<=1）的 container（站桩倒能点）。 */
