@@ -52,6 +52,10 @@ export interface RemoteTargetingInput {
   haulerCapacity: number;
   /** 本帝国用户名 — 排除被他人预定的房（己方续期中的房仍可选）。 */
   myUsername?: string;
+  /** 我方所有殖民地房名（权威 controller.my，非 intel）。己方房永不可能是远矿
+   * 目标：新占殖民地的 intel 常滞后未记 owner（info.owner=null），会被当高分目标
+   * 误选，与 maintainExistingOps 的 self-claim 废弃形成开→废 churn。用权威集合硬排除。 */
+  ownedRooms?: ReadonlySet<string>;
 }
 
 // ─── 远矿经济模型（评分公式的具名常量）────────────────────────
@@ -176,6 +180,10 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
   for (const [roomName, info] of Object.entries(intel)) {
     // 排除自身房间。
     if (roomName === homeRoom) continue;
+    // 排除我方所有殖民地（权威 controller.my）— 己方房永不可能是远矿目标。
+    // 不依赖 info.owner：新占殖民地的 intel 常滞后未记 owner，漏过下方有主房筛选，
+    // 被当高分邻房误选 → maintainExistingOps self-claim 废弃 → 重选 → churn。
+    if (input.ownedRooms?.has(roomName)) continue;
     // 排除已有运营的房间。
     if (activeTargets.has(roomName)) continue;
     // 排除他房已运营的目标（跨房去重 — 双编队抢矿是纯亏损）。

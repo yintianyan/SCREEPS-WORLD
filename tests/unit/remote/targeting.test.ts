@@ -100,6 +100,24 @@ describe("remote targeting — selectRemoteTargets", () => {
     expect(result.map((c) => c.roomName)).toEqual(["W1N2"]);
   });
 
+  it("排除我方殖民地（权威 controller.my）— intel.owner 滞后为空也硬排除，防己方邻居房被误选 churn", () => {
+    const result = selectRemoteTargets({
+      homeRoom: "W1N1",
+      intel: {
+        W2N1: makeIntel({ owner: undefined }), // 我方新占殖民地，但 intel 滞后未记 owner
+        W1N2: makeIntel({ owner: undefined }), // 真·无主，可选
+      },
+      existingOps: undefined,
+      tick,
+      staleThreshold,
+      haulerCapacity: 800,
+      ownedRooms: new Set(["W2N1"]), // 权威集合：W2N1 是我方殖民地
+    });
+    // W2N1 被 ownedRooms 硬排除（不依赖 intel.owner），只剩 W1N2 —
+    // 否则己方房被当远矿目标反复开→self-claim 废弃→重选，形成 churn。
+    expect(result.map((c) => c.roomName)).toEqual(["W1N2"]);
+  });
+
   it("排除被他人预定的房，己方续期中的房仍可选", () => {
     const result = selectRemoteTargets({
       homeRoom: "W1N1",

@@ -50,6 +50,14 @@ export const remoteMiningManagerSystem: System = {
       }
     }
 
+    // 我方所有殖民地房名（权威 controller.my）— 传入评选以硬排除己方房作远矿目标。
+    // 根因：新占殖民地的 intel 滞后未记 owner，selectRemoteTargets 的 info.owner
+    // 筛选漏过 → 己方邻居房被当高分目标反复开→被 self-claim 废弃→重选（churn，白孵）。
+    const ownedRooms = new Set<string>();
+    for (const rn of Object.keys(Game.rooms)) {
+      if (Game.rooms[rn]?.controller?.my) ownedRooms.add(rn);
+    }
+
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
@@ -125,6 +133,7 @@ export const remoteMiningManagerSystem: System = {
           globalActiveTargets,
           haulerCapacity,
           myUsername: snapshot.controller?.owner?.username,
+          ownedRooms,
         });
         // 只补充到有效上限。
         const needed = maxOps - activeCount;
