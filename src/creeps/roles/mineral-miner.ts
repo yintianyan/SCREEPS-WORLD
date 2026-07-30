@@ -26,8 +26,12 @@ import { defineRole } from "../engine/role-runner";
 
 const policy: RolePolicy = {
   acquire: [
-    // 采集 mineral（有空余背包时）。extractor 5-tick 冷却 ERR_TIRED 会置 idle，
-    // work 链的 harvestMineral 会拦截自愈（下一 tick 冷却结束继续采）。
+    // 0. 满载倒矿（防御纵深）— 镜像到 acquire：即便 FSM 因单 tick 抖动
+    //    （extractor 冷却置 idle、container 建成延迟等）没能停在 work 模式，
+    //    满载矿工在 acquire 也能倒矿自愈，不依赖 mode 流转（存量冻结矿工亦可解冻）。
+    dumpMineralsToNearbyContainer(),
+    // 1. 采集 mineral（有空余背包时）。extractor 5-tick 冷却 ERR_TIRED 会置 idle，
+    //    updateMode 总量口径恢复分支会正确按背包内容切 work/acquire。
     harvestMineral(),
   ],
 

@@ -52,22 +52,24 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
   return {
     name: "loot:remains",
     resolve: (ac) => {
+      // 遗留物按「任意资源总量」筛选（不限能量）— 只装矿物的坟墓同样值得回收，
+      // 否则满载矿物的 mineralMiner 死后，其矿物随尸体灭失（线上实证）。
       const candidates: (Tombstone | Ruin)[] = [];
       for (const t of ac.snapshot.tombstones) {
-        if (t.store.getUsedCapacity(RESOURCE_ENERGY) >= Math.max(1, minAmount)) candidates.push(t);
+        if (t.store.getUsedCapacity() >= Math.max(1, minAmount)) candidates.push(t);
       }
       for (const r of ac.snapshot.ruins) {
-        if (r.store.getUsedCapacity(RESOURCE_ENERGY) >= Math.max(1, minAmount)) candidates.push(r);
+        if (r.store.getUsedCapacity() >= Math.max(1, minAmount)) candidates.push(r);
       }
       if (candidates.length === 0) return undefined;
 
-      // 身边能量最多的优先。
+      // 身边总量最多的优先。
       let richestAdjacent: Tombstone | Ruin | undefined;
       for (const c of candidates) {
         if (ac.creep.pos.getRangeTo(c) > 1) continue;
         if (
           !richestAdjacent ||
-          c.store.getUsedCapacity(RESOURCE_ENERGY) > richestAdjacent.store.getUsedCapacity(RESOURCE_ENERGY)
+          c.store.getUsedCapacity() > richestAdjacent.store.getUsedCapacity()
         ) {
           richestAdjacent = c;
         }
@@ -77,11 +79,25 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
       return ac.creep.pos.findClosestByRange(candidates) ?? candidates[0];
     },
     execute: (ac, remains) => {
+      // 取货：能量优先（多数场景），无能量则取尸体内最多的一种资源（矿物）。
       // 限量取：min(可用, 空闲)，避免 ERR_NOT_ENOUGH_RESOURCES 竞态置 idle。
-      const available = remains.store.getUsedCapacity(RESOURCE_ENERGY);
-      const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
+      const carryFree = ac.creep.store.getFreeCapacity();
+      let resource: ResourceConstant = RESOURCE_ENERGY;
+      let available = remains.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (available <= 0) {
+        // 无能量 — 挑尸体内存量最多的一种资源（矿物/化合物）。
+        let best: ResourceConstant | undefined;
+        let bestAmt = 0;
+        for (const res of Object.keys(remains.store) as ResourceConstant[]) {
+          const amt = remains.store.getUsedCapacity(res) ?? 0;
+          if (amt > bestAmt) { bestAmt = amt; best = res; }
+        }
+        if (!best) return;
+        resource = best;
+        available = bestAmt;
+      }
       const amount = Math.min(available, carryFree);
-      runAction(ac.creep, remains, () => ac.creep.withdraw(remains, RESOURCE_ENERGY, amount), {
+      runAction(ac.creep, remains, () => ac.creep.withdraw(remains, resource, amount), {
         [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
       });
     },

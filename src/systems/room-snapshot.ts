@@ -62,17 +62,19 @@ export function buildRoomSnapshot(
     r => r.resourceType === RESOURCE_ENERGY,
   );
 
-  // 遗留能量容器：坟墓（creep 死亡）与废墟（建筑被毁/拆除）。
+  // 遗留资源容器：坟墓（creep 死亡）与废墟（建筑被毁/拆除）。
   // 两者都在衰减/限时灭失，是 hauler 优先回收的对象。
+  // 过滤口径为「任意资源总量 > 0」而非仅能量 — 否则只装矿物的坟墓（如满载矿物的
+  // mineralMiner 死亡）被整体滤出快照，其矿物无人可见、随尸体灭失（线上实证）。
   // try/catch 防御：FIND_TOMBSTONES/FIND_RUINS 可能在精简测试环境未定义。
   let tombstones: Tombstone[] = [];
   let ruins: Ruin[] = [];
   try {
     tombstones = room.find(FIND_TOMBSTONES).filter(
-      t => t.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      t => t.store.getUsedCapacity() > 0,
     );
     ruins = room.find(FIND_RUINS).filter(
-      r => r.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      r => r.store.getUsedCapacity() > 0,
     );
   } catch {
     // 常量未定义的环境（旧测试 mock）— 视为无遗留资源。

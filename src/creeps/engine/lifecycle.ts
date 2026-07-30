@@ -5,10 +5,14 @@ import { moveTowardRoom, stepToward, findSafestExit, moveToTarget, registerAncho
 import { releaseFromTask } from "../support/assignment-adapter";
 import { classifyThreats } from "../../domain/defense/threat";
 
-/** 根据能量存储更新 creep 模式。仅在阈值跨越时写入。 */
+/** 根据背包存储更新 creep 模式。仅在阈值跨越时写入。 */
 export function updateMode(creep: Creep): void {
-  const used = creep.store.getUsedCapacity(RESOURCE_ENERGY);
-  const free = creep.store.getFreeCapacity(RESOURCE_ENERGY);
+  // 总量口径（不限 RESOURCE_ENERGY）：满/空判断须计入矿物等非能量资源，
+  // 否则满背包矿物的 creep（如 mineralMiner 采满 Z）被误判"空载"——work 模式
+  // 只活 1 tick 即被踢回 acquire，采不动也倒不掉，永久冻结至老死（线上实证）。
+  // 对纯能量角色 used(total)===used(energy)，行为完全等价；仅修正携矿场景。
+  const used = creep.store.getUsedCapacity();
+  const free = creep.store.getFreeCapacity();
   const mode = creep.memory.mode ?? "acquire";
 
   if (mode === "acquire" && free === 0) {
@@ -16,7 +20,7 @@ export function updateMode(creep: Creep): void {
   } else if (mode === "work" && used === 0) {
     creep.memory.mode = "acquire";
   } else if (mode === "idle" || mode === "flee") {
-    // idle/flee 恢复：有能量时转 work 去消耗，空载时转 acquire 去采集。
+    // idle/flee 恢复：有货时转 work 去消耗，空载时转 acquire 去采集。
     // 修复：原实现缺少 idle 和 flee 分支导致 creep 一旦进入这些模式就永久卡死。
     // flee 场景：敌人离开后 shouldFlee 返回 false，但 mode 仍为 flee，需要恢复。
     creep.memory.mode = used > 0 ? "work" : "acquire";
