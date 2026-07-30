@@ -45,6 +45,11 @@ describe("Timeseries — sampleCpu", () => {
     expect(sample.ti).toBe(0); // healthy = 0
     expect(sample.sk).toBe(2);
     expect(sample.er).toBe(0);
+    // top-3 role CPU（点亮"系统之外"的 creep 执行大头）。
+    expect(sample.r1).toBe("harvester");
+    expect(sample.rv1).toBe(1.2);
+    expect(sample.r2).toBe("hauler");
+    expect(sample.rv2).toBe(0.9);
   });
 
   it("ranks tier correctly", () => {

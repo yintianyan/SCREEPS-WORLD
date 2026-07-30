@@ -54,6 +54,18 @@ export interface CpuSample {
   s3: string;
   /** Top-3 系统 CPU。 */
   v3: number;
+  /** Top-1 role 名（creep 执行 CPU — 点亮"系统之外"的最大 CPU 去向）。 */
+  r1?: string;
+  /** Top-1 role CPU。 */
+  rv1?: number;
+  /** Top-2 role 名。 */
+  r2?: string;
+  /** Top-2 role CPU。 */
+  rv2?: number;
+  /** Top-3 role 名。 */
+  r3?: string;
+  /** Top-3 role CPU。 */
+  rv3?: number;
 }
 
 // ─── 经济时序采样点 ──────────────────────────────────────────
@@ -174,6 +186,11 @@ export function sampleCpu(
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
 
+  // Top-3 role 按 CPU 降序（creep 执行 CPU — 点亮"系统之外"的大头）。
+  const roles = Object.entries(telemetry.roleCpu)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+
   return {
     t: tick,
     cpu: Math.round(cpu * 10) / 10,
@@ -189,6 +206,12 @@ export function sampleCpu(
     v2: sys[1]?.[1] ? Math.round(sys[1][1] * 10) / 10 : 0,
     s3: sys[2]?.[0] ?? "",
     v3: sys[2]?.[1] ? Math.round(sys[2][1] * 10) / 10 : 0,
+    r1: roles[0]?.[0] ?? "",
+    rv1: roles[0]?.[1] ? Math.round(roles[0][1] * 10) / 10 : 0,
+    r2: roles[1]?.[0] ?? "",
+    rv2: roles[1]?.[1] ? Math.round(roles[1][1] * 10) / 10 : 0,
+    r3: roles[2]?.[0] ?? "",
+    rv3: roles[2]?.[1] ? Math.round(roles[2][1] * 10) / 10 : 0,
   };
 }
 
