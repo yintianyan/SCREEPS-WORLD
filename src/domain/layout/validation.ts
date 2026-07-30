@@ -225,13 +225,32 @@ export function buildOccupiedPositionSet(
     ...snapshot.towers,
     ...snapshot.containers,
     ...snapshot.links,
+    ...snapshot.labs,
     ...snapshot.constructionSites,
   ];
   for (const s of structures) {
     set.add(packPos(s.pos.x, s.pos.y));
   }
+  // 单例结构 — 此前遗漏 terminal/factory/extractor/observer/powerSpawn，导致
+  // 约束放置器把新结构选在这些已占格上 → createConstructionSite 返 ERR_INVALID_TARGET
+  // → 反复失败进黑名单 → 主房 RCL6-8 结构（如 spawn#2/tower#3/factory）永久建不齐。
   if (snapshot.storage) {
     set.add(packPos(snapshot.storage.pos.x, snapshot.storage.pos.y));
+  }
+  if (snapshot.terminal) {
+    set.add(packPos(snapshot.terminal.pos.x, snapshot.terminal.pos.y));
+  }
+  if (snapshot.factory) {
+    set.add(packPos(snapshot.factory.pos.x, snapshot.factory.pos.y));
+  }
+  if (snapshot.extractor) {
+    set.add(packPos(snapshot.extractor.pos.x, snapshot.extractor.pos.y));
+  }
+  if (snapshot.observer) {
+    set.add(packPos(snapshot.observer.pos.x, snapshot.observer.pos.y));
+  }
+  if (snapshot.powerSpawn) {
+    set.add(packPos(snapshot.powerSpawn.pos.x, snapshot.powerSpawn.pos.y));
   }
   return set;
 }
