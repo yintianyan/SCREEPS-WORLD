@@ -19,7 +19,8 @@ function room(overrides: Partial<RoomStrategyInput> = {}): RoomStrategyInput {
   return {
     colonyState: "normal",
     economyPressure: 0.1,
-    rcl: 6,
+    rcl: 7,
+    storageEnergy: 150000,
     ...overrides,
   };
 }
@@ -57,6 +58,38 @@ describe("empire posture — 和平姿态选择", () => {
     expect(
       evaluateEmpirePosture(input({ rooms: [room({ colonyState: "recovery" })] })).posture,
     ).toBe("develop");
+  });
+
+  // Phase 1a：殖民门加"核心成熟度 + 最新房自立"。
+  it("无成熟 sponsor（房仅 RCL6）→ develop（不殖民）", () => {
+    const r = evaluateEmpirePosture(input({ rooms: [room({ rcl: 6 })] }));
+    expect(r.posture).toBe("develop");
+  });
+
+  it("sponsor 达 RCL7 但 storage 不足 → develop（代孵能力不够）", () => {
+    const r = evaluateEmpirePosture(input({ rooms: [room({ rcl: 7, storageEnergy: 50000 })] }));
+    expect(r.posture).toBe("develop");
+  });
+
+  it("有嫩房（RCL4 未自立）→ develop（即便有成熟 sponsor、GCL 有余量）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ rcl: 8, storageEnergy: 200000 }), room({ rcl: 4, storageEnergy: 0 })],
+        gclLevel: 3,
+      }),
+    );
+    expect(r.posture).toBe("develop");
+  });
+
+  it("成熟 sponsor（RCL8/storage 足）+ 最新房已自立（RCL6）+ GCL 余量 → expand", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ rcl: 8, storageEnergy: 200000 }), room({ rcl: 6, storageEnergy: 80000 })],
+        gclLevel: 3,
+      }),
+    );
+    expect(r.posture).toBe("expand");
+    expect(r.expansionAllowed).toBe(true);
   });
 });
 

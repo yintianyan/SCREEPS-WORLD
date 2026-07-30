@@ -485,6 +485,12 @@ export const CONFIG = {
     staleThreshold: 5000,
     /** 远矿启用 RCL 门限（低于此 RCL 不开远矿，集中能量发展本房）。 */
     minRcl: 4,
+    /** 逐房就绪门（Phase 1b）：一个房要「新开」远矿，除帝国姿态放行外，
+     * 本房还须自身经济成熟——RCL ≥ roomMinRcl 且 storage 能量 ≥ roomMinStorage
+     * 且 colonyState=normal。防止 RCL4 新占嫩房过早分兵远矿（本该闷头冲级）。
+     * 现役远矿不受影响，只挡「这房该不该再开新远矿点」。 */
+    roomMinRcl: 5,
+    roomMinStorage: 20000,
     /** 远矿房威胁的危险冷却（tick）— 冷却期内不作为新远矿/扩张候选。 */
     dangerCooldown: 2000,
     /** 普通威胁的失明保持窗口（tick，RM-2）— 有视野见威胁后，失明期间

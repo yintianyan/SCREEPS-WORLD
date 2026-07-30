@@ -30,6 +30,8 @@ export interface RoomStrategyInput {
   /** 最近一次房内出现威胁的 tick（无记录为 undefined）。 */
   lastHostileAt?: number;
   rcl: number;
+  /** 本房 storage 能量（无 storage 记 0）— 供殖民门判断核心成熟度。 */
+  storageEnergy: number;
 }
 
 /** 帝国姿态。 */
@@ -49,6 +51,12 @@ export interface PostureOptions {
   expandMaxPressure: number;
   /** war 姿态要求的最高平均经济压力（打不起就不打）。 */
   warMaxPressure: number;
+  /** 殖民门（Phase 1a）：至少存在一个「成熟 sponsor」房——RCL ≥ 此值。 */
+  colonizeSponsorRcl: number;
+  /** 殖民门：成熟 sponsor 房要求的最低 storage 能量（能快速代孵新房）。 */
+  colonizeSponsorEnergy: number;
+  /** 殖民门：所有己方房 RCL 须 ≥ 此值（最新/最嫩房已自立，不再是拖累）。 */
+  colonizeYoungestFloorRcl: number;
 }
 
 export const DEFAULT_POSTURE_OPTIONS: PostureOptions = {
@@ -58,6 +66,9 @@ export const DEFAULT_POSTURE_OPTIONS: PostureOptions = {
   expandMinBucket: 7000,
   expandMaxPressure: 0.4,
   warMaxPressure: 0.4,
+  colonizeSponsorRcl: 7,
+  colonizeSponsorEnergy: 100000,
+  colonizeYoungestFloorRcl: 5,
 };
 
 /** 姿态评估输入。 */
@@ -131,12 +142,22 @@ export function evaluateEmpirePosture(
     return finalize("develop", prevPosture, since, tick);
   }
 
-  // ── 和平姿态选择：expand 需要全面健康 ──
+  // ── 和平姿态选择：expand（授权殖民）需要全面健康 + 核心成熟 ──
+  // Phase 1a：在原经济健康门上叠加"核心成熟度 + 最新房自立"，防止过早殖民
+  //（历史教训：RCL4 嫩房只要 colonyState=normal 就触发殖民 → W6N3 失败、W8N4 硬上）。
+  //   - sponsorReady：至少一个房 RCL≥colonizeSponsorRcl 且 storage 盈余 → 能快速代孵新房；
+  //   - youngestMature：所有己方房 RCL≥colonizeYoungestFloorRcl → 上一个新房已自立、不再分兵。
+  const sponsorReady = rooms.some(
+    r => r.rcl >= options.colonizeSponsorRcl && r.storageEnergy >= options.colonizeSponsorEnergy,
+  );
+  const youngestMature = rooms.every(r => r.rcl >= options.colonizeYoungestFloorRcl);
   const canExpand =
     gclHeadroom &&
     allNormal &&
     bucket >= options.expandMinBucket &&
-    avgPressure <= options.expandMaxPressure;
+    avgPressure <= options.expandMaxPressure &&
+    sponsorReady &&
+    youngestMature;
 
   return finalize(canExpand ? "expand" : "develop", prevPosture, since, tick);
 }

@@ -35,6 +35,7 @@ export const empireStrategySystem: System = {
         economyPressure: roomMem.economyPressure ?? 0,
         lastHostileAt: roomMem.lastHostileAt,
         rcl: snapshot.rcl,
+        storageEnergy: snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
       });
     }
 

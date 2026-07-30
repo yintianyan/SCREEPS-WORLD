@@ -27,7 +27,7 @@
  */
 import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
-import type { Priority, System, TickContext, ColonyState } from "../kernel/contracts";
+import type { Priority, System, TickContext, ColonyState, RoomSnapshot } from "../kernel/contracts";
 import { selectRemoteTargets, shouldPauseOperation, effectiveMaxOperations, scoreRemoteCandidate, roomLinearDistance } from "../domain/remote/targeting";
 import { evaluateRemoteDemand, type RemoteCreepSummary } from "../domain/remote/demand";
 import { classifyThreats } from "../domain/defense/threat";
@@ -123,7 +123,10 @@ export const remoteMiningManagerSystem: System = {
       // 边际 op 若不重估会永续；body 变大后 haulerNeed 也需缩编避免过配。
       reevaluateActiveOps(remoteOps, roomMem, snapshot.roomName, haulerCapacity, ctx.tick);
 
-      if (newOpsAllowed && activeCount < maxOps) {
+      // 逐房就绪门（Phase 1b）：帝国姿态放行（newOpsAllowed）之外，本房还须自身
+      // 经济成熟才「新开」远矿——RCL≥roomMinRcl 且 colonyState=normal 且 storage 盈余。
+      // 防止 RCL4 新占嫩房过早分兵远矿（本该闷头冲级）。现役 op 的维护/重估不受影响。
+      if (newOpsAllowed && roomReadyForNewRemote(snapshot, roomMem.colonyState) && activeCount < maxOps) {
         const candidates = selectRemoteTargets({
           homeRoom: snapshot.roomName,
           intel: roomMem.intel,
@@ -388,6 +391,22 @@ function maintainExistingOps(
     }
   }
   return { selfClaimed, hostileReserved };
+}
+
+/** 逐房「新开远矿」就绪门（Phase 1b，纯函数便于单测）。
+ *
+ * 帝国姿态放行（newRemoteOpsAllowed）之外的**本房**门槛：本房经济须自身成熟，
+ * 才允许再新开远矿点——RCL≥roomMinRcl 且 colonyState=normal 且 storage 盈余
+ * ≥roomMinStorage。防止新占嫩房（RCL4、无 storage 缓冲）过早分兵远矿。
+ * 只影响「是否新开」，不影响现役 op 的维护/重估/回收。 */
+export function roomReadyForNewRemote(
+  snapshot: RoomSnapshot,
+  colonyState: ColonyState | undefined,
+): boolean {
+  if (snapshot.rcl < CONFIG.remote.roomMinRcl) return false;
+  if (colonyState !== "normal") return false;
+  const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+  return storageEnergy >= CONFIG.remote.roomMinStorage;
 }
 
 /** 统计 active 状态的运营数。 */
