@@ -74,8 +74,54 @@ export const constructionManagerSystem: System = {
 
       roomMem.buildQueue = queue;
     }
+
+    // 6. 孤儿工地清扫（Phase 3，低频 catch-all）。收口所有孤儿来源：扩张超时/失守、
+    //    远矿 abandoned、房间失守——它们各自路径都不清 Game 层 site，此处统一兜底。
+    if (ctx.tick % CONFIG.construction.orphanSweepInterval === 0) {
+      cleanOrphanConstructionSites();
+    }
   },
 };
+
+/**
+ * 计算「应保留我方工地」的房间集合：己方殖民地 ∪ 非 abandoned 远矿目标 ∪ 当前扩张目标。
+ * 保守保留集——只有三者都不是的房间，其工地才判为孤儿。
+ */
+export function computeSiteKeepRooms(): Set<string> {
+  const keep = new Set<string>();
+  // 己方殖民地（拥有 controller）。
+  for (const roomName in Game.rooms) {
+    if (Game.rooms[roomName]?.controller?.my) keep.add(roomName);
+  }
+  // 各房的远矿目标（非 abandoned — 现役/暂停的远矿有合法 container/road 工地）。
+  for (const roomName in Memory.rooms) {
+    const ops = Memory.rooms[roomName]?.remoteOps;
+    if (!ops) continue;
+    for (const target in ops) {
+      if (ops[target]?.state !== "abandoned") keep.add(target);
+    }
+  }
+  // 当前扩张目标（claiming/pioneering 期间目标房工地合法）。
+  const expTarget = Memory.kernel?.expansion?.target;
+  if (expTarget) keep.add(expTarget);
+  return keep;
+}
+
+/**
+ * 移除位于「非保留集」房间的我方建造 site（孤儿工地）。
+ * 用 Game.constructionSites（全局列出所有我方 site，无视野也可 remove），
+ * 故能清理已失去视野的失守/废弃房间的残留工地（如 claim 失败后 controller 降级的房）。
+ */
+export function cleanOrphanConstructionSites(): void {
+  const keep = computeSiteKeepRooms();
+  for (const id in Game.constructionSites) {
+    const site = Game.constructionSites[id];
+    if (!site) continue;
+    if (!keep.has(site.pos.roomName)) {
+      site.remove();
+    }
+  }
+}
 
 /**
  * 开发门禁 — 创建任何新 site 前必须满足。

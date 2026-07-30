@@ -209,8 +209,11 @@ export const CONFIG = {
      * wall/rampart），道路只能塌毁重建 — 重建耗能约为持续维修的 6 倍，
      * 且塌毁窗口期物流减速。3 条起孵避免为单条路专门养一个 builder。 */
     roadRepairBuilderFloor: 3,
+    /** 孤儿工地清扫间隔（tick）。低频遍历 Game.constructionSites（全局、无视野也可
+     * remove），移除位于"既非我方殖民地、又非活跃远矿目标、又非当前扩张目标"房间的
+     * 工地——收口扩张超时/失守、远矿 abandoned、房间失守留下的孤儿工地。 */
+    orphanSweepInterval: 100,
   },
-
   layout: {
     /** 布局模式：constraint = 约束推导放置（默认），template = 固定模板（compact-core-v2，fallback）。
      * Phase 6 切换默认值为 constraint；template 保留为极端地形下的回退选项。 */
