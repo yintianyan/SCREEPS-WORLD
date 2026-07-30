@@ -787,4 +787,66 @@ describe("hauler 积压信号接收端可达性闸门（无 storage 防移动仓
   });
 });
 
+describe("mineralMiner 孵化门禁（工业链第一环激活）", () => {
+  const mineral = (amount: number) => [{ id: "min1", mineralType: "Z", mineralAmount: amount, pos: { x: 7, y: 33 } }];
+  const extractor = mockStructure("extractor", { id: "ext1" });
+  const terminal = mockStructure("terminal", { id: "term1", energy: 10000, capacity: 300000 });
+
+  function industrySnap(overrides = {}) {
+    return stationSnapshot({
+      rcl: 7,
+      energyCapacityAvailable: 1300,
+      extractor,
+      terminal,
+      minerals: mineral(50000) as never,
+      ...overrides,
+    });
+  }
+
+  it("RCL7 + extractor + mineral 有储量 + terminal → 孵化 1 个 mineralMiner", () => {
+    const snap = industrySnap();
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    const miners = requests.filter(r => r.role === "mineralMiner");
+    expect(miners).toHaveLength(1);
+    // body 必须含 CARRY（否则 harvestMineral 永不触发）。
+    expect(miners[0]!.body.filter(p => p === "carry").length).toBeGreaterThanOrEqual(1);
+    expect(miners[0]!.body.filter(p => p === "work").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("mineral 采空（amount=0）→ 不孵化（存量矿工自然老死）", () => {
+    const snap = industrySnap({ minerals: mineral(0) as never });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
+  });
+
+  it("无 extractor → 不孵化（矿位无法采集）", () => {
+    const snap = industrySnap({ extractor: undefined });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
+  });
+
+  it("RCL5（未解锁 extractor）→ 不孵化", () => {
+    const snap = industrySnap({ rcl: 5 });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
+  });
+
+  it("已有 1 个 mineralMiner → 不重复孵化（maxCount=1）", () => {
+    const snap = industrySnap();
+    const existing = [
+      ...livingHarvester(),
+      { name: "mineralMiner_0", role: "mineralMiner", home: "W7N4", ticksToLive: 1200, bodyLength: 12, spawnIndex: 0 },
+    ];
+    const { requests } = evaluateDemand(snap, [], "normal", existing, [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
+  });
+
+  it("recovery 态 → 不孵化（不与保命孵化竞争）", () => {
+    const snap = industrySnap();
+    const { requests } = evaluateDemand(snap, [], "recovery", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
+  });
+});
+
+
 

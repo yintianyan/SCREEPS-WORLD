@@ -448,6 +448,40 @@ export function createExtractorTask(
   };
 }
 
+/**
+ * 为 mineral 生成 container 任务（RCL6+，需 extractor）。
+ *
+ * mineral miner 站桩采矿后把矿物倒入此 container，hauler 再搬到 terminal/storage。
+ * createSourceContainerTasks 只覆盖 sources、不含 mineral —— 故 mineral container
+ * 单列。选位复用 findAdjacentBuildable（mineral 八邻域找非墙非占用格）。
+ * priority 3（低于 source container / spawn 等，工业链非生存关键）。
+ */
+export function createMineralContainerTask(
+  snapshot: RoomSnapshot,
+  room: Room,
+  options: ValidationOptions,
+): BuildTaskCandidate | undefined {
+  if (snapshot.rcl < 6) return undefined;
+  if (snapshot.extractor === undefined) return undefined;
+  const mineral = snapshot.minerals[0];
+  if (!mineral) return undefined;
+
+  // mineral 旁已有 container 或 site 则不再生成。
+  if (hasAdjacentStructure(mineral.pos.x, mineral.pos.y, snapshot, STRUCTURE_CONTAINER)) return undefined;
+
+  const adjacentPos = findAdjacentBuildable(mineral.pos, room, snapshot, options);
+  if (!adjacentPos) return undefined;
+
+  return {
+    key: `industry.container.mineral.${mineral.id}`,
+    pos: adjacentPos,
+    structureType: STRUCTURE_CONTAINER,
+    priority: 3,
+    phase: "rcl6",
+    validation: "ok",
+  };
+}
+
 /** 检查指定位置附近 1 格内是否已有某类型结构（直接遍历，零数组分配）。 */
 function hasAdjacentStructure(
   cx: number,

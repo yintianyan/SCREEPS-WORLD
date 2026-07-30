@@ -4,6 +4,7 @@ import { defenderRole } from "./creeps/roles/defender";
 import { distributorRole } from "./creeps/roles/distributor";
 import { harvesterRole } from "./creeps/roles/harvester";
 import { haulerRole } from "./creeps/roles/hauler";
+import { mineralMinerRole } from "./creeps/roles/mineral-miner";
 import { remoteHarvesterRole } from "./creeps/roles/remote-harvester";
 import { remoteHaulerRole } from "./creeps/roles/remote-hauler";
 import { remoteDefenderRole } from "./creeps/roles/remote-defender";
@@ -117,6 +118,8 @@ export const registry = new Registry()
   .registerRole(reserverRole)
   // P2：claimer（扩张占领新房 controller）
   .registerRole(claimerRole)
+  // P2：mineralMiner（RCL6+ extractor 采矿 → container → hauler 搬 terminal）
+  .registerRole(mineralMinerRole)
   // P1：remoteDefender（远矿防御者，杀 NPC reserver/Invader）
   .registerRole(remoteDefenderRole);
 

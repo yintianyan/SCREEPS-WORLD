@@ -441,6 +441,9 @@ export const CONFIG = {
     remoteDefender: { minCount: 0, maxCount: 2 },
     // 扩张占领：同一时刻至多一个扩张行动（见 expansion-manager）。
     claimer: { minCount: 0, maxCount: 1 },
+    // 矿物采集：RCL6+ 有 extractor 且 mineral 未采空时孵化（见 demand 矿工块）。
+    // minCount=0 → 矿采空后自然停孵，存量矿工老死不补。
+    mineralMiner: { minCount: 0, maxCount: 1 },
   },
 
   debug: {

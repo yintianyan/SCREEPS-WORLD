@@ -12,6 +12,7 @@ import {
   createStorageLinkTask,
   createControllerLinkTask,
   createExtractorTask,
+  createMineralContainerTask,
   type BuildTaskCandidate,
 } from "../domain/layout/task-factory";
 import {
@@ -430,6 +431,14 @@ export const layoutPlannerSystem: System & {
       const extractor = createExtractorTask(snapshot);
       if (extractor) {
         if (tryAddTask(extractor)) tasksAdded = true;
+      }
+    }
+
+    // 3.7b Mineral container 任务（RCL6+，需 extractor）— mineral miner 站桩倒矿点。
+    {
+      const mineralContainer = createMineralContainerTask(snapshot, room, validationOptions);
+      if (mineralContainer) {
+        if (tryAddTask(mineralContainer)) tasksAdded = true;
       }
     }
 

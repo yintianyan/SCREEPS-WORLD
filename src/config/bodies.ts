@@ -128,6 +128,15 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["claim", "move", "move"], minCapacity: 700 },
     { parts: ["claim", "move"], minCapacity: 650 },
   ],
+  mineralMiner: [
+    // 站桩矿工：多 WORK 提升采集速率（extractor 5-tick 冷却，1 WORK=1/tick、
+    // 上限 10/tick 需 10 WORK）；必须含 CARRY（harvestMineral 检查剩余容量>0，
+    // 空 CARRY 永不触发）；1 MOVE 通勤到矿位后站桩。按容量平滑降级。
+    { parts: ["work", "work", "work", "work", "work", "work", "work", "work", "work", "work", "carry", "move"], minCapacity: 1250 },
+    { parts: ["work", "work", "work", "work", "work", "carry", "move"], minCapacity: 650 },
+    { parts: ["work", "work", "work", "carry", "move"], minCapacity: 450 },
+    { parts: ["work", "carry", "move"], minCapacity: 200 },
+  ],
   remoteDefender: [
     // [ATTACK,ATTACK,MOVE,MOVE] @520：20 damage/tick，10 tick 击杀 NPC reserver（200 hits）。
     // NPC reserver 通常只有 [CLAIM,MOVE]，无攻击能力 → defender 不会受伤。

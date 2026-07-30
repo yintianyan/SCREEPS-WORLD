@@ -570,6 +570,30 @@ export function evaluateDemand(
     }
   }
 
+  // P2：Mineral Miner — RCL6+ 且 extractor 就位、mineral 未采空、有 terminal/storage
+  // 容纳时孵化 1 个专职矿工，激活工业链第一环（extractor → container → hauler）。
+  // 门禁全满才孵：矿采空（mineralAmount=0）后不再孵化，配 minCount=0 使存量矿工
+  // 老死不补（替换门禁 3 天然阻止）— 无需额外停孵逻辑。normal 态才开（不与
+  // bootstrap/recovery 的保命孵化竞争）。
+  const mineral = snapshot.minerals[0];
+  if (
+    colonyState === "normal" &&
+    snapshot.rcl >= 6 &&
+    snapshot.extractor !== undefined &&
+    mineral !== undefined &&
+    mineral.mineralAmount > 0 &&
+    (snapshot.terminal !== undefined || hasStorage)
+  ) {
+    const minerConfig = getRoleBounds("mineralMiner", home);
+    const minerTotal = (counts.mineralMiner ?? 0) + countPending(queue, "mineralMiner", home);
+    for (let i = minerTotal; i < minerConfig.maxCount; i++) {
+      const key = spawnKey("mineralMiner", home, i);
+      if (!hasKey(queue, key)) {
+        requests.push(createRequest("mineralMiner", home, i, key, 2, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
+      }
+    }
+  }
+
   // P2：Upgrader — 仅在 normal 状态下，不在 bootstrap/recovery。
   // 当控制器存在降级风险时，即使在 recovery/bootstrap 也允许生成 upgrader（P1 优先级）。
   const hasDowngradeRisk = roomCtx.controllerDowngradeRisk;
