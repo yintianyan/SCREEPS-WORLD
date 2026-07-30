@@ -715,13 +715,22 @@ describe("distributor cc 排空反馈（镜像 hauler 积压反馈，方向相�
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
   });
 
-  it("有 controller link → 即使 cc 见底也不加成（link 供能，非 distributor 职责）", () => {
+  it("有正在供能的 controller link（有能量）→ 即使 cc 见底也不加成（link 供能，非 distributor 职责）", () => {
     (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 };
-    const ctrlLink = mockStructure("link", { id: "clink", energy: 0, capacity: 800 });
+    const ctrlLink = mockStructure("link", { id: "clink", energy: 400, capacity: 800 }); // 有能量 = 正在供能
     // 默认 mockPos.getRangeTo 返回 1 ≤ 2 → 判定为 controller link。
     const snap = ccSnapshot(200, [ctrlLink]);
     const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
+  });
+
+  it("controller link 在场但空(网络未通) + cc 见底 → distributor 接管加成（① 核心行为）", () => {
+    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 };
+    const deadLink = mockStructure("link", { id: "clink", energy: 0, capacity: 800 }); // 空 = 未在供能
+    const snap = ccSnapshot(200, [deadLink]); // cc 10% + link 死
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    // link 在场但没通 → distributor 不让位、接管 cc → 加成到 maxCount 3。
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(3);
   });
 });
 

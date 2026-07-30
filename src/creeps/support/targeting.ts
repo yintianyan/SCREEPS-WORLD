@@ -316,16 +316,24 @@ export function getDistributorFillTarget(
     }
   }
 
-  // 3. controller container 兜底 —— 仅当无 controller link 时。
+  // 3. controller container 兜底 —— 仅当无「正在供能的」controller link 时。
   //    档位与 upgrader 调度对齐（tier < 2 ⇔ storage ≥ sustained）：
   //    upgrade.sustainedStorage 允许养 upgrader 的水位，就必须允许给它的
   //    供能站送能 — 否则两套水位裁决互相矛盾，cc 沦为死资产、
   //    upgrader 退化为往返 storage 限量取能（站桩 0 通勤设计失效）。
+  //    判据用「link 在场且有能量」而非仅「在场」：link 网络未通（持续空、
+  //    harvester 站位喂不进 / storage 未灌 link）时，distributor 必须接管 cc，
+  //    否则「link 在场 → distributor 撒手 → link 又没通 → upgrader 半饿」。
+  //    link 真在供能时它 tick 内多有能量，distributor 自然让位（cc 被 upgrader
+  //    优先从 link 取而不降 → cc 满 → 本兜底无空位可填）。
   if (tier < 2) {
-    const hasControllerLink =
+    const controllerLinkServing =
       snapshot.controller != null &&
-      snapshot.links.some(l => l.pos.getRangeTo(snapshot.controller!) <= 2);
-    if (!hasControllerLink) {
+      snapshot.links.some(l =>
+        l.pos.getRangeTo(snapshot.controller!) <= 2 &&
+        l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      );
+    if (!controllerLinkServing) {
       const cc = snapshot.controllerContainer;
       if (cc && !reserved.has(cc.id) && cc.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
         reserved.add(cc.id);
@@ -381,12 +389,15 @@ export function hasDistributorFillDemand(snapshot: RoomSnapshot, tier: Distribut
   }
 
   // controller container 兜底：tier < 2（与 upgrader 的 sustainedStorage 调度对齐）
-  // 且无 controller link 时。
+  // 且无「正在供能的」controller link 时（link 网络未通则 distributor 接管，见上方注释）。
   if (tier < 2) {
-    const hasControllerLink =
+    const controllerLinkServing =
       snapshot.controller != null &&
-      snapshot.links.some(l => l.pos.getRangeTo(snapshot.controller!) <= 2);
-    if (!hasControllerLink) {
+      snapshot.links.some(l =>
+        l.pos.getRangeTo(snapshot.controller!) <= 2 &&
+        l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      );
+    if (!controllerLinkServing) {
       const cc = snapshot.controllerContainer;
       if (cc && cc.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return true;
     }

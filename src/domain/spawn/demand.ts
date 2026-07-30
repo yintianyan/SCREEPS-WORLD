@@ -503,10 +503,14 @@ export function evaluateDemand(
       snapshot.controller?.my === true &&
       storageEnergy >= CONFIG.economy.distributorTiers.sustained
     ) {
-      const hasControllerLink = snapshot.links.some(
-        l => snapshot.controller != null && l.pos.getRangeTo(snapshot.controller) <= 2,
+      // 判据用「link 在场且有能量」而非仅「在场」：link 网络未通（持续空）时
+      // distributor 必须接管 cc 供能，否则 upgrader 半饿（link 在场却没通）。
+      const controllerLinkServing = snapshot.links.some(
+        l => snapshot.controller != null &&
+          l.pos.getRangeTo(snapshot.controller) <= 2 &&
+          l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
-      if (!hasControllerLink) {
+      if (!controllerLinkServing) {
         const ccCap = snapshot.controllerContainer.store.getCapacity(RESOURCE_ENERGY) || 1;
         const ccFill = snapshot.controllerContainer.store.getUsedCapacity(RESOURCE_ENERGY) / ccCap;
         // fill 低 = 被抽干 = 运力不足；不做运力归一化 —— 远距 sink 要并行头数而非大 body。

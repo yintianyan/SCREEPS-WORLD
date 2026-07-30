@@ -55,10 +55,10 @@ describe("getDistributorFillTarget — 优先级", () => {
     expect(target?.id).toBe(ext.id);
   });
 
-  it("有 controller link 时完全不碰 controller container（即使它空着）", () => {
+  it("有正在供能的 controller link（有能量）时不碰 controller container", () => {
     const cc = struct("container", 10, 10, 0, 2000); // 空，free>0
     const tower = struct("tower", 20, 20, 0, 1000);
-    const controllerLink = struct("link", 11, 11, 0, 800); // 距 controller(10,10) 为 1 <= 2
+    const controllerLink = struct("link", 11, 11, 400, 800); // 有能量=正在供能，距 controller(10,10) 为 1
     const snap = mockSnapshot({
       controller: { pos: mockPos(10, 10) } as any,
       fillTargets: [cc, tower] as any,
@@ -67,7 +67,7 @@ describe("getDistributorFillTarget — 优先级", () => {
     });
     const creep = mockCreep({ pos: mockPos(25, 25) });
 
-    // spawn/extension 无空闲 → 应选 tower，绝不选 controller container（link 独占供能）。
+    // spawn/extension 无空闲 → 应选 tower，绝不选 controller container（link 供能）。
     const target = getDistributorFillTarget(creep as any, snap);
     expect(target?.id).toBe(tower.id);
   });
@@ -75,7 +75,7 @@ describe("getDistributorFillTarget — 优先级", () => {
   it("无 spawn/extension 时选 tower（防御次之）", () => {
     const tower = struct("tower", 20, 20, 0, 1000);
     const cc = struct("container", 10, 10, 0, 2000);
-    const controllerLink = struct("link", 11, 11, 0, 800);
+    const controllerLink = struct("link", 11, 11, 400, 800); // 供能中
     const snap = mockSnapshot({
       controller: { pos: mockPos(10, 10) } as any,
       fillTargets: [cc, tower] as any,
@@ -215,28 +215,37 @@ describe("hasDistributorFillDemand — 取能门禁口径", () => {
     expect(hasDistributorFillDemand(atFloor, 1)).toBe(false);
   });
 
-  it("controller container 兜底需求：tier 0-1 且无 controller link 时成立", () => {
+  it("controller container 兜底需求：tier 0-1 且无「正在供能的」controller link 时成立", () => {
     const cc = struct("container", 10, 10, 0, 2000);
-    const controllerLink = struct("link", 11, 11, 0, 800);
+    const servingLink = struct("link", 11, 11, 400, 800); // 有能量 = 正在供能
+    const deadLink = struct("link", 11, 11, 0, 800);       // 空 = 网络未通
     const noLinkSnap = mockSnapshot({
       controller: { pos: mockPos(10, 10) } as any,
       fillTargets: [] as any,
       controllerContainer: cc as any,
       links: [],
     });
-    const linkedSnap = mockSnapshot({
+    const servingLinkSnap = mockSnapshot({
       controller: { pos: mockPos(10, 10) } as any,
       fillTargets: [] as any,
       controllerContainer: cc as any,
-      links: [controllerLink] as any,
+      links: [servingLink] as any,
+    });
+    const deadLinkSnap = mockSnapshot({
+      controller: { pos: mockPos(10, 10) } as any,
+      fillTargets: [] as any,
+      controllerContainer: cc as any,
+      links: [deadLink] as any,
     });
 
     expect(hasDistributorFillDemand(noLinkSnap, 0)).toBe(true);
     expect(hasDistributorFillDemand(noLinkSnap, 1)).toBe(true);
     // tier 2（storage < sustained）不兜底 — 与 upgrader 调度水位对齐。
     expect(hasDistributorFillDemand(noLinkSnap, 2)).toBe(false);
-    // 有 controller link 时 container 由 link 网络独占供能，不构成需求。
-    expect(hasDistributorFillDemand(linkedSnap, 0)).toBe(false);
+    // 正在供能的 controller link（有能量）→ container 由 link 网络供能，不构成需求。
+    expect(hasDistributorFillDemand(servingLinkSnap, 0)).toBe(false);
+    // link 在场但空（网络未通）→ distributor 接管 cc，构成需求（① 核心行为）。
+    expect(hasDistributorFillDemand(deadLinkSnap, 0)).toBe(true);
   });
 
   it("无任何需求时不成立", () => {
