@@ -39,7 +39,12 @@ export type EmpirePosture = "develop" | "expand" | "fortify" | "war";
 
 /** 姿态评估选项。 */
 export interface PostureOptions {
-  /** 威胁记忆窗口：任一房 lastHostileAt 距今小于此值即视为「近期有敌情」。 */
+  /** 威胁记忆窗口：任一房 lastHostileAt 距今小于此值即视为「近期有敌情」。
+   * 只影响"是否冻结扩张/新远矿"，与 CONFIG.defense.siegeMemoryTicks（墙体升档，
+   * 10000）刻意解耦并取更短值：墙可为防御纵深保持高血更久，但经济扩张不该被一波
+   * 已击退的 invader 冻结上万 tick——活跃帝国周期性遇 invader 是常态，窗口过长会
+   * 令扩张近乎永久冻结。任何新目击仍即时 fortify（紧急旁路），故缩短此窗口只加快
+   * 威胁散去后的扩张恢复，不削弱在袭响应。 */
   threatWindow: number;
   /** fortify → war 的耐心窗口：设防状态持续超过此时长且敌情未消 → 升战争。 */
   warPatience: number;
@@ -60,7 +65,7 @@ export interface PostureOptions {
 }
 
 export const DEFAULT_POSTURE_OPTIONS: PostureOptions = {
-  threatWindow: 10000,
+  threatWindow: 3000,
   warPatience: 5000,
   minDwell: 1000,
   expandMinBucket: 7000,

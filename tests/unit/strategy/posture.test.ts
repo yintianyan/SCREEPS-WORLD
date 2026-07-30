@@ -168,6 +168,20 @@ describe("empire posture — 降级滞回", () => {
     );
     expect(r.posture).toBe("develop");
   });
+
+  // 防永冻：单波 invader 击退后，威胁记忆超出 threatWindow → 不再冻结，回 develop。
+  // （历史 bug：threatWindow=10000 令一波已击退的 invader 冻结扩张上万 tick，
+  //  活跃帝国周期性遇 invader → 扩张近乎永久冻结。缩短窗口后陈旧威胁及时老化。）
+  it("陈旧威胁（超出 threatWindow）+ 上一态 war → 回 develop（不永冻扩张）", () => {
+    const staleAgo = DEFAULT_POSTURE_OPTIONS.threatWindow + 500;
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastHostileAt: tick - staleAgo })],
+        prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
+      }),
+    );
+    expect(r.posture).toBe("develop");
+  });
 });
 
 describe("empire posture — since 语义", () => {
