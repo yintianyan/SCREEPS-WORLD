@@ -243,6 +243,26 @@ describe("upgrader — 站桩升级取能链", () => {
     expect(creep.withdraw).toHaveBeenCalledWith(cc, "energy");
   });
 
+  it("container 供能站桩：同 tick withdraw + upgradeController（消除分离取/升 cadence 损耗）", () => {
+    const controller = mockController();
+    const cc = mockStructure("container", { id: "cc_stat", energy: 1500, capacity: 2000 });
+    const snap = mockSnapshot({
+      controller,
+      controllerContainer: cc,
+      links: [], // 无 link → 走 container 分支
+      energyAvailable: 500,
+    });
+    // work 模式也应触发（stationaryUpgrade 同置 acquire[0] 与 work[0]）。
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 10, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    // 同一 tick 内既取能又升级 —— 这正是 container 供能此前缺失、导致仅 ~30-48% 效率的修复点。
+    expect(creep.withdraw).toHaveBeenCalledWith(cc, "energy");
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
+
   it("优先级 3：无 controller container 时从 storage withdraw", () => {
     const controller = mockController();
     const storage = mockStructure("storage", { id: "st1", energy: 5000, capacity: 100000 });
