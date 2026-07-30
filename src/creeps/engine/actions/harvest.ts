@@ -207,7 +207,12 @@ export function harvestMineral(): ActionCandidate<MineralTarget> {
     },
     execute: (ac, target) => {
       const { mineral } = target;
-      runAction(ac.creep, mineral, () => ac.creep.harvest(mineral), {
+      // 站位：mineral 旁 range<=1 有 container 时以 container 为通勤终点 —— 站到
+      // container 之上后 range0 倒矿 + range1 采矿，零穿梭；否则站 mineral 旁。
+      // 镜像 harvester.stationaryMine 的 container 站位，防"采(贴矿)↔倒(贴容器)"来回走格。
+      const container = ac.snapshot.containers.find(c => c.pos.getRangeTo(mineral.pos) <= 1);
+      const standTarget: RoomPosition | { pos: RoomPosition } = container ?? mineral;
+      runAction(ac.creep, standTarget, () => ac.creep.harvest(mineral), {
         [ERR_NOT_ENOUGH_RESOURCES]: () => { ac.creep.memory.mode = "idle"; },
         [ERR_TIRED]: () => { ac.creep.memory.mode = "idle"; },
       });

@@ -10,7 +10,8 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { updateMode } from "../../../src/creeps/engine/lifecycle";
 import { lootRemains } from "../../../src/creeps/engine/actions/pickup";
-import { mockCreep, mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { harvestMineral } from "../../../src/creeps/engine/actions/harvest";
+import { mockCreep, mockContext, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";
 
 beforeEach(() => {
   resetGlobals();
@@ -95,3 +96,31 @@ describe("lootRemains — 搬运尸体内矿物（不只搬能量）", () => {
     expect(creep.withdraw).toHaveBeenCalledWith(t, "energy", 300);
   });
 });
+
+describe("harvestMineral — 站位以贴 mineral 的 container 为通勤终点（防穿梭）", () => {
+  it("mineral 旁有 container → 通勤终点是 container（站上去零穿梭），非 mineral 本体", () => {
+    const mineral = { id: "min1", mineralType: "Z", mineralAmount: 50000, pos: { x: 7, y: 33, getRangeTo: () => 1 } };
+    const container = mockStructure("container", { id: "mc", energy: 0, capacity: 2000 });
+    container.pos = { x: 6, y: 33, getRangeTo: () => 1 } as never; // 贴 mineral（range 1）
+    const extractor = mockStructure("extractor", { id: "ext1" });
+    const snap = mockSnapshot({
+      minerals: [mineral] as never,
+      containers: [container],
+      extractor: extractor as never,
+    });
+    // creep 离 mineral 远 → harvest 返回 ERR_NOT_IN_RANGE → 朝站位移动。
+    const creep = mockCreep({ name: "mineralMiner_0", role: "mineralMiner", used: 0, capacity: 50, mode: "acquire" });
+    (creep.harvest as any).mockReturnValue(ERR_NOT_IN_RANGE);
+    creep.pos.getRangeTo.mockReturnValue(5); // 离站位远 → moveToTarget 走 moveTo（非 range<=1 短路）
+    const ctx = mockContext(snap);
+
+    const action = harvestMineral();
+    const ac = { creep, snapshot: snap, budget: ctx.budget, ctx } as never;
+    const target = action.resolve!(ac);
+    action.execute(ac, target as never);
+
+    // 通勤终点是 container 的 pos（站上去 range0 倒 + range1 采），而非 mineral 本体。
+    expect(creep.moveTo).toHaveBeenCalledWith(container.pos, expect.anything());
+  });
+});
+

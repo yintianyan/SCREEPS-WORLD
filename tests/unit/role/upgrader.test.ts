@@ -101,6 +101,37 @@ describe("upgrader — 空闲归站（不在 spawn 出口石化挡路）", () =>
     expect(creep.memory.mode).toBe("idle");
   });
 
+  it("归站锚点优先 controller link：有空 link 时归站奔 link（而非 container）", () => {
+    // 优化：归站真相源 link > container > controller。有 controller link 时，
+    // 即便它空能量（withdraw 链落空触发归站），归站目标也应是 link 旁（最优站桩取能位），
+    // 消除旧实现"归站奔 container、贴 link 靠 withdraw 走位副作用"的绕路。
+    const controller = mockController();
+    const emptyLink = mockStructure("link", { id: "ctrl_link", energy: 0, capacity: 800 });
+    // link 距 controller range<=2（满足 resolveStationAnchor 的 controller link 筛选）。
+    emptyLink.pos.getRangeTo = vi.fn(() => 2);
+    const emptyCC = mockStructure("container", { id: "cc", energy: 0, capacity: 2000 });
+    const snap = mockSnapshot({
+      controller,
+      controllerContainer: emptyCC,
+      containers: [emptyCC],
+      links: [emptyLink],
+      sources: [],
+      energyAvailable: 500,
+    });
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    creep.pos.getRangeTo.mockReturnValue(10); // 远离站桩位 → 触发归站移动
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    // 归站移动被触发，且目标 pos 是 controller link 的 pos（真相源优先级 link > container）。
+    expect(creep.moveTo).toHaveBeenCalled();
+    const movedToLink = (creep.moveTo as any).mock.calls.some(
+      (call: unknown[]) => call[0] === emptyLink.pos,
+    );
+    expect(movedToLink).toBe(true);
+  });
+
   it("能量地板门禁拦截时同样归站，不石化在原地", () => {
     // 无任何替代能量源 + energyAvailable 低于地板 → gate 返回 false。
     // 修复前：直接 idle 石化；修复后：先移动到站桩位再 idle。

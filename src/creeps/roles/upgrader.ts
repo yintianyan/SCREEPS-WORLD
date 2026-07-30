@@ -40,7 +40,7 @@ const STATION_RANGE = 3;
  * 该动作作为 acquire 链兜底：已在站桩位 → resolve undefined（正常 idle 等补给）；
  * 不在 → 移动过去。到位后 hauler 一填 container 立即取能开工，零通勤延迟。
  */
-function moveToStation(): ActionCandidate<StructureContainer | StructureController> {
+function moveToStation(): ActionCandidate<StructureContainer | StructureController | StructureLink> {
   return {
     name: "move:controller-station",
     resolve: (ac) => resolveStationAnchor(ac),
@@ -51,10 +51,17 @@ function moveToStation(): ActionCandidate<StructureContainer | StructureControll
 }
 
 /** 解析站桩锚点；已在站桩位或无锚点时返回 undefined。 */
-function resolveStationAnchor(ac: ActionContext): StructureContainer | StructureController | undefined {
-  // 站桩锚点：controller container 优先（真正的取能位），无则己方 controller 本体。
+function resolveStationAnchor(ac: ActionContext): StructureContainer | StructureController | StructureLink | undefined {
   const ctrl = ac.snapshot.controller;
-  const anchor = ac.snapshot.controllerContainer ?? (ctrl?.my ? ctrl : undefined);
+  // 站桩锚点真相源（优先级）：controller link > controller container > controller 本体。
+  //   - controller link 优先：link 网络瞬移供能、无 hauler 依赖，是最优站桩取能位；
+  //     归站到 link range1 后（若 ≤3 到 controller），stationaryUpgrade 的 link 分支
+  //     直接接管，消除旧实现"归站奔 container、贴 link 靠 withdraw 走位副作用"的绕路。
+  //   - 无 link 则 controller container（真正的取能位），再无则 controller 本体。
+  const ctrlLink = ctrl?.my
+    ? ac.snapshot.links.find(l => l.pos.getRangeTo(ctrl.pos) <= 2)
+    : undefined;
+  const anchor = ctrlLink ?? ac.snapshot.controllerContainer ?? (ctrl?.my ? ctrl : undefined);
   if (!anchor) return undefined;
   if (ac.creep.pos.getRangeTo(anchor.pos) <= STATION_RANGE) {
     // 已在站桩位（含等补给的 idle 期）— 登记交通锚，防被过路 creep 推离取能位。
