@@ -42,5 +42,5 @@ export {
   repairFortifications,
   repairFreshRampart,
 } from "./repair";
-export { upgradeController, upgradeControllerGated } from "./upgrade";
+export { stationaryUpgrade, upgradeController, upgradeControllerGated } from "./upgrade";
 export { haulMineralsToStorage, supplyLabs, stockTerminalEnergy, stockFactoryEnergy } from "./industry";

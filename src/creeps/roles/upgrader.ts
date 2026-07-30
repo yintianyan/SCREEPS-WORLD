@@ -16,6 +16,7 @@ import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/actio
 import {
   harvestSource,
   pickupNearbyDroppedEnergy,
+  stationaryUpgrade,
   upgradeController,
   withdrawControllerContainer,
   withdrawControllerLink,
@@ -165,25 +166,31 @@ const policy: RolePolicy = {
   gate: upgraderGate,
 
   acquire: [
-    // 0. 拾取身边的掉落能量（range<=2，不离开站桩位）。
+    // 0. 站桩同 tick 取+升 — 贴 controller link 且够到 controller 时，withdraw+upgrade
+    //    同 tick 执行，让 WORK 满效（消除小 CARRY 的取能空耗 tick）。镜像 stationaryMine，
+    //    同置 acquire[0]/work[0] 绕开单链限制；不满足条件回退下方常规取能链。
+    stationaryUpgrade(),
+    // 1. 拾取身边的掉落能量（range<=2，不离开站桩位）。
     pickupNearbyDroppedEnergy(2),
-    // 1. controller 旁 link（0 通勤，link 瞬移供能）。
+    // 2. controller 旁 link（0 通勤，link 瞬移供能）。
     withdrawControllerLink(),
-    // 2. controller 旁 container（0 通勤）。
+    // 3. controller 旁 container（0 通勤）。
     withdrawControllerContainer(),
-    // 3. storage（动态限量取能 — 按 storage 水位缩放，防止突降触发 economyPressure 连锁降级）。
+    // 4. storage（动态限量取能 — 按 storage 水位缩放，防止突降触发 economyPressure 连锁降级）。
     // P1-1: 高水位(>50%)时放开到 carry 满载；低水位(<15%)时收紧到 200，中间用固定值。
     withdrawStorageCapped(dynamicStorageLimit),
-    // 4. 最满非物流 container（不抢 hauler 的物流源）。
+    // 5. 最满非物流 container（不抢 hauler 的物流源）。
     withdrawRichestNonSourceContainer(),
-    // 5. 兜底：所有 container 无能量时直接采集。
+    // 6. 兜底：所有 container 无能量时直接采集。
     harvestSource(),
-    // 6. 归站兜底：取能全部落空（container 空、source 占满等）时移动到
+    // 7. 归站兜底：取能全部落空（container 空、source 占满等）时移动到
     //    controller 站桩位待命，而不是石化在 spawn 出口挡路。
     moveToStation(),
   ],
 
   work: [
+    // 站桩同 tick 取+升优先（与 acquire[0] 同）；不满足条件回退常规升级（含通勤）。
+    stationaryUpgrade(),
     upgradeAnchored(),
   ],
 };

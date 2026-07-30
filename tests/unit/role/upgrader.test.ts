@@ -318,3 +318,58 @@ describe("upgrader — flee", () => {
     expect(creep.upgradeController).not.toHaveBeenCalled();
   });
 });
+
+describe("upgrader — 站桩同 tick 取+升（stationaryUpgrade / ③）", () => {
+  it("贴 controller link 且够到 controller → 同 tick withdraw + upgradeController", () => {
+    const controller = mockController();
+    const link = mockStructure("link", { id: "clink", energy: 700, capacity: 800 });
+    const snap = mockSnapshot({ controller, links: [link] });
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    // 同一 tick 内既取能又升级 —— 消除小 CARRY 的取能空耗 tick。
+    expect(creep.withdraw).toHaveBeenCalledWith(link, "energy");
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
+
+  it("acquire 模式也同 tick 取+升（不空耗取能 tick）", () => {
+    const controller = mockController();
+    const link = mockStructure("link", { id: "clink", energy: 700, capacity: 800 });
+    const snap = mockSnapshot({ controller, links: [link] });
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    expect(creep.withdraw).toHaveBeenCalledWith(link, "energy");
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
+
+  it("无 controller link → 回退常规升级（不 withdraw）", () => {
+    const controller = mockController();
+    const snap = mockSnapshot({ controller, links: [] });
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    expect(creep.withdraw).not.toHaveBeenCalled();
+  });
+
+  it("空 controller link（无能量）→ 不走同 tick 路径，回退常规链", () => {
+    const controller = mockController();
+    const emptyLink = mockStructure("link", { id: "clink", energy: 0, capacity: 800 });
+    const snap = mockSnapshot({ controller, links: [emptyLink] });
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    // link 无能量 → stationaryUpgrade resolve=undefined → 回退 upgradeAnchored（仍升级），但不 withdraw 空 link。
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    expect(creep.withdraw).not.toHaveBeenCalledWith(emptyLink, "energy");
+  });
+});
