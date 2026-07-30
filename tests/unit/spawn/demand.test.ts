@@ -219,6 +219,30 @@ describe("P3 — RCL5+ Link-aware hauler 需求", () => {
     expect(haulers).toHaveLength(3);
   });
 
+  it("controller link 缺能 → storage link 信号被守卫（用于灌能升级链，不计 hauler，防过孵）", () => {
+    // 复刻叠加场景，但注入一个缺能的 controller link：storage link 此时被 distributor
+    // 用于灌能 controller link（②b），非 source 背压，且 hauler 已被守卫挡住不抽 →
+    // storage link 信号不计入编制。仅 container +2 生效 → 8C 归一化 → 2（未守卫会是 3）。
+    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    const storageLink = mockStructure("link", { id: "slink", energy: 700, capacity: 800 }); // >80%
+    const ctrlLink = mockStructure("link", { id: "clink", energy: 0, capacity: 800 });       // 缺能=灌能中
+    storageLink.pos.getRangeTo = () => 1;
+    ctrlLink.pos.getRangeTo = () => 1;
+    storage.pos.getRangeTo = () => 1;
+    const container = mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 }); // >80% +2
+    const snap = mockSnapshot({
+      storage,
+      links: [storageLink, ctrlLink], // [0]=storage-link（find storage 命中）, [1]=ctrl-link
+      containers: [container],
+      rcl: 5,
+      energyCapacityAvailable: 600,
+      controller: mockController({ level: 5 }),
+    });
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    const haulers = requests.filter(r => r.role === "hauler");
+    expect(haulers).toHaveLength(2);
+  });
+
   it("无 storage link（RCL4 以下）→ 仅看 container 信号，行为不变", () => {
     const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
     const snap = mockSnapshot({

@@ -163,9 +163,24 @@ export function withdrawStorageLink(): ActionCandidate<StructureLink> {
     resolve: (ac) => {
       const st = ac.snapshot.storage;
       if (!st) return undefined;
-      return ac.snapshot.links.find(
+      const storageLink = ac.snapshot.links.find(
         l => l.pos.getRangeTo(st) <= 2 && l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
+      if (!storageLink) return undefined;
+      // 灌能优先守卫（②b）：controller link 缺能时，storage link 的能量应由
+      // link-system 规则3 路由到 controller link 供 0 通勤升级（link-system P1
+      // 先于 creep 运行）。但规则3 受 link 冷却限制（每 ~18 tick 一次），若 hauler
+      // 在冷却间隙每 tick 抽走，controller link 断粮 — 且与 distributor 灌入形成
+      // storage→link→storage 空转。故 controller link 缺能时不抽，让升级链优先；
+      // controller link 满 / 缺席时正常排空（防 source link 背压）。
+      const ctrl = ac.snapshot.controller;
+      if (ctrl) {
+        const ctrlLink = ac.snapshot.links.find(
+          l => l.id !== storageLink.id && l.pos.getRangeTo(ctrl) <= 2,
+        );
+        if (ctrlLink && ctrlLink.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return undefined;
+      }
+      return storageLink;
     },
     execute: (ac, link) => {
       const available = link.store.getUsedCapacity(RESOURCE_ENERGY);

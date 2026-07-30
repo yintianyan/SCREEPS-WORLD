@@ -408,10 +408,21 @@ export function evaluateDemand(
         l => l.pos.getRangeTo(snapshot.storage!) <= 2,
       );
       if (storageLink) {
-        const linkCap = storageLink.store.getCapacity(RESOURCE_ENERGY) || 1;
-        const linkFillRatio = storageLink.store.getUsedCapacity(RESOURCE_ENERGY) / linkCap;
-        if (linkFillRatio > 0.8) dynamicHaulerTarget += 2;
-        else if (linkFillRatio > 0.4) dynamicHaulerTarget += 1;
+        // ②b 守卫：controller link 缺能时，storage link 被 distributor 用于灌能升级链
+        // （非 source 背压），且 hauler 已被 withdrawStorageLink 守卫挡住不抽 —
+        // 此时 storage link 满不代表需要 hauler 排空，不计入编制信号，避免过孵。
+        const ctrl = snapshot.controller;
+        const ctrlLink = ctrl
+          ? snapshot.links.find(l => l.id !== storageLink.id && l.pos.getRangeTo(ctrl) <= 2)
+          : undefined;
+        const feedingController =
+          ctrlLink !== undefined && ctrlLink.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
+        if (!feedingController) {
+          const linkCap = storageLink.store.getCapacity(RESOURCE_ENERGY) || 1;
+          const linkFillRatio = storageLink.store.getUsedCapacity(RESOURCE_ENERGY) / linkCap;
+          if (linkFillRatio > 0.8) dynamicHaulerTarget += 2;
+          else if (linkFillRatio > 0.4) dynamicHaulerTarget += 1;
+        }
       }
     }
     // 运力归一化：积压档位（+1/+2）按基准运力（referenceCarryCapacity = 6 CARRY）标定。

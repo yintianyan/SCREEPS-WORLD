@@ -253,3 +253,48 @@ describe("hasDistributorFillDemand — 取能门禁口径", () => {
     expect(hasDistributorFillDemand(snap, 0)).toBe(false);
   });
 });
+
+describe("distributor storage-link 灌能 controller-link（②b 0通勤升级链）", () => {
+  // 注：mockPos.getRangeTo 恒返回 1，links 按数组顺序区分（[0]=ctrl-link, [1]=storage-link）。
+  function feedSnap(ctrlLinkEnergy: number, storageLinkEnergy: number, storageLinkCap = 800) {
+    const ctrlLink = struct("link", 11, 11, ctrlLinkEnergy, 800);
+    const storageLink = struct("link", 31, 31, storageLinkEnergy, storageLinkCap);
+    return {
+      snap: mockSnapshot({
+        controller: { pos: mockPos(10, 10) } as any,
+        storage: struct("storage", 30, 30, 50000, 1000000) as any,
+        fillTargets: [] as any, // spawn/ext/tower/cc 全满 → 仅剩升级链灌能
+        links: [ctrlLink, storageLink] as any,
+      }),
+      ctrlLink,
+      storageLink,
+    };
+  }
+
+  it("controller link 缺能 + storage link 有空位 → distributor 灌 storage link", () => {
+    const { snap, storageLink } = feedSnap(0, 0); // ctrl 缺能、storage-link 有空位
+    const creep = mockCreep({ pos: mockPos(25, 25) });
+    const target = getDistributorFillTarget(creep as any, snap);
+    expect(target?.id).toBe(storageLink.id);
+  });
+
+  it("同场景构成取能需求（hasDistributorFillDemand=true，防携能 idle）", () => {
+    const { snap } = feedSnap(0, 0);
+    expect(hasDistributorFillDemand(snap, 0)).toBe(true);
+  });
+
+  it("controller link 已满(不缺能) → 不灌 storage link（升级链无需补给）", () => {
+    const { snap, storageLink } = feedSnap(800, 0); // ctrl 满 → 不需要灌能
+    const creep = mockCreep({ pos: mockPos(25, 25) });
+    const target = getDistributorFillTarget(creep as any, snap);
+    expect(target?.id).not.toBe(storageLink.id);
+    expect(hasDistributorFillDemand(snap, 0)).toBe(false);
+  });
+
+  it("storage link 已满(无空位) → 不灌（无中转空间，回退 cc 兜底）", () => {
+    const { snap, storageLink } = feedSnap(0, 800); // ctrl 缺能但 storage-link 满
+    const creep = mockCreep({ pos: mockPos(25, 25) });
+    const target = getDistributorFillTarget(creep as any, snap);
+    expect(target?.id).not.toBe(storageLink.id);
+  });
+});

@@ -247,6 +247,37 @@ export function computeDistributorTier(storage: StructureStorage | undefined): D
 }
 
 /**
+ * controller 旁的 link 若存在且缺能（有空位）则返回它，否则 undefined。
+ * 「缺能」= 需要 link 网络灌能供升级 —— 是 storage→storage-link→controller-link
+ * 灌能链（②b）与 hauler 排空守卫的共同判据。
+ */
+export function controllerLinkNeedingEnergy(snapshot: RoomSnapshot): StructureLink | undefined {
+  const ctrl = snapshot.controller;
+  if (!ctrl) return undefined;
+  const ctrlLink = snapshot.links.find(l => l.pos.getRangeTo(ctrl) <= 2);
+  if (ctrlLink && ctrlLink.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return ctrlLink;
+  return undefined;
+}
+
+/**
+ * storage 旁、有空位、且不是 controller-link 本身的 link（storage-link 中转）。
+ * 作为 distributor 把 storage 能量灌入、经 link-system 规则3 送达 controller-link
+ * 的中转点。`exclude` 排除 controller-link（防同一 link 既当源又当目标的退化）。
+ */
+export function storageLinkForControllerFeed(
+  snapshot: RoomSnapshot,
+  exclude: StructureLink,
+): StructureLink | undefined {
+  const st = snapshot.storage;
+  if (!st) return undefined;
+  return snapshot.links.find(
+    l => l.id !== exclude.id &&
+      l.pos.getRangeTo(st) <= 2 &&
+      l.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+  );
+}
+
+/**
  * Distributor 专用的填充目标选择 — 与 hauler 的 getHaulFillTarget 职责分离。
  *
  * 角色边界（修复角色错配）：
@@ -276,7 +307,11 @@ export function getDistributorFillTarget(
   snapshot: RoomSnapshot,
   tier: DistributorTier = 0,
 ): AnyOwnedStructure | undefined {
-  if (snapshot.fillTargets.length === 0) return undefined;
+  // 早退：无常规 fill 目标「且」无 storage-link→controller-link 灌能机会时才无事可做。
+  // storage-link 灌能不在 fillTargets 池内（link 非 FillTarget），若只看 fillTargets，
+  // spawn/ext/cc 全满时会误判无事可做而跳过升级链灌能（②b）。短路：fillTargets 非空
+  // 时不额外计算 link 判据。
+  if (snapshot.fillTargets.length === 0 && !controllerLinkNeedingEnergy(snapshot)) return undefined;
 
   const g = globalCache();
   if (!g.fillReservations || g.fillReservationTick !== Game.time) {
@@ -316,7 +351,25 @@ export function getDistributorFillTarget(
     }
   }
 
-  // 3. controller container 兜底 —— 仅当无「正在供能的」controller link 时。
+  // 3. storage link 灌能 → controller link（RCL6+ 0 通勤升级链的灌能侧）。
+  //    controller link 缺能时，distributor 从 storage 把能量灌入紧邻 storage 的
+  //    storage link（仅 1 格），link-system 规则3 免费瞬移到 controller link，
+  //    upgrader 站桩取能。这取代 distributor 长途搬 cc（18 格），是 link 网络正道：
+  //    1 格存能 vs 18 格往返，CPU/运力都远优。tier<2 与 cc 兜底同档。
+  //    排在 cc 之前：有 storage link 时优先走 link 路，cc 仅在无 storage link
+  //    （RCL5 仅 2 link）或 storage link 暂满时兜底。
+  if (tier < 2) {
+    const ctrlLink = controllerLinkNeedingEnergy(snapshot);
+    if (ctrlLink) {
+      const storageLink = storageLinkForControllerFeed(snapshot, ctrlLink);
+      if (storageLink && !reserved.has(storageLink.id)) {
+        reserved.add(storageLink.id);
+        return storageLink as unknown as AnyOwnedStructure;
+      }
+    }
+  }
+
+  // 4. controller container 兜底 —— 仅当无「正在供能的」controller link 时。
   //    档位与 upgrader 调度对齐（tier < 2 ⇔ storage ≥ sustained）：
   //    upgrade.sustainedStorage 允许养 upgrader 的水位，就必须允许给它的
   //    供能站送能 — 否则两套水位裁决互相矛盾，cc 沦为死资产、
@@ -326,6 +379,7 @@ export function getDistributorFillTarget(
   //    否则「link 在场 → distributor 撒手 → link 又没通 → upgrader 半饿」。
   //    link 真在供能时它 tick 内多有能量，distributor 自然让位（cc 被 upgrader
   //    优先从 link 取而不降 → cc 满 → 本兜底无空位可填）。
+
   if (tier < 2) {
     const controllerLinkServing =
       snapshot.controller != null &&
@@ -386,6 +440,12 @@ export function hasDistributorFillDemand(snapshot: RoomSnapshot, tier: Distribut
         (tier < 1 || t.store.getUsedCapacity(RESOURCE_ENERGY) < ammoFloor),
     );
     if (towerDemand) return true;
+  }
+
+  // storage link 灌能 → controller link 需求（RCL6+ link 升级链，与投放分支对应）。
+  if (tier < 2) {
+    const ctrlLink = controllerLinkNeedingEnergy(snapshot);
+    if (ctrlLink && storageLinkForControllerFeed(snapshot, ctrlLink)) return true;
   }
 
   // controller container 兜底：tier < 2（与 upgrader 的 sustainedStorage 调度对齐）
