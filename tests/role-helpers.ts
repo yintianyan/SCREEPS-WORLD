@@ -70,10 +70,18 @@ export function resetGlobals(): void {
   delete g.__remoteDropped;
   delete g.__remoteContainers;
   delete g.__remoteInvaderCore;
+  delete g.__hostilesCache;
   delete g.boostAssignments;
   // action profiling 缓存
   delete g.actionCpu;
   delete g.actionCpuTick;
+  // P0-A：site 配额共享账本（construction-manager × remote-mining-manager）
+  delete g.sitesCreatedThisTick;
+  delete g.remoteSiteTotal;
+  // P1-E：每房每 tick 寻路预算计数器
+  delete g.__pathSearchBudget;
+  // P1-F：layout 4-stage 分片跨 tick 中间产物
+  delete g.__planStageData;
 }
 
 /** 注册一个可被 Game.getObjectById 找到的对象。 */

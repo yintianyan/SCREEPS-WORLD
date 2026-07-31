@@ -35,13 +35,29 @@ declare global {
     sourceId?: Id<Source>;
     /** remote-harvester 缓存的 source 旁 container ID（避免每 tick lookForAtArea）。 */
     sourceContainerId?: Id<_HasId>;
-    /** 远矿自建 container 的建 site 失败冷却到期 tick（RM-1）—
-     * ERR_FULL/位置冲突等持久失败时放行 dropEnergy，冷却后重试。 */
+    /**
+     * 远矿 container 的建 site 失败冷却到期 tick（RM-1，P0-A 收编后由 remote-mining-manager 写入）—
+     * ERR_FULL/位置冲突等持久失败时放行 dropEnergy，冷却后重试。
+     * 冷却只阻断 create 路径（申请），不阻断 build 路径（已有 site 照常建造）。 */
     containerSiteCooldown?: number;
+    /**
+     * RM-1 / P0-A：远矿 harvester 满载且无 container 时申请建 site 的标记。
+     * 由 creep 在 buildSourceContainer execute 写入；remote-mining-manager
+     * 消费后清除（成功创建 site 或失败写冷却）。申请期间 resolve 跳过本候选，
+     * creep 走 dropEnergy 释放产能，等待 manager 每 managerInterval tick 处理。
+     * sourceId 已存于 creep.memory.sourceId，manager 据此定位建 site 位置。 */
+    needContainer?: boolean;
     /** 压缩的上次位置（x * 50 + y）用于卡位检测。 */
     lastPos?: number;
     /** 连续未移动的 tick 数。 */
     stuckTicks?: number;
+    /**
+     * P1-E 档 2：上次 PathFinder.search 重寻路 tick（plan.md §5.7.5）。
+     * 同一 creep 两次重寻路间隔 ≥ dynamicRepathInterval，冷却内沿旧路径走一步，
+     * 旧路径空则 getDirectionTo 直走降级。absent = 0 → 视为「很久未重算」→
+     * 冷却不生效（与改造前行为一致）。per-creep 运行时状态，无需迁移。
+     */
+    lastRepathAt?: number;
     /** 当前紧凑任务分配。 */
     assignment?: CreepAssignment;
     /** 用于稳定孵化 key 生成和替换跟踪的索引。 */
@@ -163,6 +179,18 @@ declare global {
       anchorScore?: number;
       revision: number;
       nextPlanTick: number;
+      /**
+       * P1-F：4-stage 规划分片状态（v17+）。
+       * - 0：空闲（等待 nextPlanTick）或未启动规划
+       * - 1：stage 0 已完成（prep），待跑 stage 1（核心结构）
+       * - 2：stage 1 已完成，待跑 stage 2（物流结构）
+       * - 3：stage 2 已完成，待跑 stage 3（道路 + 收尾）
+       *
+       * 跨 tick 中间产物放 globalCache（distance field 等大对象不进 Memory）。
+       * global reset 丢失 planStageData 时，下 tick 检测 planStage>0 但无 data
+       * → 重置为 0 重新开始（最多损失一个规划周期）。
+       */
+      planStage?: 0 | 1 | 2 | 3;
       // 冷数据 overrides / blocked 已迁移到 RawMemory segment 0（见 kernel/segment-store.ts）。
       // 保留可选字段用于 v3→v4 迁移兼容。
       /** @deprecated 已迁移到 segment，仅迁移期间存在。 */
@@ -317,12 +345,29 @@ declare global {
      */
     threatUntil?: number;
     /**
+     * P1-G：危险冷却到期 tick（v16+，从 intel.dangerUntil 迁移至此）。
+     * 远矿房出现威胁（hostile creep / InvaderCore）或被敌方预定时由
+     * remote-mining-manager 唯一写入。冷却期内该房不作为远矿/扩张候选（止损）。
+     * 迁移原因：intel 的写者除 remote-mining-manager 外还有 room-observer
+     * 透传链（domain/intel.ts 的 prev 保留逻辑），双写者加一个写者就崩；
+     * remoteOps 的唯一写者本就是 remote-mining-manager，字段搬家后单一写者。
+     */
+    dangerUntil?: number;
+    /**
      * 经济重估：netScore 首次跌破门槛的 tick（A-3/B-6）。
      * active op 每轮维护重算 netScore/haulerNeed（用当前 pathCost + body 运力）；
      * 连续低于门槛超过宽限期才废弃 —— 抗抖动，防单次波动误撤边际 op。
      * netScore 回升到门槛以上时清除。
      */
     lowScoreSince?: number;
+    /**
+     * P0-A：本远矿房我方创建的 container construction site 数量（v15+）。
+     * 由 remote-mining-manager 每 managerInterval tick 用 lookForAtArea 实测校正 —
+     * site 建成（变结构）/被移除/失效时递减，新建时递增。
+     * 只增不减会导致几个远矿房永久占满 maxGlobalSites 饿死自有房重建。
+     * construction-manager 的全局上限判定读此值：ctx.globalSiteCount + Σ siteCount < maxGlobalSites。
+     */
+    siteCount?: number;
   }
 
   interface Memory {

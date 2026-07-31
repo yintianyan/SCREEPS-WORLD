@@ -11,7 +11,7 @@ import {
   collectCompletedKeys,
   type ValidationOptions,
 } from "../domain/layout/validation";
-import { computeMinCutDefense } from "../domain/layout/min-cut-defense";
+import { computeMinCutDefense, MINCUT_ALGO_VERSION } from "../domain/layout/min-cut-defense";
 import { globalCache } from "../kernel/global-cache";
 
 /**
@@ -50,6 +50,16 @@ export const defensePlannerSystem: System = {
 
 /** Min-cut 最大 rampart 数（超过则 fallback 到扇区）。 */
 const MAX_CUT_RAMPARTS = 30;
+
+/**
+ * 把算法版本戳拼入 signature，让算法语义变更后旧缓存自然失效。
+ *
+ * 旧 Memory（无版本前缀）与新计算的 signature 比较时不匹配，触发重算；
+ * 新写入的 signature 含前缀，后续命中正常。无 Memory schema 变更。
+ */
+function withAlgoVersion(coreSig: string): string {
+  return `${MINCUT_ALGO_VERSION}|${coreSig}`;
+}
 
 /** 缓存的 min-cut 结果。 */
 interface MinCutCache {
@@ -210,7 +220,7 @@ function planDefense(
     // 仅在缓存 miss 时执行昂贵的 min-cut 计算。
     let cutResult: { rampartPositions: { x: number; y: number }[]; complete: boolean };
 
-    if (cached && cached.signature === coreSig) {
+    if (cached && cached.signature === withAlgoVersion(coreSig)) {
       // 核心结构未变但 mincut key 为 0（可能任务被清理了）— 用缓存结果重新生成任务。
       cutResult = cached.result;
     } else {
@@ -222,9 +232,9 @@ function planDefense(
         rampartPositions: computed.rampartPositions,
         complete: computed.complete,
       };
-      // 缓存结果。
+      // 缓存结果。signature 含算法版本戳，旧版本缓存自然失效。
       setMinCutCache(snapshot.roomName, {
-        signature: coreSig,
+        signature: withAlgoVersion(coreSig),
         result: cutResult,
         tick: Game.time,
       });

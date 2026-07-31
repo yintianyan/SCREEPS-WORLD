@@ -36,8 +36,8 @@ export interface RemoteTargetingInput {
   homeRoom: string;
   /** 邻居房情报（来自 RoomMemory.intel）。 */
   intel: Readonly<Record<string, RoomIntel>> | undefined;
-  /** 已有远矿运营（避免重复选择）。 */
-  existingOps: Readonly<Record<string, { state: string }>> | undefined;
+  /** 已有远矿运营（避免重复选择）。P1-G 后含 dangerUntil 字段用于危险冷却判定。 */
+  existingOps: Readonly<Record<string, { state: string; dangerUntil?: number }>> | undefined;
   /** 当前 tick（用于判断视野新鲜度）。 */
   tick: number;
   /** 视觉新鲜度阈值（超过此 tick 数视为旧情报）。 */
@@ -199,7 +199,9 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
     // 排除非正常状态的房间（novice/respawn/closed）。
     if (info.status !== "normal") continue;
     // 排除危险冷却中的房间 — 威胁刚出现过的房不送兵（止损）。
-    if (info.dangerUntil !== undefined && tick < info.dangerUntil) continue;
+    // P1-G：dangerUntil 从 intel 迁移到 remoteOps（remote-mining-manager 唯一写入）。
+    const dangerUntil = existingOps?.[roomName]?.dangerUntil;
+    if (dangerUntil !== undefined && tick < dangerUntil) continue;
 
     const hasRecentVision = tick - info.lastSeen < staleThreshold;
     // 净收益评分：吞吐上限减编队摊销；低于门槛的烂目标（沼泽远房/超远房）

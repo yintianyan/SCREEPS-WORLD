@@ -32,6 +32,7 @@ import { selectRemoteTargets, shouldPauseOperation, effectiveMaxOperations, scor
 import { evaluateRemoteDemand, type RemoteCreepSummary } from "../domain/remote/demand";
 import { classifyThreats } from "../domain/defense/threat";
 import { submitRequest } from "../domain/spawn/queue";
+import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
 
 export const remoteMiningManagerSystem: System = {
   name: "remote-mining-manager",
@@ -220,17 +221,17 @@ export const remoteMiningManagerSystem: System = {
         }
       }
 
-      // 威胁写入情报层：出现威胁的远矿房打上危险冷却标记 —
-      // 冷却期内该房不作为新的远矿/扩张候选（止损：不给对手送兵）。
-      // 现役运营不因此暂停 — defender 已接通，先应战再评估。
-      // InvaderCore 压制房同样打冷却 — 核心存续期间不重复选点。
-      if (roomMem.intel) {
-        for (const [threatRoom, hasThreat] of Object.entries(remoteThreats)) {
-          if (!hasThreat && !blockedRooms.has(threatRoom)) continue;
-          const info = roomMem.intel[threatRoom];
-          if (info) {
-            info.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
-          }
+      // 威胁写入 remoteOps（P1-G：从 intel.dangerUntil 迁移至此）：
+      // 出现威胁的远矿房打上危险冷却标记 — 冷却期内该房不作为新的远矿/扩张
+      // 候选（止损：不给对手送兵）。现役运营不因此暂停 — defender 已接通，
+      // 先应战再评估。InvaderCore 压制房同样打冷却 — 核心存续期间不重复选点。
+      // threatRoom 来自 remoteThreats（由 collectRemoteThreats(remoteOps) 产出），
+      // 必在 remoteOps 中；blockedRooms 同理来自 active op 房间。
+      for (const [threatRoom, hasThreat] of Object.entries(remoteThreats)) {
+        if (!hasThreat && !blockedRooms.has(threatRoom)) continue;
+        const op = remoteOps[threatRoom];
+        if (op) {
+          op.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
         }
       }
 
@@ -239,15 +240,20 @@ export const remoteMiningManagerSystem: System = {
       // RM-3：被自己 claim 的房同样回收（运营已废弃，该房转本地闭环）。
       // 敌方预定房同样回收现役 creep，并写 dangerUntil 冷却防止评选侧立即重开
       // （照 InvaderCore 双轨止损：视野消失后靠冷却维持"该房已被占"判断）。
+      // rn 来自 maintainExistingOps(remoteOps)，必在 remoteOps 中。
       for (const rn of hostileReservedRooms) {
-        const info = roomMem.intel?.[rn];
-        if (info) info.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
+        const op = remoteOps[rn];
+        if (op) op.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
       }
       const recycleRooms =
         selfClaimedRooms.length > 0 || hostileReservedRooms.length > 0
           ? new Set([...blockedRooms, ...selfClaimedRooms, ...hostileReservedRooms])
           : blockedRooms;
       recycleBlockedRoomCreeps(snapshot.roomName, recycleRooms);
+
+      // P0-A：远矿 container site 收编 — 消费 needContainer 申请标记。
+      // siteCount 实测校正 + tick 配额仲裁（让位 emergency）+ 全局总量判定。
+      fulfillContainerRequests(remoteOps, ctx, snapshot.roomName);
 
       const { requests } = evaluateRemoteDemand({
         homeRoom: snapshot.roomName,
@@ -598,6 +604,105 @@ function recycleBlockedRoomCreeps(homeRoom: string, blockedRooms: ReadonlySet<st
     const target = creep.memory.remoteTarget;
     if (!target || !blockedRooms.has(target)) continue;
     creep.memory.recycle = true;
+  }
+}
+
+/**
+ * P0-A：远矿 container site 收编 — 消费 remoteHarvester 的 needContainer 申请标记。
+ *
+ * 职责（每 managerInterval tick 运行一次）：
+ *   1. **siteCount 实测校正**（评审修正必须）：用 room.find 统计该房现存 container
+ *      construction site 数，写回 op.siteCount — site 建成（变结构）/被移除/失效时
+ *      递减，防只增不减永久占满 maxGlobalSites 饿死自有房重建。
+ *   2. **消费申请**：收集 needContainer=true 的 remoteHarvester，按 source 分组处理。
+ *   3. **配额仲裁**：远矿 site 永远让位自有房 emergency（emergency > 0 → 跳过）；
+ *      normal 槽位与 construction-manager 公平竞争（normal > 0 → 跳过）；
+ *      总量 ctx.globalSiteCount + remoteSiteTotal < maxGlobalSites。
+ *   4. **创建 site**：在站桩位 creep 脚下创建 container site，成功后清标记 +
+ *      递增 siteCount + 标记 normal 槽位已用；失败写 containerSiteCooldown 防重试。
+ *
+ * 回收：远矿 site 的孤儿清扫复用 construction-manager.ts 的 cleanOrphanConstructionSites
+ * （abandoned 房不在 computeSiteKeepRooms 保留集，低频被 remove）— 不新增第二条删除路径。
+ *
+ * @internal 导出仅供单元测试 — 业务代码唯一入口是 remoteMiningManagerSystem.run。
+ */
+export function fulfillContainerRequests(
+  remoteOps: Record<string, RemoteOp>,
+  ctx: TickContext,
+  homeRoom: string,
+): void {
+  const counters = getTickSiteCounters();
+
+  for (const [roomName, op] of Object.entries(remoteOps)) {
+    if (op.state !== "active") continue;
+    const room = Game.rooms[roomName];
+    if (!room) continue; // 无视野，无法校正也无法创建。
+
+    // 1. siteCount 实测校正 — 统计该房现存 container construction site 数。
+    //    用 room.find（一次调用）替代逐 source lookForAtArea，更低 CPU。
+    const actualSites = room.find(FIND_CONSTRUCTION_SITES, {
+      filter: s => s.structureType === STRUCTURE_CONTAINER,
+    }).length;
+    op.siteCount = actualSites;
+
+    // 2. 收集本房 needContainer 申请者（按 sourceId 分组，每组取第一个站桩位 creep）。
+    const requestingBySource = new Map<string, Creep[]>();
+    for (const creep of Object.values(Game.creeps)) {
+      if (creep.memory.home !== homeRoom) continue;
+      if (!creep.memory.needContainer) continue;
+      if (creep.memory.remoteTarget !== roomName) continue;
+      const sid = creep.memory.sourceId as string | undefined;
+      if (!sid) continue;
+      let group = requestingBySource.get(sid);
+      if (!group) { group = []; requestingBySource.set(sid, group); }
+      group.push(creep);
+    }
+
+    // 3. 已有 site → 清除所有申请标记（site 存在即申请已 fulfilled，build 路径接管）。
+    if (actualSites > 0) {
+      for (const group of requestingBySource.values()) {
+        for (const creep of group) creep.memory.needContainer = false;
+      }
+      continue;
+    }
+
+    // 4. 无申请 → 跳过。
+    if (requestingBySource.size === 0) continue;
+
+    // 5. tick 配额仲裁：远矿让位 emergency（自有房紧急重建优先）；normal 槽位公平竞争。
+    if (counters.emergency > 0) continue;
+    if (!counters.canCreateNormal) continue;
+
+    // 6. 总量判定：自有房 site + 远矿 site < maxGlobalSites。
+    const remoteTotal = getRemoteSiteTotal();
+    if (ctx.globalSiteCount + remoteTotal >= CONFIG.construction.maxGlobalSites) continue;
+
+    // 7. 处理第一个有效申请（找到站桩位 creep 创建 site）。
+    let fulfilled = false;
+    for (const [sid, group] of requestingBySource) {
+      const source = Game.getObjectById(sid as Id<Source>);
+      if (!source) continue;
+      // 找到在 source 旁 1 格内的 creep（站桩位 = container 位）。
+      const positioned = group.find(c => c.pos.getRangeTo(source) <= 1);
+      if (!positioned) continue;
+
+      const result = room.createConstructionSite(positioned.pos, STRUCTURE_CONTAINER);
+      if (result === OK) {
+        // 成功：递增 siteCount（校正值已为 0，直接设 1）、标记 normal 槽位。
+        op.siteCount = 1;
+        counters.markNormal();
+        fulfilled = true;
+      } else {
+        // 持久失败（ERR_FULL / ERR_INVALID_TARGET）：写冷却让 resolve 放行 dropEnergy。
+        for (const c of group) c.memory.containerSiteCooldown = Game.time + 100;
+      }
+      // 无论成功失败，清除该 source 组的申请标记（防重复申请）。
+      for (const c of group) c.memory.needContainer = false;
+      break; // 每 tick 每房最多处理 1 个 source（tick 配额已由 counters 限制全局 1 个）。
+    }
+
+    // 如果本房成功创建，后续房让出 normal 槽位（counters.canCreateNormal 已变 false）。
+    if (fulfilled) break;
   }
 }
 

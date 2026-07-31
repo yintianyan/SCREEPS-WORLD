@@ -267,3 +267,27 @@ export function isEmergencyTask(
   }
   return false;
 }
+
+/**
+ * 检测是否有任何房间的 buildQueue 中存在 P0 queued 的关键基建任务。
+ *
+ * 关键基建 = storage / tower / spawn — 这三类结构缺失时经济链路断裂，
+ * 必须让 construction-manager 在任何 budget tier 下都能运行（以 P1 等效优先级）。
+ *
+ * P1-F：从 kernel.ts 搬到此处，作为 construction-manager 的 recoveryEligible
+ * 钩子实现。kernel 只读钩子不识系统名（plan.md §2.1）。
+ *
+ * 纯函数 — 不访问 Game/Memory，接收显式参数，可在 Vitest 中独立测试。
+ */
+export function hasCriticalStructureGap(
+  rooms: Record<string, { buildQueue?: Array<{ priority: number; state: string; structureType: string }> } | undefined>,
+): boolean {
+  return Object.values(rooms).some(
+    r => r?.buildQueue?.some(
+      t => t.priority === 0 && t.state === "queued" &&
+        (t.structureType === STRUCTURE_STORAGE ||
+          t.structureType === STRUCTURE_TOWER ||
+          t.structureType === STRUCTURE_SPAWN),
+    ),
+  );
+}

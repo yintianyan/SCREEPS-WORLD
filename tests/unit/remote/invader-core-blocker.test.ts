@@ -126,8 +126,8 @@ describe("remote-mining-manager — 压制房止损接线（run 级副作用）"
     remoteMiningManagerSystem.run(mockContext(snapshot));
 
     const roomMem = g.Memory.rooms.W7N4;
-    // 危险冷却已写入 — 冷却期内不作为新远矿/扩张候选。
-    expect(roomMem.intel[targetRoom].dangerUntil).toBeGreaterThan(now);
+    // 危险冷却已写入（P1-G：迁至 remoteOps）— 冷却期内不作为新远矿/扩张候选。
+    expect(roomMem.remoteOps[targetRoom].dangerUntil).toBeGreaterThan(now);
     // 现役 creep 被标记回收 — 不再空耗。
     expect(harvester.memory.recycle).toBe(true);
     // 孵化冻结 — 队列中无任何指向压制房的请求。

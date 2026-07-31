@@ -107,6 +107,19 @@ export interface GlobalCache {
   actionCpuTick?: number;
   /** Traffic Manager 的 per-tick 移动意图/锚定账本（intent.ts 构建，traffic-manager 消费）。 */
   __moveIntents?: import("../creeps/movement/intent").IntentLedger;
+  /**
+   * P0-A：per-tick 全局 site 创建计数器（construction-manager 与 remote-mining-manager 共享）。
+   * 维度分离：normal = 普通槽位（每 tick 全局 1 个，自有房与远矿公平竞争）；
+   * emergency = 紧急重建槽位（每 tick 1 个，独立计额）。远矿 site 永远让位 emergency。
+   * 与 maxGlobalSites 总存量是两个维度，分开写清。
+   */
+  sitesCreatedThisTick?: { tick: number; normal: number; emergency: number };
+  /**
+   * P0-A：per-tick 远矿 site 总量缓存（Σ Memory.rooms[*].remoteOps[*].siteCount，非 abandoned）。
+   * construction-manager 的全局上限判定读此值（与 ctx.globalSiteCount 相加 < maxGlobalSites）。
+   * 由 site-quota.ts 的 getRemoteSiteTotal() 惰性构建。
+   */
+  remoteSiteTotal?: { tick: number; count: number };
 }
 
 /**

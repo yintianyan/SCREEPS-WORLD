@@ -132,6 +132,8 @@ function tryStartExpansion(ctx: TickContext): void {
   // sponsor 候选：经济成熟（RCL 门槛）且状态健康的自有房。
   const ownedRoomNames: string[] = [];
   const intelBySponsor: Record<string, Readonly<Record<string, RoomIntel>>> = {};
+  // P1-G：从各 sponsor 的 remoteOps 提取 dangerUntil 映射，供 evaluator 过滤危险候选。
+  const dangerUntilBySponsor: Record<string, Record<string, number>> = {};
   let myUsername: string | undefined;
   for (const snapshot of ctx.snapshots()) {
     ownedRoomNames.push(snapshot.roomName);
@@ -140,6 +142,16 @@ function tryStartExpansion(ctx: TickContext): void {
     const roomMem = Memory.rooms[snapshot.roomName];
     if (roomMem?.colonyState !== "normal") continue;
     if (roomMem.intel) intelBySponsor[snapshot.roomName] = roomMem.intel;
+    // 提取本 sponsor 的 remoteOps 中的 dangerUntil 记录。
+    if (roomMem.remoteOps) {
+      const dangers: Record<string, number> = {};
+      for (const [rn, op] of Object.entries(roomMem.remoteOps)) {
+        if (op.dangerUntil !== undefined) dangers[rn] = op.dangerUntil;
+      }
+      if (Object.keys(dangers).length > 0) {
+        dangerUntilBySponsor[snapshot.roomName] = dangers;
+      }
+    }
   }
   if (Object.keys(intelBySponsor).length === 0) return;
 
@@ -147,6 +159,7 @@ function tryStartExpansion(ctx: TickContext): void {
     ownedRoomNames,
     gclLevel,
     intelBySponsor,
+    dangerUntilBySponsor,
     tick: ctx.tick,
     blacklist: Memory.kernel?.expansionBlacklist,
     myUsername,
@@ -232,12 +245,13 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
   // C-2：重派前查危险情报 — 目标房 dangerUntil 冷却未过（claimer 大概率
   // 死于威胁）时不再送兵，直接止损。无此闸的后果：claimer 被杀 → 重派 →
   // 再被杀 — 送兵循环最长跑满 claimTimeout。
+  // P1-G：dangerUntil 从 intel 迁移到 remoteOps（remote-mining-manager 唯一写入）。
   const claimerAlive = Object.values(Game.creeps).some(
     c => c.memory.role === "claimer" && c.memory.remoteTarget === expansion.target,
   );
   if (!claimerAlive) {
-    const intel = Memory.rooms[expansion.sponsor]?.intel?.[expansion.target];
-    if (intel?.dangerUntil !== undefined && ctx.tick < intel.dangerUntil) {
+    const dangerUntil = Memory.rooms[expansion.sponsor]?.remoteOps?.[expansion.target]?.dangerUntil;
+    if (dangerUntil !== undefined && ctx.tick < dangerUntil) {
       console.log(`[${ctx.tick}] expansion: ${expansion.target} hostile (claimer lost), aborting`);
       blacklistTarget(expansion.target, ctx.tick);
       reclaimExpeditionCreeps(expansion.target, expansion.sponsor);

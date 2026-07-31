@@ -66,7 +66,8 @@ describe("remote-mining-manager — 敌方 reservation 运行时退出", () => {
 
     const roomMem = g.Memory.rooms[homeRoom];
     expect(roomMem.remoteOps[targetRoom].state).toBe("abandoned");
-    expect(roomMem.intel[targetRoom].dangerUntil).toBeGreaterThan(now);
+    // P1-G：dangerUntil 迁至 remoteOps（remote-mining-manager 唯一写入）。
+    expect(roomMem.remoteOps[targetRoom].dangerUntil).toBeGreaterThan(now);
     expect(reserver.memory.recycle).toBe(true);
   });
 
@@ -81,6 +82,6 @@ describe("remote-mining-manager — 敌方 reservation 运行时退出", () => {
     const roomMem = g.Memory.rooms[homeRoom];
     // 己方预定不应废弃运营，也不写危险冷却。
     expect(roomMem.remoteOps[targetRoom].state).toBe("active");
-    expect(roomMem.intel[targetRoom].dangerUntil).toBeUndefined();
+    expect(roomMem.remoteOps[targetRoom].dangerUntil).toBeUndefined();
   });
 });

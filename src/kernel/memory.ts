@@ -302,6 +302,81 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 14,
+    to: 15,
+    run: () => {
+      // v15：P0-A 远矿 site 收编 — RemoteOp 新增 siteCount 字段（可选，惰性写入）。
+      // 此迁移仅做畸形数据自愈（幂等）：siteCount 存在但非数字时清除。
+      // 实际值由 remote-mining-manager 每 managerInterval tick 用 lookForAtArea 实测校正，
+      // 首次运行时从 undefined 自然收敛到真实值，无需回填。
+      for (const roomName in Memory.rooms) {
+        const ops = Memory.rooms[roomName]?.remoteOps;
+        if (!ops) continue;
+        for (const op of Object.values(ops)) {
+          if (op.siteCount !== undefined && typeof op.siteCount !== "number") {
+            delete op.siteCount;
+          }
+        }
+      }
+    },
+  },
+  {
+    from: 15,
+    to: 16,
+    run: () => {
+      // v16：P1-G dangerUntil 搬家 — 从 intel[room].dangerUntil 迁移到
+      // remoteOps[room].dangerUntil（remote-mining-manager 成为唯一写者）。
+      // 幂等：仅当 intel 条目存在 dangerUntil 时处理。对应 remoteOps 条目
+      // 存在且尚无 dangerUntil 时搬运；否则仅删除 intel 侧旧字段。
+      // remoteOps 条目不存在时（房间已从 remoteOps 清除）仅删旧字段 —
+      // dangerCooldown(2000) << cleanupThreshold(30000)，冷却早已过期。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
+        if (!room) continue;
+        const intel = room.intel as Record<string, Record<string, unknown>> | undefined;
+        if (!intel) continue;
+        const ops = room.remoteOps as Record<string, Record<string, unknown>> | undefined;
+        for (const intelRoomName in intel) {
+          const entry = intel[intelRoomName];
+          if (!entry || entry.dangerUntil === undefined) continue;
+          if (typeof entry.dangerUntil !== "number") {
+            delete entry.dangerUntil;
+            continue;
+          }
+          // 搬运到对应 remoteOps 条目（如有且尚无 dangerUntil）。
+          if (ops && ops[intelRoomName] && ops[intelRoomName]!.dangerUntil === undefined) {
+            ops[intelRoomName]!.dangerUntil = entry.dangerUntil;
+          }
+          delete entry.dangerUntil;
+        }
+      }
+    },
+  },
+  {
+    from: 16,
+    to: 17,
+    run: () => {
+      // v17：P1-F layout 4-stage 分片 — LayoutMemory 新增 planStage 字段。
+      // 可选字段，惰性创建；此处仅幂等回填 planStage=0（视为空闲态）。
+      // 畸形数据自愈：非数字值清除回 undefined（layout-planner 视作 0）。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
+        if (!room) continue;
+        const layout = room.layout as Record<string, unknown> | undefined;
+        if (!layout) continue;
+        if (layout.planStage === undefined) {
+          layout.planStage = 0;
+        } else if (
+          typeof layout.planStage !== "number" ||
+          layout.planStage < 0 ||
+          layout.planStage > 3
+        ) {
+          delete layout.planStage;
+        }
+      }
+    },
+  },
 ];
 
 /**

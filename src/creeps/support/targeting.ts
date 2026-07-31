@@ -20,6 +20,37 @@ const DROP_DISTANCE_WEIGHT = 20;
  */
 const HAUL_CONTAINER_DISTANCE_WEIGHT = 10;
 
+/**
+ * 获取房间内所有敌对 creep（过滤联盟白名单）— per-tick per-room 共享缓存。
+ *
+ * 与 lifecycle.getRoomThreats 的区别：
+ *   - getRoomThreats 返回 body-aware 过滤后的"有威胁"单位（ATTACK/RANGED/HEAL 等），
+ *     供 flee 决策使用——无攻击能力的 reserver 不触发 flee。
+ *   - 本函数返回所有非联盟的 hostile creep，供 remote-defender 使用——
+ *     defender 需要击杀 NPC reserver（纯 CLAIM body）释放 source 占位，
+ *     reserver 无威胁 body 但仍是 defender 的合法目标。
+ *
+ * 缓存生命周期：单 tick，globalCache 自动重置。
+ * 同房多 defender 共享同一数组引用，避免每只 defender 每 tick 全房 find。
+ *
+ * 缓存数组在 tick 内不变——hostile 死亡当 tick 仍会被选中一次，
+ * `creep.attack` 返回 ERR_INVALID_TARGET 由现有错误容忍处理。无行为回归。
+ */
+export function getHostilesCached(room: Room): Creep[] {
+  const g = globalCache() as { __hostilesCache?: Record<string, { tick: number; creeps: Creep[] }> };
+  if (!g.__hostilesCache) g.__hostilesCache = {};
+  const cached = g.__hostilesCache[room.name];
+  if (cached && cached.tick === Game.time) {
+    return cached.creeps;
+  }
+  const allies = CONFIG.defense.allies;
+  const hostiles = room.find(FIND_HOSTILE_CREEPS, {
+    filter: (c) => !allies.includes(c.owner.username),
+  });
+  g.__hostilesCache[room.name] = { tick: Game.time, creeps: hostiles };
+  return hostiles;
+}
+
 /** 获取或分配 creep 的 source。将 sourceId 存入 memory。 */
 export function getSource(creep: Creep, snapshot: RoomSnapshot): Source | undefined {
   // 先尝试缓存的 source。

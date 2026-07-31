@@ -33,6 +33,12 @@ export interface ExpansionInput {
   gclLevel: number;
   /** sponsor 房名 → 其邻居情报映射。 */
   intelBySponsor: Readonly<Record<string, Readonly<Record<string, RoomIntel>>>>;
+  /**
+   * P1-G：sponsor 房名 → 远矿房名 → dangerUntil 截止 tick。
+   * 从各 sponsor 的 remoteOps 提取，用于过滤危险冷却中的扩张候选。
+   * 缺失视为无危险标记（房间从未作为远矿目标时无记录）。
+   */
+  dangerUntilBySponsor?: Readonly<Record<string, Readonly<Record<string, number>>>>;
   /** 当前 tick。 */
   tick: number;
   /** 目标黑名单：房名 → 冷却到期 tick。 */
@@ -48,7 +54,7 @@ export interface ExpansionInput {
  * 返回最优候选；无可行目标（或 GCL 无余量）返回 undefined。
  */
 export function selectExpansionTarget(input: ExpansionInput): ExpansionCandidate | undefined {
-  const { ownedRoomNames, gclLevel, intelBySponsor, tick, blacklist, maxIntelAge = 10000, myUsername } = input;
+  const { ownedRoomNames, gclLevel, intelBySponsor, dangerUntilBySponsor, tick, blacklist, maxIntelAge = 10000, myUsername } = input;
 
   // GCL 余量门禁：可占房数 = GCL 等级。
   if (gclLevel <= ownedRoomNames.length) return undefined;
@@ -74,7 +80,9 @@ export function selectExpansionTarget(input: ExpansionInput): ExpansionCandidate
       const age = tick - info.lastSeen;
       if (age > maxIntelAge) continue;
       // 危险冷却中的房不选（威胁刚出现过 — 拓荒编队会被白吃）。
-      if (info.dangerUntil !== undefined && tick < info.dangerUntil) continue;
+      // P1-G：dangerUntil 从 intel 迁移到 remoteOps，由调用方提取为 dangerUntilBySponsor。
+      const dangerUntil = dangerUntilBySponsor?.[sponsor]?.[roomName];
+      if (dangerUntil !== undefined && tick < dangerUntil) continue;
       // 有敌塔的房不选：塔会点杀 claimer 与拓荒者，claim 变成送葬。
       if ((info.towers ?? 0) > 0) continue;
       // 黑名单冷却。

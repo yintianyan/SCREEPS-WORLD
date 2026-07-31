@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasCriticalStructureGap } from "../../../src/kernel/kernel";
+import { hasCriticalStructureGap } from "../../../src/domain/construction/queue";
 
 describe("hasCriticalStructureGap — 关键基建缺失检测", () => {
   it("returns true when buildQueue has P0 queued storage", () => {

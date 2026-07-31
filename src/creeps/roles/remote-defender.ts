@@ -27,7 +27,7 @@ import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
-import { CONFIG } from "../../config";
+import { getHostilesCached } from "../support/targeting";
 
 /** 在 remoteTarget 房间内查找并攻击 hostile creep。 */
 function attackHostileAction(): ActionCandidate<Creep> {
@@ -47,13 +47,9 @@ function attackHostileAction(): ActionCandidate<Creep> {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
 
-      // 查找 hostile creep（过滤联盟白名单）。
-      const hostiles = ac.creep.room.find(FIND_HOSTILE_CREEPS, {
-        filter: (c) => {
-          const allies = CONFIG.defense.allies;
-          return !allies.includes(c.owner.username);
-        },
-      });
+      // 查找 hostile creep（过滤联盟白名单）— 走 per-tick per-room 共享缓存，
+      // 同房多 defender 共享一次 find，避免每只每 tick 全房扫描。
+      const hostiles = getHostilesCached(ac.creep.room);
       if (hostiles.length === 0) return undefined;
 
       // 选最近的 hostile。

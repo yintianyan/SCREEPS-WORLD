@@ -42,6 +42,19 @@ export interface System {
    * 的系统使用（如 traffic-manager 解算角色登记的移动意图）。
    */
   readonly phase?: "main" | "post";
+  /**
+   * Recovery / 关键基建缺失豁免自报钩子（P1-F）。
+   *
+   * 返回 true 时，kernel 在 budget tier 拦截前将其优先级等效提升为 P1，
+   * 确保紧急重建路径在任何 CPU 档位下都能运行（与 builder 的 recovery
+   * 豁免同理）。kernel 只读此钩子，不再硬编码 system 名字判断
+   * （plan.md §2.1：内核不感知具体业务）。
+   *
+   * 典型实现：
+   *   - construction-manager: buildQueue 有 P0 queued 的关键基建任务
+   *   - layout-planner: 任一 snapshot 命中 assessEmergencyRebuild().any
+   */
+  readonly recoveryEligible?: (ctx: TickContext) => boolean;
   run(ctx: TickContext): void;
 }
 

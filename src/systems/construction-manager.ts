@@ -5,18 +5,20 @@ import {
   cleanTasks,
   assessEmergencyRebuild,
   isEmergencyTask,
+  hasCriticalStructureGap,
   type EmergencyRebuildStatus,
 } from "../domain/construction/queue";
 import { getRoomLayoutData, markLayoutDirty } from "../kernel/segment-store";
+import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
 
 /**
- * 建造管理器 — 唯一创建建造 site 的模块。
+ * 建造管理器 — 自有房 site 创建的唯一模块（远机房由 remote-mining-manager 负责）。
  *
  * 职责：
  *   - 同步 BuildTask 状态与实际建造 site（委托 domain/construction/queue）
- *   - 强制执行每房和全局 site 限制
+ *   - 强制执行每房和全局 site 限制（含远矿 siteCount 账本）
  *   - 应用开发门禁（在恢复状态或存在 P0/P1 缺口时不建造）
- *   - 全局每 tick 最多创建 1 个 site
+ *   - 全局每 tick 最多创建 1 个 normal + 1 个 emergency site（与 remote-mining-manager 共享计数器）
  *
  * 纯逻辑已提取到 domain/construction/queue.ts，本模块只处理 Game API 调用。
  *
@@ -26,9 +28,19 @@ export const constructionManagerSystem: System = {
   name: "construction-manager",
   priority: 2 as Priority,
   interval: 1,
+  /**
+   * P1-F：recoveryEligible 钩子 — buildQueue 有 P0 queued 关键基建时
+   * 自报 true，让 kernel 将本系统提升为 P1 等效优先级通过 budget 拦截。
+   *
+   * 关键基建 = storage / tower / spawn（经济链路断裂三件套）。
+   * 「P0 queued」表示 layout-planner 已为缺失结构推入任务但尚未创建 site，
+   * 此时若 budget tier 拦截 construction-manager，关键基建永远建不成 → 死锁。
+   */
+  recoveryEligible: (): boolean => hasCriticalStructureGap(Memory.rooms),
   run(ctx: TickContext): void {
-    let normalCreatedThisTick = false;
-    let emergencyCreatedThisTick = false;
+    // P0-A：tick 配额计数器提升到 globalCache，与 remote-mining-manager 共享。
+    // normal 与 emergency 两个独立槽位（每 tick 各 1 个），先到先得。
+    const counters = getTickSiteCounters();
 
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
@@ -64,12 +76,12 @@ export const constructionManagerSystem: System = {
       // 5. 尝试从队列创建一个 site。
       // 紧急重建独立计额 — 允许每 tick 创建 1 个紧急 + 1 个普通 site，
       // 避免普通建造任务挤占关键基建重建窗口。
-      if (emergency.any && !emergencyCreatedThisTick) {
+      if (emergency.any && counters.canCreateEmergency) {
         const created = tryCreateSite(queue, snapshot, emergency);
-        if (created) emergencyCreatedThisTick = true;
-      } else if (!normalCreatedThisTick) {
+        if (created) counters.markEmergency();
+      } else if (counters.canCreateNormal) {
         const created = tryCreateSite(queue, snapshot, emergency);
-        if (created) normalCreatedThisTick = true;
+        if (created) counters.markNormal();
       }
 
       roomMem.buildQueue = queue;
@@ -174,7 +186,9 @@ function developmentGate(
   }
 
   // 全局 site 上限 — 紧急重建豁免自设限额（仍受游戏硬上限约束）。
-  if (!emergency.any && ctx.globalSiteCount >= CONFIG.construction.maxGlobalSites) return false;
+  // P0-A：总量 = 自有房 site（快照）+ 远矿 site（remoteOps.siteCount 账本），
+  // 防远矿 site 静默顶满 maxGlobalSites 饿死自有房重建。
+  if (!emergency.any && ctx.globalSiteCount + getRemoteSiteTotal() >= CONFIG.construction.maxGlobalSites) return false;
 
   return true;
 }

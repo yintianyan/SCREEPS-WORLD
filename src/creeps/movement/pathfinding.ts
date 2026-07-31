@@ -12,6 +12,7 @@
 
 import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
+import { recordSkip } from "../../kernel/memory";
 import { packPos, recordTraffic } from "./traffic";
 import { checkAndExecuteYield, tryPullBlocker, updateStuckTicks, clearTarget, DIR_DELTA } from "./stuck-recovery";
 import { movePriorityFor, nextDirFromPath, registerMove, trafficEnabled } from "./intent";
@@ -395,7 +396,18 @@ function tryCorridorPath(creep: Creep, target: RoomPosition): ScreepsReturnCode 
     },
   );
 
-  if (!result.incomplete && result.path.length > 0) {
+  if (result.path.length > 0) {
+    // P1-D 修复：incomplete 部分路径也写入 per-tick 共享缓存。
+    //
+    // 旧实现 `!result.incomplete` 条件导致 incomplete 时不写共享缓存 —
+    // 同 tick 内后续每个走向同走廊的 creep 都重跑一次 PathFinder.search，
+    // 跨 tick 不重算是自愈设计（:474-479 注释的线上事故教训），但同 tick 内的
+    // N-1 次重复没有任何自愈收益。
+    //
+    // 部分路径推进语义与引擎 moveTo 一致（:476-478 已论证：controller 唯一落点
+    // 被静态阻挡时，upgrader 沿部分路径走近到 range3 即可开工）。
+    // 持久层 `__creepPathCache` 维持不写 incomplete（:479 红线保留）。
+    // 与 trySharedPath（:865）写入 incomplete 的行为对齐。
     cache.set(cKey, result.path);
     const moveResult = issuePathStep(creep, result.path);
     if (moveResult !== undefined) return moveResult;
@@ -482,11 +494,57 @@ function computeAndPersistPath(
   return result.path;
 }
 
+// ─── P1-E：动态目标寻路限频（plan.md §5.7.5，remediation P1-E）────
+
+/**
+ * 档 1：目标驻留量化 — 将精确格 packed key (x*50+y) 量化到 3×3 区块 key。
+ * 目标在区块内（≤2 格）移动不触发重寻路，沿旧路径走。区块外才 miss → 重算。
+ *
+ * 区块编码：floor(x/3)*50 + floor(y/3)，与 packPos 同编码空间但值域更小
+ * （[0, 16*50+16]）。缓存比较始终 block-to-block，无碰撞歧义。
+ *
+ * @internal 导出仅供单元测试（tests/unit/movement/dynamic-target-limit.test.ts）。
+ */
+export function quantizeBlockKey(packed: number): number {
+  const x = Math.floor(packed / 50);
+  const y = packed % 50;
+  return Math.floor(x / 3) * 50 + Math.floor(y / 3);
+}
+
+/**
+ * 档 3：每房每 tick 寻路预算 — globalCache 计数器。
+ * @returns true = 获得预算（当前房本 tick search 次数 < max）；false = 超预算。
+ *
+ * 计数器存 globalCache.__pathSearchBudget: { tick, byRoom: Record<string, number> }。
+ * tick 变化即重置（per-tick 生命周期，与结构缓存同模式）。
+ *
+ * @internal 导出仅供单元测试。
+ */
+export function acquirePathBudget(roomName: string, max: number): boolean {
+  const g = globalCache() as any;
+  let budget = g.__pathSearchBudget;
+  if (!budget || budget.tick !== Game.time) {
+    budget = { tick: Game.time, byRoom: {} };
+    g.__pathSearchBudget = budget;
+  }
+  const current = budget.byRoom[roomName] ?? 0;
+  if (current >= max) return false;
+  budget.byRoom[roomName] = current + 1;
+  return true;
+}
+
 /**
  * Traffic 开启时的统一单步出口：持久化路径缓存 → PathFinder 重算 → 意图登记。
  * 引擎 moveTo 的意图化替身 — reusePath 语义由持久化缓存（目标 + 路网 revision
  * 不变即复用）等价实现，forceRepath 对应 reusePath: 0。
  * 消除引擎内部直发 move 意图的旁路，保证所有移动都经过 tick 末集中解算。
+ *
+ * P1-E 三档限频（仅作用于 cache miss 的重算路径，缓存命中不受影响）：
+ *   档 1 quantizeDynamicTarget：缓存 key 用 3×3 区块，动态目标区块内移动不 miss。
+ *   档 2 dynamicRepathInterval：冷却内不调 PathFinder.search，沿旧路径/直走降级。
+ *        forceRepath（卡位）豁免 — 卡位 creep 必须拿到新路径。
+ *   档 3 maxSearchesPerRoomPerTick：每房每 tick search 上限，超预算降级让行。
+ *        forceRepath 不豁免 — 战时 CPU 爆炸比单个 creep 卡位更致命。
  */
 function registerStepViaPathfinder(
   creep: Creep,
@@ -500,16 +558,56 @@ function registerStepViaPathfinder(
     if (creep.pos.isEqualTo(pos)) return OK;
     return registerMove(creep, creep.pos.getDirectionTo(pos), priority);
   }
-  const targetPacked = packPos(pos);
+
+  // P1-E 档 1：目标驻留量化 — 3×3 区块 key 替代精确格。
+  // 动态目标在区块内移动不触发重寻路，沿旧路径走。search 仍用精确 pos。
+  const exactPacked = packPos(pos);
+  const targetPacked = CONFIG.movement.quantizeDynamicTarget
+    ? quantizeBlockKey(exactPacked)
+    : exactPacked;
+
   const structEntry = ensureStructureCache(creep.room.name);
   const rev = structEntry?.revision ?? -1;
   const cache = getCreepPathCache();
   if (forceRepath) delete cache[creep.name];
   const cached = cache[creep.name];
-  const path =
-    cached && cached.targetKey === targetPacked && cached.structRevision === rev
-      ? cached.path
-      : computeAndPersistPath(creep, pos, targetPacked, rev, range);
+
+  // 缓存命中：目标同区块 + 路网 revision 不变 → 沿旧路径走一步。
+  // （缓存命中不受冷却/预算限制 — 不调 PathFinder.search，无 CPU 开销。）
+  if (cached && cached.targetKey === targetPacked && cached.structRevision === rev) {
+    const nd = nextDirFromPath(creep, cached.path);
+    if (nd !== undefined) return registerMove(creep, nd, priority);
+    delete cache[creep.name]; // 掉出路径 — 缓存失效，下 tick 重算。
+    return ERR_NO_PATH;
+  }
+
+  // cache miss — 需要重算。先过 P1-E 档 2/3 限频门。
+  // 档 2：重寻路冷却。forceRepath（卡位）豁免 — 卡位 creep 必须拿到新路径。
+  const interval = CONFIG.movement.dynamicRepathInterval;
+  const inCooldown = !forceRepath
+    && interval > 0
+    && Game.time - (creep.memory.lastRepathAt ?? 0) < interval;
+
+  // 档 3：每房每 tick 寻路预算。超预算降级（战时保险丝）。
+  const budgetMax = CONFIG.movement.maxSearchesPerRoomPerTick;
+  const overBudget = budgetMax > 0 && !acquirePathBudget(creep.room.name, budgetMax);
+
+  if (inCooldown || overBudget) {
+    // 限频降级：沿旧路径走一步（若有），旧路径空则 getDirectionTo 直走。
+    // （plan 评审修正 1/2：路径耗尽但目标仍在同区块时直走而非原地等待。）
+    if (overBudget) recordSkip("movement/path-budget");
+    if (cached) {
+      const nd = nextDirFromPath(creep, cached.path);
+      if (nd !== undefined) return registerMove(creep, nd, priority);
+    }
+    const dir = creep.pos.getDirectionTo(pos);
+    if (dir !== null) return registerMove(creep, dir, priority);
+    return ERR_NO_PATH;
+  }
+
+  // 通过限频门 — 执行 PathFinder.search。
+  const path = computeAndPersistPath(creep, pos, targetPacked, rev, range);
+  creep.memory.lastRepathAt = Game.time;
   if (path) {
     const nd = nextDirFromPath(creep, path);
     if (nd !== undefined) return registerMove(creep, nd, priority);

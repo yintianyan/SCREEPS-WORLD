@@ -202,7 +202,7 @@ function dropEnergy(): ActionCandidate<DropEnergyTarget> {
 /** buildSourceContainer 的 resolve 返回类型。 */
 type ContainerBuildTarget =
   | { kind: "build"; site: ConstructionSite }
-  | { kind: "create" };
+  | { kind: "request" };
 
 /**
  * RM-1：满载时自建 source container — 终结 drop-mining 衰减税。
@@ -210,15 +210,16 @@ type ContainerBuildTarget =
  * 线上实测（W37S57）：无 container 的 active 远矿房地面堆积 3300+ 能量，
  * 稳态衰减 ~4/tick ≈ 单源产出的 40% — 远超「补建造链」决策阈值（5%）。
  *
- * 行为：满载 + 站桩位 + 无 container 时，把背包能量投入建造而非溢出：
+ * P0-A 收编后行为（site 创建权从角色层收归 remote-mining-manager）：
  *   有 container site → build（5 energy/WORK/tick 转化为进度，零衰减）；
- *   无 site → 在脚下创建（站桩位即 container 位）。
+ *   无 site → 写 needContainer=true 申请标记，由 remote-mining-manager
+ *            每 managerInterval tick 消费（创建 site / 失败写冷却）。
+ * 申请期间 creep 走 dropEnergy 释放产能（最多等 10 tick），避免满载停摆。
  * 建成后 findSourceContainer 缓存接手，倒能路径与 hauler 的 container
  * withdraw 链自然激活。
  *
- * 架构注记：construction-manager 的「唯一 site 创建者」约束针对自有房
- * 布局管线（它只遍历自有房快照，远矿房不在管辖域）— 本 action 是远矿
- * source container 的唯一豁免点，不做任何其他类型的 site。
+ * 架构约束（plan.md §5.5）：角色层禁止调 createConstructionSite —
+ * site 创建的单一写者 = construction-manager（自有房）+ remote-mining-manager（远机房）。
  */
 function buildSourceContainer(): ActionCandidate<ContainerBuildTarget> {
   return {
@@ -226,15 +227,11 @@ function buildSourceContainer(): ActionCandidate<ContainerBuildTarget> {
     resolve: (ac) => {
       // 仅满载时投入建造 — 半载继续采集（建造用的是必然溢出的能量）。
       if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return undefined;
-      // 建 site 失败冷却（100 site 全局上限 / 位置冲突等持久失败）：
-      // 冷却期内放行后续候选（dropEnergy）— 否则本候选每 tick 命中、
-      // execute 静默失败、候选链终止，creep 满载永久停摆（比 drop 更差）。
-      const cooldown = ac.creep.memory.containerSiteCooldown;
-      if (cooldown !== undefined && Game.time < cooldown) return undefined;
       const source = getRemoteSource(ac.creep);
       if (!source || ac.creep.pos.getRangeTo(source) > 1) return undefined;
       if (findSourceContainer(ac.creep, source)) return undefined;
-      // 已有 container site → 建造它。
+      // 已有 container site → 优先建造（cooldown 不阻断 build 路径 —
+      // 即使上一次申请失败在冷却期，已有 site 照常投入建造）。
       const sites = ac.creep.room.lookForAtArea(
         LOOK_CONSTRUCTION_SITES,
         Math.max(0, source.pos.y - 1),
@@ -248,19 +245,23 @@ function buildSourceContainer(): ActionCandidate<ContainerBuildTarget> {
           return { kind: "build" as const, site: entry.constructionSite };
         }
       }
-      // 无 site → 在脚下创建（resolve 禁止游戏 API 副作用，交给 execute）。
-      return { kind: "create" as const };
+      // 无 site。建 site 失败冷却（ERR_FULL / 位置冲突等持久失败）：
+      // 冷却期内放行后续候选（dropEnergy）— 否则本候选每 tick 命中、
+      // 申请无意义重复、候选链终止，creep 满载永久停摆（比 drop 更差）。
+      const cooldown = ac.creep.memory.containerSiteCooldown;
+      if (cooldown !== undefined && Game.time < cooldown) return undefined;
+      // 已申请但 manager 尚未处理 → 等待（跳到 dropEnergy 释放产能）。
+      if (ac.creep.memory.needContainer) return undefined;
+      // 无 site、无冷却、无在途申请 → 发起申请（resolve 禁止游戏 API 副作用）。
+      return { kind: "request" as const };
     },
     execute: (ac, target) => {
       if (target.kind === "build") {
         ac.creep.build(target.site);
       } else {
-        const result = ac.creep.room.createConstructionSite(ac.creep.pos, STRUCTURE_CONTAINER);
-        if (result !== OK) {
-          // 持久失败（ERR_FULL 全局 site 上限 / ERR_INVALID_TARGET 占位冲突）：
-          // 写冷却让 resolve 放行 dropEnergy，100 tick 后重试。
-          ac.creep.memory.containerSiteCooldown = Game.time + 100;
-        }
+        // 写申请标记，由 remote-mining-manager 消费（创建 site 或写冷却）。
+        // sourceId 已存于 creep.memory.sourceId，manager 据此定位建 site 位置。
+        ac.creep.memory.needContainer = true;
       }
     },
   };

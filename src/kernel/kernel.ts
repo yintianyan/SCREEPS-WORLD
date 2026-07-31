@@ -211,22 +211,6 @@ export class Kernel {
   }
 
   private runSystems(ctx: Context): void {
-    // 检查是否有任何自有房间处于 recovery 状态。
-    // recovery 时 colonyState="recovery"，意味着关键基建缺失或经济断裂。
-    // 此时 construction-manager (P2) 和 layout-planner (P3) 必须能够运行：
-    //   - layout-planner: 重新将被毁的关键结构任务推入 buildQueue
-    //   - construction-manager: 为紧急任务创建 construction site
-    // 这与 runCreeps 中 builder 的 recovery 豁免同理（P2 builder 在 recovery 时
-    // 以 P1 等效优先级运行），确保灾后重建路径不被 budget tier 完全冻结。
-    const anyRecovery = Object.values(Memory.rooms).some(
-      r => r?.colonyState === "recovery",
-    );
-    // 关键基建缺失检测：storage/tower/spawn 在 buildQueue 中 P0 queued 但从未建成。
-    // 此场景下 colonyState 可能为 "normal"（phase=growth），不触发 anyRecovery，
-    // 但 construction-manager 仍被 budget tier 拦截 → 关键基建永远建不成 → 死锁。
-    // anyCriticalGap 扩展豁免范围，覆盖"从未建成"与"被毁重建"两种情况。
-    const anyCriticalGap = hasCriticalStructureGap(Memory.rooms);
-
     // 使用缓存的已排序 systems 列表（构造时构建）。
     for (const system of this.sortedSystems) {
       if (!this.shouldRunSystem(system, ctx)) {
@@ -235,13 +219,16 @@ export class Kernel {
         // skipHotspot 长期被百级 interval 计数淹没，真实信号不可见。
         continue;
       }
-      // Recovery / 关键基建缺失豁免：construction-manager 和 layout-planner
-      // 在 anyRecovery 或 anyCriticalGap 时以 P1 等效优先级通过 budget 检查，
-      // 确保紧急重建路径可达。
-      const isConstructionCritical =
-        (anyRecovery || anyCriticalGap) &&
-        (system.name === "construction-manager" || system.name === "layout-planner");
-      const effectivePriority = isConstructionCritical
+      // Recovery / 关键基建缺失豁免（P1-F）：system 通过 recoveryEligible
+      // 钩子自报是否需要 P1 等效优先级。kernel 只读钩子，不感知具体业务
+      // 系统名（plan.md §2.1）。原硬编码 "construction-manager" /
+      // "layout-planner" 名字判断已移除。
+      //
+      // - construction-manager: buildQueue 有 P0 queued 关键基建
+      //   （hasCriticalStructureGap，搬至 domain/construction/queue.ts）
+      // - layout-planner: 任一 snapshot 命中 assessEmergencyRebuild().any
+      const isRecoveryExempt = system.recoveryEligible?.(ctx) === true;
+      const effectivePriority = isRecoveryExempt
         ? (1 as Priority)
         : system.priority;
       if (!ctx.budget.canStart(effectivePriority)) {
@@ -373,23 +360,7 @@ export class Kernel {
 
 // ─── 纯函数（可独立测试）────────────────────────────────────
 
-/**
- * 检测是否有任何房间的 buildQueue 中存在 P0 queued 的关键基建任务。
- *
- * 关键基建 = storage / tower / spawn — 这三类结构缺失时经济链路断裂，
- * 必须让 construction-manager 在任何 budget tier 下都能运行（以 P1 等效优先级）。
- *
- * 纯函数 — 不访问 Game/Memory，接收显式参数，可在 Vitest 中独立测试。
- */
-export function hasCriticalStructureGap(
-  rooms: Record<string, { buildQueue?: Array<{ priority: number; state: string; structureType: string }> } | undefined>,
-): boolean {
-  return Object.values(rooms).some(
-    r => r?.buildQueue?.some(
-      t => t.priority === 0 && t.state === "queued" &&
-        (t.structureType === STRUCTURE_STORAGE ||
-          t.structureType === STRUCTURE_TOWER ||
-          t.structureType === STRUCTURE_SPAWN),
-    ),
-  );
-}
+// P1-F：hasCriticalStructureGap 已搬到 src/domain/construction/queue.ts，
+// 作为 construction-manager 的 recoveryEligible 钩子实现。kernel 不再
+// 直接持有此函数 — 通过 system.recoveryEligible 钩子间接消费。
+

@@ -40,7 +40,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 14 },
+  memory: { schemaVersion: 17 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -178,6 +178,29 @@ export const CONFIG = {
       commute: 30,
       parked: 0,
     },
+    /**
+     * P1-E：动态目标寻路限频（plan.md §5.7.5，remediation P1-E）。
+     *
+     * 根因：traffic 模式下 registerStepViaPathfinder 的缓存 key = 目标精确格 +
+     * 路网 revision。动态目标（flee 逃逸点、追击 hostile、跟车目标）每 tick 变化
+     * → 缓存必 miss → 每 tick 每 creep 一次 PathFinder.search，无引擎 reusePath
+     * 兜底。战时 10 creep 同时 flee ≈ 10-30 CPU，直接爆 hard limit。
+     *
+     * 三档限频（独立开关，默认 1+2 开、3 关）：
+     *   档 1 quantizeDynamicTarget：目标驻留量化 — 3×3 区块 key 替代精确格，
+     *     目标在区块内移动不触发重寻路，沿旧路径走。
+     *   档 2 dynamicRepathInterval：同一 creep 两次 PathFinder.search 最小间隔
+     *     （tick）。冷却内沿旧路径走一步，旧路径空则 getDirectionTo 直走降级。
+     *   档 3 maxSearchesPerRoomPerTick：每房每 tick search 上限 — 战时保险丝。
+     *     0 = 不限制；建议战时设 6。超预算的移动意图降级为「沿旧路径走一步」或
+     *     「原地让行」（交 traffic-resolver 仲裁），遥测记 movement/path-budget skip。
+     *
+     * 驻留量化在 1-2 格微操场景（tower 下绕柱）路径略钝 — 可接受，
+     * flee 场景活下来优先于路径最优。
+     */
+    quantizeDynamicTarget: true,
+    dynamicRepathInterval: 3,
+    maxSearchesPerRoomPerTick: 0,
   },
 
   construction: {

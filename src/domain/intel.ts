@@ -26,8 +26,6 @@ export interface RoomIntel {
   reservedBy?: string;
   /** 有视野时记录的敌方 tower 数（进攻/远矿风险评估的核心变量）。 */
   towers?: number;
-  /** 危险冷却到期 tick：远矿房出现威胁时标记，冷却期内不作为远矿/扩张候选。 */
-  dangerUntil?: number;
   /** home 锚点到该房中心的 PathFinder 实测成本（swampCost:5 计入地形）。
    * 远矿评选的通勤账本 — 地形静态，算一次终身缓存（room-observer 逐 tick
    * 补算）；缺失时评选方回退线性距离估算。 */
@@ -58,9 +56,9 @@ export function classifyRoomByName(roomName: string): RoomKind {
 
 /** 扫描单个邻房的情报。visibleRoom 为 undefined 时只落房名分类与房态。
  *
- * prev：既有条目 — 跨刷新保留的字段（dangerUntil；无视野时还保留上次的
- * sources/mineral/owner/towers 观测值）。不传则视为首次建档。
- * 危险标记必须跨刷新存活：它由威胁事件写入，常规情报刷新不得冲掉。
+ * prev：既有条目 — 跨刷新保留的字段（无视野时保留上次的
+ * sources/mineral/owner/towers 观测值与 pathCost）。不传则视为首次建档。
+ * P1-G 后 dangerUntil 已迁移至 RemoteOp，intel 不再保留该字段。
  */
 export function scanNeighborIntel(
   roomName: string,
@@ -97,10 +95,6 @@ export function scanNeighborIntel(
     if (prev.towers !== undefined) intel.towers = prev.towers;
     // 无视野时 lastSeen 不应前移（视野数据没有更新）。
     intel.lastSeen = prev.lastSeen;
-  }
-  // 危险冷却：未到期则保留（与视野无关 — 由威胁事件独立管理）。
-  if (prev?.dangerUntil !== undefined && tick < prev.dangerUntil) {
-    intel.dangerUntil = prev.dangerUntil;
   }
   // 通勤成本：地形静态，终身保留（由 room-observer 一次性计算，刷新不冲掉）。
   if (prev?.pathCost !== undefined) {

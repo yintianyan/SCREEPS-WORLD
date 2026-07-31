@@ -1,7 +1,10 @@
 /**
  * RM-1 回归 — remote-harvester 自建 source container（终结 drop-mining 衰减税）。
  *
- * 线上实测（W37S57）：无 container 的远矿房地面堆积 3300+ 能量，
+ * P0-A 收编后：角色层不再调 createConstructionSite，改写 needContainer 申请标记，
+ * 由 remote-mining-manager 每 managerInterval tick 消费。
+ *
+ * 线上实测（W37S57）：无 container 的 active 远矿房地面堆积 3300+ 能量，
  * 衰减 ~40% 产出 — 决策阈值 5%，补建造链。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -38,11 +41,14 @@ function stationedHarvester(opts: { sites?: any[]; containers?: any[] } = {}): a
 }
 
 describe("RM-1 — remote-harvester 自建 source container", () => {
-  it("满载 + 无 container + 无 site → 在脚下创建 container site", () => {
+  it("满载 + 无 container + 无 site → 写 needContainer 申请标记（P0-A 收编后不直接创建）", () => {
     const creep = stationedHarvester();
     remoteHarvesterRole.run(creep, mockContext(mockSnapshot()));
 
-    expect(creep.room.createConstructionSite).toHaveBeenCalledWith(creep.pos, "container");
+    expect(creep.memory.needContainer).toBe(true);
+    // 角色层禁止调 createConstructionSite — 由 remote-mining-manager 消费标记。
+    expect(creep.room.createConstructionSite).not.toHaveBeenCalled();
+    // 本 tick buildSourceContainer 候选命中并消费了 tick，不走 dropEnergy。
     expect(creep.drop).not.toHaveBeenCalled();
   });
 
@@ -82,5 +88,31 @@ describe("RM-1 — remote-harvester 自建 source container", () => {
 
     expect(creep.room.createConstructionSite).not.toHaveBeenCalled();
     expect(creep.harvest).toHaveBeenCalled();
+  });
+
+  it("已申请 needContainer → buildSourceContainer 跳过（不创建、不 build、标记保持）", () => {
+    const creep = stationedHarvester();
+    creep.memory.needContainer = true;
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot()));
+
+    // needContainer=true 时 buildSourceContainer resolve 返回 undefined，候选链继续。
+    // 下一个候选 remoteStationaryMine 会采能（满载 creep 在 source 旁照常采集）。
+    // 关键断言：不调 createConstructionSite、不 build（无 site）、标记保持待 manager 消费。
+    expect(creep.room.createConstructionSite).not.toHaveBeenCalled();
+    expect(creep.build).not.toHaveBeenCalled();
+    expect(creep.memory.needContainer).toBe(true);
+    // creep 照常采集（不会因申请标记停摆）。
+    expect(creep.harvest).toHaveBeenCalled();
+  });
+
+  it("冷却期内有 site → 仍可 build（cooldown 只阻断 create 不阻断 build）", () => {
+    const site = { id: "cs1", structureType: "container", pos: { x: 25, y: 25 } };
+    const creep = stationedHarvester({ sites: [site] });
+    creep.memory.containerSiteCooldown = 1050; // Game.time=1000，冷却到 1050
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot()));
+
+    // site 检查在 cooldown 之前 — 有 site 照常 build。
+    expect(creep.build).toHaveBeenCalledWith(site);
+    expect(creep.room.createConstructionSite).not.toHaveBeenCalled();
   });
 });

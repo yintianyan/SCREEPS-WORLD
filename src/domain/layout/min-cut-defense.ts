@@ -24,10 +24,22 @@
  *   - 图规模：~2000 非墙格 × 2（拆点）= ~4000 节点，~16000 边
  *   - Edmonds-Karp：O(V × E²) 最坏，但实际流值小（通常 < 20）
  *   - 实测：~0.5-2ms（可接受，只在 RCL4 首次规划时执行一次）
- *   - 缓存：结果存入 segment，地形不变则不重算
+ *   - 缓存：结果存入 global heap（`__minCutCache`）+ Memory.rooms[*].minCut，
+ *     地形/核心结构不变则不重算（defense-planner.ts 管理）
  *
  * 纯函数 — 不访问 Game/Memory，所有输入通过参数注入。
  */
+
+/**
+ * Min-Cut 算法版本戳。
+ *
+ * 算法语义变更时递增（如修复 SUPER_SOURCE/SINK 冲突、调整割集提取逻辑）。
+ * defense-planner 把它拼入缓存 signature，使旧缓存自然失效——
+ * 避免部署后仍读取修复前的错误结果。
+ *
+ * v2: 修复 SUPER_SOURCE/SINK 与 (49,49) 拆点 (in=4998, out=4999) 冲突。
+ */
+export const MINCUT_ALGO_VERSION = "v2";
 
 /** Min-Cut 计算结果。 */
 export interface MinCutResult {
@@ -92,8 +104,11 @@ export function computeMinCutDefense(
     }
   }
 
-  const nodeCount = 50 * 50 * 2; // 最大节点数（拆点后）
-  const adj: Edge[][] = Array.from({ length: nodeCount }, () => []);
+  // nodeCount = 普通格拆点后的节点数（0..4999）。
+  // SUPER_SOURCE/SINK 占用 5000/5001，邻接表必须 +2 容量，否则越界写入被
+  // typed array 静默丢弃（虽然 adj 是普通数组可自动扩容，但保持显式一致）。
+  const nodeCount = 50 * 50 * 2; // 普通格拆点后节点数（不含超级源汇）
+  const adj: Edge[][] = Array.from({ length: nodeCount + 2 }, () => []);
 
   // 添加边的辅助函数
   function addEdge(from: number, to: number, cap: number): void {
@@ -126,8 +141,16 @@ export function computeMinCutDefense(
   }
 
   // 4. 添加超级 source 和超级 sink
-  const SUPER_SOURCE = nodeCount - 2;
-  const SUPER_SINK = nodeCount - 1;
+  //
+  // 关键：必须使用 nodeCount / nodeCount+1，**不能**使用 nodeCount-2 / nodeCount-1。
+  // 因为 nodeId(49, 49, false) = (49*50+49)*2 + 0 = 4998，
+  //         nodeId(49, 49, true)  = (49*50+49)*2 + 1 = 4999。
+  // 旧实现 SUPER_SOURCE=4998、SUPER_SINK=4999 与 (49,49) 拆点冲突：
+  //   - (49,49) 非墙时其拆点边 v_in→v_out 变成 SUPER_SOURCE→SUPER_SINK 的退化直连边
+  //   - (49,49) 为出口格时再叠加 SUPER_SOURCE→vOut(=SUPER_SINK) 的 INF 直连边 → maxFlow 爆炸
+  //   - 残余图 BFS 被污染 → 割集错误或恒 complete=false
+  const SUPER_SOURCE = nodeCount;     // 5000，不与任何格冲突
+  const SUPER_SINK = nodeCount + 1;   // 5001
 
   for (const p of exitPositions) {
     if (getTerrain(p.x, p.y)) continue;
@@ -142,7 +165,14 @@ export function computeMinCutDefense(
 
   // 5. Edmonds-Karp 最大流（BFS 增广）
   // 优化：预分配 typed arrays + head pointer queue，避免每次增广重新分配。
-  const totalNodes = nodeCount;
+  //
+  // totalNodes 必须等于 nodeCount + 2（含超级源汇）。若仍用 nodeCount，
+  // SUPER_SOURCE=5000 / SUPER_SINK=5001 的越界写入会被 typed array 静默丢弃：
+  //   - visited[5000] / visited[5001] 永远是 0
+  //   - parent[5000] / parentEdgeIdx[5000] 也是 0（不是 -1）
+  //   - bfsQueue[tail++] = SUPER_SOURCE 写入成功但读取时返回 0
+  // 后果：BFS 永远找不到 SUPER_SINK → maxFlow 恒 0 → 全部 min-cut 恒 complete=false。
+  const totalNodes = nodeCount + 2;
   let maxFlow = 0;
 
   // 预分配 BFS 工作区（在所有增广间复用，避免反复 GC 压力）。

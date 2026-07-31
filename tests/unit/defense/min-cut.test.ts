@@ -93,16 +93,80 @@ describe("min-cut-defense — 开放地形 fallback", () => {
     expect(result.complete).toBe(false);
   });
 
-  it("全开放地形 maxRamparts=30：可能成功（割集 ~8-12）", () => {
+  it("全开放地形单出口 maxRamparts=30：必须成功（断言 complete=true）", () => {
+    // 评审修正要求：旧测试用 `if (result.complete)` 宽松断言，捕捉不到恒 fallback。
+    // 修复 SUPER_SOURCE/SINK 冲突后必须强制断言 complete === true。
     const core = [{ x: 25, y: 25 }];
     const exits = [{ x: 0, y: 25 }]; // 单出口
 
     const result = computeMinCutDefense(noWalls, core, exits, 30);
-    // 单出口方向，割集应该 <= 30
-    if (result.complete) {
-      expect(result.cutSize).toBeLessThanOrEqual(30);
-      expect(result.rampartPositions.length).toBe(result.cutSize);
+    // 单出口方向，割集应该 <= 30，必须成功
+    expect(result.complete).toBe(true);
+    expect(result.cutSize).toBeLessThanOrEqual(30);
+    expect(result.cutSize).toBeGreaterThanOrEqual(1);
+    expect(result.rampartPositions.length).toBe(result.cutSize);
+  });
+});
+
+/**
+ * SUPER_SOURCE/SINK 与 (49,49) 拆点冲突的回归测试。
+ *
+ * 旧实现 SUPER_SOURCE=4998、SUPER_SINK=4999，而 nodeId(49,49,false)=4998、
+ * nodeId(49,49,true)=4999，导致 (49,49) 非墙时拆点边变成 SUPER_SOURCE→SUPER_SINK
+ * 退化直连边，maxFlow 错误或恒 complete=false。
+ *
+ * 这些测试在修复前会失败（complete=false 或 cutSize 异常），修复后必须通过。
+ */
+describe("min-cut-defense — SUPER_SOURCE/SINK 冲突回归", () => {
+  it("(49,49) 非墙角落：全开地形 4 出口 maxRamparts=30 必须 complete=true", () => {
+    // 全开放地形下 (49,49) 自然非墙。
+    // 出口在四边中点（不含 (49,49) 本身），核心在中心。
+    const core = [{ x: 25, y: 25 }];
+    const exits = [
+      { x: 0, y: 25 }, { x: 49, y: 25 },
+      { x: 25, y: 0 }, { x: 25, y: 49 },
+    ];
+
+    const result = computeMinCutDefense(noWalls, core, exits, 30);
+    expect(result.complete).toBe(true);
+    expect(result.cutSize).toBeGreaterThan(0);
+    expect(result.rampartPositions.length).toBe(result.cutSize);
+
+    // rampart 不能落在核心格或出口格上
+    for (const pos of result.rampartPositions) {
+      const isCore = core.some(c => c.x === pos.x && c.y === pos.y);
+      const isExit = exits.some(e => e.x === pos.x && e.y === pos.y);
+      expect(isCore).toBe(false);
+      expect(isExit).toBe(false);
     }
+  });
+
+  it("(49,49) 为出口格：不再恒 complete=false", () => {
+    // 旧实现：(49,49) 为出口格时，addEdge(SUPER_SOURCE, vOut(=SUPER_SINK), INF)
+    // 直接构造 SUPER_SOURCE→SUPER_SINK 的 INF 直连边 → maxFlow 爆炸 → 恒 fallback。
+    // 修复后 SUPER_SINK=5001，vOut(49,49)=4999 不再与之冲突，应正常计算。
+    const core = [{ x: 25, y: 25 }];
+    const exits = [{ x: 49, y: 49 }]; // (49,49) 作为唯一出口
+
+    const result = computeMinCutDefense(noWalls, core, exits, 30);
+    expect(result.complete).toBe(true);
+    expect(result.cutSize).toBeGreaterThanOrEqual(1);
+    expect(result.cutSize).toBeLessThanOrEqual(30);
+    expect(result.rampartPositions.length).toBe(result.cutSize);
+  });
+
+  it("(49,49) 非墙且非出口：割集不含 (49,49)", () => {
+    // 即使 (49,49) 非墙，它也不应被选为割集格（除非必要）。
+    // 这里构造一个 (49,49) 远离核心和出口的场景，验证它不被错误地包含。
+    const core = [{ x: 25, y: 25 }];
+    const exits = [{ x: 0, y: 25 }];
+
+    const result = computeMinCutDefense(noWalls, core, exits, 30);
+    expect(result.complete).toBe(true);
+    // (49,49) 远离 (0,25)→(25,25) 的最短路径，正常割集不应包含它
+    // （修复前可能因 SUPER_SOURCE/SINK 冲突而被错误选中）
+    const has4949 = result.rampartPositions.some(p => p.x === 49 && p.y === 49);
+    expect(has4949).toBe(false);
   });
 });
 
