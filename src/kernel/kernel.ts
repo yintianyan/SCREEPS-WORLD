@@ -14,6 +14,10 @@ import { createBudget } from "./scheduler";
 import { emitSummary, initTelemetry } from "./telemetry";
 import { Registry } from "./registry";
 import { buildRoomSnapshot } from "../systems/room-snapshot";
+// R9 登记：kernel 直接 import 业务模块 pathfinding 的清理函数，形式上违反 §2.1「内核不感知业务」。
+// 权衡接受现状：pruneDeadCreepCache 本质是 global 状态卫生（清理死 creep 缓存残留），非经济策略/角色行为；
+//   100 tick 低频触发，无每 tick 耦合。为 1 个钩子引入 registry 维护钩子机制（接口+注册+遍历）属过度工程。
+// 演化条件：当出现 3+ 个周期性维护钩子时，提取为 registry 维护钩子机制（kernel 只遍历注册表）。
 import { pruneDeadCreepCache } from "../creeps/movement/pathfinding";
 import { globalCache } from "./global-cache";
 

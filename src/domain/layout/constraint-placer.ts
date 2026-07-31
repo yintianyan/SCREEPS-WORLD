@@ -328,7 +328,9 @@ export function placeStructures(
   let effectiveRadius = config.maxRadius;
   let candidates = buildCandidateGrid(anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints);
   // P2-N：增量外扩 — 传 prevCandidates + prevRadius，buildCandidateGrid 只评分新环带格，
-  //   避免每次外扩 O((2r+1)²) 全量重算。结果与全量等价（候选集 + sort 相同）。
+  //   避免每次外扩对全量候选重新评分（opennessAt + energyPenalty 计算）。
+  //   注意：sort 仍是 O(n log n) 全量排序（候选数未减），增量只省评分计算非排序开销。
+  //   结果与全量等价（候选集 + (x,y) tiebreaker 确定性总序相同）。
   while (candidates.length < totalNeeded && effectiveRadius < MAX_SEARCH_RADIUS) {
     const prevRadius = effectiveRadius;
     effectiveRadius++;
