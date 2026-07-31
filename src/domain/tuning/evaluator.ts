@@ -10,9 +10,10 @@
  *
  * 调优逻辑概览：
  *   hauler.maxCount  ↑ container 持续满 + hauler 已达上限 + 经济健康 + 消费端未饱和
- *                      （spawnFillRatio < 0.8 — 消费端饱和时加 hauler 只会加剧拥堵）
+ *                      （改进 B：consumerSaturated = container 满 + storage 盈余 + 储备在涨
+ *                       替代旧 spawnFillRatio < 0.8 门禁 — distributor 正常工作时该门禁永久不满足）
  *                    ↓ container 持续空 + hauler > minCount + 经济健康
- *   hauler.minCount  ↑ container 持续半满 + 经济健康
+ *   hauler.minCount  ↑ container 持续半满 + 经济健康 + 消费端未饱和（与 max 共享约束）
  *                    ↓ container 持续极空 + hauler ≤ minCount
  *   harvester.maxCount ↑ 储备持续下降 + harvester 已达上限 + 经济非危机
  *                      ↓ 储备持续增长 + harvester > minCount + 经济健康
@@ -36,7 +37,7 @@ import type {
   TuningEvaluation,
   TrendDirection,
 } from "./types";
-import { TUNING_BOUNDS, clampParam, isInCooldown } from "./bounds";
+import { TUNING_BOUNDS, clampParam, isInCooldown, getStorageThresholds } from "./bounds";
 
 // ─── 信号阈值常量 ─────────────────────────────────────────────
 
@@ -56,17 +57,6 @@ const CONTAINER_HIGH = 0.7;
 const CONTAINER_MODERATE = 0.5;
 const CONTAINER_LOW = 0.2;
 const CONTAINER_VERY_LOW = 0.15;
-
-/**
- * Spawn+extension 填充率阈值 — 消费端饱和度判断。
- * [Experience] 当 spawn/extension 持续 >= 80% 时，说明消费端已饱和，
- * container 满 不是 hauler 不够，而是无处可送。此时加 hauler 只会加剧拥堵。
- */
-const SPAWN_SATURATED = 0.8;
-
-/** Storage 能量阈值。 */
-const STORAGE_SURPLUS = 50000;
-const STORAGE_LOW = 10000;
 
 /** Build queue 积压阈值。 */
 const BUILD_BACKLOG = 3;
@@ -156,6 +146,15 @@ function evaluateHaulerMaxCount(
   const boundsDef = TUNING_BOUNDS[param]!;
   const economyHealthy = s.avgPressure < PRESSURE_HEALTHY;
 
+  // 改进 B：用「container 满 + storage 盈余 + 储备在涨」识别消费端真实无去处，
+  // 替代旧 spawnFillRatio < 0.8 门禁（distributor 正常工作时该门禁永久不满足）。
+  // 协同点：storage 阈值用改进 C 的 getStorageThresholds(s.rcl).surplus（按 RCL 分级）。
+  const storageSurplus = getStorageThresholds(s.rcl).surplus;
+  const consumerSaturated =
+    s.containerFillRatio > CONTAINER_HIGH &&
+    s.avgStorageEnergy > storageSurplus &&
+    s.avgReserveDelta > 0;
+
   // 计算期望方向
   let desired: TrendDirection = "none";
   let reason = "";
@@ -165,11 +164,11 @@ function evaluateHaulerMaxCount(
     s.containerFillRatio > CONTAINER_HIGH &&
     s.haulerCount >= current &&
     economyHealthy &&
-    s.spawnFillRatio < SPAWN_SATURATED &&
+    !consumerSaturated &&
     current < boundsDef.ceiling
   ) {
     desired = "up";
-    reason = `Containers ${(s.containerFillRatio * 100).toFixed(0)}% full, spawn ${(s.spawnFillRatio * 100).toFixed(0)}% (unsaturated), haulers at max ${current}`;
+    reason = `Containers ${(s.containerFillRatio * 100).toFixed(0)}% full, storage ${s.avgStorageEnergy.toFixed(0)}/${storageSurplus} (consumer unsaturated), haulers at max ${current}`;
   }
   // ↓ 减少：container 持续空 + hauler > minCount + 经济健康
   else if (
@@ -203,13 +202,22 @@ function evaluateHaulerMinCount(
   const boundsDef = TUNING_BOUNDS[param]!;
   const economyHealthy = s.avgPressure < PRESSURE_HEALTHY;
 
+  // 改进 B 一致性同步：minCount 与 maxCount 共享消费端约束，
+  // 防止「min 上调 → max 不上调 → 死锁」。
+  const storageSurplus = getStorageThresholds(s.rcl).surplus;
+  const consumerSaturated =
+    s.containerFillRatio > CONTAINER_HIGH &&
+    s.avgStorageEnergy > storageSurplus &&
+    s.avgReserveDelta > 0;
+
   let desired: TrendDirection = "none";
   let reason = "";
 
-  // ↑ 增加：container 持续半满 + 经济健康
+  // ↑ 增加：container 持续半满 + 经济健康 + 消费端未饱和
   if (
     s.containerFillRatio > CONTAINER_MODERATE &&
     economyHealthy &&
+    !consumerSaturated &&
     current < boundsDef.ceiling
   ) {
     desired = "up";
@@ -293,30 +301,33 @@ function evaluateUpgraderMaxCount(
   const economyHealthy = s.avgPressure < PRESSURE_HEALTHY;
   const economyStressed = s.avgPressure > PRESSURE_STRESSED;
 
+  // 改进 C：storage 阈值按 RCL 分级，不同发展阶段用不同标准。
+  const { surplus: storageSurplus, low: storageLow } = getStorageThresholds(s.rcl);
+
   let desired: TrendDirection = "none";
   let reason = "";
 
   // ↑ 增加：storage 持续高位 + 经济健康 + upgrader 已达上限
   if (
-    s.avgStorageEnergy > STORAGE_SURPLUS &&
+    s.avgStorageEnergy > storageSurplus &&
     economyHealthy &&
     s.upgraderCount >= current &&
     current < boundsDef.ceiling
   ) {
     desired = "up";
-    reason = `Storage ${s.avgStorageEnergy.toFixed(0)} energy with upgraders at max ${current}, burning surplus`;
+    reason = `Storage ${s.avgStorageEnergy.toFixed(0)} energy (surplus ${storageSurplus}, RCL${s.rcl}) with upgraders at max ${current}, burning surplus`;
   }
   // ↓ 减少：storage 低位（仅 RCL4+，storage 已解锁）OR 经济压力高。
   // TU-1 修复：无 storage 的 RCL2-3 房间 avgStorageEnergy 恒 0 —
   // 原条件对它们永久成立，每 2000 tick 棘轮式把 upgrader 压到地板 1，
   // 早期升级产能被系统性压制。「storage 未解锁」≠「storage 枯竭」。
   else if (
-    ((s.avgStorageEnergy < STORAGE_LOW && s.rcl >= 4) || economyStressed) &&
+    ((s.avgStorageEnergy < storageLow && s.rcl >= 4) || economyStressed) &&
     current > boundsDef.floor
   ) {
     desired = "down";
-    reason = s.avgStorageEnergy < STORAGE_LOW
-      ? `Storage low (${s.avgStorageEnergy.toFixed(0)}), conserving upgrade capacity`
+    reason = s.avgStorageEnergy < storageLow
+      ? `Storage low (${s.avgStorageEnergy.toFixed(0)}, threshold ${storageLow}, RCL${s.rcl}), conserving upgrade capacity`
       : `Economy pressure high (${(s.avgPressure * 100).toFixed(0)}%), reducing upgrade capacity`;
   }
 

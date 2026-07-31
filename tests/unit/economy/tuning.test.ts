@@ -11,6 +11,8 @@ import {
   TUNING_BOUNDS,
   clampParam,
   isInCooldown,
+  getStorageThresholds,
+  STORAGE_CAPACITY,
 } from "../../../src/domain/tuning/bounds";
 import { evaluateTuning } from "../../../src/domain/tuning/evaluator";
 import type { TuningSignals } from "../../../src/domain/tuning/types";
@@ -360,10 +362,12 @@ describe("Tuning Evaluator — upgrader.maxCount", () => {
   });
 
   it("storage 低位 → 减少", () => {
+    // 改进 C：RCL5 用 mid 档 low=10000（保持原测试意图：5000 < 10000 触发下调）
     const result = evaluateTwice(
       healthySignals({
         avgStorageEnergy: 5000,
         upgraderCount: 2,
+        rcl: 5,
       }),
       DEFAULT_BOUNDS,
       {},
@@ -447,13 +451,15 @@ describe("Tuning Evaluator — builder.maxCount", () => {
 
 describe("Tuning Evaluator — 多参数联动", () => {
   it("多个参数可同 tick 调整", () => {
+    // 改进 B 后：hauler.maxCount 上调要求 consumerSaturated=false，
+    // 与 upgrader.maxCount 上调（storage > surplus）在储备上升时互斥。
+    // 改用 hauler.maxCount ↑ + builder.maxCount ↓ 验证多参数联动。
     const result = evaluateTwice(
       healthySignals({
         containerFillRatio: 0.75, // hauler.maxCount ↑
         haulerCount: 6,
-        avgStorageEnergy: 60000,   // upgrader.maxCount ↑
-        upgraderCount: 3,
-        buildQueueBacklog: 0,       // builder.maxCount ↓
+        avgStorageEnergy: 15000,  // < early surplus=20000 → consumerSaturated=false
+        buildQueueBacklog: 0,     // builder.maxCount ↓
       }),
       DEFAULT_BOUNDS,
       {},
@@ -463,7 +469,6 @@ describe("Tuning Evaluator — 多参数联动", () => {
     expect(result.adjustments.length).toBeGreaterThanOrEqual(2);
     const params = result.adjustments.map(a => a.param);
     expect(params).toContain("hauler.maxCount");
-    expect(params).toContain("upgrader.maxCount");
     expect(params).toContain("builder.maxCount");
   });
 });
@@ -704,5 +709,237 @@ describe("Tuning Evaluator — 趋势确认 (P1-1)", () => {
 
     expect(result.skipped).toBe("cpu_tier_conserve_or_worse");
     expect(result.newTrend).toEqual({});
+  });
+});
+
+// ─── 改进 C：getStorageThresholds 按 RCL 分档 ──────────────────
+
+describe("改进 C — getStorageThresholds RCL 分档", () => {
+  it("RCL≤4 early 档：surplus=2万 / low=2千", () => {
+    const t = getStorageThresholds(4);
+    expect(t.surplus).toBe(0.02 * STORAGE_CAPACITY);
+    expect(t.low).toBe(0.002 * STORAGE_CAPACITY);
+  });
+
+  it("RCL5-6 mid 档：surplus=5万 / low=1万（保持原默认值）", () => {
+    const t5 = getStorageThresholds(5);
+    expect(t5.surplus).toBe(0.05 * STORAGE_CAPACITY);
+    expect(t5.low).toBe(0.01 * STORAGE_CAPACITY);
+
+    const t6 = getStorageThresholds(6);
+    expect(t6).toEqual(t5);
+  });
+
+  it("RCL7-8 late 档：surplus=25万 / low=5万", () => {
+    const t7 = getStorageThresholds(7);
+    expect(t7.surplus).toBe(0.25 * STORAGE_CAPACITY);
+    expect(t7.low).toBe(0.05 * STORAGE_CAPACITY);
+
+    const t8 = getStorageThresholds(8);
+    expect(t8).toEqual(t7);
+  });
+
+  it("跨档边界：RCL4→5 surplus 从 2万跳到 5万", () => {
+    const t4 = getStorageThresholds(4);
+    const t5 = getStorageThresholds(5);
+    expect(t5.surplus).toBeGreaterThan(t4.surplus);
+  });
+});
+
+// ─── 改进 C：upgrader.maxCount 按 RCL 分档阈值判定 ─────────────
+
+describe("改进 C — upgrader.maxCount RCL 分档阈值", () => {
+  it("RCL5 高库存（>mid.surplus=5万）→ 触发上调", () => {
+    const result = evaluateTwice(
+      healthySignals({
+        rcl: 5,
+        avgStorageEnergy: 60000,
+        upgraderCount: 3,
+      }),
+      DEFAULT_BOUNDS,
+      {},
+      1000,
+    );
+
+    const adj = result.adjustments.find(a => a.param === "upgrader.maxCount");
+    expect(adj).toBeDefined();
+    expect(adj!.newValue).toBe(4);
+  });
+
+  it("RCL7 高库存（<late.surplus=25万）→ 不触发上调（保守）", () => {
+    const result = evaluateTwice(
+      healthySignals({
+        rcl: 7,
+        avgStorageEnergy: 60000,
+        upgraderCount: 3,
+      }),
+      DEFAULT_BOUNDS,
+      {},
+      1000,
+    );
+
+    const adj = result.adjustments.find(a => a.param === "upgrader.maxCount");
+    expect(adj).toBeUndefined();
+  });
+
+  it("RCL8 极高库存（>late.surplus=25万）→ 触发上调", () => {
+    const result = evaluateTwice(
+      healthySignals({
+        rcl: 8,
+        avgStorageEnergy: 300000,
+        upgraderCount: 3,
+      }),
+      DEFAULT_BOUNDS,
+      {},
+      1000,
+    );
+
+    const adj = result.adjustments.find(a => a.param === "upgrader.maxCount");
+    expect(adj).toBeDefined();
+    expect(adj!.newValue).toBe(4);
+  });
+
+  it("跨档边界：RCL6→7 刚跨档，signals.rcl=7，storage=6万 → 按 RCL7 处理不触发", () => {
+    // 跨档带来的瞬态不连续可接受（设计文档 §3.3.3）
+    const result = evaluateTwice(
+      healthySignals({
+        rcl: 7,
+        avgStorageEnergy: 60000,
+        upgraderCount: 3,
+      }),
+      DEFAULT_BOUNDS,
+      {},
+      1000,
+    );
+
+    const adj = result.adjustments.find(a => a.param === "upgrader.maxCount");
+    expect(adj).toBeUndefined();
+  });
+});
+
+// ─── 改进 B：hauler.maxCount 上调门禁 consumerSaturated ─────────
+
+describe("改进 B — hauler.maxCount consumerSaturated 门禁", () => {
+  it("经典门禁解锁：container 满 + spawn 高（旧门禁锁死场景）+ storage 未盈余 → 触发上调", () => {
+    // 旧逻辑 spawnFill=0.95 > 0.8 永久不满足，新逻辑用 consumerSaturated 判定
+    // RCL7 late surplus=25万，storage=6万 < 25万 → consumerSaturated=false → 可上调
+    const result = evaluateTwice(
+      healthySignals({
+        rcl: 7,
+        containerFillRatio: 0.8,
+        haulerCount: 2,
+        spawnFillRatio: 0.95, // 旧门禁锁死场景（新逻辑不再检查此值）
+        avgStorageEnergy: 60000,
+        avgReserveDelta: 50,
+      }),
+      { ...DEFAULT_BOUNDS, hauler: { minCount: 2, maxCount: 2 } }, // 模拟锁死状态
+      {},
+      1000,
+    );
+
+    const adj = result.adjustments.find(a => a.param === "hauler.maxCount");
+    expect(adj).toBeDefined();
+    expect(adj!.oldValue).toBe(2);
+    expect(adj!.newValue).toBe(3);
+  });
+
+  it("消费端真饱和：container 满 + storage 盈余 + 储备在涨 → 不触发上调", () => {
+    // RCL5 mid surplus=5万，storage=6万 > 5万 + reserveDelta=+50 > 0 → consumerSaturated=true
+    const result = evaluateTwice(
+      healthySignals({
+        rcl: 5,
+        containerFillRatio: 0.8,
+        haulerCount: 6,
+        avgStorageEnergy: 60000,
+        avgReserveDelta: 50,
+      }),
+      DEFAULT_BOUNDS,
+      {},
+      1000,
+    );
+
+    const adj = result.adjustments.find(a => a.param === "hauler.maxCount");
+    expect(adj).toBeUndefined();
+  });
+
+  it("storage 不盈余：container 满 + storage < surplus → 触发上调（storage 还有空间）", () => {
+    // RCL5 mid surplus=5万，storage=3万 < 5万 → consumerSatisfied storage 条件不满足
+    const result = evaluateTwice(
+      healthySignals({
+        rcl: 5,
+        containerFillRatio: 0.8,
+        haulerCount: 6,
+        avgStorageEnergy: 30000,
+        avgReserveDelta: 50,
+      }),
+      DEFAULT_BOUNDS,
+      {},
+      1000,
+    );
+
+    const adj = result.adjustments.find(a => a.param === "hauler.maxCount");
+    expect(adj).toBeDefined();
+    expect(adj!.newValue).toBe(7);
+  });
+
+  it("储备在掉：container 满 + reserveDelta<0 → 触发上调（source 产能在掉，非无去处）", () => {
+    // reserveDelta<0 说明 source 端产能在掉，container 满可能是 hauler 追不上
+    const result = evaluateTwice(
+      healthySignals({
+        rcl: 5,
+        containerFillRatio: 0.8,
+        haulerCount: 6,
+        avgStorageEnergy: 60000,
+        avgReserveDelta: -30,
+      }),
+      DEFAULT_BOUNDS,
+      {},
+      1000,
+    );
+
+    const adj = result.adjustments.find(a => a.param === "hauler.maxCount");
+    expect(adj).toBeDefined();
+    expect(adj!.newValue).toBe(7);
+  });
+});
+
+// ─── 改进 B 一致性：hauler.minCount 也共享 consumerSaturated ────
+
+describe("改进 B — hauler.minCount consumerSaturated 一致性", () => {
+  it("消费端真饱和时 hauler.minCount 也不上调", () => {
+    // RCL5 mid surplus=5万，storage=6万 > 5万 + reserveDelta=+50 → consumerSaturated=true
+    const result = evaluateTwice(
+      healthySignals({
+        rcl: 5,
+        containerFillRatio: 0.8, // > CONTAINER_MODERATE(0.5) 满足 min 上调的 container 条件
+        avgStorageEnergy: 60000,
+        avgReserveDelta: 50,
+      }),
+      DEFAULT_BOUNDS,
+      {},
+      1000,
+    );
+
+    const adj = result.adjustments.find(a => a.param === "hauler.minCount");
+    expect(adj).toBeUndefined();
+  });
+
+  it("消费端未饱和时 hauler.minCount 正常上调", () => {
+    // RCL5 mid surplus=5万，storage=3万 < 5万 → consumerSaturated=false
+    const result = evaluateTwice(
+      healthySignals({
+        rcl: 5,
+        containerFillRatio: 0.55,
+        avgStorageEnergy: 30000,
+        avgReserveDelta: 50,
+      }),
+      DEFAULT_BOUNDS,
+      {},
+      1000,
+    );
+
+    const adj = result.adjustments.find(a => a.param === "hauler.minCount");
+    expect(adj).toBeDefined();
+    expect(adj!.newValue).toBe(3);
   });
 });

@@ -407,10 +407,11 @@ describe("tuning-engine integration — run() 完整链路", () => {
 // ─── 边界场景测试（CTO 全面审查后补充）─────────────────────────
 
 describe("tuning-engine 边界场景 — 消费端饱和度", () => {
-  it("container满 + spawn饱和 → 不加 hauler（消费端瓶颈，P0-1 验证）", () => {
+  it("container满 + 消费端真饱和（storage 盈余+储备在涨）→ 不加 hauler（改进 B 验证）", () => {
     const roomName = "W7N4";
-    // ea=7000, ec=8000 → spawnFillRatio = 0.875 > SPAWN_SATURATED(0.8)
-    const econ = buildEconomyRing(roomName, 15, { ea: 7000, ec: 8000 });
+    // 改进 B：consumerSaturated = container 满 + storage > surplus + 储备在涨
+    // RCL4 early surplus=20000，se=30000 > 20000 → 消费端真饱和
+    const econ = buildEconomyRing(roomName, 15, { ea: 7000, ec: 8000, se: 30000 });
     const cpu = buildCpuRing(15);
     setupTimeseries(econ, cpu);
 
@@ -423,16 +424,14 @@ describe("tuning-engine 边界场景 — 消费端饱和度", () => {
     tuningEngineSystem.run(ctx);
 
     const tuning = (globalThis as any).Memory.kernel.tuning;
-    // 消费端饱和时不应增加 hauler.maxCount（minCount 可能因 container 半满而调整，属正常）
+    // 消费端真饱和时不应增加 hauler.maxCount
     expect(tuning.rooms[roomName].roleBounds.hauler?.maxCount).toBeUndefined();
-    // 诊断信号应记录 spawnFillRatio
-    expect(tuning.lastEval[roomName].signals.spawnFillRatio).toBeGreaterThanOrEqual(0.8);
   });
 
-  it("container满 + spawn未饱和 → 加 hauler（P0-1 正向验证）", () => {
+  it("container满 + 消费端未饱和（storage 低于 surplus）→ 加 hauler（改进 B 正向验证）", () => {
     const roomName = "W7N4";
-    // ea=4000, ec=8000 → spawnFillRatio = 0.5 < 0.8（未饱和）
-    const econ = buildEconomyRing(roomName, 15, { ea: 4000, ec: 8000 });
+    // RCL4 early surplus=20000，se=10000 < 20000 → consumerSaturated=false
+    const econ = buildEconomyRing(roomName, 15, { ea: 4000, ec: 8000, se: 10000 });
     const cpu = buildCpuRing(15);
     setupTimeseries(econ, cpu);
 
@@ -446,7 +445,6 @@ describe("tuning-engine 边界场景 — 消费端饱和度", () => {
     const tuning = (globalThis as any).Memory.kernel.tuning;
     // 消费端未饱和时应增加 hauler
     expect(tuning.rooms[roomName].roleBounds.hauler.maxCount).toBe(7);
-    expect(tuning.lastEval[roomName].signals.spawnFillRatio).toBeLessThan(0.8);
   });
 });
 
