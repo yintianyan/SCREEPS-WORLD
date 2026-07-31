@@ -321,6 +321,10 @@ export const CONFIG = {
     link: {
       /** source link 发起传输的最小能量阈值（P1-4：攒够再发，避免小额传输占冷却致 source link 溢出）。 */
       minTransfer: 400,
+      /** link 角色分类的锚定半径（Chebyshev）。classifyLinkRole 与 harvester 灌能识别共用同一值，
+       * 杜绝两侧口径漂移致「死 link」。取 2：harvester 站 container（贴 source）上仍能 range1 够到
+       * 隔一格的 link，故 source link 放在到 source range≤2 内均可被灌能（可达性由灌能 range≤1 守卫兜底）。 */
+      anchorRange: 2,
     },
     /** Storage 满仓阈值 — 超过此比例时触发限采 + 加速消费。 */
     storageFullThreshold: 0.9,
@@ -494,9 +498,13 @@ export const CONFIG = {
     /** 逐房就绪门（Phase 1b）：一个房要「新开」远矿，除帝国姿态放行外，
      * 本房还须自身经济成熟——RCL ≥ roomMinRcl 且 storage 能量 ≥ roomMinStorage
      * 且 colonyState=normal。防止 RCL4 新占嫩房过早分兵远矿（本该闷头冲级）。
-     * 现役远矿不受影响，只挡「这房该不该再开新远矿点」。 */
+     * 现役远矿不受影响，只挡「这房该不该再开新远矿点」。
+     * roomMinStorage 取较低值（8000 而非 20000）：20000 门槛对「storage 常年见底」
+     * 的 2-source 房是贫困陷阱——越穷越开不了远矿、越开不了越穷；而远矿正是突破
+     * 单房 20/tick 收入天花板的唯一杠杆。降门槛让主房/边际房冲级期也能开远矿补收入
+     * （主房冲级时 storage 本就在花，不该被此门锁死）。8000 仍留一层缓冲防真嫩房过早分兵。 */
     roomMinRcl: 5,
-    roomMinStorage: 20000,
+    roomMinStorage: 8000,
     /** 远矿房威胁的危险冷却（tick）— 冷却期内不作为新远矿/扩张候选。 */
     dangerCooldown: 2000,
     /** 普通威胁的失明保持窗口（tick，RM-2）— 有视野见威胁后，失明期间

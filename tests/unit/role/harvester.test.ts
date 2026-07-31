@@ -100,14 +100,21 @@ describe("harvester — acquire 模式", () => {
 
 describe("harvester — work 模式优先级链", () => {
   it("优先级 1：身边 link（range<=2）优先于一切", () => {
+    // 真实几何：source/container 在 (25,25)，link 紧邻 (26,25)，controller 远离 (40,40)。
+    // sourceAdjacentLink 现要求 classifyLinkRole 判为 source —— link 到 source 距离 1
+    // < 到 controller 距离 14 → 判为 source。退化几何（全同处 25,25）会因 tie-break
+    // (controller>source) 把 link 误判为 controller，故必须拉开 controller 距离。
     const link = mockStructure("link", { id: "link_1", energy: 0, capacity: 800 });
+    link.pos = mockPos(26, 25);
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 0, capacity: 300 });
     const snap = mockSnapshot({
       links: [link],
       containers: [container],
       fillTargets: [spawn],
+      controller: mockController({ level: 5 }),
     });
+    snap.controller!.pos = mockPos(40, 40) as any;
     const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
     creep.pos.getRangeTo.mockReturnValue(1); // range <= 2
     const ctx = mockContext(snap);

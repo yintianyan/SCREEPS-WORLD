@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planLinkTransfers, type LinkInfo } from "../../../src/domain/economy/links";
+import { planLinkTransfers, classifyLinkRole, type LinkInfo } from "../../../src/domain/economy/links";
 
 function link(
   id: string,
@@ -182,5 +182,50 @@ describe("Links — minTransfer 阈值（P1-4）", () => {
     ];
     const transfers = planLinkTransfers(links, { minTransfer: 400 });
     expect(transfers).toHaveLength(0);
+  });
+});
+
+describe("Links — classifyLinkRole（最近锚获胜，根除优先级劫持）", () => {
+  const pt = (x: number, y: number) => ({ x, y });
+
+  it("source link：距 source=2、远离 ctrl/storage → source（(40,44) 手建 link 场景）", () => {
+    expect(classifyLinkRole(pt(40, 44), [pt(41, 46)], pt(39, 12), pt(33, 29))).toBe("source");
+  });
+
+  it("劫持根除：controller link 距 controller=1、距某 source=2 → controller（不被 source 抢）", () => {
+    expect(classifyLinkRole(pt(10, 10), [pt(12, 10)], pt(10, 11), undefined)).toBe("controller");
+  });
+
+  it("劫持根除：storage link 距 storage=1、距某 source=2 → storage（不被 source 抢）", () => {
+    expect(classifyLinkRole(pt(20, 20), [pt(22, 20)], undefined, pt(20, 21))).toBe("storage");
+  });
+
+  it("最近锚：controller 更近(dist1) 胜过 source(dist2)", () => {
+    expect(classifyLinkRole(pt(0, 0), [pt(2, 0)], pt(1, 0), undefined)).toBe("controller");
+  });
+
+  it("距离相等 tie-break：source 与 controller 均 range1 → controller 胜", () => {
+    expect(classifyLinkRole(pt(5, 5), [pt(6, 5)], pt(4, 5), undefined)).toBe("controller");
+  });
+
+  it("距离相等 tie-break：source 与 storage 均 range1 → storage 胜", () => {
+    expect(classifyLinkRole(pt(5, 5), [pt(6, 5)], undefined, pt(4, 5))).toBe("storage");
+  });
+
+  it("多 source 就近归属：仅靠近其中一个 source → source", () => {
+    expect(classifyLinkRole(pt(40, 44), [pt(12, 31), pt(41, 46)], pt(39, 12), pt(33, 29))).toBe("source");
+  });
+
+  it("都超出 anchorRange(2) → hub", () => {
+    expect(classifyLinkRole(pt(25, 25), [pt(12, 31)], pt(39, 12), pt(33, 29))).toBe("hub");
+  });
+
+  it("边界：距 source 恰好 2 命中、距 3 不命中", () => {
+    expect(classifyLinkRole(pt(0, 0), [pt(2, 2)], undefined, undefined)).toBe("source"); // Chebyshev=2
+    expect(classifyLinkRole(pt(0, 0), [pt(3, 0)], undefined, undefined)).toBe("hub"); // Chebyshev=3
+  });
+
+  it("自定义 anchorRange=1：距 source=2 不再命中 → hub（口径可收紧回退）", () => {
+    expect(classifyLinkRole(pt(40, 44), [pt(41, 46)], undefined, undefined, 1)).toBe("hub");
   });
 });

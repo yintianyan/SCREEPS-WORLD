@@ -217,3 +217,55 @@ describe("constraint-placer — 极端地形", () => {
     expect(extensions.length).toBeGreaterThanOrEqual(15);
   });
 });
+
+describe("constraint-placer — 自适应搜索半径（受限地形后期放置）", () => {
+  // 病灶回归：多墙地形 + RCL7-8 高密度下，默认 maxRadius=7 的固定候选池被
+  // wouldSealLocal 密封守卫收紧后耗尽 → 旧实现静默少放（关键建筑缺失）。
+  // 修复：候选池不足时自动外扩搜索半径（上限 15）。
+
+  it("环形墙地形 RCL8：自适应扩搜放满全套结构（旧实现会少放）", () => {
+    // 墙环 8<=r<=10：内部 r<8 开阔（约 128 偶校验格），外部 r>10 开阔。
+    // 默认半径 7 的候选池被墙环切割 + 密封守卫收紧后不足以容纳 RCL8 的
+    // ~79 个结构；扩搜到半径 >10 后可用外环开放区，放满全套。
+    const ring = (x: number, y: number): boolean => {
+      const r = Math.sqrt((x - 25) ** 2 + (y - 25) ** 2);
+      return r >= 8 && r <= 10;
+    };
+    const field = computeDistanceField(ring);
+    const result = placeStructures({ x: 25, y: 25 }, field, ring, 8, new Set(), new Map());
+
+    const count = (type: string) => result.filter(p => p.structureType === type).length;
+    // 关键建筑全到位（旧实现这些会缺）。
+    expect(count(STRUCTURE_EXTENSION)).toBe(60);
+    expect(count(STRUCTURE_TOWER)).toBe(3);
+    expect(count(STRUCTURE_SPAWN)).toBe(2);
+    expect(count(STRUCTURE_LAB)).toBe(10);
+    expect(count(STRUCTURE_TERMINAL)).toBe(1);
+    expect(count(STRUCTURE_FACTORY)).toBe(1);
+
+    // 核心不变量在扩搜后仍成立：偶校验 + 无重叠。
+    const positions = new Set<number>();
+    for (const p of result) {
+      const dx = p.pos.x - 25;
+      const dy = p.pos.y - 25;
+      expect(((dx + dy) % 2 + 2) % 2).toBe(0);
+      const packed = packPos(p.pos.x, p.pos.y);
+      expect(positions.has(packed)).toBe(false);
+      positions.add(packed);
+    }
+  });
+
+  it("开阔地形 RCL8：不触发扩搜，行为与默认半径一致（无回归）", () => {
+    const field = computeDistanceField(noWalls);
+    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set(), new Map());
+
+    // 开阔地形半径 7 即满足，扩搜不触发 → 全部结构仍落在默认 [2,47] 范围。
+    for (const p of result) {
+      expect(p.pos.x).toBeGreaterThanOrEqual(2);
+      expect(p.pos.x).toBeLessThanOrEqual(47);
+      expect(p.pos.y).toBeGreaterThanOrEqual(2);
+      expect(p.pos.y).toBeLessThanOrEqual(47);
+    }
+    expect(result.filter(p => p.structureType === STRUCTURE_EXTENSION).length).toBe(60);
+  });
+});

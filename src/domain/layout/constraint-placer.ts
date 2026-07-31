@@ -46,6 +46,16 @@ export const DEFAULT_PLACER_CONFIG: PlacerConfig = {
   minOpenness: 2,
 };
 
+/**
+ * 自适应搜索半径的硬上限。
+ *
+ * 默认 maxRadius=7 对齐 compact-core-v2 的 ±6 外环；当受限地形（多墙）下
+ * 候选池不足以容纳所需结构时，placeStructures 自动外扩搜索半径直到满足或达此上限。
+ * 15 覆盖锚点 ±15 的 31×31 区域（约大半个房间）——再大说明房间本身过于破碎，
+ * 应触发缺口告警（见 placeStructures 末段）而非无限扩搜浪费 CPU。
+ */
+const MAX_SEARCH_RADIUS = 15;
+
 /** 每 RCL 应放置的结构清单（增量，非累计）。 */
 interface StructureBatch {
   readonly type: BuildableStructureConstant;
@@ -258,10 +268,11 @@ function placeLabCluster(
  * @param preOccupied 预占用位置（source/controller/mineral/已有结构）
  * @param committed 各结构类型的承诺数量（已建 + 在建 site + 队列任务）—
  *   放置时按批次抵扣，只为真实缺口生成放置（代际稳定性核心）。
- * @param config 放置配置
+ * @param config 放置配置（可选，缺省用 DEFAULT_PLACER_CONFIG）。
  * @param energyEndpoints 能量端点位置（source/controller），用于评分加权。
  *   传入时结构放置偏好靠近能量流转路径；不传时退化为纯几何评分。
  * @param existingLabPositions 已建 lab 位置 — 新增 lab 续接既有集群（相邻约束）。
+ * @param roomName 房间名（可选）— 仅用于放置缺口告警日志定位，不影响放置逻辑。
  */
 export function placeStructures(
   anchor: { x: number; y: number },
@@ -273,8 +284,23 @@ export function placeStructures(
   config: PlacerConfig = DEFAULT_PLACER_CONFIG,
   energyEndpoints: readonly { x: number; y: number }[] = [],
   existingLabPositions: readonly { x: number; y: number }[] = [],
+  roomName?: string,
 ): ConstraintPlacement[] {
-  const candidates = buildCandidateGrid(anchor, field, getTerrain, config, energyEndpoints);
+  // ── 自适应搜索半径 ──
+  // 默认 maxRadius=7 的固定候选池在多墙地形 + RCL7-8 高密度（需 ~79 结构）下
+  // 会被耗尽：wouldSealLocal 密封守卫随已建结构增多越来越严，固定池里通过密封
+  // 守卫的格不够放满全部批次 → 静默少放（尤其最低优先级的 extension，池再小
+  // 连 spawn/tower/lab 也会缺）。修复：候选池容量不足以容纳所需结构总数时，
+  // 自动外扩搜索半径（上限 MAX_SEARCH_RADIUS），让受限地形也能找到足够合法格。
+  // 开阔地形下 radius=7 即满足，行为与旧实现完全一致（无回归）。
+  const totalNeeded = computeTotalNeeded(rcl, committed);
+  let effectiveRadius = config.maxRadius;
+  let candidates = buildCandidateGrid(anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints);
+  while (candidates.length < totalNeeded && effectiveRadius < MAX_SEARCH_RADIUS) {
+    effectiveRadius++;
+    candidates = buildCandidateGrid(anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints);
+  }
+
   const occupied = new Set<number>(preOccupied);
   // 锚点本身被 spawn 占用
   occupied.add(packPos(anchor.x, anchor.y));
@@ -310,10 +336,16 @@ export function placeStructures(
   }
   batches.sort((a, b) => (TYPE_PLACE_ORDER[a.type] ?? 99) - (TYPE_PLACE_ORDER[b.type] ?? 99));
 
+  // 抵扣承诺后的真实缺口（按类型累计）— 供末段缺口告警使用。
+  // 只用 deductBatch 返回值（真实还需放置量），不含已承诺/已建部分，
+  // 避免「全部已建成 → 本周期本就不该再放」时误报缺口。
+  const residualNeedByType = new Map<string, number>();
+
   for (const batch of batches) {
     const { type, count, priority, phase } = batch;
     const need = deductBatch(type, count);
     if (need <= 0) continue;
+    residualNeedByType.set(type, (residualNeedByType.get(type) ?? 0) + need);
 
     // Lab 特殊处理：集群放置
     if (type === STRUCTURE_LAB) {
@@ -354,7 +386,56 @@ export function placeStructures(
     }
   }
 
+  // ── 放置缺口可观测性 ──
+  // 根治「静默少放」：过去候选池耗尽时 placeStructures 直接返回不足量 placements，
+  // 无任何信号，玩家直到运营受影响（extension 不足→能量上限低→孵化慢）才发现。
+  // 现按类型对比真实缺口（抵扣承诺后）与实际放置，缺口即告警，标明搜索半径已扩
+  // 到上限的事实——提示房间地形过于破碎，需人工介入（换锚点 / 接受降级 / 手动规划）。
+  // 频率：layout-planner 每 50 tick 规划一次，告警至多每 50 tick 一条，可接受。
+  const placedByType = new Map<string, number>();
+  for (const p of placements) {
+    placedByType.set(p.structureType, (placedByType.get(p.structureType) ?? 0) + 1);
+  }
+  for (const [type, needed] of residualNeedByType) {
+    const placedCount = placedByType.get(type) ?? 0;
+    if (placedCount < needed) {
+      console.log(
+        `[layout] WARN placement shortfall${roomName ? ` in ${roomName}` : ""}: ` +
+        `${type} need ${needed} placed ${placedCount} (missing ${needed - placedCount}) — ` +
+        `search radius exhausted at ${effectiveRadius}, terrain too constrained`,
+      );
+    }
+  }
+
   return placements;
+}
+
+/**
+ * 计算指定 RCL 下需放置的结构总数（承诺抵扣后）。
+ *
+ * 供自适应搜索半径判定候选池是否足够：累计 RCL2..rcl 各批次需求，
+ * 扣除 committed 已承诺量（与 placeStructures 主循环的 deductBatch 同口径），
+ * 得到真实缺口总数。spawn 承诺扣 1（初始锚点 spawn 不在批次内，与主逻辑一致）。
+ *
+ * 纯函数 — 不访问 Game/Memory。
+ */
+function computeTotalNeeded(rcl: number, committed: ReadonlyMap<string, number>): number {
+  const remaining = new Map<string, number>(committed);
+  const spawnCommitted = remaining.get(STRUCTURE_SPAWN) ?? 0;
+  if (spawnCommitted > 0) remaining.set(STRUCTURE_SPAWN, spawnCommitted - 1);
+
+  let total = 0;
+  for (let r = 2; r <= rcl; r++) {
+    const rclBatches = RCL_BATCHES[r];
+    if (!rclBatches) continue;
+    for (const b of rclBatches) {
+      const committedCount = remaining.get(b.type) ?? 0;
+      const deduct = Math.min(b.count, committedCount);
+      if (deduct > 0) remaining.set(b.type, committedCount - deduct);
+      total += b.count - deduct;
+    }
+  }
+  return total;
 }
 
 /**

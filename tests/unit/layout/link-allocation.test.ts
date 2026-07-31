@@ -20,6 +20,7 @@ import {
   createStorageLinkTask,
   createControllerLinkTask,
 } from "../../../src/domain/layout/task-factory";
+import { classifyLinkRole } from "../../../src/domain/economy/links";
 import { buildObstaclePositionSet, type ValidationOptions } from "../../../src/domain/layout/validation";
 import { mockPos, resetGlobals } from "../../role-helpers";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
@@ -376,5 +377,89 @@ describe("Link 分配策略 — RCL7 完整模拟", () => {
 
     // 总计：4 个 link 任务（2 source + storage + controller）
     expect(queuedLinks).toBe(4);
+  });
+});
+
+// ─── 对抗性几何：放置意图 vs 运行时角色分类 ──────────────────
+//
+// 病灶复现：classifyLinkRole 按「最近锚获胜」（anchorRange=2）分类。
+// 当 source 离核心 storage 较近时，source 八邻域中部分格到 storage 比到
+// source 更近 → 运行时被判为 storage。旧放置逻辑（findAdjacentBuildable
+// 只保证几何相邻）会把 source link 建在这种格上 → harvester 因 role!==source
+// 拒灌 → 死 link + 第二个 storage link 惰化。修复后放置侧复用 classifyLinkRole
+// 过滤候选格，只接受运行时分类与意图一致的格子。
+//
+// 注意：snapshotAt 默认 source(10,10)/(40,40) 远离 storage(26,25)，是「安全几何」
+// （setup 注释明写刻意拉开距离规避误判）。本组测试反其道而行，构造危险几何。
+
+/** 运行时分类辅助：取候选格在 snapshot 几何下的 link 角色。 */
+function runtimeRole(snap: RoomSnapshot, x: number, y: number) {
+  return classifyLinkRole(
+    { x, y },
+    snap.sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
+    snap.controller ? { x: snap.controller.pos.x, y: snap.controller.pos.y } : undefined,
+    snap.storage ? { x: snap.storage.pos.x, y: snap.storage.pos.y } : undefined,
+    2,
+  );
+}
+
+describe("Link 放置与运行时角色分类闭环（对抗性几何）", () => {
+  it("source 距 storage Chebyshev=2：source link 落在运行时分类为 source 的格", () => {
+    // source (24,25) 与 storage (26,25) 相距 2。
+    // source 八邻域中：(25,*) 到 storage 更近 → 运行时判为 storage（旧实现的陷阱）；
+    // (23,25) 到 source=1 < 到 storage=3 → 判为 source（唯一合法落点方向）。
+    const snap = snapshotAt(5, {
+      sources: [{ id: "srcNear", pos: mockPos(24, 25), energy: 3000 } as any],
+    });
+    const room = roomWith();
+    const opts = optionsFor(snap);
+
+    const candidates = createSourceLinkTasks(snap, room, opts, 0, 1);
+
+    expect(candidates).toHaveLength(1);
+    const pos = candidates[0]!.pos;
+    // 放置结果在运行时必须分类为 source（闭环验证）。
+    expect(runtimeRole(snap, pos.x, pos.y)).toBe("source");
+    // 且必须紧邻 source（几何相邻不被破坏）。
+    expect(Math.max(Math.abs(pos.x - 24), Math.abs(pos.y - 25))).toBeLessThanOrEqual(1);
+  });
+
+  it("source 与 storage 紧邻（Chebyshev=1）：source link 落在远离 storage 一侧（运行时判为 source）", () => {
+    // source (25,25) 与 storage (26,25) 紧邻。source 八邻域中靠 storage 一侧的
+    // (26,*) 到 storage 更近 → 运行时判为 storage（旧实现的陷阱：findAdjacentBuildable
+    // 按 dx 升序遍历，(-1,-1) 起的 (24,*) 虽有站立格，但旧逻辑不校验角色，遇到墙/占用
+    // 时会落到 (26,*) 死格）；远离 storage 一侧的 (24,*) 到 source 更近 → 判为 source。
+    // 修复后放置侧只接受运行时判为 source 的格 → link 必然落在 source 左侧。
+    const snap = snapshotAt(5, {
+      sources: [{ id: "srcHugged", pos: mockPos(25, 25), energy: 3000 } as any],
+    });
+    const room = roomWith();
+    const opts = optionsFor(snap);
+
+    const candidates = createSourceLinkTasks(snap, room, opts, 0, 1);
+
+    expect(candidates).toHaveLength(1);
+    const pos = candidates[0]!.pos;
+    // 闭环验证：运行时分类为 source，且落在 source 远离 storage 的一侧（x <= 25）。
+    expect(runtimeRole(snap, pos.x, pos.y)).toBe("source");
+    expect(pos.x).toBeLessThanOrEqual(25);
+    expect(Math.max(Math.abs(pos.x - 25), Math.abs(pos.y - 25))).toBeLessThanOrEqual(1);
+  });
+
+  it("storage 邻近 source：storage link 落在运行时分类为 storage 的格", () => {
+    // storage (26,25) 与 source (24,25) 相距 2。storage 八邻域中 (25,*) 会被
+    // 判为 source（到 source 更近）；放置侧须避开，选运行时判为 storage 的格。
+    const snap = snapshotAt(5, {
+      sources: [{ id: "srcNear", pos: mockPos(24, 25), energy: 3000 } as any],
+    });
+    const room = roomWith();
+    const opts = optionsFor(snap);
+
+    const candidate = createStorageLinkTask(snap, room, opts);
+
+    expect(candidate).toBeDefined();
+    const pos = candidate!.pos;
+    expect(runtimeRole(snap, pos.x, pos.y)).toBe("storage");
+    expect(Math.max(Math.abs(pos.x - 26), Math.abs(pos.y - 25))).toBeLessThanOrEqual(1);
   });
 });

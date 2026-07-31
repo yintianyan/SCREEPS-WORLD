@@ -6,6 +6,7 @@ import { CONFIG } from "../../../config";
 import { moveToTarget, registerAnchor } from "../../movement";
 import { runAction } from "./helpers";
 import { getSource } from "../../support/targeting";
+import { classifyLinkRole } from "../../../domain/economy/links";
 
 /**
  * 从 source 采集（通用）。
@@ -180,9 +181,21 @@ function sourceAdjacentContainer(ac: ActionContext, source: Source): StructureCo
   return ac.snapshot.containers.find(c => c.pos.getRangeTo(source.pos) <= 1);
 }
 
-/** 找到与 source 相邻（range<=1）的 link（RCL5+ source link）。 */
+/** 找到本 source 的 source link（RCL5+）。
+ *
+ * 放宽到 range≤anchorRange(2) 且要求该 link 的角色为 source（classifyLinkRole 判定，
+ * 与 link-system 分类同源）：让「container 隔在 source 与 link 之间」的几何（link 距
+ * source range2、harvester 站 container 上仍 range1 够到 link）也能开 link 挖矿；只认
+ * role===source 绝不误灌 controller/storage link。够不到时由灌能 range≤1 守卫回退 container。 */
 function sourceAdjacentLink(ac: ActionContext, source: Source): StructureLink | undefined {
-  return ac.snapshot.links.find(l => l.pos.getRangeTo(source.pos) <= 1);
+  const range = CONFIG.economy.link.anchorRange;
+  const sourcePts = ac.snapshot.sources.map(s => s.pos);
+  const ctrlPt = ac.snapshot.controller?.pos;
+  const storagePt = ac.snapshot.storage?.pos;
+  return ac.snapshot.links.find(
+    l => l.pos.getRangeTo(source.pos) <= range
+      && classifyLinkRole(l.pos, sourcePts, ctrlPt, storagePt, range) === "source",
+  );
 }
 
 /** harvestMineral 的 resolve 返回类型。 */

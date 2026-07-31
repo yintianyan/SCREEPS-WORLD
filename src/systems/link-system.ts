@@ -1,6 +1,6 @@
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import type { LinkInfo, LinkRole } from "../domain/economy/links";
-import { planLinkTransfers } from "../domain/economy/links";
+import { planLinkTransfers, classifyLinkRole } from "../domain/economy/links";
 import { CONFIG } from "../config";
 
 /**
@@ -55,23 +55,19 @@ function runRoomLinks(snapshot: RoomSnapshot): void {
 }
 
 /**
- * 根据 link 与 source/controller/storage 的距离分类。
- * range <= 2 视为紧邻（harvester 可在采矿位直接 transfer）。
+ * 根据 link 与 source/controller/storage 的距离分类（委托纯函数 classifyLinkRole）。
  *
- * 优先级判定：当一个 link 同时紧邻多个目标时（如 source 和 storage 都在 range 2 内），
- * 按物流角色重要性判定 — source > controller > storage > hub。
- * 防止 source link 被误判为 storage link 导致 planLinkTransfers 不把它的能量送到 controller。
+ * 采用「最近锚获胜」而非旧的「source 固定最高优先级」：后者会把紧邻 controller/storage、
+ * 却恰好落在某 source range≤2 内的 link 误判为 source（优先级劫持），令 controller/storage
+ * link 从传输拓扑消失。分类逻辑与 harvester 灌能识别（harvest.ts sourceAdjacentLink）
+ * 共用同一 classifyLinkRole，消除口径漂移致的「死 link」。详见 domain/economy/links.ts。
  */
 function classifyLink(link: StructureLink, snapshot: RoomSnapshot): LinkRole {
-  // 逐一检查所有匹配，收集后按优先级选择。
-  const isNearSource = snapshot.sources.some(src => link.pos.getRangeTo(src) <= 2);
-  if (isNearSource) return "source";
-
-  const isNearController = snapshot.controller != null && link.pos.getRangeTo(snapshot.controller) <= 2;
-  if (isNearController) return "controller";
-
-  const isNearStorage = snapshot.storage != null && link.pos.getRangeTo(snapshot.storage) <= 2;
-  if (isNearStorage) return "storage";
-
-  return "hub";
+  return classifyLinkRole(
+    link.pos,
+    snapshot.sources.map(s => s.pos),
+    snapshot.controller?.pos,
+    snapshot.storage?.pos,
+    CONFIG.economy.link.anchorRange,
+  );
 }

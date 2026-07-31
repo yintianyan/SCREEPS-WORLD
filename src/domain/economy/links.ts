@@ -107,3 +107,51 @@ export function planLinkTransfers(
 
   return transfers;
 }
+
+/** 二维坐标视图 — 供 classifyLinkRole 纯几何计算，不依赖 Screeps RoomPosition。 */
+export interface LinkAnchorPoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * 按「最近锚获胜」分类单个 link 的角色（纯函数，几何判定）。
+ *
+ * 取 link 到最近 source / controller / storage 的 Chebyshev 距离，在 anchorRange 内
+ * 选距离最小的锚定角色；距离相等时按 controller > storage > source 裁决——专属单例
+ * 结构（controller/storage link）不应被 source 抢占。都不在范围内 → hub。
+ *
+ * 替代旧的「source 固定最高优先级 + 短路返回」：旧实现会把紧邻 controller/storage、
+ * 却恰好落在某 source range≤2 内的 link 误判为 source（优先级劫持），令 controller/
+ * storage link 从传输拓扑消失、升级链/排空链断裂。最近锚使 range1 到 controller 的
+ * link 胜过 range2 到 source，从根上消除劫持。
+ */
+export function classifyLinkRole(
+  link: LinkAnchorPoint,
+  sources: readonly LinkAnchorPoint[],
+  controller: LinkAnchorPoint | undefined,
+  storage: LinkAnchorPoint | undefined,
+  anchorRange = 2,
+): LinkRole {
+  const cheb = (a: LinkAnchorPoint, b: LinkAnchorPoint): number =>
+    Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+  let dSource = Infinity;
+  for (const s of sources) {
+    const d = cheb(link, s);
+    if (d < dSource) dSource = d;
+  }
+  const dController = controller ? cheb(link, controller) : Infinity;
+  const dStorage = storage ? cheb(link, storage) : Infinity;
+
+  // 候选：范围内的锚定角色，(距离, tie-break 优先级 pri 越大越优先)。
+  const candidates: { role: LinkRole; dist: number; pri: number }[] = [];
+  if (dSource <= anchorRange) candidates.push({ role: "source", dist: dSource, pri: 0 });
+  if (dStorage <= anchorRange) candidates.push({ role: "storage", dist: dStorage, pri: 1 });
+  if (dController <= anchorRange) candidates.push({ role: "controller", dist: dController, pri: 2 });
+  if (candidates.length === 0) return "hub";
+
+  // 最近锚获胜；距离相等时 pri 大者（controller > storage > source）优先。
+  candidates.sort((a, b) => a.dist - b.dist || b.pri - a.pri);
+  return candidates[0]!.role;
+}

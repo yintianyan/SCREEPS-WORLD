@@ -80,5 +80,28 @@ describe("harvester — source link 挖矿站位", () => {
     expect(creep.transfer).toHaveBeenCalledWith(container, "energy");
     expect(creep.moveTo).not.toHaveBeenCalled();
   });
+
+  it("range2 source link（container 隔在中间）→ 站 container 上同 tick 倒进 link（(40,44) 场景）", () => {
+    // 几何：source@41,46、container@40,45（贴 source，range1）、link@40,44（距 source range2、距 container range1）。
+    // 旧口径 sourceAdjacentLink 用 range≤1 到 source → 认不出此 link → 死 link 只灌 container。
+    // 新口径 range≤anchorRange(2) + role===source → 识别，harvester 站 container 上即 range1 够到 link → 倒 link。
+    const source = mockSource("src2");
+    source.pos = posAt(41, 46) as never;
+    const container = mockStructure("container", { id: "c2", energy: 0, capacity: 2000, hits: 2000, hitsMax: 2000 });
+    container.pos = posAt(40, 45) as never;
+    const link = mockStructure("link", { id: "lk2", energy: 0, capacity: 800 });
+    link.pos = posAt(40, 44) as never;
+    const snap = mockSnapshot({ sources: [source], containers: [container], links: [link] });
+    const creep = mockCreep({ name: "harvester_2", role: "harvester", used: 40, capacity: 50, mode: "work" });
+    creep.memory.sourceId = "src2";
+    creep.pos = posAt(40, 45) as never; // 站在 container 上（贴 source range1、贴 link range1）
+    creep.room.getTerrain = () => ({ get: () => 0 }) as never;
+
+    harvesterRole.run(creep, mockContext(snap));
+
+    // range2 的 link 被识别为 source link 并被灌能（link 优先于 container），无需重定位。
+    expect(creep.transfer).toHaveBeenCalledWith(link, "energy");
+    expect(creep.moveTo).not.toHaveBeenCalled();
+  });
 });
 

@@ -2,6 +2,7 @@ import type { Blueprint, BlueprintCell, BuildPriority, LayoutPhase, ValidationRe
 import { absPos, packPos, unpackPos } from "./types";
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { validateBuildCell, wouldSeal, type ValidationOptions } from "./validation";
+import { classifyLinkRole, type LinkRole } from "../economy/links";
 
 /** 蓝图单元转任务候选 — 包含验证结果。 */
 export interface BuildTaskCandidate {
@@ -263,6 +264,49 @@ export function createControllerContainerTask(
 }
 
 /**
+ * 判断候选格 (x,y) 在运行时是否会被分类为期望的 link 角色。
+ *
+ * 复用 link-system 运行时的 classifyLinkRole（最近锚获胜，anchorRange=2），
+ * 闭合「放置意图」与「运行时分类」之间的裂缝：
+ *
+ * 病灶 — 当 source 离核心较近（source 与 storage 的 Chebyshev 距离 ≤ 4）时，
+ * source 八邻域中某些格到 storage 比到该 source 更近，运行时被 classifyLinkRole
+ * 判为 storage 而非 source。放置侧（findAdjacentBuildable）只保证几何相邻、
+ * 不保证角色，会把 source link 建在该格上。后果：harvester 的 sourceAdjacentLink
+ * 要求 role==="source" 才灌能 → 该 link 永不被灌 → 被 link-system 当成第二个
+ * storage link，而 planLinkTransfers 用 find 只取第一个 storage link → 第二个
+ * storage link 永久惰化，RCL5 仅有的 2 个 link 槽位被静默浪费一个。
+ *
+ * 修复 — 放置侧只接受运行时分类与意图一致的格子，从根上消除误分类。
+ *
+ * anchorRange 取 2，必须与 CONFIG.economy.link.anchorRange 及 classifyLinkRole
+ * 默认值保持一致（放置侧为纯函数不访问 CONFIG，此处用字面量，改动需三处同步）。
+ */
+function linkRoleMatch(
+  snapshot: RoomSnapshot,
+  x: number,
+  y: number,
+  expected: LinkRole,
+): boolean {
+  const role = classifyLinkRole(
+    { x, y },
+    snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
+    snapshot.controller ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y } : undefined,
+    snapshot.storage ? { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y } : undefined,
+    2,
+  );
+  return role === expected;
+}
+
+/** 将 linkRoleMatch 包装为 findAdjacentBuildable 的候选格谓词。 */
+function linkRolePredicate(
+  snapshot: RoomSnapshot,
+  expected: LinkRole,
+): (c: { x: number; y: number }) => boolean {
+  return c => linkRoleMatch(snapshot, c.x, c.y, expected);
+}
+
+/**
  * 为 source 生成 link 任务（RCL5+）。
  * source link 紧邻 source 放置，harvester 采矿后直接 transfer 到 link，
  * 由 link 系统瞬移到 controller/storage link，替代 hauler 长途往返。
@@ -297,7 +341,12 @@ export function createSourceLinkTasks(
   for (const source of snapshot.sources) {
     if (candidates.length >= limit) break;
     if (hasAdjacentStructure(source.pos.x, source.pos.y, snapshot, STRUCTURE_LINK)) continue;
-    const adjacentPos = findAdjacentBuildable(source.pos, room, snapshot, options);
+    // 角色感知选位：只接受运行时分类为 source 的邻格（闭合放置意图与运行时分类）。
+    // source 邻近 storage/controller 时，部分邻格会被 classifyLinkRole 判为
+    // storage/controller → harvester 拒灌 → 死 link。谓词过滤从根上避免。
+    const adjacentPos = findAdjacentBuildable(
+      source.pos, room, snapshot, options, linkRolePredicate(snapshot, "source"),
+    );
     // 密封守卫：link 是障碍结构，出生即密封或封死邻居的位置不放。
     if (adjacentPos && options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
       continue;
@@ -342,7 +391,9 @@ export function createControllerLinkTask(
   ).length;
   if (existingLinks + linkSites + queuedLinkCount >= maxLinks) return undefined;
 
-  const adjacentPos = findAdjacentBuildable(controller.pos, room, snapshot, options);
+  const adjacentPos = findAdjacentBuildable(
+    controller.pos, room, snapshot, options, linkRolePredicate(snapshot, "controller"),
+  );
   if (!adjacentPos) return undefined;
   // 密封守卫：link 是障碍结构。
   if (options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
@@ -396,7 +447,10 @@ export function createStorageLinkTask(
   if (existingLinks + linkSites + queuedLinkCount >= maxLinks) return undefined;
 
   // 在 storage 附近 1 格内寻找可建造位置（link 不需要站桩位，只需紧邻 storage）。
-  const adjacentPos = findAdjacentBuildable(snapshot.storage.pos, room, snapshot, options);
+  // 角色感知：只接受运行时分类为 storage 的邻格（闭合放置意图与运行时分类）。
+  const adjacentPos = findAdjacentBuildable(
+    snapshot.storage.pos, room, snapshot, options, linkRolePredicate(snapshot, "storage"),
+  );
   if (!adjacentPos) return undefined;
   // 密封守卫：link 是障碍结构。
   if (options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
@@ -506,12 +560,19 @@ function hasAdjacentStructure(
  * harvester/upgrader 站桩时需要站在 container 相邻格，若 container 落在
  * 三面是墙的凹位，站桩 creep 无处站立，退化成每 tick 挪一步。
  * 先收集所有可建造候选，优先返回有站立格的；都没有时回退到任意可建造格。
+ *
+ * predicate（可选）：候选格的额外准入条件（默认恒真）。link 放置传入
+ * linkRolePredicate，只接受运行时角色分类与放置意图一致的格子 —— 闭合
+ * 「放置意图」与「运行时分类」的裂缝（详见 linkRoleMatch 注释）。
+ * 站立格偏好与回退路径都先经 predicate 过滤，container 等不传 predicate 的
+ * 调用方行为完全不变。
  */
 function findAdjacentBuildable(
   center: RoomPosition,
   room: Room,
   snapshot: RoomSnapshot,
   options: ValidationOptions,
+  predicate: (c: { x: number; y: number }) => boolean = () => true,
 ): { x: number; y: number; roomName: string } | undefined {
   const terrain = room.getTerrain();
   // 优先使用预计算的占用集合（每规划周期构建一次），否则回退到本地构建。
@@ -526,6 +587,7 @@ function findAdjacentBuildable(
       if (x < 1 || x > 48 || y < 1 || y > 48) continue;
       if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
       if (occupiedSet.has(packPos(x, y))) continue;
+      if (!predicate({ x, y })) continue;
       candidates.push({ x, y });
     }
   }

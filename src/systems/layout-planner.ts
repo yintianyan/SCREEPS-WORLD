@@ -260,6 +260,7 @@ export const layoutPlannerSystem: System & {
         energyEndpoints,
         // Lab 集群续接：新增 lab 必须落在既有集群 range<=2 内（反应 trio 约束）。
         snapshot.labs.map(l => ({ x: l.pos.x, y: l.pos.y })),
+        snapshot.roomName,
       );
       const constraintCandidates = placementsToCandidates(placements, snapshot.roomName);
 

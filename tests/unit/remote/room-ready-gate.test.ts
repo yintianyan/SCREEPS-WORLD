@@ -50,4 +50,11 @@ describe("remote 逐房就绪门 — roomReadyForNewRemote", () => {
   it("colonyState 缺失（undefined）→ 拒绝（保守）", () => {
     expect(roomReadyForNewRemote(snap(minRcl + 1, minStore + 50000), undefined)).toBe(false);
   });
+
+  it("Tier0 降门：storage 1 万（原 2 万门挡住）+ RCL≥门限 + normal → 放行", () => {
+    // 贫困陷阱修复：门槛从 20000 降到 8000，让 storage 常年见底的房也能开远矿补收入。
+    // 硬编码 10000 作回归锚：若有人把 roomMinStorage 调回 >10000，此测试立即失败。
+    expect(roomReadyForNewRemote(snap(minRcl, 10000), "normal")).toBe(true);
+    expect(CONFIG.remote.roomMinStorage).toBeLessThanOrEqual(10000);
+  });
 });
