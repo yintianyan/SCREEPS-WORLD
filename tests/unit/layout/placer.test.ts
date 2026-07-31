@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeDistanceField } from "../../../src/domain/layout/terrain-analysis";
-import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG } from "../../../src/domain/layout/constraint-placer";
+import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG, buildCandidateGrid } from "../../../src/domain/layout/constraint-placer";
 import { packPos } from "../../../src/domain/layout/types";
 
 const noWalls = (_x: number, _y: number): boolean => false;
@@ -169,6 +169,66 @@ describe("constraint-placer — placeStructures", () => {
       expect(keys.has(p.key)).toBe(false);
       keys.add(p.key);
     }
+  });
+});
+
+// P2-N：增量外扩与全量重算的等价性验证 — 红线：placeStructures 输出不得因增量改变。
+describe("constraint-placer — P2-N 增量与全量等价", () => {
+  it("无墙地形：增量 r=8 == 全量 r=8", () => {
+    const field = computeDistanceField(noWalls);
+    const anchor = { x: 25, y: 25 };
+    const config = { ...DEFAULT_PLACER_CONFIG, maxRadius: 8 };
+    const eps = [{ x: 10, y: 10 }, { x: 40, y: 40 }];
+
+    const full = buildCandidateGrid(anchor, field, noWalls, config, eps);
+    const prev = buildCandidateGrid(anchor, field, noWalls, { ...config, maxRadius: 7 }, eps);
+    const incr = buildCandidateGrid(anchor, field, noWalls, config, eps, prev, 7);
+
+    expect(incr.length).toBe(full.length);
+    for (let i = 0; i < full.length; i++) {
+      expect(incr[i]!.x).toBe(full[i]!.x);
+      expect(incr[i]!.y).toBe(full[i]!.y);
+      expect(incr[i]!.score).toBe(full[i]!.score);
+    }
+  });
+
+  it("墙地形：增量 r=10 == 全量 r=10", () => {
+    const walls = centerBlock(25, 25, 3);
+    const field = computeDistanceField(walls);
+    const anchor = { x: 25, y: 25 };
+    const config = { ...DEFAULT_PLACER_CONFIG, maxRadius: 10 };
+
+    const full = buildCandidateGrid(anchor, field, walls, config);
+    const prev = buildCandidateGrid(anchor, field, walls, { ...config, maxRadius: 9 });
+    const incr = buildCandidateGrid(anchor, field, walls, config, [], prev, 9);
+
+    expect(incr.length).toBe(full.length);
+    for (let i = 0; i < full.length; i++) {
+      expect(incr[i]!.x).toBe(full[i]!.x);
+      expect(incr[i]!.y).toBe(full[i]!.y);
+      expect(incr[i]!.score).toBe(full[i]!.score);
+    }
+  });
+
+  it("不传 prev 时走全量路径（向后兼容）", () => {
+    const field = computeDistanceField(noWalls);
+    const anchor = { x: 25, y: 25 };
+    const config = { ...DEFAULT_PLACER_CONFIG, maxRadius: 7 };
+
+    const a = buildCandidateGrid(anchor, field, noWalls, config);
+    const b = buildCandidateGrid(anchor, field, noWalls, config);
+    expect(a).toEqual(b);
+  });
+
+  it("maxRadius != prevRadius+1 时走全量路径（增量条件不满足）", () => {
+    const field = computeDistanceField(noWalls);
+    const anchor = { x: 25, y: 25 };
+    const config = { ...DEFAULT_PLACER_CONFIG, maxRadius: 8 };
+
+    const full = buildCandidateGrid(anchor, field, noWalls, config);
+    // prevRadius=5 但 maxRadius=8（不是 5+1=6）→ 走全量。
+    const fallback = buildCandidateGrid(anchor, field, noWalls, config, [], [], 5);
+    expect(fallback.length).toBe(full.length);
   });
 });
 

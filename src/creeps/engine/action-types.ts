@@ -90,4 +90,17 @@ export interface RolePolicy {
    * 攻击候选永远轮不到执行，角色形同虚设。
    */
   combat?: boolean;
+  /**
+   * 无候选时是否切 idle 的额外条件（P2-M）。
+   *
+   * role-runner 默认 idle 逻辑：本地角色（无 remoteTarget）或到达 remoteTarget 房时切 idle；
+   * 通勤中（有 remoteTarget 但不在目标房）保持原 mode，避免 idle→ensureHome→home 振荡。
+   *
+   * 此钩子让角色声明"前两个通用条件未命中时，是否仍切 idle"的特例。
+   * 典型用例：remoteHauler work 模式在 home 房无候选时切 idle（ensureHome 保持在家），
+   * 但 acquire 模式在 home 房不切 idle（ensureHome 导航去 remoteTarget）。
+   *
+   * 返回 true → 切 idle；返回 false/undefined → 走默认逻辑（不切 idle）。
+   */
+  shouldIdleWhenNoCandidate?(ac: ActionContext): boolean;
 }

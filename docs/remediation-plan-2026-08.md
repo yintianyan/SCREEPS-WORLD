@@ -14,6 +14,15 @@
 > **2 个设计缺口**（P0-A siteCount 账本只增不减 + tick 配额仲裁缺失）、
 > **6 处引用/表述偏差**（G :188、I 角色数、K 行号、min-cut 缓存非 segment、「100 site」为引擎硬限制、A 限流行号）。
 > 受影响条目下均以「评审修正」小节标注；实施前必须按修正后方案执行。
+>
+> **评审记录（2026-08-01 第三轮 review）**：已提交 Batch 1-4 + 工作区 Batch 5 收尾审查。
+> Batch 1-4 八条目（B/A/C/D/E/F/G/H/I/J）按修正后方案**全部验证通过**——含两个评审
+> 修正必须项：B 的 totalNodes+四 typed array 扩容（min-cut-defense.ts:175-182）、
+> A 的 siteCount 实测校正（remote-mining-manager.ts:664-667）。
+> Batch 5 审查结论 **PASS_WITH_SUGGESTIONS**（工作区未提交 diff 649+ 行）：
+> K/L/M/N/O + R2/R3/R4/R6/R7 全部落地，无 BLOCKER/HIGH；3 个新问题 R8-R10
+> （见文末「Batch 5 验收追加」）：P2-M 缺回归测试（MEDIUM）、kernel→pathfinding
+> 分层债务（MEDIUM）、P2-N 表述不精确（LOW）。
 
 ## 0. 总览
 
@@ -126,6 +135,10 @@ execute 分支（保留冷却逻辑），无 Memory 结构变更，无迁移负�
 4. **表述修正**：限流判定实际在 construction-manager.ts:67-73（原稿 :30-31 是
    每 tick 计数变量声明）；「100 site 上限」为游戏引擎硬限制（无代码常量）。
 
+> **✅ 已落实（第三轮 review 验证）**：siteCount 实测校正（remote-mining-manager.ts:664-667
+> 每次运行 `room.find(FIND_CONSTRUCTION_SITES)` 实测回写）+ 配额仲裁（:706-712 远矿让位
+> emergency、双维度账本落 site-quota.ts）+ 守卫测试（remote-site-guard.test.ts）。
+
 ---
 
 ## P0-B：min-cut 超级源汇节点冲突
@@ -195,6 +208,11 @@ const SUPER_SINK = nodeCount + 1;   // 5001
 5. **缓存机制修正**：min-cut 结果缓存在 globalCache（`__minCutCache`，key=roomName
    + coreSignature）与 Memory（`roomMem.minCut`），**非 segment**（min-cut-defense.ts:27
    注释过时）。`mincut-v2` 版本戳打在两者上，不涉及 segment。
+
+> **✅ 已落实（第三轮 review 验证）**：SUPER_SOURCE/SINK = 5000/5001
+> （min-cut-defense.ts:152-153）、totalNodes+四数组扩容到 nodeCount+2（:175-182）、
+> MINCUT_ALGO_VERSION="v2" 惰性失效（:42 + defense-planner.ts:60-62）、
+> 显式 `complete===true` 回归（min-cut.test.ts:96-104）。
 
 ---
 
@@ -516,7 +534,7 @@ domain 恢复纯函数，两个迟滞状态获得迁移保护，单测不再需�
 | Batch 2（已完成 ✅） | A（远矿 site 收编 + site-quota 账本）+ C（defender 缓存）+ D（走廊共享） | 同上 + 远矿集成场景 |
 | Batch 3（已完成 ✅） | E（寻路限频）+ F（layout 分片/相位 + recoveryEligible）+ G（dangerUntil 搬家） | 同上 + 双房 CPU 采样 |
 | Batch 4（已完成 ✅） | H（cancelRequestsByHome）+ I（tuning 版本戳 + TUNABLE_ROLES 单源）+ J（domain 收口）+ R1（分片等价测试，前置） | 同上 + 迁移测试 |
-| Batch 5（排期） | K/L/M/N/O + R2/R3/R4/R6（验收追加，见下两节） | 同上 |
+| Batch 5（已实现，待提交 ✅） | K/L/M/N/O + R2/R3/R4/R6/R7（工作区 diff 649+ 行；review PASS_WITH_SUGGESTIONS，3 个新问题 R8-R10 见文末「Batch 5 验收追加」） | 同上 + 验收追加测试 |
 
 **每批独立 PR、独立回滚**。schemaVersion 变更（F/G/I/J 各一次）集中在 Batch 3-4，
 部署选 bucket 高位窗口，部署后观察 1000 tick 的遥测 skipHotspot 与 CPU 均值。
@@ -552,6 +570,37 @@ tuning-engine 首跑检测 undefined ≠ CONFIG 触发清零（迁移直接定�
 |---|------|------|------|------|
 | R6 | P2 | TUNABLE_ROLES ↔ CONFIG.roles 无双向守卫。tuned.ts 注释称对齐由 role-config-parity 断言，但该测试只覆盖 CONFIG.roles ↔ bootstrap 注册表——新增第 14 个角色时 TUNABLE_ROLES 静默漏配（无钳制、无快照），正是 I 项要消灭的漂移类别断在最后一环 | config/tuned.ts:24-47 | Batch 5：role-config-parity（或新守卫）断言 TUNABLE_ROLES 与 Object.keys(CONFIG.roles) 双向相等 |
 | R7 | 提醒 | baselineVersion 检查在 tuning-engine 每 500 tick 评估周期内执行，CONFIG 升版后旧覆盖最长残留 500 tick。行为可接受 | systems/tuning-engine.ts:61-72 | 已确认。Batch 5 顺手把该预期写进 CONFIG.tuning.baselineVersion 注释 |
+
+---
+
+## Batch 5 验收追加（2026-08-01 review）
+
+验收基线（工作区未提交状态）：typecheck 全绿；112 测试文件 1312/1312 通过。
+K/L/M/N/O 五项 + 前批遗留 R2/R3/R4/R6/R7 全部落地，review 结论 **PASS_WITH_SUGGESTIONS**
+（无 BLOCKER/HIGH，3 个新问题 R8-R10 见下表）。
+
+### 实现验证表
+
+| # | 条目 | 实现验证 |
+|---|------|---------|
+| K | spawn churn 可观测性 | ✅ `cleanQueue` 加可选 `onPurge` 回调（queue.ts:97-129，不传回调行为完全等价；purgedKeys 仍只含 retries 路径，黑名单契约不变）；spawn-manager 转译 `recordSkip('spawn/churn/{role}/{reason}')`（spawn-manager.ts:53-64）；6 测试覆盖两路删除/顺序/兼容性 |
+| L | 路径缓存清理 | ✅ `pruneDeadCreepCache` 放 pathfinding（cache 属主，memory.ts 不感知字段名），kernel 每 100 tick `safeRun` 触发（kernel.ts:95-101）；6 测试（空/全活/全死/混合/幂等/未初始化） |
+| M | 引擎去硬编码 | ✅ remoteHauler 特判下沉为 `RolePolicy.shouldIdleWhenNoCandidate` 可选钩子（action-types.ts:93-106、role-runner.ts:201-208、remote-hauler.ts:166-173）；逐行验证与旧硬编码语义**完全等价**（`||` 短路保证钩子仅在「有 remoteTarget 且不在目标房」求值；role 由 policy 归属保证）。**缺回归测试 → R8** |
+| N | 增量网格 | ✅ `buildCandidateGrid` 增量环带 + (x,y) tiebreaker 确定性总序（constraint-placer.ts:141-213, 327-341）；4 等价性测试（无墙 r8 / 墙 r10 / 向后兼容 / 增量条件不满足回退全量） |
+| O | 扫描收窄 | ✅ `Object.values(Game.creeps)` → `creep.room.find(FIND_MY_CREEPS)`（remote-harvester.ts:53-62）；过路房兄弟不计入的语义差异显式注释 + 2 定向测试 |
+| R2 | 多源房隔离 | ✅ `sourcesWithSite` 按 site 邻接 source（range<=1）收窄清标记（remote-mining-manager.ts:664-707）；2 测试验证「A 源 site 不阻塞 B 源申请」 |
+| R3 | 收集提桶 | ✅ 申请者收集提到 per-room 循环外单遍分桶，O(M) 替代 O(R×M)（remote-mining-manager.ts:641-652） |
+| R4 | 区块量化注释 | ✅ config/index.ts 加 R4 注：实现不区分动静态目标，同区块相邻目标错走 1 tick 自愈，接受现状（改名收益不抵成本） |
+| R6 | TUNABLE_ROLES 双向守卫 | ✅ role-config-parity.test.ts 补 `TUNABLE_ROLES ↔ Object.keys(CONFIG.roles)` 双向断言 |
+| R7 | baselineVersion 窗口注释 | ✅ config/index.ts 加 R7 注：旧覆盖最长残留 500 tick（evalInterval），可接受，需立即清空可手动改 Memory |
+
+### 新发现问题（本轮无 BLOCKER/HIGH）
+
+| # | 级别 | 问题 | 位置 | 去向 |
+|---|------|------|------|------|
+| R8 | MEDIUM | P2-M 钩子化**零回归测试**：`shouldIdleWhenNoCandidate` 重构无测试锁住等价性（grep tests/ 零命中）。逐行验证等价成立，但未来改动可致 idle→ensureHome 死循环回归（原线上问题） | role-runner.ts:201-208 + remote-hauler.ts:166-173 | 补 3 断言：①remoteHauler work 在 home 房无候选 → idle；②acquire 在 home 房不 idle；③无钩子角色同条件走默认逻辑（不因 undefined 误切） |
+| R9 | MEDIUM | kernel 直接 `import { pruneDeadCreepCache } from "../creeps/movement/pathfinding"`（kernel.ts:17,95-101）——kernel 刚用 recoveryEligible 移除 system 名字硬编码，又引入业务模块具体函数依赖，违反 §2.1「内核不感知业务」分层方向。权衡合理（cache 属主清理、100 tick 低频）但值得登记 | kernel.ts:17,95-101 | 二选一：接受现状并在注释登记；或挂 registry 维护钩子（kernel 只遍历注册表，顺带解决 R8 的测试挂点） |
+| R10 | LOW | P2-N 注释「避免 9 倍重算」不精确——增量只省**评分计算**（opennessAt + energyPenalty），`candidates.sort()` 仍是 O(n log n) 全量排序，候选数未减 | constraint-placer.ts:327 | 注释改为「避免全量重新评分」 |
 
 ## 红线
 

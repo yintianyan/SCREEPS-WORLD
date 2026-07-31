@@ -7,6 +7,7 @@ import type { ColonyState } from "../kernel/contracts";
 import { cleanQueue, removeRequestsByRole, sortQueue, submitRequest } from "../domain/spawn/queue";
 import { selectRecycleCandidates } from "../domain/spawn/recycle";
 import { moveToTarget, moveTowardRoom } from "../creeps/movement";
+import { recordSkip } from "../kernel/memory";
 
 /**
  * 孵化管理器 — 唯一调用 spawnCreep 的模块。
@@ -49,7 +50,16 @@ export const spawnManagerSystem: System = {
       //    导致 harvesterCount > 0 → P0 worker 恢复请求不创建 → 死锁。
       //    SP-2：达重试上限的 key 记入黑名单冷却（1 个 TTL 窗口）—
       //    持久性配置错误不再「删除 → demand 重建 → 再失败」无限翻炒。
-      const purgedKeys = cleanQueue(queue, ctx.tick, CONFIG.spawn.maxRetries);
+      //    P2-K：onPurge 回调把两种 churn（retries 烧穿 / TTL 过期）转译为
+      //    recordSkip 指标，按角色维度聚合 — key 形如 `role:home:source?:index`，
+      //    split(':')[0] 取 role 作为指标标签（remote-hauler 等 kebab-case 角色
+      //    不含 ':'，split 安全）。指标写入 global 缓冲，由 flushSkips 低频落盘。
+      const purgedKeys = cleanQueue(
+        queue,
+        ctx.tick,
+        CONFIG.spawn.maxRetries,
+        (key, reason) => recordSkip(`spawn/churn/${key.split(":")[0]}/${reason}`),
+      );
       if (purgedKeys.length > 0) {
         roomMem.spawnBlacklist ??= {};
         for (const key of purgedKeys) {

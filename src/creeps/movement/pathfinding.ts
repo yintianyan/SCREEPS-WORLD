@@ -431,6 +431,31 @@ function getCreepPathCache(): Record<string, CreepPathEntry> {
   return g.__creepPathCache;
 }
 
+/**
+ * 清理 __creepPathCache 中已死亡 creep 的残留条目，返回清理数。
+ *
+ * P2-L：creep 死亡时其 path cache 不会被自动回收（global 状态无析构），
+ * 长期运行会积累 stale entry 占内存。kernel 每 100 tick 调用本函数兜底回收。
+ *
+ * 设计权衡：清理逻辑放在 pathfinding（cache 属主）而非 memory.ts —
+ * memory.ts 不应感知 movement 的实现细节（__creepPathCache 字段名）。
+ * kernel 触发清理动作但不读写字段，与 maintainMemory 清理 Memory.creeps
+ * 同属内存卫生范畴，但职责分离到各自模块。
+ *
+ * @internal 业务代码不直接调用，唯一入口是 kernel 的低频维护循环。
+ */
+export function pruneDeadCreepCache(): number {
+  const cache = getCreepPathCache();
+  let pruned = 0;
+  for (const name of Object.keys(cache)) {
+    if (!Game.creeps[name]) {
+      delete cache[name];
+      pruned++;
+    }
+  }
+  return pruned;
+}
+
 function tryPersistedPath(
   creep: Creep,
   targetPacked: number,
@@ -541,6 +566,7 @@ export function acquirePathBudget(roomName: string, max: number): boolean {
  *
  * P1-E 三档限频（仅作用于 cache miss 的重算路径，缓存命中不受影响）：
  *   档 1 quantizeDynamicTarget：缓存 key 用 3×3 区块，动态目标区块内移动不 miss。
+ *        （R4 注：字段名含 "Dynamic" 但实现不区分动静态目标 — 见 config/index.ts 同名字段注释。）
  *   档 2 dynamicRepathInterval：冷却内不调 PathFinder.search，沿旧路径/直走降级。
  *        forceRepath（卡位）豁免 — 卡位 creep 必须拿到新路径。
  *   档 3 maxSearchesPerRoomPerTick：每房每 tick search 上限，超预算降级让行。

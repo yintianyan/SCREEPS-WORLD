@@ -163,6 +163,13 @@ function findDroppedEnergy(creep: Creep): Resource | undefined {
 
 const policy: RolePolicy = {
   park: true,
+  // P2-M：原 role-runner 硬编码 `role === "remoteHauler" && mode === "work" && room === home`
+  //   下沉为角色钩子。work 在 home 房无候选时切 idle（ensureHome 保持在家）；
+  //   acquire 在 home 房不切 idle（保持 acquire mode，ensureHome 导航去 remoteTarget）。
+  shouldIdleWhenNoCandidate: (ac) => {
+    const c = ac.creep;
+    return c.memory.mode === "work" && c.room.name === c.memory.home;
+  },
   acquire: [
     // 优先从 container 取能。
     withdrawRemoteContainer(),

@@ -158,6 +158,76 @@ describe("SpawnQueue — cleanQueue", () => {
   });
 });
 
+// P2-K：onPurge 回调覆盖两种 churn 路径 — 让调用方把删除事件转译为遥测指标。
+// 纯函数契约：不传回调时行为完全等价于改动前（向后兼容）。
+describe("SpawnQueue — cleanQueue onPurge 回调 (P2-K)", () => {
+  it("retries 烧穿时回调以 reason='retries' 触发", () => {
+    const queue: SpawnRequest[] = [makeRequest("failed")];
+    queue[0]!.retries = 5;
+    const events: Array<{ key: string; reason: "retries" | "expired" }> = [];
+    cleanQueue(queue, 100, 5, (key, reason) => events.push({ key, reason }));
+    expect(events).toEqual([{ key: "failed", reason: "retries" }]);
+  });
+
+  it("TTL 过期时回调以 reason='expired' 触发", () => {
+    const queue: SpawnRequest[] = [makeRequest("expired")];
+    queue[0]!.expiresAt = 50;
+    const events: Array<{ key: string; reason: "retries" | "expired" }> = [];
+    cleanQueue(queue, 100, 5, (key, reason) => events.push({ key, reason }));
+    expect(events).toEqual([{ key: "expired", reason: "expired" }]);
+  });
+
+  it("混合场景按删除顺序触发回调（retries 与 expired 共存）", () => {
+    // 倒序遍历：从尾部向头部 splice。构造 [expired, failed, ok] 让顺序可断言。
+    const queue: SpawnRequest[] = [
+      makeRequest("expired"),
+      makeRequest("failed"),
+      makeRequest("ok"),
+    ];
+    queue[0]!.expiresAt = 50;
+    queue[1]!.retries = 5;
+    const events: Array<{ key: string; reason: "retries" | "expired" }> = [];
+    cleanQueue(queue, 100, 5, (key, reason) => events.push({ key, reason }));
+    // 倒序遍历：先处理 queue[2]=ok（保留），再 queue[1]=failed（retries），再 queue[0]=expired。
+    expect(events).toEqual([
+      { key: "failed", reason: "retries" },
+      { key: "expired", reason: "expired" },
+    ]);
+    expect(queue.map(r => r.key)).toEqual(["ok"]);
+  });
+
+  it("不传回调时行为完全等价于改动前（向后兼容）", () => {
+    const queue: SpawnRequest[] = [makeRequest("failed"), makeRequest("expired"), makeRequest("ok")];
+    queue[0]!.retries = 5;
+    queue[1]!.expiresAt = 50;
+    const purged = cleanQueue(queue, 100, 5);
+    // purgedKeys 仍只含 retries 路径 — 黑名单契约不变。
+    expect(purged).toEqual(["failed"]);
+    expect(queue.map(r => r.key)).toEqual(["ok"]);
+  });
+
+  it("purgedKeys 仍只含 retries 路径（黑名单契约不变）", () => {
+    const queue: SpawnRequest[] = [makeRequest("failed"), makeRequest("expired")];
+    queue[0]!.retries = 5;
+    queue[1]!.expiresAt = 50;
+    const purged = cleanQueue(queue, 100, 5, () => {});
+    // TTL 过期不入 purgedKeys — 过期是正常生命周期，不该入黑名单。
+    expect(purged).toEqual(["failed"]);
+  });
+
+  it("key.split(':')[0] 提取角色维度 — kebab-case 角色名安全", () => {
+    // spawnKey 格式 `role:home:source?:index` — role 是 kebab-case（如 remote-hauler），
+    // 不含 ':'，split(':')[0] 安全。此处验证调用方 split 提取逻辑。
+    const queue: SpawnRequest[] = [
+      { ...makeRequest("remote-hauler:W1N1:src1:0"), role: "remote-hauler" },
+    ];
+    queue[0]!.retries = 5;
+    const roles: string[] = [];
+    cleanQueue(queue, 100, 5, (key) => roles.push(key.split(":")[0] ?? ""));
+    expect(roles).toEqual(["remote-hauler"]);
+  });
+});
+
 describe("SpawnQueue — cancelRequestsByHome", () => {
   // P1-H：扩张 abort 时清掉 sponsor 队列中寄宿的拓荒请求，原本由
   // expansion-manager 直接 splice，现收敛为纯函数。语义必须严格匹配

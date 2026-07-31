@@ -80,6 +80,11 @@ export const CONFIG = {
      * 修改 CONFIG.roles 任何 minCount/maxCount 时必须 +1 此版本号。
      * tuning-engine 首次运行（无 Memory）时此字段为 undefined，
      * 自动触发首次定版（写入当前 CONFIG 值，无覆盖可清）。
+     *
+     * R7 注：版本检查在 tuning-engine 每 evalInterval(500 tick) 评估周期开头执行
+     * （见 tuning-engine.ts:61-75），CONFIG 升版后存量旧覆盖最长残留 500 tick
+     * 才被清空 — 行为可接受（自调优会重新收敛，无需立即生效）。
+     * 部署 CONFIG.roles 基线变更后若需立即清空，可手动改 Memory 或等下个评估周期。
      */
     baselineVersion: 1,
   },
@@ -202,6 +207,11 @@ export const CONFIG = {
      *
      * 三档限频（独立开关，默认 1+2 开、3 关）：
      *   档 1 quantizeDynamicTarget：目标驻留量化 — 3×3 区块 key 替代精确格，
+     *   （R4 注：字段名含 "Dynamic" 但实现不区分动静态目标 — 静态目标同样量化，
+     *   同 3×3 区块内两个相邻静态目标会共享缓存 key 错走 1 tick，路径耗尽后
+     *   nextDirFromPath 返回 undefined 触发 cache 失效、下 tick 重算自愈。
+     *   概率低代价小，接受现状；改名涉及 6 处测试用例与运行时配置兼容性，
+     *   收益不抵成本，故以注释澄清而非改名。）
      *     目标在区块内移动不触发重寻路，沿旧路径走。
      *   档 2 dynamicRepathInterval：同一 creep 两次 PathFinder.search 最小间隔
      *     （tick）。冷却内沿旧路径走一步，旧路径空则 getDirectionTo 直走降级。

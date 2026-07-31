@@ -138,51 +138,82 @@ interface CandidateTile {
  * @param energyEndpoints 能量端点位置（source/controller），用于计算能量流转距离惩罚。
  *   为空时退化为纯几何评分（向后兼容）。
  */
-function buildCandidateGrid(
+/** @internal 导出仅供单测验证 P2-N 增量与全量等价性。 */
+export function buildCandidateGrid(
   anchor: { x: number; y: number },
   field: DistanceField,
   getTerrain: (x: number, y: number) => boolean,
   config: PlacerConfig,
   energyEndpoints: readonly { x: number; y: number }[] = [],
+  prevCandidates?: readonly CandidateTile[],
+  prevRadius?: number,
 ): CandidateTile[] {
-  const candidates: CandidateTile[] = [];
   const { maxRadius, minOpenness } = config;
+
+  // P2-N：增量模式 — prevCandidates 与 prevRadius 提供 且 maxRadius == prevRadius+1。
+  const useIncremental = prevCandidates !== undefined && prevRadius !== undefined && maxRadius === prevRadius + 1;
+
+  // 候选格评分函数（提取避免增量/全量两份重复逻辑）。
+  const scoreTile = (dx: number, dy: number): CandidateTile | undefined => {
+    const x = anchor.x + dx;
+    const y = anchor.y + dy;
+    if (x < 2 || x > 47 || y < 2 || y > 47) return undefined;
+    if (getTerrain(x, y)) return undefined;
+    const openness = opennessAt(field, x, y);
+    if (openness < minOpenness) return undefined;
+    const dist = Math.abs(dx) + Math.abs(dy);
+    let energyPenalty = 0;
+    if (energyEndpoints.length > 0) {
+      let minEnergyDist = Infinity;
+      for (const ep of energyEndpoints) {
+        const d = Math.abs(ep.x - x) + Math.abs(ep.y - y);
+        if (d < minEnergyDist) minEnergyDist = d;
+      }
+      energyPenalty = minEnergyDist * 0.5;
+    }
+    return { x, y, score: openness * 2 - dist - energyPenalty };
+  };
+
+  // P2-N：排序需确定性 tiebreaker — 同分元素按 (x,y) 升序兜底。
+  // 原因：JS 稳定排序保留输入序，但全量路径输入序为扫描序（dx/dy 升序），
+  // 增量路径输入序为「prev 排序序 + 新环带扫描序」，两者对同分元素产生不同
+  // 最终顺序 → 增量与全量不等价。加 (x,y) tiebreaker 后：
+  //   1) 全量路径扫描序本身就是 x/y 升序，tiebreaker 与之完全一致 → 无回归
+  //   2) 增量路径同分元素被强制对齐到 (x,y) 序 → 与全量严格相等
+  // 附带收益：代际稳定性提升 — 同分候选不再受输入顺序漂移影响。
+  const sortByScore = (a: CandidateTile, b: CandidateTile): number => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (a.x !== b.x) return a.x - b.x;
+    return a.y - b.y;
+  };
+
+  if (useIncremental) {
+    // 增量：复制 prev 候选，只评分新环带格（|dx| 或 |dy| == maxRadius），合并后重排序。
+    const candidates: CandidateTile[] = [...prevCandidates!];
+    for (let dx = -maxRadius; dx <= maxRadius; dx++) {
+      for (let dy = -maxRadius; dy <= maxRadius; dy++) {
+        if (((dx + dy) % 2 + 2) % 2 !== 0) continue;
+        if (Math.abs(dx) !== maxRadius && Math.abs(dy) !== maxRadius) continue;
+        const tile = scoreTile(dx, dy);
+        if (tile) candidates.push(tile);
+      }
+    }
+    candidates.sort(sortByScore);
+    return candidates;
+  }
+
+  const candidates: CandidateTile[] = [];
 
   for (let dx = -maxRadius; dx <= maxRadius; dx++) {
     for (let dy = -maxRadius; dy <= maxRadius; dy++) {
       // 偶校验（棋盘格不变量）
       if (((dx + dy) % 2 + 2) % 2 !== 0) continue;
-
-      const x = anchor.x + dx;
-      const y = anchor.y + dy;
-
-      // 边界（留出 2 格安全距离）
-      if (x < 2 || x > 47 || y < 2 || y > 47) continue;
-      // 非墙
-      if (getTerrain(x, y)) continue;
-      // 开放度门槛
-      const openness = opennessAt(field, x, y);
-      if (openness < minOpenness) continue;
-
-      const dist = Math.abs(dx) + Math.abs(dy);
-
-      // 能量端点距离惩罚：到最近端点的曼哈顿距离 × 0.5。
-      // 权重 0.5 让它不会压倒 openness/anchor 距离，只在同等条件下偏好靠近能量端点的格子。
-      let energyPenalty = 0;
-      if (energyEndpoints.length > 0) {
-        let minEnergyDist = Infinity;
-        for (const ep of energyEndpoints) {
-          const d = Math.abs(ep.x - x) + Math.abs(ep.y - y);
-          if (d < minEnergyDist) minEnergyDist = d;
-        }
-        energyPenalty = minEnergyDist * 0.5;
-      }
-
-      candidates.push({ x, y, score: openness * 2 - dist - energyPenalty });
+      const tile = scoreTile(dx, dy);
+      if (tile) candidates.push(tile);
     }
   }
 
-  candidates.sort((a, b) => b.score - a.score);
+  candidates.sort(sortByScore);
   return candidates;
 }
 
@@ -296,9 +327,15 @@ export function placeStructures(
   const totalNeeded = computeTotalNeeded(rcl, committed);
   let effectiveRadius = config.maxRadius;
   let candidates = buildCandidateGrid(anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints);
+  // P2-N：增量外扩 — 传 prevCandidates + prevRadius，buildCandidateGrid 只评分新环带格，
+  //   避免每次外扩 O((2r+1)²) 全量重算。结果与全量等价（候选集 + sort 相同）。
   while (candidates.length < totalNeeded && effectiveRadius < MAX_SEARCH_RADIUS) {
+    const prevRadius = effectiveRadius;
     effectiveRadius++;
-    candidates = buildCandidateGrid(anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints);
+    candidates = buildCandidateGrid(
+      anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints,
+      candidates, prevRadius,
+    );
   }
 
   const occupied = new Set<number>(preOccupied);

@@ -14,6 +14,7 @@ import { createBudget } from "./scheduler";
 import { emitSummary, initTelemetry } from "./telemetry";
 import { Registry } from "./registry";
 import { buildRoomSnapshot } from "../systems/room-snapshot";
+import { pruneDeadCreepCache } from "../creeps/movement/pathfinding";
 import { globalCache } from "./global-cache";
 
 /** 具体 TickContext，包含用于内核设置的内部变更方法。 */
@@ -90,6 +91,13 @@ export class Kernel {
     //    关键步骤：永不冷却。
     safeRun("memory-migrate", () => runMigrations(), true);
     safeRun("memory", () => maintainMemory(), true);
+
+    // P2-L：每 100 tick 清理 __creepPathCache 中死 creep 的残留条目。
+    //   global 状态无析构，creep 死亡后 cache 条目残留累积内存。
+    //   低频触发（非每 tick）— 清理是兜底卫生，不值得常态 CPU。
+    if (Game.time % 100 === 0) {
+      safeRun("prune-path-cache", () => pruneDeadCreepCache());
+    }
 
     // 3.5 遥测 — 初始化单 tick 计数器。
     initTelemetry(Game.time);

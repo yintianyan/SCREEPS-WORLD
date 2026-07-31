@@ -633,24 +633,55 @@ export function fulfillContainerRequests(
 ): void {
   const counters = getTickSiteCounters();
 
+  // R3：申请者收集提到 per-room 循环外，单遍按 remoteTarget 分桶。
+  // R 个 active 远矿房原本需 R 次全量 Game.creeps 遍历（O(R×M)），
+  // 提桶后降为 O(M) 一次。managerInterval 低频，但多远矿房时仍是可见节流。
+  // 分桶仅保留 needContainer=true 且有 sourceId 的 creep，per-room 循环内
+  // 二次按 sourceId 分组（与原逻辑等价）。
+  const requestingByRemote = new Map<string, Creep[]>();
+  for (const creep of Object.values(Game.creeps)) {
+    if (creep.memory.home !== homeRoom) continue;
+    if (!creep.memory.needContainer) continue;
+    const target = creep.memory.remoteTarget;
+    if (!target) continue;
+    const sid = creep.memory.sourceId as string | undefined;
+    if (!sid) continue;
+    let arr = requestingByRemote.get(target);
+    if (!arr) { arr = []; requestingByRemote.set(target, arr); }
+    arr.push(creep);
+  }
+
   for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") continue;
     const room = Game.rooms[roomName];
     if (!room) continue; // 无视野，无法校正也无法创建。
 
-    // 1. siteCount 实测校正 — 统计该房现存 container construction site 数。
-    //    用 room.find（一次调用）替代逐 source lookForAtArea，更低 CPU。
-    const actualSites = room.find(FIND_CONSTRUCTION_SITES, {
+    // 1. siteCount 实测校正 — 同时收集每个 site 附近 source（R2）。
+    //    R2：旧实现"actualSites > 0 即清全部 source 组申请标记"，多源远矿房中
+    //    A 源建成会一并清 B 源申请 → B 源 creep 等不到 site；A 源 site 成孤儿时
+    //    B 被一并阻塞至 orphan sweep 清场。收窄到"已有 site 的 source 组"：
+    //    用 room.find 一次拿到 sites 与 sources，对每个 site 找 range<=1 的 source。
+    const sites = room.find(FIND_CONSTRUCTION_SITES, {
       filter: s => s.structureType === STRUCTURE_CONTAINER,
-    }).length;
-    op.siteCount = actualSites;
+    });
+    op.siteCount = sites.length;
 
-    // 2. 收集本房 needContainer 申请者（按 sourceId 分组，每组取第一个站桩位 creep）。
+    const sourcesWithSite = new Set<string>();
+    if (sites.length > 0) {
+      const sources = room.find(FIND_SOURCES);
+      for (const site of sites) {
+        for (const src of sources) {
+          if (site.pos.getRangeTo(src) <= 1) {
+            sourcesWithSite.add(src.id);
+          }
+        }
+      }
+    }
+
+    // 2. 取本房申请者，按 sourceId 二次分组。
+    const candidates = requestingByRemote.get(roomName) ?? [];
     const requestingBySource = new Map<string, Creep[]>();
-    for (const creep of Object.values(Game.creeps)) {
-      if (creep.memory.home !== homeRoom) continue;
-      if (!creep.memory.needContainer) continue;
-      if (creep.memory.remoteTarget !== roomName) continue;
+    for (const creep of candidates) {
       const sid = creep.memory.sourceId as string | undefined;
       if (!sid) continue;
       let group = requestingBySource.get(sid);
@@ -658,15 +689,18 @@ export function fulfillContainerRequests(
       group.push(creep);
     }
 
-    // 3. 已有 site → 清除所有申请标记（site 存在即申请已 fulfilled，build 路径接管）。
-    if (actualSites > 0) {
-      for (const group of requestingBySource.values()) {
+    // 3. 已有 site 的 source 组 → 清除该组申请标记（site 存在即申请已 fulfilled，
+    //    build 路径接管）并从 pending Map 移除。R2：未在 sourcesWithSite 中的
+    //    source 组（无 site）申请标记保留，继续走创建路径。
+    for (const sid of sourcesWithSite) {
+      const group = requestingBySource.get(sid);
+      if (group) {
         for (const creep of group) creep.memory.needContainer = false;
+        requestingBySource.delete(sid);
       }
-      continue;
     }
 
-    // 4. 无申请 → 跳过。
+    // 4. 无 pending 申请 → 跳过（所有 source 都已有 site 或本就无申请）。
     if (requestingBySource.size === 0) continue;
 
     // 5. tick 配额仲裁：远矿让位 emergency（自有房紧急重建优先）；normal 槽位公平竞争。
@@ -680,6 +714,8 @@ export function fulfillContainerRequests(
     // 7. 处理第一个有效申请（找到站桩位 creep 创建 site）。
     let fulfilled = false;
     for (const [sid, group] of requestingBySource) {
+      // R2 防御性跳过：该 source 已有 site（step 3 应已 delete，但 Set 校验双保险）。
+      if (sourcesWithSite.has(sid)) continue;
       const source = Game.getObjectById(sid as Id<Source>);
       if (!source) continue;
       // 找到在 source 旁 1 格内的 creep（站桩位 = container 位）。

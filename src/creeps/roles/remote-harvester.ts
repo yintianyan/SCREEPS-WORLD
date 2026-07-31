@@ -50,9 +50,15 @@ export function getRemoteSource(creep: Creep): Source | undefined {
   }
 
   // 统计兄弟 remoteHarvester（同房同 target）已绑各 source 的占用数。
+  // P2-O：原 Object.values(Game.creeps) 全帝国遍历，多远矿房时累积 O(M) 成本。
+  //   收窄到 creep.room.find(FIND_MY_CREEPS) — occupancy 统计仅在 sourceId 未缓存
+  //   （首次入房 / 缓存失效）时执行，此时 creep 已在 target 房，本房兄弟即全部
+  //   相关占用源。行为差异：过路房兄弟已绑 sourceId 时旧实现会计入、新实现不会 —
+  //   罕见场景（缓存失效 + 过路房兄弟已绑 + 同时到达）可能短暂选同一 source，
+  //   下一 tick 自愈（对方绑定后重新统计）。性能收益覆盖此边缘情况。
   const target = creep.memory.remoteTarget;
   const occupancy = new Map<Id<Source>, number>();
-  for (const other of Object.values(Game.creeps)) {
+  for (const other of creep.room.find(FIND_MY_CREEPS)) {
     if (other.name === creep.name) continue;
     if (other.memory.role !== "remoteHarvester") continue;
     if (other.memory.remoteTarget !== target) continue;

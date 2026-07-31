@@ -198,11 +198,12 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         }
         // 远矿角色不在目标房间时不切 idle——idle 会导致 ensureHome 导航回 home，
         // 形成 idle→updateMode→acquire→action fail→idle 死循环，永远到不了 remoteTarget。
-        // remoteHauler work 模式在 home 房无 action 时可以 idle（ensureHome 会保持在家）。
+        // P2-M：原 remoteHauler work-at-home 硬编码下沉为 RolePolicy 钩子 —
+        //   role-runner 不再感知角色名，由各角色 policy 声明"无候选时是否切 idle"特例。
+        //   remoteHauler work 在 home 房无候选时切 idle（ensureHome 保持在家）。
+        //   通用 idle 条件（本地角色 / 到达 remoteTarget 房）保留在引擎层。
         const remoteTarget = creep.memory.remoteTarget;
-        const haulerWorkAtHome = remoteTarget && creep.memory.role === "remoteHauler" &&
-          creep.memory.mode === "work" && creep.room.name === creep.memory.home;
-        if (!remoteTarget || creep.room.name === remoteTarget || haulerWorkAtHome) {
+        if (!remoteTarget || creep.room.name === remoteTarget || policy.shouldIdleWhenNoCandidate?.(ac) === true) {
           creep.memory.mode = "idle";
         }
       } finally {

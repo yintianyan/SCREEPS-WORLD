@@ -12,6 +12,7 @@ import {
   tryPullBlocker,
   parkIdleCreep,
 } from "../../../src/creeps/movement";
+import { pruneDeadCreepCache } from "../../../src/creeps/movement/pathfinding";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { mockSnapshot, resetGlobals } from "../../role-helpers";
 
@@ -128,5 +129,77 @@ describe("MV-3 — parked creep 响应让路请求", () => {
     parkIdleCreep(parked, snap);
 
     expect(parked.move).toHaveBeenCalledWith(3);
+  });
+});
+
+// ─── P2-L：__creepPathCache 死 creep 清理 ────────────────────
+describe("P2-L — pruneDeadCreepCache 清理死 creep 残留", () => {
+  /** 直接写 __creepPathCache 条目（绕过 pathfinding 内部写入逻辑）。 */
+  function seedCache(entries: Record<string, any>): void {
+    (globalCache() as any).__creepPathCache = { ...entries };
+  }
+
+  it("cache 含死 creep + 活 creep → 只删死 creep，返回清理数", () => {
+    g().Game.creeps = { alive1: { name: "alive1" }, alive2: { name: "alive2" } };
+    seedCache({
+      alive1: { targetKey: 1, structRevision: 0, path: [] },
+      dead1: { targetKey: 2, structRevision: 0, path: [] },
+      alive2: { targetKey: 3, structRevision: 0, path: [] },
+      dead2: { targetKey: 4, structRevision: 0, path: [] },
+    });
+
+    const pruned = pruneDeadCreepCache();
+
+    expect(pruned).toBe(2);
+    const cache = (globalCache() as any).__creepPathCache;
+    expect(Object.keys(cache).sort()).toEqual(["alive1", "alive2"]);
+  });
+
+  it("cache 为空 → 返回 0（无异常）", () => {
+    g().Game.creeps = {};
+    seedCache({});
+    expect(pruneDeadCreepCache()).toBe(0);
+  });
+
+  it("所有 creep 都活着 → 返回 0，cache 不变", () => {
+    g().Game.creeps = { a: { name: "a" }, b: { name: "b" } };
+    seedCache({
+      a: { targetKey: 1, structRevision: 0, path: [] },
+      b: { targetKey: 2, structRevision: 0, path: [] },
+    });
+    const before = (globalCache() as any).__creepPathCache;
+    expect(pruneDeadCreepCache()).toBe(0);
+    const after = (globalCache() as any).__creepPathCache;
+    expect(Object.keys(after).sort()).toEqual(["a", "b"]);
+    // 引用不变 — 没有删除操作时不重建对象。
+    expect(after).toBe(before);
+  });
+
+  it("所有 creep 都死了 → 全部清理，返回总数", () => {
+    g().Game.creeps = {};
+    seedCache({
+      dead1: { targetKey: 1, structRevision: 0, path: [] },
+      dead2: { targetKey: 2, structRevision: 0, path: [] },
+      dead3: { targetKey: 3, structRevision: 0, path: [] },
+    });
+    expect(pruneDeadCreepCache()).toBe(3);
+    expect(Object.keys((globalCache() as any).__creepPathCache)).toHaveLength(0);
+  });
+
+  it("幂等：连续调用第二次返回 0（第一次已清完）", () => {
+    g().Game.creeps = { alive: { name: "alive" } };
+    seedCache({
+      alive: { targetKey: 1, structRevision: 0, path: [] },
+      dead: { targetKey: 2, structRevision: 0, path: [] },
+    });
+    expect(pruneDeadCreepCache()).toBe(1);
+    expect(pruneDeadCreepCache()).toBe(0);
+  });
+
+  it("cache 未初始化（global reset 后）→ 返回 0（getCreepPathCache 惰性创建）", () => {
+    g().Game.creeps = { a: { name: "a" } };
+    // 不调 seedCache — __creepPathCache 不存在。
+    delete (globalCache() as any).__creepPathCache;
+    expect(pruneDeadCreepCache()).toBe(0);
   });
 });

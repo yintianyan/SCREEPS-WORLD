@@ -94,8 +94,19 @@ export function hasRequest(queue: readonly SpawnRequest[], key: string): boolean
  * （如 body 超容量）形成「5 次失败 → 删除 → 重建 → 再 5 次」的无限翻炒，
  * plan §5.4 的「隔离该请求」沦为周期性日志噪音。TTL 过期不入黑名单 —
  * 过期是正常生命周期，需求仍在时重建是设计行为。
+ *
+ * P2-K：可选 onPurge 回调在两路删除点（retries 烧穿 / TTL 过期）触发，
+ * 让调用方把 churn 事件转译为遥测条目（如 recordSkip('spawn/churn/<role>/retries')）。
+ * 回调用参数注入而非在 domain 直接调 recordSkip — cleanQueue 仍是纯函数，
+ * 不传回调时行为完全等价于改动前。purgedKeys 仍只含 retries 路径的 key
+ * （黑名单逻辑依赖此契约 — TTL 过期是设计行为，不该隔离）。
  */
-export function cleanQueue(queue: SpawnRequest[], tick: number, maxRetries: number): string[] {
+export function cleanQueue(
+  queue: SpawnRequest[],
+  tick: number,
+  maxRetries: number,
+  onPurge?: (key: string, reason: "retries" | "expired") => void,
+): string[] {
   const purgedKeys: string[] = [];
   for (let i = queue.length - 1; i >= 0; i--) {
     const req = queue[i];
@@ -103,10 +114,12 @@ export function cleanQueue(queue: SpawnRequest[], tick: number, maxRetries: numb
     if (req.retries >= maxRetries) {
       purgedKeys.push(req.key);
       queue.splice(i, 1);
+      onPurge?.(req.key, "retries");
       continue;
     }
     if (req.expiresAt && tick > req.expiresAt) {
       queue.splice(i, 1);
+      onPurge?.(req.key, "expired");
     }
   }
   return purgedKeys;

@@ -68,12 +68,22 @@ function requestingCreep(opts: {
 function mockRemoteRoom(opts: {
   name?: string;
   existingSites?: any[];
+  sources?: any[];
   createResult?: number;
 }): any {
-  const { name = "W8N4", existingSites = [], createResult = 0 } = opts;
+  const { name = "W8N4", existingSites = [], sources = [], createResult = 0 } = opts;
+  // R2：被测代码同时 find(FIND_CONSTRUCTION_SITES) 与 find(FIND_SOURCES)。
+  //   旧 mock 对所有 flag 返回同一数组，R2 后 site.pos.getRangeTo(src) 炸裂（site 无 pos）。
+  //   现按 flag 分发：sites 走 existingSites（补 pos stub，默认邻接=1），
+  //   sources 走 sources 参数。不传 sources 时 find(FIND_SOURCES) 返回 []，
+  //   sourcesWithSite 为空 — 不影响"无 site"或"仅校正 siteCount"的测试。
+  const sites = existingSites.map((s, i) => s.pos
+    ? s
+    : { ...s, pos: { x: 25 + i, y: 25 + i, roomName: name, getRangeTo: vi.fn(() => 1) } });
   return {
     name,
-    find: vi.fn((_flag: number, _opts?: any) => existingSites),
+    find: vi.fn((flag: number, _opts?: any) =>
+      flag === FIND_SOURCES ? sources : sites),
     createConstructionSite: vi.fn(() => createResult),
   };
 }
@@ -130,7 +140,14 @@ describe("fulfillContainerRequests — 正常路径", () => {
 describe("fulfillContainerRequests — 幂等", () => {
   it("已有 site → 清除申请标记，不创建", () => {
     const creep = requestingCreep({});
-    const room = mockRemoteRoom({ existingSites: [{ structureType: "container" }], createResult: 0 });
+    // R2：sourcesWithSite 由 site.pos.getRangeTo(source) <= 1 计算。
+    //   传 sources=[{id:sourceId}]，site 默认邻接（pos stub getRangeTo=1），
+    //   sourcesWithSite 含 sourceId → 该组申请标记被清，走 continue 不创建。
+    const room = mockRemoteRoom({
+      existingSites: [{ structureType: "container" }],
+      sources: [{ id: "src_W8N4_a" }],
+      createResult: 0,
+    });
     const remoteOps: Record<string, RemoteOp> = { W8N4: activeOp({ siteCount: 1 }) };
 
     const { ctx } = setupWorld({
@@ -270,6 +287,79 @@ describe("fulfillContainerRequests — siteCount 实测校正", () => {
     fulfillContainerRequests(remoteOps, ctx, "W7N4");
 
     expect(remoteOps.W8N4!.siteCount).toBe(2);
+  });
+});
+
+// R2：多源远矿房的核心价值测试 — A 源建成不得阻塞 B 源申请。
+//   旧实现 actualSites > 0 即清所有 source 组申请标记，B 源 creep 被一并清掉
+//   （needContainer=false），B 源 site 永远建不出。新实现 sourcesWithSite
+//   仅含 A 源，B 源组保留走创建路径。
+describe("fulfillContainerRequests — R2 多源房隔离", () => {
+  it("A 源已有 site，B 源申请不被阻塞 → 为 B 源创建 site", () => {
+    // src_A 已有 container site（site 邻接 src_A），src_B 无 site 有申请 creep。
+    // site.pos.getRangeTo 仅对 src_A 返回 1（邻接），对 src_B 返回 99（非邻接）。
+    const creepB = requestingCreep({ name: "rh_B", sourceId: "src_B" });
+    const site = {
+      structureType: "container",
+      pos: {
+        x: 10, y: 10, roomName: "W8N4",
+        getRangeTo: vi.fn((target: any) => target?.id === "src_A" ? 1 : 99),
+      },
+    };
+    const room = mockRemoteRoom({
+      existingSites: [site],
+      sources: [{ id: "src_A" }, { id: "src_B" }],
+      createResult: 0,
+    });
+    const remoteOps: Record<string, RemoteOp> = { W8N4: activeOp({ siteCount: 1 }) };
+
+    const { ctx } = setupWorld({
+      creeps: [creepB],
+      rooms: { W8N4: room },
+      remoteOps,
+      globalSiteCount: 0,
+    });
+
+    fulfillContainerRequests(remoteOps, ctx, "W7N4");
+
+    // siteCount 校正为实测值 1（仅 src_A 的 site）。
+    expect(remoteOps.W8N4!.siteCount).toBe(1);
+    // B 源申请未被 A 源的 site 阻塞 — 走创建路径，site 已建。
+    expect(room.createConstructionSite).toHaveBeenCalledWith(creepB.pos, "container");
+    // 创建成功后清 B 源申请标记。
+    expect(creepB.memory.needContainer).toBe(false);
+  });
+
+  it("A 源有 site 但非邻接 B 源 → sourcesWithSite 不含 B 源", () => {
+    // 验证 sourcesWithSite 的精确性：site 邻接 src_A（getRangeTo=1）但不邻接 src_B。
+    // 用自定义 pos stub 让 site.pos.getRangeTo(src_A)=1, getRangeTo(src_B)=99。
+    const creepB = requestingCreep({ name: "rh_B", sourceId: "src_B" });
+    const site = {
+      structureType: "container",
+      pos: {
+        x: 10, y: 10, roomName: "W8N4",
+        getRangeTo: vi.fn((target: any) => target?.id === "src_A" ? 1 : 99),
+      },
+    };
+    const room = mockRemoteRoom({
+      existingSites: [site],
+      sources: [{ id: "src_A" }, { id: "src_B" }],
+      createResult: 0,
+    });
+    const remoteOps: Record<string, RemoteOp> = { W8N4: activeOp({ siteCount: 1 }) };
+
+    const { ctx } = setupWorld({
+      creeps: [creepB],
+      rooms: { W8N4: room },
+      remoteOps,
+      globalSiteCount: 0,
+    });
+
+    fulfillContainerRequests(remoteOps, ctx, "W7N4");
+
+    // sourcesWithSite 仅含 src_A — B 源组保留，走创建路径。
+    expect(room.createConstructionSite).toHaveBeenCalled();
+    expect(creepB.memory.needContainer).toBe(false);
   });
 });
 
