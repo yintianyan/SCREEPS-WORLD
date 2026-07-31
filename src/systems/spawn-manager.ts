@@ -103,6 +103,10 @@ export const spawnManagerSystem: System = {
       }
 
       // 2. 从 Game/Memory 收集数据，调用纯函数评估需求。
+      // P1-J：迟滞状态（distScaleUpSince / builderPressureState）原本由
+      // demand 直读写 Memory，现收敛为显式输入输出 —— 适配层负责从
+      // RoomMemory 读出 prevHysteresis 注入、将 nextHysteresis 写回。
+      // domain 恢复纯函数，单测不再需要 mock Memory。
       const roomCtx: RoomDemandContext = {
         colonyState,
         controllerDowngradeRisk: roomMem.controllerDowngradeRisk === true,
@@ -111,8 +115,12 @@ export const spawnManagerSystem: System = {
         storageNearFull: roomMem.storageNearFull === true,
         liquidityScore: roomMem.phase?.liquidityScore ?? 0,
         drainScore: roomMem.phase?.drainScore ?? 0,
+        prevHysteresis: {
+          distScaleUpSince: roomMem.distScaleUpSince,
+          builderPressureState: roomMem.builderPressureState,
+        },
       };
-      const { requests } = evaluateDemand(
+      const { requests, nextHysteresis } = evaluateDemand(
         snapshot,
         queue,
         colonyState,
@@ -126,6 +134,19 @@ export const spawnManagerSystem: System = {
         // 步骤 1 执行，此处防御同 tick 新写入的条目）。
         if ((roomMem.spawnBlacklist?.[req.key] ?? 0) > ctx.tick) continue;
         submitRequest(queue, req);
+      }
+      // P1-J：写回迟滞状态到 RoomMemory。undefined 表示「清除」语义
+      // （如 distScaleUpSince 需求回落重置），用 delete 而非赋值 undefined
+      // 保持 Memory 体积精简（plan.md §7 性能优化）。
+      if (nextHysteresis.distScaleUpSince === undefined) {
+        delete roomMem.distScaleUpSince;
+      } else {
+        roomMem.distScaleUpSince = nextHysteresis.distScaleUpSince;
+      }
+      if (nextHysteresis.builderPressureState === undefined) {
+        delete roomMem.builderPressureState;
+      } else {
+        roomMem.builderPressureState = nextHysteresis.builderPressureState;
       }
       roomMem.spawnQueue = queue;
 

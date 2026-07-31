@@ -13,6 +13,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tuningEngineSystem } from "../../../src/systems/tuning-engine";
+import { CONFIG } from "../../../src/config";
 import {
   resetGlobals,
   mockSnapshot,
@@ -580,8 +581,10 @@ describe("tuning-engine 边界场景 — 钳制边界", () => {
     (globalThis as any).Memory.rooms = { [roomName]: { buildQueue: [] } };
 
     // 预设 hauler.maxCount 已达 ceiling
+    // P1-I：预置 baselineVersion 与 CONFIG 对齐，否则会触发清零。
     (globalThis as any).Memory.kernel.tuning = {
       lastTuned: 0,
+      baselineVersion: CONFIG.tuning.baselineVersion,
       rooms: {
         [roomName]: {
           roleBounds: { hauler: { maxCount: 8 } },
@@ -743,5 +746,138 @@ describe("tuning-engine 边界场景 — 慢振荡验证", () => {
       (a: string) => a.includes("hauler.maxCount"),
     );
     expect(haulerAdjs).toHaveLength(0);
+  });
+});
+
+// ─── P1-I：baselineVersion 版本戳清零 ───────────────────────
+
+describe("tuning-engine — P1-I baselineVersion 版本戳", () => {
+  it("首次运行（无 baselineVersion）→ 清空 rooms 并写入当前版本", () => {
+    const roomName = "W7N4";
+    const econ = buildEconomyRing(roomName, 15);
+    const cpu = buildCpuRing(15);
+    setupTimeseries(econ, cpu);
+
+    setupCreeps(roomName, { hauler: 2, harvester: 2 });
+    (globalThis as any).Memory.rooms = { [roomName]: { buildQueue: [] } };
+    // 预置「旧覆盖」：迁移后 baselineVersion 为 undefined，rooms 含旧覆盖值。
+    (globalThis as any).Memory.kernel = {
+      tuning: {
+        lastTuned: 1000,
+        rooms: {
+          W7N4: {
+            roleBounds: { hauler: { maxCount: 8 } }, // 旧基线下的离谱覆盖
+            lastAdjusted: { "hauler.maxCount": 1000 },
+          },
+          W8N5: {
+            roleBounds: { harvester: { maxCount: 5 } },
+            lastAdjusted: {},
+          },
+        },
+      },
+    };
+
+    const snap = snapshotWithContainers(roomName, 0.3);
+    const ctx = buildContext([snap], mockBudget("healthy"), 5000);
+
+    tuningEngineSystem.run(ctx);
+
+    const tuning = (globalThis as any).Memory.kernel.tuning;
+    // baselineVersion 被定版为 CONFIG 当前值。
+    expect(tuning.baselineVersion).toBe(1);
+    // 旧 rooms 覆盖被清空（清零重来语义）—— 实际行为是清空 rooms 后
+    // tuning-engine 立即评估重建空 RoomTuningState（roleBounds 为空），
+    // 故断言「W8N5（无快照不评估）应消失」「W7N4 旧覆盖被清」。
+    expect(tuning.rooms.W8N5).toBeUndefined();
+    expect(tuning.rooms.W7N4.roleBounds).toEqual({});
+    expect(tuning.rooms.W7N4.lastAdjusted).toEqual({});
+    // lastEval 也清掉避免错位（评估时按当前快照重建）。
+    // 评估后 lastEval.W7N4 会重建，但不会有 W8N5 的旧 lastEval。
+  });
+
+  it("版本匹配时不清空 rooms（保留现有覆盖值）", () => {
+    const roomName = "W7N4";
+    const econ = buildEconomyRing(roomName, 15);
+    const cpu = buildCpuRing(15);
+    setupTimeseries(econ, cpu);
+
+    setupCreeps(roomName, { hauler: 2, harvester: 2 });
+    (globalThis as any).Memory.rooms = { [roomName]: { buildQueue: [] } };
+    // 版本已对齐：保留覆盖，不触发清零。
+    (globalThis as any).Memory.kernel = {
+      tuning: {
+        lastTuned: 4500,
+        baselineVersion: 1, // 与 CONFIG.tuning.baselineVersion 一致
+        rooms: {
+          W7N4: {
+            roleBounds: { hauler: { maxCount: 7 } },
+            lastAdjusted: { "hauler.maxCount": 4500 },
+          },
+        },
+      },
+    };
+
+    const snap = snapshotWithContainers(roomName, 0.3);
+    const ctx = buildContext([snap], mockBudget("healthy"), 5000);
+
+    tuningEngineSystem.run(ctx);
+
+    const tuning = (globalThis as any).Memory.kernel.tuning;
+    expect(tuning.baselineVersion).toBe(1);
+    // 版本匹配 → rooms 保留。
+    expect(tuning.rooms.W7N4.roleBounds.hauler.maxCount).toBe(7);
+  });
+
+  it("CONFIG 升版后 → 旧版本下的覆盖被清空", () => {
+    // 模拟 CONFIG 升版后的场景：Memory 中 baselineVersion=1（旧版），
+    // CONFIG.tuning.baselineVersion 已经升到 2（mock 模拟）。
+    const roomName = "W7N4";
+    const econ = buildEconomyRing(roomName, 15);
+    const cpu = buildCpuRing(15);
+    setupTimeseries(econ, cpu);
+
+    setupCreeps(roomName, { hauler: 2, harvester: 2 });
+    (globalThis as any).Memory.rooms = { [roomName]: { buildQueue: [] } };
+    (globalThis as any).Memory.kernel = {
+      tuning: {
+        lastTuned: 4500,
+        baselineVersion: 1, // 旧版
+        rooms: {
+          W7N4: {
+            roleBounds: { hauler: { maxCount: 8 } }, // 旧基线下产生的覆盖
+            lastAdjusted: {},
+          },
+        },
+      },
+    };
+
+    // mock CONFIG.tuning.baselineVersion 升到 2（模拟基线升级后的世界）。
+    const original = CONFIG.tuning.baselineVersion;
+    Object.defineProperty(CONFIG.tuning, "baselineVersion", {
+      value: 2,
+      configurable: true,
+      writable: true,
+    });
+
+    try {
+      const snap = snapshotWithContainers(roomName, 0.3);
+      const ctx = buildContext([snap], mockBudget("healthy"), 5000);
+
+      tuningEngineSystem.run(ctx);
+
+      const tuning = (globalThis as any).Memory.kernel.tuning;
+      // 版本被更新为新基线。
+      expect(tuning.baselineVersion).toBe(2);
+      // 旧覆盖被清零——清零后立即评估会重建空 RoomTuningState，
+      // 故断言「roleBounds 为空（旧 hauler.maxCount=8 已清除）」。
+      expect(tuning.rooms.W7N4.roleBounds).toEqual({});
+      expect(tuning.rooms.W7N4.lastAdjusted).toEqual({});
+    } finally {
+      Object.defineProperty(CONFIG.tuning, "baselineVersion", {
+        value: original,
+        configurable: true,
+        writable: true,
+      });
+    }
   });
 });

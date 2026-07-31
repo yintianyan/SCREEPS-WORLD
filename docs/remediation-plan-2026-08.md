@@ -39,7 +39,8 @@
 **评审修正**：B 必须连同 BFS typed array 扩容一起实施（见 P0-B 评审修正）；
 A 必须先补 siteCount 实测校正与 tick 配额仲裁（见 P0-A 评审修正）。其余批次顺序不变。
 **验收追加**：Batch 1-3 review 新发现 R1-R5（1 个 P2 测试缺口 + 3 个 P3 + 1 行为变更确认），
-见文末「Batch 1-3 验收追加」节；R1 为 Batch 4 前置，R2-R4 随 Batch 5。
+Batch 4 review 新发现 R6-R7（1 个 P2 守卫缺口 + 1 部署提醒），
+见文末两节「验收追加」；R1 为 Batch 4 前置（已闭环），R2-R4/R6/R7 随 Batch 5。
 
 ---
 
@@ -514,8 +515,8 @@ domain 恢复纯函数，两个迟滞状态获得迁移保护，单测不再需�
 | Batch 1（已完成 ✅） | B（min-cut 源汇 + 四数组扩容 + 版本戳缓存 + 回归测试） | typecheck + test + build 全绿 |
 | Batch 2（已完成 ✅） | A（远矿 site 收编 + site-quota 账本）+ C（defender 缓存）+ D（走廊共享） | 同上 + 远矿集成场景 |
 | Batch 3（已完成 ✅） | E（寻路限频）+ F（layout 分片/相位 + recoveryEligible）+ G（dangerUntil 搬家） | 同上 + 双房 CPU 采样 |
-| Batch 4（本周） | H（cancelRequest）+ I（tuning 版本戳）+ J（domain 收口）+ **R1（分片等价测试，前置）** | 同上 + 迁移测试 |
-| Batch 5（排期） | K/L/M/N/O + R2/R3/R4（验收追加，见下节） | 同上 |
+| Batch 4（已完成 ✅） | H（cancelRequestsByHome）+ I（tuning 版本戳 + TUNABLE_ROLES 单源）+ J（domain 收口）+ R1（分片等价测试，前置） | 同上 + 迁移测试 |
+| Batch 5（排期） | K/L/M/N/O + R2/R3/R4/R6（验收追加，见下两节） | 同上 |
 
 **每批独立 PR、独立回滚**。schemaVersion 变更（F/G/I/J 各一次）集中在 Batch 3-4，
 部署选 bucket 高位窗口，部署后观察 1000 tick 的遥测 skipHotspot 与 CPU 均值。
@@ -536,6 +537,21 @@ dangerUntil 唯一写者 + v15-17 迁移）。以下为 review 新发现问题�
 | R3 | P3 | fulfillContainerRequests 的 creep 收集在 per-room 循环内，R 个 active 远矿房 = R 次全 Game.creeps 遍历（managerInterval 低频下可接受） | remote-mining-manager.ts:650 | Batch 5：收集提出循环外，按 remoteTarget 单遍分桶 |
 | R4 | P3 | 档 1 区块量化对静态目标同样生效（config 名 quantizeDynamicTarget 但实现不区分动静态）：同 3×3 区块内两个相邻目标共享缓存 key，错走 1 tick 后路径耗尽自愈。概率低代价小，接受现状 | pathfinding.ts:562-566 | Batch 5：改名（如 quantizeTargetKey）或补注释，防后来者按名误解 |
 | R5 | 确认项 | kernel 豁免语义收窄：旧「任一房 recovery 即豁免 CM+LP」→ 新「CM 自报 P0 queued 关键基建 / LP 自报紧急重建缺口」。recovery 但结构完好的房间普通建造在 CPU recovery 档不再豁免——更正确，但属行为变更 | kernel.ts:222-231 + 两系统 recoveryEligible | 已确认。部署后遥测盯建造停顿是否符合预期 |
+
+---
+
+## Batch 4 验收追加（2026-08-01 review）
+
+验收基线：typecheck 全绿；1380 测试全过（较 Batch 1-3 基线 +27）。
+H/I/J/R1 四项完整落地，其中两处实现优于原方案：cancelRequestsByHome
+比按 key 撤销更贴合拓荒 abort 语义；v18 迁移「建档不定版」故意让
+tuning-engine 首跑检测 undefined ≠ CONFIG 触发清零（迁移直接定版会让
+旧覆盖存活、修复目标自我瓦解）。以下为 review 新发现问题：
+
+| # | 级别 | 问题 | 位置 | 去向 |
+|---|------|------|------|------|
+| R6 | P2 | TUNABLE_ROLES ↔ CONFIG.roles 无双向守卫。tuned.ts 注释称对齐由 role-config-parity 断言，但该测试只覆盖 CONFIG.roles ↔ bootstrap 注册表——新增第 14 个角色时 TUNABLE_ROLES 静默漏配（无钳制、无快照），正是 I 项要消灭的漂移类别断在最后一环 | config/tuned.ts:24-47 | Batch 5：role-config-parity（或新守卫）断言 TUNABLE_ROLES 与 Object.keys(CONFIG.roles) 双向相等 |
+| R7 | 提醒 | baselineVersion 检查在 tuning-engine 每 500 tick 评估周期内执行，CONFIG 升版后旧覆盖最长残留 500 tick。行为可接受 | systems/tuning-engine.ts:61-72 | 已确认。Batch 5 顺手把该预期写进 CONFIG.tuning.baselineVersion 注释 |
 
 ## 红线
 

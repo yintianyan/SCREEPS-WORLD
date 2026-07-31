@@ -377,6 +377,66 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 17,
+    to: 18,
+    run: () => {
+      // v18：P1-I tuning 版本戳 — TuningMemory 新增 baselineVersion 字段（可选）。
+      //
+      // 设计决策：迁移只做「建档」不做「定版」——故意不写 baselineVersion
+      // 当前值（CONFIG.tuning.baselineVersion=1），让 tuning-engine 首次
+      // 评估时检测 undefined ≠ CONFIG 值 → 触发清空 rooms 覆盖（清零重来
+      // 语义，task summary 已确认）。若迁移直接定版为 CONFIG 值，则存量
+      // 旧覆盖会保留并继续压制新基线，违背 P1-I 修复目标。
+      //
+      // 幂等：仅做畸形数据自愈（非数字值清除），不写当前版本号。
+      // tuning-engine 是 baselineVersion 的唯一写者（迁移除外）。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+      const tuning = kernel.tuning as Record<string, unknown> | undefined;
+      if (!tuning) return;
+      if (
+        tuning.baselineVersion !== undefined &&
+        typeof tuning.baselineVersion !== "number"
+      ) {
+        delete tuning.baselineVersion;
+      }
+    },
+  },
+  {
+    from: 18,
+    to: 19,
+    run: () => {
+      // v19：P1-J demand 纯度收口 — RoomMemory 的 distScaleUpSince 与
+      // builderPressureState 字段原本由 domain/spawn/demand.ts 直读写，
+      // 现收敛为适配层（spawn-manager）显式输入输出。
+      //
+      // 字段本身在 RoomMemory 类型中早已登记（global.d.ts:215/221），
+      // 但游离在迁移体系外。本迁移将其纳入 schema 管理：幂等畸形自愈
+      // （distScaleUpSince 非数字清除、builderPressureState 非 'full'/'shrinking' 清除）。
+      //
+      // 语义不变：v18 之前 demand 直接写 Memory，v19 之后由 spawn-manager
+      // 适配层 prevHysteresis/nextHysteresis 读写，行为与之前逐 tick 一致
+      // （已由集成测试验证）。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
+        if (!room) continue;
+        if (
+          room.distScaleUpSince !== undefined &&
+          typeof room.distScaleUpSince !== "number"
+        ) {
+          delete room.distScaleUpSince;
+        }
+        if (
+          room.builderPressureState !== undefined &&
+          room.builderPressureState !== "full" &&
+          room.builderPressureState !== "shrinking"
+        ) {
+          delete room.builderPressureState;
+        }
+      }
+    },
+  },
 ];
 
 /**

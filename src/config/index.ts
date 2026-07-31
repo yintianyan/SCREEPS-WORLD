@@ -40,7 +40,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 17 },
+  memory: { schemaVersion: 19 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -68,6 +68,20 @@ export const CONFIG = {
   tuning: {
     /** 调优引擎评估间隔（tick）。500 tick = 10 次 economy 采样窗口。 */
     evalInterval: 500,
+    /**
+     * 调优基线版本戳（P1-I）。
+     *
+     * 当 CONFIG.roles 的 minCount/maxCount 基线值发生调整时（如调 hauler
+     * 上限 6→8），存量 Memory.kernel.tuning.rooms 中的覆盖值可能基于旧
+     * 经济假设继续压制新基线 — tuning-engine 检测到此字段不匹配时
+     * 清空 rooms 覆盖（roleBounds/lastAdjusted/lastTrend 全清），
+     * 自调优从新基线重新收敛。
+     *
+     * 修改 CONFIG.roles 任何 minCount/maxCount 时必须 +1 此版本号。
+     * tuning-engine 首次运行（无 Memory）时此字段为 undefined，
+     * 自动触发首次定版（写入当前 CONFIG 值，无覆盖可清）。
+     */
+    baselineVersion: 1,
   },
 
   cpu: {

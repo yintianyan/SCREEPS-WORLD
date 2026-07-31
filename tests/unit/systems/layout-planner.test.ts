@@ -692,3 +692,166 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     void spawnPos;
   });
 });
+
+// ─── 5. R1: 4-stage 分片 vs 单 tick 等价性（Batch 4 前置）──
+
+/**
+ * R1（docs/remediation-plan-2026-08.md §Batch 1-3 验收追加）:
+ * 验证 P1-F 核心契约「4-stage 分片不改变规划结果」。
+ *
+ * 既有 stage 单测只证明各 stage 转换正确（planStage 0→1→2→3→0），
+ * 不证明「分片 vs 不分片产出等价」——本测试直接断言这一核心契约。
+ *
+ * 设计：同一合成房间、同一初始 Memory，分别走两条路径：
+ *   - 路径 A（分片）: 4 个连续 tick（1000-1003），每 tick 推进一个 stage
+ *                    （模拟生产路径，跨 tick 中间产物存 globalCache）
+ *   - 路径 B（单 tick）: 同一 tick（1000）内连续 4 次调 planRoom
+ *                    （模拟「不分片」等价路径，中间产物同 tick 内消费）
+ *
+ * 等价断言对象：buildQueue 内容、layout.state、layout.revision、layout.anchor。
+ * 排除字段：nextPlanTick（两路径 ctx.tick 不同，roomPhase 偏移不同，必然不等）。
+ *
+ * 实现注意：
+ *   - 两路径用不同 roomName（W7N4 / W8N4），避免 Memory.rooms 冲突
+ *   - roomPhase 差异只影响 nextPlanTick，不影响 buildQueue 内容
+ *   - globalCache 的 __planStageData 在路径 A 收尾时已由 clearPlanStageData 清除，
+ *     路径 B 重新从 stage 0 开始，状态隔离
+ */
+describe("P1-F.5 — R1: 4-stage 分片 vs 单 tick 等价性", () => {
+  /**
+   * 构造最小可用 room + Memory + snapshot 三元组（与 P1-F.4 setupRoom 等价，
+   * 隔离定义避免改动既有测试；R1 场景只需 roomName/rcl/spawnPos 三个自由度）。
+   */
+  function setupRoomForEquivalence(opts: {
+    roomName: string;
+    spawnPos?: { x: number; y: number };
+    rcl?: number;
+  }) {
+    const { roomName } = opts;
+    const spawnPos = opts.spawnPos ?? { x: 25, y: 25 };
+    const rcl = opts.rcl ?? 3;
+    const anchor = packPos(spawnPos.x, spawnPos.y);
+
+    // anchor 已预设 → 跳过 diagnoseAnchor 重路径，stage 0 prep 聚焦 shouldPlan 门禁。
+    (globalThis as any).Game.rooms[roomName] = {
+      name: roomName,
+      getTerrain: () => ({ get: () => 0 }), // 无墙
+      find: () => [],
+    };
+
+    (globalThis as any).Memory.rooms[roomName] = {
+      layout: {
+        version: 2,
+        templateId: "compact-core-v2",
+        state: "accepted",
+        revision: 0,
+        nextPlanTick: 1000, // tick=1000 时到期，触发首次规划
+        planStage: 0,
+        anchor,
+      },
+      buildQueue: [],
+    };
+
+    // snapshot：spawn 位置匹配 anchor + source/container 对（避免紧急重建误判）。
+    const spawn = mockStructure("spawn", { id: `spawn_${roomName}` });
+    spawn.pos = { x: spawnPos.x, y: spawnPos.y, roomName } as any;
+    const source = mockSource(`src_${roomName}`);
+    source.pos = { x: 20, y: 20, roomName } as any;
+    const container = mockStructure("container", { id: `c_${roomName}` });
+    container.pos = { x: 21, y: 20, roomName } as any; // source 旁 1 格
+    const snap = mockSnapshot({
+      roomName,
+      rcl,
+      spawns: [spawn as any],
+      sources: [source as any],
+      containers: [container as any],
+      towers: rcl >= 3 ? [mockStructure("tower", { id: `tw_${roomName}` }) as any] : [],
+      storage: rcl >= 4 ? mockStructure("storage", { id: `st_${roomName}` }) as any : undefined,
+    });
+
+    return { roomName, snap };
+  }
+
+  /** 跑路径 A：4-tick 分片推进（生产路径，每 tick 推进一个 stage）。 */
+  function runSharded4Ticks(roomName: string): RoomMemory {
+    const { snap } = setupRoomForEquivalence({ roomName });
+    for (let i = 0; i < 4; i++) {
+      const tick = 1000 + i;
+      (globalThis as any).Game.time = tick;
+      const ctx = { ...mockContext(snap), tick };
+      layoutPlannerSystem.planRoom(snap, ctx);
+    }
+    return (globalThis as any).Memory.rooms[roomName] as RoomMemory;
+  }
+
+  /** 跑路径 B：同一 tick 内连续 4 次调 planRoom（模拟「不分片」等价路径）。 */
+  function runSingleTick(roomName: string): RoomMemory {
+    const { snap } = setupRoomForEquivalence({ roomName });
+    const tick = 1000;
+    (globalThis as any).Game.time = tick;
+    const ctx = { ...mockContext(snap), tick };
+    for (let i = 0; i < 4; i++) {
+      layoutPlannerSystem.planRoom(snap, ctx);
+    }
+    return (globalThis as any).Memory.rooms[roomName] as RoomMemory;
+  }
+
+  /**
+   * 序列化 buildQueue 为可对比的稳定字符串。
+   * - 按 key 排序，确保顺序无关（两路径 task 入队顺序应一致，排序后更稳健）
+   * - 仅保留语义字段（key/pos 坐标/type/priority/state），排除：
+   *   - 运行时态（attempts/retryAt/assignedTo 等会因 tick 推进而漂移）
+   *   - pos.roomName（两路径用不同房名 W7N4/W8N4 做测试隔离，非规划差异）
+   */
+  function serializeQueue(queue: BuildTask[]): string {
+    return JSON.stringify(
+      [...queue]
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map((t) => ({
+          key: t.key,
+          pos: { x: t.pos.x, y: t.pos.y },
+          structureType: t.structureType,
+          priority: t.priority,
+          state: t.state,
+        })),
+    );
+  }
+
+  it("buildQueue 内容等价（按 key 排序后 deep-equal）", () => {
+    const a = runSharded4Ticks("W7N4");
+    const b = runSingleTick("W8N4"); // 不同房名，避免 Memory 冲突
+    // R1 核心契约：分片不改变规划结果 — 两条路径 buildQueue 必须等价。
+    expect(serializeQueue(a.buildQueue ?? [])).toBe(serializeQueue(b.buildQueue ?? []));
+  });
+
+  it("buildQueue 非空（确认实际有产出，非空对比空的伪等价）", () => {
+    const a = runSharded4Ticks("W7N4");
+    // 若 buildQueue 为空，等价断言将退化为「空 == 空」无意义 — 必须断言非空。
+    expect((a.buildQueue ?? []).length).toBeGreaterThan(0);
+  });
+
+  it("layout.state 等价（两条路径均应进入 building 后回到 accepted）", () => {
+    const a = runSharded4Ticks("W7N4");
+    const b = runSingleTick("W8N4");
+    expect(a.layout!.state).toBe(b.layout!.state);
+  });
+
+  it("layout.revision 等价（影响 creep 目标选择的结构入队次数一致）", () => {
+    const a = runSharded4Ticks("W7N4");
+    const b = runSingleTick("W8N4");
+    expect(a.layout!.revision).toBe(b.layout!.revision);
+  });
+
+  it("layout.anchor 等价（锚点不因分片而漂移）", () => {
+    const a = runSharded4Ticks("W7N4");
+    const b = runSingleTick("W8N4");
+    expect(a.layout!.anchor).toBe(b.layout!.anchor);
+  });
+
+  it("两条路径最终 planStage 均回到 0（4-stage 完整走完，无卡死）", () => {
+    const a = runSharded4Ticks("W7N4");
+    const b = runSingleTick("W8N4");
+    expect(a.layout!.planStage).toBe(0);
+    expect(b.layout!.planStage).toBe(0);
+  });
+});

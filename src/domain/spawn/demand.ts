@@ -60,10 +60,39 @@ export interface RoomDemandContext {
   liquidityScore?: number;
   /** 偿付危机分数 (0-100)。与 liquidityScore 比较以判定危机由哪个维度主导。 */
   drainScore?: number;
+  /**
+   * P1-J：上一 tick 的迟滞状态（由适配层从 RoomMemory 读出注入）。
+   *
+   * 包含两个原本由 demand 直读写 Memory 的迟滞字段：
+   *   - distScaleUpSince：distributor 扩编趋势确认计时器
+   *   - builderPressureState：builder 压力迟滞带状态
+   *
+   * 缺失（undefined）语义 = 首次运行 / 上一 tick 未生成 → demand 按首现处理
+   * （distScaleUpSince 写当前 tick 计时、builderPressureState 默认 'full'）。
+   * domain 不再访问 Memory，单测可直接传对象不再 mock Memory。
+   */
+  prevHysteresis?: {
+    distScaleUpSince?: number;
+    builderPressureState?: "full" | "shrinking";
+  };
+}
+
+/**
+ * 评估产出的下一 tick 迟滞状态（P1-J）。
+ *
+ * 由适配层写回 RoomMemory。与 prevHysteresis 同构 — demand 是状态机：
+ * 输入上一状态 → 输出下一状态。原本由 demand 直读写 Memory，
+ * 现收敛为显式输入输出，domain 恢复纯函数。
+ */
+export interface HysteresisState {
+  distScaleUpSince?: number;
+  builderPressureState?: "full" | "shrinking";
 }
 
 interface DemandResult {
   requests: SpawnRequest[];
+  /** P1-J：本 tick 评估产出的迟滞状态，适配层负责写回 RoomMemory。 */
+  nextHysteresis: HysteresisState;
 }
 
 /**
@@ -258,6 +287,13 @@ export function evaluateDemand(
   // Storage 满仓信号 — 限采 + 加速消费。
   const storageNearFull = roomCtx.storageNearFull === true;
 
+  // P1-J：迟滞状态输出缓冲 — 由各角色评估块写入，最终返回给适配层。
+  // 初始从 prevHysteresis 复制（保持语义：未变更的字段透传下一 tick）。
+  const nextHysteresis: HysteresisState = {
+    distScaleUpSince: roomCtx.prevHysteresis?.distScaleUpSince,
+    builderPressureState: roomCtx.prevHysteresis?.builderPressureState,
+  };
+
   // 单次遍历获取所有角色计数。
   // pending 计数带 home 过滤 — sponsor 房代孵的拓荒请求（home 指向新房）
   // 寄宿在本房队列，不得计入本房人口预算。
@@ -289,7 +325,8 @@ export function evaluateDemand(
     }
     const key = spawnKey("worker", home, 0);
     requests.push(createRequest("worker", home, 0, key, 0, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
-    return { requests }; // P0 阻塞其他所有请求
+    // P0 阻塞路径：迟滞状态透传 prevHysteresis（不更新，下一 tick 重新评估）。
+    return { requests, nextHysteresis: roomCtx.prevHysteresis ?? {} };
   }
 
   // P1：Defender — 房内出现威胁时的防御响应（防御优先于经济扩员）。
@@ -544,22 +581,27 @@ export function evaluateDemand(
     // distributorScaleUpDelay tick 才放行；补足 minCount 与缩编即时生效。
     // 不确认的后果：一次 50 tick 的尖峰入队的请求活在队列里直至孵化，
     // 换来多个活 1500 tick 的常驻编制（与 builderPressureState 同为 Memory 短 key 迟滞先例）。
-    const distMem = Memory.rooms[home];
+    //
+    // P1-J：迟滞状态从 prevHysteresis 读入、产出 nextHysteresis 由适配层写回，
+    // domain 不再直读写 Memory（domain 纯函数约束：不访问 Game/Memory）。
+    let nextDistScaleUpSince = roomCtx.prevHysteresis?.distScaleUpSince;
     if (distTarget > distTotal && distTarget > distConfig.minCount) {
-      const since = distMem?.distScaleUpSince;
+      const since = nextDistScaleUpSince;
       if (since === undefined) {
         // 需求首现 — 记录起点，本轮压回地板（现有编制或 minCount 的较大者）。
-        if (distMem) distMem.distScaleUpSince = tick;
+        nextDistScaleUpSince = tick;
         distTarget = Math.min(distTarget, Math.max(distTotal, distConfig.minCount));
       } else if (tick - since < CONFIG.spawn.distributorScaleUpDelay) {
         // 确认窗口未满 — 继续压回地板。
         distTarget = Math.min(distTarget, Math.max(distTotal, distConfig.minCount));
       }
       // 窗口已满 → 需求真实持续，放行扩编（distTarget 保持折算值）。
-    } else if (distMem?.distScaleUpSince !== undefined) {
+    } else if (nextDistScaleUpSince !== undefined) {
       // 需求回落或编制已满足 — 尖峰未获确认，重置计时器。
-      distMem.distScaleUpSince = undefined;
+      nextDistScaleUpSince = undefined;
     }
+    // 缓存到外层 nextHysteresis（与 builder 状态合并）。
+    nextHysteresis.distScaleUpSince = nextDistScaleUpSince;
   }
   if (distTotal < distTarget && hasStorage) {
     for (let i = distTotal; i < distTarget; i++) {
@@ -722,16 +764,17 @@ export function evaluateDemand(
     // 梯度缩放：用 economyPressure 迟滞带替代单阈值开关（TD-016）。
     // 迟滞窗：进入收缩 > 0.35，退出收缩 <= 0.25，带内保持当前状态。
     // 消除 pressure 在阈值附近波动时 builder 目标反复跳变的振荡。
+    //
+    // P1-J：迟滞状态从 prevHysteresis 读入、产出 nextHysteresis 由适配层写回，
+    // domain 不再直读写 Memory（domain 纯函数约束：不访问 Game/Memory）。
     const builderPressure = roomCtx.economyPressure;
-    const roomMem = Memory.rooms[home];
-    let state = roomMem?.builderPressureState ?? 'full';
+    let state = roomCtx.prevHysteresis?.builderPressureState ?? 'full';
     if (state === 'full' && builderPressure > 0.35) {
       state = 'shrinking';
-      if (roomMem) roomMem.builderPressureState = state;
     } else if (state === 'shrinking' && builderPressure <= 0.25) {
       state = 'full';
-      if (roomMem) roomMem.builderPressureState = state;
     }
+    nextHysteresis.builderPressureState = state;
     let builderTarget: number;
     if (state === 'full') {
       builderTarget = dynamicBuilderTarget;
@@ -808,7 +851,7 @@ export function evaluateDemand(
     }
   }
 
-  return { requests };
+  return { requests, nextHysteresis };
 }
 
 function hasKey(queue: readonly SpawnRequest[], key: string): boolean {

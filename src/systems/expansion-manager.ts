@@ -24,7 +24,7 @@ import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { selectExpansionTarget } from "../domain/expansion/evaluator";
-import { submitRequest, hasRequest } from "../domain/spawn/queue";
+import { submitRequest, hasRequest, cancelRequestsByHome } from "../domain/spawn/queue";
 import { selectAnchors } from "../domain/layout/anchor-selection";
 import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { packPos } from "../domain/layout/types";
@@ -104,12 +104,10 @@ export function reclaimExpeditionCreeps(target: string, sponsor: string): void {
     mem.assignment = undefined;
     mem.recycle = true;
   }
+  // P1-H：经纯函数通道撤销寄宿在 sponsor 队列的拓荒请求，
+  // 不再直接 splice — spawn-manager 是队列属主，外模块不得直接动 splice。
   const queue = Memory.rooms[sponsor]?.spawnQueue;
-  if (queue) {
-    for (let i = queue.length - 1; i >= 0; i--) {
-      if (queue[i]!.home === target) queue.splice(i, 1);
-    }
-  }
+  if (queue) cancelRequestsByHome(queue, target);
 }
 
 /** 清理已到期的黑名单条目（防无限累积）。 */

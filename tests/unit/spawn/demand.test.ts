@@ -30,11 +30,15 @@ function livingHarvester() {
   ];
 }
 
-const normalCtx = (pressure = 0) => ({
+const normalCtx = (
+  pressure = 0,
+  prevHysteresis?: { distScaleUpSince?: number; builderPressureState?: "full" | "shrinking" },
+) => ({
   colonyState: "normal" as const,
   controllerDowngradeRisk: false,
   energyAvailable: 2000,
   economyPressure: pressure,
+  prevHysteresis,
 });
 
 function stationSnapshot(overrides: Parameters<typeof mockSnapshot>[0]) {
@@ -292,27 +296,25 @@ describe("TD-016 — Builder pressure 迟滞带", () => {
     });
   }
 
-  beforeEach(() => {
-    // 确保 roomMem 存在且 builderPressureState 未设置（默认 full）。
-    (globalThis as any).Memory.rooms.W7N4 = { layout: { revision: 1 } };
-  });
+  // P1-J：迟滞状态通过 prevHysteresis 注入、nextHysteresis 断言 — 不再直读写 Memory。
 
   it("初始状态默认 full — pressure 0.2 时 builder 满目标", () => {
     const snap = builderSnapshot();
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.2), 1000);
+    // prevHysteresis 缺失 → 默认 'full'；pressure 0.2 在带内不切换。
+    const { requests, nextHysteresis } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.2), 1000);
     const builders = requests.filter(r => r.role === "builder");
     // dynamicBuilderTarget = min(maxCount, economyCap, max(minCount, sites=1)) → 至少 minCount
     expect(builders.length).toBeGreaterThanOrEqual(1);
-    expect((globalThis as any).Memory.rooms.W7N4.builderPressureState).toBeUndefined(); // 未触发切换，不写入
+    expect(nextHysteresis.builderPressureState).toBe("full");
   });
 
   it("pressure 从 0.2 上升到 0.36 → 切换到 shrinking（穿越 0.35 上沿）", () => {
     const snap = builderSnapshot();
-    // 先以低压运行，状态保持 full。
-    evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.2), 1000);
+    // 先以低压运行，状态保持 full — 上一步输出作为本步输入（等价适配层写回→读入循环）。
+    const { nextHysteresis: afterLow } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.2), 1000);
     // 升压穿越 0.35。
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.36), 1001);
-    expect((globalThis as any).Memory.rooms.W7N4.builderPressureState).toBe("shrinking");
+    const { requests, nextHysteresis } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.36, afterLow), 1001);
+    expect(nextHysteresis.builderPressureState).toBe("shrinking");
     // shrinking 状态下 builder 目标应 ≤ full 状态。
     const builders = requests.filter(r => r.role === "builder");
     expect(builders.length).toBeGreaterThanOrEqual(0);
@@ -320,30 +322,28 @@ describe("TD-016 — Builder pressure 迟滞带", () => {
 
   it("pressure 在 0.30（迟滞带内）→ 保持前一状态不切换", () => {
     const snap = builderSnapshot();
-    const roomMem = (globalThis as any).Memory.rooms.W7N4;
 
     // 场景 A：之前是 full，pressure=0.30 仍在带内 → 保持 full。
-    roomMem.builderPressureState = "full";
-    evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.30), 1000);
-    expect(roomMem.builderPressureState).toBe("full");
+    {
+      const { nextHysteresis } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.30, { builderPressureState: "full" }), 1000);
+      expect(nextHysteresis.builderPressureState).toBe("full");
+    }
 
     // 场景 B：之前是 shrinking，pressure=0.30 仍在带内 → 保持 shrinking。
-    roomMem.builderPressureState = "shrinking";
-    evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.30), 1001);
-    expect(roomMem.builderPressureState).toBe("shrinking");
+    {
+      const { nextHysteresis } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.30, { builderPressureState: "shrinking" }), 1001);
+      expect(nextHysteresis.builderPressureState).toBe("shrinking");
+    }
   });
 
   it("pressure 从 0.4 下降到 0.24 → 恢复 full（穿越 0.25 下沿）", () => {
     const snap = builderSnapshot();
-    const roomMem = (globalThis as any).Memory.rooms.W7N4;
-    // 先设置为 shrinking 状态。
-    roomMem.builderPressureState = "shrinking";
-    // 高压确认保持 shrinking。
-    evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.4), 1000);
-    expect(roomMem.builderPressureState).toBe("shrinking");
+    // 高压确认保持 shrinking — 输出作为下一步输入。
+    const { nextHysteresis: afterHigh } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.4, { builderPressureState: "shrinking" }), 1000);
+    expect(afterHigh.builderPressureState).toBe("shrinking");
     // 降压穿越 0.25。
-    evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.24), 1001);
-    expect(roomMem.builderPressureState).toBe("full");
+    const { nextHysteresis } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.24, afterHigh), 1001);
+    expect(nextHysteresis.builderPressureState).toBe("full");
   });
 });
 
@@ -414,9 +414,8 @@ describe("TD-015 — 物流角色 economyPressure 衰减因子", () => {
 
   it("pressure=0.5（低于阈值 0.6）→ hauler/distributor 配额不受影响", () => {
     // 预置已满的升编确认窗口 — 本测试验证压力衰减，不验证升编时序。
-    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 };
     const snap = logisticsSnapshot();
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.5), 1000);
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0.5, { distScaleUpSince: 800 }), 1000);
     // hauler: 归一化后 dynamicHaulerTarget=3, pressure 0.5 ≤ 0.6 → 无衰减 → 3
     expect(requests.filter(r => r.role === "hauler")).toHaveLength(3);
     // distributor: distTarget=2, pressure 0.5 ≤ 0.6 → 无衰减 → 2
@@ -548,13 +547,12 @@ describe("Body 感知配额 — 数量按单体能力折算，防大 body 时代
     // 容量 1300 @ RCL5 → 16C = 800 运力 → 每头承接 floor(800/150)=5 个 fillTarget。
     // 6 个 fillTarget → ceil(6/5) = 2（原口径 ceil(6/2)=3）。
     // 预置已满的升编确认窗口 — 本测试验证运力折算，不验证升编时序。
-    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 };
     const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
     const snap = mockSnapshot({
       storage, rcl: 5, energyCapacityAvailable: 1300, controller: mockController({ level: 5 }),
       fillTargets: ["f1", "f2", "f3", "f4", "f5", "f6"] as any[],
     });
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0, { distScaleUpSince: 800 }), 1000);
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(2);
   });
 
@@ -571,10 +569,7 @@ describe("Body 感知配额 — 数量按单体能力折算，防大 body 时代
 });
 
 describe("Distributor 升编趋势确认 — 防孵化尖峰催生过量编制", () => {
-  beforeEach(() => {
-    // 计时器持久化在 RoomMemory 短 key（与 builderPressureState 同先例）。
-    (globalThis as any).Memory.rooms.W7N4 = {};
-  });
+  // P1-J：计时器通过 prevHysteresis 注入、nextHysteresis 断言 — 不再直读写 Memory。
 
   /** 6 个 fillTarget 尖峰快照（容量 600 → 6C=300 运力 → 每头承接 2 个 → want=3）。 */
   function spikeSnapshot(fillCount = 6) {
@@ -592,29 +587,26 @@ describe("Distributor 升编趋势确认 — 防孵化尖峰催生过量编制",
   ];
 
   it("尖峰首现：不扩编，压回现有编制并记录计时起点", () => {
-    const { requests } = evaluateDemand(spikeSnapshot(), [], "normal", livingDist(), [], normalCtx(0), 1000);
+    const { requests, nextHysteresis } = evaluateDemand(spikeSnapshot(), [], "normal", livingDist(), [], normalCtx(0), 1000);
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(0);
-    expect((globalThis as any).Memory.rooms.W7N4.distScaleUpSince).toBe(1000);
+    expect(nextHysteresis.distScaleUpSince).toBe(1000);
   });
 
   it("确认窗口未满（<150 tick）：持续压回，不扩编", () => {
-    (globalThis as any).Memory.rooms.W7N4.distScaleUpSince = 1000;
-    const { requests } = evaluateDemand(spikeSnapshot(), [], "normal", livingDist(), [], normalCtx(0), 1100);
+    const { requests } = evaluateDemand(spikeSnapshot(), [], "normal", livingDist(), [], normalCtx(0, { distScaleUpSince: 1000 }), 1100);
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(0);
   });
 
   it("确认窗口已满（≥150 tick）：需求真实持续，放行扩编", () => {
-    (globalThis as any).Memory.rooms.W7N4.distScaleUpSince = 1000;
-    const { requests } = evaluateDemand(spikeSnapshot(), [], "normal", livingDist(), [], normalCtx(0), 1150);
+    const { requests } = evaluateDemand(spikeSnapshot(), [], "normal", livingDist(), [], normalCtx(0, { distScaleUpSince: 1000 }), 1150);
     // want=3，存活 1 → 扩编 2 个。
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(2);
   });
 
   it("需求回落：计时器重置 — 下次尖峰重新计时", () => {
-    (globalThis as any).Memory.rooms.W7N4.distScaleUpSince = 1000;
     // fillTargets 清零 → want 落回 minCount=1 ≤ 存活 1 → 重置。
-    evaluateDemand(spikeSnapshot(0), [], "normal", livingDist(), [], normalCtx(0), 1100);
-    expect((globalThis as any).Memory.rooms.W7N4.distScaleUpSince).toBeUndefined();
+    const { nextHysteresis } = evaluateDemand(spikeSnapshot(0), [], "normal", livingDist(), [], normalCtx(0, { distScaleUpSince: 1000 }), 1100);
+    expect(nextHysteresis.distScaleUpSince).toBeUndefined();
   });
 
   it("minCount 地板不受确认约束：零编制时首个 distributor 立即孵化", () => {
@@ -725,34 +717,30 @@ describe("distributor cc 排空反馈（镜像 hauler 积压反馈，方向相�
   }
 
   it("cc 见底(<20%) + 无 controller link → distributor 加 2（并行运力）", () => {
-    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 }; // 绕过升编延迟确认
     const snap = ccSnapshot(200); // 10% → +2
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0, { distScaleUpSince: 800 }), 1000); // 绕过升编延迟确认
     // 基线 distTarget=1（minCount）+ 2 = 3（clamp maxCount 3）。
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(3);
   });
 
   it("cc 充足(≥50%) → 不加成（供能正常，无需并行）", () => {
-    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 };
     const snap = ccSnapshot(1500); // 75% → 不触发
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0, { distScaleUpSince: 800 }), 1000);
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
   });
 
   it("有正在供能的 controller link（有能量）→ 即使 cc 见底也不加成（link 供能，非 distributor 职责）", () => {
-    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 };
     const ctrlLink = mockStructure("link", { id: "clink", energy: 400, capacity: 800 }); // 有能量 = 正在供能
     // 默认 mockPos.getRangeTo 返回 1 ≤ 2 → 判定为 controller link。
     const snap = ccSnapshot(200, [ctrlLink]);
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0, { distScaleUpSince: 800 }), 1000);
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(1);
   });
 
   it("controller link 在场但空(网络未通) + cc 见底 → distributor 接管加成（① 核心行为）", () => {
-    (globalThis as any).Memory.rooms.W7N4 = { distScaleUpSince: 800 };
     const deadLink = mockStructure("link", { id: "clink", energy: 0, capacity: 800 }); // 空 = 未在供能
     const snap = ccSnapshot(200, [deadLink]); // cc 10% + link 死
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0, { distScaleUpSince: 800 }), 1000);
     // link 在场但没通 → distributor 不让位、接管 cc → 加成到 maxCount 3。
     expect(requests.filter(r => r.role === "distributor")).toHaveLength(3);
   });

@@ -24,7 +24,7 @@
 
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
-import { getRoleBounds } from "../config/tuned";
+import { getRoleBounds, TUNABLE_ROLES } from "../config/tuned";
 import { evaluateTuning } from "../domain/tuning/evaluator";
 import type { TuningSignals, RoomTuningState } from "../domain/tuning/types";
 import { readCpuSegment, readEconomySegment } from "../kernel/segment-store";
@@ -58,14 +58,35 @@ export const tuningEngineSystem: System = {
       Memory.kernel.tuning = { lastTuned: 0, rooms: {} };
     }
 
+    // P1-I：基线版本戳比对 — CONFIG.tuning.baselineVersion 升级后
+    // （如 CONFIG.roles 调整了某角色的 min/maxCount），存量 rooms 覆盖
+    // 可能基于旧经济假设继续压制新基线。检测不匹配时清空 rooms 覆盖，
+    // 自调优从新基线重新收敛。task summary 已确认此为预期行为
+    // （「清零重来」语义）。
+    if (Memory.kernel.tuning.baselineVersion !== CONFIG.tuning.baselineVersion) {
+      const oldVersion = Memory.kernel.tuning.baselineVersion;
+      Memory.kernel.tuning.rooms = {};
+      // lastEval 是诊断快照（per-room），清掉避免与 rooms 错位。
+      delete Memory.kernel.tuning.lastEval;
+      Memory.kernel.tuning.baselineVersion = CONFIG.tuning.baselineVersion;
+      console.log(
+        `[${ctx.tick}] tuning: baselineVersion ${oldVersion ?? "undefined"}→${CONFIG.tuning.baselineVersion}, rooms cleared`,
+      );
+    }
+
     // 快照所有房间的当前 bounds —— 评估期间使用快照，避免多房循环中
     // 房间 A 的 applyAdjustment 写入 Memory 后污染房间 B 的 getRoleBounds 读取。
     // 这是"读-写隔离"原则：评估基于 tick 开头的世界状态，调整在 tick 内缓冲。
+    //
+    // P1-I：快照循环从 TUNABLE_ROLES（与 CONFIG.roles 对齐的 13 角色）派生，
+    // 不再硬编码 4 角色。evaluator 当前只对前 4 角色产出调整，其余角色的
+    // 快照项无 evaluator 规则消费即空转；补全集是为「未来 evaluator 加入
+    // 新角色调整规则时无需改 tuning-engine」做前置准备。
     const snapshots = [...ctx.snapshots()];
     const roomBoundsSnapshot = new Map<string, Record<string, { minCount: number; maxCount: number }>>();
     for (const snap of snapshots) {
       const boundsMap: Record<string, { minCount: number; maxCount: number }> = {};
-      for (const role of ["hauler", "harvester", "upgrader", "builder"] as const) {
+      for (const role of TUNABLE_ROLES) {
         boundsMap[role] = getRoleBounds(role, snap.roomName);
       }
       roomBoundsSnapshot.set(snap.roomName, boundsMap);

@@ -300,6 +300,13 @@ declare global {
   interface TuningMemory {
     /** 上次调优 tick。 */
     lastTuned: number;
+    /**
+     * 生成当前 rooms 覆盖所基于的 CONFIG.tuning.baselineVersion（P1-I）。
+     * tuning-engine 每次评估前比对：不匹配时清空 rooms 覆盖（旧值可能
+     * 基于过时经济假设），写入当前 CONFIG 值，自调优从新基线重新收敛。
+     * undefined 视为不匹配（首次运行或 v18 迁移后）。
+     */
+    baselineVersion?: number;
     /** 每房间的调优覆盖值。key = 房间名。 */
     rooms: Record<string, RoomTuningState>;
     /** 每房间最近一次评估的诊断快照（供控制台查看）。key = 房间名。 */

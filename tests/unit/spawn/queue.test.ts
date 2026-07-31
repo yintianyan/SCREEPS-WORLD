@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cancelRequestsByHome,
   cleanQueue,
   countPending,
   hasRequest,
@@ -154,6 +155,45 @@ describe("SpawnQueue — cleanQueue", () => {
     const queue: SpawnRequest[] = [makeRequest("a")];
     cleanQueue(queue, 100, 5);
     expect(queue).toHaveLength(1);
+  });
+});
+
+describe("SpawnQueue — cancelRequestsByHome", () => {
+  // P1-H：扩张 abort 时清掉 sponsor 队列中寄宿的拓荒请求，原本由
+  // expansion-manager 直接 splice，现收敛为纯函数。语义必须严格匹配
+  // 「按 home 整体清空」——同 home 不同角色（worker/builder/claimer）一并清掉。
+
+  it("移除所有匹配 home 的请求（跨角色）", () => {
+    const queue: SpawnRequest[] = [
+      makeRequest("worker:W9N9:0"), // home=W1N1 默认
+      { ...makeRequest("worker:W9N9:0"), home: "W9N9" },
+      { ...makeRequest("builder:W9N9:0"), home: "W9N9", role: "builder" },
+      { ...makeRequest("claimer:W9N9"), home: "W9N9", role: "claimer" },
+    ];
+    const removed = cancelRequestsByHome(queue, "W9N9");
+    expect(removed).toBe(3);
+    expect(queue).toHaveLength(1);
+    expect(queue[0]?.home).toBe("W1N1");
+  });
+
+  it("返回 0 且不动队列当 home 不匹配", () => {
+    const queue: SpawnRequest[] = [makeRequest("a"), makeRequest("b")];
+    expect(cancelRequestsByHome(queue, "W9N9")).toBe(0);
+    expect(queue).toHaveLength(2);
+  });
+
+  it("空队列返回 0", () => {
+    expect(cancelRequestsByHome([], "W1N1")).toBe(0);
+  });
+
+  it("幂等：连续调用第二次返回 0", () => {
+    const queue: SpawnRequest[] = [
+      { ...makeRequest("a"), home: "W9N9" },
+      { ...makeRequest("b"), home: "W9N9" },
+    ];
+    expect(cancelRequestsByHome(queue, "W9N9")).toBe(2);
+    expect(cancelRequestsByHome(queue, "W9N9")).toBe(0);
+    expect(queue).toHaveLength(0);
   });
 });
 

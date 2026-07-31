@@ -46,6 +46,30 @@ export function removeRequestsByRole(queue: SpawnRequest[], role: string, home: 
   return removed;
 }
 
+/**
+ * 撤销指定 home 的所有待处理请求，返回移除数量。
+ *
+ * 主要用于扩张 abort：拓荒编队请求寄宿在 sponsor 队列但 home 指向目标房，
+ * 失守/超时退出行动时需要一次性清掉所有寄宿请求，避免 sponsor 队列
+ * 继续孵化已失去意义的拓荒者。语义与 removeRequestsByRole 互补：
+ * 前者按 home+role 精细过滤，本函数按 home 整体清空。
+ *
+ * 唯一调用方 expansion-manager 经此函数操作 sponsor 队列，禁止任何模块
+ * 直接对 spawnQueue 调用 splice（队列属主是 spawn-manager，
+ * 见 spawnQueue-splice 守卫测试）。
+ */
+export function cancelRequestsByHome(queue: SpawnRequest[], home: string): number {
+  let removed = 0;
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const req = queue[i];
+    if (req && req.home === home) {
+      queue.splice(i, 1);
+      removed++;
+    }
+  }
+  return removed;
+}
+
 /** 按优先级升序排序（P0 在前），有 replaceBy 的替换请求优先，然后按 createdAt 升序排序。 */
 export function sortQueue(queue: SpawnRequest[]): SpawnRequest[] {
   return queue.sort((a, b) => {

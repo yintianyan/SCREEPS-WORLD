@@ -21,16 +21,40 @@
 import { CONFIG } from "./index";
 import { clampParam } from "../domain/tuning/bounds";
 
-/** 角色 → 参数路径映射，用于 clampParam 安全钳制。 */
-const ROLE_PARAM_MAP: Readonly<Record<string, { min: string; max: string }>> = {
-  hauler: { min: "hauler.minCount", max: "hauler.maxCount" },
-  harvester: { min: "harvester.minCount", max: "harvester.maxCount" },
-  upgrader: { min: "upgrader.minCount", max: "upgrader.maxCount" },
-  builder: { min: "builder.minCount", max: "builder.maxCount" },
-  remoteHarvester: { min: "remoteHarvester.minCount", max: "remoteHarvester.maxCount" },
-  remoteHauler: { min: "remoteHauler.minCount", max: "remoteHauler.maxCount" },
-  reserver: { min: "reserver.minCount", max: "reserver.maxCount" },
-};
+/**
+ * 可调优角色全集 — 与 CONFIG.roles 的 key 集合对齐（role-config-parity 测试
+ * 已断言 CONFIG.roles 与 bootstrap 注册表双向一致）。
+ *
+ * 单一来源原则：ROLE_PARAM_MAP 与 tuning-engine 的 bounds 快照循环
+ * 都从本数组派生，避免 map 与列表双源不同步（P1-I 评审修正：
+ * 原稿 ROLE_PARAM_MAP 7 角色、tuning-engine 快照 4 角色双漂移）。
+ *
+ * 当前 TUNING_BOUNDS（domain/tuning/bounds.ts）只为前 4 角色
+ * （hauler/harvester/upgrader/builder）配置 floor/ceiling，其余角色
+ * 的 clampParam 调用是 no-op（无 bounds 即返回原值）。补全集是为
+ * 「未来在 TUNING_BOUNDS 添加某角色 bounds 时立即生效」做前置准备，
+ * 防止 tuning 接管新角色时漏配钳制规则导致 evaluator 写出离谱值。
+ */
+export const TUNABLE_ROLES = [
+  "hauler",
+  "harvester",
+  "upgrader",
+  "builder",
+  "remoteHarvester",
+  "remoteHauler",
+  "reserver",
+  "distributor",
+  "worker",
+  "defender",
+  "remoteDefender",
+  "claimer",
+  "mineralMiner",
+] as const;
+
+/** 角色 → 参数路径映射，用于 clampParam 安全钳制。从 TUNABLE_ROLES 派生。 */
+const ROLE_PARAM_MAP: Readonly<Record<string, { min: string; max: string }>> = Object.fromEntries(
+  TUNABLE_ROLES.map(role => [role, { min: `${role}.minCount`, max: `${role}.maxCount` }]),
+);
 
 /**
  * 获取角色的有效数量边界（CONFIG 默认 + 运行时覆盖）。
