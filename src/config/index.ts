@@ -97,12 +97,17 @@ export const CONFIG = {
       conserve: { min: 1000, recoveryHysteresis: 500, recoveryTicks: 20 },
       recovery: { min: 0, recoveryHysteresis: 500, recoveryTicks: 20 },
     },
-    /** 各档位软/硬 CPU 上限（为 20 CPU 服务器设计）。 */
+    /** 各档位软/硬 CPU 上限比例（相对于 Game.cpu.limit，0–1）。
+     * 比例化设计：自动适配任意 CPU 限制（官服 20 / 私服 100 / 可变配额）。
+     * 数值反推自原 20 CPU 绝对值（如 healthy soft 17.5/20=0.875），
+     * 官服 20 CPU 下反推值与旧绝对值完全一致，行为零变化；
+     * 私服高 CPU 下不再被静态值压死，释放的预算可用于多房运营。
+     * 运行时实际 soft/hard = effectiveLimit × ratio（见 scheduler.CpuBudget）。 */
     limits: {
-      healthy: { soft: 17.5, hard: 19.2 },
-      guarded: { soft: 16, hard: 18.5 },
-      conserve: { soft: 14, hard: 17 },
-      recovery: { soft: 12, hard: 15.5 },
+      healthy: { softRatio: 0.875, hardRatio: 0.96 },
+      guarded: { softRatio: 0.80, hardRatio: 0.925 },
+      conserve: { softRatio: 0.70, hardRatio: 0.85 },
+      recovery: { softRatio: 0.60, hardRatio: 0.775 },
     },
     /** 各档位允许的最大优先级。 */
     maxPriority: {
@@ -620,8 +625,8 @@ export const CONFIG = {
   },
 } as const;
 
-/** 类型安全的档位上限查询。 */
-export function tierLimits(tier: CpuTier): { soft: number; hard: number } {
+/** 类型安全的档位上限比例查询。 */
+export function tierLimits(tier: CpuTier): { softRatio: number; hardRatio: number } {
   return CONFIG.cpu.limits[tier];
 }
 

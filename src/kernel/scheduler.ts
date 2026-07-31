@@ -94,12 +94,29 @@ export class CpuBudget implements Budget {
 
   constructor(tier: CpuTier) {
     this.tier = tier;
-    const limits = tierLimits(tier);
-    // 有效硬上限：Game.cpu.limit 和 Game.cpu.tickLimit 的较小值减去安全余量。
-    // tickLimit 可能临时低于 20。
-    const cpuLimit = Math.min(Game.cpu.limit ?? 20, Game.cpu.tickLimit ?? 20);
-    this.hardLimit = Math.min(limits.hard, cpuLimit - CONFIG.kernel.cpuReserve);
-    this.softLimit = Math.min(limits.soft, this.hardLimit - 1);
+    const ratios = tierLimits(tier);
+    // 有效 CPU 限制：Game.cpu.limit 和 Game.cpu.tickLimit 的较小值。
+    // tickLimit 含 bucket 借用，bucket 低位时可能临时低于 limit；
+    // 取较小值确保不透支当前 tick 真实可用预算。
+    // Fallback 20 仅用于测试环境（Game.cpu 未注入）。
+    const effectiveLimit = Math.min(
+      Game.cpu.limit ?? 20,
+      Game.cpu.tickLimit ?? 20,
+    );
+    // 双重保护：比例上限（随 limit 自适应）+ 绝对余量（保护低 limit 服务器，
+    // 如 10 CPU 下 0.8 reserve 占比更高，防止系统开销挤占关键环）。
+    this.hardLimit = Math.min(
+      effectiveLimit * ratios.hardRatio,
+      effectiveLimit - CONFIG.kernel.cpuReserve,
+    );
+    // softLimit 兜底为 0：极端低 limit（如 limit < reserve）时
+    // hardLimit-reserve 可能为负，Math.max(0, ...) 防止负值导致
+    // canStart 语义混乱（负 softLimit 使 spent()>=softLimit 恒真）。
+    // softLimit=0 时非 P0 全拒是正确的极限降级行为。
+    this.softLimit = Math.max(
+      0,
+      Math.min(effectiveLimit * ratios.softRatio, this.hardLimit - 1),
+    );
   }
 
   canStart(priority: Priority): boolean {
