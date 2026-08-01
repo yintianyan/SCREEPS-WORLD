@@ -117,6 +117,9 @@ describe("水位表 — builder storage 限额（B-1）", () => {
 
 describe("水位表 — terminal 备货双相门禁（D-1）", () => {
   function runDistributor(storageEnergy: number) {
+    // D-1 水位门禁测试模拟「有市场」服务器 — stockTerminalEnergy 的 no-market
+    // 守卫（W7 止血）不应干扰本用例；无市场行为由 terminal-energy-rescue 专项测试覆盖。
+    (globalThis as any).Game.market = { getAllOrders: () => [], credits: 0 };
     const storage = mockStructure("storage", { id: "st1", energy: storageEnergy, capacity: 1000000 });
     const terminal = mockStructure("terminal", { id: "tm1", energy: 0, capacity: 300000 });
     const snap = mockSnapshot({ rcl: 6, storage, terminal, fillTargets: [] });

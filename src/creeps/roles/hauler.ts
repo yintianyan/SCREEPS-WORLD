@@ -43,6 +43,7 @@ import {
   lootRemains,
   pickupDroppedEnergy,
   supplyLabs,
+  withdrawTerminalEnergy,
   withdrawCapped,
   withdrawStorageLink,
 } from "../engine/actions";
@@ -213,6 +214,11 @@ const policy: RolePolicy = {
     //    捡满卸货后下一趟自然回到任务 container。
     lootRemains(CONFIG.economy.lootThreshold),
     pickupDroppedEnergy(CONFIG.economy.lootThreshold),
+    // 1.5 W7 止血（评审修正 P2-1）：无市场时 terminal 死能量回流 storage。
+    //    必须排在衰减资源之后 — terminal 能量不衰减，不应抢占坟墓/掉落堆的
+    //    抢救窗口；排在 assignment 之前 — 否则任务源命中后本动作永不触发。
+    //    有市场时完全惰性 — terminal 能量是交易运费储备，不得挪用。
+    withdrawTerminalEnergy(),
     // 2. assignment 指定的 container（任务驱动，定向搬运）。
     withdrawAssignmentContainer(),
     // 3. 回退到最满 container —— 主取能源。

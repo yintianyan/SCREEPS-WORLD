@@ -8,6 +8,7 @@ import { runAction } from "./helpers";
 import { CONFIG } from "../../../config";
 import { globalCache } from "../../../kernel/global-cache";
 import { getObjectById } from "../../support/obj-cache";
+import { moveToTarget } from "../../movement";
 
 /** haulMineralsToStorage 的 resolve 返回类型。 */
 type MineralHaulTarget =
@@ -195,6 +196,11 @@ export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
   return {
     name: "haul:stock-terminal-energy",
     resolve: (ac) => {
+      // W7 止血（2026-08-01）：无市场（私服）时禁止向 terminal 灌能量。
+      // terminal 无回流路径 + terminal-manager 无市场时整体跳过 → 能量永久锁死
+      // （W7N3/W7N4 实测各锁 ~10k，真实可用储备仅 3-9k、长期 crisis）。
+      // 与 systems/terminal-manager.ts 的 no-market 守卫同款，两处必须保持一致。
+      if (typeof Game.market?.getAllOrders !== "function") return undefined;
       const terminal = ac.snapshot.terminal;
       const storage = ac.snapshot.storage;
       if (!terminal || !storage) return undefined;
@@ -218,6 +224,55 @@ export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
         runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, RESOURCE_ENERGY));
       } else {
         runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, RESOURCE_ENERGY));
+      }
+    },
+  };
+}
+
+/**
+ * W7 止血（2026-08-01）：无市场环境下从 terminal 取能量回 storage。
+ *
+ * 背景：distributor 的 stockTerminalEnergy 会在 storage 富余期把能量灌进
+ * terminal 作「交易运费储备」；私服无市场时这份能量没有消费方（terminal-manager
+ * 整体跳过、无回流路径），永久锁死——W7N3/W7N4 实测各锁 ~10k，真实可用储备仅
+ * 3-9k、长期 crisis。
+ *
+ * 规则（全部满足才取）：
+ *   - 无市场（与 terminal-manager / stockTerminalEnergy 同款守卫，须保持一致）；
+ *   - terminal 有能量、storage 存在且有剩余容量；
+ *   - creep 有背包空间。
+ *
+ * 评审修正（P2-2）：无市场时 terminal 能量没有任何合法用途，应**全量排空**回
+ * storage（1M 容量足够承接），不做 storage 水位地板限制——否则 terminal 存量
+ * 超过 20k 的房间会留下永久锁死残值。有市场时本动作完全惰性（运费储备不得挪用）。
+ *
+ * 取能后由 hauler work 链的 fillStorage 存入 storage（hauler 架构约束只禁止
+ * 从 storage 取能，terminal 不在此列）。有市场时本动作完全惰性。
+ */
+export function withdrawTerminalEnergy(): ActionCandidate<StructureTerminal> {
+  return {
+    name: "withdraw:terminal-energy-rescue",
+    resolve: (ac) => {
+      // 有市场：terminal 能量是交易运费储备，不得挪用。
+      if (typeof Game.market?.getAllOrders === "function") return undefined;
+      const terminal = ac.snapshot.terminal;
+      const storage = ac.snapshot.storage;
+      if (!terminal || !storage) return undefined;
+      if (terminal.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
+      if (storage.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return undefined;
+      if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return undefined;
+      return terminal;
+    },
+    execute: (ac, terminal) => {
+      const amount = Math.min(
+        terminal.store.getUsedCapacity(RESOURCE_ENERGY),
+        ac.creep.store.getFreeCapacity(RESOURCE_ENERGY),
+      );
+      const result = ac.creep.withdraw(terminal, RESOURCE_ENERGY, amount);
+      // 仅 NOT_IN_RANGE 触发移动（角色移动铁律）。ERR_NOT_ENOUGH_RESOURCES 等
+      // 瞬态失败静默——下 tick 重新 resolve，不切 idle 中断候选链。
+      if (result === ERR_NOT_IN_RANGE) {
+        moveToTarget(ac.creep, terminal);
       }
     },
   };
