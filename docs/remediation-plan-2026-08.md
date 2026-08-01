@@ -616,3 +616,28 @@ K/L/M/N/O 五项 + 前批遗留 R2/R3/R4/R6/R7 全部落地，review 结论 **PA
 - 修 A 时 `remoteOps.siteCount` **必须**带实测校正（site 建成/失效即减），禁止
   只增不减的账本——否则远矿会永久占满 `maxGlobalSites` 额度、饿死自有房重建；
 - 所有 Memory 新字段走迁移规范（升版本、幂等、先写后删），与 plan.md §3.4 一致。
+
+---
+
+## Batch 6（2026-08-01 追加：W7 止血与收入路径豁免）
+
+> 状态：**已上线并部署验证**（私服 tick 2055185→2082xxx）。
+> 触发：W7N3/W7N4 贫困陷阱现场定位（recovery 长期 crisis、storage=0、
+> terminal 恒锁 10k、真实可用储备 3-9k、crisisRatio=1 持续数万 tick）。
+
+| 提交 | 修复 | 线上验证 |
+|---|---|---|
+| 71ce3d1 | terminal 饥饿压缩：storage < 20k 时把交易储备压回 storage（有市场留 2k 运费地板；`terminalEnergyReserveFloor`） | W7N4 terminal 10400→800、storage 回填、spawn/ext 回满 |
+| a1834e5 | 矿物卸货容量感知：terminal 总容量打满时 deposit 落 storage（存量死锁——hauler 背 L 永久罚站，W7N3 现场实证） | W7N3 hauler 解除矿物锁，terminal 10150→1950 |
+| f6d51fe | R3a：mineralMiner recovery 保底（`recoveryEligible` 角色钩子，替代 kernel 硬编码 builder 名） | `creep/mineralMiner/colony-state` 从 skip 热点消失 |
+| 9952884 | R3b：recovery 允许现役远矿 op 补员（bootstrap 仍冻结；reserver 仅 normal） | 现役 op（W8N4/W8N2）编制保持满员；newRemoteOpsAllowed 正常 |
+
+**前提修正记录**：b68236b 的「无市场」判定在本私服不成立（引擎 4.3.0
+`@screeps/engine/src/game/market.js` 自带市场 API，但市场为空、credits=0，
+terminal-manager 从不成交）——已由 71ce3d1 改为与市场状态无关的饥饿压缩语义；
+b68236b 的 stockTerminalEnergy no-market 守卫保留（对真无市场服务器仍防死锁）。
+
+**脱困闭环验证**：W7N3 recovery/crisis（storage 0、ext 0%、upgrader 0）
+→ normal/steady（storage 20,665 且持续上升、spawn/ext 100%、upgrader 1）。
+遗留：W7N3 新远矿 op 待 intel 侦察后由 manager 自动开；terminal 满仓矿物
+（L 289k/Z 288k）在空市场上无变现路径，暂为死库存（卸货死锁已消除）。
