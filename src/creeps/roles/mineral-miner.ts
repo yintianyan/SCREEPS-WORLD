@@ -25,6 +25,9 @@ import {
 import { defineRole } from "../engine/role-runner";
 
 const policy: RolePolicy = {
+  // R3a：recovery 收入路径豁免 — 矿物收入不消耗能量（矿工自采、容器→terminal），
+  // 是 W7 贫困陷阱的脱困路径；recovery 时保底 1 个矿工继续采。
+  recoveryEligible: true,
   acquire: [
     // 0. 满载倒矿（防御纵深）— 镜像到 acquire：即便 FSM 因单 tick 抖动
     //    （extractor 冷却置 idle、container 建成延迟等）没能停在 work 模式，

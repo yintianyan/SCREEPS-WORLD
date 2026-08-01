@@ -75,6 +75,9 @@ function builderStorageLimit(ac: ActionContext): number {
 
 const policy: RolePolicy = {
   park: true,
+  // R3a：builder 迁移到 recoveryEligible 钩子（替代 kernel 硬编码角色名）。
+  // recovery 时重建被毁基建是生存行为，不是发展。
+  recoveryEligible: true,
   gate: builderGate,
 
   acquire: [

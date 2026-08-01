@@ -91,6 +91,11 @@ export interface RolePolicy {
    */
   combat?: boolean;
   /**
+   * Recovery 豁免自报（R3a）：与 kernel/contracts.ts CreepRole.recoveryEligible
+   * 对应，由 defineRole 透传到注册角色。recovery 时仍执行（P1 等效预算）。
+   */
+  recoveryEligible?: boolean;
+  /**
    * 无候选时是否切 idle 的额外条件（P2-M）。
    *
    * role-runner 默认 idle 逻辑：本地角色（无 remoteTarget）或到达 remoteTarget 房时切 idle；

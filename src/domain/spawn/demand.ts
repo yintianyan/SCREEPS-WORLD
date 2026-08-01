@@ -615,11 +615,12 @@ export function evaluateDemand(
   // P2：Mineral Miner — RCL6+ 且 extractor 就位、mineral 未采空、有 terminal/storage
   // 容纳时孵化 1 个专职矿工，激活工业链第一环（extractor → container → hauler）。
   // 门禁全满才孵：矿采空（mineralAmount=0）后不再孵化，配 minCount=0 使存量矿工
-  // 老死不补（替换门禁 3 天然阻止）— 无需额外停孵逻辑。normal 态才开（不与
-  // bootstrap/recovery 的保命孵化竞争）。
+  // 老死不补（替换门禁 3 天然阻止）— 无需额外停孵逻辑。
+  // R3a：normal 全量 / recovery 保底（矿物收入不耗能量，是脱困路径）；bootstrap
+  // 仍不开（保命孵化优先）。
   const mineral = snapshot.minerals[0];
   if (
-    colonyState === "normal" &&
+    (colonyState === "normal" || colonyState === "recovery") &&
     snapshot.rcl >= 6 &&
     snapshot.extractor !== undefined &&
     mineral !== undefined &&

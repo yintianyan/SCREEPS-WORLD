@@ -829,12 +829,17 @@ describe("mineralMiner 孵化门禁（工业链第一环激活）", () => {
     expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
   });
 
-  it("recovery 态 → 不孵化（不与保命孵化竞争）", () => {
+  it("recovery 态 → 保底孵化 1 个（R3a 收入路径豁免：矿物收入是脱困路径）", () => {
     const snap = industrySnap();
     const { requests } = evaluateDemand(snap, [], "recovery", livingHarvester(), [], normalCtx(0), 1000);
+    expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(1);
+  });
+
+  it("bootstrap 态 → 不孵化（保命孵化优先，豁免仅限 recovery）", () => {
+    const snap = industrySnap();
+    const { requests } = evaluateDemand(snap, [], "bootstrap", livingHarvester(), [], normalCtx(0), 1000);
     expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
   });
 });
-
 
 

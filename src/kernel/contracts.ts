@@ -61,6 +61,18 @@ export interface System {
 export interface CreepRole {
   readonly name: string;
   readonly priority: Priority;
+  /**
+   * Recovery 豁免自报（R3a）：recovery 时 P2+ 角色默认被 colony-state 门禁跳过；
+   * 声明 true 的角色视为「生存/脱困路径」，recovery 时仍执行并以 P1 等效优先级
+   * 通过 CPU budget。kernel 只读此标志，不感知具体角色名。
+   *
+   * 典型实现：
+   *   - builder：重建被毁基建（生存行为）
+   *   - mineralMiner：矿物收入不耗能量（脱困路径）
+   *
+   * 注意：bootstrap 一律不豁免（保命孵化优先）。
+   */
+  readonly recoveryEligible?: boolean;
   run(creep: Creep, ctx: TickContext): void;
 }
 

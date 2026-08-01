@@ -332,27 +332,30 @@ export class Kernel {
     for (const { creep, role } of creepEntries) {
       // 每房殖民地状态门禁：在 recovery/bootstrap 时允许 P0 和 P1（能量链），
       // 但跳过 P2+（发展角色如 upgrader）。
-      // 例外：recovery 时允许 builder——重建被毁基建是生存行为，不是发展。
+      // 例外（R3a）：recovery 时允许角色自报的 survival/income 豁免
+      // （recoveryEligible）——builder 重建基建、mineralMiner 矿物收入。
+      // kernel 只读钩子，不再硬编码角色名（builder 已迁移，与 System
+      // recoveryEligible 同一模式）。
       // 状态由 room-state 系统每 tick 写入 RoomMemory.colonyState。
       //
       // P1-2（CPU 死亡螺旋修复）：colony-state 门禁在 budget 检查之前执行。
       // 原先 budget.canStart 先于 colony-state 检查，recovery tier 的 maxPriority=1
       // 会先挡住 P2 builder，使 colony-state 中的 builder 豁免形同虚设。
-      // 现在：先计算 colony-state 豁免，被豁免的 builder 用 P1 等效优先级通过 budget。
+      // 现在：先计算 colony-state 豁免，被豁免的角色用 P1 等效优先级通过 budget。
       const home = creep.memory.home;
       const roomState = home ? Memory.rooms[home]?.colonyState ?? "normal" : "normal";
-      const isBuilderRecoveryExempt = roomState === "recovery" && role.name === "builder";
+      const isRecoveryExempt = roomState === "recovery" && role.recoveryEligible === true;
       if (
         (roomState === "recovery" || roomState === "bootstrap") &&
         role.priority > 1 &&
-        !isBuilderRecoveryExempt
+        !isRecoveryExempt
       ) {
         recordSkip(`creep/${role.name}/colony-state`);
         continue;
       }
 
-      // Budget 检查 — 被豁免的 builder 用 P1 等效优先级，获得 CPU 逃生通道。
-      const budgetPriority = isBuilderRecoveryExempt ? (1 as Priority) : role.priority;
+      // Budget 检查 — 被豁免的角色用 P1 等效优先级，获得 CPU 逃生通道。
+      const budgetPriority = isRecoveryExempt ? (1 as Priority) : role.priority;
       if (!ctx.budget.canStart(budgetPriority)) {
         recordSkip(`creep/${role.name}/budget`);
         continue;
@@ -375,4 +378,3 @@ export class Kernel {
 // P1-F：hasCriticalStructureGap 已搬到 src/domain/construction/queue.ts，
 // 作为 construction-manager 的 recoveryEligible 钩子实现。kernel 不再
 // 直接持有此函数 — 通过 system.recoveryEligible 钩子间接消费。
-

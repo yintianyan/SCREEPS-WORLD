@@ -47,6 +47,8 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
   return {
     name,
     priority,
+    // R3a：recovery 豁免从 RolePolicy 透传（builder/mineralMiner 自报）。
+    recoveryEligible: policy.recoveryEligible === true,
     run(creep: Creep, ctx: TickContext): void {
       // try/finally 保证所有 return 路径（含异常）都绘制状态指示灯。
       // finally 块在 CONFIG.debug.statusLight 关闭时为零开销（函数内首行即 return）。
