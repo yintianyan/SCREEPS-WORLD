@@ -1,8 +1,10 @@
 # Tuning Engine 改进设计文档
 
-> 状态：草案 v5（2026-08-01）— A 方案已实现（工作区未提交），实现评审见附录 E
-> （P1-P5 问题清单，P2/P3/P5 待修，P1/P4 待定稿）。架构评审已并入（附录 D）：
-> A 的验证语义按 D.2-D.5 修正后实施；文档一致性按 D.6 统一；改进 D 范围按 D.7 收窄。
+> 状态：已实现并提交（de0d2d3，2026-08-01）— A 方案完整版（pending-lock + verifyDelay
+> + 人口合同 TTL + 下调护栏 + 冻结复位 + event-log 审计）+ v20 迁移 + 28 个测试已落地。
+> 附录 E.2 的 P1-P4 已全部修复（代码考古确认，状态见 E.2 表）；P5 文档同步本次完成。
+> 架构评审已并入（附录 D）：A 的验证语义按 D.2-D.5 修正后实施；文档一致性按 D.6 统一；
+> 改进 D 范围按 D.7 收窄。
 > 观察期已完成（tick 1623282→1676531，53249 tick），W8N3 `builder.maxCount` 振荡 1 次
 > → 触发完整版 A。P1/P2/P3 设计方案见 §3.1.6-3.1.8（附录 B-P1/P2/P3 已修）。
 > 触发场景：调参状态实证分析发现 tuning 已陷入「棘轮式锁死」状态，需在动手改代码前确认设计方向。
@@ -983,14 +985,16 @@ hauler 下调验证只有 `containerFillRatio ↑ = 改善`。容器变满既可
 
 ## 附录 E：A 方案实现评审（2026-08-01）
 
-> 评审对象：工作区已实现的完整版 A（未提交，约 1300 行：evaluator.ts /
+> 评审对象：工作区已实现的完整版 A（评审时未提交，约 1300 行：evaluator.ts /
 > tuning-engine.ts / bounds.ts / types.ts / event-log.ts / memory.ts 迁移 /
 > global.d.ts + 28 个新测试）。
 > 评审方法：对照附录 D 定稿逐条代码考古 + 设计参数推演。
 > 验证基线：`npm run typecheck` 全绿；`npm run test:unit` 116 文件 / 1376 用例通过
 > （新增 tuning-closed-loop 14 + v19→v20 迁移 14）。
 > 总体判定：核心机制全部落地且测试锁定；存在 1×MEDIUM-HIGH + 2×MEDIUM + 2×LOW，
-> 建议修复后提交。
+> 建议修复后提交。**修复已完成（de0d2d3 提交）：P1-P4 全部修复并有测试锁定
+> （状态见 E.2 表），P5 文档同步随本次完成。** 验证基线：typecheck 全绿；
+> `npm run test:unit` 116 文件 / 1391 用例通过。
 
 ### E.1 实现对照表（vs 附录 D 定稿）
 
@@ -1010,11 +1014,11 @@ hauler 下调验证只有 `containerFillRatio ↑ = 改善`。容器变满既可
 
 | # | 级别 | 问题 | 位置 | 证据 / 后果 | 修法 / 状态 |
 |---|---|---|---|---|---|
-| P1 | MEDIUM-HIGH | 人口合同 blocked 无 TTL、无观测 → 参数可被永久排除 | evaluator.ts `verifyPendingAdjustments` + tuning-engine.ts `safeRunTuning` | `blockedParams` 返回后从未被消费；`contractBlocked` 字段定义但从未写入；lastEval 无 blocked 标记。tuning 触发阈值（containerFill>0.7）与 demand 孵化阈值（0.4/0.8 分档）口径不同 + 能量饥饿排队 → 合同可能长期不满足 → pending-lock 永久排除该参数，零告警 | 待定稿：blocked 连续 2-3 窗口（1000-1500 tick）后回滚或清空；接线 `contractBlocked`；加事件 / lastEval 标记 |
-| P2 | MEDIUM | hauler 下调护栏 reserveDelta 分支是死代码 | evaluator.ts `capturePreAdjustSignals` / `isGuardrailTriggered` | hauler 快照只存 containerFillRatio + spawnFillRatio，未存 avgReserveDelta → 护栏读取恒 undefined → 永不触发；spawnFill 护栏仍生效 | 补一行快照字段 + 测试 |
-| P3 | MEDIUM | 验证 pass 不继承评估的全局门禁 | tuning-engine.ts `safeRunTuning`（verify 无条件先于 evaluate 执行） | 危机 / 低 bucket 期间 containerFill/storage 外生暴跌 → 误判未改善 → 回滚 + 计次 → 可能误冻结 | verify 前加 tier/crisis/rcl 门禁，危机保留 pending 复验；或降权不计回滚次数 |
-| P4 | LOW-MEDIUM | 解冻后 rollbackCount 保留 → 一次回滚即再冻结 10000 tick | evaluator.ts `applyFreezePolicy` + bounds.ts | 病理参数复发快冻结是特性；但对「冻结期世界已变」的场景过于粘滞 | 待定稿：解冻时清零（或减半）rollbackCount，复发确认重新交给阈值 |
-| P5 | LOW | 注释 / 文档过期 | tuning-engine.ts 顶部注释（仍写「用 console.log 记录调优事件」）；§5.5 integration 测试未建；AGENTS.md schemaVersion=19（现 20） | 误导 + 测试债 + 文档漂移 | 同步注释；§5.5 标注已由 unit 覆盖或补 integration；AGENTS.md 升 20 |
+| P1 | MEDIUM-HIGH | 人口合同 blocked 无 TTL、无观测 → 参数可被永久排除 | evaluator.ts `verifyPendingAdjustments` + tuning-engine.ts `safeRunTuning` | `blockedParams` 返回后从未被消费；`contractBlocked` 字段定义但从未写入；lastEval 无 blocked 标记。tuning 触发阈值（containerFill>0.7）与 demand 孵化阈值（0.4/0.8 分档）口径不同 + 能量饥饿排队 → 合同可能长期不满足 → pending-lock 永久排除该参数，零告警 | ✅ 已修复：blocked 连续 2 窗口（2×verifyDelay=3000 tick）超时回滚并解除 pending-lock（evaluator.ts:799-809）；`TuningBlocked` 事件 + `lastEval.blockedParams` 诊断接线（tuning-engine.ts:368-394）；5 测试锁定（tuning-closed-loop.test.ts:201-322） |
+| P2 | MEDIUM | hauler 下调护栏 reserveDelta 分支是死代码 | evaluator.ts `capturePreAdjustSignals` / `isGuardrailTriggered` | hauler 快照只存 containerFillRatio + spawnFillRatio，未存 avgReserveDelta → 护栏读取恒 undefined → 永不触发；spawnFill 护栏仍生效 | ✅ 已修复：快照补 `avgReserveDelta`（evaluator.ts:515-519，注释注明「P2 修复」）；reserveDelta 护栏不再恒 false；3 测试（tuning-closed-loop.test.ts:394-442） |
+| P3 | MEDIUM | 验证 pass 不继承评估的全局门禁 | tuning-engine.ts `safeRunTuning`（verify 无条件先于 evaluate 执行） | 危机 / 低 bucket 期间 containerFill/storage 外生暴跌 → 误判未改善 → 回滚 + 计次 → 可能误冻结 | ✅ 已修复：`checkVerifyGate`（tuning-engine.ts:235-247）与 evaluate 门禁逐条对齐（tier→crisis→rcl）；verify 条件执行（:162），门禁未过时 rollbackCount 不累加；3 测试（tuning-engine-integration.test.ts:936-1052） |
+| P4 | LOW-MEDIUM | 解冻后 rollbackCount 保留 → 一次回滚即再冻结 10000 tick | evaluator.ts `applyFreezePolicy` + bounds.ts | 病理参数复发快冻结是特性；但对「冻结期世界已变」的场景过于粘滞 | ✅ 已修复：解冻时整条删除 frozenParams（rollbackCount 清零，evaluator.ts:897-904，采用「清零」方案）；复验测试断言「解冻后需重新累积 3 次才再冻结」（tuning-closed-loop.test.ts:555-589） |
+| P5 | LOW | 注释 / 文档过期 | tuning-engine.ts 顶部注释（仍写「用 console.log 记录调优事件」）；§5.5 integration 测试未建；AGENTS.md schemaVersion=19（现 20） | 误导 + 测试债 + 文档漂移 | ✅ 已修复（残余 1 项）：tuning-engine 顶部注释已改 event-log（:36-38）；AGENTS.md 已升 20；docs 状态行随本次同步。**残余：§5.5 独立 integration 文件未建，完整闭环由 unit 层 tuning-closed-loop.test.ts 覆盖（722 行）** |
 
 ### E.3 行为推演验证（正面确认）
 
@@ -1029,7 +1033,10 @@ W8N3 builder 振荡场景（§3.1.5）在新时序下：
 
 ### E.4 收尾步骤（建议顺序）
 
-1. P2（一行快照字段）+ P3（门禁前置，约 15 行）+ P5（注释 / 文档同步）；
-2. P1 定 TTL 策略后实现（建议 2 窗口回滚 + TuningBlocked 事件）；
-3. 补 3 个测试：blocked TTL、hauler reserve 护栏、危机窗口验证跳过；
-4. `npm run build` + `npm run test:integration` 全绿后提交。
+> 状态：步骤 1-3 已执行完毕（de0d2d3 提交）；步骤 4 验证基线：typecheck 全绿、
+> 116 文件 1391 unit 用例通过。
+
+1. ✅ P2（一行快照字段）+ P3（门禁前置，约 15 行）+ P5（注释 / 文档同步）；
+2. ✅ P1 定 TTL 策略后实现（2 窗口回滚 + TuningBlocked 事件）；
+3. ✅ 补 3 个测试：blocked TTL、hauler reserve 护栏、危机窗口验证跳过；
+4. `npm run build` + `npm run test:integration` 全绿后提交（已提交 de0d2d3）。
