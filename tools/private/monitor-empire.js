@@ -8,14 +8,14 @@
  * 二者交叉，既看"地面真相"又看"框架意图"。
  *
  * 用法：
- *   node tools/monitor-empire.js            # 打印一次全景快照
- *   node tools/monitor-empire.js --watch    # 每 INTERVAL 秒刷新（前台）
- *   node tools/monitor-empire.js --once     # 采样一次并追加日志（供外部定时驱动）
- *   node tools/monitor-empire.js --json      # 输出原始 JSON（供二次处理）
+ *   node tools/private/monitor-empire.js            # 打印一次全景快照
+ *   node tools/private/monitor-empire.js --watch    # 每 INTERVAL 秒刷新（前台）
+ *   node tools/private/monitor-empire.js --once     # 采样一次并追加日志（供外部定时驱动）
+ *   node tools/private/monitor-empire.js --json      # 输出原始 JSON（供二次处理）
  *
  * 环境变量：MONITOR_INTERVAL（默认 60）
  */
-require("./load-env");
+require("../load-env");
 const fs = require("fs");
 const path = require("path");
 const { runCli } = require("./screeps-cli");

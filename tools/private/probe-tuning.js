@@ -8,9 +8,9 @@
  *   3. per-room：CONFIG 基线 vs 调优覆盖 delta + lastAdjusted 距今 tick + lastEval 信号
  *   4. 跨房经济实况（storage/RCL/colonyState）供判断「是否值得调」
  *
- * 用法：node tools/probe-tuning.js
+ * 用法：node tools/private/probe-tuning.js
  */
-require("./load-env");
+require("../load-env");
 const { runCliJson } = require("./screeps-cli");
 
 // CONFIG.roles 静态基线（与 src/config/index.ts 一致，client-side 对照）

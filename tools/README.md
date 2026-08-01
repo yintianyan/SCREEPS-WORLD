@@ -1,8 +1,30 @@
 # Screeps 私服工具集
 
 当前环境为私服（Docker screeps-launcher + CLI 后门）。所有工具通过
-`tools/screeps-cli.js`（docker exec → 容器内 21026 CLI 端口）访问服务端
+`tools/private/screeps-cli.js`（docker exec → 容器内 21026 CLI 端口）访问服务端
 storage 层（`storage.db` + `storage.env`），无需 HTTP 认证。
+
+## 目录结构
+
+```
+tools/
+  load-env.js            # 共享 .env 加载（tools/.env）
+  check-ci.js            # GitHub Actions 状态查询（与服务器无关）
+  degrade-test.js        # body 降级算法本地测试
+  private/               # 私服工具（CLI 后门通道）
+    screeps-cli.js       # CLI 适配层（勿删）
+    console-cli.js       # 私服 console 执行
+    deploy-cli.js        # 私服部署（写入 users.code）
+    empire-collector.js  # 全面数据采集器（后分析主通道）
+    monitor-empire.js    # 实时帝国看板
+    probe-tuning*.js     # tuning 引擎状态探测器
+    data/                # 采集数据输出（collect/ 时间序列与快照）
+  official/              # 官服工具（screeps.com HTTP API + token）
+    console-eval*.js     # 官服 console 执行（Memory.__diag 中转）
+    check-branches.js    # 官服分支检查
+    deploy-screeps.js    # 官服代码部署
+    diag-expr.js / diag-stall.js  # 官服诊断表达式
+```
 
 ## 核心工具
 
@@ -13,7 +35,7 @@ storage 层（`storage.db` + `storage.env`），无需 HTTP 认证。
 （世界重置）自动开新会话文件，保证从 RCL1 开始的完整生命周期可重建。
 
 ```bash
-# 常驻采集（推荐，输出到 tools/data/collect/）
+# 常驻采集（推荐，输出到 tools/private/data/collect/）
 npm run collect:private
 
 # 单次采样 / 单次快照 / 高频模式（10 tick + 500 tick 快照）
@@ -22,7 +44,7 @@ npm run collect:private:snapshot
 npm run collect:private:fast
 ```
 
-输出（`tools/data/collect/`）：
+输出（`tools/private/data/collect/`）：
 
 | 文件 | 内容 |
 |------|------|
@@ -74,7 +96,7 @@ type/structureType/坐标/store/能量/hits/ttl/body/spawning/进度/资源等�
 ```python
 import json
 # 每行一个 JSON 对象
-with open("tools/data/collect/timeseries-*.jsonl") as f:
+with open("tools/private/data/collect/timeseries-*.jsonl") as f:
     rows = [json.loads(line) for line in f]
 # 能量流：差分 storage/terminal 能量即可得到净流入速率
 # 人口：按房间按角色画数量时间线，对照 spawnQueueByRole 找孵化瓶颈

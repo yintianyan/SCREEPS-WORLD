@@ -11,15 +11,15 @@
  *     保证从 RCL1 开始的完整生命周期可分段重建）
  *
  * 用法：
- *   node tools/empire-collector.js              # 常驻采集（默认 20 tick 间隔）
- *   node tools/empire-collector.js --once       # 单次 timeseries 采样
- *   node tools/empire-collector.js --snapshot   # 单次全量快照采样
- *   node tools/empire-collector.js --interval-tick 10   # 10 tick 间隔
- *   node tools/empire-collector.js --snapshot-tick 500  # 快照频率
+ *   node tools/private/empire-collector.js              # 常驻采集（默认 20 tick 间隔）
+ *   node tools/private/empire-collector.js --once       # 单次 timeseries 采样
+ *   node tools/private/empire-collector.js --snapshot   # 单次全量快照采样
+ *   node tools/private/empire-collector.js --interval-tick 10   # 10 tick 间隔
+ *   node tools/private/empire-collector.js --snapshot-tick 500  # 快照频率
  *
  * 环境变量：SCREEPS_CONTAINER / SCREEPS_CLI_PORT（见 load-env）
  */
-require("./load-env");
+require("../load-env");
 const fs = require("fs");
 const path = require("path");
 const { runCli } = require("./screeps-cli");

@@ -629,7 +629,7 @@ const shortTermAlignedWithLongTerm =
                       ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 2: 观察期 ≥50000 tick（约 1 个游戏月）           │
-│  - 用 tools/probe-tuning.js 定期采集                    │
+│  - 用 tools/private/probe-tuning.js 定期采集             │
 │  - 覆盖季节性波动（远矿车队往返、市场周期、Builder）   │
 │  - 监控：roleBounds 偏离 / lastEval.adjustments 累计 /  │
 │    trend 方向 / 锁死是否复现 / 振荡是否出现             │
@@ -686,7 +686,7 @@ const shortTermAlignedWithLongTerm =
 
 ### 7.3 监控点
 
-部署后用 [tools/probe-tuning.js](../tools/probe-tuning.js) 监控以下指标：
+部署后用 [tools/private/probe-tuning.js](../tools/private/probe-tuning.js) 监控以下指标：
 
 1. **roleBounds 偏离基线程度**：改进 A 上线后，偏离 > 2 的参数应在 2 个评估周期（1000 tick）内开始回归。
 2. **pendingValidation 累积**：每个房间的 pending 条目数应 ≤ 5（每参数最多 1 个），超出说明验证 pass 未执行。
@@ -750,7 +750,7 @@ const shortTermAlignedWithLongTerm =
 
 ## 附录 A：参考资料
 
-- 实测数据采集：[tools/probe-tuning.js](../tools/probe-tuning.js)（tick=1578870 私服快照）
+- 实测数据采集：[tools/private/probe-tuning.js](../tools/private/probe-tuning.js)（tick=1578870 私服快照）
 - 原始 tuning-engine 设计：[plan.md §2.2](./plan.md)、[src/systems/tuning-engine.ts 顶部注释](../src/systems/tuning-engine.ts)
 - 历史迁移：v7 引入 tuning 结构、v18 引入 baselineVersion、v19 demand 收口（[src/kernel/memory.ts](../src/kernel/memory.ts)）
 
@@ -815,7 +815,7 @@ const shortTermAlignedWithLongTerm =
 
 ## 附录 C：改进 A 投资判定矩阵（Step 3 决策依据）
 
-> 本矩阵是 §6 Step 3 的决策依据。B+C 上线后，用 [tools/probe-tuning.js](../tools/probe-tuning.js) 采集 **≥50000 tick** 数据，按下表判定改进 A 的投资级别。
+> 本矩阵是 §6 Step 3 的决策依据。B+C 上线后，用 [tools/private/probe-tuning.js](../tools/private/probe-tuning.js) 采集 **≥50000 tick** 数据，按下表判定改进 A 的投资级别。
 >
 > **判定原则**：根因已被 B（门禁修正）+ C（RCL 分级）修复，A 是「防未来未知瞬态」的保险。保险值不值得买，看 B+C 上线后还有没有瞬态误判 — 而不是看「A 的设计是否完备」。
 

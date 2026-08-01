@@ -19,7 +19,7 @@
  *   SCREEPS_CONTAINER  私服容器名（默认 screeps-server）
  *   SCREEPS_CLI_PORT   容器内 CLI 端口（默认 21026）
  */
-require("./load-env");
+require("../load-env");
 const { execFile } = require("child_process");
 
 const CONTAINER = process.env.SCREEPS_CONTAINER || "screeps-server";

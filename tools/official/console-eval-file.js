@@ -1,5 +1,5 @@
 // 读取表达式文件，POST 到 Screeps console 执行，随后拉回 Memory.__diag。
-require("./load-env");
+require("../load-env");
 const https = require("https");
 const zlib = require("zlib");
 const fs = require("fs");

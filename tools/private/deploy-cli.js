@@ -11,7 +11,7 @@
  *
  * 用法：node tools/deploy-cli.js [branch]   // 默认分支 default
  */
-require("./load-env");
+require("../load-env");
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");

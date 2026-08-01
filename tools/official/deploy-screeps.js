@@ -18,7 +18,7 @@
  */
 const fs = require("fs");
 const path = require("path");
-require("./load-env"); // 本地手动部署时从 tools/.env 读取 token；CI 中 env 已由 workflow 注入
+require("../load-env"); // 本地手动部署时从 tools/.env 读取 token；CI 中 env 已由 workflow 注入
 
 const token = process.env.SCREEPS_TOKEN;
 const branch = process.env.SCREEPS_BRANCH || "default";

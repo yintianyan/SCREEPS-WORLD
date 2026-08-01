@@ -1,5 +1,5 @@
 // 列出 Screeps 账户的代码分支及当前活跃分支。
-require("./load-env");
+require("../load-env");
 const https = require("https");
 const token = process.env.SCREEPS_TOKEN;
 if (!token) { console.error("no token"); process.exit(1); }

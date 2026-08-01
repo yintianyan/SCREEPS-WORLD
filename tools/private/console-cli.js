@@ -13,7 +13,7 @@
  *   node tools/console-cli.js 'storage.db.rooms.count({}).then(n=>"rooms="+n)'
  *   node tools/console-cli.js -f tools/diag-private.js   # 从文件读表达式
  */
-require("./load-env");
+require("../load-env");
 const fs = require("fs");
 const { runCli } = require("./screeps-cli");
 

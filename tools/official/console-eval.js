@@ -1,5 +1,5 @@
 // 通过 Screeps console API 在游戏内执行诊断表达式（运行时真相，无需部署）。
-require("./load-env");
+require("../load-env");
 const https = require("https");
 const token = process.env.SCREEPS_TOKEN;
 const shard = process.env.SCREEPS_SHARD || "shard3";
