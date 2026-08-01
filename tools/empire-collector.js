@@ -57,7 +57,8 @@ const TIMESERIES_EXPR = `
       function slot(room){
         if(!byRoom[room]) byRoom[room]={struct:{},creeps:{},body:{},creepCarry:0,creepTtl:0,creepN:0,
           energy:{spawnE:0,spawnCap:0,extE:0,extCap:0,contE:0,storE:0,termE:0,srcE:0,srcCap:0,towerE:0,towerCap:0},
-          res:{},towers:[],links:[],sites:0,hostiles:0,spawning:0,dropped:0,tombs:0,minerals:{}};
+          res:{},towers:[],links:[],nukers:[],powerSpawns:[],hostileBody:{},
+          sites:0,hostiles:0,spawning:0,dropped:0,tombs:0,minerals:{}};
         return byRoom[room];
       }
       objs.forEach(function(o){
@@ -70,7 +71,16 @@ const TIMESERIES_EXPR = `
             var carry=0; for(var k in (o.store||{})){ if(k==="energy") carry+=o.store[k]; }
             b.creepCarry+=carry;
             (o.body||[]).forEach(function(p){ b.body[p.type]=(b.body[p.type]||0)+1; });
-          } else { b.hostiles++; }
+          } else {
+            b.hostiles++;
+            // 敌方 body 构成（军事威胁评估）：攻击/治疗/拆迁/boost 部件聚合。
+            (o.body||[]).forEach(function(p){
+              var key=p.type+(p.boost?"+b":"");
+              if(p.type==="attack"||p.type==="rangedAttack"||p.type==="heal"||p.type==="rangedHeal"||p.type==="dismantle"||p.type==="claim"||p.type==="work"||p.boost){
+                b.hostileBody[key]=(b.hostileBody[key]||0)+1;
+              }
+            });
+          }
           return;
         }
         if(o.type==="source"){ b.energy.srcE+=(o.energy||0); b.energy.srcCap+=(o.energyCapacity||0); return; }
@@ -85,6 +95,8 @@ const TIMESERIES_EXPR = `
         if(o.type==="extension"){ b.energy.extE+=((o.store&&o.store.energy)||0); b.energy.extCap+=((o.storeCapacityResource&&o.storeCapacityResource.energy)||50); }
         if(o.type==="tower"){ b.energy.towerE+=((o.store&&o.store.energy)||0); b.energy.towerCap+=((o.storeCapacityResource&&o.storeCapacityResource.energy)||1000); b.towers.push({x:o.x,y:o.y,e:(o.store&&o.store.energy)||0}); }
         if(o.type==="link"){ b.links.push({x:o.x,y:o.y,e:(o.store&&o.store.energy)||0}); }
+        if(o.type==="nuker"){ b.nukers.push({x:o.x,y:o.y,cd:o.cooldown||0}); }
+        if(o.type==="powerSpawn"){ b.powerSpawns.push({x:o.x,y:o.y}); }
         if(o.type==="storage"||o.type==="terminal"||o.type==="factory"||o.type==="lab"||o.type==="powerSpawn"||o.type==="nuker"){
           b.res[o.type]={};
           for(var rk in (o.store||{})){ b.res[o.type][rk]=o.store[rk]; }
@@ -108,11 +120,11 @@ const TIMESERIES_EXPR = `
         cpuTop={bucket:last.bk,cpu:last.cpu,
           s:[{n:last.s1,v:last.v1},{n:last.s2,v:last.v2},{n:last.s3,v:last.v3}].filter(function(x){return x.n;})};
       }
-      // 事件摘要：segment 2 最近 3 条。
+      // 事件摘要：segment 2 最近 10 条（含入侵/清除/safeMode/结构被毁等军事事件）。
       var events=[];
       if(evSeg&&evSeg.events&&evSeg.events.d){
         var evd=evSeg.events.d;
-        for(var i=Math.max(0,evd.length-3);i<evd.length;i++){ events.push(evd[i]); }
+        for(var i=Math.max(0,evd.length-10);i<evd.length;i++){ events.push(evd[i]); }
       }
       var roomViews=myRooms.map(function(rm){
         var b=byRoom[rm]||slot(rm);
@@ -129,7 +141,13 @@ const TIMESERIES_EXPR = `
         var sqBy={}; var sqCost=0;
         sq.forEach(function(r){ sqBy[r.role]=(sqBy[r.role]||0)+1; if(r.body) sqCost+=r.body.reduce(function(a,p){return a+(p.cost||0);},0); });
         var ro={}; var rop=rmem.remoteOps||{};
-        Object.keys(rop).forEach(function(k){ ro[k]={state:rop[k].state,haulerNeed:rop[k].haulerNeed,threat:!!rop[k].threat}; });
+        Object.keys(rop).forEach(function(k){ ro[k]={state:rop[k].state,haulerNeed:rop[k].haulerNeed,
+          threat:!!rop[k].threat,threatUntil:rop[k].threatUntil||0,
+          blockedUntil:rop[k].blockedUntil||0,lastSeen:rop[k].lastSeen||0}; });
+        // 邻居情报摘要（扩张/威胁决策依据）：条目数 + 未过期危险房数。
+        var intel=rmem.intel||{};
+        var intelDanger=0;
+        Object.keys(intel).forEach(function(k){ if(intel[k].dangerUntil&&intel[k].dangerUntil>tick) intelDanger++; });
         return {
           room:rm, rcl:rooms[rm].rcl, prog:rooms[rm].prog, progTotal:rooms[rm].progTotal,
           safeMode:rooms[rm].safeMode, downgrade:rooms[rm].downgrade,
@@ -141,6 +159,8 @@ const TIMESERIES_EXPR = `
           gaps:(kernel.layoutGaps&&kernel.layoutGaps[rm])||null,
           layout:{state:layout.state,revision:layout.revision,nextPlan:layout.nextPlanTick,nextGapPlan:layout.nextGapPlanTick,anchorScore:layout.anchorScore},
           struct:b.struct, sites:b.sites, spawning:b.spawning, hostiles:b.hostiles,
+          hostileBody:b.hostileBody, nukers:b.nukers, powerSpawns:b.powerSpawns,
+          intel:{entries:Object.keys(intel).length,danger:intelDanger},
           energy:{spawn:b.energy.spawnE,spawnCap:b.energy.spawnCap,ext:b.energy.extE,extCap:b.energy.extCap,
             cont:b.energy.contE,stor:b.energy.storE,term:b.energy.termE,src:b.energy.srcE,srcCap:b.energy.srcCap,
             tower:b.energy.towerE,towerCap:b.energy.towerCap},
@@ -170,7 +190,9 @@ const TIMESERIES_EXPR = `
         t:tick, ts:Date.now(), sv:mem.schemaVersion||0, cpu:u.lastUsedCpu, gcl:u.gcl||0,
         kernel:{tier:kernel.tier||null,recoveryTicks:kernel.recoveryTicks||0,
           skipReasons:kernel.skipReasons||{},strategy:kernel.strategy||null,
-          expansion:kernel.expansion||null,gaps:kernel.layoutGaps||{}},
+          expansion:kernel.expansion||null,
+          expansionBlacklist:Object.keys(kernel.expansionBlacklist||{}).length,
+          gaps:kernel.layoutGaps||{}},
         layoutBlocked:layoutBlocked, cpuTop:cpuTop, events:events, rooms:roomViews, remoteRooms:remoteRooms
       });
     });
@@ -202,9 +224,9 @@ const SNAPSHOT_EXPR = `
       var objsOut=[];
       objs.forEach(function(o){
         if(!keep[o.room]) return;
-        if(o.type==="creep"&&o.user!==uid) return; // 只存己方 creep（敌情已在 timeseries）
         var slim={r:o.room,t:o.type,st:o.structureType,x:o.x,y:o.y};
         if(o.user===uid||o.type==="source"||o.type==="controller"||o.type==="mineral") slim.u=true;
+        if(o.user&&o.user!==uid) slim.owner=String(o.user).slice(0,8); // 敌方/中立归属
         if(o.store) slim.store=o.store;
         if(o.energy!==undefined) slim.e=o.energy;
         if(o.energyCapacity!==undefined) slim.ec=o.energyCapacity;
@@ -212,8 +234,10 @@ const SNAPSHOT_EXPR = `
         if(o.mineralType!==undefined) slim.mt=o.mineralType;
         if(o.hits!==undefined) slim.h=o.hits;
         if(o.ticksToLive!==undefined) slim.ttl=o.ticksToLive;
-        if(o.body) slim.body=o.body.map(function(p){return p.type;});
+        if(o.body) slim.body=o.body.map(function(p){return p.boost?p.type+"+"+p.boost:p.type;});
         if(o.spawning) slim.sp=o.spawning.name;
+        if(o.cooldown!==undefined) slim.cd=o.cooldown;
+        if(o.actionLog) slim.al=o.actionLog;
         if(o.level!==undefined) slim.lv=o.level;
         if(o.progress!==undefined) slim.pr=o.progress;
         if(o.progressTotal!==undefined) slim.pt=o.progressTotal;
@@ -222,12 +246,15 @@ const SNAPSHOT_EXPR = `
         if(o.resourceType!==undefined) slim.rt=o.resourceType;
         objsOut.push(slim);
       });
-      var seg0=null; try{ seg0=JSON.parse(segs["0"]||"null"); }catch(e){}
+      var segAll={};
+      for(var si=0;si<=3;si++){
+        try{ segAll[si]=JSON.parse(segs[""+si]||"null"); }catch(e){ segAll[si]=null; }
+      }
       return JSON.stringify({
         t:tick, ts:Date.now(), kind:"snapshot",
         objects:objsOut,
         memory:mem,
-        layoutSegments:seg0?{seg0:seg0}:null,
+        segments:segAll,
         rooms:keepArr
       });
     });
