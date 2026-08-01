@@ -45,13 +45,58 @@ function runRoomLinks(snapshot: RoomSnapshot): void {
     role: classifyLink(l, snapshot),
   }));
 
-  const transfers = planLinkTransfers(infos, { minTransfer: CONFIG.economy.link.minTransfer });
+  // 需求驱动的 controller 目标水位（RCL8 停供 / 保级 / RCL<8 分级）。
+  const controllerInfo = infos.find(i => i.role === "controller");
+  const controllerTargetEnergy = controllerInfo
+    ? computeControllerLinkTarget(
+        snapshot.rcl,
+        snapshot.controller,
+        snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
+        controllerInfo.energyCapacity,
+      )
+    : undefined;
+  const transfers = planLinkTransfers(infos, {
+    minTransfer: CONFIG.economy.link.minTransfer,
+    controllerTargetEnergy,
+  });
   for (const t of transfers) {
     const from = linkMap.get(t.fromId);
     const to = linkMap.get(t.toId);
     if (!from || !to) continue;
     from.transferEnergy(to, t.amount);
   }
+}
+
+/**
+ * 需求驱动的 controller link 目标水位（2026-08-01）。
+ *
+ * 背景：旧实现 controller 永远优先被 source 喂满——RCL8 满级后升级零收益，
+ * 15/tick 白烧（W7N4 实测 storage 恒 0 主因之一）。目标水位让 controller
+ * 变成受控消费者：满级停供、降级风险保级、RCL<8 按 storage 水位分级。
+ *
+ * @param rcl          房间 RCL
+ * @param controller   房间 controller（无/非我方 → 0）
+ * @param storageEnergy storage 能量（无 storage → 0）
+ * @param linkCapacity controller link 容量
+ */
+export function computeControllerLinkTarget(
+  rcl: number,
+  controller: StructureController | undefined,
+  storageEnergy: number,
+  linkCapacity: number,
+): number {
+  if (!controller || !controller.my) return 0;
+  const upgradeCfg = CONFIG.economy.upgrade;
+  const linkCfg = CONFIG.economy.link;
+  const risk = controller.ticksToDowngrade < CONFIG.economy.controllerDowngradeThreshold;
+  // RCL8 满级：升级零收益 → 默认停供；降级风险时保级小水位。
+  if (rcl >= 8) return risk ? linkCfg.maintainTarget : 0;
+  // RCL<8：按 storage 水位分级（满功率冲刺 / 半供慢升 / 枯竭保级）。
+  if (storageEnergy >= upgradeCfg.sustainedStorage) return linkCapacity;
+  if (storageEnergy >= linkCfg.lowSupplyStorage) {
+    return Math.round(linkCapacity * linkCfg.lowSupplyRatio);
+  }
+  return Math.round(linkCapacity * linkCfg.maintainRatio);
 }
 
 /**

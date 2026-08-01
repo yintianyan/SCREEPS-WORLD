@@ -381,6 +381,20 @@ export const CONFIG = {
        * 杜绝两侧口径漂移致「死 link」。取 2：harvester 站 container（贴 source）上仍能 range1 够到
        * 隔一格的 link，故 source link 放在到 source range≤2 内均可被灌能（可达性由灌能 range≤1 守卫兜底）。 */
       anchorRange: 2,
+      /**
+       * RCL8 满级保级水位（2026-08-01）：controller link 的目标能量。
+       * 满级后升级零收益（controller.progress=0），默认停供（target=0）；
+       * 仅降级风险（ticksToDowngrade < controllerDowngradeThreshold）时
+       * 维持此小水位，保级不烧库存。
+       */
+      maintainTarget: 200,
+      /** RCL<8 半供门槛：storage 低于 sustainedStorage(10k) 但高于此值时，
+       * controller link 只供 lowSupplyRatio 比例（慢升不饿死经济）。 */
+      lowSupplyStorage: 4000,
+      /** 半供比例：controller link 目标 = capacity × 此值（RCL<8 低水位）。 */
+      lowSupplyRatio: 0.4,
+      /** 枯竭保级比例：storage < lowSupplyStorage 时 controller link 目标 = capacity × 此值。 */
+      maintainRatio: 0.2,
     },
     /** Storage 满仓阈值 — 超过此比例时触发限采 + 加速消费。 */
     storageFullThreshold: 0.9,

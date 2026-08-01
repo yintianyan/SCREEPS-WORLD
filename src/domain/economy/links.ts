@@ -42,9 +42,27 @@ export interface LinkTransfer {
  * controller link 处于“急需”（能量低于阈值）时豁免，保证升级不断粮。
  * minTransfer 默认 0（无阈值，向后兼容），生产调用由 link-system 传入 CONFIG 值。
  */
+/** 传输规划选项。 */
+export interface LinkTransferOptions {
+  minTransfer?: number;
+  /**
+   * 需求驱动的 controller link 目标水位（2026-08-01）。
+   *
+   * 缺省 = 容量（向后兼容：旧行为永远想把 controller link 装满）。
+   * 调用方（link-system）按升级需求计算：
+   *   - RCL8 满级 → 0（停供，能量全流 storage hub）
+   *   - RCL8 + 降级风险 → maintainTarget（保级小水位）
+   *   - RCL<8 → 按 storage 水位分级（满功率/半供/保级）
+   *
+   * 效果：controller 不再是无脑最高优先的 sink，而是受控消费者；
+   * source 能量先满足 controller 目标，其余全部流向 storage hub。
+   */
+  controllerTargetEnergy?: number;
+}
+
 export function planLinkTransfers(
   links: readonly LinkInfo[],
-  opts: { minTransfer?: number } = {},
+  opts: LinkTransferOptions = {},
 ): LinkTransfer[] {
   const minTransfer = opts.minTransfer ?? 0;
   // 快满比例：源 link 能量达容量 90% 时即使低于阈值也发（避免下一批采集溢出）。
@@ -58,12 +76,19 @@ export function planLinkTransfers(
   const controllerLink = links.find(l => l.role === "controller");
   const storageLink = links.find(l => l.role === "storage");
 
+  // 需求驱动目标水位：缺省 = 容量（旧行为）；显式传入时按调用方计算值。
+  const controllerTarget = opts.controllerTargetEnergy ??
+    (controllerLink ? controllerLink.energyCapacity : 0);
   let controllerNeeds = controllerLink
-    ? controllerLink.energyCapacity - controllerLink.energy
+    ? Math.max(0, controllerTarget - controllerLink.energy)
     : 0;
 
-  // controller 急需：controller link 能量低于阈值 → 豁免 source 阈值，优先喂升级链。
-  const controllerUrgent = controllerLink !== undefined && controllerLink.energy < minTransfer;
+  // controller 急需：目标水位 > 0 且能量低于 min(目标, minTransfer) →
+  // 豁免 source 阈值优先喂。target=0 时永不 urgent（停供）。
+  const controllerUrgent =
+    controllerLink !== undefined &&
+    controllerTarget > 0 &&
+    controllerLink.energy < Math.min(controllerTarget, minTransfer);
   // source link 是否达到发起传输的能量条件：达阈值 或 快满。
   const meetsThreshold = (src: LinkInfo): boolean =>
     src.energy >= minTransfer || src.energy >= src.energyCapacity * NEAR_FULL_RATIO;

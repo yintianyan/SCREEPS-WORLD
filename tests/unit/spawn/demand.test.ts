@@ -86,13 +86,26 @@ describe("A2 — storage 水位驱动升级功率", () => {
     expect(requests.filter(r => r.role === "upgrader")).toHaveLength(3);
   });
 
-  it("RCL8 显式限速：即使冲刺水位，upgrader 也封顶 15 WORK（1 个 15W body）", () => {
+  it("RCL8 满级后停孵（升级零收益，W7N4 存不下能量主因修复）", () => {
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = stationSnapshot({ storage, rcl: 8, energyCapacityAvailable: 12300 });
     const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
 
     const upgraders = requests.filter(r => r.role === "upgrader");
+    expect(upgraders).toHaveLength(0);
+  });
+
+  it("RCL8 + 降级风险 → 保级 1 个 upgrader（P1 优先，15W 顶满限速）", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
+    const snap = stationSnapshot({ storage, rcl: 8, energyCapacityAvailable: 12300 });
+    const { requests } = evaluateDemand(
+      snap, [], "normal", livingHarvester(), [],
+      { ...normalCtx(0), controllerDowngradeRisk: true }, 1000,
+    );
+
+    const upgraders = requests.filter(r => r.role === "upgrader");
     expect(upgraders).toHaveLength(1);
+    expect(upgraders[0]!.priority).toBe(1);
     expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(15);
   });
 });
@@ -841,5 +854,4 @@ describe("mineralMiner 孵化门禁（工业链第一环激活）", () => {
     expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
   });
 });
-
 

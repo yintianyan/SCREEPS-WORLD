@@ -59,6 +59,40 @@ describe("Links — planLinkTransfers", () => {
     expect(transfers[0]).toEqual({ fromId: "s1", toId: "c1", amount: 500 });
   });
 
+  it("controllerTargetEnergy=0（RCL8 停供）→ source 全流 storage hub", () => {
+    const links = [
+      link("s1", "source", 500),
+      link("c1", "controller", 100),
+      link("st", "storage", 200),
+    ];
+    const transfers = planLinkTransfers(links, { controllerTargetEnergy: 0 });
+    expect(transfers).toHaveLength(1);
+    expect(transfers[0]).toEqual({ fromId: "s1", toId: "st", amount: 500 });
+  });
+
+  it("controllerTargetEnergy=200（保级）→ controller 只补到目标，其余流 storage", () => {
+    const links = [
+      link("s1", "source", 700),
+      link("s2", "source", 600),
+      link("c1", "controller", 100),
+      link("st", "storage", 200),
+    ];
+    const transfers = planLinkTransfers(links, { controllerTargetEnergy: 200 });
+    // s1 补 controller 100（到 200 目标）；s2 全流 storage。
+    expect(transfers).toEqual([
+      { fromId: "s1", toId: "c1", amount: 100 },
+      { fromId: "s2", toId: "st", amount: 600 },
+    ]);
+  });
+
+  it("controllerTargetEnergy=0 且无 storage link → 不传输（controller 停供、无处可去）", () => {
+    const links = [
+      link("s1", "source", 500),
+      link("c1", "controller", 100),
+    ];
+    expect(planLinkTransfers(links, { controllerTargetEnergy: 0 })).toHaveLength(0);
+  });
+
   it("sends remaining source to storage via second link when first fills controller", () => {
     // link 每 tick 只能传输一次。两个 source link：一个填 controller，一个填 storage。
     const links = [

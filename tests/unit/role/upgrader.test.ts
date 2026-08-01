@@ -59,6 +59,31 @@ describe("upgrader — work 模式", () => {
   });
 });
 
+describe("upgrader — RCL8 满级停烧（W7N4 存不下能量主因修复）", () => {
+  it("RCL8 无降级风险 → gate 拦截：不升级、转 idle", () => {
+    const controller = mockController({ level: 8, ticksToDowngrade: 20000 });
+    const snap = mockSnapshot({ rcl: 8, controller });
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    expect(creep.upgradeController).not.toHaveBeenCalled();
+    expect(creep.memory.mode).toBe("idle");
+  });
+
+  it("RCL8 + 降级风险 → 保级放行（紧急覆盖，照常升级）", () => {
+    const controller = mockController({ level: 8, ticksToDowngrade: 5000 });
+    const snap = mockSnapshot({ rcl: 8, controller });
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
+});
+
 describe("upgrader — 空闲归站（不在 spawn 出口石化挡路）", () => {
   it("controller container 存在但空 + 远离站桩位 → 移动到 container 待命", () => {
     // container 空 → withdraw 链落空；无 link/storage；source 由 gate 的

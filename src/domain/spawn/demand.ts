@@ -640,7 +640,10 @@ export function evaluateDemand(
   // P2：Upgrader — 仅在 normal 状态下，不在 bootstrap/recovery。
   // 当控制器存在降级风险时，即使在 recovery/bootstrap 也允许生成 upgrader（P1 优先级）。
   const hasDowngradeRisk = roomCtx.controllerDowngradeRisk;
-  const allowUpgrader = colonyState === "normal" || hasDowngradeRisk;
+  // RCL8 满级后升级零收益（controller.progress=0）：无降级风险时停孵/停替换；
+  // 存量 upgrader 由角色 gate 停烧（upgrader.ts），自然老死后不补。
+  const rcl8NoUpgrade = snapshot.rcl >= 8 && !hasDowngradeRisk;
+  const allowUpgrader = (colonyState === "normal" || hasDowngradeRisk) && !rcl8NoUpgrade;
 
   if (allowUpgrader) {
     const upgraderConfig = getRoleBounds("upgrader", home);
