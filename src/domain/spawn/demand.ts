@@ -3,6 +3,7 @@ import { degradeBody, minimalBodyFor, RECOVERY_BODY, selectBody } from "../../co
 import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import { countPending, spawnKey } from "./queue";
+import { classifyLinkRole } from "../economy/links";
 
 /** 各角色降级时必需保留的最小部件组合。hauler/distributor 无需 WORK。 */
 export const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConstant[]>> = {
@@ -93,6 +94,13 @@ interface DemandResult {
   requests: SpawnRequest[];
   /** P1-J：本 tick 评估产出的迟滞状态，适配层负责写回 RoomMemory。 */
   nextHysteresis: HysteresisState;
+  /**
+   * 本 tick 的 hauler 编制目标（B3，2026-08-01）。
+   * 供 spawn-manager 的回收通道判定「富余 hauler」——link 化后编制收缩不能
+   * 只靠「死亡不补」（1500 tick/代），富余者应快速 recycle。
+   * 无物流基建（无 container/storage）或 P0 短路时为 undefined。
+   */
+  haulerTarget?: number;
 }
 
 /**
@@ -282,6 +290,8 @@ export function evaluateDemand(
   const requests: SpawnRequest[] = [];
   const home = snapshot.roomName;
   const energyCapacity = snapshot.energyCapacityAvailable;
+  /** B3：hauler 编制目标（供回收通道判定富余）；无物流基建时为 undefined。 */
+  let haulerTarget: number | undefined;
   // 统一经济状态：recovery 涵盖 crisis + recovery 相位，收缩非关键消耗。
   const inCrisis = colonyState === "recovery";
   // Storage 满仓信号 — 限采 + 加速消费。
@@ -429,8 +439,31 @@ export function evaluateDemand(
     // sink 一旦开口 fillTargets 重现，backlog 信号自动恢复 —— 安全、自愈。
     const canDeliver = snapshot.storage !== undefined || snapshot.fillTargets.length > 0;
     // 1. Source container 积压信号（RCL1-4 主物流路径；仅当可投放时才算运力不足）。
+    //    B1（2026-08-01）：剔除「该 source 有 source link」的 container——
+    //    link 化后容器满是背压症状（link 满倒不进去 / storage link 未排空），
+    //    不是「需要更多 hauler 搬容器」，真需求由下方 storage link 信号处理。
+    //    不剔除会让 link 化后 hauler 编制不降反升（W7N3/W7N4 现场：source
+    //    container 满 2000 被计 +2/+2，而 4 只 hauler 中已有空载在晃）。
     if (canDeliver) {
+      const sourceWithLink = new Set<string>();
+      for (const s of snapshot.sources) {
+        const hasLink = snapshot.links.some(l =>
+          l.pos.getRangeTo(s.pos) <= CONFIG.economy.link.anchorRange &&
+          classifyLinkRole(
+            l.pos,
+            snapshot.sources.map(p => p.pos),
+            snapshot.controller?.pos,
+            snapshot.storage?.pos,
+            CONFIG.economy.link.anchorRange,
+          ) === "source",
+        );
+        if (hasLink) sourceWithLink.add(s.id);
+      }
       for (const c of snapshot.containers) {
+        const coveredByLink = snapshot.sources.some(
+          s => sourceWithLink.has(s.id) && c.pos.getRangeTo(s.pos) <= 1,
+        );
+        if (coveredByLink) continue;
         const capacity = c.store.getCapacity(RESOURCE_ENERGY) || 1;
         const fillRatio = c.store.getUsedCapacity(RESOURCE_ENERGY) / capacity;
         if (fillRatio > 0.8) dynamicHaulerTarget += 2;
@@ -492,7 +525,7 @@ export function evaluateDemand(
   const liquidityScore = roomCtx.liquidityScore ?? 0;
   const drainScore = roomCtx.drainScore ?? 0;
   const liquidityDriven = liquidityScore >= 40 && liquidityScore >= drainScore;
-  const haulerTarget = (inCrisis && !liquidityDriven)
+  haulerTarget = (inCrisis && !liquidityDriven)
     ? Math.min(dynamicHaulerTarget, haulerConfig.minCount)
     : dynamicHaulerTarget;
   if (haulerTotal < haulerTarget && hasLogistics) {
@@ -855,7 +888,9 @@ export function evaluateDemand(
     }
   }
 
-  return { requests, nextHysteresis };
+  const result: DemandResult = { requests, nextHysteresis };
+  if (haulerTarget !== undefined) result.haulerTarget = haulerTarget;
+  return result;
 }
 
 function hasKey(queue: readonly SpawnRequest[], key: string): boolean {

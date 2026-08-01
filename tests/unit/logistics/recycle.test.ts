@@ -69,4 +69,31 @@ describe("recycle — selectRecycleCandidates", () => {
     );
     expect(marked).toHaveLength(0);
   });
+
+  it("富余 hauler（> haulerTarget+1）→ 回收最老富余者", () => {
+    const haulers = [
+      summary("ha1", "hauler"),
+      summary("ha2", "hauler"),
+      summary("ha3", "hauler"),
+      summary("ha4", "hauler"),
+    ];
+    const marked = selectRecycleCandidates(haulers, "W7N4", KNOWN, 2, 2);
+    // target=2 → keep=3 → 4 只中回收 1 只（TTL 最小者）。
+    expect(marked).toHaveLength(1);
+    expect(marked[0]).toBe("ha1");
+  });
+
+  it("hauler 未超目标+1 → 不回收（防抖动缓冲）", () => {
+    const haulers = [summary("ha1", "hauler"), summary("ha2", "hauler"), summary("ha3", "hauler")];
+    const marked = selectRecycleCandidates(haulers, "W7N4", KNOWN, 2, 2);
+    expect(marked).toHaveLength(0);
+  });
+
+  it("替换窗口内的富余 hauler 不回收（自然寿终，避免回收竞态）", () => {
+    const dying = { name: "ha1", role: "hauler", home: "W7N4", ticksToLive: 10, bodyLength: 3 };
+    const alive = [summary("ha2", "hauler"), summary("ha3", "hauler")];
+    const marked = selectRecycleCandidates([dying, ...alive], "W7N4", KNOWN, 2, 1);
+    // target=1 → keep=2 → 富余候选是最老（濒死）ha1 → 替换窗口内跳过 → 不回收。
+    expect(marked).toHaveLength(0);
+  });
 });

@@ -581,6 +581,38 @@ describe("Body 感知配额 — 数量按单体能力折算，防大 body 时代
   });
 });
 
+describe("B1 — link 覆盖的 source container 不计入 hauler 积压信号", () => {
+  it("有 source link 的满容器跳过；无 link 的满容器照常计入（对照 2 vs 4）", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 5000, capacity: 1000000 });
+    const src1 = mockSource("s1");
+    src1.pos = { x: 10, y: 10, getRangeTo: () => 1 } as never;
+    const src2 = mockSource("s2");
+    src2.pos = { x: 20, y: 10, getRangeTo: () => 1 } as never;
+    const link1 = mockStructure("link", { id: "l1", energy: 800, capacity: 800 });
+    link1.pos = { x: 11, y: 10, getRangeTo: () => 1 } as never; // 贴 src1 → source link
+    const c1 = mockStructure("container", { id: "c1", energy: 2000, capacity: 2000 });
+    c1.pos = { x: 10, y: 11, getRangeTo: () => 1 } as never; // 贴 src1（被 link 覆盖）
+    const c2 = mockStructure("container", { id: "c2", energy: 2000, capacity: 2000 });
+    c2.pos = { x: 20, y: 11, getRangeTo: () => 1 } as never; // 贴 src2（无 link）
+
+    const covered = evaluateDemand(
+      mockSnapshot({ storage, links: [link1], containers: [c1, c2], sources: [src1 as any, src2 as any] }),
+      [], "normal", livingHarvester(), [], normalCtx(0), 1000,
+    );
+    // c1（link 覆盖）跳过 +0；c2 满 +2 → 运力归一化后 target=2（minCount 地板）。
+    expect(covered.haulerTarget).toBe(2);
+    expect(covered.requests.filter(r => r.role === "hauler")).toHaveLength(2);
+
+    const uncovered = evaluateDemand(
+      mockSnapshot({ storage, links: [], containers: [c1, c2], sources: [src1 as any, src2 as any] }),
+      [], "normal", livingHarvester(), [], normalCtx(0), 1000,
+    );
+    // 两个满容器 +2+2=4 → target=4。
+    expect(uncovered.haulerTarget).toBe(4);
+    expect(uncovered.requests.filter(r => r.role === "hauler")).toHaveLength(4);
+  });
+});
+
 describe("Distributor 升编趋势确认 — 防孵化尖峰催生过量编制", () => {
   // P1-J：计时器通过 prevHysteresis 注入、nextHysteresis 断言 — 不再直读写 Memory。
 
@@ -854,4 +886,3 @@ describe("mineralMiner 孵化门禁（工业链第一环激活）", () => {
     expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
   });
 });
-

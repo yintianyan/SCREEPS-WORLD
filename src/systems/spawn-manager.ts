@@ -130,7 +130,7 @@ export const spawnManagerSystem: System = {
           builderPressureState: roomMem.builderPressureState,
         },
       };
-      const { requests, nextHysteresis } = evaluateDemand(
+      const demandResult = evaluateDemand(
         snapshot,
         queue,
         colonyState,
@@ -139,6 +139,7 @@ export const spawnManagerSystem: System = {
         roomCtx,
         ctx.tick,
       );
+      const { requests, nextHysteresis } = demandResult;
       for (const req of requests) {
         // SP-2：黑名单冷却中的 key 不重建（比较到期 tick — prune 已在
         // 步骤 1 执行，此处防御同 tick 新写入的条目）。
@@ -175,7 +176,7 @@ export const spawnManagerSystem: System = {
 
       // 5. B1：回收通道 — 标记退役 creep，引导至最近 spawn 回收残值能量。
       //    P3-3：传入预建的本房 creep 子集，避免全量 Game.creeps 扫描。
-      recyclePass(snapshot, creepsByRoom.get(snapshot.roomName) ?? []);
+      recyclePass(snapshot, creepsByRoom.get(snapshot.roomName) ?? [], demandResult.haulerTarget);
     }
   },
 };
@@ -197,6 +198,7 @@ const KNOWN_ROLES: ReadonlySet<string> = new Set(Object.keys(CONFIG.roles));
 function recyclePass(
   snapshot: import("../kernel/contracts").RoomSnapshot,
   roomCreeps: readonly CreepSummary[],
+  haulerTarget?: number,
 ): void {
   const home = snapshot.roomName;
 
@@ -208,6 +210,7 @@ function recyclePass(
     home,
     KNOWN_ROLES,
     getRoleBounds("harvester", home).minCount,
+    haulerTarget,
   );
   const markedSet = new Set(marked);
   for (const name of marked) {
@@ -453,4 +456,3 @@ function collectSpawningSummaries(): SpawningSummary[] {
   }
   return result;
 }
-

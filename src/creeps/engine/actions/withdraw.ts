@@ -11,6 +11,7 @@
 import type { ActionCandidate, ActionContext } from "../action-types";
 import { runAction } from "./helpers";
 import { globalCache } from "../../../kernel/global-cache";
+import { CONFIG } from "../../../config";
 import {
   findClosestContainerWithEnergy,
   findRichestContainer,
@@ -167,18 +168,28 @@ export function withdrawStorageLink(): ActionCandidate<StructureLink> {
         l => l.pos.getRangeTo(st) <= 2 && l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
       if (!storageLink) return undefined;
-      // 灌能优先守卫（②b）：controller link 缺能时，storage link 的能量应由
+      // 灌能优先守卫（②b）：controller link 急需时，storage link 的能量应由
       // link-system 规则3 路由到 controller link 供 0 通勤升级（link-system P1
       // 先于 creep 运行）。但规则3 受 link 冷却限制（每 ~18 tick 一次），若 hauler
       // 在冷却间隙每 tick 抽走，controller link 断粮 — 且与 distributor 灌入形成
-      // storage→link→storage 空转。故 controller link 缺能时不抽，让升级链优先；
-      // controller link 满 / 缺席时正常排空（防 source link 背压）。
+      // storage→link→storage 空转。故 controller link 急需时不抽，让升级链优先。
+      //
+      // A 修复（2026-08-01）：与 planLinkTransfers 的 controllerUrgent 同口径 —
+      // controller link 能量 < minTransfer(400) 才算急需。旧口径 free>0 在
+      // RCL8 停供后被残留能量（799/800，free=1）永久卡死：link-system 的
+      // controller target=0 永不补那 1 格，而守卫永远让路 → storage link 排空
+      // 被挡 → source link 背压 → source container 满 2000 → 全链堵死。
       const ctrl = ac.snapshot.controller;
       if (ctrl) {
         const ctrlLink = ac.snapshot.links.find(
           l => l.id !== storageLink.id && l.pos.getRangeTo(ctrl) <= 2,
         );
-        if (ctrlLink && ctrlLink.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return undefined;
+        if (
+          ctrlLink &&
+          ctrlLink.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.economy.link.minTransfer
+        ) {
+          return undefined;
+        }
       }
       return storageLink;
     },
