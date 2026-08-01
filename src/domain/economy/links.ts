@@ -10,8 +10,45 @@
  *   3. storage link → controller link（controller link 缺能且无 source link 补给时）
  */
 
+import { CONFIG } from "../../config";
+
 /** Link 角色分类 — 由系统层根据 link 与 source/controller/storage 的距离判定。 */
 export type LinkRole = "source" | "controller" | "storage" | "hub";
+
+/**
+ * 需求驱动的 controller link 目标水位（2026-08-01）。
+ *
+ * 背景：旧实现 controller 永远优先被 source 喂满——RCL8 满级后升级零收益，
+ * 15/tick 白烧（W7N4 实测 storage 恒 0 主因之一）。目标水位让 controller
+ * 变成受控消费者：满级停供、降级风险保级、RCL<8 按 storage 水位分级。
+ *
+ * 放 domain：link-system 与 harvester 灌能出口判定（linkHasOutlet）共用，
+ * 避免 creeps → systems 的反向依赖。
+ *
+ * @param rcl          房间 RCL
+ * @param controller   房间 controller（无/非我方 → 0）
+ * @param storageEnergy storage 能量（无 storage → 0）
+ * @param linkCapacity controller link 容量
+ */
+export function computeControllerLinkTarget(
+  rcl: number,
+  controller: { my: boolean; ticksToDowngrade: number } | undefined,
+  storageEnergy: number,
+  linkCapacity: number,
+): number {
+  if (!controller || !controller.my) return 0;
+  const upgradeCfg = CONFIG.economy.upgrade;
+  const linkCfg = CONFIG.economy.link;
+  const risk = controller.ticksToDowngrade < CONFIG.economy.controllerDowngradeThreshold;
+  // RCL8 满级：升级零收益 → 默认停供；降级风险时保级小水位。
+  if (rcl >= 8) return risk ? linkCfg.maintainTarget : 0;
+  // RCL<8：按 storage 水位分级（满功率冲刺 / 半供慢升 / 枯竭保级）。
+  if (storageEnergy >= upgradeCfg.sustainedStorage) return linkCapacity;
+  if (storageEnergy >= linkCfg.lowSupplyStorage) {
+    return Math.round(linkCapacity * linkCfg.lowSupplyRatio);
+  }
+  return Math.round(linkCapacity * linkCfg.maintainRatio);
+}
 
 /** 纯数据视图 — 不持有 Screeps 对象引用，便于测试。 */
 export interface LinkInfo {

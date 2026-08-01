@@ -11,7 +11,15 @@
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { harvesterRole } from "../../../src/creeps/roles/harvester";
-import { mockSnapshot, mockCreep, mockContext, mockSource, mockStructure, resetGlobals } from "../../role-helpers";
+import {
+  mockSnapshot,
+  mockCreep,
+  mockContext,
+  mockSource,
+  mockStructure,
+  mockController,
+  resetGlobals,
+} from "../../role-helpers";
 
 beforeEach(() => {
   resetGlobals();
@@ -42,11 +50,18 @@ function setup(creepX: number, creepY: number, withLink = true) {
   container.pos = posAt(12, 30);
   const link = mockStructure("link", { id: "link1", energy: 0, capacity: 800 });
   link.pos = posAt(12, 32);
+  // 完整网络（2026-08-01）：link 出口判定要求 controller link / storage link 存在，
+  // 否则 source link 视为无出口死资产（rcl8-endgame 回归）。补 controller + ctrlLink。
+  const controller = mockController({ level: 3, ticksToDowngrade: 20000 });
+  controller.pos = posAt(40, 40);
+  const ctrlLink = mockStructure("link", { id: "ctrlLink", energy: 0, capacity: 800 });
+  ctrlLink.pos = posAt(41, 40);
 
   const snap = mockSnapshot({
     sources: [source],
     containers: [container],
-    links: withLink ? [link] : [],
+    links: withLink ? [link, ctrlLink] : [ctrlLink],
+    controller,
   });
   const creep = mockCreep({ name: "harvester_1", role: "harvester", used: 40, capacity: 50, mode: "work" });
   creep.memory.sourceId = "src1";
@@ -91,7 +106,14 @@ describe("harvester — source link 挖矿站位", () => {
     container.pos = posAt(40, 45) as never;
     const link = mockStructure("link", { id: "lk2", energy: 0, capacity: 800 });
     link.pos = posAt(40, 44) as never;
-    const snap = mockSnapshot({ sources: [source], containers: [container], links: [link] });
+    // 完整网络：controller + ctrlLink 提供出口（RCL3 → target=160 > 0）。
+    const controller = mockController({ level: 3, ticksToDowngrade: 20000 });
+    controller.pos = posAt(30, 30) as never;
+    const ctrlLink = mockStructure("link", { id: "ctrlLink2", energy: 0, capacity: 800 });
+    ctrlLink.pos = posAt(31, 30) as never;
+    const snap = mockSnapshot({
+      sources: [source], containers: [container], links: [link, ctrlLink], controller,
+    });
     const creep = mockCreep({ name: "harvester_2", role: "harvester", used: 40, capacity: 50, mode: "work" });
     creep.memory.sourceId = "src2";
     creep.pos = posAt(40, 45) as never; // 站在 container 上（贴 source range1、贴 link range1）
@@ -104,4 +126,3 @@ describe("harvester — source link 挖矿站位", () => {
     expect(creep.moveTo).not.toHaveBeenCalled();
   });
 });
-

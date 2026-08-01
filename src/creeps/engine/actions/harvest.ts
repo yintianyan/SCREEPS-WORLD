@@ -6,7 +6,7 @@ import { CONFIG } from "../../../config";
 import { moveToTarget, registerAnchor } from "../../movement";
 import { runAction } from "./helpers";
 import { getSource } from "../../support/targeting";
-import { classifyLinkRole } from "../../../domain/economy/links";
+import { classifyLinkRole, computeControllerLinkTarget } from "../../../domain/economy/links";
 
 /**
  * 从 source 采集（通用）。
@@ -68,11 +68,17 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
     },
     execute: (ac, target) => {
       const { source, container, link } = target;
+      // 2026-08-01 健壮性：source link 只在有下游出口时可灌——
+      // storage link 存在（能量瞬移进 hub，hauler 排空）或 controller link
+      // 按需求驱动目标仍有需求（RCL<8 升级 / RCL8 保级）。
+      // 无出口（RCL8 停供 + 无 storage link / storage link 被毁）时灌 link
+      // 只会积压 → container 满 → drop 衰减损失（rcl8-endgame 5000t 回归实证）。
+      const linkUsable = link !== undefined && linkHasOutlet(ac, link);
       // 站位选择：默认站 container 之上（range 0 倒能）或 source 旁。
       // 特例——source link 与 container 分居 source 两侧、站 container 够不到 link（range>1）时：
       // 改站到「贴 source 且贴 link（均 range<=1）」的格，让 harvester 同 tick 倒进 link，
       // 能量经 link 网络瞬移入库/入 controller link，免去远距离 hauler 往返（source#1 病灶）。
-      const linkStand = link
+      const linkStand = linkUsable
         && ac.creep.pos.getRangeTo(link.pos) > 1
         && !(container && container.pos.getRangeTo(link.pos) <= 1)
         ? findSourceLinkStand(ac, source, link)
@@ -114,7 +120,7 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       }
       // 同 tick 倒能：link 优先，其次 container（均需 range<=1 且有空位）。
       if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-        const sink = link
+        const sink = linkUsable
           && ac.creep.pos.getRangeTo(link) <= 1
           && link.store.getFreeCapacity(RESOURCE_ENERGY) > 0
           ? link
@@ -133,6 +139,39 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       }
     },
   };
+}
+
+/**
+ * source link 是否有可用的下游出口（2026-08-01 健壮性）。
+ *
+ * 判定（与 link-system 的传输计划同口径）：
+ *   - storage link 存在 → true（能量瞬移进 hub，hauler 排空最后一公里）
+ *   - 否则 controller link 存在且 computeControllerLinkTarget > 当前能量
+ *     （升级/保级有真实需求）→ true
+ *   - 否则 false：link 是死资产（RCL8 停供 + 无 storage link），harvester
+ *     应灌 container 走 hauler 物流，避免 link 积压 → container 满 → drop 衰减。
+ */
+function linkHasOutlet(ac: ActionContext, link: StructureLink): boolean {
+  const snap = ac.snapshot;
+  if (snap.storage) {
+    const storageLink = snap.links.find(
+      l => l.id !== link.id && l.pos.getRangeTo(snap.storage!) <= 2,
+    );
+    if (storageLink) return true;
+  }
+  const ctrl = snap.controller;
+  if (!ctrl || !ctrl.my) return false;
+  const ctrlLink = snap.links.find(
+    l => l.id !== link.id && l.pos.getRangeTo(ctrl.pos) <= 2,
+  );
+  if (!ctrlLink) return false;
+  const target = computeControllerLinkTarget(
+    snap.rcl,
+    ctrl,
+    snap.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
+    ctrlLink.store.getCapacity(RESOURCE_ENERGY),
+  );
+  return ctrlLink.store.getUsedCapacity(RESOURCE_ENERGY) < target;
 }
 
 /**
@@ -232,4 +271,3 @@ export function harvestMineral(): ActionCandidate<MineralTarget> {
     },
   };
 }
-

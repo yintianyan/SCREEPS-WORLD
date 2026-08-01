@@ -106,10 +106,14 @@ describe("harvester — work 模式优先级链", () => {
     // (controller>source) 把 link 误判为 controller，故必须拉开 controller 距离。
     const link = mockStructure("link", { id: "link_1", energy: 0, capacity: 800 });
     link.pos = mockPos(26, 25);
+    // 完整网络（2026-08-01）：补 controller link 提供出口（RCL5 无 storage 时
+    // target=160 > 0 → source link 可用）。
+    const ctrlLink = mockStructure("link", { id: "ctrl_link", energy: 0, capacity: 800 });
+    ctrlLink.pos = mockPos(41, 40);
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 0, capacity: 300 });
     const snap = mockSnapshot({
-      links: [link],
+      links: [link, ctrlLink],
       containers: [container],
       fillTargets: [spawn],
       controller: mockController({ level: 5 }),

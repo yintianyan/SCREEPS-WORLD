@@ -46,6 +46,7 @@ function rcl8World(opts?: {
     .tower(26, 24, 900)
     .link(10, 8, 600)
     .link(29, 42, 200)
+    .link(27, 25, 0) // storage link：RCL8 完整网络（source + controller + storage hub）
     .extensions(
       Array.from({ length: 30 }, (_, i) => ({
         x: 19 + (i % 6) * 2,

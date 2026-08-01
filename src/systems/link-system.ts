@@ -1,7 +1,10 @@
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import type { LinkInfo, LinkRole } from "../domain/economy/links";
-import { planLinkTransfers, classifyLinkRole } from "../domain/economy/links";
+import { planLinkTransfers, classifyLinkRole, computeControllerLinkTarget } from "../domain/economy/links";
 import { CONFIG } from "../config";
+
+/** re-export（纯函数已下沉 domain/economy/links，保持 link-system 导入面兼容）。 */
+export { computeControllerLinkTarget } from "../domain/economy/links";
 
 /**
  * Link 能量传输系统 — P1 系统，管理 link 间瞬时能量传输。
@@ -65,38 +68,6 @@ function runRoomLinks(snapshot: RoomSnapshot): void {
     if (!from || !to) continue;
     from.transferEnergy(to, t.amount);
   }
-}
-
-/**
- * 需求驱动的 controller link 目标水位（2026-08-01）。
- *
- * 背景：旧实现 controller 永远优先被 source 喂满——RCL8 满级后升级零收益，
- * 15/tick 白烧（W7N4 实测 storage 恒 0 主因之一）。目标水位让 controller
- * 变成受控消费者：满级停供、降级风险保级、RCL<8 按 storage 水位分级。
- *
- * @param rcl          房间 RCL
- * @param controller   房间 controller（无/非我方 → 0）
- * @param storageEnergy storage 能量（无 storage → 0）
- * @param linkCapacity controller link 容量
- */
-export function computeControllerLinkTarget(
-  rcl: number,
-  controller: StructureController | undefined,
-  storageEnergy: number,
-  linkCapacity: number,
-): number {
-  if (!controller || !controller.my) return 0;
-  const upgradeCfg = CONFIG.economy.upgrade;
-  const linkCfg = CONFIG.economy.link;
-  const risk = controller.ticksToDowngrade < CONFIG.economy.controllerDowngradeThreshold;
-  // RCL8 满级：升级零收益 → 默认停供；降级风险时保级小水位。
-  if (rcl >= 8) return risk ? linkCfg.maintainTarget : 0;
-  // RCL<8：按 storage 水位分级（满功率冲刺 / 半供慢升 / 枯竭保级）。
-  if (storageEnergy >= upgradeCfg.sustainedStorage) return linkCapacity;
-  if (storageEnergy >= linkCfg.lowSupplyStorage) {
-    return Math.round(linkCapacity * linkCfg.lowSupplyRatio);
-  }
-  return Math.round(linkCapacity * linkCfg.maintainRatio);
 }
 
 /**
