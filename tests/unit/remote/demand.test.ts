@@ -140,12 +140,17 @@ describe("remote demand — evaluateRemoteDemand", () => {
     expect(reserverReqs).toHaveLength(0);
   });
 
-  it("crisis 状态时暂停远矿孵化", () => {
+  it("recovery 状态允许现役 op 补员（R3b 收入路径豁免），但不孵 reserver", () => {
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
       colonyState: "recovery",
     });
-    expect(requests).toHaveLength(0);
+    const roles = requests.map((r) => r.role);
+    // 经济收入角色照常补员（W7 贫困陷阱实证：recovery 冻结远矿 = 收入归零）。
+    expect(roles).toContain("remoteHarvester");
+    expect(roles).toContain("remoteHauler");
+    // reserver 是 P2 发展角色，recovery 下孵出会被 kernel 门禁跳过 → 不生成。
+    expect(roles).not.toContain("reserver");
   });
 
   it("bootstrap 状态时暂停远矿孵化", () => {

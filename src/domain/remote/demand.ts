@@ -13,8 +13,15 @@
  *   - remoteHauler: P1（物流链，与本地 hauler 同级）
  *   - reserver: P2（防御性，不阻塞经济）
  *
- * 安全门禁：
- *   - colonyState 非 normal 时暂停远矿孵化（远矿是扩张行为，危机时收缩）
+ * 安全门禁（R3b，2026-08-01）：
+ *   - bootstrap 时暂停远矿孵化（保命孵化优先）
+ *   - recovery 时允许**现役 active op 补员**（remoteHarvester/remoteHauler 是
+ *     收入路径——W7N4/W8N3 实测 recovery 期现役远矿 creep 死光后不补，
+ *     收入归零加剧贫困陷阱）；新 op 仍由 remote-mining-manager 的
+ *     roomReadyForNewRemote（normal + storage 盈余）把关，不在本层放行
+ *   - reserver 仅 normal 生成（P2 发展角色，recovery 下会被 kernel 门禁跳过，
+ *     孵出即闲置 = 浪费孵化窗）
+ *   - 威胁/InvaderCore 冷却在循环内仍然生效（defender 先应战、经济孵化暂停）
  *   - CPU tier <= conserve 时不孵化远矿（CPU 预算保护）
  */
 
@@ -82,8 +89,10 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
   const { homeRoom, colonyState, energyCapacityAvailable, tick, remoteOps, remoteCreeps, spawnQueue } = input;
   const requests: SpawnRequest[] = [];
 
-  // 安全门禁：危机/恢复状态时暂停远矿孵化（远矿是扩张行为，危机时收缩）。
-  if (colonyState === "recovery" || colonyState === "bootstrap") {
+  // 安全门禁（R3b）：bootstrap 时暂停远矿孵化（保命孵化优先）；recovery 时
+  // 允许现役 op 补员——远矿是收入路径，recovery 期冻结只会让房间失去
+  // 唯一的增量收入（W7N3/W7N4 贫困陷阱实证）。
+  if (colonyState === "bootstrap") {
     return { requests };
   }
 
@@ -185,7 +194,9 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     }
 
     // 3. Reserver — 每目标 1 个（可配置，RCL 门禁由系统层检查）。
-    if (CONFIG.remote.enableReserver) {
+    // R3b：reserver 仅 normal 生成——recovery 下 P2 角色被 kernel 门禁跳过，
+    // 孵出的 reserver 会在 home 房闲置，白耗孵化窗。
+    if (CONFIG.remote.enableReserver && colonyState === "normal") {
       const reserverTotal = (counts.reserver ?? 0) + pending.reserver;
       if (reserverTotal < 1) {
         const key = spawnKey("reserver", homeRoom, reserverTotal, targetRoom);
