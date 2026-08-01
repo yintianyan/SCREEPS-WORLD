@@ -122,9 +122,48 @@ const TIMESERIES_EXPR = `
       }
       // 事件摘要：segment 2 最近 10 条（含入侵/清除/safeMode/结构被毁等军事事件）。
       var events=[];
+      var eventStats={};
       if(evSeg&&evSeg.events&&evSeg.events.d){
         var evd=evSeg.events.d;
         for(var i=Math.max(0,evd.length-10);i<evd.length;i++){ events.push(evd[i]); }
+        // 环形缓冲全量事件分布（找趋势：入侵频率/塔战/死亡/调参回滚）。
+        evd.forEach(function(ev){
+          if(!ev) return;
+          eventStats["k"+ev.k]=(eventStats["k"+ev.k]||0)+1;
+          if(ev.k===17){
+            eventStats.deaths=(eventStats.deaths||0)+1;
+            if(ev.d&&ev.d.length>4&&ev.d[4]===0) eventStats.deathsViolent=(eventStats.deathsViolent||0)+1;
+          }
+        });
+      }
+      // creep 状态聚合（从 Memory.creeps）：per-room per-role 空转/卡位/任务分布。
+      var creepMode={};
+      var mcreeps=mem.creeps||{};
+      Object.keys(mcreeps).forEach(function(cn){
+        var c=mcreeps[cn]; if(!c||!c.home) return;
+        var hm=c.home, role=c.role||"?";
+        if(!creepMode[hm]) creepMode[hm]={};
+        var st=creepMode[hm][role]||(creepMode[hm][role]={total:0,acquire:0,work:0,stuck:0,assigned:0});
+        st.total++;
+        if(c.mode==="acquire") st.acquire++; else if(c.mode==="work") st.work++;
+        if((c.stuckTicks||0)>10) st.stuck++;
+        if(c.assignment&&c.assignment.id) st.assigned++;
+      });
+      // tuning 引擎摘要（调参有效性后分析）。
+      var tuning=null;
+      var tun=mem.kernel&&mem.kernel.tuning;
+      if(tun){
+        var tunRooms=tun.rooms||{};
+        var params=0, frozen=0, pending=0;
+        Object.keys(tunRooms).forEach(function(rm){
+          var tr=tunRooms[rm];
+          params+=Object.keys(tr.lastAdjusted||{}).length;
+          frozen+=Object.keys(tr.frozenParams||{}).length;
+          pending+=Object.keys(tr.pendingValidation||{}).length;
+        });
+        tuning={lastTuned:tun.lastTuned||0,lastTunedAge:(tick-(tun.lastTuned||0)),
+          baselineMatch:tun.baselineVersion===undefined?null:tun.baselineVersion,
+          rooms:Object.keys(tunRooms).length,params:frozen,pending:pending};
       }
       var roomViews=myRooms.map(function(rm){
         var b=byRoom[rm]||slot(rm);
@@ -161,6 +200,7 @@ const TIMESERIES_EXPR = `
           struct:b.struct, sites:b.sites, spawning:b.spawning, hostiles:b.hostiles,
           hostileBody:b.hostileBody, nukers:b.nukers, powerSpawns:b.powerSpawns,
           intel:{entries:Object.keys(intel).length,danger:intelDanger},
+          creepMode:creepMode[rm]||{},
           energy:{spawn:b.energy.spawnE,spawnCap:b.energy.spawnCap,ext:b.energy.extE,extCap:b.energy.extCap,
             cont:b.energy.contE,stor:b.energy.storE,term:b.energy.termE,src:b.energy.srcE,srcCap:b.energy.srcCap,
             tower:b.energy.towerE,towerCap:b.energy.towerCap},
@@ -192,8 +232,10 @@ const TIMESERIES_EXPR = `
           skipReasons:kernel.skipReasons||{},strategy:kernel.strategy||null,
           expansion:kernel.expansion||null,
           expansionBlacklist:Object.keys(kernel.expansionBlacklist||{}).length,
+          tuning:tuning,
           gaps:kernel.layoutGaps||{}},
-        layoutBlocked:layoutBlocked, cpuTop:cpuTop, events:events, rooms:roomViews, remoteRooms:remoteRooms
+        layoutBlocked:layoutBlocked, cpuTop:cpuTop, events:events, eventStats:eventStats,
+        rooms:roomViews, remoteRooms:remoteRooms
       });
     });
   });
