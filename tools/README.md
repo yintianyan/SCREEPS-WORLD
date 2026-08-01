@@ -34,9 +34,11 @@ npm run collect:private:fast
 
 - 全局：`t` tick、`ts` 主机时间、`sv` schemaVersion、`cpu`、`gcl`
 - `kernel`：tier / recoveryTicks / skipReasons / strategy / expansion / layoutGaps
+- `kernel.tuning`：lastTunedAge / baselineMatch / 覆盖房数 / params / frozen / pending（调参有效性）
 - `layoutBlocked`：每房 segment 黑名单条目数（布局任务卡死信号）
 - `cpuTop`：bucket + 总 CPU + Top3 系统（来自遥测 segment）
-- `events`：最近 3 条事件
+- `events`：最近 10 条事件；`eventStats`：环形缓冲全量事件分布
+  （入侵/塔战/死亡/调参回滚等 k0-22 计数 + deaths/deathsViolent）
 - `rooms[]`：每房——
   - controller：rcl / prog / downgrade / safeMode
   - 决策态：colonyState / phase / economyPressure / storageNearFull
@@ -46,6 +48,7 @@ npm run collect:private:fast
     resources 全量（storage/terminal/factory/lab/powerSpawn/nuker 的完整 store）、
     droppedEnergy / tombstones / minerals（找「能量断流/积压」）
   - 人口：creeps 按角色、body 部件汇总、携带能量、平均 ttl（找「编制失衡/空转」）
+  - creepMode：per-role total/acquire/work/stuck/assigned（找「空转/卡位/任务缺失」）
   - 布局：layout 状态 / revision / nextPlan / nextGapPlan / anchorScore、
     gaps（目标清单缺口）
   - 军事：hostiles / towers（位置+能量）/ safeMode / struct 计数
