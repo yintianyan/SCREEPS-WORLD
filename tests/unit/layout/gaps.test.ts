@@ -96,7 +96,8 @@ describe("constraint-placer — 单一真相源派生（CONTROLLER_STRUCTURES）
       prevLab = sum(STRUCTURE_LAB);
     }
     expect([...extByRcl.values()]).toEqual([5, 5, 10, 10, 10, 10, 10]);
-    expect([...towerByRcl.values()]).toEqual([0, 1, 0, 1, 0, 1, 0]);
+    // RCL8 解锁 +3（官方上限 6）→ 批次 rcl3=1、rcl5=1、rcl7=1、rcl8=3。
+    expect([...towerByRcl.values()]).toEqual([0, 1, 0, 1, 0, 1, 3]);
     // 锚点 spawn 豁免：RCL7 解锁第 2 个、RCL8 解锁第 3 个 → 批次在 rcl7/rcl8 各 1。
     expect([...spawnByRcl.values()]).toEqual([0, 0, 0, 0, 0, 1, 1]);
     expect([...labByRcl.values()]).toEqual([0, 0, 0, 0, 3, 3, 4]);

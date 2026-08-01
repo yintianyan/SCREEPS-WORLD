@@ -131,7 +131,9 @@ Object.assign(globalThis as Record<string, unknown>, {
     constructedWall: [0, 0, 2500, 5000, 7500, 10000, 12500, 15000, 17500],
     rampart: [0, 0, 2500, 5000, 7500, 10000, 12500, 15000, 17500],
     container: [0, 5, 5, 5, 5, 5, 5, 5, 5],
-    tower: [0, 0, 0, 1, 1, 2, 2, 3, 3],
+    // RCL8 = 6（RCL3+1、RCL5+1、RCL7+1、RCL8+3）— 旧手写表错写为 3，
+    // 导致线上三房永远只建 3 座塔。官方规则见 wiki: StructureTower。
+    tower: [0, 0, 0, 1, 1, 2, 2, 3, 6],
     storage: [0, 0, 0, 0, 1, 1, 1, 1, 1],
     link: [0, 0, 0, 0, 0, 2, 3, 4, 6],
     lab: [0, 0, 0, 0, 0, 0, 3, 6, 10],

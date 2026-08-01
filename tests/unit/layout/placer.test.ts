@@ -38,7 +38,7 @@ describe("constraint-placer — placeStructures", () => {
     expect(storages.length).toBe(1);
   });
 
-  it("RCL8：完整结构集（60 ext + 3 tower + 3 spawn + 1 storage + 0 link + 1 terminal + 1 factory + 10 lab + 1 observer + 1 powerSpawn）", () => {
+  it("RCL8：完整结构集（60 ext + 6 tower + 3 spawn + 1 storage + 0 link + 1 terminal + 1 factory + 10 lab + 1 observer + 1 powerSpawn）", () => {
     // LINK 不再由 constraint-placer 放置 — 它的评分算法不理解 link 角色
     // （source/storage/controller），会导致 RCL5 仅有的 2 个 link 分配为 2 个
     // source link 或 2 个 storage link，link 网络失效。
@@ -48,7 +48,7 @@ describe("constraint-placer — placeStructures", () => {
 
     const count = (type: string) => result.filter(p => p.structureType === type).length;
     expect(count(STRUCTURE_EXTENSION)).toBe(60);
-    expect(count(STRUCTURE_TOWER)).toBe(3);
+    expect(count(STRUCTURE_TOWER)).toBe(6); // 官方 RCL8 上限 6（旧表错写为 3）
     expect(count(STRUCTURE_SPAWN)).toBe(2); // RCL7+8 各 1（锚点 spawn 不计入）
     expect(count(STRUCTURE_STORAGE)).toBe(1);
     expect(count(STRUCTURE_LINK)).toBe(0); // link 由 task-factory 按角色放置
@@ -328,7 +328,7 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     const count = (type: string) => result.filter(p => p.structureType === type).length;
     // 关键建筑全到位（旧实现这些会缺）。
     expect(count(STRUCTURE_EXTENSION)).toBe(60);
-    expect(count(STRUCTURE_TOWER)).toBe(3);
+    expect(count(STRUCTURE_TOWER)).toBe(6);
     expect(count(STRUCTURE_SPAWN)).toBe(2);
     expect(count(STRUCTURE_LAB)).toBe(10);
     expect(count(STRUCTURE_TERMINAL)).toBe(1);

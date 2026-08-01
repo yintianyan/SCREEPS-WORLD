@@ -93,7 +93,11 @@ const BUILD_STRATEGY: Readonly<Record<string, {
   readonly priority: (rcl: number) => BuildPriority;
   readonly phaseFor: (rcl: number) => LayoutPhase;
 }>> = {
-  [STRUCTURE_TOWER]: { priority: () => 0, phaseFor: r => (r === 3 ? "rcl3" : r === 5 ? "late" : "rcl7") },
+  [STRUCTURE_TOWER]: {
+    priority: () => 0,
+    // RCL8 解锁 +3（官方上限 6：RCL3+1、RCL5+1、RCL7+1、RCL8+3）。
+    phaseFor: r => (r === 3 ? "rcl3" : r === 5 ? "late" : r === 7 ? "rcl7" : "rcl8"),
+  },
   [STRUCTURE_STORAGE]: { priority: () => 0, phaseFor: () => "rcl4" },
   [STRUCTURE_EXTENSION]: {
     // 旧手写表：RCL2-4 priority 1，RCL5+ priority 2（早期间歇性建造，
