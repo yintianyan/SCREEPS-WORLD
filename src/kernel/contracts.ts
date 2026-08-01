@@ -153,6 +153,8 @@ export interface RoomSnapshot {
   readonly observer?: StructureObserver | undefined;
   /** 房间 powerSpawn（RCL8 解锁，可选 — 多数房间/测试快照不存在）。用于 processPower 积累 GPL。 */
   readonly powerSpawn?: StructurePowerSpawn | undefined;
+  /** 房间 nuker（RCL8 解锁，可选）。核打击威慑结构，占用 3×3（放置器按单格候选，与 spawn 同级处理）。 */
+  readonly nuker?: StructureNuker | undefined;
   /** 地上掉落的能量资源（FIND_DROPPED_RESOURCES 中类型为 energy 的）。 */
   readonly droppedEnergy: readonly Resource[];
   /**

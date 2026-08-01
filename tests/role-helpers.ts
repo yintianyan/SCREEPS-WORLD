@@ -276,6 +276,7 @@ export function mockSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapsho
     factory: undefined,
     observer: undefined,
     powerSpawn: undefined,
+    nuker: undefined,
     droppedEnergy: [],
     tombstones: [],
     ruins: [],

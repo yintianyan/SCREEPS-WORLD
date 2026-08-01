@@ -38,7 +38,7 @@ describe("constraint-placer — placeStructures", () => {
     expect(storages.length).toBe(1);
   });
 
-  it("RCL8：完整结构集（60 ext + 6 tower + 3 spawn + 1 storage + 0 link + 1 terminal + 1 factory + 10 lab + 1 observer + 1 powerSpawn）", () => {
+  it("RCL8：完整结构集（60 ext + 6 tower + 3 spawn + 1 storage + 0 link + 1 terminal + 1 factory + 10 lab + 1 observer + 1 powerSpawn + 1 nuker）", () => {
     // LINK 不再由 constraint-placer 放置 — 它的评分算法不理解 link 角色
     // （source/storage/controller），会导致 RCL5 仅有的 2 个 link 分配为 2 个
     // source link 或 2 个 storage link，link 网络失效。
@@ -54,9 +54,11 @@ describe("constraint-placer — placeStructures", () => {
     expect(count(STRUCTURE_LINK)).toBe(0); // link 由 task-factory 按角色放置
     expect(count(STRUCTURE_TERMINAL)).toBe(1);
     expect(count(STRUCTURE_FACTORY)).toBe(1);
+    expect(count(STRUCTURE_NUKER)).toBe(1);
     expect(count(STRUCTURE_LAB)).toBe(10);
     expect(count(STRUCTURE_OBSERVER)).toBe(1); // 旧手写 RCL_BATCHES 漏掉的类型
     expect(count(STRUCTURE_POWER_SPAWN)).toBe(1);
+    expect(count(STRUCTURE_NUKER)).toBe(1);
   });
 
   it("无重叠：所有位置唯一", () => {
@@ -382,6 +384,77 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     for (const p of extensions) {
       // 外扩后的放置必须落在 r7 之外（r7 内已全被占）。
       expect(Math.abs(p.pos.x - 25) > 7 || Math.abs(p.pos.y - 25) > 7).toBe(true);
+    }
+  });
+
+  it("tower 覆盖加权：RCL8 批次塔优先落在 controller 侧，早期批次守城区", () => {
+    const field = computeDistanceField(noWalls);
+    const anchor = { x: 25, y: 25 };
+    const controller = { x: 25, y: 45 };
+    const result = placeStructures(
+      anchor, field, noWalls, 8, new Set(), new Map(),
+      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
+    );
+    const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
+    expect(towers.length).toBe(6);
+    const nearController = towers.filter(
+      t => Math.abs(t.pos.x - controller.x) + Math.abs(t.pos.y - controller.y) <= 15,
+    );
+    // RCL8 批次 3 塔中 2 塔罩 controller（ceil(3/2)），早期批次保持锚点侧。
+    expect(nearController.length).toBeGreaterThanOrEqual(2);
+    // 加权后 tower 平均距 controller 应小于扩展（对照组）。
+    const towerDist = towers.reduce(
+      (a, t) => a + Math.abs(t.pos.x - controller.x) + Math.abs(t.pos.y - controller.y), 0,
+    ) / towers.length;
+    const exts = result.filter(p => p.structureType === STRUCTURE_EXTENSION);
+    const extDist = exts.reduce(
+      (a, t) => a + Math.abs(t.pos.x - controller.x) + Math.abs(t.pos.y - controller.y), 0,
+    ) / exts.length;
+    expect(towerDist).toBeLessThan(extDist);
+  });
+
+  it("批次份额：RCL8 各批次按自身 priority/phase 放置（重构回归）", () => {
+    // 病灶：批次 need 误用「类型总缺口 - 已放」→ 每类型只有第一个批次
+    // 在放置，后续批次 priority/phase 全部丢失（tower 全变 rcl3 相位、
+    // extension 全变 priority 1）。
+    const field = computeDistanceField(noWalls);
+    const result = placeStructures({ x: 25, y: 25 }, field, noWalls, 8, new Set(), new Map());
+
+    const exts = result.filter(p => p.structureType === STRUCTURE_EXTENSION);
+    expect(exts.length).toBe(60);
+    expect(exts.filter(e => e.priority === 1).length).toBe(20); // rcl2-4 批次
+    expect(exts.filter(e => e.priority === 2).length).toBe(40); // rcl5-8 批次
+
+    const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
+    expect(towers.filter(t => t.phase === "rcl3").length).toBe(1);
+    expect(towers.filter(t => t.phase === "late").length).toBe(1);
+    expect(towers.filter(t => t.phase === "rcl7").length).toBe(1);
+    expect(towers.filter(t => t.phase === "rcl8").length).toBe(3);
+  });
+
+  it("lab 降级：既有集群 2 格内全被占时，按 ≤3 宽松续接补放（W7N3 lab 断层回归）", () => {
+    // 既有 lab 在 (25,25)；预占其 Chebyshev<=2 的全部偶数格 → 严格续接
+    // （level 0）无位 → 降级到 ≤3 续接（level 1）仍可放。
+    const field = computeDistanceField(noWalls);
+    const anchor = { x: 25, y: 25 };
+    const preOccupied = new Set<number>();
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = -2; dy <= 2; dy++) {
+        if (((dx + dy) % 2 + 2) % 2 === 0) preOccupied.add(packPos(25 + dx, 25 + dy));
+      }
+    }
+    // 已建 1 lab（anchored at 25,25），RCL7 需补 5 个（累计 6）。
+    const committed = new Map([[STRUCTURE_LAB, 1]]);
+    const result = placeStructures(
+      anchor, field, noWalls, 7, preOccupied, committed,
+      DEFAULT_PLACER_CONFIG, [], [{ x: 25, y: 25 }],
+    );
+    const newLabs = result.filter(p => p.structureType === STRUCTURE_LAB);
+    // 降级路径必须补出 lab（旧实现：0）。
+    expect(newLabs.length).toBeGreaterThan(0);
+    // 严格续接（≤2）已不可能 → 所有新 lab 距既有 lab 至少 3（level 1 放行）。
+    for (const lab of newLabs) {
+      expect(Math.max(Math.abs(lab.pos.x - 25), Math.abs(lab.pos.y - 25))).toBeGreaterThan(2);
     }
   });
 });

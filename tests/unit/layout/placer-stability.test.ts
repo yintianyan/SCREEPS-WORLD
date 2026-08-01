@@ -131,6 +131,7 @@ describe("validation — computeCommittedCounts（承诺口径）", () => {
       factory: st("factory", 29, 27),
       observer: st("observer", 31, 31),
       powerSpawn: st("powerSpawn", 32, 32),
+      nuker: st("nuker", 33, 33),
       myConstructionSites: [st("extension", 22, 24)] as any,
     });
     const queue = [task("extension", "queued"), task("tower", "blocked")];
@@ -147,6 +148,7 @@ describe("validation — computeCommittedCounts（承诺口径）", () => {
     // （旧 RCL_BATCHES 遗漏同源问题 — 漏计会生成重复放置任务）。
     expect(counts.get("observer")).toBe(1);
     expect(counts.get("powerSpawn")).toBe(1);
+    expect(counts.get("nuker")).toBe(1);
   });
 
   it("site/done 状态的队列任务不计入（实体 site/结构已覆盖，防双计）", () => {

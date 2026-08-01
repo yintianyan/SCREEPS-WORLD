@@ -174,6 +174,9 @@ export function precomputeStructureCounts(snapshot: RoomSnapshot): Map<string, n
   if (snapshot.powerSpawn) {
     counts.set(snapshot.powerSpawn.structureType, (counts.get(snapshot.powerSpawn.structureType) ?? 0) + 1);
   }
+  if (snapshot.nuker) {
+    counts.set(snapshot.nuker.structureType, (counts.get(snapshot.nuker.structureType) ?? 0) + 1);
+  }
   for (const site of snapshot.constructionSites) {
     counts.set(site.structureType, (counts.get(site.structureType) ?? 0) + 1);
   }
@@ -211,6 +214,7 @@ export function computeCommittedCounts(
   if (snapshot.factory) add(snapshot.factory.structureType);
   if (snapshot.observer) add(snapshot.observer.structureType);
   if (snapshot.powerSpawn) add(snapshot.powerSpawn.structureType);
+  if (snapshot.nuker) add(snapshot.nuker.structureType);
   for (const site of snapshot.myConstructionSites) add(site.structureType);
   for (const task of queue) {
     if (task.state === "queued" || task.state === "blocked") add(task.structureType);
@@ -246,6 +250,9 @@ export function buildOccupiedPositionSet(
     ...snapshot.containers,
     ...snapshot.links,
     ...snapshot.labs,
+    // 道路是结构：可通行但不可在其上建造新结构。漏掉会导致约束放置器把
+    // extension 等候选选在既有道路格上 → site 创建失败 → 阻塞/黑名单空转。
+    ...snapshot.roads,
     ...snapshot.constructionSites,
   ];
   for (const s of structures) {
@@ -271,6 +278,9 @@ export function buildOccupiedPositionSet(
   }
   if (snapshot.powerSpawn) {
     set.add(packPos(snapshot.powerSpawn.pos.x, snapshot.powerSpawn.pos.y));
+  }
+  if (snapshot.nuker) {
+    set.add(packPos(snapshot.nuker.pos.x, snapshot.nuker.pos.y));
   }
   return set;
 }

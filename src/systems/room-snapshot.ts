@@ -41,6 +41,7 @@ export function buildRoomSnapshot(
   const factory = allStructures.find(s => s.structureType === STRUCTURE_FACTORY) as StructureFactory | undefined;
   const observer = allStructures.find(s => s.structureType === STRUCTURE_OBSERVER) as StructureObserver | undefined;
   const powerSpawn = allStructures.find(s => s.structureType === STRUCTURE_POWER_SPAWN) as StructurePowerSpawn | undefined;
+  const nuker = allStructures.find(s => s.structureType === STRUCTURE_NUKER) as StructureNuker | undefined;
 
   const storage = room.storage ?? undefined;
   const terminal = room.terminal ?? undefined;
@@ -200,6 +201,7 @@ export function buildRoomSnapshot(
     factory,
     observer,
     powerSpawn,
+    nuker,
     droppedEnergy,
     tombstones,
     ruins,
@@ -227,5 +229,4 @@ function isLink(s: AnyOwnedStructure): s is StructureLink {
 function isLab(s: AnyOwnedStructure): s is StructureLab {
   return s.structureType === STRUCTURE_LAB;
 }
-
 

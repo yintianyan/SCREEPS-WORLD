@@ -42,6 +42,24 @@ import { auditStructureGaps, type StructureGaps } from "../domain/layout/gaps";
  */
 const GAP_RETRY_INTERVAL = 500;
 
+/**
+ * 枢纽道路联动（2026-08-01）：物流枢纽结构入队时同步预铺相邻 road。
+ *
+ * 病灶（空间评审实证）：热度驱动的道路规划滞后于城区成型 — W7N4 RCL8
+ * 满配后 ext 邻路率仅 32%、主 spawn 不邻路；W8N3 的 82% 说明热度机制
+ * 最终能铺好，但延迟数十个采样周期，期间 hauler 踩草地 + 拥堵。
+ *
+ * 设计约束（plan §5.5：道路逐段添加、绝不预铺全房）：
+ *   - 只铺枢纽结构（spawn/storage/terminal/factory/lab/link）邻格，
+ *     extension 仍走热度路（避免全房铺路）
+ *   - 每结构最多 2 条、每周期最多 MAX_HUB_ROADS_PER_PLAN 条，不占
+ *     热度路的采样额度；priority 3 与既有道路一致（不挤占关键建筑）
+ *   - 与热度/走廊路共用 key 命名 `road.<room>.<x>.<y>` + existingKeys
+ *     去重，建成后 done 清理，不会重复入队
+ */
+const MAX_HUB_ROADS_PER_STRUCTURE = 2;
+const MAX_HUB_ROADS_PER_PLAN = 6;
+
 // ─── P1-F.6：4-stage 分片跨 tick 中间产物 ──────────────────
 
 /**
@@ -443,6 +461,9 @@ function planStage1Core(
       energyEndpoints,
       snapshot.labs.map(l => ({ x: l.pos.x, y: l.pos.y })),
       snapshot.roomName,
+      snapshot.controller
+        ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
+        : undefined,
     );
     const constraintCandidates = placementsToCandidates(placements, snapshot.roomName);
 
@@ -649,6 +670,23 @@ function planStage3RoadsAndFinalize(
     }
   }
 
+  // 3.9-6. 枢纽道路联动 — 物流枢纽结构（spawn/storage/terminal/factory/
+  // lab/link）邻格预铺 1-2 条 road，不等热度采样（W7N4 实证滞后病灶：
+  // RCL8 满配后 ext 邻路率仅 32%）。
+  // 门禁（预算感知 + 规模感知，集成世界实证）：
+  //   - 仅 RCL6+（terminal/lab 时代，城区成型）— 早期核心路/走廊路已够
+  //   - 必须有 storage（无 storage 的贫困房能量脆弱，额外 builder 需求
+  //     会延迟 harvester 重建 — RCL5 脉冲世界 1500 tick 未恢复实证）
+  //   - 经济承压（economyPressure >= 0.5 / recovery）不铺
+  // 基于已建枢纽（snapshot）而非排队任务 — 修复「结构建成后路网滞后」本体。
+  const economyOk = (Memory.rooms[snapshot.roomName]?.economyPressure ?? 0) < 0.5;
+  if (economyOk && !snapshot.needsRecovery && snapshot.rcl >= 6 && snapshot.storage) {
+    planHubRoads(
+      snapshot, room, anchor, occupiedSet,
+      queue, existingKeys, existingPositions, isBlacklisted,
+    );
+  }
+
   // ── 紧急 spawn 重建 ──
   if (snapshot.spawns.length === 0 && layout.anchor !== undefined) {
     const anchorPos = unpackPos(layout.anchor);
@@ -725,6 +763,79 @@ function planStage3RoadsAndFinalize(
   // 收尾 — 重置 planStage + 清 planStageData。
   layout.planStage = 0;
   clearPlanStageData(snapshot.roomName);
+}
+
+/**
+ * 枢纽道路联动：为房间内**已建成**的枢纽结构（spawn/storage/terminal/
+ * factory/lab/link）预铺相邻 road — 修复热度路滞后于城区成型的本体问题
+ * （W7N4：RCL8 满配后 ext 邻路率 32%）。
+ *
+ * 邻格选择：4 正交邻居中按「距 anchor 近者优先」（物流侧朝向城区）；
+ * 跳过墙/占用/黑名单/已有任务。每结构最多 2 条，每周期最多 6 条 —
+ * 与热度路共用 key 命名与去重，建成后由 syncTaskStates 转 done 清理。
+ */
+function planHubRoads(
+  snapshot: import("../kernel/contracts").RoomSnapshot,
+  room: Room,
+  anchor: { x: number; y: number },
+  occupiedSet: ReadonlySet<number>,
+  queue: BuildTask[],
+  existingKeys: Set<string>,
+  existingPositions: Set<string>,
+  isBlacklisted: (key: string) => boolean,
+): void {
+  const terrain = room.getTerrain();
+  const hubs: { x: number; y: number }[] = [
+    ...snapshot.spawns.map(s => ({ x: s.pos.x, y: s.pos.y })),
+    ...snapshot.labs.map(s => ({ x: s.pos.x, y: s.pos.y })),
+    ...snapshot.links.map(s => ({ x: s.pos.x, y: s.pos.y })),
+  ];
+  if (snapshot.storage) hubs.push({ x: snapshot.storage.pos.x, y: snapshot.storage.pos.y });
+  if (snapshot.terminal) hubs.push({ x: snapshot.terminal.pos.x, y: snapshot.terminal.pos.y });
+  if (snapshot.factory) hubs.push({ x: snapshot.factory.pos.x, y: snapshot.factory.pos.y });
+
+  let added = 0;
+  for (const hub of hubs) {
+    if (added >= MAX_HUB_ROADS_PER_PLAN) break;
+
+    const neighbors: { x: number; y: number }[] = [
+      { x: hub.x + 1, y: hub.y },
+      { x: hub.x - 1, y: hub.y },
+      { x: hub.x, y: hub.y + 1 },
+      { x: hub.x, y: hub.y - 1 },
+    ];
+    // 物流侧优先：距 anchor 近的邻格先铺（城区内网，不铺城外野路）。
+    neighbors.sort(
+      (a, b) =>
+        (Math.abs(a.x - anchor.x) + Math.abs(a.y - anchor.y)) -
+        (Math.abs(b.x - anchor.x) + Math.abs(b.y - anchor.y)),
+    );
+
+    let perStructure = 0;
+    for (const n of neighbors) {
+      if (perStructure >= MAX_HUB_ROADS_PER_STRUCTURE) break;
+      if (n.x < 1 || n.x > 48 || n.y < 1 || n.y > 48) continue;
+      if (terrain.get(n.x, n.y) === TERRAIN_MASK_WALL) continue;
+      if (occupiedSet.has(packPos(n.x, n.y))) continue;
+      const key = `road.${snapshot.roomName}.${n.x}.${n.y}`;
+      if (existingKeys.has(key) || isBlacklisted(key)) continue;
+      if (existingPositions.has(`${n.x},${n.y}`)) continue;
+
+      queue.push({
+        key,
+        pos: { x: n.x, y: n.y, roomName: snapshot.roomName },
+        structureType: STRUCTURE_ROAD,
+        priority: 3,
+        state: "queued",
+        attempts: 0,
+        retryAt: 0,
+      });
+      existingKeys.add(key);
+      existingPositions.add(`${n.x},${n.y}`);
+      perStructure++;
+      added++;
+    }
+  }
 }
 
 /** 判断是否应该执行规划。 */

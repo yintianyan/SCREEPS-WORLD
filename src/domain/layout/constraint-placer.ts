@@ -86,8 +86,6 @@ export interface StructureBatch {
  *   - link：task-factory 按角色放置（source/storage/controller）
  *   - extractor：必须建在 mineral 格上，非自由放置
  *   - road/container/rampart/constructedWall：无限或防御/物流专用生成器
- *   - nuker：RCL8 昂贵可选且 RoomSnapshot 无字段，constraint 模式不入自动
- *     布局（template 模式由 compact-core-v2 蓝图负责）
  */
 const BUILD_STRATEGY: Readonly<Record<string, {
   readonly priority: (rcl: number) => BuildPriority;
@@ -111,6 +109,8 @@ const BUILD_STRATEGY: Readonly<Record<string, {
   [STRUCTURE_LAB]: { priority: () => 2, phaseFor: r => `rcl${r}` as LayoutPhase },
   [STRUCTURE_OBSERVER]: { priority: () => 2, phaseFor: () => "rcl8" },
   [STRUCTURE_POWER_SPAWN]: { priority: () => 2, phaseFor: () => "rcl8" },
+  // nuker：RCL8 解锁 1，核打击威慑（3×3 结构，与 spawn 同级按单格候选放置）。
+  [STRUCTURE_NUKER]: { priority: () => 2, phaseFor: () => "rcl8" },
 };
 
 /** constraint 放置器负责的有限数量结构类型（数量真相源 = CONTROLLER_STRUCTURES）。 */
@@ -124,6 +124,7 @@ const CONSTRAINT_PLACED_TYPES: readonly BuildableStructureConstant[] = [
   STRUCTURE_FACTORY,
   STRUCTURE_OBSERVER,
   STRUCTURE_POWER_SPAWN,
+  STRUCTURE_NUKER,
 ];
 
 /**
@@ -342,29 +343,39 @@ function placeLabCluster(
   const placed: { x: number; y: number }[] = [...existingLabs];
   const result: { x: number; y: number }[] = [];
 
-  for (let i = 0; i < count; i++) {
-    let found = false;
-    for (const c of candidates) {
-      const packed = packPos(c.x, c.y);
-      if (occupied.has(packed)) continue;
-      if (wouldSealLocal(c.x, c.y, getTerrain, occupied)) continue;
+  // 降级阶梯（2026-08-01）：破碎房（W7N3 lab 4/10）在既有 lab 集群 2 格内
+  // 已无可建格时，缺口永久挂起。按级放宽：
+  //   level 0：与既有 lab Chebyshev <= 2（反应 trio 契约，默认不变）
+  //   level 1：<= 3（宽松续接，仍保持集群连通）
+  //   level 2：自由放置（仅密封守卫；单 lab 可做矿物研究，优于永久缺口）
+  // 上级放不满才降级；开阔地形首级即放满，行为与旧实现完全一致。
+  const maxRanges: number[] = [2, 3, Infinity];
+  for (const maxRange of maxRanges) {
+    if (result.length >= count) break;
+    for (let i = result.length; i < count; i++) {
+      let found = false;
+      for (const c of candidates) {
+        const packed = packPos(c.x, c.y);
+        if (occupied.has(packed)) continue;
+        if (wouldSealLocal(c.x, c.y, getTerrain, occupied)) continue;
 
-      // 检查与已有 lab 的 Chebyshev 距离 <= 2
-      if (placed.length > 0) {
-        const inRange = placed.some(
-          l => Math.max(Math.abs(l.x - c.x), Math.abs(l.y - c.y)) <= 2,
-        );
-        if (!inRange) continue;
+        // 与已有 lab 的 Chebyshev 距离约束（自由放置级跳过）。
+        if (placed.length > 0 && isFinite(maxRange)) {
+          const inRange = placed.some(
+            l => Math.max(Math.abs(l.x - c.x), Math.abs(l.y - c.y)) <= maxRange,
+          );
+          if (!inRange) continue;
+        }
+
+        // 找到合法位置
+        placed.push({ x: c.x, y: c.y });
+        result.push({ x: c.x, y: c.y });
+        occupied.add(packed);
+        found = true;
+        break;
       }
-
-      // 找到合法位置
-      placed.push({ x: c.x, y: c.y });
-      result.push({ x: c.x, y: c.y });
-      occupied.add(packed);
-      found = true;
-      break;
+      if (!found) break; // 本级放不满 → 降级到下一级
     }
-    if (!found) break; // 找不到更多合法位置
   }
 
   return result;
@@ -388,6 +399,9 @@ function placeLabCluster(
  *   传入时结构放置偏好靠近能量流转路径；不传时退化为纯几何评分。
  * @param existingLabPositions 已建 lab 位置 — 新增 lab 续接既有集群（相邻约束）。
  * @param roomName 房间名（可选）— 仅用于放置缺口告警日志定位，不影响放置逻辑。
+ * @param controllerPos controller 位置（可选）— tower 覆盖加权：tower 候选
+ *   按「评分 − 距 controller 距离 × 0.3」重排，让 RCL8 六塔优先落在
+ *   controller 射程高效区（官方衰减：20 格起降至最低 25% 伤害）。
  */
 export function placeStructures(
   anchor: { x: number; y: number },
@@ -400,6 +414,7 @@ export function placeStructures(
   energyEndpoints: readonly { x: number; y: number }[] = [],
   existingLabPositions: readonly { x: number; y: number }[] = [],
   roomName?: string,
+  controllerPos?: { x: number; y: number },
 ): ConstraintPlacement[] {
   // ── 自适应搜索半径 ──
   // 默认 maxRadius=7 的固定候选池在多墙地形 + RCL7-8 高密度（需 ~80 结构）下
@@ -460,7 +475,13 @@ export function placeStructures(
   for (;;) {
     for (const batch of batches) {
       const { type, priority, phase } = batch;
-      const need = (residualNeedByType.get(type) ?? 0) - (placedByType.get(type) ?? 0);
+      // 批次级份额：min(本批 count, 类型总缺口 - 已放)。不能用
+      // 「总缺口 - 已放」直接当 need — 那会让每类型只有第一个批次在放置，
+      // 后续批次的 priority/phase 全部丢失（tower 全变 rcl3 相位）。
+      const need = Math.min(
+        batch.count,
+        Math.max(0, (residualNeedByType.get(type) ?? 0) - (placedByType.get(type) ?? 0)),
+      );
       if (need <= 0) continue;
 
       // Lab 特殊处理：集群放置
@@ -482,7 +503,28 @@ export function placeStructures(
 
       // 通用贪心放置
       let placed = 0;
-      for (const c of candidates) {
+      // tower 覆盖加权（2026-08-01）：仅 RCL8 批次的 +3 塔按「距 controller
+      // 每 15 格分桶」优先填 controller 射程高效区，且最多 ceil(need/2) 塔 —
+      // 保留其余塔走通用池守城区/入口。早期批次（RCL3/5/7）不动（已按锚点
+      // 侧放置），防线双端覆盖。官方衰减：20 格起降至最低 25% 伤害。
+      // 分桶排序对开放性/密封约束不敏感，地形受限时自然溢出到下一桶。
+      // 基分 openness 主导，线性惩罚无法把塔拉到 controller 侧，故用分桶。
+      const typeCandidates =
+        type === STRUCTURE_TOWER && phase === "rcl8" && controllerPos
+          ? [
+              ...[...candidates]
+                .sort((a, b) => {
+                  const bucketOf = (c: CandidateTile): number =>
+                    Math.floor(
+                      (Math.abs(c.x - controllerPos.x) + Math.abs(c.y - controllerPos.y)) / 15,
+                    );
+                  return (bucketOf(a) - bucketOf(b)) || (b.score - a.score) || a.x - b.x || a.y - b.y;
+                })
+                .slice(0, Math.max(1, Math.ceil(need / 2))),
+              ...candidates,
+            ]
+          : candidates;
+      for (const c of typeCandidates) {
         if (placed >= need) break;
         const packed = packPos(c.x, c.y);
         if (occupied.has(packed)) continue;

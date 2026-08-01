@@ -721,6 +721,35 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     });
   });
 
+  it("stage 3 枢纽道路联动：storage 任务入队 → 邻格预铺 road（W7N4 路网滞后病灶回归）", () => {
+    const { snap, spawnPos } = setupRoom({
+      planStage: 3,
+      nextPlanTick: 1000,
+      rcl: 8,
+      completeStructures: true,
+    });
+    writePlanStageData("W7N4", spawnPos);
+    // 已建 storage 定位到 (30,30) — 枢纽道路基于已建结构（snapshot）而非队列。
+    (snap.storage as any).pos = { x: 30, y: 30, roomName: "W7N4" };
+
+    const ctx = mockContext(snap);
+    layoutPlannerSystem.planRoom(snap, ctx);
+
+    const queue = (globalThis as any).Memory.rooms.W7N4.buildQueue;
+    const hubRoads = queue.filter(
+      (t: any) => t.structureType === STRUCTURE_ROAD &&
+        t.priority === 3 &&
+        Math.abs(t.pos.x - 30) + Math.abs(t.pos.y - 30) === 1,
+    );
+    // 枢纽邻格预铺 1-2 条 road（不等热度采样）。
+    expect(hubRoads.length).toBeGreaterThan(0);
+    expect(hubRoads.length).toBeLessThanOrEqual(2);
+    // key 与热度/走廊路共用命名空间（去重兼容）。
+    for (const r of hubRoads) {
+      expect(r.key).toBe(`road.W7N4.${r.pos.x}.${r.pos.y}`);
+    }
+  });
+
   // ── 完整 4-stage 链路（跨 tick 模拟）──
 
   it("完整 4-stage 链路：stage 0→1→2→3→0，每 tick 推进一个 stage", () => {

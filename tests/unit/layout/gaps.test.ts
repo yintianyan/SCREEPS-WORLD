@@ -34,6 +34,7 @@ const CONSTRAINT_TYPES: BuildableStructureConstant[] = [
   STRUCTURE_FACTORY,
   STRUCTURE_OBSERVER,
   STRUCTURE_POWER_SPAWN,
+  STRUCTURE_NUKER,
 ];
 
 describe("constraint-placer — 单一真相源派生（CONTROLLER_STRUCTURES）", () => {
@@ -47,10 +48,11 @@ describe("constraint-placer — 单一真相源派生（CONTROLLER_STRUCTURES）
     }
   });
 
-  it("RCL8 包含 observer 与 powerSpawn（旧手写表漏掉的类型）", () => {
+  it("RCL8 包含 observer/powerSpawn/nuker（旧手写表漏掉的类型）", () => {
     const counts = expectedStructureCounts(8);
     expect(counts[STRUCTURE_OBSERVER]).toBe(1);
     expect(counts[STRUCTURE_POWER_SPAWN]).toBe(1);
+    expect(counts[STRUCTURE_NUKER]).toBe(1);
   });
 
   it("buildRclBatches 增量合计 == 累计期望（每 RCL 全类型）", () => {
@@ -189,19 +191,22 @@ describe("auditStructureGaps — 缺口审计器", () => {
     expect(gaps[STRUCTURE_EXTENSION]).toBe(8); // 10 - 已建 1 - site 1
   });
 
-  it("RCL8：observer/powerSpawn 已建则无缺口，未建则有缺口", () => {
+  it("RCL8：observer/powerSpawn/nuker 已建则无缺口，未建则有缺口", () => {
     const spawn = mockStructure("spawn", { id: "sp" });
     spawn.pos = { x: 25, y: 25, roomName: "W7N4" } as any;
     const observer = mockStructure("observer", { id: "obs" });
+    const nuker = mockStructure("nuker", { id: "nuk" });
     const snap = mockSnapshot({
       rcl: 8,
       spawns: [spawn as any],
       observer: observer as any,
+      nuker: nuker as any,
       // powerSpawn 故意缺
     });
     const gaps = auditStructureGaps(snap, []);
     expect(gaps[STRUCTURE_OBSERVER]).toBeUndefined();
     expect(gaps[STRUCTURE_POWER_SPAWN]).toBe(1);
+    expect(gaps[STRUCTURE_NUKER]).toBeUndefined();
   });
 
   it("期望为 0 的类型（如 RCL3 的 observer）不进入缺口字典", () => {

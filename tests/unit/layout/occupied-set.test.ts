@@ -31,6 +31,8 @@ describe("buildOccupiedPositionSet — 占用集涵盖全部阻挡型结构", ()
       extractor: at("extractor", 40, 40),
       observer: at("observer", 41, 41),
       powerSpawn: at("powerSpawn", 42, 42),
+      nuker: at("nuker", 43, 43),
+      roads: [at("road", 44, 44)],
     });
 
     const set = buildOccupiedPositionSet(snap);
@@ -41,6 +43,9 @@ describe("buildOccupiedPositionSet — 占用集涵盖全部阻挡型结构", ()
     expect(set.has(packPos(40, 40))).toBe(true); // extractor
     expect(set.has(packPos(41, 41))).toBe(true); // observer
     expect(set.has(packPos(42, 42))).toBe(true); // powerSpawn
+    expect(set.has(packPos(43, 43))).toBe(true); // nuker
+    // 道路是结构：可通行但不可在其上建造 — 必须计入占用集（防放置撞路）。
+    expect(set.has(packPos(44, 44))).toBe(true); // road
   });
 
   it("仍涵盖既有类型 spawn/extension/tower/storage/link/container", () => {

@@ -34,6 +34,7 @@ export function auditStructureGaps(
   if (snapshot.factory) add(snapshot.factory.structureType);
   if (snapshot.observer) add(snapshot.observer.structureType);
   if (snapshot.powerSpawn) add(snapshot.powerSpawn.structureType);
+  if (snapshot.nuker) add(snapshot.nuker.structureType);
   for (const site of snapshot.myConstructionSites) add(site.structureType);
   for (const task of queue) {
     if (task.state === "queued" || task.state === "blocked") add(task.structureType);

@@ -73,6 +73,9 @@ export function syncTaskStates(
   if (snapshot.powerSpawn) {
     builtStructures.push(snapshot.powerSpawn);
   }
+  if (snapshot.nuker) {
+    builtStructures.push(snapshot.nuker);
+  }
   for (const s of builtStructures) {
     builtPositions.add(`${s.pos.x},${s.pos.y}:${s.structureType}`);
   }
