@@ -339,9 +339,30 @@ function placeLabCluster(
   occupied: Set<number>,
   getTerrain: (x: number, y: number) => boolean,
   existingLabs: readonly { x: number; y: number }[],
+  terminalPos?: { x: number; y: number },
 ): { x: number; y: number }[] {
   const placed: { x: number; y: number }[] = [...existingLabs];
   const result: { x: number; y: number }[] = [];
+
+  // 首批 lab 锚定 terminal（2026-08-02）：RCL6 第一批 lab 时 existingLabs
+  // 为空，第一个 lab 按通用评分落在 anchor 高分侧，terminal 后建 → lab
+  // 集群与物流枢纽分离（W8N3 实证：lab-terminal 均值 9.3）。有 terminal
+  // 时，第一个 lab 优先落在 terminal 邻域（<=3），后续 lab 续接该集群 —
+  // 老房（已有 lab）行为零变化，未来房 lab 从出生就贴物流枢纽。
+  if (placed.length === 0 && terminalPos) {
+    const terminalCandidates = candidates.filter(
+      c => Math.abs(c.x - terminalPos.x) + Math.abs(c.y - terminalPos.y) <= 3,
+    );
+    for (const c of terminalCandidates) {
+      const packed = packPos(c.x, c.y);
+      if (occupied.has(packed)) continue;
+      if (wouldSealLocal(c.x, c.y, getTerrain, occupied)) continue;
+      placed.push({ x: c.x, y: c.y });
+      result.push({ x: c.x, y: c.y });
+      occupied.add(packed);
+      break; // 只锚定第一个 lab
+    }
+  }
 
   // 降级阶梯（2026-08-01）：破碎房（W7N3 lab 4/10）在既有 lab 集群 2 格内
   // 已无可建格时，缺口永久挂起。按级放宽：
@@ -400,8 +421,10 @@ function placeLabCluster(
  * @param existingLabPositions 已建 lab 位置 — 新增 lab 续接既有集群（相邻约束）。
  * @param roomName 房间名（可选）— 仅用于放置缺口告警日志定位，不影响放置逻辑。
  * @param controllerPos controller 位置（可选）— tower 覆盖加权：tower 候选
- *   按「评分 − 距 controller 距离 × 0.3」重排，让 RCL8 六塔优先落在
- *   controller 射程高效区（官方衰减：20 格起降至最低 25% 伤害）。
+ *   按「距 controller 每 15 格分桶」优先落在 controller 射程高效区
+ *   （官方衰减：20 格起降至最低 25% 伤害）；仅 RCL8 批次且最多 2/3。
+ * @param terminalPos terminal 位置（可选）— lab 首批锚定：RCL6 第一批
+ *   lab 落在 terminal 邻域（<=3），集群与物流枢纽共生。
  */
 export function placeStructures(
   anchor: { x: number; y: number },
@@ -415,6 +438,7 @@ export function placeStructures(
   existingLabPositions: readonly { x: number; y: number }[] = [],
   roomName?: string,
   controllerPos?: { x: number; y: number },
+  terminalPos?: { x: number; y: number },
 ): ConstraintPlacement[] {
   // ── 自适应搜索半径 ──
   // 默认 maxRadius=7 的固定候选池在多墙地形 + RCL7-8 高密度（需 ~80 结构）下
@@ -486,7 +510,7 @@ export function placeStructures(
 
       // Lab 特殊处理：集群放置
       if (type === STRUCTURE_LAB) {
-        const labResult = placeLabCluster(need, candidates, occupied, getTerrain, labPositions);
+        const labResult = placeLabCluster(need, candidates, occupied, getTerrain, labPositions, terminalPos);
         for (const pos of labResult) {
           labPositions.push(pos);
           placements.push({

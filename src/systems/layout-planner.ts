@@ -464,6 +464,9 @@ function planStage1Core(
       snapshot.controller
         ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
         : undefined,
+      snapshot.terminal
+        ? { x: snapshot.terminal.pos.x, y: snapshot.terminal.pos.y }
+        : undefined,
     );
     const constraintCandidates = placementsToCandidates(placements, snapshot.roomName);
 

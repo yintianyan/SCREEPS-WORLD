@@ -457,4 +457,30 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
       expect(Math.max(Math.abs(lab.pos.x - 25), Math.abs(lab.pos.y - 25))).toBeGreaterThan(2);
     }
   });
+
+  it("lab 首批锚定 terminal：无既有 lab 时，RCL6 第一批 lab 落在 terminal 邻域（W8N3 lab 距离病灶回归）", () => {
+    const field = computeDistanceField(noWalls);
+    const anchor = { x: 10, y: 10 }; // anchor 远离 terminal — 通用评分会倾向 anchor 侧
+    const terminal = { x: 17, y: 10 }; // r7 池内边缘：邻域有候选，但通用评分低于 anchor 侧
+    const result = placeStructures(
+      anchor, field, noWalls, 6, new Set(), new Map(),
+      DEFAULT_PLACER_CONFIG, [], [], "W1N1", undefined, terminal,
+    );
+    const labs = result.filter(p => p.structureType === STRUCTURE_LAB);
+    expect(labs.length).toBe(3); // RCL6 首批 3 lab
+    // 首个 lab 必须落在 terminal 3 格内（锚定生效）。
+    const first = labs[0]!;
+    expect(
+      Math.abs(first.pos.x - terminal.x) + Math.abs(first.pos.y - terminal.y),
+    ).toBeLessThanOrEqual(3);
+    // 集群均值应显著优于对照组（锚定后整体向 terminal 收拢）。
+    const meanToTerminal = (ls: typeof labs) =>
+      ls.reduce((a, l) => a + Math.abs(l.pos.x - terminal.x) + Math.abs(l.pos.y - terminal.y), 0) / ls.length;
+    // 对照组：不传 terminalPos 时 lab 靠近 anchor（旧行为，验证规则开关）。
+    const baseline = placeStructures(
+      anchor, field, noWalls, 6, new Set(), new Map(),
+    );
+    const baselineLabs = baseline.filter(p => p.structureType === STRUCTURE_LAB);
+    expect(meanToTerminal(labs)).toBeLessThan(meanToTerminal(baselineLabs));
+  });
 });
