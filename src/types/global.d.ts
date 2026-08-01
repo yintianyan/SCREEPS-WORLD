@@ -191,6 +191,13 @@ declare global {
        * → 重置为 0 重新开始（最多损失一个规划周期）。
        */
       planStage?: 0 | 1 | 2 | 3;
+      /**
+       * 目标清单缺口的下一次强制规划 tick（v21+，layout-planner 写）。
+       * 期望结构未达成（缺口 > 0）时 gap-force 触发规划；若放置仍失败，
+       * stage 3 将其设为 tick + 500（慢速重试），防止受限地形每 tick 空转。
+       * 缺口闭合或普通周期规划完成后删除。缺失视为 0（允许立即 gap-force）。
+       */
+      nextGapPlanTick?: number;
       // 冷数据 overrides / blocked 已迁移到 RawMemory segment 0（见 kernel/segment-store.ts）。
       // 保留可选字段用于 v3→v4 迁移兼容。
       /** @deprecated 已迁移到 segment，仅迁移期间存在。 */
@@ -294,6 +301,13 @@ declare global {
      * 防止失守房的队列/布局/情报数据永久滞留。
      */
     lostRooms?: Record<string, number>;
+    /**
+     * 目标清单结构缺口观测（v21+，layout-planner 写）：房名 → 类型 → 缺口数。
+     * 期望 = CONTROLLER_STRUCTURES 派生（expectedStructureCounts），已有 = 已建
+     * 结构 + 我方在建 site + queued/blocked 队列任务。缺口 > 0 即真实未达成目标，
+     * 供控制台采样与人工介入信号；仅在实际缺口集合变化时写入（无 Memory 抖动）。
+     */
+    layoutGaps?: Record<string, Record<string, number>>;
   }
 
   /** 参数自调优的持久化状态。 */

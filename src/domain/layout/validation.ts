@@ -147,6 +147,9 @@ export function precomputeStructureCounts(snapshot: RoomSnapshot): Map<string, n
     snapshot.containers,
     snapshot.roads,
     snapshot.links,
+    snapshot.labs,
+    snapshot.ramparts,
+    snapshot.walls,
   ];
   for (const arr of typedArrays) {
     for (const s of arr) {
@@ -155,6 +158,21 @@ export function precomputeStructureCounts(snapshot: RoomSnapshot): Map<string, n
   }
   if (snapshot.storage) {
     counts.set(snapshot.storage.structureType, (counts.get(snapshot.storage.structureType) ?? 0) + 1);
+  }
+  if (snapshot.terminal) {
+    counts.set(snapshot.terminal.structureType, (counts.get(snapshot.terminal.structureType) ?? 0) + 1);
+  }
+  if (snapshot.extractor) {
+    counts.set(snapshot.extractor.structureType, (counts.get(snapshot.extractor.structureType) ?? 0) + 1);
+  }
+  if (snapshot.factory) {
+    counts.set(snapshot.factory.structureType, (counts.get(snapshot.factory.structureType) ?? 0) + 1);
+  }
+  if (snapshot.observer) {
+    counts.set(snapshot.observer.structureType, (counts.get(snapshot.observer.structureType) ?? 0) + 1);
+  }
+  if (snapshot.powerSpawn) {
+    counts.set(snapshot.powerSpawn.structureType, (counts.get(snapshot.powerSpawn.structureType) ?? 0) + 1);
   }
   for (const site of snapshot.constructionSites) {
     counts.set(site.structureType, (counts.get(site.structureType) ?? 0) + 1);
@@ -191,6 +209,8 @@ export function computeCommittedCounts(
   if (snapshot.storage) add(snapshot.storage.structureType);
   if (snapshot.terminal) add(snapshot.terminal.structureType);
   if (snapshot.factory) add(snapshot.factory.structureType);
+  if (snapshot.observer) add(snapshot.observer.structureType);
+  if (snapshot.powerSpawn) add(snapshot.powerSpawn.structureType);
   for (const site of snapshot.myConstructionSites) add(site.structureType);
   for (const task of queue) {
     if (task.state === "queued" || task.state === "blocked") add(task.structureType);

@@ -388,9 +388,9 @@ describe("migration v19 → v20（tuning 闭环验证字段建档）", () => {
     expect(room.frozenParams["harvester.maxCount"].rollbackCount).toBe(3);
   });
 
-  it("已是 v20 的新 Memory → 跳过迁移", () => {
+  it("已是当前版本的新 Memory → 跳过迁移", () => {
     (globalThis as any).Memory = {
-      schemaVersion: 20,
+      schemaVersion: CONFIG.memory.schemaVersion,
       creeps: {},
       rooms: {},
       kernel: { tuning: { rooms: { W1N1: { roleBounds: {}, lastAdjusted: {} } } } },
@@ -398,7 +398,7 @@ describe("migration v19 → v20（tuning 闭环验证字段建档）", () => {
 
     runMigrations();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(20);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     // 未被迁移改动
     expect((globalThis as any).Memory.kernel.tuning.rooms.W1N1.roleBounds).toEqual({});
   });

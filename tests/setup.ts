@@ -122,7 +122,10 @@ Object.assign(globalThis as Record<string, unknown>, {
   LOOK_CREEPS: "creep",
 
   CONTROLLER_STRUCTURES: {
-    spawn: [0, 1, 1, 1, 1, 1, 1, 1, 1],
+    // 与官方游戏常量对齐（2026-08-01）：spawn RCL7=2 / RCL8=3；
+    // 补齐 observer/powerSpawn/nuker（旧手写 RCL_BATCHES 漏类型即因
+    // 此类常量覆盖不全 — 单一真相源测试必须用真实表）。
+    spawn: [0, 1, 1, 1, 1, 1, 1, 2, 3],
     extension: [0, 0, 5, 10, 20, 30, 40, 50, 60],
     road: [250, 250, 250, 250, 250, 250, 250, 250, 250],
     constructedWall: [0, 0, 2500, 5000, 7500, 10000, 12500, 15000, 17500],
@@ -135,5 +138,8 @@ Object.assign(globalThis as Record<string, unknown>, {
     terminal: [0, 0, 0, 0, 0, 0, 1, 1, 1],
     extractor: [0, 0, 0, 0, 0, 0, 1, 1, 1],
     factory: [0, 0, 0, 0, 0, 0, 0, 1, 1],
+    observer: [0, 0, 0, 0, 0, 0, 0, 0, 1],
+    powerSpawn: [0, 0, 0, 0, 0, 0, 0, 0, 1],
+    nuker: [0, 0, 0, 0, 0, 0, 0, 0, 1],
   },
 });

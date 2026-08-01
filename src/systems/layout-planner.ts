@@ -32,6 +32,15 @@ import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { diagnoseAnchor } from "../domain/layout/anchor-selection";
 import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG } from "../domain/layout/constraint-placer";
 import { assessEmergencyRebuild, isEmergencyTask } from "../domain/construction/queue";
+import { auditStructureGaps, type StructureGaps } from "../domain/layout/gaps";
+
+/**
+ * 目标清单缺口未闭合时的慢速重试间隔（2026-08-01）。
+ * 受限地形（密封/拥挤）放置失败后，若按正常 planInterval(50) 重试会
+ * 「每周期空转放不下」— 实测 W7N3 ext 41/60、lab 4/10 持续数个周期。
+ * 缺口持续存在时以 500 tick 慢速重试，把 CPU 花在真正可闭合的周期上。
+ */
+const GAP_RETRY_INTERVAL = 500;
 
 // ─── P1-F.6：4-stage 分片跨 tick 中间产物 ──────────────────
 
@@ -316,12 +325,20 @@ function planStage0Prep(
     return;
   }
 
+  // 目标清单缺口审计 — 单一真相源（CONTROLLER_STRUCTURES 派生）对照
+  // 已建结构 + 我方在建 site + queued/blocked 队列任务。缺口 > 0 即真实
+  // 未达成目标（audit 已把队列任务计入已有，缺口不会因队列存在而误报）：
+  //   - shouldPlan 据此强制规划（不等 nextPlanTick，受 nextGapPlanTick 节流）
+  //   - 落盘 Memory.kernel.layoutGaps 供控制台采样（仅实际变化时写入）
+  const queue = roomMem.buildQueue ?? [];
+  const gaps = auditStructureGaps(snapshot, queue);
+  recordLayoutGaps(snapshot.roomName, gaps);
+
   // 检查触发条件。
-  if (!shouldPlan(layout, ctx.tick, snapshot)) return;
+  if (!shouldPlan(layout, ctx.tick, snapshot, gaps)) return;
 
   // 执行规划 — stage 0 开始。
   layout.state = "building";
-  const queue = roomMem.buildQueue ?? [];
 
   // 收集已完成 key 集合（用于依赖检查）。
   const completedKeys = collectCompletedKeys(queue);
@@ -687,8 +704,22 @@ function planStage3RoadsAndFinalize(
   // tick 扎堆重规划」的 CPU 尖峰节律。roomPhase 与 systemPhase 同算法
   // （DJB-like 哈希），保证哈希族一致。首次初始化（nextPlanTick = ctx.tick）
   // 不加偏移 — 房间刚建立时需立即规划，不应被相位延迟。
-  const planInterval = CONFIG.layout.planInterval;
-  layout.nextPlanTick = ctx.tick + planInterval + roomPhase(snapshot.roomName, planInterval);
+  //
+  // 2026-08-01 目标清单闭环：用更新后的队列重算缺口（本周期新任务已入队，
+  // 缺口应闭合）。缺口仍存在 = 受限地形放置失败 → 以 GAP_RETRY_INTERVAL(500)
+  // 慢速重试，避免「每 50 tick 空转重规划」的 CPU 浪费（W7N3 实证病灶）；
+  // 缺口闭合 → 恢复正常 planInterval。nextGapPlanTick 同步节流 gap-force，
+  // 防止下 tick 立即被缺口强制触发抵消慢速节流。
+  const gapsAfter = auditStructureGaps(snapshot, roomMem.buildQueue);
+  recordLayoutGaps(snapshot.roomName, gapsAfter);
+  const gapsOpen = Object.keys(gapsAfter).length > 0;
+  const interval = gapsOpen ? GAP_RETRY_INTERVAL : CONFIG.layout.planInterval;
+  layout.nextPlanTick = ctx.tick + interval + roomPhase(snapshot.roomName, interval);
+  if (gapsOpen) {
+    layout.nextGapPlanTick = ctx.tick + GAP_RETRY_INTERVAL;
+  } else {
+    delete layout.nextGapPlanTick;
+  }
   roomMem.lastRcl = snapshot.rcl;
 
   // 收尾 — 重置 planStage + 清 planStageData。
@@ -701,9 +732,18 @@ function shouldPlan(
   layout: NonNullable<RoomMemory["layout"]>,
   tick: number,
   snapshot: import("../kernel/contracts").RoomSnapshot,
+  gaps: StructureGaps,
 ): boolean {
   // 人工 proposed 状态 — 立即规划。
   if (layout.state === "proposed") return true;
+
+  // 目标清单缺口 — 期望结构未达成（缺口 > 0 = 无对应 queued/blocked 任务
+  // 可闭合；audit 已把队列任务计入已有）。缺口持续存在时按 nextGapPlanTick
+  // 慢速重试（stage 3 设为 +500），避免「放不下 → 每 tick 强制重规划」空转。
+  // 仅当房间已规划过（anchor 已设置）时检查 — 初始 bootstrap 不触发。
+  if (layout.anchor !== undefined && Object.keys(gaps).length > 0) {
+    if (tick >= (layout.nextGapPlanTick ?? 0)) return true;
+  }
 
   // nextPlanTick 到期。
   if (tick >= layout.nextPlanTick) return true;
@@ -730,6 +770,38 @@ function shouldPlan(
   }
 
   return false;
+}
+
+/**
+ * 目标清单缺口落盘（观测通道）：Memory.kernel.layoutGaps[roomName] = type → 缺口数。
+ *
+ * 设计约束（plan §7）：Memory 不存运行时索引 — 缺口字典是「短 key + 少量数字」，
+ * 且仅在实际缺口集合变化时写入，稳定状态下不产生 Memory 序列化抖动；
+ * 缺口闭合后删除该房条目（不留历史）。layoutGaps 无消费方时删除无害。
+ */
+function recordLayoutGaps(roomName: string, gaps: StructureGaps): void {
+  Memory.kernel ??= {};
+  const prev = Memory.kernel.layoutGaps?.[roomName];
+  const keys = Object.keys(gaps);
+  if (keys.length === 0) {
+    if (prev !== undefined) {
+      const store = Memory.kernel.layoutGaps ??= {};
+      delete store[roomName];
+    }
+    return;
+  }
+  if (prev === undefined || Object.keys(prev).length !== keys.length) {
+    const store = Memory.kernel.layoutGaps ??= {};
+    store[roomName] = { ...gaps };
+    return;
+  }
+  for (const k of keys) {
+    if (prev[k] !== gaps[k]) {
+      const store = Memory.kernel.layoutGaps ??= {};
+      store[roomName] = { ...gaps };
+      return;
+    }
+  }
 }
 
 // ─── Spawn 重建 relocation（P0 修复：避免原位被占时死循环）──
@@ -776,4 +848,3 @@ function findSpawnRelocationPosition(
   }
   return undefined;
 }
-

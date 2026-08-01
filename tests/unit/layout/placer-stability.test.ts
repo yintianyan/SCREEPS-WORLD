@@ -129,6 +129,8 @@ describe("validation — computeCommittedCounts（承诺口径）", () => {
       storage: st("storage", 27, 25),
       terminal: st("terminal", 28, 26),
       factory: st("factory", 29, 27),
+      observer: st("observer", 31, 31),
+      powerSpawn: st("powerSpawn", 32, 32),
       myConstructionSites: [st("extension", 22, 24)] as any,
     });
     const queue = [task("extension", "queued"), task("tower", "blocked")];
@@ -141,6 +143,10 @@ describe("validation — computeCommittedCounts（承诺口径）", () => {
     expect(counts.get("storage")).toBe(1);
     expect(counts.get("terminal")).toBe(1);
     expect(counts.get("factory")).toBe(1);
+    // 2026-08-01 类型覆盖补齐：observer/powerSpawn 不再从承诺口径漏计
+    // （旧 RCL_BATCHES 遗漏同源问题 — 漏计会生成重复放置任务）。
+    expect(counts.get("observer")).toBe(1);
+    expect(counts.get("powerSpawn")).toBe(1);
   });
 
   it("site/done 状态的队列任务不计入（实体 site/结构已覆盖，防双计）", () => {

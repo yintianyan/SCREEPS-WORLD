@@ -513,6 +513,56 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 20,
+    to: 21,
+    run: () => {
+      // v21：目标清单布局闭环 — 新增 KernelMemory.layoutGaps（缺口观测）与
+      // LayoutMemory.nextGapPlanTick（缺口慢速重试节流）。
+      // 设计决策（与 v18/v20 同风格）：迁移只做「建档 + 畸形自愈」不写字段值。
+      // layout-planner 是两字段的唯一写者。
+      //
+      // 自愈规则：
+      //   - layoutGaps 非对象 → 删除整个字段
+      //   - layoutGaps[room] 非对象 → 删除该房条目
+      //   - layoutGaps[room][type] 非数字 → 删除该类型
+      //   - 空对象回收（删除空房条目 / 空 layoutGaps）
+      //   - nextGapPlanTick 非数字 → 删除（缺失视为 0：允许立即 gap-force）
+      // 房间侧自愈不依赖 kernel 是否存在 — 先跑（勿被下方 kernel 守卫拦截）。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
+        if (!room) continue;
+        const layout = room.layout as Record<string, unknown> | undefined;
+        if (!layout) continue;
+        if (
+          layout.nextGapPlanTick !== undefined &&
+          typeof layout.nextGapPlanTick !== "number"
+        ) {
+          delete layout.nextGapPlanTick;
+        }
+      }
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+      const layoutGaps = kernel.layoutGaps as Record<string, unknown> | undefined;
+      if (layoutGaps === undefined) return;
+      if (typeof layoutGaps !== "object" || layoutGaps === null || Array.isArray(layoutGaps)) {
+        delete kernel.layoutGaps;
+        return;
+      }
+      for (const roomName in layoutGaps) {
+        const gaps = layoutGaps[roomName] as Record<string, unknown> | undefined;
+        if (typeof gaps !== "object" || gaps === null || Array.isArray(gaps)) {
+          delete layoutGaps[roomName];
+          continue;
+        }
+        for (const type in gaps) {
+          if (typeof gaps[type] !== "number") delete gaps[type];
+        }
+        if (Object.keys(gaps).length === 0) delete layoutGaps[roomName];
+      }
+      if (Object.keys(layoutGaps).length === 0) delete kernel.layoutGaps;
+    },
+  },
 ];
 
 /**

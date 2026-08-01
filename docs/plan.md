@@ -223,7 +223,7 @@ interface RootMemory {
 5. 死亡 creep Memory 小帝国可每 tick 清；规模变大后按 cursor 每 10 tick 清理。
 6. 每次版本升级必须有空 Memory、旧版本、重复执行和中断恢复的 Vitest 用例。
 
-当前版本：v14（v8 删除遗留 working 字段；v9 phase.liquidityScore 回填；v10 remoteOps 自愈；v11 expansion/expansionBlacklist/lostRooms 自愈；v12 lastHostileAt 与 intel.towers/dangerUntil 自愈；v13 kernel.strategy 自愈；v14 phase.bandTicks 回填。更早：v7 tuning 结构；v6 核心模板 v2；v5 recycle/intel）。
+当前版本：v21（v15 remoteOps.siteCount 自愈；v16 dangerUntil 搬家；v17 layout.planStage 回填；v18 tuning.baselineVersion 建档；v19 demand 纯度收口自愈；v20 tuning pendingValidation/frozenParams 建档；v21 目标清单布局闭环 — kernel.layoutGaps + layout.nextGapPlanTick 建档自愈。更早：v14 phase.bandTicks 回填；v13 kernel.strategy 自愈；v12 lastHostileAt 与 intel 自愈；v11 expansion/lostRooms 自愈；v10 remoteOps 自愈；v9 phase.liquidityScore 回填；v8 删除遗留 working；v7 tuning 结构；v6 核心模板 v2；v5 recycle/intel）。
 
 ## 4. 插件注册规范
 
@@ -1247,5 +1247,4 @@ M12 独立推进（RCL6 到手即开工，不等 M11）
 - M9 上线前遭真实入侵且损失惨重 → M11 集结避险跳过前置直接实施（止血优先于测量）；
 - W38S58 spawn 建成后主房孵化队列仍持续拥挤 → 优先排查 expansion 状态机收尾；
 - GCL 提前到 3 且防御 L1 未完成 → 第三房仍冻结，GCL 余量不是绕过装甲的理由。
-
 

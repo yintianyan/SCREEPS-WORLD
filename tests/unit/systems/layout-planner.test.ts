@@ -394,9 +394,12 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     roomName?: string;
     planStage?: 0 | 1 | 2 | 3;
     nextPlanTick?: number;
+    nextGapPlanTick?: number;
     spawnPos?: { x: number; y: number };
     rcl?: number;
     layoutState?: "proposed" | "accepted" | "building" | "blocked" | "manual";
+    /** 补齐当前 RCL 的全部 extension（目标清单缺口 = 0 的“健康房”）。 */
+    completeStructures?: boolean;
   }) {
     const roomName = opts.roomName ?? "W7N4";
     const spawnPos = opts.spawnPos ?? { x: 25, y: 25 };
@@ -412,16 +415,20 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     };
 
     // Memory.rooms[name] — layout + buildQueue
+    const layout: any = {
+      version: 2,
+      templateId: "compact-core-v2",
+      state: opts.layoutState ?? "accepted",
+      revision: 0,
+      nextPlanTick: opts.nextPlanTick ?? 1000,
+      planStage: opts.planStage ?? 0,
+      anchor,
+    };
+    if (opts.nextGapPlanTick !== undefined) {
+      layout.nextGapPlanTick = opts.nextGapPlanTick;
+    }
     (globalThis as any).Memory.rooms[roomName] = {
-      layout: {
-        version: 2,
-        templateId: "compact-core-v2",
-        state: opts.layoutState ?? "accepted",
-        revision: 0,
-        nextPlanTick: opts.nextPlanTick ?? 1000,
-        planStage: opts.planStage ?? 0,
-        anchor,
-      },
+      layout,
       buildQueue: [],
     };
 
@@ -432,10 +439,21 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     source.pos = { x: 20, y: 20, roomName } as any;
     const container = mockStructure("container", { id: `c_${roomName}` });
     container.pos = { x: 21, y: 20, roomName } as any; // source 旁 1 格
+    const extensions = opts.completeStructures
+      ? Array.from(
+          { length: CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION]?.[rcl] ?? 0 },
+          (_, i): any => {
+            const e = mockStructure("extension", { id: `ext_${roomName}_${i}` });
+            e.pos = { x: 10 + (i % 10), y: 30 + Math.floor(i / 10), roomName };
+            return e;
+          },
+        )
+      : [];
     const snap = mockSnapshot({
       roomName,
       rcl,
       spawns: [spawn as any],
+      extensions,
       sources: [source as any],
       containers: [container as any],
       towers: rcl >= 3 ? [mockStructure("tower", { id: `tw_${roomName}` }) as any] : [],
@@ -477,8 +495,9 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
 
   // ── stage 0 门禁 ──
 
-  it("stage 0 + shouldPlan=false（nextPlanTick 未到期）→ 不推进", () => {
-    const { snap } = setupRoom({ nextPlanTick: 2000 }); // 未来才到期
+  it("stage 0 + shouldPlan=false（nextPlanTick 未到期且无缺口）→ 不推进", () => {
+    // 结构齐全的健康房：目标清单无缺口 → 只有 nextPlanTick 到期才规划。
+    const { snap } = setupRoom({ nextPlanTick: 2000, completeStructures: true });
     const ctx = mockContext(snap);
     layoutPlannerSystem.planRoom(snap, ctx);
 
@@ -487,6 +506,33 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     expect(layout.state).toBe("accepted"); // 未进入 building
     // planStageData 不应被写入
     expect((globalThis as any).__planStageData?.W7N4).toBeUndefined();
+  });
+
+  it("stage 0 gap-force：nextPlanTick 未到期但存在目标清单缺口 → 强制规划", () => {
+    // RCL3 缺 10 个 extension（setupRoom 默认不带 extensions）→ 缺口驱动，
+    // 不再等待 nextPlanTick（静默漏建的根治点：缺口必须有人管）。
+    const { snap } = setupRoom({ nextPlanTick: 2000 });
+    const ctx = mockContext(snap);
+    layoutPlannerSystem.planRoom(snap, ctx);
+
+    const layout = (globalThis as any).Memory.rooms.W7N4.layout;
+    expect(layout.planStage).toBe(1); // gap-force 推进到 stage 1
+    expect(layout.state).toBe("building");
+  });
+
+  it("stage 0 gap-force 节流：nextGapPlanTick 未到 → 不强制，缺口落盘可观测", () => {
+    // 受限地形放置失败后 stage 3 会把 nextGapPlanTick 推到 +500 —
+    // 到期前缺口仍存在也不得每 tick 强制重规划（防空转）。
+    const { snap } = setupRoom({ nextPlanTick: 2000, nextGapPlanTick: 1500 });
+    const ctx = mockContext(snap);
+    layoutPlannerSystem.planRoom(snap, ctx);
+
+    const layout = (globalThis as any).Memory.rooms.W7N4.layout;
+    expect(layout.planStage).toBe(0); // 节流：不推进
+    // 观测通道：缺口已落盘（类型 → 缺口数），供控制台采样。
+    expect((globalThis as any).Memory.kernel.layoutGaps.W7N4).toEqual({
+      [STRUCTURE_EXTENSION]: CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION]![3],
+    });
   });
 
   it("stage 0 + layout.state='manual' → 直接返回不规划", () => {
@@ -629,6 +675,7 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
       planStage: 3,
       nextPlanTick: 1000,
       rcl: 3,
+      completeStructures: true, // 结构齐全：缺口闭合 → 恢复正常规划周期
     });
     writePlanStageData("W7N4", spawnPos);
 
@@ -643,6 +690,35 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     // nextPlanTick 更新为 ctx.tick + planInterval + roomPhase（P1-F 相位偏移）
     const expectedNext = ctx.tick + CONFIG.layout.planInterval + roomPhase("W7N4", CONFIG.layout.planInterval);
     expect(layout.nextPlanTick).toBe(expectedNext);
+    // 缺口闭合 → 清除 gap 节流字段与观测条目。
+    expect(layout.nextGapPlanTick).toBeUndefined();
+    expect((globalThis as any).Memory.kernel.layoutGaps?.W7N4).toBeUndefined();
+  });
+
+  it("stage 3 缺口未闭合 → 500 tick 慢速重试 + 同步节流 + 缺口保留", () => {
+    // W7N3 病灶场景：放置放不下（本周期未入队任何 extension 任务），
+    // 缺口持续存在。旧实现每 50 tick 空转重规划；现在推后到 500 tick。
+    const { snap, spawnPos } = setupRoom({
+      planStage: 3,
+      nextPlanTick: 1000,
+      rcl: 3,
+      // 故意不给 extensions：缺口 = 10 个 extension
+    });
+    writePlanStageData("W7N4", spawnPos);
+
+    const ctx = mockContext(snap);
+    layoutPlannerSystem.planRoom(snap, ctx);
+
+    const layout = (globalThis as any).Memory.rooms.W7N4.layout;
+    expect(layout.planStage).toBe(0);
+    const expectedNext =
+      ctx.tick + 500 + roomPhase("W7N4", 500);
+    expect(layout.nextPlanTick).toBe(expectedNext); // 慢速重试
+    expect(layout.nextGapPlanTick).toBe(1500); // gap-force 同步节流
+    // 缺口仍可见：可观测信号（console 采样 + 人工介入依据）
+    expect((globalThis as any).Memory.kernel.layoutGaps.W7N4).toEqual({
+      [STRUCTURE_EXTENSION]: CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION]![3],
+    });
   });
 
   // ── 完整 4-stage 链路（跨 tick 模拟）──

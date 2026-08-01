@@ -38,7 +38,7 @@ describe("constraint-placer — placeStructures", () => {
     expect(storages.length).toBe(1);
   });
 
-  it("RCL8：完整结构集（60 ext + 3 tower + 3 spawn + 1 storage + 0 link + 1 terminal + 1 factory + 10 lab）", () => {
+  it("RCL8：完整结构集（60 ext + 3 tower + 3 spawn + 1 storage + 0 link + 1 terminal + 1 factory + 10 lab + 1 observer + 1 powerSpawn）", () => {
     // LINK 不再由 constraint-placer 放置 — 它的评分算法不理解 link 角色
     // （source/storage/controller），会导致 RCL5 仅有的 2 个 link 分配为 2 个
     // source link 或 2 个 storage link，link 网络失效。
@@ -55,6 +55,8 @@ describe("constraint-placer — placeStructures", () => {
     expect(count(STRUCTURE_TERMINAL)).toBe(1);
     expect(count(STRUCTURE_FACTORY)).toBe(1);
     expect(count(STRUCTURE_LAB)).toBe(10);
+    expect(count(STRUCTURE_OBSERVER)).toBe(1); // 旧手写 RCL_BATCHES 漏掉的类型
+    expect(count(STRUCTURE_POWER_SPAWN)).toBe(1);
   });
 
   it("无重叠：所有位置唯一", () => {
@@ -130,6 +132,35 @@ describe("constraint-placer — placeStructures", () => {
       }
       expect(hasFree).toBe(true);
     }
+  });
+
+  it("sealTolerance=1：正交全堵但斜向可达的 extension 放行（默认严格守卫会拒绝）", () => {
+    // 目标格 (25,25) 的 4 个正交邻居全部预占 → 正交可站数 = 0；
+    // 斜向邻居（除锚点外）仍可站 — transfer 射程 1 含对角，可填充/维修。
+    const field = computeDistanceField(noWalls);
+    const anchor = { x: 24, y: 24 };
+    const target = { x: 25, y: 25 };
+    const preOccupied = new Set<number>([
+      packPos(24, 25),
+      packPos(26, 25),
+      packPos(25, 24),
+      packPos(25, 26),
+    ]);
+
+    // 严格守卫（显式 sealTolerance 为空 = 0）：目标格被拒绝。
+    const strict = placeStructures(
+      anchor, field, noWalls, 2, new Set(preOccupied), new Map(),
+      { ...DEFAULT_PLACER_CONFIG, sealTolerance: {} },
+    );
+    expect(strict.some(p => p.pos.x === target.x && p.pos.y === target.y)).toBe(false);
+
+    // 默认配置（extension tolerance=1）：目标格放行。
+    const tolerant = placeStructures(
+      anchor, field, noWalls, 2, new Set(preOccupied), new Map(), DEFAULT_PLACER_CONFIG,
+    );
+    const targetPlacement = tolerant.find(p => p.pos.x === target.x && p.pos.y === target.y);
+    expect(targetPlacement).toBeDefined();
+    expect(targetPlacement!.structureType).toBe(STRUCTURE_EXTENSION);
   });
 
   it("有墙地形：结构避开墙格", () => {

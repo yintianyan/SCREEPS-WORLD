@@ -39,11 +39,22 @@ export interface PlacerConfig {
   readonly maxRadius: number;
   /** 最低开放度门槛（默认 2，确保结构周围有走道）。 */
   readonly minOpenness: number;
+  /**
+   * 密封守卫容忍度（2026-08-01）：type → 是否允许「正交全堵但斜向可达」。
+   * 默认 0（严格正交守卫，旧语义）。extension 容忍 1：破碎房（anchorScore 低）
+   * 最后几格正交常被邻居占满、斜向仍可站（transfer 射程 1 含对角），
+   * 严格正交守卫下 RCL7/8 批次永远放不下 → 静默缺建（W7N3 实证：ext 41/60）。
+   * 斜向可站保留填充/维修可达性，能量容量收益 > 正交美观损失。
+   */
+  readonly sealTolerance?: Readonly<Record<string, number>>;
 }
 
 export const DEFAULT_PLACER_CONFIG: PlacerConfig = {
   maxRadius: 7,
   minOpenness: 2,
+  sealTolerance: {
+    [STRUCTURE_EXTENSION]: 1,
+  },
 };
 
 /**
@@ -56,53 +67,107 @@ export const DEFAULT_PLACER_CONFIG: PlacerConfig = {
  */
 const MAX_SEARCH_RADIUS = 15;
 
-/** 每 RCL 应放置的结构清单（增量，非累计）。 */
-interface StructureBatch {
+/** 放置批次（增量：该 RCL 新增的数量）。 */
+export interface StructureBatch {
   readonly type: BuildableStructureConstant;
   readonly count: number;
   readonly priority: BuildPriority;
   readonly phase: LayoutPhase;
 }
 
-/** RCL → 该等级新增的结构批次（与 CONTROLLER_STRUCTURES 对齐）。 */
-const RCL_BATCHES: Record<number, StructureBatch[]> = {
-  2: [
-    { type: STRUCTURE_EXTENSION, count: 5, priority: 1, phase: "rcl2" },
-  ],
-  3: [
-    { type: STRUCTURE_EXTENSION, count: 5, priority: 1, phase: "rcl3" },
-    { type: STRUCTURE_TOWER, count: 1, priority: 0, phase: "rcl3" },
-  ],
-  4: [
-    { type: STRUCTURE_EXTENSION, count: 10, priority: 1, phase: "rcl4" },
-    { type: STRUCTURE_STORAGE, count: 1, priority: 0, phase: "rcl4" },
-  ],
-  5: [
-    { type: STRUCTURE_EXTENSION, count: 10, priority: 2, phase: "late" },
-    { type: STRUCTURE_TOWER, count: 1, priority: 0, phase: "late" },
-    // LINK 不在此放置 — constraint-placer 的评分算法不理解 link 角色
-    // （source/storage/controller），随机放置会导致 RCL5 仅有的 2 个 link
-    // 分配为 2 个 source link 或 2 个 storage link，link 网络失效。
-    // 所有 link 由 task-factory 的 create*LinkTask 按角色优先级放置。
-  ],
-  6: [
-    { type: STRUCTURE_EXTENSION, count: 10, priority: 2, phase: "rcl6" },
-    { type: STRUCTURE_TERMINAL, count: 1, priority: 1, phase: "rcl6" },
-    { type: STRUCTURE_LAB, count: 3, priority: 2, phase: "rcl6" },
-  ],
-  7: [
-    { type: STRUCTURE_EXTENSION, count: 10, priority: 2, phase: "rcl7" },
-    { type: STRUCTURE_TOWER, count: 1, priority: 0, phase: "rcl7" },
-    { type: STRUCTURE_SPAWN, count: 1, priority: 1, phase: "rcl7" },
-    { type: STRUCTURE_FACTORY, count: 1, priority: 2, phase: "rcl7" },
-    { type: STRUCTURE_LAB, count: 3, priority: 2, phase: "rcl7" },
-  ],
-  8: [
-    { type: STRUCTURE_EXTENSION, count: 10, priority: 2, phase: "rcl8" },
-    { type: STRUCTURE_SPAWN, count: 1, priority: 1, phase: "rcl8" },
-    { type: STRUCTURE_LAB, count: 4, priority: 2, phase: "rcl8" },
-  ],
+/**
+ * 放置策略元数据（2026-08-01 单一真相源改造）。
+ *
+ * 数量一律从 CONTROLLER_STRUCTURES 派生（expectedStructureCounts），本表只保留
+ * 策略信息（优先级 + 阶段），消灭「手写数量表 vs 游戏常量」双真相源漂移
+ * （漏 observer/powerSpawn 即旧手写表的必然结果）。
+ *
+ * 明确排除的类型：
+ *   - link：task-factory 按角色放置（source/storage/controller）
+ *   - extractor：必须建在 mineral 格上，非自由放置
+ *   - road/container/rampart/constructedWall：无限或防御/物流专用生成器
+ *   - nuker：RCL8 昂贵可选且 RoomSnapshot 无字段，constraint 模式不入自动
+ *     布局（template 模式由 compact-core-v2 蓝图负责）
+ */
+const BUILD_STRATEGY: Readonly<Record<string, {
+  readonly priority: (rcl: number) => BuildPriority;
+  readonly phaseFor: (rcl: number) => LayoutPhase;
+}>> = {
+  [STRUCTURE_TOWER]: { priority: () => 0, phaseFor: r => (r === 3 ? "rcl3" : r === 5 ? "late" : "rcl7") },
+  [STRUCTURE_STORAGE]: { priority: () => 0, phaseFor: () => "rcl4" },
+  [STRUCTURE_EXTENSION]: {
+    // 旧手写表：RCL2-4 priority 1，RCL5+ priority 2（早期间歇性建造，
+    // 后期批量填充）。数量派生后策略档位也必须与旧行为逐级等价。
+    priority: r => (r <= 4 ? 1 : 2),
+    phaseFor: r => (r === 5 ? "late" : `rcl${r}` as LayoutPhase),
+  },
+  [STRUCTURE_SPAWN]: { priority: () => 1, phaseFor: r => `rcl${r}` as LayoutPhase },
+  [STRUCTURE_TERMINAL]: { priority: () => 1, phaseFor: () => "rcl6" },
+  [STRUCTURE_FACTORY]: { priority: () => 2, phaseFor: () => "rcl7" },
+  [STRUCTURE_LAB]: { priority: () => 2, phaseFor: r => `rcl${r}` as LayoutPhase },
+  [STRUCTURE_OBSERVER]: { priority: () => 2, phaseFor: () => "rcl8" },
+  [STRUCTURE_POWER_SPAWN]: { priority: () => 2, phaseFor: () => "rcl8" },
 };
+
+/** constraint 放置器负责的有限数量结构类型（数量真相源 = CONTROLLER_STRUCTURES）。 */
+const CONSTRAINT_PLACED_TYPES: readonly BuildableStructureConstant[] = [
+  STRUCTURE_SPAWN,
+  STRUCTURE_EXTENSION,
+  STRUCTURE_TOWER,
+  STRUCTURE_STORAGE,
+  STRUCTURE_LAB,
+  STRUCTURE_TERMINAL,
+  STRUCTURE_FACTORY,
+  STRUCTURE_OBSERVER,
+  STRUCTURE_POWER_SPAWN,
+];
+
+/**
+ * 每个 RCL 应有的结构数量（累计，单一真相源 = CONTROLLER_STRUCTURES）。
+ * 仅覆盖 constraint 放置器负责的类型；link/extractor/道路/防御由各自生成器负责。
+ */
+export function expectedStructureCounts(rcl: number): Readonly<Record<string, number>> {
+  const result: Record<string, number> = {};
+  for (const type of CONSTRAINT_PLACED_TYPES) {
+    const table = CONTROLLER_STRUCTURES[type];
+    result[type] = table?.[rcl] ?? 0;
+  }
+  return result;
+}
+
+/**
+ * 生成 RCL2..rcl 的增量放置批次（2026-08-01 派生版，替代手写 RCL_BATCHES）。
+ *
+ * 增量 = target(rcl) - target(rcl-1)；数量与旧手写表严格等价，额外补齐
+ * observer/powerSpawn（RCL8 解锁 1）。策略（priority/phase）来自 BUILD_STRATEGY。
+ */
+export function buildRclBatches(rcl: number): StructureBatch[] {
+  const batches: StructureBatch[] = [];
+  let prev: Readonly<Record<string, number>> = {};
+  for (let r = 2; r <= rcl; r++) {
+    const current = { ...expectedStructureCounts(r) };
+    // 锚点 spawn 豁免：CONTROLLER_STRUCTURES 的 spawn 计数包含玩家/扩张
+    // 放置的锚点 spawn（不占批次），批次从第 2 个 spawn 开始派生 —
+    // 与旧手写表（RCL7 +1、RCL8 +1）逐级等价。
+    if ((current[STRUCTURE_SPAWN] ?? 0) > 0) {
+      current[STRUCTURE_SPAWN] = (current[STRUCTURE_SPAWN] ?? 0) - 1;
+    }
+    for (const type of CONSTRAINT_PLACED_TYPES) {
+      const delta = (current[type] ?? 0) - (prev[type] ?? 0);
+      if (delta <= 0) continue;
+      const strategy = BUILD_STRATEGY[type];
+      if (!strategy) continue;
+      batches.push({
+        type,
+        count: delta,
+        priority: strategy.priority(r),
+        phase: strategy.phaseFor(r),
+      });
+    }
+    prev = current;
+  }
+  return batches;
+}
 
 /** 放置优先级：数值越小越先放置（先占位）。 */
 const TYPE_PLACE_ORDER: Record<string, number> = {
@@ -227,6 +292,7 @@ function wouldSealLocal(
   y: number,
   getTerrain: (x: number, y: number) => boolean,
   occupied: ReadonlySet<number>,
+  tolerance = 0,
 ): boolean {
   const orthogonal: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   for (const [dx, dy] of orthogonal) {
@@ -235,9 +301,23 @@ function wouldSealLocal(
     if (nx < 1 || nx > 48 || ny < 1 || ny > 48) continue;
     if (getTerrain(nx, ny)) continue;
     if (occupied.has(packPos(nx, ny))) continue;
-    return false; // 找到可站格，不密封
+    return false; // 找到可站格，不密封（旧语义快速路径）
   }
-  return true; // 4 正交邻居全堵，密封
+  // 容忍度分级（2026-08-01）：tolerance > 0 的类型允许「正交全堵但斜向可达」。
+  // 斜向距离 = transfer 射程 1（Chebyshev），creep 仍可站在对角格填充/维修 —
+  // 严格正交守卫会拒绝这些格，破碎房 RCL7/8 批次永远放不满（W7N3 实证）。
+  if (tolerance > 0) {
+    const diagonal: [number, number][] = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+    for (const [dx, dy] of diagonal) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 1 || nx > 48 || ny < 1 || ny > 48) continue;
+      if (getTerrain(nx, ny)) continue;
+      if (occupied.has(packPos(nx, ny))) continue;
+      return false; // 斜向可站 — 放行
+    }
+  }
+  return true; // 正交与斜向均无可站格 — 密封
 }
 
 /**
@@ -355,7 +435,7 @@ export function placeStructures(
   // 产生「同一逻辑结构在新格子再排一次」的幽灵任务与代际位置漂移。
   const remaining: Record<string, number> = {};
   for (const [type, n] of committed) remaining[type] = n;
-  // 初始 spawn（锚点位）由玩家/扩张放置，不在 RCL_BATCHES 内 —
+  // 初始 spawn（锚点位）由玩家/扩张放置，不在派生批次内（锚点豁免）—
   // 从 spawn 承诺中扣除 1，避免误抵扣掉 RCL7/8 批次的 spawn #2/#3。
   if ((remaining[STRUCTURE_SPAWN] ?? 0) > 0) {
     remaining[STRUCTURE_SPAWN]! -= 1;
@@ -367,12 +447,8 @@ export function placeStructures(
     return count - deduct;
   };
 
-  // 收集所有 RCL 批次并按放置优先级排序
-  const batches: StructureBatch[] = [];
-  for (let r = 2; r <= rcl; r++) {
-    const rclBatches = RCL_BATCHES[r];
-    if (rclBatches) batches.push(...rclBatches);
-  }
+  // 收集所有 RCL 批次（派生：数量真相源 = CONTROLLER_STRUCTURES）并按放置优先级排序。
+  const batches = buildRclBatches(rcl);
   batches.sort((a, b) => (TYPE_PLACE_ORDER[a.type] ?? 99) - (TYPE_PLACE_ORDER[b.type] ?? 99));
 
   // 抵扣承诺后的真实缺口（按类型累计）— 供末段缺口告警使用。
@@ -411,7 +487,9 @@ export function placeStructures(
 
       // 密封守卫（障碍结构）
       const isObstacle = type !== STRUCTURE_ROAD && type !== STRUCTURE_CONTAINER;
-      if (isObstacle && wouldSealLocal(c.x, c.y, getTerrain, occupied)) continue;
+      if (isObstacle && wouldSealLocal(
+        c.x, c.y, getTerrain, occupied, config.sealTolerance?.[type] ?? 0,
+      )) continue;
 
       occupied.add(packed);
       placements.push({
@@ -464,15 +542,11 @@ function computeTotalNeeded(rcl: number, committed: ReadonlyMap<string, number>)
   if (spawnCommitted > 0) remaining.set(STRUCTURE_SPAWN, spawnCommitted - 1);
 
   let total = 0;
-  for (let r = 2; r <= rcl; r++) {
-    const rclBatches = RCL_BATCHES[r];
-    if (!rclBatches) continue;
-    for (const b of rclBatches) {
-      const committedCount = remaining.get(b.type) ?? 0;
-      const deduct = Math.min(b.count, committedCount);
-      if (deduct > 0) remaining.set(b.type, committedCount - deduct);
-      total += b.count - deduct;
-    }
+  for (const b of buildRclBatches(rcl)) {
+    const committedCount = remaining.get(b.type) ?? 0;
+    const deduct = Math.min(b.count, committedCount);
+    if (deduct > 0) remaining.set(b.type, committedCount - deduct);
+    total += b.count - deduct;
   }
   return total;
 }

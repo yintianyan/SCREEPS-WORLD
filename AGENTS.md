@@ -74,7 +74,7 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   → plan.md **§7 性能优化 · §2.3 数据所有权**
 - **迁移规范**：每次结构变更升版本；迁移必须幂等；先写新字段验证后删旧字段；
   所有步骤成功才更新 `schemaVersion`；大迁移按 cursor 分 tick。
-  新增 Memory 字段须同时更新类型、迁移与 plan.md（当前 `schemaVersion = 20`，
+  新增 Memory 字段须同时更新类型、迁移与 plan.md（当前 `schemaVersion = 21`，
   见 `CONFIG.memory`）。冷数据（布局 overrides/blocked）走 RawMemory segment。
   → plan.md **§3.4 版本化 Memory**
 
