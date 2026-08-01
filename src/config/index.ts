@@ -622,6 +622,19 @@ export const CONFIG = {
     maxDealAmount: 1000,
     /** terminal 能量储备目标 — deal 双向都从本方 terminal 扣能量运费。 */
     energyTarget: 10000,
+    /**
+     * storage 饥饿时的 terminal 能量储备地板（W7 止血修正，2026-08-01）。
+     *
+     * 背景：私服 4.3.0 自带市场 API，但市场可为空（credits=0、无订单）——
+     * terminal-manager 从不成交，10k 交易储备在 storage 枯竭的房间变成死资本
+     * （W7N3/W7N4 实测 terminal 恒 10150/10400、storage=0、长期 crisis）。
+     *
+     * 语义：storage 能量 < storageEnergyFloor(20k) 时，hauler 把 terminal 能量
+     * 压缩到此地板（有市场时保留少量运费余量；无市场时归零，见
+     * industry.ts withdrawTerminalEnergy）。storage 恢复健康后由
+     * stockTerminalEnergy 按 energyTarget 重新回补。
+     */
+    terminalEnergyReserveFloor: 2000,
     /** storage 能量低于此值时不给 terminal 备能（经济优先于贸易）。 */
     storageEnergyFloor: 20000,
     /** credits 低于此值暂停买入（保留应急余额）。 */

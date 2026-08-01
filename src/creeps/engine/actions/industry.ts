@@ -196,9 +196,8 @@ export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
   return {
     name: "haul:stock-terminal-energy",
     resolve: (ac) => {
-      // W7 止血（2026-08-01）：无市场（私服）时禁止向 terminal 灌能量。
-      // terminal 无回流路径 + terminal-manager 无市场时整体跳过 → 能量永久锁死
-      // （W7N3/W7N4 实测各锁 ~10k，真实可用储备仅 3-9k、长期 crisis）。
+      // 无市场（真无 market API 的服务器）时禁止向 terminal 灌能量——能量无消费
+      // 方会永久锁死。有市场时靠下方 D-1 水位门禁（storage ≥ 20k 才备货）。
       // 与 systems/terminal-manager.ts 的 no-market 守卫同款，两处必须保持一致。
       if (typeof Game.market?.getAllOrders !== "function") return undefined;
       const terminal = ac.snapshot.terminal;
@@ -230,35 +229,41 @@ export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
 }
 
 /**
- * W7 止血（2026-08-01）：无市场环境下从 terminal 取能量回 storage。
+ * W7 止血修正（2026-08-01）：storage 饥饿时把 terminal 交易储备压缩回 storage。
  *
- * 背景：distributor 的 stockTerminalEnergy 会在 storage 富余期把能量灌进
- * terminal 作「交易运费储备」；私服无市场时这份能量没有消费方（terminal-manager
- * 整体跳过、无回流路径），永久锁死——W7N3/W7N4 实测各锁 ~10k，真实可用储备仅
- * 3-9k、长期 crisis。
+ * 背景（前提修正）：私服引擎 4.3.0 自带市场 API，但市场可以为空（credits=0、
+ * 无订单）——terminal-manager 从不成交，distributor 在 storage 富余期灌入的
+ * 10k 交易储备变成死资本（W7N3/W7N4 实测 terminal 恒 10150/10400、storage=0、
+ * 长期 crisis）。「无市场」判定在此服务器不成立，故改为与市场状态无关的
+ * 「饥饿压缩」语义。
  *
  * 规则（全部满足才取）：
- *   - 无市场（与 terminal-manager / stockTerminalEnergy 同款守卫，须保持一致）；
- *   - terminal 有能量、storage 存在且有剩余容量；
- *   - creep 有背包空间。
- *
- * 评审修正（P2-2）：无市场时 terminal 能量没有任何合法用途，应**全量排空**回
- * storage（1M 容量足够承接），不做 storage 水位地板限制——否则 terminal 存量
- * 超过 20k 的房间会留下永久锁死残值。有市场时本动作完全惰性（运费储备不得挪用）。
+ *   - storage 能量低于 CONFIG.market.storageEnergyFloor（20k）——只有经济饥饿
+ *     时才动交易储备；
+ *   - terminal 能量高于「饥饿储备地板」：有市场时保留 terminalEnergyReserveFloor
+ *     （2k，留运费余量），无市场时地板为 0（全量排空）；
+ *   - storage 有剩余容量、creep 有背包空间。
  *
  * 取能后由 hauler work 链的 fillStorage 存入 storage（hauler 架构约束只禁止
- * 从 storage 取能，terminal 不在此列）。有市场时本动作完全惰性。
+ * 从 storage 取能，terminal 不在此列）。storage 恢复健康后 stockTerminalEnergy
+ * 按 energyTarget 重新回补——本动作只救急、不改变储备目标。
  */
 export function withdrawTerminalEnergy(): ActionCandidate<StructureTerminal> {
   return {
     name: "withdraw:terminal-energy-rescue",
     resolve: (ac) => {
-      // 有市场：terminal 能量是交易运费储备，不得挪用。
-      if (typeof Game.market?.getAllOrders === "function") return undefined;
       const terminal = ac.snapshot.terminal;
       const storage = ac.snapshot.storage;
       if (!terminal || !storage) return undefined;
-      if (terminal.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
+      // 经济健康时不动交易储备（stockTerminalEnergy 负责回补）。
+      if (storage.store.getUsedCapacity(RESOURCE_ENERGY) >= CONFIG.market.storageEnergyFloor) {
+        return undefined;
+      }
+      // 饥饿储备地板：有市场留运费余量，无市场归零（死资本全量排空）。
+      const marketAvailable = typeof Game.market?.getAllOrders === "function";
+      const reserveFloor = marketAvailable ? CONFIG.market.terminalEnergyReserveFloor : 0;
+      const terminalEnergy = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (terminalEnergy <= reserveFloor) return undefined;
       if (storage.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return terminal;

@@ -1,9 +1,9 @@
 /**
- * withdrawTerminalEnergy 无市场回流测试（W7 止血）。
+ * withdrawTerminalEnergy 饥饿压缩测试（W7 止血修正）。
  *
- * 背景：无市场（私服）时 terminal 能量无消费方、无回流路径 → 永久锁死
- * （W7N3/W7N4 实测各 ~10k、真实可用储备 3-9k）。hauler 从 terminal 取能量
- * 回 storage（work 链 fillStorage 承接），仅无市场 + storage 枯竭时触发。
+ * 背景：私服引擎 4.3.0 自带市场但可为空——10k 交易储备在 storage 枯竭房变成
+ * 死资本。hauler 在 storage 饥饿（< 20k）时把 terminal 能量压缩回 storage：
+ * 有市场保留 2k 运费地板、无市场全量排空。
  */
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { withdrawTerminalEnergy } from "../../../src/creeps/engine/actions/industry";
@@ -30,20 +30,19 @@ describe("withdrawTerminalEnergy — 无市场死能量回流（W7 止血）", (
     };
   }
 
-  it("无市场 + storage 枯竭 → resolve 返回 terminal（取能相）", () => {
+  it("storage 枯竭 + terminal 有能量 → resolve 返回 terminal（取能相）", () => {
     const { ac } = makeAc();
     expect(withdrawTerminalEnergy().resolve!(ac)).toBeDefined();
   });
 
-  it("有市场 → resolve 返回 undefined（运费储备不得挪用）", () => {
-    (globalThis as any).Game.market = { getAllOrders: () => [], credits: 0 };
-    const { ac } = makeAc();
-    expect(withdrawTerminalEnergy().resolve!(ac)).toBeUndefined();
+  it("storage 已有能量但低于地板（如 5k）→ 仍触发（饥饿压缩）", () => {
+    const { ac } = makeAc({ storageEnergy: 5000 });
+    expect(withdrawTerminalEnergy().resolve!(ac)).toBeDefined();
   });
 
-  it("storage 已有能量但有空位 → 仍触发（无市场全量排空，评审修正 P2-2）", () => {
+  it("storage 高于地板（20k）→ 不触发（保留交易储备）", () => {
     const { ac } = makeAc({ storageEnergy: 30000 });
-    expect(withdrawTerminalEnergy().resolve!(ac)).toBeDefined();
+    expect(withdrawTerminalEnergy().resolve!(ac)).toBeUndefined();
   });
 
   it("storage 无剩余容量 → 不触发", () => {
@@ -53,6 +52,18 @@ describe("withdrawTerminalEnergy — 无市场死能量回流（W7 止血）", (
 
   it("terminal 无能量 → 不触发", () => {
     const { ac } = makeAc({ terminalEnergy: 0 });
+    expect(withdrawTerminalEnergy().resolve!(ac)).toBeUndefined();
+  });
+
+  it("有市场：terminal 高于 2k 地板 → 触发（只留运费余量）", () => {
+    (globalThis as any).Game.market = { getAllOrders: () => [], credits: 0 };
+    const { ac } = makeAc({ terminalEnergy: 10400 });
+    expect(withdrawTerminalEnergy().resolve!(ac)).toBeDefined();
+  });
+
+  it("有市场：terminal 已压到地板（≤2k）→ 不触发", () => {
+    (globalThis as any).Game.market = { getAllOrders: () => [], credits: 0 };
+    const { ac } = makeAc({ terminalEnergy: 2000 });
     expect(withdrawTerminalEnergy().resolve!(ac)).toBeUndefined();
   });
 
@@ -72,7 +83,7 @@ describe("withdrawTerminalEnergy — 无市场死能量回流（W7 止血）", (
 });
 
 describe("hauler 角色接线 — terminal 救援参与 acquire 链", () => {
-  it("无市场 + terminal 有能量 + storage 有空位 → hauler 从 terminal 取能", () => {
+  it("storage 饥饿 + terminal 有能量 → hauler 从 terminal 取能", () => {
     const storage = mockStructure("storage", { id: "st", energy: 0, capacity: 1000000 });
     const terminal = mockStructure("terminal", { id: "tm", energy: 10400, capacity: 1000000 });
     const snap = mockSnapshot({ storage, terminal });
