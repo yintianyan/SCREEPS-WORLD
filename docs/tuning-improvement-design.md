@@ -1,6 +1,10 @@
 # Tuning Engine 改进设计文档
 
-> 状态：草案 v2（2026-08-01）— 决策定稿：先 B+C 上线，A 投资级别由 ≥50000 tick 线上数据决定（附录 C 矩阵）。A 的 HIGH 级设计缺陷（验证窗口错配，附录 B-P1）暂不修，待观察期后按矩阵触发。
+> 状态：草案 v5（2026-08-01）— A 方案已实现（工作区未提交），实现评审见附录 E
+> （P1-P5 问题清单，P2/P3/P5 待修，P1/P4 待定稿）。架构评审已并入（附录 D）：
+> A 的验证语义按 D.2-D.5 修正后实施；文档一致性按 D.6 统一；改进 D 范围按 D.7 收窄。
+> 观察期已完成（tick 1623282→1676531，53249 tick），W8N3 `builder.maxCount` 振荡 1 次
+> → 触发完整版 A。P1/P2/P3 设计方案见 §3.1.6-3.1.8（附录 B-P1/P2/P3 已修）。
 > 触发场景：调参状态实证分析发现 tuning 已陷入「棘轮式锁死」状态，需在动手改代码前确认设计方向。
 > 关联代码：[src/systems/tuning-engine.ts](../src/systems/tuning-engine.ts)、[src/domain/tuning/evaluator.ts](../src/domain/tuning/evaluator.ts)、[src/domain/tuning/bounds.ts](../src/domain/tuning/bounds.ts)、[src/domain/tuning/types.ts](../src/domain/tuning/types.ts)、[src/config/tuned.ts](../src/config/tuned.ts)
 > 关联 plan.md 小节：§3.4 版本化 Memory、§2.3 数据所有权、§5.1 角色硬约束、§9 风险与应对
@@ -103,6 +107,8 @@ export interface RoomTuningState {
    * - 验证完成后清空此字段（无论回滚与否，闭环结束）
    * - 同一参数若再次触发调整，覆盖旧记录（前一次闭环未验证就被新调整覆盖，
    *   说明新信号足够强 — 接受覆盖并重新开始闭环）
+   * - 评审修正（附录 D.2）：pending 存在期间该参数禁止再次调整（pending-lock），
+   *   覆盖旧记录语义作废 — 否则第一次调整永远不被验证，闭环只审最后一步。
    */
   pendingValidation?: Record<string, {
     /** 调整前的 signals 快照（仅记本参数相关的子集，控体积） */
@@ -192,6 +198,129 @@ function verifyPendingAdjustments(
 - 若 `preAdjustSignals` 字段缺失（旧版数据迁移过来）→ 不验证，直接清空 pending。
 - 若回滚后参数值超出 `TUNING_BOUNDS` → `clampParam` 兜底（不应发生，preAdjustValue 本就合法）。
 - 回滚也走 `lastAdjusted[param] = currentTick` — **回滚本身算一次调整，触发 1000 tick 冷却**。这避免「回滚 → 立刻又被下调」的振荡。
+
+---
+
+### 3.1.5 完整版 A 触发依据（观察期 tick 1623282→1676531，53249 tick）
+
+B+C 上线后观察期出现 W8N3 `builder.maxCount` 振荡 1 次：
+
+- 下调 @1653766（backlog 归零触发）
+- 上调 @1666766（backlog=13 + builderCount>=current 触发，回滚）
+- 下调 @1668266（backlog=0 触发，同方向再调整）
+- 回滚→同方向再调整间隔 1500 tick
+
+按附录 C.2 矩阵第 5 行 → **上完整版 A**（P1 + P2 + P3）。
+
+根因 [事实]：`buildQueueBacklog` 是瞬态信号（建筑完成即归零），[evaluator.ts:360-378](../src/domain/tuning/evaluator.ts#L360-L378) 上/下调信号不对称（上调需 backlog>3，下调仅需 backlog===0），中间地带静默。冷却期 1000 tick < 振荡间隔 1500 tick，无法阻止。
+
+### 3.1.6 P1：verifyDelay 验证窗口匹配（附录 B-P1 修复）
+
+`TUNING_BOUNDS` 新增 `verifyDelay` 字段，验证 pass 据此判断时机（非 `cooldownTicks`）：
+
+```typescript
+export interface ParamBounds {
+  floor: number; ceiling: number; step: number;
+  cooldownTicks: number;
+  verifyDelay: number;  // P1：效果显现最小 tick
+}
+```
+
+标定依据（附录 B-P1 因果链分类）：所有可调参数都是「人口类」——调整后需等 creep 孵化(~150 tick) + 老 creep 死亡(CREEP_LIFE_TIME 部分) + 效果在遥测窗口显现(500 tick)。取 verifyDelay=1500 tick = 3 个评估周期，确保效果在 EVAL_WINDOW_SIZE(1000 tick) 窗口内充分显现。
+
+振荡间隔实测 1500 tick = cooldown(1000)+评估间隔(500)，verifyDelay=1500 使验证 pass 在反向调整竞态发生前抢先回滚。
+
+所有参数 verifyDelay 统一 1500（无立即生效类参数）。
+
+评审修正（附录 D.2）：verifyDelay=1500 必须配合 pending-lock 才成立 —
+trend 在 pending 期间若继续积累，反向调整最早可在 T+1000（冷却到期 +
+2 次同向确认）触发，早于或与验证同 tick 落点；pending 期间该参数
+从 evals 排除（含 trend），验证完成后再重新积累。
+
+验证 pass 集成点：[tuning-engine.ts:safeRunTuning](../src/systems/tuning-engine.ts#L112) 内、`evaluateTuning` 调用**之前**。
+
+### 3.1.7 P2：多信号验证（附录 B-P2 修复）
+
+`isImproved` 改为多信号 OR 判定：每个参数定义「改善证据集」，任一满足即算改善，避免单瞬态信号（如 backlog 归零）误回滚。
+
+| 参数 | 上调验证（improve） | 下调验证（worsen） |
+|---|---|---|
+| hauler.max/min | containerFillRatio ↓ OR spawnFillRatio ↑（能量再分配证据） | containerFillRatio ↑ |
+| harvester.max | avgReserveDelta ↑（止跌回升） | avgReserveDelta ↓（主动节能） |
+| upgrader.max | avgStorageEnergy ↓（烧库存） | avgStorageEnergy ↑（攒库存） |
+| builder.max | buildQueueBacklog ↓ OR **builderCount >= preAdjustValue+1**（人口到位即生效） | buildQueueBacklog ↑ |
+
+**builder.max 关键修复**：backlog 归零不一定是 builder 无效，可能是建筑完成。新增 `builderCount 达新 max` 作为改善证据——上调后人口到位即算生效，不因 backlog 归零误回滚。
+
+容差双门限（附录 9.2-1）：`max(5% 相对, 0.05 绝对)`，防低基数失效（container=0.1 时 5%=0.005）。
+
+`AdjustSignalsSnapshot` 扩展新增 `spawnFillRatio`、`roleCount` 字段。
+
+### 3.1.8 P3：冻结机制（附录 B-P3 修复）
+
+`RoomTuningState.frozenParams` 新增字段。连续 3 次回滚 → 冻结该参数，评估跳过，console.log 告警。
+
+```typescript
+export interface FrozenParamState {
+  frozenAt: number;
+  frozenUntil: number;  // frozenAt + FROZEN_DURATION
+  reason: string;
+  rollbackCount: number;  // 解冻后保留，用于再次冻结判定
+}
+```
+
+- `ROLLBACK_FREEZE_THRESHOLD = 3`
+- `FROZEN_DURATION = 10000` tick（~2 个完整振荡周期，让信号稳定）
+- 到期自动解冻；CLI 可手动解冻（运维介入兜底）
+- 冻结参数从 evaluator 的 evals 列表移除，跳过评估
+
+评审修正（附录 D.5）：冻结只停评估不停值 — 冻结时参数**复位到 CONFIG 基线**
+（或最近一次验证通过的值），避免「振荡结束停在错误值被钉 10000 tick」；
+冻结事件写 event-log（新增 EventKind），console.log 降级为运维提醒。
+
+### 3.1.9 回滚豁免（附录 9.2-2）
+
+回滚触发冷却（防振荡），但允许「明显反向」豁免：条件 `信号超原阈值 2x AND 距回滚 >= verifyDelay/2`。防「调错→回滚→1000 tick 不能修」死锁，同时防「刚回滚就再调」振荡。
+
+### 3.1.10 集成流程（safeRunTuning 改造）
+
+```
+1. aggregateSignals → signals
+2. getOrCreateRoomTuning → roomTuning
+2.5 [A] pending-lock（附录 D.2）：pending 参数从 evals 排除（含 trend），验证完成前不评估
+3. [A] verifyPendingAdjustments(signals, roomTuning, tick)  ← verifyDelay 时机 + P2 多信号
+   → rollbacks[], clearedParams[]
+3.5 [A] 人口合同前置（附录 D.3）：roleCount 未达新边界 → 标 pending-blocked 下周期复验，不计失败
+3.6 [A] 下调护栏（附录 D.4）：主信号方向 + spawnFill/reserve 护栏，护栏触发即回滚
+3.7 [A] 全局门禁（附录 E-P3，待实现）：危机/低 bucket（tier≥2、crisisRatio>0.3、rcl<2）
+    期间跳过验证，pending 保留下周期复验 — 防外生信号暴跌误回滚、误冻结
+4. [A] applyFreezePolicy(roomTuning, rollbacks, tick)  ← P3 冻结
+   → frozenParams[], thawedParams[]
+5. 应用 rollbacks 到 Memory（lastAdjusted=tick，触发冷却）
+6. 清空 clearedParams 的 pendingValidation
+7. [A] 过滤冻结参数：evals = filterFrozenParams(evals, frozenParams)
+8. evaluateTuning(signals, bounds, lastAdjusted, tick, prevTrend)
+   → confirmAndBuild 触发调整时返回 pendingValidation 写入指令
+9. 应用 evaluation.adjustments + 写 pendingValidation
+10. 保存 lastTrend + lastEval 诊断（含 pendingValidation/frozenParams 状态）
+```
+
+[evaluator.ts:confirmAndBuild](../src/domain/tuning/evaluator.ts#L401) 签名扩展（最小侵入）：新增 `signals` 参数，触发调整时返回 `pendingValidation` 写入指令，由 tuning-engine 落 Memory。
+
+### 3.1.11 v20 迁移（schemaVersion 升级）
+
+- `CONFIG.tuning.baselineVersion` 升至 2（触发 rooms 清空，从新基线收敛）
+- 迁移建档：`pendingValidation`/`frozenParams` 缺失即 undefined（懒创建）
+- 自愈：脏数据清理 + `expectedDirection` 枚举校验（附录 B-P5 修复）
+- 幂等：仅畸形数据自愈，不写字段值
+- 迁移测试：空 Memory / 脏 pendingValidation / 枚举校验 / 重复执行
+
+### 3.1.12 上线后验证（附录 C.3）
+
+- A 上线后重新观察 ≥50000 tick
+- 监控点：pendingValidation 产出频率、回滚次数、冻结事件、振荡是否消失
+- 回滚阈值：若 A 上线后振荡仍出现 ≥1 次 → 立即回滚 A，重设计
+- CPU 增量 <0.1 CPU/run（验证 pass O(1) 比较 + 冻结检查 O(1)）
 
 ---
 
@@ -323,6 +452,10 @@ const shortTermAlignedWithLongTerm =
 // 仅对「上调」生效；下调保持原逻辑（节能要快，不等长期确认）
 ```
 
+评审修正（附录 D.7）：长期门禁仅对 ring 已收录信号（reserveDelta / storageEnergy）
+生效 — hauler（containerFillRatio）与 builder（backlog）无长期数据，D 不适用；
+上例信号类错误，改以 upgrader（avgStorageEnergy）为准。
+
 #### 3.4.3 为什么是 P3
 
 - 改进 A 的闭环验证已能处理大多数瞬态误判。
@@ -340,7 +473,7 @@ const shortTermAlignedWithLongTerm =
 | 字段 | 位置 | 变更 | 迁移策略 |
 |---|---|---|---|
 | `RoomTuningState.pendingValidation` | `Memory.kernel.tuning.rooms[room].pendingValidation` | 新增可选字段 | 迁移只做建档（不强制初始化），evaluator/tuning-engine 首次写入时创建 |
-| `CONFIG.tuning.baselineVersion` | 静态 config | 不变（保持 1） | 无需迁移 |
+| `CONFIG.tuning.baselineVersion` | 静态 config | 升至 2（§3.1.11；评审修正 D.6-1 统一） | 触发 rooms 清空，从新基线收敛 |
 | `STORAGE_THRESHOLDS_BY_RCL` | 静态 bounds.ts | 新增常量 | 不涉及 Memory |
 
 ### 4.2 v20 迁移函数（伪代码）
@@ -356,6 +489,7 @@ const shortTermAlignedWithLongTerm =
     // 保留在 rooms 中，由 tuning-engine 首次评估时通过验证 pass 自然处理：
     //   - 若 lastAdjusted[param] 距今 > cooldownTicks 且无 pendingValidation
     //     → 视为「历史遗留覆盖」，跳过验证直接进入正常评估
+    //     （评审修正 D.6-4：Step 0 清空 rooms 后此路径为空操作，保留无害）
     //   - 若有 pendingValidation 但 preAdjustSignals 缺失
     //     → 数据损坏，清空该 param 的 pendingValidation
     //
@@ -445,10 +579,27 @@ const shortTermAlignedWithLongTerm =
 
 ### 5.5 集成测试（tests/integration/）
 
+> **覆盖说明（2026-08-01 评审 E.2-P5 同步）**：§5.5 integration 测试已由
+> `tests/unit/economy/tuning-closed-loop.test.ts`（domain 纯函数：verifyPendingAdjustments /
+> applyFreezePolicy / evaluateTuning 的 pending-lock）+ `tests/unit/economy/tuning-engine-integration.test.ts`
+> （系统层集成：run() 完整链路 + 多房间 + 边界场景）覆盖，不单独建 integration 目录测试。
+> domain 纯函数 + 系统层集成双层覆盖优于单一 integration 文件：可分别锁定逻辑正确性与接线正确性。
+
 新增 `tests/integration/tuning-closed-loop.test.ts`：
 
 1. **完整闭环场景**：mock 一个「hauler 下调 → 1 窗口后未改善 → 回滚 → 再评估不上调」的完整流程，跨 5 个评估周期（2500 tick）。
 2. **棘轮锁死防护回归**：复现实测场景（hauler.max=2 锁死 100 万 tick），验证改进 B 后能恢复。
+
+### 5.6 架构评审补充用例（附录 D.8）
+
+| 用例 | 输入 | 期望 |
+|---|---|---|
+| pending-lock 竞态 | 上调后 T+500 反向信号、T+1000 冷却到期 | T+1000 不触发反向调整；T+1500 验证后才重新积累 trend |
+| 人口合同 blocked | 上调后 roleCount 未达新边界（demand 阻塞） | 标 pending-blocked，不回滚、不计回滚次数 |
+| 人口合同 + 效果 | 人口到位但信号未动 | 正常回滚 |
+| 下调护栏 | hauler 下调后 containerFill ↑ 但 spawnFill 跌破阈值 | 回滚 |
+| 外生污染 | 验证窗口内 RCL 升级 / colony 转换（event-log 有事件） | 跳过或降权验证 |
+| D 信号范围 | hauler/builder 长期门禁 | 不生效（ring 无对应信号）；harvester/upgrader 生效 |
 
 ---
 
@@ -572,6 +723,13 @@ const shortTermAlignedWithLongTerm =
 
 ### 9.2 A 的待确认项（推迟到 Step 3 触发时求解）
 
+> **更新（2026-08-01）**：观察期已触发完整版 A，以下待确认项已在 §3.1.6-3.1.9 给出最终答案：
+> - 项 1（容差）→ §3.1.7 双门限 `max(5% 相对, 0.05 绝对)`
+> - 项 2（回滚豁免）→ §3.1.9 `信号超原阈值 2x AND 距回滚 >= verifyDelay/2`
+> - 项 3（verifyDelay 标定）→ §3.1.6 统一 1500（所有参数都是人口类）
+> - 项 4（P3 冻结）→ §3.1.8 连续 3 次回滚冻结 10000 tick
+> - 项 5（附录 D 评审修正）→ 验证语义定稿见附录 D.2-D.5；D 范围收窄见附录 D.7
+
 以下项在 A 真正进入实施时才需要最终答案，现保留评审建议作为设计输入：
 
 1. **`isImproved` 容差**：5% 相对值（前提是 verifyDelay 修对，附录 B-P1）。
@@ -597,6 +755,8 @@ const shortTermAlignedWithLongTerm =
 ---
 
 ## 附录 B：评审记录（2026-08-01）
+
+> **更新（2026-08-01）**：观察期已完成（tick 1623282→1676531，53249 tick），W8N3 `builder.maxCount` 振荡 1 次触发完整版 A。P1/P2/P3 已在 §3.1.6-3.1.8 给出设计方案，下方原评审记录保留作为设计输入追溯。
 
 > **评审结论**：诊断准确、方向正确；**改进 A 存在 HIGH 级设计缺陷（验证窗口与效果显现时间常数不匹配），照案实施会引入「回滚-下调」振荡**。根因 B/C 经代码逐行核实属实；改进 B/C/D 可实施。建议：先修改进 A 的验证时机设计，再按 B → A → C → D 顺序推进。
 
@@ -644,9 +804,9 @@ const shortTermAlignedWithLongTerm =
 |---|---|
 | 根因诊断（A-D） | ✅ 全部属实（B/C 逐行核实） |
 | 改进 B/C/D 设计 | ✅ 可实施 |
-| 改进 A 设计 | ⚠️ 需补验证窗口/效果延迟匹配（P1）后实施；是否实施由附录 C 矩阵决定 |
+| 改进 A 设计 | ✅ 已修（v1 草案）— P1/P2/P3 设计方案见 §3.1.6-3.1.8，由观察期振荡触发完整版 A |
 | 实施顺序 | ✅ 已修订为 Step0 清空 → Step1 B+C 同 PR → Step2 观察 ≥50000 tick → Step3 按矩阵决定 A |
-| 迁移 v20 | ⏸ 推迟到 A 触发时（B+C 不升 schemaVersion） |
+| 迁移 v20 | ✅ 已设计（§3.1.11）— A 触发即实施，含 pendingValidation/frozenParams 建档 + 枚举校验 |
 | 文档完善度 | ✅ 已补收益边界（§0）+ RCL 百分比参数化（§3.3）+ A 投资矩阵（附录 C） |
 
 ---
@@ -701,3 +861,175 @@ Step 3 决策时，按下模板记录：
 决策：[不上 A / 上简化版 A / 上完整版 A / 调 C 不调 A]
 下一步：[进入 A 设计阶段 / 调整 C 阈值后重新观察 / 结束 tuning 改进]
 ```
+
+---
+
+## 附录 D：架构评审补充（2026-08-01，grandmaster 视角）
+
+> 评审对象：v3 全案（B/C 已落地实现 + 完整版 A 设计 + D 设计）。
+> 评审方法：代码考古（evaluator.ts / bounds.ts / types.ts / tuning-engine.ts /
+> telemetry-collector.ts / timeseries.ts 逐行核对）+ 设计参数推演
+> （cooldown=1000、interval=500、trend 2 次确认、verifyDelay=1500）。
+> 总体判定：根因诊断与 B/C 实现 ✅；A 需按 D.2-D.5 修正后实施；
+> D 按 D.7 收窄；文档一致性按 D.6 统一。
+
+### D.1 评审结论速览
+
+| 项 | 判定 | 依据 |
+|---|---|---|
+| 缺陷 A-D 诊断 | ✅ 属实 | 附录 B.1 逐行核实；本次复核一致 |
+| B+C 实现 | ✅ 已提交 | c139055；tuning.test.ts:823-847 覆盖 RCL7 解锁 / RCL5 饱和两向 |
+| A 的 verifyDelay 竞态 | ❌ HIGH | D.2 推演：反向调整可早于或同 tick 于验证触发 |
+| A 的验证语义 | ⚠️ MEDIUM ×3 | D.3 人口合同、D.4 下调护栏、D.5 假阳性/冻结/审计 |
+| D 的信号基础 | ⚠️ 受限 | [事实] ring 无容器填充率归一值与 backlog（timeseries.ts） |
+| 文档一致性 | ⚠️ 4 处 | D.6 |
+
+### D.2 HIGH — 验证与反向调整竞态：必须加 pending-lock
+
+推演（按计划参数 + 代码常数）：
+
+1. T 时调整，trend 重置 none，pending 写入；
+2. T+500 反向信号出现 → 首次观察，trend=反向；
+3. T+1000 冷却到期（1000 ≥ 1000）且 trend 已连续 2 次同向 → 反向调整触发，
+   早于 T+1500 的验证；相位对齐时与验证同 tick；
+4. 验证同 tick 先通过（清空 pending）→ evaluator 紧接着按 trend 触发反向调整 —
+   「验证有效」与「反向调整」同 tick 并存；
+5. §3.1.1「覆盖旧记录」使 T+1000 的再次调整吞掉 T 的 pending —
+   第一次调整永远不被验证，闭环只审最后一步。
+
+**修正（定稿）**：
+
+- pending 存在期间该参数从 evaluator evals **整体排除（含 trend 记录）**，
+  验证完成（接受/回滚）清空 pending 后 trend 从 none 重新积累；
+- 验证粒度 = 调整粒度；verifyDelay=1500 在 pending-lock 下成立（否则不保证抢先）；
+- 回滚仍写 `lastAdjusted=tick` 触发冷却（原设计保留）。
+
+### D.3 MEDIUM — 人口合同前置（防 tuning 替 spawn demand 背锅）
+
+背景：§0 已承认 spawn demand 侧存在独立问题（RCL7 人口不足、colony-state skip 矛盾）。
+若调整后人口未补上，信号不动 → 误判未改善 → 回滚 → 3 次冻结 —
+病因在 demand，受罚的是 tuning。
+
+**修正（定稿）**：
+
+- 验证分两级：先验**合同**（roleCount 达新边界，用活快照或 population census），
+  未达 → 标 `pending-blocked`，不判失败、不计回滚次数，下周期复验；
+  已达 → 再验**效果**（信号方向）；
+- P2 的 builder 证据（`builderCount >= preAdjustValue+1`）推广为全部参数的统一前置。
+- 实现评审补充（附录 E-P1，待实现）：blocked 需 TTL（连续 2-3 个窗口后回滚或清空），
+  并接线 `contractBlocked` 观测 — 防「demand 口径不匹配 + 能量饥饿」导致参数被
+  pending-lock 永久排除且零告警。
+
+### D.4 MEDIUM — 下调方向缺伤害护栏
+
+hauler 下调验证只有 `containerFillRatio ↑ = 改善`。容器变满既可能是正确减产，
+也可能是搬运塌方（spawn 饿死）— 单信号把伤害当改善接受（假阳性；计划只防了
+假阴性与振荡，没防假阳性）。
+
+**修正（定稿）**：
+
+- 下调验证 = 主信号方向（containerFillRatio ↑ / storageEnergy ↑）**且**护栏
+  （spawnFillRatio 不跌破阈值、avgReserveDelta 不转负）；护栏触发即回滚；
+- upgrader 下调同样检查 avgPressure 不恶化。
+
+### D.5 MEDIUM — 冻结语义与审计轨迹
+
+- 冻结只停评估不停值：冻结时参数**复位到 CONFIG 基线**（或最近一次验证通过值），
+  避免「振荡结束停在错误值被钉 10000 tick」；
+- 调整/回滚/冻结事件写 event-log（新增 EventKind，segment 2 有界 ring），
+  console.log 降级为运维提醒 — 顺带提供附录 C.1 缺失的 adjustHistory 审计源，
+  Memory 零增长。
+
+### D.6 文档一致性修正清单（定稿）
+
+| # | 位置 | 问题 | 修正 |
+|---|---|---|---|
+| 1 | §4.1 vs §3.1.11 | baselineVersion「保持 1」与「升至 2」冲突 | 定稿：升至 2（§3.1.11 为准），§4.1 已同步；Step 0 清空与其互为冗余 |
+| 2 | §5.2 用例表 | 未标 RCL，storage=60000 在 mid 饱和 / late 不饱和，表内自相矛盾 | 每个用例补 RCL 列（已实现测试以 tuning.test.ts:825/847 为准） |
+| 3 | §3.1.9 | 「信号超原阈值 2x」基准未定义 | 定义：当前信号相对 preAdjust 值偏移 ≥ 2 × 触发时信号与判定阈值的差值 |
+| 4 | §4.2 | 「历史遗留覆盖由验证 pass 处理」与 Step 0 清空后的空状态重复 | 已注明 Step 0 后为死路径，保留无害 |
+
+### D.7 改进 D 范围收窄（定稿）
+
+[事实] economy ring（timeseries.ts `EconomySample`）只有 d/ds/p/ea/ec/se/cte/cce，
+无容器填充率归一值、无 backlog。
+
+- D 的长期门禁仅对 ring 已收录信号生效：harvester（avgReserveDelta）、
+  upgrader（avgStorageEnergy）；
+- hauler（containerFillRatio）/ builder（backlog）不做长期门禁，除非先扩遥测
+  （ring 增加 cf/bq 字段，旧样本缺字段回退活快照）；
+- §3.4.2 示例（hauler 用 reserveDelta 对齐）信号类错误，改以 upgrader 为例。
+
+### D.8 验证补充（在 §5 基础上新增，已并入 §5.6）
+
+| 用例 | 输入 | 期望 |
+|---|---|---|
+| pending-lock 竞态 | 上调后 T+500 反向信号、T+1000 冷却到期 | T+1000 不触发反向调整；T+1500 验证后才重新积累 trend |
+| 人口合同 blocked | 上调后 roleCount 未达新边界（demand 阻塞） | 标 pending-blocked，不回滚、不计回滚次数 |
+| 人口合同 + 效果 | 人口到位但信号未动 | 正常回滚 |
+| 下调护栏 | hauler 下调后 containerFill ↑ 但 spawnFill 跌破阈值 | 回滚 |
+| 外生污染 | 验证窗口内 RCL 升级 / colony 转换（event-log 有事件） | 跳过或降权验证 |
+| D 信号范围 | hauler/builder 长期门禁 | 不生效（ring 无对应信号）；harvester/upgrader 生效 |
+
+### D.9 实施顺序（定稿）
+
+1. Step 0 清空 rooms（部署前 CLI）；
+2. B/C 已上线不回退；补 §5.2 RCL 列；
+3. 按 D.2-D.5 修改 A 设计后实现（pending-lock + 人口合同 + 下调护栏 +
+   冻结复位 + event-log），并跑 D.8 用例；
+4. D 按 D.7 收窄后独立排期，不与 A 同 PR。
+
+---
+
+## 附录 E：A 方案实现评审（2026-08-01）
+
+> 评审对象：工作区已实现的完整版 A（未提交，约 1300 行：evaluator.ts /
+> tuning-engine.ts / bounds.ts / types.ts / event-log.ts / memory.ts 迁移 /
+> global.d.ts + 28 个新测试）。
+> 评审方法：对照附录 D 定稿逐条代码考古 + 设计参数推演。
+> 验证基线：`npm run typecheck` 全绿；`npm run test:unit` 116 文件 / 1376 用例通过
+> （新增 tuning-closed-loop 14 + v19→v20 迁移 14）。
+> 总体判定：核心机制全部落地且测试锁定；存在 1×MEDIUM-HIGH + 2×MEDIUM + 2×LOW，
+> 建议修复后提交。
+
+### E.1 实现对照表（vs 附录 D 定稿）
+
+| 定稿项 | 实现 | 证据 |
+|---|---|---|
+| D.2 pending-lock | ✅ | `excludedParams` 排除 pending+frozen，trend 强制 none；竞态测试锁住 T+1000 不反向 |
+| verifyDelay=1500 | ✅ | bounds.ts 每参数配置，注释写明 ≥ cooldown 约束 |
+| D.3 人口合同 | ⚠️ 半实现 | up/down 双向合同检查 + blocked 态都有，但 blocked 无 TTL、无观测（E.2-P1） |
+| D.4 下调护栏 | ⚠️ 半实现 | spawnFill/pressure 护栏生效；hauler 的 reserveDelta 护栏是死代码（E.2-P2） |
+| D.5 冻结复位基线 | ✅ | 第 3 次回滚 `rb.newValue` 改为 CONFIG 基线，测试断言 5→6 |
+| event-log 审计 | ✅ | TuningAdjust/Rollback/Freeze + 稳定 paramCode |
+| v20 迁移 | ✅ | 枚举校验、空对象回收、幂等，14 个测试 |
+| baselineVersion 2 / schema 20 | ✅ | config + 迁移一致；集成测试改为读 CONFIG 值 |
+| 容差双门限 | ✅ | max(5% 相对, 0.05 绝对) |
+
+### E.2 问题清单
+
+| # | 级别 | 问题 | 位置 | 证据 / 后果 | 修法 / 状态 |
+|---|---|---|---|---|---|
+| P1 | MEDIUM-HIGH | 人口合同 blocked 无 TTL、无观测 → 参数可被永久排除 | evaluator.ts `verifyPendingAdjustments` + tuning-engine.ts `safeRunTuning` | `blockedParams` 返回后从未被消费；`contractBlocked` 字段定义但从未写入；lastEval 无 blocked 标记。tuning 触发阈值（containerFill>0.7）与 demand 孵化阈值（0.4/0.8 分档）口径不同 + 能量饥饿排队 → 合同可能长期不满足 → pending-lock 永久排除该参数，零告警 | 待定稿：blocked 连续 2-3 窗口（1000-1500 tick）后回滚或清空；接线 `contractBlocked`；加事件 / lastEval 标记 |
+| P2 | MEDIUM | hauler 下调护栏 reserveDelta 分支是死代码 | evaluator.ts `capturePreAdjustSignals` / `isGuardrailTriggered` | hauler 快照只存 containerFillRatio + spawnFillRatio，未存 avgReserveDelta → 护栏读取恒 undefined → 永不触发；spawnFill 护栏仍生效 | 补一行快照字段 + 测试 |
+| P3 | MEDIUM | 验证 pass 不继承评估的全局门禁 | tuning-engine.ts `safeRunTuning`（verify 无条件先于 evaluate 执行） | 危机 / 低 bucket 期间 containerFill/storage 外生暴跌 → 误判未改善 → 回滚 + 计次 → 可能误冻结 | verify 前加 tier/crisis/rcl 门禁，危机保留 pending 复验；或降权不计回滚次数 |
+| P4 | LOW-MEDIUM | 解冻后 rollbackCount 保留 → 一次回滚即再冻结 10000 tick | evaluator.ts `applyFreezePolicy` + bounds.ts | 病理参数复发快冻结是特性；但对「冻结期世界已变」的场景过于粘滞 | 待定稿：解冻时清零（或减半）rollbackCount，复发确认重新交给阈值 |
+| P5 | LOW | 注释 / 文档过期 | tuning-engine.ts 顶部注释（仍写「用 console.log 记录调优事件」）；§5.5 integration 测试未建；AGENTS.md schemaVersion=19（现 20） | 误导 + 测试债 + 文档漂移 | 同步注释；§5.5 标注已由 unit 覆盖或补 integration；AGENTS.md 升 20 |
+
+### E.3 行为推演验证（正面确认）
+
+W8N3 builder 振荡场景（§3.1.5）在新时序下：
+
+上调 T → pending-lock 挡住 T+500/T+1000 的 trend → T+1500 验证（人口到位即通过）
+→ 反向下调最早 T+2500 → 下调验证再等人口收敛到新上限。
+
+结论：振荡周期从实测 1500 tick 拉长到 4000+，且每步有验证点 — A 的目标达成。
+代价：pending 窗口内真实需求突增的响应延迟约 2500 tick（不能反向调整），
+对 P3 治理器可接受；此取舍应在文档明示。
+
+### E.4 收尾步骤（建议顺序）
+
+1. P2（一行快照字段）+ P3（门禁前置，约 15 行）+ P5（注释 / 文档同步）；
+2. P1 定 TTL 策略后实现（建议 2 窗口回滚 + TuningBlocked 事件）；
+3. 补 3 个测试：blocked TTL、hauler reserve 护栏、危机窗口验证跳过；
+4. `npm run build` + `npm run test:integration` 全绿后提交。

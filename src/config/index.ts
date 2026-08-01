@@ -40,7 +40,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 19 },
+  memory: { schemaVersion: 20 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -85,8 +85,12 @@ export const CONFIG = {
      * （见 tuning-engine.ts:61-75），CONFIG 升版后存量旧覆盖最长残留 500 tick
      * 才被清空 — 行为可接受（自调优会重新收敛，无需立即生效）。
      * 部署 CONFIG.roles 基线变更后若需立即清空，可手动改 Memory 或等下个评估周期。
+     *
+     * v2（改进 A）：tuning 闭环验证机制上线（pendingValidation + frozenParams +
+     * verifyDelay + 人口合同前置 + 下调护栏 + 冻结复位基线）。升版触发 rooms
+     * 清空，从新基线收敛 — 存量旧覆盖值（如 hauler.max=2 锁死）随之清除。
      */
-    baselineVersion: 1,
+    baselineVersion: 2,
   },
 
   cpu: {

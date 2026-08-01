@@ -273,7 +273,7 @@ mindmap
 | 编号 | 级别 | 描述 | 状态 |
 | --- | --- | --- | --- |
 | 裂缝一 | P1 | 成熟房 builder 随 site 归零消亡，道路无人修（塔不修路），只能塌毁重建——重建成本约为维修 6 倍，附带无路窗口期物流减速 | ✅ 已修：demand 增加道路维修需求信号（待修道路 ≥ 3 条时维持 1 个 builder，替换门禁同步放行） |
-| 裂缝二 | P2 | 远矿无 container 建造/维修链，container 塌毁后永久转 drop-mining，承受掉落衰减损耗 | 已知取舍，暂不处理 |
+| 裂缝二 | P2 | 远矿 container 无维修链：衰减塌毁后靠满载自建重建（建造链已由 P0-A 补齐），塌毁-重建窗口期转 drop-mining 承受衰减损耗 | 已知取舍，暂不处理 |
 
 另有一处注释与实现不符：demand.ts 中「tuning-engine 观测到 hauler 空闲」
 实际接线是 container/link 空置率代理信号，TuningSignals 无 idle 字段。✅ 注释已修正。

@@ -22,7 +22,7 @@
 > Batch 5 审查结论 **PASS_WITH_SUGGESTIONS**（工作区未提交 diff 649+ 行）：
 > K/L/M/N/O + R2/R3/R4/R6/R7 全部落地，无 BLOCKER/HIGH；3 个新问题 R8-R10
 > （见文末「Batch 5 验收追加」）：P2-M 缺回归测试（MEDIUM）、kernel→pathfinding
-> 分层债务（MEDIUM）、P2-N 表述不精确（LOW）。
+> 分层债务（MEDIUM）、P2-N 表述不精确（LOW）。**2026-08-01 复核：R8/R9/R10 已全部闭环。**
 
 ## 0. 总览
 
@@ -534,7 +534,7 @@ domain 恢复纯函数，两个迟滞状态获得迁移保护，单测不再需�
 | Batch 2（已完成 ✅） | A（远矿 site 收编 + site-quota 账本）+ C（defender 缓存）+ D（走廊共享） | 同上 + 远矿集成场景 |
 | Batch 3（已完成 ✅） | E（寻路限频）+ F（layout 分片/相位 + recoveryEligible）+ G（dangerUntil 搬家） | 同上 + 双房 CPU 采样 |
 | Batch 4（已完成 ✅） | H（cancelRequestsByHome）+ I（tuning 版本戳 + TUNABLE_ROLES 单源）+ J（domain 收口）+ R1（分片等价测试，前置） | 同上 + 迁移测试 |
-| Batch 5（已实现，待提交 ✅） | K/L/M/N/O + R2/R3/R4/R6/R7（工作区 diff 649+ 行；review PASS_WITH_SUGGESTIONS，3 个新问题 R8-R10 见文末「Batch 5 验收追加」） | 同上 + 验收追加测试 |
+| Batch 5（已提交 ✅） | K/L/M/N/O + R2/R3/R4/R6/R7（review PASS_WITH_SUGGESTIONS；R8/R9/R10 已闭环，见文末「Batch 5 验收追加」） | 同上 + 验收追加测试（含 R8 回归锁） |
 
 **每批独立 PR、独立回滚**。schemaVersion 变更（F/G/I/J 各一次）集中在 Batch 3-4，
 部署选 bucket 高位窗口，部署后观察 1000 tick 的遥测 skipHotspot 与 CPU 均值。
@@ -598,9 +598,11 @@ K/L/M/N/O 五项 + 前批遗留 R2/R3/R4/R6/R7 全部落地，review 结论 **PA
 
 | # | 级别 | 问题 | 位置 | 去向 |
 |---|------|------|------|------|
-| R8 | MEDIUM | P2-M 钩子化**零回归测试**：`shouldIdleWhenNoCandidate` 重构无测试锁住等价性（grep tests/ 零命中）。逐行验证等价成立，但未来改动可致 idle→ensureHome 死循环回归（原线上问题） | role-runner.ts:201-208 + remote-hauler.ts:166-173 | 补 3 断言：①remoteHauler work 在 home 房无候选 → idle；②acquire 在 home 房不 idle；③无钩子角色同条件走默认逻辑（不因 undefined 误切） |
-| R9 | MEDIUM | kernel 直接 `import { pruneDeadCreepCache } from "../creeps/movement/pathfinding"`（kernel.ts:17,95-101）——kernel 刚用 recoveryEligible 移除 system 名字硬编码，又引入业务模块具体函数依赖，违反 §2.1「内核不感知业务」分层方向。权衡合理（cache 属主清理、100 tick 低频）但值得登记 | kernel.ts:17,95-101 | 二选一：接受现状并在注释登记；或挂 registry 维护钩子（kernel 只遍历注册表，顺带解决 R8 的测试挂点） |
-| R10 | LOW | P2-N 注释「避免 9 倍重算」不精确——增量只省**评分计算**（opennessAt + energyPenalty），`candidates.sort()` 仍是 O(n log n) 全量排序，候选数未减 | constraint-placer.ts:327 | 注释改为「避免全量重新评分」 |
+| R8 | MEDIUM | P2-M 钩子化**零回归测试**：`shouldIdleWhenNoCandidate` 重构无测试锁住等价性（grep tests/ 零命中）。逐行验证等价成立，但未来改动可致 idle→ensureHome 死循环回归（原线上问题） | role-runner.ts:201-208 + remote-hauler.ts:166-173 | ✅ 已补 [tests/unit/role/should-idle-hook.test.ts](../tests/unit/role/should-idle-hook.test.ts)：3 断言（work@home→idle / acquire@remote 不 idle / 无钩子角色默认不 idle） |
+| R9 | MEDIUM | kernel 直接 `import { pruneDeadCreepCache } from "../creeps/movement/pathfinding"`（kernel.ts:17,95-101）——kernel 刚用 recoveryEligible 移除 system 名字硬编码，又引入业务模块具体函数依赖，违反 §2.1「内核不感知业务」分层方向。权衡合理（cache 属主清理、100 tick 低频）但值得登记 | kernel.ts:17,95-101 | ✅ 已决策：接受现状并在 kernel.ts:17-21 注释登记权衡（commit 5300517）；出现 3+ 维护钩子时再提取 registry 钩子机制 |
+| R10 | LOW | P2-N 注释「避免 9 倍重算」不精确——增量只省**评分计算**（opennessAt + energyPenalty），`candidates.sort()` 仍是 O(n log n) 全量排序，候选数未减 | constraint-placer.ts:327 | ✅ 已修正：constraint-placer.ts:332 注释改为「sort 仍 O(n log n)，增量只省评分计算」 |
+
+**验收更新（2026-08-01 复核）**：R8/R9/R10 已全部闭环，本表无未决项。
 
 ## 红线
 

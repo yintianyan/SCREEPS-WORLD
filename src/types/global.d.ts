@@ -315,8 +315,42 @@ declare global {
       adjustments: string[];
       signals: Record<string, number>;
       skipped?: string;
+      /**
+       * P3 修复（附录 E.2）：verify pass 被跳过时的原因。
+       * 危机/低 bucket 期间外生信号不可信，verify 跳过保留 pending
+       * （参数仍被 pending-lock 排除，不计回滚不计 blocked）。
+       * 取值："verify_skipped_crisis" / "verify_skipped_cpu_tier" / "verify_skipped_rcl"。
+       */
+      verifySkipped?: string;
       /** 本次评估产生的趋势记录（P1-1 调整置信度）。 */
       trend?: Record<string, "up" | "down" | "none">;
+      /**
+       * 改进 A：本次评估时 pending 验证中的参数诊断（精简版，控体积）。
+       * 不含 preAdjustSignals 完整快照（那是 Memory.kernel.tuning.rooms 的数据）。
+       */
+      pendingValidations?: Record<string, {
+        adjustTick: number;
+        expectedDirection: "improve" | "worsen";
+        adjustDirection: "up" | "down";
+        contractBlocked?: boolean;
+      }>;
+      /**
+       * 改进 A：本次评估时的冻结参数诊断（精简版）。
+       */
+      frozenParams?: Record<string, {
+        frozenUntil: number;
+        rollbackCount: number;
+        reason: string;
+      }>;
+      /**
+       * P1 修复（附录 E.2）：人口合同 blocked 参数诊断。
+       * roleCount 持续未达新边界时记录 blockedSinceTick，
+       * 连续 2 个 verifyDelay 窗口仍未达 → 回滚 + 计 1 次回滚。
+       */
+      blockedParams?: Record<string, {
+        blockedSinceTick: number;
+        lastCheckedTick: number;
+      }>;
     }>;
   }
 

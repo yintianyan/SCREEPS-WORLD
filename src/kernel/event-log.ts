@@ -66,6 +66,20 @@ export const enum EventKind {
   /** 塔齐射（战斗黑匣子）。d = [firedCount, targetX, targetY, targetHealParts, floor(targetHits/100)]。
    * 每 tick 每房至多一条（全塔集火同一目标），战斗期形成连续弹道记录。 */
   TowerVolley = 18,
+  /** 改进 A：tuning 参数调整。d = [paramCode, oldValue, newValue, adjustDirectionCode(0=up/1=down)]。
+   * 由 tuning-engine 在 applyAdjustment 时记录，提供附录 C.1 缺失的 adjustHistory 审计源。 */
+  TuningAdjust = 19,
+  /** 改进 A：tuning 参数回滚（验证失败）。d = [paramCode, rolledBackValue, preAdjustValue]。
+   * 验证 pass 发现调整未改善信号时触发回滚。 */
+  TuningRollback = 20,
+  /** 改进 A：tuning 参数冻结（连续回滚达阈值）。d = [paramCode, rollbackCount, frozenUntilDelta]。
+   * 冻结时参数复位到 CONFIG 基线（附录 D.5），console.log 降级为运维提醒。 */
+  TuningFreeze = 21,
+  /** P1 修复（附录 E.2）：tuning 人口合同 blocked 超时回滚。
+   * d = [paramCode, preAdjustValue, blockedDurationTicks]。
+   * roleCount 持续未达新边界超过 2 个 verifyDelay 窗口 → 回滚到 preAdjustValue + 计 1 次回滚。
+   * 与 TuningRollback 区分：TuningRollback 是效果验证失败的回滚，TuningBlocked 是人口合同超时的回滚。 */
+  TuningBlocked = 22,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────
@@ -97,6 +111,22 @@ export function roleName(code: number): string {
     if (c === code) return name;
   }
   return "unknown";
+}
+
+// ─── tuning 参数编码表（TuningAdjust/Rollback/Freeze 事件的 paramCode）──
+
+/** tuning 参数路径 → 稳定整数编码。新增参数只能追加，不得重排。 */
+const TUNING_PARAM_CODES: Record<string, number> = {
+  "hauler.maxCount": 0,
+  "hauler.minCount": 1,
+  "harvester.maxCount": 2,
+  "upgrader.maxCount": 3,
+  "builder.maxCount": 4,
+};
+
+/** tuning 参数路径编码；未知参数返回 99。 */
+export function tuningParamCode(param: string): number {
+  return TUNING_PARAM_CODES[param] ?? 99;
 }
 
 // ─── 事件数据结构 ────────────────────────────────────────────

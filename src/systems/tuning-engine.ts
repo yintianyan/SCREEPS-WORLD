@@ -25,16 +25,17 @@
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { getRoleBounds, TUNABLE_ROLES } from "../config/tuned";
-import { evaluateTuning } from "../domain/tuning/evaluator";
-import type { TuningSignals, RoomTuningState } from "../domain/tuning/types";
+import { evaluateTuning, verifyPendingAdjustments, applyFreezePolicy } from "../domain/tuning/evaluator";
+import type { TuningSignals, RoomTuningState, PendingValidation, FrozenParamState } from "../domain/tuning/types";
 import { readCpuSegment, readEconomySegment } from "../kernel/segment-store";
 import { ringToArray } from "../kernel/ring-buffer";
 import type { EconomySample, CpuSample } from "../kernel/timeseries";
-import { recordEvent, EventKind } from "../kernel/event-log";
+import { recordEvent, EventKind, tuningParamCode } from "../kernel/event-log";
 
 // ─── 自定义事件类型（扩展 EventKind）──
-// 使用现有 EventKind 的 PluginCooldown 槽位不太合适，
-// 这里直接用 console.log 记录调优事件——它们不是游戏状态转换，是运维诊断。
+// 调优事件写入 event-log（segment 2 有界 ring），console.log 仅作运维提醒。
+// EventKind.TuningAdjust/Rollback/Freeze/Blocked 已在 event-log.ts 登记，
+// 通过 recordEvent 写入 globalCache().eventBuffer，由 telemetry-collector 低频 flush。
 
 /** 调优引擎的评估窗口大小（取最近 N 个 economy 采样点）。 */
 const EVAL_WINDOW_SIZE = 20;
@@ -105,6 +106,17 @@ export const tuningEngineSystem: System = {
 /**
  * 单房间调优评估（包裹在 safeRun 语义中）。
  *
+ * 改进 A 集成流程（§3.1.10）：
+ *   1. 聚合信号
+ *   2. 获取/创建 roomTuning
+ *   3. pending-lock：构造 excludedParams（pending + 冻结中参数）
+ *   4. verifyPendingAdjustments：验证到期 pending → rollbacks/cleared/blocked
+ *   5. applyFreezePolicy：回滚计数 + 冻结复位到 CONFIG 基线
+ *   6. 应用 rollbacks（applyAdjustment + 清空 cleared pending + 事件日志）
+ *   7. evaluateTuning（传入 boundsSnapshot + excludedParams）
+ *   8. 应用 evaluation.adjustments（写 Memory + pendingValidation + 事件日志）
+ *   9. 保存 lastTrend + lastEval 诊断（含 pending/frozen 状态）
+ *
  * @param ctx          Tick 上下文
  * @param roomName     被评估房间
  * @param boundsSnapshot 本 tick 开头快照的角色边界——防止多房读-写污染
@@ -119,52 +131,374 @@ function safeRunTuning(
     const signals = aggregateSignals(ctx, roomName);
     if (!signals) return;
 
-    // 2. 使用 tick 开头的 bounds 快照（而非实时 getRoleBounds）
-    const boundsMap = boundsSnapshot;
-
-    // 3. 获取当前调优状态（含上次趋势记录，用于 P1-1 趋势确认）
+    // 2. 获取当前调优状态
     const roomTuning = getOrCreateRoomTuning(roomName);
-    const prevTrend = roomTuning.lastTrend ?? {};
 
-    // 4. 调用纯函数评估（传入上次趋势，获取新趋势）
+    // 3. [A] pending-lock（附录 D.2）：构造 excludedParams。
+    //    包含所有有 pendingValidation 的参数 + 冻结中的参数（frozenUntil > tick）。
+    //    注意：excludedParams 在 verify 之前构造，本 tick 即将被 cleared 的参数
+    //    仍在排除集内——这是有意的：刚验证完的参数本 tick 不评估，下 tick 从 none
+    //    重新积累 trend，防「反向调整早于验证触发」竞态。
+    const excludedParams = buildExcludedParams(roomTuning, ctx.tick);
+
+    // 捕获 verify 前的 pending 快照（用于回滚事件的 preAdjustValue 查询）
+    const pendingBefore = roomTuning.pendingValidation ?? {};
+
+    // 4. [A] 验证 pass：检查到期 pending 的调整效果
+    // P3 修复（附录 E.2）：verify 前继承 evaluateTuning 的全局门禁。
+    // 危机/低 bucket 期间 containerFill/storage 外生暴跌 → 误判未改善 → 误回滚 + 误冻结。
+    // 门禁未通过时跳过 verify：pending 保留、excludedParams 仍含 pending 参数、
+    // 不计回滚不计 blocked，下周期复验。
+    const verifyGate = checkVerifyGate(signals);
+    let verifyResult: ReturnType<typeof verifyPendingAdjustments> = {
+      rollbacks: [],
+      clearedParams: [],
+      blockedParams: [],
+    };
+    let freezeResult: { newlyFrozen: Array<{ param: string; reason: string }> } = { newlyFrozen: [] };
+    // P1 诊断：blocked 参数的 blockedSinceTick + lastCheckedTick（仅在 verify 执行时填充）
+    let blockedDiag: Record<string, { blockedSinceTick: number; lastCheckedTick: number }> | undefined;
+
+    if (verifyGate.passed) {
+      verifyResult = verifyPendingAdjustments(
+        signals,
+        pendingBefore,
+        boundsSnapshot,
+        ctx.tick,
+      );
+
+      // 5. [A] 冻结策略：确保 frozenParams 容器存在后调用（applyFreezePolicy 原地修改）
+      if (!roomTuning.frozenParams) {
+        roomTuning.frozenParams = {};
+      }
+      freezeResult = applyFreezePolicy(
+        roomTuning.frozenParams,
+        verifyResult.rollbacks,
+        verifyResult.clearedParams,
+        buildConfigBaselines(),
+        ctx.tick,
+      );
+
+      // 6. [A] 应用 rollbacks + 清空 cleared pending + 写事件日志
+      applyRollbacksAndClearPending(ctx, roomName, roomTuning, verifyResult, pendingBefore);
+
+      // 写冻结事件（D.5）
+      writeFreezeEvents(ctx, roomName, freezeResult, roomTuning);
+
+      // P1：写 TuningBlocked 事件 + 构造 blockedParams 诊断
+      blockedDiag = writeBlockedEventsAndDiag(ctx, roomName, verifyResult, pendingBefore);
+    }
+
+    // 7. [A] 评估（使用 boundsSnapshot 快照 + excludedParams）
     const evaluation = evaluateTuning(
       signals,
-      boundsMap,
+      boundsSnapshot,
       roomTuning.lastAdjusted,
       ctx.tick,
-      prevTrend,
+      roomTuning.lastTrend ?? {},
+      excludedParams,
     );
 
-    // 5. 应用调整
-    if (evaluation.adjustments.length > 0) {
-      for (const adj of evaluation.adjustments) {
-        applyAdjustment(roomName, adj.param, adj.newValue, ctx.tick);
-        console.log(
-          `[${ctx.tick}] tuning/${roomName}: ${adj.param} ${adj.oldValue}→${adj.newValue} (${adj.reason})`,
-        );
-      }
-    }
+    // 8. [A] 应用 evaluation.adjustments + 写 pendingValidation + 事件日志
+    applyEvaluationAdjustments(ctx, roomName, roomTuning, evaluation);
 
-    // 6. 保存新趋势记录（P1-1：连续 2 次同方向才调整，单次只记录方向）
+    // 9. 保存 lastTrend + lastEval 诊断（含 pending/frozen 精简快照 + P3 verifySkipped + P1 blockedParams）
     roomTuning.lastTrend = evaluation.newTrend;
-
-    // 7. 保存诊断快照（per-room，避免多房间评估时互相覆盖）
-    if (!Memory.kernel!.tuning!.lastEval) {
-      Memory.kernel!.tuning!.lastEval = {};
-    }
-    Memory.kernel!.tuning!.lastEval[roomName] = {
-      tick: ctx.tick,
-      adjustments: evaluation.adjustments.map(a => `${a.param}=${a.oldValue}→${a.newValue}`),
-      signals: evaluation.signals,
-      skipped: evaluation.skipped,
-      trend: evaluation.newTrend,
-    };
+    saveLastEval(
+      ctx,
+      roomName,
+      evaluation,
+      roomTuning,
+      {
+        ...(verifyGate.skippedReason ? { verifySkipped: verifyGate.skippedReason } : {}),
+        ...(blockedDiag ? { blockedParams: blockedDiag } : {}),
+      },
+    );
   } catch (error) {
     // 调优错误不得中断 tick——静默记录，下次再试。
     console.log(
       `[${ctx.tick}] tuning/${roomName}: error ${(error as Error).message}`,
     );
   }
+}
+
+/**
+ * P3 修复（附录 E.2）：verify pass 全局门禁。
+ *
+ * 与 evaluateTuning 的全局门禁保持一致：
+ *   - tierRank < 2（healthy/guarded 才验证；conserve/recovery 跳过）
+ *   - crisisRatio <= 0.3（危机比例超阈值时外生信号不可信）
+ *   - rcl >= 2（RCL 过低时经济信号无意义）
+ *
+ * 门禁未通过时返回 skippedReason，调用方据此跳过 verify 并记录诊断。
+ */
+function checkVerifyGate(signals: TuningSignals): { passed: boolean; skippedReason?: string } {
+  // 检查顺序与 evaluateTuning 一致：tier → crisis → rcl
+  if (signals.tierRank >= 2) {
+    return { passed: false, skippedReason: "verify_skipped_cpu_tier" };
+  }
+  if (signals.crisisRatio > 0.3) {
+    return { passed: false, skippedReason: "verify_skipped_crisis" };
+  }
+  if (signals.rcl < 2) {
+    return { passed: false, skippedReason: "verify_skipped_rcl" };
+  }
+  return { passed: true };
+}
+
+// ─── 改进 A 辅助函数 ───────────────────────────────────────
+
+/**
+ * 构造 pending-lock + frozen 排除集（附录 D.2）。
+ * 排除集中的参数在 evaluateTuning 中跳过评估，newTrend 置为 "none"。
+ */
+function buildExcludedParams(roomTuning: RoomTuningState, currentTick: number): Set<string> {
+  const excluded = new Set<string>();
+  // pending 验证中的参数
+  if (roomTuning.pendingValidation) {
+    for (const param in roomTuning.pendingValidation) {
+      excluded.add(param);
+    }
+  }
+  // 冻结未到期的参数（frozenUntil > tick）
+  if (roomTuning.frozenParams) {
+    for (const param in roomTuning.frozenParams) {
+      const fp = roomTuning.frozenParams[param];
+      if (fp && fp.frozenUntil > currentTick) {
+        excluded.add(param);
+      }
+    }
+  }
+  return excluded;
+}
+
+/**
+ * 构建 CONFIG 基线值表（用于 D.5 冻结复位）。
+ * key = "role.maxCount"/"role.minCount"，value = CONFIG 默认值。
+ */
+function buildConfigBaselines(): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const role of TUNABLE_ROLES) {
+    const cfg = CONFIG.roles[role as keyof typeof CONFIG.roles];
+    if (cfg) {
+      result[`${role}.maxCount`] = cfg.maxCount;
+      result[`${role}.minCount`] = cfg.minCount;
+    }
+  }
+  return result;
+}
+
+/**
+ * 应用回滚到 Memory + 清空已验证 pending + 写 TuningRollback 事件。
+ *
+ * 回滚走 applyAdjustment（lastAdjusted=ctx.tick 触发冷却，防同 tick 反向调整）。
+ * clearedParams（含回滚与验证通过）的 pendingValidation 条目全部清空，闭环结束。
+ */
+function applyRollbacksAndClearPending(
+  ctx: TickContext,
+  roomName: string,
+  roomTuning: RoomTuningState,
+  verifyResult: { rollbacks: Array<{ param: string; oldValue: number; newValue: number; reason: string }>; clearedParams: string[] },
+  pendingBefore: Record<string, PendingValidation>,
+): void {
+  // 应用回滚值（applyFreezePolicy 可能已把冻结参数的 newValue 改为 CONFIG 基线）
+  for (const rb of verifyResult.rollbacks) {
+    applyAdjustment(roomName, rb.param, rb.newValue, ctx.tick);
+    const pv = pendingBefore[rb.param];
+    const preAdjustValue = pv?.preAdjustValue ?? rb.newValue;
+    // TuningRollback: d=[paramCode, rolledBackValue, preAdjustValue]
+    // rolledBackValue = 回滚到的值（冻结时为 CONFIG 基线，否则等于 preAdjustValue）
+    recordEvent(EventKind.TuningRollback, roomName, [
+      tuningParamCode(rb.param),
+      rb.newValue,
+      preAdjustValue,
+    ]);
+    console.log(
+      `[${ctx.tick}] tuning/${roomName}: ROLLBACK ${rb.param} ${rb.oldValue}→${rb.newValue} (${rb.reason})`,
+    );
+  }
+
+  // 清空 clearedParams 的 pendingValidation（验证完成，闭环结束）
+  if (roomTuning.pendingValidation) {
+    for (const param of verifyResult.clearedParams) {
+      delete roomTuning.pendingValidation[param];
+    }
+    // 空对象回收，控体积
+    if (Object.keys(roomTuning.pendingValidation).length === 0) {
+      delete roomTuning.pendingValidation;
+    }
+  }
+}
+
+/**
+ * 写 TuningFreeze 事件 + 运维 console.log。
+ * d=[paramCode, rollbackCount, frozenUntilDelta]
+ */
+function writeFreezeEvents(
+  ctx: TickContext,
+  roomName: string,
+  freezeResult: { newlyFrozen: Array<{ param: string; reason: string }> },
+  roomTuning: RoomTuningState,
+): void {
+  for (const f of freezeResult.newlyFrozen) {
+    const fp = roomTuning.frozenParams?.[f.param];
+    if (!fp) continue;
+    recordEvent(EventKind.TuningFreeze, roomName, [
+      tuningParamCode(f.param),
+      fp.rollbackCount,
+      fp.frozenUntil - ctx.tick,
+    ]);
+    console.log(
+      `[${ctx.tick}] tuning/${roomName}: FROZEN ${f.param} (rollbackCount=${fp.rollbackCount}, until Δ=${fp.frozenUntil - ctx.tick})`,
+    );
+  }
+}
+
+/**
+ * P1 修复（附录 E.2）：写 TuningBlocked 事件 + 构造 blockedParams 诊断。
+ *
+ * 对 verifyResult.blockedParams 中的每个参数：
+ *   - 写 TuningBlocked 事件 d=[paramCode, preAdjustValue, blockedDurationTicks]
+ *   - 构造 lastEval.blockedParams 诊断 { blockedSinceTick, lastCheckedTick }
+ *
+ * blockedDurationTicks = ctx.tick - pv.blockedSinceTick，提供「已 blocked 多久」的可观测性。
+ * 注意：blocked 不清空 pending（pending 保留，下周期继续验证）；
+ * 只有 TTL 超时（在 verifyPendingAdjustments 内判定）才加入 rollbacks + clearedParams。
+ */
+function writeBlockedEventsAndDiag(
+  ctx: TickContext,
+  roomName: string,
+  verifyResult: { blockedParams: string[] },
+  pendingBefore: Record<string, PendingValidation>,
+): Record<string, { blockedSinceTick: number; lastCheckedTick: number }> | undefined {
+  if (verifyResult.blockedParams.length === 0) return undefined;
+  const diag: Record<string, { blockedSinceTick: number; lastCheckedTick: number }> = {};
+  for (const param of verifyResult.blockedParams) {
+    const pv = pendingBefore[param];
+    const blockedSinceTick = pv?.blockedSinceTick ?? ctx.tick;
+    const blockedDurationTicks = ctx.tick - blockedSinceTick;
+    recordEvent(EventKind.TuningBlocked, roomName, [
+      tuningParamCode(param),
+      pv?.preAdjustValue ?? 0,
+      blockedDurationTicks,
+    ]);
+    console.log(
+      `[${ctx.tick}] tuning/${roomName}: BLOCKED ${param} (blockedSince Δ=${blockedDurationTicks}, preAdjustValue=${pv?.preAdjustValue ?? 0})`,
+    );
+    diag[param] = {
+      blockedSinceTick,
+      lastCheckedTick: ctx.tick,
+    };
+  }
+  return diag;
+}
+
+/**
+ * 应用 evaluation 产出的调整：写 Memory + 写 pendingValidation + 写 TuningAdjust 事件。
+ */
+function applyEvaluationAdjustments(
+  ctx: TickContext,
+  roomName: string,
+  roomTuning: RoomTuningState,
+  evaluation: { adjustments: Array<{ param: string; oldValue: number; newValue: number; reason: string }>; pendingValidations?: Record<string, PendingValidation> },
+): void {
+  for (const adj of evaluation.adjustments) {
+    applyAdjustment(roomName, adj.param, adj.newValue, ctx.tick);
+    // adjustDirectionCode: 0=up, 1=down
+    const directionCode = adj.newValue > adj.oldValue ? 0 : 1;
+    recordEvent(EventKind.TuningAdjust, roomName, [
+      tuningParamCode(adj.param),
+      adj.oldValue,
+      adj.newValue,
+      directionCode,
+    ]);
+    console.log(
+      `[${ctx.tick}] tuning/${roomName}: ${adj.param} ${adj.oldValue}→${adj.newValue} (${adj.reason})`,
+    );
+  }
+
+  // 写 pendingValidation（覆盖旧记录，adjustTick 由 evaluator 填入）
+  if (evaluation.pendingValidations) {
+    if (!roomTuning.pendingValidation) {
+      roomTuning.pendingValidation = {};
+    }
+    for (const param in evaluation.pendingValidations) {
+      roomTuning.pendingValidation[param] = evaluation.pendingValidations[param]!;
+    }
+  }
+}
+
+/**
+ * 保存 lastEval 诊断快照（含 pending/frozen 精简状态，控体积不存完整快照）。
+ *
+ * P3/P1 修复（附录 E.2）：通过 diagnostics 参数注入 verifySkipped（危机期 verify 跳过原因）
+ * 与 blockedParams（人口合同 blocked 诊断），避免修改 evaluation 数据结构。
+ */
+function saveLastEval(
+  ctx: TickContext,
+  roomName: string,
+  evaluation: { adjustments: Array<{ param: string; oldValue: number; newValue: number; reason: string }>; signals: Record<string, number>; skipped?: string; newTrend: Record<string, "up" | "down" | "none"> },
+  roomTuning: RoomTuningState,
+  diagnostics?: {
+    /** P3：verify pass 被跳过的原因（危机/低 bucket/rcl 过低）。 */
+    verifySkipped?: string;
+    /** P1：人口合同 blocked 参数诊断。 */
+    blockedParams?: Record<string, { blockedSinceTick: number; lastCheckedTick: number }>;
+  },
+): void {
+  if (!Memory.kernel!.tuning!.lastEval) {
+    Memory.kernel!.tuning!.lastEval = {};
+  }
+  const pendingDiag = buildPendingDiag(roomTuning.pendingValidation);
+  const frozenDiag = buildFrozenDiag(roomTuning.frozenParams);
+  // 用展开装配可选字段，避免复杂索引类型表达式；新字段类型由 global.d.ts 登记
+  Memory.kernel!.tuning!.lastEval[roomName] = {
+    tick: ctx.tick,
+    adjustments: evaluation.adjustments.map(a => `${a.param}=${a.oldValue}→${a.newValue}`),
+    signals: evaluation.signals,
+    ...(evaluation.skipped !== undefined ? { skipped: evaluation.skipped } : {}),
+    ...(diagnostics?.verifySkipped ? { verifySkipped: diagnostics.verifySkipped } : {}),
+    trend: evaluation.newTrend,
+    ...(pendingDiag ? { pendingValidations: pendingDiag } : {}),
+    ...(frozenDiag ? { frozenParams: frozenDiag } : {}),
+    ...(diagnostics?.blockedParams ? { blockedParams: diagnostics.blockedParams } : {}),
+  };
+}
+
+/** 构造 pendingValidation 精简诊断（不含 preAdjustSignals 完整快照，控体积）。 */
+function buildPendingDiag(
+  pending: Record<string, PendingValidation> | undefined,
+): Record<string, { adjustTick: number; expectedDirection: "improve" | "worsen"; adjustDirection: "up" | "down"; contractBlocked?: boolean }> | undefined {
+  if (!pending || Object.keys(pending).length === 0) return undefined;
+  const result: Record<string, { adjustTick: number; expectedDirection: "improve" | "worsen"; adjustDirection: "up" | "down"; contractBlocked?: boolean }> = {};
+  for (const param in pending) {
+    const pv = pending[param]!;
+    const diag: { adjustTick: number; expectedDirection: "improve" | "worsen"; adjustDirection: "up" | "down"; contractBlocked?: boolean } = {
+      adjustTick: pv.adjustTick,
+      expectedDirection: pv.expectedDirection,
+      adjustDirection: pv.adjustDirection,
+    };
+    if (pv.contractBlocked) diag.contractBlocked = true;
+    result[param] = diag;
+  }
+  return result;
+}
+
+/** 构造 frozenParams 精简诊断。 */
+function buildFrozenDiag(
+  frozen: Record<string, FrozenParamState> | undefined,
+): Record<string, { frozenUntil: number; rollbackCount: number; reason: string }> | undefined {
+  if (!frozen || Object.keys(frozen).length === 0) return undefined;
+  const result: Record<string, { frozenUntil: number; rollbackCount: number; reason: string }> = {};
+  for (const param in frozen) {
+    const fp = frozen[param]!;
+    result[param] = {
+      frozenUntil: fp.frozenUntil,
+      rollbackCount: fp.rollbackCount,
+      reason: fp.reason,
+    };
+  }
+  return result;
 }
 
 // ─── 信号聚合 ───────────────────────────────────────────────

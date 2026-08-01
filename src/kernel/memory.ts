@@ -437,6 +437,82 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 19,
+    to: 20,
+    run: () => {
+      // v20：tuning 改进 A — 新增 pendingValidation + frozenParams 字段。
+      // 设计决策（参考 v18 baselineVersion 风格）：迁移只做「建档 + 畸形自愈」
+      // 不主动写字段值。tuning-engine 是 pendingValidation/frozenParams 的唯一写者。
+      //
+      // 自愈规则：
+      //   - pendingValidation 非对象 → 删除整个字段
+      //   - pendingValidation 条目缺关键字段（adjustTick 非数字 / preAdjustValue 非数字 /
+      //     expectedDirection 非字符串 / adjustDirection 非字符串）→ 删除该条目
+      //   - expectedDirection 必须 ∈ {"improve", "worsen"}
+      //   - adjustDirection 必须 ∈ {"up", "down"}
+      //   - frozenParams 非对象 → 删除整个字段
+      //   - frozenParams 条目缺关键字段（frozenAt 非数字 / frozenUntil 非数字 /
+      //     rollbackCount 非数字）→ 删除该条目
+      //
+      // 幂等：仅畸形数据自愈，不写字段值。
+      // Step 0 清空 rooms 后此迁移为空操作（rooms 已空），保留无害。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+      const tuning = kernel.tuning as Record<string, unknown> | undefined;
+      if (!tuning || typeof tuning !== "object") return;
+      const rooms = (tuning as Record<string, unknown>).rooms as Record<string, any> | undefined;
+      if (!rooms) return;
+
+      for (const roomName in rooms) {
+        const room = rooms[roomName];
+        if (!room || typeof room !== "object") continue;
+
+        // 自愈 pendingValidation
+        if (room.pendingValidation !== undefined) {
+          if (typeof room.pendingValidation !== "object" || room.pendingValidation === null) {
+            delete room.pendingValidation;
+          } else {
+            for (const param in room.pendingValidation) {
+              const pv = room.pendingValidation[param];
+              if (!pv || typeof pv !== "object" ||
+                  typeof pv.adjustTick !== "number" ||
+                  typeof pv.preAdjustValue !== "number" ||
+                  typeof pv.expectedDirection !== "string" ||
+                  typeof pv.adjustDirection !== "string" ||
+                  (pv.expectedDirection !== "improve" && pv.expectedDirection !== "worsen") ||
+                  (pv.adjustDirection !== "up" && pv.adjustDirection !== "down")) {
+                delete room.pendingValidation[param];
+              }
+            }
+            if (Object.keys(room.pendingValidation).length === 0) {
+              delete room.pendingValidation;
+            }
+          }
+        }
+
+        // 自愈 frozenParams
+        if (room.frozenParams !== undefined) {
+          if (typeof room.frozenParams !== "object" || room.frozenParams === null) {
+            delete room.frozenParams;
+          } else {
+            for (const param in room.frozenParams) {
+              const fp = room.frozenParams[param];
+              if (!fp || typeof fp !== "object" ||
+                  typeof fp.frozenAt !== "number" ||
+                  typeof fp.frozenUntil !== "number" ||
+                  typeof fp.rollbackCount !== "number") {
+                delete room.frozenParams[param];
+              }
+            }
+            if (Object.keys(room.frozenParams).length === 0) {
+              delete room.frozenParams;
+            }
+          }
+        }
+      }
+    },
+  },
 ];
 
 /**

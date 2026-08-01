@@ -22,6 +22,17 @@ export interface ParamBounds {
   step: number;
   /** 同一参数两次调整之间的最小间隔 tick。 */
   cooldownTicks: number;
+  /**
+   * 改进 A（P1，附录 B-P1）：效果显现最小 tick — 调整后需等待此 tick 数
+   * 才验证效果。人口类参数需等 creep 孵化(~150 tick) + 老 creep 死亡
+   * (CREEP_LIFE_TIME 部分) + 效果在遥测窗口显现(500 tick) = 1500 tick
+   * = 3 个评估周期，确保效果在 EVAL_WINDOW_SIZE(1000 tick) 窗口内充分显现。
+   *
+   * verifyDelay 必须 ≥ cooldownTicks，否则验证 pass 在冷却期内触发，
+   * evaluator 的 isInCooldown 会拦截反向调整，但验证本身无意义（效果未显现）。
+   * 当前所有参数 verifyDelay 统一 1500（无立即生效类参数）。
+   */
+  verifyDelay: number;
 }
 
 /**
@@ -45,6 +56,7 @@ export const TUNING_BOUNDS: Readonly<Record<string, ParamBounds>> = {
     ceiling: 8,
     step: 1,
     cooldownTicks: 1000,
+    verifyDelay: 1500,
   },
   "hauler.minCount": {
     param: "hauler.minCount",
@@ -52,6 +64,7 @@ export const TUNING_BOUNDS: Readonly<Record<string, ParamBounds>> = {
     ceiling: 4,
     step: 1,
     cooldownTicks: 1000,
+    verifyDelay: 1500,
   },
   "harvester.maxCount": {
     param: "harvester.maxCount",
@@ -59,6 +72,7 @@ export const TUNING_BOUNDS: Readonly<Record<string, ParamBounds>> = {
     ceiling: 6,
     step: 1,
     cooldownTicks: 1000,
+    verifyDelay: 1500,
   },
   "upgrader.maxCount": {
     param: "upgrader.maxCount",
@@ -66,6 +80,7 @@ export const TUNING_BOUNDS: Readonly<Record<string, ParamBounds>> = {
     ceiling: 4,
     step: 1,
     cooldownTicks: 1000,
+    verifyDelay: 1500,
   },
   "builder.maxCount": {
     param: "builder.maxCount",
@@ -73,8 +88,26 @@ export const TUNING_BOUNDS: Readonly<Record<string, ParamBounds>> = {
     ceiling: 6,
     step: 1,
     cooldownTicks: 1000,
+    verifyDelay: 1500,
   },
 };
+
+// ─── 改进 A 冻结机制常量（附录 D.5）──────────────────────────
+
+/**
+ * 连续回滚次数达到此阈值时冻结参数。
+ * 设计依据（附录 B-P3）：信号不稳定的参数会无限「上调→回滚」循环，
+ * 每次消耗 2000 tick 与 Memory 写入。3 次是「不是偶发噪声而是结构性
+ * 信号问题」的合理证据水位。
+ */
+export const ROLLBACK_FREEZE_THRESHOLD = 3;
+
+/**
+ * 参数冻结持续时间（tick）。
+ * 10000 tick ≈ 2 个完整振荡周期，让信号稳定后自动解冻。
+ * 到期后参数从评估排除名单移除，恢复正常评估。
+ */
+export const FROZEN_DURATION = 10000;
 
 // ─── Storage 阈值按 RCL 分档（改进 C）─────────────────────────
 

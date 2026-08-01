@@ -135,7 +135,7 @@ describe("migration v18 → v19（demand 迟滞状态建档）", () => {
     expect(r2.distScaleUpSince).toBeUndefined();
   });
 
-  it("已是 v19 的新 Memory → 跳过迁移", () => {
+  it("已是 v19 的新 Memory → v18→v19 迁移跳过（后续 v19→v20 仍会执行）", () => {
     (globalThis as any).Memory = {
       schemaVersion: 19,
       creeps: {},
@@ -144,7 +144,10 @@ describe("migration v18 → v19（demand 迟滞状态建档）", () => {
 
     runMigrations();
 
-    expect((globalThis as any).Memory.schemaVersion).toBe(19);
+    // v18→v19 步骤跳过（已是 v19）；但 v19→v20 步骤仍会执行，
+    // 最终版本升到 CONFIG.memory.schemaVersion（当前为 20）。
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
+    // rooms.W1N1 内容不受 tuning 迁移影响（v20 只触及 kernel.tuning.rooms）。
     expect((globalThis as any).Memory.rooms.W1N1).toEqual({});
   });
 });

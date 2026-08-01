@@ -782,7 +782,7 @@ describe("tuning-engine — P1-I baselineVersion 版本戳", () => {
 
     const tuning = (globalThis as any).Memory.kernel.tuning;
     // baselineVersion 被定版为 CONFIG 当前值。
-    expect(tuning.baselineVersion).toBe(1);
+    expect(tuning.baselineVersion).toBe(CONFIG.tuning.baselineVersion);
     // 旧 rooms 覆盖被清空（清零重来语义）—— 实际行为是清空 rooms 后
     // tuning-engine 立即评估重建空 RoomTuningState（roleBounds 为空），
     // 故断言「W8N5（无快照不评估）应消失」「W7N4 旧覆盖被清」。
@@ -805,7 +805,7 @@ describe("tuning-engine — P1-I baselineVersion 版本戳", () => {
     (globalThis as any).Memory.kernel = {
       tuning: {
         lastTuned: 4500,
-        baselineVersion: 1, // 与 CONFIG.tuning.baselineVersion 一致
+        baselineVersion: CONFIG.tuning.baselineVersion, // 与 CONFIG.tuning.baselineVersion 一致
         rooms: {
           W7N4: {
             roleBounds: { hauler: { maxCount: 7 } },
@@ -821,14 +821,14 @@ describe("tuning-engine — P1-I baselineVersion 版本戳", () => {
     tuningEngineSystem.run(ctx);
 
     const tuning = (globalThis as any).Memory.kernel.tuning;
-    expect(tuning.baselineVersion).toBe(1);
+    expect(tuning.baselineVersion).toBe(CONFIG.tuning.baselineVersion);
     // 版本匹配 → rooms 保留。
     expect(tuning.rooms.W7N4.roleBounds.hauler.maxCount).toBe(7);
   });
 
   it("CONFIG 升版后 → 旧版本下的覆盖被清空", () => {
-    // 模拟 CONFIG 升版后的场景：Memory 中 baselineVersion=1（旧版），
-    // CONFIG.tuning.baselineVersion 已经升到 2（mock 模拟）。
+    // 模拟 CONFIG 升版后的场景：Memory 中 baselineVersion 为当前版本（旧版），
+    // CONFIG.tuning.baselineVersion 已经升到下一版（mock 模拟）。
     const roomName = "W7N4";
     const econ = buildEconomyRing(roomName, 15);
     const cpu = buildCpuRing(15);
@@ -836,10 +836,11 @@ describe("tuning-engine — P1-I baselineVersion 版本戳", () => {
 
     setupCreeps(roomName, { hauler: 2, harvester: 2 });
     (globalThis as any).Memory.rooms = { [roomName]: { buildQueue: [] } };
+    const original = CONFIG.tuning.baselineVersion;
     (globalThis as any).Memory.kernel = {
       tuning: {
         lastTuned: 4500,
-        baselineVersion: 1, // 旧版
+        baselineVersion: original, // 旧版（当前 CONFIG 版本）
         rooms: {
           W7N4: {
             roleBounds: { hauler: { maxCount: 8 } }, // 旧基线下产生的覆盖
@@ -849,10 +850,10 @@ describe("tuning-engine — P1-I baselineVersion 版本戳", () => {
       },
     };
 
-    // mock CONFIG.tuning.baselineVersion 升到 2（模拟基线升级后的世界）。
-    const original = CONFIG.tuning.baselineVersion;
+    // mock CONFIG.tuning.baselineVersion 升到下一版（模拟基线升级后的世界）。
+    const nextBaseline = original + 1;
     Object.defineProperty(CONFIG.tuning, "baselineVersion", {
-      value: 2,
+      value: nextBaseline,
       configurable: true,
       writable: true,
     });
@@ -865,7 +866,7 @@ describe("tuning-engine — P1-I baselineVersion 版本戳", () => {
 
       const tuning = (globalThis as any).Memory.kernel.tuning;
       // 版本被更新为新基线。
-      expect(tuning.baselineVersion).toBe(2);
+      expect(tuning.baselineVersion).toBe(nextBaseline);
       // 旧覆盖被清零——清零后立即评估会重建空 RoomTuningState，
       // 故断言「roleBounds 为空（旧 hauler.maxCount=8 已清除）」。
       expect(tuning.rooms.W7N4.roleBounds).toEqual({});
@@ -877,5 +878,177 @@ describe("tuning-engine — P1-I baselineVersion 版本戳", () => {
         writable: true,
       });
     }
+  });
+});
+
+// ─── P3：verify pass 继承全局门禁（附录 E.2 修复）──────────────
+
+describe("tuning-engine — P3 verify 全局门禁", () => {
+  it("危机期（crisisRatio > 0.3）verify 跳过，pending 保留，参数仍被 pending-lock 排除", () => {
+    const roomName = "W7N4";
+    // 构造危机信号：15 个采样点，前 6 个 crisis（ph=2）→ crisisRatio = 0.4 > 0.3
+    const econ = createRingBuffer<EconomySample>(300);
+    for (let i = 0; i < 15; i++) {
+      ringPush(econ, {
+        t: 1000 + i * 50, r: roomName,
+        rs: 50000, d: 50, ds: 5, p: 10,
+        ea: 4000, ec: 8000, se: 20000, hc: 2, sc: 2,
+        ph: i < 6 ? 2 : 4, // 前 6 个 crisis
+      });
+    }
+    const cpu = buildCpuRing(15); // ti=0 (healthy)
+    setupTimeseries(econ, cpu);
+
+    setupCreeps(roomName, { hauler: 7, harvester: 2 }); // hauler=7（人口合同满足）
+    (globalThis as any).Memory.rooms = { [roomName]: { buildQueue: [] } };
+
+    // 预置 pending：hauler.maxCount 6→7 上调，adjustTick=3000（verifyDelay 1500 已过）
+    // 但危机期 verify 应跳过，pending 保留
+    (globalThis as any).Memory.kernel = {
+      tuning: {
+        lastTuned: 3000,
+        baselineVersion: CONFIG.tuning.baselineVersion,
+        rooms: {
+          [roomName]: {
+            roleBounds: { hauler: { maxCount: 7 } },
+            lastAdjusted: { "hauler.maxCount": 3000 },
+            pendingValidation: {
+              "hauler.maxCount": {
+                preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, avgReserveDelta: 50, roleCount: 6 },
+                expectedDirection: "improve",
+                adjustDirection: "up",
+                adjustTick: 3000,
+                preAdjustValue: 6,
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const snap = snapshotWithContainers(roomName, 0.95); // container 满（信号恶化）
+    const ctx = buildContext([snap], mockBudget("healthy"), 5000); // T=5000，verifyDelay(1500) 已过
+
+    tuningEngineSystem.run(ctx);
+
+    const tuning = (globalThis as any).Memory.kernel.tuning;
+    // P3：危机期 verify 跳过 → pending 保留
+    expect(tuning.rooms[roomName].pendingValidation).toBeDefined();
+    expect(tuning.rooms[roomName].pendingValidation["hauler.maxCount"]).toBeDefined();
+    // verifySkipped 诊断记录原因
+    expect(tuning.lastEval[roomName].verifySkipped).toBe("verify_skipped_crisis");
+    // 危机期 evaluateTuning 也跳过（skipped=economy_unstable）
+    expect(tuning.lastEval[roomName].skipped).toBe("economy_unstable");
+    // 无回滚事件、无调整
+    expect(tuning.lastEval[roomName].adjustments).toHaveLength(0);
+  });
+
+  it("危机解除后 verify 恢复执行，pending 被消费", () => {
+    const roomName = "W7N4";
+    // 第一阶段：危机期（同上一测试），verify 跳过
+    const econCrisis = createRingBuffer<EconomySample>(300);
+    for (let i = 0; i < 15; i++) {
+      ringPush(econCrisis, {
+        t: 1000 + i * 50, r: roomName,
+        rs: 50000, d: 50, ds: 5, p: 10,
+        ea: 4000, ec: 8000, se: 20000, hc: 2, sc: 2,
+        ph: i < 6 ? 2 : 4,
+      });
+    }
+    const cpu = buildCpuRing(15);
+    setupTimeseries(econCrisis, cpu);
+
+    setupCreeps(roomName, { hauler: 7, harvester: 2 });
+    (globalThis as any).Memory.rooms = { [roomName]: { buildQueue: [] } };
+    // preAdjustSignals.spawnFillRatio=0.7：高于健康期的 0.625，
+    // 使次要证据（spawnFill↑）也不改善 → verify 恢复后触发回滚
+    (globalThis as any).Memory.kernel = {
+      tuning: {
+        lastTuned: 3000,
+        baselineVersion: CONFIG.tuning.baselineVersion,
+        rooms: {
+          [roomName]: {
+            roleBounds: { hauler: { maxCount: 7 } },
+            lastAdjusted: { "hauler.maxCount": 3000 },
+            pendingValidation: {
+              "hauler.maxCount": {
+                preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.7, avgReserveDelta: 50, roleCount: 6 },
+                expectedDirection: "improve",
+                adjustDirection: "up",
+                adjustTick: 3000,
+                preAdjustValue: 6,
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const snap = snapshotWithContainers(roomName, 0.95);
+    // T=5000：危机期，verify 跳过
+    tuningEngineSystem.run(buildContext([snap], mockBudget("healthy"), 5000));
+    const tuningAfterCrisis = (globalThis as any).Memory.kernel.tuning;
+    expect(tuningAfterCrisis.rooms[roomName].pendingValidation["hauler.maxCount"]).toBeDefined();
+    expect(tuningAfterCrisis.lastEval[roomName].verifySkipped).toBe("verify_skipped_crisis");
+
+    // 第二阶段：危机解除（crisisRatio=0），verify 恢复执行
+    const econHealthy = buildEconomyRing(roomName, 15); // 全部 ph=4（steady），ea=5000/ec=8000 → spawnFill=0.625
+    setupTimeseries(econHealthy, cpu);
+
+    // T=5500：危机解除，verifyDelay 早已过（5500-3000=2500 > 1500）
+    // containerFill 0.8→0.95（恶化）+ spawnFill 0.7→0.625（未改善）→ 回滚
+    tuningEngineSystem.run(buildContext([snap], mockBudget("healthy"), 5500));
+    const tuningAfterRecover = (globalThis as any).Memory.kernel.tuning;
+
+    // verify 恢复执行：pending 被消费（cleared）
+    expect(tuningAfterRecover.rooms[roomName].pendingValidation?.["hauler.maxCount"]).toBeUndefined();
+    expect(tuningAfterRecover.lastEval[roomName].verifySkipped).toBeUndefined();
+    // 信号未改善 → 回滚到 preAdjustValue(6)
+    expect(tuningAfterRecover.rooms[roomName].roleBounds.hauler.maxCount).toBe(6);
+  });
+
+  it("低 bucket（tierRank=2 conserve）verify 跳过，记录 verify_skipped_cpu_tier", () => {
+    const roomName = "W7N4";
+    const econ = buildEconomyRing(roomName, 15); // 健康经济
+    // CPU tier=2 (conserve)
+    const cpu = buildCpuRing(15, { ti: 2 });
+    setupTimeseries(econ, cpu);
+
+    setupCreeps(roomName, { hauler: 7, harvester: 2 });
+    (globalThis as any).Memory.rooms = { [roomName]: { buildQueue: [] } };
+    (globalThis as any).Memory.kernel = {
+      tuning: {
+        lastTuned: 3000,
+        baselineVersion: CONFIG.tuning.baselineVersion,
+        rooms: {
+          [roomName]: {
+            roleBounds: { hauler: { maxCount: 7 } },
+            lastAdjusted: { "hauler.maxCount": 3000 },
+            pendingValidation: {
+              "hauler.maxCount": {
+                preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, avgReserveDelta: 50, roleCount: 6 },
+                expectedDirection: "improve",
+                adjustDirection: "up",
+                adjustTick: 3000,
+                preAdjustValue: 6,
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const snap = snapshotWithContainers(roomName, 0.95);
+    // 注意：tierRank=2 但 budget 仍为 healthy（tuningEngineSystem.run 只检查 budget tier，
+    // 不检查 signals.tierRank；signals.tierRank 由 aggregateSignals 从 CPU ring 算出）
+    const ctx = buildContext([snap], mockBudget("healthy"), 5000);
+
+    tuningEngineSystem.run(ctx);
+
+    const tuning = (globalThis as any).Memory.kernel.tuning;
+    // tierRank=2 → verify 跳过 + evaluate 跳过
+    expect(tuning.rooms[roomName].pendingValidation["hauler.maxCount"]).toBeDefined();
+    expect(tuning.lastEval[roomName].verifySkipped).toBe("verify_skipped_cpu_tier");
+    expect(tuning.lastEval[roomName].skipped).toBe("cpu_tier_conserve_or_worse");
   });
 });
