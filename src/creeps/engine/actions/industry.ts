@@ -30,7 +30,16 @@ export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
         .find(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
 
       if (carriedMineral) {
-        const dest = ac.snapshot.terminal ?? ac.snapshot.storage;
+        // W7 定位（2026-08-01 部署验证）：terminal 总容量 300,000，矿物堆满时
+        // transfer 必返回 ERR_FULL 且被 runAction 静默忽略 → hauler 永久背矿物
+        // 锁死（W7N3 实测 terminal 恰满：energy 10150 + L 289565 + GO 285 =
+        // 300000；每代 hauler 捡 L 后原地罚站至死，房间物流瘫痪）。
+        // 修正：deposit 目标按剩余容量选择——terminal 有空位优先（贸易/工业链），
+        // 满则落 storage（1M 容量兜底，lab 供料同样可读 storage）。
+        const terminalFree = ac.snapshot.terminal
+          ? ac.snapshot.terminal.store.getFreeCapacity()
+          : 0;
+        const dest = terminalFree > 0 ? ac.snapshot.terminal : ac.snapshot.storage;
         if (dest) return { dest, mineral: carriedMineral, phase: "deposit" as const };
         return undefined;
       }

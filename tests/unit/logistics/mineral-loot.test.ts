@@ -7,10 +7,11 @@
  *   2. lootRemains 硬编码只 withdraw 能量 → tombstone 里的矿物无人搬（用户实证：
  *      "带 mineral 的尸体 hauler 只搬能量"）。
  */
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import { updateMode } from "../../../src/creeps/engine/lifecycle";
 import { lootRemains } from "../../../src/creeps/engine/actions/pickup";
 import { harvestMineral } from "../../../src/creeps/engine/actions/harvest";
+import { haulMineralsToStorage } from "../../../src/creeps/engine/actions/industry";
 import { mockCreep, mockContext, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";
 
 beforeEach(() => {
@@ -125,3 +126,37 @@ describe("harvestMineral — 站位以贴 mineral 的 container 为通勤终点�
   });
 });
 
+describe("haulMineralsToStorage — deposit 目标容量感知（W7 定位 2026-08-01）", () => {
+  /** work 模式、背 L 200 的 hauler。 */
+  function carrier() {
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 800, mode: "work" });
+    creep.store = multiStore({ energy: 0, L: 200 }, 800) as never;
+    return creep;
+  }
+
+  function acFor(snapshot: ReturnType<typeof mockSnapshot>) {
+    const ctx = mockContext(snapshot);
+    return { creep: carrier(), snapshot, budget: ctx.budget, ctx } as never;
+  }
+
+  it("terminal 有剩余容量 → 优先 deposit terminal（贸易/工业链）", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 0, capacity: 1000000 });
+    const terminal = mockStructure("terminal", { id: "tm", energy: 0, capacity: 300000 });
+    const snap = mockSnapshot({ storage, terminal });
+
+    const target = haulMineralsToStorage().resolve!(acFor(snap));
+    expect(target).toMatchObject({ dest: terminal, mineral: "L", phase: "deposit" });
+  });
+
+  it("terminal 总容量打满（W7N3 实测：energy 10150 + L 289565 + GO 285 = 300000）→ fallback storage", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 0, capacity: 1000000 });
+    const terminal = mockStructure("terminal", { id: "tm", energy: 10150, capacity: 300000 });
+    // 模拟总容量已满（free = 0）——旧实现仍选 terminal → transfer ERR_FULL 静默
+    // → hauler 永久背矿物锁死（每代 hauler 原地罚站至死）。
+    (terminal.store.getFreeCapacity as ReturnType<typeof vi.fn>).mockReturnValue(0);
+    const snap = mockSnapshot({ storage, terminal });
+
+    const target = haulMineralsToStorage().resolve!(acFor(snap));
+    expect(target).toMatchObject({ dest: storage, mineral: "L", phase: "deposit" });
+  });
+});
