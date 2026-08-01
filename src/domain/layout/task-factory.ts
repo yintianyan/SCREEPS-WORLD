@@ -307,6 +307,48 @@ function linkRolePredicate(
 }
 
 /**
+ * W7N3 定位（2026-08-01）：source link 的可喂性校验。
+ *
+ * 旧放置逻辑只验证「link 贴 source（role=source）+ 可建造」，不验证存在
+ * 「可喂站桩格」——一个可走、未占用、同时贴 source（range<=1，能采）与
+ * 贴 link（range<=1，能灌）的格。W7N3 source-2 实证：link 放 (39,7) 后两个
+ * 双贴格 (38,7)/(39,6) 全是墙，唯一可站格 (37,7) 被 container 占用 →
+ * link 建成即死（能量恒 0），harvester 只能倒 container，该 link 占一个
+ * RCL 槽位且骗过「紧邻 source 即跳过」逻辑永不补位。
+ *
+ * 放置侧在生成任务前用本函数过滤候选；运行时 harvest.ts findSourceLinkStand
+ * 用同一几何约束，两处口径一致。
+ *
+ * 容器格例外：harvester 站桩于 source container 之上（range0 倒能），若 link
+ * 贴容器（range<=1），容器格即有效站位——occupiedSet 会排除容器格，故单独
+ * 传入 containerTiles 放行。
+ */
+export function hasSourceLinkFeedStand(
+  linkX: number,
+  linkY: number,
+  sourceX: number,
+  sourceY: number,
+  terrain: RoomTerrain,
+  occupiedSet: ReadonlySet<number>,
+  containerTiles: ReadonlySet<number>,
+): boolean {
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const x = linkX + dx;
+      const y = linkY + dy;
+      if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+      if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+      if (occupiedSet.has(packPos(x, y)) && !containerTiles.has(packPos(x, y))) continue;
+      if (x === sourceX && y === sourceY) continue; // source 格本身不可作站位
+      if (Math.max(Math.abs(x - sourceX), Math.abs(y - sourceY)) > 1) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * 为 source 生成 link 任务（RCL5+）。
  * source link 紧邻 source 放置，harvester 采矿后直接 transfer 到 link，
  * 由 link 系统瞬移到 controller/storage link，替代 hauler 长途往返。
@@ -337,10 +379,26 @@ export function createSourceLinkTasks(
 
   const remainingSlots = maxLinks - existingLinks - linkSites - queuedLinkCount;
   const limit = Math.min(maxNew, remainingSlots);
+  const terrain = room.getTerrain();
+  const occupiedSet = options.occupiedSet ?? buildOccupiedSet(snapshot, options.minerals);
+  const containerTiles = new Set(snapshot.containers.map(c => packPos(c.pos.x, c.pos.y)));
 
   for (const source of snapshot.sources) {
     if (candidates.length >= limit) break;
-    if (hasAdjacentStructure(source.pos.x, source.pos.y, snapshot, STRUCTURE_LINK)) continue;
+    // W7N3 修复：旧逻辑「紧邻 source 即跳过」会把死 link（无可喂站桩格）也
+    // 当成已覆盖 → 错误跳过、死 link 永不被替换。改为按可喂性判定：
+    // 已有紧邻 link/site 且存在可喂站桩格 → 跳过；死 link → 继续尝试补位。
+    const adjacentLinkFeedable = [
+      ...snapshot.links,
+      ...snapshot.constructionSites.filter(s => s.structureType === STRUCTURE_LINK),
+    ].some(l =>
+      Math.abs(l.pos.x - source.pos.x) <= 1 &&
+      Math.abs(l.pos.y - source.pos.y) <= 1 &&
+      hasSourceLinkFeedStand(
+        l.pos.x, l.pos.y, source.pos.x, source.pos.y, terrain, occupiedSet, containerTiles,
+      ),
+    );
+    if (adjacentLinkFeedable) continue;
     // 角色感知选位：只接受运行时分类为 source 的邻格（闭合放置意图与运行时分类）。
     // source 邻近 storage/controller 时，部分邻格会被 classifyLinkRole 判为
     // storage/controller → harvester 拒灌 → 死 link。谓词过滤从根上避免。
@@ -349,6 +407,13 @@ export function createSourceLinkTasks(
     );
     // 密封守卫：link 是障碍结构，出生即密封或封死邻居的位置不放。
     if (adjacentPos && options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
+      continue;
+    }
+    // 可喂性守卫：候选 link 必须存在可走、未占用的双贴站桩格（贴 source + 贴 link）。
+    // W7N3 source-2 实证：两个双贴格全是墙 → link 建成即死。放置前过滤，防再犯。
+    if (adjacentPos && !hasSourceLinkFeedStand(
+      adjacentPos.x, adjacentPos.y, source.pos.x, source.pos.y, terrain, occupiedSet, containerTiles,
+    )) {
       continue;
     }
     if (adjacentPos) {

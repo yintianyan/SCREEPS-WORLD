@@ -19,6 +19,7 @@ import {
   createSourceLinkTasks,
   createStorageLinkTask,
   createControllerLinkTask,
+  hasSourceLinkFeedStand,
 } from "../../../src/domain/layout/task-factory";
 import { classifyLinkRole } from "../../../src/domain/economy/links";
 import { buildObstaclePositionSet, type ValidationOptions } from "../../../src/domain/layout/validation";
@@ -182,6 +183,67 @@ describe("Link 分配策略 — createSourceLinkTasks", () => {
     // source A 已有 link，source B 没有 → 1 个候选
     expect(candidates).toHaveLength(1);
     expect(candidates[0]!.key).toContain("src2");
+  });
+
+  it("候选 link 无可喂站桩格（双贴格全墙，W7N3 病灶）→ 不生成该 source 的候选", () => {
+    // 复刻 W7N3 source-2 几何：source (10,10) 的 8 个邻格中 7 个是墙，
+    // 唯一可建 link 格 (11,10) 的 7 个非 source 邻格也全是墙 →
+    // harvester 永远站不上双贴格（link 建成即死）。
+    const deadStandTiles = new Set([
+      "9,9", "9,10", "9,11", "10,9", "10,11", "11,9", "11,11", "12,9", "12,10", "12,11",
+    ]);
+    const terrain = {
+      get: (x: number, y: number) => (deadStandTiles.has(`${x},${y}`) ? 1 : 0),
+    } as unknown as RoomTerrain;
+    const room = roomWith(terrain);
+    const snap = snapshotAt(7);
+    const opts = optionsFor(snap);
+
+    const candidates = createSourceLinkTasks(snap, room, opts, 0);
+
+    // src1 (10,10) 的候选被可喂性过滤拒掉；src2 (40,40) 地形平坦正常生成。
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]!.key).toContain("src2");
+  });
+
+  describe("hasSourceLinkFeedStand — 可喂站桩格判定（W7N3 病灶回归）", () => {
+    const flat = { get: () => 0 } as unknown as RoomTerrain;
+    const emptyOcc = new Set<number>();
+    const noContainers = new Set<number>();
+
+    it("双贴格全墙 → 不可喂（W7N3 source-2 实证：link (39,7) 的两个双贴格全是墙）", () => {
+      // link (11,10) 的 7 个非 source 邻格全是墙，source (10,10) 格本身不可站。
+      const wallTiles = new Set(["10,9", "10,11", "11,9", "11,11", "12,9", "12,10", "12,11"]);
+      const terrain = {
+        get: (x: number, y: number) => (wallTiles.has(`${x},${y}`) ? 1 : 0),
+      } as unknown as RoomTerrain;
+
+      expect(hasSourceLinkFeedStand(11, 10, 10, 10, terrain, emptyOcc, noContainers)).toBe(false);
+    });
+
+    it("存在可走、贴 source、贴 link 的空格 → 可喂", () => {
+      // (10,11)：贴 source (10,10) range1、贴 link (11,10) range1。
+      const wallTiles = new Set(["10,9", "11,9", "12,9", "12,10", "12,11", "11,11"]);
+      const terrain = {
+        get: (x: number, y: number) => (wallTiles.has(`${x},${y}`) ? 1 : 0),
+      } as unknown as RoomTerrain;
+
+      expect(hasSourceLinkFeedStand(11, 10, 10, 10, terrain, emptyOcc, noContainers)).toBe(true);
+    });
+
+    it("容器格例外：link 贴 source container → 容器格算有效站位（harvester 站容器上灌 link）", () => {
+      // 唯一双贴格 (10,11) 被 container 占用：occupiedSet 排除它，但 containerTiles 放行。
+      const wallTiles = new Set(["10,9", "11,9", "12,9", "12,10", "12,11", "11,11"]);
+      const terrain = {
+        get: (x: number, y: number) => (wallTiles.has(`${x},${y}`) ? 1 : 0),
+      } as unknown as RoomTerrain;
+      const occupied = new Set<number>();
+      occupied.add(10 * 50 + 11); // 容器格 (10,11)
+      const containers = new Set<number>();
+      containers.add(10 * 50 + 11);
+
+      expect(hasSourceLinkFeedStand(11, 10, 10, 10, terrain, occupied, containers)).toBe(true);
+    });
   });
 
   it("RCL < 5 时返回空", () => {
