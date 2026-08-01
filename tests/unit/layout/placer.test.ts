@@ -359,4 +359,29 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     }
     expect(result.filter(p => p.structureType === STRUCTURE_EXTENSION).length).toBe(60);
   });
+
+  it("扩搜条件：r7 池全被占但池大小 >= 需求 → 仍外扩找到开阔区（W7N3 病灶回归）", () => {
+    // W7N3 实证病灶：破碎房 r7 候选池 53 格 >= 需求 31，但格全部被已有
+    // 结构/密封守卫排除，开阔区在 r7 之外 → 旧实现（只看池大小）永不扩搜，
+    // 每规划周期 0 放置，19 ext/6 lab/3 tower 缺口永远闭合不了。
+    // 回归：预占全部 r7 偶数格（池大小 113 >= 需求 5），新实现必须外扩
+    // 到 r7 之外放满 5 个 extension。
+    const field = computeDistanceField(noWalls);
+    const anchor = { x: 25, y: 25 };
+    const preOccupied = new Set<number>();
+    for (let dx = -7; dx <= 7; dx++) {
+      for (let dy = -7; dy <= 7; dy++) {
+        if (((dx + dy) % 2 + 2) % 2 === 0) {
+          preOccupied.add(packPos(25 + dx, 25 + dy));
+        }
+      }
+    }
+    const result = placeStructures(anchor, field, noWalls, 2, preOccupied, new Map());
+    const extensions = result.filter(p => p.structureType === STRUCTURE_EXTENSION);
+    expect(extensions.length).toBe(5);
+    for (const p of extensions) {
+      // 外扩后的放置必须落在 r7 之外（r7 内已全被占）。
+      expect(Math.abs(p.pos.x - 25) > 7 || Math.abs(p.pos.y - 25) > 7).toBe(true);
+    }
+  });
 });

@@ -402,27 +402,21 @@ export function placeStructures(
   roomName?: string,
 ): ConstraintPlacement[] {
   // ── 自适应搜索半径 ──
-  // 默认 maxRadius=7 的固定候选池在多墙地形 + RCL7-8 高密度（需 ~79 结构）下
+  // 默认 maxRadius=7 的固定候选池在多墙地形 + RCL7-8 高密度（需 ~80 结构）下
   // 会被耗尽：wouldSealLocal 密封守卫随已建结构增多越来越严，固定池里通过密封
   // 守卫的格不够放满全部批次 → 静默少放（尤其最低优先级的 extension，池再小
-  // 连 spawn/tower/lab 也会缺）。修复：候选池容量不足以容纳所需结构总数时，
-  // 自动外扩搜索半径（上限 MAX_SEARCH_RADIUS），让受限地形也能找到足够合法格。
-  // 开阔地形下 radius=7 即满足，行为与旧实现完全一致（无回归）。
-  const totalNeeded = computeTotalNeeded(rcl, committed);
+  // 连 spawn/tower/lab 也会缺）。
+  //
+  // 2026-08-01 扩搜条件修复：旧实现只在「候选池容量 < 需求总数」时外扩 —
+  // 但 W7N3 实证存在「池够大、格全不可放」的破碎房：r7 池 53 格 ≥ 需求 31，
+  // 全部被已有结构/密封守卫排除（开阔区在 r7 外），永不触发扩搜 → 每规划
+  // 周期空转 0 放置，19 ext/6 lab/3 tower 缺口永远闭合不了。
+  // 现改为「一轮放置后仍有缺口 → 外扩重试」（上限 MAX_SEARCH_RADIUS），
+  // 直到放满或半径穷尽。开阔地形首轮即放满，行为与旧实现完全一致。
+  // P2-N 增量外扩保留：buildCandidateGrid 传 prevCandidates + prevRadius，
+  // 只评分新环带格，结果与全量等价（(x,y) tiebreaker 确定性总序）。
   let effectiveRadius = config.maxRadius;
   let candidates = buildCandidateGrid(anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints);
-  // P2-N：增量外扩 — 传 prevCandidates + prevRadius，buildCandidateGrid 只评分新环带格，
-  //   避免每次外扩对全量候选重新评分（opennessAt + energyPenalty 计算）。
-  //   注意：sort 仍是 O(n log n) 全量排序（候选数未减），增量只省评分计算非排序开销。
-  //   结果与全量等价（候选集 + (x,y) tiebreaker 确定性总序相同）。
-  while (candidates.length < totalNeeded && effectiveRadius < MAX_SEARCH_RADIUS) {
-    const prevRadius = effectiveRadius;
-    effectiveRadius++;
-    candidates = buildCandidateGrid(
-      anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints,
-      candidates, prevRadius,
-    );
-  }
 
   const occupied = new Set<number>(preOccupied);
   // 锚点本身被 spawn 占用
@@ -444,67 +438,85 @@ export function placeStructures(
   if ((remaining[STRUCTURE_SPAWN] ?? 0) > 0) {
     remaining[STRUCTURE_SPAWN]! -= 1;
   }
-  /** 消耗某类型的承诺额度，返回本批次还需放置的数量。 */
-  const deductBatch = (type: string, count: number): number => {
-    const deduct = Math.min(count, remaining[type] ?? 0);
-    if (deduct > 0) remaining[type] = (remaining[type] ?? 0) - deduct;
-    return count - deduct;
-  };
-
   // 收集所有 RCL 批次（派生：数量真相源 = CONTROLLER_STRUCTURES）并按放置优先级排序。
   const batches = buildRclBatches(rcl);
   batches.sort((a, b) => (TYPE_PLACE_ORDER[a.type] ?? 99) - (TYPE_PLACE_ORDER[b.type] ?? 99));
 
-  // 抵扣承诺后的真实缺口（按类型累计）— 供末段缺口告警使用。
-  // 只用 deductBatch 返回值（真实还需放置量），不含已承诺/已建部分，
-  // 避免「全部已建成 → 本周期本就不该再放」时误报缺口。
+  // 抵扣承诺后的真实缺口（按类型累计）— 放置目标 + 末段缺口告警依据。
+  // 逐批次抵扣 ≡ 按类型总量抵扣（同类型批次合计后再扣承诺，顺序无影响），
+  // 与旧 deductBatch 语义逐级等价（含 spawn 锚点豁免）。
+  const batchTotalByType = new Map<string, number>();
+  for (const b of batches) {
+    batchTotalByType.set(b.type, (batchTotalByType.get(b.type) ?? 0) + b.count);
+  }
   const residualNeedByType = new Map<string, number>();
+  for (const [type, total] of batchTotalByType) {
+    const need = Math.max(0, total - (remaining[type] ?? 0));
+    if (need > 0) residualNeedByType.set(type, need);
+  }
+  const placedByType = new Map<string, number>();
 
-  for (const batch of batches) {
-    const { type, count, priority, phase } = batch;
-    const need = deductBatch(type, count);
-    if (need <= 0) continue;
-    residualNeedByType.set(type, (residualNeedByType.get(type) ?? 0) + need);
+  // ── 放置主循环（含扩搜重试）──
+  for (;;) {
+    for (const batch of batches) {
+      const { type, priority, phase } = batch;
+      const need = (residualNeedByType.get(type) ?? 0) - (placedByType.get(type) ?? 0);
+      if (need <= 0) continue;
 
-    // Lab 特殊处理：集群放置
-    if (type === STRUCTURE_LAB) {
-      const labResult = placeLabCluster(need, candidates, occupied, getTerrain, labPositions);
-      for (const pos of labResult) {
-        labPositions.push(pos);
+      // Lab 特殊处理：集群放置
+      if (type === STRUCTURE_LAB) {
+        const labResult = placeLabCluster(need, candidates, occupied, getTerrain, labPositions);
+        for (const pos of labResult) {
+          labPositions.push(pos);
+          placements.push({
+            key: placementKey(type, pos.x, pos.y),
+            pos,
+            structureType: type,
+            priority,
+            phase,
+          });
+        }
+        placedByType.set(type, (placedByType.get(type) ?? 0) + labResult.length);
+        continue;
+      }
+
+      // 通用贪心放置
+      let placed = 0;
+      for (const c of candidates) {
+        if (placed >= need) break;
+        const packed = packPos(c.x, c.y);
+        if (occupied.has(packed)) continue;
+
+        // 密封守卫（障碍结构）
+        const isObstacle = type !== STRUCTURE_ROAD && type !== STRUCTURE_CONTAINER;
+        if (isObstacle && wouldSealLocal(
+          c.x, c.y, getTerrain, occupied, config.sealTolerance?.[type] ?? 0,
+        )) continue;
+
+        occupied.add(packed);
         placements.push({
-          key: placementKey(type, pos.x, pos.y),
-          pos,
+          key: placementKey(type, c.x, c.y),
+          pos: { x: c.x, y: c.y },
           structureType: type,
           priority,
           phase,
         });
+        placed++;
       }
-      continue;
+      placedByType.set(type, (placedByType.get(type) ?? 0) + placed);
     }
 
-    // 通用贪心放置
-    let placed = 0;
-    for (const c of candidates) {
-      if (placed >= need) break;
-      const packed = packPos(c.x, c.y);
-      if (occupied.has(packed)) continue;
-
-      // 密封守卫（障碍结构）
-      const isObstacle = type !== STRUCTURE_ROAD && type !== STRUCTURE_CONTAINER;
-      if (isObstacle && wouldSealLocal(
-        c.x, c.y, getTerrain, occupied, config.sealTolerance?.[type] ?? 0,
-      )) continue;
-
-      occupied.add(packed);
-      placements.push({
-        key: placementKey(type, c.x, c.y),
-        pos: { x: c.x, y: c.y },
-        structureType: type,
-        priority,
-        phase,
-      });
-      placed++;
+    // 缺口是否全部闭合；未闭合且半径未穷尽 → 外扩重试。
+    let remainingNeed = 0;
+    for (const [type, need] of residualNeedByType) {
+      remainingNeed += Math.max(0, need - (placedByType.get(type) ?? 0));
     }
+    if (remainingNeed === 0 || effectiveRadius >= MAX_SEARCH_RADIUS) break;
+    effectiveRadius++;
+    candidates = buildCandidateGrid(
+      anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints,
+      candidates, effectiveRadius - 1,
+    );
   }
 
   // ── 放置缺口可观测性 ──
@@ -513,10 +525,6 @@ export function placeStructures(
   // 现按类型对比真实缺口（抵扣承诺后）与实际放置，缺口即告警，标明搜索半径已扩
   // 到上限的事实——提示房间地形过于破碎，需人工介入（换锚点 / 接受降级 / 手动规划）。
   // 频率：layout-planner 每 50 tick 规划一次，告警至多每 50 tick 一条，可接受。
-  const placedByType = new Map<string, number>();
-  for (const p of placements) {
-    placedByType.set(p.structureType, (placedByType.get(p.structureType) ?? 0) + 1);
-  }
   for (const [type, needed] of residualNeedByType) {
     const placedCount = placedByType.get(type) ?? 0;
     if (placedCount < needed) {
@@ -529,30 +537,6 @@ export function placeStructures(
   }
 
   return placements;
-}
-
-/**
- * 计算指定 RCL 下需放置的结构总数（承诺抵扣后）。
- *
- * 供自适应搜索半径判定候选池是否足够：累计 RCL2..rcl 各批次需求，
- * 扣除 committed 已承诺量（与 placeStructures 主循环的 deductBatch 同口径），
- * 得到真实缺口总数。spawn 承诺扣 1（初始锚点 spawn 不在批次内，与主逻辑一致）。
- *
- * 纯函数 — 不访问 Game/Memory。
- */
-function computeTotalNeeded(rcl: number, committed: ReadonlyMap<string, number>): number {
-  const remaining = new Map<string, number>(committed);
-  const spawnCommitted = remaining.get(STRUCTURE_SPAWN) ?? 0;
-  if (spawnCommitted > 0) remaining.set(STRUCTURE_SPAWN, spawnCommitted - 1);
-
-  let total = 0;
-  for (const b of buildRclBatches(rcl)) {
-    const committedCount = remaining.get(b.type) ?? 0;
-    const deduct = Math.min(b.count, committedCount);
-    if (deduct > 0) remaining.set(b.type, committedCount - deduct);
-    total += b.count - deduct;
-  }
-  return total;
 }
 
 /**
