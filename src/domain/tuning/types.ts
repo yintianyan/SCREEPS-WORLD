@@ -51,6 +51,12 @@ export interface TuningSignals {
   builderCount: number;
   /** 当前 buildQueue 中 queued 状态的任务数。 */
   buildQueueBacklog: number;
+  /**
+   * P1-2：最满 source 的填充率 (0.0–1.0)。
+   * srcRatio > 0.9 持续 = source 满载但采不动（采集塌方信号）。
+   * 配合 RoomMemory.phase.srcStallTicks 判断是否强制解冻关键参数。
+   */
+  srcRatio: number;
 
   // ── CPU 信号（来自 CPU ring buffer，全局聚合）──
   /** 当前 CPU tier rank (0=healthy, 1=guarded, 2=conserve, 3=recovery)。 */

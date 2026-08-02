@@ -304,6 +304,18 @@ export function evaluateDemand(
     builderPressureState: roomCtx.prevHysteresis?.builderPressureState,
   };
 
+  // P0-3：读取 churnFreezeUntil，构造冻结角色集合。
+  // 熔断期间跳过对应角色评估 — spawn-manager 在 cleanQueue 后写入，
+  // demand 此处读取。P0 worker 恢复路径（livingHarvesters===0）绝对不冻结，
+  // 这是 rcl1-survival 的生命线（见下方 P0 块的早期 return）。
+  const frozenRoles = new Set<string>();
+  const roomMem = Memory.rooms[home];
+  if (roomMem?.churnFreezeUntil) {
+    for (const [role, until] of Object.entries(roomMem.churnFreezeUntil)) {
+      if (typeof until === "number" && tick < until) frozenRoles.add(role);
+    }
+  }
+
   // 单次遍历获取所有角色计数。
   // pending 计数带 home 过滤 — sponsor 房代孵的拓荒请求（home 指向新房）
   // 寄宿在本房队列，不得计入本房人口预算。
@@ -367,6 +379,8 @@ export function evaluateDemand(
 
   // P1：Harvester — 基于实际占用分配到最少拥挤的 source。
   // 使用本地占用副本，确保同一轮多次孵化时后续迭代能看到前面的分配。
+  // P0-3：churn 熔断期间跳过 harvester 评估（frozenRoles 守卫）。
+  // P0 worker 恢复路径已在上方早期 return，不受此守卫影响 — rcl1-survival 生命线不冻结。
   const harvesterConfig = getRoleBounds("harvester", home);
   const harvesterLiving = counts.harvester ?? 0;
   const harvesterTotal = harvesterLiving + pending.harvester;
@@ -388,7 +402,7 @@ export function evaluateDemand(
   const harvesterTarget = storageNearFull
     ? Math.min(snapshot.sources.length, harvesterConfig.minCount)
     : Math.min(harvesterConfig.minCount, saturationTarget);
-  if (harvesterTotal < harvesterTarget) {
+  if (harvesterTotal < harvesterTarget && !frozenRoles.has("harvester")) {
     // 专职矿工口径的占用映射（排除 worker 等流动角色），循环内累加，
     // 避免同轮重复分配同一 source。
     const localOccupancy = buildHarvesterOccupancy(creeps, queue, home);
@@ -678,7 +692,7 @@ export function evaluateDemand(
   const rcl8NoUpgrade = snapshot.rcl >= 8 && !hasDowngradeRisk;
   const allowUpgrader = (colonyState === "normal" || hasDowngradeRisk) && !rcl8NoUpgrade;
 
-  if (allowUpgrader) {
+  if (allowUpgrader && !frozenRoles.has("upgrader")) {
     const upgraderConfig = getRoleBounds("upgrader", home);
     const upgraderTotal = (counts.upgrader ?? 0) + pending.upgrader;
 
@@ -769,7 +783,14 @@ export function evaluateDemand(
     r => r.hits < r.hitsMax * CONFIG.construction.roadRepairThreshold,
   ).length;
   const roadRepairDemand = roadsNeedingRepair >= CONFIG.construction.roadRepairBuilderFloor;
-  if (colonyState !== "bootstrap" && (snapshot.myConstructionSites.length > 0 || roadRepairDemand)) {
+  // P1-1：纳入 buildQueue backlog（保守权重 0.5）
+  // site 数受全局/单房配额限制（默认 3）看不到 backlog，backlogWeighted 补盲。
+  // 沿用 roomMem 读取模式（与 churnFreezeUntil 同源），construction-manager 每 tick 维护。
+  const queuedBacklog = roomMem?.buildQueue
+    ? roomMem.buildQueue.filter(t => t.state === "queued").length
+    : 0;
+  const backlogWeighted = Math.floor(queuedBacklog * 0.5);
+  if (colonyState !== "bootstrap" && (snapshot.myConstructionSites.length > 0 || roadRepairDemand || backlogWeighted > 0) && !frozenRoles.has("builder")) {
     const builderConfig = getRoleBounds("builder", home);
     const builderTotal = (counts.builder ?? 0) + pending.builder;
     const economyCap = (counts.harvester ?? 0) + (counts.worker ?? 0) + 1;
@@ -779,6 +800,8 @@ export function evaluateDemand(
       Math.max(
         builderConfig.minCount,
         snapshot.myConstructionSites.length,
+        // P1-1：backlog 积压按 0.5 权重折算编制，加速消化建造队列。
+        backlogWeighted,
         // 纯维修需求保底 1 个 — minCount 可能为 0（成熟房 tuning 收缩后）。
         roadRepairDemand ? 1 : 0,
       ),
@@ -850,6 +873,10 @@ export function evaluateDemand(
     const role = creep.role;
     const config = roleConfigs[role];
     if (!config) continue;
+
+    // P0-3：churn 熔断期间不替换 frozen 角色 — 替换会立即重建请求，
+    // 与熔断「暂停该 role 孵化」语义冲突。worker 不冻结（P0 生命线）。
+    if (frozenRoles.has(role)) continue;
 
     // 门禁 1：角色存在性 — worker 是紧急角色，harvester 建立后不再替换。
     if (role === "worker" && (counts.harvester ?? 0) + (counts.worker ?? 0) > 1) continue;

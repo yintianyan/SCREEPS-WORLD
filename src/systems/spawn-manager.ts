@@ -8,6 +8,7 @@ import { cleanQueue, removeRequestsByRole, sortQueue, submitRequest } from "../d
 import { selectRecycleCandidates } from "../domain/spawn/recycle";
 import { moveToTarget, moveTowardRoom } from "../creeps/movement";
 import { recordSkip } from "../kernel/memory";
+import { globalCache } from "../kernel/global-cache";
 
 /**
  * 孵化管理器 — 唯一调用 spawnCreep 的模块。
@@ -58,20 +59,36 @@ export const spawnManagerSystem: System = {
         queue,
         ctx.tick,
         CONFIG.spawn.maxRetries,
-        (key, reason) => recordSkip(`spawn/churn/${key.split(":")[0]}/${reason}`),
+        (key, reason) => {
+          const role = key.split(":")[0] ?? "";
+          recordSkip(`spawn/churn/${role}/${reason}`);
+          // P0-3：同步写入 per-room churnCounter 供熔断判定。
+          // 格式异常（role 为空）时不计数，防脏数据污染统计。
+          if (role) recordChurn(snapshot.roomName, role, ctx.tick);
+        },
       );
       if (purgedKeys.length > 0) {
         roomMem.spawnBlacklist ??= {};
+        // P0-3：bootstrap/recovery 期间采集角色豁免隔离 — 此时 retries 烧穿
+        // 几乎总是暂时性能量不足（非持久配置错误），隔离会把「等能量」变成
+        // 真死锁（rcl1-survival 回归）。normal/crisis 时采集角色用短冷却 500 tick。
+        const state: ColonyState = roomMem.colonyState ?? "normal";
+        const isBootstrapOrRecovery = state === "bootstrap" || state === "recovery";
         for (const key of purgedKeys) {
-          // 采集角色豁免隔离（与 SP-1 同款）：它们的 retries 烧穿几乎总是
-          // 「能量不足 → 降级失败」的暂时性资源问题（bootstrap 常态），
-          // 不是隔离语义针对的持久性配置错误 — 隔离采集请求 1000 tick
-          // 会把「等能量」变成真死锁（rcl1-survival 回归）。
-          if (key.startsWith("worker:") || key.startsWith("harvester:")) continue;
-          roomMem.spawnBlacklist[key] = ctx.tick + CONFIG.spawn.requestTtl;
-          console.log(`[${ctx.tick}] spawn/${snapshot.roomName}: quarantined ${key} for ${CONFIG.spawn.requestTtl} ticks`);
+          const isCollector = key.startsWith("worker:") || key.startsWith("harvester:");
+          if (isCollector && isBootstrapOrRecovery) continue;
+          // P0-3：采集角色短冷却（500 tick），其他角色长冷却（1000 tick）。
+          // 持续配置错误时 500 tick 后重建会再次失败再次隔离 —
+          // 比 1000 tick 更快进入熔断，比永久豁免避免无限 churn。
+          const ttl = computeQuarantineTtl(key);
+          roomMem.spawnBlacklist[key] = ctx.tick + ttl;
+          console.log(`[${ctx.tick}] spawn/${snapshot.roomName}: quarantined ${key} for ${ttl} ticks`);
         }
       }
+      // P0-3：churn 熔断检查 — 在 cleanQueue 之后、evaluateDemand 之前。
+      // 200 tick 滑窗内同 role churn > 20 次 → 该 role 孵化冻结 100 tick。
+      // demand 读取 churnFreezeUntil 跳过对应角色评估（P0 worker 路径豁免）。
+      checkChurnCircuitBreaker(ctx, roomMem, snapshot.roomName);
       // 到期条目顺手清理 — 防黑名单泄漏为永久封禁。
       if (roomMem.spawnBlacklist) {
         for (const [key, until] of Object.entries(roomMem.spawnBlacklist)) {
@@ -455,4 +472,112 @@ function collectSpawningSummaries(): SpawningSummary[] {
     });
   }
   return result;
+}
+
+// ─── P0-3：spawn churn 熔断 ────────────────────────────────────
+
+/**
+ * Churn 事件记录结构（存 globalCache.__churnCounter[roomName]）。
+ * heap 存储 — global reset 丢失可接受（reset 极少，且持续 churn 会快速重建计数）。
+ */
+interface ChurnRecord {
+  tick: number;
+  role: string;
+}
+
+/** 熔断触发阈值：200 tick 滑窗内同 role churn 次数 > 此值 → 冻结。 */
+const CHURN_THRESHOLD = 20;
+/** 滑窗长度（tick）。 */
+const CHURN_WINDOW = 200;
+/** 熔断时长（tick）。冻结期间该 role 不孵化（P0 worker 路径豁免）。 */
+const CHURN_FREEZE_TICKS = 100;
+
+/**
+ * P0-3：计算请求 key 的隔离冷却时长（tick）。
+ *
+ * 采集角色（harvester/worker）用短冷却（requestTtl / 2 = 500 tick）—
+ * 持续配置错误时更快进入熔断，比永久豁免避免无限 churn。
+ * 其他角色用长冷却（requestTtl = 1000 tick）— 持久性配置错误的标准化隔离。
+ *
+ * @internal 导出仅供单元测试 — 业务代码通过 spawnManagerSystem.run 间接调用。
+ */
+export function computeQuarantineTtl(key: string): number {
+  const isCollector = key.startsWith("worker:") || key.startsWith("harvester:");
+  return isCollector
+    ? Math.floor(CONFIG.spawn.requestTtl / 2)
+    : CONFIG.spawn.requestTtl;
+}
+
+/**
+ * 记录一次 churn 事件到 per-room churnCounter。
+ *
+ * 设计决策：churn 按 per-room 维度统计（spawn 是 per-room 资源，churnFreezeUntil
+ * 也写在 RoomMemory），存 globalCache 按 roomName 索引的 records 数组。
+ * heap 存储 — global reset 丢失可接受（reset 极少，且持续 churn 会快速重建）。
+ *
+ * @internal 导出仅供单元测试 — 业务代码通过 cleanQueue 的 onPurge 回调间接调用。
+ */
+export function recordChurn(roomName: string, role: string, tick: number): void {
+  const g = globalCache() as Record<string, unknown> & { __churnCounter?: Record<string, ChurnRecord[]> };
+  if (!g.__churnCounter) g.__churnCounter = {};
+  const perRoom = g.__churnCounter[roomName];
+  if (perRoom) perRoom.push({ tick, role });
+  else g.__churnCounter[roomName] = [{ tick, role }];
+}
+
+/**
+ * P0-3：检查 churn 熔断状态，触发或清理 per-room 角色 熔断条目。
+ *
+ * 流程：
+ *   1. 读取 globalCache.__churnCounter[roomName]，清理 200 tick 滑窗外的过期记录。
+ *   2. 按 role 聚合，200 tick 内同 role churn > 20 次 → 写入 churnFreezeUntil[role] = tick + 100。
+ *      仅当该 role 当前未冻结时触发（防重复续期 — 一次熔断到期前不再叠加）。
+ *   3. 清理到期熔断条目 + 异常类型自愈（非数字值视为到期清理，防 Memory 泄漏）。
+ *   4. 空对象回收（删除整个 churnFreezeUntil 字段，保持 Memory 精简）。
+ *
+ * 调用时机：cleanQueue 之后、evaluateDemand 之前 — demand 能读到本 tick 新写入的熔断。
+ *
+ * @internal 导出仅供单元测试 — 业务代码通过 spawnManagerSystem.run 间接调用。
+ */
+export function checkChurnCircuitBreaker(
+  ctx: TickContext,
+  roomMem: RoomMemory,
+  roomName: string,
+): void {
+  const g = globalCache() as Record<string, unknown> & { __churnCounter?: Record<string, ChurnRecord[]> };
+  if (!g.__churnCounter) g.__churnCounter = {};
+
+  // 1. 清理过期记录（200 tick 滑窗），回写压缩后的数组。
+  const cutoff = ctx.tick - CHURN_WINDOW;
+  const rawRecords = g.__churnCounter[roomName] ?? [];
+  const freshRecords = rawRecords.filter(r => r.tick > cutoff);
+  g.__churnCounter[roomName] = freshRecords;
+
+  // 2. 按 role 聚合，触发熔断（仅当 role 当前未冻结时）。
+  const byRole = new Map<string, number>();
+  for (const r of freshRecords) {
+    byRole.set(r.role, (byRole.get(r.role) ?? 0) + 1);
+  }
+  roomMem.churnFreezeUntil ??= {};
+  for (const [role, count] of byRole) {
+    if (count > CHURN_THRESHOLD && roomMem.churnFreezeUntil[role] === undefined) {
+      roomMem.churnFreezeUntil[role] = ctx.tick + CHURN_FREEZE_TICKS;
+      console.log(
+        `[${ctx.tick}] spawn/${roomName}: CIRCUIT_BREAKER ${role} frozen for ${CHURN_FREEZE_TICKS} ticks (churn=${count}/${CHURN_WINDOW}t)`,
+      );
+    }
+  }
+
+  // 3. 清理到期熔断 + 异常类型自愈（非数字值视为到期）。
+  for (const role of Object.keys(roomMem.churnFreezeUntil)) {
+    const until = roomMem.churnFreezeUntil[role];
+    if (typeof until !== "number" || ctx.tick >= until) {
+      delete roomMem.churnFreezeUntil[role];
+    }
+  }
+
+  // 4. 空对象回收（防 Memory 体积膨胀）。
+  if (Object.keys(roomMem.churnFreezeUntil).length === 0) {
+    delete roomMem.churnFreezeUntil;
+  }
 }

@@ -255,23 +255,40 @@ export const remoteMiningManagerSystem: System = {
       // siteCount 实测校正 + tick 配额仲裁（让位 emergency）+ 全局总量判定。
       fulfillContainerRequests(remoteOps, ctx, snapshot.roomName);
 
-      const { requests } = evaluateRemoteDemand({
-        homeRoom: snapshot.roomName,
-        colonyState,
-        energyCapacityAvailable: snapshot.energyCapacityAvailable,
-        tick: ctx.tick,
-        remoteOps,
-        remoteCreeps,
-        spawnQueue: queue,
-        remoteThreats,
-        blockedRooms,
-      });
+      // P0-2：主房 crisis 期暂停远矿 spawn 推送（病灶 2 根因）。
+      // 旧逻辑 colonyState 只挡「新开点」（roomReadyForNewRemote）+ demand 内部
+      // 挡 bootstrap/reserver，不挡现役 op 的 remoteHarvester/remoteHauler 推送 —
+      // 主房 RCL5 危机期远矿持续与主房 harvester 竞争 spawn，吸血 54795 tick。
+      // 现役远矿 creep 不召回：沉没成本已付，让其自然寿终榨干残值。
+      // 维护逻辑（maintainExistingOps/reevaluateActiveOps/fulfillContainerRequests/
+      // recycleBlockedRoomCreeps）已在上方运行完毕，本块只跳过新请求推送；
+      // 下方 recycleExcessRemoteCreeps 仍执行（清理双孵事故冗余）。
+      // colonyState 恢复 normal 后下次 manager run（≤ managerInterval）即恢复推送，
+      // 远低于设计文档 100 tick 验证指标。旧 remote* 请求若仍在 queue 中，
+      // 由 spawn-manager 自然消化（不主动清空 — 与现役 creep 自然寿终同义）。
+      const crisisPaused =
+        colonyState === "recovery" ||
+        colonyState === "bootstrap" ||
+        colonyState === "defense";
+      if (!crisisPaused) {
+        const { requests } = evaluateRemoteDemand({
+          homeRoom: snapshot.roomName,
+          colonyState,
+          energyCapacityAvailable: snapshot.energyCapacityAvailable,
+          tick: ctx.tick,
+          remoteOps,
+          remoteCreeps,
+          spawnQueue: queue,
+          remoteThreats,
+          blockedRooms,
+        });
 
-      // 推入 spawnQueue。
-      for (const req of requests) {
-        submitRequest(queue, req);
+        // 推入 spawnQueue。
+        for (const req of requests) {
+          submitRequest(queue, req);
+        }
+        roomMem.spawnQueue = queue;
       }
-      roomMem.spawnQueue = queue;
 
       // 5. 回收过量远矿 creep（超过配置上限的旧 creep 标记回收，节省 CPU）。
       recycleExcessRemoteCreeps(snapshot.roomName, remoteOps);

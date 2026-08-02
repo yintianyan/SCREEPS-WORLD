@@ -36,6 +36,25 @@ export interface PhaseInput {
   harvesterCount: number;
   sourceCount: number;
   rcl: number;
+  /**
+   * 最满 source 的填充率 (0..1)。> srcRatioTrap 持续 = source 满载但采不动。
+   *
+   * P0-1 信号（病灶 1）：双维度（drainScore/liquidityScore）在 spawn 口袋健康时
+   * 看不到采集塌方 — harvester body 退化导致单体采集能力塌方，但 source 持续
+   * 满载（3000/3000）、spendableRatio > 0.5（hauler 持续补 spawn），drainScore
+   * 走主动消费豁免路径不计赤字。srcRatio + storageDrainRate 双条件强制 crisis
+   * 通道绕过迟滞，专治这一失明路径。NaN（source 数据缺失）按 0 处理（保守不触发）。
+   */
+  srcRatio: number;
+  /**
+   * Storage 单 tick 净流出（E，负值=流失）。无 storage 时为 0。
+   *
+   * 作为 storageDrainAccum 的累积源（P0-1 修正后）：
+   * srcRatio>0.9 期间每 tick 流失量累加到 storageDrainAccum，回填抵消。
+   * 旧的单 tick drainRate<-2 持续判定已被累积量判定替代 — 实测 storage
+   * 流失是稀疏大脉冲，单 tick 差分大部分=0 无法持续触发。
+   */
+  storageDrainRate: number;
 }
 
 /** 跨 tick 持久化的相位状态（存入 room memory）。 */
@@ -56,6 +75,20 @@ export interface PhaseState {
    * 进带时从 1 起计，出带归 0。旧 Memory 无此字段时按 0 处理（v14 迁移回填）。
    */
   bandTicks?: number;
+  /**
+   * srcRatio > srcRatioTrap + storageDrainAccum > storageDrainAccumThreshold
+   * 持续成立的评估次数（P0-1）。任一条件不再满足时立即归零（防残留累积）。
+   * 达 srcStallEnterTicks 后强制 crisis，绕过 drainScore 迟滞。
+   */
+  srcStallTicks?: number;
+  /**
+   * P0-1：srcRatio>0.9 期间 storage 的累积净流失量（E，正值=累积失血）。
+   * 流失累加、回填抵消（max(0) 不为负）；srcRatio≤0.9 时归零。
+   * 替代旧的单 tick drainRate<-2 判定 — 实测 storage 流失是稀疏大脉冲
+   * （每~235tick一次-800，大部分tick静止），单 tick 差分大部分=0，
+   * srcStallTicks 反复归零无法累积。累积量能捕获间歇性失血。
+   */
+  storageDrainAccum?: number;
 }
 
 /** evaluateColonyPhase 的返回值：新状态 + 本次观测信号（供记录/调参）。 */
@@ -107,6 +140,25 @@ export interface PhaseOptions {
    * 同时它保证 crisis 退出必经 recovery 带，不再出现 30→0 直切 normal。
    */
   minBandTicks: number;
+  /**
+   * P0-1：srcRatio 强制 crisis 通道的填充率阈值。
+   * srcRatio > 此值视为 source 满载（采不动）。默认 0.9 — 略低于 1.0
+   * 给 harvester 通勤周期留余量，避免 source 短暂回血造成抖动。
+   */
+  srcRatioTrap: number;
+  /**
+   * P0-1：srcRatio 满载 + storage 流失双条件持续多少次评估后强制 crisis。
+   * 默认 50 tick — 私服快照显示失明路径持续 31000 tick，50 tick 内可观测到
+   * 真实失血而不误伤正常通勤/孵化脉冲（正常 source 满载不会持续 50 tick）。
+   */
+  srcStallEnterTicks: number;
+  /**
+   * P0-1：storage 累积净流失触发阈值（E）。
+   * srcRatio>0.9 期间 storageDrainAccum 超过此值视为采集已塌方、储备单向流失。
+   * 默认 1000 — 实测 crisis 房每~235tick一次-800 脉冲，1.2 次即达阈值；
+   * 正常房 srcRatio 不持续>0.9，accum 归零不误触发。
+   */
+  storageDrainAccumThreshold: number;
 }
 
 export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
@@ -131,6 +183,11 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   // 最短驻留 100 次评估（room-state 每 tick 评估 → 100 tick）：
   // 覆盖一轮 creep 孵化 + 通勤周期，让 recovery 期真正攒出缓冲，而非形式性过场。
   minBandTicks: 100,
+  // P0-1：srcRatio 强制 crisis 通道阈值（病灶 1 — 采集塌方失明）。
+  // 私服快照显示 srcRatio=1.0 + storage 流失 12 E/tick 持续 31000 tick 仍判 normal。
+  srcRatioTrap: 0.9,
+  srcStallEnterTicks: 50,
+  storageDrainAccumThreshold: 1000,
 };
 
 /**
@@ -155,6 +212,24 @@ export function evaluateColonyPhase(
 ): PhaseResult {
   // 首次观测无基线，reserveDelta 记 0（不判为赤字）。
   const reserveDelta = prev.prevReserve === undefined ? 0 : input.reserve - prev.prevReserve;
+
+  // ── P0-1：srcRatio 强制 crisis 通道（病灶 1 — 采集塌方失明）──
+  // 累积净流失判定：srcRatio>0.9 期间累积 storage 流失量，超阈值视为采集塌方。
+  // 替代旧的单 tick drainRate<-2 判定 — 实测 storage 流失是稀疏大脉冲
+  // （每~235tick一次-800，大部分tick静止），单 tick 差分大部分=0，
+  // srcStallTicks 反复归零永远到不了 50。累积量能捕获间歇性失血。
+  // 流失累加、回填抵消（max(0) 不为负）；srcRatio≤0.9 时归零（采集正常）。
+  // NaN（source 数据缺失）> 0.9 为 false → 保守按 0 处理不触发。
+  const srcRatioHigh = input.srcRatio > options.srcRatioTrap;
+  const drainAccumDelta = -input.storageDrainRate; // 流失为正（storageDrainRate 负=流失）
+  const storageDrainAccum = srcRatioHigh
+    ? Math.max(0, (prev.storageDrainAccum ?? 0) + drainAccumDelta)
+    : 0;
+  const srcStalled = srcRatioHigh
+    && storageDrainAccum > options.storageDrainAccumThreshold;
+  // 任一条件不再满足时立即归零，防残留累积导致误触发。
+  const newStallTicks = srcStalled ? (prev.srcStallTicks ?? 0) + 1 : 0;
+  const forceCrisis = newStallTicks >= options.srcStallEnterTicks;
 
   // ── 偿付能力维度：drainScore ──
   // 主动消费豁免（TD-003 根因 A）：spawn 口袋健康时的储备下降是升级/建造投资，
@@ -185,6 +260,23 @@ export function evaluateColonyPhase(
   const bandTicksSoFar = inCrisisBand ? (prev.bandTicks ?? 0) : 0;
   const dwellSatisfied = bandTicksSoFar >= options.minBandTicks;
 
+  // P0-1：强制 crisis 通道优先（绕过迟滞），但只覆盖 phase 字段 —
+  // 保留 drainScore/liquidityScore 既有计算，让迟滞分数按真实信号自然演化。
+  // 这样 srcRatio 通道恢复时（forceCrisis=false），若 drainScore 仍未清会自然过渡到
+  // crisis/recovery，若已清则走 recovery 带（dwellSatisfied 兜底），不会秒退 normal。
+  if (forceCrisis) {
+    return {
+      phase: "crisis",
+      prevReserve: input.reserve,
+      drainScore,
+      liquidityScore,
+      bandTicks: bandTicksSoFar + 1,
+      reserveDelta,
+      srcStallTicks: newStallTicks,
+      storageDrainAccum,
+    };
+  }
+
   let phase: ColonyPhase;
   if (crisisScore >= options.drainEnterScore) {
     phase = "crisis";
@@ -206,7 +298,7 @@ export function evaluateColonyPhase(
   const stillInBand = phase === "crisis" || phase === "recovery";
   const bandTicks = stillInBand ? bandTicksSoFar + 1 : 0;
 
-  return { phase, prevReserve: input.reserve, drainScore, liquidityScore, bandTicks, reserveDelta };
+  return { phase, prevReserve: input.reserve, drainScore, liquidityScore, bandTicks, reserveDelta, srcStallTicks: newStallTicks, storageDrainAccum };
 }
 
 /**

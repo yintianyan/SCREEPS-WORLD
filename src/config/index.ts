@@ -40,7 +40,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 21 },
+  memory: { schemaVersion: 25 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -337,6 +337,10 @@ export const CONFIG = {
       rcl8MaxWorkParts: 15,
       /** upgrader 单次从 storage 取能上限（防止 storage 突降触发 economyPressure）。 */
       perTickWithdrawLimit: 500,
+      /** P0-4：storage 净流失率上限（E/tick，正值=流失）。
+       * 跨 tick prev-cur > 此值且低水位（< sustainedStorage*2）时 upgrader 停止从 storage 取能，
+       * 让 storage 回血。降级风险时豁免（保级优先）。 */
+      drainRateLimit: 5,
     },
     /** 能量危机检测与响应参数。 */
     crisis: {
@@ -486,6 +490,10 @@ export const CONFIG = {
     rampartBootstrapHits: 10_000,
     /** 受袭记忆窗口（tick）：lastHostileAt 距今小于此值视为受袭姿态。 */
     siegeMemoryTicks: 10000,
+    /** P1-3：威胁过期 tick 数。threatCreeps>0 但 lastHostileAt 超过此值未刷新时视为 stale。
+     * 旧威胁停留（无新增）超过此窗口后不再维持 defense 姿态，让经济恢复。
+     * 100 tick ≈ 一个威胁稳定窗口：无新增 = 威胁已被处理或不再活跃。 */
+    threatStaleTicks: 100,
     /** 受袭姿态下 wall/rampart 目标血量的放大倍数。 */
     siegeWallMultiplier: 5,
     /** core 档（核心结构叠盾）目标血量相对周界全额的折扣系数。

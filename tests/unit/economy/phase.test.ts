@@ -19,6 +19,10 @@ function input(overrides?: Partial<PhaseInput>): PhaseInput {
     harvesterCount: 2,
     sourceCount: 2,
     rcl: 3,
+    // P0-1 新增字段默认值：srcRatio=0 + storageDrainRate=0 → 不触发 srcRatio 通道，
+    // 保持既有 drainScore/liquidityScore 测试行为不变。
+    srcRatio: 0,
+    storageDrainRate: 0,
     ...overrides,
   };
 }

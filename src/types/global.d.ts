@@ -136,8 +136,14 @@ declare global {
      * 最近一次房内出现威胁 creep 的 tick（v12+，room-state 写入）。
      * 受袭记忆：驱动防御姿态（如 wall/rampart 目标血量升档）—
      * 防御深度用真实威胁校准，而非静态假设。
+     *
+     * P1-3：仅在威胁新增（count 增加）时刷新，而非每 tick 刷新。
+     * 防止旧威胁停留时 lastHostileAt 永远为"当前"，导致消费方永不过期。
      */
     lastHostileAt?: number;
+    /** P1-3：上一 tick 的威胁 creep 数量，用于检测新增威胁（count 增加）。
+     * room-state 每 tick 写入，缺失时按 0 处理（首威胁即新增）。 */
+    prevThreatCount?: number;
     /** 殖民相位观测（约束层的「经济真相」）。 */
     phase?: {
       phase: ColonyPhase;
@@ -148,6 +154,22 @@ declare global {
       liquidityScore: number;
       /** 危机带（crisis/recovery）驻留评估次数（v14+，最短驻留防极限环）。 */
       bandTicks?: number;
+      /**
+       * P0-1：srcRatio 满载 + storage 累积流失双条件持续成立的评估次数。
+       * 任一条件不再满足时立即归零；达 srcStallEnterTicks 后强制 crisis。
+       */
+      srcStallTicks?: number;
+      /**
+       * P0-1：上一 tick storage 中的能量，用于跨 tick 计算 storageDrainRate。
+       * 无 storage 或首次运行时为 undefined（drainRate=0，不触发 srcRatio 通道）。
+       */
+      storageEnergyPrev?: number;
+      /**
+       * P0-1：srcRatio>0.9 期间 storage 的累积净流失量（E，正值=累积失血）。
+       * 流失累加、回填抵消（max(0) 不为负）；srcRatio≤0.9 时归零。
+       * 超过 storageDrainAccumThreshold(1000) 触发 srcStalled。
+       */
+      storageDrainAccum?: number;
       harvesterCount: number;
       sourceCount: number;
       rcl: number;
@@ -165,6 +187,13 @@ declare global {
      * 与 construction 的 segment blocked 黑名单同型（范本先例）。
      */
     spawnBlacklist?: Record<string, number>;
+    /**
+     * P0-3：spawn churn 熔断 — 角色 → 熔断到期 tick。
+     * 200 tick 滑窗内同 role churn > 20 次时，该 role 孵化冻结 100 tick。
+     * spawn-manager 写入，demand 读取跳过对应角色评估。
+     * 到期条目由 spawn-manager 自动清理防泄漏。
+     */
+    churnFreezeUntil?: Record<string, number>;
     buildQueue?: BuildTask[];
     lastRcl?: number;
     /** C2：邻居房情报（room-observer 每 50 tick 刷新，M7 远矿/扩张选址数据源）。 */

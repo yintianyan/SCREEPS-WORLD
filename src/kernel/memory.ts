@@ -563,6 +563,119 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       if (Object.keys(layoutGaps).length === 0) delete kernel.layoutGaps;
     },
   },
+  {
+    from: 21,
+    to: 22,
+    run: () => {
+      // v22：P0-1 srcRatio 强制 crisis 通道 — 新增 RoomMemory.phase.srcStallTicks
+      // 与 RoomMemory.phase.storageEnergyPrev 两个可选字段。
+      // 设计决策（参考 v20/v21 风格）：迁移只做「建档 + 畸形自愈」不写字段值。
+      // room-state 是两字段的唯一写者，缺失视为 0（srcStallTicks）/ 当前 storage 能量
+      // （storageEnergyPrev，由 room-state 用 current 兜底）。
+      //
+      // 自愈规则：
+      //   - srcStallTicks 非数字 → 删除（缺失视为 0，安全）
+      //   - storageEnergyPrev 非数字 → 删除（缺失时 room-state 用 current 兜底，drainRate=0）
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
+        if (!room) continue;
+        const phase = room.phase as Record<string, unknown> | undefined;
+        if (!phase || typeof phase !== "object") continue;
+        if (
+          phase.srcStallTicks !== undefined &&
+          typeof phase.srcStallTicks !== "number"
+        ) {
+          delete phase.srcStallTicks;
+        }
+        if (
+          phase.storageEnergyPrev !== undefined &&
+          typeof phase.storageEnergyPrev !== "number"
+        ) {
+          delete phase.storageEnergyPrev;
+        }
+      }
+    },
+  },
+  {
+    from: 22,
+    to: 23,
+    run: () => {
+      // v23：P0-3 spawn churn 熔断 — 新增 RoomMemory.churnFreezeUntil 可选字段。
+      // 设计决策（参考 v20/v21/v22 风格）：迁移只做「建档 + 畸形自愈」不写字段值。
+      // spawn-manager 是该字段的唯一写者（cleanQueue 触发 churn 计数 → 熔断写入），
+      // demand 读取跳过对应角色评估。缺失视为无熔断（安全）。
+      //
+      // 自愈规则：
+      //   - churnFreezeUntil 非对象 → 删除整个字段
+      //   - churnFreezeUntil[role] 非数字 → 删除该条目（视为到期，demand 不跳过）
+      //   - 空对象回收（删除整个字段，防 Memory 体积膨胀）
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
+        if (!room) continue;
+        const freeze = room.churnFreezeUntil as Record<string, unknown> | undefined;
+        if (freeze === undefined) continue;
+        if (typeof freeze !== "object" || freeze === null || Array.isArray(freeze)) {
+          delete room.churnFreezeUntil;
+          continue;
+        }
+        for (const role in freeze) {
+          if (typeof freeze[role] !== "number") {
+            delete freeze[role];
+          }
+        }
+        if (Object.keys(freeze).length === 0) {
+          delete room.churnFreezeUntil;
+        }
+      }
+    },
+  },
+  {
+    from: 23,
+    to: 24,
+    run: () => {
+      // v24：P0-1 srcRatio 通道修正 — 新增 RoomMemory.phase.storageDrainAccum。
+      // 累积净流失量替代单 tick drainRate 判定（实测稀疏大脉冲下单 tick 失效）。
+      // room-state 是该字段的唯一写者，缺失视为 0（phase.ts 用 ?? 0 兜底）。
+      //
+      // 自愈规则：
+      //   - storageDrainAccum 非数字 → 删除（缺失视为 0，安全）
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
+        if (!room) continue;
+        const phase = room.phase as Record<string, unknown> | undefined;
+        if (!phase || typeof phase !== "object") continue;
+        if (
+          phase.storageDrainAccum !== undefined &&
+          typeof phase.storageDrainAccum !== "number"
+        ) {
+          delete phase.storageDrainAccum;
+        }
+      }
+    },
+  },
+  {
+    from: 24,
+    to: 25,
+    run: () => {
+      // v25：P1-3 defense 误触发修复 — 新增 RoomMemory.prevThreatCount。
+      // 用于检测威胁新增（count 增加）：lastHostileAt 只在威胁新增时刷新，
+      // 而非每 tick 刷新（防旧威胁停留永久维持 defense 姿态）。
+      // room-state 是该字段的唯一写者，缺失视为 0（首威胁即新增）。
+      //
+      // 自愈规则（参考 v22/v23/v24 风格）：
+      //   - prevThreatCount 非数字 → 删除（缺失视为 0，安全）
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
+        if (!room) continue;
+        if (
+          room.prevThreatCount !== undefined &&
+          typeof room.prevThreatCount !== "number"
+        ) {
+          delete room.prevThreatCount;
+        }
+      }
+    },
+  },
 ];
 
 /**

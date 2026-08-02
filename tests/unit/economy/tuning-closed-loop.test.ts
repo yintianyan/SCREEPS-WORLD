@@ -39,6 +39,7 @@ function healthySignals(overrides: Partial<TuningSignals> = {}): TuningSignals {
     upgraderCount: 1,
     builderCount: 1,
     buildQueueBacklog: 0,
+    srcRatio: 0,
     tierRank: 0,
     rcl: 4,
     ...overrides,

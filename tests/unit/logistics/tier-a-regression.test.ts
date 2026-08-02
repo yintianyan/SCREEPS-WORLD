@@ -91,7 +91,7 @@ describe("TU-1 — tuning upgrader 降编不误伤无 storage 房间", () => {
       avgReserveDelta: 50, avgPressure: 0.2, avgDrainScore: 0, crisisRatio: 0,
       avgStorageEnergy: 0, containerFillRatio: 0.4, spawnFillRatio: 0.7,
       haulerCount: 2, harvesterCount: 2, upgraderCount: 2, builderCount: 1,
-      buildQueueBacklog: 1, tierRank: 0, rcl: 3,
+      buildQueueBacklog: 1, srcRatio: 0, tierRank: 0, rcl: 3,
       ...overrides,
     };
   }

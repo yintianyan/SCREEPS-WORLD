@@ -133,7 +133,7 @@ function upgraderGate(ac: ActionContext): boolean {
 }
 
 /**
- * 动态计算 storage 取能上限 — 水位权限表（绝对能量刻度）。
+ * 动态计算 storage 取能上限 — 水位权限表（绝对能量刻度）+ P0-4 净流出率门禁。
  *
  * U-2 修复：原比例制三档（>50%/>15% 折合 50 万/15 万能量）在发展期房间
  * 永远落在最低档 — 与 distributorTiers 的历史教训同型（比例刻度系统性错误）。
@@ -144,13 +144,55 @@ function upgraderGate(ac: ActionContext): boolean {
  *   <  upgradeEnergyFloorStorage(1k)：0 — U-1 floor 下沉：
  *      withdrawStorageCapped 的 resolve 对 limit≤0 返回 undefined（D-0 同手法），
  *      彻底封死「gate 因 container 有能量放行 → storage 被抽穿地板」的旁路。
+ *
+ * P0-4 修复（病灶 4）：srcRatio=1.0 期 storage 从 374K→0 持续流失 12 E/tick，
+ * 旧逻辑只看绝对水位 → upgrader 抽到归零。新增跨 tick 净流出率门禁：
+ *   - 复用 P0-1 写入的 roomMem.phase.storageEnergyPrev（room-state 每 tick 写入）。
+ *   - 双门槛：低水位（< sustainedStorage*2）+ 流失（> drainRateLimit）→ 返回 0 停止取能。
+ *     高水位期允许流失（盈余消化），低水位期流失即停抽让 storage 回血。
+ *   - 降级风险豁免：ticksToDowngrade < threshold 时跳过门禁（保级优先于止血）。
+ *   - storage.store 读取异常防御：try/catch 退化为返回 0，role-runner 不感知。
  */
 function dynamicStorageLimit(ac: ActionContext): number {
   const st = ac.snapshot.storage;
   if (!st) return CONFIG.economy.upgrade.perTickWithdrawLimit;
-  const energy = st.store.getUsedCapacity(RESOURCE_ENERGY);
   const cfg = CONFIG.economy;
+
+  // 防御：storage.store 读取异常（不应发生但 defensive）→ 退化为不取能，不抛错。
+  // role-runner 的 candidate resolve 无 try/catch，此处不兜底会冒泡到 kernel safeRun，
+  // 表现为 upgrader 整 tick 跳过 — 不如显式返回 0 让 withdrawStorageCapped fallthrough。
+  let energy: number;
+  try {
+    energy = st.store.getUsedCapacity(RESOURCE_ENERGY);
+  } catch {
+    return 0;
+  }
+
   if (energy < cfg.upgradeEnergyFloorStorage) return 0;
+
+  // P0-4 异常豁免：降级风险时保级优先，跳过流失率门禁。
+  // 与 upgraderGate 的 isEmergency 同一阈值（controllerDowngradeThreshold），
+  // 但 gate 已放行 acquire — 此处再豁免门禁确保 storage 取能不被拦截。
+  const ctrl = ac.snapshot.controller;
+  const hasDowngradeRisk = ctrl?.my === true &&
+    ctrl.ticksToDowngrade < cfg.controllerDowngradeThreshold;
+  if (!hasDowngradeRisk) {
+    // P0-4：storage 净流出率检查 — 跨 tick 跟踪
+    // 复用 P0-1 写入的 roomMem.phase.storageEnergyPrev（room-state 每 tick 写入）。
+    // 首次运行（prev 缺失）→ ?? energy 兜底 → drainRate=0，避免假流失。
+    const roomMem = Memory.rooms[ac.snapshot.roomName];
+    const prevEnergy = roomMem?.phase?.storageEnergyPrev ?? energy;
+    const drainRate = prevEnergy - energy; // 正值 = 流失
+
+    // 双门槛：低水位（< sustainedStorage*2）+ 流失（> drainRateLimit，严格大于）。
+    // 边界语义：drainRate===drainRateLimit 不触发（> 才触发）；energy===sustainedStorage*2 不触发（< 才触发）。
+    const lowWater = energy < cfg.upgrade.sustainedStorage * 2;
+    const draining = drainRate > cfg.upgrade.drainRateLimit;
+    if (lowWater && draining) {
+      return 0; // 停止取能，让 storage 回血
+    }
+  }
+
   if (energy >= cfg.upgrade.sprintStorage) return ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
   if (energy >= cfg.upgrade.sustainedStorage) return cfg.upgrade.perTickWithdrawLimit;
   return 200;

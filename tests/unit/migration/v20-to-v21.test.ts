@@ -173,7 +173,10 @@ describe("migration v20 → v21（目标清单布局闭环字段建档）", () =
     expect(snapshot2).toEqual(snapshot1);
   });
 
-  it("已是 v21 的新 Memory → 跳过迁移", () => {
+  it("已是 v21 的新 Memory → 跳过 v20→v21 迁移（layoutGaps 不被自愈）", () => {
+    // 注：v22 上线后 v21 会继续迁移到 v22（v22 仅遍历 rooms[].phase 自愈，
+    // 不触碰 kernel.layoutGaps）。本用例验证 v20→v21 步骤被跳过 —
+    // 脏 layoutGaps 原样保留（v21 迁移的 ready/run 不再执行）。
     (globalThis as any).Memory = {
       schemaVersion: 21,
       creeps: {},
@@ -183,8 +186,9 @@ describe("migration v20 → v21（目标清单布局闭环字段建档）", () =
 
     runMigrations();
 
-    // 迁移被跳过：脏数据原样保留（版本已达到当前，不执行自愈）。
+    // v20→v21 迁移被跳过：脏数据原样保留（v21 步骤的 ready/run 不执行）。
     expect((globalThis as any).Memory.kernel.layoutGaps.W7N3).toBe("should-not-touch");
-    expect((globalThis as any).Memory.schemaVersion).toBe(21);
+    // v21→v22 迁移会执行（rooms 为空，无副作用），版本升到当前 schemaVersion。
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 });

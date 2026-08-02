@@ -72,6 +72,37 @@ export const roomStateSystem: System = {
         }
       }
 
+      // 2.6 P0-1：srcRatio 信号（病灶 1 — 采集塌方失明）。
+      // 取最满 source 的填充率：harvester body 退化导致单体采集能力塌方时，
+      // source 持续满载（3000/3000）但 spawn 口袋仍健康（hauler 持续补），
+      // drainScore 走主动消费豁免不计赤字 → colonyState 误判 normal/growth。
+      // srcRatio + storageDrainRate 双条件强制 crisis 通道绕过迟滞。
+      let srcRatio = 0;
+      for (const s of snapshot.sources) {
+        const src = s as Source;
+        const cap = src.energyCapacity ?? 3000;
+        if (cap > 0) {
+          const fill = (src.energy ?? 0) / cap;
+          if (fill > srcRatio) srcRatio = fill;
+        }
+      }
+
+      // 2.7 P0-1：storageDrainRate 信号 — 跨 tick storage 净流出率（E/tick）。
+      // 负值 = 流失（storage 在被抽空），正值 = 充盈。无 storage 时为 0。
+      // 用本 tick storage 能量减去上一 tick 持久化的 storageEnergyPrev。
+      // 符号语义对齐 PhaseInput.storageDrainRate（负值=流失）与
+      // DEFAULT_PHASE_OPTIONS.storageDrainThreshold=-2（drainRate < -2 触发）。
+      const currentStorageEnergy = snapshot.storage
+        ? snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY)
+        : 0;
+      const prevStorageEnergy = roomMem.phase?.storageEnergyPrev ?? currentStorageEnergy;
+      // drainRate = current - prev：流失时 current < prev → 负值，符合 PhaseInput 语义。
+      // 无 storage 时 drainRate=0（srcRatio 通道永不触发，因 storageDrainRate < -2 不成立）。
+      // 首次运行（prevStorageEnergy 缺失）→ 用 current 兜底 → drainRate=0，避免假流失。
+      const storageDrainRate = snapshot.storage
+        ? currentStorageEnergy - prevStorageEnergy
+        : 0;
+
       // 3. 评估殖民相位（带迟滞的纯函数）。
       const prevPhase: PhaseState = {
         phase: roomMem.phase?.phase ?? "growth",
@@ -79,6 +110,8 @@ export const roomStateSystem: System = {
         drainScore: roomMem.phase?.drainScore ?? 0,
         liquidityScore: roomMem.phase?.liquidityScore ?? 0,
         bandTicks: roomMem.phase?.bandTicks ?? 0,
+        srcStallTicks: roomMem.phase?.srcStallTicks ?? 0,
+        storageDrainAccum: roomMem.phase?.storageDrainAccum,
       };
       const phaseResult = evaluateColonyPhase(
         {
@@ -89,6 +122,8 @@ export const roomStateSystem: System = {
           harvesterCount,
           sourceCount: snapshot.sources.length,
           rcl: snapshot.rcl,
+          srcRatio,
+          storageDrainRate,
         },
         prevPhase,
       );
@@ -101,18 +136,42 @@ export const roomStateSystem: System = {
         drainScore: phaseResult.drainScore,
         liquidityScore: phaseResult.liquidityScore,
         bandTicks: phaseResult.bandTicks,
+        srcStallTicks: phaseResult.srcStallTicks,
+        // P0-1：持久化当前 storage 能量供下一 tick 计算 drainRate。
+        // 无 storage 时记 0（下一 tick drainRate=0，srcRatio 通道永不触发）。
+        storageEnergyPrev: currentStorageEnergy,
+        // P0-1：持久化累积净流失量，供下一 tick 累积计算。
+        storageDrainAccum: phaseResult.storageDrainAccum,
         harvesterCount,
         sourceCount: snapshot.sources.length,
         rcl: snapshot.rcl,
       };
 
       // 5. 映射为 ColonyState 并写入 RoomMemory。
-      const hasHostiles = snapshot.threatCreeps.length > 0;
-      roomMem.colonyState = phaseToColonyState(phaseResult.phase, hasHostiles);
-      // 受袭记忆：威胁出现即刷新时间戳 — 供防御姿态判断（动态墙体目标等）。
-      if (hasHostiles) {
+      // P1-3：lastHostileAt 只在威胁新增（count 增加）时刷新，防旧威胁停留永久维持 defense。
+      // 旧逻辑每 tick 刷新 lastHostileAt → 消费方（tower-defense siegeMemory 等）永不过期。
+      const threatCount = snapshot.threatCreeps.length;
+      const prevThreatCount = roomMem.prevThreatCount ?? 0;
+      const threatIncreased = threatCount > prevThreatCount;
+      roomMem.prevThreatCount = threatCount;
+
+      // lastHostileAt 只在威胁新增时刷新（首次到达或增援）。
+      if (threatCount > 0 && threatIncreased) {
         roomMem.lastHostileAt = ctx.tick;
       }
+
+      // P1-3：威胁过期失效 — threatCreeps>0 但 lastHostileAt 超过 threatStaleTicks 未刷新
+      // 视为 stale threat（旧威胁停留或快照未更新），不再触发 defense。
+      // lastHostileAt undefined 时不判 stale（无基线，首次到达由上方的 threatIncreased 刷新）。
+      const lastHostileAge = roomMem.lastHostileAt !== undefined
+        ? ctx.tick - roomMem.lastHostileAt
+        : Infinity;
+      const threatStale = threatCount > 0
+        && roomMem.lastHostileAt !== undefined
+        && lastHostileAge > CONFIG.defense.threatStaleTicks;
+      const hasHostiles = threatCount > 0 && !threatStale;
+
+      roomMem.colonyState = phaseToColonyState(phaseResult.phase, hasHostiles);
 
       // 5.5 经济压力梯度信号 (0.0–1.0)。
       // 取双维度最大值（方案 C）：偿付危机（drainScore）与流动性危机（liquidityScore）

@@ -141,6 +141,23 @@ function safeRunTuning(
     //    重新积累 trend，防「反向调整早于验证触发」竞态。
     const excludedParams = buildExcludedParams(roomTuning, ctx.tick);
 
+    // P1-2：srcStallTicks > 50 时强制解冻 harvester/hauler maxCount
+    // 配合 P0-1 的 srcStallTicks（srcRatio>0.9 AND storageDrainAccum>1000 持续计数）。
+    // 在 forceCrisis 触发前（srcStallEnterTicks=50）解冻，让 tuning 有机会上调采集/搬运能力。
+    // 只解冻 maxCount 不解冻 minCount（保守，防振荡），且只解冻冻结参数不影响 pending。
+    const roomMem = Memory.rooms[roomName];
+    const srcStallTicks = roomMem?.phase?.srcStallTicks ?? 0;
+    if (signals.srcRatio > 0.9 && srcStallTicks > 50) {
+      const criticalParams = ["harvester.maxCount", "hauler.maxCount"];
+      for (const p of criticalParams) {
+        if (roomTuning.frozenParams?.[p]?.frozenUntil && roomTuning.frozenParams[p]!.frozenUntil > ctx.tick) {
+          delete roomTuning.frozenParams[p];
+          console.log(`[${ctx.tick}] tuning/${roomName}: FORCE_UNFREEZE ${p} (srcRatio=${signals.srcRatio.toFixed(2)}, stallTicks=${srcStallTicks})`);
+        }
+        excludedParams.delete(p);
+      }
+    }
+
     // 捕获 verify 前的 pending 快照（用于回滚事件的 preAdjustValue 查询）
     const pendingBefore = roomTuning.pendingValidation ?? {};
 
@@ -563,6 +580,16 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
     ? roomMem.buildQueue.filter(t => t.state === "queued").length
     : 0;
 
+  // P1-2：srcRatio 信号（采集塌方检测）— 取最满 source 填充率
+  let srcRatio = 0;
+  for (const s of snapshot.sources) {
+    const cap = (s as Source).energyCapacity ?? 3000;
+    if (cap > 0) {
+      const fill = ((s as Source).energy ?? 0) / cap;
+      if (fill > srcRatio) srcRatio = fill;
+    }
+  }
+
   return {
     avgReserveDelta,
     avgPressure,
@@ -576,6 +603,7 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
     upgraderCount: counts.upgrader ?? 0,
     builderCount: counts.builder ?? 0,
     buildQueueBacklog,
+    srcRatio,
     tierRank,
     rcl: snapshot.rcl,
   };

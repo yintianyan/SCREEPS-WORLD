@@ -19,7 +19,7 @@ const { execFileSync } = require("child_process");
 const USERNAME = process.env.SCREEPS_USERNAME || "yty";
 const MONGO_CONTAINER = process.env.SCREEPS_MONGO_CONTAINER || "screeps-mongo";
 const BRANCH = process.argv[2] || "default";
-const DIST = path.join(__dirname, "..", "dist", "main.js");
+const DIST = path.join(__dirname, "..", "..", "dist", "main.js");
 const CONTAINER_TMP = "/tmp/screeps-deploy-main.js";
 
 function main() {
