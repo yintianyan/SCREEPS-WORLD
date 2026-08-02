@@ -22,7 +22,7 @@ require("../load-env"); // 本地手动部署时从 tools/.env 读取 token；CI
 
 const token = process.env.SCREEPS_TOKEN;
 const branch = process.env.SCREEPS_BRANCH || "default";
-const distFile = process.env.DIST_FILE || path.join(__dirname, "..", "dist", "main.js");
+const distFile = process.env.DIST_FILE || path.join(__dirname, "../../", "dist", "main.js");
 
 if (!token) {
   console.error(
