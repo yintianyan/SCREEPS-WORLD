@@ -45,4 +45,4 @@ jobs:
         env:
           SCREEPS_TOKEN: ${{ secrets.SCREEPS_TOKEN }}
           SCREEPS_BRANCH: ${{ vars.SCREEPS_BRANCH || 'default' }}
-        run: node tools/deploy-screeps.js
+        run: node tools/official/deploy-screeps.js
