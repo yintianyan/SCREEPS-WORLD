@@ -324,3 +324,62 @@ describe("P0-1 累积净流失 crisis 通道 — 异常情况", () => {
     expect(state.phase).toBe("recovery");
   });
 });
+
+// ── P2-3 满仓豁免 ──
+describe("P2-3 forceCrisis 满仓豁免", () => {
+  it("满仓（storageRatio > 0.8）时 srcRatio 高 + storage 流失 → 不触发 crisis", () => {
+    // 用低阈值快速触发：accumThreshold=100, enterTicks=1
+    const o = opts({ storageDrainAccumThreshold: 100, srcStallEnterTicks: 1 });
+    let state = FRESH;
+    // 累积流失到超阈值
+    state = evaluateColonyPhase(
+      input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 5000, storageRatio: 0.9 }),
+      state, o,
+    );
+    // 满仓豁免：storageRatio=0.9 > 0.8 → srcStalled=false → srcStallTicks=0
+    // 注意：storageDrainAccum 仍正常累积（800），但 srcStalled=false 不累加 srcStallTicks
+    expect(state.srcStallTicks).toBe(0);
+    expect(state.storageDrainAccum).toBe(800); // accum 累积不受 storageHigh 影响
+    expect(state.phase).not.toBe("crisis");
+  });
+
+  it("非满仓（storageRatio <= 0.8）时 srcRatio 高 + storage 流失 → 正常触发 crisis", () => {
+    const o = opts({ storageDrainAccumThreshold: 100, srcStallEnterTicks: 1 });
+    let state = FRESH;
+    state = evaluateColonyPhase(
+      input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 5000, storageRatio: 0.5 }),
+      state, o,
+    );
+    // 非满仓：storageRatio=0.5 <= 0.8 → srcStalled=true → srcStallTicks=1 >= 1 → forceCrisis
+    expect(state.srcStallTicks).toBe(1);
+    expect(state.phase).toBe("crisis");
+  });
+
+  it("无 storage（storageRatio=undefined）时不豁免（正常触发）", () => {
+    const o = opts({ storageDrainAccumThreshold: 100, srcStallEnterTicks: 1 });
+    let state = FRESH;
+    state = evaluateColonyPhase(
+      input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 5000 }), // storageRatio undefined
+      state, o,
+    );
+    // 无 storage：storageRatio=undefined → (undefined ?? 0)=0 <= 0.8 → 不豁免
+    expect(state.srcStallTicks).toBe(1);
+    expect(state.phase).toBe("crisis");
+  });
+
+  // P2-3 边界测试（2026-08-03 加固）：
+  // phase.ts:247 用 `>` 判断（storageRatio > forceCrisisStorageHigh）。
+  // 边界值 0.8 应该不豁免（正常触发 crisis）—— 若未来误改为 `>=`，
+  // 满仓边界会误触发 forceCrisis，导致 upgrader 冻结 → link 死锁正反馈。
+  it("storageRatio 恰好 0.8（边界）→ 不豁免（> 才豁免），正常触发 crisis", () => {
+    const o = opts({ storageDrainAccumThreshold: 100, srcStallEnterTicks: 1 });
+    let state = FRESH;
+    state = evaluateColonyPhase(
+      input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 5000, storageRatio: 0.8 }),
+      state, o,
+    );
+    // storageRatio=0.8 不 > 0.8 → 不豁免 → srcStalled=true → srcStallTicks=1 >= 1 → forceCrisis
+    expect(state.srcStallTicks).toBe(1);
+    expect(state.phase).toBe("crisis");
+  });
+});

@@ -36,11 +36,6 @@ import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG } from "
 import { assessEmergencyRebuild, isEmergencyTask } from "../domain/construction/queue";
 import { auditStructureGaps, auditLinkRoleGaps, mergeLinkRoleGaps, type StructureGaps } from "../domain/layout/gaps";
 import {
-  computeLayoutMetrics,
-  recordLayoutMetrics,
-  readDefenseCutPositions,
-} from "../kernel/layout-metrics";
-import {
   getDeadAssetLinks,
   isLinkConstrained,
   markLinkConstrained,
@@ -868,12 +863,6 @@ function planStage3RoadsAndFinalize(
   // link 角色感知（同 stage 0 入口）：合并角色缺口，暴露死资产/角色分布错。
   mergeLinkRoleGaps(gapsAfter, auditLinkRoleGaps(snapshot, roomMem.buildQueue));
   recordLayoutGaps(snapshot.roomName, gapsAfter);
-
-  // 布局可观测性指标采集（漏洞 #11）：复用本周期已算的 gapsAfter + 死资产/
-  // 拆改/linkConstrained 状态，仅变化时落盘。与 recordLayoutGaps 同周期执行，
-  // 确保指标与缺口快照时序一致。
-  recordRoomLayoutMetrics(snapshot, gapsAfter, ctx.tick);
-
   const gapsOpen = Object.keys(gapsAfter).length > 0;
   const interval = gapsOpen ? GAP_RETRY_INTERVAL : CONFIG.layout.planInterval;
   layout.nextPlanTick = ctx.tick + interval + roomPhase(snapshot.roomName, interval);
@@ -1037,40 +1026,6 @@ function recordLayoutGaps(roomName: string, gaps: StructureGaps): void {
       return;
     }
   }
-}
-
-/**
- * 采集并落盘布局可观测性指标（漏洞 #11，docs/layout-system-design-2026-08.md §3.8）。
- *
- * 数据源全部来自本 tick 已构建的状态，无额外扫描成本：
- *   - snapshot.links → link 能量/容量
- *   - gapsAfter → MVC 缺口数（已算，复用）
- *   - getDeadAssetLinks → 死资产 link 数
- *   - globalCache.dismantleCount → 累计拆改次数
- *   - isLinkConstrained → 几何受限标记
- *   - readDefenseCutPositions → min-cut 割集位置（从 Memory 读取）
- *
- * 指标落盘策略与 recordLayoutGaps 一致：仅变化时写入，稳定状态不抖动。
- */
-function recordRoomLayoutMetrics(
-  snapshot: RoomSnapshot,
-  gaps: StructureGaps,
-  tick: number,
-): void {
-  const deadLinks = getDeadAssetLinks(tick);
-  const cache = globalCache();
-  const dismantleCount = cache.dismantleCount?.get(snapshot.roomName) ?? 0;
-  const linkConstrained = isLinkConstrained(snapshot.roomName, tick);
-  const defenseCut = readDefenseCutPositions(snapshot.roomName);
-  const metrics = computeLayoutMetrics(
-    snapshot,
-    gaps,
-    deadLinks.length,
-    dismantleCount,
-    linkConstrained,
-    defenseCut,
-  );
-  recordLayoutMetrics(snapshot.roomName, metrics);
 }
 
 // ─── Spawn 重建 relocation（P0 修复：避免原位被占时死循环）──

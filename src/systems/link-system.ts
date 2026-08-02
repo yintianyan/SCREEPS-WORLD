@@ -260,7 +260,6 @@ export function getDismantlePlans(): ReadonlyMap<string, import("../kernel/globa
  * 创建并登记拆改计划（layout-planner 消费）。
  *
  * 同时记录冷却 tick，确保冷却与计划创建原子化（避免冷却已记但计划未存的半成品状态）。
- * 同时递增累计拆改计数器（layout-metrics 可观测性，漏洞 #11）。
  */
 export function createDismantlePlan(
   deadLinkId: string,
@@ -281,9 +280,6 @@ export function createDismantlePlan(
     state: "waiting",
   });
   recordDismantleStart(roomName, tick);
-  // 累计拆改次数（layout-metrics 消费，跨 reset 丢失可接受）。
-  if (cache.dismantleCount === undefined) cache.dismantleCount = new Map();
-  cache.dismantleCount.set(roomName, (cache.dismantleCount.get(roomName) ?? 0) + 1);
 }
 
 /**

@@ -21,6 +21,7 @@ export function selectRecycleCandidates(
   knownRoles: ReadonlySet<string>,
   harvesterMinCount: number,
   haulerTarget?: number,
+  haulerPendingDownTarget?: number,
 ): string[] {
   const marked: string[] = [];
 
@@ -40,9 +41,13 @@ export function selectRecycleCandidates(
   }
 
   // 规则 3：富余 hauler（保留 1 只缓冲防抖动；濒死的不回收）。
+  // P1-1 修复：tuning 下调 minCount 时，keep 取下调目标 + 1 而非 haulerTarget + 1，
+  // 让 recyclePass 主动收敛到新边界，避免 isContractMet 死锁。
   if (haulerTarget !== undefined) {
     const haulers = summaries.filter(s => s.home === home && s.role === "hauler");
-    const keep = haulerTarget + 1;
+    const keep = haulerPendingDownTarget !== undefined
+      ? haulerPendingDownTarget + 1
+      : haulerTarget + 1;
     if (haulers.length > keep) {
       const sorted = [...haulers].sort((a, b) => (a.ticksToLive ?? 0) - (b.ticksToLive ?? 0));
       const excess = sorted.slice(0, sorted.length - keep);

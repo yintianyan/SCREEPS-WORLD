@@ -124,6 +124,11 @@ export const roomStateSystem: System = {
           rcl: snapshot.rcl,
           srcRatio,
           storageDrainRate,
+          // P2-3：storage 水位供 forceCrisis 满仓豁免。无 storage 时 undefined。
+          storageRatio: snapshot.storage
+            ? snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY)
+              / snapshot.storage.store.getCapacity(RESOURCE_ENERGY)
+            : undefined,
         },
         prevPhase,
       );
@@ -169,7 +174,16 @@ export const roomStateSystem: System = {
       const threatStale = threatCount > 0
         && roomMem.lastHostileAt !== undefined
         && lastHostileAge > CONFIG.defense.threatStaleTicks;
-      const hasHostiles = threatCount > 0 && !threatStale;
+      const threatPresent = threatCount > 0 && !threatStale;
+      // P1-3：退出 defense 迟滞 — 威胁消除后仍维持 defense 姿态 defenseExitHysteresis tick。
+      // 防止敌人短暂进出导致 colonyState 高频抖动（525 次/327k tick），绕过 phase 状态机
+      // minBandTicks 保护。进入 defense 仍 1 tick 触发（防御不延迟）；
+      // lastHostileAt undefined 时无基线不迟滞（首次到达由 threatIncreased 刷新）。
+      const prevInDefense = roomMem.colonyState === "defense";
+      const inExitHysteresis = prevInDefense
+        && roomMem.lastHostileAt !== undefined
+        && lastHostileAge < CONFIG.defense.defenseExitHysteresis;
+      const hasHostiles = threatPresent || inExitHysteresis;
 
       roomMem.colonyState = phaseToColonyState(phaseResult.phase, hasHostiles);
 

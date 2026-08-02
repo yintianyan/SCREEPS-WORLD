@@ -500,6 +500,11 @@ export const CONFIG = {
      * 旧威胁停留（无新增）超过此窗口后不再维持 defense 姿态，让经济恢复。
      * 100 tick ≈ 一个威胁稳定窗口：无新增 = 威胁已被处理或不再活跃。 */
     threatStaleTicks: 100,
+    /** P1-3：退出 defense 迟滞 tick 数。威胁消除（threatCount=0）后，
+     * 若 lastHostileAt 距今小于此值，仍维持 defense 姿态。
+     * 防止敌人短暂进出房间导致 colonyState 高频抖动（525 次/327k tick），
+     * 绕过 phase 状态机 minBandTicks 保护。进入 defense 仍 1 tick 触发（防御不延迟）。 */
+    defenseExitHysteresis: 50,
     /** 受袭姿态下 wall/rampart 目标血量的放大倍数。 */
     siegeWallMultiplier: 5,
     /** core 档（核心结构叠盾）目标血量相对周界全额的折扣系数。

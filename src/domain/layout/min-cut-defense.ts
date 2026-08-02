@@ -86,6 +86,12 @@ export function computeMinCutDefense(
   corePositions: readonly { x: number; y: number }[],
   exitPositions: readonly { x: number; y: number }[],
   maxRamparts = 30,
+  /**
+   * P2-1：不可放置割集顶点的位置集合（packed = x*50+y）。
+   * 这些位置的拆点边容量设为 INF（不可切割），算法自然选其他位置作为割集，
+   * 保证生成的割集全部可建造。典型用途：出口格紧邻区域、已有 construction site。
+   */
+  blockedPositions?: ReadonlySet<number>,
 ): MinCutResult {
   if (corePositions.length === 0 || exitPositions.length === 0) {
     return { rampartPositions: [], cutSize: 0, complete: false };
@@ -130,9 +136,11 @@ export function computeMinCutDefense(
 
     // 拆点边：v_in → v_out
     // Source/Sink 格容量 INF（不可切割），普通格容量 1
+    // P2-1：blockedPositions 中的位置也设为 INF（不可切割），算法选其他位置作为割集。
     const isSource = exitSet.has(packed);
     const isSink = coreSet.has(packed);
-    const vertexCap = (isSource || isSink) ? INF_CAP : 1;
+    const isBlocked = blockedPositions?.has(packed) ?? false;
+    const vertexCap = (isSource || isSink || isBlocked) ? INF_CAP : 1;
     addEdge(vIn, vOut, vertexCap);
 
     // 邻接边：v_out → neighbor_in

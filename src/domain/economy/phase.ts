@@ -55,6 +55,14 @@ export interface PhaseInput {
    * 流失是稀疏大脉冲，单 tick 差分大部分=0 无法持续触发。
    */
   storageDrainRate: number;
+  /**
+   * P2-3：Storage 水位（0..1，usedCapacity/capacity）。无 storage 时为 undefined。
+   *
+   * 满仓豁免指标：forceCrisis 通道在 storage 高水位（> forceCrisisStorageHigh）时
+   * 不触发 — 满仓时 storage 流失是正常消费（upgrader 取能），不是采集失败。
+   * 避免"满仓 → crisis → upgrader 冻结 → link 死锁"的正反馈循环。
+   */
+  storageRatio?: number;
 }
 
 /** 跨 tick 持久化的相位状态（存入 room memory）。 */
@@ -159,6 +167,12 @@ export interface PhaseOptions {
    * 正常房 srcRatio 不持续>0.9，accum 归零不误触发。
    */
   storageDrainAccumThreshold: number;
+  /**
+   * P2-3：forceCrisis 满仓豁免阈值（0..1）。storageRatio 超过此值时 forceCrisis 不触发。
+   * 满仓时 storage 流失是正常消费（upgrader 取能），不是采集失败。
+   * 0.8 = storage 80% 以上不触发 forceCrisis。
+   */
+  forceCrisisStorageHigh: number;
 }
 
 export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
@@ -188,6 +202,9 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   srcRatioTrap: 0.9,
   srcStallEnterTicks: 50,
   storageDrainAccumThreshold: 1000,
+  // P2-3：满仓豁免 — storage 80% 以上时 forceCrisis 不触发。
+  // 满仓时 storage 流失是正常消费（upgrader 取能），不是采集失败。
+  forceCrisisStorageHigh: 0.8,
 };
 
 /**
@@ -225,8 +242,12 @@ export function evaluateColonyPhase(
   const storageDrainAccum = srcRatioHigh
     ? Math.max(0, (prev.storageDrainAccum ?? 0) + drainAccumDelta)
     : 0;
+  // P2-3：满仓豁免 — storage 高水位时流失是正常消费，不是采集失败。
+  // 避免"满仓 → crisis → upgrader 冻结 → link 死锁"的正反馈循环。
+  const storageHigh = (input.storageRatio ?? 0) > options.forceCrisisStorageHigh;
   const srcStalled = srcRatioHigh
-    && storageDrainAccum > options.storageDrainAccumThreshold;
+    && storageDrainAccum > options.storageDrainAccumThreshold
+    && !storageHigh;
   // 任一条件不再满足时立即归零，防残留累积导致误触发。
   const newStallTicks = srcStalled ? (prev.srcStallTicks ?? 0) + 1 : 0;
   const forceCrisis = newStallTicks >= options.srcStallEnterTicks;

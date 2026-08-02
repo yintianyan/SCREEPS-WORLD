@@ -227,7 +227,7 @@ const TIMESERIES_EXPR = `
         }
       });
       return JSON.stringify({
-        t:tick, ts:Date.now(), sv:mem.schemaVersion||0, cpu:u.lastUsedCpu, gcl:u.gcl||0,
+        t:Number(tick), ts:Date.now(), sv:mem.schemaVersion||0, cpu:u.lastUsedCpu, gcl:u.gcl||0,
         kernel:{tier:kernel.tier||null,recoveryTicks:kernel.recoveryTicks||0,
           skipReasons:kernel.skipReasons||{},strategy:kernel.strategy||null,
           expansion:kernel.expansion||null,
@@ -293,7 +293,7 @@ const SNAPSHOT_EXPR = `
         try{ segAll[si]=JSON.parse(segs[""+si]||"null"); }catch(e){ segAll[si]=null; }
       }
       return JSON.stringify({
-        t:tick, ts:Date.now(), kind:"snapshot",
+        t:Number(tick), ts:Date.now(), kind:"snapshot",
         objects:objsOut,
         memory:mem,
         segments:segAll,
@@ -338,6 +338,7 @@ async function snapshotOnce() {
 function ensureSession(tick) {
   fs.mkdirSync(COLLECT_DIR, { recursive: true });
   const cur = loadSession();
+  tick = Number(tick);
   const resetDetected = cur && tick !== undefined &&
     (tick + 1000 < cur.lastTick || (tick < cur.startTick));
   if (!cur || resetDetected) {
@@ -362,7 +363,7 @@ function ensureSession(tick) {
 function append(session, fileKey, line) {
   fs.appendFileSync(sessionFile(session[fileKey]), JSON.stringify(line) + "\n");
   session.count++;
-  session.lastTick = line.t ?? session.lastTick;
+  session.lastTick = Number(line.t ?? session.lastTick);
   fs.writeFileSync(sessionFile("session.json"), JSON.stringify(session, null, 2));
 }
 

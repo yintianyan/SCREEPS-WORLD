@@ -60,7 +60,7 @@ export const TUNING_BOUNDS: Readonly<Record<string, ParamBounds>> = {
   },
   "hauler.minCount": {
     param: "hauler.minCount",
-    floor: 1,
+    floor: 2,
     ceiling: 4,
     step: 1,
     cooldownTicks: 1000,

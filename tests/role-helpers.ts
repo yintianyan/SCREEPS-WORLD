@@ -88,10 +88,6 @@ export function resetGlobals(): void {
   delete g.linkConstrained;
   delete g.dismantlePlans;
   delete g.lastDismantleTick;
-  // P1-4：累计拆改次数（layout-metrics 采集消费）
-  delete g.dismantleCount;
-  // 走廊路路径缓存（漏洞 #5/#8 修复，corridor-roads 维护）
-  delete g.corridorPathCache;
 }
 
 /** 注册一个可被 Game.getObjectById 找到的对象。 */

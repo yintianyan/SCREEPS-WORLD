@@ -886,3 +886,109 @@ describe("mineralMiner 孵化门禁（工业链第一环激活）", () => {
     expect(requests.filter(r => r.role === "mineralMiner")).toHaveLength(0);
   });
 });
+
+// ── P2-2：tuning pending 期间 hauler 主动收敛 ──
+describe("P2-2 haulerPendingTarget — tuning pending 期间主动收敛 haulerTarget", () => {
+  it("haulerPendingTarget=4 时 haulerTarget=4（normal 态主动扩编）", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
+    const snap = stationSnapshot({ storage, rcl: 6, energyCapacityAvailable: 2300 });
+    const ctx = { ...normalCtx(0), haulerPendingTarget: 4 };
+    const result = evaluateDemand(snap, [], "normal", livingHarvester(), [], ctx, 1000);
+    expect(result.haulerTarget).toBe(4);
+  });
+
+  it("haulerPendingTarget=2 时 haulerTarget=2（normal 态主动缩编）", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
+    const snap = stationSnapshot({ storage, rcl: 6, energyCapacityAvailable: 2300 });
+    const ctx = { ...normalCtx(0), haulerPendingTarget: 2 };
+    const result = evaluateDemand(snap, [], "normal", livingHarvester(), [], ctx, 1000);
+    expect(result.haulerTarget).toBe(2);
+  });
+
+  it("无 haulerPendingTarget 时 haulerTarget 按常规计算（undefined 不覆盖）", () => {
+    // 信号叠加场景：container >80% (+2) + storage link >80% (+2) + 8C body
+    // → signal=4 → ceil(4×300/400)=3 → clamp[2,6]=3
+    // 用 3（≠2 且 ≠4）作为期望值，使"常规计算"与"pending 覆盖=2/4"可区分，
+    // 恢复测试的证伪能力（若 undefined 被错误覆盖，结果会变成 NaN/0 而非 3）。
+    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    const storageLink = mockStructure("link", { id: "slink", energy: 700, capacity: 800 });
+    storageLink.pos.getRangeTo = () => 1;
+    storage.pos.getRangeTo = () => 1;
+    const container = mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 });
+    const snap = mockSnapshot({
+      storage,
+      links: [storageLink],
+      containers: [container],
+      rcl: 5,
+      energyCapacityAvailable: 600,
+      controller: mockController({ level: 5 }),
+    });
+    const result = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(result.haulerTarget).toBe(3);
+  });
+
+  // P2-2 crisis 短路优先级测试（2026-08-03 加固）：
+  // demand.ts:558 短路 `!(inCrisis && !liquidityDriven)` 是 P2-2 的关键安全闸。
+  // - 偿付危机（drainScore 主导，liquidityDriven=false）时 pending 被忽略 → 收缩到 minCount
+  // - 流动性危机（liquidityScore 主导，liquidityDriven=true）时 pending 生效 → 满量孵化打破死锁
+  // 若该短路被未来重构破坏，pending 会在偿付危机时强行扩编 hauler，
+  // 与"危机收缩到 minCount"初衷冲突，可能让 W37S58 流动性死锁重现。
+  it("recovery 态 + drainScore 主导（liquidityDriven=false）+ haulerPendingTarget=4 → pending 被忽略，收缩到 minCount=2", () => {
+    // 信号叠加场景让 dynamicHaulerTarget=3（≠2 且 ≠4），使"危机收缩 Math.min(3,2)=2"
+    // 与"pending 覆盖=4"可区分。若短路被破坏，pending 生效 → haulerTarget=4 ≠ 2。
+    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    const storageLink = mockStructure("link", { id: "slink", energy: 700, capacity: 800 });
+    storageLink.pos.getRangeTo = () => 1;
+    storage.pos.getRangeTo = () => 1;
+    const container = mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 });
+    const snap = mockSnapshot({
+      storage,
+      links: [storageLink],
+      containers: [container],
+      rcl: 5,
+      energyCapacityAvailable: 600,
+      controller: mockController({ level: 5 }),
+    });
+    // drainScore=80 主导（liquidityScore=0）→ liquidityDriven=false
+    // colonyState=recovery（第3参数）→ inCrisis=true
+    // 短路 !(true && !false)=!(true && true)=false → pending 被忽略
+    const ctx = {
+      ...normalCtx(0),
+      haulerPendingTarget: 4,
+      drainScore: 80,
+      liquidityScore: 0,
+    };
+    const result = evaluateDemand(snap, [], "recovery", livingHarvester(), [], ctx, 1000);
+    // 危机收缩：Math.min(dynamicHaulerTarget=3, minCount=2)=2，pending=4 被忽略
+    expect(result.haulerTarget).toBe(2);
+  });
+
+  it("recovery 态 + liquidityScore 主导（liquidityDriven=true）+ haulerPendingTarget=4 → liquidity 例外，pending 生效", () => {
+    // 流动性陷阱时 hauler 是解药，必须满量孵化打破死锁（W37S58 根因之一）
+    const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
+    const storageLink = mockStructure("link", { id: "slink", energy: 700, capacity: 800 });
+    storageLink.pos.getRangeTo = () => 1;
+    storage.pos.getRangeTo = () => 1;
+    const container = mockStructure("container", { id: "c0", energy: 1700, capacity: 2000 });
+    const snap = mockSnapshot({
+      storage,
+      links: [storageLink],
+      containers: [container],
+      rcl: 5,
+      energyCapacityAvailable: 600,
+      controller: mockController({ level: 5 }),
+    });
+    // liquidityScore=80 主导（drainScore=0）→ liquidityDriven=true
+    // colonyState=recovery → inCrisis=true
+    // 短路 !(true && !true)=!(true && false)=!false=true → pending 生效
+    const ctx = {
+      ...normalCtx(0),
+      haulerPendingTarget: 4,
+      drainScore: 0,
+      liquidityScore: 80,
+    };
+    const result = evaluateDemand(snap, [], "recovery", livingHarvester(), [], ctx, 1000);
+    // liquidity 例外：不收缩，pending 覆盖 → haulerTarget=4
+    expect(result.haulerTarget).toBe(4);
+  });
+});

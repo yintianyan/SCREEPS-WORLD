@@ -76,6 +76,15 @@ export interface RoomDemandContext {
     distScaleUpSince?: number;
     builderPressureState?: "full" | "shrinking";
   };
+  /**
+   * P2-2：tuning pending 期间 hauler 主动收敛目标。
+   *
+   * 当存在 hauler.minCount/maxCount 的 pendingValidation 时，由适配层计算新边界值传入。
+   * demand 将 haulerTarget 设为此值，让 spawn 主动扩编/缩编到合同目标，
+   * 配合 P1-1 的 isContractMet 修改让调参合同能真正满足。
+   * undefined = 无 pending，按常规 dynamicHaulerTarget 计算。
+   */
+  haulerPendingTarget?: number;
 }
 
 /**
@@ -542,6 +551,13 @@ export function evaluateDemand(
   haulerTarget = (inCrisis && !liquidityDriven)
     ? Math.min(dynamicHaulerTarget, haulerConfig.minCount)
     : dynamicHaulerTarget;
+  // P2-2：tuning pending 期间主动收敛到合同目标，让 isContractMet 能真正满足。
+  // 上调 maxCount 时扩编到新边界；下调 minCount 时缩编到新边界。
+  // 危机收缩（inCrisis && !liquidityDriven）优先级高于 pending 收敛 —
+  // 危机时 hauler 只保留 minCount，tuning 合同延后到危机解除后验证。
+  if (!(inCrisis && !liquidityDriven) && roomCtx.haulerPendingTarget !== undefined) {
+    haulerTarget = roomCtx.haulerPendingTarget;
+  }
   if (haulerTotal < haulerTarget && hasLogistics) {
     for (let i = haulerTotal; i < haulerTarget; i++) {
       const key = spawnKey("hauler", home, i);

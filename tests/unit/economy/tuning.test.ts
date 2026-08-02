@@ -83,7 +83,7 @@ function evaluateTwice(
 describe("Tuning Bounds", () => {
   it("clampParam 钳制到 floor", () => {
     expect(clampParam("hauler.maxCount", 0)).toBe(2);
-    expect(clampParam("hauler.minCount", 0)).toBe(1);
+    expect(clampParam("hauler.minCount", 0)).toBe(2);
   });
 
   it("clampParam 钳制到 ceiling", () => {
@@ -290,19 +290,21 @@ describe("Tuning Evaluator — hauler.minCount", () => {
   });
 
   it("container 极空 + hauler ≤ minCount → 减少", () => {
+    // 初始 minCount=3（floor=2，可下调到 2）
+    const bounds = { ...DEFAULT_BOUNDS, hauler: { minCount: 3, maxCount: 6 } };
     const result = evaluateTwice(
       healthySignals({
         containerFillRatio: 0.1,
         haulerCount: 2,
       }),
-      DEFAULT_BOUNDS,
+      bounds,
       {},
       1000,
     );
 
     const adj = result.adjustments.find(a => a.param === "hauler.minCount");
     expect(adj).toBeDefined();
-    expect(adj!.newValue).toBe(1);
+    expect(adj!.newValue).toBe(2);
   });
 });
 
@@ -532,7 +534,7 @@ describe("getRoleBounds — 覆盖层", () => {
     };
 
     const bounds = getRoleBounds("hauler", "W1N1");
-    expect(bounds.minCount).toBe(1); // TUNING_BOUNDS floor
+    expect(bounds.minCount).toBe(2); // TUNING_BOUNDS floor
   });
 
   it("minCount > maxCount 时 minCount 被钳制到 maxCount", () => {

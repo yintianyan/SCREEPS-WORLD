@@ -150,6 +150,47 @@ function getCachedExits(room: Room, roomName: string): { x: number; y: number }[
   return positions;
 }
 
+/**
+ * P1-2：min-cut 割集位置可建造性预校验（纯函数，便于单元测试）。
+ *
+ * 1. 出口格及紧邻出口格不可建造 wall/rampart（Screeps 出口格 x/y=0|49，
+ *    紧邻格 x/y=1|48 虽可建造但防御价值为零且 min-cut 常误选）。
+ * 2. 已有 construction site 的位置跳过（避免重复入队 → 创建失败 → blocked）。
+ *
+ * @param pos 割集位置
+ * @param hasConstructionSite 该位置是否已有 construction site（由调用方 lookForAt 查询）
+ * @returns true = 可建造，false = 不可建造（应跳过）
+ */
+export function isMinCutPositionBuildable(
+  pos: { x: number; y: number },
+  hasConstructionSite: boolean,
+): boolean {
+  if (pos.x <= 1 || pos.x >= 48 || pos.y <= 1 || pos.y >= 48) return false;
+  if (hasConstructionSite) return false;
+  return true;
+}
+
+/**
+ * P2-1：构建不可放置割集顶点的位置集合（出口格及紧邻出口格）。
+ *
+ * 这些位置在 min-cut 算法中拆点边容量设为 INF（不可切割），
+ * 算法自然选其他位置作为割集，保证生成的割集全部可建造。
+ *
+ * 集合包含 x≤1 或 x≥48 或 y≤1 或 y≥48 的所有格子（packed = x*50+y）。
+ * defense-planner 是 P3 低频系统（interval=10, bucket≥5000），遍历开销可接受。
+ */
+function buildBlockedPositions(): Set<number> {
+  const blocked = new Set<number>();
+  for (let x = 0; x < 50; x++) {
+    for (let y = 0; y < 50; y++) {
+      if (x <= 1 || x >= 48 || y <= 1 || y >= 48) {
+        blocked.add(x * 50 + y);
+      }
+    }
+  }
+  return blocked;
+}
+
 function planDefense(
   snapshot: import("../kernel/contracts").RoomSnapshot,
 ): void {
@@ -179,7 +220,7 @@ function planDefense(
   // min-cut key 格式（v3）: defense.mincut.wall.{x}.{y} / defense.mincut.rampart.{x}.{y}
   // 旧格式 defense.mincut.{x}.{y} 也匹配前缀检查，自然消化后不重生成。
   const mincutKeyCount = queue.filter(
-    t => t.key.startsWith("defense.mincut.") && t.state !== "done",
+    t => t.key.startsWith("defense.mincut.") && t.state !== "done" && t.state !== "blocked",
   ).length;
 
   // P0 修复：如果 buildQueue 中已有未完成的 mincut rampart 任务，跳过全部计算。
@@ -219,7 +260,11 @@ function planDefense(
       // 缓存 miss 或核心结构已变 — 执行 min-cut 计算。
       const terrain = room.getTerrain();
       const getTerrain = (x: number, y: number): boolean => terrain.get(x, y) === TERRAIN_MASK_WALL;
-      const computed = computeMinCutDefense(getTerrain, corePositions, exitPositions, MAX_CUT_RAMPARTS);
+      // P2-1：构建不可放置割集顶点的位置集合（出口格及紧邻出口格）。
+      // 这些位置 min-cut 会设为不可切割，算法选其他位置作为割集，
+      // 保证生成的割集全部可建造（与 P1-2 入队预校验双重保险）。
+      const blockedPositions = buildBlockedPositions();
+      const computed = computeMinCutDefense(getTerrain, corePositions, exitPositions, MAX_CUT_RAMPARTS, blockedPositions);
       cutResult = {
         rampartPositions: computed.rampartPositions,
         complete: computed.complete,
@@ -271,6 +316,10 @@ function planDefense(
         const packed = pos.x * 50 + pos.y;
         // 已建 rampart 或 wall 的位置跳过
         if (builtRamparts.has(packed) || builtWalls.has(packed)) continue;
+
+        // P1-2：可建造性预校验 — 避免入队注定 blocked 的任务。
+        const sites = room.lookForAt(LOOK_CONSTRUCTION_SITES, pos.x, pos.y);
+        if (!isMinCutPositionBuildable(pos, sites.length > 0)) continue;
 
         // 按位置特征分流：有结构 → rampart（共格），无结构 → wall（阻挡通行）
         const hasStructure = structurePositions.has(packed);

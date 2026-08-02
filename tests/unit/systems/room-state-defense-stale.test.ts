@@ -218,3 +218,94 @@ describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
     expect(after.colonyState).toBe("defense");
   });
 });
+
+/**
+ * P1-3 退出 defense 迟滞 — 威胁消除后维持 defense 姿态 defenseExitHysteresis tick。
+ *
+ * 防止敌人短暂进出房间导致 colonyState 高频抖动（525 次/327k tick）。
+ * 进入 defense 仍 1 tick 触发（防御不延迟）；退出需连续 defenseExitHysteresis(50) tick 无威胁。
+ */
+describe("room-state — P1-3 退出 defense 迟滞", () => {
+  let savedMemory: typeof Memory | undefined;
+
+  beforeEach(() => {
+    savedMemory = (globalThis as Record<string, unknown>).Memory as typeof Memory | undefined;
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: {
+        W1N1: {
+          phase: { phase: "growth", reserve: 1000, drainScore: 0, liquidityScore: 0, bandTicks: 0 },
+        },
+      },
+    };
+  });
+
+  afterEach(() => {
+    if (savedMemory !== undefined) {
+      (globalThis as Record<string, unknown>).Memory = savedMemory;
+    } else {
+      delete (globalThis as Record<string, unknown>).Memory;
+    }
+  });
+
+  function getRoomMem() {
+    return ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
+  }
+
+  it("威胁消除后 lastHostileAge < defenseExitHysteresis 时维持 defense（迟滞期内）", () => {
+    // 上一 tick 状态：defense，lastHostileAt=100
+    const rm = getRoomMem();
+    rm.colonyState = "defense";
+    rm.lastHostileAt = 100;
+    rm.prevThreatCount = 1;
+    // 本 tick：威胁全部消失，tick=130（lastHostileAge=30 < 50）
+    const snap = makeSnapshot({ threatCreeps: [] });
+    roomStateSystem.run(makeCtx([snap], 130));
+
+    // 迟滞期内 → hasHostiles=true → colonyState=defense
+    expect(getRoomMem().colonyState).toBe("defense");
+  });
+
+  it("威胁消除后 lastHostileAge >= defenseExitHysteresis 时退出 defense（迟滞结束）", () => {
+    // 上一 tick 状态：defense，lastHostileAt=100
+    const rm = getRoomMem();
+    rm.colonyState = "defense";
+    rm.lastHostileAt = 100;
+    rm.prevThreatCount = 1;
+    // 本 tick：威胁全部消失，tick=160（lastHostileAge=60 >= 50）
+    const snap = makeSnapshot({ threatCreeps: [] });
+    roomStateSystem.run(makeCtx([snap], 160));
+
+    // 迟滞结束 → hasHostiles=false → colonyState 非 defense
+    expect(getRoomMem().colonyState).not.toBe("defense");
+  });
+
+  it("非 defense 状态下威胁消除不触发迟滞（直接退出）", () => {
+    // 上一 tick 状态：normal（非 defense），但 lastHostileAt 有值
+    const rm = getRoomMem();
+    rm.colonyState = "normal";
+    rm.lastHostileAt = 100;
+    rm.prevThreatCount = 1;
+    // 本 tick：威胁全部消失，tick=130（lastHostileAge=30 < 50）
+    const snap = makeSnapshot({ threatCreeps: [] });
+    roomStateSystem.run(makeCtx([snap], 130));
+
+    // prevInDefense=false → 无迟滞 → hasHostiles=false → colonyState 非 defense
+    expect(getRoomMem().colonyState).not.toBe("defense");
+  });
+
+  it("迟滞期内威胁再次出现时 lastHostileAt 刷新（迟滞不阻塞进入）", () => {
+    // 上一 tick 状态：defense（迟滞期），lastHostileAt=100
+    const rm = getRoomMem();
+    rm.colonyState = "defense";
+    rm.lastHostileAt = 100;
+    rm.prevThreatCount = 0; // 威胁已消失
+    // 本 tick：威胁再次出现（0→1），tick=130
+    const snap = makeSnapshot({ threatCreeps: makeThreat(1) });
+    roomStateSystem.run(makeCtx([snap], 130));
+
+    // threatIncreased=true → 刷新 lastHostileAt=130
+    const after = getRoomMem();
+    expect(after.lastHostileAt).toBe(130);
+    expect(after.colonyState).toBe("defense");
+  });
+});

@@ -146,6 +146,10 @@ export const spawnManagerSystem: System = {
           distScaleUpSince: roomMem.distScaleUpSince,
           builderPressureState: roomMem.builderPressureState,
         },
+        // P2-2：tuning pending 期间 hauler 主动收敛目标。
+        // 上调 maxCount → target = preAdjustValue + 1；下调 minCount → target = preAdjustValue - 1。
+        // 让 demand 主动扩编/缩编到合同目标，配合 isContractMet 让调参合同真正满足。
+        haulerPendingTarget: computeHaulerPendingTarget(snapshot.roomName),
       };
       const demandResult = evaluateDemand(
         snapshot,
@@ -202,6 +206,25 @@ export const spawnManagerSystem: System = {
 const KNOWN_ROLES: ReadonlySet<string> = new Set(Object.keys(CONFIG.roles));
 
 /**
+ * P2-2：从 Memory 读取 hauler tuning pending 状态，计算主动收敛目标。
+ *
+ * - hauler.maxCount pending + up → preAdjustValue + 1（扩编到新上限）
+ * - hauler.minCount pending + down → preAdjustValue - 1（缩编到新下限）
+ * - 否则 → undefined（无 pending，demand 按常规计算）
+ *
+ * step=1 时 preAdjustValue±1 = newValue，与 isContractMet 合同目标对齐。
+ */
+function computeHaulerPendingTarget(roomName: string): number | undefined {
+  const pending = Memory.kernel?.tuning?.rooms?.[roomName]?.pendingValidation;
+  if (!pending) return undefined;
+  const upMax = pending["hauler.maxCount"];
+  if (upMax?.adjustDirection === "up") return upMax.preAdjustValue + 1;
+  const downMin = pending["hauler.minCount"];
+  if (downMin?.adjustDirection === "down") return downMin.preAdjustValue - 1;
+  return undefined;
+}
+
+/**
  * B1 回收通道。
  *
  * 标记规则（保守白名单，不做全量配额对账）：
@@ -222,12 +245,18 @@ function recyclePass(
   // ── 标记（纯函数决策）──
   // roomCreeps 已按 home 预过滤，selectRecycleCandidates 内部的 home 过滤为冗余 no-op，
   // 但保留以维护纯函数的自包含契约。
+  // P1-1：tuning 下调 hauler.minCount 时传入下调目标，让 recyclePass 主动收敛。
+  const haulerPendingDown = Memory.kernel?.tuning?.rooms?.[home]?.pendingValidation?.["hauler.minCount"];
+  const haulerPendingDownTarget = haulerPendingDown?.adjustDirection === "down"
+    ? haulerPendingDown.preAdjustValue - 1
+    : undefined;
   const marked = selectRecycleCandidates(
     roomCreeps,
     home,
     KNOWN_ROLES,
     getRoleBounds("harvester", home).minCount,
     haulerTarget,
+    haulerPendingDownTarget,
   );
   const markedSet = new Set(marked);
   for (const name of marked) {

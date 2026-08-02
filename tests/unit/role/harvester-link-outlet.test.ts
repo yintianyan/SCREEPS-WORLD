@@ -106,4 +106,39 @@ describe("harvester — source link 灌能出口判定", () => {
 
     expect(creep.transfer).toHaveBeenCalledWith(link, "energy");
   });
+
+  // P2-1 死锁修复（推翻 P0-3 旧行为）：RCL5/6 无 storage link + controller link
+  // 完全充满（freeCapacity=0）时，linkHasOutlet=false → harvester 灌 container 走
+  // hauler 物流。P0-3 旧逻辑"target>0 即灌 source link"会导致 controller link 满
+  // → link-system 无处可传 → source link 积压 → container 满 → drop 衰减（rcl5-links
+  // 回归实证）。新逻辑让 harvester 在 controller link 消费出空闲前先灌 container，
+  // link-system 下一 tick 把 source link 能量传走后 harvester 自然恢复灌 link。
+  it("RCL5 无 storage link + controller link 充满（freeCapacity=0）→ 灌 container 避免能量卡死 source link", () => {
+    const { creep, container, link, ctx } = setup({ withStorageLink: false, rcl: 5, ctrlLinkEnergy: 800 });
+
+    harvesterRole.run(creep, ctx);
+
+    expect(creep.transfer).toHaveBeenCalledWith(container, "energy");
+    expect(creep.transfer).not.toHaveBeenCalledWith(link, "energy");
+  });
+
+  it("RCL6 无 storage link + controller link 充满（freeCapacity=0）→ 灌 container", () => {
+    const { creep, container, link, ctx } = setup({ withStorageLink: false, rcl: 6, ctrlLinkEnergy: 800 });
+
+    harvesterRole.run(creep, ctx);
+
+    expect(creep.transfer).toHaveBeenCalledWith(container, "energy");
+    expect(creep.transfer).not.toHaveBeenCalledWith(link, "energy");
+  });
+
+  // P2-1 回归保护：controller link 接近满但仍有空闲（freeCapacity>0）时，
+  // linkHasOutlet=true → harvester 灌 source link（link-system 可传走）。
+  // 这与上面"完全充满"测试形成对照，验证 freeCapacity 边界判定正确。
+  it("RCL5 无 storage link + controller link 接近满（freeCapacity>0）→ 灌 source link", () => {
+    const { creep, link, ctx } = setup({ withStorageLink: false, rcl: 5, ctrlLinkEnergy: 799 });
+
+    harvesterRole.run(creep, ctx);
+
+    expect(creep.transfer).toHaveBeenCalledWith(link, "energy");
+  });
 });
