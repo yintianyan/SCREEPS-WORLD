@@ -244,6 +244,12 @@ export const CONFIG = {
     /** 每房道路专用 site 名额 — 独立于普通名额，保证走廊路能与 extension 并行建造，
      * 不被 priority 3 饥饿永久挤占。 */
     maxRoadSitesPerRoom: 2,
+    /** 每房 wall 专用 site 名额 — min-cut v3 割集顶点改用 wall（阻挡通行），
+     * 独立计额避免与 extension 竞争 normal 槽位导致防御线建不起来。 */
+    maxWallSitesPerRoom: 2,
+    /** 每房 rampart 专用 site 名额 — 核心覆盖 rampart + min-cut 有结构位置的 rampart，
+     * 与 wall 同类独立计额，不与 normal/road 竞争。 */
+    maxRampartSitesPerRoom: 2,
     /** 每房额外允许的关键 site 数。 */
     maxCriticalSitesPerRoom: 1,
     /** 全局活跃 site 上限。

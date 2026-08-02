@@ -82,6 +82,16 @@ export function resetGlobals(): void {
   delete g.__pathSearchBudget;
   // P1-F：layout 4-stage 分片跨 tick 中间产物
   delete g.__planStageData;
+  // P1-1：死资产 link 计时器（link-system 维护）
+  delete g.deadAssetSince;
+  // P1-3：link 几何受限标记 + P1-4 拆改计划与冷却账本
+  delete g.linkConstrained;
+  delete g.dismantlePlans;
+  delete g.lastDismantleTick;
+  // P1-4：累计拆改次数（layout-metrics 采集消费）
+  delete g.dismantleCount;
+  // 走廊路路径缓存（漏洞 #5/#8 修复，corridor-roads 维护）
+  delete g.corridorPathCache;
 }
 
 /** 注册一个可被 Game.getObjectById 找到的对象。 */

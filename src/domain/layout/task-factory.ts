@@ -443,18 +443,8 @@ export function createControllerLinkTask(
   options: ValidationOptions,
   queuedLinkCount = 0,
 ): BuildTaskCandidate | undefined {
-  if (snapshot.rcl < 5) return undefined;
-  if (!snapshot.controller) return undefined;
-
-  const controller = snapshot.controller;
-  if (hasAdjacentStructure(controller.pos.x, controller.pos.y, snapshot, STRUCTURE_LINK)) return undefined;
-
-  const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
-  const existingLinks = snapshot.links.length;
-  const linkSites = snapshot.constructionSites.filter(
-    s => s.structureType === STRUCTURE_LINK,
-  ).length;
-  if (existingLinks + linkSites + queuedLinkCount >= maxLinks) return undefined;
+  if (!shouldHaveControllerLink(snapshot, queuedLinkCount)) return undefined;
+  const controller = snapshot.controller!;
 
   const adjacentPos = findAdjacentBuildable(
     controller.pos, room, snapshot, options, linkRolePredicate(snapshot, "controller"),
@@ -476,14 +466,42 @@ export function createControllerLinkTask(
 }
 
 /**
+ * 判断房间是否应该有 controller link（RCL5+ + 无相邻 link + 槽位未满）。
+ *
+ * P1-3 fallback 链（docs/layout-system-design-2026-08.md §3.2）：
+ * layout-planner 用此谓词判断 createControllerLinkTask 返回 undefined 是否
+ * 表示「几何放不下」（应触发 fallback / 标记 linkConstrained），还是「正常跳过」
+ *（已建成 / 槽位满 / RCL 不足）。
+ */
+export function shouldHaveControllerLink(
+  snapshot: RoomSnapshot,
+  queuedLinkCount = 0,
+): boolean {
+  if (snapshot.rcl < 5) return false;
+  if (!snapshot.controller) return false;
+  if (hasAdjacentStructure(
+    snapshot.controller.pos.x,
+    snapshot.controller.pos.y,
+    snapshot,
+    STRUCTURE_LINK,
+  )) return false;
+  const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
+  const existingLinks = snapshot.links.length;
+  const linkSites = snapshot.constructionSites.filter(
+    s => s.structureType === STRUCTURE_LINK,
+  ).length;
+  return existingLinks + linkSites + queuedLinkCount < maxLinks;
+}
+
+/**
  * 为 storage 生成 link 任务（RCL5+）。
  * storage link 紧邻 storage 放置（range <= 2），作为 link 网络的「最后一公里」：
  * source link 能量瞬移到 storage link，hauler 从 storage link 排空到 storage。
  *
- * 优先级 = 1（与 controller link 同级）：在 RCL5 仅 2 个 link 槽位时，
- * storage link 的优先级高于第二个 source link —— 因为 source + storage
- * 是最小可用 link 网络（source→storage 物流打通），而双 source 无 storage
- * 意味着 link 网络无法卸载能量。
+ * 优先级 = 1（与 controller link 同级）：高于第二个 source link（priority 2）。
+ * 调用顺序（layout-planner stage 2，2026-08-02 修订）：source(1) → controller →
+ * storage → source(rest)。RCL5 仅 2 槽位时落在 source + controller（MVC 配置），
+ * storage 在 RCL6 才有槽位；若 controller 几何失败，storage 顶上作为 fallback。
  *
  * 队列感知：`queuedLinkCount` 传入当前 BuildQueue 中已有的 link 任务数。
  */
@@ -493,28 +511,13 @@ export function createStorageLinkTask(
   options: ValidationOptions,
   queuedLinkCount = 0,
 ): BuildTaskCandidate | undefined {
-  if (snapshot.rcl < 5) return undefined;
-  if (!snapshot.storage) return undefined;
-
-  // 检查 storage 附近是否已有 link 或 link 工地。
-  if (hasAdjacentStructure(
-    snapshot.storage.pos.x,
-    snapshot.storage.pos.y,
-    snapshot,
-    STRUCTURE_LINK,
-  )) return undefined;
-
-  const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
-  const existingLinks = snapshot.links.length;
-  const linkSites = snapshot.constructionSites.filter(
-    s => s.structureType === STRUCTURE_LINK,
-  ).length;
-  if (existingLinks + linkSites + queuedLinkCount >= maxLinks) return undefined;
+  if (!shouldHaveStorageLink(snapshot, queuedLinkCount)) return undefined;
+  const storage = snapshot.storage!;
 
   // 在 storage 附近 1 格内寻找可建造位置（link 不需要站桩位，只需紧邻 storage）。
   // 角色感知：只接受运行时分类为 storage 的邻格（闭合放置意图与运行时分类）。
   const adjacentPos = findAdjacentBuildable(
-    snapshot.storage.pos, room, snapshot, options, linkRolePredicate(snapshot, "storage"),
+    storage.pos, room, snapshot, options, linkRolePredicate(snapshot, "storage"),
   );
   if (!adjacentPos) return undefined;
   // 密封守卫：link 是障碍结构。
@@ -527,12 +530,38 @@ export function createStorageLinkTask(
     pos: adjacentPos,
     structureType: STRUCTURE_LINK,
     // 优先级 1：与 controller link 同级，高于第二个 source link（priority 2）。
-    // layout-planner 在 source(1) 之后、controller 之前调用，保证 RCL5
-    // 仅有的 2 个槽位分配为 source + storage。
+    // layout-planner 调用顺序（2026-08-02 修订）：source(1) → controller →
+    // storage → source(rest)。RCL5 落 source+controller，RCL6 起 storage 入网。
     priority: 1,
     phase: "late",
     validation: "ok",
   };
+}
+
+/**
+ * 判断房间是否应该有 storage link（RCL5+ + 有 storage + 无相邻 link + 槽位未满）。
+ *
+ * P1-3 fallback 链：layout-planner 用此谓词判断 createStorageLinkTask 返回
+ * undefined 是否表示「几何放不下」（应标记 linkConstrained），还是「正常跳过」。
+ */
+export function shouldHaveStorageLink(
+  snapshot: RoomSnapshot,
+  queuedLinkCount = 0,
+): boolean {
+  if (snapshot.rcl < 5) return false;
+  if (!snapshot.storage) return false;
+  if (hasAdjacentStructure(
+    snapshot.storage.pos.x,
+    snapshot.storage.pos.y,
+    snapshot,
+    STRUCTURE_LINK,
+  )) return false;
+  const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
+  const existingLinks = snapshot.links.length;
+  const linkSites = snapshot.constructionSites.filter(
+    s => s.structureType === STRUCTURE_LINK,
+  ).length;
+  return existingLinks + linkSites + queuedLinkCount < maxLinks;
 }
 
 /**
@@ -824,8 +853,12 @@ export const DEFAULT_DEFENSE_OPTIONS: DefenseOptions = {
   // P0-3：从 4 降为 3 — RCL3 是"刚有 Tower 但无 rampart"的最脆弱窗口期。
   minRcl: 3,
   defenseRadius: 7,
-  lineLength: 3,
-  maxLinesPerCycle: 1,
+  // v3 增强：从 3→5 — 旧 3 格 rampart 线在宽出口处留缺口，敌人可绕行；
+  // 5 格形成更连续的封锁面，迫使入侵者必须摧毁而非绕路。
+  lineLength: 5,
+  // v3 增强：从 1→2 — 单周期只铺 1 条线防线太薄，2 条线提供纵深，
+  // 第一条被突破后第二条为 tower 争取额外输出窗口。
+  maxLinesPerCycle: 2,
 };
 
 /** 8 方向单位向量（对应 atan2 的 8 个 45° 扇区，0 = 东，顺时针）。 */

@@ -337,6 +337,25 @@ declare global {
      * 供控制台采样与人工介入信号；仅在实际缺口集合变化时写入（无 Memory 抖动）。
      */
     layoutGaps?: Record<string, Record<string, number>>;
+    /**
+     * 布局可观测性指标（v25+，layout-metrics 写，漏洞 #11）：房名 → 指标快照。
+     * 字段见 LayoutMetrics 接口（deadAssetRate/linkUtilization/dismantleCount/
+     * mvcGapCount/linkConstrained/defenseWallRatio/defenseAlgoVersion/
+     * defenseRampartWeakPoints）。仅变化时写入，稳定状态不抖动。
+     * 消费方：deadAssetRate>0.5 触发拆改评估、linkUtilization<0.3 触发 link 审查、
+     * dismantleCount 增长但 deadAssetRate 不降 → 拆改失效告警、
+     * defenseWallRatio<0.7 防线弱点过多告警。
+     */
+    layoutMetrics?: Record<string, {
+      deadAssetRate: number;
+      linkUtilization: number;
+      dismantleCount: number;
+      mvcGapCount: number;
+      linkConstrained: boolean;
+      defenseWallRatio: number;
+      defenseAlgoVersion: string;
+      defenseRampartWeakPoints: number;
+    }>;
   }
 
   /** 参数自调优的持久化状态。 */

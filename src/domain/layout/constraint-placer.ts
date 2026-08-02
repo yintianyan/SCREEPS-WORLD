@@ -403,6 +403,122 @@ function placeLabCluster(
 }
 
 /**
+ * Tower 分桶配额 — 按 RCL 阶段决定 controller 侧 / anchor 侧配额。
+ *
+ * 设计目标（docs/layout-system-design-2026-08.md §3.7）：
+ *   RCL3 (+1)：通用池（openness 评分倾向 anchor 侧）→ 1 anchor 塔
+ *   RCL5 (+1)：全 controller 桶 → 1 controller 塔（累计 1 anchor + 1 controller）
+ *   RCL7 (+1)：全 controller 桶 → 1 controller 塔（累计 1 anchor + 2 controller）
+ *   RCL8 (+3)：1 controller + 2 anchor（累计 3 anchor + 3 controller）
+ *
+ * 硬约束（docs §3.7）：
+ *   RCL5/7：至少 1 塔 anchor Chebyshev ≤ 5（由 RCL3 塔满足）
+ *   RCL8：至少 2 塔 anchor Chebyshev ≤ 5（由 RCL8 批次的 2 anchor 塔满足）
+ *
+ * 通用池兜底：当 controller 桶或 anchor 桶因地形受限放不满时，
+ * 剩余 need 走通用池（按 openness 评分），避免静默缺塔。
+ *
+ * @param phase 批次相位
+ * @param need 本批次需放置数量
+ * @returns controller 桶配额 + anchor 桶配额（剩余走通用池）
+ */
+function towerBucketQuota(
+  phase: LayoutPhase,
+  need: number,
+): { controller: number; anchor: number } {
+  switch (phase) {
+    case "late": // RCL5：全 controller
+    case "rcl7": // RCL7：全 controller
+      return { controller: need, anchor: 0 };
+    case "rcl8": // RCL8：1 controller + 2 anchor（硬约束至少 2 anchor ≤ 5）
+      return { controller: Math.min(1, need), anchor: Math.max(0, need - 1) };
+    default: // rcl3 等：通用池（openness 评分倾向 anchor 侧）
+      return { controller: 0, anchor: 0 };
+  }
+}
+
+/**
+ * Tower 分桶放置 — controller 侧 + anchor 侧硬约束 + 通用池兜底。
+ *
+ * 三阶段放置（docs/layout-system-design-2026-08.md §3.7）：
+ *   1. controller 桶：按距 controller 每 15 格分桶排序，优先落在 controller 射程高效区
+ *      （官方衰减：20 格起降至最低 25% 伤害）
+ *   2. anchor 桶：Chebyshev(anchor) ≤ 5 硬约束；≤ 5 候选不足时降级 ≤ 7；
+ *      再不足走通用池。保证核心防御覆盖。
+ *   3. 通用池兜底：剩余 need 按 candidates 原序（openness 评分降序）放置。
+ *
+ * 候选格被占用后从 occupied 集合排除，避免 controller 桶与 anchor 桶选同一格。
+ *
+ * @returns 放置位置列表（可能少于 need，由缺口告警机制兜底）
+ */
+function placeTowerBuckets(
+  need: number,
+  phase: LayoutPhase,
+  candidates: readonly CandidateTile[],
+  occupied: Set<number>,
+  getTerrain: (x: number, y: number) => boolean,
+  anchor: { x: number; y: number },
+  controllerPos: { x: number; y: number },
+  sealTolerance: number,
+): { x: number; y: number }[] {
+  const quota = towerBucketQuota(phase, need);
+  const result: { x: number; y: number }[] = [];
+
+  /** 从给定候选池中放置 n 个塔，跳过已占/密封格。 */
+  const tryPlace = (pool: readonly CandidateTile[], n: number): number => {
+    let placed = 0;
+    for (const c of pool) {
+      if (placed >= n) break;
+      const packed = packPos(c.x, c.y);
+      if (occupied.has(packed)) continue;
+      if (wouldSealLocal(c.x, c.y, getTerrain, occupied, sealTolerance)) continue;
+      occupied.add(packed);
+      result.push({ x: c.x, y: c.y });
+      placed++;
+    }
+    return placed;
+  };
+
+  // 1. controller 桶：按距 controller 每 15 格分桶排序（近桶优先）
+  if (quota.controller > 0) {
+    const controllerSorted = [...candidates].sort((a, b) => {
+      const bucketOf = (c: CandidateTile): number =>
+        Math.floor(
+          (Math.abs(c.x - controllerPos.x) + Math.abs(c.y - controllerPos.y)) / 15,
+        );
+      return (bucketOf(a) - bucketOf(b)) || (b.score - a.score) || a.x - b.x || a.y - b.y;
+    });
+    tryPlace(controllerSorted, quota.controller);
+  }
+
+  // 2. anchor 桶：Chebyshev ≤ 5 硬约束（降级 ≤ 7）
+  if (quota.anchor > 0) {
+    const chebyshev = (c: CandidateTile): number =>
+      Math.max(Math.abs(c.x - anchor.x), Math.abs(c.y - anchor.y));
+    const sortByScore = (a: CandidateTile, b: CandidateTile): number =>
+      (b.score - a.score) || a.x - b.x || a.y - b.y;
+    // 紧桶：≤ 5
+    const tightPool = candidates.filter(c => chebyshev(c) <= 5).sort(sortByScore);
+    const placed = tryPlace(tightPool, quota.anchor);
+    // 降级：≤ 5 不够时放宽到 ≤ 7（排除已尝试的 ≤ 5）
+    if (placed < quota.anchor) {
+      const relaxedPool = candidates
+        .filter(c => chebyshev(c) > 5 && chebyshev(c) <= 7)
+        .sort(sortByScore);
+      tryPlace(relaxedPool, quota.anchor - placed);
+    }
+  }
+
+  // 3. 通用池兜底：剩余 need 按 candidates 原序放置
+  const remaining = need - result.length;
+  if (remaining > 0) {
+    tryPlace(candidates, remaining);
+  }
+
+  return result;
+}
+
+/**
  * 约束推导结构放置 — 主入口。
  *
  * 为指定 RCL 放置所有结构（从 RCL2 到目标 RCL 的累计）。
@@ -420,9 +536,10 @@ function placeLabCluster(
  *   传入时结构放置偏好靠近能量流转路径；不传时退化为纯几何评分。
  * @param existingLabPositions 已建 lab 位置 — 新增 lab 续接既有集群（相邻约束）。
  * @param roomName 房间名（可选）— 仅用于放置缺口告警日志定位，不影响放置逻辑。
- * @param controllerPos controller 位置（可选）— tower 覆盖加权：tower 候选
+ * @param controllerPos controller 位置（可选）— tower 分桶放置：RCL5+ 批次
  *   按「距 controller 每 15 格分桶」优先落在 controller 射程高效区
- *   （官方衰减：20 格起降至最低 25% 伤害）；仅 RCL8 批次且最多 2/3。
+ *   （官方衰减：20 格起降至最低 25% 伤害）；RCL8 批次额外强制至少 2 塔
+ *   anchor Chebyshev ≤ 5（核心防御覆盖硬约束，降级 ≤ 7）。
  * @param terminalPos terminal 位置（可选）— lab 首批锚定：RCL6 第一批
  *   lab 落在 terminal 邻域（<=3），集群与物流枢纽共生。
  */
@@ -525,30 +642,30 @@ export function placeStructures(
         continue;
       }
 
+      // Tower 特殊处理：分桶放置（controller 侧 + anchor 硬约束 + 通用池兜底）。
+      // 设计文档 §3.7：RCL5+ 启用 controller 分桶，RCL8 强制至少 2 塔 anchor ≤ 5。
+      // 无 controllerPos 时退化为通用池（向后兼容）。
+      if (type === STRUCTURE_TOWER && controllerPos) {
+        const towerResult = placeTowerBuckets(
+          need, phase, candidates, occupied, getTerrain, anchor, controllerPos,
+          config.sealTolerance?.[type] ?? 0,
+        );
+        for (const pos of towerResult) {
+          placements.push({
+            key: placementKey(type, pos.x, pos.y),
+            pos,
+            structureType: type,
+            priority,
+            phase,
+          });
+        }
+        placedByType.set(type, (placedByType.get(type) ?? 0) + towerResult.length);
+        continue;
+      }
+
       // 通用贪心放置
       let placed = 0;
-      // tower 覆盖加权（2026-08-01）：仅 RCL8 批次的 +3 塔按「距 controller
-      // 每 15 格分桶」优先填 controller 射程高效区，且最多 ceil(need/2) 塔 —
-      // 保留其余塔走通用池守城区/入口。早期批次（RCL3/5/7）不动（已按锚点
-      // 侧放置），防线双端覆盖。官方衰减：20 格起降至最低 25% 伤害。
-      // 分桶排序对开放性/密封约束不敏感，地形受限时自然溢出到下一桶。
-      // 基分 openness 主导，线性惩罚无法把塔拉到 controller 侧，故用分桶。
-      const typeCandidates =
-        type === STRUCTURE_TOWER && phase === "rcl8" && controllerPos
-          ? [
-              ...[...candidates]
-                .sort((a, b) => {
-                  const bucketOf = (c: CandidateTile): number =>
-                    Math.floor(
-                      (Math.abs(c.x - controllerPos.x) + Math.abs(c.y - controllerPos.y)) / 15,
-                    );
-                  return (bucketOf(a) - bucketOf(b)) || (b.score - a.score) || a.x - b.x || a.y - b.y;
-                })
-                .slice(0, Math.max(1, Math.ceil(need / 2))),
-              ...candidates,
-            ]
-          : candidates;
-      for (const c of typeCandidates) {
+      for (const c of candidates) {
         if (placed >= need) break;
         const packed = packPos(c.x, c.y);
         if (occupied.has(packed)) continue;

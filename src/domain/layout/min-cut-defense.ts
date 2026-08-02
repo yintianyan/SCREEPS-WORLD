@@ -4,11 +4,13 @@
  * 算法：最小顶点割（Minimum Vertex Cut）via 最大流（Edmonds-Karp）。
  *
  * 问题建模：
- *   - 图 G = (V, E)：V = 所有非墙格，E = 正交相邻非墙格之间的边
+ *   - 图 G = (V, E)：V = 所有非墙格，E = 8 邻接非墙格之间的边
+ *     （正交 4 方向 + 对角线 4 方向；对角线边受切角规则约束——
+ *       两个正交角落格都非墙时才连通，模拟 Screeps 切角限制）
  *   - Source 集合 S = 房间出口格（敌人入口）
  *   - Sink 集合 T = 核心区域格（要保护的结构）
  *   - 求：最小的顶点集合 C，使得移除 C 后 S 和 T 不连通
- *   - C 中的格就是 rampart 放置位置
+ *   - C 中的格就是防御建筑放置位置（defense-planner 按位置特征分流 wall/rampart）
  *
  * 实现：顶点割 → 边割转换 + Edmonds-Karp 最大流
  *   - 每个顶点 v 拆为 v_in → v_out（容量 1 = 可被切割）
@@ -38,8 +40,11 @@
  * 避免部署后仍读取修复前的错误结果。
  *
  * v2: 修复 SUPER_SOURCE/SINK 与 (49,49) 拆点 (in=4998, out=4999) 冲突。
+ * v3: 邻接从正交 4 方向扩展为 8 方向 + 切角规则——对角线边仅在两个
+ *     正交角落格都非墙时才添加，模拟 Screeps 切角移动限制。
+ *     修复盲点：旧 4 邻接图忽略对角线路径，割集可能漏封对角线入侵。
  */
-export const MINCUT_ALGO_VERSION = "v2";
+export const MINCUT_ALGO_VERSION = "v3";
 
 /** Min-Cut 计算结果。 */
 export interface MinCutResult {
@@ -130,13 +135,42 @@ export function computeMinCutDefense(
     const vertexCap = (isSource || isSink) ? INF_CAP : 1;
     addEdge(vIn, vOut, vertexCap);
 
-    // 邻接边：v_out → neighbor_in（正交 4 方向）
-    const neighbors: [number, number][] = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
-    for (const [nx, ny] of neighbors) {
+    // 邻接边：v_out → neighbor_in
+    // v3：8 邻接 — 正交 4 方向（无切角限制）+ 对角线 4 方向（切角规则约束）。
+    //
+    // 切角规则：对角线 (x,y)→(x+dx,y+dy) 仅在两个正交角落格
+    // (x+dx, y) 和 (x, y+dy) 都非墙时才连通。
+    // Screeps 不允许穿越两面正交墙形成的对角线，模拟此规则避免割集漏封。
+    //   - 两角都非墙 → 对角线可通行（4 邻接也找得到路径，此处只增加捷径边）
+    //   - 任一角为墙 → 对角线被封锁（4 邻接本就无此路径，行为一致）
+    //   - 两角都墙   → 对角线被封锁（同上）
+    // 因此切角规则不会引入 4 邻接没有的连通性，只补全对角捷径——
+    // 防止 4 邻接割集在对角捷径处留下可绕行的 1 格缺口。
+
+    // 正交 4 邻接（无切角限制）
+    const orthogonal: ReadonlyArray<readonly [number, number]> = [
+      [x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1],
+    ];
+    for (const [nx, ny] of orthogonal) {
       if (nx < 0 || nx >= 50 || ny < 0 || ny >= 50) continue;
       if (getTerrain(nx, ny)) continue;
-      const nIn = nodeId(nx, ny, false);
-      addEdge(vOut, nIn, INF_CAP);
+      addEdge(vOut, nodeId(nx, ny, false), INF_CAP);
+    }
+
+    // 对角线 4 邻接（切角规则：两个正交角落格都非墙才连通）
+    // [dx, dy] — 对角方向；角落格为 (x+dx, y) 和 (x, y+dy)
+    const diagonals: ReadonlyArray<readonly [number, number]> = [
+      [1, 1], [1, -1], [-1, 1], [-1, -1],
+    ];
+    for (const [dx, dy] of diagonals) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || nx >= 50 || ny < 0 || ny >= 50) continue;
+      if (getTerrain(nx, ny)) continue;
+      // 切角检查：两个正交角落格都必须非墙
+      if (getTerrain(x + dx, y)) continue;
+      if (getTerrain(x, y + dy)) continue;
+      addEdge(vOut, nodeId(nx, ny, false), INF_CAP);
     }
   }
 

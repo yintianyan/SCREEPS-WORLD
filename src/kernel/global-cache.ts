@@ -120,6 +120,149 @@ export interface GlobalCache {
    * 由 site-quota.ts 的 getRemoteSiteTotal() 惰性构建。
    */
   remoteSiteTotal?: { tick: number; count: number };
+  /**
+   * P1-1 死资产检测（2026-08-02，docs/layout-system-design-2026-08.md §3.3）：
+   * source link 持续满足三重校验（role=source + energy=0 + !linkHasOutlet）时，
+   * 记录首次检测 tick。持续 DEAD_ASSET_THRESHOLD(500) tick → 判定为死资产。
+   * heap 存储 — global reset 丢失计数可接受（reset 极少，且死资产会快速重建）。
+   * key = link.id，value = 首次检测 tick。
+   */
+  deadAssetSince?: Map<string, number>;
+  /**
+   * P1-3 link 几何受限标记（2026-08-02，docs/layout-system-design-2026-08.md §3.2）：
+   * controller link + storage link 都几何放不下时标记，避免每周期重复尝试空转。
+   * key = roomName，value = 标记 tick。LINK_CONSTRAINED_RETRY_INTERVAL(1000t) 后
+   * 自动过期重试（RCL 升级或拆改后可能解锁）。heap 存储 — global reset 丢失可接受
+   *（重开后重新评估一次，开销可忽略）。
+   */
+  linkConstrained?: Map<string, number>;
+  /**
+   * P1-4 拆改计划跟踪（2026-08-02，docs/layout-system-design-2026-08.md §3.3）：
+   * 死资产 link 检测到替代位置后创建拆改计划，跟踪「先建替代 → 验证灌能 → 拆旧」
+   * 的完整生命周期。key = deadLinkId（死资产 link 的 id），value = 拆改计划。
+   *
+   * heap 存储 — global reset 丢失可接受（reset 极少，且死资产会重新检测 +
+   * 重新规划拆改）。不进 Memory 避免结构变更与 schema 升级。
+   */
+  dismantlePlans?: Map<string, DismantlePlan>;
+  /**
+   * P1-4 拆改冷却账本（2026-08-02，docs/layout-system-design-2026-08.md §3.3）：
+   * key = roomName，value = 最近一次拆改启动 tick。
+   * DISMANTLE_COOLDOWN(1000t) 内不再启动新拆改 — 避免同一房频繁拆改空转。
+   * heap 存储 — global reset 丢失可接受（冷却期短，重开后快速恢复）。
+   */
+  lastDismantleTick?: Map<string, number>;
+  /**
+   * 累计拆改次数（docs/layout-system-design-2026-08.md §3.8 漏洞 #11 可观测性）。
+   * key = roomName，value = 该房累计启动的拆改计划数。
+   * 由 link-system.createDismantlePlan 递增；layout-metrics 采集消费。
+   * heap 存储 — global reset 丢失可接受（与 dismantlePlans 同策略），
+   * 重开后从 0 重新计数，不影响死资产检测/拆改逻辑。
+   */
+  dismantleCount?: Map<string, number>;
+  /**
+   * 走廊路路径缓存（docs/layout-system-design-2026-08.md §3.6 漏洞 #5/#8）。
+   * key = roomName，value = 该房最高优先级走廊对的 PathFinder 路径结果。
+   *
+   * 失效条件（完整，修复漏洞 #5）：
+   *   - pairKey 变化（端点 container/storage 消失或新建）
+   *   - rcl 变化（解锁新结构，路径可能变化）
+   *   - anchor 变化（spawn 重建在新位置）
+   *   - 路径格被新建结构占用 → 由 planCorridorRoads 内部 occupied 过滤，不触发缓存失效
+   *
+   * heap 存储 — global reset 丢失可接受（与 linkConstrained 同策略），
+   * 重开后首个规划周期重新计算，CPU 开销可忽略（单次 PathFinder 0.5-2ms）。
+   * 不进 segment — 避免 schema 升级（漏洞 #8 修正：从 segment 改为 heap）。
+   */
+  corridorPathCache?: Map<string, CorridorPathCacheEntry>;
+  /**
+   * defense-planner 的 min-cut 结果缓存（跨 global reset 从 Memory 恢复）。
+   * key = roomName，value = 该房 min-cut 计算结果 + 核心结构签名。
+   * 核心结构变化时签名不匹配 → 重算；算法版本变更时签名前缀变化 → 旧缓存自然失效。
+   */
+  __minCutCache?: Record<string, MinCutCache>;
+  /**
+   * defense-planner 的出口位置缓存（room.find(FIND_EXIT) 结果）。
+   * 出口位置在房间地形不变时固定，缓存 1000 tick 过期。heap 存储 —
+   * global reset 丢失可接受（重开后首个 defense-planner 周期重建）。
+   */
+  __exitCache?: Record<string, ExitCache>;
+}
+
+/**
+ * P1-4 拆改计划（docs/layout-system-design-2026-08.md §3.3，完整 Plan 契约）。
+ *
+ * 生命周期状态机：
+ *   waiting     → 替代 link 尚未建成（construction-manager 检查替代任务 state）
+ *   validating  → 替代 link 已建成，等待 500t 验证灌能（energy > 0）
+ *   终态（从 dismantlePlans 移除）：success / aborted / fallback
+ *
+ * 终态条件：
+ *   success    → validating 期间替代 link energy > 0：destroy 旧 link + clearDeadAssetLink
+ *   aborted    → ttl 到期（DISMANTLE_TTL=1500t）或替代任务被清理：放弃拆改，保留旧 link
+ *   fallback   → validating 超时（DISMANTLE_VALIDATION_DELAY=500t）且替代 link energy=0：
+ *                替代位置也是死资产 → markLinkConstrained + clearDeadAssetLink，避免重复空转
+ *
+ * 战时降级：房间 colonyState === "defense" 时暂停处理（不 destroy，保留计划），
+ *          恢复 peace 后继续。
+ */
+export interface DismantlePlan {
+  /** 死资产 link 的 id（待拆除）。 */
+  deadLinkId: string;
+  /** 死资产 link 所在房间名。 */
+  roomName: string;
+  /** 替代 link 的 build task key（用于在 buildQueue 中追踪替代 link 建造状态）。 */
+  replacementKey: string;
+  /** 替代 link 的位置（验证阶段查找结构用）。 */
+  replacementPos: { x: number; y: number };
+  /** 拆改计划启动 tick。 */
+  startedAt: number;
+  /** ttl 到期 tick（startedAt + DISMANTLE_TTL）。到期未完成 → abort。 */
+  expiresAt: number;
+  /** 当前状态：waiting（等替代建成） / validating（验证替代灌能）。 */
+  state: "waiting" | "validating";
+  /** 进入 validating 状态的 tick（用于计算验证超时）。state=waiting 时为 undefined。 */
+  validatingSince?: number;
+}
+
+/**
+ * 走廊路路径缓存条目（docs/layout-system-design-2026-08.md §3.6 漏洞 #5/#8）。
+ *
+ * 缓存最高优先级走廊对的 PathFinder 结果，避免每 50 tick 重算。
+ * 失效由 signature 比对完成：pairKey + rcl + anchor 任一变化即失效。
+ */
+export interface CorridorPathCacheEntry {
+  /** 走廊对签名 "fromx,fromy→tox,toy"，端点变化即失效。 */
+  pairKey: string;
+  /** 缓存时的 RCL，RCL 升级即失效（解锁新结构，路径可能变化）。 */
+  rcl: number;
+  /** 缓存时的锚点位置，spawn 重建即失效。 */
+  anchor: { x: number; y: number };
+  /** PathFinder 计算的路径格列表（未过滤占用）。 */
+  path: { x: number; y: number }[];
+  /** 缓存创建 tick（诊断用）。 */
+  tick: number;
+}
+
+/**
+ * defense-planner 的 min-cut 结果缓存条目。
+ *
+ * 核心结构签名变化时签名不匹配 → 重算；
+ * 算法版本戳（MINCUT_ALGO_VERSION）拼入 signature 前缀，旧版本缓存自然失效。
+ */
+export interface MinCutCache {
+  /** 核心结构位置的签名（含算法版本前缀，用于检测是否需要重算）。 */
+  signature: string;
+  /** min-cut 计算结果。 */
+  result: { rampartPositions: { x: number; y: number }[]; complete: boolean };
+  /** 缓存创建的 tick。 */
+  tick: number;
+}
+
+/** defense-planner 的出口位置缓存条目（room.find(FIND_EXIT) 结果，1000t 过期）。 */
+export interface ExitCache {
+  positions: { x: number; y: number }[];
+  tick: number;
 }
 
 /**

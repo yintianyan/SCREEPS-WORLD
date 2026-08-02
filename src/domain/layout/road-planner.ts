@@ -90,12 +90,14 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
 
     // 显式传入 CONFIG.layout.road — 不传则 road-policy 内置默认生效，
     // config 沦为无人消费的死配置（调参静默不生效）。
+    // 同时传入 rcl 启用 P3 RCL 分档阈值（RCL7-8=50，RCL2-6=5）。
     const roadCandidates = evaluateRoadCandidates(
       snapshot.roomName,
       snapshot,
       currentTraffic,
       prevTraffic,
       CONFIG.layout.road,
+      snapshot.rcl,
     );
 
     for (const candidate of roadCandidates) {
@@ -126,7 +128,7 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
       protectedPositions.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
     }
 
-    const corridorRoads = planCorridorRoads(room, snapshot, undefined, undefined, protectedPositions);
+    const corridorRoads = planCorridorRoads(room, snapshot, undefined, undefined, protectedPositions, anchor);
     for (const pos of corridorRoads) {
       const key = `road.${snapshot.roomName}.${pos.x}.${pos.y}`;
       if (isDuplicate(key)) continue;

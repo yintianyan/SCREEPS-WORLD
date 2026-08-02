@@ -12,7 +12,7 @@ import {
   type ValidationOptions,
 } from "../domain/layout/validation";
 import { computeMinCutDefense, MINCUT_ALGO_VERSION } from "../domain/layout/min-cut-defense";
-import { globalCache } from "../kernel/global-cache";
+import { globalCache, type MinCutCache, type ExitCache } from "../kernel/global-cache";
 
 /**
  * 防御规划器 — P3 独立系统，负责生成 rampart/wall 建造任务。
@@ -48,8 +48,13 @@ export const defensePlannerSystem: System = {
   },
 };
 
-/** Min-cut 最大 rampart 数（超过则 fallback 到扇区）。 */
-const MAX_CUT_RAMPARTS = 30;
+/**
+ * Min-cut 最大防御建筑数（超过则 fallback 到扇区）。
+ *
+ * v3：从 30 提升到 50 — 8 邻接后割集可能增大（对角线路径也需封锁），
+ * 30 在多出口开放地形下易误判为"割集过大"而回退扇区防御。
+ */
+const MAX_CUT_RAMPARTS = 50;
 
 /**
  * 把算法版本戳拼入 signature，让算法语义变更后旧缓存自然失效。
@@ -61,28 +66,14 @@ function withAlgoVersion(coreSig: string): string {
   return `${MINCUT_ALGO_VERSION}|${coreSig}`;
 }
 
-/** 缓存的 min-cut 结果。 */
-interface MinCutCache {
-  /** 核心结构位置的签名（用于检测是否需要重算）。 */
-  signature: string;
-  /** min-cut 计算结果。 */
-  result: { rampartPositions: { x: number; y: number }[]; complete: boolean };
-  /** 缓存创建的 tick。 */
-  tick: number;
-}
-
-/** 缓存的出口位置。 */
-interface ExitCache {
-  positions: { x: number; y: number }[];
-  tick: number;
-}
+/** MinCutCache / ExitCache 接口已移至 kernel/global-cache.ts（GlobalCache 字段类型声明）。 */
 
 /**
  * 获取或创建房间的 min-cut 缓存。
  * 缓存 key 为 roomName，存放在 global heap。
  */
 function getMinCutCache(roomName: string): MinCutCache | undefined {
-  const g = globalCache() as any;
+  const g = globalCache();
   // 优先读 global heap（快）
   if (g.__minCutCache?.[roomName]) return g.__minCutCache[roomName];
 
@@ -109,7 +100,7 @@ function getMinCutCache(roomName: string): MinCutCache | undefined {
 }
 
 function setMinCutCache(roomName: string, cache: MinCutCache): void {
-  const g = globalCache() as any;
+  const g = globalCache();
   if (!g.__minCutCache) g.__minCutCache = {};
   g.__minCutCache[roomName] = cache;
 
@@ -147,7 +138,7 @@ function computeCoreSignature(snapshot: import("../kernel/contracts").RoomSnapsh
  * room.find(FIND_EXIT) 是全房扫描，缓存避免每 10 tick 重算。
  */
 function getCachedExits(room: Room, roomName: string): { x: number; y: number }[] {
-  const g = globalCache() as any;
+  const g = globalCache();
   if (!g.__exitCache) g.__exitCache = {};
   const cached: ExitCache | undefined = g.__exitCache[roomName];
   // 出口位置在房间地形不变时是固定的，缓存 1000 tick 过期。
@@ -184,8 +175,9 @@ function planDefense(
   // 使敌方必须先拆 rampart 才能攻击建筑。独立于 min-cut/扇区路径封锁逻辑。
   added = addCoreRampartCoverage(queue, snapshot, existingKeys) || added;
 
-  // 快速检查：如果 buildQueue 中已有未完成的 mincut rampart key，跳过 min-cut 计算。
-  // min-cut rampart key 格式: defense.mincut.{x}.{y}
+  // 快速检查：如果 buildQueue 中已有未完成的 mincut 防御建筑 key，跳过 min-cut 计算。
+  // min-cut key 格式（v3）: defense.mincut.wall.{x}.{y} / defense.mincut.rampart.{x}.{y}
+  // 旧格式 defense.mincut.{x}.{y} 也匹配前缀检查，自然消化后不重生成。
   const mincutKeyCount = queue.filter(
     t => t.key.startsWith("defense.mincut.") && t.state !== "done",
   ).length;
@@ -241,23 +233,55 @@ function planDefense(
     }
 
     if (cutResult.complete) {
-      // Min-cut 成功：使用割集位置生成 rampart 任务。
-      // 已建 rampart 位置跳过 — 缓存命中的再生成路径若不对照实建结构去重，
+      // Min-cut 成功：使用割集位置生成防御建筑任务。
+      //
+      // v3 盲点 1 修正：割集顶点按位置特征分流 wall/rampart。
+      //   - 无结构 → STRUCTURE_WALL（wall 阻挡通行，真正阻断路径）
+      //   - 有结构（road/container/link/核心）→ STRUCTURE_RAMPART
+      //     （Screeps 中 wall 不能与任何结构共格，rampart 可共格）
+      // 旧实现全用 rampart 是语义错误 — rampart 不阻挡通行，敌人可直接穿过。
+      //
+      // 已建 rampart/wall 位置跳过 — 缓存命中的再生成路径若不对照实建结构去重，
       // 会为已建成的割集位置重复入队（建 site 必失败 → blocked → purge →
       // 下周期再生成，幽灵任务无限 churn；core 覆盖路径同款去重，此处补齐）。
       const builtRamparts = new Set<number>();
       for (const r of snapshot.ramparts) {
         builtRamparts.add(r.pos.x * 50 + r.pos.y);
       }
+      const builtWalls = new Set<number>();
+      for (const w of snapshot.walls) {
+        builtWalls.add(w.pos.x * 50 + w.pos.y);
+      }
+
+      // 构建结构位置集合 — 这些位置不能放 wall，需 fallback 到 rampart。
+      // 含 roads/containers/links 及核心结构（核心已被 min-cut 排除，此处防御性检查）。
+      const structurePositions = new Set<number>();
+      for (const s of snapshot.roads) structurePositions.add(s.pos.x * 50 + s.pos.y);
+      for (const s of snapshot.containers) structurePositions.add(s.pos.x * 50 + s.pos.y);
+      for (const s of snapshot.links) structurePositions.add(s.pos.x * 50 + s.pos.y);
+      for (const s of snapshot.spawns) structurePositions.add(s.pos.x * 50 + s.pos.y);
+      for (const s of snapshot.extensions) structurePositions.add(s.pos.x * 50 + s.pos.y);
+      for (const s of snapshot.towers) structurePositions.add(s.pos.x * 50 + s.pos.y);
+      if (snapshot.storage) {
+        structurePositions.add(snapshot.storage.pos.x * 50 + snapshot.storage.pos.y);
+      }
+
       for (let i = 0; i < cutResult.rampartPositions.length; i++) {
         const pos = cutResult.rampartPositions[i]!;
-        if (builtRamparts.has(pos.x * 50 + pos.y)) continue;
-        const key = `defense.mincut.${pos.x}.${pos.y}`;
+        const packed = pos.x * 50 + pos.y;
+        // 已建 rampart 或 wall 的位置跳过
+        if (builtRamparts.has(packed) || builtWalls.has(packed)) continue;
+
+        // 按位置特征分流：有结构 → rampart（共格），无结构 → wall（阻挡通行）
+        const hasStructure = structurePositions.has(packed);
+        const structureType = hasStructure ? STRUCTURE_RAMPART : STRUCTURE_WALL;
+        const keyPrefix = hasStructure ? "defense.mincut.rampart" : "defense.mincut.wall";
+        const key = `${keyPrefix}.${pos.x}.${pos.y}`;
         if (existingKeys.has(key)) continue;
         queue.push({
           key,
           pos: { x: pos.x, y: pos.y, roomName: snapshot.roomName },
-          structureType: STRUCTURE_RAMPART,
+          structureType,
           priority: 2,
           state: "queued",
           attempts: 0,

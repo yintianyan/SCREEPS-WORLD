@@ -1,4 +1,5 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
+import { globalCache, type CorridorPathCacheEntry } from "../../kernel/global-cache";
 
 /**
  * 确定性走廊路规划。
@@ -154,6 +155,20 @@ export function defaultPathFn(
  * 去重规则：跳过已有 road / constructionSite / 结构 / source / controller 所在格，
  * 以及本批次已收录的格。受 maxRoadsPerCycle 上限约束分段返回。
  * 调用方（layout-planner）再按 key 与 buildQueue 去重后入队。
+ *
+ * 路径缓存（漏洞 #5/#8 修复，docs/layout-system-design-2026-08.md §3.6）：
+ *   - PathFinder 结果缓存于 globalCache.corridorPathCache（heap，不升 schema）
+ *   - 失效条件：pairKey 变化 / rcl 变化 / anchor 变化
+ *   - 命中则跳过 PathFinder.search，直接用缓存路径
+ *   - 路径格被新建结构占用由 occupied 过滤，不触发缓存失效（局部重算无意义，
+ *     整体重算才能找到更优路径）
+ *
+ * @param room               房间对象
+ * @param snapshot           房间快照
+ * @param options            走廊路选项
+ * @param pathFn             PathFinder 注入（单测用）
+ * @param protectedPositions 蓝图未来格（避免占用）
+ * @param anchor             锚点位置（缓存失效条件；不传则不缓存）
  */
 export function planCorridorRoads(
   room: Room,
@@ -161,11 +176,24 @@ export function planCorridorRoads(
   options: CorridorRoadOptions = DEFAULT_CORRIDOR_OPTIONS,
   pathFn?: PathFn,
   protectedPositions?: ReadonlySet<number>,
+  anchor?: { x: number; y: number },
 ): { x: number; y: number; roomName: string }[] {
   const pairs = collectCorridorEndpoints(snapshot);
   if (pairs.length === 0) return [];
 
-  const fn = pathFn ?? defaultPathFn(snapshot, room, protectedPositions);
+  // 只规划第一条走廊（最高优先级），不贪多。
+  const pair = pairs[0]!;
+  const pairKey = `${pair.from.x},${pair.from.y}→${pair.to.x},${pair.to.y}`;
+
+  // 路径缓存查询（仅当 anchor 提供时启用）。
+  let path: { x: number; y: number }[];
+  if (anchor && !pathFn) {
+    path = getCachedOrComputePath(snapshot.roomName, pairKey, pair, anchor, snapshot, room, protectedPositions);
+  } else {
+    // 单测注入 pathFn 或无 anchor 时不走缓存（保证测试确定性）。
+    const fn = pathFn ?? defaultPathFn(snapshot, room, protectedPositions);
+    path = fn(pair.from, pair.to);
+  }
 
   // 已占用格：不能在其上修路，也不重复入队。
   const occupied = new Set<string>();
@@ -185,10 +213,6 @@ export function planCorridorRoads(
 
   const seen = new Set<string>();
   const result: { x: number; y: number; roomName: string }[] = [];
-
-  // 只规划第一条走廊（最高优先级），不贪多。
-  const pair = pairs[0]!;
-  const path = fn(pair.from, pair.to);
   for (const step of path) {
     if (step.x < 1 || step.x > 48 || step.y < 1 || step.y > 48) continue;
     const key = `${step.x},${step.y}`;
@@ -199,4 +223,53 @@ export function planCorridorRoads(
   }
 
   return result;
+}
+
+/**
+ * 查询走廊路缓存：命中且 signature 匹配则返回缓存路径，否则计算并写入缓存。
+ *
+ * signature = pairKey + rcl + anchor。任一变化即失效（漏洞 #5 完整失效条件）：
+ *   - pairKey 变化：端点 container/storage 消失或新建
+ *   - rcl 变化：解锁新结构，路径可能变化
+ *   - anchor 变化：spawn 重建在新位置，核心位置已变
+ */
+function getCachedOrComputePath(
+  roomName: string,
+  pairKey: string,
+  pair: CorridorPair,
+  anchor: { x: number; y: number },
+  snapshot: RoomSnapshot,
+  room: Room,
+  protectedPositions?: ReadonlySet<number>,
+): { x: number; y: number }[] {
+  const cache = globalCache();
+  if (cache.corridorPathCache === undefined) cache.corridorPathCache = new Map();
+  const cached = cache.corridorPathCache.get(roomName);
+
+  // 命中条件：pairKey + rcl + anchor 全匹配。
+  const cacheHit =
+    cached !== undefined &&
+    cached.pairKey === pairKey &&
+    cached.rcl === snapshot.rcl &&
+    cached.anchor.x === anchor.x &&
+    cached.anchor.y === anchor.y;
+
+  if (cacheHit) {
+    return cached!.path;
+  }
+
+  // 未命中或失效 → PathFinder 计算。
+  const fn = defaultPathFn(snapshot, room, protectedPositions);
+  const path = fn(pair.from, pair.to);
+
+  // 写入缓存。
+  const entry: CorridorPathCacheEntry = {
+    pairKey,
+    rcl: snapshot.rcl,
+    anchor: { x: anchor.x, y: anchor.y },
+    path,
+    tick: Game.time,
+  };
+  cache.corridorPathCache.set(roomName, entry);
+  return path;
 }

@@ -202,3 +202,139 @@ describe("min-cut-defense — 性能", () => {
     expect(result.cutSize).toBeGreaterThanOrEqual(0);
   });
 });
+
+// ─── v3 对角线路径封锁验证 ───────────────────────────────────
+
+/**
+ * 独立验证割集是否真正阻断所有 8 邻接路径（含切角规则）。
+ *
+ * 从所有出口 BFS，不经过割集顶点和墙，检查是否能到达任一核心格。
+ * 若不可达 → 割集有效；若可达 → 割集有漏洞（对角线未被封锁）。
+ *
+ * 此函数独立于 min-cut 算法实现，作为 v3 正确性的外部验证。
+ */
+function verifyCutBlocksAllPaths(
+  getTerrain: (x: number, y: number) => boolean,
+  corePositions: readonly { x: number; y: number }[],
+  exitPositions: readonly { x: number; y: number }[],
+  cutSet: readonly { x: number; y: number }[],
+): boolean {
+  const cutPacked = new Set(cutSet.map(p => p.x * 50 + p.y));
+  const corePacked = new Set(corePositions.map(p => p.x * 50 + p.y));
+  const visited = new Set<number>();
+  const queue: { x: number; y: number }[] = [];
+
+  // 从所有非墙、非割集出口出发
+  for (const p of exitPositions) {
+    if (getTerrain(p.x, p.y)) continue;
+    const packed = p.x * 50 + p.y;
+    if (cutPacked.has(packed)) continue;
+    if (!visited.has(packed)) {
+      visited.add(packed);
+      queue.push(p);
+    }
+  }
+
+  const orthogonal: ReadonlyArray<readonly [number, number]> = [
+    [1, 0], [-1, 0], [0, 1], [0, -1],
+  ];
+  const diagonals: ReadonlyArray<readonly [number, number]> = [
+    [1, 1], [1, -1], [-1, 1], [-1, -1],
+  ];
+
+  while (queue.length > 0) {
+    const { x, y } = queue.shift()!;
+    const packed = x * 50 + y;
+    // 到达核心 → 割集失败
+    if (corePacked.has(packed)) return false;
+
+    // 正交 4 邻接（无切角限制）
+    for (const [dx, dy] of orthogonal) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || nx >= 50 || ny < 0 || ny >= 50) continue;
+      const np = nx * 50 + ny;
+      if (visited.has(np)) continue;
+      if (getTerrain(nx, ny)) continue;
+      if (cutPacked.has(np)) continue;
+      visited.add(np);
+      queue.push({ x: nx, y: ny });
+    }
+
+    // 对角线 4 邻接（切角规则：两个角落格都非墙才连通）
+    for (const [dx, dy] of diagonals) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || nx >= 50 || ny < 0 || ny >= 50) continue;
+      const np = nx * 50 + ny;
+      if (visited.has(np)) continue;
+      if (getTerrain(nx, ny)) continue;
+      // 切角检查：两个正交角落格都必须非墙
+      if (getTerrain(x + dx, y)) continue;
+      if (getTerrain(x, y + dy)) continue;
+      if (cutPacked.has(np)) continue;
+      visited.add(np);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+
+  // BFS 完成未到达任何核心 → 割集有效
+  return true;
+}
+
+describe("min-cut-defense — v3 对角线路径封锁", () => {
+  it("开放地形单出口：v3 割集阻断所有 8 邻接路径", () => {
+    const core = [{ x: 25, y: 25 }];
+    const exits = [{ x: 0, y: 25 }];
+
+    const result = computeMinCutDefense(noWalls, core, exits, 50);
+    expect(result.complete).toBe(true);
+    expect(verifyCutBlocksAllPaths(noWalls, core, exits, result.rampartPositions)).toBe(true);
+  });
+
+  it("开放地形 4 出口：v3 割集阻断所有方向（含对角线）", () => {
+    const core = [{ x: 25, y: 25 }];
+    const exits = [
+      { x: 0, y: 25 }, { x: 49, y: 25 },
+      { x: 25, y: 0 }, { x: 25, y: 49 },
+    ];
+
+    const result = computeMinCutDefense(noWalls, core, exits, 50);
+    expect(result.complete).toBe(true);
+    expect(verifyCutBlocksAllPaths(noWalls, core, exits, result.rampartPositions)).toBe(true);
+  });
+
+  it("走廊地形：v3 割集阻断含对角线的所有路径", () => {
+    const terrain = corridorTerrain(25, 1); // 走廊 y=24,25,26
+    const core = [{ x: 30, y: 25 }];
+    const exits = [{ x: 0, y: 25 }];
+
+    const result = computeMinCutDefense(terrain, core, exits, 50);
+    expect(result.complete).toBe(true);
+    expect(verifyCutBlocksAllPaths(terrain, core, exits, result.rampartPositions)).toBe(true);
+  });
+
+  it("瓶颈地形：v3 割集阻断对角线绕行", () => {
+    const terrain = bottleneckTerrain(25);
+    const core = [{ x: 30, y: 25 }];
+    const exits = [{ x: 0, y: 25 }];
+
+    const result = computeMinCutDefense(terrain, core, exits, 50);
+    expect(result.complete).toBe(true);
+    expect(verifyCutBlocksAllPaths(terrain, core, exits, result.rampartPositions)).toBe(true);
+  });
+
+  it("多核心格：v3 割集封锁所有核心的 8 邻接路径", () => {
+    const core = [
+      { x: 24, y: 25 }, { x: 25, y: 25 }, { x: 26, y: 25 },
+      { x: 25, y: 24 }, { x: 25, y: 26 },
+    ];
+    const exits = [
+      { x: 0, y: 25 }, { x: 49, y: 25 },
+    ];
+
+    const result = computeMinCutDefense(noWalls, core, exits, 50);
+    expect(result.complete).toBe(true);
+    expect(verifyCutBlocksAllPaths(noWalls, core, exits, result.rampartPositions)).toBe(true);
+  });
+});

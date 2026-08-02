@@ -11,7 +11,12 @@ export interface RoadCandidate {
 
 /** 道路策略选项。 */
 export interface RoadPolicyOptions {
-  /** 采样窗口内位置被判定为高频的最小通行次数。 */
+  /**
+   * 采样窗口内位置被判定为高频的最小通行次数。
+   *
+   * RCL 分档启用后（`evaluateRoadCandidates` 传 rcl），此字段仅作为
+   * 测试/调参的显式覆盖；运行时由 `minTrafficForRcl(rcl)` 派生。
+   */
   minTraffic: number;
   /** 每房最多返回的道路候选数。 */
   maxCandidates: number;
@@ -29,6 +34,27 @@ export const DEFAULT_ROAD_OPTIONS: RoadPolicyOptions = {
 };
 
 /**
+ * RCL 分档的最小通行阈值表（docs/layout-system-design-2026-08.md §3.6 P3）。
+ *
+ * 设计取舍（与文档原方案 30/50 的差异）：
+ *   - RCL2-6 保持 5（已验证的早期/中期优化值）。
+ *     文档原写 RCL4-6=30，但代码现状 minTraffic=5 是修复「旧值 10 对 RCL2-3
+ *     太严」病灶后的优化值，直接套 30 会让 RCL4 道路突然修不出 — hauler
+ *     通勤最吃紧的中期反而无路。枢纽路+走廊路已覆盖关键物流节点，
+ *     热度路只需补低频路段，5 足以过滤瞬时尖峰。
+ *   - RCL7-8 提高到 50（文档值）。后期 10+ hauler 流量大，低阈值会铺出
+ *     大量低频路（重建耗能 + 维护 builder 工时），50 让热度路只铺真高频段。
+ *
+ * 纯函数 — 不访问 Game/Memory，便于单测全 RCL 分档。
+ *
+ * @param rcl 房间 RCL
+ * @returns 该 RCL 的最小通行阈值
+ */
+export function minTrafficForRcl(rcl: number): number {
+  return rcl >= 7 ? 50 : 5;
+}
+
+/**
  * 从交通热度数据中评估道路候选（plan §5.6.6）。
  *
  * 规则：
@@ -36,8 +62,14 @@ export const DEFAULT_ROAD_OPTIONS: RoadPolicyOptions = {
  *   - 不在核心保留格、出口、墙、已有 road 或 site 上
  *   - 至少靠近两个高价值端点（source/spawn/storage/controller）
  *
+ * RCL 分档阈值（P3，docs/layout-system-design-2026-08.md §3.6）：
+ *   - 传入 rcl 时，minTraffic 由 `minTrafficForRcl(rcl)` 派生，
+ *     options.minTraffic 被覆盖（仅测试/调参显式覆盖时才生效）。
+ *   - 不传 rcl（向后兼容）时，沿用 options.minTraffic。
+ *
  * @param currentTraffic 当前采样窗口的交通数据（posKey "x,y" -> count）
  * @param prevTraffic 上一个采样窗口的交通数据
+ * @param rcl 房间 RCL（用于分档阈值；不传则用 options.minTraffic）
  */
 export function evaluateRoadCandidates(
   roomName: string,
@@ -45,8 +77,12 @@ export function evaluateRoadCandidates(
   currentTraffic: Record<string, number> | undefined,
   prevTraffic: Record<string, number> | undefined,
   options: RoadPolicyOptions = DEFAULT_ROAD_OPTIONS,
+  rcl?: number,
 ): RoadCandidate[] {
   if (!currentTraffic || !prevTraffic) return [];
+
+  // RCL 分档阈值优先；rcl 未传时（向后兼容/单测）回落到 options.minTraffic。
+  const minTraffic = rcl !== undefined ? minTrafficForRcl(rcl) : options.minTraffic;
 
   // 收集高价值端点位置。
   const endpoints: { x: number; y: number }[] = [];
@@ -80,10 +116,10 @@ export function evaluateRoadCandidates(
   const candidates: RoadCandidate[] = [];
 
   for (const [posKey, traffic] of Object.entries(currentTraffic)) {
-    // 两个窗口都需超过阈值。
-    if (traffic < options.minTraffic) continue;
+    // 两个窗口都需超过阈值（RCL 分档后的有效阈值）。
+    if (traffic < minTraffic) continue;
     const prevCount = prevTraffic[posKey] ?? 0;
-    if (prevCount < options.minTraffic) continue;
+    if (prevCount < minTraffic) continue;
 
     const commaIdx = posKey.indexOf(",");
     const x = parseInt(posKey.slice(0, commaIdx), 10);

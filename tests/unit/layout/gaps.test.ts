@@ -15,13 +15,17 @@
 import { describe, expect, it } from "vitest";
 import {
   auditStructureGaps,
+  auditLinkRoleGaps,
+  expectedLinkRoleCounts,
+  mergeLinkRoleGaps,
 } from "../../../src/domain/layout/gaps";
 import {
   buildRclBatches,
   expectedStructureCounts,
   type StructureBatch,
 } from "../../../src/domain/layout/constraint-placer";
-import { mockSnapshot, mockStructure, mockConstructionSite } from "../../role-helpers";
+import type { RoomSnapshot } from "../../../src/kernel/contracts";
+import { mockSnapshot, mockStructure, mockConstructionSite, mockSource, mockController } from "../../role-helpers";
 
 /** constraint-placer 负责放置的类型（与模块内 CONSTRAint_PLACED_TYPES 对齐）。 */
 const CONSTRAINT_TYPES: BuildableStructureConstant[] = [
@@ -226,5 +230,190 @@ describe("auditStructureGaps — 缺口审计器", () => {
     expect(Object.keys(gaps).length).toBe(
       Object.keys(expected).filter(t => (expected[t] ?? 0) > 0).length,
     );
+  });
+});
+
+// ─── link 角色感知（2026-08-02，docs/layout-system-design-2026-08.md §3.5）──
+//
+// 病灶（W3N7 RCL5 实证）：2 个 source link 死资产骗过 `auditStructureGaps`
+// （总数满足 CONTROLLER_STRUCTURES[link][5]=2 → link 缺口 0），但 controller
+// link 缺失导致升级链断裂。角色感知让死资产暴露真实缺口。
+
+describe("expectedLinkRoleCounts — MVC link 角色期望表", () => {
+  it("RCL<5：全 0（link 未解锁）", () => {
+    for (let rcl = 0; rcl < 5; rcl++) {
+      const e = expectedLinkRoleCounts(rcl, 2);
+      expect(e).toEqual({ source: 0, controller: 0, storage: 0, hub: 0 });
+    }
+  });
+
+  it("RCL5 双 source：source=1, controller=1, storage=0, hub=0", () => {
+    expect(expectedLinkRoleCounts(5, 2)).toEqual({ source: 1, controller: 1, storage: 0, hub: 0 });
+  });
+
+  it("RCL6 双 source：+storage=1", () => {
+    expect(expectedLinkRoleCounts(6, 2)).toEqual({ source: 1, controller: 1, storage: 1, hub: 0 });
+  });
+
+  it("RCL8 双 source：source=2, hub=2", () => {
+    expect(expectedLinkRoleCounts(8, 2)).toEqual({ source: 2, controller: 1, storage: 1, hub: 2 });
+  });
+
+  it("RCL8 单 source：source 期望受 min(2, sources) 约束 → 1", () => {
+    expect(expectedLinkRoleCounts(8, 1)).toEqual({ source: 1, controller: 1, storage: 1, hub: 2 });
+  });
+});
+
+describe("auditLinkRoleGaps — link 角色缺口审计", () => {
+  /** 构造紧邻锚点的 link mock（Chebyshev≤2 → 角色命中）。 */
+  function linkAt(x: number, y: number, id: string): any {
+    const link = mockStructure("link", { id });
+    link.pos = { x, y, roomName: "W7N4" };
+    return link;
+  }
+
+  /** 双 source + controller + storage 的 snapshot，位置分散避免角色重叠。 */
+  function snapshotWithAnchors(rcl: number, links: any[]): RoomSnapshot {
+    const src1 = mockSource("src1");
+    src1.pos = { x: 10, y: 10, roomName: "W7N4" };
+    const src2 = mockSource("src2");
+    src2.pos = { x: 40, y: 40, roomName: "W7N4" };
+    const ctrl = mockController({ level: rcl });
+    ctrl.pos = { x: 20, y: 20, roomName: "W7N4" };
+    const storage = mockStructure("storage", { id: "stor1" });
+    storage.pos = { x: 30, y: 30, roomName: "W7N4" };
+    return mockSnapshot({
+      rcl,
+      controller: ctrl,
+      sources: [src1, src2],
+      storage: storage as any,
+      links: links as any,
+    });
+  }
+
+  it("空房 RCL5：source=1, controller=1 缺口（无任何 link）", () => {
+    const snap = snapshotWithAnchors(5, []);
+    const gaps = auditLinkRoleGaps(snap, []);
+    expect(gaps).toEqual({ source: 1, controller: 1, storage: 0, hub: 0 });
+  });
+
+  it("W3N7 死资产场景：RCL5 有 2 source link，controller link 缺失 → controller 缺口 1", () => {
+    // 2 个 source link 紧邻 src1/src2 → 角色均为 source（死资产，但总数满足）
+    const link1 = linkAt(10, 11, "link_src1");
+    const link2 = linkAt(40, 41, "link_src2");
+    const snap = snapshotWithAnchors(5, [link1, link2]);
+    const gaps = auditLinkRoleGaps(snap, []);
+    // source 期望 1，已有 2 → max(0, 1-2)=0（不报负数）
+    // controller 期望 1，已有 0 → 缺口 1（暴露真实需求）
+    expect(gaps).toEqual({ source: 0, controller: 1, storage: 0, hub: 0 });
+  });
+
+  it("RCL5 完美配置：1 source + 1 controller → 全 0 缺口", () => {
+    const srcLink = linkAt(10, 11, "link_src");
+    const ctrlLink = linkAt(20, 21, "link_ctrl");
+    const snap = snapshotWithAnchors(5, [srcLink, ctrlLink]);
+    const gaps = auditLinkRoleGaps(snap, []);
+    expect(gaps).toEqual({ source: 0, controller: 0, storage: 0, hub: 0 });
+  });
+
+  it("RCL6 缺 storage link → storage 缺口 1", () => {
+    const srcLink = linkAt(10, 11, "link_src");
+    const ctrlLink = linkAt(20, 21, "link_ctrl");
+    const snap = snapshotWithAnchors(6, [srcLink, ctrlLink]);
+    const gaps = auditLinkRoleGaps(snap, []);
+    expect(gaps).toEqual({ source: 0, controller: 0, storage: 1, hub: 0 });
+  });
+
+  it("队列中 queued link 任务计入 have（按 pos 几何分类）", () => {
+    const srcLink = linkAt(10, 11, "link_src");
+    const snap = snapshotWithAnchors(5, [srcLink]);
+    // 队列中有 controller link 任务（pos 紧邻 controller）
+    const queue: BuildTask[] = [{
+      key: "logistics.link.controller",
+      pos: { x: 20, y: 21, roomName: "W7N4" },
+      structureType: STRUCTURE_LINK,
+      priority: 1,
+      state: "queued",
+      attempts: 0,
+      retryAt: 0,
+    }];
+    const gaps = auditLinkRoleGaps(snap, queue);
+    // controller 缺口已由 queued 任务闭合 → 0
+    expect(gaps).toEqual({ source: 0, controller: 0, storage: 0, hub: 0 });
+  });
+
+  it("队列中 done/site 状态任务不计入（避免双计，与 auditStructureGaps 同口径）", () => {
+    const srcLink = linkAt(10, 11, "link_src");
+    const snap = snapshotWithAnchors(5, [srcLink]);
+    const queue: BuildTask[] = [
+      {
+        key: "logistics.link.controller",
+        pos: { x: 20, y: 21, roomName: "W7N4" },
+        structureType: STRUCTURE_LINK,
+        priority: 1,
+        state: "done",
+        attempts: 0,
+        retryAt: 0,
+      },
+      {
+        key: "logistics.link.controller.site",
+        pos: { x: 20, y: 22, roomName: "W7N4" },
+        structureType: STRUCTURE_LINK,
+        priority: 1,
+        state: "site",
+        attempts: 0,
+        retryAt: 0,
+      },
+    ];
+    const gaps = auditLinkRoleGaps(snap, queue);
+    // done/site 不计入 → controller 仍缺 1
+    expect(gaps.controller).toBe(1);
+  });
+
+  it("远离所有锚点的 link 分类为 hub（RCL8 hub 期望 2）", () => {
+    // (5,5) 远离 src(10,10)/ctrl(20,20)/stor(30,30) → hub
+    const hubLink = linkAt(5, 5, "link_hub");
+    const snap = snapshotWithAnchors(8, [hubLink]);
+    const gaps = auditLinkRoleGaps(snap, []);
+    // RCL8 期望 hub=2，已有 1 → 缺口 1
+    expect(gaps.hub).toBe(1);
+  });
+});
+
+describe("mergeLinkRoleGaps — 合并角色缺口到 StructureGaps", () => {
+  it("角色缺口全 0：保持 STRUCTURE_LINK 总缺口不变", () => {
+    const gaps: Record<string, number> = { [STRUCTURE_LINK]: 1 };
+    mergeLinkRoleGaps(gaps, { source: 0, controller: 0, storage: 0, hub: 0 });
+    expect(gaps).toEqual({ [STRUCTURE_LINK]: 1 });
+  });
+
+  it("角色缺口存在：删除 STRUCTURE_LINK 总缺口，加入 linkXxx key（避免双重计数）", () => {
+    const gaps: Record<string, number> = { [STRUCTURE_LINK]: 1 };
+    mergeLinkRoleGaps(gaps, { source: 0, controller: 1, storage: 0, hub: 0 });
+    expect(gaps[STRUCTURE_LINK]).toBeUndefined();
+    expect(gaps.linkController).toBe(1);
+  });
+
+  it("死资产场景：gaps 空字典 + controller 缺口 → 暴露 linkController", () => {
+    const gaps: Record<string, number> = {};
+    mergeLinkRoleGaps(gaps, { source: 0, controller: 1, storage: 0, hub: 0 });
+    expect(gaps).toEqual({ linkController: 1 });
+  });
+
+  it("多角色缺口同时存在：全部收录", () => {
+    const gaps: Record<string, number> = { [STRUCTURE_LINK]: 2 };
+    mergeLinkRoleGaps(gaps, { source: 1, controller: 1, storage: 0, hub: 0 });
+    expect(gaps[STRUCTURE_LINK]).toBeUndefined();
+    expect(gaps.linkSource).toBe(1);
+    expect(gaps.linkController).toBe(1);
+  });
+
+  it("不收录 0 值角色缺口（缺口字典只收 >0）", () => {
+    const gaps: Record<string, number> = {};
+    mergeLinkRoleGaps(gaps, { source: 0, controller: 1, storage: 0, hub: 0 });
+    expect(gaps).not.toHaveProperty("linkSource");
+    expect(gaps).not.toHaveProperty("linkStorage");
+    expect(gaps).not.toHaveProperty("linkHub");
+    expect(gaps.linkController).toBe(1);
   });
 });

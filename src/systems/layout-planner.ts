@@ -13,6 +13,8 @@ import {
   createSourceLinkTasks,
   createStorageLinkTask,
   createControllerLinkTask,
+  shouldHaveStorageLink,
+  shouldHaveControllerLink,
   createExtractorTask,
   createMineralContainerTask,
   type BuildTaskCandidate,
@@ -32,7 +34,21 @@ import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { diagnoseAnchor } from "../domain/layout/anchor-selection";
 import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG } from "../domain/layout/constraint-placer";
 import { assessEmergencyRebuild, isEmergencyTask } from "../domain/construction/queue";
-import { auditStructureGaps, type StructureGaps } from "../domain/layout/gaps";
+import { auditStructureGaps, auditLinkRoleGaps, mergeLinkRoleGaps, type StructureGaps } from "../domain/layout/gaps";
+import {
+  computeLayoutMetrics,
+  recordLayoutMetrics,
+  readDefenseCutPositions,
+} from "../kernel/layout-metrics";
+import {
+  getDeadAssetLinks,
+  isLinkConstrained,
+  markLinkConstrained,
+  isDismantleOnCooldown,
+  isRoomInDefense,
+  createDismantlePlan,
+  getDismantlePlans,
+} from "./link-system";
 
 /**
  * 目标清单缺口未闭合时的慢速重试间隔（2026-08-01）。
@@ -350,6 +366,14 @@ function planStage0Prep(
   //   - 落盘 Memory.kernel.layoutGaps 供控制台采样（仅实际变化时写入）
   const queue = roomMem.buildQueue ?? [];
   const gaps = auditStructureGaps(snapshot, queue);
+  // link 角色感知（2026-08-02）：总数满足但角色分布错（死资产）时暴露真实缺口。
+  mergeLinkRoleGaps(gaps, auditLinkRoleGaps(snapshot, queue));
+  // 死资产检测（2026-08-02，§3.3）：source link 持续 500t 三重校验失败 → 触发规划。
+  // deadAssetLink key 值为死资产数量，触发 shouldPlan；拆改通道由 P1-4 实现。
+  const deadAssets = getDeadAssetLinks(ctx.tick);
+  if (deadAssets.length > 0) {
+    gaps.deadAssetLink = deadAssets.length;
+  }
   recordLayoutGaps(snapshot.roomName, gaps);
 
   // 检查触发条件。
@@ -531,12 +555,14 @@ function planStage1Core(
 /**
  * Stage 2：物流结构 — source/controller container + link 网络 + extractor + mineral container。
  *
- * Link 槽位按 RCL 分级分配（RCL5 source+storage, RCL6 +controller, RCL7 +source2, RCL8 +hub）。
+ * Link 槽位按 RCL 分级分配（2026-08-02 修订，对齐 docs/layout-system-design-2026-08.md §3.2）：
+ *   RCL5 source+controller（controller 优先于 storage，避免 storage 几何失败连累升级链）
+ *   RCL6 +storage, RCL7 维持, RCL8 +source2+2hub
  * 推进到 stage 3。
  */
 function planStage2Logistics(
   snapshot: RoomSnapshot,
-  _ctx: TickContext,
+  ctx: TickContext,
   roomMem: RoomMemory,
   layout: NonNullable<RoomMemory["layout"]>,
   data: PlanStageData,
@@ -567,43 +593,130 @@ function planStage2Logistics(
   }
 
   // 3.5 Link 任务（RCL5+）— 按角色优先级分配有限的 link 槽位。
-  // 3.5a Source link（第一趟，maxNew=1）。
-  const sourceLinkFirst = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks, 1);
-  for (const candidate of sourceLinkFirst) {
-    if (tryAddTask(candidate)) {
-      data.queuedLinks++;
-      data.tasksAdded = true;
-      data.targetingChanged = true;
+  // 分配顺序（2026-08-02 修订，对齐 docs/layout-system-design-2026-08.md §3.2）：
+  //   source(1) → controller → storage → source(rest)
+  // RCL5 仅 2 槽位时落在 source + controller（MVC：source=1, controller=1, storage=0），
+  // 避免 storage 几何失败后 controller 被跳过、升级链断裂。
+  //
+  // P1-3 link 几何受限（2026-08-02，docs §3.2 fallback 链）：
+  // controller + storage 都几何放不下时标记 linkConstrained，1000t 内跳过 link
+  // 任务创建避免空转。source link 不受影响（source 邻域通常开阔，几何失败罕见）。
+  if (isLinkConstrained(snapshot.roomName, ctx.tick)) {
+    // linkConstrained 标记期内：跳过 controller/storage link 创建，但仍尝试 source link
+    // （source link 是 link 网络的基础，不应因 controller/storage 受限而停建）。
+    const sourceLinkFirst = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks, 1);
+    for (const candidate of sourceLinkFirst) {
+      if (tryAddTask(candidate)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
+    }
+    const sourceLinkRest = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks);
+    for (const candidate of sourceLinkRest) {
+      if (tryAddTask(candidate)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
+    }
+  } else {
+    // 3.5a Source link（第一趟，maxNew=1）。
+    const sourceLinkFirst = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks, 1);
+    for (const candidate of sourceLinkFirst) {
+      if (tryAddTask(candidate)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
+    }
+
+    // 3.5b Controller link（RCL5+，先于 storage）。
+    const controllerLink = createControllerLinkTask(snapshot, room, validationOptions, data.queuedLinks);
+    if (controllerLink) {
+      if (tryAddTask(controllerLink)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
+    }
+
+    // 3.5c Storage link。
+    const storageLink = createStorageLinkTask(snapshot, room, validationOptions, data.queuedLinks);
+    if (storageLink) {
+      if (tryAddTask(storageLink)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
+    }
+
+    // P1-3 fallback 链终点：controller + storage 都几何放不下 → 标记 linkConstrained。
+    // 用 shouldHave* 谓词区分「几何放不下」与「正常跳过」（已建成/槽位满/RCL不足）。
+    // 仅当两者都「应该有但放不下」时才标记，避免误标正常状态。
+    const controllerGeometryBlocked = !controllerLink && shouldHaveControllerLink(snapshot, data.queuedLinks);
+    const storageGeometryBlocked = !storageLink && shouldHaveStorageLink(snapshot, data.queuedLinks);
+    if (controllerGeometryBlocked && storageGeometryBlocked) {
+      markLinkConstrained(snapshot.roomName, ctx.tick);
+      console.log(
+        `[layout] link constrained in ${snapshot.roomName}: ` +
+        `controller + storage link geometry blocked, retry after ${1000}t`,
+      );
+    }
+
+    // 3.5d Source link（第二趟，maxNew=∞）。
+    const sourceLinkRest = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks);
+    for (const candidate of sourceLinkRest) {
+      if (tryAddTask(candidate)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
     }
   }
 
-  // 3.5b Storage link。
-  const storageLink = createStorageLinkTask(snapshot, room, validationOptions, data.queuedLinks);
-  if (storageLink) {
-    if (tryAddTask(storageLink)) {
-      data.queuedLinks++;
-      data.tasksAdded = true;
-      data.targetingChanged = true;
-    }
-  }
-
-  // 3.5c Controller link（RCL6+）。
-  const controllerLink = createControllerLinkTask(snapshot, room, validationOptions, data.queuedLinks);
-  if (controllerLink) {
-    if (tryAddTask(controllerLink)) {
-      data.queuedLinks++;
-      data.tasksAdded = true;
-      data.targetingChanged = true;
-    }
-  }
-
-  // 3.5d Source link（第二趟，maxNew=∞）。
-  const sourceLinkRest = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks);
-  for (const candidate of sourceLinkRest) {
-    if (tryAddTask(candidate)) {
-      data.queuedLinks++;
-      data.tasksAdded = true;
-      data.targetingChanged = true;
+  // 3.6 P1-4 受限拆改：死资产 link 检测到替代位置后创建拆改计划。
+  // 拆改流程（docs/layout-system-design-2026-08.md §3.3）：
+  //   1. 死资产检测已就绪（getDeadAssetLinks 返回持续 500t 三重校验失败的 linkId）
+  //   2. 替代位置搜索由 createSourceLinkTasks 完成 — 死 link 不可喂（adjacentLinkFeedable=false）
+  //      → findAdjacentBuildable 找新位置 → 替代 link 任务已入队
+  //   3. 此处登记拆改计划：跟踪「替代 link 建成 → 验证灌能 → destroy 旧 link」生命周期
+  //
+  // 门禁（避免空转）：
+  //   - 冷却（DISMANTLE_COOLDOWN=1000t）：同房 1000t 内不重复启动拆改
+  //   - 战时暂停：colonyState === "defense" 时不新建计划（保留旧计划待恢复 peace 后继续）
+  //   - 替代任务必须存在：本周期 createSourceLinkTasks 未入队替代任务 → 跳过（几何放不下）
+  //   - 已有计划不重复创建：getDismantlePlans 已含该 deadLinkId → 跳过
+  //
+  // 执行与验证由 construction-manager 负责（每 tick 消费 dismantlePlans）。
+  {
+    const deadAssets = getDeadAssetLinks(ctx.tick);
+    if (deadAssets.length > 0 && !isRoomInDefense(snapshot.roomName) && !isDismantleOnCooldown(snapshot.roomName, ctx.tick)) {
+      const existingPlans = getDismantlePlans();
+      for (const deadLinkId of deadAssets) {
+        if (existingPlans.has(deadLinkId)) continue;
+        // 死资产 link 必须属于本房（跨房死资产由各自 layout-planner 处理）。
+        const deadLink = snapshot.links.find(l => l.id === deadLinkId);
+        if (!deadLink) continue;
+        // 在 queue 中找到紧邻同一 source 的 queued 状态替代任务。
+        // 安全性：死资产 link 是已建成 structure，不会有对应 queued 任务；
+        // 若替代任务已 done（建成）且灌能，死资产已被清除不会走到这里；
+        // 若替代任务已 done 但未灌能（替代也是死资产），createSourceLinkTasks
+        // 不会再创建新任务 → 无 queued 任务 → 不创建拆改计划 → 由 fallback 路径处理。
+        const replacementTask = findReplacementForDeadLink(deadLink, snapshot, queue);
+        if (!replacementTask) continue;
+        createDismantlePlan(
+          deadLinkId,
+          snapshot.roomName,
+          replacementTask.key,
+          { x: replacementTask.pos.x, y: replacementTask.pos.y },
+          ctx.tick,
+        );
+        console.log(
+          `[layout] dismantle plan created: dead link ${deadLinkId} in ${snapshot.roomName}, ` +
+          `replacement at (${replacementTask.pos.x},${replacementTask.pos.y})`,
+        );
+      }
     }
   }
 
@@ -752,7 +865,15 @@ function planStage3RoadsAndFinalize(
   // 缺口闭合 → 恢复正常 planInterval。nextGapPlanTick 同步节流 gap-force，
   // 防止下 tick 立即被缺口强制触发抵消慢速节流。
   const gapsAfter = auditStructureGaps(snapshot, roomMem.buildQueue);
+  // link 角色感知（同 stage 0 入口）：合并角色缺口，暴露死资产/角色分布错。
+  mergeLinkRoleGaps(gapsAfter, auditLinkRoleGaps(snapshot, roomMem.buildQueue));
   recordLayoutGaps(snapshot.roomName, gapsAfter);
+
+  // 布局可观测性指标采集（漏洞 #11）：复用本周期已算的 gapsAfter + 死资产/
+  // 拆改/linkConstrained 状态，仅变化时落盘。与 recordLayoutGaps 同周期执行，
+  // 确保指标与缺口快照时序一致。
+  recordRoomLayoutMetrics(snapshot, gapsAfter, ctx.tick);
+
   const gapsOpen = Object.keys(gapsAfter).length > 0;
   const interval = gapsOpen ? GAP_RETRY_INTERVAL : CONFIG.layout.planInterval;
   layout.nextPlanTick = ctx.tick + interval + roomPhase(snapshot.roomName, interval);
@@ -918,6 +1039,40 @@ function recordLayoutGaps(roomName: string, gaps: StructureGaps): void {
   }
 }
 
+/**
+ * 采集并落盘布局可观测性指标（漏洞 #11，docs/layout-system-design-2026-08.md §3.8）。
+ *
+ * 数据源全部来自本 tick 已构建的状态，无额外扫描成本：
+ *   - snapshot.links → link 能量/容量
+ *   - gapsAfter → MVC 缺口数（已算，复用）
+ *   - getDeadAssetLinks → 死资产 link 数
+ *   - globalCache.dismantleCount → 累计拆改次数
+ *   - isLinkConstrained → 几何受限标记
+ *   - readDefenseCutPositions → min-cut 割集位置（从 Memory 读取）
+ *
+ * 指标落盘策略与 recordLayoutGaps 一致：仅变化时写入，稳定状态不抖动。
+ */
+function recordRoomLayoutMetrics(
+  snapshot: RoomSnapshot,
+  gaps: StructureGaps,
+  tick: number,
+): void {
+  const deadLinks = getDeadAssetLinks(tick);
+  const cache = globalCache();
+  const dismantleCount = cache.dismantleCount?.get(snapshot.roomName) ?? 0;
+  const linkConstrained = isLinkConstrained(snapshot.roomName, tick);
+  const defenseCut = readDefenseCutPositions(snapshot.roomName);
+  const metrics = computeLayoutMetrics(
+    snapshot,
+    gaps,
+    deadLinks.length,
+    dismantleCount,
+    linkConstrained,
+    defenseCut,
+  );
+  recordLayoutMetrics(snapshot.roomName, metrics);
+}
+
 // ─── Spawn 重建 relocation（P0 修复：避免原位被占时死循环）──
 
 /**
@@ -961,4 +1116,41 @@ function findSpawnRelocationPosition(
     }
   }
   return undefined;
+}
+
+// ─── P1-4 拆改辅助 ─────────────────────────────────────────
+
+/**
+ * 为死资产 link 找到对应的替代 build task。
+ *
+ * 关联逻辑：死资产 link 紧邻某 source → createSourceLinkTasks 为同一 source
+ * 生成替代任务（key = `logistics.link.source.<sourceId>`）。本函数遍历 queue
+ * 中 queued 状态的 link 任务，找到紧邻同一 source 的任务作为替代。
+ *
+ * 若死 link 不紧邻任何 source（异常情况，理论上不会发生 — 死资产判定要求
+ * role=source），或 queue 中无 queued 状态的替代任务（几何放不下或已建成），
+ * 返回 undefined。
+ *
+ * 导出便于单测覆盖关联逻辑（2026-08-02 review：曾因调用层用 existingKeys
+ * 过滤导致恒为空，已修复并补测试）。
+ */
+export function findReplacementForDeadLink(
+  deadLink: { pos: { x: number; y: number } },
+  snapshot: RoomSnapshot,
+  newLinkTasks: readonly BuildTask[],
+): BuildTask | undefined {
+  // 找到死 link 紧邻的 source（range <= 1）。
+  const adjacentSource = snapshot.sources.find(
+    s => Math.abs(s.pos.x - deadLink.pos.x) <= 1 && Math.abs(s.pos.y - deadLink.pos.y) <= 1,
+  );
+  if (!adjacentSource) return undefined;
+  // 替代任务紧邻同一 source（但位置不同 — occupiedSet 排除了死 link 位置）。
+  // 只匹配 queued 状态：done 表示替代 link 已建成，此时死资产仍在说明替代也是
+  // 死资产 → 不应创建拆改计划（应由 fallback 路径 markLinkConstrained 处理）。
+  return newLinkTasks.find(
+    t => t.structureType === STRUCTURE_LINK &&
+      t.state === "queued" &&
+      Math.abs(t.pos.x - adjacentSource.pos.x) <= 1 &&
+      Math.abs(t.pos.y - adjacentSource.pos.y) <= 1,
+  );
 }

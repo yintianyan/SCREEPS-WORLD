@@ -10,6 +10,17 @@ import {
 } from "../domain/construction/queue";
 import { getRoomLayoutData, markLayoutDirty } from "../kernel/segment-store";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
+import {
+  getDismantlePlans,
+  clearDismantlePlan,
+  isRoomInDefense,
+  markLinkConstrained,
+  clearDeadAssetLink,
+  transitionDismantlePlan,
+  DISMANTLE_VALIDATION_DELAY,
+} from "./link-system";
+import type { DismantlePlan } from "../kernel/global-cache";
+import { globalCache } from "../kernel/global-cache";
 
 /**
  * 建造管理器 — 自有房 site 创建的唯一模块（远机房由 remote-mining-manager 负责）。
@@ -85,9 +96,14 @@ export const constructionManagerSystem: System = {
       }
 
       roomMem.buildQueue = queue;
+
+      // 6. P1-4 拆改执行（docs/layout-system-design-2026-08.md §3.3）：
+      //    处理本房的活跃拆改计划 — 替代 link 建成后 destroy 死资产 link。
+      //    战时暂停（colonyState=defense）保留计划待恢复。
+      processDismantlePlans(snapshot, ctx.tick, queue);
     }
 
-    // 6. 孤儿工地清扫（Phase 3，低频 catch-all）。收口所有孤儿来源：扩张超时/失守、
+    // 7. 孤儿工地清扫（Phase 3，低频 catch-all）。收口所有孤儿来源：扩张超时/失守、
     //    远矿 abandoned、房间失守——它们各自路径都不清 Game 层 site，此处统一兜底。
     if (ctx.tick % CONFIG.construction.orphanSweepInterval === 0) {
       cleanOrphanConstructionSites();
@@ -219,11 +235,22 @@ function tryCreateSite(
     s => s.structureType === STRUCTURE_ROAD,
   ).length;
   const sourceContainerSites = snapshot.myConstructionSites.filter(isSourceContainerSite).length;
+  // wall/rampart 独立计额 — min-cut v3 割集顶点改用 wall（阻挡通行），
+  // 核心覆盖 + 有结构位置的割集用 rampart。若归入 normalSites（上限 3），
+  // 防御建筑会被 extension 永久挤占，防御线建不起来。
+  const wallSites = snapshot.myConstructionSites.filter(
+    s => s.structureType === STRUCTURE_WALL,
+  ).length;
+  const rampartSites = snapshot.myConstructionSites.filter(
+    s => s.structureType === STRUCTURE_RAMPART,
+  ).length;
   const normalSites = snapshot.myConstructionSites.filter(
     s =>
       s.structureType !== STRUCTURE_SPAWN &&
       s.structureType !== STRUCTURE_TOWER &&
       s.structureType !== STRUCTURE_ROAD &&
+      s.structureType !== STRUCTURE_WALL &&
+      s.structureType !== STRUCTURE_RAMPART &&
       !isSourceContainerSite(s),
   ).length;
   const criticalSites = snapshot.myConstructionSites.filter(
@@ -239,6 +266,8 @@ function tryCreateSite(
     const isCritical = task.structureType === STRUCTURE_TOWER || task.structureType === STRUCTURE_SPAWN;
     const isRoad = task.structureType === STRUCTURE_ROAD;
     const isStorage = task.structureType === STRUCTURE_STORAGE;
+    const isWall = task.structureType === STRUCTURE_WALL;
+    const isRampart = task.structureType === STRUCTURE_RAMPART;
     const isSourceContainer =
       task.structureType === STRUCTURE_CONTAINER && adjacentToSource(task.pos.x, task.pos.y);
 
@@ -249,6 +278,10 @@ function tryCreateSite(
       if (storageSites >= 1) continue;
     } else if (isRoad) {
       if (roadSites >= CONFIG.construction.maxRoadSitesPerRoom) continue;
+    } else if (isWall) {
+      if (wallSites >= CONFIG.construction.maxWallSitesPerRoom) continue;
+    } else if (isRampart) {
+      if (rampartSites >= CONFIG.construction.maxRampartSitesPerRoom) continue;
     } else if (isSourceContainer) {
       if (sourceContainerSites >= CONFIG.construction.maxCriticalSitesPerRoom) continue;
     } else {
@@ -293,4 +326,135 @@ function tryCreateSite(
   }
 
   return false;
+}
+
+// ─── P1-4 拆改执行（docs/layout-system-design-2026-08.md §3.3） ───
+
+/**
+ * 处理本房的活跃拆改计划。
+ *
+ * 状态机（每 tick 推进）：
+ *   waiting    → 检查替代任务 state：done → 转 validating；ttl 到期 → abort
+ *   validating → 检查替代 link energy：>0 → success（destroy 旧 link）；
+ *                超时（DISMANTLE_VALIDATION_DELAY）且 energy=0 → fallback
+ *
+ * 战时降级：colonyState === "defense" 时跳过处理（保留计划，不 destroy）。
+ * 替代任务被清理（cleanTasks）：abort（保留旧 link，避免空窗）。
+ *
+ * @param snapshot  本房快照
+ * @param tick      当前 tick
+ * @param queue     本房 buildQueue（查找替代任务状态）
+ */
+function processDismantlePlans(
+  snapshot: RoomSnapshot,
+  tick: number,
+  queue: readonly BuildTask[],
+): void {
+  const plans = getDismantlePlans();
+  if (plans.size === 0) return;
+
+  // 战时暂停：defense 状态下不处理拆改（保留计划待恢复 peace）。
+  if (isRoomInDefense(snapshot.roomName)) return;
+
+  for (const [deadLinkId, plan] of plans) {
+    if (plan.roomName !== snapshot.roomName) continue;
+    processSinglePlan(plan, deadLinkId, tick, queue, snapshot);
+  }
+}
+
+/**
+ * 处理单个拆改计划的状态转移（纯逻辑 + Game API 调用）。
+ *
+ * 终态处理（区分两类 abort 防止 churn）：
+ *   success            → deadLink.destroy() + clearDismantlePlan + clearDeadAssetLink
+ *   abort(ttl 到期)    → markLinkConstrained + clearDismantlePlan + clearDeadAssetLink
+ *                        几何受限 — 替代任务长期未建成视为放不下，与 fallback 同策略。
+ *                        若不标记，DISMANTLE_COOLDOWN(1000) < DISMANTLE_TTL(1500) 会导致
+ *                        cooldown 过期后 layout-planner 为同一死资产创建新拆改计划，无限 churn。
+ *   abort(任务/link 消失) → clearDismantlePlan（保留旧 link — 外部清理，给重试机会）
+ *   fallback(验证超时) → markLinkConstrained + clearDismantlePlan + clearDeadAssetLink
+ */
+function processSinglePlan(
+  plan: DismantlePlan,
+  deadLinkId: string,
+  tick: number,
+  queue: readonly BuildTask[],
+  snapshot: RoomSnapshot,
+): void {
+  // ttl 到期 → 几何受限（替代任务长期未建成视为放不下）。
+  // 必须 markLinkConstrained + clearDeadAssetLink，否则 cooldown 过期后无限 churn。
+  if (tick >= plan.expiresAt) {
+    markLinkConstrained(plan.roomName, tick);
+    clearDismantlePlan(deadLinkId);
+    clearDeadAssetLink(deadLinkId);
+    console.log(
+      `[dismantle] abort+constrained: ttl expired for link ${deadLinkId} in ${plan.roomName}, ` +
+      `marking linkConstrained to prevent churn`,
+    );
+    return;
+  }
+
+  if (plan.state === "waiting") {
+    // 查找替代任务在 buildQueue 中的状态。
+    const replacementTask = queue.find(t => t.key === plan.replacementKey);
+    if (!replacementTask) {
+      // 替代任务被清理（cleanTasks purge 或 blocked）→ abort。
+      clearDismantlePlan(deadLinkId);
+      console.log(`[dismantle] abort: replacement task ${plan.replacementKey} not found for ${deadLinkId}`);
+      return;
+    }
+    if (replacementTask.state === "done") {
+      // 替代 link 已建成 → 转 validating，开始等待灌能验证。
+      // 注意：此时不 destroy 旧 link，先验证新 link 被灌能（energy > 0）再拆旧，
+      // 避免新 link 也是死资产时「拆了旧的、新的也不工作」空窗。
+      // 使用 transitionDismantlePlan 纯函数转移状态，写回 Map 保持单一状态机来源（DRY）。
+      const updated = transitionDismantlePlan(plan, tick);
+      globalCache().dismantlePlans?.set(deadLinkId, updated);
+      console.log(`[dismantle] validating: replacement built for ${deadLinkId}, waiting for energy`);
+    }
+    return;
+  }
+
+  if (plan.state === "validating") {
+    // 查找替代 link 结构（按位置匹配）。
+    const replacementLink = snapshot.links.find(
+      l => l.pos.x === plan.replacementPos.x && l.pos.y === plan.replacementPos.y,
+    );
+    if (!replacementLink) {
+      // 替代 link 消失（被毁？）→ abort，保留旧 link。
+      clearDismantlePlan(deadLinkId);
+      console.log(`[dismantle] abort: replacement link disappeared for ${deadLinkId}`);
+      return;
+    }
+    const replacementEnergy = replacementLink.store.getUsedCapacity(RESOURCE_ENERGY);
+    if (replacementEnergy > 0) {
+      // 验证成功：替代 link 被灌能 → destroy 旧 link + 清理。
+      const deadLink = Game.getObjectById(deadLinkId as Id<StructureLink>);
+      if (deadLink) {
+        const result = deadLink.destroy();
+        if (result === OK) {
+          clearDismantlePlan(deadLinkId);
+          clearDeadAssetLink(deadLinkId);
+          console.log(`[dismantle] success: destroyed dead link ${deadLinkId}, replacement energized`);
+        }
+      } else {
+        // 旧 link 已不存在（可能被手动拆除）→ 清理计划。
+        clearDismantlePlan(deadLinkId);
+        clearDeadAssetLink(deadLinkId);
+      }
+      return;
+    }
+    // 替代 link 未灌能 → 检查验证超时。
+    const validatingSince = plan.validatingSince ?? tick;
+    if (tick - validatingSince >= DISMANTLE_VALIDATION_DELAY) {
+      // 验证超时：替代位置也是死资产 → fallback（标记 linkConstrained，避免重复空转）。
+      markLinkConstrained(plan.roomName, tick);
+      clearDismantlePlan(deadLinkId);
+      clearDeadAssetLink(deadLinkId);
+      console.log(
+        `[dismantle] fallback: replacement link not energized after ${DISMANTLE_VALIDATION_DELAY}t, ` +
+        `marking ${plan.roomName} linkConstrained`,
+      );
+    }
+  }
 }
