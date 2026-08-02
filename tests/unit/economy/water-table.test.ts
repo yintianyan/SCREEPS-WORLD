@@ -238,13 +238,16 @@ describe("水位表 — getSource 平局去偏置（B-4）", () => {
   });
 
   it("同一 creep 的选择跨 tick 稳定（哈希起点确定性）", () => {
-    const snap = twoSourceSnapshot();
+    // 跨 tick = 不同 snapshot（每 tick room-snapshot 重建 occupancy）。
+    // 同 snapshot 多次调用会因同 tick occupancy 更新而变化，这是预期行为。
+    const snap1 = twoSourceSnapshot();
+    const snap2 = twoSourceSnapshot();
     const c1 = mockCreep({ name: "builder_x", role: "builder" });
     c1.memory.sourceId = undefined;
-    const first = getSource(c1, snap)!.id;
+    const first = getSource(c1, snap1)!.id;
     const c2 = mockCreep({ name: "builder_x", role: "builder" });
     c2.memory.sourceId = undefined;
-    expect(getSource(c2, snap)!.id).toBe(first);
+    expect(getSource(c2, snap2)!.id).toBe(first);
   });
 
   it("占用有差异时仍选最空者（哈希起点不破坏负载均衡）", () => {
@@ -254,11 +257,19 @@ describe("水位表 — getSource 平局去偏置（B-4）", () => {
       sources: [s1, s2],
       sourceOccupancy: new Map([["s1", 2], ["s2", 0]]),
     });
-    for (const name of ["a", "b", "c", "d"]) {
+    // 第一个 creep 必选最空的 s2。
+    const first = mockCreep({ name: "a", role: "builder" });
+    first.memory.sourceId = undefined;
+    expect(getSource(first, snap)!.id).toBe("s2");
+    // 后续 creep 因同 tick occupancy 更新（s2 已被预占），会考虑 s1。
+    // 4 个 creep 应分散到两个 source，不再全选同一 source。
+    const chosen = new Set<string>(["s2"]);
+    for (const name of ["b", "c", "d"]) {
       const creep = mockCreep({ name, role: "builder" });
       creep.memory.sourceId = undefined;
-      expect(getSource(creep, snap)!.id).toBe("s2");
+      chosen.add(getSource(creep, snap)!.id);
     }
+    expect(chosen.size).toBeGreaterThan(1);
   });
 });
 

@@ -71,8 +71,21 @@ export function getSource(creep: Creep, snapshot: RoomSnapshot): Source | undefi
         const fairShare = Math.ceil(totalOccupancy / snapshot.sources.length);
         // 当前 source 超过公平份额 且 存在更空闲的 source → 迁移。
         if (myCount > fairShare && minCount < myCount) {
-          creep.memory.sourceId = undefined;
-          // 落入下方重分配逻辑。
+          // 拥挤迁移：直接迁移到更空的 source + 同 tick 更新 occupancy。
+          // 旧方案清除 sourceId 走重分配 → 同 tick 全员看到相同 occupancy → 全选同一 source
+          // → 下一 tick 又拥挤 → sourceId 翻转 → creep 1 格范围内摇摆不前。
+          // cast 必要：类型 ReadonlyMap 但运行时是 Map（room-snapshot 每 tick 重建，无跨 tick 污染）。
+          const occMap = snapshot.sourceOccupancy as Map<string, number>;
+          for (const s of snapshot.sources) {
+            const c = occMap.get(s.id) ?? 0;
+            if (c < myCount) {
+              creep.memory.sourceId = s.id;
+              occMap.set(s.id, c + 1);
+              occMap.set(source.id, myCount - 1);
+              return s;
+            }
+          }
+          return source; // 理论不可达（minCount < myCount 保证有更空 source），防御兜底。
         } else {
           return source;
         }
@@ -112,6 +125,8 @@ export function getSource(creep: Creep, snapshot: RoomSnapshot): Source | undefi
 
   if (best) {
     creep.memory.sourceId = best.id;
+    // 同 tick 内更新 occupancy 防止后续 creep 重复选择同一 source（与拥挤迁移同源）。
+    (snapshot.sourceOccupancy as Map<string, number>).set(best.id, bestCount + 1);
   }
   return best;
 }
