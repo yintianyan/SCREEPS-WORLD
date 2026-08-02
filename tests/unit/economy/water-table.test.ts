@@ -271,6 +271,77 @@ describe("水位表 — getSource 平局去偏置（B-4）", () => {
     }
     expect(chosen.size).toBeGreaterThan(1);
   });
+
+  // ─── 振荡回归：拥挤迁移同 tick occupancy 更新 ──────────────────
+  // 病因： getSource 拥挤迁移清除 sourceId → 重分配时全员看到相同 occupancy
+  // → 全选同一更空 source → 下一 tick 又拥挤 → sourceId 翻转 → creep 1 格摇摆。
+  // 修复：拥挤迁移直接迁移 + 同 tick 更新 snapshot.sourceOccupancy 防重复选择。
+
+  it("拥挤迁移不振荡：2 creep 都在 s2 → 一个迁 s1 一个留 s2", () => {
+    const s1 = mockSource("s1");
+    const s2 = mockSource("s2");
+    const snap = mockSnapshot({
+      sources: [s1, s2],
+      sourceOccupancy: new Map([["s1", 0], ["s2", 2]]),
+    });
+    // 两个 creep 都分配到 s2（sourceId 已设）
+    const c1 = mockCreep({ name: "harvester_a", role: "harvester" });
+    c1.memory.sourceId = "s2" as any;
+    const c2 = mockCreep({ name: "harvester_b", role: "harvester" });
+    c2.memory.sourceId = "s2" as any;
+    const r1 = getSource(c1, snap);
+    const r2 = getSource(c2, snap);
+    // 一个迁到 s1，一个留 s2 — 不再都选同一 source
+    expect(new Set([r1!.id, r2!.id])).toEqual(new Set(["s1", "s2"]));
+  });
+
+  it("同 tick occupancy 更新：第一个 creep 选完后第二个看到更新", () => {
+    const s1 = mockSource("s1");
+    const s2 = mockSource("s2");
+    const snap = mockSnapshot({
+      sources: [s1, s2],
+      sourceOccupancy: new Map([["s1", 0], ["s2", 0]]),
+    });
+    // 无 sourceId 的两个 creep，平局时 nameHash 散布应选不同 source
+    const c1 = mockCreep({ name: "harvester_a", role: "harvester" });
+    c1.memory.sourceId = undefined;
+    const c2 = mockCreep({ name: "harvester_b", role: "harvester" });
+    c2.memory.sourceId = undefined;
+    const r1 = getSource(c1, snap);
+    const r2 = getSource(c2, snap);
+    // 同 tick occupancy 更新后，第二个 creep 应看到 r1 已占的 source occupancy+1
+    // 两个 creep 应分散到不同 source（不再是平局全选同一 source）
+    expect(r1!.id).not.toBe(r2!.id);
+  });
+
+  it("跨 tick 稳定：拥挤迁移后下一 tick 不翻转", () => {
+    // 模拟两 tick：tick1 拥挤迁移分散，tick2 新 snapshot 验证不再拥挤
+    const s1 = mockSource("s1");
+    const s2 = mockSource("s2");
+    // tick1: 两 creep 都在 s2
+    const snap1 = mockSnapshot({
+      sources: [s1, s2],
+      sourceOccupancy: new Map([["s1", 0], ["s2", 2]]),
+    });
+    const c1 = mockCreep({ name: "harvester_a", role: "harvester" });
+    c1.memory.sourceId = "s2" as any;
+    const c2 = mockCreep({ name: "harvester_b", role: "harvester" });
+    c2.memory.sourceId = "s2" as any;
+    getSource(c1, snap1); // c1 可能迁移到 s1
+    getSource(c2, snap1); // c2 可能留在 s2
+    // tick2: 基于 c1/c2 的 sourceId 重建 occupancy
+    const occ2 = new Map<string, number>([["s1", 0], ["s2", 0]]);
+    if (c1.memory.sourceId) occ2.set(c1.memory.sourceId as string, (occ2.get(c1.memory.sourceId as string) ?? 0) + 1);
+    if (c2.memory.sourceId) occ2.set(c2.memory.sourceId as string, (occ2.get(c2.memory.sourceId as string) ?? 0) + 1);
+    const snap2 = mockSnapshot({ sources: [s1, s2], sourceOccupancy: occ2 });
+    // tick2: 两 creep 不再触发拥挤迁移（各 1 个 = fairShare）
+    const before1 = c1.memory.sourceId;
+    const before2 = c2.memory.sourceId;
+    getSource(c1, snap2);
+    getSource(c2, snap2);
+    expect(c1.memory.sourceId).toBe(before1); // 不翻转
+    expect(c2.memory.sourceId).toBe(before2); // 不翻转
+  });
 });
 
 // ─── RS-1：economyPressure clamp ─────────────────────────────
