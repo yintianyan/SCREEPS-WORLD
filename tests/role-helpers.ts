@@ -88,6 +88,10 @@ export function resetGlobals(): void {
   delete g.linkConstrained;
   delete g.dismantlePlans;
   delete g.lastDismantleTick;
+  // P1-4：拆改累计计数 + 走廊路路径缓存（同 heap 生命周期；漏清会让
+  // corridor-cache-invalidation / layout-restart-stability 跨用例污染，见体检报告 §3.1）
+  delete g.dismantleCount;
+  delete g.corridorPathCache;
 }
 
 /** 注册一个可被 Game.getObjectById 找到的对象。 */

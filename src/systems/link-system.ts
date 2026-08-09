@@ -280,6 +280,20 @@ export function createDismantlePlan(
     state: "waiting",
   });
   recordDismantleStart(roomName, tick);
+  incrementDismantleCount(roomName);
+}
+
+/**
+ * 递增 per-room 拆改累计计数（globalCache.dismantleCount）。
+ *
+ * layout-metrics 的「拆改失效告警」消费此计数：dismantleCount 增长但
+ * deadAssetRate 不降 → 拆改机制失效。heap 存储 — global reset 丢失可接受
+ * （与 dismantlePlans 同策略），重开后从 0 重新计数。
+ */
+export function incrementDismantleCount(roomName: string): void {
+  const cache = globalCache();
+  if (cache.dismantleCount === undefined) cache.dismantleCount = new Map();
+  cache.dismantleCount.set(roomName, (cache.dismantleCount.get(roomName) ?? 0) + 1);
 }
 
 /**
