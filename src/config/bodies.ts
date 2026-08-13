@@ -18,6 +18,15 @@ interface BodyTemplate {
  * 使模块在无 Screeps 运行时的情况下也可测试。
  */
 export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> = {
+  attacker: [
+    // 跨房远征攻击者（无 CARRY，纯战斗）：TOUGH 吸收塔伤、ATTACK 拆建筑/杀敌、
+    // MOVE 按 1:1 保证无疲劳移动。
+    // 高容量满编 [3T,4A,4M] @550：抗一轮塔伤并砸穿 rampart 血线（war-planner 按编队孵化）。
+    { parts: ["tough", "tough", "tough", "attack", "attack", "attack", "attack", "move", "move", "move", "move"], minCapacity: 800 },
+    // 低容量绝境档 [1T,1A,1M] @140：战斗角色随时可战优先于等满配（bodies.test 要求
+    // 除 reserver/claimer/defender 外最低档 minCapacity=200，本档满足）。
+    { parts: ["tough", "attack", "move"], minCapacity: 200 },
+  ],
   worker: [
     // 开局优化：RCL1 起始 300 能量直接用满，2 WORK 采集速度翻倍，大幅缩短 bootstrap。
     { parts: ["work", "work", "carry", "move"], minCapacity: 300 },

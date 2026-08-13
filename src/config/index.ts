@@ -40,7 +40,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 25 },
+  memory: { schemaVersion: 26 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -537,6 +537,28 @@ export const CONFIG = {
     // 矿物采集：RCL6+ 有 extractor 且 mineral 未采空时孵化（见 demand 矿工块）。
     // minCount=0 → 矿采空后自然停孵，存量矿工老死不补。
     mineralMiner: { minCount: 0, maxCount: 1 },
+    // 跨房远征攻击者：仅 war 姿态时由 war-planner 孵化（CONFIG.roles 兼任
+    // recyclePass「在役角色」白名单 — 漏配会让攻击者孵出即被判废弃回收）。
+    attacker: { minCount: 0, maxCount: 4 },
+  },
+
+  war: {
+    /** 战争规划器运行间隔（tick）。 */
+    interval: 10,
+    /** 目标情报新鲜度窗口（tick）：超过此值未更新的视野视为不可信，不选。 */
+    targetFreshness: 1500,
+    /** 目标 tower 数上限（含此值以下才可攻击；超过视为不可破，等待或换目标）。 */
+    maxTowers: 3,
+    /** 攻击编队基数（无 tower 目标）。 */
+    squadBase: 3,
+    /** 目标有 tower 时每座 tower 追加的攻击者数。 */
+    squadPerTower: 2,
+    /** 战争计划最长期限（tick）：超期重新选目标（目标可能已迁房/易主）。 */
+    planTimeout: 6000,
+    /** 低血撤退线：攻击者血量低于 hitsMax × 此比例 → 标记回收撤出战区。 */
+    retreatRatio: 0.3,
+    /** sponsor 快照缺失时的容量回退（测试/边缘态）— body 仍由 selectBody 约束。 */
+    fallbackCapacity: 800,
   },
 
   debug: {

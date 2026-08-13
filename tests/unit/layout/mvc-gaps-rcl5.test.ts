@@ -1,5 +1,5 @@
 /**
- * MVC link 角色缺口端到端测试（docs/layout-system-design-2026-08.md §3.5 / §5.1）。
+ * MVC link 角色缺口端到端测试（link 角色期望表）。
  *
  * 病灶背景（W3N7 RCL5 实证）：
  *   2 个 source link 死资产（harvester 不灌能），CONTROLLER_STRUCTURES[link][5]=2

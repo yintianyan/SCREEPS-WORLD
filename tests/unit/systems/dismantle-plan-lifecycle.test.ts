@@ -1,5 +1,5 @@
 /**
- * P1-4 受限拆改通道生命周期测试（docs/layout-system-design-2026-08.md §3.3）。
+ * P1-4 受限拆改通道生命周期测试（staged link 拆改生命周期）。
  *
  * 覆盖完整 Plan 契约（V2 §2）：
  *   - 冷却（DISMANTLE_COOLDOWN=1000t）：同房冷却期内不重复启动

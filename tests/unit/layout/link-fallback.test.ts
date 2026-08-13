@@ -1,5 +1,5 @@
 /**
- * P1-3 link 网络演化 fallback 测试（docs/layout-system-design-2026-08.md §3.2）。
+ * P1-3 link 网络演化 fallback 测试（link 槽位 fallback 链）。
  *
  * 验证目标：
  *   - shouldHaveControllerLink / shouldHaveStorageLink 谓词正确区分

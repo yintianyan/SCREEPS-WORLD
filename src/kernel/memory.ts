@@ -676,6 +676,28 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 25,
+    to: 26,
+    run: () => {
+      // v26：R3 战时闭环 — 新增 KernelMemory.warPlan（war-planner 写入）。
+      // 可选字段，无回填；畸形自愈：非对象 / targetRoom 或 sponsor 非字符串 /
+      // squadSize 非数字 → 删除整个字段（war-planner 下 tick 重建）。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+      const wp = kernel.warPlan as Record<string, unknown> | undefined;
+      if (wp === undefined) return;
+      if (
+        typeof wp !== "object" ||
+        typeof (wp as { targetRoom?: unknown }).targetRoom !== "string" ||
+        typeof (wp as { sponsor?: unknown }).sponsor !== "string" ||
+        typeof (wp as { squadSize?: unknown }).squadSize !== "number"
+      ) {
+        delete kernel.warPlan;
+      }
+    },
+  },
+
 ];
 
 /**

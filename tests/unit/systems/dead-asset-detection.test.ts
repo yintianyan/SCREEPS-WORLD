@@ -1,5 +1,5 @@
 /**
- * 死资产检测测试（2026-08-02，docs/layout-system-design-2026-08.md §3.3）。
+ * 死资产检测测试（2026-08-02）。
  *
  * 覆盖：
  *   - computeDeadAssetSince：三重校验（source + energy=0 + 无 outlet）

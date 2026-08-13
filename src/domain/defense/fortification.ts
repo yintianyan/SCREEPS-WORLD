@@ -82,3 +82,26 @@ export function classifyFortification(
   // 无情报（扇区防御房）时保守按周界 → 出口封锁 rampart 不降档。
   return ctx.minCutSet.size > 0 ? "utility" : "perimeter";
 }
+
+/**
+ * 受袭姿态判定（R3：战时闭环 — 帝国姿态 → 防御投资升档的统一口径）。
+ *
+ * 规则：
+ *   1. 本房真实受袭记忆（lastHostileAt 距今 < siegeMemoryTicks）恒触发升档 —
+ *      无论帝国姿态，防御深度用真实威胁校准（既有行为不变）。
+ *   2. 帝国 war 姿态 → 全局备战：本房未受袭也按受袭目标维护墙体。
+ *      fortify 不全局升档 — 单房一次 invader 目击不应烧全帝国墙血预算
+ *      （与 posture.ts 的 threatWindow 解耦同理）。
+ *
+ * 消费方：repair.ts（repairFortifications）与 tower-defense.ts（wall 维护）同口径调用。
+ * posture 由调用方注入（本函数保持纯函数，不读 Memory）。
+ */
+export function resolveUnderSiege(
+  posture: "develop" | "expand" | "fortify" | "war" | undefined,
+  lastHostileAt: number | undefined,
+  tick: number,
+  siegeMemoryTicks: number,
+): boolean {
+  if (lastHostileAt !== undefined && tick - lastHostileAt < siegeMemoryTicks) return true;
+  return posture === "war";
+}

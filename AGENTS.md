@@ -3,12 +3,20 @@
 Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 可插拔业务逻辑**，
 生存闭环优先于发展速度。任何昂贵工作必须有 CPU 上限、缓存、失效条件和可降级路径。
 
-改动前请先阅读本文件，再按“何时去读 plan.md 的哪一节”定位对应硬约束。
-完整设计见 [docs/plan.md](docs/plan.md)；角色约束细节见
-[docs/creep-behavior-constraints.md](docs/creep-behavior-constraints.md)；帝国运营总览见
-[docs/empire-mind-map.md](docs/empire-mind-map.md)；技术债治理与已知取舍见
-[docs/remediation-plan-2026-08.md](docs/remediation-plan-2026-08.md)；调参引擎设计见
-[docs/tuning-improvement-design.md](docs/tuning-improvement-design.md)；概览见 [README.md](README.md)。
+## 自治契约（最终方向）
+
+本项目演进目标是**完全自治**：零人工干预为常态。房间规模、扩张、远矿、PvP 响应都由
+系统自身按运行时 CPU 预算裁决并自我调节——预算充足则扩张/扩建/备战，预算紧张则收缩/
+降级/保命。没有任何手动 flag / console 指令是运营的前提；人工只保留发布与灾难接管两条边界。
+
+### 文档策略：代码即文档，代码即解释
+
+已实现的模块一律**不维护平行的设计文档**——设计已落地进代码与测试，内联注释就是解释。
+不恢复已被移除的设计文档，也不新增「记录了已实现功能」的独立 doc。改动前请先阅读本文件，
+再按下方「何时去读 plan.md 的哪一节」定位硬约束；新增代码务必让内联注释自足、不引用已删除
+的 doc。唯一存留的设计读物：全局硬约束 [docs/plan.md](docs/plan.md)、角色约束
+[docs/creep-behavior-constraints.md](docs/creep-behavior-constraints.md)、概览
+[README.md](README.md)。
 
 ## 目录 / 职责导航
 
@@ -20,7 +28,7 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 | [src/kernel/](src/kernel/) | tick 调度、错误隔离、内存迁移与预算、遥测与 segment | [kernel.ts](src/kernel/kernel.ts)、[scheduler.ts](src/kernel/scheduler.ts)、[memory.ts](src/kernel/memory.ts)、[safe-run.ts](src/kernel/safe-run.ts)、[phase.ts](src/kernel/phase.ts)、[segment-store.ts](src/kernel/segment-store.ts)、[telemetry.ts](src/kernel/telemetry.ts) |
 | [src/systems/](src/systems/) | 跨 creep / 跨房决策服务（P0–P3；注册顺序即同优先级执行顺序） | [room-state.ts](src/systems/room-state.ts)、[spawn-manager.ts](src/systems/spawn-manager.ts)、[assignment-service.ts](src/systems/assignment-service.ts)、[empire-strategy.ts](src/systems/empire-strategy.ts)、[construction-manager.ts](src/systems/construction-manager.ts)、[remote-mining-manager.ts](src/systems/remote-mining-manager.ts)、[tower-defense.ts](src/systems/tower-defense.ts)、[traffic-manager.ts](src/systems/traffic-manager.ts)、[tuning-engine.ts](src/systems/tuning-engine.ts)（完整清单见 [bootstrap.ts](src/bootstrap.ts)） |
 | [src/creeps/engine/](src/creeps/engine/) | 共享执行引擎：RolePolicy 声明式动作管线 + 统一 FSM | [role-runner.ts](src/creeps/engine/role-runner.ts)、[lifecycle.ts](src/creeps/engine/lifecycle.ts)、[actions/](src/creeps/engine/actions/)、[support/](src/creeps/support/) |
-| [src/creeps/roles/](src/creeps/roles/) | 角色策略（14 个）：只声明 gate/acquire/work/onFlee/park/combat | [harvester.ts](src/creeps/roles/harvester.ts)、[hauler.ts](src/creeps/roles/hauler.ts)、[builder.ts](src/creeps/roles/builder.ts)、[remote-harvester.ts](src/creeps/roles/remote-harvester.ts)、[remote-hauler.ts](src/creeps/roles/remote-hauler.ts)（完整清单见 [bootstrap.ts](src/bootstrap.ts)） |
+| [src/creeps/roles/](src/creeps/roles/) | 角色策略（15 个）：只声明 gate/acquire/work/onFlee/park/combat | [harvester.ts](src/creeps/roles/harvester.ts)、[hauler.ts](src/creeps/roles/hauler.ts)、[builder.ts](src/creeps/roles/builder.ts)、[remote-harvester.ts](src/creeps/roles/remote-harvester.ts)、[remote-hauler.ts](src/creeps/roles/remote-hauler.ts)（完整清单见 [bootstrap.ts](src/bootstrap.ts)） |
 | [src/creeps/movement/](src/creeps/movement/) | 寻路、traffic 意图账本、停车、卡位自愈 | [pathfinding.ts](src/creeps/movement/pathfinding.ts)、[traffic.ts](src/creeps/movement/traffic.ts)、[traffic-resolver.ts](src/creeps/movement/traffic-resolver.ts)、[parking.ts](src/creeps/movement/parking.ts)、[stuck-recovery.ts](src/creeps/movement/stuck-recovery.ts) |
 | [src/domain/](src/domain/) | 纯 TypeScript 逻辑（不含 Game/Memory 访问），可 Vitest 测试 | [spawn/](src/domain/spawn/)、[assignment/](src/domain/assignment/)、[layout/](src/domain/layout/)、[economy/](src/domain/economy/)、[remote/](src/domain/remote/)、[defense/](src/domain/defense/)、[strategy/](src/domain/strategy/)、[tuning/](src/domain/tuning/)、[industry/](src/domain/industry/)、[expansion/](src/domain/expansion/) |
 | [src/types/global.d.ts](src/types/global.d.ts) | 全局类型声明 | `global.d.ts` |
@@ -42,14 +50,14 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 
 ## 技术债治理状态（2026-08-01 复核）
 
-- [docs/remediation-plan-2026-08.md](docs/remediation-plan-2026-08.md) 登记的 A–O
-  十五项与 R1–R7 已闭环（Batch 1–5 分批完成；R5 为确认项）。
+- 历史治理批次（A–O 十五项 + R1–R7）已全部闭环；决策与取舍以内联注释与回归测试为准，
+  不再维护独立治理文档。
 - R8/R9/R10 已闭环：R8 回归测试见
   [tests/unit/role/should-idle-hook.test.ts](tests/unit/role/should-idle-hook.test.ts)；
   R9 按既定方案「接受现状并在注释登记」落实（[kernel.ts](src/kernel/kernel.ts) 权衡注释）；
   R10 注释已修正（[constraint-placer.ts](src/domain/layout/constraint-placer.ts)）。
-- 仍为已知取舍：远矿 container **维修**链缺失（建造链已由 P0-A 补齐），
-  见 [docs/empire-mind-map.md](docs/empire-mind-map.md)「已知裂缝备忘」裂缝二。
+- 仍为已知取舍：远矿 container **维修**链缺失（建造链已由 P0-A 补齐）；
+  取舍决策以各处内联注释为准。
 
 ## 高风险区域与硬约束摘要
 
@@ -74,8 +82,8 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   → plan.md **§7 性能优化 · §2.3 数据所有权**
 - **迁移规范**：每次结构变更升版本；迁移必须幂等；先写新字段验证后删旧字段；
   所有步骤成功才更新 `schemaVersion`；大迁移按 cursor 分 tick。
-  新增 Memory 字段须同时更新类型、迁移与 plan.md（当前 `schemaVersion = 21`，
-  见 `CONFIG.memory`）。冷数据（布局 overrides/blocked）走 RawMemory segment。
+  新增 Memory 字段须同时更新类型与迁移（当前 `schemaVersion = 25`，见 `CONFIG.memory`）。
+  冷数据（布局 overrides/blocked）走 RawMemory segment。
   → plan.md **§3.4 版本化 Memory**
 
 ### 插件注册（`src/bootstrap.ts`）
@@ -128,9 +136,9 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 | 改调度 / CPU 预算 | §3.2 看门狗降级、§7 性能优化 |
 | 改 Spawn 逻辑 | §5.4 Spawn 孵化 |
 | 改建造 / 布局 | §5.5 建造维修、§5.6 布局实施 |
-| 改远矿 / 扩张 / 帝国姿态 | §12.1–12.4、[docs/empire-mind-map.md](docs/empire-mind-map.md) |
-| 改调参 / 遥测 / CPU 预算 | [docs/tuning-improvement-design.md](docs/tuning-improvement-design.md)、§3.2、§7 |
-| 评估技术债 / 已知取舍 | [docs/remediation-plan-2026-08.md](docs/remediation-plan-2026-08.md) |
+| 改远矿 / 扩张 / 帝国姿态 | §12.1–12.4、[empire-strategy.ts](src/systems/empire-strategy.ts)、[posture.ts](src/domain/strategy/posture.ts) |
+| 改调参 / 遥测 / CPU 预算 | [tuning-engine.ts](src/systems/tuning-engine.ts)、[tuned.ts](src/config/tuned.ts)、§3.2、§7 |
+| 评估技术债 / 已知取舍 | 各处内联注释与回归测试 |
 | 注册新插件 | §4 插件注册规范 |
 | 写测试 / 覆盖边界 | §8 测试策略、§9.1 边界场景清单 |
 | 评估风险 / 降级策略 | §9 风险与应对措施 |

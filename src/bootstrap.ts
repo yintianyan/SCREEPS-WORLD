@@ -5,6 +5,7 @@ import { distributorRole } from "./creeps/roles/distributor";
 import { harvesterRole } from "./creeps/roles/harvester";
 import { haulerRole } from "./creeps/roles/hauler";
 import { mineralMinerRole } from "./creeps/roles/mineral-miner";
+import { attackerRole } from "./creeps/roles/attacker";
 import { remoteHarvesterRole } from "./creeps/roles/remote-harvester";
 import { remoteHaulerRole } from "./creeps/roles/remote-hauler";
 import { remoteDefenderRole } from "./creeps/roles/remote-defender";
@@ -24,6 +25,7 @@ import { labSystem } from "./systems/lab-system";
 import { linkSystem } from "./systems/link-system";
 import { pixelSystem } from "./systems/pixel-system";
 import { remoteMiningManagerSystem } from "./systems/remote-mining-manager";
+import { warPlannerSystem } from "./systems/war-planner";
 import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
@@ -78,6 +80,8 @@ export const registry = new Registry()
   .registerSystem(constructionManagerSystem)
   // P2：远矿管理（每 10 tick 评估目标 + 生成远矿 spawn 请求）
   .registerSystem(remoteMiningManagerSystem)
+  // P2：战争规划（war 姿态时选目标 + 推 attacker spawn 请求；非 war 收摊）
+  .registerSystem(warPlannerSystem)
   // P3：布局规划（低频生成 BuildTask 推入 BuildQueue）
   .registerSystem(layoutPlannerSystem)
   // P3：防御规划（rampart/wall 生成，独立于核心布局）
@@ -120,6 +124,8 @@ export const registry = new Registry()
   .registerRole(claimerRole)
   // P2：mineralMiner（RCL6+ extractor 采矿 → container → hauler 搬 terminal）
   .registerRole(mineralMinerRole)
+  // P2：attacker（war 姿态跨房远征攻击者 — 由 war-planner 孵化）
+  .registerRole(attackerRole)
   // P1：remoteDefender（远矿防御者，杀 NPC reserver/Invader）
   .registerRole(remoteDefenderRole);
 

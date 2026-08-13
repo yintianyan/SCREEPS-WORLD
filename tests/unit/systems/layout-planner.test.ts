@@ -1,7 +1,7 @@
 /**
  * P1-F 测试 — layout-planner 相位偏移 + 4-stage 分片 + recoveryEligible 钩子。
  *
- * 覆盖（对应 docs/remediation-plan-2026-08.md §P1-F 验证清单）：
+ * 覆盖（P1-F 验证清单）：
  *   1. roomPhase 纯函数（DJB-like 哈希，与 systemPhase 共用算法）
  *   2. assessEmergencyRebuild 纯函数（关键基建缺失检测）
  *   3. layoutPlannerSystem.recoveryEligible 钩子（kernel P1 等效提升判据）
@@ -801,7 +801,7 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
 // ─── 5. R1: 4-stage 分片 vs 单 tick 等价性（Batch 4 前置）──
 
 /**
- * R1（docs/remediation-plan-2026-08.md §Batch 1-3 验收追加）:
+ * R1（4-stage 分片 vs 单 tick 等价性，Batch 4 前置）:
  * 验证 P1-F 核心契约「4-stage 分片不改变规划结果」。
  *
  * 既有 stage 单测只证明各 stage 转换正确（planStage 0→1→2→3→0），

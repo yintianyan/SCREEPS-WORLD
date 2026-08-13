@@ -92,6 +92,9 @@ export function resetGlobals(): void {
   // corridor-cache-invalidation / layout-restart-stability 跨用例污染，见体检报告 §3.1）
   delete g.dismantleCount;
   delete g.corridorPathCache;
+  // R3：war-planner / attacker 的敌结构共享缓存（同 heap 生命周期 — 漏清会让
+  // attacker 测试跨用例复用上一用例缓存的敌结构，Game.time 固定 1000 无法自然过期）。
+  delete g.__warStructures;
 }
 
 /** 注册一个可被 Game.getObjectById 找到的对象。 */

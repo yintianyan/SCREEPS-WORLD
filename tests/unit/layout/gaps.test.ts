@@ -233,7 +233,7 @@ describe("auditStructureGaps — 缺口审计器", () => {
   });
 });
 
-// ─── link 角色感知（2026-08-02，docs/layout-system-design-2026-08.md §3.5）──
+// ─── link 角色感知（2026-08-02）──
 //
 // 病灶（W3N7 RCL5 实证）：2 个 source link 死资产骗过 `auditStructureGaps`
 // （总数满足 CONTROLLER_STRUCTURES[link][5]=2 → link 缺口 0），但 controller

@@ -1,5 +1,5 @@
 /**
- * linkHasOutlet 纯函数测试（2026-08-02，docs/layout-system-design-2026-08.md §3.2 漏洞 #3）。
+ * linkHasOutlet 纯函数测试（2026-08-02，link 布局漏洞 #3）。
  *
  * 覆盖：
  *   - 非 source link 永远有 outlet（不需要下游）

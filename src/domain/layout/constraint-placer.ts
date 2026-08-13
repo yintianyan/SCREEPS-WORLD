@@ -405,7 +405,7 @@ function placeLabCluster(
 /**
  * Tower 分桶配额 — 按 RCL 阶段决定 controller 侧 / anchor 侧配额。
  *
- * 设计目标（docs/layout-system-design-2026-08.md §3.7）：
+ * 设计目标：
  *   RCL3 (+1)：通用池（openness 评分倾向 anchor 侧）→ 1 anchor 塔
  *   RCL5 (+1)：全 controller 桶 → 1 controller 塔（累计 1 anchor + 1 controller）
  *   RCL7 (+1)：全 controller 桶 → 1 controller 塔（累计 1 anchor + 2 controller）
@@ -440,7 +440,7 @@ function towerBucketQuota(
 /**
  * Tower 分桶放置 — controller 侧 + anchor 侧硬约束 + 通用池兜底。
  *
- * 三阶段放置（docs/layout-system-design-2026-08.md §3.7）：
+ * 三阶段放置：
  *   1. controller 桶：按距 controller 每 15 格分桶排序，优先落在 controller 射程高效区
  *      （官方衰减：20 格起降至最低 25% 伤害）
  *   2. anchor 桶：Chebyshev(anchor) ≤ 5 硬约束；≤ 5 候选不足时降级 ≤ 7；

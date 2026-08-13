@@ -46,7 +46,7 @@ export const linkSystem: System = {
 /**
  * 执行单房 link 传输：分类 → 死资产检测 → 规划 → 执行。
  *
- * 死资产检测（2026-08-02，docs/layout-system-design-2026-08.md §3.3）：
+ * 死资产检测（2026-08-02）：
  *   三重校验（role=source + energy=0 + !linkHasOutlet）持续 500t → 死资产。
  *   死资产 link 的 id 暴露给 layout-planner 触发拆改规划（P1-4 通道）。
  */
@@ -200,7 +200,7 @@ export function clearLinkConstrained(roomName: string): void {
   globalCache().linkConstrained?.delete(roomName);
 }
 
-// ─── P1-4 受限拆改通道（docs/layout-system-design-2026-08.md §3.3） ───
+// ─── P1-4 受限拆改通道 ───
 
 /**
  * 拆改冷却：每房每 1000t 最多启动 1 个拆改计划。

@@ -121,7 +121,7 @@ export interface GlobalCache {
    */
   remoteSiteTotal?: { tick: number; count: number };
   /**
-   * P1-1 死资产检测（2026-08-02，docs/layout-system-design-2026-08.md §3.3）：
+   * P1-1 死资产检测（2026-08-02）：
    * source link 持续满足三重校验（role=source + energy=0 + !linkHasOutlet）时，
    * 记录首次检测 tick。持续 DEAD_ASSET_THRESHOLD(500) tick → 判定为死资产。
    * heap 存储 — global reset 丢失计数可接受（reset 极少，且死资产会快速重建）。
@@ -129,7 +129,7 @@ export interface GlobalCache {
    */
   deadAssetSince?: Map<string, number>;
   /**
-   * P1-3 link 几何受限标记（2026-08-02，docs/layout-system-design-2026-08.md §3.2）：
+   * P1-3 link 几何受限标记（2026-08-02）：
    * controller link + storage link 都几何放不下时标记，避免每周期重复尝试空转。
    * key = roomName，value = 标记 tick。LINK_CONSTRAINED_RETRY_INTERVAL(1000t) 后
    * 自动过期重试（RCL 升级或拆改后可能解锁）。heap 存储 — global reset 丢失可接受
@@ -137,7 +137,7 @@ export interface GlobalCache {
    */
   linkConstrained?: Map<string, number>;
   /**
-   * P1-4 拆改计划跟踪（2026-08-02，docs/layout-system-design-2026-08.md §3.3）：
+   * P1-4 拆改计划跟踪（2026-08-02）：
    * 死资产 link 检测到替代位置后创建拆改计划，跟踪「先建替代 → 验证灌能 → 拆旧」
    * 的完整生命周期。key = deadLinkId（死资产 link 的 id），value = 拆改计划。
    *
@@ -146,14 +146,14 @@ export interface GlobalCache {
    */
   dismantlePlans?: Map<string, DismantlePlan>;
   /**
-   * P1-4 拆改冷却账本（2026-08-02，docs/layout-system-design-2026-08.md §3.3）：
+   * P1-4 拆改冷却账本（2026-08-02）：
    * key = roomName，value = 最近一次拆改启动 tick。
    * DISMANTLE_COOLDOWN(1000t) 内不再启动新拆改 — 避免同一房频繁拆改空转。
    * heap 存储 — global reset 丢失可接受（冷却期短，重开后快速恢复）。
    */
   lastDismantleTick?: Map<string, number>;
   /**
-   * 累计拆改次数（docs/layout-system-design-2026-08.md §3.8 漏洞 #11 可观测性）。
+   * 累计拆改次数（拆改可观测性）。
    * key = roomName，value = 该房累计启动的拆改计划数。
    * 由 link-system.createDismantlePlan 递增；layout-metrics 采集消费。
    * heap 存储 — global reset 丢失可接受（与 dismantlePlans 同策略），
@@ -161,7 +161,7 @@ export interface GlobalCache {
    */
   dismantleCount?: Map<string, number>;
   /**
-   * 走廊路路径缓存（docs/layout-system-design-2026-08.md §3.6 漏洞 #5/#8）。
+   * 走廊路路径缓存（漏洞 #5/#8）。
    * key = roomName，value = 该房最高优先级走廊对的 PathFinder 路径结果。
    *
    * 失效条件（完整，修复漏洞 #5）：
@@ -190,7 +190,7 @@ export interface GlobalCache {
 }
 
 /**
- * P1-4 拆改计划（docs/layout-system-design-2026-08.md §3.3，完整 Plan 契约）。
+ * P1-4 拆改计划（完整 Plan 契约）。
  *
  * 生命周期状态机：
  *   waiting     → 替代 link 尚未建成（construction-manager 检查替代任务 state）
@@ -226,7 +226,7 @@ export interface DismantlePlan {
 }
 
 /**
- * 走廊路路径缓存条目（docs/layout-system-design-2026-08.md §3.6 漏洞 #5/#8）。
+ * 走廊路路径缓存条目（漏洞 #5/#8）。
  *
  * 缓存最高优先级走廊对的 PathFinder 结果，避免每 50 tick 重算。
  * 失效由 signature 比对完成：pairKey + rcl + anchor 任一变化即失效。

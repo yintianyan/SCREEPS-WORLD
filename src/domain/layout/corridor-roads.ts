@@ -156,7 +156,7 @@ export function defaultPathFn(
  * 以及本批次已收录的格。受 maxRoadsPerCycle 上限约束分段返回。
  * 调用方（layout-planner）再按 key 与 buildQueue 去重后入队。
  *
- * 路径缓存（漏洞 #5/#8 修复，docs/layout-system-design-2026-08.md §3.6）：
+ * 路径缓存（漏洞 #5/#8 修复）：
  *   - PathFinder 结果缓存于 globalCache.corridorPathCache（heap，不升 schema）
  *   - 失效条件：pairKey 变化 / rcl 变化 / anchor 变化
  *   - 命中则跳过 PathFinder.search，直接用缓存路径

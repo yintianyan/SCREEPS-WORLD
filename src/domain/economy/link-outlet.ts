@@ -1,5 +1,5 @@
 /**
- * Link 出口判定（纯函数，2026-08-02，docs/layout-system-design-2026-08.md §3.2 漏洞 #3）。
+ * Link 出口判定（纯函数，2026-08-02，link 布局漏洞 #3）。
  *
  * source link 的 outlet = 存在可达的 controller link 或 storage link。
  * 死资产判定用此函数：source link 无 outlet → 能量无处可去 → 死资产。

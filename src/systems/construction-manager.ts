@@ -97,7 +97,7 @@ export const constructionManagerSystem: System = {
 
       roomMem.buildQueue = queue;
 
-      // 6. P1-4 拆改执行（docs/layout-system-design-2026-08.md §3.3）：
+      // 6. P1-4 拆改执行：
       //    处理本房的活跃拆改计划 — 替代 link 建成后 destroy 死资产 link。
       //    战时暂停（colonyState=defense）保留计划待恢复。
       processDismantlePlans(snapshot, ctx.tick, queue);
@@ -328,7 +328,7 @@ function tryCreateSite(
   return false;
 }
 
-// ─── P1-4 拆改执行（docs/layout-system-design-2026-08.md §3.3） ───
+// ─── P1-4 拆改执行 ───
 
 /**
  * 处理本房的活跃拆改计划。

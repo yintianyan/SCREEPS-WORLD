@@ -26,7 +26,7 @@ export interface LinkRoleGaps {
 }
 
 /**
- * MVC link 角色期望表（docs/layout-system-design-2026-08.md §3.5）。
+ * MVC link 角色期望表。
  *
  * | RCL   | source | controller | storage | hub |
  * |-------|--------|------------|---------|-----|
@@ -89,7 +89,7 @@ export function auditStructureGaps(
 }
 
 /**
- * 按 link 角色审计缺口（2026-08-02，docs/layout-system-design-2026-08.md §3.5）。
+ * 按 link 角色审计缺口（2026-08-02）。
  *
  * 病灶（W3N7 RCL5 实证）：2 个 source link 死资产（harvester 不灌），总数满足
  * CONTROLLER_STRUCTURES[link][5]=2 → `auditStructureGaps` 报 `link: 0` 缺口，

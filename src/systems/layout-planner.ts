@@ -550,7 +550,7 @@ function planStage1Core(
 /**
  * Stage 2：物流结构 — source/controller container + link 网络 + extractor + mineral container。
  *
- * Link 槽位按 RCL 分级分配（2026-08-02 修订，对齐 docs/layout-system-design-2026-08.md §3.2）：
+ * Link 槽位按 RCL 分级分配（2026-08-02 修订）：
  *   RCL5 source+controller（controller 优先于 storage，避免 storage 几何失败连累升级链）
  *   RCL6 +storage, RCL7 维持, RCL8 +source2+2hub
  * 推进到 stage 3。
@@ -588,12 +588,12 @@ function planStage2Logistics(
   }
 
   // 3.5 Link 任务（RCL5+）— 按角色优先级分配有限的 link 槽位。
-  // 分配顺序（2026-08-02 修订，对齐 docs/layout-system-design-2026-08.md §3.2）：
+  // 分配顺序（2026-08-02 修订）：
   //   source(1) → controller → storage → source(rest)
   // RCL5 仅 2 槽位时落在 source + controller（MVC：source=1, controller=1, storage=0），
   // 避免 storage 几何失败后 controller 被跳过、升级链断裂。
   //
-  // P1-3 link 几何受限（2026-08-02，docs §3.2 fallback 链）：
+  // P1-3 link 几何受限（2026-08-02，fallback 链）：
   // controller + storage 都几何放不下时标记 linkConstrained，1000t 内跳过 link
   // 任务创建避免空转。source link 不受影响（source 邻域通常开阔，几何失败罕见）。
   if (isLinkConstrained(snapshot.roomName, ctx.tick)) {
@@ -671,7 +671,7 @@ function planStage2Logistics(
   }
 
   // 3.6 P1-4 受限拆改：死资产 link 检测到替代位置后创建拆改计划。
-  // 拆改流程（docs/layout-system-design-2026-08.md §3.3）：
+  // 拆改流程：
   //   1. 死资产检测已就绪（getDeadAssetLinks 返回持续 500t 三重校验失败的 linkId）
   //   2. 替代位置搜索由 createSourceLinkTasks 完成 — 死 link 不可喂（adjacentLinkFeedable=false）
   //      → findAdjacentBuildable 找新位置 → 替代 link 任务已入队

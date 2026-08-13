@@ -468,7 +468,7 @@ export function createControllerLinkTask(
 /**
  * 判断房间是否应该有 controller link（RCL5+ + 无相邻 link + 槽位未满）。
  *
- * P1-3 fallback 链（docs/layout-system-design-2026-08.md §3.2）：
+ * P1-3 fallback 链：
  * layout-planner 用此谓词判断 createControllerLinkTask 返回 undefined 是否
  * 表示「几何放不下」（应触发 fallback / 标记 linkConstrained），还是「正常跳过」
  *（已建成 / 槽位满 / RCL 不足）。

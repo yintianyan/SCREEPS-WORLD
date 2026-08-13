@@ -17,7 +17,7 @@ import type { ActionCandidate } from "../action-types";
 import { runAction } from "./helpers";
 import { findCriticalRepair } from "../../support/targeting";
 import { getObjectById } from "../../support/obj-cache";
-import { buildFortificationContext, classifyFortification } from "../../../domain/defense/fortification";
+import { buildFortificationContext, classifyFortification, resolveUnderSiege } from "../../../domain/defense/fortification";
 
 /** 道路维修阈值 — 血量低于此比例才修（与 builder 维修需求信号共用 CONFIG 口径）。 */
 const ROAD_REPAIR_THRESHOLD: number = CONFIG.construction.roadRepairThreshold;
@@ -141,8 +141,14 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       // 受袭姿态：近期有敌对活动 → 墙体目标升档 + 盈余门槛放宽。
       const roomMemory = Memory.rooms[ac.snapshot.roomName];
       const lastHostileAt = roomMemory?.lastHostileAt;
-      const underSiege = lastHostileAt !== undefined &&
-        Game.time - lastHostileAt < CONFIG.defense.siegeMemoryTicks;
+      // R3：帝国 war 姿态 → 全局备战 — 本房未受袭也按受袭目标维护墙体；
+      // fortify 不全局升档（单房一次 invader 目击不烧全帝国墙血预算）。
+      const underSiege = resolveUnderSiege(
+        Memory.kernel?.strategy?.posture,
+        lastHostileAt,
+        Game.time,
+        CONFIG.defense.siegeMemoryTicks,
+      );
 
       const storage = ac.snapshot.storage;
       if (storage) {

@@ -4,7 +4,7 @@ import { EventKind, recordEvent } from "../kernel/event-log";
 import { findCriticalRepair } from "../creeps/support";
 import { selectTowerTarget, type TowerThreat } from "../domain/defense/tower-target";
 import { assessEngagement, type TowerSummary } from "../domain/defense/tower-engagement";
-import { buildFortificationContext, classifyFortification, type FortificationContext } from "../domain/defense/fortification";
+import { buildFortificationContext, classifyFortification, resolveUnderSiege, type FortificationContext } from "../domain/defense/fortification";
 import { globalCache } from "../kernel/global-cache";
 
 /**
@@ -112,9 +112,14 @@ export const towerDefenseSystem: System = {
       }
 
       // G-DF-08：wall/rampart 目标血量按角色分层 + RCL 分级；受袭姿态升档。
+      // R3：帝国 war 姿态 → 全局备战（与 repair.ts 同口径，见 fortification.resolveUnderSiege）。
       const roomMemForSiege = Memory.rooms[snapshot.roomName];
-      const underSiege = roomMemForSiege?.lastHostileAt !== undefined &&
-        Game.time - roomMemForSiege.lastHostileAt < CONFIG.defense.siegeMemoryTicks;
+      const underSiege = resolveUnderSiege(
+        Memory.kernel?.strategy?.posture,
+        roomMemForSiege?.lastHostileAt,
+        Game.time,
+        CONFIG.defense.siegeMemoryTicks,
+      );
       // 分层分类上下文（与 repairFortifications 同口径）：
       // 周界全额 / 核心折扣 / container 仅地板 — 塔安全网不为低值盾浪费弹药。
       const fortCtx = buildFortificationContext(snapshot, roomMemForSiege?.minCut?.positions);

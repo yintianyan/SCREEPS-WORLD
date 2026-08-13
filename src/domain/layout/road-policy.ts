@@ -34,7 +34,7 @@ export const DEFAULT_ROAD_OPTIONS: RoadPolicyOptions = {
 };
 
 /**
- * RCL 分档的最小通行阈值表（docs/layout-system-design-2026-08.md §3.6 P3）。
+ * RCL 分档的最小通行阈值表。
  *
  * 设计取舍（与文档原方案 30/50 的差异）：
  *   - RCL2-6 保持 5（已验证的早期/中期优化值）。
@@ -62,7 +62,7 @@ export function minTrafficForRcl(rcl: number): number {
  *   - 不在核心保留格、出口、墙、已有 road 或 site 上
  *   - 至少靠近两个高价值端点（source/spawn/storage/controller）
  *
- * RCL 分档阈值（P3，docs/layout-system-design-2026-08.md §3.6）：
+ * RCL 分档阈值（P3）：
  *   - 传入 rcl 时，minTraffic 由 `minTrafficForRcl(rcl)` 派生，
  *     options.minTraffic 被覆盖（仅测试/调参显式覆盖时才生效）。
  *   - 不传 rcl（向后兼容）时，沿用 options.minTraffic。

@@ -356,6 +356,23 @@ declare global {
       defenseAlgoVersion: string;
       defenseRampartWeakPoints: number;
     }>;
+    /**
+     * 帝国战争计划（v26+，war-planner 写入）。
+     * 仅 war 姿态时存在；同一时刻至多一个攻击编队（单目标，不并行开多线）。
+     * 畸形数据由 v26 迁移自愈；姿态退出/目标失效时 war-planner 清除并回收在役 attacker。
+     */
+    warPlan?: {
+      /** 目标房名（敌方玩家房）。 */
+      targetRoom: string;
+      /** 代孵 sponsor 房名（攻击者在此孵化，取 intel 通勤最近的房）。 */
+      sponsor: string;
+      /** 期望攻击者数（编队规模）。 */
+      squadSize: number;
+      /** 计划建立 tick。 */
+      since: number;
+      /** 目标 tower 数（情报快照，供编队/撤退参考）。 */
+      towersSeen: number;
+    };
   }
 
   /** 参数自调优的持久化状态。 */
