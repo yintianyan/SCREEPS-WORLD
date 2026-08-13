@@ -129,6 +129,12 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         // 正常工作流之前（boost 是即时战力放大，先强化再上岗）。
         if (interceptForBoost(creep)) return;
 
+        // ── 3.8 战备集结（hold）──
+        // 角色声明集结条件（如 attacker 在 war build 阶段）时接管本 tick。
+        // 必须排在 ensureHome 之前：否则集结中的角色被 ensureHome 直接
+        // 导航进目标房 — attacker「散兵逐个送」的添油战术正源于此。
+        if (policy.hold && policy.hold(creep, ctx)) return;
+
         // ── 4. 确认在目标房间（home 或 remoteTarget）──
         if (!ensureHome(creep)) {
           // 远矿角色通勤中保持原 mode（acquire/work）——ensureHome 对 idle 模式

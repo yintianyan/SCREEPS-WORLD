@@ -184,6 +184,68 @@ describe("empire posture — 降级滞回", () => {
   });
 });
 
+describe("empire posture — R4 war 可持续退出（经济止损）", () => {
+  const pressureRoom = (pressure: number) => room({ lastHostileAt: tick - 100, economyPressure: pressure });
+
+  it("war + 压力持续超标达到耐心窗口 → 立即降 fortify（不等 minDwell 驻留期）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [pressureRoom(0.9)],
+        prev: { posture: "war", since: tick - 100 }, // 驻留仅 100 < minDwell
+        warPressureTicks: DEFAULT_POSTURE_OPTIONS.warExitPatienceTicks - 1,
+      }),
+    );
+    expect(r.posture).toBe("fortify");
+    expect(r.warPressureTicks).toBe(0); // 退出即清零
+  });
+
+  it("war + 压力超标未达耐心 → 维持 war，计数递增", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [pressureRoom(0.9)],
+        prev: { posture: "war", since: tick - 100 },
+        warPressureTicks: 5,
+      }),
+    );
+    expect(r.posture).toBe("war");
+    expect(r.warPressureTicks).toBe(6);
+  });
+
+  it("war + 压力恢复 → 维持 war，计数清零（防抖动：单 tick 波动不累积）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [pressureRoom(0.2)],
+        prev: { posture: "war", since: tick - 100 },
+        warPressureTicks: 500,
+      }),
+    );
+    expect(r.posture).toBe("war");
+    expect(r.warPressureTicks).toBe(0);
+  });
+
+  it("war 压力退出后（fortify）重新升 war 仍需耐心窗口（既有升级链不破坏）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastHostileAt: tick - 100 })],
+        prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
+      }),
+    );
+    expect(r.posture).toBe("war");
+    expect(r.warPressureTicks).toBe(0); // 新战争计划从零计数
+  });
+
+  it("fortify 升 war 时经济扛不住 → 保持 fortify（打不起就不打，计数不启动）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [pressureRoom(0.9)],
+        prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
+      }),
+    );
+    expect(r.posture).toBe("fortify");
+    expect(r.warPressureTicks).toBe(0);
+  });
+});
+
 describe("empire posture — since 语义", () => {
   it("姿态不变时 since 保持，变更时刷新", () => {
     const kept = evaluateEmpirePosture(

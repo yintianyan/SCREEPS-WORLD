@@ -80,6 +80,10 @@ export const enum EventKind {
    * roleCount 持续未达新边界超过 2 个 verifyDelay 窗口 → 回滚到 preAdjustValue + 计 1 次回滚。
    * 与 TuningRollback 区分：TuningRollback 是效果验证失败的回滚，TuningBlocked 是人口合同超时的回滚。 */
   TuningBlocked = 22,
+  /** R4 战争收摊核验（战后验收闭环）：一次战争计划收摊时的战果结论。
+   * d = [outcomeCode(0=success/1=failure/2=unknown), spawned, reasonCode(0=姿态退出/1=战损止损/2=无合格目标/3=计划超期换目标)]。
+   * 供战斗黑匣子复盘：投入多少孵化请求、因何收摊、核验结论如何。 */
+  WarOutcome = 23,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────
@@ -98,6 +102,8 @@ const ROLE_CODES: Record<string, number> = {
   reserver: 9,
   claimer: 10,
   remoteDefender: 11,
+  mineralMiner: 12,
+  attacker: 13,
 };
 
 /** 角色名编码；未知角色返回 99。 */

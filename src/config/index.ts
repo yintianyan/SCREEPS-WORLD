@@ -40,7 +40,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 26 },
+  memory: { schemaVersion: 27 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -559,6 +559,21 @@ export const CONFIG = {
     retreatRatio: 0.3,
     /** sponsor 快照缺失时的容量回退（测试/边缘态）— body 仍由 selectBody 约束。 */
     fallbackCapacity: 800,
+    /** 战损止损上限（R4）：单计划累计提交的孵化请求数超过 squadSize × 此倍数
+     * 即判消耗战失败 — 收编队 + 目标黑名单。2.5×：容忍首波全灭 + 半波替补，
+     * 再打不穿就止损，不让 spawn 永续给远征添油。 */
+    casualtyMultiplier: 2.5,
+    /** 波次重组线（R4）：advance 阶段在役攻击者低于 squadSize × 此比例
+     * → 计划回落 build，幸存者归建，补满编队后再整波推进 —
+     * 用「整波集结」替代「散兵逐个送」。 */
+    waveRegroupRatio: 0.5,
+    /** 战争目标黑名单冷却（tick，R4）：核验失败/未知的战争目标在冷却期内
+     * 不被重选，防止「打不过 → 收摊 → 下一轮又选中 → 再送」的循环。 */
+    warBlacklistTicks: 20000,
+    /** 战损止损后的整军休战期（tick，R4）：消耗战收摊后不立即换目标重开 —
+     * 黑名单只挡单目标，休战期挡「A 止损 → 立刻打 B → 再止损 → 打 C」的
+     * 跨目标添油循环。到期后若姿态仍为 war 再重新评估。 */
+    standDownTicks: 2000,
   },
 
   debug: {

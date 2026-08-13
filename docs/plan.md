@@ -223,7 +223,7 @@ interface RootMemory {
 5. 死亡 creep Memory 小帝国可每 tick 清；规模变大后按 cursor 每 10 tick 清理。
 6. 每次版本升级必须有空 Memory、旧版本、重复执行和中断恢复的 Vitest 用例。
 
-当前版本：v21（v15 remoteOps.siteCount 自愈；v16 dangerUntil 搬家；v17 layout.planStage 回填；v18 tuning.baselineVersion 建档；v19 demand 纯度收口自愈；v20 tuning pendingValidation/frozenParams 建档；v21 目标清单布局闭环 — kernel.layoutGaps + layout.nextGapPlanTick 建档自愈。更早：v14 phase.bandTicks 回填；v13 kernel.strategy 自愈；v12 lastHostileAt 与 intel 自愈；v11 expansion/lostRooms 自愈；v10 remoteOps 自愈；v9 phase.liquidityScore 回填；v8 删除遗留 working；v7 tuning 结构；v6 核心模板 v2；v5 recycle/intel）。
+当前版本：v27（R4 战争自治升级 — warPlan.phase/spawned、kernel.warBlacklist、strategy.warPressureTicks 建档自愈；v26 R3 战时闭环 warPlan 建档；v25 prevThreatCount 建档；v24 storageDrainAccum 建档；v23 churnFreezeUntil 建档；v22 srcStallTicks/storageEnergyPrev 建档；v21 目标清单布局闭环 — kernel.layoutGaps + layout.nextGapPlanTick 建档自愈。更早：v20 tuning pendingValidation/frozenParams 建档；v19 demand 纯度收口自愈；v18 tuning.baselineVersion 建档；v17 layout.planStage 回填；v16 dangerUntil 搬家；v15 remoteOps.siteCount 自愈；v14 phase.bandTicks 回填；v13 kernel.strategy 自愈；v12 lastHostileAt 与 intel 自愈；v11 expansion/lostRooms 自愈；v10 remoteOps 自愈；v9 phase.liquidityScore 回填；v8 删除遗留 working；v7 tuning 结构；v6 核心模板 v2；v5 recycle/intel）。
 
 ## 4. 插件注册规范
 
@@ -919,6 +919,11 @@ M4 与 M5 可并行实现；两者均完成后才宣称 RCL2 至 RCL4 稳定闭�
 | 经济 | source 一侧矿工死亡而 hauler 仍在运行 | hauler 清空无效 assignment 后转为关键送能或待命，Spawn 优先补 miner | miner 死亡 fixture |
 | 多房 | 一个房间的规划或迁移异常 | 错误隔离到房间，其他房和全局 P0 继续运行 | 两房，单房抛错 fixture |
 | 外部状态 | 新代码部署后角色 body、配置或 Memory 语义变更 | migration + feature flag 逐步启用；保留兼容读取和回退配置 | 从前一 schema 升级 smoke test |
+| 战争 | war 姿态下经济压力持续超标（消耗战信号） | 压力计数达 warExitPatienceTicks → 立即降 fortify（不等驻留期）；压力恢复计数清零 | posture 单测（连续超标序列 + 恢复序列） |
+| 战争 | 消耗战：spawned 超编队 × casualtyMultiplier | war-planner 收摊 + 目标黑名单冷却，换目标重打 | war-planner 止损用例 |
+| 战争 | 战后情报过期 / 塔网未破 / 敌主仍在 | 核验 unknown/failure → 黑名单；success（塔清零/弃房）免黑名单 | evaluateWarOutcome 纯函数用例 |
+| 战争 | 波次被打残（live < squadSize × regroupRatio） | advance 回落 build，幸存者归建，补满编再推进 | nextWavePhase 迟滞用例 |
+| 战争 | 集结中的攻击者被导航直送目标（添油路径） | hold 钩子在 ensureHome 之前接管：home 停驻 / 在外归建 | attackerHold 决策矩阵用例 |
 
 边界场景增加规则：
 
@@ -1174,7 +1179,9 @@ war 回落不直接跳 expand，先经 develop 确认经济节奏。
   的「是否铺新点」均改为消费姿态指令；局部安全门禁（RCL/bucket）只能收紧不能放宽。
 - **进行中的行动不因姿态回落中断**：claimer/拓荒编队是沉没投资，半途而废比完成更贵。
 - **war 的授权来自证据链**（持续被打 + 打得起），与进攻代码是否存在无关 —
-  未来 quad 等进攻执行器必须从此姿态取授权，禁止「代码写完即开战」。
+  进攻执行器必须从此姿态取授权，禁止「代码写完即开战」。R3 已接线 war-planner
+  作为唯一进攻执行决策者（姿态消费 + 编队孵化 + 收摊）；R4 战争自治升级
+  （波次集结 / 战损止损 / 战后核验 / war 可持续退出）见 §12.6。
 - **姿态未就绪默认固本**：reset 首 tick 无 strategy 时扩张不启动 — 安全缺省。
 
 ### 12.5 相位极限环治理（TD-003，schema v14）
@@ -1202,6 +1209,70 @@ drainScore 把「刻意消费」（孵化/升级/建造）与「生产崩溃」�
 spawn-manager 每 tick 需求评估前撤销：威胁清除后的 defender、
 非 normal 且无降级风险时的 upgrader（与 demand 的 allowUpgrader 门禁对称）。
 
+### 12.6 战争自治升级（R4，schema v27）
+
+R3 战时闭环（姿态授权 → 选题 → 孵化 → 攻击 → 收摊）跑通后，报复性战争语义内
+仍缺四个自治闭环：**无战损止损**（打不穿就无限添油）、**无编队纪律**（散兵逐个送）、
+**无战后核验**（收摊即忘，失败目标下轮重选）、**无经济退出**（war 一旦进入，
+经济压力不再参与裁决）。R4 补齐这四个闭环，全部决策为纯函数（`domain/war/planning.ts`、
+`domain/strategy/posture.ts`），执行层只消费指令。
+
+#### 1. 波次集结（杜绝添油战术）
+
+- `warPlan.phase = build | advance` 双阈值迟滞（`nextWavePhase`）：
+  build 满编（live ≥ squadSize）才 advance；advance 被打残
+  （live < squadSize × `CONFIG.war.waveRegroupRatio`）才回落 build 重组。
+- 执行端：RolePolicy 新增 `hold` 钩子（`role-runner` 在 **ensureHome 导航之前**
+  执行）— attacker 在 build 相位于 home 停驻待命（parkIdleCreep）、在外归建
+  （fleeToHome）。此前集结中的攻击者会被 ensureHome 直接导航进目标房，
+  「散兵逐个送」正源于此路径。
+- 同价值档内残血结构优先（`attackStructures` 评分加入 hitsMax − hits 项），
+  集火加速摧毁。
+
+#### 2. 战损止损（消耗战熔断）
+
+- `warPlan.spawned` 累计每个新孵化请求 key（幂等，每 key 计一次）。
+  `isAttritionLost`：spawned > squadSize × `CONFIG.war.casualtyMultiplier`（2.5）
+  → 判消耗战失败立即收摊。提交受 live+pending < squadSize 约束 —
+  队列被能量门禁卡住时 pending 封顶 squadSize，spawned 不会因空转膨胀。
+- 止损后整军休战：`kernel.warStandDownUntil`（`CONFIG.war.standDownTicks`）—
+  黑名单只挡单目标，休战闸挡「A 止损 → 立刻打 B → 再止损 → 打 C」的
+  跨目标添油循环；姿态退出 war 时清除休战闸。
+
+#### 3. 战后核验与失败记忆（战后验收闭环）
+
+- 收摊时以 sponsor 记录的最新目标房 intel 判定战果（`evaluateWarOutcome`）：
+  情报过期 → unknown；敌人弃房（owner 消失）→ success；本有塔网且已清零 → success；
+  其余 → failure。
+- failure/unknown → 目标进 `kernel.warBlacklist` 冷却（`CONFIG.war.warBlacklistTicks`），
+  冷却期内 `selectWarTarget` 剔除 — 防止「打不过 → 收摊 → 下一轮又选中 → 再送」。
+  success 免黑名单。到期条目由 war-planner 每次运行时清理（防膨胀）。
+- 收摊结论记录 `WarOutcome` 事件（EventKind 23，d = [outcome, spawned, reason]），
+  战斗黑匣子（M9）可完整复盘：投入多少孵化请求、因何收摊、核验结论如何。
+- 黑匣子角色归因补齐：`ROLE_CODES` 追加 mineralMiner/attacker（此前战死记录为
+  unknown code，无法区分战损来源）。
+
+#### 4. war 姿态经济可持续退出（Strategy 层止损）
+
+- 原状态机漏洞：war 一旦进入，只要威胁仍在（threatRecent）就无条件维持 —
+  经济压力不再参与裁决，消耗战无自动出口。
+- 修复：posture 评估新增跨 tick 计数 `warPressureTicks`（empire-strategy 持久化于
+  `kernel.strategy`，纯函数只算下一步计数）。war 下经济压力持续超过
+  `warMaxPressure` 达到 `warExitPatienceTicks`（1000）→ **立即**降 fortify
+  （与经济止损同待遇，不等 minDwell 驻留期）；压力恢复即清零。
+- 降级后重新升 war 仍需 fortify 耐心窗口（warPatience）— 既有升级链不破坏。
+
+#### 5. 边界与测试
+
+- 迁移 v26→v27 仅畸形自愈（建档不写值，与 v20/v21 同风格）；
+  缺失语义：phase → build（保守：满编才推进）、spawned → 0、warPressureTicks → 0。
+- 回归测试：war-planner 系统测试 14 例（姿态消费/编队孵化/收摊核验/止损/相位/
+  黑名单）、war-planning 纯函数 21 例、attacker 角色 13 例（hold 决策矩阵 +
+  撤退边界 + 目标选择）、posture 21 例（含 war 可持续退出五场景）、迁移 8 例。
+- 明确不做（本阶段）：healer/squad 编成、boost 战备、主动开战姿态 —
+  维持报复性战争语义；下一阶段以黑匣子实测战报（Wave 存活率、止损触发率）
+  作为编成升级的证据门槛。
+
 ## 13. 三期计划（M9-M12：双房帝国与韧性建设）
 
 制定于 stable-2026-07-29 里程碑之后。当时态势：主房 W37S58（RCL5）稳定运行，
@@ -1210,6 +1281,13 @@ active。防御短板经自测演习（heal + ranged 小队）确认存在——
 冷启动必然迟到、经济 creep 各自逃命易被逐个点名、safe mode 仅近核触发不保
 舰队——但主房有双塔集火（healer 优先）+ safe mode 兜底，实际风险敞口可控，
 故防御列为韧性线而非紧急线。
+
+> 实施状态（2026-08 复核）：M9 战斗黑匣子（event-log 的 CreepDeath/TowerVolley
+> 事件 + tools/private 收集链）、M11 防御 L1（role-runner 集结避险 + defender
+> 双编制 + fleetLossFuse 熔断）、M12 RCL6（terminal-manager / lab-system /
+> factory-manager / mineral-miner）均已落地；R3 战时闭环（war-planner +
+> attacker）与其 R4 升级（§12.6）为三期后新增阶段，本节未及回写 —
+> 战争相关硬约束以 §12.4/§12.6 与代码内联注释为准。
 
 ### 主线排序与理由
 

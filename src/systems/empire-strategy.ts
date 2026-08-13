@@ -48,6 +48,8 @@ export const empireStrategySystem: System = {
       gclLevel: Game.gcl?.level ?? 1,
       bucket: Game.cpu.bucket ?? 10000,
       prev: prev ? { posture: prev.posture, since: prev.since } : undefined,
+      // R4：war 可持续性计数跨 tick 回传（pressure 滞回输入）。
+      warPressureTicks: prev?.warPressureTicks,
     });
 
     // 姿态变更时打日志 — 战略转向是帝国级事件，必须可观测。
@@ -63,6 +65,7 @@ export const empireStrategySystem: System = {
       since: result.since,
       expansionAllowed: result.expansionAllowed,
       newRemoteOpsAllowed: result.newRemoteOpsAllowed,
+      warPressureTicks: result.warPressureTicks,
     };
   },
 };

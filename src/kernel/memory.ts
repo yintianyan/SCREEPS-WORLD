@@ -697,7 +697,66 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 26,
+    to: 27,
+    run: () => {
+      // v27：R4 战争自治升级 — warPlan 扩展 phase/spawned、新增
+      // KernelMemory.warBlacklist、strategy.warPressureTicks。
+      // 设计决策（与 v20/v21 同风格）：迁移只做「建档 + 畸形自愈」不写字段值。
+      // 唯一写者：warPlan/warBlacklist = war-planner；warPressureTicks =
+      // empire-strategy。缺失值语义：phase 缺失视为 build（保守：满编才推进）、
+      // spawned 缺失视为 0、warPressureTicks 缺失视为 0（压力未持续）。
+      //
+      // 自愈规则：
+      //   - warPlan.phase 非 "build"/"advance" → 删除（缺失视为 build）
+      //   - warPlan.spawned 非数字 → 删除（缺失视为 0）
+      //   - warBlacklist 非对象 → 删除整个字段
+      //   - warBlacklist 条目非数字 → 删除该条目；空对象回收
+      //   - strategy.warPressureTicks 非数字 → 删除（缺失视为 0）
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
 
+      const wp = kernel.warPlan as Record<string, unknown> | undefined;
+      if (wp !== undefined && typeof wp === "object") {
+        if (wp.phase !== undefined && wp.phase !== "build" && wp.phase !== "advance") {
+          delete wp.phase;
+        }
+        if (wp.spawned !== undefined && typeof wp.spawned !== "number") {
+          delete wp.spawned;
+        }
+      }
+
+      const bl = kernel.warBlacklist as Record<string, unknown> | undefined;
+      if (bl !== undefined) {
+        if (typeof bl !== "object" || bl === null || Array.isArray(bl)) {
+          delete kernel.warBlacklist;
+        } else {
+          for (const roomName in bl) {
+            if (typeof bl[roomName] !== "number") delete bl[roomName];
+          }
+          if (Object.keys(bl).length === 0) delete kernel.warBlacklist;
+        }
+      }
+
+      if (
+        kernel.warStandDownUntil !== undefined &&
+        typeof kernel.warStandDownUntil !== "number"
+      ) {
+        delete kernel.warStandDownUntil;
+      }
+
+      const strategy = kernel.strategy as Record<string, unknown> | undefined;
+      if (
+        strategy !== undefined &&
+        typeof strategy === "object" &&
+        strategy.warPressureTicks !== undefined &&
+        typeof strategy.warPressureTicks !== "number"
+      ) {
+        delete strategy.warPressureTicks;
+      }
+    },
+  },
 ];
 
 /**

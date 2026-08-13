@@ -323,6 +323,13 @@ declare global {
       expansionAllowed: boolean;
       /** 指令：是否允许开辟新的远矿点（现役运营不受影响）。 */
       newRemoteOpsAllowed: boolean;
+      /**
+       * war 可持续性计数（v27+，R4）：war 姿态下经济压力持续超过
+       * warMaxPressure 的连续 tick 数，由 empire-strategy 每 tick 写入。
+       * 持续超过 warExitPatienceTicks → 姿态降级 fortify（打不起就不打）。
+       * 压力恢复即清零 — 纯函数评估的滞回输入。
+       */
+      warPressureTicks?: number;
     };
     /**
      * 失守房间记录（v11+）：房名 → 首次检测到失守的 tick。
@@ -357,9 +364,10 @@ declare global {
       defenseRampartWeakPoints: number;
     }>;
     /**
-     * 帝国战争计划（v26+，war-planner 写入）。
+     * 帝国战争计划（v26+，war-planner 写入；v27 R4 扩展）。
      * 仅 war 姿态时存在；同一时刻至多一个攻击编队（单目标，不并行开多线）。
-     * 畸形数据由 v26 迁移自愈；姿态退出/目标失效时 war-planner 清除并回收在役 attacker。
+     * 畸形数据由 v26/v27 迁移自愈；姿态退出/目标失效/战损止损时
+     * war-planner 清除并回收在役 attacker。
      */
     warPlan?: {
       /** 目标房名（敌方玩家房）。 */
@@ -372,7 +380,29 @@ declare global {
       since: number;
       /** 目标 tower 数（情报快照，供编队/撤退参考）。 */
       towersSeen: number;
+      /**
+       * 波次相位（R4）：build 集结（攻击者归建待命，满编才推进）/
+       * advance 推进（整波进攻）。由 war-planner 按存活数迟滞切换。
+       */
+      phase?: "build" | "advance";
+      /**
+       * 累计提交的 attacker 孵化请求数（R4 止损账本）— 每个新 key
+       * 只计一次。超过 squadSize × CONFIG.war.casualtyMultiplier 判消耗战失败。
+       */
+      spawned?: number;
     };
+    /**
+     * 战争失败目标黑名单（v27+，war-planner 写入）：房名 → 冷却到期 tick。
+     * 战后核验结论为 failure/unknown 的目标在冷却期内不被 selectWarTarget
+     * 重选。到期由 war-planner 每次运行时清理（防膨胀）。
+     */
+    warBlacklist?: Record<string, number>;
+    /**
+     * 战损止损后的整军休战期（v27+，war-planner 写入）：消耗战收摊后
+     * 至此刻前不再创建新战争计划（黑名单只挡单目标，休战期挡跨目标
+     * 添油循环）。到期后若姿态仍为 war 则重新评估。
+     */
+    warStandDownUntil?: number;
   }
 
   /** 参数自调优的持久化状态。 */

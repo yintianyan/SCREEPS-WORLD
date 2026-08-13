@@ -108,4 +108,16 @@ export interface RolePolicy {
    * 返回 true → 切 idle；返回 false/undefined → 走默认逻辑（不切 idle）。
    */
   shouldIdleWhenNoCandidate?(ac: ActionContext): boolean;
+  /**
+   * 战备集结（R4）：威胁检测之后、ensureHome 导航之前调用。
+   * 返回 true 表示角色已接管本 tick（驻留/归建等集结动作），
+   * role-runner 跳过导航与任务管线直接结束本 tick。
+   *
+   * 必须在导航之前执行：否则集结中的角色会被 ensureHome 直接导航
+   * 进目标房（attacker 在 war build 阶段的「添油战术」正是此路径）。
+   *
+   * 典型用例：attacker 在 warPlan.phase === "build" 时归建待命，
+   * 满编（advance）才整波推进。
+   */
+  hold?(creep: Creep, ctx: TickContext): boolean;
 }

@@ -56,6 +56,8 @@ export function resetGlobals(): void {
   delete g.pluginCooldowns;
   delete g.telemetry;
   delete g.skipBuffer;
+  // per-tick 事件缓冲（recordEvent 写入）— 漏清会让事件断言跨用例污染。
+  delete g.eventBuffer;
   // per-tick 缓存（movement 重构 + P2-6 对象缓存）— Game.time 固定为 1000，
   // 不清理会导致上一测试缓存的对象/路径污染下一测试。
   delete g.__objCache;

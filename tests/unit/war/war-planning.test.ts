@@ -9,7 +9,13 @@
  *   - decideSquadSize 编队规模
  */
 import { describe, expect, it } from "vitest";
-import { decideSquadSize, selectWarTarget } from "../../../src/domain/war/planning";
+import {
+  decideSquadSize,
+  evaluateWarOutcome,
+  isAttritionLost,
+  nextWavePhase,
+  selectWarTarget,
+} from "../../../src/domain/war/planning";
 
 const BASE_INPUT = {
   tick: 1000,
@@ -152,5 +158,76 @@ describe("decideSquadSize", () => {
     expect(decideSquadSize(0, 3, 2)).toBe(3);
     expect(decideSquadSize(1, 3, 2)).toBe(5);
     expect(decideSquadSize(3, 3, 2)).toBe(5);
+  });
+});
+
+describe("R4 — 失败目标黑名单过滤", () => {
+  it("黑名单冷却期内的目标被剔除", () => {
+    const target = selectWarTarget({
+      ...BASE_INPUT,
+      blacklist: { W6N4: 2000 },
+      candidates: [
+        candidate(), // W6N4，冷却至 2000 > tick 1000 → 剔除
+        candidate({ roomName: "W6N5", pathCost: 800 }), // 次优但合格
+      ],
+    });
+    expect(target?.roomName).toBe("W6N5");
+  });
+
+  it("黑名单已到期的目标恢复资格", () => {
+    const target = selectWarTarget({
+      ...BASE_INPUT,
+      blacklist: { W6N4: 900 }, // 900 ≤ 1000 已到期
+      candidates: [candidate()],
+    });
+    expect(target?.roomName).toBe("W6N4");
+  });
+
+  it("无黑名单输入时行为不变（可选参数）", () => {
+    const target = selectWarTarget({ ...BASE_INPUT, candidates: [candidate()] });
+    expect(target?.roomName).toBe("W6N4");
+  });
+});
+
+describe("R4 — nextWavePhase 波次相位迟滞", () => {
+  it("build：满编才 advance；未满编保持 build", () => {
+    expect(nextWavePhase("build", 3, 3, 0.5)).toBe("advance");
+    expect(nextWavePhase("build", 2, 3, 0.5)).toBe("build");
+    expect(nextWavePhase("build", 0, 3, 0.5)).toBe("build");
+  });
+
+  it("advance：低于 regroupRatio × squadSize 才回落 build（迟滞不抖动）", () => {
+    expect(nextWavePhase("advance", 1, 3, 0.5)).toBe("build"); // 1 < 1.5
+    expect(nextWavePhase("advance", 2, 3, 0.5)).toBe("advance"); // 2 ≥ 1.5
+    expect(nextWavePhase("advance", 3, 3, 0.5)).toBe("advance");
+  });
+});
+
+describe("R4 — isAttritionLost 战损止损", () => {
+  it("spawned 超过 squadSize × 倍数 → 止损；边界值不触发", () => {
+    expect(isAttritionLost(8, 3, 2.5)).toBe(true); // 8 > 7.5
+    expect(isAttritionLost(7, 3, 2.5)).toBe(false); // 7 ≤ 7.5
+    expect(isAttritionLost(3, 3, 2.5)).toBe(false); // 满编未超
+  });
+});
+
+describe("R4 — evaluateWarOutcome 战后核验", () => {
+  it("情报过期（lastSeen 超出 freshness）→ unknown", () => {
+    expect(evaluateWarOutcome(2, 0, "Enemy", 1000 - 1600, 1000, 1500)).toBe("unknown");
+    expect(evaluateWarOutcome(2, 0, "Enemy", undefined, 1000, 1500)).toBe("unknown");
+  });
+
+  it("敌人弃房（owner 消失）→ success", () => {
+    expect(evaluateWarOutcome(0, 0, undefined, 900, 1000, 1500)).toBe("success");
+  });
+
+  it("目标本有塔网且已清零 → success", () => {
+    expect(evaluateWarOutcome(2, 0, "Enemy", 900, 1000, 1500)).toBe("success");
+  });
+
+  it("塔网尚存 / 敌主仍在 → failure", () => {
+    expect(evaluateWarOutcome(2, 1, "Enemy", 900, 1000, 1500)).toBe("failure");
+    // 无塔目标（towersSeen=0）：胜利唯一途径是敌人弃房。
+    expect(evaluateWarOutcome(0, 0, "Enemy", 900, 1000, 1500)).toBe("failure");
   });
 });

@@ -48,6 +48,13 @@ export interface PostureOptions {
   threatWindow: number;
   /** fortify → war 的耐心窗口：设防状态持续超过此时长且敌情未消 → 升战争。 */
   warPatience: number;
+  /**
+   * war 可持续性耐心窗口（R4）：war 姿态下经济压力持续超过 warMaxPressure
+   * 的连续 tick 数达到此值 → 降级 fortify（战时止损：打不起就撤资）。
+   * 与威胁升级同待遇 — 达到阈值立即生效，不等 minDwell 驻留期；
+   * 压力恢复即清零计数（滞回由「持续超标」本身提供）。
+   */
+  warExitPatienceTicks: number;
   /** 降级最短驻留期：fortify/war 至少维持此时长才允许回落。 */
   minDwell: number;
   /** expand 姿态要求的最低 bucket（扩张是 CPU 重投资）。 */
@@ -67,6 +74,7 @@ export interface PostureOptions {
 export const DEFAULT_POSTURE_OPTIONS: PostureOptions = {
   threatWindow: 3000,
   warPatience: 5000,
+  warExitPatienceTicks: 1000,
   minDwell: 1000,
   expandMinBucket: 7000,
   expandMaxPressure: 0.4,
@@ -84,6 +92,12 @@ export interface PostureInput {
   bucket: number;
   /** 上一次评估结果（滞回基准）；首次评估为 undefined。 */
   prev?: { posture: EmpirePosture; since: number };
+  /**
+   * war 可持续性计数（R4）：war 姿态下经济压力持续超标的连续 tick 数，
+   * 由 empire-strategy 持久化（kernel.strategy.warPressureTicks）后回传。
+   * 缺失视为 0。
+   */
+  warPressureTicks?: number;
 }
 
 /** 姿态评估结果 — 姿态 + 各域指令（执行系统只消费指令）。 */
@@ -95,6 +109,11 @@ export interface PostureResult {
   expansionAllowed: boolean;
   /** 是否允许开辟新的远矿点（现役运营不受影响）。 */
   newRemoteOpsAllowed: boolean;
+  /**
+   * 下一步 war 可持续性计数（R4）— 调用方（empire-strategy）须持久化
+   * 此值供下 tick 回传，否则压力计数无法跨 tick 累积。
+   */
+  warPressureTicks: number;
 }
 
 /**
@@ -122,18 +141,27 @@ export function evaluateEmpirePosture(
 
   // ── 威胁升级：立即生效（紧急旁路，不等驻留期）──
   if (threatRecent) {
+    // ── war 可持续性（R4 止损）：战时可被打，但打不动经济必须退 ──
+    // 计数跨 tick 累积（由调用方持久化回传）；压力恢复即清零。
+    // 持续超标达到耐心窗口 → 立即降级 fortify（经济止损与威胁升级同待遇，
+    // 不等待 minDwell 驻留期 — 战争机器烧的是存活所需的经济）。
+    if (prevPosture === "war") {
+      const nextCounter =
+        avgPressure > options.warMaxPressure ? (input.warPressureTicks ?? 0) + 1 : 0;
+      if (nextCounter >= options.warExitPatienceTicks) {
+        return finalize("fortify", prevPosture, since, tick, 0);
+      }
+      return finalize("war", prevPosture, since, tick, nextCounter);
+    }
     // fortify 持续超过耐心窗口且经济扛得住 → 战争姿态。
     // 注意：war 的授权来自「持续被打 + 打得起」的证据链，
     // 与是否存在进攻代码无关 — 执行器必须听姿态的，反之不成立。
     if (
-      (prevPosture === "fortify" || prevPosture === "war") &&
+      prevPosture === "fortify" &&
       dwellElapsed >= options.warPatience &&
       avgPressure <= options.warMaxPressure
     ) {
-      return finalize("war", prevPosture, since, tick);
-    }
-    if (prevPosture === "war") {
-      return finalize("war", prevPosture, since, tick);
+      return finalize("war", prevPosture, since, tick, 0);
     }
     return finalize("fortify", prevPosture, since, tick);
   }
@@ -167,12 +195,13 @@ export function evaluateEmpirePosture(
   return finalize(canExpand ? "expand" : "develop", prevPosture, since, tick);
 }
 
-/** 组装结果：姿态变更时刷新 since，并派生各域指令。 */
+/** 组装结果：姿态变更时刷新 since，并派生各域指令与 war 压力计数。 */
 function finalize(
   posture: EmpirePosture,
   prevPosture: EmpirePosture,
   prevSince: number,
   tick: number,
+  warPressureTicks: number = 0,
 ): PostureResult {
   const since = posture === prevPosture ? prevSince : tick;
   return {
@@ -180,5 +209,6 @@ function finalize(
     since,
     expansionAllowed: posture === "expand",
     newRemoteOpsAllowed: posture === "develop" || posture === "expand",
+    warPressureTicks,
   };
 }
