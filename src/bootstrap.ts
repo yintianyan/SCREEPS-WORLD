@@ -90,7 +90,7 @@ export const registry = new Registry()
   .registerSystem(roomObserverSystem)
   // P3：pixel 生成（bucket 满载时生成 pixel）
   .registerSystem(pixelSystem)
-  // P3：terminal 市场贸易（卖盈余矿物换 credits → 买缺口原料喂反应链）
+  // P3：terminal 帝国能量网络（跨房互济救助 + 能量溢出/危机市场交易 + 矿物贸易）
   .registerSystem(terminalManagerSystem)
   // P3：factory/powerSpawn 最小运营（满仓能量压缩 battery + GPL 涓流）
   .registerSystem(factoryManagerSystem)

@@ -84,6 +84,9 @@ export const enum EventKind {
    * d = [outcomeCode(0=success/1=failure/2=unknown), spawned, reasonCode(0=姿态退出/1=战损止损/2=无合格目标/3=计划超期换目标)]。
    * 供战斗黑匣子复盘：投入多少孵化请求、因何收摊、核验结论如何。 */
   WarOutcome = 23,
+  /** R5 跨房能量互济：一笔 terminal.send 救助成交。d = [amount]；r = 受助房名。
+   * 捐赠房名见 console.log 明细（事件体积优先，r 保留「谁被救」这一复盘焦点）。 */
+  EnergyTransfer = 24,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

@@ -710,6 +710,28 @@ export const CONFIG = {
     /** credits 低于此值暂停买入（保留应急余额）。 */
     creditFloor: 100,
   },
+
+  /** 帝国能量网络与市场深化（R5）— 跨房互济 + 能量市场交易。 */
+  energy: {
+    /** 救助地板：storage 能量低于此值 → 帝国互济的救助候选。 */
+    aidRecipientFloor: 20000,
+    /** 捐赠地板：storage 高于此值才可捐赠；捐赠后仍须高于此值。
+     * 与救助地板分离（50k > 20k）：受助方被补到 20k 后仍远低于捐赠线，
+     * 结构性滞回 — 同一笔救助不可能让受助方翻转为捐赠方（防震荡）。 */
+    aidDonorFloor: 50000,
+    /** 单次跨房救助最大量（terminal 储备 target 10k，批次以不掏空捐赠方 terminal 为界）。 */
+    aidMaxTransfer: 10000,
+    /** 低于此量不送（能量运费不划算）。 */
+    aidMinTransfer: 2000,
+    /** 能量溢出卖线：storage 超过此水位才向市场卖能量（真实盈余出口）。 */
+    energySellFloor: 100000,
+    /** 能量最低卖出价（credits/单位）— 低于此价囤着等行情。 */
+    minEnergySellPrice: 0.02,
+    /** 能量最高买入价（credits/单位）— 危机救助价，高于此价宁可压缩运营。 */
+    maxEnergyBuyPrice: 0.05,
+    /** 能量买入触发线：storage 低于此值且 credits 充足才买（市场是最后救助通道）。 */
+    energyBuyFloor: 5000,
+  },
 } as const;
 
 /** 类型安全的档位上限比例查询。 */

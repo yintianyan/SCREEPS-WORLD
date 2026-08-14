@@ -1,5 +1,6 @@
 /**
- * Terminal Manager — P3 系统，市场贸易的唯一 Game.market 调用点。
+ * Terminal Manager — P3 系统，terminal 业务的唯一属主：
+ *   市场贸易（Game.market.deal）+ 帝国能量互济（terminal.send）+ 能量市场交易（R5）。
  *
  * 战略定位：单房间只产一种矿物，lab 反应链需要多矿种原料。
  * 在多房间互济接入前，市场是唯一的原料来源；而买入需要 credits，
@@ -7,6 +8,16 @@
  *
  *   extractor → 本房矿物 → terminal（haulMineralsToStorage 已优先存 terminal）
  *     → 卖出盈余换 credits → 买入缺口矿物 → supplyLabs（terminal 回退）→ lab 反应链
+ *
+ * R5 帝国能量网络（每轮执行顺序 = 优先级）：
+ *   0. 跨房能量互济（terminal.send）：盈余房捐赠 → 危机房救助 —
+ *      殖民生存优先于交易收入；决策为纯函数 planEnergyAid（无状态、地板迟滞防震荡）。
+ *   1. 能量溢出卖（storage > energySellFloor）：RCL8 满级后能量是最大出口，
+ *      卖能量换 credits 是财富引擎；价格底线 minEnergySellPrice。
+ *   2. 矿物卖（正常贸易收入来源）。
+ *   3. 危机能量买（storage < energyBuyFloor 且 credits 充足）：市场是最后救助通道，
+ *      价格上限 maxEnergyBuyPrice — 高于此价宁可压缩运营。
+ *   4. 缺口矿物买（反应链原料）。
  *
  * 能量运费：deal 无论买卖都从本方 terminal 扣能量
  *（calcTransactionCost），由 distributor 的 stockTerminalEnergy 维持储备。
@@ -18,6 +29,13 @@
  */
 import { CONFIG } from "../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
+import { EventKind, recordEvent } from "../kernel/event-log";
+import {
+  energyBuyAmount,
+  energySellAmount,
+  planEnergyAid,
+  type RoomEnergyState,
+} from "../domain/economy/energy-logistics";
 import {
   getMineralDeficits,
   pickBestBuyOrder,
@@ -36,19 +54,115 @@ export const terminalManagerSystem: System = {
     if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;
     if ((Game.cpu.bucket ?? 0) < CONFIG.market.minBucket) return;
 
+    // 0. 帝国能量互济：跨房救助优先于贸易（殖民生存 > 交易收入）。
+    tryEmpireEnergyAid(ctx);
+
     for (const snapshot of ctx.snapshots()) {
       const terminal = snapshot.terminal;
       if (!terminal) continue;
       if (terminal.cooldown > 0) continue;
 
-      // 1. 先卖后买：卖出是 credits 的唯一来源，信用地板前必须先有收入。
+      // 1. 能量溢出 → 卖能量（财富引擎）。
+      if (trySellSurplusEnergy(snapshot, terminal)) continue; // 本次冷却窗口已用掉
+
+      // 2. 先卖后买：卖出是 credits 的唯一来源，信用地板前必须先有收入。
       if (trySellHomeMineral(snapshot, terminal)) continue; // 本次冷却窗口已用掉
 
-      // 2. 买入缺口矿物（credits 允许时）。
+      // 3. 危机能量买（生存救助优先于反应原料）。
+      if (tryBuyCrisisEnergy(snapshot, terminal)) continue;
+
+      // 4. 买入缺口矿物（credits 允许时）。
       tryBuyDeficit(snapshot, terminal);
     }
   },
 };
+
+/**
+ * 帝国能量互济 — 每轮至多一笔（决策纯函数，本函数只做采集与执行）。
+ * 发送方 terminal 须同时承担 货量 + 能量运费 + 储备地板；
+ * calcTransactionCost 不可用（部分私服）时整体跳过。
+ */
+function tryEmpireEnergyAid(ctx: TickContext): void {
+  if (typeof Game.market?.calcTransactionCost !== "function") return;
+  const snapshots = [...ctx.snapshots()];
+  if (snapshots.length < 2) return;
+
+  const rooms: RoomEnergyState[] = snapshots.map(s => ({
+    roomName: s.roomName,
+    storageEnergy: s.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
+    canSend: s.terminal !== undefined && s.terminal.cooldown === 0,
+    canReceive: s.terminal !== undefined,
+  }));
+
+  const plan = planEnergyAid(rooms, {
+    recipientFloor: CONFIG.energy.aidRecipientFloor,
+    donorFloor: CONFIG.energy.aidDonorFloor,
+    maxTransfer: CONFIG.energy.aidMaxTransfer,
+    minTransfer: CONFIG.energy.aidMinTransfer,
+  });
+  if (!plan) return;
+
+  const terminal = ctx.getSnapshot(plan.from)?.terminal;
+  if (!terminal || terminal.cooldown > 0) return;
+
+  // 运费预算：发送方 terminal 须同时承担 货量 + 运费 + 储备地板。
+  const fee = Game.market.calcTransactionCost(plan.amount, plan.from, plan.to);
+  const energyInTerminal = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+  if (energyInTerminal < plan.amount + fee + CONFIG.market.terminalEnergyReserveFloor) return;
+
+  const result = terminal.send(RESOURCE_ENERGY, plan.amount, plan.to);
+  if (result === OK) {
+    recordEvent(EventKind.EnergyTransfer, plan.to, [plan.amount]);
+    console.log(
+      `[${Game.time}] energy-aid: ${plan.from} → ${plan.to} ${plan.amount} energy (fee=${fee})`,
+    );
+  }
+}
+
+/** 能量溢出卖：storage 高于 energySellFloor 时向市场卖能量（terminal 现货出货）。 */
+function trySellSurplusEnergy(snapshot: RoomSnapshot, terminal: StructureTerminal): boolean {
+  const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+  const amount = energySellAmount(
+    storageEnergy,
+    CONFIG.energy.energySellFloor,
+    CONFIG.market.maxDealAmount,
+  );
+  if (amount <= 0) return false;
+  // deal 从 terminal 出货 — terminal 现货不足时等 distributor 转运，下一窗口再试。
+  if (terminal.store.getUsedCapacity(RESOURCE_ENERGY) < amount) return false;
+
+  const orders = toSummaries(
+    Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_ENERGY }),
+  );
+  const best = pickBestBuyOrder(orders, CONFIG.energy.minEnergySellPrice);
+  if (!best) return false;
+  return executeDeal(best, amount, terminal, snapshot.roomName);
+}
+
+/** 危机能量买：storage 低于 energyBuyFloor 且 credits 充足时买入（最后救助通道）。 */
+function tryBuyCrisisEnergy(snapshot: RoomSnapshot, terminal: StructureTerminal): boolean {
+  if (Game.market.credits < CONFIG.market.creditFloor) return false;
+
+  const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+  // 按最高买价预算可负担量（保守：实际成交价只低不高）。
+  const affordable = Math.floor(
+    (Game.market.credits - CONFIG.market.creditFloor) / CONFIG.energy.maxEnergyBuyPrice,
+  );
+  const amount = energyBuyAmount(
+    storageEnergy,
+    CONFIG.energy.energyBuyFloor,
+    CONFIG.market.maxDealAmount,
+    affordable,
+  );
+  if (amount <= 0) return false;
+
+  const orders = toSummaries(
+    Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_ENERGY }),
+  );
+  const best = pickBestSellOrder(orders, CONFIG.energy.maxEnergyBuyPrice);
+  if (!best) return false;
+  return executeDeal(best, amount, terminal, snapshot.roomName);
+}
 
 /** 把 Game.market 的订单对象裁剪为纯函数可消费的摘要。 */
 function toSummaries(orders: readonly Order[]): MarketOrderSummary[] {

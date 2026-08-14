@@ -63,6 +63,12 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   [tests/unit/systems/war-planner.test.ts](tests/unit/systems/war-planner.test.ts)、
   [tests/unit/war/war-planning.test.ts](tests/unit/war/war-planning.test.ts)、
   [tests/unit/role/attacker.test.ts](tests/unit/role/attacker.test.ts)。
+- R5 帝国能量网络已落地（M12 双房互济验收项补齐，**无 schema 变更**）：
+  跨房能量互济（planEnergyAid 地板迟滞防震荡 + terminal.send 预算门禁）+
+  能量市场交易（溢出卖/危机买价格门槛），EnergyTransfer 事件进黑匣子。
+  设计决策见 plan.md §13.1；测试见
+  [tests/unit/economy/energy-logistics.test.ts](tests/unit/economy/energy-logistics.test.ts)、
+  [tests/unit/systems/terminal-manager-energy.test.ts](tests/unit/systems/terminal-manager-energy.test.ts)。
 - 仍为已知取舍：远矿 container **维修**链缺失（建造链已由 P0-A 补齐）；
   取舍决策以各处内联注释为准。
 
@@ -155,6 +161,7 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 | 改建造 / 布局 | §5.5 建造维修、§5.6 布局实施 |
 | 改远矿 / 扩张 / 帝国姿态 | §12.1–12.4、[empire-strategy.ts](src/systems/empire-strategy.ts)、[posture.ts](src/domain/strategy/posture.ts) |
 | 改战争 / 进攻 / 止损 | §12.6、[war-planner.ts](src/systems/war-planner.ts)、[planning.ts](src/domain/war/planning.ts) |
+| 改跨房物流 / terminal / 市场 | §13.1、[terminal-manager.ts](src/systems/terminal-manager.ts)、[energy-logistics.ts](src/domain/economy/energy-logistics.ts) |
 | 改调参 / 遥测 / CPU 预算 | [tuning-engine.ts](src/systems/tuning-engine.ts)、[tuned.ts](src/config/tuned.ts)、§3.2、§7 |
 | 评估技术债 / 已知取舍 | 各处内联注释与回归测试 |
 | 注册新插件 | §4 插件注册规范 |

@@ -103,6 +103,10 @@ Object.assign(globalThis as Record<string, unknown>, {
   RESOURCE_POWER: "power",
   RESOURCE_BATTERY: "battery",
 
+  // 市场订单类型常量（terminal-manager 运行时引用）
+  ORDER_SELL: "sell",
+  ORDER_BUY: "buy",
+
   // 方向常量
   TOP: 1,
   TOP_RIGHT: 2,

@@ -1285,9 +1285,51 @@ active。防御短板经自测演习（heal + ranged 小队）确认存在——
 > 实施状态（2026-08 复核）：M9 战斗黑匣子（event-log 的 CreepDeath/TowerVolley
 > 事件 + tools/private 收集链）、M11 防御 L1（role-runner 集结避险 + defender
 > 双编制 + fleetLossFuse 熔断）、M12 RCL6（terminal-manager / lab-system /
-> factory-manager / mineral-miner）均已落地；R3 战时闭环（war-planner +
-> attacker）与其 R4 升级（§12.6）为三期后新增阶段，本节未及回写 —
-> 战争相关硬约束以 §12.4/§12.6 与代码内联注释为准。
+> factory-manager / mineral-miner）均已落地；M12 的「双房互济」验收项
+> （双房 terminal 互通、主房向新房输血）由 R5 补齐（§13.1）；
+> R3 战时闭环（war-planner + attacker）与其 R4 升级（§12.6）为三期后新增阶段，
+> 本节未及回写 — 战争相关硬约束以 §12.4/§12.6 与代码内联注释为准。
+
+### 13.1 帝国能量网络（R5，M12 双房互济验收项补齐）
+
+跨房能量互济与能量市场交易已实现（`domain/economy/energy-logistics.ts` +
+`systems/terminal-manager.ts`），补齐 M12 验收项「双房 terminal 互通、
+主房可向新房输血能量」。
+
+#### 跨房能量互济（terminal.send）
+
+- **决策纯函数** `planEnergyAid`：救助候选 = storage < `aidRecipientFloor`（20k），
+  按缺口降序（最饿者先救）；捐赠候选 = storage > `aidDonorFloor`（50k）且
+  terminal 冷却结束，按盈余降序（最富者先捐）；量 = min(缺口, 盈余,
+  `aidMaxTransfer`)，低于 `aidMinTransfer` 不送。每轮至多一笔。
+- **结构性滞回防震荡**：捐赠地板 > 救助地板 — 受助方被补到 20k 后仍远低于
+  50k 捐赠线，单笔救助不可能让受助方翻转为捐赠方；决策无状态，因此
+  **不新增 Memory 字段、schema 版本不变**。
+- **发送预算**：发送方 terminal 须同时承担 货量 + 能量运费（calcTransactionCost）
+  + 储备地板（terminalEnergyReserveFloor）；不足则本轮不发送，等 distributor
+  回补 terminal 后下轮再试。
+- **执行优先级**：互济排在市场交易之前（殖民生存 > 交易收入），但仅
+  healthy/guarded + bucket 门禁内运行（与 terminal-manager 同款节流）。
+- **边界**：受助房必须有 terminal（RCL6+ 门槛）— RCL4-5 新房仍走本地自举
+  （M10 路径），互济只服务 RCL6+ 房之间的能量调度。
+- **可观测**：成交记录 `EnergyTransfer` 事件（EventKind 24，d=[amount]，
+  r=受助房），黑匣子可复盘帝国能量流向。
+
+#### 能量市场交易（credits 闭环）
+
+- **溢出卖**：storage > `energySellFloor`（100k，真实盈余出口）→ 向市场卖能量，
+  价格底线 `minEnergySellPrice`（0.02）— RCL8 满级后能量是最大财富引擎。
+- **危机买**：storage < `energyBuyFloor`（5k）且 credits 高于信用地板 → 买入，
+  价格上限 `maxEnergyBuyPrice`（0.05）— 市场是最后救助通道，高于此价宁可
+  压缩运营。
+- **执行顺序**（每房每窗口至多 1 单）：能量溢出卖 → 矿物卖 → 危机能量买 →
+  缺口矿物买；价格底线/上限与 credits 地板全部配置化。
+
+#### 测试
+
+纯函数 12 例（`tests/unit/economy/energy-logistics.test.ts`）+ 系统级 11 例
+（`tests/unit/systems/terminal-manager-energy.test.ts`：互济成交/预算不足/冷却/
+单房/无交易费 API/能量买卖价格门槛）。
 
 ### 主线排序与理由
 
