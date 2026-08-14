@@ -1,18 +1,9 @@
 /**
  * Time Series — CPU 和经济指标的时序数据采集。
- *
- * 设计意图：将 per-tick 遥测数据从 heap（单 tick 生命周期）提升为
- * 持久化的时间序列（存入 RawMemory segment），供事后趋势分析。
- *
- * 数据流：
- *   per-tick heap telemetry → 采样（每 N tick）→ ring buffer → segment flush
- *
- * 采样频率策略：
- *   - CPU 时序：每 10 tick 采样一次（500 条 = 5000 tick 窗口）
- *   - 经济时序：每 50 tick 采样一次（300 条 = 15000 tick 窗口）
- *   - 人口普查：每 100 tick 采样一次（仅保留最新快照）
- *
- * 成本：采样 ~0 CPU（浅拷贝几个数字），flush ~0.1 CPU（JSON.stringify）。
+ * per-tick heap 遥测 → 采样（每 N tick）→ ring buffer → segment flush，供事后趋势分析。
+ * 采样频率：CPU 每 10 tick（300 条 = 3000 tick 窗口）；经济每 50 tick（200 条 =
+ * 10000 tick 窗口）；人口普查每 100 tick（仅保留最新快照）。
+ * 成本：采样 ~0 CPU（浅拷贝数字），flush ~0.1 CPU（JSON.stringify）。
  * 受 P3 budget 门禁：conserve/recovery tier 下跳过采集。
  */
 
@@ -181,12 +172,11 @@ export function sampleCpu(
     : budget.tier === "conserve" ? 2
     : 3;
 
-  // Top-3 系统按 CPU 降序
   const sys = Object.entries(telemetry.systemCpu)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
 
-  // Top-3 role 按 CPU 降序（creep 执行 CPU — 点亮"系统之外"的大头）。
+  // Top-3 role 按 CPU 降序（点亮「系统之外」的最大 CPU 去向）。
   const roles = Object.entries(telemetry.roleCpu)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);

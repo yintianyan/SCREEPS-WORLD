@@ -1,32 +1,19 @@
 /**
  * War Planner — P2 系统，war 姿态的唯一进攻执行决策者（R3 战时闭环，R4 自治升级）。
+ * Strategy（empire-strategy 发布 posture）→ 本系统读姿态，姿态 = war 才激活：
+ * 非 war 收摊（核验战果 → 失败黑名单 → 回收 attacker → 撤销寄宿孵化请求）；
+ * war 则选目标（domain/war/planning 纯函数）→ 发布 Memory.kernel.warPlan →
+ * 按编队缺口向 sponsor 队列推 attacker 孵化请求（spawn-manager 是唯一 spawnCreep）。
  *
- * 架构定位（ES-1 预留插座的接线）：
- *   Strategy（empire-strategy 发布 posture）→ 本系统读姿态，姿态 = war 才激活。
- *   - 非 war：无需任何军事支出 — 收摊（核验战果 → 失败黑名单 → 回收 attacker →
- *     撤销寄宿孵化请求）。
- *   - war：从各房 intel 选目标（domain/war/planning 纯函数）→ 发布 Memory.kernel.warPlan
- *     → 按编队缺口向 sponsor 队列推 attacker 孵化请求（spawn-manager 是唯一 spawnCreep）。
+ * R4 自治升级：① 波次集结 — warPlan.phase = build/advance 双阈值迟滞，build 阶段
+ * attacker 在 home 集结待命（role-runner hold 钩子），满编才整波 advance（添油战术
+ * 是消耗战失败的根源）；② 战损止损 — spawned 超 squadSize × casualtyMultiplier 判
+ * 消耗战失败收摊并整军休战（warStandDownUntil 挡「A 止损→立刻打 B」跨目标循环）；
+ * ③ 战后核验 — 用目标房最新 intel 判战果（evaluateWarOutcome），failure/unknown 进
+ * warBlacklist 冷却防重选；④ 结论记录 WarOutcome 事件。
  *
- * R4 自治升级（报复性战争深化）：
- *   1. 波次集结：warPlan.phase = build/advance 双阈值迟滞。build 阶段 attacker
- *      在 home 集结待命（role-runner hold 钩子），满编才整波 advance —
- *      用「整波推进」替代「散兵逐个送」（添油战术是消耗战失败的根源）。
- *   2. 战损止损：warPlan.spawned 累计提交孵化请求数，超过
- *      squadSize × CONFIG.war.casualtyMultiplier → 判消耗战失败收摊，
- *      并进入整军休战期（warStandDownUntil）— 黑名单挡单目标，休战期挡
- *      「A 止损 → 立刻打 B → 再止损 → 打 C」的跨目标添油循环。
- *   3. 战后核验：收摊时用目标房最新 intel 判定战果（evaluateWarOutcome 纯函数）—
- *      塔网清零/敌人弃房 = success；否则 failure/unknown 进 warBlacklist 冷却，
- *      冷却期内不被重选，防止「打不过 → 收摊 → 下一轮又选中 → 再送」。
- *   4. 可观测：收摊结论记录 WarOutcome 事件（战斗黑匣子）。
- *
- * 铁律：本系统不自行裁决「是否该开战」— 姿态是唯一授权来源。
- * 战争是否可持续由 Strategy 层裁决（posture 的 war 压力退出），
- * 本系统只执行「怎么打」与「何时止损」的作战层面决策。
- *
- * 运行成本：interval 10；非 war 时仅一次收摊（O(在役 attacker + 队列)），
- * 战争期间 O(全部 creep 一次 + 候选 intel 一次)，无全房 find / 无寻路。
+ * 铁律：本系统不自行裁决「是否该开战」— 姿态是唯一授权来源；只执行「怎么打」与
+ * 「何时止损」。interval 10；非 war 时仅一次收摊，无全房 find / 无寻路。
  */
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
@@ -77,7 +64,6 @@ export const warPlannerSystem: System = {
     // R4 休战期：战损止损后整军休战 — 黑名单只挡单目标，
     // 休战闸挡「A 止损 → 立刻打 B → 再止损 → 打 C」的跨目标添油循环。
     if ((Memory.kernel?.warStandDownUntil ?? 0) > ctx.tick) return;
-
     // 1. 维护战争计划：无计划 / 计划超期 → 重新选目标。
     const existing = Memory.kernel?.warPlan;
     const needSelect = !existing || ctx.tick - existing.since > CONFIG.war.planTimeout;
@@ -171,9 +157,7 @@ export const warPlannerSystem: System = {
 
 /**
  * 收摊（幂等）：核验战果 → 失败/unknown 进黑名单 → 记录 WarOutcome 事件 →
- * 回收在役 attacker（标记 recycle，spawn-manager 归航回收）→ 撤销寄宿请求 →
- * 清除计划。
- *
+ * 回收在役 attacker（标记 recycle，spawn-manager 归航回收）→ 撤销寄宿请求 → 清除计划。
  * reason：收摊原因编码（WarOutcome 事件 d[2]，黑匣子复盘用）。
  */
 export function demobilize(tick: number, reason: number): void {

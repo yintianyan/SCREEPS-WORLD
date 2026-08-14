@@ -1,14 +1,9 @@
 /**
- * Terminal 交易与备货策略 — 纯函数层。
- *
- * 单房间只产一种矿物，lab 反应链需要多矿种原料 — terminal 市场交易是
- * 多房间/跨帝国补给接入前唯一的原料来源，也是 credits 的唯一收入
- *（卖出本房盈余矿物 → 买入缺口矿物，形成自给的贸易闭环）。
- *
- * 分工：
- *   - 本文件：库存缺口计算、订单挑选（纯函数，Vitest 可测）
- *   - systems/terminal-manager.ts：getAllOrders/deal 等 Game.market 调用
- *   - distributor 的 stockTerminalEnergy action：维持 terminal 能量（交易运费）
+ * Terminal 交易与备货策略 — 纯函数层。单房只产一种矿物，而 lab 反应链需要
+ * 多矿种原料 — 市场交易是跨帝国补给接入前唯一的原料来源，也是 credits 唯一
+ * 收入（卖盈余 → 买缺口，自给闭环）。
+ * 分工：本文件纯函数；Game.market 调用在 systems/terminal-manager.ts；
+ * distributor 的 stockTerminalEnergy action 维持交易所需运费能量。
  */
 import type { TerminalPolicy, TerminalTransfer } from "./types";
 
@@ -23,23 +18,14 @@ const MINERAL_RESERVE_TARGET: Readonly<Record<string, number>> = {
   X: 200,
 };
 
-/**
- * 单房间 Terminal 策略 — 当前为空操作（no-op）。
- * 未来多房间时替换为实际调度逻辑。
- */
+/** 单房间阶段 no-op 策略；多房间时替换为实际调度。 */
 export const singleRoomTerminalPolicy: TerminalPolicy = {
   planTransfers(_roomName: string, _available: Readonly<Record<string, number>>): readonly TerminalTransfer[] {
-    // 单房间阶段：不主动发送
     return [];
   },
 };
 
-/**
- * 检查房间是否缺少某种基础矿物（用于市场采购决策）。
- *
- * @param available 当前库存
- * @returns 缺少的矿物列表及缺口量
- */
+/** 低于 MINERAL_RESERVE_TARGET 的矿物缺口列表（供市场采购决策）。 */
 export function getMineralDeficits(
   available: Readonly<Record<string, number>>,
 ): Array<{ mineral: string; deficit: number }> {
@@ -55,7 +41,7 @@ export function getMineralDeficits(
 
 // ─── 市场订单挑选（纯函数） ─────────────────────────────────
 
-/** 订单摘要 — 只保留决策所需字段，不持有 Game.market 的 Order 对象。 */
+/** 订单摘要 — 纯数据（决策所需字段），不持有 Game.market 的 Order 对象。 */
 export interface MarketOrderSummary {
   id: string;
   /** 单价（credits/单位）。 */
@@ -66,10 +52,7 @@ export interface MarketOrderSummary {
   roomName?: string;
 }
 
-/**
- * 从卖单中挑最优买入目标：单价不超上限，价低者优先，同价量大者优先
- *（一次 deal 吃满批量，摊薄能量运费）。
- */
+/** 挑最优卖单：单价不超上限、价低优先、同价量大优先（一次 deal 吃满批量摊薄运费）。 */
 export function pickBestSellOrder(
   orders: readonly MarketOrderSummary[],
   maxPrice: number,
@@ -85,9 +68,7 @@ export function pickBestSellOrder(
   return best;
 }
 
-/**
- * 从买单中挑最优卖出目标：单价不低于底线，价高者优先，同价量大者优先。
- */
+/** 挑最优买单：单价不低于底线、价高优先、同价量大优先（卖出方向镜像）。 */
 export function pickBestBuyOrder(
   orders: readonly MarketOrderSummary[],
   minPrice: number,

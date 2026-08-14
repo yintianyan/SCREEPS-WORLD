@@ -1,28 +1,11 @@
 /**
- * 远矿需求评估 — 纯函数，不访问 Game/Memory。
- *
- * 评估每个 active 远矿运营所需的 creep 数量，生成 SpawnRequest。
- *
- * 与本地 evaluateDemand 的区别：
- *   - 远矿需求独立评估，不经过本房的 evaluateDemand
- *   - 远矿 creep 的 home = 孵化房，remoteTarget = 远矿房
- *   - 远矿请求直接推入 spawnQueue，与本地请求共享优先级排序
- *
- * 优先级设计：
- *   - remoteHarvester: P1（经济引擎，与本地 harvester 同级）
- *   - remoteHauler: P1（物流链，与本地 hauler 同级）
- *   - reserver: P2（防御性，不阻塞经济）
- *
- * 安全门禁（R3b，2026-08-01）：
- *   - bootstrap 时暂停远矿孵化（保命孵化优先）
- *   - recovery 时允许**现役 active op 补员**（remoteHarvester/remoteHauler 是
- *     收入路径——W7N4/W8N3 实测 recovery 期现役远矿 creep 死光后不补，
- *     收入归零加剧贫困陷阱）；新 op 仍由 remote-mining-manager 的
- *     roomReadyForNewRemote（normal + storage 盈余）把关，不在本层放行
- *   - reserver 仅 normal 生成（P2 发展角色，recovery 下会被 kernel 门禁跳过，
- *     孵出即闲置 = 浪费孵化窗）
- *   - 威胁/InvaderCore 冷却在循环内仍然生效（defender 先应战、经济孵化暂停）
- *   - CPU tier <= conserve 时不孵化远矿（CPU 预算保护）
+ * 远矿需求评估 — 纯函数，不访问 Game/Memory。为每个 active 远矿运营评估所需
+ * creep 数并生成 SpawnRequest（home = 孵化房，remoteTarget = 远矿房；与本地
+ * 请求共享 spawnQueue 优先级）。优先级：harvester/hauler P1，reserver P2。
+ * 安全门禁（R3b）：bootstrap 暂停孵化；recovery 只许现役 op 补员（远矿是收入
+ * 路径，W7N4/W8N3 实证冻结致收入归零加剧贫困陷阱；新 op 由 remote-mining-
+ * manager 的 roomReadyForNewRemote 把关）；reserver 仅 normal（recovery 下被
+ * kernel 门禁跳过）；威胁/InvaderCore 冷却循环内生效；CPU tier ≤ conserve 不孵化。
  */
 
 import { CONFIG } from "../../config";
@@ -40,15 +23,12 @@ export interface RemoteCreepSummary {
   bodyLength: number;
 }
 
-/** 远矿需求评估输入。 */
+
 export interface RemoteDemandInput {
-  /** 孵化房名。 */
   homeRoom: string;
-  /** 当前 ColonyState（非 normal 时暂停远矿）。 */
+  /** ColonyState（bootstrap 暂停、recovery 限补员，见 R3b 门禁）。 */
   colonyState: ColonyState;
-  /** 房间能量容量（用于 body 选择）。 */
   energyCapacityAvailable: number;
-  /** 当前 tick。 */
   tick: number;
   /** 远矿运营列表（key = 目标房名）。 */
   remoteOps: Readonly<Record<string, { state: string; sources?: number; haulerNeed?: number; lastSeen: number }>>;
@@ -59,55 +39,38 @@ export interface RemoteDemandInput {
   /** 远矿房威胁信息（从 Game.rooms 检测，key = 房间名，value = 是否有威胁）。 */
   remoteThreats?: Readonly<Record<string, boolean>>;
   /**
-   * 被 InvaderCore 压制的远矿房集合 — 该房暂停一切孵化（含 defender）。
-   *
-   * InvaderCore 是 100,000 hits 的结构（INVADER_CORE_HITS），remoteDefender
-   * [2A,2M] 仅 20 dmg/tick、寿命 1500 tick — 拆核需 5000 tick，派 defender
-   * 是纯送死；reserver 的 attackController 对核心持续续期的预约也无效。
-   * 正确策略是止损：停孵化、撤现役、等核心自然 decay 或冷却后重评估。
+   * 被 InvaderCore 压制的远矿房集合 — 暂停该房一切孵化（含 defender）。
+   * 拆核是纯送死（INVADER_CORE_HITS=100k，defender 20 dmg/tick × 1500 tick
+   * 寿命 ≈ 需 5000 tick，且 reserver 对核心的预约无效）；正确策略是止损：
+   * 停孵化、撤现役，等核心 decay/冷却后重评估。
    */
   blockedRooms?: ReadonlySet<string>;
 }
 
-/** 远矿需求评估结果。 */
 export interface RemoteDemandResult {
   requests: SpawnRequest[];
 }
 
-/**
- * 评估远矿孵化需求。
- *
- * 纯函数 — 接收预收集的数据，返回待提交的 SpawnRequest 列表。不访问 Game/Memory。
- *
- * 评估逻辑：
- *   1. 遍历 active 状态的远矿运营
- *   2. 对每个运营，统计已分配的 harvester/hauler/reserver 数量
- *   3. 不足目标数量则生成 SpawnRequest
- *   4. 替换逻辑：creep 即将死亡时提前替补
- */
+/** 评估远矿孵化需求：遍历 active 运营，按目标编制与替换窗口生成 SpawnRequest。纯函数。 */
 export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResult {
   const { homeRoom, colonyState, energyCapacityAvailable, tick, remoteOps, remoteCreeps, spawnQueue } = input;
   const requests: SpawnRequest[] = [];
 
-  // 安全门禁（R3b）：bootstrap 时暂停远矿孵化（保命孵化优先）；recovery 时
-  // 允许现役 op 补员——远矿是收入路径，recovery 期冻结只会让房间失去
-  // 唯一的增量收入（W7N3/W7N4 贫困陷阱实证）。
+  // 安全门禁（R3b）：bootstrap 暂停（保命孵化优先）；recovery 允许现役 op 补员
+  // （远矿是唯一增量收入，冻结致贫困陷阱 — W7N3/W7N4 实证）。
   if (colonyState === "bootstrap") {
     return { requests };
   }
 
-  // CPU 预算保护：conserve 以下不孵化远矿。
-  // 注意：这里只检查 colonyState，CPU tier 检查由系统层在调用前完成。
+  // CPU 预算保护由系统层把关（conserve 以下不孵化远矿）；本层只查 colonyState。
 
   for (const [targetRoom, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") continue;
 
-    // InvaderCore 压制的房：暂停一切孵化（含 defender）— 打不动就不送兵。
-    // 现役 creep 由 remote-mining-manager 的 recycle 通道撤回；
-    // 核心消失（自然 decay / 视野确认清空）后本集合不再包含该房，孵化自动恢复。
+    // InvaderCore 压制房：暂停一切孵化（含 defender）；现役 creep 由
+    // remote-mining-manager 的 recycle 通道撤回，核心消失后自动恢复。
     if (input.blockedRooms?.has(targetRoom)) continue;
 
-    // 统计该远矿目标已分配的各角色数量。
     const counts = countRemoteCreepsByRole(remoteCreeps, targetRoom);
     const pending = {
       remoteHarvester: countRemotePending(spawnQueue, "remoteHarvester", targetRoom),
@@ -130,14 +93,13 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       }
     }
 
-    // RM-2：威胁在场（含失明冷却期 — 系统层已把 threatUntil 合并进
-    // remoteThreats）时暂停经济孵化：经济 creep 零战力，威胁未清时
-    // 补充的每一批都是送死。defender 已在上方评估（先应战再恢复运营）。
+    // RM-2：威胁在场（含失明冷却期，系统层已合并进 remoteThreats）暂停经济
+    // 孵化 — 经济 creep 零战力，威胁未清时补一批送一批；defender 已在上方评估。
     if (hasThreats) continue;
 
-    // 1. Remote Harvester — 每 source 1 个（2-source 房需 2 只，否则第二源白费）。
-    //    op.sources 缺失（无视野自举）时回退 harvestersPerTarget；上限
-    //    harvestersMaxPerTarget 防未知房 sources 异常虚增编制。
+    // 1. Remote Harvester — 每 source 1 个（2-source 房需 2 只，否则第二源白费）；
+    //    op.sources 缺失时回退 harvestersPerTarget，上限 harvestersMaxPerTarget
+    //    防未知房 sources 异常虚增编制。
     const harvesterTarget = Math.min(
       op.sources ?? CONFIG.remote.harvestersPerTarget,
       CONFIG.remote.harvestersMaxPerTarget,
@@ -151,14 +113,11 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
         key, 1, body, tick,
       ));
     } else {
-      // 替换逻辑：检查即将死亡的 remoteHarvester。
       const replacement = findReplacement(remoteCreeps, "remoteHarvester", targetRoom, tick);
-      // 守卫：仅当健康数（含孵化中替补）+ pending 不足编制时才补，防同一濒死者
-      // 每周期反复触发替换风暴（见 countHealthyByRole 注释）。
+      // 守卫：健康数（含孵化中替补）+ pending 不足编制才补，防替换风暴（见 countHealthyByRole 注释）。
       const healthy = countHealthyByRole(remoteCreeps, "remoteHarvester", targetRoom);
       if (replacement && healthy + pending.remoteHarvester < harvesterTarget) {
-        // 替补 key 绑定濒死 creep 名而非 total 索引：稳定 key 使 submitRequest
-        // 按 key 幂等合并，队列内始终只有一条替补请求。
+        // 替补 key 绑定濒死 creep 名而非 total 索引：submitRequest 按 key 幂等合并，队列内始终只有一条替补。
         const key = replacementKey("remoteHarvester", homeRoom, targetRoom, replacement);
         const body = selectBody("remoteHarvester", energyCapacityAvailable);
         requests.push(createRemoteRequest(
@@ -169,7 +128,7 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     }
 
     // 2. Remote Hauler — 编制按评选期算出的 haulerNeed（通勤越远配越多）；
-    //    存量运营无此字段时回退 haulersPerTarget（兼容，行为同现状）。
+    //    存量运营无此字段时回退 haulersPerTarget。
     const haulerTarget = op.haulerNeed ?? CONFIG.remote.haulersPerTarget;
     const haulerTotal = (counts.remoteHauler ?? 0) + pending.remoteHauler;
     if (haulerTotal < haulerTarget) {
@@ -193,16 +152,15 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       }
     }
 
-    // 3. Reserver — 每目标 1 个（可配置，RCL 门禁由系统层检查）。
-    // R3b：reserver 仅 normal 生成——recovery 下 P2 角色被 kernel 门禁跳过，
-    // 孵出的 reserver 会在 home 房闲置，白耗孵化窗。
+    // 3. Reserver — 每目标 1 个（RCL 门禁由系统层检查）。R3b：仅 normal 生成 —
+    //    recovery 下 P2 角色被 kernel 门禁跳过，孵出即在 home 闲置白耗孵化窗。
     if (CONFIG.remote.enableReserver && colonyState === "normal") {
       const reserverTotal = (counts.reserver ?? 0) + pending.reserver;
       if (reserverTotal < 1) {
         const key = spawnKey("reserver", homeRoom, reserverTotal, targetRoom);
         const body = selectBody("reserver", energyCapacityAvailable);
-        // reserver body 可能无法在低容量时生成（CLAIM 需要 650 能量）。
-        // 如果 body 选择失败（回退到 RECOVERY_BODY），跳过 — 等容量提升后再孵化。
+        // CLAIM 需 650 能量，低容量时 body 选择回退到 RECOVERY_BODY —
+        // 无 claim 部件则跳过，等容量提升后再孵化。
         if (body.includes("claim" as BodyPartConstant)) {
           requests.push(createRemoteRequest(
             "reserver", homeRoom, targetRoom, reserverTotal,
@@ -233,9 +191,7 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
   return { requests };
 }
 
-// ──────────────────────────────────────────────
-// 辅助函数
-// ──────────────────────────────────────────────
+// ── 辅助函数 ──
 
 /** 统计指定远矿目标的各角色存活 creep 数。 */
 function countRemoteCreepsByRole(
@@ -268,8 +224,8 @@ function countRemotePending(
 
 /**
  * creep 是否在替换窗口内（即将死亡，不计入有效编制）。
- * 阈值 = body.length * 3 + replaceBuffer + 50（跨房通勤更远，加 50 tick 余量）。
- * 孵化中/新生 creep（ticksToLive 未定义）视为满编制，不在窗口内。
+ * 阈值 = body.length*3 + replaceBuffer + 50（跨房通勤更远，加 50 tick 余量）；
+ * 孵化中/新生 creep（ticksToLive 未定义）视为满编制。
  */
 function inReplacementWindow(creep: RemoteCreepSummary): boolean {
   if (creep.ticksToLive === undefined) return false;
@@ -278,13 +234,10 @@ function inReplacementWindow(creep: RemoteCreepSummary): boolean {
 }
 
 /**
- * 统计某角色"健康"存活数 — 排除替换窗口内的濒死者，计入孵化中的替补。
- *
- * 替换风暴根因守卫：原替换分支只要 findReplacement 找到窗口内濒死者就补，
- * 无编制上限判定；replacement 孵出后离开队列、pending 归零，而濒死者仍在
- * 窗口 → 每个 manager 周期重复触发替换（线上实测：单个 dying reserver 连续
- * 生成 6 个替换，live 数飙到 5，配额仅 1）。以"健康数 + pending < target"
- * 为闸：健康数含孵化中的替补，补足一个后即达标停止，濒死者自然寿终不再重复补。
+ * 统计「健康」存活数 — 排除替换窗口内濒死者，计入孵化中替补。
+ * 替换风暴守卫：原实现只要找到濒死者就补（无编制上限），replacement 出队后
+ * pending 归零而濒死者仍在窗口 → 每周期重复触发（线上实测单个 dying reserver
+ * 连出 6 个替换，live 飙到 5、配额仅 1）；以「健康数 + pending < target」为闸。
  */
 function countHealthyByRole(
   creeps: readonly RemoteCreepSummary[],
@@ -300,9 +253,7 @@ function countHealthyByRole(
   return n;
 }
 
-/**
- * 查找需要替换的远矿 creep（返回第一个进入替换窗口的濒死者名）。
- */
+/** 查找需要替换的远矿 creep（返回第一个进入替换窗口的濒死者名）。 */
 function findReplacement(
   creeps: readonly RemoteCreepSummary[],
   role: string,
@@ -318,11 +269,9 @@ function findReplacement(
 }
 
 /**
- * 替补请求的稳定去重 key — 绑定被替换 creep 的名字。
- *
- * 不使用 spawnKey(role, home, total, target)：total = 存活 + pending 之和，
- * 每个评估周期随 pending 增长而漂移，同一濒死 creep 会产生一串不同 key 的
- * 重复请求（P1-5）。creep 名在其生命周期内唯一且稳定，天然幂等。
+ * 替补请求稳定去重 key — 绑定被替换 creep 名（P1-5）。
+ * 不用 spawnKey(role, home, total, target)：total 随 pending 每周期漂移，
+ * 同一濒死者会产生一串不同 key 的重复请求；creep 名生命周期内唯一稳定，天然幂等。
  */
 function replacementKey(role: string, home: string, target: string, dyingCreepName: string): string {
   return `${role}:${home}:${target}:repl:${dyingCreepName}`;

@@ -1,34 +1,8 @@
 /**
- * Tuning Evaluator — 从聚合遥测信号推导参数调整的纯函数。
- *
- * 设计原则（模型7：韧性优先于完美）：
- *   - 保守调整：每次只步进 1，有冷却期防振荡。
- *   - 趋势确认（P1-1）：连续 2 次评估窗口显示同方向信号才调整，防止单次噪声驱动决策。
- *   - 信号驱动：只在有充分证据时才调整。
- *   - 危机锁定：经济不稳定时完全跳过调优，让静态 CONFIG 应对。
- *   - 纯函数：不访问 Game/Memory，接收所有数据作为参数，可 Vitest 测试。
- *
- * 调优逻辑概览：
- *   hauler.maxCount  ↑ container 持续满 + hauler 已达上限 + 经济健康 + 消费端未饱和
- *                      （改进 B：consumerSaturated = container 满 + storage 盈余 + 储备在涨
- *                       替代旧 spawnFillRatio < 0.8 门禁 — distributor 正常工作时该门禁永久不满足）
- *                    ↓ container 持续空 + hauler > minCount + 经济健康
- *   hauler.minCount  ↑ container 持续半满 + 经济健康 + 消费端未饱和（与 max 共享约束）
- *                    ↓ container 持续极空 + hauler ≤ minCount
- *   harvester.maxCount ↑ 储备持续下降 + harvester 已达上限 + 经济非危机
- *                      ↓ 储备持续增长 + harvester > minCount + 经济健康
- *   upgrader.maxCount ↑ storage 持续高位 + 经济健康 + upgrader 已达上限
- *                     ↓ storage 低位 OR 经济压力高
- *   builder.maxCount  ↑ buildQueue 持续积压 + 经济健康 + builder 已达上限
- *                     ↓ buildQueue 空 OR 经济压力高
- *
- * 趋势确认机制：
- *   每个参数维护一个 lastTrend 方向（up/down/none）。
- *   - 当前评估计算"期望方向" desired。
- *   - 若 desired != "none" 且 prevDirection == desired → 触发调整，newDirection 重置为 "none"。
- *   - 若 desired != "none" 且 prevDirection != desired → 记录 newDirection = desired（首次观察）。
- *   - 若 desired == "none" → newDirection = "none"（清除趋势）。
- *   效果：单次噪声不会触发调整，必须连续 2 次评估窗口都显示同方向。
+ * Tuning Evaluator — 从聚合遥测信号推导参数调整的纯函数（无 Game/Memory，可 Vitest）。
+ * 设计（模型7 韧性优先于完美）：保守步进 1 + 冷却防振荡；趋势确认（P1-1）连续 2 次
+ * 评估同方向才调整，防单次噪声驱动；危机锁定（crisisRatio 超标）整体跳过调优，让静态
+ * CONFIG 应对。各参数触发条件见对应 evaluate* 函数。
  */
 
 import type {
@@ -65,22 +39,14 @@ const BUILD_BACKLOG = 3;
 
 // ─── 改进 A：闭环验证常量（附录 D）────────────────────────────
 
-/**
- * 改进 A 容差双门限（附录 9.2-1）：
- * max(5% 相对, 0.05 绝对)，防低基数失效（container=0.1 时 5%=0.005）。
- */
+/** 容差双门限 max(5% 相对, 0.05 绝对)（附录 9.2-1），防低基数失效（container=0.1 时 5%=0.005）。 */
 const TOLERANCE_RELATIVE = 0.05;
 const TOLERANCE_ABSOLUTE = 0.05;
 
-/**
- * D.4 下调护栏：spawn 填充率低于此值视为「spawn 饿死」— 即使主信号改善也回滚。
- * 取 0.5（spawn 半空 = 搬运塌方证据）。
- */
+/** D.4 下调护栏：spawn 填充率 < 0.5 视为「spawn 饿死」（半空 = 搬运塌方证据），即使主信号改善也回滚。 */
 const SPAWN_FILL_GUARDRAIL = 0.5;
 
-/**
- * D.4 下调护栏：avgReserveDelta 转负视为「储备恶化」— 即使主信号改善也回滚。
- */
+/** D.4 下调护栏：avgReserveDelta 转负视为「储备恶化」，即使主信号改善也回滚。 */
 const RESERVE_DELTA_GUARDRAIL = 0;
 
 // ─── 单参数评估结果 ───────────────────────────────────────────
@@ -98,15 +64,9 @@ interface ParamEvaluation {
 // ─── 主评估函数 ───────────────────────────────────────────────
 
 /**
- * 评估所有可调参数，返回需要执行的调整列表。
- *
- * @param signals        从遥测聚合的信号
- * @param currentBounds  当前生效的角色边界（CONFIG + override 合并后的值）
- * @param lastAdjusted   每个参数上次调整的 tick
- * @param currentTick    当前 tick
- * @param prevTrend      上次评估的趋势记录（每个参数的方向）—— P1-1 趋势确认
- * @param excludedParams 改进 A：pending-lock(D.2) + frozen(P3) 参数从 evals 整体排除（含 trend）
- * @returns 评估结果（调整列表 + 诊断信号 + 新趋势记录 + pendingValidations）
+ * 评估所有可调参数，返回调整列表。
+ * currentBounds 为 CONFIG + override 合并后的值；excludedParams（pending-lock D.2 +
+ * frozen P3 的参数）从 evals 整体排除（含 trend 记录）。
  */
 export function evaluateTuning(
   signals: TuningSignals,
@@ -146,7 +106,7 @@ export function evaluateTuning(
   ];
 
   for (const [param, evalResult] of allEvals) {
-    // D.2 pending-lock + P3 frozen：排除参数 trend 重置为 none（验证完成后从 none 重新积累）
+    // 排除参数（D.2 pending-lock + P3 frozen）trend 置 none，验证完成后从 none 重新积累
     if (excludedParams?.has(param)) {
       newTrend[param] = "none";
       continue;
@@ -187,20 +147,17 @@ function evaluateHaulerMaxCount(
   const boundsDef = TUNING_BOUNDS[param]!;
   const economyHealthy = s.avgPressure < PRESSURE_HEALTHY;
 
-  // 改进 B：用「container 满 + storage 盈余 + 储备在涨」识别消费端真实无去处，
-  // 替代旧 spawnFillRatio < 0.8 门禁（distributor 正常工作时该门禁永久不满足）。
-  // 协同点：storage 阈值用改进 C 的 getStorageThresholds(s.rcl).surplus（按 RCL 分级）。
+  // 改进 B：消费端真实无去处 = container 满 + storage 盈余 + 储备在涨，替代旧
+  // spawnFillRatio < 0.8 门禁（distributor 正常工作时该门禁永久不满足）。
   const storageSurplus = getStorageThresholds(s.rcl).surplus;
   const consumerSaturated =
     s.containerFillRatio > CONTAINER_HIGH &&
     s.avgStorageEnergy > storageSurplus &&
     s.avgReserveDelta > 0;
 
-  // 计算期望方向
   let desired: TrendDirection = "none";
   let reason = "";
 
-  // ↑ 增加：container 持续满 + hauler 已达上限 + 经济健康 + 消费端未饱和
   if (
     s.containerFillRatio > CONTAINER_HIGH &&
     s.haulerCount >= current &&
@@ -211,7 +168,6 @@ function evaluateHaulerMaxCount(
     desired = "up";
     reason = `Containers ${(s.containerFillRatio * 100).toFixed(0)}% full, storage ${s.avgStorageEnergy.toFixed(0)}/${storageSurplus} (consumer unsaturated), haulers at max ${current}`;
   }
-  // ↓ 减少：container 持续空 + hauler > minCount + 经济健康
   else if (
     s.containerFillRatio < CONTAINER_LOW &&
     s.haulerCount > (bounds.hauler?.minCount ?? 2) &&
@@ -424,22 +380,9 @@ function evaluateBuilderMaxCount(
 // ─── 趋势确认核心 ────────────────────────────────────────────
 
 /**
- * 趋势确认逻辑（P1-1 调整置信度）+ 改进 A 闭环验证快照构造。
- *
- * @param param        参数路径
- * @param desired      本次评估的期望方向
- * @param prevDirection 上次评估记录的方向
- * @param currentValue  当前参数值
- * @param step         步长
- * @param reason       调整原因（仅触发时使用）
- * @param signals      当前遥测信号（改进 A：触发调整时构造 pendingValidation 快照）
- * @returns 参数评估结果（含可能的新调整、最新方向、pendingValidation 写入指令）
- *
- * 机制：
- *   - desired == "none" → 清除趋势，newDirection = "none"
- *   - desired != "none" 且 prevDirection == desired → 连续 2 次同方向，触发调整，newDirection 重置为 "none"
- *   - desired != "none" 且 prevDirection != desired → 首次观察，记录 newDirection = desired，不调整
- *
+ * 趋势确认逻辑（P1-1）+ 改进 A 闭环验证快照构造。
+ * 机制：desired=none → 清趋势；desired 与 prevDirection 相同（连续 2 次同方向）→
+ * 触发调整并重置趋势；不同 → 首次观察，只记录方向不调整。
  * 改进 A：触发调整时同步构造 PendingValidation 写入指令（preAdjustSignals 快照 +
  * expectedDirection + adjustDirection），由调用方（tuning-engine）落 Memory。
  */
@@ -541,13 +484,10 @@ function getRoleCount(param: string, s: TuningSignals): number {
 }
 
 /**
- * 获取参数在指定调整方向下的期望信号方向（improve/worsen）。
- *
- * 方向表（§3.1.2）：
- *   hauler（up/down）→ improve（container 朝「好」方向）
- *   harvester up → improve（恢复储备）/ down → worsen（主动节能）
- *   upgrader up → worsen（烧库存）/ down → improve（攒库存）
- *   builder up → improve（消除积压）/ down → worsen（主动降产）
+ * 参数在指定调整方向下的期望信号方向（improve/worsen，§3.1.2）：
+ * hauler → improve；harvester up=improve（恢复储备）/down=worsen（主动节能）；
+ * upgrader up=worsen（烧库存）/down=improve（攒库存）；
+ * builder up=improve（消除积压）/down=worsen（主动降产）。
  */
 function getExpectedDirection(param: string, adjustDirection: TrendDirection): "improve" | "worsen" {
   if (param.startsWith("hauler.")) return "improve";
@@ -566,12 +506,8 @@ function computeTolerance(baseValue: number): number {
 }
 
 /**
- * D.3 人口合同前置：roleCount 是否达到新边界。
- *
- * - up 调整：人口应达到新上限（preAdjustValue + 1）
- * - down 调整：人口应降至新上限（preAdjustValue - 1）
- *
- * 未达 → 标 pending-blocked，不判失败不计回滚，下周期复验。
+ * D.3 人口合同前置：roleCount 是否达到新边界（up → preAdjustValue+1，down →
+ * preAdjustValue-1）。未达 → 标 pending-blocked，不判失败不计回滚，下周期复验。
  */
 function isContractMet(pv: PendingValidation, currentRoleCount: number): boolean {
   if (pv.adjustDirection === "up") {
@@ -582,15 +518,11 @@ function isContractMet(pv: PendingValidation, currentRoleCount: number): boolean
 
 /**
  * P2 多信号验证 + D.4 下调护栏：判断调整后效果是否改善。
- *
- * 多信号 OR 判定（§3.1.7）：每个参数定义「改善证据集」，任一满足即算改善，
- * 避免单瞬态信号（如 backlog 归零）误回滚。
- *
- * D.4 下调护栏：下调验证 = 主信号方向 AND 护栏
- * （spawnFillRatio 不跌破阈值、avgReserveDelta 不转负；upgrader 下调查 avgPressure）。
+ * 多信号 OR（§3.1.7）：每参数「改善证据集」任一满足即算改善，避免单瞬态信号
+ * （如 backlog 归零）误回滚。D.4 下调护栏：下调验证 = 主信号方向 AND 护栏
+ * （spawnFillRatio 不跌破阈值、avgReserveDelta 不转负；upgrader 下调查 avgPressure），
  * 护栏触发即回滚（防假阳性 — 把伤害当改善接受）。
- *
- * @returns true = 改善或无显著变化（不回滚）；false = 未改善（回滚）
+ * 返回 true = 改善或无显著变化（不回滚）；false = 未改善（回滚）。
  */
 function isImprovedMultiSignal(
   param: string,
@@ -675,15 +607,10 @@ function isImprovedMultiSignal(
 }
 
 /**
- * D.4 下调护栏：判断是否触发护栏（即使主信号改善也回滚）。
- *
- * 护栏条件（仅对下调方向生效）：
- *   - hauler 下调：spawnFillRatio 跌破阈值 AND 比调整前恶化
- *                  OR avgReserveDelta 转负 AND 比调整前恶化
- *   - upgrader 下调：avgPressure 超阈值 AND 比调整前恶化
- *
- * 「比调整前恶化」要求信号不仅越过危险阈值，还要朝坏方向移动 —
- * 防止「调整前就在危险区」误触发护栏。
+ * D.4 下调护栏（仅下调方向）：hauler 下调 spawnFillRatio 跌破阈值或 avgReserveDelta
+ * 转负且比调整前恶化、upgrader 下调 avgPressure 超阈值且恶化 → 回滚。
+ * 「比调整前恶化」要求信号不仅越过危险阈值还要朝坏方向移动 — 防「调整前就在
+ * 危险区」误触发护栏。
  */
 function isGuardrailTriggered(
   param: string,
@@ -736,26 +663,12 @@ function isGuardrailTriggered(
 
 /**
  * 验证 pass：检查所有 pendingValidation 中到期参数的调整效果。
- *
  * 集成点：tuning-engine.ts:safeRunTuning 内、evaluateTuning 调用之前。
- *
- * 流程（§3.1.10 步骤 3-3.6）：
- *   1. 检查 verifyDelay 是否到期（未到期跳过，保留 pending）
- *   2. D.3 人口合同前置：roleCount 未达新边界 → 标 blocked，不回滚不计次
- *      P1 修复（附录 E.2）：blocked 连续 2 个 verifyDelay 窗口未恢复 → 回滚 + 计 1 次回滚
- *   3. D.4 + P2 多信号验证：效果未改善 → 回滚
- *   4. 验证完成（无论回滚与否）→ 清空 pending
- *
- * 副作用说明（P1）：首次 blocked 时写入 pv.blockedSinceTick + pv.contractBlocked
- * 到 pending 记录（按引用传递，持久化到 Memory）；人口合同满足时清空这两个字段。
- * 这使 verifyPendingAdjustments 从纯函数变为有副作用——但 pending 的生命周期本就
- * 由本函数驱动（clearedParams 触发外部 delete），写入 blocked 诊断字段是同一关注点。
- *
- * @param signals       当前遥测信号
- * @param pending       待验证记录（会被修改：写入/清空 blockedSinceTick + contractBlocked）
- * @param currentBounds 当前角色边界（用于获取回滚前的当前值）
- * @param currentTick   当前 tick
- * @returns rollbacks（需回滚的调整）+ clearedParams（验证完成的参数）+ blockedParams（人口未达标的参数）
+ * 流程（§3.1.10 步骤 3-3.6）：verifyDelay 未到期跳过；D.3 人口合同未达 → blocked
+ * （P1：连续 2 个 verifyDelay 窗口未恢复 → 回滚 + 计 1 次回滚）；D.4+P2 信号未改善
+ * → 回滚；验证完成清空 pending。
+ * 副作用说明（P1）：本函数写入/清空 pv.blockedSinceTick + pv.contractBlocked（pending
+ * 生命周期本由本函数驱动 — clearedParams 触发外部 delete），故非纯函数。
  */
 export function verifyPendingAdjustments(
   signals: TuningSignals,
@@ -863,20 +776,11 @@ function parseParamPath(param: string): [string, string] | [undefined, undefined
 // ─── 改进 A：冻结策略（P3）──────────────────────────────────
 
 /**
- * 应用冻结策略：统计回滚次数，达阈值则冻结参数。
- *
- * 评审修正（附录 D.5）：
- *   - 冻结只停评估不停值 — 冻结时参数复位到 CONFIG 基线（避免钉死错误值）
- *   - 冻结事件写 event-log（由调用方 recordEvent）
- *   - rollbackCount 解冻后清零（P4 修复，附录 E.2）：原实现保留导致一次回滚即再冻结，
- *     对「冻结期世界已变」过于粘滞；解冻后重新累积，复发确认交给阈值 3
- *
- * @param frozenParams    当前冻结状态（会被修改）
- * @param rollbacks       本次验证产出的回滚列表
- * @param clearedParams   本次验证完成的参数（无回滚 = 验证通过 → 重置 rollbackCount）
- * @param configBaselines CONFIG 基线值（用于冻结时复位）
- * @param currentTick     当前 tick
- * @returns 新冻结的参数列表（param + reason）+ 本次解冻的参数列表（P4 诊断）
+ * 应用冻结策略：回滚次数达阈值则冻结参数。
+ * 评审修正（附录 D.5）：冻结只停评估不停值 — 冻结时参数复位到 CONFIG 基线
+ * （避免钉死错误值）；冻结事件写 event-log（由调用方 recordEvent）；rollbackCount
+ * 解冻后清零（P4 修复，附录 E.2）— 原实现保留导致一次回滚即再冻结，对「冻结期
+ * 世界已变」过于粘滞；解冻后重新累积，复发确认交给阈值 3。
  */
 export function applyFreezePolicy(
   frozenParams: Record<string, import("./types").FrozenParamState>,

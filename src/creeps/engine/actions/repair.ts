@@ -1,15 +1,9 @@
 /**
- * Repair actions — 维修结构。
- *
- * 四层优先级：
- *   1. repairCritical — 血量 < 50% 的关键结构（spawn/tower）
- *   2. repairContainerDecay — container 血量 < 80%（物流链保护）
- *   3. repairNearbyContainer — 身边 container（站桩矿工自维护）
- *   4. repairRoads — 道路血量 < 40%（交通效率保护）
- *   5. repairFortifications — wall/rampart 到 RCL 分级目标血量（rampart 优先于 wall）
- *
- * 目标持久化：repairContainerDecay / repairRoads / repairFortifications 复用 creep.memory.repairTargetId。
- * 共享缓存安全：每个 action 验证缓存目标的 structureType，防止跨类型缓存泄漏。
+ * Repair actions — 维修结构。优先级：repairCritical（关键结构 <50%）→ repairContainerDecay
+ * （container <80%）→ repairNearbyContainer（身边 container）→ repairRoads（道路 <40%）→
+ * repairFortifications（wall/rampart 到 RCL 分级目标，rampart 优先）。
+ * 目标持久化：复用 creep.memory.repairTargetId；每个 action 验证缓存目标的 structureType，
+ * 防止跨类型缓存泄漏。
  */
 import { CONFIG, getWallTargetHits } from "../../../config";
 import type { RoomSnapshot } from "../../../kernel/contracts";
@@ -26,9 +20,8 @@ const ROAD_REPAIR_THRESHOLD: number = CONFIG.construction.roadRepairThreshold;
 const ROAD_EMERGENCY_THRESHOLD = 0.15;
 
 /** 修复放手线 — 一旦开修就修到此比例才换目标（hysteresis）。
- * 原先修到 threshold(40%) 即弃：全路群永远贴线抖动、从不真正修满，
- * demand 的修路信号随之抖动，builder 编制孵了退退了孵。修满一条再换，
- * 路群从 90% 衰减回 40% 的窗口长达数万 tick，孵化次数大幅下降。 */
+ * 原先修到 threshold(40%) 即弃：全路群永远贴线抖动、从不真正修满，demand 的修路信号随之抖动，
+ * builder 编制孵了退退了孵。修满一条再换，路群从 90% 衰减回 40% 的窗口长达数万 tick。 */
 const ROAD_REPAIR_CEILING = 0.9;
 
 type Fortification = StructureWall | StructureRampart;
@@ -45,22 +38,17 @@ export function repairCritical(): ActionCandidate<AnyStructure> {
 }
 
 /**
- * 修复衰减中的 container（血量 < 80%）。
- * Container 每 tick 衰减 ~5000 hits，不修就会在 ~50 tick 内从 80% 降到 0 被摧毁。
- * 失去 source container = 物流链断裂 = 经济崩溃，因此阈值设得比 repairCritical (50%) 更激进。
- *
- * 目标持久化：优先复用上一 tick 选定的 container（creep.memory.repairTargetId），
- * 仅在目标修好/消失时重新选择。消除多个衰减 container 间的摇摆。
+ * 修复衰减中的 container（血量 < 80%）。Container 每 tick 衰减 ~5000 hits，不修 ~50 tick 内
+ * 从 80% 降到 0 被摧毁；失去 source container = 物流链断裂，故阈值比 repairCritical(50%) 更激进。
+ * 目标持久化：优先复用 repairTargetId，仅在目标修好/消失时重选，消除多个衰减 container 间的摇摆。
  */
 export function repairContainerDecay(): ActionCandidate<StructureContainer> {
   return {
     name: "repair:container-decay",
     resolve: (ac) => {
       // 优先复用持久化目标 — 验证类型 + 仍需修复。
-      // P1 修复：原先不检查 structureType，当 repairRoads/repairFortifications 设置的
-      // repairTargetId 指向 road/wall 时，getObjectById 返回非 container 对象，
-      // 但 hits < hitsMax*0.8 的比例检查仍可能命中（道路 hitsMax 5000，80% = 4000），
-      // 导致道路被当作 container 修复，真正衰减的 container 被饿死。
+      // P1 修复：原先不检查 structureType，repairTargetId 指向 road/wall 时比例检查仍可能命中
+      // （道路 hitsMax 5000，80% = 4000），导致道路被当 container 修，真正衰减的 container 被饿死。
       if (ac.creep.memory.repairTargetId) {
         const cached = getObjectById(ac.creep.memory.repairTargetId as Id<StructureContainer>);
         if (cached && cached.structureType === STRUCTURE_CONTAINER && cached.hits < cached.hitsMax * 0.8) {
@@ -91,9 +79,8 @@ export function repairContainerDecay(): ActionCandidate<StructureContainer> {
 }
 
 /**
- * 修复身边的 container（range <= 2，血量 < 80%）。
- * Harvester 站桩专用：你正站在 container 旁边，它快塌了，先修再倒。
- * 比 repairContainerDecay 更紧急 — 只修身边的，不需要跑远路。
+ * 修复身边的 container（range<=2，血量<80%）— harvester 站桩自维护：正站在 container 旁、它快塌了，
+ * 先修再倒。比 repairContainerDecay 更紧急——只修身边的，不需要跑远路。
  */
 export function repairNearbyContainer(): ActionCandidate<StructureContainer> {
   return {
@@ -113,23 +100,12 @@ export function repairNearbyContainer(): ActionCandidate<StructureContainer> {
 
 /**
  * 修复 wall/rampart 到分层目标血量（B3：维修权从塔移交给 creep）。
- *
- * 老玩家认知：塔修墙是能量黑洞（10 能量/次 + 距离衰减 + 与开火争弹药），
- * creep 维修是 1 energy/100 hits/WORK —— 日常工事维护必须由 builder 承担。
- *
- * 分层目标（消除统一目标的维护经济黑洞）：
- *   perimeter（min-cut 割集 / wall / 扇区封锁）→ RCL 全额；
- *   core（结构叠盾）→ 全额 × coreRampartFactor；
- *   utility（container 叠盾）→ 仅新生急救地板。
- *
- * 门禁（全部满足才启用，resolve 内判断）：
- *   - tier 非 recovery/conserve（低 CPU 不修墙）；
- *   - 无威胁 creep（入侵期间修墙是白送能量，优先开火/保命）；
- *   - 盈余门槛按姿态分档：和平期需 storage ≥ sprintStorage（50k）— 墙是死资本，
- *     RCL 是复利，储备不足时能量优先灌 controller（10k-50k 区间由
- *     repairFreshRampart 维持地板）；受袭姿态放宽到 sustainedStorage（10k）—
- *     有真实威胁时墙体优先级高于发展。
- *   - 无 storage（RCL3-4）时放宽门禁 — 靠 work chain 优先级保证不抢生存行为。
+ * 塔修墙是能量黑洞（10 能量/次+距离衰减+与开火争弹药），creep 维修 1 energy/100 hits/WORK。
+ * 分层目标（消除统一目标的维护经济黑洞）：perimeter → RCL 全额；core → 全额×coreRampartFactor；
+ * utility → 仅新生急救地板。
+ * 门禁（全部满足才启用）：tier 非 recovery/conserve；无威胁（入侵修墙是白送能量）；
+ * 盈余按姿态分档：和平期 storage ≥ sprintStorage(50k)，受袭放宽到 sustainedStorage(10k)；
+ * 无 storage（RCL3-4）放宽门禁，靠 work chain 优先级保证不抢生存行为。
  */
 export function repairFortifications(): ActionCandidate<Fortification> {
   return {
@@ -204,9 +180,8 @@ export function repairFortifications(): ActionCandidate<Fortification> {
 
 /**
  * 查找血量最低且低于自身档位目标血量的 wall/rampart。
- *
  * P2 修复：rampart 优先于 wall — rampart 被摧毁会暴露同格所有结构（spawn/tower/extension），
- * wall 被摧毁只产生缺口。先扫 rampart，只有当所有 rampart 都达标时才修 wall。
+ * wall 被摧毁只产生缺口。先扫 rampart，全部达标后才修 wall。
  */
 function findFortificationTarget(
   snapshot: RoomSnapshot,
@@ -235,32 +210,21 @@ function findFortificationTarget(
 
 /**
  * 新生 rampart 急救 — 血量低于 rampartBootstrapHits 的 rampart 无条件优先灌血。
- *
- * rampart 建成时仅 1 hit，每 100 tick 衰减 300 hits [事实：官方常量
- * RAMPART_DECAY_AMOUNT/RAMPART_DECAY_TIME]，不灌血必死于首个衰减周期。
- * 塌毁 → 规划器重新入队 site → builder 重建 → 又 1 hit，
- * builder 被永久锁死在「建了就塌、塌了再建」循环，防线永远立不起来。
- *
- * 与 repairFortifications 的区别：
- *   - 无盈余/tier/威胁门禁 — 急救的是刚投入建造的资产，属止损而非发展性投资；
- *     威胁期间尤其要灌（rampart 正是防御工事，塌了同格结构全裸）。
- *   - 必须排在 build 动作之前 — 灌 10k 血只需十几 tick，建一个 site 要上百 tick，
- *     顺序反了新 rampart 必死在建造队列后面。
- *   - 目标持久化独立于 repairTargetId 链（避免与 fortifications 的缓存互踩），
- *     每 tick 直接扫 snapshot.ramparts — 数组已在快照预建，低于急救线的通常 0-2 个。
+ * rampart 建成仅 1 hit，每 100 tick 衰减 300 hits [事实：官方常量
+ * RAMPART_DECAY_AMOUNT/RAMPART_DECAY_TIME]，不灌必死于首个衰减周期 → 规划器重建 →
+ * builder 永久锁死在「建了就塌、塌了再建」循环，防线永远立不起来。
+ * 与 repairFortifications 区别：无盈余/tier/威胁门禁（刚投入的资产属止损，威胁期间尤其要灌）；
+ * 必须排在 build 动作之前（灌 10k 血十几 tick，建 site 上百 tick，顺序反了新 rampart 必死）；
+ * 目标持久化独立于 repairTargetId（避免与 fortifications 缓存互踩），每 tick 直扫 snapshot.ramparts。
  */
 export function repairFreshRampart(): ActionCandidate<StructureRampart> {
   return {
     name: "repair:fresh-rampart",
     resolve: (ac) => {
-      // 进场线/放手线分离（hysteresis）：
-      //   进场 = bootstrapHits 的 15%（1500 ≈ 500 tick 死亡余量，真濒死）；
-      //   放手 = bootstrapHits（10k，原「灌到安全水位」语义）。
-      // 教训（线上实测两轮）：以 10k 为进场线时，22 个 9.4k-9.9k 的亚健康
-      // rampart（3000+ tick 才塌）永久占据链首急救层 — 贴线轮询或双倍灌血
-      // 都改变不了「亚健康挤占急救通道」的本质，链后的危路急救（2% 血量、
-      // ~1000 tick 塌毁）反而被饿死。急救层只救真濒死；亚健康群体由链尾
-      // repairFortifications 按分层目标常规抬升。
+      // 进场线/放手线分离（hysteresis）：进场 = bootstrapHits 的 15%（1500 ≈ 500 tick 死亡余量，
+      // 真濒死）；放手 = bootstrapHits（10k）。教训（线上实测两轮）：以 10k 为进场线时，22 个
+      // 9.4k-9.9k 亚健康 rampart（3000+ tick 才塌）永久占据急救层，链后危路急救（2% 血量）反被饿死。
+      // 急救层只救真濒死；亚健康群体由链尾 repairFortifications 按分层目标常规抬升。
       const ceiling = CONFIG.defense.rampartBootstrapHits;
       const entry = Math.floor(ceiling * 0.15);
       // 已锁定的灌血目标未到放手线则继续灌（一次灌满，防半途而废）。
@@ -291,20 +255,11 @@ export function repairFreshRampart(): ActionCandidate<StructureRampart> {
 
 /**
  * 修复衰减中的道路（血量 < 40%）。
- *
- * 道路衰减率（按地形，[Facts] docs.screeps.com/api/StructureRoad.html）：
- *   - plain:  100 hits / 1000 ticks（hitsMax 5,000）
- *   - swamp:  500 hits / 1000 ticks（hitsMax 25,000）
- *   - wall:  15,000 hits / 1000 ticks（hitsMax 750,000）
- * 每个 creep 踩一步，衰减计时器额外减少 1 tick × body part 数量 —
- * 高流量道路衰减远快于低流量道路。
- *
- * 阈值 40% 在任何地形下给约 20,000 tick 的修复窗口，足够 builder 响应。
- * 道路塌毁不致命，但需在塌毁前修复以保持物流效率（swamp 无路 = 5x 移动成本）。
- *
- * 门禁：与 repairFortifications 一致 — recovery/conserve tier + 威胁期间不修路。
- * recovery 时升级控制器保级比修路重要；入侵期间修路是白送能量。
- *
+ * 衰减率（[Facts] docs.screeps.com/api/StructureRoad.html）：plain 100 hits/1000t（hitsMax 5,000）、
+ * swamp 500/1000t（25,000）、wall 15,000/1000t（750,000）；每踩一步衰减计时器额外 -1 tick ×
+ * body part 数量，高流量道路衰减远快于低流量。阈值 40% 在任何地形给 ~20,000 tick 修复窗口；
+ * 道路塌毁不致命，但塌前需修复保持物流效率（swamp 无路 = 5x 移动成本）。
+ * 门禁与 repairFortifications 一致：recovery/conserve tier + 威胁期间不修路。
  * 目标持久化：复用 creep.memory.repairTargetId（与 fortifications 共享）。
  */
 export function repairRoads(): ActionCandidate<StructureRoad> {
@@ -313,12 +268,10 @@ export function repairRoads(): ActionCandidate<StructureRoad> {
 
 /**
  * 危路急救 — 血量 < 15% 的道路提级维修（builder 链中排在建造之前）。
- *
- * 背景（线上实测）：construction 流水线持续放行 site 时，建造动作永远命中，
- * 链尾的常规修路被饿死 — 主房 16 条路 8 条破 40%、最烂 4% 濒临塌毁。
- * 塌毁的代价不只是重建耗能 6 倍：重建 site 还要占用建造名额与 builder 工时，
- * 挤掉真正的新建任务。急救线兜住塌毁风险，常规维修仍礼让建造。
- * 与常规修路的门禁差异：conserve 不跳过（省小钱赔大钱），recovery/威胁仍跳过。
+ * 背景（线上实测）：construction 流水线持续放行 site 时，建造动作永远命中，链尾常规修路被饿死
+ * （主房 16 条路 8 条破 40%、最烂 4% 濒临塌毁）。塌毁代价不止重建耗能 6 倍：重建 site 还占用
+ * 建造名额与 builder 工时，挤掉真正的新建任务。急救线兜住塌毁风险，常规维修仍礼让建造。
+ * 门禁差异：conserve 不跳过（省小钱赔大钱），recovery/威胁仍跳过。
  */
 export function repairUrgentRoads(): ActionCandidate<StructureRoad> {
   return roadRepairAction("repair:roads-urgent", ROAD_EMERGENCY_THRESHOLD, true);
@@ -340,10 +293,9 @@ function roadRepairAction(
       if (!urgent && ac.budget.tier === "conserve") return undefined;
       if (ac.snapshot.threatCreeps.length > 0) return undefined;
 
-      // 目标缓存：急救用独立字段 urgentRoadId（共享 repairTargetId 会被
-      // 常规修路/工事维修写入非危路目标，急救接手会越过链上更紧急的修复）；
-      // 常规用共享 repairTargetId。两者都修到各自放手线才换（hysteresis）：
-      // 急救到脱险线 40% 放手回去建造，常规到 90% 消除贴线抖动。
+      // 目标缓存：急救用独立字段 urgentRoadId（共享 repairTargetId 会被常规修路/工事维修写入
+      // 非危路目标，急救接手会越过链上更紧急的修复）；常规用共享 repairTargetId。
+      // 两者都修到各自放手线才换（hysteresis）：急救到 40% 放手回去建造，常规到 90% 消除贴线抖动。
       const cacheKey = urgent ? "urgentRoadId" : "repairTargetId";
       const cachedId = ac.creep.memory[cacheKey];
       if (cachedId) {

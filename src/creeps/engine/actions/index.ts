@@ -1,8 +1,6 @@
 /**
  * Actions barrel — 统一重导出所有领域 action 工厂。
- *
- * 角色文件只需 `from "../engine/actions"` 即可导入所有 action，
- * 无需感知内部分文件结构。
+ * 角色文件只需 `from "../engine/actions"` 导入，无需感知内部分文件结构。
  */
 export { harvestSource, stationaryMine, harvestMineral } from "./harvest";
 export { pickupDroppedEnergy, pickupNearbyDroppedEnergy, lootRemains } from "./pickup";

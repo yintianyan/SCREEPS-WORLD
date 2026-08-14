@@ -24,16 +24,11 @@ import { globalCache } from "../kernel/global-cache";
 
 /**
  * 建造管理器 — 自有房 site 创建的唯一模块（远机房由 remote-mining-manager 负责）。
- *
- * 职责：
- *   - 同步 BuildTask 状态与实际建造 site（委托 domain/construction/queue）
- *   - 强制执行每房和全局 site 限制（含远矿 siteCount 账本）
- *   - 应用开发门禁（在恢复状态或存在 P0/P1 缺口时不建造）
- *   - 全局每 tick 最多创建 1 个 normal + 1 个 emergency site（与 remote-mining-manager 共享计数器）
- *
- * 纯逻辑已提取到 domain/construction/queue.ts，本模块只处理 Game API 调用。
- *
- * 优先级：P2（发展性工作 — 不能与生存竞争）。
+ * 职责：同步 BuildTask 状态与实际建造 site（domain/construction/queue）；强制执行
+ * 每房与全局 site 限制（含远矿 siteCount 账本）；应用开发门禁（恢复态或 P0/P1 缺口
+ * 时不建造）；全局每 tick 最多 1 normal + 1 emergency site（与 remote-mining-manager
+ * 共享计数器）。纯逻辑已提取到 domain/construction/queue.ts，本模块只处理 Game API 调用。
+ * P2（发展性工作 — 不能与生存竞争）。
  */
 export const constructionManagerSystem: System = {
   name: "construction-manager",
@@ -164,10 +159,8 @@ function developmentGate(
   emergency: EmergencyRebuildStatus,
 ): boolean {
   if (!emergency.any) {
-    // 梯度门禁：用 economyPressure 替代二值 colonyState 开关。
-    // pressure 0.0–0.3: 正常建造（基础阈值）
-    // pressure 0.3–0.8: 线性提高能量阈值（从基础 → 90% 容量）
-    // pressure > 0.8: 完全阻塞非紧急建造
+    // 梯度门禁：economyPressure 替代二值 colonyState — 0.0–0.3 正常建造；
+    // 0.3–0.8 线性提高能量阈值（基础 → 90% 容量）；> 0.8 完全阻塞非紧急建造。
     const pressure = Memory.rooms[snapshot.roomName]?.economyPressure ?? 0;
     if (pressure > 0.8) return false;
     if (ctx.budget.tier === "recovery" || ctx.budget.tier === "conserve") return false;
@@ -185,9 +178,8 @@ function developmentGate(
       if (hasEmergencySpawn) return false;
     }
 
-    // 检查能量盈余 — 梯度阈值：随 economyPressure 线性提高。
-    // pressure 0.0–0.3: 基础阈值（容量 60%）
-    // pressure 0.3–0.8: 线性提高到容量 90%
+    // 检查能量盈余 — 梯度阈值：pressure 0.0–0.3 基础阈值（容量 60%），
+    // 0.3–0.8 线性提高到容量 90%。
     const pressure = Memory.rooms[snapshot.roomName]?.economyPressure ?? 0;
     const baseRatio = 0.6;
     const maxRatio = 0.9;

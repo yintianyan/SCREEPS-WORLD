@@ -1,16 +1,7 @@
 /**
- * RemoteHarvester — P1 远矿采集者。
- *
- * 职责：在远矿房采集 source，将能量倒入附近 container（或 drop 在地上）。
- * 与本地 harvester 的区别：
- *   - 工作在 remoteTarget 房间（无 RoomSnapshot）
- *   - 通过 Game.rooms[remoteTarget] 直接发现 source（首次 find 后缓存 sourceId）
- *   - 倒能优先 container，无 container 时 drop（避免采满停滞）
- *
- * 策略声明：
- *   acquire: 远矿 source 采集（站桩 + 倒能）
- *   work:    倒入 container > drop（采满无处倒时释放产能）
- *
+ * RemoteHarvester — P1 远矿采集者。在远矿房采集 source，倒入附近 container（或 drop 落地）。
+ * 与本地 harvester 区别：工作在 remoteTarget 房（无 RoomSnapshot）；通过 Game.rooms[remoteTarget]
+ * 直接发现 source（首次 find 后缓存 sourceId）；倒能优先 container，无则 drop（避免采满停滞）。
  * 架构约束：ensureHome 已适配 remoteTarget，本角色常驻 remoteTarget 房间。
  */
 import type { Priority } from "../../kernel/contracts";
@@ -20,16 +11,11 @@ import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 
 /**
- * 获取远矿 source — 从缓存的 sourceId 或占用感知分配。
- * 首次进入远矿房时执行一次 room.find，之后复用 sourceId。
- *
- * 占用感知（E-1 修复）：远矿房无 RoomSnapshot/sourceOccupancy，改为扫描同房
- * 同 target 的兄弟 remoteHarvester 已绑 sourceId 统计占用。原实现单纯选最近 +
- * 入房位置偏置 → 2-source 房两只 harvester 挤同一 source，第二源白白再生浪费。
- * 现选占用最少的 source；平局用名哈希决定遍历起点（同 creep 每 tick 稳定、
- * 不抖动），把多只稳定散布到不同 source。
- *
- * 导出仅供接线测试验证占用分散行为。
+ * 获取远矿 source — 从缓存 sourceId 或占用感知分配。首次入房执行一次 find，之后复用 sourceId。
+ * 占用感知（E-1 修复）：远矿房无 RoomSnapshot/sourceOccupancy，改为统计同房同 target 的兄弟
+ * remoteHarvester 已绑 sourceId。原实现单纯选最近 + 入房位置偏置 → 2-source 房两只挤同一
+ * source，第二源白白再生浪费。现选占用最少者；平局用名哈希决定遍历起点（每 tick 稳定不抖动），
+ * 把多只稳定散布到不同 source。导出仅供接线测试验证占用分散行为。
  */
 export function getRemoteSource(creep: Creep): Source | undefined {
   // 优先使用缓存的 sourceId。
@@ -50,12 +36,11 @@ export function getRemoteSource(creep: Creep): Source | undefined {
   }
 
   // 统计兄弟 remoteHarvester（同房同 target）已绑各 source 的占用数。
-  // P2-O：原 Object.values(Game.creeps) 全帝国遍历，多远矿房时累积 O(M) 成本。
-  //   收窄到 creep.room.find(FIND_MY_CREEPS) — occupancy 统计仅在 sourceId 未缓存
-  //   （首次入房 / 缓存失效）时执行，此时 creep 已在 target 房，本房兄弟即全部
-  //   相关占用源。行为差异：过路房兄弟已绑 sourceId 时旧实现会计入、新实现不会 —
-  //   罕见场景（缓存失效 + 过路房兄弟已绑 + 同时到达）可能短暂选同一 source，
-  //   下一 tick 自愈（对方绑定后重新统计）。性能收益覆盖此边缘情况。
+  // P2-O：原 Object.values(Game.creeps) 全帝国遍历，多远矿房时累积 O(M) 成本；收窄到
+  // room.find(FIND_MY_CREEPS) — occupancy 统计仅在 sourceId 未缓存（首次/失效）时执行，
+  // 此时 creep 已在 target 房，本房兄弟即全部相关占用源。行为差异：过路房兄弟已绑时旧实现
+  // 会计入、新实现不会 — 罕见场景（缓存失效+过路房兄弟已绑+同时到达）可能短暂选同一 source，
+  // 下一 tick 自愈（对方绑定后重新统计）。性能收益覆盖此边缘情况。
   const target = creep.memory.remoteTarget;
   const occupancy = new Map<Id<Source>, number>();
   for (const other of creep.room.find(FIND_MY_CREEPS)) {
@@ -87,11 +72,9 @@ export function getRemoteSource(creep: Creep): Source | undefined {
 }
 
 /**
- * 查找 source 旁的 container（range <= 1）。
- *
- * P2 优化：缓存 containerId 到 creep.memory.sourceContainerId，
- * 避免每 tick 调用 lookForAtArea（0.05-0.1 CPU/次）。
- * 缓存失效条件：container 被摧毁（getObjectById 返回 null）。
+ * 查找 source 旁的 container（range<=1）。
+ * P2 优化：缓存 containerId 到 memory.sourceContainerId，避免每 tick 调 lookForAtArea
+ * （0.05-0.1 CPU/次）。失效条件：container 被摧毁（getObjectById 返回 null）。
  */
 function findSourceContainer(creep: Creep, source: Source): StructureContainer | undefined {
   // 优先使用缓存的 containerId。
@@ -137,13 +120,12 @@ function remoteStationaryMine(): ActionCandidate<Source> {
       return source;
     },
     execute: (ac, source) => {
-      // 采集。
       const harvestResult = ac.creep.harvest(source);
       if (harvestResult === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, source);
         return;
       }
-      // 同 tick 倒能：如果背包有能量且旁边有 container，倒入 container。
+      // 同 tick 倒能：背包有能量且旁边有 container 时倒入。
       if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
         const container = findSourceContainer(ac.creep, source);
         if (container) {
@@ -212,20 +194,13 @@ type ContainerBuildTarget =
 
 /**
  * RM-1：满载时自建 source container — 终结 drop-mining 衰减税。
- *
- * 线上实测（W37S57）：无 container 的 active 远矿房地面堆积 3300+ 能量，
- * 稳态衰减 ~4/tick ≈ 单源产出的 40% — 远超「补建造链」决策阈值（5%）。
- *
- * P0-A 收编后行为（site 创建权从角色层收归 remote-mining-manager）：
- *   有 container site → build（5 energy/WORK/tick 转化为进度，零衰减）；
- *   无 site → 写 needContainer=true 申请标记，由 remote-mining-manager
- *            每 managerInterval tick 消费（创建 site / 失败写冷却）。
- * 申请期间 creep 走 dropEnergy 释放产能（最多等 10 tick），避免满载停摆。
- * 建成后 findSourceContainer 缓存接手，倒能路径与 hauler 的 container
- * withdraw 链自然激活。
- *
- * 架构约束（plan.md §5.5）：角色层禁止调 createConstructionSite —
- * site 创建的单一写者 = construction-manager（自有房）+ remote-mining-manager（远机房）。
+ * 线上实测（W37S57）：无 container 的 active 远矿房地面堆积 3300+ 能量，稳态衰减 ~4/tick
+ * ≈ 单源产出的 40% — 远超「补建造链」决策阈值（5%）。
+ * P0-A 收编后行为（site 创建权从角色层收归 remote-mining-manager）：有 site → build（5
+ * energy/WORK/tick 转进度，零衰减）；无 site → 写 needContainer=true 申请标记，由 manager 每
+ * managerInterval tick 消费（创建 site / 失败写冷却）；申请期间走 dropEnergy 释放产能（最多等
+ * 10 tick），避免满载停摆。建成后 findSourceContainer 缓存接手，hauler 倒能链自然激活。
+ * 架构约束（plan.md §5.5）：角色层禁止调 createConstructionSite — site 创建的单一写者。
  */
 function buildSourceContainer(): ActionCandidate<ContainerBuildTarget> {
   return {
@@ -251,9 +226,8 @@ function buildSourceContainer(): ActionCandidate<ContainerBuildTarget> {
           return { kind: "build" as const, site: entry.constructionSite };
         }
       }
-      // 无 site。建 site 失败冷却（ERR_FULL / 位置冲突等持久失败）：
-      // 冷却期内放行后续候选（dropEnergy）— 否则本候选每 tick 命中、
-      // 申请无意义重复、候选链终止，creep 满载永久停摆（比 drop 更差）。
+      // 无 site。建 site 失败冷却（ERR_FULL / 位置冲突等持久失败）：冷却期内放行后续候选
+      // （dropEnergy）— 否则本候选每 tick 命中、申请无意义重复、候选链终止，满载永久停摆。
       const cooldown = ac.creep.memory.containerSiteCooldown;
       if (cooldown !== undefined && Game.time < cooldown) return undefined;
       // 已申请但 manager 尚未处理 → 等待（跳到 dropEnergy 释放产能）。

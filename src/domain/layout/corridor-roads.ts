@@ -2,18 +2,14 @@ import type { RoomSnapshot } from "../../kernel/contracts";
 import { globalCache, type CorridorPathCacheEntry } from "../../kernel/global-cache";
 
 /**
- * 确定性走廊路规划。
- *
- * 老玩家认知：流量采样式修路（road-policy）对「长走廊」失效——source 到核心/controller 的
- * 中段格子离两端都远，永远达不到「靠近两个端点」的门槛，而那里恰恰是 hauler 跑得最多、
- * 最该修路的地方。这里改用 PathFinder 直接求关键物流节点间的最优路径并铺路：
- *   - 每个 source container → 核心(spawn)
- *   - controller container → 核心(spawn)
- * 星型拓扑让 source→核心→controller 的所有运输线都被覆盖，靠近核心的路段自然重合复用。
- * 路修好后 hauler 移动成本减半（plain 2→1），等效运力翻倍，RCL2 即可生效。
+ * 确定性走廊路规划 — 流量采样式修路（road-policy）对长走廊失效：
+ * source/controller 到核心的中段格子离两端都远，达不到端点门槛却最该修路，
+ * 故改用 PathFinder 直接求关键物流节点间最优路径（星型拓扑：每个 source
+ * container→核心、controller container→核心，靠近核心路段自然重合复用）。
+ * 路成后 hauler 移动成本 plain 2→1，等效运力翻倍，RCL2 即可生效。
  */
 
-/** 一条走廊的端点对（from → to）。 */
+
 export interface CorridorPair {
   readonly from: { x: number; y: number; roomName: string };
   readonly to: { x: number; y: number; roomName: string };
@@ -28,7 +24,7 @@ export const DEFAULT_CORRIDOR_OPTIONS: CorridorRoadOptions = {
   maxRoadsPerCycle: 12,
 };
 
-/** 判断 container 是否为 source container（紧邻某个 source）。 */
+
 function isSourceContainer(c: StructureContainer, snapshot: RoomSnapshot): boolean {
   return snapshot.sources.some(
     s => Math.abs(s.pos.x - c.pos.x) <= 1 && Math.abs(s.pos.y - c.pos.y) <= 1,
@@ -36,14 +32,8 @@ function isSourceContainer(c: StructureContainer, snapshot: RoomSnapshot): boole
 }
 
 /**
- * 收集需要连通的物流走廊端点对（纯函数，便于单测）。
- *
- * 排序（按物流优先级从高到低）：
- *   1. controller container → core — 站桩升级供能线，hauler 供能最吃紧
- *   2. source container → core — 能量源头到孵化点
- *   3. storage → core — storage(RCL4+) 建成后 hauler 需 storage↔spawn 往返送能
- *
- * 配合 maxRoadsPerCycle 分段铺设时，优先保证最关键的供能走廊先成型。
+ * 收集物流走廊端点对（纯函数，便于单测）。排序即铺设优先级：
+ * controller 供能线最吃紧优先，其次 source 源头，最后 storage(RCL4+)。
  */
 export function collectCorridorEndpoints(snapshot: RoomSnapshot): CorridorPair[] {
   const spawn = snapshot.spawns[0];
@@ -52,19 +42,19 @@ export function collectCorridorEndpoints(snapshot: RoomSnapshot): CorridorPair[]
 
   const pairs: CorridorPair[] = [];
 
-  // controller container → 核心（优先）。
+
   if (snapshot.controllerContainer) {
     const cc = snapshot.controllerContainer;
     pairs.push({ from: { x: cc.pos.x, y: cc.pos.y, roomName: snapshot.roomName }, to: core });
   }
 
-  // 每个 source container → 核心。
+
   for (const c of snapshot.containers) {
     if (!isSourceContainer(c, snapshot)) continue;
     pairs.push({ from: { x: c.pos.x, y: c.pos.y, roomName: snapshot.roomName }, to: core });
   }
 
-  // storage → 核心（RCL4+，storage 建成后 hauler 的核心通勤路段）。
+
   if (snapshot.storage) {
     const st = snapshot.storage;
     pairs.push({ from: { x: st.pos.x, y: st.pos.y, roomName: snapshot.roomName }, to: core });
@@ -80,12 +70,10 @@ export type PathFn = (
 ) => { x: number; y: number }[];
 
 /**
- * 构建走廊规划用的 CostMatrix — 每规划周期只构建一次，供所有走廊对复用。
- * 避开墙与已有结构（不能在其上修路），偏好已有道路（复用）。
- *
- * protectedPositions：蓝图未来格（packed x*50+y）— 标记为 255 不可通行。
- * 修复：旧实现不保护蓝图格，走廊路可能占用未来 extension 位置，
- * 导致该 extension 被 validateBuildCell 判定 "occupied" 而永久消失。
+ * 构建走廊规划用 CostMatrix — 每规划周期一次，所有走廊对复用。
+ * 墙/已有结构不可通行，已有道路 cost 1 优先复用。protectedPositions
+ * （蓝图未来格 packed x*50+y）标记 255：防止走廊路占用未来 extension
+ * 位置，导致该 extension 被 validateBuildCell 判 occupied 而永久消失。
  */
 export function buildCorridorCostMatrix(
   snapshot: RoomSnapshot,
@@ -108,7 +96,7 @@ export function buildCorridorCostMatrix(
   for (const s of snapshot.constructionSites) cost.set(s.pos.x, s.pos.y, 255);
   for (const r of snapshot.roads) cost.set(r.pos.x, r.pos.y, 1);
 
-  // 保护蓝图未来格 — 走廊路不得占用未来的 extension/结构位置。
+
   if (protectedPositions) {
     for (const packed of protectedPositions) {
       const x = Math.floor(packed / 50);
@@ -121,10 +109,7 @@ export function buildCorridorCostMatrix(
   return cost;
 }
 
-/**
- * 默认 PathFinder 实现：CostMatrix 每规划周期构建一次，所有走廊对共享。
- * 仅在运行时调用；单测通过注入 pathFn 绕过 Screeps 全局。
- */
+/** 默认 PathFinder 实现（运行时用）；单测通过注入 pathFn 绕过 Screeps 全局。 */
 export function defaultPathFn(
   snapshot: RoomSnapshot,
   room: Room,
@@ -145,30 +130,18 @@ export function defaultPathFn(
 }
 
 /**
- * 规划走廊路：沿最高优先级走廊对的最优路径收集待建道路格。
+ * 规划走廊路 — 每次只铺最高优先级的一条，前一条建完再规划下一条：
+ * 全量铺会涌入 30-40 条 road 淹没 buildQueue、抢占 builder 工时导致
+ * extension/container 建造停滞。去重跳过已有 road/site/结构/source/
+ * controller 与本批已收录格，受 maxRoadsPerCycle 分段返回；调用方
+ * layout-planner 再按 key 与 buildQueue 去重入队。
  *
- * 每次只规划一条走廊（第一个 pair），前一条建完后才规划下一条。
- * 原因：同时规划所有走廊会一次性涌入 30-40 条 road 淹没 buildQueue，
- * 抢占 builder 工时导致 extension/container 建造停滞。
- * 一条一条建，经济基础设施优先，道路是锦上添花。
+ * 路径缓存（漏洞 #5/#8 修复）：结果存 globalCache.corridorPathCache
+ * （heap 不升 schema），pairKey/rcl/anchor 任一变化失效；路径格被新建
+ * 结构占用只做 occupied 过滤、不触发失效（局部重算无意义，整体重算更优）。
  *
- * 去重规则：跳过已有 road / constructionSite / 结构 / source / controller 所在格，
- * 以及本批次已收录的格。受 maxRoadsPerCycle 上限约束分段返回。
- * 调用方（layout-planner）再按 key 与 buildQueue 去重后入队。
- *
- * 路径缓存（漏洞 #5/#8 修复）：
- *   - PathFinder 结果缓存于 globalCache.corridorPathCache（heap，不升 schema）
- *   - 失效条件：pairKey 变化 / rcl 变化 / anchor 变化
- *   - 命中则跳过 PathFinder.search，直接用缓存路径
- *   - 路径格被新建结构占用由 occupied 过滤，不触发缓存失效（局部重算无意义，
- *     整体重算才能找到更优路径）
- *
- * @param room               房间对象
- * @param snapshot           房间快照
- * @param options            走廊路选项
- * @param pathFn             PathFinder 注入（单测用）
- * @param protectedPositions 蓝图未来格（避免占用）
- * @param anchor             锚点位置（缓存失效条件；不传则不缓存）
+ * @param anchor 锚点位置（缓存失效条件之一；不传则不缓存，保证单测确定性）
+ * @param pathFn PathFinder 注入（单测用）；protectedPositions 蓝图未来格
  */
 export function planCorridorRoads(
   room: Room,
@@ -181,9 +154,10 @@ export function planCorridorRoads(
   const pairs = collectCorridorEndpoints(snapshot);
   if (pairs.length === 0) return [];
 
-  // 只规划第一条走廊（最高优先级），不贪多。
+
   const pair = pairs[0]!;
   const pairKey = `${pair.from.x},${pair.from.y}→${pair.to.x},${pair.to.y}`;
+
 
   // 路径缓存查询（仅当 anchor 提供时启用）。
   let path: { x: number; y: number }[];
@@ -194,6 +168,7 @@ export function planCorridorRoads(
     const fn = pathFn ?? defaultPathFn(snapshot, room, protectedPositions);
     path = fn(pair.from, pair.to);
   }
+
 
   // 已占用格：不能在其上修路，也不重复入队。
   const occupied = new Set<string>();
@@ -246,6 +221,7 @@ function getCachedOrComputePath(
   if (cache.corridorPathCache === undefined) cache.corridorPathCache = new Map();
   const cached = cache.corridorPathCache.get(roomName);
 
+
   // 命中条件：pairKey + rcl + anchor 全匹配。
   const cacheHit =
     cached !== undefined &&
@@ -258,9 +234,11 @@ function getCachedOrComputePath(
     return cached!.path;
   }
 
+
   // 未命中或失效 → PathFinder 计算。
   const fn = defaultPathFn(snapshot, room, protectedPositions);
   const path = fn(pair.from, pair.to);
+
 
   // 写入缓存。
   const entry: CorridorPathCacheEntry = {

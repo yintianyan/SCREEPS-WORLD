@@ -4,22 +4,16 @@ export type LayoutPhase = "bootstrap" | "rcl2" | "rcl3" | "rcl4" | "late" | "rcl
 /** 建造优先级 — 0 最高（关键），3 最低。 */
 export type BuildPriority = 0 | 1 | 2 | 3;
 
-/** 结构标签 — 用于分类和过滤。 */
+
 export type StructureTag = "core" | "logistics" | "defense" | "road" | "industry";
 
-/**
- * 蓝图单元 — 模板中一个格子的声明。
- * 通过相对锚点的偏移定位，不包含绝对坐标。
- */
+/** 蓝图单元 — 模板中一个格子的声明，相对锚点偏移定位（不含绝对坐标）。 */
 export interface BlueprintCell {
   /** 稳定 key，例：core.extension.01 */
   readonly key: string;
-  /** 相对锚点的 x 偏移。 */
   readonly dx: number;
-  /** 相对锚点的 y 偏移。 */
   readonly dy: number;
   readonly structureType: BuildableStructureConstant;
-  /** 建造此结构所需的最低 RCL。 */
   readonly minRcl: number;
   readonly phase: LayoutPhase;
   readonly priority: BuildPriority;
@@ -28,17 +22,14 @@ export interface BlueprintCell {
   readonly tags: readonly StructureTag[];
 }
 
-/**
- * 蓝图 — 一组相对锚点的静态结构声明。
- * 模板保存在代码中，不每房复制到 Memory。
- */
+/** 蓝图 — 相对锚点的静态结构声明集合；模板存代码中，不每房复制到 Memory。 */
 export interface Blueprint {
   readonly id: string;
   readonly anchorKind: "primary-spawn" | "planned-spawn";
   readonly cells: readonly BlueprintCell[];
 }
 
-/** validateBuildCell 的返回类型。 */
+
 export type ValidationResult =
   | "ok"
   | "rcl"
@@ -54,7 +45,7 @@ export function packPos(x: number, y: number): number {
   return x * 50 + y;
 }
 
-/** 解码 packed 位置。 */
+
 export function unpackPos(packed: number): { x: number; y: number } {
   return { x: Math.floor(packed / 50), y: packed % 50 };
 }

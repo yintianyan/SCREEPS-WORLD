@@ -1,30 +1,13 @@
 /**
  * RoleRunner — 共享角色生命周期 + Action-Candidate 评估引擎。
+ * 管线：getSnapshot → recycle → 威胁检测/flee → ensureHome → updateMode →
+ * getAssignment → gate → 评估 candidates → 无匹配则 idle（park）。
  *
- * 所有角色共享的 tick 管线：
- *   1. getSnapshot — 获取 home 房快照（home 恒为自有房）
- *   2. recycle — 已标记回收则停止角色工作
- *   3. shouldFlee — 敌人检测 → flee（先于导航：外部房间扫当前房，home 房用 snapshot）
- *   4. ensureHome — 确认在目标房间（home 或 remoteTarget），不在则导航
- *   5. updateMode — FSM 状态转换
- *   6. getAssignment — 获取/续约任务
- *   7. gate — 角色级门禁（CPU tier / 能量地板等）
- *   8. 按 mode 选择 policy 分支 → 遍历 candidates → 执行第一个匹配的
- *   9. 无匹配 → idle（移动角色先归位）
- *
- * 威胁检测排在导航之前是关键：远矿角色在过境中间房遇袭时，ensureHome 会短路导航
- * （返回 false 提前 return），若威胁检测在其后则永远轮不到——故必须先检测威胁再导航。
- *
- * onFlee 钩子（P0-2 修复）：
- *   威胁检测后、通用 flee 移动之前调用 policy.onFlee。
- *   角色可在此实现"安全区行为"（如 hauler 在防御圈内安全充能）。
- *   返回 true 表示已处理，跳过通用 flee；返回 false 表示需要通用 flee 接管。
- *   这将 flee 的角色专属逻辑从引擎层（lifecycle.ts）移回角色层（RolePolicy），
- *   消除引擎层对具体角色的硬编码。
- *
- * 状态指示灯（drawStatusLight）：在 try/finally 的 finally 块统一绘制，
- * 覆盖所有 return 路径（含异常）——出错 creep 也会亮灯，便于定位故障单位。
- *
+ * 威胁检测必须排在 ensureHome 之前：远矿角色过境遇袭时 ensureHome 会短路导航
+ * （返回 false 提前 return），威胁检测在后则永远轮不到。
+ * onFlee 钩子（P0-2）：威胁检测后、通用 flee 移动前调用；返回 true=已处理跳过通用
+ * flee，false=需要通用 flee 接管——flee 专属逻辑从引擎层移回 RolePolicy。
+ * 状态指示灯在 finally 统一绘制，覆盖所有 return 路径（含异常）。
  * 角色文件只需声明 RolePolicy，不再包含生命周期样板。
  */
 import type { CreepRole, Priority, TickContext } from "../../kernel/contracts";
@@ -36,13 +19,7 @@ import { interceptForBoost } from "./boost-report";
 import { CONFIG } from "../../config";
 import { recordActionCpu } from "../../kernel/safe-run";
 
-/**
- * 创建一个由 RolePolicy 驱动的 CreepRole。
- *
- * @param name     角色名（用于注册和 telemetry）
- * @param priority 调度优先级 P0-P4
- * @param policy   声明式行为策略
- */
+/** 创建一个由 RolePolicy 驱动的 CreepRole。 */
 export function defineRole(name: string, priority: Priority, policy: RolePolicy): CreepRole {
   return {
     name,
@@ -50,26 +27,21 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
     // R3a：recovery 豁免从 RolePolicy 透传（builder/mineralMiner 自报）。
     recoveryEligible: policy.recoveryEligible === true,
     run(creep: Creep, ctx: TickContext): void {
-      // try/finally 保证所有 return 路径（含异常）都绘制状态指示灯。
       // finally 块在 CONFIG.debug.statusLight 关闭时为零开销（函数内首行即 return）。
       try {
-        // ── 1. 获取 home 房快照（home 恒为自有房，快照必存在）──
         const snapshot = ctx.getSnapshot(creep.memory.home!);
         if (!snapshot) return;
 
-        // ── 2. B1：已标记回收的 creep 停止角色工作（移动由 spawn-manager 接管）──
+        // B1：已标记回收的 creep 停止角色工作（移动由 spawn-manager 接管）。
         if (creep.memory.recycle) {
           creep.memory.mode = "idle";
           return;
         }
 
-        // ── 3. 敌人检测 → flee（先于导航：遇袭即逃，无论是否在通勤途中）──
-        // 战斗角色（policy.combat）豁免 — 它们的职责就是接敌，逃跑检测只适用于经济角色。
-        // 按 creep 实际所在房间选择威胁来源：
-        //   - 外部房间（远矿房 / 过境中间房）：无 snapshot，直接扫描当前房（shouldFleeForeignRoom）。
-        //     修复 transit 盲区——必须排在 ensureHome 之前，否则过境 creep 被 ensureHome
-        //     短路导航（返回 false 提前 return），永远轮不到威胁检测。
-        //   - home 房：使用 home snapshot 的 threatCreeps（shouldFlee）。
+        // 敌人检测先于导航（遇袭即逃，无论是否在通勤途中）；战斗角色豁免——职责是接敌。
+        // 威胁来源按实际所在房选择：外部房（远矿房/过境中间房）无 snapshot，直接扫当前房
+        // （shouldFleeForeignRoom，修复 transit 盲区——必须排在 ensureHome 之前）；
+        // home 房用 snapshot 的 threatCreeps（shouldFlee）。
         const inForeignRoom = creep.room.name !== creep.memory.home;
         if (!policy.combat && inForeignRoom && shouldFleeForeignRoom(creep)) {
           creep.memory.mode = "flee";
@@ -77,8 +49,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
           return;
         }
         // M11 战时集结避险：小队威胁在场时非战斗角色全员撤入核心集结区。
-        // 不限 fleeRange — 小队会主动追猎，散布全房各自逃跑就是被逐个点名；
-        // 撤入塔火力圈后敌人追进来吃满塔伤，不追则收割失败。
+        // 不限 fleeRange——小队会主动追猎，散布全房各自逃跑就是被逐个点名；撤入塔火力圈反杀。
         if (!policy.combat && !inForeignRoom && snapshot.squadThreat) {
           creep.memory.mode = "flee";
           shelterAtCore(creep, snapshot);
@@ -114,45 +85,33 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
           return;
         }
 
-        // ── 3.5 威胁消除后重置 flee mode ──
-        // ensureHome 在 updateMode 之前执行。如果 mode=flee（上一 tick 残留），
-        // ensureHome 看到 flee → goHome=true → 导航回 home → return false → updateMode 不执行 →
-        // mode 永远不被重置。导致 remoteHarvester 到达 source 后不采集（mode=flee → 一直走回 home）。
-        // 修复：shouldFleeForeignRoom/shouldFlee 返回 false = 当前无威胁 → 重置 flee mode。
+        // 威胁消除后重置 flee mode：ensureHome 先于 updateMode，残留 mode=flee 会触发
+        // ensureHome 回 home 导航并短路 updateMode，mode 永不被重置（remoteHarvester 到站不采集）。
         if (creep.memory.mode === "flee") {
           creep.memory.mode = undefined;
         }
 
-        // ── 3.7 Boost 报到 ──
-        // 新生 creep（报到窗口内）若被 lab-system 分配了 boost lab，
-        // 引导其到 lab 旁等待 boostCreep 执行。排在 flee 之后（安全优先）、
-        // 正常工作流之前（boost 是即时战力放大，先强化再上岗）。
+        // Boost 报到：新生 creep（报到窗口内）被 lab-system 分配 boost lab 时引导其到 lab 旁
+        // 等待 boostCreep 执行。排在 flee 之后（安全优先）、正常工作流之前（先强化再上岗）。
         if (interceptForBoost(creep)) return;
 
-        // ── 3.8 战备集结（hold）──
-        // 角色声明集结条件（如 attacker 在 war build 阶段）时接管本 tick。
-        // 必须排在 ensureHome 之前：否则集结中的角色被 ensureHome 直接
-        // 导航进目标房 — attacker「散兵逐个送」的添油战术正源于此。
+        // 战备集结（hold）：角色声明集结条件（如 attacker 在 war build 阶段）时接管本 tick。
+        // 必须排在 ensureHome 之前：否则集结中的角色被 ensureHome 直接导航进目标房 —
+        // attacker「散兵逐个送」的添油战术正源于此。
         if (policy.hold && policy.hold(creep, ctx)) return;
 
-        // ── 4. 确认在目标房间（home 或 remoteTarget）──
+        // 确认在目标房间（home 或 remoteTarget）。
         if (!ensureHome(creep)) {
-          // 远矿角色通勤中保持原 mode（acquire/work）——ensureHome 对 idle 模式
-          // 会导航回 home，导致 remote creep 在 home↔remoteTarget 之间振荡，
-          // 永远到不了目标房。本地角色（无 remoteTarget）仍切 idle 防止在异房作业。
+          // 远矿角色通勤中保持原 mode——ensureHome 对 idle 模式会导航回 home，
+          // 导致 home↔remoteTarget 振荡；本地角色（无 remoteTarget）仍切 idle 防止在异房作业。
           if (!creep.memory.remoteTarget) {
             creep.memory.mode = "idle";
           }
           return;
         }
 
-        // ── 5. FSM 状态转换 ──
         updateMode(creep);
-
-        // ── 6. 获取/续约任务 ──
         const assignment = getAssignment(creep, ctx);
-
-        // ── 7. 构建 ActionContext ──
         const ac: ActionContext = {
           creep,
           snapshot,
@@ -161,18 +120,15 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
           ctx,
         };
 
-        // ── 8. 角色级门禁 ──
+        // 角色级门禁（gate）：不通过则切 idle。
         if (policy.gate && !policy.gate(ac)) {
           creep.memory.mode = "idle";
           return;
         }
 
-        // ── 9. 按 mode 选择候选列表并评估 ──
-        // resolve 模式：resolve 返回非 undefined 即执行，目标传入 execute。
-        // 目标只解析一次，消除 predicate-execute 重复计算。
-        //
-        // actionProfiling 分支：开关关闭时走原始路径（零开销）；
-        // 开启时每个 resolve/execute 调用用 Game.cpu.getUsed() 测量并记录到 globalCache。
+        // 按 mode 选择候选列表：resolve 返回非 undefined 即执行，目标只解析一次，
+        // 消除 predicate-execute 重复计算。actionProfiling 开启时测量每个 resolve/execute
+        // 并记录到 globalCache；关闭时走原始路径（零开销）。
         const candidates = creep.memory.mode === "work" ? policy.work : policy.acquire;
         if (CONFIG.debug.actionProfiling) {
           for (const candidate of candidates) {
@@ -200,16 +156,14 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
           }
         }
 
-        // ── 10. 无匹配候选 → idle（移动角色先归位再 idle）──
+        // 无匹配候选 → idle（移动角色先归位）。
         if (policy.park) {
           parkIdleCreep(creep, snapshot);
         }
-        // 远矿角色不在目标房间时不切 idle——idle 会导致 ensureHome 导航回 home，
-        // 形成 idle→updateMode→acquire→action fail→idle 死循环，永远到不了 remoteTarget。
-        // P2-M：原 remoteHauler work-at-home 硬编码下沉为 RolePolicy 钩子 —
-        //   role-runner 不再感知角色名，由各角色 policy 声明"无候选时是否切 idle"特例。
-        //   remoteHauler work 在 home 房无候选时切 idle（ensureHome 保持在家）。
-        //   通用 idle 条件（本地角色 / 到达 remoteTarget 房）保留在引擎层。
+        // 远矿角色不在目标房间时不切 idle——idle 会让 ensureHome 导航回 home，
+        // 形成 idle→updateMode→acquire→fail→idle 死循环，永远到不了 remoteTarget。
+        // P2-M：原 remoteHauler work-at-home 硬编码下沉为 RolePolicy 钩子，
+        // 由角色 policy 声明"无候选时是否切 idle"，引擎不再感知角色名。
         const remoteTarget = creep.memory.remoteTarget;
         if (!remoteTarget || creep.room.name === remoteTarget || policy.shouldIdleWhenNoCandidate?.(ac) === true) {
           creep.memory.mode = "idle";

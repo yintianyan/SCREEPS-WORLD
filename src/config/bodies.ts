@@ -10,32 +10,26 @@ interface BodyTemplate {
 }
 
 /**
- * 按角色 → 档位索引的 body 目录。
- * 从高到低尝试各档位，第一个满足 energyCapacityAvailable 的即为选中结果。
- * "recovery" 档位始终可在 200 能量内生成，用于 P0 紧急孵化。
- *
- * 使用字符串字面量而非 Screeps 全局常量（WORK, CARRY, MOVE），
- * 使模块在无 Screeps 运行时的情况下也可测试。
+ * 按角色 → 档位索引的 body 目录，从高到低取第一个容量满足者。
+ * "recovery" 档始终 ≤200 能量，供 P0 紧急孵化。
+ * 用字符串字面量而非 Screeps 全局常量 — 无运行时也可测试。
  */
 export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> = {
   attacker: [
-    // 跨房远征攻击者（无 CARRY，纯战斗）：TOUGH 吸收塔伤、ATTACK 拆建筑/杀敌、
-    // MOVE 按 1:1 保证无疲劳移动。
-    // 高容量满编 [3T,4A,4M] @550：抗一轮塔伤并砸穿 rampart 血线（war-planner 按编队孵化）。
+    // 纯战斗（无 CARRY）：TOUGH 吸收塔伤、ATTACK 拆建筑/杀敌、1:1 MOVE 无疲劳移动。
+    // 满编 [3T,4A,4M]：抗一轮塔伤并砸穿 rampart 血线（war-planner 按编队孵化）。
     { parts: ["tough", "tough", "tough", "attack", "attack", "attack", "attack", "move", "move", "move", "move"], minCapacity: 800 },
-    // 低容量绝境档 [1T,1A,1M] @140：战斗角色随时可战优先于等满配（bodies.test 要求
-    // 除 reserver/claimer/defender 外最低档 minCapacity=200，本档满足）。
+    // 绝境档 [1T,1A,1M]：随时可战优先于等满配（bodies.test 要求最低档 minCapacity=200）。
     { parts: ["tough", "attack", "move"], minCapacity: 200 },
   ],
   worker: [
-    // 开局优化：RCL1 起始 300 能量直接用满，2 WORK 采集速度翻倍，大幅缩短 bootstrap。
+    // 开局优化：RCL1 起始 300 能量直接用满，2 WORK 采集翻倍，大幅缩短 bootstrap。
     { parts: ["work", "work", "carry", "move"], minCapacity: 300 },
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   harvester: [
-    // 站桩矿工：5 WORK 恰好匹配 source 再生速率 (3000/300=10/tick)，1 MOVE 仅用于通勤到工位。
-    // 每多 1 WORK 成本 +100，按容量平滑降级（1W=200 / 2W=300 / 3W=400 / 4W=500 / 5W=600），
-    // 避免低容量时卡在 1 WORK（2/tick，远低于 source 再生）拖垮经济。
+    // 站桩矿工：5 WORK 恰好匹配 source 再生速率（3000/300=10/tick）；按容量平滑降级，
+    // 避免低容量卡在 1 WORK（2/tick）拖垮经济。
     { parts: ["work", "work", "work", "work", "work", "carry", "move"], minCapacity: 600 },
     { parts: ["work", "work", "work", "work", "carry", "move"], minCapacity: 500 },
     { parts: ["work", "work", "work", "carry", "move"], minCapacity: 400 },
@@ -48,16 +42,15 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
       parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"],
       minCapacity: 600,
     },
-    // 300–599 补档：RCL2（容量 550）正是流动性陷阱高发期，
-    // 卡在 3C 档只有 150 运力是搬运短板 — 断档会放大 colonyState 振荡。
+    // 300–599 补档：RCL2（容量 550）流动性陷阱高发期，卡 3C 档只有 150 运力 —
+    // 断档会放大 colonyState 振荡。
     { parts: ["carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move"], minCapacity: 500 },
     { parts: ["carry", "carry", "carry", "carry", "move", "move", "move", "move"], minCapacity: 400 },
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
   distributor: [
-    // 与 hauler 相同的 body — 纯 CARRY+MOVE 物流角色。
-    // 从 storage 取能分发给 spawn/extension/tower，同样需要大运力 + 道路满速。
+    // 与 hauler 同型（纯 CARRY+MOVE 物流，storage→spawn/extension/tower 分发）。
     {
       parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"],
       minCapacity: 600,
@@ -68,8 +61,8 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
   upgrader: [
-    // 站桩升级：1 CARRY 承接 withdraw，2 MOVE 通勤，其余全 WORK。
-    // [15W] @1650：RCL5(1800) 起可孵；RCL8 时单 creep 恰好顶满官方 15 energy/tick 上限。
+    // 站桩升级：1 CARRY 承接 withdraw、2 MOVE 通勤，其余全 WORK。
+    // [15W] RCL5(1800) 起可孵；RCL8 单 creep 恰好顶满官方 15 energy/tick 上限。
     {
       parts: [
         "work", "work", "work", "work", "work", "work", "work", "work",
@@ -90,8 +83,7 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   builder: [
-    // [8W,4C,6M] @1300：RCL4 主力档。MOVE ≥ 非 MOVE/2，道路上满速；
-    // 大工地（storage/tower）几下拍完，减少往返取能次数。
+    // [8W,4C,6M] RCL4 主力档：MOVE ≥ 非MOVE/2 道路上满速；大工地几下拍完减少往返取能。
     {
       parts: [
         "work", "work", "work", "work", "work", "work", "work", "work",
@@ -110,52 +102,49 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   remoteHarvester: [
-    // [5W,1C,3M] @750：与本地 harvester 相同的 5W 站桩矿工配置，
-    // 加 2 个额外 MOVE 保证跨房通勤效率（无道路时仍可移动）。
+    // 与本地 harvester 同款 5W 站桩 + 额外 MOVE 保证跨房无道路通勤。
     { parts: ["work", "work", "work", "work", "work", "carry", "move", "move", "move"], minCapacity: 750 },
-    // [3W,1C,2M] @450：中容量档。
+    // [3W,1C,2M] 中容量档。
     { parts: ["work", "work", "work", "carry", "move", "move"], minCapacity: 450 },
-    // [2W,1C,2M] @350：低容量回退。
+    // [2W,1C,2M] 低容量回退。
     { parts: ["work", "work", "carry", "move", "move"], minCapacity: 350 },
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   remoteHauler: [
-    // 与 hauler 相同的 CARRY+MOVE 配置，但额外 MOVE 保证跨房无道路时可行进。
+    // hauler 同款 CARRY+MOVE，额外 MOVE 保证跨房无道路可行进。
     { parts: ["carry", "carry", "carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move", "move", "move"], minCapacity: 800 },
     { parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"], minCapacity: 600 },
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
   reserver: [
-    // [CLAIM,MOVE] @650：最小占领配置。1 CLAIM = 600 能量。
-    // reserveController 每 tick 续期 1 tick，1 个 CLAIM 部件即满足需求。
+    // [CLAIM,MOVE] 最小占领：1 CLAIM=600 能量；reserveController 每 tick 续期 1 tick，
+    // 单 CLAIM 即满足需求。
     { parts: ["claim", "move"], minCapacity: 650 },
   ],
   claimer: [
-    // [CLAIM,MOVE,MOVE] @700：扩张占领投送。多 1 MOVE 加速跨房长途通勤 —
-    // CLAIM creep 寿命仅 600 tick，路上每省 1 tick 都是占领窗口。
+    // 多 1 MOVE 加速跨房长途通勤 — CLAIM creep 仅 600 tick 寿命，路上省 1 tick 都是占领窗口。
     { parts: ["claim", "move", "move"], minCapacity: 700 },
     { parts: ["claim", "move"], minCapacity: 650 },
   ],
   mineralMiner: [
-    // 站桩矿工：多 WORK 提升采集速率（extractor 5-tick 冷却，1 WORK=1/tick、
-    // 上限 10/tick 需 10 WORK）；必须含 CARRY（harvestMineral 检查剩余容量>0，
-    // 空 CARRY 永不触发）；1 MOVE 通勤到矿位后站桩。按容量平滑降级。
+    // 站桩矿工：extractor 5-tick 冷却，1 WORK=1/tick、上限 10/tick 需 10 WORK；
+    // 必须含 CARRY（harvestMineral 检查剩余容量>0，空 CARRY 永不触发）。按容量平滑降级。
     { parts: ["work", "work", "work", "work", "work", "work", "work", "work", "work", "work", "carry", "move"], minCapacity: 1250 },
     { parts: ["work", "work", "work", "work", "work", "carry", "move"], minCapacity: 650 },
     { parts: ["work", "work", "work", "carry", "move"], minCapacity: 450 },
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   remoteDefender: [
-    // [ATTACK,ATTACK,MOVE,MOVE] @520：20 damage/tick，10 tick 击杀 NPC reserver（200 hits）。
-    // NPC reserver 通常只有 [CLAIM,MOVE]，无攻击能力 → defender 不会受伤。
+    // [2A,2M] 20 damage/tick，10 tick 击杀 NPC reserver（200 hits；其无攻击能力，
+    // defender 不会受伤）。
     { parts: ["attack", "attack", "move", "move"], minCapacity: 520 },
-    // [ATTACK,MOVE] @130：最小配置，10 damage/tick，20 tick 击杀 NPC reserver。
+    // [A,M] 最小配置：10 damage/tick，20 tick 击杀 NPC reserver。
     { parts: ["attack", "move"], minCapacity: 130 },
   ],
   defender: [
-    // 本房防御者：与塔协同贴脸输出。1:1 ATTACK:MOVE 保证无路面也能追击。
-    // [10A,10M] @1300：RCL5+ 主力档，300 damage/tick。
+    // 本房防御者：与塔协同贴脸输出，1:1 ATTACK:MOVE 无路面也能追击。
+    // [10A,10M] RCL5+ 主力档，300 damage/tick。
     {
       parts: [
         "attack", "attack", "attack", "attack", "attack",
@@ -165,22 +154,20 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
       ],
       minCapacity: 1300,
     },
-    // [6A,6M] @780：RCL3-4 档。
+    // [6A,6M] RCL3-4 档。
     { parts: ["attack", "attack", "attack", "attack", "attack", "attack", "move", "move", "move", "move", "move", "move"], minCapacity: 780 },
-    // [4A,4M] @520：RCL2-3 档。
+    // [4A,4M] RCL2-3 档。
     { parts: ["attack", "attack", "attack", "attack", "move", "move", "move", "move"], minCapacity: 520 },
-    // [2A,2M] @260：早期最小可用防御。
+    // [2A,2M] 早期最小可用防御。
     { parts: ["attack", "attack", "move", "move"], minCapacity: 260 },
-    // [A,M] @130：绝境档 — 有防御总比没有强。
+    // [A,M] 绝境档 — 有防御总比没有强。
     { parts: ["attack", "move"], minCapacity: 130 },
   ],
 };
 
 /**
- * 道路优化 body 变体（约束 HA-10）。
- * RCL4+ 核心物流路已铺设时使用：1 MOVE 可在道路上带动 2 CARRY（fatigue-free）。
- * 道路未覆盖时使用默认模板保证移动效率。
- * 按容量从高到低选档：同样吞吐用更少 creep，省 CPU 与 spawn 孵化窗。
+ * 道路优化 body 变体（约束 HA-10）：RCL4+ 核心物流路已铺设时使用 —
+ * 1 MOVE 可在道路上带动 2 CARRY（fatigue-free）；道路未覆盖时退回默认模板。
  */
 const ROAD_OPTIMIZED_BODIES: Readonly<Record<string, readonly BodyTemplate[]>> = {
   hauler: [
@@ -238,17 +225,14 @@ export function bodyCost(body: readonly BodyPartConstant[]): number {
 }
 
 /**
- * 选择适合 spawn 能量容量的最佳 body。
- * 最后回退到恢复 body，确保 P0 孵化不会因 body 选择而阻塞。
- *
- * options.rcl：RCL4+ 时 hauler 优先使用道路优化变体（约束 HA-10）。
+ * 选择适合 spawn 能量容量的最佳 body；无档位匹配时回退 RECOVERY_BODY，
+ * 确保 P0 孵化不因 body 选择阻塞。options.rcl ≥ 4 时 hauler 走道路优化变体（HA-10）。
  */
 export function selectBody(
   role: string,
   energyCapacityAvailable: number,
   options?: { rcl?: number },
 ): BodyPartConstant[] {
-  // RCL4+ 核心物流路已铺设时，hauler 使用道路优化变体。
   if (options?.rcl !== undefined && options.rcl >= 4) {
     const roadTiers = ROAD_OPTIMIZED_BODIES[role];
     if (roadTiers) {
@@ -268,14 +252,10 @@ export function selectBody(
 }
 
 /**
- * 角色最低档模板 body（无视能量约束）。
- *
- * selectBody 的 RECOVERY_BODY 兜底对「必需部件不同于 WORK/CARRY/MOVE」的角色
- * 是陷阱：energyAvailable < 最低档时 defender 会拿到无 ATTACK 的 [W,C,M]——
- * 一只不能攻击的"防御者"，紧急时刻白烧 200 能量 + 一个孵化窗；
- * hauler 则平白多买一个用不上的 WORK（100 能量死重）。
- * 调用方在回退产物缺必需部件时改用本函数：请求带最低档 body 排队，
- * 能量一到位即孵出真正可用的单位（如 [ATTACK,MOVE] @130）。
+ * 角色最低档模板 body（无视能量约束）— RECOVERY_BODY 兜底对必需部件非
+ * [W,C,M] 的角色是陷阱：缺能量时 defender 会拿到无 ATTACK 的 [W,C,M]、
+ * hauler 平白多买用不上的 WORK。调用方在回退产物缺必需部件时改用它：
+ * 请求带最低档 body 排队，能量一到位即孵出真正可用的单位。
  */
 export function minimalBodyFor(role: string): BodyPartConstant[] {
   const templates = BODY_TEMPLATES[role];
@@ -306,26 +286,24 @@ export function degradeBody(
   const parts = [...body];
 
   while (bodyCost(parts) > energyAvailable) {
-    // 统计每种部件当前数量。
     const counts = new Map<string, number>();
     for (const p of parts) counts.set(p, (counts.get(p) ?? 0) + 1);
 
     const moveCount = counts.get("move") ?? 0;
     const nonMoveCount = parts.length - moveCount;
 
-    // 找最贵的可移除部件（移除后仍满足 requiredParts 与 MOVE 配比约束）。
+    // 找最贵的可移除部件（满足 requiredParts 与 MOVE 配比约束）。
     let worstIdx = -1;
     let worstCost = -1;
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i]!;
       const cost = PART_COST[p] ?? 0;
       if (cost < worstCost) continue;
-      // requiredParts 最后一个不可移除。
+      // 每种 requiredParts 至少保留 1 个。
       const isRequired = requiredParts.includes(p);
       const currentCount = counts.get(p) ?? 0;
       if (isRequired && currentCount <= 1) continue;
-      // MOVE 配比守卫：移除 MOVE 后必须仍满足 move >= ceil(nonMove/2)，
-      // 否则宁可停在此处（跳过该 MOVE）也不产出独腿 body。
+      // MOVE 配比守卫：移除后仍须 move ≥ ceil(nonMove/2)，否则跳过该 MOVE。
       if (p === "move") {
         const moveAfter = moveCount - 1;
         const needed = Math.ceil(nonMoveCount / 2);
@@ -339,7 +317,6 @@ export function degradeBody(
     parts.splice(worstIdx, 1);
   }
 
-  // 确保最小可用组合：包含所有 requiredParts。
   for (const part of requiredParts) {
     if (!parts.includes(part)) return undefined;
   }

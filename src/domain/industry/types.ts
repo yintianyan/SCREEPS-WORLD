@@ -1,10 +1,6 @@
 /**
- * Industry 模块类型定义。
- *
- * 设计原则：
- *   - 纯数据描述，不含 Game API 调用。
- *   - 反应链和 boost 决策均为纯函数，可独立测试。
- *   - 预留多房间扩展接口（TerminalPolicy）。
+ * Industry 模块类型定义 — 纯数据契约（无 Game API）；反应链/boost 决策均为
+ * 可独立测试的纯函数；TerminalPolicy 预留多房间扩展。
  */
 
 // ─── Screeps 化合物常量 ─────────────────────────────────────
@@ -90,8 +86,8 @@ export interface LabUnloadDemand {
 
 /**
  * 单房间 lab 搬运需求表 — lab 角色分配（input/output/boost）只有 lab-system
- * 知道，搬运 creep 不知道；此表是两者之间唯一的化合物-lab 绑定通道。
- * 没有它，供料只能盲搬（任意化合物倒进任意 lab），错矿占位后永久死锁。
+ * 知道，搬运 creep 不知道；此表是两者间唯一的化合物-lab 绑定通道，
+ * 缺失则供料只能盲搬、错矿占位后永久死锁。
  */
 export interface LabDemandTable {
   readonly loads: readonly LabLoadDemand[];
@@ -180,12 +176,8 @@ export const REACTIONS: Readonly<Record<string, readonly [Compound, Compound]>> 
   XGHO2: ["X", "GHO2"],
 };
 
-/** Boost 化合物 → 效果类别映射（用于决策）。
- *
- * 与引擎 BOOSTS 常量逐行对齐 — 化合物线路与效果的对应关系容易记错
- *（例如 UH 线是 attack 而非 harvest，harvest 是 UO 线），
- * 映射错误会让整条 lab 反应链产出无用化合物。
- */
+/** Boost 化合物 → 效果类别映射（决策用）。与引擎 BOOSTS 逐行对齐 —
+ * 线路易记错（UH=attack 而非 harvest，harvest 是 UO 线），映射错则整条反应链产废料。 */
 export const BOOST_EFFECTS: Readonly<Record<string, BoostEffect>> = {
   // U 线：UH = attack，UO = harvest。
   UH: "attack", UH2O: "attack", XUH2O: "attack",

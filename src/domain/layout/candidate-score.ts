@@ -8,7 +8,7 @@ export interface CandidateInput {
   buildableCoreTiles: number;
   /** 到各 source 的平均距离（曼哈顿）。 */
   averageDistanceToSources: number;
-  /** 到 controller 的距离。 */
+
   distanceToController: number;
   /** 到最近房间出口的估算距离。 */
   exitRisk: number;
@@ -17,16 +17,8 @@ export interface CandidateInput {
 }
 
 /**
- * 新房锚点评分 — 纯函数。
- *
- * 评分公式（plan §5.6.3）：
- *   score = 4 * buildableCoreTiles
- *         - 2 * averageDistanceToSources
- *         - 1 * distanceToController
- *         + 3 * exitRisk   // exitRisk = 到最近出口的距离，越大越安全
- *         - 4 * blockedTemplateCells
- *
- * 分数越高越好。候选需满足核心矩形不越界、关键格不是墙、
+ * 新房锚点评分 — 纯函数（plan §5.6.3）。分数越高越好；
+ * 前置约束（调用方保证）：核心矩形不越界、关键格非墙、
  * 距出口保留安全距离、不占 source/controller/mineral。
  */
 export function scoreCandidate(input: CandidateInput): number {
@@ -39,11 +31,7 @@ export function scoreCandidate(input: CandidateInput): number {
   );
 }
 
-/**
- * 从 Room 和 Blueprint 提取候选评分所需的数据。
- * 调用方提供候选坐标和房间信息，此函数完成扫描。
- * 大扫描只能在 Green 下增量完成（plan §5.6.3）。
- */
+/** 从 Room/Blueprint 扫描提取评分数据；大扫描只能在 Green 下增量完成（plan §5.6.3）。 */
 export function evaluateCandidate(
   room: Room,
   blueprint: Blueprint,
@@ -54,7 +42,7 @@ export function evaluateCandidate(
   const sources = room.find(FIND_SOURCES);
   const controller = room.controller;
 
-  // 统计可建造核心格（3 格半径内非墙非边界）。
+
   let buildableCoreTiles = 0;
   for (let dx = -3; dx <= 3; dx++) {
     for (let dy = -3; dy <= 3; dy++) {
@@ -65,7 +53,7 @@ export function evaluateCandidate(
     }
   }
 
-  // 到各 source 的平均距离。
+
   let avgDist = 0;
   if (sources.length > 0) {
     let total = 0;
@@ -75,15 +63,15 @@ export function evaluateCandidate(
     avgDist = total / sources.length;
   }
 
-  // 到 controller 的距离。
+
   const distCtrl = controller
     ? Math.abs(controller.pos.x - cx) + Math.abs(controller.pos.y - cy)
     : 50;
 
-  // 到最近出口的估算距离（取四方向最小值）。
+
   const exitRisk = Math.min(cx, cy, 49 - cx, 49 - cy);
 
-  // 统计被墙/边界阻挡的模板 cell 数。
+
   let blocked = 0;
   for (const cell of blueprint.cells) {
     const x = cx + cell.dx;
@@ -106,10 +94,6 @@ export function evaluateCandidate(
   };
 }
 
-/**
- * 从候选列表中选择最佳锚点。
- * 返回分数最高的候选；列表为空时返回 undefined。
- */
 export function selectBestCandidate(
   candidates: readonly CandidateInput[],
 ): CandidateInput | undefined {

@@ -1,12 +1,8 @@
 /**
  * 移动意图账本 — Traffic Manager 的登记入口。
- *
- * 开关开启时：movement 层所有移动出口不再直发引擎指令，而是把
- * 「本 tick 想走哪一格」登记到 per-tick 账本；tick 末 traffic-manager
- * 后置系统按房集中解算后统一签发 creep.move。
- * 开关关闭时：registerMove 直通 creep.move + recordTraffic —
- * 与旧行为逐字节等价，是唯一的回滚通道。
- *
+ * 开关开启：movement 层所有移动出口把「本 tick 想走哪一格」登记到 per-tick 账本，
+ * tick 末 traffic-manager 后置系统按房集中解算后统一签发 creep.move。
+ * 开关关闭：registerMove 直通 creep.move + recordTraffic — 与旧行为逐字节等价，唯一的回滚通道。
  * 账本存 globalCache 并带 tick 戳，跨 tick 自动失效（global reset 安全）。
  */
 
@@ -54,11 +50,9 @@ export function movePriorityFor(creep: Creep): number {
 
 /**
  * 登记单步移动意图（Traffic Manager 的唯一移动出口）。
- *
  * 开关关闭：直通 creep.move(dir) + recordTraffic（旧行为）。
- * 开关开启：疲劳中的 creep 返回 ERR_TIRED 不入账（引擎语义对齐）；
- * 目标格越界返回 ERR_INVALID_ARGS；否则登记意图并返回 OK —
- * 「登记成功」不保证最终移动（可能在解算中败给更高优意图）。
+ * 开关开启：疲劳中返 ERR_TIRED 不入账（引擎语义对齐）；目标格越界返 ERR_INVALID_ARGS；
+ * 否则登记意图返 OK — 「登记成功」不保证最终移动（可能在解算中败给更高优意图）。
  */
 export function registerMove(creep: Creep, dir: DirectionConstant, priority: number): ScreepsReturnCode {
   if (!trafficEnabled()) {
@@ -85,8 +79,7 @@ export function registerMove(creep: Creep, dir: DirectionConstant, priority: num
 /**
  * 登记锚定声明 — creep 本 tick 原地工作，拒绝被低优先级移动方推挤。
  * 典型：站桩矿工（让出矿位 = 吞吐崩塌）、贴 lab 等 boost、站桩 upgrader。
- * 若同 tick 该 creep 又登记了移动意图，解算器以意图为准（锚自动失效）。
- * 开关关闭时为 no-op。
+ * 同 tick 又登记移动意图时解算器以意图为准（锚自动失效）。开关关闭时为 no-op。
  */
 export function registerAnchor(creep: Creep, priority: number): void {
   if (!trafficEnabled()) return;
@@ -99,9 +92,7 @@ export function registerAnchor(creep: Creep, priority: number): void {
 
 /**
  * 从缓存路径提取下一步方向（moveByPath 出口的意图化替身）。
- *
- * 语义对齐引擎 moveByPath：creep 在路径上 → 走向下一格；
- * 不在路径上但紧邻路径起点 → 走向起点（上路）；
+ * creep 在路径上 → 走向下一格；不在路径上但紧邻路径起点 → 走向起点（上路）；
  * 否则返回 undefined（等价 ERR_NOT_FOUND，调用方走缓存失效/重算路径）。
  */
 export function nextDirFromPath(creep: Creep, path: readonly RoomPosition[]): DirectionConstant | undefined {

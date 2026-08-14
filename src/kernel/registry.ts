@@ -17,12 +17,10 @@ export class Registry {
     return this;
   }
 
-  /** 系统按优先级升序排列（P0 在前）。 */
   getSystems(): System[] {
     return [...this.systems.values()].sort((a, b) => a.priority - b.priority);
   }
 
-  /** 角色按优先级升序排列（P0 在前）。 */
   getRoles(): CreepRole[] {
     return [...this.roles.values()].sort((a, b) => a.priority - b.priority);
   }

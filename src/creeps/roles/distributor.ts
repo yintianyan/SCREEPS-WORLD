@@ -1,47 +1,12 @@
 /**
- * Distributor — P1 分发角色（RCL4+）。
- *
- * 职责：从 storage 取能，分发给 spawn/extension/tower/lab。
- * 数据流方向：Storage → Sink（单向，永不回流）。
- *
- * 与 hauler 的职责分离：
- *   - Hauler（收集者）：源 → Storage（container/dropped/link → storage）
- *   - Distributor（分发者）：Storage → Sink（storage → spawn/extension/tower/lab）
- *
- * 这消除了 hauler 时代的 storage→storage 循环：
- *   旧架构：hauler 从 storage 取能 → fillStorage 存回 → 死循环
- *   新架构：distributor 从 storage 取能 → 填充 spawn/extension（永不存回 storage）
- *
- * 存在条件：仅当 storage 存在时才孵化（RCL4+）。
- * 无 storage 时 hauler 直接 container → sink 直送，不需要 distributor。
- *
- * assignment-free 设计声明（重要 — 修改前必读）：
- *   distributor 不参与 assignment 系统（不在 ROLE_TASK_KINDS 映射中），
- *   不通过 getAssignment 消费任务，而是直接读 RoomSnapshot.fillTargets 驱动。
- *
- *   为什么这么设计：
- *   distributor 的核心职责是"填充 spawn/extension/tower"。
- *   这个职责在所有状态下都应优先执行 —
- *   无论是正常态、低能量紧急态、还是敌袭态，spawn 没能量 = 无法孵化 = 全盘崩溃。
- *   若纳入 assignment 系统，assignment-service 在紧急抢占
- *   （invalidateAssignments, priority >= 1）时会清空 creep.memory.assignment，
- *   导致 distributor 失去任务 → spawn 不被填充 → 灾后无法恢复。
- *   assignment-free 让 distributor 在紧急状态下仍坚守 spawn 填充职责。
- *
- *   限制与边界：
- *   - 紧急抢占对 distributor 无效（设计意图，非 bug）。
- *   - 但 distributor 仍受 role-runner 的 shouldFlee 控制 — 敌袭时撤离优先于填充。
- *   - distributor 的"需求门禁"（fillTargets 非空才取能）已从架构上消除 storage→storage 循环，
- *     不需要 assignment 系统的任务级去重。
- *
- *   维护约束：
- *   - 不要把 distributor 纳入 assignment 系统，除非引入"紧急态豁免"机制。
- *   - 若未来需要 distributor 接受 lab 供料任务等扩展，应通过 snapshot 扩展字段驱动，
- *     而非引入 ROLE_TASK_KINDS 映射。
- *
- * 策略声明：
- *   acquire: storage（带需求门禁 — 仅当 fillTargets 非空时取能）
- *   work:    haul fillTarget（带 reservation）> supply labs > 待命
+ * Distributor — P1 分发角色（RCL4+）。从 storage 取能分发给 spawn/extension/tower/lab；
+ * 数据流 Storage → Sink（单向，永不回流）— 与 hauler 的「源 → Storage」分离，消除
+ * 旧架构的 storage→storage 循环。仅 storage 存在时孵化；无 storage 时由 hauler 直送。
+ * assignment-free 设计（修改前必读）：distributor 不参与 assignment 系统，直接读
+ * RoomSnapshot.fillTargets。为什么：spawn 填充在所有状态（正常/低能量/敌袭）都应优先，
+ * 紧急抢占会清空 assignment → 失任务 → spawn 不被填充 → 灾后无法恢复。限制：紧急抢占对
+ * distributor 无效（设计意图）；仍受 shouldFlee 控制；需求门禁从架构上消除循环。
+ * 维护约束：勿纳入 assignment 系统（除非引入「紧急态豁免」）；未来扩展走 snapshot 字段驱动。
  */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
@@ -65,21 +30,12 @@ const TIER_WITHDRAW_CAP: readonly [number, number, number, number] = [
 ];
 
 /** 从 storage 限量取能 — 带水位分级节流。
- *
- * 需求门禁是本角色的核心设计：
- * 没有本档位可服务的 fillTarget 时禁止从 storage 取能。
- * 这从架构上消除了 storage→storage 循环的可能性。
- * 门禁必须与投放阶段（distributorFillTarget）用同一套 tier 过滤口径 —
- * 否则会为档位内拒绝服务的目标（如 tier≥1 时的 tower）取能，
- * 随后携能 idle，能量滞留在背包里出不去。
- *
- * 水位分级（由 gate 写入 creep.memory.distributorTier，
- * 阈值为绝对能量值 — CONFIG.economy.distributorTiers）：
- *   tier 0 (≥50k)：满载取能，所有 fillTarget 正常服务
- *   tier 1 (≥10k)：满载取能，fillTarget 仅 spawn/extension
- *   tier 2 (≥2k)：限取 400/tick，fillTarget 仅 spawn/extension
- *   tier 3 (<2k)：限取 200/tick，fillTarget 仅 spawn/extension
- * 低水位靠取能限额节流；spawn/extension 是同一孵化能量池，任何档位都不裁剪。
+ * 需求门禁（本角色核心设计）：没有本档位可服务的 fillTarget 时禁止从 storage 取能，
+ * 从架构上消除 storage→storage 循环。门禁必须与投放阶段（distributorFillTarget）用同一套
+ * tier 过滤口径 — 否则会为档位内拒绝服务的目标（如 tier≥1 时的 tower）取能，随后携能 idle。
+ * 水位分级（由 gate 写入 memory.distributorTier，阈值 CONFIG.economy.distributorTiers）：
+ * tier 0 (≥50k) 满载全目标；tier 1 (≥10k) 满载仅 spawn/extension；tier 2 (≥2k) 限取 400；
+ * tier 3 (<2k) 限取 200 — 低水位靠取能限额节流；spawn/extension 是同一孵化能量池，任何档位不裁剪。
  */
 function withdrawStorageForDistribution(): ActionCandidate {
   return {
@@ -111,16 +67,10 @@ function withdrawStorageForDistribution(): ActionCandidate {
 }
 
 /** 无 storage 时降级为 hauler — 处理 storage 被毁后 distributor 残留的场景。
- *
- * demand 系统在无 storage 时不会孵化新 distributor（正确），
- * 但已有的 distributor 无 storage 可取能 → acquire 返回 undefined → idle → 空转。
- * 降级为 hauler 后，creep 从 container 取能、填充 spawn/extension，继续工作。
- * 当 storage 重建后，demand 系统会孵化新的 distributor。
- *
- * body 兼容：distributor 和 hauler 都是纯 CARRY+MOVE，角色转换安全。
- *
- * 水位分级计算：每 tick 根据 storage 水位计算 distributorTier 并写入 memory，
- * 供 withdrawStorageForDistribution（限取）和 distributorFillTarget（过滤目标）使用。
+ * demand 系统无 storage 时不孵新 distributor（正确），但已有 distributor 无 storage 可取 →
+ * acquire 返回 undefined → idle 空转。降级为 hauler 后从 container 取能、填充 spawn/extension，
+ * 继续工作；storage 重建后 demand 会孵新 distributor。body 兼容：两者都是纯 CARRY+MOVE，
+ * 角色转换安全。水位分级计算：每 tick 按 storage 水位写 distributorTier，供限取与目标过滤共用。
  */
 function distributorGate(ac: ActionContext): boolean {
   if (!ac.snapshot.storage) {
@@ -136,23 +86,20 @@ const policy: RolePolicy = {
   park: true,
   gate: distributorGate,
   acquire: [
-    // 唯一取能源：storage（带需求门禁）。
-    // 没有 fillTarget 时 predicate=false → idle → demand 系统不补孵。
+    // 唯一取能源：storage（带需求门禁）— 没有 fillTarget 时 predicate=false → idle → 不补孵。
     withdrawStorageForDistribution(),
-    // terminal 能量备货（storage 富余时）— 无 fillTarget 需求时的低优先级取能，
-    // 保证市场 deal 的运费储备不断供。
+    // terminal 能量备货（storage 富余时）— 无 fillTarget 需求时的低优先级取能，保证市场运费储备不断供。
     stockTerminalEnergy(),
     // factory 压缩原料备货（仅 storage 满仓时触发）。
     stockFactoryEnergy(),
-    // lab 供料（取料/卸料相）— 必须挂在 acquire 链：work 模式要求满载进入，
-    // 空载的「从 storage 取化合物 / 从 lab 清错矿」只有 acquire 阶段能执行。
-    // 只挂 work 链时取料相永不可达，需求表沦为无消费者的死数据。
+    // lab 供料（取料/卸料相）— 必须挂在 acquire 链：work 模式要求满载进入，空载的
+    // 「从 storage 取化合物 / 从 lab 清错矿」只有 acquire 阶段能执行；只挂 work 链则取料相永不可达。
     supplyLabs(),
   ],
 
   work: [
     // distributor 专用填充：spawn/extension 绝对优先 > tower > controller container（仅无 link 兜底）。
-    // 不复用 hauler 的 haulFillTarget——避免被 divert 去喂 controller container 而饿死 spawn。
+    // 不复用 haulFillTarget — 避免被 divert 去喂 controller container 而饿死 spawn。
     distributorFillTarget(),
     // terminal 能量备货（deposit 相）— 排在经济 sink 之后、lab 供料之前：
     // 携能状态下 supplyLabs 的取料相无法执行（背包已满），先卸给 terminal。
@@ -161,9 +108,8 @@ const policy: RolePolicy = {
     stockFactoryEnergy(),
     // 化合物供料到 lab。
     supplyLabs(),
-    // 所有 sink 均满 — 原地待命。
-    // 注意：distributor 没有 fillStorage — 这是架构约束。
-    // 如果加了 fillStorage，就会重新引入 storage→storage 循环。
+    // 所有 sink 均满 — 原地待命。注意：distributor 没有 fillStorage — 架构约束，
+    // 加上就会重新引入 storage→storage 循环。
   ],
 };
 

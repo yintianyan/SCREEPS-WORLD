@@ -61,13 +61,12 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
   {
     from: 3,
     to: 4,
-    // 就绪门禁：reset 首 tick segment 未加载时 readLayoutSegment 返回不缓存的
-    // 临时空结构 — 若照常迁移，overrides/blocked 会被写进临时对象后随 Memory
-    // 删除而永久丢失。segment 就绪（下一 tick）后再执行。
+    // 就绪门禁：segment 未就绪时 readLayoutSegment 返回临时空结构，迁移会把数据
+    // 写进临时对象后随 Memory 删除而永久丢失 — 就绪（下一 tick）后再执行。
     ready: () => layoutSegmentReady(),
     run: () => {
-      // v4：将 layout 冷数据（overrides/blocked）从 Memory 迁移到 RawMemory segment 0。
-      // 减少每 tick JSON.stringify(Memory) 的体积。
+      // v4：layout 冷数据（overrides/blocked）迁到 RawMemory segment 0，
+      // 减小每 tick JSON.stringify(Memory) 体积。
       const segData = readLayoutSegment();
       let migrated = false;
       for (const roomName in Memory.rooms) {
@@ -114,10 +113,9 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 5,
     to: 6,
     run: () => {
-      // v6：核心模板 compact-core-v1 → v2（偶校验棋盘格，修复全密封实心块）。
-      // v1 的 cell 坐标全部作废：清理 buildQueue 中未开工的 core.* 任务
-      // （site/done 的已建结构保留，不拆不改），版本号+1、revision+1 触发重规划。
-      // 幂等：仅当 templateId 仍为 v1 时执行，重复运行不再递增 revision。
+      // v6：核心模板 compact-core-v1 → v2（偶校验棋盘格）。v1 的 cell 坐标作废：
+      // 清理未开工的 core.* 任务（已建结构保留不拆），版本号+1 触发重规划。
+      // 幂等：仅当 templateId 仍为 v1 时执行。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName];
         if (!room?.layout) continue;
@@ -138,24 +136,21 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 6,
     to: 7,
     run: () => {
-      // v7：添加参数自调优 Memory 结构（Memory.kernel.tuning）。
-      // tuning 字段可选——tuning-engine 首次运行时自动初始化。
-      // 此迁移仅做畸形数据自愈（幂等）：如果 tuning 存在但结构不完整，修正它。
+      // v7：新增 Memory.kernel.tuning（参数自调优）— 可选字段，tuning-engine
+      // 首次运行时自动初始化；此迁移仅做畸形数据自愈。
       if (!Memory.kernel) Memory.kernel = {};
       if (Memory.kernel.tuning !== undefined) {
-        // 确保必要子字段存在。
         const t = Memory.kernel.tuning as any;
         if (typeof t !== "object" || t === null) {
           delete Memory.kernel.tuning;
         } else {
           if (typeof t.lastTuned !== "number") t.lastTuned = 0;
           if (typeof t.rooms !== "object" || t.rooms === null) t.rooms = {};
-          // lastEval 从 v7 早期的单对象格式迁移为 Record<string, {...}>。
-          // 旧格式有 room 字段，新格式以 room 为 key。
+          // lastEval 从早期单对象格式 { tick, room, adjustments, signals, skipped }
+          // 迁移为 Record<room, {...}>。
           if (t.lastEval !== undefined && typeof t.lastEval === "object" && !Array.isArray(t.lastEval)) {
             const oldEval = t.lastEval as any;
             if (typeof oldEval.room === "string" && typeof oldEval.tick === "number") {
-              // 旧格式：单对象 { tick, room, adjustments, signals, skipped }
               const room = oldEval.room;
               const migrated: Record<string, any> = {};
               migrated[room] = {
@@ -166,7 +161,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
               };
               t.lastEval = migrated;
             }
-            // 如果已经是 Record 格式（无 room 字段），保持不变。
+            // 已是 Record 格式（无 room 字段）则保持不变。
           }
         }
       }
@@ -176,10 +171,8 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 7,
     to: 8,
     run: () => {
-      // v8：清除 CreepMemory.working 遗留字段。
-      // v1→v2 迁移已将 working 转为 mode，但字段本身从未被删除。
-      // 此迁移幂等地删除所有 creep 的 working 字段；
-      // 如果 creep 没有 working 字段，delete 无副作用。
+      // v8：清除 CreepMemory.working 遗留字段 — v1→v2 已把 working 转为
+      // mode，但字段本身从未被删除。
       for (const name in Memory.creeps) {
         const creep = Memory.creeps[name] as any;
         if (creep && creep.working !== undefined) {
@@ -192,10 +185,8 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 8,
     to: 9,
     run: () => {
-      // v9：方案 C 流动性维度 — 为每个房间的 phase 回填 liquidityScore 字段。
-      // 旧 Memory 的 phase 无此字段；缺失时默认 0（不假定存在流动性危机，
-      // 分数随后由 room-state 每 tick 从 spendableRatio/frozenRatio 实时信号累加）。
-      // 幂等：仅当字段缺失时写入。
+      // v9：方案 C 流动性维度 — 为 phase 回填 liquidityScore=0（不假定存在
+      // 流动性危机；分数由 room-state 每 tick 从实时信号累加）。幂等：仅缺失时写入。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as any;
         if (room?.phase && room.phase.liquidityScore === undefined) {
@@ -217,8 +208,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
           delete room.remoteOps;
         }
       }
-      // 清理死亡 creep 的 remoteTarget 遗留（creep 死亡后 memory 已被清理，
-      // 但防御性检查不伤害）。
+      // 清理 creep 的 remoteTarget 畸形遗留。
       for (const name in Memory.creeps) {
         const creep = Memory.creeps[name] as any;
         if (creep && creep.remoteTarget !== undefined && typeof creep.remoteTarget !== "string") {
@@ -231,9 +221,8 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 10,
     to: 11,
     run: () => {
-      // v11：扩张系统 — expansion / expansionBlacklist / lostRooms 均为
-      // Memory.kernel 下的可选字段，惰性创建，无需回填；
-      // 此处仅做畸形数据自愈（幂等）。
+      // v11：扩张系统 — expansion/expansionBlacklist/lostRooms 均为 kernel 下
+      // 可选字段，惰性创建；仅畸形自愈。
       const kernel = Memory.kernel as Record<string, unknown> | undefined;
       if (!kernel) return;
       if (kernel.expansion !== undefined && typeof kernel.expansion !== "object") {
@@ -251,9 +240,8 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 11,
     to: 12,
     run: () => {
-      // v12：威胁情报与受袭记忆 — roomMem.lastHostileAt 与
-      // intel 条目的 towers/dangerUntil 均为可选数字字段，惰性写入，
-      // 无需回填；此处仅做畸形数据自愈（幂等）。
+      // v12：威胁情报与受袭记忆 — lastHostileAt 与 intel 条目的 towers/
+      // dangerUntil 均为可选数字字段，惰性写入；仅畸形自愈。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
         if (!room) continue;
@@ -290,10 +278,8 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 13,
     to: 14,
     run: () => {
-      // v14：相位驻留计数 — 为已有 phase 状态回填 bandTicks。
-      // 缺失时按 0（未入危机带）处理；处于危机带的房间从 0 重新计驻留，
-      // 最坏情况是本次危机多停留一个驻留窗口，安全方向的保守默认。
-      // 幂等：仅当字段缺失时写入。
+      // v14：相位驻留计数 — 为已有 phase 回填 bandTicks=0（未入危机带；
+      // 危机带房间从 0 重计驻留，多停留一个窗口是安全方向的保守默认）。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName];
         if (room?.phase && room.phase.bandTicks === undefined) {
@@ -306,10 +292,9 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 14,
     to: 15,
     run: () => {
-      // v15：P0-A 远矿 site 收编 — RemoteOp 新增 siteCount 字段（可选，惰性写入）。
-      // 此迁移仅做畸形数据自愈（幂等）：siteCount 存在但非数字时清除。
-      // 实际值由 remote-mining-manager 每 managerInterval tick 用 lookForAtArea 实测校正，
-      // 首次运行时从 undefined 自然收敛到真实值，无需回填。
+      // v15：P0-A 远矿 site 收编 — RemoteOp 新增 siteCount（可选，惰性写入）；
+      // 实际值由 remote-mining-manager 每 managerInterval 实测校正，无需回填。
+      // 此处仅畸形自愈。
       for (const roomName in Memory.rooms) {
         const ops = Memory.rooms[roomName]?.remoteOps;
         if (!ops) continue;
@@ -325,11 +310,9 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 15,
     to: 16,
     run: () => {
-      // v16：P1-G dangerUntil 搬家 — 从 intel[room].dangerUntil 迁移到
-      // remoteOps[room].dangerUntil（remote-mining-manager 成为唯一写者）。
-      // 幂等：仅当 intel 条目存在 dangerUntil 时处理。对应 remoteOps 条目
-      // 存在且尚无 dangerUntil 时搬运；否则仅删除 intel 侧旧字段。
-      // remoteOps 条目不存在时（房间已从 remoteOps 清除）仅删旧字段 —
+      // v16：P1-G dangerUntil 搬家 — intel[room].dangerUntil → remoteOps[room].dangerUntil
+      // （remote-mining-manager 成为唯一写者）。对应条目存在且无 dangerUntil 时搬运，
+      // 否则仅删 intel 旧字段；remoteOps 条目已清除时也仅删旧字段 —
       // dangerCooldown(2000) << cleanupThreshold(30000)，冷却早已过期。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
@@ -344,7 +327,6 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
             delete entry.dangerUntil;
             continue;
           }
-          // 搬运到对应 remoteOps 条目（如有且尚无 dangerUntil）。
           if (ops && ops[intelRoomName] && ops[intelRoomName]!.dangerUntil === undefined) {
             ops[intelRoomName]!.dangerUntil = entry.dangerUntil;
           }
@@ -357,9 +339,8 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 16,
     to: 17,
     run: () => {
-      // v17：P1-F layout 4-stage 分片 — LayoutMemory 新增 planStage 字段。
-      // 可选字段，惰性创建；此处仅幂等回填 planStage=0（视为空闲态）。
-      // 畸形数据自愈：非数字值清除回 undefined（layout-planner 视作 0）。
+      // v17：P1-F layout 4-stage 分片 — 新增 planStage；回填 0（空闲态），
+      // 非数字值清除（layout-planner 视作 0）。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
         if (!room) continue;
@@ -381,15 +362,10 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 17,
     to: 18,
     run: () => {
-      // v18：P1-I tuning 版本戳 — TuningMemory 新增 baselineVersion 字段（可选）。
-      //
-      // 设计决策：迁移只做「建档」不做「定版」——故意不写 baselineVersion
-      // 当前值（CONFIG.tuning.baselineVersion=1），让 tuning-engine 首次
-      // 评估时检测 undefined ≠ CONFIG 值 → 触发清空 rooms 覆盖（清零重来
-      // 语义，task summary 已确认）。若迁移直接定版为 CONFIG 值，则存量
-      // 旧覆盖会保留并继续压制新基线，违背 P1-I 修复目标。
-      //
-      // 幂等：仅做畸形数据自愈（非数字值清除），不写当前版本号。
+      // v18：P1-I tuning 版本戳 — TuningMemory 新增 baselineVersion（可选）。
+      // 设计决策：只「建档」不「定版」——故意不写 CONFIG.tuning.baselineVersion，
+      // 让 tuning-engine 首次评估检测 undefined ≠ CONFIG → 清空 rooms 覆盖
+      // （清零重来）；若直接定版，存量旧覆盖会继续压制新基线，违背 P1-I 目标。
       // tuning-engine 是 baselineVersion 的唯一写者（迁移除外）。
       const kernel = Memory.kernel as Record<string, unknown> | undefined;
       if (!kernel) return;
@@ -407,17 +383,11 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 18,
     to: 19,
     run: () => {
-      // v19：P1-J demand 纯度收口 — RoomMemory 的 distScaleUpSince 与
-      // builderPressureState 字段原本由 domain/spawn/demand.ts 直读写，
-      // 现收敛为适配层（spawn-manager）显式输入输出。
-      //
-      // 字段本身在 RoomMemory 类型中早已登记（global.d.ts:215/221），
-      // 但游离在迁移体系外。本迁移将其纳入 schema 管理：幂等畸形自愈
-      // （distScaleUpSince 非数字清除、builderPressureState 非 'full'/'shrinking' 清除）。
-      //
-      // 语义不变：v18 之前 demand 直接写 Memory，v19 之后由 spawn-manager
-      // 适配层 prevHysteresis/nextHysteresis 读写，行为与之前逐 tick 一致
-      // （已由集成测试验证）。
+      // v19：P1-J demand 纯度收口 — distScaleUpSince/builderPressureState 由
+      // domain/spawn/demand.ts 直读写收敛为 spawn-manager 适配层显式输入输出
+      // （字段早已登记于 global.d.ts:215/221，但游离在迁移体系外，本迁移纳入
+      // schema 管理）。语义不变：v18 前 demand 直写 Memory，v19 后由适配层
+      // prev/nextHysteresis 读写，行为逐 tick 一致（集成测试验证）。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
         if (!room) continue;
@@ -441,22 +411,11 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 19,
     to: 20,
     run: () => {
-      // v20：tuning 改进 A — 新增 pendingValidation + frozenParams 字段。
-      // 设计决策（参考 v18 baselineVersion 风格）：迁移只做「建档 + 畸形自愈」
-      // 不主动写字段值。tuning-engine 是 pendingValidation/frozenParams 的唯一写者。
-      //
-      // 自愈规则：
-      //   - pendingValidation 非对象 → 删除整个字段
-      //   - pendingValidation 条目缺关键字段（adjustTick 非数字 / preAdjustValue 非数字 /
-      //     expectedDirection 非字符串 / adjustDirection 非字符串）→ 删除该条目
-      //   - expectedDirection 必须 ∈ {"improve", "worsen"}
-      //   - adjustDirection 必须 ∈ {"up", "down"}
-      //   - frozenParams 非对象 → 删除整个字段
-      //   - frozenParams 条目缺关键字段（frozenAt 非数字 / frozenUntil 非数字 /
-      //     rollbackCount 非数字）→ 删除该条目
-      //
-      // 幂等：仅畸形数据自愈，不写字段值。
-      // Step 0 清空 rooms 后此迁移为空操作（rooms 已空），保留无害。
+      // v20：tuning 改进 A — 新增 pendingValidation + frozenParams。
+      // 设计决策（同 v18）：只建档 + 畸形自愈，不写字段值；tuning-engine 是两字段唯一写者。
+      // 自愈：非对象删除；条目缺关键字段删除（pendingValidation: adjustTick/preAdjustValue/
+      // expectedDirection∈{improve,worsen}/adjustDirection∈{up,down}；
+      // frozenParams: frozenAt/frozenUntil/rollbackCount）。Step 0 清空 rooms 后为空操作，保留无害。
       const kernel = Memory.kernel as Record<string, unknown> | undefined;
       if (!kernel) return;
       const tuning = kernel.tuning as Record<string, unknown> | undefined;
@@ -468,7 +427,6 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
         const room = rooms[roomName];
         if (!room || typeof room !== "object") continue;
 
-        // 自愈 pendingValidation
         if (room.pendingValidation !== undefined) {
           if (typeof room.pendingValidation !== "object" || room.pendingValidation === null) {
             delete room.pendingValidation;
@@ -491,7 +449,6 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
           }
         }
 
-        // 自愈 frozenParams
         if (room.frozenParams !== undefined) {
           if (typeof room.frozenParams !== "object" || room.frozenParams === null) {
             delete room.frozenParams;
@@ -519,15 +476,8 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     run: () => {
       // v21：目标清单布局闭环 — 新增 KernelMemory.layoutGaps（缺口观测）与
       // LayoutMemory.nextGapPlanTick（缺口慢速重试节流）。
-      // 设计决策（与 v18/v20 同风格）：迁移只做「建档 + 畸形自愈」不写字段值。
-      // layout-planner 是两字段的唯一写者。
-      //
-      // 自愈规则：
-      //   - layoutGaps 非对象 → 删除整个字段
-      //   - layoutGaps[room] 非对象 → 删除该房条目
-      //   - layoutGaps[room][type] 非数字 → 删除该类型
-      //   - 空对象回收（删除空房条目 / 空 layoutGaps）
-      //   - nextGapPlanTick 非数字 → 删除（缺失视为 0：允许立即 gap-force）
+      // 设计决策（同 v18/v20）：只建档 + 畸形自愈，不写字段值；layout-planner 是两字段唯一写者。
+      // 自愈：非对象删除、空对象回收；nextGapPlanTick 非数字删除（缺失视为 0：允许立即 gap-force）。
       // 房间侧自愈不依赖 kernel 是否存在 — 先跑（勿被下方 kernel 守卫拦截）。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
@@ -567,15 +517,9 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 21,
     to: 22,
     run: () => {
-      // v22：P0-1 srcRatio 强制 crisis 通道 — 新增 RoomMemory.phase.srcStallTicks
-      // 与 RoomMemory.phase.storageEnergyPrev 两个可选字段。
-      // 设计决策（参考 v20/v21 风格）：迁移只做「建档 + 畸形自愈」不写字段值。
-      // room-state 是两字段的唯一写者，缺失视为 0（srcStallTicks）/ 当前 storage 能量
-      // （storageEnergyPrev，由 room-state 用 current 兜底）。
-      //
-      // 自愈规则：
-      //   - srcStallTicks 非数字 → 删除（缺失视为 0，安全）
-      //   - storageEnergyPrev 非数字 → 删除（缺失时 room-state 用 current 兜底，drainRate=0）
+      // v22：P0-1 srcRatio 强制 crisis 通道 — 新增 phase.srcStallTicks 与
+      // phase.storageEnergyPrev（可选）。设计决策（同 v20/v21）：只建档 + 畸形自愈；
+      // room-state 是两字段唯一写者，缺失视为 0 / 当前 storage 能量（current 兜底，drainRate=0）。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
         if (!room) continue;
@@ -600,15 +544,10 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 22,
     to: 23,
     run: () => {
-      // v23：P0-3 spawn churn 熔断 — 新增 RoomMemory.churnFreezeUntil 可选字段。
-      // 设计决策（参考 v20/v21/v22 风格）：迁移只做「建档 + 畸形自愈」不写字段值。
-      // spawn-manager 是该字段的唯一写者（cleanQueue 触发 churn 计数 → 熔断写入），
-      // demand 读取跳过对应角色评估。缺失视为无熔断（安全）。
-      //
-      // 自愈规则：
-      //   - churnFreezeUntil 非对象 → 删除整个字段
-      //   - churnFreezeUntil[role] 非数字 → 删除该条目（视为到期，demand 不跳过）
-      //   - 空对象回收（删除整个字段，防 Memory 体积膨胀）
+      // v23：P0-3 spawn churn 熔断 — 新增 RoomMemory.churnFreezeUntil（可选）。
+      // 设计决策（同 v20）：只建档 + 畸形自愈；spawn-manager 是唯一写者
+      // （cleanQueue 触发 churn 计数 → 熔断写入），demand 读取跳过。缺失视为无熔断。
+      // 自愈：非对象删除；[role] 非数字删除（视为到期）；空对象回收防膨胀。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
         if (!room) continue;
@@ -633,12 +572,9 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 23,
     to: 24,
     run: () => {
-      // v24：P0-1 srcRatio 通道修正 — 新增 RoomMemory.phase.storageDrainAccum。
-      // 累积净流失量替代单 tick drainRate 判定（实测稀疏大脉冲下单 tick 失效）。
-      // room-state 是该字段的唯一写者，缺失视为 0（phase.ts 用 ?? 0 兜底）。
-      //
-      // 自愈规则：
-      //   - storageDrainAccum 非数字 → 删除（缺失视为 0，安全）
+      // v24：P0-1 srcRatio 通道修正 — 新增 phase.storageDrainAccum：累积净流失量
+      // 替代单 tick drainRate 判定（实测稀疏大脉冲下单 tick 失效）。
+      // room-state 是唯一写者，缺失视为 0（phase.ts ?? 0 兜底）。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
         if (!room) continue;
@@ -657,13 +593,9 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 24,
     to: 25,
     run: () => {
-      // v25：P1-3 defense 误触发修复 — 新增 RoomMemory.prevThreatCount。
-      // 用于检测威胁新增（count 增加）：lastHostileAt 只在威胁新增时刷新，
-      // 而非每 tick 刷新（防旧威胁停留永久维持 defense 姿态）。
-      // room-state 是该字段的唯一写者，缺失视为 0（首威胁即新增）。
-      //
-      // 自愈规则（参考 v22/v23/v24 风格）：
-      //   - prevThreatCount 非数字 → 删除（缺失视为 0，安全）
+      // v25：P1-3 defense 误触发修复 — 新增 RoomMemory.prevThreatCount：威胁新增
+      // （count 增加）时才刷新 lastHostileAt，防旧威胁永久维持 defense 姿态。
+      // room-state 是唯一写者，缺失视为 0（首威胁即新增）。
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
         if (!room) continue;
@@ -681,8 +613,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     to: 26,
     run: () => {
       // v26：R3 战时闭环 — 新增 KernelMemory.warPlan（war-planner 写入）。
-      // 可选字段，无回填；畸形自愈：非对象 / targetRoom 或 sponsor 非字符串 /
-      // squadSize 非数字 → 删除整个字段（war-planner 下 tick 重建）。
+      // 畸形自愈：非对象 / targetRoom 或 sponsor 非字符串 / squadSize 非数字 → 删除（下 tick 重建）。
       const kernel = Memory.kernel as Record<string, unknown> | undefined;
       if (!kernel) return;
       const wp = kernel.warPlan as Record<string, unknown> | undefined;
@@ -701,19 +632,11 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 26,
     to: 27,
     run: () => {
-      // v27：R4 战争自治升级 — warPlan 扩展 phase/spawned、新增
-      // KernelMemory.warBlacklist、strategy.warPressureTicks。
-      // 设计决策（与 v20/v21 同风格）：迁移只做「建档 + 畸形自愈」不写字段值。
-      // 唯一写者：warPlan/warBlacklist = war-planner；warPressureTicks =
-      // empire-strategy。缺失值语义：phase 缺失视为 build（保守：满编才推进）、
-      // spawned 缺失视为 0、warPressureTicks 缺失视为 0（压力未持续）。
-      //
-      // 自愈规则：
-      //   - warPlan.phase 非 "build"/"advance" → 删除（缺失视为 build）
-      //   - warPlan.spawned 非数字 → 删除（缺失视为 0）
-      //   - warBlacklist 非对象 → 删除整个字段
-      //   - warBlacklist 条目非数字 → 删除该条目；空对象回收
-      //   - strategy.warPressureTicks 非数字 → 删除（缺失视为 0）
+      // v27：R4 战争自治升级 — warPlan 扩展 phase/spawned；新增 warBlacklist、
+      // strategy.warPressureTicks。设计决策（同 v20/v21）：只建档 + 畸形自愈；
+      // 唯一写者：warPlan/warBlacklist = war-planner，warPressureTicks = empire-strategy。
+      // 缺失语义：phase 缺失视为 build（保守：满编才推进）、spawned 缺失视为 0、
+      // warPressureTicks 缺失视为 0（压力未持续）。
       const kernel = Memory.kernel as Record<string, unknown> | undefined;
       if (!kernel) return;
 
@@ -769,18 +692,14 @@ export function runMigrations(): void {
   if (current < CONFIG.memory.schemaVersion) migrateMemory(current);
 }
 
-/**
- * 维护 Memory：清理死亡 creep、初始化默认值、失守房宽限清理。
- * 每 tick 开头调用一次（迁移由 runMigrations 独立执行，见 K-5）。
- */
+/** 维护 Memory：清理死亡 creep、初始化默认值、失守房宽限清理（迁移由 runMigrations 独立执行，见 K-5）。 */
 export function maintainMemory(): void {
-  // 确保根结构存在。
   Memory.creeps ??= {};
   Memory.rooms ??= {};
   Memory.kernel ??= {};
 
-  // 每 tick 清理死亡 creep memory（小帝国 — 安全且廉价）。
-  // 清理前记录死亡事件（战斗黑匣子 M9）— 这是死亡的唯一系统性检测点。
+  // 每 tick 清理死亡 creep memory（小帝国安全且廉价）；清理前记录死亡事件
+  // （战斗黑匣子 M9 — 这是死亡的唯一系统性检测点）。
   for (const name in Memory.creeps) {
     if (!Game.creeps[name]) {
       recordCreepDeath(name);
@@ -788,7 +707,6 @@ export function maintainMemory(): void {
     }
   }
 
-  // 确保每个自有房间有 RoomMemory 条目。
   const ownedRooms = new Set<string>();
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
@@ -803,10 +721,9 @@ export function maintainMemory(): void {
     }
   }
 
-  // 失守房间清理：Memory.rooms 中不再拥有的房间条目延迟清除。
-  // 自有房恒有视野（结构提供视野），条目房不在拥有集合即为失守/放弃。
-  // 宽限期防止 claim 边界抖动误删布局与队列数据；到期后连同
-  // tuning 覆盖值一并清除，避免失守房数据永久滞留（慢性泄漏）。
+  // 失守房清理：条目房不在拥有集合即为失守（自有房恒有视野）。
+  // 宽限期防 claim 边界抖动误删布局与队列数据；到期后连同 tuning 覆盖
+  // 一并清除，避免失守房数据永久滞留（慢性泄漏）。
   const LOST_ROOM_GRACE = 20000;
   Memory.kernel.lostRooms ??= {};
   const lostRooms = Memory.kernel.lostRooms;
@@ -829,14 +746,9 @@ export function maintainMemory(): void {
   }
 }
 
-/** 按升序执行迁移。每个迁移都是幂等的。
- *
- * 迁移链中断语义：某步的 ready() 未就绪时停在断点、保留当前版本，
- * 下 tick 从断点续跑 — 幂等性保证重复执行安全。
- * 版本号只随实际执行的迁移递增，不做无条件盖章：
- * 若未来 MIGRATIONS 出现断号，版本会停在缺口处暴露问题，
- * 而不是被盖章静默掩盖、永久丢失缺口步骤。
- */
+/** 按升序执行迁移（每个幂等）。ready() 未就绪时停在断点、保留版本，下 tick 续跑。
+ * 版本号只随实际执行的迁移递增，不做无条件盖章：若未来出现断号，版本停在
+ * 缺口处暴露问题，而不是被盖章静默掩盖、永久丢失缺口步骤。 */
 function migrateMemory(currentVersion: number): void {
   let version = currentVersion;
   for (const migration of MIGRATIONS) {
@@ -848,26 +760,20 @@ function migrateMemory(currentVersion: number): void {
   }
 }
 
-/**
- * 记录跳过原因，用于遥测和诊断。
+/** 记录跳过原因，用于遥测和诊断。
  * 单 tick 内累加到 global 缓冲区，tick 末尾由 flushSkips 低频刷入 Memory，
- * 避免在 CPU 压力下产生频繁 Memory 写入。
- */
+ * 避免 CPU 压力下频繁 Memory 写入。 */
 export function recordSkip(reason: string): void {
   const g = globalCache();
   if (!g.skipBuffer) g.skipBuffer = {};
   g.skipBuffer[reason] = (g.skipBuffer[reason] ?? 0) + 1;
 
-  // 同时递增单 tick 遥测计数器。
   if (g.telemetry && g.telemetry.tick === Game.time) {
     g.telemetry.skipped++;
   }
 }
 
-/**
- * 将 global 中的 skipBuffer 刷入 Memory，并执行低频清理。
- * 由 Kernel 在 tick 末尾调用。
- */
+/** 将 global 的 skipBuffer 刷入 Memory 并低频清理。由 Kernel 在 tick 末尾调用。 */
 export function flushSkips(): void {
   const g = globalCache();
   if (!g.skipBuffer) return;

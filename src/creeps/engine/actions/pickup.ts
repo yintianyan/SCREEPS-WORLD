@@ -1,27 +1,17 @@
 /**
- * Pickup actions — 回收遗留能量（掉落堆 / 坟墓 / 废墟）。
- *
- * 掉落能量按 ceil(amount/1000)/tick 衰减；坟墓消失后能量转为掉落堆继续衰减；
- * 废墟到期资源直接灭失。container 能量不衰减 — 因此大额遗留能量的回收
- * 优先级应高于 container 取货（衰减资源优先原则）。
+ * Pickup actions — 回收遗留能量（掉落堆/坟墓/废墟）。
+ * 衰减事实（[Facts]）：掉落能量按 ceil(amount/1000)/tick 衰减；坟墓消失后转掉落堆继续衰减；
+ * 废墟到期资源直接灭失；container 能量不衰减 — 因此大额遗留的回收优先级应高于 container 取货。
  */
 import type { ActionCandidate } from "../action-types";
 import { runAction } from "./helpers";
 import { selectDroppedEnergy } from "../../support/targeting";
 
 /**
- * 拾取地上掉落的能量。
- *
- * 掉落能量来源：creep 死亡掉落、harvester 溢出、container 被摧毁残留等。
- * 掉落能量会随时间衰减（每 tick 减少 ceil(amount/1000)），因此应尽快拾取。
- * 目标选择由 selectDroppedEnergy 统一处理（优先身边最大堆，否则走向最近堆）。
- *
- * minAmount：只考虑不低于该数量的堆 — 用于「大堆优先于 container、
- * 零头链尾兜底」的双档链位（见 hauler 的 acquire 链）。默认 0 不过滤。
- *
- * "未装满则继续拾取"：本动作位于 acquire 候选链，而 updateMode 仅在 free===0 时才切
- * work。因此只要背包未满且快照中还有掉落能量，creep 会逐 tick 继续拾取不同的堆，
- * 直到装满才转入 work。
+ * 拾取地上掉落的能量（来源：creep 死亡掉落、harvester 溢出、container 被毁残留）。
+ * 目标选择由 selectDroppedEnergy 统一处理（优先身边最大堆，否则最近堆）。
+ * minAmount：双档链位用（「大堆优先于 container、零头链尾兜底」，见 hauler acquire 链）。
+ * "未装满则继续拾取"：updateMode 仅在 free===0 切 work，背包未满会逐 tick 拾取不同堆直到装满。
  */
 export function pickupDroppedEnergy(minAmount = 0): ActionCandidate<Resource> {
   return {
@@ -41,12 +31,10 @@ export function pickupDroppedEnergy(minAmount = 0): ActionCandidate<Resource> {
 }
 
 /**
- * 从坟墓/废墟提取遗留能量（withdraw，坟墓与掉落堆不同不能 pickup）。
- *
- * 目标选择与掉落能量同一原则：身边（range<=1）能量最多的优先
- * （减少剩余目标的衰减损耗），否则走向最近的一个。
- * minAmount 过滤零头 — 大额遗留（如全拆重建时 storage 库存进入的 ruin、
- * 满载 hauler 死亡的坟墓）值得专程；零头由链尾无阈值实例顺手清理。
+ * 从坟墓/废墟提取遗留能量（withdraw — 坟墓/废墟不能 pickup）。
+ * 目标：身边（range<=1）能量最多优先（减少衰减损耗），否则最近的一个。
+ * minAmount 过滤零头：大额遗留（全拆重建 storage 库存进 ruin、满载 hauler 死亡坟墓）值得专程，
+ * 零头由链尾无阈值实例顺手清理。
  */
 export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
   return {
@@ -85,10 +73,10 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
       let resource: ResourceConstant = RESOURCE_ENERGY;
       let available = remains.store.getUsedCapacity(RESOURCE_ENERGY);
       if (available <= 0) {
-        // 无能量 — 挑尸体内存量最多的一种资源（矿物/化合物）。
-        // 门禁：无 storage 且无 terminal 时不取矿物 —— 矿物唯一卸货出口
-        // haulMineralsToStorage 需 storage/terminal，否则捡了无处倒，配
-        // updateMode 总量口径 hauler 会冻结（RCL1-3/新占房常有含矿 ruins）。
+        // 无能量 — 挑存量最多的一种资源（矿物/化合物）。
+        // 门禁：无 storage 且无 terminal 时不取矿物——矿物唯一卸货出口 haulMineralsToStorage
+        // 需 storage/terminal，否则捡了无处倒，配 updateMode 总量口径 hauler 会冻结
+        // （RCL1-3/新占房常有含矿 ruins）。
         if (!ac.snapshot.storage && !ac.snapshot.terminal) return;
         let best: ResourceConstant | undefined;
         let bestAmt = 0;
@@ -109,11 +97,9 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
 }
 
 /**
- * 拾取身边的掉落能量（仅 range 内，不离开站桩位）。
- *
- * 专供 upgrader 等站桩角色使用：衰减资源应优先回收，但不能为了捡远处
- * 的掉落能量离开 controller 旁的站桩位。range 默认 2 — 覆盖站桩位
- * 周围一圈，足够捡起 harvester 溢出到 controller container 旁的能量。
+ * 拾取身边的掉落能量（仅 range 内，不离开站桩位）— 专供 upgrader 等站桩角色。
+ * 衰减资源应优先回收，但不能为捡远处掉落离开 controller 旁的站桩位。
+ * range 默认 2：覆盖站桩位周围一圈，足够捡起 harvester 溢出到 controller container 旁的能量。
  */
 export function pickupNearbyDroppedEnergy(range = 2): ActionCandidate<Resource> {
   return {

@@ -2,19 +2,11 @@ import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 
 /**
- * Pixel 生成系统 — P3 系统，在 CPU bucket 满载时生成 pixel。
- *
- * `Game.cpu.generatePixel()` 消耗 **10000 bucket**（吃光整个 bucket 上限）。
- * 遥测实证：bucket 10000 → 0，随后以 ~+15/tick 净回充爬升 — 注意成本不是 5000，
- * 旧注释的「healthy tier 门禁防跌破阈值」因此形同虚设：每次生成必然清零 bucket。
- *
- * 自愿放血协议：生成后写 Memory.kernel.pixelAt，scheduler 在宽限窗口内把
- * tier 地板抬到 conserve — bucket 清零只损失突发容量，每 tick 20 CPU 限额不变，
- * 常态负载（~2-5 CPU）下经济角色（P0-P2）应照常运行，只有 P3 发展性工作暂停。
- * 无此协议的后果（遥测实录）：每次 pixel → recovery 档 → upgrader/builder 等
- * P2 全停数百 tick → 每 ~660 tick 一轮「creep 不工作」锯齿。
- *
- * 优先级：P3 — 纯收益操作，绝不与生存/发展竞争。
+ * Pixel 生成系统 — P3 系统，CPU bucket 满载时生成 pixel。
+ * `Game.cpu.generatePixel()` 消耗 **10000 bucket**（吃光整个 bucket 上限）；遥测实证
+ * 成本不是 5000，旧「healthy tier 门禁防跌破阈值」因此形同虚设：每次生成必然清零。
+ * 自愿放血协议：生成后写 Memory.kernel.pixelAt，scheduler 在宽限窗口内把 tier 地板抬到
+ * conserve——无此协议（遥测实录）会每 ~660 tick 出现一轮「creep 不工作」锯齿。
  */
 export const pixelSystem: System = {
   name: "pixel-generator",

@@ -1,25 +1,10 @@
 /**
- * Tuning Engine — P3 系统：基于遥测数据的参数自调优引擎。
- *
- * 职责：
- *   1. 每 500 tick 读取时序数据（economy ring buffer + CPU ring buffer）
- *   2. 读取活快照信号（container 填充率、角色计数、build queue）
- *   3. 聚合为 TuningSignals
- *   4. 调用纯函数 evaluateTuning() 产出调整决策
- *   5. 将调整写入 Memory.kernel.tuning（持久化覆盖值）
- *   6. 记录事件日志供事后追溯
- *
- * 优先级：P3 — 自调优是非关键的后台优化。
- * interval: 500 — 每 500 tick 运行一次（= 10 次 economy 采样窗口）。
- *
- * CPU 预算：正常态 ~0.1-0.2 CPU/run（ring buffer 遍历 + 聚合计算）。
- * 受 P3 budget 门禁：conserve/recovery tier 下跳过。
- *
- * 安全保证：
- *   - 数据不足（< 10 个 economy 采样点）时跳过。
- *   - 所有调整经 clampParam 安全钳制。
- *   - 每个参数有 1000 tick 冷却期防振荡。
- *   - 经济不稳定时完全锁定。
+ * Tuning Engine — P3 系统：基于遥测数据的参数自调优引擎（interval 500）。
+ * 每 500 tick：读取时序数据（economy/CPU ring buffer）+ 活快照信号 → 聚合为
+ * TuningSignals → 纯函数 evaluateTuning() 产出调整 → 写入 Memory.kernel.tuning
+ * （持久化覆盖值）→ 记录事件日志。
+ * 安全保证：数据不足（< 10 采样点）跳过；调整经 clampParam 钳制；每参数 1000 tick
+ * 冷却防振荡；经济不稳定时完全锁定。P3 — conserve/recovery tier 下跳过。
  */
 
 import type { Priority, System, TickContext } from "../kernel/contracts";
@@ -33,9 +18,9 @@ import type { EconomySample, CpuSample } from "../kernel/timeseries";
 import { recordEvent, EventKind, tuningParamCode } from "../kernel/event-log";
 
 // ─── 自定义事件类型（扩展 EventKind）──
-// 调优事件写入 event-log（segment 2 有界 ring），console.log 仅作运维提醒。
-// EventKind.TuningAdjust/Rollback/Freeze/Blocked 已在 event-log.ts 登记，
-// 通过 recordEvent 写入 globalCache().eventBuffer，由 telemetry-collector 低频 flush。
+// 调优事件写入 event-log（segment 2 有界 ring），console.log 仅作运维提醒；
+// EventKind.TuningAdjust/Rollback/Freeze/Blocked 已在 event-log.ts 登记，由
+// recordEvent 写入 globalCache().eventBuffer，telemetry-collector 低频 flush。
 
 /** 调优引擎的评估窗口大小（取最近 N 个 economy 采样点）。 */
 const EVAL_WINDOW_SIZE = 20;
@@ -59,11 +44,9 @@ export const tuningEngineSystem: System = {
       Memory.kernel.tuning = { lastTuned: 0, rooms: {} };
     }
 
-    // P1-I：基线版本戳比对 — CONFIG.tuning.baselineVersion 升级后
-    // （如 CONFIG.roles 调整了某角色的 min/maxCount），存量 rooms 覆盖
-    // 可能基于旧经济假设继续压制新基线。检测不匹配时清空 rooms 覆盖，
-    // 自调优从新基线重新收敛。task summary 已确认此为预期行为
-    // （「清零重来」语义）。
+    // P1-I：基线版本戳比对 — CONFIG.tuning.baselineVersion 升级后（如 CONFIG.roles 调整
+    // 某角色 min/maxCount），存量 rooms 覆盖可能基于旧经济假设继续压制新基线。检测不匹配
+    // 时清空 rooms 覆盖，自调优从新基线重新收敛（「清零重来」语义）。
     if (Memory.kernel.tuning.baselineVersion !== CONFIG.tuning.baselineVersion) {
       const oldVersion = Memory.kernel.tuning.baselineVersion;
       Memory.kernel.tuning.rooms = {};
@@ -75,14 +58,13 @@ export const tuningEngineSystem: System = {
       );
     }
 
-    // 快照所有房间的当前 bounds —— 评估期间使用快照，避免多房循环中
-    // 房间 A 的 applyAdjustment 写入 Memory 后污染房间 B 的 getRoleBounds 读取。
-    // 这是"读-写隔离"原则：评估基于 tick 开头的世界状态，调整在 tick 内缓冲。
+    // 快照所有房间的当前 bounds —— 评估期间使用快照，避免多房循环中房间 A 的
+    // applyAdjustment 写入 Memory 后污染房间 B 的 getRoleBounds 读取（读-写隔离：
+    // 评估基于 tick 开头世界状态，调整在 tick 内缓冲）。
     //
-    // P1-I：快照循环从 TUNABLE_ROLES（与 CONFIG.roles 对齐的 13 角色）派生，
-    // 不再硬编码 4 角色。evaluator 当前只对前 4 角色产出调整，其余角色的
-    // 快照项无 evaluator 规则消费即空转；补全集是为「未来 evaluator 加入
-    // 新角色调整规则时无需改 tuning-engine」做前置准备。
+    // P1-I：快照循环从 TUNABLE_ROLES（与 CONFIG.roles 对齐的 13 角色）派生，不再硬编码
+    // 4 角色。evaluator 当前只对前 4 角色产出调整，其余快照项无规则消费即空转；
+    // 补全集是为「未来 evaluator 加入新角色规则时无需改 tuning-engine」的前置准备。
     const snapshots = [...ctx.snapshots()];
     const roomBoundsSnapshot = new Map<string, Record<string, { minCount: number; maxCount: number }>>();
     for (const snap of snapshots) {
@@ -105,21 +87,12 @@ export const tuningEngineSystem: System = {
 
 /**
  * 单房间调优评估（包裹在 safeRun 语义中）。
- *
- * 改进 A 集成流程（§3.1.10）：
- *   1. 聚合信号
- *   2. 获取/创建 roomTuning
- *   3. pending-lock：构造 excludedParams（pending + 冻结中参数）
- *   4. verifyPendingAdjustments：验证到期 pending → rollbacks/cleared/blocked
- *   5. applyFreezePolicy：回滚计数 + 冻结复位到 CONFIG 基线
- *   6. 应用 rollbacks（applyAdjustment + 清空 cleared pending + 事件日志）
- *   7. evaluateTuning（传入 boundsSnapshot + excludedParams）
- *   8. 应用 evaluation.adjustments（写 Memory + pendingValidation + 事件日志）
- *   9. 保存 lastTrend + lastEval 诊断（含 pending/frozen 状态）
- *
- * @param ctx          Tick 上下文
- * @param roomName     被评估房间
- * @param boundsSnapshot 本 tick 开头快照的角色边界——防止多房读-写污染
+ * 流程：聚合信号 → 获取/创建 roomTuning → pending-lock（excludedParams = pending + 冻结）
+ * → verifyPendingAdjustments（到期验证 → rollbacks/cleared/blocked）→ applyFreezePolicy
+ * （回滚计数 + 冻结复位到 CONFIG 基线）→ 应用 rollbacks → evaluateTuning（boundsSnapshot +
+ * excludedParams）→ 应用 adjustments（写 Memory + pendingValidation + 事件日志）→
+ * 保存 lastTrend + lastEval 诊断。
+ * @param boundsSnapshot 本 tick 开头快照的角色边界 — 防止多房读-写污染
  */
 function safeRunTuning(
   ctx: TickContext,
@@ -162,10 +135,10 @@ function safeRunTuning(
     const pendingBefore = roomTuning.pendingValidation ?? {};
 
     // 4. [A] 验证 pass：检查到期 pending 的调整效果
-    // P3 修复（附录 E.2）：verify 前继承 evaluateTuning 的全局门禁。
+    // P3 修复（附录 E.2）：verify 前继承 evaluateTuning 的全局门禁 —
     // 危机/低 bucket 期间 containerFill/storage 外生暴跌 → 误判未改善 → 误回滚 + 误冻结。
-    // 门禁未通过时跳过 verify：pending 保留、excludedParams 仍含 pending 参数、
-    // 不计回滚不计 blocked，下周期复验。
+    // 门禁未通过时跳过 verify：pending 保留、excludedParams 仍含 pending、不计回滚，
+    // 下周期复验。
     const verifyGate = checkVerifyGate(signals);
     let verifyResult: ReturnType<typeof verifyPendingAdjustments> = {
       rollbacks: [],
@@ -240,14 +213,10 @@ function safeRunTuning(
 }
 
 /**
- * P3 修复（附录 E.2）：verify pass 全局门禁。
- *
- * 与 evaluateTuning 的全局门禁保持一致：
- *   - tierRank < 2（healthy/guarded 才验证；conserve/recovery 跳过）
- *   - crisisRatio <= 0.3（危机比例超阈值时外生信号不可信）
- *   - rcl >= 2（RCL 过低时经济信号无意义）
- *
- * 门禁未通过时返回 skippedReason，调用方据此跳过 verify 并记录诊断。
+ * P3 修复（附录 E.2）：verify pass 全局门禁 — 与 evaluateTuning 的门禁一致：
+ * tierRank < 2（healthy/guarded 才验证）；crisisRatio <= 0.3（危机比例超阈值时
+ * 外生信号不可信）；rcl >= 2（RCL 过低时经济信号无意义）。门禁未通过返回
+ * skippedReason，调用方据此跳过 verify 并记录诊断。
  */
 function checkVerifyGate(signals: TuningSignals): { passed: boolean; skippedReason?: string } {
   // 检查顺序与 evaluateTuning 一致：tier → crisis → rcl
@@ -307,9 +276,8 @@ function buildConfigBaselines(): Record<string, number> {
 
 /**
  * 应用回滚到 Memory + 清空已验证 pending + 写 TuningRollback 事件。
- *
- * 回滚走 applyAdjustment（lastAdjusted=ctx.tick 触发冷却，防同 tick 反向调整）。
- * clearedParams（含回滚与验证通过）的 pendingValidation 条目全部清空，闭环结束。
+ * 回滚走 applyAdjustment（lastAdjusted=ctx.tick 触发冷却，防同 tick 反向调整）；
+ * clearedParams（含回滚与验证通过）的 pendingValidation 全部清空，闭环结束。
  */
 function applyRollbacksAndClearPending(
   ctx: TickContext,
@@ -335,7 +303,7 @@ function applyRollbacksAndClearPending(
     );
   }
 
-  // 清空 clearedParams 的 pendingValidation（验证完成，闭环结束）
+  // 清空 clearedParams 的 pendingValidation（验证完成，闭环结束）。
   if (roomTuning.pendingValidation) {
     for (const param of verifyResult.clearedParams) {
       delete roomTuning.pendingValidation[param];
@@ -346,7 +314,6 @@ function applyRollbacksAndClearPending(
     }
   }
 }
-
 /**
  * 写 TuningFreeze 事件 + 运维 console.log。
  * d=[paramCode, rollbackCount, frozenUntilDelta]
@@ -373,14 +340,9 @@ function writeFreezeEvents(
 
 /**
  * P1 修复（附录 E.2）：写 TuningBlocked 事件 + 构造 blockedParams 诊断。
- *
- * 对 verifyResult.blockedParams 中的每个参数：
- *   - 写 TuningBlocked 事件 d=[paramCode, preAdjustValue, blockedDurationTicks]
- *   - 构造 lastEval.blockedParams 诊断 { blockedSinceTick, lastCheckedTick }
- *
- * blockedDurationTicks = ctx.tick - pv.blockedSinceTick，提供「已 blocked 多久」的可观测性。
- * 注意：blocked 不清空 pending（pending 保留，下周期继续验证）；
- * 只有 TTL 超时（在 verifyPendingAdjustments 内判定）才加入 rollbacks + clearedParams。
+ * blockedDurationTicks = ctx.tick - pv.blockedSinceTick（「已 blocked 多久」可观测性）。
+ * 注意：blocked 不清空 pending（保留，下周期继续验证）；仅 TTL 超时（verifyPending
+ * Adjustments 内判定）才加入 rollbacks + clearedParams。
  */
 function writeBlockedEventsAndDiag(
   ctx: TickContext,
@@ -447,8 +409,7 @@ function applyEvaluationAdjustments(
 
 /**
  * 保存 lastEval 诊断快照（含 pending/frozen 精简状态，控体积不存完整快照）。
- *
- * P3/P1 修复（附录 E.2）：通过 diagnostics 参数注入 verifySkipped（危机期 verify 跳过原因）
+ * P3/P1 修复（附录 E.2）：diagnostics 参数注入 verifySkipped（危机期 verify 跳过原因）
  * 与 blockedParams（人口合同 blocked 诊断），避免修改 evaluation 数据结构。
  */
 function saveLastEval(
@@ -541,9 +502,8 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
   const crisisRatio = recentEconomy.filter(s => s.ph === 2 || s.ph === 3).length / recentEconomy.length;
   const avgStorageEnergy = avg(recentEconomy.map(s => s.se));
 
-  // 消费端饱和度：spawn+extension 平均填充率。
-  // 从 EconomySample.ea/ec 计算，反映评估窗口内的趋势而非瞬时值。
-  // ec 为 0（无 spawn）的采样点跳过，避免除零。
+  // 消费端饱和度：spawn+extension 平均填充率 — 从 EconomySample.ea/ec 计算，
+  // 反映评估窗口内的趋势而非瞬时值；ec 为 0（无 spawn）的采样点跳过，避免除零。
   const fillSamples = recentEconomy.filter(s => s.ec > 0);
   const avgSpawnFillRatio = fillSamples.length > 0
     ? avg(fillSamples.map(s => s.ea / s.ec))

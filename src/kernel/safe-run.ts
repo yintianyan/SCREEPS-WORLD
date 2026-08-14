@@ -3,7 +3,6 @@ import { globalCache, type ActionCpuEntry } from "./global-cache";
 import { recordSkip } from "./memory";
 import { EventKind, recordEvent } from "./event-log";
 
-/** 如果此 label 在限频窗口内已记录过日志则返回 true。 */
 function shouldSuppress(label: string, tick: number): boolean {
   const g = globalCache();
   if (!g.errorLog) g.errorLog = new Map();
@@ -23,10 +22,8 @@ function formatError(error: unknown): string {
 // ──────────────────────────────────────────────
 
 /** 检查非关键 label 是否处于冷却期。
- *
  * K-2a：冷却跳过必须记 skipReason（plan §3.2「不能静默丢失」）—
- * 原实现静默 return，被冷却的 P1 系统在遥测中完全不可见。
- */
+ * 原实现静默 return，被冷却的 P1 系统在遥测中完全不可见。 */
 function isCoolingDown(label: string, critical: boolean): boolean {
   if (critical) return false;
   const g = globalCache();
@@ -37,7 +34,6 @@ function isCoolingDown(label: string, critical: boolean): boolean {
   return cooling;
 }
 
-/** 成功时重置错误计数。 */
 function resetErrorCount(label: string): void {
   const g = globalCache();
   if (g.errorCounts) g.errorCounts.delete(label);
@@ -77,14 +73,9 @@ function handleError(label: string, error: unknown, critical: boolean): void {
 // 公共 API
 // ──────────────────────────────────────────────
 
-/**
- * 系统和 creep 角色的错误边界。
- * 一个错误不能终止剩余 tick。相同错误按频率限流以避免日志刷屏
- * （默认：每个 label 每 25 tick 最多输出一次）。
- *
- * 非关键插件连续失败 3 次以上将被冷却 50-200 tick。
- * 关键（P0）插件不会被冷却 — 只有日志限流。
- */
+/** 系统和 creep 角色的错误边界：一个错误不能终止剩余 tick。
+ * 相同错误按频率限流避免日志刷屏（默认每 label 每 25 tick 一次）。
+ * 非关键插件连续失败 3 次以上冷却 50-200 tick；关键（P0）插件只限流不冷却。 */
 export function safeRun(label: string, action: () => void, critical = false): void {
   if (isCoolingDown(label, critical)) return;
   try {
@@ -138,10 +129,8 @@ function recordCpu(label: string, cost: number): void {
   }
 }
 
-/**
- * 记录 Action 级 CPU profiling 数据。
- * 仅当 CONFIG.debug.actionProfiling 为 true 时调用 — 调用方负责门禁。
- * key 格式："roleName/actionName/resolve" | "roleName/actionName/execute" | "roleName/onFlee"。
+/** 记录 Action 级 CPU profiling 数据（仅当 CONFIG.debug.actionProfiling 为 true 时调用 —
+ * 调用方负责门禁）。key 格式："roleName/actionName/resolve|execute" | "roleName/onFlee"。
  * 按 tick 惰性重置 Map。 */
 export function recordActionCpu(key: string, cost: number): void {
   const g = globalCache();

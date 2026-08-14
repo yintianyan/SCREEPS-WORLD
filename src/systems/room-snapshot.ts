@@ -4,18 +4,14 @@ import { classifyThreats, isSquadThreatCreeps } from "../domain/defense/threat";
 import { preloadStructureCache, preloadStaticBlockers } from "../creeps/movement";
 
 /**
- * 为单个自有房间构建 RoomSnapshot。
- * 这是每 tick 唯一调用 room.find() 的地方 — 所有系统和角色
- * 都消费快照以避免重复扫描。
+ * 为单个自有房间构建 RoomSnapshot — 每 tick 唯一调用 room.find() 的地方，
+ * 所有系统和角色都消费快照以避免重复扫描。
+ * 成本：每房每 tick O(structures + sources + sites + hostiles)；必须保持廉价，
+ * 不使用 PathFinder、全房 lookAt 或地形扫描（唯一例外：站桩阻挡在位核验 ≤4 个单格 lookForAt）。
  *
- * 成本：每房每 tick O(structures + sources + sites + hostiles)。
- * 必须保持廉价：此处不使用 PathFinder、全房 lookAt 或地形扫描；
- * 唯一例外是站桩阻挡的在位核验（≤4 个单格 lookForAt，O(1)/格）。
- *
- * @param globalSourceOccupancy 由 Kernel 预构建的全局 source 占用映射，
- *   避免每个房间独立遍历全部 Game.creeps。
- * @param globalCreepEnergy 由 Kernel 预构建的全局“房间 → creep 携带能量”映射（P1-5 ①）。
- * @param globalPendingHarvesters 由 Kernel 预构建的全局“房间 → 待计入 harvester”映射（P0-1）。
+ * 三个 global* 参数由 Kernel 预构建（避免每房独立遍历 Game.creeps）：
+ * globalSourceOccupancy（source 占用）、globalCreepEnergy（房间 → creep 携带能量，P1-5 ①）、
+ * globalPendingHarvesters（房间 → 待计入 harvester，P0-1）。
  */
 export function buildRoomSnapshot(
   room: Room,
@@ -30,8 +26,8 @@ export function buildRoomSnapshot(
   const links = myStructures.filter(isLink);
   const labs = myStructures.filter(isLab);
 
-  // 一次 find 获取所有中性结构，在 JS 层按类型分组。
-  // 比多次带 filter 的 find 更高效（减少 C++ ↔ JS 边界穿越）。
+  // 一次 find 获取所有中性结构，在 JS 层按类型分组 — 比多次带 filter 的 find
+  // 更高效（减少 C++ ↔ JS 边界穿越）。
   const allStructures = room.find(FIND_STRUCTURES);
   const containers = allStructures.filter(s => s.structureType === STRUCTURE_CONTAINER) as StructureContainer[];
   const roads = allStructures.filter(s => s.structureType === STRUCTURE_ROAD) as StructureRoad[];
@@ -63,11 +59,9 @@ export function buildRoomSnapshot(
     r => r.resourceType === RESOURCE_ENERGY,
   );
 
-  // 遗留资源容器：坟墓（creep 死亡）与废墟（建筑被毁/拆除）。
-  // 两者都在衰减/限时灭失，是 hauler 优先回收的对象。
+  // 遗留资源容器：坟墓（creep 死亡）与废墟（建筑被毁/拆除），均衰减灭失，hauler 优先回收。
   // 过滤口径为「任意资源总量 > 0」而非仅能量 — 否则只装矿物的坟墓（如满载矿物的
-  // mineralMiner 死亡）被整体滤出快照，其矿物无人可见、随尸体灭失（线上实证）。
-  // try/catch 防御：FIND_TOMBSTONES/FIND_RUINS 可能在精简测试环境未定义。
+  // mineralMiner 死亡）被滤出快照，矿物无人可见、随尸体灭失（线上实证）。
   let tombstones: Tombstone[] = [];
   let ruins: Ruin[] = [];
   try {

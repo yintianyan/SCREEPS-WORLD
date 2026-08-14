@@ -1,19 +1,12 @@
 /**
  * 防御工事角色分类 — 纯函数，决定每个 wall/rampart 属于哪个维护档位。
- *
- * 背景：统一目标血量是维护经济的最大浪费源 — RCL5-6 把 ~75 个 rampart
- * 全部灌到 1M（≈75 万能量）与 controller 升级直接争夺盈余，
- * 而其中大多数（extension 叠盾、container 叠盾）的防御价值远低于周界割集。
- * 分层后：周界全额、核心折扣、低值资产只保新生地板。
- *
- * 分类优先级（先命中先归类）：
- *   1. constructedWall → perimeter（wall 天然是路径封锁物，不衰减，一次性投资）
- *   2. min-cut 割集位置 → perimeter（敌人必啃的门）
- *   3. 核心结构位置（spawn/extension/storage/tower/link）→ core
- *   4. container 位置 → utility
- *   5. 未知位置：有 min-cut 情报 → utility（割集外的散盾无防线价值）；
- *      无 min-cut 情报（扇区防御 fallback 房）→ perimeter（出口封锁 rampart
- *      不在任何结构位上，保守按周界全额维护，避免防线降档）。
+ * 背景：统一目标血量是维护经济最大浪费源 — RCL5-6 把 ~75 个 rampart 全灌到 1M
+ * （≈75 万能量）与升级争夺盈余，而多数（extension/container 叠盾）防御价值远低于
+ * 周界割集。分层：周界全额、核心折扣、低值资产只保新生地板。
+ * 分类优先级（先命中先归类）：wall → perimeter（不衰减一次投资）；min-cut 割集
+ * → perimeter（敌人必啃的门）；核心结构位 → core；container → utility；未知位置：
+ * 有 min-cut 情报 → utility（散盾无防线价值），无情报（扇区 fallback 房）→
+ * perimeter（出口封锁 rampart 保守全额维护）。
  */
 import type { FortificationRole, RoomSnapshot } from "../../kernel/contracts";
 
@@ -33,10 +26,9 @@ export interface FortificationContext {
 }
 
 /**
- * 从快照 + min-cut 持久化数据构建分类上下文。
- * 每次维修决策构建一次（O(结构数)，~100 项），无需跨 tick 缓存。
- *
- * @param minCutPositions Memory 中的扁平坐标数组 [x0,y0,x1,y1,...]，无数据传 undefined
+ * 从快照 + min-cut 持久化数据构建分类上下文；每次维修决策构建一次
+ * （O(结构数)，~100 项），无需跨 tick 缓存。minCutPositions 为扁平坐标
+ * [x0,y0,x1,y1,...]，无数据传 undefined。
  */
 export function buildFortificationContext(
   snapshot: Pick<RoomSnapshot, "spawns" | "extensions" | "towers" | "links" | "containers" | "storage">,
@@ -63,9 +55,7 @@ export function buildFortificationContext(
 }
 
 /**
- * 分类单个防御工事。
- *
- * @param isWall constructedWall 恒为 perimeter（不衰减的一次性路径封锁投资）
+ * 分类单个防御工事；constructedWall 恒为 perimeter（不衰减的一次性路径封锁投资）。
  */
 export function classifyFortification(
   x: number,
@@ -84,17 +74,11 @@ export function classifyFortification(
 }
 
 /**
- * 受袭姿态判定（R3：战时闭环 — 帝国姿态 → 防御投资升档的统一口径）。
- *
- * 规则：
- *   1. 本房真实受袭记忆（lastHostileAt 距今 < siegeMemoryTicks）恒触发升档 —
- *      无论帝国姿态，防御深度用真实威胁校准（既有行为不变）。
- *   2. 帝国 war 姿态 → 全局备战：本房未受袭也按受袭目标维护墙体。
- *      fortify 不全局升档 — 单房一次 invader 目击不应烧全帝国墙血预算
- *      （与 posture.ts 的 threatWindow 解耦同理）。
- *
- * 消费方：repair.ts（repairFortifications）与 tower-defense.ts（wall 维护）同口径调用。
- * posture 由调用方注入（本函数保持纯函数，不读 Memory）。
+ * 受袭姿态判定（R3：战时闭环 — 帝国姿态 → 防御投资升档的统一口径）：
+ * 本房真实受袭记忆（lastHostileAt 距今 < siegeMemoryTicks）恒触发升档 — 防御深度
+ * 用真实威胁校准（既有行为不变）；帝国 war 姿态全局备战 — 本房未受袭也按受袭目标
+ * 维护。fortify 不全局升档：单房一次 invader 目击不应烧全帝国墙血预算
+ * （与 posture.ts 的 threatWindow 解耦同理）。posture 由调用方注入（纯函数不读 Memory）。
  */
 export function resolveUnderSiege(
   posture: "develop" | "expand" | "fortify" | "war" | undefined,

@@ -2,18 +2,13 @@ import type { CreepSummary } from "./demand";
 import { CONFIG } from "../../config";
 
 /**
- * B1 回收通道的纯决策部分 — 选出应被标记回收的 creep 名。
- *
- * 标记规则（保守白名单，不做全量配额对账）：
- *   1. 废弃角色：role 不在 knownRoles 中（角色已下线，creep 永远闲置）；
- *      role 为 "unknown" 时跳过（数据畸形，交迁移/人工处理，不贸然回收）；
- *   2. 富余 worker：harvester 满编（≥ harvesterMinCount）时，
- *      worker 保留 1 只作灾后保险，其余回收（与 demand 存在性门禁语义一致）。
- *   3. 富余 hauler（B3，2026-08-01）：link 化后编制收缩不能只靠「死亡不补」
- *      （1500 tick/代）——存活 hauler > haulerTarget + 1 时回收富余者，
- *      替换窗口内（濒死）的不回收（自然寿终，避免回收竞态）。
- *
- * 纯函数 — 接收预收集的摘要列表，不访问 Game/Memory。
+ * B1 回收通道的纯决策部分 — 选出应标记回收的 creep（保守白名单，不做全量配额对账）：
+ * 1. 废弃角色（role 不在 knownRoles；"unknown" 跳过 — 数据畸形交迁移/人工处理）；
+ * 2. 富余 worker：harvester 满编（≥ minCount）时保留 1 只作灾后保险，其余回收
+ *    （与 demand 存在性门禁语义一致）；
+ * 3. 富余 hauler（B3，2026-08-01）：link 化后编制收缩不能只靠死亡不补（1500 tick/代）—
+ *    存活 > target+1 时回收富余者；替换窗口内（濒死）不回收，避免回收竞态。
+ * 纯函数 — 不访问 Game/Memory。
  */
 export function selectRecycleCandidates(
   summaries: readonly CreepSummary[],
@@ -41,7 +36,7 @@ export function selectRecycleCandidates(
   }
 
   // 规则 3：富余 hauler（保留 1 只缓冲防抖动；濒死的不回收）。
-  // P1-1 修复：tuning 下调 minCount 时，keep 取下调目标 + 1 而非 haulerTarget + 1，
+  // P1-1：tuning 下调 minCount 时 keep 取下调目标 + 1 而非 haulerTarget + 1，
   // 让 recyclePass 主动收敛到新边界，避免 isContractMet 死锁。
   if (haulerTarget !== undefined) {
     const haulers = summaries.filter(s => s.home === home && s.role === "hauler");

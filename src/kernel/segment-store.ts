@@ -1,22 +1,15 @@
 /**
  * Segment Store — RawMemory segment 的类型安全读写层。
  *
- * 设计原则：
- *   - 热数据留 Memory（每 tick 自动序列化），冷数据存 segment（按需加载）。
- *   - 读取走 globalCache 缓存（global reset 后从 RawMemory.segments 重建）。
- *   - 写入标记 dirty，tick 末尾统一 flush（避免多次 JSON.stringify）。
- *   - segment 需要在 tick 开始时通过 requestSegments() 声明激活。
+ * 原则：热数据留 Memory（每 tick 自动序列化），冷数据存 segment（按需加载）；
+ * 读取走 globalCache 缓存（global reset 后从 RawMemory.segments 重建），
+ * 写入标记 dirty、tick 末尾统一 flush（避免多次 JSON.stringify）；
+ * segment 须在 tick 开始时经 requestSegments() 声明激活。
  *
- * Segment 分配表：
- *   0 — layout 冷数据（overrides / blocked per room）
- *   1 — CPU 时序环形缓冲 + 人口普查快照（~52KB，远低于 100KB 上限）
- *   2 — 事件日志环形缓冲（Phase/Tier/ColonyState 转换等离散事件）
- *   3 — 经济时序环形缓冲（~28KB，远低于 100KB 上限）
- *   4-9 — 预留（多房间 intel / market / 路径缓存）
- *
- * 旧版将 CPU + Economy 混存于 segment 1，满载 ~81KB，逼近 100KB 上限。
- * 拆分后每个 segment 独立远低于上限，彻底消除溢出风险。
- * 激活 4 个 segment 仍在 10 个上限内 [Facts]。
+ * Segment 分配表：0 — layout 冷数据（overrides/blocked per room）；
+ *   1 — CPU 时序 + 人口普查（~52KB）；2 — 事件日志；3 — 经济时序（~28KB）；4-9 — 预留。
+ * 旧版 CPU+Economy 混存 segment 1 满载 ~81KB 逼近 100KB 上限，拆分后各自
+ * 远低于上限；激活 4 个 segment 仍在 10 个上限内 [Facts]。
  */
 import { globalCache } from "./global-cache";
 import type {
@@ -61,23 +54,14 @@ export interface LayoutSegmentData {
 // ─── 内部状态（挂在 globalCache 上）─────────────────────────
 
 interface SegmentCache {
-  /** 已解析的 segment 数据缓存。 */
   layout?: LayoutSegmentData;
-  /** 是否有未刷写的修改。 */
   layoutDirty?: boolean;
-  /** CPU segment 数据缓存（segment 1）。 */
   cpuSeg?: CpuSegmentData;
-  /** CPU segment 是否有未刷写的修改。 */
   cpuDirty?: boolean;
-  /** 经济 segment 数据缓存（segment 3）。 */
   economySeg?: EconomySegmentData;
-  /** 经济 segment 是否有未刷写的修改。 */
   economyDirty?: boolean;
-  /** 事件日志 segment 数据缓存。 */
   eventLog?: EventLogSegmentData;
-  /** 事件日志 segment 是否有未刷写的修改。 */
   eventLogDirty?: boolean;
-  /** 本 tick 是否已请求激活 segment。 */
   requested?: boolean;
   /** 首次请求激活 segment 的 tick（global reset 后重建）— 可用性守卫用。 */
   requestedAt?: number;
@@ -92,17 +76,13 @@ function segCache(): SegmentCache {
 }
 
 /**
- * P1-2 可用性守卫：判断 segment 数据本 tick 是否尚不可读。
- *
- * setActiveSegments 下一 tick 才生效 [Facts] — global reset 后的首 tick，
- * RawMemory.segments[N] 为 undefined（未激活），并非 segment 真的没有数据。
- * 此时若照常创建空结构并缓存，采样/写入会把空数据 flush 回 RawMemory，
- * **整体覆盖历史 segment**（时序清零、layout 冷数据丢失）。
- *
- * 判定：raw 为 undefined 且本 tick 恰是首次请求激活的 tick（requestedAt === Game.time）。
- * 从下一 tick 起 undefined 视为「segment 从未写入」（全新服务器），照常初始化 —
- * 避免把真空 segment 误判为未加载而永久阻塞写入。
- * 未调用过 requestSegments 的环境（单元测试）requestedAt 为 undefined，守卫不生效。
+ * P1-2 可用性守卫：setActiveSegments 下一 tick 才生效 [Facts] — global reset 后
+ * 首 tick RawMemory.segments[N] 为 undefined（未激活），并非没有数据。
+ * 此时若创建空结构并缓存，采样/写入会把空数据 flush 回 RawMemory，整体覆盖
+ * 历史 segment（时序清零、layout 冷数据丢失）。
+ * 判定：raw 为 undefined 且本 tick 恰是首次请求激活的 tick（requestedAt === Game.time）；
+ * 下一 tick 起 undefined 视为「从未写入」（新服务器），照常初始化。
+ * 未调用 requestSegments 的环境（单测）requestedAt 为 undefined，守卫不生效。
  */
 function segmentUnavailable(segmentId: number): boolean {
   return (
@@ -122,10 +102,7 @@ export function layoutSegmentReady(): boolean {
 
 // ─── 公共 API ───────────────────────────────────────────────
 
-/**
- * 在 tick 开始时调用 — 声明需要激活的 segment。
- * 激活 4 个 segment（layout + cpu + eventLog + economy）在 10 个上限内 [Facts]。
- */
+/** 在 tick 开始时调用 — 声明需要激活的 segment（4 个，在 10 个上限内 [Facts]）。 */
 export function requestSegments(): void {
   const cache = segCache();
   if (cache.requested) return;
@@ -139,16 +116,12 @@ export function requestSegments(): void {
   ]);
 }
 
-/**
- * 读取 layout segment 数据（带缓存）。
- * 首次调用时从 RawMemory.segments 解析；global reset 后自动重建。
- */
+/** 读取 layout segment 数据（带缓存）。首次调用从 RawMemory.segments 解析；global reset 后自动重建。 */
 export function readLayoutSegment(): LayoutSegmentData {
   const cache = segCache();
   if (cache.layout) return cache.layout;
 
-  // reset 后首 tick segment 未加载 — 返回临时空结构且不缓存，
-  // flush 因 cache.layout 为空跳过写入，防止空数据覆盖历史 segment。
+  // reset 后首 tick segment 未加载 — 返回临时空结构且不缓存，防止空数据覆盖历史 segment。
   if (segmentUnavailable(SEGMENT_LAYOUT)) return {};
 
   const raw = RawMemory.segments[SEGMENT_LAYOUT];
@@ -164,9 +137,7 @@ export function readLayoutSegment(): LayoutSegmentData {
   return cache.layout;
 }
 
-/**
- * 获取指定房间的 layout 冷数据。不存在时自动创建空条目。
- */
+/** 获取指定房间的 layout 冷数据；不存在时自动创建空条目。 */
 export function getRoomLayoutData(roomName: string): LayoutSegmentData[string] {
   const data = readLayoutSegment();
   if (!data[roomName]) {
@@ -182,18 +153,13 @@ export function markLayoutDirty(): void {
 
 // ─── CPU segment (Segment 1) ───────────────────────────────
 
-/**
- * 读取 CPU segment 数据（带缓存）。
- * 包含 CPU 时序环形缓冲 + 最新人口普查快照。
- *
- * 自动迁移：如果检测到旧格式（segment 1 包含 economy 字段），
- * 会将 economy 数据迁移到 segment 3 并清理 segment 1。
- */
+/** 读取 CPU segment 数据（带缓存）：CPU 时序 + 最新人口普查快照。
+ * 自动迁移：检测到旧格式（segment 1 含 economy 字段）时把 economy 迁到 segment 3。 */
 export function readCpuSegment(): CpuSegmentData {
   const cache = segCache();
   if (cache.cpuSeg) return cache.cpuSeg;
 
-  // reset 后首 tick segment 未加载 — 返回临时空结构且不缓存（见 segmentUnavailable）。
+  // segment 未加载 → 临时空结构且不缓存（见 segmentUnavailable）。
   if (segmentUnavailable(SEGMENT_CPU)) return createEmptyCpuSegment();
 
   const raw = RawMemory.segments[SEGMENT_CPU];
@@ -256,18 +222,13 @@ function createEmptyCpuSegment(): CpuSegmentData {
 
 // ─── Economy segment (Segment 3) ───────────────────────────
 
-/**
- * 读取经济 segment 数据（带缓存）。
- * 包含经济时序环形缓冲（按房间混合，每 50 tick 一条）。
- *
- * 自动迁移：首次读取时如果 segment 3 为空，
- * 会尝试从旧 segment 1 中提取 economy 数据。
- */
+/** 读取经济 segment 数据（带缓存）：经济时序环形缓冲（按房间混合，每 50 tick 一条）。
+ * 自动迁移：segment 3 为空时尝试从旧 segment 1 提取 economy 数据。 */
 export function readEconomySegment(): EconomySegmentData {
   const cache = segCache();
   if (cache.economySeg) return cache.economySeg;
 
-  // reset 后首 tick segment 未加载 — 返回临时空结构且不缓存（见 segmentUnavailable）。
+  // segment 未加载 → 临时空结构且不缓存（见 segmentUnavailable）。
   if (segmentUnavailable(SEGMENT_ECONOMY)) return createEmptyEconomySegment();
 
   // 触发迁移检查（如果 segment 1 有旧格式数据）。
@@ -323,13 +284,8 @@ function createEmptyEconomySegment(): EconomySegmentData {
 
 // ─── 迁移逻辑 ───────────────────────────────────────────────
 
-/**
- * 将旧格式 segment 1（CPU + economy + population 混存）
- * 迁移到新格式：segment 1 仅保留 CPU + population，economy 迁移到 segment 3。
- *
- * 迁移是幂等的：如果已迁移则直接返回。
- * 迁移后立即标记两个 segment 为 dirty，在 tick 末尾 flush 时写入正确格式。
- */
+/** 旧格式 segment 1（CPU + economy + population 混存）→ segment 1 仅 CPU + population，
+ * economy 迁到 segment 3。幂等（已迁移直接返回）；迁移后立即标记 dirty 供 tick 末尾 flush。 */
 function migrateLegacyTimeseries(legacy: LegacyTimeseriesData): void {
   const cache = segCache();
   if (cache.migrated) return;
@@ -355,10 +311,7 @@ function migrateLegacyTimeseries(legacy: LegacyTimeseriesData): void {
   }
 }
 
-/**
- * 从可能包含 null/undefined 空洞的旧 ring buffer 重建干净的新 ring buffer。
- * 保留所有有效数据和时间顺序。
- */
+/** 从可能含 null/undefined 空洞的旧 ring buffer 重建干净版本，保留有效数据与时间顺序。 */
 function rebuildRingBuffer<T>(old: RingBuffer<T>, capacity: number): RingBuffer<T> {
   const clean = createRingBuffer<T>(capacity);
   const valid = ringToArray(old); // ringToArray 已过滤 null/undefined
@@ -370,9 +323,7 @@ function rebuildRingBuffer<T>(old: RingBuffer<T>, capacity: number): RingBuffer<
 
 // ─── 事件日志 segment (Segment 2) ───────────────────────────
 
-/**
- * 读取事件日志 segment 数据（带缓存）。
- */
+/** 读取事件日志 segment 数据（带缓存）。 */
 export function readEventLogSegment(): EventLogSegmentData {
   const cache = segCache();
   if (cache.eventLog) return cache.eventLog;
@@ -431,10 +382,7 @@ function trimRingBuffer<T>(buf: RingBuffer<T>, keepCount: number): RingBuffer<T>
   return newBuf;
 }
 
-/**
- * 在 tick 末尾调用 — 将所有 dirty segment 刷写回 RawMemory。
- * 仅在有新写入时执行 JSON.stringify（避免无变化时的 CPU 浪费）。
- */
+/** 在 tick 末尾调用 — 将所有 dirty segment 刷写回 RawMemory（仅在有新写入时 JSON.stringify，避免 CPU 浪费）。 */
 export function flushSegments(): void {
   const cache = segCache();
 

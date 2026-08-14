@@ -1,21 +1,9 @@
 /**
- * Tuned Config — 运行时参数覆盖层。
- *
- * 设计意图：不修改静态 CONFIG，而是在其之上叠加由 tuning-engine
- * 产生的运行时覆盖值。消费者通过 getRoleBounds() 查询，
- * 先查 Memory.kernel.tuning 中的覆盖值，回退到 CONFIG 默认值。
- *
- * 数据流：
- *   CONFIG (静态基线) ← getRoleBounds() ← demand.ts / spawn-manager.ts
- *                          ↑
- *   Memory.kernel.tuning.rooms[roomName].roleBounds (运行时覆盖)
- *                          ↑
- *   tuning-engine (每 500 tick 更新)
- *
- * 安全保证：
- *   - 覆盖值永远在 TUNING_BOUNDS 的 floor/ceiling 范围内。
- *   - 无 Memory / global reset 后自动回退到 CONFIG 默认值。
- *   - 消费者不需要感知调优系统的存在——只是换个函数读参数。
+ * Tuned Config — 运行时参数覆盖层：不改静态 CONFIG，在其上叠加 tuning-engine
+ * 产生的运行时覆盖值。消费者经 getRoleBounds() 查询：先查
+ * Memory.kernel.tuning 覆盖值，回退到 CONFIG 默认。
+ * 安全保证：覆盖值永远在 TUNING_BOUNDS 的 floor/ceiling 范围内；无 Memory /
+ * global reset 后自动回退 CONFIG 默认；消费者无需感知调优系统的存在。
  */
 
 import { CONFIG } from "./index";
@@ -23,17 +11,13 @@ import { clampParam } from "../domain/tuning/bounds";
 
 /**
  * 可调优角色全集 — 与 CONFIG.roles 的 key 集合对齐（role-config-parity 测试
- * 已断言 CONFIG.roles 与 bootstrap 注册表双向一致）。
- *
- * 单一来源原则：ROLE_PARAM_MAP 与 tuning-engine 的 bounds 快照循环
- * 都从本数组派生，避免 map 与列表双源不同步（P1-I 评审修正：
- * 原稿 ROLE_PARAM_MAP 7 角色、tuning-engine 快照 4 角色双漂移）。
- *
- * 当前 TUNING_BOUNDS（domain/tuning/bounds.ts）只为前 4 角色
- * （hauler/harvester/upgrader/builder）配置 floor/ceiling，其余角色
- * 的 clampParam 调用是 no-op（无 bounds 即返回原值）。补全集是为
- * 「未来在 TUNING_BOUNDS 添加某角色 bounds 时立即生效」做前置准备，
- * 防止 tuning 接管新角色时漏配钳制规则导致 evaluator 写出离谱值。
+ * 已断言 CONFIG.roles 与 bootstrap 注册表双向一致）。单一来源：ROLE_PARAM_MAP
+ * 与 tuning-engine 的 bounds 快照循环都从本数组派生，避免双源漂移
+ * （P1-I 评审修正：原稿 7 角色 map 与 4 角色快照双漂移）。
+ * TUNING_BOUNDS（domain/tuning/bounds.ts）目前只为前 4 角色
+ * （hauler/harvester/upgrader/builder）配置 floor/ceiling，其余角色的
+ * clampParam 是 no-op — 补全集是防未来 tuning 接管新角色时漏配钳制规则
+ * 写出离谱值的前置准备。
  */
 export const TUNABLE_ROLES = [
   "hauler",
@@ -59,10 +43,7 @@ const ROLE_PARAM_MAP: Readonly<Record<string, { min: string; max: string }>> = O
 
 /**
  * 获取角色的有效数量边界（CONFIG 默认 + 运行时覆盖）。
- *
- * @param role     角色名（如 "hauler"）
- * @param roomName 房间名（可选，用于查 per-room 覆盖）
- * @returns { minCount, maxCount } 合并后的有效值
+ * roomName 可选，用于查 per-room 覆盖。
  */
 export function getRoleBounds(
   role: string,
@@ -76,7 +57,6 @@ export function getRoleBounds(
   let minCount: number = configBounds.minCount;
   let maxCount: number = configBounds.maxCount;
 
-  // 查询运行时覆盖值
   if (roomName) {
     const roomTuning = Memory.kernel?.tuning?.rooms?.[roomName]?.roleBounds?.[role];
     if (roomTuning) {

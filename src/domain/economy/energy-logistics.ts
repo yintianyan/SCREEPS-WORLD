@@ -1,19 +1,8 @@
 /**
- * 帝国能量互济与能量市场 — 纯函数决策层（R5 经济主线）。
- *
- * 背景：M12「双房互济」验收项（主房向新房输血能量）长期空缺 —
- * singleRoomTerminalPolicy 明确写着「单房间阶段不主动发送」。本模块补上
- * 跨房能量调度的决策核心；执行层在 systems/terminal-manager.ts
- * （terminal 的唯一业务属主：市场 deal 与 terminal.send 同处一室）。
- *
- * 设计要点：
- *   - 决策无状态（每轮从世界快照现算），不新增 Memory 字段 —
- *     滞回由「捐赠地板 > 救助地板」的结构性不等式提供：
- *     受助房被补到 recipientFloor（20k）后仍远低于 donorFloor（50k），
- *     同一笔救助不可能让受助方翻转为捐赠方 — 震荡在结构上不可能。
- *   - 每轮至多一笔救助：terminal.send 有 10 tick 冷却，且单笔决策
- *     让「谁最饿、谁最富」的排序直白可解释。
- *   - 纯函数不碰 Game/Memory — 全部输入由调用方采集注入。
+ * 帝国能量互济与能量市场 — 纯函数决策层（R5 经济主线），执行层在
+ * systems/terminal-manager.ts（terminal 唯一业务属主）。决策无状态每轮现算：
+ * 滞回靠「捐赠地板 > 救助地板」结构性不等式防震荡；每轮至多一笔
+ * （terminal.send 有 10 tick 冷却）。
  */
 
 /** 单房间的能量侧决策输入（调用方从 RoomSnapshot 采集）。 */
@@ -43,22 +32,15 @@ export interface EnergyAidOptions {
 export interface EnergyAidPlan {
   /** 捐赠房（terminal.send 的发起方）。 */
   from: string;
-  /** 受助房。 */
+
   to: string;
   /** 救助量（已受 recipientFloor/donorFloor/maxTransfer 三重约束）。 */
   amount: number;
 }
 
 /**
- * 规划一笔跨房能量救助（每轮至多一笔）。
- *
- * 规则：
- *   1. 救助候选：storage < recipientFloor，按缺口降序（最饿者先救）；
- *   2. 捐赠候选：canSend 且 storage > donorFloor，按盈余降序（最富者先捐）；
- *   3. 量 = min(缺口, 盈余, maxTransfer)，低于 minTransfer 不送；
- *   4. 同房不互济；受助候选须 canReceive（有 terminal 才收得到）。
- *
- * 无合格候选返回 undefined（调用方本 tick 不发送）。
+ * 规划一笔跨房能量救助（每轮至多一笔）。最饿者先救、最富者先捐；
+ * 同房不互济；无合格候选返回 undefined（调用方本 tick 不发送）。
  */
 export function planEnergyAid(
   rooms: readonly RoomEnergyState[],
@@ -87,11 +69,11 @@ export function planEnergyAid(
   return undefined;
 }
 
-// ─── 能量市场交易（纯函数）──────────────────────────────────
+
 
 /**
- * 能量卖出量：storage 溢出部分（高于 sellFloor），受单笔上限约束。
- * 只在真实盈余时卖 — 市场是能量出口，不是挤占运营库存的渠道。
+ * 能量卖出量：仅真实盈余（storage 高于 sellFloor）才卖，受单笔上限约束 —
+ * 市场是能量出口，不是挤占运营库存的渠道。
  */
 export function energySellAmount(storageEnergy: number, sellFloor: number, maxDeal: number): number {
   const surplus = storageEnergy - sellFloor;

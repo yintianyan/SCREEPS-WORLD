@@ -1,18 +1,9 @@
 /**
- * 布局可观测性指标（漏洞 #11）。
- *
- * 目的：为布局系统提供消费方驱动的反馈通道 —— 死资产率、link 利用率、
- * 拆改次数、MVC 缺口、防御完整性。每个指标都有明确的告警阈值和消费决策
- *（见文档 §3.8「消费方」表），避免「系统在运行但无法证明决策是否改善」
- * 的自治盲区。
- *
- * 落盘策略（plan §7 性能优化）：
- *   - 存 Memory.kernel.layoutMetrics[roomName]，仅变化时写入（稳定状态不抖动）
- *   - 字段全是短 key + 数字 + 布尔 + 短字符串，符合 Memory 存储约束
- *   - 不进 segment — 这些是运行时派生指标，重开后从 0 重新采集可接受
- *
- * 纯函数 computeLayoutMetrics 不访问 Game/Memory，所有输入通过参数注入，
- * 便于单测覆盖全 RCL / 死资产 / 防御场景。
+ * 布局可观测性指标（漏洞 #11）：为布局系统提供消费方驱动的反馈通道 — 死资产率、
+ * link 利用率、拆改次数、MVC 缺口、防御完整性；每个指标都有明确的告警阈值和消费
+ * 决策（见文档 §3.8「消费方」表），避免「系统在运行但无法证明决策是否改善」。
+ * 落盘策略（plan §7）：存 Memory.kernel.layoutMetrics[roomName]，仅变化时写入；
+ * 不进 segment — 重开后从 0 重采可接受。纯函数输入全参数注入，便于单测。
  */
 import type { RoomSnapshot } from "./contracts";
 import type { StructureGaps } from "../domain/layout/gaps";
@@ -45,27 +36,10 @@ export interface DefenseCutInfo {
 }
 
 /**
- * 计算布局可观测性指标（纯函数）。
- *
- * 数据源全部通过参数注入，便于单测：
- *   - snapshot → link 能量/容量、wall/rampart 位置
- *   - gaps → MVC 缺口数
- *   - deadLinkCount → 死资产 link 数（从 getDeadAssetLinks 获取）
- *   - dismantleCount → 累计拆改次数（从 globalCache.dismantleCount 获取）
- *   - linkConstrained → 几何受限标记（从 isLinkConstrained 获取）
- *   - defenseCut → 割集位置（从 Memory.rooms[roomName].minCut 读取后注入）
- *
- * 防御完整性计算：
- *   - wallRatio = 割集中已建成 wall 的位置数 / 割集总数
- *   - rampartWeakPoints = 割集中已建成 rampart 的位置数（弱点 = rampart 不挡通行）
- *   - 未建成的割集位置不计入弱点（尚未施工，不算防线缺陷）
- *
- * @param snapshot         房间快照
- * @param gaps             结构缺口字典（auditStructureGaps + mergeLinkRoleGaps 后）
- * @param deadLinkCount    死资产 link 数量
- * @param dismantleCount   累计拆改次数
- * @param linkConstrained  link 几何受限标记
- * @param defenseCut       防御割集信息（无缓存时传 { cutPositions: [] }）
+ * 计算布局可观测性指标（纯函数，数据源全参数注入便于单测）。
+ * 防御完整性：wallRatio = 割集中已建成 wall 位置数 / 割集总数；rampartWeakPoints =
+ * 割集中已建成 rampart 位置数（弱点 = rampart 不挡通行）；未建成的割集位置不计入
+ * 弱点（尚未施工，不算防线缺陷）。
  */
 export function computeLayoutMetrics(
   snapshot: RoomSnapshot,
@@ -105,17 +79,10 @@ export function computeLayoutMetrics(
 }
 
 /**
- * 计算防御完整性指标（纯函数，被 computeLayoutMetrics 内部调用）。
- *
- * wallRatio = 割集中已建成 wall 的位置数 / 割集总数
- *   - 高 wallRatio = 防线主体是 wall（真正阻挡通行），防御强
- *   - 低 wallRatio = 防线主体是 rampart（不挡通行，仅拖延），弱点多
- *
- * rampartWeakPoints = 割集中已建成 rampart 的位置数
- *   - 这些位置因有结构共格需求只能用 rampart，是防线的弱点
- *   - 需 tower 火力覆盖补偿
- *
- * 未建成的割集位置不计入弱点 — 尚未施工不算缺陷，只表示进度未完成。
+ * 计算防御完整性指标（被 computeLayoutMetrics 内部调用）。
+ * wallRatio 高 = 防线主体是 wall（真正阻挡通行）；低 = 主体是 rampart（不挡通行，
+ * 仅拖延）→ 弱点。rampartWeakPoints 位置因共格需求只能用 rampart，需 tower 火力覆盖。
+ * 未建成的割集位置不计入弱点 — 只表示进度未完成，不算缺陷。
  */
 function computeDefenseMetrics(
   snapshot: RoomSnapshot,
@@ -142,15 +109,8 @@ function computeDefenseMetrics(
   };
 }
 
-/**
- * 将指标落盘到 Memory.kernel.layoutMetrics[roomName]。
- *
- * 仅当指标实际变化时写入，稳定状态不产生 Memory 序列化抖动
- *（与 recordLayoutGaps 同策略，plan §7 性能优化）。
- * 房间无指标时删除条目（不留历史）。
- *
- * 比较规则：逐字段对比，任一字段变化则整体覆盖写入。
- */
+/** 将指标落盘到 Memory.kernel.layoutMetrics[roomName]：仅变化时写入（稳定状态不产生
+ * 序列化抖动，与 recordLayoutGaps 同策略，plan §7）；房间无指标时删除条目（不留历史）。 */
 export function recordLayoutMetrics(roomName: string, metrics: LayoutMetrics): void {
   Memory.kernel ??= {};
   const store = Memory.kernel.layoutMetrics ??= {};
@@ -161,7 +121,6 @@ export function recordLayoutMetrics(roomName: string, metrics: LayoutMetrics): v
     return;
   }
 
-  // 逐字段比较，无变化则不写入（避免 Memory 序列化抖动）。
   if (
     prev.deadAssetRate === metrics.deadAssetRate &&
     prev.linkUtilization === metrics.linkUtilization &&
@@ -178,13 +137,8 @@ export function recordLayoutMetrics(roomName: string, metrics: LayoutMetrics): v
   store[roomName] = { ...metrics };
 }
 
-/**
- * 从 Memory.rooms[roomName].minCut 读取割集位置并转为坐标数组。
- *
- * defense-planner 把割集位置以扁平数组 [x1,y1,x2,y2,...] 存入 Memory
- *（跨 global reset 存活）。本函数解包为 {x,y}[] 供 computeLayoutMetrics 注入。
- * 无缓存或 complete=false 时返回空数组。
- */
+/** 从 Memory.rooms[roomName].minCut 读取割集位置并解包为 {x,y}[]（defense-planner 以
+ * 扁平数组 [x1,y1,x2,y2,...] 存入，跨 global reset 存活）。无缓存或 complete=false 返回空数组。 */
 export function readDefenseCutPositions(roomName: string): DefenseCutInfo {
   const minCutMem = Memory.rooms[roomName]?.minCut;
   if (!minCutMem || !minCutMem.complete) return { cutPositions: [] };

@@ -16,15 +16,11 @@ const TIER_ORDER: readonly CpuTier[] = ["healthy", "guarded", "conserve", "recov
 
 /**
  * 根据 bucket 带滞回地确定 CPU 档位。
- *
- * 降级立即生效 — bucket 低时必须马上限流。
- * 升级需要 bucket 超过下一档阈值至少 `recoveryHysteresis`，
- * 并持续 `recoveryTicks` 个 tick，避免频繁抖动。
- *
- * @param voluntaryDrain 自愿放血宽限（generatePixel 后的窗口期）：
- *   tier 地板抬到 conserve — pixel 清零 bucket 只损失突发容量，
- *   每 tick 限额不变，P2 经济角色不应被 recovery 档冻结。
- *   仅影响 recovery 判定；真实 CPU 超支仍由逐 tick 硬上限兜底。
+ * 降级立即生效（bucket 低时必须马上限流）；升级需 bucket 超过下一档阈值至少
+ * recoveryHysteresis 并持续 recoveryTicks 个 tick，避免频繁抖动。
+ * @param voluntaryDrain 自愿放血宽限（generatePixel 后的窗口期）：tier 地板抬到
+ *   conserve — pixel 清零 bucket 只损失突发容量，每 tick 限额不变，P2 经济角色
+ *   不应被 recovery 档冻结。仅影响 recovery 判定；真实 CPU 超支仍由硬上限兜底。
  */
 export function resolveTier(
   prevTier: CpuTier | undefined,
@@ -36,8 +32,8 @@ export function resolveTier(
   recoveryTicks: number;
 } {
   const result = resolveTierNatural(prevTier, prevRecoveryTicks, bucket);
-  // 自愿放血宽限：recovery 地板抬到 conserve。
-  // 不影响 recoveryTicks 记账 — 滞回升级逻辑照常从真实档位爬升。
+  // 自愿放血宽限：recovery 地板抬到 conserve；不影响 recoveryTicks 记账，
+  // 滞回升级逻辑照常从真实档位爬升。
   if (voluntaryDrain && result.tier === "recovery") {
     return { tier: "conserve", recoveryTicks: result.recoveryTicks };
   }
@@ -48,17 +44,15 @@ function resolveTierNatural(prevTier: CpuTier | undefined, prevRecoveryTicks: nu
   tier: CpuTier;
   recoveryTicks: number;
 } {
-  // 根据 bucket 确定自然档位（降级立即生效）。
+  // 降级（更差的档位）立即生效；升级（更好的档位）逐步升级并带滞回。
+  // tierRank: healthy=0 < guarded=1 < conserve=2 < recovery=3（数值越大越差）。
   const naturalTier = bucketToTier(bucket);
 
-  // 降级（更差的档位）立即生效。
-  // tierRank: healthy=0 < guarded=1 < conserve=2 < recovery=3（数值越大越差）
   if (prevTier === undefined || tierRank(naturalTier) >= tierRank(prevTier)) {
     return { tier: naturalTier, recoveryTicks: 0 };
   }
 
-  // 升级（更好的档位）：逐步升级并带滞回。
-  // 目标是当前档位的上一档（而非自然档位）。
+  // 升级目标是当前档位的上一档（而非自然档位）。
   const currentRank = tierRank(prevTier);
   const targetTier = TIER_ORDER[currentRank - 1] ?? naturalTier;
   const hysteresisThreshold = TIER_BUCKET_MIN[targetTier] + CONFIG.cpu.tiers[prevTier].recoveryHysteresis;
@@ -95,9 +89,8 @@ export class CpuBudget implements Budget {
   constructor(tier: CpuTier) {
     this.tier = tier;
     const ratios = tierLimits(tier);
-    // 有效 CPU 限制：Game.cpu.limit 和 Game.cpu.tickLimit 的较小值。
-    // tickLimit 含 bucket 借用，bucket 低位时可能临时低于 limit；
-    // 取较小值确保不透支当前 tick 真实可用预算。
+    // 有效 CPU 限制取 Game.cpu.limit 与 tickLimit 较小值：tickLimit 含 bucket 借用，
+    // bucket 低位时可能临时低于 limit — 取较小值不透支当前 tick 真实预算。
     // Fallback 20 仅用于测试环境（Game.cpu 未注入）。
     const effectiveLimit = Math.min(
       Game.cpu.limit ?? 20,
@@ -109,10 +102,9 @@ export class CpuBudget implements Budget {
       effectiveLimit * ratios.hardRatio,
       effectiveLimit - CONFIG.kernel.cpuReserve,
     );
-    // softLimit 兜底为 0：极端低 limit（如 limit < reserve）时
-    // hardLimit-reserve 可能为负，Math.max(0, ...) 防止负值导致
-    // canStart 语义混乱（负 softLimit 使 spent()>=softLimit 恒真）。
-    // softLimit=0 时非 P0 全拒是正确的极限降级行为。
+    // softLimit 兜底 0：极端低 limit（limit < reserve）时 hardLimit-reserve 可能为负，
+    // 负 softLimit 使 spent()>=softLimit 恒真、canStart 语义混乱；softLimit=0 时
+    // 非 P0 全拒是正确的极限降级行为。
     this.softLimit = Math.max(
       0,
       Math.min(effectiveLimit * ratios.softRatio, this.hardLimit - 1),

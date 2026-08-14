@@ -1,8 +1,6 @@
 /**
- * 反应链规划 — 纯函数，无 Game API 依赖。
- *
- * 给定目标产物和当前库存，反向推导完整反应链。
- * 每个 lab 每 tick 产出 5 单位产物（LAB_REACTION_AMOUNT）。
+ * 反应链规划 — 纯函数（无 Game API 依赖）：从目标产物反向推导完整反应链。
+ * 每个 lab 每 tick 产出 5 单位（LAB_REACTION_AMOUNT）。
  */
 import { REACTIONS, type Compound, type ReactionPlan, type ReactionStep } from "./types";
 
@@ -10,12 +8,8 @@ import { REACTIONS, type Compound, type ReactionPlan, type ReactionStep } from "
 export const LAB_REACTION_AMOUNT = 5;
 
 /**
- * 反向推导反应链：从目标产物回溯到基础矿物。
- *
- * @param target       目标化合物
- * @param amount       目标数量
- * @param available    当前库存（storage + terminal 中的化合物数量）
- * @returns 有序反应步骤列表（从基础到高级），或 null（配方不存在）
+ * 从目标产物反向回溯到基础矿物，产出有序步骤（基础→高级）；
+ * 目标为无配方的基础矿物时 steps 为空。
  */
 export function planReactionChain(
   target: Compound,
@@ -26,7 +20,7 @@ export function planReactionChain(
   const needed = new Map<Compound, number>();
   needed.set(target, amount);
 
-  // BFS 反向展开：从目标回溯到基础矿物
+  // BFS 反向展开，从目标回溯到基础矿物
   const queue: Compound[] = [target];
   const visited = new Set<Compound>();
 
@@ -39,39 +33,31 @@ export function planReactionChain(
     const have = available[compound] ?? 0;
     const deficit = need - have;
 
-    if (deficit <= 0) continue; // 库存足够，无需生产
+    if (deficit <= 0) continue;
 
     const recipe = REACTIONS[compound];
-    if (!recipe) continue; // 基础矿物，无法再分解
+    if (!recipe) continue;
 
     const [input1, input2] = recipe;
-    // 每个反应产出 5 单位，需要 ceil(deficit / 5) 次反应
+    // 每次反应产 5 单位 → 批次 = ceil(deficit / 5)（向上取整，宁多产）
     const batches = Math.ceil(deficit / LAB_REACTION_AMOUNT);
     const inputNeeded = batches * LAB_REACTION_AMOUNT;
 
-    // 记录反应步骤
     steps.push({ input1, input2, output: compound, amount: batches * LAB_REACTION_AMOUNT });
 
-    // 递归需求：输入物也需要足够量
     needed.set(input1, (needed.get(input1) ?? 0) + inputNeeded);
     needed.set(input2, (needed.get(input2) ?? 0) + inputNeeded);
 
     queue.push(input1, input2);
   }
 
-  // 反转：从基础到高级
+  // 反转步骤顺序：从基础到高级
   steps.reverse();
 
   return { steps, target, targetAmount: amount };
 }
 
-/**
- * 判断当前库存是否满足反应链的下一步输入需求。
- *
- * @param step      当前反应步骤
- * @param available 当前库存
- * @returns 是否可以执行此步骤
- */
+/** 库存是否满足单 tick 反应所需（各输入 ≥ 5，非整批 step.amount）。 */
 export function canExecuteStep(
   step: ReactionStep,
   available: Readonly<Record<string, number>>,
@@ -81,33 +67,22 @@ export function canExecuteStep(
   return (available[step.input1] ?? 0) >= need1 && (available[step.input2] ?? 0) >= need2;
 }
 
-/**
- * 从反应计划中获取下一个可执行的步骤。
- *
- * @param plan      反应计划
- * @param available 当前库存
- * @returns 下一个可执行步骤，或 null（全部完成或原料不足）
- */
+/** 返回下一个可执行步骤；输出已满足或原料不足时返回 null。 */
 export function getNextExecutableStep(
   plan: ReactionPlan,
   available: Readonly<Record<string, number>>,
 ): ReactionStep | null {
   for (const step of plan.steps) {
-    // 检查输出是否已满足
     const outputHave = available[step.output] ?? 0;
     if (outputHave >= step.amount) continue;
-    // 检查输入是否足够
     if (canExecuteStep(step, available)) return step;
-    // 输入不足 — 需要先生产输入物（但步骤已排序，前面的应该先执行）
+    // 原料不足 → 需先执行更早步骤（步骤已排序）
     return null;
   }
   return null;
 }
 
-/**
- * 计算生产目标产物所需的总 tick 数（单 lab 对）。
- * 用于估算和优先级排序。
- */
+/** 总生产 tick 估算（单 lab 对；用于优先级排序）。 */
 export function estimateTicks(plan: ReactionPlan): number {
   return plan.steps.reduce((total, step) => {
     const batches = Math.ceil(step.amount / LAB_REACTION_AMOUNT);
@@ -140,13 +115,9 @@ function chebyshev(a: LabPos, b: LabPos): number {
 }
 
 /**
- * 从候选 lab 中挑选一个满足相邻约束的反应三元组（纯函数）。
- *
- * runReaction 要求两个 input lab 均在 output lab 的 range≤2 内；
- * RCL7-8 的 lab 若分散布置，任意取 3 个可能永远无法反应。此函数扫描每个
- * 候选 output lab，找到至少两个在其 range≤2 内的其它 lab 作为 input。
- *
- * @returns 满足约束的三元组；若无任何 output lab 能凑齐两个相邻 input，返回 undefined。
+ * 挑选满足 runReaction 相邻约束（两个 input 均在 output 的 range≤2 内）的三元组。
+ * RCL7-8 的 lab 分散布置时任意取 3 个可能永远无法反应 — 逐 output 扫描找两个
+ * 邻近 input；凑不齐则返回 undefined。
  */
 export function selectReactionTrio(labs: readonly LabPos[]): ReactionTrio | undefined {
   for (const output of labs) {

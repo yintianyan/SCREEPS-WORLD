@@ -28,24 +28,21 @@ declare global {
     fillTargetId?: Id<_HasId>;
     /** repair 目标持久化 — 避免每 tick 在多个衰减 container 间摇摆。 */
     repairTargetId?: Id<_HasId>;
-    /** 危路急救锁定目标（与 repairTargetId 分离 — 共享缓存会被常规修路/
-     * 工事维修写入非危路目标，急救接手会越过链上更紧急的修复）。 */
+    /** 危路急救锁定目标 — 与 repairTargetId 分离，防共享缓存被常规修路写入后急救越过更紧急修复。 */
     urgentRoadId?: Id<_HasId>;
     /** harvester/miner 绑定的 source。 */
     sourceId?: Id<Source>;
     /** remote-harvester 缓存的 source 旁 container ID（避免每 tick lookForAtArea）。 */
     sourceContainerId?: Id<_HasId>;
     /**
-     * 远矿 container 的建 site 失败冷却到期 tick（RM-1，P0-A 收编后由 remote-mining-manager 写入）—
-     * ERR_FULL/位置冲突等持久失败时放行 dropEnergy，冷却后重试。
-     * 冷却只阻断 create 路径（申请），不阻断 build 路径（已有 site 照常建造）。 */
+     * 远矿 container 建 site 失败冷却到期 tick（RM-1，P0-A 收编后由 remote-mining-manager 写入）—
+     * 持久失败时放行 dropEnergy；只阻断 create 路径，不阻断 build。
+     */
     containerSiteCooldown?: number;
     /**
-     * RM-1 / P0-A：远矿 harvester 满载且无 container 时申请建 site 的标记。
-     * 由 creep 在 buildSourceContainer execute 写入；remote-mining-manager
-     * 消费后清除（成功创建 site 或失败写冷却）。申请期间 resolve 跳过本候选，
-     * creep 走 dropEnergy 释放产能，等待 manager 每 managerInterval tick 处理。
-     * sourceId 已存于 creep.memory.sourceId，manager 据此定位建 site 位置。 */
+     * RM-1/P0-A：远矿 harvester 满载且无 container 时申请建 site 的标记 —
+     * creep 写入，remote-mining-manager 消费后清除（成功或写冷却）。申请期间走 dropEnergy 释放产能。
+     */
     needContainer?: boolean;
     /** 压缩的上次位置（x * 50 + y）用于卡位检测。 */
     lastPos?: number;
@@ -53,9 +50,8 @@ declare global {
     stuckTicks?: number;
     /**
      * P1-E 档 2：上次 PathFinder.search 重寻路 tick（plan.md §5.7.5）。
-     * 同一 creep 两次重寻路间隔 ≥ dynamicRepathInterval，冷却内沿旧路径走一步，
-     * 旧路径空则 getDirectionTo 直走降级。absent = 0 → 视为「很久未重算」→
-     * 冷却不生效（与改造前行为一致）。per-creep 运行时状态，无需迁移。
+     * 两次重寻路间隔 ≥ dynamicRepathInterval，冷却内沿旧路径走一步；
+     * absent=0 → 冷却不生效（与改造前一致）。per-creep 运行时状态，无需迁移。
      */
     lastRepathAt?: number;
     /** 当前紧凑任务分配。 */
@@ -65,19 +61,13 @@ declare global {
     /** B1：标记为待回收 — spawn-manager 引导其走向最近 spawn 并 recycleCreep。 */
     recycle?: boolean;
     /**
-     * 远程角色目标房 — 远矿/扩张时的工作房间。
-     * 设置后 ensureHome 根据 mode + role 决定导航目标：
-     *   remoteHauler work 模式 → home（存能），acquire 模式 → remoteTarget（取能）
-     *   remoteHarvester/reserver → 始终 remoteTarget
+     * 远程角色目标房 — 远矿/扩张时的工作房间。ensureHome 按 mode+role 决定导航：
+     * remoteHauler work→home、acquire→remoteTarget；remoteHarvester/reserver 恒 remoteTarget。
      */
     remoteTarget?: string;
-    /** remoteHauler 缓存的远矿 containerId — 避免 每 tick room.find。 */
+    /** remoteHauler 缓存的远矿 containerId — 避免每 tick room.find。 */
     remoteContainerId?: Id<StructureContainer>;
-    /**
-     * Distributor 水位分级档位（0-3）。
-     * 由 distributor gate 每 tick 根据 storage 水位计算，
-     * 供 withdrawStorageForDistribution 限取和 getDistributorFillTarget 过滤目标使用。
-     */
+    /** Distributor 水位分级档位（0-3），由 distributor gate 每 tick 按 storage 水位计算。 */
     distributorTier?: 0 | 1 | 2 | 3;
   }
 
@@ -111,34 +101,25 @@ declare global {
   interface RoomMemory {
     colonyState?: ColonyState;
     /**
-     * 经济压力梯度信号 (0.0–1.0)，从 drainScore 派生。
-     * 0.0 = 完全健康，1.0 = 完全危机。
-     * 各子系统用此信号做梯度缩放，替代二值 crisis/normal 开关。
-     *   - demand: 缩放 upgrader/builder 目标数量
-     *   - construction: 调整建造能量门禁阈值
-     *   - tower: 调整修墙能量门槛
+     * 经济压力梯度信号（0.0–1.0，从 drainScore 派生）：demand/construction/tower
+     * 用它做梯度缩放，替代二值 crisis/normal 开关。
      */
     economyPressure?: number;
     controllerDowngradeRisk?: boolean;
     /**
-     * 上一 tick 是否处于紧急状态（P1-2 边沿触发用）。
-     * assignment-service 仅在「正常 → 紧急」上升沿失效普通任务，
-     * 持续紧急期间不重复失效，避免每 tick 清空 assignment 抖动。
+     * 上一 tick 是否紧急（P1-2 边沿触发）：assignment-service 仅在
+     * 「正常 → 紧急」上升沿失效任务，持续紧急不重复失效（防抖动）。
      */
     wasEmergency?: boolean;
     /**
-     * 上次触发任务抢占的 tick（TD-018 冷却机制）。
-     * assignment-service 在抢占触发后写入，距上次抢占至少间隔 20 tick 才能再次触发，
-     * 防止房间在紧急/正常之间快速交替时每个上升沿都 invalidate assignment。
+     * 上次任务抢占 tick（TD-018 冷却）：两次抢占至少间隔 20 tick，
+     * 防紧急/正常快速交替时每个上升沿都 invalidate assignment。
      */
     lastPreemptTick?: number;
     /**
-     * 最近一次房内出现威胁 creep 的 tick（v12+，room-state 写入）。
-     * 受袭记忆：驱动防御姿态（如 wall/rampart 目标血量升档）—
-     * 防御深度用真实威胁校准，而非静态假设。
-     *
-     * P1-3：仅在威胁新增（count 增加）时刷新，而非每 tick 刷新。
-     * 防止旧威胁停留时 lastHostileAt 永远为"当前"，导致消费方永不过期。
+     * 最近一次房内出现威胁 creep 的 tick（v12+，room-state 写入）— 受袭记忆，
+     * 驱动防御姿态（如 wall/rampart 目标血量升档）。P1-3：仅在威胁新增
+     * （count 增加）时刷新，防旧威胁停留时永不过期。
      */
     lastHostileAt?: number;
     /** P1-3：上一 tick 的威胁 creep 数量，用于检测新增威胁（count 增加）。
@@ -155,19 +136,18 @@ declare global {
       /** 危机带（crisis/recovery）驻留评估次数（v14+，最短驻留防极限环）。 */
       bandTicks?: number;
       /**
-       * P0-1：srcRatio 满载 + storage 累积流失双条件持续成立的评估次数。
-       * 任一条件不再满足时立即归零；达 srcStallEnterTicks 后强制 crisis。
+       * P0-1：srcRatio 满载 + storage 累积流失双条件持续成立的评估次数；
+       * 任一条件不满足立即归零，达 srcStallEnterTicks 后强制 crisis。
        */
       srcStallTicks?: number;
       /**
-       * P0-1：上一 tick storage 中的能量，用于跨 tick 计算 storageDrainRate。
-       * 无 storage 或首次运行时为 undefined（drainRate=0，不触发 srcRatio 通道）。
+       * P0-1：上一 tick storage 能量，用于跨 tick 算 storageDrainRate；
+       * 无 storage/首次运行时 undefined（drainRate=0，不触发 srcRatio 通道）。
        */
       storageEnergyPrev?: number;
       /**
-       * P0-1：srcRatio>0.9 期间 storage 的累积净流失量（E，正值=累积失血）。
-       * 流失累加、回填抵消（max(0) 不为负）；srcRatio≤0.9 时归零。
-       * 超过 storageDrainAccumThreshold(1000) 触发 srcStalled。
+       * P0-1：srcRatio>0.9 期间 storage 累积净流失（E，正值=失血）。
+       * 流失累加、回填抵消（max(0)）；超 storageDrainAccumThreshold(1000) 触发 srcStalled。
        */
       storageDrainAccum?: number;
       harvesterCount: number;
@@ -175,23 +155,19 @@ declare global {
       rcl: number;
     };
     /**
-     * Storage 能量超过 storageFullThreshold 时为 true。
-     * 由 room-state 每 tick 计算，供 spawn-manager 限采 + demand 加速消费。
+     * Storage 能量超 storageFullThreshold 时为 true（room-state 每 tick 算），
+     * 供 spawn-manager 限采 + demand 加速消费。
      */
     storageNearFull?: boolean;
     spawnQueue?: SpawnRequest[];
     /**
-     * 孵化请求黑名单（SP-2）：key → 冷却到期 tick。
-     * cleanQueue 因重试上限清除的请求 key 在冷却期内不得重建 —
-     * 打破「5 次失败 → 删除 → demand 重建 → 再 5 次」的翻炒循环。
-     * 与 construction 的 segment blocked 黑名单同型（范本先例）。
+     * 孵化请求黑名单（SP-2）：key → 冷却到期 tick。重试上限清除的请求在冷却期内
+     * 不得重建，打破「删除 → 重建 → 再删」的翻炒循环。
      */
     spawnBlacklist?: Record<string, number>;
     /**
-     * P0-3：spawn churn 熔断 — 角色 → 熔断到期 tick。
-     * 200 tick 滑窗内同 role churn > 20 次时，该 role 孵化冻结 100 tick。
-     * spawn-manager 写入，demand 读取跳过对应角色评估。
-     * 到期条目由 spawn-manager 自动清理防泄漏。
+     * P0-3：spawn churn 熔断 — 角色 → 熔断到期 tick。200 tick 滑窗内同 role
+     * churn > 20 次则冻结孵化 100 tick；spawn-manager 写、demand 读、到期自清理。
      */
     churnFreezeUntil?: Record<string, number>;
     buildQueue?: BuildTask[];
@@ -209,26 +185,17 @@ declare global {
       revision: number;
       nextPlanTick: number;
       /**
-       * P1-F：4-stage 规划分片状态（v17+）。
-       * - 0：空闲（等待 nextPlanTick）或未启动规划
-       * - 1：stage 0 已完成（prep），待跑 stage 1（核心结构）
-       * - 2：stage 1 已完成，待跑 stage 2（物流结构）
-       * - 3：stage 2 已完成，待跑 stage 3（道路 + 收尾）
-       *
-       * 跨 tick 中间产物放 globalCache（distance field 等大对象不进 Memory）。
-       * global reset 丢失 planStageData 时，下 tick 检测 planStage>0 但无 data
-       * → 重置为 0 重新开始（最多损失一个规划周期）。
+       * P1-F：4-stage 规划分片状态（v17+）：0 空闲 / 1-3 各 stage 待跑。
+       * 跨 tick 中间产物放 globalCache（大对象不进 Memory）；reset 丢 data 时重置 0 重来。
        */
       planStage?: 0 | 1 | 2 | 3;
       /**
-       * 目标清单缺口的下一次强制规划 tick（v21+，layout-planner 写）。
-       * 期望结构未达成（缺口 > 0）时 gap-force 触发规划；若放置仍失败，
-       * stage 3 将其设为 tick + 500（慢速重试），防止受限地形每 tick 空转。
-       * 缺口闭合或普通周期规划完成后删除。缺失视为 0（允许立即 gap-force）。
+       * 目标清单缺口的下一次强制规划 tick（v21+，layout-planner 写）：缺口 > 0 时
+       * gap-force 触发；放置失败设 tick+500 慢速重试；缺失视为 0（允许立即 gap-force）。
        */
       nextGapPlanTick?: number;
-      // 冷数据 overrides / blocked 已迁移到 RawMemory segment 0（见 kernel/segment-store.ts）。
-      // 保留可选字段用于 v3→v4 迁移兼容。
+      // 冷数据 overrides / blocked 已迁移到 RawMemory segment 0（kernel/segment-store.ts）—
+      // 以下字段仅 v3→v4 迁移期存在。
       /** @deprecated 已迁移到 segment，仅迁移期间存在。 */
       overrides?: Record<string, number>;
       /** @deprecated 已迁移到 segment，仅迁移期间存在。 */
@@ -243,20 +210,15 @@ declare global {
       /** min-cut 是否完成。 */
       complete: boolean;
     };
-    /**
-     * Builder pressure 迟滞状态（TD-016）。
-     * full: 经济健康，builder 满目标；shrinking: 经济承压，builder 线性收缩。
-     * 进入收缩：pressure > 0.35；退出收缩：pressure <= 0.25；带内保持不变。
-     */
+    /** Builder pressure 迟滞状态（TD-016）：进入收缩 pressure > 0.35，退出 ≤ 0.25，带内保持不变。 */
     builderPressureState?: 'full' | 'shrinking';
     /**
-     * Distributor 扩编需求首次出现的 tick（升编趋势确认）。
-     * 需求持续超过 CONFIG.spawn.distributorScaleUpDelay 才允许超出现有编制扩编；
-     * 需求回落即清除。防止 spawn 孵化瞬间的 fillTargets 尖峰催生过量 distributor。
+     * Distributor 扩编需求首次出现 tick：需求持续超 distributorScaleUpDelay
+     * 才允许扩编，回落即清除 — 防 fillTargets 尖峰催生过量 distributor。
      */
     distScaleUpSince?: number;
     /**
-     * 远矿运营 — 从本房管理的远程采矿操作。key = 目标房名。
+     * 远矿运营 — 从本房管理的远程采矿操作，key = 目标房名。
      * 由 remote-mining-manager 每 10 tick 评估/更新。
      */
     remoteOps?: Record<string, RemoteOp>;
@@ -267,10 +229,8 @@ declare global {
     recoveryTicks?: number;
     skipReasons?: Record<string, number>;
     /**
-     * 最近一次 generatePixel 的 tick（自愿放血协议）。
-     * pixel 吃光整个 bucket（10000），宽限窗口内 scheduler 把 tier 地板
-     * 抬到 conserve — 防止看门狗把自愿放血误判为 CPU 失控进入 recovery，
-     * 冻结 P2 经济角色数百 tick。
+     * 最近一次 generatePixel 的 tick（自愿放血协议）：宽限窗口内 scheduler 把
+     * tier 地板抬到 conserve，防看门狗把自愿放血误判为 CPU 失控进 recovery。
      */
     pixelAt?: number;
     /** 运行时摘要 — 每 10 tick 更新，供控制台快速诊断。 */
@@ -295,8 +255,8 @@ declare global {
     /** 参数自调优状态（v7+）。tuning-engine 每 500 tick 更新。 */
     tuning?: TuningMemory;
     /**
-     * 当前扩张行动（v11+，同一时刻至多一个）。
-     * expansion-manager 的状态机：claiming（claimer 在途）→ pioneering（拓荒编队建 spawn）。
+     * 当前扩张行动（v11+，同一时刻至多一个）：expansion-manager 状态机
+     * claiming（claimer 在途）→ pioneering（拓荒编队建 spawn）。
      */
     expansion?: {
       state: "claiming" | "pioneering";
@@ -310,9 +270,8 @@ declare global {
     /** 扩张失败目标黑名单（v11+）：房名 → 冷却到期 tick。 */
     expansionBlacklist?: Record<string, number>;
     /**
-     * 帝国姿态（v13+，empire-strategy 每 tick 评估写入）。
-     * Strategy 层的全局真相源：执行系统（扩张/远矿/未来进攻）只消费
-     * 此处的指令，不得自行裁决「是否该扩张/开战」。
+     * 帝国姿态（v13+，empire-strategy 每 tick 评估写入）— Strategy 层全局真相源：
+     * 执行系统（扩张/远矿/未来进攻）只消费此处指令，不得自行裁决「是否该扩张/开战」。
      */
     strategy?: {
       /** 当前姿态：develop 固本 / expand 扩张 / fortify 设防 / war 战争。 */
@@ -324,34 +283,27 @@ declare global {
       /** 指令：是否允许开辟新的远矿点（现役运营不受影响）。 */
       newRemoteOpsAllowed: boolean;
       /**
-       * war 可持续性计数（v27+，R4）：war 姿态下经济压力持续超过
-       * warMaxPressure 的连续 tick 数，由 empire-strategy 每 tick 写入。
-       * 持续超过 warExitPatienceTicks → 姿态降级 fortify（打不起就不打）。
-       * 压力恢复即清零 — 纯函数评估的滞回输入。
+       * war 可持续性计数（v27+，R4）：war 姿态下经济压力持续超 warMaxPressure 的
+       * 连续 tick 数（empire-strategy 每 tick 写）；超 warExitPatienceTicks →
+       * 降级 fortify；压力恢复即清零 — 纯函数评估的滞回输入。
        */
       warPressureTicks?: number;
     };
     /**
      * 失守房间记录（v11+）：房名 → 首次检测到失守的 tick。
-     * maintainMemory 据此在宽限期后清除 Memory.rooms 条目，
-     * 防止失守房的队列/布局/情报数据永久滞留。
+     * maintainMemory 据此在宽限期后清除 Memory.rooms 条目。
      */
     lostRooms?: Record<string, number>;
     /**
-     * 目标清单结构缺口观测（v21+，layout-planner 写）：房名 → 类型 → 缺口数。
-     * 期望 = CONTROLLER_STRUCTURES 派生（expectedStructureCounts），已有 = 已建
-     * 结构 + 我方在建 site + queued/blocked 队列任务。缺口 > 0 即真实未达成目标，
-     * 供控制台采样与人工介入信号；仅在实际缺口集合变化时写入（无 Memory 抖动）。
+     * 目标清单结构缺口观测（v21+，layout-planner 写）：期望 = CONTROLLER_STRUCTURES
+     * 派生，已有 = 建成结构 + 我方在建 site + queued/blocked 队列任务；缺口 > 0 即
+     * 真实未达成，供控制台采样与人工介入信号；仅在实际缺口集合变化时写入。
      */
     layoutGaps?: Record<string, Record<string, number>>;
     /**
-     * 布局可观测性指标（v25+，layout-metrics 写，漏洞 #11）：房名 → 指标快照。
-     * 字段见 LayoutMetrics 接口（deadAssetRate/linkUtilization/dismantleCount/
-     * mvcGapCount/linkConstrained/defenseWallRatio/defenseAlgoVersion/
-     * defenseRampartWeakPoints）。仅变化时写入，稳定状态不抖动。
-     * 消费方：deadAssetRate>0.5 触发拆改评估、linkUtilization<0.3 触发 link 审查、
-     * dismantleCount 增长但 deadAssetRate 不降 → 拆改失效告警、
-     * defenseWallRatio<0.7 防线弱点过多告警。
+     * 布局可观测性指标（v25+，layout-metrics 写，漏洞 #11）：房名 → 指标快照
+     * （字段见 LayoutMetrics）。仅变化时写入；消费方：deadAssetRate>0.5 触发拆改评估、
+     * linkUtilization<0.3 触发 link 审查、defenseWallRatio<0.7 防线弱点过多告警。
      */
     layoutMetrics?: Record<string, {
       deadAssetRate: number;
@@ -364,10 +316,9 @@ declare global {
       defenseRampartWeakPoints: number;
     }>;
     /**
-     * 帝国战争计划（v26+，war-planner 写入；v27 R4 扩展）。
-     * 仅 war 姿态时存在；同一时刻至多一个攻击编队（单目标，不并行开多线）。
-     * 畸形数据由 v26/v27 迁移自愈；姿态退出/目标失效/战损止损时
-     * war-planner 清除并回收在役 attacker。
+     * 帝国战争计划（v26+，war-planner 写入；v27 R4 扩展）：仅 war 姿态时存在，
+     * 同一时刻至多一个攻击编队（不并行开多线）；姿态退出/目标失效/战损止损时
+     * 清除并回收在役 attacker。
      */
     warPlan?: {
       /** 目标房名（敌方玩家房）。 */
@@ -380,27 +331,22 @@ declare global {
       since: number;
       /** 目标 tower 数（情报快照，供编队/撤退参考）。 */
       towersSeen: number;
-      /**
-       * 波次相位（R4）：build 集结（攻击者归建待命，满编才推进）/
-       * advance 推进（整波进攻）。由 war-planner 按存活数迟滞切换。
-       */
+      /** 波次相位（R4）：build 集结（满编才推进）/ advance 推进（整波进攻），按存活数迟滞切换。 */
       phase?: "build" | "advance";
       /**
-       * 累计提交的 attacker 孵化请求数（R4 止损账本）— 每个新 key
-       * 只计一次。超过 squadSize × CONFIG.war.casualtyMultiplier 判消耗战失败。
+       * 累计提交的 attacker 孵化请求数（R4 止损账本，每 key 只计一次）；
+       * 超 squadSize × CONFIG.war.casualtyMultiplier 判消耗战失败。
        */
       spawned?: number;
     };
     /**
-     * 战争失败目标黑名单（v27+，war-planner 写入）：房名 → 冷却到期 tick。
-     * 战后核验结论为 failure/unknown 的目标在冷却期内不被 selectWarTarget
-     * 重选。到期由 war-planner 每次运行时清理（防膨胀）。
+     * 战争失败目标黑名单（v27+，war-planner 写入）：核验结论 failure/unknown 的
+     * 目标冷却期内不被 selectWarTarget 重选；到期由 war-planner 清理。
      */
     warBlacklist?: Record<string, number>;
     /**
-     * 战损止损后的整军休战期（v27+，war-planner 写入）：消耗战收摊后
-     * 至此刻前不再创建新战争计划（黑名单只挡单目标，休战期挡跨目标
-     * 添油循环）。到期后若姿态仍为 war 则重新评估。
+     * 战损止损后的整军休战截止（v27+，war-planner 写入）：此 tick 前不创建新战争
+     * 计划（黑名单只挡单目标，休战期挡跨目标添油循环）；到期后姿态仍为 war 则重估。
      */
     warStandDownUntil?: number;
   }
@@ -410,10 +356,9 @@ declare global {
     /** 上次调优 tick。 */
     lastTuned: number;
     /**
-     * 生成当前 rooms 覆盖所基于的 CONFIG.tuning.baselineVersion（P1-I）。
-     * tuning-engine 每次评估前比对：不匹配时清空 rooms 覆盖（旧值可能
-     * 基于过时经济假设），写入当前 CONFIG 值，自调优从新基线重新收敛。
-     * undefined 视为不匹配（首次运行或 v18 迁移后）。
+     * 生成 rooms 覆盖所基于的 CONFIG.tuning.baselineVersion（P1-I）：tuning-engine
+     * 每次评估前比对，不匹配即清空 rooms 覆盖（旧值可能基于过时经济假设）从新基线
+     * 收敛；undefined 视为不匹配（首次运行或 v18 迁移后）。
      */
     baselineVersion?: number;
     /** 每房间的调优覆盖值。key = 房间名。 */
@@ -425,17 +370,16 @@ declare global {
       signals: Record<string, number>;
       skipped?: string;
       /**
-       * P3 修复（附录 E.2）：verify pass 被跳过时的原因。
-       * 危机/低 bucket 期间外生信号不可信，verify 跳过保留 pending
-       * （参数仍被 pending-lock 排除，不计回滚不计 blocked）。
-       * 取值："verify_skipped_crisis" / "verify_skipped_cpu_tier" / "verify_skipped_rcl"。
+       * P3 修复（附录 E.2）：verify pass 被跳过时的原因 — 危机/低 bucket 期间外生
+       * 信号不可信，verify 跳过保留 pending。取值 "verify_skipped_crisis" /
+       * "verify_skipped_cpu_tier" / "verify_skipped_rcl"。
        */
       verifySkipped?: string;
       /** 本次评估产生的趋势记录（P1-1 调整置信度）。 */
       trend?: Record<string, "up" | "down" | "none">;
       /**
-       * 改进 A：本次评估时 pending 验证中的参数诊断（精简版，控体积）。
-       * 不含 preAdjustSignals 完整快照（那是 Memory.kernel.tuning.rooms 的数据）。
+       * 改进 A：本次评估时 pending 验证中的参数诊断（精简版，控体积；
+       * 完整 preAdjustSignals 在 Memory.kernel.tuning.rooms）。
        */
       pendingValidations?: Record<string, {
         adjustTick: number;
@@ -443,18 +387,15 @@ declare global {
         adjustDirection: "up" | "down";
         contractBlocked?: boolean;
       }>;
-      /**
-       * 改进 A：本次评估时的冻结参数诊断（精简版）。
-       */
+      /** 改进 A：本次评估时的冻结参数诊断（精简版）。 */
       frozenParams?: Record<string, {
         frozenUntil: number;
         rollbackCount: number;
         reason: string;
       }>;
       /**
-       * P1 修复（附录 E.2）：人口合同 blocked 参数诊断。
-       * roleCount 持续未达新边界时记录 blockedSinceTick，
-       * 连续 2 个 verifyDelay 窗口仍未达 → 回滚 + 计 1 次回滚。
+       * P1 修复（附录 E.2）：人口合同 blocked 参数诊断 — roleCount 持续未达新边界时
+       * 记录 blockedSinceTick，连续 2 个 verifyDelay 窗口仍未达 → 回滚 + 计 1 次回滚。
        */
       blockedParams?: Record<string, {
         blockedSinceTick: number;
@@ -464,7 +405,7 @@ declare global {
   }
 
   /**
-   * 单个远矿运营记录（存 RoomMemory.remoteOps，短字段、有界）。
+   * 单个远矿运营记录（存 RoomMemory.remoteOps，短字段、有界）—
    * 遵循 Memory 规范：只存 ID、枚举、少量数字和短 key。
    */
   interface RemoteOp {
@@ -480,42 +421,34 @@ declare global {
     /** 最近可见 tick（creep 进入或 observer 扫描时更新）。 */
     lastSeen: number;
     /**
-     * InvaderCore 压制冷却截止 tick。
-     * 压制判定不能只依赖当 tick 视野：发现核心 → 回收 creep → 视野消失 →
-     * 瞬时检测集合清空 → 孵化恢复 → 新 creep 送死，形成
-     * 「孵化→发现→回收→失明→再孵化」死循环。持久化后冷却期内孵化保持冻结；
-     * 到期恢复孵化探测，若核心仍在（新 creep 带回视野）则续期。
-     * 有视野且确认核心消失时立即清除（提前解封）。
+     * InvaderCore 压制冷却截止 tick：发现核心 → 回收 → 失明 → 孵化恢复 → 新 creep
+     * 送死的循环靠持久化冷却打破。到期恢复孵化探测（核心仍在则新视野续期）；
+     * 有视野且确认核心消失时立即清除。
      */
     blockedUntil?: number;
     /**
-     * 普通威胁冷却截止 tick（RM-2，与 blockedUntil 同款双轨）。
-     * 有视野见威胁写入/续期；有视野确认清空立即清除；无视野时冷却期内
-     * 维持威胁态 — 防「威胁 → 失明 → 恢复孵化 → 送死」循环送兵。
+     * 普通威胁冷却截止 tick（RM-2，与 blockedUntil 同款双轨）：有视野见威胁写入/
+     * 续期，确认清空立即清除，无视野时冷却期内维持威胁态 — 防「威胁→失明→恢复
+     * 孵化→送死」循环送兵。
      */
     threatUntil?: number;
     /**
-     * P1-G：危险冷却到期 tick（v16+，从 intel.dangerUntil 迁移至此）。
-     * 远矿房出现威胁（hostile creep / InvaderCore）或被敌方预定时由
-     * remote-mining-manager 唯一写入。冷却期内该房不作为远矿/扩张候选（止损）。
-     * 迁移原因：intel 的写者除 remote-mining-manager 外还有 room-observer
-     * 透传链（domain/intel.ts 的 prev 保留逻辑），双写者加一个写者就崩；
-     * remoteOps 的唯一写者本就是 remote-mining-manager，字段搬家后单一写者。
+     * P1-G：危险冷却到期 tick（v16+，从 intel.dangerUntil 迁移至此）—
+     * remote-mining-manager 唯一写入；冷却期内该房不作远矿/扩张候选（止损）。
+     * 迁移原因：intel 双写者（room-observer 透传链）加一个写者就崩，remoteOps
+     * 本就单一写者，搬家后字段归单一写者。
      */
     dangerUntil?: number;
     /**
-     * 经济重估：netScore 首次跌破门槛的 tick（A-3/B-6）。
-     * active op 每轮维护重算 netScore/haulerNeed（用当前 pathCost + body 运力）；
-     * 连续低于门槛超过宽限期才废弃 —— 抗抖动，防单次波动误撤边际 op。
-     * netScore 回升到门槛以上时清除。
+     * 经济重估（A-3/B-6）：netScore 首次跌破门槛的 tick；连续低于门槛超过宽限期
+     * 才废弃（抗抖动，防单次波动误撤边际 op）；回升到门槛以上时清除。
      */
     lowScoreSince?: number;
     /**
      * P0-A：本远矿房我方创建的 container construction site 数量（v15+）。
-     * 由 remote-mining-manager 每 managerInterval tick 用 lookForAtArea 实测校正 —
-     * site 建成（变结构）/被移除/失效时递减，新建时递增。
-     * 只增不减会导致几个远矿房永久占满 maxGlobalSites 饿死自有房重建。
-     * construction-manager 的全局上限判定读此值：ctx.globalSiteCount + Σ siteCount < maxGlobalSites。
+     * remote-mining-manager 每 managerInterval tick 用 lookForAtArea 实测校正 —
+     * 只增不减会让几个远矿房永久占满 maxGlobalSites 饿死自有房重建；
+     * construction-manager 全局上限判定读此值（ctx.globalSiteCount + Σ siteCount < maxGlobalSites）。
      */
     siteCount?: number;
   }

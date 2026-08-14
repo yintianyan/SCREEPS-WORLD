@@ -47,8 +47,7 @@ export function emitSummary(budget: Budget): void {
     parts.push(`${name}=${cpu.toFixed(1)}`);
   }
 
-  // actionProfiling 开启时输出 top 5 action 热点。
-  // 仅在 CPU 偏高或有错误时输出（与外层日志门禁一致），避免健康 tick 刷屏。
+  // actionProfiling 开启时输出 top 5 action 热点；仅 CPU 偏高或有错误时输出，避免刷屏。
   if (CONFIG.debug.actionProfiling) {
     const actionData = getActionCpuSnapshot();
     if (actionData && actionData.size > 0) {
@@ -64,7 +63,6 @@ export function emitSummary(budget: Budget): void {
     }
   }
 
-  // 仅在 CPU 偏高或有错误时记录日志 — 避免健康 tick 的控制台刷屏。
   if (totalCpu > budget.softLimit * 0.8 || t.errors > 0) {
     console.log(parts.join(" "));
   }

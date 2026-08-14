@@ -9,15 +9,10 @@ import { getSource } from "../../support/targeting";
 import { classifyLinkRole, computeControllerLinkTarget } from "../../../domain/economy/links";
 
 /**
- * 从 source 采集（通用）。
- *
- * resolve 检查 source.energy > 0：source 再生期间（energy === 0）不触发采集，
- * 避免 harvest → ERR_NOT_ENOUGH_RESOURCES → mode=idle 的无限振荡。
- * source 空时角色 fallthrough 到后续候选或 idle+park（离开矿位不堵路）。
- *
- * execute 中 ERR_NOT_ENOUGH_RESOURCES 不再设 idle：resolve 已过滤空 source，
- * 此处仅为跨 tick 竞态（resolve 通过后 source 被其他 creep 采空）。
- * 竞态是瞬时的，保持 acquire 模式下 tick 自动重试比切 idle 更快恢复。
+ * 从 source 采集（通用）。resolve 过滤空 source（再生期 energy===0），避免
+ * harvest→ERR_NOT_ENOUGH_RESOURCES→idle 无限振荡；空时 fallthrough 或 idle+park。
+ * execute 中 ERR_NOT_ENOUGH_RESOURCES 不设 idle：resolve 已过滤，此处仅为跨 tick 竞态
+ * （resolve 通过后 source 被其他 creep 采空）——瞬时竞态，保持 acquire 自动重试比切 idle 更快恢复。
  */
 export function harvestSource(): ActionCandidate<Source> {
   return {
@@ -42,18 +37,10 @@ interface StationaryMineTarget {
 
 /**
  * 站桩采集并同 tick 倒能（定点 miner 专用）。
- *
- * 关键：Screeps 中 harvest 与 transfer 是两个独立 intent，可在同一 tick 执行。
- * 只要矿工站在 source container 之上（或与 source 及 sink 均 range<=1），
- * 每 tick 即可「采 + 倒」，1 CARRY 也能维持满吞吐 10/tick，
- * 消除「采满停一 tick 倒能」造成的 ~17% 产能损失。
- *
- * 触发条件：分配到的 source 旁（range<=1）存在 container 或 link 作为站桩点。
- * 无 sink（早期无 container）时 resolve=undefined，回退到通用 harvestSource。
- *
- * 该动作同时置于 harvester 的 acquire[0] 与 work[0]：
- *   - 无论 FSM 处于哪个 mode 都执行，绕开「单 tick 只跑一条链」的限制；
- *   - 作为 work[0] 拦截站桩矿工，使其永不落到 fill/build/upgrade 而离岗（P2-7）。
+ * 关键（[Facts]）：harvest 与 transfer 是独立 intent，可同 tick 执行——站 source container 上
+ * 或 source 与 sink 均 range<=1，1 CARRY 维持满吞吐 10/tick，消除「采满停一 tick 倒能」的 ~17% 损失。
+ * 触发条件：source 旁 range<=1 有 container/link 站桩点，无则回退 harvestSource。
+ * 同时置于 acquire[0] 与 work[0]：绕开「单 tick 只跑一条链」限制；作为 work[0] 拦截站桩矿工不离岗（P2-7）。
  */
 export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
   return {
@@ -68,16 +55,13 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
     },
     execute: (ac, target) => {
       const { source, container, link } = target;
-      // 2026-08-01 健壮性：source link 只在有下游出口时可灌——
-      // storage link 存在（能量瞬移进 hub，hauler 排空）或 controller link
-      // 按需求驱动目标仍有需求（RCL<8 升级 / RCL8 保级）。
-      // 无出口（RCL8 停供 + 无 storage link / storage link 被毁）时灌 link
-      // 只会积压 → container 满 → drop 衰减损失（rcl8-endgame 5000t 回归实证）。
+      // 健壮性（2026-08-01）：source link 只在有下游出口时可灌——storage link 存在（能量瞬移进
+      // hub，hauler 排空）或 controller link 按需求驱动目标仍有需求（RCL<8 升级/RCL8 保级）。
+      // 无出口时灌 link 只会积压 → container 满 → drop 衰减损失（rcl8-endgame 5000t 回归实证）。
       const linkUsable = link !== undefined && linkHasOutlet(ac, link);
-      // 站位选择：默认站 container 之上（range 0 倒能）或 source 旁。
-      // 特例——source link 与 container 分居 source 两侧、站 container 够不到 link（range>1）时：
-      // 改站到「贴 source 且贴 link（均 range<=1）」的格，让 harvester 同 tick 倒进 link，
-      // 能量经 link 网络瞬移入库/入 controller link，免去远距离 hauler 往返（source#1 病灶）。
+      // 站位：默认站 container 之上（range 0 倒能）或 source 旁。特例——source link 与 container
+      // 分居 source 两侧、站 container 够不到 link（range>1）时，改站「贴 source 且贴 link」格，
+      // 同 tick 倒进 link，能量经 link 网络瞬移入库，免去远距离 hauler 往返（source#1 病灶）。
       const linkStand = linkUsable
         && ac.creep.pos.getRangeTo(link.pos) > 1
         && !(container && container.pos.getRangeTo(link.pos) <= 1)
@@ -91,9 +75,9 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
         registerAnchor(ac.creep, CONFIG.movement.trafficPriority.anchorMiner);
       }
 
-      // 站桩维护：站立的 source container 血量 < 80%（与 repairNearbyContainer 阈值一致）时先修再采。
-      // harvest 与 repair 互斥（不能同 tick），故空手时先采一 tick 攒能量、本 tick 不倒，
-      // 下一 tick 有能量即修，交替进行；防止 source container 坍塌断链（P0 物流 / P2-7 不离岗）。
+      // 站桩维护：站立的 source container 血量 < 80%（与 repairNearbyContainer 阈值一致）先修再采。
+      // harvest 与 repair 互斥（不能同 tick），空手时先采一 tick 攒能量、本 tick 不倒，下一 tick 即修；
+      // 防止 source container 坍塌断链（P0 物流 / P2-7 不离岗）。
       if (
         container
         && ac.creep.pos.getRangeTo(container) <= 1
@@ -113,8 +97,7 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
         return;
       }
       // 已在采集范围。若选定了 link 站位而尚未站上去，同 tick 移动过去 ——
-      // harvest 与 move 是独立 intent，重定位期间照常采集，零吞吐损失；
-      // 到位后（range 1 到 source 且 range 1 到 link）即开始同 tick 倒进 link。
+      // harvest 与 move 是独立 intent，重定位期间照常采集，零吞吐损失。
       if (linkStand && (ac.creep.pos.x !== linkStand.x || ac.creep.pos.y !== linkStand.y)) {
         moveToTarget(ac.creep, linkStand);
       }
@@ -142,17 +125,12 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
 }
 
 /**
- * source link 是否有可用的下游出口（2026-08-02 死锁修复）。
- *
- * 判定（与 link-system 的传输计划同口径）：
+ * source link 是否有可用的下游出口（2026-08-02 死锁修复，与 link-system 传输计划同口径）：
  *   - storage link 存在 → true（能量瞬移进 hub，hauler 排空最后一公里）
- *   - 否则 controller link 存在且 computeControllerLinkTarget > 0
- *     （RCL<8 有升级需求，或 RCL8 有降级风险）→ true
- *     即使 controller link 暂时充满也返回 true：upgrader 会持续消耗，
- *     harvester 应持续向 source link 倒能避免"controller link 满 → 停倒 →
- *     source link 空 → 无法补给 controller link"的死锁。
- *   - 否则 false：link 是死资产（RCL8 停供 + 无 storage link），harvester
- *     应灌 container 走 hauler 物流，避免 link 积压 → container 满 → drop 衰减。
+ *   - 否则 controller link 存在且 computeControllerLinkTarget > 0 → true。即使 controller link
+ *     暂时充满也返回 true：upgrader 持续消耗，停倒会造成「controller link 满 → 停倒 → source
+ *     link 空 → 无法补给」死锁。
+ *   - 否则 false：link 是死资产（RCL8 停供 + 无 storage link），灌 container 走 hauler 物流。
  */
 function linkHasOutlet(ac: ActionContext, link: StructureLink): boolean {
   const snap = ac.snapshot;
@@ -174,23 +152,18 @@ function linkHasOutlet(ac: ActionContext, link: StructureLink): boolean {
     snap.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
     ctrlLink.store.getCapacity(RESOURCE_ENERGY),
   );
-  // target=0 表示 RCL8 满级且无降级风险 → controller link 不需要能量 → 死资产
-  // target>0 且 controller link 有空闲容量 → true：link-system 可传走能量，harvester
-  //   应持续向 source link 倒能。这修复了 target 低（如 320）时 controller link 在
-  //   target~capacity 之间 OLD 代码误判 false 导致的"停倒 → source link 空 →
-  //   controller link 耗尽后无法补给"死锁。
-  // controller link 完全满（freeCapacity=0）→ false：link-system 无处可传，harvester
-  //   应灌 container 走 hauler 物流，避免能量卡死在 source link（rcl5-links 回归实证）。
+  // target=0 表示 RCL8 满级且无降级风险 → controller link 不需要能量 → 死资产。
+  // target>0 且有空闲容量 → true：修复了 target 低（如 320）时 OLD 代码误判 false 导致的
+  // 「停倒 → source link 空 → controller link 耗尽后无法补给」死锁。
+  // controller link 完全满（freeCapacity=0）→ false：灌 container 走 hauler 物流（rcl5-links 回归实证）。
   return target > 0 && ctrlLink.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
 }
 
 /**
- * 找一个「贴 source 且贴 link（均 range<=1）」的可站格，供 harvester 开 link 挖矿。
- *
- * 背景：当 source container 与 source link 分居 source 两侧时，站 container 上够不到 link，
- * harvester 只能灌 container → 满仓 → 靠 hauler 远搬。改站到同时贴 source 与 link 的格后，
- * harvester 可同 tick 倒进 link，能量瞬移入库、免远搬。
- * 扫 source 八邻域：非墙 + 距 link range<=1 + 非 link 本格 + 无阻挡结构 → 首个命中即返回。
+ * 找「贴 source 且贴 link（均 range<=1）」的可站格，供 harvester 开 link 挖矿。
+ * 背景：source container 与 source link 分居 source 两侧时，站 container 够不到 link，
+ * 只能灌 container 靠 hauler 远搬；改站同时贴两者的格后可同 tick 倒进 link，能量瞬移入库。
+ * 扫 source 八邻域：非墙 + 距 link range<=1 + 非 link 本格 + 无阻挡结构 → 首个命中即返回；
  * 找不到（几何无解）返回 undefined，调用方回退 container 站位。
  */
 function findSourceLinkStand(ac: ActionContext, source: Source, link: StructureLink): RoomPosition | undefined {
@@ -231,11 +204,9 @@ function sourceAdjacentContainer(ac: ActionContext, source: Source): StructureCo
 }
 
 /** 找到本 source 的 source link（RCL5+）。
- *
- * 放宽到 range≤anchorRange(2) 且要求该 link 的角色为 source（classifyLinkRole 判定，
- * 与 link-system 分类同源）：让「container 隔在 source 与 link 之间」的几何（link 距
- * source range2、harvester 站 container 上仍 range1 够到 link）也能开 link 挖矿；只认
- * role===source 绝不误灌 controller/storage link。够不到时由灌能 range≤1 守卫回退 container。 */
+ * 放宽到 range≤anchorRange(2) 且要求该 link 的 role 为 source（classifyLinkRole 判定，与
+ * link-system 分类同源）：让「container 隔在 source 与 link 之间」的几何也能开 link 挖矿；
+ * 只认 role===source，绝不误灌 controller/storage link。够不到时由灌能 range≤1 守卫回退 container。 */
 function sourceAdjacentLink(ac: ActionContext, source: Source): StructureLink | undefined {
   const range = CONFIG.economy.link.anchorRange;
   const sourcePts = ac.snapshot.sources.map(s => s.pos);
@@ -253,8 +224,7 @@ interface MineralTarget {
 }
 
 /**
- * 从 mineral 采集（需要 extractor）。
- * 触发条件：房间有 extractor + mineral 有储量 + creep 有 carry 空间。
+ * 从 mineral 采集（需要 extractor）。触发条件：房有 extractor + mineral 有储量 + carry 有空间。
  * 用于 source 再生期间的空闲利用（RCL6+）。
  */
 export function harvestMineral(): ActionCandidate<MineralTarget> {
@@ -269,9 +239,8 @@ export function harvestMineral(): ActionCandidate<MineralTarget> {
     },
     execute: (ac, target) => {
       const { mineral } = target;
-      // 站位：mineral 旁 range<=1 有 container 时以 container 为通勤终点 —— 站到
-      // container 之上后 range0 倒矿 + range1 采矿，零穿梭；否则站 mineral 旁。
-      // 镜像 harvester.stationaryMine 的 container 站位，防"采(贴矿)↔倒(贴容器)"来回走格。
+      // 站位：mineral 旁 range<=1 有 container 则以 container 为通勤终点（range0 倒矿 + range1 采矿，
+      // 零穿梭），镜像 harvester.stationaryMine 的 container 站位，防「采↔倒」来回走格。
       const container = ac.snapshot.containers.find(c => c.pos.getRangeTo(mineral.pos) <= 1);
       const standTarget: RoomPosition | { pos: RoomPosition } = container ?? mineral;
       runAction(ac.creep, standTarget, () => ac.creep.harvest(mineral), {

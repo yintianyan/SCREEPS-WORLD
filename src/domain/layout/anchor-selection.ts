@@ -1,23 +1,10 @@
 /**
- * 约束推导锚点选择 — 从地形约束推导最优核心位置。
- *
- * 设计哲学（plan §5.6）：
- *   布局从约束推导，而非套用固定模板。锚点是布局的根基——
- *   选错锚点 = 核心区域被墙切割 = 大量 relocation = 物流效率崩塌。
- *
- * 当前状态（Phase 3）：
- *   本模块只做"诊断评分"——评估已有锚点（spawn 位置）的质量，
- *   不改变运行时行为。Phase 4 才启用约束推导放置。
- *
- * 评分维度：
- *   - openness：核心区域平坦度（Distance Transform 值）
- *   - avgSourceDist：到所有 source 的平均曼哈顿距离（hauler 通勤）
- *   - controllerDist：到 controller 的距离（升级通勤，link 前重要）
- *   - exitDistance：到最近出口的距离（防御纵深）
- *   - blockedCells：核心 7×7 区域内被墙/边界阻挡的格数
- *   - mineralDist：到 mineral 的距离（RCL6+ 相关）
- *
- * 纯函数 — 不访问 Game/Memory，所有输入通过参数注入。
+ * 约束推导锚点选择 — 从地形约束推导最优核心位置（plan §5.6）。
+ * 当前只做诊断评分（评估已有 spawn 锚点质量），不改变运行时行为；
+ * Phase 4 才启用约束推导放置。纯函数，不访问 Game/Memory。
+ * 评分维度动机：平坦度（openness）权重最高，blockedCells 强惩罚；
+ * source 距离对应 hauler 通勤、controller 距离对应升级通勤（link 前
+ * 重要）、exit 距离是防御纵深、mineral 距离 RCL6+ 才相关。
  */
 
 import type { DistanceField } from "./terrain-analysis";
@@ -43,7 +30,7 @@ export const DEFAULT_WEIGHTS: AnchorWeights = {
   mineralDist: -0.5,
 };
 
-/** 锚点约束数据（从房间状态提取）。 */
+
 export interface AnchorConstraint {
   /** 核心区域开放度（Distance Transform 值）。 */
   readonly openness: number;
@@ -55,18 +42,18 @@ export interface AnchorConstraint {
   readonly exitDistance: number;
   /** 核心 7×7 区域内被墙/边界阻挡的格数。 */
   readonly blockedCells: number;
-  /** 到 mineral 的距离。 */
+
   readonly mineralDist: number;
 }
 
-/** 锚点候选（含坐标和评分）。 */
+
 export interface AnchorCandidate extends AnchorConstraint {
   readonly x: number;
   readonly y: number;
   readonly score: number;
 }
 
-/** selectAnchors 的输入。 */
+
 export interface AnchorSelectionInput {
   readonly field: DistanceField;
   readonly sources: readonly { x: number; y: number }[];
@@ -83,11 +70,7 @@ export interface AnchorSelectionInput {
   readonly maxCandidates?: number;
 }
 
-/**
- * 评分公式：加权线性组合。
- * score = w.openness * openness + w.sourceDist * avgSourceDist + ...
- * 分数越高越好。
- */
+/** 加权线性组合评分，分数越高越好。 */
 export function scoreAnchor(c: AnchorConstraint, w: AnchorWeights = DEFAULT_WEIGHTS): number {
   return (
     w.openness * c.openness
@@ -99,10 +82,7 @@ export function scoreAnchor(c: AnchorConstraint, w: AnchorWeights = DEFAULT_WEIG
   );
 }
 
-/**
- * 评估单个位置的锚点质量（不搜索，只评分）。
- * 用于诊断已有 spawn 位置。
- */
+/** 评估单个位置锚点质量（不搜索，只评分），用于诊断已有 spawn。 */
 export function evaluateAnchorAt(
   x: number,
   y: number,
@@ -146,14 +126,7 @@ export function evaluateAnchorAt(
 }
 
 /**
- * 从 DistanceField 中搜索并排序候选锚点。
- *
- * 筛选条件：
- *   1. openness >= minOpenness（默认 4，约 4 格半径无墙）
- *   2. 边界内 [bounds]（默认 [5,44]）
- *   3. 不占 source/controller/mineral
- *
- * CPU 成本：O(40×40) 候选 × O(7×7) blockedCells = ~8000 次比较。
+ * 搜索并排序候选锚点。CPU 约 O(40×40)×O(7×7) ≈ 8000 次比较，
  * 只在首次规划时执行一次，后续从 Memory 读取。
  */
 export function selectAnchors(input: AnchorSelectionInput): AnchorCandidate[] {
@@ -165,7 +138,7 @@ export function selectAnchors(input: AnchorSelectionInput): AnchorCandidate[] {
     maxCandidates = 5,
   } = input;
 
-  // 不可占用位置
+
   const occupied = new Set<number>();
   for (const s of sources) occupied.add(s.x * 50 + s.y);
   if (controller) occupied.add(controller.x * 50 + controller.y);
@@ -188,11 +161,7 @@ export function selectAnchors(input: AnchorSelectionInput): AnchorCandidate[] {
   return candidates.slice(0, maxCandidates);
 }
 
-/**
- * 诊断：评估已有锚点在候选列表中的排名。
- * 返回 { rank, total, candidate } — rank 从 1 开始。
- * 如果已有锚点不满足 minOpenness，rank = -1（不合格）。
- */
+/** 诊断：已有锚点在候选列表中的排名（rank 从 1 起，比所有候选都差时为 total+1）。 */
 export function diagnoseAnchor(
   currentX: number,
   currentY: number,
@@ -201,7 +170,7 @@ export function diagnoseAnchor(
   const current = evaluateAnchorAt(currentX, currentY, input, input.weights);
   const all = selectAnchors(input);
 
-  // 找当前锚点在排序列表中的位置
+
   let rank = -1;
   for (let i = 0; i < all.length; i++) {
     if (all[i]!.score <= current.score) {

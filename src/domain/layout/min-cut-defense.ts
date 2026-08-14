@@ -1,48 +1,17 @@
 /**
  * Min-Cut 防御规划 — 用最少 rampart 封锁所有入侵路径。
- *
- * 算法：最小顶点割（Minimum Vertex Cut）via 最大流（Edmonds-Karp）。
- *
- * 问题建模：
- *   - 图 G = (V, E)：V = 所有非墙格，E = 8 邻接非墙格之间的边
- *     （正交 4 方向 + 对角线 4 方向；对角线边受切角规则约束——
- *       两个正交角落格都非墙时才连通，模拟 Screeps 切角限制）
- *   - Source 集合 S = 房间出口格（敌人入口）
- *   - Sink 集合 T = 核心区域格（要保护的结构）
- *   - 求：最小的顶点集合 C，使得移除 C 后 S 和 T 不连通
- *   - C 中的格就是防御建筑放置位置（defense-planner 按位置特征分流 wall/rampart）
- *
- * 实现：顶点割 → 边割转换 + Edmonds-Karp 最大流
- *   - 每个顶点 v 拆为 v_in → v_out（容量 1 = 可被切割）
- *   - 相邻顶点 u_out → v_in（容量 INF = 不可切割的边）
- *   - Source 顶点容量 INF（不可切割出口格）
- *   - Sink 顶点容量 INF（不可切割核心格）
- *   - 最大流值 = 最小割大小 = 最少 rampart 数
- *   - 从残余图中提取割集：BFS 从 source 出发，
- *     经过容量 > 0 的边能到达的 v_in 中，
- *     v_in → v_out 边已满载（残余 = 0）的 v 就是割集
- *
- * CPU 成本：
- *   - 图规模：~2000 非墙格 × 2（拆点）= ~4000 节点，~16000 边
- *   - Edmonds-Karp：O(V × E²) 最坏，但实际流值小（通常 < 20）
- *   - 实测：~0.5-2ms（可接受，只在 RCL4 首次规划时执行一次）
- *   - 缓存：结果存入 global heap（`__minCutCache`）+ Memory.rooms[*].minCut，
- *     地形/核心结构不变则不重算（defense-planner.ts 管理）
- *
- * 纯函数 — 不访问 Game/Memory，所有输入通过参数注入。
+ * 最小顶点割 via Edmonds-Karp 最大流：V = 非墙格（8 邻接，对角受切角规则约束），
+ * S = 房间出口，T = 核心区域，割集 C = rampart 放置位置（defense-planner 按位置特征分流 wall/rampart）。
+ * 实现：顶点拆 v_in→v_out（容量 1）+ 超级源汇；CPU 实测 ~0.5-2ms，仅 RCL4 首规划执行；
+ * 结果缓存于 global `__minCutCache` + Memory.rooms[*].minCut（defense-planner 管理失效）。
+ * 纯函数 — 不访问 Game/Memory，输入全参数注入。
  */
 
 /**
- * Min-Cut 算法版本戳。
- *
- * 算法语义变更时递增（如修复 SUPER_SOURCE/SINK 冲突、调整割集提取逻辑）。
- * defense-planner 把它拼入缓存 signature，使旧缓存自然失效——
- * 避免部署后仍读取修复前的错误结果。
- *
- * v2: 修复 SUPER_SOURCE/SINK 与 (49,49) 拆点 (in=4998, out=4999) 冲突。
- * v3: 邻接从正交 4 方向扩展为 8 方向 + 切角规则——对角线边仅在两个
- *     正交角落格都非墙时才添加，模拟 Screeps 切角移动限制。
- *     修复盲点：旧 4 邻接图忽略对角线路径，割集可能漏封对角线入侵。
+ * Min-Cut 算法版本戳：语义变更时递增，defense-planner 拼入缓存 signature
+ * 使旧缓存自然失效，避免部署后读到修复前结果。
+ * v2：修复超级源汇与 (49,49) 拆点冲突；v3：4 邻接 → 8 邻接 + 切角规则，
+ * 修盲点：旧图忽略对角线路径，割集可能漏封对角线入侵。
  */
 export const MINCUT_ALGO_VERSION = "v3";
 
@@ -87,9 +56,8 @@ export function computeMinCutDefense(
   exitPositions: readonly { x: number; y: number }[],
   maxRamparts = 30,
   /**
-   * P2-1：不可放置割集顶点的位置集合（packed = x*50+y）。
-   * 这些位置的拆点边容量设为 INF（不可切割），算法自然选其他位置作为割集，
-   * 保证生成的割集全部可建造。典型用途：出口格紧邻区域、已有 construction site。
+   * P2-1：不可放置割集顶点的位置（packed x*50+y）— 其拆点边容量 INF（不可切割），
+   * 算法自然选其他位置，保证割集全部可建造。典型：出口紧邻区域、已有 site。
    */
   blockedPositions?: ReadonlySet<number>,
 ): MinCutResult {
@@ -115,13 +83,10 @@ export function computeMinCutDefense(
     }
   }
 
-  // nodeCount = 普通格拆点后的节点数（0..4999）。
-  // SUPER_SOURCE/SINK 占用 5000/5001，邻接表必须 +2 容量，否则越界写入被
-  // typed array 静默丢弃（虽然 adj 是普通数组可自动扩容，但保持显式一致）。
-  const nodeCount = 50 * 50 * 2; // 普通格拆点后节点数（不含超级源汇）
+  // 普通格拆点 0..4999；超级源汇占 5000/5001，邻接表 +2 容量防越界写入被静默丢弃。
+  const nodeCount = 50 * 50 * 2; // 普通格拆点节点数（不含超级源汇）
   const adj: Edge[][] = Array.from({ length: nodeCount + 2 }, () => []);
 
-  // 添加边的辅助函数
   function addEdge(from: number, to: number, cap: number): void {
     adj[from]!.push({ to, cap, rev: adj[to]!.length });
     adj[to]!.push({ to: from, cap: 0, rev: adj[from]!.length - 1 });
@@ -134,26 +99,17 @@ export function computeMinCutDefense(
     const vIn = nodeId(x, y, false);
     const vOut = nodeId(x, y, true);
 
-    // 拆点边：v_in → v_out
-    // Source/Sink 格容量 INF（不可切割），普通格容量 1
-    // P2-1：blockedPositions 中的位置也设为 INF（不可切割），算法选其他位置作为割集。
+    // 拆点边 v_in→v_out：Source/Sink/blocked（P2-1）容量 INF 不可切割，普通格容量 1。
     const isSource = exitSet.has(packed);
     const isSink = coreSet.has(packed);
     const isBlocked = blockedPositions?.has(packed) ?? false;
     const vertexCap = (isSource || isSink || isBlocked) ? INF_CAP : 1;
     addEdge(vIn, vOut, vertexCap);
 
-    // 邻接边：v_out → neighbor_in
-    // v3：8 邻接 — 正交 4 方向（无切角限制）+ 对角线 4 方向（切角规则约束）。
-    //
-    // 切角规则：对角线 (x,y)→(x+dx,y+dy) 仅在两个正交角落格
-    // (x+dx, y) 和 (x, y+dy) 都非墙时才连通。
-    // Screeps 不允许穿越两面正交墙形成的对角线，模拟此规则避免割集漏封。
-    //   - 两角都非墙 → 对角线可通行（4 邻接也找得到路径，此处只增加捷径边）
-    //   - 任一角为墙 → 对角线被封锁（4 邻接本就无此路径，行为一致）
-    //   - 两角都墙   → 对角线被封锁（同上）
-    // 因此切角规则不会引入 4 邻接没有的连通性，只补全对角捷径——
-    // 防止 4 邻接割集在对角捷径处留下可绕行的 1 格缺口。
+    // 邻接边 v_out→neighbor_in（容量 INF）。v3：8 邻接 — 对角线仅在两个正交
+    // 角落格都非墙时才连通（Screeps 不允许穿两面正交墙的对角），模拟切角限制
+    // 防割集漏封；切角规则不引入 4 邻接没有的连通性，只补对角捷径，
+    // 防止割集在对角捷径处留 1 格可绕行缺口。
 
     // 正交 4 邻接（无切角限制）
     const orthogonal: ReadonlyArray<readonly [number, number]> = [
@@ -166,7 +122,6 @@ export function computeMinCutDefense(
     }
 
     // 对角线 4 邻接（切角规则：两个正交角落格都非墙才连通）
-    // [dx, dy] — 对角方向；角落格为 (x+dx, y) 和 (x, y+dy)
     const diagonals: ReadonlyArray<readonly [number, number]> = [
       [1, 1], [1, -1], [-1, 1], [-1, -1],
     ];
@@ -175,22 +130,15 @@ export function computeMinCutDefense(
       const ny = y + dy;
       if (nx < 0 || nx >= 50 || ny < 0 || ny >= 50) continue;
       if (getTerrain(nx, ny)) continue;
-      // 切角检查：两个正交角落格都必须非墙
       if (getTerrain(x + dx, y)) continue;
       if (getTerrain(x, y + dy)) continue;
       addEdge(vOut, nodeId(nx, ny, false), INF_CAP);
     }
   }
 
-  // 4. 添加超级 source 和超级 sink
-  //
-  // 关键：必须使用 nodeCount / nodeCount+1，**不能**使用 nodeCount-2 / nodeCount-1。
-  // 因为 nodeId(49, 49, false) = (49*50+49)*2 + 0 = 4998，
-  //         nodeId(49, 49, true)  = (49*50+49)*2 + 1 = 4999。
-  // 旧实现 SUPER_SOURCE=4998、SUPER_SINK=4999 与 (49,49) 拆点冲突：
-  //   - (49,49) 非墙时其拆点边 v_in→v_out 变成 SUPER_SOURCE→SUPER_SINK 的退化直连边
-  //   - (49,49) 为出口格时再叠加 SUPER_SOURCE→vOut(=SUPER_SINK) 的 INF 直连边 → maxFlow 爆炸
-  //   - 残余图 BFS 被污染 → 割集错误或恒 complete=false
+  // 4. 超级源汇。关键：用 nodeCount/nodeCount+1（5000/5001），不能用 nodeCount-2/-1 —
+  // nodeId(49,49,*) 占 4998/4999，旧实现超级源汇与之冲突：退化直连边 → maxFlow 爆炸、
+  // 残余图 BFS 被污染 → 割集错误或恒 complete=false。
   const SUPER_SOURCE = nodeCount;     // 5000，不与任何格冲突
   const SUPER_SINK = nodeCount + 1;   // 5001
 
@@ -205,23 +153,16 @@ export function computeMinCutDefense(
     addEdge(vIn, SUPER_SINK, INF_CAP);
   }
 
-  // 5. Edmonds-Karp 最大流（BFS 增广）
-  // 优化：预分配 typed arrays + head pointer queue，避免每次增广重新分配。
-  //
-  // totalNodes 必须等于 nodeCount + 2（含超级源汇）。若仍用 nodeCount，
-  // SUPER_SOURCE=5000 / SUPER_SINK=5001 的越界写入会被 typed array 静默丢弃：
-  //   - visited[5000] / visited[5001] 永远是 0
-  //   - parent[5000] / parentEdgeIdx[5000] 也是 0（不是 -1）
-  //   - bfsQueue[tail++] = SUPER_SOURCE 写入成功但读取时返回 0
-  // 后果：BFS 永远找不到 SUPER_SINK → maxFlow 恒 0 → 全部 min-cut 恒 complete=false。
+  // 5. Edmonds-Karp 最大流。预分配 typed arrays + head/tail 队列，避免每轮增广重新分配。
+  // totalNodes 必须含超级源汇（nodeCount+2）— 越界写入会被 typed array 静默丢弃：
+  // visited/parent 恒 0 → BFS 找不到 SUPER_SINK → maxFlow 恒 0 → 恒 complete=false。
   const totalNodes = nodeCount + 2;
   let maxFlow = 0;
 
-  // 预分配 BFS 工作区（在所有增广间复用，避免反复 GC 压力）。
   const parent = new Int32Array(totalNodes);
   const parentEdgeIdx = new Int32Array(totalNodes);
   const visited = new Uint8Array(totalNodes);
-  const bfsQueue = new Int32Array(totalNodes); // 预分配队列容量
+  const bfsQueue = new Int32Array(totalNodes);
 
   function augment(): boolean {
     // 重置工作区（typed array fill 比 regular array 快）。
@@ -270,9 +211,8 @@ export function computeMinCutDefense(
     if (!augment()) break;
   }
 
-  // 6. 提取最小割集
-  // 从 SUPER_SOURCE 出发，沿残余容量 > 0 的边 BFS，
-  // 找到所有可达的 v_in 节点中，v_in→v_out 边已满载（残余=0）的格。
+  // 6. 提取割集：从 SUPER_SOURCE 沿残余容量 > 0 的边 BFS，可达 v_in 中
+  // v_in→v_out 已满载（残余=0）的格即割集。
   if (maxFlow > maxRamparts) {
     return { rampartPositions: [], cutSize: maxFlow, complete: false };
   }

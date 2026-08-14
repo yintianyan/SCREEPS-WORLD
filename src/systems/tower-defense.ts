@@ -8,15 +8,10 @@ import { buildFortificationContext, classifyFortification, resolveUnderSiege, ty
 import { globalCache } from "../kernel/global-cache";
 
 /**
- * Tower 防御系统 — P0 系统，负责所有 Tower 操作和安全模式。
- *
- * 职责：
- *   - 检测敌对 creep 并调度 Tower 攻击（三塔协同同一目标）
- *   - 无敌人时执行紧急维修（关键结构低于 50% 血量）
- *   - 无紧急维修时维护 wall/rampart 到 RCL 分级目标血量
- *   - 无 Tower 且有敌人时激活安全模式
- *
- * 优先级：P0（防御是生存关键 — 永不被冷却）。
+ * Tower 防御系统 — P0 系统，负责所有 Tower 操作和安全模式（防御是生存关键 — 永不被冷却）。
+ * 职责：检测敌对 creep 并调度 Tower 攻击（三塔协同同一目标）；无敌人时紧急维修
+ * （关键结构 < 50% 血量）；再无事则维护 wall/rampart 到 RCL 分级目标血量；
+ * 无 Tower 且有敌人时激活安全模式。
  */
 export const towerDefenseSystem: System = {
   name: "tower-defense",
@@ -24,8 +19,8 @@ export const towerDefenseSystem: System = {
   run(ctx: TickContext): void {
     for (const snapshot of ctx.snapshots()) {
       if (snapshot.towers.length === 0) {
-        // 无 Tower — 收紧 safe mode：仅当威胁 creep 靠近核心区（spawn，无 spawn 时退到 controller）
-        // 至 safeModeTriggerRange 内才激活，避免无害过境 scout 误烧珍贵的 safe mode。
+        // 无 Tower — 收紧 safe mode：仅当威胁 creep 靠近核心区（spawn，无 spawn 退到
+        // controller）至 safeModeTriggerRange 内才激活，避免无害过境 scout 误烧 safe mode。
         if (snapshot.threatCreeps.length > 0 && isCoreBreached(snapshot)) {
           tryActivateSafeMode(snapshot);
         }

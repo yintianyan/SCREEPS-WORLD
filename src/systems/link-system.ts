@@ -10,27 +10,19 @@ export { computeControllerLinkTarget } from "../domain/economy/links";
 
 /**
  * 死资产判定阈值：source link 持续满足三重校验的 tick 数。
- *
- * 500t 足以过滤瞬态（hauler 短暂离岗、link 刚建成未灌能），且不超过
- * 拆改冷却（1000t）— 死资产检测到拆改启动应在同一周期内闭环。
+ * 500t 足以过滤瞬态（hauler 短暂离岗、link 刚建成未灌能），且不超过拆改冷却（1000t）—
+ * 死资产检测到拆改启动应在同一周期内闭环。
  */
 export const DEAD_ASSET_THRESHOLD = 500;
 
 /**
  * Link 能量传输系统 — P1 系统，管理 link 间瞬时能量传输 + 死资产检测。
- *
- * 职责：
- *   - 将房间内 link 按位置分类（source / controller / storage / hub）
- *   - 调用 planLinkTransfers 计算传输计划
- *   - 执行 link.transferEnergy() 完成能量瞬移
- *   - 检测死资产 source link（三重校验 + 500t 持续），暴露给布局规划触发拆改
- *
- * link 链路是 RCL5+ 的核心物流：source link ← harvester 存能 →
- * controller link → upgrader 取能，全程 0 通勤替代 hauler 往返。
- * storage link 作为溢出回收和 controller 补给的枢纽。
- *
- * 优先级：P1 — link 传输极廉价（每房每 tick O(links) 查找 + 少量 API 调用），
- * 且直接关系升级吞吐，在能量链中优先级仅次于孵化。
+ * 职责：按位置分类 link（source / controller / storage / hub）→ planLinkTransfers
+ * 规划 → 执行 link.transferEnergy()；检测死资产 source link（三重校验 + 500t 持续），
+ * 暴露给布局规划触发拆改（P1-4 通道）。
+ * link 链路是 RCL5+ 核心物流：source link ← harvester 存能 → controller link →
+ * upgrader 取能，全程 0 通勤替代 hauler 往返；storage link 作溢出回收与 controller 补给枢纽。
+ * P1：传输极廉价（每房每 tick O(links)），且直接关系升级吞吐，能量链中仅次于孵化。
  */
 export const linkSystem: System = {
   name: "link-system",
@@ -45,10 +37,8 @@ export const linkSystem: System = {
 
 /**
  * 执行单房 link 传输：分类 → 死资产检测 → 规划 → 执行。
- *
- * 死资产检测（2026-08-02）：
- *   三重校验（role=source + energy=0 + !linkHasOutlet）持续 500t → 死资产。
- *   死资产 link 的 id 暴露给 layout-planner 触发拆改规划（P1-4 通道）。
+ * 死资产检测（2026-08-02）：三重校验（role=source + energy=0 + !linkHasOutlet）
+ * 持续 500t → 死资产，id 暴露给 layout-planner 触发拆改规划（P1-4 通道）。
  */
 function runRoomLinks(snapshot: RoomSnapshot, tick: number): void {
   const links = snapshot.links;
@@ -90,15 +80,8 @@ function runRoomLinks(snapshot: RoomSnapshot, tick: number): void {
 
 /**
  * 计算新的死资产计时器状态（纯函数，便于单测三重校验逻辑）。
- *
- * 三重校验通过（source + energy=0 + 无 outlet）→ 记录首次 tick（沿用 prevSince 已有值）；
- * 任一校验失败 → 从结果中删除（瞬态恢复）。
- * 已消失的 link（不在 infos 中但仍在 prevSince 中）→ 从结果中删除。
- *
- * @param infos      本 tick 所有 link 的信息
- * @param tick       当前 tick
- * @param prevSince  上一 tick 的计时器状态（linkId → 首次检测 tick）
- * @returns 新的计时器状态
+ * 三重校验通过（source + energy=0 + 无 outlet）→ 沿用 prevSince 或记录当前 tick；
+ * 任一校验失败或 link 已消失 → 从结果中删除（瞬态恢复）。
  */
 export function computeDeadAssetSince(
   infos: readonly LinkInfo[],
@@ -124,10 +107,8 @@ export function computeDeadAssetSince(
 
 /**
  * 更新死资产计时器（每 tick 调用，写入 globalCache）。
- *
- * 持续 DEAD_ASSET_THRESHOLD(500) tick → 留在 Map 中，由 getDeadAssetLinks 暴露。
- * 注意：link 消失（被 destroy）后，其 id 不在 infos 中 → computeDeadAssetSince
- * 自动从结果中剔除。layout-planner 消费后应调用 clearDeadAssetLink 清除。
+ * 持续 DEAD_ASSET_THRESHOLD(500) tick → 留在 Map 中，由 getDeadAssetLinks 暴露；
+ * link 消失后 computeDeadAssetSince 自动剔除；layout-planner 消费后调 clearDeadAssetLink 清除。
  */
 function updateDeadAssetTracking(infos: readonly LinkInfo[], tick: number): void {
   const cache = globalCache();
@@ -137,12 +118,8 @@ function updateDeadAssetTracking(infos: readonly LinkInfo[], tick: number): void
 
 /**
  * 获取当前判定为死资产的 source link id 列表（持续 ≥ DEAD_ASSET_THRESHOLD tick）。
- *
- * layout-planner 消费：deadAssets 非空时触发规划（尝试拆改/补位）。
- * 消费后调用 clearDeadAssetLink(id) 清除，避免重复触发。
- *
- * @param tick 当前 tick（用于判定持续时长）
- * @returns 死资产 link id 列表（可能为空）
+ * layout-planner 消费：deadAssets 非空时触发规划（拆改/补位）；消费后调用
+ * clearDeadAssetLink(id) 清除，避免重复触发。
  */
 export function getDeadAssetLinks(tick: number): readonly string[] {
   const cache = globalCache();
@@ -165,17 +142,14 @@ export function clearDeadAssetLink(linkId: string): void {
 
 /**
  * link 几何受限重试间隔：标记后 1000t 内跳过 link 任务创建，避免空转。
- *
- * 1000t 足以覆盖拆改周期（500t 检测 + 1000t 拆改冷却），且与 GAP_RETRY_INTERVAL
- * 同量级。过期后自动重试（RCL 升级或拆改完成可能解锁几何约束）。
+ * 1000t 足以覆盖拆改周期（500t 检测 + 1000t 拆改冷却），过期后自动重试
+ * （RCL 升级或拆改完成可能解锁几何约束）。
  */
 export const LINK_CONSTRAINED_RETRY_INTERVAL = 1000;
 
 /**
  * 检查房间是否处于 link 几何受限状态（controller + storage link 都放不下）。
- *
- * layout-planner 消费：标记期内跳过 link 任务创建，避免每周期重复尝试空转。
- * 标记自动过期（LINK_CONSTRAINED_RETRY_INTERVAL），过期后重新评估。
+ * layout-planner 消费：标记期内跳过 link 任务创建；标记自动过期后重新评估。
  */
 export function isLinkConstrained(roomName: string, tick: number): boolean {
   const cache = globalCache();
@@ -203,32 +177,25 @@ export function clearLinkConstrained(roomName: string): void {
 // ─── P1-4 受限拆改通道 ───
 
 /**
- * 拆改冷却：每房每 1000t 最多启动 1 个拆改计划。
- *
- * 1000t 足以覆盖单次拆改周期（500t 检测 + 替代建造 + 500t 验证），
- * 且与 LINK_CONSTRAINED_RETRY_INTERVAL 同量级。冷却避免受限地形频繁拆改空转。
+ * 拆改冷却：每房每 1000t 最多启动 1 个拆改计划 — 足以覆盖单次拆改周期
+ * （500t 检测 + 替代建造 + 500t 验证），避免受限地形频繁拆改空转。
  */
 export const DISMANTLE_COOLDOWN = 1000;
 
 /**
- * 拆改计划 ttl：1500t 未完成则 abort。
- *
- * 500t（死资产检测窗口）+ 1000t（拆改执行窗口，含替代建造 + 验证）。
- * 超时表示替代 link 迟迟未建或验证未通过，放弃拆改保留旧 link。
+ * 拆改计划 ttl：1500t 未完成则 abort — 500t（死资产检测窗口）+ 1000t
+ * （拆改执行窗口，含替代建造 + 验证）；超时表示替代 link 未建或验证未过，放弃拆改。
  */
 export const DISMANTLE_TTL = 1500;
 
 /**
- * 替代 link 灌能验证窗口：替代 link 建成后等待 500t 确认 harvester 灌能。
- *
- * 500t 与死资产检测阈值（DEAD_ASSET_THRESHOLD）对齐 — 足以过滤瞬态
- *（hauler 短暂离岗、link 刚建成未灌能），且不超过 ttl 的验证预算。
+ * 替代 link 灌能验证窗口：建成后等待 500t 确认 harvester 灌能 — 与
+ * DEAD_ASSET_THRESHOLD 对齐，足以过滤瞬态且不超过 ttl 验证预算。
  */
 export const DISMANTLE_VALIDATION_DELAY = 500;
 
 /**
  * 检查房间是否处于拆改冷却期（1000t 内已启动过拆改）。
- *
  * layout-planner 消费：冷却期内不再为该房的新死资产创建拆改计划。
  */
 export function isDismantleOnCooldown(roomName: string, tick: number): boolean {

@@ -1,18 +1,11 @@
 /**
- * Empire Strategy — P1 系统，帝国姿态的唯一裁决者与发布者。
- *
- * 架构定位（6 层模型的 Strategy 层）：
- *   State（room-state 写入的 colonyState/economyPressure/lastHostileAt）
- *     → 本系统评估姿态（domain/strategy/posture 纯函数）
- *     → 写 Memory.kernel.strategy
- *     → 执行系统消费指令（expansion-manager / remote-mining-manager / 未来进攻系统）
- *
- * 铁律：执行系统不得自行裁决「是否该扩张/开战」— 它们读姿态指令行事。
+ * Empire Strategy — P1 系统，帝国姿态的唯一裁决者与发布者（6 层模型的 Strategy 层）：
+ * State（room-state 写入的 colonyState/economyPressure/lastHostileAt）
+ *   → 本系统用 domain/strategy/posture 纯函数评估姿态 → 写 Memory.kernel.strategy
+ *   → 执行系统（expansion-manager / remote-mining-manager / 未来进攻系统）消费指令。
+ * 铁律：执行系统不得自行裁决「是否该扩张/开战」— 它们读姿态指令行事；
  * 局部安全门禁（RCL 门槛、bucket 保护等）可以叠加收紧，但不得放宽姿态。
  * 进攻执行器未来接入时同样：war 姿态是授权来源，代码存在不等于战争开始。
- *
- * 运行成本：每 tick 读几个 Memory 字段做一次纯函数评估（<0.05 CPU），
- * P1 保证在 P2/P3 消费者之前完成本 tick 姿态刷新。
  */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import {

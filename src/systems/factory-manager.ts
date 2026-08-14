@@ -1,17 +1,10 @@
 /**
  * Factory Manager — P3 系统，RCL7-8 终局结构的最小运营层。
- *
- * 职责：
- *   1. Factory：storage 满仓时把过剩能量压缩为 battery（600 energy → 50 battery，
- *      冷却 10 tick）。满仓意味着能量在源头被 harvester drop 浪费 —
- *      压缩把「必然损失」转为可存储/可交易的资产（battery 解压回收率 5/6）。
- *      解压（能量紧缺时 battery → energy）留待跨房调度阶段接入。
- *   2. PowerSpawn：有 power 与能量存货时 processPower（1 power + 50 energy/次），
- *      积累 GPL。power 采集（power bank）属更后期能力 — 当前 power 来源
- *      仅限 terminal 转入，无存货时本分支零开销跳过。
- *
- * 能量补给：factory 的原料能量由 distributor 的 stockFactoryEnergy 在
- * storage 满仓信号下搬运（见 actions/industry.ts）。
+ * Factory：storage 满仓时把过剩能量压缩为 battery（600 energy → 50 battery，
+ * 冷却 10 tick）——满仓即能量在源头被 harvester drop 浪费，压缩把「必然损失」
+ * 转为可存储/可交易的资产（battery 解压回收率 5/6）。
+ * PowerSpawn：有 power 与能量存货时 processPower（1 power + 50 energy/次）积累 GPL。
+ * 原料能量由 distributor 的 stockFactoryEnergy 在满仓信号下搬运（actions/industry.ts）。
  */
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
@@ -25,7 +18,6 @@ export const factoryManagerSystem: System = {
   interval: CONFIG.factory.interval,
   run(ctx: TickContext): void {
     for (const snapshot of ctx.snapshots()) {
-      // ── PowerSpawn：GPL 涓流 ──
       const powerSpawn = snapshot.powerSpawn;
       if (
         powerSpawn &&
@@ -36,7 +28,6 @@ export const factoryManagerSystem: System = {
         powerSpawn.processPower();
       }
 
-      // ── Factory：满仓能量压缩 ──
       const factory = snapshot.factory;
       if (!factory) continue;
       // 测试/私服环境的 factory mock 可能无 produce — 安全跳过。

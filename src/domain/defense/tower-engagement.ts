@@ -1,24 +1,13 @@
 /**
  * Tower 交战盈亏判定 — 纯函数。
- *
- * 背景：塔只要看到威胁就全弹开火的策略存在经济漏洞——
- * 塔伤随距离衰减（≤5 格满伤 600，≥20 格仅 150），而带足量 HEAL 的编队
- * 可以站在远距把伤害全部奶回去，让塔白白倾泻能量（heal-tank 骗塔战术）。
- * 官方防御文档明示：「well-secured team … withstand the attack by multiple
- * towers at point-blank range」——不算账就开火等于给对手送能量。
- *
- * 判定原则（战争即经济）：
- *   开火当且仅当「全塔对焦点目标的合计净伤 > 敌方编队的合计治疗量」，
- *   即每发炮弹都在真实削减敌方血量，而不是喂给对方的 HEAL。
- *   打不动时保留塔能量（蓄能等敌方近身/减员），例外：
- *   敌人已突入核心区（强制交战半径内）——此时结构损失比能量损失更贵，照打。
- *
- * 治疗估算取防守方悲观假设：敌方所有 HEAL 部件都以满效率（12/部件）
- * 治疗被集火目标。不计 boost 倍率——boost 编队的识别属于情报层职责。
- *
- * 引擎常量 [Facts: docs.screeps.com/api 常量表]：
- *   TOWER_POWER_ATTACK=600, TOWER_OPTIMAL_RANGE=5,
- *   TOWER_FALLOFF_RANGE=20, TOWER_FALLOFF=0.75, HEAL_POWER=12。
+ * 背景：塔见威胁就全弹开火有经济漏洞 — 塔伤随距离衰减（≤5 格满伤 600，≥20 格仅
+ * 150），带足 HEAL 的编队可站远距把伤害全奶回去（heal-tank 骗塔战术）；官方防御
+ * 文档明示 well-secured team 能 point-blank 扛多塔 — 不算账就开火等于送能量。
+ * 开火当且仅当全塔净伤 > 编队合计治疗；打不动则蓄能，例外：敌人突入核心区
+ * （强制交战半径）— 结构损失比能量贵，照打。治疗估算取悲观假设（HEAL 满效率
+ * 12/部件），不计 boost 倍率 — boost 编队识别属情报层职责。引擎常量
+ * [Facts: docs.screeps.com/api 常量表]：TOWER_POWER_ATTACK=600, TOWER_OPTIMAL_RANGE=5,
+ * TOWER_FALLOFF_RANGE=20, TOWER_FALLOFF=0.75, HEAL_POWER=12。
  */
 
 /** 塔满伤（range ≤ TOWER_OPTIMAL_RANGE）。 */
@@ -48,10 +37,7 @@ export interface HostileSquadSummary {
   breachingCore: boolean;
 }
 
-/**
- * 单塔对指定距离目标的期望伤害：
- * range ≤ 5 → 600；range ≥ 20 → 150；之间线性衰减。
- */
+/** 单塔对指定距离目标的期望伤害（≤5 格满伤、≥20 格衰减到底，之间线性）。 */
 export function towerDamageAt(range: number): number {
   if (range <= TOWER_OPTIMAL_RANGE) return TOWER_POWER_ATTACK;
   const effectiveRange = Math.min(range, TOWER_FALLOFF_RANGE);
@@ -62,7 +48,7 @@ export function towerDamageAt(range: number): number {
 
 /** 交战判定结果。 */
 export interface EngagementDecision {
-  /** 是否开火。 */
+
   engage: boolean;
   /** 全塔合计期望伤害（诊断用）。 */
   expectedDamage: number;
@@ -71,12 +57,9 @@ export interface EngagementDecision {
 }
 
 /**
- * 判定全塔集火是否有净收益。
- *
- * - 合计伤害 > 编队合计治疗 → 开火（每发都在真实掉血）。
- * - 打不动且敌人未突破核心 → 停火蓄能，等敌方近身（伤害上升）或撤退。
- * - 敌人突入核心区 → 无条件开火：结构被拆的损失恒大于塔能量，
- *   且近身处塔伤接近满值，通常也已越过盈亏线。
+ * 判定全塔集火是否有净收益：合计伤害 > 编队合计治疗 → 开火（每发都在真实掉血）；
+ * 打不动且未突破核心 → 停火蓄能，等敌方近身或撤退；敌人突入核心区 → 无条件开火
+ * （结构被拆的损失恒大于塔能量，且近身处塔伤接近满值，通常已过盈亏线）。
  */
 export function assessEngagement(
   towers: readonly TowerSummary[],

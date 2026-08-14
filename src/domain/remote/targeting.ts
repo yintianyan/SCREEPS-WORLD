@@ -1,23 +1,14 @@
 /**
- * 远矿目标选择 — 纯函数，不访问 Game/Memory。
- *
- * 老玩家认知：远矿选址依赖邻房情报（RoomIntel），核心筛选条件：
- *   1. 普通房（有 controller，可 claim/reserve）
- *   2. 无主（owner 未定义）
- *   3. 房态正常（status === "normal"，排除 novice/respawn/closed）
- *   4. 有 source（有视野时记录了 sources > 0）
- *
- * 优先级排序：有视野 > 无视野（有视野说明已有 creep 路过，信息更可靠）。
- * 同等条件下选 source 数多的（normal 房固定 2 source，但未来 SK 房可能有 3）。
- *
- * 数据流：
- *   room-observer 采集 intel → 本函数筛选候选 → remote-mining-manager 创建 remoteOps
+ * 远矿目标选择 — 纯函数，不访问 Game/Memory。核心筛选：普通房（可 reserve）、
+ * 无主、房态 normal（排除 novice/respawn/closed）、有 source。优先级：
+ * 有视野 > 无视野（信息更可靠），同等条件下选 source 多的（未来 SK 房可能有 3）。
+ * 数据流：room-observer 采集 intel → 本函数筛选 → remote-mining-manager 建 remoteOps。
  */
 
 import type { RoomIntel } from "../intel";
 import { CONFIG } from "../../config";
 
-/** 远矿候选目标评估结果。 */
+
 export interface RemoteCandidate {
   roomName: string;
   /** intel 中记录的 source 数（无视野时 undefined）。 */
@@ -30,7 +21,7 @@ export interface RemoteCandidate {
   haulerNeed: number;
 }
 
-/** 远矿目标筛选输入参数。 */
+
 export interface RemoteTargetingInput {
   /** 本房名（用于排除自身）。 */
   homeRoom: string;
@@ -38,27 +29,24 @@ export interface RemoteTargetingInput {
   intel: Readonly<Record<string, RoomIntel>> | undefined;
   /** 已有远矿运营（避免重复选择）。P1-G 后含 dangerUntil 字段用于危险冷却判定。 */
   existingOps: Readonly<Record<string, { state: string; dangerUntil?: number }>> | undefined;
-  /** 当前 tick（用于判断视野新鲜度）。 */
   tick: number;
-  /** 视觉新鲜度阈值（超过此 tick 数视为旧情报）。 */
+  /** 视野新鲜度阈值（超过此 tick 数视为旧情报）。 */
   staleThreshold: number;
-  /** 全帝国已运营的远矿目标（跨房去重）。
-   * 缺此参数的教训：existingOps 只含本房运营，双主房时代第二个房达到
-   * RCL4 后会把兄弟房正在运营的远矿当合格候选 — 双编队抢同一 source
-   * （产能固定 1500/300tick），双 reserver 各烧 1300 能量，收益不变
-   * 成本翻倍，远矿利润腰斩。 */
+  /** 全帝国已运营的远矿目标（跨房去重）。缺此参数教训：existingOps 只含本房，
+   * 双主房时代第二房会把兄弟房运营中的远矿当合格候选 — 双编队抢同一 source
+   * （产能固定 1500/300tick），双 reserver 各烧 1300 能量，收益不变成本翻倍。 */
   globalActiveTargets?: ReadonlySet<string>;
   /** remoteHauler 单只运力（carry 容量，调用方按当前 body 档位计算）。 */
   haulerCapacity: number;
   /** 本帝国用户名 — 排除被他人预定的房（己方续期中的房仍可选）。 */
   myUsername?: string;
-  /** 我方所有殖民地房名（权威 controller.my，非 intel）。己方房永不可能是远矿
-   * 目标：新占殖民地的 intel 常滞后未记 owner（info.owner=null），会被当高分目标
-   * 误选，与 maintainExistingOps 的 self-claim 废弃形成开→废 churn。用权威集合硬排除。 */
+  /** 我方所有殖民地房名（权威 controller.my，非 intel）。己方房永不可作远矿目标：
+   * 新占殖民地 intel 常滞后未记 owner 会被当高分目标误选，与 self-claim 废弃形成
+   * 开→废 churn；用权威集合硬排除。 */
   ownedRooms?: ReadonlySet<string>;
 }
 
-// ─── 远矿经济模型（评分公式的具名常量）────────────────────────
+// ─── 远矿经济模型（评分公式的具名常量）───
 // 收益：reserve 后单 source 3000/300tick = 10 e/tick；未预定仅 1500/300 = 5。
 const SOURCE_INCOME = 10;
 const SOURCE_INCOME_UNRESERVED = 5;
@@ -93,14 +81,11 @@ export function roomLinearDistance(a: string, b: string): number {
 
 /**
  * 候选净收益评分（纯函数）— 把「性价比」算成一个数。
- *
- * pathCost 是通勤账本的核心：PathFinder 实测（swampCost:5 已把沼泽折算成
- * 等效路程）；intel 缺失时回退线性距离 × 70（约一个房的对角穿越 + 余量，
- * 偏保守 — 宁可低估陌生房，不高估）。
+ * pathCost 是通勤账本核心（PathFinder 实测，swampCost:5 折算沼泽）；intel 缺失
+ * 回退线性距离 × 70（约一个房对角穿越 + 余量，偏保守 — 宁可低估陌生房）。
  * 吞吐 = min(需求, 编制 × 单 hauler 往返运力)；净分 = 吞吐 - 编队摊销。
- *
  * A-2 账本补全：upkeep 计入 defender（enableDefender 时）与道路维护；
- * reserved=false（无 CLAIM body / 未启用 reserver）时单源收益减半（5 e/tick），
+ * reserved=false（无 CLAIM body / 未启用 reserver）时单源收益减半（5 e/tick）
  * 且不计 reserver 摊销 —— 评估口径与实际执行一致（B-3）。
  */
 export function scoreRemoteCandidate(input: {
@@ -125,8 +110,6 @@ export function scoreRemoteCandidate(input: {
     Math.max(1, Math.ceil(demand / Math.max(0.01, perHauler))),
   );
   const throughput = Math.min(demand, haulerNeed * perHauler);
-  // 编队摊销：harvester（每源）+ hauler（动态编制）+ reserver（仅预定时）+
-  // defender（启用时）+ 道路维护（随通勤里程缩放）。
   const upkeep =
     HARVESTER_UPKEEP * sources +
     HAULER_UPKEEP * haulerNeed +
@@ -137,30 +120,19 @@ export function scoreRemoteCandidate(input: {
 }
 
 /**
- * 有效开点上限 — 消化能力与生产能力的双重约束取最小。
- *
- * 消化侧：无 storage 时收缩为 1。本房 sink（spawn/ext/tower/controller
- * container ≈ 4300 容量）在无 storage 时是远矿能量的唯一归宿，多点并发
- * 流入必然背压空转（远矿 container 溢出 drop 衰减）。storage 建成后放开。
- *
- * 生产侧：上限不超过 spawn 数。每个远矿操作的稳态编制 3-5 只（harvester +
- * 动态 hauler + reserver，reserver 因 CLAIM 寿命 600 以 2.5 倍频率轮换），
- * 一个 spawn 一次只能孵一只 — 单 spawn 房开双远矿时远程请求持续占用孵化位，
- * 本地 upgrader/builder/distributor 寿终后永远排不到队首，经济脊柱萎缩
- * （线上实测：远程吃掉 50% 孵化产出，upgrader/builder/distributor 全饿死）。
- * spawn 数是稳定输入（建筑不抖动），上限不震荡。
+ * 有效开点上限 — 消化能力与生产能力双重约束取最小。
+ * 消化侧：无 storage 时收缩为 1（sink ≈ 4300 容量是唯一归宿，多点并发流入
+ * 背压空转、container 溢出衰减），storage 建成后放开。
+ * 生产侧：上限不超 spawn 数 — 每 op 稳态编制 3-5 只（reserver 因 CLAIM 寿命
+ * 600 以 2.5 倍频率轮换），单 spawn 房开双远矿会持续占用孵化位，本地
+ * upgrader/builder/distributor 寿终后排队队首（线上实测远程吃 50% 孵化产出）。
  */
 export function effectiveMaxOperations(hasStorage: boolean, spawnCount: number): number {
   const digestCap = hasStorage ? CONFIG.remote.maxOperations : CONFIG.remote.maxOperationsNoStorage;
   return Math.min(digestCap, Math.max(0, spawnCount));
 }
 
-/**
- * 从邻居房情报中筛选远矿候选目标。
- *
- * 纯函数 — 接收预收集的 intel 和 existingOps，不访问 Game/Memory。
- * 返回按优先级排序的候选列表。
- */
+/** 从邻居房情报筛选远矿候选（纯函数），返回按优先级排序的候选列表。 */
 export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidate[] {
   const { homeRoom, intel, existingOps, tick, staleThreshold } = input;
   if (!intel) return [];
@@ -168,7 +140,6 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
   const candidates: RemoteCandidate[] = [];
   const activeTargets = new Set<string>();
 
-  // 收集已有运营的目标（非 abandoned 状态）。
   if (existingOps) {
     for (const [roomName, op] of Object.entries(existingOps)) {
       if (op.state !== "abandoned") {
@@ -178,25 +149,19 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
   }
 
   for (const [roomName, info] of Object.entries(intel)) {
-    // 排除自身房间。
     if (roomName === homeRoom) continue;
-    // 排除我方所有殖民地（权威 controller.my）— 己方房永不可能是远矿目标。
-    // 不依赖 info.owner：新占殖民地的 intel 常滞后未记 owner，漏过下方有主房筛选，
-    // 被当高分邻房误选 → maintainExistingOps self-claim 废弃 → 重选 → churn。
+    // 排除我方殖民地（权威 controller.my）— intel owner 常滞后，防新占殖民地被误选 churn。
     if (input.ownedRooms?.has(roomName)) continue;
-    // 排除已有运营的房间。
     if (activeTargets.has(roomName)) continue;
     // 排除他房已运营的目标（跨房去重 — 双编队抢矿是纯亏损）。
     if (input.globalActiveTargets?.has(roomName)) continue;
     // 只选普通房（有 controller，可 reserve）。
     if (info.kind !== "normal") continue;
-    // 排除有主的房间。
     if (info.owner) continue;
     // 排除被他人预定的房（己方续期中的房 reservedBy===myUsername 仍可选）。
-    // 敌方预定意味着对方在争这块矿 — 派 reserver 去只能打无谓 attackController
-    // 拉锯（单只对抗持续续期数学上磨不过），纯烧 CLAIM body + 占孵化位。止损：不去。
+    // 敌方预定 = 对方在争矿，派 reserver 去只能打无谓 attackController 拉锯
+    // （单只对抗持续续期磨不过），纯烧 CLAIM body + 占孵化位，止损不去。
     if (info.reservedBy && info.reservedBy !== input.myUsername) continue;
-    // 排除非正常状态的房间（novice/respawn/closed）。
     if (info.status !== "normal") continue;
     // 排除危险冷却中的房间 — 威胁刚出现过的房不送兵（止损）。
     // P1-G：dangerUntil 从 intel 迁移到 remoteOps（remote-mining-manager 唯一写入）。
@@ -204,8 +169,8 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
     if (dangerUntil !== undefined && tick < dangerUntil) continue;
 
     const hasRecentVision = tick - info.lastSeen < staleThreshold;
-    // 净收益评分：吞吐上限减编队摊销；低于门槛的烂目标（沼泽远房/超远房）
-    // 直接剔除 — 名额只有 maxOperations 个，占位比空置更亏。
+    // 净收益低于 minNetScore 的烂目标（沼泽远房/超远房）直接剔除 —
+    // 名额只有 maxOperations 个，占位比空置更亏。
     const { netScore, haulerNeed } = scoreRemoteCandidate({
       pathCost: info.pathCost,
       linearDistance: roomLinearDistance(homeRoom, roomName),
@@ -234,11 +199,7 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
   return candidates;
 }
 
-/**
- * 判断远矿运营是否应暂停（情报过期或房间状态变化）。
- *
- * 纯函数 — 接收显式参数，不访问 Game/Memory。
- */
+/** 远矿运营是否应暂停（abandoned 或情报过期）。纯函数。 */
 export function shouldPauseOperation(
   op: { state: string; lastSeen: number },
   tick: number,

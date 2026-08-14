@@ -1,12 +1,9 @@
 /**
- * Claimer — P2 扩张占领角色。
- *
- * 职责：由 expansion-manager 派遣（memory.remoteTarget = 扩张目标房），
- * 走到目标房 controller 旁执行 claimController。占领成功后使命完成 —
- * CLAIM 部件 creep 寿命仅 600 tick，原地待机自然到期，不做回收长途跋涉。
- *
- * 与 reserver 的区别：reserver 续期远矿房预定（可反复），claimer 是一次性
- * 占领投送；两者共用 remoteTarget 导航栈（ensureHome 处理跨房通勤）。
+ * Claimer — P2 扩张占领角色。由 expansion-manager 派遣（memory.remoteTarget = 扩张目标房），
+ * 走到目标房 controller 旁执行 claimController；占领成功后使命完成 — CLAIM 部件寿命仅 600 tick，
+ * 原地待机自然到期，不做回收长途跋涉。
+ * 与 reserver 的区别：reserver 续期远矿房预定（可反复），claimer 是一次性占领投送；
+ * 两者共用 remoteTarget 导航栈（ensureHome 处理跨房通勤）。
  */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";

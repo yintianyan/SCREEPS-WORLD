@@ -1,8 +1,6 @@
 /**
- * Dump actions — harvester 站桩倒能（向身边结构卸载能量/矿物）。
- *
- * 与 fill actions 的区别：dump 是站桩矿工向 range<=2 的身边结构倒能，
- * fill 是移动角色向 fillTarget 送能。
+ * Dump actions — harvester 站桩倒能（向身边 range<=2 结构卸载能量/矿物）。
+ * 与 fill actions 的区别：dump 是站桩矿工向身边结构倒能，fill 是移动角色向 fillTarget 送能。
  */
 import type { ActionCandidate } from "../action-types";
 import { runAction } from "./helpers";
@@ -48,9 +46,7 @@ interface MineralDumpTarget {
 }
 
 /**
- * 向身边 container 卸载矿物（range <= 2）。
- * 当 harvester 采集了 mineral（非 energy 资源）时，倒入最近 container。
- * 优先级高于 energy dump — 矿物不应占用 carry 空间。
+ * 向身边 container 卸载矿物（range <= 2）。优先级高于 energy dump — 矿物不应占用 carry 空间。
  */
 export function dumpMineralsToNearbyContainer(): ActionCandidate<MineralDumpTarget> {
   return {

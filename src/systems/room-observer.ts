@@ -20,14 +20,10 @@ const INTEL_STALE_AFTER = 2000;
 
 /**
  * 房间观察器 — P3 房间级诊断与情报采集。
- *
- * 职责：
- *   - 相位诊断日志（趋势观察，供调参）
- *   - 邻居房情报采集（出口/房态/SK 分类零视野可得；资源/归属字段需视野补全）
- *   - observer 视野调度：observeRoom 的视野只存续下一 tick，
- *     因此系统 interval 必须为 1：本 tick 请求 → 下 tick 捕获。
- *     内部各任务自带取模门控，非触发 tick 的开销仅为几次条件判断。
- *
+ * 职责：相位诊断日志（趋势观察）；邻居房情报采集（出口/房态/SK 分类零视野可得，
+ * 资源/归属字段需视野补全）；observer 视野调度。
+ * 系统 interval 必须为 1：observeRoom 的视野只存续下一 tick — 本 tick 请求 → 下 tick
+ * 捕获；内部各任务自带取模门控，非触发 tick 的开销仅为几次条件判断。
  * 经济状态计算（ColonyPhase → ColonyState）已移至 room-state 系统（P0，每 tick）。
  */
 export const roomObserverSystem: System = {

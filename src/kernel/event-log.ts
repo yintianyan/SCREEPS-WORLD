@@ -1,20 +1,11 @@
 /**
  * Event Log — 离散事件日志的采集与持久化。
  *
- * 设计意图：Screeps 控制台是流式的，滚过去就没了。关键状态转换
- * (Phase 变迁、Tier 降级、P0 孵化、敌人入侵等) 需要持久化到 segment
- * 供事后追溯——Debug Investigation Protocol 的"收集日志"步骤依赖此数据。
- *
- * 数据流：
- *   任意系统调用 recordEvent() → globalCache().eventBuffer (heap, per-tick)
- *   → telemetry-collector 每 10 tick flush → segment 2 环形缓冲
- *
- * 事件检测策略：
- *   1. 显式记录：关键路径调用 recordEvent()（如 spawn-manager 创建 P0 请求）
- *   2. 差分检测：telemetry-collector 对比 Memory 中前后状态差值
- *   优先用差分检测（不改现有系统），显式记录仅用于差分无法覆盖的事件。
- *
- * 容量：segment 2 = 100KB，每事件 ~30 bytes，保留最近 500 条。
+ * 控制台是流式的，关键状态转换（Phase/Tier/P0 孵化/入侵等）须持久化到
+ * segment 2 供事后追溯（Debug Investigation Protocol「收集日志」依赖）。
+ * 数据流：recordEvent() → globalCache().eventBuffer (heap, per-tick) →
+ * telemetry-collector 每 10 tick flush → segment 2 环形缓冲。
+ * 事件检测优先差分（不改现有系统），显式记录仅用于差分覆盖不到的事件。
  */
 
 import type { RingBuffer } from "./ring-buffer";
@@ -76,9 +67,8 @@ export const enum EventKind {
    * 冻结时参数复位到 CONFIG 基线（附录 D.5），console.log 降级为运维提醒。 */
   TuningFreeze = 21,
   /** P1 修复（附录 E.2）：tuning 人口合同 blocked 超时回滚。
-   * d = [paramCode, preAdjustValue, blockedDurationTicks]。
-   * roleCount 持续未达新边界超过 2 个 verifyDelay 窗口 → 回滚到 preAdjustValue + 计 1 次回滚。
-   * 与 TuningRollback 区分：TuningRollback 是效果验证失败的回滚，TuningBlocked 是人口合同超时的回滚。 */
+   * d = [paramCode, preAdjustValue, blockedDurationTicks]；roleCount 持续未达新边界
+   * 超过 2 个 verifyDelay 窗口 → 回滚。与 TuningRollback（效果验证失败）区分。 */
   TuningBlocked = 22,
   /** R4 战争收摊核验（战后验收闭环）：一次战争计划收摊时的战果结论。
    * d = [outcomeCode(0=success/1=failure/2=unknown), spawned, reasonCode(0=姿态退出/1=战损止损/2=无合格目标/3=计划超期换目标)]。
@@ -146,9 +136,7 @@ export function tuningParamCode(param: string): number {
  * 紧凑整数编码以最小化 segment 占用。
  */
 export interface GameEvent {
-  /** 事件发生的 tick (Game.time)。 */
   t: number;
-  /** 事件种类 (EventKind)。 */
   k: number;
   /** 关联房间名（可空，用空串表示全局事件）。 */
   r: string;
@@ -160,28 +148,20 @@ export interface GameEvent {
 
 /** Segment 2 的顶层结构：事件日志环形缓冲区。 */
 export interface EventLogSegmentData {
-  /** 事件环形缓冲（保留最近 N 条）。 */
   events: RingBuffer<GameEvent>;
 }
 
 // ─── 事件 buffer（per-tick heap）──────────────────────────────
 
-/**
- * per-tick 事件缓冲区接口。
- * 挂在 globalCache().eventBuffer 上，每 tick 初始化为空数组。
- */
+/** per-tick 事件缓冲区接口（挂在 globalCache().eventBuffer 上）。 */
 export interface EventBuffer {
   events: GameEvent[];
 }
 
 // ─── 公共 API ───────────────────────────────────────────────
 
-/**
- * 记录一个离散事件。
- * 写入 globalCache().eventBuffer（heap），由 telemetry-collector 低频 flush 到 segment。
- *
- * 此函数可从任意系统安全调用 — 不访问 Memory/segment，CPU 开销极低（数组 push）。
- */
+/** 记录一个离散事件：写入 globalCache().eventBuffer（heap），telemetry-collector 低频 flush 到 segment。
+ * 可从任意系统安全调用 — 不访问 Memory/segment，CPU 开销极低（数组 push）。 */
 export function recordEvent(
   kind: EventKind,
   roomName: string,
@@ -197,16 +177,11 @@ export function recordEvent(
   });
 }
 
-/**
- * 记录 creep 死亡事件（战斗黑匣子 M9）。
- *
- * 由 maintainMemory 在清理死者 memory 时调用 — 此刻死者已不在 Game.creeps，
- * 位置取自上 tick 预构建的 creepLastSeen 缓存（时序保证：maintainMemory
- * 先于 buildSnapshots，读到的是死者生前最后位置）。
- * 出生 tick 从 creep 名解析（命名格式 role-home-idx-birthTick-rand），
- * age 含孵化期；natural 阈值留 60 tick 余量吸收孵化时长与位置滞后。
- * 非标准命名（手工注入/外部 creep）静默跳过。
- */
+/** 记录 creep 死亡事件（战斗黑匣子 M9）。
+ * 由 maintainMemory 在清理死者 memory 时调用 — 死者已不在 Game.creeps，
+ * 位置取自上 tick 预构建的 creepLastSeen（maintainMemory 先于 buildSnapshots）。
+ * 出生 tick 从 creep 名解析（role-home-idx-birthTick-rand）；natural 阈值留
+ * 60 tick 余量吸收孵化时长与位置滞后。非标准命名（手工注入/外部 creep）静默跳过。 */
 export function recordCreepDeath(name: string): void {
   const parts = name.split("-");
   if (parts.length < 5) return;

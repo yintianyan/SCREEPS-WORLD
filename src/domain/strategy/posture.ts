@@ -1,26 +1,9 @@
 /**
- * 帝国姿态评估 — Strategy 层的纯函数核心。
- *
- * 解决的架构缺口：此前「何时扩张/何时收缩/何时备战」散落在各执行系统的
- * 局部门禁里（expansion 看 GCL、remote 看 RCL）— 功能上线即自动开启，
- * 帝国没有统一的战略判断。本模块把这些裁决收拢为单一姿态状态机：
- * 执行系统只消费指令，不自作主张；进攻能力未来接入时必须插进这个插座，
- * 禁止「代码写完即开战」。
- *
- * 姿态语义：
- *   develop — 固本：发展经济与 RCL，不开新远矿点、不扩张。默认姿态。
- *   expand  — 扩张：经济全面健康 + GCL 有余量 + CPU 富余 + 无近期威胁。
- *   fortify — 设防：出现敌对活动 — 暂停扩张与新远矿点（收缩姿态）。
- *   war     — 战争：威胁持续超过耐心窗口且经济扛得住。
- *
- * ES-1 诚实化：fortify/war 当前的全部效果是「关扩张 + 关新远矿」—
- * 防御系统（defense-planner/tower-defense/fortification）尚未消费姿态，
- * 「防御投资升档」是未接线的规划项，不是现状。进攻执行器未来接入时
- * war 姿态是唯一授权来源（代码存在不等于战争开始）。
- *
- * 迁移规则（与 CPU tier 同款哲学）：
- *   升级（威胁方向）立即生效 — 紧急旁路，不等驻留期；
- *   降级（安全方向）需要静默期 + 最短驻留期 — 滞回防抖。
+ * 帝国姿态评估 — Strategy 层纯函数核心：把「何时扩张/收缩/备战」从各执行系统
+ * 的局部门禁收拢为单一状态机（develop 固本→expand 扩张→fortify 设防→war 战争），
+ * 执行系统只消费指令、不自作主张；war 姿态是进攻唯一授权来源（ES-1：防御系统
+ * 尚未消费姿态，「防御升档」是未接线规划项）。迁移与 CPU tier 同款哲学：威胁
+ * 升级立即生效（紧急旁路），降级需静默期 + 最短驻留期（滞回防抖）。
  */
 
 /** 单房间的战略输入摘要。 */
@@ -39,21 +22,14 @@ export type EmpirePosture = "develop" | "expand" | "fortify" | "war";
 
 /** 姿态评估选项。 */
 export interface PostureOptions {
-  /** 威胁记忆窗口：任一房 lastHostileAt 距今小于此值即视为「近期有敌情」。
-   * 只影响"是否冻结扩张/新远矿"，与 CONFIG.defense.siegeMemoryTicks（墙体升档，
-   * 10000）刻意解耦并取更短值：墙可为防御纵深保持高血更久，但经济扩张不该被一波
-   * 已击退的 invader 冻结上万 tick——活跃帝国周期性遇 invader 是常态，窗口过长会
-   * 令扩张近乎永久冻结。任何新目击仍即时 fortify（紧急旁路），故缩短此窗口只加快
-   * 威胁散去后的扩张恢复，不削弱在袭响应。 */
+  /** 威胁记忆窗口（最近敌情判定）。与 CONFIG.defense.siegeMemoryTicks(10000) 刻意解耦
+   * 取更短值：活跃帝国周期性遇 invader，窗口过长会令扩张近乎永久冻结；新目击仍即时
+   * fortify（紧急旁路），缩短窗口只加快威胁散去后的恢复、不削弱在袭响应。 */
   threatWindow: number;
   /** fortify → war 的耐心窗口：设防状态持续超过此时长且敌情未消 → 升战争。 */
   warPatience: number;
-  /**
-   * war 可持续性耐心窗口（R4）：war 姿态下经济压力持续超过 warMaxPressure
-   * 的连续 tick 数达到此值 → 降级 fortify（战时止损：打不起就撤资）。
-   * 与威胁升级同待遇 — 达到阈值立即生效，不等 minDwell 驻留期；
-   * 压力恢复即清零计数（滞回由「持续超标」本身提供）。
-   */
+  /** war 可持续性耐心窗口（R4）：war 下经济压力持续超 warMaxPressure 达此值 → 降级
+   * fortify（打不起就撤资）；与威胁升级同待遇立即生效不等 minDwell，压力恢复即清零。 */
   warExitPatienceTicks: number;
   /** 降级最短驻留期：fortify/war 至少维持此时长才允许回落。 */
   minDwell: number;
@@ -92,11 +68,7 @@ export interface PostureInput {
   bucket: number;
   /** 上一次评估结果（滞回基准）；首次评估为 undefined。 */
   prev?: { posture: EmpirePosture; since: number };
-  /**
-   * war 可持续性计数（R4）：war 姿态下经济压力持续超标的连续 tick 数，
-   * 由 empire-strategy 持久化（kernel.strategy.warPressureTicks）后回传。
-   * 缺失视为 0。
-   */
+  /** war 压力连续超标 tick 数（R4）：由 empire-strategy 持久化（kernel.strategy.warPressureTicks）后回传；缺失视为 0。 */
   warPressureTicks?: number;
 }
 
@@ -109,10 +81,7 @@ export interface PostureResult {
   expansionAllowed: boolean;
   /** 是否允许开辟新的远矿点（现役运营不受影响）。 */
   newRemoteOpsAllowed: boolean;
-  /**
-   * 下一步 war 可持续性计数（R4）— 调用方（empire-strategy）须持久化
-   * 此值供下 tick 回传，否则压力计数无法跨 tick 累积。
-   */
+  /** 下一步 war 压力计数（R4）— 调用方（empire-strategy）须持久化供下 tick 回传，否则无法跨 tick 累积。 */
   warPressureTicks: number;
 }
 
@@ -141,10 +110,9 @@ export function evaluateEmpirePosture(
 
   // ── 威胁升级：立即生效（紧急旁路，不等驻留期）──
   if (threatRecent) {
-    // ── war 可持续性（R4 止损）：战时可被打，但打不动经济必须退 ──
-    // 计数跨 tick 累积（由调用方持久化回传）；压力恢复即清零。
-    // 持续超标达到耐心窗口 → 立即降级 fortify（经济止损与威胁升级同待遇，
-    // 不等待 minDwell 驻留期 — 战争机器烧的是存活所需的经济）。
+    // ── war 可持续性（R4 止损）：打不动经济必须退 ──
+    // 计数跨 tick 累积（调用方持久化回传）、压力恢复即清零；达窗口立即降级
+    // fortify，不等 minDwell — 战争机器烧的是存活所需的经济。
     if (prevPosture === "war") {
       const nextCounter =
         avgPressure > options.warMaxPressure ? (input.warPressureTicks ?? 0) + 1 : 0;
@@ -153,9 +121,8 @@ export function evaluateEmpirePosture(
       }
       return finalize("war", prevPosture, since, tick, nextCounter);
     }
-    // fortify 持续超过耐心窗口且经济扛得住 → 战争姿态。
-    // 注意：war 的授权来自「持续被打 + 打得起」的证据链，
-    // 与是否存在进攻代码无关 — 执行器必须听姿态的，反之不成立。
+    // war 授权来自「持续被打 + 打得起」的证据链，与是否存在进攻代码无关 —
+    // 执行器必须听姿态的，反之不成立。
     if (
       prevPosture === "fortify" &&
       dwellElapsed >= options.warPatience &&
@@ -171,15 +138,13 @@ export function evaluateEmpirePosture(
     if (dwellElapsed < options.minDwell) {
       return finalize(prevPosture, prevPosture, since, tick);
     }
-    // 静默期满 — 回落到固本（不直接跳 expand，先确认经济恢复节奏）。
+    // 静默期满回 develop（不直接跳 expand，先确认经济恢复节奏）。
     return finalize("develop", prevPosture, since, tick);
   }
 
   // ── 和平姿态选择：expand（授权殖民）需要全面健康 + 核心成熟 ──
-  // Phase 1a：在原经济健康门上叠加"核心成熟度 + 最新房自立"，防止过早殖民
-  //（历史教训：RCL4 嫩房只要 colonyState=normal 就触发殖民 → W6N3 失败、W8N4 硬上）。
-  //   - sponsorReady：至少一个房 RCL≥colonizeSponsorRcl 且 storage 盈余 → 能快速代孵新房；
-  //   - youngestMature：所有己方房 RCL≥colonizeYoungestFloorRcl → 上一个新房已自立、不再分兵。
+  // Phase 1a：叠加「核心成熟度 + 最新房自立」防过早殖民（历史教训：RCL4 嫩房
+  // colonyState=normal 即触发殖民 → W6N3 失败、W8N4 硬上）。
   const sponsorReady = rooms.some(
     r => r.rcl >= options.colonizeSponsorRcl && r.storageEnergy >= options.colonizeSponsorEnergy,
   );

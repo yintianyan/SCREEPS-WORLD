@@ -1,19 +1,8 @@
 /**
- * Telemetry Collector — P3 系统，时序数据采集 + 事件日志 + 运行时摘要。
- *
- * 职责：
- *   1. 每 10 tick 采样 CPU 时序数据（来自 per-tick telemetry heap）
- *   2. 每 50 tick 采样经济时序数据（来自 RoomMemory.phase）
- *   3. 每 100 tick 采样人口普查数据
- *   4. 每 10 tick 执行差分事件检测（对比 Memory 前后状态）
- *   5. 每 10 tick flush per-tick 事件缓冲区到 segment 2
- *   6. 每 10 tick 更新 Memory.kernel.stats 摘要
- *
- * 优先级：P3 — 采集系统是非关键的，在 conserve/recovery tier 下跳过。
- * interval: 10 — 每 10 tick 运行一次（对齐 cpuSampleInterval）。
- *
- * CPU 预算：正常态 ~0.05-0.1 CPU/run（采样 + 偶尔 JSON.stringify）。
- * flush 受 segment dirty flag 控制 — 无新数据时不 stringify。
+ * Telemetry Collector — P3 系统，时序数据采集 + 事件日志 + 运行时摘要（interval 10）。
+ * 职责：每 10 tick 采样 CPU 时序 + 差分事件检测 + flush 事件缓冲到 segment 2 +
+ * 更新 Memory.kernel.stats 摘要；每 50 tick 采样经济时序；每 100 tick 人口普查。
+ * P3 — 非关键，conserve/recovery 下跳过；flush 受 segment dirty flag 控制，无新数据不 stringify。
  */
 
 import type { Priority, System, TickContext } from "../kernel/contracts";
@@ -109,8 +98,8 @@ function sampleEconomyData(tick: number, ctx: TickContext): void {
       : 0;
 
     // P0-2: 采集 container 级别能量流数据，用于诊断物流瓶颈。
-    // - containerEnergy: 所有 container 的能量总和（物流缓冲健康度）
-    // - controllerContainerEnergy: controller 旁 container 的能量（站桩升级供能链健康度）
+    // containerEnergy：所有 container 能量总和（物流缓冲健康度）；
+    // controllerContainerEnergy：controller 旁 container 能量（站桩升级供能链健康度）。
     let containerEnergy = 0;
     for (const c of snapshot.containers) {
       containerEnergy += c.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -204,11 +193,9 @@ function samplePopulationData(tick: number): void {
 // ─── 差分事件检测 + 事件 flush ───────────────────────────────
 
 /**
- * 对比 Memory 中前后状态，检测关键转换并记录为事件。
- * 同时将 per-tick eventBuffer 中的显式事件 flush 到 segment 2。
- *
- * 差分检测不需要修改现有系统 — telemetry-collector 作为纯观察者，
- * 每次运行时读取当前 Memory 状态，与上次记录的"前值"对比。
+ * 对比 Memory 前后状态，检测关键转换并记录为事件；同时把 per-tick eventBuffer
+ * 的显式事件 flush 到 segment 2。差分检测不修改现有系统 — 纯观察者，每次运行
+ * 读取当前 Memory 状态与上次记录的「前值」对比。
  */
 function detectAndFlushEvents(tick: number, ctx: TickContext): void {
   const g = globalCache() as any;
@@ -451,15 +438,9 @@ function updateStatsSummary(tick: number): void {
 // ─── 结构化 console 输出（外部采集通道）──────────────────────
 
 /**
- * 输出一行 @TELEMETRY 前缀的 JSON，供外部 WebSocket console 订阅器接收。
- *
- * 格式：@TELEMETRY {"t":12345,"cpu":8.2,"bk":8500,...}
- *
- * 外部采集脚本按 @TELEMETRY 前缀过滤，写入 telemetry.jsonl 供事后分析。
- * 此行同时出现在游戏控制台 — 前缀使其可辨识但不干扰人类阅读。
- *
- * CPU 开销：单次 console.log 约 0.02-0.05 CPU [Experience]。
- * 每 10 tick 一次，在 P3 budget 下可接受。
+ * 输出一行 @TELEMETRY 前缀的 JSON，供外部 WebSocket console 订阅器接收
+ * （外部采集脚本按前缀过滤写入 telemetry.jsonl；同现于游戏控制台但不干扰阅读）。
+ * CPU 开销：单次 console.log 约 0.02-0.05 CPU [Experience]，每 10 tick 一次。
  */
 function emitTelemetryLine(tick: number, ctx: TickContext): void {
   // 显式守卫：不依赖外部调用顺序，Global Reset 后 telemetry 未重建时直接跳过。

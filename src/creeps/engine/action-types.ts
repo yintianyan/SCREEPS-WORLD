@@ -1,19 +1,12 @@
 /**
- * Action-Candidate 架构核心类型。
+ * Action-Candidate 架构核心类型：角色行为拆解为有序 ActionCandidate 列表，
+ * RoleRunner 按序评估，第一个 resolve 非 undefined 的候选被执行；
+ * 新增/调整行为 = 增删/排序候选，不修改其他候选。
  *
- * 设计原则：
- *   - 每个 role 的行为被拆解为有序的 ActionCandidate 列表。
- *   - resolve 解析目标（返回 undefined 表示不触发），execute 接收该目标执行。
- *   - RoleRunner 按序评估，第一个 resolve 非 undefined 的候选被执行。
- *   - 新增/调整行为 = 增删/排序候选，不修改其他候选。
- *
- * resolve 模式（唯一模式）：
- *   resolve 返回目标对象（T | undefined），execute 接收类型安全的 T。
- *   消除了 predicate-execute 重复计算——目标只解析一次。
- *
- * 注意：resolve 允许写入 creep.memory（持久化缓存目标 ID），
- * 这是有意为之的务实设计——Screeps 的 memory 持久化是必须的。
- * 但 resolve 禁止执行游戏 API 副作用（harvest/transfer/build 等）。
+ * resolve 模式（唯一模式）：resolve 返回 T | undefined，execute 接收类型安全的 T，
+ * 消除 predicate-execute 重复计算——目标只解析一次。
+ * resolve 允许写 creep.memory（持久化缓存目标 ID，Screeps 必需），
+ * 但禁止执行游戏 API 副作用（harvest/transfer/build 等）。
  */
 import type { Budget, RoomSnapshot, TickContext } from "../../kernel/contracts";
 
@@ -28,39 +21,22 @@ export interface ActionContext {
 
 /**
  * 单个行为候选 — role 行为的最小可组合单元。
- *
- * 泛型参数 T 表示 resolve 返回的目标类型，execute 接收同类型的 target。
- * 工厂函数声明具体类型（如 ActionCandidate<StructureContainer>），
- * 消除 execute 内的 `as Type` 无检查转换。
- * RolePolicy 的候选列表使用 ActionCandidate<any>[] 保持异构性。
- *
- * resolve: 解析目标 + 可选 memory 缓存。返回 undefined 表示此行为不触发。
- *          允许写 creep.memory（持久化缓存），但禁止执行游戏 API 副作用。
- * execute: 执行行为（移动 + 操作）。target 类型安全，由泛型参数 T 保证。
+ * 泛型 T 保证 execute 收到与 resolve 同类型的 target，消除 execute 内 `as Type` 无检查转换；
+ * RolePolicy 候选列表用 ActionCandidate<any>[] 保持异构。
  */
 export interface ActionCandidate<T = unknown> {
   /** 调试标识（telemetry / 日志用）。 */
   readonly name: string;
   /** 解析目标。返回 undefined 表示此行为不触发。
-   * EN-3：必填 — 可选时「无 resolve 的候选」永远返回 undefined、
-   * 静默死亡（编译期零防护的契约陷阱）。resolve 是唯一放行闸门（EN-1）。 */
+   * EN-3：必填 — 可选时「无 resolve 的候选」永远返回 undefined、静默死亡（EN-1 唯一放行闸门）。 */
   readonly resolve: (ac: ActionContext) => T | undefined;
   /** 执行行为。target 为 resolve 返回值，类型由泛型 T 保证。 */
   execute(ac: ActionContext, target: T): void;
 }
 
 /**
- * RolePolicy — 一个角色的完整行为策略。
- *
- * acquire: 取能阶段的候选列表（按优先级排序）。
- * work:    消耗阶段的候选列表（按优先级排序）。
- * gate:    可选的前置门禁 — 返回 false 时角色整体跳过（进入 idle）。
- * onFlee:  可选的 flee 钩子 — 威胁检测后、通用 flee 之前调用。
- *          返回 true 表示角色已自行处理（如防御圈内安全充能），跳过通用 flee 移动。
- *          返回 false 表示需要通用 flee 移动逻辑接管。
- * park:    无匹配候选（即将 idle）时，是否主动离开关键格/道路到安全格待命。
- *          站桩角色（harvester/upgrader）不设此项——它们的 idle 是守在矿位/controller 旁，本就正确。
- *          移动角色（hauler/distributor/builder/worker）设 true，避免 idle 时堵塞交通。
+ * RolePolicy — 一个角色的完整行为策略（声明式钩子集合），由 engine/role-runner 统一驱动。
+ * 各钩子的语义边界见下方字段注释。
  */
 export interface RolePolicy {
   /** 门禁：在 mode 分支之前评估。返回 false → idle。 */
@@ -71,53 +47,32 @@ export interface RolePolicy {
   work: readonly ActionCandidate<any>[];
   /**
    * flee 钩子：威胁检测后、通用 flee 移动之前调用。
-   * 返回 true 表示角色已自行处理（如 hauler 在防御圈内安全充能），跳过通用 flee。
-   * 返回 false 表示需要通用 flee 移动逻辑接管。
-   *
-   * 职责分离原则：此钩子让角色自行决定 flee 期间的"安全区行为"，
-   * 而不是在引擎层（lifecycle.ts）硬编码角色判断。
+   * 返回 true=角色已自行处理（如 hauler 防御圈内安全充能），false=需要通用 flee 接管。
+   * 职责分离（P0-2）：flee 期间的安全区行为由角色层决定，不在引擎层硬编码角色判断。
    */
   onFlee?(ac: ActionContext): boolean;
-  /**
-   * idle 归位：无匹配候选（即将 idle）时，是否主动离开关键格/道路到安全格待命。
-   * 站桩角色（harvester/upgrader）不设此项——它们的 idle 是守在矿位/controller 旁，本就正确。
-   * 移动角色（hauler/distributor/builder/worker）设 true，避免 idle 时堵塞交通。
-   */
+  /** idle 归位：无匹配候选（即将 idle）时是否主动离开关键格/道路到安全格待命。
+   * 站桩角色（harvester/upgrader）不设——idle 守在矿位/controller 旁本就正确；
+   * 移动角色（hauler/distributor/builder/worker）设 true，避免 idle 时堵塞交通。 */
   park?: boolean;
-  /**
-   * 战斗角色标志：true 时 role-runner 跳过威胁逃跑检测（shouldFlee/shouldFleeForeignRoom）。
-   * 战斗角色的职责就是接敌 — 若不豁免，defender 看到敌人会立刻逃回 home，
-   * 攻击候选永远轮不到执行，角色形同虚设。
-   */
+  /** 战斗角色标志：跳过威胁逃跑检测（shouldFlee/shouldFleeForeignRoom）。
+   * 否则 defender 看到敌人会立刻逃回 home，攻击候选永远轮不到执行，角色形同虚设。 */
   combat?: boolean;
-  /**
-   * Recovery 豁免自报（R3a）：与 kernel/contracts.ts CreepRole.recoveryEligible
-   * 对应，由 defineRole 透传到注册角色。recovery 时仍执行（P1 等效预算）。
-   */
+  /** Recovery 豁免自报（R3a）：透传到 CreepRole.recoveryEligible，recovery 时仍执行（P1 等效预算）。 */
   recoveryEligible?: boolean;
   /**
    * 无候选时是否切 idle 的额外条件（P2-M）。
-   *
-   * role-runner 默认 idle 逻辑：本地角色（无 remoteTarget）或到达 remoteTarget 房时切 idle；
-   * 通勤中（有 remoteTarget 但不在目标房）保持原 mode，避免 idle→ensureHome→home 振荡。
-   *
-   * 此钩子让角色声明"前两个通用条件未命中时，是否仍切 idle"的特例。
-   * 典型用例：remoteHauler work 模式在 home 房无候选时切 idle（ensureHome 保持在家），
-   * 但 acquire 模式在 home 房不切 idle（ensureHome 导航去 remoteTarget）。
-   *
-   * 返回 true → 切 idle；返回 false/undefined → 走默认逻辑（不切 idle）。
+   * 默认：本地角色（无 remoteTarget）或到达 remoteTarget 房时切 idle；通勤中保持原 mode
+   * （避免 idle→ensureHome→home 振荡）。此钩子声明"前两个通用条件未命中时是否仍切 idle"的特例
+   * （如 remoteHauler work 在 home 房切 idle，acquire 不切）。
+   * 返回 true → 切 idle；返回 false/undefined → 走默认逻辑。
    */
   shouldIdleWhenNoCandidate?(ac: ActionContext): boolean;
   /**
-   * 战备集结（R4）：威胁检测之后、ensureHome 导航之前调用。
-   * 返回 true 表示角色已接管本 tick（驻留/归建等集结动作），
-   * role-runner 跳过导航与任务管线直接结束本 tick。
-   *
-   * 必须在导航之前执行：否则集结中的角色会被 ensureHome 直接导航
-   * 进目标房（attacker 在 war build 阶段的「添油战术」正是此路径）。
-   *
-   * 典型用例：attacker 在 warPlan.phase === "build" 时归建待命，
-   * 满编（advance）才整波推进。
+   * 战备集结（R4）：威胁检测之后、ensureHome 导航之前调用；返回 true 表示接管本 tick，
+   * 跳过导航与任务管线直接结束。必须在导航之前执行：否则集结中的角色会被 ensureHome
+   * 直接导航进目标房（attacker 在 war build 阶段的「添油战术」正是此路径）。
+   * 典型用例：attacker 在 warPlan.phase === "build" 时归建待命，满编（advance）才整波推进。
    */
   hold?(creep: Creep, ctx: TickContext): boolean;
 }

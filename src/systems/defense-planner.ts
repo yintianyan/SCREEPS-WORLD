@@ -15,19 +15,11 @@ import { computeMinCutDefense, MINCUT_ALGO_VERSION } from "../domain/layout/min-
 import { globalCache, type MinCutCache, type ExitCache } from "../kernel/global-cache";
 
 /**
- * 防御规划器 — P3 独立系统，负责生成 rampart/wall 建造任务。
- *
- * 策略（Phase 5 升级）：
- *   1. 优先使用 min-cut 算法：用最少 rampart 封锁所有入侵路径
- *   2. Min-cut 失败（割集过大/地形太开放）时 fallback 到扇区防御
- *
- * 触发：interval 10（每 10 tick 评估一次）。
- *
- * CPU 优化（P1 修复）：
- *   - min-cut 结果缓存在 global heap，仅在核心结构变化时重算
- *   - bucket < 5000 时完全跳过（非关键系统不能拖垮生存）
- *   - buildQueue 中已有 mincut rampart key 时跳过计算
- *   - room.find(FIND_EXIT) 结果缓存在 heap（地形不变）
+ * 防御规划器 — P3 独立系统，负责生成 rampart/wall 建造任务（interval 10）。
+ * 策略（Phase 5 升级）：优先 min-cut 算法（最少 rampart 封锁所有入侵路径）；
+ * Min-cut 失败（割集过大/地形太开放）时 fallback 扇区防御。
+ * CPU 优化（P1 修复）：min-cut 结果缓存 global heap，仅核心结构变化时重算；
+ * bucket < 5000 完全跳过；buildQueue 已有 mincut key 时跳过计算；FIND_EXIT 缓存 heap。
  */
 export const defensePlannerSystem: System = {
   name: "defense-planner",
@@ -38,8 +30,7 @@ export const defensePlannerSystem: System = {
     // P3 在 conserve/recovery 下不运行。
     if (ctx.budget.tier === "conserve" || ctx.budget.tier === "recovery") return;
 
-    // Bucket 门禁 — 低于 5000 时完全跳过防御规划。
-    // 防御规划是非关键的 P3 工作，不能在 CPU 紧张时拖垮生存。
+    // Bucket 门禁 — 低于 5000 时完全跳过防御规划（非关键的 P3 工作，不能拖垮生存）。
     if (Game.cpu.bucket < 5000) return;
 
     for (const snapshot of ctx.snapshots()) {
@@ -69,15 +60,13 @@ function withAlgoVersion(coreSig: string): string {
 /** MinCutCache / ExitCache 接口已移至 kernel/global-cache.ts（GlobalCache 字段类型声明）。 */
 
 /**
- * 获取或创建房间的 min-cut 缓存。
- * 缓存 key 为 roomName，存放在 global heap。
+ * 获取或创建房间的 min-cut 缓存（缓存 key = roomName，存 global heap）。
+ * 优先读 heap；Global Reset 后从 Memory 恢复 — 避免 bucket < 5000 时防御真空。
  */
 function getMinCutCache(roomName: string): MinCutCache | undefined {
   const g = globalCache();
-  // 优先读 global heap（快）
   if (g.__minCutCache?.[roomName]) return g.__minCutCache[roomName];
 
-  // Global Reset 后从 Memory 恢复 — 避免 bucket < 5000 时防御真空
   const roomMem = Memory.rooms[roomName];
   if (roomMem?.minCut) {
     const stored = roomMem.minCut;
@@ -98,7 +87,6 @@ function getMinCutCache(roomName: string): MinCutCache | undefined {
 
   return undefined;
 }
-
 function setMinCutCache(roomName: string, cache: MinCutCache): void {
   const g = globalCache();
   if (!g.__minCutCache) g.__minCutCache = {};
@@ -121,8 +109,7 @@ function setMinCutCache(roomName: string, cache: MinCutCache): void {
 
 /**
  * 计算核心结构的签名 — 用于检测是否需要重算 min-cut。
- * 签名包含 spawns、extensions、storage、towers 的位置。
- * 只有核心结构变化时才需要重算。
+ * 签名包含 spawns、extensions、storage、towers 的位置，只有核心结构变化才重算。
  */
 function computeCoreSignature(snapshot: import("../kernel/contracts").RoomSnapshot): string {
   const parts: string[] = [];
@@ -134,14 +121,13 @@ function computeCoreSignature(snapshot: import("../kernel/contracts").RoomSnapsh
 }
 
 /**
- * 获取或缓存房间的出口位置。
- * room.find(FIND_EXIT) 是全房扫描，缓存避免每 10 tick 重算。
+ * 获取或缓存房间的出口位置（room.find(FIND_EXIT) 是全房扫描，缓存避免每 10 tick 重算；
+ * 出口位置在房间地形不变时固定，1000 tick 过期）。
  */
 function getCachedExits(room: Room, roomName: string): { x: number; y: number }[] {
   const g = globalCache();
   if (!g.__exitCache) g.__exitCache = {};
   const cached: ExitCache | undefined = g.__exitCache[roomName];
-  // 出口位置在房间地形不变时是固定的，缓存 1000 tick 过期。
   if (cached && Game.time - cached.tick < 1000) {
     return cached.positions;
   }
@@ -152,14 +138,9 @@ function getCachedExits(room: Room, roomName: string): { x: number; y: number }[
 
 /**
  * P1-2：min-cut 割集位置可建造性预校验（纯函数，便于单元测试）。
- *
- * 1. 出口格及紧邻出口格不可建造 wall/rampart（Screeps 出口格 x/y=0|49，
- *    紧邻格 x/y=1|48 虽可建造但防御价值为零且 min-cut 常误选）。
- * 2. 已有 construction site 的位置跳过（避免重复入队 → 创建失败 → blocked）。
- *
- * @param pos 割集位置
- * @param hasConstructionSite 该位置是否已有 construction site（由调用方 lookForAt 查询）
- * @returns true = 可建造，false = 不可建造（应跳过）
+ * 1. 出口格及紧邻出口格不可建 wall/rampart（Screeps 出口格 x/y=0|49，紧邻格 x/y=1|48
+ *    可建但防御价值为零且 min-cut 常误选）；2. 已有 construction site 的位置跳过
+ *    （避免重复入队 → 创建失败 → blocked）。
  */
 export function isMinCutPositionBuildable(
   pos: { x: number; y: number },
@@ -216,17 +197,16 @@ function planDefense(
   // 使敌方必须先拆 rampart 才能攻击建筑。独立于 min-cut/扇区路径封锁逻辑。
   added = addCoreRampartCoverage(queue, snapshot, existingKeys) || added;
 
-  // 快速检查：如果 buildQueue 中已有未完成的 mincut 防御建筑 key，跳过 min-cut 计算。
+  // 快速检查：buildQueue 已有未完成的 mincut 防御建筑 key → 跳过 min-cut 计算。
   // min-cut key 格式（v3）: defense.mincut.wall.{x}.{y} / defense.mincut.rampart.{x}.{y}
   // 旧格式 defense.mincut.{x}.{y} 也匹配前缀检查，自然消化后不重生成。
   const mincutKeyCount = queue.filter(
     t => t.key.startsWith("defense.mincut.") && t.state !== "done" && t.state !== "blocked",
   ).length;
 
-  // P0 修复：如果 buildQueue 中已有未完成的 mincut rampart 任务，跳过全部计算。
-  // 这些任务存于 Memory（跨 global reset 存活），无需因 global cache 清空而重算。
-  // 如果核心结构已变，旧 rampart 位置会因 ERR_INVALID_TARGET 被标记为 blocked，
-  // cleanTasks 清理后 mincutKeyCount 归零，自然触发重算。
+  // P0 修复：已有未完成的 mincut rampart 任务时跳过全部计算（任务存 Memory，跨 reset 存活，
+  // 无需因 global cache 清空而重算）。核心结构已变时旧 rampart 会 ERR_INVALID_TARGET →
+  // blocked → cleanTasks 清理后 mincutKeyCount 归零，自然触发重算。
   if (mincutKeyCount > 0) {
     if (added) roomMem.buildQueue = queue;
     return; // rampart 任务已在队列中，无需重算 min-cut

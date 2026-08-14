@@ -1,12 +1,6 @@
 /**
- * Withdraw actions — 从结构取能。
- *
- * 命名约定：
- *   - withdrawRichest*   — 从最满的 container 取
- *   - withdrawClosest*   — 从最近的 container 取
- *   - withdrawController* — 从 controller 旁结构取（站桩升级）
- *   - withdrawStorage*   — 从 storage 取
- *   - withdrawCapped      — 限量取（避免 ERR_NOT_ENOUGH_RESOURCES）
+ * Withdraw actions — 从结构取能。命名约定：Richest*=从最满 container 取；Closest*=从最近取；
+ * Controller*=从 controller 旁结构取（站桩升级）；Storage*=从 storage 取；Capped=限量取（避免 ERR_NOT_ENOUGH_RESOURCES）。
  */
 import type { ActionCandidate, ActionContext } from "../action-types";
 import { runAction } from "./helpers";
@@ -44,15 +38,11 @@ export function withdrawClosestContainer(): ActionCandidate<StructureContainer> 
 }
 
 /**
- * 判断 container 是否为物流关键 container（source container 或 controller container）。
- *
- * - source container：紧邻 source，是 hauler 的物流源。非采集角色直接取用会导致
- *   hauler 无事可做、物流链断裂。**前提是本房确有存活 hauler** — 拓荒爬坡期
- *   编制里还没有 hauler 时，container 能量没有任何物流消费者，礼让的对象不存在，
- *   builder/upgrader 应可直取（满载 withdraw 1 tick vs harvest 慢采 25 tick）。
- * - controller container：紧邻 controller，是 upgrader 的站桩能量源。builder 取用
- *   会导致 upgrader 断粮，站桩升级链路崩溃（此约束与 hauler 无关，恒生效）。
- *
+ * 是否为物流关键 container（source container 或 controller container）。
+ * source container：hauler 的物流源，非采集角色直取会致物流链断裂。**前提是本房确有存活
+ * hauler**——拓荒爬坡期编制里无 hauler 时礼让对象不存在，builder/upgrader 应可直取
+ * （满载 withdraw 1 tick vs harvest 慢采 25 tick）。
+ * controller container：upgrader 的站桩能量源，builder 取用会致升级链崩溃（与 hauler 无关，恒生效）。
  * builder 等非物流角色应从非物流 container（如 mineral container）取能。
  */
 function isLogisticsContainer(c: StructureContainer, ac: ActionContext): boolean {
@@ -145,18 +135,11 @@ export function withdrawStorage(): ActionCandidate<StructureStorage> {
 
 /**
  * 从 storage 旁 link 取能 — link 物流链的「最后一公里」。
- *
- * Link 网络能量流：
- *   Harvester → Source Link →(link-system 瞬移)→ Storage Link →(本 action)→ Hauler → Storage
- *
- * 如果没有 creep 定期排空 storage link，link 网络会堵死：
- * storage link 满后 planLinkTransfers 的 storageFree=0，
- * source link 无法再向其传输，整条链路背压瘫痪。
- *
- * 优先级：link-system (P1) 在 creep 之前运行，会先将 storage link → controller link
- * 传输（如果 controller 缺能），hauler 排空的是剩余部分 — 不影响升级链供能。
- *
- * 限量取能：与 withdrawCapped 一致，取 min(可用, 空闲)，避免 ERR_NOT_ENOUGH_RESOURCES。
+ * 链路：Harvester → Source Link →(link-system 瞬移)→ Storage Link →(本 action)→ Hauler → Storage。
+ * 无人排空 storage link 则链堵死：storage link 满后 planLinkTransfers 的 storageFree=0，
+ * source link 无法再传，整条链路背压瘫痪。优先级：link-system (P1) 先于 creep 运行，
+ * 已先将 storage link → controller link 传输（controller 缺能时），hauler 排空剩余部分。
+ * 限量取能：取 min(可用, 空闲)，避免 ERR_NOT_ENOUGH_RESOURCES。
  */
 export function withdrawStorageLink(): ActionCandidate<StructureLink> {
   return {
@@ -168,17 +151,14 @@ export function withdrawStorageLink(): ActionCandidate<StructureLink> {
         l => l.pos.getRangeTo(st) <= 2 && l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
       if (!storageLink) return undefined;
-      // 灌能优先守卫（②b）：controller link 急需时，storage link 的能量应由
-      // link-system 规则3 路由到 controller link 供 0 通勤升级（link-system P1
-      // 先于 creep 运行）。但规则3 受 link 冷却限制（每 ~18 tick 一次），若 hauler
-      // 在冷却间隙每 tick 抽走，controller link 断粮 — 且与 distributor 灌入形成
-      // storage→link→storage 空转。故 controller link 急需时不抽，让升级链优先。
-      //
-      // A 修复（2026-08-01）：与 planLinkTransfers 的 controllerUrgent 同口径 —
-      // controller link 能量 < minTransfer(400) 才算急需。旧口径 free>0 在
-      // RCL8 停供后被残留能量（799/800，free=1）永久卡死：link-system 的
-      // controller target=0 永不补那 1 格，而守卫永远让路 → storage link 排空
-      // 被挡 → source link 背压 → source container 满 2000 → 全链堵死。
+      // 灌能优先守卫：controller link 急需时，storage link 能量应由 link-system 规则3 路由到
+      // controller link 供 0 通勤升级（link-system P1 先于 creep 运行）。但规则3 受 link 冷却
+      // 限制（每 ~18 tick 一次），若 hauler 在冷却间隙每 tick 抽走则 controller link 断粮，
+      // 且与 distributor 灌入形成 storage→link→storage 空转。故 controller link 急需时不抽。
+      // A 修复（2026-08-01）：与 planLinkTransfers 的 controllerUrgent 同口径 — 能量 <
+      // minTransfer(400) 才算急需。旧口径 free>0 在 RCL8 停供后被残留能量（799/800）永久卡死：
+      // controller target=0 永不补那 1 格，守卫永远让路 → storage link 排空被挡 → source link
+      // 背压 → source container 满 → 全链堵死。
       const ctrl = ac.snapshot.controller;
       if (ctrl) {
         const ctrlLink = ac.snapshot.links.find(
@@ -211,12 +191,9 @@ interface StorageCappedTarget {
 }
 
 /**
- * 从 storage 限量取能（upgrader 专用）。
- *
- * 防止 upgrader 一次取走大量能量导致 storage 突降、触发 economyPressure
- * 连锁降级。单次取 min(可用, 空闲, limit)。
- *
- * P1-1: limit 可为固定值或动态函数 — 动态函数允许按 storage 水位缩放取能上限。
+ * 从 storage 限量取能（upgrader 专用）— 防止一次取走大量能量致 storage 突降、
+ * 触发 economyPressure 连锁降级。单次取 min(可用, 空闲, limit)。
+ * P1-1: limit 可为固定值或动态函数 — 允许按 storage 水位缩放取能上限。
  */
 export function withdrawStorageCapped(
   limit: number | ((ac: ActionContext) => number),
@@ -228,8 +205,7 @@ export function withdrawStorageCapped(
       if (!st || st.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       const effectiveLimit = typeof limit === "function" ? limit(ac) : limit;
       // U-1/B-1（floor 下沉，D-0 同手法）：限额 ≤0 表示水位表拒绝本次取能 —
-      // resolve 返回 undefined 放行后续候选（container/harvest），
-      // 而不是 execute 里 withdraw(0) 空转占链。
+      // resolve 返回 undefined 放行后续候选（container/harvest），而非 execute 里 withdraw(0) 空转占链。
       if (effectiveLimit <= 0) return undefined;
       return { storage: st, limit: effectiveLimit };
     },

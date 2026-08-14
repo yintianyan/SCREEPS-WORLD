@@ -1,18 +1,10 @@
 /**
  * Lab System — P1 系统，每 tick 执行 lab 反应和 boost。
- *
- * 职责：
- *   1. 收集 lab/terminal/storage 中的化合物库存
- *   2. 规划反应链（从 RoomMemory 中的目标产物反向推导）
- *   3. 分配 lab 角色（input1/input2/output/boost）
- *   4. 执行反应（lab.runReaction）
- *   5. 执行 boost（lab.boostCreep）
- *
- * 设计约束：
- *   - RCL6+ 才有 lab（3 个），RCL7 有 6 个，RCL8 有 10 个
- *   - 每 tick 每对 lab 只能执行一次反应（cooldown）
- *   - boost 优先于反应（boost 是即时战力提升）
- *   - 反应链状态持久化在 RoomMemory.industry 中
+ * 职责：收集 lab/terminal/storage 化合物库存 → 规划反应链（从 RoomMemory 目标产物
+ * 反向推导）→ 分配 lab 角色（input1/input2/output/boost）→ 执行反应与 boost。
+ * 约束：RCL6+ 才有 lab（3 个），RCL7 有 6 个，RCL8 有 10 个；每 tick 每对 lab 只能
+ * 反应一次（cooldown）；boost 优先于反应（即时战力提升）；反应链状态持久化在
+ * RoomMemory.industry。
  */
 import type { RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import type { BoostEffect, Compound, LabAssignment, LabDemandTable, LabLoadDemand, LabPlan, LabUnloadDemand, ReactionPlan } from "../domain/industry/types";
@@ -99,11 +91,7 @@ function collectCompoundInventory(snapshot: RoomSnapshot): Record<string, number
 
 /**
  * 规划 lab 分配：优先 boost，剩余做反应。
- *
- * 策略：
- *   - 1 个 lab 专门 boost（如果有 boost 请求）
- *   - 剩余 lab 中取 3 个做反应（2 input + 1 output）
- *   - 其余 idle
+ * 策略：1 个 lab 专门 boost（有请求时）→ 剩余取 3 个做反应（2 input + 1 output）→ 其余 idle。
  */
 function planLabs(
   snapshot: RoomSnapshot,
@@ -184,15 +172,10 @@ function heldMineral(lab: StructureLab): ResourceConstant | undefined {
 
 /**
  * 依据 lab 分配推导本 tick 的装/卸料需求表。
- *
- * 规则：
- *   boost lab   — 需要 boostCompound（parts×30）+ 能量（parts×20）；装错矿先清位
- *   input lab   — 需要对应反应原料至批次目标量；装错矿先清位
- *   output lab  — 装着非本反应产物立即回收；产物积攒到阈值后攒批回收
- *   idle lab    — 任何残留矿物回收
- *
+ * 规则：boost lab 需 boostCompound（parts×30）+ 能量（parts×20），装错矿先清位；
+ * input lab 需对应反应原料至批次目标量，装错矿先清位；output lab 装着非本反应产物
+ * 立即回收、产物积攒到阈值后攒批回收；idle lab 任何残留回收。
  * 错矿 lab 在清位完成前不发装料需求 — 否则搬运端会对满仓 lab 反复 ERR_FULL 空转。
- *
  * @internal 导出仅供接线级单元测试使用，业务代码不直接调用。
  */
 export function computeLabDemands(labPlan: LabPlan): LabDemandTable {

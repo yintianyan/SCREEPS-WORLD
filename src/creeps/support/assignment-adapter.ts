@@ -6,9 +6,7 @@ import { globalCache } from "../../kernel/global-cache";
 import { recordEvent, EventKind } from "../../kernel/event-log";
 import { getObjectById } from "./obj-cache";
 
-// ──────────────────────────────────────────────
-// 适配层 — 从 Game/Memory/creep 读取数据，调用纯函数，写回状态
-// ──────────────────────────────────────────────
+// 适配层 — 从 Game/Memory/creep 读取数据 → 领域纯函数 → 写回状态。
 
 /** 获取当前 tick 的 TaskPool，不存在或过期时返回 undefined。 */
 function getPool(ctx?: TickContext): TaskPool | undefined {
@@ -19,10 +17,7 @@ function getPool(ctx?: TickContext): TaskPool | undefined {
   return g.assignment.pool;
 }
 
-/**
- * 适配：释放 creep 的当前任务分配。
- * 通过 TaskPool 的 O(1) 索引查找任务，移除 creep 名字。
- */
+/** 释放 creep 的当前任务分配（经 TaskPool O(1) 索引移除 creep 名）。 */
 export function releaseFromTask(creep: Creep): void {
   const assignment = creep.memory.assignment;
   if (!assignment) return;
@@ -33,16 +28,9 @@ export function releaseFromTask(creep: Creep): void {
   pool.releaseCreep(assignment.id, creep.name);
 }
 
-/**
- * 适配：获取或续约 creep 的任务分配（plan §5.7.2）。
- *
- * 从 creep.memory 读取现有 assignment，通过 Game.getObjectById 验证
- * target/source 存在性，从 Memory 读取 layout.revision，
- * 调用纯函数 validateAssignmentRules 判断有效性。
- * 有效则续约 lease；无效则释放并调用纯函数 chooseTaskForRole 选择新任务。
- *
- * 无可用任务时返回 undefined — 角色应进入 idle 或回退行为。
- */
+/** 获取或续约任务分配（plan §5.7.2）：验证现有 assignment（目标存在性 +
+ * layout.revision + 任务池存活）→ 有效续约 / 无效释放并 chooseTaskForRole 选新。
+ * 无可用任务返回 undefined — 角色进入 idle 或回退。 */
 function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | undefined {
   // 1. 验证现有 assignment。
   if (creep.memory.assignment) {

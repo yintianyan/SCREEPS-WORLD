@@ -1,29 +1,10 @@
 /**
- * Remote Mining Manager — P2 系统，远矿运营的中央调度器。
- *
- * 职责：
- *   - 从 RoomMemory.intel 评选远矿目标（selectRemoteTargets）
- *   - 创建/更新 RoomMemory.remoteOps 状态
- *   - 评估远矿 spawn 需求（evaluateRemoteDemand）
- *   - 将远矿请求推入 spawnQueue
- *   - 暂停过期运营、清理废弃运营
- *
- * 数据流：
- *   room-observer（每 50 tick 采集 intel）
- *     → remote-mining-manager（每 10 tick 评估）
- *       → selectRemoteTargets（纯函数筛选候选）
- *       → evaluateRemoteDemand（纯函数生成请求）
- *       → spawnQueue（推入请求）
- *         → spawn-manager（孵化执行）
- *
- * 优先级：P2 — 远矿是扩张行为，不阻塞本房经济。
- * 间隔：10 tick — 平衡响应速度与 CPU 开销。
- *
- * 安全门禁：
- *   - colonyState 非 normal 时暂停新远矿孵化
- *   - CPU tier conserve 以下不孵化远矿
- *   - RCL < minRcl 时不启动远矿
- *   - 远矿目标数不超过 maxOperations
+ * Remote Mining Manager — P2 系统，远矿运营的中央调度器（interval 10）。
+ * 数据流：room-observer（每 50 tick 采 intel）→ 本系统（每 10 tick 评估）→
+ * selectRemoteTargets（纯函数筛选）→ evaluateRemoteDemand（纯函数生成请求）→
+ * spawnQueue → spawn-manager（孵化执行）。
+ * 安全门禁：colonyState 非 normal 暂停新远矿孵化；CPU conserve 以下不孵化；
+ * RCL < minRcl 不启动；目标数不超过 maxOperations。P2 — 远矿是扩张行为，不阻塞本房经济。
  */
 import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
@@ -84,17 +65,14 @@ export const remoteMiningManagerSystem: System = {
         snapshot.spawns.length,
       );
 
-      // 2a. 超额收缩：active 数超过上限时废弃通勤最贵的。排序键优先用
-      //     intel 实测 pathCost（越远越先砍 — 直接对应编制成本与孵化位占用），
-      //     无 intel 时回退 haulerNeed（评选期按 pathCost 算出的代理值）；
-      //     全平局按房名字典序保证确定性。线上教训：仅用 haulerNeed 时
-      //     双远矿动态重估后同为 3 形成平局，字典序误砍了更近的房。
-      //     历史场景：单 spawn 房在 storage 建成时上限被放开到 2 开了双远矿，
-      //     远程编制 ~11 只把唯一 spawn 占满，本地 upgrader/builder/
-      //     distributor 饿死。收缩用 abandoned 而非 paused — paused 会被
-      //     maintainExistingOps 在 creep 尚在房内时自动复活（震荡）；
-      //     abandoned 停止一切孵化，现役 creep 不召回（沉没成本已付，
-      //     自然寿终榨干残值）。上限输入都是建筑级稳定量，不会抖动。
+      // 2a. 超额收缩：active 数超上限时废弃通勤最贵的。排序键优先 intel 实测 pathCost
+      //     （越远越先砍 — 对应编制成本与孵化位占用），无 intel 回退 haulerNeed；
+      //     平局按房名字典序保证确定性（线上教训：仅用 haulerNeed 时双远矿同为 3 形成
+      //     平局，字典序误砍了更近的房）。
+      //     历史场景：storage 建成放开上限到 2 开双远矿，远程编制 ~11 只占满唯一 spawn，
+      //     本地角色饿死。收缩用 abandoned 而非 paused — paused 会被 maintainExistingOps
+      //     在 creep 尚在时自动复活（震荡）；abandoned 停止一切孵化、现役 creep 不召回
+      //     （沉没成本已付，自然寿终榨干残值）。上限输入都是建筑级稳定量，不会抖动。
       if (activeCount > maxOps) {
         const costOf = (roomName: string, op: RemoteOp): number =>
           roomMem.intel?.[roomName]?.pathCost ?? (op.haulerNeed ?? 1) * 20;
@@ -124,9 +102,9 @@ export const remoteMiningManagerSystem: System = {
       // 边际 op 若不重估会永续；body 变大后 haulerNeed 也需缩编避免过配。
       reevaluateActiveOps(remoteOps, roomMem, snapshot.roomName, haulerCapacity, ctx.tick);
 
-      // 逐房就绪门（Phase 1b）：帝国姿态放行（newOpsAllowed）之外，本房还须自身
-      // 经济成熟才「新开」远矿——RCL≥roomMinRcl 且 colonyState=normal 且 storage 盈余。
-      // 防止 RCL4 新占嫩房过早分兵远矿（本该闷头冲级）。现役 op 的维护/重估不受影响。
+      // 逐房就绪门（Phase 1b）：帝国姿态放行（newOpsAllowed）之外，本房还须自身经济
+      // 成熟才「新开」远矿 — RCL≥roomMinRcl 且 colonyState=normal 且 storage 盈余，
+      // 防 RCL4 新占嫩房过早分兵远矿（本该闷头冲级）。现役 op 维护/重估不受影响。
       if (newOpsAllowed && roomReadyForNewRemote(snapshot, roomMem.colonyState) && activeCount < maxOps) {
         const candidates = selectRemoteTargets({
           homeRoom: snapshot.roomName,
@@ -170,11 +148,10 @@ export const remoteMiningManagerSystem: System = {
       const remoteThreats = collectRemoteThreats(remoteOps);
 
       // RM-2：威胁失明持久化 — 与 InvaderCore blockedUntil 同款双轨。
-      // 只用瞬时集合的死角：威胁在场 → 经济 creep 被杀/flee 回家 → 房间失明
-      // → 检测集合空 → 经济孵化恢复 → 新 creep 抵达送死 — 循环送兵。
+      // 只用瞬时集合的死角：威胁在场 → 经济 creep 被杀/flee 回家 → 房间失明 →
+      // 检测集合空 → 经济孵化恢复 → 新 creep 抵达送死 — 循环送兵。
       // 规则：有视野见威胁 → 写/续期 threatUntil；有视野确认清空 → 清除；
       // 无视野 → 冷却未到期即维持威胁态（宁可少采一轮，不送一批兵）。
-      // collectRemoteThreats 只对有视野的房写键 — 键缺失即无视野。
       for (const [rn, op] of Object.entries(remoteOps)) {
         if (op.state !== "active") continue;
         const observed = rn in remoteThreats ? remoteThreats[rn] : undefined;
@@ -195,11 +172,10 @@ export const remoteMiningManagerSystem: System = {
       // 核心 100,000 hits，defender/reserver 均无力处理 — 该房进入止损模式：
       // 打上危险冷却 + 暂停孵化 + 回收现役 creep，等核心自然 decay 后自动恢复。
       const remoteBlockers = collectRemoteBlockers(remoteOps);
-      // 压制状态持久化：瞬时视野检测 + Memory 冷却双轨合并。
-      // 只用瞬时集合的死角：回收 creep 后该房失明 → 检测集合清空 → 孵化恢复
-      // → 新 creep 抵达发现核心 → 再回收 — 死循环，每轮白送整编 creep。
-      // 规则：有视野见核心 → 写/续期 blockedUntil；有视野确认消失 → 立即清除；
-      // 无视野 → 冷却未到期即视为仍被压制（宁可少采 5000 tick，不送一轮兵）。
+      // 压制状态持久化：瞬时视野检测 + Memory 冷却双轨合并 — 只用瞬时集合的死角：
+      // 回收 creep 后该房失明 → 检测集合清空 → 孵化恢复 → 新 creep 发现核心 → 再回收
+      // — 死循环每轮白送整编 creep。规则：有视野见核心 → 写/续期 blockedUntil；
+      // 有视野确认消失 → 立即清除；无视野 → 冷却未到期即视为仍被压制。
       const blockedRooms = new Set<string>();
       for (const [rn, op] of Object.entries(remoteOps)) {
         if (op.state !== "active") continue;
@@ -221,12 +197,9 @@ export const remoteMiningManagerSystem: System = {
         }
       }
 
-      // 威胁写入 remoteOps（P1-G：从 intel.dangerUntil 迁移至此）：
-      // 出现威胁的远矿房打上危险冷却标记 — 冷却期内该房不作为新的远矿/扩张
-      // 候选（止损：不给对手送兵）。现役运营不因此暂停 — defender 已接通，
-      // 先应战再评估。InvaderCore 压制房同样打冷却 — 核心存续期间不重复选点。
-      // threatRoom 来自 remoteThreats（由 collectRemoteThreats(remoteOps) 产出），
-      // 必在 remoteOps 中；blockedRooms 同理来自 active op 房间。
+      // 威胁写入 remoteOps（P1-G：从 intel.dangerUntil 迁移至此）：出现威胁的远矿房
+      // 打危险冷却 — 冷却期内不作为新远矿/扩张候选（止损：不给对手送兵）；现役运营
+      // 不因此暂停 — defender 已接通，先应战再评估。InvaderCore 压制房同样打冷却。
       for (const [threatRoom, hasThreat] of Object.entries(remoteThreats)) {
         if (!hasThreat && !blockedRooms.has(threatRoom)) continue;
         const op = remoteOps[threatRoom];
@@ -235,12 +208,11 @@ export const remoteMiningManagerSystem: System = {
         }
       }
 
-      // InvaderCore 压制房的现役远矿 creep 全部标记回收 —
-      // harvester 采集被压制、reserver 空耗寿命，留守是持续净亏损。
-      // RM-3：被自己 claim 的房同样回收（运营已废弃，该房转本地闭环）。
-      // 敌方预定房同样回收现役 creep，并写 dangerUntil 冷却防止评选侧立即重开
-      // （照 InvaderCore 双轨止损：视野消失后靠冷却维持"该房已被占"判断）。
-      // rn 来自 maintainExistingOps(remoteOps)，必在 remoteOps 中。
+      // InvaderCore 压制房的现役远矿 creep 全部标记回收 — harvester 采集被压制、
+      // reserver 空耗寿命，留守是持续净亏损。
+      // RM-3：被自己 claim 的房同样回收（运营已废弃，该房转本地闭环）；
+      // 敌方预定房同样回收现役 creep，并写 dangerUntil 冷却防评选侧立即重开
+      // （照 InvaderCore 双轨止损：视野消失后靠冷却维持「该房已被占」判断）。
       for (const rn of hostileReservedRooms) {
         const op = remoteOps[rn];
         if (op) op.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
@@ -256,16 +228,12 @@ export const remoteMiningManagerSystem: System = {
       fulfillContainerRequests(remoteOps, ctx, snapshot.roomName);
 
       // P0-2：主房 crisis 期暂停远矿 spawn 推送（病灶 2 根因）。
-      // 旧逻辑 colonyState 只挡「新开点」（roomReadyForNewRemote）+ demand 内部
-      // 挡 bootstrap/reserver，不挡现役 op 的 remoteHarvester/remoteHauler 推送 —
-      // 主房 RCL5 危机期远矿持续与主房 harvester 竞争 spawn，吸血 54795 tick。
-      // 现役远矿 creep 不召回：沉没成本已付，让其自然寿终榨干残值。
-      // 维护逻辑（maintainExistingOps/reevaluateActiveOps/fulfillContainerRequests/
-      // recycleBlockedRoomCreeps）已在上方运行完毕，本块只跳过新请求推送；
-      // 下方 recycleExcessRemoteCreeps 仍执行（清理双孵事故冗余）。
-      // colonyState 恢复 normal 后下次 manager run（≤ managerInterval）即恢复推送，
-      // 远低于设计文档 100 tick 验证指标。旧 remote* 请求若仍在 queue 中，
-      // 由 spawn-manager 自然消化（不主动清空 — 与现役 creep 自然寿终同义）。
+      // 旧逻辑 colonyState 只挡「新开点」（roomReadyForNewRemote）+ demand 内部挡
+      // bootstrap/reserver，不挡现役 op 的 remoteHarvester/remoteHauler 推送 — 主房
+      // RCL5 危机期远矿持续与主房 harvester 竞争 spawn，吸血 54795 tick。
+      // 现役远矿 creep 不召回（沉没成本已付，自然寿终榨干残值）；维护逻辑已在上方
+      // 运行完毕，本块只跳过新请求推送；下方 recycleExcessRemoteCreeps 仍执行
+      // （清理双孵事故冗余）。恢复 normal 后下次 run（≤ managerInterval）即恢复推送。
       const crisisPaused =
         colonyState === "recovery" ||
         colonyState === "bootstrap" ||

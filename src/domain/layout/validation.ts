@@ -4,26 +4,25 @@ import type { RoomSnapshot } from "../../kernel/contracts";
 
 /** validateBuildCell 的选项参数。 */
 export interface ValidationOptions {
-  /** 已完成的 blueprint key 集合 — 用于依赖检查。 */
+  /** 已完成的 blueprint key 集合 — 依赖检查。 */
   completedKeys: ReadonlySet<string>;
   /** 当前全局活跃 site 数。 */
   globalSiteCount: number;
   /** 全局 site 上限。 */
   maxGlobalSites: number;
-  /** 房间内的 mineral 位置（可选，由调用方提供）。 */
+  /** 房间 mineral 位置（可选）。 */
   minerals?: readonly { pos: { x: number; y: number } }[];
-  /** 预计算的结构计数（每规划周期构建一次，避免每 cell 重复扫描）。 */
+  /** 预计算结构计数（每规划周期构建一次，避免逐 cell 重复扫描）。 */
   structureCounts?: ReadonlyMap<string, number>;
-  /** 预计算的占用位置集合（packed x*50+y，每规划周期构建一次）。 */
+  /** 预计算占用位置集合（packed x*50+y）。 */
   occupiedSet?: ReadonlySet<number>;
-  /** 预计算的障碍位置集合（packed x*50+y，仅不可通行结构/工地）。供密封守卫使用。 */
+  /** 预计算障碍位置集合（packed，仅不可通行结构/工地），供密封守卫。 */
   obstacleSet?: ReadonlySet<number>;
 }
 
 /**
- * 障碍结构类型（不可通行）。使用字符串字面量而非 Screeps 常量，
- * 使模块在无 Screeps 运行时（Vitest）也可加载。
- * road/container/自有 rampart 可通行，不在此列。
+ * 障碍结构类型（不可通行）。字符串字面量而非 Screeps 常量，
+ * 使模块在无 Screeps 运行时（Vitest）也可加载；road/container/rampart 可通行。
  */
 export const OBSTACLE_TYPES: ReadonlySet<string> = new Set([
   "spawn",
@@ -83,16 +82,10 @@ function isServiceTile(
 }
 
 /**
- * 密封守卫 —「建筑孤岛」检测（v1 实心块教训：29 个结构 8 邻居全堵死）。
- *
- * transfer / spawnCreep / repair 射程均为 1，任何障碍结构都必须保留
- * ≥1 个相邻可站格（服务格），否则永远无法填充/维修/孵化。
- *
- * 在 (x,y) 放置障碍结构前检查：
- *   1. 自身仍有 ≥1 个相邻可站格（否则出生即密封）；
- *   2. 不夺走任何相邻障碍结构的最后一个可站格（否则把邻居封死）。
- *
- * 返回 true = 会造成密封，必须拒绝。
+ * 密封守卫 —「建筑孤岛」检测（v1 实心块教训：29 结构 8 邻居全堵死）。
+ * transfer/spawnCreep/repair 射程均 1，障碍结构必须保留 ≥1 相邻可站格；
+ * 检查自身仍有服务格，且不夺走任何相邻障碍结构的最后一个服务格。
+ * true = 会造成密封，必须拒绝。
  */
 export function wouldSeal(
   x: number,
@@ -117,7 +110,6 @@ export function wouldSeal(
       const nx = x + dx;
       const ny = y + dy;
       if (!obstacleSet.has(packPos(nx, ny))) continue;
-      // 邻居当前的可站格（排除我们将占据的 (x,y)）。
       let neighborFree = 0;
       for (let tx = -1; tx <= 1; tx++) {
         for (let ty = -1; ty <= 1; ty++) {
@@ -184,18 +176,10 @@ export function precomputeStructureCounts(snapshot: RoomSnapshot): Map<string, n
 }
 
 /**
- * 各结构类型的「承诺数量」= 已建结构 + 我方在建 site + 队列中未完成任务。
- *
- * 供 constraint 放置器做批次抵扣（代际稳定性）：placeStructures 只为
- * 真实缺口生成放置，已被承诺的数量不再排位 — 消除「已建格进 occupied →
- * 贪心顺延到次优格 → 同一逻辑结构在新格重复排队」的代际漂移与幽灵任务
- * （存量幽灵任务由 syncTaskStates 的类型饱和判定转 done 清除）。
- *
- * 队列口径：仅计 queued/blocked 任务 — site 状态的任务对应实体 site
- * （已由 site 计数覆盖），done 任务对应已建结构（已由结构计数覆盖），
- * 重复计入会高估承诺、导致缺口放置不足。
- *
- * 纯函数 — 从 snapshot 与队列读取只读数据。
+ * 承诺数量 = 已建结构 + 我方 site + 队列 queued/blocked 任务，供 constraint
+ * 放置器批次抵扣（代际稳定性）：只排真实缺口，消除幽灵任务与位置漂移
+ * （存量幽灵由 syncTaskStates 类型饱和判定清 done）。队列只计 queued/blocked —
+ * site/done 已被 site 与结构计数覆盖，重复计会高估承诺导致缺建。
  */
 export function computeCommittedCounts(
   snapshot: RoomSnapshot,
@@ -223,9 +207,8 @@ export function computeCommittedCounts(
 }
 
 /**
- * 预计算所有被占用位置（packed x*50+y）。
- * 包括：source/controller/mineral/已有结构/site。
- * 每规划周期调用一次，供 validateBuildCell 和 findAdjacentBuildable 复用。
+ * 预计算所有被占用位置（packed x*50+y）：source/controller/mineral/已有结构/site。
+ * 每规划周期调用一次，供 validateBuildCell / findAdjacentBuildable 复用。
  */
 export function buildOccupiedPositionSet(
   snapshot: RoomSnapshot,
@@ -250,17 +233,15 @@ export function buildOccupiedPositionSet(
     ...snapshot.containers,
     ...snapshot.links,
     ...snapshot.labs,
-    // 道路是结构：可通行但不可在其上建造新结构。漏掉会导致约束放置器把
-    // extension 等候选选在既有道路格上 → site 创建失败 → 阻塞/黑名单空转。
+    // 道路可通行但不可在其上新建 — 漏掉会让放置器选在既有道路格上 → site 创建失败。
     ...snapshot.roads,
     ...snapshot.constructionSites,
   ];
   for (const s of structures) {
     set.add(packPos(s.pos.x, s.pos.y));
   }
-  // 单例结构 — 此前遗漏 terminal/factory/extractor/observer/powerSpawn，导致
-  // 约束放置器把新结构选在这些已占格上 → createConstructionSite 返 ERR_INVALID_TARGET
-  // → 反复失败进黑名单 → 主房 RCL6-8 结构（如 spawn#2/tower#3/factory）永久建不齐。
+  // 单例结构此前遗漏，导致放置器选在已占格 → createConstructionSite 返
+  // ERR_INVALID_TARGET → 反复失败进黑名单 → RCL6-8 结构永久建不齐。
   if (snapshot.storage) {
     set.add(packPos(snapshot.storage.pos.x, snapshot.storage.pos.y));
   }
@@ -286,19 +267,9 @@ export function buildOccupiedPositionSet(
 }
 
 /**
- * 统一的位置验证器 — planner 和 executor 共用，避免逻辑不一致。
- *
- * 检查顺序（plan §5.6.4）：
- *   1. 边界
- *   2. RCL 可建数量上限
- *   3. 地形（墙）
- *   4. 占用（source/controller/mineral/已有结构/site）
- *   5. 前置依赖
- *   6. 全局 site 上限
- *
- * 返回 "ok" 或第一个失败原因。
- * 传入 options.structureCounts / options.occupiedSet 时使用预计算数据（O(1) 查询），
- * 否则回退到全量扫描（向后兼容）。
+ * 统一位置验证器 — planner/executor 共用避免逻辑不一致（检查顺序见 plan §5.6.4）：
+ * 边界 → RCL 上限 → 地形 → 占用 → 依赖 → 全局 site 上限，返回 "ok" 或首个失败原因。
+ * 传入预计算 structureCounts/occupiedSet 时 O(1)，否则回退全量扫描（向后兼容）。
  */
 export function validateBuildCell(
   room: Room,
@@ -312,7 +283,7 @@ export function validateBuildCell(
   // 1. 边界检查。
   if (!inBounds(x, y)) return "terrain";
 
-  // 2. RCL 检查 — CONTROLLER_STRUCTURES 限制该类型的最大数量。
+  // 2. RCL 上限（CONTROLLER_STRUCTURES 限制最大数量）。
   const maxForType = CONTROLLER_STRUCTURES[cell.structureType]?.[snapshot.rcl] ?? 0;
   if (maxForType === 0) return "rcl";
   const existingCount = options.structureCounts
@@ -320,23 +291,22 @@ export function validateBuildCell(
     : countExistingAndSites(snapshot, cell.structureType);
   if (existingCount >= maxForType) return "rcl";
 
-  // 3. 地形检查 — 不能在墙上建造。
+  // 3. 地形（墙）。
   const terrain = room.getTerrain();
   if (terrain.get(x, y) === TERRAIN_MASK_WALL) return "terrain";
 
-  // 4. 占用检查 — 不能与 source/controller/mineral/已有结构/site 重叠。
+  // 4. 占用（source/controller/mineral/已有结构/site）。
   const occupied = options.occupiedSet
     ? options.occupiedSet.has(packPos(x, y))
     : isOccupied(x, y, snapshot, options.minerals);
   if (occupied) return "occupied";
 
-  // 4.5 密封守卫 — 障碍结构不得出生即密封，也不得把邻居封死（v1 实心块教训）。
-  // 仅在提供 obstacleSet 时启用（planner 每周期预计算）。
+  // 4.5 密封守卫：障碍结构不得出生即密封或封死邻居（仅提供 obstacleSet 时启用）。
   if (options.obstacleSet && OBSTACLE_TYPES.has(cell.structureType)) {
     if (wouldSeal(x, y, terrain, options.obstacleSet)) return "seal";
   }
 
-  // 5. 依赖检查 — 前置 blueprint key 必须已完成。
+  // 5. 依赖（前置 blueprint key 须已完成）。
   if (cell.requires) {
     for (const reqKey of cell.requires) {
       if (!options.completedKeys.has(reqKey)) return "dependency";
@@ -350,15 +320,13 @@ export function validateBuildCell(
 }
 
 /**
- * 统计房间内某类型的已建结构 + 已有 site 数。
- * 通用扫描：覆盖所有 BuildableStructureConstant 类型，避免新增结构类型时遗漏。
- * （回退路径 — 优先使用 precomputeStructureCounts。）
+ * 已建结构 + site 数（通用扫描覆盖全部 BuildableStructureConstant —
+ * 回退路径，优先用 precomputeStructureCounts）。
  */
 function countExistingAndSites(
   snapshot: RoomSnapshot,
   structureType: BuildableStructureConstant,
 ): number {
-  // 预分类的结构数组按类型计数（覆盖 snapshot 已分类的所有结构）。
   const typedArrays: ReadonlyArray<readonly AnyStructure[]> = [
     snapshot.spawns,
     snapshot.extensions,
@@ -375,7 +343,6 @@ function countExistingAndSites(
   }
   // storage 是单例字段单独处理。
   if (snapshot.storage && snapshot.storage.structureType === structureType) count++;
-  // 加上已有的同类型 site。
   count += snapshot.constructionSites.filter(
     s => s.structureType === structureType,
   ).length;
@@ -421,28 +388,20 @@ function isOccupied(
   return false;
 }
 
-/**
- * 从 BuildQueue 中提取已完成的 blueprint key 集合。
- * 用于依赖检查 — 只有 state 为 "done" 的任务才算完成。
- */
+/** 从 BuildQueue 提取已完成 blueprint key（state "done"/"site" 均算完成），供依赖检查。 */
 export function collectCompletedKeys(queue: readonly BuildTask[]): Set<string> {
   const set = new Set<string>();
   for (const task of queue) {
-    // 已完成或已有 site 的任务算作依赖满足。
     if (task.state === "done" || task.state === "site") {
       set.add(task.key);
     }
-    // 已建结构也满足依赖 — 通过 key 匹配。
   }
   return set;
 }
 
 /**
- * 从房间实际已建结构中提取已完成的 blueprint key 集合。
- *
- * construction-manager 会在任务完成后立即删除 "done" 任务，
- * 因此仅依赖队列会漏掉已建结构。此函数通过检查锚点偏移位置
- * 上的实际结构类型来补充 completedKeys。
+ * 从实际已建结构补充 completedKeys — construction-manager 完成后立即删
+ * "done" 任务，仅靠队列会漏掉已建结构；按锚点偏移位置的实际结构类型补齐。
  */
 export function collectCompletedKeysFromStructures(
   blueprint: Blueprint,

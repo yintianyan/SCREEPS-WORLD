@@ -1,9 +1,7 @@
 /**
- * 建造队列域模块 — BuildTask 状态同步与清理的纯函数。
- *
- * 这些函数从 construction-manager（系统层）提取，使队列管理逻辑可独立测试。
- * construction-manager 负责调用 Game API（createConstructionSite），
- * 本模块只操作 BuildTask[] 数据结构 + 从 RoomSnapshot 读取的只读数据。
+ * 建造队列域模块 — BuildTask 状态同步与清理的纯函数。从 construction-manager
+ * （系统层，负责 Game API）提取，使队列管理逻辑可独立测试；本模块只操作
+ * BuildTask[] 数据结构 + RoomSnapshot 只读数据。
  */
 
 import type { RoomSnapshot } from "../../kernel/contracts";
@@ -15,22 +13,17 @@ interface StructurePosRef {
 }
 
 /**
- * 同步 BuildTask 状态与房间内实际建造 site 和已建结构。
- *
- * 状态转换规则：
- *   queued + site 存在      → site
- *   queued + 结构已建成     → done
- *   site  + site 消失       → done（已建成）或 queued（被毁）
- *
+ * 同步 BuildTask 状态与房间内实际建造 site 和已建结构：queued + site 存在 → site；
+ * queued + 结构已建成 → done；site + site 消失 → done（已建成）或 queued（被毁）。
  * 纯函数 — 不访问 Game/Memory，所有数据由参数传入。
  */
 export function syncTaskStates(
   queue: BuildTask[],
   snapshot: RoomSnapshot,
 ): void {
-  // 按位置 → site 映射，用于 queued→site 转换。
-  // 注意：同一位置只可能有一个 site，但不同结构类型的任务可能指向同一位置。
-  // 下面的匹配会额外检查 structureType，防止误匹配。
+  // 位置 → site 映射，用于 queued→site 转换。
+  // 注意：同一位置只可能有一个 site，但不同结构类型的任务可能指向同一位置，
+  // 匹配时额外检查 structureType，防止误匹配。
   const sites = new Map<string, ConstructionSite>();
   for (const site of snapshot.myConstructionSites) {
     sites.set(`${site.pos.x},${site.pos.y}`, site);
@@ -127,18 +120,10 @@ export function syncTaskStates(
 }
 
 /**
- * 移除已完成任务和过期阻塞任务。
- *
- * 清理规则：
- *   done                      → 删除（已完成，无需保留）
- *   blocked + attempts >= 3   → 删除（永久冲突，避免内存泄漏）
- *   blocked + retryAt 过期    → 转回 queued（保留 attempts 历史）
- *
- * 返回因永久冲突被删除的任务 key 列表 — 调用方应将其记入阻塞黑名单，
- * 否则布局规划器下个周期会按同 key 重新入队，形成
- * 「入队 → blocked → 删除 → 再入队」的无限空转循环。
- *
- * 纯函数 — 只操作 queue 数据结构 + tick 参数。
+ * 移除已完成任务和过期阻塞任务：done → 删除；blocked + attempts>=3 → 删除
+ * （永久冲突，防内存泄漏）；blocked + retryAt 过期 → 转回 queued（保留 attempts）。
+ * 返回被删除的永久冲突任务 key 列表 — 调用方应记入阻塞黑名单，否则规划器会
+ * 按同 key 重新入队，形成「入队 → blocked → 删除 → 再入队」无限空转。
  */
 export function cleanTasks(queue: BuildTask[], tick: number): string[] {
   const purgedKeys: string[] = [];
@@ -166,12 +151,9 @@ export function cleanTasks(queue: BuildTask[], tick: number): string[] {
 }
 
 /**
- * 检查是否有 source 缺少 container（且无在建 container site）—— 需要紧急重建。
- *
- * 缺失 source container 时该 source 的 harvester 只能长途送能到 spawn，经济瘫痪，
- * 必须允许在低能量/恢复状态下重建，否则陷入「能量低→不建造→无法重建→能量更低」死锁。
- *
- * 纯函数 — 从 snapshot 读取只读数据。
+ * 检查是否有 source 缺少 container（且无在建 site）— 需紧急重建。
+ * 缺失时 harvester 只能长途送能到 spawn，经济瘫痪；必须允许低能量/恢复状态下
+ * 重建，否则陷入「能量低→不建造→无法重建→能量更低」死锁。
  */
 export function needsSourceContainerRebuild(
   snapshot: RoomSnapshot,
@@ -188,20 +170,11 @@ export function needsSourceContainerRebuild(
 }
 
 /**
- * 紧急重建状态 — 检测关键基建缺失情况。
- *
- * 四类关键结构被毁时触发紧急重建路径：
- *   - sourceContainer: harvester 无法高效存能，经济链路断裂
- *   - tower: RCL3+ 房间无塔 = 无防御纵深，被拆只是时间问题
- *   - spawn: 无法孵化新 creep，人口只减不增
- *   - storage: RCL4+ 无 storage = hauler 无处倒能 + builder/upgrader 无中央能量源
- *
- * 紧急状态触发三件事（在 construction-manager 和 layout-planner 中消费）：
- *   1. developmentGate 豁免 economyPressure / budget / P0 队列 / 能量门禁
- *   2. shouldPlan 立即触发规划（不等 50 tick 周期）
- *   3. tryCreateSite 排序加权 — 紧急任务排到队列最前
- *
- * 纯函数 — 从 snapshot 读取只读数据，不访问 Game/Memory。
+ * 紧急重建状态 — 检测关键基建缺失：sourceContainer（harvester 无法就地存能）、
+ * tower（RCL3+ 无塔 = 无防御纵深）、spawn（无法孵化）、storage（RCL4+ 无中央
+ * 能量源）。紧急状态触发（construction-manager / layout-planner 消费）：
+ * developmentGate 豁免 economyPressure/budget/能量门禁、shouldPlan 立即触发
+ * （不等 50 tick 周期）、tryCreateSite 排序加权排到队首。
  */
 export interface EmergencyRebuildStatus {
   /** Source container 缺失 — harvester 无法就地存能。 */
@@ -212,19 +185,15 @@ export interface EmergencyRebuildStatus {
   readonly spawn: boolean;
   /** Storage 缺失（RCL4+ 已解锁但无 storage）— 经济中枢断裂。 */
   readonly storage: boolean;
-  /** 任一关键结构缺失。 */
+
   readonly any: boolean;
 }
 
 /**
- * 评估房间的紧急重建需求。
- *
- * 注意：spawn 缺失在初始 bootstrap 时也是 true（房间刚建立还没有 spawn）。
- * 调用方应结合 layout.anchor 是否已设置来区分「从未建造」与「被毁重建」。
- * construction-manager 的 developmentGate 不做此区分 —— 无论初始还是重建，
- * 缺 spawn 时都必须豁免门禁以尽快恢复。
- *
- * 纯函数 — 从 snapshot 读取只读数据。
+ * 评估房间的紧急重建需求。注意：spawn 缺失在初始 bootstrap 时也是 true —
+ * 调用方应结合 layout.anchor 是否已设置区分「从未建造」与「被毁重建」；
+ * construction-manager 的 developmentGate 不做此区分 — 缺 spawn 时无论初始
+ * 还是重建都必须豁免门禁尽快恢复。
  */
 export function assessEmergencyRebuild(
   snapshot: RoomSnapshot,
@@ -247,12 +216,8 @@ export function assessEmergencyRebuild(
 }
 
 /**
- * 判断一个 BuildTask 是否属于紧急重建任务。
- *
- * 用于 tryCreateSite 排序加权：紧急任务排到队列最前，
- * 确保关键基建在被毁后第一时间创建 site。
- *
- * 纯函数 — 从 task + snapshot + emergency 状态推断。
+ * 判断 BuildTask 是否属紧急重建任务 — 用于 tryCreateSite 排序加权，
+ * 确保关键基建被毁后第一时间创建 site。
  */
 export function isEmergencyTask(
   task: BuildTask,
@@ -272,15 +237,10 @@ export function isEmergencyTask(
 }
 
 /**
- * 检测是否有任何房间的 buildQueue 中存在 P0 queued 的关键基建任务。
- *
- * 关键基建 = storage / tower / spawn — 这三类结构缺失时经济链路断裂，
- * 必须让 construction-manager 在任何 budget tier 下都能运行（以 P1 等效优先级）。
- *
- * P1-F：从 kernel.ts 搬到此处，作为 construction-manager 的 recoveryEligible
- * 钩子实现。kernel 只读钩子不识系统名（plan.md §2.1）。
- *
- * 纯函数 — 不访问 Game/Memory，接收显式参数，可在 Vitest 中独立测试。
+ * 检测是否有房间的 buildQueue 存在 P0 queued 的关键基建任务（storage/tower/spawn）
+ * — 这类结构缺失时经济链路断裂，必须让 construction-manager 在任何 budget tier
+ * 下都能运行（以 P1 等效优先级）。P1-F：从 kernel.ts 搬来，作为 recoveryEligible
+ * 钩子实现 — kernel 只读钩子不识系统名（plan.md §2.1）。
  */
 export function hasCriticalStructureGap(
   rooms: Record<string, { buildQueue?: Array<{ priority: number; state: string; structureType: string }> } | undefined>,

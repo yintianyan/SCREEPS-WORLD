@@ -1,14 +1,9 @@
 /**
  * Traffic Manager — 后置系统（phase=post，P0）。
- *
  * 在所有 creep 角色执行完毕后运行，消费本 tick 移动意图账本（intent.ts），
  * 按房间集中解算（traffic-resolver）后统一签发 creep.move。
- *
  * 职责边界：只做「意图 → 引擎 move」的仲裁与签发，不决定 creep 去哪
- *（那是角色层 + pathfinding 的职责）。开关关闭时首行 return（意图账本
- * 此时也为空，因 registerMove 已直通签发）。
- *
- * 逐房 safeRun 隔离：单房解算异常不连坐他房移动。
+ * （那是角色层 + pathfinding 的职责）。逐房 safeRun 隔离：单房解算异常不连坐他房。
  */
 
 import type { RoomSnapshot, System, TickContext } from "../kernel/contracts";
@@ -55,7 +50,6 @@ export const trafficManagerSystem: System = {
         if (room && typeof room.find === "function") {
           for (const c of room.find(FIND_CREEPS)) {
             b.occupancy.set(c.pos.x * 50 + c.pos.y, c.name);
-            // 敌方 creep 与疲劳中的己方 creep 不可移动、不可被推挤。
             if (!c.my || c.fatigue > 0) b.immovable.add(c.name);
           }
         }
@@ -80,11 +74,10 @@ export const trafficManagerSystem: System = {
   },
 };
 
-/** 解算单房并把批准的意图签发为 creep.move。 */
 function resolveAndDispatch(roomName: string, batch: RoomBatch, snapshot: RoomSnapshot | undefined): void {
   const room = Game.rooms[roomName];
   if (!room) return;
-  // 能力守卫：精简 room mock（单元测试）无 getTerrain/find 时跳过 —
+  // 能力守卫：精简 room mock（单元测试）无 getTerrain 时跳过 —
   // 与 parking 的守卫同款，缺失环境下不让 P0 系统崩溃。
   if (typeof room.getTerrain !== "function") return;
 

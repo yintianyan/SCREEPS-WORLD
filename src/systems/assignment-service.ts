@@ -9,25 +9,12 @@ import { globalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
 
 /**
- * 任务分配服务 — P1 系统，在所有角色之前运行。
- *
- * 职责（plan §5.7.2）：
- *   - 为每房生成本 tick 可用任务列表
- *   - source 槽位显式化（每 source 的 maxWorkers）
- *   - 物流任务确定性化（haul/fill 任务）
- *   - 建造任务带 maxWorkers 与 lease
- *   - 紧急抢占由系统完成（P0 fill / flee 使普通 assignment 失效）
- *
- * 数据流：
- *   1. 每 tick 初始化 global.assignment 缓存
- *   2. 检测紧急状态（能量不足或敌对威胁）— 触发抢占
- *   3. 为每房生成任务列表存入缓存
- *   4. 角色通过 helpers.getAssignment 获取或续约任务
- *
- * 架构：领域层 buildRoomTasks 是纯函数，TaskPool 封装索引与原子操作。
- * 本模块（系统层）负责从 Game/Memory 收集数据、调用纯函数、写回缓存。
- *
- * 优先级：P1 — 失败时角色回退到无 assignment 行为，允许 safeRun 冷却避免刷屏。
+ * 任务分配服务 — P1 系统，在所有角色之前运行（plan §5.7.2）。
+ * 职责：为每房生成本 tick 可用任务列表（source 槽位显式化、物流任务确定性化、
+ * 建造任务带 maxWorkers 与 lease）；紧急抢占由系统完成（P0 fill / flee 使普通
+ * assignment 失效）。领域层 buildRoomTasks 是纯函数，TaskPool 封装索引与原子操作；
+ * 本系统层负责从 Game/Memory 收集数据、调用纯函数、写回缓存。
+ * P1 — 失败时角色回退到无 assignment 行为，允许 safeRun 冷却避免刷屏。
  */
 export const assignmentServiceSystem: System = {
   name: "assignment-service",
@@ -54,8 +41,7 @@ export const assignmentServiceSystem: System = {
 
       // Storage 优先：RCL4+ 无 storage 且有 storage site 时，强制释放 builder 的非 storage assignment。
       // 根因：lease 机制（50 tick）让 builder 保持旧的 extension assignment 不切换，
-      // 导致 storage site 无人建造，经济中枢断裂。此函数每 tick 主动失效非 storage build assignment，
-      // 强制 builder 在 chooseTaskForRole 中重新选 priority=1 的 storage site。
+      // 导致 storage site 无人建造，经济中枢断裂。
       const needsStorage = snapshot.rcl >= 4 && snapshot.storage === undefined;
       if (needsStorage) {
         releaseNonStorageBuilderAssignments(snapshot);
@@ -65,12 +51,8 @@ export const assignmentServiceSystem: System = {
 
       // 抢占必须在 generateRoomTasks 之后执行 — TaskPool 每 tick 重建为空，
       // 任务写入前调用 invalidate 只会读到空列表、返回空 creep 名单，
-      // 整个抢占退化为 no-op（曾因此静默失效）。任务生成后，
-      // invalidate 同时清空 task.assignedCreeps 与 creep.memory.assignment，
-      // 角色在其后的 runCreeps 阶段重新请求任务，本 tick 即转向 P0 fill/flee。
-      //
-      // TD-018 冷却：传入 lastPreemptTick 与当前 tick，抢占触发后记录 tick，
-      // 防止房间在紧急/正常之间快速交替时每个上升沿都触发 invalidate。
+      // 整个抢占退化为 no-op（曾因此静默失效）。
+      // TD-018 冷却：传入 lastPreemptTick，防房间在紧急/正常间快速交替时每个上升沿都触发。
       if (shouldPreemptAssignments(emergency, wasEmergency, roomMem?.lastPreemptTick, ctx.tick)) {
         invalidateAssignments(pool, snapshot.roomName, 1);
         if (roomMem) roomMem.lastPreemptTick = ctx.tick;
@@ -84,8 +66,7 @@ export const assignmentServiceSystem: System = {
 // ──────────────────────────────────────────────
 
 /**
- * 初始化 assignment 缓存（每 tick 开头调用）。
- * 缓存操作在适配层完成 — 领域层不访问 globalCache。
+ * 初始化 assignment 缓存（每 tick 开头调用）— 缓存操作在适配层完成，领域层不访问 globalCache。
  */
 function initAssignmentCache(tick: number): TaskPool {
   const pool = new TaskPool();
@@ -121,9 +102,9 @@ function collectAllCreepRefs(): CreepAssignmentRef[] {
 }
 
 /**
- * 适配：为房间生成任务列表并写入 TaskPool。
- * 从预构建的全量 creepRefs 中筛选本房 creep，
- * 从 Memory 读取房间标志位，调用纯函数 buildRoomTasks 后将结果存入任务池。
+ * 适配：为房间生成任务列表并写入 TaskPool —
+ * 从预构建的全量 creepRefs 中筛选本房 creep，从 Memory 读取房间标志位，
+ * 调用纯函数 buildRoomTasks 后将结果存入任务池。
  */
 function generateRoomTasks(
   pool: TaskPool,
@@ -152,8 +133,8 @@ function generateRoomTasks(
 }
 
 /**
- * 适配：失效指定房间内 priority >= minPriority 的所有任务。
- * 使用 TaskPool.invalidate() 单次遍历收集 creep 名并清空 assignedCreeps，
+ * 适配：失效指定房间内 priority >= minPriority 的所有任务 —
+ * TaskPool.invalidate() 单次遍历收集 creep 名并清空 assignedCreeps，
  * 然后清除这些 creep 的 memory.assignment。
  */
 function invalidateAssignments(pool: TaskPool, roomName: string, minPriority: number): void {
@@ -172,15 +153,14 @@ function invalidateAssignments(pool: TaskPool, roomName: string, minPriority: nu
  * 适配：强制释放绑定在非 storage/extension site 的 builder assignment。
  *
  * 触发条件：RCL4+ 无 storage 且存在 storage construction site。
- * storage 是经济中枢——haul 无处倒能、builder/upgrader 无中央能量源。
- * assignment-service 已将 storage site 标记为 priority=1, maxWorkers=2，
- * 但 lease 机制（50 tick）让 builder 保持旧的 road/rampart assignment 不切换。
- * 此函数每 tick 主动失效非 storage/extension build assignment，强制 builder 重新选 storage。
+ * storage 是经济中枢——haul 无处倒能、builder/upgrader 无中央能量源；
+ * assignment-service 已将 storage site 标记 priority=1, maxWorkers=2，
+ * 但 lease 机制（50 tick）让 builder 保持旧 assignment 不切换，故每 tick
+ * 主动失效非 storage/extension build assignment，强制 builder 重新选 storage。
  *
  * 不释放 extension site 上的 builder——extension 建成后提升 energyCapacityAvailable，
- * 解锁更大 builder body，整体建造速率翻倍。全压 storage 反而拖慢 extension 重建。
- * 当 storage site 不存在（被 block 或未规划）时不释放——避免 builder 永久 idle。
- * 已在建 storage 的 builder 不受影响（target 是 storage site，不释放）。
+ * 解锁更大 builder body，整体建造速率翻倍；全压 storage 反而拖慢 extension 重建。
+ * storage site 不存在（被 block 或未规划）时不释放——避免 builder 永久 idle。
  */
 function releaseNonStorageBuilderAssignments(snapshot: RoomSnapshot): void {
   // 必须存在 storage construction site 才释放——否则 builder 无 storage 可建。
@@ -209,11 +189,8 @@ function releaseNonStorageBuilderAssignments(snapshot: RoomSnapshot): void {
 
 /**
  * 判断房间是否处于紧急状态需要触发任务抢占。
- * 紧急条件（任一满足）：
- *   - 能量低于动态 fill 阈值 — 需要所有非关键 creep 转为 fill
- *   - 有敌对 creep — 非战斗 creep 应进入 flee
- *
- * 动态阈值：取 energyCapacityAvailable 的 40% 和固定上限的较小值。
+ * 紧急条件（任一满足）：能量低于动态 fill 阈值，或有敌对 creep。
+ * 动态阈值 = min(energyCapacityAvailable × 0.4, CONFIG.assignment.emergencyFillThreshold)；
  * 修复：原固定 300 阈值在 RCL1（容量 300）下永久触发紧急状态，
  * 导致 assignment 每 tick 被清空重建，creep 无法稳定工作。
  */
@@ -229,14 +206,10 @@ function isEmergencyState(snapshot: RoomSnapshot): boolean {
 
 /**
  * 判断是否应触发任务抢占（纯函数，P1-2 边沿触发 + TD-018 冷却机制）。
- *
- * 仅在「正常 → 紧急」上升沿返回 true（emergency=true 且 wasEmergency=false）。
- * 持续紧急（true,true）、持续正常（false,false）、紧急缓解（false,true）均返回 false。
- * 这保证一次紧急事件只失效一次 assignment，避免持续期间每 tick 抖动。
- *
- * TD-018 冷却：上升沿触发后需距上次抢占至少 20 tick，防止房间在紧急/正常之间
- * 快速交替时每个上升沿都触发 invalidateAssignments，导致 creep 频繁丢失任务。
- * 首次抢占（lastPreemptTick 为 undefined 或距今超过 20 tick）不受冷却限制。
+ * 仅在「正常 → 紧急」上升沿返回 true；持续紧急/持续正常/紧急缓解均返回 false，
+ * 保证一次紧急事件只失效一次 assignment，避免持续期间每 tick 抖动。
+ * TD-018：上升沿触发后距上次抢占至少 20 tick，防房间在紧急/正常间快速交替时
+ * 频繁 invalidate 导致 creep 丢失任务；首次抢占不受冷却限制。
  */
 export function shouldPreemptAssignments(
   emergency: boolean,

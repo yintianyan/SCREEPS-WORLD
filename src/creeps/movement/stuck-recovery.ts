@@ -1,11 +1,8 @@
 /**
  * 卡位检测与脱困 — yield/pull 让路、渐进式脱困、目标清除、安全出口。
- *
- * 脱困四级策略（由 pathfinding.ts 的 moveToTarget 驱动）：
- *   Level 0（正常）：ignoreCreeps: true + road-preference
- *   Level 1（stuckTicks >= threshold）：tryPullBlocker 请求让路
- *   Level 2（stuckTicks >= threshold+1）：ignoreCreeps: false + reusePath: 0
- *   Level 3（stuckTicks >= threshold+repathLimit）：放弃目标，idle
+ * 脱困四级策略（由 pathfinding.ts 的 moveToTarget 驱动）：L0 正常（ignoreCreeps:true +
+ * road-preference）→ L1（stuckTicks≥threshold）tryPullBlocker 请求让路 →
+ * L2（≥threshold+1）ignoreCreeps:false + reusePath:0 → L3（≥threshold+repathLimit）放弃目标 idle。
  */
 
 import { CONFIG } from "../../config";
@@ -19,21 +16,15 @@ export const DIR_DELTA: Record<number, [number, number]> = {
   [BOTTOM]: [0, 1], [BOTTOM_LEFT]: [-1, 1], [LEFT]: [-1, 0], [TOP_LEFT]: [-1, -1],
 };
 
-// ─── Yield/Pull 让路机制 ─────────────────────────────────
+// ─── Yield/Pull 让路机制 ───
 
 /**
- * 请求阻挡 creep 让路。
- * 将让路请求存入 globalCache，目标 creep 在下一次 moveToTarget/parkIdleCreep
- * 调用时执行。同 tick 内优先级低的 creep 请求优先级高的 creep 让路时，
- * 由于高优先级 creep 已经执行过，请求会在下一 tick 生效。
- *
- * MV-3：请求带 tick 时间戳 — 超过 2 tick 未执行即视为过期丢弃。
- * 无过期的后果：parked/静止 creep 恢复移动时突然执行一次「过期让路」，
- * 方向早已无意义（请求方可能已绕行/改道），且推动无落点安全检查。
- *
- * 设计意图：对站桩 creep（如 harvester 站桩采矿）请求无效是正确行为——
- * 它们不调用 moveToTarget，请求自然过期。站桩矿工不应让出矿位，
- * 否则会导致采集效率崩塌。绕行 creep 应通过 ignoreCreeps:false 自行绕路。
+ * 请求阻挡 creep 让路，存入 globalCache；目标 creep 在下次 moveToTarget/parkIdleCreep 时执行。
+ * 同 tick 内低优请求高优让路时，因高优已执行过，请求下一 tick 生效。
+ * MV-3：请求带 tick 戳 — 超过 2 tick 未执行即过期丢弃（否则 parked/静止 creep 恢复移动时突然
+ * 执行「过期让路」，方向已无意义且无落点安全检查）。
+ * 设计意图：对站桩 creep 请求无效是正确行为——它们不调用 moveToTarget，请求自然过期；
+ * 站桩矿工不应让位，绕行 creep 应靠 ignoreCreeps:false 自行绕路。
  */
 const YIELD_REQUEST_TTL = 2;
 
@@ -44,11 +35,8 @@ function requestYield(blockerName: string, dir: number): void {
 }
 
 /**
- * 检查并执行让路请求。
- * 在 moveToTarget / parkIdleCreep 开头调用 — 如果其他 creep 请求本 creep
- * 让路，立即执行移动并返回 true（本 tick 不再执行其他移动逻辑）。
- * MV-3：parked idle creep 本就无任务，是最该让路的对象 — parking 入口
- * 接通后让路机制对静止目标不再失效。
+ * 检查并执行让路请求。在 moveToTarget/parkIdleCreep 开头调用——被请求让路时立即移动并返回 true。
+ * MV-3：parked idle creep 本就无任务、最该让路——parking 入口接通后让路机制对静止目标不再失效。
  */
 export function checkAndExecuteYield(creep: Creep): boolean {
   const g = globalCache() as any;
@@ -69,8 +57,7 @@ export function checkAndExecuteYield(creep: Creep): boolean {
 }
 
 /**
- * 尝试让阻挡 creep 让路（Level 1 脱困）。
- * 找到目标方向上的 creep，请求它沿同方向移动。
+ * 尝试让阻挡 creep 让路（Level 1 脱困）。找到目标方向上的 creep，请求它沿同方向移动。
  */
 export function tryPullBlocker(creep: Creep, targetPos: RoomPosition): void {
   const dir = creep.pos.getDirectionTo(targetPos);
@@ -87,15 +74,12 @@ export function tryPullBlocker(creep: Creep, targetPos: RoomPosition): void {
   }
 }
 
-// ─── 卡位检测 ─────────────────────────────────────────────
+// ─── 卡位检测 ───
 
 /**
- * 更新卡位计数。仅在值变化时写 Memory，减少 Proxy 开销。
- * 返回当前 stuckTicks。
- *
- * MV-1（G-MV-06/G-MEM-07 落地）：疲劳期不增不减 — ERR_TIRED 是正常
- * 疲劳机制不是卡位。无豁免的后果：满载 creep 过沼泽等疲劳 ~5 tick
- * 即被误判卡死 → Level 3 弃目标携货转 idle（任务 churn + 重寻路浪费）。
+ * 更新卡位计数。仅在值变化时写 Memory，减少 Proxy 开销。返回当前 stuckTicks。
+ * MV-1（G-MV-06/G-MEM-07 落地）：疲劳期不增不减 — ERR_TIRED 是正常疲劳机制不是卡位；
+ * 无豁免则满载 creep 过沼泽疲劳 ~5 tick 即被误判卡死 → L3 弃目标携货转 idle（任务 churn + 重寻路）。
  */
 export function updateStuckTicks(creep: Creep): number {
   if (creep.fatigue > 0) return creep.memory.stuckTicks ?? 0;
@@ -115,7 +99,7 @@ export function updateStuckTicks(creep: Creep): number {
   return creep.memory.stuckTicks ?? 0;
 }
 
-// ─── 目标清除 ─────────────────────────────────────────────
+// ─── 目标清除 ───
 
 /** 清除 creep 的目标和分配，进入安全空闲。 */
 export function clearTarget(creep: Creep): void {
@@ -125,12 +109,9 @@ export function clearTarget(creep: Creep): void {
   creep.memory.stuckTicks = 0;
 }
 
-// ─── 安全出口 ─────────────────────────────────────────────
+// ─── 安全出口 ───
 
-/**
- * 查找最安全的出口 — 选择与敌人方向夹角最大的出口（约束 G-DF-09）。
- * 用 dot-product 评分：负 dot = 与敌人方向相反 = 最安全。
- */
+/** 查找最安全的出口 — 选择与敌人方向夹角最大的出口（约束 G-DF-09）。用 dot-product 评分：负 dot = 与敌人方向相反 = 最安全。 */
 export function findSafestExit(creep: Creep, enemyPos: RoomPosition): RoomPosition | undefined {
   const exits = Game.map.describeExits(creep.room.name);
   if (!exits) return undefined;

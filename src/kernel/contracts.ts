@@ -14,10 +14,9 @@ export type CreepMode = "acquire" | "work" | "idle" | "flee";
 /**
  * 防御工事角色分层 — 决定 wall/rampart 的维护目标档位。
  * perimeter: min-cut 割集 / 出口封锁线 — 敌人必啃的门，全额目标；
- * core:      核心结构叠盾（spawn/extension/storage/tower/link）— 只需撑过
- *            「周界已破 → 塔与 defender 处理」的窗口，全额的一个折扣档；
- * utility:   低值资产叠盾（container 等）— 保护对象本身价值低于全额维护成本，
- *            仅维持新生急救地板。
+ * core: 核心结构叠盾（spawn/extension/storage/tower/link）— 只需撑过「周界已破 →
+ *   塔与 defender 处理」的窗口，全额的一个折扣档；
+ * utility: 低值资产叠盾（container 等）— 保护对象价值低于全额维护成本，仅维持新生急救地板。
  */
 export type FortificationRole = "perimeter" | "core" | "utility";
 
@@ -36,23 +35,16 @@ export interface System {
   readonly priority: Priority;
   /** 最多每 N tick 运行一次（1 = 每 tick）。 */
   readonly interval?: number;
-  /**
-   * 执行阶段：main（缺省）在 creep 角色之前运行；post 在所有角色之后运行。
-   * post 阶段是通用运行秩序能力，供「消费角色执行期产出的 per-tick 数据」
-   * 的系统使用（如 traffic-manager 解算角色登记的移动意图）。
-   */
+  /** 执行阶段：main（缺省）在角色之前，post 在所有角色之后 —
+   * 供「消费角色执行期产出的 per-tick 数据」的系统使用（如 traffic-manager 解算移动意图）。 */
   readonly phase?: "main" | "post";
   /**
    * Recovery / 关键基建缺失豁免自报钩子（P1-F）。
-   *
-   * 返回 true 时，kernel 在 budget tier 拦截前将其优先级等效提升为 P1，
-   * 确保紧急重建路径在任何 CPU 档位下都能运行（与 builder 的 recovery
-   * 豁免同理）。kernel 只读此钩子，不再硬编码 system 名字判断
+   * 返回 true 时，kernel 在 budget 拦截前将其优先级等效提升为 P1，确保紧急重建
+   * 路径在任何 CPU 档位下都能运行。kernel 只读此钩子，不硬编码系统名
    * （plan.md §2.1：内核不感知具体业务）。
-   *
-   * 典型实现：
-   *   - construction-manager: buildQueue 有 P0 queued 的关键基建任务
-   *   - layout-planner: 任一 snapshot 命中 assessEmergencyRebuild().any
+   * 典型实现：construction-manager（buildQueue 有 P0 queued 关键基建）/
+   * layout-planner（任一 snapshot 命中 assessEmergencyRebuild().any）。
    */
   readonly recoveryEligible?: (ctx: TickContext) => boolean;
   run(ctx: TickContext): void;
@@ -65,11 +57,7 @@ export interface CreepRole {
    * Recovery 豁免自报（R3a）：recovery 时 P2+ 角色默认被 colony-state 门禁跳过；
    * 声明 true 的角色视为「生存/脱困路径」，recovery 时仍执行并以 P1 等效优先级
    * 通过 CPU budget。kernel 只读此标志，不感知具体角色名。
-   *
-   * 典型实现：
-   *   - builder：重建被毁基建（生存行为）
-   *   - mineralMiner：矿物收入不耗能量（脱困路径）
-   *
+   * 典型实现：builder（重建被毁基建）/ mineralMiner（矿物收入不耗能量）。
    * 注意：bootstrap 一律不豁免（保命孵化优先）。
    */
   readonly recoveryEligible?: boolean;
@@ -110,11 +98,8 @@ export interface RoomSnapshot {
   readonly constructionSites: readonly ConstructionSite[];
   readonly myConstructionSites: readonly ConstructionSite[];
   readonly hostileCreeps: readonly Creep[];
-  /**
-   * 真正的威胁 creep（hostileCreeps 中具备 ATTACK/RANGED_ATTACK/HEAL/WORK/CLAIM 且非联盟者）。
-   * 防御决策（逃跑 / 停建造 / 抢占 / 开火 / safe mode）应消费此字段而非 hostileCreeps，
-   * 避免过境 scout / reserver 冻结经济。
-   */
+  /** 真正的威胁 creep（hostileCreeps 中具备 ATTACK/RANGED_ATTACK/HEAL/WORK/CLAIM 且非联盟者）。
+   * 防御决策应消费此字段而非 hostileCreeps，避免过境 scout/reserver 冻结经济。 */
   readonly threatCreeps: readonly Creep[];
   /** 小队威胁在场（M11 威胁分级：≥2 武装或武装+治疗组合）。
    * 触发战时集结避险与 defender 双编制 P0 响应。 */
@@ -127,17 +112,13 @@ export interface RoomSnapshot {
   readonly needsRecovery: boolean;
   /** 每个.source ID 对应的已分配 creep 数量（用于免全局扫描的负载均衡）。 */
   readonly sourceOccupancy: ReadonlyMap<string, number>;
-  /**
-   * 已存在但尚未计入 sourceOccupancy 的 harvester/worker 数量。
-   * 包括：(1) 已存活但尚未分配 sourceId 的新 harvester，(2) 正在孵化中的 harvester/worker。
-   * 由 Kernel 预构建，供 room-state 的 harvesterCount 使用，避免替换期间的假 bootstrap。
-   */
+  /** 已存在但尚未计入 sourceOccupancy 的 harvester/worker 数量：
+   * 已存活未分配 sourceId 的 + 孵化中的。Kernel 预构建，供 room-state 的
+   * harvesterCount 使用，避免替换期间的假 bootstrap。 */
   readonly pendingHarvesters: number;
-  /**
-   * 本房 creep 身上携带的能量总和（memory.home 归属本房）。
-   * 用于让 room-state 的 reserve 计入在途能量，避免物流搬运造成危机信号抖动（P1-5 ①）。
-   * 由 Kernel 复用 Game.creeps 遍历结果预构建；缺省视为 0。
-   */
+  /** 本房 creep 身上携带的能量总和（memory.home 归属本房）。
+   * room-state 的 reserve 计入在途能量，避免物流搬运造成危机信号抖动（P1-5 ①）。
+   * Kernel 复用 Game.creeps 遍历预构建；缺省视为 0。 */
   readonly creepEnergy?: number;
   /** 房间内的 mineral（供布局验证使用）。 */
   readonly minerals: readonly Mineral[];
@@ -157,21 +138,15 @@ export interface RoomSnapshot {
   readonly nuker?: StructureNuker | undefined;
   /** 地上掉落的能量资源（FIND_DROPPED_RESOURCES 中类型为 energy 的）。 */
   readonly droppedEnergy: readonly Resource[];
-  /**
-   * 含能量的坟墓（creep 死亡遗留）。坟墓消失后能量转为掉落堆继续衰减 —
-   * 与掉落能量同属「衰减中的遗留资源」，hauler 应优先于 container 回收大额堆。
-   */
+  /** 含能量的坟墓（creep 死亡遗留）。坟墓消失后能量转掉落堆继续衰减 —
+   * 与掉落能量同属「衰减中的遗留资源」，hauler 应优先于 container 回收大额堆。 */
   readonly tombstones: readonly Tombstone[];
-  /**
-   * 含能量的废墟（建筑被毁/拆除遗留，如全拆重建时 storage 的库存整体进入 ruin）。
-   * 有 decay 期限，到期资源灭失 — 大额废墟是限时可回收的库存。
-   */
+  /** 含能量的废墟（建筑被毁/拆除遗留，如全拆重建时 storage 库存整体进入 ruin）。
+   * 有 decay 期限，到期资源灭失 — 大额废墟是限时可回收的库存。 */
   readonly ruins: readonly Ruin[];
-  /**
-   * 预计算的关键维修目标（血量 < 50% 的 spawn/extension/tower/container）。
-   * 在 buildRoomSnapshot 中一次遍历得出，供 tower-defense 和 builder actions 复用，
-   * 避免各模块重复迭代 snapshot.spawns/extensions/towers/containers。
-   */
+  /** 预计算的关键维修目标（血量 < 50% 的 spawn/extension/tower/container）。
+   * buildRoomSnapshot 一次遍历得出，供 tower-defense 和 builder actions 复用，
+   * 避免各模块重复迭代。 */
   readonly criticalRepairTarget?: AnyStructure | undefined;
 }
 

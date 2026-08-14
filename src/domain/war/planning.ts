@@ -1,18 +1,9 @@
 /**
- * 战争目标选择 — Strategy 层授权（war 姿态）之下的纯函数执行决策。
- *
- * 位置：Strategy 层（empire-strategy 发布 posture）与执行层（war-planner 系统）之间。
- * 本模块只做「从情报候选中选出攻击目标」的纯决策，不读 Game/Memory —
- * 所有输入由调用方（war-planner）采集后注入。
- *
- * 目标资格（全部满足才可选，v1 原则「不见不打」）：
- *   1. 普通房（kind === "normal"）— 不打 SK/center/highway（无玩家归属或价值密度不足）
- *   2. 有 owner 且非本人（未 claim 的野房不是战争目标）
- *   3. 情报新鲜（lastSeen 距今 ≤ freshness）— 没有视野的房不贸然进攻
- *   4. tower 数 < maxTowers — 塔网太密的目标啃不动，宁可等待或换目标
- *   5. 未被我方占用（非我方殖民地 / 非远矿运营目标 / 非当前扩张目标）
- *
- * 排序：通勤成本（pathCost，缺失回退线性距离）最小者优先；sponsor = 情报归属的 home。
+ * 战争目标选择 — war 姿态授权之下的纯函数执行决策（empire-strategy 发布姿态、
+ * war-planner 采集情报注入，本模块不读 Game/Memory）。
+ * 资格 v1 原则「不见不打」：普通房 + 有主非本人 + 情报新鲜 + 塔数 < maxTowers +
+ * 未被占用（详见 selectWarTarget）；排序通勤成本最小（pathCost 缺失回退线性距离），
+ * sponsor = 情报归属的 home。
  */
 import type { RoomKind } from "../intel";
 import { roomLinearDistance } from "../remote/targeting";
@@ -68,7 +59,7 @@ export function selectWarTarget(input: WarTargetInput): WarTarget | undefined {
   return best;
 }
 
-/** 编队规模：基数 + 目标有 tower 时按塔数追加（有塔目标需要更多攻击者分摊塔伤）。 */
+/** 编队规模：base + 有塔目标追加 perTower 攻击者分摊塔伤。 */
 export function decideSquadSize(towersSeen: number, base: number, perTower: number): number {
   return base + (towersSeen > 0 ? perTower : 0);
 }
@@ -79,10 +70,9 @@ export function decideSquadSize(towersSeen: number, base: number, perTower: numb
 export type WarPlanPhase = "build" | "advance";
 
 /**
- * 波次相位迟滞推进（R4）— 用「整波集结」替代「散兵逐个送」：
- *   build   → 满编（live ≥ squadSize）才 advance；
- *   advance → 被打残（live < squadSize × regroupRatio）才回落 build 重组。
- * 双阈值不对称：推进要满编（保守），重组要真打残（迟滞），防相位抖动。
+ * 波次相位迟滞推进（R4）— 「整波集结」替代「散兵逐个送」：
+ * build 满编（live ≥ squadSize）才 advance；advance 被打残（live < squadSize ×
+ * regroupRatio）才回落 build 重组。双阈值不对称：推进保守、重组迟滞，防相位抖动。
  */
 export function nextWavePhase(
   prev: WarPlanPhase,
@@ -97,11 +87,9 @@ export function nextWavePhase(
 }
 
 /**
- * 战损止损判定（R4）— spawned（累计提交的孵化请求数）超过编队规模 ×
- * 倍数即判消耗战失败：目标打不穿，再添油也只是持续放血。
- * spawned 含在队 pending — 队列被能量门禁卡住时不会无限膨胀
- * （提交受 live+pending < squadSize 约束），TTL 过期重提交的频率
- * 也远低于止损阈值，误判风险可忽略。
+ * 战损止损判定（R4）：累计 spawned > squadSize × casualtyMultiplier 即判消耗战失败
+ *（目标打不穿，再添油只是持续放血）。spawned 含在队 pending，但提交受
+ * live+pending < squadSize 约束不会无限膨胀，TTL 重提交频率也远低于阈值，误判可忽略。
  */
 export function isAttritionLost(
   spawned: number,
@@ -115,12 +103,8 @@ export function isAttritionLost(
 export type WarOutcome = "success" | "failure" | "unknown";
 
 /**
- * 战后核验（R4）— 收摊时用目标房最新 intel 判定战果：
- *   - 情报过期（lastSeen 超出 freshness）→ unknown（无证据不宣称胜利）；
- *   - 敌人弃房（owner 消失）→ success；
- *   - 目标本有塔网（towersSeen > 0）且 intel 显示塔已清零 → success
- *     （本轮远征的可达成目标 = 拆掉反制能力）；
- *   - 其余 → failure。
+ * 战后核验（R4）：情报过期 → unknown（无证据不宣称胜利）；敌人弃房或塔网清零
+ *（本轮远征的可达成目标 = 拆掉反制能力）→ success；其余 failure。
  * success 免黑名单（目标已无价值/已瘫痪），failure/unknown 进黑名单。
  */
 export function evaluateWarOutcome(

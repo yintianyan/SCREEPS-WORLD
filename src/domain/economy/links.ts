@@ -1,13 +1,7 @@
 /**
- * Link 能量传输决策（纯函数）。
- *
- * 根据 link 的角色分类和能量状态，决定哪些 link 应向哪些 link 传输多少能量。
- * 一个 link 每 tick 只能发起一次传输（Screeps 引擎限制）。
- *
- * 传输优先级：
- *   1. source link → controller link（站桩升级供能核心，0 通勤升级链）
- *   2. source link → storage link（溢出回收）
- *   3. storage link → controller link（controller link 缺能且无 source link 补给时）
+ * Link 能量传输决策（纯函数）。一个 link 每 tick 只能发起一次传输（引擎限制）；
+ * 优先级：source→controller（站桩升级供能）> source→storage（溢出回收）>
+ * storage→controller（controller 缺能且无 source 补给时）。
  */
 
 import { CONFIG } from "../../config";
@@ -16,19 +10,11 @@ import { CONFIG } from "../../config";
 export type LinkRole = "source" | "controller" | "storage" | "hub";
 
 /**
- * 需求驱动的 controller link 目标水位（2026-08-01）。
- *
- * 背景：旧实现 controller 永远优先被 source 喂满——RCL8 满级后升级零收益，
- * 15/tick 白烧（W7N4 实测 storage 恒 0 主因之一）。目标水位让 controller
- * 变成受控消费者：满级停供、降级风险保级、RCL<8 按 storage 水位分级。
- *
- * 放 domain：link-system 与 harvester 灌能出口判定（linkHasOutlet）共用，
- * 避免 creeps → systems 的反向依赖。
- *
- * @param rcl          房间 RCL
- * @param controller   房间 controller（无/非我方 → 0）
- * @param storageEnergy storage 能量（无 storage → 0）
- * @param linkCapacity controller link 容量
+ * 需求驱动的 controller link 目标水位：旧实现 RCL8 满级后仍被喂满、
+ * 15/tick 白烧（W7N4 实测 storage 恒 0 主因之一），故改为受控消费者 —
+ * 满级停供、降级风险保级、RCL<8 按 storage 水位分级。放 domain 是
+ * link-system 与 harvester 灌能出口判定共用，避免 creeps→systems 反向依赖。
+ * controller 无/非我方 → 0；storageEnergy 无 storage → 0。
  */
 export function computeControllerLinkTarget(
   rcl: number,
@@ -59,7 +45,7 @@ export interface LinkInfo {
   role: LinkRole;
 }
 
-/** 一次 link 间能量传输指令。 */
+
 export interface LinkTransfer {
   fromId: string;
   toId: string;
@@ -67,32 +53,18 @@ export interface LinkTransfer {
 }
 
 /**
- * 规划本 tick 的 link 间能量传输。
+ * 规划本 tick 的 link 间能量传输。约束：每源 link 每 tick 至多参与一次传输、
+ * 不超源可用能量与目标空闲容量、冷却中的 link 不能发起（引擎限制）。
  *
- * 约束：
- *   - 每个源 link 每 tick 最多参与一次传输（引擎限制）
- *   - 传输量不超过源 link 的可用能量和目标 link 的空闲容量
- *   - 不在冷却中的 link 才能发起传输
- *
- * P1-4 最小传输阈值（minTransfer）：source link 只在能量达到阈值（攒够再发）
- * 或快满（防溢出）时才发起，避免小额传输白占冷却导致源 link 装不下新能量而溢出；
- * controller link 处于“急需”（能量低于阈值）时豁免，保证升级不断粮。
- * minTransfer 默认 0（无阈值，向后兼容），生产调用由 link-system 传入 CONFIG 值。
+ * P1-4 minTransfer：source 攒够阈值或快满才发，避免小额传输白占冷却导致
+ * 源 link 装不下新能量而溢出；controller「急需」（能量低于阈值）时豁免。
+ * minTransfer 默认 0（无阈值，向后兼容），生产调用由 link-system 传 CONFIG 值。
  */
-/** 传输规划选项。 */
 export interface LinkTransferOptions {
   minTransfer?: number;
   /**
-   * 需求驱动的 controller link 目标水位（2026-08-01）。
-   *
-   * 缺省 = 容量（向后兼容：旧行为永远想把 controller link 装满）。
-   * 调用方（link-system）按升级需求计算：
-   *   - RCL8 满级 → 0（停供，能量全流 storage hub）
-   *   - RCL8 + 降级风险 → maintainTarget（保级小水位）
-   *   - RCL<8 → 按 storage 水位分级（满功率/半供/保级）
-   *
-   * 效果：controller 不再是无脑最高优先的 sink，而是受控消费者；
-   * source 能量先满足 controller 目标，其余全部流向 storage hub。
+   * 需求驱动的 controller 目标水位（缺省 = 容量，向后兼容）；调用方
+   * （link-system）按升级需求计算（RCL8 停供 / 保级 / RCL<8 分级）。
    */
   controllerTargetEnergy?: number;
 }
@@ -113,20 +85,20 @@ export function planLinkTransfers(
   const controllerLink = links.find(l => l.role === "controller");
   const storageLink = links.find(l => l.role === "storage");
 
-  // 需求驱动目标水位：缺省 = 容量（旧行为）；显式传入时按调用方计算值。
+
   const controllerTarget = opts.controllerTargetEnergy ??
     (controllerLink ? controllerLink.energyCapacity : 0);
   let controllerNeeds = controllerLink
     ? Math.max(0, controllerTarget - controllerLink.energy)
     : 0;
 
-  // controller 急需：目标水位 > 0 且能量低于 min(目标, minTransfer) →
-  // 豁免 source 阈值优先喂。target=0 时永不 urgent（停供）。
+  // controller 急需：目标>0 且能量低于 min(目标, minTransfer) → 豁免 source 阈值。
+  // target=0 时永不 urgent（停供）。
   const controllerUrgent =
     controllerLink !== undefined &&
     controllerTarget > 0 &&
     controllerLink.energy < Math.min(controllerTarget, minTransfer);
-  // source link 是否达到发起传输的能量条件：达阈值 或 快满。
+
   const meetsThreshold = (src: LinkInfo): boolean =>
     src.energy >= minTransfer || src.energy >= src.energyCapacity * NEAR_FULL_RATIO;
 
@@ -177,16 +149,11 @@ export interface LinkAnchorPoint {
 }
 
 /**
- * 按「最近锚获胜」分类单个 link 的角色（纯函数，几何判定）。
- *
- * 取 link 到最近 source / controller / storage 的 Chebyshev 距离，在 anchorRange 内
- * 选距离最小的锚定角色；距离相等时按 controller > storage > source 裁决——专属单例
- * 结构（controller/storage link）不应被 source 抢占。都不在范围内 → hub。
- *
- * 替代旧的「source 固定最高优先级 + 短路返回」：旧实现会把紧邻 controller/storage、
- * 却恰好落在某 source range≤2 内的 link 误判为 source（优先级劫持），令 controller/
- * storage link 从传输拓扑消失、升级链/排空链断裂。最近锚使 range1 到 controller 的
- * link 胜过 range2 到 source，从根上消除劫持。
+ * 按「最近锚获胜」分类 link 角色（纯函数）：Chebyshev 距离最近且在 anchorRange 内的
+ * 锚定角色胜出；等距按 controller > storage > source 裁决（专属单例不被 source 抢占）；
+ * 均不在范围内 → hub。替代旧「source 固定最高优先级 + 短路」— 旧版会把紧邻
+ * controller/storage 却落在 source range≤2 的 link 误判为 source（优先级劫持），
+ * 令 controller/storage link 从传输拓扑消失、升级链/排空链断裂。
  */
 export function classifyLinkRole(
   link: LinkAnchorPoint,
@@ -213,7 +180,7 @@ export function classifyLinkRole(
   if (dController <= anchorRange) candidates.push({ role: "controller", dist: dController, pri: 2 });
   if (candidates.length === 0) return "hub";
 
-  // 最近锚获胜；距离相等时 pri 大者（controller > storage > source）优先。
+
   candidates.sort((a, b) => a.dist - b.dist || b.pri - a.pri);
   return candidates[0]!.role;
 }

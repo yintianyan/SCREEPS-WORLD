@@ -1,32 +1,13 @@
 /**
  * 归位（Parking）— 非站桩角色 idle 时主动离开关键格/道路，根治交通阻塞。
- *
- * 根因：role-runner 在无匹配候选时设 mode=idle 后 return，creep 原地石化。
- * 它停在「最后一次干活的位置」——可能是 source 旁（堵矿工）、spawn 前（堵孵化出口）、
- * 工地旁（堵 builder）、road 上（堵所有过路 creep）。idle 位置是路径无关的随机残留，
- * 无法预测，只能用统一的归位行为收拢。
- *
- * 设计原则（方案 C 通用算法）：
- *   - 停车位完全从 per-room 实时快照推导（snapshot 的结构/工地 + room 地形 + 实时 creep 位置），
- *     不预设任何位置表，不引用其他房间数据。算法对任意房间地形成立。
- *   - 站桩角色（harvester/upgrader）不参与——它们的 idle 是守在矿位/controller 旁，
- *     本就正确。仅 hauler/distributor/builder/worker 归位（由 role-runner 的 park 标志控制）。
- *
- * 安全性判定（isSafeSpot）：当前位置同时满足
- *   1. 不是关键格（source/controller/spawn/storage/工地 旁 range≤1）
- *   2. 不在 road 上（road 是交通主干道，停上面挡移动方）
- *   → 已经安全则不动（避免每 tick 重新寻路浪费 CPU + 防振荡）。
- *
- * 归位策略（findParkSpot）：8 邻域选最优格，评分优先级
- *   非关键格 > 非 road > 靠近核心（spawn 方向，缩短下次出勤通勤）。
- *   只在邻域内单步移动——归位是「让出关键格/道路」，不是「长途跋涉找完美停车位」。
- *
- * 防聚堆：__parkReservations 每 tick 重置，已安全/已选目标的 creep 预约各自格子，
- *   多 creep 不会抢同一格、不会互相把对方挤来挤去（振荡）。
- *
- * 数据来源约束：结构/工地/道路全部来自 RoomSnapshot（per-tick 预构建，O(1) 查询），
- *   仅「实时 creep 占位」用 room.lookForAt(LOOK_CREEPS)（快照不含其他 creep 的瞬时位置）。
- *   不做 lookForAt(LOOK_STRUCTURES) — 避免与快照重复扫描，且保证测试与生产同源。
+ * 根因：idle creep 停在「最后一次干活的位置」石化（source 旁/spawn 前/工地旁/road 上），
+ * 位置是路径无关的随机残留，只能用统一归位行为收拢。设计（方案 C）：停车位完全从 per-room
+ * 实时快照推导（结构/工地 + 地形 + 实时 creep 位），不预设位置表；站桩角色（harvester/upgrader）
+ * 不参与（idle 守矿位/controller 本就正确）。
+ * isSafeSpot：非关键格（source/controller/spawn/storage/工地 range≤1）且非 road。
+ * findParkSpot：8 邻域单步选最优（非关键 > 非 road > 近核心），只在邻域内移动。
+ * 防聚堆：__parkReservations 每 tick 重置。数据来源：结构/工地/道路全来自 RoomSnapshot，
+ * 仅实时 creep 占位用 lookForAt(LOOK_CREEPS)（不做 LOOK_STRUCTURES，避免与快照重复扫描）。
  */
 
 import { globalCache } from "../../kernel/global-cache";
@@ -55,14 +36,9 @@ export interface ParkRoomData {
 
 /**
  * 从快照构建本房归位数据（每房每 tick 缓存一次）。
- *
- * - critical：站桩工作位 + 结构出口旁（source/controller/spawn/storage/工地 的 range≤1 邻域）。
- *   idle creep 停在这些格会阻塞生产/孵化/建造。
- * - roads：道路格（交通主干道，idle 停上面挡移动方）。
- * - blocking：不可站立的阻挡结构格（墙/extension/tower 等；road/container/rampart 可站立不算）。
- *
- * 全部从 per-room 快照推导，对任意房间地形自适应，不依赖预设位置表。
- * 导出供 traffic-manager 复用同一套「可站立/关键格」口径挑选推挤落格。
+ * critical：站桩工作位 + 结构出口旁（source/controller/spawn/storage/工地 range≤1 邻域）；
+ * roads：道路格；blocking：不可站立的阻挡结构格（road/container/rampart 可站不算）。
+ * 全部从 per-room 快照推导，导出供 traffic-manager 复用同一套「可站立/关键格」口径挑选推挤落格。
  */
 export function getParkRoomData(snapshot: RoomSnapshot): ParkRoomData {
   const g = globalCache() as any;
@@ -141,12 +117,9 @@ export function isSafeSpot(creep: Creep, snapshot: RoomSnapshot): boolean {
 }
 
 /**
- * 8 邻域选最优归位格。返回目标格坐标，无可用格则 undefined。
- *
- * 评分（越小越优）：
- *   +1000 关键格（绝不去——会把一个阻塞换成另一个阻塞）
- *   +100  road（尽量避开主干道）
- *   +到核心距离（靠近 spawn，缩短下次出勤通勤；无 spawn 时此项为 0）
+ * 8 邻域选最优归位格，无可用格返回 undefined。评分（越小越优）：
+ * +1000 关键格（绝不去——会把一个阻塞换成另一个阻塞）；+100 road（避开主干道）；
+ * +到核心距离（靠近 spawn，缩短下次出勤通勤；无 spawn 时此项为 0）。
  */
 function findParkSpot(
   creep: Creep,
@@ -182,9 +155,8 @@ function findParkSpot(
   }
   if (candidates.length === 0) return undefined;
 
-  // 阶段 1（逃离）：当前在关键格/road 上时，只选「非关键且非 road」的真逃离格，
-  //   其中取最靠近核心者（缩短下次出勤通勤）。这保证只要存在逃离格，一步就离开阻塞格，
-  //   绝不会被 core 距离牵引进关键区深处振荡。
+  // 阶段 1（逃离）：当前在关键格/road 上时，只选「非关键且非 road」的真逃离格、取最靠近核心者 —
+  // 保证只要存在逃离格一步就离开阻塞格，绝不会被 core 距离牵引进关键区深处振荡。
   if (onBlockingTile) {
     let escape: Candidate | undefined;
     for (const c of candidates) {
@@ -194,8 +166,8 @@ function findParkSpot(
     if (escape) return { x: escape.x, y: escape.y };
   }
 
-  // 阶段 2（尽力外移）：无真逃离格（深陷 3×3 关键区中心，四邻皆关键）时，
-  //   退而求其次：非关键格优先，再取最靠近核心者，逐 tick 向外走直到出现逃离格。
+  // 阶段 2（尽力外移）：无真逃离格（深陷 3×3 关键区中心，四邻皆关键）时，非关键格优先、
+  // 再取最靠近核心者，逐 tick 向外走直到出现逃离格。
   let best: Candidate | undefined;
   for (const c of candidates) {
     if (!best) { best = c; continue; }
@@ -208,27 +180,20 @@ function findParkSpot(
 
 /**
  * 归位主入口 — role-runner 在 creep 无匹配候选（即将 idle）时调用。
- *
- * 行为：
- *   1. 已在安全格 → 预约本格，不动（防振荡 + 防重复寻路）。
- *   2. 在关键格/road 上 → 单步移到最优邻格并预约。
- *   3. 无可用邻格 → 不动（保持 idle，下 tick 再试）。
- *
- * 仅对非站桩角色调用（harvester/upgrader 不参与，由 role-runner 的 park 标志控制）。
+ * 已在安全格 → 预约本格不动（防振荡 + 防重复寻路）；在关键格/road 上 → 单步移到最优邻格并预约；
+ * 无可用邻格 → 不动（保持 idle，下 tick 再试）。仅对非站桩角色调用（park 标志控制）。
  */
 export function parkIdleCreep(creep: Creep, snapshot: RoomSnapshot): void {
   const room = creep.room;
-  // 能力守卫：归位需要地形查询与 lookForAt（探测实时 creep 占位）。
-  // 精简 room mock（角色单元测试）不实现这些方法时跳过归位——归位是尽力行为，
-  // 缺失环境下保持原 idle 行为即可，不应让角色管线崩溃。
+  // 能力守卫：精简 room mock（角色单测）无 getTerrain/lookForAt 时跳过归位——
+  // 归位是尽力行为，缺失环境下保持原 idle 行为，不应让角色管线崩溃。
   if (typeof room.getTerrain !== "function" || typeof room.lookForAt !== "function") {
     return;
   }
 
-  // MV-3：parked creep 优先响应让路请求 — idle creep 无任务在身，
-  // 是最该让路的对象。原先 yield 只在 moveToTarget 开头检查，
-  // parked creep 不走该入口 → 让路请求对静止目标永不生效，
-  // 挡路只能靠移动方 ignoreCreeps:false 绕行。
+  // MV-3：parked creep 优先响应让路请求 — idle creep 无任务在身，是最该让路的对象；
+  // 原先 yield 只在 moveToTarget 开头检查，parked creep 不走该入口 → 让路请求对静止目标
+  // 永不生效，挡路只能靠移动方 ignoreCreeps:false 绕行。
   // traffic 开启时禁用 — 静止 creep 的让路由集中解算的推挤机制接管。
   if (!trafficEnabled() && checkAndExecuteYield(creep)) return;
 

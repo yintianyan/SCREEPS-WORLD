@@ -1,11 +1,6 @@
 /**
- * 邻居房情报（C2：M7 远矿/扩张的数据源，零视野成本先行积累）。
- *
- * 老玩家认知：扩张选址依赖「邻房有什么」——source 数、矿物、归属、是否 SK 房。
- * 其中房名分类（highway/center/SK/normal）与房间状态（novice/respawn/closed）
- * 无需视野即可获得；source/矿物/归属需要视野（未来 scout/observer 补全）。
- *
- * 纯函数 — 不访问 Game/Memory，所有数据由调用方采集后传入。
+ * 邻居房情报（C2：M7 远矿/扩张的数据源）— 纯函数，不访问 Game/Memory。
+ * 房名分类（highway/center/SK/normal）与房态无需视野；source/矿物/归属需视野。
  */
 
 /** 邻房类型：普通房 / source keeper 房 / 中心房 / 公路房。 */

@@ -1,16 +1,8 @@
 /**
- * 每 tick 对象缓存 — 去重同 tick 内对同一 id 的重复 Game.getObjectById 调用（P2-6）。
- *
- * 典型冗余场景：
- *   - 角色 candidate 的 predicate 和 execute 对同一 targetId 各调一次（2→1）
- *   - builder 的 gate + predicate + execute 对同一 site 调三次（3→1）
- *   - 多 creep 分配到同一目标时各自查询（N→1）
- *
- * 安全性：单个 tick 内对象身份不变（结构销毁/创建发生在 tick 边界之间），
- * 缓存引用不会过期；缓存 null 同样安全（tick 内不存在的对象不会凭空出现）。
- * 缓存以 Game.time 标记，每 tick 自动重置；Global Reset 后随 globalCache 重建。
- *
- * 类型签名与 Game.getObjectById 完全一致（双重载），调用点零类型改动。
+ * 每 tick 对象缓存（P2-6）— 去重同 tick 内对同一 id 的重复 Game.getObjectById
+ * （predicate/execute 与多 creep 同目标场景 N→1）。
+ * 安全性：tick 内对象身份不变（结构销毁/创建发生在 tick 边界），缓存 null 同样安全
+ * （tick 内不存在的对象不会凭空出现）；以 Game.time 标记每 tick 自动重置。
  */
 
 import { globalCache } from "../../kernel/global-cache";

@@ -1,14 +1,9 @@
 /**
  * Upgrade actions — 升级控制器。
- *
- * 两个变体：
- *   - upgradeController: 无能量门禁（角色自行决定是否升级）
- *   - upgradeControllerGated: 带 energyAvailable >= floor 门禁（防止与孵化竞争）
- *
- * 移动按 range 3 求路（upgradeController 的交互距离）而非 runAction 默认的
- * range 1：controller 常嵌在地形墙中，range1 落点可能只有 controller container
- * 一格且被站桩静态阻挡标 255 — 按 range1 求路无解，upgrader 满载石化；
- * range3 有大把落点（线上实测事故，见 moveToTarget 的 moveRange 参数）。
+ * 两个变体：upgradeController（无门禁）/ upgradeControllerGated（energyAvailable >= floor，防与孵化竞争）。
+ * 移动按 range 3 求路（官方交互距离）而非 runAction 默认的 range 1：controller 常嵌地形墙中，
+ * range1 落点可能只有 controller container 一格且被站桩静态阻挡标 255 → 求路无解，
+ * upgrader 满载石化（线上实测事故，见 moveToTarget 的 moveRange 参数）。
  */
 import { CONFIG } from "../../../config";
 import type { ActionCandidate } from "../action-types";
@@ -41,25 +36,13 @@ interface StationaryUpgradeTarget {
 }
 
 /**
- * 站桩升级并同 tick 取能（controller 旁供能结构——link 或 container——的 0 通勤 upgrader 专用）。
- *
- * 关键：withdraw 与 upgradeController 是两个独立 intent，可在同一 tick 执行。
- * 只要 upgrader 站在既够到 controller（range<=3 升级）又紧邻供能结构（range<=1 取能）
- * 的位置，每 tick 即可「取 + 升」，让 WORK 满效运转，消除 acquire/work 双模 FSM
- * 「取能 tick 不升级」的产能损失 —— 小 CARRY body 尤甚（1 CARRY = 50 容量，
- * 15 WORK 约 4 tick 抽干，每 5 tick 空耗 1 tick 取能 → 仅 ~67% 效率、10/tick；
- * 同 tick 取+升后恢复满效 15/tick）。container 供能同理（此前本动作只认 link，
- * container 供能的 upgrader 退化成分离取/升，实测仅发挥 ~30-48% 潜力）。
- *
- * 供能优先级：controller link 优先（link 网络瞬移供能，无需 hauler 往返），
- * 无 link 时回退 controller container（RCL5 尚无 link 名额、或非主房只有 container）。
- *
- * 镜像 harvester.stationaryMine：同置于 upgrader 的 acquire[0] 与 work[0]，
- * 绕开「单 tick 只跑一条链」的限制，无论 FSM 处于哪个 mode 都取+升同 tick。
- *
- * 触发条件：controller 己方、creep 已在升级范围内（range<=3，本动作不通勤，
- * 通勤由 moveToStation 兜底）、且身边（range<=1）有带能量的 controller link 或 container。
- * 任一不满足 resolve=undefined，回退常规链（withdraw / upgrade）。
+ * 站桩升级并同 tick 取能（controller 旁 link/container 的 0 通勤 upgrader 专用）。
+ * 关键（[Facts]）：withdraw 与 upgradeController 是独立 intent，可同 tick 执行——站既够 controller
+ * （range<=3）又紧邻供能结构（range<=1）处，每 tick「取+升」，消除双模 FSM 取能空转
+ * （1 CARRY/15 WORK 仅 ~67% 效率；此前只认 link，container 供能 upgrader 退化仅 ~30-48% 潜力）。
+ * 供能优先级：controller link 优先（瞬移供能无需 hauler），无则回退 container。
+ * 镜像 stationaryMine：同置 acquire[0] 与 work[0]，绕开「单 tick 只跑一条链」。
+ * 触发条件：己方 controller + 在升级范围 + 身边有带能 link/container；不满足回退常规链。
  */
 export function stationaryUpgrade(): ActionCandidate<StationaryUpgradeTarget> {
   return {
@@ -75,9 +58,8 @@ export function stationaryUpgrade(): ActionCandidate<StationaryUpgradeTarget> {
           l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
       if (link) return { controller: ctrl, source: link };
-      // 回退 controller container（无 link 名额/非主房）。snapshot.controllerContainer
-      // 是预算的「controller 旁 container」（room-snapshot 从 containers 中筛出），
-      // 天然满足近 controller，只需校验 creep 紧邻取能 + 有能量。
+      // 回退 controller container（无 link 名额/非主房）。snapshot.controllerContainer 是预算的
+      // 「controller 旁 container」，天然近 controller，只需校验紧邻取能 + 有能量。
       const cc = ac.snapshot.controllerContainer;
       if (cc && ac.creep.pos.getRangeTo(cc.pos) <= 1 && cc.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
         return { controller: ctrl, source: cc };
@@ -85,8 +67,7 @@ export function stationaryUpgrade(): ActionCandidate<StationaryUpgradeTarget> {
       return undefined;
     },
     execute: (ac, t) => {
-      // 同 tick 取 + 升：withdraw 补充 carry，upgradeController 消耗 carry。
-      // 稳态下 carry 恒接近满，升级永不断粮（满 WORK 效率）。返回码无需处理 —
+      // 同 tick 取 + 升：稳态下 carry 恒接近满，升级永不断粮（满 WORK 效率）。返回码无需处理 —
       // carry 满时 withdraw 返回 ERR_FULL（无害 no-op），下一 tick 升级腾出空间即补。
       ac.creep.withdraw(t.source, RESOURCE_ENERGY);
       ac.creep.upgradeController(t.controller);

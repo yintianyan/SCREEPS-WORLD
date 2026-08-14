@@ -1,24 +1,15 @@
 /**
  * Expansion Manager — P3 系统，GCL 变现的唯一入口（claim 新房）。
- *
  * 状态机（Memory.kernel.expansion，同一时刻至多一个扩张行动）：
+ * idle →(GCL 余量 + sponsor 健康 + intel 有可行目标)→ claiming →(目标房 controller.my)→
+ * pioneering →(新房 spawn 建成)→ idle；claiming 超时/被抢占 → idle + 目标黑名单冷却。
  *
- *   idle ──(GCL 有余量 + sponsor 房健康 + intel 有可行目标)──► claiming
- *   claiming ──(目标房 controller.my)──► pioneering（选锚点 + 写 layout）
- *   claiming ──(超时/被抢占)──► idle + 目标进黑名单冷却
- *   pioneering ──(新房 spawn 建成)──► idle（新房自治，普通系统接管）
- *   pioneering ──(超时)──► idle（房已占，仅停止编队补充）
- *
- * 架构复用（关键决策）：占领后只做一件事 — 用约束推导（distance field +
- * selectAnchors）选出锚点写入新房 layout.anchor。此后完全复用既有机器：
- *   layout-planner 的「spawn 被毁重建」路径推入 P0 spawn 任务 →
- *   construction-manager 的紧急豁免创建 site → 拓荒 builder 建造 →
- *   spawn 建成后新房自己的 demand/bootstrap 闭环接管。
+ * 架构复用（关键决策）：占领后只做一件事 — 用约束推导（distance field + selectAnchors）
+ * 选出锚点写入新房 layout.anchor，此后完全复用既有机器：layout-planner 的「spawn 被毁
+ * 重建」路径 → construction-manager 紧急豁免 → 拓荒 builder 建造 → 新房自治接管。
  * 灾后恢复机器与殖民机器是同一台 — 不新造第二条建造管线。
- *
- * 拓荒编队：worker×N（采集/填充/升级）+ builder×N（建 spawn），
- * home 指向新房（sponsor 队列代孵，countPending 的 home 过滤保证
- * 不污染 sponsor 自身人口预算），孵化后经 ensureHome 自行走到新房。
+ * 拓荒编队：worker×N + builder×N，home 指向新房（sponsor 队列代孵，countPending 的
+ * home 过滤保证不污染 sponsor 人口预算），孵化后经 ensureHome 自行走到新房。
  */
 import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
@@ -40,13 +31,11 @@ export const expansionManagerSystem: System = {
     const expansion = Memory.kernel.expansion;
 
     if (!expansion) {
-      // C-1：CPU 门禁只裁决「是否开启新行动」— 扩张是纯发展行为，
-      // CPU 紧张时不开新局。
+      // C-1：CPU 门禁只裁决「是否开启新行动」— 扩张是纯发展行为，CPU 紧张时不开新局。
       if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;
       if ((Game.cpu.bucket ?? 0) < 5000) return;
-      // 战略门禁：是否扩张由 empire-strategy 的姿态裁决（Strategy 层），
-      // 本系统只在获得授权时评选目标 — 不自行判断「现在是不是好时机」。
-      // 姿态未就绪（reset 首 tick）默认不扩张：固本是安全缺省。
+      // 战略门禁：是否扩张由 empire-strategy 的姿态裁决（Strategy 层）— 本系统只在
+      // 获得授权时评选目标，不自行判断时机。姿态未就绪（reset 首 tick）默认不扩张。
       if (Memory.kernel.strategy?.expansionAllowed !== true) return;
       tryStartExpansion(ctx);
       return;
@@ -54,11 +43,11 @@ export const expansionManagerSystem: System = {
 
     // 进行中的扩张行动不因姿态回落而中断 — claimer/拓荒编队已是沉没投资，
     // 半途而废比完成更贵；姿态只裁决「是否开启新行动」。
-    // C-1 修复：状态机推进不受 CPU 门禁 — 原先门禁在函数入口，
-    // conserve/recovery 期间整个状态机冻结：超时判定、被抢占检测、
-    // 威胁止损全部停摆，abort 分支恰恰是 CPU 紧张时最需要跑的止损路径。
-    // 审查修正：孵化补充（submitPioneers/claimer 重派）仍属新增投资，
-    // 与「开新行动」同类 — 传入 CPU 门禁位，低 tier 下只判定不送兵。
+    // C-1 修复：状态机推进不受 CPU 门禁 — 原先门禁在函数入口，conserve/recovery 期间
+    // 整个状态机冻结：超时判定、被抢占检测、威胁止损全部停摆，abort 分支恰恰是
+    // CPU 紧张时最需要跑的止损路径。
+    // 审查修正：孵化补充（submitPioneers/claimer 重派）仍属新增投资，与「开新行动」
+    // 同类 — 传入 CPU 门禁位，低 tier 下只判定不送兵。
     const spawningAllowed =
       (ctx.budget.tier === "healthy" || ctx.budget.tier === "guarded") &&
       (Game.cpu.bucket ?? 0) >= 5000;

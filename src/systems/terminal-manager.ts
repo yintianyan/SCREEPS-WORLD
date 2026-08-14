@@ -1,31 +1,20 @@
 /**
  * Terminal Manager — P3 系统，terminal 业务的唯一属主：
- *   市场贸易（Game.market.deal）+ 帝国能量互济（terminal.send）+ 能量市场交易（R5）。
+ * 市场贸易（Game.market.deal）+ 帝国能量互济（terminal.send）+ 能量市场交易（R5）。
  *
- * 战略定位：单房间只产一种矿物，lab 反应链需要多矿种原料。
- * 在多房间互济接入前，市场是唯一的原料来源；而买入需要 credits，
- * credits 的唯一收入是卖出本房盈余矿物 — 因此必须双向交易才能形成闭环：
+ * 战略定位：单房间只产一种矿物，lab 反应链需多矿种原料 — 互济接入前市场是唯一原料来源，
+ * 而买入需要 credits，credits 唯一收入是卖出盈余矿物，故必须双向交易才能闭环：
+ * extractor → terminal → 卖盈余换 credits → 买缺口矿物 → supplyLabs（terminal 回退）。
  *
- *   extractor → 本房矿物 → terminal（haulMineralsToStorage 已优先存 terminal）
- *     → 卖出盈余换 credits → 买入缺口矿物 → supplyLabs（terminal 回退）→ lab 反应链
+ * R5 每轮执行顺序（= 优先级）：0. 跨房能量互济（planEnergyAid 纯函数，地板迟滞防震荡，
+ * 殖民生存优先于交易收入）→ 1. 能量溢出卖（storage > energySellFloor，RCL8 后能量是最大
+ * 出口，价格底线 minEnergySellPrice）→ 2. 矿物卖 → 3. 危机能量买（storage < energyBuyFloor，
+ * 价格上限 maxEnergyBuyPrice，高于此价宁可压缩运营）→ 4. 缺口矿物买。
  *
- * R5 帝国能量网络（每轮执行顺序 = 优先级）：
- *   0. 跨房能量互济（terminal.send）：盈余房捐赠 → 危机房救助 —
- *      殖民生存优先于交易收入；决策为纯函数 planEnergyAid（无状态、地板迟滞防震荡）。
- *   1. 能量溢出卖（storage > energySellFloor）：RCL8 满级后能量是最大出口，
- *      卖能量换 credits 是财富引擎；价格底线 minEnergySellPrice。
- *   2. 矿物卖（正常贸易收入来源）。
- *   3. 危机能量买（storage < energyBuyFloor 且 credits 充足）：市场是最后救助通道，
- *      价格上限 maxEnergyBuyPrice — 高于此价宁可压缩运营。
- *   4. 缺口矿物买（反应链原料）。
- *
- * 能量运费：deal 无论买卖都从本方 terminal 扣能量
- *（calcTransactionCost），由 distributor 的 stockTerminalEnergy 维持储备。
- *
- * 节流设计：
- *   - interval 200 tick + bucket 门禁 — getAllOrders 是重调用 [Facts]
- *   - 每次运行每房最多 1 单（terminal 有 deal 冷却），全局引擎上限 10 单/tick [Facts]
- *   - 私服无市场 API 时整体跳过（与 pixel-system 同款守卫）
+ * 节流：interval 200 + bucket 门禁（getAllOrders 是重调用 [Facts]）；每房每轮最多 1 单
+ * （terminal 有 deal 冷却），全局引擎上限 10 单/tick [Facts]；私服无市场 API 时跳过。
+ * 能量运费：deal 无论买卖都从本方 terminal 扣能量（calcTransactionCost），由
+ * distributor 的 stockTerminalEnergy 维持储备。
  */
 import { CONFIG } from "../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
@@ -105,7 +94,7 @@ function tryEmpireEnergyAid(ctx: TickContext): void {
   const terminal = ctx.getSnapshot(plan.from)?.terminal;
   if (!terminal || terminal.cooldown > 0) return;
 
-  // 运费预算：发送方 terminal 须同时承担 货量 + 运费 + 储备地板。
+  // 发送方 terminal 须同时承担 货量 + 运费 + 储备地板。
   const fee = Game.market.calcTransactionCost(plan.amount, plan.from, plan.to);
   const energyInTerminal = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
   if (energyInTerminal < plan.amount + fee + CONFIG.market.terminalEnergyReserveFloor) return;

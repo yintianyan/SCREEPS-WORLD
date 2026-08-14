@@ -8,12 +8,10 @@ import { classifyThreats } from "../../domain/defense/threat";
 /** 根据背包存储更新 creep 模式。仅在阈值跨越时写入。 */
 export function updateMode(creep: Creep): void {
   // 总量口径（不限 RESOURCE_ENERGY）：满/空判断须计入矿物等非能量资源，
-  // 否则满背包矿物的 creep（如 mineralMiner 采满 Z）被误判"空载"——work 模式
-  // 只活 1 tick 即被踢回 acquire，采不动也倒不掉，永久冻结至老死（线上实证）。
-  // 注意：携非能量 cargo 的角色（distributor 从 lab unload 化合物、hauler loot 矿物）
-  // 在总量口径下会保持 work 直到卸空 —— 这些角色的 fill 动作（transfer energy）必须
-  // 在 resolve 前置"携非能量则放行后续候选卸货"门禁，否则转能量静默失败终止候选链、
-  // 卸货相永远轮不到而冻结（见 fill.ts distributorFillTarget/haulFillTarget）。
+  // 否则满背包矿物的 creep（如 mineralMiner）被误判"空载"而永久冻结（线上实证）。
+  // 注意：携非能量 cargo 的角色（distributor 卸 lab 化合物、hauler loot 矿物）在总量口径下
+  // 会保持 work 直到卸空 —— 其 fill 动作必须在 resolve 前置"携非能量则放行后续候选卸货"门禁
+  // （见 fill.ts distributorFillTarget/haulFillTarget），否则转能量静默失败终止候选链。
   const used = creep.store.getUsedCapacity();
   const free = creep.store.getFreeCapacity();
   const mode = creep.memory.mode ?? "acquire";
@@ -23,32 +21,26 @@ export function updateMode(creep: Creep): void {
   } else if (mode === "work" && used === 0) {
     creep.memory.mode = "acquire";
   } else if (mode === "idle" || mode === "flee") {
-    // idle/flee 恢复：有货时转 work 去消耗，空载时转 acquire 去采集。
-    // 修复：原实现缺少 idle 和 flee 分支导致 creep 一旦进入这些模式就永久卡死。
-    // flee 场景：敌人离开后 shouldFlee 返回 false，但 mode 仍为 flee，需要恢复。
+    // idle/flee 恢复：有货转 work 去消耗，空载转 acquire 去采集。
+    // 修复：原实现缺 idle/flee 分支，进入后永久卡死（flee 场景：敌人离开后需恢复）。
     creep.memory.mode = used > 0 ? "work" : "acquire";
   } else if (!creep.memory.mode) {
     creep.memory.mode = used > 0 ? "work" : "acquire";
   }
 }
 
-/**
- * 检查 creep 是否应逃跑（P1-1：距离分级）。
- * 仅当威胁 creep 在 fleeRange 范围内时才触发逃跑。
- * 远端过境的威胁（如 scout / reserver 穿越房间边缘）不会中断经济。
- */
+/** P1-1 距离分级：仅当威胁在 fleeRange 范围内才触发逃跑，远端过境威胁不中断经济。 */
 export function shouldFlee(creep: Creep, snapshot: RoomSnapshot): boolean {
   if (snapshot.threatCreeps.length === 0) return false;
   const range = CONFIG.defense.fleeRange;
   return snapshot.threatCreeps.some(t => creep.pos.getRangeTo(t.pos) <= range);
 }
 
-// ─── 远矿角色威胁检测 ──────────────────────────────────────
+// ─── 远矿角色威胁检测 ───
 
 /**
- * 获取指定房间的 hostile creep 列表（per-tick per-room 缓存）。
- * 用于远矿角色在无 snapshot 的房间（远矿房 / 过境中间房）检测威胁。
- * 缓存生命周期：单 tick，globalCache 自动重置。
+ * 获取指定房间的 hostile creep 列表（per-tick per-room 缓存，globalCache 自动重置）。
+ * 用于远矿角色在无 snapshot 的房间（远矿房/过境中间房）检测威胁。
  */
 function getRoomThreats(roomName: string): Creep[] {
   const g = globalCache() as any;
@@ -67,15 +59,9 @@ function getRoomThreats(roomName: string): Creep[] {
 }
 
 /**
- * 远矿角色威胁检测 — 在任意「非 home 房」检查当前房间的敌人。
- *
- * 覆盖范围（修复 transit 盲区）：
- *   - 在 remoteTarget 房间作业时
- *   - 在 home ↔ remoteTarget 之间的过境中间房通勤时
- * 旧实现仅在 creep.room.name === remoteTarget 时检测，导致过境中间房遇袭不逃跑。
- *
- * 仅对设置了 remoteTarget 的远矿角色生效；本地角色由 shouldFlee（home snapshot）处理。
- * 与 shouldFlee 的区别：直接从 Game.rooms 扫描当前房（远矿房/中间房均无 snapshot）。
+ * 远矿角色威胁检测 — 在任意「非 home 房」检查当前房敌人（修复 transit 盲区：旧实现仅在
+ * remoteTarget 房检测，过境中间房遇袭不逃跑）。仅对设置 remoteTarget 的角色生效；
+ * 本地角色由 shouldFlee（home snapshot）处理。与 shouldFlee 的区别：直接从 Game.rooms 扫当前房。
  */
 export function shouldFleeForeignRoom(creep: Creep): boolean {
   if (!creep.memory.remoteTarget) return false;
@@ -89,10 +75,8 @@ export function shouldFleeForeignRoom(creep: Creep): boolean {
 }
 
 /**
- * 远矿角色逃跑 — 向 home 方向移动（无 snapshot 可用，简化路径）。
- * 释放 assignment（如有），然后直接 moveTowardRoom 到 home。
- * 不使用 flee() 中的 spawn/exit 逻辑 — 远矿房/中间房无 snapshot，
- * 且最快逃生路径是回到 home 房的塔防范围。
+ * 远矿角色逃跑 — 释放 assignment 后直接 moveTowardRoom 回 home。
+ * 不使用 flee() 的 spawn/exit 逻辑：远矿房/中间房无 snapshot，最快逃生路径是回 home 塔防范围。
  */
 export function fleeToHome(creep: Creep): void {
   if (creep.memory.assignment) {
@@ -106,30 +90,11 @@ export function fleeToHome(creep: Creep): void {
 }
 
 /**
- * 逃跑到安全位置 — 遵循约束 G-DF-02/03/09。
- * 策略分三级：
- *   1) spawn 比最近敌人更近时走向 spawn（塔防范围内）
- *   2) spawn 不可达时，走向敌人反向出口（避免冲向敌人）
- *   3) 无安全出口时走向任意最远出口
- * flee 期间释放普通 assignment（G-SM-05），仅移动不执行经济动作。
- *
- * P0-2 修复：haul 的"防御圈内安全充能"逻辑已从此函数移除，
- * 改由 RolePolicy.onFlee 钩子在角色层实现。
- * flee() 现在只负责通用移动逻辑，不感知任何具体角色。
- */
-/**
- * 战时集结避险（M11）— 小队威胁在场时非战斗 creep 的统一避险动作。
- *
- * 与各自 flee 的区别：flee 是局部逃离（散布全房被小队逐个点名的根源），
- * 集结是撤入核心锚点（storage 优先，无则 spawn）shelterRadius 圈内 —
- * 塔在核心区，圈内即塔火力覆盖：敌人追进来吃满塔伤，不追则收割失败。
- *
- * rampart 掩体：已站在自家 rampart 格上则原地锚定（掩体内近战打不到），
- * 不主动寻找空 rampart 格 — 核心区 rampart 几乎都叠在建筑格上
- * （creep 不可站立），逐格 lookFor 找空位是徒劳的 CPU 开销。
- *
- * 无核心设施（拓荒房/灾后废墟）退回通用 flee。
- * mode 置 flee — 威胁清除后 updateMode 的既有分支自动恢复工作状态。
+ * 战时集结避险（M11）— 小队威胁在场时非战斗 creep 撤入核心锚点（storage 优先，无则 spawn）
+ * shelterRadius 圈内：圈内即塔火力覆盖，敌人追进来吃满塔伤，不追则收割失败。
+ * rampart 掩体：已站自家 rampart 格则原地锚定，不主动找空 rampart 格（核心区 rampart 几乎
+ * 都叠在不可站立的建筑格上，逐格 lookFor 是徒劳 CPU）。无核心设施退回通用 flee；
+ * mode 置 flee — 威胁清除后 updateMode 既有分支自动恢复工作状态。
  */
 export function shelterAtCore(creep: Creep, snapshot: RoomSnapshot): void {
   if (creep.memory.assignment) {
@@ -150,6 +115,15 @@ export function shelterAtCore(creep: Creep, snapshot: RoomSnapshot): void {
   moveToTarget(creep, anchor, radius);
 }
 
+/**
+ * 逃跑到安全位置 — 遵循约束 G-DF-02/03/09。三级策略：
+ *   1) spawn 比最近敌人更近时走向 spawn（塔防范围内）
+ *   2) spawn 不可达时走向敌人反向出口（避免冲向敌人）
+ *   3) 无安全出口时走向任意最远出口
+ * flee 期间释放普通 assignment（G-SM-05），仅移动不执行经济动作。
+ * P0-2 修复：haul 的"防御圈内安全充能"已移入 RolePolicy.onFlee 钩子，
+ * flee() 只负责通用移动逻辑，不感知任何具体角色。
+ */
 export function flee(creep: Creep, snapshot: RoomSnapshot): void {
   // G-SM-05: flee 期间释放普通 assignment，仅移动到安全位置。
   if (creep.memory.assignment) {

@@ -41,15 +41,10 @@ export function phaseAllowed(phase: LayoutPhase, rcl: number): boolean {
 }
 
 /**
- * 将蓝图转为 BuildTask 候选列表。
- * 每个候选包含验证结果，调用方根据验证结果决定是否推入 BuildQueue。
- *
- * 只生成当前 RCL 允许的 phase 的任务；
- * 越界或验证失败的候选仍返回（带失败原因），供调试和 blocked 记录。
- *
- * overrides：cell.key → packed 替代位置（重定位持久化，存 segment）。
- * 命中时直接使用替代坐标而非蓝图偏移 —— 墙/占用导致 cell 搬家后，
- * 后续规划周期不必重新搜索。
+ * 蓝图 → BuildTask 候选（含验证结果，调用方决定是否入队）。
+ * 只生成当前 RCL 允许的 phase；失败候选仍返回（供调试和 blocked 记录）。
+ * overrides：cell.key → packed 替代位置（重定位持久化，存 segment）—
+ * 命中时用替代坐标而非蓝图偏移，墙/占用搬家后不必重新搜索。
  */
 export function blueprintToTasks(
   blueprint: Blueprint,
@@ -65,7 +60,6 @@ export function blueprintToTasks(
   const candidates: BuildTaskCandidate[] = [];
 
   for (const cell of blueprint.cells) {
-    // 只处理当前 RCL 允许的 phase。
     if (!phaseAllowed(cell.phase, rcl)) continue;
 
     const override = overrides?.get(cell.key);
@@ -101,15 +95,9 @@ const RELOCATE_OFFSETS: ReadonlyArray<readonly [number, number]> = [
 ];
 
 /**
- * 为验证失败的可移动 cell 寻找替代位置（fallback relocation）。
- *
- * 适用：cell 落在墙/占用/密封格。依次尝试同 parity 的 Chebyshev-2 邻居，
- * 第一个通过完整验证（含密封守卫）且不与蓝图/队列位置冲突的位置胜出。
- *
- * forbidden：禁止落子的 packed 位置（全部蓝图 cell 绝对坐标 + 队列任务坐标），
- * 防止两个 cell 被重定位到同一格。
- *
- * 返回新候选（key 不变、pos 更新），找不到返回 undefined。
+ * 为验证失败的 cell 找替代位置：依次尝试同 parity 的 Chebyshev-2 邻居，
+ * 第一个通过完整验证且不与 forbidden（全部蓝图 cell 绝对坐标 + 队列任务坐标）
+ * 冲突的胜出。返回 key 不变、pos 更新的候选；找不到返回 undefined。
  */
 export function relocateCandidate(
   candidate: BuildTaskCandidate,
@@ -134,30 +122,21 @@ export function relocateCandidate(
   return undefined;
 }
 
-/**
- * 从候选列表中筛选可立即入队的安全任务。
- * 过滤掉 terrain/occupied/seal 等永久失败的任务。
- */
+/** 筛选可立即入队的安全任务（过滤 terrain/occupied/seal 等永久失败）。 */
 export function filterValidCandidates(
   candidates: readonly BuildTaskCandidate[],
 ): BuildTaskCandidate[] {
   return candidates.filter(c => c.validation === "ok" || c.validation === "rcl" || c.validation === "dependency" || c.validation === "site-limit");
 }
 
-/**
- * 从候选列表中提取永久失败的任务（用于 blocked 记录）。
- * seal（建筑孤岛）属永久失败：除非邻居结构消失，否则永不放行。
- */
+/** 提取永久失败任务（用于 blocked 记录）；seal 除非邻居消失否则永不放行。 */
 export function extractBlockedCandidates(
   candidates: readonly BuildTaskCandidate[],
 ): BuildTaskCandidate[] {
   return candidates.filter(c => c.validation === "terrain" || c.validation === "occupied" || c.validation === "seal");
 }
 
-/**
- * 将候选转为 BuildTask 对象（用于推入 BuildQueue）。
- * state 初始为 "queued"。
- */
+/** 候选 → BuildTask（state 初始 "queued"，推入 BuildQueue）。 */
 export function candidateToBuildTask(
   candidate: BuildTaskCandidate,
 ): BuildTask {
@@ -191,9 +170,8 @@ export function createSourceContainerTasks(
   // 已有 container + site 数已达上限。
   if (existingContainers + containerSites >= maxContainers) return candidates;
 
-  // 统计真正覆盖 source 的 container 数（紧邻某 source 的 container / site）。
-  // 不能用 existingContainers（含 controller container）对比 source 数 —— 否则
-  // controller container 会被误算进 source 覆盖，导致被毁的 source container 永不补建。
+  // 只统计紧邻 source 的 container/site：existingContainers 含 controller
+  // container，误用会导致被毁的 source container 永不补建。
   const adjacentToSource = (x: number, y: number): boolean =>
     snapshot.sources.some(s => Math.abs(s.pos.x - x) <= 1 && Math.abs(s.pos.y - y) <= 1);
   const sourceContainerCount = snapshot.containers.filter(c => adjacentToSource(c.pos.x, c.pos.y)).length;
@@ -203,10 +181,8 @@ export function createSourceContainerTasks(
   if (sourceContainerCount + sourceContainerSites >= snapshot.sources.length) return candidates;
 
   for (const source of snapshot.sources) {
-    // 检查 source 旁是否已有 container 或 site。
     if (hasAdjacentStructure(source.pos.x, source.pos.y, snapshot, STRUCTURE_CONTAINER)) continue;
 
-    // 寻找相邻可建造位置。
     const adjacentPos = findAdjacentBuildable(source.pos, room, snapshot, options);
     if (adjacentPos) {
       candidates.push({
@@ -224,11 +200,8 @@ export function createSourceContainerTasks(
 }
 
 /**
- * 为 controller 生成 container 任务。
- *
- * 老玩家关键认知：controller container 在 RCL2 就应建造（container RCL2 即解锁），
- * 它让 upgrader 站桩升级（0 通勤），升级吞吐提升约 2 倍。RCL2→RCL3 是整个游戏
- * 最漫长的 grind，越早建好 controller container 越早摆脱慢速升级。
+ * controller container 任务。老玩家认知：RCL2 即建（container RCL2 解锁），
+ * upgrader 站桩 0 通勤升级，吞吐约 2 倍 — RCL2→RCL3 是最漫长 grind。
  */
 export function createControllerContainerTask(
   snapshot: RoomSnapshot,
@@ -239,7 +212,6 @@ export function createControllerContainerTask(
   if (!snapshot.controller) return undefined;
 
   const controller = snapshot.controller;
-  // 检查 controller 旁是否已有 container 或 site。
   if (hasAdjacentStructure(controller.pos.x, controller.pos.y, snapshot, STRUCTURE_CONTAINER)) return undefined;
 
   const maxContainers = CONTROLLER_STRUCTURES[STRUCTURE_CONTAINER]?.[snapshot.rcl] ?? 0;
@@ -264,23 +236,12 @@ export function createControllerContainerTask(
 }
 
 /**
- * 判断候选格 (x,y) 在运行时是否会被分类为期望的 link 角色。
- *
- * 复用 link-system 运行时的 classifyLinkRole（最近锚获胜，anchorRange=2），
- * 闭合「放置意图」与「运行时分类」之间的裂缝：
- *
- * 病灶 — 当 source 离核心较近（source 与 storage 的 Chebyshev 距离 ≤ 4）时，
- * source 八邻域中某些格到 storage 比到该 source 更近，运行时被 classifyLinkRole
- * 判为 storage 而非 source。放置侧（findAdjacentBuildable）只保证几何相邻、
- * 不保证角色，会把 source link 建在该格上。后果：harvester 的 sourceAdjacentLink
- * 要求 role==="source" 才灌能 → 该 link 永不被灌 → 被 link-system 当成第二个
- * storage link，而 planLinkTransfers 用 find 只取第一个 storage link → 第二个
- * storage link 永久惰化，RCL5 仅有的 2 个 link 槽位被静默浪费一个。
- *
- * 修复 — 放置侧只接受运行时分类与意图一致的格子，从根上消除误分类。
- *
- * anchorRange 取 2，必须与 CONFIG.economy.link.anchorRange 及 classifyLinkRole
- * 默认值保持一致（放置侧为纯函数不访问 CONFIG，此处用字面量，改动需三处同步）。
+ * 候选格运行时是否会被分类为期望 link 角色 — 闭合「放置意图」与「运行时分类」裂缝：
+ * source 离 storage 近时（Chebyshev ≤ 4），source 八邻域部分格会被 classifyLinkRole
+ * 判为 storage → harvester 拒灌 → 该 link 永不被灌，RCL5 仅有的 2 个 link 槽位被
+ * 静默浪费一个。放置侧只接受角色一致的格，从根上消除误分类。
+ * anchorRange 取 2：必须与 CONFIG.economy.link.anchorRange / classifyLinkRole 默认值
+ * 同步（放置侧纯函数不访问 CONFIG，改动需三处同步）。
  */
 function linkRoleMatch(
   snapshot: RoomSnapshot,
@@ -307,21 +268,12 @@ function linkRolePredicate(
 }
 
 /**
- * W7N3 定位（2026-08-01）：source link 的可喂性校验。
- *
- * 旧放置逻辑只验证「link 贴 source（role=source）+ 可建造」，不验证存在
- * 「可喂站桩格」——一个可走、未占用、同时贴 source（range<=1，能采）与
- * 贴 link（range<=1，能灌）的格。W7N3 source-2 实证：link 放 (39,7) 后两个
- * 双贴格 (38,7)/(39,6) 全是墙，唯一可站格 (37,7) 被 container 占用 →
- * link 建成即死（能量恒 0），harvester 只能倒 container，该 link 占一个
- * RCL 槽位且骗过「紧邻 source 即跳过」逻辑永不补位。
- *
- * 放置侧在生成任务前用本函数过滤候选；运行时 harvest.ts findSourceLinkStand
- * 用同一几何约束，两处口径一致。
- *
- * 容器格例外：harvester 站桩于 source container 之上（range0 倒能），若 link
- * 贴容器（range<=1），容器格即有效站位——occupiedSet 会排除容器格，故单独
- * 传入 containerTiles 放行。
+ * source link 可喂性校验（W7N3 定位，2026-08-01）：旧逻辑只验证「link 贴 source +
+ * 可建造」，不验证存在可喂站桩格（可走、未占用、同时贴 source 与 link）。W7N3
+ * source-2 实证 link 建在 (39,7) 后双贴格全墙 → link 建成即死（能量恒 0）且骗过
+ * 「紧邻 source 即跳过」永不补位。放置侧过滤候选，运行时 harvest.ts
+ * findSourceLinkStand 用同一几何约束，两处口径一致。
+ * 容器格例外：harvester 可站桩于 source container（range0 倒能），containerTiles 放行。
  */
 export function hasSourceLinkFeedStand(
   linkX: number,
@@ -349,16 +301,11 @@ export function hasSourceLinkFeedStand(
 }
 
 /**
- * 为 source 生成 link 任务（RCL5+）。
- * source link 紧邻 source 放置，harvester 采矿后直接 transfer 到 link，
- * 由 link 系统瞬移到 controller/storage link，替代 hauler 长途往返。
- *
- * 队列感知：`queuedLinkCount` 传入当前 BuildQueue 中已有的 link 任务数
- * （含所有角色的 link 任务），防止超额分配 RCL 上限内的 link 槽位。
- *
- * 数量限制：`maxNew` 限制本次调用最多创建的新 source link 数。
- * layout-planner 分两趟调用：第一趟 maxNew=1 保证 storage link 有槽位；
- * 第二趟 maxNew=Infinity 放置剩余 source link。
+ * source link 任务（RCL5+）：紧邻 source 放置，harvester 直灌 link 瞬移
+ * 到 controller/storage，替代 hauler 长途往返。
+ * queuedLinkCount：BuildQueue 中已有 link 任务数（防超额分配槽位）。
+ * maxNew：本趟上限 — layout-planner 两趟调用：先 maxNew=1 保 storage link
+ * 槽位，再 maxNew=Infinity 放剩余 source link。
  */
 export function createSourceLinkTasks(
   snapshot: RoomSnapshot,
@@ -374,7 +321,6 @@ export function createSourceLinkTasks(
   const linkSites = snapshot.constructionSites.filter(
     s => s.structureType === STRUCTURE_LINK,
   ).length;
-  // 队列中的 link 任务也算占用槽位 — 防止超额分配。
   if (existingLinks + linkSites + queuedLinkCount >= maxLinks) return candidates;
 
   const remainingSlots = maxLinks - existingLinks - linkSites - queuedLinkCount;
@@ -385,9 +331,8 @@ export function createSourceLinkTasks(
 
   for (const source of snapshot.sources) {
     if (candidates.length >= limit) break;
-    // W7N3 修复：旧逻辑「紧邻 source 即跳过」会把死 link（无可喂站桩格）也
-    // 当成已覆盖 → 错误跳过、死 link 永不被替换。改为按可喂性判定：
-    // 已有紧邻 link/site 且存在可喂站桩格 → 跳过；死 link → 继续尝试补位。
+    // W7N3 修复：按可喂性判定而非「紧邻即跳过」— 死 link（无可喂站桩格）不算
+    // 已覆盖，继续尝试补位；已有紧邻 link/site 且可喂才跳过。
     const adjacentLinkFeedable = [
       ...snapshot.links,
       ...snapshot.constructionSites.filter(s => s.structureType === STRUCTURE_LINK),
@@ -399,9 +344,8 @@ export function createSourceLinkTasks(
       ),
     );
     if (adjacentLinkFeedable) continue;
-    // 角色感知选位：只接受运行时分类为 source 的邻格（闭合放置意图与运行时分类）。
-    // source 邻近 storage/controller 时，部分邻格会被 classifyLinkRole 判为
-    // storage/controller → harvester 拒灌 → 死 link。谓词过滤从根上避免。
+    // 角色感知选位：只接受运行时分类为 source 的邻格 — source 邻近 storage/controller
+    // 时部分邻格会被判为 storage/controller → harvester 拒灌 → 死 link。
     const adjacentPos = findAdjacentBuildable(
       source.pos, room, snapshot, options, linkRolePredicate(snapshot, "source"),
     );
@@ -409,8 +353,8 @@ export function createSourceLinkTasks(
     if (adjacentPos && options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
       continue;
     }
-    // 可喂性守卫：候选 link 必须存在可走、未占用的双贴站桩格（贴 source + 贴 link）。
-    // W7N3 source-2 实证：两个双贴格全是墙 → link 建成即死。放置前过滤，防再犯。
+    // 可喂性守卫：必须存在可走、未占用的双贴站桩格（W7N3 source-2 实证
+    // 双贴格全墙 → link 建成即死），放置前过滤。
     if (adjacentPos && !hasSourceLinkFeedStand(
       adjacentPos.x, adjacentPos.y, source.pos.x, source.pos.y, terrain, occupiedSet, containerTiles,
     )) {
@@ -431,11 +375,9 @@ export function createSourceLinkTasks(
 }
 
 /**
- * 为 controller 生成 link 任务（RCL5+）。
- * controller link 紧邻 controller 放置，upgrader 站桩 withdraw 取能，
- * 能量由 source link 瞬移送入，实现 0 通勤站桩升级。
- *
- * 队列感知：`queuedLinkCount` 传入当前 BuildQueue 中已有的 link 任务数。
+ * controller link 任务（RCL5+）：紧邻 controller，upgrader 站桩 withdraw 取能，
+ * 能量由 source link 瞬移送入，0 通勤站桩升级。
+ * queuedLinkCount：BuildQueue 中已有 link 任务数。
  */
 export function createControllerLinkTask(
   snapshot: RoomSnapshot,
@@ -466,12 +408,9 @@ export function createControllerLinkTask(
 }
 
 /**
- * 判断房间是否应该有 controller link（RCL5+ + 无相邻 link + 槽位未满）。
- *
- * P1-3 fallback 链：
- * layout-planner 用此谓词判断 createControllerLinkTask 返回 undefined 是否
- * 表示「几何放不下」（应触发 fallback / 标记 linkConstrained），还是「正常跳过」
- *（已建成 / 槽位满 / RCL 不足）。
+ * 是否应有 controller link（RCL5+ + 无相邻 link + 槽位未满）。
+ * P1-3 fallback 链：layout-planner 以此区分「几何放不下」（标记 linkConstrained）
+ * 与「正常跳过」（已建成 / 槽位满 / RCL 不足）。
  */
 export function shouldHaveControllerLink(
   snapshot: RoomSnapshot,
@@ -494,16 +433,11 @@ export function shouldHaveControllerLink(
 }
 
 /**
- * 为 storage 生成 link 任务（RCL5+）。
- * storage link 紧邻 storage 放置（range <= 2），作为 link 网络的「最后一公里」：
- * source link 能量瞬移到 storage link，hauler 从 storage link 排空到 storage。
- *
- * 优先级 = 1（与 controller link 同级）：高于第二个 source link（priority 2）。
- * 调用顺序（layout-planner stage 2，2026-08-02 修订）：source(1) → controller →
- * storage → source(rest)。RCL5 仅 2 槽位时落在 source + controller（MVC 配置），
- * storage 在 RCL6 才有槽位；若 controller 几何失败，storage 顶上作为 fallback。
- *
- * 队列感知：`queuedLinkCount` 传入当前 BuildQueue 中已有的 link 任务数。
+ * storage link 任务（RCL5+）：紧邻 storage（range ≤ 2），link 网络「最后一公里」，
+ * hauler 从 storage link 排空到 storage。
+ * priority 1（与 controller link 同级，高于第二 source link）；调用顺序
+ * （stage 2，2026-08-02）：source(1) → controller → storage → source(rest) —
+ * RCL5 落 source+controller，controller 几何失败时 storage 顶上。
  */
 export function createStorageLinkTask(
   snapshot: RoomSnapshot,
@@ -514,8 +448,7 @@ export function createStorageLinkTask(
   if (!shouldHaveStorageLink(snapshot, queuedLinkCount)) return undefined;
   const storage = snapshot.storage!;
 
-  // 在 storage 附近 1 格内寻找可建造位置（link 不需要站桩位，只需紧邻 storage）。
-  // 角色感知：只接受运行时分类为 storage 的邻格（闭合放置意图与运行时分类）。
+  // 角色感知：只接受运行时分类为 storage 的邻格（link 无需站桩位）。
   const adjacentPos = findAdjacentBuildable(
     storage.pos, room, snapshot, options, linkRolePredicate(snapshot, "storage"),
   );
@@ -529,9 +462,7 @@ export function createStorageLinkTask(
     key: `logistics.link.storage`,
     pos: adjacentPos,
     structureType: STRUCTURE_LINK,
-    // 优先级 1：与 controller link 同级，高于第二个 source link（priority 2）。
-    // layout-planner 调用顺序（2026-08-02 修订）：source(1) → controller →
-    // storage → source(rest)。RCL5 落 source+controller，RCL6 起 storage 入网。
+    // 优先级 1：与 controller link 同级（RCL5 落 source+controller，RCL6 起 storage 入网）。
     priority: 1,
     phase: "late",
     validation: "ok",
@@ -539,10 +470,9 @@ export function createStorageLinkTask(
 }
 
 /**
- * 判断房间是否应该有 storage link（RCL5+ + 有 storage + 无相邻 link + 槽位未满）。
- *
- * P1-3 fallback 链：layout-planner 用此谓词判断 createStorageLinkTask 返回
- * undefined 是否表示「几何放不下」（应标记 linkConstrained），还是「正常跳过」。
+ * 是否应有 storage link（RCL5+ + 有 storage + 无相邻 link + 槽位未满）。
+ * P1-3 fallback 链：layout-planner 以此区分「几何放不下」（标记 linkConstrained）
+ * 与「正常跳过」。
  */
 export function shouldHaveStorageLink(
   snapshot: RoomSnapshot,
@@ -565,11 +495,9 @@ export function shouldHaveStorageLink(
 }
 
 /**
- * 为 mineral 生成 extractor 任务（RCL6+）。
- *
- * extractor 必须建在 mineral 矿位上——矿位本身就是合法建造点，
- * 因此不走 validateBuildCell 的 occupied 检查（矿会被误判为占用）。
- * 补齐「extractor → harvestMineral → hauler 运回」产业链的第一环。
+ * extractor 任务（RCL6+）：必须建在 mineral 格上，不走 validateBuildCell 的
+ * occupied 检查（矿位会被误判为占用）；补齐「extractor → harvestMineral →
+ * hauler 运回」产业链第一环。
  */
 export function createExtractorTask(
   snapshot: RoomSnapshot,
@@ -597,12 +525,9 @@ export function createExtractorTask(
 }
 
 /**
- * 为 mineral 生成 container 任务（RCL6+，需 extractor）。
- *
- * mineral miner 站桩采矿后把矿物倒入此 container，hauler 再搬到 terminal/storage。
- * createSourceContainerTasks 只覆盖 sources、不含 mineral —— 故 mineral container
- * 单列。选位复用 findAdjacentBuildable（mineral 八邻域找非墙非占用格）。
- * priority 3（低于 source container / spawn 等，工业链非生存关键）。
+ * mineral container 任务（RCL6+，需 extractor）：miner 站桩倒矿，hauler 运走。
+ * createSourceContainerTasks 只覆盖 sources，故 mineral container 单列。
+ * priority 3（工业链非生存关键）。
  */
 export function createMineralContainerTask(
   snapshot: RoomSnapshot,
@@ -614,7 +539,6 @@ export function createMineralContainerTask(
   const mineral = snapshot.minerals[0];
   if (!mineral) return undefined;
 
-  // mineral 旁已有 container 或 site 则不再生成。
   if (hasAdjacentStructure(mineral.pos.x, mineral.pos.y, snapshot, STRUCTURE_CONTAINER)) return undefined;
 
   const adjacentPos = findAdjacentBuildable(mineral.pos, room, snapshot, options);
@@ -648,18 +572,11 @@ function hasAdjacentStructure(
 }
 
 /**
- * 在目标位置附近寻找可建造位置。
- *
- * 站桩位感知：优先选择「旁边至少有一个可站立格」的位置。
- * harvester/upgrader 站桩时需要站在 container 相邻格，若 container 落在
- * 三面是墙的凹位，站桩 creep 无处站立，退化成每 tick 挪一步。
- * 先收集所有可建造候选，优先返回有站立格的；都没有时回退到任意可建造格。
- *
- * predicate（可选）：候选格的额外准入条件（默认恒真）。link 放置传入
- * linkRolePredicate，只接受运行时角色分类与放置意图一致的格子 —— 闭合
- * 「放置意图」与「运行时分类」的裂缝（详见 linkRoleMatch 注释）。
- * 站立格偏好与回退路径都先经 predicate 过滤，container 等不传 predicate 的
- * 调用方行为完全不变。
+ * 在目标附近找可建造位置。站桩位感知：优先选「旁边有可站立格」的候选 —
+ * container 落在三面墙凹位则站桩 creep 无处站立（退化每 tick 挪一步），
+ * 全无时回退任意可建造格。
+ * predicate（可选，默认恒真）：link 放置传 linkRolePredicate，闭合放置意图与
+ * 运行时分类的裂缝；偏好与回退路径都先经其过滤，container 等调用方不变。
  */
 function findAdjacentBuildable(
   center: RoomPosition,
@@ -687,7 +604,7 @@ function findAdjacentBuildable(
   }
   if (candidates.length === 0) return undefined;
 
-  // 优先返回有相邻站立格的候选（站立格：非墙、边界内、非中心格）。
+  // 优先返回有相邻站立格的候选。
   for (const c of candidates) {
     if (hasStandingTile(c.x, c.y, center.x, center.y, terrain)) {
       return { ...c, roomName: center.roomName };
@@ -754,20 +671,13 @@ function buildOccupiedSet(
   return set;
 }
 
-// ─── 核心预规划道路 ─────────────────────────────────────────
+// ─── 核心预规划道路 ────────────────
 
 /**
- * 为棋盘格走道生成预规划道路。
- *
- * 老玩家认知：v2 棋盘格中结构在偶校验格，奇校验格是天然走道。
- * 如果等流量采样（100+ tick 窗口 × 2）再铺路，前 200 tick hauler 在 plain 上走
- * （cost 2），效率减半。预规划走道格铺 road 让 hauler 从第一天就 cost 1。
- *
- * 策略：找到所有奇校验格（dx+dy 为奇数），且正交相邻 ≥ 2 个已建/已规划结构位置，
- * 这些格子一定是高频通行路径。生成 priority 3 道路任务（背景建造，不拖慢 RCL 冲刺）。
- *
- * 只在 RCL2+ 生成（至少有第一批 extension 后走道才有意义）。
- * 每周期最多生成 maxRoadsPerCycle 条（避免淹没 buildQueue）。
+ * 棋盘格走道预规划道路 — 等流量采样（100+ tick × 2）再铺路会让前 200 tick
+ * hauler 走 plain（cost 2）效率减半；预铺让第一天就 cost 1（老玩家认知）。
+ * 奇校验格（天然走道）且正交相邻 ≥ 2 个已建/已规划结构 → 高频通行路径，
+ * priority 3 背景建造。RCL2+ 生成；每周期上限 maxRoadsPerCycle 条防淹没队列。
  */
 export function createCoreRoadTasks(
   blueprint: Blueprint,
@@ -784,23 +694,21 @@ export function createCoreRoadTasks(
 
   const terrain = room.getTerrain();
 
-  // 收集当前 RCL 已建/已规划的结构绝对位置（偶校验格）。
+  // 当前 RCL 已建/已规划结构绝对位置（偶校验格）。
   const structurePositions = new Set<number>();
   for (const cell of blueprint.cells) {
     if (cell.minRcl > snapshot.rcl) continue;
     structurePositions.add(packPos(anchorX + cell.dx, anchorY + cell.dy));
   }
-  // 加入已有结构位置。
   for (const s of [...snapshot.spawns, ...snapshot.extensions, ...snapshot.towers, ...snapshot.containers, ...snapshot.links]) {
     structurePositions.add(packPos(s.pos.x, s.pos.y));
   }
   if (snapshot.storage) structurePositions.add(packPos(snapshot.storage.pos.x, snapshot.storage.pos.y));
 
-  // 扫描核心区域（±7）内的奇校验格，找正交相邻 ≥ 2 个结构的走道格。
+  // 扫描核心区（±7）奇校验格：正交相邻 ≥ 2 结构即高频走道。
   let generated = 0;
   for (let dx = -7; dx <= 7 && generated < maxRoadsPerCycle; dx++) {
     for (let dy = -7; dy <= 7 && generated < maxRoadsPerCycle; dy++) {
-      // 只要奇校验格（走道格）。
       if ((dx + dy) % 2 === 0) continue;
 
       const x = anchorX + dx;
@@ -809,7 +717,6 @@ export function createCoreRoadTasks(
       if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
       if (occupiedSet.has(packPos(x, y))) continue;
 
-      // 计算正交相邻（4 方向）的结构数量。
       let adjacentStructures = 0;
       const orthogonal: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
       for (const [ox, oy] of orthogonal) {
@@ -835,7 +742,7 @@ export function createCoreRoadTasks(
   return candidates;
 }
 
-// ─── 动态防御工事 ─────────────────────────────────────────
+// ─── 动态防御工事 ────────────────
 
 /** 防御工事生成选项。 */
 export interface DefenseOptions {
@@ -853,11 +760,9 @@ export const DEFAULT_DEFENSE_OPTIONS: DefenseOptions = {
   // P0-3：从 4 降为 3 — RCL3 是"刚有 Tower 但无 rampart"的最脆弱窗口期。
   minRcl: 3,
   defenseRadius: 7,
-  // v3 增强：从 3→5 — 旧 3 格 rampart 线在宽出口处留缺口，敌人可绕行；
-  // 5 格形成更连续的封锁面，迫使入侵者必须摧毁而非绕路。
+  // v3 增强：3→5 — 旧 3 格线在宽出口留缺口可绕行；5 格形成连续封锁面。
   lineLength: 5,
-  // v3 增强：从 1→2 — 单周期只铺 1 条线防线太薄，2 条线提供纵深，
-  // 第一条被突破后第二条为 tower 争取额外输出窗口。
+  // v3 增强：1→2 — 2 条线提供纵深，首线被破后第二线为 tower 争取输出窗口。
   maxLinesPerCycle: 2,
 };
 
@@ -879,20 +784,11 @@ function octantIndex(dx: number, dy: number): number {
 }
 
 /**
- * 为房间生成防御工事任务（出口走廊封堵线）。
- *
- * 老玩家认知：单个 rampart 不挡路，敌人直接绕过去。
- * 有意义的防御 = 垂直于出口方向的连续 rampart 线（3-5 个），
- * 迫使入侵者必须摧毁或绕路，为 tower 争取 5-10 tick 输出窗口。
- *
- * 策略：
- *   1. 把出口按相对核心的方位归入 8 个扇区
- *   2. 对暴露扇区（出口最多的优先），在 核心 + 方向 × radius 处
- *      沿垂直方向铺设 lineLength 个 rampart
- *   3. 每个 rampart 吸附到最近可建造空格（避免落在墙上）
- *   4. 每周期最多生成 maxLinesPerCycle 条线（不拖慢 RCL 冲刺）
- *
- * 纯函数 — 出口位置由调用方通过 room.find(FIND_EXIT) 采集后传入。
+ * 出口走廊封堵线 — 单个 rampart 不挡路（敌人直接绕过），垂直于出口方向的
+ * 连续 rampart 线迫使入侵者摧毁或绕路，为 tower 争取 5-10 tick 输出窗口。
+ * 暴露扇区（出口多者优先）按核心+方向×radius 铺 lineLength 个 rampart，
+ * 逐格吸附最近可建空格；每周期最多 maxLinesPerCycle 条线。
+ * 出口位置由调用方 room.find(FIND_EXIT) 采集后传入。
  */
 export function createDefenseTasks(
   snapshot: RoomSnapshot,
@@ -925,7 +821,7 @@ export function createDefenseTasks(
   }
   if (exitCountByOctant.size === 0) return candidates;
 
-  // 暴露扇区按出口数量降序，取前 N 条线。
+  // 暴露扇区按出口数降序，取前 maxLinesPerCycle 条。
   const exposedOctants = [...exitCountByOctant.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, config.maxLinesPerCycle)
@@ -939,11 +835,11 @@ export function createDefenseTasks(
     const vec = OCTANT_VECTORS[octant]!;
     const perp = perpendicular(vec);
 
-    // 线的中心点：核心 + 出口方向 × radius。
+    // 线中心 = 核心 + 方向 × radius。
     const centerX = core.pos.x + vec[0] * config.defenseRadius;
     const centerY = core.pos.y + vec[1] * config.defenseRadius;
 
-    // 沿垂直方向铺设 lineLength 个 rampart（居中分布）。
+    // 沿垂直方向居中铺 lineLength 个 rampart。
     const halfLen = Math.floor(config.lineLength / 2);
     for (let i = -halfLen; i <= halfLen; i++) {
       const idealX = centerX + perp[0] * i;
@@ -952,7 +848,7 @@ export function createDefenseTasks(
       const pos = findBuildableNear(idealX, idealY, terrain, localOccupied);
       if (!pos) continue;
 
-      // 标记为已占用，防止同线内重复落子。
+      // 标记已占用，防同线内重复落子。
       localOccupied.add(packPos(pos.x, pos.y));
 
       candidates.push({

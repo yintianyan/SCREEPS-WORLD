@@ -1,22 +1,10 @@
 /**
- * 约束推导结构放置 — 从地形约束推导每个结构的位置。
- *
- * 替代固定模板偏移（compact-core-v2 的 dx/dy），用贪心算法在候选格中
- * 为每个结构找满足所有约束且评分最高的位置。
- *
- * 约束集：
- *   1. 偶校验（dx+dy 偶数）— 棋盘格走道不变量
- *   2. 非墙、非越界
- *   3. 不重叠（occupiedSet）
- *   4. 不密封（wouldSeal 守卫）
- *   5. 到锚点距离 <= maxRadius
- *   6. Lab 集群：反应 trio 必须相互 range <= 2
- *
- * 放置顺序（优先级从高到低）：
- *   spawn > storage > tower > link > terminal > factory > lab > extension
- *   高优先级结构先占位，低优先级结构在剩余格中选择。
- *
- * 纯函数 — 不访问 Game/Memory，所有输入通过参数注入。
+ * 约束推导结构放置 — 替代 compact-core-v2 固定 dx/dy 模板，贪心为每个结构
+ * 在候选格中选满足全部约束且评分最高的位置。约束：偶校验棋盘格走道、非墙、
+ * 不重叠、不密封、距锚点 ≤ maxRadius、lab 集群相互 range ≤ 2。
+ * 放置顺序 spawn > storage > tower > link > terminal > factory > lab > extension
+ * （高优先级先占位）；调用方为 layout-planner（每 50 tick 规划）。
+ * 纯函数 — 不访问 Game/Memory，输入全参数注入。
  */
 
 import type { DistanceField } from "./terrain-analysis";
@@ -40,11 +28,9 @@ export interface PlacerConfig {
   /** 最低开放度门槛（默认 2，确保结构周围有走道）。 */
   readonly minOpenness: number;
   /**
-   * 密封守卫容忍度（2026-08-01）：type → 是否允许「正交全堵但斜向可达」。
-   * 默认 0（严格正交守卫，旧语义）。extension 容忍 1：破碎房（anchorScore 低）
-   * 最后几格正交常被邻居占满、斜向仍可站（transfer 射程 1 含对角），
-   * 严格正交守卫下 RCL7/8 批次永远放不下 → 静默缺建（W7N3 实证：ext 41/60）。
-   * 斜向可站保留填充/维修可达性，能量容量收益 > 正交美观损失。
+   * 密封守卫容忍度（2026-08-01）：type → 允许「正交全堵但斜向可达」。
+   * extension 容忍 1：破碎房最后几格正交常被占满、斜向仍可站（transfer 射程 1
+   * 含对角），严格正交守卫下 RCL7/8 批次永远放不下 → 静默缺建（W7N3 实证 ext 41/60）。
    */
   readonly sealTolerance?: Readonly<Record<string, number>>;
 }
@@ -58,12 +44,9 @@ export const DEFAULT_PLACER_CONFIG: PlacerConfig = {
 };
 
 /**
- * 自适应搜索半径的硬上限。
- *
- * 默认 maxRadius=7 对齐 compact-core-v2 的 ±6 外环；当受限地形（多墙）下
- * 候选池不足以容纳所需结构时，placeStructures 自动外扩搜索半径直到满足或达此上限。
- * 15 覆盖锚点 ±15 的 31×31 区域（约大半个房间）——再大说明房间本身过于破碎，
- * 应触发缺口告警（见 placeStructures 末段）而非无限扩搜浪费 CPU。
+ * 自适应搜索半径硬上限：候选池不足时 placeStructures 自动外扩至满足或达此上限。
+ * 15 覆盖锚点 ±15（约大半个房间）——再大说明房间过于破碎，应触发缺口告警
+ * （placeStructures 末段）而非无限扩搜浪费 CPU。
  */
 const MAX_SEARCH_RADIUS = 15;
 
@@ -76,16 +59,11 @@ export interface StructureBatch {
 }
 
 /**
- * 放置策略元数据（2026-08-01 单一真相源改造）。
- *
- * 数量一律从 CONTROLLER_STRUCTURES 派生（expectedStructureCounts），本表只保留
- * 策略信息（优先级 + 阶段），消灭「手写数量表 vs 游戏常量」双真相源漂移
- * （漏 observer/powerSpawn 即旧手写表的必然结果）。
- *
- * 明确排除的类型：
- *   - link：task-factory 按角色放置（source/storage/controller）
- *   - extractor：必须建在 mineral 格上，非自由放置
- *   - road/container/rampart/constructedWall：无限或防御/物流专用生成器
+ * 放置策略元数据（2026-08-01 单一真相源改造）：数量一律从 CONTROLLER_STRUCTURES
+ * 派生（expectedStructureCounts），本表只留策略（优先级 + 阶段），消灭
+ * 「手写数量表 vs 游戏常量」双真相源漂移（旧表必漏 observer/powerSpawn）。
+ * 排除类型：link（task-factory 按角色放置）、extractor（必须建在 mineral 格）、
+ * road/container/rampart/constructedWall（无限或专用生成器）。
  */
 const BUILD_STRATEGY: Readonly<Record<string, {
   readonly priority: (rcl: number) => BuildPriority;
@@ -98,8 +76,7 @@ const BUILD_STRATEGY: Readonly<Record<string, {
   },
   [STRUCTURE_STORAGE]: { priority: () => 0, phaseFor: () => "rcl4" },
   [STRUCTURE_EXTENSION]: {
-    // 旧手写表：RCL2-4 priority 1，RCL5+ priority 2（早期间歇性建造，
-    // 后期批量填充）。数量派生后策略档位也必须与旧行为逐级等价。
+    // 与旧手写表逐级等价：RCL2-4 priority 1，RCL5+ priority 2（早期间歇、后期批量填充）。
     priority: r => (r <= 4 ? 1 : 2),
     phaseFor: r => (r === 5 ? "late" : `rcl${r}` as LayoutPhase),
   },
@@ -141,19 +118,17 @@ export function expectedStructureCounts(rcl: number): Readonly<Record<string, nu
 }
 
 /**
- * 生成 RCL2..rcl 的增量放置批次（2026-08-01 派生版，替代手写 RCL_BATCHES）。
- *
- * 增量 = target(rcl) - target(rcl-1)；数量与旧手写表严格等价，额外补齐
- * observer/powerSpawn（RCL8 解锁 1）。策略（priority/phase）来自 BUILD_STRATEGY。
+ * RCL2..rcl 增量批次（2026-08-01 派生版，替代手写 RCL_BATCHES）：
+ * 增量 = target(rcl) - target(rcl-1)，数量与旧表严格等价，补齐 observer/
+ * powerSpawn（RCL8 解锁 1）；策略（priority/phase）来自 BUILD_STRATEGY。
  */
 export function buildRclBatches(rcl: number): StructureBatch[] {
   const batches: StructureBatch[] = [];
   let prev: Readonly<Record<string, number>> = {};
   for (let r = 2; r <= rcl; r++) {
     const current = { ...expectedStructureCounts(r) };
-    // 锚点 spawn 豁免：CONTROLLER_STRUCTURES 的 spawn 计数包含玩家/扩张
-    // 放置的锚点 spawn（不占批次），批次从第 2 个 spawn 开始派生 —
-    // 与旧手写表（RCL7 +1、RCL8 +1）逐级等价。
+    // 锚点 spawn（玩家/扩张放置）不在派生批次内：批次计数扣除 1，
+    // 从第 2 个 spawn 开始派生 — 与旧手写表（RCL7 +1、RCL8 +1）等价。
     if ((current[STRUCTURE_SPAWN] ?? 0) > 0) {
       current[STRUCTURE_SPAWN] = (current[STRUCTURE_SPAWN] ?? 0) - 1;
     }
@@ -194,19 +169,10 @@ interface CandidateTile {
 }
 
 /**
- * 预计算候选格列表 — 偶校验、边界内、非墙、开放度 >= minOpenness。
- *
- * 评分 = openness × 2 - distFromAnchor - energyPenalty
- *
- * - openness：周围走道越多越好（棋盘格不变量保证）
- * - distFromAnchor：离核心越近越好（减少 hauler 通勤）
- * - energyPenalty：离能量端点（source/controller）越远越好，
- *   让 storage/link 等物流结构优先落在靠近能量流转路径的位置。
- *
- * 按评分降序排列。
- *
- * @param energyEndpoints 能量端点位置（source/controller），用于计算能量流转距离惩罚。
- *   为空时退化为纯几何评分（向后兼容）。
+ * 预计算候选格列表 — 偶校验、边界内、非墙、开放度 ≥ minOpenness，按评分降序。
+ * 评分 = openness × 2 - distFromAnchor - energyPenalty：走道越多越好；离核心越近
+ * （减少 hauler 通勤）；离能量端点越近越差 — 让 storage/link 等物流结构优先落在
+ * 能量流转路径附近。energyEndpoints 为空时退化为纯几何评分（向后兼容）。
  */
 /** @internal 导出仅供单测验证 P2-N 增量与全量等价性。 */
 export function buildCandidateGrid(
@@ -223,7 +189,6 @@ export function buildCandidateGrid(
   // P2-N：增量模式 — prevCandidates 与 prevRadius 提供 且 maxRadius == prevRadius+1。
   const useIncremental = prevCandidates !== undefined && prevRadius !== undefined && maxRadius === prevRadius + 1;
 
-  // 候选格评分函数（提取避免增量/全量两份重复逻辑）。
   const scoreTile = (dx: number, dy: number): CandidateTile | undefined => {
     const x = anchor.x + dx;
     const y = anchor.y + dy;
@@ -244,13 +209,9 @@ export function buildCandidateGrid(
     return { x, y, score: openness * 2 - dist - energyPenalty };
   };
 
-  // P2-N：排序需确定性 tiebreaker — 同分元素按 (x,y) 升序兜底。
-  // 原因：JS 稳定排序保留输入序，但全量路径输入序为扫描序（dx/dy 升序），
-  // 增量路径输入序为「prev 排序序 + 新环带扫描序」，两者对同分元素产生不同
-  // 最终顺序 → 增量与全量不等价。加 (x,y) tiebreaker 后：
-  //   1) 全量路径扫描序本身就是 x/y 升序，tiebreaker 与之完全一致 → 无回归
-  //   2) 增量路径同分元素被强制对齐到 (x,y) 序 → 与全量严格相等
-  // 附带收益：代际稳定性提升 — 同分候选不再受输入顺序漂移影响。
+  // P2-N：确定性 tiebreaker 保证增量与全量等价 — 全量输入序为扫描序、增量输入序为
+  // 「prev 排序序 + 新环带序」，同分元素最终顺序不同；加 (x,y) 升序兜底后两者严格
+  // 相等（全量路径本就 x/y 升序，无回归），附带代际稳定性提升。
   const sortByScore = (a: CandidateTile, b: CandidateTile): number => {
     if (b.score !== a.score) return b.score - a.score;
     if (a.x !== b.x) return a.x - b.x;
@@ -258,7 +219,7 @@ export function buildCandidateGrid(
   };
 
   if (useIncremental) {
-    // 增量：复制 prev 候选，只评分新环带格（|dx| 或 |dy| == maxRadius），合并后重排序。
+    // 增量：只评分新环带格（|dx| 或 |dy| == maxRadius），与 prev 合并后重排序。
     const candidates: CandidateTile[] = [...prevCandidates!];
     for (let dx = -maxRadius; dx <= maxRadius; dx++) {
       for (let dy = -maxRadius; dy <= maxRadius; dy++) {
@@ -288,9 +249,8 @@ export function buildCandidateGrid(
 }
 
 /**
- * 检查在 (x,y) 放置障碍结构是否会密封。
- * 简化版 wouldSeal：检查自身 4 正交邻居中是否有 >= 1 个可站格。
- * （完整 wouldSeal 在 validation.ts 中，这里用轻量版避免循环依赖。）
+ * 轻量版 wouldSeal：自身 4 正交邻居是否 ≥1 可站格
+ * （完整版在 validation.ts，此处避免循环依赖）。
  */
 function wouldSealLocal(
   x: number,
@@ -306,11 +266,10 @@ function wouldSealLocal(
     if (nx < 1 || nx > 48 || ny < 1 || ny > 48) continue;
     if (getTerrain(nx, ny)) continue;
     if (occupied.has(packPos(nx, ny))) continue;
-    return false; // 找到可站格，不密封（旧语义快速路径）
+    return false; // 找到可站格
   }
-  // 容忍度分级（2026-08-01）：tolerance > 0 的类型允许「正交全堵但斜向可达」。
-  // 斜向距离 = transfer 射程 1（Chebyshev），creep 仍可站在对角格填充/维修 —
-  // 严格正交守卫会拒绝这些格，破碎房 RCL7/8 批次永远放不满（W7N3 实证）。
+  // 容忍度分级（2026-08-01）：tolerance > 0 允许「正交全堵但斜向可达」— 斜向距离
+  // = transfer 射程 1（Chebyshev），严格正交守卫会让破碎房 RCL7/8 批次放不满（W7N3 实证）。
   if (tolerance > 0) {
     const diagonal: [number, number][] = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
     for (const [dx, dy] of diagonal) {
@@ -322,15 +281,11 @@ function wouldSealLocal(
       return false; // 斜向可站 — 放行
     }
   }
-  return true; // 正交与斜向均无可站格 — 密封
+  return true; // 密封
 }
 
 /**
- * 为 lab 集群寻找相互 range <= 2 的位置组。
- *
- * 策略：从候选格中找第一个满足条件的 trio（3 个 lab 相互 Chebyshev <= 2）。
- * 如果 count > 3，继续找与已有 lab 集群 range <= 2 的额外位置。
- *
+ * lab 集群放置：找相互 Chebyshev ≤ 2 的 trio；count > 3 时续接既有集群。
  * @returns 找到的位置列表（可能少于 count）
  */
 function placeLabCluster(
@@ -344,11 +299,10 @@ function placeLabCluster(
   const placed: { x: number; y: number }[] = [...existingLabs];
   const result: { x: number; y: number }[] = [];
 
-  // 首批 lab 锚定 terminal（2026-08-02）：RCL6 第一批 lab 时 existingLabs
-  // 为空，第一个 lab 按通用评分落在 anchor 高分侧，terminal 后建 → lab
-  // 集群与物流枢纽分离（W8N3 实证：lab-terminal 均值 9.3）。有 terminal
-  // 时，第一个 lab 优先落在 terminal 邻域（<=3），后续 lab 续接该集群 —
-  // 老房（已有 lab）行为零变化，未来房 lab 从出生就贴物流枢纽。
+  // 首批 lab 锚定 terminal（2026-08-02）：第一批 lab 时 existingLabs 为空，
+  // 通用评分会把集群落在 anchor 高分侧、与后建的 terminal 分离（W8N3 实证
+  // lab-terminal 均值 9.3）；有 terminal 时首个 lab 优先落其邻域（≤3）。
+  // 老房（已有 lab）行为零变化。
   if (placed.length === 0 && terminalPos) {
     const terminalCandidates = candidates.filter(
       c => Math.abs(c.x - terminalPos.x) + Math.abs(c.y - terminalPos.y) <= 3,
@@ -360,16 +314,13 @@ function placeLabCluster(
       placed.push({ x: c.x, y: c.y });
       result.push({ x: c.x, y: c.y });
       occupied.add(packed);
-      break; // 只锚定第一个 lab
+      break; // 仅首个 lab 锚定
     }
   }
 
-  // 降级阶梯（2026-08-01）：破碎房（W7N3 lab 4/10）在既有 lab 集群 2 格内
-  // 已无可建格时，缺口永久挂起。按级放宽：
-  //   level 0：与既有 lab Chebyshev <= 2（反应 trio 契约，默认不变）
-  //   level 1：<= 3（宽松续接，仍保持集群连通）
-  //   level 2：自由放置（仅密封守卫；单 lab 可做矿物研究，优于永久缺口）
-  // 上级放不满才降级；开阔地形首级即放满，行为与旧实现完全一致。
+  // 降级阶梯（2026-08-01）：既有集群 2 格内无可建格时缺口永久挂起（W7N3 lab 4/10），
+  // 按级放宽：≤2（反应 trio 契约）→ ≤3（宽松续接）→ 自由放置（仅密封守卫，单 lab
+  // 可做矿物研究）。上级放不满才降级；开阔地形首级即放满，行为与旧实现一致。
   const maxRanges: number[] = [2, 3, Infinity];
   for (const maxRange of maxRanges) {
     if (result.length >= count) break;
@@ -380,7 +331,7 @@ function placeLabCluster(
         if (occupied.has(packed)) continue;
         if (wouldSealLocal(c.x, c.y, getTerrain, occupied)) continue;
 
-        // 与已有 lab 的 Chebyshev 距离约束（自由放置级跳过）。
+        // Chebyshev 距离约束（自由放置级跳过）。
         if (placed.length > 0 && isFinite(maxRange)) {
           const inRange = placed.some(
             l => Math.max(Math.abs(l.x - c.x), Math.abs(l.y - c.y)) <= maxRange,
@@ -388,7 +339,6 @@ function placeLabCluster(
           if (!inRange) continue;
         }
 
-        // 找到合法位置
         placed.push({ x: c.x, y: c.y });
         result.push({ x: c.x, y: c.y });
         occupied.add(packed);
@@ -403,34 +353,22 @@ function placeLabCluster(
 }
 
 /**
- * Tower 分桶配额 — 按 RCL 阶段决定 controller 侧 / anchor 侧配额。
- *
- * 设计目标：
- *   RCL3 (+1)：通用池（openness 评分倾向 anchor 侧）→ 1 anchor 塔
- *   RCL5 (+1)：全 controller 桶 → 1 controller 塔（累计 1 anchor + 1 controller）
- *   RCL7 (+1)：全 controller 桶 → 1 controller 塔（累计 1 anchor + 2 controller）
- *   RCL8 (+3)：1 controller + 2 anchor（累计 3 anchor + 3 controller）
- *
- * 硬约束（docs §3.7）：
- *   RCL5/7：至少 1 塔 anchor Chebyshev ≤ 5（由 RCL3 塔满足）
- *   RCL8：至少 2 塔 anchor Chebyshev ≤ 5（由 RCL8 批次的 2 anchor 塔满足）
- *
- * 通用池兜底：当 controller 桶或 anchor 桶因地形受限放不满时，
- * 剩余 need 走通用池（按 openness 评分），避免静默缺塔。
- *
- * @param phase 批次相位
- * @param need 本批次需放置数量
- * @returns controller 桶配额 + anchor 桶配额（剩余走通用池）
+ * Tower 分桶配额 — 按 RCL 阶段分配 controller 侧 / anchor 侧数量：
+ * RCL3 通用池（openness 倾向 anchor 侧）、RCL5/7 全 controller、RCL8 1 controller + 2 anchor
+ * （累计 3 anchor + 3 controller）。
+ * 硬约束（docs §3.7）：RCL5/7 至少 1 塔 anchor Chebyshev ≤ 5（RCL3 塔满足），
+ * RCL8 至少 2 塔（本批次 2 anchor 塔满足）。桶放不满时剩余走通用池，避免静默缺塔。
+ * @returns controller 桶 + anchor 桶配额（剩余走通用池）
  */
 function towerBucketQuota(
   phase: LayoutPhase,
   need: number,
 ): { controller: number; anchor: number } {
   switch (phase) {
-    case "late": // RCL5：全 controller
-    case "rcl7": // RCL7：全 controller
+    case "late": // RCL5/7：全 controller
+    case "rcl7":
       return { controller: need, anchor: 0 };
-    case "rcl8": // RCL8：1 controller + 2 anchor（硬约束至少 2 anchor ≤ 5）
+    case "rcl8": // RCL8：1 controller + 2 anchor（§3.7 至少 2 anchor ≤ 5）
       return { controller: Math.min(1, need), anchor: Math.max(0, need - 1) };
     default: // rcl3 等：通用池（openness 评分倾向 anchor 侧）
       return { controller: 0, anchor: 0 };
@@ -438,18 +376,10 @@ function towerBucketQuota(
 }
 
 /**
- * Tower 分桶放置 — controller 侧 + anchor 侧硬约束 + 通用池兜底。
- *
- * 三阶段放置：
- *   1. controller 桶：按距 controller 每 15 格分桶排序，优先落在 controller 射程高效区
- *      （官方衰减：20 格起降至最低 25% 伤害）
- *   2. anchor 桶：Chebyshev(anchor) ≤ 5 硬约束；≤ 5 候选不足时降级 ≤ 7；
- *      再不足走通用池。保证核心防御覆盖。
- *   3. 通用池兜底：剩余 need 按 candidates 原序（openness 评分降序）放置。
- *
- * 候选格被占用后从 occupied 集合排除，避免 controller 桶与 anchor 桶选同一格。
- *
- * @returns 放置位置列表（可能少于 need，由缺口告警机制兜底）
+ * Tower 分桶放置：controller 桶（距 controller 每 15 格分桶，落在射程高效区 —
+ * 官方衰减 20 格起降至最低 25% 伤害）→ anchor 桶（Chebyshev ≤ 5 硬约束，降级 ≤ 7）
+ * → 通用池兜底（candidates 原序）。桶间经 occupied 集合互斥选格。
+ * @returns 可能少于 need（缺口告警兜底）
  */
 function placeTowerBuckets(
   need: number,
@@ -479,7 +409,7 @@ function placeTowerBuckets(
     return placed;
   };
 
-  // 1. controller 桶：按距 controller 每 15 格分桶排序（近桶优先）
+  // 1. controller 桶：距 controller 每 15 格分桶，近桶优先
   if (quota.controller > 0) {
     const controllerSorted = [...candidates].sort((a, b) => {
       const bucketOf = (c: CandidateTile): number =>
@@ -497,10 +427,10 @@ function placeTowerBuckets(
       Math.max(Math.abs(c.x - anchor.x), Math.abs(c.y - anchor.y));
     const sortByScore = (a: CandidateTile, b: CandidateTile): number =>
       (b.score - a.score) || a.x - b.x || a.y - b.y;
-    // 紧桶：≤ 5
+    // 紧桶（≤5）
     const tightPool = candidates.filter(c => chebyshev(c) <= 5).sort(sortByScore);
     const placed = tryPlace(tightPool, quota.anchor);
-    // 降级：≤ 5 不够时放宽到 ≤ 7（排除已尝试的 ≤ 5）
+    // 降级：≤5 不足时放宽到 ≤7（排除已尝试的 ≤5）
     if (placed < quota.anchor) {
       const relaxedPool = candidates
         .filter(c => chebyshev(c) > 5 && chebyshev(c) <= 7)
@@ -509,7 +439,7 @@ function placeTowerBuckets(
     }
   }
 
-  // 3. 通用池兜底：剩余 need 按 candidates 原序放置
+  // 3. 通用池兜底：剩余 need 按 candidates 原序
   const remaining = need - result.length;
   if (remaining > 0) {
     tryPlace(candidates, remaining);
@@ -519,29 +449,15 @@ function placeTowerBuckets(
 }
 
 /**
- * 约束推导结构放置 — 主入口。
- *
- * 为指定 RCL 放置所有结构（从 RCL2 到目标 RCL 的累计）。
- * 返回放置结果列表，调用方转为 BuildTask 入队。
- *
- * @param anchor 核心锚点（主 spawn 位置）
- * @param field Distance Transform 距离场
- * @param getTerrain 地形查询（是否墙）
- * @param rcl 目标 RCL 等级
- * @param preOccupied 预占用位置（source/controller/mineral/已有结构）
- * @param committed 各结构类型的承诺数量（已建 + 在建 site + 队列任务）—
- *   放置时按批次抵扣，只为真实缺口生成放置（代际稳定性核心）。
- * @param config 放置配置（可选，缺省用 DEFAULT_PLACER_CONFIG）。
- * @param energyEndpoints 能量端点位置（source/controller），用于评分加权。
- *   传入时结构放置偏好靠近能量流转路径；不传时退化为纯几何评分。
- * @param existingLabPositions 已建 lab 位置 — 新增 lab 续接既有集群（相邻约束）。
- * @param roomName 房间名（可选）— 仅用于放置缺口告警日志定位，不影响放置逻辑。
- * @param controllerPos controller 位置（可选）— tower 分桶放置：RCL5+ 批次
- *   按「距 controller 每 15 格分桶」优先落在 controller 射程高效区
- *   （官方衰减：20 格起降至最低 25% 伤害）；RCL8 批次额外强制至少 2 塔
- *   anchor Chebyshev ≤ 5（核心防御覆盖硬约束，降级 ≤ 7）。
- * @param terminalPos terminal 位置（可选）— lab 首批锚定：RCL6 第一批
- *   lab 落在 terminal 邻域（<=3），集群与物流枢纽共生。
+ * 约束推导放置主入口 — 为 RCL2..rcl 累计放置所有结构，返回结果由调用方转 BuildTask。
+ * @param committed 各类型承诺数量（已建 + site + 队列任务），按批次抵扣，
+ *   只为真实缺口生成放置（代际稳定性核心）
+ * @param energyEndpoints 能量端点（source/controller）评分加权；缺省退化纯几何
+ * @param existingLabPositions 已建 lab — 新增 lab 续接既有集群
+ * @param roomName 仅用于放置缺口告警日志定位
+ * @param controllerPos tower 分桶：RCL5+ 按距 controller 每 15 格分桶落在射程高效区
+ *   （官方衰减 20 格起 25% 伤害）；RCL8 强制至少 2 塔 anchor Chebyshev ≤ 5（降级 ≤ 7）
+ * @param terminalPos lab 首批锚定：第一个 lab 落 terminal 邻域（≤3）
  */
 export function placeStructures(
   anchor: { x: number; y: number },
@@ -558,49 +474,37 @@ export function placeStructures(
   terminalPos?: { x: number; y: number },
 ): ConstraintPlacement[] {
   // ── 自适应搜索半径 ──
-  // 默认 maxRadius=7 的固定候选池在多墙地形 + RCL7-8 高密度（需 ~80 结构）下
-  // 会被耗尽：wouldSealLocal 密封守卫随已建结构增多越来越严，固定池里通过密封
-  // 守卫的格不够放满全部批次 → 静默少放（尤其最低优先级的 extension，池再小
-  // 连 spawn/tower/lab 也会缺）。
-  //
-  // 2026-08-01 扩搜条件修复：旧实现只在「候选池容量 < 需求总数」时外扩 —
-  // 但 W7N3 实证存在「池够大、格全不可放」的破碎房：r7 池 53 格 ≥ 需求 31，
-  // 全部被已有结构/密封守卫排除（开阔区在 r7 外），永不触发扩搜 → 每规划
-  // 周期空转 0 放置，19 ext/6 lab/3 tower 缺口永远闭合不了。
-  // 现改为「一轮放置后仍有缺口 → 外扩重试」（上限 MAX_SEARCH_RADIUS），
-  // 直到放满或半径穷尽。开阔地形首轮即放满，行为与旧实现完全一致。
-  // P2-N 增量外扩保留：buildCandidateGrid 传 prevCandidates + prevRadius，
-  // 只评分新环带格，结果与全量等价（(x,y) tiebreaker 确定性总序）。
+  // 固定 maxRadius=7 候选池在多墙 + RCL7-8 高密度下会被密封守卫耗尽 → 静默少放。
+  // 旧实现仅「池容量 < 需求」时外扩，但存在「池够大、格全不可放」的破碎房
+  // （W7N3：r7 池 53 ≥ 需求 31，全被排除）永不触发 → 缺口永远闭合不了。
+  // 现改为「一轮放置后仍有缺口 → 外扩重试」至 MAX_SEARCH_RADIUS；开阔地形
+  // 首轮即放满，行为与旧实现一致。P2-N 增量外扩只评分新环带格，与全量等价。
   let effectiveRadius = config.maxRadius;
   let candidates = buildCandidateGrid(anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints);
 
   const occupied = new Set<number>(preOccupied);
-  // 锚点本身被 spawn 占用
+  // 锚点格被 spawn 占用
   occupied.add(packPos(anchor.x, anchor.y));
 
   const placements: ConstraintPlacement[] = [];
-  // Lab 集群续接：已建 lab 位置作为集群种子 — 抵扣后新增的 lab
-  // 必须落在既有集群 range<=2 内，否则反应 trio 相邻约束被代际漂移破坏。
+  // Lab 续接：既有 lab 为集群种子 — 新增 lab 必须落在集群 range≤2 内，
+  // 否则反应 trio 相邻约束被代际漂移破坏。
   const labPositions: { x: number; y: number }[] = [...existingLabPositions];
 
-  // 承诺抵扣（代际稳定性核心）：已建结构 + 在建 site + 队列任务
-  // 已经覆盖的数量不再生成放置。旧实现每周期放置 RCL 累计全量、
-  // 只跳过被占格子 — 已建结构把自己的格子占掉后，放置顺延到次优格，
-  // 产生「同一逻辑结构在新格子再排一次」的幽灵任务与代际位置漂移。
+  // 承诺抵扣（代际稳定性核心）：已建 + site + 队列覆盖的数量不再生成放置 —
+  // 旧实现全量重排、顺延次优格，产生幽灵任务与代际位置漂移。
   const remaining: Record<string, number> = {};
   for (const [type, n] of committed) remaining[type] = n;
-  // 初始 spawn（锚点位）由玩家/扩张放置，不在派生批次内（锚点豁免）—
-  // 从 spawn 承诺中扣除 1，避免误抵扣掉 RCL7/8 批次的 spawn #2/#3。
+  // 锚点 spawn（玩家/扩张放置）不在派生批次内 — 承诺扣除 1，避免误抵扣 RCL7/8 的 spawn #2/#3。
   if ((remaining[STRUCTURE_SPAWN] ?? 0) > 0) {
     remaining[STRUCTURE_SPAWN]! -= 1;
   }
-  // 收集所有 RCL 批次（派生：数量真相源 = CONTROLLER_STRUCTURES）并按放置优先级排序。
+  // 收集 RCL 批次并按放置优先级排序。
   const batches = buildRclBatches(rcl);
   batches.sort((a, b) => (TYPE_PLACE_ORDER[a.type] ?? 99) - (TYPE_PLACE_ORDER[b.type] ?? 99));
 
-  // 抵扣承诺后的真实缺口（按类型累计）— 放置目标 + 末段缺口告警依据。
-  // 逐批次抵扣 ≡ 按类型总量抵扣（同类型批次合计后再扣承诺，顺序无影响），
-  // 与旧 deductBatch 语义逐级等价（含 spawn 锚点豁免）。
+  // 真实缺口（按类型累计）：逐批次抵扣 ≡ 按类型总量抵扣（同类型合计后扣承诺，
+  // 顺序无影响），与旧 deductBatch 语义逐级等价（含 spawn 锚点豁免）。
   const batchTotalByType = new Map<string, number>();
   for (const b of batches) {
     batchTotalByType.set(b.type, (batchTotalByType.get(b.type) ?? 0) + b.count);
@@ -616,16 +520,15 @@ export function placeStructures(
   for (;;) {
     for (const batch of batches) {
       const { type, priority, phase } = batch;
-      // 批次级份额：min(本批 count, 类型总缺口 - 已放)。不能用
-      // 「总缺口 - 已放」直接当 need — 那会让每类型只有第一个批次在放置，
-      // 后续批次的 priority/phase 全部丢失（tower 全变 rcl3 相位）。
+      // 批次级份额 = min(本批 count, 类型总缺口 - 已放)：直接用「总缺口 - 已放」
+      // 会让每类型只有首个批次在放置，后续批次的 priority/phase 全丢（tower 全变 rcl3 相位）。
       const need = Math.min(
         batch.count,
         Math.max(0, (residualNeedByType.get(type) ?? 0) - (placedByType.get(type) ?? 0)),
       );
       if (need <= 0) continue;
 
-      // Lab 特殊处理：集群放置
+      // Lab：集群放置
       if (type === STRUCTURE_LAB) {
         const labResult = placeLabCluster(need, candidates, occupied, getTerrain, labPositions, terminalPos);
         for (const pos of labResult) {
@@ -642,8 +545,7 @@ export function placeStructures(
         continue;
       }
 
-      // Tower 特殊处理：分桶放置（controller 侧 + anchor 硬约束 + 通用池兜底）。
-      // 设计文档 §3.7：RCL5+ 启用 controller 分桶，RCL8 强制至少 2 塔 anchor ≤ 5。
+      // Tower：分桶放置（§3.7：RCL5+ controller 分桶，RCL8 至少 2 塔 anchor ≤ 5）；
       // 无 controllerPos 时退化为通用池（向后兼容）。
       if (type === STRUCTURE_TOWER && controllerPos) {
         const towerResult = placeTowerBuckets(
@@ -663,7 +565,6 @@ export function placeStructures(
         continue;
       }
 
-      // 通用贪心放置
       let placed = 0;
       for (const c of candidates) {
         if (placed >= need) break;
@@ -689,7 +590,7 @@ export function placeStructures(
       placedByType.set(type, (placedByType.get(type) ?? 0) + placed);
     }
 
-    // 缺口是否全部闭合；未闭合且半径未穷尽 → 外扩重试。
+    // 仍有缺口且半径未穷尽 → 外扩重试。
     let remainingNeed = 0;
     for (const [type, need] of residualNeedByType) {
       remainingNeed += Math.max(0, need - (placedByType.get(type) ?? 0));
@@ -703,11 +604,8 @@ export function placeStructures(
   }
 
   // ── 放置缺口可观测性 ──
-  // 根治「静默少放」：过去候选池耗尽时 placeStructures 直接返回不足量 placements，
-  // 无任何信号，玩家直到运营受影响（extension 不足→能量上限低→孵化慢）才发现。
-  // 现按类型对比真实缺口（抵扣承诺后）与实际放置，缺口即告警，标明搜索半径已扩
-  // 到上限的事实——提示房间地形过于破碎，需人工介入（换锚点 / 接受降级 / 手动规划）。
-  // 频率：layout-planner 每 50 tick 规划一次，告警至多每 50 tick 一条，可接受。
+  // 根治静默少放：按类型对比真实缺口与实际放置，缺口即告警（半径已穷尽 → 地形
+  // 过于破碎，需人工介入：换锚点 / 接受降级 / 手动规划）。频率 = 规划频率（50 tick）。
   for (const [type, needed] of residualNeedByType) {
     const placedCount = placedByType.get(type) ?? 0;
     if (placedCount < needed) {
@@ -723,20 +621,16 @@ export function placeStructures(
 }
 
 /**
- * 放置任务 key — 坐标绑定：`constraint.<type>.<x>.<y>`。
- *
- * 旧实现用递增计数器命名（constraint.extension.01），key 与坐标零绑定 —
- * 已建格进入 occupied 后贪心顺延，同一 key 代际间指向不同格子，
- * existingKeys 去重 / 黑名单 / done 判定全部失去锚定。
- * 坐标绑定后同一格永远同 key，重推导天然幂等。
+ * 放置 key — 坐标绑定 `constraint.<type>.<x>.<y>`：同一格永远同 key，重推导天然
+ * 幂等（旧递增计数器 key 随贪心顺延漂移，去重/黑名单/done 判定全部失锚）。
  */
 function placementKey(type: string, x: number, y: number): string {
   return `constraint.${type}.${x}.${y}`;
 }
 
 /**
- * 将 ConstraintPlacement 列表转为 BuildTaskCandidate 格式（兼容现有入队流程）。
- * 所有候选标记为 validation: "ok"（放置算法已保证合法性）。
+ * ConstraintPlacement → BuildTaskCandidate（兼容入队流程）；
+ * validation 一律 "ok"（放置算法已保证合法性）。
  */
 export function placementsToCandidates(
   placements: readonly ConstraintPlacement[],

@@ -1,9 +1,7 @@
 /**
  * Harvester — P1 定点矿工。
- *
- * 策略声明：
- *   acquire: 站桩采集并同 tick 倒能（有 source container/link 时）> 通用采集（含拥挤迁移）
- *   work:    站桩采集同 tick 倒能（拦截站桩矿工，防离岗）> 矿物卸载 > link/container 倒能 > 建身边 site > fill > 最空 container > 建造 > 升级
+ * acquire: 站桩采集同 tick 倒能（有 source container/link 时）> 通用采集（含拥挤迁移）；
+ * work: 站桩采集拦截离岗 > 矿物卸载 > link/container 倒能 > 建身边 site > fill > 最空 container > 建造 > 升级。
  */
 import type { Priority } from "../../kernel/contracts";
 import type { RolePolicy } from "../engine/action-types";
@@ -49,9 +47,8 @@ const policy: RolePolicy = {
     fillTarget(),
     // 5. 全满时倒入最空 container。
     fillEmptiestContainer(),
-    // 所有倒能/填充候选均不匹配 → park 待命。
-    // harvester 不 fallback 到建造/升级 — 这些是 builder/upgrader 的职责。
-    // harvester 留在矿位等待 container 有空间，stationaryMine 会拦截。
+    // 无候选 → park 待命。harvester 不 fallback 建造/升级（builder/upgrader 的职责）—
+    // 留在矿位等 container 有空间，stationaryMine 会拦截。
   ],
 };
 

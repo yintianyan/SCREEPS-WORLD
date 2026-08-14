@@ -1,17 +1,8 @@
 /**
- * RemoteHauler — P1 远矿穿梭搬运工。
- *
- * 职责：从远矿房 container 取能，搬运回 home 房存入 storage/sink。
- * 与本地 hauler 的区别：
- *   - acquire 在 remoteTarget 房间取能（无 snapshot，直接 Game.rooms 访问）
- *   - work 在 home 房间存能（有 snapshot，复用本地 hauler 的 fillStorage/haulFillTarget）
- *   - ensureHome 根据 mode 自动切换导航目标（acquire→remote, work→home）
- *
- * 策略声明：
- *   acquire: 远矿 container 取能 > 远矿 drop 能量拾取
- *   work:    storage 填充 > spawn/extension 直送 > 待命
- *
- * 架构约束：ensureHome 已适配 remoteHauler 的穿梭行为。
+ * RemoteHauler — P1 远矿穿梭搬运工。从远矿房 container 取能，搬运回 home 房存入 storage/sink。
+ * 与本地 hauler 区别：acquire 在 remoteTarget 房取能（无 snapshot，直接 Game.rooms 访问）；
+ * work 在 home 房存能（有 snapshot，复用 fillStorage/haulFillTarget）；
+ * ensureHome 按 mode 切换导航目标（acquire→remote, work→home）。
  */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
@@ -79,13 +70,10 @@ function pickupRemoteDropped(): ActionCandidate<Resource> {
 }
 
 /** 在远矿房查找有能量的 container（双层缓存避免每 tick find）。
- *
  * 第一层 per-creep：remoteContainerId 仍有能量时直接复用。
- * 第二层 per-tick per-room 共享：container 空窗期内，若无共享缓存，
- * 每只 remoteHauler 每 tick 会各自全房 FIND_STRUCTURES，
- * 违反「角色禁止全房 find」硬约束（与 findDroppedEnergy 同一约束、同一模式）。
- * 导出仅供接线测试验证共享缓存行为。
- */
+ * 第二层 per-tick per-room 共享：container 空窗期内若无共享缓存，每只 remoteHauler 每 tick
+ * 各自全房 FIND_STRUCTURES，违反「角色禁止全房 find」硬约束（与 findDroppedEnergy 同一模式）。
+ * 导出仅供接线测试验证共享缓存行为。 */
 export function findRemoteContainer(creep: Creep): StructureContainer | undefined {
   // 优先使用缓存的 containerId — 避免每 tick room.find。
   if (creep.memory.remoteContainerId) {
@@ -114,9 +102,9 @@ export function findRemoteContainer(creep: Creep): StructureContainer | undefine
   }
   if (containers.length === 0) return undefined;
 
-  // 加权分散（E-2 修复）：原纯 findClosestByRange 在 2-source 房（两 container）
-  // 会让所有 hauler 挤最近那个、远 container 积压溢出（羊群）。改为"能量 - 距离×权重"
-  // 打分 + 名哈希起点散布，照本地 selectHaulSourceContainer 的已验证手法。
+  // 加权分散（E-2 修复）：原纯 findClosestByRange 在 2-source 房（两 container）会让所有 hauler
+  // 挤最近那个、远 container 积压溢出（羊群）。改为「能量 - 距离×权重」打分 + 名哈希起点散布，
+  // 照本地 selectHaulSourceContainer 的已验证手法。
   let nameHash = 0;
   for (let i = 0; i < creep.name.length; i++) {
     nameHash = (nameHash * 31 + creep.name.charCodeAt(i)) | 0;

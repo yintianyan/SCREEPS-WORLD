@@ -36,97 +36,79 @@ import { tuningEngineSystem } from "./systems/tuning-engine";
 import { towerDefenseSystem } from "./systems/tower-defense";
 
 /**
- * Bootstrap — 唯一组合根。
- * 新增系统或角色只需修改此文件并添加对应模块，无需修改 Kernel。
- *
- * 硬约束：注册的每个角色名必须同时存在于 CONFIG.roles —
- * roles 表兼任 recyclePass 的「在役角色」白名单，漏配的角色
- * 孵出即被判废弃回收（role-config-parity 测试强制此一致性）。
- *
- * 系统注册顺序（同优先级内按注册顺序执行）：
- *   P0: room-state → spawn-manager → tower-defense
- *   P1: assignment-service（任务列表生成 + 紧急抢占）→ link-system（link 能量瞬移）→ lab-system（lab 反应 + boost）
- *   P2: construction-manager → remote-mining-manager（远矿目标评估 + spawn 请求）
- *   P3: layout-planner → defense-planner → room-observer → pixel-generator → telemetry-collector → tuning-engine
- *
- * 角色优先级：
- *   P0: worker（启动期/灾后恢复）
- *   P1: harvester, hauler, distributor, remoteHarvester, remoteHauler（能量链）
- *   P2: upgrader, builder, reserver（发展 + 远矿占领）
- *
- * 注意：room-state 必须在 spawn-manager 之前运行 —
- *   它每 tick 计算每房 ColonyState 并写入 RoomMemory，供所有后续系统消费。
- *   assignment-service 设为 P1 而非 P0 —
- *   失败时角色回退到无 assignment 行为，避免 P0 永不冷却刷屏。
- *   worker(P0) 可能在第一 tick 早于 assignment 运行，回退行为正确。
+ * Bootstrap — 唯一组合根：新增系统/角色只改此文件并添加对应模块，不改 Kernel。
+ * 硬约束：注册的每个角色名必须同时存在于 CONFIG.roles — roles 表兼任
+ * recyclePass 的「在役角色」白名单，漏配则孵出即被回收（role-config-parity 强制）。
+ * 注册顺序即同优先级执行顺序（P0→P3，见下方逐条注释）；room-state 必须最先运行
+ * （每 tick 写 ColonyState 供后续消费）；assignment-service 故意设 P1 而非 P0：
+ * 失败时角色回退无 assignment 行为，避免 P0 永不冷却刷屏。
  */
-/** 组合根注册表 — 导出仅供一致性测试（role-config-parity）检视注册清单。 */
+/** 组合根注册表 — 导出仅供一致性测试（role-config-parity）检视。 */
 export const registry = new Registry()
-  // P0：房间状态（每房 ColonyState + downgradeRisk，必须在所有其他系统之前运行）
+  // P0：房间状态（ColonyState，必须先于其他系统）
   .registerSystem(roomStateSystem)
-  // P0：孵化管理（紧急恢复、队列处理）
+  // P0：孵化管理（紧急恢复）
   .registerSystem(spawnManagerSystem)
-  // P0：塔防（攻击、维修、安全模式）
+  // P0：塔防
   .registerSystem(towerDefenseSystem)
-  // P1：帝国姿态（Strategy 层 — 在所有战术消费者之前裁决扩张/收缩/备战）
+  // P1：帝国姿态（先于战术消费者裁决扩张/收缩/备战）
   .registerSystem(empireStrategySystem)
-  // P1：任务分配（生成任务列表 + 紧急抢占，在 P1 角色之前运行）
+  // P1：任务分配（先于 P1 角色）
   .registerSystem(assignmentServiceSystem)
-  // P1：link 能量传输（source→controller/storage 瞬移，替代 hauler 往返）
+  // P1：link 能量传输（瞬移替代 hauler 往返）
   .registerSystem(linkSystem)
-  // P1：lab 反应 + boost（化合物生产、creep 强化）
+  // P1：lab 反应 + boost
   .registerSystem(labSystem)
-  // P2：建造（消费 BuildQueue，受 site 限流）
+  // P2：建造（消费 BuildQueue）
   .registerSystem(constructionManagerSystem)
-  // P2：远矿管理（每 10 tick 评估目标 + 生成远矿 spawn 请求）
+  // P2：远矿管理（每 10 tick 评估目标）
   .registerSystem(remoteMiningManagerSystem)
-  // P2：战争规划（war 姿态时选目标 + 推 attacker spawn 请求；非 war 收摊）
+  // P2：战争规划（war 姿态才选目标推 attacker；非 war 收摊）
   .registerSystem(warPlannerSystem)
-  // P3：布局规划（低频生成 BuildTask 推入 BuildQueue）
+  // P3：布局规划（低频）
   .registerSystem(layoutPlannerSystem)
-  // P3：防御规划（rampart/wall 生成，独立于核心布局）
+  // P3：防御规划（独立于核心布局）
   .registerSystem(defensePlannerSystem)
-  // P3：房间观察（低频策略）
+  // P3：房间观察（低频）
   .registerSystem(roomObserverSystem)
-  // P3：pixel 生成（bucket 满载时生成 pixel）
+  // P3：pixel 生成（bucket 满载时）
   .registerSystem(pixelSystem)
-  // P3：terminal 帝国能量网络（跨房互济救助 + 能量溢出/危机市场交易 + 矿物贸易）
+  // P3：terminal 帝国能量网络（跨房互济 + 市场交易）
   .registerSystem(terminalManagerSystem)
-  // P3：factory/powerSpawn 最小运营（满仓能量压缩 battery + GPL 涓流）
+  // P3：factory/powerSpawn 最小运营（battery 压缩 + GPL 涓流）
   .registerSystem(factoryManagerSystem)
-  // P3：扩张管理（GCL 有余量时 claim 新房 + 拓荒编队投送）
+  // P3：扩张管理（GCL 有余量时 claim 新房）
   .registerSystem(expansionManagerSystem)
-  // P3：遥测采集（时序数据 + 事件日志 + 运行时摘要，低频采样）
+  // P3：遥测采集（低频采样）
   .registerSystem(telemetryCollectorSystem)
-  // P3：参数自调优（每 500 tick 读取遥测 → 调整角色边界覆盖值）
+  // P3：参数自调优（每 500 tick 读遥测调角色边界覆盖值）
   .registerSystem(tuningEngineSystem)
-  // P0（post 阶段）：交通解算 — 在所有角色之后消费移动意图账本，
-  // 按房仲裁/换位/推挤后统一签发 move（CONFIG.movement.trafficManager 开关）
+  // P0（post 阶段）：交通解算 — 所有角色之后统一仲裁签发 move
   .registerSystem(trafficManagerSystem)
-  // P0：恢复 worker（启动期 / 灾后）
+  // P0：恢复 worker（启动期/灾后）
   .registerRole(workerRole)
-  // P1：defender（本房防御响应 — 房内出现威胁时孵化，与塔协同）
+  // P1：defender（房内威胁时孵化，与塔协同）
   .registerRole(defenderRole)
-  // P1：harvester 和 hauler（能量链）
+  // P1：harvester/hauler（能量链）
   .registerRole(harvesterRole)
   .registerRole(haulerRole)
-  // P1：distributor（storage → sink 分发，RCL4+）
+  // P1：distributor（storage→sink，RCL4+）
   .registerRole(distributorRole)
-  // P1：远矿角色（远矿采集 + 穿梭搬运）
+  // P1：远矿角色（采集 + 穿梭搬运）
   .registerRole(remoteHarvesterRole)
   .registerRole(remoteHaulerRole)
-  // P2：upgrader 和 builder（发展）
+  // P2：upgrader/builder
   .registerRole(upgraderRole)
   .registerRole(builderRole)
-  // P2：reserver（远矿 controller 占领）
+  // P2：reserver（远矿 controller）
   .registerRole(reserverRole)
-  // P2：claimer（扩张占领新房 controller）
+  // P2：claimer（占领新房）
   .registerRole(claimerRole)
-  // P2：mineralMiner（RCL6+ extractor 采矿 → container → hauler 搬 terminal）
+  // P2：mineralMiner（RCL6+ 采矿→container→terminal）
   .registerRole(mineralMinerRole)
-  // P2：attacker（war 姿态跨房远征攻击者 — 由 war-planner 孵化）
+  // P2：attacker（仅 war-planner 孵化）
   .registerRole(attackerRole)
-  // P1：remoteDefender（远矿防御者，杀 NPC reserver/Invader）
+  // P1：remoteDefender（杀 NPC reserver/Invader）
   .registerRole(remoteDefenderRole);
 
 export const kernel = new Kernel(registry);
