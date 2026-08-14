@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { expansionManagerSystem } from "../../../src/systems/expansion-manager";
 import { mockBudget, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { CONFIG } from "../../../src/config";
 
 beforeEach(() => {
   resetGlobals();
@@ -82,5 +83,62 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
     expect((globalThis as any).Memory.kernel.expansion).toBeUndefined();
     const ev = expansionEvents()[0];
     expect(ev?.d).toEqual([1, 0, (globalThis as any).Game.time - 1100]); // [pioneer, success, duration]
+  });
+});
+
+describe("expansion-manager — R7b 节奏自适应接线", () => {
+  it("三连败 → 扩张暂停 + 黑名单 ×1.5 缩放", () => {
+    (globalThis as any).Memory = {
+      schemaVersion: 31,
+      creeps: {},
+      rooms: { W7N4: { spawnQueue: [], buildQueue: [] } },
+      kernel: {
+        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
+        expansion: { state: "claiming", target: "W6N4", sponsor: "W7N4", startedAt: (globalThis as any).Game.time - CONFIG.expansion.claimTimeout - 100 }, // 已超时
+        expansionRhythm: { ring: [2, 2], blacklistMultiplier: 1.5, minSources: 1 }, // 已两连 timeout
+      },
+    };
+    (globalThis as any).Game.rooms = {
+      W7N4: { controller: { my: true, owner: { username: "Me" } } },
+    };
+    (globalThis as any).Game.cpu = { bucket: 10000 };
+    (globalThis as any).Game.creeps = {};
+
+    expansionManagerSystem.run(makeContext());
+
+    const kernel = (globalThis as any).Memory.kernel;
+    // 第三条 timeout 追加 → 连续 3 败 → 暂停。
+    expect(kernel.expansionRhythm.ring).toEqual([2, 2, 2]);
+    expect(kernel.expansionPausedUntil).toBe((globalThis as any).Game.time + CONFIG.expansion.rhythm.pauseTicks);
+    // 零成功窗口 → 黑名单 ×1.5。
+    expect(kernel.expansionBlacklist?.W6N4)
+      .toBe((globalThis as any).Game.time + Math.round(CONFIG.expansion.blacklistCooldown * 1.5));
+  });
+
+  it("暂停期内不开新扩张任务", () => {
+    (globalThis as any).Memory = {
+      schemaVersion: 31,
+      creeps: {},
+      rooms: {
+        W7N4: {
+          spawnQueue: [],
+          buildQueue: [],
+          intel: { W6N4: { kind: "normal", status: "normal", sources: 2, lastSeen: 900 } },
+        },
+      },
+      kernel: {
+        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
+        expansionPausedUntil: (globalThis as any).Game.time + 5000,
+      },
+    };
+    (globalThis as any).Game.rooms = {
+      W7N4: { controller: { my: true, owner: { username: "Me" } }, energyCapacityAvailable: 800 },
+    };
+    (globalThis as any).Game.cpu = { bucket: 10000 };
+    (globalThis as any).Game.gcl = { level: 2 };
+
+    expansionManagerSystem.run(makeContext());
+
+    expect((globalThis as any).Memory.kernel.expansion).toBeUndefined();
   });
 });

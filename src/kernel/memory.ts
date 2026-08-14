@@ -773,6 +773,54 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 30,
+    to: 31,
+    run: () => {
+      // v31：R7b 扩张节奏自适应 — 新增 KernelMemory.expansionRhythm /
+      // expansionPausedUntil（expansion-manager 唯一写者）。建档 + 畸形自愈：
+      // expansionRhythm 非对象 → 删除；ring 非数组或条目非数字 → 清空 ring；
+      // blacklistMultiplier/minSources 非数字或越界 → 回默认；pausedUntil 非数字 → 删除。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+
+      const rhythm = kernel.expansionRhythm as Record<string, unknown> | undefined;
+      if (rhythm !== undefined) {
+        if (typeof rhythm !== "object" || rhythm === null || Array.isArray(rhythm)) {
+          delete kernel.expansionRhythm;
+        } else {
+          if (!Array.isArray(rhythm.ring)) {
+            rhythm.ring = [];
+          } else {
+            rhythm.ring = (rhythm.ring as unknown[]).filter(
+              (v): v is number => typeof v === "number" && v >= 0 && v <= 4,
+            );
+          }
+          if (
+            typeof rhythm.blacklistMultiplier !== "number" ||
+            rhythm.blacklistMultiplier < 0.5 ||
+            rhythm.blacklistMultiplier > 1.5
+          ) {
+            rhythm.blacklistMultiplier = 1;
+          }
+          if (
+            typeof rhythm.minSources !== "number" ||
+            rhythm.minSources < 1 ||
+            rhythm.minSources > 2
+          ) {
+            rhythm.minSources = 1;
+          }
+        }
+      }
+
+      if (
+        kernel.expansionPausedUntil !== undefined &&
+        typeof kernel.expansionPausedUntil !== "number"
+      ) {
+        delete kernel.expansionPausedUntil;
+      }
+    },
+  },
 ];
 
 /**

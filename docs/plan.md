@@ -1455,9 +1455,22 @@ R6 之后帝国有了「目标」（议程）与「情报」（侦察）；R7 �
 - 与既有 WarOutcome/ProspectOutcome 组成完整台账：四类战略决策（扩张/战争/
   侦察/议程）都有「决策→结果」配对记录，R7b 节奏自适应以此为输入。
 
-#### 下一步（R7b）
+#### 扩张节奏自适应（R7b，schema v31，已实施）
 
-- 扩张节奏自适应：用 ExpansionOutcome 台账归因失败条件（stolen 多→目标更保守；
-  timeout 多→claimTimeout/门禁收紧；连续成功→门禁放宽一档，硬上界防过冲），
-  复用 tuning-engine 的验证/回滚/冻结机器。
+消费 ExpansionOutcome 台账（每次任务收摊追加一条到有界 ring，ringSize=8），
+`domain/expansion/rhythm` 纯函数产出三个有界调节：
+
+1. **连续失败暂停**：连续失败 ≥3 → 全局扩张暂停 20000 tick（`expansionPausedUntil`
+   门禁）—「失败→立刻再试」是烧 GCL 窗口的循环，暂停是止损不是放弃。
+2. **stolen 频发收紧门禁**：窗口内被抢占 ≥2 → 目标最低 source 数 1→2
+   （评估器 minSources 消费）— 差房人人抢，好房才有余量。
+3. **黑名单缩放**：窗口 ≥3 且成功率 ≥2/3 → 失败冷却 ×0.5（下界 5000）；
+   窗口零成功 → ×1.5（上界 60000）— 门禁随证据走。
+
+与 tuning-engine 同哲学不同机器：参数边界内调节（缩放 0.5–1.5 硬界）+
+可回滚（清空 ring 即回基线）+ 可观测（调节变更打日志）。测试：rhythm 纯函数
+8 例 + 迁移 5 例 + expansion-manager 接线 4 例 + evaluator minSources 2 例。
+
+#### 下一步
+
 - 人口规模封顶：capacity 分档驱动 demand 总量上限（多房压力信号出现后接线）。

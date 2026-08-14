@@ -111,3 +111,25 @@ describe("expansion — selectExpansionTarget", () => {
     expect(selectExpansionTarget(input)).toBeUndefined();
   });
 });
+
+describe("selectExpansionTarget — R7b minSources 门禁", () => {
+  it("minSources=2 时单源房被排除（节奏收紧）", () => {
+    const input = baseInput({
+      minSources: 2,
+      intelBySponsor: {
+        W1N1: {
+          W2N1: intel({ sources: 1, lastSeen: tick }), // 单源 → 排除
+          W3N1: intel({ sources: 2, lastSeen: tick }), // 双源 → 可选
+        },
+      },
+    });
+    expect(selectExpansionTarget(input)?.roomName).toBe("W3N1");
+  });
+
+  it("默认 minSources=1 保持既有行为（单源可选）", () => {
+    const input = baseInput({
+      intelBySponsor: { W1N1: { W2N1: intel({ sources: 1, lastSeen: tick }) } },
+    });
+    expect(selectExpansionTarget(input)?.roomName).toBe("W2N1");
+  });
+});

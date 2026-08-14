@@ -39,7 +39,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 30 },
+  memory: { schemaVersion: 31 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -565,6 +565,27 @@ export const CONFIG = {
     pioneerTimeout: 20000,
     /** 失败目标的黑名单冷却。 */
     blacklistCooldown: 20000,
+    /** R7b：扩张节奏自适应（消费 ExpansionOutcome 台账）。 */
+    rhythm: {
+      /** 结果 ring 最大长度（旧条目溢出丢弃）。 */
+      ringSize: 8,
+      /** 连续失败达此数 → 全局扩张暂停。 */
+      pauseFailures: 3,
+      /** 暂停时长（tick）。 */
+      pauseTicks: 20000,
+      /** 默认最低 source 数。 */
+      minSourcesBase: 1,
+      /** stolen 频发时收紧到的最低 source 数（差房人人抢）。 */
+      minSourcesOnStolen: 2,
+      /** stolen 计数窗口（最近 N 条）。 */
+      stolenWindow: 6,
+      /** stolen 频发阈值（窗口内 ≥ 此数）。 */
+      stolenThreshold: 2,
+      /** 黑名单缩放的观察窗口（最近 N 条）。 */
+      relaxWindow: 6,
+      /** 成功率 ≥ 此比例 → 黑名单 ×0.5（零成功 → ×1.5）。 */
+      successRatioRelax: 2 / 3,
+    },
   },
 
   factory: {

@@ -16,6 +16,11 @@ import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
 import { selectExpansionTarget } from "../domain/expansion/evaluator";
+import {
+  appendOutcome,
+  evaluateExpansionRhythm,
+  type ExpansionOutcomeKind,
+} from "../domain/expansion/rhythm";
 import { submitRequest, hasRequest, cancelRequestsByHome } from "../domain/spawn/queue";
 import { selectAnchors } from "../domain/layout/anchor-selection";
 import { computeDistanceField } from "../domain/layout/terrain-analysis";
@@ -44,6 +49,8 @@ export const expansionManagerSystem: System = {
       // C-1：CPU 门禁只裁决「是否开启新行动」— 扩张是纯发展行为，CPU 紧张时不开新局。
       if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;
       if ((Game.cpu.bucket ?? 0) < 5000) return;
+      // R7b：连续失败暂停止损 — 「失败→立刻再试」是烧 GCL 窗口的循环。
+      if ((Memory.kernel.expansionPausedUntil ?? 0) > ctx.tick) return;
       // 战略门禁：是否扩张由 empire-strategy 的姿态裁决（Strategy 层）— 本系统只在
       // 获得授权时评选目标，不自行判断时机。姿态未就绪（reset 首 tick）默认不扩张。
       if (Memory.kernel.strategy?.expansionAllowed !== true) return;
@@ -75,20 +82,88 @@ export const expansionManagerSystem: System = {
 
 type ExpansionState = NonNullable<KernelMemory["expansion"]>;
 
-/** R7a：扩张阶段收摊归因（决策结果台账）— 供节奏自适应归因失败条件。 */
+/** R7a：扩张阶段收摊归因（决策结果台账）— 供节奏自适应归因失败条件。
+ * R7b：任务级结果（每任务一条，claim 成功视为任务延续不追加）追加到节奏 ring，
+ * 并重算自适应调节（暂停/门禁/黑名单缩放）写入 Memory。 */
 function recordExpansionOutcome(expansion: ExpansionState, tick: number, phase: number, outcome: number): void {
   recordEvent(EventKind.ExpansionOutcome, expansion.target, [
     phase,
     outcome,
     tick - expansion.startedAt,
   ]);
+
+  // 任务级归因：phase 0 的 success 是阶段中转（继续 pioneering），不追加。
+  const kind = toOutcomeKind(phase, outcome);
+  if (!kind) return;
+
+  const rhythm = Memory.kernel!.expansionRhythm;
+  const ring = appendOutcome(
+    (rhythm?.ring ?? []).map(codeToKind),
+    kind,
+    CONFIG.expansion.rhythm.ringSize,
+  );
+  const result = evaluateExpansionRhythm(ring, {
+    ringSize: CONFIG.expansion.rhythm.ringSize,
+    pauseFailures: CONFIG.expansion.rhythm.pauseFailures,
+    pauseTicks: CONFIG.expansion.rhythm.pauseTicks,
+    minSourcesBase: CONFIG.expansion.rhythm.minSourcesBase,
+    minSourcesOnStolen: CONFIG.expansion.rhythm.minSourcesOnStolen,
+    stolenWindow: CONFIG.expansion.rhythm.stolenWindow,
+    stolenThreshold: CONFIG.expansion.rhythm.stolenThreshold,
+    relaxWindow: CONFIG.expansion.rhythm.relaxWindow,
+    successRatioRelax: CONFIG.expansion.rhythm.successRatioRelax,
+  });
+
+  const prev = Memory.kernel!.expansionRhythm;
+  if (
+    prev?.blacklistMultiplier !== result.blacklistMultiplier ||
+    prev?.minSources !== result.minSources
+  ) {
+    console.log(
+      `[${tick}] expansion-rhythm: multiplier=${result.blacklistMultiplier}` +
+      ` minSources=${result.minSources} consecFail=${result.consecutiveFailures}`,
+    );
+  }
+  Memory.kernel!.expansionRhythm = {
+    ring: ring.map(kindToCode),
+    blacklistMultiplier: result.blacklistMultiplier,
+    minSources: result.minSources,
+  };
+  if (result.pauseTicks > 0) {
+    Memory.kernel!.expansionPausedUntil = tick + result.pauseTicks;
+    console.log(`[${tick}] expansion: ${result.consecutiveFailures} 连败 — 暂停扩张 ${result.pauseTicks} tick`);
+  }
 }
 
-/** 把失败目标记入黑名单（冷却期内评估器不再选中）。 */
+function toOutcomeKind(phase: number, outcome: number): ExpansionOutcomeKind | undefined {
+  if (phase === 0) {
+    if (outcome === OUTCOME_SUCCESS) return undefined; // claim 成功 → 任务延续
+    if (outcome === OUTCOME_STOLEN) return "stolen";
+    if (outcome === OUTCOME_TIMEOUT) return "timeout";
+    if (outcome === OUTCOME_LOST) return "lost";
+    return "aborted";
+  }
+  if (outcome === OUTCOME_SUCCESS) return "success";
+  if (outcome === OUTCOME_STOLEN) return "stolen";
+  if (outcome === OUTCOME_TIMEOUT) return "timeout";
+  return "lost";
+}
+
+function codeToKind(code: number): ExpansionOutcomeKind {
+  return (["success", "stolen", "timeout", "lost", "aborted"] as const)[code] ?? "aborted";
+}
+
+function kindToCode(kind: ExpansionOutcomeKind): number {
+  return (["success", "stolen", "timeout", "lost", "aborted"] as const).indexOf(kind);
+}
+
+/** 把失败目标记入黑名单（冷却时长按节奏台账缩放：成功多 → 缩短，零成功 → 加长）。 */
 function blacklistTarget(roomName: string, tick: number): void {
   if (!Memory.kernel) Memory.kernel = {};
   Memory.kernel.expansionBlacklist ??= {};
-  Memory.kernel.expansionBlacklist[roomName] = tick + CONFIG.expansion.blacklistCooldown;
+  const multiplier = Memory.kernel.expansionRhythm?.blacklistMultiplier ?? 1;
+  const cooldown = Math.round(CONFIG.expansion.blacklistCooldown * multiplier);
+  Memory.kernel.expansionBlacklist[roomName] = tick + cooldown;
 }
 
 /**
@@ -169,6 +244,8 @@ function tryStartExpansion(ctx: TickContext): void {
     tick: ctx.tick,
     blacklist: Memory.kernel?.expansionBlacklist,
     myUsername,
+    // R7b：节奏台账驱动的目标门禁（stolen 频发 → 只选 ≥2 source 的高价值房）。
+    minSources: Memory.kernel?.expansionRhythm?.minSources ?? CONFIG.expansion.rhythm.minSourcesBase,
   });
   if (!target) return;
 

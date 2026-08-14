@@ -374,6 +374,20 @@ declare global {
       upgradeTicks: number;
     };
     /**
+     * 扩张节奏台账（v31+，expansion-manager 写入）：每次扩张任务收摊追加
+     * 一条结果（0=success/1=stolen/2=timeout/3=lost/4=aborted），有界 ring。
+     * domain/expansion/rhythm 消费产出自适应调节（暂停/门禁/黑名单缩放）。
+     */
+    expansionRhythm?: {
+      ring: number[];
+      /** 最近一次评估出的黑名单缩放（0.5–1.5）。 */
+      blacklistMultiplier: number;
+      /** 最近一次评估出的目标最低 source 数（1–2）。 */
+      minSources: number;
+    };
+    /** 扩张失败暂停截止（v31+）：此 tick 前不开新扩张行动（连续失败止损）。 */
+    expansionPausedUntil?: number;
+    /**
      * 侦察任务（v29+，prospect-manager 写入）：同一时刻至多一个。
      * 姿态 expansionAllowed 时主动为扩张候选房获取视野（决策就绪情报）。
      * 成功（intel 新鲜）/失败（超时/死亡上限）后清除，失败进 prospectCooldown。
