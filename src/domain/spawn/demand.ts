@@ -63,6 +63,9 @@ export interface RoomDemandContext {
   /** P2-2：tuning pending（hauler min/maxCount pendingValidation）期间主动收敛到合同目标，
    *  配合 P1-1 isContractMet 让调参合同能真正满足；undefined = 无 pending，按常规计算。 */
   haulerPendingTarget?: number;
+  /** R6a：帝国议程 initiative（empire-strategy 发布，spawn-manager 适配层注入）。
+   *  "rcl-push" 时 upgrader 冲刺门槛放宽一档 — 目标驱动主动冲级，而非等水位自然触发。 */
+  agendaInitiative?: string;
 }
 
 /**
@@ -631,6 +634,12 @@ export function evaluateDemand(
     const hasStorage = snapshot.storage !== undefined;
     const storageEnergy = hasStorage ? snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) : 0;
 
+    // R6a：议程 rcl-push 时冲刺门槛放宽一档（sustained 水位即可冲刺、压力容忍至 0.4）—
+    // 议程是帝国主动目标，允许比被动水位反应更进取；门禁仍由既有 pressure/水位逻辑兜底。
+    const agendaPush = roomCtx.agendaInitiative === "rcl-push";
+    const sprintStorageGate = agendaPush ? upgradeCfg.sustainedStorage : upgradeCfg.sprintStorage;
+    const sprintPressureGate = agendaPush ? 0.4 : 0.3;
+
     let upgraderTarget: number;
     if (hasDowngradeRisk || crisisNeedsGuard) {
       // 保级紧急：拉满（自采也要保级）。
@@ -638,7 +647,7 @@ export function evaluateDemand(
     } else if (!stationUpgradeOnline) {
       // 无 controller container：多 upgrader 长途自采，通勤浪费抵消数量优势，保持 minCount。
       upgraderTarget = pressure <= 0.7 ? upgraderConfig.minCount : 0;
-    } else if (hasStorage && storageEnergy >= upgradeCfg.sprintStorage && pressure <= 0.3) {
+    } else if (hasStorage && storageEnergy >= sprintStorageGate && pressure <= sprintPressureGate) {
       // 冲刺：库存充足且经济健康，烧库存换 RCL 复利（2 个满 body 站桩）；
       // P0-1：storage 满仓时拉满 maxCount — 盈余必须被消化，否则在源头被浪费。
       upgraderTarget = storageNearFull

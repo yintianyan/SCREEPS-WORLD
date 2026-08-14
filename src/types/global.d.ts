@@ -349,6 +349,15 @@ declare global {
      * 计划（黑名单只挡单目标，休战期挡跨目标添油循环）；到期后姿态仍为 war 则重估。
      */
     warStandDownUntil?: number;
+    /**
+     * 帝国议程（v28+，empire-strategy 写入）— 短期目标真相源：
+     * recovery（恢复）> defense-readiness（备战）> rcl-push（冲级）> develop（固本）。
+     * 执行系统消费 initiative 协调优先级；决策纯函数见 domain/strategy/agenda。
+     */
+    agenda?: {
+      initiative: "recovery" | "defense-readiness" | "rcl-push" | "develop";
+      since: number;
+    };
   }
 
   /** 参数自调优的持久化状态。 */

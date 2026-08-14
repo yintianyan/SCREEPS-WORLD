@@ -77,6 +77,9 @@ export const enum EventKind {
   /** R5 跨房能量互济：一笔 terminal.send 救助成交。d = [amount]；r = 受助房名。
    * 捐赠房名见 console.log 明细（事件体积优先，r 保留「谁被救」这一复盘焦点）。 */
   EnergyTransfer = 24,
+  /** R6a 帝国议程切换：短期目标变更。d = [initiativeCode(0=recovery/1=defense-readiness/2=rcl-push/3=develop)]；
+   * r = ""（帝国级事件）。观测「帝国当前在主动做什么」与目标切换节奏。 */
+  AgendaChange = 25,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

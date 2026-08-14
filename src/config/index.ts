@@ -39,7 +39,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 27 },
+  memory: { schemaVersion: 28 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -630,6 +630,18 @@ export const CONFIG = {
     maxEnergyBuyPrice: 0.05,
     /** 能量买入触发线：storage 低于此值且 credits 充足才买（市场是最后救助通道）。 */
     energyBuyFloor: 5000,
+  },
+
+  /** 帝国议程（R6a）— 主动自治的短期目标层。 */
+  agenda: {
+    /** 受袭记忆窗口：lastHostileAt 距今小于此值 → defense-readiness（主动备战）。 */
+    threatWindow: 3000,
+    /** rcl-push 的最低 storage 水位（至少一房达标才主动冲级）。 */
+    rclPushStorage: 20000,
+    /** rcl-push 允许的最高平均经济压力（打不起不冲）。 */
+    rclPushMaxPressure: 0.3,
+    /** 普通目标切换的最短驻留（防 rcl-push ↔ develop 抖动；紧急目标立即生效）。 */
+    minDwell: 200,
   },
 } as const;
 

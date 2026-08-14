@@ -201,12 +201,9 @@ export function planCorridorRoads(
 }
 
 /**
- * 查询走廊路缓存：命中且 signature 匹配则返回缓存路径，否则计算并写入缓存。
- *
- * signature = pairKey + rcl + anchor。任一变化即失效（漏洞 #5 完整失效条件）：
- *   - pairKey 变化：端点 container/storage 消失或新建
- *   - rcl 变化：解锁新结构，路径可能变化
- *   - anchor 变化：spawn 重建在新位置，核心位置已变
+ * 查询走廊路缓存：命中且 signature（pairKey + rcl + anchor，漏洞 #5 完整失效条件）
+ * 匹配则返回缓存路径，否则计算并写入。任一变化即失效：端点 container/storage
+ * 消失或新建、RCL 解锁新结构、spawn 重建换位。
  */
 function getCachedOrComputePath(
   roomName: string,
@@ -221,7 +218,6 @@ function getCachedOrComputePath(
   if (cache.corridorPathCache === undefined) cache.corridorPathCache = new Map();
   const cached = cache.corridorPathCache.get(roomName);
 
-
   // 命中条件：pairKey + rcl + anchor 全匹配。
   const cacheHit =
     cached !== undefined &&
@@ -234,13 +230,10 @@ function getCachedOrComputePath(
     return cached!.path;
   }
 
-
   // 未命中或失效 → PathFinder 计算。
   const fn = defaultPathFn(snapshot, room, protectedPositions);
   const path = fn(pair.from, pair.to);
 
-
-  // 写入缓存。
   const entry: CorridorPathCacheEntry = {
     pairKey,
     rcl: snapshot.rcl,

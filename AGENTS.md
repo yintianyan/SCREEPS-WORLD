@@ -69,6 +69,11 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   设计决策见 plan.md §13.1；测试见
   [tests/unit/economy/energy-logistics.test.ts](tests/unit/economy/energy-logistics.test.ts)、
   [tests/unit/systems/terminal-manager-energy.test.ts](tests/unit/systems/terminal-manager-energy.test.ts)。
+- R6a 帝国议程已落地（schema v28，主动自治第一增量）：短期目标层
+  （recovery > defense-readiness > rcl-push > develop），empire-strategy 发布 +
+  AgendaChange 事件；首个消费接线 = rcl-push 放宽 upgrader 冲刺门槛
+  （spawn-manager 适配层注入 agendaInitiative）。设计见 plan.md §14；
+  测试见 [tests/unit/strategy/agenda.test.ts](tests/unit/strategy/agenda.test.ts)。
 - 仍为已知取舍：远矿 container **维修**链缺失（建造链已由 P0-A 补齐）；
   取舍决策以各处内联注释为准。
 
@@ -95,7 +100,7 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   → plan.md **§7 性能优化 · §2.3 数据所有权**
 - **迁移规范**：每次结构变更升版本；迁移必须幂等；先写新字段验证后删旧字段；
   所有步骤成功才更新 `schemaVersion`；大迁移按 cursor 分 tick。
-  新增 Memory 字段须同时更新类型与迁移（当前 `schemaVersion = 27`，见 `CONFIG.memory`）。
+  新增 Memory 字段须同时更新类型与迁移（当前 `schemaVersion = 28`，见 `CONFIG.memory`）。
   冷数据（布局 overrides/blocked）走 RawMemory segment。
   → plan.md **§3.4 版本化 Memory**
 
@@ -160,6 +165,7 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 | 改 Spawn 逻辑 | §5.4 Spawn 孵化 |
 | 改建造 / 布局 | §5.5 建造维修、§5.6 布局实施 |
 | 改远矿 / 扩张 / 帝国姿态 | §12.1–12.4、[empire-strategy.ts](src/systems/empire-strategy.ts)、[posture.ts](src/domain/strategy/posture.ts) |
+| 改议程 / 主动目标 | §14、[agenda.ts](src/domain/strategy/agenda.ts)、[empire-strategy.ts](src/systems/empire-strategy.ts) |
 | 改战争 / 进攻 / 止损 | §12.6、[war-planner.ts](src/systems/war-planner.ts)、[planning.ts](src/domain/war/planning.ts) |
 | 改跨房物流 / terminal / 市场 | §13.1、[terminal-manager.ts](src/systems/terminal-manager.ts)、[energy-logistics.ts](src/domain/economy/energy-logistics.ts) |
 | 改调参 / 遥测 / CPU 预算 | [tuning-engine.ts](src/systems/tuning-engine.ts)、[tuned.ts](src/config/tuned.ts)、§3.2、§7 |

@@ -137,6 +137,8 @@ export const spawnManagerSystem: System = {
         // P2-2：tuning pending 期间 hauler 主动收敛目标 — 上调 maxCount → preAdjustValue+1；
         // 下调 minCount → preAdjustValue-1；让 demand 扩编/缩编到合同目标（配合 isContractMet）。
         haulerPendingTarget: computeHaulerPendingTarget(snapshot.roomName),
+        // R6a：议程注入（rcl-push 放宽 upgrader 冲刺门槛）。
+        agendaInitiative: Memory.kernel?.agenda?.initiative,
       };
       const demandResult = evaluateDemand(
         snapshot,

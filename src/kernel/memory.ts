@@ -680,6 +680,28 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 27,
+    to: 28,
+    run: () => {
+      // v28：R6a 帝国议程 — 新增 KernelMemory.agenda（empire-strategy 每 tick
+      // 重建，缺失视为 develop 兜底）。建档 + 畸形自愈：非对象 / initiative
+      // 不在枚举 / since 非数字 → 删除整个字段（下 tick 重建）。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+      const agenda = kernel.agenda as Record<string, unknown> | undefined;
+      if (agenda === undefined) return;
+      const validInitiatives = ["recovery", "defense-readiness", "rcl-push", "develop"];
+      if (
+        typeof agenda !== "object" ||
+        agenda === null ||
+        !validInitiatives.includes(agenda.initiative as string) ||
+        typeof agenda.since !== "number"
+      ) {
+        delete kernel.agenda;
+      }
+    },
+  },
 ];
 
 /**

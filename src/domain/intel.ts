@@ -21,22 +21,16 @@ export interface RoomIntel {
   reservedBy?: string;
   /** 有视野时记录的敌方 tower 数（进攻/远矿风险评估的核心变量）。 */
   towers?: number;
-  /** home 锚点到该房中心的 PathFinder 实测成本（swampCost:5 计入地形）。
-   * 远矿评选的通勤账本 — 地形静态，算一次终身缓存（room-observer 逐 tick
-   * 补算）；缺失时评选方回退线性距离估算。 */
+  /** home 锚点到该房中心的 PathFinder 实测成本（swampCost:5 计入地形）；地形静态、
+   * 算一次终身缓存，缺失时评选方回退线性距离估算。 */
   pathCost?: number;
-  /** 最近更新 tick。 */
   lastSeen: number;
 }
 
 /**
- * 按房名分类房间（无需视野）。
- *
- * 官方地图规律：坐标个位（mod 10）决定房间性质——
- *   任一坐标 mod 10 == 0        → 公路房（highway，十字路口无 controller）
- *   双坐标 mod 10 == 5          → 中心房（center，3 source + 1 矿，无 controller）
- *   双坐标 mod 10 ∈ {4,5,6}     → source keeper 房（3 source，SK 把守）
- *   其余                        → 普通房（可 claim）
+ * 按房名分类房间（无需视野）。官方地图规律（坐标 mod 10）：任一坐标 ==0 →
+ * highway（十字路口无 controller）；双坐标 ==5 → center（3 source+1 矿）；
+ * 双坐标 ∈{4,5,6} → sk（3 source，SK 把守）；其余 → normal（可 claim）。
  */
 export function classifyRoomByName(roomName: string): RoomKind {
   const match = roomName.match(/^([WE])(\d+)([NS])(\d+)$/);
@@ -49,12 +43,9 @@ export function classifyRoomByName(roomName: string): RoomKind {
   return "normal";
 }
 
-/** 扫描单个邻房的情报。visibleRoom 为 undefined 时只落房名分类与房态。
- *
- * prev：既有条目 — 跨刷新保留的字段（无视野时保留上次的
- * sources/mineral/owner/towers 观测值与 pathCost）。不传则视为首次建档。
- * P1-G 后 dangerUntil 已迁移至 RemoteOp，intel 不再保留该字段。
- */
+/** 扫描单个邻房的情报；visibleRoom 为 undefined 时只落房名分类与房态。
+ * prev：既有条目 — 无视野时保留上次的 sources/mineral/owner/towers 与 pathCost；
+ * 不传视为首次建档。P1-G 后 dangerUntil 已迁至 RemoteOp，intel 不再保留。 */
 export function scanNeighborIntel(
   roomName: string,
   status: string,
