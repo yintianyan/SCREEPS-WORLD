@@ -39,7 +39,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 28 },
+  memory: { schemaVersion: 29 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -452,6 +452,8 @@ export const CONFIG = {
     // 跨房远征攻击者：仅 war 姿态时由 war-planner 孵化（CONFIG.roles 兼任
     // recyclePass「在役角色」白名单 — 漏配会让攻击者孵出即被判废弃回收）。
     attacker: { minCount: 0, maxCount: 4 },
+    // 侦察兵（R6b）：prospect 任务临时孵化，同一时刻至多 1 只。
+    scout: { minCount: 0, maxCount: 1 },
   },
 
   war: {
@@ -642,6 +644,22 @@ export const CONFIG = {
     rclPushMaxPressure: 0.3,
     /** 普通目标切换的最短驻留（防 rcl-push ↔ develop 抖动；紧急目标立即生效）。 */
     minDwell: 200,
+  },
+
+  /** 主动情报（R6b）— 侦察任务：为扩张决策主动获取候选房视野。 */
+  prospect: {
+    /** 任务管理器运行间隔（tick）。 */
+    interval: 25,
+    /** 成功判定：目标 intel 距今 ≤ 此值且 sources 已知 → 决策就绪。 */
+    intelFreshness: 50,
+    /** 任务全程超时（含孵化等待）：超时判失败 + 目标冷却。 */
+    maxMissionTicks: 1200,
+    /** 最多孵化侦察兵数（含首发）：死亡达上限判失败 + 冷却。 */
+    maxSpawns: 2,
+    /** 失败/超时/死亡目标冷却：冷却期内不重选。 */
+    cooldownTicks: 20000,
+    /** 侦察是纯发展投资：bucket 低于此值不开新任务（进行中任务不受影响）。 */
+    minBucket: 5000,
   },
 } as const;
 

@@ -358,6 +358,26 @@ declare global {
       initiative: "recovery" | "defense-readiness" | "rcl-push" | "develop";
       since: number;
     };
+    /**
+     * 侦察任务（v29+，prospect-manager 写入）：同一时刻至多一个。
+     * 姿态 expansionAllowed 时主动为扩张候选房获取视野（决策就绪情报）。
+     * 成功（intel 新鲜）/失败（超时/死亡上限）后清除，失败进 prospectCooldown。
+     */
+    prospect?: {
+      /** 侦察目标房（扩张候选）。 */
+      target: string;
+      /** 孵化侦察兵的 sponsor 房（intel 归属房）。 */
+      sponsor: string;
+      /** 任务开始 tick（超时基准）。 */
+      startedAt: number;
+      /** 累计提交的 scout 孵化请求数（死亡上限判定）。 */
+      spawned: number;
+    };
+    /**
+     * 侦察失败目标冷却（v29+，prospect-manager 写入）：房名 → 到期 tick。
+     * 冷却期内不被 selectProspectTarget 重选；到期由管理器清理。
+     */
+    prospectCooldown?: Record<string, number>;
   }
 
   /** 参数自调优的持久化状态。 */

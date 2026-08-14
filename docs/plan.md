@@ -1407,7 +1407,18 @@ M12 独立推进（RCL6 到手即开工，不等 M11）
 > R6a 已实施（schema v28）：`domain/strategy/agenda.ts` 纯函数 + empire-strategy
 > 发布 + AgendaChange 事件（EventKind 25）+ demand 的 rcl-push 冲刺放宽接线
 > （spawn-manager 适配层注入 agendaInitiative）。测试：agenda 11 例 + 迁移 5 例。
+>
+> R6b 已实施（schema v29）：`domain/strategy/prospect.ts` 纯决策（claimable 过滤 +
+> 视野新鲜判定，镜像 expansion/evaluator 口径）+ prospect-manager P3 任务状态机
+> （expansionAllowed 授权 → 选目标 → 派 scout → 成功/超时/死亡/中止四态收摊，
+> 失败进 prospectCooldown）+ scout 角色（[MOVE] 50 能量一次性侦察兵）+
+> room-observer captureScoutVision 接线（侦察兵视野 → sponsor intel 落库，
+> 扩张评估器零改动消费）+ ProspectOutcome 事件（EventKind 26）。
+> 测试：prospect 7 例 + prospect-manager 9 例 + scout/视野捕获 3 例 + 迁移 6 例。
+> 边界：v1 候选范围 = 各房 intel 已登记房（自有房邻房）— 更远候选需 map 扫描，
+> 待多房阶段再扩。
 
 R6a 是「主动运行」的最小闭环：帝国首次拥有可解释、可观测的短期目标，
-行为从「状态阈值反应」升级为「目标驱动的主动运行」。R6b/R6c 在 R6a
-验证后再排期（依据：每阶段都以运行时指标证明价值，不为主动而主动）。
+行为从「状态阈值反应」升级为「目标驱动的主动运行」。R6b 补上「决策就绪
+情报」闭环：扩张候选不再干等视野 — 姿态允许时帝国主动派侦察兵取回情报。
+R6c 经复核取消（防御姿态消费已存在）。

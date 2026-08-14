@@ -702,6 +702,44 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 28,
+    to: 29,
+    run: () => {
+      // v29：R6b 主动情报 — 新增 KernelMemory.prospect / prospectCooldown
+      // （prospect-manager 唯一写者）。建档 + 畸形自愈：prospect 非对象 /
+      // target/sponsor 非字符串 / startedAt/spawned 非数字 → 删除（管理器重建）；
+      // prospectCooldown 非对象或条目非数字 → 删除该条目/字段。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+
+      const prospect = kernel.prospect as Record<string, unknown> | undefined;
+      if (prospect !== undefined) {
+        if (
+          typeof prospect !== "object" ||
+          prospect === null ||
+          typeof (prospect as { target?: unknown }).target !== "string" ||
+          typeof (prospect as { sponsor?: unknown }).sponsor !== "string" ||
+          typeof (prospect as { startedAt?: unknown }).startedAt !== "number" ||
+          typeof (prospect as { spawned?: unknown }).spawned !== "number"
+        ) {
+          delete kernel.prospect;
+        }
+      }
+
+      const cooldown = kernel.prospectCooldown as Record<string, unknown> | undefined;
+      if (cooldown !== undefined) {
+        if (typeof cooldown !== "object" || cooldown === null || Array.isArray(cooldown)) {
+          delete kernel.prospectCooldown;
+        } else {
+          for (const roomName in cooldown) {
+            if (typeof cooldown[roomName] !== "number") delete cooldown[roomName];
+          }
+          if (Object.keys(cooldown).length === 0) delete kernel.prospectCooldown;
+        }
+      }
+    },
+  },
 ];
 
 /**

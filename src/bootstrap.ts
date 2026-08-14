@@ -10,6 +10,7 @@ import { remoteHarvesterRole } from "./creeps/roles/remote-harvester";
 import { remoteHaulerRole } from "./creeps/roles/remote-hauler";
 import { remoteDefenderRole } from "./creeps/roles/remote-defender";
 import { reserverRole } from "./creeps/roles/reserver";
+import { scoutRole } from "./creeps/roles/scout";
 import { upgraderRole } from "./creeps/roles/upgrader";
 import { workerRole } from "./creeps/roles/worker";
 import { Kernel } from "./kernel/kernel";
@@ -24,6 +25,7 @@ import { layoutPlannerSystem } from "./systems/layout-planner";
 import { labSystem } from "./systems/lab-system";
 import { linkSystem } from "./systems/link-system";
 import { pixelSystem } from "./systems/pixel-system";
+import { prospectManagerSystem } from "./systems/prospect-manager";
 import { remoteMiningManagerSystem } from "./systems/remote-mining-manager";
 import { warPlannerSystem } from "./systems/war-planner";
 import { roomObserverSystem } from "./systems/room-observer";
@@ -79,6 +81,8 @@ export const registry = new Registry()
   .registerSystem(factoryManagerSystem)
   // P3：扩张管理（GCL 有余量时 claim 新房）
   .registerSystem(expansionManagerSystem)
+  // P3：主动情报（expansionAllowed 时派侦察兵取候选房视野；失败冷却止损）
+  .registerSystem(prospectManagerSystem)
   // P3：遥测采集（低频采样）
   .registerSystem(telemetryCollectorSystem)
   // P3：参数自调优（每 500 tick 读遥测调角色边界覆盖值）
@@ -108,6 +112,8 @@ export const registry = new Registry()
   .registerRole(mineralMinerRole)
   // P2：attacker（仅 war-planner 孵化）
   .registerRole(attackerRole)
+  // P3：scout（一次性侦察兵，仅 prospect-manager 孵化）
+  .registerRole(scoutRole)
   // P1：remoteDefender（杀 NPC reserver/Invader）
   .registerRole(remoteDefenderRole);
 

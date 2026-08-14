@@ -32,6 +32,7 @@ export const TUNABLE_ROLES = [
   "defender",
   "remoteDefender",
   "claimer",
+  "scout",
   "mineralMiner",
   "attacker",
 ] as const;

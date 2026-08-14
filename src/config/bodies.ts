@@ -22,6 +22,11 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     // 绝境档 [1T,1A,1M]：随时可战优先于等满配（bodies.test 要求最低档 minCapacity=200）。
     { parts: ["tough", "attack", "move"], minCapacity: 200 },
   ],
+  // 侦察兵（R6b）：[MOVE] 即足 — 无疲劳全速穿行、50 能量可抛弃；
+  // 使命是「到达目标房提供一 tick 视野」，不是战斗（敌意房由 flee 保全）。
+  scout: [
+    { parts: ["move"], minCapacity: 50 },
+  ],
   worker: [
     // 开局优化：RCL1 起始 300 能量直接用满，2 WORK 采集翻倍，大幅缩短 bootstrap。
     { parts: ["work", "work", "carry", "move"], minCapacity: 300 },

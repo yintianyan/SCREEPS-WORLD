@@ -106,7 +106,8 @@ describe("Bodies — BODY_TEMPLATES", () => {
       // reserver / claimer 需要 CLAIM 部件（600 能量），无法降级到 200。
       // remoteDefender / defender 的最低档 [ATTACK,MOVE] = 130（ATTACK 80 + MOVE 50），
       // 战斗角色的绝境档刻意低于 200 — 有防御总比没有强。
-      if (role === "reserver" || role === "claimer" || role === "remoteDefender" || role === "defender") continue;
+      // scout（R6b）为 50 能量 [MOVE] 一次性侦察兵，同样豁免。
+      if (role === "reserver" || role === "claimer" || role === "remoteDefender" || role === "defender" || role === "scout") continue;
       const lastTemplate = templates[templates.length - 1];
       expect(lastTemplate?.minCapacity).toBe(200);
     }

@@ -33,6 +33,9 @@ export const roomObserverSystem: System = {
   run(ctx: TickContext): void {
     // 上一 tick 通过 observer 请求的视野本 tick 生效 — 优先捕获（仅一次机会）。
     captureObservedIntel(ctx.tick);
+    // R6b：侦察兵视野捕获 — prospect 任务存续期间，scout 所在目标房的
+    // sources/owner/towers 落库为决策就绪情报（扩张评估器直接消费）。
+    captureScoutVision(ctx.tick);
 
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
@@ -189,6 +192,43 @@ function countHostileTowers(room: Room): number {
   return room
     .find(FIND_HOSTILE_STRUCTURES)
     .filter(s => s.structureType === STRUCTURE_TOWER).length;
+}
+
+/**
+ * 侦察兵视野捕获（R6b）：prospect 任务存续期间，把站在目标房内的 scout
+ * 视野写回 sponsor 的 intel。只扫描一次 Game.creeps（仅任务存续期间），
+ * scout 站定即每 tick 刷新 lastSeen — prospect-manager 据此判成功。
+ * 复用 scanNeighborIntel 的 prev 语义（保留 pathCost 等静态字段）。
+ */
+function captureScoutVision(tick: number): void {
+  const mission = Memory.kernel?.prospect;
+  if (!mission) return;
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    if (!c || c.memory.role !== "scout") continue;
+    const target = c.memory.remoteTarget;
+    const home = c.memory.home;
+    if (!target || !home || c.room.name !== target) continue;
+    const room = Game.rooms[target];
+    if (!room) continue;
+    const roomMem = Memory.rooms[home];
+    if (!roomMem) continue;
+    const status = Game.map.getRoomStatus(target).status;
+    roomMem.intel ??= {};
+    roomMem.intel[target] = scanNeighborIntel(
+      target,
+      status,
+      tick,
+      {
+        sources: room.find(FIND_SOURCES).length,
+        mineralType: room.find(FIND_MINERALS)[0]?.mineralType,
+        owner: room.controller?.owner?.username,
+        reservation: room.controller?.reservation?.username,
+        towers: countHostileTowers(room),
+      },
+      roomMem.intel[target],
+    );
+  }
 }
 
 /**
