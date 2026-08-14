@@ -64,6 +64,10 @@ export const remoteMiningManagerSystem: System = {
         snapshot.storage !== undefined,
         snapshot.spawns.length,
       );
+      // R7b：算力容量加码 — abundant 档（余量稳定充足）放宽 1 个远矿点，
+      // constrained/tight 不额外收紧（本地收缩已由 tier 看门狗与 posture 处理）。
+      const capacityTier = Memory.kernel?.capacity?.tier;
+      const maxOpsWithCapacity = capacityTier === "abundant" ? maxOps + 1 : maxOps;
 
       // 2a. 超额收缩：active 数超上限时废弃通勤最贵的。排序键优先 intel 实测 pathCost
       //     （越远越先砍 — 对应编制成本与孵化位占用），无 intel 回退 haulerNeed；
@@ -73,7 +77,7 @@ export const remoteMiningManagerSystem: System = {
       //     本地角色饿死。收缩用 abandoned 而非 paused — paused 会被 maintainExistingOps
       //     在 creep 尚在时自动复活（震荡）；abandoned 停止一切孵化、现役 creep 不召回
       //     （沉没成本已付，自然寿终榨干残值）。上限输入都是建筑级稳定量，不会抖动。
-      if (activeCount > maxOps) {
+      if (activeCount > maxOpsWithCapacity) {
         const costOf = (roomName: string, op: RemoteOp): number =>
           roomMem.intel?.[roomName]?.pathCost ?? (op.haulerNeed ?? 1) * 20;
         const active = Object.entries(remoteOps)
@@ -82,12 +86,12 @@ export const remoteMiningManagerSystem: System = {
             costOf(b[0], b[1]) - costOf(a[0], a[1]) ||
             a[0].localeCompare(b[0]),
           );
-        for (let i = 0; i < activeCount - maxOps; i++) {
+        for (let i = 0; i < activeCount - maxOpsWithCapacity; i++) {
           const [roomName, op] = active[i]!;
           op.state = "abandoned";
           console.log(
             `[${ctx.tick}] remote/${snapshot.roomName}: 超额收缩，废弃 ${roomName}` +
-            `（active ${activeCount} > 上限 ${maxOps}，通勤成本=${costOf(roomName, op)}）`,
+            `（active ${activeCount} > 上限 ${maxOpsWithCapacity}，通勤成本=${costOf(roomName, op)}）`,
           );
         }
       }
@@ -105,7 +109,7 @@ export const remoteMiningManagerSystem: System = {
       // 逐房就绪门（Phase 1b）：帝国姿态放行（newOpsAllowed）之外，本房还须自身经济
       // 成熟才「新开」远矿 — RCL≥roomMinRcl 且 colonyState=normal 且 storage 盈余，
       // 防 RCL4 新占嫩房过早分兵远矿（本该闷头冲级）。现役 op 维护/重估不受影响。
-      if (newOpsAllowed && roomReadyForNewRemote(snapshot, roomMem.colonyState) && activeCount < maxOps) {
+      if (newOpsAllowed && roomReadyForNewRemote(snapshot, roomMem.colonyState) && activeCount < maxOpsWithCapacity) {
         const candidates = selectRemoteTargets({
           homeRoom: snapshot.roomName,
           intel: roomMem.intel,
@@ -118,7 +122,7 @@ export const remoteMiningManagerSystem: System = {
           ownedRooms,
         });
         // 只补充到有效上限。
-        const needed = maxOps - activeCount;
+        const needed = maxOpsWithCapacity - activeCount;
         for (let i = 0; i < Math.min(needed, candidates.length); i++) {
           const candidate = candidates[i]!;
           remoteOps[candidate.roomName] = {

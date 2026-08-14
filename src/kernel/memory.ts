@@ -740,6 +740,39 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 29,
+    to: 30,
+    run: () => {
+      // v30：R7a 容量感知 — 新增 KernelMemory.capacity（empire-strategy 每 tick
+      // 重建）、agenda.progressBase（rcl-push 归因基线）。建档 + 畸形自愈：
+      // capacity 非对象 / tier 不在枚举 / since·upgradeTicks 非数字 → 删除；
+      // progressBase 非数字 → 删除（缺失视为无基线，窗口归因跳过）。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+
+      const capacity = kernel.capacity as Record<string, unknown> | undefined;
+      if (capacity !== undefined) {
+        const validTiers = ["abundant", "comfortable", "tight", "constrained"];
+        if (
+          typeof capacity !== "object" ||
+          capacity === null ||
+          !validTiers.includes(capacity.tier as string) ||
+          typeof capacity.since !== "number" ||
+          typeof capacity.upgradeTicks !== "number"
+        ) {
+          delete kernel.capacity;
+        }
+      }
+
+      const agenda = kernel.agenda as Record<string, unknown> | undefined;
+      if (agenda !== undefined && typeof agenda === "object") {
+        if (agenda.progressBase !== undefined && typeof agenda.progressBase !== "number") {
+          delete agenda.progressBase;
+        }
+      }
+    },
+  },
 ];
 
 /**

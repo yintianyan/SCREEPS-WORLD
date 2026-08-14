@@ -1422,3 +1422,42 @@ R6a 是「主动运行」的最小闭环：帝国首次拥有可解释、可观�
 行为从「状态阈值反应」升级为「目标驱动的主动运行」。R6b 补上「决策就绪
 情报」闭环：扩张候选不再干等视野 — 姿态允许时帝国主动派侦察兵取回情报。
 R6c 经复核取消（防御姿态消费已存在）。
+
+### 14.4 容量感知与节奏演化（R7）
+
+R6 之后帝国有了「目标」（议程）与「情报」（侦察）；R7 补上「容量」与「归因」：
+规模规划从「bucket 掉档后的反应式收缩」升级为「按可用算力前馈规划」，
+战略决策从「只有离散事件」升级为「决策→结果配对台账」。
+
+#### 算力容量模型（R7a，schema v30）
+
+- `domain/strategy/capacity.ts` 纯函数：四档分层 abundant/comfortable/tight/
+  constrained，**有效上限 = min(cpuLimit, tickLimit)** — 不写死任何账号数字，
+  GCL 增长/订阅变化/tickLimit 波动都自适应；输入 cpuAvg10 来自既有遥测
+  （Memory.kernel.stats），不新增采样。
+- 滞回：降档立即（收缩刻不容缓），升档需持续满足 upgradeWindowTicks(300)
+  （雄心扩张要证明余量稳定而非尖峰间隙）。
+- 与四档 bucket 看门狗正交：看门狗管本 tick 突发，容量模型管帝国规模；
+  与 tuning-engine 同层不同职：容量分档是规划信号，参数演化是行为调优。
+- empire-strategy 每 tick 发布 Memory.kernel.capacity（分档变更打日志）。
+- 首个消费者：remote-mining-manager 远矿上限在 abundant 档 +1（有算力余量
+  就多养一条远矿线）；其余消费者（人口规模封顶、扩张门禁）待多房压力
+  出现后再接线 — 单房 1.6/20 CPU 下接线只增风险无收益。
+
+#### 决策结果台账（R7a）
+
+- `ExpansionOutcome`（EventKind 28）：扩张任务两个阶段（claim/pioneer）的
+  九种收摊路径全部归因 — d=[phaseCode, outcomeCode(success/stolen/timeout/
+  lost/aborted), durationTicks]，r=目标房。
+- `AgendaOutcome`（EventKind 29）：退出议程时记录窗口收益 — rcl-push 窗口的
+  controller 进度增量与时长（agenda.progressBase 基线，v30）→「冲级议程值不值」
+  的可计算证据。
+- 与既有 WarOutcome/ProspectOutcome 组成完整台账：四类战略决策（扩张/战争/
+  侦察/议程）都有「决策→结果」配对记录，R7b 节奏自适应以此为输入。
+
+#### 下一步（R7b）
+
+- 扩张节奏自适应：用 ExpansionOutcome 台账归因失败条件（stolen 多→目标更保守；
+  timeout 多→claimTimeout/门禁收紧；连续成功→门禁放宽一档，硬上界防过冲），
+  复用 tuning-engine 的验证/回滚/冻结机器。
+- 人口规模封顶：capacity 分档驱动 demand 总量上限（多房压力信号出现后接线）。

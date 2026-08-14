@@ -80,6 +80,14 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   设计见 plan.md §14；测试见
   [tests/unit/systems/prospect-manager.test.ts](tests/unit/systems/prospect-manager.test.ts)、
   [tests/unit/strategy/prospect.test.ts](tests/unit/strategy/prospect.test.ts)。
+- R7a 容量感知已落地（schema v30）：算力容量模型（domain/strategy/capacity
+  四档分层，有效上限取 min(cpuLimit, tickLimit) 不写死 20 CPU，升档滞回/降档
+  立即，empire-strategy 发布）+ 决策结果台账（ExpansionOutcome 扩张九路归因、
+  AgendaOutcome 议程窗口归因）+ 首个消费者（远矿上限 abundant 档 +1）。
+  设计见 plan.md §14.4；测试见
+  [tests/unit/strategy/capacity.test.ts](tests/unit/strategy/capacity.test.ts)、
+  [tests/unit/systems/empire-strategy.test.ts](tests/unit/systems/empire-strategy.test.ts)、
+  [tests/unit/systems/expansion-outcome.test.ts](tests/unit/systems/expansion-outcome.test.ts)。
 - 仍为已知取舍：远矿 container **维修**链缺失（建造链已由 P0-A 补齐）；
   取舍决策以各处内联注释为准。
 
@@ -106,7 +114,7 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   → plan.md **§7 性能优化 · §2.3 数据所有权**
 - **迁移规范**：每次结构变更升版本；迁移必须幂等；先写新字段验证后删旧字段；
   所有步骤成功才更新 `schemaVersion`；大迁移按 cursor 分 tick。
-  新增 Memory 字段须同时更新类型与迁移（当前 `schemaVersion = 29`，见 `CONFIG.memory`）。
+  新增 Memory 字段须同时更新类型与迁移（当前 `schemaVersion = 30`，见 `CONFIG.memory`）。
   冷数据（布局 overrides/blocked）走 RawMemory segment。
   → plan.md **§3.4 版本化 Memory**
 
@@ -173,6 +181,7 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 | 改远矿 / 扩张 / 帝国姿态 | §12.1–12.4、[empire-strategy.ts](src/systems/empire-strategy.ts)、[posture.ts](src/domain/strategy/posture.ts) |
 | 改议程 / 主动目标 | §14、[agenda.ts](src/domain/strategy/agenda.ts)、[empire-strategy.ts](src/systems/empire-strategy.ts) |
 | 改情报 / 侦察 / 视野 | §14、[prospect-manager.ts](src/systems/prospect-manager.ts)、[prospect.ts](src/domain/strategy/prospect.ts)、[room-observer.ts](src/systems/room-observer.ts) |
+| 改容量 / 台账 / 节奏演化 | §14.4、[capacity.ts](src/domain/strategy/capacity.ts)、[empire-strategy.ts](src/systems/empire-strategy.ts) |
 | 改战争 / 进攻 / 止损 | §12.6、[war-planner.ts](src/systems/war-planner.ts)、[planning.ts](src/domain/war/planning.ts) |
 | 改跨房物流 / terminal / 市场 | §13.1、[terminal-manager.ts](src/systems/terminal-manager.ts)、[energy-logistics.ts](src/domain/economy/energy-logistics.ts) |
 | 改调参 / 遥测 / CPU 预算 | [tuning-engine.ts](src/systems/tuning-engine.ts)、[tuned.ts](src/config/tuned.ts)、§3.2、§7 |

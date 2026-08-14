@@ -357,6 +357,21 @@ declare global {
     agenda?: {
       initiative: "recovery" | "defense-readiness" | "rcl-push" | "develop";
       since: number;
+      /**
+       * rcl-push 窗口起始时的 controller 进度合计（v30+，R7a）：退出 rcl-push
+       * 时据此归因窗口内的升级速率（AgendaOutcome 事件）。
+       */
+      progressBase?: number;
+    };
+    /**
+     * 算力容量分层（v30+，empire-strategy 写入）：规模规划的前馈层 —
+     * 按 min(cpuLimit, tickLimit) 动态计算，消费者据此缩放远矿/扩张雄心。
+     */
+    capacity?: {
+      tier: "abundant" | "comfortable" | "tight" | "constrained";
+      since: number;
+      /** 升档候选连续满足余量的 tick 数（滞回防抖）。 */
+      upgradeTicks: number;
     };
     /**
      * 侦察任务（v29+，prospect-manager 写入）：同一时刻至多一个。

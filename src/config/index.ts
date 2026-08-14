@@ -39,7 +39,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 29 },
+  memory: { schemaVersion: 30 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -660,6 +660,18 @@ export const CONFIG = {
     cooldownTicks: 20000,
     /** 侦察是纯发展投资：bucket 低于此值不开新任务（进行中任务不受影响）。 */
     minBucket: 5000,
+  },
+
+  /** 算力容量模型（R7a）— 规模规划的 CPU 前馈分层。 */
+  capacity: {
+    /** avg/limit ≤ 此比例 → abundant（可扩雄心：远矿/扩张加码）。 */
+    abundantRatio: 0.35,
+    /** 超过此比例 → tight（收缩雄心）。 */
+    tightRatio: 0.6,
+    /** 超过此比例 → constrained（只保生存与恢复）。 */
+    constrainedRatio: 0.8,
+    /** 升档滞回窗口：余量需持续满足该 tick 数才升档（降档立即）。 */
+    upgradeWindowTicks: 300,
   },
 } as const;
 

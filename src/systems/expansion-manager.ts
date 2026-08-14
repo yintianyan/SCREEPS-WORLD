@@ -14,6 +14,7 @@
 import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext } from "../kernel/contracts";
+import { EventKind, recordEvent } from "../kernel/event-log";
 import { selectExpansionTarget } from "../domain/expansion/evaluator";
 import { submitRequest, hasRequest, cancelRequestsByHome } from "../domain/spawn/queue";
 import { selectAnchors } from "../domain/layout/anchor-selection";
@@ -21,6 +22,15 @@ import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { packPos } from "../domain/layout/types";
 import { COMPACT_CORE_V2 } from "../domain/layout/templates/compact-core-v2";
 import type { RoomIntel } from "../domain/intel";
+
+/** ExpansionOutcome 事件编码（与 event-log 注释对齐）。 */
+const PHASE_CLAIM = 0;
+const PHASE_PIONEER = 1;
+const OUTCOME_SUCCESS = 0;
+const OUTCOME_STOLEN = 1;
+const OUTCOME_TIMEOUT = 2;
+const OUTCOME_LOST = 3;
+const OUTCOME_ABORTED = 4;
 
 export const expansionManagerSystem: System = {
   name: "expansion-manager",
@@ -64,6 +74,15 @@ export const expansionManagerSystem: System = {
 };
 
 type ExpansionState = NonNullable<KernelMemory["expansion"]>;
+
+/** R7a：扩张阶段收摊归因（决策结果台账）— 供节奏自适应归因失败条件。 */
+function recordExpansionOutcome(expansion: ExpansionState, tick: number, phase: number, outcome: number): void {
+  recordEvent(EventKind.ExpansionOutcome, expansion.target, [
+    phase,
+    outcome,
+    tick - expansion.startedAt,
+  ]);
+}
 
 /** 把失败目标记入黑名单（冷却期内评估器不再选中）。 */
 function blacklistTarget(roomName: string, tick: number): void {
@@ -196,6 +215,7 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
   // 占领成功 → 选锚点、写 layout、进入拓荒。
   if (targetRoom?.controller?.my) {
     if (seedLayoutAnchor(targetRoom)) {
+      recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_SUCCESS);
       expansion.state = "pioneering";
       expansion.startedAt = ctx.tick;
       submitPioneers(ctx, expansion);
@@ -203,6 +223,7 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
     } else {
       // 无可行锚点 — 极罕见（开阔度门槛已带回退），放弃并冷却。
       console.log(`[${ctx.tick}] expansion: no viable anchor in ${expansion.target}, aborting`);
+      recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_ABORTED);
       blacklistTarget(expansion.target, ctx.tick);
       reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
       Memory.kernel!.expansion = undefined;
@@ -213,6 +234,7 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
   // 被他人抢占 → 立即放弃。
   if (targetRoom?.controller?.owner && !targetRoom.controller.my) {
     console.log(`[${ctx.tick}] expansion: ${expansion.target} taken by ${targetRoom.controller.owner.username}, aborting`);
+    recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_STOLEN);
     blacklistTarget(expansion.target, ctx.tick);
     reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
     Memory.kernel!.expansion = undefined;
@@ -222,6 +244,7 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
   // 超时 → 放弃（claimer 迷路/被杀/GCL 边界竞争失败）。
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.claimTimeout) {
     console.log(`[${ctx.tick}] expansion: claim ${expansion.target} timed out, aborting`);
+    recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_TIMEOUT);
     blacklistTarget(expansion.target, ctx.tick);
     reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
     Memory.kernel!.expansion = undefined;
@@ -240,6 +263,7 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
     const dangerUntil = Memory.rooms[expansion.sponsor]?.remoteOps?.[expansion.target]?.dangerUntil;
     if (dangerUntil !== undefined && ctx.tick < dangerUntil) {
       console.log(`[${ctx.tick}] expansion: ${expansion.target} hostile (claimer lost), aborting`);
+      recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_LOST);
       blacklistTarget(expansion.target, ctx.tick);
       reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
       Memory.kernel!.expansion = undefined;
@@ -298,6 +322,7 @@ function advancePioneering(ctx: TickContext, expansion: ExpansionState, spawning
   // 房间失守（被抢/降级）→ 结束行动并冷却。
   if (!targetRoom?.controller?.my) {
     console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during pioneering, aborting`);
+    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_STOLEN);
     blacklistTarget(expansion.target, ctx.tick);
     reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
     Memory.kernel!.expansion = undefined;
@@ -307,6 +332,7 @@ function advancePioneering(ctx: TickContext, expansion: ExpansionState, spawning
   // 完成判据：新房 spawn 建成 — 此后新房的 demand/bootstrap 闭环自治。
   if (targetRoom.find(FIND_MY_SPAWNS).length > 0) {
     console.log(`[${ctx.tick}] expansion: ${expansion.target} spawn online, expansion complete`);
+    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_SUCCESS);
     Memory.kernel!.expansion = undefined;
     return;
   }
@@ -327,6 +353,7 @@ function advancePioneering(ctx: TickContext, expansion: ExpansionState, spawning
     );
     if (!squadAlive) {
       console.log(`[${ctx.tick}] expansion: ${expansion.target} squad wiped by hostiles, aborting`);
+      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_LOST);
       blacklistTarget(expansion.target, ctx.tick);
       reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
       Memory.kernel!.expansion = undefined;
@@ -337,6 +364,7 @@ function advancePioneering(ctx: TickContext, expansion: ExpansionState, spawning
   // 超时：房已占下，仅停止编队补充（残余拓荒者继续干活至寿终）。
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.pioneerTimeout) {
     console.log(`[${ctx.tick}] expansion: pioneering ${expansion.target} timed out, squad replenishment stopped`);
+    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_TIMEOUT);
     Memory.kernel!.expansion = undefined;
     return;
   }

@@ -83,6 +83,14 @@ export const enum EventKind {
   /** R6b 侦察任务收摊：一次主动情报任务的结论。d = [outcomeCode(0=success/1=timeout/2=death/3=aborted), spawned]；
    * r = 目标房。复盘侦察成功率与「谁值得再侦察」。 */
   ProspectOutcome = 26,
+  /** R7a 扩张任务归因：claim 或 pioneering 阶段的收摊结论。
+   * d = [phaseCode(0=claim/1=pioneer), outcomeCode(0=success/1=stolen/2=timeout/3=lostOrHostile/4=aborted), durationTicks]；
+   * r = 目标房。供扩张节奏自适应（R7b）归因「什么条件下扩张会失败」。 */
+  ExpansionOutcome = 28,
+  /** R7a 议程窗口归因：退出某议程时记录窗口收益。
+   * d = [initiativeCode, progressGained, durationTicks]；r = ""。rcl-push 窗口的
+   * controller 进度增量 → 升级速率证据（评估冲级议程是否值得）。 */
+  AgendaOutcome = 29,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

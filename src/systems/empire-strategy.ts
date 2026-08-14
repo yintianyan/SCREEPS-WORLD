@@ -1,13 +1,13 @@
 /**
- * Empire Strategy — P1 系统，帝国姿态与议程的唯一裁决者与发布者（6 层模型的 Strategy 层）：
+ * Empire Strategy — P1 系统，帝国姿态/议程/容量的唯一裁决者与发布者（Strategy 层）：
  * State（room-state 写入的 colonyState/economyPressure/lastHostileAt）
- *   → 本系统用 domain/strategy/posture 纯函数评估姿态 → 写 Memory.kernel.strategy
- *   → 执行系统（expansion-manager / remote-mining-manager / 未来进攻系统）消费指令。
- * 铁律：执行系统不得自行裁决「是否该扩张/开战」— 它们读姿态指令行事；
- * 局部安全门禁（RCL 门槛、bucket 保护等）可以叠加收紧，但不得放宽姿态。
- * 进攻执行器未来接入时同样：war 姿态是授权来源，代码存在不等于战争开始。
- * R6a：同批评估帝国议程（domain/strategy/agenda 纯函数）→ 写 Memory.kernel.agenda —
- * 姿态回答「处于什么状态」，议程回答「主动在做什么」，切换记录 AgendaChange 事件。
+ *   → posture（domain/strategy/posture 纯函数）→ Memory.kernel.strategy
+ *   → agenda（domain/strategy/agenda 纯函数）→ Memory.kernel.agenda
+ *   → capacity（domain/strategy/capacity 纯函数）→ Memory.kernel.capacity
+ * 执行系统只消费指令（expansion-manager / remote-mining-manager / 未来进攻系统）。
+ * 铁律：执行系统不得自行裁决「是否该扩张/开战」；局部安全门禁只能收紧不得放宽。
+ * 姿态回答「处于什么状态」，议程回答「主动在做什么」，容量回答「养得起多大规模」。
+ * 切换均记录事件（AgendaChange / AgendaOutcome），容量分档变更打日志。
  */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import {
@@ -15,6 +15,7 @@ import {
   type RoomStrategyInput,
 } from "../domain/strategy/posture";
 import { evaluateAgenda } from "../domain/strategy/agenda";
+import { evaluateCapacity } from "../domain/strategy/capacity";
 import { CONFIG } from "../config";
 import { EventKind, recordEvent } from "../kernel/event-log";
 
@@ -33,9 +34,12 @@ export const empireStrategySystem: System = {
   run(ctx: TickContext): void {
     // 采集各房战略输入（room-state P0 已在本 tick 更新过这些字段）。
     const rooms: RoomStrategyInput[] = [];
+    // R7a：controller 进度合计（AgendaOutcome 归因 rcl-push 窗口的升级速率）。
+    let totalProgress = 0;
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
+      totalProgress += snapshot.controller?.progress ?? 0;
       rooms.push({
         colonyState: roomMem.colonyState ?? "normal",
         economyPressure: roomMem.economyPressure ?? 0,
@@ -89,12 +93,55 @@ export const empireStrategySystem: System = {
         minDwell: CONFIG.agenda.minDwell,
       },
     );
+
+    let progressBase = prevAgenda?.progressBase;
     if (prevAgenda?.initiative !== agenda.initiative) {
+      // R7a：退出 rcl-push 时归因窗口收益（controller 进度增量 → 升级速率证据）。
+      if (prevAgenda?.initiative === "rcl-push" && progressBase !== undefined) {
+        const gained = Math.max(0, totalProgress - progressBase);
+        const duration = ctx.tick - (prevAgenda.since ?? ctx.tick);
+        recordEvent(EventKind.AgendaOutcome, "", [AGENDA_CODES["rcl-push"]!, gained, duration]);
+      }
       console.log(
         `[${ctx.tick}] agenda: ${prevAgenda?.initiative ?? "(none)"} → ${agenda.initiative}`,
       );
       recordEvent(EventKind.AgendaChange, "", [AGENDA_CODES[agenda.initiative] ?? 3]);
+      progressBase = agenda.initiative === "rcl-push" ? totalProgress : undefined;
     }
-    Memory.kernel.agenda = agenda;
+    Memory.kernel.agenda = {
+      initiative: agenda.initiative,
+      since: agenda.since,
+      progressBase,
+    };
+
+    // ── R7a：算力容量 — 规模规划的前馈层（「养得起多大规模」）──
+    const capacity = evaluateCapacity(
+      {
+        cpuLimit: Game.cpu.limit,
+        tickLimit: Game.cpu.tickLimit,
+        bucket: Game.cpu.bucket ?? 10000,
+        cpuAvg10: Memory.kernel.stats?.cpuAvg10 ?? 0,
+        cpuMax10: Memory.kernel.stats?.cpuMax10 ?? 0,
+      },
+      Memory.kernel.capacity,
+      ctx.tick,
+      {
+        abundantRatio: CONFIG.capacity.abundantRatio,
+        tightRatio: CONFIG.capacity.tightRatio,
+        constrainedRatio: CONFIG.capacity.constrainedRatio,
+        upgradeWindowTicks: CONFIG.capacity.upgradeWindowTicks,
+      },
+    );
+    if (Memory.kernel.capacity?.tier !== capacity.tier) {
+      console.log(
+        `[${ctx.tick}] capacity: ${Memory.kernel.capacity?.tier ?? "(none)"} → ${capacity.tier}` +
+        ` (headroom=${Math.round(capacity.headroom * 100)}%, limit=${Math.min(Game.cpu.limit, Game.cpu.tickLimit)})`,
+      );
+    }
+    Memory.kernel.capacity = {
+      tier: capacity.tier,
+      since: capacity.since,
+      upgradeTicks: capacity.upgradeTicks,
+    };
   },
 };
