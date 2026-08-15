@@ -150,6 +150,23 @@ export const roomStateSystem: System = {
         roomMem.lastHostileAt = ctx.tick;
       }
 
+      // R7c：无害侦察观测 — 有敌对但无威胁部件（侦察兵）时记录目击。
+      // 持续目击 = 有人盯防的信号（与 lastHostileAt 威胁记忆刻意分开：
+      // 不触发 defense/姿态，纯情报）。塔侧由 tower-defense 放空动作让
+      // 引擎自动点杀（见 tower-defense 的无害敌对分支）。
+      const observerCount = Math.max(0, snapshot.hostileCreeps.length - threatCount);
+      if (observerCount > 0) {
+        const firstSighting = roomMem.observerSightings === undefined;
+        roomMem.lastObserverAt = ctx.tick;
+        roomMem.observerSightings = Math.min((roomMem.observerSightings ?? 0) + 1, 100000);
+        // 首次目击 + 每 500 tick 限流日志 — 盯防信号必须可见但不刷屏。
+        if (firstSighting || ctx.tick % 500 === 0) {
+          console.log(
+            `[${ctx.tick}] observer/${snapshot.roomName}: 无害侦察目击 #${roomMem.observerSightings}（hostile=${snapshot.hostileCreeps.length}）`,
+          );
+        }
+      }
+
       // P1-3：威胁过期失效 — threatCreeps>0 但 lastHostileAt 超过 threatStaleTicks 未刷新
       // 视为 stale threat（旧威胁停留或快照未更新），不再触发 defense。
       const lastHostileAge = roomMem.lastHostileAt !== undefined

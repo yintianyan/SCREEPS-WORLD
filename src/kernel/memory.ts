@@ -821,6 +821,25 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 31,
+    to: 32,
+    run: () => {
+      // v32：R7c 无害侦察观测 — 新增 RoomMemory.lastObserverAt /
+      // observerSightings（room-state 唯一写者）。建档 + 畸形自愈：
+      // 非数字 → 删除（缺失视为无目击）。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
+        if (!room) continue;
+        if (room.lastObserverAt !== undefined && typeof room.lastObserverAt !== "number") {
+          delete room.lastObserverAt;
+        }
+        if (room.observerSightings !== undefined && typeof room.observerSightings !== "number") {
+          delete room.observerSightings;
+        }
+      }
+    },
+  },
 ];
 
 /**

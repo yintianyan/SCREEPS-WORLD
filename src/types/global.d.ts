@@ -125,6 +125,13 @@ declare global {
     /** P1-3：上一 tick 的威胁 creep 数量，用于检测新增威胁（count 增加）。
      * room-state 每 tick 写入，缺失时按 0 处理（首威胁即新增）。 */
     prevThreatCount?: number;
+    /**
+     * 无害侦察观测（v32+，R7c，room-state 写入）：最近一次「有敌对但无威胁
+     * 部件」（侦察兵）目击 tick 与累计目击次数 — 盯防信号，与 lastHostileAt
+     * 威胁记忆刻意分开（不触发防御，纯情报）。
+     */
+    lastObserverAt?: number;
+    observerSightings?: number;
     /** 殖民相位观测（约束层的「经济真相」）。 */
     phase?: {
       phase: ColonyPhase;

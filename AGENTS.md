@@ -94,6 +94,11 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   plan.md §14.4；测试见
   [tests/unit/expansion/rhythm.test.ts](tests/unit/expansion/rhythm.test.ts)、
   [tests/unit/systems/expansion-outcome.test.ts](tests/unit/systems/expansion-outcome.test.ts)。
+- R7c 塔防侦察兵修复 + 无害侦察观测已落地（schema v32）：修复「满能量塔对
+  贴身侦察兵不开火」（无害敌对在场时塔不接维修，放空让引擎自动点杀）；
+  room-state 记录 lastObserverAt/observerSightings 盯防信号（与威胁记忆分离）。
+  测试见 [tests/unit/systems/tower-defense-observer.test.ts](tests/unit/systems/tower-defense-observer.test.ts)、
+  [tests/unit/systems/room-state-observer.test.ts](tests/unit/systems/room-state-observer.test.ts)。
 - 仍为已知取舍：远矿 container **维修**链缺失（建造链已由 P0-A 补齐）；
   取舍决策以各处内联注释为准。
 
@@ -120,7 +125,7 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   → plan.md **§7 性能优化 · §2.3 数据所有权**
 - **迁移规范**：每次结构变更升版本；迁移必须幂等；先写新字段验证后删旧字段；
   所有步骤成功才更新 `schemaVersion`；大迁移按 cursor 分 tick。
-  新增 Memory 字段须同时更新类型与迁移（当前 `schemaVersion = 31`，见 `CONFIG.memory`）。
+  新增 Memory 字段须同时更新类型与迁移（当前 `schemaVersion = 32`，见 `CONFIG.memory`）。
   冷数据（布局 overrides/blocked）走 RawMemory segment。
   → plan.md **§3.4 版本化 Memory**
 

@@ -98,6 +98,14 @@ export const towerDefenseSystem: System = {
         continue;
       }
 
+      // 无害敌对（侦察兵等无战斗部件单位）在场 — 塔本 tick 不接维修任务。
+      // 引擎会对最近的敌对 creep 自动开火（10 能量一枪点掉 MOVE 侦察兵）；
+      // 显式 repair 会占用塔的本 tick 动作、抑制引擎自动攻击 —
+      // 「满能量塔对贴身侦察兵不开火」的根因正是维修分支抢走了塔的动作。
+      if (snapshot.hostileCreeps.length > 0) {
+        continue;
+      }
+
       // 无敌人 — 维修逻辑。
       // A3/B3：维修权移交 creep —— 塔修 1 次 10 能量且有距离衰减，creep 修是
       // 1 energy/100 hits/WORK。本房存在 builder/worker 时塔只保留开火职责，
