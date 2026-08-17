@@ -147,6 +147,65 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   交替，维修与采集并行不断流。测试见
   [tests/unit/role/remote-harvester.test.ts](tests/unit/role/remote-harvester.test.ts)、
   [tests/integration/scenarios/remote-container-repair.test.ts](tests/integration/scenarios/remote-container-repair.test.ts)。
+- G1/G3 nuke 落点感知 + 资产抢救链已落地（无 schema 变更，帝国审计缺口
+  1+3）：① 感知 — RoomSnapshot.incomingNukes（自有房 FIND_NUKES 常量查询），
+  room-state 差分新 nuke id 记 NukeDetected 事件（globalCache 基线，reset
+  后重报无害）；② 抢救 — terminal-manager 的 tryNukeSalvage 先于市场/
+  tier/bucket 门禁（send 不依赖市场 API，战时降档不阻断），警报房 terminal
+  库存按价值密度序（power > G > X 化合物 > battery > 基础矿物 > 能量兜底
+  留运费地板）逐轮 send 到无警报兄弟房；③ 搬运 — distributor 的
+  salvageStorageToTerminal（nuke 警报房才激活，常态零开销）把 storage
+  库存搬 terminal 支撑持续 send。测试见
+  [tests/unit/defense/nuke-response.test.ts](tests/unit/defense/nuke-response.test.ts)、
+  [tests/unit/systems/terminal-manager-nuke.test.ts](tests/unit/systems/terminal-manager-nuke.test.ts)、
+  [tests/unit/role/distributor-salvage.test.ts](tests/unit/role/distributor-salvage.test.ts)。
+- G2 PB 野采链已落地（schema v36，帝国审计缺口 2）：① intel 增 powerBank
+  字段（room-observer 复用全结构扫描采集，零额外 find）；②
+  power-farm-manager（唯一写者 Memory.kernel.powerFarm）任务生命周期
+  strike→collect：编队（4 attacker + ratio healer，memory.mission 标记分流）
+  击破 PB → 房内视野确认 PB 消失 → 回收编队 + 孵 pbCollector 捡运掉落
+  power；止损三通道（超时/战损/war 抢占 — warPlan 存续即收摊，军事资源
+  不双线）；③ attacker 增 attackPowerBank 候选（PB 是 FIND_STRUCTURES
+  中立结构，hostile 链打不到）+ hold 钩子对 mission=powerBank 放行（无
+  波次集结语义）；④ queue.ts 增 removeRequestsByMission/countPendingByMission
+  （war/PB 编队共用角色名的分流口径，spawnQueue splice 守卫不破）。
+  测试见 [tests/unit/war/power-farm.test.ts](tests/unit/war/power-farm.test.ts)、
+  [tests/unit/systems/power-farm-manager.test.ts](tests/unit/systems/power-farm-manager.test.ts)、
+  [tests/unit/migration/v35-to-v36.test.ts](tests/unit/migration/v35-to-v36.test.ts)、
+  [tests/unit/role/attacker-powerbank.test.ts](tests/unit/role/attacker-powerbank.test.ts)。
+- G4/G5 挂单市场 + pixel 出售已落地（无 schema 变更，帝国审计缺口 4+5）：
+  ① 挂单生命周期 — terminal-manager 的 tryManageSellOrders：超龄零成交/
+  残单撤（价格随新 bid 重算自适应下行）+ homeMineral 大宗盈余挂 sell 单
+  （价 = 最优 buy × sellOrderMarkup 1.15，量钳位 min/maxOrderAmount；
+  账户操作不占 terminal 冷却）；② pixel 变现 — trySellPixel 吃最优 buy 单
+  （账户资源无 terminal/运费，择优独立于 pickBestBuyOrder 的 roomName
+  过滤）。测试见
+  [tests/unit/systems/terminal-manager-orders.test.ts](tests/unit/systems/terminal-manager-orders.test.ts)。
+- G7 PC 赋能扩展 + 姿态路由已落地（无 schema 变更，帝国审计缺口 7）：
+  ① build order 增 OPERATE_TOWER lv1（战时塔 DPS/维修 +33%）与
+  OPERATE_CONTROLLER lv1（rcl-push 冲级 +200%）；② selectPowerAction 姿态
+  路由：combatContext（war/fortify 姿态或房内威胁）→ operateTower 压倒
+  一切运营赋能；rclPush 议程窗口 → operateController（仅和平期）；③ 执行层
+  采集 posture/agenda/threatCreeps/tower/controller effects。
+  测试见 [tests/unit/strategy/power-creeps.test.ts](tests/unit/strategy/power-creeps.test.ts)。
+- G6 Factory commodity 升级链已落地（无 schema 变更，帝国审计缺口 6）：
+  ① 决策纯函数 domain/industry/commodity（selectCommodityTarget 梯度
+  优先 + 原料=factory+storage 合计 + 独立 commodityEnergyReserve 5000
+  地板 — 与 processEnergyFloor 30k 分离，commodity 是能量→高值资产转换
+  非烧掉）；② factory-manager 读引擎 COMMODITIES 配方表（不硬编码，
+  私服未定义时静默跳过），目标缓存在 globalCache.factoryTargets（可丢，
+  reset 后重选）；③ distributor 增 stockFactoryComponents 按目标配方
+  补料进 factory（produce 从 factory.store 扣料 — 原料不进 factory 就
+  永远不产）。V1 取舍：只为凑料搬 storage 存量，不主动市场买入。
+  测试见 [tests/unit/industry/commodity.test.ts](tests/unit/industry/commodity.test.ts)、
+  [tests/unit/systems/factory-commodity.test.ts](tests/unit/systems/factory-commodity.test.ts)。
+- 帝国审计遗留取舍（G8-G12，2026-08-18 复核）：G8 主动进攻授权 — 维持
+  「war 姿态=持续被打才反击」的纯防御定位（战略决策，需人工裁决是否引入
+  proactive counter-offense 姿态）；G9 intel 时效分级 — 战争链有
+  targetFreshness 门禁，其余消费者按需自查（专项验证未做）；G10 跨
+  shard — 超范围（单 shard 帝国目标）；G11 远矿房防御投资 — 维持 R11
+  弃房止损取舍；G12 siege 精细围攻响应 — 依赖看门狗全局降档，无房间级
+  配给（低优先，出现实证再补）。
 
 ## 高风险区域与硬约束摘要
 

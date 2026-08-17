@@ -20,6 +20,8 @@ export const PWR = {
   OPERATE_SPAWN: 2,
   OPERATE_STORAGE: 4,
   OPERATE_EXTENSION: 6,
+  OPERATE_TOWER: 7,
+  OPERATE_CONTROLLER: 12,
 } as const;
 
 /** 各 power 升到 lv1-5 所需的 PC level（typings POWER_INFO.level 列）。 */
@@ -28,13 +30,17 @@ export const POWER_LEVEL_REQUIREMENTS: Readonly<Record<number, readonly number[]
   2: [0, 2, 7, 14, 22], // OPERATE_SPAWN
   4: [0, 2, 7, 14, 22], // OPERATE_STORAGE
   6: [0, 2, 7, 14, 22], // OPERATE_EXTENSION
+  7: [0, 2, 7, 14, 22], // OPERATE_TOWER（OPERATOR 系标准梯度）
+  12: [0, 2, 7, 14, 22], // OPERATE_CONTROLLER
 };
 
 /** usePower 各动作的 ops 消耗（官方 Power 文档）。 */
 export const OPS_COST: Readonly<Record<number, number>> = {
-  2: 100, // OPERATE_SPAWN
-  4: 100, // OPERATE_STORAGE
-  6: 2,   // OPERATE_EXTENSION
+  2: 100,  // OPERATE_SPAWN
+  4: 100,  // OPERATE_STORAGE
+  6: 2,    // OPERATE_EXTENSION
+  7: 100,  // OPERATE_TOWER
+  12: 100, // OPERATE_CONTROLLER
 };
 
 /** 决策阈值 — 由调用方（power-creep-manager）经 CONFIG 注入。 */
@@ -64,6 +70,8 @@ export const POWER_BUILD_ORDER: readonly PowerId[] = [
   1, // GENERATE_OPS lv2：ops 产量翻倍（PC level 2 达标）
   6, // OPERATE_EXTENSION lv2：灌 40%
   2, // OPERATE_SPAWN lv2：提速 30%（PC level 6 达标）
+  7, // OPERATE_TOWER lv1：战时塔效率 +33%（姿态路由赋能，审计缺口 7）
+  12, // OPERATE_CONTROLLER lv1：rcl-push 冲级 +200% 进度（审计缺口 7）
 ];
 
 /** GPL 消费决策输入中的 PC 摘要。 */
@@ -149,6 +157,18 @@ export interface PcRoomInput {
   storageId: string | undefined;
   /** 第一个 spawn 的 OPERATE_SPAWN 效果剩余 tick（无效果 undefined）。 */
   spawnEffectRemaining: number | undefined;
+  /** 姿态路由（审计缺口 7）：war/fortify 或房内威胁 → OPERATE_TOWER 优先。 */
+  combatContext: boolean;
+  /** 塔目标 id 列表（有 combatContext 且有塔才可能赋能）。 */
+  towerIds: readonly string[];
+  /** 第一个塔的 OPERATE_TOWER 效果剩余 tick（无效果 undefined）。 */
+  towerEffectRemaining: number | undefined;
+  /** 议程路由（审计缺口 7）：rcl-push 冲级窗口 → OPERATE_CONTROLLER 优先。 */
+  rclPush: boolean;
+  /** controller 目标 id。 */
+  controllerId: string | undefined;
+  /** controller 的 OPERATE_CONTROLLER 效果剩余 tick（无效果 undefined）。 */
+  controllerEffectRemaining: number | undefined;
 }
 
 /** PC 单 tick 运营动作。 */
@@ -156,13 +176,18 @@ export type PowerAction =
   | { kind: "renew" }
   | { kind: "generateOps" }
   | { kind: "enableRoom" }
+  | { kind: "operateTower"; targetId: string }
+  | { kind: "operateController"; targetId: string }
   | { kind: "operateSpawn"; targetId: string }
   | { kind: "operateExtension"; targetId: string }
   | { kind: "operateStorage"; targetId: string }
   | { kind: "idle" };
 
 /**
- * PC 单 tick 动作裁决。优先级：renew > enableRoom > generateOps >
+ * PC 单 tick 动作裁决（含姿态路由，审计缺口 7）。优先级：
+ * renew > enableRoom > generateOps >
+ * [combatContext] operateTower（战时 DPS/维修 +33% — 战斗窗口压倒运营）>
+ * [rclPush] operateController（+200% 冲级 — 和平期议程窗口）>
  * operateSpawn > operateExtension > operateStorage > idle。
  * 决策无状态（效果/冷却全在 Game 层每 tick 现查）；
  * range 检查归执行层（moveTo 到 range 3 / 1）。
@@ -185,6 +210,27 @@ export function selectPowerAction(
 
   const hasLevel = (p: PowerId): boolean => (pc.powerLevels[p] ?? 0) > 0;
   const opsReady = (p: PowerId): boolean => pc.opsCarried >= (OPS_COST[p] ?? Infinity);
+
+  // OPERATE_TOWER（姿态路由）：war/fortify/威胁在场 + 有塔 + 效果缺失/临期。
+  // 战斗窗口的塔输出是生存变量 — 压倒一切运营赋能（含 spawn 提速）。
+  if (hasLevel(7) && opsReady(7) && room.combatContext && room.towerIds.length > 0) {
+    const remaining = room.towerEffectRemaining ?? 0;
+    if (remaining < t.effectRefreshMargin) {
+      return { kind: "operateTower", targetId: room.towerIds[0]! };
+    }
+  }
+
+  // OPERATE_CONTROLLER（议程路由）：rcl-push 窗口 + 效果缺失/临期。
+  // 仅和平期（combatContext 时不冲级 — 塔赋能已在上方截停）。
+  if (
+    hasLevel(12) && opsReady(12) && room.rclPush && !room.combatContext &&
+    room.controllerId !== undefined
+  ) {
+    const remaining = room.controllerEffectRemaining ?? 0;
+    if (remaining < t.effectRefreshMargin) {
+      return { kind: "operateController", targetId: room.controllerId };
+    }
+  }
 
   // OPERATE_SPAWN：效果缺失或临期续杯（dur1000，剩 < margin 续）。
   if (hasLevel(2) && opsReady(2) && room.spawnIds.length > 0) {

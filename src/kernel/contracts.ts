@@ -148,6 +148,9 @@ export interface RoomSnapshot {
    * buildRoomSnapshot 一次遍历得出，供 tower-defense 和 builder actions 复用，
    * 避免各模块重复迭代。 */
   readonly criticalRepairTarget?: AnyStructure | undefined;
+  /** 本房 nuke 落点预警（FIND_NUKES，自有房视野内常量查询）。可选 — 旧测试
+   * mock 缺省视为无警报；消费者统一用 `?.length` 判空（审计缺口 1 感知层）。 */
+  readonly incomingNukes?: readonly Nuke[];
 }
 
 /** 传递给每个系统和角色的不可变单 tick 上下文。 */

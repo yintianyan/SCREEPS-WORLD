@@ -5,6 +5,8 @@ import {
   phaseToColonyState,
   type PhaseState,
 } from "../domain/economy/phase";
+import { EventKind, recordEvent } from "../kernel/event-log";
+import { globalCache } from "../kernel/global-cache";
 
 /**
  * 房间状态系统 — P0，每 tick 运行，在所有其他系统之前（plan §5.4 统一状态）。
@@ -148,6 +150,28 @@ export const roomStateSystem: System = {
       // lastHostileAt 只在威胁新增时刷新（首次到达或增援）。
       if (threatCount > 0 && threatIncreased) {
         roomMem.lastHostileAt = ctx.tick;
+      }
+
+      // nuke 落点预警差分（审计缺口 1）：新 nuke id 首次出现即报事件 + 限流
+      // console（黑匣子可追溯）。已消失的（落地/记录误报）惰性清出集合。
+      // 差分基线放 globalCache 而非 Memory — nuke 逐 tick 可见（timeToLand
+      // 递减），无需持久化；global reset 后重报一次无害（事件为幂等记录）。
+      const incoming = snapshot.incomingNukes ?? [];
+      if (incoming.length > 0) {
+        const g = globalCache() as { seenNukeIds?: Set<string> };
+        if (!g.seenNukeIds) g.seenNukeIds = new Set();
+        const aliveIds = new Set(incoming.map(n => n.id as string));
+        for (const n of incoming) {
+          if (g.seenNukeIds.has(n.id as string)) continue;
+          g.seenNukeIds.add(n.id as string);
+          recordEvent(EventKind.NukeDetected, snapshot.roomName, [n.timeToLand]);
+          console.log(
+            `[${ctx.tick}] nuke/${snapshot.roomName}: 落点预警！launch=${n.launchRoomName} timeToLand=${n.timeToLand} — 资产抢救链启动`,
+          );
+        }
+        for (const id of g.seenNukeIds) {
+          if (!aliveIds.has(id)) g.seenNukeIds.delete(id);
+        }
       }
 
       // R7c：无害侦察观测 — 有敌对但无威胁部件（侦察兵）时记录目击。

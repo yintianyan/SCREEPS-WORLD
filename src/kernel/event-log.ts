@@ -100,6 +100,17 @@ export const enum EventKind {
   /** 核弹发射（nuker 威慑链）：d = [目标塔数]；r = 目标房名。发射失败静默
    * （下轮自然重试）；同目标在途期间不重复发射（shouldLaunchNuke 门禁）。 */
   NukeLaunched = 32,
+  /** 敌方核弹落点预警（nuke 感知链，审计缺口 1）：d = [timeToLand]；r = 落点房。
+   * 同一 nuke id 只报一次（globalCache 差分；global reset 后重报一次无害 —
+   * 环形缓冲的幂等记录）。 */
+  NukeDetected = 33,
+  /** nuke 资产抢救发运（抢救链，审计缺口 3）：d = [resourceCode(0=power/1=G/
+   * 2=化合物/3=battery/4=基础矿物/5=能量), amount]；r = 抢救房名。
+   * 接收房名见 console.log 明细（口径与 EnergyTransfer 对齐）。 */
+  NukeSalvage = 34,
+  /** PB 野采任务收摊（野采链，审计缺口 2）：d = [reasonCode(0=done/1=attrition/
+   * 2=timeout/3=war-preempt), spawned]；r = PB 目标房。开任务记 reasonCode=4。 */
+  PowerFarmOutcome = 35,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

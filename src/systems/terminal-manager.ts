@@ -34,6 +34,15 @@ import {
   type RoomMineralState,
 } from "../domain/economy/mineral-logistics";
 import {
+  pickSalvageRecipient,
+  planSalvageShipment,
+  type SalvageCandidate,
+} from "../domain/defense/nuke-response";
+import {
+  planSellOrder,
+  shouldCancelStaleOrder,
+} from "../domain/industry/market-orders";
+import {
   getMineralDeficits,
   pickBestBuyOrder,
   pickBestSellOrder,
@@ -45,6 +54,10 @@ export const terminalManagerSystem: System = {
   priority: 3 as Priority,
   interval: CONFIG.market.interval,
   run(ctx: TickContext): void {
+    // nuke 资产抢救（审计缺口 3）：生存动作 — 先于市场 API / tier / bucket
+    // 门禁执行（send 不依赖市场 API；被 nuke 瞄准的房可能正处于战时 CPU 降档）。
+    tryNukeSalvage(ctx);
+
     // 私服/测试环境无市场 API — 安全跳过。
     if (typeof Game.market?.getAllOrders !== "function") return;
     // 贸易不是生存关键：仅在 CPU 富余时运行。
@@ -60,6 +73,11 @@ export const terminalManagerSystem: System = {
     for (const snapshot of ctx.snapshots()) {
       const terminal = snapshot.terminal;
       if (!terminal) continue;
+
+      // 0.8 挂单生命周期管理（审计缺口 4）：超龄撤单 + 大宗盈余挂 sell 单
+      //（不占 terminal 冷却 — createOrder/cancelOrder 是账户操作）。
+      tryManageSellOrders(snapshot);
+
       if (terminal.cooldown > 0) continue;
 
       // 1. 能量溢出 → 卖能量（财富引擎）。
@@ -83,8 +101,173 @@ export const terminalManagerSystem: System = {
       // 6. 买入 ghodium（nuker 威慑备弹 — 战略采购，lab 自产是主通道，市场只是加速）。
       tryBuyGhodium(snapshot, terminal);
     }
+
+    // 7. pixel 出售（审计缺口 5）：账户资源吃最优 buy 单 — 生成端（pixel-system）
+    //    与变现端闭环，pixel 不再只是「自愿放血」的成本侧。
+    trySellPixel();
   },
 };
+
+/**
+ * 挂单生命周期管理（审计缺口 4）— 每房每轮：
+ * 1. 检查自有挂单：已成交完/超龄零成交 → cancelOrder（重挂价随新 bid 重算）；
+ * 2. homeMineral 大宗盈余（吃单单笔消化不完）且无在途挂单 → createOrder
+ *    挂 sell 单（价 = 最优 buy × markup — 吃即刻成交与挂单等买家之间的价差套利）。
+ * 挂单是账户操作（手续费 credits），不占 terminal 冷却。
+ */
+function tryManageSellOrders(snapshot: RoomSnapshot): void {
+  const market = Game.market as typeof Game.market & {
+    orders?: Record<string, any>;
+    createOrder?: (params: Record<string, unknown>) => number;
+    cancelOrder?: (orderId: string) => number;
+  };
+  if (typeof market.createOrder !== "function") return;
+  const myOrders = Object.values(market.orders ?? {});
+
+  // 本房挂单维护（撤超龄/残单）。
+  for (const order of myOrders) {
+    if (order.type !== "sell" || order.roomName !== snapshot.roomName) continue;
+    if (
+      shouldCancelStaleOrder(
+        order.createdTimestamp ?? 0,
+        order.remainingAmount ?? 0,
+        order.totalAmount ?? 0,
+        Date.now(),
+        CONFIG.market.orderStaleMs,
+      )
+    ) {
+      if (market.cancelOrder?.(order.id) === OK) {
+        console.log(`[${Game.time}] market: 撤单 ${order.id}（${order.resourceType} 超龄零成交）`);
+      }
+    }
+  }
+
+  // homeMineral 大宗盈余挂单。
+  const homeMineral = snapshot.minerals[0]?.mineralType;
+  if (!homeMineral) return;
+  const inTerminal = snapshot.terminal?.store.getUsedCapacity(homeMineral) ?? 0;
+  const inStorage = snapshot.storage?.store.getUsedCapacity(homeMineral) ?? 0;
+  const surplus = inTerminal + inStorage - CONFIG.market.sellReserve;
+  if (surplus <= 0) return;
+
+  const existing = myOrders.find(
+    o => o.type === "sell" && o.roomName === snapshot.roomName && o.resourceType === homeMineral,
+  );
+  if (existing && (existing.remainingAmount ?? 0) > 0) return; // 在途有效挂单 — 不重复
+
+  const bids = toSummaries(
+    Game.market.getAllOrders({ type: ORDER_BUY, resourceType: homeMineral }),
+  );
+  const best = pickBestBuyOrder(bids, CONFIG.market.minSellPrice);
+  const plan = planSellOrder({
+    resourceType: homeMineral,
+    surplus,
+    existingOrderId: existing?.id,
+    bestBuyPrice: best?.price,
+    markup: CONFIG.market.sellOrderMarkup,
+    maxOrderAmount: CONFIG.market.maxOrderAmount,
+    minOrderAmount: CONFIG.market.minOrderAmount,
+  });
+  if (!plan) return;
+
+  const result = market.createOrder({
+    type: ORDER_SELL,
+    resourceType: plan.resourceType as ResourceConstant,
+    price: plan.price,
+    totalAmount: plan.totalAmount,
+    roomName: snapshot.roomName,
+  });
+  if (result === OK) {
+    console.log(
+      `[${Game.time}] market: 挂单 sell ${plan.totalAmount} ${plan.resourceType} @ ${plan.price}（${snapshot.roomName}）`,
+    );
+  }
+}
+
+/**
+ * pixel 出售（审计缺口 5）：pixel 是账户资源（Game.resources.pixel），交易
+ * 无 terminal/运费 — deal 不带 room 即账户交割。吃最优 buy 单即刻变现，
+ * 价格低于门槛囤着（账户资源无仓储成本）。
+ * 择优不用 pickBestBuyOrder（它要求 roomName — terminal 交割口径；
+ * pixel 单无 room，被其过滤）。
+ */
+function trySellPixel(): void {
+  const pixels = Game.resources?.[RESOURCE_PIXEL] ?? 0;
+  if (pixels <= 0) return;
+  let best: MarketOrderSummary | undefined;
+  for (const o of toSummaries(
+    Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_PIXEL }),
+  )) {
+    if (o.price < CONFIG.market.minPixelSellPrice || o.amount <= 0) continue;
+    if (!best || o.price > best.price) best = o;
+  }
+  if (!best) return;
+  // 账户交易：无 roomName（pixel 不从 terminal 出货、无能量运费）。
+  const amount = Math.min(pixels, best.amount);
+  if (Game.market.deal(best.id, amount) === OK) {
+    recordEvent(EventKind.EnergyTransfer, "", [amount]);
+    console.log(`[${Game.time}] pixel: 卖出 ${amount} pixel @ ${best.price}`);
+  }
+}
+
+/**
+ * nuke 资产抢救（审计缺口 3）：警报房（incomingNukes 非空）的 terminal 库存
+ * 逐轮 send 到无警报兄弟房 — power/G/化合物优先，能量留运费地板后兜底全发。
+ * 节奏：interval 200 × send 不限量 × 50000 tick 预警窗口 = 足以转空。
+ * 无合格接收房（单房帝国/兄弟房全在警报）静默 — 感知事件已记录，无可抢救动作。
+ */
+function tryNukeSalvage(ctx: TickContext): void {
+  const snapshots = [...ctx.snapshots()];
+  const alertRooms = snapshots.filter(s => (s.incomingNukes?.length ?? 0) > 0);
+  if (alertRooms.length === 0) return;
+
+  // 接收房候选：一次构建，全体警报房复用。
+  const candidates: SalvageCandidate[] = snapshots.map(s => ({
+    roomName: s.roomName,
+    hasTerminal: s.terminal !== undefined,
+    nukeAlert: (s.incomingNukes?.length ?? 0) > 0,
+    terminalFree: s.terminal?.store.getFreeCapacity() ?? 0,
+  }));
+
+  for (const snapshot of alertRooms) {
+    const terminal = snapshot.terminal;
+    if (!terminal || terminal.cooldown > 0) continue;
+    const recipient = pickSalvageRecipient(candidates, snapshot.roomName);
+    if (!recipient) continue;
+
+    // terminal 库存枚举（引擎 store 为资源→数量的普通对象映射）。
+    const resources = new Map<string, number>(
+      Object.entries(terminal.store as unknown as Record<string, number>),
+    );
+    const plan = planSalvageShipment(
+      resources,
+      recipient.roomName,
+      CONFIG.market.terminalEnergyReserveFloor,
+    );
+    if (!plan) continue;
+
+    if (terminal.send(plan.resourceType as ResourceConstant, plan.amount, plan.to) === OK) {
+      recordEvent(EventKind.NukeSalvage, snapshot.roomName, [
+        salvageResourceCode(plan.resourceType),
+        plan.amount,
+      ]);
+      console.log(
+        `[${Game.time}] nuke-salvage: ${snapshot.roomName} → ${plan.to} ${plan.amount} ${plan.resourceType}`,
+      );
+    }
+  }
+}
+
+/** NukeSalvage 事件的资源编码：0=power/1=G/2=浓缩化合物(X*)/3=battery/4=基础矿物/5=能量/6=其他。 */
+function salvageResourceCode(resourceType: string): number {
+  if (resourceType === RESOURCE_POWER) return 0;
+  if (resourceType === RESOURCE_GHODIUM) return 1;
+  if (resourceType.startsWith("X")) return 2;
+  if (resourceType === RESOURCE_BATTERY) return 3;
+  if (["H", "O", "U", "L", "K", "Z"].includes(resourceType)) return 4;
+  if (resourceType === RESOURCE_ENERGY) return 5;
+  return 6;
+}
 
 /**
  * 帝国能量互济 — 每轮至多一笔（决策纯函数，本函数只做采集与执行）。

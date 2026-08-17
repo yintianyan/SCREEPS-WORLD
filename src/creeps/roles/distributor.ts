@@ -13,6 +13,8 @@ import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/actio
 import {
   distributorFillTarget,
   reclaimFactoryOutput,
+  salvageStorageToTerminal,
+  stockFactoryComponents,
   stockFactoryEnergy,
   stockNuker,
   stockPowerSpawn,
@@ -89,6 +91,10 @@ const policy: RolePolicy = {
   park: true,
   gate: distributorGate,
   acquire: [
+    // nuke 资产抢救（nuke 警报房才激活，常态零开销）：storage → terminal 搬运，
+    // 支撑 terminal-manager 逐轮 send。置顶 — 50000 tick 倒计时的资产迁移
+    // 压倒一切经济取料（withdraw 相不与 fillTarget 需求门禁冲突 — 各自独立）。
+    salvageStorageToTerminal(),
     // 唯一取能源：storage（带需求门禁）— 没有 fillTarget 时 predicate=false → idle → 不补孵。
     withdrawStorageForDistribution(),
     // terminal 能量备货（storage 富余时）— 无 fillTarget 需求时的低优先级取能，保证市场运费储备不断供。
@@ -97,6 +103,8 @@ const policy: RolePolicy = {
     reclaimFactoryOutput(),
     // factory 压缩原料备货（仅 storage 满仓时触发）。
     stockFactoryEnergy(),
+    // commodity 生产补料（审计缺口 6：按 factory-manager 目标补组件进 factory）。
+    stockFactoryComponents(),
     // lab 供料（取料/卸料相）— 必须挂在 acquire 链：work 模式要求满载进入，空载的
     //「从 storage 取化合物 / 从 lab 清错矿」只有 acquire 阶段能执行；只挂 work 链则取料相永不可达。
     supplyLabs(),
@@ -107,6 +115,8 @@ const policy: RolePolicy = {
   ],
 
   work: [
+    // nuke 资产抢救（deposit 相）— 置顶理由同 acquire 链。
+    salvageStorageToTerminal(),
     // distributor 专用填充：spawn/extension 绝对优先 > tower > controller container（仅无 link 兜底）。
     // 不复用 haulFillTarget — 避免被 divert 去喂 controller container 而饿死 spawn。
     distributorFillTarget(),
@@ -117,6 +127,8 @@ const policy: RolePolicy = {
     reclaimFactoryOutput(),
     // factory 压缩原料备货（deposit 相，仅满仓时触发）。
     stockFactoryEnergy(),
+    // commodity 生产补料（deposit 相）。
+    stockFactoryComponents(),
     // 化合物供料到 lab。
     supplyLabs(),
     // powerSpawn 原料投放相。

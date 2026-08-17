@@ -7,6 +7,7 @@ import { haulerRole } from "./creeps/roles/hauler";
 import { mineralMinerRole } from "./creeps/roles/mineral-miner";
 import { attackerRole } from "./creeps/roles/attacker";
 import { healerRole } from "./creeps/roles/healer";
+import { pbCollectorRole } from "./creeps/roles/pb-collector";
 import { remoteHarvesterRole } from "./creeps/roles/remote-harvester";
 import { remoteHaulerRole } from "./creeps/roles/remote-hauler";
 import { remoteDefenderRole } from "./creeps/roles/remote-defender";
@@ -23,6 +24,7 @@ import { empireStrategySystem } from "./systems/empire-strategy";
 import { expansionManagerSystem } from "./systems/expansion-manager";
 import { factoryManagerSystem } from "./systems/factory-manager";
 import { powerCreepManagerSystem } from "./systems/power-creep-manager";
+import { powerFarmManagerSystem } from "./systems/power-farm-manager";
 import { layoutPlannerSystem } from "./systems/layout-planner";
 import { labSystem } from "./systems/lab-system";
 import { linkSystem } from "./systems/link-system";
@@ -85,6 +87,8 @@ export const registry = new Registry()
   .registerSystem(powerCreepManagerSystem)
   // P3：扩张管理（GCL 有余量时 claim 新房）
   .registerSystem(expansionManagerSystem)
+  // P3：PB 野采（power 自给供给源 — war 军事资源不双线）
+  .registerSystem(powerFarmManagerSystem)
   // P3：主动情报（expansionAllowed 时派侦察兵取候选房视野；失败冷却止损）
   .registerSystem(prospectManagerSystem)
   // P3：遥测采集（低频采样）
@@ -120,6 +124,8 @@ export const registry = new Registry()
   .registerRole(healerRole)
   // P3：scout（一次性侦察兵，仅 prospect-manager 孵化）
   .registerRole(scoutRole)
+  // P3：pbCollector（一次性 PB power 捡运，仅 power-farm-manager 孵化）
+  .registerRole(pbCollectorRole)
   // P1：remoteDefender（杀 NPC reserver/Invader）
   .registerRole(remoteDefenderRole);
 

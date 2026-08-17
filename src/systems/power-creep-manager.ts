@@ -132,12 +132,20 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
   }
 
   const spawn = snapshot.spawns[0];
+  const firstTower = snapshot.towers[0];
   const thresholds: PowerCreepThresholds = {
     renewBelowTicks: CONFIG.powerCreeps.renewBelowTicks,
     opsBuffer: CONFIG.powerCreeps.opsBuffer,
     extensionFillGap: CONFIG.powerCreeps.extensionFillGap,
     effectRefreshMargin: CONFIG.powerCreeps.effectRefreshMargin,
   };
+
+  // 姿态路由采集（审计缺口 7）：war/fortify 姿态或房内有威胁 = 战斗窗口；
+  // rcl-push 议程 = 冲级窗口。
+  const posture = Memory.kernel?.strategy?.posture;
+  const agenda = Memory.kernel?.agenda?.initiative;
+  const combatContext = posture === "war" || posture === "fortify"
+    || snapshot.threatCreeps.length > 0;
 
   const action = selectPowerAction(
     {
@@ -155,6 +163,14 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
       spawnIds: spawn ? [spawn.id] : [],
       storageId: snapshot.storage?.id,
       spawnEffectRemaining: findEffectRemaining(spawn, PWR.OPERATE_SPAWN),
+      combatContext,
+      towerIds: firstTower ? [firstTower.id] : [],
+      towerEffectRemaining: findEffectRemaining(firstTower, PWR.OPERATE_TOWER),
+      rclPush: agenda === "rcl-push",
+      controllerId: snapshot.controller?.id,
+      controllerEffectRemaining: snapshot.controller?.effects?.find(
+        (e) => e.effect === PWR.OPERATE_CONTROLLER,
+      )?.ticksRemaining,
     },
     thresholds,
   );
@@ -185,6 +201,20 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
     case "generateOps":
       pc.usePower(PWR.GENERATE_OPS);
       return;
+    case "operateTower":
+    case "operateController": {
+      const target = Game.getObjectById(action.targetId as Id<Structure>);
+      if (!target) return;
+      if (pc.pos.getRangeTo(target) <= USE_POWER_RANGE) {
+        pc.usePower(
+          action.kind === "operateTower" ? PWR.OPERATE_TOWER : PWR.OPERATE_CONTROLLER,
+          target,
+        );
+      } else {
+        pc.moveTo(target, { range: USE_POWER_RANGE });
+      }
+      return;
+    }
     case "operateSpawn":
     case "operateExtension":
     case "operateStorage": {
@@ -209,7 +239,7 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
 
 /** 从结构 effects 找指定 power 的效果剩余 tick（无效果 undefined）。 */
 function findEffectRemaining(
-  structure: StructureSpawn | undefined,
+  structure: StructureSpawn | StructureTower | undefined,
   power: number,
 ): number | undefined {
   const effect = structure?.effects?.find((e) => e.effect === power);

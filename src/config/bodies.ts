@@ -35,6 +35,14 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
   scout: [
     { parts: ["move"], minCapacity: 50 },
   ],
+  // PB 捡运者（审计缺口 2）：纯 CARRY+MOVE 一次性 — PB 击破后进场捡掉落
+  // power（2k-6k）送回 home。无战斗件（PB 反击会秒杀，只在 collect 阶段进场）。
+  pbCollector: [
+    // 满档 5C5M：运 2500 power 一趟清（典型掉落 2k-6k，1-3 趟由 maxCount=1 串行）。
+    { parts: ["carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move"], minCapacity: 1250 },
+    { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 750 },
+    { parts: ["carry", "carry", "move", "move"], minCapacity: 500 },
+  ],
   worker: [
     // 开局优化：RCL1 起始 300 能量直接用满，2 WORK 采集翻倍，大幅缩短 bootstrap。
     { parts: ["work", "work", "carry", "move"], minCapacity: 300 },

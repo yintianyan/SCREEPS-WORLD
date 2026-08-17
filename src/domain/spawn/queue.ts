@@ -45,6 +45,32 @@ export function removeRequestsByRole(queue: SpawnRequest[], role: string, home: 
 }
 
 /**
+ * 撤销带指定任务标记的全部待处理请求（返回移除数）。
+ * PB 野采收摊用：attacker/healer 与 war 编队共用角色名，按 role 撤会误伤 —
+ * memory.mission 标记是 PB 请求的专属指纹。同 removeRequestsByRole 契约。
+ */
+export function removeRequestsByMission(queue: SpawnRequest[], mission: string): number {
+  let removed = 0;
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const req = queue[i];
+    if (req && req.memory?.mission === mission) {
+      queue.splice(i, 1);
+      removed++;
+    }
+  }
+  return removed;
+}
+
+/** 统计带指定任务标记的某角色待处理请求数（war/PB 编队共用角色名时的分流口径）。 */
+export function countPendingByMission(
+  queue: readonly SpawnRequest[],
+  role: string,
+  mission: string,
+): number {
+  return queue.filter(r => r.role === role && r.memory?.mission === mission).length;
+}
+
+/**
  * 撤销指定 home 的全部待处理请求（返回移除数）。
  * 主要用于扩张 abort：拓荒编队请求寄宿在 sponsor 队列但 home 指向目标房，失守/超时
  * 退出时一次性清空，避免 sponsor 继续孵已无意义的拓荒者。与 removeRequestsByRole

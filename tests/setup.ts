@@ -62,6 +62,7 @@ Object.assign(globalThis as Record<string, unknown>, {
   STRUCTURE_OBSERVER: "observer",
   STRUCTURE_POWER_SPAWN: "powerSpawn",
   STRUCTURE_NUKER: "nuker",
+  STRUCTURE_POWER_BANK: "powerBank",
   STRUCTURE_INVADER_CORE: "invaderCore",
 
   // find 常量
@@ -81,6 +82,7 @@ Object.assign(globalThis as Record<string, unknown>, {
   FIND_DROPPED_RESOURCES: 106,
   FIND_TOMBSTONES: 118,
   FIND_RUINS: 123,
+  FIND_NUKES: 117,
 
   // 返回码
   OK: 0,
@@ -105,6 +107,15 @@ Object.assign(globalThis as Record<string, unknown>, {
   RESOURCE_BATTERY: "battery",
   RESOURCE_OPS: "ops",
   RESOURCE_GHODIUM: "G",
+  RESOURCE_HYDROGEN: "H",
+  RESOURCE_OXYGEN: "O",
+  RESOURCE_UTRIUM: "U",
+  RESOURCE_LEMERGIUM: "L",
+  RESOURCE_KEANIUM: "K",
+  RESOURCE_ZYNTHIUM: "Z",
+  RESOURCE_CATALYST: "X",
+  RESOURCE_PIXEL: "pixel",
+  BASE_MINERALS: ["H", "O", "U", "L", "K", "Z", "X"],
 
   // 市场订单类型常量（terminal-manager 运行时引用）
   ORDER_SELL: "sell",

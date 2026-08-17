@@ -5,6 +5,9 @@ import type { RoomTuningState } from "../domain/tuning/types";
 export {};
 
 declare global {
+  /** 本地 typings（@types/screeps 版本）缺少的常量 — 官方引擎已支持。 */
+  const RESOURCE_PIXEL: "pixel";
+
   interface CreepAssignment {
     id: string;
     kind: TaskKind;
@@ -75,6 +78,12 @@ declare global {
     remoteContainerId?: Id<StructureContainer>;
     /** Distributor 水位分级档位（0-3），由 distributor gate 每 tick 按 storage 水位计算。 */
     distributorTier?: 0 | 1 | 2 | 3;
+    /**
+     * 任务标记（PB 野采链，审计缺口 2）："powerBank"（战斗编队，attacker/healer
+     * 分流：不集结直接推进 + 专用 PB 攻击候选）/"powerCollect"（collector 捡运）。
+     * undefined = 常规角色（war 编队走 warPlan 相位机）。
+     */
+    mission?: "powerBank" | "powerCollect";
   }
 
   interface SpawnRequest {
@@ -435,6 +444,27 @@ declare global {
      * 冷却期内不被 selectProspectTarget 重选；到期由管理器清理。
      */
     prospectCooldown?: Record<string, number>;
+    /**
+     * PB 野采任务（v36+，power-farm-manager 唯一写者，审计缺口 2）：同一时刻
+     * 至多一个。PB 击破后（编队房内视野确认）转 collect 阶段孵 collector 捡运
+     * 掉落 power；collector 消失/超时/止损时清除并回收编队。war 姿态时不建
+     * （军事资源不双线，warPlan 存续即冻结新任务）。
+     */
+    powerFarm?: {
+      /** PB 目标房（通常 highway）。 */
+      targetRoom: string;
+      /** 代孵 sponsor 房名。 */
+      sponsor: string;
+      /** 任务建立 tick（超时基准）。 */
+      since: number;
+      /** 累计提交的战斗编队孵化请求数（止损账本）。 */
+      spawned: number;
+      /** PB 已击破，进入捡运阶段（collector 已派/待派）。 */
+      phase: "strike" | "collect";
+      /** collector 首次提交孵化请求的 tick（collect 宽限窗基准；per-mission
+       * 运行时字段，缺失视为未派 — 与 lastRepathAt 同先例免迁移）。 */
+      collectorSpawnedAt?: number;
+    };
   }
 
   /** 参数自调优的持久化状态。 */

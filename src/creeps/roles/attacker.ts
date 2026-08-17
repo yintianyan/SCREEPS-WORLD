@@ -52,6 +52,42 @@ function getHostileStructuresCached(room: Room): AnyStructure[] {
   return list;
 }
 
+/** 目标房内 power bank（per-tick per-room 共享缓存 — PB 野采链，审计缺口 2）。 */
+function getPowerBankCached(room: Room): StructurePowerBank | undefined {
+  const g = globalCache() as { __powerBanks?: Record<string, { tick: number; pb: StructurePowerBank | undefined }> };
+  if (!g.__powerBanks) g.__powerBanks = {};
+  const cached = g.__powerBanks[room.name];
+  if (cached && cached.tick === Game.time) return cached.pb;
+  // FIND_STRUCTURES 全房 find 每 tick 一次/房（与 __warStructures 同预算口径）。
+  const pb = room.find(FIND_STRUCTURES).find(
+    s => s.structureType === STRUCTURE_POWER_BANK,
+  ) as StructurePowerBank | undefined;
+  g.__powerBanks[room.name] = { tick: Game.time, pb };
+  return pb;
+}
+
+/**
+ * PB 野采打击（审计缺口 2）：mission="powerBank" 编队的专用候选 — PB 是
+ * FIND_STRUCTURES 中立结构（非 hostile），attackEnemies/attackStructures
+ * 的 hostile 链打不到。编队 healer 经 buddy 机制自动跟随贴身覆盖 PB 反击。
+ */
+export function attackPowerBank(): ActionCandidate<StructurePowerBank> {
+  return {
+    name: "attacker:attack-power-bank",
+    resolve: (ac) => {
+      if (ac.creep.memory.mission !== "powerBank") return undefined;
+      if (markRetreat(ac.creep)) return undefined;
+      const target = ac.creep.memory.remoteTarget;
+      if (!target || ac.creep.room.name !== target) return undefined;
+      return getPowerBankCached(ac.creep.room);
+    },
+    execute: (ac, target) => {
+      const result = ac.creep.attack(target);
+      if (result === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, target);
+    },
+  };
+}
+
 export function attackEnemies(): ActionCandidate<Creep> {
   return {
     name: "attacker:attack-creeps",
@@ -102,12 +138,15 @@ export function attackStructures(): ActionCandidate<AnyStructure> {
 
 /**
  * 战备集结（R4 hold 钩子，导出供单测直接调用）。决策矩阵：
+ * PB 野采编队（mission="powerBank"）→ 不集结直接推进（无波次语义 —
+ *   PB 房无守军，添油无害且更快开打；healer 同用本钩子自动放行）；
  * 无 warPlan / 已 advance / 计划目标与己不一致 → 不接管（false，正常管线）；
  * build + 低血 → 标记回收接管（归航由 spawn-manager 处理）；
  * build + 在 home → 停驻待命（parkIdleCreep）；build + 在外 → 归建（fleeToHome）。
  * 返回 true 表示本 tick 已处理（role-runner 跳过导航与攻击候选）。
  */
 export function attackerHold(creep: Creep, ctx: TickContext): boolean {
+  if (creep.memory.mission === "powerBank") return false;
   const plan = Memory.kernel?.warPlan;
   if (!plan || plan.phase === "advance") return false;
   if (plan.targetRoom !== creep.memory.remoteTarget) return false;
@@ -125,8 +164,8 @@ export function attackerHold(creep: Creep, ctx: TickContext): boolean {
 const policy: RolePolicy = {
   combat: true,
   hold: attackerHold,
-  acquire: [attackEnemies(), attackStructures()],
-  work: [attackEnemies(), attackStructures()],
+  acquire: [attackPowerBank(), attackEnemies(), attackStructures()],
+  work: [attackPowerBank(), attackEnemies(), attackStructures()],
 };
 
 export const attackerRole = defineRole("attacker", 2 as Priority, policy);

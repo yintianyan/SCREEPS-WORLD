@@ -37,6 +37,8 @@ const PWR_GENERATE_OPS = 1;
 const PWR_OPERATE_SPAWN = 2;
 const PWR_OPERATE_EXTENSION = 6;
 const PWR_OPERATE_STORAGE = 4;
+const PWR_OPERATE_TOWER = 7;
+const PWR_OPERATE_CONTROLLER = 12;
 
 /** 基准 PC：level 与 powers 由参数覆盖。 */
 function pc(name: string, overrides: Partial<PcSummary> = {}): PcSummary {
@@ -89,17 +91,20 @@ describe("planGplSpending — 边界条件", () => {
   });
 
   it("build order 全部完成 → none（free levels 攒着）", () => {
-    // build order 7 项全满：PC level = 1+1+1+1+2+2+2 = 10。
+    // build order 9 项全满（含审计缺口 7 的 TOWER/CONTROLLER lv1）：
+    // PC level = 1+1+1+1+2+2+2+1+1 = 12。
     const maxed = pc("pc-op-0", {
-      level: 10,
+      level: 12,
       powers: {
         [PWR_GENERATE_OPS]: 2,
         [PWR_OPERATE_SPAWN]: 2,
         [PWR_OPERATE_EXTENSION]: 2,
         [PWR_OPERATE_STORAGE]: 1,
+        [PWR_OPERATE_TOWER]: 1,
+        [PWR_OPERATE_CONTROLLER]: 1,
       },
     });
-    expect(planGplSpending(11, [maxed], ["pc-op-0"])).toEqual({ action: "none" });
+    expect(planGplSpending(13, [maxed], ["pc-op-0"])).toEqual({ action: "none" });
   });
 });
 
@@ -145,6 +150,12 @@ function baseInput(
       spawnIds: ["spawn1"],
       storageId: "storage1",
       spawnEffectRemaining: undefined,
+      combatContext: false,
+      towerIds: [],
+      towerEffectRemaining: undefined,
+      rclPush: false,
+      controllerId: undefined,
+      controllerEffectRemaining: undefined,
       ...roomOverrides,
     },
   };
@@ -198,6 +209,51 @@ describe("selectPowerAction — 边界条件", () => {
       energyAvailable: 1300,
     });
     expect(selectPowerAction(p, r, T)).toEqual({ kind: "idle" });
+  });
+
+  it("姿态路由（审计缺口 7）：战斗窗口 + 有塔 + TOWER 已升 → operateTower 压倒 spawn", () => {
+    const { pc: p, room: r } = baseInput(
+      { powerLevels: { [PWR_GENERATE_OPS]: 1, [PWR_OPERATE_SPAWN]: 1, [PWR_OPERATE_TOWER]: 1 } },
+      { combatContext: true, towerIds: ["tower1"] },
+    );
+    // spawn 效果缺失（常态触发 operateSpawn），但战斗窗口塔赋能优先。
+    expect(selectPowerAction(p, r, T)).toEqual({ kind: "operateTower", targetId: "tower1" });
+  });
+
+  it("战斗窗口但未升 TOWER → 回退常规运营链", () => {
+    const { pc: p, room: r } = baseInput({}, { combatContext: true, towerIds: ["tower1"] });
+    expect(selectPowerAction(p, r, T)).toEqual({ kind: "operateSpawn", targetId: "spawn1" });
+  });
+
+  it("议程路由：rcl-push 窗口 + CONTROLLER 已升 → operateController 优先于 spawn", () => {
+    const { pc: p, room: r } = baseInput(
+      { powerLevels: { [PWR_GENERATE_OPS]: 1, [PWR_OPERATE_SPAWN]: 1, [PWR_OPERATE_CONTROLLER]: 1 } },
+      { rclPush: true, controllerId: "ctrl1" },
+    );
+    expect(selectPowerAction(p, r, T)).toEqual({ kind: "operateController", targetId: "ctrl1" });
+  });
+
+  it("战斗窗口优先于 rcl-push（不打仗时才冲级）", () => {
+    const { pc: p, room: r } = baseInput(
+      {
+        powerLevels: {
+          [PWR_GENERATE_OPS]: 1,
+          [PWR_OPERATE_SPAWN]: 1,
+          [PWR_OPERATE_TOWER]: 1,
+          [PWR_OPERATE_CONTROLLER]: 1,
+        },
+      },
+      { combatContext: true, towerIds: ["tower1"], rclPush: true, controllerId: "ctrl1" },
+    );
+    expect(selectPowerAction(p, r, T)).toEqual({ kind: "operateTower", targetId: "tower1" });
+  });
+
+  it("rcl-push 窗口但效果仍在 → 不重复赋能（落到 spawn）", () => {
+    const { pc: p, room: r } = baseInput(
+      { powerLevels: { [PWR_GENERATE_OPS]: 1, [PWR_OPERATE_SPAWN]: 1, [PWR_OPERATE_CONTROLLER]: 1 } },
+      { rclPush: true, controllerId: "ctrl1", controllerEffectRemaining: 800 },
+    );
+    expect(selectPowerAction(p, r, T)).toEqual({ kind: "operateSpawn", targetId: "spawn1" });
   });
 
   it("spawn 效果剩余 < 续杯提前量 → 续杯", () => {

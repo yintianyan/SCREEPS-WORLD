@@ -221,6 +221,117 @@ export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
 }
 
 /**
+ * commodity 生产补料（审计缺口 6 的 distributor 侧）：按 factory-manager
+ * 缓存在 globalCache.factoryTargets 的当前生产目标，把 factory 内缺的
+ * 配方组件从 storage 搬进 factory（produce 从 factory.store 扣料 — 原料
+ * 不进 factory 就永远不产）。双相候选：空载取 storage 缺料、满载送 factory。
+ * 无目标/无缺口/无货 → 放行后续候选（零干扰）。
+ */
+type FactoryComponentTarget =
+  | { dest: StructureFactory; resourceType: ResourceConstant; phase: "deposit" }
+  | { source: StructureStorage; resourceType: ResourceConstant; phase: "withdraw" };
+
+export function stockFactoryComponents(): ActionCandidate<FactoryComponentTarget> {
+  return {
+    name: "haul:stock-factory-components",
+    resolve: (ac) => {
+      const factory = ac.snapshot.factory;
+      const storage = ac.snapshot.storage;
+      if (!factory || !storage) return undefined;
+      // 目标锚：factory-manager 每 interval 写（无 COMMODITIES/无目标时无键）。
+      const g = globalCache() as { factoryTargets?: Record<string, string> };
+      const target = g.factoryTargets?.[ac.snapshot.roomName];
+      if (!target) return undefined;
+      const table = (globalThis as { COMMODITIES?: Record<string, { components?: Record<string, number> }> }).COMMODITIES;
+      const components = table?.[target]?.components;
+      if (!components) return undefined;
+
+      // deposit 相：背包携任意组件资源即送 factory。
+      const carried = Object.entries(ac.creep.store as unknown as Record<string, number>)
+        .find(([res, amount]) => amount > 0 && (components[res] ?? 0) > 0);
+      if (carried) {
+        return { dest: factory, resourceType: carried[0] as ResourceConstant, phase: "deposit" as const };
+      }
+      // withdraw 相：挑缺口最大且 storage 有货的组件。
+      let pick: { res: string; gap: number } | undefined;
+      for (const [res, amount] of Object.entries(components)) {
+        const gap = amount - (factory.store[res as ResourceConstant] ?? 0);
+        if (gap <= 0) continue;
+        const inStorage = storage.store[res as ResourceConstant] ?? 0;
+        if (inStorage <= 0) continue;
+        if (!pick || gap > pick.gap) pick = { res, gap };
+      }
+      if (!pick) return undefined;
+      return { source: storage, resourceType: pick.res as ResourceConstant, phase: "withdraw" as const };
+    },
+    execute: (ac, t) => {
+      if (t.phase === "deposit") {
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resourceType));
+      } else {
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resourceType));
+      }
+    },
+  };
+}
+
+/**
+ * nuke 资产抢救搬运链（审计缺口 3 的 distributor 侧）：本房 nuke 落点预警时把
+ * storage 库存搬向 terminal，支撑 terminal-manager 的逐轮 send（terminal 容量
+ * 300k，storage 典型百万级 — 不搬运则只抢救 terminal 现货，storage 全损）。
+ * 抢救语义压倒一切经济门禁：无水位地板（storage 就要没了）、无市场可用性检查
+ * （send 不依赖市场）。单资源/tick 搬运 — 50000 tick 窗口 × ~200/tick 搬运速率
+ * 足够清空典型库存；非能量资源（价值密度高）优先于能量。
+ * 双相候选：空载从 storage 取「存量最大的非能量资源」（无则能量），满载送 terminal。
+ */
+type SalvageTransferTarget =
+  | { dest: StructureTerminal; resourceType: ResourceConstant; phase: "deposit" }
+  | { source: StructureStorage; resourceType: ResourceConstant; phase: "withdraw" };
+
+export function salvageStorageToTerminal(): ActionCandidate<SalvageTransferTarget> {
+  return {
+    name: "salvage:storage-to-terminal",
+    resolve: (ac) => {
+      // 仅 nuke 警报房激活（常态零开销 — 一个字段判空）。
+      if ((ac.snapshot.incomingNukes?.length ?? 0) === 0) return undefined;
+      const terminal = ac.snapshot.terminal;
+      const storage = ac.snapshot.storage;
+      if (!terminal || !storage) return undefined;
+      if (terminal.store.getFreeCapacity() <= 0) return undefined;
+
+      // deposit 相：背包有任意资源即送 terminal。
+      const carried = Object.entries(ac.creep.store as unknown as Record<string, number>)
+        .find(([, amount]) => amount > 0);
+      if (carried) {
+        return {
+          dest: terminal,
+          resourceType: carried[0] as ResourceConstant,
+          phase: "deposit" as const,
+        };
+      }
+      // withdraw 相：挑 storage 中存量最大的非能量资源（价值密度优先），无则能量。
+      const entries = Object.entries(storage.store as unknown as Record<string, number>)
+        .filter(([resourceType, amount]) => amount > 0 && resourceType !== RESOURCE_ENERGY);
+      const pick = entries.length > 0
+        ? entries.reduce((a, b) => (b[1] > a[1] ? b : a))
+        : (["energy", storage.store[RESOURCE_ENERGY] ?? 0] as [string, number]);
+      if (pick[1] <= 0) return undefined;
+      return {
+        source: storage,
+        resourceType: pick[0] as ResourceConstant,
+        phase: "withdraw" as const,
+      };
+    },
+    execute: (ac, t) => {
+      if (t.phase === "deposit") {
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resourceType));
+      } else {
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resourceType));
+      }
+    },
+  };
+}
+
+/**
  * W7 止血修正（2026-08-01）：storage 饥饿时把 terminal 交易储备压缩回 storage。
  * 背景（前提修正）：私服引擎 4.3.0 自带市场 API 但市场可以为空（credits=0、无订单）——
  * terminal-manager 从不成交，富余期灌入的 10k 交易储备变死资本（W7N3/W7N4 实测恒 10150、storage=0），

@@ -931,6 +931,26 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 35,
+    to: 36,
+    run: () => {
+      // v36：PB 野采链 — 新增 KernelMemory.powerFarm（power-farm-manager 唯一
+      // 写者，审计缺口 2）。建档 + 畸形自愈：非对象 → 删除；phase 非法 → 删除
+      // （缺失视为无任务，安全侧）；其余字段缺失由管理器使用时兜底。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+      const mission = kernel.powerFarm as Record<string, unknown> | undefined;
+      if (mission === undefined) return;
+      if (typeof mission !== "object" || mission === null || Array.isArray(mission)) {
+        delete kernel.powerFarm;
+        return;
+      }
+      if (mission.phase !== "strike" && mission.phase !== "collect") {
+        delete kernel.powerFarm;
+      }
+    },
+  },
 ];
 
 /**

@@ -39,7 +39,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 35 },
+  memory: { schemaVersion: 36 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -455,12 +455,17 @@ export const CONFIG = {
     mineralMiner: { minCount: 0, maxCount: 1 },
     // 跨房远征攻击者：仅 war 姿态时由 war-planner 孵化（CONFIG.roles 兼任
     // recyclePass「在役角色」白名单 — 漏配会让攻击者孵出即被判废弃回收）。
-    attacker: { minCount: 0, maxCount: 4 },
+    // maxCount 8 覆盖 war 编队与 PB 野采编队（4）并行峰值。
+    attacker: { minCount: 0, maxCount: 8 },
     // 治疗者（heal-tank 编队）：仅 war 姿态时由 war-planner 按 healerSquadRatio
-    // 配比孵化，同样依赖此表作为 recyclePass 白名单。
-    healer: { minCount: 0, maxCount: 2 },
+    // 配比孵化，同样依赖此表作为 recyclePass 白名单。maxCount 4 覆盖 war 编队
+    // （healerSquadRatio 上取整）与 PB 野采编队（2 healer）并行峰值。
+    healer: { minCount: 0, maxCount: 4 },
     // 侦察兵（R6b）：prospect 任务临时孵化，同一时刻至多 1 只。
     scout: { minCount: 0, maxCount: 1 },
+    // PB 野采捡运者（审计缺口 2）：power-farm-manager collect 阶段一次性孵化，
+    // 捡完掉落 power 送回 home 后 recycle。依赖此表作为 recyclePass 白名单。
+    pbCollector: { minCount: 0, maxCount: 1 },
   },
 
   war: {
@@ -636,6 +641,12 @@ export const CONFIG = {
      * 「威慑 > 增值」的优先序：两链同时缺料时先保核弹。
      */
     processEnergyFloor: 30000,
+    /**
+     * commodity 生产的能量储备地板（审计缺口 6）— 与 processEnergyFloor 分离：
+     * commodity 是能量→高值资产的转换（非烧掉），储备门槛低得多；仅防把
+     * 最后一点能量投进 factory 卡死孵化。
+     */
+    commodityEnergyReserve: 5000,
   },
 
   powerCreeps: {
@@ -725,6 +736,17 @@ export const CONFIG = {
     powerBuyCreditFloor: 20000,
     /** 跨房矿物互济最小起送量 — 低于此值不值得占用一次 terminal 冷却与运费。 */
     mineralAidMinTransfer: 100,
+    /** 挂单价格溢价系数（审计缺口 4）：挂单价 = 最优 buy 价 × 此系数。
+     * 1.15 = 比最优 bid 高 15% — 吃单即刻成交的价差补偿。 */
+    sellOrderMarkup: 1.15,
+    /** 单笔挂单量上限（手续费与流动性暴露封顶）。 */
+    maxOrderAmount: 5000,
+    /** 挂单量下限 — 低于此量的 5% 手续费不值得挂。 */
+    minOrderAmount: 1000,
+    /** 挂单超龄（毫秒，零成交）撤单重挂 — 价格随新 bid 重算自适应下行。 */
+    orderStaleMs: 4 * 24 * 60 * 60 * 1000,
+    /** pixel 最低卖出价 — 低于此价囤着（pixel 是账户资源无仓储成本）。 */
+    minPixelSellPrice: 300,
   },
 
   /** 帝国能量网络与市场深化（R5）— 跨房互济 + 能量市场交易。 */
@@ -759,6 +781,28 @@ export const CONFIG = {
     rclPushMaxPressure: 0.3,
     /** 普通目标切换的最短驻留（防 rcl-push ↔ develop 抖动；紧急目标立即生效）。 */
     minDwell: 200,
+  },
+
+  /** PB 野采（审计缺口 2）— power bank 打击任务：自给 power 供给源。 */
+  powerFarm: {
+    /** 任务管理器运行间隔（tick）。 */
+    interval: 50,
+    /** PB 情报新鲜度上限（tick）：PB 出现后 ~5000 tick 自动消失，旧情报大概率扑空。 */
+    intelFreshness: 2000,
+    /** 派遣最大线性距离（房）。 */
+    maxRange: 7,
+    /** 战斗编队 attacker 数（4 × [4A] = 480 hits/tick → 2M hits ≈ 4200 tick，
+     * 留足 PB 衰减余量）。 */
+    squadSize: 4,
+    /** 治疗配比：每 N 个编制位配 1 healer（向上取整至少 1）— PB 反击需 heal 覆盖。 */
+    healerSquadRatio: 3,
+    /** 任务全程超时（tick）：击破 + 捡运总预算，超期止损收摊。 */
+    missionTimeout: 8000,
+    /** 战损止损倍数：spawned 超编队规模 × 此值判消耗失败（PB 房无塔，
+     * 超编队损耗只可能是路途截杀 — 停手）。 */
+    casualtyMultiplier: 2,
+    /** collect 阶段（PB 击破后）等待 collector 的宽限（tick）。 */
+    collectGraceTicks: 2000,
   },
 
   /** 主动情报（R6b）— 侦察任务：为扩张决策主动获取候选房视野。 */

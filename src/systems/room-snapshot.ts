@@ -54,6 +54,16 @@ export function buildRoomSnapshot(
   // 威胁分级：仅具备攻击/治疗/拆迁/claim 部件且非联盟者才算威胁（P0-2）。
   const threatCreeps = classifyThreats(hostileCreeps, CONFIG.defense.allies);
 
+  // nuke 落点预警（审计缺口 1）：自有房视野内 FIND_NUKES 是常量级查询，
+  // 50000 tick 预警窗口是资产抢救的全部时限。try/catch 兼容未定义常量的
+  // 旧测试 mock（与 tombstones 先例同款）。
+  let incomingNukes: Nuke[] = [];
+  try {
+    incomingNukes = room.find(FIND_NUKES);
+  } catch {
+    // 常量未定义的环境（旧测试 mock）— 视为无预警。
+  }
+
   // 掉落资源：采集地上散落的能量（creep 死亡掉落、harvester 溢出等）。
   const droppedEnergy = room.find(FIND_DROPPED_RESOURCES).filter(
     r => r.resourceType === RESOURCE_ENERGY,
@@ -200,6 +210,7 @@ export function buildRoomSnapshot(
     tombstones,
     ruins,
     criticalRepairTarget,
+    incomingNukes,
   };
 }
 

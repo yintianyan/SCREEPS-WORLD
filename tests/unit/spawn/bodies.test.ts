@@ -109,7 +109,9 @@ describe("Bodies — BODY_TEMPLATES", () => {
       // scout（R6b）为 50 能量 [MOVE] 一次性侦察兵，同样豁免。
       // healer 最低档 [heal,heal,move,move] = 600（HEAL 250×2 + MOVE 50×2）—
       // 单 HEAL 无自保与跟随能力，成对治疗是编队下限。
-      if (role === "reserver" || role === "claimer" || role === "remoteDefender" || role === "defender" || role === "scout" || role === "healer") continue;
+      // pbCollector 最低档 [carry,carry,move,move] = 500 — 单 CARRY 运力 100，
+      // PB 掉落 2k-6k 会拆成 20+ 趟，成对 CARRY 是捡运效率下限。
+      if (role === "reserver" || role === "claimer" || role === "remoteDefender" || role === "defender" || role === "scout" || role === "healer" || role === "pbCollector") continue;
       const lastTemplate = templates[templates.length - 1];
       expect(lastTemplate?.minCapacity).toBe(200);
     }

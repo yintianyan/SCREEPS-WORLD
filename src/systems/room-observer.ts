@@ -186,6 +186,7 @@ interface RoomVisionIntel {
   enemySpawns: number;
   wallCount: number;
   sealedExits: number[];
+  powerBank: boolean;
 }
 
 /**
@@ -198,12 +199,15 @@ function collectRoomVision(room: Room): RoomVisionIntel {
   const hostileStructures = room.find(FIND_HOSTILE_STRUCTURES);
   const towers = hostileStructures.filter(s => s.structureType === STRUCTURE_TOWER).length;
   const enemySpawns = hostileStructures.filter(s => s.structureType === STRUCTURE_SPAWN).length;
+  // 全结构扫描一次复用三途：人工墙口径 + PB 存在性（野采链，审计缺口 2）。
+  const structures = room.find(FIND_STRUCTURES);
   // 人工墙口径与 movement CostMatrix 一致（pathfinding buildStructurePositions）：
   // constructedWall 恒 255；rampart 仅非我方时 255（我方 rampart 可通行，不封路）。
-  const walls = room.find(FIND_STRUCTURES).filter(
+  const walls = structures.filter(
     s => s.structureType === STRUCTURE_WALL ||
       (s.structureType === STRUCTURE_RAMPART && !(s as StructureRampart).my),
   );
+  const powerBank = structures.some(s => s.structureType === STRUCTURE_POWER_BANK);
   let sealedExits: number[] = [];
   if (walls.length > 0) {
     const wallSet = new Set<number>();
@@ -228,6 +232,7 @@ function collectRoomVision(room: Room): RoomVisionIntel {
     enemySpawns,
     wallCount: walls.length,
     sealedExits,
+    powerBank,
   };
 }
 

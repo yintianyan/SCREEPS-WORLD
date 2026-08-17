@@ -46,8 +46,10 @@ export {
   supplyLabs,
   stockTerminalEnergy,
   stockFactoryEnergy,
+  stockFactoryComponents,
   withdrawTerminalEnergy,
   reclaimFactoryOutput,
   stockPowerSpawn,
   stockNuker,
+  salvageStorageToTerminal,
 } from "./industry";

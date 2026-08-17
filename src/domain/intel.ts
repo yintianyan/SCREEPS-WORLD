@@ -31,6 +31,9 @@ export interface RoomIntel {
   /** 被人工墙完全封死的出口方向（ExitConstant 数字）— 该方向可通行格全部被墙覆盖，
    * 编队无法经此进出；全部出口封死 = 房间不可达。仅在有视野且 wallCount>0 时计算。 */
   sealedExits?: number[];
+  /** 有视野时记录的 power bank 存在（PB 野采链，审计缺口 2）：中立结构，
+   * 出现后约 5000 tick 自动消失 — 新鲜 intel 才值得派遣编队。 */
+  powerBank?: boolean;
   /** home 锚点到该房中心的 PathFinder 实测成本（swampCost:5 计入地形）；地形静态、
    * 算一次终身缓存，缺失时评选方回退线性距离估算。 */
   pathCost?: number;
@@ -132,6 +135,7 @@ export function scanNeighborIntel(
     enemySpawns?: number;
     wallCount?: number;
     sealedExits?: number[];
+    powerBank?: boolean;
   },
   prev?: RoomIntel,
 ): RoomIntel {
@@ -153,6 +157,8 @@ export function scanNeighborIntel(
     // sealedExits 只在有墙时有值 — 有视野且 wallCount=0 时显式写空数组
     // （= 已确认无封死，覆盖旧观测的残留），而非省略保留旧值。
     intel.sealedExits = visibleRoom.sealedExits ?? [];
+    // PB 存在性：有视野即覆写（false 也写 — PB 消失/被摧毁立即反映，野采链据此收摊）。
+    intel.powerBank = visibleRoom.powerBank ?? false;
   } else if (prev) {
     // 无视野：沿用上次观测值（数据会随 lastSeen 保持但陈旧度由消费方判断）。
     if (prev.sources !== undefined) intel.sources = prev.sources;
@@ -163,6 +169,7 @@ export function scanNeighborIntel(
     if (prev.enemySpawns !== undefined) intel.enemySpawns = prev.enemySpawns;
     if (prev.wallCount !== undefined) intel.wallCount = prev.wallCount;
     if (prev.sealedExits !== undefined) intel.sealedExits = prev.sealedExits;
+    if (prev.powerBank !== undefined) intel.powerBank = prev.powerBank;
     // 无视野时 lastSeen 不应前移（视野数据没有更新）。
     intel.lastSeen = prev.lastSeen;
   }
