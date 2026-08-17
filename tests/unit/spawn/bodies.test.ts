@@ -107,7 +107,9 @@ describe("Bodies — BODY_TEMPLATES", () => {
       // remoteDefender / defender 的最低档 [ATTACK,MOVE] = 130（ATTACK 80 + MOVE 50），
       // 战斗角色的绝境档刻意低于 200 — 有防御总比没有强。
       // scout（R6b）为 50 能量 [MOVE] 一次性侦察兵，同样豁免。
-      if (role === "reserver" || role === "claimer" || role === "remoteDefender" || role === "defender" || role === "scout") continue;
+      // healer 最低档 [heal,heal,move,move] = 600（HEAL 250×2 + MOVE 50×2）—
+      // 单 HEAL 无自保与跟随能力，成对治疗是编队下限。
+      if (role === "reserver" || role === "claimer" || role === "remoteDefender" || role === "defender" || role === "scout" || role === "healer") continue;
       const lastTemplate = templates[templates.length - 1];
       expect(lastTemplate?.minCapacity).toBe(200);
     }

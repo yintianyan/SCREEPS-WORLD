@@ -22,6 +22,14 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     // 绝境档 [1T,1A,1M]：随时可战优先于等满配（bodies.test 要求最低档 minCapacity=200）。
     { parts: ["tough", "attack", "move"], minCapacity: 200 },
   ],
+  // 奶车（heal-tank 编队的治疗端）：1:1 HEAL:MOVE 平原无疲劳；贴身 heal 12/part/tick，
+  // range 3 退化为 rangedHeal 4/part/tick。满档 10 HEAL = 120 hits/tick，
+  // 双奶叠加可覆盖 2-3 塔集火的平均伤害（塔单发 600 衰减至 75）。
+  healer: [
+    { parts: ["heal", "heal", "heal", "heal", "heal", "heal", "heal", "heal", "heal", "heal", "move", "move", "move", "move", "move", "move", "move", "move", "move", "move"], minCapacity: 3000 },
+    { parts: ["heal", "heal", "heal", "heal", "heal", "heal", "move", "move", "move", "move", "move", "move"], minCapacity: 1800 },
+    { parts: ["heal", "heal", "move", "move"], minCapacity: 600 },
+  ],
   // 侦察兵（R6b）：[MOVE] 即足 — 无疲劳全速穿行、50 能量可抛弃；
   // 使命是「到达目标房提供一 tick 视野」，不是战斗（敌意房由 flee 保全）。
   scout: [

@@ -456,6 +456,9 @@ export const CONFIG = {
     // 跨房远征攻击者：仅 war 姿态时由 war-planner 孵化（CONFIG.roles 兼任
     // recyclePass「在役角色」白名单 — 漏配会让攻击者孵出即被判废弃回收）。
     attacker: { minCount: 0, maxCount: 4 },
+    // 治疗者（heal-tank 编队）：仅 war 姿态时由 war-planner 按 healerSquadRatio
+    // 配比孵化，同样依赖此表作为 recyclePass 白名单。
+    healer: { minCount: 0, maxCount: 2 },
     // 侦察兵（R6b）：prospect 任务临时孵化，同一时刻至多 1 只。
     scout: { minCount: 0, maxCount: 1 },
   },
@@ -471,6 +474,9 @@ export const CONFIG = {
     squadBase: 3,
     /** 目标有 tower 时每座 tower 追加的攻击者数。 */
     squadPerTower: 2,
+    /** 治疗配比（heal-tank 编队）：每 N 个编制位（attacker+healer 合计口径）配
+     * 1 个 healer，向上取整且至少 1 — 无奶的进攻编队在塔下即送。 */
+    healerSquadRatio: 2,
     /** 战争计划最长期限（tick）：超期重新选目标（目标可能已迁房/易主）。 */
     planTimeout: 6000,
     /** 低血撤退线：攻击者血量低于 hitsMax × 此比例 → 标记回收撤出战区。 */
@@ -490,6 +496,14 @@ export const CONFIG = {
     /** 战损止损后的整军休战期（tick，R4）：消耗战收摊后不立即换目标重开 — 黑名单
      * 只挡单目标，休战期挡「A 止损 → 立刻打 B → 再止损 → 打 C」的跨目标添油循环。 */
     standDownTicks: 2000,
+    /** boost 战前强化：编队化合物（XUH2O/XLHO2）预产库存目标（单位）。
+     * 满编 3 攻 + 2 奶全强化约需 360 XUH2O + 600 XLHO2，600 统一目标
+     * 覆盖大头并留余量（defender 亦消耗 XUH2O）。 */
+    boostStockpile: 600,
+    /** boost 战前强化：build 相位等强化的宽限（tick，自计划建立起算）。
+     * 超期放弃门禁裸攻推进 — sponsor 缺基础矿时反应链产不出 T3，
+     * 永久等待等于不打，止损链（casualtyMultiplier）兜底裸攻损失。 */
+    boostGraceTicks: 2500,
   },
 
   debug: {

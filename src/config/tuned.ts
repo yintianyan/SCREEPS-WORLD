@@ -35,6 +35,7 @@ export const TUNABLE_ROLES = [
   "scout",
   "mineralMiner",
   "attacker",
+  "healer",
 ] as const;
 
 /** 角色 → 参数路径映射，用于 clampParam 安全钳制。从 TUNABLE_ROLES 派生。 */

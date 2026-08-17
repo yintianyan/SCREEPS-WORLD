@@ -195,3 +195,12 @@ export const BOOST_EFFECTS: Readonly<Record<string, BoostEffect>> = {
   KH: "carry", KH2O: "carry", XKH2O: "carry",
   KO: "rangedAttack", KHO2: "rangedAttack", XKHO2: "rangedAttack",
 };
+
+/** Boost 效果 → 受强化 body part 类型（用于封顶可强化部件数与备料量计算）。
+ * 与 BOOST_EFFECTS 配套 — 供 lab-system（执行封顶）与 boost 决策（请求生成）
+ * 共用，单一来源防两处映射漂移。 */
+export const BOOST_EFFECT_PART: Readonly<Record<BoostEffect, BodyPartConstant>> = {
+  harvest: WORK, upgrade: WORK, repair: WORK, dismantle: WORK,
+  attack: ATTACK, rangedAttack: RANGED_ATTACK, heal: HEAL,
+  carry: CARRY, move: MOVE, tough: TOUGH,
+};

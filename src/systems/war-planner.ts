@@ -19,7 +19,9 @@ import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
 import {
+  decideHealerCount,
   decideSquadSize,
+  evaluateBoostGate,
   evaluateWarOutcome,
   isAttritionLost,
   nextWavePhase,
@@ -101,59 +103,103 @@ export const warPlannerSystem: System = {
       return;
     }
 
-    // 2. 维持编队：统计在役 + pending，不足则补稳定 key 的孵化请求。
-    let live = 0;
+    // 2. 维持编队（heal-tank）：attacker 拆打 + healer 治疗，分 role 统计补位。
+    //    编制合计口径：满编/止损基数 = squadSize + healerCount（缺谁都不成编队）。
+    //    boost 完成度自下而上派生（body 任一部件带 boost 即计）— 不入 Memory，
+    //    与 healerCount 同理；编队成员由 lab-system 在 build 相位经 boost 链强化。
+    const healerCount = decideHealerCount(plan.squadSize, CONFIG.war.healerSquadRatio);
+    let attackerLive = 0;
+    let healerLive = 0;
+    let boostedLive = 0;
     for (const c of Object.values(Game.creeps)) {
-      if (c.memory.role === "attacker" && c.memory.home === sponsor && c.memory.remoteTarget === plan.targetRoom) {
-        live++;
-      }
+      if (c.memory.home !== sponsor || c.memory.remoteTarget !== plan.targetRoom) continue;
+      if (c.memory.role === "attacker") attackerLive++;
+      else if (c.memory.role === "healer") healerLive++;
+      else continue;
+      if (c.body.some(p => p.boost)) boostedLive++;
     }
-    const pending = countPending(queue, "attacker", sponsor);
-    // live+pending < squadSize 时每轮至多补 1 个新 key — 队列被能量门禁卡住时
-    // pending 封顶 squadSize，spawned 不会因空转膨胀。
-    if (live + pending < plan.squadSize) {
-      const index = live + pending;
-      const key = spawnKey("attacker", sponsor, index, plan.targetRoom);
-      if (!hasRequest(queue, key)) {
-        plan.spawned = (plan.spawned ?? 0) + 1;
-        const cap = ctx.getSnapshot(sponsor)?.energyCapacityAvailable ?? CONFIG.war.fallbackCapacity;
-        const body = selectBody("attacker", cap);
-        submitRequest(queue, {
-          key,
-          role: "attacker",
-          home: sponsor,
-          priority: 2,
-          body,
-          memory: {
-            role: "attacker",
-            home: sponsor,
-            mode: "acquire",
-            spawnIndex: index,
-            remoteTarget: plan.targetRoom,
-          },
-          createdAt: ctx.tick,
-          expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
-          retries: 0,
-        });
-      }
+    const pendingAttackers = countPending(queue, "attacker", sponsor);
+    const pendingHealers = countPending(queue, "healer", sponsor);
+    const sponsorSnapshot = ctx.getSnapshot(sponsor);
+    const cap = sponsorSnapshot?.energyCapacityAvailable ?? CONFIG.war.fallbackCapacity;
+
+    // live+pending < 编制时每轮至多补 1 个新 key — 队列被能量门禁卡住时
+    // pending 封顶编制，spawned 不会因空转膨胀。
+    if (attackerLive + pendingAttackers < plan.squadSize) {
+      submitSquadRequest(queue, plan, sponsor, "attacker", attackerLive + pendingAttackers, cap, ctx.tick);
+    }
+    if (healerLive + pendingHealers < healerCount) {
+      submitSquadRequest(queue, plan, sponsor, "healer", healerLive + pendingHealers, cap, ctx.tick);
     }
 
-    // 3. 波次相位（迟滞）：满编才 advance，被打残才回落 build 重组。
+    // 3. 波次相位（迟滞，合计口径 + boost 门禁）：满编且全员强化才 advance，
+    //    被打残才回落 build 重组。门禁降级（无 lab / 宽限期过）→ undefined 豁免：
+    //    sponsor 缺基础矿时反应链产不出 T3，永久等待等于不打，裸攻由止损链兜底。
+    const liveTotal = attackerLive + healerLive;
+    const boostGate = evaluateBoostGate(
+      boostedLive,
+      liveTotal,
+      (sponsorSnapshot?.rcl ?? 0) >= 6 && (sponsorSnapshot?.labs.length ?? 0) > 0,
+      ctx.tick - plan.since > CONFIG.war.boostGraceTicks,
+    );
     plan.phase = nextWavePhase(
       plan.phase ?? "build",
-      live,
-      plan.squadSize,
+      liveTotal,
+      plan.squadSize + healerCount,
       CONFIG.war.waveRegroupRatio,
+      boostGate,
     );
 
-    // 4. 战损止损：投入超过编队规模 × 倍数仍未见效 → 判消耗战失败收摊。
-    if (isAttritionLost(plan.spawned ?? 0, plan.squadSize, CONFIG.war.casualtyMultiplier)) {
+    // 4. 战损止损（合计基数）：投入超过编制 × 倍数仍未见效 → 判消耗战失败收摊。
+    if (
+      isAttritionLost(
+        plan.spawned ?? 0,
+        plan.squadSize + healerCount,
+        CONFIG.war.casualtyMultiplier,
+      )
+    ) {
       demobilize(ctx.tick, REASON_ATTRITION);
       // 收摊后整军休战 — 下一轮评估前先让经济喘息，防止换目标立即再送。
       Memory.kernel!.warStandDownUntil = ctx.tick + CONFIG.war.standDownTicks;
     }
   },
 };
+
+/**
+ * 编队补位请求（attacker/healer 同模式）：稳定 key 幂等提交，
+ * spawned 账本在提交新 key 时 +1（消耗战判定依据）。
+ */
+function submitSquadRequest(
+  queue: NonNullable<RoomMemory["spawnQueue"]>,
+  plan: NonNullable<KernelMemory["warPlan"]>,
+  sponsor: string,
+  role: "attacker" | "healer",
+  index: number,
+  cap: number,
+  tick: number,
+): void {
+  const key = spawnKey(role, sponsor, index, plan.targetRoom);
+  if (hasRequest(queue, key)) return;
+  plan.spawned = (plan.spawned ?? 0) + 1;
+  const body = selectBody(role, cap);
+  submitRequest(queue, {
+    key,
+    role,
+    home: sponsor,
+    priority: 2,
+    body,
+    memory: {
+      role,
+      home: sponsor,
+      mode: "acquire",
+      spawnIndex: index,
+      remoteTarget: plan.targetRoom,
+    },
+    createdAt: tick,
+    expiresAt: tick + CONFIG.spawn.requestTtl,
+    retries: 0,
+  });
+}
 
 /**
  * 收摊（幂等）：核验战果 → 失败/unknown 进黑名单 → 记录 WarOutcome 事件 →
@@ -184,10 +230,14 @@ export function demobilize(tick: number, reason: number): void {
   ]);
 
   for (const c of Object.values(Game.creeps)) {
-    if (c.memory.role === "attacker") c.memory.recycle = true;
+    // heal-tank 编队双角色同收（healer 独存无意义 — 奶车不作战）。
+    if (c.memory.role === "attacker" || c.memory.role === "healer") c.memory.recycle = true;
   }
   const queue = Memory.rooms[plan.sponsor]?.spawnQueue;
-  if (queue) removeRequestsByRole(queue, "attacker", plan.sponsor);
+  if (queue) {
+    removeRequestsByRole(queue, "attacker", plan.sponsor);
+    removeRequestsByRole(queue, "healer", plan.sponsor);
+  }
   delete Memory.kernel!.warPlan;
 }
 

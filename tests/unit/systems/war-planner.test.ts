@@ -53,12 +53,25 @@ function setupHome(extraIntel: Record<string, any> = {}): void {
   };
 }
 
-/** 在役 attacker 计数（live）。 */
-function setLiveAttackers(count: number): void {
+/** 在役编队计数（live）— heal-tank：attacker + healer 都计入编制。
+ * boosted：注入 body 带 boost 标记的成员数（自下而上派生口径与生产一致）。 */
+function setLiveSquad(attackers: number, healers = 0, boosted = 0): void {
   const creeps: Record<string, any> = {};
-  for (let i = 0; i < count; i++) {
+  let boostedLeft = boosted;
+  const bodyFor = (): { type: string; boost?: string }[] =>
+    boostedLeft-- > 0
+      ? [{ type: "attack", boost: "XUH2O" }, { type: "move" }]
+      : [{ type: "attack" }, { type: "move" }];
+  for (let i = 0; i < attackers; i++) {
     creeps[`a${i}`] = {
       memory: { role: "attacker", home: "W7N4", remoteTarget: "W6N4" },
+      body: bodyFor(),
+    };
+  }
+  for (let i = 0; i < healers; i++) {
+    creeps[`h${i}`] = {
+      memory: { role: "healer", home: "W7N4", remoteTarget: "W6N4" },
+      body: bodyFor(),
     };
   }
   (globalThis as any).Game.creeps = creeps;
@@ -71,7 +84,7 @@ function warOutcomeEvents(): any[] {
 }
 
 describe("R3 — 姿态消费与编队孵化", () => {
-  it("war 姿态 + 合法目标 → 发布 warPlan（build 相位，spawned=0）并推 1 个 attacker 请求", () => {
+  it("war 姿态 + 合法目标 → 发布 warPlan（build 相位）并推 attacker + healer 首请求", () => {
     (globalThis as any).Memory = { schemaVersion: 27, creeps: {}, rooms: {}, kernel: {} };
     setupHome();
     setPosture("war");
@@ -83,15 +96,17 @@ describe("R3 — 姿态消费与编队孵化", () => {
     expect(plan.sponsor).toBe("W7N4");
     expect(plan.squadSize).toBe(3); // 无 tower 基数 3
     expect(plan.phase).toBe("build"); // 新计划从集结开始
-    expect(plan.spawned).toBe(1);
+    // heal-tank：同轮补 attacker(1) + healer(1) 两个请求。
+    expect(plan.spawned).toBe(2);
 
     const queue = (globalThis as any).Memory.rooms.W7N4.spawnQueue;
-    expect(queue.length).toBe(1);
-    expect(queue[0].role).toBe("attacker");
+    expect(queue.length).toBe(2);
+    const roles = queue.map((r: any) => r.role).sort();
+    expect(roles).toEqual(["attacker", "healer"]);
     expect(queue[0].memory.remoteTarget).toBe("W6N4");
   });
 
-  it("编队缺口逐步补齐到 squadSize（key 稳定不重复，spawned 同步累计）", () => {
+  it("编队缺口逐步补齐到合计编制（key 稳定不重复，spawned 同步累计）", () => {
     (globalThis as any).Memory = { schemaVersion: 27, creeps: {}, rooms: {}, kernel: {} };
     setupHome();
     setPosture("war");
@@ -99,26 +114,27 @@ describe("R3 — 姿态消费与编队孵化", () => {
     const ctx = mockContext(mockSnapshot());
     warPlannerSystem.run(ctx);
     const queue = (globalThis as any).Memory.rooms.W7N4.spawnQueue;
-    expect(queue.length).toBe(1);
-
-    // 第 2 次运行：live=0 + pending=1 → 再补 1 个。
-    warPlannerSystem.run(ctx);
+    // 每轮每 role 至多 1 个新 key：首轮 attacker + healer。
     expect(queue.length).toBe(2);
-    expect(queue[1].key).not.toBe(queue[0].key);
 
-    // 第 3 次运行应补到 squadSize=3。
+    // 第 2 次运行：pending 各 1 → 再各补 1 个。
     warPlannerSystem.run(ctx);
-    expect(queue.length).toBe(3);
+    expect(queue.length).toBe(4);
 
-    // spawned 只随新 key 递增：三次运行后 = 3，与队列长度一致。
-    expect((globalThis as any).Memory.kernel.warPlan.spawned).toBe(3);
+    // 第 3 次运行：attacker 满编制 3（停止），healer 满编制 2（停止）→ 封顶 5。
+    warPlannerSystem.run(ctx);
+    expect(queue.length).toBe(5);
+
+    // spawned 只随新 key 递增：与队列长度一致。
+    expect((globalThis as any).Memory.kernel.warPlan.spawned).toBe(5);
   });
 
-  it("在役满编（live ≥ squadSize）→ phase advance，不再补请求", () => {
+  it("在役满编（attacker+healer 合计 ≥ 编制）→ phase advance，不再补请求", () => {
     (globalThis as any).Memory = { schemaVersion: 27, creeps: {}, rooms: {}, kernel: {} };
     setupHome();
     setPosture("war");
-    setLiveAttackers(3);
+    // 编制 = squadSize 3 + healer 2 = 5（合计口径）。
+    setLiveSquad(3, 2);
 
     warPlannerSystem.run(mockContext(mockSnapshot()));
 
@@ -126,6 +142,22 @@ describe("R3 — 姿态消费与编队孵化", () => {
     expect(plan.phase).toBe("advance");
     expect(plan.spawned).toBe(0); // 满编 — 无新提交
     expect((globalThis as any).Memory.rooms.W7N4.spawnQueue).toHaveLength(0);
+  });
+
+  it("只有 attacker 满（缺 healer）→ 仍 build 相位（缺奶不成编队）", () => {
+    (globalThis as any).Memory = { schemaVersion: 27, creeps: {}, rooms: {}, kernel: {} };
+    setupHome();
+    setPosture("war");
+    setLiveSquad(3, 0);
+
+    warPlannerSystem.run(mockContext(mockSnapshot()));
+
+    const plan = (globalThis as any).Memory.kernel.warPlan;
+    expect(plan.phase).toBe("build");
+    // 只补 healer 缺口。
+    const queue = (globalThis as any).Memory.rooms.W7N4.spawnQueue;
+    expect(queue).toHaveLength(1);
+    expect(queue[0].role).toBe("healer");
   });
 
   it("无合格目标 → 不发布 warPlan", () => {
@@ -168,10 +200,11 @@ describe("R4 — 收摊与战后核验", () => {
     };
     (globalThis as any).Game.creeps = {
       a1: { memory: { role: "attacker", home: "W7N4", remoteTarget: "W6N4" } },
+      h1: { memory: { role: "healer", home: "W7N4", remoteTarget: "W6N4" } },
     };
   }
 
-  it("非 war 姿态 → 收摊：核验 failure → 黑名单 + 清计划 + 撤请求 + 回收 attacker", () => {
+  it("非 war 姿态 → 收摊：核验 failure → 黑名单 + 清计划 + 撤请求 + 回收编队（含 healer）", () => {
     warPlanFixture();
     setPosture("develop");
 
@@ -180,6 +213,8 @@ describe("R4 — 收摊与战后核验", () => {
     expect((globalThis as any).Memory.kernel.warPlan).toBeUndefined();
     expect((globalThis as any).Memory.rooms.W7N4.spawnQueue).toHaveLength(0);
     expect((globalThis as any).Game.creeps.a1.memory.recycle).toBe(true);
+    // heal-tank：healer 与 attacker 同收（独存奶车无意义）。
+    expect((globalThis as any).Game.creeps.h1.memory.recycle).toBe(true);
     // 塔网未清零（towersSeen=2，intel towers=1）且敌主仍在 → failure → 黑名单。
     expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(TICK + CONFIG.war.warBlacklistTicks);
     // 黑匣子事件：outcome=failure(1)。
@@ -234,13 +269,13 @@ describe("R4 — 收摊与战后核验", () => {
 });
 
 describe("R4 — 战损止损与波次相位", () => {
-  it("spawned 超编队 × casualtyMultiplier → 收摊（attrition）+ 黑名单 + 整军休战", () => {
+  it("spawned 超合计编制 × casualtyMultiplier → 收摊（attrition）+ 黑名单 + 整军休战", () => {
     (globalThis as any).Memory = { schemaVersion: 27, creeps: {}, rooms: {}, kernel: {} };
     setupHome();
     setPosture("war");
     (globalThis as any).Memory.kernel.warPlan = {
       targetRoom: "W6N4", sponsor: "W7N4", squadSize: 3, since: 900,
-      towersSeen: 0, phase: "advance", spawned: 8, // 8 > 3 × 2.5
+      towersSeen: 0, phase: "advance", spawned: 14, // 14 > (3+2 healers) × 2.5 = 12.5
     };
 
     warPlannerSystem.run(mockContext(mockSnapshot()));
@@ -289,7 +324,7 @@ describe("R4 — 战损止损与波次相位", () => {
       targetRoom: "W6N4", sponsor: "W7N4", squadSize: 3, since: 900,
       towersSeen: 0, phase: "advance", spawned: 3,
     };
-    setLiveAttackers(1); // 1 < 3 × 0.5 → 回落 build
+    setLiveSquad(1); // 1 < (3+2) × 0.5 → 回落 build
 
     warPlannerSystem.run(mockContext(mockSnapshot()));
 
@@ -304,7 +339,7 @@ describe("R4 — 战损止损与波次相位", () => {
       targetRoom: "W6N4", sponsor: "W7N4", squadSize: 3, since: 900,
       towersSeen: 0, phase: "build", spawned: 3,
     };
-    setLiveAttackers(2); // 2 ≥ 1.5 但 < 3 → 未满编仍 build
+    setLiveSquad(2); // 2 ≥ 1.5 但 < 5（合计编制）→ 未满编仍 build
 
     warPlannerSystem.run(mockContext(mockSnapshot()));
     expect((globalThis as any).Memory.kernel.warPlan.phase).toBe("build");
@@ -336,5 +371,56 @@ describe("R4 — 战损止损与波次相位", () => {
     warPlannerSystem.run(mockContext(mockSnapshot()));
 
     expect((globalThis as any).Memory.kernel.warPlan).toBeUndefined();
+  });
+});
+
+describe("boost 战前强化 — advance 门禁接线", () => {
+  /** 建立满编编队（3 攻 + 2 奶 = 合计编制 5）+ 已存在的 build 相位计划。 */
+  function setupFullSquad(boosted: number, since = 900): void {
+    (globalThis as any).Memory = { schemaVersion: 27, creeps: {}, rooms: {}, kernel: {} };
+    setupHome();
+    setPosture("war");
+    (globalThis as any).Memory.kernel.warPlan = {
+      targetRoom: "W6N4", sponsor: "W7N4", squadSize: 3, since,
+      towersSeen: 0, phase: "build", spawned: 5,
+    };
+    setLiveSquad(3, 2, boosted);
+  }
+
+  it("sponsor 有 lab + 满编但未全员强化 → 保持 build（等 lab boost 链完成）", () => {
+    setupFullSquad(3); // 5 人中 3 人已强化
+    const snap = mockSnapshot({ rcl: 6, labs: [{ id: "L1" } as any] });
+
+    warPlannerSystem.run(mockContext(snap));
+
+    expect((globalThis as any).Memory.kernel.warPlan.phase).toBe("build");
+  });
+
+  it("sponsor 有 lab + 满编且全员强化 → advance（强化完整才出征）", () => {
+    setupFullSquad(5);
+    const snap = mockSnapshot({ rcl: 6, labs: [{ id: "L1" } as any] });
+
+    warPlannerSystem.run(mockContext(snap));
+
+    expect((globalThis as any).Memory.kernel.warPlan.phase).toBe("advance");
+  });
+
+  it("sponsor 有 lab + 宽限期过（since 距今 > boostGraceTicks）→ 豁免裸攻推进", () => {
+    // 缺矿房反应链产不出 T3，永久等待等于不打 — 止损链兜底裸攻。
+    setupFullSquad(0, TICK - CONFIG.war.boostGraceTicks - 1);
+    const snap = mockSnapshot({ rcl: 6, labs: [{ id: "L1" } as any] });
+
+    warPlannerSystem.run(mockContext(snap));
+
+    expect((globalThis as any).Memory.kernel.warPlan.phase).toBe("advance");
+  });
+
+  it("sponsor 无 lab → 门禁豁免，满编即 advance（低 RCL 房不受 boost 卡阻）", () => {
+    setupFullSquad(0); // 无人强化
+    // 默认 mockSnapshot：rcl 3 + labs [] → canBoost=false。
+
+    warPlannerSystem.run(mockContext(mockSnapshot()));
+
+    expect((globalThis as any).Memory.kernel.warPlan.phase).toBe("advance");
   });
 });

@@ -64,6 +64,15 @@ export function decideSquadSize(towersSeen: number, base: number, perTower: numb
   return base + (towersSeen > 0 ? perTower : 0);
 }
 
+/**
+ * 治疗编制（heal-tank）：每 ratio 个编制位配 1 个 healer，向上取整且至少 1。
+ * 派生值 — 不入 Memory，war-planner 每轮按 squadSize 现算（squadSize 已持久化）。
+ * 非正 squadSize 防御性回 1：0 奶编队在塔下静默送死，宁可多孵。
+ */
+export function decideHealerCount(squadSize: number, ratio: number): number {
+  return Math.max(1, Math.ceil(squadSize / ratio));
+}
+
 // ─── R4：波次相位与战损止损（纯函数）──────────────────────────
 
 /** 战争计划相位：build 集结 / advance 推进。 */
@@ -73,17 +82,37 @@ export type WarPlanPhase = "build" | "advance";
  * 波次相位迟滞推进（R4）— 「整波集结」替代「散兵逐个送」：
  * build 满编（live ≥ squadSize）才 advance；advance 被打残（live < squadSize ×
  * regroupRatio）才回落 build 重组。双阈值不对称：推进保守、重组迟滞，防相位抖动。
+ * boostReady（boost 战前强化门禁）：false = 编队未全员强化，满编也继续集结；
+ * undefined = 降级豁免（sponsor 无 lab / 宽限期过，见 evaluateBoostGate）。
  */
 export function nextWavePhase(
   prev: WarPlanPhase,
   live: number,
   squadSize: number,
   regroupRatio: number,
+  boostReady?: boolean,
 ): WarPlanPhase {
   if (prev === "build") {
-    return live >= squadSize ? "advance" : "build";
+    if (live < squadSize) return "build";
+    return boostReady === false ? "build" : "advance";
   }
   return live < squadSize * regroupRatio ? "build" : "advance";
+}
+
+/**
+ * boost 门禁判定（boost 战前强化链）：编队全员已强化 → true；
+ * 不可强化（canBoost=false，sponsor 无 lab/RCL 不足）或宽限期过
+ * （graceExpired=true，防缺矿房永久卡死在 build）→ undefined（降级裸攻，
+ * 战损止损链兜底）；否则按 boostedCount ≥ liveCount 判定。
+ */
+export function evaluateBoostGate(
+  boostedCount: number,
+  liveCount: number,
+  canBoost: boolean,
+  graceExpired: boolean,
+): boolean | undefined {
+  if (!canBoost || graceExpired) return undefined;
+  return boostedCount >= liveCount;
 }
 
 /**

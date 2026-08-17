@@ -6,6 +6,7 @@ import { harvesterRole } from "./creeps/roles/harvester";
 import { haulerRole } from "./creeps/roles/hauler";
 import { mineralMinerRole } from "./creeps/roles/mineral-miner";
 import { attackerRole } from "./creeps/roles/attacker";
+import { healerRole } from "./creeps/roles/healer";
 import { remoteHarvesterRole } from "./creeps/roles/remote-harvester";
 import { remoteHaulerRole } from "./creeps/roles/remote-hauler";
 import { remoteDefenderRole } from "./creeps/roles/remote-defender";
@@ -115,6 +116,8 @@ export const registry = new Registry()
   .registerRole(mineralMinerRole)
   // P2：attacker（仅 war-planner 孵化）
   .registerRole(attackerRole)
+  // P2：healer（heal-tank 编队治疗端，仅 war-planner 孵化）
+  .registerRole(healerRole)
   // P3：scout（一次性侦察兵，仅 prospect-manager 孵化）
   .registerRole(scoutRole)
   // P1：remoteDefender（杀 NPC reserver/Invader）

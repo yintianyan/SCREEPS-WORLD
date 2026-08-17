@@ -7,11 +7,12 @@
  * RoomMemory.industry。
  */
 import type { RoomSnapshot, System, TickContext } from "../kernel/contracts";
-import type { BoostEffect, Compound, LabAssignment, LabDemandTable, LabLoadDemand, LabPlan, LabUnloadDemand, ReactionPlan } from "../domain/industry/types";
-import { BOOST_EFFECTS } from "../domain/industry/types";
-import { evaluateBoostRequests, DEFAULT_BOOST_POLICY } from "../domain/industry/boost";
+import type { Compound, LabAssignment, LabDemandTable, LabLoadDemand, LabPlan, LabUnloadDemand, ReactionPlan } from "../domain/industry/types";
+import { BOOST_EFFECTS, BOOST_EFFECT_PART } from "../domain/industry/types";
+import { evaluateBoostRequests, decideWarReactionTarget, DEFAULT_BOOST_POLICY } from "../domain/industry/boost";
 import { getNextExecutableStep, planReactionChain, selectReactionTrio, LAB_REACTION_AMOUNT } from "../domain/industry/reactions";
 import { globalCache } from "../kernel/global-cache";
+import { CONFIG } from "../config";
 
 // ─── Boost/装料常量（引擎数值：boostCreep 每部件 30 矿物 + 20 能量）────
 
@@ -21,13 +22,9 @@ const LAB_BOOST_ENERGY = 20;
 const REACTION_LOAD_TARGET = 300;
 /** output lab 产物积累到此量即发布回收需求（攒批搬运，减少往返）。 */
 const OUTPUT_RECLAIM_THRESHOLD = 100;
-
-/** boost 效果 → 对应 body part（用于封顶实际可强化的部件数）。 */
-const EFFECT_PART: Readonly<Record<BoostEffect, BodyPartConstant>> = {
-  harvest: WORK, upgrade: WORK, repair: WORK, dismantle: WORK,
-  attack: ATTACK, rangedAttack: RANGED_ATTACK, heal: HEAL,
-  carry: CARRY, move: MOVE, tough: TOUGH,
-};
+/** war 前馈激活房的休眠时长（tick）— 缩短重试间隔，market 补给基础矿后
+ * 能更快恢复反应（非 war 房保持 500，防原料断供时 BFS 规划纯空转）。 */
+const WAR_IDLE_TICKS = 50;
 
 // ─── RoomMemory 扩展 ────────────────────────────────────────
 
@@ -249,6 +246,13 @@ export const labSystem: System = {
 
       const industryMem = getIndustryMemory(snapshot.roomName);
 
+      // war 前馈激活判定（boost 战前强化链）：war 姿态且本房是 sponsor（或
+      // 计划未立 — sponsor 未知时所有 RCL6+ 房先备料，反正化合物不浪费）。
+      // 仅 sponsor 前馈：非参战房继续默认 XGH2O 生产线不受打扰。
+      const warPlan = Memory.kernel?.warPlan;
+      const warActive = Memory.kernel?.strategy?.posture === "war" &&
+        (!warPlan || warPlan.sponsor === snapshot.roomName);
+
       // 原料断供休眠：单房间只产一种矿物，多矿种原料在市场/跨房补给接入前
       // 不会自行出现。此时每 tick「规划反应链 → 无可执行步骤 → 清除 → 再规划」
       // 是纯 CPU 空转。休眠期内跳过本房全部 lab 逻辑，到期后重新评估
@@ -268,6 +272,8 @@ export const labSystem: System = {
       }
 
       // ── 1. Boost 决策 ──
+      // warBuildPhase：编队 build 相位放宽报到窗口（编队集结本就是待命，
+      // 化合物前馈未到位时窗口不该把强化机会关死 — 见 boost.ts）。
       const creepSummaries = Object.values(Game.creeps)
         .filter(c => c.memory.home === snapshot.roomName)
         .map(c => ({
@@ -275,6 +281,7 @@ export const labSystem: System = {
           role: c.memory.role ?? "unknown",
           ticksToLive: c.ticksToLive ?? 0,
           boosted: (industryMem.boostedCreeps ?? []).includes(c.name),
+          body: c.body,
         }));
 
       const boostRequests = evaluateBoostRequests(
@@ -282,12 +289,22 @@ export const labSystem: System = {
         snapshot.rcl,
         inventory,
         DEFAULT_BOOST_POLICY,
+        warPlan?.phase === "build",
       );
 
       // ── 2. 反应规划（含自动目标选择） ──
-      // 如果没有手动设定反应目标，根据 boost 需求自动决定。
+      // 优先级：war 前馈（库存缺口预产编队化合物）> boost 请求化合物 > 默认 XGH2O。
+      // 不抢占已设定的目标 — 反应批次很快完成，切目标浪费半成品。
       if (!industryMem.reactionTarget) {
-        if (boostRequests.length > 0) {
+        const warTarget = decideWarReactionTarget(
+          warActive,
+          inventory,
+          CONFIG.war.boostStockpile,
+        );
+        if (warTarget) {
+          industryMem.reactionTarget = warTarget;
+          industryMem.reactionAmount = 300;
+        } else if (boostRequests.length > 0) {
           // 优先生产 boost 需要的化合物
           industryMem.reactionTarget = boostRequests[0]!.compound;
           industryMem.reactionAmount = 300; // 一批 300 单位
@@ -324,9 +341,11 @@ export const labSystem: System = {
       }
 
       // 无可执行反应且无 boost 需求 → 进入休眠，等原料库存变化后再评估。
-      // 500 tick ≈ 一个 tuning 评估窗口，对 boost 时效的影响可忽略。
+      // 500 tick ≈ 一个 tuning 评估窗口，对 boost 时效的影响可忽略；
+      // war 前馈房用短休眠（WAR_IDLE_TICKS）— 缺矿时 market 买入（tryBuyDeficit）
+      // 补给后能更快恢复预产，战时等待即战机。
       if (!reactionStep && boostRequests.length === 0) {
-        industryMem.idleUntil = ctx.tick + 500;
+        industryMem.idleUntil = ctx.tick + (warActive ? WAR_IDLE_TICKS : 500);
         continue;
       }
 
@@ -381,7 +400,7 @@ export const labSystem: System = {
         // 必然 ERR_NOT_ENOUGH_RESOURCES，boost 永不成功。
         const compound = assignment.boostCompound as ResourceConstant;
         const effect = BOOST_EFFECTS[assignment.boostCompound];
-        const partType = effect ? EFFECT_PART[effect] : undefined;
+        const partType = effect ? BOOST_EFFECT_PART[effect] : undefined;
         if (!partType) continue;
         const matchedParts = creep.body.filter(p => p.type === partType && !p.boost).length;
         const byMineral = Math.floor((lab.store[compound] ?? 0) / LAB_BOOST_MINERAL);

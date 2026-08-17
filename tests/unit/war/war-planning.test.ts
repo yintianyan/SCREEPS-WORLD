@@ -11,6 +11,8 @@
 import { describe, expect, it } from "vitest";
 import {
   decideSquadSize,
+  decideHealerCount,
+  evaluateBoostGate,
   evaluateWarOutcome,
   isAttritionLost,
   nextWavePhase,
@@ -161,6 +163,24 @@ describe("decideSquadSize", () => {
   });
 });
 
+describe("decideHealerCount — heal-tank 治疗配比", () => {
+  it("正常：每 2 编制位 1 奶（向上取整）", () => {
+    // 编制 3（无塔基数）→ ceil(3/2) = 2；编制 5（1 塔）→ ceil(5/2) = 3。
+    expect(decideHealerCount(3, 2)).toBe(2);
+    expect(decideHealerCount(5, 2)).toBe(3);
+  });
+
+  it("边界：至少 1 个 — 最小编制也有奶", () => {
+    expect(decideHealerCount(1, 2)).toBe(1);
+    expect(decideHealerCount(2, 2)).toBe(1);
+  });
+
+  it("异常：非正编制防御性回 1（不应发生，防 0 奶编队静默送死）", () => {
+    expect(decideHealerCount(0, 2)).toBe(1);
+    expect(decideHealerCount(-3, 2)).toBe(1);
+  });
+});
+
 describe("R4 — 失败目标黑名单过滤", () => {
   it("黑名单冷却期内的目标被剔除", () => {
     const target = selectWarTarget({
@@ -200,6 +220,54 @@ describe("R4 — nextWavePhase 波次相位迟滞", () => {
     expect(nextWavePhase("advance", 1, 3, 0.5)).toBe("build"); // 1 < 1.5
     expect(nextWavePhase("advance", 2, 3, 0.5)).toBe("advance"); // 2 ≥ 1.5
     expect(nextWavePhase("advance", 3, 3, 0.5)).toBe("advance");
+  });
+});
+
+describe("boost 战前强化 — nextWavePhase boost 门禁", () => {
+  it("满编 + boostReady=false（未全员强化）→ 保持 build 集结", () => {
+    expect(nextWavePhase("build", 5, 5, 0.5, false)).toBe("build");
+  });
+
+  it("满编 + boostReady=true（全员强化）→ advance", () => {
+    expect(nextWavePhase("build", 5, 5, 0.5, true)).toBe("advance");
+  });
+
+  it("满编 + boostReady=undefined（降级豁免）→ advance", () => {
+    // 缺省参数（旧调用方）与显式 undefined 同义 — 门禁不改变既有行为。
+    expect(nextWavePhase("build", 5, 5, 0.5, undefined)).toBe("advance");
+    expect(nextWavePhase("build", 5, 5, 0.5)).toBe("advance");
+  });
+
+  it("未满编时门禁无关紧要（live 优先判）→ build", () => {
+    expect(nextWavePhase("build", 3, 5, 0.5, true)).toBe("build");
+    expect(nextWavePhase("build", 3, 5, 0.5, false)).toBe("build");
+  });
+
+  it("advance 回落判定不受 boost 门禁影响（重组不卡强化）", () => {
+    expect(nextWavePhase("advance", 2, 5, 0.5, false)).toBe("build");
+    expect(nextWavePhase("advance", 3, 5, 0.5, false)).toBe("advance");
+  });
+});
+
+describe("boost 战前强化 — evaluateBoostGate 门禁降级", () => {
+  it("全员强化（boosted ≥ live）→ true", () => {
+    expect(evaluateBoostGate(5, 5, true, false)).toBe(true);
+    expect(evaluateBoostGate(6, 5, true, false)).toBe(true);
+  });
+
+  it("未全员强化 → false", () => {
+    expect(evaluateBoostGate(4, 5, true, false)).toBe(false);
+    expect(evaluateBoostGate(0, 5, true, false)).toBe(false);
+  });
+
+  it("sponsor 无 lab（canBoost=false）→ undefined 豁免（裸攻由止损链兜底）", () => {
+    expect(evaluateBoostGate(0, 5, false, false)).toBeUndefined();
+    // 已强化与否不影响豁免结论。
+    expect(evaluateBoostGate(5, 5, false, false)).toBeUndefined();
+  });
+
+  it("宽限期过（graceExpired）→ undefined 豁免（防缺矿房永久卡死 build）", () => {
+    expect(evaluateBoostGate(0, 5, true, true)).toBeUndefined();
   });
 });
 
