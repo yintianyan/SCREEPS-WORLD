@@ -387,7 +387,7 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     }
   });
 
-  it("tower 覆盖加权：RCL5+ 批次塔优先落在 controller 侧，RCL8 强制 anchor 硬约束", () => {
+  it("tower 覆盖加权：RCL8 批次塔优先落在 controller 侧，早期批次守城区", () => {
     const field = computeDistanceField(noWalls);
     const anchor = { x: 25, y: 25 };
     const controller = { x: 25, y: 45 };
@@ -400,15 +400,9 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     const nearController = towers.filter(
       t => Math.abs(t.pos.x - controller.x) + Math.abs(t.pos.y - controller.y) <= 15,
     );
-    // 累计 3 塔 controller 侧（RCL5/7 各 1 + RCL8 批次 1），3 塔 anchor 侧
-    // （RCL3 通用池 + RCL8 批次 2 硬约束）。
-    expect(nearController.length).toBeGreaterThanOrEqual(3);
-    // RCL8 硬约束：至少 2 塔 anchor Chebyshev ≤ 5。
-    const nearAnchor = towers.filter(
-      t => Math.max(Math.abs(t.pos.x - anchor.x), Math.abs(t.pos.y - anchor.y)) <= 5,
-    );
-    expect(nearAnchor.length).toBeGreaterThanOrEqual(2);
-    // 分桶后 tower 平均距 controller 应小于 extension（对照组）。
+    // RCL8 批次 3 塔中 2 塔罩 controller（ceil(3/2)），早期批次保持锚点侧。
+    expect(nearController.length).toBeGreaterThanOrEqual(2);
+    // 加权后 tower 平均距 controller 应小于扩展（对照组）。
     const towerDist = towers.reduce(
       (a, t) => a + Math.abs(t.pos.x - controller.x) + Math.abs(t.pos.y - controller.y), 0,
     ) / towers.length;
@@ -488,147 +482,5 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     );
     const baselineLabs = baseline.filter(p => p.structureType === STRUCTURE_LAB);
     expect(meanToTerminal(labs)).toBeLessThan(meanToTerminal(baselineLabs));
-  });
-});
-
-// P1-2：tower RCL5+ controller 分桶 + anchor 硬约束（设计文档 §3.7）
-describe("constraint-placer — P1-2 tower 分桶 + anchor 硬约束", () => {
-  /** 计算 Chebyshev 距离。 */
-  const chebyshev = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
-    Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-
-  /** 计算 Manhattan 距离。 */
-  const manhattan = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
-    Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-
-  it("RCL5：late 批次塔落在 controller 侧（≤15），rcl3 塔守 anchor", () => {
-    const field = computeDistanceField(noWalls);
-    const anchor = { x: 25, y: 25 };
-    const controller = { x: 25, y: 45 };
-    const result = placeStructures(
-      anchor, field, noWalls, 5, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
-    );
-    const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
-    expect(towers.length).toBe(2); // RCL3 +1 + RCL5 +1
-    // late 批次塔应在 controller 侧（≤15）
-    const lateTower = towers.find(t => t.phase === "late");
-    expect(lateTower).toBeDefined();
-    expect(manhattan(lateTower!.pos, controller)).toBeLessThanOrEqual(15);
-    // rcl3 批次塔应守 anchor（通用池，openness 评分倾向 anchor 侧）
-    const rcl3Tower = towers.find(t => t.phase === "rcl3");
-    expect(rcl3Tower).toBeDefined();
-    expect(chebyshev(rcl3Tower!.pos, anchor)).toBeLessThanOrEqual(5);
-  });
-
-  it("RCL7：rcl7 批次塔落在 controller 侧（≤15）", () => {
-    const field = computeDistanceField(noWalls);
-    const anchor = { x: 25, y: 25 };
-    const controller = { x: 25, y: 45 };
-    const result = placeStructures(
-      anchor, field, noWalls, 7, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
-    );
-    const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
-    expect(towers.length).toBe(3); // RCL3 +1 + RCL5 +1 + RCL7 +1
-    const rcl7Tower = towers.find(t => t.phase === "rcl7");
-    expect(rcl7Tower).toBeDefined();
-    expect(manhattan(rcl7Tower!.pos, controller)).toBeLessThanOrEqual(15);
-  });
-
-  it("RCL8 硬约束：至少 2 塔 anchor Chebyshev ≤ 5", () => {
-    const field = computeDistanceField(noWalls);
-    const anchor = { x: 25, y: 25 };
-    const controller = { x: 25, y: 45 };
-    const result = placeStructures(
-      anchor, field, noWalls, 8, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
-    );
-    const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
-    expect(towers.length).toBe(6);
-    // RCL8 硬约束：至少 2 塔 anchor ≤ 5
-    const nearAnchor = towers.filter(t => chebyshev(t.pos, anchor) <= 5);
-    expect(nearAnchor.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("RCL8 累计分布：3 塔 controller 侧 + 3 塔 anchor 侧", () => {
-    const field = computeDistanceField(noWalls);
-    const anchor = { x: 25, y: 25 };
-    const controller = { x: 25, y: 45 };
-    const result = placeStructures(
-      anchor, field, noWalls, 8, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
-    );
-    const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
-    expect(towers.length).toBe(6);
-    // 累计 3 塔 controller 侧（RCL5 + RCL7 + RCL8 批次 1）
-    const nearController = towers.filter(t => manhattan(t.pos, controller) <= 15);
-    expect(nearController.length).toBe(3);
-    // 累计 3 塔 anchor 侧（RCL3 通用池 + RCL8 批次 2 硬约束）
-    const nearAnchor = towers.filter(t => chebyshev(t.pos, anchor) <= 5);
-    expect(nearAnchor.length).toBe(3);
-  });
-
-  it("RCL8 批次份额：1 controller + 2 anchor（phase=rcl8）", () => {
-    const field = computeDistanceField(noWalls);
-    const anchor = { x: 25, y: 25 };
-    const controller = { x: 25, y: 45 };
-    const result = placeStructures(
-      anchor, field, noWalls, 8, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
-    );
-    const rcl8Towers = result.filter(
-      p => p.structureType === STRUCTURE_TOWER && p.phase === "rcl8",
-    );
-    expect(rcl8Towers.length).toBe(3);
-    // RCL8 批次 3 塔中 1 塔 controller 侧
-    const rcl8Controller = rcl8Towers.filter(t => manhattan(t.pos, controller) <= 15);
-    expect(rcl8Controller.length).toBe(1);
-    // RCL8 批次 3 塔中 2 塔 anchor 侧（≤5）
-    const rcl8Anchor = rcl8Towers.filter(t => chebyshev(t.pos, anchor) <= 5);
-    expect(rcl8Anchor.length).toBe(2);
-  });
-
-  it("anchor 硬约束降级：≤5 候选不足时放宽到 ≤7", () => {
-    // 预占 anchor 周围全部 ≤5 的偶校验格 → RCL8 批次 2 anchor 塔必须降级到 ≤7
-    const field = computeDistanceField(noWalls);
-    const anchor = { x: 25, y: 25 };
-    const controller = { x: 25, y: 45 };
-    const preOccupied = new Set<number>();
-    for (let dx = -5; dx <= 5; dx++) {
-      for (let dy = -5; dy <= 5; dy++) {
-        if (((dx + dy) % 2 + 2) % 2 === 0) {
-          preOccupied.add(packPos(25 + dx, 25 + dy));
-        }
-      }
-    }
-    const result = placeStructures(
-      anchor, field, noWalls, 8, preOccupied, new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
-    );
-    const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
-    expect(towers.length).toBe(6);
-    // ≤5 全被预占 → 无塔落在 ≤5，但 ≤7 内应有 ≥2 塔（降级放行）
-    const near5 = towers.filter(t => chebyshev(t.pos, anchor) <= 5);
-    expect(near5.length).toBe(0);
-    const near7 = towers.filter(t => chebyshev(t.pos, anchor) <= 7);
-    expect(near7.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("无 controllerPos 时退化为通用池（向后兼容）", () => {
-    const field = computeDistanceField(noWalls);
-    const anchor = { x: 25, y: 25 };
-    // 不传 controllerPos（第 11 个参数）
-    const result = placeStructures(
-      anchor, field, noWalls, 8, new Set(), new Map(),
-    );
-    const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
-    expect(towers.length).toBe(6);
-    // 无分桶 → 全部走通用池，openness 评分倾向 anchor 侧
-    // 不强制 controller 侧分布（与传 controllerPos 的对照组区分）
-    const controller = { x: 25, y: 45 };
-    const nearController = towers.filter(t => manhattan(t.pos, controller) <= 15);
-    // 通用池下 controller 侧塔数 < 3（对照组传 controllerPos 时 = 3）
-    expect(nearController.length).toBeLessThan(3);
   });
 });

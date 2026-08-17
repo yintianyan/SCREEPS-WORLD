@@ -3,19 +3,39 @@ import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
 import { getObjectById } from "./obj-cache";
 
-/** 掉落堆距离权重：score = amount − dist × 此值。20 使远处溢出大堆压过近处小堆，
- * 避免多 hauler 被身边小堆截胡而冷落另一侧持续溢出的大堆。 */
+/**
+ * 掉落堆选择的距离权重：每格距离折算的能量机会成本（往返运力代价）。
+ * selectDroppedEnergy 用 score = amount − dist × 此值 在「堆大小 vs 取货距离」
+ * 间权衡。20 ≈ 往返 2 格的运力损耗量级，使远处溢出大堆（损失更大）压过近处
+ * 小堆，避免多 hauler 被身边小堆截胡而涌向同侧、冷落另一侧持续溢出的大堆。
+ */
 const DROP_DISTANCE_WEIGHT = 20;
 
-/** hauler 取能距离权重：score = energy − dist × 此值。10 使两侧同满时按距离分流，
- * 但满溢差距明显时仍优先疏解更满者，配合名字哈希散布消除羊群偏置。 */
+/**
+ * hauler 取能 container 选择的距离权重：每格距离折算的能量。
+ * selectHaulSourceContainer 用 score = energy − dist × 此值 在「满溢程度 vs 距离」
+ * 间权衡。10 使两侧同为满仓（2000）时按距离分流（近者优先），但满溢程度差距明显
+ * 时（如 2000 vs 1000）仍优先疏解更满者（距离项 ≤200 不足以翻转千级能量差），
+ * 兼顾防溢出与就近，配合名字哈希散布消除「全员涌向数组首个」的羊群偏置。
+ */
 const HAUL_CONTAINER_DISTANCE_WEIGHT = 10;
 
-/** 房间内所有敌对 creep（过滤联盟白名单）— per-tick per-room 共享缓存。
- * 与 lifecycle.getRoomThreats 的区别：后者按 body 过滤「有威胁」单位供 flee 用；
- * 本函数返回全部 hostile（remote-defender 需击杀无威胁 body 的 NPC reserver 释放占位）。
- * 同房多 defender 共享同数组，避免每只每 tick 全房 find；tick 内死亡者仍会被选中
- * 一次，attack 返回 ERR_INVALID_TARGET 由既有错误容忍处理。 */
+/**
+ * 获取房间内所有敌对 creep（过滤联盟白名单）— per-tick per-room 共享缓存。
+ *
+ * 与 lifecycle.getRoomThreats 的区别：
+ *   - getRoomThreats 返回 body-aware 过滤后的"有威胁"单位（ATTACK/RANGED/HEAL 等），
+ *     供 flee 决策使用——无攻击能力的 reserver 不触发 flee。
+ *   - 本函数返回所有非联盟的 hostile creep，供 remote-defender 使用——
+ *     defender 需要击杀 NPC reserver（纯 CLAIM body）释放 source 占位，
+ *     reserver 无威胁 body 但仍是 defender 的合法目标。
+ *
+ * 缓存生命周期：单 tick，globalCache 自动重置。
+ * 同房多 defender 共享同一数组引用，避免每只 defender 每 tick 全房 find。
+ *
+ * 缓存数组在 tick 内不变——hostile 死亡当 tick 仍会被选中一次，
+ * `creep.attack` 返回 ERR_INVALID_TARGET 由现有错误容忍处理。无行为回归。
+ */
 export function getHostilesCached(room: Room): Creep[] {
   const g = globalCache() as { __hostilesCache?: Record<string, { tick: number; creeps: Creep[] }> };
   if (!g.__hostilesCache) g.__hostilesCache = {};
@@ -51,21 +71,8 @@ export function getSource(creep: Creep, snapshot: RoomSnapshot): Source | undefi
         const fairShare = Math.ceil(totalOccupancy / snapshot.sources.length);
         // 当前 source 超过公平份额 且 存在更空闲的 source → 迁移。
         if (myCount > fairShare && minCount < myCount) {
-          // 拥挤迁移：直接迁移到更空的 source + 同 tick 更新 occupancy。
-          // 旧方案清除 sourceId 走重分配 → 同 tick 全员看到相同 occupancy → 全选同一 source
-          // → 下一 tick 又拥挤 → sourceId 翻转 → creep 1 格范围内摇摆不前。
-          // cast 必要：类型 ReadonlyMap 但运行时是 Map（room-snapshot 每 tick 重建，无跨 tick 污染）。
-          const occMap = snapshot.sourceOccupancy as Map<string, number>;
-          for (const s of snapshot.sources) {
-            const c = occMap.get(s.id) ?? 0;
-            if (c < myCount) {
-              creep.memory.sourceId = s.id;
-              occMap.set(s.id, c + 1);
-              occMap.set(source.id, myCount - 1);
-              return s;
-            }
-          }
-          return source; // 理论不可达（minCount < myCount 保证有更空 source），防御兜底。
+          creep.memory.sourceId = undefined;
+          // 落入下方重分配逻辑。
         } else {
           return source;
         }
@@ -105,8 +112,6 @@ export function getSource(creep: Creep, snapshot: RoomSnapshot): Source | undefi
 
   if (best) {
     creep.memory.sourceId = best.id;
-    // 同 tick 内更新 occupancy 防止后续 creep 重复选择同一 source（与拥挤迁移同源）。
-    (snapshot.sourceOccupancy as Map<string, number>).set(best.id, bestCount + 1);
   }
   return best;
 }
