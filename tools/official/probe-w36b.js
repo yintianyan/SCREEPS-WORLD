@@ -1,0 +1,2 @@
+// 探针 W2：W36S58 出口/controller/敌对结构/每 creep 位置+remoteTarget
+(function(){var o={ex:Game.map.describeExits("W36S58")};var w=Game.rooms.W36S58;if(w){o.cp=w.controller?[w.controller.pos.x,w.controller.pos.y]:null;o.hs=w.find(FIND_HOSTILE_STRUCTURES).map(function(s){return s.structureType});o.g=[];for(var i in Game.creeps){var c=Game.creeps[i];if(c.pos.roomName==="W36S58"){o.g.push([c.pos.x,c.pos.y,c.memory.role,c.memory.mode,c.memory.stuckTicks||0,c.memory.remoteTarget||""]);}}}Memory.__diag=JSON.stringify(o);})();

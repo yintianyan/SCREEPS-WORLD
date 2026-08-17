@@ -73,6 +73,13 @@ export function selectExpansionTarget(input: ExpansionInput): ExpansionCandidate
       if (dangerUntil !== undefined && tick < dangerUntil) continue;
       // 有敌塔的房不选：塔会点杀 claimer 与拓荒者，claim 变成送葬。
       if ((info.towers ?? 0) > 0) continue;
+      // v33 完整情报：有非我方 spawn 的房不选作占领目标 — 前任玩家的遗迹 spawn
+      // （controller 无主）会让房间在情报上可占，但 claimer 到场后敌方可随时
+      // 从遗迹 spawn 复活部队反打，而帝国当前没有「拆除敌方 spawn」的行动链
+      // （dismantle 只能拆有 site 的结构，攻击敌方结构是战争链职责）。
+      // 该类房仍可作远矿目标（remote-mining-manager 允许，威胁由 threatUntil/flee
+      // 链处置）；占领须待 spawn 拆除链落地或 spawn 自然消失后再评估。
+      if ((info.enemySpawns ?? 0) > 0) continue;
       // 黑名单冷却。
       const retryAt = blacklist?.[roomName];
       if (retryAt !== undefined && tick < retryAt) continue;

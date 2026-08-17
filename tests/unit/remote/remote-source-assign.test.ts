@@ -159,3 +159,166 @@ describe("remote-harvester — P2-O occupancy 收窄到本房", () => {
     expect(h1.memory.sourceId).toBe("srcB");
   });
 });
+
+// ─── v33-R11：物理站桩占用 + 锁死改绑自愈 ─────────────────────────
+
+describe("remote-harvester — v33-R11 绑定自愈", () => {
+  /** 带独立坐标的 source，getRangeTo 按 Chebyshev 距离计算。 */
+  function posSource(id: string, x: number, y: number): any {
+    const s = mockSource(id);
+    s.pos = {
+      x, y, roomName: targetRoom,
+      getRangeTo: vi.fn((t: any) => {
+        const tx = t.x ?? t.pos?.x ?? 0;
+        const ty = t.y ?? t.pos?.y ?? 0;
+        return Math.max(Math.abs(tx - x), Math.abs(ty - y));
+      }),
+    };
+    return s;
+  }
+
+  /** 把 creep 的 pos 换成带坐标版本（getRangeTo 按 Chebyshev，
+   *  兼容 RoomPosition 与 RoomObject 两种目标形态）。 */
+  function placeCreep(creep: any, x: number, y: number): void {
+    creep.pos = {
+      x, y, roomName: targetRoom,
+      getRangeTo: vi.fn((t: any) => {
+        const tx = t.x ?? t.pos?.x ?? 0;
+        const ty = t.y ?? t.pos?.y ?? 0;
+        return Math.max(Math.abs(tx - x), Math.abs(ty - y));
+      }),
+    };
+  }
+
+  function makeRoom(creepsInRoom: any[], sources: any[]): any {
+    return {
+      name: targetRoom,
+      find: vi.fn((t: number) => {
+        if (t === FIND_SOURCES) return sources;
+        if (t === FIND_MY_CREEPS) return creepsInRoom;
+        return [];
+      }),
+    };
+  }
+
+  it("未绑定的兄弟物理站桩于 source 旁 → 计入占用（首绑避开）", () => {
+    const g = globalThis as any;
+    const srcA = posSource("srcA", 10, 10);
+    const srcB = posSource("srcB", 30, 30);
+
+    // 兄弟 h2 未写 sourceId，但已站桩在 srcA 旁（range 1）→ 物理占用。
+    const h2 = mockCreep({ name: "rh-2", role: "remoteHarvester" });
+    h2.memory.remoteTarget = targetRoom;
+    placeCreep(h2, 11, 10); // 距 srcA (10,10) = 1，距 srcB = 19
+
+    const h1 = mockCreep({ name: "rh-1", role: "remoteHarvester" });
+    h1.memory.remoteTarget = targetRoom;
+    placeCreep(h1, 9, 11);
+    const room = makeRoom([h1, h2], [srcA, srcB]);
+    h1.room = room;
+    h2.room = room;
+    g.Game.creeps = { "rh-1": h1, "rh-2": h2 };
+
+    const chosen = getRemoteSource(h1);
+
+    // h2 物理站桩 srcA → h1 避开 srcA 选 srcB（同 tick 首绑竞态兜底）。
+    expect(chosen?.id).toBe("srcB");
+    expect(h1.memory.sourceId).toBe("srcB");
+  });
+
+  it("锁死（stuck≥3 且 range>1）+ 存在无主 source → 改绑过去", () => {
+    const g = globalThis as any;
+    const srcA = posSource("srcA", 10, 10);
+    const srcB = posSource("srcB", 30, 30);
+
+    const h1 = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "srcA" });
+    h1.memory.remoteTarget = targetRoom;
+    h1.memory.stuckTicks = 3;
+    placeCreep(h1, 10, 20); // 距 srcA=10（>1），够不到
+    const room = makeRoom([h1], [srcA, srcB]);
+    h1.room = room;
+    g.Game.creeps = { "rh-1": h1 };
+
+    const chosen = getRemoteSource(h1);
+
+    // srcB 无兄弟占用 → 改绑 srcB，终结「挤占+空缺」。
+    expect(chosen?.id).toBe("srcB");
+    expect(h1.memory.sourceId).toBe("srcB");
+  });
+
+  it("锁死但另一源已被兄弟占用 → 保持原绑定（不抢兄弟的源）", () => {
+    const g = globalThis as any;
+    const srcA = posSource("srcA", 10, 10);
+    const srcB = posSource("srcB", 30, 30);
+
+    const h2 = mockCreep({ name: "rh-2", role: "remoteHarvester", sourceId: "srcB" });
+    h2.memory.remoteTarget = targetRoom;
+    placeCreep(h2, 30, 30);
+
+    const h1 = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "srcA" });
+    h1.memory.remoteTarget = targetRoom;
+    h1.memory.stuckTicks = 3;
+    placeCreep(h1, 10, 20);
+    const room = makeRoom([h1, h2], [srcA, srcB]);
+    h1.room = room;
+    h2.room = room;
+    g.Game.creeps = { "rh-1": h1, "rh-2": h2 };
+
+    expect(getRemoteSource(h1)?.id).toBe("srcA");
+    expect(h1.memory.sourceId).toBe("srcA");
+  });
+
+  it("改绑冷却：改绑后立即重评不会改回去（防 A↔B 振荡）", () => {
+    const g = globalThis as any;
+    const srcA = posSource("srcA", 10, 10);
+    const srcB = posSource("srcB", 30, 30);
+
+    const h1 = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "srcA" });
+    h1.memory.remoteTarget = targetRoom;
+    h1.memory.stuckTicks = 3;
+    placeCreep(h1, 30, 20); // 改绑到 srcB 后仍在 range>1（够不到 srcB）
+    const room = makeRoom([h1], [srcA, srcB]);
+    h1.room = room;
+    g.Game.creeps = { "rh-1": h1 };
+
+    expect(getRemoteSource(h1)?.id).toBe("srcB"); // 首轮改绑 srcB
+    // 冷却期内：srcA 现在「空缺」，但不得立刻改回去。
+    expect(getRemoteSource(h1)?.id).toBe("srcB");
+    expect(h1.memory.sourceId).toBe("srcB");
+
+    // 冷却过期后允许再次改绑（仍锁死在新源时）。
+    g.Game.time += 250;
+    const again = getRemoteSource(h1);
+    expect(again?.id).toBe("srcA"); // 200 tick 后允许改回 srcA（此时 A 空缺）
+  });
+
+  it("单源房锁死：无第二源可分，保持原绑定", () => {
+    const g = globalThis as any;
+    const only = posSource("srcOnly", 10, 10);
+    const h1 = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "srcOnly" });
+    h1.memory.remoteTarget = targetRoom;
+    h1.memory.stuckTicks = 5;
+    placeCreep(h1, 10, 20);
+    const room = makeRoom([h1], [only]);
+    h1.room = room;
+    g.Game.creeps = { "rh-1": h1 };
+
+    expect(getRemoteSource(h1)?.id).toBe("srcOnly");
+    expect(h1.memory.sourceId).toBe("srcOnly");
+  });
+
+  it("未锁死（range≤1 或 stuck<3）→ 缓存稳定复用，不触发改绑", () => {
+    const g = globalThis as any;
+    const srcA = posSource("srcA", 10, 10);
+    const srcB = posSource("srcB", 30, 30);
+    const h1 = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "srcA" });
+    h1.memory.remoteTarget = targetRoom;
+    placeCreep(h1, 11, 10); // range 1 — 在矿位
+    const room = makeRoom([h1], [srcA, srcB]);
+    h1.room = room;
+    g.Game.creeps = { "rh-1": h1 };
+
+    expect(getRemoteSource(h1)?.id).toBe("srcA");
+    expect(h1.memory.sourceId).toBe("srcA");
+  });
+});

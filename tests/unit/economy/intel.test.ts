@@ -83,4 +83,55 @@ describe("intel — scanNeighborIntel 情报扫描", () => {
     const next = scanNeighborIntel("W7N3", "normal", 2000, undefined, prev);
     expect(next.reservedBy).toBe("enemy");
   });
+
+  // ─── v33 完整情报字段 ───────────────────────────────────────
+
+  it("有视野时记录 enemySpawns / wallCount / sealedExits（含无主遗迹 spawn 房）", () => {
+    const intel = scanNeighborIntel("W7N3", "normal", 1000, {
+      sources: 2,
+      enemySpawns: 1,
+      wallCount: 8,
+      sealedExits: [7],
+    });
+    expect(intel.enemySpawns).toBe(1);
+    expect(intel.wallCount).toBe(8);
+    expect(intel.sealedExits).toEqual([7]);
+    expect(intel.owner).toBeUndefined(); // 无主房不记 owner — 遗迹 spawn 房仍可运营
+  });
+
+  it("有视野且 wallCount=0：sealedExits 显式写空数组（确认无封死，覆盖旧残留）", () => {
+    const prev = scanNeighborIntel("W7N3", "normal", 1000, {
+      sources: 2,
+      wallCount: 12,
+      sealedExits: [7],
+    });
+    // 墙被拆净后的下一次有视野刷新。
+    const next = scanNeighborIntel(
+      "W7N3", "normal", 2000,
+      { sources: 2, wallCount: 0, sealedExits: [] },
+      prev,
+    );
+    expect(next.wallCount).toBe(0);
+    expect(next.sealedExits).toEqual([]);
+  });
+
+  it("无视野时沿用上次的 enemySpawns / wallCount / sealedExits（陈旧度由消费方判断）", () => {
+    const prev = scanNeighborIntel("W7N3", "normal", 1000, {
+      sources: 2,
+      enemySpawns: 1,
+      wallCount: 8,
+      sealedExits: [7],
+    });
+    const next = scanNeighborIntel("W7N3", "normal", 2000, undefined, prev);
+    expect(next.enemySpawns).toBe(1);
+    expect(next.wallCount).toBe(8);
+    expect(next.sealedExits).toEqual([7]);
+  });
+
+  it("首次建档无视野：新字段不落键（undefined = 未知，不触发封死废弃）", () => {
+    const intel = scanNeighborIntel("W7N3", "normal", 1000);
+    expect(intel.enemySpawns).toBeUndefined();
+    expect(intel.wallCount).toBeUndefined();
+    expect(intel.sealedExits).toBeUndefined();
+  });
 });

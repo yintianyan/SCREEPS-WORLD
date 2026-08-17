@@ -130,16 +130,28 @@ class MockRoomPosition {
     return Math.max(Math.abs(this.x - t.x), Math.abs(this.y - t.y));
   }
 
-  getDirectionTo(target: { pos?: MockRoomPosition } | MockRoomPosition | { x: number; y: number }): number {
-    const t = "x" in target ? target : (target as { pos: MockRoomPosition }).pos;
-    const dx = Math.sign(t.x - this.x);
-    const dy = Math.sign(t.y - this.y);
+  getDirectionTo(xOrTarget: number | { pos?: MockRoomPosition } | MockRoomPosition | { x: number; y: number }, y?: number): number {
+    // 双重重载：getDirectionTo(tx, ty)（pathfinding 的 nextDirFromPath 用数字坐标）
+    // 与 getDirectionTo(target)（引擎语义，target 可为 RoomPosition 或 RoomObject）。
+    let tx: number;
+    let ty: number;
+    if (typeof xOrTarget === "number" && y !== undefined) {
+      tx = xOrTarget;
+      ty = y;
+    } else {
+      const t = xOrTarget as { pos?: MockRoomPosition } | { x: number; y: number };
+      const p = "x" in t ? t : (t as { pos: MockRoomPosition }).pos;
+      tx = p.x;
+      ty = p.y;
+    }
+    const dx = Math.sign(tx - this.x);
+    const dy = Math.sign(ty - this.y);
     // 方向映射：TOP=1, TOP_RIGHT=2, RIGHT=3, BOTTOM_RIGHT=4, BOTTOM=5, BOTTOM_LEFT=6, LEFT=7, TOP_LEFT=8
     const dirMap: Record<string, number> = {
       "0,-1": 1, "1,-1": 2, "1,0": 3, "1,1": 4,
       "0,1": 5, "-1,1": 6, "-1,0": 7, "-1,-1": 8,
     };
-    return dirMap[`${dx},${dy}`] ?? 0;
+    return dirMap[dx + "," + dy] ?? 0;
   }
 
   findClosestByRange<T extends { pos: MockRoomPosition }>(targets: T[]): T | null {
@@ -859,6 +871,23 @@ class MockRoom {
       c => c.room === this && c.pos.x === x && c.pos.y === y,
     );
     return creeps;
+  }
+
+  /** 矩形扫描（remoteHarvester 的 source container / container site 扫描用）。
+   * 参数序 (top, left, bottom, right, asArray)；返回 {structure}/{constructionSite} 条目数组。 */
+  lookForAtArea(type: string, top: number, left: number, bottom: number, right: number, _asArray?: boolean): unknown[] {
+    const inRect = (x: number, y: number): boolean => x >= left && x <= right && y >= top && y <= bottom;
+    const results: unknown[] = [];
+    if (type === "structure") {
+      for (const c of this._world._containers) {
+        if (c.room === this && inRect(c.pos.x, c.pos.y)) results.push({ structure: c });
+      }
+    } else if (type === "constructionSite") {
+      for (const s of this._world._sites) {
+        if (s.room === this && inRect(s.pos.x, s.pos.y)) results.push({ constructionSite: s });
+      }
+    }
+    return results;
   }
 
   findExitTo(_roomName: string): number {

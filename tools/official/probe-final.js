@@ -1,0 +1,2 @@
+// 探针 F：reserver 去向 + W36S58 控制器 + 帝国对该房情报
+(function(){var o={rs:[]};for(var i in Game.creeps){var c=Game.creeps[i];if(c.memory.role==="reserver"){o.rs.push([c.pos.roomName,c.pos.x,c.pos.y,c.memory.mode,c.memory.remoteTarget,c.memory.stuckTicks||0]);}}var w=Game.rooms.W36S58;if(w&&w.controller)o.c={lv:w.controller.level,t:w.controller.ticksToDowngrade,bl:!!w.controller.downgradeBlocked};var m=Memory.rooms.W37S58;if(m&&m.intel&&m.intel.W36S58)o.i=m.intel.W36S58;Memory.__diag=JSON.stringify(o);})();

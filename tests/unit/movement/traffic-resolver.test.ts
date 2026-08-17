@@ -152,6 +152,31 @@ describe("resolveTraffic — 推挤链", () => {
     expect(moves.size).toBe(0);
   });
 
+  it("卡位升级：同档站桩者（anchorStation 60）被升级移动方（stuckEscalation 70）推开", () => {
+    // 线上实证 W36S58：采集者目标格被锚定 reserver 占据，同档（60≥60）不推 →
+    // 意图逐 tick 被拒、采集者永久锁死。升级后 70>60 → 推挤放行。
+    const { moves } = resolveTraffic(input({
+      intents: [intent("harvester", 100, 200, 70)],
+      anchors: new Map([["reserver", 60]]),
+      occupancy: new Map([[100, "harvester"], [200, "reserver"]]),
+      shoveCandidates: (tile) => (tile === 200 ? [250] : []),
+    }));
+
+    expect(moves.get("harvester")).toBe(200);
+    expect(moves.get("reserver")).toBe(250);
+  });
+
+  it("升级移动方仍不可推开站桩矿工（anchorMiner 90 > stuckEscalation 70）", () => {
+    const { moves } = resolveTraffic(input({
+      intents: [intent("harvester", 100, 200, 70)],
+      anchors: new Map([["miner", 90]]),
+      occupancy: new Map([[100, "harvester"], [200, "miner"]]),
+      shoveCandidates: () => [250],
+    }));
+
+    expect(moves.size).toBe(0);
+  });
+
   it("flee 高于矿工锚：逃命 creep 可推开站桩矿工", () => {
     const { moves } = resolveTraffic(input({
       intents: [intent("flee", 100, 200, 100)],

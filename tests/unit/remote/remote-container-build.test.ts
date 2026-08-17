@@ -96,13 +96,14 @@ describe("RM-1 — remote-harvester 自建 source container", () => {
     remoteHarvesterRole.run(creep, mockContext(mockSnapshot()));
 
     // needContainer=true 时 buildSourceContainer resolve 返回 undefined，候选链继续。
-    // 下一个候选 remoteStationaryMine 会采能（满载 creep 在 source 旁照常采集）。
     // 关键断言：不调 createConstructionSite、不 build（无 site）、标记保持待 manager 消费。
     expect(creep.room.createConstructionSite).not.toHaveBeenCalled();
     expect(creep.build).not.toHaveBeenCalled();
     expect(creep.memory.needContainer).toBe(true);
-    // creep 照常采集（不会因申请标记停摆）。
-    expect(creep.harvest).toHaveBeenCalled();
+    // R12：满载且无 container 时 stationaryMine 让位 → dropEnergy 放能，
+    // 不再徒劳调 harvest（ERR_FULL）— 申请标记不会让产能停摆。
+    expect(creep.drop).toHaveBeenCalledWith("energy");
+    expect(creep.harvest).not.toHaveBeenCalled();
   });
 
   it("冷却期内有 site → 仍可 build（cooldown 只阻断 create 不阻断 build）", () => {

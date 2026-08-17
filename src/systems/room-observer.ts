@@ -1,6 +1,6 @@
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import type { ColonyPhase } from "../domain/economy/phase";
-import { scanNeighborIntel, type RoomIntel } from "../domain/intel";
+import { computeSealedExits, scanNeighborIntel, type RoomIntel } from "../domain/intel";
 import { globalCache } from "../kernel/global-cache";
 
 /**
@@ -143,13 +143,7 @@ function captureObservedIntel(tick: number): void {
     pending.targetRoom,
     status,
     tick,
-    {
-      sources: room.find(FIND_SOURCES).length,
-      mineralType: room.find(FIND_MINERALS)[0]?.mineralType,
-      owner: room.controller?.owner?.username,
-      reservation: room.controller?.reservation?.username,
-      towers: countHostileTowers(room),
-    },
+    collectRoomVision(room),
     roomMem.intel[pending.targetRoom], // prev — 保留危险冷却。
   );
 }
@@ -172,26 +166,69 @@ function refreshNeighborIntel(roomName: string, roomMem: RoomMemory, tick: numbe
       neighbor,
       status,
       tick,
-      visible
-        ? {
-            sources: visible.find(FIND_SOURCES).length,
-            mineralType: visible.find(FIND_MINERALS)[0]?.mineralType,
-            owner: visible.controller?.owner?.username,
-            reservation: visible.controller?.reservation?.username,
-            towers: countHostileTowers(visible),
-          }
-        : undefined,
+      visible ? collectRoomVision(visible) : undefined,
       intel[neighbor], // prev — 保留危险冷却与上次观测值。
     );
   }
   roomMem.intel = intel;
 }
 
-/** 统计房间内敌方 tower 数（进攻/远矿风险评估的核心变量）。 */
-function countHostileTowers(room: Room): number {
-  return room
-    .find(FIND_HOSTILE_STRUCTURES)
-    .filter(s => s.structureType === STRUCTURE_TOWER).length;
+/** 有视野时的完整房况载荷（scanNeighborIntel 的 visibleRoom 输入）。
+ * v33 完整情报：enemySpawns（非我方 spawn，含无主遗迹）+ wallCount（人工墙）+
+ * sealedExits（被墙完全封死的出口）。采集点三处（observer 捕获 / 邻房刷新 /
+ * scout 视野）共用本函数，口径一致。 */
+interface RoomVisionIntel {
+  sources: number;
+  mineralType?: string;
+  owner?: string;
+  reservation?: string;
+  towers: number;
+  enemySpawns: number;
+  wallCount: number;
+  sealedExits: number[];
+}
+
+/**
+ * 采集一个可见房间的完整视野情报。
+ * 成本：3 次 find（hostile structures 复用 + 全结构扫描人工墙）+
+ * sealedExits 仅在有人工墙时计算（≤4 出口 × 100 getTerrain）— 采集点均为
+ * 低频（50 tick 邻房刷新 / observer 25 tick 单房 / scout 每 tick 单房），可接受。
+ */
+function collectRoomVision(room: Room): RoomVisionIntel {
+  const hostileStructures = room.find(FIND_HOSTILE_STRUCTURES);
+  const towers = hostileStructures.filter(s => s.structureType === STRUCTURE_TOWER).length;
+  const enemySpawns = hostileStructures.filter(s => s.structureType === STRUCTURE_SPAWN).length;
+  // 人工墙口径与 movement CostMatrix 一致（pathfinding buildStructurePositions）：
+  // constructedWall 恒 255；rampart 仅非我方时 255（我方 rampart 可通行，不封路）。
+  const walls = room.find(FIND_STRUCTURES).filter(
+    s => s.structureType === STRUCTURE_WALL ||
+      (s.structureType === STRUCTURE_RAMPART && !(s as StructureRampart).my),
+  );
+  let sealedExits: number[] = [];
+  if (walls.length > 0) {
+    const wallSet = new Set<number>();
+    for (const w of walls) wallSet.add(w.pos.x * 50 + w.pos.y);
+    const exits = Game.map.describeExits(room.name);
+    if (exits && room.getTerrain) {
+      const terrain = room.getTerrain();
+      sealedExits = computeSealedExits({
+        roomName: room.name,
+        exits,
+        artificialWalls: wallSet,
+        getTerrain: (x, y) => terrain.get(x, y),
+      });
+    }
+  }
+  return {
+    sources: room.find(FIND_SOURCES).length,
+    mineralType: room.find(FIND_MINERALS)[0]?.mineralType,
+    owner: room.controller?.owner?.username,
+    reservation: room.controller?.reservation?.username,
+    towers,
+    enemySpawns,
+    wallCount: walls.length,
+    sealedExits,
+  };
 }
 
 /**
@@ -219,13 +256,7 @@ function captureScoutVision(tick: number): void {
       target,
       status,
       tick,
-      {
-        sources: room.find(FIND_SOURCES).length,
-        mineralType: room.find(FIND_MINERALS)[0]?.mineralType,
-        owner: room.controller?.owner?.username,
-        reservation: room.controller?.reservation?.username,
-        towers: countHostileTowers(room),
-      },
+      collectRoomVision(room),
       roomMem.intel[target],
     );
   }

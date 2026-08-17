@@ -62,6 +62,28 @@ describe("expansion — selectExpansionTarget", () => {
     expect(selectExpansionTarget(input)).toBeUndefined();
   });
 
+  it("有非我方 spawn 的房（v33 完整情报）不选作占领目标 — 遗迹 spawn 可复活敌军", () => {
+    // 线上实证 W36S58：controller 无主但遗留 Fem 的满血 spawn —
+    // 情报上是无主可占房，但帝国没有拆敌方 spawn 的行动链，占领=送命。
+    // 该房仍可作远矿目标（remote-mining-manager 允许），占领须待拆除链落地。
+    const input = baseInput({
+      intelBySponsor: { W1N1: { W2N1: intel({ enemySpawns: 1 }) } },
+    });
+    expect(selectExpansionTarget(input)).toBeUndefined();
+  });
+
+  it("无敌方 spawn 的房照常入选（enemySpawns=0 或缺失）", () => {
+    const zero = baseInput({
+      intelBySponsor: { W1N1: { W2N1: intel({ enemySpawns: 0 }) } },
+    });
+    expect(selectExpansionTarget(zero)?.roomName).toBe("W2N1");
+
+    const missing = baseInput({
+      intelBySponsor: { W1N1: { W2N1: intel({}) } },
+    });
+    expect(selectExpansionTarget(missing)?.roomName).toBe("W2N1");
+  });
+
   it("被他人预定的房被剔除，己方续期房仍可选", () => {
     const enemyReserved = baseInput({
       intelBySponsor: { W1N1: { W2N1: intel({ reservedBy: "enemy" }) } },

@@ -840,6 +840,37 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 32,
+    to: 33,
+    run: () => {
+      // v33：完整情报 — RoomIntel 新增 enemySpawns / wallCount / sealedExits
+      // （room-observer 唯一写者）。建档 + 畸形自愈：
+      // 数字字段非数字 → 删除（缺失视为无观测）；sealedExits 非数组或
+      // 含非数字条目 → 删除（缺失视为未知封口状态，不触发封死废弃）。
+      for (const roomName in Memory.rooms) {
+        const intel = Memory.rooms[roomName]?.intel as
+          | Record<string, Record<string, unknown>>
+          | undefined;
+        if (!intel) continue;
+        for (const target in intel) {
+          const info = intel[target];
+          if (!info || typeof info !== "object") continue;
+          if (info.enemySpawns !== undefined && typeof info.enemySpawns !== "number") {
+            delete info.enemySpawns;
+          }
+          if (info.wallCount !== undefined && typeof info.wallCount !== "number") {
+            delete info.wallCount;
+          }
+          if (info.sealedExits !== undefined) {
+            const valid = Array.isArray(info.sealedExits) &&
+              (info.sealedExits as unknown[]).every((d) => typeof d === "number");
+            if (!valid) delete info.sealedExits;
+          }
+        }
+      }
+    },
+  },
 ];
 
 /**

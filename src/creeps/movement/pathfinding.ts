@@ -131,6 +131,29 @@ export function preloadStaticBlockers(
 }
 
 /**
+ * 站桩占位自报 — 静止角色（远矿矿工/远矿 reserver）在岗时把自己的格登记为
+ * 静态阻挡。外房无 RoomSnapshot，站桩占位无法预载，寻路矩阵看不见静止 creep：
+ * 兄弟 creep 的路径反复指向被占矿位、意图逐 tick 被解算器拒绝 → 锁死空转
+ * （线上实证：W36S58 北源采集者被 reserver 占住唯一矿位，idle 震荡）。
+ * 语义：per-tick 生命周期（与 preload 同缓存，next tick 失效重报）；
+ * 已预载本 tick 时追加去重；先于预载调用则自建条目。成本：一次数组 push。
+ */
+export function registerStaticBlocker(
+  roomName: string,
+  pos: { x: number; y: number },
+): void {
+  const g = globalCache() as any;
+  if (!g.__staticBlockersCache) g.__staticBlockersCache = {};
+  const packed = pos.x * 50 + pos.y;
+  const entry = g.__staticBlockersCache[roomName];
+  if (entry && entry.checkedTick === Game.time) {
+    if (!entry.positions.includes(packed)) entry.positions.push(packed);
+  } else {
+    g.__staticBlockersCache[roomName] = { positions: [packed], checkedTick: Game.time };
+  }
+}
+
+/**
  * 将静态占位标记到 CostMatrix — 在所有 roomCallback 末尾调用。
  * 命中条件：checkedTick === Game.time（本 tick 已预加载）。
  * 未命中则跳过（该房间无站桩数据时路径仍可正常计算，只是不会绕开站桩 creep）。
@@ -747,6 +770,14 @@ function stepOffEdge(creep: Creep): boolean {
   // 内移方向：先算指向房心的粗方向分量，再枚举含斜向的内侧候选。
   const dxs = x === 0 ? [1] : x === 49 ? [-1] : [0, 1, -1];
   const dys = y === 0 ? [1] : y === 49 ? [-1] : [0, 1, -1];
+  // v33 修复：内侧格还需无占用 — 原实现只查地形，选中被停靠 creep / 阻挡结构
+  // 占据的内侧格时，意图每 tick 被交通解算器拒绝（或引擎弹回），而管线已被
+  // stepOffEdge 的 true 短路 — creep 永久钉死在边界格（线上实证：W36S58
+  // reserver 被边界内侧停靠的 hauler 钉死 200+ tick，直至 hauler 自行离开）。
+  // 阻挡口径与 buildStructurePositions 的 CostMatrix 一致：road/container/
+  // 我方 rampart 可通行，其余结构阻挡（与寻路矩阵同一套语义，不引入分歧）。
+  // mock 无 lookForAt 时降级为旧行为（能力守卫，不阻断既有测试环境）。
+  const canLook = typeof creep.room.lookForAt === "function";
   for (const dx of dxs) {
     for (const dy of dys) {
       if (dx === 0 && dy === 0) continue;
@@ -754,12 +785,32 @@ function stepOffEdge(creep: Creep): boolean {
       const ny = y + dy;
       if (nx <= 0 || nx >= 49 || ny <= 0 || ny >= 49) continue; // 仍是边界格不算逃离
       if (terrain.get(nx, ny) === TERRAIN_MASK_WALL) continue;
+      if (canLook) {
+        if (creep.room.lookForAt(LOOK_CREEPS, nx, ny).length > 0) continue;
+        const structures = creep.room.lookForAt(LOOK_STRUCTURES, nx, ny) as AnyStructure[];
+        const blocked = structures.some((s) => {
+          if (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) return false;
+          if (s.structureType === STRUCTURE_RAMPART && (s as StructureRampart).my) return false;
+          return true;
+        });
+        if (blocked) continue;
+      }
       const dir = creep.pos.getDirectionTo(nx, ny);
       registerMove(creep, dir as DirectionConstant, movePriorityFor(creep));
       return true;
     }
   }
-  return false; // 无可走内侧格 — 交还角色管线，由其寻路绕行。
+  return false; // 内侧无可用格 — 交还角色管线，由其寻路绕行。
+}
+
+/**
+ * 立即失效指定 creep 的持久化路径缓存 — 下一 tick 强制重算（forceRepath 语义）。
+ * traffic-manager 在引擎拒绝签发移动（目标格被静态阻挡，如新筑的墙/落成结构）
+ * 时调用：陈旧路径每 tick 撞同一堵墙，仅靠 stuck 计时器爬出要数百 tick
+ * （线上实证：W36S58 新墙封路后编队钉死 ~400 tick 才自愈）。
+ */
+export function invalidateCreepPath(creepName: string): void {
+  delete getCreepPathCache()[creepName];
 }
 
 /**

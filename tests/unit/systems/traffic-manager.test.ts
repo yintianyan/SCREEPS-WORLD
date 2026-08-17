@@ -190,4 +190,65 @@ describe("traffic-manager — 解算与签发", () => {
 
     expect(creep.move).not.toHaveBeenCalled();
   });
+
+  // ─── v33：移动失败反馈（静态阻挡 → 立即失效持久化路径）─────────────
+
+  it("引擎拒绝签发（静态阻挡）：立即失效该 creep 的持久化路径，下 tick 强制重算", () => {
+    setTraffic(true);
+    const creep = trafficCreep("c1", 25, 25, undefined);
+    creep.move = vi.fn(() => ERR_INVALID_TARGET);
+    const room = flatRoom([creep]);
+    creep.room = room;
+    const g = globalThis as any;
+    g.Game.rooms.W7N4 = room;
+    g.Game.creeps.c1 = creep;
+
+    // 种子：该 creep 的持久化路径缓存（线上场景：新墙落成后陈旧路径撞墙）。
+    g.__creepPathCache = {
+      c1: { targetKey: 1, structRevision: 1, path: [{ x: 26, y: 25, roomName: "W7N4" }] },
+    };
+
+    registerMove(creep, RIGHT as DirectionConstant, 60);
+    trafficManagerSystem.run(mockContext());
+
+    expect(creep.move).toHaveBeenCalledWith(RIGHT);
+    expect(g.__creepPathCache.c1).toBeUndefined(); // 已失效 → 下一 tick PathFinder 绕墙重算
+  });
+
+  it("ERR_BUSY（孵化中）：不失效路径缓存", () => {
+    setTraffic(true);
+    const creep = trafficCreep("c1", 25, 25, undefined);
+    creep.move = vi.fn(() => ERR_BUSY);
+    const room = flatRoom([creep]);
+    creep.room = room;
+    const g = globalThis as any;
+    g.Game.rooms.W7N4 = room;
+    g.Game.creeps.c1 = creep;
+    g.__creepPathCache = {
+      c1: { targetKey: 1, structRevision: 1, path: [{ x: 26, y: 25, roomName: "W7N4" }] },
+    };
+
+    registerMove(creep, RIGHT as DirectionConstant, 60);
+    trafficManagerSystem.run(mockContext());
+
+    expect(g.__creepPathCache.c1).toBeDefined(); // BUSY 是孵化瞬态，不清缓存
+  });
+
+  it("正常签发（OK）：路径缓存不动", () => {
+    setTraffic(true);
+    const creep = trafficCreep("c1", 25, 25, undefined);
+    const room = flatRoom([creep]);
+    creep.room = room;
+    const g = globalThis as any;
+    g.Game.rooms.W7N4 = room;
+    g.Game.creeps.c1 = creep;
+    g.__creepPathCache = {
+      c1: { targetKey: 1, structRevision: 1, path: [{ x: 26, y: 25, roomName: "W7N4" }] },
+    };
+
+    registerMove(creep, RIGHT as DirectionConstant, 60);
+    trafficManagerSystem.run(mockContext());
+
+    expect(g.__creepPathCache.c1).toBeDefined();
+  });
 });

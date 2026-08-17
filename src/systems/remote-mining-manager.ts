@@ -49,10 +49,14 @@ export const remoteMiningManagerSystem: System = {
 
       const remoteOps = roomMem.remoteOps ?? {};
 
-      // 1. 评估现有运营：暂停过期、清理废弃、检测敌占/敌方预定。
+      // 1. 评估现有运营：暂停过期、清理废弃、检测敌占/敌方预定、入口封死。
       //    RM-3：被自己 claim 的房 + 敌方预定的房 — 现役远矿 creep 一并回收。
       const { selfClaimed: selfClaimedRooms, hostileReserved: hostileReservedRooms } =
-        maintainExistingOps(remoteOps, ctx.tick, snapshot.controller?.owner?.username);
+        maintainExistingOps(remoteOps, roomMem.intel, ctx.tick, snapshot.controller?.owner?.username);
+
+      // 1b. v33 空转止损：编队全员空转超时的 op 废弃（物理上无法作业或
+      //     全员卡死 — 线上实证 W36S58 墙线困编队空转 44k tick 无产出）。
+      censusStalledOps(remoteOps, snapshot.roomName, ctx.tick);
 
       // 2. 如果 active 运营数不足，从 intel 评选新目标。
       //    战略门禁：开辟新远矿点须获 empire-strategy 姿态授权
@@ -314,6 +318,7 @@ function reevaluateActiveOps(
  */
 function maintainExistingOps(
   remoteOps: Record<string, RemoteOp>,
+  intel: Record<string, import("../domain/intel").RoomIntel> | undefined,
   tick: number,
   myUsername?: string,
 ): { selfClaimed: string[]; hostileReserved: string[] } {
@@ -339,6 +344,18 @@ function maintainExistingOps(
       continue;
     }
 
+    // v33-R11 补丁：现场视野校正 op.sources — 开点时 sources 是 intel 一次性
+    // 快照，可能低估（线上实证：W37S57 开点记 1 源，实际 2 源，南源长期无
+    // 采集者、满能量空转）。有视野（编队在场）时用实测 source 数校正，
+    // 需求侧（harvestersNeeded 以 op.sources 为准）随之补齐配员；
+    // 上限仍由 harvestersMaxPerTarget(2) 兜底，未知房异常虚增不会爆编制。
+    if (targetRoom) {
+      const liveSources = targetRoom.find(FIND_SOURCES).length;
+      if (liveSources > 0 && liveSources !== op.sources) {
+        op.sources = liveSources;
+      }
+    }
+
     // 敌方预定检测（需视野）：controller 被他人预定 → 废弃 + 回收 + 打冷却。
     // 与 owner 检测同层，覆盖"开点后目标房被敌方 reserver 占据"的运行时场景。
     // 己方续期（reservation.username === myUsername）不触发。
@@ -347,6 +364,29 @@ function maintainExistingOps(
       op.state = "abandoned";
       hostileReserved.push(roomName);
       continue;
+    }
+
+    // v33 入口封死检测（需视野情报）：目标房全部出口都被人工墙封死 → 编队
+    // 物理上无法进入，运营=无限白孵 → 废弃。部分封死（如 W36S58 仅西侧墙线）
+    // 不废弃 — 编队从其余出口进入后由管线寻路绕行，正常作业。
+    // 遗迹 spawn（enemySpawns>0 且 controller 无主）不在此列 — 前任玩家的
+    // 房仍可运营远矿（威胁出现时 threatUntil/flee 链接管），占领才需先拆 spawn
+    // （见 expansion evaluator 筛选）。
+    const info = intel?.[roomName];
+    const sealed = info?.sealedExits;
+    if (sealed && sealed.length > 0) {
+      const exits = Game.map.describeExits(roomName);
+      if (exits) {
+        const exitDirs = Object.keys(exits).map(Number);
+        if (exitDirs.length > 0 && exitDirs.every((d) => sealed.includes(d))) {
+          op.state = "abandoned";
+          console.log(
+            "[" + tick + "] remote/" + (myUsername ?? "?") + ": 入口封死废弃 " + roomName +
+            "（sealedExits=[" + sealed.join(",") + "]，编队无法进入）",
+          );
+          continue;
+        }
+      }
     }
 
     // 检查是否有 creep 在该远矿房（有则更新 lastSeen）。
@@ -411,6 +451,68 @@ function countActiveOps(remoteOps: Readonly<Record<string, RemoteOp>>): number {
     if (op.state === "active") count++;
   }
   return count;
+}
+
+/**
+ * v33 远矿空转普查 — 对每个 active op 统计编队健康度，全员空转超时 → 废弃。
+ * 反馈闭环：manager 原本只看「账面」指标（sources/pathCost/netScore），看不到
+ * 「编队实际在不在干活」— W36S58 线上实证：账面上 2 源近距高分房，实际编队
+ * 被前任玩家墙线困住空转 44k tick、零产出、无限补员。本普查是吞吐反馈安全网。
+ *
+ * 空转判定（单只）：mode 为 idle/flee，或 stuckTicks ≥ CONFIG.remote.stallStuckTicks。
+ * 通勤中的 acquire/work、正常采集搬运均计为工作。全员空转计时进 op.stallSince；
+ * 任一成员恢复工作（或编队归零 — 孵化替换窗口）立即清零（抗抖动）。
+ * 成本：每 managerInterval 一次 Game.creeps 全遍历（O(creeps)，10 tick 分摊）。
+ */
+function censusStalledOps(
+  remoteOps: Record<string, RemoteOp>,
+  homeRoom: string,
+  tick: number,
+): void {
+  // 单次遍历全部 creep，按 remoteTarget 归组（远矿编队规模小，Map 摊还成本可忽略）。
+  const byTarget = new Map<string, { total: number; stalled: number }>();
+  for (const creep of Object.values(Game.creeps)) {
+    if (creep.spawning || creep.memory.recycle) continue;
+    if (creep.memory.home !== homeRoom) continue;
+    const target = creep.memory.remoteTarget;
+    if (!target) continue;
+    const op = remoteOps[target];
+    if (!op || op.state !== "active") continue;
+    let entry = byTarget.get(target);
+    if (!entry) {
+      entry = { total: 0, stalled: 0 };
+      byTarget.set(target, entry);
+    }
+    entry.total++;
+    const mode = creep.memory.mode;
+    const stuck = creep.memory.stuckTicks ?? 0;
+    if (mode === "idle" || mode === "flee" || stuck >= CONFIG.remote.stallStuckTicks) {
+      entry.stalled++;
+    }
+  }
+
+  for (const [roomName, op] of Object.entries(remoteOps)) {
+    if (op.state !== "active") continue;
+    const entry = byTarget.get(roomName);
+    if (!entry || entry.total === 0) {
+      // 编队归零（新开点孵化中 / 换代替换窗口）— 不计空转。
+      if (op.stallSince !== undefined) op.stallSince = undefined;
+      continue;
+    }
+    if (entry.stalled === entry.total) {
+      if (op.stallSince === undefined) {
+        op.stallSince = tick;
+      } else if (tick - op.stallSince > CONFIG.remote.stallAbandonTicks) {
+        op.state = "abandoned";
+        console.log(
+          "[" + tick + "] remote/" + homeRoom + ": 空转止损废弃 " + roomName +
+          "（编队 " + entry.total + " 只全员空转持续 " + (tick - op.stallSince) + " tick）",
+        );
+      }
+    } else if (op.stallSince !== undefined) {
+      op.stallSince = undefined;
+    }
+  }
 }
 
 /** 检查是否有 creep 在指定房间（通过 Game.rooms 判断可见性 + creep 存在）。 */

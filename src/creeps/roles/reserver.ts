@@ -10,7 +10,8 @@ import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { globalCache } from "../../kernel/global-cache";
-import { moveToTarget } from "../movement";
+import { CONFIG } from "../../config";
+import { moveToTarget, registerAnchor, registerStaticBlocker } from "../movement";
 
 /**
  * 检测房间是否被 InvaderCore 占据（per-tick per-room 共享缓存）。
@@ -63,7 +64,16 @@ function reserveControllerAction(): ActionCandidate<StructureController> {
       const result = ac.creep.reserveController(controller);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, controller);
-      } else if (result === ERR_INVALID_TARGET) {
+      } else {
+        // 在岗站桩 → 锚定 + 静态占位自报：reserver 常驻 controller 旁，
+        // 若站到 source 相邻矿位，不登记则采集者的寻路矩阵看不见它，
+        // 缓存路径反复指向该格、意图逐 tick 被拒绝 → 采集者锁死空转
+        // （线上实证：W36S58 北源采集者被 reserver 占住矿位）。
+        // anchorStation(60)：工作/站桩同档，仅 flee(100) 可推挤。
+        registerAnchor(ac.creep, CONFIG.movement.trafficPriority.anchorStation);
+        registerStaticBlocker(ac.creep.room.name, ac.creep.pos);
+      }
+      if (result === ERR_INVALID_TARGET) {
         // controller 被其他玩家/Invader 预定 → reserveController 返回 ERR_INVALID_TARGET →
         // attackController 降低其预定期。attackController 有 1000 tick cooldown（cooldown 中
         // 返回 ERR_TIRED），每次成功攻击降低 1 tick reservation — 缓慢但持续消耗敌方预定。

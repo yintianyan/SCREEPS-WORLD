@@ -1,0 +1,2 @@
+// 探针 CM：指定 creep 的完整 memory + store
+(function(){var o={};for(var i in Game.creeps){var c=Game.creeps[i];var m=c.memory||{};if(c.pos.roomName==="W36S58"&&m.role==="remoteHarvester"){o[c.name]={x:c.pos.x,y:c.pos.y,mode:m.mode,stuck:m.stuckTicks,store:c.store.getUsedCapacity(RESOURCE_ENERGY),sid:m.sourceId,recycle:m.recycle,needContainer:m.needContainer,siteCd:m.containerSiteCooldown,lastPos:m.lastPos,lra:m.lastRebindAt,ttl:c.ticksToLive};}}o.t=Game.time;Memory.__diag=JSON.stringify(o);})();

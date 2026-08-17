@@ -99,6 +99,46 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   room-state 记录 lastObserverAt/observerSightings 盯防信号（与威胁记忆分离）。
   测试见 [tests/unit/systems/tower-defense-observer.test.ts](tests/unit/systems/tower-defense-observer.test.ts)、
   [tests/unit/systems/room-state-observer.test.ts](tests/unit/systems/room-state-observer.test.ts)。
+- R11 完整情报与远矿运营止损已落地（schema v33，线上 W36S58 事故驱动）：
+  ① RoomIntel 增记 enemySpawns/wallCount/sealedExits（有视野即采，墙封判定纯函数）；
+  ② remote-mining-manager 消费新情报 — 全部出口封死 → 废弃 op、编队全员空转
+  （idle/flee 或 stuck≥stallStuckTicks）持续超 stallAbandonTicks → 废弃（吞吐反馈
+  闭环）；遗迹 spawn（controller 无主）房仍可运营远矿，占领侧由 expansion evaluator
+  暂缓（无拆 spawn 行动链）；③ 卡位层 — stepOffEdge 内侧格占用感知（边界钉死修复，
+  CostMatrix 同口径）+ traffic-manager 引擎拒签即失效持久化路径（撞墙下 tick 重算）。
+  测试见 [tests/unit/intel/sealed-exits.test.ts](tests/unit/intel/sealed-exits.test.ts)、
+  [tests/unit/remote/stall-census.test.ts](tests/unit/remote/stall-census.test.ts)、
+  [tests/unit/migration/v32-to-v33.test.ts](tests/unit/migration/v32-to-v33.test.ts)、
+  [tests/unit/movement/edge-and-phase.test.ts](tests/unit/movement/edge-and-phase.test.ts)、
+  [tests/unit/systems/traffic-manager.test.ts](tests/unit/systems/traffic-manager.test.ts)。
+- R12 远矿产能修复已落地（线上 W36S58/W37S57 产能损失实证驱动，**无 schema
+  变更**，per-creep 运行时字段 lastRebindAt 遵循 lastRepathAt 先例免迁移）：
+  ① 站桩占位自报 — registerStaticBlocker（per-tick 并入 applyStaticBlockers），
+  remoteHarvester 在矿位登记 anchorMiner 锚 + 占位、reserver 在岗登记
+  anchorStation 锚 + 占位，外房寻路矩阵与解算器从此看得见静止 creep，
+  终结「矿位被占 → 缓存路径反复撞格 → 采集者锁死空转」；② 绑定自愈 —
+  getRemoteSource 物理站桩计入占用 + 锁死（stuck≥3 且够不到源）时改绑无主
+  source（200 tick 冷却防 A↔B 振荡）；③ op.sources 现场视野校正 —
+  remote-mining-manager 用实测 source 数修正开点快照（W37S57 开点无 sources
+  字段 → 回退 1 只采集者 → 南源长期空缺），需求侧随之补齐配员；④ 满载放能 —
+  work 链中 stationaryMine 满载且无 container 时让位给 dropEnergy（集成仿真
+  实证：原实现满载永久停摆零产出——needsContainer 等待窗口内 harvest 徒劳
+  ERR_FULL、drop 永远轮不到）；⑤ 带能归位 — work 链补 move-and-mine（带 range
+  门禁）：被挤离矿位且携带能量时不再落入「无匹配→idle 趴窝」（线上实证：带 25
+  能量的采集者 range 2 永久趴窝，既不满载 drop 不触发、又不空载 acquire 轮不到）；
+  ⑥ 卡位升级 — movePriorityFor 连续 stuck≥stuckThreshold 时优先级抬到
+  stuckEscalation(70)，高于 anchorStation(60) 低于 anchorMiner(90)/flee(100)：
+  锁死移动方有权把占住目标格的站桩 creep 推到相邻格（线上实证：采集者目标格
+  被锚定 reserver 占据、同档不推 → 意图逐 tick 被拒永久锁死；升级后推开放行，
+  双方各自复位）。线上验证：W37S57 第二采集者自动补齐并绑南源（源下探+container
+  链运转）、W36S58 锁死采集者推挤落位双源全开采、内核零错误。集成场景
+  「双绑锁死→改绑自愈→双源全开采」+ 测试基建补齐（TestWorld getDirectionTo
+  数字重载/lookForAtArea/ERR_NOT_FOUND）。
+  测试见 [tests/unit/role/remote-harvester.test.ts](tests/unit/role/remote-harvester.test.ts)、
+  [tests/unit/remote/remote-source-assign.test.ts](tests/unit/remote/remote-source-assign.test.ts)、
+  [tests/unit/remote/stall-census.test.ts](tests/unit/remote/stall-census.test.ts)、
+  [tests/unit/movement/static-blocker.test.ts](tests/unit/movement/static-blocker.test.ts)、
+  [tests/integration/scenarios/remote-lockout-selfheal.test.ts](tests/integration/scenarios/remote-lockout-selfheal.test.ts)。
 - 仍为已知取舍：远矿 container **维修**链缺失（建造链已由 P0-A 补齐）；
   取舍决策以各处内联注释为准。
 
@@ -125,7 +165,7 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   → plan.md **§7 性能优化 · §2.3 数据所有权**
 - **迁移规范**：每次结构变更升版本；迁移必须幂等；先写新字段验证后删旧字段；
   所有步骤成功才更新 `schemaVersion`；大迁移按 cursor 分 tick。
-  新增 Memory 字段须同时更新类型与迁移（当前 `schemaVersion = 32`，见 `CONFIG.memory`）。
+  新增 Memory 字段须同时更新类型与迁移（当前 `schemaVersion = 33`，见 `CONFIG.memory`）。
   冷数据（布局 overrides/blocked）走 RawMemory segment。
   → plan.md **§3.4 版本化 Memory**
 

@@ -1,0 +1,2 @@
+// 探针 S：pixel 龄期 + 所有 stuckTicks>10 的 creep 细节
+(function(){var o={pa:Memory.kernel&&Memory.kernel.pixelAt?Game.time-Memory.kernel.pixelAt:null,r:{}};for(var i in Game.creeps){var c=Game.creeps[i],m=c.memory||{};if(m.stuckTicks>10)o.r[c.name]={x:c.pos.x,y:c.pos.y,rd:c.pos.roomName,r:m.role,m:m.mode,st:m.stuckTicks,tg:m.remoteTarget||m.targetId||null,ttl:c.ticksToLive,f:c.fatigue};}Memory.__diag=JSON.stringify(o);})();

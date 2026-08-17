@@ -7,8 +7,16 @@
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
-import { moveToTarget } from "../movement";
+import { CONFIG } from "../../config";
+import { moveToTarget, registerAnchor, registerStaticBlocker } from "../movement";
 import { getObjectById } from "../support/obj-cache";
+
+/** 改绑阈值：连续 stuck 达到此值时重评绑定（stuckThreshold=2/repathLimit=2 →
+ * L3 在 stuck≥4 重置，此值取 3 = 每个 L3 周期恰好在重置前查一次，零额外节流）。 */
+const REBIND_STUCK_TICKS = 3;
+
+/** 改绑冷却（tick）：防 A↔B 改绑振荡。 */
+const REBIND_COOLDOWN_TICKS = 200;
 
 /**
  * 获取远矿 source — 从缓存 sourceId 或占用感知分配。首次入房执行一次 find，之后复用 sourceId。
@@ -21,12 +29,64 @@ export function getRemoteSource(creep: Creep): Source | undefined {
   // 优先使用缓存的 sourceId。
   if (creep.memory.sourceId) {
     const source = getObjectById(creep.memory.sourceId);
-    if (source) return source;
+    if (source) {
+      // 在位工作或未到改绑阈值 → 稳定复用缓存（不每 tick 重评）。
+      if (
+        creep.pos.getRangeTo(source) <= 1 ||
+        (creep.memory.stuckTicks ?? 0) < REBIND_STUCK_TICKS
+      ) {
+        return source;
+      }
+      // 锁死改绑自愈：长期够不到自己的 source（矿位被占/被封，stuck 连续累积）
+      // 时重评占用 — 房内存在无主 source 则改绑，终结「两人挤一源、另一源空缺」
+      // （线上实证：W36S58 采集者矿位被占锁死 + W37S57 双源只配一只的变体）。
+      // 自限：改绑后新 source 即被自身占用；下次重评时原 source 由兄弟占着、
+      // 无空缺 → 不会来回振荡。
+      const rebound = rebindToVacantSource(creep, source);
+      if (rebound) return rebound;
+      return source;
+    }
     // source 消失（如 SK 房 source 被占领），清除缓存。
     creep.memory.sourceId = undefined;
   }
 
-  // 首次或缓存失效：从当前房间 find source。
+  return bindInitialSource(creep);
+}
+
+/**
+ * 统计兄弟 remoteHarvester（同房同 target）对各 source 的占用数。
+ * 已绑 sourceId 计绑定；未绑定的按物理站位计（range<=1 即实际站桩占用）—
+ * 兜底同 tick 首绑竞态（两只同时入房、都还没写缓存时，站桩者已可见）。
+ * P2-O：occupancy 统计仅在 sourceId 未缓存（首次/失效/改绑）时执行，
+ * 且收窄到 room.find(FIND_MY_CREEPS)（此时 creep 已在 target 房）。
+ */
+function countSiblingOccupancy(
+  creep: Creep,
+  sources: readonly Source[],
+): Map<Id<Source>, number> {
+  const target = creep.memory.remoteTarget;
+  const occupancy = new Map<Id<Source>, number>();
+  for (const other of creep.room.find(FIND_MY_CREEPS)) {
+    if (other.name === creep.name) continue;
+    if (other.memory.role !== "remoteHarvester") continue;
+    if (other.memory.remoteTarget !== target) continue;
+    const sid = other.memory.sourceId as Id<Source> | undefined;
+    if (sid) {
+      occupancy.set(sid, (occupancy.get(sid) ?? 0) + 1);
+      continue;
+    }
+    for (const s of sources) {
+      if (other.pos.getRangeTo(s.pos) <= 1) {
+        occupancy.set(s.id, (occupancy.get(s.id) ?? 0) + 1);
+        break;
+      }
+    }
+  }
+  return occupancy;
+}
+
+/** 首次绑定（或缓存失效）：占用最少者优先，平局用名哈希稳定散布。 */
+function bindInitialSource(creep: Creep): Source | undefined {
   const room = creep.room;
   const sources = room.find(FIND_SOURCES);
   if (sources.length === 0) return undefined;
@@ -35,21 +95,7 @@ export function getRemoteSource(creep: Creep): Source | undefined {
     return sources[0]!;
   }
 
-  // 统计兄弟 remoteHarvester（同房同 target）已绑各 source 的占用数。
-  // P2-O：原 Object.values(Game.creeps) 全帝国遍历，多远矿房时累积 O(M) 成本；收窄到
-  // room.find(FIND_MY_CREEPS) — occupancy 统计仅在 sourceId 未缓存（首次/失效）时执行，
-  // 此时 creep 已在 target 房，本房兄弟即全部相关占用源。行为差异：过路房兄弟已绑时旧实现
-  // 会计入、新实现不会 — 罕见场景（缓存失效+过路房兄弟已绑+同时到达）可能短暂选同一 source，
-  // 下一 tick 自愈（对方绑定后重新统计）。性能收益覆盖此边缘情况。
-  const target = creep.memory.remoteTarget;
-  const occupancy = new Map<Id<Source>, number>();
-  for (const other of creep.room.find(FIND_MY_CREEPS)) {
-    if (other.name === creep.name) continue;
-    if (other.memory.role !== "remoteHarvester") continue;
-    if (other.memory.remoteTarget !== target) continue;
-    const sid = other.memory.sourceId as Id<Source> | undefined;
-    if (sid) occupancy.set(sid, (occupancy.get(sid) ?? 0) + 1);
-  }
+  const occupancy = countSiblingOccupancy(creep, sources);
 
   // 名哈希决定遍历起点：占用平局时稳定散布到不同 source。
   let nameHash = 0;
@@ -69,6 +115,35 @@ export function getRemoteSource(creep: Creep): Source | undefined {
   }
   creep.memory.sourceId = best.id;
   return best;
+}
+
+/** 锁死改绑：房内存在无兄弟占用的 source 时改绑过去；无空缺返回 undefined。 */
+function rebindToVacantSource(creep: Creep, current: Source): Source | undefined {
+  const sources = creep.room.find(FIND_SOURCES);
+  if (sources.length <= 1) return undefined;
+  // 改绑冷却：改绑后原 source 即变「空缺」，无冷却会下一轮改回去 → A↔B 振荡。
+  // 200 tick（约 4 个编队工作周期）足够验证新源是否可作业；新源也不可达时
+  // 至少把振荡周期压到 200 tick，配合 op 级空转止损兜底。
+  const last = creep.memory.lastRebindAt ?? 0;
+  if (Game.time - last < REBIND_COOLDOWN_TICKS) return undefined;
+  const occupancy = countSiblingOccupancy(creep, sources);
+  let best: Source | undefined;
+  let bestDist = Infinity;
+  for (const s of sources) {
+    if (s.id === current.id) continue;
+    if ((occupancy.get(s.id) ?? 0) > 0) continue;
+    const dist = creep.pos.getRangeTo(s.pos);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = s;
+    }
+  }
+  if (best) {
+    creep.memory.sourceId = best.id;
+    creep.memory.lastRebindAt = Game.time;
+    return best;
+  }
+  return undefined;
 }
 
 /**
@@ -117,9 +192,25 @@ function remoteStationaryMine(): ActionCandidate<Source> {
       if (!source) return undefined;
       // 检查是否在采集范围内。
       if (ac.creep.pos.getRangeTo(source) > 1) return undefined;
+      // 满载且旁边没有 container 可倒 → 让位给后续候选（work 链的 dropEnergy）。
+      // 无此门禁：work 链在 stationaryMine 截停（其 resolve 无条件匹配在位者），
+      // harvest 返 ERR_FULL、dropEnergy 永远轮不到 → 满载永久停摆、零产出
+      // （集成场景 400 tick 实证 + 线上 W36S58 满载空转同机制）。有 container 时
+      // 仍走本候选（同 tick 倒能，吞吐最高）；有 site 时 buildSourceContainer
+      // 排在前面先行匹配，本门禁不影响 RM-1 自建路径。
+      if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+        if (!findSourceContainer(ac.creep, source)) return undefined;
+      }
       return source;
     },
     execute: (ac, source) => {
+      // 在矿位 → 锚定 + 静态占位自报（与本地 harvester 的 anchorMiner 同口径）。
+      // 外房无 RoomSnapshot，站桩占位无法预载 — 角色自报后，兄弟采集者/搬运工的
+      // 寻路矩阵才看得见这里有人，绕到其他矿位而不是逐 tick 意图撞被占格、
+      // 被解算器拒绝后空转锁死（线上实证：W36S58 采集者被占位挤死）。
+      // anchorMiner(90) 仅低于 flee(100)：逃命可推挤站桩矿工，工作/空载均不可。
+      registerAnchor(ac.creep, CONFIG.movement.trafficPriority.anchorMiner);
+      registerStaticBlocker(ac.creep.room.name, ac.creep.pos);
       const harvestResult = ac.creep.harvest(source);
       if (harvestResult === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, source);
@@ -143,7 +234,15 @@ function remoteStationaryMine(): ActionCandidate<Source> {
 function remoteHarvestSource(): ActionCandidate<Source> {
   return {
     name: "remote-harvest:move-and-mine",
-    resolve: (ac) => getRemoteSource(ac.creep),
+    resolve: (ac) => {
+      const source = getRemoteSource(ac.creep);
+      if (!source) return undefined;
+      // range≤1 时让位：acquire 链由前置 stationaryMine 接管；work 链必须
+      // 让位给 dropEnergy（否则满载在位者被本候选截停，harvest 徒劳
+      // ERR_FULL，drop 永远轮不到 — 满载停摆在另一候选重演）。
+      if (ac.creep.pos.getRangeTo(source) <= 1) return undefined;
+      return source;
+    },
     execute: (ac, source) => {
       const result = ac.creep.harvest(source);
       if (result === ERR_NOT_IN_RANGE) {
@@ -260,6 +359,11 @@ const policy: RolePolicy = {
     buildSourceContainer(),
     // 站桩采集 + 同 tick 倒能（work 模式也继续采）。
     remoteStationaryMine(),
+    // 移动到 source 并采集（带能但被挤离矿位时归位）— 线上实证：采集者
+    // 被占位挤到 range 2 且携带能量时，work 链原三候选全部 resolve 失败
+    // → 「无匹配候选 → idle + park」，既不满载（dropEnergy 不触发）又永不
+    // 空载（acquire 链轮不到）→ 永久趴窝。补此候选后归位并恢复采集。
+    remoteHarvestSource(),
     // 采满无处倒 → drop 释放产能。
     dropEnergy(),
   ],

@@ -39,7 +39,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 32 },
+  memory: { schemaVersion: 33 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -116,7 +116,7 @@ export const CONFIG = {
      * death loop：每 tick 加载即被杀 → bucket 永不回充 → 主循环永久死亡
      * （线上实测 187+ tick 停摆）。开启前置：bundle 压缩后加载成本 ≪ 20 CPU，
      * 且接受放血后 ~600 tick 的 P3 降档窗口。 */
-    enabled: false,
+    enabled: true,
   },
 
   spawn: {
@@ -159,11 +159,15 @@ export const CONFIG = {
      * 移动/锚定优先级表 — 数值越大越优先；同格争抢高优者胜，推挤仅当移动方严格大于阻挡方。
      * flee 逃命高于一切（被堵住 = 死亡）；anchorMiner 让出矿位 = 采集吞吐崩塌；
      * work/anchorStation 携能交付与站桩同档 — 绕行代价远小于让出工作位；
+     * stuckEscalation 卡位升级 — 连续卡住的移动方临时高于站桩者，可把占住目标格的
+     * 站桩 creep 推到相邻格（站桩者移一格无损失，卡死者不解锁=永久空转）；
+     * 低于 anchorMiner：站桩矿工永不被挤走（矿位让出=吞吐崩塌），低于 flee（逃命最高）。
      * acquire 空载被挤一格无损失；commute 跨房通勤；parked 待命者最该被推开。
      */
     trafficPriority: {
       flee: 100,
       anchorMiner: 90,
+      stuckEscalation: 70,
       work: 60,
       anchorStation: 60,
       acquire: 40,
@@ -549,6 +553,14 @@ export const CONFIG = {
      * 节奏而非核心寿命估计：到期恢复孵化，首个抵达的 creep 带回视野 — 核心仍在则
      * 续期，已消失则运营恢复。5000 tick 把「送死探测」频率压到每 5000 tick 一只的成本。 */
     coreBlockCooldown: 5000,
+    /** 远矿空转止损（v33）：op 编队全员空转（idle/flee 或 stuck≥stallStuckTicks）
+     * 连续超过此时长 → 废弃（线上实证：W36S58 墙线困住整编队空转 44k tick）。
+     * 阈值须大于最坏通勤+脱困时延（编队换代 ~600 tick + 卡位自愈窗口），
+     * 1500 tick 足够覆盖「替换窗口内新编队尚未到岗」的正常空窗，又不放过
+     * 「物理上无法作业」的永久空转。任一成员恢复工作立即清零计时（抗抖动）。 */
+    stallAbandonTicks: 1500,
+    /** 远矿空转判定中的卡位阈值：stuckTicks 达到此值视为空转（卡住不动=不产出）。 */
+    stallStuckTicks: 20,
   },
 
   expansion: {

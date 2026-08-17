@@ -11,6 +11,7 @@ import { globalCache } from "../kernel/global-cache";
 import { safeRun } from "../kernel/safe-run";
 import { trafficEnabled } from "../creeps/movement/intent";
 import { recordTraffic } from "../creeps/movement/traffic";
+import { invalidateCreepPath } from "../creeps/movement/pathfinding";
 import { getParkRoomData } from "../creeps/movement/parking";
 import { resolveTraffic, type MoveIntent } from "../creeps/movement/traffic-resolver";
 
@@ -126,6 +127,14 @@ function resolveAndDispatch(roomName: string, batch: RoomBatch, snapshot: RoomSn
     const dir = creep.pos.getDirectionTo(tx, ty);
     if (!dir) continue;
     const result = creep.move(dir);
-    if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+    if (result === OK || result === ERR_TIRED) {
+      recordTraffic(creep);
+    } else if (result !== ERR_BUSY) {
+      // v33：引擎拒绝签发（目标格被静态阻挡 — 新墙/新落成结构/敌方结构）→
+      // 立即失效该 creep 的持久化路径，下一 tick 强制重算绕行。陈旧路径每 tick
+      // 撞同一堵墙时，仅靠 stuck 计时器自愈要数百 tick（线上实证 W36S58 钉死事件）。
+      // ERR_BUSY（孵化中）不失效；占用冲突由解算器提前仲裁，一般不走到这里。
+      invalidateCreepPath(name);
+    }
   }
 }

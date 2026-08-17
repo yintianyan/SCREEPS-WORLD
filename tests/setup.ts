@@ -93,6 +93,7 @@ Object.assign(globalThis as Record<string, unknown>, {
   ERR_NO_PATH: -2,
   ERR_INVALID_ARGS: -10,
   ERR_TIRED: -11,
+  ERR_NOT_FOUND: -5,
   ERR_NO_BODYPART: -12,
   ERR_NOT_ENOUGH_ENERGY: -6,
   ERR_RCL_NOT_ENOUGH: -14,

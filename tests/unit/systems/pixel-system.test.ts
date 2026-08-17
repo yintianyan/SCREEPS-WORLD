@@ -52,11 +52,14 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
     } else {
       delete (globalThis as Record<string, unknown>).Game;
     }
-    // 恢复默认关闭状态，避免污染其他测试。
-    (CONFIG.pixel as { enabled: boolean }).enabled = false;
+    // 恢复线上默认（enabled=true），避免污染其他测试。
+    (CONFIG.pixel as { enabled: boolean }).enabled = true;
   });
 
-  it("默认（enabled=false）：healthy + 满 bucket 也不放血 — 防 reload death loop", () => {
+  it("开关关闭（enabled=false）：healthy + 满 bucket 也不放血 — 防 reload death loop", () => {
+    // 线上默认已切换为 enabled=true（自愿放血协议）；关闭态仍是回滚保险丝，
+    // 本用例显式设置 false 锁定关闭行为。
+    (CONFIG.pixel as { enabled: boolean }).enabled = false;
     pixelSystem.run(makeCtx("healthy"));
     expect(generatePixelSpy).not.toHaveBeenCalled();
   });

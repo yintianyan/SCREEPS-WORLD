@@ -1,0 +1,2 @@
+// 探针 HS：主房决策态 + spawn 状态（demand 门禁排查）
+(function(){var o={};var w=Game.rooms.W37S58;var m=Memory.rooms.W37S58;o.cs=m&&m.colonyState;o.ph=m&&m.phase?m.phase.phase:null;o.sq=(m&&m.spawnQueue||[]).map(function(r){return[r.role,r.priority]});o.sp=w?w.find(FIND_MY_SPAWNS).map(function(s){return s.spawning?s.spawning.name+":"+Math.floor(s.spawning.remainingTime):"idle"}):null;o.kernelTier=Memory.kernel?Memory.kernel.tier:null;o.bucket=Game.cpu.bucket;o.t=Game.time;Memory.__diag=JSON.stringify(o);})();

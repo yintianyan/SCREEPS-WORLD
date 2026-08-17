@@ -54,6 +54,12 @@ declare global {
      * absent=0 → 冷却不生效（与改造前一致）。per-creep 运行时状态，无需迁移。
      */
     lastRepathAt?: number;
+    /**
+     * v33-R11：remoteHarvester 上次改绑 source 的 tick（改绑自愈冷却）—
+     * 防止「改绑到空缺源 → 原源变空缺 → 改回去」的振荡。
+     * per-creep 运行时状态，无需迁移（同 lastRepathAt 先例）。
+     */
+    lastRebindAt?: number;
     /** 当前紧凑任务分配。 */
     assignment?: CreepAssignment;
     /** 用于稳定孵化 key 生成和替换跟踪的索引。 */
@@ -516,6 +522,12 @@ declare global {
      * construction-manager 全局上限判定读此值（ctx.globalSiteCount + Σ siteCount < maxGlobalSites）。
      */
     siteCount?: number;
+    /**
+     * v33 空转止损计时：编队全员空转（idle/flee 或 stuckTicks ≥ stallStuckTicks）
+     * 的起始 tick；任一成员恢复工作立即清除。持续超过 CONFIG.remote.stallAbandonTicks
+     * → 废弃运营。remote-mining-manager 唯一写者（managerInterval 采样）。
+     */
+    stallSince?: number;
   }
 
   interface Memory {
