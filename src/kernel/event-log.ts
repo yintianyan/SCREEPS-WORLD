@@ -97,6 +97,9 @@ export const enum EventKind {
   /** Power Creep 里程碑（v34）：d = [阶段码]，0=create / 1=upgrade(+power) /
    * 2=spawn 孵化 / 3=enableRoom。失败静默不记事件（下轮自然重试）。 */
   PowerCreepMilestone = 31,
+  /** 核弹发射（nuker 威慑链）：d = [目标塔数]；r = 目标房名。发射失败静默
+   * （下轮自然重试）；同目标在途期间不重复发射（shouldLaunchNuke 门禁）。 */
+  NukeLaunched = 32,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

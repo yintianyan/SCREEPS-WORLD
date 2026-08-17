@@ -18,12 +18,21 @@
  *   - storage 低于水位地板 → 不抽能量
  *   - power 低于目标 + storage 有 → storage 优先；无则 terminal 回退
  *   - 携 power + 缺 power → deposit；携能量 + 能量已满 → undefined（不劫持经济能量）
+ *   stockNuker：
+ *   - 能量空弹 + storage 高于储备地板 → withdraw energy（50k 大额抽血有地板门禁）
+ *   - storage 低于储备地板且 G 不缺 → undefined（不与 spawn/tower 抢血）
+ *   - 能量已满 + G 缺 + storage 有 G → withdraw G（矿物不抢生存能量，无地板）
+ *   - storage 无 G + terminal 有 G → terminal 回退（市场买入落地点）
+ *   - 携 G + nuker 缺 G → deposit；携能量 + 能量已满 → undefined（不劫持经济能量）
+ *   - 备弹全满（energy 50k + G 5k）→ undefined；无 nuker → undefined
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   reclaimFactoryOutput,
   stockPowerSpawn,
+  stockNuker,
 } from "../../../src/creeps/engine/actions/industry";
+import { NUKE_ENERGY_COST, NUKE_GHODIUM_COST } from "../../../src/domain/war/planning";
 import { CONFIG } from "../../../src/config";
 import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../role-helpers";
 
@@ -50,6 +59,7 @@ function makeAc(overrides: {
   terminalStore?: Record<string, number>;
   storageStore?: Record<string, number>;
   powerSpawnStore?: Record<string, number>;
+  nukerStore?: Record<string, number>;
   creepStore?: Record<string, number>;
   creepCapacity?: number;
   withMarket?: boolean;
@@ -66,7 +76,12 @@ function makeAc(overrides: {
   const powerSpawn = overrides.powerSpawnStore
     ? ({ id: "ps1", store: resStore(overrides.powerSpawnStore, 5000) } as any)
     : undefined;
-  const snap = mockSnapshot({ factory, terminal, storage, powerSpawn });
+  // nuker 容量按引擎语义：energy 300k + G 5k 独立通道（resStore 共享容量仅影响
+  // getFreeCapacity，deposit 相断言只用「有剩余」这一事实，不失真）。
+  const nuker = overrides.nukerStore
+    ? ({ id: "nk1", store: resStore(overrides.nukerStore, 300000), cooldown: 0 } as any)
+    : undefined;
+  const snap = mockSnapshot({ factory, terminal, storage, powerSpawn, nuker });
   const creep = mockCreep({ role: "distributor", capacity: overrides.creepCapacity ?? 300 });
   if (overrides.creepStore) {
     creep.store = resStore(overrides.creepStore, overrides.creepCapacity ?? 300);
@@ -220,5 +235,86 @@ describe("stockPowerSpawn — powerSpawn 原料补给", () => {
   it("无 powerSpawn → undefined", () => {
     const { ac } = makeAc({ storageStore: { energy: 50000 } });
     expect(stockPowerSpawn().resolve!(ac as any)).toBeUndefined();
+  });
+});
+
+describe("stockNuker — nuker 威慑备弹装填", () => {
+  it("能量空弹 + storage 高于储备地板 → withdraw energy from storage", () => {
+    const { ac } = makeAc({
+      nukerStore: { energy: 0, G: NUKE_GHODIUM_COST },
+      storageStore: { energy: CONFIG.market.storageEnergyFloor + 1000 },
+    });
+    const t = stockNuker().resolve!(ac as any);
+    expect(t).toBeDefined();
+    expect(t!.phase).toBe("withdraw");
+    expect(t!.resource).toBe("energy");
+    expect((t as any).source).toBe(ac.snapshot.storage);
+  });
+
+  it("storage 低于储备地板且 G 不缺 → undefined（50k 大额抽血不与 spawn/tower 抢）", () => {
+    const { ac } = makeAc({
+      nukerStore: { energy: 0, G: NUKE_GHODIUM_COST },
+      storageStore: { energy: CONFIG.market.storageEnergyFloor - 1 },
+    });
+    expect(stockNuker().resolve!(ac as any)).toBeUndefined();
+  });
+
+  it("能量已满 + G 缺 + storage 有 G → withdraw G from storage（矿物无地板门禁）", () => {
+    const { ac } = makeAc({
+      nukerStore: { energy: NUKE_ENERGY_COST, G: 0 },
+      storageStore: { energy: 50000, G: 2000 },
+    });
+    const t = stockNuker().resolve!(ac as any);
+    expect(t).toBeDefined();
+    expect(t!.phase).toBe("withdraw");
+    expect(t!.resource).toBe("G");
+    expect((t as any).source).toBe(ac.snapshot.storage);
+  });
+
+  it("storage 无 G + terminal 有 G → terminal 回退（市场买入落地点）", () => {
+    const { ac } = makeAc({
+      nukerStore: { energy: NUKE_ENERGY_COST, G: 0 },
+      storageStore: { energy: 50000 },
+      terminalStore: { energy: 10000, G: 3000 },
+    });
+    const t = stockNuker().resolve!(ac as any);
+    expect(t).toBeDefined();
+    expect(t!.resource).toBe("G");
+    expect((t as any).source).toBe(ac.snapshot.terminal);
+  });
+
+  it("携 G + nuker 缺 G → deposit", () => {
+    const { ac } = makeAc({
+      nukerStore: { energy: NUKE_ENERGY_COST, G: 0 },
+      storageStore: { energy: 50000 },
+      creepStore: { G: 500 },
+    });
+    const t = stockNuker().resolve!(ac as any);
+    expect(t).toBeDefined();
+    expect(t!.phase).toBe("deposit");
+    expect(t!.resource).toBe("G");
+    expect((t as any).dest).toBe(ac.snapshot.nuker);
+  });
+
+  it("携能量 + nuker 能量已满 → undefined（不劫持经济能量）", () => {
+    const { ac } = makeAc({
+      nukerStore: { energy: NUKE_ENERGY_COST, G: NUKE_GHODIUM_COST },
+      storageStore: { energy: 50000 },
+      creepStore: { energy: 300 },
+    });
+    expect(stockNuker().resolve!(ac as any)).toBeUndefined();
+  });
+
+  it("备弹全满（energy 50k + G 5k）+ 空载 → undefined（装满即停放）", () => {
+    const { ac } = makeAc({
+      nukerStore: { energy: NUKE_ENERGY_COST, G: NUKE_GHODIUM_COST },
+      storageStore: { energy: 50000, G: 5000 },
+    });
+    expect(stockNuker().resolve!(ac as any)).toBeUndefined();
+  });
+
+  it("无 nuker → undefined", () => {
+    const { ac } = makeAc({ storageStore: { energy: 50000 } });
+    expect(stockNuker().resolve!(ac as any)).toBeUndefined();
   });
 });

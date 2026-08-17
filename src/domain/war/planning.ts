@@ -131,6 +131,49 @@ export function isAttritionLost(
 /** 战后核验结论。 */
 export type WarOutcome = "success" | "failure" | "unknown";
 
+// ─── 核弹发射决策（nuker 战略威慑链，纯函数）──────────────────
+
+/** 核弹发射的能量当量（引擎数值：launchNuke 每发消耗 50k energy + 5k G）。
+ * 唯一定义点 — war-planner（发射就绪判定）与 actions/stockNuker（装填目标）共用。 */
+export const NUKE_ENERGY_COST = 50000;
+/** 核弹发射的 ghodium 当量。 */
+export const NUKE_GHODIUM_COST = 5000;
+/** 核弹飞行时长（引擎数值：发射到落地 50,000 tick）— 在途台账的到期基准。 */
+export const NUKE_LANDING_TIME = 50000;
+
+/** shouldLaunchNuke 的输入 — 全部由调用方自引擎态采集，本函数不读 Game/Memory。 */
+export interface NukeLaunchInput {
+  /** nuker 已满装填（energy ≥ 50k 且 G ≥ 5k）且 cooldown 归零。 */
+  nukerReady: boolean;
+  /** 目标房在途核弹数（Game.nukes 按 targetRoomName 过滤）。 */
+  nukesInFlightToTarget: number;
+  /** 目标 intel 塔数（攻坚门槛输入）。 */
+  towersSeen: number;
+  /** 发射塔数门槛（CONFIG.nuker.launchTowerThreshold）。 */
+  towerThreshold: number;
+  /** sponsor → 目标线性距离（射程预检口径）。 */
+  linearDistance: number;
+  /** 射程上限（CONFIG.nuker.maxRange）。 */
+  maxRange: number;
+}
+
+/**
+ * 核弹发射判定：war 姿态授权由调用方（war-planner）保证，本函数只裁决
+ * 「值不值得打 + 打得着 + 没在打」：
+ * - 未装填/冷却中 → false（发射必返 ERR_NOT_ENOUGH_RESOURCES，白跑）；
+ * - 同目标已有在途核弹 → false（天然限频：5k 冷却 + 50k 落地，重叠发射只是
+ *   把当量堆在同一片废墟上）；
+ * - 塔数低于门槛 → false（轻防目标地面编队足够，核弹留给啃不动的重防）；
+ * - 超射程 → false（走廊约束的保守预检，细判交给 launchNuke 返回码）。
+ */
+export function shouldLaunchNuke(input: NukeLaunchInput): boolean {
+  if (!input.nukerReady) return false;
+  if (input.nukesInFlightToTarget > 0) return false;
+  if (input.towersSeen < input.towerThreshold) return false;
+  if (input.linearDistance > input.maxRange) return false;
+  return true;
+}
+
 /**
  * 战后核验（R4）：情报过期 → unknown（无证据不宣称胜利）；敌人弃房或塔网清零
  *（本轮远征的可达成目标 = 拆掉反制能力）→ success；其余 failure。

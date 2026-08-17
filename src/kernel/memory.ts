@@ -906,6 +906,31 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 34,
+    to: 35,
+    run: () => {
+      // v35：nuker 威慑链 — 新增 KernelMemory.nukesInFlight（war-planner 唯一写者）：
+      // 目标房名 → 落地到期 tick 数组。引擎无全局核弹查询 API（FIND_NUKES 需
+      // 目标房视野），自发核弹只能自查，台账即完整真相。建档 + 畸形自愈：
+      // 非对象 → 删除；条目非数字数组 → 删除该条目（缺失视为无在途，安全侧）。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+
+      const ledger = kernel.nukesInFlight as Record<string, unknown> | undefined;
+      if (ledger === undefined) return;
+      if (typeof ledger !== "object" || ledger === null || Array.isArray(ledger)) {
+        delete kernel.nukesInFlight;
+        return;
+      }
+      for (const target in ledger) {
+        const entries = ledger[target];
+        if (!Array.isArray(entries) || !entries.every((v) => typeof v === "number")) {
+          delete ledger[target];
+        }
+      }
+    },
+  },
 ];
 
 /**

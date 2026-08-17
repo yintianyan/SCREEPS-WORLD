@@ -293,17 +293,28 @@ export const labSystem: System = {
       );
 
       // ── 2. 反应规划（含自动目标选择） ──
-      // 优先级：war 前馈（库存缺口预产编队化合物）> boost 请求化合物 > 默认 XGH2O。
-      // 不抢占已设定的目标 — 反应批次很快完成，切目标浪费半成品。
+      // 优先级：war 前馈（库存缺口预产编队化合物）> G 威慑备弹（nuker 存在且
+      // G 合计低于备弹目标 — 常态威慑资产，先于经济 boost 投资）> boost 请求
+      // 化合物 > 默认 XGH2O。不抢占已设定的目标 — 反应批次很快完成，切目标浪费半成品。
+      // G 合计口径 = 反应链可见库存（storage+terminal+labs）+ nuker 已装填当量。
       if (!industryMem.reactionTarget) {
         const warTarget = decideWarReactionTarget(
           warActive,
           inventory,
           CONFIG.war.boostStockpile,
         );
+        const gTotal = (inventory[RESOURCE_GHODIUM] ?? 0) +
+          (snapshot.nuker?.store[RESOURCE_GHODIUM] ?? 0);
+        const gShort = snapshot.nuker !== undefined &&
+          gTotal < CONFIG.nuker.ghodiumStockpile;
         if (warTarget) {
           industryMem.reactionTarget = warTarget;
           industryMem.reactionAmount = 300;
+        } else if (gShort) {
+          // G 备弹量纲大（5k），整链一次规划到位（300/批重规划会在 5000/300≈17
+          // 个批次间反复重建计划）；反应执行仍按 5/tick 涓流，装填由 stockNuker 搬运。
+          industryMem.reactionTarget = "G";
+          industryMem.reactionAmount = CONFIG.nuker.ghodiumStockpile;
         } else if (boostRequests.length > 0) {
           // 优先生产 boost 需要的化合物
           industryMem.reactionTarget = boostRequests[0]!.compound;

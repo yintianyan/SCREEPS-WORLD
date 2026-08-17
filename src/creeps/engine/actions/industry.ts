@@ -9,6 +9,7 @@ import { CONFIG } from "../../../config";
 import { globalCache } from "../../../kernel/global-cache";
 import { getObjectById } from "../../support/obj-cache";
 import { moveToTarget } from "../../movement";
+import { NUKE_ENERGY_COST, NUKE_GHODIUM_COST } from "../../../domain/war/planning";
 
 /** haulMineralsToStorage 的 resolve 返回类型。 */
 type MineralHaulTarget =
@@ -348,6 +349,76 @@ export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
 type PowerSpawnStockTarget =
   | { dest: StructurePowerSpawn; resource: ResourceConstant; phase: "deposit" }
   | { source: StructureStorage | StructureTerminal; resource: ResourceConstant; phase: "withdraw" };
+
+// ─── nuker 装填（战略威慑链）────────────────────────────────
+
+/** stockNuker 的 resolve 返回类型。 */
+type NukerStockTarget =
+  | { dest: StructureNuker; resource: ResourceConstant; phase: "deposit" }
+  | { source: StructureStorage | StructureTerminal; resource: ResourceConstant; phase: "withdraw" };
+
+/**
+ * 为 nuker 装填威慑备弹（energy 50k：storage → nuker；G 5k：storage/terminal → nuker）。
+ * 背景：nuker 建成即死链与 powerSpawn 同款 — 无搬运通道则威慑资产恒空弹。
+ * 威慑语义是「常态装填」：装满后停放（敌方进攻前会掂量报复成本），战时由
+ * war-planner 决策发射。
+ * 能量门禁用 market.storageEnergyFloor（20k）而非 distributorTiers.low —
+ * 50k 装填量是 powerSpawn 涓流的 50 倍，低水位地板防它一口气抽干经济储备；
+ * storage 跌破地板时暂停装填（已装入的当量保留，发射不受影响）。
+ * G 是矿物不抢生存能量，无地板门禁。
+ */
+export function stockNuker(): ActionCandidate<NukerStockTarget> {
+  return {
+    name: "haul:stock-nuker",
+    resolve: (ac) => {
+      const nuker = ac.snapshot.nuker;
+      const storage = ac.snapshot.storage;
+      if (!nuker || !storage) return undefined;
+
+      const energyShort = nuker.store.getUsedCapacity(RESOURCE_ENERGY) < NUKE_ENERGY_COST;
+      const ghodiumShort = (nuker.store[RESOURCE_GHODIUM] ?? 0) < NUKE_GHODIUM_COST;
+
+      // 携带 energy/G：nuker 缺该资源才认领（不劫持经济能量 — 与 stockPowerSpawn 同款防呆）。
+      const carried = ([RESOURCE_ENERGY, RESOURCE_GHODIUM] as ResourceConstant[])
+        .find(r => (ac.creep.store[r] ?? 0) > 0);
+      if (carried) {
+        const wanted = carried === RESOURCE_ENERGY ? energyShort : ghodiumShort;
+        if (wanted && (nuker.store.getFreeCapacity(carried) ?? 0) > 0) {
+          return { dest: nuker, resource: carried, phase: "deposit" as const };
+        }
+        return undefined;
+      }
+
+      // 空载：能量装填受高水位地板（50k 大额抽血不与 spawn/tower 抢）。
+      if (
+        energyShort &&
+        storage.store.getUsedCapacity(RESOURCE_ENERGY) > CONFIG.market.storageEnergyFloor
+      ) {
+        return { source: storage, resource: RESOURCE_ENERGY, phase: "withdraw" as const };
+      }
+      if (ghodiumShort) {
+        if ((storage.store[RESOURCE_GHODIUM] ?? 0) > 0) {
+          return { source: storage, resource: RESOURCE_GHODIUM, phase: "withdraw" as const };
+        }
+        const terminal = ac.snapshot.terminal;
+        if (terminal && (terminal.store[RESOURCE_GHODIUM] ?? 0) > 0) {
+          return { source: terminal, resource: RESOURCE_GHODIUM, phase: "withdraw" as const };
+        }
+      }
+      return undefined;
+    },
+    execute: (ac, t) => {
+      if (t.phase === "deposit") {
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resource));
+      } else {
+        const available = t.source.store[t.resource] ?? 0;
+        const amount = Math.min(available, ac.creep.store.getFreeCapacity() ?? 0);
+        if (amount <= 0) return;
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resource, amount));
+      }
+    },
+  };
+}
 
 /**
  * 为 powerSpawn 补给原料（能量: storage → powerSpawn；power: terminal/storage → powerSpawn）。

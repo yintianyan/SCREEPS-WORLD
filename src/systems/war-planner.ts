@@ -25,11 +25,16 @@ import {
   evaluateWarOutcome,
   isAttritionLost,
   nextWavePhase,
+  NUKE_ENERGY_COST,
+  NUKE_GHODIUM_COST,
+  NUKE_LANDING_TIME,
   selectWarTarget,
+  shouldLaunchNuke,
   type WarOutcome,
   type WarTargetCandidate,
   type WarTargetInput,
 } from "../domain/war/planning";
+import { roomLinearDistance } from "../domain/remote/targeting";
 import {
   countPending,
   hasRequest,
@@ -150,6 +155,45 @@ export const warPlannerSystem: System = {
       boostGate,
     );
 
+    // 3.5 核弹威慑发射（nuker 战略威慑链）：war 姿态授权（本系统是唯一进攻
+    //     执行决策者）+ 塔数门槛 + 满装填无冷却 + 射程内 + 无在途 → 对目标房
+    //     中心（25,25）发射。intel 无结构坐标，中心是敌方基地密度期望最大点。
+    //     在途判定走台账（引擎无全局核弹查询 API，FIND_NUKES 需目标房视野 —
+    //     自发核弹只能自查）；发射成功后台账 push + cooldown 5000 双保险，
+    //     同目标在途期间不重复发射（重叠只是把当量堆在同一片废墟上）。
+    //     已知取舍（发射不可取消）：核弹 50k tick 落地，若期间我方占领目标房，
+    //     落地时自伤 — 缓解：扩张目标重合不射 + 塔数门槛保证只射编队啃不动的
+    //     重防房（短期不会被占领）。
+    pruneNukeLedger(ctx.tick);
+    const nuker = sponsorSnapshot?.nuker;
+    const kernel = Memory.kernel;
+    if (nuker && kernel && kernel.expansion?.target !== plan.targetRoom) {
+      const nukerReady =
+        nuker.store.getUsedCapacity(RESOURCE_ENERGY) >= NUKE_ENERGY_COST &&
+        (nuker.store.getUsedCapacity(RESOURCE_GHODIUM) ?? 0) >= NUKE_GHODIUM_COST &&
+        nuker.cooldown === 0;
+      const inFlight = (kernel.nukesInFlight?.[plan.targetRoom] ?? [])
+        .filter(landAt => landAt > ctx.tick).length;
+      const launch = shouldLaunchNuke({
+        nukerReady,
+        nukesInFlightToTarget: inFlight,
+        towersSeen: plan.towersSeen,
+        towerThreshold: CONFIG.nuker.launchTowerThreshold,
+        linearDistance: roomLinearDistance(sponsor, plan.targetRoom),
+        maxRange: CONFIG.nuker.maxRange,
+      });
+      if (launch) {
+        const pos = new RoomPosition(25, 25, plan.targetRoom);
+        if (nuker.launchNuke(pos) === OK) {
+          recordNukeLaunch(plan.targetRoom, ctx.tick);
+          recordEvent(EventKind.NukeLaunched, plan.targetRoom, [plan.towersSeen]);
+          console.log(
+            `[${Game.time}] nuke-launch: ${sponsor} → ${plan.targetRoom} (towers=${plan.towersSeen})`,
+          );
+        }
+      }
+    }
+
     // 4. 战损止损（合计基数）：投入超过编制 × 倍数仍未见效 → 判消耗战失败收摊。
     if (
       isAttritionLost(
@@ -263,6 +307,27 @@ function pruneWarBlacklist(tick: number): void {
     if (bl[roomName]! <= tick) delete bl[roomName];
   }
   if (Object.keys(bl).length === 0) delete Memory.kernel!.warBlacklist;
+}
+
+/** 在途核弹台账登记一次发射（落地到期 = 当前 tick + 引擎飞行时长 50k）。 */
+function recordNukeLaunch(targetRoom: string, tick: number): void {
+  if (!Memory.kernel) Memory.kernel = {};
+  Memory.kernel.nukesInFlight ??= {};
+  const entries = Memory.kernel.nukesInFlight[targetRoom] ?? [];
+  entries.push(tick + NUKE_LANDING_TIME);
+  Memory.kernel.nukesInFlight[targetRoom] = entries;
+}
+
+/** 清理已落地的在途核弹台账条目（每次运行调用，O(条目数)，防膨胀）。 */
+function pruneNukeLedger(tick: number): void {
+  const ledger = Memory.kernel?.nukesInFlight;
+  if (!ledger) return;
+  for (const target in ledger) {
+    const live = ledger[target]!.filter(landAt => landAt > tick);
+    if (live.length === 0) delete ledger[target];
+    else ledger[target] = live;
+  }
+  if (Object.keys(ledger).length === 0) delete Memory.kernel!.nukesInFlight;
 }
 
 /** 从内存采集战争目标候选（世界可见态 → 纯函数输入）。 */

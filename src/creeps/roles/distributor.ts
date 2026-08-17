@@ -14,6 +14,7 @@ import {
   distributorFillTarget,
   reclaimFactoryOutput,
   stockFactoryEnergy,
+  stockNuker,
   stockPowerSpawn,
   stockTerminalEnergy,
   supplyLabs,
@@ -101,6 +102,8 @@ const policy: RolePolicy = {
     supplyLabs(),
     // powerSpawn 原料补给（能量/POWER 取料相）— GPL 涓流是最奢侈的下游，排在最后。
     stockPowerSpawn(),
+    // nuker 威慑备弹装填（能量/G 取料相）— 战略投资受高水位地板门禁，与 powerSpawn 同档垫底。
+    stockNuker(),
   ],
 
   work: [
@@ -118,6 +121,8 @@ const policy: RolePolicy = {
     supplyLabs(),
     // powerSpawn 原料投放相。
     stockPowerSpawn(),
+    // nuker 威慑备弹投放相。
+    stockNuker(),
     // 所有 sink 均满 — 原地待命。注意：distributor 没有 fillStorage — 架构约束，
     // 加上就会重新引入 storage→storage 循环。
   ],

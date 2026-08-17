@@ -316,6 +316,13 @@ declare global {
       homeAssignments: Record<string, string>;
     };
     /**
+     * 我方在途核弹台账（v35+，war-planner 唯一写者）：目标房名 → 落地到期
+     * tick 数组。引擎无全局核弹查询 API（FIND_NUKES 需要目标房视野），
+     * 自发核弹只能自查 — 台账即完整真相。发射时 push（Game.time +
+     * NUKE_LANDING_TIME 50000），到期由 war-planner 每轮清理（防膨胀）。
+     */
+    nukesInFlight?: Record<string, number[]>;
+    /**
      * 目标清单结构缺口观测（v21+，layout-planner 写）：期望 = CONTROLLER_STRUCTURES
      * 派生，已有 = 建成结构 + 我方在建 site + queued/blocked 队列任务；缺口 > 0 即
      * 真实未达成，供控制台采样与人工介入信号；仅在实际缺口集合变化时写入。

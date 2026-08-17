@@ -49,4 +49,5 @@ export {
   withdrawTerminalEnergy,
   reclaimFactoryOutput,
   stockPowerSpawn,
+  stockNuker,
 } from "./industry";

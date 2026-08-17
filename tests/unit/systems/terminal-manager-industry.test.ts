@@ -14,6 +14,10 @@
  *   - 姐妹房 homeMineral 盈余 → 缺口房 terminal.send + MineralTransfer 事件
  *   - 捐赠方 terminal 能量不足（运费+储备地板）→ 不发送
  *   - 单房 → 不互济
+ *   ghodium 买（tryBuyGhodium）：
+ *   - 高信用 + 库存缺口 + 卖单价达标 → deal 成交（量受缺口/订单/单笔上限约束）
+ *   - credits 低于高信用门禁 → 不买（战略采购排在所有生存采购之后）
+ *   - 卖单价超上限 / 库存已达标 / 无 nuker → 不买（G 无其他消费方，不囤死资本）
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/terminal-manager";
@@ -45,6 +49,7 @@ function roomSnapshot(opts: {
   terminal?: any;
   homeMineral?: string;
   powerSpawn?: Record<string, number>;
+  nuker?: Record<string, number>;
 }): any {
   return mockSnapshot({
     roomName: opts.roomName ?? "W7N4",
@@ -52,6 +57,7 @@ function roomSnapshot(opts: {
     terminal: opts.terminal,
     minerals: opts.homeMineral ? ([{ mineralType: opts.homeMineral }] as any) : [],
     powerSpawn: opts.powerSpawn ? ({ store: resStore(opts.powerSpawn, 5000) } as any) : undefined,
+    nuker: opts.nuker ? ({ store: resStore(opts.nuker, 300000), cooldown: 0 } as any) : undefined,
   });
 }
 
@@ -261,5 +267,90 @@ describe("terminal-manager — 帝国矿物互济", () => {
     terminalManagerSystem.run(makeContext([only]));
 
     expect(only.terminal.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("terminal-manager — ghodium 买（nuker 威慑备弹）", () => {
+  /** 只挂 G 卖单（其余资源查单为空），隔离 power/energy 分支抢单干扰断言。 */
+  function ghodiumMarket(overrides: Record<string, any> = {}): void {
+    setupMarket({
+      credits: 50000,
+      getAllOrders: vi.fn((opts: any) =>
+        opts.resourceType === "G"
+          ? [{ id: "g1", price: CONFIG.nuker.ghodiumBuyMaxPrice - 0.1, amount: 100000, roomName: "W9N9" }]
+          : [],
+      ),
+      ...overrides,
+    });
+  }
+
+  it("高信用 + 库存缺口 + 卖单价达标 → deal 成交（量受缺口/单笔上限约束）", () => {
+    ghodiumMarket();
+    const room = roomSnapshot({
+      terminal: terminalMock({ energy: 20000 }),
+      nuker: { energy: 0 },
+    });
+
+    terminalManagerSystem.run(makeContext([room]));
+
+    // 缺口 5000、订单充足、credits 充足 → 受单笔上限 1000 截断。
+    const expected = Math.min(
+      CONFIG.nuker.ghodiumStockpile,
+      CONFIG.market.maxDealAmount,
+    );
+    expect((globalThis as any).Game.market.deal).toHaveBeenCalledWith("g1", expected, "W7N4");
+  });
+
+  it("credits 低于高信用门禁 → 不买（战略采购排在所有生存采购之后）", () => {
+    ghodiumMarket({ credits: CONFIG.nuker.ghodiumBuyCreditFloor - 1 });
+    const room = roomSnapshot({
+      terminal: terminalMock({ energy: 20000 }),
+      nuker: { energy: 0 },
+    });
+
+    terminalManagerSystem.run(makeContext([room]));
+
+    expect((globalThis as any).Game.market.deal).not.toHaveBeenCalled();
+  });
+
+  it("卖单价超上限 → 不买", () => {
+    ghodiumMarket({
+      getAllOrders: vi.fn((opts: any) =>
+        opts.resourceType === "G"
+          ? [{ id: "g1", price: CONFIG.nuker.ghodiumBuyMaxPrice + 0.01, amount: 100000, roomName: "W9N9" }]
+          : [],
+      ),
+    });
+    const room = roomSnapshot({
+      terminal: terminalMock({ energy: 20000 }),
+      nuker: { energy: 0 },
+    });
+
+    terminalManagerSystem.run(makeContext([room]));
+
+    expect((globalThis as any).Game.market.deal).not.toHaveBeenCalled();
+  });
+
+  it("库存已达标（terminal+storage+nuker 合计）→ 不买", () => {
+    ghodiumMarket();
+    const room = roomSnapshot({
+      terminal: terminalMock({ energy: 20000, G: CONFIG.nuker.ghodiumStockpile }),
+      nuker: { energy: 0 },
+    });
+
+    terminalManagerSystem.run(makeContext([room]));
+
+    expect((globalThis as any).Game.market.deal).not.toHaveBeenCalled();
+  });
+
+  it("无 nuker → 不买（G 无其他消费方，买了就是死资本）", () => {
+    ghodiumMarket();
+    const room = roomSnapshot({
+      terminal: terminalMock({ energy: 20000 }),
+    });
+
+    terminalManagerSystem.run(makeContext([room]));
+
+    expect((globalThis as any).Game.market.deal).not.toHaveBeenCalled();
   });
 });

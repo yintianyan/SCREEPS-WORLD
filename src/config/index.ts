@@ -39,7 +39,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 34 },
+  memory: { schemaVersion: 35 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -643,6 +643,32 @@ export const CONFIG = {
     extensionFillGap: 0.5,
     /** 目标效果剩余 tick 低于此值才续杯（OPERATE_SPAWN dur1000/cd300）。 */
     effectRefreshMargin: 250,
+  },
+
+  /**
+   * nuker 战略威慑链（RCL8 解锁）：威慑备弹（常态装填 energy 50k + G 5k）+
+   * 战时发射授权（war 姿态 + warPlanner 决策）。装填/备弹经济上属「威慑投资」，
+   * 排位在生存与工业之后：能量装填受 market.storageEnergyFloor 门禁（不与
+   * spawn/tower 抢血），G 采购受高信用门槛。
+   */
+  nuker: {
+    /**
+     * G 备弹库存目标（nuker+storage+terminal+lab 合计口径）= 一发当量（5,000）。
+     * lab 前馈据此判定是否切反应链产 G；市场买入据此判定缺口。
+     */
+    ghodiumStockpile: 5000,
+    /**
+     * 发射塔数门槛（攻坚 doctrine）：目标 intel 塔数 ≥ 此值才发射 —
+     * 重防目标地面编队啃不动（塔 DPS 叠加），核弹是唯一性价比解；
+     * 轻防目标交给编队，也避免核弹砸掉我方想抢占的轻防房。
+     */
+    launchTowerThreshold: 2,
+    /** 发射射程预检（线性距离口径；引擎 NUKE_RANGE=10，走廊约束由 launchNuke 返回码兜底）。 */
+    maxRange: 10,
+    /** G 市场买入最高价（credits/单位）— 超价宁可不买（lab 自产是主通道，市场只是加速）。 */
+    ghodiumBuyMaxPrice: 1.0,
+    /** G 买入的信用门禁 — 战略物资不许挤占生存/工业采购预算。 */
+    ghodiumBuyCreditFloor: 10000,
   },
 
   market: {

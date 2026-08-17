@@ -79,6 +79,9 @@ export const terminalManagerSystem: System = {
 
       // 5. 买入 power（高信用门禁 — GPL 投资排在所有生存/工业采购之后）。
       tryBuyPower(snapshot, terminal);
+
+      // 6. 买入 ghodium（nuker 威慑备弹 — 战略采购，lab 自产是主通道，市场只是加速）。
+      tryBuyGhodium(snapshot, terminal);
     }
   },
 };
@@ -351,6 +354,38 @@ function tryBuyPower(snapshot: RoomSnapshot, terminal: StructureTerminal): boole
   if (!best) return false;
 
   const affordable = Math.floor((Game.market.credits - CONFIG.market.powerBuyCreditFloor) / best.price);
+  const amount = Math.min(deficit, best.amount, CONFIG.market.maxDealAmount, affordable);
+  return executeDeal(best, amount, terminal, snapshot.roomName);
+}
+
+/**
+ * 买入 ghodium（nuker 威慑备弹的市场加速通道 — lab 自产是主通道）。
+ * 库存口径 = terminal + storage + nuker 合计 vs nuker.ghodiumStockpile；
+ * 无 nuker 的房不采购（G 无其他消费方，买了就是死资本）。
+ * 高信用门禁 + 单笔上限双重约束：5k 缺口不会一次吃掉全部流动资金。
+ * 买入后由 distributor 的 stockNuker 搬到 nuker。
+ */
+function tryBuyGhodium(snapshot: RoomSnapshot, terminal: StructureTerminal): boolean {
+  const nuker = snapshot.nuker;
+  if (!nuker) return false;
+  if (Game.market.credits < CONFIG.nuker.ghodiumBuyCreditFloor) return false;
+
+  const have =
+    (terminal.store.getUsedCapacity(RESOURCE_GHODIUM) ?? 0) +
+    (snapshot.storage?.store.getUsedCapacity(RESOURCE_GHODIUM) ?? 0) +
+    (nuker.store.getUsedCapacity(RESOURCE_GHODIUM) ?? 0);
+  const deficit = CONFIG.nuker.ghodiumStockpile - have;
+  if (deficit <= 0) return false;
+
+  const orders = toSummaries(
+    Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_GHODIUM }),
+  );
+  const best = pickBestSellOrder(orders, CONFIG.nuker.ghodiumBuyMaxPrice);
+  if (!best) return false;
+
+  const affordable = Math.floor(
+    (Game.market.credits - CONFIG.nuker.ghodiumBuyCreditFloor) / best.price,
+  );
   const amount = Math.min(deficit, best.amount, CONFIG.market.maxDealAmount, affordable);
   return executeDeal(best, amount, terminal, snapshot.roomName);
 }

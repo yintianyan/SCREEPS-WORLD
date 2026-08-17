@@ -17,6 +17,7 @@ import {
   isAttritionLost,
   nextWavePhase,
   selectWarTarget,
+  shouldLaunchNuke,
 } from "../../../src/domain/war/planning";
 
 const BASE_INPUT = {
@@ -297,5 +298,39 @@ describe("R4 — evaluateWarOutcome 战后核验", () => {
     expect(evaluateWarOutcome(2, 1, "Enemy", 900, 1000, 1500)).toBe("failure");
     // 无塔目标（towersSeen=0）：胜利唯一途径是敌人弃房。
     expect(evaluateWarOutcome(0, 0, "Enemy", 900, 1000, 1500)).toBe("failure");
+  });
+});
+
+describe("nuker 战略威慑 — shouldLaunchNuke 发射判定", () => {
+  /** 基准：满装填无冷却、无在途、塔数达标、射程内 → 授权发射。 */
+  const NUKE_BASE = {
+    nukerReady: true,
+    nukesInFlightToTarget: 0,
+    towersSeen: 2,
+    towerThreshold: 2,
+    linearDistance: 5,
+    maxRange: 10,
+  } as const;
+
+  it("全条件满足 → true", () => {
+    expect(shouldLaunchNuke({ ...NUKE_BASE })).toBe(true);
+  });
+
+  it("nuker 未就绪（未满装填或冷却中）→ false（发射必返错，白跑）", () => {
+    expect(shouldLaunchNuke({ ...NUKE_BASE, nukerReady: false })).toBe(false);
+  });
+
+  it("同目标已有在途核弹 → false（重叠发射只是把当量堆在同一片废墟上）", () => {
+    expect(shouldLaunchNuke({ ...NUKE_BASE, nukesInFlightToTarget: 1 })).toBe(false);
+  });
+
+  it("塔数低于门槛 → false（轻防目标地面编队足够，核弹留给重防）", () => {
+    expect(shouldLaunchNuke({ ...NUKE_BASE, towersSeen: NUKE_BASE.towerThreshold - 1 })).toBe(false);
+  });
+
+  it("超射程 → false（保守预检，细判交给 launchNuke 返回码）", () => {
+    expect(shouldLaunchNuke({ ...NUKE_BASE, linearDistance: NUKE_BASE.maxRange + 1 })).toBe(false);
+    // 恰在射程边界 → 放行。
+    expect(shouldLaunchNuke({ ...NUKE_BASE, linearDistance: NUKE_BASE.maxRange })).toBe(true);
   });
 });
