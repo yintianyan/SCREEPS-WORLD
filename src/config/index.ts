@@ -630,6 +630,12 @@ export const CONFIG = {
     powerSpawnEnergyTarget: 1000,
     /** powerSpawn power 库存目标（= 市场买入目标量，terminal+storage+powerSpawn 合计口径）。 */
     powerSpawnPowerTarget: 100,
+    /**
+     * processPower 的 storage 能量地板 — GPL 是投资不是生存，余裕不足时暂停烧
+     *（power 不会腐坏，暂停零损失）。取 30k（高于 nuker 装填地板 20k）体现
+     * 「威慑 > 增值」的优先序：两链同时缺料时先保核弹。
+     */
+    processEnergyFloor: 30000,
   },
 
   powerCreeps: {

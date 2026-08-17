@@ -18,6 +18,9 @@ const REBIND_STUCK_TICKS = 3;
 /** 改绑冷却（tick）：防 A↔B 改绑振荡。 */
 const REBIND_COOLDOWN_TICKS = 200;
 
+/** container 维修触发血量比例 — 与本地 repairContainerDecay/repairNearbyContainer 同口径 0.8。 */
+const CONTAINER_REPAIR_THRESHOLD = 0.8;
+
 /**
  * 获取远矿 source — 从缓存 sourceId 或占用感知分配。首次入房执行一次 find，之后复用 sourceId。
  * 占用感知（E-1 修复）：远矿房无 RoomSnapshot/sourceOccupancy，改为统计同房同 target 的兄弟
@@ -217,12 +220,24 @@ function remoteStationaryMine(): ActionCandidate<Source> {
         return;
       }
       // 同 tick 倒能：背包有能量且旁边有 container 时倒入。
+      // 维修期留税：container 血量低于维修线时每 tick 留 WORK 数能量不倒 —
+      // 若全额倒空，下 tick repair 门禁（背包有料）在「采 N 倒 N」稳态下
+      // 永远不满足（resolve 时刻背包恒空），维修链死锁（集成场景实证：
+      // 600 tick 零维修、container 单调衰减）。留税让节拍变为
+      // 「采 N 倒 N-W、修 W」交替，维修与采集并行不断流。
       if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
         const container = findSourceContainer(ac.creep, source);
         if (container) {
           const freeCap = container.store.getFreeCapacity(RESOURCE_ENERGY);
           if (freeCap > 0) {
-            ac.creep.transfer(container, RESOURCE_ENERGY);
+            const workParts = ac.creep.body.filter((p) => p.type === WORK).length;
+            const reserve = container.hits < container.hitsMax * CONTAINER_REPAIR_THRESHOLD
+              ? workParts
+              : 0;
+            const amount = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) - reserve;
+            if (amount > 0) {
+              ac.creep.transfer(container, RESOURCE_ENERGY, amount);
+            }
           }
         }
       }
@@ -346,8 +361,50 @@ function buildSourceContainer(): ActionCandidate<ContainerBuildTarget> {
   };
 }
 
+/**
+ * RM-2：维修衰减中的 source container — 远矿房无 builder/tower 兜底，
+ * 采集者是 container 唯一的维护者（hauler/reserver 均无 WORK 部件）。
+ * container 摧毁 = 远矿产能归零直到 P0-A 全链重启（申请→建站→建造），
+ * 而维修税极低：衰减 1 hit/tick，1 energy 修 100 hits/WORK — 5 WORK body
+ * 每 ~37500 tick 仅需 75 tick 维修期，约占产能 0.1%。
+ * 与本地 harvester 的「倒能后余量才修」原则不同：本地有 builder+tower 兜底
+ * 才敢等余量，远矿采集者独行 — 血量 < 80% 且背包有能量即修。
+ * 必须同时挂 acquire/work 两链：采集者稳态是「采 N 倒 N」背包近空，FSM
+ * 长期停在 acquire（集成场景 600 tick 实证：work 链的维修零触发、container
+ * 单调衰减到摧毁）— 只挂 work 链则维修窗口仅剩「container 满 + 背包满」
+ * 的偶发交集，等价于永不维修。链序在 stationaryMine 之前同理：stationaryMine
+ * 命中即短路，置后永远轮不到；置前把维修 tick 按需插入采集流（背包空让位
+ * 回采，半载先修后采 — resolve 门禁已保证采集优先回补）。
+ */
+function repairSourceContainer(): ActionCandidate<StructureContainer> {
+  return {
+    name: "remote-harvest:repair-container",
+    resolve: (ac) => {
+      // 背包空 → 让位采集链（维修无料，采集优先回补）。
+      if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) return undefined;
+      const source = getRemoteSource(ac.creep);
+      if (!source) return undefined;
+      const container = findSourceContainer(ac.creep, source);
+      if (!container) return undefined;
+      // 超出维修射程 → 让位归位链（move-and-mine 负责移动，不在此追修）。
+      if (ac.creep.pos.getRangeTo(container.pos) > 3) return undefined;
+      return container.hits < container.hitsMax * CONTAINER_REPAIR_THRESHOLD
+        ? container
+        : undefined;
+    },
+    execute: (ac, container) => {
+      if (ac.creep.repair(container) === ERR_NOT_IN_RANGE) {
+        moveToTarget(ac.creep, container);
+      }
+    },
+  };
+}
+
 const policy: RolePolicy = {
   acquire: [
+    // RM-2：维修衰减中的 source container（采集者稳态近空载、FSM 长期
+    // acquire — 维修必须在本链可达，详见函数注释）。
+    repairSourceContainer(),
     // 站桩采集 + 同 tick 倒能（到达矿位后）。
     remoteStationaryMine(),
     // 移动到 source 并采集（通勤中）。
@@ -357,6 +414,9 @@ const policy: RolePolicy = {
     // RM-1：满载且无 container → 自建（必须在 stationaryMine 之前 —
     // stationaryMine 的 resolve 只查在位与否，满载时会继续采集溢出）。
     buildSourceContainer(),
+    // RM-2：维修衰减中的 source container（远矿无 builder/tower 兜底，
+    // 采集者是唯一维护者；详见函数注释）。
+    repairSourceContainer(),
     // 站桩采集 + 同 tick 倒能（work 模式也继续采）。
     remoteStationaryMine(),
     // 移动到 source 并采集（带能但被挤离矿位时归位）— 线上实证：采集者

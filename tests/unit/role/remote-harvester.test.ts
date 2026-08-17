@@ -145,3 +145,179 @@ describe("remoteHarvester — 站桩锚定与占位自报", () => {
     expect(creep.memory.mode).toBe("work");
   });
 });
+
+describe("remoteHarvester — RM-2 source container 维修", () => {
+  /**
+   * 构造带 container 的远矿房：source(10,10)、container(10,11)（source 旁
+   * range 1）、creep(11,10)（矿位）。lookForAtArea 返回 container 结构 —
+   * findSourceContainer 首扫命中后写 sourceContainerId 缓存。
+   */
+  function makeWorld(opts: { hits?: number; hitsMax?: number } = {}) {
+    const s1 = mockSource("s1");
+    s1.pos = { x: 10, y: 10, roomName: targetRoom };
+
+    const container: any = {
+      id: "cont-1",
+      structureType: "container",
+      pos: { x: 10, y: 11, roomName: targetRoom },
+      hits: opts.hits ?? 150000,
+      hitsMax: opts.hitsMax ?? 250000,
+      store: { getFreeCapacity: vi.fn(() => 0), getUsedCapacity: vi.fn(() => 2000) },
+    };
+
+    const creep = mockCreep({
+      name: "rh-1", role: "remoteHarvester", sourceId: "s1",
+      used: 50, capacity: 50, // 满载（work 链的常态）
+    });
+    creep.memory.home = homeRoom;
+    creep.memory.remoteTarget = targetRoom;
+    creep.memory.mode = "work";
+    placeCreep(creep, 11, 10);
+
+    const room = makeRoom(creep, [s1]);
+    room.lookForAtArea = vi.fn(() => [{ structure: container }]);
+    creep.room = room;
+
+    return { creep, container, source: s1 };
+  }
+
+  it("满载 + container 血量 < 80% → repair（把空转 tick 变维修 tick）", () => {
+    const { creep, container } = makeWorld({ hits: 150000 }); // 0.6 < 0.8
+
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
+
+    expect(creep.repair).toHaveBeenCalledWith(container);
+    // 维修候选截停 work 链 — 本 tick 不采集（背包能量流向维修）。
+    expect(creep.harvest).not.toHaveBeenCalled();
+  });
+
+  it("container 满血 → 不修，stationaryMine 接管（正常采集倒能）", () => {
+    const { creep } = makeWorld({ hits: 250000 }); // 1.0 ≥ 0.8
+
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
+
+    expect(creep.repair).not.toHaveBeenCalled();
+    expect(creep.harvest).toHaveBeenCalled();
+  });
+
+  it("血量恰在 80% 阈值 → 不修（边界含等号，防贴线抖动）", () => {
+    const { creep } = makeWorld({ hits: 200000 }); // 0.8 = 0.8
+
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
+
+    expect(creep.repair).not.toHaveBeenCalled();
+  });
+
+  it("背包空 → 让位采集链（维修无料，采集优先回补）", () => {
+    const s1 = mockSource("s1");
+    s1.pos = { x: 10, y: 10, roomName: targetRoom };
+    const container: any = {
+      id: "cont-1", structureType: "container",
+      pos: { x: 10, y: 11, roomName: targetRoom },
+      hits: 100000, hitsMax: 250000,
+      store: { getFreeCapacity: vi.fn(() => 0) },
+    };
+    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 0, capacity: 50 });
+    creep.memory.home = homeRoom;
+    creep.memory.remoteTarget = targetRoom;
+    creep.memory.mode = "work";
+    placeCreep(creep, 11, 10);
+    const room = makeRoom(creep, [s1]);
+    room.lookForAtArea = vi.fn(() => [{ structure: container }]);
+    creep.room = room;
+
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
+
+    expect(creep.repair).not.toHaveBeenCalled();
+    expect(creep.harvest).toHaveBeenCalled();
+  });
+
+  it("无 container（衰减殆尽/未建）→ 不修，走建链或采集链", () => {
+    const s1 = mockSource("s1");
+    s1.pos = { x: 10, y: 10, roomName: targetRoom };
+    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 25, capacity: 50 });
+    creep.memory.home = homeRoom;
+    creep.memory.remoteTarget = targetRoom;
+    creep.memory.mode = "work";
+    placeCreep(creep, 11, 10);
+    // lookForAtArea 返回空（makeRoom 默认）— 无 container。
+    creep.room = makeRoom(creep, [s1]);
+
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
+
+    expect(creep.repair).not.toHaveBeenCalled();
+  });
+
+  it("距 container 超维修射程（>3）→ 让位归位链，不远程追修", () => {
+    const s1 = mockSource("s1");
+    s1.pos = { x: 10, y: 10, roomName: targetRoom };
+    const container: any = {
+      id: "cont-1", structureType: "container",
+      pos: { x: 10, y: 11, roomName: targetRoom },
+      hits: 100000, hitsMax: 250000,
+      store: { getFreeCapacity: vi.fn(() => 0) },
+    };
+    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 25, capacity: 50 });
+    creep.memory.home = homeRoom;
+    creep.memory.remoteTarget = targetRoom;
+    creep.memory.mode = "work";
+    placeCreep(creep, 16, 10); // 距 container(10,11)：max(6,1)=6 > 3
+    const room = makeRoom(creep, [s1]);
+    room.lookForAtArea = vi.fn(() => [{ structure: container }]);
+    creep.room = room;
+
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
+
+    expect(creep.repair).not.toHaveBeenCalled();
+  });
+
+  it("acquire 稳态（半载）+ 血量 < 80% → repair 触发（FSM 稳态可达性）", () => {
+    // 采集者稳态是「采 N 倒 N」背包近空，FSM 长期 acquire — 维修只在
+    // work 链则永远轮不到（集成场景 600 tick 实证：container 单调衰减）。
+    const s1 = mockSource("s1");
+    s1.pos = { x: 10, y: 10, roomName: targetRoom };
+    const container: any = {
+      id: "cont-1", structureType: "container",
+      pos: { x: 10, y: 11, roomName: targetRoom },
+      hits: 150000, hitsMax: 250000, // 0.6 < 0.8
+      store: { getFreeCapacity: vi.fn(() => 0) },
+    };
+    // 半载（acquire 链常态）— mode 未设置时由 FSM 判空载/半载为 acquire。
+    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 10, capacity: 50 });
+    creep.memory.home = homeRoom;
+    creep.memory.remoteTarget = targetRoom;
+    placeCreep(creep, 11, 10); // 矿位：距 source 1、距 container 1
+    const room = makeRoom(creep, [s1]);
+    room.lookForAtArea = vi.fn(() => [{ structure: container }]);
+    creep.room = room;
+
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
+
+    expect(creep.repair).toHaveBeenCalledWith(container);
+    // 维修截停采集 — 本 tick 能量流向维修而非 harvest。
+    expect(creep.harvest).not.toHaveBeenCalled();
+  });
+
+  it("acquire 稳态空载 → 维修让位采集链（回补优先）", () => {
+    const s1 = mockSource("s1");
+    s1.pos = { x: 10, y: 10, roomName: targetRoom };
+    const container: any = {
+      id: "cont-1", structureType: "container",
+      pos: { x: 10, y: 11, roomName: targetRoom },
+      hits: 100000, hitsMax: 250000,
+      store: { getFreeCapacity: vi.fn(() => 0) },
+    };
+    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 0, capacity: 50 });
+    creep.memory.home = homeRoom;
+    creep.memory.remoteTarget = targetRoom;
+    placeCreep(creep, 11, 10);
+    const room = makeRoom(creep, [s1]);
+    room.lookForAtArea = vi.fn(() => [{ structure: container }]);
+    creep.room = room;
+
+    remoteHarvesterRole.run(creep, mockContext(mockSnapshot({ roomName: homeRoom })));
+
+    expect(creep.repair).not.toHaveBeenCalled();
+    expect(creep.harvest).toHaveBeenCalled();
+  });
+});

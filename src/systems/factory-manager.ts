@@ -3,14 +3,13 @@
  * Factory：storage 满仓时把过剩能量压缩为 battery（600 energy → 50 battery，
  * 冷却 10 tick）——满仓即能量在源头被 harvester drop 浪费，压缩把「必然损失」
  * 转为可存储/可交易的资产（battery 解压回收率 5/6）。
- * PowerSpawn：有 power 与能量存货时 processPower（1 power + 50 energy/次）积累 GPL。
+ * PowerSpawn：processPower（1 power + 50 energy/次）积累 GPL — 调度门禁见
+ * domain/economy/power-processing（能量地板 + war 姿态，投资让位生存）。
  * 原料能量由 distributor 的 stockFactoryEnergy 在满仓信号下搬运（actions/industry.ts）。
  */
 import { CONFIG } from "../config";
+import { shouldProcessPower } from "../domain/economy/power-processing";
 import type { Priority, System, TickContext } from "../kernel/contracts";
-
-/** processPower 单次消耗的能量（引擎常量 POWER_SPAWN_ENERGY_RATIO）。 */
-const POWER_PROCESS_ENERGY = 50;
 
 export const factoryManagerSystem: System = {
   name: "factory-manager",
@@ -19,13 +18,18 @@ export const factoryManagerSystem: System = {
   run(ctx: TickContext): void {
     for (const snapshot of ctx.snapshots()) {
       const powerSpawn = snapshot.powerSpawn;
-      if (
-        powerSpawn &&
-        typeof powerSpawn.processPower === "function" &&
-        powerSpawn.store.getUsedCapacity(RESOURCE_POWER) >= 1 &&
-        powerSpawn.store.getUsedCapacity(RESOURCE_ENERGY) >= POWER_PROCESS_ENERGY
-      ) {
-        powerSpawn.processPower();
+      if (powerSpawn && typeof powerSpawn.processPower === "function") {
+        if (
+          shouldProcessPower({
+            powerStored: powerSpawn.store.getUsedCapacity(RESOURCE_POWER),
+            energyStored: powerSpawn.store.getUsedCapacity(RESOURCE_ENERGY),
+            storageEnergy: snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY),
+            energyFloor: CONFIG.factory.processEnergyFloor,
+            warActive: Memory.kernel?.strategy?.posture === "war",
+          })
+        ) {
+          powerSpawn.processPower();
+        }
       }
 
       const factory = snapshot.factory;

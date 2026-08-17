@@ -139,8 +139,14 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   [tests/unit/remote/stall-census.test.ts](tests/unit/remote/stall-census.test.ts)、
   [tests/unit/movement/static-blocker.test.ts](tests/unit/movement/static-blocker.test.ts)、
   [tests/integration/scenarios/remote-lockout-selfheal.test.ts](tests/integration/scenarios/remote-lockout-selfheal.test.ts)。
-- 仍为已知取舍：远矿 container **维修**链缺失（建造链已由 P0-A 补齐）；
-  取舍决策以各处内联注释为准。
+- RM-2 远矿 container 维修链已落地（无 schema 变更）：repairSourceContainer
+  动作挂 acquire/work 双链（采集者「采 N 倒 N」稳态下 FSM 长期 acquire，只挂
+  work 链则维修窗口仅剩偶发满载交集，等价永不维修）+ stationaryMine 倒能
+  留维修税（血量 < 80% 时每 tick 留 WORK 数能量不倒 — 全额倒空会让 repair
+  的背包门禁在稳态下恒不满足，维修链死锁）。节拍为「采 N 倒 N-W、修 W」
+  交替，维修与采集并行不断流。测试见
+  [tests/unit/role/remote-harvester.test.ts](tests/unit/role/remote-harvester.test.ts)、
+  [tests/integration/scenarios/remote-container-repair.test.ts](tests/integration/scenarios/remote-container-repair.test.ts)。
 
 ## 高风险区域与硬约束摘要
 

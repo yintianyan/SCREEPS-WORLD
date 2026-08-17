@@ -18,6 +18,9 @@ export const pixelSystem: System = {
     if (!CONFIG.pixel.enabled) return;
     // 只在 healthy tier 下生成 — 保证放血起点是满 bucket + 低负载。
     if (ctx.budget.tier !== "healthy") return;
+    // war 姿态不放血 — bucket 突发容量留给战时计算（塔防/编队/物流全速），
+    // 且放血后的 P3 降档窗口会禁掉遥测与调参等战时支撑系统。
+    if (Memory.kernel?.strategy?.posture === "war") return;
     // 私服无 generatePixel API — 安全检查避免每 10 tick 报 TypeError。
     if (typeof Game.cpu.generatePixel !== "function") return;
     if ((Game.cpu.bucket ?? 0) >= 10000) {

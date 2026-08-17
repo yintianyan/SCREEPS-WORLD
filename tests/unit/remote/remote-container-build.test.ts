@@ -65,6 +65,8 @@ describe("RM-1 — remote-harvester 自建 source container", () => {
     const container = {
       id: "rc1", structureType: "container",
       pos: { getRangeTo: vi.fn(() => 1), x: 25, y: 26 },
+      // 满血 → 倒能不留维修税（RM-2 留税只在血量 < 80% 时生效）。
+      hits: 250000, hitsMax: 250000,
       store: { getFreeCapacity: vi.fn(() => 1000), getUsedCapacity: vi.fn(() => 0) },
     };
     const creep = stationedHarvester({ containers: [container] });
@@ -72,8 +74,8 @@ describe("RM-1 — remote-harvester 自建 source container", () => {
 
     expect(creep.build).not.toHaveBeenCalled();
     expect(creep.room.createConstructionSite).not.toHaveBeenCalled();
-    // stationaryMine 同 tick 倒能进 container。
-    expect(creep.transfer).toHaveBeenCalledWith(container, "energy");
+    // stationaryMine 同 tick 倒能进 container（满血全额 100）。
+    expect(creep.transfer).toHaveBeenCalledWith(container, "energy", 100);
   });
 
   it("半载不投入建造 — 继续采集（建造只用必然溢出的能量）", () => {

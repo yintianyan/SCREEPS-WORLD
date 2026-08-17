@@ -6,10 +6,11 @@ import type { TickContext, CpuTier } from "../../../src/kernel/contracts";
 /**
  * Pixel System 门禁回归测试。
  *
- * 两层门禁：
+ * 三层门禁：
  *   1. CONFIG.pixel.enabled 总开关（默认关闭）— 放血清零 bucket 与 global reset
  *      撞车会触发 reload death loop（bundle 加载即被杀、bucket 永不回充）。
  *   2. tier 门禁 — 仅 healthy 且 bucket 满仓时放血。
+ *   3. war 姿态门禁 — 战时 bucket 突发容量留给军事计算，不放血。
  */
 
 function makeCtx(tier: CpuTier): TickContext {
@@ -69,6 +70,15 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
     pixelSystem.run(makeCtx("healthy"));
     expect(generatePixelSpy).toHaveBeenCalledTimes(1);
     expect((globalThis as any).Memory.kernel.pixelAt).toBe(100);
+  });
+
+  it("war 姿态：healthy + 满 bucket 也不放血（bucket 突发容量留给战时计算）", () => {
+    (CONFIG.pixel as { enabled: boolean }).enabled = true;
+    (globalThis as any).Memory = {
+      kernel: { strategy: { posture: "war", since: 100, expansionAllowed: false, newRemoteOpsAllowed: false } },
+    };
+    pixelSystem.run(makeCtx("healthy"));
+    expect(generatePixelSpy).not.toHaveBeenCalled();
   });
 
   it("does NOT call generatePixel when guarded (even with bucket >= 10000)", () => {
