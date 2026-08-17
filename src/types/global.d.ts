@@ -308,6 +308,14 @@ declare global {
      */
     lostRooms?: Record<string, number>;
     /**
+     * Power Creep 运营状态（v34+，power-creep-manager 唯一写者）。
+     * homeAssignments：PC 名 → 驻留房名。PC 换房成本高（长途移动 +
+     * 寿命消耗），粘性防每轮重算漂移；PC 消失/房失守时由系统清理条目。
+     */
+    powerCreeps?: {
+      homeAssignments: Record<string, string>;
+    };
+    /**
      * 目标清单结构缺口观测（v21+，layout-planner 写）：期望 = CONTROLLER_STRUCTURES
      * 派生，已有 = 建成结构 + 我方在建 site + queued/blocked 队列任务；缺口 > 0 即
      * 真实未达成，供控制台采样与人工介入信号；仅在实际缺口集合变化时写入。

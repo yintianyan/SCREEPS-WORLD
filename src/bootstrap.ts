@@ -21,6 +21,7 @@ import { defensePlannerSystem } from "./systems/defense-planner";
 import { empireStrategySystem } from "./systems/empire-strategy";
 import { expansionManagerSystem } from "./systems/expansion-manager";
 import { factoryManagerSystem } from "./systems/factory-manager";
+import { powerCreepManagerSystem } from "./systems/power-creep-manager";
 import { layoutPlannerSystem } from "./systems/layout-planner";
 import { labSystem } from "./systems/lab-system";
 import { linkSystem } from "./systems/link-system";
@@ -79,6 +80,8 @@ export const registry = new Registry()
   .registerSystem(terminalManagerSystem)
   // P3：factory/powerSpawn 最小运营（battery 压缩 + GPL 涓流）
   .registerSystem(factoryManagerSystem)
+  // P3：Power Creeps GPL 消费闭环（create/upgrade/spawn/运营赋能）
+  .registerSystem(powerCreepManagerSystem)
   // P3：扩张管理（GCL 有余量时 claim 新房）
   .registerSystem(expansionManagerSystem)
   // P3：主动情报（expansionAllowed 时派侦察兵取候选房视野；失败冷却止损）

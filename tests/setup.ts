@@ -103,6 +103,7 @@ Object.assign(globalThis as Record<string, unknown>, {
   RESOURCE_ENERGY: "energy",
   RESOURCE_POWER: "power",
   RESOURCE_BATTERY: "battery",
+  RESOURCE_OPS: "ops",
 
   // 市场订单类型常量（terminal-manager 运行时引用）
   ORDER_SELL: "sell",

@@ -94,6 +94,9 @@ export const enum EventKind {
   /** 跨房矿物互济：一笔 terminal.send 矿物救助成交。d = [amount]；r = 受助房名。
    * 矿物类型与捐赠房见 console.log 明细（事件体积优先，口径与 EnergyTransfer 对齐）。 */
   MineralTransfer = 30,
+  /** Power Creep 里程碑（v34）：d = [阶段码]，0=create / 1=upgrade(+power) /
+   * 2=spawn 孵化 / 3=enableRoom。失败静默不记事件（下轮自然重试）。 */
+  PowerCreepMilestone = 31,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

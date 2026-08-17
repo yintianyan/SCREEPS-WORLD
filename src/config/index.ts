@@ -39,7 +39,7 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 33 },
+  memory: { schemaVersion: 34 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -616,6 +616,19 @@ export const CONFIG = {
     powerSpawnEnergyTarget: 1000,
     /** powerSpawn power 库存目标（= 市场买入目标量，terminal+storage+powerSpawn 合计口径）。 */
     powerSpawnPowerTarget: 100,
+  },
+
+  powerCreeps: {
+    /** 系统运行间隔（tick）— PC 动作全为低频（最大 cd 800），10 tick 轮询足够。 */
+    interval: 10,
+    /** TTL 低于此值优先续命（renew 免费，驻留房内移动成本低，提前续防意外）。 */
+    renewBelowTicks: 1000,
+    /** ops 库存缓冲线 — 低于此值先补 ops（ops 断供会让所有 operate 停摆）。 */
+    opsBuffer: 200,
+    /** 能量缺口（1-avail/cap）超过此比例才值得用 OPERATE_EXTENSION（2 ops 便宜但省力有限）。 */
+    extensionFillGap: 0.5,
+    /** 目标效果剩余 tick 低于此值才续杯（OPERATE_SPAWN dur1000/cd300）。 */
+    effectRefreshMargin: 250,
   },
 
   market: {

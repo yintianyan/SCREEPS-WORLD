@@ -871,6 +871,41 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 33,
+    to: 34,
+    run: () => {
+      // v34：Power Creeps — 新增 KernelMemory.powerCreeps.homeAssignments
+      // （power-creep-manager 唯一写者）。建档 + 畸形自愈：powerCreeps
+      // 非对象 → 删除；homeAssignments 非对象 → 重置为空（缺失视为无驻留，
+      // 系统下轮重新分配）；条目值非字符串 → 删除该条目。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+
+      const powerCreeps = kernel.powerCreeps as Record<string, unknown> | undefined;
+      if (powerCreeps !== undefined) {
+        if (typeof powerCreeps !== "object" || powerCreeps === null || Array.isArray(powerCreeps)) {
+          delete kernel.powerCreeps;
+        } else {
+          if (
+            powerCreeps.homeAssignments === undefined ||
+            typeof powerCreeps.homeAssignments !== "object" ||
+            powerCreeps.homeAssignments === null ||
+            Array.isArray(powerCreeps.homeAssignments)
+          ) {
+            powerCreeps.homeAssignments = {};
+          } else {
+            const assignments = powerCreeps.homeAssignments as Record<string, unknown>;
+            for (const pcName in assignments) {
+              if (typeof assignments[pcName] !== "string") {
+                delete assignments[pcName];
+              }
+            }
+          }
+        }
+      }
+    },
+  },
 ];
 
 /**
