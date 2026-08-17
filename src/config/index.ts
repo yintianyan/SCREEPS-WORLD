@@ -19,28 +19,27 @@ export function getWallTargetHits(
   underSiege = false,
   role: import("../kernel/contracts").FortificationRole = "perimeter",
 ): number {
-  // utility（container 等低值资产叠盾）：保护对象价值低于全额维护成本，
-  // 只维持新生急救地板 — 受袭也不升档（该格塌了损失有限，能量留给周界）。
+  // utility（container 等低值资产）：只维持新生急救地板，受袭也不升档 —
+  // 塌了损失有限，能量留给周界。
   if (role === "utility") return CONFIG.defense.rampartBootstrapHits;
   const base = rcl >= 7
     ? CONFIG.defense.wallTargetHits.rcl7_8
     : rcl >= 5
       ? CONFIG.defense.wallTargetHits.rcl5_6
       : CONFIG.defense.wallTargetHits.rcl3_4;
-  // core（结构叠盾）：只需撑过「周界已破 → 塔/defender 处理」的窗口，
-  // 全额目标的折扣档 — 消除内圈盾与周界同价维护的经济黑洞。
+  // core（结构叠盾）：只需撑过「周界已破 → 塔/defender 处理」窗口，
+  // 打折防内圈盾与周界同价维护的经济黑洞。
   const scaled = role === "core"
     ? Math.round(base * CONFIG.defense.coreRampartFactor)
     : base;
   if (!underSiege) return scaled;
-  // 受袭姿态：近期有真实敌对活动时抬高目标 — 防御深度用实际威胁校准，
-  // 和平期不为假想敌过度投资墙体（修墙能量 = 少升的 RCL）。
-  // 官方墙体血量上限 300M，封顶防溢出。
+  // 受袭姿态：以真实威胁校准防御深度，和平期不为假想敌过度投资
+  // （修墙能量 = 少升的 RCL）；官方上限 300M 封顶防溢出。
   return Math.min(scaled * CONFIG.defense.siegeWallMultiplier, 300_000_000);
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 25 },
+  memory: { schemaVersion: 33 },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -69,26 +68,12 @@ export const CONFIG = {
     /** 调优引擎评估间隔（tick）。500 tick = 10 次 economy 采样窗口。 */
     evalInterval: 500,
     /**
-     * 调优基线版本戳（P1-I）。
-     *
-     * 当 CONFIG.roles 的 minCount/maxCount 基线值发生调整时（如调 hauler
-     * 上限 6→8），存量 Memory.kernel.tuning.rooms 中的覆盖值可能基于旧
-     * 经济假设继续压制新基线 — tuning-engine 检测到此字段不匹配时
-     * 清空 rooms 覆盖（roleBounds/lastAdjusted/lastTrend 全清），
-     * 自调优从新基线重新收敛。
-     *
-     * 修改 CONFIG.roles 任何 minCount/maxCount 时必须 +1 此版本号。
-     * tuning-engine 首次运行（无 Memory）时此字段为 undefined，
-     * 自动触发首次定版（写入当前 CONFIG 值，无覆盖可清）。
-     *
-     * R7 注：版本检查在 tuning-engine 每 evalInterval(500 tick) 评估周期开头执行
-     * （见 tuning-engine.ts:61-75），CONFIG 升版后存量旧覆盖最长残留 500 tick
-     * 才被清空 — 行为可接受（自调优会重新收敛，无需立即生效）。
-     * 部署 CONFIG.roles 基线变更后若需立即清空，可手动改 Memory 或等下个评估周期。
-     *
-     * v2（改进 A）：tuning 闭环验证机制上线（pendingValidation + frozenParams +
-     * verifyDelay + 人口合同前置 + 下调护栏 + 冻结复位基线）。升版触发 rooms
-     * 清空，从新基线收敛 — 存量旧覆盖值（如 hauler.max=2 锁死）随之清除。
+     * 调优基线版本戳（P1-I）：CONFIG.roles 的 minCount/maxCount 基线调整时 +1 —
+     * tuning-engine 检测不匹配即清空 Memory 存量覆盖，从新基线重新收敛。
+     * R7：版本检查在 evalInterval 评估周期开头执行，升版后旧覆盖最长残留
+     * 500 tick 才清（可接受，自调优会重新收敛）。
+     * v2：tuning 闭环验证机制上线（pendingValidation/frozenParams/verifyDelay/
+     * 人口合同前置/下调护栏/冻结复位基线）；升版触发 rooms 清空。
      */
     baselineVersion: 2,
   },
@@ -101,12 +86,10 @@ export const CONFIG = {
       conserve: { min: 1000, recoveryHysteresis: 500, recoveryTicks: 20 },
       recovery: { min: 0, recoveryHysteresis: 500, recoveryTicks: 20 },
     },
-    /** 各档位软/硬 CPU 上限比例（相对于 Game.cpu.limit，0–1）。
-     * 比例化设计：自动适配任意 CPU 限制（官服 20 / 私服 100 / 可变配额）。
-     * 数值反推自原 20 CPU 绝对值（如 healthy soft 17.5/20=0.875），
-     * 官服 20 CPU 下反推值与旧绝对值完全一致，行为零变化；
-     * 私服高 CPU 下不再被静态值压死，释放的预算可用于多房运营。
-     * 运行时实际 soft/hard = effectiveLimit × ratio（见 scheduler.CpuBudget）。 */
+    /** 各档位软/硬 CPU 上限比例（相对 Game.cpu.limit，0–1）— 比例化适配任意
+     * CPU 限制（官服 20/私服 100/可变配额），数值反推自原 20 CPU 绝对值
+     * （官服下行为零变化，私服高 CPU 下不再被静态值压死）。
+     * 运行时 soft/hard = effectiveLimit × ratio（见 scheduler.CpuBudget）。 */
     limits: {
       healthy: { softRatio: 0.875, hardRatio: 0.96 },
       guarded: { softRatio: 0.80, hardRatio: 0.925 },
@@ -121,23 +104,19 @@ export const CONFIG = {
       recovery: 1 as Priority,
     },
     /** 自愿放血宽限窗口（tick）— generatePixel 后 tier 地板抬到 conserve 的时长。
-     * pixel 吃光整个 bucket（10000），但每 tick 20 CPU 限额不受影响：
-     * 常态负载 ~2-5 CPU 时降到 recovery（冻结 P2 经济角色）是看门狗误判。
-     * 700 覆盖 0 → conserve 阈值(1000+滞回) 的自然爬升（~+15/tick ≈ 100 tick）
-     * 加数轮滞回等待；窗口内若 CPU 真实超支，逐 tick 硬上限仍然兜底。 */
+     * pixel 吃光整个 bucket，但常态负载 2-5 CPU 时降到 recovery 是看门狗误判；
+     * 700 覆盖 0→conserve 阈值(1000+滞回) 的自然爬升加数轮滞回等待，
+     * 窗口内真实超支仍由逐 tick 硬上限兜底。 */
     pixelGraceTicks: 700,
   },
 
   pixel: {
-    /** Pixel 收割总开关 — 默认关闭。
-     * generatePixel 吃光整个 bucket（10000 → 0），若清零时刻恰逢 global reset
-     * （代码部署 / 服务器迁移），bundle 加载成本 > tickLimit(≈20) 会触发
-     * reload death loop：每 tick 加载即被杀 → 被杀 tick 按 tickLimit 计费 →
-     * bucket 永不回充 → 主循环永久死亡（线上实测：心跳停摆 187+ tick，
-     * 全房 creep 冻结，靠上传空 loop 急救才恢复）。
-     * 开启前置条件：bundle 经压缩后加载成本 ≪ 20 CPU，且接受放血后
-     * ~600 tick 的 P3 降档窗口。 */
-    enabled: false,
+    /** Pixel 收割总开关 — 默认关闭。generatePixel 吃光整个 bucket，若清零时刻
+     * 恰逢 global reset（部署/迁移），bundle 加载成本 > tickLimit 触发 reload
+     * death loop：每 tick 加载即被杀 → bucket 永不回充 → 主循环永久死亡
+     * （线上实测 187+ tick 停摆）。开启前置：bundle 压缩后加载成本 ≪ 20 CPU，
+     * 且接受放血后 ~600 tick 的 P3 降档窗口。 */
+    enabled: true,
   },
 
   spawn: {
@@ -147,29 +126,21 @@ export const CONFIG = {
     maxRetries: 5,
     /** 为 P0 恢复 body 预留的最低能量。 */
     recoveryEnergyReserve: 200,
-    /** 饥饿超时降级的最低 body 成本地板。
-     * 饥饿降级若无地板，会在能量池低谷按瞬时能量铸出残废 body（如 1C1M distributor），
-     * 该 creep 存活整个生命周期无提前替换 → 吞吐塌方 → 水位持续低迷 →
-     * 后续请求同样饥饿降级，形成自强化回路。降级产物低于地板时继续排队等能量；
-     * 生存降级路径（P0 / bootstrap / recovery）豁免，保「速出保命」语义。 */
+    /** 饥饿降级的最低 body 成本地板：无地板会在能量低谷铸出残废 body（如 1C1M
+     * distributor），其存活整个生命周期 → 吞吐塌方 → 自强化回路。降级产物低于
+     * 地板继续排队等能量；生存降级路径（P0/bootstrap/recovery）豁免，保「速出保命」。 */
     starvationDegradeFloor: 300,
-    /** Distributor 升编趋势确认窗口（tick）。
-     * spawn 孵化瞬间抽干 spawn/extension → fillTargets 尖峰，这是 distributor 的
-     * 日常工作信号而非缺员信号（在途 distributor 一两趟即可补满）。
-     * 扩编（超出现有编制）必须等需求持续此窗口才生效 — 150 tick 足够现有编制
-     * 跑 2-3 趟补满尖峰；补足 minCount 地板与缩编不受确认约束。
-     * 防止一次 50 tick 的瞬时尖峰换来多个活 1500 tick 的常驻编制。 */
+    /** Distributor 升编趋势确认窗口（tick）：孵化瞬间抽干 spawn/ext 的 fillTarget
+     * 尖峰是日常工作信号而非缺员信号；扩编必须等需求持续此窗口才生效 — 防一次
+     * 50 tick 瞬时尖峰换来多个活 1500 tick 的常驻编制。补足 minCount 地板与缩编
+     * 不受确认约束。 */
     distributorScaleUpDelay: 150,
     /**
-     * 孵化请求 TTL：cleanQueue 按 expiresAt 清除超期请求，
-     * 防止需求消失后的 stale 请求永久排队直至孵化（过量 creep 浪费能量）。
-     * 需求仍在时 demand 下一 tick 会以同 key 重建请求（hasKey 守卫解除）。
-     *
-     * 硬约束：必须大于 trySpawn 的饥饿降级窗口——
-     *   P1 饥饿 = 2 × 孵化时长（≈100 tick @ 16 部件），
-     *   P2 饥饿 = 10 × 孵化时长（≈540 tick @ 18 部件 upgrader）。
-     * 若 TTL 小于该窗口，请求在降级触发前被清除重建、createdAt 重置，
-     * 饥饿计时器永远归零 → 重新引入「等满配 → 永远凑不够」死锁（W37S58）。
+     * 孵化请求 TTL：cleanQueue 按 expiresAt 清超期请求，防需求消失后的 stale 请求
+     * 永久排队。需求仍在时下一 tick 以同 key 重建（hasKey 守卫解除）。
+     * 硬约束：必须大于 trySpawn 的饥饿降级窗口（P1 饥饿 ≈100 tick、P2 ≈540 tick）—
+     * 否则请求在降级触发前被清除重建、createdAt 重置，饥饿计时器永远归零 → 重新
+     * 引入「等满配 → 永远凑不够」死锁（W37S58）。
      */
     requestTtl: 1000,
   },
@@ -178,28 +149,25 @@ export const CONFIG = {
     /** 本地寻路的 maxRooms。remote 角色未来通过 route/waypoint 跨房，本地任务始终为 1。 */
     localMaxRooms: 1,
     /**
-     * Traffic Manager 总开关。
-     * 开启：角色执行期只登记移动意图，tick 末 traffic-manager 后置系统
-     * 按房集中解算（同格仲裁/对向换位/推挤静止者/锚定豁免）后统一签发 move；
+     * Traffic Manager 总开关。开启：角色只登记移动意图，tick 末后置系统按房集中
+     * 解算（同格仲裁/对向换位/推挤静止者/锚定豁免）后统一签发 move，
      * yield/pull 旧让路机制同时短路禁用（双仲裁并存会互相打架）。
-     * 关闭：登记函数直通引擎 move（完全恢复旧行为），后置系统空转 —
-     * 单开关双向切换，是本机制的唯一回滚通道。
+     * 关闭：登记函数直通引擎 move（完全恢复旧行为），后置系统空转 — 唯一回滚通道。
      */
     trafficManager: true,
     /**
-     * 移动/锚定优先级表 — 数值越大越优先。
-     * 同格争抢高优者胜；推挤仅当移动方优先级严格大于阻挡方时发生。
-     *   flee：逃命高于一切（被堵住 = 死亡）。
-     *   anchorMiner：站桩矿工锚 — 让出矿位 = 采集吞吐崩塌，仅次于逃命。
-     *   work/anchorStation：携能交付与站桩升级/等 boost 同档 —
-     *     交付方绕行代价（1-2 格）远小于把工作位让出去的代价。
-     *   acquire：取能途中，空载被挤一格无损失。
-     *   commute：跨房通勤等其他移动。
-     *   parked：待命 creep 无任务在身，是最该被推开的对象。
+     * 移动/锚定优先级表 — 数值越大越优先；同格争抢高优者胜，推挤仅当移动方严格大于阻挡方。
+     * flee 逃命高于一切（被堵住 = 死亡）；anchorMiner 让出矿位 = 采集吞吐崩塌；
+     * work/anchorStation 携能交付与站桩同档 — 绕行代价远小于让出工作位；
+     * stuckEscalation 卡位升级 — 连续卡住的移动方临时高于站桩者，可把占住目标格的
+     * 站桩 creep 推到相邻格（站桩者移一格无损失，卡死者不解锁=永久空转）；
+     * 低于 anchorMiner：站桩矿工永不被挤走（矿位让出=吞吐崩塌），低于 flee（逃命最高）。
+     * acquire 空载被挤一格无损失；commute 跨房通勤；parked 待命者最该被推开。
      */
     trafficPriority: {
       flee: 100,
       anchorMiner: 90,
+      stuckEscalation: 70,
       work: 60,
       anchorStation: 60,
       acquire: 40,
@@ -207,29 +175,20 @@ export const CONFIG = {
       parked: 0,
     },
     /**
-     * P1-E：动态目标寻路限频（plan.md §5.7.5，remediation P1-E）。
-     *
-     * 根因：traffic 模式下 registerStepViaPathfinder 的缓存 key = 目标精确格 +
-     * 路网 revision。动态目标（flee 逃逸点、追击 hostile、跟车目标）每 tick 变化
-     * → 缓存必 miss → 每 tick 每 creep 一次 PathFinder.search，无引擎 reusePath
-     * 兜底。战时 10 creep 同时 flee ≈ 10-30 CPU，直接爆 hard limit。
-     *
-     * 三档限频（独立开关，默认 1+2 开、3 关）：
-     *   档 1 quantizeDynamicTarget：目标驻留量化 — 3×3 区块 key 替代精确格，
-     *   （R4 注：字段名含 "Dynamic" 但实现不区分动静态目标 — 静态目标同样量化，
-     *   同 3×3 区块内两个相邻静态目标会共享缓存 key 错走 1 tick，路径耗尽后
-     *   nextDirFromPath 返回 undefined 触发 cache 失效、下 tick 重算自愈。
-     *   概率低代价小，接受现状；改名涉及 6 处测试用例与运行时配置兼容性，
-     *   收益不抵成本，故以注释澄清而非改名。）
-     *     目标在区块内移动不触发重寻路，沿旧路径走。
-     *   档 2 dynamicRepathInterval：同一 creep 两次 PathFinder.search 最小间隔
-     *     （tick）。冷却内沿旧路径走一步，旧路径空则 getDirectionTo 直走降级。
-     *   档 3 maxSearchesPerRoomPerTick：每房每 tick search 上限 — 战时保险丝。
-     *     0 = 不限制；建议战时设 6。超预算的移动意图降级为「沿旧路径走一步」或
-     *     「原地让行」（交 traffic-resolver 仲裁），遥测记 movement/path-budget skip。
-     *
-     * 驻留量化在 1-2 格微操场景（tower 下绕柱）路径略钝 — 可接受，
-     * flee 场景活下来优先于路径最优。
+     * P1-E：动态目标寻路限频（plan.md §5.7.5）。根因：traffic 模式下
+     * registerStepViaPathfinder 的缓存 key = 目标精确格 + 路网 revision，
+     * 动态目标（flee 逃逸点/追击 hostile/跟车目标）每 tick 变化 → 缓存必 miss →
+     * 每 tick 每 creep 一次 PathFinder.search（战时 10 creep 同时 flee ≈ 10-30 CPU，
+     * 直接爆 hard limit）。
+     *   档 1 quantizeDynamicTarget：3×3 区块 key 替代精确格，区块内移动不触发重寻路。
+     *     （R4 注：字段名含 "Dynamic" 但实现不区分动静态目标 — 静态目标同样量化，
+     *     同区块相邻静态目标可能共享 key 错走 1 tick，路径耗尽后自愈；改名涉及
+     *     6 处测试与运行时配置兼容，收益不抵成本，以注释澄清而非改名。）
+     *   档 2 dynamicRepathInterval：同一 creep 两次 search 最小间隔，冷却内沿旧路径走一步。
+     *   档 3 maxSearchesPerRoomPerTick：每房每 tick search 上限（战时保险丝，
+     *     0=不限制），超预算意图降级为「沿旧路径走一步」或「原地让行」，
+     *     遥测记 path-budget skip。
+     * 驻留量化在 1-2 格微操场景路径略钝 — 可接受，flee 场景活下来优先于路径最优。
      */
     quantizeDynamicTarget: true,
     dynamicRepathInterval: 3,
@@ -237,49 +196,47 @@ export const CONFIG = {
   },
 
   construction: {
-    /** 每房最大活跃建造 site 数（普通）。
-     * 3：让 priority-1 的 controller container 无需等待 extension 完工即可插队入场，
-     * 加速 RCL2→RCL3 站桩升级链路成型。 */
+    /** 每房最大活跃建造 site 数（普通）。3：让 priority-1 的 controller container
+     * 无需等待 extension 完工即可插队入场，加速 RCL2→RCL3 站桩升级链路成型。 */
     maxNormalSitesPerRoom: 3,
     /** 每房道路专用 site 名额 — 独立于普通名额，保证走廊路能与 extension 并行建造，
      * 不被 priority 3 饥饿永久挤占。 */
     maxRoadSitesPerRoom: 2,
+    /** 每房 wall 专用 site 名额 — min-cut v3 割集顶点改用 wall（阻挡通行），
+     * 独立计额避免与 extension 竞争 normal 槽位导致防御线建不起来。 */
+    maxWallSitesPerRoom: 2,
+    /** 每房 rampart 专用 site 名额 — 核心覆盖 rampart + min-cut 有结构位置的 rampart，
+     * 与 wall 同类独立计额，不与 normal/road 竞争。 */
+    maxRampartSitesPerRoom: 2,
     /** 每房额外允许的关键 site 数。 */
     maxCriticalSitesPerRoom: 1,
-    /** 全局活跃 site 上限。
-     * 7：容纳 3 extension + 2 road + 关键 container（source/controller）并行，
-     * 避免被毁的 source container 重建被道路/extension 占满名额而阻塞。 */
+    /** 全局活跃 site 上限。7：容纳 3 extension + 2 road + 关键 container
+     * （source/controller）并行，避免被毁的 source container 重建被占满名额而阻塞。 */
     maxGlobalSites: 7,
-    /** 永久位置冲突任务的黑名单冷却（tick）。
-     * blocked 任务连续 3 次 ERR_INVALID_TARGET 被清除后，其 key 进入黑名单，
-     * 冷却期内规划器不得重新入队 — 否则「入队 → blocked → 删除 → 再入队」
-     * 无限空转。冷却给足 10000 tick：冲突源（如玩家手工建筑）可能被移除。 */
+    /** 永久位置冲突任务的黑名单冷却（tick）：blocked 任务连续 3 次 ERR_INVALID_TARGET
+     * 被清除后其 key 入黑名单，冷却期内规划器不得重新入队 — 否则「入队 → blocked →
+     * 删除 → 再入队」无限空转。10000 给足冲突源（如玩家手工建筑）被移除的时间。 */
     blockedRetryDelay: 10000,
-    /** 道路维修判定的血量比例阈值 — 低于此比例的道路视为待修。
-     * repairRoads 动作与 builder 维修需求信号共用，保证「何时算需要修」口径一致。
-     * 0.4 在任何地形下给约 20000 tick 修复窗口，足够 builder 响应。 */
+    /** 道路维修判定的血量比例阈值：repairRoads 动作与 builder 维修需求信号共用，
+     * 保证「何时算需要修」口径一致。0.4 在任何地形下给约 20000 tick 修复窗口。 */
     roadRepairThreshold: 0.4,
-    /** 维修驱动 builder 的道路数门槛 — 待修道路达到此数量时，
-     * 即使无建造 site 也维持 1 个 builder 巡修。
-     * 成熟房布局建成后 site 归零 → builder 消亡，而塔不修路（只修 critical 与
-     * wall/rampart），道路只能塌毁重建 — 重建耗能约为持续维修的 6 倍，
-     * 且塌毁窗口期物流减速。3 条起孵避免为单条路专门养一个 builder。 */
+    /** 维修驱动 builder 的道路数门槛：待修道路达此数量时，即使无建造 site 也维持
+     * 1 个 builder 巡修。成熟房 site 归零 → builder 消亡而塔不修路，道路只能塌毁
+     * 重建（耗能约为持续维修 6 倍，且窗口期物流减速）。3 条起孵避免为单条路养 builder。 */
     roadRepairBuilderFloor: 3,
-    /** 孤儿工地清扫间隔（tick）。低频遍历 Game.constructionSites（全局、无视野也可
-     * remove），移除位于"既非我方殖民地、又非活跃远矿目标、又非当前扩张目标"房间的
-     * 工地——收口扩张超时/失守、远矿 abandoned、房间失守留下的孤儿工地。 */
+    /** 孤儿工地清扫间隔（tick）：低频遍历 Game.constructionSites（全局、无视野也可
+     * remove），清掉「既非我方殖民地、又非活跃远矿目标、又非当前扩张目标」房间的工地。 */
     orphanSweepInterval: 100,
   },
   layout: {
-    /** 布局模式：constraint = 约束推导放置（默认），template = 固定模板（compact-core-v2，fallback）。
-     * Phase 6 切换默认值为 constraint；template 保留为极端地形下的回退选项。 */
+    /** 布局模式：constraint = 约束推导放置（默认），template = 固定模板（compact-core-v2，fallback）。 */
     mode: "constraint" as "template" | "constraint",
     /** 布局规划器的运行间隔（tick）。 */
     planInterval: 50,
     road: {
       /** 采样窗口内位置被判定为高频的最小通行次数。
-       * 5：RCL2-3 仅 2-3 个 hauler 时每格每窗口约 3-6 次通行，
-       * 阈值 10 会让最该修路的早期修不出路；双窗口要求防瞬时尖峰误判。 */
+       * 5：RCL2-3 仅 2-3 个 hauler 时每格每窗口约 3-6 次通行，阈值 10 会让最该修路的
+       * 早期修不出路；双窗口要求防瞬时尖峰误判。 */
       minTraffic: 5,
       /** 每房最多返回的道路候选数。 */
       maxCandidates: 5,
@@ -289,10 +246,9 @@ export const CONFIG = {
   },
 
   assignment: {
-    /** 本地任务租约时长（tick）。
-     * 50 tick：builder 从 storage 取能走到工地可能需要 20+ tick，
-     * 20 tick 的 lease 会在通勤途中过期，导致每 tick 重新分配任务 — creep 在"摇摆"。
-     * 50 tick 给足单趟通勤 + 工作的时间，仅在条件真正变化时（site 消失/container 空）才重分配。 */
+    /** 本地任务租约时长（tick）。50 tick 给足单趟通勤 + 工作时间（builder 从
+     * storage 取能走到工地可能要 20+ tick）；20 tick 的 lease 会在通勤途中过期，
+     * 导致每 tick 重分配 — creep 在「摇摆」。仅在条件真正变化时才重分配。 */
     leaseDuration: 50,
     /** 每个 source 的目标 work parts 总数（向后兼容，优先使用分级配置）。 */
     sourceTargetWorkParts: 5,
@@ -312,10 +268,9 @@ export const CONFIG = {
 
   economy: {
     harvestWorkingParts: 5,
-    /** 物流配额归一化的基准运力（6 CARRY = 300）。
-     * hauler 的 container 积压启发式（+1/+2 档）与 distributor 的 fillTarget 折算
-     * 均按此运力标定；实际 body 运力更大时头数按比例折减，更小时按比例扩编。
-     * 消除「body 随容量长大而配额公式不变」的头数浪费。 */
+    /** 物流配额归一化的基准运力（6 CARRY = 300）：hauler 的 container 积压启发式
+     * 与 distributor 的 fillTarget 折算均按此标定；实际运力更大时头数折减、更小时
+     * 扩编 — 消除「body 随容量长大而配额公式不变」的头数浪费。 */
     referenceCarryCapacity: 300,
     /** upgrader 允许工作前的最低 extension 能量（RCL1-3）。 */
     upgradeEnergyFloor: 300,
@@ -337,42 +292,24 @@ export const CONFIG = {
       rcl8MaxWorkParts: 15,
       /** upgrader 单次从 storage 取能上限（防止 storage 突降触发 economyPressure）。 */
       perTickWithdrawLimit: 500,
-      /** P0-4：storage 净流失率上限（E/tick，正值=流失）。
-       * 跨 tick prev-cur > 此值且低水位（< sustainedStorage*2）时 upgrader 停止从 storage 取能，
-       * 让 storage 回血。降级风险时豁免（保级优先）。 */
+      /** P0-4：storage 净流失率上限（E/tick，正值=流失）：跨 tick prev-cur > 此值
+       * 且低水位（< sustainedStorage*2）时 upgrader 停止从 storage 取能，让 storage
+       * 回血；降级风险时豁免（保级优先）。 */
       drainRateLimit: 5,
     },
     /** 能量危机检测与响应参数。 */
     crisis: {
-      /**
-       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS.drainEnterScore。
-       * 保留此字段仅为避免破坏性变更，全库无其他引用。
-       */
+      /** @deprecated 实际逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS（保留仅为避免破坏性变更）。 */
       sourceFullRatio: 0.85,
-      /**
-       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS。
-       * 保留此字段仅为避免破坏性变更，全库无其他引用。
-       */
+      /** @deprecated 实际逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS（保留仅为避免破坏性变更）。 */
       energyThresholdRatio: 0.4,
-      /**
-       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS。
-       * 保留此字段仅为避免破坏性变更，全库无其他引用。
-       */
+      /** @deprecated 实际逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS（保留仅为避免破坏性变更）。 */
       energyThresholdCap: 400,
-      /**
-       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS.drainEnterScore。
-       * 保留此字段仅为避免破坏性变更，全库无其他引用。
-       */
+      /** @deprecated 实际逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS（保留仅为避免破坏性变更）。 */
       enterScore: 100,
-      /**
-       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS.drainExitScore。
-       * 保留此字段仅为避免破坏性变更，全库无其他引用。
-       */
+      /** @deprecated 实际逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS（保留仅为避免破坏性变更）。 */
       exitScore: 40,
-      /**
-       * @deprecated 实际生效逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS.scoreStep。
-       * 保留此字段仅为避免破坏性变更，全库无其他引用。
-       */
+      /** @deprecated 实际逻辑在 domain/economy/phase.ts DEFAULT_PHASE_OPTIONS（保留仅为避免破坏性变更）。 */
       scoreStep: 10,
       /** 危机时仅当 ticksToDowngrade 低于此值才保留 1 个 upgrader 保级，否则停升级省能。 */
       downgradeGuard: 3000,
@@ -381,15 +318,14 @@ export const CONFIG = {
     link: {
       /** source link 发起传输的最小能量阈值（P1-4：攒够再发，避免小额传输占冷却致 source link 溢出）。 */
       minTransfer: 400,
-      /** link 角色分类的锚定半径（Chebyshev）。classifyLinkRole 与 harvester 灌能识别共用同一值，
-       * 杜绝两侧口径漂移致「死 link」。取 2：harvester 站 container（贴 source）上仍能 range1 够到
-       * 隔一格的 link，故 source link 放在到 source range≤2 内均可被灌能（可达性由灌能 range≤1 守卫兜底）。 */
+      /** link 角色分类的锚定半径（Chebyshev）：classifyLinkRole 与 harvester 灌能识别
+       * 共用同一值，杜绝两侧口径漂移致「死 link」。取 2：harvester 站 container（贴 source）
+       * 上仍能 range1 够到隔一格的 link，故 source link 放 range≤2 内均可被灌能。 */
       anchorRange: 2,
       /**
-       * RCL8 满级保级水位（2026-08-01）：controller link 的目标能量。
-       * 满级后升级零收益（controller.progress=0），默认停供（target=0）；
-       * 仅降级风险（ticksToDowngrade < controllerDowngradeThreshold）时
-       * 维持此小水位，保级不烧库存。
+       * RCL8 满级保级水位（2026-08-01）：controller link 的目标能量。满级后升级零收益
+       * （controller.progress=0），默认停供（target=0）；仅降级风险
+       * （ticksToDowngrade < controllerDowngradeThreshold）时维持此小水位，保级不烧库存。
        */
       maintainTarget: 200,
       /** RCL<8 半供门槛：storage 低于 sustainedStorage(10k) 但高于此值时，
@@ -403,13 +339,10 @@ export const CONFIG = {
     /** Storage 满仓阈值 — 超过此比例时触发限采 + 加速消费。 */
     storageFullThreshold: 0.9,
     /**
-     * Distributor 水位分级的绝对能量阈值（storage 库存，单位：能量）。
-     *
-     * 必须用绝对值而非容量比例：storage 总容量 1,000,000（STORAGE_CAPACITY），
-     * 按比例分级时 10% 档 = 10 万能量 — 发展期房间（库存常年数百到数万）
-     * 永久卡在最低档，distributor 被锁死在「仅填 spawn」模式，extension 断供。
-     * 与 upgrade.sprintStorage(50000)/sustainedStorage(10000) 同一参照系，
-     * 两套 storage 调度共用一种刻度。
+     * Distributor 水位分级的绝对能量阈值（storage 库存）。必须用绝对值而非容量比例：
+     * storage 总容量 1,000,000（STORAGE_CAPACITY），按比例分级时 10% 档 = 10 万 —
+     * 发展期房间（库存常年数百到数万）永久卡在最低档，extension 断供。
+     * 与 upgrade.sprintStorage(50000)/sustainedStorage(10000) 同一参照系。
      *
      * ── 水位权限表（Batch 2 统一刻度 — 全部 storage 消费者按此表取能）──
      * | storage 水位      | distributor      | upgrader        | builder   | lab  | terminal |
@@ -417,10 +350,9 @@ export const CONFIG = {
      * | ≥ sustained(10k)  | 仅 spawn/ext 满载 | 500/趟          | 200/趟    | 放行 | <20k 拒   |
      * | ≥ low(2k)         | 限额 400          | 200/趟(≥1k)     | 50/趟     | 放行 | 拒       |
      * | < low(2k)         | 限额 200          | 拒取(<1k floor) | 拒取      | 拒   | 拒       |
-     * 消费端实现：upgrader/builder 经 withdrawStorageCapped（限额 ≤0 时
-     * resolve 拒绝，fallthrough 到 container/直采）；lab/terminal 在
-     * industry.ts 双相门禁；distributor 经 computeDistributorTier。
-     * builder 编制（demand B-5）同样按本表封顶。
+     * 消费端实现：upgrader/builder 经 withdrawStorageCapped（限额 ≤0 时 resolve 拒绝，
+     * fallthrough 到 container/直采）；lab/terminal 在 industry.ts 双相门禁；
+     * distributor 经 computeDistributorTier；builder 编制（demand B-5）按本表封顶。
      */
     distributorTiers: {
       /** ≥ 此值为 tier 0：满载取能，全目标（含 tower 补满/controller container）。 */
@@ -431,19 +363,17 @@ export const CONFIG = {
       low: 2000,
       /**
        * Tower 弹药战备线：tier 1-2 时 tower 能量低于此值才触发补给（补满由 tier 0 负责）。
-       * 塔是威慑资产，威慑资产必须平时有弹 — 战后弹药真空 + 只靠威胁在场时的
-       * 反应式补弹（hauler 战时让位）意味着下次袭击的前几十 tick 塔是哑的。
-       * 500 = 50 发，低于 tower-defense 烧墙门槛（70% 能量），战备能量不会被
-       * 墙体维护黑洞消耗；触发线语义（低于才补）保证低水位期投入有上界。
+       * 威慑资产必须平时有弹 — 战后弹药真空 + 反应式补弹意味着下次袭击前几十 tick
+       * 塔是哑的。500 = 50 发，低于塔烧墙门槛（70% 能量），战备能量不会被墙体维护
+       * 黑洞消耗；触发线语义（低于才补）保证低水位期投入有上界。
        */
       towerAmmoFloor: 500,
     },
     /**
-     * 遗留能量（掉落堆/坟墓/废墟）值得 hauler 专程回收的最小数量。
-     * 达到阈值的堆优先于 container 取货 — 遗留能量在衰减/限时灭失，
-     * container 能量不衰减；低于阈值的零头仍走链尾兜底（container 空时顺手清理），
-     * 避免「捡零头→半载往返」的空转（hauler 链注释里的历史教训）。
-     * 100 ≈ 衰减损失开始可感知的规模（ceil(amount/1000)/tick）。
+     * 遗留能量（掉落堆/坟墓/废墟）值得 hauler 专程回收的最小数量：达阈值优先于
+     * container 取货（遗留能量衰减/限时灭失，container 不衰减）；低于阈值的零头
+     * 走链尾兜底，避免「捡零头→半载往返」空转。100 ≈ 衰减损失开始可感知的规模
+     * （ceil(amount/1000)/tick）。
      */
     lootThreshold: 100,
     /** economyPressure 分段映射参数（room-state.ts 使用）。 */
@@ -460,21 +390,19 @@ export const CONFIG = {
     allies: [] as readonly string[],
     /** 无塔时，威胁 creep 靠近 spawn/controller 至此 range 内才激活 safe mode（避免过境 scout 误烧）。 */
     safeModeTriggerRange: 5,
-    /** 非战斗 creep 的逃跑触发距离：威胁 creep 在此范围内才逃跑（P1-1）。
-     * 远端过境的威胁不会中断经济；靠近时才触发 flee。 */
+    /** 非战斗 creep 的逃跑触发距离：威胁 creep 在此范围内才逃跑（P1-1）—
+     * 远端过境的威胁不会中断经济，靠近时才触发 flee。 */
     fleeRange: 10,
-    /** M11 战时集结半径：小队威胁在场时非战斗 creep 撤至核心锚点
-     * （storage/spawn）此范围内 — 塔在核心区，圈内即塔火力覆盖圈，
-     * 追进来的敌人吃满塔伤，不追则收割失败。 */
+    /** M11 战时集结半径：小队威胁在场时非战斗 creep 撤至核心锚点（storage/spawn）
+     * 此范围内 — 塔在核心区，圈内即塔火力覆盖圈，追进来的敌人吃满塔伤。 */
     shelterRadius: 5,
-    /** M11 safe mode 舰队伤亡熔断：窗口内战损（非自然死亡）达到阈值
-     * 且威胁仍在场 → 激活 safe mode。触发条件必须保守 — safe mode 是
-     * 消耗品（RCL 每级仅送一次，ghodium 制造需 RCL7+），3 只 ≈ 舰队
-     * 四分之一，已是「不烧就真团灭」的证据水位。 */
+    /** M11 safe mode 舰队伤亡熔断：窗口内战损（非自然死亡）达阈值且威胁仍在场 →
+     * 激活 safe mode。触发必须保守 — safe mode 是消耗品（RCL 每级仅送一次，
+     * ghodium 制造需 RCL7+），3 只 ≈ 舰队四分之一，已是「不烧就真团灭」的证据水位。 */
     fleetLossFuse: { windowTicks: 200, deaths: 3 },
-    /** Hauler 在 flee 状态下的"防御圈内安全充能"半径（P0-2 修复）。
-     * 当 hauler 距 spawn ≤ 此值且携带能量时，允许向防御圈内的需能量结构（tower 优先）充能。
-     * 解决战斗中 Tower 能量耗尽无人补给的死局，细化 G-SM-05 的语义。 */
+    /** Hauler 在 flee 状态下的"防御圈内安全充能"半径（P0-2 修复）：距 spawn ≤ 此值
+     * 且携带能量时允许向圈内需能量结构（tower 优先）充能 — 解决战斗中 Tower 能量
+     * 耗尽无人补给的死局，细化 G-SM-05 语义。 */
     safeRefuelRange: 3,
     /** Tower 维修 wall/rampart 的目标血量，按 RCL 分级（约束 G-DF-08）。 */
     wallTargetHits: {
@@ -482,23 +410,23 @@ export const CONFIG = {
       rcl5_6: 1_000_000,
       rcl7_8: 10_000_000,
     },
-    /** 新生 rampart 急救线（hits）。
-     * rampart 建成时仅 1 hit，且每 100 tick 衰减 300 hits — 不灌血必死于首个衰减周期，
-     * 塌毁后规划器重新入队 site → builder 重建 → 又 1 hit，形成「建了就塌」死循环。
-     * 低于此线的 rampart 由 repairFreshRampart 无门禁急救（绕过 fortification 的
-     * 盈余门禁），灌到 10k ≈ 3300 tick 存活余量，足够常规维修链或塔接管。 */
+    /** 新生 rampart 急救线（hits）：rampart 建成时仅 1 hit 且每 100 tick 衰减 300 —
+     * 不灌血必死于首个衰减周期，塌毁后重建又 1 hit，形成「建了就塌」死循环。
+     * 低于此线由 repairFreshRampart 无门禁急救，灌到 10k ≈ 3300 tick 存活余量。 */
     rampartBootstrapHits: 10_000,
     /** 受袭记忆窗口（tick）：lastHostileAt 距今小于此值视为受袭姿态。 */
     siegeMemoryTicks: 10000,
-    /** P1-3：威胁过期 tick 数。threatCreeps>0 但 lastHostileAt 超过此值未刷新时视为 stale。
-     * 旧威胁停留（无新增）超过此窗口后不再维持 defense 姿态，让经济恢复。
-     * 100 tick ≈ 一个威胁稳定窗口：无新增 = 威胁已被处理或不再活跃。 */
+    /** P1-3：威胁过期 tick 数：threatCreeps>0 但 lastHostileAt 超过此值未刷新视为
+     * stale — 旧威胁停留（无新增）超过此窗口不再维持 defense 姿态，让经济恢复。 */
     threatStaleTicks: 100,
+    /** P1-3：退出 defense 迟滞 tick 数：威胁消除（threatCount=0）后若 lastHostileAt
+     * 距今小于此值仍维持 defense 姿态 — 防敌人短暂进出导致 colonyState 高频抖动
+     * （525 次/327k tick）。进入 defense 仍 1 tick 触发（防御不延迟）。 */
+    defenseExitHysteresis: 50,
     /** 受袭姿态下 wall/rampart 目标血量的放大倍数。 */
     siegeWallMultiplier: 5,
-    /** core 档（核心结构叠盾）目标血量相对周界全额的折扣系数。
-     * 内圈盾只需撑过「周界已破 → 塔/defender 接战」的窗口，不承担第一道门的
-     * 消耗职责。0.3 在 RCL5-6 = 30 万（塔火力下足够拖垮一支拆迁队），
+    /** core 档（核心结构叠盾）目标血量相对周界全额的折扣系数：内圈盾只需撑过
+     * 「周界已破 → 塔/defender 接战」窗口。0.3 在 RCL5-6 = 30 万（够拖垮一支拆迁队），
      * 却把 ~40 个 extension 叠盾的灌注成本砍掉 70% — 释放的能量是 RCL 复利。 */
     coreRampartFactor: 0.3,
   },
@@ -516,27 +444,61 @@ export const CONFIG = {
     remoteHarvester: { minCount: 0, maxCount: 6 },
     remoteHauler: { minCount: 0, maxCount: 6 },
     reserver: { minCount: 0, maxCount: 3 },
-    // 远矿防御者：远矿房出现威胁时按需孵化（见 remote demand）。
-    // 必须在此表注册 — roles 表同时是 recyclePass 的「在役角色」白名单，
-    // 漏配会让该角色孵出即被判「废弃角色」回收，形成孵化→回收→再孵化
-    // 的烧能循环，且远矿威胁永远无人处理。
+    // 远矿防御者：远矿房出现威胁时按需孵化（见 remote demand）。必须在此表注册 —
+    // roles 表同时是 recyclePass 的「在役角色」白名单，漏配会让角色孵出即被判
+    // 废弃回收，形成孵化→回收→再孵化的烧能循环，且远矿威胁永远无人处理。
     remoteDefender: { minCount: 0, maxCount: 2 },
     // 扩张占领：同一时刻至多一个扩张行动（见 expansion-manager）。
     claimer: { minCount: 0, maxCount: 1 },
     // 矿物采集：RCL6+ 有 extractor 且 mineral 未采空时孵化（见 demand 矿工块）。
     // minCount=0 → 矿采空后自然停孵，存量矿工老死不补。
     mineralMiner: { minCount: 0, maxCount: 1 },
+    // 跨房远征攻击者：仅 war 姿态时由 war-planner 孵化（CONFIG.roles 兼任
+    // recyclePass「在役角色」白名单 — 漏配会让攻击者孵出即被判废弃回收）。
+    attacker: { minCount: 0, maxCount: 4 },
+    // 侦察兵（R6b）：prospect 任务临时孵化，同一时刻至多 1 只。
+    scout: { minCount: 0, maxCount: 1 },
+  },
+
+  war: {
+    /** 战争规划器运行间隔（tick）。 */
+    interval: 10,
+    /** 目标情报新鲜度窗口（tick）：超过此值未更新的视野视为不可信，不选。 */
+    targetFreshness: 1500,
+    /** 目标 tower 数上限（含此值以下才可攻击；超过视为不可破，等待或换目标）。 */
+    maxTowers: 3,
+    /** 攻击编队基数（无 tower 目标）。 */
+    squadBase: 3,
+    /** 目标有 tower 时每座 tower 追加的攻击者数。 */
+    squadPerTower: 2,
+    /** 战争计划最长期限（tick）：超期重新选目标（目标可能已迁房/易主）。 */
+    planTimeout: 6000,
+    /** 低血撤退线：攻击者血量低于 hitsMax × 此比例 → 标记回收撤出战区。 */
+    retreatRatio: 0.3,
+    /** sponsor 快照缺失时的容量回退（测试/边缘态）— body 仍由 selectBody 约束。 */
+    fallbackCapacity: 800,
+    /** 战损止损上限（R4）：单计划累计提交的孵化请求数超过 squadSize × 此倍数即判
+     * 消耗战失败 — 收编队 + 目标黑名单。2.5×：容忍首波全灭 + 半波替补，再打不穿
+     * 就止损，不让 spawn 永续给远征添油。 */
+    casualtyMultiplier: 2.5,
+    /** 波次重组线（R4）：advance 阶段在役攻击者低于 squadSize × 此比例 → 计划回落
+     * build，幸存者归建，补满编队后再整波推进 — 用「整波集结」替代「散兵逐个送」。 */
+    waveRegroupRatio: 0.5,
+    /** 战争目标黑名单冷却（tick，R4）：核验失败/未知的战争目标在冷却期内不被重选，
+     * 防止「打不过 → 收摊 → 下一轮又选中 → 再送」的循环。 */
+    warBlacklistTicks: 20000,
+    /** 战损止损后的整军休战期（tick，R4）：消耗战收摊后不立即换目标重开 — 黑名单
+     * 只挡单目标，休战期挡「A 止损 → 立刻打 B → 再止损 → 打 C」的跨目标添油循环。 */
+    standDownTicks: 2000,
   },
 
   debug: {
     /** 在 creep 头顶绘制状态指示灯（work=绿 / acquire=黄 / idle=红 / flee=橙）。
-     * 纯诊断功能，默认关闭。开启时每 creep 每 tick 约 0.001-0.005 CPU。
-     * 用法：需要诊断时把此值改 true 重新构建上传即可，无需改其他代码。 */
+     * 纯诊断功能，默认关闭；开启时每 creep 每 tick 约 0.001-0.005 CPU。 */
     statusLight: false,
-    /** Action 级 CPU profiling 开关。
-     * 开启时每个 creep 的每个 action 的 resolve/execute 调用都会用 Game.cpu.getUsed() 测量。
-     * 每次测量约 0.001 CPU，50 creep × 5 actions × 2 calls = ~0.5 CPU/tick 额外开销。
-     * 仅在需要定位 CPU 热点时开启，平时关闭。数据在 globalCache 中按 tick 聚合。 */
+    /** Action 级 CPU profiling 开关：每个 action 的 resolve/execute 调用都用
+     * Game.cpu.getUsed() 测量（约 0.001 CPU/次；50 creep × 5 actions × 2 calls
+     * ≈ 0.5 CPU/tick），数据在 globalCache 中按 tick 聚合。仅定位热点时开启。 */
     actionProfiling: false,
   },
 
@@ -545,9 +507,9 @@ export const CONFIG = {
     managerInterval: 10,
     /** 最大同时运营远矿目标数（CPU 预算保护）。 */
     maxOperations: 2,
-    /** 无 storage 时的开点上限 — 本房 sink（spawn/ext/tower/cc ≈ 4300 容量）
-     * 消化能力有限，多点并发流入会背压空转（远矿 container 溢出 drop 衰减）。
-     * storage 建成后自动放开到 maxOperations。 */
+    /** 无 storage 时的开点上限 — 本房 sink（spawn/ext/tower/cc ≈ 4300 容量）消化
+     * 能力有限，多点并发流入会背压空转（container 溢出 drop 衰减）。storage 建成后
+     * 自动放开到 maxOperations。 */
     maxOperationsNoStorage: 1,
     /** 每个远矿目标的 harvester 数（op.sources 缺失时的回退值）。 */
     harvestersPerTarget: 1,
@@ -558,12 +520,11 @@ export const CONFIG = {
     haulersPerTarget: 1,
     /** 动态 hauler 编制上限 — 需要更多说明目标太远，评分门槛应已剔除它。 */
     haulersMax: 3,
-    /** 净收益门槛（e/tick）— 评选评分低于此值的候选剔除：
-     * 名额只有 maxOperations 个，烂目标（沼泽远房）占位比空置更亏。 */
+    /** 净收益门槛（e/tick）— 评分低于此值的候选剔除：名额只有 maxOperations 个，
+     * 烂目标（沼泽远房）占位比空置更亏。 */
     minNetScore: 3,
-    /** 现役 op 经济重估宽限期（tick，A-3/B-6）— netScore 连续低于 minNetScore
-     * 超过此时长才废弃。抗抖动：防路况/source 瞬时波动误撤边际 op。按 manager
-     * interval(10) 计约 100 轮评估，足够区分持久劣化与短暂波动。 */
+    /** 现役 op 经济重估宽限期（tick，A-3/B-6）— netScore 连续低于 minNetScore 超过
+     * 此时长才废弃，抗路况/source 瞬时波动误撤边际 op（按 interval(10) 约 100 轮评估）。 */
     lowScoreGrace: 1000,
     /** 是否启用 reserver（RCL3+ 才有意义，CLAIM 部件 600 能量）。 */
     enableReserver: true,
@@ -573,30 +534,33 @@ export const CONFIG = {
     staleThreshold: 5000,
     /** 远矿启用 RCL 门限（低于此 RCL 不开远矿，集中能量发展本房）。 */
     minRcl: 4,
-    /** 逐房就绪门（Phase 1b）：一个房要「新开」远矿，除帝国姿态放行外，
-     * 本房还须自身经济成熟——RCL ≥ roomMinRcl 且 storage 能量 ≥ roomMinStorage
-     * 且 colonyState=normal。防止 RCL4 新占嫩房过早分兵远矿（本该闷头冲级）。
-     * 现役远矿不受影响，只挡「这房该不该再开新远矿点」。
-     * roomMinStorage 取较低值（8000 而非 20000）：20000 门槛对「storage 常年见底」
-     * 的 2-source 房是贫困陷阱——越穷越开不了远矿、越开不了越穷；而远矿正是突破
-     * 单房 20/tick 收入天花板的唯一杠杆。降门槛让主房/边际房冲级期也能开远矿补收入
-     * （主房冲级时 storage 本就在花，不该被此门锁死）。8000 仍留一层缓冲防真嫩房过早分兵。 */
+    /** 逐房就绪门（Phase 1b）：一个房要「新开」远矿，除帝国姿态放行外，本房还须
+     * 自身经济成熟（RCL ≥ roomMinRcl 且 storage ≥ roomMinStorage 且 colonyState=normal）
+     * — 防 RCL4 新占嫩房过早分兵（本该闷头冲级）。现役远矿不受影响。
+     * roomMinStorage 取 8000 而非 20000：20000 门槛对「storage 常年见底」的 2-source
+     * 房是贫困陷阱 — 越穷越开不了远矿、越开不了越穷；远矿正是突破单房 20/tick
+     * 收入天花板的唯一杠杆。8000 仍留一层缓冲防真嫩房过早分兵。 */
     roomMinRcl: 5,
     roomMinStorage: 8000,
     /** 远矿房威胁的危险冷却（tick）— 冷却期内不作为新远矿/扩张候选。 */
     dangerCooldown: 2000,
-    /** 普通威胁的失明保持窗口（tick，RM-2）— 有视野见威胁后，失明期间
-     * 维持威胁态（暂停经济孵化）的时长。按 Invader 寿命尺度取短值：
-     * 审查修正 — 复用 dangerCooldown(2000) 会在 enableDefender=false 时
-     * 让单次威胁目击变成 2000 tick 收入黑洞（无 defender 重获视野解封）。
-     * defender 在场时通常数十 tick 内清场并确认解除；300 覆盖一轮
-     * defender 孵化 + 通勤 + 交战。 */
+    /** 普通威胁的失明保持窗口（tick，RM-2）：有视野见威胁后，失明期间维持威胁态
+     * （暂停经济孵化）的时长。审查修正 — 复用 dangerCooldown(2000) 会在
+     * enableDefender=false 时让单次威胁目击变成 2000 tick 收入黑洞；defender 在场
+     * 时通常数十 tick 清场并确认解除，300 覆盖一轮 defender 孵化 + 通勤 + 交战。 */
     threatBlindHold: 300,
-    /** InvaderCore 压制冷却（tick）— 发现核心后孵化冻结的持续时长。
-     * 这是重新探测节奏而非核心寿命估计：到期后恢复孵化，首个抵达的 creep
-     * 带回视野 — 核心仍在则续期冷却，已消失则运营恢复。
-     * 5000 tick 把「送死探测」的频率压到每 5000 tick 一只 creep 的成本。 */
+    /** InvaderCore 压制冷却（tick）— 发现核心后孵化冻结的持续时长。这是重新探测
+     * 节奏而非核心寿命估计：到期恢复孵化，首个抵达的 creep 带回视野 — 核心仍在则
+     * 续期，已消失则运营恢复。5000 tick 把「送死探测」频率压到每 5000 tick 一只的成本。 */
     coreBlockCooldown: 5000,
+    /** 远矿空转止损（v33）：op 编队全员空转（idle/flee 或 stuck≥stallStuckTicks）
+     * 连续超过此时长 → 废弃（线上实证：W36S58 墙线困住整编队空转 44k tick）。
+     * 阈值须大于最坏通勤+脱困时延（编队换代 ~600 tick + 卡位自愈窗口），
+     * 1500 tick 足够覆盖「替换窗口内新编队尚未到岗」的正常空窗，又不放过
+     * 「物理上无法作业」的永久空转。任一成员恢复工作立即清零计时（抗抖动）。 */
+    stallAbandonTicks: 1500,
+    /** 远矿空转判定中的卡位阈值：stuckTicks 达到此值视为空转（卡住不动=不产出）。 */
+    stallStuckTicks: 20,
   },
 
   expansion: {
@@ -613,6 +577,27 @@ export const CONFIG = {
     pioneerTimeout: 20000,
     /** 失败目标的黑名单冷却。 */
     blacklistCooldown: 20000,
+    /** R7b：扩张节奏自适应（消费 ExpansionOutcome 台账）。 */
+    rhythm: {
+      /** 结果 ring 最大长度（旧条目溢出丢弃）。 */
+      ringSize: 8,
+      /** 连续失败达此数 → 全局扩张暂停。 */
+      pauseFailures: 3,
+      /** 暂停时长（tick）。 */
+      pauseTicks: 20000,
+      /** 默认最低 source 数。 */
+      minSourcesBase: 1,
+      /** stolen 频发时收紧到的最低 source 数（差房人人抢）。 */
+      minSourcesOnStolen: 2,
+      /** stolen 计数窗口（最近 N 条）。 */
+      stolenWindow: 6,
+      /** stolen 频发阈值（窗口内 ≥ 此数）。 */
+      stolenThreshold: 2,
+      /** 黑名单缩放的观察窗口（最近 N 条）。 */
+      relaxWindow: 6,
+      /** 成功率 ≥ 此比例 → 黑名单 ×0.5（零成功 → ×1.5）。 */
+      successRatioRelax: 2 / 3,
+    },
   },
 
   factory: {
@@ -622,6 +607,15 @@ export const CONFIG = {
     batchEnergy: 600,
     /** distributor 为 factory 维持的能量库存目标（5 批缓冲）。 */
     stockTarget: 3000,
+    /**
+     * battery 回收阈值 — factory 内 battery 攒到此量即搬出到 terminal/storage。
+     * factory 总容量 50k，产出无出路必堵死压缩链（投料 ERR_FULL 静默），此值是解堵开关。
+     */
+    batteryReclaimThreshold: 200,
+    /** powerSpawn 能量库存目标（processPower 每次耗 50 能量，按 interval 10 折算涓流）。 */
+    powerSpawnEnergyTarget: 1000,
+    /** powerSpawn power 库存目标（= 市场买入目标量，terminal+storage+powerSpawn 合计口径）。 */
+    powerSpawnPowerTarget: 100,
   },
 
   market: {
@@ -646,21 +640,94 @@ export const CONFIG = {
     energyTarget: 10000,
     /**
      * storage 饥饿时的 terminal 能量储备地板（W7 止血修正，2026-08-01）。
-     *
-     * 背景：私服 4.3.0 自带市场 API，但市场可为空（credits=0、无订单）——
+     * 背景：私服 4.3.0 自带市场 API 但市场可为空（credits=0、无订单）—
      * terminal-manager 从不成交，10k 交易储备在 storage 枯竭的房间变成死资本
      * （W7N3/W7N4 实测 terminal 恒 10150/10400、storage=0、长期 crisis）。
-     *
-     * 语义：storage 能量 < storageEnergyFloor(20k) 时，hauler 把 terminal 能量
-     * 压缩到此地板（有市场时保留少量运费余量；无市场时归零，见
-     * industry.ts withdrawTerminalEnergy）。storage 恢复健康后由
-     * stockTerminalEnergy 按 energyTarget 重新回补。
+     * 语义：storage < storageEnergyFloor(20k) 时，hauler 把 terminal 能量压缩到
+     * 此地板（有市场时保留少量运费余量；无市场时归零，见 industry.ts
+     * withdrawTerminalEnergy）；storage 恢复健康后按 energyTarget 重新回补。
      */
     terminalEnergyReserveFloor: 2000,
     /** storage 能量低于此值时不给 terminal 备能（经济优先于贸易）。 */
     storageEnergyFloor: 20000,
     /** credits 低于此值暂停买入（保留应急余额）。 */
     creditFloor: 100,
+    /**
+     * battery 最低卖出价 — battery 是满仓溢能的压缩资产（1 battery ≈ 12 能量），
+     * 低于等值能量的合理溢价不贱卖（terminal 现货囤着等行情）。
+     */
+    minBatterySellPrice: 0.8,
+    /** power 最高买入价（credits/单位）— 超价宁可不买。 */
+    powerBuyMaxPrice: 0.5,
+    /**
+     * power 买入的高信用门禁 — power 是 GPL 长期投资而非生存物资，
+     * credits 低于此值时预算全部让位给矿物/能量采购。
+     */
+    powerBuyCreditFloor: 20000,
+    /** 跨房矿物互济最小起送量 — 低于此值不值得占用一次 terminal 冷却与运费。 */
+    mineralAidMinTransfer: 100,
+  },
+
+  /** 帝国能量网络与市场深化（R5）— 跨房互济 + 能量市场交易。 */
+  energy: {
+    /** 救助地板：storage 能量低于此值 → 帝国互济的救助候选。 */
+    aidRecipientFloor: 20000,
+    /** 捐赠地板：storage 高于此值才可捐赠；捐赠后仍须高于此值。与救助地板分离
+     * （50k > 20k）：受助方被补到 20k 后仍远低于捐赠线，结构性滞回 — 同一笔救助
+     * 不可能让受助方翻转为捐赠方（防震荡）。 */
+    aidDonorFloor: 50000,
+    /** 单次跨房救助最大量（terminal 储备 target 10k，批次以不掏空捐赠方 terminal 为界）。 */
+    aidMaxTransfer: 10000,
+    /** 低于此量不送（能量运费不划算）。 */
+    aidMinTransfer: 2000,
+    /** 能量溢出卖线：storage 超过此水位才向市场卖能量（真实盈余出口）。 */
+    energySellFloor: 100000,
+    /** 能量最低卖出价（credits/单位）— 低于此价囤着等行情。 */
+    minEnergySellPrice: 0.02,
+    /** 能量最高买入价（credits/单位）— 危机救助价，高于此价宁可压缩运营。 */
+    maxEnergyBuyPrice: 0.05,
+    /** 能量买入触发线：storage 低于此值且 credits 充足才买（市场是最后救助通道）。 */
+    energyBuyFloor: 5000,
+  },
+
+  /** 帝国议程（R6a）— 主动自治的短期目标层。 */
+  agenda: {
+    /** 受袭记忆窗口：lastHostileAt 距今小于此值 → defense-readiness（主动备战）。 */
+    threatWindow: 3000,
+    /** rcl-push 的最低 storage 水位（至少一房达标才主动冲级）。 */
+    rclPushStorage: 20000,
+    /** rcl-push 允许的最高平均经济压力（打不起不冲）。 */
+    rclPushMaxPressure: 0.3,
+    /** 普通目标切换的最短驻留（防 rcl-push ↔ develop 抖动；紧急目标立即生效）。 */
+    minDwell: 200,
+  },
+
+  /** 主动情报（R6b）— 侦察任务：为扩张决策主动获取候选房视野。 */
+  prospect: {
+    /** 任务管理器运行间隔（tick）。 */
+    interval: 25,
+    /** 成功判定：目标 intel 距今 ≤ 此值且 sources 已知 → 决策就绪。 */
+    intelFreshness: 50,
+    /** 任务全程超时（含孵化等待）：超时判失败 + 目标冷却。 */
+    maxMissionTicks: 1200,
+    /** 最多孵化侦察兵数（含首发）：死亡达上限判失败 + 冷却。 */
+    maxSpawns: 2,
+    /** 失败/超时/死亡目标冷却：冷却期内不重选。 */
+    cooldownTicks: 20000,
+    /** 侦察是纯发展投资：bucket 低于此值不开新任务（进行中任务不受影响）。 */
+    minBucket: 5000,
+  },
+
+  /** 算力容量模型（R7a）— 规模规划的 CPU 前馈分层。 */
+  capacity: {
+    /** avg/limit ≤ 此比例 → abundant（可扩雄心：远矿/扩张加码）。 */
+    abundantRatio: 0.35,
+    /** 超过此比例 → tight（收缩雄心）。 */
+    tightRatio: 0.6,
+    /** 超过此比例 → constrained（只保生存与恢复）。 */
+    constrainedRatio: 0.8,
+    /** 升档滞回窗口：余量需持续满足该 tick 数才升档（降档立即）。 */
+    upgradeWindowTicks: 300,
   },
 } as const;
 

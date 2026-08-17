@@ -12,7 +12,9 @@ import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
   distributorFillTarget,
+  reclaimFactoryOutput,
   stockFactoryEnergy,
+  stockPowerSpawn,
   stockTerminalEnergy,
   supplyLabs,
 } from "../engine/actions";
@@ -90,11 +92,15 @@ const policy: RolePolicy = {
     withdrawStorageForDistribution(),
     // terminal 能量备货（storage 富余时）— 无 fillTarget 需求时的低优先级取能，保证市场运费储备不断供。
     stockTerminalEnergy(),
+    // factory battery 回收（取料相）— 先于投料：factory 堵死时继续投料无意义。
+    reclaimFactoryOutput(),
     // factory 压缩原料备货（仅 storage 满仓时触发）。
     stockFactoryEnergy(),
     // lab 供料（取料/卸料相）— 必须挂在 acquire 链：work 模式要求满载进入，空载的
-    // 「从 storage 取化合物 / 从 lab 清错矿」只有 acquire 阶段能执行；只挂 work 链则取料相永不可达。
+    //「从 storage 取化合物 / 从 lab 清错矿」只有 acquire 阶段能执行；只挂 work 链则取料相永不可达。
     supplyLabs(),
+    // powerSpawn 原料补给（能量/POWER 取料相）— GPL 涓流是最奢侈的下游，排在最后。
+    stockPowerSpawn(),
   ],
 
   work: [
@@ -104,10 +110,14 @@ const policy: RolePolicy = {
     // terminal 能量备货（deposit 相）— 排在经济 sink 之后、lab 供料之前：
     // 携能状态下 supplyLabs 的取料相无法执行（背包已满），先卸给 terminal。
     stockTerminalEnergy(),
+    // factory battery 回收（投放相）— 先于投料 deposit，避免携 battery 与投料互相顶占背包。
+    reclaimFactoryOutput(),
     // factory 压缩原料备货（deposit 相，仅满仓时触发）。
     stockFactoryEnergy(),
     // 化合物供料到 lab。
     supplyLabs(),
+    // powerSpawn 原料投放相。
+    stockPowerSpawn(),
     // 所有 sink 均满 — 原地待命。注意：distributor 没有 fillStorage — 架构约束，
     // 加上就会重新引入 storage→storage 循环。
   ],

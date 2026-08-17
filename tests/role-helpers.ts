@@ -56,6 +56,8 @@ export function resetGlobals(): void {
   delete g.pluginCooldowns;
   delete g.telemetry;
   delete g.skipBuffer;
+  // per-tick 事件缓冲（recordEvent 写入）— 漏清会让事件断言跨用例污染。
+  delete g.eventBuffer;
   // per-tick 缓存（movement 重构 + P2-6 对象缓存）— Game.time 固定为 1000，
   // 不清理会导致上一测试缓存的对象/路径污染下一测试。
   delete g.__objCache;
@@ -82,6 +84,19 @@ export function resetGlobals(): void {
   delete g.__pathSearchBudget;
   // P1-F：layout 4-stage 分片跨 tick 中间产物
   delete g.__planStageData;
+  // P1-1：死资产 link 计时器（link-system 维护）
+  delete g.deadAssetSince;
+  // P1-3：link 几何受限标记 + P1-4 拆改计划与冷却账本
+  delete g.linkConstrained;
+  delete g.dismantlePlans;
+  delete g.lastDismantleTick;
+  // P1-4：拆改累计计数 + 走廊路路径缓存（同 heap 生命周期；漏清会让
+  // corridor-cache-invalidation / layout-restart-stability 跨用例污染，见体检报告 §3.1）
+  delete g.dismantleCount;
+  delete g.corridorPathCache;
+  // R3：war-planner / attacker 的敌结构共享缓存（同 heap 生命周期 — 漏清会让
+  // attacker 测试跨用例复用上一用例缓存的敌结构，Game.time 固定 1000 无法自然过期）。
+  delete g.__warStructures;
 }
 
 /** 注册一个可被 Game.getObjectById 找到的对象。 */

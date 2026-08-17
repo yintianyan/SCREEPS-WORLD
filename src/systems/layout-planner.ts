@@ -13,6 +13,8 @@ import {
   createSourceLinkTasks,
   createStorageLinkTask,
   createControllerLinkTask,
+  shouldHaveStorageLink,
+  shouldHaveControllerLink,
   createExtractorTask,
   createMineralContainerTask,
   type BuildTaskCandidate,
@@ -32,30 +34,31 @@ import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { diagnoseAnchor } from "../domain/layout/anchor-selection";
 import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG } from "../domain/layout/constraint-placer";
 import { assessEmergencyRebuild, isEmergencyTask } from "../domain/construction/queue";
-import { auditStructureGaps, type StructureGaps } from "../domain/layout/gaps";
+import { auditStructureGaps, auditLinkRoleGaps, mergeLinkRoleGaps, type StructureGaps } from "../domain/layout/gaps";
+import {
+  getDeadAssetLinks,
+  isLinkConstrained,
+  markLinkConstrained,
+  isDismantleOnCooldown,
+  isRoomInDefense,
+  createDismantlePlan,
+  getDismantlePlans,
+} from "./link-system";
 
 /**
  * 目标清单缺口未闭合时的慢速重试间隔（2026-08-01）。
- * 受限地形（密封/拥挤）放置失败后，若按正常 planInterval(50) 重试会
- * 「每周期空转放不下」— 实测 W7N3 ext 41/60、lab 4/10 持续数个周期。
- * 缺口持续存在时以 500 tick 慢速重试，把 CPU 花在真正可闭合的周期上。
+ * 受限地形（密封/拥挤）放置失败后，按正常 planInterval(50) 重试会「每周期空转放不下」
+ * （实测 W7N3 ext 41/60、lab 4/10 持续数个周期）— 缺口持续时以 500 tick 慢速重试。
  */
 const GAP_RETRY_INTERVAL = 500;
 
 /**
  * 枢纽道路联动（2026-08-01）：物流枢纽结构入队时同步预铺相邻 road。
- *
- * 病灶（空间评审实证）：热度驱动的道路规划滞后于城区成型 — W7N4 RCL8
- * 满配后 ext 邻路率仅 32%、主 spawn 不邻路；W8N3 的 82% 说明热度机制
- * 最终能铺好，但延迟数十个采样周期，期间 hauler 踩草地 + 拥堵。
- *
- * 设计约束（plan §5.5：道路逐段添加、绝不预铺全房）：
- *   - 只铺枢纽结构（spawn/storage/terminal/factory/lab/link）邻格，
- *     extension 仍走热度路（避免全房铺路）
- *   - 每结构最多 2 条、每周期最多 MAX_HUB_ROADS_PER_PLAN 条，不占
- *     热度路的采样额度；priority 3 与既有道路一致（不挤占关键建筑）
- *   - 与热度/走廊路共用 key 命名 `road.<room>.<x>.<y>` + existingKeys
- *     去重，建成后 done 清理，不会重复入队
+ * 病灶（空间评审实证）：热度驱动道路规划滞后于城区成型 — W7N4 RCL8 满配后 ext 邻路率
+ * 仅 32%（W8N3 的 82% 说明热度机制最终能铺好，但延迟数十个采样周期，期间 hauler 踩草地）。
+ * 设计约束（plan §5.5：道路逐段添加、绝不预铺全房）：只铺枢纽结构邻格（extension 仍走
+ * 热度路）；每结构最多 2 条、每周期最多 6 条，不占热度路采样额度；priority 3 与既有
+ * 道路一致；与热度/走廊路共用 key 命名 + existingKeys 去重。
  */
 const MAX_HUB_ROADS_PER_STRUCTURE = 2;
 const MAX_HUB_ROADS_PER_PLAN = 6;
@@ -63,19 +66,13 @@ const MAX_HUB_ROADS_PER_PLAN = 6;
 // ─── P1-F.6：4-stage 分片跨 tick 中间产物 ──────────────────
 
 /**
- * 规划分片跨 tick 中间产物（存 globalCache，不进 Memory）。
- *
- * 设计原则：
- *   - 大对象（distance field、occupiedSet 等）不进 Memory（plan §7 性能优化）
- *   - 跨 tick 持久：planStage > 0 时各 stage 共享此对象
- *   - global reset 丢失：下 tick planStage > 0 但无 data → 重置 planStage=0 重新开始
- *
- * 字段分组：
- *   - stage 0 产出（只读消费于 stages 1-3）：anchor, completedKeys, structureCounts,
- *     occupiedSet, obstacleSet, minerals, validationOptions, segBlocked
- *   - stages 1-3 累加器：existingKeys, existingPositions, tasksAdded, targetingChanged,
- *     queuedLinks
- *   - queue 直接读写 roomMem.buildQueue（保持与 construction-manager 同 tick 可见性）
+ * 规划分片跨 tick 中间产物（存 globalCache，不进 Memory — plan §7：大对象不进 Memory）。
+ * 跨 tick 持久：planStage > 0 时各 stage 共享；global reset 丢失 → 下 tick 重置
+ * planStage=0 重新开始（最多损失一个规划周期）。
+ * stage 0 产出（只读消费于 1-3）：anchor/completedKeys/structureCounts/occupiedSet/
+ * obstacleSet/minerals/validationOptions/segBlocked；stages 1-3 累加器：
+ * existingKeys/existingPositions/tasksAdded/targetingChanged/queuedLinks。
+ * queue 直接读写 roomMem.buildQueue（与 construction-manager 同 tick 可见）。
  */
 interface PlanStageData {
   /** stage 0 启动 tick（诊断 + 防陈旧 data 误用）。 */
@@ -160,25 +157,14 @@ function makeTryAddTask(
 }
 
 /**
- * 布局规划器 — P3 低频系统，负责生成和维护建造计划。
- *
- * 职责（plan §5.6.3）：
- *   - 在触发条件满足时重新规划布局
- *   - 将蓝图 cells 转为 BuildTask 并推入 BuildQueue
- *   - 动态生成 source/controller container 任务
- *   - 评估交通热度并生成道路候选
- *
- * 触发条件（由 shouldPlan 判定，每 tick 调用一次但内部早返回）：
- *   - 首次运行（无 LayoutMemory）
- *   - controller 等级变化
- *   - nextPlanTick 到期（默认 50 tick）
- *   - layout.state 被人工设为 proposed
- *
- * 不使用 System.interval — 因 kernel.shouldRunSystem 用 tick % interval 跳过，
- * 会导致 RCL 变化触发最多延迟 interval-1 tick。改为每 tick 调用 planRoom，
- * 由 shouldPlan 内部的 nextPlanTick 和 RCL 检查控制实际规划时机。
- *
- * 只在 Green 或 Guarded 且房间不处于 BOOTSTRAP/RECOVERY/DEFENSE 时运行。
+ * 布局规划器 — P3 低频系统，负责生成和维护建造计划（plan §5.6.3）。
+ * 职责：触发条件满足时重新规划布局；蓝图 cells → BuildTask 推入 BuildQueue；
+ * 动态生成 source/controller container 任务；评估交通热度生成道路候选。
+ * 触发（shouldPlan 判定，每 tick 调用但内部早返回）：首次运行 / RCL 变化 /
+ * nextPlanTick 到期（默认 50）/ layout.state 人工设 proposed。
+ * 不使用 System.interval — kernel.shouldRunSystem 用 tick % interval 跳过会导致
+ * RCL 变化触发最多延迟 interval-1 tick；改为每 tick 调用 planRoom，由 shouldPlan
+ * 内部控制实际规划时机。只在 Green/Guarded 且非 BOOTSTRAP/RECOVERY/DEFENSE 运行。
  */
 export const layoutPlannerSystem: System & {
   planRoom(
@@ -236,14 +222,12 @@ export const layoutPlannerSystem: System & {
     if (layout.state === "manual") return;
 
     // P1-F.6：4-stage 分片调度。
-    // - stage 0：prep（锚点 + shouldPlan + 构建 PlanStageData）→ planStage=1
-    // - stage 1：核心结构（constraint/template）→ planStage=2
-    // - stage 2：物流结构（container/link/extractor）→ planStage=3
-    // - stage 3：道路 + spawn 重建 + 收尾 → planStage=0 + 清 planStageData
-    //
-    // 跨 tick 中间产物放 globalCache（plan §7：大对象不进 Memory）。
-    // global reset 丢失 planStageData 时，下 tick planStage>0 但无 data →
-    // 重置 planStage=0 重新开始（最多损失一个规划周期）。
+    // stage 0：prep（锚点 + shouldPlan + 构建 PlanStageData）→ 1；
+    // stage 1：核心结构（constraint/template）→ 2；
+    // stage 2：物流结构（container/link/extractor）→ 3；
+    // stage 3：道路 + spawn 重建 + 收尾 → 0 + 清 planStageData。
+    // 跨 tick 中间产物放 globalCache（plan §7：大对象不进 Memory）；global reset 丢失
+    // planStageData 时下 tick 重置 planStage=0 重新开始（最多损失一个规划周期）。
     const stage = layout.planStage ?? 0;
     if (stage === 0) {
       planStage0Prep(snapshot, ctx, roomMem, layout);
@@ -343,13 +327,20 @@ function planStage0Prep(
     return;
   }
 
-  // 目标清单缺口审计 — 单一真相源（CONTROLLER_STRUCTURES 派生）对照
-  // 已建结构 + 我方在建 site + queued/blocked 队列任务。缺口 > 0 即真实
-  // 未达成目标（audit 已把队列任务计入已有，缺口不会因队列存在而误报）：
-  //   - shouldPlan 据此强制规划（不等 nextPlanTick，受 nextGapPlanTick 节流）
-  //   - 落盘 Memory.kernel.layoutGaps 供控制台采样（仅实际变化时写入）
+  // 目标清单缺口审计 — 单一真相源（CONTROLLER_STRUCTURES 派生）对照已建结构 +
+  // 我方在建 site + queued/blocked 队列任务。缺口 > 0 即真实未达成（audit 已把队列
+  // 任务计入已有，缺口不会因队列存在而误报）：shouldPlan 据此强制规划（不等
+  // nextPlanTick，受 nextGapPlanTick 节流）；落盘 layoutGaps 供控制台采样。
   const queue = roomMem.buildQueue ?? [];
   const gaps = auditStructureGaps(snapshot, queue);
+  // link 角色感知（2026-08-02）：总数满足但角色分布错（死资产）时暴露真实缺口。
+  mergeLinkRoleGaps(gaps, auditLinkRoleGaps(snapshot, queue));
+  // 死资产检测（2026-08-02，§3.3）：source link 持续 500t 三重校验失败 → 触发规划。
+  // deadAssetLink key 值为死资产数量，触发 shouldPlan；拆改通道由 P1-4 实现。
+  const deadAssets = getDeadAssetLinks(ctx.tick);
+  if (deadAssets.length > 0) {
+    gaps.deadAssetLink = deadAssets.length;
+  }
   recordLayoutGaps(snapshot.roomName, gaps);
 
   // 检查触发条件。
@@ -531,12 +522,14 @@ function planStage1Core(
 /**
  * Stage 2：物流结构 — source/controller container + link 网络 + extractor + mineral container。
  *
- * Link 槽位按 RCL 分级分配（RCL5 source+storage, RCL6 +controller, RCL7 +source2, RCL8 +hub）。
+ * Link 槽位按 RCL 分级分配（2026-08-02 修订）：
+ *   RCL5 source+controller（controller 优先于 storage，避免 storage 几何失败连累升级链）
+ *   RCL6 +storage, RCL7 维持, RCL8 +source2+2hub
  * 推进到 stage 3。
  */
 function planStage2Logistics(
   snapshot: RoomSnapshot,
-  _ctx: TickContext,
+  ctx: TickContext,
   roomMem: RoomMemory,
   layout: NonNullable<RoomMemory["layout"]>,
   data: PlanStageData,
@@ -566,44 +559,122 @@ function planStage2Logistics(
     }
   }
 
-  // 3.5 Link 任务（RCL5+）— 按角色优先级分配有限的 link 槽位。
-  // 3.5a Source link（第一趟，maxNew=1）。
-  const sourceLinkFirst = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks, 1);
-  for (const candidate of sourceLinkFirst) {
-    if (tryAddTask(candidate)) {
-      data.queuedLinks++;
-      data.tasksAdded = true;
-      data.targetingChanged = true;
+  // 3.5 Link 任务（RCL5+）— 按角色优先级分配有限 link 槽位。
+  // 分配顺序（2026-08-02 修订）：source(1) → controller → storage → source(rest)。
+  // RCL5 仅 2 槽位时落在 source + controller（避免 storage 几何失败后 controller 被
+  // 跳过、升级链断裂）。
+  // P1-3 link 几何受限（2026-08-02，fallback 链）：controller + storage 都几何放不下
+  // 时标记 linkConstrained，1000t 内跳过 link 任务创建避免空转；source link 不受影响
+  // （source 邻域通常开阔，几何失败罕见）。
+  if (isLinkConstrained(snapshot.roomName, ctx.tick)) {
+    // linkConstrained 标记期内：跳过 controller/storage link 创建，但仍尝试 source link
+    // （source link 是 link 网络的基础，不应因 controller/storage 受限而停建）。
+    const sourceLinkFirst = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks, 1);
+    for (const candidate of sourceLinkFirst) {
+      if (tryAddTask(candidate)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
+    }
+    const sourceLinkRest = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks);
+    for (const candidate of sourceLinkRest) {
+      if (tryAddTask(candidate)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
+    }
+  } else {
+    // 3.5a Source link（第一趟，maxNew=1）。
+    const sourceLinkFirst = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks, 1);
+    for (const candidate of sourceLinkFirst) {
+      if (tryAddTask(candidate)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
+    }
+
+    // 3.5b Controller link（RCL5+，先于 storage）。
+    const controllerLink = createControllerLinkTask(snapshot, room, validationOptions, data.queuedLinks);
+    if (controllerLink) {
+      if (tryAddTask(controllerLink)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
+    }
+
+    // 3.5c Storage link。
+    const storageLink = createStorageLinkTask(snapshot, room, validationOptions, data.queuedLinks);
+    if (storageLink) {
+      if (tryAddTask(storageLink)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
+    }
+
+    // P1-3 fallback 链终点：controller + storage 都几何放不下 → 标记 linkConstrained。
+    // 用 shouldHave* 谓词区分「几何放不下」与「正常跳过」（已建成/槽位满/RCL不足），
+    // 仅当两者都「应该有但放不下」才标记，避免误标正常状态。
+    const controllerGeometryBlocked = !controllerLink && shouldHaveControllerLink(snapshot, data.queuedLinks);
+    const storageGeometryBlocked = !storageLink && shouldHaveStorageLink(snapshot, data.queuedLinks);
+    if (controllerGeometryBlocked && storageGeometryBlocked) {
+      markLinkConstrained(snapshot.roomName, ctx.tick);
+      console.log(
+        `[layout] link constrained in ${snapshot.roomName}: ` +
+        `controller + storage link geometry blocked, retry after ${1000}t`,
+      );
+    }
+
+    // 3.5d Source link（第二趟，maxNew=∞）。
+    const sourceLinkRest = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks);
+    for (const candidate of sourceLinkRest) {
+      if (tryAddTask(candidate)) {
+        data.queuedLinks++;
+        data.tasksAdded = true;
+        data.targetingChanged = true;
+      }
     }
   }
 
-  // 3.5b Storage link。
-  const storageLink = createStorageLinkTask(snapshot, room, validationOptions, data.queuedLinks);
-  if (storageLink) {
-    if (tryAddTask(storageLink)) {
-      data.queuedLinks++;
-      data.tasksAdded = true;
-      data.targetingChanged = true;
-    }
-  }
-
-  // 3.5c Controller link（RCL6+）。
-  const controllerLink = createControllerLinkTask(snapshot, room, validationOptions, data.queuedLinks);
-  if (controllerLink) {
-    if (tryAddTask(controllerLink)) {
-      data.queuedLinks++;
-      data.tasksAdded = true;
-      data.targetingChanged = true;
-    }
-  }
-
-  // 3.5d Source link（第二趟，maxNew=∞）。
-  const sourceLinkRest = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks);
-  for (const candidate of sourceLinkRest) {
-    if (tryAddTask(candidate)) {
-      data.queuedLinks++;
-      data.tasksAdded = true;
-      data.targetingChanged = true;
+  // 3.6 P1-4 受限拆改：死资产 link 检测到替代位置后创建拆改计划。
+  // 流程：死资产检测就绪（getDeadAssetLinks 持续 500t 三重校验失败）→ 替代位置由
+  // createSourceLinkTasks 搜索（死 link 不可喂 → findAdjacentBuildable 找新位置 →
+  // 替代任务已入队）→ 此处登记拆改计划，跟踪「替代建成 → 验证灌能 → destroy 旧 link」。
+  // 门禁（避免空转）：冷却（DISMANTLE_COOLDOWN=1000t）；战时暂停（defense 不新建计划）；
+  // 替代任务必须存在（本周期未入队 → 跳过）；已有计划不重复创建。
+  // 执行与验证由 construction-manager 负责（每 tick 消费 dismantlePlans）。
+  {
+    const deadAssets = getDeadAssetLinks(ctx.tick);
+    if (deadAssets.length > 0 && !isRoomInDefense(snapshot.roomName) && !isDismantleOnCooldown(snapshot.roomName, ctx.tick)) {
+      const existingPlans = getDismantlePlans();
+      for (const deadLinkId of deadAssets) {
+        if (existingPlans.has(deadLinkId)) continue;
+        // 死资产 link 必须属于本房（跨房死资产由各自 layout-planner 处理）。
+        const deadLink = snapshot.links.find(l => l.id === deadLinkId);
+        if (!deadLink) continue;
+        // 在 queue 中找到紧邻同一 source 的 queued 状态替代任务。
+        // 安全性：死资产 link 是已建成 structure，不会有对应 queued 任务；
+        // 若替代任务已 done（建成）且灌能，死资产已被清除不会走到这里；
+        // 若替代任务已 done 但未灌能（替代也是死资产），createSourceLinkTasks
+        // 不会再创建新任务 → 无 queued 任务 → 不创建拆改计划 → 由 fallback 路径处理。
+        const replacementTask = findReplacementForDeadLink(deadLink, snapshot, queue);
+        if (!replacementTask) continue;
+        createDismantlePlan(
+          deadLinkId,
+          snapshot.roomName,
+          replacementTask.key,
+          { x: replacementTask.pos.x, y: replacementTask.pos.y },
+          ctx.tick,
+        );
+        console.log(
+          `[layout] dismantle plan created: dead link ${deadLinkId} in ${snapshot.roomName}, ` +
+          `replacement at (${replacementTask.pos.x},${replacementTask.pos.y})`,
+        );
+      }
     }
   }
 
@@ -673,14 +744,11 @@ function planStage3RoadsAndFinalize(
     }
   }
 
-  // 3.9-6. 枢纽道路联动 — 物流枢纽结构（spawn/storage/terminal/factory/
-  // lab/link）邻格预铺 1-2 条 road，不等热度采样（W7N4 实证滞后病灶：
-  // RCL8 满配后 ext 邻路率仅 32%）。
-  // 门禁（预算感知 + 规模感知，集成世界实证）：
-  //   - 仅 RCL6+（terminal/lab 时代，城区成型）— 早期核心路/走廊路已够
-  //   - 必须有 storage（无 storage 的贫困房能量脆弱，额外 builder 需求
-  //     会延迟 harvester 重建 — RCL5 脉冲世界 1500 tick 未恢复实证）
-  //   - 经济承压（economyPressure >= 0.5 / recovery）不铺
+  // 3.9-6. 枢纽道路联动 — 物流枢纽结构（spawn/storage/terminal/factory/lab/link）
+  // 邻格预铺 1-2 条 road，不等热度采样（W7N4 实证滞后病灶：RCL8 满配后 ext 邻路率 32%）。
+  // 门禁（预算感知 + 规模感知）：仅 RCL6+（terminal/lab 时代城区成型）；必须有 storage
+  // （无 storage 贫困房额外 builder 需求会延迟 harvester 重建 — RCL5 脉冲世界 1500t
+  // 未恢复实证）；经济承压（economyPressure >= 0.5 / recovery）不铺。
   // 基于已建枢纽（snapshot）而非排队任务 — 修复「结构建成后路网滞后」本体。
   const economyOk = (Memory.rooms[snapshot.roomName]?.economyPressure ?? 0) < 0.5;
   if (economyOk && !snapshot.needsRecovery && snapshot.rcl >= 6 && snapshot.storage) {
@@ -741,17 +809,16 @@ function planStage3RoadsAndFinalize(
   }
 
   // 更新规划时间戳和 RCL 跟踪。
-  // P1-F：nextPlanTick 加房间名哈希偏移 — 消除「N 个房每 50 tick 在同一
-  // tick 扎堆重规划」的 CPU 尖峰节律。roomPhase 与 systemPhase 同算法
-  // （DJB-like 哈希），保证哈希族一致。首次初始化（nextPlanTick = ctx.tick）
-  // 不加偏移 — 房间刚建立时需立即规划，不应被相位延迟。
-  //
-  // 2026-08-01 目标清单闭环：用更新后的队列重算缺口（本周期新任务已入队，
-  // 缺口应闭合）。缺口仍存在 = 受限地形放置失败 → 以 GAP_RETRY_INTERVAL(500)
-  // 慢速重试，避免「每 50 tick 空转重规划」的 CPU 浪费（W7N3 实证病灶）；
-  // 缺口闭合 → 恢复正常 planInterval。nextGapPlanTick 同步节流 gap-force，
-  // 防止下 tick 立即被缺口强制触发抵消慢速节流。
+  // P1-F：nextPlanTick 加房间名哈希偏移 — 消除「N 个房每 50 tick 同一 tick 扎堆重规划」
+  // 的 CPU 尖峰（roomPhase 与 systemPhase 同 DJB-like 哈希算法）。首次初始化不加偏移 —
+  // 房间刚建立时需立即规划。
+  // 2026-08-01 目标清单闭环：用更新后队列重算缺口（本周期新任务已入队，缺口应闭合）；
+  // 缺口仍存在 = 受限地形放置失败 → GAP_RETRY_INTERVAL(500) 慢速重试，避免每 50 tick
+  // 空转重规划（W7N3 实证病灶）；缺口闭合 → 恢复正常 planInterval。nextGapPlanTick 同步
+  // 节流 gap-force，防止下 tick 立即被缺口强制触发抵消慢速节流。
   const gapsAfter = auditStructureGaps(snapshot, roomMem.buildQueue);
+  // link 角色感知（同 stage 0 入口）：合并角色缺口，暴露死资产/角色分布错。
+  mergeLinkRoleGaps(gapsAfter, auditLinkRoleGaps(snapshot, roomMem.buildQueue));
   recordLayoutGaps(snapshot.roomName, gapsAfter);
   const gapsOpen = Object.keys(gapsAfter).length > 0;
   const interval = gapsOpen ? GAP_RETRY_INTERVAL : CONFIG.layout.planInterval;
@@ -769,13 +836,10 @@ function planStage3RoadsAndFinalize(
 }
 
 /**
- * 枢纽道路联动：为房间内**已建成**的枢纽结构（spawn/storage/terminal/
- * factory/lab/link）预铺相邻 road — 修复热度路滞后于城区成型的本体问题
- * （W7N4：RCL8 满配后 ext 邻路率 32%）。
- *
- * 邻格选择：4 正交邻居中按「距 anchor 近者优先」（物流侧朝向城区）；
- * 跳过墙/占用/黑名单/已有任务。每结构最多 2 条，每周期最多 6 条 —
- * 与热度路共用 key 命名与去重，建成后由 syncTaskStates 转 done 清理。
+ * 枢纽道路联动：为房间内**已建成**的枢纽结构（spawn/storage/terminal/factory/lab/link）
+ * 预铺相邻 road — 修复热度路滞后于城区成型的本体问题（W7N4：RCL8 满配后 ext 邻路率 32%）。
+ * 邻格选择：4 正交邻居中按「距 anchor 近者优先」（物流侧朝向城区）；跳过墙/占用/黑名单/
+ * 已有任务。每结构最多 2 条、每周期最多 6 条 — 与热度路共用 key 命名与去重。
  */
 function planHubRoads(
   snapshot: import("../kernel/contracts").RoomSnapshot,
@@ -851,10 +915,9 @@ function shouldPlan(
   // 人工 proposed 状态 — 立即规划。
   if (layout.state === "proposed") return true;
 
-  // 目标清单缺口 — 期望结构未达成（缺口 > 0 = 无对应 queued/blocked 任务
-  // 可闭合；audit 已把队列任务计入已有）。缺口持续存在时按 nextGapPlanTick
-  // 慢速重试（stage 3 设为 +500），避免「放不下 → 每 tick 强制重规划」空转。
-  // 仅当房间已规划过（anchor 已设置）时检查 — 初始 bootstrap 不触发。
+  // 目标清单缺口 — 期望结构未达成（缺口 > 0 = 无对应 queued/blocked 任务可闭合；
+  // audit 已把队列任务计入已有）。缺口持续时按 nextGapPlanTick 慢速重试（stage 3 设
+  // +500），避免「放不下 → 每 tick 强制重规划」空转。仅已规划过（anchor 已设）时检查。
   if (layout.anchor !== undefined && Object.keys(gaps).length > 0) {
     if (tick >= (layout.nextGapPlanTick ?? 0)) return true;
   }
@@ -868,9 +931,8 @@ function shouldPlan(
     return true;
   }
 
-  // 紧急重建：关键基建缺失时立即触发规划，不等 50 tick 周期。
-  // 仅当房间已规划过（anchor 已设置）时检查 — 初始 bootstrap 不触发。
-  // 额外检查队列中是否已有待建任务：已有则无需重复规划，避免每 tick 跑规划浪费 CPU。
+  // 紧急重建：关键基建缺失时立即触发规划，不等 50 tick 周期。仅已规划过（anchor 已设）
+  // 时检查；队列已有待建任务则无需重复规划，避免每 tick 跑规划浪费 CPU。
   if (layout.anchor !== undefined) {
     const emergency = assessEmergencyRebuild(snapshot);
     if (emergency.any) {
@@ -888,10 +950,8 @@ function shouldPlan(
 
 /**
  * 目标清单缺口落盘（观测通道）：Memory.kernel.layoutGaps[roomName] = type → 缺口数。
- *
- * 设计约束（plan §7）：Memory 不存运行时索引 — 缺口字典是「短 key + 少量数字」，
- * 且仅在实际缺口集合变化时写入，稳定状态下不产生 Memory 序列化抖动；
- * 缺口闭合后删除该房条目（不留历史）。layoutGaps 无消费方时删除无害。
+ * 设计约束（plan §7）：Memory 不存运行时索引 — 缺口字典是「短 key + 少量数字」，仅在实际
+ * 缺口集合变化时写入，稳定态不产生序列化抖动；缺口闭合后删除该房条目（不留历史）。
  */
 function recordLayoutGaps(roomName: string, gaps: StructureGaps): void {
   Memory.kernel ??= {};
@@ -961,4 +1021,36 @@ function findSpawnRelocationPosition(
     }
   }
   return undefined;
+}
+
+// ─── P1-4 拆改辅助 ─────────────────────────────────────────
+
+/**
+ * 为死资产 link 找到对应的替代 build task。
+ * 关联逻辑：死资产 link 紧邻某 source → createSourceLinkTasks 为同一 source 生成替代
+ * 任务（key = `logistics.link.source.<sourceId>`）；本函数遍历 queue 中 queued 状态的
+ * link 任务，找到紧邻同一 source 的任务作为替代。死 link 不紧邻 source（异常，死资产判定
+ * 要求 role=source）或 queue 无 queued 替代任务时返回 undefined。
+ * 导出便于单测覆盖关联逻辑（2026-08-02 review：曾因调用层用 existingKeys 过滤导致
+ * 恒为空，已修复并补测试）。
+ */
+export function findReplacementForDeadLink(
+  deadLink: { pos: { x: number; y: number } },
+  snapshot: RoomSnapshot,
+  newLinkTasks: readonly BuildTask[],
+): BuildTask | undefined {
+  // 找到死 link 紧邻的 source（range <= 1）。
+  const adjacentSource = snapshot.sources.find(
+    s => Math.abs(s.pos.x - deadLink.pos.x) <= 1 && Math.abs(s.pos.y - deadLink.pos.y) <= 1,
+  );
+  if (!adjacentSource) return undefined;
+  // 替代任务紧邻同一 source（但位置不同 — occupiedSet 排除了死 link 位置）。
+  // 只匹配 queued 状态：done 表示替代 link 已建成，此时死资产仍在说明替代也是
+  // 死资产 → 不应创建拆改计划（应由 fallback 路径 markLinkConstrained 处理）。
+  return newLinkTasks.find(
+    t => t.structureType === STRUCTURE_LINK &&
+      t.state === "queued" &&
+      Math.abs(t.pos.x - adjacentSource.pos.x) <= 1 &&
+      Math.abs(t.pos.y - adjacentSource.pos.y) <= 1,
+  );
 }

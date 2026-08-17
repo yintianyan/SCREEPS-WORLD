@@ -91,6 +91,9 @@ export const enum EventKind {
    * d = [initiativeCode, progressGained, durationTicks]；r = ""。rcl-push 窗口的
    * controller 进度增量 → 升级速率证据（评估冲级议程是否值得）。 */
   AgendaOutcome = 29,
+  /** 跨房矿物互济：一笔 terminal.send 矿物救助成交。d = [amount]；r = 受助房名。
+   * 矿物类型与捐赠房见 console.log 明细（事件体积优先，口径与 EnergyTransfer 对齐）。 */
+  MineralTransfer = 30,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

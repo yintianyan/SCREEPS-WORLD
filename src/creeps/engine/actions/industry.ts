@@ -298,3 +298,110 @@ export function stockFactoryEnergy(): ActionCandidate<FactoryStockTarget> {
     },
   };
 }
+
+/** reclaimFactoryOutput 的 resolve 返回类型。 */
+type FactoryReclaimTarget =
+  | { dest: StructureStorage | StructureTerminal; phase: "deposit" }
+  | { source: StructureFactory; phase: "withdraw" };
+
+/**
+ * 回收 factory 的 battery 产物（factory → terminal/storage）。
+ * 背景：factory 总容量 50k，battery 产出若无搬运出路，积满后投料 transfer 必返
+ * ERR_FULL 被静默忽略 → 压缩链死锁（满仓信号下能量持续在源头被浪费）。
+ * 攒批阈值（batteryReclaimThreshold）触发，减少往返；投放目标遵循 W7 教训：
+ * 有市场时 terminal 优先（交易变现入口），无市场/满则落 storage（死资本不进 terminal）。
+ */
+export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
+  return {
+    name: "haul:reclaim-factory-output",
+    resolve: (ac) => {
+      const factory = ac.snapshot.factory;
+      if (!factory) return undefined;
+      const battery = factory.store.getUsedCapacity(RESOURCE_BATTERY);
+      if (battery < CONFIG.factory.batteryReclaimThreshold) return undefined;
+
+      // 携带 battery：送 terminal（有市场且有空位）或 storage。
+      if ((ac.creep.store[RESOURCE_BATTERY] ?? 0) > 0) {
+        const marketAvailable = typeof Game.market?.getAllOrders === "function";
+        const terminalFree = marketAvailable && ac.snapshot.terminal
+          ? (ac.snapshot.terminal.store.getFreeCapacity(RESOURCE_BATTERY) ?? 0)
+          : 0;
+        const dest = terminalFree > 0 ? ac.snapshot.terminal : ac.snapshot.storage;
+        if (dest) return { dest, phase: "deposit" as const };
+        return undefined;
+      }
+      // 满载他物（能量等）时放行后续候选先卸货 — 同 H-2 资格前置公理。
+      if (ac.creep.store.getFreeCapacity() === 0) return undefined;
+      return { source: factory, phase: "withdraw" as const };
+    },
+    execute: (ac, t) => {
+      if (t.phase === "deposit") {
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, RESOURCE_BATTERY));
+      } else {
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, RESOURCE_BATTERY));
+      }
+    },
+  };
+}
+
+/** stockPowerSpawn 的 resolve 返回类型。 */
+type PowerSpawnStockTarget =
+  | { dest: StructurePowerSpawn; resource: ResourceConstant; phase: "deposit" }
+  | { source: StructureStorage | StructureTerminal; resource: ResourceConstant; phase: "withdraw" };
+
+/**
+ * 为 powerSpawn 补给原料（能量: storage → powerSpawn；power: terminal/storage → powerSpawn）。
+ * 背景：processPower 消耗 1 power + 50 energy/次，此前两样都无搬运通道 — 结构建成
+ * 即死链（GPL 恒为 0）。power 从 terminal 取（市场 deal 落地处），storage 回退。
+ * 能量抽取受 distributorTiers.low 水位地板 — 与 lab 供料同口径，不与 spawn/tower 抢血。
+ * 投放相仅在 powerSpawn 确有缺口时认领携载资源，防止劫走 spawn 填充用的能量。
+ */
+export function stockPowerSpawn(): ActionCandidate<PowerSpawnStockTarget> {
+  return {
+    name: "haul:stock-power-spawn",
+    resolve: (ac) => {
+      const ps = ac.snapshot.powerSpawn;
+      const storage = ac.snapshot.storage;
+      if (!ps || !storage) return undefined;
+
+      const energyShort = ps.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.factory.powerSpawnEnergyTarget;
+      const powerShort = ps.store.getUsedCapacity(RESOURCE_POWER) < CONFIG.factory.powerSpawnPowerTarget;
+
+      // 携带能量/power：只有 powerSpawn 缺该资源才认领（否则放行给经济 sink）。
+      const carried = ([RESOURCE_ENERGY, RESOURCE_POWER] as ResourceConstant[])
+        .find(r => (ac.creep.store[r] ?? 0) > 0);
+      if (carried) {
+        const wanted = carried === RESOURCE_ENERGY ? energyShort : powerShort;
+        if (wanted && (ps.store.getFreeCapacity(carried) ?? 0) > 0) {
+          return { dest: ps, resource: carried, phase: "deposit" as const };
+        }
+        return undefined;
+      }
+
+      // 空载：能量缺口优先（运营必需），且 storage 高于水位地板才抽能。
+      if (energyShort && storage.store.getUsedCapacity(RESOURCE_ENERGY) > labEnergyStorageFloor()) {
+        return { source: storage, resource: RESOURCE_ENERGY, phase: "withdraw" as const };
+      }
+      if (powerShort) {
+        if ((storage.store[RESOURCE_POWER] ?? 0) > 0) {
+          return { source: storage, resource: RESOURCE_POWER, phase: "withdraw" as const };
+        }
+        const terminal = ac.snapshot.terminal;
+        if (terminal && (terminal.store[RESOURCE_POWER] ?? 0) > 0) {
+          return { source: terminal, resource: RESOURCE_POWER, phase: "withdraw" as const };
+        }
+      }
+      return undefined;
+    },
+    execute: (ac, t) => {
+      if (t.phase === "deposit") {
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resource));
+      } else {
+        const available = t.source.store[t.resource] ?? 0;
+        const amount = Math.min(available, ac.creep.store.getFreeCapacity() ?? 0);
+        if (amount <= 0) return;
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resource, amount));
+      }
+    },
+  };
+}
