@@ -11,14 +11,21 @@ import { getObjectById } from "../../support/obj-cache";
 import { moveToTarget } from "../../movement";
 import { NUKE_ENERGY_COST, NUKE_GHODIUM_COST } from "../../../domain/war/planning";
 
-/** haulMineralsToStorage 的 resolve 返回类型。 */
-type MineralHaulTarget =
-  | { dest: StructureStorage | StructureTerminal; mineral: ResourceConstant; phase: "deposit" }
-  | { source: StructureContainer; mineral: ResourceConstant; phase: "withdraw" };
+/** haulMineralsToStorage 的 resolve 返回类型（仅 deposit 相：倒已携带的矿物）。 */
+type MineralHaulTarget = {
+  dest: StructureStorage | StructureTerminal;
+  mineral: ResourceConstant;
+  phase: "deposit";
+};
 
 /**
- * 从 extractor 旁 container 搬运矿物到 storage/terminal。
- * 触发条件：container 中有非 energy 资源。
+ * 把携带的矿物倒进 storage/terminal（work 链首位，高价值资源不滞留）。
+ * 本动作只负责「倒已携带的矿物」，绝不在 work 链里取矿——取矿补仓由 haulMineralTopUp
+ * （排在 fillStorage 之后）负责。旧实现把取矿相位塞进同动作且位于 work 链首位，导致背着
+ * 能量要去存 storage 的 hauler 当 tick 被派去取矿、fillStorage 永远轮不到：能量滞留背包 +
+ * hauler 卡取矿循环不回 acquire 排空 storage link（线上实证：storage-link 满、能量不入库）。
+ * 分离后顺序变为：倒矿 → 倒能 → 有余量才补矿（能量生命线优先）。
+ * 触发条件：creep 携非 energy 资源。
  */
 export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
   return {
@@ -29,25 +36,38 @@ export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
       // 如果 creep 正在 carrying 非 energy 资源，送到 storage/terminal
       const carriedMineral = (Object.keys(ac.creep.store) as ResourceConstant[])
         .find(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
+      if (!carriedMineral) return undefined; // 不携矿物 → 放行后续候选（fillStorage 先倒能）
 
-      if (carriedMineral) {
-        // W7 定位（2026-08-01 部署验证）：terminal 总容量 300,000，矿物堆满时 transfer 必返
-        // ERR_FULL 且被 runAction 静默忽略 → hauler 永久背矿物锁死（W7N3 实测 terminal 恰满）。
-        // 修正：deposit 目标按剩余容量选择——terminal 有空位优先（贸易/工业链），满则落 storage 兜底。
-        const terminalFree = ac.snapshot.terminal
-          ? ac.snapshot.terminal.store.getFreeCapacity()
-          : 0;
-        const dest = terminalFree > 0 ? ac.snapshot.terminal : ac.snapshot.storage;
-        if (dest) return { dest, mineral: carriedMineral, phase: "deposit" as const };
-        return undefined;
-      }
+      // W7 定位（2026-08-01 部署验证）：terminal 总容量 300,000，矿物堆满时 transfer 必返
+      // ERR_FULL 且被 runAction 静默忽略 → hauler 永久背矿物锁死（W7N3 实测 terminal 恰满）。
+      // 修正：deposit 目标按剩余容量选择——terminal 有空位优先（贸易/工业链），满则落 storage 兜底。
+      const terminalFree = ac.snapshot.terminal
+        ? ac.snapshot.terminal.store.getFreeCapacity()
+        : 0;
+      const dest = terminalFree > 0 ? ac.snapshot.terminal : ac.snapshot.storage;
+      if (dest) return { dest, mineral: carriedMineral, phase: "deposit" as const };
+      return undefined;
+    },
+    execute: (ac, t) => {
+      runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.mineral));
+    },
+  };
+}
 
-      // H-2 修复：withdraw 相必须有空余容量才放行。满载能量的 hauler（无矿物）对矿物 container
-      // withdraw 必得 ERR_FULL — 静默空转且终止候选链 → 排他性全链阻塞（fillStorage 等永远轮不到）。
-      // 资格检查前置到 resolve（EN-1 公理），满载放行后续候选先卸货。
+/**
+ * 矿物补仓（work 链尾部动作）— 能量已入库后，若仍有空闲容量且存在含矿物的
+ * container，取矿回 storage/terminal。刻意排在 fillStorage/haulFillTarget 之后：
+ * 能量是生命线必须优先入库；旧实现把取矿相位挂在 haulMineralsToStorage（work 链首位），
+ * 背着能量要去存 storage 的 hauler 当 tick 被派去取矿 → fillStorage 轮不到 → 能量滞留 +
+ * hauler 卡取矿循环不回 acquire 排空 storage link（线上实证：storage-link 满、能量不入库）。
+ * 分离后：先倒矿、再倒能、有余量才补矿。
+ */
+export function haulMineralTopUp(): ActionCandidate<StructureContainer> {
+  return {
+    name: "haul:mineral-topup",
+    resolve: (ac) => {
       if (ac.creep.store.getFreeCapacity() === 0) return undefined;
-
-      // 找含矿物的 container
+      if (!ac.snapshot.storage && !ac.snapshot.terminal) return undefined;
       const source = ac.snapshot.containers.find(c => {
         for (const res of Object.keys(c.store) as ResourceConstant[]) {
           if (res !== RESOURCE_ENERGY && c.store[res]! > 0) return true;
@@ -55,19 +75,13 @@ export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
         return false;
       });
       if (!source) return undefined;
-
+      return source;
+    },
+    execute: (ac, source) => {
       const mineral = (Object.keys(source.store) as ResourceConstant[])
         .find(r => r !== RESOURCE_ENERGY && source.store[r]! > 0);
-      if (!mineral) return undefined;
-
-      return { source, mineral, phase: "withdraw" as const };
-    },
-    execute: (ac, t) => {
-      if (t.phase === "deposit") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.mineral));
-      } else {
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.mineral));
-      }
+      if (!mineral) return;
+      runAction(ac.creep, source, () => ac.creep.withdraw(source, mineral));
     },
   };
 }

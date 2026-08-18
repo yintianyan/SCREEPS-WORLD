@@ -43,6 +43,7 @@ export {
 export { stationaryUpgrade, upgradeController, upgradeControllerGated } from "./upgrade";
 export {
   haulMineralsToStorage,
+  haulMineralTopUp,
   supplyLabs,
   stockTerminalEnergy,
   stockFactoryEnergy,

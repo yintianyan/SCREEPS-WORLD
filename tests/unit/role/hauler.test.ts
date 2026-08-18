@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { haulerRole } from "../../../src/creeps/roles/hauler";
 import { harvesterRole } from "../../../src/creeps/roles/harvester";
+import { haulMineralTopUp } from "../../../src/creeps/engine/actions";
 import {
   mockContext,
   mockController,
@@ -547,7 +548,7 @@ describe("hauler — H-2 满载矿物搬运活锁修复", () => {
     expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
   });
 
-  it("有空间的 hauler 照常搬运矿物（回归保护）", () => {
+  it("work 态携能量+空位+矿物 container → 能量先入库，取矿不退抢占 fillStorage（回归保护）", () => {
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
     (container.store as any).H = 500;
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
@@ -557,6 +558,23 @@ describe("hauler — H-2 满载矿物搬运活锁修复", () => {
 
     haulerRole.run(creep, ctx);
 
+    // 修复前：取矿相位排在 fillStorage 前 → 背着能量跑去取矿、能量滞留 + storage-link 满。
+    // 修复后：能量优先入库，同 tick 不取矿（矿物补仓退居 fillStorage 之后 / 补给途中）。
+    expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
+    expect(creep.withdraw).not.toHaveBeenCalledWith(container, "H");
+  });
+
+  it("acquire 态空仓 hauler 遇矿物 container → 经 haulMineralTopUp 取矿（矿物搬运不停摆）", () => {
+    const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
+    (container.store as any).H = 500;
+    const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
+    const snap = mockSnapshot({ rcl: 4, containers: [container], storage });
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 50, mode: "acquire" });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    // 能量源为空时，acquire 链末端的 haulMineralTopUp 接管取矿，矿物搬运不断档。
     expect(creep.withdraw).toHaveBeenCalledWith(container, "H");
   });
 });
@@ -612,5 +630,41 @@ describe("hauler — HL-1 战时 tower 补给优先于囤积", () => {
     haulerRole.run(creep, ctx);
 
     expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
+  });
+});
+
+describe("hauler — work 链优先级：能量入库优先于取矿补仓（storage-link 满 bug 修复）", () => {
+  it("work 态携能量+空位+矿物 container → 先 fillStorage 倒能，不取矿", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
+    const mineralContainer = mockStructure("container", { id: "mc", energy: 0, capacity: 2000 });
+    (mineralContainer.store as any).Z = 100; // 含矿物（非 energy）
+    const snap = mockSnapshot({ storage, containers: [mineralContainer] });
+    // 携能量 200、容量 800 → 有空位；work 态（updateMode 因 used>0 保持 work）。
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 200, capacity: 800, mode: "work" });
+
+    haulerRole.run(creep, mockContext(snap));
+
+    // 能量入库（fillStorage）必须优先发生。
+    expect(creep.transfer).toHaveBeenCalledWith(storage, "energy");
+    // 旧 bug：haulMineralsToStorage 取矿相位在 work 链首位会拦截 → 背着能量跑去取矿、
+    // fillStorage 轮不到 → 能量滞留 + hauler 卡取矿循环不回 acquire 排空 storage link
+    // （线上实证：storage-link 满、能量不入库）。修复后同 tick 绝不取矿。
+    expect(creep.withdraw).not.toHaveBeenCalledWith(mineralContainer, "Z", expect.any(Number));
+  });
+
+  it("haulMineralTopUp：能量已入库后、work 链尾部有余量才取矿（矿物搬运能力不丢）", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
+    const mineralContainer = mockStructure("container", { id: "mc", energy: 0, capacity: 2000 });
+    (mineralContainer.store as any).Z = 100;
+    const snap = mockSnapshot({ storage, containers: [mineralContainer] });
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 100, capacity: 800, mode: "work" });
+    const ctx = mockContext(snap);
+    const ac = { creep, snapshot: snap, budget: ctx.budget, ctx } as never;
+
+    const action = haulMineralTopUp();
+    const target = action.resolve!(ac);
+    expect(target).toBe(mineralContainer);
+    action.execute(ac, target as never);
+    expect(creep.withdraw).toHaveBeenCalledWith(mineralContainer, "Z");
   });
 });

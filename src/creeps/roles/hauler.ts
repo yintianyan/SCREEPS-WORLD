@@ -16,6 +16,7 @@ import {
   fillStorage,
   haulFillTarget,
   haulMineralsToStorage,
+  haulMineralTopUp,
   lootRemains,
   pickupDroppedEnergy,
   supplyLabs,
@@ -175,6 +176,13 @@ const policy: RolePolicy = {
     //    drop 溢出能量，先捡零头会让 hauler 半满离开、回来再捡，来回空转而满 container 始终
     //    没被抽干（溢出根源未除）。先抽最满：一口装满背包且抽干即消除溢出根源。
     withdrawRichestCapped(),
+    // 3.5 矿物补仓（能量装完后有余量才取矿）— 接力 mineral-miner 倒在 extractor 旁 container
+    //    的矿物去 storage/terminal。刻意排在能量源之后：能量是生命线，先装满能量再顺路取矿，
+    //    且本动作在 work 链的 fillStorage 之后也有一份（能量入库后有余量才补矿），双位保证
+    //    矿物搬运不脱节（旧实现把取矿相位塞在 haulMineralsToStorage 的 work 链首位，既抢占
+    //    fillStorage 致能量滞留 + storage-link 满，又因「work 态必满」门槛几乎触发不了 → 矿物
+    //    名义有、实际不跑）。
+    haulMineralTopUp(),
     // 4. 零头兜底 — 残余清理（死亡掉落零头 / container 被毁残留 / 溢出小堆）。
     //    降至最后：仅当无 link / 大额遗留 / assignment / container 可取时才触发。
     lootRemains(1),
@@ -183,7 +191,7 @@ const policy: RolePolicy = {
   ],
 
   work: [
-    // 矿物优先搬运（高价值资源不应滞留在 container）。
+    // 倒已携带矿物（高价值资源不滞留）；仅 deposit 相——取矿补仓见下方 haulMineralTopUp。
     haulMineralsToStorage(),
     // RCL4+: 优先填充 storage（distributor 从 storage 分发到 spawn/extension）；RCL1-3 无
     // storage → fallthrough。修复 storage 空置死锁：旧顺序 haulFillTarget 在前，spawn 不满时
@@ -191,6 +199,9 @@ const policy: RolePolicy = {
     fillStorage(),
     // spawn/extension 紧急回退：storage 满或无 storage 时直送。
     haulFillTarget(),
+    // 矿物补仓（能量已入库后）：有余量才取矿，避免取矿相位抢在 fillStorage 前导致
+    // 能量滞留背包 + hauler 卡取矿循环不回 acquire 排空 storage link（线上实证 storage-link 满）。
+    haulMineralTopUp(),
     // 化合物供料到 lab。
     supplyLabs(),
     // 所有 sink 均满 — 原地待命。hauler 无 WORK 部件不能升级（upgradeController 会
