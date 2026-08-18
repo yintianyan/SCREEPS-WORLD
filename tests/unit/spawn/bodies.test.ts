@@ -111,7 +111,10 @@ describe("Bodies — BODY_TEMPLATES", () => {
       // 单 HEAL 无自保与跟随能力，成对治疗是编队下限。
       // pbCollector 最低档 [carry,carry,move,move] = 500 — 单 CARRY 运力 100，
       // PB 掉落 2k-6k 会拆成 20+ 趟，成对 CARRY 是捡运效率下限。
-      if (role === "reserver" || role === "claimer" || role === "remoteDefender" || role === "defender" || role === "scout" || role === "healer" || role === "pbCollector") continue;
+      // coreClearer 为进攻型拆核角色（ATTACK 部件），最低档 [4A,1C,5M] = 620；
+      // 200 档只能凑出单 ATTACK（80+50+50）→ 拆核效率几乎为零还冒险，故豁免，
+      // 与 defender/remoteDefender 战斗绝境档同理（有有效战力总比残废送死强）。
+      if (role === "reserver" || role === "claimer" || role === "remoteDefender" || role === "defender" || role === "scout" || role === "healer" || role === "pbCollector" || role === "coreClearer") continue;
       const lastTemplate = templates[templates.length - 1];
       expect(lastTemplate?.minCapacity).toBe(200);
     }

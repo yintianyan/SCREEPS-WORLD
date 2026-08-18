@@ -185,29 +185,42 @@ export const remoteMiningManagerSystem: System = {
       // — 死循环每轮白送整编 creep。规则：有视野见核心 → 写/续期 blockedUntil；
       // 有视野确认消失 → 立即清除；无视野 → 冷却未到期即视为仍被压制。
       const blockedRooms = new Set<string>();
+      const clearRooms = new Set<string>();
       for (const [rn, op] of Object.entries(remoteOps)) {
         if (op.state !== "active") continue;
         const observed = remoteBlockers[rn];
-        if (observed === true) {
-          // 有视野且核心在场 — 写入/续期压制冷却。
-          op.blockedUntil = ctx.tick + CONFIG.remote.coreBlockCooldown;
-          blockedRooms.add(rn);
-        } else if (observed === false) {
-          // 有视野且确认核心消失 — 提前解封。
-          if (op.blockedUntil !== undefined) op.blockedUntil = undefined;
-        } else if (op.blockedUntil !== undefined) {
-          // 无视野 — 冷却期内维持压制；到期后放行（恢复孵化以重获视野再评估）。
-          if (ctx.tick < op.blockedUntil) {
-            blockedRooms.add(rn);
-          } else {
-            op.blockedUntil = undefined;
+        if (!observed || observed.kind === "unknown") {
+          // 无视野：冷却未到期 → 仍视为被压制，保持冻结（防回收→失明→重孵死循环）；
+          // 冷却已到期 → 解封，恢复孵化以重获视野再评估（否则永失明、永冻结）。
+          if (op.blockedUntil !== undefined) {
+            if (ctx.tick < op.blockedUntil) blockedRooms.add(rn);
+            else op.blockedUntil = undefined;
           }
+          if (op.needCoreClear) clearRooms.add(rn);
+          continue;
         }
+        if (observed.kind === "clear") {
+          // 有视野且确认核心消失 — 提前解封两类标记。
+          if (op.blockedUntil !== undefined) op.blockedUntil = undefined;
+          if (op.needCoreClear) op.needCoreClear = undefined;
+          continue;
+        }
+        if (observed.kind === "stronghold") {
+          // 大要塞（带守卫/建筑）：维持现有 blockedUntil + recycle 规避，等自然 decay。
+          op.blockedUntil = ctx.tick + CONFIG.remote.coreBlockCooldown;
+          if (op.needCoreClear) op.needCoreClear = undefined; // 不是可拆的 lesser core
+          blockedRooms.add(rn);
+          continue;
+        }
+        // observed.kind === "lesser"：次级 reserve-only 核心，无守卫 → 派 clearer 拆，不阻塞。
+        // 不写 blockedUntil（核心清除后 demand 立即恢复），只标 needCoreClear 驱动孵 clearer。
+        if (op.needCoreClear !== true) op.needCoreClear = true;
+        clearRooms.add(rn);
       }
 
       // 威胁写入 remoteOps（P1-G：从 intel.dangerUntil 迁移至此）：出现威胁的远矿房
       // 打危险冷却 — 冷却期内不作为新远矿/扩张候选（止损：不给对手送兵）；现役运营
-      // 不因此暂停 — defender 已接通，先应战再评估。InvaderCore 压制房同样打冷却。
+      // 不因此暂停 — defender 已接通，先应战再评估。大要塞压制房同样打冷却。
       for (const [threatRoom, hasThreat] of Object.entries(remoteThreats)) {
         if (!hasThreat && !blockedRooms.has(threatRoom)) continue;
         const op = remoteOps[threatRoom];
@@ -216,8 +229,10 @@ export const remoteMiningManagerSystem: System = {
         }
       }
 
-      // InvaderCore 压制房的现役远矿 creep 全部标记回收 — harvester 采集被压制、
-      // reserver 空耗寿命，留守是持续净亏损。
+      // 压制房（大要塞 + 次级核心）/ 敌占房的现役远矿 creep 全部标记回收 —
+      // harvester 采集被压制、reserver 空耗寿命，留守是持续净亏损。次级核心房的
+      // 经济 creep 同样无法采集（核心压制 source），但清核者(coreClearer)本身
+      // 不被回收（recycleBlockedRoomCreeps 内豁免），需在场拆核。
       // RM-3：被自己 claim 的房同样回收（运营已废弃，该房转本地闭环）；
       // 敌方预定房同样回收现役 creep，并写 dangerUntil 冷却防评选侧立即重开
       // （照 InvaderCore 双轨止损：视野消失后靠冷却维持「该房已被占」判断）。
@@ -225,10 +240,11 @@ export const remoteMiningManagerSystem: System = {
         const op = remoteOps[rn];
         if (op) op.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
       }
+      const blockedOrClear = new Set([...blockedRooms, ...clearRooms]);
       const recycleRooms =
         selfClaimedRooms.length > 0 || hostileReservedRooms.length > 0
-          ? new Set([...blockedRooms, ...selfClaimedRooms, ...hostileReservedRooms])
-          : blockedRooms;
+          ? new Set([...blockedOrClear, ...selfClaimedRooms, ...hostileReservedRooms])
+          : blockedOrClear;
       recycleBlockedRoomCreeps(snapshot.roomName, recycleRooms);
 
       // P0-A：远矿 container site 收编 — 消费 needContainer 申请标记。
@@ -257,6 +273,7 @@ export const remoteMiningManagerSystem: System = {
           spawnQueue: queue,
           remoteThreats,
           blockedRooms,
+          clearRooms,
         });
 
         // 推入 spawnQueue。
@@ -624,7 +641,7 @@ function collectRemoteCreeps(homeRoom: string): RemoteCreepSummary[] {
     if (creep.memory.recycle === true) continue;
     const role = creep.memory.role ?? "unknown";
     // 只收集远矿角色。
-    if (role !== "remoteHarvester" && role !== "remoteHauler" && role !== "reserver" && role !== "remoteDefender") {
+    if (role !== "remoteHarvester" && role !== "remoteHauler" && role !== "reserver" && role !== "remoteDefender" && role !== "coreClearer") {
       continue;
     }
     result.push({
@@ -658,23 +675,58 @@ export function collectRemoteThreats(remoteOps: Readonly<Record<string, RemoteOp
 }
 
 /**
- * 收集 InvaderCore 压制信息 — 检测 active 运营的远矿房是否被 InvaderCore 占据。
+ * InvaderCore 压制分类：
+ * - lesser：次级 reserve-only 核心（level 0、无守卫），不反击、无建筑 —— 派轻量 clearer 拆；
+ * - stronghold：大要塞（level≥1 或带守卫 creep/防御建筑），需规避等自然 decay。
+ */
+export type RemoteBlockerState =
+  | { kind: "unknown" }
+  | { kind: "clear" }
+  | { kind: "lesser" }
+  | { kind: "stronghold" };
+
+/**
+ * 纯函数：给定核心 + 守卫信息判定压制类型。导出供单测。
+ * level===0 且无守卫 → lesser（可拆）；其余（level≥1 或存在守卫）→ stronghold（规避）。
+ * 真实 InvaderCore 始终带 .level；缺失时保守判 stronghold（不送无治疗 creep 进未知险境）。
+ */
+export function classifyInvaderCores(input: {
+  cores: ReadonlyArray<{ level?: number }>;
+  hostileCreepCount: number;
+}): "lesser" | "stronghold" {
+  if (input.cores.length === 0) return "stronghold"; // 无核心由调用方按 clear 处理
+  // 守卫判定：房内有任何敌对 creep 即视为被守卫（大要塞必带 NPC 护卫；次级核心无 creep）。
+  // 次级(level 0)核心不刷护卫、不反击 —— 派轻量 clearer 拆；大要塞(level≥1)或带守卫 → 规避。
+  const hasGuards = input.hostileCreepCount > 0;
+  const anyStronghold = input.cores.some((c) => (c.level ?? 1) >= 1);
+  return anyStronghold || hasGuards ? "stronghold" : "lesser";
+}
+
+/**
+ * 收集 InvaderCore 压制信息 — 检测 active 运营的远矿房是否被 InvaderCore 占据，并按
+ * 核心等级二分（lesser/stronghold）。详见 classifyInvaderCores。
  *
  * InvaderCore 是敌对结构而非 creep，FIND_HOSTILE_CREEPS 检测不到 —
  * 「房里只有一个核心、没有 Invader creep」的场景在旧实现中完全漏报，
  * 运营继续送 harvester/reserver 空耗。检测需要视野（active 房通常有驻场 creep）。
  * 导出供接线测试验证检测链路。
  */
-export function collectRemoteBlockers(remoteOps: Readonly<Record<string, RemoteOp>>): Record<string, boolean> {
-  const blockers: Record<string, boolean> = {};
+export function collectRemoteBlockers(remoteOps: Readonly<Record<string, RemoteOp>>): Record<string, RemoteBlockerState> {
+  const blockers: Record<string, RemoteBlockerState> = {};
   for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") continue;
     const room = Game.rooms[roomName];
-    if (!room) continue;
+    if (!room) { blockers[roomName] = { kind: "unknown" }; continue; }
     const cores = room.find(FIND_HOSTILE_STRUCTURES, {
       filter: (s) => s.structureType === STRUCTURE_INVADER_CORE,
+    }) as StructureInvaderCore[];
+    if (cores.length === 0) { blockers[roomName] = { kind: "clear" }; continue; }
+    const hostileCreepCount = room.find(FIND_HOSTILE_CREEPS).length;
+    const kind = classifyInvaderCores({
+      cores: cores.map((c) => ({ level: c.level })),
+      hostileCreepCount,
     });
-    blockers[roomName] = cores.length > 0;
+    blockers[roomName] = { kind };
   }
   return blockers;
 }
@@ -692,6 +744,8 @@ function recycleBlockedRoomCreeps(homeRoom: string, blockedRooms: ReadonlySet<st
   for (const creep of Object.values(Game.creeps)) {
     if (creep.memory.home !== homeRoom) continue;
     if (creep.memory.recycle) continue;
+    // 清核者本身要在场拆核 —— 不被回收（否则派去拆核又立刻撤，永无止境）。
+    if (creep.memory.role === "coreClearer") continue;
     const target = creep.memory.remoteTarget;
     if (!target || !blockedRooms.has(target)) continue;
     creep.memory.recycle = true;

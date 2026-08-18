@@ -468,6 +468,9 @@ export const CONFIG = {
     // PB 野采捡运者（审计缺口 2）：power-farm-manager collect 阶段一次性孵化，
     // 捡完掉落 power 送回 home 后 recycle。依赖此表作为 recyclePass 白名单。
     pbCollector: { minCount: 0, maxCount: 1 },
+    // 次级 Invader Core 清核者（P1）：拆 level-0 reserve-only 核心回收远矿 op 名额。
+    // 每房至多 1 只在场（demand 单只节流），maxCount 2 防替补窗口真空。
+    coreClearer: { minCount: 0, maxCount: 2 },
   },
 
   war: {

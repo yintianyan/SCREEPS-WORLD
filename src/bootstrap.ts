@@ -11,6 +11,7 @@ import { pbCollectorRole } from "./creeps/roles/pb-collector";
 import { remoteHarvesterRole } from "./creeps/roles/remote-harvester";
 import { remoteHaulerRole } from "./creeps/roles/remote-hauler";
 import { remoteDefenderRole } from "./creeps/roles/remote-defender";
+import { coreClearerRole } from "./creeps/roles/core-clearer";
 import { reserverRole } from "./creeps/roles/reserver";
 import { scoutRole } from "./creeps/roles/scout";
 import { upgraderRole } from "./creeps/roles/upgrader";
@@ -127,6 +128,8 @@ export const registry = new Registry()
   // P3：pbCollector（一次性 PB power 捡运，仅 power-farm-manager 孵化）
   .registerRole(pbCollectorRole)
   // P1：remoteDefender（杀 NPC reserver/Invader）
-  .registerRole(remoteDefenderRole);
+  .registerRole(remoteDefenderRole)
+  // P1：coreClearer（拆 level-0 reserve-only Invader Core 回收远矿 op 名额）
+  .registerRole(coreClearerRole);
 
 export const kernel = new Kernel(registry);

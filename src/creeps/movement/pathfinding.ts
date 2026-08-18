@@ -871,7 +871,7 @@ export function ensureHome(creep: Creep): boolean {
     // InvaderCore 压制房正是此症状；被 recycle 标记的 creep 由 recyclePass 接管移动，不受此影响）。
     const goHome = mode === "flee" ||
       (mode === "idle" && creep.room.name !== remoteTarget) ||
-      (mode === "work" && creep.memory.role === "remoteHauler");
+      (mode === "work" && (creep.memory.role === "remoteHauler" || creep.memory.role === "coreClearer"));
     const dest = goHome ? home : remoteTarget;
     if (creep.room.name === dest) {
       // MV-4：边界格防弹回 — 先内移一步再交还角色管线。

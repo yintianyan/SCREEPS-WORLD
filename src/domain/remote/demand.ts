@@ -45,6 +45,11 @@ export interface RemoteDemandInput {
    * 停孵化、撤现役，等核心 decay/冷却后重评估。
    */
   blockedRooms?: ReadonlySet<string>;
+  /**
+   * 被 level-0 reserve-only 次级核心压制的远矿房集合 — 派轻量 coreClearer 拆核回收名额，
+   * 不阻塞运营（核心清除后 demand 立即恢复经济孵）。与 blockedRooms（大要塞规避）互斥。
+   */
+  clearRooms?: ReadonlySet<string>;
 }
 
 export interface RemoteDemandResult {
@@ -67,11 +72,29 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
   for (const [targetRoom, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") continue;
 
+    const counts = countRemoteCreepsByRole(remoteCreeps, targetRoom);
+
     // InvaderCore 压制房：暂停一切孵化（含 defender）；现役 creep 由
     // remote-mining-manager 的 recycle 通道撤回，核心消失后自动恢复。
     if (input.blockedRooms?.has(targetRoom)) continue;
 
-    const counts = countRemoteCreepsByRole(remoteCreeps, targetRoom);
+    // 次级核心清除房：派轻量 clearer 拆核（拆完自动回收），核心清除前不孵经济
+    // creep（无法采集）；核心消失后 needCoreClear 清除、demand 正常恢复经济孵。
+    const needsClear = input.clearRooms?.has(targetRoom) ?? false;
+    if (needsClear) {
+      const clearerPending = countRemotePending(spawnQueue, "coreClearer", targetRoom);
+      const clearerTotal = (counts.coreClearer ?? 0) + clearerPending;
+      if (clearerTotal < 1) {
+        const key = spawnKey("coreClearer", homeRoom, clearerTotal, targetRoom);
+        const body = selectBody("coreClearer", energyCapacityAvailable);
+        requests.push(createRemoteRequest(
+          "coreClearer", homeRoom, targetRoom, clearerTotal,
+          key, 1, body, tick,
+        ));
+      }
+      continue;
+    }
+
     const pending = {
       remoteHarvester: countRemotePending(spawnQueue, "remoteHarvester", targetRoom),
       remoteHauler: countRemotePending(spawnQueue, "remoteHauler", targetRoom),

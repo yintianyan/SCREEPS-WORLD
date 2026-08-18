@@ -43,6 +43,14 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 750 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 500 },
   ],
+  // 次级 Invader Core 清核者（P1）：拆 level-0 reserve-only 核心（无守卫、不反击）。
+  // 核心是纯能量/战利品来源 —— 无 HEAL/boost/combat 编队，body 加 CARRY 顺手把废墟
+  // 战利品运回 home 存 storage 后回收。满档 8A2C10M：240 dmg/tick → 100k core ≈ 417 tick
+  // 拆完；降级档 4A1C5M 仍 ≥120 dmg/tick（≈833 tick），能量紧张亦能拆。
+  coreClearer: [
+    { parts: ["attack", "attack", "attack", "attack", "attack", "attack", "attack", "attack", "carry", "carry", "move", "move", "move", "move", "move", "move", "move", "move", "move", "move"], minCapacity: 1240 },
+    { parts: ["attack", "attack", "attack", "attack", "carry", "move", "move", "move", "move", "move"], minCapacity: 620 },
+  ],
   worker: [
     // 开局优化：RCL1 起始 300 能量直接用满，2 WORK 采集翻倍，大幅缩短 bootstrap。
     { parts: ["work", "work", "carry", "move"], minCapacity: 300 },

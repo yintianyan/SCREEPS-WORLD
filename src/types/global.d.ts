@@ -553,6 +553,13 @@ declare global {
      */
     blockedUntil?: number;
     /**
+     * P1：次级 Invader Core 清核标记 — remote-mining-manager 检测到 level-0
+     * reserve-only 核心（无守卫、不反击）时置 true，驱动 demand 孵 coreClearer 拆核。
+     * 与大要塞（level≥1 带守卫）的 blockedUntil 规避互斥：lesser 核心不阻塞运营
+     * （核心清除后 demand 立即恢复），只靠此标记驱动清核。
+     */
+    needCoreClear?: boolean;
+    /**
      * 普通威胁冷却截止 tick（RM-2，与 blockedUntil 同款双轨）：有视野见威胁写入/
      * 续期，确认清空立即清除，无视野时冷却期内维持威胁态 — 防「威胁→失明→恢复
      * 孵化→送死」循环送兵。

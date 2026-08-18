@@ -72,6 +72,7 @@ export function resetGlobals(): void {
   delete g.__remoteDropped;
   delete g.__remoteContainers;
   delete g.__remoteInvaderCore;
+  delete g.__remoteRuins;
   delete g.__hostilesCache;
   delete g.boostAssignments;
   // action profiling 缓存
