@@ -113,6 +113,13 @@ export function evaluateEmpirePosture(
     ? rooms.reduce((sum, r) => sum + r.economyPressure, 0) / rooms.length
     : 1;
   const allNormal = rooms.length > 0 && rooms.every(r => r.colonyState === "normal");
+  // 经济生存态：任一房 recovery/bootstrap（能量闭环退化）即视为「打不起战争」。
+  // 战争是盈余活动——危机下开战只会加重能量负担、拖垮恢复。姿态机必须把经济容量
+  // 作为战争的硬性前置（分析结论：posture 此前与 colonyState 解耦，导致 recovery
+  // 下仍能 war，孵出纯消耗 combat creeps 反而拖死经济；energetic crisis ≠ war）。
+  const anyRecovery = rooms.some(
+    r => r.colonyState === "recovery" || r.colonyState === "bootstrap",
+  );
   const gclHeadroom = gclLevel > rooms.length;
 
   const prevPosture = prev?.posture ?? "develop";
@@ -138,11 +145,19 @@ export function evaluateEmpirePosture(
     sponsorReady &&
     youngestMature;
 
+  // ── 危机下强行撤资（经济前置）：若上一态为 war 且当前无真实在房威胁，立即降
+  // fortify —— recovery/bootstrap 是比威胁记忆更强的经济信号，战争机器烧的是存活所需的
+  // 经济。统一覆盖「威胁仍在窗口」与「威胁已消退」两条路径（早于此处分流）。
+  if (prevPosture === "war" && anyRecovery && !liveThreat) {
+    return finalize("fortify", prevPosture, since, tick, 0, liveThreat, expandHealth);
+  }
+
   // ── 威胁升级：立即生效（紧急旁路，不等驻留期）──
   if (threatRecent) {
     // ── war 可持续性（R4 止损）：打不动经济必须退 ──
     // 计数跨 tick 累积（调用方持久化回传）、压力恢复即清零；达窗口立即降级
     // fortify，不等 minDwell — 战争机器烧的是存活所需的经济。
+    // （危机撤资已由上方统一早退处理；此处仅处理正常经济下的可持续止损。）
     if (prevPosture === "war") {
       const nextCounter =
         avgPressure > options.warMaxPressure ? (input.warPressureTicks ?? 0) + 1 : 0;
@@ -153,10 +168,12 @@ export function evaluateEmpirePosture(
     }
     // war 授权来自「持续被打 + 打得起」的证据链，与是否存在进攻代码无关 —
     // 执行器必须听姿态的，反之不成立。
+    // 危机态（recovery/bootstrap）下不发动进攻性战争——经济尚未自愈，养不起军队。
     if (
       prevPosture === "fortify" &&
       dwellElapsed >= options.warPatience &&
-      avgPressure <= options.warMaxPressure
+      avgPressure <= options.warMaxPressure &&
+      !anyRecovery
     ) {
       return finalize("war", prevPosture, since, tick, 0, liveThreat, expandHealth);
     }

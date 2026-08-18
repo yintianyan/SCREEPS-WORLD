@@ -362,3 +362,59 @@ describe("empire posture — since 语义", () => {
     expect(changed.since).toBe(tick);
   });
 });
+
+describe("empire posture — 能量危机≠战争（recovery/bootstrap 经济前置，R-analysis）", () => {
+  // 战争是盈余活动；recovery/bootstrap 表示能量闭环退化，姿态机必须把经济容量作为
+  // 战争的硬性前置——否则会像线上 W37S58 那样在危机下仍 war，孵出纯消耗 combat
+  // creeps 反而拖死经济。正常态（normal）的升级链不受影响。
+  it("recovery 态下 fortify 耐心窗口满 + 经济扛得住 → 仍不升 war（打不起就不打）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastHostileAt: tick - 100, colonyState: "recovery" })],
+        prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
+      }),
+    );
+    expect(r.posture).toBe("fortify");
+  });
+
+  it("bootstrap 态同理：不发动进攻性战争", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastHostileAt: tick - 100, colonyState: "bootstrap" })],
+        prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
+      }),
+    );
+    expect(r.posture).toBe("fortify");
+  });
+
+  it("recovery 态下既有 war 且无活敌 → 立即撤资降 fortify（危机养不起战争机器）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ colonyState: "recovery" })],
+        prev: { posture: "war", since: tick - 100 },
+      }),
+    );
+    expect(r.posture).toBe("fortify");
+    expect(r.warPressureTicks).toBe(0); // 退出即清零
+  });
+
+  it("recovery 态下 war 但有真实在房威胁（紧急旁路）→ 维持 war（防御优先于经济收缩）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ colonyState: "recovery", hasLiveThreat: true })],
+        prev: { posture: "war", since: tick - 100 },
+      }),
+    );
+    expect(r.posture).toBe("war");
+  });
+
+  it("正常态（normal）下战争升级链不受影响（对照：recovery 才拦截）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastHostileAt: tick - 100 })],
+        prev: { posture: "fortify", since: tick - DEFAULT_POSTURE_OPTIONS.warPatience - 1 },
+      }),
+    );
+    expect(r.posture).toBe("war");
+  });
+});

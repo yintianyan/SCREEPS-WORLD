@@ -26,6 +26,8 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
     priority,
     // R3a：recovery 豁免从 RolePolicy 透传（builder/mineralMiner 自报）。
     recoveryEligible: policy.recoveryEligible === true,
+    // 战斗标志透传：供 kernel recovery 门禁紧急旁路（war/真实入侵时不冻结作战单位）。
+    combat: policy.combat === true,
     run(creep: Creep, ctx: TickContext): void {
       // finally 块在 CONFIG.debug.statusLight 关闭时为零开销（函数内首行即 return）。
       try {

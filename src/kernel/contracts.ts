@@ -61,6 +61,13 @@ export interface CreepRole {
    * 注意：bootstrap 一律不豁免（保命孵化优先）。
    */
   readonly recoveryEligible?: boolean;
+  /**
+   * 战斗角色标志：attacker / healer / defender / remote-defender 自报 true。
+   * 用于 recovery 殖民地态门禁的紧急旁路——帝国在 war 姿态或本房有真实在房威胁时，
+   * 不得冻结自己的作战单位（否则 posture=war 名存实亡、真被入侵时丢房）。
+   * 与 recoveryEligible 正交：combat 旁路只在「战争/真实入侵」下生效，不对经济角色开放。
+   */
+  readonly combat?: boolean;
   run(creep: Creep, ctx: TickContext): void;
 }
 

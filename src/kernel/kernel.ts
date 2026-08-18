@@ -298,21 +298,27 @@ export class Kernel {
       return aTtl - bTtl;
     });
 
+    // 战争/在房威胁紧急旁路：combat 角色在 war 姿态或本房有真实在房威胁时不被
+    // recovery 冻结（帝国不能冻自己的军队；真被入侵时更要让作战单位跑起来）。
+    const posture = Memory.kernel?.strategy?.posture;
+    const liveThreatRooms = new Set(
+      Array.from(ctx.snapshots())
+        .filter(s => (s.threatCreeps?.length ?? 0) > 0)
+        .map(s => s.roomName),
+    );
+
     for (const { creep, role } of creepEntries) {
       // 每房殖民地状态门禁：recovery/bootstrap 时允许 P0/P1（能量链），跳过 P2+。
       // 例外（R3a）：recovery 时允许角色自报的 survival/income 豁免（recoveryEligible）—
       // kernel 只读钩子，不再硬编码角色名（与 System recoveryEligible 同一模式）。
-      // 状态由 room-state 每 tick 写入 RoomMemory.colonyState。
+      // 例外（战争紧急旁路）：combat 角色在 war 姿态或本房有活敌时继续运行（见
+      // colonyStateFreezesRole）。状态由 room-state 每 tick 写入 RoomMemory.colonyState。
       // P1-2（CPU 死亡螺旋修复）：colony-state 门禁在 budget 检查之前执行 —
       // 原先 budget.canStart 先挡住 P2 builder，使豁免形同虚设。
       const home = creep.memory.home;
       const roomState = home ? Memory.rooms[home]?.colonyState ?? "normal" : "normal";
       const isRecoveryExempt = roomState === "recovery" && role.recoveryEligible === true;
-      if (
-        (roomState === "recovery" || roomState === "bootstrap") &&
-        role.priority > 1 &&
-        !isRecoveryExempt
-      ) {
+      if (colonyStateFreezesRole(roomState, role, posture, liveThreatRooms.has(home ?? ""))) {
         recordSkip(`creep/${role.name}/colony-state`);
         continue;
       }
@@ -337,6 +343,26 @@ export class Kernel {
 }
 
 // ─── 纯函数（可独立测试）────────────────────────────────────
+
+/**
+ * recovery/bootstrap 殖民地态门禁（纯函数）：
+ * 冻结 P2+ 非豁免角色，保住能量链。战斗角色(combat)在 war 姿态或本房有真实在房威胁时
+ * 旁路——帝国不能冻自己的军队，真被入侵时更要让作战单位跑起来（紧急旁路）。
+ * 抽成纯函数便于单测，避免整段 runCreeps 难以覆盖。
+ */
+export function colonyStateFreezesRole(
+  roomState: string,
+  role: { readonly priority: number; readonly recoveryEligible?: boolean; readonly combat?: boolean },
+  posture: string | undefined,
+  liveThreatInRoom: boolean,
+): boolean {
+  if (roomState !== "recovery" && roomState !== "bootstrap") return false;
+  if (role.priority <= 1) return false; // P0/P1（能量链/防御）永远放行
+  if (roomState === "recovery" && role.recoveryEligible === true) return false; // R3a 豁免
+  // 紧急旁路：战争或真实入侵时，作战单位必须照常运行（帝国存续所系）。
+  if (role.combat === true && (posture === "war" || liveThreatInRoom)) return false;
+  return true;
+}
 
 // P1-F：hasCriticalStructureGap 已搬到 src/domain/construction/queue.ts
 // （construction-manager 的 recoveryEligible 钩子）；kernel 经

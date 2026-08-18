@@ -37,6 +37,9 @@ function makeCtx() {
       isExhausted: () => false,
       spent: () => 0,
     },
+    // combat 紧急旁路依赖快照判断本房是否有活敌；此处无威胁场景，返回空即可。
+    snapshots: () => [],
+    tick: 100000,
   };
 }
 
