@@ -5,9 +5,6 @@ import type { RoomTuningState } from "../domain/tuning/types";
 export {};
 
 declare global {
-  /** 本地 typings（@types/screeps 版本）缺少的常量 — 官方引擎已支持。 */
-  const RESOURCE_PIXEL: "pixel";
-
   interface CreepAssignment {
     id: string;
     kind: TaskKind;

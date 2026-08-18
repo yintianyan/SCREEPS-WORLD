@@ -192,11 +192,13 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
  * pixel 单无 room，被其过滤）。
  */
 function trySellPixel(): void {
-  const pixels = Game.resources?.[RESOURCE_PIXEL] ?? 0;
+  // 注意：RESOURCE_PIXEL 在部分 Screeps 运行时未作为全局提供（@types/screeps 声明了但
+  // 运行时缺失 → 裸引用会抛 ReferenceError）。直接用字面量 "pixel"，跨环境稳定且零依赖。
+  const pixels = Game.resources?.["pixel"] ?? 0;
   if (pixels <= 0) return;
   let best: MarketOrderSummary | undefined;
   for (const o of toSummaries(
-    Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_PIXEL }),
+    Game.market.getAllOrders({ type: ORDER_BUY, resourceType: "pixel" }),
   )) {
     if (o.price < CONFIG.market.minPixelSellPrice || o.amount <= 0) continue;
     if (!best || o.price > best.price) best = o;
