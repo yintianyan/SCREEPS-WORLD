@@ -66,8 +66,8 @@ describe("empire posture — 和平姿态选择", () => {
     expect(r.posture).toBe("develop");
   });
 
-  it("sponsor 达 RCL7 但 storage 不足 → develop（代孵能力不够）", () => {
-    const r = evaluateEmpirePosture(input({ rooms: [room({ rcl: 7, storageEnergy: 50000 })] }));
+  it("sponsor 达 RCL7 但 colonyState=recovery → develop（非健康不代孵）", () => {
+    const r = evaluateEmpirePosture(input({ rooms: [room({ rcl: 7, colonyState: "recovery" })] }));
     expect(r.posture).toBe("develop");
   });
 
@@ -93,11 +93,35 @@ describe("empire posture — 和平姿态选择", () => {
   });
 });
 
+describe("empire posture — sponsor 门（稳定性模型，取代 100k 库存硬门槛）", () => {
+  // 默认 room() = RCL7 / storage 150000 / colonyState normal / 无活威胁 → 满足 sponsor 成熟。
+  it("RCL7 + normal + 无活威胁 + storage≥地板 → sponsor 成熟（其余条件满足即 expand）", () => {
+    const r = evaluateEmpirePosture(input({ rooms: [room({ rcl: 7, storageEnergy: 9000 })] }));
+    expect(r.posture).toBe("expand");
+    expect(r.expansionAllowed).toBe(true);
+  });
+
+  it("sponsor RCL7 但有活威胁 → 不代孵（develop，战中不殖民）", () => {
+    const r = evaluateEmpirePosture(input({ rooms: [room({ rcl: 7, hasLiveThreat: true })] }));
+    expect(r.posture).toBe("develop");
+  });
+
+  it("sponsor RCL7 但 storage<地板（饿死边缘）→ 不代孵（develop）", () => {
+    const r = evaluateEmpirePosture(input({ rooms: [room({ rcl: 7, storageEnergy: 5000 })] }));
+    expect(r.posture).toBe("develop");
+  });
+
+  it("RCL6 → 不代孵（未达成熟 RCL 门槛）", () => {
+    const r = evaluateEmpirePosture(input({ rooms: [room({ rcl: 6 })] }));
+    expect(r.posture).toBe("develop");
+  });
+});
+
 describe("empire posture — 威胁升级（紧急旁路）", () => {
-  it("任一房近期受袭 → 立即 fortify，扩张与新远矿点全部关停", () => {
+  it("任一房近期受袭且有活威胁 → 立即 fortify，扩张与新远矿点全部关停", () => {
     const r = evaluateEmpirePosture(
       input({
-        rooms: [room(), room({ lastHostileAt: tick - 100 })],
+        rooms: [room(), room({ lastHostileAt: tick - 100, hasLiveThreat: true })],
         prev: { posture: "expand", since: tick - 50 },
       }),
     );
@@ -113,6 +137,58 @@ describe("empire posture — 威胁升级（紧急旁路）", () => {
       }),
     );
     expect(r.posture).toBe("expand");
+  });
+});
+
+describe("empire posture — 冻结跟随真实在房威胁（恐吓税修复）", () => {
+  it("近期受袭但敌已撤离（无活威胁）→ 姿态 fortify，但远矿物流恢复(newRemoteOpsAllowed true)", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastHostileAt: tick - 100 })], // 记忆窗口内但无 hasLiveThreat（敌已撤离）
+        prev: { posture: "expand", since: tick - 50 },
+      }),
+    );
+    expect(r.posture).toBe("fortify");
+    expect(r.newRemoteOpsAllowed).toBe(true); // 关键修复：不再为过期记忆付恐吓税
+  });
+
+  it("war 姿态但无活威胁 → 远矿物流恢复（现役运营不受影响，仅新 op 放开）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastHostileAt: tick - 100 })],
+        prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
+      }),
+    );
+    expect(r.posture).toBe("war");
+    expect(r.newRemoteOpsAllowed).toBe(true);
+  });
+
+  it("活威胁出现（记忆滞后）→ sponsor 不成熟 → 姿态 develop，新远矿立即冻结（安全优先）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ hasLiveThreat: true })], // 无 lastHostileAt：记忆滞后，但此刻有敌
+      }),
+    );
+    expect(r.posture).toBe("develop"); // 活威胁令 sponsor 不成熟，回到 develop
+    expect(r.newRemoteOpsAllowed).toBe(false); // 冻结跟随真实视线而非记忆
+  });
+
+  it("活威胁 → 扩张与新远矿均关闭（不把殖民队送进战场），姿态 develop", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ hasLiveThreat: true })],
+      }),
+    );
+    expect(r.posture).toBe("develop");
+    expect(r.expansionAllowed).toBe(false);
+    expect(r.newRemoteOpsAllowed).toBe(false);
+  });
+
+  it("expand 态 + 无活威胁 → 扩张与远矿均开放", () => {
+    const r = evaluateEmpirePosture(input());
+    expect(r.posture).toBe("expand");
+    expect(r.expansionAllowed).toBe(true);
+    expect(r.newRemoteOpsAllowed).toBe(true);
   });
 });
 

@@ -12,6 +12,7 @@
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import {
   evaluateEmpirePosture,
+  DEFAULT_POSTURE_OPTIONS,
   type RoomStrategyInput,
 } from "../domain/strategy/posture";
 import { evaluateAgenda } from "../domain/strategy/agenda";
@@ -44,6 +45,9 @@ export const empireStrategySystem: System = {
         colonyState: roomMem.colonyState ?? "normal",
         economyPressure: roomMem.economyPressure ?? 0,
         lastHostileAt: roomMem.lastHostileAt,
+        // 零滞回「此刻有敌」：snapshot.threatCreeps 已是剔除盟友的真实威胁列表。
+        // 透传给姿态层，使新远矿/扩张冻结跟随真实在房威胁而非过期记忆（恐吓税修复）。
+        hasLiveThreat: (snapshot.threatCreeps?.length ?? 0) > 0,
         rcl: snapshot.rcl,
         storageEnergy: snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
       });
@@ -52,15 +56,19 @@ export const empireStrategySystem: System = {
     if (!Memory.kernel) Memory.kernel = {};
     const prev = Memory.kernel.strategy;
 
-    const result = evaluateEmpirePosture({
-      tick: ctx.tick,
-      rooms,
-      gclLevel: Game.gcl?.level ?? 1,
-      bucket: Game.cpu.bucket ?? 10000,
-      prev: prev ? { posture: prev.posture, since: prev.since } : undefined,
-      // R4：war 可持续性计数跨 tick 回传（pressure 滞回输入）。
-      warPressureTicks: prev?.warPressureTicks,
-    });
+    const result = evaluateEmpirePosture(
+      {
+        tick: ctx.tick,
+        rooms,
+        gclLevel: Game.gcl?.level ?? 1,
+        bucket: Game.cpu.bucket ?? 10000,
+        prev: prev ? { posture: prev.posture, since: prev.since } : undefined,
+        // R4：war 可持续性计数跨 tick 回传（pressure 滞回输入）。
+        warPressureTicks: prev?.warPressureTicks,
+      },
+      // 姿态参数全部经 CONFIG 可调（修复原先写死 DEFAULT_POSTURE_OPTIONS 的隐藏 bug）。
+      { ...DEFAULT_POSTURE_OPTIONS, ...CONFIG.posture },
+    );
 
     // 姿态变更时打日志 — 战略转向是帝国级事件，必须可观测。
     if (prev?.posture !== result.posture) {

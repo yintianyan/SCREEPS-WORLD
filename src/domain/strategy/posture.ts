@@ -10,8 +10,13 @@
 export interface RoomStrategyInput {
   colonyState: string;
   economyPressure: number;
-  /** 最近一次房内出现威胁的 tick（无记录为 undefined）。 */
+  /** 最近一次房内出现威胁的 tick（无记录为 undefined）。带滞回的记忆。 */
   lastHostileAt?: number;
+  /** 本 tick 房内是否存在真实在房威胁（snapshot.threatCreeps 非空的透传）。
+   * 与 lastHostileAt 互补：lastHostileAt 是「威胁窗口内即算近期」的滞回记忆，
+   * hasLiveThreat 是零滞回的「此刻是否有敌」。新远矿/扩张冻结跟随它，避免被
+   * 已过期的威胁记忆收割「恐吓税」（见 evaluateEmpirePosture 内 finalize 注释）。 */
+  hasLiveThreat?: boolean;
   rcl: number;
   /** 本房 storage 能量（无 storage 记 0）— 供殖民门判断核心成熟度。 */
   storageEnergy: number;
@@ -39,10 +44,13 @@ export interface PostureOptions {
   expandMaxPressure: number;
   /** war 姿态要求的最高平均经济压力（打不起就不打）。 */
   warMaxPressure: number;
-  /** 殖民门（Phase 1a）：至少存在一个「成熟 sponsor」房——RCL ≥ 此值。 */
+  /** 殖民门（Phase 1a）：sponsor 房最低 RCL — 须成熟到拥有 terminal + 多 spawn + 收入余量。 */
   colonizeSponsorRcl: number;
-  /** 殖民门：成熟 sponsor 房要求的最低 storage 能量（能快速代孵新房）。 */
-  colonizeSponsorEnergy: number;
+  /** 殖民门：sponsor 房库存地板（饿死防护，非代孵能力门槛）。
+   *  旧版 colonizeSponsorEnergy=100000（≈ bootstrap 实际成本的 50 倍）对「不囤货的自治帝国」
+   *  结构性锁死扩张；新版改用稳定性模型（见 evaluateEmpirePosture 内 sponsorReady 注释），
+   *  本值仅作「sponsor 真饿死时不新增殖民投资」的兜底，量级取 bootstrap 成本的若干倍。 */
+  colonizeSponsorFloor: number;
   /** 殖民门：所有己方房 RCL 须 ≥ 此值（最新/最嫩房已自立，不再是拖累）。 */
   colonizeYoungestFloorRcl: number;
 }
@@ -56,7 +64,7 @@ export const DEFAULT_POSTURE_OPTIONS: PostureOptions = {
   expandMaxPressure: 0.4,
   warMaxPressure: 0.4,
   colonizeSponsorRcl: 7,
-  colonizeSponsorEnergy: 100000,
+  colonizeSponsorFloor: 8000,
   colonizeYoungestFloorRcl: 5,
 };
 
@@ -98,6 +106,9 @@ export function evaluateEmpirePosture(
   const threatRecent = rooms.some(
     r => r.lastHostileAt !== undefined && tick - r.lastHostileAt < options.threatWindow,
   );
+  // 零滞回「此刻有敌」：任一房本 tick 有真实在房威胁（已剔除盟友）。这是冻结指令的
+  // 真相来源——不读滞回记忆，只读当下视线。敌人撤离即清零，自治立即恢复。
+  const liveThreat = rooms.some(r => r.hasLiveThreat === true);
   const avgPressure = rooms.length > 0
     ? rooms.reduce((sum, r) => sum + r.economyPressure, 0) / rooms.length
     : 1;
@@ -117,9 +128,9 @@ export function evaluateEmpirePosture(
       const nextCounter =
         avgPressure > options.warMaxPressure ? (input.warPressureTicks ?? 0) + 1 : 0;
       if (nextCounter >= options.warExitPatienceTicks) {
-        return finalize("fortify", prevPosture, since, tick, 0);
+        return finalize("fortify", prevPosture, since, tick, 0, liveThreat);
       }
-      return finalize("war", prevPosture, since, tick, nextCounter);
+      return finalize("war", prevPosture, since, tick, nextCounter, liveThreat);
     }
     // war 授权来自「持续被打 + 打得起」的证据链，与是否存在进攻代码无关 —
     // 执行器必须听姿态的，反之不成立。
@@ -128,25 +139,34 @@ export function evaluateEmpirePosture(
       dwellElapsed >= options.warPatience &&
       avgPressure <= options.warMaxPressure
     ) {
-      return finalize("war", prevPosture, since, tick, 0);
+      return finalize("war", prevPosture, since, tick, 0, liveThreat);
     }
-    return finalize("fortify", prevPosture, since, tick);
+    return finalize("fortify", prevPosture, since, tick, 0, liveThreat);
   }
 
   // ── 威胁消退：降级需要最短驻留期（滞回防抖）──
   if (prevPosture === "fortify" || prevPosture === "war") {
     if (dwellElapsed < options.minDwell) {
-      return finalize(prevPosture, prevPosture, since, tick);
+      return finalize(prevPosture, prevPosture, since, tick, 0, liveThreat);
     }
     // 静默期满回 develop（不直接跳 expand，先确认经济恢复节奏）。
-    return finalize("develop", prevPosture, since, tick);
+    return finalize("develop", prevPosture, since, tick, 0, liveThreat);
   }
 
   // ── 和平姿态选择：expand（授权殖民）需要全面健康 + 核心成熟 ──
   // Phase 1a：叠加「核心成熟度 + 最新房自立」防过早殖民（历史教训：RCL4 嫩房
   // colonyState=normal 即触发殖民 → W6N3 失败、W8N4 硬上）。
+  // 殖民门（Phase 1a）：稳定性模型取代「库存硬门槛」（见 colonizeSponsorFloor 注释）。
+  // sponsor 房须：RCL 成熟(RCL7，自带 terminal+多 spawn) + 经济正常(colonyState=normal，
+  // 非 recovery/承压) + 无活威胁(复用 hasLiveThreat，战中不殖民) + 库存不低于饿死地板
+  // (兜底，不要求富余)。满足即视为可代孵——拓荒编队仅 ~2k 能量，由 sponsor 的 steady
+  // income 供给，不依赖囤积。旧版 storage>=100000 对 lean 帝国永远是达不到的死门槛。
   const sponsorReady = rooms.some(
-    r => r.rcl >= options.colonizeSponsorRcl && r.storageEnergy >= options.colonizeSponsorEnergy,
+    r =>
+      r.rcl >= options.colonizeSponsorRcl &&
+      r.colonyState === "normal" &&
+      !r.hasLiveThreat &&
+      r.storageEnergy >= options.colonizeSponsorFloor,
   );
   const youngestMature = rooms.every(r => r.rcl >= options.colonizeYoungestFloorRcl);
   const canExpand =
@@ -157,23 +177,35 @@ export function evaluateEmpirePosture(
     sponsorReady &&
     youngestMature;
 
-  return finalize(canExpand ? "expand" : "develop", prevPosture, since, tick);
+  return finalize(canExpand ? "expand" : "develop", prevPosture, since, tick, 0, liveThreat);
 }
 
-/** 组装结果：姿态变更时刷新 since，并派生各域指令与 war 压力计数。 */
+/**
+ * 组装结果：姿态变更时刷新 since，并派生各域指令与 war 压力计数。
+ *
+ * 冻结指令跟随「真实在房威胁」而非过期姿态记忆：
+ *  - 有活威胁(liveThreat) → 冻结新远矿 + 扩张：防御优先，不把新物流/殖民队送进战场；
+ *  - 无活威胁 → 即便姿态仍卡 war/fortify（lastHostileAt 在威胁窗口内、敌人已撤离），
+ *    也恢复自治，避免一次边境路过冻结远矿物流却无任何产出（"恐吓税"）。
+ *  现役远矿运营不受影响（newRemoteOpsAllowed 只门禁"新"远矿点，现役 op 照常）。
+ *  expansionAllowed 仍要求姿态为 expand（殖民是高承诺动作，仅在明确扩张态开启），
+ *  并叠加活威胁门禁（有活敌不打殖民）——稳健优先于速度。
+ */
 function finalize(
   posture: EmpirePosture,
   prevPosture: EmpirePosture,
   prevSince: number,
   tick: number,
   warPressureTicks: number = 0,
+  liveThreat: boolean = false,
 ): PostureResult {
   const since = posture === prevPosture ? prevSince : tick;
+  const freeze = liveThreat;
   return {
     posture,
     since,
-    expansionAllowed: posture === "expand",
-    newRemoteOpsAllowed: posture === "develop" || posture === "expand",
+    expansionAllowed: posture === "expand" && !freeze,
+    newRemoteOpsAllowed: !freeze,
     warPressureTicks,
   };
 }

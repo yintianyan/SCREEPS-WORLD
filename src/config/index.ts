@@ -783,6 +783,32 @@ export const CONFIG = {
     minDwell: 200,
   },
 
+  /** 帝国姿态（单仲裁：empire-strategy 唯一裁决者）— 全部参数可调，避免写死常量。
+   *  注意与 agenda.threatWindow/minDwell 刻意解耦（姿态用更长窗口防扩张永冻）。 */
+  posture: {
+    /** 威胁记忆窗口（最近敌情判定）— 缩短只加快威胁散去后的恢复、不削弱在袭响应。 */
+    threatWindow: 3000,
+    /** fortify → war 的耐心窗口：设防状态持续超过此时长且敌情未消 → 升战争。 */
+    warPatience: 5000,
+    /** war 可持续性耐心窗口（R4）：war 下经济压力持续超 warMaxPressure 达此值 → 降级。 */
+    warExitPatienceTicks: 1000,
+    /** 降级最短驻留期：fortify/war 至少维持此时长才允许回落（防抖）。 */
+    minDwell: 1000,
+    /** expand 姿态要求的最低 bucket（扩张是 CPU 重投资）。 */
+    expandMinBucket: 7000,
+    /** expand 姿态要求的最高平均经济压力。 */
+    expandMaxPressure: 0.4,
+    /** war 姿态要求的最高平均经济压力（打不起就不打）。 */
+    warMaxPressure: 0.4,
+    /** 殖民门：sponsor 房最低 RCL（成熟到拥有 terminal + 多 spawn + 收入余量）。 */
+    colonizeSponsorRcl: 7,
+    /** 殖民门：sponsor 房库存地板（饿死防护，非代孵能力门槛）。详见 posture.ts
+     *  sponsorReady 注释——稳定性模型取代旧版 100000 死门槛，量级取 bootstrap 成本若干倍。 */
+    colonizeSponsorFloor: 8000,
+    /** 殖民门：所有己方房 RCL 须 ≥ 此值（最新/最嫩房已自立，不再是拖累）。 */
+    colonizeYoungestFloorRcl: 5,
+  },
+
   /** PB 野采（审计缺口 2）— power bank 打击任务：自给 power 供给源。 */
   powerFarm: {
     /** 任务管理器运行间隔（tick）。 */
