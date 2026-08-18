@@ -19,6 +19,7 @@ import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
 import { selectProspectTarget, type ProspectCandidate } from "../domain/strategy/prospect";
+import { roomLinearDistance } from "../domain/remote/targeting";
 import { countPending, hasRequest, removeRequestsByRole, spawnKey, submitRequest } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
 
@@ -167,7 +168,13 @@ function pruneCooldown(tick: number): void {
   if (Object.keys(cooldown).length === 0) delete Memory.kernel!.prospectCooldown;
 }
 
-/** 从各房 intel 采集侦察候选（世界可见态 → 纯函数输入）。 */
+/**
+ * 从各房 intel 采集侦察候选（世界可见态 → 纯函数输入）。
+ * 除已知房外，主动纳入「已知房（含己方房）相邻、但 intel 未收录」的前沿发现候选
+ * （known=false）— 视野只从己方房出口刷新（room-observer.ts:156），已知世界会被锁死在
+ * 直接邻居；当直接邻居全不可殖民时扩张永久饿死。外扩让 scout 探明第 2 圈及以外的
+ * 干净中立房，落库 intel 后 expansion 评估器即可见（CONFIG.prospect.horizon 限圈数）。
+ */
 function buildCandidates(tick: number): ProspectCandidate[] {
   const candidates: ProspectCandidate[] = [];
 
@@ -197,10 +204,15 @@ function buildCandidates(tick: number): ProspectCandidate[] {
   }
 
   const cooldown = Memory.kernel?.prospectCooldown;
+  const horizon = CONFIG.prospect.horizon;
+
+  // ── 已知房候选（intel 已收录）──
+  const knownRooms = new Set<string>();
   for (const home of Object.keys(Memory.rooms)) {
     const intel = Memory.rooms[home]?.intel;
     if (!intel) continue;
     for (const roomName of Object.keys(intel)) {
+      knownRooms.add(roomName);
       const e = intel[roomName];
       if (!e) continue;
       if (cooldown && (cooldown[roomName] ?? 0) > tick) continue;
@@ -219,5 +231,48 @@ function buildCandidates(tick: number): ProspectCandidate[] {
       });
     }
   }
+
+  // ── 前沿发现候选：已知房（含己方房）相邻、但 intel 尚未收录的房。
+  // 以「最近己方房」为 sponsor（scout 从其 spawn 孵化、intel 落其名下），
+  // 只探 horizon 圈数内、未被占用/冷却的未知房。
+  const owned = Object.keys(Game.rooms).filter((r) => Game.rooms[r]?.controller?.my);
+  if (owned.length > 0 && horizon > 0 && Game.map?.describeExits) {
+    const baseRooms = new Set(knownRooms);
+    for (const o of owned) baseRooms.add(o);
+    const seen = new Set(knownRooms);
+    const nearestOwned = (roomName: string): string => {
+      let best = owned[0]!; // 外层已保证 owned.length > 0
+      let bestD = Infinity;
+      for (const o of owned) {
+        const d = roomLinearDistance(o, roomName);
+        if (d < bestD) { bestD = d; best = o; }
+      }
+      return best;
+    };
+    for (const base of baseRooms) {
+      const exits = Game.map.describeExits(base);
+      if (!exits) continue;
+      for (const neighbor of Object.values(exits)) {
+        if (!neighbor || seen.has(neighbor)) continue;
+        seen.add(neighbor);
+        if (occupied.has(neighbor)) continue;
+        if (cooldown && (cooldown[neighbor] ?? 0) > tick) continue;
+        const sponsor = nearestOwned(neighbor);
+        if (roomLinearDistance(sponsor, neighbor) > horizon) continue;
+        candidates.push({
+          roomName: neighbor,
+          home: sponsor,
+          kind: "unknown",
+          status: "unknown",
+          myUsername,
+          sources: undefined,
+          lastSeen: 0,
+          occupied: false,
+          known: false,
+        });
+      }
+    }
+  }
+
   return candidates;
 }

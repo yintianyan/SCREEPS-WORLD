@@ -213,7 +213,8 @@ describe("prospect-manager — 生命周期与止损", () => {
 });
 
 describe("prospect-manager — 冷却管理", () => {
-  it("冷却期内的目标不被重选；到期恢复资格", () => {
+  it("冷却期内的目标不被重选；转而探前沿房，到期恢复资格", () => {
+    // Part 1：W6N4 冷却中 → 不重选 W6N4，视野外扩去探前沿未知房。
     (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
     setupIntel();
     setPosture(true);
@@ -221,11 +222,49 @@ describe("prospect-manager — 冷却管理", () => {
     (globalThis as any).Memory.kernel.prospectCooldown = { W6N4: TICK + 10000 };
 
     prospectManagerSystem.run(makeContext());
-    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
+    const cooled = (globalThis as any).Memory.kernel.prospect;
+    expect(cooled).toBeDefined();
+    expect(cooled.target).not.toBe("W6N4"); // 冷却阻止重选 W6N4
+    expect(cooled.sponsor).toBe("W7N4");
 
-    // 冷却到期 → 恢复资格。
+    // Part 2：重置 + 冷却到期 → W6N4 恢复资格，被选中。
+    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    setupIntel();
+    setPosture(true);
+    (globalThis as any).Game.cpu.bucket = 10000;
     (globalThis as any).Memory.kernel.prospectCooldown = { W6N4: TICK - 1 };
+
     prospectManagerSystem.run(makeContext());
     expect((globalThis as any).Memory.kernel.prospect?.target).toBe("W6N4");
+  });
+});
+
+describe("prospect-manager — 视野外扩（horizon）", () => {
+  it("已知房全不可殖民 → 改探前沿未知房（打破视野锁死）", () => {
+    (globalThis as any).Memory = { schemaVersion: 29, creeps: {}, rooms: {}, kernel: {} };
+    (globalThis as any).Game.rooms = {
+      W7N4: { controller: { my: true, owner: { username: "Me" } } },
+    };
+    (globalThis as any).Memory.rooms.W7N4 = {
+      spawnQueue: [],
+      intel: {
+        // 已知房有主 → 侦察/扩张均跳过；帝国须外扩找干净中立房。
+        W6N4: { kind: "normal", status: "normal", owner: "Enemy", lastSeen: 500 },
+      },
+    };
+    setPosture(true);
+    (globalThis as any).Game.cpu.bucket = 10000;
+
+    prospectManagerSystem.run(makeContext());
+
+    const mission = (globalThis as any).Memory.kernel.prospect;
+    expect(mission).toBeDefined();
+    expect(mission.sponsor).toBe("W7N4");
+    // 选中的是前沿未知房（mock describeExits 返回 W7N3/W7N5），而非有主的 W6N4。
+    expect(mission.target).not.toBe("W6N4");
+    const queue = (globalThis as any).Memory.rooms.W7N4.spawnQueue;
+    expect(queue).toHaveLength(1);
+    expect(queue[0].role).toBe("scout");
+    expect(queue[0].memory.remoteTarget).toBe(mission.target);
   });
 });

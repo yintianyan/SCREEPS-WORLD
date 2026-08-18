@@ -84,4 +84,53 @@ describe("selectProspectTarget", () => {
     );
     expect(t?.roomName).toBe("W6N4");
   });
+
+  describe("视野外扩（known=false 前沿发现）", () => {
+    function frontier(roomName: string, overrides: Partial<ProspectCandidate> = {}): ProspectCandidate {
+      return candidate({
+        roomName,
+        known: false,
+        kind: "unknown",
+        status: "unknown",
+        lastSeen: 0,
+        ...overrides,
+      });
+    }
+
+    it("已知房有主（被跳过）时，前沿发现候选兜底选中", () => {
+      const t = selectProspectTarget(
+        [candidate({ owner: "Enemy" }), frontier("W7N3")],
+        TICK,
+        OPTS,
+      );
+      expect(t?.roomName).toBe("W7N3");
+    });
+
+    it("已知房全部新鲜时，前沿发现候选兜底（避免视野锁死饿死扩张）", () => {
+      const t = selectProspectTarget(
+        [candidate({ sources: 2, lastSeen: TICK - 10 }), frontier("W7N3")],
+        TICK,
+        OPTS,
+      );
+      expect(t?.roomName).toBe("W7N3");
+    });
+
+    it("多个前沿发现候选按距离选最近", () => {
+      const t = selectProspectTarget(
+        [frontier("W9N4"), frontier("W7N3")],
+        TICK,
+        OPTS,
+      );
+      expect(t?.roomName).toBe("W7N3");
+    });
+
+    it("已知房与前沿候选同距时，已知房优先（保持重探语义）", () => {
+      const t = selectProspectTarget(
+        [candidate(), frontier("W7N3")],
+        TICK,
+        OPTS,
+      );
+      expect(t?.roomName).toBe("W6N4");
+    });
+  });
 });

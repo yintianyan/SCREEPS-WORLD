@@ -845,6 +845,15 @@ export const CONFIG = {
     cooldownTicks: 20000,
     /** 侦察是纯发展投资：bucket 低于此值不开新任务（进行中任务不受影响）。 */
     minBucket: 5000,
+    /**
+     * 视野外扩圈数上限（房）：prospect 除重探已知房外，主动侦察「已知房（含己方房）相邻、
+     * 但 intel 未收录」的前沿房，使帝国能发现第 2 圈及以外的干净中立房。
+     * 背景：room-observer 的邻房情报只从己方房出口刷新（room-observer.ts:156），
+     * 已知世界被锁死在己方房直接邻居；当直接邻居全不可殖民（敌方所有 / 带遗迹 spawn）
+     * 时，expansion 永久饿死。外扩让 scout 探明第 2 圈，落库 intel 后 expansion 评估器
+     * 即可见干净房。horizon=0 退化为旧行为（只重探已知房）。
+     */
+    horizon: 3,
   },
 
   /** 算力容量模型（R7a）— 规模规划的 CPU 前馈分层。 */

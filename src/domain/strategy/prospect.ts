@@ -29,6 +29,13 @@ export interface ProspectCandidate {
   pathCost?: number;
   /** 已被我方占用（殖民地/远矿运营/扩张目标）— 不侦察。 */
   occupied: boolean;
+  /**
+   * 是否已知房（intel 已收录）。false = 前沿发现候选：已知房相邻、但 intel 尚未
+   * 收录的未知房。其 kind/status/owner 皆未知，selectProspectTarget 对 known=false
+   * 跳过常规过滤、直接作为侦察目标去探明（见视野外扩 horizon，CONFIG.prospect.horizon）。
+   * 省略（undefined）视为已知，兼容旧调用方与单测。
+   */
+  known?: boolean;
 }
 
 export interface ProspectOptions {
@@ -49,10 +56,21 @@ export function selectProspectTarget(
   let best: ProspectTarget | undefined;
   let bestDistance = Infinity;
   for (const c of candidates) {
+    if (c.occupied) continue;
+    // 前沿发现候选（known=false）：kind/status/owner 皆未知，无法套用常规过滤 —
+    // 直接作为侦察目标去探明，按距离排序。这是视野外扩（horizon）的核心：
+    // 已知世界锁死在己方房直接邻居时，靠它发现第 2 圈及以外的干净中立房。
+    if (c.known === false) {
+      const distance = c.pathCost ?? roomLinearDistance(c.home, c.roomName);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { roomName: c.roomName, sponsor: c.home };
+      }
+      continue;
+    }
     if (c.kind !== "normal" || c.status !== "normal") continue;
     if (c.owner && c.owner !== c.myUsername) continue;
     if (c.reservedBy && c.reservedBy !== c.myUsername) continue;
-    if (c.occupied) continue;
     // 视野已新鲜（sources 已知且未过期）→ 决策就绪，无需侦察。
     if (c.sources !== undefined && tick - c.lastSeen <= options.intelFreshness) continue;
     const distance = c.pathCost ?? roomLinearDistance(c.home, c.roomName);
