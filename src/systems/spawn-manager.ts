@@ -62,15 +62,16 @@ export const spawnManagerSystem: System = {
       );
       if (purgedKeys.length > 0) {
         roomMem.spawnBlacklist ??= {};
-        // P0-3：bootstrap/recovery 期间采集角色豁免隔离 — 此时 retries 烧穿几乎总是
-        // 暂时性能量不足（非持久配置错误），隔离会把「等能量」变成真死锁。
-        // normal/crisis 时采集角色用短冷却 500 tick（比 1000 tick 更快进入熔断，
-        // 比永久豁免避免无限 churn）。
-        const state: ColonyState = roomMem.colonyState ?? "normal";
-        const isBootstrapOrRecovery = state === "bootstrap" || state === "recovery";
+        // P0-3：采集角色（harvester/worker）永远豁免隔离 — 它们是经济命脉，normal/crisis
+        // 态恰是能量低谷最常见态，隔离会把「等能量」变成真死锁（线上 W37S58 死亡螺旋根因：
+        // 1cca151 的隔离机制在 normal 态把 harvester 关 500 tick → 某 source 停产 → 能量断链）。
+        // 失败只留队列重试，能量恢复即孵化（pre-1cca151 自愈语义）；真配置错误由独立的
+        // churn 熔断（200t 窗口 >20 次 → 冻 100 tick）兜底，不会无限翻炒。
+        // 注意：churn 熔断对采集角色仍可能短窗(100t)软冻，危害可控；若实测误冻再评估把
+        // 采集角色加入 CHURN_FREEZE 豁免（P0 worker 恢复路径已如此处理，见 demand.ts）。
         for (const key of purgedKeys) {
           const isCollector = key.startsWith("worker:") || key.startsWith("harvester:");
-          if (isCollector && isBootstrapOrRecovery) continue;
+          if (isCollector) continue;
           const ttl = computeQuarantineTtl(key);
           roomMem.spawnBlacklist[key] = ctx.tick + ttl;
           console.log(`[${ctx.tick}] spawn/${snapshot.roomName}: quarantined ${key} for ${ttl} ticks`);

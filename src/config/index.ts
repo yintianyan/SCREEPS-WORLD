@@ -122,8 +122,10 @@ export const CONFIG = {
   spawn: {
     /** body 替换窗口：ticksToLive <= body.length * 3 + 15（+ 路程项，见 demand.needsReplacement）。 */
     replaceBuffer: 15,
-    /** 孵化请求被隔离前的最大重试次数。 */
-    maxRetries: 5,
+    /** 孵化请求被隔离前的最大重试次数。上调至 12：给能量低谷更多重试余量，
+     * 避免 normal 态因瞬时 energyAvailable 跌破最小 body 成本而连续失败、误触
+     * purge→隔离（配合 spawn-manager 采集角色永不隔离，进一步降低非采集角色误 purge）。 */
+    maxRetries: 12,
     /** 为 P0 恢复 body 预留的最低能量。 */
     recoveryEnergyReserve: 200,
     /** 饥饿降级的最低 body 成本地板：无地板会在能量低谷铸出残废 body（如 1C1M

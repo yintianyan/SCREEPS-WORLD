@@ -104,21 +104,25 @@ function normalCtx(pressure = 0) {
 // ─── 正常路径（5 用例）──────────────────────────────────────────
 
 describe("P0-3 spawn churn 熔断 — 正常路径", () => {
-  it("harvester 请求达 maxRetries 后进入黑名单（短冷却 500 tick）", () => {
-    // cleanQueue 返回被清除的 key，spawn-manager 用 computeQuarantineTtl 计算冷却时长。
+  it("采集角色（harvester）达 maxRetries 也永不进黑名单（自愈语义，防死亡螺旋）", () => {
+    // cleanQueue 仍会 purge 达 maxRetries 的请求（防无限翻炒），但 spawn-manager
+    // 对采集角色豁免隔离 — 失败后只重试，能量恢复即孵化，杜绝「等能量」变停产死锁
+    // （W37S58 死亡螺旋根因：1cca151 在 normal 态把 harvester 关 500 tick → 某 source 停产）。
     const queue = [makeRequest("harvester", ROOM, 0)];
     const purgedKeys = cleanQueue(queue, 100, CONFIG.spawn.maxRetries, () => {});
     expect(purgedKeys).toContain("harvester:" + ROOM + ":0");
 
-    // 模拟 spawn-manager 的黑名单写入逻辑（用导出的 helper 计算 TTL）。
+    // 模拟 spawn-manager 的黑名单写入逻辑（采集角色跳过，不写黑名单）。
     const roomMem = (globalThis as any).Memory.rooms[ROOM] as RoomMemory;
     roomMem.spawnBlacklist = {};
     for (const key of purgedKeys) {
+      const isCollector = key.startsWith("worker:") || key.startsWith("harvester:");
+      if (isCollector) continue; // 采集角色永远豁免隔离（pre-1cca151 自愈语义）
       const ttl = computeQuarantineTtl(key);
       roomMem.spawnBlacklist[key] = 100 + ttl;
     }
-    // 采集角色短冷却 = requestTtl / 2 = 500 tick。
-    expect(roomMem.spawnBlacklist!["harvester:" + ROOM + ":0"]).toBe(100 + 500);
+    // 采集角色不进黑名单 — 这是修复后的契约，防死亡螺旋复发。
+    expect(roomMem.spawnBlacklist!["harvester:" + ROOM + ":0"]).toBeUndefined();
   });
 
   it("非采集角色（hauler）达 maxRetries → 长冷却 1000 tick（无回归）", () => {

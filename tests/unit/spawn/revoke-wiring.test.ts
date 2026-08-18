@@ -8,6 +8,7 @@
  * 同时覆盖 removeRequestsByRole 纯函数语义。
  */
 import { beforeEach, describe, expect, it } from "vitest";
+import { CONFIG } from "../../../src/config";
 import { spawnManagerSystem } from "../../../src/systems/spawn-manager";
 import { removeRequestsByRole } from "../../../src/domain/spawn/queue";
 import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
@@ -181,7 +182,7 @@ describe("spawn-manager — SP-2 黑名单闭环（隔离 → 冷却拒重建 �
     const hostile = { id: "h1", name: "h1", pos: { x: 10, y: 10 }, owner: { username: "enemy" } };
     // 预置一个已烧穿重试的 defender 请求。
     const failed = makeRequest("defender", "W7N4");
-    failed.retries = 5;
+    failed.retries = CONFIG.spawn.maxRetries;
     (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: [failed], colonyState: "normal" };
     addLivingHarvester();
 
