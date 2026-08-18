@@ -104,8 +104,14 @@ export function registerAnchor(creep: Creep, priority: number): void {
 
 /**
  * 从缓存路径提取下一步方向（moveByPath 出口的意图化替身）。
- * creep 在路径上 → 走向下一格；不在路径上但紧邻路径起点 → 走向起点（上路）；
- * 否则返回 undefined（等价 ERR_NOT_FOUND，调用方走缓存失效/重算路径）。
+ * creep 在路径上 → 走向下一格；偏离缓存路径 → 返回 undefined（等价 ERR_NOT_FOUND，
+ * 调用方删缓存、从 creep 当前位置重算正确路径）。
+ *
+ * 注意：旧实现在「偏离路径但紧邻 path[0]」时走向 path[0]（路径计算时的旧起点），会把 creep
+ * 橡皮筋拉回旧起点 → 前进 → 再拉回，形成 2-循环打转（线上实测 scout 在
+ * W36S57(21,36)↔(22,35) 原地 thrash、永远到不了出口）。path[0] 不是 creep 当下位置，不可作为
+ * 「上路」目标。偏离即重算，才是正确且自愈的行为（重算受 dynamicRepathInterval 冷却门限，
+ * 冷却内退化为 getDirectionTo 直走，不会死循环）。
  */
 export function nextDirFromPath(creep: Creep, path: readonly RoomPosition[]): DirectionConstant | undefined {
   if (path.length === 0) return undefined;
@@ -118,12 +124,6 @@ export function nextDirFromPath(creep: Creep, path: readonly RoomPosition[]): Di
       return creep.pos.getDirectionTo(nextPos.x, nextPos.y) as DirectionConstant;
     }
   }
-  const first = path[0]!;
-  if (
-    first.roomName === creep.room.name &&
-    Math.max(Math.abs(first.x - creep.pos.x), Math.abs(first.y - creep.pos.y)) === 1
-  ) {
-    return creep.pos.getDirectionTo(first.x, first.y) as DirectionConstant;
-  }
+  // 偏离缓存路径：不橡皮筋回旧起点，返回 undefined 让调用方从当前位置重算路径（见上方注释）。
   return undefined;
 }
