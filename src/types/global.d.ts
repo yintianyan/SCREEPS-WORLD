@@ -74,6 +74,12 @@ declare global {
      * remoteHauler work→home、acquire→remoteTarget；remoteHarvester/reserver 恒 remoteTarget。
      */
     remoteTarget?: string;
+    /**
+     * 已知 hostile 房集合（owner≠我 / 带遗迹 spawn）— 供 moveTowardRoom 跨房路由绕行
+     * （recon scout 专用，R6b 扩张修复：scout 钻进敌方房会被迫 flee 永远到不了 remoteTarget）。
+     * 仅作导航安全网；真正路线优选由 prospect 评分惩罚（hostileAdjacent）在源头完成。
+     */
+    avoidRooms?: string[];
     /** remoteHauler 缓存的远矿 containerId — 避免每 tick room.find。 */
     remoteContainerId?: Id<StructureContainer>;
     /** Distributor 水位分级档位（0-3），由 distributor gate 每 tick 按 storage 水位计算。 */

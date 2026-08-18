@@ -14,6 +14,12 @@
  */
 import { roomLinearDistance } from "../remote/targeting";
 
+/**
+ * hostile 相邻候选的评分罚分。取值需 > 任何候选房的可能距离（horizon 外扩下 ≤ ~6），
+ * 使「干净房」在评分上永远压过「hostile 相邻房」，但全 hostile 包围时罚分均匀、仍选最近者。
+ */
+const HOSTILE_ADJACENCY_PENALTY = 10;
+
 export interface ProspectCandidate {
   roomName: string;
   /** intel 归属房（孵化 scout 的 sponsor 候选）。 */
@@ -36,6 +42,12 @@ export interface ProspectCandidate {
    * 省略（undefined）视为已知，兼容旧调用方与单测。
    */
   known?: boolean;
+  /**
+   * 候选房是否与已知 hostile 房（敌方所有 / 带遗迹 spawn）正交相邻。scout 若需穿越 hostile
+   * 房才能 recon 该目标，会被吓退永远到不了 → 评分惩罚，优先选干净房（视野外扩场景下，
+   * 紧贴 Aguia 房 W38S58 的 W38S57 会被惩罚，改选干净且直达的 W37S59）。
+   */
+  hostileAdjacent?: boolean;
 }
 
 export interface ProspectOptions {
@@ -61,9 +73,13 @@ export function selectProspectTarget(
     // 直接作为侦察目标去探明，按距离排序。这是视野外扩（horizon）的核心：
     // 已知世界锁死在己方房直接邻居时，靠它发现第 2 圈及以外的干净中立房。
     if (c.known === false) {
+      // 评分：hostile 相邻候选加罚分（> 最大候选距离，确保干净房始终优先；全 hostile 包围时
+      // 罚分均匀，仍选最近者）。recon scout 是便宜单位，但穿越 hostile 房会被吓退/阵亡，
+      // 优先选无需穿越敌方房的干净目标才能稳定完成 recon。
       const distance = c.pathCost ?? roomLinearDistance(c.home, c.roomName);
-      if (distance < bestDistance) {
-        bestDistance = distance;
+      const effective = distance + (c.hostileAdjacent ? HOSTILE_ADJACENCY_PENALTY : 0);
+      if (effective < bestDistance) {
+        bestDistance = effective;
         best = { roomName: c.roomName, sponsor: c.home };
       }
       continue;

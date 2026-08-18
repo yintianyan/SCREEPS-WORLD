@@ -693,11 +693,33 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
   const stuckTicks = updateStuckTicks(creep);
   const { stuckThreshold, repathLimit } = CONFIG.kernel;
 
+  // 绕开 hostile 房：recon scout（memory.avoidRooms 已写入已知敌方房集合）用 Game.map.findRoute
+  // 选「避开 hostile 房」的下一跳，而非几何最近出口——几何出口可能径直把 scout 带进敌方房
+  // （如 W37S58→W38S58→W38S57，Aguia 的 W38S58 把 recon 卡死）。无路可绕（被 hostile 包围）
+  // 时 findRoute 返回 ERR_NO_PATH，回退几何出口，由 scout 的 pushThrough 标志硬钻通过。
+  let goalRoom = targetRoom;
+  const avoidRooms = creep.memory.avoidRooms;
+  if (avoidRooms && avoidRooms.length > 0 && Game.map?.findRoute && creep.room.name !== targetRoom) {
+    const avoid = new Set(avoidRooms);
+    const route = Game.map.findRoute(creep.room.name, targetRoom, {
+      // 对途经房打 Infinity 成本；起点房（fromRoomName 为空）不打，否则整条路由失败。
+      routeCallback(roomName, fromRoomName) {
+        return avoid.has(roomName) && fromRoomName !== "" ? Infinity : 1;
+      },
+    });
+    if (route !== ERR_NO_PATH) {
+      const steps = route as { room: string }[];
+      if (steps.length > 0) {
+        goalRoom = steps[0]!.room;
+      }
+    }
+  }
+
   // Level 2：严重卡位 → 清出口缓存，下次重新选出口。
   if (stuckTicks >= stuckThreshold + repathLimit) {
-    clearInterRoomExit(creep.room.name, targetRoom);
+    clearInterRoomExit(creep.room.name, goalRoom);
     // 强制 repath + ignoreCreeps: false 绕过阻挡 creep。
-    const exitDir = creep.room.findExitTo(targetRoom) as number;
+    const exitDir = creep.room.findExitTo(goalRoom) as number;
     if (exitDir < 0) return;
     const exit = creep.pos.findClosestByRange(exitDir as ExitConstant);
     if (exit) {
@@ -718,17 +740,17 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
   }
 
   // 尝试使用缓存的出口信息（避免每 tick 调用 findExitTo + findClosestByRange）。
-  const cached = getCachedInterRoomExit(creep.room.name, targetRoom);
+  const cached = getCachedInterRoomExit(creep.room.name, goalRoom);
   let exit: RoomPosition | null = null;
 
   if (cached) {
     exit = new RoomPosition(cached.exitPos.x, cached.exitPos.y, creep.room.name);
   } else {
-    const exitDir = creep.room.findExitTo(targetRoom) as number;
+    const exitDir = creep.room.findExitTo(goalRoom) as number;
     if (exitDir < 0) return;
     exit = creep.pos.findClosestByRange(exitDir as ExitConstant);
     if (exit) {
-      cacheInterRoomExit(creep.room.name, targetRoom, exitDir as ExitConstant, exit);
+      cacheInterRoomExit(creep.room.name, goalRoom, exitDir as ExitConstant, exit);
     }
   }
 

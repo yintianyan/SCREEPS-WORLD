@@ -58,6 +58,14 @@ export interface RolePolicy {
   /** 战斗角色标志：跳过威胁逃跑检测（shouldFlee/shouldFleeForeignRoom）。
    * 否则 defender 看到敌人会立刻逃回 home，攻击候选永远轮不到执行，角色形同虚设。 */
   combat?: boolean;
+  /**
+   * 侦察兵标志（recon push-through）：跳过过境房威胁逃跑检测（shouldFleeForeignRoom），
+   * 即使钻进敌方房也继续向侦察目标推进，而非 abandon 任务逃回 home。recon scout 是一次性
+   * 便宜单位（[MOVE]，50 能量），遇敌 flee 会永远到不了 remoteTarget → recon 永不完成 →
+   * 占领链卡死（W38S57 紧贴 Aguia 的 W38S58 时实测）。配合 moveTowardRoom 的
+   * avoidRooms（绕开已知 hostile 房）使用，scout 正常走安全路径、仅在路径被封时才 push through。
+   */
+  pushThrough?: boolean;
   /** Recovery 豁免自报（R3a）：透传到 CreepRole.recoveryEligible，recovery 时仍执行（P1 等效预算）。 */
   recoveryEligible?: boolean;
   /**

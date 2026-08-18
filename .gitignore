@@ -45,3 +45,5 @@ data/
 *.tmp
 *.bak
 *.orig
+# 盯盘探针运行时状态（不入库）
+tools/mmo/.watch-state.json

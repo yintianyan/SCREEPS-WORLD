@@ -132,5 +132,34 @@ describe("selectProspectTarget", () => {
       );
       expect(t?.roomName).toBe("W6N4");
     });
+
+    it("hostile 相邻惩罚：紧贴敌方房的较近前沿候选让位于干净候选", () => {
+      // W8N4（dist 1，贴 hostile）被罚 → eff 11；W7N3（dist 1，干净）→ eff 1。
+      const t = selectProspectTarget(
+        [frontier("W8N4", { hostileAdjacent: true }), frontier("W7N3", { hostileAdjacent: false })],
+        TICK,
+        OPTS,
+      );
+      expect(t?.roomName).toBe("W7N3");
+    });
+
+    it("hostile 相邻惩罚：全 hostile 包围时仍选最近（罚分均匀 → 距离决胜）", () => {
+      const t = selectProspectTarget(
+        [frontier("W8N4", { hostileAdjacent: true }), frontier("W9N4", { hostileAdjacent: true })],
+        TICK,
+        OPTS,
+      );
+      expect(t?.roomName).toBe("W8N4");
+    });
+
+    it("hostile 相邻惩罚高于距离差：干净远房优先于贴 hostile 近房", () => {
+      // W9N4（dist 2，干净）→ eff 2；W8N4（dist 1，贴 hostile）→ eff 11。
+      const t = selectProspectTarget(
+        [frontier("W9N4", { hostileAdjacent: false }), frontier("W8N4", { hostileAdjacent: true })],
+        TICK,
+        OPTS,
+      );
+      expect(t?.roomName).toBe("W9N4");
+    });
   });
 });

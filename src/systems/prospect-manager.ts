@@ -36,6 +36,9 @@ export const prospectManagerSystem: System = {
   run(ctx: TickContext): void {
     pruneCooldown(ctx.tick);
 
+    // 已知 hostile 房集合（供 scout 孵化请求写入 avoidRooms，导航绕行）。
+    const hostileRooms = Array.from(collectHostileRooms(getMyUsername()));
+
     if (!Memory.kernel) Memory.kernel = {};
     const mission = Memory.kernel.prospect;
 
@@ -59,7 +62,7 @@ export const prospectManagerSystem: System = {
         startedAt: ctx.tick,
         spawned: 0,
       };
-      submitScoutRequest(ctx, Memory.kernel.prospect);
+      submitScoutRequest(ctx, Memory.kernel.prospect, hostileRooms);
       return;
     }
 
@@ -106,13 +109,13 @@ export const prospectManagerSystem: System = {
         return;
       }
       // 补派（侦察兵死在途中）：每轮至多补 1 只，spawned 累计封顶。
-      submitScoutRequest(ctx, mission);
+      submitScoutRequest(ctx, mission, hostileRooms);
     }
   },
 };
 
 /** 提交一个稳定 key 的 scout 孵化请求（幂等：同 key 合并），并计入 spawned。 */
-function submitScoutRequest(ctx: TickContext, mission: NonNullable<KernelMemory["prospect"]>): void {
+function submitScoutRequest(ctx: TickContext, mission: NonNullable<KernelMemory["prospect"]>, avoidRooms: string[]): void {
   const queue = Memory.rooms[mission.sponsor]?.spawnQueue;
   if (!queue) return;
   const key = spawnKey("scout", mission.sponsor, mission.spawned, mission.target);
@@ -130,6 +133,10 @@ function submitScoutRequest(ctx: TickContext, mission: NonNullable<KernelMemory[
       home: mission.sponsor,
       mode: "acquire",
       remoteTarget: mission.target,
+      // 已知 hostile 房集合：moveTowardRoom 跨房路由绕行（避开 Aguia 的 W38S58 这类），
+      // 无路可绕时由 scout 的 pushThrough 标志硬钻通过。仅导航安全网；源头优选由
+      // frontier 评分惩罚（hostileAdjacent）完成。
+      avoidRooms,
     },
     createdAt: ctx.tick,
     expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
@@ -175,6 +182,35 @@ function pruneCooldown(tick: number): void {
  * 直接邻居；当直接邻居全不可殖民时扩张永久饿死。外扩让 scout 探明第 2 圈及以外的
  * 干净中立房，落库 intel 后 expansion 评估器即可见（CONFIG.prospect.horizon 限圈数）。
  */
+/** 取己方用户名（排除假冒 owner），供 hostile 判定排除自身。 */
+function getMyUsername(): string {
+  for (const rn of Object.keys(Game.rooms)) {
+    const room = Game.rooms[rn];
+    if (room?.controller?.my && room.controller.owner) {
+      return room.controller.owner.username;
+    }
+  }
+  return "";
+}
+
+/**
+ * 已知 hostile 房集合：intel 中「敌方所有（owner≠我）」或「带遗迹 spawn（enemySpawns>0）」的房。
+ * 用于前沿候选评分惩罚 + scout 绕行，避免派 scout 去「需穿越敌方房才能 recon」的目标。
+ */
+function collectHostileRooms(myUsername: string): Set<string> {
+  const hostile = new Set<string>();
+  for (const home of Object.keys(Memory.rooms)) {
+    const intel = Memory.rooms[home]?.intel;
+    if (!intel) continue;
+    for (const [rn, e] of Object.entries(intel)) {
+      if (e && ((e.owner && e.owner !== myUsername) || (e.enemySpawns ?? 0) > 0)) {
+        hostile.add(rn);
+      }
+    }
+  }
+  return hostile;
+}
+
 function buildCandidates(tick: number): ProspectCandidate[] {
   const candidates: ProspectCandidate[] = [];
 
@@ -194,17 +230,14 @@ function buildCandidates(tick: number): ProspectCandidate[] {
   if (Memory.kernel?.expansion?.target) occupied.add(Memory.kernel.expansion.target);
 
   // 我方用户名（排除假冒 owner）。
-  let myUsername = "";
-  for (const rn of Object.keys(Game.rooms)) {
-    const room = Game.rooms[rn];
-    if (room?.controller?.my && room.controller.owner) {
-      myUsername = room.controller.owner.username;
-      break;
-    }
-  }
+  const myUsername = getMyUsername();
 
   const cooldown = Memory.kernel?.prospectCooldown;
   const horizon = CONFIG.prospect.horizon;
+
+  // 已知 hostile 房集合（敌方所有 / 带遗迹 spawn）— 用于前沿候选评分惩罚 + scout 绕行。
+  // 避免把 scout 派去「需穿越敌方房才能 recon」的目标（Aguia 的 W38S58 这类）。
+  const hostileRooms = collectHostileRooms(myUsername);
 
   // ── 已知房候选（intel 已收录）──
   const knownRooms = new Set<string>();
@@ -259,6 +292,10 @@ function buildCandidates(tick: number): ProspectCandidate[] {
         if (cooldown && (cooldown[neighbor] ?? 0) > tick) continue;
         const sponsor = nearestOwned(neighbor);
         if (roomLinearDistance(sponsor, neighbor) > horizon) continue;
+        // hostile 相邻判定：候选房的正交邻居中存在已知 hostile 房 → 评分惩罚（scout 需穿越
+        // 敌方房才能 recon，会被吓退/阵亡）。describeExits 按坐标计算，无需视野。
+        const exits = Game.map?.describeExits(neighbor);
+        const hostileAdj = !!(exits && Object.values(exits).some((ex) => ex && hostileRooms.has(ex)));
         candidates.push({
           roomName: neighbor,
           home: sponsor,
@@ -269,6 +306,7 @@ function buildCandidates(tick: number): ProspectCandidate[] {
           lastSeen: 0,
           occupied: false,
           known: false,
+          hostileAdjacent: hostileAdj,
         });
       }
     }

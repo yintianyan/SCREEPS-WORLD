@@ -43,7 +43,9 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         // （shouldFleeForeignRoom，修复 transit 盲区——必须排在 ensureHome 之前）；
         // home 房用 snapshot 的 threatCreeps（shouldFlee）。
         const inForeignRoom = creep.room.name !== creep.memory.home;
-        if (!policy.combat && inForeignRoom && shouldFleeForeignRoom(creep)) {
+        // pushThrough（recon scout）：跳过过境房威胁逃跑检测，继续向侦察目标推进。
+        // 否则 scout 钻进敌方房（如 Aguia 的 W38S58）即 flee 回 home，永远到不了 remoteTarget。
+        if (!policy.combat && !policy.pushThrough && inForeignRoom && shouldFleeForeignRoom(creep)) {
           creep.memory.mode = "flee";
           fleeToHome(creep);
           return;
