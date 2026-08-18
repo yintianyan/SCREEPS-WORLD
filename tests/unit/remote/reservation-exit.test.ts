@@ -84,4 +84,17 @@ describe("remote-mining-manager — 敌方 reservation 运行时退出", () => {
     expect(roomMem.remoteOps[targetRoom].state).toBe("active");
     expect(roomMem.remoteOps[targetRoom].dangerUntil).toBeUndefined();
   });
+
+  it("Invader NPC 预定不是玩家争矿 — 不废弃（交给核心分类链）", () => {
+    const g = globalThis as any;
+    const now = g.Game.time as number;
+
+    g.Game.rooms[targetRoom] = makeReservedRoom(targetRoom, "Invader");
+    seedMemory(now);
+    remoteMiningManagerSystem.run(mockContext(ownedSnapshot("me")));
+
+    const roomMem = g.Memory.rooms[homeRoom];
+    expect(roomMem.remoteOps[targetRoom].state).toBe("active");
+    expect(roomMem.remoteOps[targetRoom].dangerUntil).toBeUndefined();
+  });
 });

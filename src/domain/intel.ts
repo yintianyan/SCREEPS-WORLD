@@ -6,6 +6,24 @@
 /** 邻房类型：普通房 / source keeper 房 / 中心房 / 公路房。 */
 export type RoomKind = "normal" | "sk" | "center" | "highway";
 
+/**
+ * NPC Invader 的 username。Invader Core 会预定房间 — 这是核心占坑信号，
+ * 不是玩家争矿。远矿评选 / 运行时退出必须把它与敌对玩家 reservation 分开：
+ * 玩家预定止损不去；Invader 预定应派 coreClearer 拆核（次级）或等 decay（要塞）。
+ */
+export const INVADER_USERNAME = "Invader";
+
+/** 是否为敌对玩家预定（排除己方续期与 NPC Invader）。无 myUsername 时非 Invader 预定一律视为敌对。 */
+export function isHostilePlayerReservation(
+  reservedBy: string | undefined,
+  myUsername: string | undefined,
+): boolean {
+  if (!reservedBy) return false;
+  if (reservedBy === INVADER_USERNAME) return false;
+  if (!myUsername) return true;
+  return reservedBy !== myUsername;
+}
+
 /** 单个邻房的情报记录（存 RoomMemory.intel，短字段、有界）。 */
 export interface RoomIntel {
   kind: RoomKind;

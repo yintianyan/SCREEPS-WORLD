@@ -89,6 +89,12 @@ function attackCoreAction(): ActionCandidate<StructureInvaderCore> {
       return findInvaderCore(ac.creep);
     },
     execute: (ac, core) => {
+      // level 缺失按要塞保守处理（与 classifyInvaderCores 同口径）：轻量 clearer
+      // 打不过大要塞，立刻回收，等 manager 写 blockedUntil。
+      if ((core.level ?? 1) >= 1) {
+        ac.creep.memory.recycle = true;
+        return;
+      }
       // 部署期核心无敌 — 站旁边等，勿空耗寿命攻击。
       if (core.ticksToDeploy !== undefined) {
         moveToTarget(ac.creep, core);

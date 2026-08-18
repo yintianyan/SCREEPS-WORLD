@@ -10,6 +10,7 @@ import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext, ColonyState, RoomSnapshot } from "../kernel/contracts";
 import { selectRemoteTargets, shouldPauseOperation, effectiveMaxOperations, scoreRemoteCandidate, roomLinearDistance } from "../domain/remote/targeting";
+import { INVADER_USERNAME, isHostilePlayerReservation } from "../domain/intel";
 import { evaluateRemoteDemand, type RemoteCreepSummary } from "../domain/remote/demand";
 import { classifyThreats } from "../domain/defense/threat";
 import { submitRequest } from "../domain/spawn/queue";
@@ -129,12 +130,18 @@ export const remoteMiningManagerSystem: System = {
         const needed = maxOpsWithCapacity - activeCount;
         for (let i = 0; i < Math.min(needed, candidates.length); i++) {
           const candidate = candidates[i]!;
+          // Invader 预定 = Core 占坑：无视野时也先标 needCoreClear，demand 首波孵
+          // clearer 而不是经济编队（否则第一波 harvester 进房即被核心压制、再走
+          // 回收→失明）。有视野后 collectRemoteBlockers 会按 lesser/stronghold/clear 校正。
+          const reservedByInvader =
+            roomMem.intel?.[candidate.roomName]?.reservedBy === INVADER_USERNAME;
           remoteOps[candidate.roomName] = {
             state: "active",
             sources: candidate.sources,
             haulerNeed: candidate.haulerNeed,
             createdAt: ctx.tick,
             lastSeen: ctx.tick,
+            ...(reservedByInvader ? { needCoreClear: true } : {}),
           };
         }
       }
@@ -245,7 +252,7 @@ export const remoteMiningManagerSystem: System = {
         selfClaimedRooms.length > 0 || hostileReservedRooms.length > 0
           ? new Set([...blockedOrClear, ...selfClaimedRooms, ...hostileReservedRooms])
           : blockedOrClear;
-      recycleBlockedRoomCreeps(snapshot.roomName, recycleRooms);
+      recycleBlockedRoomCreeps(snapshot.roomName, recycleRooms, blockedRooms);
 
       // P0-A：远矿 container site 收编 — 消费 needContainer 申请标记。
       // siteCount 实测校正 + tick 配额仲裁（让位 emergency）+ 全局总量判定。
@@ -373,11 +380,13 @@ function maintainExistingOps(
       }
     }
 
-    // 敌方预定检测（需视野）：controller 被他人预定 → 废弃 + 回收 + 打冷却。
-    // 与 owner 检测同层，覆盖"开点后目标房被敌方 reserver 占据"的运行时场景。
-    // 己方续期（reservation.username === myUsername）不触发。
+    // 敌对玩家预定检测（需视野）：controller 被他人预定 → 废弃 + 回收 + 打冷却。
+    // 覆盖"开点后目标房被敌方 reserver 占据"。己方续期不触发。
+    // Invader 预定不走这条：那是 Core 占坑，由 collectRemoteBlockers 按 lesser/
+    // stronghold 分流。若此处把 Invader 当玩家争矿废弃，coreClearer 永远没有
+    // active op 可派（线上 W37S57 实证）。
     const reservedBy = targetRoom?.controller?.reservation?.username;
-    if (reservedBy && reservedBy !== myUsername) {
+    if (isHostilePlayerReservation(reservedBy, myUsername)) {
       op.state = "abandoned";
       hostileReserved.push(roomName);
       continue;
@@ -739,15 +748,19 @@ export function collectRemoteBlockers(remoteOps: Readonly<Record<string, RemoteO
  * spawn-manager 的 recyclePass 引导回收；孵化冻结由 blockedRooms 负责，
  * 核心 decay 后运营自动恢复（remoteOps 状态与 intel 均保留）。
  */
-function recycleBlockedRoomCreeps(homeRoom: string, blockedRooms: ReadonlySet<string>): void {
-  if (blockedRooms.size === 0) return;
+function recycleBlockedRoomCreeps(
+  homeRoom: string,
+  recycleRooms: ReadonlySet<string>,
+  strongholdRooms: ReadonlySet<string> = new Set(),
+): void {
+  if (recycleRooms.size === 0) return;
   for (const creep of Object.values(Game.creeps)) {
     if (creep.memory.home !== homeRoom) continue;
     if (creep.memory.recycle) continue;
-    // 清核者本身要在场拆核 —— 不被回收（否则派去拆核又立刻撤，永无止境）。
-    if (creep.memory.role === "coreClearer") continue;
     const target = creep.memory.remoteTarget;
-    if (!target || !blockedRooms.has(target)) continue;
+    if (!target || !recycleRooms.has(target)) continue;
+    // 次级核心房的 clearer 必须留场拆核；大要塞打不过，必须撤。
+    if (creep.memory.role === "coreClearer" && !strongholdRooms.has(target)) continue;
     creep.memory.recycle = true;
   }
 }

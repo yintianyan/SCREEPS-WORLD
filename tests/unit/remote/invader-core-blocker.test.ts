@@ -39,7 +39,7 @@ const baseInput = {
 };
 
 /** 按 find 常量分发的远矿房 mock：仅 FIND_HOSTILE_STRUCTURES 返回核心（level 可选）。 */
-function makeCoreRoom(name: string, opts: { level?: number; hostiles?: boolean } = {}) {
+function makeCoreRoom(name: string, opts: { level?: number; hostiles?: boolean; reservedBy?: string } = {}) {
   const level = opts.level ?? 1;
   const find = vi.fn((type: number) => {
     if (type === FIND_HOSTILE_STRUCTURES) {
@@ -50,7 +50,13 @@ function makeCoreRoom(name: string, opts: { level?: number; hostiles?: boolean }
     }
     return [];
   });
-  return { name, find };
+  return {
+    name,
+    find,
+    controller: opts.reservedBy
+      ? { reservation: { username: opts.reservedBy }, pos: { x: 25, y: 25 } }
+      : { pos: { x: 25, y: 25 } },
+  };
 }
 
 beforeEach(() => {
@@ -167,7 +173,7 @@ describe("remote-mining-manager — 次级核心(lesser)清核接线", () => {
     const g = globalThis as any;
     const now = g.Game.time as number;
 
-    g.Game.rooms[targetRoom] = makeCoreRoom(targetRoom, { level: 0 }); // 次级核心，无守卫
+    g.Game.rooms[targetRoom] = makeCoreRoom(targetRoom, { level: 0, reservedBy: "Invader" }); // 次级核心 + NPC 预定
 
     const harvester = mockCreep({ name: "rh1", role: "remoteHarvester", home: "W7N4" });
     harvester.memory.remoteTarget = targetRoom;
@@ -189,6 +195,8 @@ describe("remote-mining-manager — 次级核心(lesser)清核接线", () => {
 
     const roomMem = g.Memory.rooms.W7N4;
     // lesser 核心：标 needCoreClear 驱动孵 clearer，不阻塞（不写 dangerUntil）。
+    // Invader 预定不得把 op 废弃（否则 clearer 永远没有 active 目标）。
+    expect(roomMem.remoteOps[targetRoom].state).toBe("active");
     expect(roomMem.remoteOps[targetRoom].needCoreClear).toBe(true);
     expect(roomMem.remoteOps[targetRoom].dangerUntil).toBeUndefined();
     // 经济 creep 仍回收（核心压制 source，无法采集）。
@@ -360,5 +368,76 @@ describe("remote demand — clearRooms 次级核心清核", () => {
     });
     expect(requests).toHaveLength(1);
     expect(requests[0]!.role).toBe("coreClearer");
+  });
+});
+
+describe("remote-mining-manager — Invader 预定闭环（线上 W37S57 复现）", () => {
+  it("abandoned + intel.reservedBy=Invader + 无视野 → 重开 op 并首波孵 coreClearer", () => {
+    const g = globalThis as any;
+    const now = g.Game.time as number;
+    g.Memory.kernel = { strategy: { newRemoteOpsAllowed: true } };
+    g.Memory.rooms.W7N4 = {
+      colonyState: "normal",
+      spawnQueue: [],
+      remoteOps: {
+        [targetRoom]: {
+          state: "abandoned",
+          createdAt: now - 15000,
+          lastSeen: now - 15000,
+          sources: 2,
+        },
+      },
+      intel: {
+        [targetRoom]: {
+          kind: "normal",
+          status: "normal",
+          lastSeen: now - 15000,
+          sources: 2,
+          reservedBy: "Invader",
+          pathCost: 36,
+        },
+      },
+    };
+
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({
+      rcl: 5,
+      spawns: [{} as never],
+      storage: { store: { getUsedCapacity: () => 9800 } } as never,
+    })));
+
+    const roomMem = g.Memory.rooms.W7N4;
+    expect(roomMem.remoteOps[targetRoom].state).toBe("active");
+    expect(roomMem.remoteOps[targetRoom].needCoreClear).toBe(true);
+    const clearerReqs = (roomMem.spawnQueue as SpawnRequest[]).filter(
+      r => r.role === "coreClearer" && r.memory.remoteTarget === targetRoom,
+    );
+    expect(clearerReqs).toHaveLength(1);
+    expect(roomMem.spawnQueue.some((r: SpawnRequest) => r.role === "remoteHarvester")).toBe(false);
+  });
+
+  it("大要塞 + Invader 预定 → op 保持 active、回收 clearer、不孵 clearer", () => {
+    const g = globalThis as any;
+    const now = g.Game.time as number;
+    g.Game.rooms[targetRoom] = makeCoreRoom(targetRoom, { level: 1, reservedBy: "Invader" });
+    const clearer = mockCreep({ name: "cc1", role: "coreClearer", home: "W7N4" });
+    clearer.memory.remoteTarget = targetRoom;
+    g.Game.creeps = { cc1: clearer };
+    g.Memory.rooms.W7N4 = {
+      colonyState: "normal",
+      spawnQueue: [],
+      remoteOps: {
+        [targetRoom]: { state: "active", createdAt: now - 500, lastSeen: now, needCoreClear: true },
+      },
+      intel: { [targetRoom]: { kind: "normal", status: "normal", lastSeen: now, reservedBy: "Invader" } },
+    };
+
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
+
+    const roomMem = g.Memory.rooms.W7N4;
+    expect(roomMem.remoteOps[targetRoom].state).toBe("active");
+    expect(roomMem.remoteOps[targetRoom].needCoreClear).toBeUndefined();
+    expect(roomMem.remoteOps[targetRoom].blockedUntil).toBeGreaterThan(now);
+    expect(clearer.memory.recycle).toBe(true);
+    expect(roomMem.spawnQueue.filter((r: SpawnRequest) => r.role === "coreClearer")).toHaveLength(0);
   });
 });

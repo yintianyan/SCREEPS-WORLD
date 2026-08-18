@@ -5,7 +5,7 @@
  * 数据流：room-observer 采集 intel → 本函数筛选 → remote-mining-manager 建 remoteOps。
  */
 
-import type { RoomIntel } from "../intel";
+import { isHostilePlayerReservation, INVADER_USERNAME, type RoomIntel } from "../intel";
 import { CONFIG } from "../../config";
 
 
@@ -158,10 +158,11 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
     // 只选普通房（有 controller，可 reserve）。
     if (info.kind !== "normal") continue;
     if (info.owner) continue;
-    // 排除被他人预定的房（己方续期中的房 reservedBy===myUsername 仍可选）。
-    // 敌方预定 = 对方在争矿，派 reserver 去只能打无谓 attackController 拉锯
-    // （单只对抗持续续期磨不过），纯烧 CLAIM body + 占孵化位，止损不去。
-    if (info.reservedBy && info.reservedBy !== input.myUsername) continue;
+    // 排除被敌对玩家预定的房（己方续期仍可选）。玩家争矿派 reserver 只能打
+    // 无谓 attackController 拉锯，止损不去。Invader 预定不是争矿——是 Core 占坑，
+    // 必须可选，否则 abandoned 远矿永远重不开（线上 W37S57/W36S58：三邻房全
+    // reservedBy=Invader，coreClearer 因无 active op 永不派兵）。
+    if (isHostilePlayerReservation(info.reservedBy, input.myUsername)) continue;
     if (info.status !== "normal") continue;
     // 排除危险冷却中的房间 — 威胁刚出现过的房不送兵（止损）。
     // P1-G：dangerUntil 从 intel 迁移到 remoteOps（remote-mining-manager 唯一写入）。
@@ -176,6 +177,9 @@ export function selectRemoteTargets(input: RemoteTargetingInput): RemoteCandidat
       linearDistance: roomLinearDistance(homeRoom, roomName),
       sources: info.sources,
       haulerCapacity: input.haulerCapacity,
+      // Invader 预定期间无法 reserve，按未预定口径评分（收益减半、不计 reserver 摊销），
+      // 避免把「拆核后才能满产」的房估成现成 10 e/tick。
+      reserved: info.reservedBy !== INVADER_USERNAME,
     });
     if (netScore < CONFIG.remote.minNetScore) continue;
     candidates.push({

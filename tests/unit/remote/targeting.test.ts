@@ -135,6 +135,37 @@ describe("remote targeting — selectRemoteTargets", () => {
     expect(result.map((c) => c.roomName).sort()).toEqual(["W1N2", "W2N2"]);
   });
 
+  it("Invader 预定不是玩家争矿 — 仍可选（Core 占坑由 coreClearer 拆，不能永久锁死远矿）", () => {
+    const result = selectRemoteTargets({
+      homeRoom: "W1N1",
+      intel: {
+        W2N1: makeIntel({ reservedBy: "Invader", sources: 2, pathCost: 36 }),
+        W1N2: makeIntel({ reservedBy: "enemy", sources: 2, pathCost: 35 }),
+      },
+      existingOps: undefined,
+      tick,
+      staleThreshold,
+      haulerCapacity: 800,
+      myUsername: "me",
+    });
+    expect(result.map((c) => c.roomName)).toEqual(["W2N1"]);
+  });
+
+  it("无 myUsername 时 Invader 预定仍可选（NPC 与未知玩家预定必须分流）", () => {
+    const result = selectRemoteTargets({
+      homeRoom: "W1N1",
+      intel: {
+        W2N1: makeIntel({ reservedBy: "Invader", sources: 2, pathCost: 36 }),
+        W1N2: makeIntel({ reservedBy: "someone", sources: 2, pathCost: 35 }),
+      },
+      existingOps: undefined,
+      tick,
+      staleThreshold,
+      haulerCapacity: 800,
+    });
+    expect(result.map((c) => c.roomName)).toEqual(["W2N1"]);
+  });
+
   it("无 myUsername 时任何 reservedBy 都视为他人预定（保守排除）", () => {
     const result = selectRemoteTargets({
       homeRoom: "W1N1",

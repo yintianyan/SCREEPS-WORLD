@@ -4,7 +4,7 @@
  * 覆盖：房名分类（SK/中心/公路/普通）、无视野与有视野两种情报扫描。
  */
 import { describe, expect, it } from "vitest";
-import { classifyRoomByName, scanNeighborIntel } from "../../../src/domain/intel";
+import { classifyRoomByName, scanNeighborIntel, isHostilePlayerReservation, INVADER_USERNAME } from "../../../src/domain/intel";
 
 describe("intel — classifyRoomByName 房名分类", () => {
   it("任一坐标 mod 10 == 0 → 公路房", () => {
@@ -133,5 +133,19 @@ describe("intel — scanNeighborIntel 情报扫描", () => {
     expect(intel.enemySpawns).toBeUndefined();
     expect(intel.wallCount).toBeUndefined();
     expect(intel.sealedExits).toBeUndefined();
+  });
+});
+
+describe("intel — isHostilePlayerReservation", () => {
+  it("无预定 / 己方续期 / Invader NPC 预定都不是敌对玩家争矿", () => {
+    expect(isHostilePlayerReservation(undefined, "me")).toBe(false);
+    expect(isHostilePlayerReservation("me", "me")).toBe(false);
+    expect(isHostilePlayerReservation(INVADER_USERNAME, "me")).toBe(false);
+    expect(isHostilePlayerReservation(INVADER_USERNAME, undefined)).toBe(false);
+  });
+
+  it("敌对玩家预定是争矿；无 myUsername 时非 Invader 预定一律视为敌对", () => {
+    expect(isHostilePlayerReservation("Aguia", "me")).toBe(true);
+    expect(isHostilePlayerReservation("someone", undefined)).toBe(true);
   });
 });
