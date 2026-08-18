@@ -846,6 +846,14 @@ export const CONFIG = {
     /** 侦察是纯发展投资：bucket 低于此值不开新任务（进行中任务不受影响）。 */
     minBucket: 5000,
     /**
+     * 瞬时 posture 翻转脱敏窗口（Opt B）：pixel 放血会周期清空 bucket、令 posture 临时翻
+     * develop（expansionAllowed=false），若在途任务立即撤会孤儿化 scout。在此窗口内非 expand
+     * 不撤任务，仅 (a) 现场有活敌，或 (b) 持续非 expand 超过本窗口，才中止。窗口须明显大于
+     * pixel 放血导致的 develop 时长（≈ bucket 0→expandMinBucket 的回血，约 700~1000 tick），
+     * 又能区分真实战略撤退（持续 develop/war 远超本窗口，则果断收摊）。
+     */
+    postureGraceTicks: 2000,
+    /**
      * 视野外扩圈数上限（房）：prospect 除重探已知房外，主动侦察「已知房（含己方房）相邻、
      * 但 intel 未收录」的前沿房，使帝国能发现第 2 圈及以外的干净中立房。
      * 背景：room-observer 的邻房情报只从己方房出口刷新（room-observer.ts:156），

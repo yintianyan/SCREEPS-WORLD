@@ -195,8 +195,10 @@ describe("prospect-manager — 生命周期与止损", () => {
     expect(prospectEvents()[0]?.d?.[0]).toBe(2);
   });
 
-  it("姿态退出 → 中止（无冷却）", () => {
-    missionFixture();
+  it("姿态持续退出超 grace → 中止（无冷却）", () => {
+    // Opt B：瞬时翻转不再秒撤；仅当非 expand 持续超过 postureGraceTicks 才收摊。
+    // 预设 postureExitSince 已越过 grace 窗口 → 视为真实战略撤退，果断中止。
+    missionFixture({ postureExitSince: TICK - CONFIG.prospect.postureGraceTicks - 1 });
     (globalThis as any).Memory.kernel.strategy.expansionAllowed = false;
     (globalThis as any).Memory.kernel.strategy.posture = "develop";
     (globalThis as any).Game.creeps = {
@@ -207,6 +209,51 @@ describe("prospect-manager — 生命周期与止损", () => {
 
     expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
     expect((globalThis as any).Memory.kernel.prospectCooldown).toBeUndefined();
+    expect((globalThis as any).Game.creeps.s1.memory.recycle).toBe(true);
+    expect(prospectEvents()[0]?.d?.[0]).toBe(3);
+  });
+
+  it("Opt B 瞬时翻转（pixel 放血：bucket 跌落、posture 临时翻 develop）→ 任务存活、scout 不孤儿化", () => {
+    // 复现线上 bug：generatePixel() 周期清空 bucket → posture 翻 develop → 旧逻辑秒撤任务。
+    // Opt B 脱敏：非 expand 仍在 grace 窗口内 → 任务保留、scout 不回收。
+    missionFixture({ spawned: 1 });
+    (globalThis as any).Memory.kernel.strategy.expansionAllowed = false;
+    (globalThis as any).Memory.kernel.strategy.posture = "develop";
+    (globalThis as any).Game.cpu.bucket = 0; // 模拟 pixel 放血后 bucket 清零
+    (globalThis as any).Game.creeps = {
+      s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
+    };
+
+    const ctx = makeContext();
+    prospectManagerSystem.run(ctx);
+
+    const mission = (globalThis as any).Memory.kernel.prospect;
+    expect(mission).toBeDefined(); // 任务未被撤
+    expect(mission.postureExitSince).toBe(TICK); // 脱敏计时已起
+    expect((globalThis as any).Game.creeps.s1.memory.recycle).toBeUndefined(); // scout 未被回收
+    expect(prospectEvents()).toHaveLength(0); // 无中止事件
+
+    // 下一 tick bucket 回血、posture 翻回 expand → 脱敏计时清零、任务继续存活。
+    (globalThis as any).Memory.kernel.strategy.expansionAllowed = true;
+    (globalThis as any).Memory.kernel.strategy.posture = "expand";
+    (globalThis as any).Game.cpu.bucket = 10000;
+    prospectManagerSystem.run(makeContext());
+    expect((globalThis as any).Memory.kernel.prospect?.postureExitSince).toBeUndefined();
+  });
+
+  it("现场有活敌（hasLiveThreat）→ 绕过 grace 即时中止（无冷却）", () => {
+    // Opt B：真实战争威胁优先级最高，即便在 grace 窗口内也立即撤任务回收 scout。
+    missionFixture({ spawned: 1 });
+    (globalThis as any).Memory.kernel.strategy.expansionAllowed = false;
+    (globalThis as any).Memory.kernel.strategy.posture = "develop";
+    (globalThis as any).Game.creeps = {
+      s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
+    };
+
+    const ctx = makeContext(mockSnapshot({ threatCreeps: [{ id: "x" }] as any }));
+    prospectManagerSystem.run(ctx);
+
+    expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
     expect((globalThis as any).Game.creeps.s1.memory.recycle).toBe(true);
     expect(prospectEvents()[0]?.d?.[0]).toBe(3);
   });

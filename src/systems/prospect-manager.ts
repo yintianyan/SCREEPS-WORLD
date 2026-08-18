@@ -67,10 +67,26 @@ export const prospectManagerSystem: System = {
     }
 
     // ── 任务存续期 ──
-    // 姿态退出 → 中止（无冷却：目标无过错，重新允许时自然再评）。
-    if (Memory.kernel.strategy?.expansionAllowed !== true) {
+    // 瞬时 posture 翻转脱敏（Opt B）：pixel 放血会周期清空 bucket、令 posture 临时翻
+    // develop（expansionAllowed=false），若在途任务立即撤会孤儿化 scout。对此类瞬时翻转
+    // 脱敏——仅当 (a) 现场有活敌（hasLiveThreat，零滞回真相），或 (b) posture 持续非
+    // expand 超过 grace 窗口，才中止任务。目标无过错、重新允许时自然再评；真实战略撤退
+    // （war/持续 develop）由 grace 兜底收摊。
+    const liveThreat = [...ctx.snapshots()].some((s) => (s.threatCreeps?.length ?? 0) > 0);
+    if (liveThreat) {
       completeMission(ctx.tick, OUTCOME_ABORTED, false);
       return;
+    }
+    if (Memory.kernel.strategy?.expansionAllowed !== true) {
+      // 瞬时翻转脱敏：累计非 expand 持续 tick，超过 grace 才中止。
+      if (mission.postureExitSince === undefined) mission.postureExitSince = ctx.tick;
+      if (ctx.tick - mission.postureExitSince >= CONFIG.prospect.postureGraceTicks) {
+        completeMission(ctx.tick, OUTCOME_ABORTED, false);
+        return;
+      }
+    } else {
+      // 恢复 expand → 清零脱敏计时，任务存活。
+      mission.postureExitSince = undefined;
     }
 
     // 成功判定：目标 intel 已新鲜且 sources 已知（决策就绪）。

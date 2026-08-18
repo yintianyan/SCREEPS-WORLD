@@ -441,6 +441,13 @@ declare global {
       startedAt: number;
       /** 累计提交的 scout 孵化请求数（死亡上限判定）。 */
       spawned: number;
+      /**
+       * posture 退出（expansionAllowed=false）的持续起点 tick（Opt B 脱敏计时）。
+       * 瞬时翻转（pixel 放血致 posture 临时翻 develop）不立即撤任务——累计非 expand
+       * 时长超过 CONFIG.prospect.postureGraceTicks 才中止；恢复 expand 即清零。
+       * 仅 liveThreat 可绕过本窗口即时中止（真实战争威胁优先级最高）。
+       */
+      postureExitSince?: number;
     };
     /**
      * 侦察失败目标冷却（v29+，prospect-manager 写入）：房名 → 到期 tick。
