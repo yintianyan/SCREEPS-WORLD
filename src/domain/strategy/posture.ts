@@ -119,6 +119,25 @@ export function evaluateEmpirePosture(
   const since = prev?.since ?? tick;
   const dwellElapsed = tick - since;
 
+  // 扩张健康门（独立于姿态机，恐吓税修复）：殖民是高承诺动作，仅在全面健康时授权，
+  // 但与姿态显示解耦——近期受袭记忆(fortify)不再封锁扩张（对齐 newRemoteOpsAllowed
+  // 跟随 liveThreat）。liveThreat / war 门禁在 finalize 叠加（有活敌 / 战争中不打殖民）。
+  const sponsorReady = rooms.some(
+    r =>
+      r.rcl >= options.colonizeSponsorRcl &&
+      r.colonyState === "normal" &&
+      !r.hasLiveThreat &&
+      r.storageEnergy >= options.colonizeSponsorFloor,
+  );
+  const youngestMature = rooms.every(r => r.rcl >= options.colonizeYoungestFloorRcl);
+  const expandHealth =
+    gclHeadroom &&
+    allNormal &&
+    bucket >= options.expandMinBucket &&
+    avgPressure <= options.expandMaxPressure &&
+    sponsorReady &&
+    youngestMature;
+
   // ── 威胁升级：立即生效（紧急旁路，不等驻留期）──
   if (threatRecent) {
     // ── war 可持续性（R4 止损）：打不动经济必须退 ──
@@ -128,9 +147,9 @@ export function evaluateEmpirePosture(
       const nextCounter =
         avgPressure > options.warMaxPressure ? (input.warPressureTicks ?? 0) + 1 : 0;
       if (nextCounter >= options.warExitPatienceTicks) {
-        return finalize("fortify", prevPosture, since, tick, 0, liveThreat);
+        return finalize("fortify", prevPosture, since, tick, 0, liveThreat, expandHealth);
       }
-      return finalize("war", prevPosture, since, tick, nextCounter, liveThreat);
+      return finalize("war", prevPosture, since, tick, nextCounter, liveThreat, expandHealth);
     }
     // war 授权来自「持续被打 + 打得起」的证据链，与是否存在进攻代码无关 —
     // 执行器必须听姿态的，反之不成立。
@@ -139,45 +158,25 @@ export function evaluateEmpirePosture(
       dwellElapsed >= options.warPatience &&
       avgPressure <= options.warMaxPressure
     ) {
-      return finalize("war", prevPosture, since, tick, 0, liveThreat);
+      return finalize("war", prevPosture, since, tick, 0, liveThreat, expandHealth);
     }
-    return finalize("fortify", prevPosture, since, tick, 0, liveThreat);
+    return finalize("fortify", prevPosture, since, tick, 0, liveThreat, expandHealth);
   }
 
   // ── 威胁消退：降级需要最短驻留期（滞回防抖）──
   if (prevPosture === "fortify" || prevPosture === "war") {
     if (dwellElapsed < options.minDwell) {
-      return finalize(prevPosture, prevPosture, since, tick, 0, liveThreat);
+      return finalize(prevPosture, prevPosture, since, tick, 0, liveThreat, expandHealth);
     }
     // 静默期满回 develop（不直接跳 expand，先确认经济恢复节奏）。
-    return finalize("develop", prevPosture, since, tick, 0, liveThreat);
+    return finalize("develop", prevPosture, since, tick, 0, liveThreat, expandHealth);
   }
 
   // ── 和平姿态选择：expand（授权殖民）需要全面健康 + 核心成熟 ──
-  // Phase 1a：叠加「核心成熟度 + 最新房自立」防过早殖民（历史教训：RCL4 嫩房
-  // colonyState=normal 即触发殖民 → W6N3 失败、W8N4 硬上）。
-  // 殖民门（Phase 1a）：稳定性模型取代「库存硬门槛」（见 colonizeSponsorFloor 注释）。
-  // sponsor 房须：RCL 成熟(RCL7，自带 terminal+多 spawn) + 经济正常(colonyState=normal，
-  // 非 recovery/承压) + 无活威胁(复用 hasLiveThreat，战中不殖民) + 库存不低于饿死地板
-  // (兜底，不要求富余)。满足即视为可代孵——拓荒编队仅 ~2k 能量，由 sponsor 的 steady
-  // income 供给，不依赖囤积。旧版 storage>=100000 对 lean 帝国永远是达不到的死门槛。
-  const sponsorReady = rooms.some(
-    r =>
-      r.rcl >= options.colonizeSponsorRcl &&
-      r.colonyState === "normal" &&
-      !r.hasLiveThreat &&
-      r.storageEnergy >= options.colonizeSponsorFloor,
-  );
-  const youngestMature = rooms.every(r => r.rcl >= options.colonizeYoungestFloorRcl);
-  const canExpand =
-    gclHeadroom &&
-    allNormal &&
-    bucket >= options.expandMinBucket &&
-    avgPressure <= options.expandMaxPressure &&
-    sponsorReady &&
-    youngestMature;
-
-  return finalize(canExpand ? "expand" : "develop", prevPosture, since, tick, 0, liveThreat);
+  // 健康门已在上方统一计算为 expandHealth（含 Phase 1a「核心成熟度 + 最新房自立」防过早
+  // 殖民、稳定性模型取代 100k 库存死门槛等，详见上方注释）。此处仅据其选显示姿态，
+  // 扩张授权本身由 finalize 复用同一 expandHealth 推导，与姿态显示解耦。
+  return finalize(expandHealth ? "expand" : "develop", prevPosture, since, tick, 0, liveThreat, expandHealth);
 }
 
 /**
@@ -186,10 +185,14 @@ export function evaluateEmpirePosture(
  * 冻结指令跟随「真实在房威胁」而非过期姿态记忆：
  *  - 有活威胁(liveThreat) → 冻结新远矿 + 扩张：防御优先，不把新物流/殖民队送进战场；
  *  - 无活威胁 → 即便姿态仍卡 war/fortify（lastHostileAt 在威胁窗口内、敌人已撤离），
- *    也恢复自治，避免一次边境路过冻结远矿物流却无任何产出（"恐吓税"）。
+ *    也恢复自治，避免一次边境路过冻结扩张却无任何产出（"恐吓税"）。
  *  现役远矿运营不受影响（newRemoteOpsAllowed 只门禁"新"远矿点，现役 op 照常）。
- *  expansionAllowed 仍要求姿态为 expand（殖民是高承诺动作，仅在明确扩张态开启），
- *  并叠加活威胁门禁（有活敌不打殖民）——稳健优先于速度。
+ *
+ * 扩张授权（expansionAllowed）= 扩张健康门(expandHealth) && 无活威胁 && 非战争态：
+ *  - 不再要求 posture==="expand"——殖民是高承诺动作，授权门由"全面健康+无活敌"决定，
+ *    与姿态显示解耦（fortify 记忆不封锁扩张）；
+ *  - war 姿态仍硬性关闭扩张（战争是主动冲突，不应同时殖民）；
+ *  - liveThreat 门禁保留（有活敌不打殖民，防御优先于速度）。
  */
 function finalize(
   posture: EmpirePosture,
@@ -198,13 +201,14 @@ function finalize(
   tick: number,
   warPressureTicks: number = 0,
   liveThreat: boolean = false,
+  expandHealth: boolean = false,
 ): PostureResult {
   const since = posture === prevPosture ? prevSince : tick;
   const freeze = liveThreat;
   return {
     posture,
     since,
-    expansionAllowed: posture === "expand" && !freeze,
+    expansionAllowed: expandHealth && !freeze && posture !== "war",
     newRemoteOpsAllowed: !freeze,
     warPressureTicks,
   };

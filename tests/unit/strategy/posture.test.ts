@@ -141,7 +141,7 @@ describe("empire posture — 威胁升级（紧急旁路）", () => {
 });
 
 describe("empire posture — 冻结跟随真实在房威胁（恐吓税修复）", () => {
-  it("近期受袭但敌已撤离（无活威胁）→ 姿态 fortify，但远矿物流恢复(newRemoteOpsAllowed true)", () => {
+  it("近期受袭但敌已撤离（无活威胁）→ 姿态 fortify，但远矿物流与扩张均恢复", () => {
     const r = evaluateEmpirePosture(
       input({
         rooms: [room({ lastHostileAt: tick - 100 })], // 记忆窗口内但无 hasLiveThreat（敌已撤离）
@@ -150,6 +150,32 @@ describe("empire posture — 冻结跟随真实在房威胁（恐吓税修复）
     );
     expect(r.posture).toBe("fortify");
     expect(r.newRemoteOpsAllowed).toBe(true); // 关键修复：不再为过期记忆付恐吓税
+    expect(r.expansionAllowed).toBe(true); // 扩张侧同构解耦：fortify 记忆不封锁殖民
+  });
+
+  it("扩张侧恐吓税修复：fortify 无活威胁 + 全面健康 → expansionAllowed true", () => {
+    // 复现线上 Aguia 边境游荡：lastHostileAt 在窗口内（posture 钉 fortify），但此刻无活敌、
+    // 帝国全面健康 → 殖民授权应开放（殖民目标 W36S56 远离 Aguia 边境 W38S58，安全）。
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastHostileAt: tick - 100 })],
+        prev: { posture: "fortify", since: tick - 200 },
+      }),
+    );
+    expect(r.posture).toBe("fortify");
+    expect(r.expansionAllowed).toBe(true);
+  });
+
+  it("war 姿态（即便无活威胁）→ expansionAllowed false（战争是主动冲突，不殖民）", () => {
+    const r = evaluateEmpirePosture(
+      input({
+        rooms: [room({ lastHostileAt: tick - 100 })],
+        prev: { posture: "war", since: tick - DEFAULT_POSTURE_OPTIONS.minDwell - 1 },
+      }),
+    );
+    expect(r.posture).toBe("war");
+    expect(r.newRemoteOpsAllowed).toBe(true); // 无活敌 → 现役远矿可继续
+    expect(r.expansionAllowed).toBe(false); // 但战争态硬性关闭新殖民
   });
 
   it("war 姿态但无活威胁 → 远矿物流恢复（现役运营不受影响，仅新 op 放开）", () => {
