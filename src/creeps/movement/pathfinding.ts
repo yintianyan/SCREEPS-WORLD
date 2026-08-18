@@ -393,8 +393,12 @@ function tryCorridorPath(creep: Creep, target: RoomPosition): ScreepsReturnCode 
     // 无任何自愈收益；跨 tick 不重算才是自愈设计）。部分路径推进语义与引擎 moveTo 一致
     // （controller 唯一落点被静态阻挡时，upgrader 沿部分路径走近到 range3 即可开工）。
     // 持久层 __creepPathCache 维持不写 incomplete（红线保留），与 trySharedPath 写入 incomplete 对齐。
-    cache.set(cKey, result.path);
-    const moveResult = issuePathStep(creep, result.path);
+    // 契约修复：首格 prepend 首算者当前位置（PathFinder path 不含起点，见 computeAndPersistPath
+    // 同款修复）— 否则首算者本人 issuePathStep 里 nextDirFromPath 定位不到自己 → 白算一次。
+    // 后来者复用主干时在路径中段命中自身位置，不受首格影响。
+    const trunkPath = [creep.pos, ...result.path];
+    cache.set(cKey, trunkPath);
+    const moveResult = issuePathStep(creep, trunkPath);
     if (moveResult !== undefined) return moveResult;
   }
 
@@ -488,14 +492,24 @@ function computeAndPersistPath(
 
   if (result.path.length === 0) return undefined;
 
+  // 契约修复：返回/缓存路径首格必须是 creep 当前位置。PathFinder.search 返回的 path
+  // 不含起点（官服实测：search((25,25)→(30,25)).path[0]=(26,26)），而 nextDirFromPath
+  // 按「在 path 中定位当前位置」提取方向 — 缺起点则刚算完的路径永远匹配不到 → undefined
+  // → 缓存被立刻删除 → L2 强制重算（forceRepath 豁免冷却直走降级）的 creep 每 tick
+  // 「search→白费→不动」无限死循环（线上实证：scout 在 W37S58 主房卡死 stuck 283+，
+  // acquire/work 候选为空、ensureHome 是唯一移动驱动）。prepend 起点恢复系统既有契约
+  // （dynamic-target-limit 测试注释「路径首格 = origin」即此假设），偏离路径重算语义
+  // （第七刀：偏离不橡皮筋回旧起点）不变 — 偏离后当前位置不在 path 上仍返回 undefined。
+  const fullPath = [creep.pos, ...result.path];
+
   // incomplete 部分路径可用但不持久化 — PathFinder 找不到完整路径时返回「朝目标推进的最优前缀」。
   // 丢弃会造成行为回归（引擎 moveTo 对 incomplete 就是沿部分路径走近：线上实测 controller 唯一
   // range1 落点被站桩静态阻挡标 255 时，upgrader 满载石化在 range5 — 走近到 range3 即可开工）。
   // 不持久化：路况随时变化，逐 tick 重算保留自愈能力。
-  if (result.incomplete) return result.path;
+  if (result.incomplete) return fullPath;
 
-  getCreepPathCache()[creep.name] = { targetKey: targetPacked, structRevision, path: result.path };
-  return result.path;
+  getCreepPathCache()[creep.name] = { targetKey: targetPacked, structRevision, path: fullPath };
+  return fullPath;
 }
 
 // ─── P1-E：动态目标寻路限频（plan.md §5.7.5，remediation P1-E）────

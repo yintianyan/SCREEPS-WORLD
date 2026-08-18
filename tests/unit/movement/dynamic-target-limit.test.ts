@@ -139,16 +139,17 @@ function target(x: number, y: number): any {
 }
 
 /**
- * PathFinder.search mock — 返回从 origin 出发的 3 步路径。
- * origin 是 creep.pos，路径首格 = origin，确保 nextDirFromPath 能命中。
+ * PathFinder.search mock — 真实引擎语义：返回的 path **不含起点**。
+ * （官服实测：search((25,25)→(30,25)).path[0]=(26,26)≠origin — 2026-08-18 契约修复的
+ * 依据。computeAndPersistPath 现负责 prepend creep.pos，nextDirFromPath 才能定位自己。）
  */
 function setupPathFinderMock(): void {
   const pf = G().PathFinder;
   pf.search = vi.fn((origin: any) => ({
     path: [
-      { x: origin.x, y: origin.y, roomName: "W7N4" },
       { x: origin.x + 1, y: origin.y, roomName: "W7N4" },
       { x: origin.x + 2, y: origin.y, roomName: "W7N4" },
+      { x: origin.x + 3, y: origin.y, roomName: "W7N4" },
     ],
     incomplete: false,
     ops: 10,
@@ -383,5 +384,69 @@ describe("P1-E 综合 — 默认配置（档 1+2 开、档 3 关）", () => {
     creep.pos.x = 26;
     stepToward(creep, target(40, 40)); // 跨区块 + 冷却过期
     expect(G().PathFinder.search).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ─── 路径契约：缓存首格 = creep 当前位置（2026-08-18 契约修复回归锁）─────
+//
+// 背景：PathFinder.search 返回的 path 不含起点（官服实测），computeAndPersistPath
+// 曾直接存 engine path → nextDirFromPath 定位不到当前位置 → 缓存刚存即删 →
+// L2 强制重算 creep 每 tick「search→白费→不动」死循环（线上 scout 卡死 stuck 283+）。
+// 修复：缓存/返回路径 prepend creep.pos。本组用例锁定该契约防回归。
+
+describe("路径契约 — 缓存首格 = creep 当前位置", () => {
+  beforeEach(() => {
+    setupPathFinderMock();
+    preloadEmptyStructures();
+    cfg({ quantizeDynamicTarget: false, dynamicRepathInterval: 0, maxSearchesPerRoomPerTick: 0 });
+    G().Game.time = 1000;
+  });
+
+  it("search 后缓存路径首格 = creep.pos（prepend 契约）", () => {
+    const creep = makeCreep("c1", 25, 25);
+    stepToward(creep, target(35, 35));
+
+    const entry = (globalCache() as any).__creepPathCache?.["c1"];
+    expect(entry).toBeDefined();
+    expect(entry.path[0].x).toBe(25);
+    expect(entry.path[0].y).toBe(25);
+    expect(entry.path[0].roomName).toBe("W7N4");
+    // 引擎返回的 3 步（不含起点）应完整保留在首格之后。
+    expect(entry.path.length).toBe(4);
+  });
+
+  it("主路径 search 后必须产生移动意图（L2 死循环回归锁）", () => {
+    // 修复前：nextDirFromPath 在「不含起点的 engine path」里找不到 creep → undefined
+    // → 缓存即删 → ERR_NO_PATH → 本 tick 无移动意图。L2 forceRepath 豁免冷却降级，
+    // 每 tick 重演 = 永久钉死（scout 线上实证）。
+    const creep = makeCreep("c1", 25, 25);
+    const rc = stepToward(creep, target(35, 35));
+    expect(rc).toBe(0); // OK — 意图登记成功
+    const ledger = (globalCache() as any).__moveIntents;
+    expect(ledger?.intents?.get("c1")).toBeDefined();
+    const intent = ledger.intents.get("c1");
+    expect(intent.to).toBe(26 * 50 + 25); // (25,25)→RIGHT→(26,25)
+  });
+
+  it("缓存滚动：creep 走上路径后命中中段，不重算", () => {
+    // 防跨用例残留（前两用例同用 "c1" 名注册过缓存/意图）。
+    delete (globalCache() as any).__creepPathCache;
+    delete (globalCache() as any).__moveIntents;
+    const creep = makeCreep("c1", 25, 25);
+    stepToward(creep, target(35, 35));
+    expect(G().PathFinder.search).toHaveBeenCalledTimes(1);
+
+    // 走一步到 (26,25)（= engine path 首格），同目标 → 缓存命中中段
+    creep.pos.x = 26;
+    G().Game.time = 1001;
+    // 生产语义：room-snapshot 每 tick 预热结构缓存（checkedTick 随 tick 续期）。
+    // 测试环境无 Game.rooms，不续期会走回退路径返回 undefined → 缓存 miss（环境噪声）。
+    const structEntry = (globalCache() as any).__structCache?.["W7N4"];
+    if (structEntry) structEntry.checkedTick = 1001;
+    stepToward(creep, target(35, 35));
+    expect(G().PathFinder.search).toHaveBeenCalledTimes(1); // 不重算
+    // 且意图指向下一格 (27,25)
+    const intent = (globalCache() as any).__moveIntents?.intents?.get("c1");
+    expect(intent.to).toBe(27 * 50 + 25);
   });
 });

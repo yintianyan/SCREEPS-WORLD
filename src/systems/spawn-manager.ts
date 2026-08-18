@@ -62,16 +62,20 @@ export const spawnManagerSystem: System = {
       );
       if (purgedKeys.length > 0) {
         roomMem.spawnBlacklist ??= {};
-        // P0-3：采集角色（harvester/worker）永远豁免隔离 — 它们是经济命脉，normal/crisis
-        // 态恰是能量低谷最常见态，隔离会把「等能量」变成真死锁（线上 W37S58 死亡螺旋根因：
-        // 1cca151 的隔离机制在 normal 态把 harvester 关 500 tick → 某 source 停产 → 能量断链）。
+        // P0-3：经济命脉角色（采集 harvester/worker + 物流 hauler/distributor）永远豁免隔离。
+        // 采集端：normal/crisis 态恰是能量低谷最常见态，隔离会把「等能量」变成真死锁
+        // （线上 W37S58 死亡螺旋根因：1cca151 的隔离机制在 normal 态把 harvester 关 500 tick
+        // → 某 source 停产 → 能量断链）。
+        // 物流端（同构复发，2026-08-18 二次实证）：能量低谷 ea<最小 body 成本 → degradeBody
+        // 返回 undefined → retries 连烧（spawn-manager trySpawn :371）→ purge → hauler/distributor
+        // 被拉黑 1000 tick → distributor 是 storage→spawn/ext 唯一分发泵、hauler 是源→storage
+        // 唯一运力，隔离它们 = 把恢复期命脉掐断 → spawn/ext 长期半空 → recovery 拖长。
         // 失败只留队列重试，能量恢复即孵化（pre-1cca151 自愈语义）；真配置错误由独立的
         // churn 熔断（200t 窗口 >20 次 → 冻 100 tick）兜底，不会无限翻炒。
-        // 注意：churn 熔断对采集角色仍可能短窗(100t)软冻，危害可控；若实测误冻再评估把
-        // 采集角色加入 CHURN_FREEZE 豁免（P0 worker 恢复路径已如此处理，见 demand.ts）。
         for (const key of purgedKeys) {
-          const isCollector = key.startsWith("worker:") || key.startsWith("harvester:");
-          if (isCollector) continue;
+          const isLifeline = key.startsWith("worker:") || key.startsWith("harvester:")
+            || key.startsWith("hauler:") || key.startsWith("distributor:");
+          if (isLifeline) continue;
           const ttl = computeQuarantineTtl(key);
           roomMem.spawnBlacklist[key] = ctx.tick + ttl;
           console.log(`[${ctx.tick}] spawn/${snapshot.roomName}: quarantined ${key} for ${ttl} ticks`);

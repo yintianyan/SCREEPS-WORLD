@@ -112,12 +112,13 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
     const purgedKeys = cleanQueue(queue, 100, CONFIG.spawn.maxRetries, () => {});
     expect(purgedKeys).toContain("harvester:" + ROOM + ":0");
 
-    // 模拟 spawn-manager 的黑名单写入逻辑（采集角色跳过，不写黑名单）。
+    // 模拟 spawn-manager 的黑名单写入逻辑（经济命脉角色跳过，不写黑名单）。
     const roomMem = (globalThis as any).Memory.rooms[ROOM] as RoomMemory;
     roomMem.spawnBlacklist = {};
     for (const key of purgedKeys) {
-      const isCollector = key.startsWith("worker:") || key.startsWith("harvester:");
-      if (isCollector) continue; // 采集角色永远豁免隔离（pre-1cca151 自愈语义）
+      const isLifeline = key.startsWith("worker:") || key.startsWith("harvester:")
+        || key.startsWith("hauler:") || key.startsWith("distributor:");
+      if (isLifeline) continue; // 经济命脉永远豁免隔离（pre-1cca151 自愈语义）
       const ttl = computeQuarantineTtl(key);
       roomMem.spawnBlacklist[key] = 100 + ttl;
     }
@@ -125,10 +126,33 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
     expect(roomMem.spawnBlacklist!["harvester:" + ROOM + ":0"]).toBeUndefined();
   });
 
-  it("非采集角色（hauler）达 maxRetries → 长冷却 1000 tick（无回归）", () => {
-    const queue = [makeRequest("hauler", ROOM, 0)];
+  it("物流角色（hauler/distributor）达 maxRetries 也永不进黑名单（2026-08-18 二次螺旋修复）", () => {
+    // 物流命脉豁免扩围：能量低谷 degradeBody 返回 undefined → retries 连烧 → purge →
+    // 旧逻辑把 hauler/distributor 拉黑 1000 tick → distributor 是唯一分发泵、hauler 是唯一运力
+    // → spawn/ext 长期半空、恢复期被掐断（线上实证：hauler:W37S58:2/3 + distributor:W37S58:2
+    // 同时进黑名单）。修复后与采集角色同享豁免，churn 熔断兜底防真配置错误无限翻炒。
+    const queue = [makeRequest("hauler", ROOM, 0), makeRequest("distributor", ROOM, 0)];
     const purgedKeys = cleanQueue(queue, 100, CONFIG.spawn.maxRetries, () => {});
     expect(purgedKeys).toContain("hauler:" + ROOM + ":0");
+    expect(purgedKeys).toContain("distributor:" + ROOM + ":0");
+
+    const roomMem = (globalThis as any).Memory.rooms[ROOM] as RoomMemory;
+    roomMem.spawnBlacklist = {};
+    for (const key of purgedKeys) {
+      const isLifeline = key.startsWith("worker:") || key.startsWith("harvester:")
+        || key.startsWith("hauler:") || key.startsWith("distributor:");
+      if (isLifeline) continue;
+      const ttl = computeQuarantineTtl(key);
+      roomMem.spawnBlacklist[key] = 100 + ttl;
+    }
+    expect(roomMem.spawnBlacklist!["hauler:" + ROOM + ":0"]).toBeUndefined();
+    expect(roomMem.spawnBlacklist!["distributor:" + ROOM + ":0"]).toBeUndefined();
+  });
+
+  it("非命脉角色（defender）达 maxRetries → 长冷却 1000 tick（无回归）", () => {
+    const queue = [makeRequest("defender", ROOM, 0)];
+    const purgedKeys = cleanQueue(queue, 100, CONFIG.spawn.maxRetries, () => {});
+    expect(purgedKeys).toContain("defender:" + ROOM + ":0");
 
     const roomMem = (globalThis as any).Memory.rooms[ROOM] as RoomMemory;
     roomMem.spawnBlacklist = {};
@@ -136,8 +160,8 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
       const ttl = computeQuarantineTtl(key);
       roomMem.spawnBlacklist[key] = 100 + ttl;
     }
-    // 非采集角色长冷却 = requestTtl = 1000 tick。
-    expect(roomMem.spawnBlacklist!["hauler:" + ROOM + ":0"]).toBe(100 + 1000);
+    // 非命脉角色长冷却 = requestTtl = 1000 tick。
+    expect(roomMem.spawnBlacklist!["defender:" + ROOM + ":0"]).toBe(100 + 1000);
   });
 
   it("近 200 tick 内 harvester churn > 20 次 → 触发 100 tick 熔断", () => {
