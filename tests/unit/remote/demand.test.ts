@@ -271,6 +271,24 @@ describe("remote demand — evaluateRemoteDemand", () => {
     expect(harvesterReqs[0]!.replaceBy).toBe(tick);
   });
 
+  it("远距离路径提前交接，近距离不沿用固定 50 tick 过早替补", () => {
+    const dying: RemoteCreepSummary = {
+      name: "remoteHarvester-dying", role: "remoteHarvester", remoteTarget: targetRoom,
+      ticksToLive: 95, bodyLength: 5,
+    };
+    // 未取得路径成本时保留历史 50 tick 回退：阈值 15 + 15 + 50 = 80。
+    const unknown = evaluateRemoteDemand({ ...baseInput, remoteCreeps: [dying] });
+    expect(unknown.requests.filter(r => r.role === "remoteHarvester")).toHaveLength(0);
+
+    // pathCost=80 时通勤预算=95，完整阈值=125，应在 95 TTL 时启动交接。
+    const distant = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: [dying],
+      travelCosts: { [targetRoom]: 80 },
+    });
+    expect(distant.requests.filter(r => r.role === "remoteHarvester")).toHaveLength(1);
+  });
+
   it("濒死者 + 已有健康替补并存时不再补（防替换风暴）", () => {
     // target=1（单源）。濒死者在窗口内，但已有 1 只健康替补 → 健康数达标，不补。
     const dying: RemoteCreepSummary = {

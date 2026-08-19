@@ -13,6 +13,7 @@ import { selectBody } from "../../config/bodies";
 import type { ColonyState } from "../../kernel/contracts";
 import type { RoomIntel } from "../intel";
 import { spawnKey, countPending } from "../spawn/queue";
+import { remoteHaulerTarget, remoteReplacementThreshold } from "./staffing";
 
 /** 远矿 creep 摘要（与本地 CreepSummary 对齐但精简）。 */
 export interface RemoteCreepSummary {
@@ -38,6 +39,8 @@ export interface RemoteDemandInput {
   spawnQueue: readonly SpawnRequest[];
   /** 远矿房威胁信息（从 Game.rooms 检测，key = 房间名，value = 是否有威胁）。 */
   remoteThreats?: Readonly<Record<string, boolean>>;
+  /** 远矿通勤成本（来自 intel，运行时输入，不写入 RemoteOp）。 */
+  travelCosts?: Readonly<Record<string, number | undefined>>;
   /**
    * 被 InvaderCore 压制的远矿房集合 — 暂停该房一切孵化（含 defender）。
    * 拆核是纯送死（INVADER_CORE_HITS=100k，defender 20 dmg/tick × 1500 tick
@@ -136,9 +139,10 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
         key, 1, body, tick,
       ));
     } else {
-      const replacement = findReplacement(remoteCreeps, "remoteHarvester", targetRoom, tick);
+      const pathCost = input.travelCosts?.[targetRoom];
+      const replacement = findReplacement(remoteCreeps, "remoteHarvester", targetRoom, pathCost);
       // 守卫：健康数（含孵化中替补）+ pending 不足编制才补，防替换风暴（见 countHealthyByRole 注释）。
-      const healthy = countHealthyByRole(remoteCreeps, "remoteHarvester", targetRoom);
+      const healthy = countHealthyByRole(remoteCreeps, "remoteHarvester", targetRoom, pathCost);
       if (replacement && healthy + pending.remoteHarvester < harvesterTarget) {
         // 替补 key 绑定濒死 creep 名而非 total 索引：submitRequest 按 key 幂等合并，队列内始终只有一条替补。
         const key = replacementKey("remoteHarvester", homeRoom, targetRoom, replacement);
@@ -158,12 +162,8 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     //    过剩（线上实证 W36S58：2 harvester 爬坡 + 4 hauler，7 只 remoteHauler
     //    同批 idle 等货，视觉即「交通阻塞」）。按就位 harvester 数（含孵化中）等比
     //    收缩，下限 1 保物流连通；采集满编自动恢复全额编制，无迟滞字段、零状态。
-    const sourcesTotal = Math.max(1, op.sources ?? CONFIG.remote.harvestersPerTarget);
     const harvestersReady = (counts.remoteHarvester ?? 0) + pending.remoteHarvester;
-    const effectiveSources = Math.min(sourcesTotal, Math.max(1, harvestersReady));
-    const haulerTarget = Math.max(1, Math.ceil(
-      (op.haulerNeed ?? CONFIG.remote.haulersPerTarget) * (effectiveSources / sourcesTotal),
-    ));
+    const haulerTarget = remoteHaulerTarget(op.sources, op.haulerNeed, harvestersReady);
     const haulerTotal = (counts.remoteHauler ?? 0) + pending.remoteHauler;
     if (haulerTotal < haulerTarget) {
       const key = spawnKey("remoteHauler", homeRoom, haulerTotal, targetRoom);
@@ -173,8 +173,9 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
         key, 1, body, tick,
       ));
     } else {
-      const replacement = findReplacement(remoteCreeps, "remoteHauler", targetRoom, tick);
-      const healthy = countHealthyByRole(remoteCreeps, "remoteHauler", targetRoom);
+      const pathCost = input.travelCosts?.[targetRoom];
+      const replacement = findReplacement(remoteCreeps, "remoteHauler", targetRoom, pathCost);
+      const healthy = countHealthyByRole(remoteCreeps, "remoteHauler", targetRoom, pathCost);
       if (replacement && healthy + pending.remoteHauler < haulerTarget) {
         // 稳定替补 key（同 harvester 分支）。
         const key = replacementKey("remoteHauler", homeRoom, targetRoom, replacement);
@@ -202,8 +203,9 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
           ));
         }
       } else {
-        const replacement = findReplacement(remoteCreeps, "reserver", targetRoom, tick);
-        const healthy = countHealthyByRole(remoteCreeps, "reserver", targetRoom);
+        const pathCost = input.travelCosts?.[targetRoom];
+        const replacement = findReplacement(remoteCreeps, "reserver", targetRoom, pathCost);
+        const healthy = countHealthyByRole(remoteCreeps, "reserver", targetRoom, pathCost);
         if (replacement && healthy + pending.reserver < 1) {
           // 稳定替补 key（同 harvester 分支）。
           const key = replacementKey("reserver", homeRoom, targetRoom, replacement);
@@ -258,12 +260,12 @@ function countRemotePending(
 
 /**
  * creep 是否在替换窗口内（即将死亡，不计入有效编制）。
- * 阈值 = body.length*3 + replaceBuffer + 50（跨房通勤更远，加 50 tick 余量）；
+ * 阈值 = body.length*3 + replaceBuffer + 基于实测 pathCost 的通勤余量；
  * 孵化中/新生 creep（ticksToLive 未定义）视为满编制。
  */
-function inReplacementWindow(creep: RemoteCreepSummary): boolean {
+function inReplacementWindow(creep: RemoteCreepSummary, pathCost: number | undefined): boolean {
   if (creep.ticksToLive === undefined) return false;
-  const threshold = (creep.bodyLength ?? 3) * 3 + CONFIG.spawn.replaceBuffer + 50;
+  const threshold = remoteReplacementThreshold(creep.bodyLength, pathCost);
   return creep.ticksToLive <= threshold;
 }
 
@@ -277,11 +279,12 @@ function countHealthyByRole(
   creeps: readonly RemoteCreepSummary[],
   role: string,
   targetRoom: string,
+  pathCost: number | undefined,
 ): number {
   let n = 0;
   for (const c of creeps) {
     if (c.role !== role || c.remoteTarget !== targetRoom) continue;
-    if (inReplacementWindow(c)) continue;
+    if (inReplacementWindow(c, pathCost)) continue;
     n++;
   }
   return n;
@@ -292,12 +295,12 @@ function findReplacement(
   creeps: readonly RemoteCreepSummary[],
   role: string,
   targetRoom: string,
-  _tick: number,
+  pathCost: number | undefined,
 ): string | undefined {
   for (const creep of creeps) {
     if (creep.role !== role) continue;
     if (creep.remoteTarget !== targetRoom) continue;
-    if (inReplacementWindow(creep)) return creep.name;
+    if (inReplacementWindow(creep, pathCost)) return creep.name;
   }
   return undefined;
 }

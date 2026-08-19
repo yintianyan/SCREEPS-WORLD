@@ -12,6 +12,7 @@ import type { Priority, System, TickContext, ColonyState, RoomSnapshot } from ".
 import { selectRemoteTargets, shouldPauseOperation, effectiveMaxOperations, scoreRemoteCandidate, roomLinearDistance } from "../domain/remote/targeting";
 import { INVADER_USERNAME, isHostilePlayerReservation } from "../domain/intel";
 import { evaluateRemoteDemand, type RemoteCreepSummary } from "../domain/remote/demand";
+import { remoteReplacementThreshold } from "../domain/remote/staffing";
 import { classifyThreats } from "../domain/defense/threat";
 import { submitRequest } from "../domain/spawn/queue";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
@@ -281,6 +282,9 @@ export const remoteMiningManagerSystem: System = {
           remoteThreats,
           blockedRooms,
           clearRooms,
+          travelCosts: Object.fromEntries(
+            Object.keys(remoteOps).map(roomName => [roomName, roomMem.intel?.[roomName]?.pathCost]),
+          ),
         });
 
         // 推入 spawnQueue。
@@ -291,7 +295,11 @@ export const remoteMiningManagerSystem: System = {
       }
 
       // 5. 回收过量远矿 creep（超过配置上限的旧 creep 标记回收，节省 CPU）。
-      recycleExcessRemoteCreeps(snapshot.roomName, remoteOps);
+      recycleExcessRemoteCreeps(
+        snapshot.roomName,
+        remoteOps,
+        roomMem.intel,
+      );
     }
   },
 };
@@ -576,6 +584,7 @@ function hasCreepInRoom(roomName: string): boolean {
 export function recycleExcessRemoteCreeps(
   homeRoom: string,
   remoteOps: Readonly<Record<string, RemoteOp>>,
+  travelCosts?: Readonly<Record<string, { pathCost?: number }>>,
 ): void {
   // 收集每个 active 目标的远矿 creep，按角色分组。
   const byTarget = new Map<string, { harvester: Creep[]; hauler: Creep[]; reserver: Creep[]; defender: Creep[] }>();
@@ -583,7 +592,6 @@ export function recycleExcessRemoteCreeps(
   for (const creep of Object.values(Game.creeps)) {
     if (creep.memory.home !== homeRoom) continue;
     if (creep.memory.recycle) continue; // 已标记回收的跳过。
-    if (creep.spawning) continue; // 孵化中的替补未上岗，不参与配额判定。
     const target = creep.memory.remoteTarget;
     if (!target) continue;
     const op = remoteOps[target];
@@ -595,6 +603,7 @@ export function recycleExcessRemoteCreeps(
       byTarget.set(target, entry);
     }
     const role = creep.memory.role;
+    if (creep.spawning) continue;
     if (role === "remoteHarvester") entry.harvester.push(creep);
     else if (role === "remoteHauler") entry.hauler.push(creep);
     else if (role === "reserver") entry.reserver.push(creep);
@@ -602,9 +611,11 @@ export function recycleExcessRemoteCreeps(
   }
 
   // 替换窗口判定 — 与 demand 的 findReplacement 完全同口径。
-  const inReplacementWindow = (c: Creep): boolean =>
-    c.ticksToLive !== undefined &&
-    c.ticksToLive <= c.body.length * 3 + CONFIG.spawn.replaceBuffer + 50;
+  const inReplacementWindow = (c: Creep): boolean => {
+    const pathCost = travelCosts?.[c.memory.remoteTarget ?? ""]?.pathCost;
+    return c.ticksToLive !== undefined &&
+      c.ticksToLive <= remoteReplacementThreshold(c.body.length, pathCost);
+  };
 
   // 组内标记：豁免垂死交接者后，健康成员超出配额的部分回收（保留最年轻）。
   const markExcess = (creeps: Creep[], quota: number): void => {
@@ -628,12 +639,9 @@ export function recycleExcessRemoteCreeps(
         CONFIG.remote.harvestersMaxPerTarget,
       ),
     );
-    // hauler 配额必须与 demand 侧同口径（op.haulerNeed 动态编制，回退
-    // haulersPerTarget）。远矿 2.0 引入动态编制时此处漏改，口径分裂成
-    // 「孵化按 haulerNeed=2-3、回收按固定值 1」— 编制内的健康 hauler
-    // 被反复标记回收，collectRemoteCreeps 又排除被标记者，demand 视角
-    // 缺编再孵，形成孵化→回收死循环（线上实测：W7N3 编制 2 只，第 2 只
-    // 永远 recycle=true，每轮白烧一具 body + 跨房返程）。
+    // 爬坡期需求侧只少孵、不主动回收健康 hauler：远矿通勤存在长反馈延迟，
+    // 已付出的运力在下一名 miner 到位后立即可用；低能量无 storage 时提前收缩
+    // 会使 container 积压、home 断供并进入死亡螺旋。真正超额仅按满产额度回收。
     markExcess(entry.hauler, remoteOps[target]?.haulerNeed ?? CONFIG.remote.haulersPerTarget);
     markExcess(entry.reserver, 1);
     markExcess(entry.defender, 1);
@@ -899,4 +907,3 @@ export function fulfillContainerRequests(
     if (fulfilled) break;
   }
 }
-
