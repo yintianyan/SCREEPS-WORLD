@@ -104,6 +104,59 @@ function hasCreepAt(room: Room, x: number, y: number): boolean {
   return (room.lookForAt(LOOK_CREEPS, x, y) as Creep[]).length > 0;
 }
 
+/** 该格是否有阻挡站立的结构（与 getParkRoomData.blocking 同口径，用于无快照的异房）。 */
+function hasBlockingStructureAt(room: Room, x: number, y: number): boolean {
+  const structs = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
+  return structs.some(s =>
+    s.structureType !== STRUCTURE_ROAD &&
+    s.structureType !== STRUCTURE_CONTAINER &&
+    s.structureType !== STRUCTURE_RAMPART,
+  );
+}
+
+/**
+ * 异房（远矿/过境房）归位 — 无本房快照时的启发式分支。
+ * 背景（2026-08-19 线上实证）：parkIdleCreep 拿到的 snapshot 恒为 home 房，
+ * 坐标口径对异房毫无意义 → isSafeSpot 对异房 creep 恒「已安全」→ idle 停在
+ * 跨房第一步（边界格一带），堵住出入口走廊（remoteHauler 扎堆 W36S58 (1,27-30)，
+ * 视觉即「交通阻塞无法到达」）。启发式安全 = 距边界 ≥2 格（边界 1 格是引擎弹回区、
+ * 贴边 2 格是通勤走廊）；不安全时 8 邻域内移，选距房心最近的可站格。
+ */
+function parkInForeignRoom(creep: Creep): void {
+  const room = creep.room;
+  const { x, y } = creep.pos;
+  const inCorridor = (nx: number, ny: number): boolean =>
+    nx <= 1 || nx >= 48 || ny <= 1 || ny >= 48;
+  if (!inCorridor(x, y)) {
+    // 已离开走廊带 — 预约本格防重复寻路，原地待命。
+    getParkReservations().add(packPos(creep.pos));
+    return;
+  }
+  const reserved = getParkReservations();
+  let best: { x: number; y: number; dist: number } | undefined;
+  for (const dir of Object.keys(DIR_DELTA)) {
+    const delta = DIR_DELTA[Number(dir) as DirectionConstant];
+    if (!delta) continue;
+    const nx = x + delta[0];
+    const ny = y + delta[1];
+    if (nx < 0 || nx > 49 || ny < 0 || ny > 49) continue;
+    if (inCorridor(nx, ny)) continue; // 仍贴边 — 继续内移才有意义。
+    if (!isWalkableTerrain(room, nx, ny)) continue;
+    if (hasBlockingStructureAt(room, nx, ny)) continue;
+    if (hasCreepAt(room, nx, ny)) continue;
+    const packed = nx * 50 + ny;
+    if (reserved.has(packed)) continue;
+    const dist = Math.max(Math.abs(nx - 25), Math.abs(ny - 25));
+    if (!best || dist < best.dist) best = { x: nx, y: ny, dist };
+  }
+  if (!best) return; // 无可用内移格 — 保持 idle，下 tick 再试。
+  reserved.add(best.x * 50 + best.y);
+  const spotPos = room.getPositionAt(best.x, best.y);
+  if (!spotPos) return;
+  const dir = creep.pos.getDirectionTo(spotPos);
+  registerMove(creep, dir as DirectionConstant, CONFIG.movement.trafficPriority.parked);
+}
+
 /**
  * 判断 creep 当前位置是否已安全（不需要归位）。
  * 安全 = 非关键格 且 非 road。
@@ -196,6 +249,13 @@ export function parkIdleCreep(creep: Creep, snapshot: RoomSnapshot): void {
   // 永不生效，挡路只能靠移动方 ignoreCreeps:false 绕行。
   // traffic 开启时禁用 — 静止 creep 的让路由集中解算的推挤机制接管。
   if (!trafficEnabled() && checkAndExecuteYield(creep)) return;
+
+  // 异房分支：snapshot 恒为 home 房（role-runner 以 memory.home 取快照），坐标口径
+  // 不适用于远矿/过境房 — 交给启发式（远离边界走廊），不用 home 的关键格/道路集合。
+  if (creep.room.name !== snapshot.roomName) {
+    parkInForeignRoom(creep);
+    return;
+  }
 
   const reserved = getParkReservations();
   const currentPacked = packPos(creep.pos);

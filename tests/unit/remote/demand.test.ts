@@ -108,17 +108,57 @@ describe("remote demand — evaluateRemoteDemand", () => {
     expect(haulerReqs).toHaveLength(0);
   });
 
-  it("op.haulerNeed=2 时已有 1 只仍继续补第 2 只（动态编制放大目标）", () => {
+  it("op.haulerNeed=2 且采集满编时已有 1 只仍继续补第 2 只（动态编制放大目标）", () => {
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
       remoteOps: {
         [targetRoom]: { state: "active", sources: 2, haulerNeed: 2, lastSeen: tick },
       },
-      remoteCreeps: makeCreeps("remoteHauler", 1), // 已有 1 只。
+      remoteCreeps: [
+        ...makeCreeps("remoteHauler", 1), // 已有 1 只。
+        ...makeCreeps("remoteHarvester", 2), // 采集端满编（2 source 全就位）。
+      ],
     });
-    // 回退档（target=1）时这 1 只已满足、不再补；haulerNeed=2 时仍补第 2 只。
+    // 回退档（target=1）时这 1 只已满足、不再补；haulerNeed=2 且采集满编时仍补第 2 只。
     const haulerReqs = requests.filter((r) => r.role === "remoteHauler");
     expect(haulerReqs).toHaveLength(1);
+  });
+
+  it("采集端联动收缩（2026-08-19）：harvester 未满编时 hauler 编制等比收缩", () => {
+    // 场景（线上实证 W36S58）：sources=2 + haulerNeed=2，但 harvester 0 就位（爬坡期）
+    // → 旧逻辑全额配 2 只 hauler 扎堆 idle 等货；新逻辑收缩为 1 只保物流连通。
+    const ramping = evaluateRemoteDemand({
+      ...baseInput,
+      remoteOps: {
+        [targetRoom]: { state: "active", sources: 2, haulerNeed: 2, lastSeen: tick },
+      },
+      remoteCreeps: makeCreeps("remoteHauler", 1), // 已有 1 只 hauler，0 harvester。
+    });
+    expect(ramping.requests.filter((r) => r.role === "remoteHauler")).toHaveLength(0); // 收缩后已满足。
+
+    // 采集半编（2 source 只有 1 harvester）→ haulerNeed=2 收缩为 ceil(2×0.5)=1。
+    const half = evaluateRemoteDemand({
+      ...baseInput,
+      remoteOps: {
+        [targetRoom]: { state: "active", sources: 2, haulerNeed: 2, lastSeen: tick },
+      },
+      remoteCreeps: makeCreeps("remoteHarvester", 1), // 半编，无 hauler。
+    });
+    const haulerReqs = half.requests.filter((r) => r.role === "remoteHauler");
+    expect(haulerReqs).toHaveLength(1); // 只孵 1 只（收缩后目标）。
+
+    // 采集满编 → 恢复全额 2 只。
+    const full = evaluateRemoteDemand({
+      ...baseInput,
+      remoteOps: {
+        [targetRoom]: { state: "active", sources: 2, haulerNeed: 2, lastSeen: tick },
+      },
+      remoteCreeps: [
+        ...makeCreeps("remoteHarvester", 2),
+        ...makeCreeps("remoteHauler", 1), // 已有 1 只，应补第 2 只。
+      ],
+    });
+    expect(full.requests.filter((r) => r.role === "remoteHauler")).toHaveLength(1);
   });
 
   it("op 无 haulerNeed 时回退 haulersPerTarget=1（存量运营兼容）", () => {
