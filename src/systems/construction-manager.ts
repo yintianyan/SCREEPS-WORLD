@@ -151,9 +151,9 @@ export function cleanOrphanConstructionSites(): void {
  * 返回 true 表示允许建造。
  *
  * 紧急重建（source container / tower / spawn / storage 缺失）豁免 economyPressure / budget /
- * P0 队列 / 能量门禁，但不豁免威胁检测 — 敌人脚下不建工地。
+ * P0 队列 / 能量门禁 / claim-secure 护栏，但不豁免威胁检测 — 敌人脚下不建工地。
  */
-function developmentGate(
+export function developmentGate(
   snapshot: RoomSnapshot,
   ctx: TickContext,
   emergency: EmergencyRebuildStatus,
@@ -164,6 +164,11 @@ function developmentGate(
     const pressure = Memory.rooms[snapshot.roomName]?.economyPressure ?? 0;
     if (pressure > 0.8) return false;
     if (ctx.budget.tier === "recovery" || ctx.budget.tier === "conserve") return false;
+
+    // 脆弱新房护栏（claim-secure）：RCL<4 且 controller 临近降级时，集中能量保
+    // controller —— 抑制一切非紧急 site 创建。紧急重建（spawn/tower/storage 缺失）
+    // 走 emergency 路径豁免本门禁（上方 !emergency.any 包裹），确保关键基建仍可建。
+    if (Memory.rooms[snapshot.roomName]?.claimSecure) return false;
   }
 
   // 有威胁 creep 时不建造（过境 scout 不影响建造）。

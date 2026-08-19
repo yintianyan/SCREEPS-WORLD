@@ -125,6 +125,12 @@ declare global {
     economyPressure?: number;
     controllerDowngradeRisk?: boolean;
     /**
+     * 脆弱新房护栏标记（claim-secure，v-next，room-state 每 tick 写入）：
+     * RCL<4 且 controller 临近降级时为 true，供 construction-manager 抑制非必要建造、
+     * upgrader 放宽取能地板，集中能量保住 controller（新房无 storage 缓冲）。
+     */
+    claimSecure?: boolean;
+    /**
      * 上一 tick 是否紧急（P1-2 边沿触发）：assignment-service 仅在
      * 「正常 → 紧急」上升沿失效任务，持续紧急不重复失效（防抖动）。
      */

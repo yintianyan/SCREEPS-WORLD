@@ -449,3 +449,32 @@ describe("upgrader — 站桩同 tick 取+升（stationaryUpgrade / ③）", () 
     expect(creep.withdraw).not.toHaveBeenCalledWith(emptyLink, "energy");
   });
 });
+
+describe("upgrader — claim-secure 护栏（脆弱新房放宽取能地板）", () => {
+  it("claimSecure=true 时即使 energyAvailable 低于地板也放行 acquire（保级优先）", () => {
+    // 模拟 W38S59 类新房：RCL3、无任何替代能量源、energyAvailable 偏低、ttd 远高于
+    // 紧急阈值（20000）—— 正常地板门禁会拦截，但 claimSecure 应放行让 upgrader 喂 controller。
+    (globalThis as any).Memory.rooms.W7N4.claimSecure = true;
+    const controller = mockController({ ticksToDowngrade: 20000 });
+    const source = mockSource("s1");
+    const snap = mockSnapshot({
+      controller,
+      rcl: 3,
+      energyAvailable: 100, // 低于 upgradeEnergyFloor(300) 与 capacity*0.4
+      energyCapacityAvailable: 800,
+      storage: undefined,
+      sources: [source],
+      sourceOccupancy: new Map([["s1", 0]]),
+      containers: [],
+      links: [],
+    });
+    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    // claimSecure 放宽地板 → 不阻止 acquire → 无替代能量源则回退 harvest 喂 controller。
+    expect(creep.memory.mode).not.toBe("idle");
+    expect(creep.harvest).toHaveBeenCalledWith(source);
+  });
+});

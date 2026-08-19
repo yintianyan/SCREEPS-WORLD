@@ -1,4 +1,5 @@
 import type { ColonyState } from "../../kernel/contracts";
+import { CONFIG } from "../../config";
 
 /**
  * 殖民相位（Colony Phase）— 每房经济状态的唯一权威来源，替代散落各处的
@@ -289,4 +290,38 @@ export function phaseToColonyState(
   if (phase === "bootstrap") return "bootstrap";
   if (phase === "crisis" || phase === "recovery") return "recovery";
   return "normal";
+}
+
+/**
+ * 脆弱新房（claim-secure）护栏谓词 — 「先保级再发展」的前置护栏核心判定。
+ *
+ * 判定：RCL<4（无 storage 缓冲，能量池薄，一旦 builder 抢能量 controller 极易降级）
+ * + controller 临近降级（ticksToDowngrade 低于进入阈值）。
+ * RCL4+ 房间已有 storage 缓冲，降级由既有 emergency 豁免（upgraderGate /
+ * dynamicStorageLimit 的 isEmergency）处理，不在此列。
+ *
+ * 用途：room-state 用 {@link computeClaimSecure} 带迟滞写入 roomMem.claimSecure；
+ * construction-manager 据此抑制非必要建造、upgrader 据此放宽取能地板。
+ */
+export function isClaimSecure(rcl: number, ticksToDowngrade: number | undefined): boolean {
+  if (rcl >= 4) return false;
+  if (ticksToDowngrade === undefined) return false;
+  return ticksToDowngrade < CONFIG.economy.claimSecureEnterTtd;
+}
+
+/**
+ * 带迟滞的 claimSecure 状态记忆（供 room-state 每 tick 持久化到 roomMem.claimSecure）。
+ * 进入阈值 claimSecureEnterTtd，退出阈值 claimSecureExitTtd — 双门槛防「保级/发展」
+ * 在临界 ttd 高频振荡（与 controllerDowngradeRisk 同款迟滞；ttd 最大值为控制器升级
+ * 重置值 20000，故退出阈值取 20000 确保 upgrader 一旦保住 controller 即解除护栏）。
+ */
+export function computeClaimSecure(
+  rcl: number,
+  ticksToDowngrade: number | undefined,
+  prev: boolean,
+): boolean {
+  if (rcl >= 4) return false;
+  if (ticksToDowngrade === undefined) return false;
+  if (prev) return ticksToDowngrade < CONFIG.economy.claimSecureExitTtd;
+  return ticksToDowngrade < CONFIG.economy.claimSecureEnterTtd;
 }

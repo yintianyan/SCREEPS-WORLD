@@ -284,6 +284,17 @@ export const CONFIG = {
     controllerDowngradeThreshold: 10000,
     /** controllerDowngradeRisk 迟滞退出阈值 —— ticksToDowngrade 回升到此值以上才退出风险状态。 */
     controllerDowngradeExitThreshold: 15000,
+    /**
+     * claim-secure 护栏「进入」阈值（controller ticksToDowngrade）：RCL<4 无 storage
+     * 缓冲的新房，ttd 低于此值即进入「保级优先」态 —— 比 controllerDowngradeRisk(10000)
+     * 更前置，把能量预留给 upgrader 防降级，而非等降到 10000 才反应。迟滞退出见下。
+     */
+    claimSecureEnterTtd: 15000,
+    /**
+     * claim-secure 护栏「退出」迟滞阈值：ttd 回升到此值以上才解除（双门槛防振荡）。
+     * = 控制器升级重置后的最大 ttd(20000)，确保 upgrader 一旦保住 controller 即解除护栏。
+     */
+    claimSecureExitTtd: 20000,
     /** 升级功率控制（A2：storage 水位驱动 + RCL8 显式限速）。 */
     upgrade: {
       /** storage 能量 ≥ 此值且 pressure ≤ 0.3 时进入升级冲刺（燃烧库存换 RCL 复利）。 */

@@ -3,6 +3,7 @@ import type { Priority, System, TickContext } from "../kernel/contracts";
 import {
   evaluateColonyPhase,
   phaseToColonyState,
+  computeClaimSecure,
   type PhaseState,
 } from "../domain/economy/phase";
 import { EventKind, recordEvent } from "../kernel/event-log";
@@ -248,6 +249,20 @@ export const roomStateSystem: System = {
         }
       } else {
         roomMem.controllerDowngradeRisk = false;
+      }
+
+      // 6.5 脆弱新房护栏标记（claim-secure）：RCL<4 且 controller 临近降级时标记，
+      // 供 construction-manager 抑制非必要建造、upgrader 放宽取能地板 —— 集中能量
+      // 保住 controller（新房无 storage 缓冲，builder 抢能量致降级实证：W38S59）。
+      // 迟滞双门槛（enter/exit）防「保级/发展」在临界 ttd 高频振荡（ttd 最大重置值 20000）。
+      if (controller != null && controller.my) {
+        roomMem.claimSecure = computeClaimSecure(
+          snapshot.rcl,
+          controller.ticksToDowngrade,
+          roomMem.claimSecure ?? false,
+        );
+      } else {
+        roomMem.claimSecure = false;
       }
     }
   },

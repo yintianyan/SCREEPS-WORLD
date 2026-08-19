@@ -95,6 +95,14 @@ function upgraderGate(ac: ActionContext): boolean {
 
   if (isEmergency) return true; // 紧急：不阻止
 
+  // claim-secure 护栏：脆弱新房（RCL<4 且 controller 临近降级）保级压倒一切 ——
+  // 放宽取能地板，让 upgrader 即使在 energyAvailable 偏低时也能喂 controller
+  // （新房无 storage，能量结构紧张，builder 抢能量致 controller 降级风险，W38S59 实证）。
+  // trade-off：spawn 孵化可能短暂让位，但 controller 降级（进度清零 + 重建成本）
+  // 远大于短暂孵化延迟。RCL4+ 房间无此标记（claimSecure 仅在 RCL<4 置位）。
+  const claimSecure = Memory.rooms[ac.snapshot.roomName]?.claimSecure ?? false;
+  if (claimSecure) return true;
+
   // RCL8 满级后升级零收益（controller.progress=0）：无降级风险时停烧。
   // 存量 upgrader 直接 idle（不取能不升级），demand 已停孵，自然老死后退出；
   // 能量让给 storage/spawn/link hub。降级风险（isEmergency）时上面已放行保级。
