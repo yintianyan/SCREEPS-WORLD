@@ -19,7 +19,9 @@ import { buildRoomSnapshot } from "../systems/room-snapshot";
 //   100 tick 低频触发，无每 tick 耦合。为 1 个钩子引入 registry 维护钩子机制（接口+注册+遍历）属过度工程。
 // 演化条件：当出现 3+ 个周期性维护钩子时，提取为 registry 维护钩子机制（kernel 只遍历注册表）。
 import { pruneDeadCreepCache } from "../creeps/movement/pathfinding";
-import { globalCache } from "./global-cache";
+import { globalCache, type SquadIndexEntry } from "./global-cache";
+import { CONFIG } from "../config";
+import { classifyThreats } from "../domain/defense/threat";
 
 /** 具体 TickContext，包含用于内核设置的内部变更方法。 */
 class Context implements TickContext {
@@ -144,6 +146,13 @@ export class Kernel {
     // 战斗黑匣子（M9）：记录每个 creep 的当前位置，供下 tick 死亡事件取
     // 生前最后位置（maintainMemory 先于本函数运行，死者读到的是旧 Map）。
     const creepLastSeen = new Map<string, { r: string; x: number; y: number }>();
+    // P0-1：全局编队索引 — 在已有的 Game.creeps 遍历中顺便按编队维度归组，
+    // 供 war-planner / power-farm-manager / prospect-manager / expansion-manager
+    // 复用，消除各系统独立全量遍历的 O(4N) → O(N)。
+    // 只收录有 remoteTarget 或 mission 标记的 creep（编队判定域）— 纯本地角色
+    // （harvester/hauler/builder/upgrader/distributor 无 remoteTarget）不进索引，
+    // 减少内存占用。
+    const squadIndex: SquadIndexEntry[] = [];
     for (const creep of Object.values(Game.creeps)) {
       creepLastSeen.set(creep.name, { r: creep.room.name, x: creep.pos.x, y: creep.pos.y });
       const home = creep.memory.home;
@@ -165,6 +174,18 @@ export class Kernel {
       if (role === "hauler") {
         const haulHome = home ?? creep.room.name;
         if (haulHome) globalHaulerRooms.add(haulHome);
+      }
+      // P0-1：编队索引收录 — 有 remoteTarget 或 mission 标记的 creep 才入索引。
+      if (creep.memory.remoteTarget || creep.memory.mission) {
+        squadIndex.push({
+          name: creep.name,
+          role: role ?? "unknown",
+          home: home ?? creep.room.name,
+          remoteTarget: creep.memory.remoteTarget,
+          mission: creep.memory.mission,
+          boosted: creep.body.some(p => p.boost !== undefined),
+          spawning: creep.spawning === true,
+        });
       }
       if (role !== "harvester" && role !== "worker") continue;
       const sid = creep.memory.sourceId;
@@ -190,6 +211,9 @@ export class Kernel {
     globalCache().haulerRooms = globalHaulerRooms;
     // creepLastSeen 供下 tick 的死亡事件（战斗黑匣子）取生前最后位置。
     globalCache().creepLastSeen = creepLastSeen;
+    // P0-1：编队索引供 war-planner / power-farm-manager / prospect-manager /
+    // expansion-manager 复用，消除各自独立全量遍历 Game.creeps。
+    globalCache().squadIndex = squadIndex;
 
     for (const room of Object.values(Game.rooms)) {
       if (!room.controller?.my) continue;
@@ -301,11 +325,37 @@ export class Kernel {
     // 战争/在房威胁紧急旁路：combat 角色在 war 姿态或本房有真实在房威胁时不被
     // recovery 冻结（帝国不能冻自己的军队；真被入侵时更要让作战单位跑起来）。
     const posture = Memory.kernel?.strategy?.posture;
+    // P0-3：自有房威胁集合（snapshot.threatCreeps）。
     const liveThreatRooms = new Set(
       Array.from(ctx.snapshots())
         .filter(s => (s.threatCreeps?.length ?? 0) > 0)
         .map(s => s.roomName),
     );
+    // P0-3：远矿房威胁集合 — combat 角色可能正在远矿房/扩张目标房作战，
+    // 这些房不在 ctx.snapshots()（只含 controller.my 的房）中。
+    // 遍历 Game.rooms 中非自有房的房，检测有 hostile creep 的房名 —
+    // combat 角色当前所在房有威胁时同样需要旁路。
+    // 只扫描 combat 角色可能出现的房（减少扫描量）：收集 combat 角色所在房名。
+    const combatRooms = new Set<string>();
+    for (const { creep, role } of creepEntries) {
+      if (role.combat !== true) continue;
+      // creep.room 是当前视野所在房（自有/远矿/敌方）— 可能为 undefined（测试 mock）。
+      const roomName = creep.room?.name;
+      if (roomName && !liveThreatRooms.has(roomName)) {
+        combatRooms.add(roomName);
+      }
+    }
+    for (const roomName of combatRooms) {
+      const room = Game.rooms[roomName];
+      if (!room) continue; // 无视野
+      // FIND_HOSTILE_CREEPS 在非自有房也可用（需视野）。
+      // 复用 classifyThreats 统一威胁口径（THREAT_PARTS = ATTACK/RANGED_ATTACK/HEAL/WORK/CLAIM）—
+      // 与 room-snapshot / remote-mining-manager / flee 判定同口径，消除分裂。
+      const hostiles = room.find(FIND_HOSTILE_CREEPS);
+      if (classifyThreats(hostiles, CONFIG.defense.allies).length > 0) {
+        liveThreatRooms.add(roomName);
+      }
+    }
 
     for (const { creep, role } of creepEntries) {
       // 每房殖民地状态门禁：recovery/bootstrap 时允许 P0/P1（能量链），跳过 P2+。
@@ -318,7 +368,9 @@ export class Kernel {
       const home = creep.memory.home;
       const roomState = home ? Memory.rooms[home]?.colonyState ?? "normal" : "normal";
       const isRecoveryExempt = roomState === "recovery" && role.recoveryEligible === true;
-      if (colonyStateFreezesRole(roomState, role, posture, liveThreatRooms.has(home ?? ""))) {
+      // P0-3：combat 角色可能在远矿房作战 — 威胁检查同时看 home 和当前所在房。
+      const inThreatRoom = liveThreatRooms.has(home ?? "") || liveThreatRooms.has(creep.room?.name ?? "");
+      if (colonyStateFreezesRole(roomState, role, posture, inThreatRoom)) {
         recordSkip(`creep/${role.name}/colony-state`);
         continue;
       }

@@ -22,6 +22,7 @@ import { selectProspectTarget, type ProspectCandidate } from "../domain/strategy
 import { roomLinearDistance } from "../domain/remote/targeting";
 import { countPending, hasRequest, removeRequestsByRole, spawnKey, submitRequest } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
+import { querySquad } from "../kernel/global-cache";
 
 /** ProspectOutcome 事件 outcome 编码（与 event-log 注释对齐）。 */
 const OUTCOME_SUCCESS = 0;
@@ -107,15 +108,11 @@ export const prospectManagerSystem: System = {
     }
 
     // 侦察兵全灭判定：live + pending 均为 0 且已孵化过 → 死光了。
+    // P0-1：从全局编队索引取 scout 存活数，替代独立全量遍历 Game.creeps。
     let live = 0;
-    for (const c of Object.values(Game.creeps)) {
-      if (
-        c.memory.role === "scout" &&
-        c.memory.home === mission.sponsor &&
-        c.memory.remoteTarget === mission.target
-      ) {
-        live++;
-      }
+    const scouts = querySquad({ role: "scout", home: mission.sponsor, remoteTarget: mission.target });
+    for (const e of scouts) {
+      if (!e.spawning) live++;
     }
     const queue = Memory.rooms[mission.sponsor]?.spawnQueue;
     const pending = queue ? countPending(queue, "scout", mission.sponsor) : 0;
@@ -171,10 +168,11 @@ function completeMission(tick: number, outcome: number, cooldown: boolean): void
     Memory.kernel!.prospectCooldown[mission.target] = tick + CONFIG.prospect.cooldownTicks;
   }
 
-  for (const c of Object.values(Game.creeps)) {
-    if (c.memory.role === "scout" && c.memory.remoteTarget === mission.target) {
-      c.memory.recycle = true;
-    }
+  // P0-1：从全局编队索引取 scout，按 name 精确定位 Creep 对象标记 recycle。
+  const scouts = querySquad({ role: "scout", remoteTarget: mission.target });
+  for (const e of scouts) {
+    const creep = Game.creeps[e.name];
+    if (creep) creep.memory.recycle = true;
   }
   const queue = Memory.rooms[mission.sponsor]?.spawnQueue;
   if (queue) removeRequestsByRole(queue, "scout", mission.sponsor);

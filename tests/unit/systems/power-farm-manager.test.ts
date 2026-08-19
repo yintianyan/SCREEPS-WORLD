@@ -11,7 +11,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { powerFarmManagerSystem } from "../../../src/systems/power-farm-manager";
 import { CONFIG } from "../../../src/config";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals, syncSquadIndex } from "../../role-helpers";
 
 const HOME = "W7N4";
 const TARGET = "W2N1";
@@ -87,6 +87,7 @@ describe("power-farm-manager — 任务生命周期", () => {
       since: 1500,
       towersSeen: 1,
     };
+    syncSquadIndex();
     powerFarmManagerSystem.run(makeContext(1600));
 
     expect((globalThis as any).Memory.kernel.powerFarm).toBeUndefined();
@@ -102,18 +103,21 @@ describe("power-farm-manager — 任务生命周期", () => {
       spawned: 6,
       phase: "strike",
     };
+    syncSquadIndex();
     (globalThis as any).Memory.rooms[HOME] = { spawnQueue: [] };
     // 编队到达提供视野，房内已无 PB（击破/自灭）。
     (globalThis as any).Game.rooms[TARGET] = {
       name: TARGET,
       find: vi.fn(() => []),
     };
+    syncSquadIndex();
     // 一只在途 attacker（应被回收）。
     (globalThis as any).Game.creeps = {
       "attacker-HOME-0-1000-x": {
         memory: { role: "attacker", mission: "powerBank", home: HOME, remoteTarget: TARGET },
       },
     };
+    syncSquadIndex();
 
     powerFarmManagerSystem.run(makeContext(2000));
 
@@ -136,6 +140,7 @@ describe("power-farm-manager — 任务生命周期", () => {
       spawned: 0,
       phase: "strike",
     };
+    syncSquadIndex();
     (globalThis as any).Memory.rooms[HOME] = { spawnQueue: [] };
 
     powerFarmManagerSystem.run(makeContext(1000 + CONFIG.powerFarm.missionTimeout + 1));
@@ -152,6 +157,7 @@ describe("power-farm-manager — 任务生命周期", () => {
       spawned: 13,
       phase: "strike",
     };
+    syncSquadIndex();
     (globalThis as any).Memory.rooms[HOME] = { spawnQueue: [] };
 
     powerFarmManagerSystem.run(makeContext(1500));

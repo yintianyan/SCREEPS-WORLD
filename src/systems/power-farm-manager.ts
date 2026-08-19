@@ -36,6 +36,7 @@ import {
   submitRequest,
 } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
+import { querySquad } from "../kernel/global-cache";
 
 export const powerFarmManagerSystem: System = {
   name: "power-farm-manager",
@@ -191,11 +192,11 @@ function maintainSquad(
 
   let attackerLive = 0;
   let healerLive = 0;
-  for (const c of Object.values(Game.creeps)) {
-    if (c.memory.mission !== "powerBank") continue;
-    if (c.memory.home !== mission.sponsor || c.memory.remoteTarget !== mission.targetRoom) continue;
-    if (c.memory.role === "attacker") attackerLive++;
-    else if (c.memory.role === "healer") healerLive++;
+  // P0-1：从全局编队索引取子集，替代独立全量遍历 Game.creeps。
+  const squad = querySquad({ home: mission.sponsor, remoteTarget: mission.targetRoom, mission: "powerBank" });
+  for (const e of squad) {
+    if (e.role === "attacker") attackerLive++;
+    else if (e.role === "healer") healerLive++;
   }
   const pendingAttackers = countPendingByMission(queue, "attacker", "powerBank");
   const pendingHealers = countPendingByMission(queue, "healer", "powerBank");
@@ -243,22 +244,20 @@ function submitFarmRequest(
   });
 }
 
-/** 统计指定角色的存活数（按 remoteTarget 过滤）。 */
+/** 统计指定角色的存活数（按 remoteTarget 过滤）。
+ * P0-1：从全局编队索引取子集，替代全量遍历 Game.creeps。 */
 function countRoleLive(role: string, targetRoom: string): number {
-  let n = 0;
-  for (const c of Object.values(Game.creeps)) {
-    if (c.memory.role === role && c.memory.remoteTarget === targetRoom) n++;
-  }
-  return n;
+  return querySquad({ role, remoteTarget: targetRoom }).length;
 }
 
-/** 回收指定目标房的战斗编队（attacker/healer，mission 过滤防误伤 war 编队）。 */
+/** 回收指定目标房的战斗编队（attacker/healer，mission 过滤防误伤 war 编队）。
+ * P0-1：从全局编队索引取子集，按 name 精确定位 Creep 对象标记 recycle。 */
 function recycleSquad(targetRoom: string): void {
-  for (const c of Object.values(Game.creeps)) {
-    if (c.memory.mission !== "powerBank") continue;
-    if (c.memory.remoteTarget !== targetRoom) continue;
-    if (c.memory.role === "attacker" || c.memory.role === "healer") {
-      c.memory.recycle = true;
+  const squad = querySquad({ remoteTarget: targetRoom, mission: "powerBank" });
+  for (const e of squad) {
+    if (e.role === "attacker" || e.role === "healer") {
+      const creep = Game.creeps[e.name];
+      if (creep) creep.memory.recycle = true;
     }
   }
 }

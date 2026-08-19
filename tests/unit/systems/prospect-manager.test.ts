@@ -12,7 +12,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { prospectManagerSystem } from "../../../src/systems/prospect-manager";
-import { mockBudget, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockBudget, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
 import { CONFIG } from "../../../src/config";
 
 const TICK = 1000;
@@ -108,6 +108,7 @@ describe("prospect-manager — 任务开启", () => {
     (globalThis as any).Memory.kernel.expansion = {
       state: "claiming", target: "W8N4", sponsor: "W7N4", startedAt: 900,
     };
+    syncSquadIndex();
 
     prospectManagerSystem.run(makeContext());
 
@@ -136,9 +137,11 @@ describe("prospect-manager — 生命周期与止损", () => {
         },
       },
     };
+    syncSquadIndex();
     (globalThis as any).Game.rooms = {
       W7N4: { controller: { my: true, owner: { username: "Me" } } },
     };
+    syncSquadIndex();
     (globalThis as any).Game.cpu.bucket = 10000;
   }
 
@@ -147,9 +150,11 @@ describe("prospect-manager — 生命周期与止损", () => {
     (globalThis as any).Memory.rooms.W7N4.intel.W6N4 = {
       kind: "normal", status: "normal", sources: 2, lastSeen: 990,
     };
+    syncSquadIndex();
     (globalThis as any).Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
     };
+    syncSquadIndex();
 
     prospectManagerSystem.run(makeContext());
 
@@ -164,6 +169,7 @@ describe("prospect-manager — 生命周期与止损", () => {
     (globalThis as any).Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
     };
+    syncSquadIndex();
 
     prospectManagerSystem.run(makeContext());
 
@@ -204,6 +210,7 @@ describe("prospect-manager — 生命周期与止损", () => {
     (globalThis as any).Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
     };
+    syncSquadIndex();
 
     prospectManagerSystem.run(makeContext());
 
@@ -223,6 +230,7 @@ describe("prospect-manager — 生命周期与止损", () => {
     (globalThis as any).Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
     };
+    syncSquadIndex();
 
     const ctx = makeContext();
     prospectManagerSystem.run(ctx);
@@ -249,6 +257,7 @@ describe("prospect-manager — 生命周期与止损", () => {
     (globalThis as any).Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },
     };
+    syncSquadIndex();
 
     const ctx = makeContext(mockSnapshot({ threatCreeps: [{ id: "x" }] as any }));
     prospectManagerSystem.run(ctx);
@@ -292,6 +301,7 @@ describe("prospect-manager — 视野外扩（horizon）", () => {
     (globalThis as any).Game.rooms = {
       W7N4: { controller: { my: true, owner: { username: "Me" } } },
     };
+    syncSquadIndex();
     (globalThis as any).Memory.rooms.W7N4 = {
       spawnQueue: [],
       intel: {
@@ -299,6 +309,7 @@ describe("prospect-manager — 视野外扩（horizon）", () => {
         W6N4: { kind: "normal", status: "normal", owner: "Enemy", lastSeen: 500 },
       },
     };
+    syncSquadIndex();
     setPosture(true);
     (globalThis as any).Game.cpu.bucket = 10000;
 

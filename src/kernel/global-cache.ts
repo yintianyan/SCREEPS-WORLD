@@ -124,6 +124,30 @@ export interface GlobalCache {
   /** defense-planner 的出口位置缓存（room.find(FIND_EXIT) 结果，1000t 过期）。
    * heap 存储 — global reset 丢失可接受（重开后首个周期重建）。 */
   __exitCache?: Record<string, ExitCache>;
+  /** P0-1 全局编队索引：Kernel.buildSnapshots 预构建，按 (home, remoteTarget,
+   * mission) 归组的编队 creep 摘要。war-planner / power-farm-manager /
+   * prospect-manager / expansion-manager 从中取子集，避免各系统独立全量遍历
+   * Game.creeps（4 系统 × O(creeps) → 1 次遍历 O(creeps)）。
+   * heap 存储 — global reset 丢失可接受（next tick 重建）。 */
+  squadIndex?: SquadIndexEntry[];
+}
+
+/** 编队索引条目 — 仅记录编队判定所需的最小字段集（不持有 Creep 引用）。 */
+export interface SquadIndexEntry {
+  /** creep 名（用于 recycle 标记等操作）。 */
+  name: string;
+  /** 角色（attacker / healer / scout / claimer / pbCollector / worker / builder 等）。 */
+  role: string;
+  /** memory.home — 编队归属房。 */
+  home: string;
+  /** memory.remoteTarget — 远程目标房（war/PB/远矿/扩张目标）。 */
+  remoteTarget?: string;
+  /** memory.mission — 任务标记（powerBank / powerCollect）。 */
+  mission?: string;
+  /** body 中是否有 boost 部件（war-planner boost 门禁判定）。 */
+  boosted: boolean;
+  /** 是否正在孵化（spawning=true — war-planner 编队统计计入 live 而非 pending）。 */
+  spawning: boolean;
 }
 
 /**
@@ -179,6 +203,30 @@ export interface MinCutCache {
 export interface ExitCache {
   positions: { x: number; y: number }[];
   tick: number;
+}
+
+/**
+ * P0-1：从 squadIndex 中查询编队成员 — 供 war-planner / power-farm-manager /
+ * prospect-manager / expansion-manager 复用，替代各自独立遍历 Game.creeps。
+ *
+ * 过滤维度均为可选：undefined = 不过滤该维度。
+ * 返回的条目可直接用于统计计数；如需对 Creep 对象操作（如标记 recycle），
+ * 调用方按 name 从 Game.creeps 取 — 这比全量遍历廉价得多（通常 ≤ 十几条）。
+ */
+export function querySquad(filter: {
+  home?: string;
+  remoteTarget?: string;
+  role?: string;
+  mission?: string;
+}): readonly SquadIndexEntry[] {
+  const idx = globalCache().squadIndex;
+  if (!idx) return [];
+  return idx.filter(e =>
+    (filter.home === undefined || e.home === filter.home) &&
+    (filter.remoteTarget === undefined || e.remoteTarget === filter.remoteTarget) &&
+    (filter.role === undefined || e.role === filter.role) &&
+    (filter.mission === undefined || e.mission === filter.mission),
+  );
 }
 
 /** Screeps 沙箱 `global` 对象的类型安全访问器。

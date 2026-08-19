@@ -98,6 +98,35 @@ export function resetGlobals(): void {
   // R3：war-planner / attacker 的敌结构共享缓存（同 heap 生命周期 — 漏清会让
   // attacker 测试跨用例复用上一用例缓存的敌结构，Game.time 固定 1000 无法自然过期）。
   delete g.__warStructures;
+  // P0-1：全局编队索引（kernel.buildSnapshots 预构建，测试中需手动同步）。
+  delete g.squadIndex;
+}
+
+/**
+ * P0-1：从当前 Game.creeps 构建 squadIndex（测试 helper）。
+ * 生产环境由 kernel.buildSnapshots 预构建；测试 mock 直接设 Game.creeps 时
+ * 需调用此函数同步索引，否则 querySquad 返回空。
+ */
+export function syncSquadIndex(): void {
+  const entries: Array<{
+    name: string; role: string; home: string;
+    remoteTarget?: string; mission?: string; boosted: boolean; spawning: boolean;
+  }> = [];
+  const creeps = (globalThis as any).Game?.creeps ?? {};
+  for (const [name, creep] of Object.entries(creeps) as [string, any][]) {
+    const mem = creep.memory ?? {};
+    if (!mem.remoteTarget && !mem.mission) continue;
+    entries.push({
+      name,
+      role: mem.role ?? "unknown",
+      home: mem.home ?? "W7N4",
+      remoteTarget: mem.remoteTarget,
+      mission: mem.mission,
+      boosted: (creep.body ?? []).some((p: any) => p.boost !== undefined),
+      spawning: creep.spawning === true,
+    });
+  }
+  (globalThis as any).squadIndex = entries;
 }
 
 /** 注册一个可被 Game.getObjectById 找到的对象。 */

@@ -20,7 +20,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { demobilize, warPlannerSystem } from "../../../src/systems/war-planner";
-import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
 import { CONFIG } from "../../../src/config";
 
 const TICK = 1000;
@@ -75,6 +75,7 @@ function setLiveSquad(attackers: number, healers = 0, boosted = 0): void {
     };
   }
   (globalThis as any).Game.creeps = creeps;
+  syncSquadIndex();
 }
 
 /** 读取 WarOutcome 事件（kind=23）列表。 */
@@ -202,6 +203,7 @@ describe("R4 — 收摊与战后核验", () => {
       a1: { memory: { role: "attacker", home: "W7N4", remoteTarget: "W6N4" } },
       h1: { memory: { role: "healer", home: "W7N4", remoteTarget: "W6N4" } },
     };
+    syncSquadIndex();
   }
 
   it("非 war 姿态 → 收摊：核验 failure → 黑名单 + 清计划 + 撤请求 + 回收编队（含 healer）", () => {
@@ -243,14 +245,15 @@ describe("R4 — 收摊与战后核验", () => {
     expect(warOutcomeEvents()[0]?.d?.[0]).toBe(0);
   });
 
-  it("核验 unknown（情报过期）→ 黑名单", () => {
+  it("核验 unknown（情报过期）→ 黑名单（半额冷却 — P0-2 区分 “打不赢” 与 “没看到”）", () => {
     warPlanFixture();
     (globalThis as any).Memory.rooms.W7N4.intel.W6N4.lastSeen = -600; // 距今 1600 > freshness 1500
     setPosture("develop");
 
     warPlannerSystem.run(mockContext(mockSnapshot()));
 
-    expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(TICK + CONFIG.war.warBlacklistTicks);
+    // P0-2：unknown 用半额冷却 — intel 过期不是目标的错。
+    expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(TICK + Math.floor(CONFIG.war.warBlacklistTicks / 2));
     expect(warOutcomeEvents()[0]?.d?.[0]).toBe(2);
   });
 

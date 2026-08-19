@@ -6,7 +6,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { expansionManagerSystem } from "../../../src/systems/expansion-manager";
-import { mockBudget, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockBudget, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
 import { CONFIG } from "../../../src/config";
 
 beforeEach(() => {
@@ -38,10 +38,12 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
         expansion: { state: "claiming", target: "W6N4", sponsor: "W7N4", startedAt: 900 },
       },
     };
+    syncSquadIndex();
     (globalThis as any).Game.rooms = {
       W7N4: { controller: { my: true, owner: { username: "Me" } } },
       W6N4: { controller: { owner: { username: "Rival" } } },
     };
+    syncSquadIndex();
     (globalThis as any).Game.cpu = { bucket: 10000 };
     (globalThis as any).Game.creeps = {};
 
@@ -64,6 +66,7 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
         expansion: { state: "pioneering", target: "W6N4", sponsor: "W7N4", startedAt: 1100 },
       },
     };
+    syncSquadIndex();
     (globalThis as any).Game.rooms = {
       W7N4: { controller: { my: true, owner: { username: "Me" } } },
       W6N4: {
@@ -75,6 +78,7 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
         },
       },
     };
+    syncSquadIndex();
     (globalThis as any).Game.cpu = { bucket: 10000 };
     (globalThis as any).Game.creeps = {};
 
@@ -98,9 +102,11 @@ describe("expansion-manager — R7b 节奏自适应接线", () => {
         expansionRhythm: { ring: [2, 2], blacklistMultiplier: 1.5, minSources: 1 }, // 已两连 timeout
       },
     };
+    syncSquadIndex();
     (globalThis as any).Game.rooms = {
       W7N4: { controller: { my: true, owner: { username: "Me" } } },
     };
+    syncSquadIndex();
     (globalThis as any).Game.cpu = { bucket: 10000 };
     (globalThis as any).Game.creeps = {};
 
@@ -131,9 +137,11 @@ describe("expansion-manager — R7b 节奏自适应接线", () => {
         expansionPausedUntil: (globalThis as any).Game.time + 5000,
       },
     };
+    syncSquadIndex();
     (globalThis as any).Game.rooms = {
       W7N4: { controller: { my: true, owner: { username: "Me" } }, energyCapacityAvailable: 800 },
     };
+    syncSquadIndex();
     (globalThis as any).Game.cpu = { bucket: 10000 };
     (globalThis as any).Game.gcl = { level: 2 };
 

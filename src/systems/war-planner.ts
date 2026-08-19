@@ -43,6 +43,7 @@ import {
   submitRequest,
 } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
+import { querySquad } from "../kernel/global-cache";
 
 /** 收摊原因编码（WarOutcome 事件 d[2]）。 */
 const REASON_POSTURE = 0;
@@ -112,16 +113,17 @@ export const warPlannerSystem: System = {
     //    编制合计口径：满编/止损基数 = squadSize + healerCount（缺谁都不成编队）。
     //    boost 完成度自下而上派生（body 任一部件带 boost 即计）— 不入 Memory，
     //    与 healerCount 同理；编队成员由 lab-system 在 build 相位经 boost 链强化。
+    //    P0-1：从全局编队索引取子集，替代独立全量遍历 Game.creeps。
     const healerCount = decideHealerCount(plan.squadSize, CONFIG.war.healerSquadRatio);
     let attackerLive = 0;
     let healerLive = 0;
     let boostedLive = 0;
-    for (const c of Object.values(Game.creeps)) {
-      if (c.memory.home !== sponsor || c.memory.remoteTarget !== plan.targetRoom) continue;
-      if (c.memory.role === "attacker") attackerLive++;
-      else if (c.memory.role === "healer") healerLive++;
+    const squad = querySquad({ home: sponsor, remoteTarget: plan.targetRoom });
+    for (const e of squad) {
+      if (e.role === "attacker") attackerLive++;
+      else if (e.role === "healer") healerLive++;
       else continue;
-      if (c.body.some(p => p.boost)) boostedLive++;
+      if (e.boosted) boostedLive++;
     }
     const pendingAttackers = countPending(queue, "attacker", sponsor);
     const pendingHealers = countPending(queue, "healer", sponsor);
@@ -249,6 +251,12 @@ function submitSquadRequest(
  * 收摊（幂等）：核验战果 → 失败/unknown 进黑名单 → 记录 WarOutcome 事件 →
  * 回收在役 attacker（标记 recycle，spawn-manager 归航回收）→ 撤销寄宿请求 → 清除计划。
  * reason：收摊原因编码（WarOutcome 事件 d[2]，黑匣子复盘用）。
+ *
+ * P0-2 核验盲区修复：unknown（intel 过期/无视野）用更短的黑名单冷却 —
+ * 区分「确定性打不赢」（failure，满额冷却）与「不知道打没打赢」（unknown，半额冷却）。
+ * 根因：战后 attacker 撤退路径不一定经过目标房 → sponsor 的 intel 可能在战前就过期。
+ * 将 unknown 与 failure 等同拉黑 20000 tick 会让一个「可能打赢了但没看到」的目标长期不可重选。
+ * 缩短 unknown 冷却让系统在 intel 自然刷新后有更早的重评窗口。
  */
 export function demobilize(tick: number, reason: number): void {
   const plan = Memory.kernel?.warPlan;
@@ -265,7 +273,17 @@ export function demobilize(tick: number, reason: number): void {
     CONFIG.war.targetFreshness,
   );
   if (outcome !== "success") {
-    blacklistWarTarget(plan.targetRoom, tick + CONFIG.war.warBlacklistTicks);
+    // P0-2：unknown 用半额冷却 — intel 过期不是目标的错，缩短冷却让 intel 自然刷新后可重评。
+    // failure 是确定性「打不赢」，用满额冷却防重选循环。
+    const cooldown = outcome === "unknown"
+      ? Math.floor(CONFIG.war.warBlacklistTicks / 2)
+      : CONFIG.war.warBlacklistTicks;
+    blacklistWarTarget(plan.targetRoom, tick + cooldown);
+    console.log(
+      `[${tick}] war: demobilize ${plan.targetRoom} outcome=${outcome}` +
+      ` (intel_age=${intel?.lastSeen !== undefined ? tick - intel.lastSeen : "never"},` +
+      ` blacklist=${cooldown}t, reason=${reason})`,
+    );
   }
   recordEvent(EventKind.WarOutcome, plan.targetRoom, [
     OUTCOME_CODES[outcome],
@@ -273,9 +291,15 @@ export function demobilize(tick: number, reason: number): void {
     reason,
   ]);
 
-  for (const c of Object.values(Game.creeps)) {
+  // P0-1：从全局编队索引取编队成员，按 name 精确定位 Creep 对象标记 recycle。
+  // 只需遍历编队子集（通常 ≤ 十几条），而非全量 Game.creeps。
+  const warSquad = querySquad({ home: plan.sponsor, remoteTarget: plan.targetRoom });
+  for (const e of warSquad) {
     // heal-tank 编队双角色同收（healer 独存无意义 — 奶车不作战）。
-    if (c.memory.role === "attacker" || c.memory.role === "healer") c.memory.recycle = true;
+    if (e.role === "attacker" || e.role === "healer") {
+      const creep = Game.creeps[e.name];
+      if (creep) creep.memory.recycle = true;
+    }
   }
   const queue = Memory.rooms[plan.sponsor]?.spawnQueue;
   if (queue) {

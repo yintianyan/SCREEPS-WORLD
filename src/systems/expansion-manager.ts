@@ -21,7 +21,8 @@ import {
   evaluateExpansionRhythm,
   type ExpansionOutcomeKind,
 } from "../domain/expansion/rhythm";
-import { submitRequest, hasRequest, cancelRequestsByHome } from "../domain/spawn/queue";
+import { cancelRequestsByHome, hasRequest, submitRequest } from "../domain/spawn/queue";
+import { querySquad } from "../kernel/global-cache";
 import { selectAnchors } from "../domain/layout/anchor-selection";
 import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { packPos } from "../domain/layout/types";
@@ -333,9 +334,8 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
   // 死于威胁）时不再送兵，直接止损。无此闸的后果：claimer 被杀 → 重派 →
   // 再被杀 — 送兵循环最长跑满 claimTimeout。
   // P1-G：dangerUntil 从 intel 迁移到 remoteOps（remote-mining-manager 唯一写入）。
-  const claimerAlive = Object.values(Game.creeps).some(
-    c => c.memory.role === "claimer" && c.memory.remoteTarget === expansion.target,
-  );
+  // P0-1：claimer 有 remoteTarget，在 squadIndex 中 — 用 querySquad 替代全量遍历。
+  const claimerAlive = querySquad({ role: "claimer", remoteTarget: expansion.target }).length > 0;
   if (!claimerAlive) {
     const dangerUntil = Memory.rooms[expansion.sponsor]?.remoteOps?.[expansion.target]?.dangerUntil;
     if (dangerUntil !== undefined && ctx.tick < dangerUntil) {
