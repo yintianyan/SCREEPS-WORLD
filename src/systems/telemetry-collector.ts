@@ -407,6 +407,17 @@ function updateStatsSummary(tick: number): void {
 
   stats.lastSample = tick;
 
+  // Per-room CPU 记账：从 globalCache.cpuByHome 采样写入 Memory。
+  // 供 empire-strategy / capacity 评估每房真实 CPU 成本。
+  const byHome = globalCache().cpuByHome;
+  if (byHome && byHome.size > 0) {
+    const record: Record<string, number> = {};
+    for (const [room, cpu] of byHome) {
+      record[room] = Math.round(cpu * 1000) / 1000;
+    }
+    stats.cpuByHome = record;
+  }
+
   // 最频繁的 skip 原因
   if (Memory.kernel.skipReasons) {
     let maxSkip = 0;

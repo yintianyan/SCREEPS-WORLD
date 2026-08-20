@@ -13,6 +13,8 @@ export function initTelemetry(tick: number): void {
     skipped: 0,
     errors: 0,
   };
+  // 初始化 per-room CPU 记账 Map — kernel.runCreeps 逐只 creep 写入。
+  g.cpuByHome = new Map<string, number>();
   // 初始化 per-tick 事件缓冲区 — 任意系统可通过 recordEvent() 写入，
   // telemetry-collector 在 tick 末尾 flush 到 segment 2。
   if (!g.eventBuffer) {

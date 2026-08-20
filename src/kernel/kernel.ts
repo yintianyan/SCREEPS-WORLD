@@ -63,6 +63,23 @@ const ROLE_EXECUTION_ORDER: Readonly<Record<string, number>> = {
   builder: 4,
 };
 
+/**
+ * Idle creep 降频执行的 tick 间隔（cadence）。
+ * idle creep 每 N tick 检查一次是否有新任务——大部分 tick 跳过完整 role-runner 管线，
+ * 省 0.03-0.05 CPU/只/tick。N=5 平衡响应性与节约：idle 到 acquire 的延迟 ≤5 tick
+ * （assignment-service 每 tick 运行，下一个 cadence tick 即发现任务）。
+ */
+const IDLE_CADENCE_TICKS = 5;
+
+/** 轻量字符串哈希 — 用 creep 名做相位偏移，避免所有 idle creep 同 tick 扎堆检查。 */
+function hashCreepName(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) {
+    h = (h * 31 + name.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
 export class Kernel {
   private readonly roleMap: Map<string, CreepRole>;
   private readonly sortedSystems: readonly System[];
@@ -375,6 +392,33 @@ export class Kernel {
         continue;
       }
 
+      // Idle cadence：idle 且无 stuck 的 creep 降频执行。每 tick 都完整走
+      // role-runner 管线（威胁检测 → ensureHome → updateMode → 候选遍历 →
+      // parkIdleCreep）对 idle creep 纯属浪费——它不在做任何事，下一 tick
+      // 也不会突然有活干（任务由 assignment-service 分配，与 creep 自身无关）。
+      // 降频检查（每 cadenceTicks tick 一次）保持响应性：
+      //   - 每次检查仍走完整管线 → 发现新任务即恢复每 tick 执行（mode 切回 acquire/work）
+      //   - 用 creep 名哈希做相位偏移，idle creep 不扎堆同一 tick 检查
+      //   - stuck > 0 的 idle creep 不跳过（可能需要自愈脱困）
+      //   - recycle 标记的 creep 不跳过（spawn-manager 每 tick 驱动归航回收）
+      //   - remoteTarget 存在的 creep 不跳过（跨房通勤中 idle 可能需导航）
+      //   - home/所在房有威胁时不跳过（role-runner 内部威胁检测不可漏帧，
+      //     否则 idle creep 在敌袭 tick 不会 flee——PvP 场景 5 tick 延迟可致命）
+      const mode = creep.memory.mode ?? "acquire";
+      const stuck = creep.memory.stuckTicks ?? 0;
+      const inThreatArea = liveThreatRooms.has(home ?? "") || liveThreatRooms.has(creep.room?.name ?? "");
+      if (
+        mode === "idle" &&
+        stuck === 0 &&
+        !creep.memory.recycle &&
+        !creep.memory.remoteTarget &&
+        !inThreatArea &&
+        (Game.time + hashCreepName(creep.name)) % IDLE_CADENCE_TICKS !== 0
+      ) {
+        recordSkip(`creep/${role.name}/idle-cadence`);
+        continue;
+      }
+
       // Budget 检查 — 被豁免的角色用 P1 等效优先级，获得 CPU 逃生通道。
       const budgetPriority = isRecoveryExempt ? (1 as Priority) : role.priority;
       if (!ctx.budget.canStart(budgetPriority)) {
@@ -383,13 +427,20 @@ export class Kernel {
       }
       if (ctx.budget.isExhausted()) break;
 
-      measuredRun(`creep/${creep.name}/${role.name}`, () =>
+      // Per-room CPU 记账：复用 measuredRun 返回的 CPU 消耗值，零额外 getUsed() 调用。
+      // telemetry-collector 采样写入 Memory，供 empire-strategy 评估每房真实成本。
+      const cpuCost = measuredRun(`creep/${creep.name}/${role.name}`, () =>
         safeRun(
           `creep/${creep.name}/${role.name}`,
           () => role.run(creep, ctx),
           role.priority === 0, // P0 角色是关键的 — 永不冷却。
         ),
       );
+      const homeKey = home ?? creep.room?.name ?? "unknown";
+      const byHome = globalCache().cpuByHome;
+      if (byHome) {
+        byHome.set(homeKey, (byHome.get(homeKey) ?? 0) + cpuCost);
+      }
     }
   }
 }

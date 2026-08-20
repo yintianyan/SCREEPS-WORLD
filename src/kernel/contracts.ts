@@ -158,6 +158,11 @@ export interface RoomSnapshot {
   /** 本房 nuke 落点预警（FIND_NUKES，自有房视野内常量查询）。可选 — 旧测试
    * mock 缺省视为无警报；消费者统一用 `?.length` 判空（审计缺口 1 感知层）。 */
   readonly incomingNukes?: readonly Nuke[];
+  /** 本房全部 creep 的占位表：packed pos(x*50+y) → { name, my, fatigue }。
+   * traffic-manager 直接消费，消除其独立 room.find(FIND_CREEPS) 扫描（~0.3 CPU/tick）。
+   * buildRoomSnapshot 已遍历 FIND_HOSTILE_CREEPS，此处同时采集 FIND_CREEPS（含己方）
+   * 在同一遍 find 中完成。可选：旧测试 mock 或无视野房缺省视为空表。 */
+  readonly creepPositions?: ReadonlyMap<number, { name: string; my: boolean; fatigue: number }>;
 }
 
 /** 传递给每个系统和角色的不可变单 tick 上下文。 */

@@ -46,12 +46,22 @@ export const trafficManagerSystem: System = {
       if (!b) {
         b = { intents: [], occupancy: new Map(), immovable: new Set(), anchors: new Map() };
         batches.set(roomName, b);
-        // 一次性建占位表：本房全部 creep（含敌方 — 敌方视为硬墙）。
-        const room = Game.rooms[roomName];
-        if (room && typeof room.find === "function") {
-          for (const c of room.find(FIND_CREEPS)) {
-            b.occupancy.set(c.pos.x * 50 + c.pos.y, c.name);
-            if (!c.my || c.fatigue > 0) b.immovable.add(c.name);
+        // 一次性建占位表：优先从 snapshot.creepPositions 读取（零额外 find），
+        // 消除独立 room.find(FIND_CREEPS) 扫描（~0.3 CPU/tick）。
+        // snapshot 只含自有房；远矿/过境房无 snapshot → 回退 find。
+        const snapshot = ctx.getSnapshot(roomName);
+        if (snapshot?.creepPositions) {
+          for (const [packed, info] of snapshot.creepPositions) {
+            b.occupancy.set(packed, info.name);
+            if (!info.my || info.fatigue > 0) b.immovable.add(info.name);
+          }
+        } else {
+          const room = Game.rooms[roomName];
+          if (room && typeof room.find === "function") {
+            for (const c of room.find(FIND_CREEPS)) {
+              b.occupancy.set(c.pos.x * 50 + c.pos.y, c.name);
+              if (!c.my || c.fatigue > 0) b.immovable.add(c.name);
+            }
           }
         }
       }

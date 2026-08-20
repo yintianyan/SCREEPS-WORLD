@@ -282,6 +282,10 @@ declare global {
       errorHotspot: string;
       /** 最频繁的 skip 原因。 */
       skipHotspot: string;
+      /** 每房 CPU 消耗快照（最近一次采样）：roomName → CPU。
+       * 来自 kernel.runCreeps 按 memory.home 归集的 globalCache.cpuByHome。
+       * 供 empire-strategy / capacity 评估每房真实 CPU 成本。 */
+      cpuByHome?: Record<string, number>;
     };
     /** 参数自调优状态（v7+）。tuning-engine 每 500 tick 更新。 */
     tuning?: TuningMemory;

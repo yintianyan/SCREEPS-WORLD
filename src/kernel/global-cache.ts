@@ -143,6 +143,11 @@ export interface GlobalCache {
    * key = 资源类型，value = 盈余量（库存 - boost 储备目标）。
    * heap 存储 — global reset 丢失可接受（下 tick 重建）。无 schema 变更。 */
   surplusCompounds?: { tick: number; items: Record<string, number> };
+  /** Per-room CPU 记账：kernel.runCreeps 中每只 creep 执行后按 memory.home
+   * 归集 CPU 消耗。telemetry-collector 采样写入 Memory.kernel.stats.cpuByHome，
+   * 供 empire-strategy / capacity 模型评估每房真实 CPU 成本。
+   * heap 存储 — global reset 丢失可接受（下 tick 重建）。 */
+  cpuByHome?: Map<string, number>;
 }
 
 /**

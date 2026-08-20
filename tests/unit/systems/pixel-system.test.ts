@@ -37,10 +37,13 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
   beforeEach(() => {
     originalGame = (globalThis as Record<string, unknown>).Game;
     generatePixelSpy = vi.fn(() => 0);
+    // 保留缓冲策略：门槛 = 10000 + bucketReserve（默认 3000）= 13000。
+    // beforeEach 默认设 bucket=13000 使「开关开启后放血」用例直接通过；
+    // 需要测试「未达门槛」的用例在自身内覆盖 bucket 值。
     (globalThis as Record<string, unknown>).Game = {
       time: 100,
       cpu: {
-        bucket: 10000,
+        bucket: 13000,
         generatePixel: generatePixelSpy,
       },
     };
@@ -65,8 +68,9 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
     expect(generatePixelSpy).not.toHaveBeenCalled();
   });
 
-  it("开关开启后：healthy + bucket >= 10000 才放血，并记录 pixelAt", () => {
+  it("开关开启后：healthy + bucket >= 门槛(10000+reserve) 才放血，并记录 pixelAt", () => {
     (CONFIG.pixel as { enabled: boolean }).enabled = true;
+    // bucket=13000（默认 beforeEach 已设），门槛 = 10000 + 3000 = 13000 → 放血。
     pixelSystem.run(makeCtx("healthy"));
     expect(generatePixelSpy).toHaveBeenCalledTimes(1);
     expect((globalThis as any).Memory.kernel.pixelAt).toBe(100);
@@ -99,12 +103,13 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
     expect(generatePixelSpy).not.toHaveBeenCalled();
   });
 
-  it("does NOT call generatePixel when healthy but bucket < 10000", () => {
+  it("does NOT call generatePixel when healthy but bucket < 门槛(10000+reserve)", () => {
     (CONFIG.pixel as { enabled: boolean }).enabled = true;
+    // 门槛 = 10000 + 3000 = 13000；bucket=12999 未达门槛 → 不放血。
     (globalThis as Record<string, unknown>).Game = {
       time: 100,
       cpu: {
-        bucket: 9999,
+        bucket: 12999,
         generatePixel: generatePixelSpy,
       },
     };
@@ -117,7 +122,7 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
     (globalThis as Record<string, unknown>).Game = {
       time: 100,
       cpu: {
-        bucket: 10000,
+        bucket: 13000,
         // generatePixel 不存在
       },
     };

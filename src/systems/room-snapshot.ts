@@ -54,6 +54,15 @@ export function buildRoomSnapshot(
   // 威胁分级：仅具备攻击/治疗/拆迁/claim 部件且非联盟者才算威胁（P0-2）。
   const threatCreeps = classifyThreats(hostileCreeps, CONFIG.defense.allies);
 
+  // 采集本房全部 creep（己方+敌方）的占位表，供 traffic-manager 直接消费——
+  // 消除其独立 room.find(FIND_CREEPS) 扫描（~0.3 CPU/tick 在 3 房规模）。
+  // packed 格式与 traffic-manager 的 occupancy Map 同口径（x*50+y）。
+  const allCreeps = room.find(FIND_CREEPS);
+  const creepPositions = new Map<number, { name: string; my: boolean; fatigue: number }>();
+  for (const c of allCreeps) {
+    creepPositions.set(c.pos.x * 50 + c.pos.y, { name: c.name, my: c.my, fatigue: c.fatigue });
+  }
+
   // nuke 落点预警（审计缺口 1）：自有房视野内 FIND_NUKES 是常量级查询，
   // 50000 tick 预警窗口是资产抢救的全部时限。try/catch 兼容未定义常量的
   // 旧测试 mock（与 tombstones 先例同款）。
@@ -211,6 +220,7 @@ export function buildRoomSnapshot(
     ruins,
     criticalRepairTarget,
     incomingNukes,
+    creepPositions,
   };
 }
 

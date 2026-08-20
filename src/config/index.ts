@@ -117,6 +117,15 @@ export const CONFIG = {
      * （线上实测 187+ tick 停摆）。开启前置：bundle 压缩后加载成本 ≪ 20 CPU，
      * 且接受放血后 ~600 tick 的 P3 降档窗口。 */
     enabled: true,
+    /** 生成后保留的 bucket 缓冲量。generatePixel 消耗 10000 bucket（清零），
+     * 但帝国不应触底归零——需要保留缓冲应对 global reset（bundle 加载）、
+     * 战时 CPU spike 等突发。生成门槛 = 10000 + bucketReserve：
+     * bucket 攒到此值才生成，生成后剩余 bucketReserve 的缓冲。
+     * 默认 3000：tier 不会跌到 recovery（1000 以下），P3 系统冻结窗口从
+     * ~700 tick 缩短到 ~300 tick（bucket 从 3000 恢复到 7000 healthy 门槛
+     * 约 364 tick @ 11/tick），调参/遥测更快恢复。
+     * 设为 0 即恢复旧行为（满 10000 即清零）。 */
+    bucketReserve: 3000,
   },
 
   spawn: {
