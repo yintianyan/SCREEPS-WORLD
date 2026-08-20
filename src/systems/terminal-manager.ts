@@ -144,11 +144,15 @@ export const terminalManagerSystem: System = {
       // 需求表存在时 priority 必须高于卖出候选（SELL_PRIORITY_CAP=50），
       // 否则买入被日常卖出永久挤出（卖出消耗 terminal 冷却 → 买入无窗口）。
       // 工业链原料买入是生产性投资，优先于日常卖出变现。
+      //
+      // 需求表时效：lab-system 每 50 tick 发布一次（idle 期间），terminal-manager
+      // 每 200 tick 运行一次 — 两者 tick 极少重合。检查需求是否在有效期内
+      //（发布 tick 到 deadline 之间）而非严格等于当前 tick。
       {
         let deficitPriority = DEFICIT_PRIORITY_BASE;
         const g = globalThis as unknown as { procurementDemands?: { tick: number; byRoom: Record<string, ProcurementDemand[]> } };
         const demandsCache = g.procurementDemands;
-        if (demandsCache && demandsCache.tick === ctx.tick) {
+        if (demandsCache && ctx.tick - demandsCache.tick <= CONFIG.market.interval + 50) {
           const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
           if (allDemands.length > 0) {
             // 需求表存在时，取最高 priority 但不低于 SELL_PRIORITY_CAP+1，
@@ -526,9 +530,12 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
   if (Game.market.credits < CONFIG.market.creditFloor) return false;
 
   // ── 阶段 1：优先消费需求表 ──
+  // 需求表时效：lab-system 每 50 tick 发布一次（idle 期间），terminal-manager
+  // 每 200 tick 运行一次 — 两者 tick 极少重合。检查需求是否在有效期内
+  //（发布 tick 到 deadline 之间）而非严格等于当前 tick。
   const g = globalThis as unknown as { procurementDemands?: { tick: number; byRoom: Record<string, ProcurementDemand[]> } };
   const demandsCache = g.procurementDemands;
-  if (demandsCache && demandsCache.tick === ctx.tick) {
+  if (demandsCache && ctx.tick - demandsCache.tick <= CONFIG.market.interval + 50) {
     const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
     // 过滤出当前房间的需求（跨房需求不在此房买 — terminal.send 走互济通道）。
     // 实际上所有房的需求都汇入：任意房的缺口都可在任意 terminal 买入（买入后走互济送到位）。
