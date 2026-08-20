@@ -707,8 +707,9 @@ export const CONFIG = {
     launchTowerThreshold: 2,
     /** 发射射程预检（线性距离口径；引擎 NUKE_RANGE=10，走廊约束由 launchNuke 返回码兜底）。 */
     maxRange: 10,
-    /** G 市场买入最高价（credits/单位）— 超价宁可不买（lab 自产是主通道，市场只是加速）。 */
-    ghodiumBuyMaxPrice: 1.0,
+    /** G 市场买入最高价（credits/单位）— 超价宁可不买（lab 自产是主通道，市场只是加速）。
+     * 2026-08-21 校准：市场 G 最低卖价 262，设 300 允许溢价吃单。 */
+    ghodiumBuyMaxPrice: 300,
     /** G 买入的信用门禁 — 战略物资不许挤占生存/工业采购预算。 */
     ghodiumBuyCreditFloor: 10000,
   },
@@ -720,13 +721,19 @@ export const CONFIG = {
     minBucket: 8000,
     /**
      * 各基础矿物最高买入价（credits/单位）— 高于此价宁可等待。
-     * 基础矿物市价常年低于 1，X 稀缺溢价更高；价格随赛季波动，按需调整。
+     * 2026-08-21 线上行情校准（shard3）：基础矿严重通胀，旧值 1.5 已失效。
+     * 定价策略：取市场最低卖价 × 1.1（略高于最低卖单确保能吃到），
+     * 资金充裕时（33M+ credits）工业链刚需优先于价格敏感度。
+     * X 最稀缺（216+），H/L 高价（137-335），U/K/Z 中低价（11-14），O 自产不买。
+     * 定期复核：每赛季/重大通胀事件后需重新校准。
      */
     maxBuyPrice: {
-      H: 1.5, O: 1.5, U: 1.5, L: 1.5, K: 1.5, Z: 1.5, X: 5,
+      H: 370, O: 65, U: 13, L: 150, K: 15, Z: 16, X: 240,
     } as Readonly<Record<string, number>>,
-    /** 本房矿物最低卖出价 — 低于此价不贱卖（宁可囤着等行情）。 */
-    minSellPrice: 0.3,
+    /** 本房矿物最低卖出价 — 低于此价不贱卖（宁可囤着等行情）。
+     * 2026-08-21 校准：旧值 0.3 在通胀市场下已无意义。设为 0.5 作为地板 —
+     * 实际卖价由 trySellHomeMineral 取市场最优 buy 价 × 0.95 动态计算。 */
+    minSellPrice: 0.5,
     /** 卖出保留量：本房矿物合计低于此量不卖（留作自用反应原料）。 */
     sellReserve: 3000,
     /** 单笔 deal 最大成交量 — 控制单笔运费与坏单风险。 */
@@ -752,8 +759,9 @@ export const CONFIG = {
      * 低于等值能量的合理溢价不贱卖（terminal 现货囤着等行情）。
      */
     minBatterySellPrice: 0.8,
-    /** power 最高买入价（credits/单位）— 超价宁可不买。 */
-    powerBuyMaxPrice: 0.5,
+    /** power 最高买入价（credits/单位）— 超价宁可不买。
+     * 2026-08-21 校准：市场 power 最低卖价 999，设 1100 允许吃单。 */
+    powerBuyMaxPrice: 1100,
     /**
      * power 买入的高信用门禁 — power 是 GPL 长期投资而非生存物资，
      * credits 低于此值时预算全部让位给矿物/能量采购。
@@ -770,7 +778,8 @@ export const CONFIG = {
     minOrderAmount: 1000,
     /** 挂单超龄（毫秒，零成交）撤单重挂 — 价格随新 bid 重算自适应下行。 */
     orderStaleMs: 4 * 24 * 60 * 60 * 1000,
-    /** pixel 最低卖出价 — 低于此价囤着（pixel 是账户资源无仓储成本）。 */
+    /** pixel 最低卖出价 — 低于此价囤着（pixel 是账户资源无仓储成本）。
+     * 2026-08-21 校准：市场行情未变，300 保持合理。 */
     minPixelSellPrice: 300,
   },
 
