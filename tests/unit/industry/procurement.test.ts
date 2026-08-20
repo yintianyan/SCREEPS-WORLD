@@ -24,6 +24,8 @@ import {
   expandReactionDemands,
   expandCommodityDemands,
   isBaseMineral,
+  isIntermediateCompound,
+  computeMaxBuyPrice,
 } from "../../../src/domain/industry/procurement";
 import type { ProcurementDemand } from "../../../src/kernel/global-cache";
 
@@ -88,8 +90,8 @@ describe("collectDemands — 汇总/排序/去重/过期清理", () => {
 
 // ─── expandReactionDemands ───────────────────────────────
 
-describe("expandReactionDemands — 反应链基础矿物缺口展开", () => {
-  it("只展开基础矿物（中间产物不买）", () => {
+describe("expandReactionDemands — 反应链原料缺口展开（含中间产物）", () => {
+  it("基础矿物和中间产物都展开", () => {
     // 反应链：OH ← O + H
     const plan = {
       steps: [{ input1: "O" as const, input2: "H" as const, output: "OH" as const, amount: 300 }],
@@ -98,11 +100,10 @@ describe("expandReactionDemands — 反应链基础矿物缺口展开", () => {
     };
     const inventory = {}; // 完全空库存
     const result = expandReactionDemands(plan, inventory, 100, 250);
+    // O 和 H 是基础矿，都是输入原料 → 都展开
     expect(result).toHaveLength(2);
     const resources = result.map(d => d.resource).sort();
     expect(resources).toEqual(["H", "O"]);
-    // 不应该有 OH（中间产物）
-    expect(result.find(d => d.resource === "OH")).toBeUndefined();
   });
 
   it("已有库存抵扣缺口", () => {
@@ -129,7 +130,7 @@ describe("expandReactionDemands — 反应链基础矿物缺口展开", () => {
     expect(result).toHaveLength(0);
   });
 
-  it("多步骤反应链正确展开各层基础矿", () => {
+  it("多步骤反应链展开各层基础矿和中间产物", () => {
     // G ← ZK + UL, ZK ← Z + K, UL ← U + L
     const plan = {
       steps: [
@@ -142,13 +143,27 @@ describe("expandReactionDemands — 反应链基础矿物缺口展开", () => {
     };
     const inventory = {};
     const result = expandReactionDemands(plan, inventory, 100, 250);
-    // Z, K, U, L 是基础矿物；ZK, UL, G 不是
+    // Z, K, U, L 是基础矿；ZK, UL 是中间产物（也是输入）→ 阶段 3 扩展后都展开。
+    // G 是最终产物，不是任何 step 的输入 → 不展开。
     const resources = result.map(d => d.resource).sort();
-    expect(resources).toEqual(["K", "L", "U", "Z"]);
-    // ZK/UL/G 不应该出现（不是基础矿物）
-    expect(result.find(d => d.resource === "ZK")).toBeUndefined();
-    expect(result.find(d => d.resource === "UL")).toBeUndefined();
+    expect(resources).toEqual(["K", "L", "U", "UL", "Z", "ZK"]);
     expect(result.find(d => d.resource === "G")).toBeUndefined();
+  });
+
+  it("中间产物 priority=20（低于基础矿 25）", () => {
+    const plan = {
+      steps: [
+        { input1: "Z" as const, input2: "K" as const, output: "ZK" as const, amount: 300 },
+        { input1: "ZK" as const, input2: "UL" as const, output: "G" as const, amount: 300 },
+      ],
+      target: "G",
+      targetAmount: 300,
+    };
+    const result = expandReactionDemands(plan, {}, 100, 250);
+    const base = result.find(d => d.resource === "Z");
+    const intermediate = result.find(d => d.resource === "ZK");
+    expect(base!.priority).toBe(25);
+    expect(intermediate!.priority).toBe(20);
   });
 
   it("deadline = tick + deadlineOffset", () => {
@@ -200,7 +215,7 @@ describe("expandCommodityDemands — commodity 原料缺口展开", () => {
   });
 });
 
-// ─── isBaseMineral ───────────────────────────────────────
+// ─── isBaseMineral / isIntermediateCompound ──────────────
 
 describe("isBaseMineral", () => {
   it("基础矿返回 true", () => {
@@ -220,5 +235,56 @@ describe("isBaseMineral", () => {
     expect(isBaseMineral("XGH2O")).toBe(false);
     expect(isBaseMineral("power")).toBe(false);
     expect(isBaseMineral("energy")).toBe(false);
+  });
+});
+
+describe("isIntermediateCompound", () => {
+  it("中间产物返回 true", () => {
+    expect(isIntermediateCompound("OH")).toBe(true);
+    expect(isIntermediateCompound("ZK")).toBe(true);
+    expect(isIntermediateCompound("UL")).toBe(true);
+    expect(isIntermediateCompound("G")).toBe(true);
+  });
+
+  it("非中间产物返回 false", () => {
+    expect(isIntermediateCompound("H")).toBe(false);
+    expect(isIntermediateCompound("X")).toBe(false);
+    expect(isIntermediateCompound("XGH2O")).toBe(false);
+    expect(isIntermediateCompound("UH")).toBe(false);
+  });
+});
+
+// ─── computeMaxBuyPrice ───────────────────────────────────
+
+describe("computeMaxBuyPrice — 价格分级", () => {
+  const maxBuyPrice = { H: 1.5, O: 1.5, U: 1.5, L: 1.5, K: 1.5, Z: 1.5, X: 5 };
+
+  it("基础矿直接用配置值", () => {
+    expect(computeMaxBuyPrice("H", maxBuyPrice)).toBe(1.5);
+    expect(computeMaxBuyPrice("X", maxBuyPrice)).toBe(5);
+  });
+
+  it("中间产物 = 最贵基础矿 × 2", () => {
+    // 最贵 = X(5) × 2 = 10
+    expect(computeMaxBuyPrice("OH", maxBuyPrice)).toBe(10);
+    expect(computeMaxBuyPrice("ZK", maxBuyPrice)).toBe(10);
+    expect(computeMaxBuyPrice("UL", maxBuyPrice)).toBe(10);
+  });
+
+  it("G 作为中间产物走 ×2 通道", () => {
+    // G 在 INTERMEDIATE_COMPOUNDS 集合中
+    expect(computeMaxBuyPrice("G", maxBuyPrice)).toBe(10);
+  });
+
+  it("T1+ 化合物 = 最贵基础矿 × 5", () => {
+    // 最贵 = X(5) × 5 = 25
+    expect(computeMaxBuyPrice("UH", maxBuyPrice)).toBe(25);
+    expect(computeMaxBuyPrice("XGH2O", maxBuyPrice)).toBe(25);
+    expect(computeMaxBuyPrice("GHO2", maxBuyPrice)).toBe(25);
+  });
+
+  it("配置中已有的资源直接查表（如 G 配了价格）", () => {
+    const withG = { ...maxBuyPrice, G: 2.0 };
+    expect(computeMaxBuyPrice("G", withG)).toBe(2.0);
   });
 });

@@ -49,7 +49,7 @@ import {
   type MarketOrderSummary,
 } from "../domain/industry/terminal-policy";
 import { collectFullInventory } from "../domain/industry/inventory";
-import { collectDemands, isBaseMineral } from "../domain/industry/procurement";
+import { collectDemands, computeMaxBuyPrice } from "../domain/industry/procurement";
 import type { ProcurementDemand } from "../kernel/global-cache";
 import {
   executeBestCandidate,
@@ -495,14 +495,9 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
       if (demand.deadline <= ctx.tick) continue;
       if (demand.amount <= 0) continue;
 
-      // 价格门禁：基础矿物用 maxBuyPrice；非基础矿物用 maxBuyPrice × 2。
-      const baseMax = isBaseMineral(demand.resource)
-        ? (CONFIG.market.maxBuyPrice[demand.resource] ?? 0)
-        : (CONFIG.market.maxBuyPrice[demand.resource] ?? 0);
-      // 中间产物/化合物的价格上限 = 最贵的基研矿 maxBuyPrice × 2（加工溢价容忍）。
-      const maxPrice = baseMax > 0
-        ? baseMax
-        : Math.max(...Object.values(CONFIG.market.maxBuyPrice)) * 2;
+      // 价格门禁：按资源类型分级（阶段 3）。
+      // 基础矿用 maxBuyPrice；中间产物(OH/ZK/UL/G)用 ×2；化合物用 ×5。
+      const maxPrice = computeMaxBuyPrice(demand.resource, CONFIG.market.maxBuyPrice);
 
       const orders = toSummaries(
         Game.market.getAllOrders({ type: ORDER_SELL, resourceType: demand.resource as ResourceConstant }),
