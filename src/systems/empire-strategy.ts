@@ -10,6 +10,7 @@
  * 切换均记录事件（AgendaChange / AgendaOutcome），容量分档变更打日志。
  */
 import type { Priority, System, TickContext } from "../kernel/contracts";
+import { globalCache } from "../kernel/global-cache";
 import {
   evaluateEmpirePosture,
   DEFAULT_POSTURE_OPTIONS,
@@ -65,6 +66,13 @@ export const empireStrategySystem: System = {
         prev: prev ? { posture: prev.posture, since: prev.since } : undefined,
         // R4：war 可持续性计数跨 tick 回传（pressure 滞回输入）。
         warPressureTicks: prev?.warPressureTicks,
+        // P2-2：per-room CPU 记账 → 扩张 ROI 门禁。从 stats.cpuByHome 汇总
+        // 各房归属 CPU 总量，与有效 CPU limit 对比。CPU 余量不足时拒绝扩张。
+        totalCreepCpu: sumCpuByHome(),
+        effectiveCpuLimit: Math.min(
+          Game.cpu.limit ?? 20,
+          Game.cpu.tickLimit ?? 20,
+        ),
       },
       // 姿态参数全部经 CONFIG 可调（修复原先写死 DEFAULT_POSTURE_OPTIONS 的隐藏 bug）。
       { ...DEFAULT_POSTURE_OPTIONS, ...CONFIG.posture },
@@ -153,3 +161,23 @@ export const empireStrategySystem: System = {
     };
   },
 };
+
+/**
+ * P2-2：汇总各房归属 CPU 总量。优先从 Memory.kernel.stats.cpuByHome
+ * （telemetry 采样值，10 tick 更新一次）；缺省从 globalCache.cpuByHome
+ * （当前 tick 累积值）实时汇总。两者都缺则返回 0（不门禁）。
+ */
+function sumCpuByHome(): number {
+  const stats = Memory.kernel?.stats;
+  if (stats?.cpuByHome) {
+    return Object.values(stats.cpuByHome).reduce((a, b) => a + b, 0);
+  }
+  // 回退：当前 tick 的实时 globalCache（telemetry-collector 尚未采样时）
+  const byHome = globalCache().cpuByHome;
+  if (byHome && byHome.size > 0) {
+    let sum = 0;
+    for (const cpu of byHome.values()) sum += cpu;
+    return sum;
+  }
+  return 0;
+}

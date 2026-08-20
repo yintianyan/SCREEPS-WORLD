@@ -1,6 +1,7 @@
 import type {
   Budget,
   CreepRole,
+  CpuTier,
   Priority,
   RoomSnapshot,
   System,
@@ -64,12 +65,22 @@ const ROLE_EXECUTION_ORDER: Readonly<Record<string, number>> = {
 };
 
 /**
- * Idle creep 降频执行的 tick 间隔（cadence）。
- * idle creep 每 N tick 检查一次是否有新任务——大部分 tick 跳过完整 role-runner 管线，
- * 省 0.03-0.05 CPU/只/tick。N=5 平衡响应性与节约：idle 到 acquire 的延迟 ≤5 tick
- * （assignment-service 每 tick 运行，下一个 cadence tick 即发现任务）。
+ * Idle creep 降频执行的 tick 间隔（cadence）——按 CPU tier 自适应。
+ * idle creep 每 N tick 检查一次是否有新任务，跳过的 tick 省 role-runner 管线开销。
+ * tier 越紧张 N 越大（省更多 CPU），但响应延迟同步增大：
+ *   - healthy: 5 tick（~0.2s 游戏时间，响应灵敏）
+ *   - guarded: 8 tick（bucket 在恢复中，适度节流）
+ *   - conserve: 12 tick（CPU 紧张，最大化节流）
+ *   - recovery: 不跳过（P0 恢复期间每 tick 都需检测 threats/assignment）
  */
-const IDLE_CADENCE_TICKS = 5;
+function idleCadenceTicks(tier: CpuTier): number {
+  switch (tier) {
+    case "healthy": return 5;
+    case "guarded": return 8;
+    case "conserve": return 12;
+    default: return 1; // recovery — 不跳过
+  }
+}
 
 /** 轻量字符串哈希 — 用 creep 名做相位偏移，避免所有 idle creep 同 tick 扎堆检查。 */
 function hashCreepName(name: string): number {
@@ -407,13 +418,15 @@ export class Kernel {
       const mode = creep.memory.mode ?? "acquire";
       const stuck = creep.memory.stuckTicks ?? 0;
       const inThreatArea = liveThreatRooms.has(home ?? "") || liveThreatRooms.has(creep.room?.name ?? "");
+      const cadence = idleCadenceTicks(ctx.budget.tier);
       if (
         mode === "idle" &&
         stuck === 0 &&
         !creep.memory.recycle &&
         !creep.memory.remoteTarget &&
         !inThreatArea &&
-        (Game.time + hashCreepName(creep.name)) % IDLE_CADENCE_TICKS !== 0
+        cadence > 1 &&
+        (Game.time + hashCreepName(creep.name)) % cadence !== 0
       ) {
         recordSkip(`creep/${role.name}/idle-cadence`);
         continue;

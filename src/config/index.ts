@@ -823,6 +823,9 @@ export const CONFIG = {
     expandMinBucket: 7000,
     /** expand 姿态要求的最高平均经济压力。 */
     expandMaxPressure: 0.4,
+    /** P2-2：扩张 CPU ROI 门禁——总 creep CPU 占 limit 比例超过此值时拒绝扩张。
+     *  新房间增量 ~3-5 CPU/tick（harvester/hauler/upgrader/builder），余量不足触发死亡螺旋。 */
+    expandMaxCpuRatio: 0.6,
     /** war 姿态要求的最高平均经济压力（打不起就不打）。 */
     warMaxPressure: 0.4,
     /** 殖民门：sponsor 房最低 RCL（成熟到拥有 terminal + 多 spawn + 收入余量）。 */

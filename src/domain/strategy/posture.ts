@@ -42,6 +42,11 @@ export interface PostureOptions {
   expandMinBucket: number;
   /** expand 姿态要求的最高平均经济压力。 */
   expandMaxPressure: number;
+  /** P2-2：扩张 CPU ROI 门禁——总 creep CPU 占 limit 比例超过此值时
+   * 拒绝扩张。新增房间会带来 ~3-5 CPU/tick 的 creep 增量（harvester/
+   * hauler/upgrader/builder 等），在已接近 limit 的情况下会导致 CPU 死亡螺旋。
+   * 默认 0.6：留 40% 余量给系统开销 + 突发。 */
+  expandMaxCpuRatio: number;
   /** war 姿态要求的最高平均经济压力（打不起就不打）。 */
   warMaxPressure: number;
   /** 殖民门（Phase 1a）：sponsor 房最低 RCL — 须成熟到拥有 terminal + 多 spawn + 收入余量。 */
@@ -62,6 +67,7 @@ export const DEFAULT_POSTURE_OPTIONS: PostureOptions = {
   minDwell: 1000,
   expandMinBucket: 7000,
   expandMaxPressure: 0.4,
+  expandMaxCpuRatio: 0.6,
   warMaxPressure: 0.4,
   colonizeSponsorRcl: 7,
   colonizeSponsorFloor: 8000,
@@ -78,6 +84,12 @@ export interface PostureInput {
   prev?: { posture: EmpirePosture; since: number };
   /** war 压力连续超标 tick 数（R4）：由 empire-strategy 持久化（kernel.strategy.warPressureTicks）后回传；缺失视为 0。 */
   warPressureTicks?: number;
+  /** P2-2：帝国总 creep CPU 消耗（Σ cpuByHome，来自 telemetry 采样）。
+   * 用于扩张 ROI 门禁：扩张会增加归属 CPU，若现有 CPU 已接近 limit
+   * 的一定比例，新增房间将导致 CPU 死亡螺旋。缺省视为 0（不门禁）。 */
+  totalCreepCpu?: number;
+  /** P2-2：有效 CPU limit（min(cpuLimit, tickLimit)），用于计算 CPU 占比。 */
+  effectiveCpuLimit?: number;
 }
 
 /** 姿态评估结果 — 姿态 + 各域指令（执行系统只消费指令）。 */
@@ -101,6 +113,11 @@ export function evaluateEmpirePosture(
   options: PostureOptions = DEFAULT_POSTURE_OPTIONS,
 ): PostureResult {
   const { tick, rooms, gclLevel, bucket, prev } = input;
+  // P2-2：CPU ROI 门禁——扩张会增加 creep CPU（新房间至少 +harvester+hauler+upgrader），
+  // 若现有 CPU 已占 limit 的 expandMaxCpuRatio 以上，新房间将吃掉剩余预算触发死亡螺旋。
+  const totalCreepCpu = input.totalCreepCpu ?? 0;
+  const effectiveLimit = Math.max(1, input.effectiveCpuLimit ?? 20);
+  const cpuRatioOk = totalCreepCpu / effectiveLimit < options.expandMaxCpuRatio;
 
   // ── 世界状态信号 ──
   const threatRecent = rooms.some(
@@ -143,7 +160,8 @@ export function evaluateEmpirePosture(
     bucket >= options.expandMinBucket &&
     avgPressure <= options.expandMaxPressure &&
     sponsorReady &&
-    youngestMature;
+    youngestMature &&
+    cpuRatioOk; // P2-2：CPU 余量不足以支撑新房间时不扩张
 
   // ── 危机下强行撤资（经济前置）：若上一态为 war 且当前无真实在房威胁，立即降
   // fortify —— recovery/bootstrap 是比威胁记忆更强的经济信号，战争机器烧的是存活所需的
