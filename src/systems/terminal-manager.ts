@@ -41,6 +41,7 @@ import {
 import {
   planSellOrder,
   shouldCancelStaleOrder,
+  shouldChangeOrderPrice,
 } from "../domain/industry/market-orders";
 import {
   getMineralDeficits,
@@ -61,6 +62,7 @@ import {
   POWER_PRIORITY,
   GHODIUM_PRIORITY,
 } from "../domain/industry/deal-scheduler";
+import { BOOST_EFFECTS, type Compound } from "../domain/industry/types";
 
 export const terminalManagerSystem: System = {
   name: "terminal-manager",
@@ -124,6 +126,13 @@ export const terminalManagerSystem: System = {
         priority: 30,
         execute: () => trySellSurplusCompound(snapshot, terminal),
       });
+      // sell-commodity：factory commodity 产出卖出（priority 25 — 终局高值资产，
+      // terminal 有现货时变现，低于 compound 因为 commodity 不如 boost 化合物紧缺）。
+      candidates.push({
+        type: "sell-commodity",
+        priority: 25,
+        execute: () => trySellCommodity(snapshot, terminal),
+      });
 
       // 买入候选。
       candidates.push({
@@ -185,25 +194,47 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
     orders?: Record<string, any>;
     createOrder?: (params: Record<string, unknown>) => number;
     cancelOrder?: (orderId: string) => number;
+    changeOrderPrice?: (orderId: string, newPrice: number) => number;
   };
   if (typeof market.createOrder !== "function") return;
   const myOrders = Object.values(market.orders ?? {});
 
-  // 本房挂单维护（撤超龄/残单）。
+  // 本房挂单维护（改价/撤单）。
   for (const order of myOrders) {
     if (order.type !== "sell" || order.roomName !== snapshot.roomName) continue;
-    if (
-      shouldCancelStaleOrder(
-        order.createdTimestamp ?? 0,
+    const stale = shouldCancelStaleOrder(
+      order.createdTimestamp ?? 0,
+      order.remainingAmount ?? 0,
+      order.totalAmount ?? 0,
+      Date.now(),
+      CONFIG.market.orderStaleMs,
+    );
+    if (!stale) continue;
+
+    // 超龄零成交 — 优先改价（省 5% 手续费），改不了再撤单重挂。
+    if (typeof market.changeOrderPrice === "function") {
+      const bids = toSummaries(
+        Game.market.getAllOrders({ type: ORDER_BUY, resourceType: order.resourceType }),
+      );
+      const best = pickBestBuyOrder(bids, CONFIG.market.minSellPrice);
+      const newPrice = shouldChangeOrderPrice(
         order.remainingAmount ?? 0,
         order.totalAmount ?? 0,
-        Date.now(),
-        CONFIG.market.orderStaleMs,
-      )
-    ) {
-      if (market.cancelOrder?.(order.id) === OK) {
-        console.log(`[${Game.time}] market: 撤单 ${order.id}（${order.resourceType} 超龄零成交）`);
+        order.price ?? 0,
+        best?.price,
+        CONFIG.market.sellOrderMarkup,
+      );
+      if (newPrice !== undefined) {
+        if (market.changeOrderPrice(order.id, newPrice) === OK) {
+          console.log(`[${Game.time}] market: 改价 ${order.id}（${order.resourceType} ${order.price}→${newPrice}）`);
+          continue; // 改价成功 — 不撤单，等新价成交
+        }
       }
+    }
+
+    // 改价不适用（无 bid / 价变不足 / API 不可用）→ 撤单重挂。
+    if (market.cancelOrder?.(order.id) === OK) {
+      console.log(`[${Game.time}] market: 撤单 ${order.id}（${order.resourceType} 超龄零成交）`);
     }
   }
 
@@ -657,6 +688,48 @@ function trySellSurplusBattery(snapshot: RoomSnapshot, terminal: StructureTermin
 
   const amount = Math.min(inTerminal, best.amount, CONFIG.market.maxDealAmount);
   return executeDeal(best, amount, terminal, snapshot.roomName);
+}
+
+/**
+ * 卖出 factory commodity 产出（circuit/wire/alloy/device 等）。
+ * commodity 是 factory 升级链产物，搬到 terminal 后由此函数变现。
+ * 口径：terminal 内非 energy、非 homeMineral、非 battery、非 boost 化合物的资源。
+ * 价格门禁用 minSellPrice（与矿物同底线 — 不贱卖，commodity 单价远高于基础矿）。
+ * 每次只卖一种（控制 getAllOrders 开销）。
+ */
+function trySellCommodity(snapshot: RoomSnapshot, terminal: StructureTerminal): boolean {
+  const homeMineral = snapshot.minerals[0]?.mineralType;
+
+  // 扫描 terminal 中 commodity 产出（排除 energy/homeMineral/battery/boost 化合物）。
+  for (const res of Object.keys(terminal.store) as ResourceConstant[]) {
+    if (res === RESOURCE_ENERGY) continue;
+    if (res === homeMineral) continue;
+    if (res === RESOURCE_BATTERY) continue;
+    // boost 化合物由 trySellSurplusCompound 通道处理（有 BOOST_EFFECTS 映射）。
+    if (BOOST_EFFECTS[res as Compound]) continue;
+    // 基础矿物由 trySellHomeMineral 通道处理。
+    if (["H", "O", "U", "L", "K", "Z", "X"].includes(res)) continue;
+    // G 由 tryBuyGhodium 通道管理（买入而非卖出）。
+    if (res === RESOURCE_GHODIUM) continue;
+    // power 由 tryBuyPower 通道管理（买入而非卖出）。
+    if (res === RESOURCE_POWER) continue;
+
+    const inTerminal = terminal.store.getUsedCapacity(res) ?? 0;
+    if (inTerminal <= 0) continue;
+
+    const orders = toSummaries(
+      Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res }),
+    );
+    const best = pickBestBuyOrder(orders, CONFIG.market.minSellPrice);
+    if (!best) continue;
+
+    const amount = Math.min(inTerminal, best.amount, CONFIG.market.maxDealAmount);
+    if (amount <= 0) continue;
+
+    console.log(`[${Game.time}] terminal/${snapshot.roomName}: 卖出 commodity ${res} amount=${amount} price=${best.price}`);
+    return executeDeal(best, amount, terminal, snapshot.roomName);
+  }
+  return false;
 }
 
 /**

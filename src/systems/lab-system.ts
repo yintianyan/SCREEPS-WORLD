@@ -10,7 +10,7 @@ import type { RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import type { Compound, LabAssignment, LabDemandTable, LabLoadDemand, LabPlan, LabUnloadDemand, ReactionPlan } from "../domain/industry/types";
 import { BOOST_EFFECTS, BOOST_EFFECT_PART } from "../domain/industry/types";
 import { evaluateBoostRequests, decideWarReactionTarget, DEFAULT_BOOST_POLICY } from "../domain/industry/boost";
-import { getNextExecutableStep, planReactionChain, selectReactionTrio, LAB_REACTION_AMOUNT } from "../domain/industry/reactions";
+import { getNextExecutableStep, planReactionChain, selectReactionTrios, LAB_REACTION_AMOUNT } from "../domain/industry/reactions";
 import { globalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
 import { collectFullInventory } from "../domain/industry/inventory";
@@ -67,7 +67,9 @@ function collectCompoundInventory(snapshot: RoomSnapshot): Record<string, number
 
 /**
  * 规划 lab 分配：优先 boost，剩余做反应。
- * 策略：1 个 lab 专门 boost（有请求时）→ 剩余取 3 个做反应（2 input + 1 output）→ 其余 idle。
+ * 策略：1 个 lab 专门 boost（有请求时）→ 剩余取贪心多三元组（各组 2 input + 1 output）
+ * 并行执行同一反应步骤 → 未参与反应的 idle。
+ * RCL8 有 10 个 lab — 多三元组并行可把产能从 5/tick 提到 15/tick（3 组）。
  */
 function planLabs(
   snapshot: RoomSnapshot,
@@ -97,20 +99,22 @@ function planLabs(
     labIndex++;
   }
 
-  // 2. Reaction labs（需要 3 个相邻的：2 input + 1 output）。
+  // 2. Reaction labs（贪心多三元组：每组 2 input + 1 output 并行反应）。
   // runReaction 要求两个 input lab 均在 output lab 的 range≤2 内，
-  // 因此不能任意取 3 个——须挑选满足相邻约束的三元组，否则本 tick 不反应（P2-8）。
+  // selectReactionTrios 贪心选出多个不相交三元组。
   const remainingLabs = labs.slice(labIndex);
   if (reactionStep && remainingLabs.length >= 3) {
-    const trio = selectReactionTrio(
+    const trios = selectReactionTrios(
       remainingLabs.map(l => ({ id: l.id as string, x: l.pos.x, y: l.pos.y })),
     );
-    if (trio) {
-      assignments.push(
-        { labId: trio.input1, role: "input1" },
-        { labId: trio.input2, role: "input2" },
-        { labId: trio.output, role: "output" },
-      );
+    if (trios.length > 0) {
+      for (const trio of trios) {
+        assignments.push(
+          { labId: trio.input1, role: "input1" },
+          { labId: trio.input2, role: "input2" },
+          { labId: trio.output, role: "output" },
+        );
+      }
 
       // 未参与反应的剩余 lab 标记 idle。
       for (const lab of remainingLabs) {
@@ -451,30 +455,30 @@ export const labSystem: System = {
         }
       }
 
-      // ── 5. 执行反应 ──
+      // ── 5. 执行反应（多三元组并行）──
+      // 每个 input1+input2+output 三元组独立执行 runReaction —
+      // RCL8 有 10 个 lab 时可并行 3 组，产能 5→15/tick。
       if (labPlan.reaction) {
-        const input1Assignment = labPlan.assignments.find(a => a.role === "input1");
-        const input2Assignment = labPlan.assignments.find(a => a.role === "input2");
+        const input1Assignments = labPlan.assignments.filter(a => a.role === "input1");
+        const input2Assignments = labPlan.assignments.filter(a => a.role === "input2");
+        const outputAssignments = labPlan.assignments.filter(a => a.role === "output");
 
-        if (input1Assignment && input2Assignment) {
-          const input1Lab = Game.getObjectById(input1Assignment.labId as Id<StructureLab>);
-          const input2Lab = Game.getObjectById(input2Assignment.labId as Id<StructureLab>);
+        // 三元组数量 = min(input1, input2, output) — planLabs 保证它们成对，
+        // 但防御性取最小值防错配。
+        const trioCount = Math.min(
+          input1Assignments.length, input2Assignments.length, outputAssignments.length,
+        );
+        for (let i = 0; i < trioCount; i++) {
+          const input1Lab = Game.getObjectById(input1Assignments[i]!.labId as Id<StructureLab>);
+          const input2Lab = Game.getObjectById(input2Assignments[i]!.labId as Id<StructureLab>);
+          const outputLab = Game.getObjectById(outputAssignments[i]!.labId as Id<StructureLab>);
+          if (!input1Lab || !input2Lab || !outputLab) continue;
 
-          if (input1Lab && input2Lab) {
-            // 确保 input labs 中有正确的原料
-            const input1Amount = input1Lab.store[labPlan.reaction.input1 as ResourceConstant] ?? 0;
-            const input2Amount = input2Lab.store[labPlan.reaction.input2 as ResourceConstant] ?? 0;
-
-            if (input1Amount >= LAB_REACTION_AMOUNT && input2Amount >= LAB_REACTION_AMOUNT) {
-              // 找一个 output lab 来执行反应
-              const outputAssignment = labPlan.assignments.find(a => a.role === "output");
-              if (outputAssignment) {
-                const outputLab = Game.getObjectById(outputAssignment.labId as Id<StructureLab>);
-                if (outputLab) {
-                  outputLab.runReaction(input1Lab, input2Lab);
-                }
-              }
-            }
+          // 确保 input labs 中有正确的原料（每 tick 每组各需 5 单位）。
+          const input1Amount = input1Lab.store[labPlan.reaction.input1 as ResourceConstant] ?? 0;
+          const input2Amount = input2Lab.store[labPlan.reaction.input2 as ResourceConstant] ?? 0;
+          if (input1Amount >= LAB_REACTION_AMOUNT && input2Amount >= LAB_REACTION_AMOUNT) {
+            outputLab.runReaction(input1Lab, input2Lab);
           }
         }
       }

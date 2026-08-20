@@ -58,3 +58,27 @@ export function shouldCancelStaleOrder(
   if (remainingAmount < totalAmount) return false; // 有部分成交 — 价格有效，保留
   return nowMs - createdTimestamp > staleMs;
 }
+
+/**
+ * 改价决策：挂龄超限且零成交，但市场 bid 仍存在 → 不撤单重挂（省 5% 手续费），
+ * 直接 changeOrderPrice 到新价（随 bid 自适应下行）。
+ *
+ * 返回值：undefined = 不改价（保留或走撤单路径）；number = 新价格。
+ * 条件：① 零成交（remaining == total）；② 有新 bid 锚定；③ 新价与旧价差异超阈值
+ * （价格不变改价无意义，且 changeOrderPrice 有调用成本）。
+ */
+export function shouldChangeOrderPrice(
+  remainingAmount: number,
+  totalAmount: number,
+  currentPrice: number,
+  bestBuyPrice: number | undefined,
+  markup: number,
+): number | undefined {
+  // 零成交才考虑改价（有部分成交说明价格有效）。
+  if (remainingAmount < totalAmount) return undefined;
+  if (bestBuyPrice === undefined || bestBuyPrice <= 0) return undefined;
+  const newPrice = Math.round(bestBuyPrice * markup * 100) / 100;
+  // 价格变化需超过 5% 才值得改价（避免微小波动频繁触发）。
+  if (Math.abs(newPrice - currentPrice) / currentPrice < 0.05) return undefined;
+  return newPrice;
+}

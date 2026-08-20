@@ -128,3 +128,47 @@ export function selectReactionTrio(labs: readonly LabPos[]): ReactionTrio | unde
   }
   return undefined;
 }
+
+/**
+ * 贪心选出多个互不相交的三元组（每个 lab 最多被一个三元组占用）。
+ * RCL8 有 10 个 lab — 单三元组只利用 3 个（产能 5/tick），剩余 7 个 idle。
+ * 多三元组可并行执行同一反应步骤，产能成倍提升（3 组 = 15/tick）。
+ *
+ * 策略：按 output 候选的可用 input 数降序排列（input 多的 output 优先分配），
+ * 贪心锁定后从可用池移除已分配 lab，继续选下一组。
+ */
+export function selectReactionTrios(labs: readonly LabPos[]): ReactionTrio[] {
+  if (labs.length < 3) return [];
+  const used = new Set<string>();
+  const trios: ReactionTrio[] = [];
+
+  // 预计算每个 lab 周围的可用邻居。
+  const neighbors = new Map<string, LabPos[]>();
+  for (const lab of labs) {
+    neighbors.set(lab.id, labs.filter(
+      l => l.id !== lab.id && chebyshev(l, lab) <= REACTION_RANGE,
+    ));
+  }
+
+  // 按「可用 input 数降序」排列 output 候选（邻居多的 output 优先锁定，
+  // 避免被邻居少的 output 先占走共享 lab 导致总组数减少）。
+  const outputCandidates = [...labs].sort(
+    (a, b) => (neighbors.get(b.id)!.length) - (neighbors.get(a.id)!.length),
+  );
+
+  for (const output of outputCandidates) {
+    if (used.has(output.id)) continue;
+    const available = neighbors.get(output.id)!.filter(l => !used.has(l.id));
+    if (available.length < 2) continue;
+    trios.push({
+      output: output.id,
+      input1: available[0]!.id,
+      input2: available[1]!.id,
+    });
+    used.add(output.id);
+    used.add(available[0]!.id);
+    used.add(available[1]!.id);
+  }
+
+  return trios;
+}

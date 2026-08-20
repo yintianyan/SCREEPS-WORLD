@@ -39,6 +39,7 @@ const PWR_OPERATE_EXTENSION = 6;
 const PWR_OPERATE_STORAGE = 4;
 const PWR_OPERATE_TOWER = 7;
 const PWR_OPERATE_CONTROLLER = 12;
+const PWR_OPERATE_FACTORY = 14;
 
 /** 基准 PC：level 与 powers 由参数覆盖。 */
 function pc(name: string, overrides: Partial<PcSummary> = {}): PcSummary {
@@ -92,9 +93,9 @@ describe("planGplSpending — 边界条件", () => {
 
   it("build order 全部完成 → none（free levels 攒着）", () => {
     // build order 9 项全满（含审计缺口 7 的 TOWER/CONTROLLER lv1）：
-    // PC level = 1+1+1+1+2+2+2+1+1 = 12。
+    // PC level = 1+1+1+1+2+2+2+1+1+1 = 13（含 OPERATE_FACTORY lv1）。
     const maxed = pc("pc-op-0", {
-      level: 12,
+      level: 13,
       powers: {
         [PWR_GENERATE_OPS]: 2,
         [PWR_OPERATE_SPAWN]: 2,
@@ -102,9 +103,10 @@ describe("planGplSpending — 边界条件", () => {
         [PWR_OPERATE_STORAGE]: 1,
         [PWR_OPERATE_TOWER]: 1,
         [PWR_OPERATE_CONTROLLER]: 1,
+        [PWR_OPERATE_FACTORY]: 1,
       },
     });
-    expect(planGplSpending(13, [maxed], ["pc-op-0"])).toEqual({ action: "none" });
+    expect(planGplSpending(14, [maxed], ["pc-op-0"])).toEqual({ action: "none" });
   });
 });
 
@@ -156,6 +158,9 @@ function baseInput(
       rclPush: false,
       controllerId: undefined,
       controllerEffectRemaining: undefined,
+      factoryId: undefined,
+      factoryEffectRemaining: undefined,
+      factoryLevel: 0,
       ...roomOverrides,
     },
   };

@@ -427,15 +427,20 @@ export function stockFactoryEnergy(): ActionCandidate<FactoryStockTarget> {
 
 /** reclaimFactoryOutput 的 resolve 返回类型。 */
 type FactoryReclaimTarget =
-  | { dest: StructureStorage | StructureTerminal; phase: "deposit" }
-  | { source: StructureFactory; phase: "withdraw" };
+  | { dest: StructureStorage | StructureTerminal; resource: ResourceConstant; phase: "deposit" }
+  | { source: StructureFactory; resource: ResourceConstant; phase: "withdraw" };
+
+/** commodity 回收阈值 — 与 battery 共用，factory 总容量 50k 产出无出路必堵死。 */
+const FACTORY_RECLAIM_THRESHOLD = 100;
 
 /**
- * 回收 factory 的 battery 产物（factory → terminal/storage）。
- * 背景：factory 总容量 50k，battery 产出若无搬运出路，积满后投料 transfer 必返
- * ERR_FULL 被静默忽略 → 压缩链死锁（满仓信号下能量持续在源头被浪费）。
- * 攒批阈值（batteryReclaimThreshold）触发，减少往返；投放目标遵循 W7 教训：
- * 有市场时 terminal 优先（交易变现入口），无市场/满则落 storage（死资本不进 terminal）。
+ * 回收 factory 的产出（factory → terminal/storage）。
+ * 覆盖两类产出：① battery（满仓压缩产物）；② commodity（升级链产物如 circuit/wire/alloy）。
+ * 背景：factory 总容量 50k，产出若无搬运出路，积满后投料 transfer 必返 ERR_FULL
+ * 被静默忽略 → 生产链死锁。原实现只回收 battery — commodity 产出积压后 commodity 链
+ * 死锁（factory-manager produce 永远 ERR_FULL）。
+ * 攒批阈值触发减少往返；投放目标遵循 W7 教训：有市场时 terminal 优先（交易变现入口），
+ * 无市场/满则落 storage。能量不回收（能量是 factory 运营原料，不是产出）。
  */
 export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
   return {
@@ -443,28 +448,47 @@ export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
     resolve: (ac) => {
       const factory = ac.snapshot.factory;
       if (!factory) return undefined;
-      const battery = factory.store.getUsedCapacity(RESOURCE_BATTERY);
-      if (battery < CONFIG.factory.batteryReclaimThreshold) return undefined;
 
-      // 携带 battery：送 terminal（有市场且有空位）或 storage。
-      if ((ac.creep.store[RESOURCE_BATTERY] ?? 0) > 0) {
+      // 扫描 factory store 中所有非 energy 产出资源。
+      const outputs: { res: ResourceConstant; qty: number }[] = [];
+      for (const res of Object.keys(factory.store) as ResourceConstant[]) {
+        if (res === RESOURCE_ENERGY) continue;
+        const qty = factory.store[res] ?? 0;
+        if (qty > 0) outputs.push({ res, qty });
+      }
+
+      // deposit 相：creep 携带产出资源 → 送 terminal（有市场有空位）或 storage。
+      const carriedOutput = (Object.keys(ac.creep.store) as ResourceConstant[])
+        .find(r => r !== RESOURCE_ENERGY && (ac.creep.store[r] ?? 0) > 0);
+      if (carriedOutput) {
         const marketAvailable = typeof Game.market?.getAllOrders === "function";
         const terminalFree = marketAvailable && ac.snapshot.terminal
-          ? (ac.snapshot.terminal.store.getFreeCapacity(RESOURCE_BATTERY) ?? 0)
+          ? (ac.snapshot.terminal.store.getFreeCapacity(carriedOutput) ?? 0)
           : 0;
         const dest = terminalFree > 0 ? ac.snapshot.terminal : ac.snapshot.storage;
-        if (dest) return { dest, phase: "deposit" as const };
+        if (dest) return { dest, resource: carriedOutput, phase: "deposit" as const };
         return undefined;
       }
-      // 满载他物（能量等）时放行后续候选先卸货 — 同 H-2 资格前置公理。
+
+      // withdraw 相：挑存量最大的产出资源（battery 或 commodity），达阈值才搬。
+      // battery 攒批阈值更高（200，压缩产物量大），commodity 阈值更低（100，高值不积压）。
       if (ac.creep.store.getFreeCapacity() === 0) return undefined;
-      return { source: factory, phase: "withdraw" as const };
+      let pick: { res: ResourceConstant; qty: number } | undefined;
+      for (const o of outputs) {
+        const threshold = o.res === RESOURCE_BATTERY
+          ? CONFIG.factory.batteryReclaimThreshold
+          : FACTORY_RECLAIM_THRESHOLD;
+        if (o.qty < threshold) continue;
+        if (!pick || o.qty > pick.qty) pick = o;
+      }
+      if (!pick) return undefined;
+      return { source: factory, resource: pick.res, phase: "withdraw" as const };
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, RESOURCE_BATTERY));
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resource));
       } else {
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, RESOURCE_BATTERY));
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resource));
       }
     },
   };

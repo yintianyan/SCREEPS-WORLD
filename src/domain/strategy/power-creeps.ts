@@ -22,6 +22,7 @@ export const PWR = {
   OPERATE_EXTENSION: 6,
   OPERATE_TOWER: 7,
   OPERATE_CONTROLLER: 12,
+  OPERATE_FACTORY: 14,
 } as const;
 
 /** 各 power 升到 lv1-5 所需的 PC level（typings POWER_INFO.level 列）。 */
@@ -32,6 +33,7 @@ export const POWER_LEVEL_REQUIREMENTS: Readonly<Record<number, readonly number[]
   6: [0, 2, 7, 14, 22], // OPERATE_EXTENSION
   7: [0, 2, 7, 14, 22], // OPERATE_TOWER（OPERATOR 系标准梯度）
   12: [0, 2, 7, 14, 22], // OPERATE_CONTROLLER
+  14: [0, 2, 7, 14, 22], // OPERATE_FACTORY（OPERATOR 系标准梯度）
 };
 
 /** usePower 各动作的 ops 消耗（官方 Power 文档）。 */
@@ -41,6 +43,7 @@ export const OPS_COST: Readonly<Record<number, number>> = {
   6: 2,    // OPERATE_EXTENSION
   7: 100,  // OPERATE_TOWER
   12: 100, // OPERATE_CONTROLLER
+  14: 100, // OPERATE_FACTORY
 };
 
 /** 决策阈值 — 由调用方（power-creep-manager）经 CONFIG 注入。 */
@@ -72,6 +75,9 @@ export const POWER_BUILD_ORDER: readonly PowerId[] = [
   2, // OPERATE_SPAWN lv2：提速 30%（PC level 6 达标）
   7, // OPERATE_TOWER lv1：战时塔效率 +33%（姿态路由赋能，审计缺口 7）
   12, // OPERATE_CONTROLLER lv1：rcl-push 冲级 +200% 进度（审计缺口 7）
+  14, // OPERATE_FACTORY lv1：解锁 factory level 1（commodity T1+ 生产门禁 —
+      // PC level 达标即升，factory 常态是 RCL7 终局结构，比 boost 优先级低
+      // 但先于 lv2 深化拿到，确保 commodity 链不被 PC 技能卡死）
 ];
 
 /** GPL 消费决策输入中的 PC 摘要。 */
@@ -169,6 +175,12 @@ export interface PcRoomInput {
   controllerId: string | undefined;
   /** controller 的 OPERATE_CONTROLLER 效果剩余 tick（无效果 undefined）。 */
   controllerEffectRemaining: number | undefined;
+  /** factory 目标 id（无 factory 为 undefined）。 */
+  factoryId: string | undefined;
+  /** factory 的 OPERATE_FACTORY 效果剩余 tick（无效果 undefined）。 */
+  factoryEffectRemaining: number | undefined;
+  /** factory 当前 level（0=未赋能，1-5=已赋能等级）。 */
+  factoryLevel: number;
 }
 
 /** PC 单 tick 运营动作。 */
@@ -181,6 +193,7 @@ export type PowerAction =
   | { kind: "operateSpawn"; targetId: string }
   | { kind: "operateExtension"; targetId: string }
   | { kind: "operateStorage"; targetId: string }
+  | { kind: "operateFactory"; targetId: string }
   | { kind: "idle" };
 
 /**
@@ -188,7 +201,8 @@ export type PowerAction =
  * renew > enableRoom > generateOps >
  * [combatContext] operateTower（战时 DPS/维修 +33% — 战斗窗口压倒运营）>
  * [rclPush] operateController（+200% 冲级 — 和平期议程窗口）>
- * operateSpawn > operateExtension > operateStorage > idle。
+ * operateSpawn > operateExtension > operateStorage >
+ * operateFactory（commodity 升级链赋能 — 和平期终局资产投资）> idle。
  * 决策无状态（效果/冷却全在 Game 层每 tick 现查）；
  * range 检查归执行层（moveTo 到 range 3 / 1）。
  */
@@ -254,6 +268,22 @@ export function selectPowerAction(
   // ERR_TIRED/ERR_FULL 静默兜底 — cd800/dur1000 操作频率天然低）。
   if (hasLevel(4) && opsReady(4) && room.storageId !== undefined && room.storageNearFull) {
     return { kind: "operateStorage", targetId: room.storageId };
+  }
+
+  // OPERATE_FACTORY（commodity 赋能）：和平期（非战斗/非冲级）且有 factory
+  // 且 factory level 低于 PC 的 OPERATE_FACTORY 等级时赋能。
+  // factory-manager 的 commodity 链依赖 factory.level ≥ 1 才能产 T1+ —
+  // PC 技能等级直接决定 factory 可用等级，未赋能则 commodity 链全卡死。
+  // 仅和平期：combatContext 塔赋能已在上方截停，rclPush 冲级已在上方截停。
+  if (
+    hasLevel(14) && opsReady(14) && room.factoryId !== undefined &&
+    !room.combatContext && !room.rclPush &&
+    room.factoryLevel < (pc.powerLevels[14] ?? 0)
+  ) {
+    const remaining = room.factoryEffectRemaining ?? 0;
+    if (remaining < t.effectRefreshMargin) {
+      return { kind: "operateFactory", targetId: room.factoryId };
+    }
   }
 
   return { kind: "idle" };

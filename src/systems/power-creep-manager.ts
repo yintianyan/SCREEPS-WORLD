@@ -147,6 +147,11 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
   const combatContext = posture === "war" || posture === "fortify"
     || snapshot.threatCreeps.length > 0;
 
+  const factory = snapshot.factory;
+  const factoryEffect = factory?.effects?.find(
+    (e) => e.effect === PWR.OPERATE_FACTORY,
+  );
+
   const action = selectPowerAction(
     {
       ticksToLive: pc.ticksToLive,
@@ -171,6 +176,9 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
       controllerEffectRemaining: snapshot.controller?.effects?.find(
         (e) => e.effect === PWR.OPERATE_CONTROLLER,
       )?.ticksRemaining,
+      factoryId: factory?.id,
+      factoryEffectRemaining: factoryEffect?.ticksRemaining,
+      factoryLevel: factory?.level ?? 0,
     },
     thresholds,
   );
@@ -217,7 +225,8 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
     }
     case "operateSpawn":
     case "operateExtension":
-    case "operateStorage": {
+    case "operateStorage":
+    case "operateFactory": {
       const target = Game.getObjectById(action.targetId as Id<Structure>);
       if (!target) return;
       if (pc.pos.getRangeTo(target) <= USE_POWER_RANGE) {
@@ -225,7 +234,9 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
           ? PWR.OPERATE_SPAWN
           : action.kind === "operateExtension"
             ? PWR.OPERATE_EXTENSION
-            : PWR.OPERATE_STORAGE;
+            : action.kind === "operateStorage"
+              ? PWR.OPERATE_STORAGE
+              : PWR.OPERATE_FACTORY;
         pc.usePower(power, target);
       } else {
         pc.moveTo(target, { range: USE_POWER_RANGE });
