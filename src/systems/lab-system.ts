@@ -16,6 +16,7 @@ import { CONFIG } from "../config";
 import { collectFullInventory } from "../domain/industry/inventory";
 import { expandReactionDemands } from "../domain/industry/procurement";
 import type { ProcurementDemand } from "../kernel/global-cache";
+import { systemPhase } from "../kernel/phase";
 
 // ─── Boost/装料常量（引擎数值：boostCreep 每部件 30 矿物 + 20 能量）────
 
@@ -238,9 +239,47 @@ export const labSystem: System = {
 
       // 原料断供休眠：单房间只产一种矿物，多矿种原料在市场/跨房补给接入前
       // 不会自行出现。此时每 tick「规划反应链 → 无可执行步骤 → 清除 → 再规划」
-      // 是纯 CPU 空转。休眠期内跳过本房全部 lab 逻辑，到期后重新评估
-      //（休眠由下方「无反应可执行且无 boost 需求」时设置）。
+      // 是纯 CPU 空转。休眠期内跳过 lab 分配与反应执行。
+      //
+      // 但休眠期间仍需发布采购需求（procurementDemands）— 否则 terminal-manager
+      // 收不到买入信号，基础矿永远为 0，lab 永远无法解除休眠（死锁循环）。
+      // 休眠期间低频重评估：每 50 tick 重新规划一次反应链并发布采购需求，
+      // 平衡 CPU 开销与响应速度。
       if (industryMem.idleUntil !== undefined && ctx.tick < industryMem.idleUntil) {
+        // 每 50 tick 一次窗口：重新规划 + 发布采购需求（不执行 lab 分配/反应）。
+        if (ctx.tick % 50 !== systemPhase("lab-manager", 50)) continue;
+
+        const idleInventory = collectCompoundInventory(snapshot);
+
+        // idle 期间重新设定默认目标（idle 前可能已清除 reactionTarget）。
+        if (!industryMem.reactionTarget) {
+          industryMem.reactionTarget = "XGH2O";
+          industryMem.reactionAmount = 300;
+        }
+        if (!industryMem.reactionPlan || industryMem.reactionPlan.target !== industryMem.reactionTarget) {
+          industryMem.reactionPlan = planReactionChain(
+            industryMem.reactionTarget,
+            industryMem.reactionAmount ?? 300,
+            idleInventory,
+          ) ?? undefined;
+        }
+
+        // 发布采购需求 — terminal-manager 据此买入基础矿。
+        if (industryMem.reactionPlan) {
+          const demands = expandReactionDemands(
+            industryMem.reactionPlan,
+            idleInventory,
+            ctx.tick,
+            CONFIG.market.interval + 50,
+          );
+          if (demands.length > 0) {
+            const g = globalCache();
+            if (!g.procurementDemands || g.procurementDemands.tick !== ctx.tick) {
+              g.procurementDemands = { tick: ctx.tick, byRoom: {} };
+            }
+            g.procurementDemands.byRoom[snapshot.roomName] = demands as ProcurementDemand[];
+          }
+        }
         continue;
       }
 
