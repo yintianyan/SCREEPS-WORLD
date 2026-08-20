@@ -77,6 +77,15 @@ vi.mock("../../../src/config", () => ({
   },
 }));
 
+// RawMemory mock（P0-1 Memory 体积监控测试需要）
+let mockRawMemory: string = "{}";
+(globalThis as Record<string, unknown>).RawMemory = {
+  get: () => mockRawMemory,
+  segments: {},
+  setActiveSegments: () => undefined,
+  set: (v: string) => { mockRawMemory = v; },
+};
+
 // 导入被测模块（必须在 vi.mock 之后）
 const { telemetryCollectorSystem } = await import("../../../src/systems/telemetry-collector");
 
@@ -220,5 +229,250 @@ describe("telemetry-collector — Storage 被毁事件检测 (TD-004)", () => {
 
     const storageEvents = capturedEvents.filter(e => e.k === 13 && e.d[0] === 3);
     expect(storageEvents.length).toBe(0);
+  });
+});
+
+// ── P0-1: Memory 体积监控 ──────────────────────────────────
+
+describe("telemetry-collector — Memory 体积监控 (P0-1)", () => {
+  beforeEach(() => {
+    capturedEvents.length = 0;
+    delete mockGlobalCache.__telemetryPrevState;
+    delete mockGlobalCache.telemetry;
+    mockRawMemory = "{}";
+    (globalThis as Record<string, unknown>).Memory = { rooms: { W1N1: {} }, kernel: {} };
+    (globalThis as Record<string, unknown>).Game = {
+      time: 100,
+      cpu: { bucket: 10000, getUsed: () => 5 },
+      creeps: {},
+      spawns: {},
+    };
+  });
+
+  it("人口普查节拍采样 memorySize 写入 stats", () => {
+    // systemPhase("telemetry-collector", 10) = 5 → 系统在 tick≡5(mod 10) 运行。
+    // 人口普查门: (tick - 5) % 100 === 0 → tick=105
+    mockRawMemory = "x".repeat(500_000);
+    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+    (globalThis as Record<string, unknown>).Game = {
+      time: 105,
+      cpu: { bucket: 10000, getUsed: () => 5 },
+      creeps: {},
+      spawns: {},
+    };
+
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+
+    expect(Memory.kernel!.stats!.memorySize).toBe(500_000);
+  });
+
+  it("Memory 超过 1.5MB 告警线时输出 console.log 警告", () => {
+    mockRawMemory = "x".repeat(1_600_000);
+    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+    (globalThis as Record<string, unknown>).Game = {
+      time: 105,
+      cpu: { bucket: 10000, getUsed: () => 5 },
+      creeps: {},
+      spawns: {},
+    };
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+
+    expect(Memory.kernel!.stats!.memorySize).toBe(1_600_000);
+    const warningCall = logSpy.mock.calls.find(
+      call => typeof call[0] === "string" && call[0].includes("WARNING: Memory size"),
+    );
+    expect(warningCall).toBeDefined();
+    expect(warningCall![0]).toContain("1.53");
+    logSpy.mockRestore();
+  });
+
+  it("Memory 未超告警线时不输出警告", () => {
+    mockRawMemory = "x".repeat(100_000);
+    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+    (globalThis as Record<string, unknown>).Game = {
+      time: 105,
+      cpu: { bucket: 10000, getUsed: () => 5 },
+      creeps: {},
+      spawns: {},
+    };
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+
+    const warningCall = logSpy.mock.calls.find(
+      call => typeof call[0] === "string" && call[0].includes("WARNING: Memory size"),
+    );
+    expect(warningCall).toBeUndefined();
+    logSpy.mockRestore();
+  });
+
+  it("非人口普查节拍不采样 memorySize", () => {
+    // tick=115 是 CPU 采样节拍 (115-5)%10===0 但 (115-5)%100===10≠0 → 不采样
+    mockRawMemory = "x".repeat(500_000);
+    mockGlobalCache.telemetry = { tick: 115, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+    (globalThis as Record<string, unknown>).Game = {
+      time: 115,
+      cpu: { bucket: 10000, getUsed: () => 5 },
+      creeps: {},
+      spawns: {},
+    };
+
+    telemetryCollectorSystem.run(makeCtx("healthy", 115, [makeSnapshot()]));
+
+    // memorySize 不应被写入（或保持上次的值）
+    expect(Memory.kernel!.stats?.memorySize).toBeUndefined();
+  });
+});
+
+// ── P2-1: 健康度告警 ──────────────────────────────────────
+
+describe("telemetry-collector — 健康度告警 (P2-1)", () => {
+  beforeEach(() => {
+    capturedEvents.length = 0;
+    delete mockGlobalCache.__telemetryPrevState;
+    delete mockGlobalCache.telemetry;
+    delete mockGlobalCache.__alertThrottle;
+    mockRawMemory = "{}";
+    (globalThis as Record<string, unknown>).Memory = { rooms: { W1N1: {} }, kernel: {} };
+    (globalThis as Record<string, unknown>).Game = {
+      time: 105,
+      cpu: { bucket: 10000, getUsed: () => 5 },
+      creeps: {},
+      spawns: {},
+    };
+  });
+
+  it("cpuAvg10 >= softLimit*0.9 时输出 cpu-high 告警", () => {
+    // healthy tier: softLimit = 17.5, 0.9*17.5 = 15.75
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: { W1N1: {} },
+      kernel: {
+        stats: {
+          lastSample: 105, cpuAvg10: 16, cpuMax10: 18,
+          bucketMin10: 9000, crisisCount: 0, tierTransitions: 0,
+          errorHotspot: "", skipHotspot: "",
+        },
+      },
+    };
+    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+
+    const alertCall = logSpy.mock.calls.find(
+      call => typeof call[0] === "string" && call[0].includes("@ALERT cpu-high"),
+    );
+    expect(alertCall).toBeDefined();
+    logSpy.mockRestore();
+  });
+
+  it("bucketMin10 < 2000 时输出 bucket-critical 告警", () => {
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: { W1N1: {} },
+      kernel: {
+        stats: {
+          lastSample: 105, cpuAvg10: 5, cpuMax10: 8,
+          bucketMin10: 1500, crisisCount: 0, tierTransitions: 0,
+          errorHotspot: "", skipHotspot: "",
+        },
+      },
+    };
+    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+
+    const alertCall = logSpy.mock.calls.find(
+      call => typeof call[0] === "string" && call[0].includes("@ALERT bucket-critical"),
+    );
+    expect(alertCall).toBeDefined();
+    logSpy.mockRestore();
+  });
+
+  it("errors > 0 且有 errorHotspot 时输出 error-hotspot 告警", () => {
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: { W1N1: {} },
+      kernel: {
+        stats: {
+          lastSample: 105, cpuAvg10: 5, cpuMax10: 8,
+          bucketMin10: 9000, crisisCount: 0, tierTransitions: 0,
+          errorHotspot: "harvester.run", skipHotspot: "",
+        },
+      },
+    };
+    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 3 };
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+
+    const alertCall = logSpy.mock.calls.find(
+      call => typeof call[0] === "string" && call[0].includes("@ALERT error-hotspot"),
+    );
+    expect(alertCall).toBeDefined();
+    expect(alertCall![0]).toContain("harvester.run");
+    logSpy.mockRestore();
+  });
+
+  it("健康状态下不输出任何告警", () => {
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: { W1N1: {} },
+      kernel: {
+        stats: {
+          lastSample: 105, cpuAvg10: 5, cpuMax10: 8,
+          bucketMin10: 9000, crisisCount: 0, tierTransitions: 0,
+          errorHotspot: "", skipHotspot: "",
+        },
+      },
+    };
+    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+
+    const alertCalls = logSpy.mock.calls.filter(
+      call => typeof call[0] === "string" && call[0].startsWith("@ALERT"),
+    );
+    expect(alertCalls).toHaveLength(0);
+    logSpy.mockRestore();
+  });
+
+  it("同类告警限频——100 tick 内不重复输出", () => {
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: { W1N1: {} },
+      kernel: {
+        stats: {
+          lastSample: 105, cpuAvg10: 16, cpuMax10: 18,
+          bucketMin10: 9000, crisisCount: 0, tierTransitions: 0,
+          errorHotspot: "", skipHotspot: "",
+        },
+      },
+    };
+
+    // 第一次 tick=105
+    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
+    const firstAlerts = logSpy.mock.calls.filter(
+      call => typeof call[0] === "string" && call[0].includes("@ALERT cpu-high"),
+    );
+    expect(firstAlerts).toHaveLength(1);
+
+    // 第二次 tick=115（10 tick 后，< 100 tick 限频间隔）
+    mockGlobalCache.telemetry = { tick: 115, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+    (globalThis as Record<string, unknown>).Game = {
+      time: 115,
+      cpu: { bucket: 10000, getUsed: () => 5 },
+      creeps: {},
+      spawns: {},
+    };
+    telemetryCollectorSystem.run(makeCtx("healthy", 115, [makeSnapshot()]));
+    const allAlerts = logSpy.mock.calls.filter(
+      call => typeof call[0] === "string" && call[0].includes("@ALERT cpu-high"),
+    );
+    // 仍然只有 1 条——限频生效
+    expect(allAlerts).toHaveLength(1);
+    logSpy.mockRestore();
   });
 });

@@ -236,3 +236,82 @@ describe("RCL7 Defense — 防御系统", () => {
     assertions.assertEmpireAlive("RCL7 tower empty");
   });
 });
+
+// ── P2-4: 多威胁同时入侵 ──────────────────────────────────
+
+describe("RCL7 Defense — 多威胁同时入侵 (P2-4)", () => {
+  it("多组敌方 creep 同时入侵：tower 不崩溃、creep 进入 flee、系统存活", () => {
+    // 3 tower + 5 组敌人（模拟多房受袭在单房中的等效压力）
+    const world = rcl7World({ towers: 3, towerEnergy: 1000, hostiles: 0 });
+    addRcl7Population(world);
+
+    // 手动注入 5 组敌方 creep（不同位置模拟多方向入侵）
+    for (let i = 0; i < 5; i++) {
+      world.addHostile(`multi_invader_${i}`, { x: 5 + i * 8, y: 5 }, [
+        { type: "attack" }, { type: "attack" }, { type: "tough" }, { type: "move" }, { type: "move" },
+      ]);
+    }
+
+    const runner = new TickRunner();
+    runner.setLoop(loop);
+
+    const result = runner.run(world, 200);
+    const assertions = new Assertions(world, result.records);
+
+    assertions.assertNoRuntimeError("多威胁同时入侵");
+    assertions.assertEmpireAlive("多威胁同时入侵");
+
+    // tower 能量应被消耗（攻击了敌人）
+    const towerEnergyLeft = world.towers.reduce(
+      (sum, t) => sum + (t.store[RESOURCE_ENERGY] ?? 0), 0,
+    );
+    expect(towerEnergyLeft).toBeLessThan(3000); // 3 tower × 1000 初始 = 3000
+
+    // 经济 creep 应进入 flee 模式（非战斗 creep 释放任务逃跑）
+    const nonFleeing = world.creeps.filter(
+      c => c.memory.mode !== "flee" && c.memory.role !== "defender",
+    );
+    // 允许 harvester 留在 source（站桩采集是安全的），但 hauler/upgrader 应 flee
+    const haulersAndUpgraders = world.creeps.filter(
+      c => c.memory.role === "hauler" || c.memory.role === "upgrader",
+    );
+    const fleeingHaulers = haulersAndUpgraders.filter(c => c.memory.mode === "flee");
+    // 至少部分非战斗 creep 应进入 flee
+    expect(fleeingHaulers.length).toBeGreaterThan(0);
+  });
+
+  it("敌方 creep 被清除后系统恢复", () => {
+    const world = rcl7World({ towers: 3, towerEnergy: 1000, hostiles: 0 });
+    addRcl7Population(world);
+
+    // 注入 3 组敌人
+    for (let i = 0; i < 3; i++) {
+      world.addHostile(`recover_invader_${i}`, { x: 10 + i * 10, y: 10 }, [
+        { type: "attack" }, { type: "move" }, { type: "move" },
+      ]);
+    }
+
+    const runner = new TickRunner();
+    runner.setLoop(loop);
+
+    // 100 tick 后清除所有敌人
+    runner.run(world, 100);
+    for (let i = 0; i < 3; i++) {
+      world.removeHostile(`recover_invader_${i}`);
+    }
+
+    // 再运行 100 tick 验证恢复
+    const result = runner.run(world, 100);
+    const assertions = new Assertions(world, result.records);
+
+    assertions.assertNoRuntimeError("多威胁恢复");
+    assertions.assertEmpireAlive("多威胁恢复");
+
+    // creep 应退出 flee 模式
+    const fleeing = world.creeps.filter(c => c.memory.mode === "flee");
+    expect(fleeing.length).toBe(0);
+
+    // 经济恢复运转
+    expect(result.finalSnapshot.stats.totalHarvested).toBeGreaterThan(0);
+  });
+});

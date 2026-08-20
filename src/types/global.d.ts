@@ -286,6 +286,10 @@ declare global {
        * 来自 kernel.runCreeps 按 memory.home 归集的 globalCache.cpuByHome。
        * 供 empire-strategy / capacity 评估每房真实 CPU 成本。 */
       cpuByHome?: Record<string, number>;
+      /** Memory 原始字符串体积（字符数），每 100 tick 采样。
+       * RawMemory.get().length — 零 JSON 解析成本，只读字符串长度。
+       * 官服上限 2MB（2*1024*1024）[Fact: typings 验证]；超 1.5MB 告警。 */
+      memorySize?: number;
     };
     /** 参数自调优状态（v7+）。tuning-engine 每 500 tick 更新。 */
     tuning?: TuningMemory;
@@ -484,6 +488,23 @@ declare global {
       /** collector 首次提交孵化请求的 tick（collect 宽限窗基准；per-mission
        * 运行时字段，缺失视为未派 — 与 lastRepathAt 同先例免迁移）。 */
       collectorSpawnedAt?: number;
+    };
+    /**
+     * 环境画像（P1-3，empire-strategy 每 100 tick 采样写入）：市场活跃度 +
+     * 邻居竞争压力 + GCL 进度速率。供策略层调整扩张节奏/市场交易参数。
+     * 无 schema 变更（kernel 可选字段，惰性创建）。
+     */
+    environment?: {
+      /** 市场活跃度：active / moderate / thin。 */
+      marketActivity: "active" | "moderate" | "thin";
+      /** 邻居竞争压力：high / medium / low。 */
+      neighborPressure: "high" | "medium" | "low";
+      /** GCL 进度速率（progress/tick）。 */
+      gclProgressRate: number;
+      /** 采样 tick。 */
+      tick: number;
+      /** 上次采样的 GCL progress（供下次计算速率）。 */
+      gclProgress: number;
     };
   }
 

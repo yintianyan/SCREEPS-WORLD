@@ -197,3 +197,41 @@ export function scanNeighborIntel(
   }
   return intel;
 }
+
+// ─── 情报时效分级（P1-1）─────────────────────────────────────
+
+/** 情报置信度分级 — 按时效衰减分档，消费方按各自风险容忍度选择阈值。 */
+export type IntelConfidence = "fresh" | "stale" | "expired" | "unknown";
+
+/**
+ * 情报时效分级纯函数（P1-1）。
+ *
+ * 设计理念：不同消费方对情报新鲜度的要求不同——战争目标需要极新鲜（<500 tick），
+ * 远矿运营可容忍较旧（<2000 tick），扩张评选介于两者之间。本函数提供统一的
+ * 时效计算逻辑，消费方按各自 TTL 阈值调用获得分级结果，避免散落的
+ * `tick - lastSeen < N` 判定（现有 6+ 处）各自演化、口径漂移。
+ *
+ * 分级语义：
+ * - fresh：lastSeen 在 freshTtl 内 — 可直接用于决策（进攻/开矿/扩张）。
+ * - stale：超过 freshTtl 但在 staleTtl 内 — 降级使用（远矿维护可接受，进攻需补侦察）。
+ * - expired：超过 staleTtl — 不可信，必须刷新后再用（等同从未观测该字段）。
+ * - unknown：lastSeen 缺失 — 从未有过视野。
+ *
+ * @param lastSeen  intel.lastSeen（观测 tick）。
+ * @param currentTick  当前 tick（Game.time）。
+ * @param freshTtl  新鲜阈值（tick）— 超过即降为 stale。
+ * @param staleTtl  陈旧阈值（tick）— 超过即降为 expired（必须 > freshTtl）。
+ */
+export function getIntelConfidence(
+  lastSeen: number | undefined,
+  currentTick: number,
+  freshTtl: number,
+  staleTtl: number,
+): IntelConfidence {
+  if (lastSeen === undefined) return "unknown";
+  const age = currentTick - lastSeen;
+  if (age <= freshTtl) return "fresh";
+  if (age <= staleTtl) return "stale";
+  return "expired";
+}
+

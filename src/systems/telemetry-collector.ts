@@ -60,6 +60,10 @@ export const telemetryCollectorSystem: System = {
     // 3. 人口普查（每 populationInterval tick = 每 100 tick）
     if ((tick - phase) % CONFIG.telemetry.populationInterval === 0) {
       samplePopulationData(tick);
+      // P0-1: Memory 体积监控——与人口普查同频率（每 100 tick），
+      // RawMemory.get().length 零 JSON 解析成本（只读字符串长度）[Fact: typings 验证]。
+      // 官服上限 2MB（2*1024*1024）；超 1.5MB 告警留 25% 余量。
+      sampleMemorySize(tick);
     }
 
     // 4. 差分事件检测 + 事件缓冲 flush
@@ -71,6 +75,10 @@ export const telemetryCollectorSystem: System = {
     // 6. 输出结构化遥测行供外部采集器（WebSocket console 订阅）接收。
     // 格式：@TELEMETRY {json} — 前缀过滤，不影响游戏控制台可读性。
     emitTelemetryLine(tick, ctx);
+
+    // P2-1: 健康度告警最小版——每 10 tick 检查关键阈值，异常时 console.log 告警。
+    // 不向 Memory 写入（告警是瞬时信号，外部采集器按 @ALERT 前缀过滤）。
+    checkHealthAlerts(tick, ctx);
   },
 };
 
@@ -191,6 +199,44 @@ function samplePopulationData(tick: number): void {
   const seg = readCpuSegment();
   seg.population = snapshot;
   markCpuDirty();
+}
+
+// ─── Memory 体积监控（P0-1）────────────────────────────
+
+/** Memory 体积告警阈值（字符数）。官服 RawMemory.set 上限 2*1024*1024 [Fact: typings]。
+ * 1.5MB 留 25% 余量——超此值 console.log 告警，玩家可介入清理。 */
+const MEMORY_SIZE_ALERT = 1_500_000;
+
+/** 采样 Memory 原始字符串体积并告警。RawMemory.get() 返回 Memory 的 JSON 字符串
+ * [Fact: typings get(): string]，.length 是零成本属性读取（不解析 JSON）。
+ * 写入 stats.memorySize 供 @TELEMETRY 外部采集器追踪体积趋势。 */
+function sampleMemorySize(tick: number): void {
+  // safeRun 包裹：私服或测试环境可能无 RawMemory.get（typings 不保证所有环境）。
+  try {
+    const size = RawMemory.get().length;
+    if (!Memory.kernel) Memory.kernel = {};
+    if (!Memory.kernel.stats) {
+      Memory.kernel.stats = {
+        lastSample: 0,
+        cpuAvg10: 0,
+        cpuMax10: 0,
+        bucketMin10: 0,
+        crisisCount: 0,
+        tierTransitions: 0,
+        errorHotspot: "",
+        skipHotspot: "",
+      };
+    }
+    Memory.kernel.stats.memorySize = size;
+    if (size > MEMORY_SIZE_ALERT) {
+      console.log(
+        `[${tick}] WARNING: Memory size ${size} bytes (${(size / 1024 / 1024).toFixed(2)}MB) ` +
+        `approaching 2MB limit — consider pruning Memory.rooms / remoteOps`,
+      );
+    }
+  } catch {
+    // RawMemory 不可用（测试环境）——静默跳过。
+  }
 }
 
 // ─── 差分事件检测 + 事件 flush ───────────────────────────────
@@ -486,6 +532,7 @@ function emitTelemetryLine(tick: number, ctx: TickContext): void {
     crisis: stats?.crisisCount ?? 0,
     errHot: stats?.errorHotspot ?? "",
     skipHot: stats?.skipHotspot ?? "",
+    mem: stats?.memorySize ?? 0,
   };
 
   // actionProfiling 开启时附挂 top 3 action 热点（按 totalCpu 降序）。
@@ -504,6 +551,73 @@ function emitTelemetryLine(tick: number, ctx: TickContext): void {
   }
 
   console.log(`@TELEMETRY ${JSON.stringify(payload)}`);
+}
+
+// ─── 健康度告警（P2-1）──────────────────────────────────────
+
+/** 健康度告警限频间隔（tick）——同类型告警至少间隔此 tick 数，防刷屏。 */
+const ALERT_THROTTLE = 100;
+
+/** 告警类型与上次告警 tick 的全局缓存（reset 后重建，非持久化）。 */
+function alertState(): Record<string, number> {
+  const g = globalCache() as Record<string, unknown>;
+  if (!g.__alertThrottle) g.__alertThrottle = {} as Record<string, number>;
+  return g.__alertThrottle as Record<string, number>;
+}
+
+/** 检查关键健康度阈值并告警。每 10 tick 调用一次（与 telemetry 采样同步）。
+ * 告警格式：@ALERT {type}:{message} — 外部采集器按前缀过滤。
+ * 告警不写 Memory（瞬时信号，限频防刷屏）。 */
+function checkHealthAlerts(tick: number, ctx: TickContext): void {
+  const stats = Memory.kernel?.stats;
+  const tel = globalCache().telemetry;
+  if (!tel || tel.tick !== tick) return;
+
+  const throttle = alertState();
+
+  /** 限频后输出告警。 */
+  function alert(type: string, msg: string): void {
+    const last = throttle[type] ?? 0;
+    if (tick - last < ALERT_THROTTLE) return;
+    throttle[type] = tick;
+    console.log(`@ALERT ${type}:${msg}`);
+  }
+
+  // 1. CPU 持续高位告警
+  if (stats && stats.cpuAvg10 >= ctx.budget.softLimit * 0.9) {
+    alert("cpu-high",
+      `cpuAvg10=${stats.cpuAvg10} >= softLimit*0.9=${(ctx.budget.softLimit * 0.9).toFixed(1)}` +
+      ` (tier=${ctx.budget.tier}, max10=${stats.cpuMax10})`,
+    );
+  }
+
+  // 2. bucket 危急告警
+  if (stats && stats.bucketMin10 < 2000) {
+    alert("bucket-critical",
+      `bucketMin10=${stats.bucketMin10} < 2000 (recovery threshold=1000)`,
+    );
+  }
+
+  // 3. 错误频发告警
+  if (tel.errors > 0 && stats?.errorHotspot) {
+    alert("error-hotspot",
+      `errors this cycle=${tel.errors}, hotspot=${stats.errorHotspot}`,
+    );
+  }
+
+  // 4. skip 频发告警
+  if (tel.skipped > 5 && stats?.skipHotspot) {
+    alert("skip-hotspot",
+      `skipped this cycle=${tel.skipped}, hotspot=${stats.skipHotspot}`,
+    );
+  }
+
+  // 5. Memory 体积告警（与 P0-1 联动，但这里是周期性检查而非仅采样时）
+  if (stats?.memorySize !== undefined && stats.memorySize > 1_500_000) {
+    alert("memory-size",
+      `memorySize=${stats.memorySize} (${(stats.memorySize / 1024 / 1024).toFixed(2)}MB) > 1.5MB`,
+    );
+  }
 }
 
 // ─── 辅助函数 ───────────────────────────────────────────────

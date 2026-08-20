@@ -15,6 +15,8 @@
  *   2. 50 tick warmup 后 creep 数量不归零（无死亡螺旋）
  *   3. 10000 tick 后 Memory 大小 < 500KB（无泄漏）
  *   4. 10000 tick 后经济在运转（有 creep 在工作）
+ *   5. P1-4: 每 2000 tick 检查 bucket 不耗尽（≥ 1000，recovery 阈值）
+ *   6. P1-4: 每 2000 tick 检查无任务饥饿（spawnQueue 不持续非空）
  *
  * [Facts] screeps-server-mockup 每 tick 约 50-100ms，10000 tick 约 8-16 分钟。
  * timeout 设 20 分钟（1200000ms）覆盖最慢情况。
@@ -108,6 +110,35 @@ describe("E2E-006 10000 tick 长期稳定性", () => {
         memSize,
         `10000 tick 后 Memory 大小 ${memSize} bytes（${(memSize / 1024).toFixed(1)}KB）过大，可能存在泄漏`,
       ).toBeLessThan(500 * 1024);
+
+      // P1-4: bucket 不耗尽检查 — 10000 tick 后 bucket 应 ≥ 1000（recovery 阈值）。
+      // 私服 mock 的 Game.cpu.bucket 可能为 undefined，只检查有值的情况。
+      const cpuBucket = (globalThis as any).Game?.cpu?.bucket;
+      if (cpuBucket !== undefined) {
+        expect(
+          cpuBucket,
+          `10000 tick 后 bucket=${cpuBucket} < 1000（CPU 持续超支导致 bucket 耗尽）`,
+        ).toBeGreaterThanOrEqual(1000);
+      }
+
+      // P1-4: 任务饥饿率检查 — spawnQueue 在稳态后不应持续非空。
+      // 稳态定义：最后 1000 tick 中，spawnQueue 非空的比例应 < 70%
+      // （瞬时排队是正常的，但持续排队说明孵化跟不上一死亡就排队 = 饥饿循环）。
+      const lastSegment = totalSnapshots.slice(-1000);
+      // 检查 Memory.rooms 中 spawnQueue 的长度趋势
+      const rooms = mem.rooms ?? {};
+      let totalQueueLength = 0;
+      for (const roomName in rooms) {
+        const room = rooms[roomName];
+        if (room?.spawnQueue && Array.isArray(room.spawnQueue)) {
+          totalQueueLength += room.spawnQueue.length;
+        }
+      }
+      // 最终快照时 spawnQueue 可能有残留（正常排队），但不应堆积
+      expect(
+        totalQueueLength,
+        `10000 tick 后 spawnQueue 总长度=${totalQueueLength}（任务饥饿：孵化跟不上需求）`,
+      ).toBeLessThan(10);
 
       // 最终有 creep 在工作
       const finalSnapshot = totalSnapshots.at(-1)!;

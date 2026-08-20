@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { resolveTier } from "../../../src/kernel/scheduler";
-import type { CpuTier } from "../../../src/kernel/contracts";
+import { describe, expect, it, beforeEach } from "vitest";
+import { resolveTier, CpuBudget } from "../../../src/kernel/scheduler";
+import type { CpuTier, Priority } from "../../../src/kernel/contracts";
 
 describe("Scheduler — resolveTier", () => {
   it("returns recovery for undefined previous tier and low bucket", () => {
@@ -119,5 +119,84 @@ describe("Scheduler — 自愿放血宽限（generatePixel 后 recovery 地板�
     expect(r1.recoveryTicks).toBe(1);
     const r2 = resolveTier("conserve", 19, 3600, true);
     expect(r2.tier).toBe("guarded");
+  });
+});
+
+// ── P1-2: CPU 前馈预测 ──────────────────────────────────────
+
+describe("CpuBudget — 前馈预测 (P1-2)", () => {
+  beforeEach(() => {
+    // 重置 Game.cpu mock 和 Memory
+    (globalThis as any).Game = {
+      time: 1000,
+      cpu: {
+        limit: 20,
+        tickLimit: 500,
+        bucket: 10000,
+        getUsed: () => 0,
+      },
+    };
+    (globalThis as any).Memory = { kernel: {} };
+  });
+
+  it("无 stats 时退化为原有行为（前馈检查静默跳过）", () => {
+    const budget = new CpuBudget("healthy");
+    // 无 stats → 前馈检查不生效，P2 正常通过
+    expect(budget.canStart(2 as Priority)).toBe(true);
+    expect(budget.canStart(3 as Priority)).toBe(true);
+  });
+
+  it("cpuMax10 逼近 hardLimit 时 P2+ 被拒绝（P0/P1 仍放行）", () => {
+    // healthy tier: hardLimit = 20*0.96=19.2, softLimit = min(20*0.875, 18.2)=17.5
+    const budget = new CpuBudget("healthy");
+    // cpuMax10 = 16 >= 19.2*0.8 = 15.36 → P2 拒绝
+    (globalThis as any).Memory = {
+      kernel: {
+        stats: { cpuMax10: 16, cpuAvg10: 10 },
+      },
+    };
+    // Game.cpu.getUsed = 0 → 未超 softLimit
+    expect(budget.canStart(0 as Priority)).toBe(true);
+    expect(budget.canStart(1 as Priority)).toBe(true);
+    expect(budget.canStart(2 as Priority)).toBe(false);
+    expect(budget.canStart(3 as Priority)).toBe(false);
+  });
+
+  it("cpuAvg10 逼近 softLimit 时 P3+ 被拒绝（P2 仍放行）", () => {
+    const budget = new CpuBudget("healthy");
+    // cpuAvg10 = 14.5 >= 17.5*0.8 = 14 → P3+ 拒绝
+    // cpuMax10 = 14 < 19.2*0.8 = 15.36 → P2 仍放行
+    (globalThis as any).Memory = {
+      kernel: {
+        stats: { cpuMax10: 14, cpuAvg10: 14.5 },
+      },
+    };
+    expect(budget.canStart(2 as Priority)).toBe(true);
+    expect(budget.canStart(3 as Priority)).toBe(false);
+  });
+
+  it("历史 CPU 低位时前馈检查不生效", () => {
+    const budget = new CpuBudget("healthy");
+    (globalThis as any).Memory = {
+      kernel: {
+        stats: { cpuMax10: 5, cpuAvg10: 3 },
+      },
+    };
+    expect(budget.canStart(0 as Priority)).toBe(true);
+    expect(budget.canStart(1 as Priority)).toBe(true);
+    expect(budget.canStart(2 as Priority)).toBe(true);
+    expect(budget.canStart(3 as Priority)).toBe(true);
+  });
+
+  it("isExhausted 优先于前馈检查", () => {
+    // Game.cpu.getUsed 已超 hardLimit → 所有优先级拒绝
+    (globalThis as any).Game.cpu.getUsed = () => 100;
+    const budget = new CpuBudget("healthy");
+    (globalThis as any).Memory = {
+      kernel: {
+        stats: { cpuMax10: 5, cpuAvg10: 3 },
+      },
+    };
+    expect(budget.canStart(0 as Priority)).toBe(false);
   });
 });

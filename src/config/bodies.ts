@@ -17,7 +17,14 @@ interface BodyTemplate {
 export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> = {
   attacker: [
     // 纯战斗（无 CARRY）：TOUGH 吸收塔伤、ATTACK 拆建筑/杀敌、1:1 MOVE 无疲劳移动。
-    // 满编 [3T,4A,4M]：抗一轮塔伤并砸穿 rampart 血线（war-planner 按编队孵化）。
+    // RCL8 攻城档 [10T,20A,20M] @4200（50 部件 = MAX_CREEP_SIZE）：20 ATTACK = 600 dmg/tick，
+    // 10 TOUGH 吸 1000 塔伤保住 ATTACK 输出窗口；1:1 MOVE 平原满速突进。
+    // 用于 war-planner 编队攻坚（塔 ≥2 座的重防目标），平时不孵（仅 war 姿态）。
+    { parts: ["tough","tough","tough","tough","tough","tough","tough","tough","tough","tough","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move"], minCapacity: 4200 },
+    // RCL7 塔下攻坚档 [5T,10A,10M] @2100：10 ATTACK = 300 dmg/tick，5 TOUGH 吸 500 塔伤。
+    // 2-3 塔目标可打（配合 healer 编队），无塔目标碾压。
+    { parts: ["tough","tough","tough","tough","tough","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","move","move","move","move","move","move","move","move","move","move"], minCapacity: 2100 },
+    // 满编 [3T,4A,4M] @800：抗一轮塔伤并砸穿 rampart 血线（war-planner 按编队孵化）。
     { parts: ["tough", "tough", "tough", "attack", "attack", "attack", "attack", "move", "move", "move", "move"], minCapacity: 800 },
     // 绝境档 [1T,1A,1M]：随时可战优先于等满配（bodies.test 要求最低档 minCapacity=200）。
     { parts: ["tough", "attack", "move"], minCapacity: 200 },
@@ -38,7 +45,11 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
   // PB 捡运者（审计缺口 2）：纯 CARRY+MOVE 一次性 — PB 击破后进场捡掉落
   // power（2k-6k）送回 home。无战斗件（PB 反击会秒杀，只在 collect 阶段进场）。
   pbCollector: [
-    // 满档 5C5M：运 2500 power 一趟清（典型掉落 2k-6k，1-3 趟由 maxCount=1 串行）。
+    // RCL7+ 大运力档 [10C,10M] @1000 成本：运 5000 power 一趟清（大 PB 掉落 6k 一趟搞定）。
+    // minCapacity=1300：与 [5C,5M] 同在 RCL4(1300) 解锁，但排在更高档位。
+    // 低于 1300 容量退回 [5C,5M]（5C5M 成本 750，1250 门槛确保 RCL3(800) 不用此档）。
+    { parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","move","move","move","move","move","move","move","move","move","move"], minCapacity: 1300 },
+    // 5C5M：运 2500 power 一趟清（典型掉落 2k-6k，1-3 趟由 maxCount=1 串行）。
     { parts: ["carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move"], minCapacity: 1250 },
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 750 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 500 },
@@ -66,6 +77,12 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   hauler: [
+    // RCL7+ 无路大运力档 [10C,10M] @1000：1:1 CARRY:MOVE 平原满速，运力 500/趟。
+    // 无道路覆盖的房间或远矿路径上用此档，比 6C6M 运力 +67%。
+    {
+      parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","move","move","move","move","move","move","move","move","move","move"],
+      minCapacity: 1000,
+    },
     // RCL3+ 大运力档：同样吞吐用更少 creep，省 CPU/寻路/spawn 孵化窗。
     {
       parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"],
@@ -80,6 +97,11 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
   ],
   distributor: [
     // 与 hauler 同型（纯 CARRY+MOVE 物流，storage→spawn/extension/tower 分发）。
+    // RCL7+ 无路大运力档 [10C,10M] @1000。
+    {
+      parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","move","move","move","move","move","move","move","move","move","move"],
+      minCapacity: 1000,
+    },
     {
       parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"],
       minCapacity: 600,
@@ -112,6 +134,28 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   builder: [
+    // RCL8 大工地档 [16W,8C,12M] @2600：16 WORK = 16/tick 建造速度，
+    // 8 CARRY = 400 运力减少往返，12 MOVE ≥ 24非MOVE/2 道路满速。
+    // RCL8 大量 rampart/wall 工地时显著缩短建造周期。
+    {
+      parts: [
+        "work","work","work","work","work","work","work","work",
+        "work","work","work","work","work","work","work","work",
+        "carry","carry","carry","carry","carry","carry","carry","carry",
+        "move","move","move","move","move","move","move","move","move","move","move","move",
+      ],
+      minCapacity: 2600,
+    },
+    // RCL7 大工地档 [12W,6C,9M] @1950：12 WORK = 12/tick，比 8W 快 50%。
+    {
+      parts: [
+        "work","work","work","work","work","work","work","work",
+        "work","work","work","work",
+        "carry","carry","carry","carry","carry","carry",
+        "move","move","move","move","move","move","move","move","move",
+      ],
+      minCapacity: 1950,
+    },
     // [8W,4C,6M] RCL4 主力档：MOVE ≥ 非MOVE/2 道路上满速；大工地几下拍完减少往返取能。
     {
       parts: [
@@ -140,6 +184,11 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   remoteHauler: [
+    // RCL8 跨房大运力档 [24C,12M] @1800：1:1 配比平原满速，运力 1200/趟。
+    // 远矿距离远、往返耗时长，大运力减少趟数 = 减少 CPU 消耗 + 更少 creep 编制。
+    { parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","move","move","move","move","move","move","move","move","move","move","move","move"], minCapacity: 1800 },
+    // RCL7 跨房大运力档 [16C,8M] @1200：运力 800/趟，比 8C8M 翻倍。
+    { parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","move","move","move","move","move","move","move","move"], minCapacity: 1200 },
     // hauler 同款 CARRY+MOVE，额外 MOVE 保证跨房无道路可行进。
     { parts: ["carry", "carry", "carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move", "move", "move"], minCapacity: 800 },
     { parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"], minCapacity: 600 },
@@ -173,7 +222,20 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
   ],
   defender: [
     // 本房防御者：与塔协同贴脸输出，1:1 ATTACK:MOVE 无路面也能追击。
-    // [10A,10M] RCL5+ 主力档，300 damage/tick。
+    // RCL8 重防档 [8T,16A,16M] @2160：16 ATTACK = 480 dmg/tick，8 TOUGH 吸 800 塔伤
+    // 保住 ATTACK 输出窗口。TOUGH 前置是关键 — 塔伤按部件顺序命中，TOUGH 先死
+    // 保护后面的 ATTACK 不被摧毁（部件摧毁后输出骤降）。
+    {
+      parts: ["tough","tough","tough","tough","tough","tough","tough","tough","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move"],
+      minCapacity: 2160,
+    },
+    // RCL7+ 重防档 [4T,10A,10M] @1340：TOUGH 前置吸塔伤，10 ATTACK = 300 dmg/tick。
+    // 仅比无 TOUGH 版多 40 能量（4×10），但塔下存活率显著提升。
+    {
+      parts: ["tough","tough","tough","tough","attack","attack","attack","attack","attack","attack","attack","attack","attack","attack","move","move","move","move","move","move","move","move","move","move"],
+      minCapacity: 1340,
+    },
+    // [10A,10M] RCL5+ 主力档，300 damage/tick（无 TOUGH — 和平期足够）。
     {
       parts: [
         "attack", "attack", "attack", "attack", "attack",
@@ -200,6 +262,20 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
  */
 const ROAD_OPTIMIZED_BODIES: Readonly<Record<string, readonly BodyTemplate[]>> = {
   hauler: [
+    // RCL8 道路顶档 [32C,16M] @2400：道路 2:1 配比满速，运力 1600/趟。
+    // RCL8(12300) 容量远超此档 — 但 32C 已是单趟饱和点（storage→spawn 一趟填满），
+    // 更多 CARRY 只增加孵化时间与成本而吞吐无增益（spawn 窗口是瓶颈）。
+    {
+      parts: [
+        "carry","carry","carry","carry","carry","carry","carry","carry",
+        "carry","carry","carry","carry","carry","carry","carry","carry",
+        "carry","carry","carry","carry","carry","carry","carry","carry",
+        "carry","carry","carry","carry","carry","carry","carry","carry",
+        "move","move","move","move","move","move","move","move",
+        "move","move","move","move","move","move","move","move",
+      ],
+      minCapacity: 2400,
+    },
     // [16C,8M] @1200：RCL4(1300) 顶档。
     {
       parts: [
@@ -217,6 +293,18 @@ const ROAD_OPTIMIZED_BODIES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["carry", "carry", "carry", "carry", "move", "move"], minCapacity: 300 },
   ],
   distributor: [
+    // RCL8 道路顶档 [32C,16M] @2400：与 hauler 同型。
+    {
+      parts: [
+        "carry","carry","carry","carry","carry","carry","carry","carry",
+        "carry","carry","carry","carry","carry","carry","carry","carry",
+        "carry","carry","carry","carry","carry","carry","carry","carry",
+        "carry","carry","carry","carry","carry","carry","carry","carry",
+        "move","move","move","move","move","move","move","move",
+        "move","move","move","move","move","move","move","move",
+      ],
+      minCapacity: 2400,
+    },
     // 与 hauler 相同的道路优化 body。
     {
       parts: [

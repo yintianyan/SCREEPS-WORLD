@@ -176,11 +176,138 @@ describe("Bodies — A1 大 body 档位（随 RCL 容量放大）", () => {
 
   it("所有新档位成本 ≤ 其 minCapacity 对应的容量", () => {
     // selectBody 只在 capacity >= minCapacity 时选中，成本绝不超过容量。
-    for (const capacity of [550, 800, 1300, 1800, 2300]) {
-      for (const role of ["upgrader", "builder", "hauler"]) {
+    for (const capacity of [550, 800, 1300, 1800, 2300, 5300, 12300]) {
+      for (const role of ["upgrader", "builder", "hauler", "distributor", "remoteHauler", "attacker", "defender", "pbCollector"]) {
         const body = selectBody(role, capacity, { rcl: 8 });
         expect(bodyCost(body)).toBeLessThanOrEqual(capacity);
       }
     }
+  });
+});
+
+describe("Bodies — RCL7/RCL8 高档模板补充", () => {
+  it("所有模板部件数 ≤ 50（MAX_CREEP_SIZE）", () => {
+    for (const [role, templates] of Object.entries(BODY_TEMPLATES)) {
+      for (const t of templates) {
+        expect(t.parts.length).toBeLessThanOrEqual(50);
+      }
+    }
+  });
+
+  it("attacker RCL8(12300) 选 50 部件攻城档 [10T,20A,20M]", () => {
+    const body = selectBody("attacker", 12300);
+    expect(body).toHaveLength(50);
+    expect(body.filter(p => p === "tough")).toHaveLength(10);
+    expect(body.filter(p => p === "attack")).toHaveLength(20);
+    expect(body.filter(p => p === "move")).toHaveLength(20);
+    expect(bodyCost(body)).toBe(10 * 10 + 20 * 80 + 20 * 50); // 100 + 1600 + 1000 = 2700
+  });
+
+  it("attacker RCL7(5300) 选 [5T,10A,10M] 塔下攻坚档", () => {
+    // 5300 < 4200(RCL8档)，所以选到 RCL7 档 [5T,10A,10M] minCapacity=2100
+    const body = selectBody("attacker", 2100);
+    expect(body.filter(p => p === "tough")).toHaveLength(5);
+    expect(body.filter(p => p === "attack")).toHaveLength(10);
+    expect(body.filter(p => p === "move")).toHaveLength(10);
+    expect(bodyCost(body)).toBe(5 * 10 + 10 * 80 + 10 * 50); // 50 + 800 + 500 = 1350
+  });
+
+  it("attacker RCL5(1300) 仍选 [3T,4A,4M] 基础档", () => {
+    const body = selectBody("attacker", 1300);
+    expect(body.filter(p => p === "tough")).toHaveLength(3);
+    expect(body.filter(p => p === "attack")).toHaveLength(4);
+  });
+
+  it("defender RCL8(12300) 选 [8T,16A,16M] 重防档", () => {
+    const body = selectBody("defender", 12300);
+    expect(body.filter(p => p === "tough")).toHaveLength(8);
+    expect(body.filter(p => p === "attack")).toHaveLength(16);
+    expect(body.filter(p => p === "move")).toHaveLength(16);
+    // TOUGH 前置：前 8 个部件全为 tough
+    expect(body.slice(0, 8).every(p => p === "tough")).toBe(true);
+  });
+
+  it("defender RCL7(5300) 选 [4T,10A,10M] TOUGH 前置档", () => {
+    // 5300 < 2160(RCL8档)，所以选到 RCL7 档 [4T,10A,10M] minCapacity=1340
+    const body = selectBody("defender", 1340);
+    expect(body.filter(p => p === "tough")).toHaveLength(4);
+    expect(body.filter(p => p === "attack")).toHaveLength(10);
+    expect(body.filter(p => p === "move")).toHaveLength(10);
+    expect(body.slice(0, 4).every(p => p === "tough")).toBe(true);
+  });
+
+  it("defender RCL5(1300) 仍选 [10A,10M] 无 TOUGH 档", () => {
+    const body = selectBody("defender", 1300);
+    expect(body.filter(p => p === "tough")).toHaveLength(0);
+    expect(body.filter(p => p === "attack")).toHaveLength(10);
+  });
+
+  it("builder RCL8(12300) 选 [16W,8C,12M] 大工地档", () => {
+    const body = selectBody("builder", 12300, { rcl: 8 });
+    expect(body.filter(p => p === "work")).toHaveLength(16);
+    expect(body.filter(p => p === "carry")).toHaveLength(8);
+    expect(body.filter(p => p === "move")).toHaveLength(12);
+  });
+
+  it("builder RCL7(5300) 选 [12W,6C,9M] 档", () => {
+    // 5300 < 2600(RCL8档)，所以选到 RCL7 档 [12W,6C,9M] minCapacity=1950
+    const body = selectBody("builder", 1950, { rcl: 7 });
+    expect(body.filter(p => p === "work")).toHaveLength(12);
+    expect(body.filter(p => p === "carry")).toHaveLength(6);
+    expect(body.filter(p => p === "move")).toHaveLength(9);
+  });
+
+  it("builder RCL4(1300) 仍选 [8W,4C,6M] 主力档", () => {
+    const body = selectBody("builder", 1300, { rcl: 4 });
+    expect(body.filter(p => p === "work")).toHaveLength(8);
+  });
+
+  it("hauler 无路 RCL7(5300) 选 [10C,10M] 大运力档", () => {
+    const body = selectBody("hauler", 5300, { rcl: 2 });
+    expect(body.filter(p => p === "carry")).toHaveLength(10);
+    expect(body.filter(p => p === "move")).toHaveLength(10);
+  });
+
+  it("hauler 道路 RCL8(12300) 选 [32C,16M] 顶档", () => {
+    const body = selectBody("hauler", 12300, { rcl: 8 });
+    expect(body.filter(p => p === "carry")).toHaveLength(32);
+    expect(body.filter(p => p === "move")).toHaveLength(16);
+  });
+
+  it("distributor 道路 RCL8(12300) 选 [32C,16M] 顶档", () => {
+    const body = selectBody("distributor", 12300, { rcl: 8 });
+    expect(body.filter(p => p === "carry")).toHaveLength(32);
+    expect(body.filter(p => p === "move")).toHaveLength(16);
+  });
+
+  it("remoteHauler RCL8(12300) 选 [24C,12M] 跨房大运力档", () => {
+    const body = selectBody("remoteHauler", 12300);
+    expect(body.filter(p => p === "carry")).toHaveLength(24);
+    expect(body.filter(p => p === "move")).toHaveLength(12);
+  });
+
+  it("remoteHauler RCL7(5300) 选 [16C,8M] 档", () => {
+    // 5300 < 1800(RCL8档)，所以选到 RCL7 档 [16C,8M] minCapacity=1200
+    const body = selectBody("remoteHauler", 1200);
+    expect(body.filter(p => p === "carry")).toHaveLength(16);
+    expect(body.filter(p => p === "move")).toHaveLength(8);
+  });
+
+  it("remoteHauler RCL4(800) 仍选 [8C,8M] 基础档", () => {
+    const body = selectBody("remoteHauler", 800);
+    expect(body.filter(p => p === "carry")).toHaveLength(8);
+  });
+
+  it("pbCollector RCL7(5300) 选 [10C,10M] 大运力档", () => {
+    // 5300 < 1300(10C10M档的 minCapacity)，等等 5300 >= 1300 所以选到 10C10M
+    const body = selectBody("pbCollector", 5300);
+    expect(body.filter(p => p === "carry")).toHaveLength(10);
+    expect(body.filter(p => p === "move")).toHaveLength(10);
+  });
+
+  it("pbCollector RCL4(1300) 选 [10C,10M] 高档（minCapacity=1300）", () => {
+    // 10C10M 的 minCapacity=1300，1250-1299 容量选 [5C,5M]
+    const body = selectBody("pbCollector", 1300);
+    expect(body.filter(p => p === "carry")).toHaveLength(10);
   });
 });

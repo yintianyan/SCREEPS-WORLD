@@ -18,6 +18,7 @@ import {
 } from "../domain/strategy/posture";
 import { evaluateAgenda } from "../domain/strategy/agenda";
 import { evaluateCapacity } from "../domain/strategy/capacity";
+import { evaluateEnvironment } from "../domain/strategy/environment";
 import { CONFIG } from "../config";
 import { EventKind, recordEvent } from "../kernel/event-log";
 
@@ -159,14 +160,79 @@ export const empireStrategySystem: System = {
       since: capacity.since,
       upgradeTicks: capacity.upgradeTicks,
     };
+
+    // ── P1-3：环境画像 — 低频采样（每 100 tick），getAllOrders 是 CPU 大户 ──
+    if (ctx.tick % 100 === 0) {
+      sampleEnvironment(ctx);
+    }
   },
 };
 
 /**
- * P2-2：汇总各房归属 CPU 总量。优先从 Memory.kernel.stats.cpuByHome
- * （telemetry 采样值，10 tick 更新一次）；缺省从 globalCache.cpuByHome
- * （当前 tick 累积值）实时汇总。两者都缺则返回 0（不门禁）。
+ * P1-3：环境画像采样。采集市场可用性 + 邻居密度 + GCL 趋势，
+ * 写入 Memory.kernel.environment 供策略层消费。
+ * 每 100 tick 调用一次（getAllOrders ~0.5-1 CPU，不可每 tick 调）。
  */
+function sampleEnvironment(ctx: TickContext): void {
+  if (!Memory.kernel) Memory.kernel = {};
+  // 1. 市场快照 — getAllOrders 是 CPU 大户，每 100 tick 调一次可接受。
+  let totalOrders = 0;
+  let buyOrders = 0;
+  let sellOrders = 0;
+  let credits = 0;
+  try {
+    const orders = Game.market?.getAllOrders?.() ?? [];
+    totalOrders = orders.length;
+    for (const o of orders) {
+      if (o.type === "buy") buyOrders++;
+      else sellOrders++;
+    }
+    credits = Game.market?.credits ?? 0;
+  } catch {
+    // 私服可能无 market API — 静默跳过。
+  }
+
+  // 2. 邻居密度 — 从各房 intel 汇总。
+  let totalNeighbors = 0;
+  let ownedNeighbors = 0;
+  for (const roomName in Memory.rooms) {
+    const intel = Memory.rooms[roomName]?.intel;
+    if (!intel) continue;
+    for (const neighborName in intel) {
+      const entry = intel[neighborName];
+      if (!entry) continue;
+      totalNeighbors++;
+      if (entry.owner) ownedNeighbors++;
+    }
+  }
+
+  // 3. GCL 趋势 — 与上次采样对比。
+  const prevEnv = Memory.kernel.environment;
+  const gclLevel = Game.gcl?.level ?? 1;
+  const gclProgress = Game.gcl?.progress ?? 0;
+
+  const profile = evaluateEnvironment(
+    ctx.tick,
+    { totalOrders, buyOrders, sellOrders, credits },
+    { totalNeighbors, ownedNeighbors },
+    {
+      level: gclLevel,
+      progress: gclProgress,
+      prevTick: prevEnv?.tick,
+      prevProgress: prevEnv?.gclProgress,
+    },
+  );
+
+  // 写入 Memory（字段精简：只存分级结果 + 采样 tick + GCL progress 供下次计算）。
+  Memory.kernel.environment = {
+    marketActivity: profile.marketActivity,
+    neighborPressure: profile.neighborPressure,
+    gclProgressRate: profile.gclProgressRate,
+    tick: ctx.tick,
+    gclProgress,
+  };
+}
+
 function sumCpuByHome(): number {
   const stats = Memory.kernel?.stats;
   if (stats?.cpuByHome) {
