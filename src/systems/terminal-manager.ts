@@ -51,6 +51,15 @@ import {
 import { collectFullInventory } from "../domain/industry/inventory";
 import { collectDemands, isBaseMineral } from "../domain/industry/procurement";
 import type { ProcurementDemand } from "../kernel/global-cache";
+import {
+  executeBestCandidate,
+  type DealCandidate,
+  SELL_PRIORITY_CAP,
+  CRISIS_ENERGY_PRIORITY,
+  DEFICIT_PRIORITY_BASE,
+  POWER_PRIORITY,
+  GHODIUM_PRIORITY,
+} from "../domain/industry/deal-scheduler";
 
 export const terminalManagerSystem: System = {
   name: "terminal-manager",
@@ -83,26 +92,71 @@ export const terminalManagerSystem: System = {
 
       if (terminal.cooldown > 0) continue;
 
-      // 1. 能量溢出 → 卖能量（财富引擎）。
-      if (trySellSurplusEnergy(snapshot, terminal)) continue; // 本次冷却窗口已用掉
+      // ── 阶段 2 改造：continue 链改为 priority 竞争 ──
+      // 旧实现：卖出函数用 continue 独占 deal 窗口，买入被永久挤出。
+      // 新实现：收集所有候选 deal（卖出 + 买入）为 DealCandidate[]，
+      // 按 priority 降序排序后取最高执行。卖出 priority ≤ 50（日常贸易
+      // 不挤掉紧急采购），买入 priority 可达 100（需求表驱动）。
+      // 每房每轮只有 1 个 deal 窗口（terminal 冷却），所以选最高价值的。
+      const candidates: DealCandidate[] = [];
 
-      // 2. 先卖后买：卖出是 credits 的唯一来源，信用地板前必须先有收入。
-      if (trySellHomeMineral(snapshot, terminal)) continue; // 本次冷却窗口已用掉
+      // 卖出候选（priority ≤ SELL_PRIORITY_CAP）。
+      candidates.push({
+        type: "sell-energy",
+        priority: 45,
+        execute: () => trySellSurplusEnergy(snapshot, terminal),
+      });
+      candidates.push({
+        type: "sell-mineral",
+        priority: 40,
+        execute: () => trySellHomeMineral(snapshot, terminal),
+      });
+      candidates.push({
+        type: "sell-battery",
+        priority: 35,
+        execute: () => trySellSurplusBattery(snapshot, terminal),
+      });
 
-      // 2.5 battery 卖：满仓溢能的压缩资产变现（reclaimFactoryOutput 落货后）。
-      if (trySellSurplusBattery(snapshot, terminal)) continue;
+      // 买入候选。
+      candidates.push({
+        type: "buy-crisis-energy",
+        priority: CRISIS_ENERGY_PRIORITY,
+        execute: () => tryBuyCrisisEnergy(snapshot, terminal),
+      });
+      // buy-deficit 的 priority 动态反映需求表中的最高 priority —
+      // 需求表存在时 priority 可达 30+（boost 化合物），超过卖出候选。
+      {
+        let deficitPriority = DEFICIT_PRIORITY_BASE;
+        const g = globalThis as unknown as { procurementDemands?: { tick: number; byRoom: Record<string, ProcurementDemand[]> } };
+        const demandsCache = g.procurementDemands;
+        if (demandsCache && demandsCache.tick === ctx.tick) {
+          const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
+          if (allDemands.length > 0) {
+            // 需求表存在时，取最高 priority 作为 deal 竞争 priority。
+            deficitPriority = allDemands[0]!.priority;
+          }
+        }
+        candidates.push({
+          type: "buy-deficit",
+          priority: deficitPriority,
+          execute: () => tryBuyDeficit(snapshot, terminal, ctx),
+        });
+      }
+      candidates.push({
+        type: "buy-power",
+        priority: POWER_PRIORITY,
+        execute: () => tryBuyPower(snapshot, terminal),
+      });
+      candidates.push({
+        type: "buy-ghodium",
+        priority: GHODIUM_PRIORITY,
+        execute: () => tryBuyGhodium(snapshot, terminal),
+      });
 
-      // 3. 危机能量买（生存救助优先于反应原料）。
-      if (tryBuyCrisisEnergy(snapshot, terminal)) continue;
-
-      // 4. 买入缺口矿物（credits 允许时）。
-      if (tryBuyDeficit(snapshot, terminal, ctx)) continue;
-
-      // 5. 买入 power（高信用门禁 — GPL 投资排在所有生存/工业采购之后）。
-      tryBuyPower(snapshot, terminal);
-
-      // 6. 买入 ghodium（nuker 威慑备弹 — 战略采购，lab 自产是主通道，市场只是加速）。
-      tryBuyGhodium(snapshot, terminal);
+      // 按 priority 降序逐个尝试执行 — 最高优先级的先试，
+      // 如果没成交（无卖单/无现货）则 fallback 到下一个。
+      // 这修复了 continue 饥饿：卖出返回 false 时买入有机会执行。
+      executeBestCandidate(candidates);
     }
 
     // 7. pixel 出售（审计缺口 5）：账户资源吃最优 buy 单 — 生成端（pixel-system）
