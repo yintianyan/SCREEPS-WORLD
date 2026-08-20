@@ -49,6 +49,8 @@ import {
   type MarketOrderSummary,
 } from "../domain/industry/terminal-policy";
 import { collectFullInventory } from "../domain/industry/inventory";
+import { collectDemands, isBaseMineral } from "../domain/industry/procurement";
+import type { ProcurementDemand } from "../kernel/global-cache";
 
 export const terminalManagerSystem: System = {
   name: "terminal-manager",
@@ -94,7 +96,7 @@ export const terminalManagerSystem: System = {
       if (tryBuyCrisisEnergy(snapshot, terminal)) continue;
 
       // 4. 买入缺口矿物（credits 允许时）。
-      if (tryBuyDeficit(snapshot, terminal)) continue;
+      if (tryBuyDeficit(snapshot, terminal, ctx)) continue;
 
       // 5. 买入 power（高信用门禁 — GPL 投资排在所有生存/工业采购之后）。
       tryBuyPower(snapshot, terminal);
@@ -412,10 +414,61 @@ function trySellHomeMineral(snapshot: RoomSnapshot, terminal: StructureTerminal)
   return executeDeal(best, amount, terminal, snapshot.roomName);
 }
 
-/** 买入库存缺口最大的一种基础矿物（每次运行只处理一种，控制 getAllOrders 开销）。 */
-function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal): boolean {
+/**
+ * 买入缺口资源 — 阶段 1 改造：优先消费 procurementDemands 需求表。
+ *
+ * 新流程：
+ * 1. 读取 globalCache.procurementDemands（lab-system / factory-manager 发布）；
+ * 2. 按 priority 降序排序，逐个尝试买入；
+ * 3. 基础矿物用 CONFIG.market.maxBuyPrice 价格门禁；
+ * 4. 中间产物/化合物用 maxBuyPrice × 2 价格门禁（加工溢价）。
+ *
+ * 向后兼容：无需求表时回退到旧的 getMineralDeficits（硬编码 MINERAL_RESERVE_TARGET）。
+ * 每次运行只处理一种（控制 getAllOrders 开销）。
+ */
+function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx: TickContext): boolean {
   if (Game.market.credits < CONFIG.market.creditFloor) return false;
 
+  // ── 阶段 1：优先消费需求表 ──
+  const g = globalThis as unknown as { procurementDemands?: { tick: number; byRoom: Record<string, ProcurementDemand[]> } };
+  const demandsCache = g.procurementDemands;
+  if (demandsCache && demandsCache.tick === ctx.tick) {
+    const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
+    // 过滤出当前房间的需求（跨房需求不在此房买 — terminal.send 走互济通道）。
+    // 实际上所有房的需求都汇入：任意房的缺口都可在任意 terminal 买入（买入后走互济送到位）。
+    // 但为控制 getAllOrders 开销，只取 priority 最高的一个需求。
+    for (const demand of allDemands) {
+      if (demand.deadline <= ctx.tick) continue;
+      if (demand.amount <= 0) continue;
+
+      // 价格门禁：基础矿物用 maxBuyPrice；非基础矿物用 maxBuyPrice × 2。
+      const baseMax = isBaseMineral(demand.resource)
+        ? (CONFIG.market.maxBuyPrice[demand.resource] ?? 0)
+        : (CONFIG.market.maxBuyPrice[demand.resource] ?? 0);
+      // 中间产物/化合物的价格上限 = 最贵的基研矿 maxBuyPrice × 2（加工溢价容忍）。
+      const maxPrice = baseMax > 0
+        ? baseMax
+        : Math.max(...Object.values(CONFIG.market.maxBuyPrice)) * 2;
+
+      const orders = toSummaries(
+        Game.market.getAllOrders({ type: ORDER_SELL, resourceType: demand.resource as ResourceConstant }),
+      );
+      const best = pickBestSellOrder(orders, maxPrice);
+      if (!best) continue;
+
+      const affordable = Math.floor((Game.market.credits - CONFIG.market.creditFloor) / best.price);
+      const amount = Math.min(demand.amount, best.amount, CONFIG.market.maxDealAmount, affordable);
+      if (amount <= 0) continue;
+
+      console.log(`[${Game.time}] terminal/${snapshot.roomName}: 买入 ${demand.resource} amount=${amount} priority=${demand.priority} reason=${demand.reason}`);
+      return executeDeal(best, amount, terminal, snapshot.roomName);
+    }
+    // 需求表有需求但全部买入失败（无卖单/价超门禁）— 不回退到硬编码目标，
+    // 避免在已有明确需求时买不需要的东西。
+    return false;
+  }
+
+  // ── 向后兼容：无需求表时回退到硬编码 MINERAL_RESERVE_TARGET ──
   const inventory = collectMineralInventory(snapshot);
   const deficits = getMineralDeficits(inventory);
   if (deficits.length === 0) return false;

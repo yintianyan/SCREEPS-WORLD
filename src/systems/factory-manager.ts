@@ -21,6 +21,9 @@ import {
 } from "../domain/industry/commodity";
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
+import type { ProcurementDemand } from "../kernel/global-cache";
+import { collectFullInventory } from "../domain/industry/inventory";
+import { expandCommodityDemands } from "../domain/industry/procurement";
 
 export const factoryManagerSystem: System = {
   name: "factory-manager",
@@ -51,7 +54,7 @@ export const factoryManagerSystem: System = {
 
       // ── commodity 升级链（审计缺口 6）──
       // battery 之外的常规生产：非满仓也产（commodity 是正收益升级）。
-      tryProduceCommodity(snapshot, factory);
+      tryProduceCommodity(snapshot, factory, ctx);
 
       // ── battery 压缩（满仓止损，语义不变）──
       // 仅在 storage 满仓（能量正在源头被浪费）时压缩 — 正常水位下
@@ -70,11 +73,11 @@ export const factoryManagerSystem: System = {
  * 与 FIND_NUKES 等引擎常量同防御口径）。battery/energy 之外的产出
  * 即 commodity（能量是解压回退，battery 走满仓链）。
  */
-function tryProduceCommodity(snapshot: RoomSnapshot, factory: StructureFactory): void {
+function tryProduceCommodity(snapshot: RoomSnapshot, factory: StructureFactory, ctx: TickContext): void {
   const recipes = collectRecipes(factory.level ?? 0);
   if (recipes.length === 0) return;
 
-  const g = globalCache() as { factoryTargets?: Record<string, string> };
+  const g = globalCache();
   if (!g.factoryTargets) g.factoryTargets = {};
 
   const factoryStoreView = toStockView(factory.store as unknown as Record<string, number>);
@@ -93,6 +96,27 @@ function tryProduceCommodity(snapshot: RoomSnapshot, factory: StructureFactory):
   if (target) g.factoryTargets[snapshot.roomName] = target.resourceType;
   else delete g.factoryTargets[snapshot.roomName];
   if (!target) return;
+
+  // ── 阶段 1：发布 commodity 原料缺口需求 ──
+  // V1 边界（登记取舍）不变：只为凑料搬 storage 存量，不主动市场买入 —
+  // 但发布需求让 terminal-manager 知道“缺什么”，当价格合适时可买入。
+  // 需求有效期 = market.interval(200) + buffer(50) = 250 tick。
+  {
+    const inventory = collectFullInventory(snapshot);
+    const demands = expandCommodityDemands(
+      target.resourceType,
+      target.components,
+      inventory,
+      ctx.tick,
+      CONFIG.market.interval + 50,
+    );
+    if (demands.length > 0) {
+      if (!g.procurementDemands || g.procurementDemands.tick !== ctx.tick) {
+        g.procurementDemands = { tick: ctx.tick, byRoom: {} };
+      }
+      g.procurementDemands.byRoom[snapshot.roomName] = demands as ProcurementDemand[];
+    }
+  }
 
   // factory 内原料齐 → 生产（缺料由 distributor 补，下轮再产）。
   const missing = missingComponents(factoryStoreView, target);

@@ -130,6 +130,31 @@ export interface GlobalCache {
    * Game.creeps（4 系统 × O(creeps) → 1 次遍历 O(creeps)）。
    * heap 存储 — global reset 丢失可接受（next tick 重建）。 */
   squadIndex?: SquadIndexEntry[];
+  /** 阶段 1 采购需求表（lab-system / factory-manager 发布，terminal-manager 消费）。
+   * 消费方发布结构化需求 → terminal-manager 汇总后按 priority 排序，在 deal 窗口内
+   * 按 priority 竞争（替代旧 tryBuyDeficit 的硬编码 MINERAL_RESERVE_TARGET）。
+   * heap 存储 — global reset 丢失可接受（下 tick 重建）。无 schema 变更。 */
+  procurementDemands?: { tick: number; byRoom: Record<string, ProcurementDemand[]> };
+  /** factory commodity 目标缓存（factory-manager 写，distributor 的
+   * stockFactoryComponents 读 — 补料锚点）。heap 存储，可丢。 */
+  factoryTargets?: Record<string, string>;
+}
+
+/**
+ * 采购需求 — 消费方向采购方（terminal-manager）传递的结构化需求信号。
+ * resource 可是基础矿 / 中间产物 / 化合物 / power / G — 任何可在市场交易的资源。
+ */
+export interface ProcurementDemand {
+  /** 资源类型（基础矿/中间产物/化合物/power/G）。 */
+  resource: string;
+  /** 缺口量（目标量 - 当前库存）。 */
+  amount: number;
+  /** 优先级（0-100，越高越急）：反应原料 20-30 / boost 30-40 / commodity 10-15。 */
+  priority: number;
+  /** 截止 tick（超过则降级/放弃，防僵尸需求）。 */
+  deadline: number;
+  /** 来源标记（诊断用，如 "lab-reaction" / "factory-commodity" / "boost"）。 */
+  reason: string;
 }
 
 /** 编队索引条目 — 仅记录编队判定所需的最小字段集（不持有 Creep 引用）。 */

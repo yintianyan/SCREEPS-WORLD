@@ -14,6 +14,8 @@ import { getNextExecutableStep, planReactionChain, selectReactionTrio, LAB_REACT
 import { globalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
 import { collectFullInventory } from "../domain/industry/inventory";
+import { expandReactionDemands } from "../domain/industry/procurement";
+import type { ProcurementDemand } from "../kernel/global-cache";
 
 // ─── Boost/装料常量（引擎数值：boostCreep 每部件 30 矿物 + 20 能量）────
 
@@ -325,6 +327,27 @@ export const labSystem: System = {
             industryMem.reactionAmount = undefined;
             industryMem.reactionPlan = undefined;
           }
+        }
+      }
+
+      // ── 2.5 发布采购需求（阶段 1 改造）──
+      // 反应链计划存在时，展开基础矿物缺口写入 globalCache.procurementDemands，
+      // 供 terminal-manager 按 priority 排序后买入。旧实现硬编码 MINERAL_RESERVE_TARGET
+      // (500/200) 与实际消费速率无关 — 此处让需求信号从消费方传递到采购方。
+      // 需求有效期 = market.interval(200) + buffer(50) = 250 tick，确保跨终端冷却窗口。
+      if (industryMem.reactionPlan) {
+        const demands = expandReactionDemands(
+          industryMem.reactionPlan,
+          inventory,
+          ctx.tick,
+          CONFIG.market.interval + 50,
+        );
+        if (demands.length > 0) {
+          const g = globalCache();
+          if (!g.procurementDemands || g.procurementDemands.tick !== ctx.tick) {
+            g.procurementDemands = { tick: ctx.tick, byRoom: {} };
+          }
+          g.procurementDemands.byRoom[snapshot.roomName] = demands as ProcurementDemand[];
         }
       }
 
