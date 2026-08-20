@@ -181,3 +181,37 @@ export function expandCommodityDemands(
 
   return demands;
 }
+
+// ─── 阶段 5：动态价格调整 ──────────────────────────────────
+
+/**
+ * 高优先级需求的价格上浮比例。
+ *
+ * 当 demand.priority ≥ PRIORITY_BOOST_THRESHOLD 时，允许价格上限上浮
+ * 以提高成交概率 — boost/war 需求的时间价值高于价格差异。
+ */
+const PRIORITY_BOOST_THRESHOLD = 30;
+
+/** 高优先级需求的价格上浮系数（×1.5）。 */
+const HIGH_PRIORITY_PRICE_MULTIPLIER = 1.5;
+
+/**
+ * 根据需求优先级动态调整买入价格上限（阶段 5）。
+ *
+ * 策略：
+ * - priority ≥ 30（boost/war 级）：价格上限上浮 50%（时间价值 > 价格差异）
+ * - priority < 30（commodity/反应原料级）：维持基准价格
+ *
+ * 安全约束：即使上浮，仍受 computeMaxBuyPrice 的资源类型分级约束 —
+ * 基础矿上浮后仍 ≤ maxBuyPrice × 1.5，不会无限制加价。
+ *
+ * @param basePrice computeMaxBuyPrice 计算的基准价格上限。
+ * @param priority 需求优先级（0-100）。
+ * @returns 调整后的价格上限。
+ */
+export function adjustMaxPrice(basePrice: number, priority: number): number {
+  if (priority >= PRIORITY_BOOST_THRESHOLD) {
+    return basePrice * HIGH_PRIORITY_PRICE_MULTIPLIER;
+  }
+  return basePrice;
+}

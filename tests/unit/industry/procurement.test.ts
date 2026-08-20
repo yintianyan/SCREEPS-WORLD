@@ -26,6 +26,7 @@ import {
   isBaseMineral,
   isIntermediateCompound,
   computeMaxBuyPrice,
+  adjustMaxPrice,
 } from "../../../src/domain/industry/procurement";
 import type { ProcurementDemand } from "../../../src/kernel/global-cache";
 
@@ -286,5 +287,49 @@ describe("computeMaxBuyPrice — 价格分级", () => {
   it("配置中已有的资源直接查表（如 G 配了价格）", () => {
     const withG = { ...maxBuyPrice, G: 2.0 };
     expect(computeMaxBuyPrice("G", withG)).toBe(2.0);
+  });
+});
+
+// ─── adjustMaxPrice（阶段 5：动态价格调整）─────────────────
+
+describe("adjustMaxPrice — 优先级动态价格调整", () => {
+  it("高优先级(≥30)上浮50%", () => {
+    expect(adjustMaxPrice(10, 30)).toBe(15);
+    expect(adjustMaxPrice(10, 40)).toBe(15);
+    expect(adjustMaxPrice(10, 100)).toBe(15);
+  });
+
+  it("低优先级(<30)维持基准价格", () => {
+    expect(adjustMaxPrice(10, 0)).toBe(10);
+    expect(adjustMaxPrice(10, 12)).toBe(10);
+    expect(adjustMaxPrice(10, 25)).toBe(10);
+    expect(adjustMaxPrice(10, 29)).toBe(10);
+  });
+
+  it("边界：priority=30 触发上浮", () => {
+    expect(adjustMaxPrice(10, 29)).toBe(10);
+    expect(adjustMaxPrice(10, 30)).toBe(15);
+  });
+
+  it("与 computeMaxBuyPrice 组合 — 基础矿 boost 需求", () => {
+    const maxBuyPrice = { H: 1.5, O: 1.5, U: 1.5, L: 1.5, K: 1.5, Z: 1.5, X: 5 };
+    // 基础矿 H，boost 级 priority=35
+    const base = computeMaxBuyPrice("H", maxBuyPrice);
+    const adjusted = adjustMaxPrice(base, 35);
+    expect(base).toBe(1.5);
+    expect(adjusted).toBe(2.25); // 1.5 × 1.5
+  });
+
+  it("与 computeMaxBuyPrice 组合 — 化合物 commodity 需求不上浮", () => {
+    const maxBuyPrice = { H: 1.5, O: 1.5, U: 1.5, L: 1.5, K: 1.5, Z: 1.5, X: 5 };
+    // 化合物 XGH2O，commodity 级 priority=12
+    const base = computeMaxBuyPrice("XGH2O", maxBuyPrice);
+    const adjusted = adjustMaxPrice(base, 12);
+    expect(base).toBe(25); // 5 × 5
+    expect(adjusted).toBe(25); // 不上浮
+  });
+
+  it("零价格不放大", () => {
+    expect(adjustMaxPrice(0, 50)).toBe(0);
   });
 });

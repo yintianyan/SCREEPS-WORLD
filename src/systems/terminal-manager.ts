@@ -49,7 +49,7 @@ import {
   type MarketOrderSummary,
 } from "../domain/industry/terminal-policy";
 import { collectFullInventory } from "../domain/industry/inventory";
-import { collectDemands, computeMaxBuyPrice } from "../domain/industry/procurement";
+import { collectDemands, computeMaxBuyPrice, adjustMaxPrice } from "../domain/industry/procurement";
 import { globalCache } from "../kernel/global-cache";
 import type { ProcurementDemand } from "../kernel/global-cache";
 import {
@@ -503,9 +503,11 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
       if (demand.deadline <= ctx.tick) continue;
       if (demand.amount <= 0) continue;
 
-      // 价格门禁：按资源类型分级（阶段 3）。
+      // 价格门禁：按资源类型分级（阶段 3）+ 优先级动态调整（阶段 5）。
       // 基础矿用 maxBuyPrice；中间产物(OH/ZK/UL/G)用 ×2；化合物用 ×5。
-      const maxPrice = computeMaxBuyPrice(demand.resource, CONFIG.market.maxBuyPrice);
+      // 高优先级需求(priority≥30)允许上浮50% — boost/war 时间价值 > 价格差异。
+      const basePrice = computeMaxBuyPrice(demand.resource, CONFIG.market.maxBuyPrice);
+      const maxPrice = adjustMaxPrice(basePrice, demand.priority);
 
       const orders = toSummaries(
         Game.market.getAllOrders({ type: ORDER_SELL, resourceType: demand.resource as ResourceConstant }),
