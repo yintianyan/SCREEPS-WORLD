@@ -141,7 +141,9 @@ export const terminalManagerSystem: System = {
         execute: () => tryBuyCrisisEnergy(snapshot, terminal),
       });
       // buy-deficit 的 priority 动态反映需求表中的最高 priority —
-      // 需求表存在时 priority 可达 30+（boost 化合物），超过卖出候选。
+      // 需求表存在时 priority 必须高于卖出候选（SELL_PRIORITY_CAP=50），
+      // 否则买入被日常卖出永久挤出（卖出消耗 terminal 冷却 → 买入无窗口）。
+      // 工业链原料买入是生产性投资，优先于日常卖出变现。
       {
         let deficitPriority = DEFICIT_PRIORITY_BASE;
         const g = globalThis as unknown as { procurementDemands?: { tick: number; byRoom: Record<string, ProcurementDemand[]> } };
@@ -149,8 +151,9 @@ export const terminalManagerSystem: System = {
         if (demandsCache && demandsCache.tick === ctx.tick) {
           const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
           if (allDemands.length > 0) {
-            // 需求表存在时，取最高 priority 作为 deal 竞争 priority。
-            deficitPriority = allDemands[0]!.priority;
+            // 需求表存在时，取最高 priority 但不低于 SELL_PRIORITY_CAP+1，
+            // 确保买入在 deal 竞争中胜过卖出候选。
+            deficitPriority = Math.max(allDemands[0]!.priority, SELL_PRIORITY_CAP + 1);
           }
         }
         candidates.push({
