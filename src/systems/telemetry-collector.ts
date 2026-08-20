@@ -33,6 +33,9 @@ export const telemetryCollectorSystem: System = {
   name: "telemetry-collector",
   priority: 3 as Priority,
   interval: CONFIG.telemetry.cpuSampleInterval,
+  // post 阶段：在 runCreeps 之后运行，确保 cpuByHome 等 per-tick 累积数据
+  // 已被填充后再采样（main 阶段运行时 cpuByHome 是空 Map，采样无意义）。
+  phase: "post",
   run(ctx: TickContext): void {
     // P3 在 conserve/recovery 下不运行 — 采集是非关键的。
     if (ctx.budget.tier === "conserve" || ctx.budget.tier === "recovery") return;
