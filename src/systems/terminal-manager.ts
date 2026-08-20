@@ -50,6 +50,7 @@ import {
 } from "../domain/industry/terminal-policy";
 import { collectFullInventory } from "../domain/industry/inventory";
 import { collectDemands, computeMaxBuyPrice } from "../domain/industry/procurement";
+import { globalCache } from "../kernel/global-cache";
 import type { ProcurementDemand } from "../kernel/global-cache";
 import {
   executeBestCandidate,
@@ -115,6 +116,13 @@ export const terminalManagerSystem: System = {
         type: "sell-battery",
         priority: 35,
         execute: () => trySellSurplusBattery(snapshot, terminal),
+      });
+      // sell-compound：盈余 boost 化合物卖出（priority 30 — 低于 battery 因为
+      // 化合物是战略资源，只在明显盈余时变现）。
+      candidates.push({
+        type: "sell-compound",
+        priority: 30,
+        execute: () => trySellSurplusCompound(snapshot, terminal),
       });
 
       // 买入候选。
@@ -538,6 +546,41 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
   const affordable = Math.floor((Game.market.credits - CONFIG.market.creditFloor) / best.price);
   const amount = Math.min(target.deficit, best.amount, CONFIG.market.maxDealAmount, affordable);
   return executeDeal(best, amount, terminal, snapshot.roomName);
+}
+
+/**
+ * 卖出盈余 boost 化合物 — 阶段 4 改造。
+ *
+ * lab-system 在 boost 库存超过 boostStockpile 后将盈余写入 globalCache.surplusCompounds，
+ * 本函数读取该信号并在 deal 窗口内尝试卖出。
+ *
+ * 价格门禁：使用 CONFIG.market.minSellPrice（与 homeMineral 同底线 — 不贱卖）。
+ * 成交量受盈余量、terminal 现货、订单余量与单笔上限四重约束。
+ */
+function trySellSurplusCompound(snapshot: RoomSnapshot, terminal: StructureTerminal): boolean {
+  const g = globalCache();
+  const surplus = g.surplusCompounds;
+  if (!surplus) return false;
+
+  // 取第一个有 terminal 现货的盈余化合物（控制 getAllOrders 开销 — 每次只卖一种）。
+  for (const [res, surplusAmount] of Object.entries(surplus.items)) {
+    if (surplusAmount <= 0) continue;
+    const inTerminal = terminal.store.getUsedCapacity(res as ResourceConstant) ?? 0;
+    if (inTerminal <= 0) continue;
+
+    const orders = toSummaries(
+      Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res as ResourceConstant }),
+    );
+    const best = pickBestBuyOrder(orders, CONFIG.market.minSellPrice);
+    if (!best) continue;
+
+    const amount = Math.min(surplusAmount, inTerminal, best.amount, CONFIG.market.maxDealAmount);
+    if (amount <= 0) continue;
+
+    console.log(`[${Game.time}] terminal/${snapshot.roomName}: 卖出盈余化合物 ${res} amount=${amount} price=${best.price}`);
+    return executeDeal(best, amount, terminal, snapshot.roomName);
+  }
+  return false;
 }
 
 /**

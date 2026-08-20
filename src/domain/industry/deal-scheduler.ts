@@ -16,6 +16,7 @@ export type DealCandidateType =
   | "sell-energy"
   | "sell-mineral"
   | "sell-battery"
+  | "sell-compound"
   | "buy-crisis-energy"
   | "buy-deficit"
   | "buy-power"

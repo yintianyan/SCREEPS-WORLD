@@ -351,6 +351,28 @@ export const labSystem: System = {
         }
       }
 
+      // ── 2.6 发布盈余化合物卖出信号（阶段 4 改造）──
+      // lab 产出的 boost 化合物在库存超过 boostStockpile 后可卖出变现。
+      // 旧实现只卖 homeMineral 和 battery — T3 化合物（XGH2O/XUH2O 等）永远囤着不卖，
+      // 库存膨胀后 lab output 无处回收 → 反应链停摆。此处让盈余信号从生产方传到卖出方。
+      {
+        const g = globalCache();
+        if (!g.surplusCompounds || g.surplusCompounds.tick !== ctx.tick) {
+          g.surplusCompounds = { tick: ctx.tick, items: {} };
+        }
+        // 检查所有 boost 化合物库存是否超过 boostStockpile。
+        for (const [res, qty] of Object.entries(inventory)) {
+          if (res === RESOURCE_ENERGY) continue;
+          // 只对 boost 化合物（T1-T3 tier）发卖出信号 — 不卖基础矿（走 homeMineral 通道）。
+          const boostEffect = BOOST_EFFECTS[res as Compound];
+          if (!boostEffect) continue;
+          const surplus = qty - CONFIG.war.boostStockpile;
+          if (surplus > 0) {
+            g.surplusCompounds.items[res] = (g.surplusCompounds.items[res] ?? 0) + surplus;
+          }
+        }
+      }
+
       // 无可执行反应且无 boost 需求 → 进入休眠，等原料库存变化后再评估。
       // 500 tick ≈ 一个 tuning 评估窗口，对 boost 时效的影响可忽略；
       // war 前馈房用短休眠（WAR_IDLE_TICKS）— 缺矿时 market 买入（tryBuyDeficit）

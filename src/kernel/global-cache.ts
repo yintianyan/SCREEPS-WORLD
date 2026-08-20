@@ -138,6 +138,11 @@ export interface GlobalCache {
   /** factory commodity 目标缓存（factory-manager 写，distributor 的
    * stockFactoryComponents 读 — 补料锚点）。heap 存储，可丢。 */
   factoryTargets?: Record<string, string>;
+  /** 阶段 4 盈余化合物卖出信号（lab-system 发布，terminal-manager 消费）。
+   * lab 产出的 T3 化合物在 boost 库存已满后写入此表，供 terminal-manager 卖出变现。
+   * key = 资源类型，value = 盈余量（库存 - boost 储备目标）。
+   * heap 存储 — global reset 丢失可接受（下 tick 重建）。无 schema 变更。 */
+  surplusCompounds?: { tick: number; items: Record<string, number> };
 }
 
 /**
