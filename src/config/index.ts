@@ -707,9 +707,8 @@ export const CONFIG = {
     launchTowerThreshold: 2,
     /** 发射射程预检（线性距离口径；引擎 NUKE_RANGE=10，走廊约束由 launchNuke 返回码兜底）。 */
     maxRange: 10,
-    /** G 市场买入最高价（credits/单位）— 超价宁可不买（lab 自产是主通道，市场只是加速）。
-     * 2026-08-21 校准：市场 G 最低卖价 262，设 300 允许溢价吃单。 */
-    ghodiumBuyMaxPrice: 300,
+    /** G 兆底买入价 — 行情缺失时兆底（lab 自产是主通道，市场只是加速）。 */
+    fallbackGhodiumBuyMaxPrice: 300,
     /** G 买入的信用门禁 — 战略物资不许挤占生存/工业采购预算。 */
     ghodiumBuyCreditFloor: 10000,
   },
@@ -720,20 +719,28 @@ export const CONFIG = {
     /** bucket 低于此值不做市场操作（贸易不是生存关键）。 */
     minBucket: 8000,
     /**
-     * 各基础矿物最高买入价（credits/单位）— 高于此价宁可等待。
-     * 2026-08-21 线上行情校准（shard3）：基础矿严重通胀，旧值 1.5 已失效。
-     * 定价策略：取市场最低卖价 × 1.1（略高于最低卖单确保能吃到），
-     * 资金充裕时（33M+ credits）工业链刚需优先于价格敏感度。
-     * X 最稀缺（216+），H/L 高价（137-335），U/K/Z 中低价（11-14），O 自产不买。
-     * 定期复核：每赛季/重大通胀事件后需重新校准。
+     * 动态定价策略参数 — 市场行情快照驱动的相对价格门禁。
+     *
+     * 核心思路：买/卖价格不写死绝对值，而是以 marketPrices 行情快照为基准 ×
+     * 策略系数计算。市场通胀/通缩时门禁自动浮动，代码不需要调整。
+     *
+     * fallback 值仅在行情空窗期（首 tick / global reset / 无卖单）兆底，
+     * 正常运行时由行情快照接管。
      */
-    maxBuyPrice: {
+    /** 买入溢价系数：买入上限 = 市场最低卖价 × 此系数（>1 确保吃到单子）。 */
+    buyPremium: 1.1,
+    /** 卖出折价系数：卖出下限 = 市场最高买价 × 此系数（<1 确保成交）。 */
+    sellDiscount: 0.9,
+    /**
+     * 行情缺失时的兆底买入价（credits/单位）— 仅在无行情快照时生效。
+     * 取当前市场的大致中位数（2026-08 校准），防首 tick / global reset 空窗。
+     * 市场正常运行时由 sellMin × buyPremium 接管，此值不生效。
+     */
+    fallbackMaxBuyPrice: {
       H: 370, O: 65, U: 13, L: 150, K: 15, Z: 16, X: 240,
     } as Readonly<Record<string, number>>,
-    /** 本房矿物最低卖出价 — 低于此价不贱卖（宁可囤着等行情）。
-     * 2026-08-21 校准：旧值 0.3 在通胀市场下已无意义。设为 0.5 作为地板 —
-     * 实际卖价由 trySellHomeMineral 取市场最优 buy 价 × 0.95 动态计算。 */
-    minSellPrice: 0.5,
+    /** 行情缺失时的兆底卖出价 — 低于此价不卖（防无买盘时 0 价格挂单）。 */
+    fallbackMinSellPrice: 0.5,
     /** 卖出保留量：本房矿物合计低于此量不卖（留作自用反应原料）。 */
     sellReserve: 3000,
     /** 单笔 deal 最大成交量 — 控制单笔运费与坏单风险。 */
@@ -754,14 +761,11 @@ export const CONFIG = {
     storageEnergyFloor: 20000,
     /** credits 低于此值暂停买入（保留应急余额）。 */
     creditFloor: 100,
-    /**
-     * battery 最低卖出价 — battery 是满仓溢能的压缩资产（1 battery ≈ 12 能量），
-     * 低于等值能量的合理溢价不贱卖（terminal 现货囤着等行情）。
-     */
-    minBatterySellPrice: 0.8,
-    /** power 最高买入价（credits/单位）— 超价宁可不买。
-     * 2026-08-21 校准：市场 power 最低卖价 999，设 1100 允许吃单。 */
-    powerBuyMaxPrice: 1100,
+    /** battery 兆底卖出价 — battery 是满仓溢能的压缩资产（1 battery ≈ 12 能量），
+     * 低于等值能量的合理溢价不贱卖。正常运行时由行情快照接管。 */
+    fallbackMinBatterySellPrice: 0.8,
+    /** power 兆底买入价 — 行情缺失时兆底。正常运行时由 sellMin × buyPremium 接管。 */
+    fallbackPowerBuyMaxPrice: 1100,
     /**
      * power 买入的高信用门禁 — power 是 GPL 长期投资而非生存物资，
      * credits 低于此值时预算全部让位给矿物/能量采购。
@@ -778,9 +782,8 @@ export const CONFIG = {
     minOrderAmount: 1000,
     /** 挂单超龄（毫秒，零成交）撤单重挂 — 价格随新 bid 重算自适应下行。 */
     orderStaleMs: 4 * 24 * 60 * 60 * 1000,
-    /** pixel 最低卖出价 — 低于此价囤着（pixel 是账户资源无仓储成本）。
-     * 2026-08-21 校准：市场行情未变，300 保持合理。 */
-    minPixelSellPrice: 300,
+    /** pixel 兆底卖出价 — 行情缺失时兆底（pixel 是账户资源无仓储成本）。 */
+    fallbackMinPixelSellPrice: 300,
   },
 
   /** 帝国能量网络与市场深化（R5）— 跨房互济 + 能量市场交易。 */

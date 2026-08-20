@@ -143,6 +143,11 @@ export interface GlobalCache {
    * key = 资源类型，value = 盈余量（库存 - boost 储备目标）。
    * heap 存储 — global reset 丢失可接受（下 tick 重建）。无 schema 变更。 */
   surplusCompounds?: { tick: number; items: Record<string, number> };
+  /** 市场行情快照（terminal-manager 每 interval 采集写入）。
+   * key = 资源类型，value = { sellMin, buyMax } — 当前市场最低卖价与最高买价。
+   * 所有买/卖决策以行情快照为基准计算动态价格门禁，替代 CONFIG 中的死价格。
+   * heap 存储 — global reset 后首 tick 重建，无 schema 变更。 */
+  marketPrices?: { tick: number; prices: Record<string, MarketPriceSnapshot> };
   /** Per-room CPU 记账：kernel.runCreeps 中每只 creep 执行后按 memory.home
    * 归集 CPU 消耗。telemetry-collector 采样写入 Memory.kernel.stats.cpuByHome，
    * 供 empire-strategy / capacity 模型评估每房真实 CPU 成本。
@@ -165,6 +170,14 @@ export interface ProcurementDemand {
   deadline: number;
   /** 来源标记（诊断用，如 "lab-reaction" / "factory-commodity" / "boost"）。 */
   reason: string;
+}
+
+/** 市场行情快照 — 单种资源在采集时刻的最低卖价与最高买价。 */
+export interface MarketPriceSnapshot {
+  /** 市场最低卖单价格（买入基准）。0 = 无卖单。 */
+  sellMin: number;
+  /** 市场最高买单价格（卖出基准）。0 = 无买单。 */
+  buyMax: number;
 }
 
 /** 编队索引条目 — 仅记录编队判定所需的最小字段集（不持有 Creep 引用）。 */

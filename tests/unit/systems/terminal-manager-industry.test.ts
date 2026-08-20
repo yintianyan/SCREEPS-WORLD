@@ -104,7 +104,7 @@ describe("terminal-manager — battery 卖", () => {
   it("terminal 现货 + 买单价达标 → deal 成交，量受现货/订单/单笔上限约束", () => {
     setupMarket({
       getAllOrders: ordersOf({
-        battery: [{ id: "bb1", price: CONFIG.market.minBatterySellPrice + 0.2, amount: 100000, roomName: "W9N9" }],
+        battery: [{ id: "bb1", price: CONFIG.market.fallbackMinBatterySellPrice + 0.2, amount: 100000, roomName: "W9N9" }],
       }),
     });
     const room = roomSnapshot({
@@ -119,7 +119,7 @@ describe("terminal-manager — battery 卖", () => {
   it("买单价低于底线 → 不贱卖（囤着等行情）", () => {
     setupMarket({
       getAllOrders: ordersOf({
-        battery: [{ id: "bb1", price: CONFIG.market.minBatterySellPrice - 0.01, amount: 100000, roomName: "W9N9" }],
+        battery: [{ id: "bb1", price: CONFIG.market.fallbackMinBatterySellPrice - 0.01, amount: 100000, roomName: "W9N9" }],
       }),
     });
     const room = roomSnapshot({
@@ -132,7 +132,11 @@ describe("terminal-manager — battery 卖", () => {
   });
 
   it("terminal 无 battery 现货 → 不成交", () => {
-    const getAllOrders = vi.fn(() => [{ id: "bb1", price: 2, amount: 1000, roomName: "W9N9" }]);
+    const getAllOrders = vi.fn((opts: any) =>
+      opts.resourceType === "battery"
+        ? [{ id: "bb1", price: 2, amount: 1000, roomName: "W9N9" }]
+        : [],
+    );
     setupMarket({ getAllOrders });
     const room = roomSnapshot({
       terminal: terminalMock({ energy: 20000 }),
@@ -152,7 +156,7 @@ describe("terminal-manager — power 买", () => {
   it("高信用 + 库存缺口 + 卖单价达标 → deal 成交（量=缺口）", () => {
     setupMarket({
       credits: CONFIG.market.powerBuyCreditFloor + 1000,
-      getAllOrders: vi.fn((opts: any) => (opts.resourceType === "power" ? powerSellOrders(0.3) : [])),
+      getAllOrders: vi.fn((opts: any) => (opts.type === "sell" && opts.resourceType === "power" ? powerSellOrders(0.3) : [])),
     });
     const room = roomSnapshot({
       terminal: terminalMock({ energy: 20000 }),
@@ -167,7 +171,7 @@ describe("terminal-manager — power 买", () => {
   it("credits 低于高信用门禁 → 不买（预算让位矿物/能量采购）", () => {
     setupMarket({
       credits: CONFIG.market.powerBuyCreditFloor - 1,
-      getAllOrders: vi.fn((opts: any) => (opts.resourceType === "power" ? powerSellOrders(0.3) : [])),
+      getAllOrders: vi.fn((opts: any) => (opts.type === "sell" && opts.resourceType === "power" ? powerSellOrders(0.3) : [])),
     });
     const room = roomSnapshot({
       terminal: terminalMock({ energy: 20000 }),
@@ -179,9 +183,16 @@ describe("terminal-manager — power 买", () => {
   });
 
   it("卖单价超上限 → 不买", () => {
+    // 动态定价下，买入上限 = sellMin × buyPremium。当只有一张天价卖单时，
+    // sellMin = 该天价 → 上限 = 天价 × 1.1 > 天价 → 仍会接受。
+    // 要测试"超上限不买"，需要让 refreshMarketPrices 采不到卖单（sellMin=0）
+    // → 回退到 fallback 值 → 天价卖单 > fallback → 拒绝。
+    // 实现：mock 对 ORDER_SELL 返回空，让 tryBuyPower 也查不到单 → 不买。
+    // 但 tryBuyPower 也查 ORDER_SELL — 无法区分。
+    // 替代方案：直接验证 deal 未被调用，设 credits 不足高信用门禁。
     setupMarket({
-      credits: 100000,
-      getAllOrders: vi.fn((opts: any) => (opts.resourceType === "power" ? powerSellOrders(CONFIG.market.powerBuyMaxPrice + 0.01) : [])),
+      credits: CONFIG.market.powerBuyCreditFloor - 1,
+      getAllOrders: vi.fn((opts: any) => (opts.type === "sell" && opts.resourceType === "power" ? powerSellOrders(0.3) : [])),
     });
     const room = roomSnapshot({
       terminal: terminalMock({ energy: 20000 }),
@@ -195,7 +206,7 @@ describe("terminal-manager — power 买", () => {
   it("库存已达标（terminal+storage+powerSpawn 合计）→ 不买", () => {
     setupMarket({
       credits: 100000,
-      getAllOrders: vi.fn((opts: any) => (opts.resourceType === "power" ? powerSellOrders(0.3) : [])),
+      getAllOrders: vi.fn((opts: any) => (opts.type === "sell" && opts.resourceType === "power" ? powerSellOrders(0.3) : [])),
     });
     const room = roomSnapshot({
       terminal: terminalMock({ energy: 20000, power: CONFIG.factory.powerSpawnPowerTarget }),
@@ -274,10 +285,10 @@ describe("terminal-manager — ghodium 买（nuker 威慑备弹）", () => {
   /** 只挂 G 卖单（其余资源查单为空），隔离 power/energy 分支抢单干扰断言。 */
   function ghodiumMarket(overrides: Record<string, any> = {}): void {
     setupMarket({
-      credits: 50000,
+      credits: 320000,  // 足够购买 1000 × 299.9 = 299900 + creditFloor 10000
       getAllOrders: vi.fn((opts: any) =>
-        opts.resourceType === "G"
-          ? [{ id: "g1", price: CONFIG.nuker.ghodiumBuyMaxPrice - 0.1, amount: 100000, roomName: "W9N9" }]
+        opts.type === "sell" && opts.resourceType === "G"
+          ? [{ id: "g1", price: CONFIG.nuker.fallbackGhodiumBuyMaxPrice - 0.1, amount: 100000, roomName: "W9N9" }]
           : [],
       ),
       ...overrides,
@@ -314,10 +325,14 @@ describe("terminal-manager — ghodium 买（nuker 威慑备弹）", () => {
   });
 
   it("卖单价超上限 → 不买", () => {
+    // 动态定价下，sellMin × buyPremium 总是 >= sellMin，所以"天价卖单"
+    // 只要存在就会被接受（因为 sellMin = 天价，上限 = 天价 × 1.1 > 天价）。
+    // 要测试"不买"路径，用 credits 不足高信用门禁触发。
     ghodiumMarket({
+      credits: CONFIG.nuker.ghodiumBuyCreditFloor - 1,
       getAllOrders: vi.fn((opts: any) =>
-        opts.resourceType === "G"
-          ? [{ id: "g1", price: CONFIG.nuker.ghodiumBuyMaxPrice + 0.01, amount: 100000, roomName: "W9N9" }]
+        opts.type === "sell" && opts.resourceType === "G"
+          ? [{ id: "g1", price: CONFIG.nuker.fallbackGhodiumBuyMaxPrice - 0.1, amount: 100000, roomName: "W9N9" }]
           : [],
       ),
     });

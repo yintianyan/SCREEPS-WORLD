@@ -28,13 +28,16 @@ export function isIntermediateCompound(resource: string): boolean {
  * 根据资源类型计算市场买入价格上限。
  *
  * 分级策略：
- * - 基础矿：直接用 CONFIG.market.maxBuyPrice。
- * - 中间产物：最贵基础矿 maxBuyPrice × 2（加工溢价容忍）。
- * - 化合物（T1-T3）：最贵基础矿 maxBuyPrice × 5（高级加工溢价）。
+ * - 基础矿：直接用 fallbackMaxBuyPrice 或行情快照动态计算。
+ * - 中间产物：最贵基础矿价格 × 2（加工溢价容忍）。
+ * - 化合物（T1-T3）：最贵基础矿价格 × 5（高级加工溢价）。
  * - 其他资源（power/G 等）：配置值或回退。
  *
+ * 注意：terminal-manager 已改用 market-pricing.ts 的 computeDynamicBuyPrice
+ * 做行情驱动定价，此函数仅保留向后兼容（测试/回退路径）。
+ *
  * @param resource 资源类型。
- * @param maxBuyPrice CONFIG.market.maxBuyPrice 映射。
+ * @param maxBuyPrice CONFIG.market.fallbackMaxBuyPrice 映射（向后兼容接口）。
  * @returns 价格上限（credits/单位），0 表示不买。
  */
 export function computeMaxBuyPrice(

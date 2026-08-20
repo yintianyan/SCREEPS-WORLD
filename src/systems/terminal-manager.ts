@@ -50,9 +50,15 @@ import {
   type MarketOrderSummary,
 } from "../domain/industry/terminal-policy";
 import { collectFullInventory } from "../domain/industry/inventory";
-import { collectDemands, computeMaxBuyPrice, adjustMaxPrice } from "../domain/industry/procurement";
+import { collectDemands, adjustMaxPrice } from "../domain/industry/procurement";
 import { globalCache } from "../kernel/global-cache";
 import type { ProcurementDemand } from "../kernel/global-cache";
+import {
+  computeDynamicBuyPrice,
+  computeDynamicSellPrice,
+  collectMarketPrices,
+  type PriceTable,
+} from "../domain/industry/market-pricing";
 import {
   executeBestCandidate,
   type DealCandidate,
@@ -78,6 +84,12 @@ export const terminalManagerSystem: System = {
     // 贸易不是生存关键：仅在 CPU 富余时运行。
     if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;
     if ((Game.cpu.bucket ?? 0) < CONFIG.market.minBucket) return;
+
+    // ── 行情快照采集 ──
+    // 每 interval tick 运行时先采集当前市场行情（最低卖价/最高买价）写入
+    // globalCache.marketPrices。所有买/卖决策以行情快照为基准计算动态价格门禁，
+    // 替代 CONFIG 中的静态死价格 — 市场通胀/通缩时门禁自动浮动。
+    refreshMarketPrices();
 
     // 0. 帝国能量互济：跨房救助优先于贸易（殖民生存 > 交易收入）。
     tryEmpireEnergyAid(ctx);
@@ -223,7 +235,7 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
       const bids = toSummaries(
         Game.market.getAllOrders({ type: ORDER_BUY, resourceType: order.resourceType }),
       );
-      const best = pickBestBuyOrder(bids, CONFIG.market.minSellPrice);
+      const best = pickBestBuyOrder(bids, computeDynamicSellPrice(order.resourceType, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
       const newPrice = shouldChangeOrderPrice(
         order.remainingAmount ?? 0,
         order.totalAmount ?? 0,
@@ -261,7 +273,7 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
   const bids = toSummaries(
     Game.market.getAllOrders({ type: ORDER_BUY, resourceType: homeMineral }),
   );
-  const best = pickBestBuyOrder(bids, CONFIG.market.minSellPrice);
+  const best = pickBestBuyOrder(bids, computeDynamicSellPrice(homeMineral, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
   const plan = planSellOrder({
     resourceType: homeMineral,
     surplus,
@@ -303,7 +315,7 @@ function trySellPixel(): void {
   for (const o of toSummaries(
     Game.market.getAllOrders({ type: ORDER_BUY, resourceType: "pixel" }),
   )) {
-    if (o.price < CONFIG.market.minPixelSellPrice || o.amount <= 0) continue;
+    if (o.price < computeDynamicSellPrice("pixel", getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinPixelSellPrice) || o.amount <= 0) continue;
     if (!best || o.price > best.price) best = o;
   }
   if (!best) return;
@@ -507,7 +519,7 @@ function trySellHomeMineral(snapshot: RoomSnapshot, terminal: StructureTerminal)
   const orders = toSummaries(
     Game.market.getAllOrders({ type: ORDER_BUY, resourceType: homeMineral }),
   );
-  const best = pickBestBuyOrder(orders, CONFIG.market.minSellPrice);
+  const best = pickBestBuyOrder(orders, computeDynamicSellPrice(homeMineral, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
   if (!best) return false;
 
   const amount = Math.min(surplus, inTerminal, best.amount, CONFIG.market.maxDealAmount);
@@ -544,10 +556,15 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
       if (demand.deadline <= ctx.tick) continue;
       if (demand.amount <= 0) continue;
 
-      // 价格门禁：按资源类型分级（阶段 3）+ 优先级动态调整（阶段 5）。
-      // 基础矿用 maxBuyPrice；中间产物(OH/ZK/UL/G)用 ×2；化合物用 ×5。
+      // 价格门禁：基于行情快照的动态定价 + 优先级动态调整（阶段 5）。
+      // 买入上限 = 市场最低卖价 × buyPremium（行情缺失时回退 fallback）。
       // 高优先级需求(priority≥30)允许上浮50% — boost/war 时间价值 > 价格差异。
-      const basePrice = computeMaxBuyPrice(demand.resource, CONFIG.market.maxBuyPrice);
+      const prices = getMarketPrices();
+      const fallback = CONFIG.market.fallbackMaxBuyPrice[demand.resource] ??
+        Math.max(...Object.values(CONFIG.market.fallbackMaxBuyPrice));
+      const basePrice = computeDynamicBuyPrice(
+        demand.resource, prices, CONFIG.market.buyPremium, fallback,
+      );
       const maxPrice = adjustMaxPrice(basePrice, demand.priority);
 
       const orders = toSummaries(
@@ -576,8 +593,11 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
   // 缺口最大者优先 — 反应链最先卡在存量最少的原料上。
   deficits.sort((a, b) => b.deficit - a.deficit);
   const target = deficits[0]!;
-  const maxPrice = CONFIG.market.maxBuyPrice[target.mineral];
-  if (maxPrice === undefined) return false;
+  const prices = getMarketPrices();
+  const fallback = CONFIG.market.fallbackMaxBuyPrice[target.mineral] ??
+    Math.max(...Object.values(CONFIG.market.fallbackMaxBuyPrice));
+  const maxPrice = computeDynamicBuyPrice(target.mineral, prices, CONFIG.market.buyPremium, fallback);
+  if (maxPrice <= 0) return false;
 
   const orders = toSummaries(
     Game.market.getAllOrders({ type: ORDER_SELL, resourceType: target.mineral as ResourceConstant }),
@@ -597,7 +617,7 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
  * lab-system 在 boost 库存超过 boostStockpile 后将盈余写入 globalCache.surplusCompounds，
  * 本函数读取该信号并在 deal 窗口内尝试卖出。
  *
- * 价格门禁：使用 CONFIG.market.minSellPrice（与 homeMineral 同底线 — 不贱卖）。
+ * 价格门禁：基于行情快照动态定价（市场最高买价 × sellDiscount）。
  * 成交量受盈余量、terminal 现货、订单余量与单笔上限四重约束。
  */
 function trySellSurplusCompound(snapshot: RoomSnapshot, terminal: StructureTerminal): boolean {
@@ -614,7 +634,7 @@ function trySellSurplusCompound(snapshot: RoomSnapshot, terminal: StructureTermi
     const orders = toSummaries(
       Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res as ResourceConstant }),
     );
-    const best = pickBestBuyOrder(orders, CONFIG.market.minSellPrice);
+    const best = pickBestBuyOrder(orders, computeDynamicSellPrice(res, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
     if (!best) continue;
 
     const amount = Math.min(surplusAmount, inTerminal, best.amount, CONFIG.market.maxDealAmount);
@@ -693,7 +713,7 @@ function trySellSurplusBattery(snapshot: RoomSnapshot, terminal: StructureTermin
   const orders = toSummaries(
     Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_BATTERY }),
   );
-  const best = pickBestBuyOrder(orders, CONFIG.market.minBatterySellPrice);
+  const best = pickBestBuyOrder(orders, computeDynamicSellPrice(RESOURCE_BATTERY, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinBatterySellPrice));
   if (!best) return false;
 
   const amount = Math.min(inTerminal, best.amount, CONFIG.market.maxDealAmount);
@@ -730,7 +750,7 @@ function trySellCommodity(snapshot: RoomSnapshot, terminal: StructureTerminal): 
     const orders = toSummaries(
       Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res }),
     );
-    const best = pickBestBuyOrder(orders, CONFIG.market.minSellPrice);
+    const best = pickBestBuyOrder(orders, computeDynamicSellPrice(res, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
     if (!best) continue;
 
     const amount = Math.min(inTerminal, best.amount, CONFIG.market.maxDealAmount);
@@ -762,12 +782,60 @@ function tryBuyPower(snapshot: RoomSnapshot, terminal: StructureTerminal): boole
   const orders = toSummaries(
     Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_POWER }),
   );
-  const best = pickBestSellOrder(orders, CONFIG.market.powerBuyMaxPrice);
+  const best = pickBestSellOrder(orders, computeDynamicBuyPrice(RESOURCE_POWER, getMarketPrices(), CONFIG.market.buyPremium, CONFIG.market.fallbackPowerBuyMaxPrice));
   if (!best) return false;
 
   const affordable = Math.floor((Game.market.credits - CONFIG.market.powerBuyCreditFloor) / best.price);
   const amount = Math.min(deficit, best.amount, CONFIG.market.maxDealAmount, affordable);
   return executeDeal(best, amount, terminal, snapshot.roomName);
+}
+
+// ─── 市场行情快照 ──────────────────────────────────────────
+
+/** 需要采集行情的资源列表 — 覆盖所有交易涉及的资源类型。 */
+const PRICED_RESOURCES = [
+  "H", "O", "U", "L", "K", "Z", "X",
+  "OH", "ZK", "UL", "G",
+  "GO", "GH2O", "XGH2O",
+  "battery", "power", "pixel",
+  "GHODIUM",
+] as const;
+
+/**
+ * 采集当前市场行情并写入 globalCache.marketPrices。
+ * 每 interval tick 调用一次 — getAllOrders 已在 deal 候选逻辑中各自调用，
+ * 此函数集中采集一轮行情供所有买/卖决策复用（避免每个函数独立 getAllOrders）。
+ *
+ * 采集策略：对每种资源分别查 sell/buy 订单，取最低卖价与最高买价。
+ * 成本：PRICED_RESOURCES.length × 2 次 getAllOrders（过滤后通常 < 20 条/资源）。
+ * 与旧实现（每函数独立 getAllOrders）总开销持平，但结果复用。
+ */
+function refreshMarketPrices(): void {
+  const sellOrders: Record<string, { price: number }[]> = {};
+  const buyOrders: Record<string, { price: number }[]> = {};
+
+  for (const res of PRICED_RESOURCES) {
+    const sells = Game.market.getAllOrders({ type: ORDER_SELL, resourceType: res as ResourceConstant });
+    sellOrders[res] = sells.map(o => ({ price: o.price }));
+    const buys = Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res as ResourceConstant });
+    buyOrders[res] = buys.map(o => ({ price: o.price }));
+  }
+
+  const prices = collectMarketPrices(PRICED_RESOURCES, sellOrders, buyOrders);
+  const g = globalCache();
+  g.marketPrices = { tick: Game.time, prices };
+}
+
+/**
+ * 获取当前行情快照表（供买/卖决策计算动态价格）。
+ * 若行情过期或缺失返回空对象 — computeDynamicBuy/SellPrice 会回退到 fallback。
+ */
+function getMarketPrices(): PriceTable {
+  const g = globalCache();
+  if (g.marketPrices && Game.time - g.marketPrices.tick <= CONFIG.market.interval + 50) {
+    return g.marketPrices.prices;
+  }
+  return {};
 }
 
 /**
@@ -792,7 +860,7 @@ function tryBuyGhodium(snapshot: RoomSnapshot, terminal: StructureTerminal): boo
   const orders = toSummaries(
     Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_GHODIUM }),
   );
-  const best = pickBestSellOrder(orders, CONFIG.nuker.ghodiumBuyMaxPrice);
+  const best = pickBestSellOrder(orders, computeDynamicBuyPrice(RESOURCE_GHODIUM, getMarketPrices(), CONFIG.market.buyPremium, CONFIG.nuker.fallbackGhodiumBuyMaxPrice));
   if (!best) return false;
 
   const affordable = Math.floor(
