@@ -48,6 +48,7 @@ import {
   pickBestSellOrder,
   type MarketOrderSummary,
 } from "../domain/industry/terminal-policy";
+import { collectFullInventory } from "../domain/industry/inventory";
 
 export const terminalManagerSystem: System = {
   name: "terminal-manager",
@@ -437,18 +438,14 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal): boo
   return executeDeal(best, amount, terminal, snapshot.roomName);
 }
 
-/** 汇总 storage + terminal 的矿物库存（供缺口计算）。 */
+/**
+ * 汇总全房矿物库存（供缺口计算）。
+ * 统一库存视图（阶段 0 改造）：storage + terminal + labs + factory。
+ * 旧实现只看 storage+terminal — 遗漏 lab 反应中原料与 factory 在制 stock，
+ * 导致缺口计算虚高/虚低（如反应链正在消耗 H 时 H 库存不在口径内，重复买入）。
+ */
 function collectMineralInventory(snapshot: RoomSnapshot): Record<string, number> {
-  const inventory: Record<string, number> = {};
-  const stores = [snapshot.storage?.store, snapshot.terminal?.store];
-  for (const store of stores) {
-    if (!store) continue;
-    for (const resource of Object.keys(store) as ResourceConstant[]) {
-      if (resource === RESOURCE_ENERGY) continue;
-      inventory[resource] = (inventory[resource] ?? 0) + (store[resource] ?? 0);
-    }
-  }
-  return inventory;
+  return collectFullInventory(snapshot);
 }
 
 /**

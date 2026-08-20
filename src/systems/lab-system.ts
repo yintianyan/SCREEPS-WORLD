@@ -13,6 +13,7 @@ import { evaluateBoostRequests, decideWarReactionTarget, DEFAULT_BOOST_POLICY } 
 import { getNextExecutableStep, planReactionChain, selectReactionTrio, LAB_REACTION_AMOUNT } from "../domain/industry/reactions";
 import { globalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
+import { collectFullInventory } from "../domain/industry/inventory";
 
 // ─── Boost/装料常量（引擎数值：boostCreep 每部件 30 矿物 + 20 能量）────
 
@@ -50,38 +51,14 @@ function getIndustryMemory(roomName: string): IndustryMemory {
 
 // ─── 库存收集 ───────────────────────────────────────────────
 
-/** 收集房间中所有化合物库存（storage + terminal + labs）。 */
+/**
+ * 收集房间中所有非 energy 资源的完整库存视图。
+ * 统一库存视图（阶段 0 改造）：storage + terminal + labs + factory。
+ * 旧实现遗漏 factory 在制 stock — commodity 生产链的原料/产物不在口径内，
+ * 反应链规划时 factory 中的化合物被忽略，可能重复规划已有库存的反应。
+ */
 function collectCompoundInventory(snapshot: RoomSnapshot): Record<string, number> {
-  const inventory: Record<string, number> = {};
-
-  // Storage
-  if (snapshot.storage) {
-    const store = snapshot.storage.store;
-    for (const resource of Object.keys(store) as ResourceConstant[]) {
-      if (resource === RESOURCE_ENERGY) continue;
-      inventory[resource] = (inventory[resource] ?? 0) + store[resource]!;
-    }
-  }
-
-  // Terminal
-  if (snapshot.terminal) {
-    const store = snapshot.terminal.store;
-    for (const resource of Object.keys(store) as ResourceConstant[]) {
-      if (resource === RESOURCE_ENERGY) continue;
-      inventory[resource] = (inventory[resource] ?? 0) + store[resource]!;
-    }
-  }
-
-  // Labs（正在反应中的也算库存）
-  for (const lab of snapshot.labs) {
-    const store = lab.store;
-    for (const resource of Object.keys(store) as ResourceConstant[]) {
-      if (resource === RESOURCE_ENERGY) continue;
-      inventory[resource] = (inventory[resource] ?? 0) + store[resource]!;
-    }
-  }
-
-  return inventory;
+  return collectFullInventory(snapshot);
 }
 
 // ─── Lab 分配 ───────────────────────────────────────────────
