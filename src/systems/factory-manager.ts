@@ -27,7 +27,7 @@ import {
   type StockView,
 } from "../domain/industry/commodity";
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
-import { globalCache } from "../kernel/global-cache";
+import { globalCache, publishProcurementDemands } from "../kernel/global-cache";
 import type { ProcurementDemand } from "../kernel/global-cache";
 import { collectFullInventory } from "../domain/industry/inventory";
 import { expandCommodityDemands } from "../domain/industry/procurement";
@@ -124,10 +124,9 @@ function tryProduceCommodity(snapshot: RoomSnapshot, factory: StructureFactory, 
       CONFIG.market.interval + 50,
     );
     if (demands.length > 0) {
-      if (!g.procurementDemands || g.procurementDemands.tick !== ctx.tick) {
-        g.procurementDemands = { tick: ctx.tick, byRoom: {} };
-      }
-      g.procurementDemands.byRoom[snapshot.roomName] = demands as ProcurementDemand[];
+      // 合并语义：与 lab-system 的同房需求并存，不再整表覆写
+      // （旧实现 P3 后跑覆盖 P1 已发布的 lab 基础矿需求，信号最坏丢失 ~200t）。
+      publishProcurementDemands(snapshot.roomName, demands as ProcurementDemand[], ctx.tick);
     }
   }
 

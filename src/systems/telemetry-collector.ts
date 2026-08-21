@@ -492,6 +492,11 @@ function updateStatsSummary(tick: number): void {
       }
     }
     stats.errorHotspot = hotspot;
+  } else if ((g.telemetry?.errors ?? 0) === 0) {
+    // 审计修复：boot 后零错误时回写空串 —— 旧实现保留上一 boot 的陈旧
+    // hotspot，误导线上诊断（本次事故实证：terminal-manager 陈旧值残留）。
+    // 本 tick 仍有错误但 counts 为空的理论态不清理（粘滞语义，测试契约）。
+    stats.errorHotspot = "";
   }
 }
 

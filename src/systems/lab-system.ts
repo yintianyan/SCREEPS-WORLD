@@ -12,7 +12,7 @@ import { BOOST_EFFECTS, BOOST_EFFECT_PART } from "../domain/industry/types";
 import { evaluateBoostRequests, decideWarReactionTarget, DEFAULT_BOOST_POLICY } from "../domain/industry/boost";
 import { computeBoostSurplus } from "../domain/industry/boost-stockpile";
 import { getNextExecutableStep, planReactionChain, selectReactionTrios, LAB_REACTION_AMOUNT } from "../domain/industry/reactions";
-import { globalCache } from "../kernel/global-cache";
+import { globalCache, publishProcurementDemands } from "../kernel/global-cache";
 import { CONFIG } from "../config";
 import { collectFullInventory } from "../domain/industry/inventory";
 import { expandReactionDemands } from "../domain/industry/procurement";
@@ -274,11 +274,7 @@ export const labSystem: System = {
             CONFIG.market.interval + 50,
           );
           if (demands.length > 0) {
-            const g = globalCache();
-            if (!g.procurementDemands || g.procurementDemands.tick !== ctx.tick) {
-              g.procurementDemands = { tick: ctx.tick, byRoom: {} };
-            }
-            g.procurementDemands.byRoom[snapshot.roomName] = demands as ProcurementDemand[];
+            publishProcurementDemands(snapshot.roomName, demands as ProcurementDemand[], ctx.tick);
           }
         }
         continue;
@@ -387,11 +383,7 @@ export const labSystem: System = {
           CONFIG.market.interval + 50,
         );
         if (demands.length > 0) {
-          const g = globalCache();
-          if (!g.procurementDemands || g.procurementDemands.tick !== ctx.tick) {
-            g.procurementDemands = { tick: ctx.tick, byRoom: {} };
-          }
-          g.procurementDemands.byRoom[snapshot.roomName] = demands as ProcurementDemand[];
+          publishProcurementDemands(snapshot.roomName, demands as ProcurementDemand[], ctx.tick);
         }
       }
 

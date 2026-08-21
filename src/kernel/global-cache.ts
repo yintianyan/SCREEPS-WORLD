@@ -130,10 +130,10 @@ export interface GlobalCache {
    * Game.creeps（4 系统 × O(creeps) → 1 次遍历 O(creeps)）。
    * heap 存储 — global reset 丢失可接受（next tick 重建）。 */
   squadIndex?: SquadIndexEntry[];
-  /** 阶段 1 采购需求表（lab-system / factory-manager 发布，terminal-manager 消费）。
-   * 消费方发布结构化需求 → terminal-manager 汇总后按 priority 排序，在 deal 窗口内
-   * 按 priority 竞争（替代旧 tryBuyDeficit 的硬编码 MINERAL_RESERVE_TARGET）。
-   * heap 存储 — global reset 丢失可接受（下 tick 重建）。无 schema 变更。 */
+  /** 阶段 1 采购需求表（publishProcurementDemands 是唯一写入口）。
+   * 信道契约（审计修复）：条目持久存在直到各自 deadline —— 旧实现的 tick 守卫
+   * 使整表单 tick 存活，生产者/消费者相位错开时需求静默丢失。
+   * heap 存储 — global reset 丢失可接受（生产者按自身 cadence 重发）。无 schema 变更。 */
   procurementDemands?: { tick: number; byRoom: Record<string, ProcurementDemand[]> };
   /** factory commodity 目标缓存（factory-manager 写，distributor 的
    * stockFactoryComponents 读 — 补料锚点）。heap 存储，可丢。 */
@@ -172,6 +172,29 @@ export interface ProcurementDemand {
   deadline: number;
   /** 来源标记（诊断用，如 "lab-reaction" / "factory-commodity" / "boost"）。 */
   reason: string;
+}
+/**
+ * 发布房间采购需求 — 全表唯一写入口（多生产者合并语义）。
+ *
+ * 历史：lab-system（两处）与 factory-manager 曾各自整表覆写 byRoom[room]，
+ * 且 tick 守卫使容器单 tick 存活 —— 后写者覆盖先写者、跨 tick 需求静默蒸发，
+ * 终端 200t 相位几乎永远看不到完整需求（lab 基础矿买入通道长期半死）。
+ * 合并规则：同资源新发布覆盖旧条目；其他资源条目保留；写入时顺手丢弃已过期项。
+ */
+export function publishProcurementDemands(
+  roomName: string,
+  demands: readonly ProcurementDemand[],
+  tick: number,
+): void {
+  const g = globalCache();
+  if (!g.procurementDemands) g.procurementDemands = { tick, byRoom: {} };
+  g.procurementDemands.tick = tick;
+  const merged = new Map<string, ProcurementDemand>();
+  for (const d of g.procurementDemands.byRoom[roomName] ?? []) {
+    if (d.deadline > tick) merged.set(d.resource, d);
+  }
+  for (const d of demands) merged.set(d.resource, { ...d });
+  g.procurementDemands.byRoom[roomName] = Array.from(merged.values());
 }
 
 /** 市场行情快照 — 单种资源在采集时刻的最低卖价与最高买价。 */
