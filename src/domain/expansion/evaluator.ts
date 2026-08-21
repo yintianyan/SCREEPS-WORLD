@@ -32,6 +32,11 @@ export interface ExpansionInput {
   tick: number;
   /** 目标黑名单：房名 → 冷却到期 tick。 */
   blacklist?: Readonly<Record<string, number>>;
+  /** 宿敌邻接集合：与未过期 warBlacklist 目标相邻的房名（调用方经
+   * Game.map.describeExits 预计算）。命中即排除 —— 新生 RCL1 殖民地无塔无
+   * 防御纵深，宿敌一个纯 WORK 单位即可 attackController 打穿 TTD 驱逐拓荒
+   * 编队（W38S59 事故实证：邻接黑名单宿敌 W38S58 的候选被占后失守）。 */
+  hostileAdj?: ReadonlySet<string>;
   /** 情报陈旧上限（超过则不可信，不入选）。默认 10000。 */
   maxIntelAge?: number;
   /** R7b：目标最低 source 数（扩张节奏自适应消费 — stolen 频发时收紧到 2）。默认 1。 */
@@ -42,7 +47,7 @@ export interface ExpansionInput {
 
 /** 从各 sponsor 房的邻居情报中评选扩张目标；返回最优候选，无可行目标（或 GCL 无余量）返回 undefined。 */
 export function selectExpansionTarget(input: ExpansionInput): ExpansionCandidate | undefined {
-  const { ownedRoomNames, gclLevel, intelBySponsor, dangerUntilBySponsor, tick, blacklist, maxIntelAge = 10000, minSources = 1, myUsername } = input;
+  const { ownedRoomNames, gclLevel, intelBySponsor, dangerUntilBySponsor, tick, blacklist, hostileAdj, maxIntelAge = 10000, minSources = 1, myUsername } = input;
 
   // GCL 余量门禁：可占房数 = GCL 等级。
   if (gclLevel <= ownedRoomNames.length) return undefined;
@@ -83,6 +88,8 @@ export function selectExpansionTarget(input: ExpansionInput): ExpansionCandidate
       // 黑名单冷却。
       const retryAt = blacklist?.[roomName];
       if (retryAt !== undefined && tick < retryAt) continue;
+      // 宿敌邻接门禁（审计修复）：集合由调用方经 describeExits 预计算。
+      if (hostileAdj?.has(roomName)) continue;
 
       // 评分：source 数主导 + 新鲜度修正（满分 100，线性衰减到 0）。
       const freshness = Math.max(0, 100 - (age / maxIntelAge) * 100);

@@ -17,6 +17,12 @@ import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
 import { selectExpansionTarget } from "../domain/expansion/evaluator";
 import {
+  decideBootstrapRooms,
+  BOOTSTRAP_WORKER_BODY,
+  BOOTSTRAP_DEFENDER_BODY,
+} from "../domain/expansion/bootstrap";
+import { roomLinearDistance } from "../domain/remote/targeting";
+import {
   appendOutcome,
   evaluateExpansionRhythm,
   type ExpansionOutcomeKind,
@@ -44,6 +50,11 @@ export const expansionManagerSystem: System = {
   interval: CONFIG.expansion.interval,
   run(ctx: TickContext): void {
     if (!Memory.kernel) Memory.kernel = {};
+    // 自举车道（审计修复，W38S59 事故实证）：owned 无 spawn 的房不在扩张状态机
+    // 覆盖内 —— 任务 success/aborted 即离场，本地 spawnQueue 无 spawn 永不可孵化，
+    // 建造无 builder 可用，唯一活路是姊妹房代孵 bootstrap 组。生存级，独立于
+    // 姿态与扩张任务；CPU 极轻（仅快照字段 + 已有房间的免费查询）。
+    runBootstrapLane(ctx);
     const expansion = Memory.kernel.expansion;
 
     if (!expansion) {
@@ -205,6 +216,103 @@ function pruneBlacklist(tick: number): void {
 
 // ─── idle → claiming ────────────────────────────────────────
 
+// ─── 自举车道：owned 无 spawn 房的跨房重建（W38S59 事故驱动）───
+
+function runBootstrapLane(ctx: TickContext): void {
+  const kernel = Memory.kernel!;
+  kernel.bootstrap ??= {};
+
+  const rooms: { room: string; ttd?: number; hostileCount: number; sponsor?: { room: string; capacityAvailable: number } }[] = [];
+  const sponsorPool: { room: string; capacityAvailable: number }[] = [];
+
+  for (const snapshot of ctx.snapshots()) {
+    const room = Game.rooms[snapshot.roomName] as Room | undefined;
+    if (!room || typeof room.find !== "function") continue;
+    if (room.find(FIND_MY_SPAWNS).length > 0) {
+      // 已恢复 —— 清台账（自举完成）。
+      delete kernel.bootstrap[snapshot.roomName];
+      if (snapshot.rcl >= CONFIG.expansion.sponsorMinRcl && Memory.rooms[snapshot.roomName]?.colonyState === "normal") {
+        sponsorPool.push({ room: snapshot.roomName, capacityAvailable: snapshot.energyCapacityAvailable });
+      }
+      continue;
+    }
+    if (snapshot.controller?.my !== true) continue;
+    rooms.push({
+      room: snapshot.roomName,
+      ttd: room.controller?.ticksToDowngrade,
+      hostileCount: snapshot.threatCreeps.length,
+    });
+  }
+  if (rooms.length === 0) return;
+
+  // 最近 sponsor（线性距）：系统层选定后交纯函数裁决冷却/弃房/容量。
+  for (const r of rooms) {
+    let best: { room: string; capacityAvailable: number } | undefined;
+    let bestD = Infinity;
+    for (const s of sponsorPool) {
+      if (s.room === r.room) continue;
+      const d = roomLinearDistance(s.room, r.room);
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    if (best) r.sponsor = { room: best.room, capacityAvailable: best.capacityAvailable };
+  }
+
+  const { decisions, ledgerUpdates } = decideBootstrapRooms({
+    tick: ctx.tick,
+    rooms,
+    ledger: kernel.bootstrap,
+  });
+  for (const [room, upd] of Object.entries(ledgerUpdates)) kernel.bootstrap[room] = upd;
+
+  for (const d of decisions) {
+    if (d.action === "abandon") {
+      // 弃房止损：TTD 危急 + 敌情 —— 清空本地不可孵化队列，控制权自然移交
+      // （G11 弃房取舍同口径；rescue 单位由后续回收通道归航）。
+      if (Memory.rooms[d.room]) Memory.rooms[d.room]!.spawnQueue = [];
+      console.log(`[${ctx.tick}] bootstrap: abandon ${d.room} — ${d.reason}`);
+      recordEvent(EventKind.ExpansionOutcome, d.room, [1, 4, 0]);
+      continue;
+    }
+    if (d.action !== "dispatch" || !d.sponsor) continue;
+    const queue = Memory.rooms[d.sponsor]?.spawnQueue;
+    if (!queue) continue;
+    const room = d.room;
+    const hostile = rooms.find((r) => r.room === room)?.hostileCount ?? 0;
+    const wave = kernel.bootstrap[room]?.waves ?? 0;
+    const base = `bootstrap.${room}.${wave}`;
+    submitRequest(queue, {
+      key: `${base}.worker`,
+      role: "worker",
+      home: room,
+      priority: 1,
+      body: [...BOOTSTRAP_WORKER_BODY],
+      memory: { role: "worker", home: room, mode: "acquire" },
+      createdAt: ctx.tick,
+      expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
+      retries: 0,
+    });
+    if (hostile > 0) {
+      submitRequest(queue, {
+        key: `${base}.defender`,
+        role: "defender",
+        home: room,
+        priority: 1,
+        body: [...BOOTSTRAP_DEFENDER_BODY],
+        memory: { role: "defender", home: room, mode: "acquire" },
+        createdAt: ctx.tick,
+        expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
+        retries: 0,
+      });
+    }
+    console.log(
+      `[${ctx.tick}] bootstrap: dispatch ${room} wave${wave} via ${d.sponsor} (hostile=${hostile})`,
+    );
+  }
+}
+
 function tryStartExpansion(ctx: TickContext): void {
   pruneBlacklist(ctx.tick);
 
@@ -237,6 +345,15 @@ function tryStartExpansion(ctx: TickContext): void {
   }
   if (Object.keys(intelBySponsor).length === 0) return;
 
+  // 宿敌邻接集合：与未过期 warBlacklist 目标相邻的候选一律排除
+  // （新生 RCL1 殖民地扛不住宿敌 attackController 降级打击 —— W38S59 实证）。
+  const hostileAdj = new Set<string>();
+  for (const [blRoom, until] of Object.entries(Memory.kernel?.warBlacklist ?? {})) {
+    if (until <= ctx.tick) continue;
+    const exits = Game.map.describeExits(blRoom);
+    for (const dir in exits) hostileAdj.add(exits[dir as keyof typeof exits]!);
+  }
+
   const target = selectExpansionTarget({
     ownedRoomNames,
     gclLevel,
@@ -244,6 +361,7 @@ function tryStartExpansion(ctx: TickContext): void {
     dangerUntilBySponsor,
     tick: ctx.tick,
     blacklist: Memory.kernel?.expansionBlacklist,
+    hostileAdj,
     myUsername,
     // R7b：节奏台账驱动的目标门禁（stolen 频发 → 只选 ≥2 source 的高价值房）。
     minSources: Memory.kernel?.expansionRhythm?.minSources ?? CONFIG.expansion.rhythm.minSourcesBase,

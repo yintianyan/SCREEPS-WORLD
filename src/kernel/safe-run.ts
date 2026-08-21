@@ -47,6 +47,7 @@ function handleError(label: string, error: unknown, critical: boolean): void {
     console.log(`[${Game.time}] ${label}: ${formatError(error)}`);
   }
   recordError();
+  recordLastErrorSnapshot(label, error);
 
   // 跟踪连续错误并为非关键插件设置冷却。
   if (!critical) {
@@ -117,6 +118,25 @@ function recordError(): void {
   const g = globalCache();
   if (!g.telemetry || g.telemetry.tick !== Game.time) return;
   g.telemetry.errors++;
+}
+
+/**
+ * 最近一次系统级错误的现场快照（线上运维通道 —— 官服无控制台历史回读 API，
+ * 熔断限流日志转瞬即逝；落 Memory 让外部采集器可拉取真实异常文本）。
+ * 有界：单条覆盖式写入，不累积。 */
+function recordLastErrorSnapshot(label: string, error: unknown): void {
+  try {
+    const mem = Memory as { kernel?: { stats?: Record<string, unknown> } };
+    if (!mem.kernel) mem.kernel = {};
+    if (!mem.kernel.stats) mem.kernel.stats = {} as never;
+    (mem.kernel.stats as Record<string, unknown>).lastError = {
+      label,
+      msg: formatError(error).split("\n")[0]?.slice(0, 220) ?? "",
+      tick: Game.time,
+    };
+  } catch {
+    // 诊断写入自身的失败绝不放大故障
+  }
 }
 
 function recordCpu(label: string, cost: number): void {

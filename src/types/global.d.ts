@@ -282,6 +282,8 @@ declare global {
       errorHotspot: string;
       /** 最频繁的 skip 原因。 */
       skipHotspot: string;
+      /** 最近一次系统级错误现场（单条覆盖式，运维采集通道 —— 官服无控制台历史回读）。 */
+      lastError?: { label: string; msg: string; tick: number };
       /** 每房 CPU 消耗快照（最近一次采样）：roomName → CPU。
        * 来自 kernel.runCreeps 按 memory.home 归集的 globalCache.cpuByHome。
        * 供 empire-strategy / capacity 评估每房真实 CPU 成本。 */
@@ -449,6 +451,11 @@ declare global {
     };
     /** 扩张失败暂停截止（v31+）：此 tick 前不开新扩张行动（连续失败止损）。 */
     expansionPausedUntil?: number;
+    /**
+     * 新生殖民地自举台账（expansion-manager 自举车道写，运行时字段无 schema
+     * 变更）：owned 无 spawn 的房 → 冷却/波次/弃房标记。房间建成 spawn 后清除。
+     */
+    bootstrap?: Record<string, { until: number; waves: number; abandoned?: number }>;
     /**
      * 侦察任务（v29+，prospect-manager 写入）：同一时刻至多一个。
      * 姿态 expansionAllowed 时主动为扩张候选房获取视野（决策就绪情报）。
