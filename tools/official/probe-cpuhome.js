@@ -1,1 +1,0 @@
-(function(){var g=globalThis;var o={t:Game.time,bk:Game.cpu.bucket,hasCpuByHome:!!g.cpuByHome,size:g.cpuByHome?g.cpuByHome.size:0,entries:g.cpuByHome?[...g.cpuByHome.entries()].slice(0,10):null};Memory.__diag=JSON.stringify(o);})();
