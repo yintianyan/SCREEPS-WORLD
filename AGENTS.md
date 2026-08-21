@@ -206,6 +206,23 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   shard — 超范围（单 shard 帝国目标）；G11 远矿房防御投资 — 维持 R11
   弃房止损取舍；G12 siege 精细围攻响应 — 依赖看门狗全局降档，无房间级
   配给（低优先，出现实证再补）。
+- 工业链缺口修复（2026-08-21）：① Battery 解压回能 — factory-manager
+  新增 tryDecompressBattery（storage 能量低于 energyBuyFloor 时
+  factory.produce(RESOURCE_ENERGY) 解压 battery → 50 energy/tick），
+  distributor 新增 stockFactoryBattery（crisis 时搬 battery 到 factory
+  供解压）+ reclaimFactoryOutput crisis 能量回收（factory 解压产出能量
+  搬到 storage）。纯函数 shouldDecompressBattery 见
+  [battery-decompression.ts](src/domain/economy/battery-decompression.ts)。
+  ② Boost 化合物分级库存上限 — lab-system 的 surplusCompounds 卖出信号
+  从统一 war.boostStockpile(600) 改为分级：war 编队化合物（XUH2O/XLHO2）
+  维持 600 战略储备，日常 boost 化合物（XGH2O/XUHO2/XLH2O 等）用
+  boost.dailyStockpile(300) 独立上限。纯函数 computeBoostSurplus 见
+  [boost-stockpile.ts](src/domain/industry/boost-stockpile.ts)。
+  ③ Deposit 远采链 — **维持不做，登记取舍**：deposit 资源（metal/silicon/
+  biomass/mist）在 highway 房间 FIND_DEPOSITS，需完整远采编队（类似远矿
+  但更远），当前帝国规模（2-3 房）下高阶 commodity 收益不足以支撑编队
+  CPU/人口成本。触发条件：帝国进入 Grand Empire 阶段（>5 房）且 factory
+  level ≥ 1 时再评估。不为「未来可能用到」建立没有消费者的抽象。
 
 ## 高风险区域与硬约束摘要
 

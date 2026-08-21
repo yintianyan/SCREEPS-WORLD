@@ -10,6 +10,7 @@ import type { RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import type { Compound, LabAssignment, LabDemandTable, LabLoadDemand, LabPlan, LabUnloadDemand, ReactionPlan } from "../domain/industry/types";
 import { BOOST_EFFECTS, BOOST_EFFECT_PART } from "../domain/industry/types";
 import { evaluateBoostRequests, decideWarReactionTarget, DEFAULT_BOOST_POLICY } from "../domain/industry/boost";
+import { computeBoostSurplus } from "../domain/industry/boost-stockpile";
 import { getNextExecutableStep, planReactionChain, selectReactionTrios, LAB_REACTION_AMOUNT } from "../domain/industry/reactions";
 import { globalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
@@ -394,22 +395,31 @@ export const labSystem: System = {
         }
       }
 
-      // ── 2.6 发布盈余化合物卖出信号（阶段 4 改造）──
-      // lab 产出的 boost 化合物在库存超过 boostStockpile 后可卖出变现。
+      // ── 2.6 发布盈余化合物卖出信号（阶段 4 改造 + 分级库存上限）──
+      // lab 产出的 boost 化合物在库存超过各自上限后可卖出变现。
       // 旧实现只卖 homeMineral 和 battery — T3 化合物（XGH2O/XUH2O 等）永远囤着不卖，
       // 库存膨胀后 lab output 无处回收 → 反应链停摆。此处让盈余信号从生产方传到卖出方。
+      //
+      // 分级库存上限（审计缺口修复）：
+      // - war 编队化合物（XUH2O/XLHO2）→ war.boostStockpile(600) 战略储备
+      // - 日常 boost 化合物（XGH2O/XUHO2/XLH2O 等）→ boost.dailyStockpile(300)
+      //   日常消费低频，300 够 2 个 creep 全强化，超出即卖防止 lab output 积压。
       {
         const g = globalCache();
         if (!g.surplusCompounds || g.surplusCompounds.tick !== ctx.tick) {
           g.surplusCompounds = { tick: ctx.tick, items: {} };
         }
-        // 检查所有 boost 化合物库存是否超过 boostStockpile。
+        // 检查所有 boost 化合物库存是否超过各自分级上限。
         for (const [res, qty] of Object.entries(inventory)) {
           if (res === RESOURCE_ENERGY) continue;
           // 只对 boost 化合物（T1-T3 tier）发卖出信号 — 不卖基础矿（走 homeMineral 通道）。
           const boostEffect = BOOST_EFFECTS[res as Compound];
           if (!boostEffect) continue;
-          const surplus = qty - CONFIG.war.boostStockpile;
+          const surplus = computeBoostSurplus(
+            res, qty,
+            CONFIG.war.boostStockpile,
+            CONFIG.boost.dailyStockpile,
+          );
           if (surplus > 0) {
             g.surplusCompounds.items[res] = (g.surplusCompounds.items[res] ?? 0) + surplus;
           }

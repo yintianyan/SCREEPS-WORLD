@@ -47,6 +47,7 @@ export {
   supplyLabs,
   stockTerminalEnergy,
   stockFactoryEnergy,
+  stockFactoryBattery,
   stockFactoryComponents,
   withdrawTerminalEnergy,
   reclaimFactoryOutput,

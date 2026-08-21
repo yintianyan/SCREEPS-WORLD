@@ -14,6 +14,7 @@ import {
   distributorFillTarget,
   reclaimFactoryOutput,
   salvageStorageToTerminal,
+  stockFactoryBattery,
   stockFactoryComponents,
   stockFactoryEnergy,
   stockNuker,
@@ -100,7 +101,12 @@ const policy: RolePolicy = {
     // terminal 能量备货（storage 富余时）— 无 fillTarget 需求时的低优先级取能，保证市场运费储备不断供。
     stockTerminalEnergy(),
     // factory battery 回收（取料相）— 先于投料：factory 堵死时继续投料无意义。
+    // crisis 时此 action 也会回收 factory 内解压产出的能量到 storage。
     reclaimFactoryOutput(),
+    // factory battery 解压原料补给（crisis 时触发：storage 能量低于地板时
+    // 从 storage/terminal 搬 battery 到 factory 供解压回能）。先于压缩原料 —
+    // crisis 救助优先于满仓止损。
+    stockFactoryBattery(),
     // factory 压缩原料备货（仅 storage 满仓时触发）。
     stockFactoryEnergy(),
     // commodity 生产补料（审计缺口 6：按 factory-manager 目标补组件进 factory）。
@@ -124,7 +130,10 @@ const policy: RolePolicy = {
     // 携能状态下 supplyLabs 的取料相无法执行（背包已满），先卸给 terminal。
     stockTerminalEnergy(),
     // factory battery 回收（投放相）— 先于投料 deposit，避免携 battery 与投料互相顶占背包。
+    // crisis 时此 action 也会把 factory 内解压产出的能量 deposit 到 storage。
     reclaimFactoryOutput(),
+    // factory battery 解压原料补给（deposit 相，crisis 时触发）。
+    stockFactoryBattery(),
     // factory 压缩原料备货（deposit 相，仅满仓时触发）。
     stockFactoryEnergy(),
     // commodity 生产补料（deposit 相）。

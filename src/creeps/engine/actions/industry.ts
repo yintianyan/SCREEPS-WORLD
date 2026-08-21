@@ -425,6 +425,58 @@ export function stockFactoryEnergy(): ActionCandidate<FactoryStockTarget> {
   };
 }
 
+/** stockFactoryBattery 的 resolve 返回类型。 */
+type FactoryBatteryTarget =
+  | { dest: StructureFactory; phase: "deposit" }
+  | { source: StructureStorage | StructureTerminal; phase: "withdraw" };
+
+/** crisis 时 factory 内 battery 解压原料的目标量（够 5 批解压 = 250 能量缓冲）。 */
+const FACTORY_CRISIS_BATTERY_TARGET = 25;
+
+/**
+ * 为 factory 补给 battery 解压原料（storage/terminal → factory）。
+ * 仅在 storage 能量危机时触发 — battery 解压是 crisis 救助链，
+ * 正常水位下不搬 battery 进 factory（battery 在 terminal 待卖或 storage 保值）。
+ * 双相候选：空载取 storage/terminal、满载送 factory。
+ * 优先 storage（terminal 的 battery 可能挂单中）。
+ */
+export function stockFactoryBattery(): ActionCandidate<FactoryBatteryTarget> {
+  return {
+    name: "haul:stock-factory-battery",
+    resolve: (ac) => {
+      const factory = ac.snapshot.factory;
+      const storage = ac.snapshot.storage;
+      if (!factory || !storage) return undefined;
+      // 仅 crisis 时触发（与 tryDecompressBattery 的触发条件同口径）。
+      const storageEnergy = storage.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      if (storageEnergy >= CONFIG.market.storageEnergyFloor) return undefined;
+
+      const batteryInFactory = factory.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
+      if (batteryInFactory >= FACTORY_CRISIS_BATTERY_TARGET) return undefined;
+
+      // deposit 相：creep 携带 battery → 送 factory。
+      const carrying = ac.creep.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
+      if (carrying > 0) return { dest: factory, phase: "deposit" as const };
+
+      // withdraw 相：从 storage 或 terminal 取 battery。
+      const storageBattery = storage.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
+      if (storageBattery > 0) return { source: storage, phase: "withdraw" as const };
+      const terminalBattery = ac.snapshot.terminal?.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
+      if (terminalBattery > 0 && ac.snapshot.terminal) {
+        return { source: ac.snapshot.terminal, phase: "withdraw" as const };
+      }
+      return undefined;
+    },
+    execute: (ac, t) => {
+      if (t.phase === "deposit") {
+        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, RESOURCE_BATTERY));
+      } else {
+        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, RESOURCE_BATTERY));
+      }
+    },
+  };
+}
+
 /** reclaimFactoryOutput 的 resolve 返回类型。 */
 type FactoryReclaimTarget =
   | { dest: StructureStorage | StructureTerminal; resource: ResourceConstant; phase: "deposit" }
@@ -435,12 +487,15 @@ const FACTORY_RECLAIM_THRESHOLD = 100;
 
 /**
  * 回收 factory 的产出（factory → terminal/storage）。
- * 覆盖两类产出：① battery（满仓压缩产物）；② commodity（升级链产物如 circuit/wire/alloy）。
+ * 覆盖三类产出：① battery（满仓压缩产物）；② commodity（升级链产物如 circuit/wire/alloy）；
+ * ③ 解压能量（battery 解压回能链的产出 — storage 危机时 factory.produce(RESOURCE_ENERGY)
+ * 产出的能量需搬到 storage 供 spawn 使用）。
  * 背景：factory 总容量 50k，产出若无搬运出路，积满后投料 transfer 必返 ERR_FULL
  * 被静默忽略 → 生产链死锁。原实现只回收 battery — commodity 产出积压后 commodity 链
  * 死锁（factory-manager produce 永远 ERR_FULL）。
  * 攒批阈值触发减少往返；投放目标遵循 W7 教训：有市场时 terminal 优先（交易变现入口），
- * 无市场/满则落 storage。能量不回收（能量是 factory 运营原料，不是产出）。
+ * 无市场/满则落 storage。能量仅在 crisis 时回收（能量是 factory 运营原料，
+ * 非危机时回收会抽干 factory 的 commodity/battery 生产原料）。
  */
 export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
   return {
@@ -448,6 +503,28 @@ export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
     resolve: (ac) => {
       const factory = ac.snapshot.factory;
       if (!factory) return undefined;
+
+      // ── crisis 能量回收：storage 能量低于危机线时，factory 内的解压能量
+      // 优先搬到 storage（供 spawn 使用）。这是 battery 解压链的搬运出口 —
+      // 不搬出去则 factory 能量积满后 produce(RESOURCE_ENERGY) 必返 ERR_FULL，
+      // 解压链死锁。crisis 门槛低于 reclaim 阈值（50 energy 不够攒批就搬 —
+      // spawn 急需）。非 crisis 时跳过（能量是 factory 运营原料）。
+      const storageEnergy = ac.snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      const inCrisis = storageEnergy < CONFIG.market.storageEnergyFloor;
+      if (inCrisis) {
+        const factoryEnergy = factory.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+        if (factoryEnergy > 0) {
+          // deposit 相：creep 携带能量 → 送 storage（crisis 时 storage 优先于 terminal）。
+          const carrying = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+          if (carrying > 0 && ac.snapshot.storage) {
+            return { dest: ac.snapshot.storage, resource: RESOURCE_ENERGY, phase: "deposit" as const };
+          }
+          // withdraw 相：从 factory 取能量。
+          if (ac.creep.store.getFreeCapacity() > 0) {
+            return { source: factory, resource: RESOURCE_ENERGY, phase: "withdraw" as const };
+          }
+        }
+      }
 
       // 扫描 factory store 中所有非 energy 产出资源。
       const outputs: { res: ResourceConstant; qty: number }[] = [];

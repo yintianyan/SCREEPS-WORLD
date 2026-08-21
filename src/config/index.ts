@@ -536,6 +536,17 @@ export const CONFIG = {
     boostGraceTicks: 2500,
   },
 
+  /** boost 化合物分级库存管理（审计缺口：日常 boost 化合物无独立上限）。
+   * 与 war.boostStockpile 分离：war 编队化合物维持 600 战略储备，日常 boost
+   * 化合物（XGH2O/XUHO2/XLH2O 等）用独立的 dailyStockpile 上限，超出即卖出。 */
+  boost: {
+    /** 日常 boost 化合物库存上限（单位）。
+     * 够 2 个 creep 全强化（5 WORK × 30 = 150/creep，2 creep = 300）—
+     * 单房日常 boost 消费低频（creep 存活 1500 tick，换代才需新 boost），
+     * 300 够一个换代周期 + 余量。超出部分卖出变现，防止 lab output 积压死锁。 */
+    dailyStockpile: 300,
+  },
+
   debug: {
     /** 在 creep 头顶绘制状态指示灯（work=绿 / acquire=黄 / idle=红 / flee=橙）。
      * 纯诊断功能，默认关闭；开启时每 creep 每 tick 约 0.001-0.005 CPU。 */

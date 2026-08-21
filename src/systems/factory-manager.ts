@@ -1,18 +1,25 @@
 /**
  * Factory Manager — P3 系统，RCL7-8 终局结构的最小运营层。
  * Factory：① battery 压缩（storage 满仓时把过剩能量转为资产 — 止损语义，
- * 正常水位不压缩：1/6 折损划不来）；② commodity 升级链（审计缺口 6）：
+ * 正常水位不压缩：1/6 折损划不来）；② battery 解压回能（storage 能量危机时
+ * 逆向生产 battery → energy — 最后救助通道，比市场买入优先：不消耗 credits、
+ * 不付运费、无市场依赖）；③ commodity 升级链（审计缺口 6）：
  * 配方读引擎 COMMODITIES（不硬编码），梯度高者优先，原料 = factory +
  * storage 合计，distributor 按 missingComponents 补料进 factory。
  * PowerSpawn：processPower（1 power + 50 energy/次）积累 GPL — 调度门禁见
  * domain/economy/power-processing（能量地板 + war 姿态，投资让位生存）。
  * 原料能量由 distributor 的 stockFactoryEnergy/stockFactoryComponents 搬运。
  *
+ * 执行顺序（每房每 interval tick）：powerSpawn → battery 解压（危机优先）→
+ * commodity 升级 → battery 压缩（满仓止损）。解压与压缩水位区间不重叠
+ * （危机 5k vs 满仓 900k+），天然互斥。
+ *
  * commodity 目标缓存在 globalCache（可丢 — global reset 后重选，无 Memory
  * schema 依赖；目标本身每 interval 重评，粘性只避免同 tick 抖动）。
  */
 import { CONFIG } from "../config";
 import { shouldProcessPower } from "../domain/economy/power-processing";
+import { shouldDecompressBattery } from "../domain/economy/battery-decompression";
 import {
   missingComponents,
   selectCommodityTarget,
@@ -51,6 +58,12 @@ export const factoryManagerSystem: System = {
       // 测试/私服环境的 factory mock 可能无 produce — 安全跳过。
       if (typeof factory.produce !== "function") continue;
       if (factory.cooldown > 0) continue;
+
+      // ── battery 解压回能（危机优先于一切 factory 生产）──
+      // storage 能量低于危机线时，把 factory 内 battery 解压为能量。
+      // 比市场买入更优先：不消耗 credits、不付运费、无市场依赖。
+      // 解压产出能量在 factory 内，由 distributor 搬到 storage 供 spawn 使用。
+      if (tryDecompressBattery(snapshot, factory)) continue;
 
       // ── commodity 升级链（审计缺口 6）──
       // battery 之外的常规生产：非满仓也产（commodity 是正收益升级）。
@@ -148,4 +161,28 @@ function toStockView(store: Record<string, number>): StockView {
     if (typeof v === "number" && v > 0) view[k] = v;
   }
   return view;
+}
+
+/**
+ * battery 解压回能：storage 能量危机时，把 factory 内的 battery 逆向生产为能量。
+ *
+ * 官方配方（COMMODITIES[RESOURCE_ENERGY]）：5 battery → 50 energy，cooldown 10。
+ * 产出能量留在 factory.store 内 — distributor 需将其搬到 storage 供 spawn 使用。
+ * 与 reclaimFactoryOutput 配合：distributor 在 crisis 时优先搬 factory 能量到 storage。
+ *
+ * 返回 true = 已执行 produce（消耗 factory 本 tick 的 produce 窗口，跳过 commodity/压缩）。
+ * 返回 false = 条件不满足，继续后续 commodity/压缩链。
+ */
+function tryDecompressBattery(snapshot: RoomSnapshot, factory: StructureFactory): boolean {
+  const batteryInFactory = factory.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
+  const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY);
+  if (!shouldDecompressBattery({
+    storageEnergy,
+    batteryInFactory,
+    factoryCooldown: factory.cooldown,
+    energyCrisisFloor: CONFIG.energy.energyBuyFloor,
+  })) return false;
+
+  factory.produce(RESOURCE_ENERGY);
+  return true;
 }
