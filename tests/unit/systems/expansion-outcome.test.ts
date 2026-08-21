@@ -56,6 +56,61 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
     expect(ev?.d).toEqual([0, 1, (globalThis as any).Game.time - 900]); // [claim, stolen, duration]
   });
 
+  it("pioneering 无视野（编队全灭失明）→ outcome=lost 而非 stolen（归因二分回归）", () => {
+    (globalThis as any).Memory = {
+      schemaVersion: 30,
+      creeps: {},
+      rooms: { W7N4: { spawnQueue: [], buildQueue: [] } },
+      kernel: {
+        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
+        expansion: { state: "pioneering", target: "W6N4", sponsor: "W7N4", startedAt: 1100 },
+      },
+    };
+    syncSquadIndex();
+    // 目标房不在 Game.rooms —— 我方在该房已无任何 creep 且无观察者支援。
+    (globalThis as any).Game.rooms = {
+      W7N4: { controller: { my: true, owner: { username: "Me" } } },
+    };
+    syncSquadIndex();
+    (globalThis as any).Game.cpu = { bucket: 10000 };
+    (globalThis as any).Game.creeps = {};
+
+    expansionManagerSystem.run(makeContext());
+
+    expect((globalThis as any).Memory.kernel.expansion).toBeUndefined();
+    const ev = expansionEvents()[0];
+    expect(ev?.r).toBe("W6N4");
+    // [pioneer=1, lost=3, duration] —— 修复前此处误记 [1, 1, ...]（stolen）
+    expect(ev?.d).toEqual([1, 3, (globalThis as any).Game.time - 1100]);
+  });
+
+  it("pioneering 有视野且 controller 易手 → 维持 outcome=stolen", () => {
+    (globalThis as any).Memory = {
+      schemaVersion: 30,
+      creeps: {},
+      rooms: { W7N4: { spawnQueue: [], buildQueue: [] } },
+      kernel: {
+        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
+        expansion: { state: "pioneering", target: "W6N4", sponsor: "W7N4", startedAt: 1100 },
+      },
+    };
+    syncSquadIndex();
+    (globalThis as any).Game.rooms = {
+      W7N4: { controller: { my: true, owner: { username: "Me" } } },
+      // 有视野（如观察者支援）且 controller 非我方 —— 确证被抢
+      W6N4: { controller: { owner: { username: "Rival" }, reservation: { username: "Rival" } } },
+    };
+    syncSquadIndex();
+    (globalThis as any).Game.cpu = { bucket: 10000 };
+    (globalThis as any).Game.creeps = {};
+
+    expansionManagerSystem.run(makeContext());
+
+    expect((globalThis as any).Memory.kernel.expansion).toBeUndefined();
+    const ev = expansionEvents()[0];
+    expect(ev?.d).toEqual([1, 1, (globalThis as any).Game.time - 1100]); // [pioneer, stolen, duration]
+  });
+
   it("pioneering spawn 上线 → phase=pioneer outcome=success", () => {
     (globalThis as any).Memory = {
       schemaVersion: 30,

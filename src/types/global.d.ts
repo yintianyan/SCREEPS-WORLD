@@ -388,10 +388,18 @@ declare global {
       /** 波次相位（R4）：build 集结（满编才推进）/ advance 推进（整波进攻），按存活数迟滞切换。 */
       phase?: "build" | "advance";
       /**
-       * 累计提交的 attacker 孵化请求数（R4 止损账本，每 key 只计一次）；
+       * 累计提交的 attacker 孵化请求数（R4 止损账本）；
        * 超 squadSize × CONFIG.war.casualtyMultiplier 判消耗战失败。
+       * 计数口径：首次提交 + 前任已实际孵化的同键替换计入；TTL 过期/重试
+       * 烧穿后的纯 churn 重提交不计数（否则能量紧张期止损被虚增基数误触）。
        */
       spawned?: number;
+      /**
+       * 槽位 key → 前任是否已实际孵化（含孵化中）。spawned 去重与替换判定
+       * 的依据；随 plan 生命周期存续，收摊时随 plan 一并清除。运行时字段，
+       * 无 schema 变更（遵循 R12 运行时字段先例）。
+       */
+      spawnedKeys?: Record<string, boolean>;
     };
     /**
      * 战争失败目标黑名单（v27+，war-planner 写入）：核验结论 failure/unknown 的

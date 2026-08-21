@@ -95,6 +95,7 @@ export const warPlannerSystem: System = {
         // 同目标续期：保留相位与止损账本（spawned 是消耗战判定的依据，不能重置）。
         phase: keep && existing!.phase ? existing!.phase : "build",
         spawned: keep ? (existing!.spawned ?? 0) : 0,
+        spawnedKeys: keep ? existing!.spawnedKeys : undefined,
       };
     }
 
@@ -125,6 +126,7 @@ export const warPlannerSystem: System = {
       else continue;
       if (e.boosted) boostedLive++;
     }
+    markSquadMaterialized(plan, squad, sponsor);
     const pendingAttackers = countPending(queue, "attacker", sponsor);
     const pendingHealers = countPending(queue, "healer", sponsor);
     const sponsorSnapshot = ctx.getSnapshot(sponsor);
@@ -215,7 +217,7 @@ export const warPlannerSystem: System = {
  * 编队补位请求（attacker/healer 同模式）：稳定 key 幂等提交，
  * spawned 账本在提交新 key 时 +1（消耗战判定依据）。
  */
-function submitSquadRequest(
+export function submitSquadRequest(
   queue: NonNullable<RoomMemory["spawnQueue"]>,
   plan: NonNullable<KernelMemory["warPlan"]>,
   sponsor: string,
@@ -226,7 +228,20 @@ function submitSquadRequest(
 ): void {
   const key = spawnKey(role, sponsor, index, plan.targetRoom);
   if (hasRequest(queue, key)) return;
-  plan.spawned = (plan.spawned ?? 0) + 1;
+  // 计数口径（修复 churn 虚增止损基数）：
+  //   - 首次见到的 key → 计入（初始编制承诺）；
+  //   - 前任已实际孵化（markSquadMaterialized 置位）的同键重提交 → 计入（战损替换）；
+  //   - 其余（前任从未孵化的 TTL 过期/重试烧穿重提交）→ 不计入 —— 能量紧张时
+  //     请求反复 churn 曾把没孵化出的请求也计入基数，提前误触 attrition 收摊。
+  const materialized = plan.spawnedKeys?.[key] === true;
+  const firstSubmit = plan.spawnedKeys?.[key] === undefined;
+  if (firstSubmit || materialized) {
+    plan.spawned = (plan.spawned ?? 0) + 1;
+  }
+  // 计数后一律归位：前任的兑现已消费，本任必须重新物化才能触发下一次替换计数
+  // （否则「兑现→替换请求又 churn→再重提交」会沿 true 旗标连续误计）。
+  if (!plan.spawnedKeys) plan.spawnedKeys = {};
+  plan.spawnedKeys[key] = false;
   const body = selectBody(role, cap);
   submitRequest(queue, {
     key,
@@ -245,6 +260,27 @@ function submitSquadRequest(
     expiresAt: tick + CONFIG.spawn.requestTtl,
     retries: 0,
   });
+}
+
+/**
+ * 标记编队槽位的「已实际孵化」状态（Game.creeps 含 spawning 中的 creep，故
+ * 孵化一开始即算兑现）。供 submitSquadRequest 区分战损替换（计数）与纯
+ * churn 重提交（不计数）；只更新 log 中已存在的 key（计划建立前的存量
+ * 编队成员不入账）。导出仅供单元测试注入编队条目。
+ */
+export function markSquadMaterialized(
+  plan: NonNullable<KernelMemory["warPlan"]>,
+  squad: readonly { name: string; role: string }[],
+  sponsor: string,
+): void {
+  if (!plan.spawnedKeys) return;
+  for (const e of squad) {
+    const mem = Game.creeps[e.name]?.memory as { spawnIndex?: number } | undefined;
+    const idx = mem?.spawnIndex;
+    if (idx === undefined) continue;
+    const key = spawnKey(e.role, sponsor, idx, plan.targetRoom);
+    if (key in plan.spawnedKeys) plan.spawnedKeys[key] = true;
+  }
 }
 
 /**

@@ -9,30 +9,18 @@
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
-import { globalCache } from "../../kernel/global-cache";
+import { roomHasInvaderCore } from "../support/invader-core";
 import { CONFIG } from "../../config";
 import { moveToTarget, registerAnchor, registerStaticBlocker } from "../movement";
 
 /**
- * 检测房间是否被 InvaderCore 占据（per-tick per-room 共享缓存）。
- * InvaderCore 持续为 controller 续期预约（每 tick +2），reserver 的 attackController 每次仅 -1
- * （1 CLAIM）— 永远磨不过，留守纯空耗。检测到即放弃动作 → idle → ensureHome 回 home；
- * 孵化冻结与回收由 remote-mining-manager 负责，此处是其 10-tick 评估间隔内的即时兜底。
- * 导出供接线测试验证检测与缓存行为。
+ * InvaderCore 压制检测已收敛到 support/invader-core（全仓唯一写者，单一形状）。
+ * 语义不变：核心持续为 controller 续期预约（+2/tick），attackController 仅 -1/次，
+ * 磨不过即放弃动作 → idle → ensureHome 回 home；孵化冻结与回收仍由
+ * remote-mining-manager 负责，此处是其 10-tick 评估间隔内的即时兜底。
+ * 兼容再导出：接线测试（tests/unit/remote/invader-core-blocker.test.ts）从本模块导入。
  */
-export function roomHasInvaderCore(room: Room): boolean {
-  const g = globalCache() as { __remoteInvaderCore?: Record<string, { tick: number; blocked: boolean }> };
-  if (!g.__remoteInvaderCore) g.__remoteInvaderCore = {};
-  const cached = g.__remoteInvaderCore[room.name];
-  if (cached && cached.tick === Game.time) return cached.blocked;
-
-  const cores = room.find(FIND_HOSTILE_STRUCTURES, {
-    filter: (s) => s.structureType === STRUCTURE_INVADER_CORE,
-  });
-  const blocked = cores.length > 0;
-  g.__remoteInvaderCore[room.name] = { tick: Game.time, blocked };
-  return blocked;
-}
+export { roomHasInvaderCore };
 
 /** 占领/攻击 controller。 */
 function reserveControllerAction(): ActionCandidate<StructureController> {

@@ -961,6 +961,18 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
 export function runMigrations(): void {
   const current = Memory.schemaVersion ?? 0;
   if (current < CONFIG.memory.schemaVersion) migrateMemory(current);
+  else if (current > CONFIG.memory.schemaVersion) {
+    // 降版保护：代码回滚到旧 schema 而 Memory 已被新版迁移 —— 迁移链静默跳过
+    // 会让旧代码跑在新结构上且无人知晓。无自动降级迁移（未实现），当前唯一
+    // 选择是继续运行，但必须响亮可见；每次 global reset（模块重载）告警一次。
+    if (!(globalThis as { __schemaDowngradeWarned?: boolean }).__schemaDowngradeWarned) {
+      (globalThis as { __schemaDowngradeWarned?: boolean }).__schemaDowngradeWarned = true;
+      console.log(
+        "[schema] WARNING: Memory.schemaVersion=" + current + " > code " + CONFIG.memory.schemaVersion +
+          " — rolled-back code running on newer schema; no downgrade migration exists.",
+      );
+    }
+  }
 }
 
 /** 维护 Memory：清理死亡 creep、初始化默认值、失守房宽限清理（迁移由 runMigrations 独立执行，见 K-5）。 */

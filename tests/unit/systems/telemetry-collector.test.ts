@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { TickContext, CpuTier } from "../../../src/kernel/contracts";
 
 // ── 模块 mock ──────────────────────────────────────────────
@@ -149,6 +149,71 @@ function makeSnapshot(overrides: Record<string, unknown> = {}) {
 }
 
 // ── 测试 ──────────────────────────────────────────────
+
+describe("telemetry-collector — @TELEMETRY 输出门禁（stats 恒真回归）", () => {
+  let logSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    capturedEvents.length = 0;
+    delete mockGlobalCache.__telemetryPrevState;
+    delete mockGlobalCache.telemetry;
+    delete mockGlobalCache.__alertThrottle;
+    (globalThis as Record<string, unknown>).Memory = {
+      rooms: {},
+      kernel: { stats: { memorySize: 1234, cpuAvg10: 5, cpuMax10: 8, bucketMin10: 9000, crisisCount: 0, errorHotspot: "", skipHotspot: "" } },
+    };
+    (globalThis as Record<string, unknown>).Game = {
+      time: 100,
+      cpu: { bucket: 10000, getUsed: () => 5 },
+      creeps: {},
+      spawns: {},
+    };
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+  });
+
+  function telemetryLines(): string[] {
+    return logSpy.mock.calls
+      .map((c) => String(c[0]))
+      .filter((s) => s.startsWith("@TELEMETRY"));
+  }
+
+  it("健康 tick（低 CPU / 无错误 / 无 skip，stats 存在）不输出 —— 门禁不得被 stats 击穿", () => {
+    mockGlobalCache.telemetry = { tick: 100, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+    telemetryCollectorSystem.run(makeCtx("healthy", 100, []));
+    expect(telemetryLines()).toHaveLength(0);
+  });
+
+  it("有错误的 tick 输出且携带摘要指标", () => {
+    mockGlobalCache.telemetry = { tick: 100, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 2 };
+    telemetryCollectorSystem.run(makeCtx("healthy", 100, []));
+    const lines = telemetryLines();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('"er":2');
+    expect(lines[0]).toContain('"mem":1234');
+  });
+
+  it("高 CPU tick 输出（getUsed > softLimit*0.7 = 12.25）", () => {
+    (globalThis as Record<string, unknown>).Game = {
+      time: 100,
+      cpu: { bucket: 10000, getUsed: () => 15 },
+      creeps: {},
+      spawns: {},
+    };
+    mockGlobalCache.telemetry = { tick: 100, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+    telemetryCollectorSystem.run(makeCtx("healthy", 100, []));
+    expect(telemetryLines()).toHaveLength(1);
+  });
+
+  it("有 skip 的 tick 输出", () => {
+    mockGlobalCache.telemetry = { tick: 100, systemCpu: {}, roleCpu: {}, skipped: 7, errors: 0 };
+    telemetryCollectorSystem.run(makeCtx("healthy", 100, []));
+    expect(telemetryLines()).toHaveLength(1);
+  });
+});
 
 describe("telemetry-collector — Storage 被毁事件检测 (TD-004)", () => {
   beforeEach(() => {

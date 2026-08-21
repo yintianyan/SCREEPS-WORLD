@@ -990,13 +990,22 @@ export function moveToTarget(
       return sharedResult;
     }
 
-    // 4. 新计算 + 持久化 + 共享。
-    const path = computeAndPersistPath(creep, pos, targetPacked, structRevision, moveRange);
-    if (path) {
-      getPathShareCache().set(cacheKey, path);
-      const result = issuePathStep(creep, path);
-      if (result !== undefined) {
-        return result;
+    // 4. 新计算 + 持久化 + 共享 —— 纳入档3每房预算（修复直算旁路）。
+    // 此前仅 registerStepViaPathfinder 的 cache-miss 路径吃限频；集体缓存失效
+    // 时刻（global reset / 结构 revision 跳变使持久化路径同 tick 全失效）全房
+    // creep 从此处无节流重算，CPU 尖峰恰逢 bucket 低位。预算拒签时落入下方
+    // 统一单步出口降级（沿旧路径一步/让行），下 tick 预算恢复自然补齐。
+    const budgetMax = CONFIG.movement.maxSearchesPerRoomPerTick;
+    if (budgetMax > 0 && !acquirePathBudget(creep.room.name, budgetMax)) {
+      recordSkip("movement/path-budget");
+    } else {
+      const path = computeAndPersistPath(creep, pos, targetPacked, structRevision, moveRange);
+      if (path) {
+        getPathShareCache().set(cacheKey, path);
+        const result = issuePathStep(creep, path);
+        if (result !== undefined) {
+          return result;
+        }
       }
     }
   }

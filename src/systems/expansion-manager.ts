@@ -396,10 +396,23 @@ function seedLayoutAnchor(room: Room): boolean {
 function advancePioneering(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
   const targetRoom = Game.rooms[expansion.target];
 
-  // 房间失守（被抢/降级）→ 结束行动并冷却。
+  // 失守/失明二分归因（修复：无视野被误记 STOLEN 污染节奏台账）：
+  // pioneering 仅在 claim 成功后进入，进入时刻 controller 必为我方。此后：
+  //   - 无视野（!targetRoom）＝ 我方在该房已无任何 creep 且无观察者支援 ——
+  //     编队全灭/撤离属远征失败而非对手竞争，记 OUTCOME_LOST。rhythm 只按
+  //     "stolen" 频次收紧目标门禁，误记 stolen 会让一次「拓荒编队被野怪
+  //     团灭」错误收紧后续扩张目标质量（minSources 1→2）。
+  //   - 有视野且 controller 非我方 ＝ 确证被抢（控制权易手可见），维持
+  //     OUTCOME_STOLEN。观察者视野同样成立：room-observer 支援时即使编队
+  //     全灭也能确证归属，二分不会把可证实的抢占漏记成 LOST。
   if (!targetRoom?.controller?.my) {
-    console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during pioneering, aborting`);
-    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_STOLEN);
+    if (!targetRoom) {
+      console.log(`[${ctx.tick}] expansion: lost vision of ${expansion.target} during pioneering (expedition gone), aborting`);
+      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_LOST);
+    } else {
+      console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during pioneering, aborting`);
+      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_STOLEN);
+    }
     blacklistTarget(expansion.target, ctx.tick);
     reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
     Memory.kernel!.expansion = undefined;

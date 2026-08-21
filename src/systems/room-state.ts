@@ -143,6 +143,12 @@ export const roomStateSystem: System = {
       // 5. 映射为 ColonyState 并写入 RoomMemory。
       // P1-3：lastHostileAt 只在威胁新增（count 增加）时刷新，防旧威胁停留永久维持 defense
       // （旧逻辑每 tick 刷新 → 消费方 tower-defense siegeMemory 等永不过期）。
+      // 审计登记（2026-08-21 深审复核）：这是有意经济取舍——武装敌人静止在场超
+      // threatStaleTicks 即退出 defense 让经济恢复，代价是持续围攻期经济门禁放宽。
+      // 接受依据：塔防实时开火不受此记忆影响；repairFortifications 在活敌在场时
+      // 整体让位（threatCreeps>0 提前返回）；真正依赖 lastHostileAt 的只有经济
+      // 门禁与下方 stale 判定。若未来出现「围攻中门禁放宽造成实证损失」，再引入
+      // 损伤信号区分「静止驻留」与「交战中」，不为假想场景预建抽象。
       const threatCount = snapshot.threatCreeps.length;
       const prevThreatCount = roomMem.prevThreatCount ?? 0;
       const threatIncreased = threatCount > prevThreatCount;

@@ -28,7 +28,7 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 | [src/kernel/](src/kernel/) | tick 调度、错误隔离、内存迁移与预算、遥测与 segment | [kernel.ts](src/kernel/kernel.ts)、[scheduler.ts](src/kernel/scheduler.ts)、[memory.ts](src/kernel/memory.ts)、[safe-run.ts](src/kernel/safe-run.ts)、[phase.ts](src/kernel/phase.ts)、[segment-store.ts](src/kernel/segment-store.ts)、[telemetry.ts](src/kernel/telemetry.ts) |
 | [src/systems/](src/systems/) | 跨 creep / 跨房决策服务（P0–P3；注册顺序即同优先级执行顺序） | [room-state.ts](src/systems/room-state.ts)、[spawn-manager.ts](src/systems/spawn-manager.ts)、[assignment-service.ts](src/systems/assignment-service.ts)、[empire-strategy.ts](src/systems/empire-strategy.ts)、[construction-manager.ts](src/systems/construction-manager.ts)、[remote-mining-manager.ts](src/systems/remote-mining-manager.ts)、[tower-defense.ts](src/systems/tower-defense.ts)、[traffic-manager.ts](src/systems/traffic-manager.ts)、[tuning-engine.ts](src/systems/tuning-engine.ts)（完整清单见 [bootstrap.ts](src/bootstrap.ts)） |
 | [src/creeps/engine/](src/creeps/engine/) | 共享执行引擎：RolePolicy 声明式动作管线 + 统一 FSM | [role-runner.ts](src/creeps/engine/role-runner.ts)、[lifecycle.ts](src/creeps/engine/lifecycle.ts)、[actions/](src/creeps/engine/actions/)、[support/](src/creeps/support/) |
-| [src/creeps/roles/](src/creeps/roles/) | 角色策略（15 个）：只声明 gate/acquire/work/onFlee/hold/park/combat | [harvester.ts](src/creeps/roles/harvester.ts)、[hauler.ts](src/creeps/roles/hauler.ts)、[builder.ts](src/creeps/roles/builder.ts)、[remote-harvester.ts](src/creeps/roles/remote-harvester.ts)、[remote-hauler.ts](src/creeps/roles/remote-hauler.ts)（完整清单见 [bootstrap.ts](src/bootstrap.ts)） |
+| [src/creeps/roles/](src/creeps/roles/) | 角色策略（18 个，以 bootstrap 注册为准）：只声明 gate/acquire/work/onFlee/hold/park/combat | [harvester.ts](src/creeps/roles/harvester.ts)、[hauler.ts](src/creeps/roles/hauler.ts)、[builder.ts](src/creeps/roles/builder.ts)、[remote-harvester.ts](src/creeps/roles/remote-harvester.ts)、[remote-hauler.ts](src/creeps/roles/remote-hauler.ts)（完整清单见 [bootstrap.ts](src/bootstrap.ts)） |
 | [src/creeps/movement/](src/creeps/movement/) | 寻路、traffic 意图账本、停车、卡位自愈 | [pathfinding.ts](src/creeps/movement/pathfinding.ts)、[traffic.ts](src/creeps/movement/traffic.ts)、[traffic-resolver.ts](src/creeps/movement/traffic-resolver.ts)、[parking.ts](src/creeps/movement/parking.ts)、[stuck-recovery.ts](src/creeps/movement/stuck-recovery.ts) |
 | [src/domain/](src/domain/) | 纯 TypeScript 逻辑（不含 Game/Memory 访问），可 Vitest 测试 | [spawn/](src/domain/spawn/)、[assignment/](src/domain/assignment/)、[layout/](src/domain/layout/)、[economy/](src/domain/economy/)、[remote/](src/domain/remote/)、[defense/](src/domain/defense/)、[strategy/](src/domain/strategy/)、[tuning/](src/domain/tuning/)、[industry/](src/domain/industry/)、[expansion/](src/domain/expansion/) |
 | [src/types/global.d.ts](src/types/global.d.ts) | 全局类型声明 | `global.d.ts` |
@@ -247,7 +247,8 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
   → plan.md **§7 性能优化 · §2.3 数据所有权**
 - **迁移规范**：每次结构变更升版本；迁移必须幂等；先写新字段验证后删旧字段；
   所有步骤成功才更新 `schemaVersion`；大迁移按 cursor 分 tick。
-  新增 Memory 字段须同时更新类型与迁移（当前 `schemaVersion = 33`，见 `CONFIG.memory`）。
+  新增 Memory 字段须同时更新类型与迁移（当前 `schemaVersion = 36`，见 `CONFIG.memory`；
+  数字仅为快照 —— 以 CONFIG 为单一真相源，发现不一致以代码为准并回改本文）。
   冷数据（布局 overrides/blocked）走 RawMemory segment。
   → plan.md **§3.4 版本化 Memory**
 

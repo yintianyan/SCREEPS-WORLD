@@ -38,8 +38,29 @@ jobs:
         # 跳过后既省 2-4 分钟编译，又彻底规避 isolated-vm 的 node-gyp 编译失败。
         run: npm ci --ignore-scripts
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      # 审计修复（P0）：此前 push 直推生产无任何门禁 —— plan.md §8 的
+      # 「typecheck+test+build 全绿」纯靠本地自觉。单测 7s 级耗时，不构成瓶颈。
+      - name: Unit tests
+        run: npm run test:unit
+
       - name: Build
         run: npm run build
+
+      # Bundle 尺寸预算：global reset 时 bundle 加载成本与 tickLimit 直接相关
+      # （见 CONFIG.pixel 注释的 reload death loop 事故）。超预算响亮失败，
+      # 迫使压缩/拆分而不是静默滑向危险区。当前基线 ~350KB。
+      - name: Bundle size budget
+        run: |
+          SIZE=$(wc -c < dist/main.js)
+          CAP=614400
+          echo "bundle size: ${SIZE} bytes (cap ${CAP})"
+          if [ "$SIZE" -gt "$CAP" ]; then
+            echo "::error::dist/main.js exceeds 600KB bundle budget"
+            exit 1
+          fi
 
       - name: Upload code to Screeps (API)
         env:

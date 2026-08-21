@@ -34,7 +34,7 @@ export const defensePlannerSystem: System = {
     if (Game.cpu.bucket < 5000) return;
 
     for (const snapshot of ctx.snapshots()) {
-      planDefense(snapshot);
+      planDefense(snapshot, ctx.globalSiteCount);
     }
   },
 };
@@ -174,6 +174,7 @@ function buildBlockedPositions(): Set<number> {
 
 function planDefense(
   snapshot: import("../kernel/contracts").RoomSnapshot,
+  globalSiteCount: number,
 ): void {
   // P0-3 修复：RCL 门禁从 4 降为 3。
   // RCL3 是"刚有 Tower 但无 rampart"的最脆弱窗口期 — 一波突袭就破。
@@ -329,7 +330,11 @@ function planDefense(
   const occupiedSet = buildOccupiedPositionSet(snapshot, minerals);
   const validationOptions: ValidationOptions = {
     completedKeys: collectCompletedKeys(queue),
-    globalSiteCount: 0,
+    // 审计修复：曾硬编码 0 —— 扇区防御路径完全绕过全局 site 配额
+    // （validation.ts 对 globalSiteCount >= maxGlobalSites 返回 "site-limit"
+    // 拒绝候选），帝国接近上限时此路径仍无限入队。接通 kernel 逐 tick
+    // 汇总的真实计数，与 construction-manager / remote-mining-manager 同一口径。
+    globalSiteCount,
     maxGlobalSites: CONFIG.construction.maxGlobalSites,
     minerals,
     structureCounts: precomputeStructureCounts(snapshot),

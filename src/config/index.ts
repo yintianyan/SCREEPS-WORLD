@@ -203,7 +203,11 @@ export const CONFIG = {
      */
     quantizeDynamicTarget: true,
     dynamicRepathInterval: 3,
-    maxSearchesPerRoomPerTick: 0,
+    // 审计修复：默认从 0（关闭）改为启用 —— 原配置使「战时保险丝」缺位，
+    // 且 L0 直算路径不受限频。20 ≈ 常态新算需求上界（三级缓存命中为主、
+    // miss 稀疏），集体失效时刻封顶单房 search 数，溢出意图降级让行，
+    // 下 tick 自然补齐。设回 0 可恢复不限流（不推荐）。
+    maxSearchesPerRoomPerTick: 20,
   },
 
   construction: {

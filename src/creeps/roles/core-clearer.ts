@@ -20,6 +20,7 @@ import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/actio
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { globalCache } from "../../kernel/global-cache";
+import { findInvaderCores } from "../support/invader-core";
 
 /** 战利品捡取优先级：能量优先，其次按化合物顺序兜底（核心废墟可能含矿物）。 */
 const LOOT_RESOURCE_PRIORITY: ResourceConstant[] = [
@@ -34,26 +35,12 @@ const LOOT_RESOURCE_PRIORITY: ResourceConstant[] = [
 ];
 
 /**
- * 在远矿房查找 InvaderCore。per-tick per-room 缓存：单房至多一只 clearer，
- * 但避免每 tick room.find（角色硬约束——远程房无 RoomSnapshot 预热，缓存在
- * globalCache 按 tick 失效，同房共享）。
+ * 在远矿房查找首个 InvaderCore。缓存收敛到 support/invader-core 共享实现
+ * （历史：本角色与 reserver 曾各自写同名键的不同形状，同 tick 共房交错读写产生
+ * TypeError/falsy 双失败模式——完整事故档案见该模块头注释）。
  */
 function findInvaderCore(creep: Creep): StructureInvaderCore | undefined {
-  const g = globalCache() as {
-    __remoteInvaderCore?: Record<string, { tick: number; list: StructureInvaderCore[] }>;
-  };
-  if (!g.__remoteInvaderCore) g.__remoteInvaderCore = {};
-  const cached = g.__remoteInvaderCore[creep.room.name];
-  let cores: StructureInvaderCore[];
-  if (cached && cached.tick === Game.time) {
-    cores = cached.list;
-  } else {
-    cores = creep.room.find(FIND_HOSTILE_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_INVADER_CORE,
-    }) as StructureInvaderCore[];
-    g.__remoteInvaderCore[creep.room.name] = { tick: Game.time, list: cores };
-  }
-  return cores[0];
+  return findInvaderCores(creep.room)[0];
 }
 
 /**

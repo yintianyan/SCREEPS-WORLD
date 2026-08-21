@@ -500,7 +500,8 @@ function updateStatsSummary(tick: number): void {
 /**
  * 输出一行 @TELEMETRY 前缀的 JSON，供外部 WebSocket console 订阅器接收
  * （外部采集脚本按前缀过滤写入 telemetry.jsonl；同现于游戏控制台但不干扰阅读）。
- * CPU 开销：单次 console.log 约 0.02-0.05 CPU [Experience]，每 10 tick 一次。
+ * CPU 开销：单次 console.log 约 0.02-0.05 CPU [Experience]；每 10 tick 评估一次，
+ * 仅命中信号门禁的 tick 实际输出（摘要指标随信号行附带）。
  */
 function emitTelemetryLine(tick: number, ctx: TickContext): void {
   // 显式守卫：不依赖外部调用顺序，Global Reset 后 telemetry 未重建时直接跳过。
@@ -508,13 +509,14 @@ function emitTelemetryLine(tick: number, ctx: TickContext): void {
   if (!tel || tel.tick !== tick) return;
   const stats = Memory.kernel?.stats;
 
-  // 仅在有值得关注的信号时输出，避免健康 tick 刷屏。
-  // 始终输出：CPU > softLimit*0.7、有错误、有 skip、有事件、有 stats。
+  // 仅在有值得关注的信号时输出，避免健康 tick 刷屏：
+  // CPU > softLimit*0.7、有错误、有 skip 任一满足才输出。
+  // 修复：曾含 "|| stats != null" —— stats 首次采样后恒存在，条件恒真击穿门禁，
+  // 健康 tick 全量灌入 @TELEMETRY，外部采集通道信噪比归零（告警语义失效）。
   const cpu = Game.cpu.getUsed();
   const hasSignal = cpu > ctx.budget.softLimit * 0.7
     || tel.errors > 0
-    || tel.skipped > 0
-    || stats != null;
+    || tel.skipped > 0;
 
   if (!hasSignal) return;
 
