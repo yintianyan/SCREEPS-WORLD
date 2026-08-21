@@ -12,6 +12,8 @@ import { systemPhase } from "./phase";
 import { requestSegments, flushSegments } from "./segment-store";
 import { measuredRun, safeRun, safeRunBuild } from "./safe-run";
 import { createBudget } from "./scheduler";
+import { evaluateExpectations, P3_BYPASS_WINDOW_TICKS, type P3SystemRef } from "./expectations";
+import { EventKind, recordEvent } from "./event-log";
 import { emitSummary, initTelemetry } from "./telemetry";
 import { Registry } from "./registry";
 import { buildRoomSnapshot } from "../systems/room-snapshot";
@@ -145,6 +147,7 @@ export class Kernel {
 
     emitSummary(budget);
 
+    safeRun("expectations", () => this.runExpectations(ctx));
     safeRun("flush-skips", () => flushSkips(), true);
 
     safeRun("segments-flush", () => flushSegments(), true);
@@ -284,7 +287,42 @@ export class Kernel {
           system.priority === 0, // P0 系统是关键的 — 永不冷却。
         ),
       );
+      const gRun = globalCache();
+      (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
       if (ctx.budget.isExhausted()) break;
+    }
+  }
+
+  /** 期望自检（E1 遥测新鲜度 / E2 P3 存活）→ 违例入 Memory + 事件；
+   * P3 饥饿时设置前馈旁路窗口（scheduler 消费），恢复后自动摘除。 */
+  private runExpectations(ctx: Context): void {
+    const kernelMem = Memory.kernel;
+    if (!kernelMem) return;
+    const g = globalCache();
+    const p3Systems: P3SystemRef[] = [...this.sortedSystems, ...this.postSystems]
+      .filter((s) => s.priority === 3)
+      .map((s) => ({ name: s.name, interval: s.interval }));
+    const res = evaluateExpectations({
+      tick: ctx.tick,
+      statsLastSample: kernelMem.stats?.lastSample,
+      systemLastRun: g.systemLastRun ?? {},
+      p3Systems,
+    });
+    if (res.violations.length > 0) {
+      kernelMem.expectations = {
+        tick: ctx.tick,
+        violations: res.violations.map((v) => v.id + "(" + v.detail + ")").slice(0, 10),
+      };
+      recordEvent(EventKind.ExpectationViolation, "kernel", [res.violations.length]);
+      if (res.p3Starved) {
+        kernelMem.p3StarveBypassUntil = ctx.tick + P3_BYPASS_WINDOW_TICKS;
+        console.log(
+          "[" + ctx.tick + "] expectations: P3 starvation — feed-forward bypass until " + kernelMem.p3StarveBypassUntil,
+        );
+      }
+    } else {
+      kernelMem.expectations = { tick: ctx.tick, violations: [] };
+      if (kernelMem.p3StarveBypassUntil !== undefined) delete kernelMem.p3StarveBypassUntil;
     }
   }
 
@@ -315,6 +353,8 @@ export class Kernel {
           system.priority === 0, // P0 系统是关键的 — 永不冷却。
         ),
       );
+      const gRun = globalCache();
+      (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
       if (ctx.budget.isExhausted()) break;
     }
   }

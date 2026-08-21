@@ -21,6 +21,10 @@ import { evaluateCapacity } from "../domain/strategy/capacity";
 import { evaluateEnvironment } from "../domain/strategy/environment";
 import { CONFIG } from "../config";
 import { EventKind, recordEvent } from "../kernel/event-log";
+import {
+  buildEmpireSituation,
+  type SituationRoomInput,
+} from "../domain/strategy/situation";
 
 /** AgendaChange 事件的 initiative 编码（与 event-log 注释对齐）。 */
 const AGENDA_CODES: Record<string, number> = {
@@ -149,6 +153,46 @@ export const empireStrategySystem: System = {
         upgradeWindowTicks: CONFIG.capacity.upgradeWindowTicks,
       },
     );
+    // ── 态势评估（认知层增量）：散落事实 → 命名条件 + 对手画像 ──
+    // 消费方：当前仅观测（Memory.kernel.situation + SituationChange 事件）；
+    // 姿态/议程的调制消费按场景逐步接线（避免无消费者抽象）。
+    const sitRooms: SituationRoomInput[] = [];
+    for (const snapshot of ctx.snapshots()) {
+      const room = Game.rooms[snapshot.roomName];
+      sitRooms.push({
+        room: snapshot.roomName,
+        rcl: snapshot.rcl,
+        hasSpawn: snapshot.spawns.length > 0,
+        ttd: room?.controller?.ticksToDowngrade,
+        threats: snapshot.threatCreeps.map((c) => ({ owner: c.owner?.username ?? "?" })),
+        colonyState: Memory.rooms[snapshot.roomName]?.colonyState ?? "normal",
+      });
+    }
+    const hostileAdjSit = new Set<string>();
+    for (const [blRoom, until] of Object.entries(Memory.kernel?.warBlacklist ?? {})) {
+      if (until <= ctx.tick) continue;
+      const exits = Game.map.describeExits(blRoom);
+      for (const dir in exits) hostileAdjSit.add(exits[dir as keyof typeof exits]!);
+    }
+    const situation = buildEmpireSituation({
+      tick: ctx.tick,
+      rooms: sitRooms,
+      warBlacklist: Memory.kernel?.warBlacklist ?? {},
+      hostileAdj: hostileAdjSit,
+      activeExpansionTarget: Memory.kernel?.expansion?.target,
+    });
+    const prevSit = Memory.kernel.situation;
+    Memory.kernel.situation = {
+      tick: situation.tick,
+      adversaries: Object.fromEntries(
+        situation.adversaries.slice(0, 8).map((a) => [a.username, { rooms: a.rooms, lastSeen: a.lastSeen }]),
+      ),
+      conditions: situation.conditions.slice(0, 12).map((c) => ({ id: c.id, severity: c.severity, detail: c.detail })),
+    };
+    const prevIds = new Set((prevSit?.conditions ?? []).map((c) => c.id));
+    for (const c of situation.conditions) {
+      if (!prevIds.has(c.id)) recordEvent(EventKind.SituationChange, c.id, [c.severity]);
+    }
     if (Memory.kernel.capacity?.tier !== capacity.tier) {
       console.log(
         `[${ctx.tick}] capacity: ${Memory.kernel.capacity?.tier ?? "(none)"} → ${capacity.tier}` +

@@ -131,7 +131,12 @@ export class CpuBudget implements Budget {
     // stats 冻结后前馈又以冻结值持续拒绝（本事故根因）。修正为：
     //   - 峰值判据仅在「上窗真实触顶」(max10 ≥ hardLimit) 时硬拒 P2+；
     //   - 基线压力由 avg 把守：avg ≥ softLimit 拒 P3+（P2 仍放行）。
-    if (priority >= 2) {
+    // 自愈旁路（expectations E2 触发时由 kernel 设置）：P3 饥饿期间跳过前馈
+    // 拒绝，让冻结系统复活、窗口 max 自然回落打破自锁；软/硬上限仍生效，
+    // bucket 低位时旁路自动失效（不拿生存换观测）。
+    const p3Escape =
+      (Memory.kernel?.p3StarveBypassUntil ?? 0) > Game.time && (Game.cpu.bucket ?? 0) >= 3000;
+    if (priority >= 2 && !p3Escape) {
       const stats = Memory.kernel?.stats;
       if (stats && (stats.cpuMax10 ?? 0) > 0 && (stats.cpuAvg10 ?? 0) > 0) {
         // 上窗峰值真实触及硬上限 → 本 tick 大概率透支，P2+ 拒绝。

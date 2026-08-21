@@ -153,6 +153,8 @@ export interface GlobalCache {
    * 供 empire-strategy / capacity 模型评估每房真实 CPU 成本。
    * heap 存储 — global reset 丢失可接受（下 tick 重建）。 */
   cpuByHome?: Map<string, number>;
+  /** 各系统最近一次实际执行 tick（kernel.runSystems 记录）—— 期望自检的 P3 存活判据输入。heap 存储。 */
+  systemLastRun?: Record<string, number>;
 }
 
 /**

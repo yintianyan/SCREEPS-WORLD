@@ -111,6 +111,10 @@ export const enum EventKind {
   /** PB 野采任务收摊（野采链，审计缺口 2）：d = [reasonCode(0=done/1=attrition/
    * 2=timeout/3=war-preempt), spawned]；r = PB 目标房。开任务记 reasonCode=4。 */
   PowerFarmOutcome = 35,
+  /** 态势条件变迁（empire-strategy 写）。d = [severity]。r = 条件 id。 */
+  SituationChange = 36,
+  /** 期望自检违例（kernel 写 —— 帝国自我诊断通道）。d = [violationCount]。 */
+  ExpectationViolation = 37,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

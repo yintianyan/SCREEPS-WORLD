@@ -456,6 +456,16 @@ declare global {
      * 变更）：owned 无 spawn 的房 → 冷却/波次/弃房标记。房间建成 spawn 后清除。
      */
     bootstrap?: Record<string, { until: number; waves: number; abandoned?: number }>;
+    /** 帝国态势快照（empire-strategy 写，有界）：对手画像 + 命名条件。 */
+    situation?: {
+      tick: number;
+      adversaries: Record<string, { rooms: string[]; lastSeen: number }>;
+      conditions: { id: string; severity: number; detail: string }[];
+    };
+    /** 期望自检结果（kernel 写）：最近一次核验的违例清单。 */
+    expectations?: { tick: number; violations: string[] };
+    /** P3 饥饿旁路截止 tick（expectations E2 触发，scheduler 消费）。运行时字段无 schema 变更。 */
+    p3StarveBypassUntil?: number;
     /**
      * 侦察任务（v29+，prospect-manager 写入）：同一时刻至多一个。
      * 姿态 expansionAllowed 时主动为扩张候选房获取视野（决策就绪情报）。
