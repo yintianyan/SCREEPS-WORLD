@@ -146,29 +146,42 @@ describe("CpuBudget — 前馈预测 (P1-2)", () => {
     expect(budget.canStart(3 as Priority)).toBe(true);
   });
 
-  it("cpuMax10 逼近 hardLimit 时 P2+ 被拒绝（P0/P1 仍放行）", () => {
+  it("峰值仅在真实触顶（max10 ≥ hardLimit）时拒 P2+；80% 尖峰不再永久饥饿（P3 饥饿回归）", () => {
     // healthy tier: hardLimit = 20*0.96=19.2, softLimit = min(20*0.875, 18.2)=17.5
     const budget = new CpuBudget("healthy");
-    // cpuMax10 = 16 >= 19.2*0.8 = 15.36 → P2 拒绝
+    // cpuMax10 = 16：旧判据 0.8*19.2=15.36 会拒 P2+/P3（自锁饥饿根因），
+    // 新判据 16 < 19.2 → 放行
     (globalThis as any).Memory = {
       kernel: {
         stats: { cpuMax10: 16, cpuAvg10: 10 },
       },
     };
-    // Game.cpu.getUsed = 0 → 未超 softLimit
+    expect(budget.canStart(0 as Priority)).toBe(true);
+    expect(budget.canStart(1 as Priority)).toBe(true);
+    expect(budget.canStart(2 as Priority)).toBe(true);
+    expect(budget.canStart(3 as Priority)).toBe(true);
+  });
+
+  it("cpuMax10 真实触顶 hardLimit → P2+ 拒绝（P0/P1 仍放行）", () => {
+    const budget = new CpuBudget("healthy");
+    (globalThis as any).Memory = {
+      kernel: {
+        stats: { cpuMax10: 19.5, cpuAvg10: 10 },
+      },
+    };
     expect(budget.canStart(0 as Priority)).toBe(true);
     expect(budget.canStart(1 as Priority)).toBe(true);
     expect(budget.canStart(2 as Priority)).toBe(false);
     expect(budget.canStart(3 as Priority)).toBe(false);
   });
 
-  it("cpuAvg10 逼近 softLimit 时 P3+ 被拒绝（P2 仍放行）", () => {
+  it("cpuAvg10 触及 softLimit 时 P3+ 被拒绝（P2 仍放行）", () => {
     const budget = new CpuBudget("healthy");
-    // cpuAvg10 = 14.5 >= 17.5*0.8 = 14 → P3+ 拒绝
-    // cpuMax10 = 14 < 19.2*0.8 = 15.36 → P2 仍放行
+    // cpuAvg10 = 18 >= 17.5 → 基线高企，P3+ 拒绝
+    // cpuMax10 = 14 < 19.2 → P2 仍放行
     (globalThis as any).Memory = {
       kernel: {
-        stats: { cpuMax10: 14, cpuAvg10: 14.5 },
+        stats: { cpuMax10: 14, cpuAvg10: 18 },
       },
     };
     expect(budget.canStart(2 as Priority)).toBe(true);

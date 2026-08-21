@@ -119,19 +119,25 @@ export class CpuBudget implements Budget {
     if (priority > 0 && this.spent() >= this.softLimit) return false;
     // P1-2 前馈预测：历史 CPU 持续高位时收紧非 P0 任务的通过率。
     // cpuAvg10/cpuMax10 是最近 10 个采样点（~100 tick）的均值/峰值，
-    // 非 real-time 但能反映本 tick 的基线 CPU 消耗水平。当历史峰值已接近
-    // hardLimit 时，当前 tick 的增量工作很可能触发硬上限——提前拒绝 P2+
-    // 任务比触发 isExhausted 后一刀切更平滑（P1 仍放行）。
+    // 非 real-time 但能反映本 tick 的基线 CPU 消耗水平。
     // 守卫：cpuMax10/cpuAvg10 必须为正数才视为有效历史数据 —
     // 测试环境或 reset 首 tick stats 可能未初始化（值为 0 或 undefined），
     // 此时不应启用前馈预测，避免残留/空数据错误拒绝低优先级任务。
+    // 审计修复（线上 W37S58 P3 全族饥饿 ~13h 实证）：旧判据
+    // 「cpuMax10 ≥ hardLimit*0.8 → 拒 P2+」用**峰值**做永久惩罚 —— 任何一次
+    // 尖峰（行情调用/战斗 tick/reload 后首拍）都会让 10 样本窗口 max 长期
+    // 高于阈值，而 P2/P3 被冻结恰恰保证窗口 max 不回落 → 自锁死循环：
+    // telemetry-collector/terminal/factory/pixel 等 P3 系统整体停摆，
+    // stats 冻结后前馈又以冻结值持续拒绝（本事故根因）。修正为：
+    //   - 峰值判据仅在「上窗真实触顶」(max10 ≥ hardLimit) 时硬拒 P2+；
+    //   - 基线压力由 avg 把守：avg ≥ softLimit 拒 P3+（P2 仍放行）。
     if (priority >= 2) {
       const stats = Memory.kernel?.stats;
       if (stats && (stats.cpuMax10 ?? 0) > 0 && (stats.cpuAvg10 ?? 0) > 0) {
-        // cpuMax10 >= hardLimit*0.8 → 历史峰值已逼近硬上限，P2+ 拒绝。
-        if (stats.cpuMax10! >= this.hardLimit * 0.8) return false;
-        // cpuAvg10 >= softLimit*0.8 → 基线 CPU 持续高位，P3+ 拒绝（P2 仍放行）。
-        if (priority >= 3 && stats.cpuAvg10! >= this.softLimit * 0.8) return false;
+        // 上窗峰值真实触及硬上限 → 本 tick 大概率透支，P2+ 拒绝。
+        if (stats.cpuMax10! >= this.hardLimit) return false;
+        // 基线持续高位 → P3+ 拒绝（P2 仍放行）。
+        if (priority >= 3 && stats.cpuAvg10! >= this.softLimit) return false;
       }
     }
     return true;
