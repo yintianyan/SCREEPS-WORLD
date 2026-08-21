@@ -462,6 +462,8 @@ declare global {
       adversaries: Record<string, { rooms: string[]; lastSeen: number }>;
       conditions: { id: string; severity: number; detail: string }[];
     };
+    /** 本次 boot 首个 tick（maintainMemory 记录）—— E2 相对宽限基准。 */
+    bootTick?: number;
     /** 期望自检结果（kernel 写）：最近一次核验的违例清单。 */
     expectations?: { tick: number; violations: string[] };
     /** P3 饥饿旁路截止 tick（expectations E2 触发，scheduler 消费）。运行时字段无 schema 变更。 */

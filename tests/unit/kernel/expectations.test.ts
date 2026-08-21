@@ -33,14 +33,32 @@ describe("expectations — E1 遥测新鲜度", () => {
 });
 
 describe("expectations — E2 P3 存活", () => {
-  it("boot 宽限期内从未运行不判饿", () => {
+  it("boot 宽限期内从未运行不判饿（相对 bootTick）", () => {
     const r = evaluateExpectations({
       tick: P3_BOOT_GRACE_TICKS - 1,
+      bootTick: 0,
       statsLastSample: undefined,
       systemLastRun: {},
       p3Systems: P3,
     });
     expect(r.p3Starved).toBe(false);
+  });
+
+  it("reset 后 200 tick（绝对 tick 巨大）不误报 —— W38S59 夜间误报回归", () => {
+    const r = evaluateExpectations({
+      tick: 82414200,
+      bootTick: 82414000,
+      statsLastSample: undefined,
+      systemLastRun: {},
+      p3Systems: [
+        { name: "terminal-manager", interval: 200 },
+        { name: "expansion-manager", interval: 20 },
+        { name: "tuning-engine", interval: 500 },
+      ],
+    });
+    // E1（遥测未流）可合理触发；本回归锁定的是 E2 不把 post-reset 待跑误判为饥饿
+    expect(r.p3Starved).toBe(false);
+    expect(r.violations.some((v) => v.id.startsWith("p3Starved:"))).toBe(false);
   });
 
   it("宽限期后仍未见执行 → p3Starved（含从未运行）", () => {

@@ -980,6 +980,10 @@ export function maintainMemory(): void {
   Memory.creeps ??= {};
   Memory.rooms ??= {};
   Memory.kernel ??= {};
+  // 本次 boot 的首个 tick（期望自检 E2 的相对宽限基准 —— reset 后系统需要
+  // 数个 interval 才能各跑一遍，绝对 tick 判据会把正常的 post-reset 待跑
+  // 误报为 P3 饥饿）。heap/global 均可：写 Memory 使跨 reset 语义稳定。
+  if (Memory.kernel.bootTick === undefined) Memory.kernel.bootTick = Game.time;
 
   // 每 tick 清理死亡 creep memory（小帝国安全且廉价）；清理前记录死亡事件
   // （战斗黑匣子 M9 — 这是死亡的唯一系统性检测点）。

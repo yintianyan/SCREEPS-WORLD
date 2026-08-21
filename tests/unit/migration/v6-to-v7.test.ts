@@ -143,7 +143,8 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
     expect(() => maintainMemory()).not.toThrow();
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     // maintainMemory 会惰性初始化失守房记录（lostRooms）— kernel 不再是纯空对象。
-    expect((globalThis as any).Memory.kernel).toEqual({ lostRooms: {} });
+    // bootTick：期望自检 E2 的相对宽限基准（maintainMemory 首次写入，取当前 Game.time）。
+    expect((globalThis as any).Memory.kernel).toEqual({ lostRooms: {}, bootTick: (globalThis as any).Game.time });
   });
 
   it("完整的 tuning 结构不受影响", () => {

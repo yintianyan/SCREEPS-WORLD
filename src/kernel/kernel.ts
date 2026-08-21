@@ -305,6 +305,7 @@ export class Kernel {
     const res = evaluateExpectations({
       tick: ctx.tick,
       statsLastSample: kernelMem.stats?.lastSample,
+      bootTick: kernelMem.bootTick,
       systemLastRun: g.systemLastRun ?? {},
       p3Systems,
     });

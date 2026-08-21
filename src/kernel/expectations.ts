@@ -44,12 +44,17 @@ export interface P3SystemRef {
 
 export function evaluateExpectations(input: {
   tick: number;
+  /** 本次 boot 首 tick（kernel 注入）；缺省按无限老处理（兼容测试）。 */
+  bootTick?: number;
   statsLastSample?: number;
   systemLastRun: Readonly<Record<string, number>>;
   p3Systems: readonly P3SystemRef[];
 }): ExpectationResult {
   const violations: ExpectationViolation[] = [];
   let p3Starved = false;
+
+  // E2 相对宽限基准：reset 后系统需数个 interval 才能各跑一遍。
+  const bootAge = input.tick - (input.bootTick ?? -Infinity);
 
   // E1 遥测新鲜度。
   const sampleAge = input.statsLastSample !== undefined
@@ -63,7 +68,7 @@ export function evaluateExpectations(input: {
   }
 
   // E2 P3 存活（boot 宽限后生效）。
-  if (input.tick > P3_BOOT_GRACE_TICKS) {
+  if (bootAge >= P3_BOOT_GRACE_TICKS) {
     for (const s of input.p3Systems) {
       const interval = Math.max(s.interval ?? 1, 1);
       const grace = interval * P3_GRACE_MULTIPLIER + P3_BOOT_GRACE_TICKS;
