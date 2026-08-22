@@ -1,0 +1,49 @@
+%% EMPIRE_ARCHITECTURE · 一页架构图（Phase 1 冻结版）
+%% 依据：EMPIRE_SYSTEM_MODEL / DECISION_AUTHORITY_MODEL / ARCHITECTURE_RECONCILIATION
+%% 任务书 §36 的建议树已按研究结论修订：Planning 解散进 Policy+Agenda；Directive 收编为 AgendaItem；无 Agent Runtime。
+
+flowchart TB
+    subgraph WORLD["World（Screeps 引擎 · 客观事实）"]
+        GAME[Game objects / Terrain / Market / 他者]
+    end
+
+    subgraph RUNTIME["确定性 Tick 运行时（唯一执行通道）"]
+        direction TB
+        SNAP["① 感知：只读快照<br/>RoomSnapshot / 帝国态势（分频聚合）"]
+        STATE["② 状态归一化<br/>RoomState·phase / 派生索引（三级存储：Memory 瘦·heap 缓存·segment 冷）"]
+        subgraph BRAIN["Empire（唯一受限 Agent = Policy 纯函数）"]
+            POLICY["③ Policy：posture 四态×五域预算<br/>滞回切换 · Goal=声明式谓词不实例化"]
+            AGENDA["④ Agenda 复核（低频）<br/>AgendaItem：远矿/扩张/战争/重建<br/>预算·期限·取消条件·核验"]
+        end
+        DEMAND["⑤ Demand 生成（每 tick 瞬时）<br/>census→spawn intent · 供需池→物流 · 建造申请 · 防御响应"]
+        EXEC["⑧ Execution：RolePolicy 管线 + 唯一写者<br/>SpawnManager·Construction·TrafficResolver·Market"]
+        subgraph KERNEL["轻量 Kernel（四职能 · 不感知业务）"]
+            K["固定顺序管线 P0→P1→P2→P3 · safeRun 隔离+熔断<br/>四档看门狗（比例化·滞回） · Memory 迁移 · 紧急直通"]
+        end
+        FB["⑨ 反馈：遥测·健康度·异常检测<br/>自愈监视（有界六动作） · 演化闭环（有界参数）"]
+    end
+
+    subgraph ROOMS["Room × N（本地六闭环 · 无目标选择权）"]
+        R["能量 · 人口 · 物流 · 建造 · 升级 · 本地防御<br/>Report/Request 通道向上"]
+    end
+
+    subgraph OFFWORLD["体外（零 tick 成本）"]
+        LLM["LLM：L1 开发研究员 / L2 低频参数顾问 / L3 灾难接管<br/>白名单+护栏+canary —— 禁入 tick 路径"]
+        SOAK["Soak/CI · 私服 · 人工接管（仅发布与灾难）"]
+    end
+
+    GAME -->|"只读"| SNAP
+    SNAP --> STATE --> POLICY --> AGENDA
+    AGENDA -->|"立项/维持 Demand 流"| DEMAND
+    ROOMS -->|"Report/Request（缺口）"| DEMAND
+    DEMAND -->|"认领即 Task（租约六态）"| EXEC
+    KERNEL -.->|"秩序包裹 ①-⑨"| RUNTIME
+    EXEC -->|动作| GAME
+    EXEC --> FB
+    FB -->|"Intel 更新 / 指标修正"| POLICY
+    FB -->|"segment 遥测"| SOAK
+    LOM -.->|"参数建议（护栏内）"| FB
+    ROOMS <-->|"属地执行 / 下发预算与调拨令"| AGENDA
+
+    LOM[/"体外 LLM 顾问"/]:::offworld
+    classDef offworld fill:#eee,stroke:#999,stroke-dasharray: 5 5
