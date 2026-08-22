@@ -11,6 +11,7 @@ import { recordSkip, flushSkips, maintainMemory, runMigrations } from "./memory"
 import { systemPhase } from "./phase";
 import { requestSegments, flushSegments } from "./segment-store";
 import { measuredRun, safeRun, safeRunBuild } from "./safe-run";
+import { buildCadenceTable, resolveInterval, type CadenceTable } from "./cadence";
 import { createBudget } from "./scheduler";
 import { evaluateExpectations, P3_BYPASS_WINDOW_TICKS, type P3SystemRef } from "./expectations";
 import { EventKind, recordEvent } from "./event-log";
@@ -97,8 +98,11 @@ export class Kernel {
   private readonly roleMap: Map<string, CreepRole>;
   private readonly sortedSystems: readonly System[];
   private readonly postSystems: readonly System[];
+  /** 【F1/G-A】cadence 治理表：系统名 → 生效间隔（覆盖层优先）。 */
+  private readonly cadenceTable: CadenceTable;
 
   constructor(private readonly registry: Registry) {
+    this.cadenceTable = buildCadenceTable(registry);
     // 缓存 roleMap 和 sortedSystems — Registry 内容在 tick 间不变，避免每 tick 重建和排序。
     this.roleMap = new Map(registry.getRoles().map(r => [r.name, r] as const));
     // 按执行阶段拆分：main 在角色之前，post 在所有角色之后
@@ -269,7 +273,7 @@ export class Kernel {
       }
       // Recovery / 关键基建缺失豁免（P1-F）：system 通过 recoveryEligible 钩子
       // 自报是否需要 P1 等效优先级。kernel 只读钩子，不感知具体系统名
-      // （plan.md §2.1）；原硬编码 "construction-manager"/"layout-planner" 判断已移除。
+      // （docs/architecture/KERNEL_ARCHITECTURE.md）；原硬编码 "construction-manager"/"layout-planner" 判断已移除。
       // - construction-manager: buildQueue 有 P0 queued 关键基建（hasCriticalStructureGap，在 domain/construction/queue.ts）
       // - layout-planner: 任一 snapshot 命中 assessEmergencyRebuild().any
       const isRecoveryExempt = system.recoveryEligible?.(ctx) === true;
@@ -280,13 +284,26 @@ export class Kernel {
         recordSkip(`system/${system.name}/budget`);
         continue;
       }
-      measuredRun(`system/${system.name}`, () =>
+      // 【F1/G-B】budgetCap 局部截断：EMA 超上限让位（缺省未启用=零行为变更）。
+      const sysCap = system.budgetCap;
+      const sysEma = globalCache().systemBudgetEma?.get(system.name);
+      if (sysCap !== undefined && sysEma !== undefined && sysEma > sysCap) {
+        recordSkip(`system/${system.name}/budget-cap`);
+        continue;
+      }
+      const cpuCostSys = measuredRun(`system/${system.name}`, () =>
         safeRun(
           `system/${system.name}`,
           () => system.run(ctx),
           system.priority === 0, // P0 系统是关键的 — 永不冷却。
         ),
       );
+      {
+        const gEma = globalCache();
+        const emaMap = gEma.systemBudgetEma ?? (gEma.systemBudgetEma = new Map<string, number>());
+        const prevEma = emaMap.get(system.name);
+        emaMap.set(system.name, prevEma === undefined ? cpuCostSys : prevEma * 0.8 + cpuCostSys * 0.2);
+      }
       const gRun = globalCache();
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
       if (ctx.budget.isExhausted()) break;
@@ -332,9 +349,10 @@ export class Kernel {
     // 原先 tick % interval === 0 使同 interval 的系统在同一 tick 扎堆运行
     // （每 10 tick 一个 CPU 尖峰节律），「错峰」原则未落实到系统层。
     // 内部有二级取模调度的系统必须用 systemPhase() 做相位相对判定。
-    if (system.interval && system.interval > 1) {
-      const phase = systemPhase(system.name, system.interval);
-      if (ctx.tick % system.interval !== phase) return false;
+    const interval = resolveInterval(this.cadenceTable, system.name, system.interval ?? 1);
+    if (interval > 1) {
+      const phase = systemPhase(system.name, interval);
+      if (ctx.tick % interval !== phase) return false;
     }
     return true;
   }
@@ -347,13 +365,26 @@ export class Kernel {
         recordSkip(`system/${system.name}/budget`);
         continue;
       }
-      measuredRun(`system/${system.name}`, () =>
+      // 【F1/G-B】post 系统同样受 budgetCap 局部截断。
+      const postCap = system.budgetCap;
+      const postEma = globalCache().systemBudgetEma?.get(system.name);
+      if (postCap !== undefined && postEma !== undefined && postEma > postCap) {
+        recordSkip(`system/${system.name}/budget-cap`);
+        continue;
+      }
+      const cpuCostPost = measuredRun(`system/${system.name}`, () =>
         safeRun(
           `system/${system.name}`,
           () => system.run(ctx),
           system.priority === 0, // P0 系统是关键的 — 永不冷却。
         ),
       );
+      {
+        const gEma = globalCache();
+        const emaMap = gEma.systemBudgetEma ?? (gEma.systemBudgetEma = new Map<string, number>());
+        const prevEma = emaMap.get(system.name);
+        emaMap.set(system.name, prevEma === undefined ? cpuCostPost : prevEma * 0.8 + cpuCostPost * 0.2);
+      }
       const gRun = globalCache();
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
       if (ctx.budget.isExhausted()) break;

@@ -39,7 +39,29 @@ export function getWallTargetHits(
 }
 
 export const CONFIG = {
-  memory: { schemaVersion: 36 },
+  memory: {
+    schemaVersion: 36,
+    /** 【F1/G-C】数据族 TTL 表（FREEZE §9）：每族 {maxAge, sweepPolicy}。
+     * sweepPolicy: "ring"（定长环自动截断）| "hook"（由既有清理钩子执行）| "planned"（消费者落地前占位）。
+     * 本表 v1 为治理登记：ring/hook 两类由既有机制兑现，"planned" 行不产生行为。 */
+    ttl: {
+      telemetryRing: { maxAge: 3000, sweepPolicy: "ring" },
+      economyRing: { maxAge: 10000, sweepPolicy: "ring" },
+      eventLogRing: { maxAge: 5000, sweepPolicy: "ring" },
+      skipReasons: { maxAge: 1, sweepPolicy: "hook" },
+      deadCreepPathCache: { maxAge: 100, sweepPolicy: "hook" },
+    } as Record<string, { maxAge: number; sweepPolicy: "ring" | "hook" | "planned" }>,
+    /** 【F1/G-D】segment 配额表（FREEZE §9，R2-8 参数表）：id 唯一、≤10 active。
+     * segment-store 消费本表 id；新增段必须在此登记并保持 ≤10。 */
+    segments: {
+      maxActive: 10,
+      layout: { id: 0 },
+      cpu: { id: 1 },
+      eventLog: { id: 2 },
+      economy: { id: 3 },
+      // 4–9 预留（见 segment-store 分配表注释）。
+    } as Record<string, { id: number } | number>,
+  },
 
   kernel: {
     /** 硬上限以下保留的安全 CPU 余量。 */
@@ -47,6 +69,8 @@ export const CONFIG = {
     logErrors: true,
     /** 相同错误日志的最小重复间隔 tick 数。 */
     errorLogInterval: 25,
+    /** 【G-I】统一 Logger 级别门（OUT-OF-FREEZE 参数）。 */
+    logLevel: "info" as "debug" | "info" | "warn" | "error",
     /** creep 被判定为卡位后重新寻路前的 tick 数。 */
     stuckThreshold: 2,
     /** 释放目标前的最大重新寻路次数。 */
@@ -108,6 +132,9 @@ export const CONFIG = {
      * 700 覆盖 0→conserve 阈值(1000+滞回) 的自然爬升加数轮滞回等待，
      * 窗口内真实超支仍由逐 tick 硬上限兜底。 */
     pixelGraceTicks: 700,
+    /** 【F1/G-A】cadence 覆盖层：按系统名覆盖注册时的 interval（空=全用注册值）。
+     * 真相源仍是各系统注册值；本表只做治理性覆盖，kernel 消费。 */
+    cadenceOverrides: {} as Record<string, number>,
   },
 
   pixel: {
@@ -186,7 +213,7 @@ export const CONFIG = {
       parked: 0,
     },
     /**
-     * P1-E：动态目标寻路限频（plan.md §5.7.5）。根因：traffic 模式下
+     * P1-E：动态目标寻路限频（docs/architecture/DATA_FLOW.md）。根因：traffic 模式下
      * registerStepViaPathfinder 的缓存 key = 目标精确格 + 路网 revision，
      * 动态目标（flee 逃逸点/追击 hostile/跟车目标）每 tick 变化 → 缓存必 miss →
      * 每 tick 每 creep 一次 PathFinder.search（战时 10 creep 同时 flee ≈ 10-30 CPU，

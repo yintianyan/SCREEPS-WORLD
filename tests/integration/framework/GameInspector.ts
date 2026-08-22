@@ -36,9 +36,9 @@ export interface EconomyReport {
   creepsDied: number;
   harvestRate: number;
   upgradeRate: number;
-  /** 能量趋势：正=增长，负=衰退 */
+  /** 能量趋势：正=增长，负=衰退（注意：开局冻结储备被消费也会导致负值，单独不构成螺旋证据） */
   energyTrend: number;
-  /** 是否处于死亡螺旋（连续 N tick 能量下降） */
+  /** 是否处于死亡螺旋（能量持续下降 且 人口同步萎缩——见 economyReport 内注释） */
   deathSpiral: boolean;
 }
 
@@ -99,13 +99,20 @@ export class GameInspector {
       const lateAvg = late.reduce((s, r) => s + r.totalEnergy, 0) / late.length;
       energyTrend = lateAvg - earlyAvg;
 
-      // 死亡螺旋：最后 20 tick 中超过 80% 能量在下降
+      // 死亡螺旋：最后 20 tick 能量持续下降 **且人口同步萎缩**。
+      // 仅看能量下降会把「健康支出期」（孵化/建造/升级消费、人口稳定）误判为螺旋 —
+      // 实测健康轨迹的 energyTrend 也为负（开局 container 冻结能量被逐步消费是结构性
+      // 支出），故必须以人口趋势作为生产崩溃的见证（P1-D：轨迹脆弱指标修复）。
       const last20 = records.slice(-20);
       let declining = 0;
+      let popDeclining = 0;
       for (let i = 1; i < last20.length; i++) {
         if (last20[i]!.totalEnergy < last20[i - 1]!.totalEnergy) declining++;
+        if (last20[i]!.creepCount < last20[i - 1]!.creepCount) popDeclining++;
       }
-      deathSpiral = declining / (last20.length - 1) > 0.8;
+      const energyFalling = declining / (last20.length - 1) > 0.8;
+      const populationCollapsing = popDeclining / (last20.length - 1) > 0.5;
+      deathSpiral = energyFalling && populationCollapsing;
     }
 
     return {

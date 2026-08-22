@@ -1,5 +1,5 @@
 /**
- * 侦察目标选择 — 主动情报的纯决策层（R6b，plan.md §14）。
+ * 侦察目标选择 — 主动情报的纯决策层（R6b，docs/architecture/GOAL_POLICY_PLAN_MODEL.md）。
  *
  * 背景：扩张「不见不选」（candidates 必须有过视野 sources），但视野只有
  * observer（RCL8）/过境 creep 顺带提供 — 高分候选房可能永远等不到视野。

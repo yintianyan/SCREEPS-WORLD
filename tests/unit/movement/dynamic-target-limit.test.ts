@@ -1,5 +1,5 @@
 /**
- * P1-E：动态目标寻路限频三档单测（plan.md §5.7.5，remediation P1-E）。
+ * P1-E：动态目标寻路限频三档单测（docs/architecture/DATA_FLOW.md，remediation P1-E）。
  *
  * 档 1 quantizeBlockKey：3×3 区块 key 量化 — 目标在区块内移动不触发重寻路。
  * 档 2 dynamicRepathInterval：重寻路冷却 — 冷却内沿旧路径/直走降级。

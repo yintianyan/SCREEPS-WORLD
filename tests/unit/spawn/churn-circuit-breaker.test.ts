@@ -92,12 +92,13 @@ function livingHarvester() {
 }
 
 /** normal 状态的 RoomDemandContext。 */
-function normalCtx(pressure = 0) {
+function normalCtx(pressure = 0, churnFreezeUntil?: Record<string, number>) {
   return {
     colonyState: "normal" as const,
     controllerDowngradeRisk: false,
     energyAvailable: 500,
     economyPressure: pressure,
+    churnFreezeUntil,
   };
 }
 
@@ -180,7 +181,7 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
 
     const snap = snapshotWithHarvester();
     // tick=250 < 300 → harvester 被冻结。
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(), 250);
+    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0, { harvester: 300 }), 250);
     expect(requests.filter(r => r.role === "harvester")).toHaveLength(0);
   });
 

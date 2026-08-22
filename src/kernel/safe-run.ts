@@ -131,7 +131,7 @@ function recordLastErrorSnapshot(label: string, error: unknown): void {
     if (!mem.kernel.stats) mem.kernel.stats = {} as never;
     (mem.kernel.stats as Record<string, unknown>).lastError = {
       label,
-      msg: formatError(error).split("\n")[0]?.slice(0, 220) ?? "",
+      msg: formatError(error).split("\n").slice(0, 8).join(" | ").slice(0, 1500) ?? "",
       tick: Game.time,
     };
   } catch {

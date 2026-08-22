@@ -1,5 +1,5 @@
 /**
- * 扩张节奏自适应 — 从失败中学习怎么扩张（R7b，plan.md §14.4）。
+ * 扩张节奏自适应 — 从失败中学习怎么扩张（R7b，docs/architecture/GOAL_POLICY_PLAN_MODEL.md）。
  *
  * 消费 ExpansionOutcome 归因（每次扩张任务收摊追加一条结果到有限 ring），
  * 产出三个有界调节：

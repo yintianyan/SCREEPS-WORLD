@@ -38,11 +38,15 @@ export interface System {
   /** 执行阶段：main（缺省）在角色之前，post 在所有角色之后 —
    * 供「消费角色执行期产出的 per-tick 数据」的系统使用（如 traffic-manager 解算移动意图）。 */
   readonly phase?: "main" | "post";
+  /** 【F1/G-B】单次调用 CPU 预算上限（EMA 平滑值，单位 CPU）。定义时生效：
+   * 连续超支的系统被跳过并记 skipReason=budget-cap——局部截断不连坐整 tick。
+   * 缺省 undefined = 不启用（零行为变更）。 */
+  readonly budgetCap?: number;
   /**
    * Recovery / 关键基建缺失豁免自报钩子（P1-F）。
    * 返回 true 时，kernel 在 budget 拦截前将其优先级等效提升为 P1，确保紧急重建
    * 路径在任何 CPU 档位下都能运行。kernel 只读此钩子，不硬编码系统名
-   * （plan.md §2.1：内核不感知具体业务）。
+   * （docs/architecture/KERNEL_ARCHITECTURE.md：内核不感知具体业务）。
    * 典型实现：construction-manager（buildQueue 有 P0 queued 关键基建）/
    * layout-planner（任一 snapshot 命中 assessEmergencyRebuild().any）。
    */
@@ -163,6 +167,16 @@ export interface RoomSnapshot {
    * buildRoomSnapshot 已遍历 FIND_HOSTILE_CREEPS，此处同时采集 FIND_CREEPS（含己方）
    * 在同一遍 find 中完成。可选：旧测试 mock 或无视野房缺省视为空表。 */
   readonly creepPositions?: ReadonlyMap<number, { name: string; my: boolean; fatigue: number }>;
+}
+
+/** 【G-G/R2-3】状态族版本（Intent 分层指纹数据源；实现见 kernel/state-store）。 */
+export interface StateStore {
+  /** 当前族版本（未触碰=0）。 */
+  version(family: string): number;
+  /** 递增并返回新版本（owner 在差分写入时调用）。 */
+  bump(family: string): number;
+  /** 全族快照（诊断/测试用）。 */
+  versionOfAll(): Record<string, number>;
 }
 
 /** 传递给每个系统和角色的不可变单 tick 上下文。 */

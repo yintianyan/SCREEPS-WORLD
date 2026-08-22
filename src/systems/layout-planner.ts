@@ -33,6 +33,7 @@ import { packPos, unpackPos } from "../domain/layout/types";
 import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { diagnoseAnchor } from "../domain/layout/anchor-selection";
 import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG } from "../domain/layout/constraint-placer";
+import { log } from "../kernel/log";
 import { assessEmergencyRebuild, isEmergencyTask } from "../domain/construction/queue";
 import { auditStructureGaps, auditLinkRoleGaps, mergeLinkRoleGaps, type StructureGaps } from "../domain/layout/gaps";
 import {
@@ -181,7 +182,7 @@ export const layoutPlannerSystem: System & {
    *
    * CTO 裁决（2026-08-01）：常规 50-tick 重规划不再享受 recovery 档豁免 —
    * 仅在关键基建确实缺失时提升。kernel 只读此钩子，不再硬编码 layout-planner
-   * 名字（plan.md §2.1）。
+   * 名字（docs/architecture/KERNEL_ARCHITECTURE.md）。
    */
   recoveryEligible: (ctx: TickContext): boolean => {
     for (const snapshot of ctx.snapshots()) {
@@ -458,6 +459,11 @@ function planStage1Core(
       snapshot.terminal
         ? { x: snapshot.terminal.pos.x, y: snapshot.terminal.pos.y }
         : undefined,
+      (shortfalls) => {
+        for (const s of shortfalls) {
+          log.warn("layout", "placement shortfall in " + (s.roomName ?? "?") + ": " + s.type + " need " + s.needed + " placed " + s.placed);
+        }
+      },
     );
     const constraintCandidates = placementsToCandidates(placements, snapshot.roomName);
 
@@ -732,6 +738,7 @@ function planStage3RoadsAndFinalize(
       occupiedSet,
       queue,
       existingKeys,
+      tick: ctx.tick,
     });
     for (const task of roadTasks) {
       const posKey = `${task.pos.x},${task.pos.y}`;

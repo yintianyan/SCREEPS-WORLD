@@ -11,6 +11,7 @@
  * 旧版 CPU+Economy 混存 segment 1 满载 ~81KB 逼近 100KB 上限，拆分后各自
  * 远低于上限；激活 4 个 segment 仍在 10 个上限内 [Facts]。
  */
+import { CONFIG } from "../config";
 import { globalCache } from "./global-cache";
 import type {
   CpuSegmentData,
@@ -25,10 +26,17 @@ import { createRingBuffer, ringToArray, ringPush, type RingBuffer } from "./ring
 
 // ─── Segment ID 常量 ────────────────────────────────────────
 
-export const SEGMENT_LAYOUT = 0;
-export const SEGMENT_CPU = 1;
-export const SEGMENT_EVENT_LOG = 2;
-export const SEGMENT_ECONOMY = 3;
+// 【F1/G-D】segment id 真相源 = CONFIG.memory.segments 配额表（FREEZE §9）；
+// 此处仅保留兼容别名。新增段必须先在配额表登记（≤10 active）。
+const SEG_IDS = CONFIG.memory.segments as Record<string, { id: number } | number>;
+function segId(name: string, fallback: number): number {
+  const entry = SEG_IDS[name];
+  return typeof entry === "number" ? fallback : (entry?.id ?? fallback);
+}
+export const SEGMENT_LAYOUT = segId("layout", 0);
+export const SEGMENT_CPU = segId("cpu", 1);
+export const SEGMENT_EVENT_LOG = segId("eventLog", 2);
+export const SEGMENT_ECONOMY = segId("economy", 3);
 /** @deprecated 使用 SEGMENT_CPU。保留用于迁移期间的代码引用。 */
 export const SEGMENT_TIMESERIES = SEGMENT_CPU;
 

@@ -1,7 +1,7 @@
 /**
  * trySpawn 消费逻辑测试 — SP-1 recovery 能量预留 + 首批管线本体覆盖。
  *
- * 背景（审计 SP-1）：plan.md「保留恢复能源是不可妥协的硬约束」，但孵化侧
+ * 背景（审计 SP-1）：AGENTS.md「保留恢复能源是不可妥协的硬约束」，但孵化侧
  * 原先不预留一分 — 低优先级孵化可把能量花到 0，团灭窗口内 P0 恢复要
  * 等 ~200 tick 被动回能。修复：采集链濒临断裂（collectorCount ≤ 1）时
  * 非 P0 请求按 energyBudget - recoveryEnergyReserve 校验。

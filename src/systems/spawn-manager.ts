@@ -144,6 +144,10 @@ export const spawnManagerSystem: System = {
         haulerPendingTarget: computeHaulerPendingTarget(snapshot.roomName),
         // R6a：议程注入（rcl-push 放宽 upgrader 冲刺门槛）。
         agendaInitiative: Memory.kernel?.agenda?.initiative,
+        // 【G-J 合规】churn 冻结表注入（写者=本系统 cleanQueue；domain 不触 Memory）。
+        churnFreezeUntil: roomMem?.churnFreezeUntil as Record<string, number> | undefined,
+        // 【G-J 合规】建造 backlog 注入（数据源=construction-manager 维护的 RoomMemory.buildQueue；本系统为读者）。
+        buildQueueBacklog: (roomMem?.buildQueue as readonly { state?: string }[] | undefined)?.filter(t => t.state === "queued").length ?? 0,
       };
       const demandResult = evaluateDemand(
         snapshot,
@@ -162,7 +166,7 @@ export const spawnManagerSystem: System = {
         submitRequest(queue, req);
       }
       // P1-J：写回迟滞状态。undefined 表示「清除」语义（如需求回落重置），
-      // 用 delete 而非赋值 undefined 保持 Memory 体积精简（plan.md §7 性能优化）。
+      // 用 delete 而非赋值 undefined 保持 Memory 体积精简（docs/architecture/CPU_EXECUTION_MODEL.md 性能优化）。
       if (nextHysteresis.distScaleUpSince === undefined) {
         delete roomMem.distScaleUpSince;
       } else {
@@ -281,7 +285,7 @@ function recyclePass(
  * 能量记账：room.energyAvailable 是 tick 开始快照，同 tick 多次 spawnCreep 的扣费
  * 在意图执行阶段才结算 — 若都按快照校验，第二个意图可能超支失败；因此用本地
  * energyBudget 逐次扣减，保证每个意图都在真实可用额度内。
- * SP-1（plan.md「保留恢复能源」硬约束落地）：采集链濒临断裂（collectorCount ≤ 1）时，
+ * SP-1（AGENTS.md「保留恢复能源」硬约束落地）：采集链濒临断裂（collectorCount ≤ 1）时，
  * 非 P0 请求的预算扣除 recoveryEnergyReserve — 低优先级孵化不得把能量花到 P0 团灭
  * 恢复无法立即出生的程度；常态不预留，避免浪费容量。
  * @internal 导出仅供单元测试（tests/unit/spawn/try-spawn.test.ts）— 业务代码
@@ -298,10 +302,17 @@ export function trySpawn(
 
   // 收集所有空闲 spawn — RCL7-8 有 2-3 个 spawn，逐个消费队列请求。
   const freeSpawns = snapshot.spawns.filter(s => !s.spawning);
-  if (freeSpawns.length === 0) return; // 所有 spawn 忙 — 不是错误。
+  // 【Phase3A 修复】全部 spawn 忙（含孵化窗口）时本 tick 不孵化 —— 下 tick 重试。
+  // 必须在访问 freeSpawns[0] 之前判空：空数组时 [0].room 会抛 TypeError
+  // （E2E-006 实测 103 次 TypeError 中断孵化管线 → 死亡螺旋）。
+  if (freeSpawns.length === 0) return;
 
   let spawnIdx = 0;
-  let energyBudget = freeSpawns[0]!.room.energyAvailable;
+  // 【防御】mockup 环境 spawn 包装对象的 room 引用存在瞬态 undefined（孵化边界），
+  // 此时本 tick 跳过孵化（下 tick 重试），避免 TypeError 中断整个系统。
+  const primaryRoom = freeSpawns[0]!.room;
+  if (!primaryRoom) return;
+  let energyBudget = primaryRoom.energyAvailable;
   // SP-1：非 P0 请求可用的预算（P0 本身可动用全部能量）。
   const reserve = collectorCount <= 1 ? CONFIG.spawn.recoveryEnergyReserve : 0;
 
@@ -316,7 +327,9 @@ export function trySpawn(
     if (!req) continue;
 
     // P0 阻塞：如果存在 P0 请求但暂时无法满足，不孵化非 P0 creep。
-    if (hasP0 && req.priority > 0) return;
+    if (hasP0 && req.priority > 0) {
+      return;
+    }
 
     // 检查 body 是否有效。
     if (req.body.length === 0) {
@@ -389,7 +402,8 @@ export function trySpawn(
     }
 
     // 检查 body 不超过容量上限。
-    const capacity = spawn.room.energyCapacityAvailable;
+    const capacity = spawn.room ? spawn.room.energyCapacityAvailable : 0;
+    if (capacity === 0) continue; // 【防御】同上：room 引用瞬态缺失时跳过本次请求。
     if (bodyCost(body) > capacity) {
       req.retries++;
       console.log(

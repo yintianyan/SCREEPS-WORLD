@@ -60,8 +60,23 @@ export interface WorldConfig {
   cpuBucket?: number;
   /** CPU limit（默认 20） */
   cpuLimit?: number;
+  /** Math.random 种子（默认 12345）— 每个 installGlobals 重置为该种子，使仿真轨迹
+   * 完全可复现（spawn 命名含随机后缀，会经排序/平局裁决影响逐 tick 轨迹；
+   * A0 验收证据合同要求同输入同行为）。 */
+  randomSeed?: number;
   /** 预设房间 Memory 为 normal/steady 状态（防止 room-state 首 tick 计算 bootstrap 阻塞 P2 角色） */
   preseedRoomState?: boolean;
+}
+
+/** mulberry32 — 种子化 PRNG（32bit，足够测试确定性用途）。 */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 // ─── 内部实体类 ─────────────────────────────────────────────
@@ -1292,6 +1307,10 @@ export class TestWorld {
   installGlobals(): void {
     const world = this;
     const room = this._room;
+
+    // 确定性：本 world 的 Math.random 固定种子 — 仿真轨迹可复现
+    //（生产代码仅 spawn 命名用 Math.random 作防碰撞后缀，种子化不影响其语义）。
+    Math.random = mulberry32(this.config.randomSeed ?? 12345);
 
     // Game 对象
     (globalThis as Record<string, unknown>).Game = {

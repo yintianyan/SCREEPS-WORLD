@@ -146,6 +146,7 @@ export function defaultPathFn(
 export function planCorridorRoads(
   room: Room,
   snapshot: RoomSnapshot,
+  tick: number,
   options: CorridorRoadOptions = DEFAULT_CORRIDOR_OPTIONS,
   pathFn?: PathFn,
   protectedPositions?: ReadonlySet<number>,
@@ -162,7 +163,7 @@ export function planCorridorRoads(
   // 路径缓存查询（仅当 anchor 提供时启用）。
   let path: { x: number; y: number }[];
   if (anchor && !pathFn) {
-    path = getCachedOrComputePath(snapshot.roomName, pairKey, pair, anchor, snapshot, room, protectedPositions);
+    path = getCachedOrComputePath(snapshot.roomName, pairKey, pair, anchor, snapshot, room, tick!, protectedPositions);
   } else {
     // 单测注入 pathFn 或无 anchor 时不走缓存（保证测试确定性）。
     const fn = pathFn ?? defaultPathFn(snapshot, room, protectedPositions);
@@ -212,6 +213,7 @@ function getCachedOrComputePath(
   anchor: { x: number; y: number },
   snapshot: RoomSnapshot,
   room: Room,
+  tick: number,
   protectedPositions?: ReadonlySet<number>,
 ): { x: number; y: number }[] {
   const cache = globalCache();
@@ -239,7 +241,7 @@ function getCachedOrComputePath(
     rcl: snapshot.rcl,
     anchor: { x: anchor.x, y: anchor.y },
     path,
-    tick: Game.time,
+    tick,
   };
   cache.corridorPathCache.set(roomName, entry);
   return path;

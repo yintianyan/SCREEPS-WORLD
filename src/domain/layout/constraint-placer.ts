@@ -472,6 +472,7 @@ export function placeStructures(
   roomName?: string,
   controllerPos?: { x: number; y: number },
   terminalPos?: { x: number; y: number },
+  diagnostics?: (shortfalls: readonly { type: string; needed: number; placed: number; roomName?: string }[]) => void,
 ): ConstraintPlacement[] {
   // ── 自适应搜索半径 ──
   // 固定 maxRadius=7 候选池在多墙 + RCL7-8 高密度下会被密封守卫耗尽 → 静默少放。
@@ -606,15 +607,16 @@ export function placeStructures(
   // ── 放置缺口可观测性 ──
   // 根治静默少放：按类型对比真实缺口与实际放置，缺口即告警（半径已穷尽 → 地形
   // 过于破碎，需人工介入：换锚点 / 接受降级 / 手动规划）。频率 = 规划频率（50 tick）。
+  // 【G-J 合规】domain 不触 console：缺口以数据回调交由 systems 层记录。
+  const shortfalls: { type: string; needed: number; placed: number; roomName?: string }[] = [];
   for (const [type, needed] of residualNeedByType) {
     const placedCount = placedByType.get(type) ?? 0;
     if (placedCount < needed) {
-      console.log(
-        `[layout] WARN placement shortfall${roomName ? ` in ${roomName}` : ""}: ` +
-        `${type} need ${needed} placed ${placedCount} (missing ${needed - placedCount}) — ` +
-        `search radius exhausted at ${effectiveRadius}, terrain too constrained`,
-      );
+      shortfalls.push({ type, needed, placed: placedCount, roomName });
     }
+  }
+  if (shortfalls.length > 0 && diagnostics) {
+    diagnostics(shortfalls);
   }
 
   return placements;

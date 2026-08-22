@@ -51,6 +51,10 @@ export interface RoomDemandContext {
   liquidityScore?: number;
   /** 偿付危机分 (0-100)；与 liquidityScore 比较判定危机主导维度。 */
   drainScore?: number;
+  /** 【G-J 合规】churn 冻结表（spawn-manager 写入后注入，domain 不触 Memory）。 */
+  churnFreezeUntil?: Record<string, number>;
+  /** 【G-J 合规】buildQueue backlog 计数（construction-manager 维护，注入）。 */
+  buildQueueBacklog?: number;
   /**
    * P1-J：上一 tick 迟滞状态（适配层从 RoomMemory 读出注入）：distScaleUpSince
    * （distributor 扩编确认计时器）与 builderPressureState（压力迟滞带）。
@@ -266,9 +270,9 @@ export function evaluateDemand(
   // 熔断期间跳过对应角色评估。P0 worker 恢复路径（livingHarvesters===0）绝对不冻结 —
   // rcl1-survival 生命线（见下方 P0 块早期 return）。
   const frozenRoles = new Set<string>();
-  const roomMem = Memory.rooms[home];
-  if (roomMem?.churnFreezeUntil) {
-    for (const [role, until] of Object.entries(roomMem.churnFreezeUntil)) {
+  const churnFreeze = roomCtx.churnFreezeUntil;
+  if (churnFreeze) {
+    for (const [role, until] of Object.entries(churnFreeze)) {
       if (typeof until === "number" && tick < until) frozenRoles.add(role);
     }
   }
@@ -710,9 +714,7 @@ export function evaluateDemand(
   const roadRepairDemand = roadsNeedingRepair >= CONFIG.construction.roadRepairBuilderFloor;
   // P1-1：纳入 buildQueue backlog（保守权重 0.5）— site 数受配额限制（默认 3）看不到
   // backlog，backlogWeighted 补盲；roomMem 由 construction-manager 每 tick 维护。
-  const queuedBacklog = roomMem?.buildQueue
-    ? roomMem.buildQueue.filter(t => t.state === "queued").length
-    : 0;
+  const queuedBacklog = roomCtx.buildQueueBacklog ?? 0;
   const backlogWeighted = Math.floor(queuedBacklog * 0.5);
   if (colonyState !== "bootstrap" && (snapshot.myConstructionSites.length > 0 || roadRepairDemand || backlogWeighted > 0) && !frozenRoles.has("builder")) {
     const builderConfig = getRoleBounds("builder", home);

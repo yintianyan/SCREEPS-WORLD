@@ -61,7 +61,7 @@ describe("P1-F.1 — roomPhase 相位偏移哈希", () => {
 
   it("与 systemPhase 共用 hashPhase 算法（同 key+interval 返回相同值）", () => {
     // roomPhase 与 systemPhase 都是 hashPhase 的语义包装 — 哈希族一致
-    // 是 P1-F 的核心设计契约（plan.md §3.2 错峰）。
+    // 是 P1-F 的核心设计契约（docs/architecture/CPU_EXECUTION_MODEL.md 错峰）。
     expect(roomPhase("W7N4", 50)).toBe(systemPhase("W7N4", 50));
     expect(roomPhase("abc", 10)).toBe(systemPhase("abc", 10));
     expect(roomPhase("", 7)).toBe(systemPhase("", 7));
@@ -600,7 +600,7 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     const layout = (globalThis as any).Memory.rooms.W7N4.layout;
     expect(layout.planStage).toBe(0); // 重置为 0
     // 本 tick 不执行 stage 2 逻辑，下 tick 从 stage 0 重新开始
-    // 最多损失一个规划周期（plan.md §P1-F 风险评估）
+    // 最多损失一个规划周期（旧 plan.md P1-F 风险评估，已并入 docs/architecture）
   });
 
   it("global reset 恢复对 stage 1 同样生效", () => {

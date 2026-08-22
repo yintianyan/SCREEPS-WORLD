@@ -26,6 +26,8 @@ export interface RoadPlanContext {
   readonly queue: readonly BuildTask[];
   /** 已入队的 key 集合（用于去重，只读引用；内部用本地 Set 追踪本批次新增）。 */
   readonly existingKeys: ReadonlySet<string>;
+  /** 【G-J 合规】当前 tick（domain 不触 Game 全局）。 */
+  readonly tick: number;
 }
 
 /** 规划本周期应入队的道路任务；调用方负责 push 到 queue 并更新 existingKeys，内部已去重。 */
@@ -109,7 +111,7 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
       protectedPositions.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
     }
 
-    const corridorRoads = planCorridorRoads(room, snapshot, undefined, undefined, protectedPositions, anchor);
+    const corridorRoads = planCorridorRoads(room, snapshot, ctx.tick);
     for (const pos of corridorRoads) {
       const key = `road.${snapshot.roomName}.${pos.x}.${pos.y}`;
       if (isDuplicate(key)) continue;

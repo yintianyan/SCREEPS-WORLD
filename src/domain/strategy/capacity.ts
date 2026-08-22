@@ -1,5 +1,5 @@
 /**
- * 算力容量模型 — 规模规划的 CPU 前馈层（R7a，plan.md §14 延伸）。
+ * 算力容量模型 — 规模规划的 CPU 前馈层（R7a，docs/architecture/GOAL_POLICY_PLAN_MODEL.md 延伸）。
  *
  * 与四档 bucket 看门狗正交：看门狗管「本 tick 突发」的反应式降载（bucket 掉了
  * 才收缩）；本模型管「帝国该养多大」的规划式雄心 — 在 bucket 压力出现之前，

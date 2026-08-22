@@ -1,4 +1,5 @@
 import { TaskPool } from "../domain/assignment/task-pool";
+import type { TraceState } from "./decision-trace";
 
 /** assignment-service 的单 tick 缓存。 */
 export interface AssignmentCache {
@@ -62,6 +63,10 @@ export interface GlobalCache {
    * 直送核心 sink — 否则能量锁进无人能取的仓库，energyAvailable 卡死在 spawn 自充值，
    * 全舰队孵化饥饿降级。 */
   distributorRooms?: ReadonlySet<string>;
+  /** 【G-H】DecisionTrace 分层 ring（volatile 调试设施）。 */
+  decisionTrace?: TraceState;
+  /** 【F1/G-B】各系统 CPU 消耗 EMA（budgetCap 局部截断判据）。heap 存储，reset 后从零重建（EMA 快速收敛可接受）。 */
+  systemBudgetEma?: Map<string, number>;
   /** 本 tick 的 boost 报到分配表（lab-system 每 tick 写入）。
    * key = creep 名；ready = lab 内化合物已备足（≥ 单次 boost 用量）—
    * 报到拦截仅在 ready 时生效，避免 creep 罚站等 supplyLabs 搬运

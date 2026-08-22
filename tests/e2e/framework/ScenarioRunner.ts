@@ -68,8 +68,20 @@ export class ScenarioRunner {
     this._server = new ServerHarness();
     await this._server.reset(opts.stubWorld ?? false);
 
+    // 【Phase3A 修复】双 spawn 去重：mockup 的 addBot() 会自动在目标房创建一个
+    // store 制式 spawn；若夹具再放一个 legacy 制式（energy 字段）spawn，两者能量
+    // 计费口径分裂 —— transfer 只写 store、引擎容量检查读 legacy → 孵化容量恒 0，
+    // 经济死亡螺旋（根因分析见 git 历史的 docs/phase3，文档已删除）。
+    // 因此 bot 所在房间的夹具 spawn 一律移除，由 addBot 统一提供。
+    const roomsForWorld = opts.rooms.map((r) => ({
+      ...r,
+      objects: (r.objects ?? []).filter(
+        (o) => !(o.type === "spawn" && r.name === opts.roomName),
+      ),
+    }));
+
     this._worldBuilder = new WorldBuilder(this._server.server.world);
-    await this._worldBuilder.addRooms(opts.rooms);
+    await this._worldBuilder.addRooms(roomsForWorld);
 
     const spawnPos = opts.spawnPos ?? { x: 25, y: 25 };
     this._bot = new BotHarness(
@@ -91,8 +103,31 @@ export class ScenarioRunner {
       throw new Error("ScenarioRunner.tick() called before setup()");
     }
     await this._server.tick();
+    // 【Phase3A 环境垫片】screeps-server-mockup/driver 分裂脑缺陷：creep transfer 意图
+    // 只写 spawn.store，而引擎的 room.energyAvailable / spawnCreep 容量检查读 legacy
+    // .energy 字段 —— 后者从不被 transfer 更新，导致孵化容量恒 0、经济死亡螺旋。
+    // 官方服务器无此问题（两处由引擎同步）。此处将 legacy 对齐到 store 真值。
+    await this.syncSpawnEnergyLegacy();
     const tick = await this._server.gameTime;
     return this._inspector.snapshot(tick);
+  }
+
+  /**
+   * 【环境垫片】把 W0N1 spawn 的 legacy energy 字段对齐到 store.energy。
+   * 仅测试基础设施使用；生产代码不得依赖。
+   */
+  private async syncSpawnEnergyLegacy(): Promise<void> {
+    try {
+      const world = (this._server as any).server.world;
+      const objs = await world.roomObjects(this._bot?.roomName ?? "W0N1");
+      for (const o of objs) {
+        if (o.type === "spawn" && o.store && typeof o.store.energy === "number" && o.energy !== o.store.energy) {
+          o.energy = o.store.energy;
+        }
+      }
+    } catch {
+      // 垫片失败不阻塞 tick（仅影响孵化容量判定的真实性）
+    }
   }
 
   /**
