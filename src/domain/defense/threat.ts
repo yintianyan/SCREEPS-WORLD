@@ -33,7 +33,9 @@ export function classifyThreats(
 ): Creep[] {
   return hostiles.filter(c =>
     isThreat(
-      { owner: c.owner.username, bodyParts: c.body.map(b => b.type) },
+      // owner 缺失（私服注入/NPC 边缘形态）记 "?"——非盟友名，按威胁部件判定，
+      // 不可在逐 tick 威胁分类里抛错（否则威胁在场期间防御链整体失能）。
+      { owner: c.owner?.username ?? "?", bodyParts: c.body.map(b => b.type) },
       allies,
     ),
   );
@@ -58,6 +60,6 @@ export function isSquadThreat(threats: readonly ThreatInput[]): boolean {
 /** Creep 列表版本的小队判定（snapshot 构建处使用）。 */
 export function isSquadThreatCreeps(threats: readonly Creep[]): boolean {
   return isSquadThreat(
-    threats.map(c => ({ owner: c.owner.username, bodyParts: c.body.map(b => b.type) })),
+    threats.map(c => ({ owner: c.owner?.username ?? "?", bodyParts: c.body.map(b => b.type) })),
   );
 }

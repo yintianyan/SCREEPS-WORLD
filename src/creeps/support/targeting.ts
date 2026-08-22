@@ -24,8 +24,10 @@ export function getHostilesCached(room: Room): Creep[] {
     return cached.creeps;
   }
   const allies = CONFIG.defense.allies;
+  // owner 缺失（私服注入/NPC 边缘形态）视为非盟友 → 敌对；不可让 filter 抛错
+  // （该缓存被 attacker/remote-defender 逐 tick 调用，抛错即战斗失能）。
   const hostiles = room.find(FIND_HOSTILE_CREEPS, {
-    filter: (c) => !allies.includes(c.owner.username),
+    filter: (c) => !allies.includes(c.owner?.username ?? ""),
   });
   g.__hostilesCache[room.name] = { tick: Game.time, creeps: hostiles };
   return hostiles;

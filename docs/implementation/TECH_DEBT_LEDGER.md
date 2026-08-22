@@ -205,3 +205,31 @@ R0 初始冻结）开工 P1（IMPLEMENTATION_PHASES §2）。本批次三笔：
   原「末 20 tick >80% 能量下降」误报健康支出期为螺旋（实测健康轨迹 energyTrend
   也为负——开局 container 冻结能量被消费是结构性支出）；改为「能量持续下降 ∧
   人口同步萎缩（>50% tick 递减）」。全部 7 处断言均为负向断言，无正向检测受影响。
+
+## Phase-2 / P2（单房生存闭环 → A1）批次登记 — 2026-08-23
+
+按 IMPLEMENTATION_PHASES §2 P2 合同执行。本批次以验收取证为主（实现已成熟），
+新增/修复四笔：
+
+- **A1 缺口测试（新增）**：`tests/integration/scenarios/a1-bootstrap-tower.test.ts`
+  ——「RCL2→RCL3 爬升后 tower site 由 AI 自然创建」。既有覆盖中 e2e-002 只验
+  RCL1→RCL2、rcl3/rcl4 场景预设 tower/storage（测行为不测爬升），缺的正是
+  A1「RCL3+ 且 tower 在建」结构层链路。新测试全链闭环：自然升级 → 布局解锁
+  tower 相位 → site 自然创建 → builder 由 census 自然补位 → tower 建成。
+- **hostile owner 防御性读取（生产加固）**：threat.ts / targeting.ts /
+  expansion-manager 的 hostile 过滤改 `c.owner?.username ?? "?"|""`（无 owner
+  视为敌对）。官服 NPC 恒有 owner，但战斗/威胁路径逐 tick 运行不可抛错。
+- **e2e 注入修复（测试基建）**：WorldBuilder.addHostileCreep 原传 `owner`
+  字符串——引擎 owner getter 是 `runtimeData.users[o.user].username`，无 user
+  字段时 getter 内部抛 TypeError（e2e-004 两测试因此常红）。改注入真实 NPC
+  user id（mockup 预置 '2'=Invader / '3'=Source Keeper）。
+- **e2e 环境修复（工具链）**：@screeps/driver 嵌套 isolated-vm 与本机
+  Node 26 ABI 不容（且 CLT 缺 libc++ 头）——需 `PATH=nvm node22 +
+  SDKROOT=$(xcrun --show-sdk-path) npx node-gyp rebuild --release` 原地重建。
+  e2e 必须在 Node 22 下运行（与 @types/node ^22 对齐）。
+
+A1 证据台账：自举链（e2e-002 RCL1→RCL2 + a1-bootstrap-tower RCL2→RCL3+tower）、
+冷启动（rcl1-suite T1）、关键角色补位（rcl1-suite T4 替代延迟量化 + e2e-001
+0-creep 灾后 500t 内复产）、零人工（ScenarioRunner 纯代码上传 + tick 驱动，
+零 console 注入）。30 万 tick 全程验收留待官服 soak（A5 窗口），压缩证据
+（e2e-006 11k tick 长稳 + rcl1-suite 6.5k tick）先行入库。

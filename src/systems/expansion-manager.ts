@@ -551,7 +551,8 @@ function advancePioneering(ctx: TickContext, expansion: ExpansionState, spawning
   // 审查修正：编队存活时只暂停补充，超时/完成判定继续运行 —
   // 原先直接 return 会让长期骚扰无限推迟超时判定。
   const hostiles = targetRoom.find(FIND_HOSTILE_CREEPS, {
-    filter: c => !CONFIG.defense.allies.includes(c.owner.username) &&
+    // owner 缺失（私服注入/NPC 边缘形态）视为非盟友 → 敌对，防 filter 抛错。
+    filter: c => !CONFIG.defense.allies.includes(c.owner?.username ?? "") &&
       c.body.some(p => p.type === ATTACK || p.type === RANGED_ATTACK),
   });
   if (hostiles.length > 0) {

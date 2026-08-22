@@ -135,10 +135,14 @@ export class WorldBuilder {
   ): Promise<void> {
     // screeps-server-mockup 期望 body 为字符串数组（部件类型）
     const bodyParts = body.map((b) => (typeof b === "string" ? b : b.type));
+    // 引擎的 creep.owner getter 是 runtimeData.users[o.user].username —— 注入必须带
+    // 真实 user id（mockup world.reset 预置 NPC：'2'=Invader、'3'=Source Keeper），
+    // 传 owner 字符串会被 DB 存下但 getter 解析 undefined 直接抛 TypeError。
+    const userId = owner === "source-keeper" ? "3" : "2";
     await this.world.addRoomObject(roomName, "creep", x, y, {
       body: bodyParts.map((type) => ({ type, hits: 100 })),
       name,
-      owner,
+      user: userId,
       hits: bodyParts.length * 100,
       hitsMax: bodyParts.length * 100,
       fatigue: 0,
