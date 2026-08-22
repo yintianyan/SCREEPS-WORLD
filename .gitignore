@@ -37,6 +37,7 @@ coverage/
 # Screeps telemetry & export data (generated, not source)
 tools/data/
 data/
+/server
 
 # TypeScript
 *.tsbuildinfo
