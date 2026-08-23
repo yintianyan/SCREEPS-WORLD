@@ -45,24 +45,21 @@ import {
   createDismantlePlan,
   getDismantlePlans,
 } from "./link-system";
+// D2 归位：纯函数已下沉到 domain/layout/planner.ts
+import {
+  makeTryAddTask as makeTryAddTaskDomain,
+  planHubRoads as planHubRoadsDomain,
+  isPositionBuildable as isPositionBuildableDomain,
+  findSpawnRelocationPosition as findSpawnRelocationPositionDomain,
+  shouldPlan as shouldPlanDomain,
+  GAP_RETRY_INTERVAL,
+  MAX_HUB_ROADS_PER_PLAN,
+} from "../domain/layout/planner";
 
 /**
- * 目标清单缺口未闭合时的慢速重试间隔（2026-08-01）。
- * 受限地形（密封/拥挤）放置失败后，按正常 planInterval(50) 重试会「每周期空转放不下」
- * （实测 W7N3 ext 41/60、lab 4/10 持续数个周期）— 缺口持续时以 500 tick 慢速重试。
+ * D2 归位：常量 GAP_RETRY_INTERVAL / MAX_HUB_ROADS_* 已下沉到
+ * domain/layout/planner.ts，此处只 import 复用。
  */
-const GAP_RETRY_INTERVAL = 500;
-
-/**
- * 枢纽道路联动（2026-08-01）：物流枢纽结构入队时同步预铺相邻 road。
- * 病灶（空间评审实证）：热度驱动道路规划滞后于城区成型 — W7N4 RCL8 满配后 ext 邻路率
- * 仅 32%（W8N3 的 82% 说明热度机制最终能铺好，但延迟数十个采样周期，期间 hauler 踩草地）。
- * 设计约束（plan §5.5：道路逐段添加、绝不预铺全房）：只铺枢纽结构邻格（extension 仍走
- * 热度路）；每结构最多 2 条、每周期最多 6 条，不占热度路采样额度；priority 3 与既有
- * 道路一致；与热度/走廊路共用 key 命名 + existingKeys 去重。
- */
-const MAX_HUB_ROADS_PER_STRUCTURE = 2;
-const MAX_HUB_ROADS_PER_PLAN = 6;
 
 // ─── P1-F.6：4-stage 分片跨 tick 中间产物 ──────────────────
 
@@ -136,25 +133,14 @@ function clearPlanStageData(roomName: string): void {
 }
 
 /**
- * 重建 tryAddTask 闭包（从 planStageData 提取共享状态）。
- * stages 1-3 共用同一去重逻辑 — key + position + blacklist 三重检查。
+ * D2 归位：tryAddTask 闭包逻辑已下沉到 domain/layout/planner.ts 的 makeTryAddTaskDomain。
+ * 系统侧薄壳包装——从 planStageData 提取参数委托给纯函数。
  */
 function makeTryAddTask(
   data: PlanStageData,
   queue: BuildTask[],
 ): (candidate: BuildTaskCandidate) => boolean {
-  const { existingKeys, existingPositions, segBlocked } = data;
-  const isBlacklisted = (key: string): boolean => segBlocked[key] !== undefined;
-  return (candidate: BuildTaskCandidate): boolean => {
-    if (existingKeys.has(candidate.key)) return false;
-    if (isBlacklisted(candidate.key)) return false;
-    const posKey = `${candidate.pos.x},${candidate.pos.y}`;
-    if (existingPositions.has(posKey)) return false;
-    queue.push(candidateToBuildTask(candidate));
-    existingKeys.add(candidate.key);
-    existingPositions.add(posKey);
-    return true;
-  };
+  return makeTryAddTaskDomain(data.existingKeys, data.existingPositions, data.segBlocked, queue);
 }
 
 /**
@@ -843,10 +829,8 @@ function planStage3RoadsAndFinalize(
 }
 
 /**
- * 枢纽道路联动：为房间内**已建成**的枢纽结构（spawn/storage/terminal/factory/lab/link）
- * 预铺相邻 road — 修复热度路滞后于城区成型的本体问题（W7N4：RCL8 满配后 ext 邻路率 32%）。
- * 邻格选择：4 正交邻居中按「距 anchor 近者优先」（物流侧朝向城区）；跳过墙/占用/黑名单/
- * 已有任务。每结构最多 2 条、每周期最多 6 条 — 与热度路共用 key 命名与去重。
+ * D2 归位：枢纽道路联动纯函数已下沉到 domain/layout/planner.ts。
+ * 系统侧薄壳——从 snapshot 组装参数委托给纯函数。
  */
 function planHubRoads(
   snapshot: import("../kernel/contracts").RoomSnapshot,
@@ -858,7 +842,6 @@ function planHubRoads(
   existingPositions: Set<string>,
   isBlacklisted: (key: string) => boolean,
 ): void {
-  const terrain = room.getTerrain();
   const hubs: { x: number; y: number }[] = [
     ...snapshot.spawns.map(s => ({ x: s.pos.x, y: s.pos.y })),
     ...snapshot.labs.map(s => ({ x: s.pos.x, y: s.pos.y })),
@@ -868,91 +851,41 @@ function planHubRoads(
   if (snapshot.terminal) hubs.push({ x: snapshot.terminal.pos.x, y: snapshot.terminal.pos.y });
   if (snapshot.factory) hubs.push({ x: snapshot.factory.pos.x, y: snapshot.factory.pos.y });
 
-  let added = 0;
-  for (const hub of hubs) {
-    if (added >= MAX_HUB_ROADS_PER_PLAN) break;
-
-    const neighbors: { x: number; y: number }[] = [
-      { x: hub.x + 1, y: hub.y },
-      { x: hub.x - 1, y: hub.y },
-      { x: hub.x, y: hub.y + 1 },
-      { x: hub.x, y: hub.y - 1 },
-    ];
-    // 物流侧优先：距 anchor 近的邻格先铺（城区内网，不铺城外野路）。
-    neighbors.sort(
-      (a, b) =>
-        (Math.abs(a.x - anchor.x) + Math.abs(a.y - anchor.y)) -
-        (Math.abs(b.x - anchor.x) + Math.abs(b.y - anchor.y)),
-    );
-
-    let perStructure = 0;
-    for (const n of neighbors) {
-      if (perStructure >= MAX_HUB_ROADS_PER_STRUCTURE) break;
-      if (n.x < 1 || n.x > 48 || n.y < 1 || n.y > 48) continue;
-      if (terrain.get(n.x, n.y) === TERRAIN_MASK_WALL) continue;
-      if (occupiedSet.has(packPos(n.x, n.y))) continue;
-      const key = `road.${snapshot.roomName}.${n.x}.${n.y}`;
-      if (existingKeys.has(key) || isBlacklisted(key)) continue;
-      if (existingPositions.has(`${n.x},${n.y}`)) continue;
-
-      queue.push({
-        key,
-        pos: { x: n.x, y: n.y, roomName: snapshot.roomName },
-        structureType: STRUCTURE_ROAD,
-        priority: 3,
-        state: "queued",
-        attempts: 0,
-        retryAt: 0,
-      });
-      existingKeys.add(key);
-      existingPositions.add(`${n.x},${n.y}`);
-      perStructure++;
-      added++;
-    }
-  }
+  planHubRoadsDomain(
+    snapshot.roomName, hubs, anchor, room.getTerrain(),
+    occupiedSet, queue, existingKeys, existingPositions, isBlacklisted,
+  );
 }
 
-/** 判断是否应该执行规划。 */
+/**
+ * D2 归位：shouldPlan 纯函数已下沉到 domain/layout/planner.ts。
+ * 系统侧薄壳——从 Memory/快照提取参数委托给纯函数。
+ */
 function shouldPlan(
   layout: NonNullable<RoomMemory["layout"]>,
   tick: number,
   snapshot: import("../kernel/contracts").RoomSnapshot,
   gaps: StructureGaps,
 ): boolean {
-  // 人工 proposed 状态 — 立即规划。
-  if (layout.state === "proposed") return true;
-
-  // 目标清单缺口 — 期望结构未达成（缺口 > 0 = 无对应 queued/blocked 任务可闭合；
-  // audit 已把队列任务计入已有）。缺口持续时按 nextGapPlanTick 慢速重试（stage 3 设
-  // +500），避免「放不下 → 每 tick 强制重规划」空转。仅已规划过（anchor 已设）时检查。
-  if (layout.anchor !== undefined && Object.keys(gaps).length > 0) {
-    if (tick >= (layout.nextGapPlanTick ?? 0)) return true;
-  }
-
-  // nextPlanTick 到期。
-  if (tick >= layout.nextPlanTick) return true;
-
-  // RCL 变化。
   const roomMem = Memory.rooms[snapshot.roomName];
-  if (roomMem?.lastRcl !== undefined && roomMem.lastRcl !== snapshot.rcl) {
-    return true;
-  }
-
-  // 紧急重建：关键基建缺失时立即触发规划，不等 50 tick 周期。仅已规划过（anchor 已设）
-  // 时检查；队列已有待建任务则无需重复规划，避免每 tick 跑规划浪费 CPU。
-  if (layout.anchor !== undefined) {
-    const emergency = assessEmergencyRebuild(snapshot);
-    if (emergency.any) {
-      const queue = roomMem?.buildQueue ?? [];
-      const hasPendingTask = queue.some(
-        t => (t.state === "queued" || t.state === "site") &&
-          isEmergencyTask(t, snapshot, emergency),
-      );
-      if (!hasPendingTask) return true;
-    }
-  }
-
-  return false;
+  const emergency = assessEmergencyRebuild(snapshot);
+  const queue = roomMem?.buildQueue ?? [];
+  const hasPendingEmergencyTask = emergency.any && queue.some(
+    t => (t.state === "queued" || t.state === "site") &&
+      isEmergencyTask(t, snapshot, emergency),
+  );
+  return shouldPlanDomain(
+    layout.state,
+    layout.nextPlanTick,
+    layout.nextGapPlanTick,
+    layout.anchor !== undefined,
+    Object.keys(gaps).length > 0,
+    tick,
+    roomMem?.lastRcl,
+    snapshot.rcl,
+    emergency.any,
+    hasPendingEmergencyTask,
+  );
 }
 
 /**
@@ -988,8 +921,8 @@ function recordLayoutGaps(roomName: string, gaps: StructureGaps): void {
 // ─── Spawn 重建 relocation（P0 修复：避免原位被占时死循环）──
 
 /**
- * 检测位置是否可建建筑（地形非墙 + 无已有结构占用）。
- * spawn 不能建在出口格（0 或 49），边界限制 1-48。
+ * D2 归位：spawn 重建 relocation 纯函数已下沉到 domain/layout/planner.ts。
+ * 系统侧薄壳——从 room.getTerrain() 注入 getTerrain 函数。
  */
 function isPositionBuildable(
   room: Room,
@@ -997,37 +930,24 @@ function isPositionBuildable(
   y: number,
   occupiedSet: Set<number>,
 ): boolean {
-  if (x < 1 || x > 48 || y < 1 || y > 48) return false;
   const terrain = room.getTerrain();
-  if (terrain.get(x, y) === TERRAIN_MASK_WALL) return false;
-  if (occupiedSet.has(packPos(x, y))) return false;
-  return true;
+  return isPositionBuildableDomain(x, y, (tx, ty) => terrain.get(tx, ty) === TERRAIN_MASK_WALL, occupiedSet);
 }
 
 /**
- * 在锚点附近螺旋搜索可建 spawn 的替代位置。
- * 搜索范围 ±3 格（避免 spawn 离核心太远）。
- * 返回第一个可建位置，无则 undefined。
+ * 在锚点附近螺旋搜索可建 spawn 的替代位置。系统侧薄壳委托给纯函数。
  */
 function findSpawnRelocationPosition(
   room: Room,
   anchor: { x: number; y: number },
   occupiedSet: Set<number>,
 ): { x: number; y: number } | undefined {
-  for (let radius = 1; radius <= 3; radius++) {
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        // 只搜索当前半径的边缘（螺旋外扩）
-        if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-        const x = anchor.x + dx;
-        const y = anchor.y + dy;
-        if (isPositionBuildable(room, x, y, occupiedSet)) {
-          return { x, y };
-        }
-      }
-    }
-  }
-  return undefined;
+  const terrain = room.getTerrain();
+  return findSpawnRelocationPositionDomain(
+    anchor,
+    (x, y) => terrain.get(x, y) === TERRAIN_MASK_WALL,
+    occupiedSet,
+  );
 }
 
 // ─── P1-4 拆改辅助 ─────────────────────────────────────────
