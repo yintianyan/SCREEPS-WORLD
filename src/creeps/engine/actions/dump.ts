@@ -3,7 +3,7 @@
  * 与 fill actions 的区别：dump 是站桩矿工向身边结构倒能，fill 是移动角色向 fillTarget 送能。
  */
 import type { ActionCandidate } from "../action-types";
-import { runAction } from "./helpers";
+import { runAction, runCountedAction } from "./helpers";
 
 /** 向身边 link 倒能（range <= 2）。 */
 export function dumpToNearbyLink(): ActionCandidate<StructureLink> {
@@ -82,7 +82,7 @@ export function buildNearbyContainerSite(): ActionCandidate<ConstructionSite> {
       return site;
     },
     execute: (ac, site) => {
-      runAction(ac.creep, site, () => ac.creep.build(site));
+      runCountedAction(ac.creep, site, "built", () => ac.creep.build(site));
     },
   };
 }

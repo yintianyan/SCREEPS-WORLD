@@ -67,6 +67,12 @@ export interface GlobalCache {
   decisionTrace?: TraceState;
   /** 【F1/G-B】各系统 CPU 消耗 EMA（budgetCap 局部截断判据）。heap 存储，reset 后从零重建（EMA 快速收敛可接受）。 */
   systemBudgetEma?: Map<string, number>;
+  /** P3 能量核算 L1 计数器（bumpEnergyCounter 写入；economy 系统每窗滚动消费）。 */
+  energyLedger?: { tick: number; rooms: Record<string, RoomEnergyCounters> };
+  /** P3 物流请求池槽位（logistics 系统每 tick 重导出；assignment-service 同 tick 合并）。 */
+  transportPool?: { tick: number; rooms: Record<string, unknown[]> };
+  /** P3 物流指标 L1 计数器（空载率分母/分子等）。 */
+  logisticsCounters?: { rooms: Record<string, { idleTicks: number; claims: number }> };
   /** 本 tick 的 boost 报到分配表（lab-system 每 tick 写入）。
    * key = creep 名；ready = lab 内化合物已备足（≥ 单次 boost 用量）—
    * 报到拦截仅在 ready 时生效，避免 creep 罚站等 supplyLabs 搬运
@@ -160,6 +166,8 @@ export interface GlobalCache {
   cpuByHome?: Map<string, number>;
   /** 各系统最近一次实际执行 tick（kernel.runSystems 记录）—— 期望自检的 P3 存活判据输入。heap 存储。 */
   systemLastRun?: Record<string, number>;
+  /** P3 核算诊断：最近一次漂移事件的窗口分解（economy 写，观测/归因用）。 */
+  lastDriftDiag?: unknown;
 }
 
 /**
@@ -307,6 +315,39 @@ export function querySquad(filter: {
   );
 }
 
+/**
+ * P3 能量核算 L1 计数器（平台 Metrics 设施，ENERGY_ACCOUNTING_MODEL §2）。
+ * 结构镜像 domain/economy/accounting.EnergyLedger —— kernel 不 import 业务类型，
+ * 两侧字段集必须保持一致（economy 系统按结构消费）。
+ */
+export interface RoomEnergyCounters {
+  harvested: number;
+  pickedUp: number;
+  spawned: number;
+  recycledRefund: number;
+  upgraded: number;
+  built: number;
+  repaired: number;
+  towerSpent: number;
+}
+
+export type EnergyCounterField = keyof RoomEnergyCounters;
+
+/**
+ * L1 计数累加（每 tick 近零成本，R6 声明：聚合档位=economy 50tick 窗）。
+ * 计数在堆生命周期内**累计**（不按 tick 重置）——核算窗取前后两次累计差值，
+ * 中间 tick 的账不丢。非法输入（非有限/非正）静默忽略，维持 ≥0 不变量。
+ * global reset 清零可接受：economy 系统按「无基线/tick 断档」重新播种窗口起点。
+ */
+export function bumpEnergyCounter(roomName: string, field: EnergyCounterField, amount: number): void {
+  if (!(amount > 0) || !Number.isFinite(amount)) return;
+  const g = globalCache();
+  if (g.energyLedger === undefined) {
+    g.energyLedger = { tick: (globalThis as { Game?: { time?: number } }).Game?.time ?? 0, rooms: {} };
+  }
+  const entry = g.energyLedger.rooms[roomName] ??= { harvested: 0, pickedUp: 0, spawned: 0, recycledRefund: 0, upgraded: 0, built: 0, repaired: 0, towerSpent: 0 };
+  entry[field] += amount;
+}
 /** Screeps 沙箱 `global` 对象的类型安全访问器。
  * 用 `globalThis` 避免与 `@types/node` 的 `global` 类型冲突（沙箱中二者同一作用域）。
  * 所有字段可选，必须在 global reset 后可惰性重建。 */

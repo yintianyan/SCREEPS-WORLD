@@ -1,0 +1,159 @@
+/**
+ * Logistics 系统 — 请求池载体（模块 1.6 P0 档，SYSTEM_BOUNDARIES §1.6）。
+ *
+ * 每 tick 重导出搬运请求（Demand 瞬时语义）→ 写入 globalCache.transportPool，
+ * assignment-service 合并进任务槽供 hauler 认领（claim 即 Task 六态的 claimed）。
+ * 另负责：TTL 过期回执（不静默丢单）、延迟样本、塔补给并入物流（需求侧聚合：
+ * 塔缺口把收集请求整体提级——hauler work 链本就塔置顶投递，无需新增执行器）。
+ * 不做：全量重匹配、全局最优、请求持久化 Memory（LOGISTICS §7 红线）。
+ */
+import type { System, TickContext } from "../kernel/contracts";
+import { globalCache } from "../kernel/global-cache";
+import { EventKind, recordEvent } from "../kernel/event-log";
+import {
+  applyShrink,
+  buildTransportRequests,
+  reconcileRegistry,
+  type LeaseSummary,
+  type RegistryEntry,
+  type SupplySource,
+  type TransportRequest,
+} from "../domain/assignment/request-pool";
+import type { AssignmentTaskEntry } from "../domain/assignment/service";
+import { CONFIG } from "../config";
+
+/** 每房 heap 态：key 注册表 + 延迟样本环。global reset 可丢（自动重播种）。 */
+interface RoomPoolState {
+  registry: Map<string, RegistryEntry>;
+  latencyRing: number[];
+}
+const poolRooms = new Map<string, RoomPoolState>();
+
+const LATENCY_RING_CAP = 64;
+
+function stateFor(roomName: string): RoomPoolState {
+  let st = poolRooms.get(roomName);
+  if (!st) {
+    st = { registry: new Map(), latencyRing: [] };
+    poolRooms.set(roomName, st);
+  }
+  return st;
+}
+
+/** 32bit 字符串哈希（事件数值通道用；非加密）。 */
+function strHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h;
+}
+
+/** TransportRequest → AssignmentTaskEntry（haul 通道复用既有认领与执行链）。 */
+function toTaskEntry(r: TransportRequest): AssignmentTaskEntry {
+  return {
+    id: r.key,
+    kind: "haul",
+    sourceId: r.sourceId,
+    priority: r.priority,
+    maxWorkers: 1,
+    assignedCreeps: [],
+    pos: r.pos,
+  };
+}
+
+
+export const logisticsSystem: System = {
+  name: "logistics",
+  priority: 0,
+  interval: 1,
+  run(ctx: TickContext): void {
+    const g = globalCache();
+    g.transportPool = { tick: ctx.tick, rooms: {} };
+    const cfg = CONFIG.logistics;
+
+    // 全房 creep 租约投影只扫一次（O(creeps)，复用 collectCreepRefs 模式）。
+    const leasesByRoom = new Map<string, LeaseSummary[]>();
+    const claimsByRoom = new Map<string, Set<string>>();
+    for (const creep of Object.values(Game.creeps)) {
+      if (creep.spawning) continue;
+      const home = creep.memory.home ?? creep.room?.name;
+      if (!home) continue;
+      const a = creep.memory.assignment;
+      let leaseList = leasesByRoom.get(home);
+      if (!leaseList) { leaseList = []; leasesByRoom.set(home, leaseList); }
+      if (a?.kind === "haul" && a.id) {
+        leaseList.push({ sourceId: a.sourceId, valid: true });
+        let claims = claimsByRoom.get(home);
+        if (!claims) { claims = new Set(); claimsByRoom.set(home, claims); }
+        claims.add(a.id);
+      }
+    }
+
+    for (const snapshot of ctx.snapshots()) {
+      const roomName = snapshot.roomName;
+      const st = stateFor(roomName);
+
+      // 供给登记：含能非 controller container（controller container 是投递目标）。
+      const ccId = snapshot.controllerContainer?.id;
+      const supplies: SupplySource[] = snapshot.containers
+        .filter(c => c.id !== ccId)
+        .map(c => ({
+          id: c.id as string,
+          pos: { x: c.pos.x, y: c.pos.y },
+          available: c.store.getUsedCapacity(RESOURCE_ENERGY),
+        }))
+        .filter(s => s.available > 0);
+
+      // 塔饥渴信号（需求侧聚合）：任一塔低于阈值区间下沿。
+      const towerStarving = snapshot.towers.some(
+        t => t.store.getUsedCapacity(RESOURCE_ENERGY) < cfg.towerStarveThreshold,
+      );
+
+      const reqs = buildTransportRequests({
+        roomName,
+        supplies,
+        leases: leasesByRoom.get(roomName) ?? [],
+        towerStarving,
+        maxConcurrentPerSource: 1,
+        basePriority: 1,
+        boostedPriority: 0,
+      });
+
+      // L2 池收缩（断链 fallback 链）：风险缓冲低于地板 → 只保 P0/P1。
+      // Economy → Logistics 的反馈闭环实例（任务书 §26）。
+      const econSnap = Memory.rooms[roomName]?.economy;
+      const shrink = econSnap !== undefined && econSnap.cr > 0
+        && econSnap.rb / 10 < cfg.shrinkRiskBufferTicks;
+      const finalReqs = applyShrink(reqs, shrink);
+
+      // 注册表对账：登记新 key / 过期回执（不静默丢单）/ 清失联项。
+      const currentKeys = new Set(reqs.map(r => r.key));
+      const rec = reconcileRegistry(st.registry, currentKeys, ctx.tick, cfg.requestTtlTicks);
+      for (const key of rec.expiredKeys) {
+        // 事件通道是数值数组——key 以 32bit 哈希入账（完整 key 见 console/黑匣子文本）。
+        recordEvent(EventKind.RequestExpired, roomName, [strHash(key)]);
+      }
+
+      // 延迟样本：本窗新被认领的 key（claimed 未标记且在册）→ tick − firstSeen。
+      const claims = claimsByRoom.get(roomName);
+      if (claims) {
+        for (const key of claims) {
+          const e = st.registry.get(key);
+          if (e && !e.claimed) {
+            e.claimed = true;
+            e.claimedAt = ctx.tick;
+            const lat = ctx.tick - e.firstSeen;
+            if (st.latencyRing.length >= LATENCY_RING_CAP) st.latencyRing.shift();
+            st.latencyRing.push(lat);
+          }
+        }
+      }
+
+      g.transportPool.rooms[roomName] = finalReqs.map(toTaskEntry);
+    }
+  },
+};
+
+/** 查询口（观测用）：房间延迟样本环（只读副本）。 */
+export function logisticsLatencySamples(roomName: string): readonly number[] {
+  return poolRooms.get(roomName)?.latencyRing ?? [];
+}

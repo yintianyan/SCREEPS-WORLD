@@ -951,6 +951,15 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 36,
+    to: 37,
+    run: () => {
+      // v37：P3 能量核算 — 新增 RoomMemory.rooms[r].economy 瘦快照（economy 系统
+      // 唯一写者）。字段全部可选、惰性初始化，无存量数据需变换 —— 幂等 no-op，
+      // 仅升版本登记结构变更（STATE_OWNERSHIP §4 迁移三件套之迁移步骤）。
+    },
+  },
 ];
 
 /**

@@ -5,7 +5,22 @@ import { findCriticalRepair } from "../creeps/support";
 import { selectTowerTarget, type TowerThreat } from "../domain/defense/tower-target";
 import { assessEngagement, type TowerSummary } from "../domain/defense/tower-engagement";
 import { buildFortificationContext, classifyFortification, resolveUnderSiege, type FortificationContext } from "../domain/defense/fortification";
-import { globalCache } from "../kernel/global-cache";
+import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
+
+/** P3 L1 核算：塔动作耗能按库存差值实测（attack/heal/repair 每次固定耗能）。 */
+function countedTowerAction(
+  roomName: string,
+  tower: StructureTower,
+  action: () => number,
+): number {
+  const before = tower.store.getUsedCapacity(RESOURCE_ENERGY);
+  const result = action();
+  if (result === OK) {
+    const spent = before - tower.store.getUsedCapacity(RESOURCE_ENERGY);
+    if (spent > 0) bumpEnergyCounter(roomName, "towerSpent", spent);
+  }
+  return result;
+}
 
 /**
  * Tower 防御系统 — P0 系统，负责所有 Tower 操作和安全模式（防御是生存关键 — 永不被冷却）。
@@ -60,7 +75,7 @@ export const towerDefenseSystem: System = {
               let firedCount = 0;
               for (const tower of snapshot.towers) {
                 if (tower.store.getUsedCapacity(RESOURCE_ENERGY) === 0) continue;
-                tower.attack(target);
+                countedTowerAction(snapshot.roomName, tower, () => tower.attack(target));
                 firedCount++;
               }
               fired = firedCount > 0;
@@ -143,7 +158,7 @@ export const towerDefenseSystem: System = {
 
         // R3-07：维修优先级 spawn/extension → tower → container → wall/rampart。
         if (repairTarget) {
-          tower.repair(repairTarget);
+          countedTowerAction(snapshot.roomName, tower, () => tower.repair(repairTarget));
           continue;
         }
 
@@ -152,7 +167,7 @@ export const towerDefenseSystem: System = {
         if (wallRepairTarget && wallMaintenanceAllowed) {
           const towerEnergyRatio = tower.store.getUsedCapacity(RESOURCE_ENERGY) / tower.store.getCapacity(RESOURCE_ENERGY);
           if (towerEnergyRatio > 0.7) {
-            tower.repair(wallRepairTarget);
+            countedTowerAction(snapshot.roomName, tower, () => tower.repair(wallRepairTarget));
           }
         }
       }

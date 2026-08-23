@@ -115,6 +115,10 @@ export const enum EventKind {
   SituationChange = 36,
   /** 期望自检违例（kernel 写 —— 帝国自我诊断通道）。d = [violationCount]。 */
   ExpectationViolation = 37,
+  /** P3 能量核算连续漂移超容差（economy 写，先修核算再发展）。d = [drift, streak]。 */
+  AccountingDrift = 38,
+  /** P3 物流请求 TTL 过期出池（不静默丢单回执）。r = 房间，d = [key]。 */
+  RequestExpired = 39,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

@@ -98,30 +98,10 @@ export function buildRoomTasks(
     });
   }
 
-  // 2. haul 任务 — 每个含能量 container 独立任务（P2-5 拆分单点聚合）：旧实现单任务
-  // 让 3 个 hauler 全挤向最满 container，其余饿死；拆分 + P2-4 距离感知自然分散。
-  // maxWorkers=1：每个 container 至少 1 个 hauler，多余走自身回退链。
-  // 排除 controller container：它是 haulFillTarget 的填充目标，若同时作 haul 取能源会
-  // hauler A 倒入 → B 取出 → 乒乓振荡（与 hauler.ts withdrawRichestCapped 排除对齐）。
-  const ccId = snapshot.controllerContainer?.id;
-  const haulContainers = snapshot.containers.filter(
-    c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0 && c.id !== ccId,
-  );
-  if (haulContainers.length > 0) {
-    for (const c of haulContainers) {
-      tasks.push({
-        id: `haul:${roomName}:${c.id}`,
-        kind: "haul",
-        sourceId: c.id as string,
-        priority: 1,
-        maxWorkers: 1,
-        assignedCreeps: taskToCreeps.get(`haul:${roomName}:${c.id}`) ?? [],
-        pos: { x: c.pos.x, y: c.pos.y },
-      });
-    }
-  }
-  // 无含能量 container 时不生成 haul 任务（TD-013）：hauler 永不从 storage 取能 —
-  // storage → sink 由 distributor 负责，container 全空时应等 harvester 产出。
+  // 2. haul 任务 — P3 起由 logistics 请求池生成（REQUEST_POOL_DESIGN §1/§3）：
+  // 搬运是 Demand 一等来源，归池统一管理（TTL/过期回执/防超卖/塔提级聚合）。
+  // 本函数只保留工作任务（fill/build/upgrade）。TD-013 语义保持：hauler 永不从
+  // storage 取能，storage → sink 由 distributor 负责。
 
   // 3. build 任务 — 为每个 active site 生成。
   const ctrl = snapshot.controller;

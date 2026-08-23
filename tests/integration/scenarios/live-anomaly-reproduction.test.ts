@@ -126,6 +126,9 @@ describe("Live Anomaly: Hauler 不足死锁", () => {
     expect(haulers.length).toBeGreaterThanOrEqual(1);
   });
 
+  // B4 重写（P3）：断言改为「经济不停滞」不变量——recycleCreep 引擎语义修复后，
+  // 旧「hauler 头数」代理不再成立（解药可以不是多孵 hauler：单 hauler 循环 + P2 消费
+  // 同样消化积压）。不变量：无运行时错误 ∧ 帝国存活 ∧ 采集量可观 ∧ 积压被消化。
   it("container 能量积压但 spawn 饥饿时经济不应停滞", () => {
     // 复现：reserve=6000 但 ea=300（能量困在 container 里）
     // 线上表现：harvester 持续采矿，container 满溢，但 spawn 饿死
@@ -157,15 +160,8 @@ describe("Live Anomaly: Hauler 不足死锁", () => {
     assertions.assertNoRuntimeError("container energy trap");
     assertions.assertEmpireAlive("container energy trap");
 
-    // 核心断言：死锁被打破（方案 C 流动性维度生效）。
-    // 注意：不应以「spawn 池能量堆积」衡量健康——健康殖民会把收入花在生产上
-    // （孵化 creep / 升级），能量流经 spawn 而非囤积。探针实测修复后：hauler 1→5、
-    // harvested 7128、container 清空、colonyState 恢复 normal。故衡量以下三点：
-    //   1. 系统孵出了额外 hauler（搬运冻结能量的解药，死锁前永远孵不出）；
-    //   2. 采集量可观（经济运转，未停滞）；
-    //   3. 冻结的 container 能量被搬空（不再积压）。
-    const haulers = world.creepsByRole("hauler");
-    expect(haulers.length).toBeGreaterThan(1);
+    // 核心不变量（B4 重写）：能量困在 container 的死锁不再存在。
+    // 不以 hauler 头数为代理——解药形式不限（多孵 hauler 或单 hauler 循环 + P2 消费）。
     expect(result.finalSnapshot.stats.totalHarvested).toBeGreaterThan(2000);
     const maxContainerFill = Math.max(
       0,
@@ -261,10 +257,13 @@ describe("Live Anomaly: Phase 振荡（Flip-Flop）", () => {
     assertions.assertNoRuntimeError("pulse drain");
     assertions.assertEmpireAlive("pulse drain");
 
-    // 核心断言：系统从脉冲消耗中恢复，不陷入永久 crisis
-    // 1500 tick 后应该有新的 harvester 存活
-    const harvesters = world.creepsByRole("harvester");
-    expect(harvesters.length).toBeGreaterThanOrEqual(1);
+    // 核心不变量（B4 重写）：脉冲消耗后系统恢复——窗口末段任一采样点出现存活
+    // harvester 即算恢复（瞬时端点受 TTL 相位影响，不作硬断言）。
+    const recovered = result.records.some(
+      r => r.tick > 900 && (r.creepsByRole.harvester ?? 0) >= 1,
+    );
+    expect(recovered).toBe(true);
+    expect(result.finalSnapshot.stats.totalHarvested).toBeGreaterThan(0);
   });
 });
 
@@ -355,13 +354,18 @@ describe("Live Anomaly: Harvester 计数振荡", () => {
     assertions.assertNoRuntimeError("harvester oscillation");
     assertions.assertEmpireAlive("harvester oscillation");
 
-    // 核心断言：2000 tick 后 harvester 数量应该稳定在 2（每 source 1 个）
-    // 不应该出现 4 个 harvester 同时存在的情况（sourceOccupancy 限制）
-    const harvesters = world.creepsByRole("harvester");
-    expect(harvesters.length).toBeLessThanOrEqual(3); // 允许短暂重叠（替换期间）
-    expect(harvesters.length).toBeGreaterThanOrEqual(1); // 不能归零
-
-    // 采集应该持续稳定
+    // 核心不变量（B4 重写）：全窗口采样——并发 harvester 峰值 ≤3（sourceOccupancy 上限
+    // + 替换重叠容差）；归零 tick 占比 <20%（短 TTL 缺口允许，长期断供不允许）；
+    // 采集持续。
+    let maxHarvesters = 0;
+    let zeroTicks = 0;
+    for (const r of result.records) {
+      const n = r.creepsByRole.harvester ?? 0;
+      if (n > maxHarvesters) maxHarvesters = n;
+      if (n === 0) zeroTicks++;
+    }
+    expect(maxHarvesters).toBeLessThanOrEqual(3);
+    expect(zeroTicks / result.records.length).toBeLessThan(0.2);
     expect(result.finalSnapshot.stats.totalHarvested).toBeGreaterThan(5000);
   });
 });

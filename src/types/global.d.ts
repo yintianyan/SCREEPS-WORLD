@@ -119,6 +119,27 @@ declare global {
   interface RoomMemory {
     colonyState?: ColonyState;
     /**
+     * P3 能量核算瘦快照（schema v37，economy 系统唯一写者，50tick 错峰）。
+     * 字段镜像 domain/economy/accounting.EconomyMemorySnapshot（整数化短字段，
+     * STATE_OWNERSHIP §2 Memory 白名单）。消费只经 queryEconomy() 公开接口。
+     */
+    economy?: {
+      /** 采样 tick。 */
+      t: number;
+      /** 净流 EMA ×100（能量/tick）。 */
+      nf: number;
+      /** 合同储备（storage+terminal+link 水位）。 */
+      cr: number;
+      /** 风险缓冲 tick 数 ×10。 */
+      rb: number;
+      /** 最近一窗 drift。 */
+      dr: number;
+      /** 估计收入 ×10（能量/tick）。 */
+      ei: number;
+      /** 效率系数 ×100。 */
+      ef: number;
+    };
+    /**
      * 经济压力梯度信号（0.0–1.0，从 drainScore 派生）：demand/construction/tower
      * 用它做梯度缩放，替代二值 crisis/normal 开关。
      */

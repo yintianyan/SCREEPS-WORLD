@@ -559,34 +559,16 @@ describe("Assignment — haul task split (P2-5)", () => {
     } as unknown as StructureContainer;
   }
 
-  it("为每个含能量的 container 生成独立 haul 任务", () => {
+  // P3 迁移：haul 任务生成已整体迁往 logistics 请求池（REQUEST_POOL_DESIGN §1）——
+  // 正向覆盖见 tests/unit/logistics/request-pool.test.ts（拆分聚合/防超卖/塔提级）。
+  // 此处保留边界守卫：buildRoomTasks 不再产出任何搬运任务。
+  it("buildRoomTasks 不再生成 haul 任务（搬运归请求池）", () => {
     const c1 = container("c1", 100, 10, 10);
     const c2 = container("c2", 300, 40, 40);
     const snapshot = mockSnapshot({ containers: [c1, c2] });
 
     const tasks = buildRoomTasks(snapshot, [], mockFlags());
-    const haulTasks = tasks.filter(t => t.kind === "haul");
-
-    expect(haulTasks).toHaveLength(2);
-    expect(haulTasks.map(t => t.sourceId).sort()).toEqual(["c1", "c2"]);
-    // 每个任务 maxWorkers=1（促分散），且有独立 id 和 pos。
-    for (const t of haulTasks) {
-      expect(t.maxWorkers).toBe(1);
-      expect(t.id).toMatch(/^haul:W1N1:c\d$/);
-      expect(t.pos).toBeDefined();
-    }
-  });
-
-  it("空 container 不生成 haul 任务", () => {
-    const empty = container("c1", 0, 10, 10);
-    const full = container("c2", 200, 40, 40);
-    const snapshot = mockSnapshot({ containers: [empty, full] });
-
-    const tasks = buildRoomTasks(snapshot, [], mockFlags());
-    const haulTasks = tasks.filter(t => t.kind === "haul");
-
-    expect(haulTasks).toHaveLength(1);
-    expect(haulTasks[0]?.sourceId).toBe("c2");
+    expect(tasks.filter(t => t.kind === "haul")).toHaveLength(0);
   });
 
   // TD-013 修复：container 全空 + storage 有能量时，不生成指向 storage 的 haul 任务。

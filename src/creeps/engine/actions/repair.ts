@@ -8,7 +8,7 @@
 import { CONFIG, getWallTargetHits } from "../../../config";
 import type { RoomSnapshot } from "../../../kernel/contracts";
 import type { ActionCandidate } from "../action-types";
-import { runAction } from "./helpers";
+import { runCountedAction } from "./helpers";
 import { findCriticalRepair } from "../../support/targeting";
 import { getObjectById } from "../../support/obj-cache";
 import { buildFortificationContext, classifyFortification, resolveUnderSiege } from "../../../domain/defense/fortification";
@@ -32,7 +32,7 @@ export function repairCritical(): ActionCandidate<AnyStructure> {
     name: "repair:critical",
     resolve: (ac) => findCriticalRepair(ac.snapshot),
     execute: (ac, t) => {
-      runAction(ac.creep, t, () => ac.creep.repair(t));
+      runCountedAction(ac.creep, t, "repaired", () => ac.creep.repair(t));
     },
   };
 }
@@ -71,7 +71,7 @@ export function repairContainerDecay(): ActionCandidate<StructureContainer> {
       return worst;
     },
     execute: (ac, worst) => {
-      runAction(ac.creep, worst, () => ac.creep.repair(worst), {
+      runCountedAction(ac.creep, worst, "repaired", () => ac.creep.repair(worst), {
         [ERR_INVALID_TARGET]: () => { ac.creep.memory.repairTargetId = undefined; },
       });
     },
@@ -93,7 +93,7 @@ export function repairNearbyContainer(): ActionCandidate<StructureContainer> {
       return ac.creep.pos.findClosestByRange(candidates as StructureContainer[]) ?? undefined;
     },
     execute: (ac, nearby) => {
-      runAction(ac.creep, nearby, () => ac.creep.repair(nearby));
+      runCountedAction(ac.creep, nearby, "repaired", () => ac.creep.repair(nearby));
     },
   };
 }
@@ -171,7 +171,7 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       return target;
     },
     execute: (ac, t) => {
-      runAction(ac.creep, t, () => ac.creep.repair(t), {
+      runCountedAction(ac.creep, t, "repaired", () => ac.creep.repair(t), {
         [ERR_INVALID_TARGET]: () => { ac.creep.memory.repairTargetId = undefined; },
       });
     },
@@ -248,7 +248,7 @@ export function repairFreshRampart(): ActionCandidate<StructureRampart> {
       return worst;
     },
     execute: (ac, t) => {
-      runAction(ac.creep, t, () => ac.creep.repair(t));
+      runCountedAction(ac.creep, t, "repaired", () => ac.creep.repair(t));
     },
   };
 }
@@ -321,7 +321,7 @@ function roadRepairAction(
       return worst;
     },
     execute: (ac, worst) => {
-      runAction(ac.creep, worst, () => ac.creep.repair(worst), {
+      runCountedAction(ac.creep, worst, "repaired", () => ac.creep.repair(worst), {
         [ERR_INVALID_TARGET]: () => { ac.creep.memory.repairTargetId = undefined; },
       });
     },

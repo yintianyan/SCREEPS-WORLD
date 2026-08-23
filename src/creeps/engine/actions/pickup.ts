@@ -4,7 +4,7 @@
  * 废墟到期资源直接灭失；container 能量不衰减 — 因此大额遗留的回收优先级应高于 container 取货。
  */
 import type { ActionCandidate } from "../action-types";
-import { runAction } from "./helpers";
+import { runCountedAction } from "./helpers";
 import { selectDroppedEnergy } from "../../support/targeting";
 
 /**
@@ -23,7 +23,7 @@ export function pickupDroppedEnergy(minAmount = 0): ActionCandidate<Resource> {
       return selectDroppedEnergy(ac.creep, candidates);
     },
     execute: (ac, resource) => {
-      runAction(ac.creep, resource, () => ac.creep.pickup(resource), {
+      runCountedAction(ac.creep, resource, "pickedUp", () => ac.creep.pickup(resource), {
         [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
       });
     },
@@ -89,7 +89,8 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
         available = bestAmt;
       }
       const amount = Math.min(available, carryFree);
-      runAction(ac.creep, remains, () => ac.creep.withdraw(remains, resource, amount), {
+      // 墓碑/废墟取能＝散落资产回收，是真实经济流入（pickedUp），非搬运。
+      runCountedAction(ac.creep, remains, "pickedUp", () => ac.creep.withdraw(remains, resource, amount), {
         [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
       });
     },
@@ -111,7 +112,7 @@ export function pickupNearbyDroppedEnergy(range = 2): ActionCandidate<Resource> 
       return selectDroppedEnergy(ac.creep, nearby);
     },
     execute: (ac, resource) => {
-      runAction(ac.creep, resource, () => ac.creep.pickup(resource), {
+      runCountedAction(ac.creep, resource, "pickedUp", () => ac.creep.pickup(resource), {
         [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
       });
     },

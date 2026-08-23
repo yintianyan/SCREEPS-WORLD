@@ -20,6 +20,7 @@ import { Kernel } from "./kernel/kernel";
 import { Registry } from "./kernel/registry";
 import { assignmentServiceSystem } from "./systems/assignment-service";
 import { constructionManagerSystem } from "./systems/construction-manager";
+import { economySystem } from "./systems/economy";
 import { defensePlannerSystem } from "./systems/defense-planner";
 import { empireStrategySystem } from "./systems/empire-strategy";
 import { expansionManagerSystem } from "./systems/expansion-manager";
@@ -27,6 +28,7 @@ import { factoryManagerSystem } from "./systems/factory-manager";
 import { powerCreepManagerSystem } from "./systems/power-creep-manager";
 import { powerFarmManagerSystem } from "./systems/power-farm-manager";
 import { layoutPlannerSystem } from "./systems/layout-planner";
+import { logisticsSystem } from "./systems/logistics";
 import { labSystem } from "./systems/lab-system";
 import { linkSystem } from "./systems/link-system";
 import { pixelSystem } from "./systems/pixel-system";
@@ -54,12 +56,16 @@ import { towerDefenseSystem } from "./systems/tower-defense";
 export const registry = new Registry()
   // P0：房间状态（ColonyState，必须先于其他系统）
   .registerSystem(roomStateSystem)
+  // P1：能量收支核算（三指标，50tick 房间错峰；消费 L1 计数器产出 EconomyState）
+  .registerSystem(economySystem)
   // P0：孵化管理（紧急恢复）
   .registerSystem(spawnManagerSystem)
   // P0：塔防
   .registerSystem(towerDefenseSystem)
   // P1：帝国姿态（先于战术消费者裁决扩张/收缩/备战）
   .registerSystem(empireStrategySystem)
+  // P0：物流请求池（搬运 Demand 一等来源；先于 assignment-service 合并进任务槽）
+  .registerSystem(logisticsSystem)
   // P1：任务分配（先于 P1 角色）
   .registerSystem(assignmentServiceSystem)
   // P1：link 能量传输（瞬移替代 hauler 往返）

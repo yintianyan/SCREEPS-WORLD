@@ -338,6 +338,26 @@ class MockSpawn implements MockStructureBase {
     });
     return 0;
   }
+
+  /**
+   * 回收 creep（官方 StructureSpawn.recycleCreep 近似实现）。
+   * 真实引擎：立即移除 creep，按剩余寿命比例返还能量到该 spawn（超出容量部分丢失），
+   * 不计死亡事件、无尸体。mockup 采用同一语义；能量入 spawn store 并刷新房可用量。
+   */
+  recycleCreep(creep: { name: string }): number {
+    const target = this._world._creeps.find(c => c.name === creep.name);
+    if (!target || target.room !== this.room) return -7; // ERR_INVALID_TARGET
+    const cost = target.body.reduce((sum, p) => sum + (PART_COST[p.type] ?? 0), 0);
+    const ttl = Math.max(0, target.ticksToLive ?? 1500);
+    const refund = Math.ceil((cost * ttl) / 1500);
+    this.store.energy = this.store.getCapacity() > this.store.energy + refund
+      ? this.store.energy + refund
+      : this.store.getCapacity();
+    this._world._creeps = this._world._creeps.filter(c => c !== target);
+    this._world._stats.tickLog.push({ tick: this._world.tick, event: `recycled:${target.name}` });
+    this.room._recalcEnergy();
+    return 0;
+  }
 }
 
 class MockExtension implements MockStructureBase {

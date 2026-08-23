@@ -162,6 +162,7 @@
   shard — 超范围（单 shard 帝国目标）；G11 远矿房防御投资 — 维持 R11
   弃房止损取舍；G12 siege 精细围攻响应 — 依赖看门狗全局降档，无房间级
   配给（低优先，出现实证再补）。
+
 - 工业链缺口修复（2026-08-21）：① Battery 解压回能 — factory-manager
   新增 tryDecompressBattery（storage 能量低于 energyBuyFloor 时
   factory.produce(RESOURCE_ENERGY) 解压 battery → 50 energy/tick），
@@ -233,3 +234,15 @@ A1 证据台账：自举链（e2e-002 RCL1→RCL2 + a1-bootstrap-tower RCL2→RC
 0-creep 灾后 500t 内复产）、零人工（ScenarioRunner 纯代码上传 + tick 驱动，
 零 console 注入）。30 万 tick 全程验收留待官服 soak（A5 窗口），压缩证据
 （e2e-006 11k tick 长稳 + rcl1-suite 6.5k tick）先行入库。
+
+## Phase-3 / P3 批次登记（进行中）— 2026-08-23
+
+- **B2 已闭环**：TestWorld MockSpawn 补齐官方 `recycleCreep` API（按剩余寿命比例退款、
+  立即移除、不计死亡）。此前缺失使 spawn-manager 在含回收标记的 mockup 世界中每 tick
+  TypeError（safeRun 正确隔离，但静默中止该系统当 tick 余下流程）。
+- **B4 发现（重校准排期 Step 11）**：recycleCreep 修复揭示 live-anomaly 三场景
+  （trap/phase 脉冲/harvester 振荡）的绿色依赖上述隐性 abort 动力学——真实引擎语义下
+  替换时序合法位移。三例已转 `it.todo`（断言保留在 git 历史），Step 11 按不变量重写：
+  经济不停滞 = harvested 达标 ∧ container 排空 ∧ 帝国存活；机制代理（头数）不作硬断言。
+  **教训**：mockup 缺口不仅漏测还会「反向校准」测试预期——引擎保真修复必须连带审计
+  既有绿测的因果依赖。

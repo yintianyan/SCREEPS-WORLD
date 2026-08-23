@@ -129,6 +129,17 @@ function generateRoomTasks(
   };
 
   const tasks = buildRoomTasks(snapshot, creepRefs, flags);
+
+  // P3：搬运请求由 logistics 请求池生成（REQUEST_POOL_DESIGN）——合并进任务槽并重排。
+  const tp = globalCache().transportPool;
+  if (tp && tp.tick === ctx.tick) {
+    const transport = tp.rooms[roomName];
+    if (transport && transport.length > 0) {
+      for (const t of transport) tasks.push(t as import("../domain/assignment/service").AssignmentTaskEntry);
+      tasks.sort((a, b) => a.priority - b.priority);
+    }
+  }
+
   pool.setRoomTasks(roomName, tasks);
 }
 

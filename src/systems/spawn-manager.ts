@@ -8,7 +8,7 @@ import { cleanQueue, removeRequestsByRole, sortQueue, submitRequest } from "../d
 import { selectRecycleCandidates } from "../domain/spawn/recycle";
 import { moveToTarget, moveTowardRoom } from "../creeps/movement";
 import { recordSkip } from "../kernel/memory";
-import { globalCache } from "../kernel/global-cache";
+import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
 
 /**
  * 孵化管理器 — 唯一调用 spawnCreep 的模块。
@@ -190,7 +190,13 @@ export const spawnManagerSystem: System = {
       const collectorCount = roomCreeps
         .filter(c => c.role === "harvester" || c.role === "worker").length;
       const distributorCount = roomCreeps.filter(c => c.role === "distributor").length;
-      trySpawn(snapshot, queue, collectorCount, distributorCount);
+      // P3 Reservation①前馈：任一采集者进入替换窗口（B1 对策，P3_BASELINE §6）。
+      const replacementReserve = roomCreeps.some(
+        c => (c.role === "harvester" || c.role === "worker")
+          && c.ticksToLive !== undefined
+          && c.ticksToLive < CONFIG.spawn.replacementHorizonTicks,
+      );
+      trySpawn(snapshot, queue, collectorCount, distributorCount, replacementReserve);
 
       // 5. B1：回收通道 — 标记退役 creep，引导至最近 spawn 回收残值能量。
       //    P3-3：传入预建的本房 creep 子集，避免全量 Game.creeps 扫描。
@@ -274,7 +280,12 @@ function recyclePass(
     if (!spawn) continue;
     if (creep.pos.getRangeTo(spawn) <= 1) {
       // ERR_BUSY（spawn 孵化中）时静默等待下一 tick，不算失败。
-      spawn.recycleCreep(creep);
+      // P3 L1 核算：返还额按 spawn 库存差值实测（引擎按剩余寿命比例退款）。
+      const storeBefore = spawn.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (spawn.recycleCreep(creep) === OK) {
+        const refunded = spawn.store.getUsedCapacity(RESOURCE_ENERGY) - storeBefore;
+        if (refunded > 0) bumpEnergyCounter(home, "recycledRefund", refunded);
+      }
     } else {
       moveToTarget(creep, spawn);
     }
@@ -296,6 +307,7 @@ export function trySpawn(
   queue: SpawnRequest[],
   collectorCount: number,
   distributorCount = 1,
+  replacementReserve = false,
 ): void {
   if (queue.length === 0) return;
   if (snapshot.spawns.length === 0) return;
@@ -314,7 +326,24 @@ export function trySpawn(
   if (!primaryRoom) return;
   let energyBudget = primaryRoom.energyAvailable;
   // SP-1：非 P0 请求可用的预算（P0 本身可动用全部能量）。
-  const reserve = collectorCount <= 1 ? CONFIG.spawn.recoveryEnergyReserve : 0;
+  let reserve = collectorCount <= 1 ? CONFIG.spawn.recoveryEnergyReserve : 0;
+  // P3 Reservation①扩展（ECONOMY §2.1-7）：RCL4+ 有中央储备时，风险缓冲低于地板
+  // （断供耐受 tick 数不足）即同样为非 P0 预留恢复能源——堵 B1 类「P2 支出抽干
+  // 替换能力」的死锁路径。仅 storage/terminal/link 任一存在时生效（低容量房无
+  // 合同储备口径，维持原动态，避免 RCL1 孵化被饿死）。
+  const econSnap = Memory.rooms[snapshot.roomName]?.economy;
+  if (
+    econSnap !== undefined
+    && econSnap.cr > 0
+    && econSnap.rb / 10 < CONFIG.spawn.lowRiskBufferTicks
+  ) {
+    reserve += CONFIG.spawn.recoveryEnergyReserve;
+  }
+  // Reservation①前馈（低容量房形态）：采集者进入替换窗口（TTL < horizon）时同样预留——
+  // 防「P2 支出抽干孵化现金 → 首代替换失败级联」（B1 定量归因见 P3_BASELINE.md §6）。
+  if (replacementReserve) {
+    reserve += CONFIG.spawn.recoveryEnergyReserve;
+  }
 
   // 如果有待处理的 P0 请求，不处理更低优先级的请求。
   const hasP0 = queue.some(r => r.priority === 0);
@@ -423,6 +452,8 @@ export function trySpawn(
     if (result === OK) {
       const queueIdx = queue.indexOf(req);
       if (queueIdx >= 0) queue.splice(queueIdx, 1);
+      // P3 L1 核算：孵化成功即全额计费（gross；recycle 返还在回收通道冲销）。
+      bumpEnergyCounter(snapshot.roomName, "spawned", bodyCost(body));
       // 扣减本地能量预算，换下一个空闲 spawn 继续消费队列。
       energyBudget -= bodyCost(body);
       spawnIdx++;

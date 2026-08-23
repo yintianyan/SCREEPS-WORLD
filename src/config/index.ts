@@ -40,7 +40,7 @@ export function getWallTargetHits(
 
 export const CONFIG = {
   memory: {
-    schemaVersion: 36,
+    schemaVersion: 37,
     /** 【F1/G-C】数据族 TTL 表（FREEZE §9）：每族 {maxAge, sweepPolicy}。
      * sweepPolicy: "ring"（定长环自动截断）| "hook"（由既有清理钩子执行）| "planned"（消费者落地前占位）。
      * 本表 v1 为治理登记：ring/hook 两类由既有机制兑现，"planned" 行不产生行为。 */
@@ -75,6 +75,20 @@ export const CONFIG = {
     stuckThreshold: 2,
     /** 释放目标前的最大重新寻路次数。 */
     repathLimit: 2,
+  },
+
+  /**
+   * P3 物流请求池参数（REQUEST_POOL_DESIGN §5）——阈值均为 tuning 候选。
+   */
+  logistics: {
+    /** 请求 TTL（tick）：到期未被认领完成 → 出池 + RequestExpired 回执。 */
+    requestTtlTicks: 300,
+    /** 饥饿老化提级门槛（tick，仅 P≥2 请求适用）。 */
+    promoteAfterTicks: 150,
+    /** 塔饥渴阈值（能量）：任一塔低于此值 → 收集请求整体提级 P0。 */
+    towerStarveThreshold: 200,
+    /** L2 池收缩门槛：风险缓冲（tick）低于此值 → 只保 P0/P1 请求（LOGISTICS §3）。 */
+    shrinkRiskBufferTicks: 400,
   },
 
   telemetry: {
@@ -164,6 +178,14 @@ export const CONFIG = {
     maxRetries: 12,
     /** 为 P0 恢复 body 预留的最低能量。 */
     recoveryEnergyReserve: 200,
+    /** P3 风险预留门槛：风险缓冲（断供耐受 tick 数，economy 瘦快照 rb/10）低于此值时，
+     * 非 P0 孵化预算额外扣除 recoveryEnergyReserve——RCL4+ storage 经济的排产预留
+     * （ECONOMY §2.1-7①；B1 冷启动崩塌对策）。仅合同储备 >0 的房间生效。 */
+    lowRiskBufferTicks: 400,
+    /** P3 预测性替换预留（Reservation①前馈）：采集者 TTL 低于此值即视为「替换窗口开启」，
+     * 非 P0 孵化预算扣 recoveryEnergyReserve——防 B1 类「替换潮来临前 P2 支出抽干
+     * 孵化现金」（低容量房无合同储备口径时的前馈形态）。 */
+    replacementHorizonTicks: 600,
     /** 饥饿降级的最低 body 成本地板：无地板会在能量低谷铸出残废 body（如 1C1M
      * distributor），其存活整个生命周期 → 吞吐塌方 → 自强化回路。降级产物低于
      * 地板继续排队等能量；生存降级路径（P0/bootstrap/recovery）豁免，保「速出保命」。 */
@@ -366,6 +388,24 @@ export const CONFIG = {
       scoreStep: 10,
       /** 危机时仅当 ticksToDowngrade 低于此值才保留 1 个 upgrader 保级，否则停升级省能。 */
       downgradeGuard: 3000,
+    },
+    /**
+     * P3 能量核算参数（ENERGY_ACCOUNTING_MODEL §4）——窗口/平滑/漂移容差。
+     * 刷新频率合同：每 N tick（10–100，错峰散列），ECONOMY_ARCHITECTURE §3。
+     */
+    accounting: {
+      /** 核算窗长度（tick）。 */
+      windowTicks: 50,
+      /** 净流 EMA 平滑系数（每窗更新，等效半衰 ≈ ln2/α 窗）。 */
+      netFlowAlpha: 0.3,
+      /** 效率系数 EMA 平滑系数。 */
+      efficiencyAlpha: 0.1,
+      /** drift 绝对容差地板（能量）。 */
+      driftFloor: 20,
+      /** drift 相对吞吐比容差。 */
+      driftRatio: 0.02,
+      /** 风险缓冲速率 ε 地板（能量/tick），防零除。 */
+      riskEpsilon: 0.05,
     },
     /** Link 传输参数。 */
     link: {

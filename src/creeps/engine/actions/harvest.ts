@@ -4,7 +4,7 @@
 import type { ActionCandidate, ActionContext } from "../action-types";
 import { CONFIG } from "../../../config";
 import { moveToTarget, registerAnchor } from "../../movement";
-import { runAction } from "./helpers";
+import { runAction, runCountedAction, countedHarvest } from "./helpers";
 import { getSource } from "../../support/targeting";
 import { classifyLinkRole, computeControllerLinkTarget } from "../../../domain/economy/links";
 
@@ -23,7 +23,7 @@ export function harvestSource(): ActionCandidate<Source> {
       return source;
     },
     execute: (ac, source) => {
-      runAction(ac.creep, source, () => ac.creep.harvest(source));
+      runCountedAction(ac.creep, source, "harvested", () => ac.creep.harvest(source));
     },
   };
 }
@@ -85,13 +85,13 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       ) {
         if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
           ac.creep.repair(container);
-        } else if (ac.creep.harvest(source) === ERR_NOT_IN_RANGE) {
+        } else if (countedHarvest(ac.creep, source) === ERR_NOT_IN_RANGE) {
           moveToTarget(ac.creep, standTarget);
         }
         return;
       }
 
-      const harvestResult = ac.creep.harvest(source);
+      const harvestResult = countedHarvest(ac.creep, source);
       if (harvestResult === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, standTarget);
         return;
