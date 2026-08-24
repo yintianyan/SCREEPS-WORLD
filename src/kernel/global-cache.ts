@@ -175,6 +175,12 @@ export interface GlobalCache {
   /** A3.0：Agenda Manager 运行时指标快照（agenda-manager 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   agendaMetrics?: import("../domain/operation/metrics").OperationMetrics;
+  /** A3.1：Resource Network Snapshot（agenda-manager 每 100t 写入）。
+   * heap 存储 — global reset 丢失可接受。 */
+  networkSnapshot?: import("../domain/operation/network-snapshot").NetworkSnapshot;
+  /** A3.1：Network Health 指标（agenda-manager 每 100t 写入）。
+   * heap 存储 — global reset 丢失可接受。 */
+  networkHealth?: import("../domain/operation/network-health").NetworkHealthResult;
 }
 
 /**
