@@ -487,6 +487,12 @@ declare global {
     /** 扩张失败暂停截止（v31+）：此 tick 前不开新扩张行动（连续失败止损）。 */
     expansionPausedUntil?: number;
     /**
+     * A3.4：上一次扩张完成的 tick（Cooldown 门禁）。
+     * expansion-manager 在状态机进入 completed 时写入。
+     * evaluateExpansionCooldown 消费——完成后冷却窗口内不启动新扩张。
+     */
+    lastExpansionCompletedTick?: number;
+    /**
      * 新生殖民地自举台账（expansion-manager 自举车道写，运行时字段无 schema
      * 变更）：owned 无 spawn 的房 → 冷却/波次/弃房标记。房间建成 spawn 后清除。
      */

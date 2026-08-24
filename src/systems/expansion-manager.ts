@@ -55,6 +55,12 @@ import {
   isReservationExpired,
   type ResourceReservation,
 } from "../domain/expansion/resource-reservation";
+import { evaluateExpansionCooldown, DEFAULT_COOLDOWN_CONFIG } from "../domain/expansion/expansion-cooldown";
+import { evaluateAutonomyAge } from "../domain/expansion/autonomy";
+import { evaluateStabilityScore } from "../domain/expansion/stability-score";
+import { evaluateColonyFailure } from "../domain/expansion/colony-failure";
+import { evaluateExpansionRoi, type EmpireSnapshot } from "../domain/expansion/roi-tracker";
+import { buildColonyStabilityDashboard } from "../domain/expansion/colony-dashboard";
 
 /** ExpansionOutcome 事件编码（与 event-log 注释对齐）。 */
 const PHASE_CLAIM = 0;
@@ -96,6 +102,17 @@ export const expansionManagerSystem: System = {
       // 战略门禁：是否扩张由 empire-strategy 的姿态裁决（Strategy 层）— 本系统只在
       // 获得授权时评选目标，不自行判断时机。姿态未就绪（reset 首 tick）默认不扩张。
       if (Memory.kernel.strategy?.expansionAllowed !== true) return;
+      // A3.4：Expansion Cooldown 检查 — 防止扩张级联
+      const cooldownResult = evaluateExpansionCooldown({
+        lastCompletedTick: Memory.kernel.lastExpansionCompletedTick,
+        activeExpansionCount: Memory.kernel.expansion ? 1 : 0,
+        currentTick: ctx.tick,
+        config: DEFAULT_COOLDOWN_CONFIG,
+      });
+      if (!cooldownResult.allowed) {
+        console.log(`[${ctx.tick}] expansion: ${cooldownResult.evidence}`);
+        return;
+      }
       // A3.3：从 expansionPlans[] 消费 WAITING_EXECUTION Plan
       tryConsumePlan(ctx);
       return;
@@ -596,13 +613,13 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
 
   console.log(`[${ctx.tick}] expansion: integrating ${expansion.target} — ${econResult.evidence}`);
 
-  // 评估帝国集成
+  // 评估帝国集成（A3.4 修复：从真实系统状态验证，不硬编码）
   const integrationInput: EmpireIntegrationInput = {
-    inOwnedRoomsList: true, // controller.my 已验证
-    hasSnapshot: true, // ctx.snapshots 包含该房
-    inEconomyStats: true, // 简化：已纳入经济统计
-    spawnManaged: true, // spawn 已在 spawn-manager 覆盖
-    defenseCovered: true, // defense 系统自动覆盖
+    inOwnedRoomsList: !!targetRoom.controller?.my, // controller.my 已验证
+    hasSnapshot: Array.from(ctx.snapshots()).some(s => s.roomName === expansion.target), // 检查 snapshot 是否包含
+    inEconomyStats: isRoomInEconomyStats(ctx, expansion.target), // 检查经济统计
+    spawnManaged: isSpawnManaged(ctx, expansion.target), // 检查 spawn-manager 是否覆盖
+    defenseCovered: isDefenseCovered(ctx, expansion.target), // 检查防御覆盖
     hasVersionedLayout: Memory.rooms[expansion.target]?.layout !== undefined,
     tick: ctx.tick,
   };
@@ -632,6 +649,9 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     expansion.state = "completed";
     console.log(`[${ctx.tick}] expansion: integrating → completed (CP5 passed) — ${expansion.target} is now AUTONOMOUS`);
     recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_SUCCESS);
+    // A3.4：记录完成 tick，供 Cooldown 门禁消费
+    if (!Memory.kernel) Memory.kernel = {};
+    Memory.kernel.lastExpansionCompletedTick = ctx.tick;
     // 标记 Plan 为 COMPLETED
     updatePlanStatus(expansion.planId ?? "", "COMPLETED");
   // 释放预留资源
@@ -794,6 +814,8 @@ function runBootstrapLane(ctx: TickContext): void {
   const kernel = Memory.kernel!;
   kernel.bootstrap ??= {};
 
+  // A3.4 防重门禁：已 COMPLETED 的 Colony 不重新进入 Bootstrap
+  // 只有 owned 无 spawn 的房间才需要 Bootstrap
   const rooms: { room: string; ttd?: number; hostileCount: number; sponsor?: { room: string; capacityAvailable: number } }[] = [];
   const sponsorPool: { room: string; capacityAvailable: number }[] = [];
 
@@ -805,6 +827,13 @@ function runBootstrapLane(ctx: TickContext): void {
       if (snapshot.rcl >= CONFIG.expansion.sponsorMinRcl && Memory.rooms[snapshot.roomName]?.colonyState === "normal") {
         sponsorPool.push({ room: snapshot.roomName, capacityAvailable: snapshot.energyCapacityAvailable });
       }
+      continue;
+    }
+    // A3.4 防重门禁：colonyState 为 "normal" 的房间不进入 Bootstrap
+    // — normal 意味着已通过 Economic Activation，不应重新 Bootstrap
+    const colonyState = Memory.rooms[snapshot.roomName]?.colonyState;
+    if (colonyState === "normal") {
+      delete kernel.bootstrap[snapshot.roomName];
       continue;
     }
     if (snapshot.controller?.my !== true) continue;
@@ -1120,6 +1149,41 @@ function updatePlanStatus(planId: string, status: string): void {
   }
 }
 
+/**
+ * A3.4：检查房间是否被纳入 Empire Economy 统计。
+ * 经济统计由 empire-economy 系统 按 owned rooms 轮询，
+ * 只要房间有 snapshot 且 controller.my 即被纳入。
+ */
+function isRoomInEconomyStats(ctx: TickContext, roomName: string): boolean {
+  // empire-economy 遍历所有 owned rooms — 只要 snapshot 存在且 controller.my 就算纳入
+  const snap = ctx.getSnapshot(roomName);
+  return snap !== undefined && snap.controller?.my === true;
+}
+
+/**
+ * A3.4：检查房间 Spawn 是否被 Spawn Manager 统一调度。
+ * spawn-manager 遍历所有 owned rooms 的 spawnQueue，
+ * 只要房间有 Memory.rooms[roomName].spawnQueue 就算被管理。
+ */
+function isSpawnManaged(ctx: TickContext, roomName: string): boolean {
+  // spawn-manager 覆盖所有有 spawnQueue 的 owned rooms
+  const snap = ctx.getSnapshot(roomName);
+  return snap !== undefined && snap.controller?.my === true &&
+    Memory.rooms[roomName]?.spawnQueue !== undefined;
+}
+
+/**
+ * A3.4：检查房间是否被 Defense 系统覆盖。
+ * defense 系统（tower-defense）遍历所有 owned rooms 的 snapshot，
+ * 只要房间有 snapshot 且 controller.my 就算被覆盖。
+ * spawn 建成后自动纳入 defense；无 spawn 时 fallback 到 safeRun 告警。
+ */
+function isDefenseCovered(ctx: TickContext, roomName: string): boolean {
+  // defense 覆盖所有 owned rooms — 只要 snapshot 存在且 controller.my
+  const snap = ctx.getSnapshot(roomName);
+  return snap !== undefined && snap.controller?.my === true;
+}
+
 /** 估算新房能量生产。 */
 function estimateEnergyProduction(room: Room): number {
   const sources = room.find(FIND_SOURCES);
@@ -1148,14 +1212,42 @@ function estimateEnergyConsumption(room: Room): number {
   return consumption;
 }
 
-/** 估算从 sponsor 到新房的外部能量流入。 */
+/**
+ * 估算从 sponsor 到新房的外部能量流入。
+ *
+ * A3.4 修复：正确检测 carrier 角色（而非 transporter）+ 区分来源。
+ *
+ * 两条能量流入路径：
+ *   1. Bootstrap 输血 — Pioneer（worker/builder）从 sponsor 带能量去 target
+ *   2. Resource Network 正常调拨 — carrier 由 agenda-manager 的 supply Operation 创建
+ *
+ * carrier 的特征：memory.role === "carrier" + memory.remoteTarget === targetRoom
+ * Pioneer 的特征：memory.home === targetRoom + memory.role === worker/builder（在 sponsor 取能后跨房）
+ */
 function estimateExternalInflow(targetRoom: string, sponsorRoom: string): number {
-  // 检查是否有 transporter 在从 sponsor 到 target 的路线上
-  const transporters = Object.values(Game.creeps).filter(
-    c => c.memory.home === targetRoom &&
-      c.memory.role === "transporter" &&
-      c.memory.assignment === (sponsorRoom as never),
+  let inflow = 0;
+
+  // 1. Resource Network 正常调拨 — carrier 角色跨房搬运
+  //    carrier 的 home 是 sourceRoom（sponsor），remoteTarget 是 targetRoom
+  const carriers = Object.values(Game.creeps).filter(
+    c => c.memory.role === "carrier" &&
+      c.memory.remoteTarget === targetRoom &&
+      c.memory.home === sponsorRoom,
   );
-  // 简化：每个 transporter 50 energy/tick
-  return transporters.length * 50;
+  // 每个 carrier 的有效搬运量 ≈ carry capacity / 来回路程（简化 50/tick）
+  inflow += carriers.length * 50;
+
+  // 2. Bootstrap 输血 — Pioneer（worker/builder）从 sponsor 携带能量
+  //    Pioneer 的 home 是 targetRoom，但在 sponsor 房被孵化并取能
+  const pioneers = Object.values(Game.creeps).filter(
+    c => c.memory.home === targetRoom &&
+      (c.memory.role === "worker" || c.memory.role === "builder") &&
+      c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+  );
+  // 每个 pioneer 携带的能量（一次性，不持续）— 仅在有 carrier 缺位时计入
+  if (carriers.length === 0) {
+    inflow += pioneers.length * 25; // 简化：每个 pioneer 平均 25 energy/tick
+  }
+
+  return inflow;
 }
