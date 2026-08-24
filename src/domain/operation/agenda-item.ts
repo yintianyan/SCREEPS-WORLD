@@ -32,8 +32,20 @@ export type OperationStatus =
 /** 操作优先级（0=最高 survival / 1=high / 2=normal / 3=low）。 */
 export type OperationPriority = 0 | 1 | 2 | 3;
 
-/** 资源类型（当前只支持 energy，后续可扩展）。 */
-export type ResourceType = "energy";
+/**
+ * 资源类型 — A4.2 从 energy-only 扩展为多资源联合类型。
+ *
+ * A4.0 §18.4 规划路径：`"energy" | MineralResourceType | CommodityResourceType`。
+ * A4.2 执行第一步：加入 `MineralConstant`（7 种基础矿物）。
+ * 后续阶段（A4.4+）加入矿物化合物 / 商品类型。
+ *
+ * `MineralConstant` 是 Screeps 引擎全局 `declare type`（无需 import）：
+ *   RESOURCE_UTRIUM | RESOURCE_LEMERGIUM | RESOURCE_KEANIUM |
+ *   RESOURCE_ZYNTHIUM | RESOURCE_OXYGEN | RESOURCE_HYDROGEN | RESOURCE_CATALYST
+ *
+ * 向后兼容：`"energy"` 仍是合法值，现有代码零改动。
+ */
+export type ResourceType = "energy" | MineralConstant;
 
 /**
  * OperationContext — AgendaItem 的运行时上下文。

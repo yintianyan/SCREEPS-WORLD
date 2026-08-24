@@ -29,6 +29,7 @@
  */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
+import { globalCache } from "../kernel/global-cache";
 import { queryEconomy, type EconomyQuery } from "./economy";
 import {
   buildRoomEconomicProfile,
@@ -46,6 +47,20 @@ import { allocateEmpireBudget } from "../domain/strategy/budget";
 import { evaluateExpansionReadiness } from "../domain/strategy/readiness";
 import { evaluateSafetyMargin } from "../domain/strategy/safety-margin";
 import { buildEmpirePlannerInput } from "../domain/strategy/planner-input";
+// A4.2 多资源链路
+import { getAllMineralTypes } from "../domain/economy/resource-definition";
+import {
+  createResourceLedger,
+  getOrCreateEntry,
+  emptyStock,
+  aggregateLedgers,
+  type ResourceLedger,
+  type ResourceStockSnapshot,
+} from "../domain/economy/resource-ledger";
+import { evaluateMultiResourceHealth } from "../domain/strategy/multi-resource-health";
+import { identifyBottlenecks } from "../domain/economy/bottleneck";
+import type { ResourceHealthStatus } from "../domain/economy/resource-health";
+import type { ResourceType } from "../domain/operation/agenda-item";
 
 /**
  * Empire Economy 瘦快照（写入 Memory.kernel.empireEconomy）。
@@ -84,6 +99,15 @@ interface EmpireEconomySnapshot {
   fb: number;
   /** 储备预算。 */
   rr: number;
+  // ── A4.2 多资源维度 ──
+  /** 多资源帝国健康度编码。 */
+  mh: number;
+  /** 是否有矿物缺口。 */
+  md: number;
+  /** 瓶颈资源编码（0 = energy, 1-7 = U/L/K/Z/O/H/X, 99 = none）。 */
+  bn: number;
+  /** 最差矿物健康度编码。 */
+  wmh: number;
 }
 
 /** 健康度编码（节省 Memory 字符）。 */
@@ -101,6 +125,100 @@ const READINESS_CODES: Record<string, number> = {
   READY: 1,
   STRONGLY_READY: 2,
 };
+
+/** A4.2 多资源健康度编码（与 Energy 健康度编码对齐，供快照用）。 */
+const MULTI_HEALTH_CODES: Record<ResourceHealthStatus, number> = {
+  critical: 0,
+  deficit: 1,
+  degraded: 2,
+  stable: 3,
+  healthy: 4,
+};
+
+/**
+ * A4.2：从 RoomSnapshot 采集矿物库存快照。
+ *
+ * 只采集矿物（非 energy），energy 由现有 EnergyLedger 链路处理。
+ * 遍历 storage / terminal / container / lab / factory 中的矿物存量。
+ */
+function collectMineralStock(snapshot: import("../kernel/contracts").RoomSnapshot): Map<string, ResourceStockSnapshot> {
+  const minerals = getAllMineralTypes();
+  const result = new Map<string, ResourceStockSnapshot>();
+
+  for (const mineral of minerals) {
+    const stock = emptyStock();
+
+    // storage
+    if (snapshot.storage) {
+      stock.storage = snapshot.storage.store[mineral as MineralConstant] ?? 0;
+    }
+    // terminal
+    if (snapshot.terminal) {
+      stock.terminal = snapshot.terminal.store[mineral as MineralConstant] ?? 0;
+    }
+    // containers
+    for (const c of snapshot.containers) {
+      stock.containers += c.store[mineral as MineralConstant] ?? 0;
+    }
+    // labs
+    for (const l of snapshot.labs) {
+      stock.labs += (l.store[mineral as MineralConstant] ?? 0) as number;
+    }
+    // factory
+    if (snapshot.factory) {
+      stock.factory += (snapshot.factory.store[mineral as MineralConstant] ?? 0) as number;
+    }
+
+    // 只记录有存量的矿物
+    if (stock.storage + stock.terminal + stock.containers + stock.labs + stock.factory > 0) {
+      result.set(mineral, stock);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * A4.2：从各房矿物库存聚合为帝国级 ResourceLedger。
+ */
+function buildEmpireResourceLedger(
+  snapshots: readonly import("../kernel/contracts").RoomSnapshot[],
+): ResourceLedger {
+  const roomLedgers: ResourceLedger[] = [];
+
+  for (const snap of snapshots) {
+    const roomLedger = createResourceLedger();
+    const mineralStocks = collectMineralStock(snap);
+
+    for (const [mineral, stock] of mineralStocks) {
+      const entry = getOrCreateEntry(roomLedger, mineral as ResourceType);
+      entry.stock = stock;
+    }
+
+    roomLedgers.push(roomLedger);
+  }
+
+  return aggregateLedgers(roomLedgers);
+}
+
+/**
+ * A4.2：将 Energy-only EconomicHealth 映射到 ResourceHealthStatus。
+ *
+ * EmpireEconomicHealth（critical/deficit/stable/growing/healthy）
+ * → ResourceHealthStatus（critical/deficit/degraded/stable/healthy）。
+ * growing 归入 stable（对应 ResourceHealth 没有 growing 维度）。
+ */
+function mapEnergyHealthToResourceHealth(
+  h: "critical" | "deficit" | "stable" | "growing" | "healthy",
+): ResourceHealthStatus {
+  switch (h) {
+    case "critical": return "critical";
+    case "deficit": return "deficit";
+    case "stable": return "stable";
+    case "growing": return "stable";
+    case "healthy": return "healthy";
+  }
+}
 
 /** heap 缓存的 Planner Input（供同 tick 内其他系统只读消费）。 */
 let cachedPlannerInput: { tick: number; input: ReturnType<typeof buildEmpirePlannerInput> } | undefined;
@@ -209,8 +327,38 @@ export const empireEconomySystem: System = {
     // ── 写入 heap 缓存（供同 tick 内其他系统只读消费）──
     cachedPlannerInput = { tick: ctx.tick, input: plannerInput };
 
+    // ── A4.2 步 11：多资源链路 ──
+    // 从 RoomSnapshot 采集矿物库存 → 帝国级 ResourceLedger → 多资源健康度 + 瓶颈
+    const allSnapshots = Array.from(ctx.snapshots());
+    const empireLedger = buildEmpireResourceLedger(allSnapshots);
+    const energyHealthStatus = mapEnergyHealthToResourceHealth(health.health);
+    const multiHealth = evaluateMultiResourceHealth(
+      ctx.tick,
+      empireLedger,
+      energyHealthStatus,
+    );
+    const bottlenecks = identifyBottlenecks(empireLedger);
+
+    // 写入 globalCache 供其他系统消费
+    const g = globalCache();
+    g.multiResourceHealth = multiHealth;
+    g.resourceBottlenecks = bottlenecks;
+    g.empireResourceLedger = empireLedger;
+
     // ── 写入 Memory 瘦快照 ──
     if (!Memory.kernel) Memory.kernel = {};
+
+    // 瓶颈资源编码
+    const BOTTLENECK_CODES: Record<string, number> = {
+      energy: 0, U: 1, L: 2, K: 3, Z: 4, O: 5, H: 6, X: 7,
+    };
+    const bottleneckCode = multiHealth.bottleneck !== null
+      ? (BOTTLENECK_CODES[multiHealth.bottleneck] ?? 99)
+      : 99;
+    const worstMineralHealthCode = multiHealth.worstMineralHealth !== null
+      ? (MULTI_HEALTH_CODES[multiHealth.worstMineralHealth] ?? 0)
+      : 4; // 无矿物数据时默认 healthy
+
     const snapshot: EmpireEconomySnapshot = {
       t: ctx.tick,
       te: resourceView.totalEnergy,
@@ -228,17 +376,28 @@ export const empireEconomySystem: System = {
       eb: budget.expansion,
       fb: budget.free,
       rr: budget.reserve,
+      // A4.2 多资源维度
+      mh: MULTI_HEALTH_CODES[multiHealth.health] ?? 0,
+      md: multiHealth.hasMineralDeficit ? 1 : 0,
+      bn: bottleneckCode,
+      wmh: worstMineralHealthCode,
     };
     Memory.kernel.empireEconomy = snapshot;
 
     // ── 可观测性：变更时打日志 ──
     const prev = Memory.kernel.empireEconomy;
-    if (prev?.er !== snapshot.er || prev?.h !== snapshot.h) {
+    if (prev?.er !== snapshot.er || prev?.h !== snapshot.h || prev?.mh !== snapshot.mh) {
+      const mineralInfo = multiHealth.worstMineral !== null
+        ? ` worstMineral=${multiHealth.worstMineral}:${multiHealth.worstMineralHealth}`
+        : "";
       console.log(
-        `[${ctx.tick}] empire-economy: health=${health.health} readiness=${readiness.readiness}` +
+        `[${ctx.tick}] empire-economy: health=${health.health} multiHealth=${multiHealth.health}` +
+        ` readiness=${readiness.readiness}` +
         ` energy=${resourceView.totalEnergy} netFlow=${resourceView.totalNetFlow.toFixed(1)}` +
         ` surplus=${imbalance.surplusCount} deficit=${imbalance.deficitCount}` +
-        ` safety=${safetyMargin.score.toFixed(2)}`,
+        ` safety=${safetyMargin.score.toFixed(2)}` +
+        mineralInfo +
+        (bottlenecks.length > 0 ? ` bottleneck=${bottlenecks[0]?.resource}(${bottlenecks[0]?.score.toFixed(2)})` : ""),
       );
     }
   },

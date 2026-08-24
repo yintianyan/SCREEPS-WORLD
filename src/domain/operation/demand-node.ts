@@ -76,6 +76,7 @@ export function buildDemandNode(
   tick: number,
   deadline: number = tick + 2000,
   firstSeen: number = tick,
+  resource: ResourceType = "energy",
 ): DemandNode | undefined {
   if (!entry.needsAid) return undefined;
 
@@ -87,7 +88,7 @@ export function buildDemandNode(
 
   return {
     room: entry.roomName,
-    resource: "energy",
+    resource,
     requested,
     priority,
     deadline,

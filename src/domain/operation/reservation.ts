@@ -11,6 +11,8 @@
  * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
  */
 
+import type { ResourceType } from "./agenda-item";
+
 /** 默认预留 TTL（tick）。500 tick ≈ 运输往返 + 安全余量。 */
 export const DEFAULT_RESERVATION_TTL = 500;
 
@@ -33,8 +35,8 @@ export interface Reservation {
   expiresAt: number;
   /** 上次心跳 tick。 */
   lastHeartbeat: number;
-  /** 资源类型。 */
-  resource: "energy";
+  /** 资源类型（A4.2 泛化：支持 energy + mineral）。 */
+  resource: ResourceType;
 }
 
 /** 预留表 — operationId → Reservation。 */
@@ -53,6 +55,7 @@ export function createReservation(
   amount: number,
   tick: number,
   ttl: number = DEFAULT_RESERVATION_TTL,
+  resource: ResourceType = "energy",
 ): ReservationTable {
   const next = new Map(table);
   next.set(operationId, {
@@ -63,7 +66,7 @@ export function createReservation(
     createdAt: tick,
     expiresAt: tick + ttl,
     lastHeartbeat: tick,
-    resource: "energy",
+    resource,
   });
   return next;
 }

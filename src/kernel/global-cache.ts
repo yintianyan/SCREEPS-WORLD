@@ -184,6 +184,15 @@ export interface GlobalCache {
   /** A3.2：Expansion Dashboard（expansion-planner 每 interval tick 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   expansionDashboard?: import("../domain/expansion/dashboard").ExpansionDashboard;
+  /** A4.2：多资源帝国健康度（empire-economy 每 100t 写入）。
+   * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
+  multiResourceHealth?: import("../domain/strategy/multi-resource-health").MultiResourceEmpireHealth;
+  /** A4.2：资源瓶颈排序列表（empire-economy 每 100t 写入）。
+   * heap 存储 — global reset 丢失可接受。 */
+  resourceBottlenecks?: import("../domain/economy/bottleneck").BottleneckEntry[];
+  /** A4.2：帝国级 Resource Ledger（empire-economy 每 100t 写入）。
+   * heap 存储 — global reset 丢失可接受。 */
+  empireResourceLedger?: import("../domain/economy/resource-ledger").ResourceLedger;
 }
 
 /**

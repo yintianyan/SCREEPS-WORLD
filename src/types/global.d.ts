@@ -596,6 +596,15 @@ declare global {
       eb: number;
       fb: number;
       rr: number;
+      // ── A4.2 多资源维度 ──
+      /** 多资源帝国健康度编码（0=critical..4=healthy）。 */
+      mh: number;
+      /** 是否有矿物缺口（0/1）。 */
+      md: number;
+      /** 瓶颈资源编码（0=energy, 1-7=U/L/K/Z/O/H/X, 99=none）。 */
+      bn: number;
+      /** 最差矿物健康度编码（0=critical..4=healthy, 4=无矿物数据）。 */
+      wmh: number;
     };
     /**
      * A3.0 帝国议程（agenda-manager 每 100t 写入）— 跨房调拨 Operation 生命周期。

@@ -55,6 +55,7 @@ export function buildSupplyNode(
   entry: RoomRegistryEntry,
   reservedAmount: number,
   tick: number,
+  resource: ResourceType = "energy",
 ): SupplyNode | undefined {
   if (!entry.canExport || entry.transferable <= 0) return undefined;
 
@@ -66,7 +67,7 @@ export function buildSupplyNode(
 
   return {
     room: entry.roomName,
-    resource: "energy",
+    resource,
     available: entry.storageEnergy,
     reserved: reservedAmount,
     safety,

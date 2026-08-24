@@ -413,6 +413,28 @@ export function getContractsByTarget(
 // ─── 序列化 / 反序列化 ───────────────────────────────────
 
 /**
+ * A4.2: ResourceType 短码编解码。
+ *
+ * 编码方案（无冲突）：
+ * - `"energy"` → `"E"`（大写，不与 mineral 单字母冲突）
+ * - MineralConstant（如 `"U"`, `"L"`, `"K"`, `"Z"`, `"O"`, `"H"`, `"X"`）→ 直接存原值
+ *
+ * 纯函数。
+ */
+
+/** 将 ResourceType 编码为短码。纯函数。 */
+export function serializeResourceCode(resource: ResourceType): string {
+  return resource === "energy" ? "E" : resource;
+}
+
+/** 将短码解码为 ResourceType。纯函数。 */
+export function deserializeResourceCode(code: string): ResourceType {
+  if (code === "E") return "energy";
+  // 矿物短码直接作为 MineralConstant 返回
+  return code as ResourceType;
+}
+
+/**
  * Supply Contract 瘦快照（存入 Memory.kernel.supplyContracts）。
  * 只存必要字段——数字 + 枚举 + ID。
  * 纯函数。
@@ -482,7 +504,7 @@ export function serializeContract(c: SupplyContract): ContractMemorySnapshot {
     i: c.id,
     s: c.sourceRoom,
     t: c.targetRoom,
-    r: c.resource === "energy" ? "E" : "E",
+    r: serializeResourceCode(c.resource),
     tr: Math.round(c.targetRate * 10),
     mr: Math.round(c.minimumReserve),
     p: c.priority,
@@ -531,7 +553,7 @@ export function deserializeContract(s: ContractMemorySnapshot): SupplyContract {
     id: s.i,
     sourceRoom: s.s,
     targetRoom: s.t,
-    resource: "energy",
+    resource: deserializeResourceCode(s.r),
     targetRate: s.tr / 10,
     minimumReserve: s.mr,
     priority: s.p as OperationPriority,

@@ -970,6 +970,17 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       // 仅升版本登记结构变更（STATE_OWNERSHIP §4 迁移三件套之迁移步骤）。
     },
   },
+  {
+    from: 38,
+    to: 39,
+    run: () => {
+      // v39：A4.2 多资源帝国经济 — 扩展 KernelMemory.empireEconomy 瘦快照新增
+      // 4 个字段（mh/md/bn/wmh：多资源健康度/矿物缺口/瓶颈资源/最差矿物健康度）。
+      // 字段全部可选、惰性初始化（empire-economy 系统 100t 后首次写入即填充）——
+      // 幂等 no-op，仅升版本登记结构变更（STATE_OWNERSHIP §4 迁移三件套之迁移步骤）。
+      // 存量快照无新字段 → 读取方用 ?? 默认值兜底，不影响正确性。
+    },
+  },
 ];
 
 /**
