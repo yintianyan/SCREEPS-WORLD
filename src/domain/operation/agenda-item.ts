@@ -8,13 +8,14 @@
  */
 
 /**
- * 操作类型（A3.3 扩展：新增 claim + colonize）。
+ * 操作类型（A3.3 扩展：新增 claim + colonize；A4.1 扩展：新增 remote_mining）。
  *
- * - supply:   资源调拨（A3.0 已实现）
- * - claim:    获取 Controller 所有权（A3.3 新增）
- * - colonize: 建立经济——从 Spawn 到 Autonomous Room（A3.3 新增）
+ * - supply:        资源调拨（A3.0 已实现）
+ * - claim:         获取 Controller 所有权（A3.3 新增）
+ * - colonize:      建立经济——从 Spawn 到 Autonomous Room（A3.3 新增）
+ * - remote_mining: 远矿采集运营（A4.1 新增）
  */
-export type OperationType = "supply" | "claim" | "colonize";
+export type OperationType = "supply" | "claim" | "colonize" | "remote_mining";
 
 /** 操作状态机九态（PLANNING_ARCHITECTURE §3 AgendaItem 生命周期）。 */
 export type OperationStatus =
@@ -232,6 +233,54 @@ export function createColonizeOperation(
     sourceRoom: sponsorRoom,
     targetRoom,
     requestedAmount: bootstrapEnergy,
+    deliveredAmount: 0,
+    reservedAmount: 0,
+    priority,
+    resource: "energy",
+    deadline,
+    createdAt: tick,
+    updatedAt: tick,
+    retries: 0,
+    maxRetries,
+  };
+}
+
+// ─── A4.1 扩展：remote_mining Operation ────────────────────
+
+/**
+ * 生成 Remote Mining Operation 的幂等键。
+ * 格式："remote_mining:${homeRoom}:${targetRoom}"
+ * 同一对 (homeRoom, targetRoom) 只允许一个活跃远矿 Operation。
+ */
+export function makeRemoteMiningOperationId(
+  homeRoom: string,
+  targetRoom: string,
+): string {
+  return `remote_mining:${homeRoom}:${targetRoom}`;
+}
+
+/**
+ * 创建 Remote Mining Operation（远矿采集运营）。
+ *
+ * 初始状态 = planned，sourceRoom = home 房（孵化方），targetRoom = 远矿目标房。
+ * requestedAmount = 预算上限（budget limit），deliveredAmount = 实际交付累计。
+ */
+export function createRemoteMiningOperation(
+  homeRoom: string,
+  targetRoom: string,
+  budgetLimit: number,
+  priority: OperationPriority,
+  deadline: number,
+  tick: number,
+  maxRetries = 5,
+): OperationContext {
+  return {
+    id: makeRemoteMiningOperationId(homeRoom, targetRoom),
+    type: "remote_mining",
+    status: "planned",
+    sourceRoom: homeRoom,
+    targetRoom,
+    requestedAmount: budgetLimit,
     deliveredAmount: 0,
     reservedAmount: 0,
     priority,

@@ -38,6 +38,7 @@ import { linkSystem } from "./systems/link-system";
 import { pixelSystem } from "./systems/pixel-system";
 import { prospectManagerSystem } from "./systems/prospect-manager";
 import { remoteMiningManagerSystem } from "./systems/remote-mining-manager";
+import { specializationPlannerSystem } from "./systems/specialization-planner";
 import { warPlannerSystem } from "./systems/war-planner";
 import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
@@ -84,6 +85,8 @@ export const registry = new Registry()
   .registerSystem(constructionManagerSystem)
   // P2：远矿管理（每 10 tick 评估目标）
   .registerSystem(remoteMiningManagerSystem)
+  // P1：专业化规划器（每 100 tick 消费 Opportunity + 评估经济健康度）
+  .registerSystem(specializationPlannerSystem)
   // P2：战争规划（war 姿态才选目标推 attacker；非 war 收摊）
   .registerSystem(warPlannerSystem)
   // P3：布局规划（低频）

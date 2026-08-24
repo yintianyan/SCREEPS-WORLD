@@ -628,6 +628,30 @@ declare global {
       tick: number;
       summary: string;
     };
+    /**
+     * A4.1 远矿经济 Dashboard 快照（specialization-planner 每 100t 写入）—
+     * 全链路可观测性：Remote Source / Operation / Production / Transport /
+     * Delivered / Net Value / ROI / Health / Budget 汇总。
+     */
+    remoteEconomyDashboard?: {
+      t: number;
+      /** 活跃远矿数。 */
+      ao: number;
+      /** 总产出（e/tick）。 */
+      tp: number;
+      /** 总交付（e/tick）。 */
+      td: number;
+      /** 总净价值（e/tick）。 */
+      nv: number;
+      /** 健康运营数。 */
+      ho: number;
+      /** 降级运营数。 */
+      dg: number;
+      /** 暂停运营数。 */
+      sp: number;
+      /** 摘要文本。 */
+      s: string;
+    };
   }
 
   /** A3.3 扩展：扩张执行状态机的完整状态集合。 */
@@ -826,6 +850,32 @@ declare global {
      * → 废弃运营。remote-mining-manager 唯一写者（managerInterval 采样）。
      */
     stallSince?: number;
+
+    // ─── A4.1 扩展：RemoteMiningOperation 关联字段 ────────
+
+    /**
+     * A4.1：关联的 RemoteMiningOperation ID（"remote_mining:${homeRoom}:${targetRoom}"）。
+     * 渐进迁移：remoteOps 保留为执行器侧扁平结构，此字段关联到
+     * globalCache 中的 RemoteMiningOperationContext。undefined = 尚未关联。
+     */
+    operationId?: string;
+    /**
+     * A4.1：Remote Operation Checkpoint（"discovered"|"validated"|"prepared"|
+     * "infrastructure_ready"|"mining_active"|"logistics_active"|"economic_active"）。
+     * 镜像 globalCache 中 RemoteMiningOperationContext.checkpoint。
+     */
+    checkpoint?: string;
+    /**
+     * A4.1：Remote Economic Health（"healthy"|"degraded"|"unprofitable"|
+     * "suspended"|"failed"）。镜像 globalCache 中
+     * RemoteMiningOperationContext.economicHealth。
+     */
+    economicHealth?: string;
+    /**
+     * A4.1：预算消耗累计（能量）。镜像 globalCache 中
+     * RemoteMiningOperationContext.budget.consumed。
+     */
+    budgetConsumed?: number;
   }
 
   interface Memory {
