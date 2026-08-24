@@ -9,6 +9,7 @@
  */
 
 import type { RoomEconomicProfile } from "../economy/room-profile";
+import type { EmpireRoomRole } from "../economy/empire-role";
 
 /**
  * Room Registry Entry — 单房注册项。
@@ -47,6 +48,8 @@ export interface RoomRegistryEntry {
   needsAid: boolean;
   /** 可调拨量（由 ownership.ts computeTransferable 计算）。 */
   transferable: number;
+  /** A4.0 Empire Room Role（经济职能分工）。undefined = 尚未评估。 */
+  empireRole?: EmpireRoomRole;
   /** 最近更新 tick。 */
   updatedAt: number;
 }
@@ -84,6 +87,7 @@ export function makeRegistryEntry(
     canExport: false, // 由调用方设置（需 canExportEnergy 判定）
     needsAid: false, // 由调用方设置（需 needsEnergyAid 判定）
     transferable,
+    empireRole: profile.empireRole,
     updatedAt: tick,
   };
 }

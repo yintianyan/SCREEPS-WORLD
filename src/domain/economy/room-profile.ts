@@ -22,6 +22,7 @@
 
 import type { RoomSnapshot, ColonyState } from "../../kernel/contracts";
 import type { ColonyPhase } from "./phase";
+import type { EmpireRoomRole } from "./empire-role";
 
 /**
  * Economy 查询结果接口（镜像 systems/economy.ts EconomyQuery）。
@@ -157,6 +158,18 @@ export interface RoomEconomicProfile {
    * 困难房应停止被均衡抽离、优先注入（ECONOMY §1.2 异常房例外）。
    */
   isStruggling: boolean;
+
+  // ── A4.0 Empire Room Role（经济职能分工，与 economicClass 正交）──
+  /**
+   * Empire Room Role — 房间在帝国经济中的职能分工（CORE/PRODUCTION/SUPPORT/REMOTE）。
+   *
+   * 与 economicClass 正交：economicClass 是发展阶段分类（能力门槛），
+   * empireRole 是经济职能分工（比较优势）。
+   *
+   * undefined 表示尚未评估（首次评估前或 global reset 后）。
+   * 由 Role Evaluation 纯函数 + Role Stability 迟滞机制裁决后写入。
+   */
+  empireRole?: EmpireRoomRole;
 }
 
 // ─── 输入类型 ───────────────────────────────────────────────
@@ -251,12 +264,17 @@ export function computeSelfSufficiency(
  *
  * 调用方：empire-economy 系统（A2 后半新增薄壳）或 empire-strategy 扩展。
  * 频率：每 N tick（50–100，与 economy 同频或更低）。
+ *
+ * 注意：empireRole 字段不在此函数中设置——它由 Role Evaluation + Role Stability
+ * 裁决后由调用方（系统侧薄壳）单独写入。此函数只组装经济剖面数据。
  */
 export function buildRoomEconomicProfile(
   snapshot: RoomSnapshot,
   roomMem: RoomEconomicMemory,
   economy: EconomyQueryInput | undefined,
   tick: number,
+  /** A4.0：当前 empireRole（从 Role Stability 状态传入，默认 undefined=首次评估）。 */
+  currentEmpireRole?: EmpireRoomRole,
 ): RoomEconomicProfile {
   const rcl = snapshot.rcl;
   const hasSpawn = snapshot.spawns.length > 0;
@@ -334,6 +352,7 @@ export function buildRoomEconomicProfile(
     netFlowPositive,
     selfSufficiency,
     isStruggling,
+    empireRole: currentEmpireRole,
   };
 }
 
