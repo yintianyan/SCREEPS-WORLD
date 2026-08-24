@@ -562,6 +562,9 @@ export const CONFIG = {
     // 次级 Invader Core 清核者（P1）：拆 level-0 reserve-only 核心回收远矿 op 名额。
     // 每房至多 1 只在场（demand 单只节流），maxCount 2 防替补窗口真空。
     coreClearer: { minCount: 0, maxCount: 2 },
+    // A3.0 跨房调拨搬运工：由 agenda-manager 按 Operation 需求孵化，
+    // 不走 demand 评估（maxCount 6 覆盖多对多调拨峰值）。
+    carrier: { minCount: 0, maxCount: 6 },
   },
 
   war: {

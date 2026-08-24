@@ -1,4 +1,5 @@
 import { builderRole } from "./creeps/roles/builder";
+import { carrierRole } from "./creeps/roles/carrier";
 import { claimerRole } from "./creeps/roles/claimer";
 import { defenderRole } from "./creeps/roles/defender";
 import { distributorRole } from "./creeps/roles/distributor";
@@ -142,6 +143,8 @@ export const registry = new Registry()
   // P1：remoteDefender（杀 NPC reserver/Invader）
   .registerRole(remoteDefenderRole)
   // P1：coreClearer（拆 level-0 reserve-only Invader Core 回收远矿 op 名额）
-  .registerRole(coreClearerRole);
+  .registerRole(coreClearerRole)
+  // P1：carrier（A3.0 跨房调拨搬运工，由 agenda-manager 孵化）
+  .registerRole(carrierRole);
 
 export const kernel = new Kernel(registry);

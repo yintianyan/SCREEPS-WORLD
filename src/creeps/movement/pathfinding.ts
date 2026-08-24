@@ -869,9 +869,13 @@ export function ensureHome(creep: Creep): boolean {
     // 无事可做）时不导航回 home，留在目标房等待条件恢复；否则 home↔remoteTarget 振荡
     // （idle→goHome→acquire→导航回 remoteTarget→又 idle…）至寿终（remoteHarvester 在
     // InvaderCore 压制房正是此症状；被 recycle 标记的 creep 由 recyclePass 接管移动，不受此影响）。
+    // carrier（A3.0 跨房调拨）：acquire/idle/flee → home（source room 取能），
+    // work → remoteTarget（target room 卸能）。与 remoteHauler 方向对偶。
+    const isCarrier = creep.memory.role === "carrier";
     const goHome = mode === "flee" ||
       (mode === "idle" && creep.room.name !== remoteTarget) ||
-      (mode === "work" && (creep.memory.role === "remoteHauler" || creep.memory.role === "coreClearer"));
+      (mode === "work" && (creep.memory.role === "remoteHauler" || creep.memory.role === "coreClearer")) ||
+      (isCarrier && (mode === "acquire" || mode === "idle"));
     const dest = goHome ? home : remoteTarget;
     if (creep.room.name === dest) {
       // MV-4：边界格防弹回 — 先内移一步再交还角色管线。

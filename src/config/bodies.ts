@@ -195,6 +195,20 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
+  // A3.0 跨房调拨搬运工：CARRY+MOVE 1:1 平原满速跨房。
+  // 模板与 remoteHauler 同构——远距离大运力减少趟数。
+  carrier: [
+    // RCL8 大运力档 [24C,12M] @1800：运力 1200/趟。
+    { parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","move","move","move","move","move","move","move","move","move","move","move","move"], minCapacity: 1800 },
+    // RCL7 中运力档 [16C,8M] @1200：运力 800/趟。
+    { parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","move","move","move","move","move","move","move","move"], minCapacity: 1200 },
+    // RCL5 标准档 [8C,8M] @800：运力 400/趟。
+    { parts: ["carry","carry","carry","carry","carry","carry","carry","carry","move","move","move","move","move","move","move","move"], minCapacity: 800 },
+    // RCL4 基础档 [4C,4M] @400：运力 200/趟。
+    { parts: ["carry","carry","carry","carry","move","move","move","move"], minCapacity: 400 },
+    // 最小档 [2C,2M] @200：运力 100/趟。
+    { parts: ["carry","carry","move","move"], minCapacity: 200 },
+  ],
   reserver: [
     // [CLAIM,MOVE] 最小占领：1 CLAIM=600 能量；reserveController 每 tick 续期 1 tick，
     // 单 CLAIM 即满足需求。

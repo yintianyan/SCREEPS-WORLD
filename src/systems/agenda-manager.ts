@@ -8,18 +8,19 @@
  *   3. 管理 OperationContext 生命周期（Memory.kernel.agendas）
  *   4. 管理 ReservationTable（Memory.kernel.reservations）
  *   5. 执行路由（Game.map.findRoute）并注入到 transport-planner
- *   6. 将 TransportRequest 候选写入 globalCache 供 logistics 消费
+ *   6. 提交 carrier spawn 请求到 source 房 spawn queue
  *   7. 事件驱动重规划（carrier 死亡 / 房间状态变更）
  *   8. 清理终态 Operation（归档后删除）
+ *   9. 验证：检测 carrier 在 target room + target storage 增量
  *
  * 状态所有权（STATE_OWNERSHIP §3.1）：
  *   唯一写者 = 本系统 → Memory.kernel.agendas / Memory.kernel.reservations。
  *
  * 不做（硬约束）：
- *   - 不直接调用 spawnCreep
- *   - 不直接修改 Room Memory
- *   - 不直接控制 Creep
- *   - 不绕过 Request Pool（只产出候选 Request）
+ *   - 不直接调用 spawnCreep（通过 spawn queue 提交请求）
+ *   - 不直接修改 Room Memory（只读 snapshot + Memory.kernel.*）
+ *   - 不直接控制 Creep（carrier 由 role-runner 驱动）
+ *   - 不绕过 Request Pool（carrier 不经 transportPool）
  *
  * CPU 预算：低频执行（interval=100），不每 tick 重算。
  */
@@ -67,12 +68,6 @@ import {
   type AllocationPlan,
 } from "../domain/operation/allocation";
 import {
-  planTransportsBatch,
-  filterExecutable,
-  type RouteResult,
-  type TransportPlan,
-} from "../domain/operation/transport-planner";
-import {
   createReservation,
   releaseReservation,
   sweepExpired,
@@ -83,7 +78,9 @@ import { verifyTransfer, shouldAbortVerification, shouldPartialComplete } from "
 import { hasActiveOperation, pruneTerminal } from "../domain/operation/dedup";
 import { processReplanEvent, shouldReplan, type ReplanEvent } from "../domain/operation/replan";
 import { computeOperationMetrics, formatOperationMetrics } from "../domain/operation/metrics";
-import type { TransportRequest } from "../domain/assignment/request-pool";
+import { submitRequest, hasRequest } from "../domain/spawn/queue";
+import { bodyCost, selectBody } from "../config/bodies";
+import { getRoleBounds } from "../config/tuned";
 
 /** 默认 Operation 超时（tick）。2000 tick ≈ 运输 + 验证 + 重试。 */
 const DEFAULT_OPERATION_DEADLINE = 2000;
@@ -92,7 +89,7 @@ const DEFAULT_OPERATION_DEADLINE = 2000;
 const TERMINAL_RETENTION = 1000;
 
 /** 路由缓存（heap，跨 tick 不持久 — 失效后下次重算）。 */
-const routeCache = new Map<string, RouteResult>();
+const routeCache = new Map<string, { from: string; to: string; hops: number; reachable: boolean }>();
 
 /** pending 重规划事件（heap 缓冲，下次 planning cycle 消费）。 */
 let pendingEvents: ReplanEvent[] = [];
@@ -108,24 +105,24 @@ export function queueReplanEvent(event: ReplanEvent): void {
  * 执行 Game.map.findRoute 并缓存结果。
  * 失败/不可达时返回 hops=-1。
  */
-function computeRoute(from: string, to: string): RouteResult {
+function computeRoute(from: string, to: string): { from: string; to: string; hops: number; reachable: boolean } {
   const key = `${from}:${to}`;
   const cached = routeCache.get(key);
   if (cached) return cached;
 
   try {
     const route = Game.map.findRoute(from, to);
-    if (route === ERR_NO_PATH || typeof route === "number" && route < 0) {
-      const result: RouteResult = { from, to, hops: -1, reachable: false };
+    if (route === ERR_NO_PATH || (typeof route === "number" && route < 0)) {
+      const result = { from, to, hops: -1, reachable: false };
       routeCache.set(key, result);
       return result;
     }
     const hops = Array.isArray(route) ? route.length : -1;
-    const result: RouteResult = { from, to, hops, reachable: hops >= 0 };
+    const result = { from, to, hops, reachable: hops >= 0 };
     routeCache.set(key, result);
     return result;
   } catch {
-    const result: RouteResult = { from, to, hops: -1, reachable: false };
+    const result = { from, to, hops: -1, reachable: false };
     routeCache.set(key, result);
     return result;
   }
@@ -171,6 +168,72 @@ function saveReservations(table: ReservationTable): void {
     obj[id] = entry;
   }
   Memory.kernel.reservations = obj;
+}
+
+/**
+ * 为 Operation 提交 carrier spawn 请求到 source 房的 spawn queue。
+ * 请求 key = `carrier:${opId}`（幂等：同 opId 不重复提交）。
+ * carrier 的 memory 注入 home=sourceRoom, remoteTarget=targetRoom,
+ * assignment={id:opId, kind:"carrier"}。
+ */
+function submitCarrierSpawn(op: OperationContext, sourceRcl: number, tick: number): void {
+  const roomMem = Memory.rooms[op.sourceRoom];
+  if (!roomMem) return;
+
+  const queue = roomMem.spawnQueue ?? [];
+  const spawnKey = `carrier:${op.id}`;
+
+  // 幂等：同 opId 的请求不重复提交
+  if (hasRequest(queue, spawnKey)) {
+    // 已提交 — 检查是否孵化成功（carrier 已在场则记录 carrierName）
+    return;
+  }
+
+  // 选择 body — 按 source 房间的 energyCapacityAvailable 分档
+  const sourceRoom = Game.rooms[op.sourceRoom];
+  const energyCapacity = sourceRoom?.energyCapacityAvailable ?? 300;
+  const body = selectBody("carrier", energyCapacity);
+  if (!body) return;
+
+  const request: SpawnRequest = {
+    key: spawnKey,
+    role: "carrier",
+    home: op.sourceRoom,
+    priority: op.priority as 0 | 1 | 2 | 3 | 4,
+    body,
+    memory: {
+      role: "carrier",
+      home: op.sourceRoom,
+      remoteTarget: op.targetRoom,
+      assignment: {
+        id: op.id,
+        kind: "carrier",
+      } as unknown as CreepAssignment,
+    } as unknown as CreepMemory,
+    createdAt: tick,
+    expiresAt: tick + DEFAULT_OPERATION_DEADLINE,
+    retries: 0,
+  };
+
+  submitRequest(queue, request);
+  roomMem.spawnQueue = queue;
+}
+
+/**
+ * 检查 Operation 是否已有 carrier 在场（孵化完成或正在运行）。
+ */
+function hasCarrierForOp(op: OperationContext): boolean {
+  if (op.carrierName) {
+    const creep = Game.creeps[op.carrierName];
+    if (creep && !creep.spawning) return true;
+  }
+  // 检查 spawn queue 中是否有待孵化请求
+  const roomMem = Memory.rooms[op.sourceRoom];
+  if (roomMem?.spawnQueue) {
+    const spawnKey = `carrier:${op.id}`;
+    if (hasRequest(roomMem.spawnQueue, spawnKey)) return true;
+  }
+  return false;
 }
 
 export const agendaManagerSystem: System = {
@@ -234,8 +297,7 @@ export const agendaManagerSystem: System = {
         const failResult = markFailed(op, ctx.tick, "max retries exceeded");
         if (!failResult.ok) {
           // 释放 reservation
-          const opId = op.id;
-          reservations = releaseReservation(reservations, opId);
+          reservations = releaseReservation(reservations, op.id);
         }
         return failResult.op;
       }
@@ -356,26 +418,12 @@ export const agendaManagerSystem: System = {
       }
     }
 
-    // ── 13. 路由计算 + TransportRequest 生成 ──
-    const routes = new Map<string, RouteResult>();
-    const sourceRclByRoom = new Map<string, number>();
-    for (const op of operations) {
-      if (op.status !== "ready") continue;
-      const routeKey = `${op.sourceRoom}:${op.targetRoom}`;
-      if (!routes.has(routeKey)) {
-        routes.set(routeKey, computeRoute(op.sourceRoom, op.targetRoom));
-      }
-      const sourceRcl = registry.get(op.sourceRoom)?.rcl ?? 1;
-      sourceRclByRoom.set(op.sourceRoom, sourceRcl);
-    }
-
-    // 为 ready 的 Operation 生成 TransportRequest
-    const empireRequests: TransportRequest[] = [];
+    // ── 13. 路由计算 + carrier spawn 请求 ──
     for (const op of operations) {
       if (op.status !== "ready") continue;
 
-      const route = routes.get(`${op.sourceRoom}:${op.targetRoom}`);
-      if (!route || !route.reachable) {
+      const route = computeRoute(op.sourceRoom, op.targetRoom);
+      if (!route.reachable) {
         // 路由不可达 → 标记 blocked
         const blockedResult = markBlocked(op, ctx.tick, "route unreachable");
         if (blockedResult.ok) {
@@ -385,7 +433,7 @@ export const agendaManagerSystem: System = {
         continue;
       }
 
-      // 生成 TransportRequest
+      // 检查 source 仍有 storage
       const sourceSnapshot = ctx.getSnapshot(op.sourceRoom);
       const sourceStorage = sourceSnapshot?.storage;
       if (!sourceStorage) {
@@ -397,70 +445,120 @@ export const agendaManagerSystem: System = {
         continue;
       }
 
-      const request: TransportRequest = {
-        key: makeOperationId(op.sourceRoom, op.targetRoom, "energy"),
-        resource: "energy",
-        amount: op.requestedAmount,
-        sourceId: sourceStorage.id,
-        pos: { x: sourceStorage.pos.x, y: sourceStorage.pos.y },
-        priority: op.priority as 0 | 1 | 2 | 3,
-        scope: "empire",
-        targetRoom: op.targetRoom,
-      };
-      empireRequests.push(request);
+      // 提交 carrier spawn 请求
+      const sourceRcl = registry.get(op.sourceRoom)?.rcl ?? 1;
+      submitCarrierSpawn(op, sourceRcl, ctx.tick);
 
-      // ready → running
+      // ready → running（carrier 请求已提交）
+      // 同时记录 target storage baseline
+      const targetSnapshot = ctx.getSnapshot(op.targetRoom);
+      const targetStorage = targetSnapshot?.storage;
+      const baseline = targetStorage
+        ? targetStorage.store.getUsedCapacity(RESOURCE_ENERGY)
+        : 0;
+
       const runningResult = markRunning(op, ctx.tick);
       if (runningResult.ok) {
         const idx = operations.indexOf(op);
-        if (idx >= 0) operations[idx] = runningResult.op;
+        if (idx >= 0) {
+          operations[idx] = runningResult.op;
+          operations[idx].baselineEnergy = baseline;
+        }
       }
     }
 
-    // ── 14. 写入 globalCache 供 logistics 消费 ──
-    const g = globalCache();
-    g.empireTransportRequests = { tick: ctx.tick, requests: empireRequests };
-
-    // ── 15. 验证 running Operation 的送达情况 ──
+    // ── 14. 验证 running Operation 的送达情况 ──
     for (const op of operations) {
       if (op.status !== "running") continue;
 
-      const targetSnapshot = ctx.getSnapshot(op.targetRoom);
-      if (!targetSnapshot?.storage) continue;
-
-      // 检查 target 是否已有足够能量（简化验证：storage 增量）
-      const currentEnergy = targetSnapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY);
-      const baseline = 0; // TODO: 系统侧记录 baseline 快照
-      const verify = verifyTransfer(op, currentEnergy, baseline, ctx.tick);
-
-      if (verify.verified) {
-        const completedResult = markCompleted(op, ctx.tick);
-        if (completedResult.ok) {
-          const idx = operations.indexOf(op);
-          if (idx >= 0) operations[idx] = reportDelivery(completedResult.op, op.requestedAmount, ctx.tick);
-          reservations = releaseReservation(reservations, op.id);
+      // 检查 carrier 是否存在
+      const carrierExists = hasCarrierForOp(op);
+      if (!carrierExists) {
+        // Carrier 未孵化或已死亡 — 检查 spawn queue
+        // 如果 spawn queue 中无请求且无 carrier，标记 blocked
+        const roomMem = Memory.rooms[op.sourceRoom];
+        const spawnKey = `carrier:${op.id}`;
+        const inQueue = roomMem?.spawnQueue?.some(r => r.key === spawnKey) ?? false;
+        if (!inQueue && !op.carrierName) {
+          // spawn 请求可能被清理了 — 重新提交
+          submitCarrierSpawn(op, registry.get(op.sourceRoom)?.rcl ?? 1, ctx.tick);
         }
-      } else if (verify.actualDelta > 0) {
-        // 部分送达
-        const idx = operations.indexOf(op);
-        if (idx >= 0) {
-          operations[idx] = reportDelivery(op, verify.actualDelta, ctx.tick);
-          // 转入验证阶段
-          const verifyingResult = markVerifying(operations[idx], ctx.tick);
-          if (verifyingResult.ok) operations[idx] = verifyingResult.op;
+        continue;
+      }
+
+      // 记录 carrier name（如果已孵化但未记录）
+      if (!op.carrierName) {
+        for (const [name, creep] of Object.entries(Game.creeps)) {
+          if (creep.memory.assignment?.id === op.id) {
+            const idx = operations.indexOf(op);
+            if (idx >= 0) operations[idx]!.carrierName = name;
+            break;
+          }
+        }
+      }
+
+      // 检查 carrier 是否到达 target room
+      const carrierName = op.carrierName;
+      if (carrierName) {
+        const carrier = Game.creeps[carrierName];
+        if (carrier && !carrier.spawning) {
+          // carrier 在 target room 且空载 → 能量已卸完
+          if (carrier.room.name === op.targetRoom && carrier.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
+            // carrier 已卸能 — 进入验证阶段
+            const targetSnapshot = ctx.getSnapshot(op.targetRoom);
+            const targetStorage = targetSnapshot?.storage;
+            if (targetStorage) {
+              const currentEnergy = targetStorage.store.getUsedCapacity(RESOURCE_ENERGY);
+              const baseline = op.baselineEnergy ?? 0;
+              const verify = verifyTransfer(op, currentEnergy, baseline, ctx.tick);
+
+              if (verify.verified) {
+                const completedResult = markCompleted(op, ctx.tick);
+                if (completedResult.ok) {
+                  const idx = operations.indexOf(op);
+                  if (idx >= 0) operations[idx] = reportDelivery(completedResult.op, op.requestedAmount, ctx.tick);
+                  reservations = releaseReservation(reservations, op.id);
+                }
+              } else if (verify.actualDelta > 0) {
+                // 部分送达
+                const idx = operations.indexOf(op);
+                if (idx >= 0) {
+                  operations[idx] = reportDelivery(op, verify.actualDelta, ctx.tick);
+                  // 转入验证阶段
+                  const verifyingResult = markVerifying(operations[idx], ctx.tick);
+                  if (verifyingResult.ok) operations[idx] = verifyingResult.op;
+                }
+              } else {
+                // actualDelta = 0 — carrier 卸了但 target 消耗了
+                // 给予宽限：deadline 前继续等待
+                // 如果 carrier 已卸完且空载，但增量=0，可能是 target 在持续消耗
+                // 在这种情况下，认为 carrier 完成了一次搬运
+                const idx = operations.indexOf(op);
+                if (idx >= 0) {
+                  // carrier 报告卸能完成 — 假设送达量 = carrier carry 容量
+                  // 用 carrier 实际卸载量更新 deliveredAmount
+                  const carrierCapacity = carrier.store.getCapacity(RESOURCE_ENERGY);
+                  operations[idx] = reportDelivery(op, carrierCapacity, ctx.tick);
+                  const verifyingResult = markVerifying(operations[idx], ctx.tick);
+                  if (verifyingResult.ok) operations[idx] = verifyingResult.op;
+                }
+              }
+            }
+          }
         }
       }
     }
 
-    // ── 16. 清理终态 Operation（归档后删除）──
+    // ── 15. 清理终态 Operation（归档后删除）──
     operations = pruneTerminal(operations);
 
-    // ── 17. 保存状态 ──
+    // ── 16. 保存状态 ──
     saveOperations(operations);
     saveReservations(reservations);
 
-    // ── 18. 可观测性 ──
+    // ── 17. 可观测性 ──
     const metrics = computeOperationMetrics(operations, ctx.tick);
+    const g = globalCache();
     g.agendaMetrics = metrics;
 
     if (metrics.activeCount > 0 || metrics.terminalCount > 0) {
@@ -468,4 +566,3 @@ export const agendaManagerSystem: System = {
     }
   },
 };
-

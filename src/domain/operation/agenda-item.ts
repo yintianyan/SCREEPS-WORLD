@@ -69,6 +69,17 @@ export interface OperationContext {
   cooldownUntil?: number;
   /** 上次错误原因（诊断用，终态归档时清除）。 */
   lastError?: string;
+  /**
+   * Operation 进入 running 时记录的 target 房 storage 能量基线。
+   * 验证阶段用 currentEnergy - baseline 计算实际增量。
+   * -1 表示未设置（Operation 尚未进入 running）。
+   */
+  baselineEnergy?: number;
+  /**
+   * 分配给本 Operation 的 carrier creep 名称（spawn 成功后填充）。
+   * 用于 carrier 死亡检测和重规划。
+   */
+  carrierName?: string;
 }
 
 /**
