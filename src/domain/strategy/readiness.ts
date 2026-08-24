@@ -19,6 +19,10 @@ import type { EmpireResourceView } from "./resource-view";
 import type { EmpireEconomicHealth } from "./economic-health";
 import type { EmpireBudget } from "./budget";
 import type { CapacityTier } from "./capacity";
+import type { TieredExpansionBudget } from "../expansion/budget";
+import type { ExpansionCandidateV2 } from "../expansion/candidate";
+import type { ExpansionCostEstimate } from "../expansion/cost-model";
+import type { RiskResult } from "../expansion/risk";
 
 /**
  * 扩张就绪度。
@@ -80,6 +84,11 @@ export interface ReadinessOptions {
   blockOnLiveThreat: boolean;
   /** 是否有困难房时禁止扩张。 */
   blockOnStruggling: boolean;
+  // ── A3.2 扩展 Gate ──
+  /** G12: 候选评分最低阈值。 */
+  minCandidateScore: number;
+  /** G14: 风险分数最高阈值（超过则 NOT_READY）。 */
+  maxRiskScore: number;
 }
 
 export const DEFAULT_READINESS_OPTIONS: ReadinessOptions = {
@@ -94,6 +103,9 @@ export const DEFAULT_READINESS_OPTIONS: ReadinessOptions = {
   minExpansionBudget: 2000,
   blockOnLiveThreat: true,
   blockOnStruggling: true,
+  // A3.2 扩展 Gate 默认值
+  minCandidateScore: 0.5,
+  maxRiskScore: 0.8,
 };
 
 const TIER_RANK: Record<CapacityTier, number> = {
@@ -258,4 +270,71 @@ export function evaluateExpansionReadiness(
     evidence: `basic gates passed: netFlow=${view.totalNetFlow.toFixed(1)} core=${view.coreRooms} health=${health} tier=${cpuTier}`,
     gates: allGates,
   };
+}
+
+// ─── A3.2 扩展 Gate (G12–G15) ─────────────────────────────
+
+/**
+ * A3.2 扩展就绪度评估：在基础 G0–G11 通过后，追加 G12–G15 候选/成本/风险/保护层门控。
+ *
+ * G12: 有评分合格候选（candidateScore ≥ minCandidateScore）
+ * G13: Available Budget ≥ Estimated Cost
+ * G14: Risk ≤ maxRiskScore
+ * G15: Core Reserve 未被侵入
+ *
+ * 返回新增的 Gate 条目列表，供调用方追加到基础 Gates 后。
+ */
+export function evaluateExpansionReadinessExtended(
+  topCandidate: ExpansionCandidateV2 | undefined,
+  cost: ExpansionCostEstimate | undefined,
+  risk: RiskResult | undefined,
+  tieredBudget: TieredExpansionBudget | undefined,
+  options: ReadinessOptions = DEFAULT_READINESS_OPTIONS,
+): { gates: ExpansionGate[]; allPassed: boolean; evidence: string } {
+  const gates: ExpansionGate[] = [];
+
+  // G12: 候选评分合格
+  const g12 = topCandidate !== undefined && topCandidate.score >= options.minCandidateScore;
+  gates.push({
+    name: "G12: qualified candidate",
+    passed: g12,
+    value: topCandidate ? `score=${topCandidate.score.toFixed(2)}` : "none",
+    condition: `candidateScore ≥ ${options.minCandidateScore}`,
+  });
+
+  // G13: 预算 ≥ 成本
+  const g13 = cost !== undefined && tieredBudget !== undefined
+    && tieredBudget.availableExpansion >= cost.totalCost;
+  gates.push({
+    name: "G13: budget ≥ cost",
+    passed: g13,
+    value: cost && tieredBudget ? `${tieredBudget.availableExpansion} ≥ ${cost.totalCost}` : "unknown",
+    condition: "availableBudget ≥ estimatedCost",
+  });
+
+  // G14: 风险可接受
+  const g14 = risk !== undefined && risk.score <= options.maxRiskScore;
+  gates.push({
+    name: "G14: risk acceptable",
+    passed: g14,
+    value: risk ? `${risk.level}(${risk.score.toFixed(2)})` : "unknown",
+    condition: `riskScore ≤ ${options.maxRiskScore}`,
+  });
+
+  // G15: Core Reserve 未被侵入
+  const g15 = tieredBudget !== undefined && !tieredBudget.coreInvaded;
+  gates.push({
+    name: "G15: core reserve safe",
+    passed: g15,
+    value: tieredBudget ? (tieredBudget.coreInvaded ? "INVADED" : "safe") : "unknown",
+    condition: "coreInvaded === false",
+  });
+
+  const allPassed = gates.every(g => g.passed);
+  const failed = gates.filter(g => !g.passed).map(g => g.name);
+  const evidence = allPassed
+    ? "extended gates passed (G12–G15)"
+    : `extended gates failed: ${failed.join(", ")}`;
+
+  return { gates, allPassed, evidence };
 }

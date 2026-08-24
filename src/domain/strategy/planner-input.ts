@@ -21,6 +21,7 @@ import type { ResourceImbalanceResult } from "./imbalance";
 import type { EmpireBudget } from "./budget";
 import type { ExpansionReadinessResult } from "./readiness";
 import type { SafetyMarginResult } from "./safety-margin";
+import type { ExpansionPressureResult } from "../expansion/pressure";
 
 /**
  * Empire Planner Input — 帝国级规划输入的完整汇总。
@@ -56,6 +57,8 @@ export interface EmpirePlannerInput {
   readiness: ExpansionReadinessResult;
   /** 安全边际。 */
   safetyMargin: SafetyMarginResult;
+  /** A3.2 扩张压力评估。 */
+  expansionPressure?: ExpansionPressureResult;
   // ── 派生 ──
   /** 人类可读摘要（供 dashboard / log 用）。 */
   summary: string;

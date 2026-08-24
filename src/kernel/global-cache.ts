@@ -181,6 +181,9 @@ export interface GlobalCache {
   /** A3.1：Network Health 指标（agenda-manager 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   networkHealth?: import("../domain/operation/network-health").NetworkHealthResult;
+  /** A3.2：Expansion Dashboard（expansion-planner 每 interval tick 写入）。
+   * heap 存储 — global reset 丢失可接受。 */
+  expansionDashboard?: import("../domain/expansion/dashboard").ExpansionDashboard;
 }
 
 /**

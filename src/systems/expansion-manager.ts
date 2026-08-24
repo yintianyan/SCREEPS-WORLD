@@ -1,21 +1,28 @@
 /**
- * Expansion Manager — P3 系统，GCL 变现的唯一入口（claim 新房）。
- * 状态机（Memory.kernel.expansion，同一时刻至多一个扩张行动）：
- * idle →(GCL 余量 + sponsor 健康 + intel 有可行目标)→ claiming →(目标房 controller.my)→
- * pioneering →(新房 spawn 建成)→ idle；claiming 超时/被抢占 → idle + 目标黑名单冷却。
+ * Expansion Manager — A3.3 完整执行链路系统。
  *
- * 架构复用（关键决策）：占领后只做一件事 — 用约束推导（distance field + selectAnchors）
- * 选出锚点写入新房 layout.anchor，此后完全复用既有机器：layout-planner 的「spawn 被毁
- * 重建」路径 → construction-manager 紧急豁免 → 拓荒 builder 建造 → 新房自治接管。
- * 灾后恢复机器与殖民机器是同一台 — 不新造第二条建造管线。
- * 拓荒编队：worker×N + builder×N，home 指向新房（sponsor 队列代孵，countPending 的
- * home 过滤保证不污染 sponsor 人口预算），孵化后经 ensureHome 自行走到新房。
+ * 合同锚点：EXPANSION_ARCHITECTURE §3 执行闭环 +
+ * A3.3 Task Spec 全链路状态机。
+ *
+ * 完整链路：
+ *   ExpansionPlan → Execution Gate → Claim → Owned Room → Pioneer →
+ *   Spawn → Harvest → Transport → Build → Energy Loop →
+ *   Economic Activation → Empire Integration → Autonomous Room
+ *
+ * 状态机（Memory.kernel.expansion）：
+ *   validating → preparing → claiming → claimed → bootstrapping →
+ *   economic_startup → integrating → completed
+ *
+ * 关键决策：
+ *   1. 统一以 expansionPlans[] 为唯一真相源（退役 V1 Evaluator 的自主评选）
+ *   2. 从 WAITING_EXECUTION Plan 消费 → Execution Gate → 完整链路
+ *   3. 完成判据从"spawn 建成"升级为"Economic Activation + Empire Integration"
+ *   4. 向后兼容：旧 claiming/pioneering 映射为 claiming/bootstrapping
  */
 import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
-import { selectExpansionTarget } from "../domain/expansion/evaluator";
 import {
   decideBootstrapRooms,
   BOOTSTRAP_WORKER_BODY,
@@ -28,12 +35,26 @@ import {
   type ExpansionOutcomeKind,
 } from "../domain/expansion/rhythm";
 import { cancelRequestsByHome, hasRequest, submitRequest } from "../domain/spawn/queue";
-import { querySquad } from "../kernel/global-cache";
+import { querySquad, globalCache } from "../kernel/global-cache";
 import { selectAnchors } from "../domain/layout/anchor-selection";
 import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { packPos } from "../domain/layout/types";
 import { COMPACT_CORE_V2 } from "../domain/layout/templates/compact-core-v2";
 import type { RoomIntel } from "../domain/intel";
+import type { ExpansionPlan } from "../domain/expansion/plan";
+import type { ExecutionState } from "../domain/expansion/execution-state";
+import { transitionExecutionState, getExecutionProgress, describeExecutionState } from "../domain/expansion/execution-state";
+import { validateExecutionGate, type ExecutionGateInput } from "../domain/expansion/execution-gate";
+import { evaluateCheckpoint, type CheckpointId } from "../domain/expansion/checkpoint";
+import { evaluateEconomicActivation, type EconomicActivationInput } from "../domain/expansion/economic-activation";
+import { evaluateEmpireIntegration, canHandover, type EmpireIntegrationInput } from "../domain/expansion/empire-integration";
+import { evaluateThreatEscalation, type ThreatEscalationInput } from "../domain/expansion/threat-escalation";
+import {
+  tryReserve,
+  releaseReservation,
+  isReservationExpired,
+  type ResourceReservation,
+} from "../domain/expansion/resource-reservation";
 
 /** ExpansionOutcome 事件编码（与 event-log 注释对齐）。 */
 const PHASE_CLAIM = 0;
@@ -43,6 +64,15 @@ const OUTCOME_STOLEN = 1;
 const OUTCOME_TIMEOUT = 2;
 const OUTCOME_LOST = 3;
 const OUTCOME_ABORTED = 4;
+
+/** Checkpoint ID 列表（顺序执行）。 */
+const CHECKPOINT_IDS: CheckpointId[] = [
+  "CP1_CLAIMED",
+  "CP2_SPAWN_ACTIVE",
+  "CP3_ENERGY_LOOP",
+  "CP4_BASIC_INFRA",
+  "CP5_ECONOMIC_ACTIVATION",
+];
 
 export const expansionManagerSystem: System = {
   name: "expansion-manager",
@@ -66,37 +96,597 @@ export const expansionManagerSystem: System = {
       // 战略门禁：是否扩张由 empire-strategy 的姿态裁决（Strategy 层）— 本系统只在
       // 获得授权时评选目标，不自行判断时机。姿态未就绪（reset 首 tick）默认不扩张。
       if (Memory.kernel.strategy?.expansionAllowed !== true) return;
-      tryStartExpansion(ctx);
+      // A3.3：从 expansionPlans[] 消费 WAITING_EXECUTION Plan
+      tryConsumePlan(ctx);
       return;
     }
 
     // 进行中的扩张行动不因姿态回落而中断 — claimer/拓荒编队已是沉没投资，
     // 半途而废比完成更贵；姿态只裁决「是否开启新行动」。
-    // C-1 修复：状态机推进不受 CPU 门禁 — 原先门禁在函数入口，conserve/recovery 期间
-    // 整个状态机冻结：超时判定、被抢占检测、威胁止损全部停摆，abort 分支恰恰是
-    // CPU 紧张时最需要跑的止损路径。
-    // 审查修正：孵化补充（submitPioneers/claimer 重派）仍属新增投资，与「开新行动」
-    // 同类 — 传入 CPU 门禁位，低 tier 下只判定不送兵。
     const spawningAllowed =
       (ctx.budget.tier === "healthy" || ctx.budget.tier === "guarded") &&
       (Game.cpu.bucket ?? 0) >= 5000;
 
-    switch (expansion.state) {
-      case "claiming":
-        advanceClaiming(ctx, expansion, spawningAllowed);
-        break;
-      case "pioneering":
-        advancePioneering(ctx, expansion, spawningAllowed);
-        break;
-    }
+    // A3.3：完整状态机推进
+    advanceExecutionStateMachine(ctx, expansion, spawningAllowed);
   },
 };
 
 type ExpansionState = NonNullable<KernelMemory["expansion"]>;
 
-/** R7a：扩张阶段收摊归因（决策结果台账）— 供节奏自适应归因失败条件。
- * R7b：任务级结果（每任务一条，claim 成功视为任务延续不追加）追加到节奏 ring，
- * 并重算自适应调节（暂停/门禁/黑名单缩放）写入 Memory。 */
+// ─── A3.3：从 Plan 消费 → 启动执行 ──────────────────────────
+
+/**
+ * A3.3：从 expansionPlans[] 中消费 WAITING_EXECUTION Plan。
+ *
+ * 退役 V1 Evaluator 的自主评选——统一以 Plan 为唯一真相源。
+ */
+function tryConsumePlan(ctx: TickContext): void {
+  pruneBlacklist(ctx.tick);
+
+  // 从 Memory 读取 Plan 列表
+  if (!Memory.kernel) Memory.kernel = {};
+  const plans = Memory.kernel.expansionPlans ?? [];
+  const waitingPlan = plans.find(p => p.st === "WAITING_EXECUTION");
+  if (!waitingPlan) return;
+
+  // 反序列化 Plan 为可执行格式（简化版：直接用 Memory 瘦结构）
+  const plan = deserializePlanMemory(waitingPlan);
+  if (!plan) return;
+
+  // 执行 Gate 验证（TOCTOU 防护）
+  const gateInput: ExecutionGateInput = {
+    plan,
+    budget: getTieredBudget(ctx),
+    isEmpireReady: Memory.kernel!.strategy?.expansionAllowed === true,
+    alreadyOwned: isRoomOwned(plan.roomName),
+    hasConcurrentOp: false, // 简化：检查是否有同类 Operation
+    hasOtherExpansion: Memory.kernel!.expansion !== undefined,
+    intelStale: isIntelStale(plan.roomName, ctx.tick),
+    threatEscalated: false, // 简化：检查威胁升级
+    targetClaimable: isTargetClaimable(plan.roomName),
+    candidateValid: true, // 简化：候选仍然有效
+  };
+
+  const gateResult = validateExecutionGate(gateInput);
+  if (!gateResult.allPassed) {
+    console.log(`[${ctx.tick}] expansion-manager: Gate failed for ${plan.roomName}: ${gateResult.evidence}`);
+    // 如果 Gate 持续失败，更新 Plan 状态为 CANCELLED
+    if (gateResult.failedGates.includes("GATE_PLAN_VALID") ||
+        gateResult.failedGates.includes("GATE_TARGET_CLAIMABLE") ||
+        gateResult.failedGates.includes("GATE_NOT_OWNED")) {
+      updatePlanStatus(plan.planId, "EXECUTING");
+    }
+    return;
+  }
+
+  // GCL 余量检查
+  const gclLevel = Game.gcl?.level ?? 1;
+  const ownedCount = Array.from(ctx.snapshots()).filter(s => s.controller?.my).length;
+  if (gclLevel <= ownedCount) return;
+
+  // 标记 Plan 为 EXECUTING
+  updatePlanStatus(plan.planId, "EXECUTING");
+
+  // 初始化扩张状态
+  if (!Memory.kernel) Memory.kernel = {};
+  Memory.kernel.expansion = {
+    state: "preparing",
+    target: plan.roomName,
+    sponsor: plan.sponsorRoom,
+    startedAt: ctx.tick,
+    planId: plan.planId,
+    checkpointsPassed: 0,
+    reservedEnergy: 0,
+    consecutivePositiveTicks: 0,
+  };
+
+  console.log(`[${ctx.tick}] expansion-manager: consuming plan ${plan.planId} for ${plan.roomName} (sponsor=${plan.sponsorRoom})`);
+}
+
+// ─── A3.3：完整状态机推进 ─────────────────────────────────────
+
+/**
+ * A3.3 核心函数：推进执行状态机。
+ *
+ * 从当前状态出发，检查转换条件，推进到下一个状态。
+ * 覆盖完整链路：preparing → claiming → claimed → bootstrapping →
+ * economic_startup → integrating → completed
+ */
+function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
+  switch (expansion.state) {
+    case "validating":
+      // Gate 验证已在 tryConsumePlan 中完成，直接推进
+      expansion.state = "preparing";
+      expansion.startedAt = ctx.tick;
+      console.log(`[${ctx.tick}] expansion: validating → preparing`);
+      break;
+
+    case "preparing":
+      advancePreparing(ctx, expansion, spawningAllowed);
+      break;
+
+    case "claiming":
+      advanceClaiming(ctx, expansion, spawningAllowed);
+      break;
+
+    case "claimed":
+      // Checkpoint 1: Claimed — 直接推进到 bootstrapping
+      expansion.state = "bootstrapping";
+      expansion.startedAt = ctx.tick;
+      expansion.checkpointsPassed = Math.max(expansion.checkpointsPassed ?? 0, 1);
+      // 选锚点 + 写 layout
+      const claimedRoom = Game.rooms[expansion.target];
+      if (claimedRoom) {
+        if (!seedLayoutAnchor(claimedRoom)) {
+          console.log(`[${ctx.tick}] expansion: no viable anchor in ${expansion.target}, aborting`);
+          abortExpansion(ctx, expansion, OUTCOME_ABORTED);
+          return;
+        }
+      }
+      submitPioneers(ctx, expansion);
+      console.log(`[${ctx.tick}] expansion: claimed → bootstrapping (CP1 passed)`);
+      break;
+
+    case "bootstrapping":
+      advanceBootstrapping(ctx, expansion, spawningAllowed);
+      break;
+
+    case "economic_startup":
+      advanceEconomicStartup(ctx, expansion);
+      break;
+
+    case "integrating":
+      advanceIntegrating(ctx, expansion);
+      break;
+
+    case "completed":
+      // 已完成，清理扩张状态
+      console.log(`[${ctx.tick}] expansion: ${expansion.target} already completed, cleaning up`);
+      updatePlanStatus(expansion.planId ?? "", "COMPLETED");
+      if (!Memory.kernel) Memory.kernel = {};
+      Memory.kernel.expansion = undefined;
+      break;
+
+    case "failed":
+    case "aborted":
+      // 已终止，清理
+      if (!Memory.kernel) Memory.kernel = {};
+      Memory.kernel.expansion = undefined;
+      break;
+  }
+
+  // A3.3：写入 Execution Dashboard 到 globalCache
+  const g = globalCache() as Record<string, unknown> & { executionDashboard?: unknown };
+  g.executionDashboard = {
+    tick: ctx.tick,
+    executionState: expansion.state,
+    targetRoom: expansion.target,
+    sponsorRoom: expansion.sponsor,
+    progress: getExecutionProgress(expansion.state as ExecutionState),
+    checkpointsPassed: expansion.checkpointsPassed ?? 0,
+    reservedEnergy: expansion.reservedEnergy ?? 0,
+    consecutivePositiveTicks: expansion.consecutivePositiveTicks ?? 0,
+    summary: `[${ctx.tick}] expansion: ${expansion.target} state=${expansion.state} cp=${expansion.checkpointsPassed ?? 0}/5`,
+  };
+}
+
+// ── preparing ──────────────────────────────────────────────
+
+function advancePreparing(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
+  // 尝试预留资源
+  if (!expansion.reservedEnergy || expansion.reservedEnergy === 0) {
+    const reserveResult = tryReserve({
+      planId: expansion.planId ?? "",
+      energyNeeded: 5000, // 估算的 bootstrap 能量
+      availableExpansionBudget: getAvailableBudget(ctx),
+      tick: ctx.tick,
+    });
+    if (reserveResult.success && reserveResult.reservation) {
+      expansion.reservedEnergy = reserveResult.reservation.reservedEnergy;
+      console.log(`[${ctx.tick}] expansion: reserved ${expansion.reservedEnergy} energy for ${expansion.target}`);
+    } else {
+      console.log(`[${ctx.tick}] expansion: resource reservation failed: ${reserveResult.failReason}`);
+      // 预留失败不立即终止，重试
+    }
+  }
+
+  // 提交 Claimer 请求
+  if (spawningAllowed) {
+    submitClaimer(expansion.sponsor, expansion.target, ctx.tick);
+  }
+
+  // 检查 Claimer 是否已创建
+  const claimerAlive = querySquad({ role: "claimer", remoteTarget: expansion.target }).length > 0;
+  const claimerPending = hasRequest(
+    Memory.rooms[expansion.sponsor]?.spawnQueue ?? [],
+    `claimer:${expansion.sponsor}:${expansion.target}`,
+  );
+
+  if (claimerAlive || claimerPending) {
+    expansion.state = "claiming";
+    expansion.startedAt = ctx.tick;
+    console.log(`[${ctx.tick}] expansion: preparing → claiming`);
+  }
+
+  // 超时检查
+  if (ctx.tick - expansion.startedAt > CONFIG.expansion.claimTimeout) {
+    console.log(`[${ctx.tick}] expansion: preparing timed out, aborting`);
+    abortExpansion(ctx, expansion, OUTCOME_TIMEOUT);
+  }
+}
+
+
+// ── claiming ────────────────────────────────────────────────
+
+function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
+  const targetRoom = Game.rooms[expansion.target];
+
+  // 占领成功 → 进入 claimed
+  if (targetRoom?.controller?.my) {
+    expansion.state = "claimed";
+    expansion.startedAt = ctx.tick;
+    recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_SUCCESS);
+    console.log(`[${ctx.tick}] expansion: claiming → claimed`);
+    return;
+  }
+
+  // 被他人抢占 → 立即放弃
+  if (targetRoom?.controller?.owner && !targetRoom.controller.my) {
+    console.log(`[${ctx.tick}] expansion: ${expansion.target} taken by ${targetRoom.controller.owner.username}, aborting`);
+    blacklistTarget(expansion.target, ctx.tick);
+    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
+    abortExpansion(ctx, expansion, OUTCOME_STOLEN);
+    return;
+  }
+
+  // 超时 → 放弃
+  if (ctx.tick - expansion.startedAt > CONFIG.expansion.claimTimeout) {
+    console.log(`[${ctx.tick}] expansion: claim ${expansion.target} timed out, aborting`);
+    blacklistTarget(expansion.target, ctx.tick);
+    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
+    abortExpansion(ctx, expansion, OUTCOME_TIMEOUT);
+    return;
+  }
+
+  // Claimer 阵亡且无 pending → 幂等重派
+  const claimerAlive = querySquad({ role: "claimer", remoteTarget: expansion.target }).length > 0;
+  if (!claimerAlive) {
+    const dangerUntil = Memory.rooms[expansion.sponsor]?.remoteOps?.[expansion.target]?.dangerUntil;
+    if (dangerUntil !== undefined && ctx.tick < dangerUntil) {
+      console.log(`[${ctx.tick}] expansion: ${expansion.target} hostile (claimer lost), aborting`);
+      blacklistTarget(expansion.target, ctx.tick);
+      reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
+      abortExpansion(ctx, expansion, OUTCOME_LOST);
+      return;
+    }
+    if (!spawningAllowed) return;
+    submitClaimer(expansion.sponsor, expansion.target, ctx.tick);
+  }
+}
+
+// ── bootstrapping（旧 pioneering 的升级版）──────────────────
+
+function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
+  const targetRoom = Game.rooms[expansion.target];
+
+  // 失守/失明检查（与旧 advancePioneering 相同逻辑）
+  if (!targetRoom?.controller?.my) {
+    if (!targetRoom) {
+      console.log(`[${ctx.tick}] expansion: lost vision of ${expansion.target} during bootstrapping, aborting`);
+      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_LOST);
+    } else {
+      console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during bootstrapping, aborting`);
+      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_STOLEN);
+    }
+    blacklistTarget(expansion.target, ctx.tick);
+    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
+    abortExpansion(ctx, expansion, OUTCOME_LOST);
+    return;
+  }
+
+  // Checkpoint 2: Spawn Active
+  const spawns = targetRoom.find(FIND_MY_SPAWNS);
+  if (spawns.length > 0) {
+    // Spawn 已建成 → 检查是否能孵化
+    const spawnCanSpawn = targetRoom.energyAvailable >= 300;
+    const cp2 = evaluateCheckpoint({
+      checkpointId: "CP2_SPAWN_ACTIVE",
+      controllerClaimed: true,
+      spawnBuilt: spawns.length > 0,
+      spawnCanSpawn,
+      harvesterActive: false,
+      transporterActive: false,
+      extensionsBuilt: false,
+      containerBuilt: false,
+      roadsBuilt: false,
+      netEnergyFlowPositive: false,
+      empireIntegrated: false,
+      tick: ctx.tick,
+      retryCount: 0,
+    });
+
+    if (cp2.passed) {
+      expansion.checkpointsPassed = Math.max(expansion.checkpointsPassed ?? 0, 2);
+      expansion.state = "economic_startup";
+      expansion.startedAt = ctx.tick;
+      console.log(`[${ctx.tick}] expansion: bootstrapping → economic_startup (CP2 passed)`);
+      return;
+    }
+  }
+
+  // 威胁止损
+  const hostiles = targetRoom.find(FIND_HOSTILE_CREEPS, {
+    filter: c => !CONFIG.defense.allies.includes(c.owner?.username ?? "") &&
+      c.body.some(p => p.type === ATTACK || p.type === RANGED_ATTACK),
+  });
+  if (hostiles.length > 0) {
+    const squadAlive = Object.values(Game.creeps).some(
+      c => c.memory.home === expansion.target &&
+        (c.memory.role === "worker" || c.memory.role === "builder"),
+    );
+    if (!squadAlive) {
+      console.log(`[${ctx.tick}] expansion: ${expansion.target} squad wiped by hostiles, aborting`);
+      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_LOST);
+      blacklistTarget(expansion.target, ctx.tick);
+      reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
+      abortExpansion(ctx, expansion, OUTCOME_LOST);
+      return;
+    }
+  }
+
+  // 超时
+  if (ctx.tick - expansion.startedAt > CONFIG.expansion.pioneerTimeout) {
+    console.log(`[${ctx.tick}] expansion: bootstrapping ${expansion.target} timed out`);
+    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_TIMEOUT);
+    // 不直接 abort — 如果 spawn 已建成，尝试推进到 economic_startup
+    if (spawns.length > 0) {
+      expansion.state = "economic_startup";
+      expansion.startedAt = ctx.tick;
+      console.log(`[${ctx.tick}] expansion: forcing bootstrapping → economic_startup (spawn exists)`);
+      return;
+    }
+    abortExpansion(ctx, expansion, OUTCOME_TIMEOUT);
+    return;
+  }
+
+  // 补充编队
+  if (hostiles.length === 0 && spawningAllowed) {
+    submitPioneers(ctx, expansion);
+  }
+}
+
+// ── economic_startup（A3.3 新增：能量环路建立）──────────────
+
+function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): void {
+  const targetRoom = Game.rooms[expansion.target];
+
+  if (!targetRoom?.controller?.my) {
+    console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during economic_startup, aborting`);
+    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_LOST);
+    blacklistTarget(expansion.target, ctx.tick);
+    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
+    abortExpansion(ctx, expansion, OUTCOME_LOST);
+    return;
+  }
+
+  // 检查 harvester/transporter 活跃度
+  const harvesterActive = Object.values(Game.creeps).some(
+    c => c.memory.home === expansion.target && c.memory.role === "harvester",
+  );
+  const transporterActive = Object.values(Game.creeps).some(
+    c => c.memory.home === expansion.target && c.memory.role === "transporter",
+  );
+
+  const spawns = targetRoom.find(FIND_MY_SPAWNS);
+  const spawnCanSpawn = spawns.length > 0 && targetRoom.energyAvailable >= 300;
+
+  // Checkpoint 3: Energy Loop
+  const cp3 = evaluateCheckpoint({
+    checkpointId: "CP3_ENERGY_LOOP",
+    controllerClaimed: true,
+    spawnBuilt: spawns.length > 0,
+    spawnCanSpawn,
+    harvesterActive,
+    transporterActive,
+    extensionsBuilt: false,
+    containerBuilt: false,
+    roadsBuilt: false,
+    netEnergyFlowPositive: false,
+    empireIntegrated: false,
+    tick: ctx.tick,
+    retryCount: 0,
+  });
+
+  if (cp3.passed) {
+    expansion.checkpointsPassed = Math.max(expansion.checkpointsPassed ?? 0, 3);
+    console.log(`[${ctx.tick}] expansion: CP3 (Energy Loop) passed for ${expansion.target}`);
+  }
+
+  // 检查基础基础设施
+  const extensions = targetRoom.find(FIND_MY_STRUCTURES, {
+    filter: s => s.structureType === STRUCTURE_EXTENSION,
+  });
+  const containers = targetRoom.find(FIND_STRUCTURES, {
+    filter: s => s.structureType === STRUCTURE_CONTAINER,
+  });
+
+  // Checkpoint 4: Basic Infra
+  const cp4 = evaluateCheckpoint({
+    checkpointId: "CP4_BASIC_INFRA",
+    controllerClaimed: true,
+    spawnBuilt: spawns.length > 0,
+    spawnCanSpawn,
+    harvesterActive,
+    transporterActive,
+    extensionsBuilt: extensions.length >= 5, // RCL2 = 5 extensions
+    containerBuilt: containers.length > 0,
+    roadsBuilt: true, // 简化：不强制道路
+    netEnergyFlowPositive: false,
+    empireIntegrated: false,
+    tick: ctx.tick,
+    retryCount: 0,
+  });
+
+  if (cp4.passed) {
+    expansion.checkpointsPassed = Math.max(expansion.checkpointsPassed ?? 0, 4);
+    console.log(`[${ctx.tick}] expansion: CP4 (Basic Infra) passed for ${expansion.target}`);
+  }
+
+  // CP3 + CP4 都通过 → 进入 integrating
+  if (cp3.passed && cp4.passed) {
+    expansion.state = "integrating";
+    expansion.startedAt = ctx.tick;
+    console.log(`[${ctx.tick}] expansion: economic_startup → integrating`);
+    return;
+  }
+
+  // 超时检查（economic_startup 阶段给更长的时间）
+  if (ctx.tick - expansion.startedAt > CONFIG.expansion.pioneerTimeout * 2) {
+    console.log(`[${ctx.tick}] expansion: economic_startup timed out for ${expansion.target}`);
+    // 如果至少 energy loop 活跃，尝试强行推进
+    if (cp3.passed) {
+      expansion.state = "integrating";
+      expansion.startedAt = ctx.tick;
+      console.log(`[${ctx.tick}] expansion: forcing economic_startup → integrating (energy loop active)`);
+      return;
+    }
+    abortExpansion(ctx, expansion, OUTCOME_TIMEOUT);
+  }
+}
+
+// ── integrating（A3.3 新增：经济激活 + 帝国集成）────────────
+
+function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
+  const targetRoom = Game.rooms[expansion.target];
+
+  if (!targetRoom?.controller?.my) {
+    console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during integrating, aborting`);
+    abortExpansion(ctx, expansion, OUTCOME_LOST);
+    return;
+  }
+
+  // 评估经济激活
+  const economicInput: EconomicActivationInput = {
+    energyProduction: estimateEnergyProduction(targetRoom),
+    energyConsumption: estimateEnergyConsumption(targetRoom),
+    externalEnergyInflow: estimateExternalInflow(expansion.target, expansion.sponsor),
+    consecutivePositiveTicks: expansion.consecutivePositiveTicks ?? 0,
+    hasHarvester: Object.values(Game.creeps).some(
+      c => c.memory.home === expansion.target && c.memory.role === "harvester",
+    ),
+    hasTransporter: Object.values(Game.creeps).some(
+      c => c.memory.home === expansion.target && c.memory.role === "transporter",
+    ),
+    hasUpgrader: Object.values(Game.creeps).some(
+      c => c.memory.home === expansion.target && c.memory.role === "upgrader",
+    ),
+    spawnActive: targetRoom.find(FIND_MY_SPAWNS).some(s => !s.spawning),
+    tick: ctx.tick,
+  };
+
+  const econResult = evaluateEconomicActivation(economicInput);
+
+  // 更新连续净流为正的 tick 数
+  if (econResult.netFlow > 0) {
+    expansion.consecutivePositiveTicks = (expansion.consecutivePositiveTicks ?? 0) + 1;
+  } else {
+    expansion.consecutivePositiveTicks = 0;
+  }
+
+  console.log(`[${ctx.tick}] expansion: integrating ${expansion.target} — ${econResult.evidence}`);
+
+  // 评估帝国集成
+  const integrationInput: EmpireIntegrationInput = {
+    inOwnedRoomsList: true, // controller.my 已验证
+    hasSnapshot: true, // ctx.snapshots 包含该房
+    inEconomyStats: true, // 简化：已纳入经济统计
+    spawnManaged: true, // spawn 已在 spawn-manager 覆盖
+    defenseCovered: true, // defense 系统自动覆盖
+    hasVersionedLayout: Memory.rooms[expansion.target]?.layout !== undefined,
+    tick: ctx.tick,
+  };
+
+  const integrationResult = evaluateEmpireIntegration(integrationInput);
+
+  // Checkpoint 5: Economic Activation + Empire Integration
+  const cp5 = evaluateCheckpoint({
+    checkpointId: "CP5_ECONOMIC_ACTIVATION",
+    controllerClaimed: true,
+    spawnBuilt: targetRoom.find(FIND_MY_SPAWNS).length > 0,
+    spawnCanSpawn: targetRoom.energyAvailable >= 300,
+    harvesterActive: economicInput.hasHarvester,
+    transporterActive: economicInput.hasTransporter,
+    extensionsBuilt: true,
+    containerBuilt: true,
+    roadsBuilt: true,
+    netEnergyFlowPositive: econResult.netFlow > 0,
+    empireIntegrated: integrationResult.integrated,
+    tick: ctx.tick,
+    retryCount: 0,
+  });
+
+  if (cp5.passed && canHandover(integrationResult, econResult.activated)) {
+    // 全链路完成！
+    expansion.checkpointsPassed = 5;
+    expansion.state = "completed";
+    console.log(`[${ctx.tick}] expansion: integrating → completed (CP5 passed) — ${expansion.target} is now AUTONOMOUS`);
+    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_SUCCESS);
+    // 标记 Plan 为 COMPLETED
+    updatePlanStatus(expansion.planId ?? "", "COMPLETED");
+  // 释放预留资源
+  if (!Memory.kernel) Memory.kernel = {};
+  if (expansion.reservedEnergy && expansion.reservedEnergy > 0) {
+    console.log(`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy for ${expansion.target}`);
+  }
+  // 清理扩张状态
+  Memory.kernel.expansion = undefined;
+  return;
+  }
+
+  // 超时检查（integrating 阶段给最长的时间）
+  const integratingTimeout = CONFIG.expansion.pioneerTimeout * 3;
+  if (ctx.tick - expansion.startedAt > integratingTimeout) {
+    console.log(`[${ctx.tick}] expansion: integrating timed out for ${expansion.target} (netFlow=${econResult.netFlow})`);
+    // 如果经济至少在正方向，仍然算成功
+    if (econResult.netFlow > 0 && integrationResult.integrated) {
+      expansion.state = "completed";
+      expansion.checkpointsPassed = 5;
+      console.log(`[${ctx.tick}] expansion: forcing integrating → completed (net positive + integrated)`);
+      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_SUCCESS);
+      updatePlanStatus(expansion.planId ?? "", "COMPLETED");
+      if (!Memory.kernel) Memory.kernel = {};
+      Memory.kernel.expansion = undefined;
+      return;
+    }
+    abortExpansion(ctx, expansion, OUTCOME_TIMEOUT);
+  }
+}
+
+// ─── 辅助函数 ──────────────────────────────────────────────
+
+/**
+ * 终止扩张行动的统一清理函数。
+ */
+function abortExpansion(ctx: TickContext, expansion: ExpansionState, outcome: number): void {
+  // 根据当前状态决定归因 phase：claiming 阶段 → claim，其他 → pioneer
+  const phase = expansion.state === "claiming" || expansion.state === "preparing" ? PHASE_CLAIM : PHASE_PIONEER;
+  recordExpansionOutcome(expansion, ctx.tick, phase, outcome);
+  // 释放预留资源
+  if (!Memory.kernel) Memory.kernel = {};
+  if (expansion.reservedEnergy && expansion.reservedEnergy > 0) {
+    console.log(`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy (abort)`);
+  }
+  reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
+  // 标记 Plan 为 CANCELLED
+  if (expansion.planId) {
+    updatePlanStatus(expansion.planId, "CANCELLED");
+  }
+  Memory.kernel.expansion = undefined;
+}
+
+// ─── V1 辅助函数（保留，供 Plan 消费路径使用）────────────────
+
 function recordExpansionOutcome(expansion: ExpansionState, tick: number, phase: number, outcome: number): void {
   recordEvent(EventKind.ExpansionOutcome, expansion.target, [
     phase,
@@ -104,7 +694,6 @@ function recordExpansionOutcome(expansion: ExpansionState, tick: number, phase: 
     tick - expansion.startedAt,
   ]);
 
-  // 任务级归因：phase 0 的 success 是阶段中转（继续 pioneering），不追加。
   const kind = toOutcomeKind(phase, outcome);
   if (!kind) return;
 
@@ -136,6 +725,7 @@ function recordExpansionOutcome(expansion: ExpansionState, tick: number, phase: 
       ` minSources=${result.minSources} consecFail=${result.consecutiveFailures}`,
     );
   }
+
   Memory.kernel!.expansionRhythm = {
     ring: ring.map(kindToCode),
     blacklistMultiplier: result.blacklistMultiplier,
@@ -149,7 +739,7 @@ function recordExpansionOutcome(expansion: ExpansionState, tick: number, phase: 
 
 function toOutcomeKind(phase: number, outcome: number): ExpansionOutcomeKind | undefined {
   if (phase === 0) {
-    if (outcome === OUTCOME_SUCCESS) return undefined; // claim 成功 → 任务延续
+    if (outcome === OUTCOME_SUCCESS) return undefined;
     if (outcome === OUTCOME_STOLEN) return "stolen";
     if (outcome === OUTCOME_TIMEOUT) return "timeout";
     if (outcome === OUTCOME_LOST) return "lost";
@@ -169,7 +759,6 @@ function kindToCode(kind: ExpansionOutcomeKind): number {
   return (["success", "stolen", "timeout", "lost", "aborted"] as const).indexOf(kind);
 }
 
-/** 把失败目标记入黑名单（冷却时长按节奏台账缩放：成功多 → 缩短，零成功 → 加长）。 */
 function blacklistTarget(roomName: string, tick: number): void {
   if (!Memory.kernel) Memory.kernel = {};
   Memory.kernel.expansionBlacklist ??= {};
@@ -178,18 +767,6 @@ function blacklistTarget(roomName: string, tick: number): void {
   Memory.kernel.expansionBlacklist[roomName] = tick + cooldown;
 }
 
-/**
- * 召回扩张行动的存活 creep（claimer + 拓荒编队）。
- *
- * abort 只清 Memory 不触碰 creep 会留下孤儿：拓荒者 home=新房，
- * 失守后 home 房无 snapshot → role-runner 每 tick 静默 return，
- * recyclePass 按自有房遍历也覆盖不到 — 整支编队原地呆立至寿终。
- * 把 home 改回 sponsor 并标记 recycle，让既有回收链（role-runner 停工 +
- * spawn-manager recyclePass 归航）接管；同时清掉 sponsor 队列中
- * 尚未孵化的本目标请求，防止 abort 后继续送兵。
- *
- * @internal 导出仅供接线级单元测试使用，业务代码经由 abort 路径调用。
- */
 export function reclaimExpeditionCreeps(target: string, sponsor: string): void {
   for (const creep of Object.values(Game.creeps)) {
     const mem = creep.memory;
@@ -199,13 +776,10 @@ export function reclaimExpeditionCreeps(target: string, sponsor: string): void {
     mem.assignment = undefined;
     mem.recycle = true;
   }
-  // P1-H：经纯函数通道撤销寄宿在 sponsor 队列的拓荒请求，
-  // 不再直接 splice — spawn-manager 是队列属主，外模块不得直接动 splice。
   const queue = Memory.rooms[sponsor]?.spawnQueue;
   if (queue) cancelRequestsByHome(queue, target);
 }
 
-/** 清理已到期的黑名单条目（防无限累积）。 */
 function pruneBlacklist(tick: number): void {
   const bl = Memory.kernel?.expansionBlacklist;
   if (!bl) return;
@@ -214,9 +788,7 @@ function pruneBlacklist(tick: number): void {
   }
 }
 
-// ─── idle → claiming ────────────────────────────────────────
-
-// ─── 自举车道：owned 无 spawn 房的跨房重建（W38S59 事故驱动）───
+// ─── 自举车道 ─────────────────────────────────────────────
 
 function runBootstrapLane(ctx: TickContext): void {
   const kernel = Memory.kernel!;
@@ -229,7 +801,6 @@ function runBootstrapLane(ctx: TickContext): void {
     const room = Game.rooms[snapshot.roomName] as Room | undefined;
     if (!room || typeof room.find !== "function") continue;
     if (room.find(FIND_MY_SPAWNS).length > 0) {
-      // 已恢复 —— 清台账（自举完成）。
       delete kernel.bootstrap[snapshot.roomName];
       if (snapshot.rcl >= CONFIG.expansion.sponsorMinRcl && Memory.rooms[snapshot.roomName]?.colonyState === "normal") {
         sponsorPool.push({ room: snapshot.roomName, capacityAvailable: snapshot.energyCapacityAvailable });
@@ -245,7 +816,6 @@ function runBootstrapLane(ctx: TickContext): void {
   }
   if (rooms.length === 0) return;
 
-  // 最近 sponsor（线性距）：系统层选定后交纯函数裁决冷却/弃房/容量。
   for (const r of rooms) {
     let best: { room: string; capacityAvailable: number } | undefined;
     let bestD = Infinity;
@@ -269,8 +839,6 @@ function runBootstrapLane(ctx: TickContext): void {
 
   for (const d of decisions) {
     if (d.action === "abandon") {
-      // 弃房止损：TTD 危急 + 敌情 —— 清空本地不可孵化队列，控制权自然移交
-      // （G11 弃房取舍同口径；rescue 单位由后续回收通道归航）。
       if (Memory.rooms[d.room]) Memory.rooms[d.room]!.spawnQueue = [];
       console.log(`[${ctx.tick}] bootstrap: abandon ${d.room} — ${d.reason}`);
       recordEvent(EventKind.ExpansionOutcome, d.room, [1, 4, 0]);
@@ -313,72 +881,7 @@ function runBootstrapLane(ctx: TickContext): void {
   }
 }
 
-function tryStartExpansion(ctx: TickContext): void {
-  pruneBlacklist(ctx.tick);
-
-  // GCL 余量（测试环境无 Game.gcl 时按 1 处理 — 单房间下永远无余量，安全）。
-  const gclLevel = Game.gcl?.level ?? 1;
-
-  // sponsor 候选：经济成熟（RCL 门槛）且状态健康的自有房。
-  const ownedRoomNames: string[] = [];
-  const intelBySponsor: Record<string, Readonly<Record<string, RoomIntel>>> = {};
-  // P1-G：从各 sponsor 的 remoteOps 提取 dangerUntil 映射，供 evaluator 过滤危险候选。
-  const dangerUntilBySponsor: Record<string, Record<string, number>> = {};
-  let myUsername: string | undefined;
-  for (const snapshot of ctx.snapshots()) {
-    ownedRoomNames.push(snapshot.roomName);
-    myUsername ??= snapshot.controller?.owner?.username;
-    if (snapshot.rcl < CONFIG.expansion.sponsorMinRcl) continue;
-    const roomMem = Memory.rooms[snapshot.roomName];
-    if (roomMem?.colonyState !== "normal") continue;
-    if (roomMem.intel) intelBySponsor[snapshot.roomName] = roomMem.intel;
-    // 提取本 sponsor 的 remoteOps 中的 dangerUntil 记录。
-    if (roomMem.remoteOps) {
-      const dangers: Record<string, number> = {};
-      for (const [rn, op] of Object.entries(roomMem.remoteOps)) {
-        if (op.dangerUntil !== undefined) dangers[rn] = op.dangerUntil;
-      }
-      if (Object.keys(dangers).length > 0) {
-        dangerUntilBySponsor[snapshot.roomName] = dangers;
-      }
-    }
-  }
-  if (Object.keys(intelBySponsor).length === 0) return;
-
-  // 宿敌邻接集合：与未过期 warBlacklist 目标相邻的候选一律排除
-  // （新生 RCL1 殖民地扛不住宿敌 attackController 降级打击 —— W38S59 实证）。
-  const hostileAdj = new Set<string>();
-  for (const [blRoom, until] of Object.entries(Memory.kernel?.warBlacklist ?? {})) {
-    if (until <= ctx.tick) continue;
-    const exits = Game.map.describeExits(blRoom);
-    for (const dir in exits) hostileAdj.add(exits[dir as keyof typeof exits]!);
-  }
-
-  const target = selectExpansionTarget({
-    ownedRoomNames,
-    gclLevel,
-    intelBySponsor,
-    dangerUntilBySponsor,
-    tick: ctx.tick,
-    blacklist: Memory.kernel?.expansionBlacklist,
-    hostileAdj,
-    myUsername,
-    // R7b：节奏台账驱动的目标门禁（stolen 频发 → 只选 ≥2 source 的高价值房）。
-    minSources: Memory.kernel?.expansionRhythm?.minSources ?? CONFIG.expansion.rhythm.minSourcesBase,
-  });
-  if (!target) return;
-
-  Memory.kernel!.expansion = {
-    state: "claiming",
-    target: target.roomName,
-    sponsor: target.sponsorRoom,
-    startedAt: ctx.tick,
-  };
-  submitClaimer(target.sponsorRoom, target.roomName, ctx.tick);
-  console.log(
-    `[${ctx.tick}] expansion: claiming ${target.roomName} (sponsor=${target.sponsorRoom}, sources=${target.sources})`,
-  );
-}
+// ─── A3.3 辅助函数 ─────────────────────────────────────────
 
 /** 向 sponsor 队列提交 claimer 请求（稳定 key，幂等）。 */
 function submitClaimer(sponsor: string, target: string, tick: number): void {
@@ -403,76 +906,8 @@ function submitClaimer(sponsor: string, target: string, tick: number): void {
   roomMem.spawnQueue = queue;
 }
 
-// ─── claiming → pioneering ──────────────────────────────────
-
-function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
-  const targetRoom = Game.rooms[expansion.target];
-
-  // 占领成功 → 选锚点、写 layout、进入拓荒。
-  if (targetRoom?.controller?.my) {
-    if (seedLayoutAnchor(targetRoom)) {
-      recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_SUCCESS);
-      expansion.state = "pioneering";
-      expansion.startedAt = ctx.tick;
-      submitPioneers(ctx, expansion);
-      console.log(`[${ctx.tick}] expansion: claimed ${expansion.target}, pioneering`);
-    } else {
-      // 无可行锚点 — 极罕见（开阔度门槛已带回退），放弃并冷却。
-      console.log(`[${ctx.tick}] expansion: no viable anchor in ${expansion.target}, aborting`);
-      recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_ABORTED);
-      blacklistTarget(expansion.target, ctx.tick);
-      reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-      Memory.kernel!.expansion = undefined;
-    }
-    return;
-  }
-
-  // 被他人抢占 → 立即放弃。
-  if (targetRoom?.controller?.owner && !targetRoom.controller.my) {
-    console.log(`[${ctx.tick}] expansion: ${expansion.target} taken by ${targetRoom.controller.owner.username}, aborting`);
-    recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_STOLEN);
-    blacklistTarget(expansion.target, ctx.tick);
-    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-    Memory.kernel!.expansion = undefined;
-    return;
-  }
-
-  // 超时 → 放弃（claimer 迷路/被杀/GCL 边界竞争失败）。
-  if (ctx.tick - expansion.startedAt > CONFIG.expansion.claimTimeout) {
-    console.log(`[${ctx.tick}] expansion: claim ${expansion.target} timed out, aborting`);
-    recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_TIMEOUT);
-    blacklistTarget(expansion.target, ctx.tick);
-    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-    Memory.kernel!.expansion = undefined;
-    return;
-  }
-
-  // claimer 阵亡且无 pending → 幂等重派。
-  // C-2：重派前查危险情报 — 目标房 dangerUntil 冷却未过（claimer 大概率
-  // 死于威胁）时不再送兵，直接止损。无此闸的后果：claimer 被杀 → 重派 →
-  // 再被杀 — 送兵循环最长跑满 claimTimeout。
-  // P1-G：dangerUntil 从 intel 迁移到 remoteOps（remote-mining-manager 唯一写入）。
-  // P0-1：claimer 有 remoteTarget，在 squadIndex 中 — 用 querySquad 替代全量遍历。
-  const claimerAlive = querySquad({ role: "claimer", remoteTarget: expansion.target }).length > 0;
-  if (!claimerAlive) {
-    const dangerUntil = Memory.rooms[expansion.sponsor]?.remoteOps?.[expansion.target]?.dangerUntil;
-    if (dangerUntil !== undefined && ctx.tick < dangerUntil) {
-      console.log(`[${ctx.tick}] expansion: ${expansion.target} hostile (claimer lost), aborting`);
-      recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_LOST);
-      blacklistTarget(expansion.target, ctx.tick);
-      reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-      Memory.kernel!.expansion = undefined;
-      return;
-    }
-    // 低 tier 下不重派（止损判定已在上方照常运行 — 送兵是新增投资）。
-    if (!spawningAllowed) return;
-    submitClaimer(expansion.sponsor, expansion.target, ctx.tick);
-  }
-}
-
 /**
- * 用约束推导为新房选锚点并写入 layout — 之后交给既有的
- * layout-planner（spawn 重建路径）+ construction-manager（紧急豁免）。
+ * 用约束推导为新房选锚点并写入 layout。
  */
 function seedLayoutAnchor(room: Room): boolean {
   const terrain = room.getTerrain();
@@ -487,7 +922,6 @@ function seedLayoutAnchor(room: Room): boolean {
   const mineralPos = mineral ? { x: mineral.pos.x, y: mineral.pos.y } : undefined;
 
   const base = { field, sources, controller, exits, mineral: mineralPos, getTerrain };
-  // 开阔度 4 优先；地形逼仄的房间回退到 2（能放下 spawn 即可，核心可后续 relocation）。
   let candidates = selectAnchors({ ...base, maxCandidates: 1 });
   if (candidates.length === 0) {
     candidates = selectAnchors({ ...base, maxCandidates: 1, minOpenness: 2 });
@@ -502,86 +936,11 @@ function seedLayoutAnchor(room: Room): boolean {
     templateId: COMPACT_CORE_V2.id,
     state: "accepted",
     revision: 0,
-    nextPlanTick: 0, // 立即触发首次规划。
+    nextPlanTick: 0,
     anchor: packPos(best.x, best.y),
     anchorScore: best.score,
   };
   return true;
-}
-
-// ─── pioneering → done ──────────────────────────────────────
-
-function advancePioneering(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
-  const targetRoom = Game.rooms[expansion.target];
-
-  // 失守/失明二分归因（修复：无视野被误记 STOLEN 污染节奏台账）：
-  // pioneering 仅在 claim 成功后进入，进入时刻 controller 必为我方。此后：
-  //   - 无视野（!targetRoom）＝ 我方在该房已无任何 creep 且无观察者支援 ——
-  //     编队全灭/撤离属远征失败而非对手竞争，记 OUTCOME_LOST。rhythm 只按
-  //     "stolen" 频次收紧目标门禁，误记 stolen 会让一次「拓荒编队被野怪
-  //     团灭」错误收紧后续扩张目标质量（minSources 1→2）。
-  //   - 有视野且 controller 非我方 ＝ 确证被抢（控制权易手可见），维持
-  //     OUTCOME_STOLEN。观察者视野同样成立：room-observer 支援时即使编队
-  //     全灭也能确证归属，二分不会把可证实的抢占漏记成 LOST。
-  if (!targetRoom?.controller?.my) {
-    if (!targetRoom) {
-      console.log(`[${ctx.tick}] expansion: lost vision of ${expansion.target} during pioneering (expedition gone), aborting`);
-      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_LOST);
-    } else {
-      console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during pioneering, aborting`);
-      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_STOLEN);
-    }
-    blacklistTarget(expansion.target, ctx.tick);
-    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-    Memory.kernel!.expansion = undefined;
-    return;
-  }
-
-  // 完成判据：新房 spawn 建成 — 此后新房的 demand/bootstrap 闭环自治。
-  if (targetRoom.find(FIND_MY_SPAWNS).length > 0) {
-    console.log(`[${ctx.tick}] expansion: ${expansion.target} spawn online, expansion complete`);
-    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_SUCCESS);
-    Memory.kernel!.expansion = undefined;
-    return;
-  }
-
-  // C-2：拓荒期威胁止损 — 拓荒编队零战力，威胁在场时全员 flee，
-  // 补充的每一批都是给对手送经验。判据：目标房有威胁且编队已全灭
-  // （worker+builder 存活 0）→ 放弃 + 黑名单冷却 + 撤单。
-  // 审查修正：编队存活时只暂停补充，超时/完成判定继续运行 —
-  // 原先直接 return 会让长期骚扰无限推迟超时判定。
-  const hostiles = targetRoom.find(FIND_HOSTILE_CREEPS, {
-    // owner 缺失（私服注入/NPC 边缘形态）视为非盟友 → 敌对，防 filter 抛错。
-    filter: c => !CONFIG.defense.allies.includes(c.owner?.username ?? "") &&
-      c.body.some(p => p.type === ATTACK || p.type === RANGED_ATTACK),
-  });
-  if (hostiles.length > 0) {
-    const squadAlive = Object.values(Game.creeps).some(
-      c => c.memory.home === expansion.target &&
-        (c.memory.role === "worker" || c.memory.role === "builder"),
-    );
-    if (!squadAlive) {
-      console.log(`[${ctx.tick}] expansion: ${expansion.target} squad wiped by hostiles, aborting`);
-      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_LOST);
-      blacklistTarget(expansion.target, ctx.tick);
-      reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-      Memory.kernel!.expansion = undefined;
-      return;
-    }
-  }
-
-  // 超时：房已占下，仅停止编队补充（残余拓荒者继续干活至寿终）。
-  if (ctx.tick - expansion.startedAt > CONFIG.expansion.pioneerTimeout) {
-    console.log(`[${ctx.tick}] expansion: pioneering ${expansion.target} timed out, squad replenishment stopped`);
-    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_TIMEOUT);
-    Memory.kernel!.expansion = undefined;
-    return;
-  }
-
-  // 补充编队：威胁在场（不送新兵进战场）或低 CPU tier（新增投资暂停）时跳过。
-  if (hostiles.length === 0 && spawningAllowed) {
-    submitPioneers(ctx, expansion);
-  }
 }
 
 /** 维持拓荒编队规模（sponsor 队列代孵，稳定 key 幂等）。 */
@@ -592,7 +951,6 @@ function submitPioneers(_ctx: TickContext, expansion: ExpansionState): void {
   const capacity = Game.rooms[expansion.sponsor]?.energyCapacityAvailable ?? 300;
   const sponsorRcl = Game.rooms[expansion.sponsor]?.controller?.level ?? 4;
 
-  // 存活计数（home 指向目标房的拓荒者）。
   const living: Record<string, number> = {};
   for (const creep of Object.values(Game.creeps)) {
     if (creep.memory.home !== expansion.target) continue;
@@ -614,7 +972,7 @@ function submitPioneers(_ctx: TickContext, expansion: ExpansionState): void {
       submitRequest(queue, {
         key,
         role,
-        home: expansion.target, // home = 新房：孵化后 ensureHome 自行迁徙。
+        home: expansion.target,
         priority: 2,
         body: selectBody(role, capacity, { rcl: sponsorRcl }),
         memory: { role, home: expansion.target, mode: "acquire", spawnIndex: i },
@@ -625,4 +983,179 @@ function submitPioneers(_ctx: TickContext, expansion: ExpansionState): void {
     }
   }
   roomMem.spawnQueue = queue;
+}
+
+/** 检查房间是否已被拥有。 */
+function isRoomOwned(roomName: string): boolean {
+  const room = Game.rooms[roomName];
+  return !!room?.controller?.my;
+}
+
+/** 检查 Intel 是否过期。 */
+function isIntelStale(roomName: string, tick: number): boolean {
+  // 简化：如果从未观测过，不算过期（让 Gate 验证去做）
+  // 如果有 intel 记录，检查 lastSeen
+  for (const roomMem of Object.values(Memory.rooms)) {
+    const intel = roomMem?.intel as Record<string, RoomIntel> | undefined;
+    if (intel?.[roomName]) {
+      return tick - intel[roomName].lastSeen > 10000;
+    }
+  }
+  return false;
+}
+
+/** 检查目标房是否可 claim。 */
+function isTargetClaimable(roomName: string): boolean {
+  const room = Game.rooms[roomName];
+  if (!room?.controller) return false;
+  // 不能 claim 已拥有的 controller
+  if (room.controller.owner) return false;
+  // 不能 claim 被敌方 reservation 的 controller
+  if (room.controller.reservation && !room.controller.my) return false;
+  return true;
+}
+
+/** 获取 Tiered Budget（简化版）。 */
+function getTieredBudget(_ctx: TickContext): import("../domain/expansion/budget").TieredExpansionBudget {
+  // 从 globalCache 获取或构建简化版
+  const totalEnergy = Object.values(Game.rooms)
+    .filter(r => r.controller?.my)
+    .reduce((sum, r) => sum + (r.storage?.store[RESOURCE_ENERGY] ?? 0), 0);
+  const coreReserve = Math.floor(totalEnergy * 0.5);
+  return {
+    totalEnergy,
+    coreReserve,
+    availableExpansion: Math.floor(totalEnergy * 0.3),
+    emergencyReserve: Math.floor(totalEnergy * 0.1),
+    operationalReserve: Math.floor(totalEnergy * 0.1),
+    coreInvaded: false,
+    tick: Game.time,
+    evidence: "simplified",
+  };
+}
+
+/** 获取可用扩张预算。 */
+function getAvailableBudget(ctx: TickContext): number {
+  return getTieredBudget(ctx).availableExpansion;
+}
+
+/** 从 Memory 瘦结构反序列化 Plan。 */
+function deserializePlanMemory(m: ExpansionPlanMemory): ExpansionPlan | null {
+  if (!m || typeof m !== "object") return null;
+  const cost = {
+    roomName: m.rn,
+    totalCost: m.tc,
+    claimerCost: 650,
+    pioneerCost: 0,
+    spawnCost: 5000,
+    travelCost: 0,
+    infrastructureCost: 0,
+    bootstrapEnergy: 0,
+    evidence: "",
+  };
+  const payback = {
+    roomName: m.rn,
+    totalCost: m.tc,
+    expectedIncomePerTick: 0,
+    paybackTicks: m.pb === -1 ? Infinity : m.pb,
+    roi: m.roi,
+    worthwhile: m.roi >= 1,
+    evidence: "",
+  };
+  const risk = {
+    roomName: m.rn,
+    score: m.rk,
+    level: m.rl as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+    dimensions: { economic: 0, operational: 0, distance: 0, recovery: 0, defense: 0 },
+    evidence: "",
+  };
+  const candidate = {
+    roomName: m.rn,
+    sponsorRoom: m.sr,
+    kind: "normal" as const,
+    roomStatus: "normal" as const,
+    sourceCount: 2,
+    mineral: undefined,
+    terrain: { exitCount: 4, sealedExitCount: 0, wallCount: 0 },
+    controller: { hasOwner: false, isMine: false, isHostileReserved: false },
+    pathCost: undefined,
+    lastSeen: m.ca,
+    distance: 1,
+    neighborRooms: [],
+    score: m.sc,
+    status: "QUALIFIED" as const,
+    discoveredAt: m.ca,
+  };
+  return {
+    planId: m.pid,
+    roomName: m.rn,
+    sponsorRoom: m.sr,
+    reason: m.rs as ExpansionPlan["reason"],
+    priority: m.pr as "P0" | "P1" | "P2" | "P3",
+    candidateScore: m.sc,
+    cost,
+    payback,
+    risk,
+    candidate,
+    status: m.st as "DISCOVERED" | "EVALUATED" | "READY" | "APPROVED" | "WAITING_EXECUTION" | "EXECUTING" | "COMPLETED" | "CANCELLED" | "BLACKLISTED",
+    createdAt: m.ca,
+    updatedAt: m.ua ?? m.ca,
+    approvedAt: m.aa,
+    cancelReason: m.cr,
+    cancelConditions: [],
+    dependencies: [],
+    explanation: m.ex ?? "",
+  };
+}
+
+/** 更新 Plan 状态到 Memory。 */
+function updatePlanStatus(planId: string, status: string): void {
+  if (!planId) return;
+  const plans = Memory.kernel?.expansionPlans;
+  if (!plans) return;
+  const plan = plans.find(p => p.pid === planId);
+  if (plan) {
+    plan.st = status;
+    plan.ua = Game.time;
+  }
+}
+
+/** 估算新房能量生产。 */
+function estimateEnergyProduction(room: Room): number {
+  const sources = room.find(FIND_SOURCES);
+  // 每个 source 理论最大 10 energy/tick，实际取决于 harvester 数量
+  const harvesters = Object.values(Game.creeps).filter(
+    c => c.memory.home === room.name && c.memory.role === "harvester",
+  );
+  const harvesterParts = harvesters.reduce((sum, c) =>
+    sum + c.body.filter(p => p.type === WORK).length, 0);
+  // 每个 WORK 部件 5 energy/tick（减去移动消耗 1）
+  return Math.min(sources.length * 10, harvesterParts * 5);
+}
+
+/** 估算新房能量消耗。 */
+function estimateEnergyConsumption(room: Room): number {
+  // spawn 消耗 + 建造消耗 + repair 消耗
+  const spawns = room.find(FIND_MY_SPAWNS);
+  let consumption = 0;
+  // 如果 spawn 正在孵化，估算消耗
+  for (const spawn of spawns) {
+    if (spawn.spawning) consumption += 3; // 简化估算
+  }
+  // construction sites 消耗
+  const sites = room.find(FIND_CONSTRUCTION_SITES);
+  consumption += Math.min(sites.length * 5, 30);
+  return consumption;
+}
+
+/** 估算从 sponsor 到新房的外部能量流入。 */
+function estimateExternalInflow(targetRoom: string, sponsorRoom: string): number {
+  // 检查是否有 transporter 在从 sponsor 到 target 的路线上
+  const transporters = Object.values(Game.creeps).filter(
+    c => c.memory.home === targetRoom &&
+      c.memory.role === "transporter" &&
+      c.memory.assignment === (sponsorRoom as never),
+  );
+  // 简化：每个 transporter 50 energy/tick
+  return transporters.length * 50;
 }

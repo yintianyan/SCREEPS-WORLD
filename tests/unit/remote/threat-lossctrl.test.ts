@@ -277,7 +277,7 @@ describe("C-1/C-2 — expansion 状态机止损豁免", () => {
   it("C-1：conserve tier 下 pioneering 超时判定仍然运行（状态机不被门禁冻结）", () => {
     g().Game.time = 30000;
     g().Memory.kernel = {
-      expansion: { state: "pioneering", target: "W9N9", sponsor: "W7N4", startedAt: 1 },
+      expansion: { state: "bootstrapping", target: "W9N9", sponsor: "W7N4", startedAt: 1, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
     };
     g().Memory.rooms.W7N4 = { spawnQueue: [] };
     g().Game.rooms.W9N9 = {
@@ -295,7 +295,7 @@ describe("C-1/C-2 — expansion 状态机止损豁免", () => {
   it("C-2：拓荒编队全灭 + 威胁在场 → 放弃 + 黑名单冷却", () => {
     g().Game.time = 5000;
     g().Memory.kernel = {
-      expansion: { state: "pioneering", target: "W9N9", sponsor: "W7N4", startedAt: 4900 },
+      expansion: { state: "bootstrapping", target: "W9N9", sponsor: "W7N4", startedAt: 4900, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
     };
     g().Memory.rooms.W7N4 = { spawnQueue: [] };
     g().Game.rooms.W9N9 = {
@@ -324,7 +324,7 @@ describe("C-1/C-2 — expansion 状态机止损豁免", () => {
   it("C-2：威胁在场但编队存活 → 暂停补充不放弃（过境骚扰可恢复）", () => {
     g().Game.time = 5000;
     g().Memory.kernel = {
-      expansion: { state: "pioneering", target: "W9N9", sponsor: "W7N4", startedAt: 4900 },
+      expansion: { state: "bootstrapping", target: "W9N9", sponsor: "W7N4", startedAt: 4900, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
     };
     g().Memory.rooms.W7N4 = { spawnQueue: [] };
     g().Game.rooms.W9N9 = {

@@ -63,7 +63,7 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
       rooms: { W7N4: { spawnQueue: [], buildQueue: [] } },
       kernel: {
         strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
-        expansion: { state: "pioneering", target: "W6N4", sponsor: "W7N4", startedAt: 1100 },
+        expansion: { state: "bootstrapping", target: "W6N4", sponsor: "W7N4", startedAt: 1100, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
       },
     };
     syncSquadIndex();
@@ -91,7 +91,7 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
       rooms: { W7N4: { spawnQueue: [], buildQueue: [] } },
       kernel: {
         strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
-        expansion: { state: "pioneering", target: "W6N4", sponsor: "W7N4", startedAt: 1100 },
+        expansion: { state: "bootstrapping", target: "W6N4", sponsor: "W7N4", startedAt: 1100, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
       },
     };
     syncSquadIndex();
@@ -111,14 +111,14 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
     expect(ev?.d).toEqual([1, 1, (globalThis as any).Game.time - 1100]); // [pioneer, stolen, duration]
   });
 
-  it("pioneering spawn 上线 → phase=pioneer outcome=success", () => {
+  it("bootstrapping spawn 上线 + 可孵化 → 推进到 economic_startup (A3.3)", () => {
     (globalThis as any).Memory = {
       schemaVersion: 30,
       creeps: {},
       rooms: { W7N4: { spawnQueue: [], buildQueue: [] } },
       kernel: {
         strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
-        expansion: { state: "pioneering", target: "W6N4", sponsor: "W7N4", startedAt: 1100 },
+        expansion: { state: "bootstrapping", target: "W6N4", sponsor: "W7N4", startedAt: 1100, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
       },
     };
     syncSquadIndex();
@@ -126,9 +126,12 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
       W7N4: { controller: { my: true, owner: { username: "Me" } } },
       W6N4: {
         controller: { my: true, owner: { username: "Me" } },
+        energyAvailable: 300,
         find: (kind: number) => {
           if (kind === FIND_MY_SPAWNS) return [{ structureType: STRUCTURE_SPAWN }];
           if (kind === FIND_HOSTILE_CREEPS) return [];
+          if (kind === FIND_MY_STRUCTURES) return [];
+          if (kind === FIND_STRUCTURES) return [];
           return [];
         },
       },
@@ -139,9 +142,12 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
 
     expansionManagerSystem.run(makeContext());
 
-    expect((globalThis as any).Memory.kernel.expansion).toBeUndefined();
-    const ev = expansionEvents()[0];
-    expect(ev?.d).toEqual([1, 0, (globalThis as any).Game.time - 1100]); // [pioneer, success, duration]
+    // A3.3: spawn 存在 + 可孵化 → CP2 通过 → 推进到 economic_startup
+    // 不再直接完成（不降级为 spawn 建成=成功）
+    const expansion = (globalThis as any).Memory.kernel.expansion;
+    expect(expansion).toBeDefined();
+    expect(expansion.state).toBe("economic_startup");
+    expect(expansion.checkpointsPassed).toBeGreaterThanOrEqual(2);
   });
 });
 

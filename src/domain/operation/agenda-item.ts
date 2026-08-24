@@ -7,8 +7,14 @@
  * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
  */
 
-/** 操作类型（当前只实现 supply，后续阶段扩展其他类型）。 */
-export type OperationType = "supply";
+/**
+ * 操作类型（A3.3 扩展：新增 claim + colonize）。
+ *
+ * - supply:   资源调拨（A3.0 已实现）
+ * - claim:    获取 Controller 所有权（A3.3 新增）
+ * - colonize: 建立经济——从 Spawn 到 Autonomous Room（A3.3 新增）
+ */
+export type OperationType = "supply" | "claim" | "colonize";
 
 /** 操作状态机九态（PLANNING_ARCHITECTURE §3 AgendaItem 生命周期）。 */
 export type OperationStatus =
@@ -152,4 +158,88 @@ export function isActive(op: OperationContext): boolean {
  */
 export function isExpired(op: OperationContext, tick: number): boolean {
   return tick > op.deadline;
+}
+
+// ─── A3.3 扩展：claim + colonize Operation 创建 ──────────────────
+
+/**
+ * 生成 Claim Operation 的幂等键。
+ * 格式："claim:${targetRoom}"
+ * 同一目标房只允许一个活跃 Claim Operation。
+ */
+export function makeClaimOperationId(targetRoom: string): string {
+  return `claim:${targetRoom}`;
+}
+
+/**
+ * 创建 Claim Operation（获取 Controller 所有权）。
+ *
+ * 初始状态 = planned，sourceRoom = sponsor 房，targetRoom = 候选房。
+ */
+export function createClaimOperation(
+  sponsorRoom: string,
+  targetRoom: string,
+  priority: OperationPriority,
+  deadline: number,
+  tick: number,
+  maxRetries = 1,
+): OperationContext {
+  return {
+    id: makeClaimOperationId(targetRoom),
+    type: "claim",
+    status: "planned",
+    sourceRoom: sponsorRoom,
+    targetRoom,
+    requestedAmount: 0, // claim 不需要资源调拨
+    deliveredAmount: 0,
+    reservedAmount: 0,
+    priority,
+    resource: "energy",
+    deadline,
+    createdAt: tick,
+    updatedAt: tick,
+    retries: 0,
+    maxRetries,
+  };
+}
+
+/**
+ * 生成 Colonize Operation 的幂等键。
+ * 格式："colonize:${targetRoom}"
+ */
+export function makeColonizeOperationId(targetRoom: string): string {
+  return `colonize:${targetRoom}`;
+}
+
+/**
+ * 创建 Colonize Operation（建立经济——从 Spawn 到 Autonomous Room）。
+ *
+ * 初始状态 = planned。Colonize 在 Claim 完成后创建。
+ */
+export function createColonizeOperation(
+  sponsorRoom: string,
+  targetRoom: string,
+  bootstrapEnergy: number,
+  priority: OperationPriority,
+  deadline: number,
+  tick: number,
+  maxRetries = 3,
+): OperationContext {
+  return {
+    id: makeColonizeOperationId(targetRoom),
+    type: "colonize",
+    status: "planned",
+    sourceRoom: sponsorRoom,
+    targetRoom,
+    requestedAmount: bootstrapEnergy,
+    deliveredAmount: 0,
+    reservedAmount: 0,
+    priority,
+    resource: "energy",
+    deadline,
+    createdAt: tick,
+    updatedAt: tick,
+    retries: 0,
+    maxRetries,
+  };
 }

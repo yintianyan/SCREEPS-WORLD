@@ -317,17 +317,31 @@ declare global {
     /** 参数自调优状态（v7+）。tuning-engine 每 500 tick 更新。 */
     tuning?: TuningMemory;
     /**
-     * 当前扩张行动（v11+，同一时刻至多一个）：expansion-manager 状态机
-     * claiming（claimer 在途）→ pioneering（拓荒编队建 spawn）。
+     * 当前扩张行动（v11+，同一时刻至多一个）：expansion-manager 状态机。
+     *
+     * A3.3 扩展：从二态（claiming | pioneering）升级为完整执行链路：
+     *   validating → preparing → claiming → claimed → bootstrapping →
+     *   economic_startup → integrating → completed
+     *
+     * 向后兼容：旧二态作为 claiming/bootstrapping 的子集继续工作。
      */
     expansion?: {
-      state: "claiming" | "pioneering";
+      /** 执行状态（A3.3 完整状态机）。 */
+      state: ExpansionExecutionState;
       /** 扩张目标房名。 */
       target: string;
       /** 孵化 claimer 与拓荒编队的 sponsor 房名。 */
       sponsor: string;
       /** 当前状态的起始 tick（超时判定基准）。 */
       startedAt: number;
+      /** A3.3：关联的 planId。 */
+      planId?: string;
+      /** A3.3：已通过 checkpoint 数（0-5）。 */
+      checkpointsPassed?: number;
+      /** A3.3：预留能量。 */
+      reservedEnergy?: number;
+      /** A3.3：连续净流为正的 tick 数（经济激活判据）。 */
+      consecutivePositiveTicks?: number;
     };
     /** 扩张失败目标黑名单（v11+）：房名 → 冷却到期 tick。 */
     expansionBlacklist?: Record<string, number>;
@@ -588,6 +602,109 @@ declare global {
      * key = operationId, value = Reservation（含 TTL）。TTL 过期自动清除。
      */
     reservations?: Record<string, unknown>;
+    /**
+     * A3.2 扩张计划列表（expansion-planner 每 interval tick 写入）— 有界列表，
+     * 最多 MAX_ACTIVE_PLANS(5) 个 Active Plan + 终态 Plan 保留期内条目。
+     * A3.2 只产出 Plan（到 WAITING_EXECUTION），不执行 Claim/Reserve/Bootstrap。
+     */
+    expansionPlans?: ExpansionPlanMemory[];
+    /**
+     * A3.2 扩张候选 Registry（expansion-planner 每 interval tick 更新）—
+     * 从 Intel 提取的候选房列表，携带评分和生命周期状态。
+     * 有界（maxPoolSize=10），超出截断。
+     */
+    expansionCandidates?: ExpansionCandidateMemory[];
+    /**
+     * A3.2 扩张 Dashboard 快照（expansion-planner 每 interval tick 写入）—
+     * Pressure/Readiness/Budget/Candidates/Plan 汇总，供可观测性消费。
+     */
+    expansionDashboard?: {
+      tick: number;
+      summary: string;
+    };
+  }
+
+  /** A3.3 扩展：扩张执行状态机的完整状态集合。 */
+  type ExpansionExecutionState =
+    | "validating"        // 执行 Gate 验证中
+    | "preparing"         // 预留资源 + 准备 Claimer
+    | "claiming"          // Claimer 出发 + claimController（向后兼容旧 claiming）
+    | "claimed"           // Claim 成功，controller 已拥有
+    | "bootstrapping"     // Pioneer 到达 + 基础设施建设（向后兼容旧 pioneering）
+    | "economic_startup"  // 能量环路建立（harvest + transport + spawn）
+    | "integrating"       // 经济激活 → 帝国集成
+    | "completed"         // 自主运行
+    | "failed"            // 执行失败
+    | "aborted";          // 主动终止
+
+  /** A3.2 扩张计划的 Memory 瘦结构（只存 ID/枚举/少量数字/短 key）。 */
+  interface ExpansionPlanMemory {
+    /** 全局唯一 planId。 */
+    pid: string;
+    /** 候选房名。 */
+    rn: string;
+    /** Sponsor 房名。 */
+    sr: string;
+    /** 扩张动机。 */
+    rs: string;
+    /** 优先级。 */
+    pr: string;
+    /** 候选评分。 */
+    sc: number;
+    /** 估算总成本。 */
+    tc: number;
+    /** 回收周期（tick）。 */
+    pb: number;
+    /** ROI。 */
+    roi: number;
+    /** 风险分数。 */
+    rk: number;
+    /** 风险等级。 */
+    rl: string;
+    /** Plan 状态。 */
+    st: string;
+    /** 创建 tick。 */
+    ca: number;
+    /** 更新 tick。 */
+    ua: number;
+    /** 批准 tick。 */
+    aa?: number;
+    /** 取消原因。 */
+    cr?: string;
+    /** 决策摘要。 */
+    ex: string;
+  }
+
+  /** A3.2 扩张候选的 Memory 瘦结构。 */
+  interface ExpansionCandidateMemory {
+    /** 房名（稳定 key）。 */
+    rn: string;
+    /** Sponsor 房名。 */
+    sr: string;
+    /** 房间类型。 */
+    k: string;
+    /** 房态。 */
+    rs: string;
+    /** source 数。 */
+    sc?: number;
+    /** 矿物类型。 */
+    mn?: string;
+    /** 评分。 */
+    s: number;
+    /** 距离。 */
+    d: number;
+    /** 通勤成本。 */
+    pc?: number;
+    /** 最后观测 tick。 */
+    ls: number;
+    /** 候选状态。 */
+    st: string;
+    /** 发现 tick。 */
+    da: number;
+    /** 评估 tick。 */
+    ea?: number;
+    /** 否决原因。 */
+    vr?: string;
   }
 
   /** 参数自调优的持久化状态。 */

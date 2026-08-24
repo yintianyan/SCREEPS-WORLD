@@ -26,6 +26,7 @@ import { defensePlannerSystem } from "./systems/defense-planner";
 import { empireStrategySystem } from "./systems/empire-strategy";
 import { empireEconomySystem } from "./systems/empire-economy";
 import { expansionManagerSystem } from "./systems/expansion-manager";
+import { expansionPlannerSystem } from "./systems/expansion-planner";
 import { factoryManagerSystem } from "./systems/factory-manager";
 import { powerCreepManagerSystem } from "./systems/power-creep-manager";
 import { powerFarmManagerSystem } from "./systems/power-farm-manager";
@@ -101,6 +102,8 @@ export const registry = new Registry()
   .registerSystem(powerCreepManagerSystem)
   // P3：扩张管理（GCL 有余量时 claim 新房）
   .registerSystem(expansionManagerSystem)
+  // P3：扩张智能（A3.2——Pressure/Candidate/Cost/Risk/Plan 评估，不执行 Claim）
+  .registerSystem(expansionPlannerSystem)
   // P3：PB 野采（power 自给供给源 — war 军事资源不双线）
   .registerSystem(powerFarmManagerSystem)
   // P3：主动情报（expansionAllowed 时派侦察兵取候选房视野；失败冷却止损）
