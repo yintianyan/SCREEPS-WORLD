@@ -150,6 +150,26 @@ export const logisticsSystem: System = {
 
       g.transportPool.rooms[roomName] = finalReqs.map(toTaskEntry);
     }
+
+    // A3.0：合并 empire scope 跨房调拨请求（agenda-manager 每 100t 写入）。
+    // empire 请求直接追加到源房的 transportPool，hauler 认领后跨房运输。
+    const empireReqs = g.empireTransportRequests;
+    if (empireReqs && empireReqs.tick === ctx.tick && empireReqs.requests.length > 0) {
+      for (const req of empireReqs.requests) {
+        // empire 请求的 sourceId 是源房 storage id — 归入源房 pool
+        const sourceRoom = req.key.split(":")[1] ?? "";
+        if (!sourceRoom) continue;
+        if (!g.transportPool.rooms[sourceRoom]) {
+          g.transportPool.rooms[sourceRoom] = [];
+        }
+        const entries = g.transportPool.rooms[sourceRoom] as AssignmentTaskEntry[];
+        // 幂等：同 key 不重复添加
+        const exists = entries.some(e => e.id === req.key);
+        if (!exists) {
+          entries.push(toTaskEntry(req));
+        }
+      }
+    }
   },
 };
 

@@ -1,0 +1,144 @@
+/**
+ * AgendaItem 类型定义 — A3.0 多房帝国执行基础（PLANNING_ARCHITECTURE §3）。
+ *
+ * Operation = AgendaItem 的 supply 子类型。不新建独立 Operation 类型，
+ * 是冻结蓝图中已定义的 AgendaItem 的具体实现。
+ *
+ * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
+ */
+
+/** 操作类型（当前只实现 supply，后续阶段扩展其他类型）。 */
+export type OperationType = "supply";
+
+/** 操作状态机九态（PLANNING_ARCHITECTURE §3 AgendaItem 生命周期）。 */
+export type OperationStatus =
+  | "planned"
+  | "ready"
+  | "running"
+  | "verifying"
+  | "completed"
+  | "blocked"
+  | "failed"
+  | "cancelled"
+  | "expired";
+
+/** 操作优先级（0=最高 survival / 1=high / 2=normal / 3=low）。 */
+export type OperationPriority = 0 | 1 | 2 | 3;
+
+/** 资源类型（当前只支持 energy，后续可扩展）。 */
+export type ResourceType = "energy";
+
+/**
+ * OperationContext — AgendaItem 的运行时上下文。
+ *
+ * 瘦结构：只存必要字段，终态归档后删除（MEMORY_ARCHITECTURE §4）。
+ * 不存完整路径/历史/运行时索引。
+ */
+export interface OperationContext {
+  /** 幂等键："supply:${from}:${to}:${resource}"。 */
+  id: string;
+  /** 操作类型。 */
+  type: OperationType;
+  /** 当前状态。 */
+  status: OperationStatus;
+  /** 源房名（调出方）。 */
+  sourceRoom: string;
+  /** 目标房名（调入方）。 */
+  targetRoom: string;
+  /** 请求总量。 */
+  requestedAmount: number;
+  /** 已送达量。 */
+  deliveredAmount: number;
+  /** 已预留量（Reservation 跟踪）。 */
+  reservedAmount: number;
+  /** 优先级。 */
+  priority: OperationPriority;
+  /** 资源类型。 */
+  resource: ResourceType;
+  /** 截止 tick（超时 → expired）。 */
+  deadline: number;
+  /** 创建 tick。 */
+  createdAt: number;
+  /** 最近状态变更 tick。 */
+  updatedAt: number;
+  /** 当前重试次数。 */
+  retries: number;
+  /** 最大重试次数。 */
+  maxRetries: number;
+  /** 失败冷却到期 tick（重试上限到达后进入冷却）。 */
+  cooldownUntil?: number;
+  /** 上次错误原因（诊断用，终态归档时清除）。 */
+  lastError?: string;
+}
+
+/**
+ * 生成幂等键：supply:${from}:${to}:${resource}。
+ * 同一对 (from, to, resource) 只允许一个活跃 Operation。
+ */
+export function makeOperationId(
+  sourceRoom: string,
+  targetRoom: string,
+  resource: ResourceType,
+): string {
+  return `supply:${sourceRoom}:${targetRoom}:${resource}`;
+}
+
+/**
+ * 创建新 OperationContext（初始状态 = planned）。
+ *
+ * 纯函数 — 不访问 Game/Memory。
+ */
+export function createOperation(
+  sourceRoom: string,
+  targetRoom: string,
+  resource: ResourceType,
+  requestedAmount: number,
+  priority: OperationPriority,
+  deadline: number,
+  tick: number,
+  maxRetries = 3,
+): OperationContext {
+  return {
+    id: makeOperationId(sourceRoom, targetRoom, resource),
+    type: "supply",
+    status: "planned",
+    sourceRoom,
+    targetRoom,
+    requestedAmount,
+    deliveredAmount: 0,
+    reservedAmount: 0,
+    priority,
+    resource,
+    deadline,
+    createdAt: tick,
+    updatedAt: tick,
+    retries: 0,
+    maxRetries,
+  };
+}
+
+/**
+ * 判断操作是否处于终态（归档后可删除）。
+ */
+export function isTerminalStatus(status: OperationStatus): boolean {
+  return (
+    status === "completed" ||
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "expired"
+  );
+}
+
+/**
+ * 判断操作是否活跃（非终态）。
+ */
+export function isActive(op: OperationContext): boolean {
+  return !isTerminalStatus(op.status);
+}
+
+/**
+ * 判断操作是否已超时（当前 tick > deadline）。
+ */
+export function isExpired(op: OperationContext, tick: number): boolean {
+  return tick > op.deadline;
+}

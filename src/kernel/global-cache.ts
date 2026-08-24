@@ -168,6 +168,13 @@ export interface GlobalCache {
   systemLastRun?: Record<string, number>;
   /** P3 核算诊断：最近一次漂移事件的窗口分解（economy 写，观测/归因用）。 */
   lastDriftDiag?: unknown;
+  /** A3.0：帝国级 TransportRequest 候选（agenda-manager 每 100t 写入，logistics 消费）。
+   * scope="empire" 的跨房调拨请求 — logistics 系统合并进 transportPool 供 hauler 认领。
+   * heap 存储 — global reset 丢失可接受（agenda-manager 下个周期重建）。 */
+  empireTransportRequests?: { tick: number; requests: import("../domain/assignment/request-pool").TransportRequest[] };
+  /** A3.0：Agenda Manager 运行时指标快照（agenda-manager 每 100t 写入）。
+   * heap 存储 — global reset 丢失可接受。 */
+  agendaMetrics?: import("../domain/operation/metrics").OperationMetrics;
 }
 
 /**

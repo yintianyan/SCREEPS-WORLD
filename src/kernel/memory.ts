@@ -960,6 +960,16 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       // 仅升版本登记结构变更（STATE_OWNERSHIP §4 迁移三件套之迁移步骤）。
     },
   },
+  {
+    from: 37,
+    to: 38,
+    run: () => {
+      // v38：A3.0 多房帝国执行 — 新增 KernelMemory.agendas（agenda-manager 唯一
+      // 写者，跨房调拨 Operation 生命周期）+ KernelMemory.reservations（资源预留
+      // 表）。字段全部可选、惰性初始化，无存量数据需变换 —— 幂等 no-op，
+      // 仅升版本登记结构变更（STATE_OWNERSHIP §4 迁移三件套之迁移步骤）。
+    },
+  },
 ];
 
 /**

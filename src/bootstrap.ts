@@ -28,6 +28,7 @@ import { expansionManagerSystem } from "./systems/expansion-manager";
 import { factoryManagerSystem } from "./systems/factory-manager";
 import { powerCreepManagerSystem } from "./systems/power-creep-manager";
 import { powerFarmManagerSystem } from "./systems/power-farm-manager";
+import { agendaManagerSystem } from "./systems/agenda-manager";
 import { layoutPlannerSystem } from "./systems/layout-planner";
 import { logisticsSystem } from "./systems/logistics";
 import { labSystem } from "./systems/lab-system";
@@ -67,6 +68,8 @@ export const registry = new Registry()
   .registerSystem(empireStrategySystem)
   // P1：帝国经济聚合（低频 100t——Empire Resource View / Health / Budget / Readiness）
   .registerSystem(empireEconomySystem)
+  // P1：Agenda Manager（低频 100t——跨房调拨 Operation 生命周期管理）
+  .registerSystem(agendaManagerSystem)
   // P0：物流请求池（搬运 Demand 一等来源；先于 assignment-service 合并进任务槽）
   .registerSystem(logisticsSystem)
   // P1：任务分配（先于 P1 角色）

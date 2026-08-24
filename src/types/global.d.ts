@@ -577,6 +577,17 @@ declare global {
       fb: number;
       rr: number;
     };
+    /**
+     * A3.0 帝国议程（agenda-manager 每 100t 写入）— 跨房调拨 Operation 生命周期。
+     * 只存活跃 + 归档保留期内的终态 Operation；终态超 1000t 清理。
+     * 数组上限 = O(active agendas)，通常 ≤ 数条。
+     */
+    agendas?: unknown[];
+    /**
+     * A3.0 跨房资源预留表（agenda-manager 每 100t 写入）— 防超卖。
+     * key = operationId, value = Reservation（含 TTL）。TTL 过期自动清除。
+     */
+    reservations?: Record<string, unknown>;
   }
 
   /** 参数自调优的持久化状态。 */
