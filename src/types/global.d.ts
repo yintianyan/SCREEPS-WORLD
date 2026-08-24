@@ -554,6 +554,29 @@ declare global {
       /** 上次采样的 GCL progress（供下次计算速率）。 */
       gclProgress: number;
     };
+    /**
+     * Empire Economy 瘦快照（A2 后半，empire-economy 每 100 tick 写入）：
+     * 帝国级经济聚合指标——总能量/生产/净流/储备/健康度/扩张就绪度/预算。
+     * 只存 Summary，不复制完整 RoomState（MEMORY_ARCHITECTURE §4）。
+     */
+    empireEconomy?: {
+      t: number;
+      te: number;
+      tp: number;
+      nf: number;
+      tr: number;
+      rb: number;
+      ef: number;
+      h: number;
+      dr: number;
+      sr: number;
+      im: number;
+      er: number;
+      sm: number;
+      eb: number;
+      fb: number;
+      rr: number;
+    };
   }
 
   /** 参数自调优的持久化状态。 */

@@ -4,7 +4,20 @@
  * Demand 瞬时不持久化（STATE_OWNERSHIP §1.4）：每 tick 由 logistics 系统重导出，
  * 确定性 key 幂等重建即天然去重；跨 tick 连续性由 key 注册表（firstSeen）+ 执行者
  * 租约承载。认领即 Task（六态归执行层契约）。禁全量重匹配/全局最优（红线 1）。
+ *
+ * A2 后半扩展：Request Scope Model（DATA_FLOW §2 Demand 语义）。
+ * scope 为可选字段——缺省 = "room"，不破坏现有 key 语义与幂等合并。
  */
+
+/**
+ * 请求归属域（A2 后半·步 11：Request Scope Model）。
+ *
+ * - room：房内请求（现有行为——由本房 logistics 系统生成并满足）
+ * - empire：帝国级请求（跨房调拨候选——由 Empire Resource Imbalance 检测产出，
+ *   A2 后半只生成候选不执行运输；A3 阶段由 logistics 系统消费）
+ * - operation：操作级请求（未来扩展——远矿/军事行动的物流需求）
+ */
+export type RequestScope = "room" | "empire" | "operation";
 
 /** 搬运请求五字段合同化（LOGISTICS §2.1-2：资源/数量/位置/优先级/TTL）。 */
 export interface TransportRequest {
@@ -16,6 +29,10 @@ export interface TransportRequest {
   sourceId?: string;
   pos?: { x: number; y: number };
   priority: 0 | 1 | 2 | 3;
+  /** 请求归属域（A2 后半扩展）。缺省 = "room"，不破坏现有 key 语义。 */
+  scope?: RequestScope;
+  /** 帝国级请求的目标房（scope="empire" 时由 Imbalance 检测填充）。 */
+  targetRoom?: string;
 }
 
 /** 供给侧登记项（「此处有多少可取」）。available 由调用方按库存给出。 */

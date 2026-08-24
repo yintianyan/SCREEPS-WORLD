@@ -23,6 +23,7 @@ import { constructionManagerSystem } from "./systems/construction-manager";
 import { economySystem } from "./systems/economy";
 import { defensePlannerSystem } from "./systems/defense-planner";
 import { empireStrategySystem } from "./systems/empire-strategy";
+import { empireEconomySystem } from "./systems/empire-economy";
 import { expansionManagerSystem } from "./systems/expansion-manager";
 import { factoryManagerSystem } from "./systems/factory-manager";
 import { powerCreepManagerSystem } from "./systems/power-creep-manager";
@@ -64,6 +65,8 @@ export const registry = new Registry()
   .registerSystem(towerDefenseSystem)
   // P1：帝国姿态（先于战术消费者裁决扩张/收缩/备战）
   .registerSystem(empireStrategySystem)
+  // P1：帝国经济聚合（低频 100t——Empire Resource View / Health / Budget / Readiness）
+  .registerSystem(empireEconomySystem)
   // P0：物流请求池（搬运 Demand 一等来源；先于 assignment-service 合并进任务槽）
   .registerSystem(logisticsSystem)
   // P1：任务分配（先于 P1 角色）
