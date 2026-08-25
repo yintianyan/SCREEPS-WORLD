@@ -205,3 +205,45 @@ export {
   validatePrediction,
   validateRingBuffer,
 } from "./prediction";
+
+// ── A6.3.2 Prediction Models & Evidence & Resolution ──
+export type {
+  EvidenceBuilderInput,
+  EvidenceTraceResult,
+  PredictionResolution,
+  PredictionVerificationInput,
+  PredictionVerificationResult,
+  BatchResolutionResult,
+  EnergyShortageStatus,
+  EnergyShortageInput,
+  SpawnStarvationStatus,
+  SpawnStarvationInput,
+} from "./prediction";
+
+export {
+  timeSeriesSourceRef,
+  experienceSourceRef,
+  metricSourceRef,
+  buildPredictionEvidenceFromInput,
+  tracePredictionEvidence,
+  validatePredictionEvidence,
+  FULFILLMENT_DEVIATION_THRESHOLD,
+  INVALIDATION_DEVIATION_THRESHOLD,
+  verifyPrediction,
+  resolvePredictionStatus,
+  batchResolvePredictions,
+  ENERGY_SHORTAGE_MODEL_VERSION,
+  DEFAULT_ENERGY_HORIZON,
+  SHORTAGE_IMMINENT_TICKS,
+  ENERGY_MIN_SAMPLES,
+  ENERGY_SUFFICIENT_SAMPLES,
+  predictEnergyShortage,
+  analyzeEnergyShortage,
+  SPAWN_STARVATION_MODEL_VERSION,
+  DEFAULT_SPAWN_HORIZON,
+  STARVATION_IMMINENT_TICKS,
+  SPAWN_MIN_SAMPLES,
+  SPAWN_SUFFICIENT_SAMPLES,
+  predictSpawnStarvation,
+  analyzeSpawnStarvation,
+} from "./prediction";
