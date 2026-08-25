@@ -129,6 +129,40 @@ export const logisticsPlannerSystem: System = {
       }
     }
 
+    // 1b-A5.4.1. 战术补给需求注入：从 globalCache.tacticalSupplyDemands 提取
+    //   Tactical Runtime 产出的 energy 补给需求，
+    //   适配为 DemandNode 注入物流规划，使战术物资进入物流网络。
+    const tacG = globalCache() as ReturnType<typeof globalCache> & {
+      tacticalSupplyDemands?: Array<{
+        squadId: string;
+        operationId: string;
+        resource: string;
+        amount: number;
+        targetRoom: string;
+        priority: 0 | 1 | 2 | 3;
+        tick: number;
+        reason: string;
+      }>;
+    };
+    const tacSupplies = tacG.tacticalSupplyDemands;
+    if (tacSupplies && tacSupplies.length > 0) {
+      for (const td of tacSupplies) {
+        if (td.amount <= 0) continue;
+        deficits.push({
+          room: td.targetRoom,
+          resource: td.resource as "energy",
+          requested: td.amount,
+          priority: td.priority as OperationPriority,
+          deadline: ctx.tick + 2000,
+          criticality: "high" as const,
+          fulfilled: 0,
+          remaining: td.amount,
+          firstSeen: td.tick,
+          timestamp: td.tick,
+        });
+      }
+    }
+
     // 1c. 收集运力规划输入
     const capacityInputs = collectCapacityInputs(snapshots, ctx.tick);
 

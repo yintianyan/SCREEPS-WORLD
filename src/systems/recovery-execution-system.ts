@@ -55,6 +55,7 @@ import {
 import type { FailureNode } from "../domain/strategy/failure-propagation";
 import { mapAbortSignalsToRecoveryActions, type WarAbortSignal } from "../domain/military/abort-recovery";
 import { recordEvent, EventKind } from "../kernel/event-log";
+import type { TacticalAbortSignal } from "../domain/tactical";
 
 /** 上次消费 warAbortSignals 的 tick（防止同一信号重复消费）。 */
 let lastConsumedAbortTick = -1;
@@ -78,7 +79,8 @@ export const recoveryExecutionSystem: System = {
     // 同一 sponsor+reason 的 action 由 recoveryIdempotencyKey 去重。
     const empireActions = g.recoveryActions ?? [];
     const warActions = consumeWarAbortSignals(g, tick);
-    const actions = [...empireActions, ...warActions];
+    const tacticalActions = consumeTacticalAbortSignals(g, tick);
+    const actions = [...empireActions, ...warActions, ...tacticalActions];
     if (actions.length === 0) {
       // 无 Recovery Action — 仍然需要做 Verification（检查已提交的 Action）
       verifyPendingActions(g, ctx);
@@ -1030,6 +1032,73 @@ function consumeWarAbortSignals(
 
   // 消费后清除信号（防止下一 tick 重复消费）
   g.warAbortSignals = undefined;
+
+  return actions;
+}
+
+// ─── A5.4.1: Tactical Abort Signal 消费 ──────────────────
+
+/**
+ * 消费 globalCache.tacticalAbortSignals，转换为 WarAbortSignal 格式后走同一管线。
+ *
+ * Tactical Runtime System 将 TacticalAbortSignal 写入 globalCache.tacticalAbortSignals，
+ * 本函数负责将其桥接到 warAbortSignals 管线（复用 mapAbortSignalsToRecoveryActions）。
+ *
+ * 边界：
+ *   - 只读 tacticalAbortSignals（Tactical Runtime 写入的公开信号）
+ *   - 转换为 WarAbortSignal 格式后复用既有管线
+ *   - 幂等性：通过 signalId 去重
+ */
+function consumeTacticalAbortSignals(
+  g: ReturnType<typeof globalCache> & { tacticalAbortSignals?: TacticalAbortSignal[] },
+  tick: number,
+): RecoveryAction[] {
+  const signals = g.tacticalAbortSignals;
+  if (!signals || signals.length === 0) return [];
+
+  const consumed = new Set<string>();
+  const warSignals: WarAbortSignal[] = [];
+
+  for (const sig of signals) {
+    if (consumed.has(sig.signalId)) continue;
+    consumed.add(sig.signalId);
+
+    // TacticalAbortReason → WarAbortSignal.reason 映射
+    const reasonMap: Record<string, string> = {
+      SQUAD_BROKEN: "ATTRITION",
+      HEALER_LOST: "ATTRITION",
+      ENEMY_CAPABILITY_SURGE: "ATTRITION",
+      INTEL_STALE: "PLAN_TIMEOUT",
+      LOGISTICS_FAILURE: "ATTRITION",
+      CASUALTY_EXCEEDED: "ATTRITION",
+      OBJECTIVE_UNACHIEVABLE: "NO_TARGET",
+      AUTHORIZATION_REVOKED: "POSTURE",
+    };
+
+    warSignals.push({
+      tick: sig.tick,
+      reason: reasonMap[sig.reason] ?? "ATTRITION",
+      targetRoom: sig.operationId.replace("war-", ""),
+      sponsor: "",
+      spawned: 0,
+      outcome: "unknown",
+      operationId: sig.operationId,
+    });
+  }
+
+  // 消费后清除
+  g.tacticalAbortSignals = [];
+
+  if (warSignals.length === 0) return [];
+
+  const actions = mapAbortSignalsToRecoveryActions(warSignals);
+
+  if (actions.length > 0) {
+    console.log(
+      `[${tick}] recovery: TACTICAL_ABORT consumed` +
+      ` count=${warSignals.length} → actions=${actions.length}`,
+    );
+  }
 
   return actions;
 }

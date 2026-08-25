@@ -45,6 +45,7 @@ import { recoveryExecutionSystem } from "./systems/recovery-execution-system";
 import { decisionTraceSystem } from "./systems/decision-trace-system";
 import { warPlannerSystem } from "./systems/war-planner";
 import { warPlanningSystem } from "./systems/war-planning-system";
+import { tacticalRuntimeSystem } from "./systems/tactical-runtime-system";
 import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
@@ -114,6 +115,11 @@ export const registry = new Registry()
   .registerSystem(warPlanningSystem)
   // P2：战争执行（war 姿态才选目标推 attacker；非 war 收摊；消费 war-planning 产出）
   .registerSystem(warPlannerSystem)
+  // P2：战术运行时（A5.4.1 — interval=10t，消费 war-planner 的 warPlan 产出，
+  //   构建 TacticalSnapshot 调用 domain 纯函数 evaluateTacticalAction，
+  //   将 TacticalDecision 映射为 RoleActionIntent 写入 globalCache 供角色消费；
+  //   在 war-planner 之后运行，不执行 Game action）
+  .registerSystem(tacticalRuntimeSystem)
   // P3：布局规划（低频）
   .registerSystem(layoutPlannerSystem)
   // P3：防御规划（独立于核心布局）

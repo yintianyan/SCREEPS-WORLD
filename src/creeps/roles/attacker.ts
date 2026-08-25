@@ -17,6 +17,27 @@ import { getHostilesCached } from "../support/targeting";
 import { globalCache } from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
 
+/** A5.4.1 战术指令接口（与 domain/tactical/role-intent.ts RoleActionIntent 对齐）。 */
+interface TacticalIntent {
+  moveDirective: string;
+  combatDirective: string;
+  targetId?: string;
+}
+
+/**
+ * A5.4.1 从 globalCache 读取当前 creep 的战术指令。
+ *
+ * 角色层不导入 systems 层（R3 架构守卫），直接从 globalCache 读取
+ * tactical-runtime-system 写入的 RoleActionIntent。
+ * 无指令时返回 null → 角色回退到 Legacy 行为。
+ */
+function readTacticalIntent(creepName: string): TacticalIntent | null {
+  const g = globalCache() as Record<string, unknown> & {
+    tacticalRoleIntents?: Map<string, TacticalIntent>;
+  };
+  return g.tacticalRoleIntents?.get(creepName) ?? null;
+}
+
 /** 低血撤退：标记回收 → role-runner 下 tick 短路 idle → spawn-manager recyclePass 归航。 */
 export function markRetreat(creep: Creep): boolean {
   if (creep.hits < creep.hitsMax * CONFIG.war.retreatRatio) {
@@ -71,6 +92,50 @@ function getPowerBankCached(room: Room): StructurePowerBank | undefined {
  * FIND_STRUCTURES 中立结构（非 hostile），attackEnemies/attackStructures
  * 的 hostile 链打不到。编队 healer 经 buddy 机制自动跟随贴身覆盖 PB 反击。
  */
+/**
+ * A5.4.1 战术指令消费 — 优先消费 Tactical Runtime 产出的 RoleActionIntent。
+ *
+ * 当 tactical-runtime-system 产出指令时，attacker 按指令执行移动/攻击/撤退，
+ * 而非走 Legacy 的 findClosestByRange 逻辑。指令不覆盖 hold 钩子（波次集结
+ * 仍在 attackerHold 中裁决）。
+ *
+ * 边界：无指令时返回 undefined → 回退到 Legacy 候选（向后兼容）。
+ *      指令的 targetId 可能在视野外 → resolve 时检查可见性。
+ */
+export function attackByTacticalIntent(): ActionCandidate<Creep | AnyStructure> {
+  return {
+    name: "attacker:tactical-intent",
+    resolve: (ac) => {
+      if (markRetreat(ac.creep)) return undefined;
+      const intent = readTacticalIntent(ac.creep.name);
+      if (!intent) return undefined; // 无战术指令 → 回退 Legacy
+      // HOLD_POSITION / NO_MOVE → 不消费攻击候选（移动由 traffic-manager 处理）
+      if (intent.moveDirective === "HOLD_POSITION" || intent.moveDirective === "NO_MOVE") {
+        // 但如果有战斗指令，仍然攻击
+      }
+      // RETREAT → 标记回收让 spawn-manager 处理撤退
+      if (intent.moveDirective === "RETREAT_TO_SAFE" || intent.moveDirective === "BREAK_CONTACT") {
+        ac.creep.memory.recycle = true;
+        return undefined;
+      }
+      // 有战斗指令 + targetId → 查找目标
+      if (intent.combatDirective !== "NO_COMBAT" && intent.targetId) {
+        const target = Game.getObjectById(intent.targetId as Id<Creep | AnyStructure>);
+        if (target) return target;
+        // targetId 无效 → 回退 Legacy
+      }
+      // 有移动指令但无战斗 → 不消费候选，让移动由 traffic-manager 处理
+      if (intent.combatDirective === "NO_COMBAT") return undefined;
+      // 回退 Legacy
+      return undefined;
+    },
+    execute: (ac, target) => {
+      const result = ac.creep.attack(target);
+      if (result === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, target);
+    },
+  };
+}
+
 export function attackPowerBank(): ActionCandidate<StructurePowerBank> {
   return {
     name: "attacker:attack-power-bank",
@@ -164,8 +229,9 @@ export function attackerHold(creep: Creep, ctx: TickContext): boolean {
 const policy: RolePolicy = {
   combat: true,
   hold: attackerHold,
-  acquire: [attackPowerBank(), attackEnemies(), attackStructures()],
-  work: [attackPowerBank(), attackEnemies(), attackStructures()],
+  // A5.4.1：tactical-intent 优先于 Legacy 候选；无指令时回退到 PB → enemies → structures
+  acquire: [attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures()],
+  work: [attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures()],
 };
 
 export const attackerRole = defineRole("attacker", 2 as Priority, policy);
