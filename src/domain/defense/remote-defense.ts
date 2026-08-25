@@ -14,6 +14,7 @@
  */
 
 import type { ThreatAssessment, ThreatLevel } from "./threat-assessment";
+import type { TerrainContext } from "./terrain-context";
 
 // ═══════════════════════════════════════════════════════════
 // §1. 类型定义
@@ -93,6 +94,8 @@ export interface RemoteDefenseInput {
   empireContext: EmpireContext;
   logisticsContext: LogisticsContext;
   militaryContext: MilitaryContext;
+  /** A5.2：地形上下文（可选，用于 Retreat/Escort/Reinforcement 难度评估）。 */
+  terrainContext?: TerrainContext;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -264,10 +267,22 @@ export interface RemoteDefenseDecision {
  *    → 正常运营
  */
 export function decideRemoteDefenseAction(input: RemoteDefenseInput): RemoteDefenseDecision {
-  const { threat, remoteOp, empireContext, militaryContext } = input;
+  const { threat, remoteOp, empireContext, militaryContext, terrainContext } = input;
   const ev = evaluateRemoteExpectedValue(input);
 
   const rejected: { action: RemoteDefenseAction; reason: string }[] = [];
+
+  // A5.2: TerrainContext 影响 — retreatQuality 调整撤退安全性判定
+  // POOR/CRITICAL retreat → 撤退更危险，可能需要 ESCORT 而非 RETREAT
+  // VERY_GOOD/GOOD retreat → 撤退更安全，更倾向 RETREAT
+  const retreatQuality = terrainContext?.retreatQuality ?? "UNKNOWN";
+  const terrainRetreatBonus = retreatQuality === "VERY_GOOD" ? 1
+    : retreatQuality === "GOOD" ? 0
+      : retreatQuality === "POOR" ? -1
+        : retreatQuality === "CRITICAL" ? -2
+          : 0; // UNKNOWN
+  // 撤退路径有效距离 = pathCost + terrainRetreatBonus（越好越短）
+  const effectivePathCost = Math.max(0, (remoteOp.pathCost ?? 1) - terrainRetreatBonus);
 
   // 威胁 NONE → CONTINUE
   if (threat.level === "NONE") {
@@ -310,7 +325,8 @@ export function decideRemoteDefenseAction(input: RemoteDefenseInput): RemoteDefe
   // HIGH/CRITICAL + 净价值为负 → RETREAT
   if ((threat.level === "HIGH" || threat.level === "CRITICAL") && ev.netValue < 0) {
     // 检查撤退安全性：如果 creep 距离太远可能无法安全返回
-    const canRetreatSafely = (remoteOp.pathCost ?? 1) <= 3; // 3 房以内可安全返回
+    // A5.2: TerrainContext.retreatQuality 影响撤退安全性
+    const canRetreatSafely = effectivePathCost <= 3; // 3 房以内可安全返回
     if (canRetreatSafely) {
       rejected.push({ action: "ESCORT", reason: `净价值${ev.netValue}<0，护航不划算` });
       rejected.push({ action: "CONTINUE", reason: `威胁${threat.level}继续运营风险过高` });
@@ -322,6 +338,17 @@ export function decideRemoteDefenseAction(input: RemoteDefenseInput): RemoteDefe
       };
     } else {
       // 距离太远无法安全返回 → ABORT
+      // A5.2: 但如果 retreatQuality 好，可能仍然可以撤退
+      if (retreatQuality === "VERY_GOOD" || retreatQuality === "GOOD") {
+        rejected.push({ action: "ABORT", reason: `retreatQuality=${retreatQuality}，仍有安全撤退可能` });
+        rejected.push({ action: "CONTINUE", reason: `威胁${threat.level}继续运营风险过高` });
+        return {
+          action: "RETREAT",
+          reason: `威胁${threat.level} + pathCost=${remoteOp.pathCost}但retreatQuality=${retreatQuality} → 仍可安全撤退`,
+          expectedValue: ev,
+          rejectedAlternatives: rejected,
+        };
+      }
       rejected.push({ action: "RETREAT", reason: `pathCost=${remoteOp.pathCost} > 3，无法安全撤退` });
       return {
         action: "ABORT",

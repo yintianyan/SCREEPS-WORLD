@@ -201,6 +201,33 @@ export interface DecisionEvidence {
     bottleneck: string;
     recovering: boolean;
   };
+  /** A5.2: 地形证据。 */
+  readonly terrain?: {
+    terrainType: string;
+    walkability: string;
+    retreatQuality: string;
+    mobilityModifier: number;
+    towerCoverage: string;
+    rampartCoverage: string;
+    chokepointCount: number;
+  };
+  /** A5.2: 情报证据。 */
+  readonly intel?: {
+    hasIntel: boolean;
+    aggregatedConfidence: string;
+    threatIndex: number;
+    hasConflict: boolean;
+    evidenceCount: number;
+  };
+  /** A5.2: 多维度置信度。 */
+  readonly confidence?: {
+    fact: number;
+    combat: number;
+    intent: number;
+    terrain: number;
+    intel: number;
+    overall: number;
+  };
 }
 
 // ═══════════════════════════════════════════════════════════

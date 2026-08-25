@@ -864,7 +864,7 @@ describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
     { name: "T2-NPC-Invader", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "Invader" })] }) },
     { name: "T3-Scout", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([{ type: MOVE }, { type: MOVE }], { owner: "enemy" })] }) },
     { name: "T4-Boosted-Attacker", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([{ type: ATTACK, boost: "XUH2O" }, { type: MOVE }], { owner: "enemy" })] }) },
-    { name: "T5-Heal-Stack", type: "threat", input: makeThreatInput({ hostiles: [makeHostile(Array.from({ length: 10 }, () => ({ type: HEAL as BodyPartConstant, boost: "XLHO2" as string })).concat(Array.from({ length: 10 }, () => ({ type: MOVE as BodyPartConstant }))), { owner: "enemy", pos: 48 * 50 + 48 })] }) },
+    { name: "T5-Heal-Stack", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([...Array.from({ length: 10 }, () => ({ type: HEAL as BodyPartConstant, boost: "XLHO2" as string })), ...Array.from({ length: 10 }, () => ({ type: MOVE as BodyPartConstant, boost: undefined as string | undefined }))], { owner: "enemy", pos: 48 * 50 + 48 })] }) },
     { name: "T6-Claim", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([{ type: CLAIM }, { type: MOVE }], { owner: "enemy" })] }) },
     { name: "T7-Full-Assault", type: "threat", input: makeThreatInput({ hostiles: Array.from({ length: 4 }, (_, i) => makeHostile([{ type: TOUGH, boost: "XGHO2" }, { type: ATTACK, boost: "XUH2O" }, { type: MOVE }], { owner: "enemy", pos: (40 + i) * 50 + 40, id: `c${i}` })) }) },
     { name: "T8-Nuke", type: "threat", input: makeThreatInput({ roomContext: makeRoomContext({ incomingNukes: 1 }) }) },

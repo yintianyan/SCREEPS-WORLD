@@ -540,6 +540,30 @@ function collectDefenseDecisions(
           hostileCount: assessment.score.combat > 0 ? Math.ceil(assessment.score.combat / 10) : 0,
           posture: assessment.recommendedPosture,
         },
+        terrain: assessment.terrainEvidence ? {
+          terrainType: assessment.terrainEvidence.terrainType,
+          walkability: assessment.terrainEvidence.retreatQuality, // walkability approximated
+          retreatQuality: assessment.terrainEvidence.retreatQuality,
+          mobilityModifier: assessment.terrainEvidence.mobilityModifier,
+          towerCoverage: assessment.terrainEvidence.towerCoverage,
+          rampartCoverage: "UNKNOWN",
+          chokepointCount: 0,
+        } : undefined,
+        intel: assessment.intelEvidence ? {
+          hasIntel: assessment.intelEvidence.hasIntel,
+          aggregatedConfidence: assessment.intelEvidence.aggregatedConfidence,
+          threatIndex: assessment.intelEvidence.threatIndex,
+          hasConflict: assessment.intelEvidence.hasConflict,
+          evidenceCount: assessment.intelEvidence.evidenceCount,
+        } : undefined,
+        confidence: assessment.multiConfidence ? {
+          fact: assessment.multiConfidence.factConfidence,
+          combat: assessment.multiConfidence.combatConfidence,
+          intent: assessment.multiConfidence.intentConfidence,
+          terrain: assessment.multiConfidence.terrainConfidence,
+          intel: assessment.multiConfidence.intelConfidence,
+          overall: assessment.multiConfidence.overallConfidence,
+        } : undefined,
       };
 
       const isCritical =
