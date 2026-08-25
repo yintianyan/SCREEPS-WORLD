@@ -111,7 +111,22 @@ export const remoteMiningManagerSystem: System = {
       // 现役 op 周期重估：用当前 pathCost + 当前 body 运力重算 netScore/haulerNeed。
       // 一次性快照的反面 —— 开点时勉强达标、后续变差（路况恶化/source 被抢）的
       // 边际 op 若不重估会永续；body 变大后 haulerNeed 也需缩编避免过配。
+      // A4.4 修复 DUPLICATE-003：Plan 存在时，reevaluateActiveOps 降级为 Capacity Signal。
+      // 旧逻辑：reevaluateActiveOps 独立计算 haulerNeed，Plan 只增不减 → 两个决策源冲突。
+      // 修复后：Plan 存在时，reevaluateActiveOps 仍然运行（采集 pathCost/body 变化信号），
+      // 但其 haulerNeed 结果只作为 Plan 的输入参考，不直接覆写。
+      // Plan 的 scope="operation" 请求拥有 Decision Authority（在下方 L295-316 消费）。
+      const planForRemote = globalCache().logisticsPlan?.plan;
+      const planIsActiveForRemote = planForRemote && planForRemote.plannedAt >= ctx.tick - 100;
       reevaluateActiveOps(remoteOps, roomMem, snapshot.roomName, haulerCapacity, ctx.tick);
+
+      // A4.4：如果 Plan 有效，记录 reevaluateActiveOps 的 haulerNeed 信号到 Plan 消费日志。
+      // Plan 消费逻辑（L295-316）会用 Plan 的 haulerNeed 覆写，reevaluateActiveOps 的结果
+      // 作为降级 fallback（Plan 不存在时有效）。
+      if (planIsActiveForRemote) {
+        // Plan 存在 — reevaluateActiveOps 的 haulerNeed 作为 fallback signal。
+        // Plan 消费在 L295-316 中处理，此处不做额外操作。
+      }
 
       // 逐房就绪门（Phase 1b）：帝国姿态放行（newOpsAllowed）之外，本房还须自身经济
       // 成熟才「新开」远矿 — RCL≥roomMinRcl 且 colonyState=normal 且 storage 盈余，
@@ -292,23 +307,29 @@ export const remoteMiningManagerSystem: System = {
         // 作为远矿运力需求的补充信号。如果 Plan 指示某远矿房需要额外运力，
         // 在 evaluateRemoteDemand 已产出的 requests 基础上不删除，只追加（不覆盖）。
         // 这使远矿 hauler 编制不仅基于 container 积压信号，还基于 Plan 的主动规划。
+        // A4.4 修复 DUPLICATE-003：Plan 有效时拥有完整 Decision Authority（可增可减）。
+        // 旧逻辑：Plan 只增不减（if planHaulerNeed > existing），reevaluateActiveOps 的
+        //   缩编决策可能被 Plan 覆写。两个决策源冲突。
+        // 修复后：Plan 有效时，Plan 的 haulerNeed 直接覆写（可增可减）。
+        // Plan 不存在时，reevaluateActiveOps 的 haulerNeed 保持有效（DEGRADED MODE）。
         const logisticsPlan = globalCache().logisticsPlan?.plan;
         if (logisticsPlan && logisticsPlan.plannedAt >= ctx.tick - 100) {
           const planOpReqs = logisticsPlan.requests.filter(
             r => r.scope === "operation" && r.source.room === snapshot.roomName,
           );
           for (const planReq of planOpReqs) {
-            // Plan 指示的远矿目标房需要额外运力
-            // 如果该目标已在 remoteOps 中且 haulerNeed 低于 Plan 指示，不降低现有编制
-            // 只在 Plan 请求量大于现有 haulerNeed 时记录日志（观测用）
+            // Plan 指示的远矿目标房运力需求
             const targetOp = remoteOps[planReq.destination.room];
             if (targetOp && targetOp.state === "active") {
               const planHaulerNeed = Math.ceil(planReq.amount / 1000); // 简化：1000 energy/hauler
-              if (planHaulerNeed > (targetOp.haulerNeed ?? 0)) {
+              // A4.4：Plan 拥有 Decision Authority — 可增可减。
+              if (planHaulerNeed !== (targetOp.haulerNeed ?? 0)) {
+                const oldNeed = targetOp.haulerNeed ?? 0;
                 targetOp.haulerNeed = planHaulerNeed;
+                const direction = planHaulerNeed > oldNeed ? "increase" : "decrease";
                 console.log(
                   `[${ctx.tick}] remote/plan-calibrate: ${snapshot.roomName} → ${planReq.destination.room}` +
-                  ` haulerNeed=${planHaulerNeed} (Plan 指示量=${planReq.amount})`,
+                  ` haulerNeed=${planHaulerNeed} (Plan ${direction} from ${oldNeed}, amount=${planReq.amount})`,
                 );
               }
             }

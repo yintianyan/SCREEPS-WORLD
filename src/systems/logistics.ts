@@ -149,15 +149,48 @@ export const logisticsSystem: System = {
         }
       }
 
-      g.transportPool.rooms[roomName] = finalReqs.map(toTaskEntry);
+      // A4.4 修复 DUPLICATE-002：V1/V2 去重。
+      // 旧问题：V1 和 V2 可能同时为同一个 container 积压生成运输请求，hauler 看到重复任务。
+      // 修复：Plan 存在且有效时，V1 检查 Plan 是否已覆盖该 source，若覆盖则跳过。
+      const plan = globalCache().logisticsPlan?.plan;
+      const planIsActive = plan && plan.plannedAt >= ctx.tick - 100;
+
+      // 收集 Plan V2 已覆盖的 source ID（scope="room" 的请求的 source.id）。
+      const planCoveredSourceIds = new Set<string>();
+      if (planIsActive) {
+        for (const pr of plan.requests) {
+          if (pr.scope === "room" && pr.destination.room === roomName) {
+            if (pr.source.structureId) {
+              planCoveredSourceIds.add(pr.source.structureId);
+            }
+          }
+        }
+      }
+
+      // V1 过滤：如果 Plan V2 已覆盖该 source，跳过 V1 Request。
+      const dedupedReqs = planIsActive && planCoveredSourceIds.size > 0
+        ? finalReqs.filter(r => {
+            // V1 Request 的 key 格式: "collect:room:containerId"
+            // 如果 Plan V2 已覆盖该 containerId，跳过。
+            const parts = r.key.split(":");
+            const containerId = parts[2];
+            if (containerId && planCoveredSourceIds.has(containerId)) {
+              return false; // Plan V2 已覆盖，跳过 V1
+            }
+            return true;
+          })
+        : finalReqs;
+
+      g.transportPool.rooms[roomName] = dedupedReqs.map(toTaskEntry);
 
       // A4.3：合并 logistics-planner 产出的 Plan 中 scope="room" 的请求。
       // Plan 驱动的请求适配为 AssignmentTaskEntry 格式，追加到本房任务槽。
       // scope="empire" 的请求不进 transportPool — 由 agenda-manager carrier 执行。
       // scope="operation" 的请求不进 transportPool — 由远矿 remoteHauler 执行。
-      const plan = globalCache().logisticsPlan?.plan;
-      if (plan && plan.plannedAt === ctx.tick) {
-        // 仅消费本 tick 产出的 Plan（过期 Plan 不合并）。
+      // A4.4 修复 BYPASS-012：与 agenda-manager 步 13.5 同口径——消费最近 100t 内的 Plan。
+      // 旧逻辑 plannedAt === ctx.tick 导致 99% 的 tick V2 不参与房内物流。
+      if (planIsActive) {
+        // 消费最近 100 tick 内产出的 Plan（与 agenda-manager 步 13.5 一致）。
         const planReqs = plan.requests.filter(
           r => r.scope === "room" && r.destination.room === roomName,
         );

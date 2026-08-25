@@ -92,17 +92,26 @@ export const terminalManagerSystem: System = {
     // 替代 CONFIG 中的静态死价格 — 市场通胀/通缩时门禁自动浮动。
     refreshMarketPrices();
 
-    // 0. 帝国能量互济：跨房救助优先于贸易（殖民生存 > 交易收入）。
-    tryEmpireEnergyAid(ctx);
-
-    // 0.5 帝国矿物互济：姐妹房 homeMineral 盈余先于市场买入（省 credits）。
-    tryEmpireMineralAid(ctx);
-
-    // A4.3：查询 Logistics Plan 中由 logistics-planner 产出的跨房请求。
-    // 如果 Plan 中有涉及 terminal 的请求，terminal-manager 作为 Network 计划执行器
-    // 优先执行 Plan 指定的操作。Plan 未覆盖的领域由原有自主决策逻辑 fallback。
+    // A4.4 修复 DUPLICATE-004：Plan 存在时，自主互济降级为 DEGRADED MODE fallback。
+    // 旧逻辑：tryEmpireEnergyAid/tryEmpireMineralAid 先于 Plan 候选执行，
+    // 如果互济已执行 → terminal 冷却 → Plan 驱动的 send 被跳过。
+    // 修复后：Plan 存在且有效时，自主互济不执行（Plan 拥有 Decision Authority）。
+    // Plan 不存在时（非 100t tick），自主互济作为 DEGRADED MODE 执行。
     const logisticsPlan = globalCache().logisticsPlan?.plan;
+    const planIsActive = logisticsPlan && logisticsPlan.plannedAt >= ctx.tick - 100;
     const planRequestRooms = collectPlanTerminalRooms(logisticsPlan);
+
+    if (!planIsActive) {
+      // DEGRADED MODE：Plan 不可用，自主互济作为 fallback。
+      // 0. 帝国能量互济：跨房救助优先于贸易（殖民生存 > 交易收入）。
+      tryEmpireEnergyAid(ctx);
+      // 0.5 帝国矿物互济：姐妹房 homeMineral 盈余先于市场买入（省 credits）。
+      tryEmpireMineralAid(ctx);
+    } else if (planRequestRooms.size > 0) {
+      // Plan 存在且有 terminal 请求 — Plan 拥有 Decision Authority。
+      // 自主互济跳过，由 Plan 驱动的 tryPlanDrivenSend 执行。
+      console.log(`[${ctx.tick}] terminal: Plan active (plannedAt=${logisticsPlan!.plannedAt}), self-aid skipped in favor of Plan-driven send`);
+    }
 
     for (const snapshot of ctx.snapshots()) {
       const terminal = snapshot.terminal;

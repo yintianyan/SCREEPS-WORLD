@@ -50,6 +50,9 @@ import {
 } from "../domain/logistics/logistics-health";
 import {
   createAccounting,
+  recordDelivered,
+  recordLost,
+  summarizeAccounting,
   type TransportAccounting,
 } from "../domain/logistics/transport-accounting";
 import {
@@ -79,6 +82,11 @@ let lastCapacityResult: EmpireCapacityResult | undefined;
 
 /** 房间 → hauler 闲置持续 tick 计数（heap，跨 tick 持续）。 */
 const idleTicksByRoom = new Map<string, number>();
+
+// A4.4 修复 BYPASS-010：跨 tick Transport Accounting 追踪（heap，跨 tick 持久）。
+// key = requestId, value = TransportAccounting。
+// 每 100t 由 logistics-planner 从 Operation 状态同步 delivered/lost。
+const accountingByRequestId = new Map<string, TransportAccounting>();
 
 // ─── 系统定义 ─────────────────────────────────────────────
 
@@ -125,10 +133,19 @@ export const logisticsPlannerSystem: System = {
 
     const plan = planLogistics(plannerInput);
 
-    // ── 3. 收集 Accounting（从现有 Operation 追踪） ──
-    const accounting = collectAccounting(plan);
+    // ── 3. 收集 Accounting ──
+    // A4.4 修复 BYPASS-010：跨 tick Accounting 追踪。
+    // 旧问题：collectAccounting 只从 Plan requests 创建初始 Accounting（delivered/lost=0），
+    //   无跨 tick 累积 → Logistics Health 基于空数据 → deliveryRate/lossRate 不可信。
+    // 修复：
+    //   1. 为 Plan 中的新 requests 创建初始 Accounting
+    //   2. 从 Memory 中的 Operation 状态同步 delivered/lost
+    //   3. 写入 globalCache 供其他系统消费
+    const accounting = collectAccountingWithTracking(plan, ctx.tick);
+    const accountingSummary = summarizeAccounting(accounting);
 
     // ── 4. 计算 Logistics Health ──
+    // A4.4 修复 BYPASS-011：Health 基于真实 Accounting 数据，不再全为 0。
     const avgLatency = computeAvgLatency();
     const health = computeLogisticsHealth(accounting, plan.requests, avgLatency, ctx.tick);
 
@@ -211,6 +228,8 @@ export const logisticsPlannerSystem: System = {
     g.logisticsCapacity = { tick: ctx.tick, result: capacity };
     g.logisticsScaling = { tick: ctx.tick, decisions: Object.fromEntries(scalingDecisions) };
     g.logisticsIdleHaulers = { tick: ctx.tick, names: idleHaulerNames };
+    // A4.4 修复 BYPASS-010：暴露 Accounting 到 globalCache 供 Observability 消费。
+    g.logisticsAccounting = { tick: ctx.tick, summary: accountingSummary, entries: accounting };
 
     // ── 11. 控制台输出（观测用，低频不会刷屏） ──
     if (plan.requests.length > 0 || health.level !== "healthy") {
@@ -219,7 +238,8 @@ export const logisticsPlannerSystem: System = {
         `health=${health.level}(${health.score.toFixed(2)}), ` +
         `delivery=${(health.deliveryRate * 100).toFixed(0)}%, ` +
         `backlog=${health.backlogCount}, ` +
-        `capacity_gap=H${capacity.totalHaulerGap}/C${capacity.totalCarrierGap}`,
+        `capacity_gap=H${capacity.totalHaulerGap}/C${capacity.totalCarrierGap}, ` +
+        `accounting=req=${accountingSummary.totalRequested}/del=${accountingSummary.totalDelivered}/lost=${accountingSummary.totalLost}`,
       );
     }
   },
@@ -374,13 +394,125 @@ function collectThreats(snapshots: readonly RoomSnapshot[]): Map<string, number>
 }
 
 /**
- * 从 Transport Plan 的 requests 构建初始 Accounting。
- * 完整的 Accounting 追踪需要跨 tick 累积（Phase 8 集成）。
+ * A4.4 修复 BYPASS-010：跨 tick Accounting 追踪。
+ *
+ * 逻辑：
+ *   1. 为 Plan 中的新 requests 创建初始 Accounting（如果 requestId 不在缓存中）
+ *   2. 从 Memory 中的 Operation 状态同步 delivered/lost
+ *   3. 清理已完成的 Accounting 条目（防止无限增长）
+ *   4. 返回当前所有活跃 Accounting 条目
  */
-function collectAccounting(plan: TransportPlan): TransportAccounting[] {
-  return plan.requests.map(r =>
-    createAccounting(r.requestId, r.amount),
-  );
+function collectAccountingWithTracking(plan: TransportPlan, tick: number): TransportAccounting[] {
+  // 1. 为新 requests 创建初始 Accounting
+  for (const req of plan.requests) {
+    if (!accountingByRequestId.has(req.requestId)) {
+      accountingByRequestId.set(req.requestId, createAccounting(req.requestId, req.amount));
+    }
+  }
+
+  // 2. 从 Operation 状态同步 delivered/lost
+  syncAccountingFromOperations(tick);
+
+  // 3. 清理已完成的条目（delivered + lost >= requested 且超过 500 tick）
+  cleanupCompletedAccounting(tick);
+
+  // 4. 返回 Plan 中 requests 对应的 Accounting
+  return plan.requests.map(r => accountingByRequestId.get(r.requestId)!).filter(Boolean);
+}
+
+/**
+ * 从 Memory 中的 Operation 状态同步 delivered/lost 到 Accounting。
+ *
+ * Operation 的 deliveredAmount / requestedAmount 对应 Accounting 的 delivered / requested。
+ * Operation 失败（status=failed）→ lost = requestedAmount - deliveredAmount。
+ */
+function syncAccountingFromOperations(tick: number): void {
+  const operations = loadOperations();
+
+  for (const op of operations) {
+    // 只处理 supply 类型的 Operation（跨房调拨）
+    if (op.type !== "supply") continue;
+
+    // 从 Operation 的 sourceRoom/targetRoom 推导 requestId
+    // Plan 的 requestId 格式: `tr:${scope}:${sourceRoom}:${targetRoom}:${resource}:${seq}`
+    // Operation 不直接存储 requestId，用 (source, target, resource) 匹配
+    const matchingReqs = findMatchingRequests(op.sourceRoom, op.targetRoom, op.resource);
+
+    for (const reqId of matchingReqs) {
+      const acc = accountingByRequestId.get(reqId);
+      if (!acc) continue;
+
+      // 同步 delivered
+      if (op.deliveredAmount > acc.delivered) {
+        const delta = op.deliveredAmount - acc.delivered;
+        const updated = recordDelivered(acc, delta);
+        accountingByRequestId.set(reqId, updated);
+      }
+
+      // 同步 lost（Operation 失败时）
+      if (op.status === "failed" || op.status === "cancelled") {
+        const lostAmount = op.requestedAmount - op.deliveredAmount;
+        if (lostAmount > 0) {
+          const current = accountingByRequestId.get(reqId)!;
+          if (lostAmount > current.lost) {
+            const updated = recordLost(current, lostAmount - current.lost);
+            accountingByRequestId.set(reqId, updated);
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * 从 Memory 读取 Operations。
+ */
+function loadOperations(): import("../domain/operation/agenda-item").OperationContext[] {
+  const stored = (global as unknown as { __operations?: import("../domain/operation/agenda-item").OperationContext[] }).__operations;
+  return stored ?? [];
+}
+
+/**
+ * 在 Accounting 缓存中查找与 (source, target, resource) 匹配的 requestId。
+ */
+function findMatchingRequests(sourceRoom: string, targetRoom: string, resource: string): string[] {
+  const result: string[] = [];
+  for (const [reqId] of accountingByRequestId) {
+    // requestId 格式: tr:${scope}:${source}:${target}:${resource}:${seq}
+    const parts = reqId.split(":");
+    if (parts.length >= 5 && parts[2] === sourceRoom && parts[3] === targetRoom && parts[4] === resource) {
+      result.push(reqId);
+    }
+  }
+  return result;
+}
+
+/**
+ * 清理已完成的 Accounting 条目（防止 Map 无限增长）。
+ * 完成条件：delivered + lost >= requested 且超过 500 tick 未更新。
+ */
+function cleanupCompletedAccounting(tick: number): void {
+  // Accounting 不存储 tick，用 globalCache 的 logisticsPlan.tick 作为近似
+  // 清理条件：Plan 中不再包含该 requestId，且 Accounting 的 remaining = 0
+  const currentPlan = globalCache().logisticsPlan?.plan;
+  const currentReqIds = new Set(currentPlan?.requests.map(r => r.requestId) ?? []);
+
+  for (const [reqId, acc] of accountingByRequestId) {
+    // 如果不在当前 Plan 中且已完成/失败，清理
+    if (!currentReqIds.has(reqId) && acc.remaining <= 0) {
+      accountingByRequestId.delete(reqId);
+    }
+  }
+
+  // 安全上限：最多保留 200 条 Accounting（防止异常情况下的无限增长）
+  if (accountingByRequestId.size > 200) {
+    // 删除最早创建的条目（按 requestId 排序，旧的先删）
+    const sorted = [...accountingByRequestId.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    const toRemove = sorted.slice(0, accountingByRequestId.size - 200);
+    for (const [id] of toRemove) {
+      accountingByRequestId.delete(id);
+    }
+  }
 }
 
 /**

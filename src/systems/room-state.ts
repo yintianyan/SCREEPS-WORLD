@@ -270,6 +270,29 @@ export const roomStateSystem: System = {
       } else {
         roomMem.claimSecure = false;
       }
+
+      // A4.6：spawnStarvationCount 派生 — 从真实 spawn/demand/capacity 状态派生。
+      // 检测条件：spawnQueue 有 P0 请求但 energyAvailable < bodyCost(RECOVERY_BODY)
+      // （即有紧急孵化需求但能量不够孵最小 body），或所有 spawn 都在忙碌且队列有 P0。
+      // 每 tick 条件满足则递增，条件不满足则归零。
+      const queue = roomMem.spawnQueue ?? [];
+      const hasP0Request = queue.some(r => r.priority === 0);
+      const allSpawnsBusy = snapshot.spawns.length > 0 && snapshot.spawns.every(s => s.spawning);
+      const energyAvailable = snapshot.energyAvailable;
+      // RECOVERY_BODY = [WORK, CARRY, MOVE] = 200 energy
+      const minSpawnEnergy = 200;
+      const isStarving = hasP0Request && (energyAvailable < minSpawnEnergy || allSpawnsBusy);
+
+      if (isStarving) {
+        const prev = (roomMem as RoomMemory & { spawnStarvationCount?: number }).spawnStarvationCount ?? 0;
+        (roomMem as RoomMemory & { spawnStarvationCount?: number }).spawnStarvationCount = prev + 1;
+      } else {
+        // 条件不满足 → 归零（恢复后重置）
+        const prev = (roomMem as RoomMemory & { spawnStarvationCount?: number }).spawnStarvationCount;
+        if (prev !== undefined && prev > 0) {
+          (roomMem as RoomMemory & { spawnStarvationCount?: number }).spawnStarvationCount = 0;
+        }
+      }
     }
   },
 };

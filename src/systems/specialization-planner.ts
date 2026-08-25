@@ -1,5 +1,5 @@
 /**
- * Specialization Planner System — A4.0/A4.1 系统侧薄壳。
+ * Specialization Planner System — A4.0/A4.1/A4.4 系统侧薄壳。
  *
  * 合同锚点：A4.1 Architecture Audit §3.2（A4.0 纯函数层完整但系统层缺失）。
  * 记忆约束 [[memory:17875714213295541337]]：Remote Mining 必须作为 Empire
@@ -16,6 +16,7 @@
  *   3. REJECTED → 记录原因
  *   4. 定期重估 Active Operations 的经济健康度
  *   5. 过期 Opportunities 清理
+ *   6. A4.4 修复 BYPASS-009：从 networkSnapshot 的 surplus/deficit 对创建 Supply Contract
  *
  *   不做的事：
  *   - 不替代 remote-mining-manager 的执行链
@@ -28,6 +29,7 @@
 
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
+import { globalCache } from "../kernel/global-cache";
 import {
   filterWaitingExecution,
   expireStaleOpportunities,
@@ -59,6 +61,18 @@ import {
   computeRemoteContribution,
   type RemoteContribution,
 } from "../domain/strategy/empire-balance";
+// A4.4 修复 BYPASS-009：Supply Contract 系统层接入。
+import {
+  createActiveSupplyContract,
+  hasActiveContract,
+  filterActiveContracts,
+  filterTerminalContracts,
+  makeContractId,
+  serializeContract,
+  deserializeContract,
+  type SupplyContract,
+  type ContractMemorySnapshot,
+} from "../domain/economy/supply-contract";
 
 /**
  * Specialization Planner System — P1, interval=100。
@@ -118,6 +132,13 @@ export const specializationPlannerSystem: System = {
         updateEconomicHealth(op, assessment.health, ctx.tick);
       }
     }
+
+    // A4.4 修复 BYPASS-009：从 networkSnapshot 的 surplus/deficit 对创建 Supply Contract。
+    // Supply Contract 是 logistics-planner 的 contract → request 链条的输入源。
+    // 旧问题：createSupplyContract() 纯函数完整但从未被系统层调用 →
+    //   Memory.kernel.supplyContracts 永远为空 → Planner 的 contract→request 链路不产出。
+    // 修复：每 100t 从 networkSnapshot 提取 surplus/deficit 对，为每对创建 ACTIVE Contract。
+    maintainSupplyContracts(ctx.tick);
 
     // 4. 写回 Memory
     saveOpportunities(freshOpps);
@@ -223,6 +244,128 @@ function buildHealthInput(
   // A4.1 阶段简化实现——完整实现需要从 flow-accounting 和 economic-accounting 获取数据
   // 暂返回 undefined，等 Phase 5 集成时完善
   return undefined;
+}
+
+// ─── A4.4: Supply Contract 维护 ──────────────────────────
+
+/**
+ * A4.4 修复 BYPASS-009：从 networkSnapshot 的 surplus/deficit 对维护 Supply Contract。
+ *
+ * 逻辑：
+ *   1. 读取 globalCache().networkSnapshot（由 agenda-manager 每 100t 写入）
+ *   2. 对每个 (surplusRoom, deficitRoom, resource) 对：
+ *      - 如果已有非终态 Contract → 跳过（幂等）
+ *      - 否则创建 ACTIVE SupplyContract
+ *   3. 清理终态 Contract（COMPLETED/CANCELLED）
+ *   4. 序列化写入 Memory.kernel.supplyContracts（瘦快照）
+ *
+ * Contract 参数推导：
+ *   - targetRate: deficit.remaining / 100（每 tick 供应量，100t 周期铺平）
+ *   - minimumReserve: surplus.capacity × 0.2（Producer 保留 20% 安全储备）
+ *   - priority: 由 deficit.criticality 推导
+ */
+function maintainSupplyContracts(tick: number): void {
+  const networkSnapshot = globalCache().networkSnapshot;
+  if (!networkSnapshot) return;
+
+  // 读取现有 Contracts（从 Memory 反序列化）
+  const existing = loadContractsFromMemory();
+
+  // 清理终态 Contract
+  const activeContracts = existing.filter(c => !isContractTerminalStatus(c.status));
+
+  // 从 networkSnapshot 提取 surplus/deficit 对
+  const supplyNodes = networkSnapshot.supplyNodes;
+  const demandNodes = networkSnapshot.demandNodes;
+
+  let newContractsCreated = 0;
+
+  for (const supply of supplyNodes) {
+    for (const demand of demandNodes) {
+      // 只匹配同资源类型
+      if (supply.resource !== demand.resource) continue;
+      // 不为同一房创建
+      if (supply.room === demand.room) continue;
+
+      // 幂等检查：已有非终态 Contract → 跳过
+      if (hasActiveContract(activeContracts, supply.room, demand.room, supply.resource)) {
+        continue;
+      }
+
+      // 推导 Contract 参数
+      const targetRate = Math.max(1, Math.ceil(demand.remaining / 100));
+      const minimumReserve = Math.max(5000, Math.floor(supply.capacity * 0.2));
+      const priority = criticalityToPriority(demand.criticality);
+
+      const contract = createActiveSupplyContract(
+        supply.room,
+        demand.room,
+        supply.resource,
+        targetRate,
+        minimumReserve,
+        priority,
+        tick,
+        undefined, // sourceRole — 后续接入 empireRole
+        undefined, // targetRole
+        `network-surplus-deficit-pair`,
+      );
+
+      activeContracts.push(contract);
+      newContractsCreated++;
+    }
+  }
+
+  // 序列化写入 Memory.kernel.supplyContracts
+  saveContractsToMemory(activeContracts, tick);
+
+  if (newContractsCreated > 0) {
+    console.log(
+      `[${tick}] specialization-planner: created ${newContractsCreated} supply contracts ` +
+      `(${activeContracts.length} active total)`,
+    );
+  }
+}
+
+/**
+ * 从 Memory.kernel.supplyContracts 读取并反序列化 Contracts。
+ */
+function loadContractsFromMemory(): SupplyContract[] {
+  if (!Memory.kernel) return [];
+  const stored = (Memory.kernel as { supplyContracts?: ContractMemorySnapshot[] }).supplyContracts;
+  if (!stored || !Array.isArray(stored)) return [];
+  return stored.map(deserializeContract);
+}
+
+/**
+ * 序列化并写入 Memory.kernel.supplyContracts（瘦快照）。
+ */
+function saveContractsToMemory(contracts: SupplyContract[], tick: number): void {
+  if (!Memory.kernel) Memory.kernel = {};
+  // 只保存非终态 Contract（终态的已被清理）
+  const snapshots = contracts
+    .filter(c => !isContractTerminalStatus(c.status))
+    .map(serializeContract);
+  (Memory.kernel as { supplyContracts?: ContractMemorySnapshot[] }).supplyContracts = snapshots;
+}
+
+/**
+ * 判断 Contract 状态是否为终态。
+ */
+function isContractTerminalStatus(status: string): boolean {
+  return status === "completed" || status === "cancelled";
+}
+
+/**
+ * 从 Criticality 推导 OperationPriority。
+ */
+function criticalityToPriority(criticality: string): import("../domain/operation/agenda-item").OperationPriority {
+  switch (criticality) {
+    case "critical": return 0;
+    case "high": return 1;
+    case "normal": return 2;
+    case "low": return 3;
+    default: return 2;
+  }
 }
 
 // ─── 从 Opportunity 创建 Operation ────────────────────
