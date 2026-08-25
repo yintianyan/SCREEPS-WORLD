@@ -310,6 +310,9 @@ export interface GlobalCache {
     transport: number;
     replacement: number;
   };
+  /** A6.1：Experience Collector 缓存（Ring Buffer + seq + processedIds）。
+   * heap 存储 — global reset 丢失可接受（experience 是可观测设施，非持久真相）。 */
+  __experienceCache?: unknown;
   /** A5.3：战争止损信号（war-planner demobilize 时写入）。
    * 供 recovery-execution-system 消费，触发经济恢复动作。
    * A5.3.1 GAP-1 修复：recovery-execution-system 通过纯函数 mapAbortSignalsToRecoveryActions

@@ -43,6 +43,7 @@ import { specializationPlannerSystem } from "./systems/specialization-planner";
 import { empireHealthSystem } from "./systems/empire-health-system";
 import { recoveryExecutionSystem } from "./systems/recovery-execution-system";
 import { decisionTraceSystem } from "./systems/decision-trace-system";
+import { experienceCollectorSystem } from "./systems/intelligence/experience-collector-system";
 import { warPlannerSystem } from "./systems/war-planner";
 import { warPlanningSystem } from "./systems/war-planning-system";
 import { tacticalRuntimeSystem } from "./systems/tactical-runtime-system";
@@ -112,6 +113,10 @@ export const registry = new Registry()
   //   构建 DecisionSnapshot + DecisionRecord 写入 Ring Buffer；不参与决策，
   //   只做可观测性追踪 + Trace GC + Memory Budget 监控）。
   .registerSystem(decisionTraceSystem)
+  // P3：Experience Collector（A6.1 — 低频 100t post 阶段，消费 DecisionTrace Ring Buffer
+  //   中到期的 DecisionRecord，采集 Outcome + Attribution，构建 ExperienceRecord
+  //   写入 heap Ring Buffer。Shadow-Only：不执行 Game API，不修改 Strategy）
+  .registerSystem(experienceCollectorSystem)
   // P2：战争规划（A5.3 — 低频 10t，domain 层纯函数薄壳；在 war-planner 之前运行，
   //   产出 WarPlan 写入 globalCache.warPlanCache + 兼容 Memory.kernel.warPlan。
   //   war-planner 消费 WarPlan 执行 spawn/止损/核验。纯函数不执行 Game action）
