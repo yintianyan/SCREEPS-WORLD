@@ -69,3 +69,69 @@ export {
   attributionHash,
   verifyAttributionDeterminism,
 } from "./attribution";
+
+// ── A6.2 Strategy Evaluation ──
+export type {
+  EvaluationDimension,
+  EvidenceType,
+  EvaluationVerdict,
+  EvaluationWindow,
+  WindowType,
+  DimensionScore as EvaluationDimensionScore,
+  TrendDirection,
+  StrategyScore,
+  EvaluationFinding,
+  RecommendationCandidate,
+  StrategyEvaluation,
+  EvaluationInput,
+  MetricSnapshot,
+  ContextInfo,
+} from "./strategy-evaluation";
+
+export {
+  CANONICAL_EVALUATION_DIMENSIONS,
+  evaluateStrategy,
+  evaluationHash,
+  verifyEvaluationDeterminism,
+} from "./strategy-evaluation";
+
+// ── A6.2 Baseline ──
+export type {
+  BaselineSource,
+  BaselineKey,
+  BaselineValue,
+  Baseline,
+  BaselineComparison,
+  SampleSufficiency,
+  RegimeMismatch,
+} from "./baseline";
+
+export {
+  CONFIG_BASELINE_VALUES,
+  MINIMUM_SAMPLE_SIZES,
+  buildContextSignature,
+  buildBaselineKey,
+  buildBaseline,
+  compareBaseline,
+  evaluateSampleSufficiency,
+  computeBaselineConfidence,
+  detectRegimeMismatch,
+  checkContextCompatibility,
+  extractHistoricalValues,
+  baselineHash,
+  verifyBaselineDeterminism,
+} from "./baseline";
+
+// ── A6.2 Evaluation Evidence ──
+export type {
+  EvaluationEvidence,
+  EvidenceChain,
+  EvidenceChainNode,
+  EvidenceCompleteness,
+} from "./evaluation-evidence";
+
+export {
+  buildEvaluationEvidence,
+  traceEvidence,
+  validateEvidenceCompleteness,
+} from "./evaluation-evidence";
