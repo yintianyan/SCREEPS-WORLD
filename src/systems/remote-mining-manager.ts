@@ -17,6 +17,20 @@ import { classifyThreats } from "../domain/defense/threat";
 import { submitRequest } from "../domain/spawn/queue";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
 import { globalCache } from "../kernel/global-cache";
+import {
+  assessThreat,
+  type HostileSnapshot as ThreatHostileSnapshot,
+  type RoomContext as ThreatRoomContext,
+  type DefenseContext as ThreatDefenseContext,
+  type ThreatAssessment as RemoteThreatAssessment,
+} from "../domain/defense/threat-assessment";
+import {
+  decideRemoteDefenseAction,
+  type RemoteOperationState,
+  type EmpireContext,
+  type LogisticsContext,
+  type MilitaryContext,
+} from "../domain/defense/remote-defense";
 
 export const remoteMiningManagerSystem: System = {
   name: "remote-mining-manager",
@@ -184,6 +198,15 @@ export const remoteMiningManagerSystem: System = {
       // 检测集合空 → 经济孵化恢复 → 新 creep 抵达送死 — 循环送兵。
       // 规则：有视野见威胁 → 写/续期 threatUntil；有视野确认清空 → 清除；
       // 无视野 → 冷却未到期即维持威胁态（宁可少采一轮，不送一批兵）。
+      // A5.1：有视野确认有威胁时，额外调用 decideRemoteDefenseAction() 做结构化决策。
+      // decideRemoteDefenseAction 是纯函数 (O(1))，仅在有威胁时调用，CPU 影响可忽略。
+      // 决策结果写入 globalCache.remoteDefenseDecisions 供 decision-trace 消费。
+      const gRemoteDecisions = globalCache().remoteDefenseDecisions ??= new Map();
+      gRemoteDecisions.clear(); // 每 interval 清空旧决策
+      const posture = Memory.kernel?.strategy?.posture ?? "develop";
+      const cpuTier = Memory.kernel?.capacity?.tier ?? "comfortable";
+      const empireEnergyReserve = collectEmpireEnergyReserve();
+      const activeRemoteCount = countActiveOps(remoteOps);
       for (const [rn, op] of Object.entries(remoteOps)) {
         if (op.state !== "active") continue;
         const observed = rn in remoteThreats ? remoteThreats[rn] : undefined;
@@ -196,6 +219,81 @@ export const remoteMiningManagerSystem: System = {
             remoteThreats[rn] = true; // 失明期间维持威胁态。
           } else {
             op.threatUntil = undefined;
+          }
+        }
+
+        // A5.1：对有视野且确认有威胁的远矿房做结构化防御决策。
+        // 仅在有视野 (observed !== undefined) 且有威胁 (remoteThreats[rn] === true) 时调用。
+        // 无视野时维持现有 threatUntil 逻辑（失明保持），不做决策（信息不足）。
+        if (remoteThreats[rn] === true) {
+          const remoteThreatAssessment = buildRemoteThreatAssessment(
+            rn, snapshot.roomName, ctx.tick, op, roomMem.colonyState ?? "normal",
+          );
+          if (remoteThreatAssessment) {
+            const remoteOpState: RemoteOperationState = {
+              targetRoom: rn,
+              homeRoom: snapshot.roomName,
+              state: op.state as "active" | "paused" | "abandoned",
+              sources: op.sources ?? 1,
+              haulerNeed: op.haulerNeed ?? 1,
+              creepCount: collectRemoteCreeps(snapshot.roomName)
+                .filter(c => c.remoteTarget === rn).length,
+              creepInvestment: estimateCreepInvestment(op, snapshot.energyCapacityAvailable),
+              pathCost: roomMem.intel?.[rn]?.pathCost,
+              threatUntil: op.threatUntil,
+              dangerUntil: op.dangerUntil,
+              createdAt: op.createdAt,
+              lastSeen: op.lastSeen,
+            };
+            const empireContext: EmpireContext = {
+              tick: ctx.tick,
+              posture: posture as "develop" | "expand" | "fortify" | "war",
+              empireEnergyReserve,
+              cpuTier: cpuTier as "abundant" | "comfortable" | "tight" | "constrained",
+              activeRemoteCount,
+              maxRemoteOps: effectiveMaxOperations(
+                snapshot.storage !== undefined,
+                snapshot.spawns.length,
+              ),
+            };
+            const logisticsContext: LogisticsContext = {
+              avgHaulerCommute: roomMem.intel?.[rn]?.pathCost ?? 1,
+              availableHaulers: collectRemoteCreeps(snapshot.roomName)
+                .filter(c => c.role === "remoteHauler").length,
+            };
+            const defenderBody = selectBody("remoteDefender", snapshot.energyCapacityAvailable);
+            const militaryContext: MilitaryContext = {
+              availableDefenders: collectRemoteCreeps(snapshot.roomName)
+                .filter(c => c.role === "remoteDefender").length,
+              defenderSpawnCost: defenderBody.reduce(
+                (sum, p) => sum + BODYPART_COST[p], 0,
+              ),
+              defenderCommuteTicks: (roomMem.intel?.[rn]?.pathCost ?? 1) * 50,
+              atWar: posture === "war",
+            };
+            const decision = decideRemoteDefenseAction({
+              threat: remoteThreatAssessment,
+              remoteOp: remoteOpState,
+              empireContext,
+              logisticsContext,
+              militaryContext,
+            });
+            gRemoteDecisions.set(rn, decision);
+
+            // 根据决策结果更新 op 状态。
+            // ESCORT / CONTINUE → 保持 active（defender 由 evaluateRemoteDemand 生成）。
+            // PAUSE → 维持 threatUntil（已有逻辑），不额外操作。
+            // RETREAT → 标记 creep 回收 + op.state = "paused"。
+            // ABORT → 标记 creep 回收 + op.state = "abandoned"。
+            if (decision.action === "RETREAT" || decision.action === "ABORT") {
+              recycleRemoteCreepsForRoom(snapshot.roomName, rn);
+              op.state = decision.action === "ABORT" ? "abandoned" : "paused";
+              op.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
+              console.log(
+                `[${ctx.tick}] remote/A5.1: ${snapshot.roomName} → ${rn} ` +
+                `${decision.action} (${decision.reason})`,
+              );
+            }
           }
         }
       }
@@ -954,5 +1052,126 @@ export function fulfillContainerRequests(
 
     // 如果本房成功创建，后续房让出 normal 槽位（counters.canCreateNormal 已变 false）。
     if (fulfilled) break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// A5.1 辅助函数 — decideRemoteDefenseAction 集成支持
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * A5.1：为远矿房构建 ThreatAssessment。
+ * 系统层薄壳：从远矿房视野读取 hostile creeps，转换为 HostileSnapshot，
+ * 委托给 assessThreat() 纯函数。无视野时返回 undefined。
+ */
+function buildRemoteThreatAssessment(
+  targetRoom: string,
+  homeRoom: string,
+  tick: number,
+  op: RemoteOp,
+  colonyState: string,
+): RemoteThreatAssessment | undefined {
+  const room = Game.rooms[targetRoom];
+  if (!room) return undefined;
+
+  const hostiles = room.find(FIND_HOSTILE_CREEPS) as Creep[];
+  if (hostiles.length === 0) return undefined;
+
+  // 核心锚点：远矿房无 spawn/controller 归我方，用 source 位置作锚点。
+  const sources = room.find(FIND_SOURCES);
+  const anchor = sources[0];
+  if (!anchor) return undefined;
+
+  const hostileSnapshots: ThreatHostileSnapshot[] = hostiles.map(c => ({
+    id: c.id as string,
+    owner: c.owner?.username ?? "unknown",
+    pos: c.pos.x * 50 + c.pos.y,
+    body: c.body.map(p => ({
+      type: p.type,
+      boost: p.boost as string | undefined,
+      damaged: p.hits <= 0,
+    })),
+    hits: c.hits,
+    hitsMax: c.hitsMax,
+    ticksToLive: c.ticksToLive,
+    room: c.room.name,
+  }));
+
+  const roomContext: ThreatRoomContext = {
+    roomName: targetRoom,
+    corePos: anchor.pos.x * 50 + anchor.pos.y,
+    towerCount: 0, // 远矿房无塔
+    towerEnergyTotal: 0,
+    rampartCoverage: 0,
+    rcl: room.controller?.level ?? 0,
+    safeModeAvailable: 0,
+    safeModeTicks: undefined,
+    hasStorage: false,
+    hasSpawn: false,
+    friendlyCreepCount: 0,
+    sourceCount: sources.length,
+    isRemoteRoom: true,
+    incomingNukes: room.find(FIND_NUKES).length,
+  };
+
+  const defenseContext: ThreatDefenseContext = {
+    colonyState,
+    lastHostileAt: op.lastSeen,
+    prevThreatCount: 0,
+  };
+
+  return assessThreat({
+    tick,
+    hostiles: hostileSnapshots,
+    roomContext,
+    defenseContext,
+    remoteContext: {
+      homeRoom,
+      targetRoom,
+      remoteCreepCount: 0,
+      incomePerTick: (op.sources ?? 1) * 10,
+    },
+  });
+}
+
+/** 估算帝国总能量储备（storage + terminal 能量之和）。 */
+function collectEmpireEnergyReserve(): number {
+  let total = 0;
+  for (const room of Object.values(Game.rooms)) {
+    if (!room.controller?.my) continue;
+    if (room.storage) {
+      total += room.storage.store.getUsedCapacity(RESOURCE_ENERGY);
+    }
+    if (room.terminal) {
+      total += room.terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+    }
+  }
+  return total;
+}
+
+/**
+ * 估算远矿 creep 投资成本（能量）。
+ * 粗估：harvester + hauler + reserver 的 body 成本总和。
+ */
+function estimateCreepInvestment(op: RemoteOp, energyCapacity: number): number {
+  const harvesterBody = selectBody("remoteHarvester", energyCapacity);
+  const haulerBody = selectBody("remoteHauler", energyCapacity);
+  const cost = (body: readonly BodyPartConstant[]): number =>
+    body.reduce((sum, p) => sum + BODYPART_COST[p], 0);
+  const harvesterCost = cost(harvesterBody) * (op.sources ?? 1);
+  const haulerCost = cost(haulerBody) * (op.haulerNeed ?? 1);
+  const reserverCost = 600; // CLAIM body = 600 energy
+  return harvesterCost + haulerCost + reserverCost;
+}
+
+/** 回收指定远矿目标房的所有远矿 creep（RETREAT/ABORT 时调用）。 */
+function recycleRemoteCreepsForRoom(homeRoom: string, targetRoom: string): void {
+  for (const creep of Object.values(Game.creeps)) {
+    if (creep.memory.home !== homeRoom) continue;
+    if (creep.memory.remoteTarget !== targetRoom) continue;
+    if (creep.memory.recycle) continue;
+    // coreClearer 不回收（可能正在拆 InvaderCore，与威胁响应无关）。
+    if (creep.memory.role === "coreClearer") continue;
+    creep.memory.recycle = true;
   }
 }

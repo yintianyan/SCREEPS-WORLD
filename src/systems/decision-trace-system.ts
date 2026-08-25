@@ -49,6 +49,8 @@ import {
   makeDecisionId,
   buildDecisionChain,
 } from "../domain/strategy/decision-trace";
+import type { ThreatAssessment, ThreatLevel, ThreatIntent } from "../domain/defense/threat-assessment";
+import type { RemoteDefenseDecision, RemoteDefenseAction } from "../domain/defense/remote-defense";
 
 // ─── globalCache 字段类型 ──────────────────────────────────
 
@@ -87,6 +89,7 @@ export const decisionTraceSystem: System = {
     collectLogisticsDecisions(ctx, cache, tick);
     collectRecoveryDecisions(ctx, cache, tick);
     collectSpawnDecisions(ctx, cache, tick);
+    collectDefenseDecisions(ctx, cache, tick);
 
     // ── 3. Trace GC ──
     gcTrace(cache.ringBuffer, tick);
@@ -454,6 +457,205 @@ function collectSpawnDecisions(
   };
 
   pushRecord(cache.ringBuffer, record);
+}
+
+/**
+ * 从 A5.1 威胁评估 + 远矿防御决策构建 DecisionRecord。
+ *
+ * 采集 globalCache.threatAssessments（room-state 每 tick 写入）和
+ * globalCache.remoteDefenseDecisions（remote-mining-manager 按需写入），
+ * 将军事防御决策接入 Decision Trace 追踪链。
+ *
+ * 记录规则：
+ * - 威胁级别 ≥ MEDIUM 或意图 ∈ {SIEGE, FULL_ASSAULT, NUCLEAR} → 记录
+ * - 远矿防御决策 ≠ CONTINUE → 记录
+ * - 威胁置信度 = fact 且级别 ≥ HIGH → severity = CRITICAL
+ */
+function collectDefenseDecisions(
+  ctx: TickContext,
+  cache: DecisionTraceCache,
+  tick: number,
+): void {
+  const g = globalCache();
+
+  // ── 1. 采集威胁评估 ──
+  const threatMap = g.threatAssessments;
+  if (threatMap && threatMap.size > 0) {
+    for (const [roomName, assessment] of threatMap) {
+      // 只记录有意义的威胁
+      const isImportant =
+        assessment.level === "HIGH" ||
+        assessment.level === "CRITICAL" ||
+        (assessment.level === "MEDIUM" &&
+          (assessment.estimatedIntent.intent === "SIEGE" ||
+           assessment.estimatedIntent.intent === "FULL_ASSAULT" ||
+           assessment.estimatedIntent.intent === "NUCLEAR" ||
+           assessment.estimatedIntent.intent === "CONTROLLER_ATTACK"));
+
+      if (!isImportant) continue;
+
+      const snapshot = buildSnapshot(ctx, tick, roomName, "DEFENSE_PREP");
+      const snapHash = snapshotHash(snapshot);
+      if (!cache.snapshotRegistry.has(snapHash)) {
+        cache.snapshotRegistry.set(snapHash, snapshot);
+      }
+
+      const reasons: DecisionReason[] = [];
+      reasons.push({
+        metric: "threatLevel",
+        actual: assessment.level,
+        threshold: "LOW",
+        severity: assessment.level === "CRITICAL" ? "critical" : "warning",
+        consequence: `房间 ${roomName} 面临 ${assessment.level} 级威胁`,
+      });
+      reasons.push({
+        metric: "threatIntent",
+        actual: assessment.estimatedIntent.intent,
+        threshold: "SCOUTING",
+        severity: assessment.estimatedIntent.intent === "NUCLEAR" ? "critical" : "warning",
+        consequence: `意图推断: ${assessment.estimatedIntent.evidence.join("; ")}`,
+      });
+      if (assessment.estimatedPower.boosted) {
+        reasons.push({
+          metric: "enemyBoosted",
+          actual: `T${assessment.estimatedPower.maxBoostTier}`,
+          threshold: 0,
+          severity: "warning",
+          consequence: `敌方使用 T${assessment.estimatedPower.maxBoostTier} boost`,
+        });
+      }
+      if (assessment.timeToImpact !== Infinity && assessment.timeToImpact < 50) {
+        reasons.push({
+          metric: "timeToImpact",
+          actual: assessment.timeToImpact,
+          threshold: 50,
+          severity: "critical",
+          consequence: `预计 ${assessment.timeToImpact} tick 后到达核心区`,
+        });
+      }
+
+      const selectedAction = `THREAT_${assessment.level}_${assessment.estimatedIntent.intent}_${roomName}`;
+      const evidence: DecisionEvidence = {
+        threat: {
+          hostileCount: assessment.score.combat > 0 ? Math.ceil(assessment.score.combat / 10) : 0,
+          posture: assessment.recommendedPosture,
+        },
+      };
+
+      const isCritical =
+        assessment.level === "CRITICAL" ||
+        assessment.estimatedIntent.intent === "NUCLEAR" ||
+        (assessment.confidence === "fact" && assessment.level === "HIGH");
+
+      const dHash = decisionHash(selectedAction, reasons, evidence, []);
+      const decisionId = makeDecisionId(tick, ++cache.seq);
+      const record: DecisionRecord = {
+        decisionId,
+        tick,
+        category: "DEFENSE_PREP",
+        actor: "threat-assessment",
+        scope: roomName,
+        inputSnapshotHash: snapHash,
+        reasons,
+        evidence,
+        selectedAction,
+        rejectedAlternatives: [],
+        expectedOutcome: `姿态调整为 ${assessment.recommendedPosture}，防御系统响应`,
+        correlationId: makeCorrelationId(decisionId, tick),
+        severity: isCritical ? "CRITICAL" : "IMPORTANT",
+        decisionHash: dHash,
+        createdAt: tick,
+        lifecycle: "ACTIVE",
+      };
+
+      pushRecord(cache.ringBuffer, record);
+    }
+  }
+
+  // ── 2. 采集远矿防御决策 ──
+  const remoteDecisions = g.remoteDefenseDecisions;
+  if (remoteDecisions && remoteDecisions.size > 0) {
+    for (const [targetRoom, decision] of remoteDecisions) {
+      // 只记录非 CONTINUE 的决策
+      if (decision.action === "CONTINUE") continue;
+
+      const snapshot = buildSnapshot(ctx, tick, targetRoom, "REMOTE");
+      const snapHash = snapshotHash(snapshot);
+      if (!cache.snapshotRegistry.has(snapHash)) {
+        cache.snapshotRegistry.set(snapHash, snapshot);
+      }
+
+      const reasons: DecisionReason[] = [];
+      reasons.push({
+        metric: "remoteDefenseAction",
+        actual: decision.action,
+        threshold: "CONTINUE",
+        severity: decision.action === "ABORT" ? "critical" : "warning",
+        consequence: decision.reason,
+      });
+      if (decision.expectedValue.netValue < 0) {
+        reasons.push({
+          metric: "remoteNetValue",
+          actual: decision.expectedValue.netValue,
+          threshold: 0,
+          severity: "warning",
+          consequence: `远矿净价值为负，继续运营不划算`,
+        });
+      }
+      if (decision.escortDemand) {
+        reasons.push({
+          metric: "escortDemand",
+          actual: `${decision.escortDemand.count} defenders`,
+          threshold: 0,
+          severity: "info",
+          consequence: `护航需求: ${decision.escortDemand.count} defender, 成本 ${decision.escortDemand.cost}`,
+        });
+      }
+
+      const selectedAction = `REMOTE_DEFENSE_${decision.action}_${targetRoom}`;
+      const evidence: DecisionEvidence = {
+        threat: {
+          hostileCount: 0,
+          posture: decision.action,
+        },
+      };
+
+      const rejected: RejectedAlternative[] = decision.rejectedAlternatives.map(alt => ({
+        action: `REMOTE_DEFENSE_${alt.action}_${targetRoom}`,
+        reason: alt.reason,
+      }));
+
+      const isCritical = decision.action === "ABORT";
+      const dHash = decisionHash(selectedAction, reasons, evidence, rejected);
+      const decisionId = makeDecisionId(tick, ++cache.seq);
+      const record: DecisionRecord = {
+        decisionId,
+        tick,
+        category: "REMOTE",
+        actor: "remote-defense",
+        scope: targetRoom,
+        inputSnapshotHash: snapHash,
+        reasons,
+        evidence,
+        selectedAction,
+        rejectedAlternatives: rejected,
+        expectedOutcome: decision.action === "ABORT"
+          ? `远矿车道 ${targetRoom} 放弃`
+          : decision.action === "RETREAT"
+            ? `远矿 creep 从 ${targetRoom} 撤退`
+            : decision.action === "ESCORT"
+              ? `defender 护航 ${targetRoom}`
+              : `远矿 ${targetRoom} 暂停后恢复`,
+        correlationId: makeCorrelationId(decisionId, tick),
+        severity: isCritical ? "IMPORTANT" : "NORMAL",
+        decisionHash: dHash,
+        createdAt: tick,
+        lifecycle: "ACTIVE",
+      };
+
+      pushRecord(cache.ringBuffer, record);
+    }
+  }
 }
 
 // ─── Snapshot 构建器（从 Runtime State 采集）──────────────

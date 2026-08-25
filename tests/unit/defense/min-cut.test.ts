@@ -192,11 +192,15 @@ describe("min-cut-defense — 性能", () => {
       { x: 25, y: 0 }, { x: 25, y: 49 },
     ];
 
+    // 预热：首次调用包含 V8 JIT 编译开销（可达 ~50ms），
+    // 实际算法计算仅 ~5ms。预热后测量真实计算性能。
+    computeMinCutDefense(noWalls, core, exits, 30);
+
     const start = performance.now();
     const result = computeMinCutDefense(noWalls, core, exits, 30);
     const elapsed = performance.now() - start;
 
-    // 应该在 50ms 内完成（实际 ~1-5ms）
+    // 预热后在 50ms 内完成（实际 ~1-5ms，无 JIT 开销）
     expect(elapsed).toBeLessThan(50);
     // 结果有效（无论 complete 与否）
     expect(result.cutSize).toBeGreaterThanOrEqual(0);

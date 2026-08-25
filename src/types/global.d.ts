@@ -274,6 +274,18 @@ declare global {
      * 由 remote-mining-manager 每 10 tick 评估/更新。
      */
     remoteOps?: Record<string, RemoteOp>;
+    /**
+     * A5.1：防御状态标记（recovery-execution-system 写入，kernel/consumers 读取）。
+     * heap 语义——不持久化到 RawMemory（global reset 丢失可接受，下 tick 重建）。
+     */
+    defenseState?: {
+      /** safeMode 激活需求（CRITICAL 威胁时标记）。 */
+      safeModeRequested?: boolean;
+      /** 标记 tick。 */
+      safeModeRequestTick?: number;
+      /** 请求原因（含 correlationId 供追踪）。 */
+      safeModeReason?: string;
+    };
   }
 
   interface KernelMemory {

@@ -288,6 +288,14 @@ export interface GlobalCache {
   /** A4.7：Decision Trace 缓存（Ring Buffer + Snapshot Registry + seq）。
    * heap 存储 — global reset 丢失可接受（trace 是调试/可观测设施，非持久真相）。 */
   __decisionTraceCache?: unknown;
+  /** A5.1：per-tick 威胁评估结果（room-state 每 tick 对有威胁的自有房写入）。
+   * key = roomName，value = ThreatAssessment。tower-defense / war-planner 消费。
+   * heap 存储 — global reset 丢失可接受（下 tick 重建）。仅 threatCount > 0 的房有条目。 */
+  threatAssessments?: Map<string, import("../domain/defense/threat-assessment").ThreatAssessment>;
+  /** A5.1：per-tick 远矿防御决策结果（remote-mining-manager 按 interval 写入）。
+   * key = targetRoomName，value = RemoteDefenseDecision。供 decision-trace 消费。
+   * heap 存储 — global reset 丢失可接受。 */
+  remoteDefenseDecisions?: Map<string, import("../domain/defense/remote-defense").RemoteDefenseDecision>;
 }
 
 /**

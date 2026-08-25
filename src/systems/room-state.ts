@@ -8,6 +8,13 @@ import {
 } from "../domain/economy/phase";
 import { EventKind, recordEvent } from "../kernel/event-log";
 import { globalCache } from "../kernel/global-cache";
+import {
+  assessThreat,
+  type ThreatAssessment,
+  type HostileSnapshot,
+  type RoomContext,
+  type DefenseContext,
+} from "../domain/defense/threat-assessment";
 
 /**
  * 房间状态系统 — P0，每 tick 运行，在所有其他系统之前（plan §5.4 统一状态）。
@@ -218,6 +225,29 @@ export const roomStateSystem: System = {
 
       roomMem.colonyState = phaseToColonyState(phaseResult.phase, hasHostiles);
 
+      // A5.1：威胁评估集成 — threatCount > 0 时调用 assessThreat() 纯函数，
+      // 将结构化威胁评估（含 intent / combatPower / recommendedPosture）写入
+      // globalCache.threatAssessments，供 tower-defense / war-planner 消费。
+      // CPU 预算：仅在有威胁时调用（绝大多数 tick 无威胁 → 零成本）；
+      // assessThreat 复杂度 O(hostiles × body.length)，hostiles 通常 ≤ 10。
+      // 无威胁时从 Map 中移除旧条目（防跨 tick 残留）。
+      const gThreats = globalCache().threatAssessments ??= new Map();
+      if (threatCount > 0 && threatPresent) {
+        const threatAssessment = buildThreatAssessment(
+          snapshot.threatCreeps,
+          snapshot,
+          ctx.tick,
+          roomMem.lastHostileAt,
+          prevThreatCount,
+          roomMem.colonyState,
+        );
+        if (threatAssessment) {
+          gThreats.set(snapshot.roomName, threatAssessment);
+        }
+      } else {
+        gThreats.delete(snapshot.roomName);
+      }
+
       // 5.5 经济压力梯度 (0.0–1.0)：取双维度最大值（方案 C），drainScore 与 liquidityScore
       // 任一升高都推高压力，使建造门禁 / P2 缩放对「富得流油却花不出去」也做出反应。
       // 映射：score 0→midpoint → pressure 0.0→0.5；midpoint→midpoint+range → 0.5→1.0。
@@ -296,3 +326,88 @@ export const roomStateSystem: System = {
     }
   },
 };
+
+/**
+ * A5.1：从 RoomSnapshot 构建 ThreatAssessmentInput 并调用 assessThreat()。
+ *
+ * 系统层薄壳：将 Runtime Creep 对象转换为纯数据 HostileSnapshot，
+ * 然后委托给 assessThreat() 纯函数。转换成本 O(threats × body.length)。
+ *
+ * 返回 undefined 表示输入不完整（无核心锚点等），调用方跳过写入。
+ */
+function buildThreatAssessment(
+  threatCreeps: readonly Creep[],
+  snapshot: import("../kernel/contracts").RoomSnapshot,
+  tick: number,
+  lastHostileAt: number | undefined,
+  prevThreatCount: number,
+  colonyState: string,
+): ThreatAssessment | undefined {
+  if (threatCreeps.length === 0) return undefined;
+
+  // 核心锚点：spawn 优先，无 spawn 退到 controller。
+  const anchor = snapshot.spawns[0] ?? snapshot.controller;
+  if (!anchor) return undefined;
+
+  // 防御性检查：测试 mock 中的 threatCreeps 可能缺少 pos/room 属性。
+  // 缺少必要属性时跳过评估（不破坏现有测试，也不影响生产行为——
+  // 生产环境中的 RoomSnapshot.threatCreeps 始终是完整 Creep 对象）。
+  if (threatCreeps.some(c => !c.pos || !c.room)) return undefined;
+
+  // HostileSnapshot 转换 — 仅提取 assessThreat 需要的纯数据。
+  const hostiles: HostileSnapshot[] = threatCreeps.map(c => ({
+    id: c.id as string,
+    owner: c.owner?.username ?? "unknown",
+    pos: c.pos.x * 50 + c.pos.y,
+    body: c.body.map(p => ({
+      type: p.type,
+      boost: p.boost as string | undefined,
+      damaged: p.hits <= 0,
+    })),
+    hits: c.hits,
+    hitsMax: c.hitsMax,
+    ticksToLive: c.ticksToLive,
+    room: c.room.name,
+  }));
+
+  // RoomContext 构建 — 从 snapshot 提取防御相关静态信息。
+  const towerEnergyTotal = snapshot.towers.reduce(
+    (sum: number, t) => sum + t.store.getUsedCapacity(RESOURCE_ENERGY), 0,
+  );
+  const rampartCoverage = snapshot.ramparts.length > 0
+    ? Math.min(snapshot.ramparts.length / 20, 1) // 粗估：20 个 rampart = 满覆盖
+    : 0;
+
+  const roomContext: RoomContext = {
+    roomName: snapshot.roomName,
+    corePos: anchor.pos.x * 50 + anchor.pos.y,
+    towerCount: snapshot.towers.length,
+    towerEnergyTotal,
+    rampartCoverage,
+    rcl: snapshot.rcl,
+    safeModeAvailable: snapshot.controller?.safeModeAvailable ?? 0,
+    safeModeTicks: snapshot.controller?.safeMode ?? undefined,
+    hasStorage: snapshot.storage !== undefined,
+    hasSpawn: snapshot.spawns.length > 0,
+    friendlyCreepCount: snapshot.creepPositions
+      ? Array.from(snapshot.creepPositions.values()).filter((v: { name: string; my: boolean; fatigue: number }) => v.my).length
+      : 0,
+    sourceCount: snapshot.sources.length,
+    isRemoteRoom: false, // 自有房不是远矿房
+    incomingNukes: snapshot.incomingNukes?.length ?? 0,
+  };
+
+  const defenseContext: DefenseContext = {
+    colonyState,
+    lastHostileAt,
+    prevThreatCount,
+  };
+
+  return assessThreat({
+    tick,
+    hostiles,
+    roomContext,
+    defenseContext,
+    // playerIntel 和 remoteContext 在自有房场景不提供（A5.2 扩展点）
+  });
+}

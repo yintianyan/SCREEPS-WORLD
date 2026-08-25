@@ -71,7 +71,21 @@ export const towerDefenseSystem: System = {
               totalHealParts,
               breachingCore,
             });
-            if (decision.engage) {
+            // A5.1：威胁意图集成 — SIEGE intent 意味着敌方有足够治疗扛塔伤，
+            // 且未突入核心区。此时开火 = 白耗能量（每发都被 HEAL 奶回）。
+            // 塔应停火蓄能，等敌方近身或撤退。breachingCore 仍无条件开火
+            // （结构损失 > 能量价值）。这是对 assessEngagement 的 intent 维度增强，
+            // 不替换 assessEngagement 的净伤判定——两者互补：
+            // - assessEngagement：数学净伤判定（damage > heal）
+            // - SIEGE override：战术意图判定（敌方在房外蹲坑消耗塔能量）
+            let shouldEngage = decision.engage;
+            if (shouldEngage && !breachingCore) {
+              const threatAssessment = globalCache().threatAssessments?.get(snapshot.roomName);
+              if (threatAssessment?.estimatedIntent.intent === "SIEGE") {
+                shouldEngage = false;
+              }
+            }
+            if (shouldEngage) {
               let firedCount = 0;
               for (const tower of snapshot.towers) {
                 if (tower.store.getUsedCapacity(RESOURCE_ENERGY) === 0) continue;

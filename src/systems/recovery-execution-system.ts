@@ -235,8 +235,7 @@ function translateAndSubmit(
       return submitPopulationRebuild(action, ctx, correlationId);
 
     case "defense_response":
-      // 防御有独立链路（tower-defense + defense-planner），不重复
-      return { submitted: false, reason: "defense has independent response chain" };
+      return submitDefenseResponse(action, ctx, correlationId);
 
     default:
       return { submitted: false, reason: `unknown action type: ${action.type}` };
@@ -544,6 +543,124 @@ function submitPopulationRebuild(
     : { submitted: true, executionRef: harvesterKey, reason: "already in queue (idempotent)" };
 }
 
+/**
+ * DEFENSE_RESPONSE：基于 A5.1 威胁评估触发防御响应。
+ *
+ * 翻译：RecoveryAction → 读取 globalCache.threatAssessments 获取威胁详情
+ *   - 威胁 CRITICAL + safeModeAvailable > 0 → 标记 safeMode 需求
+ *   - 威胁 ≥ HIGH + 无存活 defender → 提交 defender spawn 请求
+ *   - 威胁 < HIGH → 标记给 tower-defense 系统处理（已有独立链路）
+ *
+ * 不直接调用 Game API（不调 safeMode / 不调 spawnCreep）。
+ * 只标记需求，由各系统自行消费。
+ */
+function submitDefenseResponse(
+  action: RecoveryAction,
+  ctx: TickContext,
+  correlationId: string,
+): SubmitResult {
+  const g = globalCache();
+  const room = action.targetFailureId.split(":")[1] ?? action.targetFailureId;
+  const roomMem = Memory.rooms[room];
+  if (!roomMem) {
+    return { submitted: false, reason: `room memory not found: ${room}` };
+  }
+
+  // 读取 A5.1 威胁评估结果
+  const threatAssessment = g.threatAssessments?.get(room);
+  if (!threatAssessment) {
+    // 无威胁评估数据——防御有独立链路（tower-defense），标记不重复
+    return { submitted: false, reason: "no threat assessment available — tower-defense handles independently" };
+  }
+
+  const level = threatAssessment.level;
+  const intent = threatAssessment.estimatedIntent.intent;
+  const posture = threatAssessment.recommendedPosture;
+
+  // CRITICAL + NUCLEAR/SIEGE + safeMode 可用 → 标记 safeMode 需求
+  // 不直接调 Game.rooms[room].controller.activateSafeMode()——由 kernel 层在下一 tick 消费
+  if (level === "CRITICAL" &&
+      (intent === "NUCLEAR" || intent === "FULL_ASSAULT" || intent === "SIEGE") &&
+       (Game.rooms[room]?.controller?.safeModeAvailable ?? 0) > 0) {
+    // 标记 safeMode 需求到 room memory，供 kernel/consumers 读取
+    if (!roomMem.defenseState) roomMem.defenseState = {} as RoomMemory["defenseState"];
+    if (roomMem.defenseState) {
+      roomMem.defenseState.safeModeRequested = true;
+      roomMem.defenseState.safeModeRequestTick = ctx.tick;
+      roomMem.defenseState.safeModeReason = `CRITICAL+${intent} corr=${correlationId}`;
+    }
+    console.log(
+      `[${ctx.tick}] recovery: DEFENSE_RESPONSE safeMode requested` +
+      ` room=${room} level=${level} intent=${intent} corr=${correlationId}`,
+    );
+    return {
+      submitted: true,
+      executionRef: `safe-mode:${room}`,
+      reason: `safeMode requested for CRITICAL ${intent} threat`,
+    };
+  }
+
+  // HIGH/CRITICAL → 提交 defender spawn 请求
+  if (level === "HIGH" || level === "CRITICAL") {
+    // 检查是否已有存活 defender
+    const livingDefenders = Object.values(Game.creeps).filter(
+      c => c.memory.role === "defender" && c.memory.home === room && !c.spawning,
+    ).length;
+
+    if (livingDefenders >= 2) {
+      return { submitted: true, executionRef: `defenders-existing:${room}`, reason: `${livingDefenders} defenders already alive` };
+    }
+
+    // 提交 defender spawn 请求
+    const queue = roomMem.spawnQueue ?? [];
+    const key = `recovery:defender:${room}:0`;
+
+    if (hasRequest(queue, key)) {
+      return { submitted: true, executionRef: key, reason: "defender already in queue (idempotent)" };
+    }
+
+    // defender body：基于房间 energyCapacityAvailable
+    const energyCapacity = Game.rooms[room]?.energyCapacityAvailable ?? 300;
+    const body = simpleDefenderBody(energyCapacity);
+
+    submitRequest(queue, {
+      key,
+      role: "defender",
+      home: room,
+      priority: 0, // P0 紧急——防御响应
+      body,
+      memory: {
+        role: "defender",
+        home: room,
+        mode: "acquire",
+        recoveryCorrelationId: correlationId,
+      } as CreepMemory,
+      createdAt: ctx.tick,
+      expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
+      retries: 0,
+    });
+    roomMem.spawnQueue = queue;
+
+    console.log(
+      `[${ctx.tick}] recovery: DEFENSE_RESPONSE defender spawned` +
+      ` room=${room} level=${level} intent=${intent} posture=${posture}` +
+      ` corr=${correlationId}`,
+    );
+    return {
+      submitted: true,
+      executionRef: key,
+      reason: `defender spawn submitted for ${level} ${intent} threat`,
+    };
+  }
+
+  // MEDIUM 或更低 → tower-defense 独立处理
+  return {
+    submitted: true,
+    executionRef: `tower-defense:${room}`,
+    reason: `threat ${level} handled by tower-defense (posture=${posture})`,
+  };
+}
+
 // ─── Verification ─────────────────────────────────────────
 
 /**
@@ -704,7 +821,8 @@ function isExecutionRefActive(executionRef: string | undefined, actionType: stri
 
   // spawn 请求：检查是否还在队列
   if (actionType === "spawn_recovery" || actionType === "logistics_fix" ||
-      actionType === "population_rebuild" || actionType === "energy_redirect") {
+      actionType === "population_rebuild" || actionType === "energy_redirect" ||
+      actionType === "defense_response") {
     // 检查是否已有对应 creep 存活
     // executionRef 格式: "recovery:role:room:index"
     const parts = executionRef.split(":");
@@ -827,4 +945,17 @@ function simpleHaulerBody(energyCapacity: number): BodyPartConstant[] {
   if (energyCapacity >= 400) return [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE];
   if (energyCapacity >= 300) return [CARRY, CARRY, CARRY, MOVE, MOVE, MOVE];
   return [CARRY, CARRY, MOVE, MOVE];
+}
+
+/**
+ * 简化的 defender body 生成（近战 + 远程混合）。
+ *
+ * 优先 [ATTACK, MOVE] × N（高机动近战），
+ * 能量充足时加入 RANGED_ATTACK 和 TOUGH 前排。
+ */
+function simpleDefenderBody(energyCapacity: number): BodyPartConstant[] {
+  if (energyCapacity >= 600) return [TOUGH, TOUGH, ATTACK, ATTACK, RANGED_ATTACK, MOVE, MOVE, MOVE, MOVE];
+  if (energyCapacity >= 400) return [TOUGH, ATTACK, ATTACK, MOVE, MOVE, MOVE];
+  if (energyCapacity >= 250) return [ATTACK, ATTACK, MOVE, MOVE];
+  return [ATTACK, MOVE];
 }

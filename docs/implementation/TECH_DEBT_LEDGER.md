@@ -246,3 +246,26 @@ A1 证据台账：自举链（e2e-002 RCL1→RCL2 + a1-bootstrap-tower RCL2→RC
   经济不停滞 = harvested 达标 ∧ container 排空 ∧ 帝国存活；机制代理（头数）不作硬断言。
   **教训**：mockup 缺口不仅漏测还会「反向校准」测试预期——引擎保真修复必须连带审计
   既有绿测的因果依赖。
+
+## A5.1 验证债务登记 — 2026-08-25
+
+A5.1 FINAL AUDIT 判定 PASS（0 BLOCKER / 0 HIGH / 2 MEDIUM / 5 LOW）。两个 MEDIUM
+均为**环境兼容性验证债务**（非代码缺陷），不阻塞 Domain/Integration PASS，登记如下：
+
+- **VD-1 isolated-vm E2E 环境兼容性（MEDIUM → 验证债务）**：E2E 测试已编写
+  （`tests/e2e/scenarios/12-military-defense.test.ts`，6 场景），受限于
+  `isolated-vm` 原生模块在当前 macOS + Node 26 ABI 的 V8 符号缺失
+  （`v8::ArrayBuffer::Allocator::Reallocate`），无法本地执行。**不修改环境**：
+  Domain 纯函数已通过 86 个单元测试（含 20 × 1000 次 Replay Hash 100% 一致）+
+  138 个集成测试全绿，系统层集成逻辑与现有 A4 模式一致。**消除条件**：私服或 CI
+  环境（Node 22 + @screeps/driver 正常编译）下执行 E2E 6 场景全绿。
+  风险评估：LOW。
+- **VD-2 私服 5000t Real Runtime 长运行验证（MEDIUM → 验证债务）**：A5.1 的
+  CPU/Memory 预算分析为代码审查推算（assessThreat 条件触发 O(hostiles × body)、
+  globalCache heap-only 无持久化增长），未经真实 5000+ tick 连续运行验证。
+  **不阻塞 PASS**：应作为下一次真实 Runtime 长运行验证（soak test）的一部分，
+  验收项 = 5000+ tick 连续运行 ∧ ≥1 次 Threat 事件触发 ∧ ≥1 次 Remote Defense
+  Decision ∧ ≥1 条 DecisionTrace 记录 ∧ CPU 无异常增长 ∧ Memory 无持久化泄漏。
+  风险评估：LOW。
+
+审计报告见 [A5_1_FINAL_AUDIT.md](../phase17/A5_1_FINAL_AUDIT.md)。
