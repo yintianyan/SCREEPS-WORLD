@@ -40,6 +40,9 @@ import { pixelSystem } from "./systems/pixel-system";
 import { prospectManagerSystem } from "./systems/prospect-manager";
 import { remoteMiningManagerSystem } from "./systems/remote-mining-manager";
 import { specializationPlannerSystem } from "./systems/specialization-planner";
+import { empireHealthSystem } from "./systems/empire-health-system";
+import { recoveryExecutionSystem } from "./systems/recovery-execution-system";
+import { decisionTraceSystem } from "./systems/decision-trace-system";
 import { warPlannerSystem } from "./systems/war-planner";
 import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
@@ -91,6 +94,19 @@ export const registry = new Registry()
   .registerSystem(remoteMiningManagerSystem)
   // P1：专业化规划器（每 100 tick 消费 Opportunity + 评估经济健康度）
   .registerSystem(specializationPlannerSystem)
+  // P1：Empire Health（A4.5 — 低频 100t，综合 8 维度健康度 + Hysteresis +
+  //   失败传播 + 恢复优先级 + 自治指标；在 specialization-planner 之后运行，
+  //   消费 empireEconomy / logistics / network / colony 信号）
+  .registerSystem(empireHealthSystem)
+  // P1：Recovery Execution（A4.6 — interval=10t，薄壳消费 empire-health 产出的
+  //   recoveryActions，翻译为 spawn/agenda/terminal/remote 指令并提交；
+  //   追踪 Action 生命周期 + Before/After World State 验证 + Retry/Escalation。
+  //   在 empire-health 之后运行（同 P1 但 interval=10 远高于 100t，每 10t 消费一次）
+  .registerSystem(recoveryExecutionSystem)
+  // P3：Decision Trace（A4.7 — 低频 100t post 阶段，采集各系统产出的决策信号，
+  //   构建 DecisionSnapshot + DecisionRecord 写入 Ring Buffer；不参与决策，
+  //   只做可观测性追踪 + Trace GC + Memory Budget 监控）。
+  .registerSystem(decisionTraceSystem)
   // P2：战争规划（war 姿态才选目标推 attacker；非 war 收摊）
   .registerSystem(warPlannerSystem)
   // P3：布局规划（低频）

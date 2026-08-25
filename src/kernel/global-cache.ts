@@ -213,6 +213,81 @@ export interface GlobalCache {
   /** A4.3：闲置 hauler 名称列表（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsIdleHaulers?: { tick: number; names: string[] };
+  /** A4.4：Transport Accounting 运行时追踪（logistics-planner 每 100t 写入）。
+   * 包含 summary 统计 + entries 每条 Request 的会计明细。
+   * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
+  logisticsAccounting?: {
+    tick: number;
+    summary: {
+      totalRequested: number;
+      totalAssigned: number;
+      totalLoaded: number;
+      totalDelivered: number;
+      totalLost: number;
+      totalRemaining: number;
+      totalCost: number;
+      avgDeliveryRate: number;
+      avgLossRate: number;
+      completedCount: number;
+      activeCount: number;
+    };
+    entries: import("../domain/logistics/transport-accounting").TransportAccounting[];
+  };
+  /** A4.5：Empire Health 综合评估结果（empire-health-system 每 100t 写入）。
+   * 包含 8 维度健康度 + Hysteresis 等级 + 瓶颈维度 + 恢复中标记。
+   * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
+  empireHealth?: import("../domain/strategy/empire-health").EmpireHealthResult;
+  /** A4.5：Failure Propagation 失败传播图（empire-health-system 每 100t 写入）。
+   * 包含活跃失败节点 + 传播边 + 根因/症状标记。
+   * heap 存储 — global reset 丢失可接受。 */
+  failureGraph?: import("../domain/strategy/failure-propagation").FailureGraph;
+  /** A4.5：Recovery Priority 恢复优先级列表（empire-health-system 每 100t 写入）。
+   * 排序后的恢复动作列表，供执行系统消费。
+   * heap 存储 — global reset 丢失可接受。 */
+  recoveryActions?: import("../domain/strategy/recovery-priority").RecoveryAction[];
+  /** A4.5：Autonomy Status 自治状态（empire-health-system 每 100t 写入）。
+   * 包含 Autonomy Score + No-Progress + Thrashing 检测结果。
+   * heap 存储 — global reset 丢失可接受。 */
+  autonomyStatus?: import("../domain/strategy/autonomy-metrics").AutonomyStatus;
+  /** A4.5：Recovery Cooldown Table（empire-health-system 维护，跨 tick 持久）。
+   * key = cooldownKey(domain, room)，value = cooldown entry。
+   * heap 存储 — global reset 丢失可接受（冷却期短，重开后快速重建）。 */
+  recoveryCooldowns?: import("../domain/strategy/recovery-priority").CooldownTable;
+  /** A4.5：健康度历史（empire-health-system 追踪，用于 Thrashing 检测）。heap 存储。 */
+  __healthHistory?: Array<{ tick: number; level: string; score: number }>;
+  /** A4.5：姿态历史（empire-health-system 追踪，用于 Thrashing 检测）。heap 存储。 */
+  __postureHistory?: Array<{ tick: number; posture: string }>;
+  /** A4.5：净能量流历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
+  __netFlowHistory?: number[];
+  /** A4.5：总储备历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
+  __reserveHistory?: number[];
+  /** A4.5：总人口历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
+  __populationHistory?: number[];
+  /** A4.5：失败计数历史（empire-health-system 追踪，用于 No-Progress 检测）。heap 存储。 */
+  __failureCountHistory?: number[];
+  /** A4.5：连续稳态 tick 数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
+  __consecutiveStableTicks?: number;
+  /** A4.5：累计检测到的失败数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
+  __totalFailuresDetected?: number;
+  /** A4.5：累计自动恢复的失败数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
+  __autoRecoveredFailures?: number;
+  /** A4.5：累计扰动次数（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
+  __perturbationCount?: number;
+  /** A4.5：累计恢复总时间（empire-health-system 追踪，用于 Autonomy Score）。heap 存储。 */
+  __totalRecoveryTime?: number;
+  /** A4.5：失败领域循环计数（empire-health-system 追踪，用于 Thrashing 检测）。heap 存储。 */
+  __failureDomainCycles?: Record<string, number>;
+  /** A4.6：Recovery Action 追踪表（recovery-execution-system 维护，跨 tick 持久）。
+   * key = idempotencyKey(domain:type:room)，value = RecoveryActionRecord。
+   * heap 存储 — global reset 丢失可接受（冷却期短，重开后快速重建）。 */
+  recoveryActionTable?: import("../domain/strategy/recovery-lifecycle").RecoveryActionTable;
+  /** A4.6：Recovery 统计数据（recovery-execution-system 每 interval tick 写入）。heap 存储。 */
+  recoveryStats?: import("../domain/strategy/recovery-lifecycle").RecoveryStats;
+  /** A4.6：Recovery Before-State 快照（用于 Verification 的 Before/After 对比）。heap 存储。 */
+  recoveryBeforeStates?: Map<string, import("../domain/strategy/recovery-lifecycle").RecoveryWorldSnapshot>;
+  /** A4.7：Decision Trace 缓存（Ring Buffer + Snapshot Registry + seq）。
+   * heap 存储 — global reset 丢失可接受（trace 是调试/可观测设施，非持久真相）。 */
+  __decisionTraceCache?: unknown;
 }
 
 /**
