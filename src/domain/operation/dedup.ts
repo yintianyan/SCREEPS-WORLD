@@ -8,7 +8,7 @@
  * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
  */
 
-import type { OperationContext } from "./agenda-item";
+import type { OperationContext, ResourceType } from "./agenda-item";
 import { isActive, makeOperationId } from "./agenda-item";
 
 /**
@@ -18,7 +18,7 @@ export function hasActiveOperation(
   operations: readonly OperationContext[],
   sourceRoom: string,
   targetRoom: string,
-  resource: "energy" = "energy",
+  resource: ResourceType = "energy",
 ): boolean {
   const id = makeOperationId(sourceRoom, targetRoom, resource);
   return operations.some(op => op.id === id && isActive(op));
@@ -31,7 +31,7 @@ export function findActiveOperation(
   operations: readonly OperationContext[],
   sourceRoom: string,
   targetRoom: string,
-  resource: "energy" = "energy",
+  resource: ResourceType = "energy",
 ): OperationContext | undefined {
   const id = makeOperationId(sourceRoom, targetRoom, resource);
   return operations.find(op => op.id === id && isActive(op));

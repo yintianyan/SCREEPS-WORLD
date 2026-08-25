@@ -16,6 +16,7 @@ import { remoteReplacementThreshold } from "../domain/remote/staffing";
 import { classifyThreats } from "../domain/defense/threat";
 import { submitRequest } from "../domain/spawn/queue";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
+import { globalCache } from "../kernel/global-cache";
 
 export const remoteMiningManagerSystem: System = {
   name: "remote-mining-manager",
@@ -286,6 +287,33 @@ export const remoteMiningManagerSystem: System = {
             Object.keys(remoteOps).map(roomName => [roomName, roomMem.intel?.[roomName]?.pathCost]),
           ),
         });
+
+        // A4.3：从 logistics-planner 产出的 Transport Plan 中提取 operation-scope 请求，
+        // 作为远矿运力需求的补充信号。如果 Plan 指示某远矿房需要额外运力，
+        // 在 evaluateRemoteDemand 已产出的 requests 基础上不删除，只追加（不覆盖）。
+        // 这使远矿 hauler 编制不仅基于 container 积压信号，还基于 Plan 的主动规划。
+        const logisticsPlan = globalCache().logisticsPlan?.plan;
+        if (logisticsPlan && logisticsPlan.plannedAt >= ctx.tick - 100) {
+          const planOpReqs = logisticsPlan.requests.filter(
+            r => r.scope === "operation" && r.source.room === snapshot.roomName,
+          );
+          for (const planReq of planOpReqs) {
+            // Plan 指示的远矿目标房需要额外运力
+            // 如果该目标已在 remoteOps 中且 haulerNeed 低于 Plan 指示，不降低现有编制
+            // 只在 Plan 请求量大于现有 haulerNeed 时记录日志（观测用）
+            const targetOp = remoteOps[planReq.destination.room];
+            if (targetOp && targetOp.state === "active") {
+              const planHaulerNeed = Math.ceil(planReq.amount / 1000); // 简化：1000 energy/hauler
+              if (planHaulerNeed > (targetOp.haulerNeed ?? 0)) {
+                targetOp.haulerNeed = planHaulerNeed;
+                console.log(
+                  `[${ctx.tick}] remote/plan-calibrate: ${snapshot.roomName} → ${planReq.destination.room}` +
+                  ` haulerNeed=${planHaulerNeed} (Plan 指示量=${planReq.amount})`,
+                );
+              }
+            }
+          }
+        }
 
         // 推入 spawnQueue。
         for (const req of requests) {

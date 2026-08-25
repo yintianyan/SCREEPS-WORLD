@@ -193,6 +193,26 @@ export interface GlobalCache {
   /** A4.2：帝国级 Resource Ledger（empire-economy 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   empireResourceLedger?: import("../domain/economy/resource-ledger").ResourceLedger;
+  /** A4.3：Empire Logistics Plan（logistics-planner 每 100t 写入）。
+   * 包含 Transport Requests + Routes + 成本/时间/风险估算。
+   * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
+  logisticsPlan?: { tick: number; plan: import("../domain/logistics/transport-plan").TransportPlan };
+  /** A4.3：Empire Logistics Dashboard（logistics-planner 每 100t 写入）。
+   * heap 存储 — global reset 丢失可接受。 */
+  logisticsDashboard?: import("../domain/logistics/dashboard").LogisticsDashboard;
+  /** A4.3：Empire Logistics Health（logistics-planner 每 100t 写入）。
+   * heap 存储 — global reset 丢失可接受。 */
+  logisticsHealth?: import("../domain/logistics/logistics-health").LogisticsHealthResult;
+  /** A4.3：Empire Logistics Capacity（logistics-planner 每 100t 写入）。
+   * heap 存储 — global reset 丢失可接受。 */
+  logisticsCapacity?: { tick: number; result: import("../domain/logistics/capacity-planning").EmpireCapacityResult };
+  /** A4.3：Hauler 扩缩编决策（logistics-planner 每 100t 写入）。
+   * key = roomName, value = ScalingDecision。
+   * heap 存储 — global reset 丢失可接受。 */
+  logisticsScaling?: { tick: number; decisions: Record<string, import("../domain/logistics/hauler-scaling").ScalingDecision> };
+  /** A4.3：闲置 hauler 名称列表（logistics-planner 每 100t 写入）。
+   * heap 存储 — global reset 丢失可接受。 */
+  logisticsIdleHaulers?: { tick: number; names: string[] };
 }
 
 /**

@@ -21,6 +21,7 @@ import {
 } from "../domain/assignment/request-pool";
 import type { AssignmentTaskEntry } from "../domain/assignment/service";
 import { CONFIG } from "../config";
+import type { TransportRequestV2 } from "../domain/logistics/transport-request";
 
 /** 每房 heap 态：key 注册表 + 延迟样本环。global reset 可丢（自动重播种）。 */
 interface RoomPoolState {
@@ -149,6 +150,24 @@ export const logisticsSystem: System = {
       }
 
       g.transportPool.rooms[roomName] = finalReqs.map(toTaskEntry);
+
+      // A4.3：合并 logistics-planner 产出的 Plan 中 scope="room" 的请求。
+      // Plan 驱动的请求适配为 AssignmentTaskEntry 格式，追加到本房任务槽。
+      // scope="empire" 的请求不进 transportPool — 由 agenda-manager carrier 执行。
+      // scope="operation" 的请求不进 transportPool — 由远矿 remoteHauler 执行。
+      const plan = globalCache().logisticsPlan?.plan;
+      if (plan && plan.plannedAt === ctx.tick) {
+        // 仅消费本 tick 产出的 Plan（过期 Plan 不合并）。
+        const planReqs = plan.requests.filter(
+          r => r.scope === "room" && r.destination.room === roomName,
+        );
+        for (const pr of planReqs) {
+          const taskEntry = planRequestToTaskEntry(pr);
+          if (taskEntry) {
+            g.transportPool.rooms[roomName]?.push(taskEntry);
+          }
+        }
+      }
     }
     // A3.0：empire scope 跨房调拨不再通过 transportPool — carrier 角色独立搬运，
     // 不走 hauler assignment 链。agenda-manager 直接提交 carrier spawn 请求。
@@ -158,4 +177,27 @@ export const logisticsSystem: System = {
 /** 查询口（观测用）：房间延迟样本环（只读副本）。 */
 export function logisticsLatencySamples(roomName: string): readonly number[] {
   return poolRooms.get(roomName)?.latencyRing ?? [];
+}
+
+/**
+ * A4.3：TransportRequestV2 → AssignmentTaskEntry 适配器。
+ *
+ * 将 logistics-planner 产出的 V2 请求适配为现有 hauler 认领链可消费的格式。
+ * 仅适配 scope="room" 的请求（房内搬运）。
+ *
+ * source.structureId 若有则作为 sourceId；否则用 source.room 作为伪 ID。
+ */
+function planRequestToTaskEntry(req: TransportRequestV2): AssignmentTaskEntry | undefined {
+  // 只适配 scope="room" 的请求
+  if (req.scope !== "room") return undefined;
+
+  return {
+    id: req.requestId,
+    kind: "haul" as const,
+    sourceId: req.source.structureId ?? req.source.room,
+    priority: req.priority,
+    maxWorkers: 1,
+    assignedCreeps: [],
+    pos: req.source.pos,
+  };
 }

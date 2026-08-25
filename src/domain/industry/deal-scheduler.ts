@@ -21,7 +21,8 @@ export type DealCandidateType =
   | "buy-crisis-energy"
   | "buy-deficit"
   | "buy-power"
-  | "buy-ghodium";
+  | "buy-ghodium"
+  | "plan-driven-send"; // A4.3: logistics-planner 产出的 Plan 驱动 terminal.send
 
 /** 单个 deal 候选 — 带 priority 的可执行 deal 描述。 */
 export interface DealCandidate {

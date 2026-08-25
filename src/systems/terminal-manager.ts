@@ -53,6 +53,7 @@ import { collectFullInventory } from "../domain/industry/inventory";
 import { collectDemands, adjustMaxPrice } from "../domain/industry/procurement";
 import { globalCache } from "../kernel/global-cache";
 import type { ProcurementDemand } from "../kernel/global-cache";
+import type { TransportPlan } from "../domain/logistics/transport-plan";
 import {
   computeDynamicBuyPrice,
   computeDynamicSellPrice,
@@ -97,6 +98,12 @@ export const terminalManagerSystem: System = {
     // 0.5 帝国矿物互济：姐妹房 homeMineral 盈余先于市场买入（省 credits）。
     tryEmpireMineralAid(ctx);
 
+    // A4.3：查询 Logistics Plan 中由 logistics-planner 产出的跨房请求。
+    // 如果 Plan 中有涉及 terminal 的请求，terminal-manager 作为 Network 计划执行器
+    // 优先执行 Plan 指定的操作。Plan 未覆盖的领域由原有自主决策逻辑 fallback。
+    const logisticsPlan = globalCache().logisticsPlan?.plan;
+    const planRequestRooms = collectPlanTerminalRooms(logisticsPlan);
+
     for (const snapshot of ctx.snapshots()) {
       const terminal = snapshot.terminal;
       if (!terminal) continue;
@@ -107,13 +114,18 @@ export const terminalManagerSystem: System = {
 
       if (terminal.cooldown > 0) continue;
 
-      // ── 阶段 2 改造：continue 链改为 priority 竞争 ──
-      // 旧实现：卖出函数用 continue 独占 deal 窗口，买入被永久挤出。
-      // 新实现：收集所有候选 deal（卖出 + 买入）为 DealCandidate[]，
-      // 按 priority 降序排序后取最高执行。卖出 priority ≤ 50（日常贸易
-      // 不挤掉紧急采购），买入 priority 可达 100（需求表驱动）。
-      // 每房每轮只有 1 个 deal 窗口（terminal 冷却），所以选最高价值的。
+      // A4.3：如果本房 terminal 在 Plan 的请求中，注入 Plan 驱动的候选。
+      // Plan 驱动的 terminal.send 优先级最高（Network 计划 > 自主市场决策）。
       const candidates: DealCandidate[] = [];
+
+      // A4.3 Plan 驱动候选：从 logisticsPlan 中筛选本房涉及的请求。
+      if (logisticsPlan && planRequestRooms.has(snapshot.roomName)) {
+        candidates.push({
+          type: "plan-driven-send",
+          priority: 200, // 最高优先级 — Plan 驱动 > 自主市场决策
+          execute: () => tryPlanDrivenSend(snapshot, terminal, logisticsPlan, ctx),
+        });
+      }
 
       // 卖出候选（priority ≤ SELL_PRIORITY_CAP）。
       candidates.push({
@@ -870,3 +882,78 @@ function tryBuyGhodium(snapshot: RoomSnapshot, terminal: StructureTerminal): boo
   const amount = Math.min(deficit, best.amount, CONFIG.market.maxDealAmount, affordable);
   return executeDeal(best, amount, terminal, snapshot.roomName);
 }
+
+// ─── A4.3 Plan 驱动的 Terminal 执行器 ──────────────────────
+
+/**
+ * 收集 Logistics Plan 中涉及的 terminal 房间集合。
+ * Plan 中的 TransportRequestV2 若 source/destination 的 type 为 "terminal"，
+ * 则该房是 Plan 驱动的 terminal 操作对象。
+ */
+function collectPlanTerminalRooms(plan: TransportPlan | undefined): Set<string> {
+  const rooms = new Set<string>();
+  if (!plan) return rooms;
+  for (const req of plan.requests) {
+    if (req.source.type === "terminal") rooms.add(req.source.room);
+    if (req.destination.type === "terminal") rooms.add(req.destination.room);
+  }
+  return rooms;
+}
+
+/**
+ * Plan 驱动的 terminal.send 执行器。
+ *
+ * 当 logistics-planner 产出 Transport Plan 中有涉及本房 terminal 的请求时，
+ * terminal-manager 作为 Network 计划执行器，按 Plan 指定的资源/量/目标执行 terminal.send。
+ *
+ * 执行规则：
+ *   1. 筛选 Plan 中 source.room = 本房 且 source.type = "terminal" 的请求
+ *   2. 对每个请求，检查 terminal 内现货 ≥ 请求量 + 能量运费 + 储备地板
+ *   3. 满足条件则执行 terminal.send
+ *   4. 每个 terminal 每轮只执行 1 笔（terminal 冷却限制）
+ *
+ * 返回 true 表示已执行 send（占用 terminal 冷却）。
+ */
+function tryPlanDrivenSend(
+  snapshot: RoomSnapshot,
+  terminal: StructureTerminal,
+  plan: TransportPlan,
+  _ctx: TickContext,
+): boolean {
+  // 筛选本房作为 source 的 terminal 请求
+  const roomRequests = plan.requests.filter(
+    r => r.source.room === snapshot.roomName && r.source.type === "terminal",
+  );
+  if (roomRequests.length === 0) return false;
+
+  // 按 priority 升序（0=最高）取最高优先级的请求
+  roomRequests.sort((a, b) => a.priority - b.priority);
+
+  for (const req of roomRequests) {
+    const resource = req.resource === "energy" ? RESOURCE_ENERGY : req.resource as ResourceConstant;
+    const inTerminal = terminal.store.getUsedCapacity(resource) ?? 0;
+    if (inTerminal < req.amount) continue; // 现货不足，等 distributor 转运
+
+    // 能量运费校验
+    if (typeof Game.market?.calcTransactionCost === "function") {
+      const fee = Game.market.calcTransactionCost(req.amount, req.source.room, req.destination.room);
+      const energyInTerminal = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (energyInTerminal < fee + CONFIG.market.terminalEnergyReserveFloor) continue;
+    }
+
+    // 执行 send
+    const result = terminal.send(resource, req.amount, req.destination.room);
+    if (result === OK) {
+      recordEvent(EventKind.MineralTransfer, req.destination.room, [req.amount]);
+      console.log(
+        `[${Game.time}] terminal/plan-driven: ${snapshot.roomName} → ${req.destination.room}` +
+        ` ${req.amount} ${req.resource} (origin=${req.origin})`,
+      );
+      return true; // 占用 terminal 冷却
+    }
+    // send 失败（cooldown/资源不足等）→ 试下一个请求
+  }
+
+  return false; // 没有可执行的请求
+}
+

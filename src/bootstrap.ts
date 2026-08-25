@@ -33,6 +33,7 @@ import { powerFarmManagerSystem } from "./systems/power-farm-manager";
 import { agendaManagerSystem } from "./systems/agenda-manager";
 import { layoutPlannerSystem } from "./systems/layout-planner";
 import { logisticsSystem } from "./systems/logistics";
+import { logisticsPlannerSystem } from "./systems/logistics-planner";
 import { labSystem } from "./systems/lab-system";
 import { linkSystem } from "./systems/link-system";
 import { pixelSystem } from "./systems/pixel-system";
@@ -75,6 +76,9 @@ export const registry = new Registry()
   .registerSystem(agendaManagerSystem)
   // P0：物流请求池（搬运 Demand 一等来源；先于 assignment-service 合并进任务槽）
   .registerSystem(logisticsSystem)
+  // P1：Empire Logistics Planner（A4.3 — 低频 100t，domain 层纯函数薄壳；
+  //   在 agenda-manager 之后运行，消费 networkSnapshot 产出 TransportPlan）
+  .registerSystem(logisticsPlannerSystem)
   // P1：任务分配（先于 P1 角色）
   .registerSystem(assignmentServiceSystem)
   // P1：link 能量传输（瞬移替代 hauler 往返）

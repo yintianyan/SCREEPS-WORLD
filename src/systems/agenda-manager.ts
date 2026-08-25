@@ -487,6 +487,59 @@ export const agendaManagerSystem: System = {
       }
     }
 
+    // ── 13.5 A4.3：Plan 驱动的 Operation 创建 ──
+    // 从 logistics-planner 产出的 Transport Plan 中筛选 scope="empire" 的请求，
+    // 为尚未有活跃 Operation 的 (source, target, resource) 三元组创建新 Operation。
+    // 这补充了 allocation-policy 只处理 energy 的局限——Plan 可产出矿物等非能量资源的跨房请求。
+    const logisticsPlan = globalCache().logisticsPlan?.plan;
+    if (logisticsPlan && logisticsPlan.plannedAt >= ctx.tick - 100) {
+      // 仅消费最近 100 tick 内产出的 Plan（避免过期 Plan 创建僵尸 Operation）。
+      const sourceTransferablePlan = new Map<string, number>();
+      for (const s of supplyNodes) {
+        sourceTransferablePlan.set(s.room, s.transferable);
+      }
+
+      for (const req of logisticsPlan.requests) {
+        if (req.scope !== "empire") continue;
+        // Operation Storm 防护
+        if (operations.filter(isActive).length >= MAX_GLOBAL_OPERATIONS) break;
+
+        // 幂等去重：同 (source, target, resource) 只有一个活跃 Operation
+        if (hasActiveOperation(operations, req.source.room, req.destination.room, req.resource)) {
+          continue;
+        }
+
+        // TOCTOU 防护
+        const localAvail = sourceTransferablePlan.get(req.source.room) ?? 0;
+        if (localAvail < req.amount) continue;
+
+        const deadline = Math.min(req.deadline, ctx.tick + DEFAULT_OPERATION_DEADLINE);
+        const op = createOperation(
+          req.source.room,
+          req.destination.room,
+          req.resource,
+          req.amount,
+          req.priority as 0 | 1 | 2 | 3,
+          deadline,
+          ctx.tick,
+        );
+
+        const readyResult = markReady(op, ctx.tick);
+        if (readyResult.ok) {
+          operations.push(readyResult.op);
+          reservations = createReservation(
+            reservations,
+            readyResult.op.id,
+            req.source.room,
+            req.destination.room,
+            req.amount,
+            ctx.tick,
+          );
+          sourceTransferablePlan.set(req.source.room, localAvail - req.amount);
+        }
+      }
+    }
+
     // ── 14. 路由计算 + carrier spawn 请求 ──
     for (const op of operations) {
       if (op.status !== "ready") continue;
