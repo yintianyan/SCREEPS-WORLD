@@ -331,6 +331,44 @@ export interface GlobalCache {
     /** A5.3 operationId（如果来自 A5.3 路径，供 Decision Trace 追踪）。 */
     operationId?: string;
   };
+
+  // ── A6.3 Prediction Layer ──────────────────────────────────
+
+  /** A6.3：Prediction 缓存（PredictionRingBuffer + TimeSeries 集合 + seq）。
+   * heap 存储 — global reset 丢失可接受（prediction 是可观测设施，非持久真相）。
+   * PRED-001：预测层唯一可写的 globalCache 字段。 */
+  __predictionCache?: unknown;
+
+  /** A6.3：CPU bucket 历史采样（寄生 empire-health-system 100t cadence）。
+   * 用于 CPU 压力预测（#7）。heap 存储 — global reset 后从空重建。 */
+  __cpuBucketHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<number>;
+
+  /** A6.3：Spawn 队列深度历史采样（寄生 empire-health-system 100t cadence）。
+   * 用于孵化饥饿预测（#2）。heap 存储 — global reset 后从空重建。 */
+  __spawnQueueDepthHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<number>;
+
+  /** A6.3：物流健康度历史采样（寄生 empire-health-system 100t cadence）。
+   * 用于物流瓶颈预测（#3）。heap 存储 — global reset 后从空重建。 */
+  __logisticsHealthHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<{
+    score: number;
+    deliveryRate: number;
+    lossRate: number;
+  }>;
+
+  /** A6.3：房间健康度历史采样（寄生 empire-health-system 100t cadence）。
+   * 用于房间崩溃预测（#4）。key = roomName, value = TimeSeries。
+   * heap 存储 — global reset 后从空重建。 */
+  __roomHealthHistory?: Map<string, import("../domain/intelligence/prediction/time-series").TimeSeries<{
+    score: number;
+    level: string;
+  }>>;
+
+  /** A6.3：远矿收益历史采样（寄生 expansion-planner 100t cadence）。
+   * 用于远矿失败预测（#5）。heap 存储 — global reset 后从空重建。 */
+  __remoteMiningHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<{
+    netIncome: number;
+    threatCount: number;
+  }>;
 }
 
 /**

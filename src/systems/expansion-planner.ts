@@ -24,6 +24,11 @@
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { globalCache } from "../kernel/global-cache";
+import {
+  createTimeSeries,
+  pushSample,
+  gcTimeSeries,
+} from "../domain/intelligence/prediction/time-series";
 import { queryEmpirePlannerInput } from "./empire-economy";
 import { evaluateExpansionPressure } from "../domain/expansion/pressure";
 import { discoverCandidates } from "../domain/expansion/discovery";
@@ -222,6 +227,10 @@ export const expansionPlannerSystem: System = {
     const g = globalCache();
     g.expansionDashboard = dashboard;
 
+    // ── A6.3 远矿收益采样寄生（复用 expansion-planner 既有 100t cadence）──
+    // PRED-010：不自建采样通道，寄生在既有 cadence 中追加 1 个采样字段。
+    sampleRemoteMiningForPredictions(g, ctx.tick);
+
     // ── 写入 Memory 瘦快照 ──
     Memory.kernel.expansionDashboard = {
       tick: ctx.tick,
@@ -389,3 +398,61 @@ import type { PaybackResult } from "../domain/expansion/payback";
 import type { RiskResult, RiskLevel } from "../domain/expansion/risk";
 import type { ExpansionReason } from "../domain/expansion/candidate";
 import type { PlanStatus, PlanPriority } from "../domain/expansion/plan";
+
+// ─── A6.3 远矿采样寄生 ────────────────────────────────────
+
+/** TimeSeries 容量上限。 */
+const REMOTE_MINING_TS_CAPACITY = 100;
+
+/**
+ * A6.3 远矿收益采样 — 复用 expansion-planner 既有 100t cadence。
+ *
+ * PRED-010：不自建采样通道，寄生在既有 cadence 中追加 1 个采样字段。
+ *
+ * 采样内容：
+ *   - 远矿净收益 + 威胁计数（→ __remoteMiningHistory，预测目标 #5）
+ *
+ * 从 expansionDashboard 或 Memory 中的远矿数据派生净收益。
+ * global reset 后从空 TimeSeries 重建（可接受）。
+ */
+function sampleRemoteMiningForPredictions(
+  g: ReturnType<typeof globalCache>,
+  tick: number,
+): void {
+  if (!g.__remoteMiningHistory) {
+    g.__remoteMiningHistory = createTimeSeries<{ netIncome: number; threatCount: number }>(
+      REMOTE_MINING_TS_CAPACITY,
+    );
+  }
+
+  // 从 expansionDashboard 提取远矿数据
+  const dashboard = g.expansionDashboard;
+  if (!dashboard) return;
+
+  // 从 Memory.rooms 中统计活跃远矿 op 数量
+  let remoteOpCount = 0;
+  let threatCount = 0;
+  const mem = globalThis as { Memory?: { rooms?: Record<string, { remoteOps?: unknown[] }> } };
+  if (mem.Memory?.rooms) {
+    for (const roomMem of Object.values(mem.Memory.rooms)) {
+      if (roomMem?.remoteOps && Array.isArray(roomMem.remoteOps)) {
+        remoteOpCount += roomMem.remoteOps.length;
+      }
+    }
+  }
+
+  // 从 threatAssessments 统计威胁数
+  if (g.threatAssessments) {
+    for (const _ of g.threatAssessments) {
+      threatCount++;
+    }
+  }
+
+  // 净收益简化：用 dashboard 的 summary 数据（如果可用）
+  // dashboard.summary 是字符串，不直接可解析为数字
+  // 简化：用 remoteOpCount 作为代理指标，netIncome 后续由 models 推导
+  const netIncome = remoteOpCount > 0 ? 1 : 0;
+
+  pushSample(g.__remoteMiningHistory, tick, { netIncome, threatCount });
+  gcTimeSeries(g.__remoteMiningHistory, tick, REMOTE_MINING_TS_CAPACITY * 200);
+}
