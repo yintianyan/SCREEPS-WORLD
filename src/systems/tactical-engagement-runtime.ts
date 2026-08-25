@@ -276,7 +276,8 @@ function collectMemberSnapshots(squad: SquadPlan): FocusFireMemberSnapshot[] {
   for (const member of squad.members) {
     const creep = Game.creeps[member.name];
     if (!creep) {
-      // Creep 不存在 — 标记为死亡
+      // Creep 不存在 — 标记为死亡（capability/hitsMax 全 0 因无 body 信息；
+      // planFocusFire 会过滤 alive=false 的成员，0 值不影响决策）
       result.push({
         name: member.name,
         role: member.role,
@@ -297,7 +298,8 @@ function collectMemberSnapshots(squad: SquadPlan): FocusFireMemberSnapshot[] {
       name: member.name,
       role: member.role,
       capability,
-      pos: creep.pos.y * 50 + creep.pos.x,
+      // pos 编码格式: x * 50 + y（与 buildTargetCandidate / chebyshevDist 一致）
+      pos: creep.pos.x * 50 + creep.pos.y,
       room: creep.pos.roomName,
       hits: creep.hits,
       hitsMax: creep.hitsMax,

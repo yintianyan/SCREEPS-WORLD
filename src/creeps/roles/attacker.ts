@@ -154,16 +154,28 @@ export function attackByFocusFire(): ActionCandidate<Creep | AnyStructure> {
       if (intent.attackType === "RANGED_ATTACK") {
         const dist = ac.creep.pos.getRangeTo(target.pos);
         if (dist <= 3) {
-          // 在远程范围内 — 使用 rangedAttack（或 rangedMassAttack 如果多目标）
+          // 在远程范围内 — 使用 rangedAttack
           ac.creep.rangedAttack(target as Creep | AnyStructure);
         } else {
           // 不在范围 — 移动接近（Movement 系统会处理，但这里作为 fallback）
           moveToTarget(ac.creep, target);
         }
-      } else {
-        // ATTACK (melee) 或 DISMANTLE
-        const result = ac.creep.attack(target);
+      } else if (intent.attackType === "DISMANTLE") {
+        // DISMANTLE 对建筑有效 — 使用 dismantle() 而非 attack()
+        const result = ac.creep.dismantle(target as AnyStructure);
         if (result === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, target);
+      } else if (intent.attackType === "ATTACK") {
+        // 近身攻击 — 先校验范围
+        const dist = ac.creep.pos.getRangeTo(target.pos);
+        if (dist <= 1) {
+          ac.creep.attack(target as Creep | AnyStructure);
+        } else {
+          // 不在近身范围 — 移动接近
+          moveToTarget(ac.creep, target);
+        }
+      } else {
+        // NO_ATTACK 或未知类型 — 不执行攻击动作，由 Movement 系统处理
+        if (intent.requiresMovement) moveToTarget(ac.creep, target);
       }
     },
   };

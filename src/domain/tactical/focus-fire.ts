@@ -427,8 +427,8 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
     );
   }
 
-  // RETREATING / DISENGAGING / REGROUPING / ABORTED → 禁止 AttackIntent
-  if (tacticalState === "RETREATING" || tacticalState === "DISENGAGING" || tacticalState === "ABORTED") {
+  // RETREATING / DISENGAGING / REGROUPING / COMPLETED / ABORTED → 禁止 AttackIntent
+  if (tacticalState === "RETREATING" || tacticalState === "DISENGAGING" || tacticalState === "REGROUPING" || tacticalState === "COMPLETED" || tacticalState === "ABORTED") {
     evidence.push(`tacticalState=${tacticalState} → no attack intent`);
     return buildEmptyPlan(
       squadId, objectiveId, tick,
@@ -464,18 +464,25 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
     return true;
   });
 
+  // ── 4. 状态机连续性 ── 在 validCandidates 检查之前推导状态
+  // （以便目标死亡/消失时正确反映状态而非 IDLE）
+  const engagementState = deriveEngagementState(snapshot, prevPlan);
+
   if (validCandidates.length === 0) {
     evidence.push("no valid candidates after scope filter");
+    // 根据状态机推导结果决定返回什么状态
+    const stateForEmpty: EngagementState =
+      engagementState === "TARGET_DEAD" ? "TARGET_DEAD" :
+      engagementState === "TARGET_LOST" ? "TARGET_LOST" :
+      engagementState === "TARGET_OUT_OF_RANGE" ? "TARGET_OUT_OF_RANGE" :
+      "IDLE";
     return buildEmptyPlan(
       squadId, objectiveId, tick,
-      "IDLE",
+      stateForEmpty,
       "no valid engagement targets",
       evidence, rejected, prevPlan,
     );
   }
-
-  // ── 4. 状态机连续性 ──
-  const engagementState = deriveEngagementState(snapshot, prevPlan);
 
   // TARGET_DEAD / TARGET_LOST / REASSESSING → 重新选择目标
   // REGROUP → 不产出攻击
