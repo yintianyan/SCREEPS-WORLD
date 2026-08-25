@@ -22,3 +22,6 @@ export * from "./role-intent";
 
 // ─── A5.4.2 Squad Formation & Tactical Movement ───
 export * from "./squad-formation";
+
+// ─── A5.4.3 Tactical Engagement & Focus Fire ───
+export * from "./focus-fire";

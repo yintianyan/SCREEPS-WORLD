@@ -47,6 +47,7 @@ import { warPlannerSystem } from "./systems/war-planner";
 import { warPlanningSystem } from "./systems/war-planning-system";
 import { tacticalRuntimeSystem } from "./systems/tactical-runtime-system";
 import { squadMovementSystem } from "./systems/squad-movement-runtime";
+import { tacticalEngagementSystem } from "./systems/tactical-engagement-runtime";
 import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
@@ -126,6 +127,11 @@ export const registry = new Registry()
   //   将 SquadMovementIntent 翻译为 PathFinder + registerMove 指令；
   //   在 tactical-runtime 之后运行，不执行 attack/heal）
   .registerSystem(squadMovementSystem)
+  // P2：战术交战运行时（A5.4.3 — interval=3t，消费 squad-movement 的 cohesion +
+  //   tactical-runtime 的 TacticalState，构建 FocusFireSnapshot 调用 domain 纯函数
+  //   planFocusFire，将 AttackIntent 写入 globalCache 供 attacker 角色消费；
+  //   在 squad-movement 之后运行，不执行 attack/heal）
+  .registerSystem(tacticalEngagementSystem)
   // P3：布局规划（低频）
   .registerSystem(layoutPlannerSystem)
   // P3：防御规划（独立于核心布局）

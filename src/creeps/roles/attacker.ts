@@ -24,6 +24,19 @@ interface TacticalIntent {
   targetId?: string;
 }
 
+/** A5.4.3 AttackIntent 接口（与 domain/tactical/focus-fire.ts AttackIntent 对齐）。 */
+interface FocusFireAttackIntent {
+  squadId: string;
+  creepId: string;
+  targetId: string;
+  targetPos: number;
+  targetRoom: string;
+  attackType: string;
+  priority: string;
+  expectedDamage: number;
+  requiresMovement: boolean;
+}
+
 /**
  * A5.4.1 从 globalCache 读取当前 creep 的战术指令。
  *
@@ -36,6 +49,20 @@ function readTacticalIntent(creepName: string): TacticalIntent | null {
     tacticalRoleIntents?: Map<string, TacticalIntent>;
   };
   return g.tacticalRoleIntents?.get(creepName) ?? null;
+}
+
+/**
+ * A5.4.3 从 globalCache 读取当前 creep 的 FocusFire AttackIntent。
+ *
+ * 角色层不导入 systems 层（R3 架构守卫），直接从 globalCache 读取
+ * tactical-engagement-runtime 写入的 AttackIntent。
+ * 无指令时返回 null → 角色回退到 A5.4.1 TacticalIntent → Legacy 行为。
+ */
+function readAttackIntent(creepName: string): FocusFireAttackIntent | null {
+  const g = globalCache() as Record<string, unknown> & {
+    attackIntents?: Map<string, FocusFireAttackIntent>;
+  };
+  return g.attackIntents?.get(creepName) ?? null;
 }
 
 /** 低血撤退：标记回收 → role-runner 下 tick 短路 idle → spawn-manager recyclePass 归航。 */
@@ -85,6 +112,61 @@ function getPowerBankCached(room: Room): StructurePowerBank | undefined {
   ) as StructurePowerBank | undefined;
   g.__powerBanks[room.name] = { tick: Game.time, pb };
   return pb;
+}
+
+/**
+ * A5.4.3 Focus Fire AttackIntent 消费 — 最高优先级的攻击候选。
+ *
+ * 当 tactical-engagement-runtime 产出 AttackIntent 时，attacker 按指令执行
+ * 集火攻击：
+ *   - ATTACK → 近身 attack
+ *   - RANGED_ATTACK → rangedAttack
+ *   - NO_ATTACK + requiresMovement → 不消费候选，让 Movement 系统处理
+ *
+ * 边界：无指令时返回 undefined → 回退到 A5.4.1 TacticalIntent → Legacy。
+ *      targetId 可能无效（目标死亡）→ resolve 时检查并回退。
+ *      requiresMovement=true → 不直接 resolve 目标，让 Movement 系统先移动到位。
+ */
+export function attackByFocusFire(): ActionCandidate<Creep | AnyStructure> {
+  return {
+    name: "attacker:focus-fire",
+    resolve: (ac) => {
+      if (markRetreat(ac.creep)) return undefined;
+      const intent = readAttackIntent(ac.creep.name);
+      if (!intent) return undefined; // 无 FocusFire 指令 → 回退 A5.4.1
+      // NO_ATTACK → 不消费候选（目标不在射程，Movement 系统处理接近）
+      if (intent.attackType === "NO_ATTACK") return undefined;
+      // 解析目标
+      const target = Game.getObjectById(intent.targetId as Id<Creep | AnyStructure>);
+      if (!target) return undefined; // 目标无效 → 回退
+      // 攻击类型决定执行方式
+      return target;
+    },
+    execute: (ac, target) => {
+      const intent = readAttackIntent(ac.creep.name);
+      if (!intent) {
+        // 无 intent（不应到达此处，但防御性处理）→ Legacy attack
+        const result = ac.creep.attack(target);
+        if (result === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, target);
+        return;
+      }
+      // 按攻击类型执行
+      if (intent.attackType === "RANGED_ATTACK") {
+        const dist = ac.creep.pos.getRangeTo(target.pos);
+        if (dist <= 3) {
+          // 在远程范围内 — 使用 rangedAttack（或 rangedMassAttack 如果多目标）
+          ac.creep.rangedAttack(target as Creep | AnyStructure);
+        } else {
+          // 不在范围 — 移动接近（Movement 系统会处理，但这里作为 fallback）
+          moveToTarget(ac.creep, target);
+        }
+      } else {
+        // ATTACK (melee) 或 DISMANTLE
+        const result = ac.creep.attack(target);
+        if (result === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, target);
+      }
+    },
+  };
 }
 
 /**
@@ -229,9 +311,10 @@ export function attackerHold(creep: Creep, ctx: TickContext): boolean {
 const policy: RolePolicy = {
   combat: true,
   hold: attackerHold,
-  // A5.4.1：tactical-intent 优先于 Legacy 候选；无指令时回退到 PB → enemies → structures
-  acquire: [attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures()],
-  work: [attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures()],
+  // A5.4.3：focus-fire 最高优先 → A5.4.1 tactical-intent → Legacy 候选
+  // 无 FocusFire 指令时回退到 A5.4.1 TacticalIntent → PB → enemies → structures
+  acquire: [attackByFocusFire(), attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures()],
+  work: [attackByFocusFire(), attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures()],
 };
 
 export const attackerRole = defineRole("attacker", 2 as Priority, policy);
