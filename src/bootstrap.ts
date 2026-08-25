@@ -48,6 +48,7 @@ import { warPlanningSystem } from "./systems/war-planning-system";
 import { tacticalRuntimeSystem } from "./systems/tactical-runtime-system";
 import { squadMovementSystem } from "./systems/squad-movement-runtime";
 import { tacticalEngagementSystem } from "./systems/tactical-engagement-runtime";
+import { combatMicroSystem } from "./systems/combat-micro-runtime";
 import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";

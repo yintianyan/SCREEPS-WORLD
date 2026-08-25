@@ -25,3 +25,6 @@ export * from "./squad-formation";
 
 // ─── A5.4.3 Tactical Engagement & Focus Fire ───
 export * from "./focus-fire";
+
+// ─── A5.5 Advanced Tactical Combat Micro ───
+export * from "./combat-micro";
