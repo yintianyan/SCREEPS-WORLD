@@ -19,3 +19,6 @@ export * from "./formation";
 
 // ─── A5.4.1 Role Intent 映射 + 生命周期 ───
 export * from "./role-intent";
+
+// ─── A5.4.2 Squad Formation & Tactical Movement ───
+export * from "./squad-formation";

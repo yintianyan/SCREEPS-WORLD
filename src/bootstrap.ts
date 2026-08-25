@@ -46,6 +46,7 @@ import { decisionTraceSystem } from "./systems/decision-trace-system";
 import { warPlannerSystem } from "./systems/war-planner";
 import { warPlanningSystem } from "./systems/war-planning-system";
 import { tacticalRuntimeSystem } from "./systems/tactical-runtime-system";
+import { squadMovementSystem } from "./systems/squad-movement-runtime";
 import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
@@ -120,6 +121,11 @@ export const registry = new Registry()
   //   将 TacticalDecision 映射为 RoleActionIntent 写入 globalCache 供角色消费；
   //   在 war-planner 之后运行，不执行 Game action）
   .registerSystem(tacticalRuntimeSystem)
+  // P2：编队移动运行时（A5.4.2 — interval=1t，消费 tactical-runtime 的 SquadPlan，
+  //   构建 SquadSnapshot 调用 domain 纯函数 produceSquadMovementIntent，
+  //   将 SquadMovementIntent 翻译为 PathFinder + registerMove 指令；
+  //   在 tactical-runtime 之后运行，不执行 attack/heal）
+  .registerSystem(squadMovementSystem)
   // P3：布局规划（低频）
   .registerSystem(layoutPlannerSystem)
   // P3：防御规划（独立于核心布局）
