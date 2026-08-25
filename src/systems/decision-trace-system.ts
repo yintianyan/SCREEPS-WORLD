@@ -90,6 +90,7 @@ export const decisionTraceSystem: System = {
     collectRecoveryDecisions(ctx, cache, tick);
     collectSpawnDecisions(ctx, cache, tick);
     collectDefenseDecisions(ctx, cache, tick);
+    collectWarPlanDecisions(ctx, cache, tick);
 
     // ── 3. Trace GC ──
     gcTrace(cache.ringBuffer, tick);
@@ -296,7 +297,25 @@ function collectRecoveryDecisions(
 ): void {
   const g = globalCache();
   const actionTable = g.recoveryActionTable;
-  if (!actionTable || actionTable.size === 0) return;
+
+  // A5.3.1 GAP-1: 追踪 war abort → recovery 链路。
+  // warAbortSignals 被 recovery-execution-system 消费后转化为 RecoveryAction，
+  // 出现在 actionTable 中。这里追踪 ABORT_TRIGGERED → RECOVERY_REQUESTED 链。
+  // 信号已消费（g.warAbortSignals === undefined），但可通过 actionTable 中的
+  // targetFailureId 前缀 "war-abort:" 识别来自军事止损的 action。
+  let warAbortActions = 0;
+  if (actionTable && actionTable.size > 0) {
+    for (const [, record] of actionTable) {
+      if (record.failureId?.startsWith("war-abort:")) {
+        warAbortActions++;
+      }
+    }
+  }
+
+  if (!actionTable || actionTable.size === 0) {
+    // 即使没有 actionTable，如果有 war abort 相关的 action 也需要记录
+    if (warAbortActions === 0) return;
+  }
 
   const snapshot = buildSnapshot(ctx, tick, "empire", "RECOVERY");
   const snapHash = snapshotHash(snapshot);
@@ -310,6 +329,8 @@ function collectRecoveryDecisions(
   let succeeded = 0;
   let failed = 0;
   const actionTypes: string[] = [];
+
+  if (!actionTable) return;
 
   for (const [, record] of actionTable) {
     if (record.state === "executing" || record.state === "submitted") submitted++;
@@ -680,6 +701,157 @@ function collectDefenseDecisions(
       pushRecord(cache.ringBuffer, record);
     }
   }
+}
+
+// ─── A5.3 军事行动计划决策采集 ──────────────────────────────
+
+/**
+ * 从 A5.3 war-planning-system 产出的 WarPlan 构建决策记录。
+ *
+ * 采集 globalCache.warPlanCache（war-planning-system 每 interval 写入），
+ * 将军事行动计划接入 Decision Trace 追踪链。
+ *
+ * 记录规则：
+ * - 有 WarPlan → 记录（包含 operationId, type, target, posture, risk, econGuard, netValue）
+ * - 无 WarPlan 但 posture=war → 记录 "no plan" 原因
+ * - posture≠war → 不记录（CEASEFIRE 无军事决策）
+ * - 被拒绝的目标候选 → RejectedAlternatives
+ */
+function collectWarPlanDecisions(
+  ctx: TickContext,
+  cache: DecisionTraceCache,
+  tick: number,
+): void {
+  const g = globalCache();
+  const warPlanCache = g.warPlanCache;
+  const posture = Memory.kernel?.strategy?.posture ?? "develop";
+
+  // posture 非 war 且无活跃计划 → 不记录
+  if (posture !== "war" && !warPlanCache?.plan) return;
+
+  const plan = warPlanCache?.plan;
+  const scope = plan?.operation.target.roomName ?? "empire";
+
+  const snapshot = buildSnapshot(ctx, tick, scope, "MILITARY");
+  const snapHash = snapshotHash(snapshot);
+  if (!cache.snapshotRegistry.has(snapHash)) {
+    cache.snapshotRegistry.set(snapHash, snapshot);
+  }
+
+  const reasons: DecisionReason[] = [];
+  const rejected: RejectedAlternative[] = [];
+  let selectedAction: string;
+  let expectedOutcome: string;
+  let severity: DecisionSeverity = "NORMAL";
+
+  if (plan) {
+    // 有计划
+    reasons.push({
+      metric: "warPosture",
+      actual: plan.posture.posture,
+      threshold: "CEASEFIRE",
+      severity: plan.posture.offensiveAuthorized ? "warning" : "info",
+      consequence: plan.posture.reasons.join("; "),
+    });
+    reasons.push({
+      metric: "operationType",
+      actual: plan.operation.type,
+      threshold: "none",
+      severity: "info",
+      consequence: `目标: ${plan.operation.objective}`,
+    });
+    reasons.push({
+      metric: "riskLevel",
+      actual: plan.risk.level,
+      threshold: "LOW",
+      severity: plan.risk.level === "CRITICAL" ? "critical" : plan.risk.level === "HIGH" ? "warning" : "info",
+      consequence: `风险分数: ${plan.risk.score}`,
+    });
+    reasons.push({
+      metric: "economicGuard",
+      actual: plan.economicGuard.passed ? "PASS" : "FAIL",
+      threshold: "PASS",
+      severity: plan.economicGuard.passed ? "info" : "critical",
+      consequence: plan.economicGuard.recommendation || "经济护栏通过",
+    });
+    reasons.push({
+      metric: "netValue",
+      actual: plan.expectedValue.netValue,
+      threshold: 0,
+      severity: plan.expectedValue.netValue < 0 ? "critical" : "info",
+      consequence: `建议: ${plan.expectedValue.recommendation}`,
+    });
+    if (plan.capabilityGaps.totalGapRatio > 0.3) {
+      reasons.push({
+        metric: "capabilityGap",
+        actual: plan.capabilityGaps.totalGapRatio,
+        threshold: 0.3,
+        severity: "warning",
+        consequence: `能力缺口较大: ${plan.capabilityGaps.evidence.join(", ")}`,
+      });
+    }
+
+    // 被拒绝的目标候选
+    for (const alt of plan.targetSelection.rejectedAlternatives) {
+      rejected.push({
+        action: `TARGET_${alt.roomName}`,
+        reason: alt.reason,
+      });
+    }
+
+    selectedAction = `WAR_PLAN_${plan.operation.type}_${plan.operation.target.roomName}`;
+    expectedOutcome = plan.expectedValue.recommendation === "PROCEED"
+      ? `军事行动 ${plan.operation.operationId} 执行: ${plan.operation.type} → ${plan.operation.target.roomName}`
+      : `军事行动 ${plan.operation.operationId} 延迟/降级: ${plan.expectedValue.recommendation}`;
+
+    severity = plan.risk.level === "CRITICAL" || !plan.economicGuard.passed
+      ? "CRITICAL"
+      : plan.risk.level === "HIGH" || plan.expectedValue.netValue < 0
+        ? "IMPORTANT"
+        : "NORMAL";
+  } else {
+    // posture=war 但无计划
+    reasons.push({
+      metric: "empirePosture",
+      actual: posture,
+      threshold: "war",
+      severity: "warning",
+      consequence: "战争姿态但无活跃军事行动计划",
+    });
+    selectedAction = "WAR_PLAN_NONE";
+    expectedOutcome = "等待威胁评估或条件改善后产生军事行动计划";
+    severity = "NORMAL";
+  }
+
+  const evidence: DecisionEvidence = {
+    threat: {
+      hostileCount: 0,
+      posture,
+    },
+  };
+
+  const dHash = decisionHash(selectedAction, reasons, evidence, rejected);
+  const decisionId = makeDecisionId(tick, ++cache.seq);
+  const record: DecisionRecord = {
+    decisionId,
+    tick,
+    category: "MILITARY",
+    actor: "war-planning",
+    scope,
+    inputSnapshotHash: snapHash,
+    reasons,
+    evidence,
+    selectedAction,
+    rejectedAlternatives: rejected,
+    expectedOutcome,
+    correlationId: makeCorrelationId(decisionId, tick),
+    severity,
+    decisionHash: dHash,
+    createdAt: tick,
+    lifecycle: "ACTIVE",
+  };
+
+  pushRecord(cache.ringBuffer, record);
 }
 
 // ─── Snapshot 构建器（从 Runtime State 采集）──────────────

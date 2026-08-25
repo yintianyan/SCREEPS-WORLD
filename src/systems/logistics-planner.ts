@@ -43,7 +43,7 @@ import type { SupplyContract } from "../domain/economy/supply-contract";
 import { isContractActive } from "../domain/economy/supply-contract";
 import type { SupplyNode } from "../domain/operation/supply-node";
 import type { DemandNode } from "../domain/operation/demand-node";
-import type { ResourceType } from "../domain/operation/agenda-item";
+import type { ResourceType, OperationPriority } from "../domain/operation/agenda-item";
 import {
   computeLogisticsHealth,
   type LogisticsHealthResult,
@@ -106,6 +106,28 @@ export const logisticsPlannerSystem: System = {
     const networkSnapshot = globalCache().networkSnapshot;
     const surpluses: SupplyNode[] = networkSnapshot?.supplyNodes ?? [];
     const deficits: DemandNode[] = networkSnapshot?.demandNodes ?? [];
+
+    // 1b-A5.3. 战争物流需求注入：从 globalCache.warLogisticsDemand 提取
+    //   WarPlan 产出的 energy/boost/transport/replacement 需求，
+    //   适配为 DemandNode 注入物流规划，使战争物资进入物流网络。
+    const warLogi = globalCache().warLogisticsDemand;
+    if (warLogi && warLogi.tick >= ctx.tick - 100) {
+      // 能量需求（孵化 + 运输）— 战争物资优先级 high
+      if (warLogi.energy > 0) {
+        deficits.push({
+          room: warLogi.sponsor,
+          resource: "energy" as const,
+          requested: warLogi.energy,
+          priority: 1 as OperationPriority,
+          deadline: ctx.tick + 2000,
+          criticality: "high" as const,
+          fulfilled: 0,
+          remaining: warLogi.energy,
+          firstSeen: warLogi.tick,
+          timestamp: warLogi.tick,
+        });
+      }
+    }
 
     // 1c. 收集运力规划输入
     const capacityInputs = collectCapacityInputs(snapshots, ctx.tick);

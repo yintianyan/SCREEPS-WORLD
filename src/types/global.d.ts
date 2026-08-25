@@ -449,6 +449,19 @@ declare global {
        * 无 schema 变更（遵循 R12 运行时字段先例）。
        */
       spawnedKeys?: Record<string, boolean>;
+      /**
+       * A5.3 运行时编队需求（遵循 R12 运行时字段先例，无 schema 版本变更）。
+       * 由 war-planning-system 写入、war-planner 消费。存在时 war-planner 使用
+       * A5.3 能力推导的编队替代旧 decideSquadSize/decideHealerCount；不存在时
+       * 退回旧路径（兼容性）。
+       */
+      a5ForceReq?: {
+        attacker: number;
+        healer: number;
+        tank: number;
+        dismantler: number;
+        total: number;
+      };
     };
     /**
      * 战争失败目标黑名单（v27+，war-planner 写入）：核验结论 failure/unknown 的

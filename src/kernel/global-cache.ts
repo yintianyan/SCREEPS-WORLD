@@ -296,6 +296,35 @@ export interface GlobalCache {
    * key = targetRoomName，value = RemoteDefenseDecision。供 decision-trace 消费。
    * heap 存储 — global reset 丢失可接受。 */
   remoteDefenseDecisions?: Map<string, import("../domain/defense/remote-defense").RemoteDefenseDecision>;
+  /** A5.3：per-interval 军事行动计划结果（war-planning-system 按 interval 写入）。
+   * 供 war-planner / decision-trace 消费。heap 存储 — global reset 丢失可接受。 */
+  warPlanCache?: { tick: number; plan: import("../domain/military/war-planning").WarPlan | undefined };
+  /** A5.3：战争物流需求（war-planning-system 从 WarPlan.logisticsRequirement 提取写入）。
+   * 供 logistics-planner 消费作为额外 demand node。heap 存储 — global reset 丢失可接受。 */
+  warLogisticsDemand?: {
+    tick: number;
+    sponsor: string;
+    targetRoom: string;
+    energy: number;
+    boost: number;
+    transport: number;
+    replacement: number;
+  };
+  /** A5.3：战争止损信号（war-planner demobilize 时写入）。
+   * 供 recovery-execution-system 消费，触发经济恢复动作。
+   * A5.3.1 GAP-1 修复：recovery-execution-system 通过纯函数 mapAbortSignalsToRecoveryActions
+   * 将信号转换为 RecoveryAction，复用 A4.6 lifecycle 幂等机制。
+   * heap 存储 — global reset 丢失可接受。 */
+  warAbortSignals?: {
+    tick: number;
+    reason: string;
+    targetRoom: string;
+    sponsor: string;
+    spawned: number;
+    outcome: string;
+    /** A5.3 operationId（如果来自 A5.3 路径，供 Decision Trace 追踪）。 */
+    operationId?: string;
+  };
 }
 
 /**

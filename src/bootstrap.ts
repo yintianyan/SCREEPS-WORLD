@@ -44,6 +44,7 @@ import { empireHealthSystem } from "./systems/empire-health-system";
 import { recoveryExecutionSystem } from "./systems/recovery-execution-system";
 import { decisionTraceSystem } from "./systems/decision-trace-system";
 import { warPlannerSystem } from "./systems/war-planner";
+import { warPlanningSystem } from "./systems/war-planning-system";
 import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
@@ -107,7 +108,11 @@ export const registry = new Registry()
   //   构建 DecisionSnapshot + DecisionRecord 写入 Ring Buffer；不参与决策，
   //   只做可观测性追踪 + Trace GC + Memory Budget 监控）。
   .registerSystem(decisionTraceSystem)
-  // P2：战争规划（war 姿态才选目标推 attacker；非 war 收摊）
+  // P2：战争规划（A5.3 — 低频 10t，domain 层纯函数薄壳；在 war-planner 之前运行，
+  //   产出 WarPlan 写入 globalCache.warPlanCache + 兼容 Memory.kernel.warPlan。
+  //   war-planner 消费 WarPlan 执行 spawn/止损/核验。纯函数不执行 Game action）
+  .registerSystem(warPlanningSystem)
+  // P2：战争执行（war 姿态才选目标推 attacker；非 war 收摊；消费 war-planning 产出）
   .registerSystem(warPlannerSystem)
   // P3：布局规划（低频）
   .registerSystem(layoutPlannerSystem)

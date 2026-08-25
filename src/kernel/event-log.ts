@@ -119,6 +119,10 @@ export const enum EventKind {
   AccountingDrift = 38,
   /** P3 物流请求 TTL 过期出池（不静默丢单回执）。r = 房间，d = [key]。 */
   RequestExpired = 39,
+  /** A5.3 军事行动计划创建：war-planning-system 产出一个新 WarPlan。
+   * d = [statusCode(0=PLANNED~9=EXPIRED), priorityScore]；r = 目标房名。
+   * 供战斗黑匣子复盘：计划创建时的初始状态与优先级。 */
+  WarPlanCreated = 40,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

@@ -4,6 +4,14 @@
  * 资格 v1 原则「不见不打」：普通房 + 有主非本人 + 情报新鲜 + 塔数 < maxTowers +
  * 未被占用（详见 selectWarTarget）；排序通勤成本最小（pathCost 缺失回退线性距离），
  * sponsor = 情报归属的 home。
+ *
+ * LEGACY_COMPATIBILITY_ONLY（A5.3.1）：
+ *   本模块的 selectWarTarget / decideSquadSize 是 Legacy 路径。
+ *   A5.3 的 planMilitaryOperation()（domain/military/war-planning.ts）是 Canonical 路径。
+ *   war-planner.ts 仅在 a5ForceReq 不存在时 fallback 到本模块。
+ *   不产生新决策权——最终 WarPlan 由 war-planning-system 的 planMilitaryOperation() 裁决。
+ *   删除条件：当 war-planning-system 完全接管 WarPlan 产出后，
+ *   本模块可安全删除（包括 war-planner.ts 中的 import 与 fallback 分支）。
  */
 import type { RoomKind } from "../intel";
 import { roomLinearDistance } from "../remote/targeting";

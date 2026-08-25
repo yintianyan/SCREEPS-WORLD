@@ -30,7 +30,8 @@ export type DecisionCategory =
   | "DEFENSE_PREP"
   | "RESOURCE_ALLOCATION"
   | "ROUTE_SELECTION"
-  | "CONTRACT";
+  | "CONTRACT"
+  | "MILITARY";
 
 export type DecisionSeverity = "DEBUG" | "NORMAL" | "IMPORTANT" | "CRITICAL";
 

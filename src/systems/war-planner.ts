@@ -43,7 +43,7 @@ import {
   submitRequest,
 } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
-import { querySquad } from "../kernel/global-cache";
+import { querySquad, globalCache } from "../kernel/global-cache";
 
 /** 收摊原因编码（WarOutcome 事件 d[2]）。 */
 const REASON_POSTURE = 0;
@@ -73,9 +73,15 @@ export const warPlannerSystem: System = {
     // 休战闸挡「A 止损 → 立刻打 B → 再止损 → 打 C」的跨目标添油循环。
     if ((Memory.kernel?.warStandDownUntil ?? 0) > ctx.tick) return;
     // 1. 维护战争计划：无计划 / 计划超期 → 重新选目标。
+    //    LEGACY_COMPATIBILITY_ONLY：selectWarTarget / decideSquadSize 是 Legacy 路径，
+    //    只在 A5.3 war-planning-system 未产出 WarPlan 时作为 fallback。
+    //    删除条件：当 war-planning-system 完全接管 WarPlan 产出后，
+    //    此块可安全删除（包括 selectWarTarget/decideSquadSize import）。
+    //    不产生新决策权——最终 WarPlan 由 war-planning-system 的 planMilitaryOperation() 裁决。
     const existing = Memory.kernel?.warPlan;
     const needSelect = !existing || ctx.tick - existing.since > CONFIG.war.planTimeout;
     if (needSelect) {
+      // LEGACY_COMPATIBILITY_ONLY: selectWarTarget fallback
       const next = selectWarTarget(buildTargetInput(ctx.tick));
       if (!next) {
         // 无合格目标（情报全过期 / 无玩家邻居 / 目标全在黑名单）：
@@ -89,6 +95,7 @@ export const warPlannerSystem: System = {
       Memory.kernel.warPlan = {
         targetRoom: next.roomName,
         sponsor: next.sponsor,
+        // LEGACY_COMPATIBILITY_ONLY: decideSquadSize fallback (A5.3 a5ForceReq overrides at runtime)
         squadSize: decideSquadSize(next.towersSeen, CONFIG.war.squadBase, CONFIG.war.squadPerTower),
         since: ctx.tick,
         towersSeen: next.towersSeen,
@@ -115,7 +122,17 @@ export const warPlannerSystem: System = {
     //    boost 完成度自下而上派生（body 任一部件带 boost 即计）— 不入 Memory，
     //    与 healerCount 同理；编队成员由 lab-system 在 build 相位经 boost 链强化。
     //    P0-1：从全局编队索引取子集，替代独立全量遍历 Game.creeps。
-    const healerCount = decideHealerCount(plan.squadSize, CONFIG.war.healerSquadRatio);
+    //
+    //    A5.3 集成：当 a5ForceReq 存在时（war-planning-system 写入），
+    //    使用 A5.3 能力推导的编队需求替代旧 decideSquadSize/decideHealerCount。
+    //    LEGACY_COMPATIBILITY_ONLY：当 a5ForceReq 不存在时（war-planning-system 未运行），
+    //    fallback 到 decideHealerCount(plan.squadSize)。
+    //    不产生新决策——plan.squadSize 已在 needSelect 块中由 Legacy 路径决定。
+    //    删除条件：当 war-planning-system 完全接管后，a5ForceReq 永远存在，
+    //    fallback 分支永远不会执行，可安全删除。
+    const a5 = plan.a5ForceReq;
+    const attackerTarget = a5 ? a5.attacker : plan.squadSize;
+    const healerCount = a5 ? a5.healer : decideHealerCount(plan.squadSize, CONFIG.war.healerSquadRatio);
     let attackerLive = 0;
     let healerLive = 0;
     let boostedLive = 0;
@@ -134,7 +151,8 @@ export const warPlannerSystem: System = {
 
     // live+pending < 编制时每轮至多补 1 个新 key — 队列被能量门禁卡住时
     // pending 封顶编制，spawned 不会因空转膨胀。
-    if (attackerLive + pendingAttackers < plan.squadSize) {
+    // A5.3：attackerTarget 来自 a5ForceReq（attacker+ranged 合并编制）。
+    if (attackerLive + pendingAttackers < attackerTarget) {
       submitSquadRequest(queue, plan, sponsor, "attacker", attackerLive + pendingAttackers, cap, ctx.tick);
     }
     if (healerLive + pendingHealers < healerCount) {
@@ -145,6 +163,8 @@ export const warPlannerSystem: System = {
     //    被打残才回落 build 重组。门禁降级（无 lab / 宽限期过）→ undefined 豁免：
     //    sponsor 缺基础矿时反应链产不出 T3，永久等待等于不打，裸攻由止损链兜底。
     const liveTotal = attackerLive + healerLive;
+    // A5.3：满编阈值使用 attackerTarget + healerCount（与 a5ForceReq 一致）
+    const fullSquadSize = attackerTarget + healerCount;
     const boostGate = evaluateBoostGate(
       boostedLive,
       liveTotal,
@@ -154,7 +174,7 @@ export const warPlannerSystem: System = {
     plan.phase = nextWavePhase(
       plan.phase ?? "build",
       liveTotal,
-      plan.squadSize + healerCount,
+      fullSquadSize,
       CONFIG.war.waveRegroupRatio,
       boostGate,
     );
@@ -199,10 +219,11 @@ export const warPlannerSystem: System = {
     }
 
     // 4. 战损止损（合计基数）：投入超过编制 × 倍数仍未见效 → 判消耗战失败收摊。
+    //    A5.3：止损基数使用 fullSquadSize（attackerTarget + healerCount）。
     if (
       isAttritionLost(
         plan.spawned ?? 0,
-        plan.squadSize + healerCount,
+        fullSquadSize,
         CONFIG.war.casualtyMultiplier,
       )
     ) {
@@ -321,6 +342,24 @@ export function demobilize(tick: number, reason: number): void {
       ` blacklist=${cooldown}t, reason=${reason})`,
     );
   }
+
+  // A5.3.1 GAP-1 修复：写入止损信号供 recovery-execution-system 消费。
+  // recovery-execution-system 通过纯函数 mapAbortSignalsToRecoveryActions 将信号
+  // 转换为 RecoveryAction，复用 A4.6 lifecycle 幂等机制（recoveryIdempotencyKey 去重）。
+  // Military 只产出 Signal，不执行 Recovery。A4.6 负责 Signal → Action → 执行。
+  const REASON_LABELS = ["POSTURE", "ATTRITION", "NO_TARGET", "PLAN_TIMEOUT"];
+  const g = globalCache();
+  // 读取 A5.3 operationId（如果 war-planning-system 已写入兼容字段）
+  const compatOp = plan as typeof plan & { operationId?: string };
+  g.warAbortSignals = {
+    tick,
+    reason: REASON_LABELS[reason] ?? `UNKNOWN(${reason})`,
+    targetRoom: plan.targetRoom,
+    sponsor: plan.sponsor,
+    spawned: plan.spawned ?? 0,
+    outcome,
+    operationId: compatOp.operationId,
+  };
   recordEvent(EventKind.WarOutcome, plan.targetRoom, [
     OUTCOME_CODES[outcome],
     plan.spawned ?? 0,

@@ -53,6 +53,11 @@ import {
   type RecoveryWorldSnapshot,
 } from "../domain/strategy/recovery-lifecycle";
 import type { FailureNode } from "../domain/strategy/failure-propagation";
+import { mapAbortSignalsToRecoveryActions, type WarAbortSignal } from "../domain/military/abort-recovery";
+import { recordEvent, EventKind } from "../kernel/event-log";
+
+/** 上次消费 warAbortSignals 的 tick（防止同一信号重复消费）。 */
+let lastConsumedAbortTick = -1;
 
 // ─── 系统定义 ──────────────────────────────────────────────
 
@@ -65,8 +70,15 @@ export const recoveryExecutionSystem: System = {
     const g = globalCache();
     const tick = ctx.tick;
 
-    // ── 1. 读取 recoveryActions ──
-    const actions = g.recoveryActions ?? [];
+    // ── 1. 读取 recoveryActions + warAbortSignals ──
+    // A5.3.1 GAP-1 修复：消费军事止损信号，通过纯函数转换为 RecoveryAction。
+    // Military 只产出 Signal（domain 纯函数 mapAbortSignalsToRecoveryActions），
+    // 不执行 Recovery。本系统负责将 Signal → Action → 执行。
+    // 幂等性：同一 tick 的 signal 只消费一次（lastConsumedAbortTick 去重），
+    // 同一 sponsor+reason 的 action 由 recoveryIdempotencyKey 去重。
+    const empireActions = g.recoveryActions ?? [];
+    const warActions = consumeWarAbortSignals(g, tick);
+    const actions = [...empireActions, ...warActions];
     if (actions.length === 0) {
       // 无 Recovery Action — 仍然需要做 Verification（检查已提交的 Action）
       verifyPendingActions(g, ctx);
@@ -958,4 +970,66 @@ function simpleDefenderBody(energyCapacity: number): BodyPartConstant[] {
   if (energyCapacity >= 400) return [TOUGH, ATTACK, ATTACK, MOVE, MOVE, MOVE];
   if (energyCapacity >= 250) return [ATTACK, ATTACK, MOVE, MOVE];
   return [ATTACK, MOVE];
+}
+
+// ─── A5.3.1 GAP-1: War Abort Signal 消费 ──────────────────
+
+/**
+ * 消费 globalCache.warAbortSignals，通过纯函数转换为 RecoveryAction。
+ *
+ * 幂等性机制（双层去重）：
+ *   1. tick 级去重：lastConsumedAbortTick 确保同一 tick 不重复消费
+ *   2. domain 级去重：recoveryIdempotencyKey 确保同一 sponsor+reason
+ *      不重复提交（A4.6 lifecycle cooldown 机制）
+ *
+ * 边界：
+ *   - 不直接读 Military 内部状态
+ *   - 只读 globalCache.warAbortSignals（Military 写入的公开信号）
+ *   - 通过 domain 纯函数 mapAbortSignalsToRecoveryActions 转换
+ *   - 不执行 Recovery（只产出 Action，由 translateAndSubmit 执行）
+ *
+ * @param g globalCache
+ * @param tick 当前 tick
+ * @returns 转换后的 RecoveryAction 列表
+ */
+function consumeWarAbortSignals(
+  g: ReturnType<typeof globalCache>,
+  tick: number,
+): RecoveryAction[] {
+  const signal = g.warAbortSignals;
+  if (!signal) return [];
+
+  // tick 级幂等：同一 tick 不重复消费
+  if (signal.tick === lastConsumedAbortTick) return [];
+
+  // 只消费当前或更早 tick 写入的信号（不消费未来信号）
+  if (signal.tick > tick) return [];
+
+  // 标记为已消费
+  lastConsumedAbortTick = signal.tick;
+
+  // 通过 domain 纯函数转换
+  const actions = mapAbortSignalsToRecoveryActions([signal as WarAbortSignal]);
+
+  // 记录 Decision Trace 事件
+  if (actions.length > 0) {
+    const action = actions[0]!;
+    recordEvent(EventKind.WarOutcome, signal.targetRoom, [
+      -1, // 特殊编码：Recovery triggered
+      signal.spawned,
+      actions.length,
+    ]);
+    console.log(
+      `[${tick}] recovery: WAR_ABORT consumed` +
+      ` reason=${signal.reason} outcome=${signal.outcome}` +
+      ` sponsor=${signal.sponsor} target=${signal.targetRoom}` +
+      ` → action=${action.type} priority=${action.priority}` +
+      ` urgent=${action.urgent}`,
+    );
+  }
+
+  // 消费后清除信号（防止下一 tick 重复消费）
+  g.warAbortSignals = undefined;
+
+  return actions;
 }
