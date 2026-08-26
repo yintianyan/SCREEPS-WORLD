@@ -47,6 +47,7 @@ import { experienceCollectorSystem } from "./systems/intelligence/experience-col
 import { strategyEvaluationSystem } from "./systems/intelligence/strategy-evaluation-system";
 import { predictionSystem } from "./systems/intelligence/prediction-system";
 import { calibrationResolutionSystem } from "./systems/intelligence/calibration-resolution-system";
+import { intelligenceStateSystem } from "./systems/intelligence/intelligence-state-system";
 import { warPlannerSystem } from "./systems/war-planner";
 import { warPlanningSystem } from "./systems/war-planning-system";
 import { tacticalRuntimeSystem } from "./systems/tactical-runtime-system";
@@ -134,6 +135,12 @@ export const registry = new Registry()
   //   低频计算 ModelCalibrationProfile（每 5000t）。
   //   Shadow-Only：不执行 Game API，不修改 Strategy，Resolution 不自动进入执行系统）
   .registerSystem(calibrationResolutionSystem)
+  // P3：Intelligence State（A6.5 — 低频 500t post 阶段，只读消费 A6.1-A6.4 既有数据，
+  //   调用 Domain 纯函数 computeIntelligenceState 产出 IntelligenceState。
+  //   REL-001：不写入任何 cache — IntelligenceState 是只读投影，不持久化。
+  //   在 calibration-resolution 之后运行，消费最新 calibration profile。
+  //   Shadow-Only：不执行 Game API，不修改 Strategy，不解决冲突，不产出万能分数）
+  .registerSystem(intelligenceStateSystem)
   // P2：战争规划（A5.3 — 低频 10t，domain 层纯函数薄壳；在 war-planner 之前运行，
   //   产出 WarPlan 写入 globalCache.warPlanCache + 兼容 Memory.kernel.warPlan。
   //   war-planner 消费 WarPlan 执行 spawn/止损/核验。纯函数不执行 Game action）
