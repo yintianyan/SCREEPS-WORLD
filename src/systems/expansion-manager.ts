@@ -487,12 +487,15 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
     return;
   }
 
-  // 检查 harvester/transporter 活跃度
+  // 检查 harvester/物流活跃度。
+  // Phantom Transporter Bug 修复：系统不存在 "transporter" 角色，实际运输由 hauler
+  // 和 distributor 承担。此处检查 hauler 或 distributor 存在即为物流活跃。
   const harvesterActive = Object.values(Game.creeps).some(
     c => c.memory.home === expansion.target && c.memory.role === "harvester",
   );
-  const transporterActive = Object.values(Game.creeps).some(
-    c => c.memory.home === expansion.target && c.memory.role === "transporter",
+  const logisticsActive = Object.values(Game.creeps).some(
+    c => c.memory.home === expansion.target &&
+      (c.memory.role === "hauler" || c.memory.role === "distributor"),
   );
 
   const spawns = targetRoom.find(FIND_MY_SPAWNS);
@@ -505,7 +508,7 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
     spawnBuilt: spawns.length > 0,
     spawnCanSpawn,
     harvesterActive,
-    transporterActive,
+    transporterActive: logisticsActive,
     extensionsBuilt: false,
     containerBuilt: false,
     roadsBuilt: false,
@@ -535,7 +538,7 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
     spawnBuilt: spawns.length > 0,
     spawnCanSpawn,
     harvesterActive,
-    transporterActive,
+    transporterActive: logisticsActive,
     extensionsBuilt: extensions.length >= 5, // RCL2 = 5 extensions
     containerBuilt: containers.length > 0,
     roadsBuilt: true, // 简化：不强制道路
@@ -592,8 +595,12 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     hasHarvester: Object.values(Game.creeps).some(
       c => c.memory.home === expansion.target && c.memory.role === "harvester",
     ),
+    // Phantom Transporter Bug 修复：检查 hauler 或 distributor 存在即为物流活跃。
+    // 系统不存在 "transporter" 角色，实际运输由 hauler（源→sink）和
+    // distributor（storage→sink）承担。
     hasTransporter: Object.values(Game.creeps).some(
-      c => c.memory.home === expansion.target && c.memory.role === "transporter",
+      c => c.memory.home === expansion.target &&
+        (c.memory.role === "hauler" || c.memory.role === "distributor"),
     ),
     hasUpgrader: Object.values(Game.creeps).some(
       c => c.memory.home === expansion.target && c.memory.role === "upgrader",
@@ -633,7 +640,7 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     spawnBuilt: targetRoom.find(FIND_MY_SPAWNS).length > 0,
     spawnCanSpawn: targetRoom.energyAvailable >= 300,
     harvesterActive: economicInput.hasHarvester,
-    transporterActive: economicInput.hasTransporter,
+    transporterActive: economicInput.hasTransporter, // 已修复：检查 hauler/distributor
     extensionsBuilt: true,
     containerBuilt: true,
     roadsBuilt: true,

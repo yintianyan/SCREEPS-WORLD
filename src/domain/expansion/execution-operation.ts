@@ -91,7 +91,7 @@ export function createExpansionOperation(input: OperationInput): ExpansionOperat
         "pioneer reached target room",
         "spawn construction complete",
         "harvester deployed",
-        "transporter deployed",
+        "hauler or distributor deployed",
         "energy loop active",
         "net energy flow positive",
         "economic activation achieved",
