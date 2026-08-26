@@ -374,6 +374,11 @@ export interface GlobalCache {
     netIncome: number;
     threatCount: number;
   }>;
+
+  /** A6.6：Recommendation 缓存（RecommendationRingBuffer + lastRunTick）。
+   * heap 存储 — global reset 丢失可接受（recommendation 是可观测设施，非持久真相）。
+   * REC-001：Recommendation Engine 唯一可写的 globalCache 字段。 */
+  __recommendationCache?: unknown;
 }
 
 /**

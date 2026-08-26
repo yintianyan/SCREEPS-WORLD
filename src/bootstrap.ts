@@ -48,6 +48,7 @@ import { strategyEvaluationSystem } from "./systems/intelligence/strategy-evalua
 import { predictionSystem } from "./systems/intelligence/prediction-system";
 import { calibrationResolutionSystem } from "./systems/intelligence/calibration-resolution-system";
 import { intelligenceStateSystem } from "./systems/intelligence/intelligence-state-system";
+import { recommendationEngineSystem } from "./systems/intelligence/recommendation-engine-system";
 import { warPlannerSystem } from "./systems/war-planner";
 import { warPlanningSystem } from "./systems/war-planning-system";
 import { tacticalRuntimeSystem } from "./systems/tactical-runtime-system";
@@ -141,6 +142,11 @@ export const registry = new Registry()
   //   在 calibration-resolution 之后运行，消费最新 calibration profile。
   //   Shadow-Only：不执行 Game API，不修改 Strategy，不解决冲突，不产出万能分数）
   .registerSystem(intelligenceStateSystem)
+  // P3：Recommendation Engine（A6.6 — 低频 500t post 阶段，只读消费 A6.1-A6.5 既有数据，
+  //   调用 Domain 纯函数 generateRecommendations 产出 RecommendationCandidate[]。
+  //   Shadow-Only：不执行 Game API，不修改 Strategy，不解决冲突，不产出万能分数，
+  //   不被任何执行系统消费。写入 globalCache.__recommendationCache）
+  .registerSystem(recommendationEngineSystem)
   // P2：战争规划（A5.3 — 低频 10t，domain 层纯函数薄壳；在 war-planner 之前运行，
   //   产出 WarPlan 写入 globalCache.warPlanCache + 兼容 Memory.kernel.warPlan。
   //   war-planner 消费 WarPlan 执行 spawn/止损/核验。纯函数不执行 Game action）
