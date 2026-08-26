@@ -339,6 +339,11 @@ export interface GlobalCache {
    * PRED-001：预测层唯一可写的 globalCache 字段。 */
   __predictionCache?: unknown;
 
+  /** A6.4：Calibration 缓存（CalibrationRingBuffer + profiles + failureStats）。
+   * heap 存储 — global reset 丢失可接受（calibration 是可观测设施，非持久真相）。
+   * CAL-001：校准层唯一可写的 globalCache 字段。 */
+  __calibrationCache?: unknown;
+
   /** A6.3：CPU bucket 历史采样（寄生 empire-health-system 100t cadence）。
    * 用于 CPU 压力预测（#7）。heap 存储 — global reset 后从空重建。 */
   __cpuBucketHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<number>;

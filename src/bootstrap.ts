@@ -45,6 +45,8 @@ import { recoveryExecutionSystem } from "./systems/recovery-execution-system";
 import { decisionTraceSystem } from "./systems/decision-trace-system";
 import { experienceCollectorSystem } from "./systems/intelligence/experience-collector-system";
 import { strategyEvaluationSystem } from "./systems/intelligence/strategy-evaluation-system";
+import { predictionSystem } from "./systems/intelligence/prediction-system";
+import { calibrationResolutionSystem } from "./systems/intelligence/calibration-resolution-system";
 import { warPlannerSystem } from "./systems/war-planner";
 import { warPlanningSystem } from "./systems/war-planning-system";
 import { tacticalRuntimeSystem } from "./systems/tactical-runtime-system";
@@ -122,6 +124,16 @@ export const registry = new Registry()
   //   中 FINALIZED 的 Experience，8 维独立评估 + Baseline 比较 + Evidence 追溯。
   //   Shadow-Only：不执行 Game API，不修改 Strategy，Recommendation 不自动进入执行系统）
   .registerSystem(strategyEvaluationSystem)
+  // P3：Prediction（A6.3 — 低频 500t post 阶段，消费 globalCache 中的 TimeSeries 数据，
+  //   调用 A6.3 Domain 纯函数产出 Prediction 写入 PredictionRingBuffer。
+  //   Shadow-Only：不执行 Game API，不修改 Strategy，Prediction 不自动进入执行系统）
+  .registerSystem(predictionSystem)
+  // P3：Calibration Resolution（A6.4 — 低频 500t post 阶段，消费 Prediction Ring Buffer
+  //   中已到期的 Prediction，构建 ObservationSample 调用 A6.4 Domain 纯函数
+  //   resolvePrediction 产出 ResolutionResult 写入 CalibrationRingBuffer。
+  //   低频计算 ModelCalibrationProfile（每 5000t）。
+  //   Shadow-Only：不执行 Game API，不修改 Strategy，Resolution 不自动进入执行系统）
+  .registerSystem(calibrationResolutionSystem)
   // P2：战争规划（A5.3 — 低频 10t，domain 层纯函数薄壳；在 war-planner 之前运行，
   //   产出 WarPlan 写入 globalCache.warPlanCache + 兼容 Memory.kernel.warPlan。
   //   war-planner 消费 WarPlan 执行 spawn/止损/核验。纯函数不执行 Game action）
