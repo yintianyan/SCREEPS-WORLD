@@ -419,6 +419,10 @@ function sampleRemoteMiningForPredictions(
   g: ReturnType<typeof globalCache>,
   tick: number,
 ): void {
+  // WO-11/P14：无消费者（prediction-system 不读此序列）。降频到每 500t 采样省 CPU，
+  // 数据保留供未来预测目标 #5 接线。接线后恢复每 100t 采样。
+  if (tick % 500 !== 0) return;
+
   if (!g.__remoteMiningHistory) {
     g.__remoteMiningHistory = createTimeSeries<{ netIncome: number; threatCount: number }>(
       REMOTE_MINING_TS_CAPACITY,

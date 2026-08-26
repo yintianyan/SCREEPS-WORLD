@@ -2,10 +2,9 @@ import type { Blueprint } from "./types";
 import { packPos } from "./types";
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
-import { globalCache } from "../../kernel/global-cache";
 import { createCoreRoadTasks, candidateToBuildTask } from "./task-factory";
 import { evaluateRoadCandidates } from "./road-policy";
-import { planCorridorRoads } from "./corridor-roads";
+import { planCorridorRoads, type CorridorPathCacheStore, DEFAULT_CORRIDOR_OPTIONS } from "./corridor-roads";
 
 /**
  * 统一道路规划 — 合并三种道路来源，由 layout-planner 编排器调用
@@ -28,6 +27,14 @@ export interface RoadPlanContext {
   readonly existingKeys: ReadonlySet<string>;
   /** 【G-J 合规】当前 tick（domain 不触 Game 全局）。 */
   readonly tick: number;
+  /** 【D-1 修复】当前采样窗口交通数据（由 system 层从 globalCache 注入，domain 层不再直读 globalCache）。 */
+  readonly currentTraffic?: Record<string, number>;
+  /** 【D-1 修复】上一采样窗口交通数据（同上）。 */
+  readonly prevTraffic?: Record<string, number>;
+  /** 【D-2 修复】走廊路路径缓存接口（由 system 层注入，domain 不再直读 globalCache）。 */
+  readonly corridorCacheStore?: CorridorPathCacheStore;
+  /** 【D-2 修复】蓝图受保护位置集合（走廊路不得占用未来结构位置）。 */
+  readonly protectedPositionsFactory?: () => Set<number>;
 }
 
 /** 规划本周期应入队的道路任务；调用方负责 push 到 queue 并更新 existingKeys，内部已去重。 */
@@ -68,10 +75,11 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
   }
 
   // ── 2. 流量采样路（RCL4+）──
+  // 【D-1 修复】交通数据由调用方注入（currentTraffic / prevTraffic），
+  // domain 层不再直读 globalCache。
   if (snapshot.rcl >= 4) {
-    const g = globalCache();
-    const currentTraffic = g.roomTraffic?.[snapshot.roomName];
-    const prevTraffic = g.prevRoomTraffic?.[snapshot.roomName];
+    const currentTraffic = ctx.currentTraffic;
+    const prevTraffic = ctx.prevTraffic;
 
     // 显式传 CONFIG.layout.road 与 rcl（否则 config 成无人消费的死配置，
     // 调参静默不生效）；rcl 启用 P3 分档阈值（RCL7-8=50，RCL2-6=5）。
@@ -111,7 +119,11 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
       protectedPositions.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
     }
 
-    const corridorRoads = planCorridorRoads(room, snapshot, ctx.tick);
+    const corridorRoads = planCorridorRoads(
+      room, snapshot, ctx.tick,
+      DEFAULT_CORRIDOR_OPTIONS, undefined, protectedPositions,
+      anchor, ctx.corridorCacheStore,
+    );
     for (const pos of corridorRoads) {
       const key = `road.${snapshot.roomName}.${pos.x}.${pos.y}`;
       if (isDuplicate(key)) continue;
@@ -132,19 +144,14 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
 }
 
 /**
- * 交通数据轮换 — 将当前窗口快照为 prevTraffic，然后清零当前窗口。
+ * 【D-1 修复】交通数据轮换接口 — domain 层不再直读 globalCache。
+ * 调用方（layout-planner system 层）提供轮换操作函数，
+ * domain 层只负责声明「需要轮换」这一意图。
  *
  * 无论 RCL、无论是否生成道路，每规划周期必须调用一次。
  * 确保 RCL4 启用流量路时已有 prevTraffic 可供双窗口比较。
  */
-export function rotateTraffic(roomName: string): void {
-  const g = globalCache();
-  const currentTraffic = g.roomTraffic?.[roomName];
-  if (currentTraffic) {
-    if (!g.prevRoomTraffic) g.prevRoomTraffic = {};
-    g.prevRoomTraffic[roomName] = { ...currentTraffic };
-  }
-  if (g.roomTraffic) {
-    g.roomTraffic[roomName] = {};
-  }
+export interface TrafficRotator {
+  /** 将当前窗口快照为 prevTraffic，然后清零当前窗口。 */
+  rotate(roomName: string): void;
 }

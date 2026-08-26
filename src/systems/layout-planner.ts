@@ -27,7 +27,8 @@ import {
   buildOccupiedPositionSet,
   buildObstaclePositionSet,
 } from "../domain/layout/validation";
-import { planRoads, rotateTraffic } from "../domain/layout/road-planner";
+import { planRoads } from "../domain/layout/road-planner";
+import type { CorridorPathCacheStore } from "../domain/layout/corridor-roads";
 import { evaluateCandidate, scoreCandidate } from "../domain/layout/candidate-score";
 import { packPos, unpackPos } from "../domain/layout/types";
 import { computeDistanceField } from "../domain/layout/terrain-analysis";
@@ -715,7 +716,28 @@ function planStage3RoadsAndFinalize(
   const isBlacklisted = (key: string): boolean => segBlocked[key] !== undefined;
 
   // 3.9-5. 道路规划。
+  // 【D-1/D-2 修复】从 system 层注入 globalCache 数据（交通热度 + 路径缓存），
+  // domain 层不再直读 globalCache。
   {
+    const g = globalCache();
+    const currentTraffic = g.roomTraffic?.[snapshot.roomName];
+    const prevTraffic = g.prevRoomTraffic?.[snapshot.roomName];
+    // 构建路径缓存接口实现，注入给 domain 层。
+    const corridorCacheStore: CorridorPathCacheStore | undefined = (() => {
+      const cache = g;
+      return {
+        ensureMap() {
+          if (cache.corridorPathCache === undefined) cache.corridorPathCache = new Map();
+        },
+        get(roomName: string) {
+          return cache.corridorPathCache?.get(roomName);
+        },
+        set(roomName: string, entry: import("../kernel/global-cache").CorridorPathCacheEntry) {
+          if (!cache.corridorPathCache) cache.corridorPathCache = new Map();
+          cache.corridorPathCache.set(roomName, entry);
+        },
+      };
+    })();
     const roadTasks = planRoads({
       snapshot,
       room,
@@ -725,6 +747,9 @@ function planStage3RoadsAndFinalize(
       queue,
       existingKeys,
       tick: ctx.tick,
+      currentTraffic,
+      prevTraffic,
+      corridorCacheStore,
     });
     for (const task of roadTasks) {
       const posKey = `${task.pos.x},${task.pos.y}`;
@@ -792,7 +817,18 @@ function planStage3RoadsAndFinalize(
   }
 
   // 交通数据轮换（无论 RCL 都执行，确保 RCL4 时已有 prevTraffic 可用）。
-  rotateTraffic(snapshot.roomName);
+  // 【D-1 修复】轮换逻辑在 system 层实现，domain 层不再直读 globalCache。
+  {
+    const g = globalCache();
+    const currentTraffic = g.roomTraffic?.[snapshot.roomName];
+    if (currentTraffic) {
+      if (!g.prevRoomTraffic) g.prevRoomTraffic = {};
+      g.prevRoomTraffic[snapshot.roomName] = { ...currentTraffic };
+    }
+    if (g.roomTraffic) {
+      g.roomTraffic[snapshot.roomName] = {};
+    }
+  }
 
   roomMem.buildQueue = queue;
 

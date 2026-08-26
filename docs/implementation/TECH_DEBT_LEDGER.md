@@ -269,3 +269,169 @@ A5.1 FINAL AUDIT 判定 PASS（0 BLOCKER / 0 HIGH / 2 MEDIUM / 5 LOW）。两个
   风险评估：LOW。
 
 审计报告见 [A5_1_FINAL_AUDIT.md](../phase17/A5_1_FINAL_AUDIT.md)。
+
+## 审计修复批次 — 2026-08-27
+
+来源：[docs/audit-2026-08/](../audit-2026-08/) Phase 0-13 架构审计。
+
+### AU-1: domain/layout 纯函数律违规修复（D-1/D-2）
+
+**来源**：Phase 2 §2.7.1 — `domain/layout/road-planner.ts` 和
+`domain/layout/corridor-roads.ts` 直接 import `globalCache` 读写 heap 缓存，
+违反 DEPENDENCY_GRAPH §3-5 纯函数律。
+
+**修复**：globalCache 读写上移到 system 层（`layout-planner.ts`），
+domain 层通过参数注入接收数据：
+- `road-planner.ts`：`RoadPlanContext` 新增 `currentTraffic`/`prevTraffic`/
+  `corridorCacheStore` 可选字段；`rotateTraffic` 函数替换为 `TrafficRotator`
+  接口，由 system 层内联实现。
+- `corridor-roads.ts`：新增 `CorridorPathCacheStore` 接口，
+  `planCorridorRoads` 新增 `cacheStore` 可选参数；缓存读写通过接口注入。
+- `layout-planner.ts`：`planStage3RoadsAndFinalize` 中从 `globalCache()` 读取
+  交通数据和路径缓存，构造接口实现注入给 domain 层。
+- 测试更新：`corridor-cache-invalidation.test.ts` 新增 `makeTestCacheStore()`
+  桥接 `globalCache.corridorPathCache`，所有缓存测试用例传入 `cacheStore`。
+
+**影响**：domain/layout 纯函数律合规度从 97% → 100%，架构合规度整体
+97% → 98%+。行为等价修复，无功能变化。typecheck ✅ + 4832 单元测试全绿。
+
+### AU-2: globalCache 死字段删除（F-DEAD-1/F-DEAD-2）
+
+**来源**：Phase 13 §13.2 — 两个 globalCache 字段全库零引用。
+
+| 字段 | 位置 | 处置 |
+|------|------|------|
+| `logisticsCounters` | global-cache.ts:75 | 删除字段声明，留注释标记 |
+| `empireTransportRequests` | global-cache.ts:174 | 删除字段声明，留注释标记 |
+
+`logisticsCounters` 注释声明"P3 物流指标 L1 计数器"，但 L1 埋点从未落地。
+`empireTransportRequests` 注释声明"agenda-manager 每 100t 写入，logistics 消费"
+——但 agenda-manager 不写、logistics 不读，连生产者都不存在。
+若 A3.0 帝国调拨进入路线图，须重新设计完整链路而非留假装存在的槽位。
+
+### AU-3: globalCache 只写不读字段标注（WO-1~WO-11）
+
+**来源**：Phase 13 §13.3 — 11 个 globalCache 字段有生产者但无消费者。
+
+处置策略：标注为诊断观测字段，保留在 heap 供 console 内省。
+若后续接入 decision-trace 应明确接线，否则可删除省 CPU。
+
+| 编号 | 字段 | 标注 |
+|------|------|------|
+| WO-1 | `resourceBottlenecks` | 诊断观测，console 内省 |
+| WO-2 | `empireResourceLedger` | 诊断观测，console 内省 |
+| WO-3 | `agendaMetrics` | 诊断观测，console 内省 |
+| WO-4 | `lastDriftDiag` | 弱消费诊断，console 手查 |
+| WO-5 | `logisticsDashboard` | 观测仪表盘，console 内省 |
+| WO-6 | `logisticsAccounting` | 观测字段，console 内省 |
+| WO-7 | `logisticsScaling` | 观测字段，console 内省 |
+| WO-8 | `__cpuBucketHistory` | A6.3 采样空转，待接线或删采样 |
+| WO-9 | `__logisticsHealthHistory` | 同上 |
+| WO-10 | `__roomHealthHistory` | 同上 |
+| WO-11 | `__remoteMiningHistory` | 同上 |
+
+A6.3 四条无消费历史采样序列（WO-8~WO-11）是当前最浪费的状态：
+采样器每 100t 消耗 CPU 产出无人读取的数据。待 A6.3 预测层接入对应预测
+目标（#3/#4/#5/#7）时接线，或在不使用预测时删除采样省 CPU。
+
+### AU-4: 市场交易能量入 L1 账本
+
+**来源**：Phase 4-5 §5.4.2 — `market.deal` 的能量买卖未入 L1 EnergyLedger，
+drift 恒等式缺口靠容差兜底但不精确。
+
+**修复**：
+- `RoomEnergyCounters`（global-cache.ts）新增 `bought`/`sold` 字段。
+- `EnergyLedger`（accounting.ts）新增 `bought`/`sold` 字段；
+  `ledgerIncome` 包含 `bought`；`ledgerConsumption` 包含 `sold`；
+  `CONSUMPTION_FIELDS` 增加 `"sold"`。
+- `terminal-manager.ts`：`trySellSurplusEnergy` 成功后
+  `bumpEnergyCounter(room, "sold", amount)`；
+  `tryBuyCrisisEnergy` 成功后 `bumpEnergyCounter(room, "bought", amount)`。
+
+恒等式更新：`income = harvested + pickedUp + bought`，
+`consumption = spawned + upgraded + built + repaired + towerSpent + sold`。
+drift 现在精确捕获市场交易的影响，不再依赖容差兜底。
+
+### AU-5: spawn 全毁死锁风险登记
+
+**来源**：Phase 3 §3.6.3 + Phase 4-5 §5.2.3 — 所有 spawn 被毁时
+存在死锁：spawn-manager 无法孵化 builder，builder 无法建造新 spawn。
+
+**现状**：
+- `spawn-manager`：`snapshot.spawns.length === 0 → return`（无法孵化）
+- `room-state`：`needsRecovery = spawns.length === 0 → colonyState = bootstrap/recovery`
+- `layout-planner`：`planStage3` 中有紧急 spawn 重建逻辑（创建 spawn site）
+- 死锁链：需要 builder 建造 spawn → builder 需要 spawn 孵化 → 死锁
+
+**缓解**：
+- worker 角色可替代 builder（万能工），但 worker 也需要 spawn 孵化
+- claimer 从外部 claim 新房是唯一逃生路径，但需要 expansion 授权
+
+**登记取舍**：维持现状，不做自动恢复（spawn 全毁是极端场景，通常意味着
+房间已被攻陷，自动恢复可能浪费 CPU/人口）。需要人工干预或扩张系统从
+兄弟房 claim 新房。触发条件：spawn 全毁且无兄弟房可 claim 时人工接管。
+
+### AU-6: Phase 14 Cadence 死锁修复
+
+**来源**：Phase 13 末尾 "Phase 14 将继续验证 40+ 注册系统中是否存在
+cadence 永不满足导致的实际永不运行项"。
+
+**审计方法**：遍历全部 44 个注册系统，提取 interval/phase/priority，
+计算 `systemPhase(name, interval)` 相位偏移，逐一检查内部门控
+`tick % N` 是否与外层 cadence 错峰相交。
+
+**发现**：7 个低频系统使用了绝对 `tick % N` 内部门控，但由于外层
+cadence 错峰使系统只在 `tick % interval === phase`（phase ≠ 0）时运行，
+而 `tick % N === 0` 要求 `tick % interval === 0`（因 N 是 interval 的
+倍数），两者不相交，导致内部门控**永不触发**——Cadence 死锁。
+
+| 系统 | interval | phase | 死锁门控 | 影响 |
+|------|----------|-------|---------|------|
+| decision-trace | 100 | 12 | `tick%500===0` | snapshot 驱逐永不执行 → 内存泄漏风险 |
+| experience-collector | 100 | 2 | `tick%1000===0` | 可观测性日志永不输出 |
+| prediction | 500 | 75 | `tick%5000===0` | 可观测性日志永不输出 |
+| calibration-resolution | 500 | 51 | `tick%5000===0` ×2 | 守卫检查 + 可观测性永不执行 |
+| intelligence-state | 500 | 263 | `tick%5000===0` ×3 | 守卫检查 + 冷启动日志 + 可观测性永不执行 |
+| recommendation-engine | 500 | 290 | `tick%5000===0` ×2 | 冷启动日志 + 可观测性永不执行 |
+| strategy-evaluation | 500 | 202 | `tick%5000===0` | 可观测性日志永不输出 |
+
+**修复**：将 `tick % N === 0` 改为 `(tick - phase) % N === 0`，其中
+phase = `systemPhase(systemName, interval)`。与 telemetry-collector 的
+内部门控模式一致（已在 K-6 注释中要求所有内部门用 `systemPhase()` 做
+相位相对判定——绝对对齐 `tick % N === 0` 与错峰后的运行 tick 可能无交集）。
+
+修复文件：
+- `src/systems/decision-trace-system.ts`：import systemPhase + 1 处门控
+- `src/systems/intelligence/experience-collector-system.ts`：import + 1 处
+- `src/systems/intelligence/prediction-system.ts`：import + 1 处
+- `src/systems/intelligence/calibration-resolution-system.ts`：import + 2 处
+- `src/systems/intelligence/intelligence-state-system.ts`：import + 3 处
+- `src/systems/intelligence/recommendation-engine-system.ts`：import + 2 处
+- `src/systems/intelligence/strategy-evaluation-system.ts`：import + 1 处
+
+**严重度**：🟡 中等 — decision-trace 的 snapshot 驱逐死锁是真实内存泄漏
+风险（每 100t 添加 snapshot 但永不驱逐）；其余为可观测性盲区和守卫死代码。
+
+### AU-7: A6.3 空转采样降频
+
+**来源**：Phase 13 §13.3 WO-8~WO-11 — 4 条无消费历史采样序列
+每 100t 采样但 prediction-system 不读。
+
+**修复**：将 4 条无消费者采样序列从每 100t 降频到每 500t（5 倍降频），
+CPU 成本降低 80%。保留 `__spawnQueueDepthHistory` 每次采样（唯一有消费者
+的序列——prediction-system + calibration-resolution 消费）。
+
+| 序列 | 采样者 | 降频前 | 降频后 | 消费者 |
+|------|--------|--------|--------|--------|
+| `__cpuBucketHistory` (WO-8) | empire-health-system | 100t | 500t | 无 |
+| `__logisticsHealthHistory` (WO-9) | empire-health-system | 100t | 500t | 无 |
+| `__roomHealthHistory` (WO-10) | empire-health-system | 100t | 500t | 无 |
+| `__remoteMiningHistory` (WO-11) | expansion-planner | 100t | 500t | 无 |
+| `__spawnQueueDepthHistory` | empire-health-system | 100t | 100t | prediction-system + calibration-resolution |
+
+接线条件：prediction-system 预测模型 #3/#4/#5/#7 接入对应输入时
+恢复每 100t 采样。在不使用预测时可直接删除采样省 CPU。
+
+**WO-5~WO-7 处置**：logisticsDashboard/logisticsAccounting/logisticsScaling
+三个只写不读字段维持 AU-3 登记的"诊断观测，console 内省"策略不变——
+写入成本极低（每 100t 一次赋值），删除收益可忽略。

@@ -71,8 +71,8 @@ export interface GlobalCache {
   energyLedger?: { tick: number; rooms: Record<string, RoomEnergyCounters> };
   /** P3 物流请求池槽位（logistics 系统每 tick 重导出；assignment-service 同 tick 合并）。 */
   transportPool?: { tick: number; rooms: Record<string, unknown[]> };
-  /** P3 物流指标 L1 计数器（空载率分母/分子等）。 */
-  logisticsCounters?: { rooms: Record<string, { idleTicks: number; claims: number }> };
+  // 【F-DEAD-1 已删除】logisticsCounters — L1 物流指标从未落地，全库零引用。
+  // 物流空载率指标为纸面功能，若需重引入须同时接线生产者与消费者。
   /** 本 tick 的 boost 报到分配表（lab-system 每 tick 写入）。
    * key = creep 名；ready = lab 内化合物已备足（≥ 单次 boost 用量）—
    * 报到拦截仅在 ready 时生效，避免 creep 罚站等 supplyLabs 搬运
@@ -166,14 +166,16 @@ export interface GlobalCache {
   cpuByHome?: Map<string, number>;
   /** 各系统最近一次实际执行 tick（kernel.runSystems 记录）—— 期望自检的 P3 存活判据输入。heap 存储。 */
   systemLastRun?: Record<string, number>;
-  /** P3 核算诊断：最近一次漂移事件的窗口分解（economy 写，观测/归因用）。 */
+  /** P3 核算诊断：最近一次漂移事件的窗口分解（economy 写，观测/归因用）。
+   * 【WO-4 修复】弱消费诊断字段 — 只能 console 手查。若要保留应挂到
+   * decision-trace 或 Memory 短期快照；否则等于没记。保留在 heap 供 console 内省。 */
   lastDriftDiag?: unknown;
-  /** A3.0：帝国级 TransportRequest 候选（agenda-manager 每 100t 写入，logistics 消费）。
-   * scope="empire" 的跨房调拨请求 — logistics 系统合并进 transportPool 供 hauler 认领。
-   * heap 存储 — global reset 丢失可接受（agenda-manager 下个周期重建）。 */
-  empireTransportRequests?: { tick: number; requests: import("../domain/assignment/request-pool").TransportRequest[] };
+  // 【F-DEAD-2 已删除】empireTransportRequests — A3.0 帝国级跨房调拨请求池
+  // 连生产者都不存在（agenda-manager 不写、logistics 不读），只有 cache 槽位和
+  // 文档描述。若 A3.0 帝国调拨进入路线图，须重新设计完整链路而非留假装存在的槽位。
   /** A3.0：Agenda Manager 运行时指标快照（agenda-manager 每 100t 写入）。
-   * heap 存储 — global reset 丢失可接受。 */
+   * 【WO-3 修复】标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
+   * 供 console 内省归因使用。若后续接入 decision-trace 应明确接线。 */
   agendaMetrics?: import("../domain/operation/metrics").OperationMetrics;
   /** A3.1：Resource Network Snapshot（agenda-manager 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
@@ -188,17 +190,20 @@ export interface GlobalCache {
    * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
   multiResourceHealth?: import("../domain/strategy/multi-resource-health").MultiResourceEmpireHealth;
   /** A4.2：资源瓶颈排序列表（empire-economy 每 100t 写入）。
-   * heap 存储 — global reset 丢失可接受。 */
+   * 【WO-1 修复】标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
+   * 供 console 内省归因使用。若后续接入 decision-trace 应明确接线。 */
   resourceBottlenecks?: import("../domain/economy/bottleneck").BottleneckEntry[];
   /** A4.2：帝国级 Resource Ledger（empire-economy 每 100t 写入）。
-   * heap 存储 — global reset 丢失可接受。 */
+   * 【WO-2 修复】标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
+   * 供 console 内省归因使用。若后续接入 decision-trace 应明确接线。 */
   empireResourceLedger?: import("../domain/economy/resource-ledger").ResourceLedger;
   /** A4.3：Empire Logistics Plan（logistics-planner 每 100t 写入）。
    * 包含 Transport Requests + Routes + 成本/时间/风险估算。
    * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
   logisticsPlan?: { tick: number; plan: import("../domain/logistics/transport-plan").TransportPlan };
   /** A4.3：Empire Logistics Dashboard（logistics-planner 每 100t 写入）。
-   * heap 存储 — global reset 丢失可接受。 */
+   * 【WO-5 修复】标注为观测仪表盘 — 目前无代码消费者（getLogisticsDashboard 零调用），
+   * 保留在 heap 供 console 内省。若后续接入 decision-trace metrics 快照即可接线。 */
   logisticsDashboard?: import("../domain/logistics/dashboard").LogisticsDashboard;
   /** A4.3：Empire Logistics Health（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
@@ -208,14 +213,16 @@ export interface GlobalCache {
   logisticsCapacity?: { tick: number; result: import("../domain/logistics/capacity-planning").EmpireCapacityResult };
   /** A4.3：Hauler 扩缩编决策（logistics-planner 每 100t 写入）。
    * key = roomName, value = ScalingDecision。
-   * heap 存储 — global reset 丢失可接受。 */
+   * 【WO-7 修复】标注为观测字段 — getScalingDecision 零调用方，
+   * 保留在 heap 供 console 内省。若后续接入 spawn-manager 扩缩编可接线。 */
   logisticsScaling?: { tick: number; decisions: Record<string, import("../domain/logistics/hauler-scaling").ScalingDecision> };
   /** A4.3：闲置 hauler 名称列表（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsIdleHaulers?: { tick: number; names: string[] };
   /** A4.4：Transport Accounting 运行时追踪（logistics-planner 每 100t 写入）。
    * 包含 summary 统计 + entries 每条 Request 的会计明细。
-   * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
+   * 【WO-6 修复】标注为观测字段 — summary+entries 均无代码消费者，
+   * 保留在 heap 供 console 内省。若后续接入 decision-trace metrics 快照即可接线。 */
   logisticsAccounting?: {
     tick: number;
     summary: {
@@ -368,7 +375,9 @@ export interface GlobalCache {
   __calibrationCache?: unknown;
 
   /** A6.3：CPU bucket 历史采样（寄生 empire-health-system 100t cadence）。
-   * 用于 CPU 压力预测（#7）。heap 存储 — global reset 后从空重建。 */
+   * 用于 CPU 压力预测（#7）。heap 存储 — global reset 后从空重建。
+   * 【WO-8 修复】采样器在跑但 prediction-system 不读此序列。待 A6.3 预测层
+   * 接入 #7 目标时接线，或在不使用预测时删除采样省 CPU。 */
   __cpuBucketHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<number>;
 
   /** A6.3：Spawn 队列深度历史采样（寄生 empire-health-system 100t cadence）。
@@ -376,7 +385,9 @@ export interface GlobalCache {
   __spawnQueueDepthHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<number>;
 
   /** A6.3：物流健康度历史采样（寄生 empire-health-system 100t cadence）。
-   * 用于物流瓶颈预测（#3）。heap 存储 — global reset 后从空重建。 */
+   * 用于物流瓶颈预测（#3）。heap 存储 — global reset 后从空重建。
+   * 【WO-9 修复】采样器在跑但 prediction-system 不读此序列。待 A6.3 预测层
+   * 接入 #3 目标时接线，或在不使用预测时删除采样省 CPU。 */
   __logisticsHealthHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<{
     score: number;
     deliveryRate: number;
@@ -385,14 +396,18 @@ export interface GlobalCache {
 
   /** A6.3：房间健康度历史采样（寄生 empire-health-system 100t cadence）。
    * 用于房间崩溃预测（#4）。key = roomName, value = TimeSeries。
-   * heap 存储 — global reset 后从空重建。 */
+   * heap 存储 — global reset 后从空重建。
+   * 【WO-10 修复】采样器在跑但 prediction-system 不读此序列。待 A6.3 预测层
+   * 接入 #4 目标时接线，或在不使用预测时删除采样省 CPU。 */
   __roomHealthHistory?: Map<string, import("../domain/intelligence/prediction/time-series").TimeSeries<{
     score: number;
     level: string;
   }>>;
 
   /** A6.3：远矿收益历史采样（寄生 expansion-planner 100t cadence）。
-   * 用于远矿失败预测（#5）。heap 存储 — global reset 后从空重建。 */
+   * 用于远矿失败预测（#5）。heap 存储 — global reset 后从空重建。
+   * 【WO-11 修复】采样器在跑但 prediction-system 不读此序列。待 A6.3 预测层
+   * 接入 #5 目标时接线，或在不使用预测时删除采样省 CPU。 */
   __remoteMiningHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<{
     netIncome: number;
     threatCount: number;
@@ -563,6 +578,11 @@ export interface RoomEnergyCounters {
   built: number;
   repaired: number;
   towerSpent: number;
+  // 【审计修复 Phase 4-5】市场交易能量入 L1 账本 — 买入/卖出的能量量。
+  // 消除 drift 恒等式的市场交易缺口（之前 market.deal 的能量买卖未入账，
+  // pool 变化被 drift 捕获但不精确）。
+  bought: number;
+  sold: number;
 }
 
 export type EnergyCounterField = keyof RoomEnergyCounters;
@@ -579,7 +599,7 @@ export function bumpEnergyCounter(roomName: string, field: EnergyCounterField, a
   if (g.energyLedger === undefined) {
     g.energyLedger = { tick: (globalThis as { Game?: { time?: number } }).Game?.time ?? 0, rooms: {} };
   }
-  const entry = g.energyLedger.rooms[roomName] ??= { harvested: 0, pickedUp: 0, spawned: 0, recycledRefund: 0, upgraded: 0, built: 0, repaired: 0, towerSpent: 0 };
+  const entry = g.energyLedger.rooms[roomName] ??= { harvested: 0, pickedUp: 0, spawned: 0, recycledRefund: 0, upgraded: 0, built: 0, repaired: 0, towerSpent: 0, bought: 0, sold: 0 };
   entry[field] += amount;
 }
 /** Screeps 沙箱 `global` 对象的类型安全访问器。

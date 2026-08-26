@@ -29,17 +29,23 @@ export interface EnergyLedger {
   repaired: number;
   /** 塔 attack/heal/repair 耗能（每次 10）。 */
   towerSpent: number;
+  // 【审计修复 Phase 4-5】市场交易能量入 L1 账本。
+  // bought = 市场买入的能量量（income 侧）；sold = 市场卖出的能量量（consumption 侧）。
+  /** 市场买入能量（terminal.deal 收到的能量）。 */
+  bought: number;
+  /** 市场卖出能量（terminal.deal 付出的能量）。 */
+  sold: number;
 }
 
 export type LedgerField = keyof EnergyLedger;
 
 /** 消费类字段——风险缓冲的 P0/P1 速率分母取此子集（spawn/tower/repair）。 */
 const CONSUMPTION_FIELDS: readonly LedgerField[] = [
-  "spawned", "recycledRefund", "upgraded", "built", "repaired", "towerSpent",
+  "spawned", "recycledRefund", "upgraded", "built", "repaired", "towerSpent", "sold",
 ];
 
 export function emptyLedger(): EnergyLedger {
-  return { harvested: 0, pickedUp: 0, spawned: 0, recycledRefund: 0, upgraded: 0, built: 0, repaired: 0, towerSpent: 0 };
+  return { harvested: 0, pickedUp: 0, spawned: 0, recycledRefund: 0, upgraded: 0, built: 0, repaired: 0, towerSpent: 0, bought: 0, sold: 0 };
 }
 
 /**
@@ -60,12 +66,12 @@ export function ledgerDelta(start: EnergyLedger, end: EnergyLedger): EnergyLedge
   return out;
 }
 
-/** 收入合计（harvest + pickup）。 */
+/** 收入合计（harvest + pickup + bought）。 */
 export function ledgerIncome(l: EnergyLedger): number {
-  return l.harvested + l.pickedUp;
+  return l.harvested + l.pickedUp + l.bought;
 }
 
-/** 消费合计（gross，不含冲销）。 */
+/** 消费合计（gross，不含冲销；sold 为市场卖出能量，属消费侧）。 */
 export function ledgerConsumption(l: EnergyLedger): number {
   let sum = 0;
   for (const f of CONSUMPTION_FIELDS) {

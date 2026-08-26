@@ -25,6 +25,7 @@
  */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
+import { systemPhase } from "../../kernel/phase";
 import {
   type ExperienceRingBuffer,
   type ExperienceRecord,
@@ -113,8 +114,12 @@ export const experienceCollectorSystem: System = {
     gcExperienceBuffer(cache.ringBuffer, tick, EXPERIENCE_MAX_AGE);
 
     // ── 6. 可观测性输出 ──
+    // P14 修复：cadence 错峰使本系统只在 tick%100===phase 时运行，
+    // 绝对 tick%1000===0 要求 tick%100===0，与 phase≠0 不相交 → 永不执行。
+    // 改为相位相对判定 (tick-phase)%1000===0。
+    const ecPhase = systemPhase("experience-collector", 100);
     const stats = experienceStats(cache.ringBuffer);
-    if (stats.total > 0 && tick % 1000 === 0) {
+    if (stats.total > 0 && (tick - ecPhase) % 1000 === 0) {
       console.log(
         `[${tick}] experience-collector: ${stats.total} experiences, ` +
         `${stats.attributed} attributed (${stats.unattributed} pending), ` +

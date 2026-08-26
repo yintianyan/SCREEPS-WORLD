@@ -26,6 +26,7 @@
  */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
+import { systemPhase } from "../../kernel/phase";
 import {
   type EvaluationInput,
   type MetricSnapshot,
@@ -156,7 +157,11 @@ export const strategyEvaluationSystem: System = {
     cache.lastEvaluationTick = tick;
 
     // ── 7. Observability ──
-    if (tick % 5000 === 0) {
+    // P14 修复：cadence 错峰使本系统只在 tick%500===phase 时运行，
+    // 绝对 tick%5000===0 与 phase≠0 不相交 → 永不执行。
+    // 改为相位相对判定 (tick-phase)%5000===0。
+    const sePhase = systemPhase("strategy-evaluation", 500);
+    if ((tick - sePhase) % 5000 === 0) {
       const evidence = buildEvaluationEvidence(evaluation, experiences);
       const completeness = validateEvidenceCompleteness(evaluation, experiences);
       console.log(

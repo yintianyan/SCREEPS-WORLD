@@ -51,7 +51,7 @@ import {
 } from "../domain/industry/terminal-policy";
 import { collectFullInventory } from "../domain/industry/inventory";
 import { collectDemands, adjustMaxPrice } from "../domain/industry/procurement";
-import { globalCache } from "../kernel/global-cache";
+import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
 import type { ProcurementDemand } from "../kernel/global-cache";
 import type { TransportPlan } from "../domain/logistics/transport-plan";
 import {
@@ -467,7 +467,12 @@ function trySellSurplusEnergy(snapshot: RoomSnapshot, terminal: StructureTermina
   );
   const best = pickBestBuyOrder(orders, CONFIG.energy.minEnergySellPrice);
   if (!best) return false;
-  return executeDeal(best, amount, terminal, snapshot.roomName);
+  // 【审计修复 Phase 4-5】卖出能量入 L1 账本 — 记 sold。
+  if (executeDeal(best, amount, terminal, snapshot.roomName)) {
+    bumpEnergyCounter(snapshot.roomName, "sold", amount);
+    return true;
+  }
+  return false;
 }
 
 /** 危机能量买：storage 低于 energyBuyFloor 且 credits 充足时买入（最后救助通道）。 */
@@ -492,7 +497,12 @@ function tryBuyCrisisEnergy(snapshot: RoomSnapshot, terminal: StructureTerminal)
   );
   const best = pickBestSellOrder(orders, CONFIG.energy.maxEnergyBuyPrice);
   if (!best) return false;
-  return executeDeal(best, amount, terminal, snapshot.roomName);
+  // 【审计修复 Phase 4-5】买入能量入 L1 账本 — 记 bought。
+  if (executeDeal(best, amount, terminal, snapshot.roomName)) {
+    bumpEnergyCounter(snapshot.roomName, "bought", amount);
+    return true;
+  }
+  return false;
 }
 
 /** 把 Game.market 的订单对象裁剪为纯函数可消费的摘要。 */

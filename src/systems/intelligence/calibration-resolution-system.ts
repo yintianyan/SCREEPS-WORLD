@@ -29,6 +29,7 @@
  */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
+import { systemPhase } from "../../kernel/phase";
 import type { Prediction } from "../../domain/intelligence/prediction";
 import type { PredictionRingBuffer } from "../../domain/intelligence/prediction";
 import type { PredictionContext } from "../../domain/intelligence/prediction";
@@ -168,7 +169,11 @@ export const calibrationResolutionSystem: System = {
     cache.lastRunTick = tick;
 
     // ── 6. 守卫检查（违规只记日志）──
-    if (tick % 5000 === 0) {
+    // P14 修复：cadence 错峰使本系统只在 tick%500===phase 时运行，
+    // 绝对 tick%5000===0 与 phase≠0 不相交 → 守卫永不执行。
+    // 改为相位相对判定 (tick-phase)%5000===0。
+    const calPhase = systemPhase("calibration-resolution", 500);
+    if ((tick - calPhase) % 5000 === 0) {
       const violations = validateCalibrationBuffer(cache.ringBuffer);
       if (violations.length > 0) {
         console.log(`[${tick}] calibration: ${violations.length} guard violations`);
@@ -179,7 +184,7 @@ export const calibrationResolutionSystem: System = {
     }
 
     // ── 7. Observability ──
-    if (tick % 5000 === 0) {
+    if ((tick - calPhase) % 5000 === 0) {
       const stats = calibrationBufferStats(cache.ringBuffer);
       console.log(
         `[${tick}] calibration: total=${stats.total}, calibratable=${stats.calibratable}, ` +

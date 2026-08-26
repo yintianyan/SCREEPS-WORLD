@@ -26,6 +26,7 @@
  */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
+import { systemPhase } from "../../kernel/phase";
 import type {
   Prediction,
   PredictionResult,
@@ -116,7 +117,11 @@ export const predictionSystem: System = {
     cache.lastRunTick = tick;
 
     // ── 7. Observability ──
-    if (tick % 5000 === 0) {
+    // P14 修复：cadence 错峰使本系统只在 tick%500===phase 时运行，
+    // 绝对 tick%5000===0 要求 tick%500===0，与 phase≠0 不相交 → 永不执行。
+    // 改为相位相对判定 (tick-phase)%5000===0。
+    const predPhase = systemPhase("prediction", 500);
+    if ((tick - predPhase) % 5000 === 0) {
       const stats = predictionStats(cache.ringBuffer);
       console.log(
         `[${tick}] prediction: total=${stats.total}, active=${stats.active}, ` +

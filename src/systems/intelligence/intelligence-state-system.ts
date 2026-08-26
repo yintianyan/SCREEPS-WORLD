@@ -27,6 +27,7 @@
  */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
+import { systemPhase } from "../../kernel/phase";
 import type { Prediction } from "../../domain/intelligence/prediction";
 import type { PredictionRingBuffer } from "../../domain/intelligence/prediction";
 import type { PredictionContext } from "../../domain/intelligence/prediction";
@@ -84,10 +85,12 @@ export const intelligenceStateSystem: System = {
         : [];
 
     // ── 3. 构建 PredictionContext ──
+    const isPhase = systemPhase("intelligence-state", INTELLIGENCE_STATE_INTERVAL);
     const currentContext = buildCurrentContext(ctx, g);
     if (!currentContext) {
       // 冷启动：empireHealth 尚未产出
-      if (tick % 5000 === 0) {
+      // P14 修复：改为相位相对判定 (tick-phase)%5000===0。
+      if ((tick - isPhase) % 5000 === 0) {
         console.log(`[${tick}] intelligence-state: cold start (no empireHealth)`);
       }
       return;
@@ -112,7 +115,8 @@ export const intelligenceStateSystem: System = {
     }
 
     // ── 5. 运行 REL 守卫检查 ──
-    if (tick % 5000 === 0) {
+    // P14 修复：改为相位相对判定 (tick-phase)%5000===0。
+    if ((tick - isPhase) % 5000 === 0) {
       const violations = validateIntelligenceState(state);
       if (violations.length > 0) {
         for (const v of violations.slice(0, 5)) {
@@ -132,7 +136,8 @@ export const intelligenceStateSystem: System = {
     }
 
     // ── 6. 可观测性输出（每 5000t）──
-    if (tick % 5000 === 0) {
+    // P14 修复：改为相位相对判定。
+    if ((tick - isPhase) % 5000 === 0) {
       const summary = formatStateSummary(state);
       console.log(`[${tick}] intelligence-state: ${summary}`);
     }

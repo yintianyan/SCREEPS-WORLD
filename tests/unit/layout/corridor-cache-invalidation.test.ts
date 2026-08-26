@@ -20,9 +20,9 @@
  *   - 验证 global reset 清空 corridorPathCache 后的重新计算路径
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { planCorridorRoads, DEFAULT_CORRIDOR_OPTIONS } from "../../../src/domain/layout/corridor-roads";
+import { planCorridorRoads, DEFAULT_CORRIDOR_OPTIONS, type CorridorPathCacheStore } from "../../../src/domain/layout/corridor-roads";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
-import { globalCache } from "../../../src/kernel/global-cache";
+import { globalCache, type CorridorPathCacheEntry } from "../../../src/kernel/global-cache";
 import { mockPos, resetGlobals } from "../../role-helpers";
 
 // ─── 房间 mock ──────────────────────────────────────────────
@@ -43,7 +43,25 @@ function mockRoom(): Room {
   return { getTerrain: () => mockTerrain() } as unknown as Room;
 }
 
-// ─── snapshot 工厂 ──────────────────────────────────────────
+// ─── snapshot 工厂 ───────────────────────────────────────
+
+/** 【D-2 修复】测试用 cacheStore 实现 — 桥接 globalCache.corridorPathCache。 */
+function makeTestCacheStore(): CorridorPathCacheStore {
+  const cache = globalCache();
+  return {
+    ensureMap() {
+      if (cache.corridorPathCache === undefined) cache.corridorPathCache = new Map();
+    },
+    get(roomName: string) {
+      return cache.corridorPathCache?.get(roomName);
+    },
+    set(roomName: string, entry: CorridorPathCacheEntry) {
+      if (!cache.corridorPathCache) cache.corridorPathCache = new Map();
+      cache.corridorPathCache.set(roomName, entry);
+    },
+  };
+}
+
 // 物流端点：spawn @ (25,25) 核心，controller container @ (20,40)，
 // source container @ (12,30) 紧邻 source @ (12,31)。
 
@@ -120,12 +138,12 @@ describe("走廊路缓存失效条件 — signature = pairKey + rcl + anchor", (
     const search = (globalThis as any).PathFinder.search as ReturnType<typeof vi.fn>;
 
     // 第一次调用：缓存未命中 → 计算 + 写入缓存。
-    const first = planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor);
+    const first = planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor, makeTestCacheStore());
     expect(first.length).toBeGreaterThan(0);
     expect(search).toHaveBeenCalledTimes(1);
 
     // 第二次调用：signature 完全相同 → 命中缓存，不调用 search。
-    const second = planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor);
+    const second = planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor, makeTestCacheStore());
     expect(second).toEqual(first);
     expect(search).toHaveBeenCalledTimes(1); // 仍然只调用 1 次
   });
@@ -137,13 +155,13 @@ describe("走廊路缓存失效条件 — signature = pairKey + rcl + anchor", (
 
     // 第一次：有 controller container → 走廊对 (20,40)→(25,25)。
     const snap1 = snapshotFor(5);
-    planCorridorRoads(room, snap1, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor);
+    planCorridorRoads(room, snap1, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor, makeTestCacheStore());
     expect(search).toHaveBeenCalledTimes(1);
 
     // 第二次：controller container 消失 → 走廊对变为 (12,30)→(25,25)。
     // pairKey 不同 → 缓存失效 → 重新调用 search。
     const snap2 = snapshotFor(5, { controllerContainer: undefined });
-    planCorridorRoads(room, snap2, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor);
+    planCorridorRoads(room, snap2, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor, makeTestCacheStore());
     expect(search).toHaveBeenCalledTimes(2);
   });
 
@@ -154,12 +172,12 @@ describe("走廊路缓存失效条件 — signature = pairKey + rcl + anchor", (
 
     // RCL5：缓存写入。
     const snapRcl5 = snapshotFor(5);
-    planCorridorRoads(room, snapRcl5, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor);
+    planCorridorRoads(room, snapRcl5, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor, makeTestCacheStore());
     expect(search).toHaveBeenCalledTimes(1);
 
     // RCL6：rcl 字段变化 → 缓存失效（即使 pairKey 和 anchor 相同）。
     const snapRcl6 = snapshotFor(6);
-    planCorridorRoads(room, snapRcl6, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor);
+    planCorridorRoads(room, snapRcl6, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor, makeTestCacheStore());
     expect(search).toHaveBeenCalledTimes(2);
   });
 
@@ -169,11 +187,11 @@ describe("走廊路缓存失效条件 — signature = pairKey + rcl + anchor", (
     const search = (globalThis as any).PathFinder.search as ReturnType<typeof vi.fn>;
 
     // 锚点 (25,25)：缓存写入。
-    planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, { x: 25, y: 25 });
+    planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, { x: 25, y: 25 }, makeTestCacheStore());
     expect(search).toHaveBeenCalledTimes(1);
 
     // 锚点变为 (26,25)（spawn 重建在新位置）：anchor 字段变化 → 缓存失效。
-    planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, { x: 26, y: 25 });
+    planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, { x: 26, y: 25 }, makeTestCacheStore());
     expect(search).toHaveBeenCalledTimes(2);
   });
 
@@ -184,7 +202,7 @@ describe("走廊路缓存失效条件 — signature = pairKey + rcl + anchor", (
     const search = (globalThis as any).PathFinder.search as ReturnType<typeof vi.fn>;
 
     // 第一次调用：缓存写入。返回路径包含 (22,32)。
-    const first = planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor);
+    const first = planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor, makeTestCacheStore());
     expect(first.some(p => p.x === 22 && p.y === 32)).toBe(true);
     expect(search).toHaveBeenCalledTimes(1);
 
@@ -195,7 +213,7 @@ describe("走廊路缓存失效条件 — signature = pairKey + rcl + anchor", (
       // 添加一个 structure 占用 (22,32)（用 roads 数组模拟 occupied）。
       roads: [{ id: "road_22_32", pos: mockPos(22, 32), structureType: "road" } as any],
     });
-    const second = planCorridorRoads(room, snapWithStructure, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor);
+    const second = planCorridorRoads(room, snapWithStructure, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor, makeTestCacheStore());
 
     // search 仍只调用 1 次 → 缓存命中。
     expect(search).toHaveBeenCalledTimes(1);
@@ -212,7 +230,7 @@ describe("走廊路缓存失效条件 — signature = pairKey + rcl + anchor", (
     const search = (globalThis as any).PathFinder.search as ReturnType<typeof vi.fn>;
 
     // 第一次：缓存写入。
-    planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor);
+    planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor, makeTestCacheStore());
     expect(search).toHaveBeenCalledTimes(1);
 
     // 模拟 global reset：清空 corridorPathCache。
@@ -220,7 +238,7 @@ describe("走廊路缓存失效条件 — signature = pairKey + rcl + anchor", (
     cache.corridorPathCache = undefined;
 
     // 第二次：缓存丢失 → 重新计算。
-    planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor);
+    planCorridorRoads(room, snapshot, Game.time, DEFAULT_CORRIDOR_OPTIONS, undefined, undefined, anchor, makeTestCacheStore());
     expect(search).toHaveBeenCalledTimes(2);
   });
 

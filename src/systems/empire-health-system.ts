@@ -507,15 +507,20 @@ function sampleForPredictions(
   spawnHealth: DimensionResult,
 ): void {
   // ── 1. CPU bucket 历史 ──
-  if (!g.__cpuBucketHistory) {
-    g.__cpuBucketHistory = createTimeSeries<number>(PREDICTION_TS_CAPACITY);
+  // WO-8/P14：无消费者（prediction-system 不读此序列）。降频到每 500t 采样省 CPU，
+  // 数据保留供未来预测目标 #7 接线。接线后恢复每 100t 采样。
+  if (tick % 500 === 0) {
+    if (!g.__cpuBucketHistory) {
+      g.__cpuBucketHistory = createTimeSeries<number>(PREDICTION_TS_CAPACITY);
+    }
+    const game = globalThis as { Game?: { cpu?: { bucket?: number } } };
+    const bucket = game.Game?.cpu?.bucket ?? 0;
+    pushSample(g.__cpuBucketHistory, tick, bucket);
+    gcTimeSeries(g.__cpuBucketHistory, tick, PREDICTION_TS_CAPACITY * 200);
   }
-  const game = globalThis as { Game?: { cpu?: { bucket?: number } } };
-  const bucket = game.Game?.cpu?.bucket ?? 0;
-  pushSample(g.__cpuBucketHistory, tick, bucket);
-  gcTimeSeries(g.__cpuBucketHistory, tick, PREDICTION_TS_CAPACITY * 200);
 
   // ── 2. Spawn 队列深度历史 ──
+  // 唯一有消费者的序列：prediction-system + calibration-resolution 消费。
   if (!g.__spawnQueueDepthHistory) {
     g.__spawnQueueDepthHistory = createTimeSeries<number>(PREDICTION_TS_CAPACITY);
   }
@@ -531,31 +536,30 @@ function sampleForPredictions(
   gcTimeSeries(g.__spawnQueueDepthHistory, tick, PREDICTION_TS_CAPACITY * 200);
 
   // ── 3. 物流健康度历史 ──
-  if (!g.__logisticsHealthHistory) {
-    g.__logisticsHealthHistory = createTimeSeries<{ score: number; deliveryRate: number; lossRate: number }>(
-      PREDICTION_TS_CAPACITY,
-    );
-  }
-  const lh = g.logisticsHealth;
-  if (lh) {
-    pushSample(g.__logisticsHealthHistory, tick, {
-      score: lh.score,
-      deliveryRate: lh.deliveryRate,
-      lossRate: lh.lossRate,
-    });
-    gcTimeSeries(g.__logisticsHealthHistory, tick, PREDICTION_TS_CAPACITY * 200);
+  // WO-9/P14：无消费者。降频到每 500t 采样省 CPU。
+  if (tick % 500 === 0) {
+    if (!g.__logisticsHealthHistory) {
+      g.__logisticsHealthHistory = createTimeSeries<{ score: number; deliveryRate: number; lossRate: number }>(
+        PREDICTION_TS_CAPACITY,
+      );
+    }
+    const lh = g.logisticsHealth;
+    if (lh) {
+      pushSample(g.__logisticsHealthHistory, tick, {
+        score: lh.score,
+        deliveryRate: lh.deliveryRate,
+        lossRate: lh.lossRate,
+      });
+      gcTimeSeries(g.__logisticsHealthHistory, tick, PREDICTION_TS_CAPACITY * 200);
+    }
   }
 
   // ── 4. 房间健康度历史（per-room）──
+  // WO-10/P14：无消费者。降频到每 500t 采样省 CPU。
+  if (tick % 500 === 0) {
   if (!g.__roomHealthHistory) {
     g.__roomHealthHistory = new Map();
   }
-  for (const dim of healthResult.dimensions) {
-    // 只采样 colony 维度的 per-room 数据（colony 维度包含各房状态）
-    // 简化：用 empireHealth 各维度分数作为帝国级健康度
-    // per-room 精细采样从 colonyState 推导
-  }
-  // per-room 采样：从 RoomMemory.colonyState 推导 room health
   for (const snap of ctx.snapshots()) {
     const roomMem = Memory.rooms[snap.roomName];
     const colonyState = roomMem?.colonyState ?? "normal";
@@ -572,4 +576,5 @@ function sampleForPredictions(
     pushSample(roomTs, tick, { score: roomScore, level: colonyState });
     gcTimeSeries(roomTs, tick, PREDICTION_TS_CAPACITY * 200);
   }
+  } // end if (tick % 500 === 0)
 }

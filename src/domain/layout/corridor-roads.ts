@@ -1,5 +1,19 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
-import { globalCache, type CorridorPathCacheEntry } from "../../kernel/global-cache";
+import type { CorridorPathCacheEntry } from "../../kernel/global-cache";
+
+/**
+ * 【D-2 修复】走廊路路径缓存接口 — domain 层不再直读 globalCache。
+ * 调用方（layout-planner system 层）提供缓存读写实现，
+ * domain 层只消费缓存接口。
+ */
+export interface CorridorPathCacheStore {
+  /** 读取指定房的缓存路径条目，无则返回 undefined。 */
+  get(roomName: string): CorridorPathCacheEntry | undefined;
+  /** 写入/更新指定房的缓存路径条目。 */
+  set(roomName: string, entry: CorridorPathCacheEntry): void;
+  /** 确保缓存 Map 已初始化（惰性创建）。 */
+  ensureMap(): void;
+}
 
 /**
  * 确定性走廊路规划 — 流量采样式修路（road-policy）对长走廊失效：
@@ -142,6 +156,7 @@ export function defaultPathFn(
  *
  * @param anchor 锚点位置（缓存失效条件之一；不传则不缓存，保证单测确定性）
  * @param pathFn PathFinder 注入（单测用）；protectedPositions 蓝图未来格
+ * @param cacheStore 【D-2 修复】路径缓存接口（由 system 层注入，domain 不再直读 globalCache）
  */
 export function planCorridorRoads(
   room: Room,
@@ -151,6 +166,7 @@ export function planCorridorRoads(
   pathFn?: PathFn,
   protectedPositions?: ReadonlySet<number>,
   anchor?: { x: number; y: number },
+  cacheStore?: CorridorPathCacheStore,
 ): { x: number; y: number; roomName: string }[] {
   const pairs = collectCorridorEndpoints(snapshot);
   if (pairs.length === 0) return [];
@@ -160,10 +176,10 @@ export function planCorridorRoads(
   const pairKey = `${pair.from.x},${pair.from.y}→${pair.to.x},${pair.to.y}`;
 
 
-  // 路径缓存查询（仅当 anchor 提供时启用）。
+  // 路径缓存查询（仅当 anchor 提供且 cacheStore 注入时启用）。
   let path: { x: number; y: number }[];
-  if (anchor && !pathFn) {
-    path = getCachedOrComputePath(snapshot.roomName, pairKey, pair, anchor, snapshot, room, tick!, protectedPositions);
+  if (anchor && !pathFn && cacheStore) {
+    path = getCachedOrComputePath(snapshot.roomName, pairKey, pair, anchor, snapshot, room, tick!, protectedPositions, cacheStore);
   } else {
     // 单测注入 pathFn 或无 anchor 时不走缓存（保证测试确定性）。
     const fn = pathFn ?? defaultPathFn(snapshot, room, protectedPositions);
@@ -205,6 +221,8 @@ export function planCorridorRoads(
  * 查询走廊路缓存：命中且 signature（pairKey + rcl + anchor，漏洞 #5 完整失效条件）
  * 匹配则返回缓存路径，否则计算并写入。任一变化即失效：端点 container/storage
  * 消失或新建、RCL 解锁新结构、spawn 重建换位。
+ *
+ * 【D-2 修复】缓存读写通过 cacheStore 接口注入，domain 层不再直读 globalCache。
  */
 function getCachedOrComputePath(
   roomName: string,
@@ -215,10 +233,15 @@ function getCachedOrComputePath(
   room: Room,
   tick: number,
   protectedPositions?: ReadonlySet<number>,
+  cacheStore?: CorridorPathCacheStore,
 ): { x: number; y: number }[] {
-  const cache = globalCache();
-  if (cache.corridorPathCache === undefined) cache.corridorPathCache = new Map();
-  const cached = cache.corridorPathCache.get(roomName);
+  if (!cacheStore) {
+    // 无缓存接口（单测路径）— 直接计算
+    const fn = defaultPathFn(snapshot, room, protectedPositions);
+    return fn(pair.from, pair.to);
+  }
+  cacheStore.ensureMap();
+  const cached = cacheStore.get(roomName);
 
   // 命中条件：pairKey + rcl + anchor 全匹配。
   const cacheHit =
@@ -243,6 +266,6 @@ function getCachedOrComputePath(
     path,
     tick,
   };
-  cache.corridorPathCache.set(roomName, entry);
+  cacheStore.set(roomName, entry);
   return path;
 }

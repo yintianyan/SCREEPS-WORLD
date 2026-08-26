@@ -22,6 +22,7 @@
  */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
+import { systemPhase } from "../kernel/phase";
 import {
   type DecisionSnapshot,
   type DecisionRecord,
@@ -104,7 +105,11 @@ export const decisionTraceSystem: System = {
     // AI-1 修复：snapshotRegistry 只增不减导致无界增长。
     // 驱逐策略：只保留 ring buffer 中仍存活 DecisionRecord 引用的 snapshot。
     // 驱逐时机：每 500 tick 执行一次（低频，避免每 100t 遍历开销）。
-    if (tick % 500 === 0) {
+    // P14 修复：cadence 错峰使本系统只在 tick%100===phase 时运行，
+    // 绝对 tick%500===0 要求 tick%100===0，与 phase≠0 不相交 → 永不执行。
+    // 改为相位相对判定 (tick-phase)%500===0。
+    const dtPhase = systemPhase("decision-trace", 100);
+    if ((tick - dtPhase) % 500 === 0) {
       evictStaleSnapshots(cache);
     }
 

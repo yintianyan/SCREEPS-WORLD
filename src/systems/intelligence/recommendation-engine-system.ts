@@ -30,6 +30,7 @@
  */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
+import { systemPhase } from "../../kernel/phase";
 import type { ExperienceRecord, ExperienceRingBuffer } from "../../domain/intelligence/experience";
 import { getRecentExperiences } from "../../domain/intelligence/experience";
 import type { StrategyEvaluation } from "../../domain/intelligence/strategy-evaluation";
@@ -129,10 +130,13 @@ export const recommendationEngineSystem: System = {
     const { resolutions, profiles, failureStats } = collectCalibration(g);
 
     // ── 3. 构建 PredictionContext ──
+    // ── 3. 构建 RecommendationContext ──
+    const recPhase = systemPhase("recommendation-engine", RECOMMENDATION_INTERVAL);
     const currentContext = buildCurrentContext(ctx, g);
     if (!currentContext) {
       // 冷启动：empireHealth 尚未产出
-      if (tick % 5000 === 0) {
+      // P14 修复：改为相位相对判定 (tick-phase)%5000===0。
+      if ((tick - recPhase) % 5000 === 0) {
         console.log(`[${tick}] recommendation-engine: cold start (no empireHealth)`);
       }
       return;
@@ -229,7 +233,8 @@ export const recommendationEngineSystem: System = {
     cache.lastRunTick = tick;
 
     // ── 13. 可观测性输出 ──
-    if (tick % 5000 === 0) {
+    // P14 修复：改为相位相对判定 (tick-phase)%5000===0。
+    if ((tick - recPhase) % 5000 === 0) {
       const stats = recommendationStats(buf);
       const activeConflicts = getActiveConflicts(buf);
       const ranked = rankRecommendations(getActiveRecommendations(buf));
