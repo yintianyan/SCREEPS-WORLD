@@ -566,6 +566,9 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
     console.log(`[${ctx.tick}] expansion: economic_startup timed out for ${expansion.target}`);
     // 如果至少 energy loop 活跃，尝试强行推进
     if (cp3.passed) {
+      // TD-37-3：timeout 强推路径补充 recordExpansionOutcome 调用
+      // 与 advanceIntegrating 的 timeout 强推路径保持一致
+      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_SUCCESS);
       expansion.state = "integrating";
       expansion.startedAt = ctx.tick;
       console.log(`[${ctx.tick}] expansion: forcing economic_startup → integrating (energy loop active)`);
@@ -720,6 +723,18 @@ function recordExpansionOutcome(expansion: ExpansionState, tick: number, phase: 
     outcome,
     tick - expansion.startedAt,
   ]);
+
+  // AI-2 修复：写入 globalCache().lastExpansionOutcome 供 A6 experience-collector 匹配读取
+  // decisionId 是唯一稳定关联键：由 collectExpansionDecisions 写入 Memory.kernel.expansion.decisionId，
+  // 整个扩张生命周期不变（startedAt 被状态机覆盖，planId 在旧版 Memory 可能缺失）
+  globalCache().lastExpansionOutcome = {
+    target: expansion.target,
+    outcomeCode: outcome,
+    completedTick: tick,
+    duration: tick - expansion.startedAt,
+    startedAt: expansion.startedAt,
+    decisionId: expansion.decisionId,
+  };
 
   const kind = toOutcomeKind(phase, outcome);
   if (!kind) return;

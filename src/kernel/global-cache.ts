@@ -332,6 +332,29 @@ export interface GlobalCache {
     operationId?: string;
   };
 
+  /** AI-2 修复：最近一次扩张结果摘要（heap only）。
+   * 由 recordExpansionOutcome 写入，供 experience-collector 的
+   * buildOutcomeCollectionInput case "expansion" 通过 decisionId 匹配读取。
+   * decisionId 是唯一稳定关联键：由 collectExpansionDecisions 分配，
+   * 存储在 Memory.kernel.expansion.decisionId 中，整个扩张生命周期不变。
+   * heap 存储 — global reset 丢失可接受（与 ring buffer 同生命周期）。 */
+  lastExpansionOutcome?: {
+    /** 目标房名。 */
+    target: string;
+    /** outcome code: 0=success, 1=stolen, 2=timeout, 3=lost, 4=aborted */
+    outcomeCode: number;
+    /** 扩张完成/终止 tick。 */
+    completedTick: number;
+    /** 扩张持续时间（tick）。 */
+    duration: number;
+    /** 扩张开始 tick（expansion.startedAt）— 最后一次状态转换的 tick。
+     * 注意：startedAt 在状态机推进中被反复覆盖，不能作为唯一关联键。 */
+    startedAt: number;
+    /** 关联的 DecisionRecord.decisionId — 唯一稳定关联键。
+     * 与 ExperienceRecord.decision.decisionId 直接匹配。 */
+    decisionId?: string;
+  };
+
   // ── A6.3 Prediction Layer ──────────────────────────────────
 
   /** A6.3：Prediction 缓存（PredictionRingBuffer + TimeSeries 集合 + seq）。

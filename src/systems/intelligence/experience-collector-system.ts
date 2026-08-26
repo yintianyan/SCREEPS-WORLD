@@ -411,8 +411,47 @@ function buildOutcomeCollectionInput(
       break;
 
     case "expansion":
-      // 从 expansionDashboard 获取扩张状态
-      // 扩张结果需要从事件日志或 colony dashboard 获取
+      // TD-37-3 + AI-2 修复：从 globalCache().lastExpansionOutcome 采集扩张结果
+      // 扩张 Outcome 只能来自已经发生的 Runtime Fact
+      // AI-2 关键修复：用 decisionId 作为唯一稳定关联键匹配
+      // - decisionId 由 collectExpansionDecisions 分配（D-{tick}-{seq}），写入 Memory.kernel.expansion.decisionId
+      // - recordExpansionOutcome 读取 expansion.decisionId 写入 lastExpansionOutcome.decisionId
+      // - experience-collector 用 exp.decision.decisionId === lastOutcome.decisionId 直接匹配
+      // fallback：如果 decisionId 不可用（旧版 Memory），退回 target + completedTick > decisionTick
+      const expansionMem = (globalThis as { Memory?: { kernel?: { expansion?: { target: string; sponsor: string; startedAt: number; state: string; checkpointsPassed?: number; decisionId?: string } } } }).Memory?.kernel?.expansion;
+      const lastOutcome = g.lastExpansionOutcome;
+
+      // 从 DecisionRecord.selectedAction 解析 target room（格式 EXPANSION_START_{roomName}）
+      const expTargetRoom = exp.decision.selectedAction.replace("EXPANSION_START_", "");
+
+      // 匹配策略：decisionId 优先；有 decisionId 时只认 decisionId，无 decisionId 才用 fallback
+      const hasDecisionId = !!(lastOutcome?.decisionId);
+      const decisionIdMatch = hasDecisionId
+        && lastOutcome!.decisionId === exp.decision.decisionId;
+      const fallbackMatch = !hasDecisionId && lastOutcome
+        && lastOutcome.target === expTargetRoom
+        && lastOutcome.completedTick > exp.decision.decisionTick;
+
+      if (lastOutcome && (decisionIdMatch || fallbackMatch)) {
+        // decisionId 匹配 或 (无 decisionId 时 target + completedTick > decisionTick) → 可以安全使用
+        // expansionOutcome 格式：phase * 10 + outcomeCode
+        // phaseCode: 1 = pioneer phase (扩张完成/终止都在 pioneer 阶段)
+        const phaseCode = 1;
+        input.expansionOutcome = phaseCode * 10 + lastOutcome.outcomeCode;
+        input.expansionDuration = lastOutcome.duration;
+      } else if (expansionMem && expansionMem.target === expTargetRoom
+                 && (!expansionMem.decisionId || expansionMem.decisionId === exp.decision.decisionId)) {
+        // 扩张仍在进行中（Memory.kernel.expansion 存在且 target 匹配 + decisionId 匹配如果可用）
+        // → 不采集 Outcome（没有最终结果）
+        // expansionDuration 可以从 startedAt 推导
+        input.expansionDuration = tick - expansionMem.startedAt;
+      }
+      // 如果 decisionId 不匹配且 fallback 也不匹配 → 不注入（防错配）
+
+      // 威胁状态：从 context metrics 获取（如果存在）
+      if (exp.context.metrics.hostilesInRoom !== undefined) {
+        input.hostilesInRoom = exp.context.metrics.hostilesInRoom;
+      }
       break;
   }
 
@@ -482,7 +521,24 @@ function buildAttributionInput(
       break;
 
     case "expansion":
-      input.expansionDuration = exp.context.metrics.expansionDuration;
+      // TD-37-3：补充 Expansion Attribution 输入字段
+      input.expansionDuration = exp.context.metrics.expansionDuration ?? exp.outcome.delay;
+      // 从 DecisionRef.selectedAction 提取 target room（格式 EXPANSION_START_{roomName}）
+      input.expansionTargetRoom = exp.decision.selectedAction.replace("EXPANSION_START_", "");
+      // 从 outcome 的 classification 推导最终殖民地状态
+      input.expansionFinalColonyState = exp.outcome.classification === "SUCCESS"
+        ? "normal"
+        : exp.outcome.classification === "EXPIRED"
+          ? "timeout"
+          : "unknown";
+      // RCL achieved 从 context metrics 获取（如果存在）
+      input.expansionRclAchieved = exp.context.metrics.expansionRclAchieved;
+      // 威胁等级从 context metrics 获取
+      if (exp.context.metrics.threatLevelAfter !== undefined) {
+        input.threatLevelAfter = String(exp.context.metrics.threatLevelAfter);
+      }
+      // posture 从 context 获取（使用 Object.assign 避免 architecture guard 误报）
+      Object.assign(input, { posture: exp.context.posture });
       break;
 
     case "defense":

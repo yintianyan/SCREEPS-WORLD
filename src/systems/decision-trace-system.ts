@@ -60,6 +60,8 @@ interface DecisionTraceCache {
   snapshotRegistry: Map<string, DecisionSnapshot>;
   /** 自增序列号（生成 decisionId）。 */
   seq: number;
+  /** TD-37-3：已产生 DecisionTrace 的 expansion planId 集合（防重复）。 */
+  processedExpansionPlanIds: Set<string>;
 }
 
 // ─── 系统定义 ──────────────────────────────────────────────
@@ -80,6 +82,7 @@ export const decisionTraceSystem: System = {
         ringBuffer: createRingBuffer(1000),
         snapshotRegistry: new Map(),
         seq: 0,
+        processedExpansionPlanIds: new Set(),
       };
     }
     const cache = g.__decisionTraceCache as DecisionTraceCache;
@@ -91,9 +94,19 @@ export const decisionTraceSystem: System = {
     collectSpawnDecisions(ctx, cache, tick);
     collectDefenseDecisions(ctx, cache, tick);
     collectWarPlanDecisions(ctx, cache, tick);
+    // TD-37-3：采集 Expansion Decision（一次 Plan consume = 一次 Decision Event）
+    collectExpansionDecisions(ctx, cache, tick);
 
     // ── 3. Trace GC ──
     gcTrace(cache.ringBuffer, tick);
+
+    // ── 3b. Snapshot Registry eviction ──
+    // AI-1 修复：snapshotRegistry 只增不减导致无界增长。
+    // 驱逐策略：只保留 ring buffer 中仍存活 DecisionRecord 引用的 snapshot。
+    // 驱逐时机：每 500 tick 执行一次（低频，避免每 100t 遍历开销）。
+    if (tick % 500 === 0) {
+      evictStaleSnapshots(cache);
+    }
 
     // ── 4. 可观测性输出 ──
     const records = getRecentRecords(cache.ringBuffer, 5);
@@ -854,6 +867,141 @@ function collectWarPlanDecisions(
   pushRecord(cache.ringBuffer, record);
 }
 
+// ─── TD-37-3: Expansion Decision 采集 ──────────────────────────
+
+/**
+ * 从 expansion-manager 的运行时状态构建 Expansion DecisionRecord。
+ *
+ * 语义约束：一次真实 Expansion Decision = Plan 被 consume 启动执行的时刻，
+ * 而不是 Operation 每 tick 的状态变化。使用 processedExpansionPlanIds 防重。
+ *
+ * 采集来源：
+ * - Memory.kernel.expansion（活跃扩张状态机）
+ * - globalCache.executionDashboard（运行时执行看板）
+ * - Memory.kernel.strategy（姿态上下文）
+ *
+ * 记录规则：
+ * - 有活跃扩张 + planId 未处理过 → 记录一次
+ * - 无活跃扩张 → 不记录（扩张终止的 Outcome 由 Outcome 采集链处理）
+ * - planId 为空但有活跃扩张 → 用 target+startedAt 作为去重 key
+ */
+function collectExpansionDecisions(
+  ctx: TickContext,
+  cache: DecisionTraceCache,
+  tick: number,
+): void {
+  const mem = (globalThis as { Memory?: { kernel?: { expansion?: { target: string; sponsor: string; startedAt: number; planId?: string; state: string; checkpointsPassed?: number } } } }).Memory?.kernel?.expansion;
+  if (!mem) return;
+
+  // 去重 key：planId 优先，fallback 到 target+startedAt
+  const dedupKey = mem.planId ?? `expansion:${mem.target}:${mem.startedAt}`;
+  if (cache.processedExpansionPlanIds.has(dedupKey)) return;
+
+  // 防止 Set 无限增长
+  if (cache.processedExpansionPlanIds.size > 500) {
+    const old = Array.from(cache.processedExpansionPlanIds).slice(0, 200);
+    for (const k of old) cache.processedExpansionPlanIds.delete(k);
+  }
+
+  const scope = mem.target;
+  const snapshot = buildSnapshot(ctx, tick, scope, "EXPANSION");
+  const snapHash = snapshotHash(snapshot);
+  if (!cache.snapshotRegistry.has(snapHash)) {
+    cache.snapshotRegistry.set(snapHash, snapshot);
+  }
+
+  const strategy = (globalThis as { Memory?: { kernel?: { strategy?: { posture?: string; expansionAllowed?: boolean } } } }).Memory?.kernel?.strategy;
+  const posture = strategy?.posture ?? "develop";
+  const expansionAllowed = strategy?.expansionAllowed ?? false;
+
+  const reasons: DecisionReason[] = [];
+  reasons.push({
+    metric: "expansionPlanConsumed",
+    actual: dedupKey,
+    threshold: "none",
+    severity: "info",
+    consequence: `扩张计划 ${dedupKey} 开始执行: ${mem.target} (sponsor=${mem.sponsor})`,
+  });
+  reasons.push({
+    metric: "expansionPosture",
+    actual: posture,
+    threshold: "develop",
+    severity: expansionAllowed ? "info" : "warning",
+    consequence: expansionAllowed
+      ? "姿态授权扩张"
+      : "姿态未授权但已有活跃扩张（沉没投资保护）",
+  });
+  reasons.push({
+    metric: "expansionState",
+    actual: mem.state,
+    threshold: "preparing",
+    severity: "info",
+    consequence: `初始状态: ${mem.state}`,
+  });
+
+  // 采集扩张看板证据
+  const g = globalCache() as { executionDashboard?: { tick: number; executionState: string; targetRoom: string; sponsorRoom: string; progress: number; checkpointsPassed: number; reservedEnergy: number; consecutivePositiveTicks: number } };
+  const dashboard = g.executionDashboard;
+
+  const evidence: DecisionEvidence = {
+    threat: {
+      hostileCount: 0,
+      posture,
+    },
+    health: {
+      empireHealthLevel: snapshot.health.empireHealthLevel,
+      empireHealthScore: snapshot.health.empireHealthScore,
+      bottleneck: snapshot.health.bottleneck,
+      recovering: snapshot.health.recovering,
+    },
+    population: snapshot.population.creepByRole,
+  };
+
+  if (dashboard) {
+    reasons.push({
+      metric: "executionProgress",
+      actual: `${dashboard.checkpointsPassed}/5`,
+      threshold: "5/5",
+      severity: "info",
+      consequence: `执行进度: ${dashboard.executionState}, CP=${dashboard.checkpointsPassed}/5`,
+    });
+  }
+
+  const selectedAction = `EXPANSION_START_${mem.target}`;
+  const dHash = decisionHash(selectedAction, reasons, evidence, []);
+  const decisionId = makeDecisionId(tick, ++cache.seq);
+  const record: DecisionRecord = {
+    decisionId,
+    tick,
+    category: "EXPANSION",
+    actor: "expansion-manager",
+    scope,
+    inputSnapshotHash: snapHash,
+    reasons,
+    evidence,
+    selectedAction,
+    rejectedAlternatives: [],
+    expectedOutcome: `房间 ${mem.target} 完成完整扩张链路 (CP1-CP5) 并成为自治房间`,
+    correlationId: makeCorrelationId(decisionId, tick),
+    severity: "IMPORTANT",
+    decisionHash: dHash,
+    createdAt: tick,
+    lifecycle: "ACTIVE",
+  };
+
+  pushRecord(cache.ringBuffer, record);
+  cache.processedExpansionPlanIds.add(dedupKey);
+
+  // AI-2 修复：将 decisionId 写入 Memory.kernel.expansion.decisionId
+  // 这是唯一稳定关联键——recordExpansionOutcome 读取此值写入 lastExpansionOutcome.decisionId，
+  // experience-collector 用 exp.decision.decisionId === lastOutcome.decisionId 直接匹配。
+  // startedAt 在状态机推进中被反复覆盖，planId 在旧版 Memory 可能缺失，decisionId 是可靠键。
+  const expMem = (globalThis as { Memory?: { kernel?: { expansion?: { decisionId?: string } } } }).Memory?.kernel?.expansion;
+  if (expMem) {
+    expMem.decisionId = decisionId;
+  }
+}
+
 // ─── Snapshot 构建器（从 Runtime State 采集）──────────────
 
 /**
@@ -1035,6 +1183,45 @@ function buildSnapshot(
       cpuBucket: Game.cpu.bucket ?? 10000,
     },
   };
+}
+
+// ─── AI-1 修复：Snapshot Registry eviction ──────────────────
+
+/**
+ * 驱逐 snapshotRegistry 中不再被任何存活 DecisionRecord 引用的 snapshot。
+ *
+ * 策略：遍历 ring buffer 中仍存活的 DecisionRecord，收集它们的 inputSnapshotHash，
+ * 然后删除 snapshotRegistry 中不在该集合中的条目。
+ *
+ * 执行频率：每 500 tick 一次（低频，与 gcTrace 同区域）。
+ * 复杂度：O(ringBuffer.count + snapshotRegistry.size)。
+ */
+function evictStaleSnapshots(cache: DecisionTraceCache): void {
+  const referencedHashes = new Set<string>();
+
+  // 收集 ring buffer 中所有存活记录引用的 snapshot hash
+  for (let i = 0; i < cache.ringBuffer.records.length; i++) {
+    const r = cache.ringBuffer.records[i];
+    if (r && r.lifecycle !== "EXPIRED") {
+      referencedHashes.add(r.inputSnapshotHash);
+    }
+  }
+
+  // 删除未被引用的 snapshot
+  let evicted = 0;
+  for (const key of cache.snapshotRegistry.keys()) {
+    if (!referencedHashes.has(key)) {
+      cache.snapshotRegistry.delete(key);
+      evicted++;
+    }
+  }
+
+  if (evicted > 0 && cache.snapshotRegistry.size > 0) {
+    console.log(
+      `[decision-trace] snapshotRegistry evicted ${evicted} stale snapshots, ` +
+      `remaining: ${cache.snapshotRegistry.size}`,
+    );
+  }
 }
 
 // ─── 查询口（供 Dashboard / 外部消费）─────────────────────

@@ -354,6 +354,11 @@ declare global {
       reservedEnergy?: number;
       /** A3.3：连续净流为正的 tick 数（经济激活判据）。 */
       consecutivePositiveTicks?: number;
+      /** AI-2 修复：DecisionTrace 分配的 decisionId（D-{tick}-{seq}）。
+       * 由 collectExpansionDecisions 在采集 DecisionRecord 时写入，
+       * recordExpansionOutcome 读取并写入 lastExpansionOutcome.decisionId。
+       * 唯一稳定关联键——planId 在旧版 Memory 可能缺失，startedAt 被状态机覆盖。 */
+      decisionId?: string;
     };
     /** 扩张失败目标黑名单（v11+）：房名 → 冷却到期 tick。 */
     expansionBlacklist?: Record<string, number>;
