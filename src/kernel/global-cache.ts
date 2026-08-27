@@ -102,6 +102,13 @@ export interface GlobalCache {
    * construction-manager 全局上限判定读此值（与 ctx.globalSiteCount 相加 < maxGlobalSites）。
    * 由 site-quota.ts 的 getRemoteSiteTotal() 惰性构建。 */
   remoteSiteTotal?: { tick: number; count: number };
+  /** R2：construction-manager 跳过原因 L1 计数（heap — 观测数据不上 Memory，
+   * STATE_OWNERSHIP §3.10）。rooms 按窗口聚合，结构化日志输出后清零。 */
+  constructionSkips?: {
+    rooms: Record<string, Record<string, number>>;
+    total: number;
+    lastReportTick?: number;
+  };
   /** P1-1 死资产检测：source link 持续满足三重校验（role=source + energy=0 + !linkHasOutlet）
    * 达 DEAD_ASSET_THRESHOLD(500) tick → 判定死资产。key = link.id，value = 首次检测 tick。
    * heap 存储 — global reset 丢失可接受（reset 极少，且死资产会快速重建）。 */

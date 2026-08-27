@@ -40,7 +40,7 @@ export function getWallTargetHits(
 
 export const CONFIG = {
   memory: {
-    schemaVersion: 41,
+    schemaVersion: 42,
     /** 【F1/G-C】数据族 TTL 表（FREEZE §9）：每族 {maxAge, sweepPolicy}。
      * sweepPolicy: "ring"（定长环自动截断）| "hook"（由既有清理钩子执行）| "planned"（消费者落地前占位）。
      * 本表 v1 为治理登记：ring/hook 两类由既有机制兑现，"planned" 行不产生行为。 */
@@ -291,6 +291,23 @@ export const CONFIG = {
     /** 孤儿工地清扫间隔（tick）：低频遍历 Game.constructionSites（全局、无视野也可
      * remove），清掉「既非我方殖民地、又非活跃远矿目标、又非当前扩张目标」房间的工地。 */
     orphanSweepInterval: 100,
+    /** R2：construction-manager 跳过原因结构化日志的输出间隔（tick）。
+     * 跳过计数按此窗口聚合输出一条日志后清零（heap L1 — 不进 Memory）。 */
+    skipReportInterval: 100,
+    /** R2 队列治理：每房 buildQueue 背景任务（priority >= 2）硬上限。
+     * P0/P1（生存 + 关键发展：spawn/container/extension/tower）不受此限 —
+     * 上限只约束道路/防御等背景任务的无限追加（layout 重规划防膨胀）。 */
+    maxBackgroundQueuedPerRoom: 16,
+    /** R2 队列治理：queued 任务最大等待年龄（tick）。超龄且 priority > 0 的
+     * 任务被清除（不进黑名单 — 超龄≠永久无效），规划器下周期可重新入队。 */
+    maxQueuedTaskAge: 3000,
+    /** R2 关键发展通道能量地板（绝对值）：RCL2-3 extension/controller container
+     * 在门禁被 claimSecure/pressure/conserve 拉闸时仍可建 site 的最低能量储备。
+     * 独立于门禁的 60% 容量梯度阈值 — 那个阈值正是 RCL2 停摆的拉闸点之一。 */
+    developmentLaneEnergyFloor: 150,
+    /** R2 关键发展通道适用 RCL 上界（含）：RCL2-3 生效，RCL4+ 有 storage/emergency
+     * 通道接管，extension 回归常规门禁。 */
+    developmentLaneMaxRcl: 3,
   },
   layout: {
     /** 布局模式：constraint = 约束推导放置（默认），template = 固定模板（compact-core-v2，fallback）。 */

@@ -30,7 +30,7 @@
 | # | 验证项 | 通过标准 |
 | --- | --- | --- |
 | MEM-1 | Memory 无持续增长 | `JSON.stringify(Memory).length` 在 10000 tick 内环比增长 < 20% |
-| MEM-2 | schemaVersion 稳定 | 全程保持 41（当前版本） |
+| MEM-2 | schemaVersion 稳定 | 全程保持 CONFIG.memory.schemaVersion（当前 42） |
 | MEM-3 | 无 schema 降版告警 | console 无 `[schema] WARNING` 日志 |
 
 ### 2.3 Pipeline 与错误隔离
@@ -55,7 +55,7 @@
 | # | 验证项 | 通过标准 |
 | --- | --- | --- |
 | RECOVER-1 | 损坏 Memory 恢复 | 注入 null Memory → 500 tick 内恢复运转 |
-| RECOVER-2 | 旧 schema 迁移 | 注入 schemaVersion=1 → 迁移到 41 |
+| RECOVER-2 | 旧 schema 迁移 | 注入 schemaVersion=1 → 迁移到 CONFIG.memory.schemaVersion |
 | RECOVER-3 | 扩张超时恢复 | 扩张超时后进入 forced advance |
 | RECOVER-4 | 被占/丢失恢复 | 扩张目标被占 → 进入 warBlacklist 冷却 |
 

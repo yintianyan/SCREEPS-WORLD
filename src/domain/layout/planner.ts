@@ -19,20 +19,42 @@ import { packPos } from "./types";
 /**
  * 构建队列去重闭包：key + position + blacklist 三重检查。
  * stages 1-3 共用同一去重逻辑——纯函数，不触 Game/Memory。
+ * R2 队列治理：maxBackgroundQueued 参数启用 admission control — 非终端队列中
+ * priority >= 2 的背景任务（道路/防御等）达到上限后拒绝新背景任务入队；
+ * priority <= 1（生存 + 关键发展）不受限。返回值 false = 被去重/黑名单/上限拒绝。
  */
 export function makeTryAddTask(
   existingKeys: Set<string>,
   existingPositions: Set<string>,
   segBlocked: Record<string, { retryAt: number }>,
   queue: BuildTask[],
+  opts?: {
+    /** 背景任务（priority>=2）队列硬上限 — 默认 Infinity（不受限）。 */
+    maxBackgroundQueued?: number;
+    /** 入队 tick（BuildTask.queuedAt）。 */
+    nowTick?: number;
+    /** 上限拒绝计数（调用方观测用，跨候选累加）。 */
+    stats?: { capRejected: number };
+  },
 ): (candidate: BuildTaskCandidate) => boolean {
   const isBlacklisted = (key: string): boolean => segBlocked[key] !== undefined;
+  const maxBackgroundQueued = opts?.maxBackgroundQueued ?? Infinity;
+  const nowTick = opts?.nowTick ?? 0;
+  const backgroundQueued = (): number =>
+    queue.filter(t => (t.state === "queued" || t.state === "blocked") && t.priority >= 2).length;
   return (candidate: BuildTaskCandidate): boolean => {
     if (existingKeys.has(candidate.key)) return false;
     if (isBlacklisted(candidate.key)) return false;
     const posKey = `${candidate.pos.x},${candidate.pos.y}`;
     if (existingPositions.has(posKey)) return false;
-    queue.push(candidateToBuildTask(candidate));
+    if (
+      candidate.priority >= 2 &&
+      backgroundQueued() >= maxBackgroundQueued
+    ) {
+      if (opts?.stats) opts.stats.capRejected++;
+      return false;
+    }
+    queue.push(candidateToBuildTask(candidate, nowTick));
     existingKeys.add(candidate.key);
     existingPositions.add(posKey);
     return true;

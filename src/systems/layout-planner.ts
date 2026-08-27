@@ -110,6 +110,8 @@ interface PlanStageData {
   targetingChanged: boolean;
   /** 已入队 link 数（stage 2 内部累加，防超额分配 RCL link 槽位）。 */
   queuedLinks: number;
+  /** R2 队列治理：本规划周期内因背景任务队列硬上限被拒绝的候选数。 */
+  capRejected: number;
 }
 
 /** 从 globalCache 读取 planStageData；不存在返回 undefined。 */
@@ -136,12 +138,17 @@ function clearPlanStageData(roomName: string): void {
 /**
  * D2 归位：tryAddTask 闭包逻辑已下沉到 domain/layout/planner.ts 的 makeTryAddTaskDomain。
  * 系统侧薄壳包装——从 planStageData 提取参数委托给纯函数。
+ * R2 队列治理：启用背景任务硬上限 + 入队 tick 盖戳（queuedAt）。
  */
 function makeTryAddTask(
   data: PlanStageData,
   queue: BuildTask[],
 ): (candidate: BuildTaskCandidate) => boolean {
-  return makeTryAddTaskDomain(data.existingKeys, data.existingPositions, data.segBlocked, queue);
+  return makeTryAddTaskDomain(data.existingKeys, data.existingPositions, data.segBlocked, queue, {
+    maxBackgroundQueued: CONFIG.construction.maxBackgroundQueuedPerRoom,
+    nowTick: Game.time,
+    stats: data,
+  });
 }
 
 /**
@@ -394,6 +401,7 @@ function planStage0Prep(
     existingPositions,
     tasksAdded: false,
     targetingChanged: false,
+    capRejected: 0,
     queuedLinks: queue.filter(t => t.structureType === STRUCTURE_LINK).length,
   });
 
@@ -409,7 +417,7 @@ function planStage0Prep(
  */
 function planStage1Core(
   snapshot: RoomSnapshot,
-  _ctx: TickContext,
+  ctx: TickContext,
   roomMem: RoomMemory,
   layout: NonNullable<RoomMemory["layout"]>,
   data: PlanStageData,
@@ -492,7 +500,7 @@ function planStage1Core(
             ? relocateCandidate(candidate, cell, room, snapshot, validationOptions, forbidden)
             : undefined;
           if (relocated) {
-            queue.push(candidateToBuildTask(relocated));
+            queue.push(candidateToBuildTask(relocated, ctx.tick));
             existingKeys.add(relocated.key);
             existingPositions.add(`${relocated.pos.x},${relocated.pos.y}`);
             forbidden.add(packPos(relocated.pos.x, relocated.pos.y));
@@ -755,7 +763,16 @@ function planStage3RoadsAndFinalize(
       const posKey = `${task.pos.x},${task.pos.y}`;
       if (existingKeys.has(task.key) || existingPositions.has(posKey)) continue;
       if (isBlacklisted(task.key)) continue;
+      // R2 队列治理：道路是背景任务（priority 3），直达 push 也受硬上限约束。
+      const backgroundQueued = queue.filter(
+        t => (t.state === "queued" || t.state === "blocked") && t.priority >= 2,
+      ).length;
+      if (backgroundQueued >= CONFIG.construction.maxBackgroundQueuedPerRoom) {
+        data.capRejected++;
+        break;
+      }
       queue.push(task);
+      task.queuedAt = ctx.tick;
       existingKeys.add(task.key);
       existingPositions.add(posKey);
       data.tasksAdded = true;
@@ -807,6 +824,7 @@ function planStage3RoadsAndFinalize(
           state: "queued",
           attempts: 0,
           retryAt: 0,
+          queuedAt: ctx.tick,
         });
         existingKeys.add(spawnKey);
         existingPositions.add(`${buildPos.x},${buildPos.y}`);
@@ -831,6 +849,14 @@ function planStage3RoadsAndFinalize(
   }
 
   roomMem.buildQueue = queue;
+
+  // R2 队列治理观测：本周期背景任务上限拒绝计数（每规划周期至多一条日志）。
+  if (data.capRejected > 0) {
+    console.log(
+      `[layout] queue cap reached in ${snapshot.roomName}: rejected ${data.capRejected} ` +
+      `background candidates (max ${CONFIG.construction.maxBackgroundQueuedPerRoom})`,
+    );
+  }
 
   // 仅在影响 creep 目标选择的结构入队时递增 revision。
   if (data.targetingChanged) {

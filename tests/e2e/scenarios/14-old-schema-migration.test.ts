@@ -52,13 +52,13 @@ describe("E2E-014 旧 Schema 迁移", () => {
       // 推进 1 tick：console 命令执行（注入旧版 Memory）+ loop 执行（迁移系统升级）
       await runner.tick();
 
-      // 精确断言：schemaVersion 必须等于 CONFIG.memory.schemaVersion（=41）
+      // 精确断言：schemaVersion 必须等于 CONFIG.memory.schemaVersion（=CONFIG.memory.schemaVersion）
       const mem = await runner.bot.getMemory();
       expect(mem.schemaVersion, "schemaVersion 应存在").toBeDefined();
       expect(mem.schemaVersion, "schemaVersion 必须等于 CONFIG.memory.schemaVersion").toBe(
         CONFIG.memory.schemaVersion,
       );
-      expect(mem.schemaVersion, "schemaVersion 必须等于 41").toBe(41);
+      expect(mem.schemaVersion, "schemaVersion 必须等于 CONFIG.memory.schemaVersion").toBe(CONFIG.memory.schemaVersion);
 
       // kernel 必须存在
       const kernel = mem.kernel as Record<string, unknown> | undefined;
@@ -100,13 +100,13 @@ describe("E2E-014 旧 Schema 迁移", () => {
       const last = snapshots.at(-1)!;
 
       // Phase 6: 验证迁移完成且 kernel 恢复
-      // 精确断言：schemaVersion 必须等于 CONFIG.memory.schemaVersion（=41）
+      // 精确断言：schemaVersion 必须等于 CONFIG.memory.schemaVersion（=CONFIG.memory.schemaVersion）
       const mem = await runner.bot.getMemory();
       expect(mem.schemaVersion, "schemaVersion 应存在").toBeDefined();
       expect(mem.schemaVersion, "schemaVersion 必须等于 CONFIG.memory.schemaVersion").toBe(
         CONFIG.memory.schemaVersion,
       );
-      expect(mem.schemaVersion, "schemaVersion 必须等于 41").toBe(41);
+      expect(mem.schemaVersion, "schemaVersion 必须等于 CONFIG.memory.schemaVersion").toBe(CONFIG.memory.schemaVersion);
       expect(mem.kernel, "kernel 应存在").toBeDefined();
 
       // 验证帝国正常运转
@@ -148,12 +148,12 @@ describe("E2E-014 旧 Schema 迁移", () => {
         `迁移有错误：\n${migrationErrors.join("\n")}`,
       ).toHaveLength(0);
 
-      // 精确断言：schemaVersion 稳定且等于 41
+      // 精确断言：schemaVersion 稳定且等于 CONFIG.memory.schemaVersion
       const mem = await runner.bot.getMemory();
       expect(mem.schemaVersion, "schemaVersion 应保持稳定").toBe(
         CONFIG.memory.schemaVersion,
       );
-      expect(mem.schemaVersion, "schemaVersion 必须等于 41").toBe(41);
+      expect(mem.schemaVersion, "schemaVersion 必须等于 CONFIG.memory.schemaVersion").toBe(CONFIG.memory.schemaVersion);
       // Phase 6: 验证有实际生产/执行行为
       expect(last.rawMemory?.kernel, "kernel 应存在").toBeDefined();
     },

@@ -631,3 +631,46 @@ AGENTS.md 要求"不得只依赖 getOutcomeChannel 的惰性迁移来代替正�
 
 **验证**：双文件实验 2/2、6/6 全绿，无 Errors，EXIT_CODE=0，进程 40s 自然
 收尾，零孤儿进程、零端口残留。
+
+## Phase R2 — RCL2 Early Development Recovery 批次 — 2026-08-27
+
+### R2-1: RCL2 建设闭环修复（根因报告见 [PHASE_R2_RCL2_RECOVERY.md](PHASE_R2_RCL2_RECOVERY.md)）
+
+**症状**：私服真实运行中 RCL2 房间 buildQueue 大量堆积而 construction site 长期为 0
+（含 extension 等关键发展建筑），直到 RCL3 tower 缺失触发 emergency 路径才自愈。
+
+**根因（三层叠加互为掩盖）**：
+1. extension 无受保护通道——`developmentGate` 任一门禁（claimSecure 自增强死锁 /
+   conserve tier / 能量地板 / P0 spawn）长期置位即冻结全部非紧急建造，而 emergency
+   豁免清单 tower 需 RCL≥3、storage 需 RCL≥4，RCL2 无任何救援通道；
+2. `if (emergency && canEmergency) else if (canNormal)` 互斥分支——2 source 房第二处
+   container 在 critical 配额(1/房)下排队使 emergency 恒真，normal 槽位被永久饿死；
+3. emergency 槽位「搭车」放行普通任务——排序置前但不过滤，旧代码靠它意外缓解根因 2，
+   同时又在能量危机时放行普通任务。
+
+**修复**：
+- RCL2-3 关键发展通道 `evaluateDevelopmentLane`（严格门禁拒绝但生存前提齐备时，
+  extension / controller container 仍可建 site；conserve 放行、recovery 不放行、
+  威胁/P0/能量地板 150/全局+每房配额/唯一写者全部保留）；
+- emergency 与 normal 双槽位独立化（emergency-only 语义，禁止普通任务搭车；
+  normal 槽位永远按严格发展门禁判定——emergency 豁免只属于 emergency 槽位）；
+- 队列治理：背景任务(priority≥2)硬上限 16/房（P0/P1 不受限）、BuildTask.queuedAt
+  年龄字段（schema **v42** 存量回填）、超龄(3000t)清除（不进黑名单）；
+- skip-reason 结构化观测：门禁 7 类 + 通道 9 类 + 创建期 8 类按「类型×原因」L1 计数，
+  每 100t 聚合日志（`[construction-skip]`）。
+
+**顺手修复（继承的在途 bug）**：v40→v41 迁移步骤 3 误删新字段 `oe`（应为旧字段
+`overflowEvicted`）——OutcomeChannel 双向存在时压缩字段被误删。
+
+**测试**：integration `rcl2-development-recovery.test.ts`（8 场景矩阵）、unit
+`rcl2-development-lane.test.ts`（30）、unit `v41-to-v42.test.ts`（5）、e2e
+`rcl2-recovery.test.ts`（隔离私服 canary 5200t）；全量回归 5122/5122 ✅。
+
+### R2-2: 未尽事项登记
+
+- `planHubRoads`（domain/layout/planner.ts）内部直达 push 未接入背景任务硬上限
+  （自身有 MAX_HUB_ROADS_PER_PLAN=6 且仅 RCL6+ storage 房触发，风险有界）；后续若
+  队列治理扩围需一并接入。
+- `maxCriticalSitesPerRoom=1` 使 2 source 房的第二个 source container 必须串行等待
+  第一个建成（配额正确行为但延长 emergency 激活时长）；是否为 source container 单列
+  配额属策略调优，走 CONFIG 校准流程，不在本批次改动。

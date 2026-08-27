@@ -5,6 +5,7 @@
  */
 
 import type { RoomSnapshot } from "../../kernel/contracts";
+import { CONFIG } from "../../config";
 
 /** 建造任务状态同步所需的已建结构摘要。 */
 interface StructurePosRef {
@@ -122,11 +123,25 @@ export function syncTaskStates(
 /**
  * 移除已完成任务和过期阻塞任务：done → 删除；blocked + attempts>=3 → 删除
  * （永久冲突，防内存泄漏）；blocked + retryAt 过期 → 转回 queued（保留 attempts）。
- * 返回被删除的永久冲突任务 key 列表 — 调用方应记入阻塞黑名单，否则规划器会
- * 按同 key 重新入队，形成「入队 → blocked → 删除 → 再入队」无限空转。
+ * R2 队列治理新增：queued 任务超龄（tick - queuedAt > maxQueuedAge）且非关键
+ * （priority > 0）→ 清除（staleKeys 返回，仅计数观测，不进黑名单 — 超龄≠永久无效，
+ * 规划器下周期可重新入队获得新 queuedAt）。
+ * 返回被删除的永久冲突任务 key 列表（黑名单语义不变）+ 超龄清除 key 列表（观测语义）。
  */
-export function cleanTasks(queue: BuildTask[], tick: number): string[] {
-  const purgedKeys: string[] = [];
+export interface CleanTasksResult {
+  /** 永久冲突任务 key（调用方应记入 segment 黑名单）。 */
+  blacklistedKeys: string[];
+  /** 超龄 queued 任务 key（仅观测，不进黑名单）。 */
+  staleKeys: string[];
+}
+
+export function cleanTasks(
+  queue: BuildTask[],
+  tick: number,
+  opts?: { maxQueuedAge?: number },
+): CleanTasksResult {
+  const blacklistedKeys: string[] = [];
+  const staleKeys: string[] = [];
   for (let i = queue.length - 1; i >= 0; i--) {
     const task = queue[i];
     if (!task) continue;
@@ -137,7 +152,7 @@ export function cleanTasks(queue: BuildTask[], tick: number): string[] {
     if (task.state === "blocked") {
       // 超过 3 次重试的永久冲突任务直接删除，避免内存泄漏。
       if (task.attempts >= 3) {
-        purgedKeys.push(task.key);
+        blacklistedKeys.push(task.key);
         queue.splice(i, 1);
         continue;
       }
@@ -145,9 +160,21 @@ export function cleanTasks(queue: BuildTask[], tick: number): string[] {
         task.state = "queued";
         // 注意：不重置 attempts，保留失败历史以达上限后删除。
       }
+      continue;
+    }
+    // R2 队列治理：queued 任务超龄清除。priority 0（生存关键：spawn 重建等）
+    // 永不清除 — 等待再久也必须建成。blocked 任务走上方专属链路，不在此列。
+    if (
+      task.state === "queued" &&
+      opts?.maxQueuedAge !== undefined &&
+      task.priority > 0 &&
+      tick - (task.queuedAt ?? tick) > opts.maxQueuedAge
+    ) {
+      staleKeys.push(task.key);
+      queue.splice(i, 1);
     }
   }
-  return purgedKeys;
+  return { blacklistedKeys, staleKeys };
 }
 
 /**
@@ -253,4 +280,180 @@ export function hasCriticalStructureGap(
           t.structureType === STRUCTURE_SPAWN),
     ),
   );
+}
+
+// ─── R2：developmentGate 结构化原因码（可观测性契约）──────────
+
+/**
+ * developmentGate 判定结果原因码。"ok" 表示允许建造；其余值即被跳过的具体原因。
+ * 语义与 systems/construction-manager.developmentGate 的既有门禁链完全一致：
+ *   1. 非紧急路径依次检查 pressure → cpu-tier → claim-secure；
+ *   2. 威胁检查双路径生效（敌人脚下不建工地）；
+ *   3. 非紧急路径继续检查 p0-spawn → energy-floor → global-site-cap。
+ */
+export type DevelopmentGateReason =
+  | "ok"
+  | "pressure"
+  | "cpu-tier"
+  | "claim-secure"
+  | "threat"
+  | "p0-spawn"
+  | "energy-floor"
+  | "global-site-cap";
+
+/** evaluateDevelopmentGate 的全部输入（纯函数 — 禁止 Game/Memory 访问）。 */
+export interface DevelopmentGateInputs {
+  /** 紧急重建判定（assessEmergencyRebuild().any）。 */
+  emergencyAny: boolean;
+  /** 房间经济压力 0..1（RoomMemory.economyPressure）。 */
+  economyPressure: number;
+  /** 内核看门狗档位（ctx.budget.tier）。 */
+  budgetTier: string;
+  /** claim-secure 护栏标记（RoomMemory.claimSecure）。 */
+  claimSecure: boolean;
+  /** 威胁 creep 数（snapshot.threatCreeps.length）。 */
+  threatCount: number;
+  /** 孵化队列是否有 P0 请求（RoomMemory.spawnQueue）。 */
+  hasP0SpawnRequest: boolean;
+  /** 房间可用能量（snapshot.energyAvailable）。 */
+  energyAvailable: number;
+  /** 房间能量容量（snapshot.energyCapacityAvailable）。 */
+  energyCapacityAvailable: number;
+  /** 全局 site 占用 = 自有房 site + 远矿 site 账本。 */
+  globalSiteCount: number;
+  /** 全局 site 上限（CONFIG.construction.maxGlobalSites）。 */
+  maxGlobalSites: number;
+}
+
+/**
+ * developmentGate 的纯函数版本 — 按既有门禁链输出具体原因码。
+ * 门禁顺序与阈值必须与历史行为逐条一致（本函数是唯一逻辑源，
+ * systems 层 developmentGate 只是薄壳委托）。
+ */
+export function evaluateDevelopmentGate(
+  inputs: DevelopmentGateInputs,
+): DevelopmentGateReason {
+  if (!inputs.emergencyAny) {
+    // 梯度门禁：pressure > 0.8 完全阻塞非紧急建造。
+    if (inputs.economyPressure > 0.8) return "pressure";
+    if (inputs.budgetTier === "recovery" || inputs.budgetTier === "conserve") return "cpu-tier";
+    if (inputs.claimSecure) return "claim-secure";
+  }
+
+  // 威胁检查双路径生效 — 紧急重建也不豁免（敌人脚下建工地 = 送钱）。
+  if (inputs.threatCount > 0) return "threat";
+
+  if (!inputs.emergencyAny) {
+    if (inputs.hasP0SpawnRequest) return "p0-spawn";
+
+    // 能量盈余梯度阈值：pressure 0.0–0.3 基础阈值（容量 60%），
+    // 0.3–0.8 线性提高到容量 90%。
+    const baseRatio = 0.6;
+    const maxRatio = 0.9;
+    const ratio = inputs.economyPressure <= 0.3
+      ? baseRatio
+      : baseRatio + ((inputs.economyPressure - 0.3) / 0.5) * (maxRatio - baseRatio);
+    const buildThreshold = Math.min(
+      Math.floor(inputs.energyCapacityAvailable * ratio),
+      CONFIG.economy.buildEnergySurplus + CONFIG.spawn.recoveryEnergyReserve,
+    );
+    if (inputs.energyAvailable < buildThreshold) return "energy-floor";
+
+    if (inputs.globalSiteCount >= inputs.maxGlobalSites) return "global-site-cap";
+  }
+
+  return "ok";
+}
+
+// ─── R2：关键发展建设通道（RCL2-3 development lane）──────────
+
+/** 关键发展结构判定 — extension 与 controller 邻接 container（不含 source 邻接，
+ * 后者归 emergency 车道）。extension 是 RCL2 唯一提升孵化容量的结构，是早期
+ * 发展闭环的核心；controller container 让 upgrader 0 通勤站桩（RCL2 即解锁）。
+ * 纯函数。 */
+export function isCriticalDevelopmentTask(
+  task: BuildTask,
+  snapshot: RoomSnapshot,
+): boolean {
+  if (task.structureType === STRUCTURE_EXTENSION) return true;
+  if (task.structureType === STRUCTURE_CONTAINER) {
+    const adjacentToSource = snapshot.sources.some(
+      s => Math.abs(s.pos.x - task.pos.x) <= 1 && Math.abs(s.pos.y - task.pos.y) <= 1,
+    );
+    if (adjacentToSource) return false;
+    if (
+      snapshot.controller &&
+      Math.abs(snapshot.controller.pos.x - task.pos.x) <= 1 &&
+      Math.abs(snapshot.controller.pos.y - task.pos.y) <= 1
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** evaluateDevelopmentLane 判定结果原因码。"ok" = 允许走通道创建 site。 */
+export type DevelopmentLaneReason =
+  | "ok"
+  | "rcl-window"
+  | "recovery-tier"
+  | "threat"
+  | "p0-spawn"
+  | "survival-gap"
+  | "energy-floor"
+  | "global-site-cap"
+  | "no-lane-task";
+
+/** evaluateDevelopmentLane 的全部输入（纯函数 — 禁止 Game/Memory 访问）。 */
+export interface DevelopmentLaneInputs {
+  /** 房间 RCL。 */
+  rcl: number;
+  /** 通道适用 RCL 上界（CONFIG.construction.developmentLaneMaxRcl）。 */
+  laneMaxRcl: number;
+  /** 内核看门狗档位（ctx.budget.tier）。 */
+  budgetTier: string;
+  /** 威胁 creep 数。 */
+  threatCount: number;
+  /** 孵化队列是否有 P0 请求。 */
+  hasP0SpawnRequest: boolean;
+  /** 生存级紧急缺口激活（spawn/tower/storage 缺失 — spawn 由 assessEmergencyRebuild
+   *  的 spawn/tower/storage 字段 OR 而来）。source container 缺失是经济效率缺口
+   *  而非生存缺口，不计入 — 它由 emergency 槽位并行处理，不应冻结发展通道
+   *  （2 source 房第二处 container 在 critical 配额=1 下排队会使该状态长期存在）。 */
+  survivalGapActive: boolean;
+  /** 房间可用能量。 */
+  energyAvailable: number;
+  /** 通道能量地板（CONFIG.construction.developmentLaneEnergyFloor，绝对值）。 */
+  laneEnergyFloor: number;
+  /** 全局 site 占用（自有 + 远矿账本）。 */
+  globalSiteCount: number;
+  /** 全局 site 上限。 */
+  maxGlobalSites: number;
+  /** 队列中「可立即创建」的关键发展任务数（queued 且过 retryAt）。 */
+  readyLaneTaskCount: number;
+}
+
+/**
+ * RCL2 关键发展建设通道判定 — 修复「extension 作为普通背景 P2 被门禁永久阻塞」
+ * 的 RCL2 停摆闭环（Phase R2 根因）。
+ *
+ * 通道语义：当 developmentGate 因 claimSecure / pressure / conserve 等门禁拒绝时，
+ * 若房间满足全部生存前提（无敌人、无 P0 孵化缺口、无紧急重建缺口）且能量不低于
+ * 绝对地板，则允许为 extension / controller container 创建 site。通道不绕过：
+ * Game API、每房 site 配额、全局 site 上限、位置校验、construction-manager 唯一
+ * 写者约束；创建仍消耗 normal tick 槽位（每 tick 全局 1 个 = 「每 tick 有限数量」）。
+ * recovery 档由内核 maxPriority=1 拦截本系统（P2），此处显式拒绝保持语义一致。
+ */
+export function evaluateDevelopmentLane(
+  inputs: DevelopmentLaneInputs,
+): DevelopmentLaneReason {
+  if (inputs.rcl < 2 || inputs.rcl > inputs.laneMaxRcl) return "rcl-window";
+  if (inputs.budgetTier === "recovery") return "recovery-tier";
+  if (inputs.threatCount > 0) return "threat";
+  if (inputs.hasP0SpawnRequest) return "p0-spawn";
+  if (inputs.survivalGapActive) return "survival-gap";
+  if (inputs.energyAvailable < inputs.laneEnergyFloor) return "energy-floor";
+  if (inputs.globalSiteCount >= inputs.maxGlobalSites) return "global-site-cap";
+  if (inputs.readyLaneTaskCount === 0) return "no-lane-task";
+  return "ok";
 }

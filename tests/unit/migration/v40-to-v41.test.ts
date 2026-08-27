@@ -8,7 +8,7 @@
  * 而非复制粘贴迁移逻辑——确保测试验证的是生产代码而非副本。
  *
  * 覆盖：
- *   1. 正常迁移：旧字段名 → 新字段名，数据保留，schemaVersion === 41
+ *   1. 正常迁移：旧字段名 → 新字段名，数据保留，schemaVersion === CONFIG 版本
  *   2. 幂等性：重复执行不产生副作用
  *   3. 坏数据：字段类型错误时不崩溃
  *   4. 无 outcomeEvents 时安全跳过
@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 
 describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
-  it("空 Memory 不报错，版本升到 CONFIG.memory.schemaVersion（=41）", () => {
+  it("空 Memory 不报错，版本升到 CONFIG.memory.schemaVersion（=CONFIG.memory.schemaVersion）", () => {
     (globalThis as any).Memory = {
       schemaVersion: 40,
       creeps: {},
@@ -37,7 +37,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     expect((globalThis as any).Memory.schemaVersion).toBe(
       CONFIG.memory.schemaVersion,
     );
-    expect((globalThis as any).Memory.schemaVersion).toBe(41);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 
   it("正常迁移：旧字段 → 新字段，数据保留", () => {
@@ -67,7 +67,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     runMigrations();
 
     const mem = (globalThis as any).Memory;
-    expect(mem.schemaVersion).toBe(41);
+    expect(mem.schemaVersion).toBe(CONFIG.memory.schemaVersion);
 
     const ch = mem.kernel.outcomeEvents;
     expect(ch).toBeDefined();
@@ -111,7 +111,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     const ch1 = JSON.parse(JSON.stringify(mem1.kernel.outcomeEvents));
     const version1 = mem1.schemaVersion;
 
-    expect(version1).toBe(41);
+    expect(version1).toBe(CONFIG.memory.schemaVersion);
 
     // 第二次调用（已经是当前版本 → migrateMemory 不执行）
     runMigrations();
@@ -146,7 +146,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     expect(ch.oe).toBe(0);
 
     // 坏数据使用安全默认值归一化，迁移仍可完成，避免永久卡在 v40。
-    expect((globalThis as any).Memory.schemaVersion).toBe(41);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect((globalThis as any).Memory.kernel.outcomeEvents).toEqual({
       q: [], s: [], dr: 0, oe: 0,
     });
@@ -164,7 +164,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     expect(
       (globalThis as any).Memory.kernel.outcomeEvents,
     ).toBeUndefined();
-    expect((globalThis as any).Memory.schemaVersion).toBe(41);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 
   it("无 kernel 时安全跳过", () => {
@@ -176,7 +176,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
 
     expect(() => runMigrations()).not.toThrow();
     expect((globalThis as any).Memory.kernel).toBeUndefined();
-    expect((globalThis as any).Memory.schemaVersion).toBe(41);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 
   it("不破坏 expansion 的 operationId/openedAt/closedAt/forcedAdvance", () => {
@@ -239,7 +239,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     expect(ch.dr).toBe(3);
     expect(ch.s).toEqual([]);
     expect(ch.oe).toBe(0);
-    expect((globalThis as any).Memory.schemaVersion).toBe(41);
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 
   it("空 outcomeEvents 安全处理", () => {
@@ -294,7 +294,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     const afterFirst = JSON.parse(
       JSON.stringify((globalThis as any).Memory),
     );
-    expect(afterFirst.schemaVersion).toBe(41);
+    expect(afterFirst.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect(afterFirst.kernel.outcomeEvents.q).toHaveLength(1);
 
     // 模拟 global reset 后从持久化恢复（此时已有 v41 数据）
@@ -303,7 +303,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     runMigrations();
     const afterReset = (globalThis as any).Memory;
 
-    expect(afterReset.schemaVersion).toBe(41);
+    expect(afterReset.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect(afterReset.kernel.outcomeEvents.q).toEqual(
       afterFirst.kernel.outcomeEvents.q,
     );

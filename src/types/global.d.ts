@@ -110,6 +110,8 @@ declare global {
     state: "queued" | "site" | "done" | "blocked";
     attempts: number;
     retryAt: number;
+    /** 入队 tick（R2 队列治理：年龄观测与超龄清除）。旧数据缺省 → v42 迁移回填。 */
+    queuedAt?: number;
     assignedTo?: string;
     leaseUntil?: number;
     /** 此任务允许的最大同时工作 creep 数。 */

@@ -74,12 +74,12 @@ describe("E2E-013 损坏 Memory 恢复", () => {
       const mem = await runner.bot.getMemory();
       expect(mem, "Memory 应存在").toBeDefined();
 
-      // 精确断言：schemaVersion 必须等于 CONFIG.memory.schemaVersion（=41）
+      // 精确断言：schemaVersion 必须等于 CONFIG.memory.schemaVersion（=CONFIG.memory.schemaVersion）
       expect(mem.schemaVersion, "schemaVersion 必须存在").toBeDefined();
       expect(mem.schemaVersion, "schemaVersion 必须等于 CONFIG.memory.schemaVersion").toBe(
         CONFIG.memory.schemaVersion,
       );
-      expect(mem.schemaVersion, "schemaVersion 必须等于 41").toBe(41);
+      expect(mem.schemaVersion, "schemaVersion 必须等于 CONFIG.memory.schemaVersion").toBe(CONFIG.memory.schemaVersion);
       expect(typeof mem.schemaVersion, "schemaVersion 应为数字").toBe("number");
 
       // kernel 必须存在且为 object

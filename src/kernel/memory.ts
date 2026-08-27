@@ -1050,6 +1050,23 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 41,
+    to: 42,
+    run: () => {
+      // v42：R2 队列治理 — BuildTask 新增可选 queuedAt（入队 tick）。存量任务
+      // 无该字段 → 回填为当前 tick（年龄从迁移时刻起算，避免「缺省=0」被误判
+      // 为超龄遭清除）。幂等：仅当 undefined 时写入；重复执行无副作用。
+      const now = Game.time;
+      for (const roomName in Memory.rooms) {
+        const queue = Memory.rooms[roomName]?.buildQueue;
+        if (!Array.isArray(queue)) continue;
+        for (const task of queue) {
+          if (task && task.queuedAt === undefined) task.queuedAt = now;
+        }
+      }
+    },
+  },
 ];
 
 /**

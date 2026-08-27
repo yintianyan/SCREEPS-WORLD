@@ -1,12 +1,18 @@
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext, RoomSnapshot } from "../kernel/contracts";
+import { globalCache } from "../kernel/global-cache";
 import {
   syncTaskStates,
   cleanTasks,
   assessEmergencyRebuild,
   isEmergencyTask,
+  isCriticalDevelopmentTask,
   hasCriticalStructureGap,
+  evaluateDevelopmentGate,
+  evaluateDevelopmentLane,
   type EmergencyRebuildStatus,
+  type DevelopmentGateReason,
+  type DevelopmentLaneReason,
 } from "../domain/construction/queue";
 import { getRoomLayoutData, markLayoutDirty } from "../kernel/segment-store";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
@@ -20,7 +26,6 @@ import {
   DISMANTLE_VALIDATION_DELAY,
 } from "./link-system";
 import type { DismantlePlan } from "../kernel/global-cache";
-import { globalCache } from "../kernel/global-cache";
 
 /**
  * 建造管理器 — 自有房 site 创建的唯一模块（远机房由 remote-mining-manager 负责）。
@@ -57,14 +62,17 @@ export const constructionManagerSystem: System = {
       // 1. 同步任务状态与实际 site（纯函数 — domain/construction/queue）。
       syncTaskStates(queue, snapshot);
 
-      // 2. 清理完成 / 阻塞的任务（纯函数 — domain/construction/queue）。
+      // 2. 清理完成 / 阻塞 / 超龄的任务（纯函数 — domain/construction/queue）。
       //    永久冲突（3 次 ERR_INVALID_TARGET）被清除的 key 记入 segment 黑名单，
-      //    layout-planner 在冷却期内不会按同 key 重新入队。
-      const purgedKeys = cleanTasks(queue, ctx.tick);
-      if (purgedKeys.length > 0) {
+      //    layout-planner 在冷却期内不会按同 key 重新入队。超龄 queued 任务
+      //    （R2 队列治理）仅清除 + 计数观测，不进黑名单。
+      const cleaned = cleanTasks(queue, ctx.tick, {
+        maxQueuedAge: CONFIG.construction.maxQueuedTaskAge,
+      });
+      if (cleaned.blacklistedKeys.length > 0) {
         const segData = getRoomLayoutData(snapshot.roomName);
         segData.blocked ??= {};
-        for (const key of purgedKeys) {
+        for (const key of cleaned.blacklistedKeys) {
           segData.blocked[key] = {
             code: 1, // ERR_INVALID_TARGET 类永久冲突
             retryAt: ctx.tick + CONFIG.construction.blockedRetryDelay,
@@ -72,22 +80,96 @@ export const constructionManagerSystem: System = {
         }
         markLayoutDirty();
       }
+      for (const _key of cleaned.staleKeys) {
+        recordConstructionSkip(snapshot.roomName, "stale-evict", queue, snapshot);
+      }
 
       // 3. 评估紧急重建状态。
       const emergency = assessEmergencyRebuild(snapshot);
 
-      // 4. 检查开发门禁。
-      if (!developmentGate(snapshot, ctx, emergency)) continue;
-
-      // 5. 尝试从队列创建一个 site。
-      // 紧急重建独立计额 — 允许每 tick 创建 1 个紧急 + 1 个普通 site，
-      // 避免普通建造任务挤占关键基建重建窗口。
+      // 4. 开发门禁（结构化原因码 — R2 可观测性）。
+      //    注意：normal 槽位永远按「发展规则」严格判定（emergencyAny=false）—
+      //    emergency 豁免只属于 emergency 槽位。否则 emergency 长期激活的房
+      //    （2 source 房 container 配额排队）会借豁免把普通任务也绕过能量地板。
+      const strictGateInputs = {
+        economyPressure: roomMem.economyPressure ?? 0,
+        budgetTier: ctx.budget.tier,
+        claimSecure: roomMem.claimSecure ?? false,
+        threatCount: snapshot.threatCreeps.length,
+        hasP0SpawnRequest: (roomMem.spawnQueue ?? []).some(r => r.priority === 0),
+        energyAvailable: snapshot.energyAvailable,
+        energyCapacityAvailable: snapshot.energyCapacityAvailable,
+        globalSiteCount: ctx.globalSiteCount + getRemoteSiteTotal(),
+        maxGlobalSites: CONFIG.construction.maxGlobalSites,
+      };
+      const normalGateReason = evaluateDevelopmentGate({
+        ...strictGateInputs,
+        emergencyAny: false,
+      });
+      // 5. site 创建 — emergency 与 normal 是两个独立槽位（蓝图 §3：每 tick
+      //    各 1 个，先到先得），不是 if/else 互斥分支。
+      //    R2 根因修复：旧结构 `if (emergency && canEmergency) else if (canNormal)`
+      //    在 emergency 长期激活的房（如 2 source 房第二处 container 在 critical
+      //    配额=1 下排队 → needsSourceContainerRebuild 恒真）永久饿死 normal 槽位
+      //    — extension 永远建不出来，直到 RCL3 tower emergency 才自愈。
+      // 5a. Emergency 槽位 — 仅紧急重建任务（事件式签发；普通任务禁止搭车
+      //     绕过能量/门禁 — 搭车曾在能量危机时放行 extension site）。
       if (emergency.any && counters.canCreateEmergency) {
-        const created = tryCreateSite(queue, snapshot, emergency);
-        if (created) counters.markEmergency();
-      } else if (counters.canCreateNormal) {
-        const created = tryCreateSite(queue, snapshot, emergency);
-        if (created) counters.markNormal();
+        if (tryCreateSite(queue, snapshot, emergency, snapshot.roomName, "emergency")) {
+          counters.markEmergency();
+        }
+      }
+
+      // 5b. Normal 槽位 — 严格发展门禁通过时全队列可竞争；被拒时走 R2 关键
+      //     发展通道（extension / controller container）。
+      if (counters.canCreateNormal) {
+        if (normalGateReason === "ok") {
+          if (tryCreateSite(queue, snapshot, emergency, snapshot.roomName)) {
+            counters.markNormal();
+          }
+        } else {
+          // R2 关键发展通道：严格门禁拒绝但生存前提齐备时，extension /
+          // controller container 仍可创建 site（修复 RCL2 停摆闭环）。通道不绕过
+          // 每房/全局配额与 Game API — tryCreateSite 内部照常执行；创建消耗
+          // normal tick 槽位（每 tick 全局 1 个，即「每 tick 只允许有限数量」）。
+          // 严格门禁原因本身也计数 — 门禁可观测性主通道。
+          recordConstructionSkip(snapshot.roomName, normalGateReason, queue, snapshot);
+          const laneReason = evaluateDevelopmentLane({
+            rcl: snapshot.rcl,
+            laneMaxRcl: CONFIG.construction.developmentLaneMaxRcl,
+            budgetTier: ctx.budget.tier,
+            threatCount: snapshot.threatCreeps.length,
+            hasP0SpawnRequest: (roomMem.spawnQueue ?? []).some(r => r.priority === 0),
+            // 生存级缺口 = spawn/tower/storage 缺失；source container 缺失是
+            // 经济效率缺口（由 emergency 槽位并行处理），不冻结发展通道。
+            survivalGapActive: emergency.spawn || emergency.tower || emergency.storage,
+            energyAvailable: snapshot.energyAvailable,
+            laneEnergyFloor: CONFIG.construction.developmentLaneEnergyFloor,
+            globalSiteCount: ctx.globalSiteCount + getRemoteSiteTotal(),
+            maxGlobalSites: CONFIG.construction.maxGlobalSites,
+            readyLaneTaskCount: queue.filter(
+              t => t.state === "queued" && Game.time >= t.retryAt &&
+                isCriticalDevelopmentTask(t, snapshot),
+            ).length,
+          });
+          if (laneReason === "ok") {
+            // 创建失败的具体原因（配额/ERR_FULL/invalid-target）已由 tryCreateSite
+            // 内部按原因计数 — 此处无需重复记录。
+            if (tryCreateSite(queue, snapshot, emergency, snapshot.roomName, "lane")) {
+              counters.markNormal();
+            }
+          } else {
+            recordConstructionSkip(
+              snapshot.roomName,
+              `lane:${laneReason}` as ConstructionSkipReason,
+              queue, snapshot,
+            );
+          }
+        }
+      }
+      if (!counters.canCreateNormal && queue.some(t => t.state === "queued")) {
+        // normal 槽位本 tick 被占用（多为远矿 site 先到先得）。
+        recordConstructionSkip(snapshot.roomName, "tick-quota", queue, snapshot);
       }
 
       roomMem.buildQueue = queue;
@@ -150,6 +232,9 @@ export function cleanOrphanConstructionSites(): void {
  * 开发门禁 — 创建任何新 site 前必须满足。
  * 返回 true 表示允许建造。
  *
+ * 逻辑已下沉到 domain 层纯函数 evaluateDevelopmentGate（R2 可观测性：
+ * 每个拒绝都携带原因码）；本函数保留布尔签名供既有调用方与测试使用。
+ *
  * 紧急重建（source container / tower / spawn / storage 缺失）豁免 economyPressure / budget /
  * P0 队列 / 能量门禁 / claim-secure 护栏，但不豁免威胁检测 — 敌人脚下不建工地。
  */
@@ -158,69 +243,114 @@ export function developmentGate(
   ctx: TickContext,
   emergency: EmergencyRebuildStatus,
 ): boolean {
-  if (!emergency.any) {
-    // 梯度门禁：economyPressure 替代二值 colonyState — 0.0–0.3 正常建造；
-    // 0.3–0.8 线性提高能量阈值（基础 → 90% 容量）；> 0.8 完全阻塞非紧急建造。
-    const pressure = Memory.rooms[snapshot.roomName]?.economyPressure ?? 0;
-    if (pressure > 0.8) return false;
-    if (ctx.budget.tier === "recovery" || ctx.budget.tier === "conserve") return false;
-
-    // 脆弱新房护栏（claim-secure）：RCL<4 且 controller 临近降级时，集中能量保
-    // controller —— 抑制一切非紧急 site 创建。紧急重建（spawn/tower/storage 缺失）
-    // 走 emergency 路径豁免本门禁（上方 !emergency.any 包裹），确保关键基建仍可建。
-    if (Memory.rooms[snapshot.roomName]?.claimSecure) return false;
-  }
-
-  // 有威胁 creep 时不建造（过境 scout 不影响建造）。
-  // 紧急重建也不豁免此条 — 敌人脚下建工地 = 送钱。
-  if (snapshot.threatCreeps.length > 0) return false;
-
-  if (!emergency.any) {
-    // 检查 P0 孵化队列缺口 — 仅 P0（紧急恢复 worker）阻塞建造。
-    const roomMem = Memory.rooms[snapshot.roomName];
-    if (roomMem?.spawnQueue) {
-      const hasEmergencySpawn = roomMem.spawnQueue.some(r => r.priority === 0);
-      if (hasEmergencySpawn) return false;
-    }
-
-    // 检查能量盈余 — 梯度阈值：pressure 0.0–0.3 基础阈值（容量 60%），
-    // 0.3–0.8 线性提高到容量 90%。
-    const pressure = Memory.rooms[snapshot.roomName]?.economyPressure ?? 0;
-    const baseRatio = 0.6;
-    const maxRatio = 0.9;
-    const ratio = pressure <= 0.3
-      ? baseRatio
-      : baseRatio + ((pressure - 0.3) / 0.5) * (maxRatio - baseRatio);
-    const buildThreshold = Math.min(
-      Math.floor(snapshot.energyCapacityAvailable * ratio),
-      CONFIG.economy.buildEnergySurplus + CONFIG.spawn.recoveryEnergyReserve,
-    );
-    if (snapshot.energyAvailable < buildThreshold) return false;
-  }
-
-  // 全局 site 上限 — 紧急重建豁免自设限额（仍受游戏硬上限约束）。
-  // P0-A：总量 = 自有房 site（快照）+ 远矿 site（remoteOps.siteCount 账本），
-  // 防远矿 site 静默顶满 maxGlobalSites 饿死自有房重建。
-  if (!emergency.any && ctx.globalSiteCount + getRemoteSiteTotal() >= CONFIG.construction.maxGlobalSites) return false;
-
-  return true;
+  const roomMem = Memory.rooms[snapshot.roomName];
+  return evaluateDevelopmentGate({
+    emergencyAny: emergency.any,
+    economyPressure: roomMem?.economyPressure ?? 0,
+    budgetTier: ctx.budget.tier,
+    claimSecure: roomMem?.claimSecure ?? false,
+    threatCount: snapshot.threatCreeps.length,
+    hasP0SpawnRequest: (roomMem?.spawnQueue ?? []).some(r => r.priority === 0),
+    energyAvailable: snapshot.energyAvailable,
+    energyCapacityAvailable: snapshot.energyCapacityAvailable,
+    globalSiteCount: ctx.globalSiteCount + getRemoteSiteTotal(),
+    maxGlobalSites: CONFIG.construction.maxGlobalSites,
+  }) === "ok";
 }
 
-/** 尝试从队列创建一个建造 site。成功创建返回 true。 */
-function tryCreateSite(
+// ─── R2：skip reason 结构化观测 ─────────────────────────────
+
+/**
+ * construction-manager 跳过原因全集 — 开发门禁原因码 + site 创建阶段原因。
+ * heap L1 计数（global reset 丢失可接受），每 CONFIG.construction.skipReportInterval
+ * tick 输出一条结构化日志后清零（STATE_OWNERSHIP §3.10：观测计数不上 Memory）。
+ */
+export type ConstructionSkipReason =
+  | Exclude<DevelopmentGateReason, "ok">
+  | `lane:${DevelopmentLaneReason}`
+  | `per-room-site-cap:${string}`
+  | "tick-quota"
+  | "stale-evict"
+  | "no-eligible-task"
+  | "invalid-target"
+  | "rcl-not-enough"
+  | "err-full"
+  | "unknown-error";
+
+/** 记录一次跳过（heap L1 计数 + 低频结构化日志，双路径共用）。 */
+export function recordConstructionSkip(
+  roomName: string,
+  reason: ConstructionSkipReason,
+  queue: readonly BuildTask[],
+  snapshot: RoomSnapshot,
+): void {
+  const g = globalCache();
+  const skips = (g.constructionSkips ??= { rooms: {}, total: 0 });
+  const roomStats = (skips.rooms[roomName] ??= {});
+  roomStats[reason] = (roomStats[reason] ?? 0) + 1;
+  skips.total += 1;
+
+  // 低频结构化输出：每 skipReportInterval tick 且窗口内有跳过时输出一次。
+  const interval = CONFIG.construction.skipReportInterval;
+  if (skips.lastReportTick === Game.time || Game.time % interval !== 0) return;
+  skips.lastReportTick = Game.time;
+
+  for (const [room, stats] of Object.entries(skips.rooms)) {
+    const reasons = Object.entries(stats)
+      .map(([r, n]) => `${r}=${n}`)
+      .join(" ");
+    if (!reasons) continue;
+    const q = Memory.rooms[room]?.buildQueue ?? [];
+    const queued = q.filter(t => t.state === "queued").length;
+    const site = q.filter(t => t.state === "site").length;
+    const blocked = q.filter(t => t.state === "blocked").length;
+    console.log(
+      `[construction-skip] t=${Game.time} room=${room} window=${interval}t ` +
+      `${reasons} queue=${q.length}(q${queued}/s${site}/b${blocked}) sites=${snapshot.myConstructionSites.length}`,
+    );
+  }
+  // 窗口清零（日志已承载窗口聚合值）。
+  skips.rooms = {};
+  skips.total = 0;
+}
+
+/** 尝试从队列创建一个建造 site。成功创建返回 true。
+ *  roomName：跳过原因计数归属房间（R2 可观测性）。
+ *  mode："emergency" — 仅紧急重建任务（emergency 槽位语义：事件式签发，
+ *  禁止普通任务搭车绕过能量/门禁）；"lane" — 仅关键发展任务（R2 发展通道，
+ *  已通过 evaluateDevelopmentLane 全部生存前提检查）；undefined — 全部队列。 */
+export function tryCreateSite(
   queue: BuildTask[],
   snapshot: RoomSnapshot,
   emergency: EmergencyRebuildStatus,
+  roomName?: string,
+  mode?: "emergency" | "lane",
 ): boolean {
   // 按紧急重建 + 优先级排序：紧急任务排到最前，确保关键基建第一时间创建 site。
   const sorted = queue
     .filter(t => t.state === "queued" && Game.time >= t.retryAt)
+    .filter(t => {
+      if (mode === "emergency") return isEmergencyTask(t, snapshot, emergency);
+      if (mode === "lane") {
+        // R2 验收加固：lane 任务必须是当前 RCL 已解锁的结构（防 controller
+        // 降级后残留的过期任务借通道提前签发——降级场景由 ERR_RCL_NOT_ENOUGH
+        // 瞬态重试链路处理，不归 lane）。
+        if (!isCriticalDevelopmentTask(t, snapshot)) return false;
+        return (CONTROLLER_STRUCTURES[t.structureType]?.[snapshot.rcl] ?? 0) > 0;
+      }
+      return true;
+    })
     .sort((a, b) => {
       const aEmergency = isEmergencyTask(a, snapshot, emergency);
       const bEmergency = isEmergencyTask(b, snapshot, emergency);
       if (aEmergency !== bEmergency) return aEmergency ? -1 : 1;
       return a.priority - b.priority;
     });
+
+  if (sorted.length === 0 && roomName) {
+    // 队列非空但全部处于 retryAt 冷却 — 静默空转的可观测出口。
+    recordConstructionSkip(roomName, "no-eligible-task", queue, snapshot);
+  }
 
   // 检查每房 site 限制。道路与 source container 单独计额，避免被 extension 永久挤占。
   const adjacentToSource = (x: number, y: number): boolean =>
@@ -269,20 +399,28 @@ function tryCreateSite(
       task.structureType === STRUCTURE_CONTAINER && adjacentToSource(task.pos.x, task.pos.y);
 
     // 检查每房限制。
+    let quotaBlocked = false;
     if (isCritical) {
-      if (criticalSites >= CONFIG.construction.maxCriticalSitesPerRoom) continue;
+      quotaBlocked = criticalSites >= CONFIG.construction.maxCriticalSitesPerRoom;
     } else if (isStorage) {
-      if (storageSites >= 1) continue;
+      quotaBlocked = storageSites >= 1;
     } else if (isRoad) {
-      if (roadSites >= CONFIG.construction.maxRoadSitesPerRoom) continue;
+      quotaBlocked = roadSites >= CONFIG.construction.maxRoadSitesPerRoom;
     } else if (isWall) {
-      if (wallSites >= CONFIG.construction.maxWallSitesPerRoom) continue;
+      quotaBlocked = wallSites >= CONFIG.construction.maxWallSitesPerRoom;
     } else if (isRampart) {
-      if (rampartSites >= CONFIG.construction.maxRampartSitesPerRoom) continue;
+      quotaBlocked = rampartSites >= CONFIG.construction.maxRampartSitesPerRoom;
     } else if (isSourceContainer) {
-      if (sourceContainerSites >= CONFIG.construction.maxCriticalSitesPerRoom) continue;
+      quotaBlocked = sourceContainerSites >= CONFIG.construction.maxCriticalSitesPerRoom;
     } else {
-      if (normalSites >= CONFIG.construction.maxNormalSitesPerRoom) continue;
+      quotaBlocked = normalSites >= CONFIG.construction.maxNormalSitesPerRoom;
+    }
+    if (quotaBlocked) {
+      if (roomName) {
+        // R2 诊断：按「结构类型 × 拒绝原因」计数，定位哪类任务在持续吃配额拒绝。
+        recordConstructionSkip(roomName, `per-room-site-cap:${task.structureType}`, queue, snapshot);
+      }
+      continue;
     }
 
     // 尝试创建 site。
@@ -301,6 +439,7 @@ function tryCreateSite(
       task.state = "blocked";
       task.attempts++;
       task.retryAt = Game.time + 100;
+      if (roomName) recordConstructionSkip(roomName, "invalid-target", queue, snapshot);
       continue;
     }
 
@@ -309,17 +448,20 @@ function tryCreateSite(
       // 「类型已在别处建满配额」的幽灵任务不会走到这里 —
       // syncTaskStates 的类型饱和判定已在同步阶段将其转 done 清除。
       task.retryAt = Game.time + 50;
+      if (roomName) recordConstructionSkip(roomName, "rcl-not-enough", queue, snapshot);
       continue;
     }
 
     if (result === ERR_FULL) {
       task.retryAt = Game.time + 10;
+      if (roomName) recordConstructionSkip(roomName, "err-full", queue, snapshot);
       return false;
     }
 
     // 未知错误 — 指数退避。
     task.attempts++;
     task.retryAt = Game.time + Math.min(10 * Math.pow(2, task.attempts), 200);
+    if (roomName) recordConstructionSkip(roomName, "unknown-error", queue, snapshot);
   }
 
   return false;

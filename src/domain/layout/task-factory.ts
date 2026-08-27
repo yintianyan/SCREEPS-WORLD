@@ -136,9 +136,12 @@ export function extractBlockedCandidates(
   return candidates.filter(c => c.validation === "terrain" || c.validation === "occupied" || c.validation === "seal");
 }
 
-/** 候选 → BuildTask（state 初始 "queued"，推入 BuildQueue）。 */
+/** 候选 → BuildTask（state 初始 "queued"，推入 BuildQueue）。
+ *  queuedAt：入队 tick（R2 队列治理 — 年龄观测/超龄清除），由调用方传入
+ *  （domain 纯函数禁读 Game.time）。 */
 export function candidateToBuildTask(
   candidate: BuildTaskCandidate,
+  queuedAt = 0,
 ): BuildTask {
   return {
     key: candidate.key,
@@ -148,6 +151,7 @@ export function candidateToBuildTask(
     state: "queued",
     attempts: 0,
     retryAt: 0,
+    queuedAt,
   };
 }
 
