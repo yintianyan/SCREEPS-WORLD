@@ -435,3 +435,30 @@ CPU 成本降低 80%。保留 `__spawnQueueDepthHistory` 每次采样（唯一�
 **WO-5~WO-7 处置**：logisticsDashboard/logisticsAccounting/logisticsScaling
 三个只写不读字段维持 AU-3 登记的"诊断观测，console 内省"策略不变——
 写入成本极低（每 100t 一次赋值），删除收益可忽略。
+
+### AU-8: R10 ADR — System 合并（43→34）
+
+**来源**：R9 System 上限 15+3 与实际 43 个 System 的偏差治理。
+
+**修复**：
+- 批 1（A6 智能层）：6→1 `intelligence-pipeline`（6 个 Shadow-Only post 系统合并，
+  interval=100，内部分频执行 6 阶段：experience→evaluation→prediction→
+  calibration→intelligence-state→recommendation）
+- 批 2（A5.4 战术运行时）：4→1 `tactical-runtime-pipeline`（4 个 P2 main 系统合并，
+  interval=1，内部分频执行 4 阶段：squad-movement→tactical-engagement→
+  combat-micro→tactical-runtime）
+- 合并后 System 总数：43 - 6 - 4 + 2 = 35
+
+**Shadow-Only 结论**：A6 智能层全部 6 个 System 的产出不被任何执行系统消费，
+是纯可观测性设施。保留现状（不删除也不接入执行系统）。安全不变式已满足：
+整个 pipeline 停止时帝国照常运行。AU-7 中登记的 4 条无消费者采样序列维持
+500t 降频策略不变。
+
+合并文件：
+- `src/systems/intelligence/intelligence-pipeline-system.ts`（新增）
+- `src/systems/tactical-runtime-pipeline.ts`（新增）
+- `src/bootstrap.ts`（6+4 个注册替换为 2 个 pipeline 注册）
+- 6 个 A6 + 4 个 A5.4 原文件保持不变（export 函数和 run 逻辑保留）
+- 5 个架构测试更新（检查 pipeline 注册而非原 System 名）
+
+回归验证：typecheck ✅ | build ✅ | unit 304/304 ✅ | e2e 15/15 ✅

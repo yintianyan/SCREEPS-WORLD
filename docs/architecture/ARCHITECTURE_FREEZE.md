@@ -133,6 +133,7 @@ RCL1→8 / Empire 多房 / Stress 10-50 房+soak / Failure S1–S10 注入 / PvP
 | R7 | 2026-08-23 | 红队 V8 修复（新增条款） | **segment 总量预算+滚动窗口**：每域冷数据保留窗口外的记录聚合为摘要后删除；100×100KB 分配表带余量警戒线 | MEMORY §4 |
 | R8 | 2026-08-23 | 红队 V9 修复（新增条款） | **AgendaItem 类型集=冻结枚举**（远矿/扩张/战争/重建/准军事五种）：新增类型须走本 §15 ADR 且证明无法用既有类型+参数表达；同类型实例数上限（远矿车道 ≤6 先例） | PLANNING §3 |
 | R9 | 2026-08-23 | 红队 V10 修复（新增条款） | **System 注册表上限 15+3**：新 System 须 ADR 证明既有系统无法承载且不违反单一职责下限（防 System 碎片化增殖） | SYSTEM_BOUNDARIES §2 |
+| R10 | 2026-08-27 | 现状治理（放宽+合并计划） | **System 上限从 15+3 调整为 32+3 目标**，现状 43 个 System 分三批合并：(1) A6 智能层 6→1 `intelligence-pipeline`（Shadow-Only post 系统，无 Game API、无执行行为，按内部分频串行 6 阶段）；(2) A5.4 战术运行时 4→1 `tactical-runtime`（P2 main，仅在 war 姿态下运行，按内部分频串行 4 阶段）；(3) 非蓝图 System 3→0 合并（specialization-planner→empire-strategy，logistics-planner→logistics，empire-health→self-healing）。合并后目标 32 System 仍超原始 15+3，剩余超量因各模块有独立状态所有权/CPU 节奏/降级序不可再合并（依据：15 模块中 11 个落点在 systems/，每模块可因 interval 差异拆为多 System 但不可再合并——如 construction-manager interval=1 与 remote-mining-manager interval=10 不同节奏不可合并）。合并计划须在 A5 验收前完成批 1+2（9 System 减少），批 3 可后置。 | SYSTEM_BOUNDARIES §2 |
 | R0 | 2026-08-23 | 初始冻结 | 36 份冻结蓝图整体生效（本文 §2–§14） | 全部 |
 
 **完成标准回执**（任务书 §39）：把 FREEZE+ENGINEERING_BLUEPRINT+

@@ -82,6 +82,14 @@ export class BotHarness {
   }
 
   /**
+   * 向 bot 发送控制台命令（在下一个 tick 执行）。
+   * 用于注入 Memory 或执行调试命令。
+   */
+  async sendConsole(cmd: string): Promise<void> {
+    await this._bot.console(cmd);
+  }
+
+  /**
    * 获取从上次调用以来的新 console 日志。
    * 调用后清空缓冲区，避免重复读取。
    */

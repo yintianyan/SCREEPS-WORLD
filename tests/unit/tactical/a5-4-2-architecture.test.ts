@@ -115,11 +115,13 @@ describe("A5.4.2: Squad Movement Runtime Boundary", () => {
 // ─── 规则 3: Bootstrap Registration ───
 
 describe("A5.4.2: Bootstrap Registration", () => {
-  it("squadMovementSystem 已注册到 bootstrap", () => {
+  it("squadMovementSystem 已通过 pipeline 注册到 bootstrap", () => {
     const bootstrapPath = join(SRC, "bootstrap.ts");
     const src = readFileSync(bootstrapPath, "utf8");
-    expect(src).toContain("squadMovementSystem");
-    expect(src).toContain("registerSystem(squadMovementSystem)");
+    // R10 ADR 合并后：squadMovementSystem 通过 tacticalRuntimePipelineSystem 注册
+    expect(src).toContain("tacticalRuntimePipelineSystem");
+    expect(src).toContain("registerSystem(tacticalRuntimePipelineSystem)");
+    expect(src).toContain("tactical-runtime-pipeline");
   });
 });
 

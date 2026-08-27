@@ -220,12 +220,15 @@ describe("A5.4.1 TAC-R09: healer readTacticalIntent 从 globalCache 读取", () 
 
 // ─── TAC-R10: bootstrap.ts 注册了 tacticalRuntimeSystem ───
 
-describe("A5.4.1 TAC-R10: bootstrap 注册 tacticalRuntimeSystem", () => {
-  it("bootstrap.ts 导入并注册了 tacticalRuntimeSystem", () => {
+describe("A5.4.1 TAC-R10: bootstrap 注册 tacticalRuntime（通过 pipeline 合并）", () => {
+  it("bootstrap.ts 导入并注册了 tacticalRuntimePipelineSystem", () => {
     const f = resolve(SRC, "bootstrap.ts");
     const src = readFileSync(f, "utf8");
-    expect(src).toContain("tacticalRuntimeSystem");
-    expect(src).toContain("registerSystem(tacticalRuntimeSystem)");
+    // R10 ADR 合并后：tacticalRuntimeSystem 通过 tacticalRuntimePipelineSystem 注册
+    expect(src).toContain("tacticalRuntimePipelineSystem");
+    expect(src).toContain("registerSystem(tacticalRuntimePipelineSystem)");
+    // pipeline 内部导入 tacticalRuntimeSystem
+    expect(src).toContain("tactical-runtime-pipeline");
   });
 });
 

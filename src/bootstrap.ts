@@ -43,18 +43,10 @@ import { specializationPlannerSystem } from "./systems/specialization-planner";
 import { empireHealthSystem } from "./systems/empire-health-system";
 import { recoveryExecutionSystem } from "./systems/recovery-execution-system";
 import { decisionTraceSystem } from "./systems/decision-trace-system";
-import { experienceCollectorSystem } from "./systems/intelligence/experience-collector-system";
-import { strategyEvaluationSystem } from "./systems/intelligence/strategy-evaluation-system";
-import { predictionSystem } from "./systems/intelligence/prediction-system";
-import { calibrationResolutionSystem } from "./systems/intelligence/calibration-resolution-system";
-import { intelligenceStateSystem } from "./systems/intelligence/intelligence-state-system";
-import { recommendationEngineSystem } from "./systems/intelligence/recommendation-engine-system";
+import { intelligencePipelineSystem } from "./systems/intelligence/intelligence-pipeline-system";
 import { warPlannerSystem } from "./systems/war-planner";
 import { warPlanningSystem } from "./systems/war-planning-system";
-import { tacticalRuntimeSystem } from "./systems/tactical-runtime-system";
-import { squadMovementSystem } from "./systems/squad-movement-runtime";
-import { tacticalEngagementSystem } from "./systems/tactical-engagement-runtime";
-import { combatMicroSystem } from "./systems/combat-micro-runtime";
+import { tacticalRuntimePipelineSystem } from "./systems/tactical-runtime-pipeline";
 import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
@@ -118,56 +110,26 @@ export const registry = new Registry()
   //   构建 DecisionSnapshot + DecisionRecord 写入 Ring Buffer；不参与决策，
   //   只做可观测性追踪 + Trace GC + Memory Budget 监控）。
   .registerSystem(decisionTraceSystem)
-  // P3：Experience Collector（A6.1 — 低频 100t post 阶段，消费 DecisionTrace Ring Buffer
-  //   中到期的 DecisionRecord，采集 Outcome + Attribution，构建 ExperienceRecord
-  //   写入 heap Ring Buffer。Shadow-Only：不执行 Game API，不修改 Strategy）
-  .registerSystem(experienceCollectorSystem)
-  // P3：Strategy Evaluation（A6.2 — 低频 500t post 阶段，消费 Experience Ring Buffer
-  //   中 FINALIZED 的 Experience，8 维独立评估 + Baseline 比较 + Evidence 追溯。
-  //   Shadow-Only：不执行 Game API，不修改 Strategy，Recommendation 不自动进入执行系统）
-  .registerSystem(strategyEvaluationSystem)
-  // P3：Prediction（A6.3 — 低频 500t post 阶段，消费 globalCache 中的 TimeSeries 数据，
-  //   调用 A6.3 Domain 纯函数产出 Prediction 写入 PredictionRingBuffer。
-  //   Shadow-Only：不执行 Game API，不修改 Strategy，Prediction 不自动进入执行系统）
-  .registerSystem(predictionSystem)
-  // P3：Calibration Resolution（A6.4 — 低频 500t post 阶段，消费 Prediction Ring Buffer
-  //   中已到期的 Prediction，构建 ObservationSample 调用 A6.4 Domain 纯函数
-  //   resolvePrediction 产出 ResolutionResult 写入 CalibrationRingBuffer。
-  //   低频计算 ModelCalibrationProfile（每 5000t）。
-  //   Shadow-Only：不执行 Game API，不修改 Strategy，Resolution 不自动进入执行系统）
-  .registerSystem(calibrationResolutionSystem)
-  // P3：Intelligence State（A6.5 — 低频 500t post 阶段，只读消费 A6.1-A6.4 既有数据，
-  //   调用 Domain 纯函数 computeIntelligenceState 产出 IntelligenceState。
-  //   REL-001：不写入任何 cache — IntelligenceState 是只读投影，不持久化。
-  //   在 calibration-resolution 之后运行，消费最新 calibration profile。
-  //   Shadow-Only：不执行 Game API，不修改 Strategy，不解决冲突，不产出万能分数）
-  .registerSystem(intelligenceStateSystem)
-  // P3：Recommendation Engine（A6.6 — 低频 500t post 阶段，只读消费 A6.1-A6.5 既有数据，
-  //   调用 Domain 纯函数 generateRecommendations 产出 RecommendationCandidate[]。
-  //   Shadow-Only：不执行 Game API，不修改 Strategy，不解决冲突，不产出万能分数，
-  //   不被任何执行系统消费。写入 globalCache.__recommendationCache）
-  .registerSystem(recommendationEngineSystem)
+  // P3：Intelligence Pipeline（R10 ADR 合并 A6.1-A6.6 为 1 个 System — interval=100t
+  //   post 阶段，内部按各阶段原始 interval 分频执行 6 阶段 pipeline：
+  //   A6.1 experience-collector(100t) → A6.2 strategy-evaluation(500t) →
+  //   A6.3 prediction(500t) → A6.4 calibration-resolution(500t) →
+  //   A6.5 intelligence-state(500t) → A6.6 recommendation-engine(500t)。
+  //   全部 Shadow-Only：不执行 Game API，不修改 Strategy，结果不自动进入执行系统。
+  //   安全不变式：本系统完全停止时，帝国照常安全运行）
+  .registerSystem(intelligencePipelineSystem)
   // P2：战争规划（A5.3 — 低频 10t，domain 层纯函数薄壳；在 war-planner 之前运行，
   //   产出 WarPlan 写入 globalCache.warPlanCache + 兼容 Memory.kernel.warPlan。
   //   war-planner 消费 WarPlan 执行 spawn/止损/核验。纯函数不执行 Game action）
   .registerSystem(warPlanningSystem)
   // P2：战争执行（war 姿态才选目标推 attacker；非 war 收摊；消费 war-planning 产出）
   .registerSystem(warPlannerSystem)
-  // P2：战术运行时（A5.4.1 — interval=10t，消费 war-planner 的 warPlan 产出，
-  //   构建 TacticalSnapshot 调用 domain 纯函数 evaluateTacticalAction，
-  //   将 TacticalDecision 映射为 RoleActionIntent 写入 globalCache 供角色消费；
+  // P2：战术运行时 Pipeline（R10 ADR 合并 A5.4.1-A5.4.4 为 1 个 System — interval=1t
+  //   main 阶段，内部按各阶段原始 interval 分频执行 4 阶段 pipeline：
+  //   A5.4.2 squad-movement(1t) → A5.4.3 tactical-engagement(3t) →
+  //   A5.4.4 combat-micro(3t) → A5.4.1 tactical-runtime(10t)。
   //   在 war-planner 之后运行，不执行 Game action）
-  .registerSystem(tacticalRuntimeSystem)
-  // P2：编队移动运行时（A5.4.2 — interval=1t，消费 tactical-runtime 的 SquadPlan，
-  //   构建 SquadSnapshot 调用 domain 纯函数 produceSquadMovementIntent，
-  //   将 SquadMovementIntent 翻译为 PathFinder + registerMove 指令；
-  //   在 tactical-runtime 之后运行，不执行 attack/heal）
-  .registerSystem(squadMovementSystem)
-  // P2：战术交战运行时（A5.4.3 — interval=3t，消费 squad-movement 的 cohesion +
-  //   tactical-runtime 的 TacticalState，构建 FocusFireSnapshot 调用 domain 纯函数
-  //   planFocusFire，将 AttackIntent 写入 globalCache 供 attacker 角色消费；
-  //   在 squad-movement 之后运行，不执行 attack/heal）
-  .registerSystem(tacticalEngagementSystem)
+  .registerSystem(tacticalRuntimePipelineSystem)
   // P3：布局规划（低频）
   .registerSystem(layoutPlannerSystem)
   // P3：防御规划（独立于核心布局）

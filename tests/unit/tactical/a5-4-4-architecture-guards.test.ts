@@ -440,18 +440,20 @@ describe("A5.4.4: Runtime System Boundary", () => {
 // ═════════════════════════════════════════════════════════════
 
 describe("A5.4.4: Bootstrap Registration", () => {
-  it("tacticalEngagementSystem 已注册到 bootstrap", () => {
+  it("tacticalEngagementSystem 已通过 pipeline 注册到 bootstrap", () => {
     const bootstrapPath = join(SRC, "bootstrap.ts");
     const src = readFileSync(bootstrapPath, "utf8");
-    expect(src).toContain("tacticalEngagementSystem");
-    expect(src).toContain("registerSystem(tacticalEngagementSystem)");
+    // R10 ADR 合并后：tacticalEngagementSystem 通过 tacticalRuntimePipelineSystem 注册
+    expect(src).toContain("tacticalRuntimePipelineSystem");
+    expect(src).toContain("registerSystem(tacticalRuntimePipelineSystem)");
   });
 
-  it("tacticalRuntimeSystem 已注册到 bootstrap", () => {
+  it("tacticalRuntimeSystem 已通过 pipeline 注册到 bootstrap", () => {
     const bootstrapPath = join(SRC, "bootstrap.ts");
     const src = readFileSync(bootstrapPath, "utf8");
-    expect(src).toContain("tacticalRuntimeSystem");
-    expect(src).toContain("registerSystem(tacticalRuntimeSystem)");
+    // R10 ADR 合并后：tacticalRuntimeSystem 通过 tacticalRuntimePipelineSystem 注册
+    expect(src).toContain("tacticalRuntimePipelineSystem");
+    expect(src).toContain("registerSystem(tacticalRuntimePipelineSystem)");
   });
 });
 

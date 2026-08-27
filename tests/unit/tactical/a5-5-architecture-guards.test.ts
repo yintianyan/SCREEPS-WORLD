@@ -196,10 +196,12 @@ describe("A5.5 Architecture Guards", () => {
     expect(barrel).toMatch(/export.*combat-micro/);
   });
 
-  // ── 额外：bootstrap 注册 combatMicroSystem ──
-  it("bootstrap.ts 应注册 combatMicroSystem", () => {
+  // ── 额外：bootstrap 注册 combatMicroSystem（通过 pipeline 合并）──
+  it("bootstrap.ts 应通过 pipeline 注册 combatMicroSystem", () => {
     const bootstrap = readFileSync(join(SRC, "bootstrap.ts"), "utf-8");
-    expect(bootstrap).toMatch(/combatMicroSystem/);
+    // R10 ADR 合并后：combatMicroSystem 通过 tacticalRuntimePipelineSystem 注册
+    expect(bootstrap).toMatch(/tacticalRuntimePipelineSystem/);
+    expect(bootstrap).toMatch(/tactical-runtime-pipeline/);
   });
 
   // ── 额外：Runtime 公共 API 存在 ──
