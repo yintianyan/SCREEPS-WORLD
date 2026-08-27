@@ -985,8 +985,8 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 39,
     to: 40,
     run: () => {
-      // v40：Phase 6 UOEM — 新增 KernelMemory.outcomeEvents（OutcomeChannel Memory
-      // 持久化，cap=32，≤3.2KB）+ KernelMemory.expansion 新增 operationId/openedAt/
+// v40：Phase 6 UOEM — 新增 KernelMemory.outcomeEvents（OutcomeChannel Memory
+// 持久化，cap=16，压缩字段名，≤3.2KB）+ KernelMemory.expansion 新增 operationId/openedAt/
       // forcedAdvance 三个可选字段。存量 expansion 无新字段 → 下次 consume 时铸造
       // operationId，当前用 ?? 默认值兜底。outcomeEvents 惰性初始化（getOutcomeChannel
       // 首次调用时创建空结构）。幂等 no-op，仅升版本登记结构变更。

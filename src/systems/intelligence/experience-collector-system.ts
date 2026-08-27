@@ -434,7 +434,7 @@ function buildOutcomeCollectionInput(
       // Phase 6 UOEM: 从 OutcomeChannel drain 读取终态事件（替代单槽 lastExpansionOutcome）
       // operationId 优先匹配；无法可靠匹配时产生 UNRESOLVED/DATA_GAP，不得猜测归因。
       const expansionMem = (globalThis as { Memory?: { kernel?: { expansion?: { target: string; sponsor: string; startedAt: number; state: string; checkpointsPassed?: number; decisionId?: string; operationId?: string; openedAt?: number } } } }).Memory?.kernel?.expansion;
-      const channel = getOutcomeChannel(Memory.kernel as { kernel?: Record<string, unknown> });
+      const channel = getOutcomeChannel(Memory as { kernel?: Record<string, unknown> });
       const drainedEvents = drainOutcomes(channel);
 
       // 从 DecisionRecord.selectedAction 解析 target room（格式 EXPANSION_START_{roomName}）

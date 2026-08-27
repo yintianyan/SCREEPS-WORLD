@@ -56,6 +56,28 @@ describe("E2E-014 旧 Schema 迁移", () => {
       // Phase 6: schemaVersion 必须升级到当前版本
       expect(mem.schemaVersion, "schemaVersion 应存在").toBeDefined();
       expect(mem.schemaVersion, "schemaVersion 应从 1 升级到当前版本（≥ 2）").toBeGreaterThanOrEqual(2);
+
+      // Phase 6 UOEM: 验证迁移后 UOEM 字段结构正确（不破坏 outcomeEvents）
+      const kernel = mem.kernel as Record<string, unknown> | undefined;
+      if (kernel?.outcomeEvents) {
+        const ch = kernel.outcomeEvents as Record<string, unknown>;
+        expect(ch.q, "channel queue 应为数组").toBeInstanceOf(Array);
+        expect(ch.s, "channel seen 应为数组").toBeInstanceOf(Array);
+      }
+      // 验证 expansion 子结构（如果有）的 UOEM 字段不丢失
+      if (kernel?.expansion) {
+        const exp = kernel.expansion as Record<string, unknown>;
+        // operationId/openedAt/forcedAdvance 是可选字段，迁移后应为 undefined 或正确类型
+        if (exp.operationId !== undefined) {
+          expect(typeof exp.operationId, "operationId 应为 string").toBe("string");
+        }
+        if (exp.openedAt !== undefined) {
+          expect(typeof exp.openedAt, "openedAt 应为 number").toBe("number");
+        }
+        if (exp.forcedAdvance !== undefined) {
+          expect(typeof exp.forcedAdvance, "forcedAdvance 应为 boolean").toBe("boolean");
+        }
+      }
     },
     30000,
   );

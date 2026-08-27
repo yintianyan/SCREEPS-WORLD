@@ -531,7 +531,7 @@ declare global {
      * Phase 6 UOEM：OutcomeChannel — Memory 持久化的有界 FIFO 通道。
      * expansion-manager 在终态时 enqueue OutcomeEvent，
      * experience-collector drain() 读取并匹配 operationId。
-     * cap=32，≤3.2KB。溢出可观测（不静默丢失）。 */
+     * cap=16，压缩字段名，≤3.2KB（冻结契约 PHASE38_B §11）。溢出可观测（不静默丢失）。 */
     outcomeEvents?: import("../kernel/outcome-channel").OutcomeChannelMemory;
     /**
      * A3.4：上一次扩张完成的 tick（Cooldown 门禁）。

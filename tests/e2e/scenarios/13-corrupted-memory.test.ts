@@ -94,6 +94,16 @@ describe("E2E-013 损坏 Memory 恢复", () => {
       // Phase 6: 验证恢复后有实际生产/执行行为
       // 检查 Memory.kernel 存在且有 creeps 在运行
       expect(last.rawMemory?.kernel, "kernel 应存在").toBeDefined();
+
+      // Phase 6 UOEM: 验证 outcomeEvents channel 在损坏 Memory 恢复后正确初始化
+      const kernel = last.rawMemory?.kernel as Record<string, unknown> | undefined;
+      if (kernel?.outcomeEvents) {
+        const ch = kernel.outcomeEvents as Record<string, unknown>;
+        expect(ch.q, "channel queue 应为数组").toBeInstanceOf(Array);
+        expect(ch.s, "channel seen 应为数组").toBeInstanceOf(Array);
+        expect(typeof ch.dr, "channel duplicateRejected 应为数字").toBe("number");
+        expect(typeof ch.oe, "channel overflowEvicted 应为数字").toBe("number");
+      }
     },
     120000,
   );

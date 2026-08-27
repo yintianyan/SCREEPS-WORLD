@@ -244,7 +244,7 @@ function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionStat
       if (claimedRoom) {
         if (!seedLayoutAnchor(claimedRoom)) {
           console.log(`[${ctx.tick}] expansion: no viable anchor in ${expansion.target}, aborting`);
-          abortExpansion(ctx, expansion, OUTCOME_ABORTED);
+          abortExpansion(ctx, expansion, "ABANDONED");
           return;
         }
       }
@@ -336,7 +336,7 @@ function advancePreparing(ctx: TickContext, expansion: ExpansionState, spawningA
   // 超时检查
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.claimTimeout) {
     console.log(`[${ctx.tick}] expansion: preparing timed out, aborting`);
-    abortExpansion(ctx, expansion, OUTCOME_TIMEOUT);
+    abortExpansion(ctx, expansion, "TIMED_OUT");
   }
 }
 
@@ -350,7 +350,8 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
   if (targetRoom?.controller?.my) {
     expansion.state = "claimed";
     expansion.startedAt = ctx.tick;
-    recordExpansionOutcome(expansion, ctx.tick, PHASE_CLAIM, OUTCOME_SUCCESS);
+    // Phase 6 UOEM: P1 是 Milestone（CLAIMED），不进 OutcomeChannel
+    emitMilestone(expansion, "CLAIMED", ctx.tick);
     console.log(`[${ctx.tick}] expansion: claiming → claimed`);
     return;
   }
@@ -358,18 +359,15 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
   // 被他人抢占 → 立即放弃
   if (targetRoom?.controller?.owner && !targetRoom.controller.my) {
     console.log(`[${ctx.tick}] expansion: ${expansion.target} taken by ${targetRoom.controller.owner.username}, aborting`);
-    blacklistTarget(expansion.target, ctx.tick);
-    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-    abortExpansion(ctx, expansion, OUTCOME_STOLEN);
+    // Phase 6 UOEM: abortExpansion 内部统一做 blacklist + reclaim + enqueue
+    abortExpansion(ctx, expansion, "STOLEN");
     return;
   }
 
   // 超时 → 放弃
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.claimTimeout) {
     console.log(`[${ctx.tick}] expansion: claim ${expansion.target} timed out, aborting`);
-    blacklistTarget(expansion.target, ctx.tick);
-    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-    abortExpansion(ctx, expansion, OUTCOME_TIMEOUT);
+    abortExpansion(ctx, expansion, "TIMED_OUT");
     return;
   }
 
@@ -379,9 +377,8 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
     const dangerUntil = Memory.rooms[expansion.sponsor]?.remoteOps?.[expansion.target]?.dangerUntil;
     if (dangerUntil !== undefined && ctx.tick < dangerUntil) {
       console.log(`[${ctx.tick}] expansion: ${expansion.target} hostile (claimer lost), aborting`);
-      blacklistTarget(expansion.target, ctx.tick);
-      reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-      abortExpansion(ctx, expansion, OUTCOME_LOST);
+      // Phase 6 UOEM: abortExpansion 内部统一做 blacklist + reclaim + enqueue
+      abortExpansion(ctx, expansion, "LOST");
       return;
     }
     if (!spawningAllowed) return;
@@ -396,16 +393,15 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
 
   // 失守/失明检查（与旧 advancePioneering 相同逻辑）
   if (!targetRoom?.controller?.my) {
+    // Phase 6 UOEM: terminal outcome 只由 abortExpansion 产生一次
+    // P2/P3 的 LOST/STOLEN 直接传给 abortExpansion，不在前面调 record
     if (!targetRoom) {
       console.log(`[${ctx.tick}] expansion: lost vision of ${expansion.target} during bootstrapping, aborting`);
-      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_LOST);
+      abortExpansion(ctx, expansion, "LOST");
     } else {
       console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during bootstrapping, aborting`);
-      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_STOLEN);
+      abortExpansion(ctx, expansion, "STOLEN");
     }
-    blacklistTarget(expansion.target, ctx.tick);
-    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-    abortExpansion(ctx, expansion, OUTCOME_LOST);
     return;
   }
 
@@ -451,10 +447,8 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
     );
     if (!squadAlive) {
       console.log(`[${ctx.tick}] expansion: ${expansion.target} squad wiped by hostiles, aborting`);
-      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_LOST);
-      blacklistTarget(expansion.target, ctx.tick);
-      reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-      abortExpansion(ctx, expansion, OUTCOME_LOST);
+      // Phase 6 UOEM: terminal outcome 只由 abortExpansion 产生一次
+      abortExpansion(ctx, expansion, "LOST");
       return;
     }
   }
@@ -471,7 +465,7 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
       console.log(`[${ctx.tick}] expansion: forcing bootstrapping → economic_startup (spawn exists)`);
       return;
     }
-    abortExpansion(ctx, expansion, OUTCOME_TIMEOUT);
+    abortExpansion(ctx, expansion, "TIMED_OUT");
     return;
   }
 
@@ -488,10 +482,8 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
 
   if (!targetRoom?.controller?.my) {
     console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during economic_startup, aborting`);
-    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_LOST);
-    blacklistTarget(expansion.target, ctx.tick);
-    reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
-    abortExpansion(ctx, expansion, OUTCOME_LOST);
+    // Phase 6 UOEM: terminal outcome 只由 abortExpansion 产生一次
+    abortExpansion(ctx, expansion, "LOST");
     return;
   }
 
@@ -581,7 +573,7 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
       console.log(`[${ctx.tick}] expansion: forcing economic_startup → integrating (energy loop active)`);
       return;
     }
-    abortExpansion(ctx, expansion, OUTCOME_TIMEOUT);
+    abortExpansion(ctx, expansion, "TIMED_OUT");
   }
 }
 
@@ -592,7 +584,7 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
 
   if (!targetRoom?.controller?.my) {
     console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during integrating, aborting`);
-    abortExpansion(ctx, expansion, OUTCOME_LOST);
+    abortExpansion(ctx, expansion, "LOST");
     return;
   }
 
@@ -665,7 +657,8 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     expansion.checkpointsPassed = 5;
     expansion.state = "completed";
     console.log(`[${ctx.tick}] expansion: integrating → completed (CP5 passed) — ${expansion.target} is now AUTONOMOUS`);
-    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_SUCCESS);
+    // Phase 6 UOEM: P8 终态 COMPLETED，直接调 enqueueTerminalOutcome
+    enqueueTerminalOutcome(expansion, ctx.tick, "COMPLETED");
     // A3.4：记录完成 tick，供 Cooldown 门禁消费
     if (!Memory.kernel) Memory.kernel = {};
     Memory.kernel.lastExpansionCompletedTick = ctx.tick;
@@ -697,7 +690,7 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
       Memory.kernel.expansion = undefined;
       return;
     }
-    abortExpansion(ctx, expansion, OUTCOME_TIMEOUT);
+    abortExpansion(ctx, expansion, "TIMED_OUT");
   }
 }
 
@@ -705,16 +698,19 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
 
 /**
  * 终止扩张行动的统一清理函数。
+ * Phase 6 UOEM: 直接接收 ExpansionResult，调用 enqueueTerminalOutcome（唯一终态出口）。
+ * 不再调用旧 recordExpansionOutcome — 消除配对双写。
+ * blacklistTarget/reclaimExpeditionCreeps 在此统一执行，调用方不需重复。
  */
-function abortExpansion(ctx: TickContext, expansion: ExpansionState, outcome: number): void {
-  // 根据当前状态决定归因 phase：claiming 阶段 → claim，其他 → pioneer
-  const phase = expansion.state === "claiming" || expansion.state === "preparing" ? PHASE_CLAIM : PHASE_PIONEER;
-  recordExpansionOutcome(expansion, ctx.tick, phase, outcome);
+function abortExpansion(ctx: TickContext, expansion: ExpansionState, outcome: ExpansionResult): void {
+  // Phase 6 UOEM: 唯一终态写入 — enqueueTerminalOutcome 幂等去重
+  enqueueTerminalOutcome(expansion, ctx.tick, outcome);
   // 释放预留资源
   if (!Memory.kernel) Memory.kernel = {};
   if (expansion.reservedEnergy && expansion.reservedEnergy > 0) {
     console.log(`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy (abort)`);
   }
+  blacklistTarget(expansion.target, ctx.tick);
   reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
   // 标记 Plan 为 CANCELLED
   if (expansion.planId) {
@@ -812,7 +808,7 @@ function enqueueTerminalOutcome(
   };
 
   // 入队 OutcomeChannel（Memory 持久化，幂等去重）
-  const channel = getOutcomeChannel(Memory.kernel as { kernel?: Record<string, unknown> });
+  const channel = getOutcomeChannel(Memory as { kernel?: Record<string, unknown> });
   const enqueueResult = enqueueOutcome(channel, ev);
   if (enqueueResult === "DUPLICATE_REJECTED") {
     // 同一 operation 已有终态 outcome — 不覆盖（terminal-only 语义）
@@ -918,49 +914,7 @@ function updateRhythmRing(kind: ExpansionOutcomeKind, tick: number): void {
   }
 }
 
-/** Phase 6 UOEM 兼容：保留旧 recordExpansionOutcome 签名供过渡期使用。
- * 内部根据 phase+outcome 判断是 milestone 还是终态，分发到对应函数。
- * @deprecated 新代码应直接调用 emitMilestone 或 enqueueTerminalOutcome */
-function recordExpansionOutcome(expansion: ExpansionState, tick: number, phase: number, outcome: number): void {
-  // P1 (phase=0, outcome=SUCCESS) → milestone CLAIMED
-  if (phase === PHASE_CLAIM && outcome === OUTCOME_SUCCESS) {
-    emitMilestone(expansion, "CLAIMED", tick);
-    return;
-  }
-  // P5/P7 timeout with forced advance → milestone FORCED_ADVANCE
-  // (调用者通过 phase=PHASE_PIONEER, outcome=OUTCOME_TIMEOUT 或 OUTCOME_SUCCESS 传入)
-  // 这些路径在 advanceBootstrapping/advanceEconomicStartup 中已改为直接调用 emitMilestone
-  // 此函数仅作为兼容入口，新代码不应依赖此分发
-
-  // 终态路径
-  const result = outcomeCodeToResult(phase, outcome);
-  enqueueTerminalOutcome(expansion, tick, result);
-}
-
-/** outcome code → ExpansionResult 映射。 */
-function outcomeCodeToResult(phase: number, outcome: number): ExpansionResult {
-  if (outcome === OUTCOME_SUCCESS) {
-    return phase === PHASE_CLAIM ? "COMPLETED" : "COMPLETED"; // claim success 不应走到这里（是 milestone）
-  }
-  if (outcome === OUTCOME_STOLEN) return "STOLEN";
-  if (outcome === OUTCOME_TIMEOUT) return "TIMED_OUT";
-  if (outcome === OUTCOME_LOST) return "LOST";
-  return "ABANDONED";
-}
-
-function toOutcomeKind(phase: number, outcome: number): ExpansionOutcomeKind | undefined {
-  if (phase === 0) {
-    if (outcome === OUTCOME_SUCCESS) return undefined;
-    if (outcome === OUTCOME_STOLEN) return "stolen";
-    if (outcome === OUTCOME_TIMEOUT) return "timeout";
-    if (outcome === OUTCOME_LOST) return "lost";
-    return "aborted";
-  }
-  if (outcome === OUTCOME_SUCCESS) return "success";
-  if (outcome === OUTCOME_STOLEN) return "stolen";
-  if (outcome === OUTCOME_TIMEOUT) return "timeout";
-  return "lost";
-}
+// ─── Legacy outcome code helpers (used by resultToOutcomeCode/resultToRhythmKind) ───
 
 function codeToKind(code: number): ExpansionOutcomeKind {
   return (["success", "stolen", "timeout", "lost", "aborted"] as const)[code] ?? "aborted";
