@@ -426,6 +426,7 @@ function pushEventDirect(kind: EventKind, roomName: string, data: number[]): voi
 
 function updateStatsSummary(tick: number): void {
   if (!Memory.kernel) Memory.kernel = {};
+  // 防御性初始化：stats 可能为 undefined 或部分字段缺失（Memory 损坏/旧版本残留）
   if (!Memory.kernel.stats) {
     Memory.kernel.stats = {
       lastSample: 0,
@@ -438,8 +439,14 @@ function updateStatsSummary(tick: number): void {
       skipHotspot: "",
     };
   }
-
-  const stats = Memory.kernel.stats!;
+  // 确保关键字段存在（防止部分字段缺失导致 NaN/undefined 传播）
+  const stats = Memory.kernel.stats;
+  if (stats.cpuAvg10 === undefined) stats.cpuAvg10 = 0;
+  if (stats.cpuMax10 === undefined) stats.cpuMax10 = 0;
+  if (stats.bucketMin10 === undefined) stats.bucketMin10 = 0;
+  if (stats.crisisCount === undefined) stats.crisisCount = 0;
+  if (stats.errorHotspot === undefined) stats.errorHotspot = "";
+  if (stats.skipHotspot === undefined) stats.skipHotspot = "";
   const seg = readCpuSegment();
   const cpuSamples = ringToArray(seg.cpu);
 

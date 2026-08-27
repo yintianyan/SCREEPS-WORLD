@@ -16,6 +16,21 @@ import { createBudget } from "./scheduler";
 import { evaluateExpectations, P3_BYPASS_WINDOW_TICKS, type P3SystemRef } from "./expectations";
 import { EventKind, recordEvent } from "./event-log";
 import { emitSummary, initTelemetry } from "./telemetry";
+import {
+  collectRuntimeMetrics,
+  collectKernelMetrics,
+  collectSchedulerMetrics,
+  collectWorldMetrics,
+  collectRoomMetrics,
+  collectCreepMetrics,
+  collectSpawnMetrics,
+  collectEconomyMetrics,
+  collectLogisticsMetrics,
+  collectEmpireMetrics,
+  collectExpansionMetrics,
+  collectDefenseMetrics,
+  runFlush,
+} from "../telemetry";
 import { Registry } from "./registry";
 import { buildRoomSnapshot } from "../systems/room-snapshot";
 // ：kernel 直接 import 业务模块 pathfinding 的清理函数，形式上违反 §2.1「内核不感知业务」。
@@ -150,6 +165,33 @@ export class Kernel {
     this.runPostSystems(ctx);
 
     emitSummary(budget);
+
+    // 相位⑨：遥测采集 — 各域 collect 函数内部有频率门控和 try/catch，
+    // 失败不得影响 AI。safeRun 外层再加一道隔离。
+    safeRun("telemetry-collect", () => {
+      const g = globalCache();
+      const tel = g.telemetry;
+      const skipped = tel?.skipped ?? 0;
+      const errors = tel?.errors ?? 0;
+      const snapshots = ctx.snapshots();
+
+      collectRuntimeMetrics(budget, skipped, errors, 0);
+      collectKernelMetrics(skipped, errors);
+      collectSchedulerMetrics(budget, 0, 0, 0, 0, 0);
+      collectWorldMetrics();
+      collectRoomMetrics(snapshots);
+      collectCreepMetrics();
+      collectSpawnMetrics();
+      collectEconomyMetrics(snapshots);
+      collectLogisticsMetrics();
+      collectDefenseMetrics(snapshots);
+      collectEmpireMetrics();
+      collectExpansionMetrics();
+    });
+
+    safeRun("telemetry-flush", () => {
+      runFlush(budget.tier);
+    });
 
     safeRun("expectations", () => this.runExpectations(ctx));
     safeRun("flush-skips", () => flushSkips(), true);

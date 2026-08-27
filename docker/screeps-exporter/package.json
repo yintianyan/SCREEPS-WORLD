@@ -1,0 +1,10 @@
+{
+  "name": "screeps-exporter",
+  "version": "1.0.0",
+  "description": "Screeps Prometheus metrics exporter — reads RawMemory segment and exposes /metrics",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {}
+}

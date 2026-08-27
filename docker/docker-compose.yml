@@ -1,10 +1,14 @@
 # ─── Screeps 私服 Docker 编排 ──────────────────────────────────
 # 迁移自 ~/Desktop/screeps-server，路径全部相对化。
 #
-# 架构：screeps (引擎+launcher) + client (浏览器客户端) + mongo (持久化) + redis (缓存)
+# 架构：
+#   screeps (引擎+launcher) + client (浏览器客户端) + mongo + redis
+#   + screeps-exporter (segment→/metrics) + prometheus + grafana
+#
 # 启动：cd docker && docker compose up -d
 # 日志：docker compose logs -f screeps
 # CLI： docker exec screeps-server curl -s -X POST http://127.0.0.1:21026/cli -d "JS"
+# 监控：http://localhost:3000 (Grafana, admin/admin)
 # 重置：node scripts/reset-private-server.js
 
 services:
@@ -99,8 +103,73 @@ services:
       start_period: 5s
       retries: 5
 
+  # ─── 监控栈：screeps-exporter → Prometheus → Grafana ──────────
+
+  # screeps-exporter: 从 Screeps API 读取 segment 4 (Prometheus text) → 暴露 /metrics
+  screeps-exporter:
+    build: ./screeps-exporter
+    container_name: screeps-exporter
+    ports:
+      - "9115:9115/tcp"
+    environment:
+      SCREEPS_HOST: http://screeps:21025
+      # 私服用 email/password 登录（screepsmod-auth）
+      SCREEPS_USERNAME: ${SCREEPS_EXPORTER_USER:-admin}
+      SCREEPS_PASSWORD: ${SCREEPS_EXPORTER_PASS:-admin}
+      SCREEPS_SHARD: ${SCREEPS_SHARD:-shard3}
+      EXPORTER_PORT: "9115"
+      SCRAPE_INTERVAL: "15"
+      METRICS_SEGMENT: "4"
+    depends_on:
+      screeps:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:9115/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  # Prometheus: 时序数据库，scrape screeps-exporter
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: screeps-prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090/tcp"
+    depends_on:
+      screeps-exporter:
+        condition: service_started
+    restart: unless-stopped
+
+  # Grafana: 可视化仪表盘
+  grafana:
+    image: grafana/grafana:latest
+    container_name: screeps-grafana
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000/tcp"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/screeps-overview.json
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   screeps-data:
   mongo-data:
   redis-data:
   client-npm-cache:
+  prometheus-data:
+  grafana-data:

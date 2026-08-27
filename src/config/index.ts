@@ -59,7 +59,9 @@ export const CONFIG = {
       cpu: { id: 1 },
       eventLog: { id: 2 },
       economy: { id: 3 },
-      // 4–9 预留（见 segment-store 分配表注释）。
+      // 4: Prometheus metrics segment（screeps-exporter 读取并暴露 /metrics）
+      prometheus: { id: 4 },
+      // 5–9 预留。
     } as Record<string, { id: number } | number>,
   },
 

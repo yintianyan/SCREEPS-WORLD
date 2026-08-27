@@ -28,6 +28,8 @@ import {
 } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
 import { querySquad, globalCache } from "../kernel/global-cache";
+import { recordExecution, recordPlanningDecision } from "../telemetry";
+import { declareExpected, resolveOutcome } from "../telemetry";
 
 /** 收摊原因编码（WarOutcome 事件 d[2]）。 */
 const REASON_POSTURE = 0;
@@ -88,6 +90,21 @@ export const warPlannerSystem: System = {
         spawned: keep ? (existing!.spawned ?? 0) : 0,
         spawnedKeys: keep ? existing!.spawnedKeys : undefined,
       };
+
+      // T3: 声明战争期望 — 预期 500 tick 内达成目标或可探失
+      // 仅在新计划创建时声明（keep 时跳过 — 同目标续期不重复声明）
+      if (!keep) {
+        declareExpected({
+          id: `war-${next.roomName}-${ctx.tick}`,
+          declaredAtTick: ctx.tick,
+          domain: "war",
+          decision: `WAR_ENGAGE:${next.roomName}`,
+          target: next.roomName,
+          expectedDeadlineTick: ctx.tick + 500,
+          expectedMetrics: { squadDeployed: decideSquadSize(next.towersSeen, CONFIG.war.squadBase, CONFIG.war.squadPerTower), outcomeSuccess: 1 },
+          confidence: 0.5,
+        });
+      }
     }
 
     const plan = Memory.kernel!.warPlan!;
@@ -349,6 +366,22 @@ export function demobilize(tick: number, reason: number): void {
     plan.spawned ?? 0,
     reason,
   ]);
+
+  // 遥测：战后核验 Decision→Outcome 闭环
+  if (outcome === "success") {
+    recordExecution("war", "completed");
+  } else {
+    recordExecution("war", "failed");
+  }
+  recordPlanningDecision("war", outcome === "success");
+
+  // T3: 回填战争期望 — Expected vs Actual 对比
+  const planTick = Memory.kernel?.warPlan?.since ?? tick;
+  resolveOutcome(`war-${plan.targetRoom}-${planTick}`, {
+    resolvedAtTick: tick,
+    actualMetrics: { squadDeployed: plan.spawned ?? 0, outcomeSuccess: outcome === "success" ? 1 : 0 },
+    result: outcome === "success" ? "COMPLETED" : "FAILED",
+  });
 
   // P0-1：从全局编队索引取编队成员，按 name 精确定位 Creep 对象标记 recycle。
   // 只需遍历编队子集（通常 ≤ 十几条），而非全量 Game.creeps。

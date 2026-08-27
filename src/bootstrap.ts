@@ -51,10 +51,31 @@ import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
 import { telemetryCollectorSystem } from "./systems/telemetry-collector";
+import { evaluationSystem } from "./systems/evaluation-system";
 import { terminalManagerSystem } from "./systems/terminal-manager";
 import { trafficManagerSystem } from "./systems/traffic-manager";
 import { tuningEngineSystem } from "./systems/tuning-engine";
 import { towerDefenseSystem } from "./systems/tower-defense";
+
+import {
+  registerRuntimeMetrics,
+  registerKernelMetrics,
+  registerSchedulerMetrics,
+  registerWorldMetrics,
+  registerRoomMetrics,
+  registerCreepMetrics,
+  registerSpawnMetrics,
+  registerEconomyMetrics,
+  registerLogisticsMetrics,
+  registerPlanningMetrics,
+  registerExecutionMetrics,
+  registerEmpireMetrics,
+  registerExpansionMetrics,
+  registerDefenseMetrics,
+  registerEvaluationMetrics,
+  initTelemetryFlush,
+  resetFrequencyState,
+} from "./telemetry";
 
 /**
  * Bootstrap — 唯一组合根：新增系统/角色只改此文件并添加对应模块，不改 Kernel。
@@ -64,6 +85,25 @@ import { towerDefenseSystem } from "./systems/tower-defense";
  * （每 tick 写 ColonyState 供后续消费）；assignment-service 故意设 P1 而非 P0：
  * 失败时角色回退无 assignment 行为，避免 P0 永不冷却刷屏。
  */
+
+// ─── Telemetry SDK 初始化（幂等，global reset 后首 tick 重建）──────────
+resetFrequencyState();
+initTelemetryFlush();
+registerRuntimeMetrics();
+registerKernelMetrics();
+registerSchedulerMetrics();
+registerWorldMetrics();
+registerRoomMetrics();
+registerCreepMetrics();
+registerSpawnMetrics();
+registerEconomyMetrics();
+registerLogisticsMetrics();
+registerPlanningMetrics();
+registerExecutionMetrics();
+registerEmpireMetrics();
+registerExpansionMetrics();
+registerDefenseMetrics();
+registerEvaluationMetrics();
 /** 组合根注册表 — 导出仅供一致性测试（role-config-parity）检视。 */
 export const registry = new Registry()
   // P0：房间状态（ColonyState，必须先于其他系统）
@@ -154,6 +194,8 @@ export const registry = new Registry()
   .registerSystem(prospectManagerSystem)
   // P3：遥测采集（低频采样）
   .registerSystem(telemetryCollectorSystem)
+  // P3：T3 AI Evaluation（低频 100t post 阶段，Expected vs Actual → Deviation → Strategy Feedback）
+  .registerSystem(evaluationSystem)
   // P3：参数自调优（每 500 tick 读遥测调角色边界覆盖值）
   .registerSystem(tuningEngineSystem)
   // P0（post 阶段）：交通解算 — 所有角色之后统一仲裁签发 move

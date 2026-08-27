@@ -80,6 +80,8 @@ export class TickRunner {
     if (silent) {
       console.log = (...args: unknown[]) => {
         const msg = args.map(String).join(" ");
+        // 跳过遥测输出行（@TELEMETRY / @ALERT 前缀）
+        if (msg.startsWith("@TELEMETRY") || msg.startsWith("@ALERT")) return;
         if (msg.includes("Error") || msg.includes("error") || msg.includes("TypeError")) {
           errors.push(msg);
         }

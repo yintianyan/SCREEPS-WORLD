@@ -44,6 +44,7 @@ import { shouldAbortVerification, shouldPartialComplete } from "../domain/operat
 import { hasActiveOperation, pruneTerminal } from "../domain/operation/dedup";
 import { processReplanEvent, type ReplanEvent } from "../domain/operation/replan";
 import { computeOperationMetrics, formatOperationMetrics } from "../domain/operation/metrics";
+import { recordPlanningDecision, recordExecution } from "../telemetry";
 import { submitRequest, hasRequest } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
 
@@ -276,10 +277,12 @@ export const agendaManagerSystem: System = {
       if (op.status !== "verifying") return op;
       if (shouldAbortVerification(op, ctx.tick)) {
         const result = markFailed(op, ctx.tick, "verification timeout: 0 delivery");
+        recordExecution("carrier", "failed");
         return result.op;
       }
       if (shouldPartialComplete(op, ctx.tick)) {
         const result = markCompleted(op, ctx.tick);
+        recordExecution("carrier", "completed");
         return result.op;
       }
       return op;
@@ -294,6 +297,7 @@ export const agendaManagerSystem: System = {
         if (!failResult.ok) {
           reservations = releaseReservation(reservations, op.id);
         }
+        recordExecution("carrier", "failed");
         return failResult.op;
       }
       return op;
@@ -664,6 +668,7 @@ export const agendaManagerSystem: System = {
                   if (completedResult.ok) {
                     operations[idx] = completedResult.op;
                     reservations = releaseReservation(reservations, op.id);
+                    recordExecution("carrier", "completed");
                   }
                 } else {
                   // 部分送达 → verifying

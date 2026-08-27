@@ -25,6 +25,8 @@ export const SEGMENT_LAYOUT = segId("layout", 0);
 export const SEGMENT_CPU = segId("cpu", 1);
 export const SEGMENT_EVENT_LOG = segId("eventLog", 2);
 export const SEGMENT_ECONOMY = segId("economy", 3);
+/** Segment 4: Prometheus metrics text（screeps-exporter 读取）。 */
+export const SEGMENT_PROMETHEUS = segId("prometheus", 4);
 /** @deprecated 使用 SEGMENT_CPU。保留用于迁移期间的代码引用。 */
 export const SEGMENT_TIMESERIES = SEGMENT_CPU;
 
@@ -58,6 +60,9 @@ interface SegmentCache {
   economyDirty?: boolean;
   eventLog?: EventLogSegmentData;
   eventLogDirty?: boolean;
+  /** Prometheus text（纯文本 exposition format）。 */
+  prometheusText?: string;
+  prometheusDirty?: boolean;
   requested?: boolean;
   /** 首次请求激活 segment 的 tick（global reset 后重建）— 可用性守卫用。 */
   requestedAt?: number;
@@ -109,6 +114,7 @@ export function requestSegments(): void {
     SEGMENT_CPU,
     SEGMENT_EVENT_LOG,
     SEGMENT_ECONOMY,
+    SEGMENT_PROMETHEUS,
   ]);
 }
 
@@ -355,6 +361,17 @@ export function markEventLogDirty(): void {
   segCache().eventLogDirty = true;
 }
 
+/**
+ * 写入 Prometheus exposition format text 到 segment 4。
+ * 由 TelemetryFlush 在 flush 时调用。tick 末尾 flushSegments 会写入 RawMemory。
+ * 安全不变式：空字符串也会写入（exporter 需要区分「无数据」与「未更新」）。
+ */
+export function writePrometheusSegment(text: string): void {
+  const cache = segCache();
+  cache.prometheusText = text;
+  cache.prometheusDirty = true;
+}
+
 // ─── Size guard ─────────────────────────────────────────────
 
 /** 安全阈值：序列化体积超过此值时触发裁剪。 */
@@ -419,5 +436,17 @@ export function flushSegments(): void {
   if (cache.eventLogDirty && cache.eventLog) {
     RawMemory.segments[SEGMENT_EVENT_LOG] = JSON.stringify(cache.eventLog);
     cache.eventLogDirty = false;
+  }
+
+  // Segment 4: Prometheus metrics — 存纯文本 Prom exposition format。
+  // 不走 JSON（screeps-exporter 直接读取文本作为 /metrics 响应体）。
+  // 由 TelemetryFlush 在 runFlush 中调用 writePrometheusSegment 写入。
+  if (cache.prometheusDirty) {
+    const text = cache.prometheusText ?? "";
+    // 容量守卫：100KB 上限，超出截断（理论上不会超 — 指标数量有限）
+    RawMemory.segments[SEGMENT_PROMETHEUS] = text.length > 95 * 1024
+      ? text.slice(0, 95 * 1024)
+      : text;
+    cache.prometheusDirty = false;
   }
 }

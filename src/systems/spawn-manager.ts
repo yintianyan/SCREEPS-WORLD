@@ -9,6 +9,7 @@ import { selectRecycleCandidates } from "../domain/spawn/recycle";
 import { moveToTarget, moveTowardRoom } from "../creeps/movement";
 import { recordSkip } from "../kernel/memory";
 import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
+import { recordExecution } from "../telemetry";
 
 /**
  * 孵化管理器 — 唯一调用 spawnCreep 的模块。
@@ -457,6 +458,7 @@ export function trySpawn(
       // 扣减本地能量预算，换下一个空闲 spawn 继续消费队列。
       energyBudget -= bodyCost(body);
       spawnIdx++;
+      recordExecution("spawn", "completed");
       continue;
     }
 
@@ -475,6 +477,7 @@ export function trySpawn(
         `[${Game.time}] spawn/${snapshot.roomName}: spawnCreep returned ${result} for ${req.key} (retry ${req.retries})`,
       );
     }
+    recordExecution("spawn", "failed");
   }
 }
 

@@ -1,38 +1,38 @@
 /** Telemetry SDK — Barrel Export */
 
-// ─── Facade API（1.md §21）──────────────────────────────────
+// ─── Facade API ──────────────────────────────────
 export {
-  counter,
-  gauge,
-  timer,
-  event,
-  decision,
-  outcome,
-  registerMetricCounter,
-  registerMetricGauge,
-  registerMetricHistogram,
-  registeredMetricCount,
-  TELEMETRY_EVENT_TYPES,
-  buildMetricName,
+    counter,
+    gauge,
+    timer,
+    event,
+    decision,
+    outcome,
+    registerMetricCounter,
+    registerMetricGauge,
+    registerMetricHistogram,
+    registeredMetricCount,
+    TELEMETRY_EVENT_TYPES,
+    buildMetricName,
 } from "./Telemetry";
 
-// ─── Schema Types（1.md §18, §22）───────────────────────────
+// ─── Schema Types ───────────────────────────
 export type {
-  CounterMetric,
-  GaugeMetric,
-  HistogramMetric,
-  TimerHandle,
-  TelemetryDomain,
-  AllowedLabel,
-  LabelSet,
-  TelemetryEvent,
-  DecisionRecord,
+    CounterMetric,
+    GaugeMetric,
+    HistogramMetric,
+    TimerHandle,
+    TelemetryDomain,
+    AllowedLabel,
+    LabelSet,
+    TelemetryEvent,
+    DecisionRecord,
 } from "./schema";
 
 export {
-  TELEMETRY_DOMAINS,
-  ALLOWED_LABELS,
-  COLLECTION_FREQUENCY,
+    TELEMETRY_DOMAINS,
+    ALLOWED_LABELS,
+    COLLECTION_FREQUENCY,
 } from "./schema";
 
 // ─── Metric Registry ──────────────────────────────────────
@@ -59,6 +59,37 @@ export { registerExecutionMetrics, recordExecution, recordExecutionLatency } fro
 export { registerEmpireMetrics, collectEmpireMetrics } from "./metrics/EmpireMetrics";
 export { registerExpansionMetrics, collectExpansionMetrics, recordExpansionCompleted, recordExpansionFailed } from "./metrics/ExpansionMetrics";
 export { registerDefenseMetrics, collectDefenseMetrics } from "./metrics/DefenseMetrics";
+export {
+    registerEvaluationMetrics,
+    recordExpectationDeclared,
+    recordExpectationFulfilled,
+    recordExpectationMissed,
+    recordExpectationExpired,
+    recordPendingCount,
+} from "./metrics/EvaluationMetrics";
+
+// ─── Evaluation Registry (T3: AI Evaluation) ───────────────
+export {
+    declareExpected,
+    resolveOutcome,
+    evaluatePending,
+    getStrategyFeedback,
+    pendingCount,
+    recentResolved,
+    shouldEvaluate,
+    resetEvaluation,
+    computeDeviations,
+    aggregate,
+    determineStatus,
+} from "./EvaluationRegistry";
+export type {
+    EvaluationDomain,
+    ExpectationStatus,
+    ExpectedOutcome,
+    ActualOutcome,
+    ResolvedExpectation,
+    StrategyFeedback,
+} from "./EvaluationRegistry";
 
 // ─── Exporters ────────────────────────────────────────────
 export { exportConsoleLine, exportAlertLine } from "./exporters/ConsoleExporter";

@@ -1,4 +1,4 @@
-/** Planning Metrics — 规划指标（1.md §15）。 */
+/** Planning Metrics — 规划指标。 */
 
 import { registerMetricCounter, registerMetricHistogram } from "../Telemetry";
 import { incrementCounter, observeHistogram } from "../MetricRegistry";
@@ -6,13 +6,13 @@ import { incrementCounter, observeHistogram } from "../MetricRegistry";
 let registered = false;
 
 export function registerPlanningMetrics(): void {
-  if (registered) return;
-  registered = true;
+    if (registered) return;
+    registered = true;
 
-  registerMetricCounter("planning", "decisions", "Total planning decisions", ["planner"], "total");
-  registerMetricCounter("planning", "decisions_accepted", "Accepted decisions", ["planner"], "total");
-  registerMetricCounter("planning", "decisions_rejected", "Rejected decisions", ["planner"], "total");
-  registerMetricHistogram("planning", "plan_generation", "Plan generation time in seconds", ["planner"], undefined, "seconds");
+    registerMetricCounter("planning", "decisions", "Total planning decisions", ["planner"], "total");
+    registerMetricCounter("planning", "decisions_accepted", "Accepted decisions", ["planner"], "total");
+    registerMetricCounter("planning", "decisions_rejected", "Rejected decisions", ["planner"], "total");
+    registerMetricHistogram("planning", "plan_generation", "Plan generation time in seconds", ["planner"], undefined, "seconds");
 }
 
 /**
@@ -21,16 +21,16 @@ export function registerPlanningMetrics(): void {
  * @param accepted 是否接受
  */
 export function recordPlanningDecision(planner: string, accepted: boolean): void {
-  try {
-    incrementCounter("screeps_planning_decisions_total", 1, { planner });
-    if (accepted) {
-      incrementCounter("screeps_planning_decisions_accepted_total", 1, { planner });
-    } else {
-      incrementCounter("screeps_planning_decisions_rejected_total", 1, { planner });
+    try {
+        incrementCounter("screeps_planning_decisions_total", 1, { planner });
+        if (accepted) {
+            incrementCounter("screeps_planning_decisions_accepted_total", 1, { planner });
+        } else {
+            incrementCounter("screeps_planning_decisions_rejected_total", 1, { planner });
+        }
+    } catch {
+        // Telemetry 失败不得影响 AI
     }
-  } catch {
-    // Telemetry 失败不得影响 AI
-  }
 }
 
 /**
@@ -39,9 +39,9 @@ export function recordPlanningDecision(planner: string, accepted: boolean): void
  * @param seconds 耗时（秒）
  */
 export function recordPlanningTime(planner: string, seconds: number): void {
-  try {
-    observeHistogram("screeps_planning_plan_generation_seconds", seconds, { planner });
-  } catch {
-    // Telemetry 失败不得影响 AI
-  }
+    try {
+        observeHistogram("screeps_planning_plan_generation_seconds", seconds, { planner });
+    } catch {
+        // Telemetry 失败不得影响 AI
+    }
 }
