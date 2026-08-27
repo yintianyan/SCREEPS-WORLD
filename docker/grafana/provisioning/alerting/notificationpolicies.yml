@@ -1,0 +1,35 @@
+# ─── Grafana Notification Policies ──────────────────────────────
+# 告警路由策略：按 severity 分级路由到不同 contact point
+
+apiVersion: 1
+policies:
+  - orgId: 1
+    receiver: "Screeps Alert Hub"
+    group_by: ["alertname", "domain"]
+    group_wait: 10s
+    group_interval: 30s
+    repeat_interval: 1h
+    routes:
+      # Critical 告警立即发送，重复更频繁
+      - receiver: "Critical Alert Pager"
+        matchers:
+          - severity="critical"
+        group_wait: 0s
+        group_interval: 10s
+        repeat_interval: 15m
+
+      # Warning 告警按域分组
+      - receiver: "Screeps Alert Hub"
+        matchers:
+          - severity="warning"
+        group_wait: 30s
+        group_interval: 1m
+        repeat_interval: 30m
+
+      # Info 告警仅记录
+      - receiver: "Screeps Alert Hub"
+        matchers:
+          - severity="info"
+        group_wait: 5m
+        group_interval: 10m
+        repeat_interval: 2h

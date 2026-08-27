@@ -1,0 +1,226 @@
+# ─── Screeps Alerting Rules ─────────────────────────────────────
+# 5 级告警体系：Critical (即时行动) → Warning (关注) → Info (记录)
+# 所有阈值基于 ARCHITECTURE_FREEZE §9 CPU 规则和 §14 验收门槛
+
+groups:
+  # ── CPU & Bucket 告警 ──
+  - name: screeps_cpu_alerts
+    interval: 15s
+    rules:
+      # Bucket 枯竭 — CPU 持续超限
+      - alert: ScreepsBucketCritical
+        expr: screeps_runtime_cpu_bucket < 2000
+        for: 2m
+        labels:
+          severity: critical
+          domain: cpu
+        annotations:
+          summary: "CPU bucket 低于 2000（枯竭风险）"
+          description: "Bucket={{ $value }}，持续低于安全线。帝国即将进入降级或 tick 停止。"
+
+      # Bucket 警戒
+      - alert: ScreepsBucketWarning
+        expr: screeps_runtime_cpu_bucket < 5000
+        for: 5m
+        labels:
+          severity: warning
+          domain: cpu
+        annotations:
+          summary: "CPU bucket 低于 5000（警戒线）"
+          description: "Bucket={{ $value }}，建议检查 CPU 消耗趋势。"
+
+      # CPU 使用率过高
+      - alert: ScreepsCpuUsageHigh
+        expr: screeps:cpu_used:avg5m > 80
+        for: 5m
+        labels:
+          severity: warning
+          domain: cpu
+        annotations:
+          summary: "CPU 使用率 5m 均值 > 80%"
+          description: "avg5m={{ $value }}，检查是否有 CPU 密集系统异常活跃。"
+
+      # Tick 错误率
+      - alert: ScreepsTickErrorRate
+        expr: rate(screeps_runtime_tick_error_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          domain: cpu
+        annotations:
+          summary: "Tick 错误率 > 0.1/tick"
+          description: "error_rate={{ $value }}/tick，检查内核日志是否有 safeRun 隔离的异常。"
+
+  # ── 帝国生存告警 ──
+  - name: screeps_empire_alerts
+    interval: 15s
+    rules:
+      # Creep 全灭
+      - alert: ScreepsCreepsZero
+        expr: screeps_empire_creeps == 0
+        for: 1m
+        labels:
+          severity: critical
+          domain: empire
+        annotations:
+          summary: "帝国 Creep 数为 0"
+          description: "所有 creep 已死亡，SpawnManager 应触发紧急孵化。"
+
+      # Creep 数量过低
+      - alert: ScreepsCreepsLow
+        expr: screeps_empire_creeps < 3
+        for: 3m
+        labels:
+          severity: warning
+          domain: empire
+        annotations:
+          summary: "帝国 Creep 数 < 3"
+          description: "creeps={{ $value }}，可能存在 spawn 瓶颈或大面积伤亡。"
+
+      # 帝国能量告急
+      - alert: ScreepsEnergyCritical
+        expr: screeps_empire_energy < 5000
+        for: 2m
+        labels:
+          severity: critical
+          domain: empire
+        annotations:
+          summary: "帝国总能量 < 5000"
+          description: "energy={{ $value }}，能量饥饿前兆，检查采矿链是否断链。"
+
+      # 帝国健康度低
+      - alert: ScreepsHealthLow
+        expr: screeps_empire_health < 0.4
+        for: 5m
+        labels:
+          severity: warning
+          domain: empire
+        annotations:
+          summary: "帝国健康度 < 0.4 (40%)"
+          description: "health={{ $value }}/100，一个或多个维度进入恢复状态。"
+
+      # 帝国健康度极低
+      - alert: ScreepsHealthCritical
+        expr: screeps_empire_health < 0.2
+        for: 2m
+        labels:
+          severity: critical
+          domain: empire
+        annotations:
+          summary: "帝国健康度 < 0.2 (20%，濒死)"
+          description: "health={{ $value }}/100，多系统同时进入恢复，可能需要人工介入。"
+
+  # ── 孵化告警 ──
+  - name: screeps_spawn_alerts
+    interval: 15s
+    rules:
+      # 孵化失败率高
+      - alert: ScreepsSpawnFailRate
+        expr: rate(screeps_spawn_failed_total[5m]) / (rate(screeps_spawn_failed_total[5m]) + rate(screeps_spawn_spawned_total[5m]) + 0.001) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          domain: spawn
+        annotations:
+          summary: "孵化失败率 > 50%"
+          description: "fail_rate={{ $value }}，检查能量是否充足或 spawn 是否被占。"
+
+      # 孵化队列积压
+      - alert: ScreepsSpawnQueueStuck
+        expr: screeps_spawn_queue_length > 5
+        for: 5m
+        labels:
+          severity: warning
+          domain: spawn
+        annotations:
+          summary: "孵化队列积压 > 5 持续 5m"
+          description: "queue={{ $value }}，spawn 可能被长期占用或能量不足。"
+
+  # ── 内核系统告警 ──
+  - name: screeps_kernel_alerts
+    interval: 15s
+    rules:
+      # 进程跳过率高
+      - alert: ScreepsKernelSkipRateHigh
+        expr: rate(screeps_kernel_process_skipped_total[5m]) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          domain: kernel
+        annotations:
+          summary: "内核进程跳过率 > 0.3/tick"
+          description: "skip_rate={{ $value }}/tick，可能有系统频繁超预算或降级。"
+
+      # 进程失败率高
+      - alert: ScreepsKernelFailRateHigh
+        expr: rate(screeps_kernel_process_failed_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          domain: kernel
+        annotations:
+          summary: "内核进程失败率 > 0.1/tick"
+          description: "fail_rate={{ $value }}/tick，safeRun 频繁捕获异常，检查 console。"
+
+      # Memory 膨胀
+      - alert: ScreepsMemoryBloat
+        expr: screeps_runtime_memory_bytes > 2097152
+        for: 10m
+        labels:
+          severity: warning
+          domain: kernel
+        annotations:
+          summary: "Memory > 2MB 持续 10m"
+          description: "memory={{ $value }}bytes，可能存在 Memory 膨胀。"
+
+  # ── 防御告警 ──
+  - name: screeps_defense_alerts
+    interval: 15s
+    rules:
+      # 遭遇攻击
+      - alert: ScreepsUnderAttack
+        expr: screeps_defense_threat_level > 0
+        for: 30s
+        labels:
+          severity: warning
+          domain: defense
+        annotations:
+          summary: "检测到威胁 (threat_level={{ $value }})"
+          description: "房间正在遭受攻击或有敌对单位进入。"
+
+      # 塔防能量不足
+      - alert: ScreepsTowerEnergyLow
+        expr: screeps_defense_tower_energy_avg < 500
+        for: 2m
+        labels:
+          severity: warning
+          domain: defense
+        annotations:
+          summary: "塔平均能量 < 500"
+          description: "tower_energy={{ $value }}，防御塔可能无法有效反击。"
+
+  # ── T3 评估告警 ──
+  - name: screeps_evaluation_alerts
+    interval: 15s
+    rules:
+      # 期望达成率低
+      - alert: ScreepsEvaluationFulfillRateLow
+        expr: screeps:evaluation_fulfill_rate5m < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          domain: evaluation
+        annotations:
+          summary: "T3 期望达成率 < 50%"
+          description: "fulfill_rate={{ $value }}，策略决策与执行结果偏差过大。"
+
+      # 偏差率过大
+      - alert: ScreepsEvaluationDeviationHigh
+        expr: screeps:evaluation_deviation:avg5m > 50
+        for: 10m
+        labels:
+          severity: info
+          domain: evaluation
+        annotations:
+          summary: "T3 偏差率 > 50%"
+          description: "deviation={{ $value }}%，检查相关域的决策模型是否需要校准。"
