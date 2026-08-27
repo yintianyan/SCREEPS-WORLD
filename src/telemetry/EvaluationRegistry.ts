@@ -16,6 +16,7 @@
 
 import { globalCache } from "../kernel/global-cache";
 import { recordOutcome } from "./DecisionRegistry";
+import { recordExpectationDeclared, recordExpectationFulfilled, recordExpectationMissed } from "./metrics/EvaluationMetrics";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -130,6 +131,7 @@ export function declareExpected(outcome: ExpectedOutcome): void {
         // 如果 resolved 中已有同 id，也不重复声明
         if (s.resolved.some(r => r.id === outcome.id)) return;
         s.pending.set(outcome.id, outcome);
+        recordExpectationDeclared(outcome.domain);
     } catch {
         // Evaluation 失败不得影响 AI
     }
@@ -168,10 +170,14 @@ export function resolveOutcome(id: string, actual: ActualOutcome): void {
         if (s.resolved.length >= MAX_RESOLVED) {
             s.resolved.shift();
         }
-        s.resolved.push(resolved);
+    s.resolved.push(resolved);
         s.pending.delete(id);
 
-        // 同时写入 DecisionRegistry 的 Outcome 追踪
+        // T3 Metrics
+        if (status === "fulfilled") recordExpectationFulfilled(expected.domain, aggregateDeviation);
+        else if (status === "missed") recordExpectationMissed(expected.domain, aggregateDeviation);
+
+    // 同时写入 DecisionRegistry 的 Outcome 追踪
         recordOutcome(
             expected.declaredAtTick,
             expected.domain,
