@@ -36,6 +36,7 @@ coverage/
 
 # Screeps telemetry & export data (generated, not source)
 tools/data/
+tools/private/data/
 data/
 /server
 
