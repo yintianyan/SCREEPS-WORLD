@@ -355,10 +355,21 @@ declare global {
       /** A3.3：连续净流为正的 tick 数（经济激活判据）。 */
       consecutivePositiveTicks?: number;
       /** AI-2 修复：DecisionTrace 分配的 decisionId（D-{tick}-{seq}）。
-       * 由 collectExpansionDecisions 在采集 DecisionRecord 时写入，
-       * recordExpansionOutcome 读取并写入 lastExpansionOutcome.decisionId。
-       * 唯一稳定关联键——planId 在旧版 Memory 可能缺失，startedAt 被状态机覆盖。 */
+       * 由 collectExpansionDecisions 在采集 DecisionRecord 时写入。
+       * Phase 6 UOEM 后：decisionId 仅作为 DecisionTrace 内部引用，
+       * 不再作为 outcome 匹配键（由 operationId 替代）。 */
       decisionId?: string;
+      /** Phase 6 UOEM：Operation 唯一身份标识（op:{target}:{consumeTick}）。
+       * 在 tryConsumePlan 时一次性铸造，写入 Memory，跨 global reset 稳定。
+       * Experience Collector 用 operationId 匹配 OutcomeChannel 中的终态事件。 */
+      operationId?: string;
+      /** Phase 6 UOEM：Operation 生命周期起点（consume tick，不可变）。
+       * 与 startedAt（mutable state timer）分离——startedAt 仍用于超时判定，
+       * 但 duration 计算使用 openedAt 作为起点。 */
+      openedAt?: number;
+      /** Phase 6 UOEM：是否经历过 forced advance（P5/P7 milestone 传播）。
+       * 终态 outcome 携带此标志，区分 COMPLETED 与 COMPLETED_FORCED。 */
+      forcedAdvance?: boolean;
     };
     /** 扩张失败目标黑名单（v11+）：房名 → 冷却到期 tick。 */
     expansionBlacklist?: Record<string, number>;
@@ -516,6 +527,12 @@ declare global {
     };
     /** 扩张失败暂停截止（v31+）：此 tick 前不开新扩张行动（连续失败止损）。 */
     expansionPausedUntil?: number;
+    /**
+     * Phase 6 UOEM：OutcomeChannel — Memory 持久化的有界 FIFO 通道。
+     * expansion-manager 在终态时 enqueue OutcomeEvent，
+     * experience-collector drain() 读取并匹配 operationId。
+     * cap=32，≤3.2KB。溢出可观测（不静默丢失）。 */
+    outcomeEvents?: import("../kernel/outcome-channel").OutcomeChannelMemory;
     /**
      * A3.4：上一次扩张完成的 tick（Cooldown 门禁）。
      * expansion-manager 在状态机进入 completed 时写入。

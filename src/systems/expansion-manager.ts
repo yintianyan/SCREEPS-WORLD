@@ -23,6 +23,8 @@ import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
+import { makeOperationId, type ExpansionResult, type OutcomeEvent, type MilestoneEvent } from "../domain/expansion/uoem-types";
+import { getOutcomeChannel, enqueueOutcome, makeEventId, type OutcomeChannelMemory } from "../kernel/outcome-channel";
 import {
   decideBootstrapRooms,
   BOOTSTRAP_WORKER_BODY,
@@ -187,6 +189,8 @@ function tryConsumePlan(ctx: TickContext): void {
 
   // 初始化扩张状态
   if (!Memory.kernel) Memory.kernel = {};
+  // Phase 6 UOEM：铸造 operationId（consume 时一次性，跨 reset 稳定）
+  const operationId = makeOperationId(plan.roomName, ctx.tick);
   Memory.kernel.expansion = {
     state: "preparing",
     target: plan.roomName,
@@ -196,6 +200,9 @@ function tryConsumePlan(ctx: TickContext): void {
     checkpointsPassed: 0,
     reservedEnergy: 0,
     consecutivePositiveTicks: 0,
+    operationId,
+    openedAt: ctx.tick, // UOEM：immutable lifecycle anchor
+    forcedAdvance: false,
   };
 
   console.log(`[${ctx.tick}] expansion-manager: consuming plan ${plan.planId} for ${plan.roomName} (sponsor=${plan.sponsorRoom})`);
@@ -455,7 +462,8 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
   // 超时
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.pioneerTimeout) {
     console.log(`[${ctx.tick}] expansion: bootstrapping ${expansion.target} timed out`);
-    recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_TIMEOUT);
+    // Phase 6 UOEM: P5 是 Milestone（FORCED_ADVANCE），不进 OutcomeChannel
+    emitMilestone(expansion, "FORCED_ADVANCE", ctx.tick);
     // 不直接 abort — 如果 spawn 已建成，尝试推进到 economic_startup
     if (spawns.length > 0) {
       expansion.state = "economic_startup";
@@ -566,9 +574,8 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
     console.log(`[${ctx.tick}] expansion: economic_startup timed out for ${expansion.target}`);
     // 如果至少 energy loop 活跃，尝试强行推进
     if (cp3.passed) {
-      // TD-37-3：timeout 强推路径补充 recordExpansionOutcome 调用
-      // 与 advanceIntegrating 的 timeout 强推路径保持一致
-      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_SUCCESS);
+      // Phase 6 UOEM: P7 是 Milestone（FORCED_ADVANCE），不进 OutcomeChannel
+      emitMilestone(expansion, "FORCED_ADVANCE", ctx.tick);
       expansion.state = "integrating";
       expansion.startedAt = ctx.tick;
       console.log(`[${ctx.tick}] expansion: forcing economic_startup → integrating (energy loop active)`);
@@ -683,7 +690,8 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
       expansion.state = "completed";
       expansion.checkpointsPassed = 5;
       console.log(`[${ctx.tick}] expansion: forcing integrating → completed (net positive + integrated)`);
-      recordExpansionOutcome(expansion, ctx.tick, PHASE_PIONEER, OUTCOME_SUCCESS);
+      // Phase 6 UOEM: P9 终态 COMPLETED_FORCED（经历过 forced advance 的超时强推完成）
+      enqueueTerminalOutcome(expansion, ctx.tick, "COMPLETED_FORCED");
       updatePlanStatus(expansion.planId ?? "", "COMPLETED");
       if (!Memory.kernel) Memory.kernel = {};
       Memory.kernel.expansion = undefined;
@@ -717,28 +725,159 @@ function abortExpansion(ctx: TickContext, expansion: ExpansionState, outcome: nu
 
 // ─── V1 辅助函数（保留，供 Plan 消费路径使用）────────────────
 
-function recordExpansionOutcome(expansion: ExpansionState, tick: number, phase: number, outcome: number): void {
+// ─── Phase 6 UOEM: Milestone / Outcome 分离 ─────────────────
+//
+// EXP-1 修复：P1/P5/P7 不再调 recordExpansionOutcome，改为 emitMilestone。
+//  - Milestone 不写 OutcomeChannel
+//  - Milestone 不写 globalCache().lastExpansionOutcome
+//  - Milestone 不进 rhythm ring
+//  - forcedAdvance 标志持久化到 Memory.kernel.expansion.forcedAdvance
+//
+// 终态路径（P2/P3/P4/P6/P8/P9/A1/B1）改为 enqueueTerminalOutcome。
+//  - 写 OutcomeChannel（Memory 持久化，幂等去重）
+//  - 保留 recordEvent 写 eventLog
+//  - rhythm ring 只在终态路径更新
+
+/** 事件序列号（用于 makeEventId）。heap only — reset 后从 0 重启可接受。 */
+let __uoemEventSeq = 0;
+
+/**
+ * 发射 MilestoneEvent — 非终态事件，不进入 OutcomeChannel。
+ * P1 claim 成功、P5 forced advance、P7 forced success 调用此函数。
+ */
+function emitMilestone(
+  expansion: ExpansionState,
+  milestone: string,
+  tick: number,
+): void {
+  const operationId = expansion.operationId
+    ?? makeOperationId(expansion.target, expansion.openedAt ?? expansion.startedAt);
+
+  // FORCED_ADVANCE 标志传播
+  if (milestone === "FORCED_ADVANCE" && !expansion.forcedAdvance) {
+    expansion.forcedAdvance = true;
+  }
+
+  // recordEvent 保留（eventLog 不变）
   recordEvent(EventKind.ExpansionOutcome, expansion.target, [
-    phase,
-    outcome,
+    expansion.state === "claiming" || expansion.state === "preparing" ? PHASE_CLAIM : PHASE_PIONEER,
+    milestone === "CLAIMED" ? OUTCOME_SUCCESS : OUTCOME_TIMEOUT,
     tick - expansion.startedAt,
   ]);
 
-  // AI-2 修复：写入 globalCache().lastExpansionOutcome 供 A6 experience-collector 匹配读取
-  // decisionId 是唯一稳定关联键：由 collectExpansionDecisions 写入 Memory.kernel.expansion.decisionId，
-  // 整个扩张生命周期不变（startedAt 被状态机覆盖，planId 在旧版 Memory 可能缺失）
-  globalCache().lastExpansionOutcome = {
-    target: expansion.target,
-    outcomeCode: outcome,
-    completedTick: tick,
-    duration: tick - expansion.startedAt,
-    startedAt: expansion.startedAt,
-    decisionId: expansion.decisionId,
+  // MilestoneEvent 构造（不写 channel，不写 globalCache）
+  const _event: MilestoneEvent = {
+    kind: "MILESTONE",
+    milestone,
+    at: tick,
+    eventId: makeEventId(tick, ++__uoemEventSeq),
+    operationId,
+  };
+  // 可选：写入 eventLog 供 telemetry 追踪（不进 OutcomeChannel）
+  // 目前 eventLog 已通过 recordEvent 记录，MilestoneEvent 本身无需额外持久化
+}
+
+/**
+ * 入队终态 OutcomeEvent — 唯一终态出口。
+ * P2/P3/P4/P6/P8/P9/A1/B1 调用此函数。
+ * 同一 operationId 只接受第一条（幂等去重）。
+ */
+function enqueueTerminalOutcome(
+  expansion: ExpansionState,
+  tick: number,
+  result: ExpansionResult,
+): void {
+  const operationId = expansion.operationId
+    ?? makeOperationId(expansion.target, expansion.openedAt ?? expansion.startedAt);
+  const openedAt = expansion.openedAt ?? expansion.startedAt;
+
+  // recordEvent 保留（eventLog 不变）
+  const phaseCode = expansion.state === "claiming" || expansion.state === "preparing" ? PHASE_CLAIM : PHASE_PIONEER;
+  const outcomeCode = resultToOutcomeCode(result);
+  recordEvent(EventKind.ExpansionOutcome, expansion.target, [
+    phaseCode,
+    outcomeCode,
+    tick - openedAt, // UOEM: 使用 openedAt 而非 startedAt
+  ]);
+
+  // 构造 OutcomeEvent
+  const ev: OutcomeEvent = {
+    kind: "OUTCOME",
+    domain: "expansion",
+    result,
+    operationId,
+    eventId: makeEventId(tick, ++__uoemEventSeq),
+    interval: { openedAt, closedAt: tick },
+    forcedAdvance: expansion.forcedAdvance ?? false,
   };
 
-  const kind = toOutcomeKind(phase, outcome);
-  if (!kind) return;
+  // 入队 OutcomeChannel（Memory 持久化，幂等去重）
+  const channel = getOutcomeChannel(Memory.kernel as { kernel?: Record<string, unknown> });
+  const enqueueResult = enqueueOutcome(channel, ev);
+  if (enqueueResult === "DUPLICATE_REJECTED") {
+    // 同一 operation 已有终态 outcome — 不覆盖（terminal-only 语义）
+    console.log(`[${tick}] expansion: duplicate terminal outcome rejected for ${operationId}`);
+    return;
+  }
 
+  // rhythm ring 只在终态路径更新（不收 milestone）
+  const kind = resultToRhythmKind(result);
+  if (kind) {
+    updateRhythmRing(kind, tick);
+  }
+
+  // 清理 globalCache().lastExpansionOutcome（兼容期：保留旧字段供未迁移消费者）
+  // Phase 6 后 experience-collector 从 channel drain 读取，不再依赖此字段
+  globalCache().lastExpansionOutcome = {
+    target: expansion.target,
+    outcomeCode,
+    completedTick: tick,
+    duration: tick - openedAt,
+    startedAt: openedAt,
+    decisionId: expansion.decisionId,
+  };
+}
+
+/** ExpansionResult → outcome code（eventLog 兼容）。 */
+function resultToOutcomeCode(result: ExpansionResult): number {
+  switch (result) {
+    case "COMPLETED":
+    case "COMPLETED_FORCED":
+      return OUTCOME_SUCCESS;
+    case "STOLEN":
+      return OUTCOME_STOLEN;
+    case "TIMED_OUT":
+      return OUTCOME_TIMEOUT;
+    case "LOST":
+      return OUTCOME_LOST;
+    case "ABANDONED":
+      return OUTCOME_ABORTED;
+    default:
+      return OUTCOME_ABORTED;
+  }
+}
+
+/** ExpansionResult → rhythm ring kind。 */
+function resultToRhythmKind(result: ExpansionResult): ExpansionOutcomeKind | undefined {
+  switch (result) {
+    case "COMPLETED":
+    case "COMPLETED_FORCED":
+      return "success";
+    case "STOLEN":
+      return "stolen";
+    case "TIMED_OUT":
+      return "timeout";
+    case "LOST":
+      return "lost";
+    case "ABANDONED":
+      return "aborted";
+    default:
+      return undefined;
+  }
+}
+
+/** rhythm ring 更新（只终态路径调用）。 */
+function updateRhythmRing(kind: ExpansionOutcomeKind, tick: number): void {
   const rhythm = Memory.kernel!.expansionRhythm;
   const ring = appendOutcome(
     (rhythm?.ring ?? []).map(codeToKind),
@@ -777,6 +916,36 @@ function recordExpansionOutcome(expansion: ExpansionState, tick: number, phase: 
     Memory.kernel!.expansionPausedUntil = tick + result.pauseTicks;
     console.log(`[${tick}] expansion: ${result.consecutiveFailures} 连败 — 暂停扩张 ${result.pauseTicks} tick`);
   }
+}
+
+/** Phase 6 UOEM 兼容：保留旧 recordExpansionOutcome 签名供过渡期使用。
+ * 内部根据 phase+outcome 判断是 milestone 还是终态，分发到对应函数。
+ * @deprecated 新代码应直接调用 emitMilestone 或 enqueueTerminalOutcome */
+function recordExpansionOutcome(expansion: ExpansionState, tick: number, phase: number, outcome: number): void {
+  // P1 (phase=0, outcome=SUCCESS) → milestone CLAIMED
+  if (phase === PHASE_CLAIM && outcome === OUTCOME_SUCCESS) {
+    emitMilestone(expansion, "CLAIMED", tick);
+    return;
+  }
+  // P5/P7 timeout with forced advance → milestone FORCED_ADVANCE
+  // (调用者通过 phase=PHASE_PIONEER, outcome=OUTCOME_TIMEOUT 或 OUTCOME_SUCCESS 传入)
+  // 这些路径在 advanceBootstrapping/advanceEconomicStartup 中已改为直接调用 emitMilestone
+  // 此函数仅作为兼容入口，新代码不应依赖此分发
+
+  // 终态路径
+  const result = outcomeCodeToResult(phase, outcome);
+  enqueueTerminalOutcome(expansion, tick, result);
+}
+
+/** outcome code → ExpansionResult 映射。 */
+function outcomeCodeToResult(phase: number, outcome: number): ExpansionResult {
+  if (outcome === OUTCOME_SUCCESS) {
+    return phase === PHASE_CLAIM ? "COMPLETED" : "COMPLETED"; // claim success 不应走到这里（是 milestone）
+  }
+  if (outcome === OUTCOME_STOLEN) return "STOLEN";
+  if (outcome === OUTCOME_TIMEOUT) return "TIMED_OUT";
+  if (outcome === OUTCOME_LOST) return "LOST";
+  return "ABANDONED";
 }
 
 function toOutcomeKind(phase: number, outcome: number): ExpansionOutcomeKind | undefined {

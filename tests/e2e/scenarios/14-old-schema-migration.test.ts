@@ -53,10 +53,9 @@ describe("E2E-014 旧 Schema 迁移", () => {
 
       // 验证迁移已执行——schemaVersion 从 1 升级到当前版本
       const mem = await runner.bot.getMemory();
-      expect(
-        mem.schemaVersion,
-        "schemaVersion 应从 1 升级到当前版本（≥ 2）",
-      ).toBeGreaterThanOrEqual(2);
+      // Phase 6: schemaVersion 必须升级到当前版本
+      expect(mem.schemaVersion, "schemaVersion 应存在").toBeDefined();
+      expect(mem.schemaVersion, "schemaVersion 应从 1 升级到当前版本（≥ 2）").toBeGreaterThanOrEqual(2);
     },
     30000,
   );
@@ -67,12 +66,14 @@ describe("E2E-014 旧 Schema 迁移", () => {
       const snapshots = await runner.runTicks(500);
       const last = snapshots.at(-1)!;
 
-      // 验证迁移完成——schemaVersion 升级到当前版本
+      // Phase 6: 验证迁移完成且 kernel 恢复
       const mem = await runner.bot.getMemory();
+      expect(mem.schemaVersion, "schemaVersion 应存在").toBeDefined();
       expect(
         mem.schemaVersion,
         "schemaVersion 应升级到当前版本（≥ 2）",
       ).toBeGreaterThanOrEqual(2);
+      expect(mem.kernel, "kernel 应存在").toBeDefined();
 
       // 验证帝国正常运转
       expect(
@@ -113,9 +114,11 @@ describe("E2E-014 旧 Schema 迁移", () => {
         `迁移有错误：\n${migrationErrors.join("\n")}`,
       ).toHaveLength(0);
 
-      // schemaVersion 仍然稳定
+      // Phase 6: schemaVersion 稳定且不为 undefined
       const mem = await runner.bot.getMemory();
       expect(mem.schemaVersion, "schemaVersion 应保持稳定").toBeGreaterThanOrEqual(2);
+      // Phase 6: 验证有实际生产/执行行为
+      expect(last.rawMemory?.kernel, "kernel 应存在").toBeDefined();
     },
     180000,
   );

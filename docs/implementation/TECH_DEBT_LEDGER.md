@@ -436,18 +436,28 @@ CPU 成本降低 80%。保留 `__spawnQueueDepthHistory` 每次采样（唯一�
 三个只写不读字段维持 AU-3 登记的"诊断观测，console 内省"策略不变——
 写入成本极低（每 100t 一次赋值），删除收益可忽略。
 
-### AU-8: R10 ADR — System 合并（43→34）
+### AU-8: R10 ADR — System 合并（43→36）
 
 **来源**：R9 System 上限 15+3 与实际 43 个 System 的偏差治理。
+
+**统计口径**：以 `bootstrap.ts` 中 `registerSystem` 调用数为唯一真相源。
+合并前 43 → 合并后 36（批 1+2 已完成，批 3 后置）。
 
 **修复**：
 - 批 1（A6 智能层）：6→1 `intelligence-pipeline`（6 个 Shadow-Only post 系统合并，
   interval=100，内部分频执行 6 阶段：experience→evaluation→prediction→
-  calibration→intelligence-state→recommendation）
+  calibration→intelligence-state→recommendation）✅ 已完成
 - 批 2（A5.4 战术运行时）：4→1 `tactical-runtime-pipeline`（4 个 P2 main 系统合并，
-  interval=1，内部分频执行 4 阶段：squad-movement→tactical-engagement→
-  combat-micro→tactical-runtime）
-- 合并后 System 总数：43 - 6 - 4 + 2 = 35
+  interval=1，内部分频执行 4 阶段：tactical-runtime→squad-movement→
+  tactical-engagement→combat-micro）✅ 已完成
+- 合并后 System 总数：43 − (6−1) − (4−1) = 43 − 5 − 3 = 35（理论值）。
+  实际 `bootstrap.ts` 中 `registerSystem` 调用数为 **36**，以此为唯一真相源。
+  差异 1 的来源：历史 43 计数可能包含了已删除或合并的中间 System 文件，
+  以代码实际计数 36 为准。
+
+**批 3（后置）**：非蓝图 System 3→0 合并
+（specialization-planner→empire-strategy，logistics-planner→logistics，
+empire-health→self-healing）⏳ 未执行，这三个 System 仍独立注册。
 
 **Shadow-Only 结论**：A6 智能层全部 6 个 System 的产出不被任何执行系统消费，
 是纯可观测性设施。保留现状（不删除也不接入执行系统）。安全不变式已满足：
@@ -461,4 +471,21 @@ CPU 成本降低 80%。保留 `__spawnQueueDepthHistory` 每次采样（唯一�
 - 6 个 A6 + 4 个 A5.4 原文件保持不变（export 函数和 run 逻辑保留）
 - 5 个架构测试更新（检查 pipeline 注册而非原 System 名）
 
-回归验证：typecheck ✅ | build ✅ | unit 304/304 ✅ | e2e 15/15 ✅
+回归验证：typecheck ✅ | build ✅ | unit 5051/5052 ✅ (1 flaky CPU benchmark)
+E2E 15/15 ✅ (13-corrupted-memory + 14-old-schema-migration 新增)
+
+**Phase 6 UOEM 数据完整性更新**：
+- EXP-1（数据污染）：P1/P5/P7 改为 `emitMilestone`，不进 OutcomeChannel ✅ 已修复
+- EXP-2（身份丢失）：`operationId` 在 consume 时铸造，写入 Memory ✅ 已修复
+- TMP-1（时间错误）：`openedAt` 不可变，`duration` 使用全生命周期 ✅ 已修复
+- A6-R（累计冒充增量）：recovery 使用 paired delta ✅ 已修复
+- A6-SL（BEFORE/AFTER 错位）：logistics/spawn 使用决策时刻冻结值 ✅ 已修复
+- TIMEOUT-SEMANTICS：P5 是 Milestone 不 finalize Experience ✅ 已修复
+- Pipeline 顺序：tactical-runtime → squad-movement → tactical-engagement → combat-micro ✅ 已修复
+- Pipeline 错误隔离：每个 stage 独立 safeRun ✅ 已修复
+- A6 仍保持 Shadow-Only：不修改 Strategy、不进入执行路径 ✅
+
+**仍需 runtime soak 验证**：
+- 真实 Screeps 服务端长时间运行（≥10000 tick）的 UOEM 数据流
+- 真实扩张生命周期的 operationId 跨 global reset 稳定性
+- E2E 受 screeps-server-mockup 环境限制，部分场景需在 MMO 验证

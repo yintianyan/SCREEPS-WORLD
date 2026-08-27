@@ -63,22 +63,25 @@ describe("E2E-013 损坏 Memory 恢复", () => {
       const last = snapshots.at(-1)!;
 
       // 验证系统恢复——至少有 creep 在运行
+      // Phase 6: 有信息量断言——损坏 Memory 恢复后必须有 creep 在运行
       expect(
         last.totalCreeps,
-        `损坏 Memory 恢复后无 creep。\n${debugSnapshot(last)}`,
-      ).toBeGreaterThanOrEqual(0); // 宽松断言——恢复可能需要时间
+        `损坏 Memory 恢复后应有至少 1 个 creep 运转。\n${debugSnapshot(last)}`,
+      ).toBeGreaterThanOrEqual(1);
 
       // 验证 Memory 被正确初始化
       const mem = await runner.bot.getMemory();
       expect(mem, "Memory 应存在").toBeDefined();
 
-      // schemaVersion 应被修正为数字
-      if (mem.schemaVersion !== undefined) {
-        expect(
-          typeof mem.schemaVersion,
-          "schemaVersion 应为数字（迁移系统修正）",
-        ).toBe("number");
-      }
+      // Phase 6: schemaVersion 必须存在且为当前版本
+      expect(mem.schemaVersion, "schemaVersion 必须存在").toBeDefined();
+      expect(
+        typeof mem.schemaVersion,
+        "schemaVersion 应为数字（迁移系统修正）",
+      ).toBe("number");
+      // 验证 kernel 结构恢复
+      expect(mem.kernel, "kernel 结构应存在").toBeDefined();
+      expect(typeof mem.kernel, "kernel 应为 object").toBe("object");
 
       // creeps 应为 object 或 undefined（不应该是 null）
       if (mem.creeps !== undefined) {
@@ -87,6 +90,10 @@ describe("E2E-013 损坏 Memory 恢复", () => {
           "creeps 应为 object（迁移系统修正）",
         ).toBe("object");
       }
+
+      // Phase 6: 验证恢复后有实际生产/执行行为
+      // 检查 Memory.kernel 存在且有 creeps 在运行
+      expect(last.rawMemory?.kernel, "kernel 应存在").toBeDefined();
     },
     120000,
   );

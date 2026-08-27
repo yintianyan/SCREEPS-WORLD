@@ -26,6 +26,8 @@
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { systemPhase } from "../../kernel/phase";
+import { getOutcomeChannel, drainOutcomes, hasTerminalOutcome, type OutcomeChannelMemory } from "../../kernel/outcome-channel";
+import type { OutcomeEvent, OperationId } from "../../domain/expansion/uoem-types";
 import {
   type ExperienceRingBuffer,
   type ExperienceRecord,
@@ -373,9 +375,17 @@ function buildOutcomeCollectionInput(
       break;
 
     case "recovery":
+      // Phase 6 UOEM A6-R: 使用 paired delta 而非终身累计值
+      // BEFORE = 决策时刻冻结的 recoveryStats（从 exp.context.metrics 获取）
+      // AFTER = 终态时刻的 recoveryStats
       if (recoveryStats) {
-        input.recoverySucceeded = recoveryStats.succeededCount;
-        input.recoveryFailed = recoveryStats.failedCount;
+        const beforeSucceeded = exp.context.metrics.recoverySucceeded ?? 0;
+        const beforeFailed = exp.context.metrics.recoveryFailed ?? 0;
+        const afterSucceeded = recoveryStats.succeededCount;
+        const afterFailed = recoveryStats.failedCount;
+        // delta = after - before（增量而非累计）
+        input.recoverySucceeded = afterSucceeded - beforeSucceeded;
+        input.recoveryFailed = afterFailed - beforeFailed;
         input.recoveryTerminal = (recoveryStats as { terminalCount?: number }).terminalCount ?? 0;
       }
       if (health) {
@@ -395,8 +405,12 @@ function buildOutcomeCollectionInput(
       break;
 
     case "logistics":
+      // Phase 6 UOEM A6-SL: before 不再硬编码 "stable"，使用决策时刻冻结值
       if (logisticsHealth) {
-        (input as { logisticsLevelBefore?: string }).logisticsLevelBefore = "stable";
+        // BEFORE = 决策时刻的 logistics level（从 exp.context.metrics 获取）
+        // AFTER = 终态时刻的 logistics level
+        const beforeLevel = String(exp.context.metrics.logisticsLevel ?? "stable");
+        (input as { logisticsLevelBefore?: string }).logisticsLevelBefore = beforeLevel;
         input.logisticsLevelAfter = logisticsHealth.level;
         input.logisticsBacklog = logisticsHealth.backlogCount;
         input.logisticsDeliveryRate = logisticsHealth.deliveryRate;
@@ -404,7 +418,8 @@ function buildOutcomeCollectionInput(
       break;
 
     case "spawn":
-      // 从 DecisionRecord 的 evidence 获取 spawn 状态
+      // Phase 6 UOEM A6-SL: BEFORE 从 DecisionRecord evidence 获取（决策时刻冻结）
+      // AFTER 从当前 globalCache 获取（终态时刻）
       input.spawnQueueLength = exp.context.metrics.spawnQueueLength;
       input.spawnP0Count = exp.context.metrics.spawnP0Count;
       input.totalPopulation = exp.context.metrics.totalPopulation;
@@ -416,42 +431,46 @@ function buildOutcomeCollectionInput(
       break;
 
     case "expansion":
-      // TD-37-3 + AI-2 修复：从 globalCache().lastExpansionOutcome 采集扩张结果
-      // 扩张 Outcome 只能来自已经发生的 Runtime Fact
-      // AI-2 关键修复：用 decisionId 作为唯一稳定关联键匹配
-      // - decisionId 由 collectExpansionDecisions 分配（D-{tick}-{seq}），写入 Memory.kernel.expansion.decisionId
-      // - recordExpansionOutcome 读取 expansion.decisionId 写入 lastExpansionOutcome.decisionId
-      // - experience-collector 用 exp.decision.decisionId === lastOutcome.decisionId 直接匹配
-      // fallback：如果 decisionId 不可用（旧版 Memory），退回 target + completedTick > decisionTick
-      const expansionMem = (globalThis as { Memory?: { kernel?: { expansion?: { target: string; sponsor: string; startedAt: number; state: string; checkpointsPassed?: number; decisionId?: string } } } }).Memory?.kernel?.expansion;
-      const lastOutcome = g.lastExpansionOutcome;
+      // Phase 6 UOEM: 从 OutcomeChannel drain 读取终态事件（替代单槽 lastExpansionOutcome）
+      // operationId 优先匹配；无法可靠匹配时产生 UNRESOLVED/DATA_GAP，不得猜测归因。
+      const expansionMem = (globalThis as { Memory?: { kernel?: { expansion?: { target: string; sponsor: string; startedAt: number; state: string; checkpointsPassed?: number; decisionId?: string; operationId?: string; openedAt?: number } } } }).Memory?.kernel?.expansion;
+      const channel = getOutcomeChannel(Memory.kernel as { kernel?: Record<string, unknown> });
+      const drainedEvents = drainOutcomes(channel);
 
       // 从 DecisionRecord.selectedAction 解析 target room（格式 EXPANSION_START_{roomName}）
       const expTargetRoom = exp.decision.selectedAction.replace("EXPANSION_START_", "");
 
-      // 匹配策略：decisionId 优先；有 decisionId 时只认 decisionId，无 decisionId 才用 fallback
-      const hasDecisionId = !!(lastOutcome?.decisionId);
-      const decisionIdMatch = hasDecisionId
-        && lastOutcome!.decisionId === exp.decision.decisionId;
-      const fallbackMatch = !hasDecisionId && lastOutcome
-        && lastOutcome.target === expTargetRoom
-        && lastOutcome.completedTick > exp.decision.decisionTick;
+      // 尝试用 operationId 匹配 pending Experience
+      // operationId 在 consume 时铸造，写入 Memory.kernel.expansion.operationId
+      // DecisionRecord 携带 operationId（从 Memory.expansion 读取，reset 后幸存）
+      const expOpId = (exp.decision as { operationId?: OperationId }).operationId;
 
-      if (lastOutcome && (decisionIdMatch || fallbackMatch)) {
-        // decisionId 匹配 或 (无 decisionId 时 target + completedTick > decisionTick) → 可以安全使用
-        // expansionOutcome 格式：phase * 10 + outcomeCode
-        // phaseCode: 1 = pioneer phase (扩张完成/终止都在 pioneer 阶段)
-        const phaseCode = 1;
-        input.expansionOutcome = phaseCode * 10 + lastOutcome.outcomeCode;
-        input.expansionDuration = lastOutcome.duration;
-      } else if (expansionMem && expansionMem.target === expTargetRoom
-                 && (!expansionMem.decisionId || expansionMem.decisionId === exp.decision.decisionId)) {
-        // 扩张仍在进行中（Memory.kernel.expansion 存在且 target 匹配 + decisionId 匹配如果可用）
-        // → 不采集 Outcome（没有最终结果）
-        // expansionDuration 可以从 startedAt 推导
-        input.expansionDuration = tick - expansionMem.startedAt;
+      let matchedEvent: OutcomeEvent | undefined;
+      if (expOpId) {
+        matchedEvent = drainedEvents.find(e => e.operationId === expOpId);
       }
-      // 如果 decisionId 不匹配且 fallback 也不匹配 → 不注入（防错配）
+
+      if (!matchedEvent && drainedEvents.length > 0 && !expOpId) {
+        // legacy 无 operationId → DATA_GAP（不得猜测归因）
+        // 保留兼容：尝试用 target 匹配（仅用于过渡期旧 Experience）
+        matchedEvent = drainedEvents.find(e => {
+          // 从 operationId 格式 op:{target}:{tick} 提取 target
+          const parts = e.operationId.split(":");
+          return parts.length >= 2 && parts[1] === expTargetRoom;
+        });
+      }
+
+      if (matchedEvent) {
+        // 匹配成功 — 使用 OutcomeEvent 的 result 和 interval
+        input.expansionOutcome = mapResultToOutcomeCode(matchedEvent.result);
+        input.expansionDuration = matchedEvent.interval.closedAt - matchedEvent.interval.openedAt;
+      } else if (expansionMem && expansionMem.target === expTargetRoom
+                 && (!expansionMem.operationId || expansionMem.operationId === expOpId)) {
+        // 扩张仍在进行中（Memory.kernel.expansion 存在且 target 匹配）
+        // → 不采集 Outcome（没有最终结果）
+        input.expansionDuration = ctx.tick - (expansionMem.openedAt ?? expansionMem.startedAt);
+      }
+      // 如果未匹配 → 不注入（防错配），Experience 保持 pending，超 maxDelay 后 UNRESOLVED
 
       // 威胁状态：从 context metrics 获取（如果存在）
       if (exp.context.metrics.hostilesInRoom !== undefined) {
@@ -463,9 +482,29 @@ function buildOutcomeCollectionInput(
   return input;
 }
 
-/**
- * 构建 AttributionInput — 从 globalCache 采集运行时状态。
- */
+/** Phase 6 UOEM: ExpansionResult → outcome code 映射（eventLog 兼容格式）。
+ * phaseCode=1 (pioneer phase)，outcomeCode 与旧 recordExpansionOutcome 一致。 */
+function mapResultToOutcomeCode(result: string): number | undefined {
+  const phaseCode = 1; // pioneer phase
+  const SUCCESS = 0, STOLEN = 1, TIMEOUT = 2, LOST = 3, ABORTED = 4;
+  let outcomeCode: number;
+  switch (result) {
+    case "COMPLETED":
+    case "COMPLETED_FORCED":
+      outcomeCode = SUCCESS; break;
+    case "STOLEN":
+      outcomeCode = STOLEN; break;
+    case "TIMED_OUT":
+      outcomeCode = TIMEOUT; break;
+    case "LOST":
+      outcomeCode = LOST; break;
+    case "ABANDONED":
+      outcomeCode = ABORTED; break;
+    default:
+      return undefined;
+  }
+  return phaseCode * 10 + outcomeCode;
+}
 function buildAttributionInput(
   exp: ExperienceRecord,
   ctx: TickContext,
