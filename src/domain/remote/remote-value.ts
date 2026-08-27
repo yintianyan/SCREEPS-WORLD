@@ -1,24 +1,4 @@
-/**
- * Remote Resource Value — A4.0 Phase 3：远矿净价值评估。
- *
- * 合同锚点：A4.0 Architecture Audit §18.3（Remote Source 是评估层，不是执行层）。
- *
- * 设计意图：
- *   计算远矿资源的净价值 = 预期产出 - 运输成本 - 风险成本 - 基建成本。
- *
- *   这不是 remote-mining-manager 的 scoreRemoteCandidate() 的替代——
- *   scoreRemoteCandidate 评估的是「是否值得开新远矿」（运营决策），
- *   remote-value 评估的是「这个远矿资源的长期经济价值是多少」（经济评估）。
- *
- *   两者的关系：
- *   - scoreRemoteCandidate 的 netScore ≈ throughput - upkeep（瞬时运营净收益）
- *   - remote-value 的 netValue = expectedYield - transportCost - riskCost - infraCost
- *     （长期经济价值，考虑风险和基建摊销）
- *
- *   remote-value 的输出供 remote-opportunity.ts 用于 Opportunity 排序。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Remote Resource Value */
 
 import type { RemoteSource } from "./remote-source";
 
@@ -89,12 +69,12 @@ export interface ValueAssessmentConfig {
 
 /**
  * 默认价值评估参数。
- *
+
  * 参数校准依据（与 targeting.ts 的经济模型对齐）：
  * - SOURCE_INCOME = 10 e/tick (reserved), 5 (unreserved)
  * - HARVESTER_UPKEEP = 0.4, HAULER_UPKEEP = 0.4, RESERVER_UPKEEP = 2.2
  * - DEFENDER_UPKEEP = 0.35, ROAD_UPKEEP_PER_PATHCOST = 0.002
- *
+
  * 运输成本权重 = 0.003（略高于 ROAD_UPKEEP_PER_PATHCOST，含 hauler 燃料）
  * 风险成本基数 = 0.5（低风险的固定成本）
  * 每级风险 = 1.0（riskLevel 0→3 对应 0.5→3.5 e/tick）
@@ -161,11 +141,11 @@ export function computeInfrastructureCost(
 
 /**
  * 评估 Remote Source 的净价值。
- *
+
  * netValue = expectedYield - transportCost - riskCost - infrastructureCost
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param source Remote Source
  * @param config 评估参数
  */

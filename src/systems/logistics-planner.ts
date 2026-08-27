@@ -1,28 +1,4 @@
-/**
- * Logistics Planner 系统 — A4.3 Phase 7：domain 层 → 系统层薄壳。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #35（Planner 集成）。
- *
- * 设计意图：
- *   这是连接 `src/domain/logistics/` 纯函数层与现有系统层的薄壳。
- *   职责仅限于：
- *   1. 从 Game / Memory / globalCache 收集运行时数据
- *   2. 适配为 PlannerInput（纯函数输入格式）
- *   3. 调用 planLogistics 纯函数
- *   4. 将 TransportPlan 写入 globalCache 供下游消费
- *
- *   **不做**的事（由现有系统继续承担）：
- *   - 不创建 spawn 请求（agenda-manager / spawn-manager 负责）
- *   - 不执行 terminal.send / market.deal（terminal-manager 负责）
- *   - 不直接驱动 hauler（logistics + assignment-service 负责）
- *
- * 频率：低频 100 tick（与 agenda-manager 同频，在其之后运行）。
- * 存储：heap only — global reset 可丢（下个周期重建）。
- *
- * 纯函数律遵守（SYSTEM_BOUNDARIES §2.3-3）：
- *   系统层可引用 Game / Memory / globalCache；
- *   但本系统**不**直接修改 Memory 结构（只读 Game/Memory，写 globalCache）。
- */
+/** Logistics Planner 系统 */
 import type { Priority, System, TickContext, RoomSnapshot } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
@@ -451,7 +427,7 @@ function collectThreats(snapshots: readonly RoomSnapshot[]): Map<string, number>
 
 /**
  * A4.4 修复 BYPASS-010：跨 tick Accounting 追踪。
- *
+
  * 逻辑：
  *   1. 为 Plan 中的新 requests 创建初始 Accounting（如果 requestId 不在缓存中）
  *   2. 从 Memory 中的 Operation 状态同步 delivered/lost
@@ -478,7 +454,7 @@ function collectAccountingWithTracking(plan: TransportPlan, tick: number): Trans
 
 /**
  * 从 Memory 中的 Operation 状态同步 delivered/lost 到 Accounting。
- *
+
  * Operation 的 deliveredAmount / requestedAmount 对应 Accounting 的 delivered / requested。
  * Operation 失败（status=failed）→ lost = requestedAmount - deliveredAmount。
  */

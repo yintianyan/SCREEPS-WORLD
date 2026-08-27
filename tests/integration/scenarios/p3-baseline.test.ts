@@ -1,23 +1,4 @@
-/**
- * P3 Baseline — 经济基线采集（任务书 §4 / P3_A2_CONTRACT_REVIEW §5）。
- *
- * 目的：在改动任何 P3 代码之前，量化当前单房 AI 的真实经济形态，
- * 回答「活着（Survival）」还是「具备稳定生产能力（Production）」。
- *
- * 两个世界：
- *   A. cold-start — RCL1 零 creep 冷启动（自举轨迹基线）
- *   B. rcl4-storage — RCL4 标准 storage 经济预设（产能形态基线）
- *
- * 采集口径（诚实标注）：
- *   - income(harvest)/upgrade/build 能量 = TestWorld 物理层实测累计（world._stats）
- *   - spawn 能量 = 孵化完成时按 body 部件成本表累加（采样差分实测）
- *   - net flow = 总储备（room 全口径）窗口差分；非 EMA，非合同三指标（P3 才实现）
- *   - CPU/bucket = mockup 不含真实 CPU 计量，本场景不采集（真实 CPU 证据归
- *     e2e 私服与官服遥测，见 P3_BASELINE.md 说明）
- *
- * 运行：默认快速档（1500 tick，CI 冒烟）；P3_BASELINE_FULL=1 时跑全量 10000 tick。
- * 结果 JSON 写入 docs/phase3/data/（全量档）。
- */
+/** Baseline */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner } from "../framework";
 import type { TestWorld } from "../framework";
@@ -328,9 +309,9 @@ describe("P3 Accounting 接线冒烟", () => {
   });
 });
 
-/** 全量档：结果落盘 docs/phase3/data/ 供 P3_BASELINE.md 引用。 */
+/** 将全量测试结果落盘为 JSON。 */
 function persist(worldLabel: string, samples: Sample[], windows: WindowReport[]): void {
-  const dir = path.resolve(__dirname, "../../../docs/phase3/data");
+  const dir = path.resolve(__dirname, "../../../tmp/docs-moved/phase3/data");
   fs.mkdirSync(dir, { recursive: true });
   const payload = {
     generatedAt: new Date().toISOString(),
@@ -340,5 +321,5 @@ function persist(worldLabel: string, samples: Sample[], windows: WindowReport[])
     samples,
   };
   fs.writeFileSync(path.join(dir, "p3-baseline-" + worldLabel + ".json"), JSON.stringify(payload));
-  console.log("[P3-BASELINE] persisted -> docs/phase3/data/p3-baseline-" + worldLabel + ".json");
+  console.log("[P3-BASELINE] persisted -> tmp/docs-moved/phase3/data/p3-baseline-" + worldLabel + ".json");
 }

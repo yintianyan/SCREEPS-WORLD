@@ -1,12 +1,4 @@
-/**
- * harvester source-link 灌能出口判定（2026-08-01 健壮性回归）。
- *
- * 背景：rcl8-endgame 5000t 稳定性测试抓到缺陷——布局只有 source link +
- * controller link、无 storage link 时，RCL8 停供后 source link 能量无处可去
- * → link 积压 → container 满 → drop 衰减 → 能量持续下降（deathSpiral）。
- * 修复：harvester 只在 link 有下游出口（storage link 存在，或 controller
- * 按需求驱动目标仍有需求）时灌 link；否则灌 container 走 hauler 物流。
- */
+/** harvester source-link 灌能出口判定（2026-08-01 健壮性回归）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { harvesterRole } from "../../../src/creeps/roles/harvester";
 import {

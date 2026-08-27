@@ -1,23 +1,4 @@
-/**
- * Checkpoint System — A3.3 Phase 1：5 个检查点 + 失败恢复。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §3 执行闭环 +
- * A3.3 Task Spec Checkpoint 机制。
- *
- * 5 个 Checkpoint 对应全链路的关键里程碑：
- *   CP1: Claimed          — Controller 已 claim
- *   CP2: Spawn Active      — Spawn 已建成可孵化
- *   CP3: Energy Loop       — Harvest → Transport → Spawn 能量环路运转
- *   CP4: Basic Infra       — 基础设施完成（extensions, containers, roads）
- *   CP5: Economic Activation — 经济指标达标（净流为正）+ 帝国集成
- *
- * 每个 Checkpoint：
- *   - 有判定函数（纯函数）
- *   - 失败时可以回退到上一个 Checkpoint（而非从头开始）
- *   - 记录通过时间用于可观测性
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Checkpoint System */
 
 import type { ExecutionState } from "./execution-state";
 

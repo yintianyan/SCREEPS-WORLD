@@ -1,15 +1,4 @@
-/**
- * P1-4 受限拆改通道生命周期测试（staged link 拆改生命周期）。
- *
- * 覆盖完整 Plan 契约（V2 §2）：
- *   - 冷却（DISMANTLE_COOLDOWN=1000t）：同房冷却期内不重复启动
- *   - ttl（DISMANTLE_TTL=1500t）：到期 abort，保留旧 link
- *   - 战时暂停（colonyState=defense）：不处理计划，恢复 peace 后继续
- *   - 替代任务丢失 → abort（保留旧 link，避免空窗）
- *   - 替代 link 建成 + 灌能 → success（destroy 旧 link + clearDeadAssetLink）
- *   - 替代 link 建成 + 超时未灌能 → fallback（markLinkConstrained + clearDeadAssetLink）
- *   - 先建替代后拆旧（避免空窗）
- */
+/** P1-4 受限拆改通道生命周期测试（staged link 拆改生命周期）。 */
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   isDismantleOnCooldown,

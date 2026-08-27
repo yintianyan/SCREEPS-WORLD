@@ -1,18 +1,4 @@
-/**
- * 远矿 container 维修闭环集成场景（RM-2，技术债「远矿 container 维修链缺失」闭环）。
- *
- * 场景还原远矿房的真实衰减环境：
- *   - source s1 (12,12) 旁预置 container（初始 hits 150k = 60%，低于 80% 触发线）；
- *   - containerDecay(1) = 引擎真实衰减率（5000 hits / 5000 tick）；
- *   - 一只 remoteHarvester（1 WORK）站桩采集 — 远矿房无 builder/tower 兜底，
- *     采集者是 container 唯一维护者。
- *
- * 断言（600 tick 内）：
- *   1. container 存活（hits > 0）；
- *   2. 维修净生效：hits > 初始值（600 tick 衰减 600 hits，无维修时终点
- *      149400 < 150000 — 维修链必须补回衰减并净增）；
- *   3. 维修不吞噬产能：source 被持续开采（energy < 3000）。
- */
+/** 远矿 container 维修闭环集成场景（RM-2，技术债「远矿 container 维修链缺失」闭环）。 */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 import { CONFIG } from "../../../src/config";

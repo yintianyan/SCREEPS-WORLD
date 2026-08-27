@@ -1,12 +1,4 @@
-/**
- * P1-3 link 网络演化 fallback 测试（link 槽位 fallback 链）。
- *
- * 验证目标：
- *   - shouldHaveControllerLink / shouldHaveStorageLink 谓词正确区分
- *     「几何放不下」与「正常跳过」（已建成/槽位满/RCL不足）
- *   - linkConstrained 标记逻辑：isLinkConstrained / markLinkConstrained / clearLinkConstrained
- *   - LINK_CONSTRAINED_RETRY_INTERVAL 过期后自动重试
- */
+/** P1-3 link 网络演化 fallback 测试（link 槽位 fallback 链）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   shouldHaveControllerLink,

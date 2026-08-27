@@ -1,18 +1,4 @@
-/**
- * Allocation Policy v2 — A3.1 可解释多对多资源分配策略
- *（ECONOMY §1.2 跨房调拨权 + A3.1 Architecture Review §4.2）。
- *
- * 相比 A3.0 的 allocateMultiRoom，v2 的改进：
- *   1. 7 因子可解释排序（Criticality + Priority + Safety + Transferable
- *      + Distance + Health + Deadline）
- *   2. TOCTOU 防护：每创建一个 plan 后递减 source 可用量（不依赖外部 transferable 快照）
- *   3. Multi-Source Fulfillment：同一 Demand Node 可被多个 Supply Node 共同满足
- *   4. Partial Allocation：Supply < Demand 时不失败，产出部分分配
- *   5. Operation Storm 防护：全局上限 + per-source/target 上限
- *   6. 可解释性：输出每条分配的理由
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Allocation Policy v2 */
 
 import type { SupplyNode } from "./supply-node";
 import type { DemandNode } from "./demand-node";
@@ -63,7 +49,7 @@ export interface RouteDistance {
 
 /**
  * 7 因子可解释多对多分配。
- *
+
  * 算法：
  *   1. 对 Demand Nodes 按 7 因子综合评分排序（越紧急分越高）
  *   2. 对 Supply Nodes 按 transferable 降序 + health 降序排列
@@ -71,9 +57,9 @@ export interface RouteDistance {
  *   4. Multi-Source：一个 demand 遍历多个 source 直到满足或 source 耗尽
  *   5. Partial Allocation：Supply < Demand 时产出部分分配
  *   6. 每条分配输出可解释理由
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param supplyNodes 供给节点列表（已排序）
  * @param demandNodes 需求节点列表（已排序）
  * @param routes 路由距离表（key = `${from}:${to}`）
@@ -185,7 +171,7 @@ export function allocateNetwork(
 /**
  * 计算 Demand 的综合评分（7 因子加权）。
  * 分越高 = 越紧急。
- *
+
  * 因子权重：
  *   1. Criticality (40%) — 紧急度
  *   2. Priority (20%) — 操作优先级
@@ -223,7 +209,7 @@ function scoreDemand(demand: DemandNode, tick: number): number {
 /**
  * 计算某 Supply 对某 Demand 的匹配度评分。
  * 分越高 = 越适合分配。
- *
+
  * 因子：
  *   1. Transferable (30%) — 可调拨量越大越好
  *   2. Distance (25%) — 距离越近越好

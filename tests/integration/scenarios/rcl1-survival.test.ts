@@ -1,16 +1,4 @@
-/**
- * RCL1 Survival — 新手生存集成测试。
- *
- * 验证 AI 从 RCL1 零 creep 开局能够：
- *   - 自动产生 harvest creep
- *   - 自动产生 upgrader
- *   - Spawn 不长期空闲
- *   - 能量循环建立
- *   - Controller 持续升级
- *   - 无 runtime error
- *
- * 驱动真实 main.ts → kernel.run()，不 mock AI 内部逻辑。
- */
+/** RCL1 Survival — 新手生存集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions, GameInspector } from "../framework";
 import type { TestWorld } from "../framework";

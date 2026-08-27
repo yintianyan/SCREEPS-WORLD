@@ -1,14 +1,4 @@
-/**
- * UOEM（Unified Outcome Event Model）架构证明测试
- *
- * ⚠️ 本文件是 Phase 38 架构阶段的独立证明件：
- *  - 模型实现完全内嵌于本文件（reference implementation in test），
- *    不 import 任何生产模块、不被任何生产代码引用。
- *  - 目的：在进入 Implementation 之前，验证架构文档
- *    (docs/phase38/UOEM_ARCHITECTURE_PROOF.md) 第三部分的五条消解证明
- *    在可执行语义层面成立。
- *  - Implementation Phase 落地时，本文件的断言即验收用例的蓝本。
- */
+/** UOEM（Unified Outcome Event Model）架构证明测试 */
 import { describe, it, expect } from "vitest";
 
 // ═══════════════ 参考实现（仅存在于本测试文件） ═══════════════

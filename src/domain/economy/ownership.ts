@@ -1,17 +1,4 @@
-/**
- * Resource Ownership — A3.0 资源所有权与可调拨量计算
- *（ECONOMY §1.1 资源属房间，帝国持调拨权）。
- *
- * 核心公式：
- *   transferable = storageEnergy - reserve - safetyReserve - activeReservations
- *
- * 其中：
- *   - reserve = contractReserve（经济合同储备，由 economy 系统计算）
- *   - safetyReserve = storageCapacity × safetyReserveRatio（最低安全线，防抽干）
- *   - activeReservations = 当前活跃的跨房预留总量
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Resource Ownership */
 
 import type { RoomEconomicProfile } from "./room-profile";
 
@@ -36,11 +23,11 @@ export function computeSafetyReserve(
 
 /**
  * 计算可调拨量 — 资源所有权的核心函数。
- *
+
  * transferable = max(0, storageEnergy - reserve - safetyReserve - activeReservations)
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param profile 房间经济画像
  * @param activeReservations 当前活跃预留总量（所有跨房 Operation 的 reservedAmount 之和）
  * @param safetyReserveRatio 安全储备比例（默认 0.2）

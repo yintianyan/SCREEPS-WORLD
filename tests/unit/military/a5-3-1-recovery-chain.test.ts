@@ -1,18 +1,4 @@
-/**
- * A5.3.1 GAP-1 E2E Tests — Recovery Chain Closure。
- *
- * 测试完整链路：
- *   WarPlan → Abort → warAbortSignals → Recovery Intent → Recovery Action → A4.6 Execution
- *
- * REC-001: 完整链路从 Abort 到 Recovery Action 产出
- * REC-002: 重复 Abort 不产生重复 Recovery 执行
- * REC-003: Recovery unavailable → escalation 而不是无限 retry
- * REC-004: Logistics failure → Recovery 路径正确触发
- *
- * 注意：本地环境无法真实执行 Screeps Game API，
- * 因此 E2E 测试在 domain 纯函数层面验证完整链路。
- * 标记为 ENVIRONMENT_BLOCKED 的测试需要真实 Screeps 环境。
- */
+/** A5.3.1 GAP-1 E2E Tests — Recovery Chain Closure。 */
 
 import { describe, expect, it } from "vitest";
 import {

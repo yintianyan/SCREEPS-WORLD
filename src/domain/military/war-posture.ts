@@ -1,19 +1,4 @@
-/**
- * War Posture — A5.3 唯一进攻授权来源。
- *
- * 核心原则：
- * - 任何 OFFENSIVE Operation 必须经过 WarPosture
- * - attacker.ts 不得自行决定「可以进攻」
- * - war/planning 不得绕过 Posture
- *
- * 正确链路：
- *   Strategic Posture (EmpirePosture) → WarPosture → Offensive Authorization
- *   → Operation → War Plan → Execution
- *
- * 当 EmpirePosture !== "war" 时，WarPosture = CEASEFIRE（唯一例外）。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** War Posture */
 
 import type { ThreatAssessment, ThreatLevel } from "../defense/threat-assessment";
 import type { MultiDimensionalConfidence } from "../defense/confidence";
@@ -83,7 +68,7 @@ export interface WarPostureResult {
 
 /**
  * 评估 WarPosture — 唯一进攻授权来源。
- *
+
  * 决策矩阵：
  * 1. EmpirePosture !== "war" → CEASEFIRE（不授权任何进攻）
  * 2. EmpireHealth = CRITICAL → DEFENSIVE（帝国危急，不能进攻）
@@ -92,7 +77,7 @@ export interface WarPostureResult {
  * 5. 威胁 HIGH + IntelConfidence HIGH → CONTAIN（遏制）
  * 6. 威胁 CRITICAL + IntelConfidence HIGH + EmpireHealth STABLE+ → LIMITED_OFFENSIVE
  * 7. 威胁 CRITICAL + IntelConfidence CONFIRMED + EmpireHealth HEALTHY + Resource充足 → FULL_OFFENSIVE
- *
+
  * Intel Confidence 必须影响 WarPosture：
  * - HIGH Threat + LOW Intel → CONTAIN / DEFENSIVE（不盲目进攻）
  * - HIGH Threat + HIGH Intel → 可以升级到 OFFENSIVE
@@ -225,7 +210,7 @@ function levelRank(level: ThreatLevel): number {
 
 /**
  * 检查 WarPosture 是否授权特定 OperationType。
- *
+
  * DEFENSIVE: 只允许 DEFEND / ESCORT / RETREAT
  * CONTAIN: DEFENSIVE + HARASS / REMOTE_DENIAL
  * LIMITED_OFFENSIVE: CONTAIN + SIEGE / RAID / CONTROLLER_ATTACK

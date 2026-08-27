@@ -1,14 +1,4 @@
-/**
- * Autonomy Age — A3.4：Colony 自治年龄追踪。
- *
- * 合同锚点：A3.4 Task Spec §28 Autonomy Age。
- *
- * 定义：Economic Activation（CP5 通过）之后连续运行的 ticks 数。
- * 用于判断 Colony 是否真正稳定——500 tick 只是最低门槛，
- * 1k/5k/10k 里程碑衡量长期稳定性。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Autonomy Age */
 
 /** 自治年龄里程碑。 */
 export const AUTONOMY_MILESTONES = {
@@ -61,7 +51,7 @@ export interface AutonomyAgeResult {
 
 /**
  * 计算 Colony 的自治年龄（纯函数）。
- *
+
  * 年龄 = currentTick - activatedAtTick（仅在无中断时）。
  * 如果有过中断（netFlow 转负），年龄从最近一次恢复点重新计算。
  */

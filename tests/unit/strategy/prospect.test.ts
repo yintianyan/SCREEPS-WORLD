@@ -1,10 +1,4 @@
-/**
- * 侦察目标选择纯函数测试（R6b 主动情报）。
- *
- * 覆盖：claimable 过滤（kind/status/owner/reservedBy/occupied）、
- * 视野新鲜判定（sources 已知且未过期 → 跳过）、排序（pathCost 最近优先）、
- * 无候选返回 undefined。
- */
+/** 侦察目标选择纯函数测试（R6b 主动情报）。 */
 import { describe, expect, it } from "vitest";
 import { selectProspectTarget, type ProspectCandidate } from "../../../src/domain/strategy/prospect";
 

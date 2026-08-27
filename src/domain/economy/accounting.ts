@@ -1,13 +1,4 @@
-/**
- * 能量核算纯函数层（P3 · ENERGY_ACCOUNTING_MODEL）。
- *
- * 双层口径：L1 实测计数器（本文件 Ledger 族，动作层埋点累加）+ L2 核算指标
- * （三指标：净流 EMA / 储备 / 风险缓冲）。对账恒等式与池划分见
- * docs/phase3/ENERGY_ACCOUNTING_MODEL.md §3；合同锚点 ECONOMY_ARCHITECTURE §3、
- * STATE_OWNERSHIP §3.6。资源移动（withdraw/transfer/fill）不是消费——恒等式中
- * Transfers 在池内自相抵消，机械保证 relocation 不入账。
- * 纯函数律：不触 Game/Memory/RawMemory（lint 红线），全部状态由参数传入。
- */
+/** 能量核算纯函数层（· ENERGY_ACCOUNTING_MODEL）。 */
 
 // ─── L1 计数器 ──────────────────────────────────────────────
 

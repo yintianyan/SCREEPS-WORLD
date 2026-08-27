@@ -1,25 +1,4 @@
-/**
- * v20 → v21 迁移独立测试（目标清单布局闭环字段建档）。
- *
- * 迁移语义：新增 KernelMemory.layoutGaps（缺口观测）与
- * LayoutMemory.nextGapPlanTick（缺口慢速重试节流）两个可选字段，
- * 由 layout-planner 惰性写入。迁移只做「建档 + 畸形自愈」，不写字段值。
- *
- * 自愈规则：
- *   - layoutGaps 非对象 → 删除整个字段
- *   - layoutGaps[room] 非对象 → 删除该房条目
- *   - layoutGaps[room][type] 非数字 → 删除该类型
- *   - 空对象回收（删除空房条目 / 空 layoutGaps）
- *   - nextGapPlanTick 非数字 → 删除（缺失视为 0：允许立即 gap-force）
- *
- * 覆盖：
- *   - 空 Memory（无 kernel）不报错
- *   - 合法 layoutGaps / nextGapPlanTick 保留
- *   - 脏 layoutGaps（非对象/非数字值）→ 清除
- *   - 脏 nextGapPlanTick → 清除
- *   - 幂等：重复执行不产生副作用
- *   - 已是 v21 的新 Memory → 跳过迁移
- */
+/** v20 → v21 迁移独立测试（目标清单布局闭环字段建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

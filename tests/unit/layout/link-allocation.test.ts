@@ -1,19 +1,4 @@
-/**
- * Link 分配策略测试 — 验证 RCL5+ 的 link 角色优先级分配。
- *
- * 核心策略（CONTROLLER_STRUCTURES link 上限：RCL5=2, RCL6=3, RCL7=4, RCL8=6）:
- *   RCL5 (2 links): source(1) + storage   → 最小可用 link 网络
- *   RCL6 (3 links): + controller           → 站桩升级链打通
- *   RCL7 (4 links): + source(2)            → 双 source 全覆盖
- *
- * 验证目标：
- *   - createSourceLinkTasks 的 maxNew 参数正确限制数量
- *   - createSourceLinkTasks 的 queuedLinkCount 正确扣减槽位
- *   - createStorageLinkTask 在 storage 附近创建 link
- *   - createControllerLinkTask 的 queuedLinkCount 正确扣减槽位
- *   - RCL5 场景：仅 source + storage，controller 无法获取槽位
- *   - RCL6 场景：source + storage + controller 全部就位
- */
+/** Link 分配策略测试 — 验证 RCL5+ 的 link 角色优先级分配。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createSourceLinkTasks,

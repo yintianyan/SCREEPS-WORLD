@@ -18,7 +18,7 @@ import { EventKind, recordEvent } from "./event-log";
 import { emitSummary, initTelemetry } from "./telemetry";
 import { Registry } from "./registry";
 import { buildRoomSnapshot } from "../systems/room-snapshot";
-// R9 登记：kernel 直接 import 业务模块 pathfinding 的清理函数，形式上违反 §2.1「内核不感知业务」。
+// ：kernel 直接 import 业务模块 pathfinding 的清理函数，形式上违反 §2.1「内核不感知业务」。
 // 权衡接受现状：pruneDeadCreepCache 本质是 global 状态卫生（清理死 creep 缓存残留），非经济策略/角色行为；
 //   100 tick 低频触发，无每 tick 耦合。为 1 个钩子引入 registry 维护钩子机制（接口+注册+遍历）属过度工程。
 // 演化条件：当出现 3+ 个周期性维护钩子时，提取为 registry 维护钩子机制（kernel 只遍历注册表）。
@@ -295,7 +295,10 @@ export class Kernel {
         safeRun(
           `system/${system.name}`,
           () => system.run(ctx),
-          system.priority === 0, // P0 系统是关键的 — 永不冷却。
+          // P0 系统永不冷却；recoveryEligible 系统在关键基建缺口时同样豁免冷却
+          // （P2-6 修复：construction-manager 连续 3 次失败 → 冷却 50-200 tick →
+          // 关键基建无法创建 → 死锁。recoveryEligible 钩子已验证缺口存在才 true）。
+          system.priority === 0 || isRecoveryExempt,
         ),
       );
       {

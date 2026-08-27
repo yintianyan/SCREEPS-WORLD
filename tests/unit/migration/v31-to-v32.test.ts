@@ -1,9 +1,4 @@
-/**
- * v31 → v32 迁移独立测试（R7c 无害侦察观测 / lastObserverAt + observerSightings 建档）。
- *
- * 迁移语义：两字段为 RoomMemory 可选字段（room-state 唯一写者）。建档 + 畸形自愈：
- * 非数字 → 删除（缺失视为无目击）。
- */
+/** v31 → v32 迁移独立测试（R7c 无害侦察观测 / lastObserverAt + observerSightings 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

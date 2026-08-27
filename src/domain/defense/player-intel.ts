@@ -1,19 +1,4 @@
-/**
- * Player Intel Confidence — A5.2 G5 纯函数。
- *
- * 解决核心问题：「这个情报到底有多可信？」
- *
- * 设计原则：
- * - Fact / Inference / Prediction 严格分离，不混为一个 Threat 事实
- * - 过期情报必须降低 Confidence
- * - 不同 Source 默认可信度不同，但不能硬编码某个 Source 永远正确
- * - 冲突情报不能简单覆盖，必须产生 Conflict 状态或降低 Confidence
- * - PlayerIntel 只能影响 ThreatAssessment 的 Confidence 和 Intent Evidence，
- *   禁止直接把 Threat Level 提升为 HIGH / CRITICAL
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / Creep / Room / 任何 Runtime 对象。
- * 所有运行时数据由调用方（系统层薄壳）注入为 Snapshot。
- */
+/** Player Intel Confidence */
 
 // ═══════════════════════════════════════════════════════════
 // §1. 类型定义
@@ -136,7 +121,7 @@ export function computeFreshness(age: number): "FRESH" | "RECENT" | "STALE" | "E
 
 /**
  * 根据新鲜度降级 Confidence。
- *
+
  * 过期情报必须降低 Confidence，禁止旧情报永久保持 HIGH。
  */
 export function applyFreshnessDecay(
@@ -182,10 +167,10 @@ export interface ConflictResult {
 
 /**
  * 检测情报列表中的冲突。
- *
+
  * 冲突定义：两条 FACT 级别情报描述矛盾的行为模式。
  * 例如：Intel A 说玩家和平，Intel B 说玩家最近有 Boosted Military 活动。
- *
+
  * 系统不能简单覆盖其中一个，必须产生 Conflict 状态或降低 Confidence。
  */
 export function detectIntelConflict(evidence: IntelEvidence[]): ConflictResult {
@@ -244,7 +229,7 @@ function isContradictory(a: string, b: string): boolean {
 
 /**
  * 聚合多条 Evidence 的 Confidence。
- *
+
  * 算法：
  * 1. 对每条 Evidence 应用 freshness decay
  * 2. 按 source 权重加权
@@ -309,10 +294,10 @@ function valueToConfidence(value: number): IntelConfidence {
 
 /**
  * 评估玩家的威胁指数（0-100）。
- *
+
  * ⚠ 重要：threatIndex 是 Evidence，不是 Truth。
  * 禁止用法：if (playerIntel.threatIndex > 80) threatLevel = CRITICAL
- *
+
  * 正确用法：threatIndex 作为 Intent Evidence 的一部分，
  * 影响 ThreatAssessment 的 confidence 和 intent 推断，
  * 但不直接决定 Threat Level。
@@ -381,7 +366,7 @@ function extractThreatSignal(description: string): number {
 
 /**
  * 从原始情报数据构建完整的 PlayerIntelRecord。
- *
+
  * 这是系统层薄壳调用的入口点：
  * 1. 接收原始 Evidence 列表
  * 2. 检测冲突
@@ -433,12 +418,12 @@ export function buildPlayerIntelRecord(
 
 /**
  * 清理过期的情报证据。
- *
+
  * 策略：
  * - EXPIRED 证据（age > 10000）删除
  * - 保留最近 N 条证据（默认 20）
  * - 冲突证据不自动删除（需要人工或系统裁决）
- *
+
  * 禁止保存完整 Player 历史无限增长，必须有 TTL 和 GC。
  */
 export function gcIntelEvidence(

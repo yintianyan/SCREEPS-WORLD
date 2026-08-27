@@ -1,17 +1,4 @@
-/**
- * Plan Stability Policy — A3.1 防抖四防线
- *（PLANNING_ARCHITECTURE §4 防振荡 + A3.1 Architecture Review §4.5）。
- *
- * 防止资源调度抖动（A→C→A→D→A→C...）。
- *
- * 四防线：
- *   1. Operation Hysteresis — Operation 创建后至少 N tick 不被取消
- *   2. Minimum Commitment — carrier 孵化后至少完成一次运输
- *   3. Rebalance Threshold — 新 Supply/Demand 变化量 < 阈值时不触发 rebalance
- *   4. Rebalance Cooldown — 上次 rebalance 后 M tick 内不再次 rebalance
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Plan Stability Policy */
 
 import type { OperationContext } from "./agenda-item";
 import { isActive } from "./agenda-item";
@@ -31,7 +18,7 @@ const REBALANCE_COOLDOWN_TICKS = 200;
 
 /**
  * 判定 Operation 是否处于 hysteresis 保护期（创建后 N tick 内不可取消）。
- *
+
  * 纯函数。
  */
 export function isInHysteresis(op: OperationContext, tick: number): boolean {
@@ -40,7 +27,7 @@ export function isInHysteresis(op: OperationContext, tick: number): boolean {
 
 /**
  * 判定 Operation 是否已满足 minimum commitment（carrier 至少完成一次运输）。
- *
+
  * @param op Operation 上下文
  * @param carrierHasRun carrier 是否已完成至少一次运输
  */
@@ -55,7 +42,7 @@ export function hasMinimumCommitment(
 
 /**
  * 判定是否应该取消某 Operation（综合 hysteresis + commitment）。
- *
+
  * 纯函数。
  */
 export function shouldCancelOperation(
@@ -76,14 +63,14 @@ export function shouldCancelOperation(
 
 /**
  * 判定是否应该触发 rebalance。
- *
+
  * 四防线之三：Rebalance Threshold + Cooldown
- *
+
  * @param current 当前快照
  * @param previous 上次快照
  * @param lastRebalanceTick 上次 rebalance tick
  * @param tick 当前 tick
- *
+
  * 纯函数。
  */
 export function shouldRebalance(

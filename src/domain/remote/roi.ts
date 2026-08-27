@@ -1,22 +1,4 @@
-/**
- * Remote ROI — A4.1 Phase 2：远矿投资回报率。
- *
- * 合同锚点：A4.1 Architecture Audit §9.2（ROI 缺失）。
- *
- * 设计意图：
- *   计算 Expected ROI（预期投资回报）和 Actual ROI（实际投资回报）。
- *
- *   Expected ROI = (expectedYield × lifespan - expectedTotalCost) / expectedTotalCost
- *   Actual ROI = (actualDelivered - actualTotalCost) / actualTotalCost
- *
- *   ROI > 0: 投资有回报
- *   ROI < 0: 投资亏损
- *   ROI = 0: 盈亏平衡
- *
- *   用途：供 Economic Health 判定 UNPROFITABLE，供 Dashboard 展示。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Remote ROI */
 
 import type { EconomicAccountingResult } from "./economic-accounting";
 
@@ -60,10 +42,10 @@ export interface ROIResult {
 
 /**
  * 计算预期 ROI。
- *
+
  * expectedROI = (expectedProduction - expectedCost) / expectedCost
  * 如果 expectedCost = 0，返回 Infinity（无成本意味着无限回报）。
- *
+
  * 纯函数。
  */
 export function computeExpectedROI(
@@ -76,10 +58,10 @@ export function computeExpectedROI(
 
 /**
  * 计算实际 ROI。
- *
+
  * actualROI = (actualDelivered - actualCost) / actualCost
  * 如果 actualCost = 0，返回 Infinity。
- *
+
  * 纯函数。
  */
 export function computeActualROI(
@@ -92,9 +74,9 @@ export function computeActualROI(
 
 /**
  * 计算完整 ROI 对比结果。
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param operationId Operation ID
  * @param expectedProduction 预期总产出
  * @param expectedCost 预期总成本
@@ -139,9 +121,9 @@ export function calculateROI(
 
 /**
  * 从 EconomicAccountingResult 构建 Actual ROI 输入。
- *
+
  * actualCost = totalCost × duration（将 e/tick 转为总量）。
- *
+
  * 纯函数。
  */
 export function buildActualROIInput(

@@ -1,24 +1,4 @@
-/**
- * Role Transition — A4.0 Phase 1：角色变更条件与转换规则。
- *
- * 合同锚点：A4.0 Architecture Audit §9（Role Transition：Role 变更条件 + 滞回）。
- *
- * 设计意图：
- *   Role Stability 的三防线决定「是否允许切换」，但不决定「切换是否合理」。
- *   Role Transition 在 Stability 裁决之上增加一层语义验证：
- *
- *   1. Transition Validity — 某些角色转换是不允许的（如 REMOTE → CORE 跳级）
- *      必须经过中间角色（REMOTE → PRODUCTION → CORE）
- *   2. Transition Trigger — 记录触发转换的经济事件（RCL 升级、远矿开点等）
- *      供 Dashboard 展示和审计追溯
- *   3. Transition Impact — 评估转换对 Supply Contract 的影响
- *      （哪些 Contract 需要重建、哪些可以保留）
- *
- *   Role Transition 是 Role Stability 的补充层，不替换 Stability 裁决。
- *   流程：evaluateRoomRole → decideRoleStability → validateRoleTransition
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Role Transition */
 
 import type { EmpireRoomRole } from "./empire-role";
 import type { RoleStabilityDecision } from "./role-stability";
@@ -27,7 +7,7 @@ import type { RoleStabilityDecision } from "./role-stability";
 
 /**
  * 允许的角色直接转换路径。
- *
+
  * 设计理念——角色层级与渐进路径：
  * - CORE ↔ PRODUCTION：双向允许（核心房可降级为产能房，反之亦然）
  * - PRODUCTION ↔ SUPPORT：双向允许
@@ -36,7 +16,7 @@ import type { RoleStabilityDecision } from "./role-stability";
  * - CORE ↔ SUPPORT：双向允许（核心房可转为物流枢纽，反之亦然）
  * - CORE ↔ REMOTE：不允许直接转换——必须经过 PRODUCTION 或 SUPPORT
  *   （基座房与远矿房差异太大，跳级转换不合理）
- *
+
  * 任何角色 → 同角色 = 无转换（stable）。
  */
 const ALLOWED_TRANSITIONS: ReadonlySet<string> = new Set([
@@ -119,12 +99,12 @@ export interface RoleTransitionImpact {
 
 /**
  * 验证角色转换是否允许。
- *
+
  * 检查转换路径是否合法，并评估转换影响。
  * 如果 Stability 裁决 roleChanged=false（无变更），返回 allowed=true + trigger=stable。
- *
+
  * 纯函数 — 不引用 Game/Memory。
- *
+
  * @param decision Role Stability 裁决结果
  * @param trigger 触发事件（由调用方判定）
  * @param affectedContracts 受影响的 Contract 数量（由调用方查询）
@@ -196,11 +176,11 @@ export function validateRoleTransition(
 
 /**
  * 查找中间角色（用于不允许直接转换的路径）。
- *
+
  * 当前仅 CORE ↔ REMOTE 需要中间角色：
  * - CORE → REMOTE：经过 PRODUCTION（降级为产能房→再降为远矿房）
  * - REMOTE → CORE：经过 PRODUCTION（升级为产能房→再升为核心房）
- *
+
  * 纯函数。
  */
 function findIntermediateRole(
@@ -218,7 +198,7 @@ function findIntermediateRole(
 
 /**
  * 评估转换对 Supply Contract 的影响。
- *
+
  * 比较转换前后角色的 economicBehavior，判断哪些能力发生了变化。
  * 纯函数。
  */
@@ -272,10 +252,10 @@ function assessTransitionImpact(
 
 /**
  * 推断转换触发事件（供调用方辅助判定）。
- *
+
  * 从评估输入的变化推断最可能的触发原因。
  * 这只是提示——调用方应根据实际运行时事件覆盖。
- *
+
  * 纯函数。
  */
 export function inferTransitionTrigger(

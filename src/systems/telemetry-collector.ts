@@ -1,9 +1,4 @@
-/**
- * Telemetry Collector — P3 系统，时序数据采集 + 事件日志 + 运行时摘要（interval 10）。
- * 职责：每 10 tick 采样 CPU 时序 + 差分事件检测 + flush 事件缓冲到 segment 2 +
- * 更新 Memory.kernel.stats 摘要；每 50 tick 采样经济时序；每 100 tick 人口普查。
- * P3 — 非关键，conserve/recovery 下跳过；flush 受 segment dirty flag 控制，无新数据不 stringify。
- */
+/** Telemetry Collector */
 
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
@@ -37,8 +32,18 @@ export const telemetryCollectorSystem: System = {
   // 已被填充后再采样（main 阶段运行时 cpuByHome 是空 Map，采样无意义）。
   phase: "post",
   run(ctx: TickContext): void {
-    // P3 在 conserve/recovery 下不运行 — 采集是非关键的。
-    if (ctx.budget.tier === "conserve" || ctx.budget.tier === "recovery") return;
+    // P3 在 recovery 下不运行 — 采集是非关键的。
+    if (ctx.budget.tier === "recovery") return;
+    // P2-9 修复：conserve 档做轻量 stats 更新（只采样 CPU，跳过事件检测和输出）。
+    // 确保前馈预测使用新鲜 stats，避免 conserve→healthy 升级后前馈以旧值误判。
+    if (ctx.budget.tier === "conserve") {
+      const tick = ctx.tick;
+      const tel = globalCache().telemetry;
+      if (!tel || tel.tick !== tick) return;
+      sampleCpuData(tick, ctx);
+      updateStatsSummary(tick);
+      return;
+    }
 
     const tick = ctx.tick;
     const tel = globalCache().telemetry;

@@ -1,13 +1,4 @@
-/**
- * Action 级 CPU profiling 测试。
- *
- * 覆盖：
- *   - recordActionCpu 正确记录 count/totalCpu/maxCpu
- *   - 按 tick 惰性重置
- *   - getActionCpuSnapshot 返回当前 tick 数据
- *   - actionProfiling 开关关闭时不产生 profiling 数据（零开销）
- *   - role-runner 在 profiling 开启时正确包裹 resolve/execute
- */
+/** Action 级 CPU profiling 测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { recordActionCpu, getActionCpuSnapshot } from "../../../src/kernel/safe-run";
 import { globalCache } from "../../../src/kernel/global-cache";

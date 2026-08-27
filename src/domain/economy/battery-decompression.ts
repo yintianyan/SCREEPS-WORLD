@@ -1,20 +1,4 @@
-/**
- * Battery 解压回能决策 — 纯函数（无 Game API 依赖）。
- *
- * 战略定位：battery 压缩是「满仓溢能止损」（600 能量 → 50 battery，1/6 折损）。
- * 解压是逆向链：factory.produce(RESOURCE_ENERGY) 消耗 battery 产出能量。
- * 官方配方（COMMODITIES[RESOURCE_ENERGY]）：5 battery → 50 energy（cooldown 10）。
- *
- * 触发条件：storage 能量低于危机线（energyBuyFloor 5k）且 factory 内有 battery。
- * 这是最后救助通道——比市场买入更优先（不消耗 credits、不付运费、无市场依赖）。
- *
- * 与压缩链的互斥关系：压缩在 storageNearFull 时触发，解压在 storage 危机时触发。
- * 两者水位区间不重叠（满仓 vs 危机），天然互斥，不需要显式互斥锁。
- *
- * 取舍：解压有 1/6 能量折损（600→50→500 循环），但危机时 credits 和市场
- * 都不可靠（私服无市场、官服行情空窗），battery 是已锁定的本地能量储备——
- * 折损回能比饿死 spawn 强。
- */
+/** Battery 解压回能决策 — 纯函数（无 Game API 依赖）。 */
 
 /** shouldDecompressBattery 的输入 — 全部由执行层从引擎态采集。 */
 export interface DecompressBatteryInput {

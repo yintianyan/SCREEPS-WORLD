@@ -1,11 +1,4 @@
-/**
- * A3.1 Simulation Tests — Multi-Room Resource Network Stability
- *
- * 测试范围：
- *   - 4 Room Simulation（2 surplus + 2 deficit，验证多对多分配的正确性）
- *   - Scale Test（10+ demand nodes，验证 Operation Storm 防护 + 调度性能）
- *   - 10k Tick Stability（模拟 10000 tick 调度循环，验证无抖动）
- */
+/** A3.1 Simulation Tests — Multi-Room Resource Network Stability */
 import { describe, expect, it } from "vitest";
 import {
   buildSupplyNodes,

@@ -1,15 +1,4 @@
-/**
- * Transfer Verification — A3.0 跨房调拨验证纯函数
- *（PLANNING_ARCHITECTURE §3 验证阶段）。
- *
- * 验证逻辑：
- *   1. 记录 Operation 开始时 target 房间的 storage 能量快照
- *   2. Carrier 报告到达后，比较当前 storage 能量与快照
- *   3. 增量 ≥ expectedDelta → 验证通过
- *   4. 增量 < expectedDelta → 部分满足（继续调度或超时取消）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Transfer Verification */
 
 import type { OperationContext } from "./agenda-item";
 
@@ -36,12 +25,12 @@ export function computeExpectedDelta(op: OperationContext): number {
 
 /**
  * 验证调拨送达 — 比较 target 房间 storage 增量。
- *
+
  * @param op 当前操作上下文
  * @param currentStorageEnergy target 房间当前 storage 能量
  * @param baselineEnergy Operation 开始时的 storage 能量快照
  * @param tick 当前 tick
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function verifyTransfer(

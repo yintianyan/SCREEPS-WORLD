@@ -1,27 +1,4 @@
-/**
- * A6.4 Calibration Ring Buffer — 有界存储 ResolutionResult + GC。
- *
- * 合同锚点：A6_4_CONTRACT.md §1.11 + §六
- *
- * 职责：
- *   - 存储 ResolutionResult 对象（固定长度环形覆盖）
- *   - 维护已解析 Prediction ID 集合（防止重复解析）
- *   - 存储 ModelCalibrationProfile 和 ModelFailureStats（Map）
- *   - GC 清理超龄记录
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * Shadow-Only（CAL-001）：
- *   Ring Buffer 只做存储和查询，不执行 Game API。
- *
- * 确定性（CAL-005）：
- *   同一 ResolutionResult 输入 → 相同的 Ring Buffer 状态。
- *
- * 有界内存（CAL-006）：
- *   容量固定 = RESOLUTION_RING_BUFFER_CAPACITY。
- *   Profiles Map ≤ MAX_PROFILES。
- *   GC 按 resolvedTick 清理超龄记录。
- */
+/** A6.4 Calibration Ring Buffer — 有界存储 ResolutionResult + GC。 */
 
 import type {
   CalibrationRingBuffer,
@@ -40,9 +17,9 @@ import {
 
 /**
  * 创建 CalibrationRingBuffer。
- *
+
  * 纯函数 — 返回新对象。
- *
+
  * @param capacity - Ring Buffer 容量（默认 RESOLUTION_RING_BUFFER_CAPACITY）
  */
 export function createCalibrationRingBuffer(
@@ -66,9 +43,9 @@ export function createCalibrationRingBuffer(
 
 /**
  * 向 Ring Buffer 写入一条 ResolutionResult（环形覆盖最旧数据）。
- *
+
  * 如果 predictionId 已解析过，则跳过（幂等）。
- *
+
  * 确定性：不使用 Math.random / Date.now。
  */
 export function pushResolution(
@@ -109,7 +86,7 @@ export function pushResolution(
 
 /**
  * 获取所有 ResolutionResult（按 predictionId 排序确保确定性）。
- *
+
  * 纯函数 — 不修改 Ring Buffer。
  */
 export function getAllResolutions(buf: CalibrationRingBuffer): ResolutionResult[] {
@@ -124,7 +101,7 @@ export function getAllResolutions(buf: CalibrationRingBuffer): ResolutionResult[
 
 /**
  * 获取最近的 N 条 ResolutionResult（按 resolvedTick 降序）。
- *
+
  * 纯函数 — 不修改 Ring Buffer。
  */
 export function getRecentResolutions(
@@ -145,7 +122,7 @@ export function getRecentResolutions(
 
 /**
  * 检查 Prediction 是否已被解析。
- *
+
  * 纯函数。
  */
 export function isPredictionResolved(
@@ -157,10 +134,10 @@ export function isPredictionResolved(
 
 /**
  * 获取需要解析的 Prediction IDs（已到期但未解析的）。
- *
+
  * 输入：所有 active 预测（从 PredictionRingBuffer 获取）
  * 输出：window.endTick + RESOLUTION_GRACE_PERIOD ≤ currentTick 且未解析的 prediction IDs
- *
+
  * 纯函数。
  */
 export function getPendingResolutionIds(
@@ -190,7 +167,7 @@ export function getPendingResolutionIds(
 
 /**
  * 更新模型校准档案。
- *
+
  * 如果 modelKey 已存在则覆盖，如果不存在则新增。
  * 如果 Map 超过 MAX_PROFILES，则删除最旧的。
  */
@@ -204,7 +181,7 @@ export function updateProfile(
 
 /**
  * 获取模型校准档案。
- *
+
  * 纯函数。
  */
 export function getProfile(
@@ -226,7 +203,7 @@ export function updateFailureStats(
 
 /**
  * 获取模型失败统计。
- *
+
  * 纯函数。
  */
 export function getFailureStats(
@@ -242,12 +219,12 @@ export function getFailureStats(
 
 /**
  * 清理 Ring Buffer 中过老的 ResolutionResult。
- *
+
  * 删除超过 maxAge tick 的记录（设为 undefined）。
  * 不改变 cursor 位置，只释放空间。
- *
+
  * 确定性 GC：基于 resolution.resolvedTick 判断。
- *
+
  * @param buf - CalibrationRingBuffer
  * @param currentTick - 当前 tick
  * @param maxAge - 最大存活 tick（默认 RESOLUTION_MAX_AGE）
@@ -279,7 +256,7 @@ export function gcCalibrationBuffer(
 
 /**
  * 统计 Ring Buffer 中的 Resolution 分布。
- *
+
  * 用于可观测性：各分类数量、校准率、覆盖率。
  * 确定性：遍历后排序。
  */

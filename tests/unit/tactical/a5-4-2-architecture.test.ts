@@ -1,14 +1,4 @@
-/**
- * A5.4.2 Architecture Guard — Squad Formation Domain Purity & Boundary Tests.
- *
- * 规则：
- *   1. domain/tactical/squad-formation.ts 不得引用 Game / Memory / RawMemory / Kernel / Spawn / Transport / Recovery
- *   2. domain/tactical/squad-formation.ts 不得 import systems/ 或 creeps/
- *   3. domain/tactical/squad-formation.ts 不得调用 PathFinder / moveTo / registerMove
- *   4. domain/tactical/squad-formation.ts 不得使用 Math.random / Date.now
- *   5. systems/squad-movement-runtime.ts 不得引用 domain 层纯函数以外的决策函数
- *   6. squad-movement-runtime.ts 必须注册到 bootstrap
- */
+/**  */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";

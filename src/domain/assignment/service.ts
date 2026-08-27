@@ -17,7 +17,7 @@ export interface AssignmentTaskEntry {
 }
 
 /** 各角色可接受的任务类型。
- *
+
  * source 分配统一归 targeting.getSource()（sourceOccupancy 公平份额），不经过 assignment —
  * harvester/worker 采集均走 getSource，故无 "harvest" 任务类型，消除了旧实现
  * 「assignment harvest 槽位」与「targeting fairShare」的双轨制（P1-1）。
@@ -170,7 +170,7 @@ export function buildRoomTasks(
 
 /**
  * 验证 assignment 是否仍然有效（纯函数）。
- *
+
  * 无效条件：lease 过期、revision 变化、target 消失、source 消失。
  * 所有外部状态由参数传入，不访问 Game/Memory。
  */
@@ -280,7 +280,7 @@ function taskDistance(task: AssignmentTaskEntry, pos: { x: number; y: number }):
 
 /**
  * 收集需要被失效的 creep 名称列表（纯函数）。
- *
+
  * 返回所有分配到 priority >= minPriority 任务的 creep 名称。
  * 适配层负责清除这些 creep 的 memory.assignment。
  */

@@ -1,14 +1,4 @@
-/**
- * Resource Reservation — A3.3 Phase 1：扩张资源预留。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §2 G5 可撤离门控 +
- * A3.3 Task Spec Resource Reservation。
- *
- * 定位：扩张执行前，从 Empire 预算中锁定资源，防止日常生产侵蚀。
- * 失败时安全释放，不造成资源泄漏。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Resource Reservation */
 
 /** 预留状态。 */
 export type ReservationStatus = "PENDING" | "RESERVED" | "RELEASED" | "CONSUMED";
@@ -59,7 +49,7 @@ export interface ReservationResult {
 
 /**
  * 尝试预留资源（纯函数）。
- *
+
  * 条件：energyNeeded <= availableExpansionBudget
  */
 export function tryReserve(input: ReservationInput): ReservationResult {

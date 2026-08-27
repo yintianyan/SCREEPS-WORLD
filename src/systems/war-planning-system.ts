@@ -1,26 +1,4 @@
-/**
- * War Planning System — A5.3 系统层薄壳。
- *
- * 合同锚点：A5.3 Task Spec §4 Domain/System 分离 + §6 低频调度。
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 globalCache / Memory / Game 采集运行时状态
- *   2. 适配为 WarPlanningInput（纯函数输入格式）
- *   3. 调用 domain 纯函数 planMilitaryOperation() 生成 WarPlan
- *   4. 写入 globalCache.warPlanCache 供 war-planner / decision-trace 消费
- *   5. 兼容写入 Memory.kernel.warPlan（attacker/healer 无缝切换）
- *
- * 禁止：
- *   - 不做任何业务决策（决策由 domain 纯函数做）
- *   - 不直接修改 Game（spawn/move/attack 全部禁止）
- *   - 不直接调 spawn-manager / logistics / recovery
- *
- * 纯函数律：planMilitaryOperation 是纯函数，本系统只负责数据采集与结果分发。
- *
- * CPU 预算：低频执行（interval=10），采集近零成本。
- * 优先级 P2（在 empire-strategy 之后运行，消费 posture 产出）。
- * 存储：heap only — global reset 可丢。
- */
+/** War Planning System */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
@@ -108,7 +86,7 @@ export const warPlanningSystem: System = {
 
 /**
  * 从运行时状态采集并适配为 WarPlanningInput。
- *
+
  * 采集来源：
  * - Memory.kernel.strategy.posture → empirePosture
  * - globalCache.empireHealth → empireHealth
@@ -300,7 +278,7 @@ function buildTargetCandidates(tick: number): TargetCandidate[] {
 
 /**
  * 从 squadIndex 聚合我方军事 creep 的战斗力。
- *
+
  * 统计 attacker + healer + defender 的 body parts，
  * 用 computeCombatPower 的简化版估计。
  */
@@ -396,10 +374,10 @@ function computeOurPower(g: ReturnType<typeof globalCache>): CombatPower {
 /**
  * 将新 WarPlan 兼容写入 Memory.kernel.warPlan，
  * 使 attacker/healer 角色无感知切换。
- *
+
  * 兼容格式：
  *   targetRoom, sponsor, squadSize, since, towersSeen, phase, spawned
- *
+
  * 新字段（A5.3 运行时字段，无 schema 变更）：
  *   operationId, warPosture, operationType
  */

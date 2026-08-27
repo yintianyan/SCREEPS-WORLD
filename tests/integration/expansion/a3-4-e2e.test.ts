@@ -1,15 +1,4 @@
-/**
- * A3.4 E2E Tests — Colony Autonomy & Stability 端到端测试。
- *
- * 覆盖完整链路场景（5 个测试用例）：
- *   1. Colony Autonomy 验证 — 从 COMPLETED 到自治
- *   2. Colony Failure Recovery — 经济衰退 → Normal Recovery
- *   3. Expansion Cooldown — 完成后冷却窗口内阻止新扩张
- *   4. Expansion ROI — Before/After 对比验证改善
- *   5. Bootstrap 防重门禁 — normal Colony 不重新 Bootstrap
- *
- * 纯函数 E2E 测试 — 不需要 Game/Memory mock，模拟完整状态流。
- */
+/** A3.4 E2E Tests — Colony Autonomy & Stability 端到端测试。 */
 
 import { describe, it, expect } from "vitest";
 import {

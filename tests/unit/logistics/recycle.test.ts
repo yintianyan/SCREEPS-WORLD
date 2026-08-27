@@ -1,9 +1,4 @@
-/**
- * B1 回收通道纯决策测试。
- *
- * 覆盖：废弃角色标记、富余 worker 标记（保留 1 只保险）、
- * unknown 角色不回收、harvester 未满编时 worker 全保留、跨房不标记。
- */
+/** B1 回收通道纯决策测试。 */
 import { describe, expect, it } from "vitest";
 import { selectRecycleCandidates } from "../../../src/domain/spawn/recycle";
 import type { CreepSummary } from "../../../src/domain/spawn/demand";

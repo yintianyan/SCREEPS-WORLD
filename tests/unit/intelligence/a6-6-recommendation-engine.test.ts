@@ -1,18 +1,4 @@
-/**
- * A6.6 Recommendation Engine — 单元测试 + 确定性测试 + 安全边界测试。
- *
- * 测试矩阵：
- *   REC-001 ~ REC-014: Guard validation
- *   EVID-001 ~ EVID-006: Evidence builder tests
- *   GEN-001 ~ GEN-010: Generator tests
- *   RANK-001 ~ RANK-005: Ranking determinism tests
- *   CONF-001 ~ CONF-004: Conflict detector tests
- *   LIFE-001 ~ LIFE-006: Lifecycle tests (TTL, Supersede, GC)
- *   SHADOW-001 ~ SHADOW-003: Shadow-only boundary tests
- *   DET-001 ~ DET-003: Determinism tests (1000 replay identical)
- *
- * 纯函数测试 — 不依赖 Game/Memory。
- */
+/** A6.6 Recommendation Engine — 单元测试 + 确定性测试 + 安全边界测试。 */
 import { describe, it, expect } from "vitest";
 import {
   type RecommendationCandidate,

@@ -1,25 +1,4 @@
-/**
- * Execution Operation — A3.3 Phase 1：扩张执行 Operation 模型。
- *
- * 合同锚点：SYSTEM_BOUNDARIES §2 Operation 概念 +
- * A3.3 Task Spec Claim vs Colonize 拆分。
- *
- * 定位：ExpansionPlan 映射为 Operation，通过 Operation → Request → Task
- * 链条驱动实际执行。A3.3 将扩张拆分为两个 Operation：
- *
- *   1. Claim-Operation: 获取 Controller 所有权
- *      - 创建 Claimer Creep Request
- *      - Claimer 行走到目标房
- *      - 执行 claimController()
- *
- *   2. Colonize-Operation: 建立经济
- *      - 创建 Pioneer Creep Request
- *      - Pioneer 带能量到目标房
- *      - 建造 Spawn → Harvest → Transport → Build
- *      - 达到 Economic Activation
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Execution Operation */
 
 import type { ExpansionPlan } from "./plan";
 import type { ExecutionState } from "./execution-state";

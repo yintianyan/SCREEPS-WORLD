@@ -1,15 +1,4 @@
-/**
- * Segment Store 可用性守卫测试。
- *
- * 场景：global reset 后首 tick，setActiveSegments 尚未生效，
- * RawMemory.segments[N] 为 undefined。旧实现此时创建空结构并缓存，
- * 若该 tick 发生采样/写入，flush 会用空数据整体覆盖历史 segment。
- *
- * 守卫语义：
- *   - reset 首 tick（requestedAt === Game.time 且 raw undefined）→ 临时空结构，不缓存不 flush
- *   - 次 tick 起 undefined 视为「segment 从未写入」（全新服务器）→ 照常初始化并允许写入
- *   - 未调用 requestSegments 的环境（纯单测）→ 守卫不生效，向后兼容
- */
+/** Segment Store 可用性守卫测试。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   requestSegments,

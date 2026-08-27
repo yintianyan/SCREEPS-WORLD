@@ -1,19 +1,4 @@
-/**
- * Allocation Policy — A3.0 多对多资源分配策略
- *（ECONOMY §1.2 跨房调拨权）。
- *
- * 给定 surplus 房间列表和 deficit 房间列表，
- * 计算最优的 (source, target, amount) 三元组列表。
- *
- * 策略：
- *   1. 按紧急度排序 deficit（riskBuffer 升序）
- *   2. 按富余度排序 surplus（transferable 降序）
- *   3. 贪心分配：从最紧急的 deficit 开始，从最富余的 surplus 取
- *   4. 安全储备保护：不抽干 source（transferable 已扣除安全线）
- *   5. 单 source 不超载：同时最多服务 N 个 deficit（默认 2）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Allocation Policy */
 
 import type { RoomRegistryEntry } from "../strategy/room-registry";
 import type { OperationPriority } from "./agenda-item";
@@ -38,7 +23,7 @@ const MIN_TRANSFER_AMOUNT = 1000;
 
 /**
  * 计算分配计划 — 贪心多对多分配。
- *
+
  * @param surplusRooms 可对外输出的房间（按 transferable 降序排列）
  * @param deficitRooms 需要援助的房间（按 riskBuffer 升序排列）
  * @param inTransitByTarget 已在途量 by target room（排除已在调拨中的量）
@@ -103,11 +88,11 @@ export function allocateMultiRoom(
 
 /**
  * 估算 deficit 需求量。
- *
+
  * 基于 riskBuffer 和 estimatedIncome 推导：
  *   need ≈ max(0, safetyTarget - storageEnergy - inTransit)
  *   safetyTarget = storageCapacity × 0.3（最低安全水位）
- *
+
  * 对于无 storage 的 candidate 房：
  *   need ≈ estimatedIncome × 500（约 500 tick 的收入量，作为种子能量）
  */

@@ -1,18 +1,4 @@
-/**
- * A6.6 Recommendation Domain — 统一出口。
- *
- * 分层结构：
- *   types.ts              — RecommendationCandidate, EvidenceItem, NoRecommendation 等
- *   evidence-builder.ts   — 从 A6.1-A6.5 数据构建 EvidenceItem[]
- *   generator.ts          — 规则匹配 + Recommendation 生成
- *   conflict-detector.ts — Recommendation 间冲突检测
- *   lifecycle.ts          — TTL / Supersede / GC 生命周期管理
- *   ranking.ts            — Lexicographic ranking（确定性排序）
- *   hashing.ts            — 确定性 hash（复用 A6.3 stableStringify + FNV-1a）
- *   guards.ts             — REC-001~014 守卫验证函数
- *
- * 纯函数律：本模块不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- */
+/** A6.6 Recommendation Domain — 统一出口。 */
 
 // ── Types ──
 export type {

@@ -1,31 +1,4 @@
-/**
- * E2E-005 Global Reset 恢复韧性 — 验证 Memory 持久性 + 长期运行稳定性。
- *
- * 真实场景 [Experience]：
- *   - Screeps 服务端每 4-12 小时触发 Global Reset
- *   - 所有 global 变量清空，只保留 Memory 和 RawMemory
- *   - AI 必须能从 Memory 种子重建运行时状态
- *
- * 架构说明 [Facts]：
- *   - screeps-server-mockup 的 bot 代码在 isolated-vm 中运行
- *   - mockup 没有公开 API 清空 isolate 的 global 对象
- *   - 因此 E2E 层无法真正模拟 Global Reset（清空 global）
- *
- * 分层验证策略：
- *   - **integration 层**（tests/integration/edge-cases/global-reset.test.ts）：
- *     通过 delete global.X 真正模拟 Global Reset，验证 heap 缓存重建
- *   - **E2E 层**（本文件）：验证 Global Reset 能恢复的**前提条件**：
- *     1. Memory 持久性——长期运行后 schemaVersion 不变、creep memory 不丢失
- *     2. 无错误累积——长期运行不产生 JS 错误
- *     3. 系统韧性——creep 持续存在，无死亡螺旋
- *
- * 验证标准：
- *   1. 500 tick 建立稳态，记录 Memory 快照
- *   2. 继续 1000 tick，验证 Memory 一致性
- *   3. schemaVersion 不变（迁移幂等）
- *   4. creep memory 数量不减（Memory 不丢）
- *   5. 全程无 JS 错误
- */
+/** E2E-005 Global Reset 恢复韧性 — 验证 Memory 持久性 + 长期运行稳定性。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";

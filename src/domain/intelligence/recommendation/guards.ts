@@ -1,15 +1,4 @@
-/**
- * A6.6 Recommendation Guards — REC-001 ~ REC-014 守卫验证函数。
- *
- * 合同锚点：A6_6_SAFETY_BOUNDARY.md §二
- *
- * 职责：
- *   - 验证 Recommendation 域约束
- *   - 验证 System 层不违反安全边界
- *   - 验证确定性、有界性、shadow-only
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- */
+/** A6.6 Recommendation Guards — REC-001 ~ REC-014 守卫验证函数。 */
 
 import type {
   RecommendationCandidate,
@@ -40,7 +29,7 @@ export interface SystemLike {
 
 /**
  * REC-001: Bounded Cache — A6.6 唯一可写的 cache 是 __recommendationCache。
- *
+
  * System 层守卫：检查 system 是否只写 __recommendationCache。
  */
 export function guardRec001BoundedCache(
@@ -58,7 +47,7 @@ export function guardRec001BoundedCache(
 
 /**
  * REC-002: Domain Purity — Domain 不引用 Game/Memory/globalThis。
- *
+
  * 此守卫通过静态分析（grep）验证，运行时检查仅做辅助。
  */
 export function guardRec002DomainPurity(
@@ -79,7 +68,7 @@ export function guardRec002DomainPurity(
 
 /**
  * REC-003: No Game API — A6.6 不调用 Game API。
- *
+
  * 与 REC-002 重叠，但单独检查 spawnCreep / createConstructionSite 等。
  */
 export function guardRec003NoGameApi(
@@ -145,7 +134,7 @@ export function guardRec005Determinism(
 
 /**
  * REC-006: No Execution Leak — A6.6 输出不能被执行系统消费。
- *
+
  * 此守卫通过静态 import 分析验证。
  * 运行时检查：验证 Recommendation 有 shadowOnly=true + autoApply=false。
  */
@@ -187,7 +176,7 @@ export function guardRec007NoStrategyMutation(
 
 /**
  * REC-008: No Decision Authority — 不拥有 Decision Authority。
- *
+
  * 检查 Recommendation 不包含任何决策执行字段。
  */
 export function guardRec008NoDecisionAuthority(
@@ -329,7 +318,7 @@ export function guardRec013TTLEnforcement(
 
 /**
  * REC-014: No Math.random/Date.now — 确定性约束。
- *
+
  * 与 REC-005 重叠，但此守卫专门检查 Recommendation 对象。
  */
 export function guardRec014Deterministic(

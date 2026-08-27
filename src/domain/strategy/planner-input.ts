@@ -1,17 +1,4 @@
-/**
- * Empire Planner Input — A2 后半·步 10：帝国级规划输入汇总。
- *
- * 合同锚点：DATA_FLOW §2 决策流（Empire → Planning → Execution）。
- *
- * 定位：本阶段最终交付物——把步 1–9 的全部产出汇总为一个
- * EmpirePlannerInput 对象，供下一阶段（A3 / Multi-Room Empire
- * Execution）的 Planner 消费。
- *
- * A2 后半只做到 Observation + Accounting + Evaluation + Planning Input。
- * 不执行任何 Multi-Room Execution。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Empire Planner Input */
 
 import type { RoomEconomicProfile } from "../economy/room-profile";
 import type { RoomCapacityProfile } from "../economy/capacity-profile";
@@ -25,12 +12,12 @@ import type { ExpansionPressureResult } from "../expansion/pressure";
 
 /**
  * Empire Planner Input — 帝国级规划输入的完整汇总。
- *
+
  * 这条链的最终产物：
  *   Room Economy → Room Economic Profile → Empire Resource View →
  *   Empire Economic Health → Resource Imbalance → Expansion Readiness →
  *   Empire Planner Input
- *
+
  * 不变量：
  *   - 所有字段从调用方注入的子结果组装
  *   - 不访问 Game/Memory
@@ -66,12 +53,12 @@ export interface EmpirePlannerInput {
 
 /**
  * 汇总全部子结果为 Empire Planner Input。
- *
+
  * 调用方（empire-economy 系统薄壳）依次调用步 1–9 的纯函数，
  * 将产出传入本函数组装为最终 Planner Input。
- *
+
  * 纯函数 — 不引用 Game/Memory。
- *
+
  * @param tick 当前 tick
  * @param profiles 各房经济剖面（步 1）
  * @param capacityProfiles 各房产能剖面（步 3）
@@ -118,7 +105,7 @@ export function buildEmpirePlannerInput(
 
 /**
  * 格式化帝国经济摘要（供 Observability / Dashboard 用）。
- *
+
  * 输出示例：
  * ┌─────────────────────────────────┐
  * │ Empire                           │

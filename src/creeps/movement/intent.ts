@@ -1,10 +1,4 @@
-/**
- * 移动意图账本 — Traffic Manager 的登记入口。
- * 开关开启：movement 层所有移动出口把「本 tick 想走哪一格」登记到 per-tick 账本，
- * tick 末 traffic-manager 后置系统按房集中解算后统一签发 creep.move。
- * 开关关闭：registerMove 直通 creep.move + recordTraffic — 与旧行为逐字节等价，唯一的回滚通道。
- * 账本存 globalCache 并带 tick 戳，跨 tick 自动失效（global reset 安全）。
- */
+/** 移动意图账本 — Traffic Manager 的登记入口。 */
 
 import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
@@ -106,7 +100,7 @@ export function registerAnchor(creep: Creep, priority: number): void {
  * 从缓存路径提取下一步方向（moveByPath 出口的意图化替身）。
  * creep 在路径上 → 走向下一格；偏离缓存路径 → 返回 undefined（等价 ERR_NOT_FOUND，
  * 调用方删缓存、从 creep 当前位置重算正确路径）。
- *
+
  * 注意：旧实现在「偏离路径但紧邻 path[0]」时走向 path[0]（路径计算时的旧起点），会把 creep
  * 橡皮筋拉回旧起点 → 前进 → 再拉回，形成 2-循环打转（线上实测 scout 在
  * W36S57(21,36)↔(22,35) 原地 thrash、永远到不了出口）。path[0] 不是 creep 当下位置，不可作为

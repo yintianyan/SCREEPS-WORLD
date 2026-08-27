@@ -1,14 +1,4 @@
-/**
- * InvaderCore 共享探测缓存回归测试（键冲突修复）。
- *
- * 背景：reserver 与 core-clearer 曾各自以同名键 __remoteInvaderCore 写不同形状
- * （{tick,blocked} vs {tick,list}）。同 tick 同房共存时执行序随 kernel 的 TTL
- * 升序排序波动，两种交错方向各有一种失败模式：
- *   - clearer 先写 {list} → reserver 读 .blocked = undefined（falsy）→ 恒判无核心空耗；
- *   - reserver 先写 {blocked} → clearer 读 .list = undefined → TypeError 进冷却螺旋。
- * 修复：单一写者 support/invader-core，形状 {tick,cores}。本文件锁定双消费方在
- * 任意调用顺序下的正确性、同 tick 缓存命中与跨 tick 失效行为。
- */
+/** InvaderCore 共享探测缓存回归测试（键冲突修复）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { findInvaderCores, roomHasInvaderCore } from "../../../src/creeps/support/invader-core";
 import { resetGlobals } from "../../role-helpers";

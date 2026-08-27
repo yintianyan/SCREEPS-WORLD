@@ -1,16 +1,4 @@
-/**
- * Global Reset 恢复韧性集成测试。
- *
- * 验证系统在 Global Reset（heap 全清，Memory 保留）后能：
- *   - 无 runtime error
- *   - 从 Memory 重建 heap 缓存
- *   - 恢复能量循环
- *   - 不丢失 creep / Memory 状态
- *
- * 这是模型7（韧性优先于完美）的核心验证——
- * Screeps 每 4-12h 必发 Global Reset，恢复路径必须可靠。
- * 一个不能从 Global Reset 恢复的系统，扩展到多房间只是放大故障面。
- */
+/** Global Reset 恢复韧性集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { TickRunner, Assertions, rcl3Economy, TestWorld, flatTerrain } from "../framework";
 import type { RunResult } from "../framework";
@@ -26,10 +14,10 @@ beforeAll(async () => {
 /**
  * 模拟 Screeps Global Reset：
  * 清空所有 globalCache heap 字段（模拟沙箱重建），保留 Memory（持久化）。
- *
+
  * 字段清单来源：src/kernel/global-cache.ts 的 GlobalCache 接口 +
  * 各消费者用 `globalCache() as any` 写入的私有字段。
- *
+
  * 注意：不删除 Game / PathFinder / RoomPosition / Memory / RawMemory ——
  *   - Game 由 TickRunner.refreshGameGlobals() 维护
  *   - Memory / RawMemory 是持久化数据，Global Reset 后保留

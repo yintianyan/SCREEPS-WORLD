@@ -1,13 +1,4 @@
-/**
- * Action-Candidate 架构核心类型：角色行为拆解为有序 ActionCandidate 列表，
- * RoleRunner 按序评估，第一个 resolve 非 undefined 的候选被执行；
- * 新增/调整行为 = 增删/排序候选，不修改其他候选。
- *
- * resolve 模式（唯一模式）：resolve 返回 T | undefined，execute 接收类型安全的 T，
- * 消除 predicate-execute 重复计算——目标只解析一次。
- * resolve 允许写 creep.memory（持久化缓存目标 ID，Screeps 必需），
- * 但禁止执行游戏 API 副作用（harvest/transfer/build 等）。
- */
+/** Action-Candidate 架构核心类型：角色行为拆解为有序 ActionCandidate 列表， */
 import type { Budget, RoomSnapshot, TickContext } from "../../kernel/contracts";
 
 /** 传递给每个 ActionCandidate 的只读决策上下文。 */

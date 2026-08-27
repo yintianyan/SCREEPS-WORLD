@@ -1,13 +1,4 @@
-/**
- * A4.0 Phase 2 — Supply Contract 单元测试。
- *
- * 覆盖：
- * - supply-contract.ts：Contract Model、ID 生成、创建、有效速率、周期量、交付记录、序列化
- * - contract-lifecycle.ts：状态机转换、故障检测、归档清理
- * - transport-cost.ts：距离/Body/能量/时间成本、总成本
- * - route-efficiency.ts：效率比率、等级判定、建议动作、最优 Producer 选择
- * - contract-node-bridge.ts：Contract→SupplyNode/DemandNode 转换、节点合并
- */
+/**  */
 import { describe, it, expect } from "vitest";
 import {
   createSupplyContract,

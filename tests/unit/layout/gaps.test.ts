@@ -1,17 +1,4 @@
-/**
- * 目标清单布局闭环 — 单一真相源派生 + 缺口审计器测试（2026-08-01）。
- *
- * 病灶背景（W7N3 实证）：
- *   旧手写 RCL_BATCHES 缺 observer/powerSpawn → 线上三房全缺；
- *   placeStructures 的 shortfall 只打 console 日志 → 放不下时静默空转。
- *
- * 覆盖：
- *   1. expectedStructureCounts 与 CONTROLLER_STRUCTURES 全量等价
- *      （observer/powerSpawn 不再是手写表遗漏）
- *   2. buildRclBatches 增量派生与累计期望一致、旧表类型数量不回退
- *   3. auditStructureGaps：已建 / site / queued / blocked 同口径抵扣，
- *      done/site 状态任务不双计，缺口字典只收 >0 类型
- */
+/** 目标清单布局闭环 — 单一真相源派生 + 缺口审计器测试（2026-08-01）。 */
 import { describe, expect, it } from "vitest";
 import {
   auditStructureGaps,

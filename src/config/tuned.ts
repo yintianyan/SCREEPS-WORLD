@@ -1,10 +1,4 @@
-/**
- * Tuned Config — 运行时参数覆盖层：不改静态 CONFIG，在其上叠加 tuning-engine
- * 产生的运行时覆盖值。消费者经 getRoleBounds() 查询：先查
- * Memory.kernel.tuning 覆盖值，回退到 CONFIG 默认。
- * 安全保证：覆盖值永远在 TUNING_BOUNDS 的 floor/ceiling 范围内；无 Memory /
- * global reset 后自动回退 CONFIG 默认；消费者无需感知调优系统的存在。
- */
+/** Tuned Config — 运行时参数覆盖层：不改静态 CONFIG，在其上叠加 tuning-engine */
 
 import { CONFIG } from "./index";
 import { clampParam } from "../domain/tuning/bounds";

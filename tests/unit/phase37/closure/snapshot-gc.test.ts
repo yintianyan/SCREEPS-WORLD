@@ -1,15 +1,4 @@
-/**
- * Phase 37 Final Closure — Snapshot GC 反事实测试
- *
- * 验证 evictStaleSnapshots 的正确性：
- *   A1: 活跃 snapshot 不得被删除
- *   A2: 已失效 snapshot 可以删除
- *   A3: GC 重复执行幂等
- *   A4: GC 不改变 ringBuffer
- *   A5: GC 不改变 DecisionRecord hash
- *   A6: GC 不改变 deterministic replay
- *   A7: 长期模拟后 registry 有界
- */
+/** Phase 37 Final Closure — Snapshot GC 反事实测试 */
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   type DecisionRecord,

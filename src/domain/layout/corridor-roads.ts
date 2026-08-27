@@ -149,11 +149,11 @@ export function defaultPathFn(
  * extension/container 建造停滞。去重跳过已有 road/site/结构/source/
  * controller 与本批已收录格，受 maxRoadsPerCycle 分段返回；调用方
  * layout-planner 再按 key 与 buildQueue 去重入队。
- *
+
  * 路径缓存（漏洞 #5/#8 修复）：结果存 globalCache.corridorPathCache
  * （heap 不升 schema），pairKey/rcl/anchor 任一变化失效；路径格被新建
  * 结构占用只做 occupied 过滤、不触发失效（局部重算无意义，整体重算更优）。
- *
+
  * @param anchor 锚点位置（缓存失效条件之一；不传则不缓存，保证单测确定性）
  * @param pathFn PathFinder 注入（单测用）；protectedPositions 蓝图未来格
  * @param cacheStore 【D-2 修复】路径缓存接口（由 system 层注入，domain 不再直读 globalCache）
@@ -221,7 +221,7 @@ export function planCorridorRoads(
  * 查询走廊路缓存：命中且 signature（pairKey + rcl + anchor，漏洞 #5 完整失效条件）
  * 匹配则返回缓存路径，否则计算并写入。任一变化即失效：端点 container/storage
  * 消失或新建、RCL 解锁新结构、spawn 重建换位。
- *
+
  * 【D-2 修复】缓存读写通过 cacheStore 接口注入，domain 层不再直读 globalCache。
  */
 function getCachedOrComputePath(

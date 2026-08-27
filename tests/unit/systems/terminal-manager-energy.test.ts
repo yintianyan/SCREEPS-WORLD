@@ -1,18 +1,4 @@
-/**
- * Terminal Manager 能量网络系统测试（R5 经济主线）。
- *
- * 覆盖：
- *   帝国能量互济：
- *   - 双房（盈余房 → 危机房）→ terminal.send 一次，量三重约束封顶
- *   - 捐赠方 terminal 能量不足（货量+运费+储备地板）→ 不发送
- *   - 单房 / 捐赠方冷却中 → 不发送
- *   - 成交记录 EnergyTransfer 事件（黑匣子）
- *   能量市场交易：
- *   - storage 溢出卖能量（deal 成交，价格底线生效）
- *   - 未达卖线 → 不卖
- *   - 危机买能量（credits/价格上限/缺口三重约束）
- *   - 价格超上限 / credits 低于地板 → 不买
- */
+/** Terminal Manager 能量网络系统测试（R5 经济主线）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/terminal-manager";
 import { mockBudget, mockSnapshot, mockStore, resetGlobals } from "../../role-helpers";

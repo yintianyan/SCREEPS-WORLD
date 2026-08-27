@@ -1,15 +1,4 @@
-/**
- * Source Reservation — A3.0 跨房资源预留机制
- *（LOGISTICS §2.1 #3 防超卖）。
- *
- * 预留带 TTL 和心跳：
- *   - 创建时设 TTL（默认 500 tick）
- *   - 每次 Operation tick 心跳续期
- *   - TTL 到期自动释放（防泄漏）
- *   - Operation 完成时显式释放
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Source Reservation */
 
 import type { ResourceType } from "./agenda-item";
 
@@ -44,7 +33,7 @@ export type ReservationTable = Map<string, Reservation>;
 
 /**
  * 创建预留（幂等：同 operationId 覆盖旧值）。
- *
+
  * 纯函数 — 返回新表，不修改原表。
  */
 export function createReservation(

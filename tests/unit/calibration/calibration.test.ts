@@ -1,22 +1,4 @@
-/**
- * A6.4 Calibration Domain — 反事实场景 + 确定性回放 + 集成测试。
- *
- * 合同锚点：A6_4_RESOLUTION_DESIGN.md §五 (C1-C12)
- *
- * 测试覆盖：
- *   C1  — 预测 shortage，实际 shortage 在窗口内发生 → CORRECT
- *   C2  — 预测 shortage，实际 shortage 没有发生 → FALSE_POSITIVE
- *   C3  — 当前状态与预测冲突 → INCORRECT
- *   C4  — 预测在 Horizon 内发生 → CORRECT
- *   C5  — 预测在 Horizon 外发生 → INCORRECT
- *   C6  — Regime 变化（posture 变化） → REGIME_CHANGED
- *   C7  — 外部能量注入导致 shortage 没发生 → EXTERNAL_INTERFERENCE
- *   C8  — 数据不足 → INSUFFICIENT_OBSERVATION
- *   C9  — Observation gap 过大 → INSUFFICIENT_OBSERVATION
- *   C10 — confidence=0.8 但实际只有 40% 成功 → OVERCONFIDENT
- *   C11 — confidence=0.2 但实际成功 → UNDERCONFIDENT
- *   C12 — 完全相同输入 → 完全相同 ResolutionResult (100×replay)
- */
+/** A6.4 Calibration Domain — 反事实场景 + 确定性回放 + 集成测试。 */
 
 import { describe, it, expect } from "vitest";
 import type { Prediction, PredictionContext } from "../../../src/domain/intelligence/prediction";

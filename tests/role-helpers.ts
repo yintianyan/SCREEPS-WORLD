@@ -1,12 +1,4 @@
-/**
- * Role 级场景测试共享 mock 工厂。
- *
- * 设计原则：
- *   - 每个工厂函数返回最小可用 mock，测试按需覆盖字段。
- *   - Game/Memory/globalThis 在每个测试前通过 resetGlobals() 重置。
- *   - Creep mock 的 action 方法（harvest/transfer/...）默认返回 OK，
- *     测试可通过 vi.fn() 替换以模拟 ERR_NOT_IN_RANGE 等。
- */
+/** Role 级场景测试共享 mock 工厂。 */
 import { vi } from "vitest";
 import type { Budget, CpuTier, RoomSnapshot, TickContext } from "../src/kernel/contracts";
 

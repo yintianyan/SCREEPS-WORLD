@@ -1,13 +1,4 @@
-/**
- * Execution Gate — A3.3 Phase 1：执行门控（TOCTOU 防护）。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §2 G1–G5 门控 + A3.3 执行前验证。
- *
- * 定位：ExpansionPlan 处于 WAITING_EXECUTION 状态后，在真正执行前
- * 必须重新验证 11 项条件——Plan 创建时的数据可能已过期。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Execution Gate */
 
 import type { ExpansionPlan } from "./plan";
 import type { TieredExpansionBudget } from "./budget";
@@ -76,7 +67,7 @@ export interface ExecutionGateResult {
 
 /**
  * 执行 11 项 TOCTOU 验证（纯函数）。
- *
+
  * 任何 Gate Failure → 阻止执行，Plan 保持 WAITING_EXECUTION
  * 或降级为 CANCELLED / REPLAN。
  */

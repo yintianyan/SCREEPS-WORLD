@@ -1,14 +1,4 @@
-/**
- * Transport Capacity Reservation — A4.3 Phase 5：运力预留 + TTL。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #16（无 Transport Reservation）、§10 #15 #16。
- *
- * 与 operation/reservation.ts 的区别：
- *   - operation/reservation.ts 预留 source 资源量
- *   - logistics/reservation.ts 预留 hauler carry capacity
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Transport Capacity Reservation */
 
 // ─── 预留模型 ──────────────────────────────────────────────
 

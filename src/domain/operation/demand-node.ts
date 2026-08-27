@@ -1,22 +1,4 @@
-/**
- * Demand Node — A3.1 Empire Resource Network 需求节点。
- *
- * 需求节点是房间级资源缺口的网络投影——只在房间需要援助时创建。
- * 与 RoomRegistryEntry 的区别：
- *   - Registry 是全量房间注册表
- *   - Demand Node 是网络参与者的投影（只含 deficit 房间）
- *
- * 节点字段遵循 A3.1 Architecture Review §6 的要求：
- *   Room + Resource + Requested + Priority + Deadline + Criticality
- *   + Fulfilled + Remaining
- *
- * 关键能力：
- *   - Partial Fulfillment：追踪 fulfilledAmount / remainingAmount
- *   - Multi-Source Fulfillment：多个 Supply Node 可共同满足同一 Demand Node
- *   - Starvation Detection：记录 firstSeenTick，支持 aging 机制
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Demand Node */
 
 import type { RoomRegistryEntry } from "../strategy/room-registry";
 import type { OperationPriority, ResourceType } from "./agenda-item";
@@ -58,16 +40,16 @@ export interface DemandNode {
 
 /**
  * 从 RoomRegistryEntry 派生 Demand Node。
- *
+
  * 只在 needsAid=true 时创建。
  * 返回 undefined 表示该房间不产生需求节点。
- *
+
  * @param entry 房间注册项
  * @param inTransitAmount 已在途量（来自活跃 Operation 的 requestedAmount - deliveredAmount）
  * @param tick 当前 tick
  * @param deadline 截止 tick（默认 tick + 2000）
  * @param firstSeen 首次发现 tick（用于 aging，默认 = tick）
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function buildDemandNode(
@@ -104,7 +86,7 @@ export function buildDemandNode(
  * 批量构建 Demand Nodes。
  * 从 RoomRegistry + 在途量派生所有活跃需求节点。
  * 返回按 criticality 升序（critical 优先）排列的列表。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function buildDemandNodes(

@@ -1,12 +1,4 @@
-/**
- * RemoteHarvester 角色测试 — v33-R11 站桩锚定与占位自报。
- *
- * 事故背景（线上实证 W36S58）：远矿房无 RoomSnapshot，站桩占位不预载，
- * 寻路矩阵看不见静止 creep — reserver 占住矿位后，采集者的缓存路径反复
- * 指向该格、意图逐 tick 被解算器拒绝 → 锁死空转。修复：在矿位采集时
- * 登记 anchorMiner 锚 + registerStaticBlocker 占位自报（与本地 harvester
- * 的 anchorMiner 同口径）。
- */
+/** RemoteHarvester 角色测试 — v33-R11 站桩锚定与占位自报。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteHarvesterRole } from "../../../src/creeps/roles/remote-harvester";
 import { getIntentLedger } from "../../../src/creeps/movement/intent";

@@ -1,12 +1,4 @@
-/**
- * E2E 测试全局 setup。
- *
- * 职责：
- *   - 确保 dist/main.js 存在
- *   - 设置环境变量（macOS SDK 路径）
- *   - 检测并修复 isolated-vm / @screeps/driver 的 Node ABI 兼容性问题
- *   - 全局清理钩子
- */
+/** E2E 测试全局 setup。 */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve } from "node:path";

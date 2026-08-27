@@ -1,9 +1,4 @@
-/**
- * 寻路核心 — 结构缓存、路径持久化、走廊共享、跨房间缓存、moveToTarget。
- * 路径缓存三级优先级（moveToTarget 内部）：1. 跨 tick 持久化路径（per-creep，目标+结构不变则复用）
- * 2. 走廊共享路径（同 tick 多 creep 共享主干，末端分歧）3. 新算 PathFinder + 持久化 + 放入共享缓存。
- * 跨房间路径缓存（remote mining 前置）：出口到出口的路径存 globalCache，地形不变则永不失效。
- */
+/** 寻路核心 — 结构缓存、路径持久化、走廊共享、跨房间缓存、moveToTarget。 */
 
 import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";

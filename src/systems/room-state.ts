@@ -329,10 +329,10 @@ export const roomStateSystem: System = {
 
 /**
  * A5.1：从 RoomSnapshot 构建 ThreatAssessmentInput 并调用 assessThreat()。
- *
+
  * 系统层薄壳：将 Runtime Creep 对象转换为纯数据 HostileSnapshot，
  * 然后委托给 assessThreat() 纯函数。转换成本 O(threats × body.length)。
- *
+
  * 返回 undefined 表示输入不完整（无核心锚点等），调用方跳过写入。
  */
 function buildThreatAssessment(

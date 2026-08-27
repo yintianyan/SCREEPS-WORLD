@@ -1,17 +1,4 @@
-/**
- * Force Requirement — A5.3 Capability 需求推导纯函数。
- *
- * 从 Operation 推导需要的能力，而不是直接推导 Creep 数量。
- *
- * 例如：
- * - SIEGE: 需要 dismantle, heal, tank, mobility
- * - ASSAULT: 需要 attack, ranged, heal, effectiveHP
- * - ESCORT: 需要 defense, mobility, responseTime
- *
- * 禁止自动决定 spawn 多少 Creep。这里只产生 Demand。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** Force Requirement */
 
 import type { OperationType } from "./operation";
 import type { CombatPower } from "../combat/capability";

@@ -1,8 +1,4 @@
-/**
- * Boost 决策 — 纯函数（无 Game API 依赖）。
- * 取舍：boost 是锦上添花，库存/能量不足时放弃，绝不阻塞经济；
- * 高价值角色优先，策略经 BoostPolicy 参数可扩展（预留多房间）。
- */
+/** Boost 决策 — 纯函数（无 Game API 依赖）。 */
 import { BOOST_EFFECTS, BOOST_EFFECT_PART, type BoostPolicy, type BoostRequest, type Compound } from "./types";
 
 /** 默认 boost 策略：RCL6+ 启用，优先 upgrader。 */

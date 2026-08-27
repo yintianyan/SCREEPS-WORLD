@@ -1,29 +1,4 @@
-/**
- * Agenda Manager 系统 — A3.1 Empire Resource Network·系统侧薄壳
- *（SYSTEM_BOUNDARIES §1.13 Agenda 管理器）。
- *
- * 职责（低频 100 tick 执行）：
- *   1. 从 empire-economy 获取 RoomEconomicProfile 列表
- *   2. 构建 Supply/Demand Nodes + Resource Network Snapshot
- *   3. 调用 Allocation Policy v2（7 因子可解释分配）
- *   4. 管理 OperationContext 生命周期（Memory.kernel.agendas）
- *   5. 管理 ReservationTable（Memory.kernel.reservations）
- *   6. 提交 carrier spawn 请求到 source 房 spawn queue
- *   7. 验证：检测 carrier 在 target room + carrier 实际卸载量
- *   8. 事件驱动重规划（carrier 死亡 / 房间状态变更）
- *   9. 清理终态 Operation（归档后删除）
- *   10. Network Health + Rebalance State
- *
- * A3.1 修复：
- *   - TOCTOU：Operation 创建循环中递减 transferable（防 Double Allocation）
- *   - Baseline 污染：改用 carrier 实际卸载量验证（不用 storage delta）
- *   - Operation Storm：全局上限 + per-source/target 上限
- *
- * 状态所有权（STATE_OWNERSHIP §3.1）：
- *   唯一写者 = 本系统 → Memory.kernel.agendas / Memory.kernel.reservations。
- *
- * CPU 预算：低频执行（interval=100），不每 tick 重算。
- */
+/** Agenda Manager 系统 */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
 import { queryEconomy, type EconomyQuery } from "./economy";

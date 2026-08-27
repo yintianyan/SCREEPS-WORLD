@@ -1,15 +1,4 @@
-/**
- * Bottleneck Detection — A4.3 Phase 5：瓶颈检测 + 链分析。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #9（无 Logistics Bottleneck Detection）、
- * §10 #26 #27。
- *
- * 设计意图：
- *   区分 Production/Logistics/Storage/Consumption/Spawn 瓶颈。
- *   识别 Bottleneck Chain 中的真正限制环节。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Bottleneck Detection */
 
 // ─── 类型 ──────────────────────────────────────────────────
 
@@ -59,9 +48,9 @@ export interface BottleneckResult {
 
 /**
  * Bottleneck Detection + Chain 分析。
- *
+
  * 输入四个环节的速率和容量，识别真正限制环节。
- *
+
  * 纯函数。
  */
 export function detectBottleneck(

@@ -1,10 +1,4 @@
-/**
- * 结构缺口审计器 — 目标清单驱动的布局闭环核心。
- * 期望 = expectedStructureCounts(rcl)（单一真相源 CONTROLLER_STRUCTURES）；
- * 已有 = 已建结构 + 在建 site + 队列任务（queued/blocked 同口径）。缺口 > 0
- * 即真实需求：驱动 layout-planner 规划、写 Memory.kernel.layoutGaps（可观测，
- * 替代控制台告警）；放不下时缺口持续 → 慢速重试 + 人工介入信号。纯函数。
- */
+/** 结构缺口审计器 — 目标清单驱动的布局闭环核心。 */
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { classifyLinkRole } from "../economy/links";
 import { expectedStructureCounts } from "./constraint-placer";

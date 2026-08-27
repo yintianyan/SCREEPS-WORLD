@@ -1,15 +1,4 @@
-/**
- * Phase R2 验收加固 — 多房间建造公平性单元测试。
- *
- * 证明（任务书三.3）：
- *   - 单房间无法无限占用全局 normal site 槽位：每房配额（3 normal）把单房
- *     占用限制在其自身配额内，配额满后立即让出槽位；
- *   - 其他房间不会建设饥饿：让出后的下一个 tick 即获得 normal 槽位；
- *   - 全局 site cap 由 lane/门禁双路检查（unit 见 rcl2-development-lane.test.ts
- *     「global-site-cap」用例），每房 cap 由 tryCreateSite 配额检查强制。
- *
- * 直接驱动 constructionManagerSystem.run()（双房间快照，逐 tick 推进 Game.time）。
- */
+/** Phase R2 验收加固 — 多房间建造公平性单元测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { constructionManagerSystem } from "../../../src/systems/construction-manager";
 import { resetGlobals } from "../../role-helpers";

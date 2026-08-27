@@ -1,31 +1,4 @@
-/**
- * Autonomy Metrics — A4.5：自治指标 + Autonomy Score + No-Progress/Thrashing 检测。
- *
- * 合同锚点：A4.5 Task Spec §25 Autonomy Metrics + §26 No-Progress + §27 Thrashing。
- *
- * 设计意图：
- *   自治不是「没人碰它」——而是「系统面对扰动能自我恢复到稳态」。
- *   本模块量化自治能力：
- *
- *   1. Autonomy Score（0..100）——综合自治分数
- *      - 经济闭环率：能量生产→消费→补充的闭环是否在运转
- *      - 失败恢复率：检测到的失败中有多少被自动恢复
- *      - 人工干预次数：零干预 = 满分
- *      - 稳态维持时间：连续稳态的 tick 数
- *      - 扰动恢复速度：从扰动到恢复的平均 tick 数
- *
- *   2. No-Progress 检测——系统是否卡住（长期无进展）
- *      - 经济指标连续 N tick 无改善
- *      - 人口/产能/储备无增长
- *      - 失败数量不减少
- *
- *   3. Thrashing 检测——系统是否在振荡（反复失败/恢复）
- *      - 同一失败类型在短时间内反复出现
- *      - 健康度等级频繁跳动（healthy→degraded→healthy→degraded）
- *      - 姿态频繁切换（develop→fortify→develop→fortify）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Autonomy Metrics */
 
 // ─── Autonomy Score ───────────────────────────────────────
 
@@ -177,14 +150,14 @@ export interface ThrashingResult {
 
 /**
  * 计算 Autonomy Score（纯函数）。
- *
+
  * 五维加权：
  *   - 经济闭环率（25%）：闭环运转 + 闭环率高 = 高分
  *   - 失败恢复率（25%）：自动恢复 / 检测到的失败
  *   - 人工干预（20%）：零干预 = 满分，每次干预扣分
  *   - 稳态维持（15%）：连续稳态时间长 = 高分
  *   - 扰动恢复（15%）：恢复快 = 高分
- *
+
  * @param input 自治指标输入
  * @returns 自治分数结果
  */
@@ -271,13 +244,13 @@ export function computeAutonomyScore(input: AutonomyScoreInput): AutonomyScoreRe
 
 /**
  * 检测系统是否卡住（No-Progress）（纯函数）。
- *
+
  * 判定逻辑：
  *   - 净能量流连续 N tick 无正增长 → economic_stall
  *   - 总储备连续 N tick 无增长 → reserve_stall
  *   - 总人口连续 N tick 无增长 → population_stall
  *   - 活跃失败数连续 N tick 不减少 → failure_persistent
- *
+
  * @param input No-Progress 检测输入
  * @returns No-Progress 检测结果
  */
@@ -356,12 +329,12 @@ export function detectNoProgress(input: NoProgressInput): NoProgressResult {
 
 /**
  * 检测系统是否在振荡（Thrashing）（纯函数）。
- *
+
  * 判定逻辑：
  *   - 健康度等级在窗口内跳动 ≥ 4 次 → health_oscillation
  *   - 姿态在窗口内切换 ≥ 3 次 → posture_oscillation
  *   - 同一失败领域在窗口内出现/恢复 ≥ 3 次 → failure_cycle
- *
+
  * @param input Thrashing 检测输入
  * @returns Thrashing 检测结果
  */
@@ -472,9 +445,9 @@ export interface AutonomyStatus {
 
 /**
  * 综合判定帝国是否处于自治状态（纯函数）。
- *
+
  * 自治 = Autonomy Score ≥ 50 + 无 No-Progress + 无 Thrashing
- *
+
  * @param score Autonomy Score 结果
  * @param noProgress No-Progress 检测结果
  * @param thrashing Thrashing 检测结果

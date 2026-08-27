@@ -1,25 +1,4 @@
-/**
- * Terminal Manager — P3 系统，terminal 业务的唯一属主：
- * 市场贸易（Game.market.deal）+ 帝国能量/矿物互济（terminal.send）+ 能量市场交易（R5）。
- *
- * 战略定位：单房间只产一种矿物，lab 反应链需多矿种原料 — 互济接入前市场是唯一原料来源，
- * 而买入需要 credits，credits 唯一收入是卖出盈余矿物，故必须双向交易才能闭环：
- * extractor → terminal → 卖盈余换 credits → 买缺口矿物 → supplyLabs（terminal 回退）。
- *
- * 每轮执行顺序（= 优先级）：0. 跨房能量互济（planEnergyAid 纯函数，地板迟滞防震荡，
- * 殖民生存优先于交易收入）→ 0.5 跨房矿物互济（planMineralAid，姐妹房 homeMineral
- * 盈余先于市场买入 — 省 credits）→ 1. 能量溢出卖（storage > energySellFloor，RCL8 后
- * 能量是最大出口，价格底线 minEnergySellPrice）→ 2. 矿物卖 → 2.5 battery 卖（满仓溢能
- * 的压缩资产变现）→ 3. 危机能量买（storage < energyBuyFloor，价格上限
- * maxEnergyBuyPrice，高于此价宁可压缩运营）→ 4. 缺口矿物买 → 5. power 买（高信用
- * 门禁 powerBuyCreditFloor — GPL 长期投资，不许挤占生存采购预算）。
- *
- * 节流：interval 200 + bucket 门禁（getAllOrders 是重调用 [Facts]）；每房每轮最多 1 单
- * （terminal 有 deal 冷却），全局引擎上限 10 单/tick [Facts]；私服无市场 API 时跳过
- * （互济不受此限 — terminal.send 不依赖市场订单，仅依赖 calcTransactionCost 可用）。
- * 能量运费：deal/send 无论买卖都从本方 terminal 扣能量（calcTransactionCost），由
- * distributor 的 stockTerminalEnergy 维持储备。
- */
+/** Terminal Manager */
 import { CONFIG } from "../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
@@ -560,13 +539,13 @@ function trySellHomeMineral(snapshot: RoomSnapshot, terminal: StructureTerminal)
 
 /**
  * 买入缺口资源 — 阶段 1 改造：优先消费 procurementDemands 需求表。
- *
+
  * 新流程：
  * 1. 读取 globalCache.procurementDemands（lab-system / factory-manager 发布）；
  * 2. 按 priority 降序排序，逐个尝试买入；
  * 3. 基础矿物用 CONFIG.market.maxBuyPrice 价格门禁；
  * 4. 中间产物/化合物用 maxBuyPrice × 2 价格门禁（加工溢价）。
- *
+
  * 向后兼容：无需求表时回退到旧的 getMineralDeficits（硬编码 MINERAL_RESERVE_TARGET）。
  * 每次运行只处理一种（控制 getAllOrders 开销）。
  */
@@ -645,10 +624,10 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
 
 /**
  * 卖出盈余 boost 化合物 — 阶段 4 改造。
- *
+
  * lab-system 在 boost 库存超过 boostStockpile 后将盈余写入 globalCache.surplusCompounds，
  * 本函数读取该信号并在 deal 窗口内尝试卖出。
- *
+
  * 价格门禁：基于行情快照动态定价（市场最高买价 × sellDiscount）。
  * 成交量受盈余量、terminal 现货、订单余量与单笔上限四重约束。
  */
@@ -837,7 +816,7 @@ const PRICED_RESOURCES = [
  * 采集当前市场行情并写入 globalCache.marketPrices。
  * 每 interval tick 调用一次 — getAllOrders 已在 deal 候选逻辑中各自调用，
  * 此函数集中采集一轮行情供所有买/卖决策复用（避免每个函数独立 getAllOrders）。
- *
+
  * 采集策略：对每种资源分别查 sell/buy 订单，取最低卖价与最高买价。
  * 成本：PRICED_RESOURCES.length × 2 次 getAllOrders（过滤后通常 < 20 条/资源）。
  * 与旧实现（每函数独立 getAllOrders）总开销持平，但结果复用。
@@ -921,16 +900,16 @@ function collectPlanTerminalRooms(plan: TransportPlan | undefined): Set<string> 
 
 /**
  * Plan 驱动的 terminal.send 执行器。
- *
+
  * 当 logistics-planner 产出 Transport Plan 中有涉及本房 terminal 的请求时，
  * terminal-manager 作为 Network 计划执行器，按 Plan 指定的资源/量/目标执行 terminal.send。
- *
+
  * 执行规则：
  *   1. 筛选 Plan 中 source.room = 本房 且 source.type = "terminal" 的请求
  *   2. 对每个请求，检查 terminal 内现货 ≥ 请求量 + 能量运费 + 储备地板
  *   3. 满足条件则执行 terminal.send
  *   4. 每个 terminal 每轮只执行 1 笔（terminal 冷却限制）
- *
+
  * 返回 true 表示已执行 send（占用 terminal 冷却）。
  */
 function tryPlanDrivenSend(

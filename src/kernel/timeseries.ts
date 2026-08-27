@@ -1,11 +1,4 @@
-/**
- * Time Series — CPU 和经济指标的时序数据采集。
- * per-tick heap 遥测 → 采样（每 N tick）→ ring buffer → segment flush，供事后趋势分析。
- * 采样频率：CPU 每 10 tick（300 条 = 3000 tick 窗口）；经济每 50 tick（200 条 =
- * 10000 tick 窗口）；人口普查每 100 tick（仅保留最新快照）。
- * 成本：采样 ~0 CPU（浅拷贝数字），flush ~0.1 CPU（JSON.stringify）。
- * 受 P3 budget 门禁：conserve/recovery tier 下跳过采集。
- */
+/** Time Series — CPU 和经济指标的时序数据采集。 */
 
 import type { RingBuffer } from "./ring-buffer";
 import type { Budget } from "./contracts";

@@ -1,11 +1,4 @@
-/**
- * A5.4.0 Tactical Combat — Domain Tests.
- *
- * TAC-001 ~ TAC-014: 场景测试。
- * Architecture Guard: Domain Purity / Boundary / Authorization。
- *
- * 纯函数测试 — 不需要 Game / Memory / 任何 Runtime。
- */
+/** A5.4.0 Tactical Combat — Domain Tests. */
 
 import { describe, expect, it } from "vitest";
 import {

@@ -1,12 +1,4 @@
-/**
- * RM-1 回归 — remote-harvester 自建 source container（终结 drop-mining 衰减税）。
- *
- * P0-A 收编后：角色层不再调 createConstructionSite，改写 needContainer 申请标记，
- * 由 remote-mining-manager 每 managerInterval tick 消费。
- *
- * 线上实测（W37S57）：无 container 的 active 远矿房地面堆积 3300+ 能量，
- * 衰减 ~40% 产出 — 决策阈值 5%，补建造链。
- */
+/** RM-1 回归 — remote-harvester 自建 source container（终结 drop-mining 衰减税）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteHarvesterRole } from "../../../src/creeps/roles/remote-harvester";
 import { mockContext, mockSnapshot, mockCreep, mockSource, resetGlobals } from "../../role-helpers";

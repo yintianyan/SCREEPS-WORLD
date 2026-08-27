@@ -1,24 +1,4 @@
-/**
- * v19 → v20 迁移独立测试（改进 A：tuning 闭环验证字段建档）。
- *
- * 迁移语义：新增 pendingValidation + frozenParams 两个可选字段，
- * 由 tuning-engine 惰性写入。迁移只做「建档 + 畸形自愈」，不写字段值。
- *
- * 自愈规则：
- *   - pendingValidation 非对象 → 删除整个字段
- *   - pendingValidation 条目缺关键字段或枚举非法 → 删除该条目
- *   - frozenParams 非对象 → 删除整个字段
- *   - frozenParams 条目缺关键字段 → 删除该条目
- *   - 空对象回收（删除空 pendingValidation/frozenParams）
- *
- * 覆盖：
- *   - 空 Memory（tuning 不存在）
- *   - 合法 pendingValidation/frozenParams 保留
- *   - 脏 pendingValidation（非对象/缺字段/非法枚举值）→ 清除
- *   - 脏 frozenParams（非对象/缺字段）→ 清除
- *   - 幂等：重复执行不产生副作用
- *   - 已是 v20 的新 Memory → 跳过迁移
- */
+/** v19 → v20 迁移独立测试（改进 A：tuning 闭环验证字段建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

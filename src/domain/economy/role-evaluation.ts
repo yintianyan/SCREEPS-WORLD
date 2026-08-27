@@ -1,26 +1,4 @@
-/**
- * Role Evaluation — A4.0 Phase 1：从 Room Characteristics 推导 EmpireRoomRole 评分。
- *
- * 合同锚点：A4.0 Architecture Audit §9（当前 Planner 不支持 Specialization）。
- *
- * 设计意图：
- *   对每个房间，基于其经济剖面 + 产能剖面 + 地理位置特征 + 远矿运营状态，
- *   计算四个角色（CORE / PRODUCTION / SUPPORT / REMOTE）的适配分数（0..1）。
- *   分数最高的角色即为推荐角色（recommended role）。
- *
- *   评分不是硬编码映射——而是多维度加权评分：
- *   - 每个角色有不同维度的权重（如 CORE 重储备稳定性，PRODUCTION 重产能效率）
- *   - 每个维度有评分函数（0..1），再按权重加权汇总
- *   - 前置条件不满足时该角色分数直接为 0（hard gate）
- *
- *   评分结果可解释——每个维度分数和证据都暴露给调用方，
- *   供 Dashboard 展示和调试。
- *
- * 纯函数律（DEP_GRAPH §3-5，SYSTEM_BOUNDARIES §2.3-3）：
- *   - 不引用 Game / Memory / RawMemory（lint 红线）
- *   - 全部输入由参数注入
- *   - 不写任何状态——只读计算
- */
+/** Role Evaluation */
 
 import type { EmpireRoomRole } from "./empire-role";
 import type { RoomEconomicProfile } from "./room-profile";
@@ -30,7 +8,7 @@ import type { RoomCapacityProfile } from "./capacity-profile";
 
 /**
  * Role Evaluation Input — 角色评估所需的房间特征输入。
- *
+
  * 从 RoomEconomicProfile + RoomCapacityProfile + 地理/远矿数据组装。
  * 调用方（系统侧薄壳）负责采集各字段并注入。
  */
@@ -148,7 +126,7 @@ export interface RoleEvaluationResult {
 
 /**
  * 各角色的维度权重（总和 = 1.0）。
- *
+
  * 设计理念：
  * - CORE 重储备 + 稳定性（高 RCL + 高 storageRatio + 高 riskBuffer + 正 netFlow）
  * - PRODUCTION 重产能（高 efficiency + 高 estimatedIncome + 高 sourceCount）
@@ -190,7 +168,7 @@ const ROLE_WEIGHTS: Record<EmpireRoomRole, Record<string, number>> = {
 
 /**
  * 判定角色的前置条件是否满足。
- *
+
  * 硬门控——不满足时该角色分数直接为 0。
  * 纯函数。
  */
@@ -496,12 +474,12 @@ function scoreRemoteRole(input: RoleEvaluationInput): RoleScore {
 
 /**
  * 评估房间的 Empire Room Role。
- *
+
  * 对四个角色分别计算评分，推荐分数最高且通过前置条件的角色。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  * 频率：每 100 tick（与 empire-economy 同频）。
- *
+
  * @param input 房间特征输入
  * @param currentRole 当前角色（用于检测变更，可选）
  */

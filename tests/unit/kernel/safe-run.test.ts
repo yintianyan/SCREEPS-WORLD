@@ -1,12 +1,4 @@
-/**
- * safe-run 错误边界测试 — K-2 冷却三修的回归保护。
- *
- * 覆盖：
- *   a) 冷却期间跳过必须记 skipReason（plan §3.2「不能静默丢失」）
- *   b) 错误计数跨冷却轮次累积 — 冷却时长 80→90→…→200 真递增（plan §3.3）
- *   c) 进入冷却时写 PluginCooldown 事件（观测链闭合）
- *   d) critical 永不冷却；成功一次重置计数（既有语义不回归）
- */
+/** safe-run 错误边界测试 — K-2 冷却三修的回归保护。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { safeRun } from "../../../src/kernel/safe-run";
 import { EventKind } from "../../../src/kernel/event-log";

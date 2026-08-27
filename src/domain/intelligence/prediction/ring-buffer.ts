@@ -1,24 +1,4 @@
-/**
- * A6.3.1 PredictionRingBuffer — 预测结果环形缓冲。
- *
- * 职责：
- *   - 存储 Prediction 对象（固定长度环形覆盖）
- *   - 提供按 target / status 查询的接口
- *   - GC 清理过期预测
- *   - 追踪预测应验/失效（resolve）
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * 所有运行时数据由调用方注入。
- *
- * Deterministic Replay：
- *   同一 Prediction 输入 → 相同的 Ring Buffer 状态。
- *   禁止 Math.random() / Date.now() / 无序迭代 / 浮点误差。
- *
- * Shadow-Only（PRED-001）：
- *   Ring Buffer 只做存储和查询，不执行 Game API。
- *
- * PRED-008：只负责记录 lifecycle，不执行 recommendation。
- */
+/** A6.3.1 PredictionRingBuffer — 预测结果环形缓冲。 */
 
 import type { Prediction, PredictionStatus, PredictionTarget } from "./types";
 import { isPredictionExpired } from "./types";
@@ -29,7 +9,7 @@ import { isPredictionExpired } from "./types";
 
 /**
  * PredictionRingBuffer — 固定长度环形缓冲。
- *
+
  * 同构于 ExperienceRingBuffer / EvaluationRingBuffer。
  * 容量固定，超出时环形覆盖最旧数据。
  */
@@ -50,7 +30,7 @@ export interface PredictionRingBuffer {
 
 /**
  * 创建 PredictionRingBuffer。
- *
+
  * 纯函数 — 返回新对象。
  */
 export function createPredictionRingBuffer(capacity: number): PredictionRingBuffer {
@@ -66,7 +46,7 @@ export function createPredictionRingBuffer(capacity: number): PredictionRingBuff
 
 /**
  * 向 Ring Buffer 写入一条 Prediction（环形覆盖最旧数据）。
- *
+
  * 确定性：不使用 Math.random / Date.now。
  */
 export function pushPrediction(buf: PredictionRingBuffer, prediction: Prediction): void {
@@ -83,7 +63,7 @@ export function pushPrediction(buf: PredictionRingBuffer, prediction: Prediction
 
 /**
  * 获取最近的 N 条 Prediction（按 generatedAt 降序）。
- *
+
  * 确定性：遍历后排序，保证遍历顺序一致。
  */
 export function getRecentPredictions(
@@ -104,7 +84,7 @@ export function getRecentPredictions(
 
 /**
  * 按 target 查询活跃预测。
- *
+
  * 返回所有 status="active" 且 target 匹配的 Prediction。
  * 确定性：遍历后排序（按 generatedAt 降序）。
  */
@@ -126,7 +106,7 @@ export function activeByTarget(
 
 /**
  * 查询所有活跃预测。
- *
+
  * 确定性：遍历后排序（按 generatedAt 降序）。
  */
 export function allActivePredictions(buf: PredictionRingBuffer): Prediction[] {
@@ -144,7 +124,7 @@ export function allActivePredictions(buf: PredictionRingBuffer): Prediction[] {
 
 /**
  * 按 target 查询所有预测（不限 status）。
- *
+
  * 确定性：遍历后排序（按 generatedAt 降序）。
  */
 export function byTarget(
@@ -169,10 +149,10 @@ export function byTarget(
 
 /**
  * 标记预测的终态（fulfilled / expired / invalidated）。
- *
+
  * PRED-008：只负责记录 lifecycle，不执行 recommendation。
  * 返回是否成功更新（如果 Prediction 不存在或已终态则返回 false）。
- *
+
  * 确定性：基于 prediction.id 匹配。
  */
 export function resolvePrediction(
@@ -198,10 +178,10 @@ export function resolvePrediction(
 
 /**
  * 批量处理已到期的 active 预测。
- *
+
  * 将 window.endTick < currentTick 的 active 预测标记为 "expired"。
  * PRED-008：lifecycle 管理，不执行 recommendation。
- *
+
  * 返回过期数量。
  */
 export function expireOverduePredictions(
@@ -226,10 +206,10 @@ export function expireOverduePredictions(
 
 /**
  * 清理 Ring Buffer 中过老的记录。
- *
+
  * 删除超过 maxAge tick 的记录（设为 undefined）。
  * 不改变 cursor 位置，只释放空间。
- *
+
  * 确定性 GC：基于 prediction.generatedAt 判断。
  */
 export function gcPredictionBuffer(
@@ -256,7 +236,7 @@ export function gcPredictionBuffer(
 
 /**
  * 统计 Ring Buffer 中的 Prediction 分布。
- *
+
  * 用于可观测性：各目标数量、活跃率、应验率。
  * 确定性：遍历后排序。
  */

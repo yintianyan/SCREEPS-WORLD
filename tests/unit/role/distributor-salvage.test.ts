@@ -1,13 +1,4 @@
-/**
- * Distributor nuke 资产抢救搬运链测试（审计缺口 3 的 distributor 侧）。
- *
- * 覆盖：
- *   - 警报房空载 → withdraw storage 中存量最大的非能量资源（价值密度优先）
- *   - 警报房携能 → deposit 到 terminal（支撑 terminal-manager 逐轮 send）
- *   - storage 只有能量 → withdraw 能量兜底
- *   - 无警报 → 动作不激活（常态零行为，走正常分发链）
- *   - terminal 满 → 不激活（无处可放）
- */
+/** Distributor nuke 资产抢救搬运链测试（审计缺口 3 的 distributor 侧）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { distributorRole } from "../../../src/creeps/roles/distributor";
 import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../role-helpers";

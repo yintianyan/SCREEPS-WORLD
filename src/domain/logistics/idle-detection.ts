@@ -1,13 +1,4 @@
-/**
- * Idle Detection — A4.3 Phase 3：闲置检测。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #24。
- *
- * 设计意图：
- *   检测长期无任务的 hauler，供 Hauler Scaling 做缩编决策。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Idle Detection */
 
 // ─── 闲置 Hauler 摘要 ──────────────────────────────────────
 
@@ -29,11 +20,11 @@ export interface HaulerIdleSummary {
 
 /**
  * 检测闲置 hauler。
- *
+
  * 闲置定义：lastActionTick 距当前 tick 超过 idleThreshold。
- *
+
  * 纯函数。
- *
+
  * @param haulers hauler 摘要列表
  * @param currentTick 当前 tick
  * @param idleThreshold 闲置阈值（tick）

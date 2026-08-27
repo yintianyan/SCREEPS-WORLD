@@ -1,7 +1,4 @@
-/**
- * Action 共享辅助 — 跨领域复用的 execute 层工具函数。
- * 从 role-runner.ts 迁出，消除 actions → role-runner 的循环依赖。
- */
+/** Action 共享辅助 — 跨领域复用的 execute 层工具函数。 */
 import { moveToTarget } from "../../movement";
 import { bumpEnergyCounter } from "../../../kernel/global-cache";
 

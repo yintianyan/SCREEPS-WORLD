@@ -1,9 +1,4 @@
-/**
- * 帝国议程纯函数测试（R6a 主动自治）。
- *
- * 覆盖：优先级（recovery > defense-readiness > rcl-push > develop）、
- * 紧急目标立即生效、普通切换最短驻留滞回、rcl-push 门槛全集、边界。
- */
+/** 帝国议程纯函数测试（R6a 主动自治）。 */
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_AGENDA_OPTIONS,

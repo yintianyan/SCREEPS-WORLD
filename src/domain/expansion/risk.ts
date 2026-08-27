@@ -1,13 +1,4 @@
-/**
- * Expansion Risk Model — A3.2 Phase 1：五维风险评估。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §2 G4 可撤离门控 + §5 失败降级表。
- *
- * 定位：评估扩张到候选房的风险，输出五维风险分数和综合风险等级。
- * 五维：Economic / Operational / Distance / Recovery / Defense。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Expansion Risk Model */
 
 import type { ExpansionCandidateV2 } from "./candidate";
 import type { ExpansionCostEstimate } from "./cost-model";
@@ -74,7 +65,7 @@ export const DEFAULT_RISK_OPTIONS: RiskOptions = {
 
 /**
  * 评估扩张风险（纯函数）。
- *
+
  * 五维：
  * 1. Economic  — 成本占帝国储备比例（越高风险越大）
  * 2. Operational — 情报新鲜度 + 未知信息量（越旧越风险）

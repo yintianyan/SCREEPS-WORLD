@@ -1,22 +1,4 @@
-/**
- * A5.4.3 Tactical Engagement & Focus Fire — Domain 纯函数测试。
- *
- * 测试覆盖：
- *   COMBAT-001: 单目标 → 正确选择
- *   COMBAT-002: 多目标 → 最高 Tactical 价值
- *   COMBAT-003: Overkill → 分配攻击者而不是全部集中
- *   COMBAT-004: 目标死亡 → 重新分配
- *   COMBAT-005: 目标逃跑 → 重新评估
- *   COMBAT-006: 目标超出射程 → requiresMovement
- *   COMBAT-007: 敌方 Healer → 考虑 HealSupport
- *   COMBAT-008: Boost → CombatCapability 影响正确
- *   COMBAT-009: Melee 与 Ranged 攻击方式正确
- *   COMBAT-010: Formation 不能被 FocusFire 绕过
- *   COMBAT-011: Retreat 状态 → 禁止 AttackIntent
- *   COMBAT-012: WarPosture 非 WAR → 禁止进攻 Intent
- *   COMBAT-013: TargetScope 越界 → 拒绝目标
- *   COMBAT-014: 同 Snapshot → 1000 次 Hash 一致
- */
+/** A5.4.3 Tactical Engagement & Focus Fire — Domain 纯函数测试。 */
 
 import { describe, expect, it } from "vitest";
 import {

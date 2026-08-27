@@ -1,9 +1,4 @@
-/**
- * GameInspector — 世界状态查询工具。
- *
- * 提供结构化的状态查询 API，用于测试断言和失败报告。
- * 不修改世界状态，纯只读。
- */
+/** GameInspector — 世界状态查询工具。 */
 import type { TestWorld } from "./TestWorld";
 import type { TickRecord } from "./TickRunner";
 

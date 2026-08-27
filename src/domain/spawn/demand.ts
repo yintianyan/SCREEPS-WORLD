@@ -74,7 +74,7 @@ export interface RoomDemandContext {
 
 /**
  * 评估产出的下一 tick 迟滞状态（P1-J）。
- *
+
  * 由适配层写回 RoomMemory。与 prevHysteresis 同构 — demand 是状态机：
  * 输入上一状态 → 输出下一状态。原本由 demand 直读写 Memory，
  * 现收敛为显式输入输出，domain 恢复纯函数。

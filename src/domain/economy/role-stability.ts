@@ -1,25 +1,4 @@
-/**
- * Role Stability — A4.0 Phase 1：防 Role 振荡的迟滞机制。
- *
- * 合同锚点：A4.0 Architecture Audit §9（Role Stability / Hysteresis）。
- *
- * 设计意图：
- *   Role Evaluation 每 100 tick 重算一次，评分会因经济波动而抖动。
- *   如果每次都直接采用推荐角色，会导致 Role 频繁切换——
- *   Role 切换会触发 Supply Contract 重建、Spawn 优先级变化等连锁效应。
- *
- *   防振荡三防线（与 Colony Phase / Expansion Plan 同模式）：
- *   1. Hysteresis — 推荐角色分数必须超过当前角色分数一定裕度才允许切换
- *   2. Minimum Duration — 角色分配后至少保持 N 个评估周期（tick）不可切换
- *   3. Re-evaluation Threshold — 角色分数低于阈值时触发重评（即使未到周期）
- *
- *   这三道防线确保：
- *   - 短期经济波动不会导致 Role 抖动
- *   - 真实的经济结构变化（如 RCL 升级、远矿开点）能及时反映
- *   - Role 切换有最小驻留期，避免 churn
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Role Stability */
 
 import type { EmpireRoomRole } from "./empire-role";
 import type { RoleEvaluationResult } from "./role-evaluation";
@@ -71,7 +50,7 @@ export const DEFAULT_ROLE_STABILITY_CONFIG: RoleStabilityConfig = {
 
 /**
  * Role Stability State — 跨 tick 持久化的角色稳定性状态。
- *
+
  * 存入 Memory.kernel.roleStability[roomName]（瘦快照）。
  * 由系统侧薄壳负责持久化。
  */
@@ -110,18 +89,18 @@ export interface RoleStabilityDecision {
 
 /**
  * 判定是否应该切换角色（综合三防线）。
- *
+
  * 防振荡三防线：
  * 1. Hysteresis — 推荐角色分数 > 当前角色分数 + hysteresisMargin
  * 2. Min Duration — epochsSinceAssignment ≥ minDurationEpochs
  * 3. Re-evaluation Threshold — 当前角色分数 < reevaluationThreshold 时绕过 1+2
- *
+
  * 特殊情况：
  * - 所有角色分数 < noRoleThreshold → 保持当前角色（数据不足）
  * - 当前角色分数 = 0（前置条件不再满足）→ 立即切换到推荐角色
- *
+
  * 纯函数 — 不引用 Game/Memory。
- *
+
  * @param evaluation 角色评估结果
  * @param state 当前稳定性状态
  * @param config 稳定性配置

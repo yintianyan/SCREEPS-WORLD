@@ -1,17 +1,4 @@
-/**
- * Resource Network Snapshot — A3.1 Empire Resource Network 全局供需快照。
- *
- * Network Snapshot 是某一时刻 Empire Resource Network 的完整投影：
- *   Supply Nodes + Demand Nodes + Reservations + Active Operations +
- *   Pending Requests + Allocation Plan + 供需汇总 + Timestamp
- *
- * 特性：
- *   - 可观察：完整反映网络状态
- *   - 可测试：纯函数构建，不依赖 Game/Memory
- *   - 不可无限增长：只存活跃节点，终态后移除
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Resource Network Snapshot */
 
 import type { SupplyNode, sumSupplyTransferable } from "./supply-node";
 import type { DemandNode, sumDemandRemaining } from "./demand-node";
@@ -51,12 +38,12 @@ export interface NetworkSnapshot {
 
 /**
  * 构建 Resource Network Snapshot。
- *
+
  * 从 Supply Nodes + Demand Nodes + Operations + Reservations + AllocationPlans
  * 组装全局快照。
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param tick 当前 tick
  * @param supplyNodes 供给节点列表
  * @param demandNodes 需求节点列表
@@ -100,7 +87,7 @@ export function buildNetworkSnapshot(
 /**
  * 判断 Network 状态是否需要 rebalance。
  * 当 supply/demand 变化超过阈值时返回 true。
- *
+
  * 纯函数。
  */
 export function needsRebalance(

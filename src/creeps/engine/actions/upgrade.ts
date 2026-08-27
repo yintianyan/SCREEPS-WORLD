@@ -1,10 +1,4 @@
-/**
- * Upgrade actions — 升级控制器。
- * 两个变体：upgradeController（无门禁）/ upgradeControllerGated（energyAvailable >= floor，防与孵化竞争）。
- * 移动按 range 3 求路（官方交互距离）而非 runAction 默认的 range 1：controller 常嵌地形墙中，
- * range1 落点可能只有 controller container 一格且被站桩静态阻挡标 255 → 求路无解，
- * upgrader 满载石化（线上实测事故，见 moveToTarget 的 moveRange 参数）。
- */
+/** Upgrade actions — 升级控制器。 */
 import { CONFIG } from "../../../config";
 import type { ActionCandidate } from "../action-types";
 import { moveToTarget, registerAnchor } from "../../movement";

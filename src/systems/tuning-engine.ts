@@ -1,11 +1,4 @@
-/**
- * Tuning Engine — P3 系统：基于遥测数据的参数自调优引擎（interval 500）。
- * 每 500 tick：读取时序数据（economy/CPU ring buffer）+ 活快照信号 → 聚合为
- * TuningSignals → 纯函数 evaluateTuning() 产出调整 → 写入 Memory.kernel.tuning
- * （持久化覆盖值）→ 记录事件日志。
- * 安全保证：数据不足（< 10 采样点）跳过；调整经 clampParam 钳制；每参数 1000 tick
- * 冷却防振荡；经济不稳定时完全锁定。P3 — conserve/recovery tier 下跳过。
- */
+/** Tuning Engine */
 
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";

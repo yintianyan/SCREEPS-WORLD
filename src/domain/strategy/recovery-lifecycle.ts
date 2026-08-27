@@ -1,21 +1,4 @@
-/**
- * Recovery Lifecycle — A4.6：Recovery Action 生命周期 + Idempotency + Verification + Retry + Escalation。
- *
- * 合同锚点：A4.6 Task Spec §7-15 Recovery Action Lifecycle / Idempotency /
- * Verification / Retry Policy / Recovery Escalation / Root Cause Re-evaluation。
- *
- * 设计意图：
- *   A4.5 产出了 RecoveryAction（建议），但没有：
- *   1. 生命周期（PROPOSED → SUBMITTED → VERIFYING → SUCCEEDED/FAILED）
- *   2. 幂等性（同一 Action 不重复提交）
- *   3. 验证（提交成功 ≠ 恢复成功——必须验证 World State）
- *   4. 重试策略（不能无限 retry——有 maxAttempts + 分类）
- *   5. 升级（失败后重新 Diagnosis 而非重复同一 Action）
- *
- *   本模块提供纯函数工具，由 recovery-execution-system.ts 调用。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Recovery Lifecycle */
 
 import type { RecoveryAction, RecoveryActionType } from "./recovery-priority";
 import type { FailureNode, FailureDomain } from "./failure-propagation";
@@ -76,10 +59,10 @@ export type RecoveryActionTable = Map<string, RecoveryActionRecord>;
 
 /**
  * 生成稳定的 Idempotency Key。
- *
+
  * 不使用随机 ID——基于 domain + room + actionType + targetId 确定性生成。
  * 同一个失败在同一房间产生的同类型 Action 会得到相同的 key。
- *
+
  * @param action RecoveryAction
  * @returns 稳定 key
  */
@@ -92,7 +75,7 @@ export function recoveryIdempotencyKey(action: RecoveryAction): string {
 
 /**
  * 检查 Action 是否已经在追踪表中（活跃状态）。
- *
+
  * 活跃状态 = proposed/validated/submitted/executing/verifying。
  * succeeded/failed/terminal/blocked 的旧记录可以清理后重新创建。
  */
@@ -107,7 +90,7 @@ export function isActionActive(record: RecoveryActionRecord | undefined): boolea
 
 /**
  * 检查 RecoveryAction 是否应该被提交（Idempotency 检查）。
- *
+
  * 规则：
  *   1. 追踪表中没有此 key → 可以提交
  *   2. 追踪表中有但状态为 succeeded/failed/terminal → 可以重新创建（新周期）
@@ -325,13 +308,13 @@ export interface RecoveryWorldSnapshot {
 
 /**
  * 评估 Recovery 结果（纯函数）。
- *
+
  * 判定逻辑：
  *   - domainLevel 从 critical/degraded 改善 → success 或 partial
  *   - domainLevel 未变但有其他指标改善 → partial
  *   - domainLevel 未变且无任何改善 → no_progress 或 failed
  *   - 提交后经过足够时间（> estimatedRecoveryTime）仍无改善 → failed
- *
+
  * @param input 验证输入
  * @returns 验证结果
  */
@@ -511,7 +494,7 @@ export interface RecoveryBudgetResult {
 
 /**
  * 评估 Recovery Budget（纯函数）。
- *
+
  * 规则：
  *   - CPU bucket < 1000 → 不允许任何 Recovery（保命优先）
  *   - 帝国能量储备 < 500 → 只允许 spawn_recovery（生存级）
@@ -586,7 +569,7 @@ export interface RecoveryUnviabilityResult {
 
 /**
  * 评估 Recovery 是否不可行（纯函数）。
- *
+
  * 规则：
  *   - 累计尝试 > 10 → unviable
  *   - 累计投入 > 5000 能量且无改善 → unviable
@@ -640,7 +623,7 @@ export interface EscalationResult {
 
 /**
  * 评估是否需要 Recovery Escalation（纯函数）。
- *
+
  * 规则：
  *   - 同一 Action 失败 ≥ 2 次 → 重新 Diagnosis
  *   - Action 类型是 spawn_recovery 但失败原因是能量不足 → 应该先修 Energy
@@ -702,13 +685,13 @@ export function evaluateEscalation(input: EscalationInput): EscalationResult {
 
 /**
  * 清理过期的 Recovery Action 记录（防止 Map 无限增长）。
- *
+
  * 清理规则：
  *   - succeeded 记录保留 500 tick 后清理
  *   - failed/terminal 记录保留 1000 tick 后清理
  *   - blocked 记录保留 500 tick 后清理
  *   - 活跃记录不清理
- *
+
  * @param table Recovery Action 追踪表
  * @param currentTick 当前 tick
  * @returns 新的追踪表（不可变更新）

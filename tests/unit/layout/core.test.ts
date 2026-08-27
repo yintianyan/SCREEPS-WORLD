@@ -667,7 +667,7 @@ describe("Layout — createDefenseTasks RCL3 兜底（P0-3）", () => {
    * P0-3 修复：RCL3 是"刚有 Tower 但无 rampart"的最脆弱窗口期。
    * 修复前：DEFAULT_DEFENSE_OPTIONS.minRcl = 4，RCL3 完全不生成 rampart。
    * 修复后：minRcl = 3，RCL3 时扇区防御 fallback 生成包围核心的 rampart。
-   *
+
    * defense-planner.ts 侧的 min-cut 块也加了 RCL4 门禁，RCL3 走扇区防御主路径。
    */
   it("DEFAULT_DEFENSE_OPTIONS.minRcl 应为 3（P0-3 修复）", () => {

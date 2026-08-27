@@ -1,6 +1,4 @@
-/**
- * 期望自检回归测试 —— P3 饥饿自锁事故（stats 冻结 12.5k tick）的自我体感通道。
- */
+/** 期望自检回归测试 — */
 import { describe, expect, it } from "vitest";
 import {
   evaluateExpectations,

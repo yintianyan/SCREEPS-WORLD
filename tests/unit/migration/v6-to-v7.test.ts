@@ -1,16 +1,4 @@
-/**
- * v6 → v7 迁移独立测试（参数自调优 Memory 结构自愈）。
- *
- * 迁移链路 v6→v7→v8→v9→v10，最终 schemaVersion === 10。
- *
- * 覆盖：
- *   - v6 Memory 升级，kernel.tuning 结构正确初始化
- *   - 畸形 tuning 数据被自愈修正
- *   - tuning 为非对象类型时被清除
- *   - 旧格式 lastEval（单对象含 room 字段）迁移为 Record 格式
- *   - 幂等：重复执行不产生副作用
- *   - 无 kernel 字段时正常初始化
- */
+/** v6 → v7 迁移独立测试（参数自调优 Memory 结构自愈）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { maintainMemory, runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

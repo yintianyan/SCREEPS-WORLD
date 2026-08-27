@@ -1,19 +1,4 @@
-/**
- * War Planning — A5.3 planMilitaryOperation() 核心规划纯函数。
- *
- * 核心链路：
- *   ThreatAssessment + CombatCapability + TerrainContext + PlayerIntel
- *   + EmpireHealth + ResourceView + OperationContext
- *   → WarPlan
- *
- * A5.3 约束：
- * - WarPlan 只是 Plan
- * - 禁止直接修改 Game
- * - 禁止直接修改 Memory
- * - 禁止直接 Spawn
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** War Planning */
 
 import type { ThreatAssessment } from "../defense/threat-assessment";
 import type { TerrainContext } from "../defense/terrain-context";
@@ -180,10 +165,10 @@ export interface WarPlan {
 
 /**
  * 从威胁评估推导军事行动类型。
- *
+
  * ThreatIntent 回答「敌人想干什么？」
  * OperationType 回答「我们准备干什么？」
- *
+
  * 例如：
  * - REMOTE_MINING_ATTACK → DEFEND_REMOTE / ESCORT / PAUSE_REMOTE / RETREAT
  * - SIEGE → DEFEND / BREAK_SIEGE

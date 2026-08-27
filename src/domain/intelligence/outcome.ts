@@ -1,11 +1,4 @@
-/**
- * A6.1 Outcome Model — Domain 层纯函数与类型定义。
- *
- * 消费已有系统的产出（evaluateWarOutcome / empireHealth / recoveryStats），
- * 不建立第二套 Outcome 评估。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- */
+/** A6.1 Outcome Model — Domain 层纯函数与类型定义。 */
 
 // ═══════════════════════════════════════════════════════════
 // §1. Outcome Types (re-exported from experience.ts for convenience)
@@ -26,7 +19,7 @@ import type { ExperienceType } from "./experience";
 
 /**
  * Outcome 采集输入 — 从已有系统收集的运行时状态。
- *
+
  * 由 system 层薄壳采集并注入，domain 纯函数不直接读 Game/Memory。
  */
 export interface OutcomeCollectionInput {
@@ -120,10 +113,10 @@ export interface OutcomeCollectionInput {
 
 /**
  * 从已有系统采集 Outcome。
- *
+
  * 根据 Experience 类型分发到不同的采集函数。
  * 只消费已有系统产出，不重新评估。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function collectOutcome(
@@ -151,7 +144,7 @@ export function collectOutcome(
 
 /**
  * War Outcome — 消费 evaluateWarOutcome。
- *
+
  * 归因基础：warOutcome (success/failure/unknown) + warSpawned + warAbortReason
  */
 function collectWarOutcome(input: OutcomeCollectionInput): OutcomeRecord | undefined {
@@ -221,7 +214,7 @@ function collectRecoveryOutcome(input: OutcomeCollectionInput): OutcomeRecord | 
 
 /**
  * Economic Outcome — 消费 empireHealth delta。
- *
+
  * 经济归因困难（多系统耦合），低置信度。
  */
 function collectEconomicOutcome(input: OutcomeCollectionInput): OutcomeRecord | undefined {
@@ -401,7 +394,7 @@ function collectDefenseOutcome(input: OutcomeCollectionInput): OutcomeRecord | u
 
 /**
  * 将 WarOutcome (success/failure/unknown) + abortReason 映射到 OutcomeClassification。
- *
+
  * 区分正常结束和止损中止。
  */
 function mapWarOutcomeToClassification(
@@ -424,7 +417,7 @@ function mapWarOutcomeToClassification(
 
 /**
  * 计算结果置信度。
- *
+
  * 基于测量延迟和结果来源可靠性。
  * 延迟越长 → 置信度越低（中间发生太多事）。
  */

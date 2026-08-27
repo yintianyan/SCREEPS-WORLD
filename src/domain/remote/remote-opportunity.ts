@@ -1,25 +1,4 @@
-/**
- * Remote Opportunity — A4.0 Phase 3：远矿机会评估与生命周期。
- *
- * 合同锚点：A4.0 Architecture Audit §18.3（Remote Opportunity 是规划产物，不直接执行）。
- *
- * 设计意图：
- *   Opportunity 是 Remote Source + Value Assessment 的规划产物——
- *   它不直接执行远矿运营，而是产出一个 WAITING_EXECUTION 状态的提议，
- *   由 specialization-planner 评估后决定是否开新远矿。
- *
- *   数据流：
- *   RoomIntel → deriveRemoteSource() → assessRemoteValue() → createOpportunity()
- *     → WAITING_EXECUTION → specialization-planner 评估 → APPROVED/REJECTED
- *     → APPROVED 后由 remote-mining-manager.selectRemoteTargets() 执行
- *
- *   Opportunity 不做的事：
- *   - 不调用 spawnCreep / createConstructionSite
- *   - 不修改 remoteOps
- *   - 不替代 remote-mining-manager 的执行链
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Remote Opportunity */
 
 import type { RemoteSource } from "./remote-source";
 import type { RemoteResourceValue, ValueGrade } from "./remote-value";
@@ -28,12 +7,12 @@ import type { RemoteResourceValue, ValueGrade } from "./remote-value";
 
 /**
  * Opportunity Status — 机会生命周期状态。
- *
+
  * 状态流转：
  *   WAITING_EXECUTION → APPROVED → EXECUTING → COMPLETED
  *                    ↘ REJECTED
  *                    ↘ EXPIRED
- *
+
  * - WAITING_EXECUTION: 等待 specialization-planner 评估
  * - APPROVED: 已批准——planner 决定开新远矿，等待 remote-mining-manager 执行
  * - REJECTED: 已拒绝——planner 决定不开（经济不划算/风险过高/名额已满）
@@ -127,11 +106,11 @@ export interface OpportunityInput {
 
 /**
  * 创建 Remote Opportunity（初始状态 = WAITING_EXECUTION）。
- *
+
  * 从 Remote Source + Value Assessment 产出 Opportunity。
  * Opportunity 的评估快照在创建时冻结——后续 Remote Source 状态变化
  * 不影响已有 Opportunity（需要新评估则创建新 Opportunity）。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function createOpportunity(input: OpportunityInput): RemoteOpportunity {

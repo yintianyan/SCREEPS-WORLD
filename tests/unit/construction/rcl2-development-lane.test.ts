@@ -1,18 +1,4 @@
-/**
- * Phase R2 — RCL2 关键发展通道 + 队列治理单元测试。
- *
- * 覆盖：
- *   1. evaluateDevelopmentGate：每个门禁拒绝时输出正确原因码（可观测性契约）；
- *      emergency 豁免链保持不变。
- *   2. evaluateDevelopmentLane：RCL2-3 通道真值表 — 门禁被 claimSecure/pressure/
- *      conserve 拉闸时，extension / controller container 在生存前提齐备下放行；
- *      威胁 / P0 spawn / emergency / 能量地板 / 全局配额仍拦截。
- *   3. isCriticalDevelopmentTask：extension 与 controller 邻接 container 属通道，
- *      source 邻接 container 属 emergency 车道，道路不属于。
- *   4. cleanTasks：超龄 queued 任务清除（观测语义，不进黑名单）；priority 0 豁免。
- *   5. makeTryAddTask：背景任务（priority>=2）队列硬上限 admission control；
- *      P0/P1 不受限。
- */
+/** Phase R2 — RCL2 关键发展通道 + 队列治理单元测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   evaluateDevelopmentGate,

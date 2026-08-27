@@ -1,12 +1,4 @@
-/**
- * 工业链接线测试（TD-023 ~ TD-028）。
- *
- * 覆盖三条曾经断裂的接线：
- *   1. lab-system 需求表推导（computeLabDemands）— 化合物-lab 绑定的唯一通道
- *   2. supplyLabs 按需求表搬运 — mock 必须复现引擎受限 store 的 null 语义
- *      （无参 getFreeCapacity() 返回 null，正是旧实现全链断路且测试全绿的根因）
- *   3. 建造队列 rampart/road 建成判定（syncTaskStates）与扩张编队召回
- */
+/** 工业链接线测试（TD-023 ~ TD-028）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { supplyLabs } from "../../../src/creeps/engine/actions/industry";
 import { computeLabDemands } from "../../../src/systems/lab-system";

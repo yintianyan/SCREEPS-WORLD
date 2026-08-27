@@ -1,13 +1,4 @@
-/**
- * 防御工事角色分类 — 纯函数，决定每个 wall/rampart 属于哪个维护档位。
- * 背景：统一目标血量是维护经济最大浪费源 — RCL5-6 把 ~75 个 rampart 全灌到 1M
- * （≈75 万能量）与升级争夺盈余，而多数（extension/container 叠盾）防御价值远低于
- * 周界割集。分层：周界全额、核心折扣、低值资产只保新生地板。
- * 分类优先级（先命中先归类）：wall → perimeter（不衰减一次投资）；min-cut 割集
- * → perimeter（敌人必啃的门）；核心结构位 → core；container → utility；未知位置：
- * 有 min-cut 情报 → utility（散盾无防线价值），无情报（扇区 fallback 房）→
- * perimeter（出口封锁 rampart 保守全额维护）。
- */
+/** 防御工事角色分类 — 纯函数，决定每个 wall/rampart 属于哪个维护档位。 */
 import type { FortificationRole, RoomSnapshot } from "../../kernel/contracts";
 
 /** 打包坐标为单数字 key（与 defense-planner 的 minCut 存储口径一致）。 */

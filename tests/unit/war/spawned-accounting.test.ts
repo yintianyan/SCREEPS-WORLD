@@ -1,13 +1,4 @@
-/**
- * war-planner spawned 计数口径回归测试（churn 虚增修复）。
- *
- * 背景：spawned 原在「提交请求」时无条件 +1。sponsor 能量紧张时请求反复
- * TTL 过期 → 重提交，每次 churn 都虚增消耗战基数（spawned），提前误触
- * attrition 收摊 + standDown 休战——仗还没打就自行撤军。
- * 修复口径：首次提交计数；前任已实际孵化（markSquadMaterialized 置位）的
- * 同键重提交按替换计数（计数后旗标归位，替换者自身需重新兑现）；纯 churn
- * 不计数。
- */
+/** war-planner spawned 计数口径回归测试（churn 虚增修复）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { markSquadMaterialized, submitSquadRequest } from "../../../src/systems/war-planner";
 import { resetGlobals } from "../../role-helpers";

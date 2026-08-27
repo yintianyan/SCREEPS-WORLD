@@ -1,23 +1,4 @@
-/**
- * v26 → v27 迁移独立测试（R4 战争自治升级 / warPlan 扩展 + warBlacklist + warPressureTicks）。
- *
- * 迁移语义：warPlan 新增 phase/spawned、KernelMemory 新增 warBlacklist、
- * strategy 新增 warPressureTicks — 均为可选字段，由对应系统写入。
- * 迁移只做「建档 + 畸形自愈」，不写字段值。
- *
- * 自愈规则：
- *   - warPlan.phase 非 "build"/"advance" → 删除（缺失视为 build）
- *   - warPlan.spawned 非数字 → 删除（缺失视为 0）
- *   - warBlacklist 非对象 → 删除整个字段
- *   - warBlacklist 条目非数字 → 删除该条目；空对象回收
- *   - strategy.warPressureTicks 非数字 → 删除（缺失视为 0）
- *
- * 覆盖：
- *   - 空 Memory（无新字段）不报错
- *   - 合法 phase/spawned/warBlacklist/warPressureTicks 保留
- *   - 各类畸形数据 → 精确清除对应字段（不伤合法 warPlan 核心字段）
- *   - 幂等：重复执行不产生副作用
- */
+/** v26 → v27 迁移独立测试（R4 战争自治升级 / warPlan 扩展 + warBlacklist + warPressureTicks）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

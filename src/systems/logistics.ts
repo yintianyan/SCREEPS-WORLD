@@ -1,12 +1,4 @@
-/**
- * Logistics 系统 — 请求池载体（模块 1.6 P0 档，SYSTEM_BOUNDARIES §1.6）。
- *
- * 每 tick 重导出搬运请求（Demand 瞬时语义）→ 写入 globalCache.transportPool，
- * assignment-service 合并进任务槽供 hauler 认领（claim 即 Task 六态的 claimed）。
- * 另负责：TTL 过期回执（不静默丢单）、延迟样本、塔补给并入物流（需求侧聚合：
- * 塔缺口把收集请求整体提级——hauler work 链本就塔置顶投递，无需新增执行器）。
- * 不做：全量重匹配、全局最优、请求持久化 Memory（LOGISTICS §7 红线）。
- */
+/** Logistics 系统 */
 import type { System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
 import { EventKind, recordEvent } from "../kernel/event-log";
@@ -214,10 +206,10 @@ export function logisticsLatencySamples(roomName: string): readonly number[] {
 
 /**
  * A4.3：TransportRequestV2 → AssignmentTaskEntry 适配器。
- *
+
  * 将 logistics-planner 产出的 V2 请求适配为现有 hauler 认领链可消费的格式。
  * 仅适配 scope="room" 的请求（房内搬运）。
- *
+
  * source.structureId 若有则作为 sourceId；否则用 source.room 作为伪 ID。
  */
 function planRequestToTaskEntry(req: TransportRequestV2): AssignmentTaskEntry | undefined {

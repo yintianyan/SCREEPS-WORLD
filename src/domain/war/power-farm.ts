@@ -1,15 +1,4 @@
-/**
- * Power Bank 野采决策 — 纯函数层（审计缺口 2：power 供给自给）。
- *
- * 引擎语义 [Fact]：PB 是中立结构（FIND_STRUCTURES，非 hostile — attacker 的
- * FIND_HOSTILE_STRUCTURES 打不到，需专用候选），出现后约 5000 tick 自动消失；
- * hits 1M–2M，被击破掉落 2k–6k power。PB 反击伤害高 — 必须 heal-tank 编队
- * （attacker 拆打 + healer 覆盖），编队规模按「PB 生命周期内可击破」定：
- * 4 attacker × [4A] = 480 hits/tick → 2M hits 需 ~4200 tick（留衰减余量）。
- *
- * 战略定位：power 是 GPL 硬通货 — 野采是买入通道之外的正收益供给源
- * （市场买 power 纯消耗，野采只花编队折旧）。
- */
+/** Power Bank 野采决策 — 纯函数层（审计缺口 2：power 供给自给）。 */
 
 /** PB 目标候选（执行层从各 home 的 intel 采集）。 */
 export interface PowerBankCandidate {

@@ -1,14 +1,4 @@
-/**
- * Expansion Plan Model — A3.2 Phase 1：扩张计划数据模型。
- *
- * 合同锚点：PLANNING_ARCHITECTURE §1 无 Planner 组件 + §3 AgendaItem 数据契约。
- *
- * 定位：ExpansionPlan 不是运行时组件——它是中期承诺的数据模型，
- * 携带 planId / candidate / reason / priority / cost / benefit / risk / status。
- * 可映射为 AgendaItem 的 expansion 类型（A3.3 执行层消费）。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Expansion Plan Model */
 
 import type { ExpansionCandidateV2, ExpansionReason } from "./candidate";
 import type { ExpansionCostEstimate } from "./cost-model";
@@ -132,7 +122,7 @@ export function createPlan(input: PlanInput): ExpansionPlan {
 
 /**
  * 从评分 + ROI + 风险推导优先级。
- *
+
  * P0: score ≥ 0.8, ROI ≥ 2.0, risk ≤ MEDIUM
  * P1: score ≥ 0.6, ROI ≥ 1.5, risk ≤ HIGH
  * P2: score ≥ 0.5, ROI ≥ 1.0, risk < CRITICAL

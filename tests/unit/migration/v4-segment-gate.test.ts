@@ -1,15 +1,4 @@
-/**
- * v3→v4 迁移的 segment 就绪门禁测试。
- *
- * 背景：global reset 首 tick，setActiveSegments 尚未生效（RawMemory.segments[0]
- * 为 undefined）。旧实现中迁移照常执行，overrides/blocked 被写进
- * readLayoutSegment 返回的临时空结构（守卫不缓存），随后从 Memory 删除源字段 —
- * 数据永久丢失，且旧版 migrateMemory 无条件盖章 schemaVersion，事故被静默掩盖。
- *
- * 门禁语义：
- *   - segment 未就绪 → 迁移链停在 v3，Memory 数据原封不动，下 tick 重试
- *   - 次 tick segment 可用 → 迁移续跑至最新版本，数据落入 segment
- */
+/** v3→v4 迁移的 segment 就绪门禁测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { maintainMemory, runMigrations } from "../../../src/kernel/memory";
 import { requestSegments, getRoomLayoutData } from "../../../src/kernel/segment-store";

@@ -1,9 +1,4 @@
-/**
- * Terminal 交易策略纯函数测试。
- *
- * 覆盖：矿物缺口计算、买入订单挑选（价低量大优先 + 价格上限）、
- * 卖出订单挑选（价高量大优先 + 价格底线）、无效订单剔除。
- */
+/** Terminal 交易策略纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   getMineralDeficits,

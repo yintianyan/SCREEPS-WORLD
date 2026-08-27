@@ -1,22 +1,4 @@
-/**
- * Squad Formation & Tactical Movement — A5.4.2 Domain 纯函数。
- *
- * 解决「一个 Squad 如何作为一个战术单位移动，而不是 N 个 Creep 各走各的」。
- *
- * 核心数据流：
- *   TacticalSnapshot (A5.4.0)
- *     ↓
- *   SquadSnapshot (本模块构建)
- *     ↓
- *   Anchor → Formation → FormationSlot[] (每个 Member 的 DesiredPosition)
- *     ↓
- *   SquadMovementIntent (Domain 只产出 Intent，不执行 Path)
- *     ↓
- *   Movement Runtime (系统层薄壳 → PathFinder → registerMove)
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / Creep / Room / PathFinder / 任何 Runtime。
- * 所有运行时数据由调用方（系统层薄壳）注入为 Snapshot / DTO。
- */
+/** Squad Formation & Tactical Movement */
 
 import type {
   FormationType,
@@ -32,7 +14,7 @@ import type { TerrainContext } from "../defense/terrain-context";
 
 /**
  * Squad 成员运行时快照 — 从 Game 对象提取的 DTO，不持有 Runtime 引用。
- *
+
  * 与 A5.4.0 SquadMemberSnapshot 的区别：
  *   - SquadMemberSnapshot 是 SquadPlan 的静态成员列表（孵化时确定）。
  *   - SquadMemberRuntimeSnapshot 是每 tick 从 Game 对象采集的实时状态。
@@ -72,7 +54,7 @@ export interface SquadMemberRuntimeSnapshot {
 
 /**
  * SquadSnapshot — 一个编队在某一 tick 的完整运行时快照。
- *
+
  * 这是 Squad Formation Domain 的唯一输入格式（纯函数输入）。
  * 系统层薄壳负责从 Game/Memory 构建此快照并注入。
  */
@@ -109,7 +91,7 @@ export interface SquadSnapshot {
 
 /**
  * FormationSlot — 一个成员在阵型中相对于 Anchor 的期望位置。
- *
+
  * Domain 只计算 DesiredPosition，不执行移动。
  * Runtime 负责 DesiredPosition → PathFinder → registerMove。
  */
@@ -136,9 +118,9 @@ export interface FormationSlot {
 
 /**
  * Anchor 定义 — 编队的参考中心点。
- *
+
  * Canonical 选择：Centroid（存活成员的几何中心）。
- *
+
  * 选择理由（基于 Screeps 语义分析）：
  *   - Leader Path（方案 A）：Leader 死亡则 Anchor 丢失，编队瞬间散架。
  *     且 Leader 的 PathFinder 结果是单点路径，其他成员无法有效投影。
@@ -148,7 +130,7 @@ export interface FormationSlot {
  *     Anchor = Centroid（用于 Formation Slot 计算 + Cohesion 判断）
  *     Path = 从最接近 Centroid 的存活成员（Path Leader）计算主路径
  *     其他成员按 Formation Slot 跟随 Path Leader 的方向
- *
+
  * 这样 Leader 死亡时 Centroid 自动重算，新 Leader 自动产生，编队不散架。
  */
 export interface FormationAnchor {
@@ -164,13 +146,13 @@ export interface FormationAnchor {
 
 /**
  * 计算 Squad Anchor（Centroid + Path Leader）。
- *
+
  * 算法：
  *   1. 过滤存活成员
  *   2. 计算几何中心（所有存活成员位置的平均值）
  *   3. 选择最接近中心的成员作为 Path Leader
  *   4. 确定性 tie-break：名称字典序
- *
+
  * 纯函数 — 相同输入必产生相同输出。
  */
 export function computeSquadAnchor(squad: SquadSnapshot): FormationAnchor {
@@ -265,19 +247,19 @@ export function computeSquadAnchor(squad: SquadSnapshot): FormationAnchor {
 
 /**
  * 计算每个成员相对于 Anchor 的 Formation Slot。
- *
+
  * 算法：
  *   1. 对存活成员按确定性排序（role priority → name）
  *   2. 按 FormationType 分配相对偏移
  *   3. 将偏移投影到 Anchor 位置得到 DesiredPosition
- *
+
  * 阵型偏移语义（Screeps 格子坐标，y 向下为正）：
  *   LINE:    成员水平展开，前排在前（y-1），后排在后（y+1）
  *   WEDGE:   楔形，尖端在前，两翼后展
  *   COLUMN:  纵队，前后排列（y 方向递增）
  *   CLUSTER: 密集围绕中心（8 邻域）
  *   SCATTER: 间隔 2 格分散
- *
+
  * @param anchor 编队锚点
  * @param formation 阵型类型
  * @param members 存活成员列表
@@ -348,37 +330,37 @@ export function computeFormationSlots(
 
 /**
  * 按阵型类型生成相对偏移数组。
- *
+
  * 偏移坐标系：[dx, dy]，相对于 Anchor。
  * Screeps 坐标系：x 向右为正，y 向下为正。
  * 「前方」= y 减小方向（向上），「后方」= y 增大方向（向下）。
- *
+
  * 语义分析（每种阵型适合什么环境）：
- *
+
  * LINE（线形）：
  *   - 适合：开阔地形正面展开，最大化火力输出
  *   - 布局：前排 attacker/tank 在 y-1，后排 healer/ranged 在 y+1
  *   - 优势：均匀间距减少 AoE 脆性
  *   - 劣势：侧翼暴露
- *
+
  * WEDGE（楔形）：
  *   - 适合：开阔地形突击，集中火力突破一点
  *   - 布局：尖端 1 人在 y-2，第二排 2 人在 y-1，第三排在 y
  *   - 优势：healer 可跟在楔形后方
  *   - 劣势：尖端承受最大伤害
- *
+
  * COLUMN（纵队）：
  *   - 适合：狭窄通道行军，跨房移动
  *   - 布局：所有成员沿 y 轴排列，间距 1 格
  *   - 优势：窄轮廓通过 chokepoint
  *   - 劣势：只有前排能攻击
- *
+
  * CLUSTER（密集）：
  *   - 适合：撤退/防守紧凑编队
  *   - 布局：围绕中心 8 邻域
  *   - 优势：最大化治疗覆盖
  *   - 劣势：AoE 脆性
- *
+
  * SCATTER（散开）：
  *   - 适合：规避 AoE / 分散塔火力
  *   - 布局：间隔 2 格分散
@@ -520,7 +502,7 @@ function scatterOffsets(count: number): (readonly [number, number])[] {
 
 /**
  * 计算槽位容忍范围（格数）。
- *
+
  * healer 容忍更小（不能掉队），attacker 容忍中等，tank 容忍更大。
  * CLUSTER 容忍最小（密集编队），SCATTER 容忍最大（本就分散）。
  */
@@ -548,7 +530,7 @@ function computeSlotTolerance(role: string, formation: FormationType): number {
 
 /**
  * CohesionMetric — 编队凝聚力量化指标。
- *
+
  * 不使用简单的「距离 > 3 就散队」判断。
  * 根据 Formation、Role、Anchor 距离综合评估。
  */
@@ -582,7 +564,7 @@ export type CohesionStatus =
 
 /**
  * 计算编队凝聚力。
- *
+
  * 评估维度：
  *   1. 最大成员到 Anchor 距离
  *   2. 平均成员到 Anchor 距离
@@ -590,7 +572,7 @@ export type CohesionStatus =
  *   4. Healer 到最近 Combat 成员距离（Screeps 最重要的特殊关系）
  *   5. 阵型偏离度（实际位置 vs DesiredPosition）
  *   6. 成员存活比例
- *
+
  * 不同阵型有不同的容忍阈值：
  *   CLUSTER: maxDist > 3 → DEGRADED, > 5 → BROKEN
  *   COLUMN:  maxDist > 4 → DEGRADED, > 7 → BROKEN（行军队列天然拉长）
@@ -757,9 +739,9 @@ export type MovementMode = "ABSOLUTE" | "OBJECTIVE_RELATIVE";
 
 /**
  * SquadMovementIntent — Domain 产出的编队移动意图。
- *
+
  * Tactical 只决定 Intent，Movement 系统负责实际 Path。
- *
+
  * 数据流：
  *   Tactical Domain
  *     ↓ SquadMovementIntent
@@ -801,9 +783,9 @@ export interface SquadMovementIntent {
 
 /**
  * 从 SquadSnapshot + TacticalState 产出 SquadMovementIntent。
- *
+
  * 这是 Domain 层的核心产出 — Tactical 只决定 Intent，不执行 Path。
- *
+
  * 决策逻辑：
  *   1. 根据 TacticalState 确定 destination 和 mode
  *   2. 计算 Anchor
@@ -811,7 +793,7 @@ export interface SquadMovementIntent {
  *   4. 计算 Cohesion
  *   5. 如果 Cohesion BROKEN → 产出 REGROUP Intent
  *   6. 否则产出 ADVANCE/RETREAT/HOLD Intent
- *
+
  * 纯函数 — 相同输入必产生相同输出。
  */
 export function produceSquadMovementIntent(
@@ -885,7 +867,7 @@ interface DestinationDecision {
 
 /**
  * 根据 TacticalState 确定编队目标。
- *
+
  * 状态 → 目标映射：
  *   FORMING     → 集结点（ABSOLUTE）
  *   MOVING      → 目标房间中心（OBJECTIVE_RELATIVE）
@@ -1015,7 +997,7 @@ export type FormationDegradation =
 
 /**
  * 评估阵型退化级别。
- *
+
  * 不直接进入 Recovery — 先判断退化级别，由上层决策是否 Regroup。
  */
 export function assessFormationDegradation(
@@ -1035,11 +1017,11 @@ export function assessFormationDegradation(
 
 /**
  * 计算 Regroup 点。
- *
+
  * Regroup 逻辑：
  *   - 如果有存活成员 → 取 Centroid 作为 Regroup 点
  *   - 如果全灭 → 使用预设集结点
- *
+
  * Regroup 不能自行改变 WarPlan — 只产出集结意图。
  */
 export function computeRegroupPoint(
@@ -1068,11 +1050,11 @@ export function computeRegroupPoint(
 
 /**
  * Healer Cohesion 检查 — 确保 Healer 不掉队。
- *
+
  * Screeps 中 Healer 和 Combat 成员的距离关系是最重要的特殊 case：
  *   - 攻击 Creep 进入敌方 range 时 Healer 必须在治疗范围内（≤3 格 ranged heal）
  *   - Healer 不应落后多个 tile
- *
+
  * 本阶段只解决「队形移动时 Healer 不掉队」，不实现完整 Heal target 选择算法。
  */
 export interface HealerCohesionCheck {
@@ -1088,7 +1070,7 @@ export interface HealerCohesionCheck {
 
 /**
  * 检查 Healer 是否掉队。
- *
+
  * 判据：每个 Healer 到最近 Combat 成员的距离 ≤ HEALER_SAFE_DISTANCE。
  * 超过则标记为 lagging。
  */
@@ -1143,16 +1125,16 @@ export function checkHealerCohesion(squad: SquadSnapshot): HealerCohesionCheck {
 
 /**
  * 撤退阵型决策。
- *
+
  * 撤退不等于每个 Creep moveTo 安全位置。
  * 必须保护 Healer 和低 HP 成员。
- *
+
  * 撤退时：
  *   - Anchor = 最慢成员位置（低 HP / Healer）— 确保 Anchor 不跑太快
  *   - Formation = CLUSTER（紧凑保护）
  *   - 前排 = 高 HP Combat 成员（断后）
  *   - 后排 = Healer / 低 HP 成员（优先后撤）
- *
+
  * 但本阶段不实现复杂 Combat Micro — 只解决阵型保持。
  */
 export interface RetreatFormationDecision {
@@ -1172,7 +1154,7 @@ export interface RetreatFormationDecision {
 
 /**
  * 计算撤退阵型。
- *
+
  * 撤退优先级：
  *   1. Healer 最先撤（保护治疗能力）
  *   2. 低 HP 成员其次
@@ -1242,11 +1224,11 @@ export interface SquadStuckDetection {
 
 /**
  * 检测编队级卡位。
- *
+
  * 区分 Individual Stuck 和 Squad Stuck：
  *   - Individual Stuck：个别成员被挡，不导致整个 Squad 失败
  *   - Squad Stuck：Anchor 连续多 tick 未前进 → 触发 Recovery
- *
+
  * @param squad 当前快照
  * @param anchor 当前 Anchor
  * @param prevAnchorPos 上 tick Anchor 位置（packed pos）
@@ -1309,7 +1291,7 @@ export function detectSquadStuck(
 
 /**
  * 计算 SquadMovementIntent 的确定性 Hash。
- *
+
  * 相同 Snapshot → 相同 Intent → 相同 Hash。
  * 用于验证确定性。
  */
@@ -1359,7 +1341,7 @@ function chebyshevDist(pos1: number, pos2: number): number {
 
 /**
  * 从 SquadPlan (A5.4.0) + 成员运行时数据构建 SquadSnapshot。
- *
+
  * 这是系统层薄壳的辅助函数 — 将 A5.4.0 的 SquadPlan 与每 tick 采集的
  * 成员运行时数据合并为 SquadSnapshot。
  */

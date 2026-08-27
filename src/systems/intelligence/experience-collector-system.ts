@@ -1,28 +1,4 @@
-/**
- * A6.1 Experience Collector System — 系统层薄壳。
- *
- * 合同锚点：A6.1 Task Spec + INT-001/INT-004/INT-013/INT-014。
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 DecisionTrace Ring Buffer 读取到期的 DecisionRecord
- *   2. 从 globalCache / Memory 采集运行时状态构建 OutcomeCollectionInput
- *   3. 调用 domain 纯函数 collectOutcome 采集 OutcomeRecord
- *   4. 调用 domain 纯函数 collectAttribution 采集 Attribution
- *   5. 合并为 ExperienceRecord 写入 Experience Ring Buffer (heap)
- *   6. 定期执行 GC
- *
- * 禁止：
- *   - 不执行任何 Game API（Shadow-Only 原则）
- *   - 不修改任何业务状态
- *   - 不进入 tick 关键路径（低频 100t）
- *   - 不建立第二套 DecisionTrace / evaluateWarOutcome / empireHealth
- *
- * CPU 预算：低频执行（interval=100），采集近零成本。
- * 优先级 P3（在所有业务系统之后运行，消费它们产出的数据）。
- * 存储：heap only — global reset 可丢。
- *
- * 安全不变式：本系统完全停止时，帝国必须照常安全运行。
- */
+/** A6.1 Experience Collector System — 系统层薄壳。 */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { systemPhase } from "../../kernel/phase";
@@ -135,7 +111,7 @@ export const experienceCollectorSystem: System = {
 
 /**
  * 从 DecisionTrace Ring Buffer 采集新的 DecisionRecord，构建 ExperienceRecord。
- *
+
  * 只处理尚未处理过的 DecisionRecord。
  * 不复制完整 DecisionRecord，只提取 DecisionRef。
  */
@@ -200,7 +176,7 @@ function collectNewExperiences(
 
 /**
  * 采集到期 Experience 的 Outcome。
- *
+
  * 遍历未采集 Outcome 的 Experience，检查是否到期。
  */
 function collectPendingOutcomes(

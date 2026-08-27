@@ -1,31 +1,4 @@
-/**
- * A6.4 Calibration Domain — 统一出口。
- *
- * 分层结构：
- *   types.ts       — Calibration 类型定义（ResolutionResult, ModelCalibrationProfile 等）
- *   resolve.ts     — Resolution Engine（resolvePrediction 纯函数）
- *   metrics.ts     — Resolution Metric Registry（按模型注册 Metric 函数）
- *   calibration.ts — Calibration Engine（置信度分桶 + ECE + Brier Score）
- *   failure-attribution.ts — 失败归因（对 INCORRECT Prediction 进行归因）
- *   ring-buffer.ts — Calibration Ring Buffer（有界存储 + GC）
- *   guards.ts      — CAL-001 ~ CAL-010 守卫验证函数
- *
- * 纯函数律：本模块不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * Shadow-Only（CAL-001）：
- *   所有函数只做计算，不执行 Game API，不修改运行时状态。
- *
- * 确定性（CAL-005）：
- *   同输入 → 同输出。禁止 Math.random / Date.now / 无序迭代 / 浮点误差。
- *
- * 依赖方向（A6_4_CONTRACT.md §八）：
- *   A6.4 Calibration Domain
- *     ↓ imports (只读)
- *   A6.3 Prediction Domain (types, context, hashing)
- *     ↓ imports (只读)
- *   A6.1 Experience Domain (types only)
- *   A6.2 Strategy Evaluation Domain (types only)
- */
+/** A6.4 Calibration Domain — 统一出口。 */
 
 // ── Calibration Types ──
 export type {

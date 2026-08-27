@@ -1,20 +1,4 @@
-/**
- * E2E-014 旧 Schema 迁移 — 验证 Memory 迁移系统能从旧版 schema 升级。
- *
- * 真实场景：
- *   - 代码更新后 schemaVersion 提升，旧 Memory 需要迁移
- *   - 长时间未运行的 bot 重新上线时 Memory 版本很旧
- *   - 迁移必须幂等、安全、不丢数据
- *
- * 验证策略：
- *   1. 注入旧版 schema Memory（schemaVersion=1，只有最小字段）
- *   2. 运行 500 tick
- *   3. 验证 schemaVersion 升级到当前版本
- *   4. 验证帝国正常运转
- *
- * 注意：screeps-server-mockup 的 bot 没有 memory setter，
- * 通过 console() 方法注入 `Memory = {...}` 来模拟旧版 Memory。
- */
+/** E2E-014 旧 Schema 迁移 — 验证 Memory 迁移系统能从旧版 schema 升级。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";

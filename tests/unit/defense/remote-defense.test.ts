@@ -1,15 +1,4 @@
-/**
- * A5.1 G4 — Remote Defense Decision 纯函数测试。
- *
- * 覆盖 A5-S05 场景：
- * - R01: 威胁 NONE → CONTINUE
- * - R02: 威胁 LOW + 风险低 → CONTINUE
- * - R03: 威胁 MEDIUM + 风险高 → PAUSE
- * - R04: 威胁 MEDIUM/HIGH + 护航后净价值正 → ESCORT
- * - R05: 威胁 HIGH + 净价值负 → RETREAT
- * - R06: 威胁 CRITICAL + 净价值负 + 替换成本高 → ABORT
- * - R07: war 姿态 + 威胁 HIGH → RETREAT（不护航）
- */
+/** A5.1 G4 — Remote Defense Decision 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   decideRemoteDefenseAction,

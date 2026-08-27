@@ -1,16 +1,4 @@
-/**
- * R8 回归测试：shouldIdleWhenNoCandidate 钩子等价性锁住。
- *
- * 背景：P2-M 将 role-runner 中 `role === "remoteHauler" && mode === "work" && room === home`
- * 硬编码下沉为 RolePolicy.shouldIdleWhenNoCandidate 钩子。原硬编码解决线上 idle→ensureHome
- * 死循环：remoteHauler work 在 home 房无 sink 时若不切 idle，会保持 work → 无候选 → 保持 work →
- * 永久冻结。钩子化后若未来改动误删钩子或改语义，死循环回归。
- *
- * 三断言（review 要求）：
- *   ① remoteHauler work 在 home 房无候选 → idle（钩子返回 true）
- *   ② remoteHauler acquire 在 remoteTarget 房无候选 → 不 idle（钩子返回 false，防 home↔remote 振荡）
- *   ③ 无钩子角色同条件 → 不 idle（undefined === true → false，不因 undefined 误切；证明钩子必要性）
- */
+/** R8 回归测试：shouldIdleWhenNoCandidate 钩子等价性锁住。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteHaulerRole } from "../../../src/creeps/roles/remote-hauler";
 import { defineRole } from "../../../src/creeps/engine/role-runner";

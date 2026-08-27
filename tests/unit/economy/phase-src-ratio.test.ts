@@ -9,12 +9,11 @@ import {
 
 /**
  * P0-1 srcRatio 累积净流失 crisis 通道 — 单元测试。
- *
- * 背景（病灶 1）：私服快照显示 srcRatio=1.0 持续 31000 tick 时，colonyState
+
  * 仍判 normal/growth — 双维度（drainScore/liquidityScore）在 spawn 口袋健康时
  * 看不到采集塌方。本测试覆盖 srcRatio + storageDrainAccum 累积净流失双条件
  * 强制 crisis 通道（绕过 drainScore 迟滞）。
- *
+
  * 修正历史：原方案用单 tick drainRate<-2 持续 50 tick 判定，但实测 storage
  * 流失是稀疏大脉冲（每~235tick一次-800，大部分tick静止），单 tick 差分大部分=0，
  * srcStallTicks 反复归零永远到不了 50。改为累积净流失量（流失累加、回填抵消、

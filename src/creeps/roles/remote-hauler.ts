@@ -1,9 +1,4 @@
-/**
- * RemoteHauler — P1 远矿穿梭搬运工。从远矿房 container 取能，搬运回 home 房存入 storage/sink。
- * 与本地 hauler 区别：acquire 在 remoteTarget 房取能（无 snapshot，直接 Game.rooms 访问）；
- * work 在 home 房存能（有 snapshot，复用 fillStorage/haulFillTarget）；
- * ensureHome 按 mode 切换导航目标（acquire→remote, work→home）。
- */
+/** RemoteHauler */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
@@ -127,7 +122,7 @@ export function findRemoteContainer(creep: Creep): StructureContainer | undefine
 }
 
 /** 在远矿房查找最近的掉落能量。
- *
+
  * 掉落资源列表走 per-tick per-room 缓存：远矿房无 RoomSnapshot 预热，
  * 若每 tick 直接 room.find，container 空档期内 acquire 链每 tick 都会全房扫描，
  * 违反「角色禁止全房 find」硬约束。缓存生命周期单 tick，同房多 hauler 共享。

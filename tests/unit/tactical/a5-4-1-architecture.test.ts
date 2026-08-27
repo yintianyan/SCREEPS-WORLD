@@ -1,16 +1,4 @@
-/**
- * A5.4.1 Architecture Guards — Tactical Runtime 架构守卫。
- *
- * 守卫规则：
- *   AG-1: tactical-runtime-system 是系统层（不导入 creeps/roles/）
- *   AG-2: tactical-runtime-system 不直接写 warAbortSignals
- *   AG-3: tactical-runtime-system 不调用 spawnCreep / submitRequest（由 war-planner 执行孵化）
- *   AG-4: creeps 层不导入 tactical-runtime-system（通过 globalCache 通信）
- *   AG-5: tactical-runtime-system 不调用 PathFinder.search
- *   AG-6: tactical-runtime-system 不调用 creep.move / attack / heal / rangedAttack
- *   AG-7: recovery-execution-system 消费 tacticalAbortSignals
- *   AG-8: logistics-planner 消费 tacticalSupplyDemands
- */
+/**  */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";

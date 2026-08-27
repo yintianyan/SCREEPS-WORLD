@@ -1,10 +1,4 @@
-/**
- * withdrawTerminalEnergy 饥饿压缩测试（W7 止血修正）。
- *
- * 背景：私服引擎 4.3.0 自带市场但可为空——10k 交易储备在 storage 枯竭房变成
- * 死资本。hauler 在 storage 饥饿（< 20k）时把 terminal 能量压缩回 storage：
- * 有市场保留 2k 运费地板、无市场全量排空。
- */
+/** withdrawTerminalEnergy 饥饿压缩测试（W7 止血修正）。 */
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { withdrawTerminalEnergy } from "../../../src/creeps/engine/actions/industry";
 import { haulerRole } from "../../../src/creeps/roles/hauler";

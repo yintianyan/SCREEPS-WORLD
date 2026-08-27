@@ -1,29 +1,4 @@
-/**
- * E2E-012 Military & Defense — A5.1 E2E 验收。
- *
- * 验证链路：
- *   威胁注入（hostile creep）→ room-state 威胁评估 → globalCache.threatAssessments →
- *   tower-defense 响应 → decision-trace 采集 → recovery-execution 防御响应 →
- *   远矿防御决策
- *
- * 场景设计（6 个）：
- *   1. **NPC Invader Response**: 注入 NPC invader → 验证威胁评估产出 + 无 JS 错误
- *   2. **Threat Trace Collection**: 威胁存在时 decision-trace 系统采集 DEFENSE_PREP 记录
- *   3. **Defense Recovery Link**: CRITICAL 威胁时 recovery-execution 触发 defense_response
- *   4. **Remote Defense Decision**: 远矿运营 + 威胁 → remote-mining-manager 产出决策
- *   5. **Long Stability with Defense**: 3000t 连续运行，期间注入 + 移除威胁，验证稳定性
- *   6. **Memory Budget Under Threat**: 威胁期间 Memory 不膨胀
- *
- * 验证标准：
- *   - 全程无 JS 错误（TypeError/ReferenceError）
- *   - 威胁评估写入 globalCache.threatAssessments
- *   - decision-trace 采集 DEFENSE_PREP 类别记录
- *   - Memory < 500KB
- *   - spawnQueue 不持续堆积
- *
- * [Facts] screeps-server-mockup 的 addHostileCreep 可注入敌方 creep。
- * [Facts] NPC invader owner = "invader"（userId="2" in mockup）。
- */
+/** E2E-012 Military & Defense */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom, rcl3RoomWithTower } from "../fixtures/rooms";

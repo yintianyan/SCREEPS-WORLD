@@ -1,22 +1,4 @@
-/**
- * E2E-004 Tower 防御 — 注入 hostile creep，验证 tower 攻击行为。
- *
- * 真实场景 [Experience]：
- *   - RCL3 解锁 tower，是防御里程碑
- *   - Tower 优先级：attack hostile > emergency repair > wall maintenance
- *   - Tower 攻击有衰减（近距离 600，远距离 150）
- *   - Tower 每次攻击消耗 10 能量
- *
- * 验证标准：
- *   1. RCL3 + tower 场景，AI 能正常运行
- *   2. 注入 hostile creep 后，tower 能量下降（说明攻击了）
- *   3. hostile creep 受到伤害（hits 下降）
- *
- * 实现方式 [Facts]：
- *   - screeps-server-mockup 的 world.addRoomObject 可创建 hostile creep
- *   - owner 不是当前 bot 用户名 → 被 FIND_HOSTILE_CREEPS 识别
- *   - 通过 Memory.creeps 或 bot.console 观察攻击行为
- */
+/** E2E-004 Tower 防御 — 注入 hostile creep，验证 tower 攻击行为。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { rcl3RoomWithTower } from "../fixtures/rooms";

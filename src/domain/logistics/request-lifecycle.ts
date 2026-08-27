@@ -1,33 +1,4 @@
-/**
- * Request Lifecycle — A4.3 Phase 1：Transport Request 生命周期状态机。
- *
- * 合同锚点：A4.3 Architecture Audit §3.2（无 PENDING → ASSIGNED → IN_TRANSIT → DELIVERED
- * 状态机）、§10 #3。
- *
- * 设计意图：
- *   现有 request-pool.ts 只有 `firstSeen`/`claimed` 标记，无正式状态机。
- *   跨房 OperationContext 有九态状态机但不统一。
- *   本模块提供 TransportRequestV2 的十态状态机，纯函数 + 不可变。
- *
- * 状态流转图：
- *
- *   pending → planned → assigned → in_transit → delivering → delivered
- *                                        ↓            ↓
- *                                    blocked       partial → planned (重新规划)
- *                                        ↓
- *                                    failed / cancelled
- *
- *   任何活跃状态 → cancelled（外部取消）
- *   blocked → planned（重试）
- *   partial → planned（生成 remaining request）
- *
- * 与 operation/lifecycle.ts 的关系：
- *   - operation/lifecycle.ts 管理 OperationContext 九态
- *   - logistics/request-lifecycle 管理 TransportRequestV2 十态
- *   - 两者模式一致（纯函数 + TransitionResult），但状态定义不同
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Request Lifecycle */
 
 import type { TransportRequestV2, TransportStatus } from "./transport-request";
 import { isTerminal } from "./transport-request";
@@ -52,7 +23,7 @@ export interface TransitionResult {
 /**
  * 合法的前进状态转换图。
  * key = 源状态，value = 可到达的目标状态集合。
- *
+
  * 注意：
  * - 终态（delivered/failed/cancelled）不可转换
  * - 任何活跃状态 → cancelled 都允许（外部取消）
@@ -87,7 +58,7 @@ export function canTransition(from: TransportStatus, to: TransportStatus): boole
 /**
  * 通用状态转换函数 — 验证合法后更新状态。
  * 不允许跳跃转换（如 pending → in_transit 非法）。
- *
+
  * 纯函数 — 返回新对象，不修改原对象。
  */
 function transition(
@@ -207,7 +178,7 @@ export function markCancelled(req: TransportRequestV2, tick: number, reason?: st
 /**
  * 超时检查 — 如果 Request 已超时且仍活跃，转为 failed。
  * 与 operation/lifecycle.ts 的 checkExpiry 一致模式。
- *
+
  * 纯函数。
  */
 export function checkExpiry(req: TransportRequestV2, tick: number): TransitionResult {

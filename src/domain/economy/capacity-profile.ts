@@ -1,28 +1,18 @@
-/**
- * Capacity Model — A2 后半·步 3：Room 产能容量剖面。
- *
- * 合同锚点：ECONOMY §2.1 Income（source 产能 × 效率系数）、§2.3 能量预算公式。
- *
- * 扩展 RoomEconomicProfile 的产能维度，提供 Empire 级决策所需的
- * 标准化产能/物流/孵化/建造容量剖面。与 room-profile.ts 互补：
- * room-profile 侧重组算（收支/储备/风险），本模块侧重产能（上限/利用率/瓶颈）。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory，全部输入由参数注入。
- */
+/** Capacity Model */
 
 import type { RoomEconomicProfile } from "./room-profile";
 import { NOMINAL_INCOME_PER_SOURCE } from "./accounting";
 
 /**
  * Room Capacity Profile — 产能维度剖面。
- *
+
  * 五域容量（ECONOMY §2.1 + GOAL_POLICY_PLAN §4 五域预算下钻）：
  * - Energy Production：source 产能 × 效率系数（Income 上界）
  * - Energy Storage：storage/terminal/link 总容量（储备上界）
  * - Spawn Capacity：spawn+extension 总容量（孵化吞吐上界）
  * - Logistics Capacity：hauler 运力 × 趟频率（物流吞吐上界，近似）
  * - Construction Capacity：builder 编制 × 单趟建造量（建造吞吐上界，近似）
- *
+
  * 效率系数从实测收入速率 ÷ 名义产能 EMA 平滑（ECONOMY §2.1）。
  * 本模型只组装剖面，不做预算分配（分配在 Empire Budget，步 9）。
  */
@@ -86,14 +76,14 @@ export interface RoomCapacityProfile {
 
 /**
  * 组装 Room Capacity Profile。
- *
+
  * 输入：
  * - profile: RoomEconomicProfile（已组装的经济剖面，步 1 产出）
  * - haulerCount / builderCount: 人口编制（由调用方从 demand 或 census 采集）
  * - terminalCapacity / linkCapacity: 结构容量（由调用方从 snapshot 采集）
  * - spawnCount: spawn 数量
  * - referenceCarry: 参考运力（CONFIG.economy.referenceCarryCapacity）
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function buildRoomCapacityProfile(

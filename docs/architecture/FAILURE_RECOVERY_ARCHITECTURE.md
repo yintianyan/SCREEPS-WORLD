@@ -24,7 +24,7 @@ Self-Healing（[SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.15，P1，分档
 | ③ Diagnose 诊断 | **签名查表**：签名＝错误码＋故障域＋频次窗口 → 处置表（dispatch table，只读数据）。未登记签名走**默认安全动作**（冷却＋记录＋告警） | 推理引擎；对未登记签名做任何「猜测性修复」 | research/22 §10.1/§11 |
 | ④ Recover 恢复 | 仅限有界六动作（§1.2），全部带冷却、每 tick 配额；删除类动作两阶段（标记 `deprecated` 观察 N tick→物理删除）；动作一律经对应 owner 公开接口执行 | 绕过 owner 直改状态；无上限重试 | research/22 §10.3；[RUNTIME_API_DESIGN.md](RUNTIME_API_DESIGN.md) §6 |
 | ⑤ Verify 核验 | 对照**预期状态**核对成功判据；核验带超时，超时＝「未确认恢复」按升级处理；合理停滞白名单见表 §1.3 | 无判据的「发射后不管」；对白名单状态触发恢复动作 | research/22 §10.1；红队 A10 |
-| ⑥ Escalate 升级 | 升级路径：creep 级→房间级→帝国级→TAKEOVER 人工接管信号；TAKEOVER 触发清单与 research/21 §10.4 逐条一致（§1.4）。人工只保留发布与灾难接管两条边界（AGENTS.md） | 自愈系统做出任何六禁令动作后代偿掩盖 | research/22 §10.2；research/21 §10.4 |
+| ⑥ Escalate 升级 | 升级路径：creep 级→房间级→帝国级→TAKEOVER 人工接管信号；TAKEOVER 触发清单与 research/21 §10.4 逐条一致（§1.4）。人工只保留发布与灾难接管两条边界（AGENT.md） | 自愈系统做出任何六禁令动作后代偿掩盖 | research/22 §10.2；research/21 §10.4 |
 
 ### 1.1 故障域分级与升级条件
 

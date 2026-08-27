@@ -1,9 +1,4 @@
-/**
- * construction-manager 单元测试 — claim-secure 护栏。
- *
- * 覆盖：
- *   - developmentGate：脆弱新房（claimSecure）抑制非紧急 site 创建，但紧急重建豁免。
- */
+/** construction-manager 单元测试 — claim-secure 护栏。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { developmentGate, isRuntimeDefenseWallTask } from "../../../src/systems/construction-manager";
 import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";

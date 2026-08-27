@@ -1,8 +1,4 @@
-/**
- * A3-003: Resource Reservation 创建/消耗/释放
- * A3-004: 无 Phantom Reservation（TTL 过期自动清除）
- * A3-010: Carrier Death Recovery（释放 Reservation + 重试）
- */
+/** A3-003: Resource Reservation 创建/消耗/释放 */
 import { describe, expect, it } from "vitest";
 import {
   createReservation,

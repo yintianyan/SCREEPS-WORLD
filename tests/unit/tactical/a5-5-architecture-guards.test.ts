@@ -1,30 +1,4 @@
-/**
- * A5.5 Architecture Guards — Combat Micro Boundary Enforcement.
- *
- * 对应需求 §29 架构守卫：
- *
- *   1.  Domain (combat-micro.ts) 禁止 Game
- *   2.  Domain 禁止 Memory / RawMemory
- *   3.  Domain 禁止 Creep / Room / PathFinder
- *   4.  Domain 禁止 attack() / rangedAttack() / heal()
- *   5.  Domain 禁止 move() / registerMove / spawnCreep
- *   6.  Micro Runtime 禁止 spawn
- *   7.  Micro Runtime 禁止 logistics
- *   8.  Micro Runtime 禁止 recovery
- *   9.  Micro Runtime 禁止修改 WarPosture
- *   10. Micro Runtime 禁止创建 Operation
- *   11. Micro Runtime 禁止创建 Strategic Target
- *   12. Micro 禁止第二套 Threat Assessment
- *   13. Micro 禁止第二套 CombatCapability（消费 A5.1）
- *   14. Micro 禁止第二套 Formation（消费 A5.4.2）
- *   15. Micro 禁止第二套 FocusFire（消费 A5.4.3）
- *
- * 额外验证：
- *   - combat-micro.ts 不 import systems/ 或 creeps/ 或 kernel/
- *   - combat-micro.ts 不使用 Math.random / Date.now
- *   - combat-micro-runtime.ts 不直接调用 Game action API
- *   - barrel export 完整
- */
+/**  */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";

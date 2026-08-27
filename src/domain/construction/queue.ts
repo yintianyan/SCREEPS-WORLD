@@ -1,8 +1,4 @@
-/**
- * 建造队列域模块 — BuildTask 状态同步与清理的纯函数。从 construction-manager
- * （系统层，负责 Game API）提取，使队列管理逻辑可独立测试；本模块只操作
- * BuildTask[] 数据结构 + RoomSnapshot 只读数据。
- */
+/** 建造队列域模块 — BuildTask 状态同步与清理的纯函数。从 construction-manager */
 
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
@@ -436,7 +432,7 @@ export interface DevelopmentLaneInputs {
 /**
  * RCL2 关键发展建设通道判定 — 修复「extension 作为普通背景 P2 被门禁永久阻塞」
  * 的 RCL2 停摆闭环（Phase R2 根因）。
- *
+
  * 通道语义：当 developmentGate 因 claimSecure / pressure / conserve 等门禁拒绝时，
  * 若房间满足全部生存前提（无敌人、无 P0 孵化缺口、无紧急重建缺口）且能量不低于
  * 绝对地板，则允许为 extension / controller container 创建 site。通道不绕过：

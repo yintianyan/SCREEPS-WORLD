@@ -1,24 +1,4 @@
-/**
- * Expansion Manager — A3.3 完整执行链路系统。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §3 执行闭环 +
- * A3.3 Task Spec 全链路状态机。
- *
- * 完整链路：
- *   ExpansionPlan → Execution Gate → Claim → Owned Room → Pioneer →
- *   Spawn → Harvest → Transport → Build → Energy Loop →
- *   Economic Activation → Empire Integration → Autonomous Room
- *
- * 状态机（Memory.kernel.expansion）：
- *   validating → preparing → claiming → claimed → bootstrapping →
- *   economic_startup → integrating → completed
- *
- * 关键决策：
- *   1. 统一以 expansionPlans[] 为唯一真相源（退役 V1 Evaluator 的自主评选）
- *   2. 从 WAITING_EXECUTION Plan 消费 → Execution Gate → 完整链路
- *   3. 完成判据从"spawn 建成"升级为"Economic Activation + Empire Integration"
- *   4. 向后兼容：旧 claiming/pioneering 映射为 claiming/bootstrapping
- */
+/** Expansion Manager */
 import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext } from "../kernel/contracts";
@@ -137,7 +117,7 @@ type ExpansionState = NonNullable<KernelMemory["expansion"]>;
 
 /**
  * A3.3：从 expansionPlans[] 中消费 WAITING_EXECUTION Plan。
- *
+
  * 退役 V1 Evaluator 的自主评选——统一以 Plan 为唯一真相源。
  */
 function tryConsumePlan(ctx: TickContext): void {
@@ -212,7 +192,7 @@ function tryConsumePlan(ctx: TickContext): void {
 
 /**
  * A3.3 核心函数：推进执行状态机。
- *
+
  * 从当前状态出发，检查转换条件，推进到下一个状态。
  * 覆盖完整链路：preparing → claiming → claimed → bootstrapping →
  * economic_startup → integrating → completed
@@ -1359,13 +1339,13 @@ function estimateEnergyConsumption(room: Room): number {
 
 /**
  * 估算从 sponsor 到新房的外部能量流入。
- *
+
  * A3.4 修复：正确检测 carrier 角色（而非 transporter）+ 区分来源。
- *
+
  * 两条能量流入路径：
  *   1. Bootstrap 输血 — Pioneer（worker/builder）从 sponsor 带能量去 target
  *   2. Resource Network 正常调拨 — carrier 由 agenda-manager 的 supply Operation 创建
- *
+
  * carrier 的特征：memory.role === "carrier" + memory.remoteTarget === targetRoom
  * Pioneer 的特征：memory.home === targetRoom + memory.role === worker/builder（在 sponsor 取能后跨房）
  */

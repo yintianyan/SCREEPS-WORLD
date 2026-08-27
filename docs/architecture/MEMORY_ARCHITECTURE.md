@@ -36,7 +36,7 @@ segment 答「帝国记住了什么」**（research/18 §10.1）。
 
 | 条款 | 内容 |
 | --- | --- |
-| 单一真相源 | TypeScript 类型 + `schemaVersion` 常量同处一文件；运行时以 `CONFIG.memory` 为单一真相源，本文任何数字仅为快照（AGENTS.md）。 |
+| 单一真相源 | TypeScript 类型 + `schemaVersion` 常量同处一文件；运行时以 `CONFIG.memory` 为单一真相源，本文任何数字仅为快照（AGENT.md）。 |
 | 三件套纪律 | 新增字段必须同时改三处：类型定义、默认值工厂、迁移步骤——缺一即视为未完成，不予合并。 |
 | 值类型白名单 | 短 string / number / boolean / 枚举 / ID 引用 / 浅层数组。深层嵌套对象与路径结构一律拒绝；RoomPosition 拍平为 `roomName+x+y` 复合短 key（research/18 §10.2）。 |
 | 字段纪律 | 每个字段的 Owner/Reader/Lifecycle/Persistence/Frequency 六列登记入 [STATE_OWNERSHIP_MODEL.md](STATE_OWNERSHIP_MODEL.md) §3；未登记字段不得写入。 |

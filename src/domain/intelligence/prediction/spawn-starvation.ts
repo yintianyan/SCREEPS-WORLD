@@ -1,29 +1,4 @@
-/**
- * A6.3.2 Spawn Starvation Prediction Model — 孵化饥饿预测。
- *
- * 职责：
- *   - 分析 Spawn 队列深度、孵化容量、能量可用性和人口需求趋势
- *   - 预测孵化饥饿何时发生及其严重程度
- *   - 区分 5 种状态：NO_DEMAND / ENERGY_LIMITED / CAPACITY_LIMITED / QUEUE_GROWING / STARVATION_IMMINENT
- *   - 数据不足时返回 INSUFFICIENT_DATA
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * 所有运行时数据由调用方注入。
- *
- * PRED-001: Shadow-Only — 不执行 Game API，不修改运行时状态。
- * PRED-002: 不进入 tick critical path — 由系统层 P3 cadence 调用。
- * PRED-003: 完全 deterministic — 禁止 Math.random / Date.now / 无序迭代。
- * PRED-004: 每条 Prediction 必须有明确 horizon。
- * PRED-005: 数据不足返回 INSUFFICIENT_DATA，不伪造预测。
- * PRED-006: Evidence 完整可追溯。
- * PRED-007: 使用 ContextSignature + Regime compatibility。
- * PRED-008: 支持生命周期 PREDICTED → CONFIRMED / FAILED / EXPIRED。
- * PRED-009: 不产出 Recommendation。
- * PRED-010: 不自建采样通道，只消费已有 TimeSeries。
- *
- * 禁止简化为 `queueDepth > X => starvation`。
- * 必须综合分析：Demand + Queue + Energy + Spawn Capacity + Trend。
- */
+/** A6.3.2 Spawn Starvation Prediction Model — 孵化饥饿预测。 */
 
 import type {
   Prediction,
@@ -62,7 +37,7 @@ import {
 
 /**
  * 孵化饥饿预测状态分类。
- *
+
  * 区分 5 种不同情况：
  *   NO_DEMAND — 没有孵化需求（队列空、人口已满）
  *   ENERGY_LIMITED — 有需求但没有能量孵化
@@ -79,7 +54,7 @@ export type SpawnStarvationStatus =
 
 /**
  * Spawn Starvation Prediction 输入。
- *
+
  * 所有数据由系统层从 globalCache 注入，domain 不直接读 Game/Memory。
  */
 export interface SpawnStarvationInput {
@@ -177,21 +152,21 @@ export const QUEUE_GROWING_SLOPE_THRESHOLD = 0.01;
 
 /**
  * 预测孵化饥饿。
- *
+
  * 方法：threshold-projection + trend-extrapolation
  *   1. 分析队列深度趋势（上升 = 需求 > 供给）
  *   2. 分析人口趋势（下降 = 死亡 > 补充）
  *   3. 检查能量可用性（currentEnergy < minSpawnEnergy → ENERGY_LIMITED）
  *   4. 检查容量利用率（capacityUtilization > 1 → CAPACITY_LIMITED）
  *   5. 综合判断状态和预测饥饿时间
- *
+
  * 必须区分：
  *   - 没有 spawn demand（队列空，人口稳定）
  *   - 有 demand 但没有 energy（队列非空，能量不足）
  *   - 有 energy 但 spawn capacity 不足（能量足够但 spawn 全忙）
  *   - queue 持续增长（需求持续超过供给）
  *   - spawn starvation 即将发生
- *
+
  * PRED-005：数据不足时返回 INSUFFICIENT_DATA。
  * PRED-003：完全确定性。
  */
@@ -273,7 +248,7 @@ export function predictSpawnStarvation(input: SpawnStarvationInput): PredictionR
 
 /**
  * 分析孵化时间序列。
- *
+
  * 综合分析 Demand + Queue + Energy + Spawn Capacity + Trend。
  */
 function analyzeSpawnTimeSeries(
@@ -368,7 +343,7 @@ function deriveTrend(
 
 /**
  * 计算能量可用性因子 (0-1)。
- *
+
  * currentEnergy >= minSpawnEnergy → 1.0
  * currentEnergy = 0 → 0.0
  */
@@ -381,7 +356,7 @@ function computeEnergyAvailability(currentEnergy: number, minSpawnEnergy: number
 
 /**
  * 计算容量利用率 (0-1+)。
- *
+
  * population / spawnCapacity：
  *   < 0.8 → 利用率低
  *   0.8-1.0 → 接近满载
@@ -394,7 +369,7 @@ function computeCapacityUtilization(currentPopulation: number, spawnCapacity: nu
 
 /**
  * 计算需求压力因子 (0-1+)。
- *
+
  * queueDepth + p0Count 综合：
  *   queueDepth = 0 → 0
  *   queueDepth > 0 + p0Count > 0 → 高压力
@@ -408,12 +383,12 @@ function computeDemandPressure(currentQueueDepth: number, p0RequestCount?: numbe
 
 /**
  * 估计孵化饥饿何时发生。
- *
+
  * 饥饿条件：
  *   1. 队列持续增长（需求 > 供给）
  *   2. 人口持续下降（死亡 > 补充）
  *   3. 能量不足以孵化
- *
+
  * 综合判断：如果队列在增长且（人口下降或能量不足），外推何时到达临界。
  */
 function estimateStarvationTick(
@@ -478,7 +453,7 @@ function estimateStarvationTick(
 
 /**
  * 计算孵化饥饿严重程度 (0-1)。
- *
+
  * 严重程度基于趋势外推结果：
  *   - 有 estimatedStarvationTick → 按时间距离分级
  *   - 无 estimatedStarvationTick → 按趋势方向 + 当前因子综合评估
@@ -533,9 +508,9 @@ function computeSpawnSeverity(
 
 /**
  * 确定孵化饥饿状态。
- *
+
  * 必须区分 5 种情况。
- *
+
  * 关键原则：状态判定基于趋势外推结果，不是当前快照贴标签。
  * - ENERGY_LIMITED 需要能量趋势在下降或持续不足（不是只看当前值）
  * - CAPACITY_LIMITED 需要容量趋势在恶化或持续饱和
@@ -601,7 +576,7 @@ function determineSpawnStatus(
 
 /**
  * 计算基础置信度。
- *
+
  * 因素：
  *   - 样本数
  *   - R² 拟合度
@@ -672,7 +647,7 @@ function computeSpawnHorizon(
 
 /**
  * 计算预测值。
- *
+
  * value = 预测窗口结束时的队列深度。
  * 高值 = 饥饿越严重。
  */
@@ -803,7 +778,7 @@ function buildSpawnEvidence(
 
 /**
  * 获取 Spawn Starvation Prediction 的分析摘要。
- *
+
  * 用于可观测性 — 不产出 Prediction，只返回分析结果。
  * 纯函数。
  */

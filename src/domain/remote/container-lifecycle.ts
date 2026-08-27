@@ -1,36 +1,4 @@
-/**
- * Container Lifecycle — A4.1 Phase 1：远矿 container 建设状态生命周期。
- *
- * 合同锚点：A4.1 Architecture Audit §4.4（Container 建设状态）。
- *
- * 设计意图：
- *   定义远矿 container 的六状态生命周期，用于追踪 container 从规划到建成到修复
- *   的完整过程。不修改现有 remote-mining-manager 的 fulfillContainerRequests
- *   或 remote-harvester 的 buildSourceContainer/repairSourceContainer——
- *   本模块提供状态抽象和转换规则，供 Operation 追踪和 Dashboard 展示。
- *
- *   六状态：
- *   MISSING → PLANNED → BUILDING → ACTIVE → DAMAGED → DESTROYED
- *                                        ↺              ↺
- *   - MISSING: 无 container（初始状态或被完全摧毁）
- *   - PLANNED: 已标记 needContainer，等待创建 site
- *   - BUILDING: construction site 已创建，正在建造
- *   - ACTIVE: container 建成，正常使用
- *   - DAMAGED: container hits < threshold，需要维修
- *   - DESTROYED: container 被摧毁（需重建）
- *
- *   转换规则：
- *   MISSING → PLANNED: remoteHarvester 标记 needContainer
- *   PLANNED → BUILDING: fulfillContainerRequests 创建 site
- *   BUILDING → ACTIVE: site 建成
- *   ACTIVE → DAMAGED: hits < repairThreshold
- *   DAMAGED → ACTIVE: repair 完成
- *   DAMAGED → DESTROYED: hits = 0
- *   ACTIVE → DESTROYED: 被摧毁
- *   DESTROYED → PLANNED: 重建计划
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Container Lifecycle */
 
 // ─── 容器生命周期状态 ──────────────────────────────────
 
@@ -145,7 +113,7 @@ export function transitionContainerState(
 
 /**
  * 从 container 结构 + construction site + needContainer 标记派生生命周期状态。
- *
+
  * 优先级：
  * 1. 有 ACTIVE container 且 hits >= repairThreshold → ACTIVE
  * 2. 有 ACTIVE container 且 hits < repairThreshold → DAMAGED
@@ -153,7 +121,7 @@ export function transitionContainerState(
  * 4. 有 needContainer 标记 → PLANNED
  * 5. 曾有 container 但现在没了 → DESTROYED（如果之前是 ACTIVE/DAMAGED）
  * 6. 无任何痕迹 → MISSING
- *
+
  * 纯函数 — 不访问 Game/Memory，从参数注入。
  */
 export function deriveContainerState(input: {

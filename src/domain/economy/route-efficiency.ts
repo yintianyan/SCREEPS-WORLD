@@ -1,23 +1,4 @@
-/**
- * Route Efficiency — A4.0 Phase 2：路由效率评估。
- *
- * 合同锚点：A4.0 Architecture Audit §18.3（Route Efficiency 模型）。
- *
- * 设计意图：
- *   Route Efficiency = Delivered / Cost（交付效率 = 实际交付量 / 运输成本）
- *
- *   用于：
- *   1. 评估 Contract 的经济效率——是否值得维持
- *   2. 多 Producer 竞争时选择效率最高的供应方
- *   3. 触发 Contract 重新谈判（效率持续低于阈值 → 寻找替代 Producer）
- *
- *   理解：
- *   - highEfficiency (> threshold): 路由高效，Contract 值得维持
- *   - lowEfficiency (< threshold): 路由低效，考虑寻找替代方案
- *   - negativeEfficiency: 成本 > 交付量（严重亏损）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Route Efficiency */
 
 import type { TransportCostBreakdown } from "./transport-cost";
 import type { SupplyContract } from "./supply-contract";
@@ -96,15 +77,15 @@ export function gradeEfficiency(
 
 /**
  * 计算路由效率。
- *
+
  * ratio = delivered / cost.total
- *
+
  * 特殊情况：
  *   - cost.total = 0 → ratio = Infinity（零成本运输，理论上无限高效）
  *   - delivered = 0 → ratio = 0（无交付）
- *
+
  * 纯函数。
- *
+
  * @param contract 关联的 Contract
  * @param delivered 本周期实际交付量
  * @param cost 运输成本明细

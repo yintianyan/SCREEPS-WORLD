@@ -1,30 +1,4 @@
-/**
- * Tactical Runtime Pipeline — A5.4 战术运行时合并薄壳。
- *
- * R10 ADR 合并产物：将 A5.4.1–A5.4.4 四个独立 System 合并为 1 个 pipeline。
- *
- * 设计原理：
- *   - 四个战术 System 全部是 P2 main 阶段，仅在 war 姿态下有实际工作量
- *   - 它们有严格的 producer → consumer 依赖关系：
- *     tactical-runtime(10t) → squad-movement(1t) → tactical-engagement(3t) → combat-micro(3t)
- *   - tactical-runtime 是决策层（产出 TacticalDecision），必须先于消费者运行；
- *     squad-movement 消费决策更新编队位置；tactical-engagement 评估接敌；
- *     combat-micro 执行微操（通过 RoleActionIntent）。
- *   - interval 不同：tactical-runtime=10t, squad-movement=1t, tactical-engagement=3t, combat-micro=3t
- *   - 合并后 interval=1（取最小），内部按各阶段原始 interval 分频执行
- *   - 各阶段的 run() 逻辑完全保留，只是从独立 System 变为 pipeline 内部 stage 调用
- *
- * 错误隔离（Phase 6 修复）：
- *   - 每个 stage 独立 safeRun 包裹，一个 stage 抛错不跳过后续独立 stage。
- *   - 错误带 pipeline 名 + stage 名 + tick，不误报为整 pipeline 失败。
- *   - pipeline 本身的 safeRun 由 kernel 调用层提供（registerSystem → kernel.shouldRunSystem）。
- *
- * 注意：combat-micro-system 原本未注册（import 了但没 register），合并后正式纳入。
- *      这不改变运行时行为——它的 run() 在非 war 姿态下是 no-op。
- *      回归测试：tests/unit/tactical/a5-4-4-architecture-guards.test.ts 验证其 no-op 行为。
- *
- * 合同锚点：R10 ADR（ARCHITECTURE_FREEZE.md §15）+ A5.4.1-A5.4.4 各自合同。
- */
+/** Tactical Runtime Pipeline */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { safeRun } from "../kernel/safe-run";
 import { systemPhase } from "../kernel/phase";
@@ -53,7 +27,7 @@ const PIPELINE_NAME = "tactical-runtime-pipeline";
 
 /**
  * Tactical Runtime Pipeline — 合并后的单一 System 注册。
- *
+
  * interval=1（取最小），内部按各阶段原始 interval 分频调用。
  * 优先级 P2（main 阶段，在 war-planner 之后运行）。
  */

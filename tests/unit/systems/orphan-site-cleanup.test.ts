@@ -1,10 +1,4 @@
-/**
- * 孤儿工地清扫测试（Phase 3）。
- *
- * cleanOrphanConstructionSites 是 catch-all 兜底：移除位于"既非己方殖民地、
- * 又非活跃远矿目标、又非当前扩张目标"房间的我方建造 site。收口扩张超时/失守、
- * 远矿 abandoned、房间失守留下的孤儿工地（如线上 W6N3 的 spawn/container 孤儿）。
- */
+/** 孤儿工地清扫测试（Phase 3）。 */
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   computeSiteKeepRooms,

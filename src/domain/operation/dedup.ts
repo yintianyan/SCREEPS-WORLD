@@ -1,12 +1,4 @@
-/**
- * Operation Dedup — A3.0 操作幂等去重
- *（PLANNING_ARCHITECTURE §3 AgendaItem 幂等键去重）。
- *
- * 幂等键 = "supply:${from}:${to}:${resource}"
- * 同一对 (from, to, resource) 只允许一个活跃 Operation。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Operation Dedup */
 
 import type { OperationContext, ResourceType } from "./agenda-item";
 import { isActive, makeOperationId } from "./agenda-item";

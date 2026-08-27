@@ -1,19 +1,4 @@
-/**
- * RCL4 Automation — 自动化集成测试。
- *
- * RCL4 关键特征：
- *   - 20 extensions（energyCapacity = 300 + 20×50 = 1300）
- *   - storage 建成（hauler 溢出存储 + 取能回退）
- *   - tower 防御（hostile 出现时集火攻击）
- *   - 人口自动缩放（harvester/hauler/upgrader/builder 动态平衡）
- *   - CPU 控制（budget tier 正常时 P0-P3 全开）
- *
- * 验证目标：
- *   - storage 作为能量溢出池正常工作
- *   - hostile 出现时 tower 攻击、creep 不崩溃
- *   - 人口随经济自动调整
- *   - 长期运行能量稳定
- */
+/** RCL4 Automation — 自动化集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions, GameInspector } from "../framework";
 import type { TestWorld } from "../framework";

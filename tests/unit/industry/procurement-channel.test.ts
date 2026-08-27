@@ -1,11 +1,4 @@
-/**
- * 采购需求信道回归测试（多生产者合并 + 持久化）。
- *
- * 背景：lab-system（P1，两处发布点）与 factory-manager（P3）曾各自整表覆写
- * byRoom[room]，且 tick 守卫使容器单 tick 存活 —— 后写者覆盖先写者、跨 tick
- * 需求静默蒸发，终端 200t 相位几乎看不到完整需求（lab 买入通道长期半死，
- * 催生 c224ee8/e0af9d4/9d65d67 三连修）。本文件锁定合并语义与持久化契约。
- */
+/** 采购需求信道回归测试（多生产者合并 + 持久化）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { globalCache, publishProcurementDemands } from "../../../src/kernel/global-cache";
 import type { ProcurementDemand } from "../../../src/kernel/global-cache";

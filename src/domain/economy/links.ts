@@ -1,8 +1,4 @@
-/**
- * Link 能量传输决策（纯函数）。一个 link 每 tick 只能发起一次传输（引擎限制）；
- * 优先级：source→controller（站桩升级供能）> source→storage（溢出回收）>
- * storage→controller（controller 缺能且无 source 补给时）。
- */
+/** Link 能量传输决策（纯函数）。一个 link 每 tick 只能发起一次传输（引擎限制）； */
 
 import { CONFIG } from "../../config";
 
@@ -55,7 +51,7 @@ export interface LinkTransfer {
 /**
  * 规划本 tick 的 link 间能量传输。约束：每源 link 每 tick 至多参与一次传输、
  * 不超源可用能量与目标空闲容量、冷却中的 link 不能发起（引擎限制）。
- *
+
  * P1-4 minTransfer：source 攒够阈值或快满才发，避免小额传输白占冷却导致
  * 源 link 装不下新能量而溢出；controller「急需」（能量低于阈值）时豁免。
  * minTransfer 默认 0（无阈值，向后兼容），生产调用由 link-system 传 CONFIG 值。

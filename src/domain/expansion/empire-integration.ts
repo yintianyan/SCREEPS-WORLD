@@ -1,21 +1,4 @@
-/**
- * Empire Integration — A3.3 Phase 1：帝国集成判据。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §3 执行闭环 +
- * A3.3 Task Spec Empire Integration。
- *
- * 定位：经济激活后，新房需要被集成到 Empire 的统一管理框架中。
- * 集成 = 新房被纳入 Empire 的以下系统：
- *   1. RoomSnapshot 轮询（kernel 每 tick 拍快照）
- *   2. Empire Economy 统计（产出/消耗/预算）
- *   3. Spawn Manager 统一调度
- *   4. Defense 系统（自动响应入侵）
- *   5. Layout Planner（版本化布局管理）
- *
- * 集成完成后，新房从「扩张管理」移交到「常规运营」，expansion-manager 退出。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Empire Integration */
 
 /** Empire Integration 评估输入。 */
 export interface EmpireIntegrationInput {
@@ -57,7 +40,7 @@ export interface EmpireIntegrationResult {
 
 /**
  * 评估 Empire Integration 状态（纯函数）。
- *
+
  * 集成条件：5 个系统全部覆盖。
  */
 export function evaluateEmpireIntegration(input: EmpireIntegrationInput): EmpireIntegrationResult {
@@ -98,7 +81,7 @@ export function evaluateEmpireIntegration(input: EmpireIntegrationInput): Empire
 
 /**
  * 判断是否可以移交（从 expansion-manager 到常规运营）。
- *
+
  * 移交条件：integrated === true && economicActivated === true
  */
 export function canHandover(

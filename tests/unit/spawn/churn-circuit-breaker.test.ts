@@ -1,14 +1,4 @@
-/**
- * P0-3：spawn churn 熔断测试。
- *
- * 覆盖设计文档 §5.4 全部 13 用例：
- *   - 正常路径 5：短冷却隔离 / 长冷却 / 熔断触发 / 熔断期 demand 跳过 / 熔断到期恢复
- *   - 边界条件 5：滑窗边界 / 阈值恰好 20 / per-role 独立计数 / P0 worker 不阻塞 / 到期清理
- *   - 异常情况 3：globalCache 丢失 / key 格式异常 / churnFreezeUntil 类型异常
- *
- * 背景：私服快照事后分析病灶 3 — harvester 永久豁免隔离导致 spawn churn 4238 次。
- * 修复：harvester/worker 改短冷却 500 tick + 200 tick 滑窗内同 role churn > 20 → 熔断 100 tick。
- */
+/** P0-3：spawn churn 熔断测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   computeQuarantineTtl,

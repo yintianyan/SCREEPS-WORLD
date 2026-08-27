@@ -1,22 +1,4 @@
-/**
- * A6.2 Evaluation Evidence — Domain 层纯函数与类型定义。
- *
- * 职责：
- *   buildEvaluationEvidence()      — 从 Evaluation 构建可追溯证据链
- *   traceEvidence()                — 追溯 Evidence 到 Experience / Outcome / Attribution
- *   validateEvidenceCompleteness() — 验证证据完整性
- *
- * Evaluation 必须可解释。
- * 任何结论必须能够追溯到：
- *   Experience → Outcome → Attribution → Metric
- * 不能出现：score = 0.72 但不知道为什么。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * Deterministic Replay：
- *   同一输入 + 同一模型版本 → 相同 evidenceHash。
- *   禁止 Math.random() / Date.now() / 无序迭代 / 浮点误差。
- */
+/** A6.2 Evaluation Evidence — Domain 层纯函数与类型定义。 */
 
 import type {
   EvaluationDimension,
@@ -115,10 +97,10 @@ export interface EvidenceCompleteness {
 
 /**
  * 从 Evaluation 构建可追溯证据链。
- *
+
  * 每个 DimensionScore 都产出一条 Evidence。
  * Evidence 可追溯到 Experience / Outcome / Attribution / Metric。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function buildEvaluationEvidence(
@@ -183,10 +165,10 @@ function buildDimensionEvidence(
 
 /**
  * 追溯证据链 — 从 Finding 追溯到原始数据。
- *
+
  * 链路：
  *   Finding → DimensionScore → Experience → Outcome → Attribution → Metric
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function traceEvidence(
@@ -294,9 +276,9 @@ export function traceEvidence(
 
 /**
  * 验证证据完整性 — 确保每个结论都有完整的证据链。
- *
+
  * 禁止 score = 0.72 但不知道为什么。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function validateEvidenceCompleteness(

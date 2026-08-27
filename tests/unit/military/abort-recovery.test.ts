@@ -1,12 +1,4 @@
-/**
- * A5.3.1 GAP-1 Unit Tests — AbortReason → RecoveryAction 映射 + 幂等 + 确定性。
- *
- * 覆盖：
- *   - AbortReason → RecoveryIntent → Action 映射
- *   - Idempotency / Cooldown
- *   - Escalation / RecoveryUnavailable
- *   - Determinism
- */
+/** A5.3.1 GAP-1 Unit Tests — AbortReason → RecoveryAction 映射 + 幂等 + 确定性。 */
 
 import { describe, expect, it } from "vitest";
 import {

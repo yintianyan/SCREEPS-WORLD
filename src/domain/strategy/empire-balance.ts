@@ -1,19 +1,4 @@
-/**
- * Empire Economic Balance — A4.0/A4.1：帝国级经济计算。
- *
- * 合同锚点：A4.1 Architecture Audit §18.1（资源流闭环）。
- * 记忆约束 [[memory:17875714213295541337]]：Remote Mining 必须作为 Empire
- * Resource Network 上的 Resource Production Operation。
- *
- * 设计意图：
- *   计算帝国级的资源平衡——生产/消费/运输/储备。
- *   远矿产出作为帝国生产层的一部分被纳入计算。
- *
- *   输入：各房间的经济摘要 + 远矿运营数据
- *   输出：帝国级资源平衡表 + 扩张压力 + 经济健康度
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Empire Economic Balance */
 
 // ─── 帝国资源平衡 ─────────────────────────────────────────
 
@@ -106,9 +91,9 @@ export type EmpireEconomicHealth =
 
 /**
  * 计算帝国级资源平衡。
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param tick 当前 tick
  * @param roomSummaries 各房间经济摘要
  * @param remoteContributions 远矿贡献列表
@@ -248,7 +233,7 @@ export function classifyEmpireHealthReason(
 
 /**
  * 从各远矿 Operation 的经济数据计算对某孵化房的远矿贡献。
- *
+
  * 纯函数。
  */
 export function computeRemoteContribution(

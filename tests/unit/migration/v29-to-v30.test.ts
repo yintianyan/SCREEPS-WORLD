@@ -1,10 +1,4 @@
-/**
- * v29 → v30 迁移独立测试（R7a 容量感知 / capacity + agenda.progressBase 建档）。
- *
- * 迁移语义：两字段均可选（empire-strategy 唯一写者）。建档 + 畸形自愈：
- * capacity 非对象 / tier 不在枚举 / since·upgradeTicks 非数字 → 删除；
- * progressBase 非数字 → 删除（缺失视为无基线）。
- */
+/** v29 → v30 迁移独立测试（R7a 容量感知 / capacity + agenda.progressBase 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

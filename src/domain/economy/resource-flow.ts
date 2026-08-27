@@ -1,26 +1,4 @@
-/**
- * Resource Flow — A4.2 统一资源流图。
- *
- * 合同锚点：A4.2 Architecture Audit §10.17-18 NM-7。
- *
- * 设计意图：
- *   统一记录每种资源的完整流转路径：
- *   Production → Transfer → Storage → Consumption → Loss
- *
- *   与 ResourceFlowSnapshot（flow-accounting.ts）的关系：
- *   - ResourceFlowSnapshot 是远矿 Operation 级别的流追踪
- *   - ResourceFlow 是帝国/房间级别的统一流图，聚合所有资源类型
- *
- *   损失分类：
- *   - production_loss: 生产点到存储点之间丢失（creep 死亡携带）
- *   - transport_loss: 运输过程中丢失（carrier 死亡 / 路径过长衰减）
- *   - overflow_loss: 存储满后无法入库导致的溢出损失
- *   - death_loss: creep 死亡携带的资源损失
- *   - decay_loss: dropped resource 自然衰减
- *   - other_loss: 其他未归类损失
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Resource Flow */
 
 import type { ResourceType } from "../operation/agenda-item";
 
@@ -112,7 +90,7 @@ export interface ResourceFlowGraph {
 
 /**
  * 构建资源流图。纯函数。
- *
+
  * @param resource 资源类型
  * @param t0 起始 tick
  * @param t1 结束 tick
@@ -213,12 +191,12 @@ export function summarizeFlowGraph(flow: ResourceFlowGraph): string {
 
 /**
  * 核算恒等式验证。
- *
+
  * 不变量：stockEnd = stockStart + produced + imported + bought
  *                   - exported - sold - consumed - totalLoss
- *
+
  * 等价于：drift = 0。
- *
+
  * 纯函数。
  */
 export function verifyAccountingInvariant(flow: ResourceFlowGraph): {

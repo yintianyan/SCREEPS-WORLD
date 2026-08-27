@@ -1,33 +1,4 @@
-/**
- * Squad Movement Runtime — A5.4.2 系统层薄壳。
- *
- * 合同锚点：A5.4.2 §9 PathFinder Boundary + §10 Movement Execution。
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 globalCache / Game 采集 Squad 成员运行时状态
- *   2. 构建 SquadSnapshot（纯函数输入格式）
- *   3. 调用 domain 纯函数 produceSquadMovementIntent() → SquadMovementIntent
- *   4. 将 SquadMovementIntent 翻译为实际移动指令：
- *      a. Path Leader 走 PathFinder 共享路径（只算一次，其他成员跟随）
- *      b. 其他成员走 Formation Slot（registerMove 到 DesiredPosition）
- *   5. 编队级 Stuck Detection（Anchor 连续未前进 → Recovery）
- *
- * 禁止：
- *   - 不做任何战术决策（决策由 domain 纯函数裁决）
- *   - 不直接调用 attack() / heal()（那些是角色层职责）
- *   - 不修改 domain 层纯函数的输入/输出结构
- *
- * 频率：interval=1（每 tick 运行——编队移动需要每 tick 执行路径）
- * 优先级：P2（在 tactical-runtime 之后运行，消费其产出的 RoleActionIntent）
- * 阶段：main（在角色之前——先产出 SquadMovementIntent 供角色消费）
- * 存储：heap only — global reset 可丢（下个周期重建）。
- *
- * PathFinder 边界（A5.4.2 §9）：
- *   - Domain 层绝不调用 PathFinder / moveTo / registerMove
- *   - 本模块是唯一允许调用 PathFinder 的编队移动模块
- *   - Path Leader 算一条共享路径，其他成员沿路径方向走 Formation Slot
- *   - 每房每 tick 最多 1 次 PathFinder.search（编队共享）
- */
+/** Squad Movement Runtime */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache, querySquad, type GlobalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
@@ -171,14 +142,14 @@ export const squadMovementSystem: System = {
 
 /**
  * 执行编队移动 — 将 SquadMovementIntent 翻译为实际移动指令。
- *
+
  * 核心策略（A5.4.2 §9-10）：
  *   1. Path Leader 走 PathFinder 共享路径（只算一次）
  *   2. 其他成员沿共享路径方向走 Formation Slot
  *   3. 跨房时 Path Leader 走 moveTowardRoom，其他成员跟随
  *   4. ENGAGING 状态时不大范围移动（维持阵位）
  *   5. Cohesion BROKEN 时全员走 Regroup 点（CLUSTER 阵型）
- *
+
  * PathFinder 边界：
  *   - Domain 层只产出 Intent（DesiredPosition），不调 PathFinder
  *   - 本模块是唯一调 PathFinder 的编队移动模块
@@ -242,10 +213,10 @@ function executeSquadMovement(
 
 /**
  * 将成员调整到 Formation Slot（DesiredPosition）。
- *
+
  * 每个成员走 registerMove 到自己的 DesiredPosition。
  * Traffic Manager 在 tick 末仲裁。
- *
+
  * 不调 PathFinder — 只走单步方向（getDirectionTo + registerMove）。
  * 长距离移动由 Path Leader 的 moveToTarget 处理。
  */
@@ -305,7 +276,7 @@ function adjustMembersToSlots(
 
 /**
  * 从 warPlan + globalCache.squadIndex 构建 SquadPlan。
- *
+
  * 复用 tactical-runtime-system 的构建逻辑，但简化为只取编队信息。
  */
 function buildSquadPlanFromWarPlan(
@@ -492,10 +463,10 @@ function buildDefaultTerrain(roomName: string, tick: number): TerrainContext {
 
 /**
  * 查询编队的移动意图（供角色层消费）。
- *
+
  * 角色层（attacker/healer）在 RolePolicy 中调用此函数，
  * 获取当前 tick 的编队移动指令（Formation Slot + 移动模式）。
- *
+
  * 如果返回 null，角色回退到原有行为（Legacy 兼容）。
  */
 export function getSquadMovementIntent(squadId: string): SquadMovementIntent | null {
@@ -507,7 +478,7 @@ export function getSquadMovementIntent(squadId: string): SquadMovementIntent | n
 
 /**
  * 查询 creep 的 Formation Slot（供角色层消费）。
- *
+
  * 返回该 creep 在编队中的期望位置和移动指令。
  * 如果返回 null，角色回退到原有行为。
  */

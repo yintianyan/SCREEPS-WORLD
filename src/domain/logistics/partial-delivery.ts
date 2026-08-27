@@ -1,15 +1,4 @@
-/**
- * Partial Delivery — A4.3 Phase 4：部分交付 → 剩余需求。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #14（无 Partial Delivery → Remaining）、
- * §10 #17。
- *
- * 设计意图：
- *   交付 < 需求 → 自动生成 Remaining Demand（新的 TransportRequestV2）。
- *   现有 shouldPartialComplete 只标记状态但不生成剩余需求。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Partial Delivery */
 
 import type { TransportRequestV2 } from "./transport-request";
 import { createRequest } from "./transport-request";
@@ -18,13 +7,13 @@ import { createRequest } from "./transport-request";
 
 /**
  * 交付 < 需求 → 自动生成 Remaining Demand。
- *
+
  * 创建新的 TransportRequestV2，amount = original.amount - deliveredAmount。
  * 新 Request 继承原始 Request 的所有属性（resource/source/destination/priority/scope），
  * 但 deadline 可能缩短（剩余时间的 80%）。
- *
+
  * 纯函数。
- *
+
  * @param original 原始 Request
  * @param deliveredAmount 已交付量
  * @param tick 当前 tick

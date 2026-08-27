@@ -1,12 +1,4 @@
-/**
- * Expansion ROI Tracker — A3.4：扩张投资回报追踪。
- *
- * 合同锚点：A3.4 Task Spec §18 Expansion ROI。
- *
- * 记录 Before/After 扩张指标对比，回答"这次扩张到底有没有改善 Empire？"
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Expansion ROI Tracker */
 
 /** Before/After 快照。 */
 export interface EmpireSnapshot {
@@ -62,7 +54,7 @@ export interface ExpansionRoiResult {
 
 /**
  * 计算 Expansion ROI（纯函数）。
- *
+
  * 对比 Before/After 快照，计算各维度的增量。
  * improved = 产能增益 > 0 或 净流改善 或 储备增加。
  */

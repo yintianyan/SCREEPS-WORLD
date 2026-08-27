@@ -1,21 +1,4 @@
-/**
- * A6.3.1 Prediction Types — 预测层基础类型定义。
- *
- * 职责：
- *   - 定义 Prediction 核心类型（target, method, status, window, evidence）
- *   - 定义 PredictionEvidence 证据类型
- *   - 定义 INSUFFICIENT_DATA / NO_PREDICTION 哨兵值
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * Shadow-Only（PRED-001）：
- *   类型定义不执行任何行为。
- *
- * PRED-004：每条 Prediction 必须携带 horizon（时间窗口）。
- * PRED-005：数据不足时返回 INSUFFICIENT_DATA，不伪造预测。
- * PRED-006：每条 Prediction 必须携带 Evidence。
- * PRED-007：每条 Prediction 必须携带 ContextSignature。
- */
+/** A6.3.1 Prediction Types — 预测层基础类型定义。 */
 
 import type { PredictionContext } from "./context";
 
@@ -25,7 +8,7 @@ import type { PredictionContext } from "./context";
 
 /**
  * 第一阶段预测目标（7 个）。
- *
+
  * 来源：A6.0 A6_0_PREDICTION_ARCHITECTURE.md §1.2。
  * 第二阶段预测目标（hostile-arrival, resource-imbalance, war-escalation,
  * enemy-behavior, recovery-probability）在 A6.4+ 实现。
@@ -41,7 +24,7 @@ export type PredictionTarget =
 
 /**
  * 预测方法。
- *
+
  * 来源：A6.0 A6_0_PREDICTION_ARCHITECTURE.md §2.1。
  * 全部为规则 + 统计方法，禁止 ML/RL/NN。
  */
@@ -52,7 +35,7 @@ export type PredictionMethod =
 
 /**
  * 预测生命周期状态。
- *
+
  * PRED-008：预测基础设施只负责记录 lifecycle，不执行 recommendation。
  */
 export type PredictionStatus = "active" | "fulfilled" | "expired" | "invalidated";
@@ -63,7 +46,7 @@ export type PredictionStatus = "active" | "fulfilled" | "expired" | "invalidated
 
 /**
  * 预测时间窗口 — PRED-004 强制要求。
- *
+
  * 每条 Prediction 必须携带 horizon。
  * 上限 duration ≤ 5000 tick；下限 duration ≥ 50 tick。
  */
@@ -82,7 +65,7 @@ export interface PredictionWindow {
 
 /**
  * 预测证据 — PRED-006 强制要求。
- *
+
  * 每条 Prediction 必须有可追溯的证据链。
  * evidence → 数据源 → 采集 tick → 原始系统输出。
  */
@@ -117,7 +100,7 @@ export interface PredictionEvidence {
 
 /**
  * Prediction — 完整的预测结果。
- *
+
  * 不变式（PRED-XXX 守卫）：
  *   - PRED-004：window 必须有值（horizon 强制）
  *   - PRED-005：confidence = 0 时不产出（返回 INSUFFICIENT_DATA）
@@ -158,7 +141,7 @@ export interface Prediction {
 
 /**
  * 数据不足哨兵 — PRED-005。
- *
+
  * 当数据不足时不产出 Prediction，返回此哨兵。
  * confidence = 0 的垃圾预测不应被消费。
  */
@@ -171,14 +154,14 @@ export const NO_PREDICTION = "NO_PREDICTION" as const;
 
 /**
  * 预测结果类型 — 要么是有效的 Prediction，要么是哨兵值。
- *
+
  * PRED-005：调用方必须检查是否为哨兵值，不得消费 confidence=0 的预测。
  */
 export type PredictionResult = Prediction | typeof INSUFFICIENT_DATA | typeof NO_PREDICTION;
 
 /**
  * 检查预测结果是否为有效 Prediction（非哨兵值）。
- *
+
  * PRED-005：防止 confidence=0 的垃圾预测被错误消费。
  */
 export function isValidPrediction(result: PredictionResult): result is Prediction {
@@ -198,7 +181,7 @@ export function isInsufficientData(result: PredictionResult): boolean {
 
 /**
  * 创建 Prediction ID（确定性：P-{tick}-{seq}）。
- *
+
  * 禁止使用 Math.random / Date.now。
  */
 export function makePredictionId(tick: number, seq: number): string {
@@ -211,7 +194,7 @@ export function makePredictionId(tick: number, seq: number): string {
 
 /**
  * 检查 Prediction 是否已到期（window.endTick < currentTick）。
- *
+
  * PRED-008：到期预测应标记为 "expired"。
  */
 export function isPredictionExpired(prediction: Prediction, currentTick: number): boolean {

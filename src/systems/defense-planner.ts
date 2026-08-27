@@ -42,7 +42,7 @@ export const defensePlannerSystem: System = {
 
 /**
  * Min-cut 最大防御建筑数（超过则 fallback 到扇区）。
- *
+
  * v3：从 30 提升到 50 — 8 邻接后割集可能增大（对角线路径也需封锁），
  * 30 在多出口开放地形下易误判为"割集过大"而回退扇区防御。
  */
@@ -50,7 +50,7 @@ const MAX_CUT_RAMPARTS = 50;
 
 /**
  * 把算法版本戳拼入 signature，让算法语义变更后旧缓存自然失效。
- *
+
  * 旧 Memory（无版本前缀）与新计算的 signature 比较时不匹配，触发重算；
  * 新写入的 signature 含前缀，后续命中正常。无 Memory schema 变更。
  */
@@ -172,10 +172,10 @@ export function isMinCutPositionBuildable(
 
 /**
  * P2-1：构建不可放置割集顶点的位置集合（出口格及紧邻出口格）。
- *
+
  * 这些位置在 min-cut 算法中拆点边容量设为 INF（不可切割），
  * 算法自然选其他位置作为割集，保证生成的割集全部可建造。
- *
+
  * 集合包含 x≤1 或 x≥48 或 y≤1 或 y≥48 的所有格子（packed = x*50+y）。
  * defense-planner 是 P3 低频系统（interval=10, bucket≥5000），遍历开销可接受。
  */
@@ -363,13 +363,13 @@ function planDefense(
 
 /**
  * 核心结构 rampart 覆盖 — 在每个核心结构位置生成 rampart 任务。
- *
+
  * rampart 可与建筑共格，使敌方必须先拆 rampart 才能攻击建筑。
  * 用 snapshot.ramparts 去重，避免对已有 rampart 的位置重复入队。
- *
+
  * 覆盖范围：spawn / extension / storage / tower / link / container —
  * 这些是敌方优先攻击的高价值目标。
- *
+
  * 返回是否新增了任务。
  */
 function addCoreRampartCoverage(

@@ -1,17 +1,4 @@
-/**
- * Military Operation Model — A5.3 Domain 纯函数。
- *
- * 核心链路中的位置：
- *   Threat + CombatCapability + Terrain + PlayerIntel + Confidence
- *   + EmpireContext + EconomicContext + StrategicContext
- *   → Military Operation → Operation Proposal → War Plan
- *   → Force Requirement → Logistics Requirement → Spawn Requirement
- *   → Execution Authorization
- *
- * A5.3 只负责 Planning。不负责 Tactical Execution。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / Creep / Room / 任何 Runtime 对象。
- */
+/** Military Operation Model */
 
 // ═══════════════════════════════════════════════════════════
 // §1. OperationType — 12 种军事行动类型

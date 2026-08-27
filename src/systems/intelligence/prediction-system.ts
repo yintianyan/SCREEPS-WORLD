@@ -1,29 +1,4 @@
-/**
- * A6.3 Prediction System — 系统层薄壳。
- *
- * 合同锚点：A6.3 Prediction Architecture + A6_3_PREDICTION_CONTRACT.md
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 globalCache 采集 TimeSeries 数据（netFlow, reserve, spawnQueueDepth 等）
- *   2. 构建 PredictionContext
- *   3. 调用 A6.3 Domain 纯函数（predictEnergyShortage / predictSpawnStarvation）
- *   4. 将有效 Prediction 写入 PredictionRingBuffer
- *   5. 过期预测 lifecycle 管理（expireOverduePredictions）
- *   6. GC 清理超龄记录
- *
- * 禁止：
- *   - 不执行任何 Game API 写操作（Shadow-Only 原则）
- *   - 不修改任何业务状态
- *   - 不进入 tick 关键路径（低频 500t）
- *   - 不建立第二套 Metrics / Strategy / Outcome
- *   - Prediction 结果不得进入任何执行系统
- *
- * CPU 预算：低频执行（interval=500），每 tick 近零成本。
- * 优先级 P3（在所有业务系统之后运行，消费它们产出的数据）。
- * 存储：heap only — global reset 可丢。
- *
- * 安全不变式：本系统完全停止时，帝国必须照常安全运行。
- */
+/** A6.3 Prediction System — 系统层薄壳。 */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { systemPhase } from "../../kernel/phase";

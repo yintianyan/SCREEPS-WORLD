@@ -1,20 +1,4 @@
-/**
- * UOEM Implementation Tests — Phase 6 生产代码验证。
- *
- * 与 uoem-proof.test.ts（reference implementation）对应，
- * 验证 src/domain/expansion/uoem-types.ts + src/kernel/outcome-channel.ts
- * 的生产实现满足六类缺陷消解路径。
- *
- * 覆盖：
- *   - Operation Identity 跨 reset 稳定
- *   - OutcomeChannel FIFO 顺序 + 幂等去重 + 溢出可观测
- *   - Milestone 不进入 OutcomeChannel
- *   - terminal-only 语义（SUCCESS 后 FAILURE 被拒绝）
- *   - firstStartedAt/openedAt duration 正确
- *   - recovery delta
- *   - logistics/spawn paired before/after
- *   - deterministic replay
- */
+/** UOEM Implementation Tests — Phase 6 生产代码验证。 */
 import { describe, it, expect } from "vitest";
 import {
   makeOperationId,

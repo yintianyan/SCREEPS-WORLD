@@ -1,16 +1,4 @@
-/**
- * ServerHarness — 封装 screeps-server-mockup 的 ScreepsServer 生命周期。
- *
- * 职责：
- *   - 创建/启动/停止 server 实例
- *   - 提供 world 访问接口（reset/addRoom/addRoomObject/addBot）
- *   - 管理 server 进程清理（process.exit 替代方案）
- *
- * 关键约束 [Facts]：
- *   - screeps-server-mockup 的 server.stop() 无法优雅关闭 storage
- *   - vitest v2 无 --forceExit CLI 参数，process.exit() 会被 vitest 拦截
- *   - 解法：setup.ts afterAll 中用 process.kill(pid, SIGKILL) 绕过拦截
- */
+/** ServerHarness — 封装 screeps-server-mockup 的 ScreepsServer 生命周期。 */
 import { ScreepsServer } from "screeps-server-mockup";
 
 // terrain 辅助函数定义在 WorldBuilder.ts 中，避免重复
@@ -61,7 +49,7 @@ export class ServerHarness {
 
   /**
    * 清理资源。
-   *
+
    * screeps-server-mockup 的 server.stop() 发 SIGTERM 但 storage 进程对 SIGTERM
    * 不完全退出（只停 queue fetching）。@screeps/common storage.js 的 socket
    * error/end handler 会 setTimeout(_connect, 1000) 无限重连，使 worker 事件

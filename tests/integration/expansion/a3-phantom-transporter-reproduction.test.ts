@@ -1,17 +1,4 @@
-/**
- * A3 Phantom Transporter Bug — 最小复现测试
- *
- * Bug 现象：扩张状态机在 economic_startup 阶段检查 `transporterActive`，
- * 但系统中不存在 "transporter" 角色——CONFIG.roles 没有、bootstrap 未注册、
- * demand.ts 不产生 demand、spawn-manager 不孵化。实际的运输角色是 hauler/distributor。
- *
- * 这导致：
- *   CP3_ENERGY_LOOP 永远不可能通过（transporterActive 永远为 false）
- *   economic-activation 永远不可能通过（hasTransporter 永远为 false）
- *   扩张必然超时并回收殖民地
- *
- * 本测试在修复前应稳定复现 bug，修复后应全部通过。
- */
+/** A3 Phantom Transporter Bug — 最小复现测试 */
 
 import { describe, it, expect } from "vitest";
 import { CONFIG } from "../../../src/config";

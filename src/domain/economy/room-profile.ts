@@ -1,24 +1,4 @@
-/**
- * Room Economic Contract — A2 后半·Room 向 Empire 暴露的标准化经济接口。
- *
- * 合同锚点：EMPIRE_SYSTEM_MODEL §1 Room 接口（Report/Request/Directive-channel）、
- * ECONOMY §2 九概念 + §3 三指标、STATE_OWNERSHIP §3.5–§3.6。
- *
- * 设计意图：当前 Empire 层（empire-strategy.ts）直接遍历 Memory 字段拼凑
- * RoomStrategyInput——这是蓝图允许的（DATA_FLOW §1），但缺少一个显式的
- * Room Economic Contract。本模块把分散的 Memory 字段 + Economy 快照 + RoomSnapshot
- * 组装为一个标准化、类型安全的 Read Model，供 Empire 级纯函数消费。
- *
- * 纯函数律（DEP_GRAPH §3-5，SYSTEM_BOUNDARIES §2.3-3）：
- *   - 不引用 Game / Memory / RawMemory（lint 红线）
- *   - 全部输入由参数注入（调用方 = 系统侧薄壳）
- *   - 不写任何状态——只读组装
- *
- * 数据来源（三个输入源，均已在 tick 执行前更新）：
- *   1. RoomSnapshot — kernel 每 tick 重建（活对象快照）
- *   2. RoomMemory — room-state (P0) + economy (P1/50t) 写入的结构化字段
- *   3. EconomyQuery — economy.ts 的 queryEconomy() 公开接口返回值
- */
+/** Room Economic Contract */
 
 import type { RoomSnapshot, ColonyState } from "../../kernel/contracts";
 import type { ColonyPhase } from "./phase";
@@ -43,10 +23,10 @@ export interface EconomyQueryInput {
 
 /**
  * Room 经济分类（EMPIRE_SYSTEM_MODEL §1 Room「能力门槛 phase」隐含定义）。
- *
+
  * 从 colonyState + RCL + storage + netFlow 派生的经济能力层级，
  * 供 Empire 判断房间在帝国经济中的角色定位。
- *
+
  * - Core：经济成熟的自有房（RCL≥6 + storage + netFlow≥0 + colonyState=normal）
  *   — 帝国基座，可承担调拨源 / 代孵 / 远矿 sponsor 职责
  * - Production：发展中的自有房（RCL4-5 或 storage 刚建 + colonyState=normal）
@@ -62,7 +42,7 @@ export type RoomEconomicClass = "core" | "production" | "candidate" | "strugglin
 
 /**
  * Room Economic Profile — 房间向 Empire 暴露的标准化经济只读视图。
- *
+
  * 合同映射：
  * - Report 通道（EMPIRE_SYSTEM_MODEL §1 Room）：净流/缺口/风险 → 本 Profile 的
  *   netFlow / deficit / riskBuffer 字段
@@ -71,7 +51,7 @@ export type RoomEconomicClass = "core" | "production" | "candidate" | "strugglin
  * - 九概念快照（ECONOMY §2）：Income/Consumption/Storage/Reservation →
  *   本 Profile 的 income / consumption / storage / reserved 字段
  * - Room Economic Classification：economicClass 字段
- *
+
  * 不变量：
  * - 所有字段从调用方注入的三个源派生，不做任何 Game/Memory 访问
  * - storageCapacity 为 0 时 storageRatio = 0（不 NaN）
@@ -162,10 +142,10 @@ export interface RoomEconomicProfile {
   // ── A4.0 Empire Room Role（经济职能分工，与 economicClass 正交）──
   /**
    * Empire Room Role — 房间在帝国经济中的职能分工（CORE/PRODUCTION/SUPPORT/REMOTE）。
-   *
+
    * 与 economicClass 正交：economicClass 是发展阶段分类（能力门槛），
    * empireRole 是经济职能分工（比较优势）。
-   *
+
    * undefined 表示尚未评估（首次评估前或 global reset 后）。
    * 由 Role Evaluation 纯函数 + Role Stability 迟滞机制裁决后写入。
    */
@@ -210,13 +190,13 @@ export interface RoomEconomicMemory {
 
 /**
  * 判定房间经济分类（EMPIRE_SYSTEM_MODEL §1 Room 能力门槛）。
- *
+
  * 优先级：struggling > candidate > production > core
  * - struggling: colonyState 为 bootstrap/recovery/defense
  * - candidate: RCL < 4 或无 storage
  * - production: RCL 4-5 且有 storage 且 colonyState=normal
  * - core: RCL ≥ 6 且有 storage 且 colonyState=normal
- *
+
  * 纯函数 — 不触 Game/Memory。
  */
 export function classifyRoomEconomic(
@@ -256,15 +236,15 @@ export function computeSelfSufficiency(
 
 /**
  * 从 RoomSnapshot + RoomMemory 子集 + EconomyQuery 组装 RoomEconomicProfile。
- *
+
  * 这是 Room Economic Contract 的核心纯函数：
  * - 不访问 Game/Memory/RawMemory（DEP_GRAPH §3-5 红线）
  * - 三个输入源由调用方（系统侧薄壳）注入
  * - 只读组装，不写任何状态
- *
+
  * 调用方：empire-economy 系统（A2 后半新增薄壳）或 empire-strategy 扩展。
  * 频率：每 N tick（50–100，与 economy 同频或更低）。
- *
+
  * 注意：empireRole 字段不在此函数中设置——它由 Role Evaluation + Role Stability
  * 裁决后由调用方（系统侧薄壳）单独写入。此函数只组装经济剖面数据。
  */
@@ -358,13 +338,13 @@ export function buildRoomEconomicProfile(
 
 /**
  * 判定房间是否具备对外输出能力（ECONOMY §1.2 调拨门控前置）。
- *
+
  * 前置条件（全部满足）：
  * 1. 非困难态（colonyState=normal）
  * 2. 有 storage
  * 3. 本土净流为正（netFlowPositive）
  * 4. storage 水位 ≥ 最低安全线（storageRatio ≥ 0.3）
- *
+
  * 纯函数 — 用于 Empire Resource View 的 surplus 检测，不执行调拨。
  */
 export function canExportEnergy(profile: RoomEconomicProfile): boolean {
@@ -377,12 +357,12 @@ export function canExportEnergy(profile: RoomEconomicProfile): boolean {
 
 /**
  * 判定房间是否需要外部能量援助（ECONOMY §1.2 调拨门控受援侧）。
- *
+
  * 前置条件（任一满足即视为需要援助）：
  * 1. colonyState 为 recovery/bootstrap（经济困难态）
  * 2. 净流为负 且 riskBuffer < 400（断供耐受 < 400 tick）
  * 3. storageRatio < 0.1 且 estimatedIncome < 5（储备近空 + 产能极低）
- *
+
  * 纯函数 — 用于 Empire Resource View 的 deficit 检测，不执行调拨。
  */
 export function needsEnergyAid(profile: RoomEconomicProfile): boolean {

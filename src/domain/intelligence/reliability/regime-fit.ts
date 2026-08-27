@@ -1,15 +1,4 @@
-/**
- * A6.5 Regime Fit — Regime 适配度计算。
- *
- * 职责：
- *   - 检查当前 Regime 下各模型的 CalibrationProfile 适配情况
- *   - Regime Profile 查找（通过 ResolutionResult 的 resolutionContextSignature）
- *   - Profile Fallback 策略（Regime → 全局 → NONE）
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * REL-001 (Read-Only)：只读消费，不修改输入。
- * REL-005 (Deterministic)：相同输入 → 相同输出。
- */
+/** A6.5 Regime Fit — Regime 适配度计算。 */
 
 import type { PredictionContext } from "../prediction/context";
 import { buildPredictionContextSignature } from "../prediction/context";
@@ -30,9 +19,9 @@ import {
 
 /**
  * 计算 Regime 适配度。
- *
+
  * 纯函数 — 从 A6.4 Profile + A6.3 Context 计算。
- *
+
  * @param profiles - 所有 ModelCalibrationProfile
  * @param resolutions - 所有 ResolutionResult
  * @param predictions - 所有 Prediction
@@ -75,7 +64,7 @@ export function computeRegimeFit(
 
 /**
  * 计算单个模型的 Regime 适配度。
- *
+
  * 检查 ResolutionResult 中是否有足够多的 resolutionContextSignature 与当前签名匹配。
  */
 function computeModelRegimeFit(

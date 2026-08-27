@@ -1,21 +1,4 @@
-/**
- * A6.3 Prediction Layer — C1-C7 统一反事实退化审计。
- *
- * 审计目标：验证已实现的 2 个预测模型（Energy Shortage、Spawn Starvation）
- * 在以下 7 种场景下的行为：
- *
- *   C1: 当前坏 + 趋势改善 → 不得预测未来恶化
- *   C2: 当前正常 + 趋势恶化 → 必须提前预测
- *   C3: 当前异常 + 无有效趋势 → 不得伪造预测（重点！）
- *   C4: 趋势存在但 R² 不足 → confidence 必须下降（重点！）
- *   C5: Regime 改变 → prediction 必须降权/失效
- *   C6: 历史数据不足 → INSUFFICIENT_DATA
- *   C7: 输入完全相同 → deterministic replay
- *
- * 额外深层检查：
- *   C8: 噪声数据（R² 极低但 slope 碰巧超阈值）→ 不得误判趋势方向
- *   C9: 变化幅度极小（slope 刚过阈值但实际无意义）→ 不得放大成严重预测
- */
+/** A6.3 Prediction Layer — C1-C7 统一反事实退化审计。 */
 import { describe, it, expect } from "vitest";
 import {
   type EnergyShortageInput,

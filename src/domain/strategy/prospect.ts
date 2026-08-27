@@ -1,17 +1,4 @@
-/**
- * 侦察目标选择 — 主动情报的纯决策层（R6b，docs/architecture/GOAL_POLICY_PLAN_MODEL.md）。
- *
- * 背景：扩张「不见不选」（candidates 必须有过视野 sources），但视野只有
- * observer（RCL8）/过境 creep 顺带提供 — 高分候选房可能永远等不到视野。
- * 本模块选出「值得主动侦察」的目标，prospect-manager 派 scout 获取视野，
- * 产出决策就绪情报（intel.sources 落库，扩张评估器零改动消费）。
- *
- * 选择口径（镜像 expansion/evaluator 的 claimable 过滤）：
- *   normal 房 + status normal + 无主 + 无他人预定 + 未被占用 +
- *   不在失败冷却中 + 视野陈旧（sources 未知或 lastSeen 超期）。
- * 排序：pathCost 升序（缺失回退线性距离）— 通勤近的先侦察。
- * 纯函数 — 不访问 Game/Memory，全部输入由调用方采集。
- */
+/** 侦察目标选择 — 主动情报的纯决策层（R6b，docs/architecture/GOAL_POLICY_PLAN_MODEL.md）。 */
 import { roomLinearDistance } from "../remote/targeting";
 
 /**

@@ -1,9 +1,4 @@
-/**
- * Ring Buffer — 固定容量环形缓冲区。
- * RawMemory segment 有 100KB 上限 [Facts]，时序数据和事件日志必须在固定空间内
- * 循环覆盖最老数据。纯数据结构 — 不依赖 Game/Memory/global，可独立 Vitest 测试。
- * 序列化友好：JSON.stringify 后是 { d: [...], h, c }，反序列化后可直接恢复。
- */
+/** Ring Buffer — 固定容量环形缓冲区。 */
 
 /** 环形缓冲区的序列化形态。 */
 export interface RingBuffer<T> {

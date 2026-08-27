@@ -1,13 +1,4 @@
-/**
- * Deal 调度器纯函数测试（阶段 2）。
- *
- * 覆盖：
- *   pickBestCandidate（优先级竞争）：
- *   - 最高 priority 的候选被选中
- *   - 空列表返回 undefined
- *   - 同 priority 时保持插入顺序（稳定排序）
- *   - 卖出 vs 买入竞争（continue 饥饿修复验证）
- */
+/** Deal 调度器纯函数测试（阶段 2）。 */
 import { describe, expect, it } from "vitest";
 import {
   pickBestCandidate,

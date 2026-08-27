@@ -1,26 +1,4 @@
-/**
- * Remote Source Model — A4.0 Phase 3：远矿资源实体抽象。
- *
- * 合同锚点：A4.0 Architecture Audit §18.3（Remote Source 是评估层，不是执行层）。
- * 记忆约束 [[memory:17875714213295541337]]：Remote Source Model 应该产出 SupplyNode
- * 注入网络，而不是自己造一套调拨逻辑。
- *
- * 设计意图：
- *   Remote Source 是将远矿产出**注入 Empire Resource Network** 的适配器。
- *
- *   它不替代 remote-mining-manager 的执行链（spawn/haul/reserve 不变），
- *   只做三件事：
- *   1. 抽象远矿资源实体（sourceId/roomName/capacity/distance/risk/expectedYield/status）
- *   2. 为 remote-value.ts 提供评估输入（净价值 = 产出 - 运输 - 风险 - 基建）
- *   3. 为 remote-opportunity.ts 提供候选实体（Opportunity 排序的输入）
- *
- *   产出侧（未来 Phase 4）：Remote Source → SupplyNode 注入网络
- *
- * 纯函数律（DEP_GRAPH §3-5，SYSTEM_BOUNDARIES §2.3-3）：
- *   - 不引用 Game / Memory / RawMemory（lint 红线）
- *   - 全部输入由参数注入
- *   - 不写任何状态——只读计算
- */
+/** Remote Source Model */
 
 import type { ResourceType } from "../operation/agenda-item";
 
@@ -28,11 +6,11 @@ import type { ResourceType } from "../operation/agenda-item";
 
 /**
  * Remote Source Status — 远矿资源实体生命周期五态。
- *
+
  * 状态流转：
  *   AVAILABLE → ASSIGNED → DEGRADED → BLOCKED → INACTIVE
  *                    ↺           ↺
- *
+
  * - AVAILABLE: 可用——未分配给任何孵化房，可被 Opportunity 评估
  * - ASSIGNED: 已分配——已有 remote-mining-manager 运营此 source
  * - DEGRADED: 降级——产出低于预期（威胁/InvaderCore 压制/采集不足）
@@ -85,10 +63,10 @@ export function isRemoteSourceTerminal(status: RemoteSourceStatus): boolean {
 
 /**
  * Remote Source — 远矿资源实体抽象。
- *
+
  * 从 RoomIntel + remoteOps 数据派生，不直接访问 Game/Memory。
  * 是 remote-value.ts 和 remote-opportunity.ts 的核心输入。
- *
+
  * 字段设计原则：
  * - 只存评估所需数据（不存运行时状态——那是 remote-mining-manager 的事）
  * - ID 幂等：sourceId = "remote:${homeRoom}:${targetRoom}"
@@ -194,10 +172,10 @@ export function makeRemoteSourceId(homeRoom: string, targetRoom: string): string
 
 /**
  * 创建 Remote Source。
- *
+
  * 从显式参数构建——不访问 Game/Memory。
  * 调用方（系统侧薄壳）负责从 RoomIntel + remoteOps 采集数据。
- *
+
  * 纯函数。
  */
 export function createRemoteSource(input: RemoteSourceInput): RemoteSource {
@@ -241,12 +219,12 @@ export interface IntelForRemoteSource {
 
 /**
  * 从 RoomIntel 派生 Remote Source。
- *
+
  * 这是系统侧薄壳调用的核心函数——
  * 将 intel.ts 的 RoomIntel 转换为 Remote Source Model。
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param homeRoom 孵化房
  * @param targetRoom 目标房
  * @param intel 目标房情报

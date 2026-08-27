@@ -22,7 +22,7 @@ PlayerIntel 持续威胁记忆（被打 N tick——事实级，不含推测）
 | --- | --- |
 | 授权唯一 | `war` 姿态是进攻的**唯一**授权来源（持续被打 ∧ 打得起）；**打得起** = 预期最大损失 ≤ 战争基金（从帝国能量盈余计提的专项储备）；基金不足则只 fortify 不 war——哪怕被持续骚扰（research/16 §10.2）。 |
 | 执行唯一 | war-planner 是唯一进攻执行决策者；attacker **仅**由它经 Spawn 请求孵化，不存在第二孵化路径（research/16 §10.1；[DECISION_AUTHORITY_MODEL.md](DECISION_AUTHORITY_MODEL.md) §1）。 |
-| 代码存在 ≠ 战争开始 | 进攻能力在代码中存在不构成战争状态；非 war 姿态下军事人口仅维持 boost SLA 水平，军事人口不会悄悄繁殖吃掉经济（research/16 §6；AGENTS.md）。 |
+| 代码存在 ≠ 战争开始 | 进攻能力在代码中存在不构成战争状态；非 war 姿态下军事人口仅维持 boost SLA 水平，军事人口不会悄悄繁殖吃掉经济（research/16 §6；AGENT.md）。 |
 | 基金分账 | war 授权后战争基金预算线被 Policy 划出：基金内军事消耗**不与经济发展竞争**；基金耗尽或经济压力持续超标 → 止损链强制退 fortify——经济底线最终不可被军事击穿（[DECISION_AUTHORITY_MODEL.md](DECISION_AUTHORITY_MODEL.md) Q2）。 |
 | 反击延迟 | 授权链长 → 反击延迟是被接受的代价：fortify 可先行筑防，防御不等战争（research/16 §7）。 |
 

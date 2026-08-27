@@ -1,18 +1,4 @@
-/**
- * 改进 A 闭环验证测试 — 覆盖附录 D.8 用例（domain 层纯函数测试）。
- *
- * 测试对象：
- *   - verifyPendingAdjustments（验证 pass：verifyDelay 时机 + D.3 人口合同 + D.4 下调护栏 + P2 多信号）
- *   - applyFreezePolicy（D.5 冻结复位到 CONFIG 基线）
- *   - evaluateTuning 的 excludedParams（D.2 pending-lock）
- *
- * D.8 必覆盖用例：
- *   1. pending-lock 竞态：上调后反向信号在验证窗口内不触发反向调整
- *   2. 人口合同 blocked：roleCount 未达新边界 → 标 blocked，不回滚不计次
- *   3. 人口合同 + 效果：人口到位但信号未改善 → 正常回滚
- *   4. 下调护栏：hauler 下调后主信号改善但 spawnFill 跌破阈值 → 回滚
- *   5. 冻结复位：连续 3 次回滚 → 冻结 + 参数复位到 CONFIG 基线
- */
+/** 改进 A 闭环验证测试 — 覆盖附录 D.8 用例（domain 层纯函数测试）。 */
 import { describe, expect, it } from "vitest";
 import {
   evaluateTuning,

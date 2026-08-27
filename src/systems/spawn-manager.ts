@@ -12,7 +12,7 @@ import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
 
 /**
  * 孵化管理器 — 唯一调用 spawnCreep 的模块。
- * 职责：评估每房孵化需求；维护去重、按优先级排序的队列；处理队列尝试孵化最高
+
  * 优先级请求；处理 P0 恢复、body 降级和重试限制。
  * P0（在所有依赖人口的其他系统之前运行）。
  */
@@ -44,7 +44,7 @@ export const spawnManagerSystem: System = {
       // 1. 先清理过期 / 隔离的请求 — 必须在 evaluateDemand 之前运行，
       //    否则已达 maxRetries 的 stale 请求仍计入 pending → harvesterCount > 0 →
       //    P0 worker 恢复请求不创建 → 死锁。
-      //    SP-2：达重试上限的 key 记入黑名单冷却（1 个 TTL 窗口）— 持久性配置错误
+      //    ：达重试上限的 key 记入黑名单冷却（1 个 TTL 窗口）— 持久性配置错误
       //    不再「删除 → demand 重建 → 再失败」无限翻炒。
       //    P2-K：onPurge 回调把两种 churn（retries 烧穿 / TTL 过期）转译为 recordSkip
       //    指标，按角色聚合 — key 形如 `role:home:source?:index`，split(':')[0] 取 role
@@ -160,7 +160,7 @@ export const spawnManagerSystem: System = {
       );
       const { requests, nextHysteresis } = demandResult;
       for (const req of requests) {
-        // SP-2：黑名单冷却中的 key 不重建（比较到期 tick — prune 已在步骤 1 执行，
+        // ：黑名单冷却中的 key 不重建（比较到期 tick — prune 已在步骤 1 执行，
         // 此处防御同 tick 新写入的条目）。
         if ((roomMem.spawnBlacklist?.[req.key] ?? 0) > ctx.tick) continue;
         submitRequest(queue, req);
@@ -183,7 +183,7 @@ export const spawnManagerSystem: System = {
       sortQueue(queue);
 
       // 4. 尝试孵化最高优先级的请求。
-      //    SP-1：房内存活采集者（harvester/worker）数传入 — 采集链濒临断裂（≤1 只）时
+      //    ：房内存活采集者（harvester/worker）数传入 — 采集链濒临断裂（≤1 只）时
       //    为 P0 恢复预留 recoveryEnergyReserve；存活 distributor 数传入 — 泵断供时
       //    distributor 请求立即降级速出。
       const roomCreeps = creepsByRoom.get(snapshot.roomName) ?? [];
@@ -296,7 +296,7 @@ function recyclePass(
  * 能量记账：room.energyAvailable 是 tick 开始快照，同 tick 多次 spawnCreep 的扣费
  * 在意图执行阶段才结算 — 若都按快照校验，第二个意图可能超支失败；因此用本地
  * energyBudget 逐次扣减，保证每个意图都在真实可用额度内。
- * SP-1（AGENTS.md「保留恢复能源」硬约束落地）：采集链濒临断裂（collectorCount ≤ 1）时，
+ * 采集链濒临断裂（collectorCount ≤ 1）时，
  * 非 P0 请求的预算扣除 recoveryEnergyReserve — 低优先级孵化不得把能量花到 P0 团灭
  * 恢复无法立即出生的程度；常态不预留，避免浪费容量。
  * @internal 导出仅供单元测试（tests/unit/spawn/try-spawn.test.ts）— 业务代码
@@ -325,7 +325,7 @@ export function trySpawn(
   const primaryRoom = freeSpawns[0]!.room;
   if (!primaryRoom) return;
   let energyBudget = primaryRoom.energyAvailable;
-  // SP-1：非 P0 请求可用的预算（P0 本身可动用全部能量）。
+  // ：非 P0 请求可用的预算（P0 本身可动用全部能量）。
   let reserve = collectorCount <= 1 ? CONFIG.spawn.recoveryEnergyReserve : 0;
   // P3 Reservation①扩展（ECONOMY §2.1-7）：RCL4+ 有中央储备时，风险缓冲低于地板
   // （断供耐受 tick 数不足）即同样为非 P0 预留恢复能源——堵 B1 类「P2 支出抽干
@@ -368,7 +368,7 @@ export function trySpawn(
 
     const cost = bodyCost(req.body);
 
-    // SP-1：非 P0 请求按预留后的额度校验 — P0 恢复能量不被低优先级侵占。
+    // ：非 P0 请求按预留后的额度校验 — P0 恢复能量不被低优先级侵占。
     // 采集角色（harvester/worker）豁免：它们本身就是恢复路径 —
     // 拦住采集者扩编会让「1 采集者 + 满能量」的房间永远孵不出第二只
     // （rcl1-survival 回归：预留挡住 harvester → spawn 永久 idle）。
@@ -461,7 +461,7 @@ export function trySpawn(
     }
 
     if (result === ERR_BUSY) {
-      // SP-3 注释修正：防御性分支 — freeSpawns 已过滤 !spawning 且成功后换 spawn，
+      //  注释修正：防御性分支 — freeSpawns 已过滤 !spawning 且成功后换 spawn，
       // 正常流程不可达。命中时跳过本请求（下 tick 重试），换下一个空闲 spawn。
       spawnIdx++;
       continue;
@@ -543,11 +543,11 @@ const CHURN_FREEZE_TICKS = 100;
 
 /**
  * P0-3：计算请求 key 的隔离冷却时长（tick）。
- *
+
  * 采集角色（harvester/worker）用短冷却（requestTtl / 2 = 500 tick）—
  * 持续配置错误时更快进入熔断，比永久豁免避免无限 churn。
  * 其他角色用长冷却（requestTtl = 1000 tick）— 持久性配置错误的标准化隔离。
- *
+
  * @internal 导出仅供单元测试 — 业务代码通过 spawnManagerSystem.run 间接调用。
  */
 export function computeQuarantineTtl(key: string): number {
@@ -559,11 +559,11 @@ export function computeQuarantineTtl(key: string): number {
 
 /**
  * 记录一次 churn 事件到 per-room churnCounter。
- *
+
  * 设计决策：churn 按 per-room 维度统计（spawn 是 per-room 资源，churnFreezeUntil
  * 也写在 RoomMemory），存 globalCache 按 roomName 索引的 records 数组。
  * heap 存储 — global reset 丢失可接受（reset 极少，且持续 churn 会快速重建）。
- *
+
  * @internal 导出仅供单元测试 — 业务代码通过 cleanQueue 的 onPurge 回调间接调用。
  */
 export function recordChurn(roomName: string, role: string, tick: number): void {
@@ -576,16 +576,16 @@ export function recordChurn(roomName: string, role: string, tick: number): void 
 
 /**
  * P0-3：检查 churn 熔断状态，触发或清理 per-room 角色 熔断条目。
- *
+
  * 流程：
  *   1. 读取 globalCache.__churnCounter[roomName]，清理 200 tick 滑窗外的过期记录。
  *   2. 按 role 聚合，200 tick 内同 role churn > 20 次 → 写入 churnFreezeUntil[role] = tick + 100。
  *      仅当该 role 当前未冻结时触发（防重复续期 — 一次熔断到期前不再叠加）。
  *   3. 清理到期熔断条目 + 异常类型自愈（非数字值视为到期清理，防 Memory 泄漏）。
  *   4. 空对象回收（删除整个 churnFreezeUntil 字段，保持 Memory 精简）。
- *
+
  * 调用时机：cleanQueue 之后、evaluateDemand 之前 — demand 能读到本 tick 新写入的熔断。
- *
+
  * @internal 导出仅供单元测试 — 业务代码通过 spawnManagerSystem.run 间接调用。
  */
 export function checkChurnCircuitBreaker(

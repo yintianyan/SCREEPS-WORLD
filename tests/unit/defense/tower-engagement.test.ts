@@ -1,12 +1,4 @@
-/**
- * Tower 交战盈亏判定测试。
- *
- * 覆盖：距离衰减公式（满伤/最低伤/线性中段）、
- * 「合计伤害 vs 编队治疗」的开火判定、核心突破强制交战、空能塔剔除。
- *
- * 常量基准 [Facts: docs.screeps.com/api 常量表]：
- *   TOWER_POWER_ATTACK=600 @ range≤5，线性衰减至 150 @ range≥20；HEAL_POWER=12。
- */
+/** Tower 交战盈亏判定测试。 */
 import { describe, expect, it } from "vitest";
 import {
   towerDamageAt,

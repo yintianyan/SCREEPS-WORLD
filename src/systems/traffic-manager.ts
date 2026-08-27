@@ -1,10 +1,4 @@
-/**
- * Traffic Manager — 后置系统（phase=post，P0）。
- * 在所有 creep 角色执行完毕后运行，消费本 tick 移动意图账本（intent.ts），
- * 按房间集中解算（traffic-resolver）后统一签发 creep.move。
- * 职责边界：只做「意图 → 引擎 move」的仲裁与签发，不决定 creep 去哪
- * （那是角色层 + pathfinding 的职责）。逐房 safeRun 隔离：单房解算异常不连坐他房。
- */
+/** Traffic Manager — 后置系统（phase=post，P0）。 */
 
 import type { RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";

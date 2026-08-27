@@ -1,19 +1,4 @@
-/**
- * Hauler Scaling — A4.3 Phase 3：动态扩缩编。
- *
- * 合同锚点：A4.3 Architecture Audit §3.3（无 Hauler Overprovisioning 检测）、
- * §10 #7 #8。
- *
- * 设计意图：
- *   现有 hauler 数量由 demand.ts 的 container 积压信号驱动，只能扩不能缩。
- *   Hauler Scaling 基于 Capacity Planning 结果做动态扩缩编决策。
- *
- *   扩编条件：haulerGap > 0 且 spawn 有余力
- *   缩编条件：utilization < 0.5 持续 N tick
- *   维持条件：其他情况
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Hauler Scaling */
 
 import type { RoomCapacityResult } from "./capacity-planning";
 
@@ -39,14 +24,14 @@ const EXPAND_ECONOMY_PRESSURE_LIMIT = 0.8;
 
 /**
  * 动态扩缩编决策。
- *
+
  * 算法：
  *   1. haulerGap > 0 且 spawnAvailable 且 economyPressure < limit → expand
  *   2. utilization < threshold 且 idleTicks > idleThreshold → shrink
  *   3. 否则 → maintain
- *
+
  * 纯函数。
- *
+
  * @param capacity 房间运力规划结果
  * @param spawnAvailable spawn 是否有余力
  * @param economyPressure 经济压力 (0..1, 0=健康, 1=危机)

@@ -1,16 +1,4 @@
-/**
- * 市场挂单 + pixel 出售测试（审计缺口 4+5）。
- *
- * 覆盖：
- *   planSellOrder（纯函数）：
- *   - 有盈余 + 有 bid 锚定 → 挂单价 = bid × markup
- *   - 在途挂单 / 无 bid / 量不足 → 不挂
- *   shouldCancelStaleOrder（纯函数）：
- *   - 残单清撤 / 部分成交保留 / 超龄零成交撤
- *   terminal-manager 集成：
- *   - 大宗盈余 → createOrder 调用参数正确
- *   - pixel 账户资源 → 吃最优 buy 单 deal（无 room 参数）
- */
+/** 市场挂单 + pixel 出售测试（审计缺口 4+5）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/terminal-manager";
 import { CONFIG } from "../../../src/config";

@@ -1,14 +1,4 @@
-/**
- * A5.4.0 Architecture Guard — Tactical Domain Purity & Boundary Tests.
- *
- * 规则：
- *   1. domain/tactical/ 不得引用 Game / Memory / RawMemory / Kernel / Spawn / Transport / Recovery
- *   2. domain/tactical/ 不得 import systems/ 或 creeps/
- *   3. domain/tactical/ 不得调用 spawnCreep / submitRequest / recycle / RecoveryExecution
- *   4. domain/tactical/ 不得使用 Math.random / Date.now
- *   5. Tactical Authorization 必须验证 warPosture
- *   6. Tactical 不得引用 Game.rooms / Memory
- */
+/**  */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";

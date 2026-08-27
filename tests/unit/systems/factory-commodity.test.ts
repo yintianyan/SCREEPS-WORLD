@@ -1,12 +1,4 @@
-/**
- * Factory Manager commodity 集成测试（审计缺口 6 执行层）。
- *
- * 覆盖：
- *   - 引擎 COMMODITIES 配方驱动：原料齐 → produce 高梯度目标 + globalCache 锚
- *   - 原料不齐 → 不 produce（等 distributor 补料）
- *   - 无 COMMODITIES（私服/旧环境）→ 静默跳过不炸
- *   - battery 满仓压缩链无回归
- */
+/** Factory Manager commodity 集成测试（审计缺口 6 执行层）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { factoryManagerSystem } from "../../../src/systems/factory-manager";
 import { mockBudget, mockSnapshot, resetGlobals } from "../../role-helpers";

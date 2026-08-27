@@ -1,18 +1,4 @@
-/**
- * Economic Safety Margin — A2 后半·步 9：经济安全边际联动模型。
- *
- * 合同锚点：ECONOMY §3 riskBuffer（风险缓冲）+ GOAL_POLICY_PLAN §4 预算 +
- * EXPANSION §2 G1–G5 门控。
- *
- * 定位：不止看库存——storage 很高但 production 很低 / population 很低 /
- * critical requests 很多时，Expansion Readiness 必须下降。
- * Safety Margin 是一个 0..1 的综合安全分数，由多个维度加权计算，
- * 供 Expansion Readiness 和 Empire Budget 消费作为调整因子。
- *
- * 设计意图：防止「库存高但产能低」的假富裕误判。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Economic Safety Margin */
 
 import type { EmpireResourceView } from "./resource-view";
 import type { EmpireEconomicHealth } from "./economic-health";
@@ -82,16 +68,16 @@ function lerpScore(value: number, passMark: number, fullMark: number): number {
 
 /**
  * 计算经济安全边际（纯函数）。
- *
+
  * 五维子分数：
  * 1. Production Safety：净流 > 0 → 基础分；netFlow ≥ fullMark → 满分
  * 2. Reserve Safety：minRiskBuffer ≥ fullMark → 满分；≤ passMark → 0
  * 3. Health Safety：无困难房 + 无活威胁 → 1；有困难房 → 0；有活威胁 → 0.3
  * 4. Self-Sufficiency Safety：empireSelfSufficiency ≥ fullMark → 满分
  * 5. Population Safety：strugglingRooms = 0 → 1；= roomCount → 0
- *
+
  * 综合 = Σ(子分数 × 权重)
- *
+
  * @param view EmpireResourceView
  * @param health EmpireEconomicHealth
  * @param options 选项

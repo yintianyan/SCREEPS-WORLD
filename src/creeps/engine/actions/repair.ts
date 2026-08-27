@@ -1,10 +1,4 @@
-/**
- * Repair actions — 维修结构。优先级：repairCritical（关键结构 <50%）→ repairContainerDecay
- * （container <80%）→ repairNearbyContainer（身边 container）→ repairRoads（道路 <40%）→
- * repairFortifications（wall/rampart 到 RCL 分级目标，rampart 优先）。
- * 目标持久化：复用 creep.memory.repairTargetId；每个 action 验证缓存目标的 structureType，
- * 防止跨类型缓存泄漏。
- */
+/** Repair actions — 维修结构。优先级：repairCritical（关键结构 <50%）→ repairContainerDecay */
 import { CONFIG, getWallTargetHits } from "../../../config";
 import type { RoomSnapshot } from "../../../kernel/contracts";
 import type { ActionCandidate } from "../action-types";
@@ -268,7 +262,7 @@ export function repairRoads(): ActionCandidate<StructureRoad> {
 
 /**
  * 危路急救 — 血量 < 15% 的道路提级维修（builder 链中排在建造之前）。
- * 背景（线上实测）：construction 流水线持续放行 site 时，建造动作永远命中，链尾常规修路被饿死
+
  * （主房 16 条路 8 条破 40%、最烂 4% 濒临塌毁）。塌毁代价不止重建耗能 6 倍：重建 site 还占用
  * 建造名额与 builder 工时，挤掉真正的新建任务。急救线兜住塌毁风险，常规维修仍礼让建造。
  * 门禁差异：conserve 不跳过（省小钱赔大钱），recovery/威胁仍跳过。

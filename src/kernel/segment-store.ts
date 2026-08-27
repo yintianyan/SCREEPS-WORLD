@@ -1,16 +1,4 @@
-/**
- * Segment Store — RawMemory segment 的类型安全读写层。
- *
- * 原则：热数据留 Memory（每 tick 自动序列化），冷数据存 segment（按需加载）；
- * 读取走 globalCache 缓存（global reset 后从 RawMemory.segments 重建），
- * 写入标记 dirty、tick 末尾统一 flush（避免多次 JSON.stringify）；
- * segment 须在 tick 开始时经 requestSegments() 声明激活。
- *
- * Segment 分配表：0 — layout 冷数据（overrides/blocked per room）；
- *   1 — CPU 时序 + 人口普查（~52KB）；2 — 事件日志；3 — 经济时序（~28KB）；4-9 — 预留。
- * 旧版 CPU+Economy 混存 segment 1 满载 ~81KB 逼近 100KB 上限，拆分后各自
- * 远低于上限；激活 4 个 segment 仍在 10 个上限内 [Facts]。
- */
+/** Segment Store — RawMemory segment 的类型安全读写层。 */
 import { CONFIG } from "../config";
 import { globalCache } from "./global-cache";
 import type {

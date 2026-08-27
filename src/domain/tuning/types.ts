@@ -1,9 +1,4 @@
-/**
- * 遥测自调参类型契约（在静态 CONFIG 之上叠加运行时覆盖）。
- * 数据流：ring buffer + 活快照 → TuningSignals → evaluateTuning → 调整写入
- * Memory.kernel.tuning.rooms[*].roleBounds → 查询时覆盖 CONFIG。
- * evaluator 保持纯函数，不依赖 Game/Memory。
- */
+/** 遥测自调参类型契约（在静态 CONFIG 之上叠加运行时覆盖）。 */
 
 // ─── 聚合信号 ───────────────────────────────────────────────
 

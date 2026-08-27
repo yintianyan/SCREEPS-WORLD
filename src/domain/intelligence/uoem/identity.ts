@@ -1,17 +1,10 @@
-/**
- * UOEM Core — Identity Model.
- *
- * STEP 1.2：Operation / Decision / Event Identity 的 branded type 和工厂函数。
- * 纯 Domain 层：不引用 Game / Memory / RawMemory / CPU。
- *
- * 复用 STEP 1.1 的 branded type 定义，提供额外的解析/验证函数。
- */
+/** UOEM Core — Identity Model. */
 
 // ── Branded Types ─────────────────────────────────────────────
 
 /**
  * OperationId — Operation 的唯一生命周期身份。
- *
+
  * 格式：`op:{target}:{consumeTick}`
  * 不允许从 target 单独推导；不允许从 startedAt 推导；不允许用 decisionId 代替。
  */
@@ -19,7 +12,7 @@ export type OperationId = string & { readonly __brand: "OperationId" };
 
 /**
  * DecisionId — DecisionRecord 的唯一标识。
- *
+
  * 格式：`D-{tick}-{seq}`
  * decisionId ≠ operationId（attribution identity ≠ lifecycle identity）。
  */
@@ -27,7 +20,7 @@ export type DecisionId = string & { readonly __brand: "DecisionId" };
 
 /**
  * EventId — UOEM Event 的全局唯一标识。
- *
+
  * 格式：`E-{tick}-{seq}`
  * 确定性：由 tick + 自增 seq 组成，不依赖 Date.now() / Math.random()。
  */
@@ -37,7 +30,7 @@ export type EventId = string & { readonly __brand: "EventId" };
 
 /**
  * 铸造 OperationId — 确定性纯函数。
- *
+
  * @param target 目标房名（business attribute，非 identity）
  * @param consumeTick Operation 消费 Plan 的 tick
  * @returns `op:{target}:{consumeTick}`
@@ -48,7 +41,7 @@ export function createOperationId(target: string, consumeTick: number): Operatio
 
 /**
  * 铸造 DecisionId — 确定性纯函数。
- *
+
  * @param tick DecisionRecord 创建 tick
  * @param seq 自增序号
  * @returns `D-{tick}-{seq}`
@@ -59,7 +52,7 @@ export function createDecisionId(tick: number, seq: number): DecisionId {
 
 /**
  * 铸造 EventId — 确定性纯函数。
- *
+
  * @param tick 事件发生 tick
  * @param seq 自增序号
  * @returns `E-{tick}-{seq}`
@@ -72,7 +65,7 @@ export function createEventId(tick: number, seq: number): EventId {
 
 /**
  * 解析 OperationId 字符串，验证格式合法性。
- *
+
  * @returns null 如果格式不合法
  */
 export function parseOperationId(raw: string): OperationId | null {

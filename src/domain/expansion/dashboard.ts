@@ -1,13 +1,4 @@
-/**
- * Expansion Observability Dashboard — A3.2 Phase 1：可观测性数据组装。
- *
- * 合同锚点：AGENTS.md 自治可审计前提 + DATA_FLOW §3 可观测性。
- *
- * 定位：把 Pressure / Readiness / Budget / Candidates / Plan 汇总为一个
- * 结构化 Dashboard 对象，供 global-cache.ts 写入、控制台/log 消费。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Expansion Observability Dashboard */
 
 import type { ExpansionPressureResult } from "./pressure";
 import type { TieredExpansionBudget } from "./budget";

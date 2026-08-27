@@ -1,14 +1,4 @@
-/**
- * 布局规划纯函数层（D2 归位：从 systems/layout-planner.ts 提取）。
- *
- * 本文件承载从系统侧提取的布局规划纯计算逻辑——不触 Game/Memory/RawMemory
- * （lint 红线）。系统侧 `src/systems/layout-planner.ts` 只保留：
- * ① System 注册 + planRoom 入口；② Game API 调用（getTerrain/find 等）；
- * ③ Memory 读写（layout state / buildQueue）；④ globalCache 中间产物管理。
- *
- * 归位遵循 ENGINEERING_BLUEPRINT §5 #3：布局纯函数归 domain/layout/，
- * 系统侧只留队列推进与 site 签发。
- */
+/** 布局规划纯函数层（D2 归位：从 systems/layout-planner.ts 提取）。 */
 
 import type { BuildTaskCandidate } from "./task-factory";
 import { candidateToBuildTask } from "./task-factory";
@@ -73,7 +63,7 @@ export const GAP_RETRY_INTERVAL = 500;
 /**
  * 枢纽道路联动：为已建枢纽结构预铺相邻 road。
  * 纯函数——terrain 和 occupiedSet 由调用方传入（系统侧从 Game API 获取）。
- * 设计约束（CONSTRUCTION_ARCHITECTURE §2.2）：道路逐段添加、绝不预铺全房；
+
  * 本函数只铺枢纽结构邻格（extension 仍走热度路）。
  */
 export function planHubRoads(

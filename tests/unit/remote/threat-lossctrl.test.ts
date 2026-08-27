@@ -1,15 +1,4 @@
-/**
- * 止损链场景测试（Batch 3 — 病理③「止损豁免缺失」修复回归）。
- *
- * 覆盖：
- *   RM-2 威胁失明持久化（threatUntil 双轨，照抄 InvaderCore blockedUntil 范本）
- *   RM-3 远矿房被自己 claim → 运营废弃 + creep 回收
- *   RD-1 remote-defender 半血撤退（recycle 标记 + 编制让位）
- *   DF-1 defender 追击边界（贴出口敌人不追 / 异房不接敌）
- *   W-3  P0 团灭恢复在威胁在场时先孵 defender
- *   C-1  expansion 状态机不被 CPU 门禁冻结（止损分支可达）
- *   C-2  拓荒编队全灭 + 威胁在场 → 放弃 + 黑名单
- */
+/** 止损链场景测试（Batch 3 — 病理③「止损豁免缺失」修复回归）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
 import { expansionManagerSystem } from "../../../src/systems/expansion-manager";

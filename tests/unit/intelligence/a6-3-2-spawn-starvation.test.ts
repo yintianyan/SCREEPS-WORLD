@@ -1,33 +1,4 @@
-/**
- * A6.3.2 Spawn Starvation Prediction — 单元测试。
- *
- * 测试矩阵：
- *   SPAWN-001: 正常趋势（队列空、人口稳定）→ NO_DEMAND
- *   SPAWN-002: 上升趋势（人口增长、队列低）→ NO_DEMAND 或 QUEUE_GROWING
- *   SPAWN-003: 下降趋势（人口下降、队列增长）→ QUEUE_GROWING 或 STARVATION_IMMINENT
- *   SPAWN-004: 稳定趋势（队列稳定、人口稳定）
- *   SPAWN-005: 数据不足 → INSUFFICIENT_DATA
- *   SPAWN-006: 边界值（队列恰好为 0）
- *   SPAWN-007: 极端值（队列为 100、能量为 0）
- *   SPAWN-008: Regime compatible → 正常 confidence
- *   SPAWN-009: Regime mismatch → confidence 降级
- *   SPAWN-010: 外部因素（P0 请求增加压力）
- *   SPAWN-011: 确定性 Replay（1000 次 hash 一致）
- *   SPAWN-012: Evidence 完整性
- *   SPAWN-013: Horizon 存在
- *   SPAWN-014: Lifecycle 完整
- *   SPAWN-015: STARVATION_IMMINENT 状态
- *
- * Architecture Guards:
- *   AG-S-001 ~ AG-S-011
- *
- * 区分测试：
- *   DIST-001: 没有 spawn demand → NO_DEMAND
- *   DIST-002: 有 demand 但没有 energy → ENERGY_LIMITED
- *   DIST-003: 有 energy 但 capacity 不足 → CAPACITY_LIMITED
- *   DIST-004: queue 持续增长 → QUEUE_GROWING
- *   DIST-005: starvation 即将发生 → STARVATION_IMMINENT
- */
+/** A6.3.2 Spawn Starvation Prediction — 单元测试。 */
 import { describe, it, expect } from "vitest";
 import {
   type SpawnStarvationInput,

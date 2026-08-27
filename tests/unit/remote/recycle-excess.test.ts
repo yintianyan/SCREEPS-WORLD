@@ -1,12 +1,4 @@
-/**
- * 远矿超额回收测试 — 交接豁免语义。
- *
- * 事故背景（孵化→秒杀→再孵化循环）：findReplacement 提前孵化替补形成
- * 合法的交接重叠，但超额回收把重叠判成超编；孵化中的替补 ticksToLive
- * 为 undefined，按 ?? 0 排序被当「最老」标记回收 — 出场即消融；
- * collectRemoteCreeps 又排除 recycle 标记者，demand 视角编制归零立即
- * 再孵，无限空烧（reserver 因 CLAIM 寿命 600 替换最频繁，观感最明显）。
- */
+/** 远矿超额回收测试 — 交接豁免语义。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { recycleExcessRemoteCreeps } from "../../../src/systems/remote-mining-manager";
 import { resetGlobals } from "../../role-helpers";

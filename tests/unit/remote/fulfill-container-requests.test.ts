@@ -1,15 +1,4 @@
-/**
- * P0-A 单测 — remote-mining-manager.fulfillContainerRequests。
- *
- * 覆盖：
- *   1. 正常路径：申请 creep + 无 site + 配额可用 → 创建 site + 清标记 + siteCount=1
- *   2. 幂等：已有 site → 清除申请标记，不创建
- *   3. ERR_FULL 失败 → 写冷却 + 清标记
- *   4. tick 配额耗尽（normal > 0）→ 跳过
- *   5. 让位 emergency（emergency > 0）→ 跳过
- *   6. siteCount 实测校正：记忆值与实际偏差 → 校正
- *   7. 总量超限（globalSiteCount + remoteTotal >= max）→ 跳过
- */
+/** P0-A 单测 — remote-mining-manager.fulfillContainerRequests。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fulfillContainerRequests } from "../../../src/systems/remote-mining-manager";
 import { getTickSiteCounters } from "../../../src/systems/site-quota";

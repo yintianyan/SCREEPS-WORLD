@@ -1,9 +1,4 @@
-/**
- * 交通热度记录 — 供道路规划器使用。
- *
- * 使用 numeric packed key（x*50+y）替代字符串拼接，减少 GC 压力。
- * 数据存 globalCache().roomTraffic，每规划周期由 road-planner 轮换。
- */
+/** 交通热度记录 — 供道路规划器使用。 */
 
 import { globalCache } from "../../kernel/global-cache";
 

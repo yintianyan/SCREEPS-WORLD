@@ -1,24 +1,4 @@
-/**
- * A6.3.2 Prediction Models — 集成测试。
- *
- * 验证真实调用链：
- *   TimeSeries → Prediction Input → predictEnergyShortage/predictSpawnStarvation
- *   → validatePrediction → PredictionRingBuffer → globalCache → Query
- *
- * 禁止路径验证：
- *   Prediction → Strategy → Spawn → Logistics → Military → Recovery
- *
- * CPU Benchmark:
- *   - 单次 prediction < 0.1ms (10000ns)
- *   - 100 次 prediction < 10ms
- *
- * Memory Audit:
- *   - 不产生 Game Object retention
- *   - 不产生 Room Object retention
- *   - 不产生 Creep Object retention
- *   - 不产生 Path retention
- *   - 不产生完整 Runtime Snapshot retention
- */
+/** A6.3.2 Prediction Models — 集成测试。 */
 import { describe, it, expect } from "vitest";
 import {
   type EnergyShortageInput,

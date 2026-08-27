@@ -1,31 +1,4 @@
-/**
- * Specialization Planner System — A4.0/A4.1/A4.4 系统侧薄壳。
- *
- * 合同锚点：A4.1 Architecture Audit §3.2（A4.0 纯函数层完整但系统层缺失）。
- * 记忆约束 [[memory:17875714213295541337]]：Remote Mining 必须作为 Empire
- * Resource Network 上的 Resource Production Operation。
- *
- * 设计意图：
- *   A4.0 建立了完整的纯函数层（Empire Room Role / Supply Contract / Remote
- *   Opportunity / Contract-Node Bridge），但没有系统侧薄壳来驱动它们。
- *   specialization-planner 是连接 Opportunity → Execution → Operation 的系统侧入口。
- *
- *   职责（每 100 tick 运行一次，P1）：
- *   1. 评估 WAITING_EXECUTION Opportunities → Execution Gate 验证
- *   2. APPROVED → 在 remote-mining-manager 中创建 remoteOps
- *   3. REJECTED → 记录原因
- *   4. 定期重估 Active Operations 的经济健康度
- *   5. 过期 Opportunities 清理
- *   6. A4.4 修复 BYPASS-009：从 networkSnapshot 的 surplus/deficit 对创建 Supply Contract
- *
- *   不做的事：
- *   - 不替代 remote-mining-manager 的执行链
- *   - 不直接调用 spawnCreep
- *   - 不直接创建 construction site
- *   - 不修改 RoomEconomicProfile（由 empire-economy 计算）
- *
- * 硬约束：模块顶层禁止访问 Game / Memory（SYSTEM_BOUNDARIES §2.3-3）。
- */
+/** Specialization Planner System */
 
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
@@ -76,7 +49,7 @@ import {
 
 /**
  * Specialization Planner System — P1, interval=100。
- *
+
  * 每 100 tick 运行一次，消费 WAITING_EXECUTION Opportunities 并评估
  * 活跃远矿 Operation 的经济健康度。
  */
@@ -184,7 +157,7 @@ function saveRemoteMiningOps(ops: RemoteMiningOperationContext[]): void {
 
 /**
  * 从 Opportunity + 现有 Operations 构建 Execution Gate 输入。
- *
+
  * 系统侧薄壳负责从 Game/Memory 采集数据注入 Gate。
  * 返回 undefined 表示数据不足（如缺少 intel），跳过本次评估。
  */
@@ -234,7 +207,7 @@ function buildGateInput(
 
 /**
  * 从 Operation 构建 Economic Health 评估输入。
- *
+
  * 系统侧薄壳负责从 Game/Memory 采集数据注入 Health 评估。
  */
 function buildHealthInput(
@@ -250,7 +223,7 @@ function buildHealthInput(
 
 /**
  * A4.4 修复 BYPASS-009：从 networkSnapshot 的 surplus/deficit 对维护 Supply Contract。
- *
+
  * 逻辑：
  *   1. 读取 globalCache().networkSnapshot（由 agenda-manager 每 100t 写入）
  *   2. 对每个 (surplusRoom, deficitRoom, resource) 对：
@@ -258,7 +231,7 @@ function buildHealthInput(
  *      - 否则创建 ACTIVE SupplyContract
  *   3. 清理终态 Contract（COMPLETED/CANCELLED）
  *   4. 序列化写入 Memory.kernel.supplyContracts（瘦快照）
- *
+
  * Contract 参数推导：
  *   - targetRate: deficit.remaining / 100（每 tick 供应量，100t 周期铺平）
  *   - minimumReserve: surplus.capacity × 0.2（Producer 保留 20% 安全储备）

@@ -1,14 +1,4 @@
-/**
- * Transport Accounting — A4.3 Phase 4：运输会计。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #7（无 Transport Accounting）、§10 #20。
- *
- * 设计意图：
- *   追踪 Requested/Assigned/Loaded/Delivered/Lost/Remaining/Cost per Request。
- *   与 flow-accounting.ts（A4.1）模式一致——纯函数 + 不可变。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Transport Accounting */
 
 // ─── Transport Accounting 模型 ────────────────────────────
 

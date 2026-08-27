@@ -1,23 +1,4 @@
-/**
- * A6.5 Architecture Guards — REL-001 ~ REL-012 守卫验证函数。
- *
- * 合同锚点：A6_5_SAFETY_BOUNDARY.md §二
- *
- * 职责：
- *   - 提供 REL-001 ~ REL-012 的运行时验证函数
- *   - 供系统层调用方在关键路径检查守卫合规性
- *   - 全部为纯函数，不引用 Game/Memory/Runtime
- *
- * 使用方式：
- *   系统层在 intelligence-state-system 的 run 中调用这些守卫，
- *   违规时记日志但不中断执行（safeRun 隔离）。
- *
- * REL-XXX 守卫来源：A6_5_SAFETY_BOUNDARY.md §二.1
- *
- * 与 A6.3/A6.4 guards.ts 的关系：
- *   复用 GuardResult 类型（从 A6.3 guards.ts import）。
- *   守卫函数独立实现（A6.5 自己的守卫逻辑）。
- */
+/**  */
 
 import type { GuardResult } from "../prediction/guards";
 import type { IntelligenceState } from "./types";
@@ -29,12 +10,12 @@ import type { System } from "../../../kernel/contracts";
 
 /**
  * REL-001 守卫：验证 A6.5 不写入任何 cache。
- *
+
  * 检查 System 层的 run 函数不包含写入 globalCache 的代码。
  * 这是 A6.5 与 A6.1-A6.4 的关键区别：
  *   A6.4 写入 __calibrationCache
  *   A6.5 不写入任何 cache
- *
+
  * 纯函数。
  */
 export function guardRelReadOnly(system: System): GuardResult {
@@ -63,9 +44,9 @@ export function guardRelReadOnly(system: System): GuardResult {
 
 /**
  * REL-002 守卫：验证 Domain 函数不引用 Game/Memory。
- *
+
  * 静态检查 — 验证函数的 toString 不包含 Game/Memory 引用。
- *
+
  * 纯函数。
  */
 export function guardRelDomainPurity(fn: (...args: unknown[]) => unknown): GuardResult {
@@ -93,9 +74,9 @@ export function guardRelDomainPurity(fn: (...args: unknown[]) => unknown): Guard
 
 /**
  * REL-003 守卫：不调用 Game API。
- *
+
  * Domain 层类型系统保证。此守卫为运行时冗余检查，始终通过。
- *
+
  * 纯函数。
  */
 export function guardRelNoGameApi(): GuardResult {
@@ -108,11 +89,11 @@ export function guardRelNoGameApi(): GuardResult {
 
 /**
  * REL-004 守卫：不修改任何运行时状态。
- *
+
  * 验证 IntelligenceState 不包含对上游数据的可变引用。
  * IntelligenceState 的所有字段都是 readonly，TypeScript 类型系统保证。
  * 此守卫为运行时冗余检查。
- *
+
  * 纯函数。
  */
 export function guardRelNoRuntimeMutation(state: IntelligenceState): GuardResult {
@@ -141,9 +122,9 @@ export function guardRelNoRuntimeMutation(state: IntelligenceState): GuardResult
 
 /**
  * REL-005 守卫：验证确定性 — 相同输入 → 相同输出。
- *
+
  * 通过多次调用 hash 函数检查一致性。
- *
+
  * 纯函数。
  */
 export function guardRelDeterminism(
@@ -170,10 +151,10 @@ export function guardRelDeterminism(
 
 /**
  * REL-006 守卫：IntelligenceState 不持久化。
- *
+
  * 验证 globalCache 中不存在 __intelligenceStateCache 字段。
  * A6.5 是第一个不写入任何 cache 的 System。
- *
+
  * 纯函数。
  */
 export function guardRelBoundedMemory(
@@ -196,10 +177,10 @@ export function guardRelBoundedMemory(
 
 /**
  * REL-007 守卫：不新建采样通道。
- *
+
  * A6.5 不新建采样通道，只消费既有 data。
  * 检查 System 的 run 函数不包含新建 TimeSeries / RingBuffer 的代码。
- *
+
  * 纯函数。
  */
 export function guardRelNoNewSampler(system: System): GuardResult {
@@ -229,10 +210,10 @@ export function guardRelNoNewSampler(system: System): GuardResult {
 
 /**
  * REL-008 守卫：不采集新 Metrics。
- *
+
  * A6.5 不建立第二套 Metrics / Strategy / Outcome / DecisionTrace。
  * 此守卫为运行时冗余检查。
- *
+
  * 纯函数。
  */
 export function guardRelNoSecondMetrics(): GuardResult {
@@ -245,9 +226,9 @@ export function guardRelNoSecondMetrics(): GuardResult {
 
 /**
  * REL-009 守卫：不修改 Strategy/Posture/Spawn。
- *
+
  * 验证 System 的 run 函数不包含写 Strategy/Posture/Spawn 的代码。
- *
+
  * 纯函数。
  */
 export function guardRelNoStrategyMutation(system: System): GuardResult {
@@ -280,12 +261,12 @@ export function guardRelNoStrategyMutation(system: System): GuardResult {
 
 /**
  * REL-010 守卫：IntelligenceState 可追溯到上游数据。
- *
+
  * 检查：
  *   - stateHash 非空
  *   - modelReliability 每条都有 reliabilityHash 和 profileHash
  *   - predictionConflicts 每条都有 conflictHash
- *
+
  * 纯函数。
  */
 export function guardRelEvidenceTraceability(state: IntelligenceState): GuardResult {
@@ -333,9 +314,9 @@ export function guardRelEvidenceTraceability(state: IntelligenceState): GuardRes
 
 /**
  * REL-011 守卫：不裁决预测冲突。
- *
+
  * 检查 A6.5 的 run 函数不包含选择、降权、过滤冲突预测的代码。
- *
+
  * 纯函数。
  */
 export function guardRelNoConflictResolution(system: System): GuardResult {
@@ -368,10 +349,10 @@ export function guardRelNoConflictResolution(system: System): GuardResult {
 
 /**
  * REL-012 守卫：不产出单一 reliability 分数。
- *
+
  * 验证 IntelligenceState 不包含 reliabilityScore / intelligenceScore /
  * overallScore 字段。
- *
+
  * 纯函数。
  */
 export function guardRelNoReliabilityScore(state: IntelligenceState): GuardResult {
@@ -399,7 +380,7 @@ export function guardRelNoReliabilityScore(state: IntelligenceState): GuardResul
 
 /**
  * 对 IntelligenceState 执行全部守卫检查。
- *
+
  * 返回所有违规项（通过时为空数组）。
  * 纯函数。
  */
@@ -418,7 +399,7 @@ export function validateIntelligenceState(state: IntelligenceState): GuardResult
 
 /**
  * 对 System 层执行全部守卫检查。
- *
+
  * 返回所有违规项。
  * 纯函数。
  */

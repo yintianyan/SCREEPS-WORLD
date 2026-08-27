@@ -1,14 +1,4 @@
-/**
- * Expansion Cooldown & Rate Limit — A3.4：防止扩张级联。
- *
- * 合同锚点：A3.4 Task Spec §24 Cascade Prevention + §25 Rate Limit。
- *
- * 两个机制：
- *   1. Cooldown — 一次扩张 COMPLETED 后，在冷却窗口内不启动新扩张。
- *   2. Rate Limit — 单位时间内的活跃扩张数量上限（默认 1）。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Expansion Cooldown & Rate Limit */
 
 /** Cooldown 配置。 */
 export interface CooldownConfig {
@@ -54,7 +44,7 @@ export interface CooldownResult {
 
 /**
  * 评估是否允许启动新扩张（纯函数）。
- *
+
  * 阻止条件：
  *   1. 在冷却窗口内（lastCompletedTick + cooldownTicks > currentTick）
  *   2. 活跃扩张数已达上限

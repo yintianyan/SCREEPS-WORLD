@@ -1,14 +1,4 @@
-/**
- * Terminal Manager nuke 资产抢救链测试（审计缺口 3）。
- *
- * 覆盖：
- *   - 警报房（incomingNukes 非空）terminal 库存 → 无警报兄弟房 send 一笔
- *   - 抢救先于市场门禁：无市场 API（getAllOrders 缺失）时依然执行（send 不依赖市场）
- *   - 抢救先于 tier 门禁：recovery 降档时依然执行（战时 CPU 降档不阻断资产迁移）
- *   - 无合格接收房（单房帝国）→ 静默不 send
- *   - terminal 冷却中 → 跳过本轮
- *   - 成交记录 NukeSalvage 事件（kind=34，黑匣子）
- */
+/** Terminal Manager nuke 资产抢救链测试（审计缺口 3）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/terminal-manager";
 import type { CpuTier } from "../../../src/kernel/contracts";

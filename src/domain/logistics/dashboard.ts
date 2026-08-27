@@ -1,15 +1,4 @@
-/**
- * Empire Logistics Dashboard — A4.3 Phase 6：全链路可观测性。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #34。
- *
- * 设计意图：
- *   全链路可观测性仪表盘，汇总 Transport Requests / Assignments / Haulers /
- *   Capacity / Utilization / Routes / Cost / Reliability / Backlog / Delivery Rate /
- *   Loss / Starvation / Bottleneck / Health。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Empire Logistics Dashboard */
 
 import type { TransportRequestV2 } from "./transport-request";
 import type { TransportAssignment } from "./transport-assignment";
@@ -66,7 +55,7 @@ export interface LogisticsDashboard {
 
 /**
  * 构建 Empire Logistics Dashboard。
- *
+
  * 纯函数。
  */
 export function buildDashboard(

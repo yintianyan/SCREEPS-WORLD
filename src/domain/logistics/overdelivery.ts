@@ -1,14 +1,4 @@
-/**
- * Overdelivery Handling — A4.3 Phase 4：超量交付处理。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #18。
- *
- * 设计意图：
- *   交付 > 需求 → 重新分配 Excess Resource。
- *   不撤销已交付资源，但记录 excess 供后续 Demand 抵扣。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Overdelivery Handling */
 
 import type { TransportRequestV2 } from "./transport-request";
 
@@ -30,12 +20,12 @@ export interface OverdeliveryResult {
 
 /**
  * 处理超量交付。
- *
+
  * 交付 > 需求时：
  *   1. 不撤销已交付资源（无法撤销）
  *   2. 将 Request 标记为 delivered（已完成）
  *   3. 记录 excess 量供后续 Demand 抵扣
- *
+
  * 纯函数。
  */
 export function handleOverdelivery(

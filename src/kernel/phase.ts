@@ -1,8 +1,4 @@
-/**
- * K-6 相位偏移 — 零依赖纯函数（独立文件防止导入链污染）：放 kernel.ts 会让
- * 轻量消费者（telemetry-collector 等）连带引入 scheduler 的模块顶层 CONFIG
- * 求值，partial-mock config 的测试直接崩。
- */
+/** K-6 相位偏移 — 零依赖纯函数（独立文件防止导入链污染）：放 kernel.ts 会让 */
 
 /** 字符串 → [0, interval) 稳定哈希（DJB-like 变种）。
  * systemPhase 与 roomPhase 共用同一哈希算法，避免两处相位偏移漂移到

@@ -1,41 +1,14 @@
-/**
- * Empire Room Role — A4.0 Phase 1：房间经济职能分工枚举与角色特征。
- *
- * 合同锚点：A4.0 Architecture Audit §1–§8（EmpireRoomRole 正交于 RoomEconomicClass）。
- *
- * 设计意图：
- *   `RoomEconomicClass`（room-profile.ts）回答「这个房间发展到了什么阶段」，
- *   是基于 RCL/storage/colonyState 的能力门槛分类。
- *   `EmpireRoomRole` 回答「这个房间在帝国经济中最适合做什么」，
- *   是基于比较优势的经济职能分工。
- *   两者正交——一个 RCL6 的 `core` 房间可能被分配为 PRODUCTION（高产能）
- *   或 SUPPORT（物流枢纽）或 CORE（帝国基座），取决于其特征剖面。
- *
- * 角色定义：
- *   - CORE：帝国基座，高 RCL + 高产能 + 高储备，可承担调拨源/代孵/sponsor。
- *     核心特征：RCL≥6 + storage + 高净产出 + 稳定经济。
- *   - PRODUCTION：产能中心，高效率 + 高 source 数，优先产出能量。
- *     核心特征：高 estimatedIncome + 高 efficiency + 低风险。
- *   - SUPPORT：物流枢纽，位于帝国地理中心或多条调拨路径交汇处。
- *     核心特征：terminal + 高 neighborCount + 低距离均值。
- *   - REMOTE：远矿运营基地，以远矿产出为主要经济来源。
- *     核心特征：高 remoteOps 数 + 高远矿净收益 + 低本地产能。
- *
- * 纯函数律（DEP_GRAPH §3-5，SYSTEM_BOUNDARIES §2.3-3）：
- *   - 不引用 Game / Memory / RawMemory（lint 红线）
- *   - 全部输入由参数注入
- *   - 不写任何状态——只读计算
- */
+/** Empire Room Role */
 
 // ─── Empire Room Role 枚举 ───────────────────────────────
 
 /**
  * Empire Room Role — 房间在帝国经济中的职能分工。
- *
+
  * 与 `RoomEconomicClass` 正交：
  * - RoomEconomicClass = 发展阶段（能力门槛）
  * - EmpireRoomRole = 经济职能（比较优势）
- *
+
  * 一个房间在同一 RoomEconomicClass 下可以有不同的 EmpireRoomRole，
  * 反之亦然。Role 由 Role Evaluation 纯函数从多维特征推导。
  */
@@ -55,7 +28,7 @@ export const EMPIRE_ROOM_ROLES: readonly EmpireRoomRole[] = [
 
 /**
  * Role Characteristic — 角色特征描述。
- *
+
  * 定义每个 Role 的核心特征、前置条件、职责和能力限制。
  * 供 Role Evaluation 评分时参考，也供 Dashboard 可观测性展示。
  */
@@ -87,7 +60,7 @@ export interface RoleCharacteristic {
 
 /**
  * 各角色的特征定义。
- *
+
  * 这些是静态描述，不随运行时变化。
  * Role Evaluation 纯函数消费这些特征来计算评分。
  */

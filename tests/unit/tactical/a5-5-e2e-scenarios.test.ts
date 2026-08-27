@@ -1,24 +1,4 @@
-/**
- * A5.5 E2E Scenario Declarations — ENVIRONMENT BLOCKED.
- *
- * 对应需求 §25 E2E 和 §32 PASS 标准：
- *
- *   MICRO-E2E-001: War → Squad → Formation → Movement → Enemy Approach →
- *                  Kiting → Reposition → FocusFire → Attack → Target Death
- *   MICRO-E2E-002: Enemy Melee Rush → Ranged Kite → Formation 保持
- *   MICRO-E2E-003: Enemy Healer → Pressure → Target Decision 变化
- *   MICRO-E2E-004: Tower Range → Avoidance → 继续 Combat
- *   MICRO-E2E-005: Formation Break → Reform → 继续 Combat
- *   MICRO-E2E-006: Retreat → Micro 全部停止 Aggressive Intent
- *
- * STATUS: ENVIRONMENT BLOCKED
- *
- * Screeps E2E 需要真实游戏环境（Game 对象、Room、Creep），
- * 无法在 CI / Vitest 中执行。此处声明 6 个场景并在 Domain 层
- * 用模拟快照验证逻辑闭环（非真实 E2E）。
- *
- * 真实 E2E 必须在 Screeps 私服 / MMO 中执行。
- */
+/** A5.5 E2E Scenario Declarations — ENVIRONMENT BLOCKED. */
 
 import { describe, expect, it } from "vitest";
 import {

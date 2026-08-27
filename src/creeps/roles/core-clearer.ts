@@ -1,20 +1,4 @@
-/**
- * CoreClearer — P1 次级 Invader Core 清核者。
- *
- * 前往被 level-0 reserve-only 核心压制的远矿房，拆毁核心（核心不反击、无守卫），
- * 然后当场从废墟（ruin）捡取随机战利品带回 home 存 storage，最后标记回收。
- * 比「绕开等自然 decay」更优：直接回收被核心白占的稀缺远矿 op 名额。
- *
- * 设计：body ATTACK+MOVE+CARRY（无 heal/boost/combat 编队）。combat:true 跳过过境房
- * 威胁逃跑检测（必须在 hostile 房场推进到核心）。优先级 1 → 不被 recovery 殖民地态门禁
- * 冻结（与 defender/remoteHarvester 同档，P2+ 才被冻结）。
- *
- * 行为链（acquire 在 remoteTarget，work 在 home）：
- *   ① 核心在场 → 部署期(ticksToDeploy)无敌则待命、否则 attack 直至摧毁；
- *   ② 无核心 → 从 ruin 捡 loot（能量优先、矿物兜底）；
- *   ③ 无核心且无 loot 可捡 → 切 work 返航；
- *   ④ work 到家 → 存 storage；⑤ 空包 → 回收（一次性使命完成）。
- */
+/** CoreClearer */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";

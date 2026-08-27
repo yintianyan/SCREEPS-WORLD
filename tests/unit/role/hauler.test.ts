@@ -1,9 +1,4 @@
-/**
- * Hauler 角色场景测试。
- *
- * 覆盖：capped withdraw、reservation 去重、controller container 优先补给、
- * fallback 链（storage → upgrade → idle）、无 WORK 部件不采集、flee。
- */
+/** Hauler 角色场景测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { haulerRole } from "../../../src/creeps/roles/hauler";
 import { harvesterRole } from "../../../src/creeps/roles/harvester";
@@ -297,17 +292,17 @@ describe("hauler — flee", () => {
 
 /**
  * P0-2 修复：hauler 在 flee 状态下的"防御圈内安全充能"。
- *
+
  * 场景：战斗中 Tower 能量耗尽，hauler 全部 flee 到 spawn 旁。
  * 修复后：hauler 距 spawn ≤ safeRefuelRange(3) 且携带能量时，
  *         允许向防御圈内的需能量结构（threat 时 tower 优先）执行 transfer。
- *
+
  * 测试位置布局约束：
  *   - hostile 距 hauler ≤ fleeRange(10) → 触发 shouldFlee
  *   - hauler 距 spawn ≤ safeRefuelRange(3) → 在安全区内
  *   - hostile 距 spawn > safeRefuelRange(3) → 不在安全区
  *   - 目标(tower) 距 hostile > hauler 距 hostile → 目标不在敌人侧
- *
+
  * 设计要点：
  *   - G-SM-05 细化：移动阶段不动作，到达安全区后允许关键补给
  *   - 目标必须在防御圈内（距 spawn ≤ safeRange）

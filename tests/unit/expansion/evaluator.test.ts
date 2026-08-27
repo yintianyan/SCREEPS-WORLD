@@ -1,9 +1,4 @@
-/**
- * 扩张目标评估器测试。
- *
- * 覆盖：GCL 余量门禁、盲区拒选（无视野候选）、有主/非普通房/黑名单剔除、
- * source 数主导评分、情报过期剔除、跨 sponsor 择优。
- */
+/** 扩张目标评估器测试。 */
 import { describe, expect, it } from "vitest";
 import { selectExpansionTarget, type ExpansionInput } from "../../../src/domain/expansion/evaluator";
 import type { RoomIntel } from "../../../src/domain/intel";

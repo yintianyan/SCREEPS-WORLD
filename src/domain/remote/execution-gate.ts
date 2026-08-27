@@ -1,29 +1,4 @@
-/**
- * Execution Gate — A4.1 Phase 1：Opportunity → Operation 前的验证门禁。
- *
- * 合同锚点：A4.1 Architecture Audit §4.3（Execution Gate 检查项）。
- *
- * 设计意图：
- *   只有 Remote Opportunity 满足 Execution Gate 的全部检查项后，
- *   才能转化为 RemoteMiningOperation。任何检查失败返回结构化结果，
- *   调用方据此决定 WAITING / BLOCKED / CANCELLED / REPLAN。
- *
- *   10 项检查：
- *   1. Source 是否仍存在
- *   2. Source 是否仍然可采
- *   3. Target Room 是否可进入
- *   4. Route 是否有效
- *   5. Threat 是否允许
- *   6. Expected Yield 是否仍然合理
- *   7. Empire 是否仍需要资源
- *   8. Transport Cost 是否仍可接受
- *   9. Operation 是否重复
- *   10. Budget 是否足够
- *
- *   不能：旧 Opportunity 永久执行——过期则 REPLAN 或 CANCELLED。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Execution Gate */
 
 import type { RemoteOpportunity } from "./remote-opportunity";
 import type { RemoteMiningOperationContext } from "../operation/remote-mining-op";
@@ -33,7 +8,7 @@ import { hasActiveRemoteMiningOp } from "../operation/remote-mining-op";
 
 /**
  * Execution Gate 检查结果。
- *
+
  * - PASS: 全部检查通过——可以创建 RemoteMiningOperation
  * - WAIT: 暂时不可执行——条件可能改善（如威胁冷却中、spawn 容量不足）
  * - BLOCK: 阻塞——条件不太可能改善（如 source 丢失、房间被占）
@@ -109,7 +84,7 @@ export const ALL_GATE_CHECKS: readonly GateCheck[] = [
 
 /**
  * Execution Gate 检查输入。
- *
+
  * 所有数据由调用方（系统侧薄壳）注入——不访问 Game/Memory。
  */
 export interface ExecutionGateInput {
@@ -179,10 +154,10 @@ export interface ExecutionGateInput {
 
 /**
  * 执行 Execution Gate 的全部 10 项检查。
- *
+
  * 逐项检查，遇到第一个失败项即返回（短路）。
  * 全部通过返回 GATE_PASS。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function checkExecutionGate(input: ExecutionGateInput): GateResult {

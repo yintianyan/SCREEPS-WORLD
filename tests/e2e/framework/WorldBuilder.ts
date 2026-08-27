@@ -1,9 +1,4 @@
-/**
- * WorldBuilder — 精细控制 Screeps 世界构建。
- *
- * 基于 Screeps API 真实常量构建世界，不用理想化假设。
- * 所有数值来自 [Facts] docs.screeps.com/constants。
- */
+/** WorldBuilder — 精细控制 Screeps 世界构建。 */
 import { TerrainMatrix } from "screeps-server-mockup";
 
 /**
@@ -114,10 +109,10 @@ export class WorldBuilder {
 
   /**
    * 注入敌方 creep 到指定房间（用于 tower 防御测试）。
-   *
+
    * [Facts] Screeps 中 hostile creep 的 owner 不是当前玩家。
    * screeps-server-mockup 的 addRoomObject 直接创建对象。
-   *
+
    * @param roomName 房间名
    * @param x x 坐标
    * @param y y 坐标

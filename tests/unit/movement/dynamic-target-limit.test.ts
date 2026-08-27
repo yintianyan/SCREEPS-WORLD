@@ -1,12 +1,4 @@
-/**
- * P1-E：动态目标寻路限频三档单测（docs/architecture/DATA_FLOW.md，remediation P1-E）。
- *
- * 档 1 quantizeBlockKey：3×3 区块 key 量化 — 目标在区块内移动不触发重寻路。
- * 档 2 dynamicRepathInterval：重寻路冷却 — 冷却内沿旧路径/直走降级。
- * 档 3 maxSearchesPerRoomPerTick：每房每 tick 寻路预算 — 超预算降级让行。
- *
- * 纯函数测试 + 通过 stepToward 的集成测试（mock PathFinder.search 计数）。
- */
+/** P1-E：动态目标寻路限频三档单测（docs/architecture/DATA_FLOW.md，remediation P1-E）。 */
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { stepToward } from "../../../src/creeps/movement";
 import { preloadStructureCache } from "../../../src/creeps/movement";

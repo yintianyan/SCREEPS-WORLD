@@ -1,8 +1,4 @@
-/**
- * 远矿需求评估测试。
- *
- * 覆盖：正常孵化、角色计数、替换逻辑、危机暂停、reserver body 门禁。
- */
+/** 远矿需求评估测试。 */
 import { describe, expect, it } from "vitest";
 import { evaluateRemoteDemand, type RemoteCreepSummary } from "../../../src/domain/remote/demand";
 import type { ColonyState } from "../../../src/kernel/contracts";

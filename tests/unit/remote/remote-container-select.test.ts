@@ -1,13 +1,4 @@
-/**
- * 远矿 hauler container 加权分散测试（组②-2c / E-2）。
- *
- * 背景：原 findRemoteContainer 用纯 findClosestByRange，2-source 房（两 container）
- * 所有 hauler 挤最近那个、远 container 积压溢出（羊群）。修复后按"能量 - 距离×权重"
- * 打分 + 名哈希起点散布（照本地 selectHaulSourceContainer）。
- *
- * 注：测试环境 mockPos.getRangeTo 恒为 1，距离项恒定 → 加权退化为按能量择优，
- * 正好验证"不再是数组序最近，而是选满的" —— 反羊群的本质属性。
- */
+/** 远矿 hauler container 加权分散测试（组②-2c / E-2）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { findRemoteContainer } from "../../../src/creeps/roles/remote-hauler";
 import { mockCreep, resetGlobals } from "../../role-helpers";

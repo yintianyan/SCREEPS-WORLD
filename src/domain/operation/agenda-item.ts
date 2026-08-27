@@ -1,15 +1,8 @@
-/**
- * AgendaItem 类型定义 — A3.0 多房帝国执行基础（PLANNING_ARCHITECTURE §3）。
- *
- * Operation = AgendaItem 的 supply 子类型。不新建独立 Operation 类型，
- * 是冻结蓝图中已定义的 AgendaItem 的具体实现。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** AgendaItem 类型定义 */
 
 /**
  * 操作类型（A3.3 扩展：新增 claim + colonize；A4.1 扩展：新增 remote_mining）。
- *
+
  * - supply:        资源调拨（A3.0 已实现）
  * - claim:         获取 Controller 所有权（A3.3 新增）
  * - colonize:      建立经济——从 Spawn 到 Autonomous Room（A3.3 新增）
@@ -34,22 +27,22 @@ export type OperationPriority = 0 | 1 | 2 | 3;
 
 /**
  * 资源类型 — A4.2 从 energy-only 扩展为多资源联合类型。
- *
+
  * A4.0 §18.4 规划路径：`"energy" | MineralResourceType | CommodityResourceType`。
  * A4.2 执行第一步：加入 `MineralConstant`（7 种基础矿物）。
  * 后续阶段（A4.4+）加入矿物化合物 / 商品类型。
- *
+
  * `MineralConstant` 是 Screeps 引擎全局 `declare type`（无需 import）：
  *   RESOURCE_UTRIUM | RESOURCE_LEMERGIUM | RESOURCE_KEANIUM |
  *   RESOURCE_ZYNTHIUM | RESOURCE_OXYGEN | RESOURCE_HYDROGEN | RESOURCE_CATALYST
- *
+
  * 向后兼容：`"energy"` 仍是合法值，现有代码零改动。
  */
 export type ResourceType = "energy" | MineralConstant;
 
 /**
  * OperationContext — AgendaItem 的运行时上下文。
- *
+
  * 瘦结构：只存必要字段，终态归档后删除（MEMORY_ARCHITECTURE §4）。
  * 不存完整路径/历史/运行时索引。
  */
@@ -115,7 +108,7 @@ export function makeOperationId(
 
 /**
  * 创建新 OperationContext（初始状态 = planned）。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function createOperation(
@@ -186,7 +179,7 @@ export function makeClaimOperationId(targetRoom: string): string {
 
 /**
  * 创建 Claim Operation（获取 Controller 所有权）。
- *
+
  * 初始状态 = planned，sourceRoom = sponsor 房，targetRoom = 候选房。
  */
 export function createClaimOperation(
@@ -226,7 +219,7 @@ export function makeColonizeOperationId(targetRoom: string): string {
 
 /**
  * 创建 Colonize Operation（建立经济——从 Spawn 到 Autonomous Room）。
- *
+
  * 初始状态 = planned。Colonize 在 Claim 完成后创建。
  */
 export function createColonizeOperation(
@@ -273,7 +266,7 @@ export function makeRemoteMiningOperationId(
 
 /**
  * 创建 Remote Mining Operation（远矿采集运营）。
- *
+
  * 初始状态 = planned，sourceRoom = home 房（孵化方），targetRoom = 远矿目标房。
  * requestedAmount = 预算上限（budget limit），deliveredAmount = 实际交付累计。
  */

@@ -1,23 +1,4 @@
-/**
- * 布局系统重开稳定性测试（重推导稳定性）。
- *
- * 核心原则：
- *   布局决策必须可从「地形 + 锚点 + RCL」完全重推导，不依赖运行时状态。
- *
- * Global Reset 影响矩阵（仅列本文覆盖的 heap 字段）：
- *   - deadAssetSince      → 丢失 → 从 0 重新检测（500t 内不拆改，可接受避免抖动）
- *   - linkConstrained     → 丢失 → 重新评估一次（开销可忽略）
- *   - dismantlePlans      → 丢失 → 死资产重新检测 + 重新规划拆改
- *   - dismantleCount      → 丢失 → 从 0 重新计数（不影响死资产检测/拆改逻辑）
- *   - corridorPathCache   → 丢失 → 重新计算（已由 corridor-cache-invalidation.test.ts 覆盖）
- *   - planStageData       → 丢失 → 重置 planStage=0（已由 layout-planner.test.ts 覆盖）
- *
- * 验证策略：
- *   1. 建立「重置前」状态（写入 heap 缓存）
- *   2. 模拟 global reset（清空对应 heap 字段）
- *   3. 验证「重置后」行为符合设计预期（不报错、降级安全、可重建）
- *   4. 验证 layout-planner 从 Memory.layout.anchor 重新规划路径正确
- */
+/** 布局系统重开稳定性测试（重推导稳定性）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   computeDeadAssetSince,
@@ -231,7 +212,7 @@ describe("重开稳定性 — dismantleCount 丢失", () => {
 describe("重开稳定性 — layout-planner 从 Memory 重新规划", () => {
   /**
    * 构造最小可用 room + Memory + snapshot 三元组（复用 layout-planner.test.ts 模式）。
-   *
+
    * 关键：anchor 预设为 spawn 位置 — 模拟 global reset 后 Memory.layout.anchor
    * 仍在（持久化），layout-planner 可据此重新规划，不依赖 heap 缓存。
    */
@@ -350,7 +331,7 @@ describe("重开稳定性 — layout-planner 从 Memory 重新规划", () => {
 describe("重开稳定性 — Layout 决策一致性", () => {
   /**
    * 核心原则：布局决策必须可从「地形 + 锚点 + RCL」完全重推导。
-   *
+
    * 验证：相同 anchor + RCL + 地形 → 重启前后产生相同的 buildQueue 任务集
    * （key 集合一致）。这是「无状态重启」的根本保证 — heap 缓存只是性能优化，
    * 不影响决策结果。

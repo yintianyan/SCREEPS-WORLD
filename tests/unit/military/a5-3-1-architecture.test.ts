@@ -1,13 +1,4 @@
-/**
- * A5.3.1 GAP-2 Architecture Test — 阻止新代码进入 Legacy Decision 路径。
- *
- * 规则：
- *   1. 只有 war-planner.ts 和 war-planning-system.ts 可以 import selectWarTarget / decideSquadSize
- *   2. 新增 system 文件禁止 import domain/war/planning.ts（Legacy 路径）
- *   3. 新增 system 文件必须通过 domain/military/war-planning.ts（Canonical 路径）
- *   4. domain/military/ 不得引用 Game / Memory / RawMemory
- *   5. recovery-execution-system.ts 是唯一消费 warAbortSignals 的系统
- */
+/** A5.3.1 GAP-2 Architecture Test — 阻止新代码进入 Legacy Decision 路径。 */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";

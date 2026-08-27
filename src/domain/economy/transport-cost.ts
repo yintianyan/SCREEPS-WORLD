@@ -1,38 +1,15 @@
-/**
- * Transport Cost — A4.0 Phase 2：运输成本估算。
- *
- * 合同锚点：A4.0 Architecture Audit §18.3（Route Efficiency 模型）。
- *
- * 设计意图：
- *   在 Contract 创建和评估时，需要估算从 Producer 到 Consumer 的运输成本。
- *   这不是实际 Game.cpu 耗费——而是一个**可比较的抽象成本指标**，
- *   用于：
- *   1. Contract 创建时判断是否值得建立长期供应关系
- *   2. Route Efficiency 计算（delivered / cost 比率）
- *   3. 多 Producer 竞争时选择成本最低的供应方
- *
- * 成本组成：
- *   totalCost = distanceCost + bodyCost + energyCost + timeCost
- *
- *   - distanceCost: 路径距离成本（Game.map.getRoomLinearDistance 近似）
- *   - bodyCost: Hauler body 成本（spawn 能量花费折算）
- *   - energyCost: 搬运过程中消耗的能量（carry 衰减 / 路上损耗）
- *   - timeCost: 搬运耗时折算（tick 数 × CPU 时间价值）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- * 距离由参数注入（系统侧薄壳调用 Game.map.getRoomLinearDistance）。
- */
+/** Transport Cost */
 
 // ─── 距离成本 ─────────────────────────────────────────────
 
 /**
  * 计算路径距离成本。
- *
+
  * 使用线性距离作为近似值（避免每 tick 调 PathFinder.search）。
  * distanceCost = linearDistance × DISTANCE_WEIGHT
- *
+
  * 纯函数。
- *
+
  * @param linearDistance 两房间间的线性距离（Game.map.getRoomLinearDistance）
  * @param weight 每单位距离的权重（默认 10）
  */
@@ -61,12 +38,12 @@ export interface HaulerBodyConfig {
 
 /**
  * 计算 Hauler body 成本。
- *
+
  * bodyCost = spawnCost / expectedLifespanTicks
  * （将 spawn 成本均摊到预期寿命上）
- *
+
  * 纯函数。
- *
+
  * @param body Hauler body 配置
  * @param expectedLifespan 预期寿命 tick 数（默认 1000，即 CREEP_LIFE_TIME）
  * @param costPerSpawnEnergy 每 1 spawn 能量的成本权重（默认 1）
@@ -84,13 +61,13 @@ export function computeBodyCost(
 
 /**
  * 计算搬运过程中的能量损耗成本。
- *
+
  * Hauler 每个来回需要走 distance × 2 步（去 + 回）。
  * 路上每 tick 有 fatigue / move 消耗（如果道路不通畅）。
  * 这里使用简化模型：energyLoss = roundTrips × decayPerTrip
- *
+
  * 纯函数。
- *
+
  * @param amount 搬运总量
  * @param body Hauler body 配置
  * @param linearDistance 线性距离
@@ -111,15 +88,15 @@ export function computeEnergyCost(
 
 /**
  * 计算搬运时间成本。
- *
+
  * timeCost = totalTicks × cpuTimeValue
- *
+
  * totalTicks = roundTrips × roundTripTicks
  * roundTripTicks ≈ linearDistance × 2 / moveSpeed
  * moveSpeed = 1（有路）或 0.5（无路）
- *
+
  * 纯函数。
- *
+
  * @param amount 搬运总量
  * @param body Hauler body 配置
  * @param linearDistance 线性距离
@@ -203,9 +180,9 @@ export interface TransportCostBreakdown {
 
 /**
  * 计算总运输成本（含明细）。
- *
+
  * totalCost = distanceCost + bodyCost + energyCost + timeCost
- *
+
  * 纯函数。
  */
 export function computeTransportCost(

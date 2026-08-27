@@ -1,14 +1,4 @@
-/**
- * A3.1 Contract Tests — Empire Resource Network
- *
- * 测试范围：
- *   A3.1-001..005: Supply Node
- *   A3.1-006..010: Demand Node
- *   A3.1-011..013: Network Snapshot
- *   A3.1-014..017: Allocation Policy v2 (TOCTOU + Multi-Source + Partial + Storm)
- *   A3.1-018..019: Preemption Policy
- *   A3.1-020: Plan Stability
- */
+/** A3.1 Contract Tests — Empire Resource Network */
 import { describe, expect, it } from "vitest";
 import {
   buildSupplyNode,

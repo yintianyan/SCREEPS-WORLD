@@ -1,31 +1,4 @@
-/**
- * OutcomeChannel — Memory 持久化的有界 FIFO 通道。
- *
- * Phase 38 UOEM Model A 实现：权威通道（幂等、Memory 持久、容量可观测）。
- *
- * 设计约束（冻结契约 docs/phase38/PHASE38_B_FINAL_VERDICT.md §11）：
- *   - 存 Memory（≤3.2KB，cap=16 条 OutcomeEvent，压缩字段名）
- *   - 每 operationId 至多一条 OUTCOME（幂等去重）
- *   - FIFO 顺序（drain 取出全部）
- *   - 通道溢出可观测，不静默丢失
- *   - eventId 确定性、有序、可去重
- *   - duplicate outcome 被拒绝且计数可查
- *
- * 压缩策略（满足 3.2KB 冻结契约）：
- *   - SerializedOutcomeEvent 字段名缩短（eid/oid/r/oa/ca/fa/ob/oa2/ds/df）
- *   - OutcomeChannelMemory 字段名缩短（q/s/dr/oe）
- *   - cap=16，满载最大事件 JSON ≤ 2.4KB（远低于 3.2KB）
- *   - seen 数组每次 drain 裁剪到 cap，drain 前 ≤ cap×2
- *
- * 安全不变式：
- *   - channel 完全停止时帝国照常安全运行（Shadow-Only consumer）
- *   - channel 是 experience-collector 的唯一 outcome 数据源
- *   - 不修改任何业务状态
- *   - overflowEvicted 后可观测：日志 + 计数器，不静默丢失
- *
- * 合同锚点：docs/phase38/PHASE38_B_FINAL_VERDICT.md §11
- * 证明测试：tests/unit/phase38/uoem-proof.test.ts（reference implementation）
- */
+/** OutcomeChannel — Memory 持久化的有界 FIFO 通道。 */
 import type {
   OutcomeEvent,
   OperationId,
@@ -82,7 +55,7 @@ export interface SerializedOutcomeEvent {
 /**
  * Channel 容量上限。
  * cap=16 × ~128B(max event) + 16 × ~20B(seen) + 16B(counters) ≈ 2.4KB < 3.2KB。
- * 冻结契约：≤3.2KB（docs/phase38/PHASE38_B_FINAL_VERDICT.md §11）。
+ * 冻结契约：≤3.2KB（见文件头 ARCHITECTURE_FREEZE.md §11）。
  */
 export const OUTCOME_CHANNEL_CAPACITY = 16;
 

@@ -1,28 +1,4 @@
-/**
- * A5.4.4 Tactical Combat Runtime Validation — Domain 纯函数验证测试。
- *
- * 测试覆盖：
- *   COMBAT-RUNTIME-001: Target Death Race — Tick N 击杀目标 → Tick N+1 不继续攻击死目标
- *   COMBAT-RUNTIME-002: Target Escape — 目标离开攻击范围 → requiresMovement + NO_ATTACK
- *   COMBAT-RUNTIME-003: Formation Conflict — Cohesion BROKEN → REGROUP（不攻击）
- *   COMBAT-RUNTIME-004: Retreat Safety — RETREATING → 0 AttackIntent
- *   COMBAT-RUNTIME-005: Authorization Denied — 非 war → 0 AttackIntent
- *   COMBAT-RUNTIME-006: Focus Fire Overkill — 多 attacker 不全部集中一个目标
- *   COMBAT-RUNTIME-007: Enemy Healer → 优先选择 healer 目标
- *   COMBAT-RUNTIME-008: Boosted Enemy → tacticalPriority 提升
- *   COMBAT-RUNTIME-009: Deterministic Replay — 50 组 × 1000 次 Hash 一致
- *   COMBAT-RUNTIME-010: Mixed Melee + Ranged — 攻击类型正确分配
- *   COMBAT-RUNTIME-011: Low HP Target — 残血优先
- *   COMBAT-RUNTIME-012: TargetScope LOCAL → 同房目标不拒绝
- *   COMBAT-RUNTIME-013: TargetScope OPERATIONAL → 跨房目标拒绝
- *   COMBAT-RUNTIME-014: Authorization Expired → 0 AttackIntent
- *   COMBAT-RUNTIME-015: DISENGAGING → 0 AttackIntent
- *   COMBAT-RUNTIME-016: 多 tick 状态连续性（ATTACKING → TARGET_DYING → TARGET_DEAD → REASSESSING）
- *   COMBAT-RUNTIME-017: Overkill 分流后主目标 HP 下降 → 更多 attacker 分到次目标
- *   COMBAT-RUNTIME-018: 全部 attacker 超出射程 → 全部 requiresMovement
- *   COMBAT-RUNTIME-019: HealCoverage retreatRecommended — 无 healer + 受伤 → 推荐
- *   COMBAT-RUNTIME-020: decisionHash 非空且确定性
- */
+/** A5.4.4 Tactical Combat Runtime Validation — Domain 纯函数验证测试。 */
 
 import { describe, expect, it } from "vitest";
 import {

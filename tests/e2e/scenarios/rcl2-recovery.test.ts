@@ -1,20 +1,4 @@
-/**
- * 【Phase R2 验收加固】RCL2 Early Development Recovery — 私服 canary（隔离世界）。
- *
- * 使用 in-process screeps private server（ServerHarness/ScenarioRunner），
- * 与正式私服世界完全隔离 — 不触碰任何现有世界数据。
- *
- * R2 验收口径（任务书一/六）：
- *   - 「RCL2 阶段」断言一律使用 rcl === 2 精确窗口，禁止 rcl >= 2 把 RCL3/4
- *     结果误算为 RCL2 成功；
- *   - 采样按 rcl === 1 / === 2 / >= 3 三分区记录；
- *   - extension 或 controller/source container site 必须在 rcl === 2 时出现，
- *     且首个 development site 早于首次进入 RCL3；
- *     若 RCL2 无 site 而 RCL3+ 后才出现 → 测试失败；
- *   - queued > 0 && siteCount === 0 的连续窗口 ≤ 100 tick（rcl === 2 窗口内）；
- *   - queue 中的 extension/container 任务必须实际发生 queued → site 转移；
- *   - 队列有硬上限；无经济死亡螺旋；不依赖 tower emergency 才恢复。
- */
+/** RCL2 Early Development Recovery — 私服 canary（隔离世界）。 */
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { writeFileSync } from "node:fs";
 import { ScenarioRunner } from "../framework";

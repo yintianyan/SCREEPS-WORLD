@@ -1,7 +1,4 @@
-/**
- * 请求池纯函数单测——防超卖供给账/生成聚合/TTL 过期回执/饥饿老化。
- * 合同：LOGISTICS §2–§5；任务书 §22–§25。
- */
+/** 请求池纯函数单测——防超卖供给账/生成聚合/TTL 过期回执/饥饿老化。 */
 import { describe, it, expect } from "vitest";
 import {
   supplyLedger, buildTransportRequests, reconcileRegistry, promoteAged, applyShrink,

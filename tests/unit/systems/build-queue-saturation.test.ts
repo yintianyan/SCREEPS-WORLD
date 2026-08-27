@@ -1,12 +1,4 @@
-/**
- * BuildTask 类型饱和清理测试 — 幽灵任务（漂移遗留）的唯一出口。
- *
- * 线上事故：布局代际漂移修复前的旧计数器 key 任务遗留在 buildQueue，
- * 坐标为空但同类结构已在别处建满 RCL 配额 —— 逐格 done 判定永不命中，
- * createConstructionSite 永远 ERR_RCL_NOT_ENOUGH（不 blocked 不进黑名单），
- * 18 个幽灵 extension 任务永久积压，且被承诺计数误计、RCL 升级时会在
- * 过时坐标真的建出结构。
- */
+/** BuildTask 类型饱和清理测试 — 幽灵任务（漂移遗留）的唯一出口。 */
 import { describe, expect, it } from "vitest";
 import { cleanTasks, syncTaskStates } from "../../../src/domain/construction/queue";
 import { mockSnapshot, mockStructure } from "../../role-helpers";

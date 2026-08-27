@@ -1,7 +1,4 @@
-/**
- * 临时诊断（非长期回归）：用官服拉回的真实 segment 内容驱动采集器全链，
- * 捕捉线上「采集器停摆 12.5k tick」的抛错点。定位后移除或转为回归 fixture。
- */
+/** 临时诊断（非长期回归）：用官服拉回的真实 segment 内容驱动采集器全链， */
 import { describe, expect, it, beforeEach } from "vitest";
 import fs from "fs";
 

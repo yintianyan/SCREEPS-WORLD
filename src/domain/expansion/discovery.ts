@@ -1,14 +1,4 @@
-/**
- * Candidate Discovery — A3.2 Phase 1：从 Intel 提取候选 + 去重。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §3 巡检发现候选 → 开 remote 车道。
- *
- * 定位：从各 sponsor 房的邻居 Intel 中提取可 claim 候选，
- * 标记 UNKNOWN / DISCOVERED，去重（同一 roomName 只保留一个 entry），
- * 为后续 Scoring 层提供输入。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Candidate Discovery */
 
 import type { RoomIntel } from "../intel";
 import { ExpansionCandidateV2, buildCandidate, isEvaluable } from "./candidate";
@@ -41,7 +31,7 @@ export interface DiscoveryResult {
 
 /**
  * 从 Intel 提取候选房，与已有候选合并去重。
- *
+
  * 合并规则：
  * - 同一 roomName 只保留一个 entry
  * - 新 Intel lastSeen > 旧 lastSeen → 更新候选

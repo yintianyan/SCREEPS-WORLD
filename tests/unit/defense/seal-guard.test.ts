@@ -1,12 +1,4 @@
-/**
- * 密封守卫（wouldSeal / validateBuildCell "seal"）测试。
- *
- * 覆盖：
- *   - 候选位置出生即密封 → 拒绝
- *   - 候选夺走邻居最后一个可站格 → 拒绝
- *   - 开阔位置 → 放行
- *   - 可通行结构（road/container/rampart）不做密封检查
- */
+/** 密封守卫（wouldSeal / validateBuildCell "seal"）测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   buildObstaclePositionSet,

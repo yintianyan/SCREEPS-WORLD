@@ -1,21 +1,4 @@
-/**
- * Opportunity Ranking — A4.0 Phase 3：远矿机会多候选排序 + 可解释。
- *
- * 合同锚点：A4.0 Architecture Audit §18.3（Opportunity 排序 + 可解释）。
- *
- * 设计意图：
- *   当存在多个 WAITING_EXECUTION 的 Opportunity 时，需要排序以决定评估优先级。
- *
- *   排序维度（多维可解释评分）：
- *   1. netValue（经济净价值——权重最高）
- *   2. distance（距离越近越好——降低运输成本和风险）
- *   3. riskLevel（风险越低越好——稳定性）
- *   4. freshness（情报越新越好——可靠性）
- *
- *   排序结果包含可解释的评分明细——供 Dashboard 展示。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Opportunity Ranking */
 
 import type { RemoteOpportunity } from "./remote-opportunity";
 import type { ValueGrade } from "./remote-value";
@@ -84,7 +67,7 @@ export interface RankingConfig {
 
 /**
  * 默认排序参数。
- *
+
  * 权重分配（总分 100）：
  * - valueWeight = 40（经济价值最重要）
  * - distanceWeight = 25（距离影响运输成本和响应速度）
@@ -104,13 +87,13 @@ export const DEFAULT_RANKING_CONFIG: RankingConfig = {
 
 /**
  * 计算经济价值得分（0..valueWeight）。
- *
+
  * 评分映射：
  * - premium (netValue >= 15) → 满分
  * - profitable (>= 8) → 75%
  * - marginal (>= 3) → 50%
  * - unprofitable (< 3) → 10%
- *
+
  * 纯函数。
  */
 export function scoreValue(
@@ -129,11 +112,11 @@ export function scoreValue(
 
 /**
  * 计算距离得分（0..distanceWeight）。
- *
+
  * 评分公式：线性映射 [minDistance, maxDistance] → [weight, 0]
  * distance <= minDistance → 满分
  * distance >= maxDistance → 0
- *
+
  * 纯函数。
  */
 export function scoreDistance(
@@ -150,14 +133,14 @@ export function scoreDistance(
 
 /**
  * 计算风险得分（0..riskWeight）。
- *
+
  * 评分映射：
  * - riskLevel 0 (安全) → 满分
  * - riskLevel 1 (低风险) → 75%
  * - riskLevel 2 (中风险) → 50%
  * - riskLevel 3 (高危) → 10%
  * - hasInvaderCore → 额外减半
- *
+
  * 纯函数。
  */
 export function scoreRisk(
@@ -179,13 +162,13 @@ export function scoreRisk(
 
 /**
  * 计算可靠性得分（0..reliabilityWeight）。
- *
+
  * 评分依据：情报是否新鲜（使用 createdAt 距当前 tick 的差值）。
  * 但由于 Opportunity 在创建时冻结了快照，这里用 expectedYield 和 sourceCount
  * 的完整性作为可靠性代理指标：
  * - sourceCount > 0 且 expectedYield > 0 → 满分（情报完整）
  * - sourceCount = 0 或 expectedYield = 0 → 50%（情报不完整）
- *
+
  * 纯函数。
  */
 export function scoreReliability(
@@ -262,15 +245,15 @@ function buildReason(
 
 /**
  * 对 Opportunities 进行排序，返回带排名的评分列表。
- *
+
  * 排序规则：
  * 1. 按总评分降序
  * 2. 同分按 netValue 降序
  * 3. 仍同分按距离升序
  * 4. 最终按 targetRoom 字母序（确定性）
- *
+
  * 纯函数。
- *
+
  * @param opps 待排序的 Opportunities
  * @param config 排序参数
  * @returns 按排名升序排列的评分列表

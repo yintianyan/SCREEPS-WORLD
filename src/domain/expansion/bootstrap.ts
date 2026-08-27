@@ -1,14 +1,4 @@
-/**
- * 新生殖民地自举（Bootstrap）— 纯决策函数，不访问 Game/Memory。
- *
- * 背景（W38S59 事故实证）：扩张任务在 spawn 建成时记 success 离场，此后新生
- * RCL1 殖民地被宿敌 WORK 单位 attackController 打穿 TTD 并摧毁 spawn —— 任务
- * 已结束，本地 spawnQueue 无 spawn 永不可孵化，建造无 builder 可用，唯一活路
- * 是姊妹房代孵 bootstrap 组（worker 建造 + 敌情时 defender 护航）。
- *
- * 止损口径（G11 弃房取舍同源）：TTD 危急且敌情在场 → abandon 永久标记，
- * 不再投喂单位资敌；清空本地不可孵化队列（TTL churn 噪声源）由系统层执行。
- */
+/** 新生殖民地自举（Bootstrap）— 纯决策函数，不访问 Game/Memory。 */
 export interface BootstrapRoomInput {
   room: string;
   /** 控制器降级剩余 tick；undefined = 未知（无视野不可能 —— owned 房恒有视野）。 */

@@ -82,7 +82,7 @@ Goal(常量谓词集) → Policy 求值 → AgendaItem 立项 → Demand 生成 
 | `war` | 持续被打 ∧ 打得起（ADR-009 授权链，见 [DECISION_AUTHORITY_MODEL.md](DECISION_AUTHORITY_MODEL.md) §1） | 止损链触发（伤亡超 squadSize×casualMultiplier / 经济压力持续超标经 warPressureTicks）或胜利核验完成 | **退出滞回 ≥ 一个完整波次周期**（集结+推进+战后核验，红队 A3）；minDuration 由波次周期推导，禁止拍脑袋定值 | 进攻波次（唯一授权，仅 war-planner 执行）；扩张冻结；远矿按战区收缩 | 战争基金预算线划出：基金内军事消耗**不与经济发展竞争**；基金耗尽→强制退 fortify |
 | `evacuate`（按房） | 房间评估为不可守（防御纵深×储备×援军时效全不达标） | 撤离完成或威胁消除 | 同房评估滞回 | **房间级评估、帝国级批准**（上报→战略层确认→作为 Agenda 项下发），不占全局 posture 槽位（research/06 §10.2 裁决） | 该房只保人口与可搬运资产；帝国侧收缩 GCL 槽位 |
 
-**硬约束**：`war` 姿态是进攻的唯一授权来源；代码存在进攻能力 ≠ 战争开始（AGENTS.md
+**硬约束**：`war` 姿态是进攻的唯一授权来源；代码存在进攻能力 ≠ 战争开始（AGENT.md
 战争条款一致）。姿态切换带 minDuration 承诺（防振荡三防线第一、二线，见
 [PLANNING_ARCHITECTURE.md](PLANNING_ARCHITECTURE.md) §4）。
 

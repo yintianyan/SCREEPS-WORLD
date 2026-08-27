@@ -1,25 +1,4 @@
-/**
- * A6.1 Experience Model — Domain 层纯函数与类型定义。
- *
- * 核心数据结构：
- *   ExperienceIdentity  → 经验的稳定标识
- *   DecisionRef         → 对 A4.7 DecisionRecord 的引用（不复制）
- *   ExperienceContext   → 决策时的上下文摘要
- *   OutcomeRecord       → 决策执行后的世界状态变化
- *   Attribution          → 结果归因（Evidence-based）
- *   ExperienceRecord     → 完整经验记录 = Identity + DecisionRef + Context + Outcome + Attribution
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * 所有运行时数据由调用方（system 层薄壳）注入。
- *
- * Deterministic Replay：
- *   同一 Experience 输入 + 同一模型版本 → 相同 attributionHash。
- *   禁止 Math.random() / Date.now() / 无序迭代 / 浮点误差。
- *
- * Shadow-Only 原则：
- *   Experience 只做 OBSERVE / RECORD / EVALUATE / ATTRIBUTE / STORE。
- *   不产出 Decision，不执行 Game API，不修改 Strategy。
- */
+/** A6.1 Experience Model — Domain 层纯函数与类型定义。 */
 
 // ═══════════════════════════════════════════════════════════
 // §1. Experience Types
@@ -98,7 +77,7 @@ export interface ExperienceIdentity {
 
 /**
  * DecisionRef — 对 A4.7 DecisionRecord 的轻量引用。
- *
+
  * 不复制完整 DecisionRecord，只存摘要 + decisionId。
  * 可通过 decisionId 从 Ring Buffer 追溯到完整记录。
  */
@@ -125,7 +104,7 @@ export interface DecisionRef {
 
 /**
  * 决策时的上下文摘要。
- *
+
  * 不存完整状态快照（太大），只存关键指标 + stateHash。
  */
 export interface ExperienceContext {
@@ -151,7 +130,7 @@ export interface ExperienceContext {
 
 /**
  * OutcomeRecord — 决策执行后的世界状态变化。
- *
+
  * 消费已有系统的产出（evaluateWarOutcome / empireHealth / recoveryStats），
  * 不建立第二套 Outcome 评估。
  */
@@ -202,7 +181,7 @@ export interface StateDelta {
 
 /**
  * 单条 Evidence — 可追溯到事实的证据。
- *
+
  * 禁止 "if failed then cause = logistics" 这种无证据归因。
  * 每一个 attribution 都应该能够追溯到 Evidence。
  */
@@ -221,7 +200,7 @@ export interface AttributionEvidence {
 
 /**
  * Attribution — 结果归因。
- *
+
  * Evidence-based：每条 attribution 都有 evidence 支撑。
  * 形成可审计链：Experience → Attribution → Evidence → DecisionTrace。
  */
@@ -250,9 +229,9 @@ export interface Attribution {
 
 /**
  * ExperienceRecord — 完整经验记录。
- *
+
  * = Identity + DecisionRef + Context + Outcome + Attribution
- *
+
  * 不复制完整 DecisionRecord，只引用 decisionId。
  * 不存完整状态快照，只存 stateHash。
  */
@@ -392,7 +371,7 @@ export function makeExperienceId(tick: number, seq: number): string {
 
 /**
  * 构建 DecisionRef from DecisionRecord 摘要字段。
- *
+
  * 只提取必要字段，不复制完整 DecisionRecord。
  */
 export function buildDecisionRef(input: {
@@ -417,7 +396,7 @@ export function buildDecisionRef(input: {
 
 /**
  * 创建新的 ExperienceRecord（初始 lifecycle = OBSERVED）。
- *
+
  * 纯函数 — 不修改输入参数，返回新对象。
  */
 export function createExperience(
@@ -440,7 +419,7 @@ export function createExperience(
 
 /**
  * 为 Experience 附加 Outcome。
- *
+
  * 返回新对象（不可变更新）。
  * lifecycle: OBSERVED → OPEN。
  */
@@ -457,7 +436,7 @@ export function attachOutcome(
 
 /**
  * 为 Experience 附加 Attribution。
- *
+
  * 返回新对象（不可变更新）。
  * lifecycle: OPEN → ATTRIBUTED。
  */
@@ -500,7 +479,7 @@ export function unresolveExperience(exp: ExperienceRecord): ExperienceRecord {
 
 /**
  * 各 Experience 类型的默认测量延迟（tick）。
- *
+
  * 决策后多少 tick 才能可靠测量结果。
  */
 export const MEASUREMENT_DELAYS: Readonly<Record<ExperienceType, number>> = {
@@ -515,7 +494,7 @@ export const MEASUREMENT_DELAYS: Readonly<Record<ExperienceType, number>> = {
 
 /**
  * 判断 DecisionRecord 是否已到期（可以采集 Outcome）。
- *
+
  * 纯函数 — 不依赖运行时状态。
  */
 export function isDecisionReadyForOutcome(
@@ -553,7 +532,7 @@ export function categoryToExperienceType(category: string): ExperienceType {
 
 /**
  * 清理 Ring Buffer 中过老的记录。
- *
+
  * 删除超过 maxAge tick 的记录（设为 undefined）。
  * 不改变 cursor 位置，只释放空间。
  */
@@ -577,7 +556,7 @@ export function gcExperienceBuffer(
 
 /**
  * 统计 Ring Buffer 中的 Experience 分布。
- *
+
  * 用于可观测性：各类经验数量、归因率、未知率。
  */
 export function experienceStats(buf: ExperienceRingBuffer): {

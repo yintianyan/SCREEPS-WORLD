@@ -1,18 +1,4 @@
-/**
- * A4.4 Unified Logistics Network — 收敛验证测试。
- *
- * 验证 A4.3/A4.4 的核心架构收敛目标：
- *   1. Supply Contract → TransportRequestV2 闭环
- *   2. Double Transport 防护（V1/V2 去重）
- *   3. Duplicate Assignment 约束
- *   4. Accounting Truth（跨 tick 追踪）
- *   5. Delivery Validation（实际收到量验证）
- *   6. Failure Recovery（损失 → 重规划）
- *   7. Plan → Execution 链路完整性
- *   8. Convergence Score（单一决策器）
- *
- * 纯函数测试 — 不依赖 Game/Memory。
- */
+/** A4.4 Unified Logistics Network — 收敛验证测试。 */
 import { describe, it, expect } from "vitest";
 import {
   createActiveSupplyContract,

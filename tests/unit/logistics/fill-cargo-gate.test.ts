@@ -1,12 +1,4 @@
-/**
- * fill 动作携非能量 cargo 放行门禁测试（P0 回归）。
- *
- * 回归：updateMode 改总量口径后，携非能量资源（化合物/矿物）无能量的 creep 恒停
- * work 模式。distributorFillTarget/haulFillTarget 的 execute 只 transfer(RESOURCE_ENERGY)，
- * 携化合物会 ERR_NOT_ENOUGH_RESOURCES 静默失败并终止候选链 → 卸货相（supplyLabs）
- * 永远轮不到 → distributor/hauler 永久冻结至老死。
- * 修复：resolve 前置门禁——携非能量 cargo 且无能量时返回 undefined，放行后续候选卸货。
- */
+/** fill 动作携非能量 cargo 放行门禁测试（回归）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { distributorFillTarget, haulFillTarget } from "../../../src/creeps/engine/actions/fill";
 import { mockCreep, mockContext, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";

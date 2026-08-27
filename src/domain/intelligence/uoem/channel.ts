@@ -1,37 +1,4 @@
-/**
- * ⚠️ REFERENCE IMPLEMENTATION — NOT FOR PRODUCTION USE ⚠️
- *
- * 此文件是 UOEM Step 1.2 的 reference 实现，用于：
- *   - 纯 Domain 层理论证明（不可变纯函数 + FIFO + bounded）
- *   - tests/unit/phase38/uoem-step2-core.test.ts 的架构不变量验证
- *
- * 生产环境必须使用 src/kernel/outcome-channel.ts（cap=16，压缩字段名，
- * 直接操作 Memory，满足 3.2KB 冻结契约）。
- *
- * 两套实现的差异：
- *   - reference：cap=32，不可变纯函数，entries/seq/seen 全名段
- *   - production：cap=16，mutable 直接操作 Memory，q/s/dr/oe 压缩字段名
- *
- * 安全不变式：此文件不被任何生产代码导入（仅测试导入），
- * 两个实现不会被同时注册或同时写入 Memory。
- *
- * UOEM Core — Memory-backed bounded OutcomeChannel.
- *
- * STEP 1.2：FIFO 有界 OutcomeChannel 实现。
- *
- * 核心约束：
- *   capacity = 32（固定不可变）
- *   FIFO（旧→新）
- *   terminal OutcomeEvent only（MilestoneEvent 禁止进入）
- *   duplicate outcome 被拒绝（operationId 去重）
- *   bounded（无论 producer 数量 / tick / duplicate / restart 都不突破 capacity）
- *   drain 后已消费事件移除
- *   reset/restart 后 Memory-backed event identity 保持
- *
- * 纯 Domain 层：不引用 Game / RawMemory / CPU。
- * Channel 不拥有 Decision Authority，不执行 Game API。
- * Channel 是 Event Transport，不是 State Store，不是 Strategy。
- */
+/** ⚠️ REFERENCE IMPLEMENTATION — NOT FOR PRODUCTION USE ⚠️ */
 
 import type { OperationId } from "./identity";
 import type { OutcomeEvent, UOEMEvent } from "./guards";
@@ -63,12 +30,12 @@ export type EmitResult =
 
 /**
  * OutcomeChannel 的可序列化快照（用于 Memory 持久化）。
- *
+
  * 存储格式：{ entries, seq, seen }
  * - entries: OutcomeChannelEntry[]（FIFO，cap=32）
  * - seq: 下一个 sequence number
  * - seen: 已见 operationId 集合（与 entries 同步，用于 O(1) 幂等检查）
- *
+
  * Memory 预算：32 × ~100B (entry) + 32 × ~40B (seen) ≈ 4.5KB worst-case
  */
 export interface OutcomeChannelSnapshot {
@@ -113,12 +80,12 @@ export function peek(snapshot: OutcomeChannelSnapshot, limit?: number): OutcomeE
 
 /**
  * Emit — 向 channel 提交一个事件。
- *
+
  * 规则：
  * 1. 只接受 OutcomeEvent（MilestoneEvent 在类型层被拒绝）
  * 2. 同一 operationId 的第二条 OutcomeEvent → DUPLICATE_REJECTED
  * 3. 超过 capacity 时，FIFO 溢出最老条目（OVERFLOW）
- *
+
  * 返回新的 snapshot（不可变）和 emit 结果。
  */
 export function emitOutcome(
@@ -171,7 +138,7 @@ export function emitOutcome(
 
 /**
  * Drain — 消费并移除所有事件（FIFO 顺序）。
- *
+
  * 返回所有事件，并清空 channel。
  * drain 后再次 drain 返回空数组。
  */
@@ -237,10 +204,10 @@ export function isValidSnapshot(snapshot: OutcomeChannelSnapshot): boolean {
 
 /**
  * 从 UOEMEvent 提取 OutcomeEvent（如果事件是 terminal）。
- *
+
  * MilestoneEvent → undefined（不进入 channel）
  * OutcomeEvent → event 本身
- *
+
  * 这是防止 MilestoneEvent 进入 channel 的运行时保护。
  */
 export function extractOutcomeIfTerminal(event: UOEMEvent): OutcomeEvent | undefined {
@@ -252,7 +219,7 @@ export function extractOutcomeIfTerminal(event: UOEMEvent): OutcomeEvent | undef
 
 /**
  * 重建 snapshot 从裸 entry 列表（用于 Memory 恢复）。
- *
+
  * 如果 entries 中有同 operationId 的重复，保留第一个（幂等语义）。
  * 如果 entries 超过 capacity，截断到最近 capacity 条。
  */

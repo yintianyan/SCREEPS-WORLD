@@ -1,17 +1,4 @@
-/**
- * 【Phase 3A】RCL1 经济场景套件 —— 一次 6500t 世界驱动七个断言面。
- *
- * 场景映射（用户 §21 → 本套件）：
- *   001 Bootstrap        → TEST 1（冷启动人口建立）
- *   002 Harvester Death  → TEST 4（自然 TTL 死亡波后的恢复，含替代延迟度量）
- *   003 Spawn Starvation → TEST 2（spawn 空仓窗口检测与恢复）
- *   004 Energy Crisis    → TEST 3（能量储备地板）
- *   005 Creep Replacement→ TEST 4（替代延迟量化）
- *   006 Economic Recovery→ TEST 5（死亡波后人口回归）
- *   007 Long Stable      → E2E-006 覆盖 11k（本套件不重复）
- *
- * 全部断言基于可观察结果（Memory 视图），零生产代码侵入。
- */
+/** RCL1 经济场景套件 —— 一次 6500t 世界驱动七个断言面。 */
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { writeFileSync } from "node:fs";
 import { ScenarioRunner } from "../framework";

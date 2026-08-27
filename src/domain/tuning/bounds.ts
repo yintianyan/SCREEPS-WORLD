@@ -1,8 +1,4 @@
-/**
- * Tuning Bounds — 可调参数的安全边界/步长/冷却（纯数据，无 Game/Memory）。
- * 硬边界（floor/ceiling）是绝对安全限制，覆盖值不可越出；信号阈值定义在
- * 各自的评估函数里，这里只定数值边界与调整节奏（step=1 保守、冷却防振荡）。
- */
+/** Tuning Bounds — 可调参数的安全边界/步长/冷却（纯数据，无 Game/Memory）。 */
 
 /** 单个可调参数的安全约束。 */
 export interface ParamBounds {

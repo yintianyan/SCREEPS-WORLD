@@ -1,18 +1,4 @@
-/**
- * Candidate Evaluation (7-Factor) — A3.2 Phase 1：蓝图七因子评分。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §1.2 七因子评分公式。
- *
- * score = w1·sourceValue      // 2/3 source 价值
- *       + w2·mineralValue     // 矿物密度 × 帝国矿种缺口权重
- *       + w3·distanceScore    // 距最近自有房跳数
- *       + w4·neighborSafety   // 周边归属分布
- *       − w5·rivalProximity   // 宿敌距离
- *       + w6·defensibility    // 出口数/地形/塔位
- *       + w7·layoutFitness    // 模板适配
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Candidate Evaluation (7-Factor) */
 
 import type { ExpansionCandidateV2, CandidateScoreBreakdown } from "./candidate";
 
@@ -74,7 +60,7 @@ export interface ScoringInput {
 
 /**
  * 计算七因子评分（纯函数）。
- *
+
  * 各因子归一化到 [0,1] 后线性加权，总分 [0,1]。
  */
 export function scoreCandidate(

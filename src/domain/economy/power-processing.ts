@@ -1,13 +1,4 @@
-/**
- * powerSpawn processPower 调度决策 — 纯函数，执行层在 systems/factory-manager.ts。
- *
- * 战略定位：processPower 是 GPL 投资链（攒等级解锁 power creep），非生存刚需。
- * power 不会腐坏、暂停零损失，因此两项门禁都取保守侧：
- * - 能量地板：storage 低于地板 = 经济余裕不足，烧 50 energy/次等于与
- *   spawn/tower 抢血 — 投资让位生存；
- * - war 姿态：战时能量军事优先，GPL 增值等得起。暂停烧 → powerSpawn 库存
- *   涨满 → stockPowerSpawn 自然停搬（单一闸门管全链，无需逐环节加门禁）。
- */
+/** powerSpawn processPower 调度决策 — 纯函数，执行层在 systems/factory-manager.ts。 */
 
 /** processPower 单次消耗的能量（引擎常量 POWER_SPAWN_ENERGY_RATIO）。 */
 export const PROCESS_POWER_ENERGY = 50;

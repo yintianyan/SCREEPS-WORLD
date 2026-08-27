@@ -1,25 +1,4 @@
-/**
- * A6.1 Experience Model — 单元测试。
- *
- * 验证 domain 层纯函数的核心能力：
- *   UT-001: ExperienceRingBuffer — push + getRecent
- *   UT-002: ExperienceRingBuffer — 环形覆盖
- *   UT-003: getPendingOutcomes — 筛选未采集 Outcome
- *   UT-004: getUnattributed — 筛选未归因
- *   UT-005: createExperience — 初始 lifecycle = OBSERVED
- *   UT-006: attachOutcome — lifecycle: OBSERVED → OPEN
- *   UT-007: attachAttribution — lifecycle: OPEN → ATTRIBUTED
- *   UT-008: finalizeExperience — lifecycle: ATTRIBUTED → FINALIZED
- *   UT-009: expireExperience — 标记为 EXPIRED
- *   UT-010: isDecisionReadyForOutcome — 到期判定
- *   UT-011: categoryToExperienceType — DecisionCategory 映射
- *   UT-012: gcExperienceBuffer — GC 清理
- *   UT-013: experienceStats — 统计正确
- *   UT-014: makeExperienceId — 格式正确
- *   UT-015: buildDecisionRef — 引用不复制
- *
- * 纯函数测试 — 不依赖 Game/Memory。
- */
+/** A6.1 Experience Model — 单元测试。 */
 import { describe, it, expect } from "vitest";
 import {
   type ExperienceRingBuffer,

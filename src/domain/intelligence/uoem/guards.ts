@@ -1,13 +1,4 @@
-/**
- * UOEM Core — Event Guards & Terminal Semantics.
- *
- * STEP 1.2：Terminal 判定、类型守卫、forcedAdvance 语义验证。
- * 纯 Domain 层：不引用 Game / Memory / RawMemory / CPU。
- *
- * 核心不变式：
- *   terminality 来自 event.kind，不来自 outcomeCode
- *   forcedAdvance 是 metadata，不改变 terminality
- */
+/** UOEM Core — Event Guards & Terminal Semantics. */
 
 import type {
   OperationId,
@@ -20,13 +11,13 @@ import type { OperationInterval } from "./interval";
 
 /**
  * Terminal Outcome Code — 复用 expansion-manager.ts 现有常量。
- *
+
  * 禁止创造新的 outcome code。禁止修改现有码表。
- *
+
  * 现有码表（expansion-manager.ts:66-72）：
  *   OUTCOME_SUCCESS = 0, OUTCOME_STOLEN = 1, OUTCOME_TIMEOUT = 2,
  *   OUTCOME_LOST = 3, OUTCOME_ABORTED = 4
- *
+
  * EXISTING_CODE_CONTRACT: outcome.ts:337-342 的 classification 映射
  *   0→"SUCCESS", 1→"FAILURE", 2→"EXPIRED", 3/4→"UNKNOWN"
  * 此映射属于 A6.1 domain 层冻结契约，UOEM 不修改。
@@ -52,7 +43,7 @@ export function isTerminalOutcomeCode(code: number): code is TerminalOutcomeCode
 
 /**
  * Milestone kind — 表达"状态推进但 Operation 尚未终态"的事件类型。
- *
+
  * 不使用 terminal outcome code（如 TIMEOUT/SUCCESS）。
  * milestoneKind ≠ terminalOutcomeCode：
  *   FORCED_ADVANCE ≠ TERMINAL_OUTCOME.TIMED_OUT
@@ -80,7 +71,7 @@ export interface EventCorrelation {
 
 /**
  * MilestoneEvent — Operation 生命周期中的非终态事件。
- *
+
  * 没有 outcomeCode 字段。
  * 不进入 OutcomeChannel。
  * 不触发 terminal Experience resolution。
@@ -103,7 +94,7 @@ export interface MilestoneEvent {
 
 /**
  * OutcomeEvent — 一个 Operation 的 Terminal Outcome。
- *
+
  * 每 Operation 至多一个（由 OutcomeChannel 幂等保证）。
  * forcedAdvance 是 metadata：
  *   forcedAdvance=true + outcomeCode=SUCCESS 合法（强推后成功）
@@ -128,11 +119,11 @@ export interface OutcomeEvent {
 
 /**
  * UOEM Event — MilestoneEvent | OutcomeEvent。
- *
+
  * Discriminated union on `kind`：
  * - kind === "milestone" → 无 terminal outcome
  * - kind === "outcome" → 有 terminal outcome
- *
+
  * 防止 EXP-1 的第一道结构性保护。
  */
 export type UOEMEvent = MilestoneEvent | OutcomeEvent;
@@ -141,12 +132,12 @@ export type UOEMEvent = MilestoneEvent | OutcomeEvent;
 
 /**
  * 判断事件是否为 Terminal。
- *
+
  * Terminality 来自 event.kind，不来自 outcomeCode。
- *
+
  * - MilestoneEvent → false（无论 milestoneKind / forcedAdvance）
  * - OutcomeEvent → true（无论 outcomeCode / forcedAdvance）
- *
+
  * TIMEOUT-SEMANTICS 核心修复：
  * timeout milestone 的 kind 是 "milestone" → isTerminalEvent = false
  * timeout terminal 的 kind 是 "outcome" → isTerminalEvent = true
@@ -166,7 +157,7 @@ export function isMilestoneEvent(event: UOEMEvent): event is MilestoneEvent {
 
 /**
  * forcedAdvance 不改变 terminality。
- *
+
  * 证明：
  * - MilestoneEvent + forcedAdvance=true → isTerminalEvent = false（因为 kind="milestone"）
  * - OutcomeEvent + forcedAdvance=true → isTerminalEvent = true（因为 kind="outcome"）
@@ -188,7 +179,7 @@ export function forcedAdvanceDoesNotImplyTerminality(
 
 /**
  * 验证 occurredAt <= recordedAt。
- *
+
  * 事件实际发生 tick <= 系统记录 tick。
  * 事件可能在发生后才被系统记录（delayed recording）。
  */

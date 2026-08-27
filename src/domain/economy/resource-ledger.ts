@@ -1,22 +1,4 @@
-/**
- * Resource Ledger — A4.2 统一资源账本。
- *
- * 合同锚点：A4.2 Architecture Audit §10.4 NM-2 / §12.2 NM-2。
- *
- * 设计意图：
- *   扩展 EnergyLedger 的双口径设计（L1 计数器 + L2 核算窗口）到多资源类型。
- *   按 resourceType 分别维护独立账本，支持：
- *   - 五态分离：STORED / RESERVED / IN_TRANSIT / ALLOCATED / CONSUMED
- *   - Production / Consumption 速率（Rolling Window EMA）
- *   - drift 恒等式对账（Initial + Production + Incoming - Outgoing - Consumption - Loss ≈ Final）
- *
- * 与 EnergyLedger 的关系：
- *   EnergyLedger 是 ResourceLedger<"energy"> 的概念特例。
- *   A4.2 不删除 EnergyLedger（避免大规模重构风险），而是新建 ResourceLedger
- *   作为多资源的统一口径。后续阶段渐进迁移 EnergyLedger 的消费方。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Resource Ledger */
 
 import type { ResourceType } from "../operation/agenda-item";
 import { getResourceCategory } from "./resource-definition";
@@ -25,7 +7,7 @@ import { getResourceCategory } from "./resource-definition";
 
 /**
  * 资源状态分类——用于五态分离。
- *
+
  * 不变量：总量 = STORED + RESERVED + IN_TRANSIT + ALLOCATED + CONSUMED
  * （CONSUMED 是累计已消费量，不属于当前存量）。
  */
@@ -40,11 +22,11 @@ export type ResourceState =
 
 /**
  * 单资源的 L1 累计计数器。
- *
+
  * 与 EnergyLedger 字段对应但泛化：
  * - energy: harvested / spawned / upgraded / built / repaired / towerSpent
  * - mineral: extracted / consumed / traded / transferred
- *
+
  * 通用字段（所有资源类型共享）：
  * - produced: 生产量（energy=harvested, mineral=extracted）
  * - consumed: 消费量
@@ -171,12 +153,12 @@ export function stockReserve(s: ResourceStockSnapshot): number {
 
 /**
  * 单资源在一个核算窗口内的完整结果。
- *
+
  * drift 恒等式：
  *   drift = Δstock - (inflow - outflow)
  *   = (stockEnd - stockStart) - (produced + imported + bought
  *      - consumed - exported - sold - lost)
- *
+
  * drift ≈ 0 表示账实一致；超容差则触发 Reconciliation。
  */
 export interface ResourceAccountingWindow {
@@ -208,7 +190,7 @@ export interface ResourceAccountingWindow {
 
 /**
  * 滚动一个核算窗口。纯函数。
- *
+
  * @param resource 资源类型
  * @param t0 起始 tick
  * @param t1 结束 tick
@@ -281,7 +263,7 @@ export function isResourceDriftExcessive(
 
 /**
  * 生产速率 EMA 更新。纯函数。
- *
+
  * @param prev 前值（undefined = 首窗直接取现值）
  * @param windowPerTick 本窗每 tick 生产量
  * @param alpha 平滑系数
@@ -347,7 +329,7 @@ export function emptyLedgerEntry(resource: ResourceType): ResourceLedgerEntry {
 
 /**
  * Resource Ledger — 多资源统一账本。
- *
+
  * key = ResourceType，value = ResourceLedgerEntry。
  * 一个账本实例可代表一个房间或整个帝国的资源状态。
  */

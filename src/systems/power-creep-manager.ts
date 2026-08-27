@@ -1,18 +1,4 @@
-/**
- * Power Creep Manager — P3 系统，GPL 消费闭环的执行层。
- * 决策纯函数见 domain/strategy/power-creeps（planGplSpending /
- * selectPowerAction）；本系统只做 Game 层采集 + 意图签发：
- *   ① GPL 消费：create（账号级创建）→ upgrade（build order 推进）；
- *   ② 驻留分配：PC → 有 powerSpawn 的房（Memory 粘性，PC 换房成本高）；
- *   ③ 孵化：未孵化 PC 在驻留房 powerSpawn.spawn（死亡冷却 ERR_TIRED 静默）；
- *   ④ 运营：已孵化 PC 按 selectPowerAction 裁决执行（renew/enableRoom/
- *      generateOps/三类 operate）。
- *
- * 行为约束（D1/D2 决策）：PC 不接 RolePolicy 管线（数量 ≤3、低频英雄单位，
- * 不配专属引擎）；移动用 moveTo 直连不接 traffic-manager（无产量仲裁需求）。
- * 幂等性：所有失败码静默等下轮（interval 10 tick 自然重试），成功才记
- * PowerCreepMilestone 事件；绝不调用 pc.delete（删 PC 会 -1 GPL）。
- */
+/** Power Creep Manager */
 import { CONFIG } from "../config";
 import { recordEvent, EventKind } from "../kernel/event-log";
 import type { Priority, System, TickContext, RoomSnapshot } from "../kernel/contracts";

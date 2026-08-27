@@ -4,12 +4,12 @@ import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";
 
 /**
  * P1-3 defense 误触发修复 — lastHostileAt 过期失效机制单元测试。
- *
+
  * 覆盖 room-state 层的威胁过期逻辑：
  *   - lastHostileAt 只在威胁新增（count 增加）时刷新（防旧威胁停留永久维持 defense）
  *   - threatCreeps>0 但 lastHostileAt 超 threatStaleTicks 未刷新 → hasHostiles=false
  *   - prevThreatCount 跨 tick 跟踪威胁数变化
- *
+
  * 根因：旧逻辑每 tick 刷新 lastHostileAt（当 hasHostiles 时），导致旧威胁停留时
  * lastHostileAt 永远是"当前"，消费方（tower-defense siegeMemory 等）永不过期。
  */
@@ -221,7 +221,7 @@ describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
 
 /**
  * P1-3 退出 defense 迟滞 — 威胁消除后维持 defense 姿态 defenseExitHysteresis tick。
- *
+
  * 防止敌人短暂进出房间导致 colonyState 高频抖动（525 次/327k tick）。
  * 进入 defense 仍 1 tick 触发（防御不延迟）；退出需连续 defenseExitHysteresis(50) tick 无威胁。
  */

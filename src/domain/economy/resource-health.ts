@@ -1,20 +1,4 @@
-/**
- * Resource Health — A4.2 单资源健康度判定。
- *
- * 合同锚点：A4.2 Architecture Audit §10.14 NM-3 / §12.2 NM-3。
- *
- * 设计意图：
- *   为每种资源计算独立的健康度，供 Multi-Resource Empire Health 聚合。
- *
- *   健康度五态：
- *   - HEALTHY: 储备充足 + 生产速率 ≥ 消费速率
- *   - STABLE: 储备尚可但生产/消费平衡偏紧
- *   - DEGRADED: 储备偏低或生产速率 < 消费速率（趋势恶化）
- *   - DEFICIT: 储备不足 + 持续入不敷出
- *   - CRITICAL: 储备耗尽 + 无生产来源
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Resource Health */
 
 import type { ResourceType } from "../operation/agenda-item";
 import type { ResourceLedgerEntry } from "./resource-ledger";
@@ -83,14 +67,14 @@ export const DEFAULT_RESOURCE_HEALTH_OPTIONS: ResourceHealthOptions = {
 
 /**
  * 评估单资源健康度。纯函数。
- *
+
  * 判定优先级（从高到低）：
  * 1. CRITICAL: reserve === 0 && productionRate === 0（无储备无生产）
  * 2. DEFICIT: reserve < deficitAbsoluteThreshold && netRate < 0
  * 3. DEGRADED: netRate < 0（趋势恶化）或 reserve < safetyReserve
  * 4. STABLE: coverage >= stableCoverageRatio
  * 5. HEALTHY: coverage >= healthyCoverageRatio && netRate >= 0
- *
+
  * @param entry 资源账本条目
  * @param expectedConsumption 预期消费量（用于缺口计算，默认 0）
  * @param options 评估参数

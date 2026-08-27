@@ -1,12 +1,4 @@
-/**
- * 泵断供兜底测试 — distributor 归零时 hauler 的 fillStorage 让位直送。
- *
- * 断供死锁：distributor 是 storage→spawn/extension 的唯一分发泵，归零后
- * hauler 照常把能量囤进 storage（1M 容量永远填不满）→ 能量被锁进无人能取
- * 的仓库 → energyAvailable 卡死在 spawn 自充值 → 全部替补孵化走饥饿降级。
- * 兜底：泵断供且核心 sink 有缺口时 fillStorage resolve 让位，
- * 放行 haulFillTarget 直送 spawn/extension。
- */
+/** 泵断供兜底测试 — distributor 归零时 hauler 的 fillStorage 让位直送。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { fillStorage } from "../../../src/creeps/engine/actions/fill";
 import { globalCache } from "../../../src/kernel/global-cache";

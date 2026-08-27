@@ -1,31 +1,4 @@
-/**
- * A6.4 Calibration Types — 校准层基础类型定义。
- *
- * 合同锚点：A6_4_CONTRACT.md §一
- *
- * 职责：
- *   - 定义 CalibrationResolution（8 种解析分类）
- *   - 定义 ObservationSample（窗口内观测采样）
- *   - 定义 ExternalFactorSignal（外部干扰信号）
- *   - 定义 ResolutionResult（解析结果）
- *   - 定义 ConfidenceBucketStats（置信度分桶统计）
- *   - 定义 CalibrationVerdict / ModelCalibrationProfile
- *   - 定义 FailureAttributionCategory / FailureAttributionResult / ModelFailureStats
- *   - 定义 CalibrationRingBuffer
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * Shadow-Only（CAL-001）：
- *   类型定义不执行任何行为。
- *
- * 确定性（CAL-005）：
- *   所有 hash 计算使用 stableStringify + FNV-1a，禁止 Math.random / Date.now。
- *
- * 与 A6.3 的关系（§七 依赖声明）：
- *   A6.4 只读 import A6.3 types/context/hashing。
- *   A6.4 不修改 A6.3 的任何文件。
- *   A6.4 构建独立的 Resolution Engine，不复用 A6.3 resolve.ts。
- */
+/** A6.4 Calibration Types — 校准层基础类型定义。 */
 
 import type { PredictionContext } from "../prediction/context";
 import type { Prediction } from "../prediction/types";
@@ -36,10 +9,10 @@ import type { Prediction } from "../prediction/types";
 
 /**
  * A6.4 Calibration Resolution — 对 Prediction 的解析结果分类。
- *
+
  * 与 A6.3 PredictionStatus（active/fulfilled/expired/invalidated）不同：
  * CalibrationResolution 是更细粒度的校准分类。
- *
+
  * 来源：A6_4_RESOLUTION_DESIGN.md §二
  */
 export type CalibrationResolution =
@@ -54,7 +27,7 @@ export type CalibrationResolution =
 
 /**
  * 判断 Resolution 是否计入 Calibration denominator。
- *
+
  * REGIME_CHANGED / EXTERNAL_INTERFERENCE / INSUFFICIENT_OBSERVATION 不计入。
  * 来源：A6_4_RESOLUTION_DESIGN.md §二.2
  */
@@ -70,7 +43,7 @@ export function isCalibratable(resolution: CalibrationResolution): boolean {
 
 /**
  * 判断 Resolution 是否为"成功"（用于 observedSuccessRate 分子）。
- *
+
  * 只有 CORRECT 计入成功。
  * PARTIAL / FALSE_POSITIVE / FALSE_NEGATIVE 计入失败。
  */
@@ -84,7 +57,7 @@ export function isResolutionSuccess(resolution: CalibrationResolution): boolean 
 
 /**
  * 窗口内的一次观测采样。
- *
+
  * 不包含 Game/Memory 引用。
  * 由 System 层从 globalCache 既有数据构建，不新建采样通道（CAL-007）。
  */
@@ -103,7 +76,7 @@ export interface ObservationSample {
 
 /**
  * 外部干扰信号 — 从 A6.1 Attribution 和 A6.2 Evaluation 提取。
- *
+
  * 来源：A6_4_CONTRACT.md §1.3
  */
 export interface ExternalFactorSignal {
@@ -121,13 +94,13 @@ export interface ExternalFactorSignal {
 
 /**
  * Resolution Result — 对一条 Prediction 的 Resolution 结果。
- *
+
  * 纯数据对象，不引用 Game/Memory/Prediction 可变状态。
  * 确定性：相同 Prediction + 相同 Observation → 相同 ResolutionResult。
- *
+
  * A6.4 不修改 Prediction 对象。A6.4 只读取 Prediction 和 Observation，
  * 产出独立的 ResolutionResult。
- *
+
  * 来源：A6_4_CONTRACT.md §1.4
  */
 export interface ResolutionResult {
@@ -171,9 +144,9 @@ export interface ResolutionResult {
 
 /**
  * 置信度分桶统计 — 单个桶的校准统计。
- *
+
  * 10 个桶：[0,0.1), [0.1,0.2), ..., [0.9,1.0]
- *
+
  * 来源：A6_4_CONTRACT.md §1.5
  */
 export interface ConfidenceBucketStats {
@@ -209,7 +182,7 @@ export interface ConfidenceBucketStats {
 
 /**
  * 校准判定 — 对模型置信度可信度的整体评价。
- *
+
  * 来源：A6_4_CONTRACT.md §1.6
  */
 export type CalibrationVerdict =
@@ -224,7 +197,7 @@ export type CalibrationVerdict =
 
 /**
  * 模型校准档案 — 单个预测模型的完整校准统计。
- *
+
  * 来源：A6_4_CONTRACT.md §1.7
  */
 export interface ModelCalibrationProfile {
@@ -270,7 +243,7 @@ export interface ModelCalibrationProfile {
 
 /**
  * 失败归因分类。
- *
+
  * 来源：A6_4_CONTRACT.md §1.8
  */
 export type FailureAttributionCategory =
@@ -283,7 +256,7 @@ export type FailureAttributionCategory =
 
 /**
  * 失败归因结果 — 对一条失败 Prediction 的归因。
- *
+
  * 来源：A6_4_CONTRACT.md §1.9
  */
 export interface FailureAttributionResult {
@@ -311,7 +284,7 @@ export interface FailureAttributionResult {
 
 /**
  * 模型级失败统计。
- *
+
  * 来源：A6_4_CONTRACT.md §1.10
  */
 export interface ModelFailureStats {
@@ -340,10 +313,10 @@ export interface ModelFailureStats {
 
 /**
  * Calibration Ring Buffer — 存储 Resolution 结果的有界环形缓冲。
- *
+
  * 同构于 PredictionRingBuffer / ExperienceRingBuffer / EvaluationRingBuffer。
  * 容量固定，超出时环形覆盖最旧数据。
- *
+
  * 来源：A6_4_CONTRACT.md §1.11
  */
 export interface CalibrationRingBuffer {

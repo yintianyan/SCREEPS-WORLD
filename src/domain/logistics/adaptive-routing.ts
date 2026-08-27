@@ -1,17 +1,4 @@
-/**
- * Adaptive Routing — A4.3 Phase 2：自适应路由。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #13。
- *
- * 设计意图：
- *   Route Score 根据历史 Success/Failure 动态调整。
- *   可解释（非黑盒 ML）：
- *   - 最近 N 次 trip 成功率 → confidence multiplier
- *   - 连续失败 > 3 → penalty
- *   - 连续成功 > 5 → bonus
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Adaptive Routing */
 
 import type { Route } from "./route";
 
@@ -68,13 +55,13 @@ const HISTORY_WINDOW = 20;
 
 /**
  * 根据历史 Success/Failure 动态调整 Route 评分。
- *
+
  * 算法：
  *   1. 从最近 N 次 trip 中计算连续失败数和连续成功数
  *   2. 连续失败 > 3 → 每次额外扣 10%（上限 50%）
  *   3. 连续成功 > 5 → 每次额外加 5%（上限 20%）
  *   4. 窗口内成功率 → confidence multiplier（0.5..1.0）
- *
+
  * 纯函数。
  */
 export function adaptRouteScore(

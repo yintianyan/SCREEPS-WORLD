@@ -1,29 +1,4 @@
-/**
- * A6.2 Strategy Evaluation System — 系统层薄壳。
- *
- * 合同锚点：A6.2 Task Spec + A6_2_CONTRACT_RESOLUTION.md
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 Experience Ring Buffer 读取 FINALIZED Experience
- *   2. 从 globalCache 采集 EmpireHealth / AutonomyMetrics / RecoveryStats
- *   3. 构建 EvaluationInput（纯 DTO）
- *   4. 调用 domain 纯函数 evaluateStrategy
- *   5. 保存 compact Evaluation Result（Ring Buffer + GC）
- *   6. 提供 observability
- *
- * 禁止：
- *   - 不执行任何 Game API（Shadow-Only 原则）
- *   - 不修改任何业务状态
- *   - 不进入 tick 关键路径（低频 500t）
- *   - 不建立第二套 Evaluation / Metrics / Strategy
- *   - Evaluation Result 不得进入任何执行系统
- *
- * CPU 预算：低频执行（interval=500），评估近零成本。
- * 优先级 P3（在所有业务系统之后运行，消费它们产出的数据）。
- * 存储：heap only — global reset 可丢。
- *
- * 安全不变式：本系统完全停止时，帝国必须照常安全运行。
- */
+/** A6.2 Strategy Evaluation System — 系统层薄壳。 */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { systemPhase } from "../../kernel/phase";

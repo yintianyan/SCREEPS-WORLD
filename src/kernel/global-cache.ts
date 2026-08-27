@@ -444,7 +444,7 @@ export interface ProcurementDemand {
 }
 /**
  * 发布房间采购需求 — 全表唯一写入口（多生产者合并语义）。
- *
+
  * 历史：lab-system（两处）与 factory-manager 曾各自整表覆写 byRoom[room]，
  * 且 tick 守卫使容器单 tick 存活 —— 后写者覆盖先写者、跨 tick 需求静默蒸发，
  * 终端 200t 相位几乎永远看不到完整需求（lab 基础矿买入通道长期半死）。
@@ -550,7 +550,7 @@ export interface ExitCache {
 /**
  * P0-1：从 squadIndex 中查询编队成员 — 供 war-planner / power-farm-manager /
  * prospect-manager / expansion-manager 复用，替代各自独立遍历 Game.creeps。
- *
+
  * 过滤维度均为可选：undefined = 不过滤该维度。
  * 返回的条目可直接用于统计计数；如需对 Creep 对象操作（如标记 recycle），
  * 调用方按 name 从 Game.creeps 取 — 这比全量遍历廉价得多（通常 ≤ 十几条）。

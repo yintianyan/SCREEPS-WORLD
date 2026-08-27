@@ -1,26 +1,4 @@
-/**
- * E2E-006 10000 tick 长期稳定性 — 验证长期运行不崩、不泄漏、不死亡螺旋。
- *
- * 真实场景 [Experience]：
- *   - Screeps 是 24/7 运行的游戏，一次部署跑数月
- *   - 常见死亡螺旋：creep 死光 → 无能量 → 无法孵化 → 永久死亡
- *   - Memory 泄漏：每 tick 累积数据，最终超 2MB 上限
- *   - Global Reset 每 4-12h 必发，reset 后必须能恢复
- *
- * 这是 E2E 测试的核心价值——在真实 Screeps 引擎上长期运行，
- * 验证生产代码的 dist/main.js 构建产物能稳定自治。
- *
- * 验证标准（按 2000 tick 分段检查）：
- *   1. 每 2000 tick 内无 JS 错误（TypeError/ReferenceError）
- *   2. 50 tick warmup 后 creep 数量不归零（无死亡螺旋）
- *   3. 10000 tick 后 Memory 大小 < 500KB（无泄漏）
- *   4. 10000 tick 后经济在运转（有 creep 在工作）
- *   5. P1-4: 每 2000 tick 检查 bucket 不耗尽（≥ 1000，recovery 阈值）
- *   6. P1-4: 每 2000 tick 检查无任务饥饿（spawnQueue 不持续非空）
- *
- * [Facts] screeps-server-mockup 每 tick 约 50-100ms，10000 tick 约 8-16 分钟。
- * timeout 设 20 分钟（1200000ms）覆盖最慢情况。
- */
+/** E2E-006 10000 tick 长期稳定性 — 验证长期运行不崩、不泄漏、不死亡螺旋。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";

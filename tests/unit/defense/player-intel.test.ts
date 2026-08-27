@@ -1,18 +1,4 @@
-/**
- * A5.2 G5 — PlayerIntel Confidence 纯函数测试。
- *
- * 覆盖场景：
- * 1. Fresh Observed Fact
- * 2. Stale Fact（过期降低 Confidence）
- * 3. Inference
- * 4. Prediction
- * 5. Conflicting Intel
- * 6. Multiple Sources
- * 7. High Threat Player
- * 8. Low Threat Player
- * 9. Unknown Player
- * 10. Expired Intel
- */
+/** A5.2 G5 — PlayerIntel Confidence 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   buildPlayerIntelRecord,

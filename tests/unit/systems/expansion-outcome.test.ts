@@ -1,9 +1,4 @@
-/**
- * 扩张台账事件测试（R7a ExpansionOutcome）。
- *
- * 覆盖：claim 阶段被抢占 → 记录 ExpansionOutcome（phase=claim, outcome=stolen,
- * 时长）+ 黑名单 + 行动清除；pioneering 阶段 spawn 上线 → success 归因。
- */
+/** 扩张台账事件测试（R7a ExpansionOutcome）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { expansionManagerSystem } from "../../../src/systems/expansion-manager";
 import { mockBudget, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";

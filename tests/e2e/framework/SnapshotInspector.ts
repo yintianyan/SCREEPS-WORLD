@@ -1,15 +1,4 @@
-/**
- * SnapshotInspector — 从 bot.memory 和 Game API 提取可断言的状态快照。
- *
- * 职责：
- *   - 解析 bot.memory 为结构化快照
- *   - 提供语义化断言辅助（creepCount, roleDistribution, storageEnergy 等）
- *   - 不假设生产代码内部结构，只通过 Memory 公开字段观察
- *
- * 设计原则：
- *   - 只读取 Memory 的公开字段，不解析内部实现细节
- *   - 快照不可变，每次调用都从 server 拉取最新值
- */
+/** SnapshotInspector — 从 bot.memory 和 Game API 提取可断言的状态快照。 */
 import type { BotHarness } from "./BotHarness";
 
 /**

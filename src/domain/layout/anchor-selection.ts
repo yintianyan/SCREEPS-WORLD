@@ -1,11 +1,4 @@
-/**
- * 约束推导锚点选择 — 从地形约束推导最优核心位置（plan §5.6）。
- * 当前只做诊断评分（评估已有 spawn 锚点质量），不改变运行时行为；
- * Phase 4 才启用约束推导放置。纯函数，不访问 Game/Memory。
- * 评分维度动机：平坦度（openness）权重最高，blockedCells 强惩罚；
- * source 距离对应 hauler 通勤、controller 距离对应升级通勤（link 前
- * 重要）、exit 距离是防御纵深、mineral 距离 RCL6+ 才相关。
- */
+/** 约束推导锚点选择 — 从地形约束推导最优核心位置（plan §5.6）。 */
 
 import type { DistanceField } from "./terrain-analysis";
 import { opennessAt, countBlockedCells } from "./terrain-analysis";

@@ -1,13 +1,4 @@
-/**
- * Power Farm Manager 系统生命周期测试（审计缺口 2）。
- *
- * 覆盖：
- *   - 开任务：新鲜 intel powerBank=true + 自有房 sponsor → 建 powerFarm + 提交编队请求
- *   - war 抢占：warPlan 存续时既有任务立即收摊（回收编队 + 撤请求 + 清任务）
- *   - PB 消失（编队提供视野）：phase → collect + 回收战斗编队 + 孵 collector
- *   - 超时收摊：missionTimeout 耗尽 → 清任务
- *   - 止损收摊：spawned 超编队 × 倍数 → 清任务
- */
+/** Power Farm Manager 系统生命周期测试（审计缺口 2）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { powerFarmManagerSystem } from "../../../src/systems/power-farm-manager";
 import { CONFIG } from "../../../src/config";

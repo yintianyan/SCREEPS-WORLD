@@ -1,15 +1,4 @@
-/**
- * compact-core-v2 几何不变量测试 — 永久守卫。
- *
- * v1 的 P0 教训：实心块模板全建成后 29/68 个结构被完全密封
- * （spawn 无法孵化 / storage 无法存取 / 塔无法补能 / 22 个 extension 幽灵容量）。
- * 这些不变量保证任何未来的 cell 修改都不可能再制造建筑孤岛：
- *   1. 所有 cell 落在偶校验格（dx+dy 为偶数）—— 奇数格永远留作走道；
- *   2. 无任何密封结构（每个障碍结构 ≥1 个相邻空格）；
- *   3. 每个 spawn ≥2 个出生格；
- *   4. extension 各 RCL 批次数量与 CONTROLLER_STRUCTURES 上限一致；
- *   5. 模板占地 ≤±7（锚点适配性）。
- */
+/** compact-core-v2 几何不变量测试 — 永久守卫。 */
 import { describe, expect, it } from "vitest";
 import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-core-v2";
 import { OBSTACLE_TYPES } from "../../../src/domain/layout/validation";

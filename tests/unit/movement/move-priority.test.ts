@@ -1,10 +1,4 @@
-/**
- * movePriorityFor 卡位升级测试（v33-R12）。
- *
- * 语义：连续 stuck（≥ stuckThreshold）时优先级临时抬到 stuckEscalation(70) —
- * 高于 anchorStation(60) 让锁死者有权推开站桩者，低于 anchorMiner(90)
- * （站桩矿工永不被挤）与 flee(100)（逃命最高）。
- */
+/** movePriorityFor 卡位升级测试（v33-R12）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { movePriorityFor } from "../../../src/creeps/movement/intent";
 import { CONFIG } from "../../../src/config";

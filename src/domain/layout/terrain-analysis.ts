@@ -1,10 +1,4 @@
-/**
- * 地形分析 — Chamfer 3-4 Distance Transform 计算房间开放度：
- * 每格赋「到最近墙/边界的距离」，值越大越适合放核心建筑群。
- * 正交代价 3、对角代价 4（近似欧氏 ×3），前向/后向两遍扫描，最终 ÷3
- * 归一化为整数格距离。CPU O(50×50) ≈ 0.01ms 可忽略；地形永不变，
- * 每房计算一次后存 RawMemory segment。纯函数。
- */
+/** 地形分析 — Chamfer 3-4 Distance Transform 计算房间开放度： */
 
 /** 50×50 距离场，index = x*50+y，值 = 到最近墙的格距离（0=墙，255=INF 截断）。 */
 export type DistanceField = Uint8Array;

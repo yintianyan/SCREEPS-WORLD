@@ -1,17 +1,4 @@
-/**
- * Nuke 响应决策 — 纯函数层（审计缺口 1+3：核弹落点感知 + 资产抢救）。
- *
- * 引擎语义 [Fact]：敌方 nuke 发射后 50000 tick（约 11 小时）落地，落点
- * range≤2 内建筑全毁 — terminal/storage 无法移动，唯一出路是把库存
- * terminal.send 到无警报兄弟房。send 无单笔量上限（只受 terminal 库存与
- * 10 tick 冷却限制），预警窗口内可多轮转空。
- *
- * 感知（room-snapshot）：自有房每 tick FIND_NUKES（视野内常量查询，零额外
- * find）；Nuke.timeToLand 逐 tick 递减，无需 Memory 持久化 — 无 schema 变更。
- *
- * 抢救价值序：power/G/浓缩矿物（价值密度高、不可再生）优先于能量（可再生、
- * 自身即运费来源）；能量只留运费地板（send 矿物也要能量付运费）。
- */
+/** Nuke 响应决策 — 纯函数层（审计缺口 1+3：核弹落点感知 + 资产抢救）。 */
 
 /** 资产抢救接收房候选（由执行层从 snapshot 采集，纯函数不访问 Game）。 */
 export interface SalvageCandidate {

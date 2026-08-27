@@ -8,7 +8,7 @@ import { preloadStructureCache, preloadStaticBlockers } from "../creeps/movement
  * 所有系统和角色都消费快照以避免重复扫描。
  * 成本：每房每 tick O(structures + sources + sites + hostiles)；必须保持廉价，
  * 不使用 PathFinder、全房 lookAt 或地形扫描（唯一例外：站桩阻挡在位核验 ≤4 个单格 lookForAt）。
- *
+
  * 三个 global* 参数由 Kernel 预构建（避免每房独立遍历 Game.creeps）：
  * globalSourceOccupancy（source 占用）、globalCreepEnergy（房间 → creep 携带能量，P1-5 ①）、
  * globalPendingHarvesters（房间 → 待计入 harvester，P0-1）。

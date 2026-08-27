@@ -1,31 +1,4 @@
-/**
- * A4.6 Recovery Execution & Autonomous Recovery Loop — E2E 场景测试。
- *
- * 验证 A4.6 的核心能力：
- *   E2E-001: RecoveryAction 生命周期状态转换（PROPOSED → SUBMITTED → EXECUTING → VERIFYING → SUCCEEDED）
- *   E2E-002: Idempotency — 同一 Action 不重复提交
- *   E2E-003: Idempotency — 活跃状态阻止重复提交
- *   E2E-004: Idempotency — succeeded 状态阻止重新提交
- *   E2E-005: Idempotency — retryable 冷却期到期后允许重试
- *   E2E-006: Idempotency — terminal 状态永久阻止重试
- *   E2E-007: Verification — domainLevel 改善 → success
- *   E2E-008: Verification — domainScore 改善 → partial
- *   E2E-009: Verification — 无改善 + 超时 → failed
- *   E2E-010: Verification — 提交成功但未到恢复时间 → no_progress
- *   E2E-011: Retry Policy — 各 Action 类型的 maxAttempts/cooldownDuration
- *   E2E-012: Failure Classification — 威胁/能量/CPU/永久/暂时
- *   E2E-013: Recovery Budget — CPU bucket 不足时禁止 Recovery
- *   E2E-014: Recovery Budget — 低能量时只允许零成本 Recovery
- *   E2E-015: Recovery Budget — 并发上限
- *   E2E-016: Recovery Unviability — 累计尝试过多 → 不可恢复
- *   E2E-017: Escalation — spawn 失败因能量不足 → 建议改修 Energy
- *   E2E-018: Escalation — logistics 失败因威胁 → 建议改修 Defense
- *   E2E-019: Escalation — terminal 状态 → 必须找替代路径
- *   E2E-020: Cleanup — 过期记录清理 + 100 条上限
- *   E2E-021: Stats — 统计数据计算正确
- *
- * 纯函数测试 — 不依赖 Game/Memory。
- */
+/** A4.6 Recovery Execution & Autonomous Recovery Loop — E2E 场景测试。 */
 import { describe, it, expect } from "vitest";
 import {
   recoveryIdempotencyKey,

@@ -1,13 +1,4 @@
-/**
- * factory-manager processPower 接线测试 — 调度门禁（domain/economy/power-processing）
- * 在系统层的采集与执行闭环。
- *
- * 覆盖：
- *   - 库存充足 + storage 达地板 + 和平 → processPower 被调
- *   - storage 低于地板 → 暂停（power 不腐坏，暂停零损失）
- *   - war 姿态 → 暂停（能量军事优先）
- *   - 无 powerSpawn → 安全跳过
- */
+/** factory-manager processPower 接线测试 — 调度门禁（domain/economy/power-processing） */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { factoryManagerSystem } from "../../../src/systems/factory-manager";
 import { CONFIG } from "../../../src/config";

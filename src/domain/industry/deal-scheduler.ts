@@ -1,15 +1,4 @@
-/**
- * Deal 调度器纯函数 — terminal/lab/factory 市场改造阶段 2。
- *
- * 问题：旧实现用 continue 链硬编码优先级（卖能量→卖矿→卖battery→买危机能量→
- * 买缺口→买power→买G），卖出永远先于买入 — 当 terminal 冷却被卖出占用时，
- * 买入被永久挤出（每轮只有 1 个 deal 窗口）。
- *
- * 改造：收集所有候选 deal（卖出 + 买入）为 DealCandidate，按 priority 降序排序，
- * 取最高优先级的执行。卖出 priority ≤ 50，买入 priority 可达 100（生存级）。
- *
- * 纯函数层：不访问 Game/Memory，可 Vitest 测试。
- */
+/** Deal 调度器纯函数 — terminal/lab/factory 市场改造阶段 2。 */
 
 /** Deal 候选类型。 */
 export type DealCandidateType =
@@ -72,11 +61,11 @@ export function pickBestCandidate(
 
 /**
  * 按 priority 降序逐个尝试执行候选，直到一个成功（返回 true）或全部尝试完毕。
- *
+
  * 这解决了 continue 链的核心问题：旧实现中如果前一个函数返回 false（未成交），
  * 下一个函数有机会执行。新的 priority 竞争模式保留了这一语义 —
  * priority 最高的先试，如果没成交（如无卖单/无现货），fallback 到下一个。
- *
+
  * @param candidates 候选列表（会被按 priority 降序排列）。
  * @returns 是否有候选成功成交。
  */

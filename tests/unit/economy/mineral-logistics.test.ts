@@ -1,18 +1,4 @@
-/**
- * planMineralAid — 跨房矿物互济纯函数决策测试。
- *
- * 覆盖：
- *   正常路径：
- *   - 姐妹房 homeMineral 盈余 → 缺口房：量受 缺口/盈余/上限 三重约束
- *   - 缺口最大者优先（与市场买入同排序口径）
- *   边界条件：
- *   - 捐赠方存量 ≤ 保留量（sellReserve）→ 不捐
- *   - 可送量 < 起送门禁 → 不送
- *   - 同房不互济（自给自足的缺口不触发自送）
- *   - 买入的非本房矿物库存不算盈余（只认 homeMineral 供给）
- *   异常情况：
- *   - 无接收方 / 无捐赠方 / 捐赠方 terminal 冷却 → undefined
- */
+/** planMineralAid — 跨房矿物互济纯函数决策测试。 */
 import { describe, expect, it } from "vitest";
 import { planMineralAid, type RoomMineralState } from "../../../src/domain/economy/mineral-logistics";
 

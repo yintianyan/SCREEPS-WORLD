@@ -1,8 +1,4 @@
-/**
- * Industry actions — 矿物/化合物搬运（lab 供料、矿物回收）。
- *
- * 触发条件均基于 snapshot 预计算的结构状态，不做实时 find。
- */
+/** Industry actions — 矿物/化合物搬运（lab 供料、矿物回收）。 */
 import type { ActionCandidate } from "../action-types";
 import { runAction } from "./helpers";
 import { CONFIG } from "../../../config";
@@ -347,7 +343,7 @@ export function salvageStorageToTerminal(): ActionCandidate<SalvageTransferTarge
 
 /**
  * W7 止血修正（2026-08-01）：storage 饥饿时把 terminal 交易储备压缩回 storage。
- * 背景（前提修正）：私服引擎 4.3.0 自带市场 API 但市场可以为空（credits=0、无订单）——
+
  * terminal-manager 从不成交，富余期灌入的 10k 交易储备变死资本（W7N3/W7N4 实测恒 10150、storage=0），
  * 故改为与市场状态无关的「饥饿压缩」语义。
  * 规则（全满足才取）：storage 低于 20k（只有经济饥饿才动交易储备）；terminal 高于饥饿储备地板

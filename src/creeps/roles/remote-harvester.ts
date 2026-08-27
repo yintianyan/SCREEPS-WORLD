@@ -1,9 +1,4 @@
-/**
- * RemoteHarvester — P1 远矿采集者。在远矿房采集 source，倒入附近 container（或 drop 落地）。
- * 与本地 harvester 区别：工作在 remoteTarget 房（无 RoomSnapshot）；通过 Game.rooms[remoteTarget]
- * 直接发现 source（首次 find 后缓存 sourceId）；倒能优先 container，无则 drop（避免采满停滞）。
- * 架构约束：ensureHome 已适配 remoteTarget，本角色常驻 remoteTarget 房间。
- */
+/** RemoteHarvester */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";

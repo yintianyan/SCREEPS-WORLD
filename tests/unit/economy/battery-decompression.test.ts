@@ -1,13 +1,4 @@
-/**
- * Battery 解压回能决策测试（纯函数）。
- *
- * 覆盖 shouldDecompressBattery 的所有判定路径：
- * - factory 冷却中 → false
- * - factory 内 battery 不足 5 → false
- * - storage 无视野 → false
- * - storage 能量 ≥ 危机线 → false（不危机不解压）
- * - 全部满足 → true
- */
+/** Battery 解压回能决策测试（纯函数）。 */
 import { describe, expect, it } from "vitest";
 import {
   shouldDecompressBattery,

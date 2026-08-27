@@ -1,13 +1,4 @@
-/**
- * Hauler 顺路卸能测试 — acquire 途中路过 storage 时把残余能量顺手存入。
- *
- * 实现形态是 gate 伴随动作（不占候选链）：transfer 与 move 是独立 intent
- * 同 tick 可并行，顺路卸零通勤成本。三个让位守卫与 work 链 fillStorage
- * 同口径：威胁在场（直送 tower）、泵断供（直送 spawn/extension，不得提前
- * 锁仓对冲兜底）、storage 满。
- *
- * 走真实角色管线（haulerRole.run）断言实际动作。
- */
+/** Hauler 顺路卸能测试 — acquire 途中路过 storage 时把残余能量顺手存入。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { haulerRole } from "../../../src/creeps/roles/hauler";
 import { globalCache } from "../../../src/kernel/global-cache";

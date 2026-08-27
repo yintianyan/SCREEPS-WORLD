@@ -1,13 +1,4 @@
-/**
- * Hauler — P1 收集者角色。将能量从源（container/dropped/link）搬运到 sink（spawn/extension/storage）。
- * 架构约束：hauler 永不从 storage 取能（storage → sink 分发由 distributor 负责）—
- * 消除旧架构「同时取能又存回 storage」的循环依赖；无 storage（RCL1-3）时 container → sink 直送。
- * onFlee 钩子（P0-2）：flee 状态下「防御圈内安全充能」从 lifecycle.ts 移入此处——携能量且已在
- * spawn 安全区内时向圈内需能结构（threat 时 tower 优先）转移能量，解决塔断能、hauler 全 flee 无人补给的死局。
- * acquire 顺序要点：零头 droppedEnergy 排最后 — container 满溢时 harvester 会 drop 溢出，先捡零头
- * 会让 hauler 半满离开来回空转、抽不干满 container（溢出根源未除）；先抽最满 container 满载搬运
- * 且从源头止住溢出。大额遗留（≥ lootThreshold）例外插队 — 它们在衰减/限时灭失，container 能量不会。
- */
+/** Hauler */
 import { CONFIG } from "../../config";
 import type { Priority } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";

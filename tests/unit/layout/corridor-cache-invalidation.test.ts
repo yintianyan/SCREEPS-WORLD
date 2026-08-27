@@ -1,24 +1,4 @@
-/**
- * 走廊路缓存失效条件测试（走廊/缓存失效判定）。
- *
- * 病灶背景（漏洞 #5/#8）：
- *   走廊路每规划周期调用 PathFinder.search，单次 0.5-2ms CPU。原设计走
- *   segment 缓存 + schemaVersion 22 升级，但 schema 升级风险高于收益
- *   （P0-P1 已确认 heap 存储策略）。改为 globalCache heap 缓存，失效条件
- *   必须完整覆盖，否则旧缓存导致路径错误。
- *
- * 失效维度（signature = pairKey + rcl + anchor）：
- *   1. pairKey 变化：端点 container/storage 消失或新建 → 重新求路径
- *   2. rcl 变化：解锁新结构，路径可能变化 → 重新求路径
- *   3. anchor 变化：spawn 重建在新位置，核心位置已变 → 重新求路径
- *   4. 路径格被新建结构占用 → 由 planCorridorRoads 内部 occupied 过滤，
- *      不触发缓存失效（局部重算无意义，整体重算才能找到更优路径）
- *
- * 验证方式：
- *   - 通过 vi.fn() 跟踪 PathFinder.search 调用次数
- *   - 缓存命中 → search 不被调用；缓存失效 → search 再次被调用
- *   - 验证 global reset 清空 corridorPathCache 后的重新计算路径
- */
+/** 走廊路缓存失效条件测试（走廊/缓存失效判定）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { planCorridorRoads, DEFAULT_CORRIDOR_OPTIONS, type CorridorPathCacheStore } from "../../../src/domain/layout/corridor-roads";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";

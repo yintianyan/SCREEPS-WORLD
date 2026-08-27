@@ -1,27 +1,4 @@
-/**
- * Tactical Engagement & Focus Fire — A5.4.3 Domain 纯函数。
- *
- * 核心目标：让已完成 Formation + Movement 的 Squad 具备
- *   "接敌 → 选择攻击目标 → 集火 → 攻击 → 目标死亡 → 重新选择 → 继续作战"
- * 的真正 Tactical Engagement Loop。
- *
- * 设计边界（严格）：
- *   Strategic（WHY）    → WarPosture / WarPlan — 不碰
- *   Operational（WHAT） → TacticalObjective / TargetScope — 只消费
- *   Tactical（HOW）     → 本模块：局部交战目标分配 + 火力协同
- *
- * 消费 Canonical 上游（不创建第二套）：
- *   - A5.1 G1 ThreatAssessment → 消费 estimatedPower / enemyCombatPower
- *   - A5.1 G2 CombatCapability → 消费 evaluateCombatCapability 输出
- *   - A5.4.0 TacticalSnapshot → 消费 enemies / squad / objective
- *   - A5.4.2 SquadSnapshot / SquadMovementIntent → 消费 formation / cohesion
- *
- * 输出：
- *   FocusFirePlan → AttackIntent[] → globalCache → Role Execution
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / Creep / Room / PathFinder / Kernel / Spawn / Transport / Recovery。
- * 所有运行时数据由调用方（系统层薄壳）注入为 Snapshot / DTO。
- */
+/** Tactical Engagement & Focus Fire */
 
 import type {
   TacticalState,
@@ -35,7 +12,7 @@ import type { CombatCapability } from "../combat/capability";
 
 /**
  * TargetCandidate — 一个敌方单位的战术候选快照。
- *
+
  * 从 EnemySnapshot + CombatCapability 构建。
  * 不直接引用 Game/Creep — 所有数据是 DTO。
  */
@@ -89,7 +66,7 @@ export type TargetAccessibility =
 
 /**
  * TacticalValueBreakdown — 多维战术价值评分。
- *
+
  * 禁止：单一 powerScore。
  * 必须分别考虑以下维度。
  */
@@ -131,7 +108,7 @@ export type TargetPriority = "PRIMARY" | "SECONDARY" | "NO_TARGET";
 
 /**
  * AttackIntent — 单个 Creep 的攻击意图。
- *
+
  * Domain 只产出 Intent，不执行 attack()。
  * Role 层读取 Intent 调用实际 API。
  */
@@ -170,7 +147,7 @@ export interface AttackIntent {
 
 /**
  * HealCoverage — 编队治疗覆盖状态。
- *
+
  * 不创建第二套 Healer Target Selection。
  * 只产出治疗需求信号，具体 heal target 由既有 Healer Role 执行。
  */
@@ -199,7 +176,7 @@ export interface HealCoverage {
 
 /**
  * EnemyHealSupport — 评估敌方对某个目标的 heal 支持。
- *
+
  * 不实现"先杀 healer"战略算法。
  * 只将 EnemyHealSupport 作为 Tactical 指标。
  */
@@ -224,7 +201,7 @@ export interface EnemyHealSupport {
 
 /**
  * FocusFirePlan — 一个 Squad 在某一 tick 的完整集火计划。
- *
+
  * 包含：
  *   - 选中的主目标 + 次目标
  *   - 每个 attacker 的攻击分配
@@ -292,10 +269,10 @@ export interface RejectedTarget {
 
 /**
  * EngagementState — Focus Fire 级别的状态机。
- *
+
  * 复用 A5.4 TacticalState（Squad 级）作为上层状态。
  * 本状态机是 TacticalState=ENGAGING 时的子状态。
- *
+
  * 状态流：
  *   TARGET_ACQUIRED
  *     ↓
@@ -308,7 +285,7 @@ export interface RejectedTarget {
  *   REASSESSING
  *     ↓
  *   NEW_TARGET → TARGET_ACQUIRED
- *
+
  * 异常：
  *   TARGET_LOST → REASSESSING（或 REGROUP）
  *   TARGET_OUT_OF_RANGE → REQUEST_MOVEMENT（不直接进入 Strategic Planning）
@@ -333,7 +310,7 @@ export type EngagementState =
 
 /**
  * FocusFireSnapshot — planFocusFire() 的唯一输入。
- *
+
  * 系统层薄壳负责构建此快照并注入。
  * 包含：Squad 成员状态 + 目标候选列表 + 上 tick 计划 + 授权信息。
  */
@@ -394,7 +371,7 @@ export interface FocusFireMemberSnapshot {
 
 /**
  * planFocusFire — 从 Snapshot 产出 FocusFirePlan + AttackIntent[]。
- *
+
  * 决策链：
  *   1. 授权 / 姿态检查 → 非 war 或 RETREATING → 禁止 AttackIntent
  *   2. TargetScope 检查 → 越界目标拒绝
@@ -406,7 +383,7 @@ export interface FocusFireMemberSnapshot {
  *   8. HealCoverage 评估
  *   9. EnemyHealSupport 评估
  *   10. 产出 FocusFirePlan + AttackIntent[]
- *
+
  * 纯函数 — 相同输入必产生相同输出。
  */
 export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
@@ -863,7 +840,7 @@ function assessEnemyHealSupport(
 
 /**
  * 推导 EngagementState — 从上 tick 的 Plan + 当前 Snapshot 推导。
- *
+
  * 状态流：
  *   无 prevPlan → IDLE
  *   prevPlan.primaryTargetId 在当前候选中存在:
@@ -873,7 +850,7 @@ function assessEnemyHealSupport(
  *   prevPlan.primaryTargetId 不在当前候选中:
  *     OUT_OF_RANGE → TARGET_OUT_OF_RANGE
  *     其他 → TARGET_LOST
- *
+
  * TARGET_DEAD / TARGET_LOST → REASSESSING（本 tick 重新选择目标）
  * REASSESSING → TARGET_ACQUIRED（选到新目标后）
  */
@@ -948,7 +925,7 @@ function computeConfidence(
 
 /**
  * 焦点射击状态机转换验证。
- *
+
  * 验证 EngagementState 转换是否合法。
  */
 const VALID_ENGAGEMENT_TRANSITIONS: Record<EngagementState, readonly EngagementState[]> = {
@@ -977,7 +954,7 @@ export function canTransitionEngagement(from: EngagementState, to: EngagementSta
 
 /**
  * 计算 FocusFirePlan 的确定性 Hash。
- *
+
  * 相同 Snapshot → 相同 Plan → 相同 Hash。
  * 用于验证确定性（1000 次 Replay → Hash 完全一致）。
  */
@@ -1028,7 +1005,7 @@ function fnv1a32Hex(str: string): string {
 
 /**
  * 从 EnemySnapshot + CombatCapability 构建 TargetCandidate。
- *
+
  * 系统层薄壳调用此函数将 Runtime 数据转换为 Domain 输入。
  */
 export function buildTargetCandidate(

@@ -1,22 +1,4 @@
-/**
- * A6.4 Resolution Metric Registry — 按模型注册 Resolution Metric。
- *
- * 合同锚点：A6_4_CONTRACT.md §二.2 + A6_4_RESOLUTION_DESIGN.md §三.4
- *
- * 职责：
- *   - 注册每个预测模型的 Resolution Metric 函数
- *   - 每个模型定义自己的 "actualValue" 计算方式
- *   - 不建立万能 Resolution Metric
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * 确定性（CAL-005）：
- *   相同 Prediction + 相同 Observation → 相同 Metric 输出。
- *
- * 禁止（A6_4_RESOLUTION_DESIGN.md §三.4）：
- *   - 建立万能 Resolution Metric
- *   - 将不同模型的 Metric 混合
- */
+/** A6.4 Resolution Metric Registry — 按模型注册 Resolution Metric。 */
 
 import type { Prediction } from "../prediction/types";
 import type { ObservationSample } from "./types";
@@ -27,13 +9,13 @@ import type { ObservationSample } from "./types";
 
 /**
  * Resolution Metric 函数类型 — 按模型注册。
- *
+
  * 每个模型定义如何从 Prediction 和 Observation 计算：
  *   - actualValue: 实际值
  *   - relativeError: 相对误差
  *   - directionCorrect: 方向是否正确
  *   - withinHorizon: 是否在预测窗口内
- *
+
  * 来源：A6_4_CONTRACT.md §二.2
  */
 export type ResolutionMetricFn = (
@@ -52,7 +34,7 @@ export type ResolutionMetricFn = (
 
 /**
  * Metric Registry — 按模型 key 注册的 Metric 函数集合。
- *
+
  * 不使用 Map（确保确定性遍历）。
  * 不引用 Game/Memory。
  */
@@ -60,7 +42,7 @@ const metricRegistry: Map<string, ResolutionMetricFn> = new Map();
 
 /**
  * 生成模型 key（格式：target-method-modelVersion）。
- *
+
  * 确定性：相同参数 → 相同 key。
  */
 export function makeModelKey(
@@ -73,7 +55,7 @@ export function makeModelKey(
 
 /**
  * 注册 Resolution Metric（按 modelKey）。
- *
+
  * 重复注册会覆盖（用于热重载场景）。
  * 纯函数（对 registry 的 mutation 是 module-level 单例，不影响确定性）。
  */
@@ -86,7 +68,7 @@ export function registerResolutionMetric(
 
 /**
  * 获取已注册的 Resolution Metric。
- *
+
  * 如果未注册返回 null。
  */
 export function getResolutionMetric(modelKey: string): ResolutionMetricFn | null {
@@ -95,7 +77,7 @@ export function getResolutionMetric(modelKey: string): ResolutionMetricFn | null
 
 /**
  * 获取所有已注册的 modelKey。
- *
+
  * 确定性：按字母序排序。
  */
 export function getRegisteredModelKeys(): readonly string[] {
@@ -115,15 +97,15 @@ export function clearResolutionMetricRegistry(): void {
 
 /**
  * Energy Shortage Resolution Metric。
- *
+
  * 来源：A6_4_RESOLUTION_DESIGN.md §三.4
- *
+
  * Metric 计算：
  *   - actualValue = 窗口内最低储备值（shortage 预测看是否触底）
  *   - relativeError = |actual - predicted| / |predicted|
  *   - directionCorrect = 预测下降 vs 实际下降（误差 < 50%）
  *   - withinHorizon = 窗口内有观测
- *
+
  * 纯函数。
  */
 export function energyShortageMetric(
@@ -180,15 +162,15 @@ export function energyShortageMetric(
 
 /**
  * Spawn Starvation Resolution Metric。
- *
+
  * 来源：A6_4_RESOLUTION_DESIGN.md §三.4
- *
+
  * Metric 计算：
  *   - actualValue = 窗口结束时的队列深度
  *   - relativeError = |actual - predicted| / max(|predicted|, 1)
  *   - directionCorrect = 预测增长 vs 实际增长（趋势匹配）
  *   - withinHorizon = 窗口内有观测
- *
+
  * 纯函数。
  */
 export function spawnStarvationMetric(
@@ -257,7 +239,7 @@ export function spawnStarvationMetric(
 
 /**
  * 注册默认的 Resolution Metrics。
- *
+
  * 在模块加载时自动注册已知的模型 Metric。
  * 如果需要重新注册，调用 clearResolutionMetricRegistry() 后重新调用。
  */

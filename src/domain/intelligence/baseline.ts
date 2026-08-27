@@ -1,30 +1,4 @@
-/**
- * A6.2 Baseline Model — Domain 层纯函数与类型定义。
- *
- * 三类 Baseline：
- *   CONFIG BASELINE     — 来自 CONFIG 的静态基准（始终可用）
- *   HISTORICAL BASELINE — 来自 Experience Ring Buffer 的滚动历史基准
- *   COMMUNITY BASELINE  — 社区平均值（当前无可靠数据 → UNAVAILABLE）
- *
- * BaselineKey = strategyId + phase + contextSignature
- * 不同策略/不同上下文/不同阶段的 baseline 不可混合。
- *
- * 公平性验证：
- *   比较前检查 context compatibility（RCL, empire size, room count, threat, posture, resource）。
- *   不匹配 → INCOMPARABLE。
- *
- * 统计稳健性：
- *   不只用 mean，同时计算 median + variance + outlier。
- *   样本不足 → INCONCLUSIVE。
- *   置信度基于样本数 + 方差 + 时间窗口新鲜度。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * 所有运行时数据由调用方（system 层薄壳）注入。
- *
- * Deterministic Replay：
- *   同一输入 + 同一模型版本 → 相同 baselineHash。
- *   禁止 Math.random() / Date.now() / 无序迭代 / 浮点误差。
- */
+/** A6.2 Baseline Model — Domain 层纯函数与类型定义。 */
 
 import type { EvaluationDimension } from "./strategy-evaluation";
 import type { ExperienceRecord } from "./experience";
@@ -140,10 +114,10 @@ export interface RegimeMismatch {
 
 /**
  * CONFIG 静态基准值 — 从已有系统推导的合理默认值。
- *
+
  * 这些不是"最优值"，而是"帝国正常运行时各维度应该达到的最低水平"。
  * 来源：EmpireHealth Hysteresis 阈值 + AutonomyMetrics + RecoveryStats。
- *
+
  * 理由：
  *   economicGrowth=0.70  → EmpireHealth recoverToStable 阈值
  *   resourceEfficiency=0.75 → logistics deliveryRate 目标 0.9，保守取 0.75
@@ -167,9 +141,9 @@ export const CONFIG_BASELINE_VALUES: Readonly<Record<EvaluationDimension, number
 
 /**
  * 各维度最低样本数要求。
- *
+
  * A6.0 未明确指定 → 以 CONFIG 常量表达并记录理由。
- *
+
  * 理由：
  *   economicGrowth=5    → 经济是多系统耦合，需更多样本平滑噪声
  *   resourceEfficiency=5 → 物流效率波动大
@@ -197,10 +171,10 @@ export const MINIMUM_SAMPLE_SIZES: Readonly<Record<EvaluationDimension, number>>
 
 /**
  * 构建 BaselineKey 的 contextSignature。
- *
+
  * 编码：rclRange + roomCountRange + threatLevel
  * 不同 RCL/规模/威胁下的 baseline 不可混合。
- *
+
  * RCL range：1-3=early, 4-6=mid, 7-8=late
  * Room count range：1=single, 2-3=small, 4-6=medium, 7+=large
  */
@@ -240,13 +214,13 @@ export function buildBaselineKey(input: {
 
 /**
  * 构建 Baseline — 从历史 Experience 计算 + CONFIG 兜底。
- *
+
  * 策略：
  *   1. 如果历史样本 >= minimum → 用 HISTORICAL baseline
  *   2. 如果历史样本 > 0 但 < minimum → 用 CONFIG baseline，降低置信度
  *   3. 如果无历史样本 → 用 CONFIG baseline，置信度 = 0.5
  *   4. COMMUNITY baseline = UNAVAILABLE
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function buildBaseline(
@@ -322,10 +296,10 @@ export function buildBaseline(
 
 /**
  * 比较观察值与基准值。
- *
+
  * 必须先验证 context compatibility。
  * 不匹配 → comparable=false, delta=0。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function compareBaseline(
@@ -370,9 +344,9 @@ export function compareBaseline(
 
 /**
  * 评估样本充足性。
- *
+
  * 样本不足时返回 INCONCLUSIVE 建议。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function evaluateSampleSufficiency(
@@ -416,12 +390,12 @@ export function evaluateSampleSufficiency(
 
 /**
  * 计算 Baseline 置信度。
- *
+
  * 基于样本数 + 方差 + 时间新鲜度。
  * 样本越多 → 越高
  * 方差越低 → 越高
  * 越新 → 越高
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function computeBaselineConfidence(
@@ -443,10 +417,10 @@ export function computeBaselineConfidence(
 
 /**
  * 检测 Regime Mismatch — 历史基准的上下文与当前上下文是否匹配。
- *
+
  * 比较维度：RCL range, room count range, threat level, war posture, resource context。
  * 不匹配 → baseline = INCOMPARABLE。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function detectRegimeMismatch(
@@ -513,9 +487,9 @@ export function detectRegimeMismatch(
 
 /**
  * 检查上下文兼容性 — baseline 与当前 context 是否可比较。
- *
+
  * 至少考虑：RCL, empire size, room count, threat context, war posture, resource context。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function checkContextCompatibility(
@@ -549,10 +523,10 @@ export function checkContextCompatibility(
 
 /**
  * 从 Experience 列表提取各维度的历史值。
- *
+
  * 每个维度从 Experience 的 Outcome + Context 中提取对应的数值指标。
  * 由 system 层调用，domain 不直接读 Experience Store。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function extractHistoricalValues(
@@ -617,9 +591,9 @@ export function extractHistoricalValues(
 
 /**
  * 为 Baseline 生成稳定的 Hash。
- *
+
  * 算法：stableStringify(key + dimensions + modelVersion) → FNV-1a 32-bit → hex。
- *
+
  * 确定性保证：
  *   - 不使用 Math.random / Date.now
  *   - JSON.stringify 对相同对象结构产生相同字符串
@@ -682,7 +656,7 @@ export function verifyBaselineDeterminism(
 
 /**
  * 计算统计量：mean, median, variance, outliers。
- *
+
  * Outlier 检测：IQR 方法（1.5×IQR 超出 = outlier）。
  */
 function computeStats(values: number[]): {

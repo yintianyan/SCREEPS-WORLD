@@ -1,11 +1,4 @@
-/**
- * A3 Phantom Transporter Bug — 反事实测试 (CF-1 到 CF-12)
- *
- * 验证修复后的不变量：修复将 expansion-manager 中对不存在角色 "transporter"
- * 的检查替换为检查实际存在的运输角色 (hauler/distributor)。
- *
- * 这些测试验证从 Demand → Spawn → Assignment → Execution → Recovery 的完整链路。
- */
+/** A3 Phantom Transporter Bug — 反事实测试 (CF-1 到 CF-12) */
 
 import { describe, it, expect } from "vitest";
 import { CONFIG } from "../../../src/config";

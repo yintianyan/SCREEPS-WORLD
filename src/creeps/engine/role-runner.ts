@@ -1,15 +1,4 @@
-/**
- * RoleRunner — 共享角色生命周期 + Action-Candidate 评估引擎。
- * 管线：getSnapshot → recycle → 威胁检测/flee → ensureHome → updateMode →
- * getAssignment → gate → 评估 candidates → 无匹配则 idle（park）。
- *
- * 威胁检测必须排在 ensureHome 之前：远矿角色过境遇袭时 ensureHome 会短路导航
- * （返回 false 提前 return），威胁检测在后则永远轮不到。
- * onFlee 钩子（P0-2）：威胁检测后、通用 flee 移动前调用；返回 true=已处理跳过通用
- * flee，false=需要通用 flee 接管——flee 专属逻辑从引擎层移回 RolePolicy。
- * 状态指示灯在 finally 统一绘制，覆盖所有 return 路径（含异常）。
- * 角色文件只需声明 RolePolicy，不再包含生命周期样板。
- */
+/** RoleRunner — 共享角色生命周期 + Action-Candidate 评估引擎。 */
 import type { CreepRole, Priority, TickContext } from "../../kernel/contracts";
 import type { ActionContext, RolePolicy } from "./action-types";
 import { ensureHome, flee, getAssignment, shouldFlee, shouldFleeForeignRoom, fleeToHome, shelterAtCore, updateMode, releaseAssignment } from "../support";

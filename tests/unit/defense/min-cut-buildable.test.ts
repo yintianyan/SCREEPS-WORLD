@@ -4,12 +4,12 @@ import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-co
 
 /**
  * P1-2 min-cut 割集位置可建造性预校验单元测试。
- *
+
  * 覆盖：
  *   - 出口格及紧邻出口格过滤（x/y ≤1 或 ≥48）
  *   - 已有 construction site 的位置过滤
  *   - 正常位置通过校验
- *
+
  * 根因：min-cut 算法只看地形不验证可建造性，11 个 wall 站点因位置不可建造
  * 永久阻塞 22 万 tick。P1-2 在入队前预校验，避免注定 blocked 的任务入队。
  */

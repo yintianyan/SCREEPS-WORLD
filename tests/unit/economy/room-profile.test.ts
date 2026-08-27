@@ -1,13 +1,4 @@
-/**
- * Room Economic Contract 单测 — A2 后半·A2B-001..A2B-004。
- *
- * 合同锚点：EMPIRE_SYSTEM_MODEL §1 Room 接口、ECONOMY §2 九概念 + §3 三指标。
- * 测试范围：
- *   - classifyRoomEconomic：四种经济分类的边界条件
- *   - computeSelfSufficiency：自给度计算
- *   - buildRoomEconomicProfile：从三源组装 Profile 的完整性
- *   - canExportEnergy / needsEnergyAid：调拨门控前置判定
- */
+/** Room Economic Contract 单测 */
 import { describe, it, expect } from "vitest";
 import {
   classifyRoomEconomic,

@@ -1,8 +1,4 @@
-/**
- * 交通解算器纯函数测试 — 同格仲裁 / 跟车 / 对向换位 / 推挤链 / 锚定与疲劳豁免。
- *
- * 坐标均为 packed（x*50+y）。为可读性用小数字直接表示格子。
- */
+/** 交通解算器纯函数测试 — 同格仲裁 / 跟车 / 对向换位 / 推挤链 / 锚定与疲劳豁免。 */
 import { describe, expect, it } from "vitest";
 import { resolveTraffic, type MoveIntent, type ResolveInput } from "../../../src/creeps/movement/traffic-resolver";
 

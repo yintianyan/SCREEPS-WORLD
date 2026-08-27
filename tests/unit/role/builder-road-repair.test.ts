@@ -1,12 +1,4 @@
-/**
- * 道路维修链测试 — 危路急救提级与 hysteresis 修满放手。
- *
- * 事故背景（线上实测）：construction 流水线持续放行 site 时，建造动作永远
- * 命中，链尾的常规修路被饿死 — 16 条路 8 条破 40%、最烂 4% 濒临塌毁
- * （塌毁重建耗能 6 倍 + site 占建造名额）。修复：<15% 危路急救提级到建造
- * 之前（拉出险区 40% 即放手）；常规修路加 hysteresis（修到 90% 才换目标，
- * 消除全路群贴 40% 线抖动引发的编制孵退振荡）。
- */
+/** 道路维修链测试 — 危路急救提级与 hysteresis 修满放手。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { builderRole } from "../../../src/creeps/roles/builder";
 import {

@@ -1,26 +1,4 @@
-/**
- * Transport Request V2 — A4.3 Phase 1：统一运输请求模型。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #1（无统一 Transport Request）、
- * §3.1（TransportRequest 最小五字段模型）、§10 #1。
- *
- * 设计意图：
- *   现有 `TransportRequest`（request-pool.ts）是最小五字段模型，只用于房内搬运。
- *   跨房用 `OperationContext`，远矿用 `RemoteOp`——三套数据模型。
- *
- *   `TransportRequestV2` 是统一接口，不替换现有 `TransportRequest`——
- *   通过 `scope` 字段区分房内/跨房/远矿三种场景，通过 adapter 映射到现有执行层。
- *
- *   V2 新增能力：
- *   - `destination` — 现有只有 source，目标隐含
- *   - `status` — 完整十态状态机
- *   - `deadline` — 现有房内无
- *   - `minBatch` / `maxBatch` — 现有每源一请求，无批量
- *   - `routePreference` — 路由偏好
- *   - `origin` — 来源追溯（Contract ID / Operation ID / logistics-auto）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Transport Request V2 */
 
 import type { ResourceType } from "../operation/agenda-item";
 import type { RequestScope } from "../assignment/request-pool";
@@ -29,14 +7,14 @@ import type { RequestScope } from "../assignment/request-pool";
 
 /**
  * Transport Request 状态机十态。
- *
+
  * 状态流转：
  *   pending → planned → assigned → in_transit → delivering → delivered
  *                                        ↓            ↓
  *                                    blocked       partial → planned (重新规划)
  *                                        ↓
  *                                    failed / cancelled
- *
+
  * - pending:     已创建，等待纳入 Transport Plan
  * - planned:     已纳入 Transport Plan，等待 Assignment
  * - assigned:    已分配给 hauler/carrier
@@ -125,12 +103,12 @@ export interface RoutePreference {
 
 /**
  * Transport Request V2 — 统一运输请求模型。
- *
+
  * 字段设计原则（MEMORY_ARCHITECTURE）：
  * - 存储在 Memory.kernel.transportRequests（瘦快照，只存 ID + 数字 + 枚举）
  * - 不存完整路径/历史/运行时索引
  * - 终态后归档删除（与 OperationContext 同模式）
- *
+
  * 与现有 `TransportRequest`（request-pool.ts）的关系：
  * - V2 是上层统一接口，现有 TransportRequest 是房内执行层接口
  * - V2 通过 adapter 映射为现有 TransportRequest 供 logistics.ts 消费
@@ -176,10 +154,10 @@ let _requestSeq = 0;
 /**
  * 生成 Transport Request ID。
  * 格式："tr:<scope>:<sourceRoom>:<targetRoom>:<resource>:<seq>"
- *
+
  * seq 是递增序号（heap 状态，global reset 后从 0 重新开始——
  * 因为旧 Request 已在 Memory 中持久化，不会冲突）。
- *
+
  * 纯函数（除了 seq 自增——这是幂等创建的必要去重手段）。
  */
 export function makeRequestId(
@@ -201,9 +179,9 @@ export function _resetRequestSeq(): void {
 
 /**
  * 创建新 Transport Request V2（初始状态 = pending）。
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param resource 资源类型
  * @param amount 请求总量
  * @param source 源端点

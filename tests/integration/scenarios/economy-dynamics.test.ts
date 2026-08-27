@@ -1,16 +1,4 @@
-/**
- * Economy Dynamics — 经济动力学集成测试。
- *
- * 验证经济系统的核心协调信号（economyPressure 梯度）是否正确驱动
- * 各子系统行为，以及关键经济不变量在压力下是否成立。
- *
- * 覆盖场景：
- *   - 经济压力梯度对 spawn/construction/upgrade 的比例调制
- *   - Hauler 震荡防护（controllerContainer 排除）
- *   - Spawn queue 隔离（不可负担请求不阻塞 P0）
- *   - Harvester 替换时序重叠（零采矿间隙）
- *   - Colony state 滞回（drainScore 振荡不导致状态翻转）
- */
+/** Economy Dynamics — 经济动力学集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions, GameInspector } from "../framework";
 import type { TestWorld } from "../framework";

@@ -10,7 +10,7 @@ import { CONFIG } from "../config";
 
 /**
  * 任务分配服务 — P1 系统，在所有角色之前运行（plan §5.7.2）。
- * 职责：为每房生成本 tick 可用任务列表（source 槽位显式化、物流任务确定性化、
+
  * 建造任务带 maxWorkers 与 lease）；紧急抢占由系统完成（P0 fill / flee 使普通
  * assignment 失效）。领域层 buildRoomTasks 是纯函数，TaskPool 封装索引与原子操作；
  * 本系统层负责从 Game/Memory 收集数据、调用纯函数、写回缓存。
@@ -162,13 +162,13 @@ function invalidateAssignments(pool: TaskPool, roomName: string, minPriority: nu
 
 /**
  * 适配：强制释放绑定在非 storage/extension site 的 builder assignment。
- *
+
  * 触发条件：RCL4+ 无 storage 且存在 storage construction site。
  * storage 是经济中枢——haul 无处倒能、builder/upgrader 无中央能量源；
  * assignment-service 已将 storage site 标记 priority=1, maxWorkers=2，
  * 但 lease 机制（50 tick）让 builder 保持旧 assignment 不切换，故每 tick
  * 主动失效非 storage/extension build assignment，强制 builder 重新选 storage。
- *
+
  * 不释放 extension site 上的 builder——extension 建成后提升 energyCapacityAvailable，
  * 解锁更大 builder body，整体建造速率翻倍；全压 storage 反而拖慢 extension 重建。
  * storage site 不存在（被 block 或未规划）时不释放——避免 builder 永久 idle。

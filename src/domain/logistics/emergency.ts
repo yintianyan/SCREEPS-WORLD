@@ -1,14 +1,4 @@
-/**
- * Emergency Logistics — A4.3 Phase 5：紧急物流。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #29。
- *
- * 设计意图：
- *   提高 Priority 但不绕过 Resource Network。
- *   紧急时将 Request 优先级提升到 P0，但不创建新的独立运输链。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Emergency Logistics */
 
 import type { TransportRequestV2 } from "./transport-request";
 

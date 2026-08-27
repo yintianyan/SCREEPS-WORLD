@@ -1,21 +1,4 @@
-/**
- * RCL7 Defense — 防御系统集成测试。
- *
- * RCL7 关键特征：
- *   - 多 tower（最多 3 个）协同防御
- *   - hostile 检测 → tower 集火攻击
- *   - 无 tower 时 → safe mode 激活
- *   - creep flee 行为（shouldFlee → 释放任务 → 逃向 spawn/出口）
- *   - 敌人离开后恢复正常经济
- *
- * 验证目标：
- *   - threat detection：hostile 出现时 tower 立即攻击
- *   - tower 集火：多 tower 聚焦同一目标
- *   - creep 撤退：非战斗 creep 释放任务逃跑
- *   - safe mode：无 tower 时激活
- *   - 防御 spawn：敌人存在时不孵化非必要 creep
- *   - 恢复：敌人离开后经济恢复
- */
+/** RCL7 Defense — 防御系统集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 import type { TestWorld } from "../framework";

@@ -1,16 +1,4 @@
-/**
- * A3.4 Contract Tests — Colony Autonomy & Stability 合约测试。
- *
- * 覆盖 6 个 A3.4 新增纯函数模块（25+ 测试用例）：
- *   1. Autonomy Age（自治年龄追踪 + 里程碑）
- *   2. Stability Score（5 维度评分 + 等级映射）
- *   3. Colony Failure Detection（6 种失败类型 + 恢复动作）
- *   4. Expansion Cooldown & Rate Limit（冷却窗口 + 并发上限）
- *   5. Expansion ROI Tracker（Before/After 对比 + 改善判定）
- *   6. Colony Stability Dashboard（可观测性组装）
- *
- * 纯函数测试 — 不需要 Game/Memory mock。
- */
+/** A3.4 Contract Tests — Colony Autonomy & Stability 合约测试。 */
 
 import { describe, it, expect } from "vitest";
 import {

@@ -1,25 +1,4 @@
-/**
- * Threat Assessment — A5.1 G1 + A5.2 链路升级纯函数。
- *
- * 综合评估房间威胁：body 解析（复用 G2）→ 量级估计 → 四级分级 →
- * 10 种意图推断 → 置信度标注 → posture 推荐。
- *
- * A5.2 链路升级：
- *   HostileSnapshot → CombatCapability → TerrainContext → PlayerIntel
- *   → ThreatIntent → ThreatScore → Confidence → ThreatAssessment
- *
- * 核心原则：Threat ≠ Hostile Creep。hostileCreeps.length > 0 ≠ Threat = HIGH。
- * 一个仅有 MOVE 的 scout 过境不应触发全帝国动员。
- *
- * A5.2 约束：
- * - PlayerIntel 只能影响 Confidence 和 Intent Evidence，
- *   禁止直接把 Threat Level 提升为 HIGH / CRITICAL
- * - TerrainContext 只提供 Context，不产生 Military Action
- * - CombatCapability 不被 TerrainContext 修改
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / Creep / Room / 任何 Runtime 对象。
- * 所有运行时数据由调用方（系统层薄壳）注入为 Snapshot。
- */
+/** Threat Assessment */
 
 import {
   evaluateCombatCapability,
@@ -309,7 +288,7 @@ export function analyzeHostileBody(hostile: HostileSnapshot): CombatCapability {
 
 /**
  * 推断威胁意图。
- *
+
  * 推断链（按优先级从高到低，§3.2 规则）：
  * 1. nuke 落点 → NUCLEAR (fact)
  * 2. claim 部件 → CLAIM (fact)
@@ -321,7 +300,7 @@ export function analyzeHostileBody(hostile: HostileSnapshot): CombatCapability {
  * 8. 1-2 武装 + 攻击外围 → HARASSMENT (fact)
  * 9. 仅 MOVE / 穿过 → SCOUTING (fact)
  * 10. 信息不足 → UNKNOWN
- *
+
  * confidence 不是确定事实，而是基于证据强度的估计值。
  */
 export function inferThreatIntent(
@@ -456,10 +435,10 @@ export function inferThreatIntent(
 
 /**
  * 综合威胁评分——可拆解，非黑盒。
- *
+
  * 这不是「hostile count + boost ? 20 : 0 + attackParts * 5」的复杂版。
  * 每个维度都有独立的语义和证据支撑，消费者应优先看维度拆解而非 total。
- *
+
  * 各维度语义：
  * - combat: 敌方战力估计（基于 G2 CombatCapability 聚合，含 boost/HP/heal）
  *   ⚠ 这是多维度压缩值，消费者应同时检查 estimatedPower 各字段
@@ -469,7 +448,7 @@ export function inferThreatIntent(
  * - boost: boost 等级（T1-T3 × boostedCount，反映军备竞赛投入）
  * - defense: 我方防御覆盖（反向——防御强则威胁分降低）
  * - economicImpact: 经济影响（远矿房损失 vs 自有房风险）
- *
+
  * total 是加权求和，用于快速分级，不能替代各维度精细判断。
  */
 function computeThreatScore(
@@ -593,11 +572,11 @@ function levelToPosture(level: ThreatLevel, intent: ThreatIntent): RecommendedPo
 
 /**
  * 综合评估房间威胁。
- *
+
  * A5.2 链路：
  *   HostileSnapshot → CombatCapability → TerrainContext → PlayerIntel
  *   → ThreatIntent → ThreatScore → Confidence → ThreatAssessment
- *
+
  * 算法：
  * 1. 将 HostileSnapshot → CreepSnapshot → evaluateCombatCapability（G2）
  * 2. 聚合编队战力 computeCombatPower
@@ -606,10 +585,10 @@ function levelToPosture(level: ThreatLevel, intent: ThreatIntent): RecommendedPo
  * 5. 映射级别 + 推荐姿态
  * 6. 估计 timeToImpact（TerrainContext.mobilityModifier 影响）
  * 7. A5.2：计算多维度置信度（fact/combat/intent/terrain/intel → overall）
- *
+
  * 向后兼容：terrainContext / playerIntelRecord 为可选参数，不传时
  * terrainConfidence=0.3, intelConfidence=0.0，不影响 A5.1 行为。
- *
+
  * 复杂度：O(hostiles.length × body.length)，hostiles 通常 ≤ 20，body ≤ 50。
  */
 export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {

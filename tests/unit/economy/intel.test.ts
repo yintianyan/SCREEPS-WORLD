@@ -1,8 +1,4 @@
-/**
- * 邻居房情报测试（C2）。
- *
- * 覆盖：房名分类（SK/中心/公路/普通）、无视野与有视野两种情报扫描。
- */
+/** 邻居房情报测试（C2）。 */
 import { describe, expect, it } from "vitest";
 import { classifyRoomByName, scanNeighborIntel, isHostilePlayerReservation, INVADER_USERNAME } from "../../../src/domain/intel";
 

@@ -1,16 +1,4 @@
-/**
- * A6.6 Conflict Detector — Recommendation 间冲突检测。
- *
- * 职责：
- *   - 检测同一目标冲突
- *   - 检测不同目标资源竞争
- *   - 检测战略矛盾
- *   - 输出 RecommendationConflict
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * REC-008：只检测不解决。禁止 resolveConflict / selectHighest。
- */
+/** A6.6 Conflict Detector — Recommendation 间冲突检测。 */
 
 import type { RecommendationCandidate, RecommendationConflict, ConflictSeverity, RecommendationConflictType } from "./types";
 import { conflictHash } from "./hashing";
@@ -21,12 +9,12 @@ import { conflictHash } from "./hashing";
 
 /**
  * 检测 Recommendations 之间的冲突。
- *
+
  * 检测逻辑：
  *   1. same_target: 同一 target 的多条同 category 建议 → 冲突
  *   2. resource_competition: 不同 category 但可能竞争资源 → 冲突
  *   3. strategic_contradiction: Posture 与 Military 冲突 → 冲突
- *
+
  * 不解决冲突，只检测和标记。
  */
 export function detectConflicts(
@@ -182,7 +170,7 @@ function determineSameTargetSeverity(
 
 /**
  * 将冲突 ID 关联到 Recommendation。
- *
+
  * 返回新的 Recommendation 数组（不修改输入）。
  */
 export function attachConflictIds(

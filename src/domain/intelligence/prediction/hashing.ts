@@ -1,22 +1,4 @@
-/**
- * A6.3.1 Deterministic Hashing — 预测层确定性哈希工具。
- *
- * 职责：
- *   - 提供 stableStringify（稳定 JSON 序列化）
- *   - 提供 fnv1a32Hex（FNV-1a 32-bit 哈希）
- *   - 提供 verifyPredictionDeterminism（确定性回放验证）
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * Deterministic Replay（PRED-003）：
- *   同一输入 + 同一模型版本 → 相同 hash。
- *   禁止 Math.random() / Date.now() / 无序迭代 / 浮点误差。
- *
- * Shadow-Only（PRED-001）：
- *   哈希计算不执行任何 Game API。
- *
- * 复用 A6.1/A6.2 的同构实现（baseline.ts §13）。
- */
+/** A6.3.1 Deterministic Hashing — 预测层确定性哈希工具。 */
 
 import type { Prediction } from "./types";
 import type { PredictionRingBuffer } from "./ring-buffer";
@@ -27,7 +9,7 @@ import type { PredictionRingBuffer } from "./ring-buffer";
 
 /**
  * 稳定 JSON 序列化：按 key 排序，确保相同对象产生相同字符串。
- *
+
  * 确定性保证：
  *   - Object.keys 按 alphabetical 排序
  *   - Array 保持原序（调用方需保证排序一致）
@@ -56,7 +38,7 @@ export function stableStringify(obj: unknown): string {
 
 /**
  * FNV-1a 32-bit Hash → 8 字符 hex。
- *
+
  * 确定性：相同字符串 → 相同 hash。
  * 不使用 Math.random / Date.now。
  */
@@ -75,9 +57,9 @@ export function fnv1a32Hex(str: string): string {
 
 /**
  * 为 Prediction 生成稳定的 Hash。
- *
+
  * 算法：stableStringify(prediction 关键字段) → FNV-1a 32-bit → hex。
- *
+
  * 确定性保证：
  *   - 不使用 Math.random / Date.now
  *   - 字段按 alphabetical 排序
@@ -116,10 +98,10 @@ export function predictionHash(prediction: Prediction): string {
 
 /**
  * 验证 Prediction 确定性：同一输入连续 N 次，检查 hash 一致。
- *
+
  * PRED-003：禁止 Math.random / Date.now / wall-clock。
  * 要求 100% identical hash。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function verifyPredictionDeterminism(
@@ -138,7 +120,7 @@ export function verifyPredictionDeterminism(
 
 /**
  * 验证 Ring Buffer 确定性：对 Buffer 中所有 Prediction 逐个验证 hash 一致性。
- *
+
  * PRED-003：20 scenarios × 1000 replay → 100% identical hash。
  */
 export function verifyRingBufferDeterminism(

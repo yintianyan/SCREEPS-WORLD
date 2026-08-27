@@ -1,9 +1,4 @@
-/**
- * Assertions — 游戏级断言系统。
- *
- * 不判断代码执行，判断游戏状态。
- * 每个断言失败时输出完整诊断报告，方便 AI Agent 自动修复。
- */
+/** Assertions — 游戏级断言系统。 */
 import { expect } from "vitest";
 import type { TestWorld } from "./TestWorld";
 import type { TickRecord, RunResult } from "./TickRunner";

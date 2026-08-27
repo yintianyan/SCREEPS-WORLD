@@ -1,12 +1,4 @@
-/**
- * 远矿威胁检测测试。
- *
- * 覆盖：shouldFleeForeignRoom 触发条件（含 transit 中间房）、getRoomThreats 缓存、fleeToHome 行为。
- *
- * 修复背景：旧 shouldRemoteFlee 仅在 creep.room.name === remoteTarget 时检测威胁，
- * 导致远矿角色在 home ↔ remoteTarget 的过境中间房遇袭不逃跑（transit 盲区）。
- * 泛化后的 shouldFleeForeignRoom 对任意「非 home 房」扫描当前房敌人。
- */
+/** 远矿威胁检测测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { shouldFleeForeignRoom, fleeToHome } from "../../../src/creeps/engine/lifecycle";
 import { resetGlobals, mockPos, mockCreep } from "../../role-helpers";

@@ -1,12 +1,4 @@
-/**
- * Empire Strategy 系统测试（R6a/R7a 发布层 — 容量分档 + 议程归因）。
- *
- * 覆盖：
- *   - capacity 发布：按 cpuLimit/tickLimit/telemetry 均值写 Memory.kernel.capacity
- *     （分档正确、分档变更打日志）
- *   - AgendaOutcome 归因：退出 rcl-push 时记录 controller 进度增量与窗口时长
- *   - rcl-push 进入时记录 progressBase（归因基线）
- */
+/** Empire Strategy 系统测试（R6a/R7a 发布层 — 容量分档 + 议程归因）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { empireStrategySystem } from "../../../src/systems/empire-strategy";
 import { mockBudget, mockController, mockSnapshot, resetGlobals } from "../../role-helpers";

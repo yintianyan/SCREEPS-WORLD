@@ -1,18 +1,4 @@
-/**
- * A6.1 Attribution Model — Domain 层纯函数与类型定义。
- *
- * Evidence-based Attribution：每条归因都有可追溯的证据支撑。
- * 形成可审计链：Experience → Attribution → Evidence → Decision Trace。
- *
- * 第一阶段归因策略：只做 Direct + Correlation 归因，不做 Counterfactual。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * 所有运行时数据由调用方（system 层薄壳）注入。
- *
- * Deterministic Replay：
- *   同一 Outcome + 同一 Context + 同一模型版本 → 相同 attributionHash。
- *   禁止 Math.random() / Date.now() / 无序迭代 / 浮点误差。
- */
+/** A6.1 Attribution Model — Domain 层纯函数与类型定义。 */
 
 import type {
   Attribution,
@@ -31,7 +17,7 @@ import type {
 
 /**
  * Attribution 采集输入 — 从已有系统和 Outcome 中收集的状态。
- *
+
  * 由 system 层薄壳采集并注入，domain 纯函数不直接读 Game/Memory。
  */
 export interface AttributionInput {
@@ -149,7 +135,7 @@ export interface AttributionInput {
 
 /**
  * 采集 Attribution — 根据 Experience 类型分发到不同的归因策略。
- *
+
  * 第一阶段只做 Direct + Correlation 归因。
  * 纯函数 — 不引用 Game/Memory。
  */
@@ -180,7 +166,7 @@ export function collectAttribution(input: AttributionInput): Attribution {
 
 /**
  * War 归因 — Direct 方法，置信度高（0.8+）。
- *
+
  * 归因规则：
  *   胜 + 损失 < 30% → forceComposition 有效
  *   胜 + 损失 > 50% → forceComposition 勉强
@@ -324,7 +310,7 @@ function collectWarAttribution(input: AttributionInput): Attribution {
 
 /**
  * Recovery 归因 — Direct 方法，置信度高（0.7+）。
- *
+
  * 归因规则：
  *   成功率高 → DECISION_QUALITY（恢复策略正确）
  *   成功率低 + 多次失败 → EXECUTION_QUALITY（执行不足）
@@ -423,7 +409,7 @@ function collectRecoveryAttribution(input: AttributionInput): Attribution {
 
 /**
  * Economic 归因 — Expert 方法，低置信度（0.3-0.5）。
- *
+
  * 经济归因困难：多系统耦合，无法单独归因。
  * 使用 CONFIG 规则归因，标注低置信度。
  */
@@ -867,7 +853,7 @@ function collectUnknownAttribution(input: AttributionInput): Attribution {
 
 /**
  * 计算归因置信度 — 基于样本数 + 方差 + 测量延迟。
- *
+
  * 样本越多 → 置信度越高
  * 方差越低 → 置信度越高
  * 延迟越长 → 置信度越低（中间发生太多事）
@@ -890,9 +876,9 @@ export function computeAttributionConfidence(
 
 /**
  * 为 Attribution 生成稳定的 Hash。
- *
+
  * 算法：stableStringify(type + primaryCause + evidence + modelVersion) → FNV-1a 32-bit → hex。
- *
+
  * 确定性保证：
  *   - 不使用 Math.random / Date.now
  *   - JSON.stringify 对相同对象结构产生相同字符串

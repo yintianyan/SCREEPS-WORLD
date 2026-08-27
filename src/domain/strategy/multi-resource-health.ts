@@ -1,20 +1,4 @@
-/**
- * Multi-Resource Empire Health — A4.2 多资源帝国健康度。
- *
- * 合同锚点：A4.2 Architecture Audit §10.22 NM-5 / §12.2 NM-5。
- *
- * 设计意图：
- *   将单资源健康度聚合为帝国级多资源健康度。
- *   核心规则：Energy HEALTHY + Mineral DEFICIT → Empire DEGRADED。
- *
- *   与现有 EmpireEconomicHealth（energy-only）的关系：
- *   - 现有 EmpireEconomicHealth 保持不变（向后兼容）
- *   - 新增 MultiResourceEmpireHealth 作为 A4.2 的上层视图
- *   - MultiResourceEmpireHealth 包含 energy 维度（映射自 EmpireEconomicHealth）
- *     和 mineral 维度（从 ResourceLedger 派生）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Multi-Resource Empire Health */
 
 import type { ResourceType } from "../operation/agenda-item";
 import type { ResourceLedger, ResourceLedgerEntry } from "../economy/resource-ledger";
@@ -76,9 +60,9 @@ export interface MultiResourceEmpireHealth {
 
 /**
  * 从帝国级 ResourceLedger 评估多资源帝国健康度。
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param tick 当前 tick
  * @param ledger 帝国级 ResourceLedger（聚合后）
  * @param energyHealth Energy 维度健康度（从现有 EmpireEconomicHealth 映射）

@@ -1,12 +1,4 @@
-/**
- * 矿物搬运链修复测试（updateMode 总量口径 + lootRemains 全资源）。
- *
- * 回归两个线上 bug：
- *   1. updateMode 用纯能量口径判满/空 → 满背包矿物的 creep（mineralMiner 采满 Z）
- *      被误判"空载"，work 模式只活 1 tick 即被踢回 acquire，永久冻结至老死。
- *   2. lootRemains 硬编码只 withdraw 能量 → tombstone 里的矿物无人搬（用户实证：
- *      "带 mineral 的尸体 hauler 只搬能量"）。
- */
+/** 矿物搬运链修复测试（updateMode 总量口径 + lootRemains 全资源）。 */
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { updateMode } from "../../../src/creeps/engine/lifecycle";
 import { lootRemains } from "../../../src/creeps/engine/actions/pickup";

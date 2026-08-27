@@ -1,22 +1,4 @@
-/**
- * E2E-002 RCL 升级链路 — 验证 controller 升级行为。
- *
- * 真实场景 [Experience]：
- *   - RCL1→RCL2：解锁 5 extension（300→550 energyCapacityAvailable）
- *   - RCL2→RCL3：解锁 1 tower（防御里程碑）
- *   - 升级需要 upgrader 持续对 controller 投入能量
- *
- * 验证标准（不依赖 Memory 内部结构，只通过 bot.console 和 Memory.creeps 观察）：
- *   1. 1500 tick 内出现 upgrader 角色
- *   2. 全程无 JS 错误
- *   3. creep 数量增长（经济在运转）
- *   4. Memory 持久存在（schemaVersion 稳定）
- *
- * 不验证：
- *   - 具体升级速度（取决于 AI 策略）
- *   - 建筑具体位置
- *   - Memory 中 RCL 字段（生产代码结构可能变化）
- */
+/** E2E-002 RCL 升级链路 — 验证 controller 升级行为。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";

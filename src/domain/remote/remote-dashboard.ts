@@ -1,20 +1,4 @@
-/**
- * Remote Economy Dashboard — A4.1 Phase 6：全链路可观测性。
- *
- * 合同锚点：A4.1 Architecture Audit §24（Observability Dashboard 设计）。
- *
- * 设计意图：
- *   聚合远矿运营的全链路数据，支持回答两个核心问题：
- *   1. "这个 Remote Source 为什么现在赚钱？"
- *      → Health=HEALTHY, netValue>0, ROI>threshold
- *   2. "为什么 Empire 暂停了这个 Remote Operation？"
- *      → Health=SUSPENDED, reason=Threat HIGH / Budget 超支 / Unprofitable
- *
- *   数据来源：RemoteMiningOperationContext + ResourceFlowSnapshot +
- *   EconomicAccountingResult + ROIResult + BudgetStatus + Threat + ContainerState
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Remote Economy Dashboard */
 
 import type { RemoteMiningOperationContext } from "../operation/remote-mining-op";
 import type { ResourceFlowSnapshot } from "./flow-accounting";
@@ -127,7 +111,7 @@ export interface DashboardBuildInput {
 
 /**
  * 构建远矿经济 Dashboard。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function buildRemoteDashboard(
@@ -234,7 +218,7 @@ export function buildRemoteDashboard(
 
 /**
  * 构建可解释性文本——回答 "为什么赚钱" 或 "为什么暂停"。
- *
+
  * 纯函数。
  */
 export function buildExplanation(

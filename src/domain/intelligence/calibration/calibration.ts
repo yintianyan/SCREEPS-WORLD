@@ -1,29 +1,4 @@
-/**
- * A6.4 Calibration Engine — 置信度校准引擎。
- *
- * 合同锚点：A6_4_CONTRACT.md §二.3 + A6_4_CONFIDENCE_CALIBRATION.md
- *
- * 职责：
- *   - 计算 Confidence Buckets（10 个桶，每桶统计 avgConfidence vs observedSuccessRate）
- *   - 计算预期校准误差（ECE — Expected Calibration Error）
- *   - 计算 Brier Score
- *   - 计算 False Positive Rate / False Negative Rate
- *   - 生成 ModelCalibrationProfile（校准判定）
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * Shadow-Only（CAL-001）：
- *   不修改任何运行时状态。
- *
- * 确定性（CAL-005）：
- *   相同 ResolutionResult 列表 → 相同 ModelCalibrationProfile。
- *   禁止 Math.random / Date.now / 无序迭代 / 浮点误差。
- *
- * 反退化措施（A6_4_RESOLUTION_DESIGN.md §五.2）：
- *   - 退化 2 防止：不合并 confidence = success rate，按分桶统计
- *   - 退化 3 防止：不建立万能 score，每个模型独立统计
- *   - 退化 4 防止：不合并不同模型的校准数据
- */
+/** A6.4 Calibration Engine — 置信度校准引擎。 */
 
 import type { Prediction } from "../prediction/types";
 import { stableStringify, fnv1a32Hex } from "../prediction/hashing";
@@ -51,17 +26,17 @@ import { makeModelKey } from "./metrics";
 
 /**
  * 计算置信度分桶统计。
- *
+
  * 10 个桶：[0,0.1), [0.1,0.2), ..., [0.9,1.0]
  * 每桶统计：
  *   - avgConfidence: 桶内预测的平均置信度
  *   - observedSuccessRate: 桶内 CORRECT / calibratable total
  *   - calibrationError: |avgConfidence - observedSuccessRate|
  *   - sufficient: 样本数 ≥ MIN_SAMPLES_PER_BUCKET
- *
+
  * 纯函数 — 不引用 Game/Memory。
  * 确定性：按 predictionId 排序后遍历。
- *
+
  * 来源：A6_4_CONTRACT.md §1.5 + A6_4_CONFIDENCE_CALIBRATION.md
  */
 export function computeConfidenceBuckets(
@@ -164,19 +139,19 @@ export function computeConfidenceBuckets(
 
 /**
  * 计算预期校准误差（ECE）。
- *
+
  * ECE = Σ (|B_i| / N) × |acc(B_i) - conf(B_i)|
- *
+
  * 其中：
  *   B_i = 第 i 个桶
  *   |B_i| = 桶内样本数
  *   N = 总样本数
  *   acc(B_i) = 桶内观测成功率
  *   conf(B_i) = 桶内平均置信度
- *
+
  * ECE ∈ [0, 1]，越低越好。
  * ECE < 0.05 → WELL_CALIBRATED
- *
+
  * 纯函数。
  * 确定性：遍历桶时按索引序。
  */
@@ -203,17 +178,17 @@ export function computeECE(buckets: readonly ConfidenceBucketStats[]): number {
 
 /**
  * 计算 Brier Score。
- *
+
  * Brier = (1/N) × Σ (f_i - o_i)²
- *
+
  * 其中：
  *   f_i = 预测置信度
  *   o_i = 实际结果（1 = 成功, 0 = 失败）
  *   N = 样本数
- *
+
  * Brier ∈ [0, 1]，越低越好。
  * 需要 calibratable resolutions 才有意义。
- *
+
  * 纯函数。
  */
 export function computeBrierScore(
@@ -249,11 +224,11 @@ export function computeBrierScore(
 
 /**
  * 计算 False Positive Rate。
- *
+
  * FPR = FALSE_POSITIVE / (FALSE_POSITIVE + CORRECT + PARTIAL)
- *
+
  * 含义：预测说会发生但没发生的比例。
- *
+
  * 纯函数。
  */
 export function computeFalsePositiveRate(
@@ -276,11 +251,11 @@ export function computeFalsePositiveRate(
 
 /**
  * 计算 False Negative Rate。
- *
+
  * FNR = FALSE_NEGATIVE / (FALSE_NEGATIVE + CORRECT + PARTIAL)
- *
+
  * 含义：预测说不会发生但发生了的比例。
- *
+
  * 纯函数。
  */
 export function computeFalseNegativeRate(
@@ -307,14 +282,14 @@ export function computeFalseNegativeRate(
 
 /**
  * 判定校准判定。
- *
+
  * 规则：
  *   - 总样本 < MIN_SAMPLES_FOR_VERDICT → INSUFFICIENT_DATA
  *   - ECE < ECE_WELL_CALIBRATED_THRESHOLD → WELL_CALIBRATED
  *   - avgConfidence > observedSuccessRate + BIAS → OVERCONFIDENT
  *   - avgConfidence < observedSuccessRate - BIAS → UNDERCONFIDENT
  *   - 否则 → WELL_CALIBRATED
- *
+
  * 纯函数。
  */
 export function determineCalibrationVerdict(
@@ -363,10 +338,10 @@ export function determineCalibrationVerdict(
 
 /**
  * 计算单个模型的 Calibration Profile。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  * 确定性：相同输入 → 相同 profileHash。
- *
+
  * 来源：A6_4_CONTRACT.md §二.3
  */
 export function computeCalibrationProfile(
@@ -454,10 +429,10 @@ export function computeCalibrationProfile(
 
 /**
  * 计算所有模型的 Calibration Statistics。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  * 确定性：按 modelKey 排序。
- *
+
  * 来源：A6_4_CONTRACT.md §二.3
  */
 export function computeCalibrationStatistics(
@@ -494,9 +469,9 @@ export function computeCalibrationStatistics(
 
 /**
  * ModelCalibrationProfile 确定性 Hash。
- *
+
  * 复用 A6.3 stableStringify + FNV-1a 32-bit。
- *
+
  * 来源：A6_4_CONTRACT.md §二.5
  */
 export function calibrationProfileHash(
@@ -535,7 +510,7 @@ export function calibrationProfileHash(
 
 /**
  * 检查是否有足够样本来生成 Profile。
- *
+
  * 需要 ≥ MIN_SAMPLES_FOR_PROFILE 个 calibratable resolutions。
  */
 export function hasSufficientSamples(

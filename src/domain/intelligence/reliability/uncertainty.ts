@@ -1,16 +1,4 @@
-/**
- * A6.5 Uncertainty Aggregation — 不确定性聚合。
- *
- * 职责：
- *   - 从 Regime Fit / Drift / Conflict / Data Sufficiency 聚合不确定性来源
- *   - 识别主要不确定性来源
- *
- * REL-012 (No Reliability Score)：
- *   禁止 uncertaintyScore: number。
- *   不确定性是分类标签 + 描述，不是单一值。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- */
+/** A6.5 Uncertainty Aggregation — 不确定性聚合。 */
 
 import type {
   UncertaintySource,
@@ -24,7 +12,7 @@ import type { CalibrationHealthSummary } from "./types";
 
 /**
  * 聚合不确定性。
- *
+
  * 纯函数 — 从各维度的评估结果聚合。
  */
 export function aggregateUncertainty(
@@ -140,7 +128,7 @@ export function aggregateUncertainty(
 
 /**
  * 计算对不确定性评估本身的置信度。
- *
+
  * 数据充足 → 评估本身可信 → confidence 高
  * 数据不足 → 评估本身也不可信 → confidence 低
  */

@@ -1,30 +1,4 @@
-/**
- * Empire Health — A4.5：综合帝国健康评估 + Hysteresis。
- *
- * 合同锚点：A4.5 Task Spec §18 Empire Health + §19 Health Hysteresis。
- *
- * 设计意图：
- *   当前 Empire 没有「综合健康度」——EconomicHealth 只看 Energy，
- *   MultiResourceHealth 加了 Mineral，LogisticsHealth 看物流，
- *   NetworkHealth 看网络，ColonyFailure 看 Colony。
- *   但没有一个系统回答：「Empire 整体怎么样？」
- *
- *   Empire Health 综合以下维度：
- *   1. Energy — 经济健康度（从 EmpireEconomicHealth 映射）
- *   2. Minerals — 多资源健康度（从 MultiResourceEmpireHealth 映射）
- *   3. Logistics — 物流健康度（从 LogisticsHealthResult 映射）
- *   4. Network — 网络健康度（从 NetworkHealthResult 映射）
- *   5. Colonies — Colony 稳定性（聚合各 Colony StabilityScore）
- *   6. Threat — 威胁状态（从 posture/threat 信号）
- *   7. Spawn — Spawn 容量（从 spawn 状态推导）
- *   8. CPU — CPU/Bucket 状态（从 capacity tier 推导）
- *
- *   四档健康度：HEALTHY / STABLE / DEGRADED / CRITICAL
- *
- *   Hysteresis：进入 DEGRADED < 70，恢复 > 80，防止每 tick 跳动。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Empire Health */
 
 // ─── 类型定义 ──────────────────────────────────────────────
 
@@ -115,7 +89,7 @@ export interface EmpireHealthResult {
 
 /**
  * 各维度权重（总和 = 1.0）。
- *
+
  * Energy 权重最高（0.25）——能量是帝国生命线。
  * Logistics 次之（0.18）——物流中断直接导致经济瘫痪。
  * Colony 权重 0.15——殖民失败影响扩张。
@@ -137,7 +111,7 @@ const DIMENSION_WEIGHTS: Record<string, number> = {
 
 /**
  * Hysteresis 阈值（0..1 分数）。
- *
+
  * 进入 DEGRADED：< 0.70（分数低于 70% → 降级）
  * 恢复到 STABLE：> 0.80（分数高于 80% → 升级）
  * 进入 CRITICAL：< 0.40（分数低于 40% → 降级）
@@ -174,13 +148,13 @@ const RANK_TO_HEALTH: Record<number, DimensionHealth> = {
 
 /**
  * 评估帝国综合健康度（纯函数）。
- *
+
  * 逻辑：
  *   1. 各维度已有等级和分数，加权汇总得到综合分数。
  *   2. 综合等级 = 最差维度的等级（短板效应）。
  *   3. 但如果加权分数远高于最差维度，用分数修正（防一个维度拖垮全局）。
  *   4. 应用 Hysteresis：进入降级立即生效，恢复需超过恢复阈值。
- *
+
  * @param input 各维度健康度 + 滞回输入
  * @returns 综合健康度结果
  */
@@ -286,12 +260,12 @@ export function evaluateEmpireHealth(input: EmpireHealthInput): EmpireHealthResu
 
 /**
  * 应用滞回逻辑：降级立即生效，恢复需超过恢复阈值。
- *
+
  * 规则：
  *   - 降级（healthy→stable→degraded→critical）：立即生效，不需要阈值确认。
  *   - 升级（critical→degraded→stable→healthy）：需分数超过恢复阈值。
  *   - 同等级不变：保持。
- *
+
  * @param prevLevel 上一次等级（undefined = 首次评估）
  * @param rawLevel 本次原始评估等级
  * @param score 本次加权分数
@@ -338,7 +312,7 @@ function applyHysteresis(
 
 /**
  * 从 EconomicHealthResult 映射到 DimensionHealth。
- *
+
  * EconomicHealth 的五档 → DimensionHealth 的四档：
  *   critical → critical
  *   deficit → degraded
@@ -361,7 +335,7 @@ export function mapEconomicHealth(health: string): DimensionHealth {
 
 /**
  * 从 ResourceHealthStatus 映射到 DimensionHealth。
- *
+
  * Mineral 维度的四档 → DimensionHealth 的四档：
  *   critical → critical
  *   deficit → degraded
@@ -413,7 +387,7 @@ export function mapNetworkHealth(level: string): DimensionHealth {
 
 /**
  * 从 Colony StabilityScore 的 level 字段映射到 DimensionHealth。
- *
+
  * Colony 的四档 → DimensionHealth 的四档：
  *   CRITICAL → critical
  *   DEGRADED → degraded
@@ -434,7 +408,7 @@ export function mapColonyHealth(level: string): DimensionHealth {
 
 /**
  * 从 EmpirePosture 映射到 Threat 维度的 DimensionHealth。
- *
+
  * 姿态 → 威胁健康度：
  *   war → critical（战争状态 = 最高威胁）
  *   fortify → degraded（设防 = 有威胁记忆）
@@ -455,7 +429,7 @@ export function mapThreatHealth(posture: string): DimensionHealth {
 
 /**
  * 从 CpuTier 映射到 CPU 维度的 DimensionHealth。
- *
+
  * Bucket 四档 → CPU 健康度：
  *   recovery → critical
  *   conserve → degraded
@@ -476,7 +450,7 @@ export function mapCpuHealth(tier: string): DimensionHealth {
 
 /**
  * 从 Spawn 状态映射到 Spawn 维度的 DimensionHealth。
- *
+
  * @param spawnAvailable 是否有可用 spawn
  * @param spawnStarvationCount 最近 spawn 饥饿次数
  */
@@ -490,7 +464,7 @@ export function mapSpawnHealth(spawnAvailable: boolean, spawnStarvationCount: nu
 
 /**
  * 从 DimensionHealth 映射到 0..1 分数。
- *
+
  * healthy → 1.0
  * stable → 0.75
  * degraded → 0.5

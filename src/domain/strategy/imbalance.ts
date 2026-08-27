@@ -1,17 +1,4 @@
-/**
- * Resource Imbalance Detection — A2 后半·步 6：跨房资源余缺检测 + 调拨候选。
- *
- * 合同锚点：ECONOMY §1.2 调拨门控（surplus → deficit 的 Transfer Request 候选）。
- *
- * 定位：Empire 每个周期从 EmpireResourceView 中发现 surplus 房与 deficit 房，
- * 生成 ResourceImbalance 列表（只检测，不执行调拨）。
- *
- * 严格禁止（A2 后半红线）：
- *   - 不执行跨房运输、不下 terminal 订单、不绕过 Request Pool
- *   - 只产出 TransferCandidate 候选列表，供下一阶段（A3）消费
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Resource Imbalance Detection */
 
 import type { EmpireResourceView } from "./resource-view";
 import type { RoomEconomicProfile } from "../economy/room-profile";
@@ -19,7 +6,7 @@ import { canExportEnergy, needsEnergyAid } from "../economy/room-profile";
 
 /**
  * 单条调拨候选（surplus → deficit 的配对建议）。
- *
+
  * 不变量：
  *   - from 房间 canExportEnergy=true（满足调拨门控前置）
  *   - to 房间 needsEnergyAid=true（满足受援侧门控）
@@ -59,11 +46,11 @@ export interface ResourceImbalanceResult {
 
 /**
  * 计算房间的可调拨余量（surplus）。
- *
+
  * 门控前置（ECONOMY §1.2）：
  *   - canExportEnergy=true 才有 surplus
  *   - surplus = storageEnergy × exportRatio（保守估值，不抽干）
- *
+
  * 纯函数。
  */
 export function computeSurplus(profile: RoomEconomicProfile, exportRatio = 0.3): number {
@@ -73,11 +60,11 @@ export function computeSurplus(profile: RoomEconomicProfile, exportRatio = 0.3):
 
 /**
  * 计算房间的缺口量（deficit）。
- *
+
  * 门控前置（ECONOMY §1.2）：
  *   - needsEnergyAid=true 才有 deficit
  *   - deficit = 保守估计的援助量（riskBuffer × p0p1Consumption 近似，上限 5000）
- *
+
  * 纯函数。
  */
 export function computeDeficit(profile: RoomEconomicProfile): number {
@@ -94,15 +81,15 @@ export function computeDeficit(profile: RoomEconomicProfile): number {
 
 /**
  * 检测跨房资源余缺并生成调拨候选。
- *
+
  * 算法：
  *   1. 遍历 profiles，分出 surplus 房列表和 deficit 房列表
  *   2. 按缺口量降序排列 deficit 房
  *   3. 对每个 deficit 房，从 surplus 池中按余量降序匹配
  *   4. 生成 TransferCandidate（amount = min(surplus, deficit)）
- *
+
  * 纯函数 — 不执行调拨，不写状态。
- *
+
  * @param profiles 各房 RoomEconomicProfile
  * @param view EmpireResourceView（用于 hasImbalance 交叉验证）
  * @param tick 当前 tick
@@ -177,10 +164,10 @@ export function detectImbalance(
 
 /**
  * 将调拨候选转换为帝国级 TransportRequest 候选（步 11 Request Scope 联动）。
- *
+
  * A2 后半只生成候选请求——不执行运输。
  * A3 阶段的 logistics 系统消费这些候选请求（scope="empire"）。
- *
+
  * 纯函数 — 不写状态、不触 Game/Memory。
  */
 export function candidatesToEmpireRequests(

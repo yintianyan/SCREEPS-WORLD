@@ -20,7 +20,7 @@ const INTEL_STALE_AFTER = 2000;
 
 /**
  * 房间观察器 — P3 房间级诊断与情报采集。
- * 职责：相位诊断日志（趋势观察）；邻居房情报采集（出口/房态/SK 分类零视野可得，
+
  * 资源/归属字段需视野补全）；observer 视野调度。
  * 系统 interval 必须为 1：observeRoom 的视野只存续下一 tick — 本 tick 请求 → 下 tick
  * 捕获；内部各任务自带取模门控，非触发 tick 的开销仅为几次条件判断。
@@ -269,12 +269,12 @@ function captureScoutVision(tick: number): void {
 
 /**
  * 为一个 pathCost 缺失的 normal 邻房补算通勤成本（远矿评选的距离账本）。
- *
+
  * 锚点 = 本房 storage（无则首个 spawn）；目标 = 邻房中心 (25,25) range 15
  * （无视野时不知 source 位置，用房中心近似）。swampCost:5 让沼泽自然折算
  * 成等效路程。PathFinder incomplete（跨房无路）时写线性距离 ×70 保守估算，
  * 不重试 — 地形静态，一次定终身。
- *
+
  * 每次刷新至多算 1 个（PathFinder 是 CPU 大户，逐次分摊）；只算 normal 房
  * （只有它能做远矿候选）。
  */
@@ -303,10 +303,10 @@ function backfillPathCost(homeRoom: string, roomMem: RoomMemory): void {
 
 /**
  * 相位诊断日志输出（限频）。
- *
+
  * 触发条件：
  *   - 到达 PHASE_LOG_INTERVAL 周期：打印完整快照，标记 [PERIODIC]
- *
+
  * 无变化且未到周期：静默，避免控制台刷屏。
  */
 function logPhaseIfChangedOrDue(

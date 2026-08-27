@@ -1,14 +1,4 @@
-/**
- * Empire Strategy — P1 系统，帝国姿态/议程/容量的唯一裁决者与发布者（Strategy 层）：
- * State（room-state 写入的 colonyState/economyPressure/lastHostileAt）
- *   → posture（domain/strategy/posture 纯函数）→ Memory.kernel.strategy
- *   → agenda（domain/strategy/agenda 纯函数）→ Memory.kernel.agenda
- *   → capacity（domain/strategy/capacity 纯函数）→ Memory.kernel.capacity
- * 执行系统只消费指令（expansion-manager / remote-mining-manager / 未来进攻系统）。
- * 铁律：执行系统不得自行裁决「是否该扩张/开战」；局部安全门禁只能收紧不得放宽。
- * 姿态回答「处于什么状态」，议程回答「主动在做什么」，容量回答「养得起多大规模」。
- * 切换均记录事件（AgendaChange / AgendaOutcome），容量分档变更打日志。
- */
+/** Empire Strategy */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
 import {

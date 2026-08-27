@@ -1,15 +1,4 @@
-/**
- * P1-2 srcRatio 信号 + 危机解锁冻结 — 单元测试。
- *
- * 背景（病灶 6）：frozen=3/pending=1 锁住关键参数，采集塌方时无法上调。
- * P0-1 已计算 srcStallTicks（srcRatio>0.9 AND storageDrainAccum>1000 持续 50+ tick
- * → forceCrisis）。P1-2 在 forceCrisis 触发前（srcStallTicks>50）解冻
- * harvester/hauler maxCount，让 tuning 有机会上调采集/搬运能力。
- *
- * 测试通过公共入口 tuningEngineSystem.run() 验证 force-unfreeze 行为：
- * safeRunTuning 是私有函数，通过观察 Memory 副作用（frozenParams 删除、
- * lastEval.trend 不再为 "none"）和控制台诊断日志间接验证。
- */
+/** P1-2 srcRatio 信号 + 危机解锁冻结 — 单元测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tuningEngineSystem } from "../../../src/systems/tuning-engine";
 import { CONFIG } from "../../../src/config";

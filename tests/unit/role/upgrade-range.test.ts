@@ -1,11 +1,4 @@
-/**
- * Upgrade action 移动 range 回归测试。
- *
- * 事故背景：controller 常嵌在地形墙中，range1 唯一落点（controller
- * container 格）被站桩静态阻挡标 255 时，按 runAction 默认 range1 求路
- * 无解 — 满载 upgrader 石化在 range5 永不开工。upgrade 动作必须按
- * 交互距离 range3 移动（走近到 range3 即可升级）。
- */
+/** Upgrade action 移动 range 回归测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { upgraderRole } from "../../../src/creeps/roles/upgrader";
 import { moveToTarget } from "../../../src/creeps/movement";

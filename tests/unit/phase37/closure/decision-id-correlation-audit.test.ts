@@ -1,17 +1,4 @@
-/**
- * Phase 37 Decision ID Correlation Final Audit — E14-E21 反事实测试
- *
- * 验证 decisionId 作为 Expansion Operation 的 correlation identity 的稳定性。
- *
- *   E14: Decision A running → Decision B 出现 → Expansion A completes → Outcome = A
- *   E15: A/B same target → both complete → A→A, B→B
- *   E16: A running → B supersedes plan → A completes → A→A
- *   E17: A timeout → B starts same target → A timeout→A, B outcome→B
- *   E18: A aborted → B starts same target → A aborted→A
- *   E19: Decision duplicated/re-evaluated → multiple IDs check
- *   E20: Server restart between decision and outcome
- *   E21: Memory.kernel.expansion.decisionId 被覆盖 → recordExpansionOutcome 得到什么
- */
+/** Phase 37 Decision ID Correlation Final Audit — E14-E21 反事实测试 */
 import { describe, it, expect, beforeEach } from "vitest";
 import { globalCache } from "../../../../src/kernel/global-cache";
 import {

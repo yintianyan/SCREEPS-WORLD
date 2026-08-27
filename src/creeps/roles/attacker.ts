@@ -1,13 +1,4 @@
-/**
- * Attacker — P2 跨房远征攻击者（R3 战时闭环的进攻执行端，R4 波次集结）。
- * 职责：仅 war 姿态时由 war-planner 孵化；跨房行军至 war 目标房，先清敌方守军 creep，
- * 再拆高值建筑（spawn/tower > storage > extension）；低血标记回收撤出战区（recyclePass 归航）。
- * R4 波次集结（hold 钩子）：warPlan.phase==="build" 时不在目标房作战——在 home 停驻待命，
- * 在外归建（fleeToHome），advance 满编才整波推进；hold 在 ensureHome 之前接管本 tick，
- * 堵住「散兵逐个送」的添油路径。
- * 策略：combat:true 豁免 flee 检测；acquire/work 相同候选（无 CARRY，mode 振荡不影响行为）。
- * 约束：敌 creep/结构走 per-tick per-room 共享缓存（getHostilesCached 等），角色不做全房 find。
- */
+/** Attacker */
 import type { Priority, TickContext } from "../../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
@@ -39,7 +30,7 @@ interface FocusFireAttackIntent {
 
 /**
  * A5.4.1 从 globalCache 读取当前 creep 的战术指令。
- *
+
  * 角色层不导入 systems 层（R3 架构守卫），直接从 globalCache 读取
  * tactical-runtime-system 写入的 RoleActionIntent。
  * 无指令时返回 null → 角色回退到 Legacy 行为。
@@ -53,7 +44,7 @@ function readTacticalIntent(creepName: string): TacticalIntent | null {
 
 /**
  * A5.4.3 从 globalCache 读取当前 creep 的 FocusFire AttackIntent。
- *
+
  * 角色层不导入 systems 层（R3 架构守卫），直接从 globalCache 读取
  * tactical-engagement-runtime 写入的 AttackIntent。
  * 无指令时返回 null → 角色回退到 A5.4.1 TacticalIntent → Legacy 行为。
@@ -116,13 +107,13 @@ function getPowerBankCached(room: Room): StructurePowerBank | undefined {
 
 /**
  * A5.4.3 Focus Fire AttackIntent 消费 — 最高优先级的攻击候选。
- *
+
  * 当 tactical-engagement-runtime 产出 AttackIntent 时，attacker 按指令执行
  * 集火攻击：
  *   - ATTACK → 近身 attack
  *   - RANGED_ATTACK → rangedAttack
  *   - NO_ATTACK + requiresMovement → 不消费候选，让 Movement 系统处理
- *
+
  * 边界：无指令时返回 undefined → 回退到 A5.4.1 TacticalIntent → Legacy。
  *      targetId 可能无效（目标死亡）→ resolve 时检查并回退。
  *      requiresMovement=true → 不直接 resolve 目标，让 Movement 系统先移动到位。
@@ -188,11 +179,11 @@ export function attackByFocusFire(): ActionCandidate<Creep | AnyStructure> {
  */
 /**
  * A5.4.1 战术指令消费 — 优先消费 Tactical Runtime 产出的 RoleActionIntent。
- *
+
  * 当 tactical-runtime-system 产出指令时，attacker 按指令执行移动/攻击/撤退，
  * 而非走 Legacy 的 findClosestByRange 逻辑。指令不覆盖 hold 钩子（波次集结
  * 仍在 attackerHold 中裁决）。
- *
+
  * 边界：无指令时返回 undefined → 回退到 Legacy 候选（向后兼容）。
  *      指令的 targetId 可能在视野外 → resolve 时检查可见性。
  */

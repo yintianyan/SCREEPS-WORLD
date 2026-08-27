@@ -1,14 +1,4 @@
-/**
- * Fallback relocation（cell 落在墙/占用格时的替代位置搜索）测试。
- *
- * 覆盖：
- *   - 墙/密封失败的 extension 重定位到同 parity 邻近格
- *   - 重定位保持偶校验不变量（不制造新密封）
- *   - 禁止落子集合（蓝图/队列位置）不被占用
- *   - 不可移动类型（tower/spawn/storage）不重定位
- *   - 全部 fallback 失败 → undefined（安全跳过）
- *   - blueprintToTasks 应用 overrides（替代坐标直接生效）
- */
+/** Fallback relocation（cell 落在墙/占用格时的替代位置搜索）测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   blueprintToTasks,

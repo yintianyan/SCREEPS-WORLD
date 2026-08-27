@@ -3,13 +3,13 @@ import type { Priority, System, TickContext } from "../kernel/contracts";
 
 /**
  * Pixel 生成系统 — P3 系统，CPU bucket 满载时生成 pixel。
- *
+
  * **保留缓冲策略**：`Game.cpu.generatePixel()` 消耗 10000 bucket。旧策略满 10000
  * 即清零，bucket 在 0-10000 间锯齿振荡，生成后 tier 跌至 recovery、P3 系统冻结
  * ~700 tick。现改为：bucket 须攒到 `10000 + bucketReserve` 才生成，生成后剩余
  * `bucketReserve` 缓冲（默认 3000）——tier 不跌到 recovery，P3 冻结窗口缩短
  * 到 ~300 tick，帝国始终保留应急 bucket。
- *
+
  * 自愿放血协议：生成后写 Memory.kernel.pixelAt，scheduler 在宽限窗口内把 tier
  * 地板抬到 conserve——防止看门狗把自愿献血误判为失血性休克。
  */

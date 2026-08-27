@@ -1,19 +1,4 @@
-/**
- * RCL8 End Game — 终局集成测试。
- *
- * RCL8 关键特征：
- *   - 最大人口管理（50+ creep）
- *   - CPU 限制（bucket 压力）
- *   - Memory 增长（大量 creep memory）
- *   - 长期稳定运行（5000+ tick）
- *   - 60 extensions（energyCapacity = 300 + 60×50 = 3300）
- *
- * 验证目标：
- *   - 50+ creep 时 scheduler 稳定
- *   - CPU bucket 下降时优先级正确（P0/P1 不被跳过）
- *   - 长期运行不崩溃、不泄漏
- *   - Memory 增长不影响性能
- */
+/** RCL8 End Game — 终局集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions, GameInspector } from "../framework";
 import type { TestWorld } from "../framework";

@@ -1,14 +1,4 @@
-/**
- * Plan Lifecycle — A3.2 Phase 1：Plan 生命周期管理 + 去重 + 重评。
- *
- * 合同锚点：PLANNING_ARCHITECTURE §4 防振荡三防线。
- *
- * 定位：管理 Plan 的状态流转（DISCOVERED→...→WAITING_EXECUTION），
- * 包括去重（同一 roomName 最多一个 Active Plan）、重评（经济/Intel 变化时）、
- * 和防抖（READY↔NOT_READY 滞回）。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Plan Lifecycle */
 
 import type { ExpansionPlan, PlanStatus } from "./plan";
 import { updatePlanStatus } from "./plan";
@@ -127,7 +117,7 @@ export function isRebuildBlocked(
 
 /**
  * 防抖判定：根据 ready 条件和持续时间决定 Plan 状态流转。
- *
+
  * @param current 当前 Plan + 防抖状态
  * @param isReady 当前是否满足 ready 条件
  * @param tick 当前 tick

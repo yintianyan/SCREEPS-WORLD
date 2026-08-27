@@ -1,9 +1,4 @@
-/**
- * Worker 角色场景测试。
- *
- * 覆盖：P0 恢复角色基本循环（harvest → fill）、fallback 到 upgrade、
- * assignment sourceId 使用、flee、边界情况。
- */
+/** Worker 角色场景测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { workerRole } from "../../../src/creeps/roles/worker";
 import {

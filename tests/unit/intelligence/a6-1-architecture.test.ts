@@ -1,18 +1,4 @@
-/**
- * A6.1 Architecture Guards — 架构安全边界测试。
- *
- * 验证 A6 的安全不变式（INT-007/INT-010/INT-011/INT-013/INT-014/INT-015）：
- *   UT-041: INT-013 — Domain 层不引用 Game/Memory/RawMemory
- *   UT-042: INT-013 — Domain 层不建立第二套 DecisionTrace/Recovery/Spawn
- *   UT-043: INT-010 — 系统注册 interval ≥ 100, priority ≥ P3
- *   UT-044: INT-014 — 系统通过 safeRun 注册
- *   UT-045: INT-007 — Domain 纯函数不调用 Game API
- *   UT-046: 确定性 — attributionHash 不使用 Math.random
- *   UT-047: 确定性 — attributionHash 不使用 Date.now
- *   UT-048: Shadow-Only — collectAttribution 不修改输入
- *
- * 静态代码分析测试 — 不运行系统，只检查代码结构。
- */
+/**  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";

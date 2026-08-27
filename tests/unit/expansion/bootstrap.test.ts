@@ -1,10 +1,4 @@
-/**
- * 新生殖民地自举决策回归测试（W38S59 事故驱动）。
- *
- * 背景：扩张任务在 spawn 建成时记 success 离场，此后新生 RCL1 殖民地被宿敌
- * 打穿 TTD / 摧毁 spawn 时无人负责 —— 本地队列永不可孵化，建造无 builder。
- * 自举车道：姊妹房代孵 worker(+敌情 defender)；TTD 危急且有敌 → abandon 止损。
- */
+/** 新生殖民地自举决策回归测试（W38S59 事故驱动）。 */
 import { describe, expect, it } from "vitest";
 import {
   decideBootstrapRooms,

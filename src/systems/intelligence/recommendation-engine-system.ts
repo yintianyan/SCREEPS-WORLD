@@ -1,33 +1,4 @@
-/**
- * A6.6 Recommendation Engine System — 系统层薄壳。
- *
- * 合同锚点：A6_6_ARCHITECTURE.md · A6_6_SAFETY_BOUNDARY.md
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 globalCache.__experienceCache / __evaluationCache / __predictionCache / __calibrationCache 只读采集数据
- *   2. 调用 A6.5 computeIntelligenceState 获取 IntelligenceState（瞬态）
- *   3. 调用 A6.6 Domain 纯函数构建 EvidenceItem[] + EvidenceTrace
- *   4. 调用 A6.6 Domain 纯函数 generateRecommendations
- *   5. 调用 A6.6 Domain 纯函数 detectConflicts + attachConflictIds
- *   6. 调用 A6.6 Domain 纯函数 lifecycle 管理（TTL / Supersede / GC）
- *   7. 将结果写入 globalCache.__recommendationCache
- *   8. 可观测性输出
- *
- * 禁止（REC-001~014）：
- *   - 不调用 Game API（REC-003）
- *   - 不修改任何业务状态（REC-004）
- *   - 不修改 Strategy / Posture（REC-007）
- *   - 不进入 tick 关键路径（低频 500t）
- *   - 不新建采样通道（复用 A6.1-A6.5 cadence）
- *   - 不建立第二套 Metrics / Strategy / Prediction / Calibration / Reliability
- *   - Recommendation 不自动进入任何执行系统（REC-006）
- *
- * CPU 预算：低频执行（interval=500），每 tick 近零成本。
- * 优先级 P3（在所有业务系统之后运行，消费它们产出的数据）。
- * 存储：heap only — global reset 可丢。
- *
- * 安全不变式：本系统完全停止时，帝国必须照常安全运行。
- */
+/** A6.6 Recommendation Engine System — 系统层薄壳。 */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { systemPhase } from "../../kernel/phase";

@@ -1,21 +1,4 @@
-/**
- * v40 → v41 Schema Migration Test
- *
- * 验证 OutcomeChannel 字段名压缩迁移：
- *   queue → q, seen → s, duplicateRejected → dr, overflowEvicted → oe
- *
- * 关键：调用真实的 `runMigrations()` 函数（src/kernel/memory.ts），
- * 而非复制粘贴迁移逻辑——确保测试验证的是生产代码而非副本。
- *
- * 覆盖：
- *   1. 正常迁移：旧字段名 → 新字段名，数据保留，schemaVersion === CONFIG 版本
- *   2. 幂等性：重复执行不产生副作用
- *   3. 坏数据：字段类型错误时不崩溃
- *   4. 无 outcomeEvents 时安全跳过
- *   5. 不破坏 operationId/openedAt/closedAt/forcedAdvance
- *   6. global reset 后不重复破坏数据
- *   7. 迁移中断后下一 tick 可重试，schemaVersion 不提前增加
- */
+/** v40 → v41 Schema Migration Test */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

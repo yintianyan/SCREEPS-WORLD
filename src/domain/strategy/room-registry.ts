@@ -1,12 +1,4 @@
-/**
- * Room Registry — A3.0 多房帝国执行基础（EMPIRE_SYSTEM_MODEL §1）。
- *
- * 帝国已知房间的注册表 — 维护自有房的运行时经济画像快照，
- * 供 Agenda Manager / Allocation Policy / Transport Planner 消费。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- * 所有输入由参数注入（调用方 = 系统侧薄壳 agenda-manager）。
- */
+/** Room Registry */
 
 import type { RoomEconomicProfile } from "../economy/room-profile";
 import type { EmpireRoomRole } from "../economy/empire-role";
@@ -62,7 +54,7 @@ export type RoomRegistry = Map<string, RoomRegistryEntry>;
 
 /**
  * 从 RoomEconomicProfile + 预计算的 transferable 创建/更新注册项。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function makeRegistryEntry(

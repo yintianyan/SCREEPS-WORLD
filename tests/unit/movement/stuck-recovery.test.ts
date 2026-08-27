@@ -1,10 +1,4 @@
-/**
- * 卡位检测测试 — updateStuckTicks 的疲劳豁免（MV-1 / G-MV-06 / G-MEM-07）。
- *
- * 硬约束测试化：「ERR_TIRED 不递增也不归零卡位计数」写了两处文档却从未有实现，
- * 本文件把该约束固化为可执行契约 — 疲劳期误判卡位会让满载 creep 过沼泽时
- * 被 Level 3 弃目标（携货转 idle，任务 churn）。
- */
+/** 卡位检测测试 — updateStuckTicks 的疲劳豁免（MV-1 / G-MV-06 / G-MEM-07）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { updateStuckTicks } from "../../../src/creeps/movement";
 import { resetGlobals } from "../../role-helpers";

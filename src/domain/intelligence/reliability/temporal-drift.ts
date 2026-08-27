@@ -1,18 +1,4 @@
-/**
- * A6.5 Temporal Drift — 时效性退化检测。
- *
- * 职责：
- *   - 计算 Rolling Window（最近 N 条 Resolution）的 ECE
- *   - 对比 recent ECE vs overall ECE 检测 drift
- *   - 检测 Profile aging（statisticsTick 距当前 tick 过远）
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * REL-001 (Read-Only)：只读消费，不修改输入。
- * REL-005 (Deterministic)：相同输入 → 相同输出。
- *
- * 不重新实现 Calibration：
- *   复用 A6.4 的 computeECE() 和 getRecentResolutions()。
- */
+/** A6.5 Temporal Drift — 时效性退化检测。 */
 
 import type { Prediction } from "../prediction/types";
 import type { ResolutionResult } from "../calibration/types";
@@ -43,16 +29,16 @@ export interface DriftDetectionResult {
 
 /**
  * 检测模型校准的时间退化。
- *
+
  * 纯函数 — 从 ResolutionResult 列表计算。
- *
+
  * 策略：
  *   1. 取最近 ROLLING_WINDOW_SIZE 条 calibratable Resolution
  *   2. 如果 >= ROLLING_WINDOW_MIN_CALIBRATABLE，计算 recent ECE
  *   3. 对比 recentEce vs overallEce
  *   4. recentEce > overallEce × DRIFT_DEGRADING_MULTIPLIER → DEGRADING
  *   5. recentEce < overallEce × DRIFT_IMPROVING_MULTIPLIER → IMPROVING
- *
+
  * @param resolutions - 全部 ResolutionResult
  * @param predictions - 全部 Prediction（用于匹配 modelKey）
  * @param modelKey - 模型标识
@@ -144,7 +130,7 @@ function compareDrift(
 
 /**
  * 检测 Profile 是否过期。
- *
+
  * @param statisticsTick - Profile 最后统计 tick
  * @param currentTick - 当前 tick
  * @returns 是否过期

@@ -1,19 +1,4 @@
-/**
- * Tactical Authorization — A5.4.0 纯函数。
- *
- * 确保 Tactical 层只在 WarPlan 授权下执行。
- *
- * 验证维度：
- *   1. operationId 匹配
- *   2. objectiveId 有效
- *   3. warPosture = war 或 fortify（进攻需 war，防御可 fortify）
- *   4. authorization state = AUTHORIZED
- *   5. target 匹配（Tactical target 在 Operational target scope 内）
- *   6. expiry 未过期
- *   7. operation 未 abort
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** Tactical Authorization */
 
 import type {
   TacticalAuthorization,
@@ -36,7 +21,7 @@ export interface AuthorizationCheckResult {
 
 /**
  * 验证 TacticalAuthorization 是否有效。
- *
+
  * 检查项：
  *   - state === AUTHORIZED
  *   - expiry > currentTick
@@ -116,7 +101,7 @@ export function validateAuthorization(
 
 /**
  * 从 MilitaryOperation 和 WarPosture 构建 TacticalAuthorization。
- *
+
  * 这是系统层的辅助函数——从 Operational 层信息派生 Tactical 授权。
  */
 export function buildAuthorization(
@@ -167,12 +152,12 @@ export interface TargetScopeCheckResult {
 
 /**
  * 验证 Tactical 目标是否在允许的 Target Scope 内。
- *
+
  * 规则：
  *   - LOCAL: Tactical 可以在当前视野内排序目标（先打 A 还是 B）
  *   - OPERATIONAL: Tactical 必须执行 Operational 指定的目标
  *   - STRATEGIC: Tactical 禁止自行切换战略目标
- *
+
  * 禁止：Tactical 看到另一个 Enemy 就自行切换战略目标。
  */
 export function validateTargetScope(

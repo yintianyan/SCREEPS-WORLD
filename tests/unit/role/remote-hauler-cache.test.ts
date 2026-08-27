@@ -1,11 +1,4 @@
-/**
- * remote-hauler container 查找的共享缓存接线测试。
- *
- * 背景：findRemoteContainer 的 per-creep 缓存失效时（container 空窗期）
- * 曾直接全房 room.find — 同房多只 hauler 每 tick 各自扫描，
- * 违反「角色禁止全房 find」硬约束。修复后走 per-tick per-room 共享缓存
- * （与 findDroppedEnergy 同一模式），同 tick 同房只 find 一次。
- */
+/** remote-hauler container 查找的共享缓存接线测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { findRemoteContainer } from "../../../src/creeps/roles/remote-hauler";
 import { mockPos, mockStore, registerObject, resetGlobals } from "../../role-helpers";

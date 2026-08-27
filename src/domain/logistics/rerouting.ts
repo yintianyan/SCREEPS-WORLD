@@ -1,25 +1,4 @@
-/**
- * Dynamic Rerouting — A4.3 Phase 2：动态重路由。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #11（无 Route Failure → Rerouting）、
- * §10 #11。
- *
- * 设计意图：
- *   现有 routeCache 不可达后直接 markBlocked，不尝试替代路线。
- *   Dynamic Rerouting 在 Route A 失效时尝试替代路线。
- *
- *   算法：
- *   1. 查询 routeCache 中所有 from→to 的替代路线
- *   2. 按 reliability × (1 - cost) 排序
- *   3. 选择最优替代路线
- *   4. 无替代 → 返回 undefined（触发 Request blocked）
- *
- *   替代路线来源：
- *   - 直接路线（from→to）以外的中转路线（from→via→to）
- *   - 缓存中的历史路线
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Dynamic Rerouting */
 
 import type { Route } from "./route";
 import { routeScore, isRouteUsable, makeRouteId } from "./route";
@@ -45,15 +24,15 @@ export interface ReroutingResult {
 
 /**
  * Route A 失效时尝试替代路线。
- *
+
  * 查找策略：
  *   1. 首先查 routeCache 中是否有其他 from→to 的路线（可能有多个历史评估）
  *   2. 如果没有，尝试中转路线：from→via→to（查 routeCache 中 from→via + via→to 的组合）
  *   3. 按 routeScore 排序所有候选
  *   4. 返回最优候选
- *
+
  * 纯函数 — 不访问 Game/Memory（RouteCache 由参数注入）。
- *
+
  * @param cache Route Cache 实例
  * @param blockedRoute 被阻塞的原始路由
  * @param tick 当前 tick

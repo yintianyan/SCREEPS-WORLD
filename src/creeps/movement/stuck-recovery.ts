@@ -1,9 +1,4 @@
-/**
- * 卡位检测与脱困 — yield/pull 让路、渐进式脱困、目标清除、安全出口。
- * 脱困四级策略（由 pathfinding.ts 的 moveToTarget 驱动）：L0 正常（ignoreCreeps:true +
- * road-preference）→ L1（stuckTicks≥threshold）tryPullBlocker 请求让路 →
- * L2（≥threshold+1）ignoreCreeps:false + reusePath:0 → L3（≥threshold+repathLimit）放弃目标 idle。
- */
+/** 卡位检测与脱困 — yield/pull 让路、渐进式脱困、目标清除、安全出口。 */
 
 import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
@@ -23,7 +18,7 @@ export const DIR_DELTA: Record<number, [number, number]> = {
  * 同 tick 内低优请求高优让路时，因高优已执行过，请求下一 tick 生效。
  * MV-3：请求带 tick 戳 — 超过 2 tick 未执行即过期丢弃（否则 parked/静止 creep 恢复移动时突然
  * 执行「过期让路」，方向已无意义且无落点安全检查）。
- * 设计意图：对站桩 creep 请求无效是正确行为——它们不调用 moveToTarget，请求自然过期；
+
  * 站桩矿工不应让位，绕行 creep 应靠 ignoreCreeps:false 自行绕路。
  */
 const YIELD_REQUEST_TTL = 2;

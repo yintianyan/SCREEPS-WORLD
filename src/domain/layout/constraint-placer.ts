@@ -1,11 +1,4 @@
-/**
- * 约束推导结构放置 — 替代 compact-core-v2 固定 dx/dy 模板，贪心为每个结构
- * 在候选格中选满足全部约束且评分最高的位置。约束：偶校验棋盘格走道、非墙、
- * 不重叠、不密封、距锚点 ≤ maxRadius、lab 集群相互 range ≤ 2。
- * 放置顺序 spawn > storage > tower > link > terminal > factory > lab > extension
- * （高优先级先占位）；调用方为 layout-planner（每 50 tick 规划）。
- * 纯函数 — 不访问 Game/Memory，输入全参数注入。
- */
+/** 约束推导结构放置 — 替代 compact-core-v2 固定 dx/dy 模板，贪心为每个结构 */
 
 import type { DistanceField } from "./terrain-analysis";
 import { opennessAt } from "./terrain-analysis";

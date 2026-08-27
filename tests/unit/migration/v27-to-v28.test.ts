@@ -1,10 +1,4 @@
-/**
- * v27 → v28 迁移独立测试（R6a 帝国议程 / KernelMemory.agenda 建档）。
- *
- * 迁移语义：agenda 为可选字段（empire-strategy 每 tick 重建，缺失视为 develop 兜底）。
- * 迁移只做「建档 + 畸形自愈」，不写字段值。
- * 自愈：非对象 / initiative 不在枚举 / since 非数字 → 删除整个字段（下 tick 重建）。
- */
+/** v27 → v28 迁移独立测试（R6a 帝国议程 / KernelMemory.agenda 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

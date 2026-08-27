@@ -1,20 +1,4 @@
-/**
- * A5.4.3 E2E Tests — Tactical Engagement & Focus Fire 全链路端到端测试。
- *
- * 验证完整链路：
- *   Snapshot 构建 → planFocusFire → FocusFirePlan → AttackIntent 消费验证
- *   多 tick 状态机连续性（TARGET_ACQUIRED → ATTACKING → TARGET_DYING → TARGET_DEAD → REASSESSING）
- *
- * 使用纯函数状态机驱动，不需要完整 Screeps 引擎 mock。
- *
- * E2E 场景：
- *   COMBAT-E2E-001: 完整交战周期 — 从接敌到击杀到重新选择目标
- *   COMBAT-E2E-002: 多目标优先级链 — healer 优先 > attacker > 残血
- *   COMBAT-E2E-003: Overkill 分流 → 多目标同时压制
- *   COMBAT-E2E-004: 目标逃跑 → 状态机转换 → 重新接敌
- *   COMBAT-E2E-005: 治疗覆盖不足 → retreatRecommended
- *   COMBAT-E2E-006: 非 war 姿态 → 禁止 AttackIntent → 安全降级
- */
+/** A5.4.3 E2E Tests — Tactical Engagement & Focus Fire 全链路端到端测试。 */
 
 import { describe, expect, it } from "vitest";
 import {

@@ -1,25 +1,4 @@
-/**
- * Failure Propagation — A4.5：失败传播图 + 根因检测。
- *
- * 合同锚点：A4.5 Task Spec §20 Failure Propagation + §21 Root Cause Detection。
- *
- * 设计意图：
- *   帝国中一个系统失败不是孤立事件——它会级联传播。
- *   例如：
- *     Hauler 死亡 → Logistics Failure → Colony Starvation → Colony Failure → Empire Degraded
- *     Spawn 饥饿 → Population Collapse → Production Drop → Economic Deficit
- *     Route Block → Remote Mining Stall → Resource Deficit → Factory Stop
- *
- *   本模块提供：
- *   1. 失败节点类型定义（FailureNode）
- *   2. 传播边定义（FailureEdge）
- *   3. 根因检测算法（从症状回溯到根因）
- *   4. 影响范围分析（从根因正向传播到受影响的系统）
- *
- *   不做实时监控——只提供纯函数工具，由 empire-health-system 调用。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Failure Propagation */
 
 // ─── 失败节点类型 ──────────────────────────────────────────
 
@@ -91,7 +70,7 @@ export interface FailureGraph {
 
 /**
  * 预定义的失败传播规则（领域知识编码）。
- *
+
  * 这些规则描述了帝国中系统间的因果依赖关系。
  * 每条规则定义：当 A 领域失败时，B 领域在何种条件下也会失败。
  */
@@ -176,9 +155,9 @@ export interface ImpactAnalysisResult {
 
 /**
  * 构建失败传播图（纯函数）。
- *
+
  * 从当前活跃的失败节点列表 + 预定义传播规则构建有向图。
- *
+
  * @param activeFailures 当前活跃的失败节点列表
  * @param tick 当前 tick
  * @returns 失败传播图
@@ -222,12 +201,12 @@ export function buildFailureGraph(
 
 /**
  * 根因检测：从症状节点回溯到根因（纯函数）。
- *
+
  * 使用反向 BFS：从症状节点出发，沿着传播边的反方向搜索，
  * 找到没有入边的节点（即没有上游原因的节点 = 根因）。
- *
+
  * 如果有多个根因，选择传播概率乘积最大（最可能）的路径。
- *
+
  * @param graph 失败传播图
  * @param symptomId 症状节点 ID
  * @returns 根因检测结果
@@ -334,10 +313,10 @@ export function detectRootCause(
 
 /**
  * 影响范围分析：从根因正向传播到所有受影响的节点（纯函数）。
- *
+
  * 使用正向 BFS：从根因节点出发，沿着传播边搜索，
  * 找到所有可能被影响的节点。
- *
+
  * @param graph 失败传播图
  * @param rootCauseId 根因节点 ID
  * @returns 影响范围分析结果
@@ -402,7 +381,7 @@ export function analyzeImpact(
 
 /**
  * 从失败节点列表中找到所有根因节点（没有上游原因的节点）。
- *
+
  * @param graph 失败传播图
  * @returns 根因节点列表
  */
@@ -421,7 +400,7 @@ export function findRootCauses(graph: FailureGraph): FailureNode[] {
 
 /**
  * 从失败节点列表中找到所有叶子节点（症状 = 没有出边的节点）。
- *
+
  * @param graph 失败传播图
  * @returns 症状节点列表
  */
@@ -440,12 +419,12 @@ export function findSymptoms(graph: FailureGraph): FailureNode[] {
 
 /**
  * 计算失败图的整体严重度（纯函数）。
- *
+
  * 综合考虑：
  *   - 节点数量
  *   - 节点严重度
  *   - 传播深度
- *
+
  * @param graph 失败传播图
  * @returns 0..1 分数（1 = 最严重）
  */

@@ -1,14 +1,4 @@
-/**
- * harvester source-link 挖矿站位测试。
- *
- * 回归：当 source container 与 source link 分居 source 两侧时，harvester 站 container 上
- * 够不到 link（range 2），只能灌 container → 满仓 → 靠 hauler 远搬（线上 W7N4 source#1 病灶）。
- * 修复后：harvester 改站到「贴 source 且贴 link」的格，同 tick 倒进 link（免远搬）；
- * 已够到 link 则不再重定位（稳定），无 link 则维持 container 站位（不受影响）。
- *
- * 几何（W7N4 source#1）：source@12,31、container@12,30、link@12,32（垂直排列，
- * container/link 分居 source 两侧）；13,31 同时贴三者，是理想 link 站位。
- */
+/** harvester source-link 挖矿站位测试。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { harvesterRole } from "../../../src/creeps/roles/harvester";
 import {

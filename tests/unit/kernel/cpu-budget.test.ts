@@ -1,15 +1,4 @@
-/**
- * CpuBudget 比例化 CPU 上限测试。
- *
- * 背景：limits 曾硬编码绝对值（为 20 CPU 服务器设计），私服可变 CPU 下
- * softLimit 被静态值压死。改为 softRatio/hardRatio 后，soft/hard 随
- * Game.cpu.limit 自适应。本文件验证：
- *   - 20 CPU 反推值与旧绝对值一致（官服零回归）
- *   - 100/10 CPU 下按比例缩放
- *   - tickLimit < limit 时取较小值（bucket 低位保护）
- *   - 绝对余量 cpuReserve 在低 limit 下生效
- *   - canStart / isExhausted 限流行为正确
- */
+/** CpuBudget 比例化 CPU 上限测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { CpuBudget, createBudget } from "../../../src/kernel/scheduler";
 import { CONFIG } from "../../../src/config";

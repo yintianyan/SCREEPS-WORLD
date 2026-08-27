@@ -1,14 +1,4 @@
-/**
- * Confidence Model — A5.2 多维度置信度聚合。
- *
- * 设计原则：
- * - 禁止只有一个 confidence 数字覆盖所有不确定性
- * - 必须区分 factConfidence / combatConfidence / intentConfidence /
- *   terrainConfidence / intelConfidence / overallConfidence
- * - aggregateConfidence() 禁止简单 average，必须明确权重和冲突处理
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** Confidence Model */
 
 import type { IntelConfidence, PlayerIntelRecord } from "./player-intel";
 import type { TerrainContext } from "./terrain-context";
@@ -20,7 +10,7 @@ import { CONFIDENCE_VALUE } from "./player-intel";
 
 /**
  * 多维度置信度——不压缩为单一数字。
- *
+
  * 每个维度独立评估不确定性来源：
  * - factConfidence: 引擎事实（nuke 落点、body 解析）的置信度
  * - combatConfidence: G2 CombatCapability 解析的置信度
@@ -49,7 +39,7 @@ export interface MultiDimensionalConfidence {
 
 /**
  * 计算引擎事实置信度。
- *
+
  * 引擎事实（如 nuke 落点、hostile body 可见性）由引擎保证，
  * 通常为 1.0。但如果 body 未完全可见（如部分 creep 在视野边缘），
  * 则降低。
@@ -74,7 +64,7 @@ export function computeFactConfidence(
 
 /**
  * 计算战斗能力解析置信度。
- *
+
  * 基于 body 解析的完整性：
  * - body 全部可见且 boost 已识别 → 0.9
  * - body 可见但 boost 未识别 → 0.7
@@ -91,7 +81,7 @@ export function computeCombatConfidence(
 
 /**
  * 计算意图推断置信度。
- *
+
  * 直接使用 IntentAssessment.confidence。
  */
 export function computeIntentConfidence(intentConfidence: number): number {
@@ -100,7 +90,7 @@ export function computeIntentConfidence(intentConfidence: number): number {
 
 /**
  * 计算地形上下文置信度。
- *
+
  * 基于 TerrainContext 的视野和数据完整性：
  * - 有视野且地形数据完整 → 0.9
  * - 有视野但部分数据缺失 → 0.6
@@ -128,7 +118,7 @@ export function computeTerrainConfidence(terrain: TerrainContext): number {
 
 /**
  * 计算玩家情报置信度。
- *
+
  * 从 PlayerIntelRecord.aggregatedConfidence 映射到 0-1 数值。
  */
 export function computeIntelConfidence(
@@ -152,14 +142,14 @@ export function computeIntelConfidence(
 
 /**
  * Confidence 聚合权重。
- *
+
  * 不同维度的权重不同：
  * - factConfidence: 最高权重（引擎事实最可靠）
  * - combatConfidence: 高权重（body 解析是直接观察）
  * - intentConfidence: 中等权重（推断有不确定性）
  * - terrainConfidence: 中等权重（地形是上下文）
  * - intelConfidence: 最低权重（玩家情报是间接信息）
- *
+
  * ⚠ 禁止简单 average——必须用加权聚合 + 冲突处理。
  */
 export const CONFIDENCE_WEIGHTS = {
@@ -172,7 +162,7 @@ export const CONFIDENCE_WEIGHTS = {
 
 /**
  * 聚合多维度置信度。
- *
+
  * 算法：
  * 1. 对每个维度应用对应权重
  * 2. 检查维度间的冲突（如 fact 高但 intent 低 → 可能意图推断错误）
@@ -225,7 +215,7 @@ export function aggregateConfidence(
 
 /**
  * 从 overallConfidence 映射到 ThreatConfidence（A5.1 兼容）。
- *
+
  * A5.1 的 ThreatConfidence 有 4 个等级：fact / stale / inferred / unknown。
  * A5.2 扩展为 6 维，但需要向后兼容 A5.1 的 ThreatAssessment.confidence 字段。
  */

@@ -1,12 +1,4 @@
-/**
- * Operation Metrics — A3.0 操作可观测性指标
- *（Observability 合同）。
- *
- * 统计当前所有 Operation 的运行时指标，
- * 供 dashboard / log / 诊断消费。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Operation Metrics */
 
 import type { OperationContext } from "./agenda-item";
 import { isActive, isTerminalStatus } from "./agenda-item";
@@ -43,7 +35,7 @@ export interface OperationMetrics {
 
 /**
  * 计算 Operation 指标快照。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function computeOperationMetrics(

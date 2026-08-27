@@ -1,18 +1,4 @@
-/**
- * A5.4.1 Runtime Integration Tests — Tactical Runtime 集成验证。
- *
- * 验证：
- *   TAC-R01: tacticalRuntimeSystem 正确导出与结构
- *   TAC-R02: TacticalRuntimeCache 字段在 globalCache 上正确初始化
- *   TAC-R03: attacker.ts 不导入 systems 层（R3 守卫）
- *   TAC-R04: healer.ts 不导入 systems 层（R3 守卫）
- *   TAC-R05: tactical-runtime-system 不直接写 warAbortSignals
- *   TAC-R06: recovery-execution-system 消费 tacticalAbortSignals
- *   TAC-R07: logistics-planner 消费 tacticalSupplyDemands
- *   TAC-R08: attacker.ts readTacticalIntent 正确从 globalCache 读取
- *   TAC-R09: healer.ts readTacticalIntent 正确从 globalCache 读取
- *   TAC-R10: bootstrap.ts 注册了 tacticalRuntimeSystem
- */
+/** A5.4.1 Runtime Integration Tests — Tactical Runtime 集成验证。 */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";

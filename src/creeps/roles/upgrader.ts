@@ -1,15 +1,4 @@
-/**
- * Upgrader — P2 升级角色。
- *
- * 策略声明：
- *   gate:    能量地板门禁（仅阻止 acquire，不阻止 work）；紧急防降级覆盖
- *   acquire: 身边掉落能量 > controller link > controller container > storage(动态限量) > 最满非物流 container > harvest
- *   work:    升级控制器
- *
- * 站桩升级核心：upgrader 站在 controller 旁，从 link/container 取能 + 升级，0 通勤。
- * P1-1: storage 取能上限按水位动态缩放 — 高水位时放开上限加速消化库存，
- * 低水位时收紧防止 storage 突降触发 economyPressure 连锁降级。
- */
+/** Upgrader */
 import { CONFIG } from "../../config";
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
@@ -31,12 +20,12 @@ const STATION_RANGE = 3;
 
 /**
  * 空闲归站 — 不在站桩位附近时移动过去待命。
- *
+
  * 根因：acquire 链全部落空（controller container 存在但空、无 link、storage
  * 低水位、gate 拦截直采）时，role-runner 置 idle 且 upgrader 被 parking 排除
  * （parking.ts 明文豁免站桩角色）→ 刚孵化的 upgrader 石化在 spawn 出口挡路。
  * 「站桩角色的 idle 是守在 controller 旁」这个前提只有 creep 已经在站桩位才成立。
- *
+
  * 该动作作为 acquire 链兜底：已在站桩位 → resolve undefined（正常 idle 等补给）；
  * 不在 → 移动过去。到位后 hauler 一填 container 立即取能开工，零通勤延迟。
  */
@@ -81,7 +70,7 @@ function nudgeToStation(ac: ActionContext): void {
 /**
  * 能量地板门禁 — 仅阻止 acquire 模式取能，不阻止已满载的 upgrader 交付。
  * 紧急状态（ticksToDowngrade < threshold）时豁免。
- *
+
  * 关键修复：门禁只在 upgrader 需要直接采集时才阻止。
  * 如果 controller container / 任何 container 有能量，upgrader 不与 spawn 竞争，
  * 不应被 energyAvailable 地板阻止。
@@ -142,7 +131,7 @@ function upgraderGate(ac: ActionContext): boolean {
 
 /**
  * 动态计算 storage 取能上限 — 水位权限表（绝对能量刻度）+ P0-4 净流出率门禁。
- *
+
  * U-2 修复：原比例制三档（>50%/>15% 折合 50 万/15 万能量）在发展期房间
  * 永远落在最低档 — 与 distributorTiers 的历史教训同型（比例刻度系统性错误）。
  * 现改用与 distributorTiers/upgrade 调度同一参照系的绝对阈值：
@@ -152,7 +141,7 @@ function upgraderGate(ac: ActionContext): boolean {
  *   <  upgradeEnergyFloorStorage(1k)：0 — U-1 floor 下沉：
  *      withdrawStorageCapped 的 resolve 对 limit≤0 返回 undefined（D-0 同手法），
  *      彻底封死「gate 因 container 有能量放行 → storage 被抽穿地板」的旁路。
- *
+
  * P0-4 修复（病灶 4）：srcRatio=1.0 期 storage 从 374K→0 持续流失 12 E/tick，
  * 旧逻辑只看绝对水位 → upgrader 抽到归零。新增跨 tick 净流出率门禁：
  *   - 复用 P0-1 写入的 roomMem.phase.storageEnergyPrev（room-state 每 tick 写入）。

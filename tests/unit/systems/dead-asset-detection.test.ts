@@ -1,13 +1,4 @@
-/**
- * 死资产检测测试（2026-08-02）。
- *
- * 覆盖：
- *   - computeDeadAssetSince：三重校验（source + energy=0 + 无 outlet）
- *   - 持续时长判定（getDeadAssetLinks 阈值过滤）
- *   - 瞬态恢复（校验失败 → 清除计时器）
- *   - link 消失 → 自动清理
- *   - clearDeadAssetLink 清除指定 link
- */
+/** 死资产检测测试（2026-08-02）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   computeDeadAssetSince,

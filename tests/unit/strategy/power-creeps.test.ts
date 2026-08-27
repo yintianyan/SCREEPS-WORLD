@@ -1,17 +1,4 @@
-/**
- * Power Creeps 决策纯函数测试 — planGplSpending（GPL 消费规划）+
- * selectPowerAction（PC 单 tick 运营动作裁决）。
- *
- * 覆盖：
- *   planGplSpending：
- *   - 正常：GPL1 无 PC → create；有 PC → 沿 build order 升级
- *   - 边界：free=0 → none；PC level 不足门禁 → 顺延；build order 全满 → none
- *   - 异常：名字占位递增；gplLevel=0 → none
- *   selectPowerAction：
- *   - 正常：renew/enableRoom/generateOps/三类 operate 各自命中
- *   - 边界：ops 不足时退化；效果未过期不续杯；未升 power 不可选
- *   - 异常：未孵化（TTL undefined）→ idle
- */
+/** Power Creeps 决策纯函数测试 — planGplSpending（GPL 消费规划）+ */
 import { describe, expect, it } from "vitest";
 import {
   OPS_COST,

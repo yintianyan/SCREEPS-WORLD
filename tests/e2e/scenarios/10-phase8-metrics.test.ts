@@ -1,25 +1,4 @@
-/**
- * E2E-010 Phase 8 全量指标验证 — 10k tick 经济/人口/CPU/Memory 全维采样。
- *
- * 这是 Phase 8 的核心验证套件，在 10000 tick 连续运行中采集：
- *   - 人口动态（per-role 计数 + TTL 分布）
- *   - 能量全景（spawn/extension/container/storage 逐 tick）
- *   - Spawn 队列趋势（饥饿检测）
- *   - Memory 增长曲线
- *   - 错误率统计
- *   - 死亡螺旋检测（creep 数归零窗口）
- *   - 经济运转信号（creep 在 work 状态的比例）
- *
- * 验证标准（5 段 × 2000t）：
- *   1. 每 2000t 内无 JS 错误
- *   2. 50t warmup 后 creep 数不归零
- *   3. 10000t 后 Memory < 500KB
- *   4. 10000t 后经济在运转（有 creep 在工作）
- *   5. 每 2000t 检查 spawnQueue 不持续堆积（< 10）
- *   6. 每 2000t 检查角色多样性（≥ 2 种角色）
- *
- * [Facts] 10000 tick × ~100ms/tick ≈ 17 分钟，timeout=20 分钟。
- */
+/** E2E-010 Phase 8 全量指标验证 — 10k tick 经济/人口/CPU/Memory 全维采样。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { writeFileSync } from "node:fs";
 import { ScenarioRunner } from "../framework";

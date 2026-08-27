@@ -1,17 +1,4 @@
-/**
- * Phase R2 验收加固 — BuildTask 状态机完备性单元测试。
- *
- * 覆盖 createConstructionSite 全部返回值与后续 tick 的状态转移：
- *   - OK → site；
- *   - ERR_FULL → queued + 短冷却 + 本轮终止；
- *   - ERR_RCL_NOT_ENOUGH → queued + 50t 瞬态重试；
- *   - ERR_INVALID_TARGET → blocked + attempts++；
- *   - 未知错误 → queued + 指数退避（封顶 200t）；
- *   - site 已建但下一 tick snapshot 无此 site → 回退 queued（可重试）；
- *   - 位置已建成 → done（由 cleanTasks 清除）；
- *   - 超龄清除 / 同 key 重规划去重；
- *   - lane 模式 RCL 解锁守卫（降级后过期任务不借通道签发）。
- */
+/** Phase R2 验收加固 — BuildTask 状态机完备性单元测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tryCreateSite } from "../../../src/systems/construction-manager";
 import { syncTaskStates, cleanTasks, assessEmergencyRebuild } from "../../../src/domain/construction/queue";

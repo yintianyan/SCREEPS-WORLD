@@ -1,11 +1,4 @@
-/**
- * 扩张目标评估 — 纯函数，不访问 Game/Memory。
- * 战略约束：claim 是重投资（claimer 600 能量 + 拓荒编队 + 新房自举期），禁止盲选 —
- * 候选必须有过视野（sources 已知），与远矿盲选自举刻意不同：远矿失败损失一只 creep，
- * 扩张失败损失一个 GCL 窗口。GCL 无余量（level <= 已拥有房数）不评估；失败目标进
- * 黑名单冷却（被抢占/无锚点/超时）。评分：source 数主导（2 源房标配，1 源房仅无更优
- * 时接受），情报新鲜度做次级修正（越新越可信）。
- */
+/** 扩张目标评估 — 纯函数，不访问 Game/Memory。 */
 import type { RoomIntel } from "../intel";
 
 export interface ExpansionCandidate {

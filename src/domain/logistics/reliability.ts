@@ -1,24 +1,4 @@
-/**
- * Reliability — A4.3 Phase 2：运输可靠性评分。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #10（无 Transport Reliability Score）、
- * §10 #12。
- *
- * 设计意图：
- *   基于 Historical Success/Failure/Route Risk/Threat/Traffic/Creep Death/Path Failure
- *   计算可靠性评分 (0..1, 1=最可靠)。
- *
- *   用于：
- *   1. Route 评估和排序
- *   2. Transport Plan 风险评估
- *   3. Route Suspension/Recovery 判断
- *
- *   加权平均（可解释，非黑盒 ML）：
- *     successRate(40%) + routeSafety(20%) + threatSafety(15%)
- *     + trafficFlow(10%) + creepSurvival(10%) + pathStability(5%)
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Reliability */
 
 // ─── 输入 / 输出 ──────────────────────────────────────────
 
@@ -85,11 +65,11 @@ export const RELIABILITY_WEIGHTS = {
 
 /**
  * 计算 Transport Reliability Score。
- *
+
  * 加权平均：
  *   successRate(40%) + routeSafety(20%) + threatSafety(15%)
  *   + trafficFlow(10%) + creepSurvival(10%) + pathStability(5%)
- *
+
  * 每个因子归一化到 0..1：
  *   - successRate 直接使用 (0..1)
  *   - routeSafety = 1 - routeRisk
@@ -97,7 +77,7 @@ export const RELIABILITY_WEIGHTS = {
  *   - trafficFlow = 1 - trafficLevel
  *   - creepSurvival = 1 - creepDeathRate
  *   - pathStability = 1 - pathFailureRate
- *
+
  * 纯函数。
  */
 export function computeReliability(input: ReliabilityInput): ReliabilityResult {

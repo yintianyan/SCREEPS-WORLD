@@ -1,26 +1,4 @@
-/**
- * 远矿锁死自愈集成场景（R12，线上 W36S58/W37S57 产能损失复现）。
- *
- * 场景还原「两人挤一源、另一源空缺」的真实机制：
- *   - source s1 (12,12) 的 8 个相邻格中 7 个是地形墙，唯一开口 (13,12)；
- *   - 两只 remoteHarvester 都绑定 s1（同 tick 首绑哈希碰撞的线上形态）；
- *   - rh1 已站桩唯一矿位开采，rh2 到达后距离 2 格、永远够不到 s1 —
- *     旧实现下 rh2 终身锁死，s2 无人开采；
- *   - 修复后：rh2 连续卡位（stuck≥3）触发改绑自愈 → 改绑无主 source s2 →
- *     双源同时被开采。
- *
- * 顺带锁定第二条产能链：rh2 满载后 work 链必须能走到 dropEnergy（R12 补丁 —
- * stationaryMine 满载且无 container 时让位），否则满载永久停摆、s2 停止下探。
- *
- * 注意：集成环境 setup 默认关闭 trafficManager（存量单测行为），本场景显式
- * 开启并在 afterAll 恢复 — 生产语义（意图账本+集中解算+站桩锚定）才是
- * 本次修复的运行环境。
- *
- * 断言（400 tick 内）：
- *   1. rh2.memory.sourceId 由 s1 改为 s2（改绑发生）；
- *   2. s2.energy < 3000（空缺源恢复开采）；
- *   3. s1.energy < 3000（唯一矿位持续开采，无回归）。
- */
+/** 远矿锁死自愈集成场景（R12，线上 W36S58/W37S57 产能损失复现）。 */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 import { CONFIG } from "../../../src/config";

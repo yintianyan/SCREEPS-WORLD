@@ -1,13 +1,4 @@
-/**
- * Execution Dashboard — A3.3 Phase 4：执行可观测性。
- *
- * 合同锚点：AGENTS.md 自治可审计前提 + DATA_FLOW §3 可观测性。
- *
- * 定位：把 Expansion Execution 的全链路状态汇总为结构化 Dashboard，
- * 供 global-cache.ts 写入、控制台/log 消费。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Execution Dashboard */
 
 import type { ExecutionState } from "./execution-state";
 import type { CheckpointRecord } from "./checkpoint";

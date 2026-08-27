@@ -80,11 +80,11 @@ export interface HaulerSizingResult {
 
 /**
  * 计算单只 hauler 的吞吐量。
- *
+
  * perHaulerThroughput = carryCapacity / roundTripTime
  * carryCapacity = haulerCarryParts × 50
  * roundTripTime = pathCost × 2 / speed (有路 speed=2, 无路 speed=1)
- *
+
  * 纯函数。
  */
 export function computePerHaulerThroughput(
@@ -102,14 +102,14 @@ export function computePerHaulerThroughput(
 /**
  * 基于 Expected Production / Travel Distance / Carry Capacity / Road Efficiency
  * 计算所需 hauler 数量。
- *
+
  * Transport Capacity ≥ Expected Production
  * requiredHaulers = ceil(production / perHaulerThroughput)
- *
+
  * A4.1 扩展：基于实际 Production 而非理论 Production 收缩：
  * if actualProduction < expectedProduction × 0.5:
  *   haulerTarget = max(1, ceil(haulerNeed × (actualProduction / expectedProduction)))
- *
+
  * 纯函数。
  */
 export function computeHaulerSizing(input: HaulerSizingInput): HaulerSizingResult {
@@ -149,12 +149,12 @@ export function computeHaulerSizing(input: HaulerSizingInput): HaulerSizingResul
 
 /**
  * Transport Capacity 验证。
- *
+
  * if TransportCapacity < ExpectedProduction:
  *   → Container Fill Rate 监控
  *   → if Container 持续满:
  *     → DEGRADED：增加 Transport Capacity 或降低 Mining Capacity
- *
+
  * 纯函数。
  */
 export function validateTransportCapacity(

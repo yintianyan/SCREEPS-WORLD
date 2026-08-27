@@ -1,13 +1,4 @@
-/**
- * Expansion Payback Model — A3.2 Phase 1：Cost vs Benefit 比较。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §1 投资决策合同 + §6 GCL 节奏。
- *
- * 定位：回答「扩张到新房多久能回本」——比较估算成本与预期收益，
- * 输出回收周期和投资回报率。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Expansion Payback Model */
 
 import type { ExpansionCandidateV2 } from "./candidate";
 import type { ExpansionCostEstimate } from "./cost-model";
@@ -54,7 +45,7 @@ export const DEFAULT_PAYBACK_OPTIONS: PaybackOptions = {
 
 /**
  * 评估扩张投资回收期（纯函数）。
- *
+
  * 收益估算 = source 数 × 名义产能 × 假设效率 × 净产出率（约 50% 可调拨）
  * 回收周期 = 总成本 / 每 tick 净收益
  * ROI = (整个回收期内总收益) / 总成本

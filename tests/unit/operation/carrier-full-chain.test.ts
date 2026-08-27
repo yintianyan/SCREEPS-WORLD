@@ -1,16 +1,4 @@
-/**
- * A3-020: Carrier Full Chain — 完整链路集成测试
- *
- * 验证跨房调拨的完整执行骨架：
- *   Operation 创建 → ready → running (carrier spawn 提交)
- *   → carrier 到达 target → 卸能 → verifyTransfer
- *   → 部分送达 → verifying → 全量送达 → completed
- *   → reservation 释放 → 归档
- *
- * 同时验证失败恢复链路：
- *   blocked → retryFromBlocked → ready → running
- *   → maxRetries → failed → reservation 释放
- */
+/** A3-020: Carrier Full Chain — 完整链路集成测试 */
 import { describe, expect, it } from "vitest";
 import {
   createOperation,

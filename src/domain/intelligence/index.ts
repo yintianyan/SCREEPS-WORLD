@@ -1,13 +1,4 @@
-/**
- * A6.1 Intelligence Domain — 统一出口。
- *
- * 分层结构：
- *   experience.ts  — Experience 模型 + Ring Buffer + 构建函数
- *   outcome.ts     — Outcome 采集（消费已有系统）
- *   attribution.ts — Attribution 归因（Evidence-based）
- *
- * 纯函数律：本模块不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- */
+/** A6.1 Intelligence Domain — 统一出口。 */
 
 // ── Experience ──
 export type {

@@ -1,12 +1,4 @@
-/**
- * A4.0 Phase 3 — Remote Economy Foundation 单元测试。
- *
- * 覆盖：
- * - remote-source.ts：Remote Source Model、状态判定、创建、从 Intel 派生、查询、序列化
- * - remote-value.ts：净价值评估、成本计算、等级判定、批量评估
- * - remote-opportunity.ts：Opportunity 模型、状态转换、过期检测、查询
- * - opportunity-ranking.ts：多维评分、排序、Top-N、可解释
- */
+/**  */
 import { describe, it, expect } from "vitest";
 import {
   createRemoteSource,

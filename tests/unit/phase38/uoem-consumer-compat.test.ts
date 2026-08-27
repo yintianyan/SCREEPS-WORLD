@@ -1,25 +1,4 @@
-/**
- * Phase 38-B · UOEM Consumer Compatibility — 扩展反事实测试 T6-T20
- *
- * 验证 UOEM 模型在以下场景下的正确性：
- *   T6:  多个 milestone + terminal success
- *   T7:  多个 milestone + terminal failure
- *   T8:  timeout milestone + later success
- *   T9:  timeout milestone + later failure
- *   T10: success milestone + later failure
- *   T11: duplicate milestone (合法)
- *   T12: duplicate terminal (拒绝)
- *   T13: conflicting terminal events
- *   T14: same tick multiple events
- *   T15: reset before terminal
- *   T16: reset after terminal
- *   T17: collector runs twice
- *   T18: event queue replay
- *   T19: 1000 operations
- *   T20: long-running GC
- *
- * 基于 UOEM 参考实现（与 uoem-proof.test.ts / timeout-semantics.test.ts 同构）。
- */
+/** Phase 38-B · UOEM Consumer Compatibility — 扩展反事实测试 T6-T20 */
 import { describe, it, expect, beforeEach } from "vitest";
 import { globalCache } from "../../../src/kernel/global-cache";
 import {

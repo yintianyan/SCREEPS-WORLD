@@ -1,14 +1,4 @@
-/**
- * A5.5 Deterministic Replay Validation.
- *
- * 对应需求 §23 Determinism：
- *   - 100 组 Combat Micro Snapshot
- *   - 每组 1000 次 Replay
- *   - 验证 Hash 完全一致
- *   - 禁止 Math.random / Date.now / 非确定 Object Iteration
- *
- * 所有 tie-break 必须稳定：priority → urgency → distance → id
- */
+/** A5.5 Deterministic Replay Validation. */
 
 import { describe, expect, it } from "vitest";
 import {

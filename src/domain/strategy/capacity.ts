@@ -1,18 +1,4 @@
-/**
- * 算力容量模型 — 规模规划的 CPU 前馈层（R7a，docs/architecture/GOAL_POLICY_PLAN_MODEL.md 延伸）。
- *
- * 与四档 bucket 看门狗正交：看门狗管「本 tick 突发」的反应式降载（bucket 掉了
- * 才收缩）；本模型管「帝国该养多大」的规划式雄心 — 在 bucket 压力出现之前，
- * 按可用算力决定人口/远矿/扩张的规模上限（CPU 是第一类资源，与能量并列）。
- *
- * 关键性质：
- *   - 上限动态：effective limit = min(cpuLimit, tickLimit)，不写死任何账号
- *     数字 — 官服 limit 随 GCL 变化、订阅差异、tickLimit 波动都能自适应。
- *   - 滞回：降档立即（收缩刻不容缓），升档需持续满足 upgradeWindowTicks
- *     （雄心扩张要证明算力余量是稳定而不是尖峰间隙）。
- *   - 纯函数：输入由调用方采集（Game.cpu.* 与 telemetry 的 cpuAvg10），
- *     prev 回传滞回计数；不访问 Game/Memory。
- */
+/** 算力容量模型 — 规模规划的 CPU 前馈层（R7a，docs/architecture/GOAL_POLICY_PLAN_MODEL.md 延伸）。 */
 
 export type CapacityTier = "abundant" | "comfortable" | "tight" | "constrained";
 

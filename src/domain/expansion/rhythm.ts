@@ -1,21 +1,4 @@
-/**
- * 扩张节奏自适应 — 从失败中学习怎么扩张（R7b，docs/architecture/GOAL_POLICY_PLAN_MODEL.md）。
- *
- * 消费 ExpansionOutcome 归因（每次扩张任务收摊追加一条结果到有限 ring），
- * 产出三个有界调节：
- *   1. 连续失败暂停：连续失败 ≥ pauseFailures → 全局扩张暂停 pauseTicks —
- *      「失败→立刻再试」是消耗 GCL 窗口的烧钱循环，暂停是止损不是放弃。
- *   2. stolen 频发收紧目标门禁：窗口内被抢占 ≥ 2 次 → 只选 ≥2 source 的
- *      高价值房（评估器 minSources 消费）— 差房人人抢，好房才有余量。
- *   3. 成功率达标放松黑名单：窗口内成功率 ≥ successRatioRelax →
- *      失败目标冷却 × 0.5（有下界）；窗口内零成功 → × 1.5（有上界）—
- *      门禁随证据走，不随情绪走。
- *
- * 全部输出有界（缩放 0.5–1.5、minSources 1–2、暂停固定时长），
- * 与 tuning-engine 同哲学不同机器：参数边界内调节 + 可回滚（重置 ring 即
- * 回基线）+ 可观测（节奏变化打日志），不复用其角色边界专用机制。
- * 纯函数 — 不访问 Game/Memory，ring 由调用方持久化。
- */
+/** 扩张节奏自适应 — 从失败中学习怎么扩张（R7b，docs/architecture/GOAL_POLICY_PLAN_MODEL.md）。 */
 
 /** 扩张任务最终结果（每任务一条，收摊时追加）。 */
 export type ExpansionOutcomeKind = "success" | "stolen" | "timeout" | "lost" | "aborted";

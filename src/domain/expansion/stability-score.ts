@@ -1,18 +1,4 @@
-/**
- * Stability Score — A3.4：可解释的 Colony 稳定性评分。
- *
- * 合同锚点：A3.4 Task Spec §29 Stability Score。
- *
- * 评分维度（加权汇总，可解释）：
- *   1. Energy — 净流为正且稳定
- *   2. Population — 人口目标满足，无振荡
- *   3. Spawn — 孵化正常，无饥饿
- *   4. Production — 产能达标
- *   5. Requests — 请求不泄漏
- *   6. Failures — 无连续失败
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Stability Score */
 
 /** 稳定性等级。 */
 export type StabilityLevel = "EXCELLENT" | "GOOD" | "DEGRADED" | "CRITICAL";
@@ -93,7 +79,7 @@ const WEIGHTS = {
 
 /**
  * 计算 Colony 稳定性评分（纯函数）。
- *
+
  * 每个维度独立评分（0..100），加权汇总后映射为等级：
  *   EXCELLENT ≥ 85, GOOD ≥ 65, DEGRADED ≥ 40, CRITICAL < 40
  */

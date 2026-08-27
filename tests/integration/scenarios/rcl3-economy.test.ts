@@ -1,20 +1,4 @@
-/**
- * RCL3 Economy — 经济形成集成测试。
- *
- * RCL3 关键特征：
- *   - 10 extensions（energyCapacity = 300 + 10×50 = 800）
- *   - 1 tower（防御 + 维修）
- *   - controller container 建成 → upgrader 站桩升级（maxCount=3）
- *   - hauler 物流链：source container → spawn/extensions/controller container
- *   - hauler 数量随 container fillRatio 动态缩放（2-6）
- *
- * 验证目标：
- *   - hauler 系统正常运转（container 不溢满、spawn 不空）
- *   - controller container 建成后升级速率显著提升
- *   - tower 维修 container 衰减
- *   - 能量流稳定（无死亡螺旋）
- *   - spawn queue 正确（不堆积、不饥饿）
- */
+/** RCL3 Economy — 经济形成集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions, GameInspector } from "../framework";
 import type { TestWorld } from "../framework";

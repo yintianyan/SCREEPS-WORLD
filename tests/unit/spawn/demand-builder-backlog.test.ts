@@ -1,22 +1,4 @@
-/**
- * P1-1：builder 编制纳入 buildQueue backlog 测试。
- *
- * 背景：site 数受全局/单房配额限制（默认 3），看不到 buildQueue 中
- * queued 状态的任务积压。引入 backlogWeighted = floor(queued * 0.5)
- * 补盲，让 builder 编制随 backlog 增长，加速消化建造队列。
- *
- * 数据来源：demand.ts 沿用已有的 roomMem 读取模式（与 churnFreezeUntil 同源），
- * 从 Memory.rooms[home].buildQueue 读取，construction-manager 每 tick 维护。
- *
- * 覆盖场景：
- *   1. 正常路径：site + backlog 同时存在 → target = max(site, backlog*0.5)
- *   2. 边界：无 site + 仅 backlog → 触发孵化（if 条件已扩展）
- *   3. 边界：backlog=1 → backlogWeighted=0（向下取整不影响）
- *   4. 边界：economyCap 仍生效（target 不超过 harvester+worker+1）
- *   5. 边界：builderConfig.maxCount 仍生效
- *   6. 异常：buildQueue undefined → backlogWeighted=0 不抛错
- *   7. 边界：只统计 queued 状态（site/done/blocked 不计）
- */
+/** P1-1：builder 编制纳入 buildQueue backlog 测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { evaluateDemand } from "../../../src/domain/spawn/demand";
 import { mockSnapshot, resetGlobals } from "../../role-helpers";

@@ -1,10 +1,4 @@
-/**
- * 远矿 harvester source 占用分散测试（组②-2b / E-1）。
- *
- * 背景：原 getRemoteSource 单纯选最近 source + 入房位置偏置 → 2-source 房两只
- * harvester 挤同一 source，第二源白白再生浪费。修复后按兄弟 harvester 的
- * sourceId 占用统计分配，多只稳定散布到不同 source。
- */
+/** 远矿 harvester source 占用分散测试（组②-2b / E-1）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getRemoteSource } from "../../../src/creeps/roles/remote-harvester";
 import { mockCreep, mockSource, resetGlobals } from "../../role-helpers";

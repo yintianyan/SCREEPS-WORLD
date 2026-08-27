@@ -1,17 +1,4 @@
-/**
- * Logistics ROI — A4.3 Phase 5：物流投资回报率。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #31。
- *
- * 设计意图：
- *   Resource Value - Transport Cost - Risk Cost = Net Logistics Value
- *
- *   与 route-efficiency.ts（A4.0）的关系：
- *   - route-efficiency 计算 Delivered/Cost 比率
- *   - logistics-roi 计算 Net Value（含资源价值和风险成本）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Logistics ROI */
 
 // ─── 结果 ──────────────────────────────────────────────────
 
@@ -37,10 +24,10 @@ export interface LogisticsROIResult {
 
 /**
  * 计算 Logistics ROI。
- *
+
  * Net Logistics Value = Resource Value - Transport Cost - Risk Cost
  * ROI = Net Value / Transport Cost
- *
+
  * 纯函数。
  */
 export function computeLogisticsROI(

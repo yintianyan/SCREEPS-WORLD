@@ -1,10 +1,4 @@
-/**
- * Defender — P1 本房防御角色。colonyState=defense（房内出现威胁 creep）时由 demand 孵化，
- * 与塔协同清剿入侵者：塔负责远程集火，defender 贴脸补刀 / 无塔窗口期（RCL1-2 或塔被打空）的唯一主动防线。
- * 策略：combat:true 豁免 flee 检测；acquire/work 攻击最近威胁 creep（读 snapshot.threatCreeps，零 find）；
- * 威胁清除后无候选 → park 待命直至寿命耗尽（demand 不再补充/替换）。
- * 约束：目标来自 RoomSnapshot.threatCreeps（P0 层已分类过滤联盟与无害单位），角色自身不做 room.find。
- */
+/** Defender */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { moveToTarget } from "../movement";

@@ -1,14 +1,4 @@
-/**
- * Phase R2 — RCL2 stall repro：诊断采样 + 可判定回归断言。
- *
- * 双职责：
- *   1. 保留全维度采样（tick/rcl/progress/queue 分类/site/pressure/tier/
- *      claimSecure/P0 spawn/skip reason）——作为失败诊断与时间序列数据源；
- *   2. 硬断言（任务书二）：RCL2 期间不存在 queue>0 且 site=0 超过 100 tick 的
- *      窗口；RCL2 期间至少出现一个 extension/container site；失败时输出最后
- *      20 个采样点与 skip reason。
- * 不允许只断言「无 runtime error」和「spawn 存活」。
- */
+/** Phase R2 — RCL2 stall repro：诊断采样 + 可判定回归断言。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner } from "../framework";
 import type { TestWorld } from "../framework";

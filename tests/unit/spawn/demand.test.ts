@@ -1,12 +1,4 @@
-/**
- * Spawn 需求评估测试（A2 升级功率 + A4 替换路程项）。
- *
- * 覆盖：
- *   - storage 水位三档：冲刺（≥50k）/ 维持（≥10k）/ 低水位（<10k）
- *   - RCL8 升级功率显式封顶 15 WORK
- *   - 无 storage 时保留早期猛冲梯度
- *   - 替换阈值计入 spawn→source 通勤路程
- */
+/** Spawn 需求评估测试（A2 升级功率 + A4 替换路程项）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { evaluateDemand, estimateTravelTicks, needsReplacement } from "../../../src/domain/spawn/demand";
 import { mockController, mockCreep, mockHostile, mockSnapshot, mockSource, mockStructure, resetGlobals } from "../../role-helpers";

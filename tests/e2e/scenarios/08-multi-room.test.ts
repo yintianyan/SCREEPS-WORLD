@@ -1,19 +1,4 @@
-/**
- * E2E-008 多房间 remote mining — 验证跨房物流。
- *
- * 真实场景 [Experience]：
- *   - 单房 source 产能上限 3000/300tick = 10/tick
- *   - Remote mining 是突破单房能量上限的关键
- *   - 需要跨房 pathfinding、remote harvester、跨房 hauler
- *
- * 验证标准：
- *   1. 双房场景稳定运行
- *   2. 不崩
- *   3. 主房 creep 能正常工作
- *
- * 注意：这个场景验证的是"不崩"，不是"remote mining 成功"。
- * Remote mining 是高级功能，AI 可能还没实现。先确保不崩。
- */
+/** E2E-008 多房间 remote mining — 验证跨房物流。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { remoteMiningRooms } from "../fixtures/rooms";

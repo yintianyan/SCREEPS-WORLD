@@ -1,22 +1,4 @@
-/**
- * A6.3.1 TimeSeries<T> — 通用有界时间序列容器。
- *
- * 职责：
- *   - 存储带 tick 标注的采样点
- *   - 固定容量上限（bounded），超出时移除最旧（FIFO 淘汰）
- *   - 提供线性回归、均值、趋势方向等统计计算
- *   - 确定性：遍历前排序，浮点结果 toFixed(3)
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * 所有运行时数据由调用方注入。
- *
- * Deterministic Replay：
- *   同一采样点序列 → 相同的回归结果 / 均值 / 趋势方向。
- *   禁止 Math.random() / Date.now() / 无序迭代 / 浮点误差。
- *
- * Shadow-Only（PRED-001）：
- *   TimeSeries 只做存储和计算，不执行 Game API，不修改运行时状态。
- */
+/** A6.3.1 TimeSeries<T> — 通用有界时间序列容器。 */
 
 // ═══════════════════════════════════════════════════════════
 // §1. Types
@@ -51,10 +33,10 @@ export type TrendDirection = "up" | "down" | "flat" | null;
 
 /**
  * TimeSeries<T> — 有界时间序列容器。
- *
+
  * 容量固定，超出时移除最旧的采样点（FIFO）。
  * 所有操作 O(n) 但 n ≤ capacity（默认 100）。
- *
+
  * 确定性保证：
  *   - push 不依赖随机/时间来源
  *   - recent 返回按 tick 升序排序的数组
@@ -72,7 +54,7 @@ export interface TimeSeries<T = number> {
 
 /**
  * 创建新的 TimeSeries 容器。
- *
+
  * 纯函数 — 返回新对象，不修改输入。
  */
 export function createTimeSeries<T>(capacity: number): TimeSeries<T> {
@@ -85,10 +67,10 @@ export function createTimeSeries<T>(capacity: number): TimeSeries<T> {
 
 /**
  * 向 TimeSeries 压入一个采样点。
- *
+
  * 超出容量时移除最旧的采样点（FIFO 淘汰）。
  * 如果同一 tick 已有采样点，更新值（不重复）。
- *
+
  * 确定性：不使用 Math.random / Date.now。
  */
 export function pushSample<T>(ts: TimeSeries<T>, tick: number, value: T): void {
@@ -114,7 +96,7 @@ export function pushSample<T>(ts: TimeSeries<T>, tick: number, value: T): void {
 
 /**
  * 获取最近的 N 个采样点（按 tick 升序）。
- *
+
  * 确定性：先排序再切片，保证遍历顺序一致。
  */
 export function recentSamples<T>(ts: TimeSeries<T>, n: number): TimeSeriesPoint<T>[] {
@@ -124,7 +106,7 @@ export function recentSamples<T>(ts: TimeSeries<T>, n: number): TimeSeriesPoint<
 
 /**
  * 获取所有采样点（按 tick 升序）。
- *
+
  * 确定性：排序后返回。
  */
 export function allSamples<T>(ts: TimeSeries<T>): TimeSeriesPoint<T>[] {
@@ -133,10 +115,10 @@ export function allSamples<T>(ts: TimeSeries<T>): TimeSeriesPoint<T>[] {
 
 /**
  * 对数值型 TimeSeries 执行线性回归。
- *
+
  * 返回 { slope, intercept, r2, samples }。
  * 样本数 < 2 时返回 null（无法回归）。
- *
+
  * 确定性：相同输入 → 相同输出。浮点结果 toFixed(3)。
  */
 export function linearRegression(ts: TimeSeries<number>): LinearRegressionResult | null {
@@ -180,7 +162,7 @@ export function linearRegression(ts: TimeSeries<number>): LinearRegressionResult
 
 /**
  * 计算数值型 TimeSeries 的均值。
- *
+
  * 样本数 = 0 时返回 null。
  * 确定性：排序后遍历，浮点结果 toFixed(3)。
  */
@@ -193,13 +175,13 @@ export function meanValue(ts: TimeSeries<number>): number | null {
 
 /**
  * 判断数值型 TimeSeries 的趋势方向。
- *
+
  * 基于线性回归斜率：
  *   slope > threshold → "up"
  *   slope < -threshold → "down"
  *   |slope| <= threshold → "flat"
  *   样本不足 → null
- *
+
  * threshold 默认 = 0.001（避免浮点噪声误判）。
  * 确定性：相同输入 → 相同输出。
  */
@@ -217,10 +199,10 @@ export function trendDirection(ts: TimeSeries<number>, threshold = 0.001): Trend
 
 /**
  * 清理 TimeSeries 中超过 maxAge tick 的采样点。
- *
+
  * 确定性 GC：删除所有 tick < (currentTick - maxAge) 的采样点。
  * 不改变 samples 顺序（只 filter）。
- *
+
  * 返回清理的采样点数。
  */
 export function gcTimeSeries<T>(ts: TimeSeries<T>, currentTick: number, maxAge: number): { cleaned: number } {
@@ -233,7 +215,7 @@ export function gcTimeSeries<T>(ts: TimeSeries<T>, currentTick: number, maxAge: 
 
 /**
  * 获取 TimeSeries 统计信息（用于可观测性）。
- *
+
  * 确定性：遍历前排序。
  */
 export function timeSeriesStats<T>(ts: TimeSeries<T>): {

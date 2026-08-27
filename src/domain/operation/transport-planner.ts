@@ -1,15 +1,4 @@
-/**
- * Transport Planner — A3.0 跨房运输规划纯函数
- *（LOGISTICS §2.1 Route）。
- *
- * 从 AllocationPlan 生成 TransportRequest 候选：
- *   - 路由规划（Game.map.findRoute 由系统侧执行，domain 只做路由检查）
- *   - Carrier Body 计算
- *   - ETA 估算
- *   - 生成 TransportRequest(scope="empire")
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Transport Planner */
 
 import type { AllocationPlan } from "./allocation";
 import type { TransportRequest } from "../assignment/request-pool";
@@ -78,7 +67,7 @@ function estimateEta(routeHops: number): number {
 
 /**
  * 从 AllocationPlan + RouteResult 生成 TransportPlan。
- *
+
  * 纯函数 — 不执行 Game.map.findRoute（由系统侧注入）。
  */
 export function planTransport(

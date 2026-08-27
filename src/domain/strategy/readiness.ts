@@ -1,19 +1,4 @@
-/**
- * Expansion Readiness — A2 后半·步 8：扩张就绪度统一评估。
- *
- * 合同锚点：EXPANSION §2 G1–G5 门控、GOAL_POLICY_PLAN §3 posture × budget、
- * ECONOMY §1.2 本土净流为正是一切对外援助/扩张的前置。
- *
- * 定位：归一化散布在 posture.expansionAllowed + capacity.tier + G1 门控中的
- * 扩张判定为统一 Readiness 评估。不只是看「能不能扩张」——
- * 而是「现在为什么适合/不适合扩张」，给出 Evidence。
- *
- * 严格禁止（A2 后半红线）：
- *   - 不执行 Claim/Reserve/Remote Mining/Military Escort
- *   - 只做 Evaluation——产出 Readiness 枚举 + Evidence
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Expansion Readiness */
 
 import type { EmpireResourceView } from "./resource-view";
 import type { EmpireEconomicHealth } from "./economic-health";
@@ -26,7 +11,7 @@ import type { RiskResult } from "../expansion/risk";
 
 /**
  * 扩张就绪度。
- *
+
  * - NOT_READY：当前经济不支持扩张
  * - READY：满足基本扩张门控
  * - STRONGLY_READY：经济充裕 + 多核心房 + CPU 余量充足
@@ -125,7 +110,7 @@ const HEALTH_RANK: Record<EmpireEconomicHealth, number> = {
 
 /**
  * 评估扩张就绪度（纯函数）。
- *
+
  * 门控序列（全部通过才 READY）：
  *   G1: 无活威胁（blockOnLiveThreat）
  *   G2: 无困难房（blockOnStruggling）
@@ -134,13 +119,13 @@ const HEALTH_RANK: Record<EmpireEconomicHealth, number> = {
  *   G5: 核心房数 ≥ minCoreRooms
  *   G6: CPU tier ≤ minCpuTier（余量充足）
  *   G7: 扩张预算 ≥ minExpansionBudget
- *
+
  * STRONGLY_READY 额外要求：
  *   G8: health ≥ stronglyMinHealth
  *   G9: coreRooms ≥ stronglyMinCoreRooms
  *   G10: cpuTier ≤ stronglyMinCpuTier
  *   G11: netFlow ≥ stronglyMinNetFlow
- *
+
  * @param view EmpireResourceView
  * @param health EmpireEconomicHealth
  * @param budget EmpireBudget
@@ -276,12 +261,12 @@ export function evaluateExpansionReadiness(
 
 /**
  * A3.2 扩展就绪度评估：在基础 G0–G11 通过后，追加 G12–G15 候选/成本/风险/保护层门控。
- *
+
  * G12: 有评分合格候选（candidateScore ≥ minCandidateScore）
  * G13: Available Budget ≥ Estimated Cost
  * G14: Risk ≤ maxRiskScore
  * G15: Core Reserve 未被侵入
- *
+
  * 返回新增的 Gate 条目列表，供调用方追加到基础 Gates 后。
  */
 export function evaluateExpansionReadinessExtended(

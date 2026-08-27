@@ -1,7 +1,4 @@
-/**
- * 反应链规划 — 纯函数（无 Game API 依赖）：从目标产物反向推导完整反应链。
- * 每个 lab 每 tick 产出 5 单位（LAB_REACTION_AMOUNT）。
- */
+/** 反应链规划 — 纯函数（无 Game API 依赖）：从目标产物反向推导完整反应链。 */
 import { REACTIONS, type Compound, type ReactionPlan, type ReactionStep } from "./types";
 
 /** 每个 lab 每 tick 的反应产出量。 */
@@ -133,7 +130,7 @@ export function selectReactionTrio(labs: readonly LabPos[]): ReactionTrio | unde
  * 贪心选出多个互不相交的三元组（每个 lab 最多被一个三元组占用）。
  * RCL8 有 10 个 lab — 单三元组只利用 3 个（产能 5/tick），剩余 7 个 idle。
  * 多三元组可并行执行同一反应步骤，产能成倍提升（3 组 = 15/tick）。
- *
+
  * 策略：按 output 候选的可用 input 数降序排列（input 多的 output 优先分配），
  * 贪心锁定后从可用池移除已分配 lab，继续选下一组。
  */

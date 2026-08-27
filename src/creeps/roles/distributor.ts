@@ -1,13 +1,4 @@
-/**
- * Distributor — P1 分发角色（RCL4+）。从 storage 取能分发给 spawn/extension/tower/lab；
- * 数据流 Storage → Sink（单向，永不回流）— 与 hauler 的「源 → Storage」分离，消除
- * 旧架构的 storage→storage 循环。仅 storage 存在时孵化；无 storage 时由 hauler 直送。
- * assignment-free 设计（修改前必读）：distributor 不参与 assignment 系统，直接读
- * RoomSnapshot.fillTargets。为什么：spawn 填充在所有状态（正常/低能量/敌袭）都应优先，
- * 紧急抢占会清空 assignment → 失任务 → spawn 不被填充 → 灾后无法恢复。限制：紧急抢占对
- * distributor 无效（设计意图）；仍受 shouldFlee 控制；需求门禁从架构上消除循环。
- * 维护约束：勿纳入 assignment 系统（除非引入「紧急态豁免」）；未来扩展走 snapshot 字段驱动。
- */
+/** Distributor */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {

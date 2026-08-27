@@ -1,11 +1,4 @@
-/**
- * 战斗黑匣子（M9）— creep 死亡事件测试。
- *
- * recordCreepDeath 由 maintainMemory 在清理死者 memory 时调用：
- * 出生 tick 从 creep 名解析（role-home-idx-birthTick-rand），位置取自
- * 上 tick 预构建的 creepLastSeen 缓存，natural 按角色寿命阈值判定。
- * 黑匣子的价值在非自然死亡（战损/事故）的复盘，事件字段必须精确。
- */
+/** 战斗黑匣子（M9）— creep 死亡事件测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   EventKind,

@@ -1,18 +1,10 @@
-/**
- * E2E 场景夹具 — 基于 Screeps 真实常量构建标准房间。
- *
- * 所有数值来自 [Facts] docs.screeps.com：
- *   - SOURCE_ENERGY_CAPACITY = 3000
- *   - SOURCE_ENERGY_REGEN_TIME = 300
- *   - CONTROLLER_LEVELS 升级能量
- *   - 房间 50x50，中心 (25,25) 是常见 spawn 位置
- */
+/** E2E 场景夹具 — 基于 Screeps 真实常量构建标准房间。 */
 import { WorldBuilder, type RoomSetup, source, controller, mineral, spawn, emptyTerrain } from "../framework/WorldBuilder";
 
 /**
  * 标准单房间：spawn + 2 source + 1 controller + 1 mineral。
  * 地形全平原，spawn 在中心 (25,25)。
- *
+
  * @param roomName 房间名
  * @param spawnEnergy spawn 初始能量（默认 300，灾后恢复用）
  * @param rcl controller 初始等级（默认 1）

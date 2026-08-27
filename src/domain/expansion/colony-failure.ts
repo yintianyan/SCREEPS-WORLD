@@ -1,20 +1,4 @@
-/**
- * Colony Failure Detection — A3.4：新 Colony 经济失败检测。
- *
- * 合同锚点：A3.4 Task Spec §19 Colony Failure Detection + §20 No Re-bootstrap。
- *
- * 检测 Colony 是否进入经济衰退，触发 Normal Room Recovery（不是重新 Bootstrap）。
- *
- * 失败类型：
- *   1. Energy Deficit — 净流持续为负
- *   2. Population Collapse — 人口急剧下降
- *   3. Spawn Starvation — spawn 长期无能量
- *   4. Construction Block — 关键建造长期停滞
- *   5. Logistics Failure — 物流中断
- *   6. Defense Failure — 防御失败（已失守不算 Colony 失败，是 Room Lost）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Colony Failure Detection */
 
 /** 失败类型枚举。 */
 export type FailureType =
@@ -99,7 +83,7 @@ const LOGISTICS_GAP_TICKS = 300;
 
 /**
  * 评估 Colony 失败状态（纯函数）。
- *
+
  * 检测多种失败模式，推荐 Normal Room Recovery 而非重新 Bootstrap。
  * 重新 Bootstrap 仅在 Room Lost（controller 丢失）时允许——
  * 这由 expansion-manager 的失守检查处理，不在本模块。
@@ -192,7 +176,7 @@ export function evaluateColonyFailure(input: ColonyFailureInput): ColonyFailureR
 
 /**
  * Normal Room Recovery 建议（纯函数）。
- *
+
  * 根据 Colony Failure 类型推荐具体的恢复路径，
  * 所有路径都走 Normal Room Runtime（不重新 Bootstrap）。
  */

@@ -1,10 +1,4 @@
-/**
- * 布局可观测性指标（漏洞 #11）：为布局系统提供消费方驱动的反馈通道 — 死资产率、
- * link 利用率、拆改次数、MVC 缺口、防御完整性；每个指标都有明确的告警阈值和消费
- * 决策（见文档 §3.8「消费方」表），避免「系统在运行但无法证明决策是否改善」。
- * 落盘策略（plan §7）：存 Memory.kernel.layoutMetrics[roomName]，仅变化时写入；
- * 不进 segment — 重开后从 0 重采可接受。纯函数输入全参数注入，便于单测。
- */
+/** 布局可观测性指标（漏洞 #11）：为布局系统提供消费方驱动的反馈通道 — 死资产率、 */
 import type { RoomSnapshot } from "./contracts";
 import type { StructureGaps } from "../domain/layout/gaps";
 import { MINCUT_ALGO_VERSION } from "../domain/layout/min-cut-defense";

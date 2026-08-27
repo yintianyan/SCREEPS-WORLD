@@ -1,14 +1,4 @@
-/**
- * TickRunner — 驱动真实 kernel.run() 运行 N tick 并收集遥测。
- *
- * 核心职责：
- *   1. 每 tick 先推进物理（TestWorld.advancePhysics）
- *   2. 刷新 Game 全局对象（refreshGameGlobals）
- *   3. 调用生产代码 loop()（即 kernel.run()）
- *   4. 收集每 tick 的状态快照用于断言和报告
- *
- * 不 mock AI 内部逻辑 — 生产代码原样运行。
- */
+/** TickRunner — 驱动真实 kernel.run() 运行 N tick 并收集遥测。 */
 import type { TestWorld } from "./TestWorld";
 
 export interface TickRecord {
@@ -62,7 +52,7 @@ export class TickRunner {
 
   /**
    * 运行 N tick。
-   *
+
    * @param world  已配置好的 TestWorld
    * @param ticks  运行 tick 数
    * @param opts   运行选项

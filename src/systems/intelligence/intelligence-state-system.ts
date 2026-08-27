@@ -1,30 +1,4 @@
-/**
- * A6.5 IntelligenceState System — 系统层薄壳。
- *
- * 合同锚点：A6_5_SAFETY_BOUNDARY.md §六
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 globalCache.__predictionCache / __calibrationCache 只读采集数据
- *   2. 构建 PredictionContext（复用 A6.3 makePredictionContext）
- *   3. 调用 Domain 纯函数 computeIntelligenceState → IntelligenceState
- *   4. 运行 REL-001~REL-012 守卫检查
- *   5. console.log 可观测性输出
- *
- * 禁止（REL-001: Read-Only）：
- *   - **不写入任何 cache** — IntelligenceState 不持久化
- *   - 不执行任何 Game API 写操作
- *   - 不修改任何业务状态（REL-004）
- *   - 不进入 tick 关键路径（低频 500t）
- *   - 不新建采样通道（REL-007）
- *   - 不建立第二套 Metrics / Strategy / Outcome（REL-008）
- *   - IntelligenceState 不进入任何执行系统
- *
- * CPU 预算：低频执行（interval=500），每 tick 近零成本。
- * 优先级 P3（在所有业务系统之后运行，消费它们产出的数据）。
- * 存储：heap only — global reset 可丢。
- *
- * 安全不变式：本系统完全停止时，帝国必须照常安全运行。
- */
+/** A6.5 IntelligenceState System — 系统层薄壳。 */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { systemPhase } from "../../kernel/phase";

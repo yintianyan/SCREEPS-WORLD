@@ -1,23 +1,4 @@
-/**
- * Logistics Health — A4.3 Phase 6：物流健康度。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #19（无 Logistics Health）、§10 #33。
- *
- * 设计意图：
- *   与 network-health.ts 的区别：
- *   - network-health 看 supply/demand gap（资源层）
- *   - logistics-health 看 delivery rate / loss / latency（执行层）
- *
- *   六档健康度：
- *   - healthy:    运力充足，交付率高
- *   - stable:      运力匹配，偶有积压
- *   - degraded:    运力不足，部分积压
- *   - congested:   路由拥堵，交付延迟
- *   - starved:     长期缺资源，物流失败
- *   - critical:    网络崩溃，大量失败
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Logistics Health */
 
 import type { TransportAccounting } from "./transport-accounting";
 import { deliveryRate, lossRate, isComplete } from "./transport-accounting";
@@ -63,11 +44,11 @@ export interface LogisticsHealthResult {
 
 /**
  * 计算 Logistics Health。
- *
+
  * 与 network-health.ts 的区别：
  *   - network-health 看 supply/demand gap（资源层）
  *   - logistics-health 看 delivery rate / loss / latency（执行层）
- *
+
  * 纯函数。
  */
 export function computeLogisticsHealth(

@@ -1,12 +1,4 @@
-/**
- * assignment-service 紧急抢占接线测试。
- *
- * 背景：抢占纯函数（shouldPreemptAssignments）的单测一直全绿，但接线曾断裂 —
- * invalidate 在 generateRoomTasks 之前调用，读到每 tick 重建的空 TaskPool，
- * 返回空 creep 名单，抢占静默退化为 no-op。
- * 本文件走真实调用链（system.run → TaskPool → creep memory 副作用），
- * 纯函数测试不能替代它。
- */
+/** assignment-service 紧急抢占接线测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { assignmentServiceSystem } from "../../../src/systems/assignment-service";
 import {

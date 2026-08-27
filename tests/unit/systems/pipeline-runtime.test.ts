@@ -1,13 +1,4 @@
-/**
- * Pipeline Runtime Tests — Phase 6 验证 pipeline 顺序和错误隔离。
- *
- * 覆盖：
- *   - tactical-runtime-pipeline stage 顺序
- *   - intelligence-pipeline-system cadence 保持
- *   - 单 stage 异常隔离（一个 stage 抛错不跳过后续 stage）
- *   - stage cadence 不死锁
- *   - pipeline 停止时 A6 不影响帝国主执行链
- */
+/** Pipeline Runtime Tests — Phase 6 验证 pipeline 顺序和错误隔离。 */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { tacticalRuntimePipelineSystem } from "../../../src/systems/tactical-runtime-pipeline";
 import { intelligencePipelineSystem } from "../../../src/systems/intelligence/intelligence-pipeline-system";

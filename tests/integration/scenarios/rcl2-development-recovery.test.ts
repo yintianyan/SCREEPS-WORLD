@@ -1,16 +1,4 @@
-/**
- * Phase R2 — RCL2 Early Development Recovery 集成回归。
- *
- * 修复目标：RCL2 从「建设需求入队」到「实际 construction site 创建」的闭环。
- * 根因（复现报告见 docs/implementation/TECH_DEBT_LEDGER.md R2 条目）：
- *   extension 等关键发展结构没有受保护通道 — developmentGate 任一门禁
- *   （claimSecure / pressure / conserve / 能量地板 / P0 spawn）拉闸即无限期停摆，
- *   而 emergency 豁免清单中 tower 需 RCL3+ 才生效 → 拖到 RCL3 才自愈。
- * 修复：RCL2-3 关键发展通道（evaluateDevelopmentLane）+ 队列治理
- *   （背景任务硬上限 / queuedAt 年龄 / 超龄清除）。
- *
- * 驱动真实 main.ts → kernel.run()，不 mock AI 内部逻辑。
- */
+/** Phase R2 — RCL2 Early Development Recovery 集成回归。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner } from "../framework";
 import type { TestWorld } from "../framework";

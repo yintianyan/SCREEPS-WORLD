@@ -1,14 +1,4 @@
-/**
- * Edge Cases — 老玩家边界场景集成测试。
- *
- * 覆盖：
- *   - Spawn 异常（busy、能量不足、body 无法生成）
- *   - Creep 异常（死亡、TTL 不足、memory 损坏）
- *   - 能量危机（source 枯竭、energy=0）
- *   - Memory 异常（缺少字段、错误结构）
- *   - CPU 压力（大量 creep）
- *   - 随机事件（连续运行不崩溃）
- */
+/** Edge Cases — 老玩家边界场景集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 import type { TestWorld } from "../framework";

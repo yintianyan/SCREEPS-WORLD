@@ -1,22 +1,4 @@
-/**
- * v21 → v22 迁移独立测试（P0-1 srcRatio 强制 crisis 通道字段建档）。
- *
- * 迁移语义：新增 RoomMemory.phase.srcStallTicks 与 RoomMemory.phase.storageEnergyPrev
- * 两个可选字段，由 room-state 惰性写入。迁移只做「建档 + 畸形自愈」，不写字段值。
- *
- * 自愈规则：
- *   - srcStallTicks 非数字 → 删除（缺失视为 0，安全）
- *   - storageEnergyPrev 非数字 → 删除（缺失由 room-state 用 current 兜底，drainRate=0）
- *   - phase 非对象 → 跳过该房（不触碰）
- *
- * 覆盖：
- *   - 空 Memory（无 room.phase）不报错
- *   - 合法 srcStallTicks / storageEnergyPrev 保留
- *   - 脏 srcStallTicks（非数字）→ 清除，合法 storageEnergyPrev 保留
- *   - 脏 storageEnergyPrev（非数字）→ 清除，合法 srcStallTicks 保留
- *   - phase 非对象 → 跳过
- *   - 幂等：重复执行不产生副作用
- */
+/** v21 → v22 迁移独立测试（P0-1 srcRatio 强制 crisis 通道字段建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

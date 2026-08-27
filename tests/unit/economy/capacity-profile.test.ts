@@ -1,9 +1,4 @@
-/**
- * Capacity Model + Empire Resource View 单测 — A2B-002..A2B-005。
- *
- * 合同锚点：ECONOMY §2.1 Income + §2.3 能量预算公式、
- * EMPIRE_SYSTEM_MODEL §1 Empire + STATE_OWNERSHIP §3.1 EmpireSituation。
- */
+/** Capacity Model + Empire Resource View 单测 */
 import { describe, it, expect } from "vitest";
 import {
   buildRoomCapacityProfile,

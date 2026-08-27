@@ -1,9 +1,4 @@
-/**
- * 【F1/G-E】指标四元组目录（FREEZE §12 / 研究文档 21 号）。
- * 规则：每个进入遥测的指标必须在此登记 {name, source, consumer, action}——
- * 无 consumer/action 的指标不许存在（防虚荣指标与观测税）。
- * 本目录 v1 登记「已存在」的指标；新增指标必须同步登记。
- */
+/** 指标四元组目录（FREEZE §12 / 研究文档 21 号）。 */
 
 /** 指标消费后可触发的行动类型（约束 action 字段的取值域）。 */
 export type MetricAction =

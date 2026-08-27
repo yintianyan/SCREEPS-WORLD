@@ -1,9 +1,4 @@
-/**
- * Traffic Manager 系统测试 — 意图登记双模、tick 末集中解算与统一签发。
- *
- * 全局 setup 默认关闭 trafficManager（存量行为断言不变），
- * 本文件按用例显式开启并在 afterEach 恢复。
- */
+/** Traffic Manager 系统测试 — 意图登记双模、tick 末集中解算与统一签发。 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CONFIG } from "../../../src/config";
 import { trafficManagerSystem } from "../../../src/systems/traffic-manager";

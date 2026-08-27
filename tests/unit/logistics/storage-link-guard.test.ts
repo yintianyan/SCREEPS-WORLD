@@ -1,11 +1,4 @@
-/**
- * withdrawStorageLink ②b 守卫口径回归（A 修复，2026-08-01）。
- *
- * 旧口径：controller link free>0 即让路升级链 → RCL8 停供后残留能量
- * （799/800, free=1）永久卡死 storage link 排空 → source 背压 → 全链堵。
- * 新口径与 planLinkTransfers 的 controllerUrgent 一致：controller link
- * 能量 < minTransfer(400) 才算急需。
- */
+/** withdrawStorageLink ②b 守卫口径回归（A 修复，2026-08-01）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { withdrawStorageLink } from "../../../src/creeps/engine/actions/withdraw";
 import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";

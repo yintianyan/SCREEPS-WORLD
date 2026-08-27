@@ -1,13 +1,4 @@
-/**
- * Site 配额管理 — construction-manager 与 remote-mining-manager 的共享账本。
- * 两个维度严格分离（P0-A 评审修正）：
- *   1. tick 速率：每 tick 全局最多 1 个 normal site + 1 个 emergency site；
- *      normal 槽位自有房与远矿公平竞争，远矿 site 永远让位自有房 emergency。
- *   2. 总存量：ctx.globalSiteCount + Σ remoteOps.siteCount < CONFIG.construction.maxGlobalSites，
- *      emergency 豁免自设限额。
- * 红线：不得用 Game.constructionSites 全量遍历替代账本（每 tick O(n) 对象遍历）；
- * remoteOps.siteCount 必须带实测校正（site 建成/失效即减），禁止只增不减。
- */
+/** Site 配额管理 — construction-manager 与 remote-mining-manager 的共享账本。 */
 import { globalCache } from "../kernel/global-cache";
 
 /**

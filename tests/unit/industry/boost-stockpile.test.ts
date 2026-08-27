@@ -1,11 +1,4 @@
-/**
- * Boost 化合物分级库存上限测试（纯函数）。
- *
- * 覆盖：
- *   getBoostStockpileLimit — war vs 日常分级判定
- *   computeBoostSurplus — 盈余量计算
- *   isWarStrategicCompound — war 编队化合物识别
- */
+/** Boost 化合物分级库存上限测试（纯函数）。 */
 import { describe, expect, it } from "vitest";
 import {
   getBoostStockpileLimit,

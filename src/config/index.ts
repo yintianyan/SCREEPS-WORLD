@@ -453,7 +453,7 @@ export const CONFIG = {
      * storage 总容量 1,000,000（STORAGE_CAPACITY），按比例分级时 10% 档 = 10 万 —
      * 发展期房间（库存常年数百到数万）永久卡在最低档，extension 断供。
      * 与 upgrade.sprintStorage(50000)/sustainedStorage(10000) 同一参照系。
-     *
+
      * ── 水位权限表（Batch 2 统一刻度 — 全部 storage 消费者按此表取能）──
      * | storage 水位      | distributor      | upgrader        | builder   | lab  | terminal |
      * | ≥ full(50k)       | 全目标满载        | 冲刺(=sprint)   | 满载      | 放行 | ≥20k 放行 |
@@ -822,10 +822,10 @@ export const CONFIG = {
     minBucket: 8000,
     /**
      * 动态定价策略参数 — 市场行情快照驱动的相对价格门禁。
-     *
+
      * 核心思路：买/卖价格不写死绝对值，而是以 marketPrices 行情快照为基准 ×
      * 策略系数计算。市场通胀/通缩时门禁自动浮动，代码不需要调整。
-     *
+
      * fallback 值仅在行情空窗期（首 tick / global reset / 无卖单）兆底，
      * 正常运行时由行情快照接管。
      */

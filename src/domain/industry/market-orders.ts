@@ -1,14 +1,4 @@
-/**
- * 市场挂单决策 — 纯函数层（审计缺口 4：只吃单不挂单损失买卖价差）。
- *
- * 背景：deal 吃单即刻成交但付价差（矿物流动性差，吃单往往贱卖 10-30%）；
- * createOrder 挂单等合理买家，代价是 5% 手续费 + 成交时滞。策略：大宗盈余
- * （吃单单笔消化不完）走挂单，价 = 当前最优 buy 价 × markup（比最优 bid
- * 略高的 ask，市场微观结构的合理溢价）。
- *
- * 生命周期：每房每资源至多 1 张挂单；挂龄超 staleMs 且零成交 → 撤单重挂
- *（重挂价随市场 bid 重算，天然自适应下行）。
- */
+/** 市场挂单决策 — 纯函数层（审计缺口 4：只吃单不挂单损失买卖价差）。 */
 
 /** 挂单决策输入（执行层从 Game.market / snapshot 采集）。 */
 export interface SellOrderInput {
@@ -62,7 +52,7 @@ export function shouldCancelStaleOrder(
 /**
  * 改价决策：挂龄超限且零成交，但市场 bid 仍存在 → 不撤单重挂（省 5% 手续费），
  * 直接 changeOrderPrice 到新价（随 bid 自适应下行）。
- *
+
  * 返回值：undefined = 不改价（保留或走撤单路径）；number = 新价格。
  * 条件：① 零成交（remaining == total）；② 有新 bid 锚定；③ 新价与旧价差异超阈值
  * （价格不变改价无意义，且 changeOrderPrice 有调用成本）。

@@ -1,32 +1,4 @@
-/**
- * E2E-003 Storage 建造 — RCL4 解锁 storage，验证建造链路启动。
- *
- * 真实场景 [Experience]：
- *   - RCL4 解锁 storage（1 个），是经济自动化的关键里程碑
- *   - Storage 建好后 hauler 才能高效运转（centralized logistics）
- *   - 没有 storage 的 RCL4+ 房间是病态的（container 堆积）
- *
- * 验证标准（不依赖 Memory 内部结构，只通过 bot.console 和 Memory.creeps 观察）：
- *   1. 2800 tick 内出现 builder 角色（RCL 升级需要时间）
- *   2. 全程无 JS 错误
- *   3. creep 数量增长（经济在运转）
- *   4. Memory 持久存在（schemaVersion 稳定）
- *
- * 关键约束（来自 project_memory）：
- *   - Storage construction site must be marked with priority=1 and maxWorkers=3
- *   - For RCL4+ rooms without storage but with storage site:
- *     builder non-storage build assignments must be released each tick
- *
- * 不验证：
- *   - 具体建造进度（取决于 AI 策略和能量供应）
- *   - Memory 中建造队列结构（生产代码结构可能变化）
- *
- * 修复说明（Release Hardening）：mockup 的 world.addBot() 会把 controller
- * 强制重置为 level=1（world.js:216），fixture 预设的 RCL4 无效；runtime
- * 中 controller.level 是 getter-only，sendConsole 赋值同样无效。正确方式是
- * 通过 ScenarioRunner 的 controllerLevel 选项在 addBot 之后、server 启动
- * 前直接修正 DB。
- */
+/** E2E-003 Storage 建造 — RCL4 解锁 storage，验证建造链路启动。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { rcl4Room } from "../fixtures/rooms";

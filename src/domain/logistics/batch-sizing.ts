@@ -1,20 +1,4 @@
-/**
- * Batch Sizing — A4.3 Phase 1：动态批量大小计算。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #5。
- *
- * 设计意图：
- *   根据源可用量、目标需求量、hauler 运力、运输成本、优先级和截止时间，
- *   计算最优单次运输批量。
- *
- *   公式：
- *     理论批量 = min(sourceAvailable, destinationDemand)
- *     经济批量 = ceil(理论批量 / haulerCapacity) × haulerCapacity（满载优化）
- *     紧急批量 = deadline 紧迫时取 minBatch（快速响应）
- *     最终批量 = clamp(minBatch, 经济批量, maxBatch)
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Batch Sizing */
 
 // ─── 输入 / 输出 ──────────────────────────────────────────
 
@@ -67,7 +51,7 @@ const DEFAULT_MAX_BATCH = 5000;
 
 /**
  * 动态 Batch Size 计算。
- *
+
  * 算法：
  *   1. 理论批量 = min(sourceAvailable, destinationDemand)
  *   2. 如果 haulerCapacity > 0:
@@ -76,7 +60,7 @@ const DEFAULT_MAX_BATCH = 5000;
  *   4. 紧急模式（deadline 紧迫或 priority=0）: 批量取 minBatch（快速响应）
  *   5. 最终批量 = clamp(minBatch, 经济批量, maxBatch)
  *   6. trips = ceil(批量 / haulerCapacity)
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function computeBatchSize(input: BatchSizingInput): BatchSizingResult {

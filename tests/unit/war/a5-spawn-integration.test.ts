@@ -1,16 +1,4 @@
-/**
- * A5.3 Spawn 集成测试 — WarPlan → a5ForceReq → war-planner 消费。
- *
- * 验证链路：
- *   war-planning-system.writeCompatibleWarPlan → 写入 Memory.kernel.warPlan.a5ForceReq
- *   war-planner → 读取 a5ForceReq，用它替代旧 decideSquadSize/decideHealerCount
- *
- * 核心断言：
- *   1. a5ForceReq 存在时，attacker 补位目标 = a5ForceReq.attacker（非 plan.squadSize）
- *   2. a5ForceReq 存在时，healer 编制 = a5ForceReq.healer（非 decideHealerCount 推导）
- *   3. a5ForceReq 不存在时，退回旧路径（兼容性）
- *   4. 止损基数使用 fullSquadSize = attackerTarget + healerCount
- */
+/** A5.3 Spawn 集成测试 — WarPlan → a5ForceReq → war-planner 消费。 */
 import { describe, expect, it } from "vitest";
 import { submitSquadRequest } from "../../../src/systems/war-planner";
 import { resetGlobals } from "../../role-helpers";

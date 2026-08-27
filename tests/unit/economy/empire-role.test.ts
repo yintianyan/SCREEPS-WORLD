@@ -1,14 +1,4 @@
-/**
- * A4.0 Phase 1 — Empire Room Role 单元测试。
- *
- * 覆盖：
- * - empire-role.ts：枚举、特征、序列化/反序列化
- * - role-evaluation.ts：四角色评分、前置条件门控、推荐角色选择
- * - role-stability.ts：Hysteresis、Min Duration、Re-evaluation Threshold
- * - role-transition.ts：转换路径验证、影响评估、触发推断
- * - room-profile.ts：empireRole 字段扩展
- * - room-registry.ts：empireRole 字段扩展
- */
+/**  */
 import { describe, it, expect } from "vitest";
 import {
   EMPIRE_ROOM_ROLES,

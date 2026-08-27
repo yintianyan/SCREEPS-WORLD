@@ -1,12 +1,4 @@
-/**
- * linkHasOutlet 纯函数测试（2026-08-02，link 布局漏洞 #3）。
- *
- * 覆盖：
- *   - 非 source link 永远有 outlet（不需要下游）
- *   - source link 有 controller/storage link → 有 outlet
- *   - source link 无 controller/storage link → 无 outlet（死资产）
- *   - otherLinks 不含 link 自身（调用方过滤）
- */
+/** linkHasOutlet 纯函数测试（2026-08-02，link 布局漏洞 #3）。 */
 import { describe, expect, it } from "vitest";
 import { linkHasOutlet } from "../../../src/domain/economy/link-outlet";
 import type { LinkInfo } from "../../../src/domain/economy/links";

@@ -1,11 +1,4 @@
-/**
- * RemoteDefender — P1 远矿防御者。前往受威胁的远矿房，击杀 NPC Invader / reserver creep。
- * 设计：body [ATTACK,ATTACK,MOVE,MOVE] @520 — 20 damage/tick，10 tick 击杀 NPC reserver；
- * 无 CARRY → mode 振荡但两 mode 行为相同；不用 assignment → 目标固定为 remoteTarget 中 hostile；
- * 常驻 remoteTarget（ensureHome 导航适配）。
- * 行为链：ensureHome 导航 → 找 hostile（过滤联盟白名单）→ attack 最近 → 无威胁则 idle → 回 home 回收。
- * 架构约束：NPC reserver 无攻击能力 → defender 不会受伤；NPC Invader 可能有 ATTACK → 需足够 ATTACK 快杀。
- */
+/** RemoteDefender */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";

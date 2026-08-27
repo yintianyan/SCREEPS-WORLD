@@ -1,21 +1,4 @@
-/**
- * A5.4.3 Architecture Guard — Focus Fire Domain Purity & Boundary Tests.
- *
- * 13 条边界检查（对应需求 §24 Architecture Guards）：
- *   1. Domain 禁止 Game
- *   2. Domain 禁止 Memory
- *   3. Domain 禁止 Creep
- *   4. Domain 禁止 attack
- *   5. Domain 禁止 move
- *   6. Tactical 禁止 spawn
- *   7. Tactical 禁止 logistics
- *   8. Tactical 禁止 recovery
- *   9. Tactical 禁止修改 WarPosture
- *   10. Tactical 禁止创建 Operation
- *   11. FocusFire 不得创建 Strategic Target
- *   12. 不得创建第二套 Threat Assessment
- *   13. 不得创建第二套 CombatCapability
- */
+/**  */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";

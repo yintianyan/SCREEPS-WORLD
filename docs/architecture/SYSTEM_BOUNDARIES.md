@@ -1,7 +1,7 @@
 # SYSTEM_BOUNDARIES · 系统边界契约（冻结蓝图）
 
 > 本文件是**模块边界契约**：每个模块的职责（Responsibility）、输入 / 输出、依赖、
-> 公开接口、状态所有权、CPU 档位与节奏以此为准；注册新插件前必读（AGENTS.md）。
+> 公开接口、状态所有权、CPU 档位与节奏以此为准；注册新插件前必读（AGENT.md）。
 > 结构性修订必须走 ADR 并登记 [ARCHITECTURE_FREEZE.md](ARCHITECTURE_FREEZE.md) §15。
 > 决策权与 [DECISION_AUTHORITY_MODEL.md](DECISION_AUTHORITY_MODEL.md) §1 权力总表
 > 严格一致；模块概念定义见 [EMPIRE_SYSTEM_MODEL.md](EMPIRE_SYSTEM_MODEL.md)；
@@ -220,7 +220,7 @@
 
 - **禁止**后缀：Coordinator / Handler / Controller 及一切空转命名。
 - 名称必须全局唯一 kebab-case；bootstrap 注册时查重，重复注册启动即失败。
-- 模块顶层禁止访问 `Game` / `Memory`（AGENTS.md）。
+- 模块顶层禁止访问 `Game` / `Memory`（AGENT.md）。
 
 ### 2.2 删除判据
 

@@ -1,13 +1,4 @@
-/**
- * P0-A 静态守卫 — remote-harvester 禁止调 createConstructionSite。
- *
- * 与 role-config-parity 同款的「隐式契约固化为显式断言」模式：
- * site 创建的单一写者 = construction-manager（自有房）+ remote-mining-manager（远机房）。
- * 角色层调 createConstructionSite 会打破 site 垄断，远矿 site 静默顶满
- * maxGlobalSites 后自有房灾后重建吃 ERR_FULL（P0-A 根因）。
- *
- * 此测试用源码扫描（非 eslint no-restricted-syntax，项目无 eslint 配置）实现。
- */
+/** P0-A 静态守卫 — remote-harvester 禁止调 createConstructionSite。 */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

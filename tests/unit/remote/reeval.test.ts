@@ -1,11 +1,4 @@
-/**
- * 现役 op 周期经济重估测试（组③ / A-3 + B-6）。
- *
- * 一次性快照的反面：开点时达标、后续变差的边际 op 若不重估会永续；body 变大后
- * haulerNeed 也需缩编。重估在 maintainExistingOps 之后、每轮 manager run 执行。
- *
- * 抗抖动：netScore 连续低于门槛超过 lowScoreGrace 才废弃，单次波动不撤、回升清零。
- */
+/** 现役 op 周期经济重估测试（组③ / A-3 + B-6）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
 import { CONFIG } from "../../../src/config";

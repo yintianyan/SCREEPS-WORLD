@@ -1,26 +1,4 @@
-/**
- * Phase 37 Final Closure — Expansion Outcome Correlation 反事实测试 (v3)
- *
- * 验证 AI-2 修复（decisionId 优先 + target+completedTick fallback）的反事实场景。
- * 核心发现：startedAt 在状态机推进中被反复覆盖，不能作为唯一关联键。
- * planId 在旧版 Memory 可能缺失且不能直接从 DecisionRef 获取。
- * 修复方案：用 decisionId 作为唯一稳定关联键——collectExpansionDecisions 分配并写入
- * Memory.kernel.expansion.decisionId，recordExpansionOutcome 读取并写入 lastExpansionOutcome.decisionId。
- *
- *   E1:  Expansion A outcome 不被 B 使用（decisionId 不匹配）
- *   E2:  A/B 各自正确归属
- *   E3:  A 进行中不读 B 的 outcome
- *   E4:  target + decisionId 都不匹配 → 不注入
- *   E5:  同 target 多次 expansion → decisionId 消歧
- *   E6:  不同 target → 不交叉污染
- *   E7:  完成顺序不同于 decision 顺序 → 不错误归因
- *   E8:  heap reset → 不伪造历史
- *   E9:  超出 measurement window → unresolved
- *   E10: 接近同时完成 → decisionId 唯一关联
- *   E11: startedAt 被状态机覆盖 → decisionId 仍可靠
- *   E12: fallback — 无 decisionId 时 target + completedTick > decisionTick
- *   E13: fallback 已知限制 — 无 decisionId 时同 target 风险
- */
+/** Phase 37 Final Closure — Expansion Outcome Correlation 反事实测试 (v3) */
 import { describe, it, expect, beforeEach } from "vitest";
 import { globalCache } from "../../../../src/kernel/global-cache";
 import {

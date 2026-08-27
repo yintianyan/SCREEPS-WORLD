@@ -1,14 +1,4 @@
-/**
- * A5.3 — Military Operation & War Planning 纯函数测试。
- *
- * 覆盖：
- *   §1. 12 种 OperationType（Operation 模型：isOffensive / isDefensive / 生命周期 / Hash）
- *   §2. WarPosture 授权矩阵（CEASEFIRE / DEFENSIVE / CONTAIN / LIMITED_OFFENSIVE / FULL_OFFENSIVE）
- *   §3. Capability 评估（deriveRequiredCapability × 12 type / computeCapabilityGap / deriveForceComposition）
- *   §4. Economic Guard（5 维度门槛 + 防御/进攻差异 + recommendation 降级链）
- *   §5. Target 选择（scoreTarget / selectTarget 多维度评分 + 硬过滤 + 排序）
- *   §6. WarPlan Hash 确定性（planMilitaryOperation 端到端 + 相同输入同 hash）
- */
+/** A5.3 — Military Operation & War Planning 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 
 import {

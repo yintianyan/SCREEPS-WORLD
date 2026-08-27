@@ -1,7 +1,4 @@
-/**
- * 帝国态势评估回归测试 —— 散落事实 → 命名条件 + 对手画像。
- * 场景锚定：W38S59 事故（新生殖民地邻接宿敌被降级驱逐）。
- */
+/** 帝国态势评估回归测试 —— 散落事实 → 命名条件 + 对手画像。 */
 import { describe, expect, it } from "vitest";
 import { buildEmpireSituation } from "../../../src/domain/strategy/situation";
 

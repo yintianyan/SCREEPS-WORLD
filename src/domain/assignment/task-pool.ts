@@ -1,9 +1,4 @@
-/**
- * TaskPool — 单 tick 任务池（纯数据结构），封装任务存储与索引：
- * taskIndex 以 O(1) 替代 tasks.find() 的 O(N) 扫描；invalidate 单次遍历合并
- * 「收集 creep 名」与「清空 assignedCreeps」。生命周期由调用方管理 —
- * 每 tick 开头 init(tick) 清池，池随 global reset 自然消亡；不访问 Game/Memory。
- */
+/** TaskPool — 单 tick 任务池（纯数据结构），封装任务存储与索引： */
 
 import type { AssignmentTaskEntry } from "./service";
 

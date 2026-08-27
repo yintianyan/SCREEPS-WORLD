@@ -1,14 +1,4 @@
-/**
- * v33 远矿空转止损 + 入口封死废弃测试（remote-mining-manager）。
- *
- * 线上事故背景：W36S58 远矿房被前任玩家墙线困住整编队（harvester/hauler 全员
- * idle + reserver 边界钉死），op 账面指标（2 源近距）全绿，空转 44k tick 无产出、
- * 无限补员。修复：
- *   - censusStalledOps：编队全员空转（idle/flee 或 stuck≥stallStuckTicks）计时，
- *     持续超 stallAbandonTicks → 废弃；任一成员恢复立即清零。
- *   - maintainExistingOps：intel.sealedExits 覆盖全部出口 → 废弃（部分封死不废弃 —
- *     编队可绕行，W36S58 即此场景）。
- */
+/** v33 远矿空转止损 + 入口封死废弃测试（remote-mining-manager）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
 import { CONFIG } from "../../../src/config";

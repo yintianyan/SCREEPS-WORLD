@@ -1,26 +1,4 @@
-/**
- * Combat Micro Runtime — A5.5 系统层薄壳。
- *
- * 合同锚点：A5.5 §20 Runtime Integration。
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 globalCache / Game 采集运行时状态
- *   2. 构建 MicroSnapshot（纯函数输入格式）
- *   3. 调用 domain 纯函数 planCombatMicro() → MicroPlan
- *   4. 将 CombatMovementDecision[] 写入 globalCache 供角色层消费
- *   5. MicroPlan 写入 globalCache 供 decision-trace 消费
- *
- * 禁止：
- *   - 不做任何微操决策（决策由 domain 纯函数 planCombatMicro 裁决）
- *   - 不直接调用 attack() / rangedAttack() / heal() / move() / spawnCreep()
- *   - 不修改 domain 层纯函数的输入/输出结构
- *   - 不修改 WarPosture / 不创建 Operation / 不创建 Strategic Target
- *
- * 频率：interval=3（与 tactical-engagement 同频，FocusFire 产出后立即消费）
- * 优先级：P2（在 tactical-engagement 之后运行）
- * 阶段：main（在角色之前——先产出 MicroDecision 供角色消费）
- * 存储：heap only — global reset 可丢（下个周期重建）。
- */
+/** Combat Micro Runtime */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache, querySquad, type GlobalCache } from "../kernel/global-cache";
 import {
@@ -390,10 +368,10 @@ function getTerrainModifier(terrain: TerrainContext): EffectiveCombatModifier {
 
 /**
  * 查询 creep 的微操决策（供角色层消费）。
- *
+
  * 角色层在 RolePolicy 的 acquire/work 候选中调用此函数，
  * 获取当前 tick 的微操指令（动作 + 目标 + 移动方向）。
- *
+
  * 如果返回 null，角色回退到 A5.4.3 FocusFire → A5.4.1 TacticalIntent → Legacy。
  */
 export function getMicroDecision(creepName: string): CombatMovementDecision | null {

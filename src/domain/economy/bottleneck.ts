@@ -1,20 +1,4 @@
-/**
- * Resource Bottleneck — A4.2 资源瓶颈识别与排序。
- *
- * 合同锚点：A4.2 Architecture Audit §10.15-16 NM-4。
- *
- * 设计意图：
- *   识别真正限制 Empire 的资源——不是简单地找「最差的资源」，
- *   而是综合考虑：
- *   1. Demand Pressure：缺口大小 / 帝国总需求
- *   2. Production Gap：消费速率 - 生产速率（趋势恶化程度）
- *   3. Economic Impact：关键资源 vs 非关键资源
- *   4. Recovery Cost：恢复到健康状态所需的资源量 / 时间
- *
- *   输出：按瓶颈严重度排序的资源列表 + 可解释原因。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Resource Bottleneck */
 
 import type { ResourceType } from "../operation/agenda-item";
 import type { ResourceLedger } from "./resource-ledger";
@@ -77,10 +61,10 @@ export const DEFAULT_BOTTLENECK_OPTIONS: BottleneckOptions = {
 
 /**
  * 评估单个资源的瓶颈分数。纯函数。
- *
+
  * 分数 = (deficitScore × deficitWeight + productionGapScore × productionGapWeight
  *         + healthScore × healthWeight) × criticalMultiplier
- *
+
  * 各子分数归一化到 [0, 1]。
  */
 export function evaluateBottleneck(
@@ -144,7 +128,7 @@ export function evaluateBottleneck(
 
 /**
  * 识别并排序瓶颈资源。纯函数。
- *
+
  * @param ledger 帝国级 ResourceLedger
  * @param options 排序参数
  * @returns 按瓶颈分数降序排列的列表（空列表 = 无瓶颈）

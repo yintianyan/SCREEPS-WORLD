@@ -1,21 +1,4 @@
-/**
- * Transport Assignment — A4.3 Phase 1：运输分配模型。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #2（无统一 Transport Assignment）、
- * §10 #2。
- *
- * 设计意图：
- *   现有 hauler/carrier/remoteHauler 各自通过 memory.assignment 驱动，无正式
- *   Assignment 对象。`TransportAssignment` 是统一分配模型，追踪：
- *   - 哪个 creep 服务哪个 Request
- *   - 分配了多少、装载了多少、交付了多少、损失了多少
- *   - 路由 ID（关联 Route 一等对象）
- *
- *   Assignment 与 Request 分离——一个 Request 可被多个 Assignment 满足
- *   （Multi-Source Fulfillment）。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Transport Assignment */
 
 import type { ResourceType } from "../operation/agenda-item";
 
@@ -23,7 +6,7 @@ import type { ResourceType } from "../operation/agenda-item";
 
 /**
  * Transport Assignment 状态。
- *
+
  * - assigned:   已分配，creep 尚未行动
  * - loading:    正在装载（在 source 取资源）
  * - in_transit: 运输中（前往 destination）
@@ -67,20 +50,20 @@ export type TransportRole = "hauler" | "carrier" | "remoteHauler" | "distributor
 
 /**
  * Transport Assignment — 运输分配模型。
- *
+
  * 一个 Assignment 表示「creep X 被分配去完成 Request Y 的一部分」。
- *
+
  * 生命周期：
  *   assigned → loading → in_transit → unloading → completed
  *                              ↓               ↓
  *                           failed          failed
- *
+
  * 一个 Request 可以有多个 Assignment（Multi-Source Fulfillment）：
  *   Request(5000 energy, roomA → roomB)
  *     ├── Assignment1(hauler1, 2000 energy)
  *     ├── Assignment2(hauler2, 2000 energy)
  *     └── Assignment3(hauler3, 1000 energy)
- *
+
  * 字段设计原则（MEMORY_ARCHITECTURE）：
  * - 存储在 Memory.kernel.transportAssignments（瘦快照）
  * - 终态后归档删除
@@ -129,9 +112,9 @@ export function makeAssignmentId(requestId: string, creepName: string): string {
 
 /**
  * 创建新 Transport Assignment（初始状态 = assigned）。
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param requestId 关联的 Transport Request ID
  * @param creepName 执行 creep 名称
  * @param role 执行角色

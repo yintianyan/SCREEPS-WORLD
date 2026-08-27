@@ -1,10 +1,4 @@
-/**
- * 威胁分类 — 纯函数，区分「威胁 creep」与「无害过客」。
- * 背景（P0-2）：FIND_HOSTILE_CREEPS 不区分 scout/reserver/中立/攻击单位 — 一个路过
- * scout 若当「有敌人」消费，会同时触发全体逃跑、切 defense、停建造、作废任务、
- * 误烧 safe mode，冻结整个经济。只有带实际威胁部件的才算威胁（ATTACK/RANGED_ATTACK/
- * HEAL/WORK/CLAIM）；仅 MOVE/CARRY/TOUGH 的空壳不算。owner 命中 allies 一律非威胁。
- */
+/** 威胁分类 — 纯函数，区分「威胁 creep」与「无害过客」。 */
 
 /** 具备任一即视为威胁的部件类型。 */
 const THREAT_PARTS: readonly BodyPartConstant[] = [

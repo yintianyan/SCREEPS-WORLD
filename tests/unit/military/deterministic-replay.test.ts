@@ -1,10 +1,4 @@
-/**
- * A5.3 确定性验证 — warPlanHash 可重现性测试。
- *
- * 验证：相同输入 → 相同 WarPlan → 相同 hash。
- * 创建 50 组不同的输入快照，每组重放 20 次，验证 hash 一致。
- * （50 × 20 = 1000 次重放）
- */
+/** A5.3 确定性验证 — warPlanHash 可重现性测试。 */
 import { describe, expect, it } from "vitest";
 import { planMilitaryOperation, warPlanHash, type WarPlanningInput } from "../../../src/domain/military/war-planning";
 import type { CombatPower } from "../../../src/domain/combat/capability";

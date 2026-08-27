@@ -1,17 +1,4 @@
-/**
- * Backpressure — A4.3 Phase 5：背压机制。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #12（无 Backpressure）、§10 #25。
- *
- * 设计意图：
- *   Logistics Capacity 不足时向 Resource Planner 反馈。
- *   反馈通道：
- *   1. reduce-production: 远矿 harvester 限采
- *   2. increase-haulers: spawn 额外 hauler
- *   3. reduce-demand: 降低非关键消费（builder/upgrader）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Backpressure */
 
 import type { RoomCapacityResult } from "./capacity-planning";
 
@@ -37,13 +24,13 @@ export interface BackpressureSignal {
 
 /**
  * 评估 Backpressure。
- *
+
  * 算法：
  *   1. capacityGap > 0 且 backlog > threshold → increase-haulers
  *   2. capacityGap > 0 且 backlog > threshold 且 spawn 无余力 → reduce-production
  *   3. capacityGap > 0 且 utilization < 0.3 → reduce-demand
  *   4. 否则 → none
- *
+
  * 纯函数。
  */
 export function evaluateBackpressure(

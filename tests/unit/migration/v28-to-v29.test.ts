@@ -1,10 +1,4 @@
-/**
- * v28 → v29 迁移独立测试（R6b 主动情报 / prospect + prospectCooldown 建档）。
- *
- * 迁移语义：两字段均为可选（prospect-manager 唯一写者）。建档 + 畸形自愈：
- * prospect 非对象 / target·sponsor 非字符串 / startedAt·spawned 非数字 → 删除；
- * prospectCooldown 非对象 → 删除字段，条目非数字 → 删除该条目，空对象回收。
- */
+/** v28 → v29 迁移独立测试（R6b 主动情报 / prospect + prospectCooldown 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

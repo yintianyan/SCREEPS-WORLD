@@ -1,33 +1,4 @@
-/**
- * A6.4 Resolution Engine — 对 Prediction 的解析引擎。
- *
- * 合同锚点：A6_4_CONTRACT.md §二.1 + A6_4_RESOLUTION_DESIGN.md §四
- *
- * 职责：
- *   - 对比 Prediction 与实际 Observation，产出 ResolutionResult
- *   - 检查 Regime 变化 → REGIME_CHANGED
- *   - 检查外部干扰 → EXTERNAL_INTERFERENCE
- *   - 计算 predicted vs actual 偏差
- *   - 判定 CORRECT / INCORRECT / PARTIAL / FALSE_POSITIVE / FALSE_NEGATIVE
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * Shadow-Only（CAL-001）：
- *   不修改 Prediction 对象，不修改任何运行时状态。
- *   只读取 Prediction 和 Observation，产出独立的 ResolutionResult。
- *
- * 确定性（CAL-005）：
- *   相同 Prediction + 相同 Observation + 相同 Context → 相同 resolutionHash。
- *   禁止 Math.random / Date.now / 无序迭代 / 浮点误差。
- *
- * 与 A6.3 resolve.ts 的关系：
- *   A6.3 resolve.ts = Lifecycle Resolution（更新 Prediction status: fulfilled/expired/invalidated）
- *   A6.4 resolve.ts = Calibration Resolution（更细粒度分类，不修改 Prediction）
- *   两者独立，不复用代码。
- *
- * 反事实场景覆盖（A6_4_RESOLUTION_DESIGN.md §五）：
- *   C1-C12 全部由 resolvePrediction 的判定路径覆盖。
- */
+/** A6.4 Resolution Engine — 对 Prediction 的解析引擎。 */
 
 import type { Prediction } from "../prediction/types";
 import type { PredictionContext } from "../prediction/context";
@@ -56,17 +27,17 @@ import {
 
 /**
  * 解析一条 Prediction — 对比预测与实际观测，产出 ResolutionResult。
- *
+
  * 判定流程（A6_4_RESOLUTION_DESIGN.md §二.4）：
  *   1. 检查 observation 是否充足 → INSUFFICIENT_OBSERVATION
  *   2. 检查 Regime 是否变化 → REGIME_CHANGED（如果严重）
  *   3. 检查 External Interference → EXTERNAL_INTERFERENCE（如果有且方向不一致）
  *   4. 计算 predicted vs actual 偏差
  *   5. 判定 CORRECT / INCORRECT / PARTIAL / FALSE_POSITIVE / FALSE_NEGATIVE
- *
+
  * 纯函数 — 不引用 Game/Memory。
  * 确定性 — 相同输入 → 相同 resolutionHash。
- *
+
  * @param prediction - A6.3 冻结的 Prediction 对象（只读）
  * @param observations - 窗口内的观测采样
  * @param currentContext - Resolution 时的上下文
@@ -199,7 +170,7 @@ export function resolvePrediction(
 
 /**
  * 构建 ResolutionResult 并计算确定性 hash。
- *
+
  * 纯函数 — 不修改任何输入。
  */
 function buildResolutionResult(
@@ -246,9 +217,9 @@ function buildResolutionResult(
 
 /**
  * ResolutionResult 确定性 Hash。
- *
+
  * 复用 A6.3 stableStringify + FNV-1a 32-bit。
- *
+
  * 来源：A6_4_CONTRACT.md §二.5
  */
 export function resolutionResultHash(result: Omit<ResolutionResult, "resolutionHash">): string {
@@ -273,11 +244,11 @@ export function resolutionResultHash(result: Omit<ResolutionResult, "resolutionH
 
 /**
  * 检查观测数据是否充足。
- *
+
  * 规则（A6_4_RESOLUTION_DESIGN.md §五 C8/C9）：
  *   - 样本数 < MIN_OBSERVATION_SAMPLES → 不充足
  *   - 最大间隔 > MAX_OBSERVATION_GAP → 不充足
- *
+
  * 纯函数。
  */
 function checkObservationSufficiency(
@@ -332,10 +303,10 @@ function checkObservationSufficiency(
 
 /**
  * 从观测序列中计算实际值。
- *
+
  * 策略：取窗口内最后一个观测值作为 actualValue。
  * 这与 prediction.value（窗口结束时的预测值）对齐。
- *
+
  * 纯函数。
  */
 function computeActualValue(
@@ -371,7 +342,7 @@ function computeAbsoluteError(predicted: number, actual: number): number {
 
 /**
  * 计算相对误差。
- *
+
  * 预测值接近 0 时用绝对偏差的归一化。
  */
 function computeRelativeError(predicted: number, actual: number): number {
@@ -383,10 +354,10 @@ function computeRelativeError(predicted: number, actual: number): number {
 
 /**
  * 判断方向是否正确。
- *
+
  * 对于值型预测：预测值 < 当前值（预测下降）vs 实际值 < 当前值（实际下降）。
  * 方向一致 = correct。
- *
+
  * 纯函数。
  */
 function computeDirectionCorrect(prediction: Prediction, actualValue: number): boolean {
@@ -402,7 +373,7 @@ function computeDirectionCorrect(prediction: Prediction, actualValue: number): b
 
 /**
  * 检查事件是否在 Horizon 内发生。
- *
+
  * 通过观测序列判断：窗口内是否有观测值达到预测条件。
  */
 function checkWithinHorizon(
@@ -421,12 +392,12 @@ function checkWithinHorizon(
 
 /**
  * 判断 Regime 是否发生重大变化。
- *
+
  * 规则（A6_4_RESOLUTION_DESIGN.md §六.2）：
  *   - mismatchedDimensions.length ≥ 3 → REGIME_CHANGED
  *   - mismatchedDimensions 包含 "posture" → REGIME_CHANGED
  *   - 其他 → 不标记
- *
+
  * 纯函数。
  */
 function isRegimeChanged(
@@ -443,14 +414,14 @@ function isRegimeChanged(
 
 /**
  * 判定最终 Resolution 分类。
- *
+
  * 规则（A6_4_RESOLUTION_DESIGN.md §二.4 + §三.4）：
  *   - relativeError < CORRECT_THRESHOLD → CORRECT
  *   - relativeError ≥ INCORRECT_THRESHOLD → INCORRECT
  *   - 中间 → PARTIAL
  *   - 方向错误 + 事件未发生 → FALSE_POSITIVE
  *   - 方向错误 + 事件发生了但预测说不会 → FALSE_NEGATIVE
- *
+
  * 纯函数。
  */
 function determineResolution(
@@ -511,7 +482,7 @@ function buildReason(
 
 /**
  * 验证 ResolutionResult 确定性：同一输入连续 N 次，检查 hash 一致。
- *
+
  * CAL-005 守卫：相同输入 → 相同输出。
  */
 export function verifyResolutionDeterminism(

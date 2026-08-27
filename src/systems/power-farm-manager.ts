@@ -1,23 +1,4 @@
-/**
- * Power Farm Manager — P3 系统，PB 野采任务的唯一决策者（审计缺口 2）。
- *
- * 战略定位：power 是 GPL 硬通货 — 野采是市场买入之外的正收益供给源
- * （买 power 纯消耗 credit，野采只花编队折旧）。复用 war 编队基础设施
- * （attacker/healer body、spawn 队列、recycle 通道），编队 creep 经
- * memory.mission="powerBank" 分流（不集结直接推进 + 专用 PB 攻击候选 —
- * PB 是 FIND_STRUCTURES 中立结构，attacker 的 hostile 链打不到）。
- *
- * 任务生命周期（Memory.kernel.powerFarm，唯一写者）：
- *   无任务 → 扫描 intel（新鲜 powerBank=true + 距离内 + 未占用）→ 建任务
- *     （war 姿态/战争计划存续时冻结 — 军事资源不双线，既有任务立即收摊让路）；
- *   strike → 维持编队（squadSize attacker + ratio healer）；
- *     编队到达后房内视野自查 PB 存活：PB 消失（击破/自灭）→ phase=collect；
- *   collect → 回收战斗编队 + 孵 pbCollector 捡运掉落 power；
- *     collector 消失（捡完送回/阵亡）且宽限期内未复现 → 收摊清任务。
- *
- * 队列纪律：寄宿请求撤销走 queue.ts API（removeRequestsByMission 按
- * mission 标记过滤 — attacker/healer 与 war 编队共用角色名）。
- */
+/** Power Farm Manager */
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";

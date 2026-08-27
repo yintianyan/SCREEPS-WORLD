@@ -1,13 +1,4 @@
-/**
- * 帝国矿物互济 — 纯函数决策层，执行层在 systems/terminal-manager.ts。
- * 战略定位：单房只产一种矿物，lab 反应链需多矿种原料 — 姐妹房的 homeMineral
- * 盈余经 terminal.send 互济，先于市场买入（省 credits，只付能量运费）。
- *
- * 供给侧只认各房 homeMineral 超出捐赠保留量的部分：市场买入落在 terminal 的
- * 非本房矿物是自用库存（反应原料），不是可外送的盈余 — 动它们会把 A 房买给
- * 自己的原料搬给 B 房，再让 A 房重新买入，纯浪费运费与 credits。
- * 决策无状态每轮现算；每轮至多一笔（terminal.send 有 10 tick 冷却）。
- */
+/** 帝国矿物互济 — 纯函数决策层，执行层在 systems/terminal-manager.ts。 */
 import { getMineralDeficits } from "../industry/terminal-policy";
 
 /** 单房间的矿物侧决策输入（调用方从 RoomSnapshot 采集）。 */

@@ -1,28 +1,10 @@
-/**
- * Route — A4.3 Phase 2：路由一等对象。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #3（无 Route 一等对象）、
- * §7.2（缺失）、§10 #9。
- *
- * 设计意图：
- *   现有 agenda-manager 有 `routeCache`（heap Map），只有 `{ hops, reachable }`。
- *   movement 有 `__interRoomCache`（TTL=100），但无正式 Route 数据模型。
- *
- *   Route 作为一等数据对象，有 ID / Cost / Reliability / Status，
- *   支持评估、排序、缓存、失效、重路由。
- *
- *   与 transport-cost.ts 的关系：
- *   - transport-cost.ts 计算**单次运输的成本明细**
- *   - route.ts 封装**路由的全部元数据**（含成本、风险、可靠性、历史）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Route */
 
 // ─── Route 状态 ────────────────────────────────────────────
 
 /**
  * Route 状态。
- *
+
  * - active:     可用
  * - congested:  拥堵（traffic > 阈值）
  * - degraded:   性能下降（reliability < 阈值）
@@ -58,7 +40,7 @@ export function isRouteTerminal(status: RouteStatus): boolean {
 
 /**
  * Route — 路由一等对象。
- *
+
  * 描述从源房到目标房的完整路由元数据。
  * 存储在 Memory.kernel.routes（瘦快照 + 终态归档）。
  */
@@ -112,9 +94,9 @@ export function makeRouteId(from: string, to: string): string {
 
 /**
  * 创建新 Route（初始状态 = active）。
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param from 源房
  * @param to 目标房
  * @param hops 路由跳数
@@ -241,13 +223,13 @@ export function updateRouteEvaluation(
 /**
  * 计算路由的综合评分（用于排序和选择最优路由）。
  * 分越高 = 越优。
- *
+
  * 评分因子：
  *   - reliability (40%)
  *   - cost efficiency (30%) — 1 / (1 + cost/1000)
  *   - safety (20%) — 1 - risk
  *   - traffic flow (10%) — 1 - traffic
- *
+
  * 纯函数。
  */
 export function routeScore(route: Route): number {

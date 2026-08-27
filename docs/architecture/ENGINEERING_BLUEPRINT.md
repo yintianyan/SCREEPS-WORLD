@@ -5,7 +5,7 @@
 > §1 十五模块 ＋ domain Service ＋ RolePolicy ＋ [DEPENDENCY_GRAPH.md](DEPENDENCY_GRAPH.md)
 > 分层），不照抄任务书示例树。结构性修订必须走 ADR 并登记
 > [ARCHITECTURE_FREEZE.md](ARCHITECTURE_FREEZE.md) §15。现状代码与本蓝图冲突时，
-> 以蓝图为目标、代码为待迁移现状（AGENTS.md 裁决规则 1；差异登记见 §5）。
+> 以蓝图为目标、代码为待迁移现状（AGENT.md 裁决规则 1；差异登记见 §5）。
 
 ## 1. 目录树合同（目标形态）
 
@@ -103,7 +103,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | --- | --- |
 | Purpose | CONFIG 单一真相源；环境类型声明 |
 | Responsibilities | k 系数与滞回 N、频带 N 值、权重初值、bodies 模板、metrics 清单、`schemaVersion` 常量与迁移注册、Memory 类型＋默认值工厂三件套 |
-| Dependencies | 被全体 import，自身零业务 import（types 除外）；文档中数字仅为快照（AGENTS.md） |
+| Dependencies | 被全体 import，自身零业务 import（types 除外）；文档中数字仅为快照（AGENT.md） |
 | Public API | `CONFIG` 常量树（运行时唯一真相源） |
 | State | 无（tuning 覆盖层运行时叠加，见 `src/domain/tuning/`） |
 | Tests | `tests/unit/migration`＋config 一致性（三件套缺一即红） |
@@ -115,14 +115,14 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | ① | **唯一组合根**：`bootstrap.ts` 是 `Registry.register*` 的全仓库唯一调用点（RUNTIME_API §5 Scheduler 行）；新增角色 / 系统只改 bootstrap 与新模块，**不改 Kernel**；名称全局唯一 kebab-case，重复注册启动即失败；模块顶层禁止访问 `Game` / `Memory` |
 | ② | **domain 纯函数律**：`src/domain` 出现 Game / Memory / RawMemory 引用即 lint 红；Game 动作只允许出现在唯一写者（systems 内 Manager）与执行运行时（creeps/engine·movement、kernel） |
 | ③ | **systems 管线成员制**：每成员带 P0–P3 标注（降级牺牲序）与频带登记（SYSTEM_BOUNDARIES §1 Tick Frequency 行）；后缀判据五条（System / Service / Manager / engine / Agent，SYSTEM_BOUNDARIES §2.1），Manager 仅限唯一写者；禁止 Coordinator / Handler / Controller 及一切空转命名，「只是转发 / 只是 if-else 分派」的模块必须删除 |
-| ④ | **creeps＝RolePolicy＋engine**：roles/ 纯声明、engine/ 统一驱动；角色禁止全房 `find`、全局扫描、创建 Spawn 请求、调 `createConstructionSite`、每 tick `PathFinder.search`（AGENTS.md；lint 分区规则） |
+| ④ | **creeps＝RolePolicy＋engine**：roles/ 纯声明、engine/ 统一驱动；角色禁止全房 `find`、全局扫描、创建 Spawn 请求、调 `createConstructionSite`、每 tick `PathFinder.search`（AGENT.md；lint 分区规则） |
 | ⑤ | **分层一致性**：目录分层＝DEPENDENCY_GRAPH §1 分层（组合根→kernel→感知→战略→业务→写者→执行→横切）；import 权限＝调用权限（RUNTIME_API §7-3）；CI 架构回归以 §1 图为期望集 diff，新增边不在允许表即失败 |
 | ⑥ | **命名规约**：文件与模块名一律 kebab-case（如 `spawn-manager.ts`、`assignment-service.ts`）；测试文件 `*.test.ts` 镜像被测目录；目录名用单数领域词（domain/）或复数惯用词（systems/ / creeps/ / config/） |
 | ⑦ | **规模量级**：全仓 ~160 文件 / ~36k 行（现状盘点口径：kernel 20/4.3k、systems 25/10.5k、domain 61/11.5k、creeps 46/7.8k、config 4/1.6k）；蓝图约束的是**结构与职责归属**而非行数，任何使目录数量级跳档的扩张（如 domain 翻倍）须 ADR |
 
 ## 5. 现状登记（待迁移差异，不改本蓝图）
 
-以下现状与蓝图冲突，按 AGENTS.md 裁决规则 1 以本蓝图为目标收敛，登记进技术债台账
+以下现状与蓝图冲突，按 AGENT.md 裁决规则 1 以本蓝图为目标收敛，登记进技术债台账
 （[TECH_DEBT_LEDGER.md](../implementation/TECH_DEBT_LEDGER.md)）：
 
 | # | 现状 | 蓝图目标 |
@@ -139,5 +139,5 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 [DEPENDENCY_GRAPH.md](DEPENDENCY_GRAPH.md) §1–§3（依赖边与禁令）、
 [RUNTIME_API_DESIGN.md](RUNTIME_API_DESIGN.md) §5–§6（平台面与权限矩阵）、
 [STATE_OWNERSHIP_MODEL.md](STATE_OWNERSHIP_MODEL.md) §3（状态归属）、
-[TEST_ARCHITECTURE.md](TEST_ARCHITECTURE.md) §2（测试入口）、AGENTS.md（组合根 /
+[TEST_ARCHITECTURE.md](TEST_ARCHITECTURE.md) §2（测试入口）、AGENT.md（组合根 /
 角色 / 命名条款）同一时刻必须一致；目录增删、模块落点变化必须先改本文并走 ADR。

@@ -1,14 +1,4 @@
-/**
- * Decision Explanation — A3.2 Phase 1：人类可读的决策理由。
- *
- * 合同锚点：PLANNING_ARCHITECTURE §3 里程碑验收用行为证据 +
- * AGENTS.md 自治可审计前提。
- *
- * 定位：为扩张决策提供可解释、可审计的决策理由。
- * 输出格式：结论 + 证据链 + 分项评分 + 推荐/不推荐原因。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Decision Explanation */
 
 import type { ExpansionPlan } from "./plan";
 import type { ExpansionPressureResult } from "./pressure";
@@ -44,7 +34,7 @@ export interface DecisionExplanation {
 
 /**
  * 生成扩张决策的完整解释（纯函数）。
- *
+
  * 输入所有评估结果，输出人类可读的决策理由。
  */
 export function explainDecision(input: {

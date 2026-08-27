@@ -1,13 +1,4 @@
-/**
- * Expansion Candidate Model (v2) — A3.2 Phase 1：候选房间模型。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §1.2 七因子评分输入。
- *
- * 替代 evaluator.ts 中仅 4 字段的 ExpansionCandidate。本模型携带 14+ 字段 +
- * lifecycle status，支撑 Candidate Discovery / Scoring / Ranking / Plan 全链。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Expansion Candidate Model (v2) */
 
 import type { RoomIntel, RoomKind } from "../intel";
 
@@ -108,7 +99,7 @@ export interface CandidateScoreBreakdown {
 
 /**
  * 从 RoomIntel + 上下文构建候选房初始模型。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function buildCandidate(

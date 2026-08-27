@@ -1,17 +1,8 @@
-/**
- * 物流请求池纯函数层（P3 · REQUEST_POOL_DESIGN §2–§5）。
- *
- * Demand 瞬时不持久化（STATE_OWNERSHIP §1.4）：每 tick 由 logistics 系统重导出，
- * 确定性 key 幂等重建即天然去重；跨 tick 连续性由 key 注册表（firstSeen）+ 执行者
- * 租约承载。认领即 Task（六态归执行层契约）。禁全量重匹配/全局最优（红线 1）。
- *
- * A2 后半扩展：Request Scope Model（DATA_FLOW §2 Demand 语义）。
- * scope 为可选字段——缺省 = "room"，不破坏现有 key 语义与幂等合并。
- */
+/** 物流请求池纯函数层（· REQUEST_POOL_DESIGN §2–§5）。 */
 
 /**
  * 请求归属域（A2 后半·步 11：Request Scope Model）。
- *
+
  * - room：房内请求（现有行为——由本房 logistics 系统生成并满足）
  * - empire：帝国级请求（跨房调拨候选——由 Empire Resource Imbalance 检测产出，
  *   A2 后半只生成候选不执行运输；A3 阶段由 logistics 系统消费）

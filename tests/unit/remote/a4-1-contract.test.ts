@@ -1,18 +1,4 @@
-/**
- * A4.1 Contract Tests — Remote Mining Execution
- *
- * 覆盖 audit §20 中定义的核心 Contract Tests：
- * - A4.1-001: Opportunity Execution Gate
- * - A4.1-003: Remote Source Identity 幂等
- * - A4.1-004: Operation Deduplication
- * - A4.1-009: Container Lifecycle 六状态
- * - A4.1-011: Harvest Production 追踪
- * - A4.1-017: Economic Accounting 计算
- * - A4.1-018: ROI Expected vs Actual
- * - A4.1-019: Budget 上限 + 超支检测
- * - A4.1-029: Idempotency 全链路
- * - A4.1-030: Economic Activation 连续窗口
- */
+/** A4.1 Contract Tests — Remote Mining Execution */
 
 import { describe, it, expect } from "vitest";
 import {

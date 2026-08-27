@@ -1,26 +1,4 @@
-/**
- * Recovery Execution System — A4.6 系统薄壳。
- *
- * 合同锚点：A4.6 Task Spec §5-6 Recovery Execution Gateway + §7 Action Lifecycle。
- *
- * 职责（薄壳——只编排，不重新实现执行逻辑）：
- *   1. 读取 globalCache.recoveryActions（empire-health-system 产出）
- *   2. Idempotency 检查（recoveryActionTable 去重）
- *   3. 将 RecoveryAction 翻译为现有执行系统的输入格式
- *   4. 提交到现有执行系统（spawn queue / agenda operation / remote ops / terminal demands）
- *   5. 追踪 Action 生命周期（PROPOSED → SUBMITTED → VERIFYING → SUCCEEDED/FAILED）
- *   6. 验证 World State 实际改善（evaluateRecoveryResult）
- *
- * 禁止：
- *   - 不重新实现 spawn 逻辑（使用 submitRequest → spawn-manager）
- *   - 不重新实现 logistics 逻辑（使用 agenda-manager 的 Operation 链路）
- *   - 不重新实现 operation 逻辑（使用 createOperation → lifecycle）
- *   - 不直接调用 Game API（spawnCreep / terminal.send / market.deal）
- *
- * 频率：interval=10（高频消费，不等 100t）
- * 优先级：P1（在 empire-health-system 之后运行，消费其产出的 recoveryActions）
- * 存储：heap only — global reset 可丢（下个周期重建）。
- */
+/** Recovery Execution System */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache, publishProcurementDemands } from "../kernel/global-cache";
 import { CONFIG } from "../config";
@@ -215,7 +193,7 @@ interface SubmitResult {
 
 /**
  * 将 RecoveryAction 翻译为现有执行系统的输入格式并提交。
- *
+
  * 这是本系统的核心——只做翻译和提交，不做执行。
  */
 function translateAndSubmit(
@@ -258,7 +236,7 @@ function translateAndSubmit(
 
 /**
  * SPAWN_RECOVERY：提交紧急 spawn 请求到 spawn queue。
- *
+
  * 翻译：RecoveryAction → SpawnRequest { role:"worker", priority:0, body:RECOVERY_BODY }
  * 幂等：submitRequest 按 key 去重
  */
@@ -306,7 +284,7 @@ function submitSpawnRecovery(
 
 /**
  * LOGISTICS_FIX：提交 hauler 替换请求到 spawn queue。
- *
+
  * 翻译：RecoveryAction → SpawnRequest { role:"hauler", priority:1 }
  */
 function submitLogisticsFix(
@@ -354,7 +332,7 @@ function submitLogisticsFix(
 
 /**
  * ENERGY_REDIRECT：触发跨房能量调拨。
- *
+
  * 翻译：RecoveryAction → 标记到 globalCache 供 agenda-manager 消费
  * 当前实现：通过 queueReplanEvent 通知 agenda-manager 重新规划
  */
@@ -416,7 +394,7 @@ function submitEnergyRedirect(
 
 /**
  * REMOTE_STALL：暂停远矿运营。
- *
+
  * 翻译：RecoveryAction → RemoteOp.state = "paused"
  */
 function submitRemoteStall(
@@ -449,7 +427,7 @@ function submitRemoteStall(
 
 /**
  * EXPANSION_PAUSE：暂停扩张。
- *
+
  * 翻译：RecoveryAction → Memory.kernel.expansionPausedUntil = tick + cooldown
  */
 function submitExpansionPause(
@@ -472,7 +450,7 @@ function submitExpansionPause(
 
 /**
  * TERMINAL_TRADE：发布采购需求。
- *
+
  * 翻译：RecoveryAction → publishProcurementDemands()
  */
 function submitTerminalTrade(
@@ -497,7 +475,7 @@ function submitTerminalTrade(
 
 /**
  * CPU_CONSERVE：标记 CPU 降级建议。
- *
+
  * 翻译：RecoveryAction → 日志建议（kernel scheduler 有独立的 bucket 看门狗）
  */
 function submitCpuConserve(
@@ -512,7 +490,7 @@ function submitCpuConserve(
 
 /**
  * POPULATION_REBUILD：提交多角色 spawn 请求。
- *
+
  * 翻译：RecoveryAction → SpawnRequest { role:"harvester", priority:1 } + SpawnRequest { role:"hauler", priority:1 }
  */
 function submitPopulationRebuild(
@@ -559,12 +537,12 @@ function submitPopulationRebuild(
 
 /**
  * DEFENSE_RESPONSE：基于 A5.1 威胁评估触发防御响应。
- *
+
  * 翻译：RecoveryAction → 读取 globalCache.threatAssessments 获取威胁详情
  *   - 威胁 CRITICAL + safeModeAvailable > 0 → 标记 safeMode 需求
  *   - 威胁 ≥ HIGH + 无存活 defender → 提交 defender spawn 请求
  *   - 威胁 < HIGH → 标记给 tower-defense 系统处理（已有独立链路）
- *
+
  * 不直接调用 Game API（不调 safeMode / 不调 spawnCreep）。
  * 只标记需求，由各系统自行消费。
  */
@@ -679,7 +657,7 @@ function submitDefenseResponse(
 
 /**
  * 验证已提交的 Action（检查 World State 是否改善）。
- *
+
  * 对状态为 "executing" 的 Action：
  *   1. 检查 executionRef 是否仍然有效（spawn 请求是否还在队列 / creep 是否已出生）
  *   2. 如果已过 estimatedRecoveryTime → 进入 verifying
@@ -963,7 +941,7 @@ function simpleHaulerBody(energyCapacity: number): BodyPartConstant[] {
 
 /**
  * 简化的 defender body 生成（近战 + 远程混合）。
- *
+
  * 优先 [ATTACK, MOVE] × N（高机动近战），
  * 能量充足时加入 RANGED_ATTACK 和 TOUGH 前排。
  */
@@ -978,18 +956,18 @@ function simpleDefenderBody(energyCapacity: number): BodyPartConstant[] {
 
 /**
  * 消费 globalCache.warAbortSignals，通过纯函数转换为 RecoveryAction。
- *
+
  * 幂等性机制（双层去重）：
  *   1. tick 级去重：lastConsumedAbortTick 确保同一 tick 不重复消费
  *   2. domain 级去重：recoveryIdempotencyKey 确保同一 sponsor+reason
  *      不重复提交（A4.6 lifecycle cooldown 机制）
- *
+
  * 边界：
  *   - 不直接读 Military 内部状态
  *   - 只读 globalCache.warAbortSignals（Military 写入的公开信号）
  *   - 通过 domain 纯函数 mapAbortSignalsToRecoveryActions 转换
  *   - 不执行 Recovery（只产出 Action，由 translateAndSubmit 执行）
- *
+
  * @param g globalCache
  * @param tick 当前 tick
  * @returns 转换后的 RecoveryAction 列表
@@ -1040,10 +1018,10 @@ function consumeWarAbortSignals(
 
 /**
  * 消费 globalCache.tacticalAbortSignals，转换为 WarAbortSignal 格式后走同一管线。
- *
+
  * Tactical Runtime System 将 TacticalAbortSignal 写入 globalCache.tacticalAbortSignals，
  * 本函数负责将其桥接到 warAbortSignals 管线（复用 mapAbortSignalsToRecoveryActions）。
- *
+
  * 边界：
  *   - 只读 tacticalAbortSignals（Tactical Runtime 写入的公开信号）
  *   - 转换为 WarAbortSignal 格式后复用既有管线

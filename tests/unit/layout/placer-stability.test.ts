@@ -1,16 +1,4 @@
-/**
- * constraint-placer 代际稳定性测试。
- *
- * 背景：旧实现每规划周期放置 RCL 累计全量、key 用递增计数器命名 —
- * 已建结构把自己的格子占掉后，贪心顺延到次优格，同一逻辑结构在新格重复排队：
- * 全拆重建期间少数 extension 的实际落位与 buildQueue 漂移，
- * 多余任务 ERR_RCL_NOT_ENOUGH → blocked → 黑名单 churn。
- *
- * 固化的不变量：
- *   1. 确定性续放 — 已建 = 首代前缀时，重推导输出 === 首代剩余部分（key/pos 全等）
- *   2. key 坐标绑定 — constraint.<type>.<x>.<y>，同格永远同 key
- *   3. 承诺抵扣 — 只为真实缺口放置；锚点 spawn 豁免；lab 续接既有集群
- */
+/** constraint-placer 代际稳定性测试。 */
 import { describe, expect, it } from "vitest";
 import { computeDistanceField } from "../../../src/domain/layout/terrain-analysis";
 import { placeStructures } from "../../../src/domain/layout/constraint-placer";

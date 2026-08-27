@@ -1,17 +1,4 @@
-/**
- * Remote Defense Decision — A5.1 G4 纯函数。
- *
- * 远矿房威胁响应决策：CONTINUE / PAUSE / ESCORT / RETREAT / ABORT。
- *
- * 核心原则：不纯按 Threat Level 做 switch。必须综合考虑：
- * - 远矿经济价值（incomePerTick / replacementCost / escortCost）
- * - 威胁级别与意图
- * - 撤退成本（creep 是否能安全返回）
- * - 增援 ETA
- * - 房间战略价值
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / Creep / Room / 任何 Runtime 对象。
- */
+/** Remote Defense Decision */
 
 import type { ThreatAssessment, ThreatLevel } from "./threat-assessment";
 import type { TerrainContext } from "./terrain-context";
@@ -122,7 +109,7 @@ export interface RemoteExpectedValue {
 
 /**
  * 估算远矿运营的期望价值。
- *
+
  * operationValue = sources × 10 (energy/tick per source, 3000/300=10)
  * risk: 映射 ThreatLevel → 0-1
  * expectedLoss: creepInvestment × risk × threatDuration
@@ -211,12 +198,12 @@ export interface RemoteDefenseDecision {
   expectedValue: RemoteExpectedValue;
   /**
    * 如果 ESCORT，输出护航需求（需求标记，非 spawn 指令）。
-   *
+
    * 权责边界：本字段只描述「需要多少 defender」，不直接触发 spawn。
    * 实际孵化走 evaluateRemoteDemand → spawnQueue → spawn-manager 标准链路。
    * remote-mining-manager 消费此决策后保持 op.state = "active"，
    * 由 evaluateRemoteDemand 根据 threatUntil / remoteThreats 生成 remoteDefender 请求。
-   *
+
    * 严禁：decideRemoteDefenseAction 或其调用方直接调 submitRequest / spawnCreep。
    */
   escortDemand?: {
@@ -233,36 +220,36 @@ export interface RemoteDefenseDecision {
 
 /**
  * 远矿防御决策——综合威胁级别、经济价值和风险。
- *
+
  * 这是 A4（经济运营）→ A5（军事防御）的第一个真正桥梁：
- *
+
  *   Remote Mining → Threat Assessment → Remote Defense Decision
  *     → CONTINUE / PAUSE / ESCORT / RETREAT / ABORT
  *       → Military Intent → Spawn / Logistics
- *
+
  * 权责边界（A4 体系不可绕过）：
  * - 本函数是纯函数，只输出决策，不执行任何动作
  * - ESCORT 的 escortDemand 是需求标记，不触发 spawn
  * - RETREAT/ABORT 只输出决策，由 remote-mining-manager 修改 op.state
  * - 实际 spawn 走 evaluateRemoteDemand → spawnQueue → spawn-manager
  * - remote-mining-manager 不得因 ESCORT 决策而自行 submitRequest
- *
+
  * 决策规则（非纯 switch，需综合 EV）：
- *
+
  * 1. ABORT: 威胁 CRITICAL 且净价值为负 且 替换成本 > 帝国储备 20%
  *    → 长期不可维持，放弃车道
- *
+
  * 2. RETREAT: 威胁 HIGH/CRITICAL 且 净价值为负
  *    → 撤退远矿 creep，车道暂停
  *    → 撤退成本 = creep 返程风险（如果能安全返回）
- *
+
  * 3. ESCORT: 威胁 MEDIUM/HIGH 且 护航后净价值为正
  *    → 派 duo 轻队护航，走防御预算
  *    → 输出 escortDemand（不直接 spawn）
- *
+
  * 4. PAUSE: 威胁 LOW/MEDIUM 且 净价值为正但风险较高
  *    → 暂停生产 N tick 后恢复（保留 op）
- *
+
  * 5. CONTINUE: 威胁 NONE/LOW 且 净价值为正
  *    → 正常运营
  */

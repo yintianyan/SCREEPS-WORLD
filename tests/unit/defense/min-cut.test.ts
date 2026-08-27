@@ -110,11 +110,11 @@ describe("min-cut-defense — 开放地形 fallback", () => {
 
 /**
  * SUPER_SOURCE/SINK 与 (49,49) 拆点冲突的回归测试。
- *
+
  * 旧实现 SUPER_SOURCE=4998、SUPER_SINK=4999，而 nodeId(49,49,false)=4998、
  * nodeId(49,49,true)=4999，导致 (49,49) 非墙时拆点边变成 SUPER_SOURCE→SUPER_SINK
  * 退化直连边，maxFlow 错误或恒 complete=false。
- *
+
  * 这些测试在修复前会失败（complete=false 或 cutSize 异常），修复后必须通过。
  */
 describe("min-cut-defense — SUPER_SOURCE/SINK 冲突回归", () => {
@@ -211,10 +211,10 @@ describe("min-cut-defense — 性能", () => {
 
 /**
  * 独立验证割集是否真正阻断所有 8 邻接路径（含切角规则）。
- *
+
  * 从所有出口 BFS，不经过割集顶点和墙，检查是否能到达任一核心格。
  * 若不可达 → 割集有效；若可达 → 割集有漏洞（对角线未被封锁）。
- *
+
  * 此函数独立于 min-cut 算法实现，作为 v3 正确性的外部验证。
  */
 function verifyCutBlocksAllPaths(

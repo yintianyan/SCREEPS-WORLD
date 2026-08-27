@@ -1,22 +1,4 @@
-/**
- * A6.3.2 Prediction Models — 确定性回放测试。
- *
- * 测试矩阵：20 scenarios × 1000 replay
- *
- * 验证：
- *   - prediction hash 一致
- *   - evidence hash 一致
- *   - confidence 一致
- *   - horizon 一致
- *   - lifecycle 一致
- *
- * 全部 20 个场景覆盖：
- *   - Energy Shortage: STABLE, IMPROVING, DEGRADING, SHORTAGE_IMMINENT, SHORTAGE_PREDICTED, INSUFFICIENT
- *   - Spawn Starvation: NO_DEMAND, ENERGY_LIMITED, CAPACITY_LIMITED, QUEUE_GROWING, STARVATION_IMMINENT, INSUFFICIENT
- *   - Regime compatible / mismatch
- *   - 外部因素
- *   - 边界值
- */
+/** A6.3.2 Prediction Models — 确定性回放测试。 */
 import { describe, it, expect } from "vitest";
 import {
   type EnergyShortageInput,

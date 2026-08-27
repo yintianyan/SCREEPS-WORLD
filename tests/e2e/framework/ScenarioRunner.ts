@@ -1,16 +1,4 @@
-/**
- * ScenarioRunner — E2E 场景运行器。
- *
- * 职责：
- *   - 封装 server + bot 的一体化生命周期
- *   - 提供 tick 循环 + 谓词终止条件
- *   - 收集快照序列用于断言
- *
- * 设计原则：
- *   - 每个场景独立 ServerHarness 实例，避免状态污染
- *   - 谓词驱动终止：满足条件提前退出，不固定跑 N tick
- *   - 超时保护：最长 tick 数上限，防止死循环
- */
+/** ScenarioRunner — E2E 场景运行器。 */
 import { ServerHarness } from "./ServerHarness";
 import { BotHarness } from "./BotHarness";
 import { WorldBuilder, type RoomSetup } from "./WorldBuilder";
@@ -31,12 +19,12 @@ export interface ScenarioOptions {
   stubWorld?: boolean;
   /**
    * 强制设置 controller RCL（在 addBot 之后应用）。
-   *
+
    * [Facts] mockup 的 world.addBot() 会强制把 controller 重置为
    * level=1, progress=0（world.js:216）。fixture 中预设的 controller
    * level 会被覆盖。此选项在 bot 注册后、server 启动前通过 DB 直
    * 接修正，绕过 addBot 的重置行为。
-   *
+
    * runtime 中 controller.level 是 getter-only 属性，通过 sendConsole
    * 赋值无效（严格模式抛 TypeError，非严格模式静默失败），只能用 DB
    * 更新。
@@ -52,7 +40,7 @@ export type TickPredicate = (snapshot: BotSnapshot, tick: number) => boolean;
 
 /**
  * 场景运行器。
- *
+
  * 使用模式：
  * ```typescript
  * const runner = new ScenarioRunner();
@@ -84,7 +72,7 @@ export class ScenarioRunner {
     // 【Phase3A 修复】双 spawn 去重：mockup 的 addBot() 会自动在目标房创建一个
     // store 制式 spawn；若夹具再放一个 legacy 制式（energy 字段）spawn，两者能量
     // 计费口径分裂 —— transfer 只写 store、引擎容量检查读 legacy → 孵化容量恒 0，
-    // 经济死亡螺旋（根因分析见 git 历史的 docs/phase3，文档已删除）。
+    
     // 因此 bot 所在房间的夹具 spawn 一律移除，由 addBot 统一提供。
     const roomsForWorld = opts.rooms.map((r) => ({
       ...r,
@@ -195,11 +183,11 @@ export class ScenarioRunner {
 
   /**
    * 获取 server 句柄（用于高级操作，如注入 hostile creep）。
-   *
+
    * 使用场景：
    *   - 在 setup() 之后、tick 之前注入 hostile creep 测试 tower 防御
    *   - 在运行中动态修改世界状态
-   *
+
    * 注意：直接操作 server.world 是高级用法，可能破坏场景隔离。
    * 优先使用 WorldBuilder 的高层 API。
    */

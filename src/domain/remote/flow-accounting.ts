@@ -1,23 +1,4 @@
-/**
- * Resource Flow Accounting — A4.1 Phase 2：远矿资源流追踪。
- *
- * 合同锚点：A4.1 Architecture Audit §9.2（Resource Flow 追踪缺失）。
- *
- * 设计意图：
- *   追踪远矿资源从采集到交付的完整链路：
- *   Produced → Transported → Delivered → Lost → Consumed → Stored
- *
- *   不修改角色代码——从 Creep 行为间接采集数据：
- *   - Produced: remoteHarvester 的 harvest 量
- *   - Transported: remoteHauler 的 withdraw 量
- *   - Delivered: remoteHauler 的 transfer 量（到达 home）
- *   - Lost: drop + container 满溢出 + creep 死亡携带
- *
- *   用途：供 Economic Accounting 计算 Net Value，供 ROI 计算 Actual ROI，
- *   供 Economic Health 检测 Over/Underproduction。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Resource Flow Accounting */
 
 // ─── 资源流快照 ─────────────────────────────────────────
 

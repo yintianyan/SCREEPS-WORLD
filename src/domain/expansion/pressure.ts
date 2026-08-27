@@ -1,23 +1,4 @@
-/**
- * Expansion Pressure Model — A3.2 Phase 1：帝国为什么想扩张。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §1.1 四类动机 + GOAL_POLICY_PLAN §3 posture。
- *
- * 定位：回答「帝国当前是否有扩张驱动力」——不是「能不能扩张」（Readiness），
- * 而是「想不想扩张」（Pressure）。Pressure=HIGH + Readiness=NOT_READY → 不扩张但
- * 标记需求；Pressure=LOW + Readiness=READY → 不扩张（没有驱动力）。
- *
- * 七维可解释检测，不用复杂公式：
- *   1. productionCapacity  — 产能利用率饱和度
- *   2. storageSaturation  — 储备水位饱和度
- *   3. spawnCapacity      — 孵化带宽饱和度
- *   4. resourceDeficit    — 资源缺口信号
- *   5. growthOpportunity  — GCL 余量 + 候选池深度
- *   6. strategicPosition — 战略位置需求（对手逼近）
- *   7. infrastructureSaturation — 基建饱和（无发展空间）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Expansion Pressure Model */
 
 import type { EmpireResourceView } from "../strategy/resource-view";
 import type { EmpireBudget } from "../strategy/budget";
@@ -94,7 +75,7 @@ export const DEFAULT_PRESSURE_OPTIONS: PressureOptions = {
 
 /**
  * 评估帝国扩张压力（纯函数）。
- *
+
  * 综合七维信号，输出 LOW/MEDIUM/HIGH + 可解释证据。
  */
 export function evaluateExpansionPressure(

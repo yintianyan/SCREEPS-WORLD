@@ -1,14 +1,4 @@
-/**
- * 帝国能量互济与能量市场 — 纯函数测试（R5 经济主线）。
- *
- * 覆盖：
- *   - planEnergyAid：最饿者先救 / 最富者先捐 / 三重约束封顶 /
- *     同房不互济 / 门槛过滤（canSend/canReceive/地板/minTransfer）/
- *     无候选返回 undefined
- *   - 结构性滞回：受助方被补到 recipientFloor 后仍低于 donorFloor，
- *     单笔救助不可能让受助方翻转为捐赠方
- *   - energySellAmount / energyBuyAmount 边界
- */
+/** 帝国能量互济与能量市场 — 纯函数测试（R5 经济主线）。 */
 import { describe, expect, it } from "vitest";
 import {
   energyBuyAmount,

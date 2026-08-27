@@ -1,19 +1,4 @@
-/**
- * Economic Guard — A5.3 经济护栏纯函数。
- *
- * 军事行动必须经过 Economic Guard。
- *
- * 至少检查：
- * - energyReserve
- * - spawnCapacity
- * - replacementCapacity
- * - logisticsCapacity
- * - recoveryCapacity
- *
- * 禁止为了一次战争导致帝国经济死亡螺旋。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** Economic Guard */
 
 // ═══════════════════════════════════════════════════════════
 // §1. 类型定义
@@ -61,7 +46,7 @@ export interface EconomicGuardResult {
 
 /**
  * 经济护栏检查。
- *
+
  * 防御性 Operation 门槛更低（保命优先于经济）。
  * 进攻性 Operation 门槛更高（不能为进攻拖垮经济）。
  */

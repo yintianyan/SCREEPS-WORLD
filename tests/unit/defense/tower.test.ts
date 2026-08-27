@@ -1,11 +1,4 @@
-/**
- * A3 — tower-defense 维修权收窄测试。
- *
- * 覆盖：
- *   - 有维修 creep（builder/worker）时塔只开火，不做结构/工事维修
- *   - 无维修 creep 时塔保留维修安全网
- *   - 威胁存在时无论有无维修 creep 都开火
- */
+/** A3 — tower-defense 维修权收窄测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { towerDefenseSystem } from "../../../src/systems/tower-defense";
 import {

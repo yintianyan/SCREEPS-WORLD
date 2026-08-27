@@ -1,21 +1,4 @@
-/**
- * Target Selection — A5.3 多目标评分与选择纯函数。
- *
- * 不能只选择最近敌人。必须考虑：
- * - targetValue
- * - threat
- * - objective
- * - terrain
- * - defense
- * - intelConfidence
- * - distance
- * - logisticsCost
- * - strategicImpact
- *
- * 输出 SelectedTarget + RejectedAlternatives（进入 DecisionTrace）。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** Target Selection */
 
 import type { ThreatAssessment } from "../defense/threat-assessment";
 import type { TerrainContext } from "../defense/terrain-context";

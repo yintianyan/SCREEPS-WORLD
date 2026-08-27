@@ -1,23 +1,4 @@
-/**
- * A5.5 Advanced Tactical Combat Micro — Domain 纯函数测试。
- *
- * 测试覆盖（对应需求 §24 Tests）：
- *   MICRO-001: Melee 追击 Ranged → Kite
- *   MICRO-002: Ranged 优势 → 保持 Range
- *   MICRO-003: Enemy Ranged 优势 → 重新 Position
- *   MICRO-004: Healer 受到威胁 → Protection
- *   MICRO-005: Enemy Healer → Local Pressure
- *   MICRO-006: Target Switch → Hysteresis
- *   MICRO-007: Formation Break → Reform
- *   MICRO-008: Tower 威胁 → Avoidance
- *   MICRO-009: Chokepoint → Hold
- *   MICRO-010: Retreat → 禁止 Aggressive Micro
- *   MICRO-011: Authorization Denied → 禁止 Attack
- *   MICRO-012: CombatCapability 不足 → 不能 Chase
- *   MICRO-013: Terrain 改变 → Micro Decision 改变
- *   MICRO-014: 多个 Intent 冲突 → Arbitrator 唯一输出
- *   MICRO-015: 同 Snapshot → 1000 Replay 一致
- */
+/** A5.5 Advanced Tactical Combat Micro — Domain 纯函数测试。 */
 
 import { describe, expect, it } from "vitest";
 import {

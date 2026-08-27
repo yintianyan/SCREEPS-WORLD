@@ -1,21 +1,4 @@
-/**
- * Operation Value — A5.3 evaluateOperationValue() 纯函数。
- *
- * 不能只比较 powerScore。
- *
- * 输出：
- * - expectedGain
- * - expectedLoss
- * - militaryCost
- * - economicCost
- * - strategicValue
- * - risk
- * - confidence
- * - netValue
- * - recommendation
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** Operation Value */
 
 import type { WarCost } from "./war-cost";
 import type { RiskResult } from "./risk-model";

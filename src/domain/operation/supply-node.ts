@@ -1,18 +1,4 @@
-/**
- * Supply Node — A3.1 Empire Resource Network 供给节点。
- *
- * 供给节点是房间级资源富余的网络投影——只在房间有可调拨资源时创建。
- * 与 RoomRegistryEntry 的区别：
- *   - Registry 是全量房间注册表（含既不 surplus 也不 deficit 的房间）
- *   - Supply Node 是网络参与者的投影（只含 surplus 房间）
- *   - 两者生命周期不同：Registry 每 100t 全量更新；Supply Node 可增量更新
- *
- * 节点字段遵循 A3.1 Architecture Review §6 的要求：
- *   Room + Resource + Available + Reserved + Safety + Transferable
- *   + Priority + Health + Capacity + Timestamp
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Supply Node */
 
 import type { RoomRegistryEntry } from "../strategy/room-registry";
 import type { OperationPriority, ResourceType } from "./agenda-item";
@@ -45,10 +31,10 @@ export interface SupplyNode {
 
 /**
  * 从 RoomRegistryEntry 派生 Supply Node。
- *
+
  * 只在 canExport=true 且 transferable > 0 时创建。
  * 返回 undefined 表示该房间不产生供给节点。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function buildSupplyNode(
@@ -83,7 +69,7 @@ export function buildSupplyNode(
  * 批量构建 Supply Nodes。
  * 从 RoomRegistry + ReservationTable 派生所有活跃供给节点。
  * 返回按 transferable 降序排列的列表。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function buildSupplyNodes(

@@ -1,9 +1,4 @@
-/**
- * 扩张节奏自适应纯函数测试（R7b）。
- *
- * 覆盖：连续失败 → 暂停；stolen 频发 → minSources 收紧；成功率达标 → 黑名单
- * ×0.5；窗口零成功 → ×1.5；ring 有界追加；空台账基线。
- */
+/** 扩张节奏自适应纯函数测试（R7b）。 */
 import { describe, expect, it } from "vitest";
 import {
   appendOutcome,

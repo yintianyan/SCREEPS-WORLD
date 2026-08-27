@@ -1,24 +1,4 @@
-/**
- * Route Cache — A4.3 Phase 2：带失效条件的路由缓存。
- *
- * 合同锚点：A4.3 Architecture Audit §7.1（routeCache 无失效条件）、§10 #10。
- *
- * 设计意图：
- *   现有 agenda-manager 有 `routeCache`（heap Map），但**永不失效**（除非 global reset）。
- *   movement 有三层缓存（持久化/同 tick/跨房出口），但 agenda-manager 不复用。
- *
- *   Route Cache 提供带失效条件的路由缓存：
- *   - TTL 到期
- *   - 道路结构变化（revision 变化）
- *   - 威胁变化（新 hostile 房间）
- *   - Route 被标记 blocked
- *
- *   与 movement 的 path cache 的区别：
- *   - movement cache 是 per-creep path（某 creep 的路径）
- *   - Route Cache 是 per-room-pair route（两房间的路由元数据）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Route Cache */
 
 import type { Route } from "./route";
 import { makeRouteId } from "./route";
@@ -41,7 +21,7 @@ export interface RouteInvalidationRule {
 
 /**
  * 检查是否需要重新评估路由。
- *
+
  * 纯函数。
  */
 export function needsReeval(
@@ -81,7 +61,7 @@ export function anyInvalidated(rule: RouteInvalidationRule): boolean {
 
 /**
  * Route Cache — 带失效条件的路由缓存。
- *
+
  * 存储：heap（非 Memory）。global reset 后重建（从 Memory 快照恢复）。
  */
 export class RouteCache {

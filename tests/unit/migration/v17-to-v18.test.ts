@@ -1,17 +1,4 @@
-/**
- * v17 → v18 迁移独立测试（P1-I：tuning baselineVersion 版本戳建档）。
- *
- * 迁移语义：只建档不定版 —— 故意不写 baselineVersion=CONFIG.tuning.baselineVersion，
- * 让 tuning-engine 首次评估时检测 undefined ≠ CONFIG 值触发清空 rooms 覆盖
- * （清零重来语义）。若迁移直接定版，则存量旧覆盖会保留并继续压制新基线，
- * 违背 P1-I 修复目标。
- *
- * 覆盖：
- *   - 旧 tuning 结构存在 → 不写 baselineVersion，保留 undefined
- *   - 无 tuning 结构 → 不创建（惰性）
- *   - 非数字 baselineVersion 自愈删除
- *   - 幂等：重复执行不产生副作用
- */
+/** v17 → v18 迁移独立测试（P1-I：tuning baselineVersion 版本戳建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

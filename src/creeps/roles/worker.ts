@@ -1,17 +1,4 @@
-/**
- * Worker — P0 恢复混合角色。
- *
- * 策略声明：
- *   acquire: getSource（含拥挤迁移，source 分配统一入口）> 拾取掉落能量
- *   work:    assignment target > critical repair > fillTarget > 升级
- *
- * 启动期和灾后恢复的最后防线。直接采集 + 填充，防止能量死锁。
- * source 分配不经 assignment 系统（P1-1）— 与 harvester 一致走 getSource 公平份额。
- *
- * P0 修复：worker 被 kernel.ts 计入 repairRooms（与 builder 并列），但原先 work 链
- * 无任何 repair action → tower-defense 误判"本房有维修 creep"而跳过全部非战斗维修，
- * 形成塔修死区。现在 worker 携带 repairCritical，名实相符。
- */
+/** Worker */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import {

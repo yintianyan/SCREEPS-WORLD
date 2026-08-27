@@ -1,17 +1,4 @@
-/**
- * v41 → v42 Schema Migration Test
- *
- * 验证 R2 队列治理迁移：BuildTask 新增可选 queuedAt（入队 tick）。
- * 存量任务缺 queuedAt → 回填为迁移时刻 Game.time（防止「缺省=0」被超龄
- * 判定误清除）。调用真实 runMigrations()。
- *
- * 覆盖：
- *   1. 回填：无 queuedAt 的任务获得当前 tick
- *   2. 保留：已有 queuedAt 的任务不被覆盖
- *   3. 幂等：重复执行不改变回填值
- *   4. 防御：buildQueue 非数组 / 任务为 null 不崩溃
- *   5. 版本：schemaVersion 升至 CONFIG.memory.schemaVersion
- */
+/** v41 → v42 Schema Migration Test */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

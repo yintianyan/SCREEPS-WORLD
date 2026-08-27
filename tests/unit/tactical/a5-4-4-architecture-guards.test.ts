@@ -1,34 +1,4 @@
-/**
- * A5.4.4 Architecture Guards — Tactical Combat Runtime Validation & Closure.
- *
- * 15 条强化架构守卫（对应需求 §19 Architecture Guards）：
- *
- *   1.  Domain 禁止 Game
- *   2.  Domain 禁止 Memory
- *   3.  Domain 禁止 Creep / Room / PathFinder
- *   4.  Domain 禁止 attack() / rangedAttack() / heal()
- *   5.  Domain 禁止 move() / registerMove / spawnCreep
- *   6.  Tactical 禁止 spawn
- *   7.  Tactical 禁止 logistics
- *   8.  Tactical 禁止 recovery
- *   9.  Tactical 禁止修改 WarPosture
- *   10. Tactical 禁止创建 Operation
- *   11. Tactical 禁止创建 Strategic Target
- *   12. Tactical 禁止第二套 Threat Assessment
- *   13. Tactical 禁止第二套 CombatCapability
- *   14. Role 禁止自行创建 Strategic Target
- *   15. Role 禁止绕过 AttackIntent 系统（attacker.ts 的 Legacy attack 必须是 fallback 而非首选）
- *
- * 同时验证：
- *   - Domain 不 import systems/ 或 creeps/ 或 kernel/
- *   - Domain 不使用 Math.random / Date.now
- *   - Tactical Runtime 不直接调用 Game action API
- *   - attacker.ts 的 acquire/work 链中 attackByFocusFire 在首位
- *   - focus-fire.ts 不使用 assessThreat / ThreatAssessment
- *   - focus-fire.ts 不使用 evaluateCombatCapability
- *   - 所有 Domain 纯函数文件 barrel export 完整
- *   - Bootstrap 注册完整
- */
+/**  */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";

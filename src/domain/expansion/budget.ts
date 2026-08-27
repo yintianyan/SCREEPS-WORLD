@@ -1,15 +1,4 @@
-/**
- * Tiered Expansion Budget — A3.2 Phase 1：递进式预算计算。
- *
- * 合同锚点：GOAL_POLICY_PLAN §4 五域预算 + EXPANSION_ARCHITECTURE §2 G5 预算预演。
- *
- * 定位：回答「当前可用扩张预算有多少」——从 EmpireBudget 派生递进式预算：
- * Total → Emergency Reserve → Core Reserve → Operational Reserve → Available Expansion
- *
- * Core Protection Constraint：Available Expansion Budget 不得侵入 Emergency Reserve。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Tiered Expansion Budget */
 
 import type { EmpireBudget } from "../strategy/budget";
 
@@ -53,14 +42,14 @@ export const DEFAULT_TIERED_BUDGET_OPTIONS: TieredBudgetOptions = {
 
 /**
  * 从 EmpireBudget 派生递进式扩张预算（纯函数）。
- *
+
  * 递进逻辑：
  * 1. Emergency Reserve = totalEnergy × emergencyRatio（不可触碰）
  * 2. Core Reserve = totalEnergy × coreRatio（在 Emergency 之上）
  * 3. Operational Reserve = budget.survival + budget.production + budget.infrastructure
  * 4. Available Expansion = totalEnergy - Emergency - Core - Operational
  *    （但不超过 budget.expansion + budget.free —— 不能把预算外能量全算进扩张）
- *
+
  * Core Protection：Available < 0 时设为 0，并标记 coreInvaded=true。
  */
 export function computeTieredBudget(

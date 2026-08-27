@@ -1,20 +1,4 @@
-/**
- * Prospect Manager — P3 系统，主动情报任务的唯一管理者（R6b）。
- *
- * 闭环：expansionAllowed（姿态授权）→ 选侦察目标（domain/strategy/prospect
- * 纯函数）→ 发布 Memory.kernel.prospect → 向 sponsor 队列推 scout 孵化请求
- * （spawn-manager 唯一 spawnCreep）→ scout 到达目标房 → room-observer 捕获视野
- * 写入 intel → 本系统检测 intel 新鲜即判成功收摊。
- *
- * 止损链（每种失败都有冷却，防「派了就死还反复派」）：
- *   - 超时（maxMissionTicks）→ 收摊 + 目标冷却；
- *   - 侦察兵死亡且孵化数达 maxSpawns → 收摊 + 目标冷却；
- *   - 姿态退出 expansionAllowed → 中止任务（无冷却 — 目标无过错）。
- * 成功/失败均记录 ProspectOutcome 事件（黑匣子可复盘侦察成功率）。
- *
- * 运行成本：interval 25；无任务时仅门禁判断；有任务时 O(全部 creep 一次)
- * 统计存活侦察兵。无全房 find、无寻路（导航在 scout 角色层）。
- */
+/** Prospect Manager */
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";

@@ -1,10 +1,4 @@
-/**
- * stockTerminalEnergy 无市场守卫测试（W7 止血）。
- *
- * 背景：distributor 在 storage 富余时会把能量灌进 terminal 作「交易运费储备」；
- * 私服无市场时这份能量永久锁死（W7N3/W7N4 实测各 ~10k、真实储备 3-9k）。
- * 守卫与 terminal-manager 的 no-market 分支同款，两处必须保持一致。
- */
+/** stockTerminalEnergy 无市场守卫测试（W7 止血）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { stockTerminalEnergy } from "../../../src/creeps/engine/actions/industry";
 import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";

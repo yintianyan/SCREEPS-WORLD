@@ -1,18 +1,4 @@
-/**
- * A6.3.2 Prediction Lifecycle Resolution — 预测应验/失效判定。
- *
- * 职责：
- *   - 判断已到期 Prediction 是否应验（fulfilled）
- *   - 判断是否未应验（expired）
- *   - 判断是否被新数据推翻（invalidated）
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * PRED-008：只负责记录 lifecycle，不执行 recommendation。
- * 不建立第二套 Outcome 系统——复用 A6.1 Outcome 概念但只做预测验证。
- *
- * Deterministic Replay：相同输入 → 相同输出。
- */
+/** A6.3.2 Prediction Lifecycle Resolution — 预测应验/失效判定。 */
 
 import type { Prediction, PredictionStatus } from "./types";
 
@@ -57,7 +43,7 @@ export const INVALIDATION_DEVIATION_THRESHOLD = 1.0;
 
 /**
  * 验证单条 Prediction 的应验状态。
- *
+
  * 判定规则：
  *   1. 窗口已到期（currentTick > endTick）：
  *      - 偏差 < 20% → fulfilled
@@ -66,7 +52,7 @@ export const INVALIDATION_DEVIATION_THRESHOLD = 1.0;
  *   2. 窗口未到期：
  *      - 偏差 ≥ 100% → invalidated（新数据推翻预测）
  *      - 否则 → 不变（仍 active）
- *
+
  * 纯函数 — 不修改输入，不引用 Game/Memory。
  * 确定性：相同输入 → 相同输出。
  */
@@ -134,9 +120,9 @@ export function verifyPrediction(
 
 /**
  * 判断 Prediction 是否需要状态转换。
- *
+
  * 返回新的 status（如果需要转换），否则返回当前 status。
- *
+
  * 纯函数 — 不修改输入。
  */
 export function resolvePredictionStatus(
@@ -182,7 +168,7 @@ export interface BatchResolutionResult {
 
 /**
  * 批量验证预测列表。
- *
+
  * 纯函数 — 不修改输入列表。
  * 确定性：遍历前按 id 排序。
  */

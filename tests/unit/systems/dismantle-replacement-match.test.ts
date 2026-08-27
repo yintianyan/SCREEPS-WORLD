@@ -1,9 +1,4 @@
-/**
- * P1-4 findReplacementForDeadLink 单测（staged link 拆改）。
- *
- * 2026-08-02 review：曾因调用层用 existingKeys 过滤导致 newLinkTasks 恒为空，
- * 拆改计划永远不创建。修复后直接搜索 queue 中 queued 状态任务，补测试防回归。
- */
+/** P1-4 findReplacementForDeadLink 单测（staged link 拆改）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { findReplacementForDeadLink } from "../../../src/systems/layout-planner";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";

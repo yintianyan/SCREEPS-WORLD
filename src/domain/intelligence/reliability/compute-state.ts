@@ -1,18 +1,4 @@
-/**
- * A6.5 IntelligenceState Projection — 聚合入口 + State Hash。
- *
- * 职责：
- *   - 从 A6.1-A6.4 既有数据聚合为 IntelligenceState
- *   - 计算确定性 stateHash
- *
- * READ-ONLY PROJECTION（REL-001）：
- *   不持久化，不写入 globalCache。
- *   每次运行时从既有数据重新计算。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * REL-005 (Deterministic)：相同输入 → 相同输出。
- * REL-012 (No Reliability Score)：不产出单一分数。
- */
+/** A6.5 IntelligenceState Projection — 聚合入口 + State Hash。 */
 
 import type { Prediction } from "../prediction/types";
 import type { PredictionContext } from "../prediction/context";
@@ -67,11 +53,11 @@ export interface IntelligenceStateInput {
 
 /**
  * 计算 IntelligenceState — A6.5 的唯一入口。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  * 确定性 — 相同输入 → 相同 stateHash。
  * 只读 — 不修改任何输入数据。
- *
+
  * @param input - A6.1-A6.4 的既有数据
  * @returns IntelligenceState（只读投影）
  */

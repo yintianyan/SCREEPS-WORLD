@@ -1,11 +1,4 @@
-/**
- * Reserver — P2 远矿 controller 占领者。在远矿房 reserveController，防止 Source Keeper 刷怪、
- * 延长 source 再生时间。设计：body [CLAIM, MOVE] 最小配置（650 能量）；无 CARRY → mode 振荡
- * 不影响行为；不用 assignment → 目标固定为 remoteTarget 的 controller；常驻 remoteTarget。
- * 架构约束：reserveController 每 tick 续期 1 tick，1 个 CLAIM 即满足；controller 被 SK/其他玩家
- * 占领时（owner 存在且非自己）attackController 而非占领；被预定时 reserveController 返回
- * ERR_INVALID_TARGET → fallback attackController 消耗敌方预定期。
- */
+/** Reserver */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";

@@ -1,20 +1,4 @@
-/**
- * v23 → v24 迁移独立测试（P0-1 srcRatio 修正 / storageDrainAccum 字段建档）。
- *
- * 迁移语义：新增 RoomMemory.phase.storageDrainAccum 可选字段（累积净流失量，替代单 tick
- * drainRate 判定），由 room-state 惰性写入。迁移只做「建档 + 畸形自愈」，不写字段值。
- *
- * 自愈规则：
- *   - storageDrainAccum 非数字 → 删除（缺失视为 0，phase.ts 用 ?? 0 兜底）
- *   - phase 非对象 → 跳过该房（不触碰）
- *
- * 覆盖：
- *   - 空 Memory（无 phase）不报错
- *   - 合法 storageDrainAccum 保留
- *   - 脏 storageDrainAccum（非数字）→ 清除
- *   - phase 非对象 → 跳过
- *   - 幂等：重复执行不产生副作用
- */
+/** v23 → v24 迁移独立测试（P0-1 srcRatio 修正 / storageDrainAccum 字段建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

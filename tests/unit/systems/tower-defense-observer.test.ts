@@ -1,10 +1,4 @@
-/**
- * 塔防侦察兵修复测试（R7c）— 满能量塔对贴身侦察兵不开火的根因与修复。
- *
- * 根因：无害敌对（无威胁部件）在场时，塔防走维修分支，显式 tower.repair
- * 占用塔的本 tick 动作 → 引擎的自动攻击被抑制 → 侦察兵贴着满能量塔穿行。
- * 修复：无害敌对在场时塔不接任何任务，放空动作让引擎自动点杀。
- */
+/** 塔防侦察兵修复测试（R7c）— 满能量塔对贴身侦察兵不开火的根因与修复。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { towerDefenseSystem } from "../../../src/systems/tower-defense";
 import { mockContext, mockPos, mockSnapshot, mockStore, resetGlobals } from "../../role-helpers";

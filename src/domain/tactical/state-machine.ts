@@ -1,13 +1,4 @@
-/**
- * Tactical State Machine — A5.4.0 纯函数。
- *
- * transitionTacticalState(): 合法状态转换。
- * evaluateTacticalAction(): 从 Snapshot 推导 TacticalDecision。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- * 输入：TacticalSnapshot / DTO。
- * 输出：TacticalDecision / Transition。
- */
+/** Tactical State Machine */
 
 import type {
   TacticalState,
@@ -50,7 +41,7 @@ export function canTransitionTactical(from: TacticalState, to: TacticalState): b
 
 /**
  * 从 TacticalSnapshot 推导 TacticalDecision。
- *
+
  * 决策链（按优先级）：
  *   1. 授权检查 → 无授权 → ABORTED
  *   2. 止损检查 → 触发止损 → 产出 AbortSignal
@@ -61,7 +52,7 @@ export function canTransitionTactical(from: TacticalState, to: TacticalState): b
  *   7. 血量检查 → 低于撤退阈值 → DISENGAGING → RETREATING
  *   8. 正常接敌 → ENGAGING
  *   9. 移动 → MOVING → POSITIONING
- *
+
  * 确定性：相同 Snapshot 必须产生相同 Decision。
  */
 export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDecision {
@@ -665,7 +656,7 @@ function buildDecision(
 
 /**
  * 计算决策 Hash — 确定性验证。
- *
+
  * 相同 Snapshot + 相同 Decision → 相同 Hash。
  */
 export function tacticalDecisionHash(decision: TacticalDecision, snapshot: TacticalSnapshot): string {

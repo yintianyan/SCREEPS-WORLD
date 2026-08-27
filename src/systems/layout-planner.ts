@@ -153,7 +153,7 @@ function makeTryAddTask(
 
 /**
  * 布局规划器 — P3 低频系统，负责生成和维护建造计划（plan §5.6.3）。
- * 职责：触发条件满足时重新规划布局；蓝图 cells → BuildTask 推入 BuildQueue；
+
  * 动态生成 source/controller container 任务；评估交通热度生成道路候选。
  * 触发（shouldPlan 判定，每 tick 调用但内部早返回）：首次运行 / RCL 变化 /
  * nextPlanTick 到期（默认 50）/ layout.state 人工设 proposed。
@@ -173,7 +173,7 @@ export const layoutPlannerSystem: System & {
    * P1-F：recoveryEligible 钩子 — 任一 snapshot 命中紧急重建（关键基建
    * 缺失：spawn/storage/tower/sourceContainer）时自报 true，让 kernel
    * 将本系统提升为 P1 等效优先级通过 budget 拦截。
-   *
+
    * CTO 裁决（2026-08-01）：常规 50-tick 重规划不再享受 recovery 档豁免 —
    * 仅在关键基建确实缺失时提升。kernel 只读此钩子，不再硬编码 layout-planner
    * 名字（docs/architecture/KERNEL_ARCHITECTURE.md）。
@@ -250,7 +250,7 @@ export const layoutPlannerSystem: System & {
 
 /**
  * Stage 0：prep — 锚点确定 + shouldPlan 门禁 + 构建 PlanStageData。
- *
+
  * 包含原 planRoom 的锚点逻辑（spawn 位置变化检测、queue 清空、site 移除）
  * 和所有 prep 计算（completedKeys、occupiedSet、distance field 等）。
  * 完成后写入 planStageData 到 globalCache，设置 planStage=1。
@@ -411,7 +411,7 @@ function planStage0Prep(
 
 /**
  * Stage 1：核心结构 — constraint 模式（placeStructures）或 template 模式（blueprintToTasks + relocation）。
- *
+
  * 从 planStageData 读取 stage 0 产出的 anchor、occupiedSet、validationOptions 等，
  * 入队核心结构任务，推进到 stage 2。
  */
@@ -522,7 +522,7 @@ function planStage1Core(
 
 /**
  * Stage 2：物流结构 — source/controller container + link 网络 + extractor + mineral container。
- *
+
  * Link 槽位按 RCL 分级分配（2026-08-02 修订）：
  *   RCL5 source+controller（controller 优先于 storage，避免 storage 几何失败连累升级链）
  *   RCL6 +storage, RCL7 维持, RCL8 +source2+2hub
@@ -701,7 +701,7 @@ function planStage2Logistics(
 
 /**
  * Stage 3：道路 + spawn 重建 + 收尾。
- *
+
  * - planRoads 生成道路任务
  * - 紧急 spawn 重建（无 spawn 且 anchor 已设置）
  * - rotateTraffic 数据轮换
@@ -952,7 +952,7 @@ function shouldPlan(
 
 /**
  * 目标清单缺口落盘（观测通道）：Memory.kernel.layoutGaps[roomName] = type → 缺口数。
- * 设计约束（plan §7）：Memory 不存运行时索引 — 缺口字典是「短 key + 少量数字」，仅在实际
+
  * 缺口集合变化时写入，稳定态不产生序列化抖动；缺口闭合后删除该房条目（不留历史）。
  */
 function recordLayoutGaps(roomName: string, gaps: StructureGaps): void {

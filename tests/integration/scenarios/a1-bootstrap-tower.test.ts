@@ -1,22 +1,4 @@
-/**
- * A1 门槛证据 — 自举链路收口：RCL2→RCL3 爬升后 tower site 由 AI 自然创建。
- *
- * EMPIRE_MVP §4 场景 1 的关键断言面：「RCL3+ 且 tower 在建」。既有覆盖中
- * e2e-002 验证 RCL1→RCL2 爬升、e2e-004/rcl3-economy 在**预设** RCL3+tower
- * 房间验证行为——缺的是「爬升到 RCL3 的瞬间，施工系统自己排队 tower site」
- * 这条结构层链路。本测试从 RCL2 进度 44,900/45,000（一次升级就到 RCL3）的
- * 最小人口起步，全程零预设 tower/site：
- *
- *   upgrader 自然推满进度 → RCL3 → 布局/施工系统解锁 tower 相位 →
- *   construction-manager 创建 tower site → builder 由 census 自然补位 →
- *   （能量允许时）tower 建成
- *
- * 断言（可观察指标）：
- *   1. 无运行时错误、帝国存活；
- *   2. RCL 达到 3（自然升级，非预设）；
- *   3. tower site 出现或 tower 建成（「tower 在建」判据）；
- *   4. builder 角色由系统自然孵化（零人工补位链证据）。
- */
+/** A1 门槛证据 — 自举链路收口：RCL2→RCL3 爬升后 tower site 由 AI 自然创建。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 

@@ -1,24 +1,4 @@
-/**
- * Terminal Manager 工业链扩展测试 — battery 卖 / power 买 / 矿物互济。
- *
- * 覆盖：
- *   battery 卖（trySellSurplusBattery）：
- *   - terminal 现货 + 买单价达标 → deal 成交（量受现货/订单/单笔上限约束）
- *   - 买单价低于底线 → 不贱卖
- *   - terminal 无现货 → 不查单不成交
- *   power 买（tryBuyPower）：
- *   - 高信用 + 库存缺口 + 卖单价达标 → deal 成交
- *   - credits 低于高信用门禁 → 不买（预算让位生存采购）
- *   - 卖单价超上限 / 库存已达标 → 不买
- *   矿物互济（tryEmpireMineralAid）：
- *   - 姐妹房 homeMineral 盈余 → 缺口房 terminal.send + MineralTransfer 事件
- *   - 捐赠方 terminal 能量不足（运费+储备地板）→ 不发送
- *   - 单房 → 不互济
- *   ghodium 买（tryBuyGhodium）：
- *   - 高信用 + 库存缺口 + 卖单价达标 → deal 成交（量受缺口/订单/单笔上限约束）
- *   - credits 低于高信用门禁 → 不买（战略采购排在所有生存采购之后）
- *   - 卖单价超上限 / 库存已达标 / 无 nuker → 不买（G 无其他消费方，不囤死资本）
- */
+/** Terminal Manager 工业链扩展测试 — battery 卖 / power 买 / 矿物互济。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/terminal-manager";
 import { mockBudget, mockSnapshot, resetGlobals } from "../../role-helpers";

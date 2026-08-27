@@ -1,25 +1,4 @@
-/**
- * Abort Recovery Mapping — A5.3.1 GAP-1 纯函数。
- *
- * 合同锚点：A5.3.1 Task Spec PART 1-3 — Recovery Chain Closure。
- *
- * 职责：
- *   将军事止损信号（WarAbortSignal）翻译为 RecoveryAction，
- *   供 recovery-execution-system 消费。Military 只产出 Recovery Intent，
- *   不执行 Recovery。A4.6 负责将 Intent 转为 Action 并执行。
- *
- * 映射规则（AbortReason → RecoveryAction）：
- *   POSTURE           → expansion_pause    （姿态退出 = 停止进攻 = 暂停扩张消耗）
- *   ATTRITION         → population_rebuild  （消耗战 = 需要重建人口）
- *   NO_TARGET         → auto_resolve       （无目标 = 自然收摊，无需特殊恢复）
- *   PLAN_TIMEOUT      → population_rebuild （计划超期 = 可能已有投入需重建）
- *
- * 确定性：相同 input 必须产出相同 output（无 Date.now / Math.random）。
- * 幂等性：由 recovery-lifecycle 的 recoveryIdempotencyKey 保证
- *  （相同 sponsor + abortReason 产出相同 key，A4.6 cooldown 去重）。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / Kernel / Spawn / Transport。
- */
+/** Abort Recovery Mapping */
 
 import type { RecoveryAction, RecoveryActionType } from "../strategy/recovery-priority";
 import type { FailureDomain } from "../strategy/failure-propagation";
@@ -66,13 +45,13 @@ export interface WarAbortSignal {
 
 /**
  * 止损原因到恢复动作类型的映射。
- *
+
  * 每个止损原因都有明确的 Recovery 语义：
  * - POSTURE → expansion_pause：姿态退出意味着停止进攻，暂停扩张以恢复经济
  * - ATTRITION → population_rebuild：消耗战失败意味着大量 Creep 损失，需重建
  * - NO_TARGET → auto_resolve：无目标 = 自然收摊，无需特殊恢复
  * - PLAN_TIMEOUT → population_rebuild：计划超期可能有未完成投入，需重建
- *
+
  * 注意：LOGISTICS_FAILURE / REINFORCEMENT_TIMEOUT / RECOVERY_UNAVAILABLE
  * 不是 war-planner 的止损原因——它们是 A5.3 operation.ts 的 AbortCondition，
  * 在当前架构中，war-planner 的 demobilize 只产生 4 种 reason。
@@ -132,12 +111,12 @@ const ABORT_REASON_MAP: Record<string, {
 
 /**
  * 将战争止损信号转换为 RecoveryAction。
- *
+
  * 这是 Military → Recovery 的唯一桥梁：
  * - Military 只产出 RecoveryAction（建议），不执行
  * - A4.6 recovery-execution-system 负责执行
  * - 幂等性由 recoveryIdempotencyKey 保证
- *
+
  * @param signal 止损信号
  * @returns RecoveryAction 或 null（无匹配映射时）
  */
@@ -168,7 +147,7 @@ export function mapAbortToRecoveryAction(signal: WarAbortSignal): RecoveryAction
 
 /**
  * 计算恢复优先级（0-100）。
- *
+
  * 基于：止损原因 urgency + outcome severity + spawned investment。
  */
 function computePriority(signal: WarAbortSignal, baseUrgent: boolean): number {
@@ -212,7 +191,7 @@ function computeBenefit(signal: WarAbortSignal): number {
 
 /**
  * 将止损信号列表批量转换为 RecoveryAction 列表。
- *
+
  * 确定性：输出顺序与输入顺序一致（不排序、不 shuffle）。
  * 幂等性：同一 signal 产出相同 action（相同 id）。
  * 去重由 A4.6 recovery-lifecycle 的 shouldSubmitAction 保证。
@@ -230,7 +209,7 @@ export function mapAbortSignalsToRecoveryActions(
 
 /**
  * 生成止损信号的确定性 Hash。
- *
+
  * 相同 WarPlan + 相同 World Snapshot → 相同 AbortSignal Hash。
  * 用于 A5.3.1 确定性审计。
  */

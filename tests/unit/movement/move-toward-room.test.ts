@@ -1,12 +1,4 @@
-/**
- * moveTowardRoom 跨房路由测试（R6b 扩张修复 Fix #2）。
- *
- * 覆盖：
- *   - 无 avoidRooms：几何出口，不调 Game.map.findRoute；
- *   - 有 avoidRooms：优先用 Game.map.findRoute 选「避开 hostile 房」的下一跳，
- *     routeCallback 对 hostile 途经房打 Infinity、起点房不打，findExitTo 朝向绕行首跳；
- *   - findRoute 无路可绕（ERR_NO_PATH）：回退几何出口（由 scout pushThrough 硬钻兜底）。
- */
+/** moveTowardRoom 跨房路由测试（R6b 扩张修复 Fix #2）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { moveTowardRoom } from "../../../src/creeps/movement/pathfinding";
 import { mockCreep, mockPos, resetGlobals } from "../../role-helpers";

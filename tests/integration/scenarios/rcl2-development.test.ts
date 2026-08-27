@@ -1,14 +1,4 @@
-/**
- * RCL2 Development — 基础建设集成测试。
- *
- * 验证 AI 在 RCL2 阶段能够：
- *   - extension 建造
- *   - spawn capacity 增加
- *   - creep body 自动升级
- *   - population 自动调整
- *   - container 建设
- *   - repair 工作
- */
+/** RCL2 Development — 基础建设集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 

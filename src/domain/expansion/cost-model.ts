@@ -1,13 +1,4 @@
-/**
- * Expansion Cost Model — A3.2 Phase 1：扩张成本估算。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §4 殖民自举五阶段成本。
- *
- * 定位：回答「扩张到新房需要多少资源」——不是「当前有多少可调拨」。
- * 估算 Bootstrap Cost（0→Autonomous）+ Travel Cost + Spawn Cost + Infrastructure Cost。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Expansion Cost Model */
 
 import type { ExpansionCandidateV2 } from "./candidate";
 
@@ -73,7 +64,7 @@ export const DEFAULT_COST_OPTIONS: CostModelOptions = {
 
 /**
  * 估算扩张总成本（纯函数）。
- *
+
  * 成本构成：
  * 1. Claimer  = claimerBodyCost（一次性）
  * 2. Pioneer  = (workerCount × workerBodyCost) + (builderCount × builderBodyCost)（一次性）

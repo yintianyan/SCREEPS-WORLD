@@ -1,14 +1,4 @@
-/**
- * pathfinding 模块单元测试。
- *
- * 当前覆盖：getCoreCenter 的 tick 级 globalCache 缓存行为。
- * 后续可扩展：preloadStructureCache、ensureStructureCache 回退路径、走廊共享等。
- *
- * 测试策略：
- *   - 通过 mock room.find 的 spy 计数验证缓存命中（行为测试，非实现测试）
- *   - 跨 tick 失效用修改 Game.time 模拟
- *   - 不依赖完整 Creep mock，只测纯函数
- */
+/** pathfinding 模块单元测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getCoreCenter } from "../../../src/creeps/movement";
 import { resetGlobals } from "../../role-helpers";

@@ -1,12 +1,4 @@
-/**
- * PB 野采决策纯函数测试（审计缺口 2）。
- *
- * 覆盖：
- *   selectPowerBankTarget：
- *   - 新鲜 intel + 距离内 + 未占用 → 最近者优先
- *   - 过期 intel / 超距 / 占用房 / 无 PB → 排除
- *   isPowerFarmTimedOut / isPowerFarmAttritionLost：边界含等号语义
- */
+/** PB 野采决策纯函数测试（审计缺口 2）。 */
 import { describe, expect, it } from "vitest";
 import {
   isPowerFarmAttritionLost,

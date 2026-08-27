@@ -1,12 +1,4 @@
-/**
- * spawn 请求撤销通道接线测试。
- *
- * 背景：队列请求的常规出队路径只有孵化成功 / TTL(1000 tick) / 重试隔离，
- * removeRequest 曾全仓 0 调用 — 威胁清除后的 defender、状态翻转后的 upgrader
- * 请求会在 TTL 窗口内继续孵化（幽灵需求）。
- * 本文件走真实调用链（spawnManagerSystem.run → 队列副作用），
- * 同时覆盖 removeRequestsByRole 纯函数语义。
- */
+/** spawn 请求撤销通道接线测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { CONFIG } from "../../../src/config";
 import { spawnManagerSystem } from "../../../src/systems/spawn-manager";

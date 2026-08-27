@@ -1,7 +1,4 @@
-/**
- * 能量核算纯函数单测——对账恒等式、不变量、三指标计算、Memory 快照往返。
- * 对应合同：ECONOMY §3；任务书 §14–§16（恒等式/不变量/漂移）。
- */
+/** 能量核算纯函数单测——对账恒等式、不变量、三指标计算、Memory 快照往返。 */
 import { describe, it, expect } from "vitest";
 import {
   emptyLedger, ledgerAdd, ledgerDelta, ledgerIncome, ledgerConsumption, ledgerP0P1Consumption,

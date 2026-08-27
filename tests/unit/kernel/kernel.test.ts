@@ -1,7 +1,4 @@
-/**
- * kernel — colony-state 门禁纯函数测试。
- * 覆盖 recovery/bootstrap 冻结 P2+ 角色，以及战争/真实入侵的 combat 紧急旁路。
- */
+/** kernel — colony-state 门禁纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import { colonyStateFreezesRole } from "../../../src/kernel/kernel";
 

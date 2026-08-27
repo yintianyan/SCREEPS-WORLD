@@ -1,10 +1,4 @@
-/**
- * 远矿威胁探测 body-aware 口径测试（组④ / F-2）。
- *
- * 修复前 collectRemoteThreats "任何非盟友即威胁"，会为纯 MOVE 斥候空孵 defender
- * + 停产 300t，而经济角色 flee 用的 getRoomThreats 是 body-aware —— 两个探测器
- * 口径分裂。修复后统一走 classifyThreats（同一 THREAT_PARTS）。
- */
+/** 远矿威胁探测 body-aware 口径测试（组④ / F-2）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { collectRemoteThreats } from "../../../src/systems/remote-mining-manager";
 import { resetGlobals } from "../../role-helpers";

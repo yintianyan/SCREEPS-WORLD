@@ -1,17 +1,4 @@
-/**
- * Resource Reconciliation — A4.2 周期性对账。
- *
- * 合同锚点：A4.2 Architecture Audit §10.20-21 NM-6。
- *
- * 设计意图：
- *   周期性检查 ResourceLedger 与实际库存是否一致。
- *   mismatch 不静默修正——而是发出 RECONCILIATION_REQUIRED 信号，
- *   由上层系统决策（重置 ledger / 触发全量扫描 / 人工介入）。
- *
- *   对账频率：500 tick（低频，分批校验避免 CPU 尖峰）。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Resource Reconciliation */
 
 import type { ResourceType } from "../operation/agenda-item";
 import type { ResourceLedger, ResourceStockSnapshot } from "./resource-ledger";
@@ -89,7 +76,7 @@ export const DEFAULT_RECONCILIATION_OPTIONS: ReconciliationOptions = {
 
 /**
  * 对账单个资源。纯函数。
- *
+
  * @param resource 资源类型
  * @param ledgerStock Ledger 记录的存量
  * @param actualStock 实际存量（从 RoomSnapshot 采集）
@@ -199,7 +186,7 @@ export function reconcileResource(
 
 /**
  * 对账整个 Ledger。纯函数。
- *
+
  * @param tick 当前 tick
  * @param ledger ResourceLedger
  * @param actualStocks 实际存量快照（从 RoomSnapshot 采集）

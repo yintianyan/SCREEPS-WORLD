@@ -1,15 +1,4 @@
-/**
- * A6.6 Evidence Builder — 从 A6.1–A6.5 数据构建可追溯证据链。
- *
- * 职责：
- *   - 从 Experience / Evaluation / Prediction / Calibration / Reliability 提取 EvidenceItem
- *   - 组装 EvidenceTrace（完整链 + 缺失检测）
- *   - 计算 minConfidence（证据链最低置信度）
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * REC-010：每条 Recommendation 必须有可追溯 evidence。
- */
+/** A6.6 Evidence Builder — 从 A6.1–A6.5 数据构建可追溯证据链。 */
 
 import type { ExperienceRecord, OutcomeRecord, Attribution } from "../experience";
 import type { StrategyEvaluation, EvaluationFinding } from "../strategy-evaluation";
@@ -36,7 +25,7 @@ export function makeEvidenceId(stage: EvidenceStage, seq: number): string {
 
 /**
  * 从 A6.1 Experience 构建证据。
- *
+
  * OBSERVED 阶段：Experience + Outcome。
  */
 export function buildExperienceEvidence(
@@ -73,7 +62,7 @@ export function buildExperienceEvidence(
 
 /**
  * 从 A6.1 Attribution 构建证据。
- *
+
  * ATTRIBUTED 阶段：归因结果。
  */
 export function buildAttributionEvidence(
@@ -110,7 +99,7 @@ export function buildAttributionEvidence(
 
 /**
  * 从 A6.2 StrategyEvaluation 构建证据。
- *
+
  * INFERRED 阶段：评估发现。
  */
 export function buildEvaluationEvidence(
@@ -147,7 +136,7 @@ export function buildEvaluationEvidence(
 
 /**
  * 从 A6.3 Prediction 构建证据。
- *
+
  * PREDICTED 阶段：预测结果。
  */
 export function buildPredictionEvidence(
@@ -188,7 +177,7 @@ export function buildPredictionEvidence(
 
 /**
  * 从 A6.4 Calibration 构建证据。
- *
+
  * CALIBRATED 阶段：校准结果。
  */
 export function buildCalibrationEvidence(
@@ -252,7 +241,7 @@ export function buildCalibrationEvidence(
 
 /**
  * 从 A6.5 IntelligenceState 构建证据。
- *
+
  * RELIABILITY_ASSESSED 阶段：可靠性评估。
  */
 export function buildReliabilityEvidence(
@@ -331,7 +320,7 @@ export function buildReliabilityEvidence(
 
 /**
  * 组装证据链。
- *
+
  * 检查每个必需阶段是否有证据，计算 minConfidence。
  */
 export function assembleEvidenceTrace(

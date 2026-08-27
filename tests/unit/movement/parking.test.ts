@@ -1,18 +1,4 @@
-/**
- * 归位（Parking）地形多样化测试矩阵。
- *
- * 验证 parkIdleCreep 通用算法对任意房间地形成立——不预设位置、不引用其他房间数据，
- * 完全从 per-room 快照（结构/工地）+ 地形 + 实时 creep 位置推导停车位。
- *
- * 核心不变量：
- *   1. 关键格（source/spawn/controller/storage/工地 旁 range≤1）上的 idle creep 必须离开。
- *   2. road 上的 idle creep 必须离开（road 是交通主干道）。
- *   3. 已安全的 creep 不动（防每 tick 重复寻路 + 防振荡）。
- *   4. 不走进墙、不走进阻挡结构。
- *   5. 多 creep 不聚堆（预约缓存保证各占不同格）。
- *
- * 地形覆盖：开阔平原 / 单格走廊（墙夹）/ 墙劈房间 / 角落 source / 多 creep 聚堆。
- */
+/** 归位（Parking）地形多样化测试矩阵。 */
 import { describe, it, expect, beforeEach } from "vitest";
 import { ScenarioBuilder, type TestWorld } from "../../integration/framework";
 import { buildRoomSnapshot } from "../../../src/systems/room-snapshot";

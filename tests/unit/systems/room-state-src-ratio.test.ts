@@ -4,12 +4,12 @@ import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";
 
 /**
  * P0-1 room-state srcRatio + storageDrainRate 信号采集 — 单元测试。
- *
+
  * 覆盖病灶 1 中 room-state 层的信号采集逻辑：
  *   - srcRatio：取最满 source 的填充率（source.energy / energyCapacity）
  *   - storageDrainRate：跨 tick 计算（current - prev，负值=流失）
  *   - storageEnergyPrev：持久化供下一 tick 使用
- *
+
  * 设计取舍：无 storage 时 srcRatio 通道永不触发（storageDrainRate=0），
  * 因 storageDrainThreshold=-2，0 < -2 不成立。
  */

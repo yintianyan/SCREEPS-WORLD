@@ -1,9 +1,4 @@
-/**
- * A3-006: Operation Lifecycle 状态转换
- * A3-009: Partial Fulfillment（部分送达继续调度）
- * A3-013: Operation Retry（失败后重建冷却 + 重试上限）
- * A3-014: Reservation Release（成功/失败/超时三种路径释放）
- */
+/** A3-006: Operation Lifecycle 状态转换 */
 import { describe, expect, it } from "vitest";
 import {
   createOperation,

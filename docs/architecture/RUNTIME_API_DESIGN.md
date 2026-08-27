@@ -88,9 +88,9 @@
 6. Defense→SpawnService 仅提交 P0 请求（不绕过队列）；Logistics→LogisticsService、
    Construction 消费申请标记、Military→SpawnService 提交 attacker。
 7. RolePolicy 对 DemandService **只能认领，不能创建战略 Demand**——人口 / 车道级
-   Demand 由系统从缺口推导（research/08 §10.3；AGENTS.md 角色禁令）。
+   Demand 由系统从缺口推导（research/08 §10.3；AGENT.md 角色禁令）。
 8. 角色写 `needContainer` 等申请标记是唯一例外，site 签发权恒在两个 Construction
-   写者（AGENTS.md 建造条款）。
+   写者（AGENT.md 建造条款）。
 9. Self-Healing 无自有业务状态；恢复动作计数进 Metrics，处置走 owner 接口
    （research/22 §10.3 不可越权清单）。
 

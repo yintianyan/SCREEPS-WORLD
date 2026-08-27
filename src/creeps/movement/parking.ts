@@ -1,14 +1,4 @@
-/**
- * 归位（Parking）— 非站桩角色 idle 时主动离开关键格/道路，根治交通阻塞。
- * 根因：idle creep 停在「最后一次干活的位置」石化（source 旁/spawn 前/工地旁/road 上），
- * 位置是路径无关的随机残留，只能用统一归位行为收拢。设计（方案 C）：停车位完全从 per-room
- * 实时快照推导（结构/工地 + 地形 + 实时 creep 位），不预设位置表；站桩角色（harvester/upgrader）
- * 不参与（idle 守矿位/controller 本就正确）。
- * isSafeSpot：非关键格（source/controller/spawn/storage/工地 range≤1）且非 road。
- * findParkSpot：8 邻域单步选最优（非关键 > 非 road > 近核心），只在邻域内移动。
- * 防聚堆：__parkReservations 每 tick 重置。数据来源：结构/工地/道路全来自 RoomSnapshot，
- * 仅实时 creep 占位用 lookForAt(LOOK_CREEPS)（不做 LOOK_STRUCTURES，避免与快照重复扫描）。
- */
+/** 归位（Parking）— 非站桩角色 idle 时主动离开关键格/道路，根治交通阻塞。 */
 
 import { globalCache } from "../../kernel/global-cache";
 import type { RoomSnapshot } from "../../kernel/contracts";
@@ -116,7 +106,7 @@ function hasBlockingStructureAt(room: Room, x: number, y: number): boolean {
 
 /**
  * 异房（远矿/过境房）归位 — 无本房快照时的启发式分支。
- * 背景（2026-08-19 线上实证）：parkIdleCreep 拿到的 snapshot 恒为 home 房，
+
  * 坐标口径对异房毫无意义 → isSafeSpot 对异房 creep 恒「已安全」→ idle 停在
  * 跨房第一步（边界格一带），堵住出入口走廊（remoteHauler 扎堆 W36S58 (1,27-30)，
  * 视觉即「交通阻塞无法到达」）。启发式安全 = 距边界 ≥2 格（边界 1 格是引擎弹回区、

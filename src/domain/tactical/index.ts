@@ -1,9 +1,4 @@
-/**
- * Tactical Combat Domain — A5.4.0/A5.4.1 barrel.
- *
- * 纯函数律：本模块所有文件不引用 Game / Memory / RawMemory / Kernel / Spawn / Transport / Recovery。
- * 所有运行时数据由调用方（系统层薄壳）注入为 Snapshot / DTO。
- */
+/** Tactical Combat Domain */
 
 // ─── 类型定义 ───
 export * from "./types";

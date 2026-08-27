@@ -130,11 +130,11 @@ export type FillTarget = StructureSpawn | StructureExtension | StructureTower | 
 
 /**
  * Hauler 填充目标的优先级层级（threat 感知）。
- *
+
  * 返回有序的类型桶 — 调用者按序遍历，第一个有匹配的桶中取最近目标。
  * threat 存在时 tower 提升到最高优先（防御弹药是生存关键）。
  * 末尾空桶匹配所有剩余类型（回退兜底）。
- *
+
  * 注意：controller container 的特殊优先级（< 半满时插队）
  * 由 getHaulFillTarget 在调用此函数之前自行处理，不包含在此通用层级中 —
  * flee 场景不需要补给 controller container（非生存关键）。
@@ -163,7 +163,7 @@ function pickFillTarget(
 
 /**
  * Hauler 专用的填充目标选择 — 带优先级与每 tick 预约去重。
- *
+
  * 老玩家填充优先级：
  *   0. controller container 低于半满时优先补 1 个 hauler（站桩升级供能核心，远离核心区易饿死）。
  *   1. spawn / extension —— 孵化引擎，断能即停产，最高优先。
@@ -232,16 +232,16 @@ export function getHaulFillTarget(
 
 /**
  * Distributor 水位分级档位。
- *
+
  * 由 distributor gate 每 tick 根据 storage 水位计算并写入 creep.memory.distributorTier。
  * getDistributorFillTarget 读取该值过滤目标类型，withdrawStorageForDistribution 读取该值限制取能量。
- *
+
  * 档位定义（阈值见 CONFIG.economy.distributorTiers，绝对能量值）：
  *   0 — 库存 ≥ full(50k)：满载取能，所有 fillTarget 正常服务
  *   1 — 库存 ≥ sustained(10k)：满载取能，仅服务 spawn/extension（跳过 tower）
  *   2 — 库存 ≥ low(2k)：限取 400/tick，仅服务 spawn/extension
  *   3 — 库存 < low(2k)：限取 200/tick，仅服务 spawn/extension
- *
+
  * spawn 与 extension 在所有档位都同池服务：extension 里的能量只能被
  * spawnCreep 消费，与 spawn 本体同属孵化能量池 — 把能量从 storage 挪到
  * extension 不是消耗，只是换口袋。曾经 tier 3 排除 extension，导致
@@ -253,13 +253,13 @@ export type DistributorTier = 0 | 1 | 2 | 3;
 
 /**
  * 根据 storage 库存的**绝对能量值**计算 distributor 调度档位。
- *
+
  * 刻度口径（曾经的教训）：不能用 energy/capacity 比例 — storage 总容量
  * 1,000,000，比例 10% = 10 万能量，发展期房间（库存数百到数万）永久卡在
  * 最低档，extension 长期断供。绝对阈值来自
  * CONFIG.economy.distributorTiers，与 upgrade 调度（sprintStorage/
  * sustainedStorage）同一参照系。
- *
+
  * 边界不加迟滞：tier 只影响单车取量与目标类型，抖动代价小
  * （不像 colonyState 有全房爆炸半径），不值得引入驻留状态。
  * 无 storage 时返回 0（不限制）。
@@ -307,27 +307,27 @@ export function storageLinkForControllerFeed(
 
 /**
  * Distributor 专用的填充目标选择 — 与 hauler 的 getHaulFillTarget 职责分离。
- *
+
  * 角色边界（修复角色错配）：
  *   distributor 的职责是 storage → 生产 sink。spawn/extension 是生产引擎，
  *   断能即停产 = 全盘崩溃，是绝对最高优先——即使敌袭期间也不让位 tower，
  *   因为 spawn 没能量就产不出防御 creep，等于釜底抽薪。
- *
+
  *   旧实现复用 hauler 专用的 getHaulFillTarget，其 #0 优先是 controller container
  *   （< 半满即派），导致 distributor 被持续 divert 去喂升级无底洞，spawn/extension
  *   长期排第二；且与 link 网络的 source/storage→controller 供能冗余，形成
  *   storage→distributor→controller container 的回流环路。本函数根治该错配。
- *
+
  * 优先级：
  *   1. spawn / extension —— 生产引擎，绝对最高（威胁下也不让位），所有档位服务。
  *   2. tower —— 防御/维修（tier >= 1 时跳过，保护低水位储备）。
  *   3. controller container —— 仅当房间无 controller link 时兜底（RCL4 有 storage 但
  *      link 未建成的窗口期）。有 controller link 时由 link 网络独占供能（零通勤），
  *      distributor 完全不碰，避免冗余回流。
- *
+
  * 同级取最近未预约者；预约集合与 hauler 共享（fillReservations，按 tick 惰性重置），
  * 避免 distributor 与 hauler 抢同一目标。所有目标都被预约时回退最近目标避免死锁。
- *
+
  * @param tier distributor 水位档位，控制允许填充的结构类型范围。
  */
 export function getDistributorFillTarget(
@@ -441,11 +441,11 @@ export function getDistributorFillTarget(
 
 /**
  * 判断当前水位档位下 distributor 是否存在可服务的填充需求。
- *
+
  * 供取能门禁使用 — 取能与投放必须用同一套目标口径：
  * 若门禁只看未过滤的 fillTargets（如仅剩 tower 需求但档位跳过 tower），
  * distributor 会为它拒绝服务的目标取能，随后携能 idle，能量滞留在背包里。
- *
+
  * 判定与 getDistributorFillTarget 的过滤规则一一对应（不含预约状态 —
  * 门禁关心的是需求存在性，预约只是同 tick 内的分工去重）。
  */
@@ -495,11 +495,11 @@ export function hasDistributorFillDemand(snapshot: RoomSnapshot, tier: Distribut
 
 /**
  * 在 spawn 安全区内、按 hauler 填充优先级选择最近的需能量结构。
- *
+
  * 供 flee 等特殊场景使用 — 与 getHaulFillTarget 共享优先级层级（haulerFillTiers），
  * 但不使用预约系统（flee 是临时行为，不应消耗正常 hauler 的预约配额），
  * 且增加空间约束（仅选择 spawnPos safeRange 范围内的结构）。
- *
+
  * 不包含 controller container 优先级 — flee 是生存行为，
  * controller container 供能是效率行为，不应在威胁期间占优先。
  */
@@ -531,11 +531,11 @@ export function pickHaulFillTargetInRange(
 
 /**
  * hauler 取能 container 选择：在「满溢程度 vs 取货距离」间权衡，防止羊群偏置。
- *
+
  * 旧实现 findRichestContainer 纯选最满：两侧 source container 同为满仓（2000）时
  * 严格大于比较恒选数组首个 → 所有空载 hauler 每趟都涌向同一个 container，另一侧
  * 持续溢出无人疏解（线上实测：一侧 container 满溢地面堆积 5000+，hauler 全挤对侧）。
- *
+
  * score = energy − dist × HAUL_CONTAINER_DISTANCE_WEIGHT：
  *   - 越满的 container 越该优先疏解（防溢出，能量项主导）；
  *   - 越近成本越低（距离项微调，避免舍近求远空跑）；
@@ -626,7 +626,7 @@ export function findEmptiestContainer(
 
 /**
  * 选择下一个要拾取的掉落能量堆（考虑拾取范围、衰减与堆大小）。
- *
+
  * 游戏机制：pickup 需相邻（range ≤ 1），每 tick 只能拾取一堆；掉落能量按
  * ceil(amount/1000)/tick 衰减，堆越大衰减越快（绝对损失越大）。因此：
  *   - 若身边（range ≤ 1）有可拾取的堆，优先拾取能量最多的一堆

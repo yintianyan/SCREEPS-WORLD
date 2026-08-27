@@ -5,7 +5,7 @@ import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";
 
 /**
  * Room State System 单元测试。
- *
+
  * 重点覆盖 TD-012：RCL6+ 房间 terminal 能量必须计入 reserve，
  * 避免遗漏导致假性危机误判。
  */

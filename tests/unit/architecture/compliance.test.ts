@@ -1,8 +1,4 @@
-/**
- * 【G-J】Architecture Compliance Tests —— FREEZE 红线的自动化守卫。
- * 规则来源：DEPENDENCY_GRAPH.md + STATE_OWNERSHIP_MODEL。
- * 已登记例外内建于 allowlist；新增例外必须在此登记并注明 ADR。
- */
+/** Architecture Compliance Tests —— FREEZE 红线的自动化守卫。 */
 
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";

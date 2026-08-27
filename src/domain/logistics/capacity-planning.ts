@@ -1,24 +1,4 @@
-/**
- * Transport Capacity Planning — A4.3 Phase 3：Empire 级运力估算。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #4（无 Transport Capacity Planning）、
- * §3.3（无生产率×往返×运力估算）、§10 #6。
- *
- * 设计意图：
- *   现有 demand.ts 基于 container 积压信号（被动响应）。
- *   Capacity Planning 基于生产率×往返×运力（主动规划）。
- *
- *   公式：requiredHaulers = ceil(productionRate × roundTripTicks / haulerCapacity)
- *
- *   与 demand.ts 的关系：
- *   - demand.ts 的 container 积压信号仍作为验证/校准
- *   - Capacity Planning 作为 demand.ts 的前置输入
- *
- *   生产率来源：A4.1 的 flow-accounting.ts `productionRate()`。
- *   往返时间来源：transport-cost.ts 的 `estimatedTicks`。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Transport Capacity Planning */
 
 // ─── 房间级输入 / 输出 ────────────────────────────────────
 
@@ -68,14 +48,14 @@ export interface RoomCapacityResult {
 
 /**
  * 计算房间级运力需求。
- *
+
  * 公式：
  *   requiredHaulers = ceil(productionRate × localRoundTripTicks / haulerCapacity)
  *   requiredCarriers = ceil(crossRoomDemand × crossRoomRoundTripTicks / haulerCapacity)
  *   theoreticalCapacity = requiredHaulers × haulerCapacity / localRoundTripTicks
  *   actualCapacity = currentHaulerCount × haulerCapacity / localRoundTripTicks
  *   utilization = productionRate / max(1, actualCapacity)
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function planRoomCapacity(input: RoomCapacityInput): RoomCapacityResult {

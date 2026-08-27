@@ -1,13 +1,4 @@
-/**
- * Distributor 角色场景测试。
- *
- * 覆盖：
- *   - 从 storage 取能并填充 fillTarget（核心数据流）
- *   - 需求门禁：无 fillTarget 时不从 storage 取能（防循环）
- *   - 无 storage 时 idle
- *   - 永不调用 fillStorage（架构约束）
- *   - fillTarget 全满时 idle
- */
+/** Distributor 角色场景测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { distributorRole } from "../../../src/creeps/roles/distributor";
 import { CONFIG } from "../../../src/config";

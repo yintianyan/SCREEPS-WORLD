@@ -1,14 +1,4 @@
-/**
- * Attacker 角色行为测试（R3 战时闭环进攻执行端 + R4 波次集结）。
- *
- * 覆盖：
- *   - 目标房内有敌守军 → 攻击最近的敌 creep
- *   - 目标房内无守军但有敌结构 → 攻击高值结构（spawn/tower 优先于 rampart）
- *   - 同价值档残血结构优先（集火加速摧毁）
- *   - 低血（< 30% hitsMax）→ 标记 recycle 撤退，不再攻击
- *   - R4 attackerHold 集结决策矩阵：无计划 / advance / 目标不一致 → 不接管；
- *     build + 在 home → 停驻待命；build + 在外 → 归建；build + 低血 → 标记回收
- */
+/** Attacker 角色行为测试（R3 战时闭环进攻执行端 + R4 波次集结）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   attackerHold,

@@ -1,25 +1,4 @@
-/**
- * A4.7 Decision Trace System — 系统层薄壳。
- *
- * 合同锚点：A4.7 Task Spec §5 Domain/System 分离 + §32 CPU Budget。
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 globalCache / Memory / Game 采集运行时状态
- *   2. 适配为 DecisionSnapshot（纯函数输入格式）
- *   3. 调用 domain 纯函数生成 DecisionRecord（写入 Ring Buffer）
- *   4. 定期执行 Trace GC
- *   5. 提供 Dashboard / 查询接口
- *
- * 禁止：
- *   - 不做任何业务决策（决策由各业务系统自己做）
- *   - 不修改任何业务状态
- *   - 不进入 tick 关键路径（低频 100t）
- *   - Replay 不在此系统运行（Replay 只在测试/诊断环境）
- *
- * CPU 预算：低频执行（interval=100），Snapshot 生成近零成本。
- * 优先级 P3（在所有业务系统之后运行，采集它们产出的决策信号）。
- * 存储：heap only — global reset 可丢。
- */
+/** A4.7 Decision Trace System — 系统层薄壳。 */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
 import { systemPhase } from "../kernel/phase";
@@ -500,11 +479,11 @@ function collectSpawnDecisions(
 
 /**
  * 从 A5.1 威胁评估 + 远矿防御决策构建 DecisionRecord。
- *
+
  * 采集 globalCache.threatAssessments（room-state 每 tick 写入）和
  * globalCache.remoteDefenseDecisions（remote-mining-manager 按需写入），
  * 将军事防御决策接入 Decision Trace 追踪链。
- *
+
  * 记录规则：
  * - 威胁级别 ≥ MEDIUM 或意图 ∈ {SIEGE, FULL_ASSAULT, NUCLEAR} → 记录
  * - 远矿防御决策 ≠ CONTINUE → 记录
@@ -725,10 +704,10 @@ function collectDefenseDecisions(
 
 /**
  * 从 A5.3 war-planning-system 产出的 WarPlan 构建决策记录。
- *
+
  * 采集 globalCache.warPlanCache（war-planning-system 每 interval 写入），
  * 将军事行动计划接入 Decision Trace 追踪链。
- *
+
  * 记录规则：
  * - 有 WarPlan → 记录（包含 operationId, type, target, posture, risk, econGuard, netValue）
  * - 无 WarPlan 但 posture=war → 记录 "no plan" 原因
@@ -876,15 +855,15 @@ function collectWarPlanDecisions(
 
 /**
  * 从 expansion-manager 的运行时状态构建 Expansion DecisionRecord。
- *
+
  * 语义约束：一次真实 Expansion Decision = Plan 被 consume 启动执行的时刻，
  * 而不是 Operation 每 tick 的状态变化。使用 processedExpansionPlanIds 防重。
- *
+
  * 采集来源：
  * - Memory.kernel.expansion（活跃扩张状态机）
  * - globalCache.executionDashboard（运行时执行看板）
  * - Memory.kernel.strategy（姿态上下文）
- *
+
  * 记录规则：
  * - 有活跃扩张 + planId 未处理过 → 记录一次
  * - 无活跃扩张 → 不记录（扩张终止的 Outcome 由 Outcome 采集链处理）
@@ -1011,7 +990,7 @@ function collectExpansionDecisions(
 
 /**
  * 从运行时状态构建 DecisionSnapshot。
- *
+
  * 这是 system 层的核心职责：把散落在 globalCache / Memory / Game 中的
  * 运行时数据适配为纯函数可消费的确定性快照。
  */
@@ -1194,10 +1173,10 @@ function buildSnapshot(
 
 /**
  * 驱逐 snapshotRegistry 中不再被任何存活 DecisionRecord 引用的 snapshot。
- *
+
  * 策略：遍历 ring buffer 中仍存活的 DecisionRecord，收集它们的 inputSnapshotHash，
  * 然后删除 snapshotRegistry 中不在该集合中的条目。
- *
+
  * 执行频率：每 500 tick 一次（低频，与 gcTrace 同区域）。
  * 复杂度：O(ringBuffer.count + snapshotRegistry.size)。
  */
@@ -1266,13 +1245,13 @@ export function getDecisionTraceIntegrity(): IntegrityCheckResult | null {
 
 /**
  * 打印 Decision Trace Dashboard — 供控制台调用。
- *
+
  * 输出格式：
  *   ═══ Decision Trace Dashboard @12345 ═══
  *   Records: 42 (capacity=1000, written=58)
  *   Memory: 320 bytes/record, 320KB for 1000
  *   Integrity: 42/42 (100%)
- *
+
  *   Recent IMPORTANT/CRITICAL:
  *     [12340] SPAWN_QUEUE_3_p0_1 (spawn-manager) — p0SpawnQueue=1(critical)
  *     [12330] RECOVERY_SPAWN_HAULER (empire-health) — bottleneckDimension=spawn(warning)

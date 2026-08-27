@@ -1,34 +1,4 @@
-/**
- * A6.2 Strategy Evaluation Domain — 纯函数与类型定义。
- *
- * 权威来源：A6_2_CONTRACT_RESOLUTION.md → CANONICAL_EVALUATION_DIMENSIONS
- *
- * 8 个独立维度评估（禁止万能分数）：
- *   economicGrowth, resourceEfficiency, cpuEfficiency, riskLevel,
- *   survival, expansion, militaryOutcome, recoveryCost
- *
- * 每维度独立计算：observed, baseline, delta, trend, confidence, evidence。
- *
- * 证据类型分三层：
- *   OBSERVED  — 直接观察到的结果
- *   ATTRIBUTED — 已经经过 A6.1 归因
- *   INFERRED  — Evaluation 根据证据推导出的判断
- *
- * Verdict 表达：
- *   IMPROVING / STABLE / DEGRADING / INCONCLUSIVE / CONFLICTING_TREND
- *   禁止 EXECUTE / APPLY / SWITCH / SPAWN / ATTACK
- *
- * Shadow-Only 原则：
- *   Evaluation 只做分析，不执行任何 Game API，不修改 Strategy。
- *   Recommendation 只是 Shadow Output，不自动进入执行系统。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * 所有运行时数据由调用方（system 层薄壳）注入。
- *
- * Deterministic Replay：
- *   同一输入 + 同一模型版本 → 相同 evaluationHash。
- *   禁止 Math.random() / Date.now() / 无序迭代 / 浮点误差。
- */
+/** A6.2 Strategy Evaluation Domain — 纯函数与类型定义。 */
 
 import type { ExperienceRecord, Attribution, OutcomeRecord } from "./experience";
 import type { Baseline, BaselineComparison, BaselineKey } from "./baseline";
@@ -39,10 +9,10 @@ import type { Baseline, BaselineComparison, BaselineKey } from "./baseline";
 
 /**
  * CANONICAL_EVALUATION_DIMENSIONS — 策略评估的 8 个独立维度。
- *
+
  * 权威来源：A6_0_STRATEGY_EVALUATION.md §2.2 + §2.3
  * 仲裁文档：A6_2_CONTRACT_RESOLUTION.md
- *
+
  * 绝对禁止：
  *   - 不同模块使用不同维度集合
  *   - 将多维合并为单一万能分数
@@ -220,7 +190,7 @@ export interface StrategyEvaluation {
 
 /**
  * EvaluationInput — 纯 DTO，由 system 层组装注入。
- *
+
  * Domain 不自行读取 Runtime State。
  */
 export interface EvaluationInput {
@@ -290,10 +260,10 @@ export interface ContextInfo {
 
 /**
  * 评估策略效果 — 主入口函数。
- *
+
  * 8 维独立计算，每维产出 DimensionScore。
  * 消费 A6.1 Attribution，不重新实现归因。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function evaluateStrategy(input: EvaluationInput): StrategyEvaluation {
@@ -358,7 +328,7 @@ export function evaluateStrategy(input: EvaluationInput): StrategyEvaluation {
 
 /**
  * 评估单个维度。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 function evaluateDimension(
@@ -448,14 +418,14 @@ function evaluateDimension(
 
 /**
  * 计算整体 verdict。
- *
+
  * 规则：
  *   - 任何维度 INCONCLUSIVE → INCONCLUSIVE（样本不足优先）
  *   - short-term 和 long-term 趋势冲突 → CONFLICTING_TREND
  *   - 多数维度 delta > 阈值 → IMPROVING
  *   - 多数维度 delta < -阈值 → DEGRADING
  *   - 其余 → STABLE
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 function computeVerdict(
@@ -547,7 +517,7 @@ function computeOverallTrend(dimensions: Readonly<Record<EvaluationDimension, Di
 
 /**
  * 计算单维度趋势。
- *
+
  * 基于窗口内的 Experience 值序列变化方向。
  */
 function computeTrend(
@@ -581,7 +551,7 @@ function computeTrend(
 
 /**
  * 计算 Informational Aggregate Score。
- *
+
  * 明确标注：informational only，无决策权。
  * 禁止用于 if score > X then strategy good。
  */
@@ -622,7 +592,7 @@ function computeInformationalScore(
 
 /**
  * 生成评估发现 — 每条发现可追溯到 Experience / Attribution / Metric。
- *
+
  * 禁止 score = 0.72 但不知道为什么。
  */
 function generateFindings(
@@ -705,7 +675,7 @@ function generateFindings(
 
 /**
  * 生成 Shadow Recommendation — 不自动执行。
- *
+
  * Recommendation 始终 shadowOnly=true, autoApply=false。
  */
 function generateRecommendations(
@@ -741,7 +711,7 @@ function generateRecommendations(
 
 /**
  * 检测外部因素干扰。
- *
+
  * 例如：策略表现好但 externalEnergyInflow > 0 → 不能全归功于策略。
  */
 function detectExternalFactor(
@@ -771,7 +741,7 @@ function detectExternalFactor(
 
 /**
  * 获取维度相关的 Attribution 置信度。
- *
+
  * Evaluation 必须消费 Attribution，并把 Attribution Confidence 纳入 Evaluation Confidence。
  */
 function getAttributionConfidence(
@@ -796,7 +766,7 @@ function getAttributionConfidence(
 
 /**
  * 收集维度相关的证据 ID 列表。
- *
+
  * 每个结论必须能追溯到 Experience / Outcome / Attribution。
  */
 function collectEvidenceIds(
@@ -923,9 +893,9 @@ function checkContextCompatibility(
 
 /**
  * 为 Evaluation 生成稳定的 Hash。
- *
+
  * 算法：stableStringify(score + findings + modelVersion) → FNV-1a 32-bit → hex。
- *
+
  * 确定性保证：
  *   - 不使用 Math.random / Date.now
  *   - 维度顺序固定

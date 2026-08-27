@@ -1,25 +1,4 @@
-/**
- * Resource Definition — A4.2 数据驱动的资源元数据注册。
- *
- * 合同锚点：A4.2 Architecture Audit §10.1 / §12.2 NM-1。
- *
- * 设计意图：
- *   统一定义每种 ResourceType 的属性，供 ResourceLedger /
- *   ResourceHealth / AllocationPolicy / Terminal Manager 消费。
- *
- *   不做的事：
- *   - 不引用 Game / Memory / RawMemory（纯函数律）
- *   - 不运行时动态注册——静态定义，编译期确定
- *
- * 资源分类（category）：
- *   - energy: 能量（帝国血液，所有 creep 运行的基础）
- *   - mineral: 基础矿物（lab 反应链原料，市场交易品）
- *
- * 后续阶段（A4.4+）扩展：
- *   - compound: 矿物化合物（boost 原料）
- *   - commodity: 工厂商品
- *   - deposit: 沉积矿
- */
+/** Resource Definition */
 
 import type { ResourceType } from "../operation/agenda-item";
 
@@ -104,7 +83,7 @@ function mineralDefinition(
 
 /**
  * 全量资源定义注册表。
- *
+
  * 后续阶段（A4.4+）在此扩展化合物 / 商品定义。
  */
 export const RESOURCE_DEFINITIONS: Readonly<Record<string, ResourceDefinition>> = {

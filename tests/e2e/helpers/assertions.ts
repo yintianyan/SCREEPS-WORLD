@@ -1,8 +1,4 @@
-/**
- * E2E 断言辅助 — Screeps 专用语义化断言。
- *
- * 基于真实 Screeps 运营经验定义断言，不假设生产代码内部结构。
- */
+/** E2E 断言辅助 — Screeps 专用语义化断言。 */
 import { expect } from "vitest";
 import type { BotSnapshot } from "../framework/SnapshotInspector";
 

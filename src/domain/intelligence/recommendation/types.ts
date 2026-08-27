@@ -1,31 +1,4 @@
-/**
- * A6.6 Recommendation Types — 建议层基础类型定义。
- *
- * 合同锚点：A6_6_ARCHITECTURE.md §三 · A6_6_SAFETY_BOUNDARY.md
- *
- * 职责：
- *   - 定义 RecommendationCandidate（A6.6 扩展版，含 evidence chain / lifecycle / conflict）
- *   - 定义 EvidenceItem / EvidenceTrace（可追溯证据链）
- *   - 定义 NoRecommendation 及其枚举（NO_RECOMMENDATION 是合法且重要的结果）
- *   - 定义 RecommendationConflict（冲突只检测不解决）
- *   - 定义 RecommendationLifecycle（6 态状态机）
- *   - 定义 RecommendationCategory（8 类建议目录）
- *   - 定义 RecommendationUrgency / RecommendationValidity
- *   - 定义 RecommendationRingBuffer（有界缓存）
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * Shadow-Only（REC-001）：
- *   - shadowOnly: true (literal type)
- *   - autoApply: false (literal type)
- *
- * REC-009：禁止 recommendationScore 字段。
- * REC-010：每条必须有可追溯 evidence。
- * REC-011：autoApply 必须 false。
- * REC-012：Recommendation 历史有界。
- * REC-013：必须有 validityWindow (TTL)。
- * REC-014：禁止 Math.random / Date.now。
- */
+/** A6.6 Recommendation Types — 建议层基础类型定义。 */
 
 // ═══════════════════════════════════════════════════════════
 // §1. Recommendation Category — 8 类建议目录
@@ -33,7 +6,7 @@
 
 /**
  * 建议分类 — 严格匹配 A6_6_RECOMMENDATION_CATALOG.md 定义的 8 类。
- *
+
  * 禁止新增未在 catalog 中定义的类型。
  */
 export type RecommendationCategory =
@@ -48,7 +21,7 @@ export type RecommendationCategory =
 
 /**
  * 紧急度 — 5 级，用于 Lexicographic ranking 第一排序维度。
- *
+
  * 禁止数值化（不使用 score）。
  */
 export type RecommendationUrgency =
@@ -76,7 +49,7 @@ export const URGENCY_ORDER: Readonly<Record<RecommendationUrgency, number>> = {
 
 /**
  * 证据来源阶段 — 区分证据来自 A6 链条的哪一层。
- *
+
  * 不要把不同来源的证据混成一条。
  */
 export type EvidenceStage =
@@ -89,7 +62,7 @@ export type EvidenceStage =
 
 /**
  * EvidenceItem — 单条可追溯证据。
- *
+
  * 每条证据必须能追溯到 A6.1–A6.5 的具体输出。
  * 禁止无来源的证据。
  */
@@ -114,7 +87,7 @@ export interface EvidenceItem {
 
 /**
  * EvidenceTrace — 完整证据链。
- *
+
  * 追溯链：
  *   Recommendation → EvidenceItem[] → Prediction/Evaluation/Calibration/Reliability
  *     → Experience → Outcome → Attribution
@@ -136,7 +109,7 @@ export interface EvidenceTrace {
 
 /**
  * 不推荐原因枚举。
- *
+
  * NO_RECOMMENDATION 是正常且重要的 Intelligence Output，不是异常。
  */
 export type NoRecommendationReason =
@@ -173,7 +146,7 @@ export interface NoRecommendationResult {
 
 /**
  * 建议有效期 — TTL 机制。
- *
+
  * REC-013：每条 Recommendation 必须有 validityWindow。
  */
 export interface RecommendationValidity {
@@ -206,9 +179,9 @@ export const DEFAULT_TTL: Readonly<Record<RecommendationCategory, number>> = {
 
 /**
  * 建议生命周期状态 — 6 态状态机。
- *
+
  * 来源：A6_6_LIFECYCLE.md §一
- *
+
  *     Created ──→ Valid ──→ Expired
  *                  │           ↑
  *                  ├──→ Superseded
@@ -244,7 +217,7 @@ export type ConflictSeverity = "high" | "medium" | "low";
 
 /**
  * RecommendationConflict — 两个或多个建议之间的冲突。
- *
+
  * A6.6 只检测和暴露冲突，不解决冲突。
  * 禁止 resolveConflict / selectHighest。
  */
@@ -271,12 +244,12 @@ export interface RecommendationConflict {
 
 /**
  * A6.6 RecommendationCandidate — 完整的建议候选。
- *
+
  * Shadow-Only:
  *   - shadowOnly: true (literal type)
  *   - autoApply: false (literal type)
  *   - 不被任何执行系统读取
- *
+
  * REC-009: 禁止 recommendationScore 字段。
  * REC-010: 每条必须有可追溯 evidence。
  * REC-011: autoApply 必须 false。
@@ -308,7 +281,7 @@ export interface RecommendationCandidate {
   // ── 置信度 ──
   /**
    * 建议置信度。
-   *
+
    * 硬约束：confidence <= min(evidence confidence)。
    * 禁止 confidence > 最低证据置信度。
    */
@@ -357,7 +330,7 @@ export interface RecommendationCandidate {
 
 /**
  * 建议结果类型 — 要么是有效的 RecommendationCandidate，要么是 NoRecommendationResult。
- *
+
  * 调用方必须检查是否为 NO_RECOMMENDATION。
  */
 export type RecommendationResult =
@@ -388,7 +361,7 @@ export function isNoRecommendation(
 
 /**
  * Recommendation Ring Buffer — 固定长度环形缓冲。
- *
+
  * REC-001：A6.6 唯一可写的 cache 结构。
  * REC-012：历史有界，不会无限增长。
  */

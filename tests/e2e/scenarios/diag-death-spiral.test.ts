@@ -1,6 +1,4 @@
-/**
- * 【Phase 3A 诊断 v5 极简】镜像 E2E-006 全程，输出人口曲线与 spawn 决策值。
- */
+/** 镜像 E2E-006 全程，输出人口曲线与 spawn 决策值。 */
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { writeFileSync } from "node:fs";
 import { ScenarioRunner } from "../framework";

@@ -1,20 +1,4 @@
-/**
- * E2E-013 损坏 Memory 恢复 — 验证 Memory 迁移系统能从损坏状态恢复。
- *
- * 真实场景：
- *   - Screeps 服务端升级可能导致 Memory 格式不兼容
- *   - 手动 console 操作可能意外损坏 Memory 结构
- *   - 网络抖动导致 storage 写入不完整
- *
- * 验证策略：
- *   1. 注入损坏的 Memory（缺少必要字段、类型错误、null 值）
- *   2. 运行 500 tick
- *   3. 验证迁移系统修复了损坏字段
- *   4. 验证帝国正常运转（无 JS 错误、creep 存活）
- *
- * 注意：screeps-server-mockup 的 bot 没有 memory setter，
- * 但有 console() 方法可以执行 `Memory = {...}` 来注入。
- */
+/** E2E-013 损坏 Memory 恢复 — 验证 Memory 迁移系统能从损坏状态恢复。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";

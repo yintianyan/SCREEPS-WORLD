@@ -1,20 +1,4 @@
-/**
- * War Cost — A5.3 战争成本估算纯函数。
- *
- * 不能把 "Spawn Energy" 当成全部战争成本。
- *
- * 至少包括：
- * - SpawnEnergyCost
- * - BoostCost
- * - ReplacementCost
- * - TransportCost
- * - HealingCost
- * - OpportunityCost
- * - CPUCost
- * - RecoveryCost
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** War Cost */
 
 // ═══════════════════════════════════════════════════════════
 // §1. 类型定义

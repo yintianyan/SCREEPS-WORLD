@@ -1,15 +1,4 @@
-/**
- * Death Recovery — A4.3 Phase 4：Hauler 死亡恢复全链。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #22。
- *
- * 设计意图：
- *   Hauler 死亡后的完整恢复链：
- *   Death → Assignment Failure → Cargo Reconciliation → Demand Recalculation
- *   → New Assignment → Replacement Spawn
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Death Recovery */
 
 import type { TransportAssignment } from "./transport-assignment";
 import type { TransportRequestV2 } from "./transport-request";
@@ -70,14 +59,14 @@ export interface DeathRecoveryInput {
 
 /**
  * 规划 Hauler 死亡恢复全链。
- *
+
  * 链路：
  *   1. Assignment Failure → 标记 Assignment 为 failed
  *   2. Cargo Reconciliation → cargo loss 计入 accounting
  *   3. Demand Recalculation → 重新计算 remaining demand
  *   4. New Assignment → 是否需要替代 hauler
  *   5. Replacement Spawn → 是否需要 spawn 新 hauler
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function planDeathRecovery(input: DeathRecoveryInput): DeathRecoveryPlan {

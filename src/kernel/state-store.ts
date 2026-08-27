@@ -1,11 +1,4 @@
-/**
- * 【G-G/R2-3】StateStore — 状态族单调版本号（分层指纹的数据源）。
- *
- * 用途：Intent 的 domainFingerprint 校验（研究文档 07 号【RT-3】）——意图只绑定其依赖域，
- * 校验时比对版本号；域内任何差分写入由 owner 调 bumpStateFamily()。
- * 持久化：Memory.kernel.stateVersions —— **跨 global reset 存活**（reset 后若版本归零，
- * 陈旧 Intent 会重新通过校验——正是要防的事故）。planner 无感知、无法忘记 bump。
- */
+/** StateStore — 状态族单调版本号（分层指纹的数据源）。 */
 
 import type { StateStore } from "./contracts";
 

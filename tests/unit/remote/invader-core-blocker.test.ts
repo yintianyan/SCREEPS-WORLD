@@ -1,16 +1,4 @@
-/**
- * InvaderCore 压制止损链接线测试。
- *
- * 背景：InvaderCore 是敌对结构而非 creep — FIND_HOSTILE_CREEPS 检测不到，
- * 旧实现对「房里只有一个核心、没有 Invader creep」完全漏报：
- * 运营继续送 harvester（source 被压在 1500 容量）、reserver 空耗
- * （attackController -1/次磨不过核心 +2/tick 续期）、威胁层不写危险冷却。
- *
- * 止损链（P1 升级）：
- *   - 大要塞（level≥1 或带守卫）→ 维持 blockedUntil + recycle 规避 + dangerUntil，等自然 decay；
- *   - 次级核心（level 0、无守卫）→ 标 needCoreClear 驱动孵 coreClearer 拆核回收 op 名额，
- *     不阻塞运营（核心清除后 demand 立即恢复），经济 creep 仍回收（无法采集）。
- */
+/** InvaderCore 压制止损链接线测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { evaluateRemoteDemand, type RemoteCreepSummary } from "../../../src/domain/remote/demand";
 import {

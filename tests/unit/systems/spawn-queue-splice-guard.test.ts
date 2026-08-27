@@ -1,20 +1,4 @@
-/**
- * P1-H 静态守卫 — spawnQueue 直接 splice 仅允许在队列属主 spawn-manager。
- *
- * 队列属主是 spawn-manager（tick 内独占消费孵化，读取 spawnQueue 后 splice
- * 出队是合法行为）。其他模块（如 expansion-manager）必须经纯函数通道
- * （domain/spawn/queue 的 cancelRequestsByHome/removeRequest/...）
- * 操作队列，禁止「读取 spawnQueue 后直接 splice」——否则会绕过队列属主
- * 的 tick 内独占假设，引入隐式执行顺序耦合。
- *
- * 原始 bug：expansion-manager.reclaimExpeditionCreeps 取出 sponsor 的
- * spawnQueue 局部变量后用 for 循环 + queue.splice 清队列。链式调用守卫
- * （`.spawnQueue.splice(`）捕捉不到这种「先取局部变量再 splice」变体，
- * 故用复合判定：同一文件同时出现 .spawnQueue 引用与 .splice( 调用即违规
- * （白名单：spawn-manager 是属主，domain/spawn/queue 是纯函数层不读 Memory）。
- *
- * 与 danger-until-single-writer / remote-site-guard 同款源码扫描模式。
- */
+/** P1-H 静态守卫 — spawnQueue 直接 splice 仅允许在队列属主 spawn-manager。 */
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -54,9 +38,9 @@ function stripComments(source: string): string {
 
 /**
  * 允许「同时出现 .spawnQueue 引用 + .splice( 调用」的文件白名单。
- *
+
  * - spawn-manager：队列属主，tick 内独占消费孵化，直接 splice 出队合法。
- *
+
  * domain/spawn/queue.ts 是纯函数层（不读 Memory，不会触发复合判定），
  * 故不在白名单内——若未来该文件开始读 Memory，则需在白名单补登记
  * 或重构为不读 Memory 的形态（设计上不应读）。

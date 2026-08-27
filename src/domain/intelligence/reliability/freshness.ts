@@ -1,17 +1,4 @@
-/**
- * A6.5 Freshness & Data Sufficiency — 数据新鲜度 + 充足性评估。
- *
- * 职责：
- *   - Freshness: 基于实际 tick / cadence 评估各数据源的新鲜度
- *   - Data Sufficiency: 跨模型聚合数据充足性
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * REL-001 (Read-Only)：只读消费，不修改输入。
- * REL-005 (Deterministic)：相同输入 → 相同输出。
- * REL-007 (No New Sampler)：不新建采样通道。
- *
- * 禁止 Date.now() / wall clock。必须 deterministic。
- */
+/** A6.5 Freshness & Data Sufficiency — 数据新鲜度 + 充足性评估。 */
 
 import type { Prediction } from "../prediction/types";
 import type {
@@ -40,9 +27,9 @@ import {
 
 /**
  * 计算知识新鲜度。
- *
+
  * 纯函数 — 从各数据源的 tick 信息计算。
- *
+
  * @param profiles - 所有 ModelCalibrationProfile
  * @param resolutions - 所有 ResolutionResult
  * @param predictions - 所有 Prediction
@@ -156,9 +143,9 @@ function computeOverallFreshness(
 
 /**
  * 计算数据充足性聚合。
- *
+
  * 纯函数 — 从 A6.4 Profile + A6.3 Prediction 聚合。
- *
+
  * @param profiles - 所有 ModelCalibrationProfile
  * @param resolutions - 所有 ResolutionResult
  * @param predictions - 所有 Prediction

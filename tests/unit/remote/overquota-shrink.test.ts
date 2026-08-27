@@ -1,12 +1,4 @@
-/**
- * 远矿超额收缩测试 — spawn 产能维度接入后的存量治理。
- *
- * 背景：effectiveMaxOperations 曾只看 storage 有无（建成即放开到 2），
- * 单 spawn 房开双远矿后远程编制 ~11 只把唯一孵化位占满，本地
- * upgrader/builder/distributor 寿终后永远排不到队首（线上实测：远程吃掉
- * 50% 孵化产出，本地关键角色全饿死）。修复引入 spawn 数上限 + 超额收缩：
- * active 数超过新上限时废弃编制最贵的（haulerNeed 最大 = 通勤最远）。
- */
+/** 远矿超额收缩测试 — spawn 产能维度接入后的存量治理。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
 import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";

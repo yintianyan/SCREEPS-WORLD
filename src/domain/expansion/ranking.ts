@@ -1,13 +1,4 @@
-/**
- * Candidate Ranking — A3.2 Phase 1：多候选排序 + 可解释。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §1.2 并发条款（至多一条 colonize 车道）。
- *
- * 定位：对已评分候选房进行多维度排序，输出可解释的优先队列。
- * 排序维度：评分 > 距离 > source 数 > 新鲜度。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Candidate Ranking */
 
 import type { ExpansionCandidateV2 } from "./candidate";
 
@@ -40,7 +31,7 @@ export const DEFAULT_RANKING_OPTIONS: RankingOptions = {
 
 /**
  * 对已评分候选房进行排序（纯函数）。
- *
+
  * 排序逻辑：
  * 1. 过滤出 QUALIFIED 候选
  * 2. 按 compositeScore = score × (1 - distWeight×distPenalty) + sourceBonus + freshnessBonus 排序

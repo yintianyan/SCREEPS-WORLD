@@ -1,21 +1,4 @@
-/**
- * UOEM (Unified Outcome Event Model) — 类型定义。
- *
- * Phase 38 批准的 Model A: Event Ring + Terminal Index。
- * 消解六类数据缺陷：EXP-1/EXP-2/TMP-1/A6-R/A6-SL/TIMEOUT-SEMANTICS。
- *
- * 设计原则（七条边界提醒，Phase 38-B）：
- *   1. Event History != Latest State — channel 是 FIFO 历史，不是单槽 latest
- *   2. Milestone != Outcome — kind 分离，milestone 不进 channel
- *   3. Timeout != Terminal Timeout — P5 是 milestone，A8/A10 是 terminal
- *   4. Decision != Operation — decisionId 是 DecisionTrace 内部引用，operationId 是 Operation 身份
- *   5. Aggregate != Outcome — delta vs 累计
- *   6. Before != After — PairedObservation 强制双端点
- *   7. RecordedAt != OccurredAt — eventId 包含 tick+seq 保证确定性排序
- *
- * 合同锚点：docs/phase38/PHASE38_B_FINAL_VERDICT.md + UOEM_IMPLEMENTATION_READINESS.md
- * 证明测试：tests/unit/phase38/uoem-proof.test.ts（reference implementation）
- */
+/** UOEM (Unified Outcome Event Model) — 类型定义。 */
 
 // ─── Operation Identity ──────────────────────────────────
 

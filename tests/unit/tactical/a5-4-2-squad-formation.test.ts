@@ -1,17 +1,4 @@
-/**
- * A5.4.2 Squad Formation & Tactical Movement — Domain 纯函数测试。
- *
- * 测试覆盖：
- *   FORM-001~006: computeSquadAnchor（Centroid + Path Leader）
- *   FORM-007~010: computeFormationSlots（LINE/WEDGE/COLUMN/CLUSTER/SCATTER）
- *   FORM-011~013: computeCohesion（INTACT/DEGRADED/BROKEN/CRITICAL）
- *   FORM-014~016: produceSquadMovementIntent（状态→目标映射）
- *   FORM-017~018: detectSquadStuck（编队级卡位）
- *   FORM-019~020: checkHealerCohesion（Healer 掉队检测）
- *   FORM-021~022: computeRetreatFormation（撤退阵型）
- *   FORM-023~024: squadMovementIntentHash（确定性 Hash）
- *   FORM-025: buildSquadSnapshot（快照构建）
- */
+/** A5.4.2 Squad Formation & Tactical Movement — Domain 纯函数测试。 */
 
 import { describe, expect, it } from "vitest";
 import {

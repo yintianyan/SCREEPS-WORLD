@@ -1,11 +1,4 @@
-/**
- * registerStaticBlocker 站桩占位自报测试（v33-R11）。
- *
- * 语义：外房无 RoomSnapshot 预载，静止角色在岗时自报占位，寻路矩阵
- * （applyStaticBlockers）据此把该格标 255，兄弟 creep 绕行而不是撞被占格。
- * per-tick 生命周期：与预载共用 __staticBlockersCache，同 tick 追加去重，
- * 旧 tick 条目被新自报/预载替换。
- */
+/** registerStaticBlocker 站桩占位自报测试（v33-R11）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { preloadStaticBlockers, registerStaticBlocker } from "../../../src/creeps/movement";
 import { resetGlobals } from "../../role-helpers";

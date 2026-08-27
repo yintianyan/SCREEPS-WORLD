@@ -1,16 +1,4 @@
-/**
- * 异房归位（parkInForeignRoom）单测 — 2026-08-19「交通阻塞」修复的回归锁。
- *
- * 背景：parkIdleCreep 的 snapshot 恒为 home 房，坐标口径对远矿/过境房无意义 →
- * 异房 idle creep 恒判「已安全」停在跨房第一步（边界格一带），堵出入口走廊
- * （线上实证：remoteHauler 扎堆 W36S58 (1,27-30)，视觉即「无法到达目的地」）。
- *
- * 核心不变量：
- *   1. 异房 creep 在走廊带（距边界 ≤2 格）→ 必须内移（单步，远离边界）。
- *   2. 已离开走廊带 → 原地预约待命（不每 tick 重复寻路）。
- *   3. 不进墙、不进阻挡结构格、不进被占格。
- *   4. 多 creep 预约缓存保证各占不同格。
- */
+/** 异房归位（parkInForeignRoom）单测 — 2026-08-19「交通阻塞」修复的回归锁。 */
 import { describe, it, expect, beforeEach } from "vitest";
 import { parkIdleCreep } from "../../../src/creeps/movement";
 import { resetGlobals } from "../../role-helpers";

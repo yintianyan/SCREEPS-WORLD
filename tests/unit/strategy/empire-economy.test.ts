@@ -1,18 +1,4 @@
-/**
- * Empire Economy 链路单测 — A2B-006..A2B-012。
- *
- * 合同锚点：
- *   A2B-006 Empire Economic Health（economic-health.ts）
- *   A2B-007 Expansion Readiness（readiness.ts）
- *   A2B-008 Reserve Protection（budget.ts）
- *   A2B-009 Request Scope（request-pool.ts scope 字段 + imbalance.ts candidatesToEmpireRequests）
- *   A2B-010 Empire Request Routing（imbalance.ts detectImbalance）
- *   A2B-011 Capacity Calculation（capacity-profile.ts，已有测试补充）
- *   A2B-012 Economic Trend（safety-margin.ts）
- *
- * 加上 Multi-Room Simulation Scenario（A2B-S1）和
- * Expansion Readiness Scenario A–E（A2B-S2）。
- */
+/** Empire Economy 链路单测 */
 import { describe, it, expect } from "vitest";
 import {
   evaluateEconomicHealth,

@@ -1,12 +1,4 @@
-/**
- * A5.4.4 CPU Benchmark & Memory Audit — planFocusFire 性能基准测试。
- *
- * 测量维度：
- *   1. CPU: 单次 planFocusFire 调用的平均耗时（ns）
- *   2. CPU: 50 组 × 100 次 Replay 总耗时
- *   3. Memory: FocusFirePlan 对象序列化大小
- *   4. Memory: globalCache 中 tactical-engagement 字段的堆占用估算
- */
+/** A5.4.4 CPU Benchmark & Memory Audit — planFocusFire 性能基准测试。 */
 import { describe, expect, it } from "vitest";
 import {
   planFocusFire,

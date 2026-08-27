@@ -1,8 +1,4 @@
-/**
- * Creep 工具函数 barrel — 统一重导出，保持消费者导入路径不变。
- * 依赖方向（无循环）：movement → assignment-adapter；lifecycle → movement + assignment-adapter；
- * targeting 独立（仅依赖 contracts + global-cache）。
- */
+/** Creep 工具函数 barrel — 统一重导出，保持消费者导入路径不变。 */
 export {
   packPos,
   recordTraffic,

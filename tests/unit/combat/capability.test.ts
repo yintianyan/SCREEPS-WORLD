@@ -1,20 +1,4 @@
-/**
- * A5.1 G2 — Combat Capability 纯函数测试。
- *
- * 覆盖：
- * - C01: 基础 body 解析（ATTACK/RANGED_ATTACK/HEAL/TOUGH/MOVE/WORK/CLAIM）
- * - C02: Boost 倍率（T1/T2/T3 for attack/heal/tough/dismantle/move/claim）
- * - C03: effectiveHP 计算（含 TOUGH 减伤）
- * - C04: mobility 估计
- * - C05: damaged 部件排除
- * - C06: 编队聚合 aggregateCombatCapability
- * - C07: computeCombatPower 权重计算
- * - C08: 空输入处理
- * - C09: 全 MOVE scout
- * - C10: T3 boost tough 编队（极限场景）
- *
- * 引擎常量来源：docs/research/03_SCREEPS_GAME_CONSTRAINTS.md §7/§8（CONFIRMED）。
- */
+/** A5.1 G2 — Combat Capability 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   evaluateCombatCapability,

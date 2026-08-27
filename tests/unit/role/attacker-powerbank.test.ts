@@ -1,11 +1,4 @@
-/**
- * Attacker PB 分流测试（审计缺口 2 角色层）。
- *
- * 覆盖：
- *   - mission="powerBank" + 在目标房 + 房内有 PB → attack PB（hostile 链打不到）
- *   - mission="powerBank" → hold 钩子不集结（warPlan build 相位也放行）
- *   - 无 mission（war 编队）→ attackPowerBank 不激活，走常规 hostile 链
- */
+/** Attacker PB 分流测试（审计缺口 2 角色层）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { attackerRole, attackerHold } from "../../../src/creeps/roles/attacker";
 import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../role-helpers";

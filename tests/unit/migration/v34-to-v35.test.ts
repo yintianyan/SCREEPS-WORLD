@@ -1,10 +1,4 @@
-/**
- * v34 → v35 迁移独立测试（v35 nuker 威慑链：nukesInFlight 在途台账建档）。
- *
- * 迁移语义：KernelMemory.nukesInFlight 为可选字段（war-planner 唯一写者）。
- * 建档 + 畸形自愈：nukesInFlight 非对象 → 删除；条目非数字数组 → 删除该
- * 条目（缺失视为无在途，安全侧 — 宁可漏射不可重复砸同一目标）。
- */
+/** v34 → v35 迁移独立测试（v35 nuker 威慑链：nukesInFlight 在途台账建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

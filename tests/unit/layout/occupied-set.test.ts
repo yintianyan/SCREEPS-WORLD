@@ -1,12 +1,4 @@
-/**
- * buildOccupiedPositionSet 占用集完整性测试。
- *
- * 回归：此前占用集遗漏 terminal/lab/factory/extractor/observer/powerSpawn，
- * 导致约束放置器把新结构（spawn#2/tower#3/factory）选在这些已占格上 →
- * createConstructionSite 返 ERR_INVALID_TARGET → 反复失败进黑名单 →
- * 主房 RCL6-8 结构永久建不齐（线上 W7N4 实证：spawn 选在 terminal 格、
- * tower/factory 选在 lab 格）。占用集必须涵盖所有会阻挡放置的结构。
- */
+/** buildOccupiedPositionSet 占用集完整性测试。 */
 import { describe, expect, it } from "vitest";
 import { buildOccupiedPositionSet } from "../../../src/domain/layout/validation";
 import { packPos } from "../../../src/domain/layout/types";

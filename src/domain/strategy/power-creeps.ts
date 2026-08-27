@@ -1,13 +1,4 @@
-/**
- * Power Creeps 决策层 — 纯函数，执行层在 systems/power-creep-manager.ts。
- * 战略定位：powerSpawn processPower 攒 GPL（factory-manager 已落地），
- * 此处消费 GPL——create（账号级创建）→ upgrade（按 build order 升技能），
- * 以及已孵化 PC 的单 tick 运营动作裁决。
- *
- * 引擎事实自包含：power 升级门禁与 ops 消耗硬编码于此（与 typings
- * POWER_INFO / 官方文档一致，测试自检锁定），domain 层不依赖运行时常量表 —
- * 测试环境无需 mock PWR_* 全局常量。
- */
+/** Power Creeps 决策层 — 纯函数，执行层在 systems/power-creep-manager.ts。 */
 
 /** Power ID（与引擎 PWR_* 常量数值一致）。 */
 export type PowerId = number;

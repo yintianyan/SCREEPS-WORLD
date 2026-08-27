@@ -1,23 +1,4 @@
-/**
- * 采购需求纯函数测试（阶段 1）。
- *
- * 覆盖：
- *   collectDemands（汇总/排序/去重/过期清理）：
- *   - 多房间同资源去重（取 max priority + max amount）
- *   - 过期需求清除
- *   - priority 降序排列
- *   - amount ≤ 0 过滤
- *
- *   expandReactionDemands（反应链原料展开）：
- *   - 只展开基础矿物（中间产物不买）
- *   - 已有库存抵扣
- *   - 无缺口的资源不出现
- *
- *   expandCommodityDemands（commodity 原料展开）：
- *   - energy 不买
- *   - 已有库存抵扣
- *   - 无缺口的资源不出现
- */
+/** 采购需求纯函数测试（阶段 1）。 */
 import { describe, expect, it } from "vitest";
 import {
   collectDemands,

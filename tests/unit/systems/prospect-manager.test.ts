@@ -1,15 +1,4 @@
-/**
- * Prospect Manager 系统测试（R6b 主动情报 — 任务生命周期 + 止损链）。
- *
- * 覆盖：
- *   - expansionAllowed + 合法候选 → 发布任务 + 推 scout 孵化请求
- *   - 姿态未授权 / 低 bucket / 扩张行动进行中 → 不开新任务
- *   - 成功：目标 intel 新鲜（sources 已知）→ 收摊 + 事件 + 回收 scout + 无冷却
- *   - 超时 → 收摊 + 目标冷却
- *   - 侦察兵死亡 → 补派（spawned 递增）；达 maxSpawns 再死 → 失败 + 冷却
- *   - 姿态退出 → 中止（无冷却）
- *   - 冷却期内候选不被重选；冷却到期恢复资格
- */
+/** Prospect Manager 系统测试（R6b 主动情报 — 任务生命周期 + 止损链）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { prospectManagerSystem } from "../../../src/systems/prospect-manager";
 import { mockBudget, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";

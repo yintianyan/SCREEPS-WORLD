@@ -1,14 +1,4 @@
-/**
- * PB Collector — P3 一次性捡运角色（PB 野采链，审计缺口 2）。
- * 职责：仅 power-farm-manager collect 阶段孵化；到 PB 房捡掉落 power
- * （dropped/ruin），满载送回 home 的 storage/terminal，存完自标记 recycle。
- * 一次性语义（与 scout 同型）：任务完成（背包空 + 房内无掉落）或无物可捡
- * 均自我了断 — 不留常驻编制。
- *
- * 时序安全：只在 PB 消失后进场（manager 的 phase=collect 门禁）— PB 反击
- * 对无战斗件 creep 是秒杀。掉落 power 2k-6k，maxCount=1 串行多趟。
- * 约束：无 combat 豁免（遇袭走通用 flee）；无 assignment（一次性任务角色）。
- */
+/** PB Collector */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";

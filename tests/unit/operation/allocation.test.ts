@@ -1,7 +1,4 @@
-/**
- * A3-015: Multi-Room Allocation（3 房分配 A surplus → B+C deficit）
- * A3-017: Event-driven Replanning
- */
+/** A3-015: Multi-Room Allocation（3 房分配 A surplus → B+C deficit） */
 import { describe, expect, it } from "vitest";
 import {
   allocateMultiRoom,

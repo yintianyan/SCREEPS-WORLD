@@ -1,27 +1,4 @@
-/**
- * A6.5 Reliability Assessment — 反事实测试 (REL-C1 ~ REL-C15)
- *
- * 合同锚点：A6_5_ACCEPTANCE.md §四 (D3 正确性)
- *
- * 覆盖场景：
- *   CF-1:  Regime Profile 存在且充足
- *   CF-2:  Regime Profile 不存在 → Fallback
- *   CF-3:  样本不足 → INSUFFICIENT_FOR_REGIME
- *   CF-4:  Drift DEGRADING 检测
- *   CF-5:  Drift IMPROVING 检测
- *   CF-6:  样本不足 → drift 不检测
- *   CF-7:  逻辑冲突（互斥预测对）
- *   CF-8:  因果链（不误报冲突）
- *   CF-9:  Temporal 不一致
- *   CF-10: Regime 冲突
- *   CF-11: 全面恶化
- *   CF-12: 冷启动
- *   CF-13: 部分数据
- *   CF-14: Profile Aging
- *   CF-15: 守卫违规检测
- *
- * 纯函数测试 — 不引用 Game/Memory。
- */
+/** A6.5 Reliability Assessment — 反事实测试 (REL-C1 ~ REL-C15) */
 
 import { describe, expect, it } from "vitest";
 import { computeIntelligenceState } from "../../../src/domain/intelligence/reliability/compute-state";
@@ -153,7 +130,7 @@ function makeInput(overrides: Partial<IntelligenceStateInput> = {}): Intelligenc
 
 /**
  * 生成 N 条同模型的 calibratable ResolutionResult。
- *
+
  * target/method/modelVersion 须与 makeModelKey 的参数一致，
  * modelKey = `${target}-${method}-${modelVersion}`。
  */

@@ -1,12 +1,4 @@
-/**
- * shouldProcessPower — powerSpawn processPower 调度门禁纯函数测试。
- *
- * 战略定位：GPL 是投资不是生存，门禁全取保守侧 —
- *   - war 姿态 → 暂停（能量军事优先；power 不腐坏，暂停零损失）
- *   - power/energy 存量不足 → 暂停（引擎必返错）
- *   - storage 无视野/低于地板 → 暂停（投资让位 spawn/tower）
- *   - 余裕充足 → 烧
- */
+/** shouldProcessPower — powerSpawn processPower 调度门禁纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   PROCESS_POWER_ENERGY,

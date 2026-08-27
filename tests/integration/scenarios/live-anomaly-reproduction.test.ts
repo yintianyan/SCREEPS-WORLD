@@ -1,29 +1,4 @@
-/**
- * Live Anomaly Reproduction — 从 W37S58 线上数据提取的真实故障场景。
- *
- * 数据来源：2026-07-24 diagnose.js 采集，tick 81742700–81758320。
- * 这些测试不是从代码推导的，而是从真实运行数据中观察到的异常模式固化而来。
- *
- * 异常 1：Hauler 不足死锁
- *   - energyAvailable 持续 300-500（容量 1800）
- *   - Hauler body 24 部件（~1200 能量）
- *   - colonyState=normal → P1 hauler 不触发 body 降级
- *   - 结果：spawn 永远凑不够能量孵 hauler → 物流断裂 → spawn 继续饿
- *
- * 异常 2：Phase 振荡（Flip-Flop）
- *   - 32 次相位切换 / 15600 tick，14/31 间隔 < 100 tick
- *   - drainScore 脉冲式 0→100→0（spawn 一次性消耗 1200 触发）
- *   - 滞回机制（scoreStep=20, recoveryStep=30）无法处理脉冲式消耗
- *
- * 异常 3：Distributor 空转浪费
- *   - 3 个 distributor 存活但 storage=0
- *   - 无事可做永久 idle，占用人口槽位
- *   - 同时 spawn 孵不起 hauler
- *
- * 异常 4：Harvester 计数振荡
- *   - 2→4→2 快速振荡（11 次），harvester 存活仅 100-300 tick
- *   - 替换请求与实际死亡时序错配
- */
+/** Live Anomaly Reproduction — 从 W37S58 线上数据提取的真实故障场景。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions, GameInspector } from "../framework";
 import type { TestWorld } from "../framework";

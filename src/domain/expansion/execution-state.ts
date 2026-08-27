@@ -1,18 +1,4 @@
-/**
- * Execution State Machine — A3.3 Phase 1：扩张执行状态机。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §3 执行闭环 +
- * A3.3 Task Spec 全链路状态机。
- *
- * 完整链路：
- *   VALIDATING → PREPARING → CLAIMING → CLAIMED → BOOTSTRAPPING →
- *   ECONOMIC_STARTUP → INTEGRATING → COMPLETED
- *
- * 每个状态有明确的进入条件、退出条件和失败路径。
- * 失败路径：任何状态 → FAILED → (REPLAN | ABORTED)
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Execution State Machine */
 
 import type { ExpansionPlan } from "./plan";
 
@@ -91,7 +77,7 @@ const TRANSITION_TABLE: Record<ExecutionState, ExecutionState[]> = {
 
 /**
  * 状态机转换函数（纯函数）。
- *
+
  * 根据当前状态和输入条件，决定是否转换到下一个状态。
  */
 export function transitionExecutionState(input: StateTransitionInput): StateTransitionResult {

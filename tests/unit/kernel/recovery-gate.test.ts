@@ -1,10 +1,4 @@
-/**
- * Kernel recovery 门禁 — 角色级 recoveryEligible 钩子（R3a）。
- *
- * 背景：recovery 时 P2+ 角色默认被 colony-state 门禁跳过（保命优先）；builder
- * （重建基建）与 mineralMiner（矿物收入，不耗能量）是「生存/脱困路径」，由角色
- * 自报 recoveryEligible 豁免 — kernel 不再硬编码角色名。bootstrap 一律不豁免。
- */
+/** Kernel recovery 门禁 — 角色级 recoveryEligible 钩子（R3a）。 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Kernel } from "../../../src/kernel/kernel";
 import { Registry } from "../../../src/kernel/registry";

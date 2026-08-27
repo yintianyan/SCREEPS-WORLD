@@ -1,9 +1,4 @@
-/**
- * computeSealedExits 纯函数测试（v33 完整情报 — 入口封死判定）。
- *
- * 语义：某出口方向 2 格深边界带内，所有「地形可通行」格均被人工墙覆盖 → 封死。
- * 覆盖：全封/部分封/无墙/地形墙不算封死/多方向/describeExits 未列出的方向不判定。
- */
+/** computeSealedExits 纯函数测试（v33 完整情报 — 入口封死判定）。 */
 import { describe, expect, it } from "vitest";
 import { computeSealedExits, type SealedExitInput } from "../../../src/domain/intel";
 

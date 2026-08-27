@@ -1,27 +1,4 @@
-/**
- * Tactical Runtime System — A5.4.1 系统层薄壳。
- *
- * 合同锚点：A5.4.0 §10 系统边界契约 + A5.4.1 Runtime Integration。
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 globalCache / Game / Memory 采集运行时状态
- *   2. 适配为 TacticalSnapshot（纯函数输入格式）
- *   3. 调用 domain 纯函数 evaluateTacticalAction() → TacticalDecision
- *   4. 调用 domain 纯函数 assessObjectiveLifecycle() → 生命周期转换
- *   5. 将 TacticalDecision 映射为 RoleActionIntent 写入 globalCache 供角色消费
- *   6. TacticalAbortSignal → globalCache 供 recovery-execution-system 消费
- *   7. ReinforcementDemand → spawn queue 供 spawn-manager 消费
- *   8. TacticalDecisionRecord → event-log 供 decision-trace 消费
- *
- * 禁止：
- *   - 不做任何战术决策（决策由 domain 纯函数 evaluateTacticalAction 裁决）
- *   - 不直接调用 move() / attack() / heal() / spawnCreep()
- *   - 不修改 domain 层纯函数的输入/输出结构
- *
- * 频率：interval=10（与 war-planner 同频，在 war-planner 之后运行）
- * 优先级：P2（在 war-planner 产出 WarPlan 后消费）
- * 存储：heap only — global reset 可丢（下个周期重建）。
- */
+/** Tactical Runtime System */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache, querySquad, type GlobalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
@@ -235,7 +212,7 @@ export const tacticalRuntimeSystem: System = {
 
 /**
  * 从 WarPlan 派生 TacticalObjective。
- *
+
  * Operational 层决定 WHAT（打哪个房），Tactical 层投影为 HOW 的目标。
  */
 function buildTacticalObjective(
@@ -286,7 +263,7 @@ function buildTacticalObjective(
 
 /**
  * 从 warPlan + globalCache.squadIndex 构建 SquadPlan。
- *
+
  * 使用 querySquad 获取编队成员，构建纯函数可消费的快照。
  */
 function buildSquadPlan(
@@ -817,11 +794,11 @@ function submitReinforcementDemand(
 
 /**
  * 检测编队补给需求（能量）并产出 SupplyDemand。
- *
+
  * 战术编队在 advance/engage 相位需要持续能量补给（boost 等）。
  * SupplyDemand 写入 globalCache.tacticalSupplyDemands，
  * logistics-planner 消费并注入 DemandNode 管线。
- *
+
  * 只在 advance 相位产出（build 相位编队在 home，不需要远征补给）。
  */
 function detectSupplyDemand(
@@ -950,10 +927,10 @@ const EVENT_CODE_MAP: Record<TacticalDecisionEvent, number> = {
 
 /**
  * 查询 creep 的战术指令（供角色层消费）。
- *
+
  * 角色层（attacker/healer）在 RolePolicy 的 acquire/work 候选中调用此函数，
  * 获取当前 tick 的战术指令（移动方向 + 战斗目标）。
- *
+
  * 如果返回 null，角色回退到原有行为（Legacy 兼容）。
  */
 export function getTacticalIntent(creepName: string): RoleActionIntent | null {

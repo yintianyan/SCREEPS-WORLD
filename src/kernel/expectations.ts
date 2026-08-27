@@ -1,20 +1,4 @@
-/**
- * 期望自检 — 帝国的「自我体感」：对运行时序不变式做周期性断言。
- *
- * 背景（P3 饥饿 ~13h 事故）：前馈判据自锁冻结了整个 P3 家族，而受害者之一
- * 恰是观测者自身 —— stats 冻结后没有任何内部通道能发现「系统没在跑」，
- * 直到人类外部轮询才暴露。本模块把「应该发生的事」显式化为期望并逐期核验：
- *
- *   E1 遥测新鲜度：stats.lastSample 距今不得超过 TELEMETRY_STALE_TICKS。
- *   E2 P3 存活：healthy/guarded 档下每个 P3 系统应在 interval × GRACE 内
- *      至少完整执行一次（boot 宽限期内豁免）。
- *
- * 违例处置（韧性梯度：检测 → 降级 → 自动旁路）：
- *   - 全部违例写入 Memory.kernel.expectations + ExpectationViolation 事件
- *     （可观测，供外部采集器/人类告警）；
- *   - E2 触发时设置 p3StarveBypassUntil —— scheduler.canStart 对前馈拒绝
- *     加旁路窗口（软/硬上限仍然生效），打破「冻结保证 max 不回落」的自锁。
- */
+/** 期望自检 — 帝国的「自我体感」：对运行时序不变式做周期性断言。 */
 import type { EventKind } from "./event-log";
 
 /** 遥测新鲜度阈值（采样间隔 10t，500t ≈ 50 个采样周期仍无更新即判停摆）。 */

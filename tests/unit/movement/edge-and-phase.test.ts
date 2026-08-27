@@ -1,9 +1,4 @@
-/**
- * MV-4 回归 — moveTowardRoom/ensureHome 跨房修缮（审查补测试债）。
- *
- * 覆盖：出口缓存 TTL 过期、stepOffEdge 边界内移语义（含内侧墙回退）、
- * K-6 systemPhase 相位一致性（kernel 门与 telemetry 内部采样门同源）。
- */
+/** MV-4 回归 — moveTowardRoom/ensureHome 跨房修缮（审查补测试债）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ensureHome } from "../../../src/creeps/movement";
 import { systemPhase } from "../../../src/kernel/phase";

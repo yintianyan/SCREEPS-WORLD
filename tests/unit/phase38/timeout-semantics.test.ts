@@ -1,25 +1,4 @@
-/**
- * Phase 38 · TIMEOUT-SEMANTICS 反事实测试
- *
- * 验证 UOEM 模型对 TIMEOUT 的三态语义正确处理：
- *   - TIMEOUT as Terminal Failure → OutcomeEvent(result: "TIMED_OUT")
- *   - TIMEOUT as Transition (Milestone) → MilestoneEvent("FORCED_ADVANCE")
- *   - TIMEOUT as Forced Success → OutcomeEvent(result: "COMPLETED_FORCED", forcedAdvance: true)
- *
- * 测试基于 UOEM 参考实现（与 uoem-proof.test.ts 同构），不依赖生产代码。
- * 生产代码当前不满足这些 invariant——这些测试固化 UOEM 模型的目标语义。
- *
- *   T1: bootstrapping timeout → economic_startup → final success
- *       → 不能因为中间出现 TIMEOUT 就把最终 Outcome 判定为 TIMEOUT
- *   T2: bootstrapping timeout → economic_startup → final failure
- *       → 最终 Outcome 必须是 FAILURE (TIMED_OUT)
- *   T3: bootstrapping timeout → collector 在 timeout 后立即运行
- *       → collector 不能提前把 timeout 当成 terminal outcome
- *   T4: bootstrapping timeout → reset → operation continues → final success
- *       → reset 不改变最终 Outcome
- *   T5: multiple timeout milestones → final success
- *       → 所有 timeout 都只能作为 lifecycle evidence，不能产生多个 terminal outcomes
- */
+/** Phase 38 · TIMEOUT-SEMANTICS 反事实测试 */
 import { describe, it, expect } from "vitest";
 
 // ═══════════════════════════════════════════════════════════

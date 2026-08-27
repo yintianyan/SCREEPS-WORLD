@@ -50,7 +50,7 @@
 
 | 条款 | 内容 |
 | --- | --- |
-| 唯二写者 | `createConstructionSite` 全系统**仅**两个合法调用点：ConstructionManager（自有房）+ RemoteMiningManager（远矿房）（research/13 §10.3；AGENTS.md）。 |
+| 唯二写者 | `createConstructionSite` 全系统**仅**两个合法调用点：ConstructionManager（自有房）+ RemoteMiningManager（远矿房）（research/13 §10.3；AGENT.md）。 |
 | 角色层 | 角色**只**写申请标记（如 `needContainer`）；申请标记的唯一消费者是 ConstructionManager（[SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.8）。 |
 | 全局上限 | 官方硬上限 100 site/玩家（ERR_FULL，research/13 §4）；自治 `CONFIG.construction.maxGlobalSites` **必须**留安全余量（初值 ≤80，SPECULATION）。 |
 | 每房配额 | 每房至多 3 normal + 2 road + 1 critical（research/13 §10.4）。 |

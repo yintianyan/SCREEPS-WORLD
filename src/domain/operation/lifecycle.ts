@@ -1,15 +1,4 @@
-/**
- * Operation Lifecycle — A3.0 操作生命周期状态转换纯函数
- *（PLANNING_ARCHITECTURE §3 AgendaItem 生命周期）。
- *
- * 九态状态机：
- *   planned → ready → running → verifying → completed
- *                  ↘ blocked → (retry) → ready
- *                  ↘ failed / cancelled / expired
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- * 所有状态转换接受一个 tick 参数，写入 updatedAt。
- */
+/** Operation Lifecycle */
 
 import type { OperationContext, OperationStatus } from "./agenda-item";
 

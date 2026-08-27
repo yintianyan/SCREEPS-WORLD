@@ -1,13 +1,4 @@
-/**
- * Scout 过境房威胁行为测试（R6b 扩张修复 Fix #3：pushThrough）。
- *
- * 复现场景：scout 钻进敌方过境房（如 Aguia 的 W38S58）时，旧逻辑 foreign-room flee
- * 让其逃回 home，永远到不了 remoteTarget（recon 永不完成 → 占领链卡死）。pushThrough 标志
- * 跳过该 flee 检测，使其继续向侦察目标推进。
- *
- * 对照：同场景下一个无 pushThrough 的普通远矿角色会 flee 回 home（验证检测本身有效，
- * 仅 scout 被放行）。
- */
+/** Scout 过境房威胁行为测试（R6b 扩张修复 Fix #3：pushThrough）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { scoutRole } from "../../../src/creeps/roles/scout";
 import { defineRole } from "../../../src/creeps/engine/role-runner";

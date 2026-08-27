@@ -1,32 +1,4 @@
-/**
- * Empire Economy 系统 — A2 后半·步 12：系统侧薄壳。
- *
- * 合同锚点：SYSTEM_BOUNDARIES §1.4 Empire、§1.5 Economy、
- * DATA_FLOW §1 红队 A1（分频聚合 + Cached Snapshot）。
- *
- * 职责：每 N tick 调用 domain 纯函数链组装 Empire Planner Input，
- * 写入 Memory.kernel.empireEconomy 瘦快照。不写 Room Memory、
- * 不控制 Creep、不绕过 Request Pool、不直接调用 Spawn
- * （ECONOMY §6 红线 1/4，DECISION_AUTHORITY §1）。
- *
- * 执行链：
- *   RoomSnapshot + RoomMemory + EconomyQuery
- *   → buildRoomEconomicProfile (步 1)
- *   → buildRoomCapacityProfile (步 3)
- *   → buildEmpireResourceView (步 4)
- *   → evaluateEconomicHealth (步 5)
- *   → detectImbalance (步 6)
- *   → allocateEmpireBudget (步 7)
- *   → evaluateExpansionReadiness (步 8)
- *   → evaluateSafetyMargin (步 9)
- *   → buildEmpirePlannerInput (步 10)
- *
- * 状态所有权（STATE_OWNERSHIP §3.1）：
- *   唯一写者 = 本系统 → Memory.kernel.empireEconomy（瘦快照）。
- *   不写 Memory.rooms[r].*（Room 状态仍由 room-state/economy 写）。
- *
- * CPU 预算：低频执行（interval=100），不每 tick 重算整个 Empire。
- */
+/** Empire Economy 系统 */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { globalCache } from "../kernel/global-cache";
@@ -137,7 +109,7 @@ const MULTI_HEALTH_CODES: Record<ResourceHealthStatus, number> = {
 
 /**
  * A4.2：从 RoomSnapshot 采集矿物库存快照。
- *
+
  * 只采集矿物（非 energy），energy 由现有 EnergyLedger 链路处理。
  * 遍历 storage / terminal / container / lab / factory 中的矿物存量。
  */
@@ -203,7 +175,7 @@ function buildEmpireResourceLedger(
 
 /**
  * A4.2：将 Energy-only EconomicHealth 映射到 ResourceHealthStatus。
- *
+
  * EmpireEconomicHealth（critical/deficit/stable/growing/healthy）
  * → ResourceHealthStatus（critical/deficit/degraded/stable/healthy）。
  * growing 归入 stable（对应 ResourceHealth 没有 growing 维度）。

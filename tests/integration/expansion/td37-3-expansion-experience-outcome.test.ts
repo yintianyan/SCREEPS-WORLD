@@ -1,28 +1,4 @@
-/**
- * TD-37-3: Expansion Decision → DecisionTrace → Experience → Outcome 完整链路测试
- *
- * 验证修复后的采集链路：
- *   1. Expansion Decision 产生统一 DecisionRecord (DT-EXP-001)
- *   2. 同一 Plan 不重复产生 DecisionTrace (DT-EXP-002)
- *   3. DecisionTrace 关联 decisionId/operationId/expansionId (DT-EXP-003)
- *   4. 成功 Expansion → SUCCESS Outcome (OUT-EXP-001)
- *   5. Timeout Expansion → FAILURE Outcome (OUT-EXP-002)
- *   6. Abort Expansion → 正确 Outcome (OUT-EXP-003)
- *   7. External interference 正确标记 (OUT-EXP-004)
- *   8. 无法确定原因 → INCONCLUSIVE/UNKNOWN (OUT-EXP-005)
- *   9. startTick/endTick/duration 正确 (OUT-EXP-006)
- *  10. Outcome 不读取未来数据 (OUT-EXP-007)
- *  11. 失败 Expansion 不被丢弃 (OUT-EXP-008)
- *  12. DecisionTrace → Experience → Outcome 完整链路 (A6-EXP-001)
- *  13. Attribution 可消费 Outcome (A6-EXP-002)
- *  14. Evaluation 可消费 Experience (A6-EXP-003)
- *  15. A6.3-A6.6 无需修改 (A6-EXP-004)
- *  16. A6 停止时 A3 不受影响 (SAFETY-EXP-001)
- *  17. Outcome 采集不改变 Execution (SAFETY-EXP-002)
- *
- * 反事实测试：
- *  CF-EXP-01..10: 各种历史/当前组合的忠实性验证
- */
+/** TD-37-3: Expansion Decision → DecisionTrace → Experience → Outcome 完整链路测试 */
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   type OutcomeCollectionInput,

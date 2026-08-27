@@ -1,12 +1,4 @@
-/**
- * Mineral Miner — P2 矿物开采角色（RCL6+，需 extractor）。站 mineral 旁采集，倒入旁边
- * container，由 hauler 的 haulMineralsToStorage 接力搬到 terminal（贸易变现）或 storage（喂 lab）。
- * 补齐工业链第一环 — 此前 harvestMineral 挂在 harvester 但被 stationaryMine 无条件拦截、永不执行。
- * 为何独立角色而非复用 harvester：harvester 的 stationaryMine 只查「矿位旁有 container/link」
- * 即锚定采能量，矿物采集永远轮不到；专职矿工 policy 无此拦截。
- * body 必须含 CARRY：harvestMineral resolve 检查剩余容量>0（纯 WORK 永不触发），走「采满→倒」循环。
- * 生命周期：minCount=0 → 矿采空后 demand 不再孵化，存量矿工自然老死不补（替换门禁 3 阻止）。
- */
+/** Mineral Miner */
 import type { Priority } from "../../kernel/contracts";
 import type { RolePolicy } from "../engine/action-types";
 import {

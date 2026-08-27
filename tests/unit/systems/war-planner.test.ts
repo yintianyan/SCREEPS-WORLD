@@ -1,23 +1,4 @@
-/**
- * War Planner 系统测试（R3 战时闭环 + R4 自治升级）。
- *
- * 覆盖：
- *   R3 姿态消费与编队孵化：
- *   - war 姿态 + 合法目标 → 发布 warPlan（build 相位、spawned=0）并推 attacker 请求
- *   - 编队缺口逐步补齐到 squadSize（key 稳定不重复、spawned 同步累计）
- *   - 在役满编 → phase advance，不再补请求
- *   - 无合格目标 → 不发布 warPlan
- *   R4 收摊与战后核验：
- *   - 非 war 姿态 → 收摊：核验 failure → 黑名单 + 清计划 + 撤请求 + 回收 attacker
- *   - 核验 success（塔网清零 / 敌人弃房）→ 不黑名单
- *   - 核验 unknown（情报过期）→ 黑名单
- *   - demobilize 幂等
- *   R4 战损止损与波次相位：
- *   - spawned 超编队 × casualtyMultiplier → 收摊（attrition）+ 黑名单
- *   - advance 残编 → 回落 build（幸存者归建重组）
- *   - 黑名单目标不被重选（选次优）
- *   - 计划存续期间目标进黑名单 → 立即收摊
- */
+/** War Planner 系统测试（R3 战时闭环 + R4 自治升级）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { demobilize, warPlannerSystem } from "../../../src/systems/war-planner";
 import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";

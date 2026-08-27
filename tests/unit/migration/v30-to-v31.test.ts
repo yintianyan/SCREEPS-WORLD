@@ -1,10 +1,4 @@
-/**
- * v30 → v31 迁移独立测试（R7b 扩张节奏自适应 / expansionRhythm + expansionPausedUntil 建档）。
- *
- * 迁移语义：expansionRhythm 为可选字段（expansion-manager 唯一写者）。建档 + 畸形自愈：
- * 非对象 → 删除；ring 非数组 → 空数组，条目非 0-4 数字 → 过滤；
- * blacklistMultiplier/minSources 非数字或越界 → 回默认；pausedUntil 非数字 → 删除。
- */
+/** v30 → v31 迁移独立测试（R7b 扩张节奏自适应 / expansionRhythm + expansionPausedUntil 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

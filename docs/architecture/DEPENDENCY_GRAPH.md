@@ -117,11 +117,11 @@ Dependencies 列同步登记、且不落入 §3 任何一禁——三处同步�
 | # | 禁止形态 | 依据 |
 | --- | --- | --- |
 | 1 | **Execution 反向依赖 Strategy**：Execution Runtime / RolePolicy import Empire、Agenda、Economy、Military 等战略与业务系统 | 执行层只消费快照与登记意图（SYSTEM_BOUNDARIES §1.2） |
-| 2 | **Creep/RolePolicy 直达 SpawnManager / Construction**：直接提交孵化请求或调用 site 创建 | 只能经 Demand（census 推导）与申请标记（`needContainer`）；AGENTS.md 角色条款 |
+| 2 | **Creep/RolePolicy 直达 SpawnManager / Construction**：直接提交孵化请求或调用 site 创建 | 只能经 Demand（census 推导）与申请标记（`needContainer`）；AGENT.md 角色条款 |
 | 3 | **Room 逻辑直写 EmpireState**：posture / 预算 / 房间注册 / GCL 的写权唯一在 Empire | [STATE_OWNERSHIP_MODEL.md](STATE_OWNERSHIP_MODEL.md) §1/§3.1；两个系统同 tick 写 posture = 姿态撕裂 |
 | 4 | **任何模块 import Kernel 内部**：绕过公开接口直取内核私有结构 | 只经 §2-1 公开面；Kernel 内部件重构不得波及业务 |
 | 5 | **domain 层访问 Game / Memory**：决策函数体内出现 `Game.` / `RawMemory.` 引用 | 纯函数律（research/28 §10.3，与 ADR-004 同级红线）；Game 动作只允许出现在唯一写者与执行运行时 |
-| 6 | **模块顶层访问 Game / Memory** | 组合根注入（AGENTS.md bootstrap 条款） |
+| 6 | **模块顶层访问 Game / Memory** | 组合根注入（AGENT.md bootstrap 条款） |
 | 7 | **兄弟系统横向 import 直读内部状态** | 跨系统只经 Public Interface（SYSTEM_BOUNDARIES §2.3-2）；已登记存量违规（layout-planner ↔ link-system dismantle 工具）按技术债台账收敛 |
 | 8 | **Kernel import 业务模块** | research/19 §8；风险 R-13；唯一例外 = R9（KERNEL §8，「3 个钩子即 registry 化」） |
 | 9 | **感知层依赖任何业务**：World Model import 战略 / 业务 / 执行模块 | 感知层是最上游（SYSTEM_BOUNDARIES §1.3）；引入将形成全图循环 |
@@ -139,7 +139,7 @@ Dependencies 列同步登记、且不落入 §3 任何一禁——三处同步�
 | 3 | 架构图回归测试 | 依赖审计工具（dependency-cruiser 类）以 §1 图为期望集做 diff：新增边不在 §2 表内即失败；15 模块集合变化必须先改本文 |
 | 4 | 运行时断言 | 组合根注册时校验：名称全局唯一 kebab-case、RolePolicy 钩子签名齐全（research/30 A4） |
 | 5 | 例外登记制度 | 任何非法边的豁免走 ADR + 触发器（R9 模式：「N 个即重构」，不是容忍上限） |
-| 6 | 质量门槛 | 以上检查并入 `npm run typecheck` / `npm test` / `npm run build` 全绿链（AGENTS.md 合并门槛） |
+| 6 | 质量门槛 | 以上检查并入 `npm run typecheck` / `npm test` / `npm run build` 全绿链（AGENT.md 合并门槛） |
 
 ## 5. 一致性声明
 

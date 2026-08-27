@@ -1,26 +1,4 @@
-/**
- * Expansion Planner 系统 — A3.2 Phase 3 + A3.3 Phase 0：系统侧薄壳。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §1 立项权在 Empire +
- * PLANNING_ARCHITECTURE §1 无 Planner 组件（Plan 是数据模型不是运行时组件）。
- *
- * 职责：每 N tick 调用 A3.2 domain 纯函数链组装 Expansion Intelligence：
- *   EmpirePlannerInput → Pressure → Discovery → Scoring → Ranking →
- *   Cost → Payback → Risk → Tiered Budget → Plan → Readiness (G12–G15) →
- *   Decision Explanation → Hysteresis → READY → APPROVED → WAITING_EXECUTION
- *
- * A3.3 修复（Phase 0）：
- *   - 从 Memory 反序列化已有 Plan（不再每次空列表）
- *   - 调用 applyHysteresis 推进 EVALUATED → READY
- *   - 调用 explainDecision 判定 APPROVE → APPROVED → WAITING_EXECUTION
- *   - 需要重评的 Plan 触发重评估
- *
- * 状态所有权：
- *   唯一写者 = 本系统 → Memory.kernel.expansionPlans + expansionCandidates + expansionDashboard。
- *   heap 缓存 → globalCache().expansionDashboard（供同 tick 内其他系统只读消费）。
- *
- * CPU 预算：低频执行（interval=100，与 empire-economy 同频）。
- */
+/** Expansion Planner 系统 */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { globalCache } from "../kernel/global-cache";
@@ -58,7 +36,7 @@ let hysteresisCache: Map<string, PlanWithHysteresis> = new Map();
 
 /**
  * Expansion Planner 系统 — Intelligence 层薄壳。
- *
+
  * 不执行任何 Expansion Action。只做评估、排序、Plan 生命周期管理。
  * A3.3 Phase 0 修复：推进 Plan 到 WAITING_EXECUTION 供 expansion-manager 消费。
  */
@@ -406,12 +384,12 @@ const REMOTE_MINING_TS_CAPACITY = 100;
 
 /**
  * A6.3 远矿收益采样 — 复用 expansion-planner 既有 100t cadence。
- *
+
  * PRED-010：不自建采样通道，寄生在既有 cadence 中追加 1 个采样字段。
- *
+
  * 采样内容：
  *   - 远矿净收益 + 威胁计数（→ __remoteMiningHistory，预测目标 #5）
- *
+
  * 从 expansionDashboard 或 Memory 中的远矿数据派生净收益。
  * global reset 后从空 TimeSeries 重建（可接受）。
  */

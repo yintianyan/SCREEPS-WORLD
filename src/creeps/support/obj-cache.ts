@@ -1,9 +1,4 @@
-/**
- * 每 tick 对象缓存（P2-6）— 去重同 tick 内对同一 id 的重复 Game.getObjectById
- * （predicate/execute 与多 creep 同目标场景 N→1）。
- * 安全性：tick 内对象身份不变（结构销毁/创建发生在 tick 边界），缓存 null 同样安全
- * （tick 内不存在的对象不会凭空出现）；以 Game.time 标记每 tick 自动重置。
- */
+/** 每 tick 对象缓存（P2-6）— 去重同 tick 内对同一 id 的重复 Game.getObjectById */
 
 import { globalCache } from "../../kernel/global-cache";
 

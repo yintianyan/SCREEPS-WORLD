@@ -1,17 +1,4 @@
-/**
- * System Lifecycle — 系统生命周期与跨系统交互集成测试。
- *
- * 验证关键基础设施的完整生命周期（建造→运行→损毁→重建），
- * 以及跨系统协调不变量在压力下是否成立。
- *
- * 覆盖场景：
- *   - Container 衰减级联（损毁→回退→紧急重建→恢复）
- *   - Storage 建造优先级收敛（builder 全部转向 storage）
- *   - 紧急抢占边沿触发（持续紧急不重复清空 assignment）
- *   - 过时 worker 回收（harvester 满编后 worker 被 recycle）
- *   - Tower 能量反馈环（攻击→耗能→hauler 补充→再攻击）
- *   - Link 背压（全满时不崩溃，优先级链正确）
- */
+/** System Lifecycle — 系统生命周期与跨系统交互集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions, GameInspector } from "../framework";
 import type { TestWorld } from "../framework";

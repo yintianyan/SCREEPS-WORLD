@@ -1,9 +1,4 @@
-/**
- * 帝国能量互济与能量市场 — 纯函数决策层（R5 经济主线），执行层在
- * systems/terminal-manager.ts（terminal 唯一业务属主）。决策无状态每轮现算：
- * 滞回靠「捐赠地板 > 救助地板」结构性不等式防震荡；每轮至多一笔
- * （terminal.send 有 10 tick 冷却）。
- */
+/** 帝国能量互济与能量市场 — 纯函数决策层（R5 经济主线），执行层在 */
 
 /** 单房间的能量侧决策输入（调用方从 RoomSnapshot 采集）。 */
 export interface RoomEnergyState {
@@ -68,7 +63,6 @@ export function planEnergyAid(
   }
   return undefined;
 }
-
 
 
 /**

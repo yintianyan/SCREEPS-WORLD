@@ -1,32 +1,4 @@
-/**
- * A6.4 Calibration Resolution System — 系统层薄壳。
- *
- * 合同锚点：A6_4_CONTRACT.md §四
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 globalCache.__predictionCache 读取已到期 Prediction
- *   2. 从 globalCache 既有数据构建 ObservationSample
- *   3. 构建当前 PredictionContext
- *   4. 从 A6.1/A6.2 提取 ExternalFactorSignal
- *   5. 调用 Domain 纯函数 resolvePrediction → ResolutionResult
- *   6. 将 ResolutionResult 写入 globalCache.__calibrationCache
- *   7. 低频计算 ModelCalibrationProfile（每 CALIBRATION_PROFILE_INTERVAL tick）
- *   8. GC 清理超龄记录
- *
- * 禁止：
- *   - 不执行任何 Game API 写操作（Shadow-Only 原则，CAL-001）
- *   - 不修改任何业务状态（CAL-004）
- *   - 不进入 tick 关键路径（低频 500t）
- *   - 不建立第二套 Metrics / Strategy / Outcome（CAL-008）
- *   - Calibration 结果不得进入任何执行系统（CAL-009）
- *   - 不新建采样通道（CAL-007）
- *
- * CPU 预算：低频执行（interval=500），每 tick 近零成本。
- * 优先级 P3（在所有业务系统之后运行，消费它们产出的数据）。
- * 存储：heap only — global reset 可丢。
- *
- * 安全不变式：本系统完全停止时，帝国必须照常安全运行。
- */
+/** A6.4 Calibration Resolution System — 系统层薄壳。 */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { systemPhase } from "../../kernel/phase";
@@ -200,7 +172,7 @@ export const calibrationResolutionSystem: System = {
 
 /**
  * 从 globalCache 既有数据构建 ObservationSample 序列。
- *
+
  * 不新建采样通道（CAL-007）。
  * 只从既有 TimeSeries / history 数组读取。
  */
@@ -254,7 +226,7 @@ function buildObservations(
 
 /**
  * 构建当前 PredictionContext。
- *
+
  * 从 globalCache + Memory 读取，不新建采样。
  */
 function buildCurrentContext(
@@ -291,7 +263,7 @@ function buildCurrentContext(
 
 /**
  * 从 A6.1/A6.2 和 globalCache 提取 ExternalFactorSignal。
- *
+
  * 不新建采样通道，只从既有缓存读取。
  */
 function buildExternalFactors(

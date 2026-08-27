@@ -1,9 +1,4 @@
-/**
- * Tuning Evaluator — 从聚合遥测信号推导参数调整的纯函数（无 Game/Memory，可 Vitest）。
- * 设计（模型7 韧性优先于完美）：保守步进 1 + 冷却防振荡；趋势确认（P1-1）连续 2 次
- * 评估同方向才调整，防单次噪声驱动；危机锁定（crisisRatio 超标）整体跳过调优，让静态
- * CONFIG 应对。各参数触发条件见对应 evaluate* 函数。
- */
+/** Tuning Evaluator — 从聚合遥测信号推导参数调整的纯函数（无 Game/Memory，可 Vitest）。 */
 
 import type {
   TuningSignals,

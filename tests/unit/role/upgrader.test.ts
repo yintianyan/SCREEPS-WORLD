@@ -1,10 +1,4 @@
-/**
- * Upgrader 角色场景测试。
- *
- * 覆盖：能量地板门禁、紧急覆盖（ticksToDowngrade）、站桩升级取能链
- *（controller link → controller container → storage → richest container → harvest）、
- * 满载 upgrader 不被地板阻止、flee。
- */
+/** Upgrader 角色场景测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { upgraderRole } from "../../../src/creeps/roles/upgrader";
 import {

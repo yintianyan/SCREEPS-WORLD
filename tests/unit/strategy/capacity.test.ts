@@ -1,10 +1,4 @@
-/**
- * 算力容量模型纯函数测试（R7a）。
- *
- * 覆盖：四档分界（abundant/comfortable/tight/constrained）、
- * 有效上限取 min(cpuLimit, tickLimit)（不写死 20 CPU）、
- * 降档立即、升档需持续窗口（滞回防抖）、余量计算。
- */
+/** 算力容量模型纯函数测试（R7a）。 */
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_CAPACITY_OPTIONS,

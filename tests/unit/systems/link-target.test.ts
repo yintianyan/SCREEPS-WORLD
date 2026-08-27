@@ -1,10 +1,4 @@
-/**
- * computeControllerLinkTarget — 需求驱动的 controller link 供能水位。
- *
- * 背景（W7N4 存不下能量主因）：旧实现 controller link 永远被 source 优先喂满，
- * RCL8 满级后升级零收益仍 15/tick 白烧。目标水位让 controller 变成受控消费者：
- * 满级停供、降级风险保级、RCL<8 按 storage 水位分级。
- */
+/** computeControllerLinkTarget — 需求驱动的 controller link 供能水位。 */
 import { describe, expect, it } from "vitest";
 import { computeControllerLinkTarget } from "../../../src/systems/link-system";
 import { CONFIG } from "../../../src/config";

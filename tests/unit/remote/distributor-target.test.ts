@@ -1,13 +1,4 @@
-/**
- * getDistributorFillTarget 单测 — distributor 专用填充目标优先级。
- *
- * 修复背景：distributor 旧实现复用 hauler 专用的 getHaulFillTarget，其 #0 优先是
- * controller container（< 半满即派），导致 distributor 被 divert 去喂升级无底洞，
- * spawn/extension 长期排第二。本函数确立 distributor 的正确优先级：
- *   1. spawn / extension（生产引擎，绝对最高，威胁下也不让位 tower）
- *   2. tower（防御）
- *   3. controller container（仅当无 controller link 时兜底）
- */
+/** getDistributorFillTarget 单测 — distributor 专用填充目标优先级。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   getDistributorFillTarget,

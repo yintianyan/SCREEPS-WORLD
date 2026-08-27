@@ -1,10 +1,4 @@
-/**
- * Terminal 交易与备货策略 — 纯函数层。单房只产一种矿物，而 lab 反应链需要
- * 多矿种原料 — 市场交易是跨帝国补给接入前唯一的原料来源，也是 credits 唯一
- * 收入（卖盈余 → 买缺口，自给闭环）。
- * 分工：本文件纯函数；Game.market 调用在 systems/terminal-manager.ts；
- * distributor 的 stockTerminalEnergy action 维持交易所需运费能量。
- */
+/** Terminal 交易与备货策略 — 纯函数层。单房只产一种矿物，而 lab 反应链需要 */
 import type { TerminalPolicy, TerminalTransfer } from "./types";
 
 /** 基础矿物库存目标（每种至少保留的量）。 */

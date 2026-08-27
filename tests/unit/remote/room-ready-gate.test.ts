@@ -1,11 +1,4 @@
-/**
- * 远矿逐房「新开」就绪门测试（Phase 1b）。
- *
- * roomReadyForNewRemote 是帝国姿态放行之外、本房自身的成熟度门：
- * RCL≥roomMinRcl 且 colonyState=normal 且 storage 盈余≥roomMinStorage 才放新开。
- * 防止新占嫩房（RCL4、无 storage 缓冲、非稳态）过早分兵远矿。
- * 只裁「是否新开」，不影响现役 op。
- */
+/** 远矿逐房「新开」就绪门测试（Phase 1b）。 */
 import { describe, expect, it } from "vitest";
 import { roomReadyForNewRemote } from "../../../src/systems/remote-mining-manager";
 import { CONFIG } from "../../../src/config";

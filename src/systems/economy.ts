@@ -1,16 +1,4 @@
-/**
- * Economy 系统 — 能量收支核算（模块 1.5，SYSTEM_BOUNDARIES §1.5 合同）。
- *
- * 职责：L1 计数器（globalCache.energyLedger，动作层/系统层埋点累计）按 50 tick
- * 错峰窗口滚动为核算窗 → 三指标（净流 EMA / 合同储备 / 风险缓冲）+ 收支分解 +
- * 漂移检测；产出 Memory.rooms[r].economy 瘦快照（schema v37）与 queryEconomy()
- * 查询口，供 Storage-aware Spawn / 请求池 / 门控消费。不做调拨、不下单
- * （ECONOMY §6 红线 4）；不做每 tick 全量重算（红线：分频 + 增量）。
- *
- * 状态所有权（STATE_OWNERSHIP §3.6）：heap 派生为主（本文件模块级 Map，global
- * reset 随堆消亡）+ Memory 瘦快照（唯一写者=本系统）。reset 后按「无基线/tick
- * 断档」重播种窗口起点，净流 EMA 与效率系数从 Memory 快照恢复。
- */
+/** Economy 系统 — 能量收支核算（模块 1.5，SYSTEM_BOUNDARIES §1.5 合同）。 */
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import { globalCache, type RoomEnergyCounters } from "../kernel/global-cache";
 import { EventKind, recordEvent } from "../kernel/event-log";

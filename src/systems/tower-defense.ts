@@ -24,7 +24,7 @@ function countedTowerAction(
 
 /**
  * Tower 防御系统 — P0 系统，负责所有 Tower 操作和安全模式（防御是生存关键 — 永不被冷却）。
- * 职责：检测敌对 creep 并调度 Tower 攻击（三塔协同同一目标）；无敌人时紧急维修
+
  * （关键结构 < 50% 血量）；再无事则维护 wall/rampart 到 RCL 分级目标血量；
  * 无 Tower 且有敌人时激活安全模式。
  */
@@ -170,7 +170,7 @@ export const towerDefenseSystem: System = {
         // G-DF-07：能量 < 50 时不维修（保留攻击能量）；能量 = 0 时跳过。
         if (tower.store.getUsedCapacity(RESOURCE_ENERGY) < 50) continue;
 
-        // R3-07：维修优先级 spawn/extension → tower → container → wall/rampart。
+        // ：维修优先级 spawn/extension → tower → container → wall/rampart。
         if (repairTarget) {
           countedTowerAction(snapshot.roomName, tower, () => tower.repair(repairTarget));
           continue;

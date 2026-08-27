@@ -1,22 +1,10 @@
-/**
- * Empire Economic Health — A2 后半·步 5：帝国级经济健康度判定。
- *
- * 合同锚点：GOAL_POLICY_PLAN §4 五域预算 + ECONOMY §3 三指标 +
- * EMPIRE_SYSTEM_MODEL §1 Empire（聚合重建态势）。
- *
- * 定位：不简单加总各房能量——而是基于 EmpireResourceView 的
- * 生产/消费/储备/需求/恢复/人口信号判定帝国整体经济健康状态。
- * 输出可解释、可测试的枚举 + evidence，供 Expansion Readiness /
- * Empire Budget / Empire Planner Input 消费。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Empire Economic Health */
 
 import type { EmpireResourceView } from "./resource-view";
 
 /**
  * 帝国经济健康状态。
- *
+
  * - Critical：有困难房 + 帝国净流为负 → 生存优先，冻结一切扩张/调拨
  * - Deficit：帝国净流为负（无困难房但整体入不敷出）→ 收缩，不扩张
  * - Stable：净流 ≥ 0 但储备或自给度偏低 → 维持，谨慎扩张
@@ -78,14 +66,14 @@ export const DEFAULT_HEALTH_OPTIONS: HealthOptions = {
 
 /**
  * 判定帝国经济健康度（纯函数）。
- *
+
  * 判定逻辑（优先级从高到低）：
  * 1. Critical: hasStruggling || (totalProduction === 0) || (netFlow < 0 && minRiskBuffer < 200)
  * 2. Deficit: netFlow < 0（整体入不敷出，但无困难房）
  * 3. Stable: netFlow ≥ 0 但 minRiskBuffer < stableMinRiskBuffer || selfSufficiency < growingMin
  * 4. Growing: netFlow > 0 + coreRooms ≥ 1 + selfSufficiency ≥ growingMin
  * 5. Healthy: netFlow > 0 + coreRooms ≥ healthyMin + selfSufficiency ≥ healthyMin + riskBuffer ≥ healthyMin
- *
+
  * @param view EmpireResourceView（步 4 产出）
  * @param options 阈值选项
  */

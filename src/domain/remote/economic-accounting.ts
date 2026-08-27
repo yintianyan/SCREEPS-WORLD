@@ -1,23 +1,4 @@
-/**
- * Remote Economic Accounting — A4.1 Phase 2：远矿经济核算。
- *
- * 合同锚点：A4.1 Architecture Audit §9.2（Net Value 计算缺失）。
- *
- * 设计意图：
- *   计算远矿运营的完整经济明细，包含：
- *   - Gross Production: 产出总值
- *   - Transport Cost: 运输成本（hauler 燃料 + 路径损耗）
- *   - Infrastructure Cost: 基建成本（container 摊销 + 维修）
- *   - Spawn Cost: 孵化成本（creep body 成本摊销）
- *   - Risk Cost: 风险成本（威胁/损失/防御）
- *   - Net Economic Value: 净经济价值 = Gross - 所有成本
- *
- *   与 remote-value.ts 的区别：
- *   - remote-value 是**评估期**（Opportunity 创建时）的预期净价值
- *   - economic-accounting 是**运营期**（Operation 运行中）的实际净价值
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Remote Economic Accounting */
 
 import type { ResourceFlowSnapshot } from "./flow-accounting";
 import { flowDuration } from "./flow-accounting";
@@ -110,14 +91,14 @@ export interface EconomicAccountingConfig {
 
 /**
  * 计算运输成本（e/tick）。
- *
+
  * hauler 单趟燃料 = pathCost × (body 距离成本因子)。
  * 每趟运力 = haulerCarryParts × 50。
  * 往返时间 ≈ pathCost × 2 / speed。
  * 所需 hauler 数 = 产出 / (运力 / 往返时间)。
- *
+
  * 简化：transportCost = (pathCost × haulerFuelPerTile × 2) × haulerCount / duration
- *
+
  * 纯函数。
  */
 export function computeTransportCost(
@@ -192,9 +173,9 @@ export function computeRiskCost(
 
 /**
  * 执行完整经济核算。
- *
+
  * netValue = grossProduction - transportCost - infrastructureCost - spawnCost - riskCost
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function calculateEconomicAccounting(

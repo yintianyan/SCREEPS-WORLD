@@ -1,14 +1,4 @@
-/**
- * E2E 冒烟测试 — 验证 screeps-server-mockup + dist/main.js 基础链路。
- *
- * 目标：
- *   1. 验证 server 能启动
- *   2. 验证 dist/main.js 能作为 bot 代码加载
- *   3. 验证 bot 能跑 10 tick 不崩
- *   4. 验证能从 bot.memory 读取状态
- *
- * 这个测试是所有后续 E2E 测试的前提。如果它失败，说明环境问题，其他测试都跑不了。
- */
+/** E2E 冒烟测试 — 验证 screeps-server-mockup + dist/main.js 基础链路。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";

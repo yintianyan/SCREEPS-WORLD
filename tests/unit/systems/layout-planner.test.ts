@@ -1,18 +1,4 @@
-/**
- * P1-F 测试 — layout-planner 相位偏移 + 4-stage 分片 + recoveryEligible 钩子。
- *
- * 覆盖（P1-F 验证清单）：
- *   1. roomPhase 纯函数（DJB-like 哈希，与 systemPhase 共用算法）
- *   2. assessEmergencyRebuild 纯函数（关键基建缺失检测）
- *   3. layoutPlannerSystem.recoveryEligible 钩子（kernel P1 等效提升判据）
- *   4. planStage 4-stage 状态机（转换 + global reset 恢复 + stage 0 门禁）
- *
- * 设计原则：
- *   - 纯函数测试不依赖 Game/Memory（roomPhase、assessEmergencyRebuild）
- *   - 钩子测试用 mockContext + mockSnapshot（recoveryEligible 只读 ctx.snapshots()）
- *   - 状态机测试用最小 Game.rooms + Memory + RawMemory mock，聚焦不变量而非
- *     各 stage 内部业务逻辑（constraint-placer / road-planner 自有单测覆盖）
- */
+/** P1-F 测试 — layout-planner 相位偏移 + 4-stage 分片 + recoveryEligible 钩子。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { roomPhase, systemPhase } from "../../../src/kernel/phase";
 import {
@@ -382,11 +368,11 @@ describe("P1-F.3 — layoutPlannerSystem.recoveryEligible 钩子", () => {
 describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
   /**
    * 构造最小可用 room + Memory + snapshot 三元组。
-   *
+
    * 关键：anchor 预设为 spawn 位置 — 跳过 diagnoseAnchor 的重路径
    * （computeDistanceField + room.find(FIND_EXIT) + 诊断日志），
    * 使 stage 0 prep 聚焦于 shouldPlan 门禁 + planStageData 写入。
-   *
+
    * 同时提供 source+container 对 — 避免 assessEmergencyRebuild 误判
    * sourceContainer 缺失触发紧急重建路径（干扰 shouldPlan 门禁测试）。
    */
@@ -803,19 +789,19 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
 /**
  * R1（4-stage 分片 vs 单 tick 等价性，Batch 4 前置）:
  * 验证 P1-F 核心契约「4-stage 分片不改变规划结果」。
- *
+
  * 既有 stage 单测只证明各 stage 转换正确（planStage 0→1→2→3→0），
  * 不证明「分片 vs 不分片产出等价」——本测试直接断言这一核心契约。
- *
+
  * 设计：同一合成房间、同一初始 Memory，分别走两条路径：
  *   - 路径 A（分片）: 4 个连续 tick（1000-1003），每 tick 推进一个 stage
  *                    （模拟生产路径，跨 tick 中间产物存 globalCache）
  *   - 路径 B（单 tick）: 同一 tick（1000）内连续 4 次调 planRoom
  *                    （模拟「不分片」等价路径，中间产物同 tick 内消费）
- *
+
  * 等价断言对象：buildQueue 内容、layout.state、layout.revision、layout.anchor。
  * 排除字段：nextPlanTick（两路径 ctx.tick 不同，roomPhase 偏移不同，必然不等）。
- *
+
  * 实现注意：
  *   - 两路径用不同 roomName（W7N4 / W8N4），避免 Memory.rooms 冲突
  *   - roomPhase 差异只影响 nextPlanTick，不影响 buildQueue 内容

@@ -1,35 +1,4 @@
-/**
- * A4.7 Decision Trace & Deterministic Replay — 单元测试。
- *
- * 验证 domain 层纯函数的核心能力：
- *   UT-001: Snapshot Hash 确定性 — 相同输入永远产生相同 Hash
- *   UT-002: Snapshot Hash 区分性 — 不同输入产生不同 Hash
- *   UT-003: Decision Hash 确定性
- *   UT-004: stableStringify key 排序稳定性
- *   UT-005: FNV-1a Hash 分布均匀性
- *   UT-006: Replay Decision 确定性 — 1000 次 replay 结果一致
- *   UT-007: verifyDeterminism — 检测确定性
- *   UT-008: compareReplay — MATCH 场景
- *   UT-009: compareReplay — DIVERGENCE 场景
- *   UT-010: Ring Buffer — push + 自动淘汰
- *   UT-011: Ring Buffer — getRecentRecords 顺序
- *   UT-012: Ring Buffer — 超容量滚动正确
- *   UT-013: Trace GC — ACTIVE → ARCHIVED 转换
- *   UT-014: Trace GC — ARCHIVED → EXPIRED 删除
- *   UT-015: Trace GC — 统计正确
- *   UT-016: Query — 按 tick 过滤
- *   UT-017: Query — 按 category 过滤
- *   UT-018: Query — 按 severity/minSeverity 过滤
- *   UT-019: Query — 按 correlationId 追踪链
- *   UT-020: Memory Budget — 单条记录大小测量
- *   UT-021: Memory Budget — 1000 条 < 500KB 安全线
- *   UT-022: Integrity Check — 孤立记录检测
- *   UT-023: buildDecisionChain — 可读输出
- *   UT-024: CorrelationId 格式
- *   UT-025: DecisionId 格式
- *
- * 纯函数测试 — 不依赖 Game/Memory。
- */
+/** A4.7 Decision Trace & Deterministic Replay — 单元测试。 */
 import { describe, it, expect } from "vitest";
 import {
   type DecisionSnapshot,

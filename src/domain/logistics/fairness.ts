@@ -1,14 +1,4 @@
-/**
- * Fairness Scheduling — A4.3 Phase 5：公平调度。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #30。
- *
- * 设计意图：
- *   防高频 Room 永久抢占全部 Logistics。
- *   算法：Weighted Round Robin + Priority Boost
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Fairness Scheduling */
 
 import type { TransportRequestV2 } from "./transport-request";
 
@@ -16,13 +6,13 @@ import type { TransportRequestV2 } from "./transport-request";
 
 /**
  * Fairness Scheduling。
- *
+
  * 算法：
  *   1. 对每个房间计算 weight = 1 / (1 + recentAllocation × fairnessDecay)
  *      近期分配多的房间 weight 降低
  *   2. 每个房间的 Request 按 weight 重新排序
  *   3. 高优先级 Request 仍然优先（priority 先排，同 priority 内按 weight 排）
- *
+
  * 纯函数。
  */
 export function applyFairness(

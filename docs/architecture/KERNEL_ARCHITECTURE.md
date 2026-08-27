@@ -39,9 +39,9 @@ Kernel **必须**存在，且**仅当**以下四职能归其所有（research/19
 ### 2.1 组合根注册制
 
 1. `src/bootstrap.ts` 是**唯一组合根**：新增角色 / 系统只改此文件与新模块，
-   不改 Kernel（AGENTS.md）。
+   不改 Kernel（AGENT.md）。
 2. 注册名全局唯一 kebab-case；重复注册**启动即失败**。
-3. 模块顶层禁止访问 `Game` / `Memory`（AGENTS.md）。
+3. 模块顶层禁止访问 `Game` / `Memory`（AGENT.md）。
 4. 注册表为启动期构建的静态结构，tick 内只遍历调用；禁止每 tick 重建闭包 / 排序
    （research/19 §9）。
 5. 注册顺序即同优先级执行顺序；写组合根者必须理解顺序依赖（如人口普查先于
@@ -65,7 +65,7 @@ P 序是**降级牺牲序而非重要度排名**：P0 的量永远最小，预�
 
 1. 所有软 / 硬上限与档位阈值**必须**定义为 `Game.cpu.limit` 与 bucket 水位比例的
    函数：`threshold = Game.cpu.limit × k`（k 为无量纲系数），**禁止**在任何代码或
-   配置中写死账户级数字（research/19 §10.3；AGENTS.md）。
+   配置中写死账户级数字（research/19 §10.3；AGENT.md）。
 2. 系数 k 与恢复滞回的 N 值集中定义于 `CONFIG`（单一真相源），初值保守、由
    tuning 引擎按 soak 数据调整（research/19 §12）。
 3. `Game.cpu.getUsed()` 采样每 tick 限制在档位点（2–4 次）——采样不是免费 API
@@ -146,7 +146,7 @@ P 序是**降级牺牲序而非重要度排名**：P0 的量永远最小，预�
 1. `src/kernel/` **禁止** import `src/systems`、`src/creeps`、`src/domain` 的业务
    符号；内核不直接调 `spawnCreep` / `createConstructionSite`（research/19 §10.6；
    §6 紧急直通由内核触发、SpawnManager 执行，不构成例外）。
-2. **已登记例外（R9，AGENTS.md）**：kernel 直接 import 业务侧
+2. **已登记例外（R9，AGENT.md）**：kernel 直接 import 业务侧
    `pruneDeadCreepCache`（100 tick 低频维护钩子）。处理方式：
    - 该例外**仅此一项**，新维护钩子不得再以直接 import 形式进入内核；
    - 维护钩子总数达到 **3 个**时，必须提取统一 registry 钩子机制并撤销直接

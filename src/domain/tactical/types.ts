@@ -1,16 +1,4 @@
-/**
- * A5.4.0 Tactical Combat — Domain Type Definitions.
- *
- * 三层军事控制边界：
- *   Strategic (WHY)   → WarPosture / EmpirePosture / WarPlan
- *   Operational (WHAT) → MilitaryOperation / Objective / ForceRequirement
- *   Tactical (HOW)    → TacticalObjective / SquadPlan / TacticalDecision
- *
- * Tactical 层只决定 HOW，不决定 WHY 和 WHAT。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / Creep / Room / Spawn / Transport / Recovery / Kernel。
- * 所有运行时数据由调用方（系统层薄壳）注入为 Snapshot / DTO。
- */
+/** A5.4.0 Tactical Combat — Domain Type Definitions. */
 
 import type { CombatCapability, AggregateCapability } from "../combat/capability";
 import type { TerrainContext, EffectiveCombatModifier } from "../defense/terrain-context";
@@ -137,7 +125,7 @@ export interface TacticalConstraints {
 
 /**
  * TacticalState — Squad 的战术生命周期。
- *
+
  * 设计理由（与 OperationStatus 区分）：
  * - OperationStatus 是 Operational 层的宏观生命周期（PLANNED → ACTIVE → COMPLETED）。
  * - TacticalState 是战术层的微观执行状态（FORMING → MOVING → ENGAGING → ...）。

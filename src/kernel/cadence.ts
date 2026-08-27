@@ -1,14 +1,4 @@
-/**
- * 【F1/G-A】Cadence 注册表 — 系统执行间隔的治理视图。
- *
- * 真相源：各 System 注册时声明的 interval（bootstrap 唯一组合根）；
- * CONFIG.cpu.cadenceOverrides 提供治理性覆盖（按系统名），空表=零行为变更。
- * Kernel 构造时从 Registry 构建本表，供：
- *  - shouldRunSystem 消费（生效间隔）
- *  - 遥测/蓝图检视（governance visibility，研究文档 20 号 cadence 总表）
- *
- * 语义与既有实现一致：interval≤1 表示每 tick；相位偏移由 systemPhase() 提供。
- */
+/** Cadence 注册表 — 系统执行间隔的治理视图。 */
 
 import { CONFIG } from "../config";
 import type { Registry } from "./registry";

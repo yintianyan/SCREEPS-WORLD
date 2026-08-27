@@ -29,7 +29,7 @@ import type { DismantlePlan } from "../kernel/global-cache";
 
 /**
  * 建造管理器 — 自有房 site 创建的唯一模块（远机房由 remote-mining-manager 负责）。
- * 职责：同步 BuildTask 状态与实际建造 site（domain/construction/queue）；强制执行
+
  * 每房与全局 site 限制（含远矿 siteCount 账本）；应用开发门禁（恢复态或 P0/P1 缺口
  * 时不建造）；全局每 tick 最多 1 normal + 1 emergency site（与 remote-mining-manager
  * 共享计数器）。纯逻辑已提取到 domain/construction/queue.ts，本模块只处理 Game API 调用。
@@ -42,7 +42,7 @@ export const constructionManagerSystem: System = {
   /**
    * P1-F：recoveryEligible 钩子 — buildQueue 有 P0 queued 关键基建时
    * 自报 true，让 kernel 将本系统提升为 P1 等效优先级通过 budget 拦截。
-   *
+
    * 关键基建 = storage / tower / spawn（经济链路断裂三件套）。
    * 「P0 queued」表示 layout-planner 已为缺失结构推入任务但尚未创建 site，
    * 此时若 budget tier 拦截 construction-manager，关键基建永远建不成 → 死锁。
@@ -231,10 +231,10 @@ export function cleanOrphanConstructionSites(): void {
 /**
  * 开发门禁 — 创建任何新 site 前必须满足。
  * 返回 true 表示允许建造。
- *
+
  * 逻辑已下沉到 domain 层纯函数 evaluateDevelopmentGate（R2 可观测性：
  * 每个拒绝都携带原因码）；本函数保留布尔签名供既有调用方与测试使用。
- *
+
  * 紧急重建（source container / tower / spawn / storage 缺失）豁免 economyPressure / budget /
  * P0 队列 / 能量门禁 / claim-secure 护栏，但不豁免威胁检测 — 敌人脚下不建工地。
  */
@@ -483,15 +483,15 @@ export function tryCreateSite(
 
 /**
  * 处理本房的活跃拆改计划。
- *
+
  * 状态机（每 tick 推进）：
  *   waiting    → 检查替代任务 state：done → 转 validating；ttl 到期 → abort
  *   validating → 检查替代 link energy：>0 → success（destroy 旧 link）；
  *                超时（DISMANTLE_VALIDATION_DELAY）且 energy=0 → fallback
- *
+
  * 战时降级：colonyState === "defense" 时跳过处理（保留计划，不 destroy）。
  * 替代任务被清理（cleanTasks）：abort（保留旧 link，避免空窗）。
- *
+
  * @param snapshot  本房快照
  * @param tick      当前 tick
  * @param queue     本房 buildQueue（查找替代任务状态）
@@ -515,7 +515,7 @@ function processDismantlePlans(
 
 /**
  * 处理单个拆改计划的状态转移（纯逻辑 + Game API 调用）。
- *
+
  * 终态处理（区分两类 abort 防止 churn）：
  *   success            → deadLink.destroy() + clearDismantlePlan + clearDeadAssetLink
  *   abort(ttl 到期)    → markLinkConstrained + clearDismantlePlan + clearDeadAssetLink

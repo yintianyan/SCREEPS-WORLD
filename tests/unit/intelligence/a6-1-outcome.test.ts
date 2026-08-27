@@ -1,22 +1,4 @@
-/**
- * A6.1 Outcome Model — 单元测试。
- *
- * 验证 domain 层纯函数的核心能力：
- *   UT-016: collectOutcome — War 成功
- *   UT-017: collectOutcome — War 失败
- *   UT-018: collectOutcome — War 止损
- *   UT-019: collectOutcome — Recovery 成功
- *   UT-020: collectOutcome — Recovery 失败
- *   UT-021: collectOutcome — Economic 健康度变化
- *   UT-022: collectOutcome — Logistics 级别变化
- *   UT-023: collectOutcome — Spawn 队列清空
- *   UT-024: collectOutcome — Expansion 结果
- *   UT-025: collectOutcome — Defense 威胁降低
- *   UT-026: collectOutcome — 无输入时返回 undefined
- *   UT-027: computeOutcomeConfidence — 延迟 + 来源可靠性
- *
- * 纯函数测试 — 不依赖 Game/Memory。
- */
+/** A6.1 Outcome Model — 单元测试。 */
 import { describe, it, expect } from "vitest";
 import {
   type OutcomeCollectionInput,

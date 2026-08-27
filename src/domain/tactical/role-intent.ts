@@ -1,17 +1,4 @@
-/**
- * Tactical Role Intent — A5.4.1 TacticalDecision → RoleAction 映射。
- *
- * 将 Tactical Domain 产出的 TacticalDecision（纯函数输出）
- * 转换为现有 RolePolicy 可消费的 RoleActionIntent。
- *
- * 设计原则：
- *   - Domain 只输出 Intent（MovementIntent / CombatIntent）
- *   - 本模块将 Intent 映射为 Role 可执行的结构化指令
- *   - Role 负责将指令转换为实际 Creep API 调用
- *   - 不创建第二套 Creep 行为系统
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** Tactical Role Intent */
 
 import type {
   TacticalDecision,
@@ -69,7 +56,7 @@ export interface RoleActionIntent {
 
 /**
  * 将 TacticalDecision 映射为 RoleActionIntent。
- *
+
  * 映射规则（明确对应关系）：
  *   ADVANCE  → MOVE_TO_OBJECTIVE
  *   HOLD     → HOLD_POSITION
@@ -77,14 +64,14 @@ export interface RoleActionIntent {
  *   RETREAT  → RETREAT_TO_SAFE
  *   REGROUP  → MOVE_TO_REGROUP
  *   POSITION → MOVE_TO_TACTICAL_POS
- *
+
  *   ATTACK        → ATTACK_TARGET
  *   RANGED_ATTACK → RANGED_ATTACK_TARGET
  *   HEAL          → HEAL_TARGET
  *   RANGED_HEAL   → RANGED_HEAL_TARGET
  *   DISMANTLE     → DISMANTLE_TARGET
  *   NONE          → NO_COMBAT
- *
+
  * 纯函数 — 相同 Decision 必产生相同 Intent。
  */
 export function mapDecisionToRoleIntent(decision: TacticalDecision): RoleActionIntent {
@@ -215,7 +202,7 @@ export interface LifecycleAssessmentResult {
 
 /**
  * 评估 Objective 是否应转换生命周期状态。
- *
+
  * 处理条件：
  *   - authorization expired → REJECTED/ABORTED
  *   - operation aborted → ABORTED

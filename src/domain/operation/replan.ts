@@ -1,17 +1,4 @@
-/**
- * Event-driven Replan — A3.0 事件驱动重规划
- *（DATA_FLOW §1 关键事件触发重规划）。
- *
- * 当发生以下事件时，Agenda Manager 应触发重规划：
- *   1. 房间失守（Room lost）→ 取消相关 Operation
- *   2. 房间进入 Critical（ColonyState → recovery）→ 取消以该房为 source 的 Operation
- *   3. 房间经济恢复（ColonyState → normal）→ 重新评估是否需要调拨
- *   4. Carrier 死亡 → 释放 Reservation + 标记 Operation blocked
- *   5. Resource 不足 → Operation 降级或取消
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- * 事件由系统侧采集并注入。
- */
+/** Event-driven Replan */
 
 import type { OperationContext, OperationPriority } from "./agenda-item";
 import { isActive } from "./agenda-item";
@@ -28,7 +15,7 @@ export type ReplanEvent =
 
 /**
  * 处理重规划事件 — 返回需要更新的 Operation 列表。
- *
+
  * 纯函数 — 不修改原数组，返回新数组（含状态变更后的 Operation）。
  */
 export function processReplanEvent(

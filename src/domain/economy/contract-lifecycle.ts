@@ -1,35 +1,4 @@
-/**
- * Contract Lifecycle — A4.0 Phase 2：契约生命周期状态机 + 故障检测。
- *
- * 合同锚点：A4.0 Architecture Audit §18.2（Supply Contract 生命周期）。
- *
- * 状态流转图：
- *
- *   PROPOSED ──activate──→ ACTIVE
- *      │                     │
- *      │ cancel              │ degrade
- *      ↓                     ↓
- *   CANCELLED             DEGRADED
- *                          │  │
- *               suspend ←──┘  │ recover
- *               ↓              ↓
- *           SUSPENDED       ACTIVE
- *              │
- *              │ resume / cancel
- *              ↓
- *         ACTIVE / CANCELLED
- *
- *   ACTIVE / DEGRADED → COMPLETED（当 Consumer 不再需要）
- *   任何状态 → CANCELLED（当 Producer/Consumer 失守）
- *
- * 故障检测：
- *   - Producer 失败：storageEnergy < minimumReserve 持续 N 周期 → DEGRADE → SUSPEND
- *   - Consumer 不再需要：连续 N 周期 delivered ≥ requested → COMPLETED
- *   - 房间失守：sourceRoom/targetRoom 不在 ownedRooms → CANCELLED
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- * 所有输入由参数注入。
- */
+/** Contract Lifecycle */
 
 import type { SupplyContract, ContractStatus } from "./supply-contract";
 import { isContractActive, isContractTerminal } from "./supply-contract";
@@ -244,11 +213,11 @@ export interface FaultDetectionResult {
 
 /**
  * 评估 Producer 和 Consumer 状态，决定 Contract 的生命周期动作。
- *
+
  * 这是 Contract 生命周期的核心纯函数——
  * 每周期由系统侧薄壳调用，传入 Producer/Consumer 运行时状态快照，
  * 返回建议的新状态和原因。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function detectFault(

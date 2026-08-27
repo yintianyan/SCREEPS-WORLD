@@ -1,9 +1,4 @@
-/**
- * 无害侦察观测测试（R7c）— room-state 记录「有人盯防」信号。
- *
- * 覆盖：敌对无威胁部件（侦察兵）→ lastObserverAt + observerSightings 写入；
- * 威胁在场 → 观测字段不写（与威胁记忆分离）；重复目击计数累计。
- */
+/** 无害侦察观测测试（R7c）— room-state 记录「有人盯防」信号。 */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { roomStateSystem } from "../../../src/systems/room-state";
 import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";

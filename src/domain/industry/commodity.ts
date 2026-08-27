@@ -1,14 +1,4 @@
-/**
- * Factory commodity 生产决策 — 纯函数层（审计缺口 6：产业链只有 battery 压缩）。
- *
- * 背景：factory 除 battery 压缩（止损）外支持 commodity 升级链
- * （base 矿物 → T1 wire/switch/cell/… → T2 circuit/alloy/device → T3）。
- * T2+ 是后期重要收入（单价数倍于原料），且配方表引擎自带（COMMODITIES
- * 全局常量）— 不硬编码配方，执行层读引擎、测试注入。
- *
- * V1 边界（登记取舍）：只产「storage+factory 合计原料充足」的最高梯度
- * 目标 — 不为凑料主动买入；原料搬运由 distributor 按目标配方补进 factory。
- */
+/** Factory commodity 生产决策 — 纯函数层（审计缺口 6：产业链只有 battery 压缩）。 */
 
 /** 配方摘要（从引擎 COMMODITIES 裁剪；components 缺失 = 不可生产）。 */
 export interface CommodityRecipe {

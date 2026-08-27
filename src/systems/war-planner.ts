@@ -1,20 +1,4 @@
-/**
- * War Planner — P2 系统，war 姿态的唯一进攻执行决策者（R3 战时闭环，R4 自治升级）。
- * Strategy（empire-strategy 发布 posture）→ 本系统读姿态，姿态 = war 才激活：
- * 非 war 收摊（核验战果 → 失败黑名单 → 回收 attacker → 撤销寄宿孵化请求）；
- * war 则选目标（domain/war/planning 纯函数）→ 发布 Memory.kernel.warPlan →
- * 按编队缺口向 sponsor 队列推 attacker 孵化请求（spawn-manager 是唯一 spawnCreep）。
- *
- * R4 自治升级：① 波次集结 — warPlan.phase = build/advance 双阈值迟滞，build 阶段
- * attacker 在 home 集结待命（role-runner hold 钩子），满编才整波 advance（添油战术
- * 是消耗战失败的根源）；② 战损止损 — spawned 超 squadSize × casualtyMultiplier 判
- * 消耗战失败收摊并整军休战（warStandDownUntil 挡「A 止损→立刻打 B」跨目标循环）；
- * ③ 战后核验 — 用目标房最新 intel 判战果（evaluateWarOutcome），failure/unknown 进
- * warBlacklist 冷却防重选；④ 结论记录 WarOutcome 事件。
- *
- * 铁律：本系统不自行裁决「是否该开战」— 姿态是唯一授权来源；只执行「怎么打」与
- * 「何时止损」。interval 10；非 war 时仅一次收摊，无全房 find / 无寻路。
- */
+/** War Planner */
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
@@ -308,7 +292,7 @@ export function markSquadMaterialized(
  * 收摊（幂等）：核验战果 → 失败/unknown 进黑名单 → 记录 WarOutcome 事件 →
  * 回收在役 attacker（标记 recycle，spawn-manager 归航回收）→ 撤销寄宿请求 → 清除计划。
  * reason：收摊原因编码（WarOutcome 事件 d[2]，黑匣子复盘用）。
- *
+
  * P0-2 核验盲区修复：unknown（intel 过期/无视野）用更短的黑名单冷却 —
  * 区分「确定性打不赢」（failure，满额冷却）与「不知道打没打赢」（unknown，半额冷却）。
  * 根因：战后 attacker 撤退路径不一定经过目标房 → sponsor 的 intel 可能在战前就过期。

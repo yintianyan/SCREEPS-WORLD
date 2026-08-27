@@ -133,7 +133,7 @@ describe("SpawnQueue — cleanQueue", () => {
     expect(queue[0]?.key).toBe("b");
   });
 
-  // SP-2：达重试上限的 key 返回给调用方入黑名单 — 打破删除-重建翻炒。
+  // ：达重试上限的 key 返回给调用方入黑名单 — 打破删除-重建翻炒。
   it("SP-2：返回被隔离的 key 列表（TTL 过期不入列）", () => {
     const queue: SpawnRequest[] = [makeRequest("failed"), makeRequest("expired"), makeRequest("ok")];
     queue[0]!.retries = 5;

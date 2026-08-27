@@ -1,27 +1,4 @@
-/**
- * Tactical Engagement Runtime — A5.4.3 系统层薄壳。
- *
- * 合同锚点：A5.4.3 §16 Runtime Integration。
- *
- * 职责（薄壳——只采集和编排，不做决策）：
- *   1. 从 globalCache / Game / Memory 采集运行时状态
- *   2. 构建 FocusFireSnapshot（纯函数输入格式）
- *   3. 调用 domain 纯函数 planFocusFire() → FocusFirePlan
- *   4. 将 AttackIntent[] 写入 globalCache 供角色层消费
- *   5. FocusFirePlan 写入 globalCache 供 decision-trace 消费
- *   6. 上 tick Plan 保留用于状态机连续性
- *
- * 禁止：
- *   - 不做任何战术决策（决策由 domain 纯函数 planFocusFire 裁决）
- *   - 不直接调用 attack() / rangedAttack() / heal() / move() / spawnCreep()
- *   - 不修改 domain 层纯函数的输入/输出结构
- *   - 不修改 WarPosture / 不创建 Operation / 不创建 Strategic Target
- *
- * 频率：interval=3（低频——Focus Fire 不需要每 tick 重算，3 tick 间隔足够响应目标死亡/逃跑）
- * 优先级：P2（在 tactical-runtime 和 squad-movement 之后运行）
- * 阶段：main（在角色之前——先产出 AttackIntent 供角色消费）
- * 存储：heap only — global reset 可丢（下个周期重建）。
- */
+/** Tactical Engagement Runtime */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache, querySquad, type GlobalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
@@ -484,10 +461,10 @@ function getHostilesCached(room: Room): Creep[] {
 
 /**
  * 查询 creep 的攻击意图（供角色层消费）。
- *
+
  * 角色层（attacker）在 RolePolicy 的 acquire/work 候选中调用此函数，
  * 获取当前 tick 的攻击指令（目标 ID + 攻击类型 + 优先级）。
- *
+
  * 如果返回 null，角色回退到原有行为（Legacy 兼容）。
  */
 export function getAttackIntent(creepName: string): AttackIntent | null {

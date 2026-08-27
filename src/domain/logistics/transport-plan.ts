@@ -1,14 +1,4 @@
-/**
- * Transport Plan — A4.3 Phase 5：运输计划模型。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #36。
- *
- * 设计意图：
- *   Transport Plan 是 Empire Logistics Planner 的输出。
- *   包含一组 Transport Requests + 推荐 Assignments + Routes + 成本/时间/风险估算。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Transport Plan */
 
 import type { TransportRequestV2 } from "./transport-request";
 import type { TransportAssignment } from "./transport-assignment";

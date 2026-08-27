@@ -1,21 +1,4 @@
-/**
- * Traffic Detection — A4.3 Phase 2：交通检测 + 惩罚。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #14（无 Traffic Detection）、§10 #14。
- *
- * 设计意图：
- *   多 Hauler 共享同一路由时产生拥堵。Traffic Detection 识别拥堵并施加惩罚
- *   （有上限），用于 Route 评估和排序。
- *
- *   复用 movement 系统的 recordTraffic() 数据（traffic-manager.ts）。
- *
- *   算法：
- *   - activeHaulerCount > routeCapacity → congestion
- *   - penalty = min(1, (activeHaulerCount - routeCapacity) / routeCapacity × 0.3)
- *   - penalty 上限 1.0
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Traffic Detection */
 
 // ─── 输入 / 输出 ──────────────────────────────────────────
 
@@ -66,11 +49,11 @@ const MAX_PENALTY = 1.0;
 
 /**
  * 计算交通惩罚。
- *
+
  * @param routeId 路由 ID
  * @param activeHaulerCount 当前在该路由上的 hauler 数量
  * @param routeCapacity 路由容量（可用 hops × HAULER_CAPACITY_PER_HOP 计算）
- *
+
  * 纯函数。
  */
 export function computeTrafficPenalty(

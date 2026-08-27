@@ -1,24 +1,4 @@
-/**
- * Power Creep Manager 系统测试 — GPL 消费 / 驻留分配 / 孵化 / 运营执行。
- *
- * 覆盖：
- *   环境守卫：
- *   - 私服/测试环境无 PC API → 空转（不 throw）
- *   GPL 消费：
- *   - GPL1 无 PC → PowerCreep.create("pc-op-0", "operator")
- *   - 有 PC 有 free level → pc.upgrade(build order 下一项)
- *   - free=0 → 不调用 create/upgrade
- *   孵化：
- *   - 未孵化 PC + 驻留房有 powerSpawn → pc.spawn
- *   驻留：
- *   - 首次分配写入 Memory.kernel.powerCreeps.homeAssignments（粘性）
- *   - PC 消失 → 死条目清理
- *   运营：
- *   - renew：TTL 低 + 贴近 powerSpawn → pc.renew
- *   - enableRoom：controller 未启用 + 贴近 → pc.enableRoom + 事件
- *   - operateSpawn：效果缺失 + ops 够 → usePower(2, spawn)
- *   - 帝国无 powerSpawn → 系统空转
- */
+/** Power Creep Manager 系统测试 — GPL 消费 / 驻留分配 / 孵化 / 运营执行。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { powerCreepManagerSystem } from "../../../src/systems/power-creep-manager";
 import { mockBudget, mockSnapshot, registerObject, resetGlobals } from "../../role-helpers";

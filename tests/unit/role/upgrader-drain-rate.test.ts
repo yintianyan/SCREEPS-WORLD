@@ -1,16 +1,4 @@
-/**
- * P0-4 upgrader storage 净流失率门禁 — 场景测试。
- *
- * 覆盖设计文档 §5.5 全部 10 用例：
- *   正常路径 3：高水位无流失 / 流失+低水位停止取能 / 流失但高水位放行
- *   边界条件 4：drainRate=5 不拦截 / 无 storage / storageEnergyPrev 缺失 / 水位=sustainedStorage*2
- *   异常情况 3：storage.store 读取异常不抛错 / 降级风险豁免 / storage 回正立即恢复
- *
- * 关键约束：
- *   - 复用 P0-1 写入的 roomMem.phase.storageEnergyPrev（room-state 每 tick 写入）。
- *   - 不修改 schemaVersion（无新 Memory 字段）。
- *   - 通过 role.run 间接测试（与既有 upgrader.test.ts 模式一致）。
- */
+/** P0-4 upgrader storage 净流失率门禁 — 场景测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { upgraderRole } from "../../../src/creeps/roles/upgrader";
 import {

@@ -1,19 +1,4 @@
-/**
- * Cargo Loss — A4.3 Phase 4：货物损失计算。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #8（无 Hauler Death Cargo Recovery）、
- * §10 #21。
- *
- * 设计意图：
- *   Hauler 死亡后 cargo 凭空消失。Cargo Loss 将死亡时携带的资源计入
- *   Transport Accounting，使资源账本平衡。
- *
- *   与 flow-accounting.ts（A4.1）的关系：
- *   - flow-accounting 追踪远矿的 Produced/Transported/Delivered/Lost
- *   - cargo-loss 追踪所有运输的 cargo loss（含房内/跨房/远矿）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Cargo Loss */
 
 import type { ResourceType } from "../operation/agenda-item";
 import type { TransportAccounting } from "./transport-accounting";
@@ -61,11 +46,11 @@ export interface CargoLossResult {
 
 /**
  * 记录 Cargo Loss。
- *
+
  * 当 creep 死亡时调用，将 cargo 计入 Transport Accounting。
  * 如果 cargo 可回收（tombstone），标记为可回收但仍然计入 loss
  * （tombstone 可能被其他 creep 拾取，但不保证）。
- *
+
  * 纯函数。
  */
 export function recordCargoLoss(

@@ -1,14 +1,4 @@
-/**
- * Factory commodity 生产决策测试（审计缺口 6）。
- *
- * 覆盖：
- *   selectCommodityTarget（纯函数）：
- *   - 原料 = factory + storage 合计（跨容器合成判定）
- *   - 梯度优先（T2 击败 T1 — 传入降序，先到先得）
- *   - level 门槛 / 能量储备地板 / 原料不齐 → 跳过
- *   missingComponents（纯函数）：
- *   - factory 内缺口 = 配方量 - 现有（负值不出现）
- */
+/** Factory commodity 生产决策测试（审计缺口 6）。 */
 import { describe, expect, it } from "vitest";
 import {
   missingComponents,

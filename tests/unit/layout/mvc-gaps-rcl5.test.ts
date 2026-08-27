@@ -1,18 +1,4 @@
-/**
- * MVC link 角色缺口端到端测试（link 角色期望表）。
- *
- * 病灶背景（W3N7 RCL5 实证）：
- *   2 个 source link 死资产（harvester 不灌能），CONTROLLER_STRUCTURES[link][5]=2
- *   总数满足 → auditStructureGaps 报 link:0 缺口，但 controller link 缺失导致
- *   升级链断裂。角色感知（auditLinkRoleGaps + mergeLinkRoleGaps）让死资产骗不过检测。
- *
- * 覆盖（端到端：snapshot + queue → auditStructureGaps + mergeLinkRoleGaps → 最终 gaps）：
- *   1. RCL5 完美配置：1 source + 1 controller link → 无缺口
- *   2. W3N7 死资产场景：2 source link + 0 controller → controller 缺口暴露
- *   3. 队列有 controller link 任务 → 缺口闭合（queued 任务计入已有）
- *   4. 单 source 房 → source 缺口上限 1（不硬要 2）
- *   5. 几何受限标记不影响缺口报告（linkConstrained 是拆改侧标记，不掩盖缺口）
- */
+/** MVC link 角色缺口端到端测试（link 角色期望表）。 */
 import { describe, expect, it } from "vitest";
 import { auditStructureGaps, auditLinkRoleGaps, mergeLinkRoleGaps } from "../../../src/domain/layout/gaps";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";

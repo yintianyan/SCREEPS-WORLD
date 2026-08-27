@@ -1,19 +1,4 @@
-/**
- * A6.6 Recommendation Generator — 规则匹配 + Recommendation 生成。
- *
- * 职责：
- *   - 从 EvidenceItem[] 匹配 trigger condition
- *   - 生成 RecommendationCandidate（含 confidence propagation）
- *   - 不满足条件时产出 NO_RECOMMENDATION
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * REC-008：不拥有 Decision Authority。
- * REC-009：禁止 recommendationScore。
- * REC-010：必须有可追溯 evidence。
- * REC-011：autoApply=false。
- * REC-013：必须有 validityWindow (TTL)。
- */
+/** A6.6 Recommendation Generator — 规则匹配 + Recommendation 生成。 */
 
 import type {
   EvidenceItem,
@@ -40,15 +25,15 @@ import { recommendationHash } from "./hashing";
 
 /**
  * 计算建议置信度。
- *
+
  * 硬约束：confidence <= min(evidence confidence)。
- *
+
  * 考虑因素（每项有明确语义，非 magic number）：
  *   1. evidence minConfidence（基础）
  *   2. evidence 完整性（缺阶段则降权）
  *   3. 数据充足性（样本少则降权）
  *   4. Regime 兼容性（不匹配则降权）
- *
+
  * 禁止任意 confidence += / confidence *= magic number。
  */
 export function computeRecommendationConfidence(
@@ -92,7 +77,7 @@ export function computeRecommendationConfidence(
 
 /**
  * Trigger Condition — 触发条件评估。
- *
+
  * 每个条件评估一个 category 的触发可能性和参数。
  * 返回 null 表示 NO_RECOMMENDATION。
  */
@@ -108,7 +93,7 @@ interface TriggerResult {
 
 /**
  * 评估 Economic 触发条件。
- *
+
  * 证据来源：
  *   - A6.2 Evaluation: economicGrowth / resourceEfficiency 维度恶化
  *   - A6.3 Prediction: energy-shortage 预测
@@ -373,7 +358,7 @@ export function evaluateMilitaryTrigger(
 
 /**
  * 从 TriggerResult + EvidenceTrace 构建 RecommendationCandidate。
- *
+
  * 纯函数 — 不修改输入参数。
  */
 export function buildRecommendation(
@@ -451,9 +436,9 @@ export interface RecommendationGeneratorInput {
 
 /**
  * 生成 Recommendations — 主入口。
- *
+
  * 遍历所有 trigger conditions，为每个匹配的 trigger 生成一条 Recommendation。
- *
+
  * 不满足条件时产出 NO_RECOMMENDATION。
  */
 export function generateRecommendations(

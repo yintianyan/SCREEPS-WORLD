@@ -1,17 +1,4 @@
-/**
- * A3.3 E2E Tests — Expansion Execution 全链路端到端测试。
- *
- * 验证完整链路：
- *   Success: VALIDATING → PREPARING → CLAIMING → CLAIMED →
- *            BOOTSTRAPPING → ECONOMIC_STARTUP → INTEGRATING → COMPLETED
- *
- *   Failure: VALIDATING → FAILED → REPLANNING → (revalidate)
- *            PREPARING → FAILED (timeout)
- *            CLAIMING → FAILED (stolen)
- *            BOOTSTRAPPING → FAILED (squad wiped)
- *
- * 使用纯函数状态机驱动，不需要完整 Screeps 引擎 mock。
- */
+/** A3.3 E2E Tests — Expansion Execution 全链路端到端测试。 */
 
 import { describe, it, expect } from "vitest";
 import {

@@ -1,21 +1,4 @@
-/**
- * v18 → v19 迁移独立测试（P1-J：demand 迟滞状态入迁移体系）。
- *
- * 迁移语义：distScaleUpSince 与 builderPressureState 字段原本由
- * domain/spawn/demand.ts 直读写 Memory，现收敛为 spawn-manager 适配层
- * 显式输入输出（prevHysteresis / nextHysteresis）。
- *
- * 字段类型早已登记在 RoomMemory（global.d.ts:215/221），本迁移只纳入
- * schema 管理（幂等畸形自愈），不改变值。
- *
- * 覆盖：
- *   - 旧格式 distScaleUpSince（数字）→ 保留
- *   - 旧格式 builderPressureState（'full'/'shrinking'）→ 保留
- *   - 非数字 distScaleUpSince 自愈删除
- *   - 非法 builderPressureState 自愈删除
- *   - 幂等：重复执行不产生副作用
- *   - 字段缺失时跳过（惰性）
- */
+/** v18 → v19 迁移独立测试（P1-J：demand 迟滞状态入迁移体系）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

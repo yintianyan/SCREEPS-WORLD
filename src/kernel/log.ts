@@ -1,8 +1,4 @@
-/**
- * 【G-I】统一 Logger 门面 —— 业务/内核代码禁止直接 console.log（plan §7）。
- * 设计：级别门（CONFIG.kernel.logLevel）+ error 沿用 safeRun 的限流口径由调用方
- * 决定；sink 可注入（测试捕获）。存量 safeRun 日志保持现状（审计判定无害）。
- */
+/** 统一 Logger 门面 —— 业务/内核代码禁止直接 console.log（plan §7）。 */
 
 import { CONFIG } from "../config";
 

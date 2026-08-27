@@ -1,18 +1,4 @@
-/**
- * A5.1 G1 — Threat Assessment 纯函数测试。
- *
- * 覆盖 A5-S01~S05 场景：
- * - T01: 无威胁 → NONE / NORMAL
- * - T02: NPC invader（单只 ATTACK）→ LOW/MEDIUM
- * - T03: Boosted attacker（T3 ATTACK）→ HIGH
- * - T04: Heal stack（heal ≥ 塔净伤）→ SIEGE
- * - T05: Remote harassment（远矿房武装骚扰）
- * - T06: Scout（仅 MOVE）→ SCOUTING / LOW
- * - T07: Nuke → NUCLEAR / EMERGENCY
- * - T08: Claim → CLAIM
- * - T09: Full assault（4+ boosted）→ FULL_ASSAULT
- * - T10: Score 可拆解性
- */
+/** A5.1 G1 — Threat Assessment 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   assessThreat,

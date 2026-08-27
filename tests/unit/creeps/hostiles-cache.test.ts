@@ -1,14 +1,4 @@
-/**
- * getHostilesCached — per-tick per-room hostile 缓存测试（P1-C）。
- *
- * 验证：
- *   1. 同 tick 同房多次调用返回同一数组引用（缓存命中，避免重复 find）。
- *   2. tick 推进后缓存失效，重新 find（返回新数组）。
- *   3. 联盟白名单过滤生效。
- *
- * 修复前 remote-defender 每 tick 每 creep 各调一次 room.find(FIND_HOSTILE_CREEPS)，
- * n 个 defender = n 次全房扫描。修复后同房共享一次 find。
- */
+/** getHostilesCached — per-tick per-room hostile 缓存测试（P1-C）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getHostilesCached } from "../../../src/creeps/support/targeting";
 import { resetGlobals } from "../../role-helpers";

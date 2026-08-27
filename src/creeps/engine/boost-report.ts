@@ -1,12 +1,4 @@
-/**
- * Boost 报到拦截 — 连接「boost 决策」与「boostCreep 执行」的就位环节。
- * lab-system（P1 系统，先于角色运行）把「creep → boost lab」分配写入
- * globalCache.boostAssignments；role-runner 管线早段调用本函数，命中分配的新生 creep
- * 被引导到 lab 旁原地等待，lab-system 在相邻时执行 lab.boostCreep（该 API 要求相邻）。
- * 自限性防呆：拦截仅在报到窗口内生效（与请求生成共用 isWithinBoostWindow
- * 同一口径），窗口一过自动放行转入正常工作——化合物迟到也不会在 lab 旁永久罚站。
- * 战时例外：war build 相位的编队角色全程可报到（见函数内注释）。
- */
+/** Boost 报到拦截 — 连接「boost 决策」与「boostCreep 执行」的就位环节。 */
 import { globalCache } from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
 import { isWithinBoostWindow } from "../../domain/industry/boost";

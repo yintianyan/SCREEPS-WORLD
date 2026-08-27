@@ -1,20 +1,4 @@
-/**
- * Healer — P2 战争编队治疗端（heal-tank 最小闭环）。
- * 职责：仅 war 姿态时由 war-planner 与 attacker 同波孵化；跨房行军至 war 目标房
- * （role-runner remoteTarget 通勤栈），贴身奶受伤己方（含自奶），满血时跟随
- * buddy attacker 贴身待命（塔伤下 tick 即转 heal）；自身低血标记回收撤出。
- *
- * 编队协同：与 attacker 共用 warPlan 的 build/advance 波次 — hold 复用
- * attackerHold（集结逻辑同构：build 相位归建停驻，advance 才整波推进）。
- * 编队不存在防御：目标房内既无受伤己方也无 attacker（编队被打散/全灭）→
- * 自标记 recycle 止损，绝不在敌房裸奔站桩。
- *
- * 战术依据：贴身 heal 12/part/tick、range 3 退化 rangedHeal 4/part/tick；
- * 塔（600 衰减至 75/shot）对 heal 覆盖下的 TOUGH 前排难以造成净减员 —
- * 这正是 tower-engagement 防守侧早已登记的 heal-tank 骗塔战术，此处为进攻镜像。
- *
- * 约束：combat:true 豁免 flee（奶车不能丢下前排逃跑）；无 CARRY 不涉物流。
- */
+/** Healer */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
@@ -31,7 +15,7 @@ interface TacticalIntent {
 
 /**
  * A5.4.1 从 globalCache 读取当前 creep 的战术指令。
- *
+
  * 角色层不导入 systems 层（R3 架构守卫），直接从 globalCache 读取
  * tactical-runtime-system 写入的 RoleActionIntent。
  * 无指令时返回 null → 角色回退到 Legacy 行为。
@@ -77,7 +61,7 @@ function findWounded(creep: Creep): Creep | undefined {
 
 /**
  * A5.4.1 战术指令消费 — 优先消费 Tactical Runtime 产出的 RoleActionIntent。
- *
+
  * 当有 HEAL/RANGED_HEAL 指令 + targetId 时，按指令治疗指定目标。
  * 无指令时回退到 Legacy findWounded/findBuddy 逻辑。
  */

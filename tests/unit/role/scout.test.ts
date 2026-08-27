@@ -1,12 +1,4 @@
-/**
- * Scout 角色 + 侦察视野捕获测试（R6b 主动情报执行端）。
- *
- * 覆盖：
- *   - scout 站到目标房：无任何主动作（不攻击/不采集），纯站桩提供视野
- *   - 在 home/过境：ensureHome 导航向 remoteTarget（findExitTo 被调用）
- *   - room-observer 的 captureScoutVision：prospect 任务存续期间，
- *     scout 所在目标房的 sources/owner 写入 sponsor intel（决策就绪情报）
- */
+/** Scout 角色 + 侦察视野捕获测试（R6b 主动情报执行端）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { scoutRole } from "../../../src/creeps/roles/scout";
 import { roomObserverSystem } from "../../../src/systems/room-observer";

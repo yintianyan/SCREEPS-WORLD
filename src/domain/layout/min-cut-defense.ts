@@ -1,11 +1,4 @@
-/**
- * Min-Cut 防御规划 — 用最少 rampart 封锁所有入侵路径。
- * 最小顶点割 via Edmonds-Karp 最大流：V = 非墙格（8 邻接，对角受切角规则约束），
- * S = 房间出口，T = 核心区域，割集 C = rampart 放置位置（defense-planner 按位置特征分流 wall/rampart）。
- * 实现：顶点拆 v_in→v_out（容量 1）+ 超级源汇；CPU 实测 ~0.5-2ms，仅 RCL4 首规划执行；
- * 结果缓存于 global `__minCutCache` + Memory.rooms[*].minCut（defense-planner 管理失效）。
- * 纯函数 — 不访问 Game/Memory，输入全参数注入。
- */
+/** Min-Cut 防御规划 — 用最少 rampart 封锁所有入侵路径。 */
 
 /**
  * Min-Cut 算法版本戳：语义变更时递增，defense-planner 拼入缓存 signature
@@ -44,7 +37,7 @@ const INF_CAP = 10000;
 
 /**
  * 计算房间的最小割防御线。
- *
+
  * @param getTerrain 地形查询 (x,y) → 是否墙
  * @param corePositions 核心区域格（要保护的结构位置）
  * @param exitPositions 房间出口格（敌人入口）

@@ -1,18 +1,4 @@
-/**
- * A5.2 Threat Integration 测试。
- *
- * 链路验证：HostileSnapshot → CombatCapability → TerrainContext → PlayerIntel
- * → ThreatIntent → ThreatScore → Confidence → ThreatAssessment
- *
- * 场景覆盖：
- * - T01: Enemy Strong 但 Open Terrain
- * - T02: Enemy Moderate 但 Chokepoint
- * - T03: Enemy High Combat 但 Poor Retreat
- * - T04: PlayerIntel Fresh
- * - T05: PlayerIntel Stale
- * - T06: Conflicting Intel
- * - T07: Terrain Unknown
- */
+/** A5.2 Threat Integration 测试。 */
 import { describe, expect, it } from "vitest";
 import {
   assessThreat,

@@ -1,16 +1,4 @@
-/**
- * BotHarness — 封装 bot 加载 dist/main.js 真实构建产物。
- *
- * 职责：
- *   - 读取 dist/main.js 作为 bot 的 main 模块代码
- *   - 提供 bot.memory / bot.console / bot.newNotifications 访问
- *   - 收集 console 日志用于断言和调试
- *
- * 关键设计 [Facts]：
- *   - screeps-server-mockup 的 addBot({modules: {main: codeString}}) 需要代码字符串
- *   - dist/main.js 是 CJS 格式（exports.loop = loop），匹配 Screeps 运行时要求
- *   - 不直接 import 生产代码，只通过真实 Screeps 引擎交互
- */
+/** BotHarness — 封装 bot 加载 dist/main.js 真实构建产物。 */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 

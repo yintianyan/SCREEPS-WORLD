@@ -1,13 +1,4 @@
-/**
- * Hauler 遗留能量回收链测试。
- *
- * 场景背景：container 能量不足装满一车、而房内有 creep 死亡坟墓 /
- * 拆除建筑废墟 / 大堆掉落能量时，hauler 应优先回收这些**正在衰减**的
- * 遗留资源（container 能量不衰减）；零头仍走链尾兜底，
- * 保住「先抽满 container 防溢出空转」的既有取舍。
- *
- * 走真实角色管线（haulerRole.run）断言实际动作，不只测纯函数。
- */
+/** Hauler 遗留能量回收链测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { haulerRole } from "../../../src/creeps/roles/hauler";
 import { CONFIG } from "../../../src/config";

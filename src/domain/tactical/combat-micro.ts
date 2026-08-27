@@ -1,26 +1,4 @@
-/**
- * A5.5 Advanced Tactical Combat Micro — Domain Pure Functions.
- *
- * 核心目标：让 A5.4 的 Tactical 执行器从「能不能打」升级为
- * 「如何在复杂 PvP 战场中减少无效动作，提高 Squad 生存率、输出效率和战术稳定性」。
- *
- * 设计边界（严格 — 不创建第二套系统）：
- *   Strategic (WHY)    → WarPosture / WarPlan — 不碰
- *   Operational (WHAT) → TacticalObjective / TargetScope — 只消费
- *   Tactical (HOW)     → A5.4 状态机 / Formation / FocusFire — 扩展不替换
- *   Micro (HOW now)   → 本模块：当前 tick/短周期内的微操决策
- *
- * 消费 Canonical 上游（禁止重新实现）：
- *   - A5.1 G2 CombatCapability → 消费 attack/ranged/heal/mobility/effectiveHP
- *   - A5.2 G3 TerrainContext → 消费 terrainType/chokepoints/towerCoverage/mobilityModifier
- *   - A5.4.2 CohesionMetric → 消费 formation cohesion status
- *   - A5.4.3 FocusFirePlan → 消费 AttackIntent / engagementState
- *
- * 输出：MicroIntent → globalCache → Role / Movement 消费
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / Creep / Room / PathFinder / Kernel / Spawn / Transport / Recovery。
- * 禁止 Math.random / Date.now。所有 tie-break 必须 stable（priority → urgency → distance → id）。
- */
+/** A5.5 Advanced Tactical Combat Micro — Domain Pure Functions. */
 
 import type { CombatCapability } from "../combat/capability";
 import type { TerrainContext, EffectiveCombatModifier } from "../defense/terrain-context";
@@ -301,12 +279,12 @@ export interface MicroPlan {
 
 /**
  * planCombatMicro — 从 MicroSnapshot 产出每成员的 CombatMovementDecision。
- *
+
  * 决策链：
  *   1. 授权 / 姿态检查
  *   2. CombatPressure 评估
  *   3. 对每个 alive member：评估各 Intent → 仲裁 → 唯一 Decision
- *
+
  * 纯函数 — 相同输入必产生相同输出。禁止 Math.random / Date.now。
  */
 export function planCombatMicro(snapshot: MicroSnapshot): MicroPlan {
@@ -391,7 +369,7 @@ export function planCombatMicro(snapshot: MicroSnapshot): MicroPlan {
 
 /**
  * arbitrateMicro — 统一仲裁，唯一输出 CombatMovementDecision。
- *
+
  * 优先级（从高到低）：
  *   1. RETREAT — hp < retreatThreshold OR authorization revoked
  *   2. SURVIVAL — 即将死亡（1 tick 致死量）

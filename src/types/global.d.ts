@@ -332,11 +332,11 @@ declare global {
     tuning?: TuningMemory;
     /**
      * 当前扩张行动（v11+，同一时刻至多一个）：expansion-manager 状态机。
-     *
+
      * A3.3 扩展：从二态（claiming | pioneering）升级为完整执行链路：
      *   validating → preparing → claiming → claimed → bootstrapping →
      *   economic_startup → integrating → completed
-     *
+
      * 向后兼容：旧二态作为 claiming/bootstrapping 的子集继续工作。
      */
     expansion?: {

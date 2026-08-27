@@ -1,11 +1,4 @@
-/**
- * Builder 角色场景测试。
- *
- * 覆盖：CPU 门禁（recovery 释放 / conserve 只建 critical / repairRoads tier 门禁）、
- * fallback 链（fill → repair → upgrade → idle）、ERR_INVALID_TARGET 处理、
- * acquire 取能策略、repairContainerDecay 缓存泄漏防护（P1）、
- * rampart 优先于 wall 的维修优先级（P2）。
- */
+/** Builder 角色场景测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { builderRole } from "../../../src/creeps/roles/builder";
 import {

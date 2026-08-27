@@ -1,34 +1,4 @@
-/**
- * Supply Contract — A4.0 Phase 2：长期供应契约模型。
- *
- * 合同锚点：A4.0 Architecture Audit §18.2（Supply Contract 是编排层，不是执行层）。
- *
- * 设计意图：
- *   Supply Contract 是现有 SupplyNode → DemandNode → AllocationPolicy → Operation → Logistics
- *   链条的**上层编排协议**，不是新的独立系统。
- *
- *   Contract 定义「谁应该长期供应谁」（长期关系），
- *   AllocationPolicy 仍然决定「本周期供应多少」（瞬时分配），
- *   Operation 仍然是单次执行单元，
- *   Logistics 仍然通过 Request Pool + assignment-service 搬运。
- *
- *   Contract 的作用：
- *   1. 定义长期供应关系（source/target/rate/reserve/priority/status）
- *   2. 每周期由 Contract 驱动注入 SupplyNode/DemandNode（通过 contract-node-bridge 适配器）
- *   3. 监控健康度——Producer 失败时 DEGRADE，Consumer 不再需要时 COMPLETED
- *   4. 提供可解释的长期经济关系视图（Dashboard）
- *
- *   Contract **不**做的事：
- *   - 不替代 AllocationPolicy 的分配决策
- *   - 不替代 Operation 的执行逻辑
- *   - 不替代 Logistics 的搬运机制
- *   - 不新增 OperationType——Contract 驱动的仍是 type="supply" Operation
- *
- * 纯函数律（DEP_GRAPH §3-5，SYSTEM_BOUNDARIES §2.3-3）：
- *   - 不引用 Game / Memory / RawMemory（lint 红线）
- *   - 全部输入由参数注入
- *   - 不写任何状态——只读计算
- */
+/** Supply Contract */
 
 import type { EmpireRoomRole } from "./empire-role";
 import type { OperationPriority, ResourceType } from "../operation/agenda-item";
@@ -37,12 +7,12 @@ import type { OperationPriority, ResourceType } from "../operation/agenda-item";
 
 /**
  * Supply Contract Status — 契约生命周期六态。
- *
+
  * 状态流转（详见 contract-lifecycle.ts）：
  *   PROPOSED → ACTIVE → DEGRADED → SUSPENDED → COMPLETED
  *                    ↘                ↗
  *                     → CANCELLED ←──
- *
+
  * - PROPOSED: 已提议但未激活（等待条件满足或人工裁决）
  * - ACTIVE: 活跃——每周期注入 SupplyNode/DemandNode 驱动调拨
  * - DEGRADED: 降级——Producer 经济状况不佳，降低 targetRate
@@ -90,11 +60,11 @@ export function isContractTerminal(status: ContractStatus): boolean {
 
 /**
  * Supply Contract — 长期供应契约。
- *
+
  * 定义两个房间之间的长期资源供应关系。
  * Contract 的 source 房每周期通过 contract-node-bridge 适配器
  * 注入为 SupplyNode，target 房注入为 DemandNode。
- *
+
  * 字段设计原则：
  * - 存储在 Memory.kernel.supplyContracts（瘦快照，只存 ID + 数字 + 枚举）
  * - 不存完整路径/历史/运行时索引
@@ -187,12 +157,12 @@ export function makeContractId(
 
 /**
  * 创建新 Supply Contract（初始状态 = PROPOSED）。
- *
+
  * Contract 创建后需要由 contract-lifecycle 的 activateContract() 激活。
  * 直接创建为 ACTIVE 也可——用 createAndActivateContract()。
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param sourceRoom 源房名（producer）
  * @param targetRoom 目标房名（consumer）
  * @param resource 资源类型
@@ -287,13 +257,13 @@ export function effectiveRate(contract: SupplyContract): number {
 
 /**
  * 计算本周期 Contract 应注入的供应量。
- *
+
  * 这是 Contract 传给 contract-node-bridge 的指导值——
  * bridge 将其转换为 SupplyNode.transferable 和 DemandNode.requested。
  * AllocationPolicy 仍根据瞬时供需决定实际分配量。
- *
+
  * 纯函数。
- *
+
  * @param contract 供应契约
  * @param intervalTicks 周期间隔 tick 数（默认 100，与 empire-economy 同频）
  */
@@ -309,10 +279,10 @@ export function computeCycleAmount(
 
 /**
  * 更新 Contract 的交付追踪。
- *
+
  * 每周期由系统侧薄壳调用——传入本周期通过本 Contract 驱动的
  * Operation 的 deliveredAmount 之和。
- *
+
  * 纯函数 — 返回新 Contract 对象。
  */
 export function recordDelivery(
@@ -414,11 +384,11 @@ export function getContractsByTarget(
 
 /**
  * A4.2: ResourceType 短码编解码。
- *
+
  * 编码方案（无冲突）：
  * - `"energy"` → `"E"`（大写，不与 mineral 单字母冲突）
  * - MineralConstant（如 `"U"`, `"L"`, `"K"`, `"Z"`, `"O"`, `"H"`, `"X"`）→ 直接存原值
- *
+
  * 纯函数。
  */
 

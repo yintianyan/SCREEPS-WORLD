@@ -1,12 +1,4 @@
-/**
- * 水位权限表矩阵测试（Batch 2 — 病理②「水位刻度碎片化」修复回归）。
- *
- * 唯一刻度：CONFIG.economy.distributorTiers 绝对能量阈值（full/sustained/low）
- * + upgrade.sprintStorage/sustainedStorage 同参照系。
- * 覆盖消费者：upgrader（U-1/U-2）、builder（B-1）、terminal 备货（D-1）、
- * builder 编制（B-5）、distributor 编制信号（D-3）、直采分流（B-4）、
- * economyPressure clamp（RS-1）。
- */
+/** 水位权限表矩阵测试（Batch 2 — 病理②「水位刻度碎片化」修复回归）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { upgraderRole } from "../../../src/creeps/roles/upgrader";
 import { builderRole } from "../../../src/creeps/roles/builder";

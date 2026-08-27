@@ -1,31 +1,4 @@
-/**
- * reclaimFactoryOutput / stockPowerSpawn — factory 产物回收与 powerSpawn 供料动作测试。
- *
- * 背景：审计确认 factory battery 无搬运出路（50k 容量必堵死压缩链）、powerSpawn
- * 的 power/能量无供给通道（结构建成即死链，GPL 恒 0）。本文件锁定两个动作的
- * 相位解析正确性（执行层是通用 transfer/withdraw，由 runAction 覆盖）。
- *
- * 覆盖：
- *   reclaimFactoryOutput：
- *   - battery 达阈值 + 空载 → withdraw 相（source=factory）
- *   - battery 低于阈值 / 无 factory → undefined
- *   - 携 battery + 有市场 + terminal 有空位 → deposit terminal（交易变现入口）
- *   - 携 battery + 无市场 → deposit storage（W7 死资本教训）
- *   - 携 battery + terminal 满 → deposit storage 兜底
- *   - 满载他物（非 battery）→ undefined（放行后续候选）
- *   stockPowerSpawn：
- *   - 能量低于目标 + storage 高于水位地板 → withdraw energy
- *   - storage 低于水位地板 → 不抽能量
- *   - power 低于目标 + storage 有 → storage 优先；无则 terminal 回退
- *   - 携 power + 缺 power → deposit；携能量 + 能量已满 → undefined（不劫持经济能量）
- *   stockNuker：
- *   - 能量空弹 + storage 高于储备地板 → withdraw energy（50k 大额抽血有地板门禁）
- *   - storage 低于储备地板且 G 不缺 → undefined（不与 spawn/tower 抢血）
- *   - 能量已满 + G 缺 + storage 有 G → withdraw G（矿物不抢生存能量，无地板）
- *   - storage 无 G + terminal 有 G → terminal 回退（市场买入落地点）
- *   - 携 G + nuker 缺 G → deposit；携能量 + 能量已满 → undefined（不劫持经济能量）
- *   - 备弹全满（energy 50k + G 5k）→ undefined；无 nuker → undefined
- */
+/** reclaimFactoryOutput / stockPowerSpawn — factory 产物回收与 powerSpawn 供料动作测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   reclaimFactoryOutput,

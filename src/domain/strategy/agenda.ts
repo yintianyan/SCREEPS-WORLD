@@ -1,22 +1,4 @@
-/**
- * 帝国议程 — 主动自治的短期目标层（R6a，docs/architecture/GOAL_POLICY_PLAN_MODEL.md）。
- *
- * 姿态（posture）回答「帝国处于什么状态」（受袭/健康/战争），议程回答
- * 「帝国现在主动在做什么」。此前所有行为由各系统本地阈值被动反应
- * （升级看 storage 水位、防御看威胁在场），本模块给出单一、可观测、
- * 可解释的帝国级短期目标，执行系统消费它以协调优先级。
- *
- * 优先级（首个命中即当前目标）：
- *   recovery         任一房 colonyState ∈ bootstrap/recovery/crisis — 生存优先。
- *   defense-readiness 任一房近期受袭（lastHostileAt < threatWindow）— 主动备战。
- *   rcl-push         无威胁且全房 RCL<8 且至少一房 storage ≥ rclPushStorage
- *                    且平均压力 ≤ rclPushMaxPressure — 主动冲级（RCL 是复利）。
- *   develop          兜底固本。
- *
- * 滞回：紧急目标（recovery/defense-readiness）进入立即生效（同 posture 哲学）；
- * 普通目标切换（rcl-push ↔ develop）需最短驻留 minDwell 防抖。
- * 纯函数 — 不访问 Game/Memory，计数经 prev 回传（调用方持久化 since）。
- */
+/** 帝国议程 — 主动自治的短期目标层（R6a，docs/architecture/GOAL_POLICY_PLAN_MODEL.md）。 */
 
 export type AgendaInitiative = "recovery" | "defense-readiness" | "rcl-push" | "develop";
 

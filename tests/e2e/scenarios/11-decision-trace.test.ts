@@ -1,30 +1,4 @@
-/**
- * E2E-011 Decision Trace & Deterministic Replay — A4.7 E2E 验收。
- *
- * 验证链路：
- *   系统运行 → decision-trace-system 周期采集 → Ring Buffer 写入 →
- *   查询接口可用 → Memory Budget 安全 → 确定性验证
- *
- * 场景设计（基于 A4.7 Task Spec §28-30）：
- *   1. **Trace Initialization**: 运行 200t 后验证 decision-trace 系统已初始化
- *   2. **Record Collection**: 运行到稳态（1500t）后验证有 DecisionRecord 产出
- *   3. **Query Capability**: 验证查询接口按 category/severity 过滤
- *   4. **Memory Budget**: 验证 1000 条记录 < 2MB
- *   5. **Trace GC**: 运行 2500t 后验证 GC 生效（ACTIVE → ARCHIVED）
- *   6. **Integrity Check**: 验证 Snapshot Registry 完整性
- *   7. **Correlation Chain**: 验证 Correlation ID 追踪链
- *   8. **Long Stability (5k)**: 5000t 连续运行无 JS 错误 + Memory 不膨胀
- *
- * 验证标准：
- *   - 全程无 JS 错误（TypeError/ReferenceError）
- *   - decision-trace 系统 interval=100t 正常运行
- *   - Ring Buffer count > 0（有记录产出）
- *   - Memory < 500KB
- *   - spawnQueue 不持续堆积
- *
- * [Facts] screeps-server-mockup 不模拟 Global Reset，
- * heap-only 的 __decisionTraceCache 在 tick 间持续存在。
- */
+/** E2E-011 Decision Trace & Deterministic Replay */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";

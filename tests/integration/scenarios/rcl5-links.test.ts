@@ -1,19 +1,4 @@
-/**
- * RCL5 Links — Link 系统集成测试。
- *
- * RCL5 关键特征：
- *   - 2 links 可用（source link + controller link）
- *   - link-system（P1）每 tick 规划传输：source→controller 优先
- *   - upgrader 站桩升级：从 controller link 取能，0 通勤
- *   - link cooldown（传输后 1 tick 冷却）
- *   - 30 extensions（energyCapacity = 300 + 30×50 = 1800）
- *
- * 验证目标：
- *   - source link → controller link 传输正常
- *   - controller link 供能 upgrader 站桩升级
- *   - link cooldown 正确（不连续传输）
- *   - storage link 溢出回收
- */
+/** RCL5 Links — Link 系统集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 import type { TestWorld } from "../framework";

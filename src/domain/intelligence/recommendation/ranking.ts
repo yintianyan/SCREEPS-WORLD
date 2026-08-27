@@ -1,18 +1,4 @@
-/**
- * A6.6 Ranking — 5-level Lexicographic ranking。
- *
- * 禁止 weighted average / single score / 万能 score。
- *
- * 排序维度（按优先级）：
- *   1. validity / safety（valid > expired > superseded > rejected）
- *   2. urgency（critical > high > medium > low > informational）
- *   3. confidence（高 → 低）
- *   4. evidence quality（evidence 数量多 → 少）
- *   5. deterministic tie-breaker（recommendationId 字典序）
- *
- * 确定性：相同输入 → 相同排序。
- * 禁止 Math.random / Date.now / 非确定遍历。
- */
+/** A6.6 Ranking — 5-level Lexicographic ranking。 */
 
 import type {
   RecommendationCandidate,
@@ -26,7 +12,7 @@ import { URGENCY_ORDER } from "./types";
 
 /**
  * 生命周期优先级 — 用于第一排序维度。
- *
+
  * valid(0) > created(1) > accepted(2) > expired(3) > superseded(4) > rejected(5)
  * 值越小优先级越高。
  */
@@ -45,11 +31,11 @@ const LIFECYCLE_ORDER: Readonly<Record<RecommendationLifecycle, number>> = {
 
 /**
  * 5-level Lexicographic 比较器。
- *
+
  * 返回负数: a 优先于 b
  * 返回正数: b 优先于 a
  * 返回 0: 两者等价（此时 recommendationId 作为确定性 tie-breaker）
- *
+
  * 确定性保证：
  *   - 不使用 Math.random / Date.now
  *   - 所有比较基于 stable 字段
@@ -94,7 +80,7 @@ export function compareRecommendations(
 
 /**
  * 对 Recommendations 排序（确定性 Lexicographic）。
- *
+
  * 返回新数组（不修改输入）。
  */
 export function rankRecommendations(
@@ -118,7 +104,7 @@ export function getTopRecommendations(
 
 /**
  * 解释为什么 Recommendation A 排在 B 前面。
- *
+
  * 可观测性辅助函数。
  */
 export function explainRanking(

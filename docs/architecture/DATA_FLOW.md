@@ -26,7 +26,7 @@ flowchart TD
 感知流合同：
 
 1. 快照是感知的**唯一入口**：角色与系统禁止全房 `find`，一律复用快照与派生索引
-   （research/20 §10.6；AGENTS.md）。
+   （research/20 §10.6；AGENT.md）。
 2. **禁止跨 tick 假设**：RoomSnapshot 每 tick 重建、tick 末作废；任何「上 tick 的
    快照还有效」的读取都是违规（STATE_OWNERSHIP §3.2）。
 3. intel 是感知流的**慢速旁路**（segment，本 tick 请求下 tick 可读），禁止进入

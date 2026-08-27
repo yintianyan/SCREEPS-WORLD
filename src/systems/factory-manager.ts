@@ -1,22 +1,4 @@
-/**
- * Factory Manager — P3 系统，RCL7-8 终局结构的最小运营层。
- * Factory：① battery 压缩（storage 满仓时把过剩能量转为资产 — 止损语义，
- * 正常水位不压缩：1/6 折损划不来）；② battery 解压回能（storage 能量危机时
- * 逆向生产 battery → energy — 最后救助通道，比市场买入优先：不消耗 credits、
- * 不付运费、无市场依赖）；③ commodity 升级链（审计缺口 6）：
- * 配方读引擎 COMMODITIES（不硬编码），梯度高者优先，原料 = factory +
- * storage 合计，distributor 按 missingComponents 补料进 factory。
- * PowerSpawn：processPower（1 power + 50 energy/次）积累 GPL — 调度门禁见
- * domain/economy/power-processing（能量地板 + war 姿态，投资让位生存）。
- * 原料能量由 distributor 的 stockFactoryEnergy/stockFactoryComponents 搬运。
- *
- * 执行顺序（每房每 interval tick）：powerSpawn → battery 解压（危机优先）→
- * commodity 升级 → battery 压缩（满仓止损）。解压与压缩水位区间不重叠
- * （危机 5k vs 满仓 900k+），天然互斥。
- *
- * commodity 目标缓存在 globalCache（可丢 — global reset 后重选，无 Memory
- * schema 依赖；目标本身每 interval 重评，粘性只避免同 tick 抖动）。
- */
+/** Factory Manager */
 import { CONFIG } from "../config";
 import { shouldProcessPower } from "../domain/economy/power-processing";
 import { shouldDecompressBattery } from "../domain/economy/battery-decompression";
@@ -164,11 +146,11 @@ function toStockView(store: Record<string, number>): StockView {
 
 /**
  * battery 解压回能：storage 能量危机时，把 factory 内的 battery 逆向生产为能量。
- *
+
  * 官方配方（COMMODITIES[RESOURCE_ENERGY]）：5 battery → 50 energy，cooldown 10。
  * 产出能量留在 factory.store 内 — distributor 需将其搬到 storage 供 spawn 使用。
  * 与 reclaimFactoryOutput 配合：distributor 在 crisis 时优先搬 factory 能量到 storage。
- *
+
  * 返回 true = 已执行 produce（消耗 factory 本 tick 的 produce 窗口，跳过 commodity/压缩）。
  * 返回 false = 条件不满足，继续后续 commodity/压缩链。
  */

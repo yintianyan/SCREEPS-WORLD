@@ -1,20 +1,4 @@
-/**
- * Empire Logistics Planner — A4.3 Phase 5：帝国物流规划器。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #35。
- *
- * 设计意图：
- *   Planner 只规划不执行。
- *   输入：Deficit/Contract/Capacity/Route/Threat/Priority/Deadline
- *   输出：Transport Plan
- *
- *   规划频率：Event/Dirty Flag/Periodic 三档
- *   - Event: ReplanEvent 触发（carrier-death, room-lost 等）
- *   - Dirty Flag: Network Snapshot 变化 > 阈值
- *   - Periodic: 每 100 tick（与 agenda-manager 同频）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Empire Logistics Planner */
 
 import type { SupplyContract } from "../economy/supply-contract";
 import { isContractActive, computeCycleAmount } from "../economy/supply-contract";
@@ -57,13 +41,13 @@ export interface PlannerInput {
 
 /**
  * Empire Logistics Planner。
- *
+
  * 规划步骤：
  *   1. 从 Contract 派生 Transport Request
  *   2. 从 Deficit 派生 Ad-hoc Transport Request
  *   3. 评估每个 Request 的 Route
  *   4. 输出 Transport Plan
- *
+
  * 纯函数。
  */
 export function planLogistics(input: PlannerInput): TransportPlan {

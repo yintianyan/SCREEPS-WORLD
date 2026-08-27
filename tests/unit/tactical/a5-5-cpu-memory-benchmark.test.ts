@@ -1,18 +1,4 @@
-/**
- * A5.5 CPU Benchmark & Memory Boundedness Audit.
- *
- * 对应需求 §26 CPU 和 §27 Memory。
- *
- * CPU Benchmark：
- *   - 1/2/5/10/20 Squad × 20 Members × 50 Targets
- *   - 记录 Average / P95 / Max
- *   - 确认 20 Squad × 20 Members × 50 Targets 不会 CPU 爆炸
- *
- * Memory Audit：
- *   - MicroPlan / CombatMovementDecision / TargetLock 不无限增长
- *   - globalCache 中 micro 缓存有 TTL / GC
- *   - RingBuffer / bounded 数组
- */
+/** A5.5 CPU Benchmark & Memory Boundedness Audit. */
 
 import { describe, expect, it } from "vitest";
 import {

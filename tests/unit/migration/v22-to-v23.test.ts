@@ -1,22 +1,4 @@
-/**
- * v22 → v23 迁移独立测试（P0-3 spawn churn 熔断字段建档）。
- *
- * 迁移语义：新增 RoomMemory.churnFreezeUntil 可选字段，由 spawn-manager 惰性写入
- * （cleanQueue 触发 churn 计数 → 熔断写入）。迁移只做「建档 + 畸形自愈」，不写字段值。
- *
- * 自愈规则：
- *   - churnFreezeUntil 非对象 → 删除整个字段
- *   - churnFreezeUntil[role] 非数字 → 删除该条目（视为到期，demand 不跳过）
- *   - 空对象回收（删除整个字段，防 Memory 体积膨胀）
- *
- * 覆盖：
- *   - 空 Memory 不报错
- *   - 合法 churnFreezeUntil（role → 数字）保留
- *   - churnFreezeUntil 非对象（字符串/数组）→ 清除
- *   - churnFreezeUntil[role] 非数字 → 清除该条目
- *   - 空对象 → 回收整个字段
- *   - 幂等：重复执行不产生副作用
- */
+/** v22 → v23 迁移独立测试（P0-3 spawn churn 熔断字段建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

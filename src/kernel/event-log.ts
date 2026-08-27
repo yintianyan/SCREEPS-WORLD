@@ -1,12 +1,4 @@
-/**
- * Event Log — 离散事件日志的采集与持久化。
- *
- * 控制台是流式的，关键状态转换（Phase/Tier/P0 孵化/入侵等）须持久化到
- * segment 2 供事后追溯（Debug Investigation Protocol「收集日志」依赖）。
- * 数据流：recordEvent() → globalCache().eventBuffer (heap, per-tick) →
- * telemetry-collector 每 10 tick flush → segment 2 环形缓冲。
- * 事件检测优先差分（不改现有系统），显式记录仅用于差分覆盖不到的事件。
- */
+/** Event Log — 离散事件日志的采集与持久化。 */
 
 import type { RingBuffer } from "./ring-buffer";
 import { globalCache } from "./global-cache";

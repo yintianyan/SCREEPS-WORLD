@@ -1,11 +1,4 @@
-/**
- * 【G-H】DecisionTrace — 决策追踪基础结构（先建后用）。
- *
- * 目标：让「AI 为什么做了这个决定」可追因。五层（goal/policy/intent/demand/task）
- * 与 action 层各持一条 heap ring（volatile——trace 是调试设施，非持久真相；
- * 持久真相走 EventLog 台账）。未来 Goal/Intent 系统落地时按层写入；
- * 本阶段仅提供结构与 API + 单测，不接线业务。
- */
+/** DecisionTrace — 决策追踪基础结构（先建后用）。 */
 
 import { globalCache } from "./global-cache";
 

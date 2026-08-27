@@ -1,20 +1,4 @@
-/**
- * Route Suspension / Recovery — A4.3 Phase 2：路由暂停与恢复。
- *
- * 合同锚点：A4.3 Architecture Audit §10 #32。
- *
- * 设计意图：
- *   长期不经济 → SUSPENDED；条件恢复 → RESUME。
- *
- *   暂停条件：连续 N 次评估 ratio < maintainThreshold
- *   恢复条件：连续 M 次评估 ratio ≥ maintainThreshold 或外部触发
- *
- *   与 route-efficiency.ts（A4.0）的关系：
- *   - route-efficiency.ts 计算 Delivered/Cost 比率
- *   - route-suspension.ts 基于比率历史决定暂停/恢复
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Route Suspension / Recovery */
 
 import type { Route, RouteStatus } from "./route";
 
@@ -59,18 +43,18 @@ export interface SuspensionEvaluation {
 
 /**
  * 评估路由是否应该暂停或恢复。
- *
+
  * 输入：路由的效率历史（最近 N 次评估的 ratio 值）。
- *
+
  * 算法：
  *   1. 如果路由已 suspended：
  *      - 连续 resumeAfter 次 ratio ≥ maintainThreshold → resume
  *   2. 如果路由已 active：
  *      - 连续 suspendAfter 次 ratio < maintainThreshold → suspend
  *   3. 否则维持现状
- *
+
  * 纯函数。
- *
+
  * @param route 当前路由
  * @param efficiencyHistory 效率历史（最近 N 次评估的 ratio 值，按时间正序）
  * @param config 暂停参数

@@ -1,7 +1,4 @@
-/**
- * Withdraw actions — 从结构取能。命名约定：Richest*=从最满 container 取；Closest*=从最近取；
- * Controller*=从 controller 旁结构取（站桩升级）；Storage*=从 storage 取；Capped=限量取（避免 ERR_NOT_ENOUGH_RESOURCES）。
- */
+/** Withdraw actions — 从结构取能。命名约定：Richest*=从最满 container 取；Closest*=从最近取； */
 import type { ActionCandidate, ActionContext } from "../action-types";
 import { runAction } from "./helpers";
 import { globalCache } from "../../../kernel/global-cache";

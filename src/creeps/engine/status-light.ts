@@ -1,13 +1,4 @@
-/**
- * 状态指示灯 — creep 头顶红/黄/绿灯，可视化诊断工作状态（零侵入，不读 action 内部）。
- *   work → 绿（工作）/ acquire → 黄（取能途中）/ idle → 红（空闲）/ flee → 橙（逃跑，异常态）
- * 用 RoomVisual.circle 而非 say：不占 say 通道，且每 tick 自动清除无需清理。
- * CPU（[Facts] 官方 RoomVisual 纯客户端渲染）：每次约 0.001-0.005，默认关闭
- * （CONFIG.debug.statusLight = false），10 房 × 30 creep ≈ 0.3-1.5 CPU/tick 可接受。
- * 插入点：role-runner 的 run() 末端（try/finally），所有 return 后统一绘制。
- * 精度边界（[Experience]）：work 下 creep 可能仍在移动——精确区分需侵入 execute 返回状态，
- * 违背可插拔原则，当前不做（P2 级）。
- */
+/** 状态指示灯 — creep 头顶红/黄/绿灯，可视化诊断工作状态（零侵入，不读 action 内部）。 */
 import { CONFIG } from "../../config";
 
 /** CreepMode → 颜色映射。未匹配的 mode 回退到 idle 的红色。 */

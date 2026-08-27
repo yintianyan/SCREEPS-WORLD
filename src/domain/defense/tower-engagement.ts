@@ -1,14 +1,4 @@
-/**
- * Tower 交战盈亏判定 — 纯函数。
- * 背景：塔见威胁就全弹开火有经济漏洞 — 塔伤随距离衰减（≤5 格满伤 600，≥20 格仅
- * 150），带足 HEAL 的编队可站远距把伤害全奶回去（heal-tank 骗塔战术）；官方防御
- * 文档明示 well-secured team 能 point-blank 扛多塔 — 不算账就开火等于送能量。
- * 开火当且仅当全塔净伤 > 编队合计治疗；打不动则蓄能，例外：敌人突入核心区
- * （强制交战半径）— 结构损失比能量贵，照打。治疗估算取悲观假设（HEAL 满效率
- * 12/部件），不计 boost 倍率 — boost 编队识别属情报层职责。引擎常量
- * [Facts: docs.screeps.com/api 常量表]：TOWER_POWER_ATTACK=600, TOWER_OPTIMAL_RANGE=5,
- * TOWER_FALLOFF_RANGE=20, TOWER_FALLOFF=0.75, HEAL_POWER=12。
- */
+/** Tower 交战盈亏判定 — 纯函数。 */
 
 /** 塔满伤（range ≤ TOWER_OPTIMAL_RANGE）。 */
 const TOWER_POWER_ATTACK = 600;

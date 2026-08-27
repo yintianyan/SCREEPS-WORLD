@@ -1,16 +1,4 @@
-/**
- * Tuning Engine 集成测试 — 测试 run() 完整链路。
- *
- * 覆盖系统层集成（domain 纯函数已在 tuning.test.ts 中覆盖）：
- *   - conserve/recovery tier 跳过
- *   - 数据不足跳过
- *   - 健康经济 + container 满 → hauler.maxCount 增加
- *   - 健康经济 + buildQueue 空 → builder.maxCount 减少
- *   - 多房间 lastEval 按房间独立保存
- *   - 经济不稳定（crisisRatio 过高）跳过并记录原因
- *   - lastTuned 更新为当前 tick
- *   - 冷却期阻止重复调整
- */
+/** Tuning Engine 集成测试 — 测试 run() 完整链路。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tuningEngineSystem } from "../../../src/systems/tuning-engine";
 import { CONFIG } from "../../../src/config";

@@ -1,25 +1,4 @@
-/**
- * Remote Operation Budget — A4.1 Phase 2：远矿运营预算追踪。
- *
- * 合同锚点：A4.1 Architecture Audit §4.2（Budget 字段）。
- *
- * 设计意图：
- *   每个远矿 Operation 拥有独立的预算上限，防止亏损 Operation 无限消耗资源。
- *
- *   预算消耗来源：
- *   - Spawn 成本（harvester + hauler + reserver + defender body 摊销）
- *   - 运输成本（hauler 燃料）
- *   - 基建成本（container 建造 + 维修）
- *   - 风险成本（creep 死亡损失 + defender 持续成本）
- *
- *   预算耗尽 → Operation 进入 failed 或 blocked（由 Economic Health 决定）。
- *
- *   与 remote-mining-op.ts 的 RemoteOperationBudget 的关系：
- *   - remote-mining-op.ts 定义了 Operation 上的 budget 字段（limit + consumed）
- *   - 本模块提供预算策略参数和超支检测逻辑
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Remote Operation Budget */
 
 // ─── 预算策略 ──────────────────────────────────────────
 
@@ -187,11 +166,11 @@ export function computeExhaustionCooldown(
 
 /**
  * 根据策略分配预算上限。
- *
+
  * 可根据 sourceCount / expectedYield / riskLevel 动态调整预算：
  * - 高产出 → 更高预算（值得更多投资）
  * - 高风险 → 更低预算（限制潜在损失）
- *
+
  * 纯函数。
  */
 export function allocateBudget(

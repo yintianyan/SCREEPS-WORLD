@@ -1,12 +1,4 @@
-/**
- * resolveUnderSiege — 受袭姿态判定测试（R3 战时闭环 / 帝国姿态 → 防御投资升档）。
- *
- * 覆盖：
- *   - 本房真实受袭记忆（lastHostileAt 距今 < siegeMemoryTicks）恒触发升档，与姿态无关
- *   - 无局部威胁 + war 姿态 → 升档（全局备战）
- *   - 无局部威胁 + develop/expand/fortify/undefined → 不升档（fortify 不全局烧墙血）
- *   - 局部威胁已过期 + war → 仍升档；+ fortify → 不升档
- */
+/** resolveUnderSiege — 受袭姿态判定测试（R3 战时闭环 / 帝国姿态 → 防御投资升档）。 */
 import { describe, expect, it } from "vitest";
 import { resolveUnderSiege } from "../../../src/domain/defense/fortification";
 

@@ -1,11 +1,4 @@
-/**
- * Tier A 收尾修复回归（Batch 5 — AS-1 / TU-1）。
- *
- * AS-1：assignment 续约必须校验「任务仍在本 tick 池中」— 僵尸 assignment
- *（container 抽空后任务出池但对象还在）不得无限续约。
- * TU-1：tuning 的 upgrader 降编不得把「storage 未解锁（RCL2-3）」
- * 误判为「storage 枯竭」。
- */
+/** Tier A 收尾修复回归（Batch 5 — AS-1 / TU-1）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { getAssignment } from "../../../src/creeps/support/assignment-adapter";
 import { TaskPool } from "../../../src/domain/assignment/task-pool";

@@ -1,22 +1,4 @@
-/**
- * Network Health — A3.1 Empire Resource Network 健康度
- *（A3.1 Architecture Review §4.6）。
- *
- * 四档健康度：
- *   - HEALTHY: 供给充足，无未满足需求
- *   - CONSTRAINED: 供给紧张，部分需求未满足但可管理
- *   - DEGRADED: 供给严重不足，多房需求未满足
- *   - CRITICAL: 网络崩溃——大量失败 Operation + 大量未满足需求
- *
- * 判断基于：
- *   - Supply vs Demand 缺口
- *   - 未满足需求数
- *   - 失败 Operation 数
- *   - Reservation 压力
- *   - Critical 房间数
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Network Health */
 
 import type { NetworkSnapshot } from "./network-snapshot";
 import type { OperationContext } from "./agenda-item";
@@ -54,11 +36,11 @@ export interface NetworkHealthResult {
 
 /**
  * 计算 Network Health。
- *
+
  * @param snapshot 网络快照
  * @param operations 全部 Operation 列表（含终态）
  * @param tick 当前 tick
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function computeNetworkHealth(

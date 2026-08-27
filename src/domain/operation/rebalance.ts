@@ -1,25 +1,4 @@
-/**
- * Network Rebalance — A3.1 事件驱动增量重平衡
- *（DATA_FLOW §1 红队 A1 + A3.1 Architecture Review §4.5）。
- *
- * 不是每 tick 全量重算，而是：
- *   1. 事件触发 dirty mark
- *   2. debounce（合并短时间内的多个事件）
- *   3. 只重算受影响 scope
- *
- * 触发事件：
- *   - New Demand（新 deficit 房间出现）
- *   - New Supply（新 surplus 房间出现）
- *   - Operation Failure（carrier 死亡 / 路由不可达）
- *   - Reservation Released（Reservation 过期或被取消）
- *   - Room Economic Health Changed（房间状态变化）
- *   - Priority Changed（需求优先级变化）
- *   - Deadline Approaching（截止时间临近）
- *   - Target Fulfilled（目标已满足）
- *   - Source Capacity Lost（源房丧失生产能力）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Network Rebalance */
 
 /** Rebalance 触发事件类型。 */
 export type RebalanceTrigger =
@@ -65,7 +44,7 @@ const MIN_REBALANCE_INTERVAL = 200;
 
 /**
  * Rebalance Manager — 纯函数状态机。
- *
+
  * 不持久化状态——状态由调用方（系统侧）持有并注入。
  */
 export class RebalanceState {
@@ -101,15 +80,15 @@ export class RebalanceState {
 
 /**
  * 判定是否应该触发 rebalance。
- *
+
  * 逻辑：
  *   1. 有待处理事件
  *   2. 距上次 rebalance 超过 MIN_REBALANCE_INTERVAL
  *   3. 最早的事件已超过 DEBOUNCE_TICKS
- *
+
  * @param state rebalance 状态
  * @param tick 当前 tick
- *
+
  * 纯函数。
  */
 export function decideRebalance(
@@ -158,7 +137,7 @@ export function decideRebalance(
 
 /**
  * 标记 rebalance 完成（清空事件缓冲 + 更新 lastRebalanceTick）。
- *
+
  * 纯函数 — 修改 state 对象（调用方持有）。
  */
 export function markRebalanced(state: RebalanceState, tick: number): void {

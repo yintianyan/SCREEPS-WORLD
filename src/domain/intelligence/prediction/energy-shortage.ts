@@ -1,29 +1,4 @@
-/**
- * A6.3.2 Energy Shortage Prediction Model — 能量短缺预测。
- *
- * 职责：
- *   - 基于时间序列趋势分析能量收支平衡
- *   - 预测能量短缺何时发生及其严重程度
- *   - 支持 5 种状态：STABLE / IMPROVING / DEGRADING / SHORTAGE_IMMINENT / SHORTAGE_PREDICTED
- *   - 数据不足时返回 INSUFFICIENT_DATA
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * 所有运行时数据由调用方注入。
- *
- * PRED-001: Shadow-Only — 不执行 Game API，不修改运行时状态。
- * PRED-002: 不进入 tick critical path — 由系统层 P3 cadence 调用。
- * PRED-003: 完全 deterministic — 禁止 Math.random / Date.now / 无序迭代。
- * PRED-004: 每条 Prediction 必须有明确 horizon。
- * PRED-005: 数据不足返回 INSUFFICIENT_DATA，不伪造预测。
- * PRED-006: Evidence 完整可追溯。
- * PRED-007: 使用 ContextSignature + Regime compatibility。
- * PRED-008: 支持生命周期 PREDICTED → CONFIRMED / FAILED / EXPIRED。
- * PRED-009: 不产出 Recommendation。
- * PRED-010: 不自建采样通道，只消费已有 TimeSeries。
- *
- * 禁止简化为 `if energy < X => shortage`。
- * 必须基于时间序列趋势和上下文。
- */
+/** A6.3.2 Energy Shortage Prediction Model — 能量短缺预测。 */
 
 import type {
   Prediction,
@@ -62,7 +37,7 @@ import {
 
 /**
  * 能量短缺预测状态分类。
- *
+
  * 描述能量趋势的定性判断：
  *   STABLE — 净流在 0 附近，储备稳定
  *   IMPROVING — 净流上升，储备增加
@@ -79,7 +54,7 @@ export type EnergyShortageStatus =
 
 /**
  * Energy Shortage Prediction 输入。
- *
+
  * 所有数据由系统层从 globalCache 注入，domain 不直接读 Game/Memory。
  */
 export interface EnergyShortageInput {
@@ -160,17 +135,17 @@ export const ENERGY_SUFFICIENT_SAMPLES = 10;
 
 /**
  * 预测能量短缺。
- *
+
  * 方法：trend-extrapolation
  *   1. 对净流历史做线性回归 → 趋势方向
  *   2. 对储备历史做线性回归 → 趋势方向
  *   3. 如果储备在下降，外推何时到达 shortageThreshold
  *   4. 计算短缺 severity 和 confidence
  *   5. 检查 Regime compatibility → 调整 confidence
- *
+
  * PRED-005：数据不足时返回 INSUFFICIENT_DATA。
  * PRED-003：完全确定性。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function predictEnergyShortage(input: EnergyShortageInput): PredictionResult {
@@ -251,7 +226,7 @@ export function predictEnergyShortage(input: EnergyShortageInput): PredictionRes
 
 /**
  * 分析能量时间序列。
- *
+
  * 纯函数 — 确定性。
  */
 function analyzeEnergyTimeSeries(
@@ -323,10 +298,10 @@ function deriveTrend(
 
 /**
  * 估计何时进入 shortage。
- *
+
  * 基于储备回归斜率外推。
  * 如果斜率 ≥ 0（储备不下降）→ null（不会进入 shortage）。
- *
+
  * 注意：当前 reserve <= threshold 是 CURRENT_FACT，不是未来预测。
  * 只有当趋势也在下降（或无趋势数据）时，才认为当前已进入 shortage。
  * 如果趋势在改善（slope > 0），即使当前低于阈值，也不会外推出未来 shortage。
@@ -366,12 +341,12 @@ function estimateShortageTick(
 
 /**
  * 计算短缺严重程度 (0-1)。
- *
+
  * severity 基于趋势外推结果，不是当前快照：
  *   - 有 estimatedShortageTick → 按时间距离分级
  *   - 无 estimatedShortageTick（趋势不在恶化）→ severity = 0
  *   - 当前已低于阈值且趋势也在下降 → BOUNDARY_OVERRIDE，severity 加重
- *
+
  * 禁止：currentReserve <= threshold 直接产生高 severity 而无视趋势。
  */
 function computeSeverity(
@@ -414,13 +389,13 @@ function computeSeverity(
 
 /**
  * 确定能量短缺状态。
- *
+
  * 判定优先级：
  *   1. PROJECTED：estimatedShortageTick > currentTick → SHORTAGE_IMMINENT / SHORTAGE_PREDICTED
  *   2. TREND：reserveTrend / netFlowTrend → DEGRADING / IMPROVING
  *   3. BOUNDARY_OVERRIDE：当前已低于阈值且趋势也在下降 → SHORTAGE_PREDICTED
  *   4. BOUNDARY_OVERRIDE：当前已低于阈值但趋势在改善/平稳 → IMPROVING / STABLE
- *
+
  * 禁止：currentReserve <= threshold 直接返回 SHORTAGE_PREDICTED 而无视趋势。
  */
 function determineEnergyStatus(
@@ -470,7 +445,7 @@ function determineEnergyStatus(
 
 /**
  * 计算基础置信度（不含 Regime 调整）。
- *
+
  * 因素：
  *   - 样本数（越多越高）
  *   - R² 拟合度（越高越高）
@@ -514,7 +489,7 @@ function computeEnergyConfidence(
 
 /**
  * 计算预测窗口。
- *
+
  * - SHORTAGE_IMMINENT → 200 tick
  * - SHORTAGE_PREDICTED → 1000 tick
  * - DEGRADING → 1000 tick（观察趋势）
@@ -547,7 +522,7 @@ function computeEnergyHorizon(
 
 /**
  * 计算预测值。
- *
+
  * value 的含义：
  *   - 预测窗口结束时的储备值
  *   - 如果 < shortageThreshold → 表示短缺程度
@@ -670,7 +645,7 @@ function buildEnergyEvidence(
 
 /**
  * 获取 Energy Shortage Prediction 的分析摘要。
- *
+
  * 用于可观测性 — 不产出 Prediction，只返回分析结果。
  * 纯函数。
  */

@@ -1,18 +1,4 @@
-/**
- * Phase 37 Final Closure — Temporal Leakage 反事实测试
- *
- * 验证 Decision→Outcome 全链路的时间正确性：
- *   T1: future outcome 不得进入 past decision
- *   T2: overlapping expansion — no cross-pollution
- *   T3: same-target repeated expansion — no temporal leakage
- *   T4: delayed outcome — correct UNRESOLVED behavior
- *   T5: timeout outcome — correct classification
- *   T6: aborted outcome — correct classification
- *   T7: measurement window boundary — not ready before delay
- *   T8: measurement window boundary — ready at exact delay
- *   T9: outcome measurementTick never exceeds currentTick
- *   T10: attribution delay is non-negative
- */
+/** Phase 37 Final Closure — Temporal Leakage 反事实测试 */
 import { describe, it, expect } from "vitest";
 import {
   type OutcomeCollectionInput,

@@ -1,11 +1,4 @@
-/**
- * Lab System — P1 系统，每 tick 执行 lab 反应和 boost。
- * 职责：收集 lab/terminal/storage 化合物库存 → 规划反应链（从 RoomMemory 目标产物
- * 反向推导）→ 分配 lab 角色（input1/input2/output/boost）→ 执行反应与 boost。
- * 约束：RCL6+ 才有 lab（3 个），RCL7 有 6 个，RCL8 有 10 个；每 tick 每对 lab 只能
- * 反应一次（cooldown）；boost 优先于反应（即时战力提升）；反应链状态持久化在
- * RoomMemory.industry。
- */
+/** Lab System */
 import type { RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import type { Compound, LabAssignment, LabDemandTable, LabLoadDemand, LabPlan, LabUnloadDemand, ReactionPlan } from "../domain/industry/types";
 import { BOOST_EFFECTS, BOOST_EFFECT_PART } from "../domain/industry/types";

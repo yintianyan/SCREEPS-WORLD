@@ -6,7 +6,7 @@
 > S1–S10 / 纯函数律 / hivemind mock 先例 / TI featureFlags / Quorum CI 裁剪）、
 > research/21（指标共用与发布门槛）、research/24 §10.3（防线→场景绑定）、
 > research/27（A0–A5 门槛）；场景对齐 [ARCHITECTURE_VALIDATION.md](ARCHITECTURE_VALIDATION.md)
-> Scenario A–J，合并门槛对齐 AGENTS.md 质量门槛。
+> Scenario A–J，合并门槛对齐 AGENT.md 质量门槛。
 
 ## 1. 八类测试层级合同
 
@@ -30,7 +30,7 @@ L6 归 §5 canary 发布；L2–L5 展开为下表八类。每类**能证明 / �
 
 | 层 | 工具与入口（package.json scripts 为唯一口径） | 先例与义务 |
 | --- | --- | --- |
-| 静态 | `npm run typecheck` / `npm run build`（rollup） | AGENTS.md 质量门槛 |
+| 静态 | `npm run typecheck` / `npm run build`（rollup） | AGENT.md 质量门槛 |
 | Unit | Vitest `tests/unit/`（`npm run test:unit`），目录镜像 src 子域（kernel/spawn/logistics/…/architecture） | 纯函数律；迁移链逐步测（research/18 §10.3） |
 | Integration | Vitest `tests/integration/`（`npm run test:integration`）＋ fake adapter | 唯一写者断言；注册表查重与钩子签名校验（红队 A4） |
 | Simulation / Scenario / Empire / Failure / PvP | 私服 e2e `tests/e2e/`（`npm run test:e2e`；冒烟 `test:e2e:smoke`），screeps-server-mockup 驱动 | hivemind mock 先例；场景脚本必须进矩阵（§6），禁止场外手写脚本不登记（research/28 §11） |
@@ -51,7 +51,7 @@ L6 归 §5 canary 发布；L2–L5 展开为下表八类。每类**能证明 / �
 
 | 条款 | 内容 |
 | --- | --- |
-| 合并门槛 | `npm run typecheck`、`npm test`、`npm run build` 全绿＝合并门槛（AGENTS.md；与 scripts 清单一致：typecheck / test / test:unit / test:integration / build / watch） |
+| 合并门槛 | `npm run typecheck`、`npm test`、`npm run build` 全绿＝合并门槛（AGENT.md；与 scripts 清单一致：typecheck / test / test:unit / test:integration / build / watch） |
 | PR 编排 | PR → 静态＋Unit＋Integration（分钟级）→ 私服冒烟（场景矩阵子集）→ 放行 → 官服 canary（§5）→ 全量 |
 | 架构测试 | 循环依赖静态检查、边界 lint、依赖图 diff、组合根运行时断言全部并入门槛链（DEPENDENCY_GRAPH §4 六项义务） |
 | 覆盖率 | 覆盖率只是辅助信号——验收以场景矩阵＋指标门槛为准（覆盖率崇拜防线，research/28 §8） |
@@ -95,7 +95,7 @@ research/24 §10.3 新场景入库流程）。
 
 ## 7. 一致性声明
 
-本文件与 AGENTS.md 质量门槛、[ARCHITECTURE_VALIDATION.md](ARCHITECTURE_VALIDATION.md)
+本文件与 AGENT.md 质量门槛、[ARCHITECTURE_VALIDATION.md](ARCHITECTURE_VALIDATION.md)
 （Scenario A–J ↔ §1 八类）、[FAILURE_RECOVERY_ARCHITECTURE.md](FAILURE_RECOVERY_ARCHITECTURE.md)
 （§2 九类故障 ↔ §6 矩阵）、[EMPIRE_MVP.md](EMPIRE_MVP.md) §4（MVP 验收场景）、
 [IMPLEMENTATION_PHASES.md](IMPLEMENTATION_PHASES.md)（各 Phase 验收门槛 ↔ §3 门槛

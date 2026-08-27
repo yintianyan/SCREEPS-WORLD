@@ -1,21 +1,4 @@
-/**
- * A6.3.1 ContextSignature & Regime Compatibility — 预测上下文签名与体制兼容性。
- *
- * 职责：
- *   - 为预测生成确定性的上下文签名（ContextSignature）
- *   - 比较历史预测的上下文与当前上下文是否兼容（Regime Compatibility）
- *   - 不匹配时降低置信度（PRED-007）
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * 所有运行时数据由调用方注入。
- *
- * Deterministic Replay：
- *   同一上下文输入 → 相同 ContextSignature。
- *   禁止 Math.random() / Date.now() / 无序迭代 / 浮点误差。
- *
- * Shadow-Only（PRED-001）：
- *   只做计算，不执行 Game API，不修改运行时状态。
- */
+/** A6.3.1 ContextSignature & Regime Compatibility — 预测上下文签名与体制兼容性。 */
 
 // ═══════════════════════════════════════════════════════════
 // §1. Regime Types
@@ -23,7 +6,7 @@
 
 /**
  * 预测上下文 — 生成 ContextSignature 所需的输入。
- *
+
  * 编码影响预测模型有效性的宏观状态。
  */
 export interface PredictionContext {
@@ -61,10 +44,10 @@ export interface RegimeCompatibility {
 
 /**
  * 为预测构建稳定的上下文签名（ContextSignature）。
- *
+
  * 编码：posture-watchdogTier-roomRange-rclRange-threat
  * 不同姿态/看门狗档位/规模/威胁等级下的预测不可混合。
- *
+
  * 确定性：相同输入 → 相同签名。
  */
 export function buildPredictionContextSignature(ctx: PredictionContext): string {
@@ -76,7 +59,7 @@ export function buildPredictionContextSignature(ctx: PredictionContext): string 
 
 /**
  * 获取完整的 PredictionContext（供调用方构建）。
- *
+
  * 这是一个便利函数，调用方传入原始参数，返回结构化 PredictionContext。
  */
 export function makePredictionContext(input: {
@@ -101,15 +84,15 @@ export function makePredictionContext(input: {
 
 /**
  * 检查两个 PredictionContext 之间的体制兼容性。
- *
+
  * 比较维度：posture, watchdogTier, room count range, rcl range, threat level。
  * 不匹配维度越多 → severity 越高 → confidenceMultiplier 越低。
- *
+
  * PRED-007 守卫：
  *   - 不匹配时 confidenceMultiplier = 0.5（降权，不拒绝）
  *   - 完全匹配时 confidenceMultiplier = 1.0
  *   - 严重不匹配（≥3 维度）时 confidenceMultiplier = 0.3
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function checkRegimeCompatibility(
@@ -170,7 +153,7 @@ export function checkRegimeCompatibility(
 
 /**
  * 应用 Regime 兼容性乘数到置信度。
- *
+
  * PRED-007：不匹配时降权，不拒绝。
  * 确定性：相同输入 → 相同输出。
  */

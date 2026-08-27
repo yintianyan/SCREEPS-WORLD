@@ -1,21 +1,4 @@
-/**
- * v25 → v26 迁移独立测试（R3 战时闭环 / KernelMemory.warPlan 建档）。
- *
- * 迁移语义：新增 KernelMemory.warPlan（帝国战争计划）可选字段，由 war-planner 写入。
- * 迁移只做「建档 + 畸形自愈」，不写字段值。
- *
- * 自愈规则：
- *   - warPlan 非对象 → 删除整个字段
- *   - targetRoom / sponsor 非字符串 → 删除整个字段
- *   - squadSize 非数字 → 删除整个字段
- *   （删除后 war-planner 下 tick 重建 — 姿态仍在则即刻恢复）
- *
- * 覆盖：
- *   - 空 Memory（无 warPlan）不报错
- *   - 合法 warPlan 保留
- *   - 畸形 warPlan（非对象 / 缺字段 / 类型错误）→ 清除
- *   - 幂等：重复执行不产生副作用
- */
+/** v25 → v26 迁移独立测试（R3 战时闭环 / KernelMemory.warPlan 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

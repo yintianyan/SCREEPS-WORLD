@@ -1,17 +1,4 @@
-/**
- * A6.3.1 Architecture Guards — PRED-XXX 守卫验证函数。
- *
- * 职责：
- *   - 提供 PRED-001 ~ PRED-010 的运行时验证函数
- *   - 供系统层调用方在关键路径检查守卫合规性
- *   - 全部为纯函数，不引用 Game/Memory/Runtime
- *
- * 使用方式：
- *   系统层在 prediction-system 的 run 中调用这些守卫，
- *   违规时记日志但不中断执行（safeRun 隔离）。
- *
- * PRED-XXX 守卫来源：A6_3_PREDICTION_CONTRACT.md §一。
- */
+/**  */
 
 import type { Prediction, PredictionResult, PredictionWindow } from "./types";
 import { INSUFFICIENT_DATA, NO_PREDICTION, isValidPrediction } from "./types";
@@ -38,10 +25,10 @@ export interface GuardResult {
 
 /**
  * PRED-001 守卫：验证 Prediction 只写 __predictionCache。
- *
+
  * 检查 Prediction 对象不包含任何 Game API 引用。
  * 这是一个静态检查 — 验证类型层面不引用 Game。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  */
 export function guardShadowOnly(prediction: Prediction): GuardResult {
@@ -68,13 +55,13 @@ export function guardShadowOnly(prediction: Prediction): GuardResult {
 
 /**
  * PRED-003 守卫：验证 Prediction 不包含非确定性来源。
- *
+
  * 检查：
  *   - id 不包含 random
  *   - value 是有限数
  *   - confidence 是有限数
  *   - 浮点值已截断（toFixed 验证）
- *
+
  * 纯函数。
  */
 export function guardDeterminism(prediction: Prediction): GuardResult {
@@ -115,14 +102,14 @@ export const MIN_PREDICTION_DURATION = 50;
 
 /**
  * PRED-004 守卫：验证 Prediction 必须有有效的时间窗口。
- *
+
  * 检查：
  *   - window 必须有值
  *   - duration ≥ 50 tick
  *   - duration ≤ 5000 tick
  *   - endTick > startTick
  *   - duration === endTick - startTick
- *
+
  * 纯函数。
  */
 export function guardHorizon(window: PredictionWindow): GuardResult {
@@ -177,13 +164,13 @@ export const LOW_CONFIDENCE_SAMPLE_THRESHOLD = 10;
 
 /**
  * PRED-005 守卫：验证置信度合规。
- *
+
  * 检查：
  *   - confidence ∈ [0, 1]
  *   - confidence = 0 时不产出（应返回 INSUFFICIENT_DATA）
  *   - 样本 < 3 时 confidence 必须为 0
  *   - 样本 < 10 时 confidence ≤ 0.3
- *
+
  * 纯函数。
  */
 export function guardConfidence(
@@ -239,12 +226,12 @@ export function guardConfidence(
 
 /**
  * PRED-006 守卫：验证 Prediction 必须有证据链。
- *
+
  * 检查：
  *   - evidence.sources 非空（至少 1 条）
  *   - evidence.modelParams 非空
  *   - evidence.sampleRange 有效
- *
+
  * 纯函数。
  */
 export function guardEvidence(prediction: Prediction): GuardResult {
@@ -286,11 +273,11 @@ export function guardEvidence(prediction: Prediction): GuardResult {
 
 /**
  * PRED-007 守卫：验证 Prediction 必须有 contextSignature。
- *
+
  * 检查：
  *   - contextSignature 非空
  *   - context 非空（包含 posture/watchdogTier/roomCount/maxRcl/threatLevel）
- *
+
  * 纯函数。
  */
 export function guardRegime(prediction: Prediction): GuardResult {
@@ -325,12 +312,12 @@ export function guardRegime(prediction: Prediction): GuardResult {
 
 /**
  * PRED-008 守卫：验证 Prediction lifecycle 合规。
- *
+
  * 检查：
  *   - status 是合法值
  *   - active → 终态只允许 fulfilled/expired/invalidated
  *   - 终态不可回退到 active
- *
+
  * 纯函数。
  */
 export function guardLifecycle(prediction: Prediction): GuardResult {
@@ -351,10 +338,10 @@ export function guardLifecycle(prediction: Prediction): GuardResult {
 
 /**
  * PRED-010 守卫：验证 TimeSeries 不直接引用 Game/Memory。
- *
+
  * 这是一个结构性检查 — 验证 TimeSeries 的采样点
  * 只包含 tick + value，不包含 Game 对象引用。
- *
+
  * 纯函数。
  */
 export function guardNoDirectSampling<T>(ts: TimeSeries<T>): GuardResult {
@@ -384,7 +371,7 @@ export function guardNoDirectSampling<T>(ts: TimeSeries<T>): GuardResult {
 
 /**
  * 对一条 Prediction 执行全部守卫检查。
- *
+
  * 返回所有违规项（通过时为空数组）。
  * 纯函数。
  */
@@ -406,7 +393,7 @@ export function validatePrediction(prediction: Prediction): GuardResult[] {
 
 /**
  * 对 Ring Buffer 中的所有 Prediction 执行守卫检查。
- *
+
  * 返回所有违规项。
  * 纯函数。
  */

@@ -1,9 +1,4 @@
-/**
- * Harvester 角色场景测试。
- *
- * 覆盖：站桩优先级链（link > container > container site > fillTarget > emptiest > build > upgrade）、
- * flee 与恢复、source 拥挤迁移、assignment 过期重分配、source 耗尽。
- */
+/** Harvester 角色场景测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { harvesterRole } from "../../../src/creeps/roles/harvester";
 import {

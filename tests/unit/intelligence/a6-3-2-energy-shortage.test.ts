@@ -1,36 +1,4 @@
-/**
- * A6.3.2 Energy Shortage Prediction — 单元测试。
- *
- * 测试矩阵：
- *   ENERGY-001: 正常稳定趋势 → STABLE
- *   ENERGY-002: 上升趋势 → IMPROVING
- *   ENERGY-003: 下降趋势 → DEGRADING
- *   ENERGY-004: 稳定趋势（波动小） → STABLE
- *   ENERGY-005: 数据不足 → INSUFFICIENT_DATA
- *   ENERGY-006: 边界值（储备恰好等于阈值）
- *   ENERGY-007: 极端值（储备为 0）
- *   ENERGY-008: Regime compatible → 正常 confidence
- *   ENERGY-009: Regime mismatch → confidence 降级
- *   ENERGY-010: 外部因素（外部能量注入）
- *   ENERGY-011: 确定性 Replay（1000 次 hash 一致）
- *   ENERGY-012: Evidence 完整性
- *   ENERGY-013: Horizon 存在
- *   ENERGY-014: Lifecycle 完整（active → fulfilled/expired）
- *   ENERGY-015: SHORTAGE_IMMINENT 状态
- *
- * Architecture Guards:
- *   AG-E-001: 不调用 Game API
- *   AG-E-002: 不修改 Runtime State
- *   AG-E-003: 不修改 Strategy
- *   AG-E-004: 不修改 Spawn
- *   AG-E-005: 不修改 Logistics
- *   AG-E-006: 不修改 Military
- *   AG-E-007: 不修改 Recovery
- *   AG-E-008: 不创建新 Sampling Loop
- *   AG-E-009: 不创建第二套 Metrics
- *   AG-E-010: 不创建第二套 Outcome
- *   AG-E-011: 不创建 Recommendation
- */
+/** A6.3.2 Energy Shortage Prediction — 单元测试。 */
 import { describe, it, expect } from "vitest";
 import {
   type EnergyShortageInput,

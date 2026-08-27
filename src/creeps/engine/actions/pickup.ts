@@ -1,8 +1,4 @@
-/**
- * Pickup actions — 回收遗留能量（掉落堆/坟墓/废墟）。
- * 衰减事实（[Facts]）：掉落能量按 ceil(amount/1000)/tick 衰减；坟墓消失后转掉落堆继续衰减；
- * 废墟到期资源直接灭失；container 能量不衰减 — 因此大额遗留的回收优先级应高于 container 取货。
- */
+/** Pickup actions — 回收遗留能量（掉落堆/坟墓/废墟）。 */
 import type { ActionCandidate } from "../action-types";
 import { runCountedAction } from "./helpers";
 import { selectDroppedEnergy } from "../../support/targeting";

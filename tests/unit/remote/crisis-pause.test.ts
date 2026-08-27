@@ -1,20 +1,4 @@
-/**
- * P0-2 远矿 crisis 暂停测试 — 主房危机期停止远矿 spawn 推送。
- *
- * 实现思路：
- *   - 工厂函数 seed() 统一构造 homeRoom=W1N1 的 Memory/Game mock，按用例覆盖
- *     colonyState / remoteOps / intel / creeps / rooms。
- *   - remoteReqs() 读取 spawnQueue 中 remote* 请求，作为危机暂停的断言锚点。
- *   - 10 用例分三组：正常路径（3）/ 边界条件（4）/ 异常情况（3），覆盖
- *     recovery/bootstrap/defense 暂停、normal 推送无回归、维护逻辑不中断、
- *     现役 creep 不召回、状态不丢失、recovery→normal 恢复推送。
- *
- * 事故背景：旧逻辑 colonyState 只挡「新开点」（roomReadyForNewRemote）+
- * demand 内部挡 bootstrap/reserver，不挡现役 op 的 remoteHarvester/
- * remoteHauler 推送 — 主房 RCL5 危机期远矿持续与主房 harvester 竞争 spawn，
- * 吸血 54795 tick。修复：系统层在 evaluateRemoteDemand 调用前根据
- * colonyState 跳过整个 spawn 推送块，现役 creep 自然寿终不召回。
- */
+/** P0-2 远矿 crisis 暂停测试 — 主房危机期停止远矿 spawn 推送。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
 import { CONFIG } from "../../../src/config";

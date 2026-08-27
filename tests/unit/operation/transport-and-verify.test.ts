@@ -1,8 +1,4 @@
-/**
- * A3-006: Transport Planning（路由 + Carrier Body + ETA）
- * A3-007: Transfer Verification（Target 增量验证）
- * A3-019: Operation Failure（完整失败链路：检测→释放→归档）
- */
+/** A3-006: Transport Planning（路由 + Carrier Body + ETA） */
 import { describe, expect, it } from "vitest";
 import {
   planTransport,

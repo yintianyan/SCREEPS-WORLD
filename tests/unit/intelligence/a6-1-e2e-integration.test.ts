@@ -1,21 +1,4 @@
-/**
- * A6.1 E2E Integration — 端到端集成测试。
- *
- * 验证完整数据流：DecisionTrace → ExperienceCollector → Outcome → Attribution → ExperienceRecord
- *
- *   E2E-001: 完整流水线 — DecisionRecord → ExperienceRecord → FINALIZED
- *   E2E-002: 测量延迟门禁 — 未到期 Experience 不采集 Outcome
- *   E2E-003: 重复 DecisionRecord 不产生重复 Experience
- *   E2E-004: Ring Buffer 环形覆盖 — 超容量后最旧数据被覆盖
- *   E2E-005: GC 清理 — 过老记录被释放
- *   E2E-006: Stats 可观测性 — 统计数据正确
- *   E2E-007: Shadow-Only — 系统不修改任何全局状态
- *   E2E-008: 确定性 Replay — 相同输入产生相同 attributionHash
- *   E2E-009: 无法采集 Outcome 的 Experience → UNRESOLVED
- *   E2E-010: 多类型混合 — War + Recovery + Economic 并行处理
- *
- * 集成测试 — 模拟 globalCache + DecisionTrace Ring Buffer，不依赖 Game/Memory。
- */
+/** A6.1 E2E Integration — 端到端集成测试。 */
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   type ExperienceRecord,

@@ -1,9 +1,4 @@
-/**
- * UOEM STEP 1.2 — Core Model Implementation Tests.
- *
- * 覆盖：CF-UOEM-01~20 + I-UOEM-01~12 + edge cases
- * 纯 Domain 测试：不依赖 Game/Memory/Runtime。
- */
+/** UOEM STEP 1.2 — Core Model Implementation Tests. */
 
 import { describe, it, expect } from "vitest";
 import {

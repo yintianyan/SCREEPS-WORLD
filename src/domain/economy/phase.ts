@@ -294,12 +294,12 @@ export function phaseToColonyState(
 
 /**
  * 脆弱新房（claim-secure）护栏谓词 — 「先保级再发展」的前置护栏核心判定。
- *
+
  * 判定：RCL<4（无 storage 缓冲，能量池薄，一旦 builder 抢能量 controller 极易降级）
  * + controller 临近降级（ticksToDowngrade 低于进入阈值）。
  * RCL4+ 房间已有 storage 缓冲，降级由既有 emergency 豁免（upgraderGate /
  * dynamicStorageLimit 的 isEmergency）处理，不在此列。
- *
+
  * 用途：room-state 用 {@link computeClaimSecure} 带迟滞写入 roomMem.claimSecure；
  * construction-manager 据此抑制非必要建造、upgrader 据此放宽取能地板。
  */

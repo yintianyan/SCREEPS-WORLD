@@ -1,10 +1,4 @@
-/**
- * 迁移降版保护回归测试。
- *
- * 背景：runMigrations 只处理 current < code 的正向迁移；Memory.schemaVersion
- * 高于代码（部署回滚）时静默跳过 —— 旧代码跑在新 schema 上无任何告警，
- * 结构性字段错位只能表现为运行时怪象。修复：响亮告警一次/global reset。
- */
+/** 迁移降版保护回归测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { resetGlobals } from "../../role-helpers";

@@ -1,19 +1,4 @@
-/**
- * A6.5 Conflict Detection — 跨模型预测冲突检测。
- *
- * 职责：
- *   - 检测活跃预测之间的逻辑矛盾（logical conflict）
- *   - 检测同一目标多个预测的时间不一致（temporal conflict）
- *   - 检测预测上下文与当前 Regime 的不匹配（regime conflict）
- *
- * REL-011 (No Conflict Resolution)：
- *   只检测和标记冲突，不解决冲突。
- *   不自动选择最高 confidence 的预测。
- *   不降低任一预测的 confidence。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * REL-005 (Deterministic)：相同输入 → 相同输出。
- */
+/** A6.5 Conflict Detection — 跨模型预测冲突检测。 */
 
 import type { Prediction } from "../prediction/types";
 import type { PredictionContext } from "../prediction/context";
@@ -41,7 +26,7 @@ interface ConflictRule {
 
 /**
  * 已注册的逻辑冲突规则。
- *
+
  * 当两条活跃预测分别匹配 targetA/targetB 且 conditionA/conditionB 均满足时，
  * 标记为 logical conflict。
  */
@@ -90,9 +75,9 @@ const CONFLICT_RULES: ConflictRule[] = [
 
 /**
  * 检测活跃预测之间的冲突。
- *
+
  * 纯函数 — Shadow-Only（REL-011: 不解决冲突）。
- *
+
  * @param activePredictions - 当前活跃预测列表
  * @param currentContext - 当前 PredictionContext
  * @param currentTick - 当前 tick
@@ -233,7 +218,7 @@ function detectTemporalConflicts(
 
 /**
  * 检测 Regime 冲突 — 活跃预测的 contextSignature 与当前 Regime 不匹配。
- *
+
  * 复用 A6.3 checkRegimeCompatibility()。
  */
 function detectRegimeConflicts(

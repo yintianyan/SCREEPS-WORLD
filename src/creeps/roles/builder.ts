@@ -1,12 +1,4 @@
-/**
- * Builder — P2 建造角色。
- * 策略：gate 在 recovery 释放 assignment（不建造）；acquire 拾取掉落 > storage（RCL4+ 主力源）>
- * 最近非物流 container > harvest；work 新生 rampart 急救 > assignment site > 最近 site > fill >
- * critical repair > 升级。CPU 门禁通过 build.ts tier 选项实现，不内嵌 if-else。
- * RCL4+ 取能：storage 是主力源（hauler 持续填充，最可靠）；body [8W,4C,6M] 满载 200 能量 /
- * 8 WORK = 25 tick 建造；水位 <20% 收紧取能上限（200）、<10% 收紧（50），与 distributor 水位
- * 分级对齐，让 hauler 优先补给 spawn/extension；无 storage（RCL1-3）自动回退 container/harvest。
- */
+/** Builder */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionContext, RolePolicy } from "../engine/action-types";
 import { CONFIG } from "../../config";

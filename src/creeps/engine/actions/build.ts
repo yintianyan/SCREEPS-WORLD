@@ -1,8 +1,4 @@
-/**
- * Build actions — 建造 construction site。
- * 目标持久化：复用 creep.memory.targetId 缓存的 site，仅在目标消失或不再满足过滤时重选。
- * tier 门禁（可选）：recoverySkip（recovery 跳过）/ conserveCriticalOnly（conserve 仅建 critical）。
- */
+/** Build actions — 建造 construction site。 */
 import type { ActionContext, ActionCandidate } from "../action-types";
 import { runCountedAction } from "./helpers";
 import { getObjectById } from "../../support/obj-cache";

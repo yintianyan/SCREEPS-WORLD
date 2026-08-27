@@ -1,12 +1,4 @@
-/**
- * Boost 报到拦截测试。
- *
- * 覆盖：报到窗口门禁（TTL）、分配表命中/未命中、lab 消失容错、
- * 相邻时原地等待（返回 true 且不移动）。
- *
- * 断链背景：boost 决策（evaluateBoostRequests）与执行（lab.boostCreep）之间
- * 缺「creep 走到 lab 旁」的就位环节时，boostCreep 因不相邻永不生效。
- */
+/** Boost 报到拦截测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { interceptForBoost } from "../../../src/creeps/engine/boost-report";
 import { BOOST_REPORT_TTL } from "../../../src/domain/industry/boost";

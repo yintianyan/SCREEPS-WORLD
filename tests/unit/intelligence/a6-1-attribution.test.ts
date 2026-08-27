@@ -1,23 +1,4 @@
-/**
- * A6.1 Attribution Model — 单元测试。
- *
- * 验证 domain 层纯函数的核心能力：
- *   UT-028: collectAttribution — War 成功归因
- *   UT-029: collectAttribution — War 失败 + 敌方 boosted → INTEL_QUALITY
- *   UT-030: collectAttribution — War 止损归因 → ECONOMIC_GUARD
- *   UT-031: collectAttribution — Recovery 成功归因
- *   UT-032: collectAttribution — Economic 低置信度
- *   UT-033: collectAttribution — Logistics hauler deficit
- *   UT-034: collectAttribution — Spawn P0 → RESOURCE_AVAILABILITY
- *   UT-035: attributionHash — 确定性（1000 次相同 hash）
- *   UT-036: verifyAttributionDeterminism — 1000 次一致
- *   UT-037: collectAttribution — Evidence-based（每条归因有 evidence）
- *   UT-038: collectAttribution — Economic confidence ≤ 0.5
- *   UT-039: collectAttribution — War confidence ≥ 0.5
- *   UT-040: computeAttributionConfidence — 样本+方差+延迟
- *
- * 纯函数测试 — 不依赖 Game/Memory。
- */
+/** A6.1 Attribution Model — 单元测试。 */
 import { describe, it, expect } from "vitest";
 import {
   type AttributionInput,

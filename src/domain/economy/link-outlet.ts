@@ -1,9 +1,4 @@
-/**
- * Link 出口判定（纯函数，link 布局漏洞 #3）：source link 的 outlet = 存在可达的
- * controller/storage link；用于死资产检测（link-system）。与 harvest.ts 的
- * linkHasOutlet 语义不同（本函数是结构存在性拓扑判定；harvest 版检查 controller
- * link 的运行时能量需求，避免灌满 RCL8 停供的 link）— 不强行合并。
- */
+/** Link 出口判定（纯函数，link 布局漏洞 #3）：source link 的 outlet = 存在可达的 */
 import type { LinkInfo, LinkRole } from "./links";
 
 /**

@@ -1,20 +1,4 @@
-/**
- * A6.3.2 Prediction Evidence Builder — 预测证据链构建。
- *
- * 职责：
- *   - 为每条 Prediction 构建可追溯的 PredictionEvidence
- *   - 生成数据源引用字符串（source:range 格式）
- *   - 支持追踪到 TimeSeries 采样点和 Experience/Attribution
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * PRED-006：每条 Prediction 必须有完整证据链。
- * 证据链路：
- *   Prediction → Evidence → TimeSeries samples → Metric source
- *   Prediction → Evidence → Experience → Outcome → Attribution
- *
- * Deterministic Replay：相同输入 → 相同输出。
- */
+/** A6.3.2 Prediction Evidence Builder — 预测证据链构建。 */
 
 import type { PredictionEvidence } from "./types";
 import type { TimeSeries } from "./time-series";
@@ -26,9 +10,9 @@ import type { ExperienceRecord } from "../experience";
 
 /**
  * 构建 TimeSeries 数据源引用字符串。
- *
+
  * 格式："{sourceName}:{oldestTick}-{newestTick}({count})"
- *
+
  * 确定性：遍历前排序。
  */
 export function timeSeriesSourceRef(
@@ -46,7 +30,7 @@ export function timeSeriesSourceRef(
 
 /**
  * 构建 Experience 数据源引用字符串。
- *
+
  * 格式："exp:{experienceId}:{tick}"
  */
 export function experienceSourceRef(exp: ExperienceRecord): string {
@@ -55,7 +39,7 @@ export function experienceSourceRef(exp: ExperienceRecord): string {
 
 /**
  * 构建标量指标源引用字符串。
- *
+
  * 格式："metric:{metricName}:{value}"
  */
 export function metricSourceRef(metricName: string, value: number): string {
@@ -90,7 +74,7 @@ export interface EvidenceBuilderInput {
 
 /**
  * 构建 PredictionEvidence。
- *
+
  * 纯函数 — 返回新对象，不修改输入。
  * 确定性：相同输入 → 相同输出。
  */
@@ -148,7 +132,7 @@ export interface EvidenceTraceResult {
 
 /**
  * 追溯 PredictionEvidence 中的来源。
- *
+
  * PRED-006：验证证据链可追溯性。
  * 纯函数 — 不引用 Game/Memory。
  */
@@ -182,7 +166,7 @@ export function tracePredictionEvidence(evidence: PredictionEvidence): EvidenceT
 
 /**
  * 验证 PredictionEvidence 是否完整。
- *
+
  * PRED-006 守卫辅助：
  *   - sources 非空
  *   - modelParams 非空

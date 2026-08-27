@@ -1,21 +1,4 @@
-/**
- * Preemption Policy — A3.1 Operation 抢占策略
- *（PLANNING_ARCHITECTURE §4 防振荡 + A3.1 Architecture Review §4.4）。
- *
- * 当高优先级 Request 出现但资源被低优先级 Operation 占用时，
- * 系统可以取消/缩减低优先级 Operation 来释放资源。
- *
- * 四分类（A3.1 Architecture Review §4.4）：
- *   - Critical: priority=0 (survival) → ❌ 不可抢占
- *   - Committed: carrier 已在途中 → ❌ 不可抢占
- *   - Preemptable: priority≥2 且 carrier 未孵化 → ✅ 可抢占
- *   - NonPreemptable: priority=1 且 carrier 已孵化但未出发 → ⚠️ 条件可抢占
- *
- * 遵循 R4（资源回购窗口）：被取消 Operation 释放的资源在冷却期内
- * 优先保留给其恢复，不立即并入公共池。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Preemption Policy */
 
 import type { OperationContext, OperationPriority } from "./agenda-item";
 import { isActive } from "./agenda-item";
@@ -45,10 +28,10 @@ export interface PreemptionResult {
 
 /**
  * 判定单个 Operation 的抢占分类。
- *
+
  * @param op Operation 上下文
  * @param carrierInTransit carrier 是否已在途中（不在 source room）
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function classifyPreemption(
@@ -104,18 +87,18 @@ export function isConditionallyPreemptable(
 
 /**
  * 尝试抢占资源以满足高优先级需求。
- *
+
  * 策略：
  *   1. 先尝试抢占所有 preemptable Operation
  *   2. 如果还不够且是 critical 需求，尝试抢占 conditional Operation
  *   3. 不抢占 critical 和 committed Operation
- *
+
  * @param operations 活跃 Operation 列表
  * @param neededAmount 需要释放的资源量
  * @param requestingPriority 请求抢占的优先级（0=critical 才触发 conditional 抢占）
  * @param carrierInTransitByOp 每个 Operation 的 carrier 是否在途中（key = opId）
  * @returns 抢占结果
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function attemptPreemption(

@@ -1,12 +1,4 @@
-/**
- * source container 礼让豁免测试 — 拓荒房无 hauler 时可直取。
- *
- * isLogisticsContainer 的「不抢物流源」礼让以本房确有存活 hauler 为前提：
- * 拓荒爬坡期编制里还没有 hauler，source container 能量没有任何物流消费者，
- * builder 却绕开满罐 container 去矿位慢采（withdraw 1 tick vs harvest 25 tick）
- * — 假设性约束脱离地面真相的又一案（线上实测 W38S58 两工 558 能量旁干瞪眼）。
- * 判据消费 kernel 预构建的 globalCache.haulerRooms。
- */
+/** source container 礼让豁免测试 — 拓荒房无 hauler 时可直取。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { builderRole } from "../../../src/creeps/roles/builder";
 import { globalCache } from "../../../src/kernel/global-cache";

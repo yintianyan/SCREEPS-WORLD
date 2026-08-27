@@ -1,11 +1,4 @@
-/**
- * A3.2 Contract Tests — Expansion Intelligence 全链路合约测试。
- *
- * 覆盖：Pressure / Candidate / Discovery / Scoring / Ranking / Cost / Payback /
- * Risk / Budget / Plan / Lifecycle / Explanation / Dashboard / Readiness Extended。
- *
- * 纯函数测试 — 不需要 Game/Memory mock。
- */
+/** A3.2 Contract Tests — Expansion Intelligence 全链路合约测试。 */
 
 import { describe, it, expect } from "vitest";
 import {

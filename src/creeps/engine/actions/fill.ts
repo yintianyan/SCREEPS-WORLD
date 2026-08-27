@@ -1,9 +1,4 @@
-/**
- * Fill actions — 向 fillTarget / storage / container 送能（与 dump 的区别：
- * fill 是移动角色向目标送能，dump 是站桩矿工向身边结构倒能）。
- * 目标持久化：fillTarget 等动作复用 creep.memory 缓存的上一 tick 目标 ID，
- * 仅在目标满/消失时重新选择，消除等距目标摇摆。
- */
+/** Fill actions — 向 fillTarget / storage / container 送能（与 dump 的区别： */
 import type { ActionCandidate } from "../action-types";
 import { globalCache } from "../../../kernel/global-cache";
 import { log } from "../../../kernel/log";

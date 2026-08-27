@@ -1,22 +1,4 @@
-/**
- * Risk Model — A5.3 风险评估纯函数。
- *
- * 风险等级：LOW / MEDIUM / HIGH / CRITICAL
- *
- * 必须考虑：
- * - EnemyCapability
- * - OurCapability
- * - Terrain
- * - Tower
- * - SafeMode
- * - ReinforcementETA
- * - RetreatQuality
- * - IntelConfidence
- * - LogisticsReliability
- * - RecoveryCapability
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** Risk Model */
 
 import type { CombatPower } from "../combat/capability";
 import type { TerrainContext } from "../defense/terrain-context";

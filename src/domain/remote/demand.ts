@@ -1,12 +1,4 @@
-/**
- * 远矿需求评估 — 纯函数，不访问 Game/Memory。为每个 active 远矿运营评估所需
- * creep 数并生成 SpawnRequest（home = 孵化房，remoteTarget = 远矿房；与本地
- * 请求共享 spawnQueue 优先级）。优先级：harvester/hauler P1，reserver P2。
- * 安全门禁（R3b）：bootstrap 暂停孵化；recovery 只许现役 op 补员（远矿是收入
- * 路径，W7N4/W8N3 实证冻结致收入归零加剧贫困陷阱；新 op 由 remote-mining-
- * manager 的 roomReadyForNewRemote 把关）；reserver 仅 normal（recovery 下被
- * kernel 门禁跳过）；威胁/InvaderCore 冷却循环内生效；CPU tier ≤ conserve 不孵化。
- */
+/** 远矿需求评估 — 纯函数，不访问 Game/Memory。为每个 active 远矿运营评估所需 */
 
 import { CONFIG } from "../../config";
 import { selectBody } from "../../config/bodies";

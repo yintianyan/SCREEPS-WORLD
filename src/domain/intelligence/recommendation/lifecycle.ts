@@ -1,17 +1,4 @@
-/**
- * A6.6 Lifecycle Manager — TTL / Supersede / GC 生命周期管理。
- *
- * 职责：
- *   - TTL 过期检测（expired）
- *   - Supersede 链管理（同 category+target 的新建议替代旧建议）
- *   - Regime 变化检测（contextSignature 不匹配 → 失效）
- *   - GC 清理超龄记录
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * REC-012：历史有界。
- * REC-013：TTL 强制执行。
- */
+/** A6.6 Lifecycle Manager — TTL / Supersede / GC 生命周期管理。 */
 
 import type {
   RecommendationCandidate,
@@ -26,7 +13,7 @@ import { RECOMMENDATION_MAX_AGE } from "./types";
 
 /**
  * 过期检测 — 标记 TTL 到期的 Recommendation 为 expired。
- *
+
  * REC-013：过期的 Recommendation 不得继续被视为 active。
  */
 export function expireOverdueRecommendations(
@@ -52,7 +39,7 @@ export function expireOverdueRecommendations(
 
 /**
  * Regime 变化检测 — contextSignature 不匹配 → 标记 expired。
- *
+
  * 当帝国 posture 从 peace 变为 war 时，所有基于 peace 的建议应失效。
  */
 export function expireByRegimeChange(
@@ -82,10 +69,10 @@ export function expireByRegimeChange(
 
 /**
  * Supersede 处理 — 同 category+target 的新建议替代旧建议。
- *
+
  * 旧建议标记为 superseded，记录 supersededBy。
  * 新建议记录 supersedes（前驱 ID）。
- *
+
  * 不删除历史关系。
  */
 export function processSupersession(
@@ -150,7 +137,7 @@ export function validateRecommendation(
 
 /**
  * GC 清理超龄记录。
- *
+
  * REC-012：确保历史有界，不会无限增长。
  */
 export function gcRecommendationBuffer(

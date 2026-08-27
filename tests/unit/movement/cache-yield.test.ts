@@ -1,10 +1,4 @@
-/**
- * 移动缓存与让路测试（Batch 4 — MV-2/MV-3/MV-4 回归）。
- *
- * MV-2：持久化路径按路网 revision 失效（布局指纹变化才失效，非结构总数）
- * MV-3：yield 请求带 TTL（过期丢弃）+ parked creep 响应让路
- * MV-4：跨房出口缓存 TTL
- */
+/** 移动缓存与让路测试（Batch 4 — MV-2/MV-3/MV-4 回归）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   preloadStructureCache,

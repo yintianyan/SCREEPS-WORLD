@@ -1,20 +1,4 @@
-/**
- * Remote Economic Health — A4.1 Phase 2/3：远矿经济健康度评估。
- *
- * 合同锚点：A4.1 Architecture Audit §13（Remote Economic Health 设计）。
- *
- * 设计意图：
- *   基于资源流、经济核算、ROI、预算、威胁等多维度输入，
- *   判定远矿 Operation 的经济健康度（5 级）。
- *
- *   HEALTHY:      净价值 > 阈值 且 ROI 达标 — 正常运营
- *   DEGRADED:     净价值 > 0 但 < 阈值，或运输 < 产出 — 监控，考虑缩编
- *   UNPROFITABLE: 净价值 ≤ 0 持续 N 周期 — 暂停等待改善
- *   SUSPENDED:    威胁/预算耗尽/主动暂停 — 停止孵化回收 creep
- *   FAILED:        永久不可恢复（房间丢失/source 耗尽）— 归档删除
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Remote Economic Health */
 
 import type { RemoteEconomicHealth } from "../operation/remote-mining-op";
 import type { ResourceFlowSnapshot } from "./flow-accounting";
@@ -117,14 +101,14 @@ export type RecommendedAction =
 
 /**
  * 评估远矿经济健康度。
- *
+
  * 优先级（从高到低）：
  * 1. 威胁 CRITICAL (level=3) 或预算耗尽 → SUSPENDED
  * 2. 净价值 ≤ 0 持续超阈值 → UNPROFITABLE
  * 3. 运输效率 < 阈值 或 净价值 < healthyThreshold 持续 → DEGRADED
  * 4. ROI 达标 且 净价值 > 阈值 → HEALTHY
  * 5. 默认 → DEGRADED
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function assessEconomicHealth(
@@ -218,12 +202,12 @@ export function assessEconomicHealth(
 
 /**
  * 判定 SUSPENDED Operation 是否可以恢复。
- *
+
  * 恢复条件：
  * - 威胁已消除（threatLevel < 2）
  * - 预算有剩余或已补充
  * - 净价值回正
- *
+
  * 纯函数。
  */
 export function canResume(
@@ -238,12 +222,12 @@ export function canResume(
 
 /**
  * 判定 Operation 是否应永久归档（FAILED）。
- *
+
  * FAILED 条件：
  * - 房间永久丢失（source 不存在）
  * - source 耗尽（expectedYield = 0）
  * - 连续 UNPROFITABLE 超过最大周期
- *
+
  * 纯函数。
  */
 export function shouldArchive(

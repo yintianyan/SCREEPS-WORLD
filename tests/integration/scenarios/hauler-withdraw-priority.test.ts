@@ -1,16 +1,4 @@
-/**
- * Hauler 取能优先级复现测试 — 修复「追逐溢出、来回空转」bug。
- *
- * 修复前：hauler acquire 链 pickupDroppedEnergy 排第一。container 满溢时 harvester drop
- * 溢出能量，hauler 先捡那小堆 drop（背包没装满）→ 转 work 去卸货 → 回来时 harvester 又 drop
- * → 再捡零头……满 container 始终没被抽干，溢出根源未除，hauler 来回空转。
- *
- * 修复后：withdrawRichestCapped 排在 pickupDroppedEnergy 之前。container 满溢时 hauler
- * 优先抽干最满 container（满载搬运 + 从源头止住溢出），drop 仅作残余清理。
- *
- * 验证：满 container 与小堆 drop 共存且 hauler 与两者都相邻时，hauler 第一动作抽 container
- * （container 能量下降），而非捡 drop（drop 原封不动）。
- */
+/** Hauler 取能优先级复现测试 — 修复「追逐溢出、来回空转」bug。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 

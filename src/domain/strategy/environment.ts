@@ -1,15 +1,4 @@
-/**
- * 环境画像（P1-3）— 纯函数，不访问 Game/Memory。
- *
- * 采集三类环境信号供 empire-strategy 消费：
- *   1. 市场可用性：buy/sell 单数量 + credits 余额 → 判断市场活跃度
- *   2. 邻居密度：intel 中有 owner 的邻房比例 → 判断竞争压力
- *   3. GCL 趋势：level + progress 变化率 → 判断扩张节奏
- *
- * 设计决策：纯函数 + 由调用方注入运行时数据（Game.market / Game.gcl / intel），
- * 不直接访问 Game 使其可测试。empire-strategy 低频调用（每 100 tick），
- * getAllOrders 是 CPU 大户（官服 ~0.5-1 CPU），不可每 tick 调。
- */
+/** 环境画像（P1-3）— 纯函数，不访问 Game/Memory。 */
 
 /** 市场快照输入。 */
 export interface MarketSnapshotInput {
@@ -57,10 +46,10 @@ export interface EnvironmentProfile {
 
 /**
  * 计算环境画像（P1-3 纯函数）。
- *
+
  * 消费方（empire-strategy）按画像调整策略参数——如市场活跃时提高矿物出售
  * 意愿、邻居密度高时收紧扩张半径、GCL 速率快时放宽远矿上限。
- *
+
  * @param tick  当前 tick。
  * @param market  市场快照。
  * @param density  邻居密度。

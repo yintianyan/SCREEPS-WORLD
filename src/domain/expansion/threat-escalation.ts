@@ -1,19 +1,4 @@
-/**
- * Threat Escalation — A3.3 Phase 1：威胁升级响应。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §2 G4 可撤离门控 +
- * DEFENSE_ARCHITECTURE §1 威胁评估。
- *
- * 定位：扩张执行过程中，如果新房或路径上出现威胁升级，
- * 需要决策：继续 / 暂停 / 撤离。
- *
- * 三级威胁响应：
- *   1. GREEN: 无威胁 → 继续
- *   2. YELLOW: 可疑活动 → 暂停 + 评估
- *   3. RED: 确认威胁 → 撤离 + 释放资源
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Threat Escalation */
 
 import type { ExecutionState } from "./execution-state";
 
@@ -64,12 +49,12 @@ export interface ThreatEscalationResult {
 
 /**
  * 评估威胁升级并决定响应动作（纯函数）。
- *
+
  * 判定逻辑：
  *   - RED: hasHostileCreep || hasHostileTower || sponsorUnderAttack
  *   - YELLOW: hasHostileReservation || hasPathThreat
  *   - GREEN: none of above
- *
+
  * 响应逻辑：
  *   - GREEN → CONTINUE
  *   - YELLOW → PAUSE（如果 state < CLAIMED）或 CONTINUE（如果已 claim）

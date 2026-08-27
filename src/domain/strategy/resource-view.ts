@@ -1,28 +1,17 @@
-/**
- * Empire Resource View — A2 后半·步 4：Empire 级资源聚合只读视图。
- *
- * 合同锚点：EMPIRE_SYSTEM_MODEL §1 Empire + STATE_OWNERSHIP §3.1 EmpireSituation。
- *
- * 定位：把各房 RoomEconomicProfile 聚合为 Empire 级只读视图，供
- * Empire Economic Health / Expansion Readiness / Empire Budget 消费。
- * 只读聚合——不写 Room Memory、不控制 Creep、不绕过 Request Pool
- * （ECONOMY §6 红线 1/4，DECISION_AUTHORITY §1）。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Empire Resource View */
 
 import type { RoomEconomicProfile } from "../economy/room-profile";
 import { canExportEnergy, needsEnergyAid } from "../economy/room-profile";
 
 /**
  * Empire Resource View — 帝国级资源聚合只读视图。
- *
+
  * 由各房 RoomEconomicProfile 聚合派生。包含：
  * - 总量指标：energy / production / consumption / netFlow
  * - 分类统计：core/production/candidate/struggling 各类房间数
  * - Imbalance 信号：surplus rooms / deficit rooms
  * - 风险信号：struggling 房间数 + 最差 riskBuffer
- *
+
  * 不变量：
  * - 所有字段从 profiles 数组派生，不访问 Game/Memory
  * - 空数组（无房间）时总量为 0，分类为 0，health 为 Critical
@@ -89,10 +78,10 @@ export interface EmpireResourceView {
 
 /**
  * 聚合各房 RoomEconomicProfile 为 Empire Resource View。
- *
+
  * 纯函数 — 不引用 Game/Memory。
  * 频率：每 N tick（100–500，与 Empire 姿态/容量同频或更低）。
- *
+
  * @param profiles 各房的 RoomEconomicProfile（由调用方从 RoomSnapshot + Memory 组装）
  * @param tick 当前 tick
  */

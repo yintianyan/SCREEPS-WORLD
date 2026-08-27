@@ -1,10 +1,4 @@
-/**
- * 帝国姿态评估器测试。
- *
- * 覆盖：默认固本、扩张条件全集、威胁即时升级（紧急旁路）、
- * fortify→war 耐心窗口与经济门槛、降级滞回（驻留期）、
- * war 不直接回 expand、指令派生正确性。
- */
+/** 帝国姿态评估器测试。 */
 import { describe, expect, it } from "vitest";
 import {
   evaluateEmpirePosture,

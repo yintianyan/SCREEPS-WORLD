@@ -1,14 +1,4 @@
-/**
- * Phase 38 — 长期运行级反事实测试（CF-LONG-01 ~ CF-LONG-20）
- *
- * 与 phase37/closure 的区别：本套件聚焦「长期运行」语义 ——
- * 环形缓冲 rollover、FIFO trim、GC 后引用、同 target 复用、
- * decisionId 生命周期漏洞、多 Outcome 覆盖、时间窗口错位。
- *
- * 全部测试调用真实生产函数（domain/intelligence/*, kernel/ring-buffer,
- * systems/decision-trace-system 内部逻辑经其导出口验证），
- * 不复制生产谓词。
- */
+/** Phase 38 — 长期运行级反事实测试（CF-LONG-01 ~ CF-LONG-20） */
 import { describe, it, expect, beforeEach } from "vitest";
 import { globalCache } from "../../../src/kernel/global-cache";
 import {

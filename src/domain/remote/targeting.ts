@@ -1,9 +1,4 @@
-/**
- * 远矿目标选择 — 纯函数，不访问 Game/Memory。核心筛选：普通房（可 reserve）、
- * 无主、房态 normal（排除 novice/respawn/closed）、有 source。优先级：
- * 有视野 > 无视野（信息更可靠），同等条件下选 source 多的（未来 SK 房可能有 3）。
- * 数据流：room-observer 采集 intel → 本函数筛选 → remote-mining-manager 建 remoteOps。
- */
+/** 远矿目标选择 — 纯函数，不访问 Game/Memory。核心筛选：普通房（可 reserve）、 */
 
 import { isHostilePlayerReservation, INVADER_USERNAME, type RoomIntel } from "../intel";
 import { CONFIG } from "../../config";

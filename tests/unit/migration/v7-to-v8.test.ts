@@ -1,15 +1,4 @@
-/**
- * v7 → v8 迁移独立测试（清除 CreepMemory.working 遗留字段）。
- *
- * 迁移链路 v7→v8，最终 schemaVersion === 10。
- *
- * 覆盖：
- *   - v7 Memory 升级到 v8，所有 creep 的 working 字段被删除
- *   - 无 working 字段的 creep 不受影响
- *   - 幂等：重复执行不产生副作用
- *   - 空 creeps 对象正常处理
- *   - mode 字段不受影响
- */
+/** v7 → v8 迁移独立测试（清除 CreepMemory.working 遗留字段）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { maintainMemory, runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

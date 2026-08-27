@@ -5,7 +5,7 @@ import type { TickContext, CpuTier } from "../../../src/kernel/contracts";
 
 /**
  * Pixel System 门禁回归测试。
- *
+
  * 三层门禁：
  *   1. CONFIG.pixel.enabled 总开关（默认关闭）— 放血清零 bucket 与 global reset
  *      撞车会触发 reload death loop（bundle 加载即被杀、bucket 永不回充）。

@@ -1,11 +1,4 @@
-/**
- * scheduler bucket 阈值的单一真相源测试。
- *
- * 背景：scheduler 曾硬编码 TIER_BUCKET_MIN（7000/3000/1000/0），
- * 与 CONFIG.cpu.tiers[*].min 双源并存 — 调 config 静默不生效。
- * 修复后 scheduler 从 CONFIG 取值；本文件用 CONFIG 值断言档位边界，
- * 保证两者永远一致（config 改动会同步反映在断言输入上）。
- */
+/** scheduler bucket 阈值的单一真相源测试。 */
 import { describe, expect, it } from "vitest";
 import { resolveTier } from "../../../src/kernel/scheduler";
 import { CONFIG } from "../../../src/config";

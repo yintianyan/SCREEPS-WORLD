@@ -1,14 +1,4 @@
-/**
- * Healer 角色行为测试（heal-tank 最小闭环治疗端）。
- *
- * 覆盖：
- *   - 受伤己方最近者：range 1 → heal；range 2-3 → rangedHeal + 贴近；远 → moveTo
- *   - 满血 buddy attacker：range > 1 跟随贴身；range 1 静默待命
- *   - 自身受伤且无他人 → 自奶
- *   - 编队不存在（无受伤无 attacker）→ 自标记 recycle 止损
- *   - 自身低血（< retreatRatio）→ markRetreat 接管，不治疗
- *   - build 相位（warPlan.phase="build"）→ attackerHold 集结复用生效（归建）
- */
+/** Healer 角色行为测试（heal-tank 最小闭环治疗端）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { healerRole } from "../../../src/creeps/roles/healer";
 import { mockContext, mockCreep, mockPos, mockSnapshot, resetGlobals } from "../../role-helpers";

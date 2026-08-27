@@ -1,18 +1,4 @@
-/**
- * A3.3 Contract Tests — Expansion Execution 全链路合约测试。
- *
- * 覆盖 7 个纯函数模块（25+ 测试用例）：
- *   1. Execution Gate（11 项 TOCTOU 验证）
- *   2. Execution State Machine（状态转换表 + 转换函数）
- *   3. Checkpoint System（5 个检查点 + 失败回退）
- *   4. Economic Activation（三段判据 + 自给自足）
- *   5. Empire Integration（5 系统覆盖 + 移交判据）
- *   6. Threat Escalation（三级威胁 + 响应动作）
- *   7. Resource Reservation + Execution Operation
- *   8. Execution Dashboard（可观测性组装）
- *
- * 纯函数测试 — 不需要 Game/Memory mock。
- */
+/** A3.3 Contract Tests — Expansion Execution 全链路合约测试。 */
 
 import { describe, it, expect } from "vitest";
 import {

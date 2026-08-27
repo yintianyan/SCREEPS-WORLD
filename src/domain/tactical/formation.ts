@@ -1,11 +1,4 @@
-/**
- * Formation Model — A5.4.0 纯函数。
- *
- * 阵型语义定义和选择条件。
- * 本阶段只定义语义和转换条件，不实现复杂 movement 算法。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / 任何 Runtime。
- */
+/** Formation Model */
 
 import type {
   FormationType,
@@ -77,7 +70,7 @@ export const FORMATION_SEMANTICS: Record<FormationType, FormationSemantics> = {
 
 /**
  * 根据地形和战术状态选择阵型。
- *
+
  * 选择规则（基于实际代码分析，非凑枚举）：
  *   OPEN_TERRAIN + ENGAGING → WEDGE（突击突破）
  *   CHOKEPOINT + MOVING → COLUMN（纵队通过）
@@ -146,7 +139,7 @@ export interface FormationTransition {
 
 /**
  * 评估是否需要阵型转换。
- *
+
  * 转换条件基于实际地形变化：
  *   OPEN → CHOKEPOINT: WEDGE → COLUMN
  *   CHOKEPOINT → OPEN: COLUMN → WEDGE

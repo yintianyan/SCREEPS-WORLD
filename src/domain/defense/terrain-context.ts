@@ -1,22 +1,4 @@
-/**
- * Terrain Context — A5.2 G3 纯函数。
- *
- * 从地形快照（TerrainSnapshot）推导军事地形上下文（TerrainContext）。
- *
- * 核心原则：Terrain 只提供 Context，不产生 Military Action。
- * TerrainContext 影响 Combat（通过 mobilityModifier），但绝不直接修改 CombatCapability。
- * 正确方式：CombatCapability + TerrainContext → effectiveCombatContext。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / Creep / Room / PathFinder / 任何 Runtime 对象。
- * 所有运行时数据由调用方（系统层薄壳）注入为 Snapshot。
- *
- * 引擎常量来源：docs/research/03_SCREEPS_GAME_CONSTRAINTS.md（CONFIRMED）。
- * - plain: fatigue=1, move=1 可走
- * - swamp: fatigue=5, move=1 需要 5 tick 减 2 = 3 tick 一步
- * - road: fatigue=0, move=1 无 fatigue
- * - wall: 不可通行
- * - rampart: 可通行（友方），提供掩护
- */
+/** Terrain Context */
 
 // ═══════════════════════════════════════════════════════════
 // §1. 类型定义
@@ -262,7 +244,7 @@ function computeWalkability(snapshot: TerrainSnapshot): Walkability {
 
 /**
  * 识别 chokepoint — 出口附近通行宽度 ≤ 2 的位置。
- *
+
  * 算法：
  * 1. 对每个出口位置，检查其到核心区的路径宽度
  * 2. 如果某位置通过 4 邻接只有 ≤ 2 个非墙邻居，它是 chokepoint
@@ -313,7 +295,7 @@ function identifyChokepoints(snapshot: TerrainSnapshot): Chokepoint[] {
 
 /**
  * 识别走廊 — 连接两个开放区域的窄通道。
- *
+
  * 简化算法：找连续的窄通道格（openNeighbors ≤ 3）。
  */
 function identifyCorridors(snapshot: TerrainSnapshot): Corridor[] {
@@ -394,7 +376,7 @@ function computeRampartCoverage(snapshot: TerrainSnapshot): RampartCoverage {
 
 /**
  * 计算 Tower 暴露等级。
- *
+
  * 不简单用 towerCount 决定，必须考虑位置和可进入区域。
  */
 function computeTowerExposure(
@@ -435,7 +417,7 @@ function computeTowerExposure(
 
 /**
  * 计算核心区暴露程度（0-1）。
- *
+
  * 基于：到最近出口的距离（越近越暴露）、chokepoint 数量（越少越暴露）。
  */
 function computeCoreExposure(
@@ -464,7 +446,7 @@ function computeCoreExposure(
 
 /**
  * 计算撤退质量。
- *
+
  * 基于：出口数量、chokepoint 数量、核心到出口的路径多样性。
  */
 function computeRetreatQuality(
@@ -485,7 +467,7 @@ function computeRetreatQuality(
 
 /**
  * 计算机动性修正系数。
- *
+
  * 基于：道路密度、沼泽比例、chokepoint 影响。
  * - 全路 + 开放 = 1.5（移动加速）
  * - 全沼泽 + 受限 = 0.3（移动严重受限）
@@ -561,10 +543,10 @@ function deriveTerrainType(
 
 /**
  * 从 TerrainSnapshot 构建完整的地形上下文。
- *
+
  * 纯函数 — 不访问 Game / Memory / 任何 Runtime。
  * 复杂度：O(exitPositions.length × roomSize) 用于 chokepoint 识别。
- *
+
  * @param snapshot 地形快照（由系统层薄壳注入）
  * @param tick 当前 tick
  * @param hostilePos 可选：敌方位置（用于 tower exposure 计算）
@@ -632,7 +614,7 @@ export function buildTerrainContext(
 
 /**
  * 计算 effective combat context — Terrain 对 Combat 的影响。
- *
+
  * 正确方式：不修改 CombatCapability，而是产出修正系数供消费者使用。
  * 例如：mobilityModifier 影响 timeToImpact，towerCoverage 影响 effectiveHP。
  */
@@ -688,7 +670,7 @@ export function deriveCombatModifier(terrain: TerrainContext): EffectiveCombatMo
 
 /**
  * 地形缓存签名 — 用于检测地形变化并使缓存失效。
- *
+
  * 地形本身不变（plain/swamp/wall 是永久的），但建筑（rampart/tower/road）会变化。
  * 签名包含建筑位置，变化时缓存失效。
  */

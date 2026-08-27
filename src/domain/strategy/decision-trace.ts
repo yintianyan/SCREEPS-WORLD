@@ -1,20 +1,4 @@
-/**
- * A4.7 Decision Trace — Domain 层纯函数与类型定义。
- *
- * 核心数据结构：
- *   DecisionSnapshot → 决策输入的确定性快照
- *   DecisionRecord   → 决策的完整结构化记录
- *   DecisionReason   → 结构化原因（不是字符串）
- *   DecisionEvidence → 支撑决策的量化证据
- *   CorrelationId    → 跨系统追踪链
- *
- * 纯函数律：本模块不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- * 所有运行时数据由调用方（system 层薄壳）注入。
- *
- * Deterministic Replay：
- *   replayDecision(snapshot) → decision
- *   同一 Snapshot 连续 Replay 1000 次必须得到相同 Decision Hash。
- */
+/** A4.7 Decision Trace — Domain 层纯函数与类型定义。 */
 
 // ═══════════════════════════════════════════════════════════
 // §1. Decision Categories
@@ -41,7 +25,7 @@ export type DecisionSeverity = "DEBUG" | "NORMAL" | "IMPORTANT" | "CRITICAL";
 
 /**
  * DecisionSnapshot — 决策时刻的完整输入状态。
- *
+
  * 设计原则：
  *   - 最小化：只保存决策所需输入，不 dump 整个 Memory/Game
  *   - 确定性：相同输入必须产生相同输出
@@ -248,7 +232,7 @@ export interface RejectedAlternative {
 
 /**
  * DecisionRecord — 一个决策的完整结构化记录。
- *
+
  * 包含：输入快照、原因、证据、选中方案、被拒方案、预期/实际结果。
  */
 export interface DecisionRecord {
@@ -296,7 +280,7 @@ export type TraceLifecycle = "ACTIVE" | "ARCHIVED" | "EXPIRED";
 
 /**
  * CorrelationId 格式：`rcv-{decisionId}-{tick}`
- *
+
  * 追踪链：
  *   failureId (F-xxx) → decisionId (D-xxx) → actionId (R-xxx)
  *   → spawnRequestId (S-xxx) → creepName (C-xxx)
@@ -316,16 +300,16 @@ export function makeDecisionId(tick: number, seq: number): string {
 
 /**
  * 为 DecisionSnapshot 生成稳定的 Hash。
- *
+
  * 算法：JSON.stringify（字段顺序固定 by interface definition）→
  * FNV-1a 32-bit hash → hex string。
- *
+
  * 确定性保证：
  *   - 不使用 Math.random
  *   - 不使用 Date.now()
  *   - 不依赖运行时状态
  *   - JSON.stringify 对相同对象结构产生相同字符串
- *
+
  * @param snapshot 决策快照
  * @returns 8 字符 hex hash（如 "a1b2c3d4"）
  */
@@ -340,10 +324,10 @@ export function snapshotHash(snapshot: DecisionSnapshot): string {
 
 /**
  * 为决策输出生成稳定 Hash。
- *
+
  * 输入：selectedAction + rejectedAlternatives + reasons + evidence
  * 输出：8 字符 hex hash
- *
+
  * 用于 Replay 比对：Original Decision Hash vs Replay Decision Hash。
  */
 export function decisionHash(
@@ -373,17 +357,17 @@ export function decisionHash(
 
 /**
  * Replay Decision — 从 Snapshot 重新推导决策。
- *
+
  * 核心契约：
  *   - 只使用 Snapshot 中的数据
  *   - 禁止访问 Game / Memory / 任何 Runtime
  *   - 同一 Snapshot → 相同 Decision Hash（1000 次 replay 结果一致）
- *
+
  * Replay 分类：
  *   1. Recovery Replay: 从 recovery snapshot 推导 recovery action
  *   2. Logistics Replay: 从 logistics snapshot 推导 route/assignment
  *   3. Economic Replay: 从 economic snapshot 推导 resource allocation
- *
+
  * @param snapshot 决策快照
  * @param replayFn 领域特定 replay 纯函数（由调用方注入）
  * @returns ReplayResult 包含决策输出 + hash
@@ -417,7 +401,7 @@ export function replayDecision(
 
 /**
  * 验证 Replay 确定性：同一 Snapshot 连续 replay N 次，检查 hash 一致。
- *
+
  * @returns { deterministic: true, hashes: string[] } 或 { deterministic: false, firstDivergence: number }
  */
 export function verifyDeterminism(
@@ -462,7 +446,7 @@ export interface ReplayComparison {
 
 /**
  * 比较原始决策与 Replay 决策。
- *
+
  * 如果 Hash 相同 → MATCH。
  * 如果 Hash 不同 → DIVERGENCE，输出具体不同字段。
  */
@@ -515,7 +499,7 @@ export function compareReplay(
 
 /**
  * Trace Ring Buffer — 有限容量，自动淘汰最旧记录。
- *
+
  * 默认上限 1000 条 DecisionRecord。
  * 只记录 IMPORTANT 和 CRITICAL 级别。
  */
@@ -567,12 +551,12 @@ export function getRecentRecords(buf: TraceRingBuffer, limit = 50): DecisionReco
 
 /**
  * Trace GC — 清理过期记录。
- *
+
  * 生命周期：
  *   ACTIVE → IMPORTANT/CRITICAL 保留，NORMAL 保留 500t
  *   ARCHIVED → 保留 1000t
  *   EXPIRED → 删除
- *
+
  * @param buf Ring Buffer
  * @param currentTick 当前 tick
  * @returns 清理后的 buf + 清理统计
@@ -669,7 +653,7 @@ export function queryRecords(buf: TraceRingBuffer, query: TraceQuery): DecisionR
 
 /**
  * 按 Correlation ID 追踪完整 Decision Chain。
- *
+
  * 返回按时间序排列的决策链。
  */
 export function traceChain(buf: TraceRingBuffer, correlationId: string): DecisionRecord[] {
@@ -724,7 +708,7 @@ export interface IntegrityCheckResult {
 
 /**
  * 检查 Trace 完整性：每条 Decision 引用的 Snapshot 是否存在。
- *
+
  * 如果 Snapshot 已删除，Decision 必须标记为 ORPHANED。
  */
 export function checkTraceIntegrity(
@@ -763,7 +747,7 @@ export function checkTraceIntegrity(
 
 /**
  * 稳定 JSON 序列化：按 key 排序，确保相同对象产生相同字符串。
- *
+
  * 不使用 JSON.stringify 的默认顺序（V8 引擎的属性插入顺序），
  * 而是递归排序 key，确保跨引擎/跨运行确定性。
  */
@@ -783,7 +767,7 @@ function stableStringify(obj: unknown): string {
 
 /**
  * FNV-1a 32-bit Hash → 8 字符 hex。
- *
+
  * 选择 FNV-1a 因为：
  *   - 简单（~5 行代码）
  *   - 快（O(n)，无分配）
@@ -815,7 +799,7 @@ export interface DecisionChainEntry {
 
 /**
  * 从 DecisionRecord 列表构建可读的 Decision Chain。
- *
+
  * 输出示例：
  *   Tick 12000 | Energy Deficit | corr=rcv-D-12000-1
  *   Tick 12001 | Economic Health = DEGRADED | corr=rcv-D-12000-1

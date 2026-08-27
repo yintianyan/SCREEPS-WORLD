@@ -1,19 +1,4 @@
-/**
- * Delivery Validation — A4.3 Phase 4：交付验证。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #6（无 Delivery Validation）、
- * §4.2（carrier 空载推断）、§10 #19。
- *
- * 设计意图：
- *   现有 carrier 验证靠「空载=卸完」推断，不验证 target storage 实际收到量。
- *   Delivery Validation 不依赖 transfer() 返回值，而是验证 Destination 实际收到量。
- *
- *   与 verification.ts 的区别：
- *   - verification.ts 用 storage 增量（间接推断）
- *   - delivery-validation 用前后快照对比 + 排除其他来源
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Delivery Validation */
 
 import type { TransportAssignment } from "./transport-assignment";
 
@@ -41,15 +26,15 @@ export interface DeliveryValidationResult {
 
 /**
  * 验证 Destination 实际收到量。
- *
+
  * 验证逻辑：
  *   1. actualReceived = destinationAfter - destinationBefore - otherContributions
  *   2. actualReceived ≥ expectedAmount → verified
  *   3. actualReceived < expectedAmount → partial (shortfall > 0)
  *   4. actualReceived > expectedAmount → overdelivery
- *
+
  * 纯函数 — 不访问 Game/Memory。
- *
+
  * @param assignment 运输分配（含 expectedAmount = assignedAmount）
  * @param destinationBefore 目标在运输前的资源量
  * @param destinationAfter 目标在运输后的资源量

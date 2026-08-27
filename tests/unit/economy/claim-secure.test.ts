@@ -1,9 +1,4 @@
-/**
- * claim-secure 护栏纯函数测试。
- *
- * 覆盖：isClaimSecure（瞬时谓词）/ computeClaimSecure（带迟滞状态记忆）的边界与迟滞行为。
- * 阈值来自 CONFIG.economy：claimSecureEnterTtd=15000、claimSecureExitTtd=20000。
- */
+/** claim-secure 护栏纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import { isClaimSecure, computeClaimSecure } from "../../../src/domain/economy/phase";
 

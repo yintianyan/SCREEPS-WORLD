@@ -1,14 +1,4 @@
-/**
- * Combat Capability — A5.1 G2 纯函数。
- *
- * 从 CreepSnapshot（body + boost）解析结构化战斗能力。G1 威胁评估和后续
- * war-planning 编队可行性评估都消费本模块输出——单一 body 解析算法。
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / Creep / Room / 任何 Runtime 对象。
- * 所有运行时数据由调用方（系统层薄壳）注入为 Snapshot。
- *
- * 引擎常量来源：docs/research/03_SCREEPS_GAME_CONSTRAINTS.md §7/§8（CONFIRMED）。
- */
+/** Combat Capability */
 
 // ═══════════════════════════════════════════════════════════
 // §1. 引擎常量（从 docs/research/03 校准，非硬编码猜测）
@@ -156,14 +146,14 @@ function boostMultiplier(partType: BodyPartConstant, tier: 0 | 1 | 2 | 3): numbe
 
 /**
  * 从 CreepSnapshot 解析结构化战斗能力。
- *
+
  * 算法：
  * 1. 遍历 body 部件，按 type 分组计数（排除 damaged）
  * 2. 对每个部件查 boost tier → 计算实际倍率
  * 3. 按引擎常量派生各维度能力值
  * 4. effectiveHP 考虑 TOUGH 减伤
  * 5. mobility 是 estimate（MOVE/body weight 比值），标记为估计值
- *
+
  * 复杂度：O(body.length)，通常 ≤ 50。
  */
 export function evaluateCombatCapability(creep: CreepSnapshot): CombatCapability {
@@ -319,13 +309,13 @@ export interface AggregateCapability {
 
 /**
  * 聚合多只 creep 的战斗能力。
- *
+
  * 设计原则：
  * - 各维度独立加总（attack/heal/dismantle 不互相折算）
  * - effectiveHP 是加总（编队总血池）
  * - avgMobility 取平均（编队速度受最慢成员限制——此处用平均作 estimate）
  * - boostedCount 统计被 boost 的成员数
- *
+
  * 复杂度：O(capabilities.length)。
  */
 export function aggregateCombatCapability(
@@ -410,13 +400,13 @@ export interface FormationContext {
 
 /**
  * 编队战斗力估计——粗粒度参考值，严禁作为军事决策的唯一依据。
- *
+
  * Screeps 战斗胜负取决于位置/地形/Rampart/Tower/Heal/集中火力/移动/
  * Boost/撤退路径/编队/目标价值等因素，单一数字无法捕获这些维度。
- *
+
  * 正确用法：消费 burstDamage / effectiveHP / healOutput / dismantlePower
  * 等独立维度做精细判断；powerScore 仅用于粗粒度快速筛选（如「是否值得进一步评估」）。
- *
+
  * 错误用法：if (myPower > enemyPower) attack() — 这会输掉 PvP。
  */
 export interface CombatPower {
@@ -440,7 +430,7 @@ export interface CombatPower {
 
 /**
  * 计算编队战斗力估计值。
- *
+
  * ⚠ 重要警告——必须阅读：
  * - powerScore 只是加权估计，不能直接代表胜率，不能作为军事决策的唯一依据
  * - 10 heal 不一定胜 10 attack（治疗是被动的，攻击是主动的）
@@ -448,7 +438,7 @@ export interface CombatPower {
  * - 必须保留 AggregateCapability / CombatPower 各独立维度用于后续 Planner 的精细决策
  * - 下游消费者应优先使用 burstDamage / effectiveHP / healOutput 等维度，
  *   而非直接比较 powerScore
- *
+
  * 权重设计（粗粒度，非精确模型）：
  * - burstDamage: 1.0（直接杀伤能力）
  * - effectiveHP: 0.1（生存能力，1000 HP ≈ 100 分）

@@ -1,23 +1,4 @@
-/**
- * Recovery Priority — A4.5：恢复优先级 + ROI + Cooldown。
- *
- * 合同锚点：A4.5 Task Spec §22 Recovery Priority + §23 ROI + §24 Cooldown。
- *
- * 设计意图：
- *   帝国同时面临多个失败时，需要决定先恢复哪个。
- *   不是所有的失败都需要立即处理——有些可以等，有些必须立即修。
- *
- *   恢复优先级取决于：
- *   1. 失败严重度（critical > error > warning > info）
- *   2. 影响范围（影响多房 > 影响单房 > 全局无影响）
- *   3. 恢复 ROI（投入产出比——低成本高收益优先）
- *   4. Cooldown（同一失败类型最近已尝试恢复 → 冷却中不再重试）
- *   5. 依赖关系（根因失败优先于下游症状）
- *
- *   输出排序后的恢复动作列表，供 empire-health-system 消费。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Recovery Priority */
 
 import type { FailureNode, FailureSeverity, FailureDomain } from "./failure-propagation";
 import type { RootCauseResult, ImpactAnalysisResult } from "./failure-propagation";
@@ -97,7 +78,7 @@ export function cooldownKey(domain: FailureDomain, room?: string): string {
 
 /**
  * 检查某个恢复动作是否在冷却中（纯函数）。
- *
+
  * @param cooldowns cooldown 表
  * @param domain 失败领域
  * @param room 目标房间（可选）
@@ -203,9 +184,9 @@ const RECOVERY_RECOMMENDATIONS: Record<FailureDomain, { type: RecoveryActionType
 
 /**
  * 计算单个失败的恢复优先级（纯函数）。
- *
+
  * 优先级 = 严重度权重 × 领域权重 × 影响因子 × 紧急因子 × ROI 因素
- *
+
  * @param failure 失败节点
  * @param rootCauses 根因检测结果（如果是根因，优先级更高）
  * @param impact 影响范围分析结果
@@ -270,13 +251,13 @@ export function computeRecoveryPriority(
 
 /**
  * 对多个失败节点排序恢复优先级（纯函数）。
- *
+
  * 排序规则：
  *   1. urgent 优先
  *   2. 根因优先（isRootCause）
  *   3. priority 分数降序
  *   4. ROI 降序（同分时）
- *
+
  * @param failures 失败节点列表
  * @param rootCauseIds 根因节点 ID 集合
  * @param impacts 影响范围分析结果映射
@@ -329,13 +310,13 @@ export function prioritizeRecovery(
 
 /**
  * 从恢复动作列表中选择下一个要执行的动作（纯函数）。
- *
+
  * 选择逻辑：
  *   1. 过滤冷却中的
  *   2. 取优先级最高的
  *   3. 如果最高优先级是 urgent，立即返回
  *   4. 否则考虑 ROI（避免高成本低收益的动作）
- *
+
  * @param actions 已排序的恢复动作列表
  * @param maxConcurrent 最大并发恢复数
  * @returns 选中的恢复动作（或 null 如果无可用）

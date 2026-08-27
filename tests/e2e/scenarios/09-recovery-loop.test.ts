@@ -1,25 +1,4 @@
-/**
- * E2E-009 Recovery 闭环验证 — A4.6 Recovery Execution 的 E2E 验收。
- *
- * 验证链路：
- *   经济产生波动 → 资源重新分配 → 物流自动调整 → 运输失败 → 自动恢复 → 生产恢复
- *
- * 场景设计（基于 A4.6 FINAL_REPORT §5 验证场景）：
- *   1. **Hauler Death Recovery**: 运行到稳态 → 等待 hauler 自然 TTL 死亡 →
- *      验证 recovery-execution 在 100t 内提交 hauler spawn 请求，200t 内人口恢复
- *   2. **Spawn Starvation 检测**: 验证 spawnStarvationCount 在能量不足时递增
- *   3. **Recovery Stats**: 验证 Memory 中 recoveryStats 或 globalCache 迹象
- *
- * 验证标准：
- *   - 稳态后 creep 死亡波（TTL 到期）→ 200t 内 creep 数恢复到死亡前 80%
- *   - 全程无 JS 错误（TypeError/ReferenceError）
- *   - Memory 不膨胀（< 500KB）
- *   - spawnQueue 不持续堆积（< 10）
- *
- * [Facts] screeps-server-mockup 不模拟 Global Reset，
- * 所以 heap-only 的 recoveryActionTable 会在 tick 间持续存在。
- * 这恰好适合验证 recovery 闭环的持续有效性。
- */
+/** E2E-009 Recovery 闭环验证 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";

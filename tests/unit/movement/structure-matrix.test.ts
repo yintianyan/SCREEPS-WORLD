@@ -1,10 +1,4 @@
-/**
- * CostMatrix 结构成本合并测试 — 同格多结构（rampart 叠盾）不得洗白障碍。
- *
- * 线上事故：rampart 叠在 spawn 上，遍历序靠后的 rampart（cost 2）覆盖
- * spawn 的 255 → 路径矩阵把 spawn 格标记为可走 → 全部核心区物流路径
- * 穿 spawn → move 被引擎逐 tick 拒绝 → 全房车队冻结。
- */
+/** CostMatrix 结构成本合并测试 — 同格多结构（rampart 叠盾）不得洗白障碍。 */
 import { describe, expect, it } from "vitest";
 import { buildStructurePositions } from "../../../src/creeps/movement/pathfinding";
 import { mockPos } from "../../role-helpers";

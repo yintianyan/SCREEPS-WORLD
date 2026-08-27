@@ -1,11 +1,4 @@
-/**
- * 采购需求纯函数 — terminal/lab/factory 市场改造阶段 1。
- *
- * 消费方（lab-system / factory-manager）发布 ProcurementDemand 到 globalCache，
- * 采购方（terminal-manager）汇总后按 priority 排序，在 deal 窗口内按序尝试买入。
- *
- * 纯函数层：不访问 Game/Memory，可 Vitest 测试。
- */
+/** 采购需求纯函数 — terminal/lab/factory 市场改造阶段 1。 */
 import type { ProcurementDemand } from "../../kernel/global-cache";
 
 /** 基础矿物集合 — 用于区分基础矿与中间产物/化合物的价格策略。 */
@@ -26,16 +19,16 @@ export function isIntermediateCompound(resource: string): boolean {
 
 /**
  * 根据资源类型计算市场买入价格上限。
- *
+
  * 分级策略：
  * - 基础矿：直接用 fallbackMaxBuyPrice 或行情快照动态计算。
  * - 中间产物：最贵基础矿价格 × 2（加工溢价容忍）。
  * - 化合物（T1-T3）：最贵基础矿价格 × 5（高级加工溢价）。
  * - 其他资源（power/G 等）：配置值或回退。
- *
+
  * 注意：terminal-manager 已改用 market-pricing.ts 的 computeDynamicBuyPrice
  * 做行情驱动定价，此函数仅保留向后兼容（测试/回退路径）。
- *
+
  * @param resource 资源类型。
  * @param maxBuyPrice CONFIG.market.fallbackMaxBuyPrice 映射（向后兼容接口）。
  * @returns 价格上限（credits/单位），0 表示不买。
@@ -62,7 +55,7 @@ export function computeMaxBuyPrice(
 /**
  * 汇总多房间的采购需求表，按 priority 降序排序，过期需求清除。
  * 同资源的多个需求取最大 priority + 合并 amount（取 max 而非 sum 防重复计数）。
- *
+
  * @param byRoom 按房名索引的需求表。
  * @param currentTick 当前 tick（用于过滤过期需求）。
  * @returns 按 priority 降序排列的去重需求列表。
@@ -102,12 +95,12 @@ export function collectDemands(
 
 /**
  * 从反应链计划展开原料缺口需求（阶段 3 扩展：含中间产物）。
- *
+
  * 反应链的每个 step 需要两种输入原料。基础矿物缺口直接发采购需求；
  * 中间产物（OH/ZK/UL/G）缺口也发采购需求 — 阶段 3 扩展，允许市场买入
  * 中间产物以加速反应链（自产是主通道，市场是加速通道）。
  * 已有库存满足的部分不计入缺口。
- *
+
  * @param reactionPlan 反应链计划。
  * @param inventory 完整库存视图。
  * @param tick 当前 tick。
@@ -148,7 +141,7 @@ export function expandReactionDemands(
 
 /**
  * 从 commodity 配方展开原料缺口需求。
- *
+
  * @param targetResource 目标产物资源类型。
  * @param components 配方原料表（资源 → 单批用量）。
  * @param inventory 完整库存视图。
@@ -189,7 +182,7 @@ export function expandCommodityDemands(
 
 /**
  * 高优先级需求的价格上浮比例。
- *
+
  * 当 demand.priority ≥ PRIORITY_BOOST_THRESHOLD 时，允许价格上限上浮
  * 以提高成交概率 — boost/war 需求的时间价值高于价格差异。
  */
@@ -200,14 +193,14 @@ const HIGH_PRIORITY_PRICE_MULTIPLIER = 1.5;
 
 /**
  * 根据需求优先级动态调整买入价格上限（阶段 5）。
- *
+
  * 策略：
  * - priority ≥ 30（boost/war 级）：价格上限上浮 50%（时间价值 > 价格差异）
  * - priority < 30（commodity/反应原料级）：维持基准价格
- *
+
  * 安全约束：即使上浮，仍受 computeMaxBuyPrice 的资源类型分级约束 —
  * 基础矿上浮后仍 ≤ maxBuyPrice × 1.5，不会无限制加价。
- *
+
  * @param basePrice computeMaxBuyPrice 计算的基准价格上限。
  * @param priority 需求优先级（0-100）。
  * @returns 调整后的价格上限。

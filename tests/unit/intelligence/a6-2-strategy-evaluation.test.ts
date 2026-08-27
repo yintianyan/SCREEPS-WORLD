@@ -1,34 +1,4 @@
-/**
- * A6.2 Strategy Evaluation & Baseline — 单元测试 + 集成测试。
- *
- * 测试矩阵：
- *   EVAL-001: Strategy clearly better than baseline → IMPROVING
- *   EVAL-002: Strategy clearly worse → DEGRADING
- *   EVAL-003: Insufficient samples → INCONCLUSIVE
- *   EVAL-004: Nearly identical → STABLE
- *   EVAL-005: Short-term improving / long-term degrading → CONFLICTING_TREND
- *   EVAL-006: External energy injection → attribution confidence reduction
- *   EVAL-007: Enemy disappears without player action → attribution uncertainty
- *   EVAL-008: RCL mismatch → baseline incomparable
- *   EVAL-009: Threat context mismatch → baseline incomparable
- *   EVAL-010: Missing metrics → confidence reduction
- *   EVAL-011: Conflicting evidence → confidence reduction
- *   EVAL-012: Historical regime changed → baseline confidence reduction
- *   EVAL-013: Same snapshot 1000 replay → identical hash
- *   EVAL-014: Different strategy identity → different baseline
- *   EVAL-015: A6 disabled → empire behavior unchanged
- *
- * Architecture Guards:
- *   AG-001: Domain zero Game reference
- *   AG-002: Domain zero Memory reference
- *   AG-003: Domain zero RawMemory reference
- *   AG-004: Domain zero globalThis
- *   AG-005: Domain zero console
- *   AG-006: Domain zero Kernel
- *   AG-007: Evaluation output cannot enter execution systems
- *
- * 纯函数测试 — 不依赖 Game/Memory。
- */
+/** A6.2 Strategy Evaluation & Baseline — 单元测试 + 集成测试。 */
 import { describe, it, expect } from "vitest";
 import {
   type EvaluationInput,

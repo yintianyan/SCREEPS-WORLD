@@ -1,21 +1,4 @@
-/**
- * A4.5 Empire Autonomous Stability — E2E 场景测试。
- *
- * 验证 A4.5 的核心自治能力：
- *   E2E-001: Empire Health 8 维度评估 + Hysteresis
- *   E2E-002: Health 等级降级立即生效
- *   E2E-003: Health 等级恢复需超阈值（滞回）
- *   E2E-004: Failure Propagation 根因检测
- *   E2E-005: Failure 影响范围分析
- *   E2E-006: Recovery Priority 排序 + ROI
- *   E2E-007: Recovery Cooldown 机制
- *   E2E-008: Autonomy Score 计算
- *   E2E-009: No-Progress 检测
- *   E2E-010: Thrashing 检测
- *   E2E-011: 综合自治状态判定
- *
- * 纯函数测试 — 不依赖 Game/Memory。
- */
+/** A4.5 Empire Autonomous Stability — E2E 场景测试。 */
 import { describe, it, expect } from "vitest";
 import {
   evaluateEmpireHealth,

@@ -1,25 +1,4 @@
-/**
- * A6.3 Prediction Domain — 统一出口。
- *
- * 分层结构：
- *   time-series.ts      — 通用有界时间序列容器（线性回归、趋势、GC）
- *   context.ts          — 预测上下文签名 + 体制兼容性检查
- *   types.ts            — Prediction/Evidence/Window 核心类型
- *   ring-buffer.ts      — 预测结果环形缓冲
- *   hashing.ts          — 确定性序列化 + FNV-1a 哈希 + 回放验证
- *   evidence-builder.ts — 预测证据链构建（A6.3.2）
- *   resolve.ts          — 预测应验/失效判定（A6.3.2）
- *   energy-shortage.ts  — 能量短缺预测模型（A6.3.2）
- *   spawn-starvation.ts — 孵化饥饿预测模型（A6.3.2）
- *
- * 纯函数律：本模块不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * Shadow-Only（PRED-001）：
- *   所有函数只做计算，不执行 Game API，不修改运行时状态。
- *
- * 确定性（PRED-003）：
- *   同输入 → 同输出。禁止 Math.random / Date.now / 无序迭代 / 浮点误差。
- */
+/** A6.3 Prediction Domain — 统一出口。 */
 
 // ── TimeSeries ──
 export type {

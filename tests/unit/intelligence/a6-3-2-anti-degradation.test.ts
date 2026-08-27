@@ -1,23 +1,4 @@
-/**
- * A6.3.2 Anti-Degradation Tests — 反事实测试。
- *
- * 核心验证原则：
- *   "Prediction 的价值不是重新给当前状态贴标签，
- *    而是利用历史序列回答'按照当前趋势，未来会发生什么'。"
- *
- * 两个最关键的反事实测试：
- *   1. 当前状态坏 + 历史趋势改善 → 不得预测未来恶化
- *   2. 当前状态正常 + 历史趋势恶化 → 必须能提前预测问题
- *
- * ANTI-001: 当前能量低，但历史趋势明显改善 → 不得预测未来 shortage
- * ANTI-002: 当前队列 > 0，但 queueTrend = DOWN → 不得判定 QUEUE_GROWING
- * ANTI-003: 当前容量 > 90%，但 populationTrend = DOWN → 不得判定未来 capacity starvation
- * ANTI-004: 当前 demand 很高，但 demandTrend = DOWN → 不得仅凭当前 demand 产生恶化预测
- * ANTI-005: 当前状态正常，但 regression 明确指向未来 shortage → 必须能够产生预测
- * ANTI-006: 当前状态正常，但 regression 指向未来 spawn starvation → 必须能够产生预测
- * ANTI-007: 历史样本不足，但当前 snapshot 已经异常 → 不得伪造未来预测
- * ANTI-008: Regime mismatch → 不得继续使用旧 regime 的高 confidence
- */
+/** A6.3.2 Anti-Degradation Tests — 反事实测试。 */
 import { describe, it, expect } from "vitest";
 import {
   type EnergyShortageInput,

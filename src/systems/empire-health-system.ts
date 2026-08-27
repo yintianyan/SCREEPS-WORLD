@@ -1,33 +1,4 @@
-/**
- * Empire Health System — A4.5 系统薄壳。
- *
- * 合同锚点：A4.5 Task Spec §18-27 + SYSTEM_BOUNDARIES §1.4 Empire。
- *
- * 职责：每 100 tick 调用 domain 纯函数链，综合评估帝国健康度，
- * 检测失败传播，计算恢复优先级，量化自治能力。
- *
- * 执行链：
- *   1. 从 globalCache 读取各维度健康信号（empireEconomy / logistics / network / colony）
- *   2. 映射各维度到 DimensionHealth + score
- *   3. evaluateEmpireHealth（8 维度 + Hysteresis）
- *   4. 从活跃失败列表构建 failureGraph
- *   5. detectRootCause + analyzeImpact
- *   6. prioritizeRecovery
- *   7. computeAutonomyScore + detectNoProgress + detectThrashing
- *   8. 写入 globalCache（empireHealth / failureGraph / recoveryActions / autonomyStatus）
- *
- * 状态所有权：
- *   唯一写者 = 本系统 → globalCache.empireHealth / failureGraph / recoveryActions / autonomyStatus
- *   recoveryCooldowns 跨 tick 持久（heap Map，global reset 丢失可接受）。
- *
- * CPU 预算：低频执行（interval=100），不每 tick 重算。
- * 优先级 P1（在 empireEconomy / agendaManager / logisticsPlanner 之后运行，
- *   消费它们产出的信号）。
- *
- * 注意：本系统不执行任何恢复动作——只产出建议。
- * 恢复动作的执行由各执行系统（spawn-manager / agenda-manager / terminal-manager 等）
- * 消费 recoveryActions 自行决定是否执行。
- */
+/** Empire Health System */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
 import {
@@ -485,17 +456,17 @@ const PREDICTION_TS_CAPACITY = 100;
 
 /**
  * A6.3 预测采样寄生函数 — 复用 empire-health-system 既有 100t cadence。
- *
+
  * PRED-010：不自建采样通道，寄生在既有 cadence 中追加 4 个采样字段。
- *
+
  * 采样内容：
  *   1. CPU bucket 历史（→ __cpuBucketHistory，预测目标 #7）
  *   2. Spawn 队列深度历史（→ __spawnQueueDepthHistory，预测目标 #2）
  *   3. 物流健康度历史（→ __logisticsHealthHistory，预测目标 #3）
  *   4. 房间健康度历史（→ __roomHealthHistory，预测目标 #4）
- *
+
  * 远矿收益历史（#5）由 expansion-planner 的 cadence 采样，不在此处。
- *
+
  * 每个采样点 O(1) 成本（push + 可能的 shift）。
  * global reset 后从空 TimeSeries 重建（可接受）。
  */

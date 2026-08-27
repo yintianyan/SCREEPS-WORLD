@@ -1,8 +1,4 @@
-/**
- * 远矿目标选择测试。
- *
- * 覆盖：候选筛选（kind/owner/status）、排序优先级、去重、过期暂停。
- */
+/** 远矿目标选择测试。 */
 import { describe, expect, it } from "vitest";
 import { selectRemoteTargets, shouldPauseOperation, scoreRemoteCandidate, effectiveMaxOperations, roomLinearDistance } from "../../../src/domain/remote/targeting";
 import type { RoomIntel } from "../../../src/domain/intel";

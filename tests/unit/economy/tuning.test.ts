@@ -1,11 +1,4 @@
-/**
- * 参数自调优系统测试。
- *
- * 覆盖：
- *   - bounds.ts: clampParam、isInCooldown
- *   - evaluator.ts: 全局门禁、各参数增减逻辑、冷却期、边界钳制
- *   - tuned.ts: getRoleBounds 覆盖层、回退、钳制、不变量
- */
+/** 参数自调优系统测试。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   TUNING_BOUNDS,

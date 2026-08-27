@@ -1,13 +1,4 @@
-/**
- * v15 → v16 迁移独立测试（P1-G：dangerUntil 从 intel 搬到 remoteOps）。
- *
- * 覆盖：
- *   - intel[room].dangerUntil 搬到 remoteOps[room].dangerUntil
- *   - 搬运后 intel 侧旧字段删除
- *   - remoteOps 条目不存在时仅删 intel 旧字段
- *   - 非数字 dangerUntil 自愈删除
- *   - 幂等：重复执行不产生副作用
- */
+/** v15 → v16 迁移独立测试（P1-G：dangerUntil 从 intel 搬到 remoteOps）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

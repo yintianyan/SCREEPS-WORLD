@@ -1,9 +1,4 @@
-/**
- * v32 → v33 迁移独立测试（v33 完整情报：enemySpawns / wallCount / sealedExits 建档）。
- *
- * 迁移语义：三字段为 RoomIntel 可选字段（room-observer 唯一写者）。建档 + 畸形自愈：
- * 数字字段非数字 → 删除；sealedExits 非数组或含非数字条目 → 删除（缺失视为未知封口）。
- */
+/** v32 → v33 迁移独立测试（v33 完整情报：enemySpawns / wallCount / sealedExits 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

@@ -1,7 +1,4 @@
-/**
- * A3-002: Room Economic Profile → Transferable 计算
- * A3-016: Safety Reserve Protection（不抽干 Source 房）
- */
+/** A3-002: Room Economic Profile → Transferable 计算 */
 import { describe, expect, it } from "vitest";
 import {
   computeTransferable,

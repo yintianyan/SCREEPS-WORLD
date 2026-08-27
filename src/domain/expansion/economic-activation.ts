@@ -1,19 +1,4 @@
-/**
- * Economic Activation — A3.3 Phase 1：经济激活判据。
- *
- * 合同锚点：EXPANSION_ARCHITECTURE §3 执行闭环 +
- * A3.3 Task Spec Economic Activation 判据。
- *
- * 核心使命：定义「扩张完成」的判据——不是 claimController 成功，
- * 而是新房间经济指标达标且自主运行。
- *
- * 三段判据：
- *   1. Energy Loop Active   — Harvest → Transport → Spawn 环路运转
- *   2. Net Energy Positive   — 能量净流为正（生产 > 消耗）
- *   3. Self-Sustaining       — 连续 N tick 自主运行（无需外部输血）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Economic Activation */
 
 /** 经济激活评估输入。 */
 export interface EconomicActivationInput {
@@ -68,7 +53,7 @@ const SELF_SUSTAINING_TICKS = 500;
 
 /**
  * 评估经济激活状态（纯函数）。
- *
+
  * 激活条件（三段全满足）：
  *   1. Energy Loop Active: hasHarvester && hasTransporter && spawnActive
  *   2. Net Energy Positive: netFlow > 0（连续 SELF_SUSTAINING_TICKS）
@@ -133,7 +118,7 @@ export function evaluateEconomicActivation(input: EconomicActivationInput): Econ
 
 /**
  * 检查是否需要外部输血。
- *
+
  * 当 netFlow < 0 或 externalEnergyInflow > 0 时，房间仍需要外部支持。
  */
 export function needsExternalSupport(input: EconomicActivationInput): boolean {

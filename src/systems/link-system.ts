@@ -17,7 +17,7 @@ export const DEAD_ASSET_THRESHOLD = 500;
 
 /**
  * Link 能量传输系统 — P1 系统，管理 link 间瞬时能量传输 + 死资产检测。
- * 职责：按位置分类 link（source / controller / storage / hub）→ planLinkTransfers
+
  * 规划 → 执行 link.transferEnergy()；检测死资产 source link（三重校验 + 500t 持续），
  * 暴露给布局规划触发拆改（P1-4 通道）。
  * link 链路是 RCL5+ 核心物流：source link ← harvester 存能 → controller link →
@@ -207,7 +207,7 @@ export function isDismantleOnCooldown(roomName: string, tick: number): boolean {
 
 /**
  * 记录房间拆改启动 tick（用于冷却账本）。
- *
+
  * layout-planner 创建拆改计划时调用。
  */
 export function recordDismantleStart(roomName: string, tick: number): void {
@@ -225,7 +225,7 @@ export function getDismantlePlans(): ReadonlyMap<string, import("../kernel/globa
 
 /**
  * 创建并登记拆改计划（layout-planner 消费）。
- *
+
  * 同时记录冷却 tick，确保冷却与计划创建原子化（避免冷却已记但计划未存的半成品状态）。
  */
 export function createDismantlePlan(
@@ -252,7 +252,7 @@ export function createDismantlePlan(
 
 /**
  * 递增 per-room 拆改累计计数（globalCache.dismantleCount）。
- *
+
  * layout-metrics 的「拆改失效告警」消费此计数：dismantleCount 增长但
  * deadAssetRate 不降 → 拆改机制失效。heap 存储 — global reset 丢失可接受
  * （与 dismantlePlans 同策略），重开后从 0 重新计数。
@@ -272,7 +272,7 @@ export function clearDismantlePlan(deadLinkId: string): void {
 
 /**
  * 更新拆改计划状态（construction-manager 每 tick 调用）。
- *
+
  * 纯函数版本便于单测状态机转移逻辑，实际 cache 写入由调用方负责。
  */
 export function transitionDismantlePlan(
@@ -287,7 +287,7 @@ export function transitionDismantlePlan(
 
 /**
  * 判定房间是否处于战时状态（colonyState === "defense"）。
- *
+
  * layout-planner + construction-manager 消费：战时暂停拆改（不新建计划、不 destroy 旧 link），
  * 保留现有计划待恢复 peace 后继续。
  */
@@ -297,7 +297,7 @@ export function isRoomInDefense(roomName: string): boolean {
 
 /**
  * 根据可与 source/controller/storage 的距离分类（委托纯函数 classifyLinkRole）。
- *
+
  * 采用「最近锚获胜」而非旧的「source 固定最高优先级」：后者会把紧邻 controller/storage、
  * 却恰好落在某 source range≤2 内的 link 误判为 source（优先级劫持），令 controller/storage
  * link 从传输拓扑消失。分类逻辑与 harvester 灌能识别（harvest.ts sourceAdjacentLink）

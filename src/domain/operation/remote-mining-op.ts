@@ -1,28 +1,4 @@
-/**
- * Remote Mining Operation — A4.1 Phase 1：远矿运营的 Operation 生命周期。
- *
- * 合同锚点：A4.1 Architecture Audit §4（RemoteMiningOperation 设计）。
- * 记忆约束 [[memory:17875714213295541337]]：Remote Mining 必须作为 Empire Resource
- * Network 上的 Resource Production Operation，不是独立子系统。
- *
- * 设计意图：
- *   将远矿运营从 Memory.rooms[home].remoteOps[target] 扁平结构提升为正式 Operation，
- *   复用 OperationContext 九态状态机（planned→ready→running→verifying→completed|
- *   blocked|failed|cancelled|expired），不创建第二套 Operation System。
- *
- *   RemoteMiningOperationContext 在 OperationContext 基础上扩展远矿特有字段：
- *   - sourceId: RemoteSource 幂等键（稳定 Identity）
- *   - expectedYield: 预期产出 (e/tick)
- *   - 经济追踪: actualProduction / actualDelivered / actualLost
- *   - 预算: budget (RemoteOperationBudget)
- *   - 检查点: checkpoint (RemoteCheckpoint)
- *   - 经济健康度: economicHealth (RemoteEconomicHealth)
- *
- *   幂等性：同一 (homeRoom, targetRoom) 只允许一个 Active RemoteMiningOperation。
- *   幂等键 = "remote_mining:${homeRoom}:${targetRoom}"，与 RemoteSource ID 同源。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Remote Mining Operation */
 
 import type {
   OperationContext,
@@ -40,11 +16,11 @@ import {
 
 /**
  * Remote Operation Checkpoint — 远矿运营的阶段性检查点。
- *
+
  * 状态流转：
  *   DISCOVERED → VALIDATED → PREPARED → INFRASTRUCTURE_READY
  *     → MINING_ACTIVE → LOGISTICS_ACTIVE → ECONOMIC_ACTIVE
- *
+
  * - DISCOVERED: intel 发现远矿候选
  * - VALIDATED: Execution Gate 通过
  * - PREPARED: spawn 请求提交
@@ -102,7 +78,7 @@ export function nextCheckpoint(cp: RemoteCheckpoint): RemoteCheckpoint | undefin
 
 /**
  * Remote Economic Health — 远矿经济健康度五级。
- *
+
  * - HEALTHY:      净价值 > 阈值 且 ROI > 预期 — 正常运营
  * - DEGRADED:     净价值 > 0 但 < 阈值，或运输 < 产出 — 监控
  * - UNPROFITABLE: 净价值 ≤ 0 持续 N 周期 — 暂停等待改善
@@ -130,7 +106,7 @@ export function isHealthOperational(health: RemoteEconomicHealth): boolean {
 
 /**
  * Remote Operation Budget — 远矿运营预算追踪。
- *
+
  * budgetLimit: 总预算上限（能量），由 CONFIG 配置。
  * consumed: 已消耗累计（spawn 成本 + 运输成本 + 基建成本 + 风险成本）。
  * remaining = limit - consumed.
@@ -175,7 +151,7 @@ export function consumeBudget(
 
 /**
  * RemoteMiningOperationContext — 远矿运营的完整运行时上下文。
- *
+
  * 扩展 OperationContext，增加远矿特有字段。
  * 不修改原 OperationContext 接口——通过 extends 扩展。
  */
@@ -245,14 +221,14 @@ export interface CreateRemoteMiningOpInput {
 
 /**
  * 创建 RemoteMiningOperationContext。
- *
+
  * 初始状态：
  * - status = planned
  * - checkpoint = discovered
  * - economicHealth = healthy
  * - budget = { limit: budgetLimit, consumed: 0 }
  * - 经济追踪全部归零
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function createRemoteMiningOp(

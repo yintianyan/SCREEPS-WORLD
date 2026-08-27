@@ -1,13 +1,4 @@
-/**
- * Colony Stability Dashboard — A3.4：Colony 稳定性可观测性。
- *
- * 合同锚点：A3.4 Task Spec §27 Observability。
- *
- * 把 Colony 的稳定性指标汇总为结构化 Dashboard，
- * 供 globalCache 写入、控制台/log 消费。
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game/Memory/RawMemory。
- */
+/** Colony Stability Dashboard */
 
 import type { AutonomyAgeResult } from "./autonomy";
 import type { StabilityScoreResult } from "./stability-score";

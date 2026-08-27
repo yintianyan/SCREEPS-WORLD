@@ -1,12 +1,4 @@
-/**
- * 防御工事分层维护测试。
- *
- * 覆盖：
- *   - classifyFortification 分类优先级（wall/min-cut/core/container/未知）
- *   - getWallTargetHits 分层目标（perimeter 全额 / core 折扣 / utility 地板）
- *   - 受袭姿态升档只作用于 perimeter/core，utility 恒为地板
- *   - 无 min-cut 情报时未知 rampart 保守按周界（扇区防御房不降档）
- */
+/** 防御工事分层维护测试。 */
 import { describe, expect, it } from "vitest";
 import {
   buildFortificationContext,

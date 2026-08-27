@@ -1,24 +1,4 @@
-/**
- * Demand Batching — A4.3 Phase 1：需求批量聚合。
- *
- * 合同锚点：A4.3 Architecture Audit §2.1 #5（无 Demand Batching）、
- * §3.1（每源一请求，无聚合）、§10 #4。
- *
- * 设计意图：
- *   现有 request-pool.ts 每源一请求（每 container 一个 TransportRequest），
- *   无聚合能力。跨房每个 DemandNode 一个 Operation，也无批量聚合。
- *
- *   Demand Batching 将同房同资源多 Demand 聚合为批量请求，减少 Request 数量，
- *   提高 hauler 利用率（满载优化）。
- *
- * 聚合规则：
- *   - 同 destination room + 同 resource 的 demand 合并
- *   - priority 取最高（最小数字）
- *   - amount 求和
- *   - source 信息保留所有源（多源 fulfillment）
- *
- * 纯函数律（DEP_GRAPH §3-5）：不引用 Game / Memory / RawMemory。
- */
+/** Demand Batching */
 
 import type { ResourceType } from "../operation/agenda-item";
 import type { RequestScope } from "../assignment/request-pool";
@@ -82,13 +62,13 @@ interface DemandGroup {
 
 /**
  * Demand Batching — 同房同资源多 Demand 聚合为批量请求。
- *
+
  * 算法：
  *   1. 按 (destination.room, resource) 分组
  *   2. 每组内 amount 求和，priority 取最高
  *   3. 每组生成一个 TransportRequestV2
  *   4. amount < minBatch 的组跳过（不值得运输）
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function batchDemands(input: BatchInput): TransportRequestV2[] {
@@ -154,7 +134,7 @@ export function batchDemands(input: BatchInput): TransportRequestV2[] {
 /**
  * 将大批量 Request 拆分为多个小批量（如果 amount > maxBatch）。
  * 用于单次运输量过大的场景。
- *
+
  * 纯函数 — 不访问 Game/Memory。
  */
 export function splitBatch(

@@ -1,21 +1,4 @@
-/**
- * Carrier — A3.0 跨房能量搬运工。
- *
- * 专责跨房调拨运输：从 sourceRoom（home）storage 取能 → 跨房搬运 → 在 targetRoom
- * （remoteTarget）storage 卸能。由 agenda-manager 在创建 supply Operation 时孵化，
- * 完成运输后自动 recycle。
- *
- * 与 remoteHauler 的关键区别（方向对偶）：
- *   remoteHauler: acquire → remoteTarget 取能, work → home 卸能
- *   carrier:      acquire → home 取能,       work → remoteTarget 卸能
- *
- * ensureHome 导航逻辑（carrier 专用，在 pathfinding.ts 的 ensureHome 中注册）：
- *   acquire/idle/flee → home (sourceRoom) — 在源房取能
- *   work → remoteTarget (targetRoom) — 去目标房卸能
- *
- * 不参与 assignment 任务池 — 直接由 memory 携带 operationId 关联到 Operation。
- * mode 切换由 gate 钩子完成：满载 → work, 空载 → acquire。
- */
+/** Carrier */
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";

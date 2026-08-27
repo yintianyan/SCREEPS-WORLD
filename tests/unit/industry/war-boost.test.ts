@@ -1,14 +1,4 @@
-/**
- * boost 战前强化链测试（P0）。
- *
- * 覆盖三层：
- *   1. domain 纯函数 — decideWarReactionTarget（war 前馈预产目标）、
- *      isWithinBoostWindow（战时报到窗口放宽）、evaluateBoostRequests
- *      （attacker/healer 映射 + 按实际 body 部件数备料 + 战时窗口）。
- *   2. lab-system 前馈接线 — war 姿态 + sponsor 房时 reactionTarget 被
- *      前馈设定为缺口编队化合物（而非默认 XGH2O）。
- *   3. 降级路径 — 非 war / 非 sponsor / 库存达标 → 回退默认生产线。
- */
+/** boost 战前强化链测试（P0）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   BOOST_REPORT_TTL,

@@ -1,15 +1,4 @@
-/**
- * ScenarioBuilder — 流式 API 构建测试世界初始状态。
- *
- * 用法：
- *   const world = new ScenarioBuilder("W1N1")
- *     .rcl(1)
- *     .spawn("Spawn1", 25, 25)
- *     .source("s1", 20, 20)
- *     .source("s2", 30, 30)
- *     .flat()
- *     .build();
- */
+/** ScenarioBuilder — 流式 API 构建测试世界初始状态。 */
 import { TestWorld, flatTerrain, terrainWithWalls, type WorldConfig, type WorldPos } from "./TestWorld";
 
 export class ScenarioBuilder {

@@ -1,21 +1,4 @@
-/**
- * E2E-001 灾后恢复 — 0 creep + 300 能量，AI 必须自恢复到有 creep 工作。
- *
- * 真实场景 [Experience]：
- *   - Global Reset 后 heap 清空，只有 Memory 种子
- *   - 灾难性崩盘后所有 creep 死光，只剩 spawn
- *   - 新开服第一 tick
- *
- * 验证标准（基于 Screeps 真实运营经验）：
- *   1. 500 tick 内必须有至少 1 个 creep（spawn 能孵化）
- *   2. 1000 tick 内必须有 harvester（能采能量）
- *   3. 1500 tick 内能量开始流入 spawn（经济闭环启动）
- *   4. 全程不崩（无 TypeError）
- *
- * 不验证：
- *   - 具体角色数量（不同 RCL 阶段策略不同）
- *   - 具体建筑（灾后恢复只关心活下来）
- */
+/** E2E-001 灾后恢复 — 0 creep + 300 能量，AI 必须自恢复到有 creep 工作。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { disasterRoom } from "../fixtures/rooms";

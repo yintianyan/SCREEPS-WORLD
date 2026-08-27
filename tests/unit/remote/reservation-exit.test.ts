@@ -1,13 +1,4 @@
-/**
- * 敌方 reservation 运行时退出接线测试（组①-1c）。
- *
- * 背景：评选侧（targeting/evaluator）已挡住"已知被他人预定"的房，但 RCL4-7
- * 无 observer，reservation 只能在我方 creep 进房获得视野后才被发现。因此需要
- * 运行时退出：maintainExistingOps 检测到 active op 的目标房被敌方预定时，
- * 照 InvaderCore 止损链模板 —— 废弃运营 + 写 dangerUntil 冷却 + 回收现役 creep。
- *
- * 己方续期（reservation.username === 本帝国用户名）不触发。
- */
+/** 敌方 reservation 运行时退出接线测试（组①-1c）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
 import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../role-helpers";

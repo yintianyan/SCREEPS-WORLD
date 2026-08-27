@@ -1,7 +1,4 @@
-/**
- * Dump actions — harvester 站桩倒能（向身边 range<=2 结构卸载能量/矿物）。
- * 与 fill actions 的区别：dump 是站桩矿工向身边结构倒能，fill 是移动角色向 fillTarget 送能。
- */
+/** Dump actions — harvester 站桩倒能（向身边 range<=2 结构卸载能量/矿物）。 */
 import type { ActionCandidate } from "../action-types";
 import { runAction, runCountedAction } from "./helpers";
 

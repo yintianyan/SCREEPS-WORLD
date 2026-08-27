@@ -1,8 +1,4 @@
-/**
- * A3-001: AgendaItem 类型 + Operation 创建 + 幂等键
- * A3-005: Supply Operation 创建（幂等键去重 + 状态 PLANNED）
- * A3-012: Operation 超时检测
- */
+/** A3-001: AgendaItem 类型 + Operation 创建 + 幂等键 */
 import { describe, expect, it } from "vitest";
 import {
   createOperation,

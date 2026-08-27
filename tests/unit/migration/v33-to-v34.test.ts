@@ -1,10 +1,4 @@
-/**
- * v33 → v34 迁移独立测试（v34 Power Creeps：homeAssignments 建档）。
- *
- * 迁移语义：KernelMemory.powerCreeps 为可选字段（power-creep-manager 唯一写者）。
- * 建档 + 畸形自愈：powerCreeps 非对象 → 删除；homeAssignments 非对象/缺失 →
- * 重置为空（缺失视为无驻留，系统下轮重新分配）；条目值非字符串 → 删除条目。
- */
+/** v33 → v34 迁移独立测试（v34 Power Creeps：homeAssignments 建档）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";

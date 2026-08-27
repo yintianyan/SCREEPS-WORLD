@@ -1,12 +1,4 @@
-/**
- * UOEM Channel Isolation Test — Phase 38 Release Hardening
- *
- * 证明：
- *   1. 生产实现（src/kernel/outcome-channel.ts）是唯一写入 Memory 的 OutcomeChannel
- *   2. reference 实现（src/domain/intelligence/uoem/channel.ts）不写入 Memory
- *   3. 两个实现不会同时注册或同时写入 Memory
- *   4. 两者容量不同（生产=16, reference=32），不会混淆
- */
+/** UOEM Channel Isolation Test — Phase 38 Release Hardening */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

@@ -1,18 +1,4 @@
-/**
- * runAction 统一错误处理策略测试。
- *
- * 覆盖：
- *   - OK（0）：无 handler 调用
- *   - ERR_NOT_IN_RANGE（-9）：自动触发 moveToTarget
- *   - ERR_FULL（-10）：handler 调用 + 不触发移动
- *   - ERR_INVALID_TARGET（-7）：handler 调用 + 不触发移动
- *   - ERR_NOT_ENOUGH_RESOURCES（-6）：handler 调用
- *   - ERR_TIRED（-2）：handler 调用
- *   - 未注册错误码：静默忽略
- *   - 多 handler 共存
- *   - 无 handlers 时退化为 actOrMove 行为
- *   - actOrMove 向后兼容
- */
+/** runAction 统一错误处理策略测试。 */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   resetGlobals,

@@ -1,13 +1,4 @@
-/**
- * war/planning — 战争目标选择纯函数测试。
- *
- * 覆盖：
- *   - 合法目标被选中（普通房 + 有主 + 情报新鲜 + 塔数达标 + 未占用）
- *   - 多候选选通勤最近（pathCost；缺失回退线性距离）
- *   - 过滤：SK 房 / 无主房 / 己方房 / 情报过期 / tower ≥ 上限 / 已被占用
- *   - 无合格目标 → undefined
- *   - decideSquadSize 编队规模
- */
+/** war/planning — 战争目标选择纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   decideSquadSize,

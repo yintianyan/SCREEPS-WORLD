@@ -1,26 +1,4 @@
-/**
- * A6.5 Reliability Types — IntelligenceState 及所有子类型定义。
- *
- * 合同锚点：A6_5_ARCHITECTURE.md §三
- *
- * 职责：
- *   - 定义 IntelligenceState（多维只读投影，不持久化）
- *   - 定义 ModelReliabilityAssessment（单模型可靠性评估）
- *   - 定义 CalibrationHealthSummary / DataSufficiencySummary / RegimeFitSummary
- *   - 定义 UncertaintySummary / PredictionConflict / FreshnessSummary
- *
- * 纯函数律：不引用 Game / Memory / RawMemory / CPU / 任何全局 Runtime。
- *
- * REL-001 (Read-Only)：类型定义不执行任何行为。
- * REL-005 (Deterministic)：所有 hash 使用 stableStringify + FNV-1a。
- * REL-012 (No Reliability Score)：禁止 reliabilityScore: number 字段。
- *
- * 依赖方向：
- *   A6.5 Reliability Domain
- *     ↓ imports (只读)
- *   A6.4 Calibration Domain (types only)
- *   A6.3 Prediction Domain (types only)
- */
+/** A6.5 Reliability Types — IntelligenceState 及所有子类型定义。 */
 
 import type { CalibrationVerdict } from "../calibration/types";
 
@@ -50,7 +28,7 @@ export interface PredictionCoverage {
 
 /**
  * 单个模型的可靠性评估。
- *
+
  * REL-012：禁止 reliabilityScore: number。
  * Reliability 是多维评估，不是单一分数。
  */
@@ -229,7 +207,7 @@ export type UncertaintyType =
 
 /**
  * 不确定性聚合 — 系统级不确定性来源。
- *
+
  * REL-012：禁止 uncertaintyScore: number。
  */
 export interface UncertaintySummary {
@@ -246,7 +224,7 @@ export interface UncertaintySummary {
 
 /**
  * 预测冲突 — 两个活跃预测之间的矛盾。
- *
+
  * REL-011：A6.5 只检测和标记冲突，不解决冲突。
  */
 export interface PredictionConflict {
@@ -316,13 +294,13 @@ export type OverallFreshness =
 
 /**
  * IntelligenceState — 多维 Intelligence 健康状态。
- *
+
  * READ-ONLY PROJECTION（REL-001）：
  *   不持久化，不写入 globalCache。
  *   每次运行时从 A6.1-A6.4 既有数据重新计算。
- *
+
  * REL-012：禁止 intelligenceScore / overallScore / reliabilityScore 字段。
- *
+
  * 禁止合并为单一 IntelligenceScore。
  */
 export interface IntelligenceState {

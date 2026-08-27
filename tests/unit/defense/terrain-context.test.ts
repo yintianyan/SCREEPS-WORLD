@@ -1,17 +1,4 @@
-/**
- * A5.2 G3 — TerrainContext 纯函数测试。
- *
- * 覆盖场景：
- * 1. Open Room（开阔房）
- * 2. Dense Walls（墙密度高）
- * 3. Chokepoint（狭窄入口）
- * 4. Corridor（走廊）
- * 5. Fortified Core（核心区防御）
- * 6. Partial Rampart（部分 rampart）
- * 7. High Tower Exposure（高塔暴露）
- * 8. Poor Retreat（撤退困难）
- * 9. Unknown Terrain（无视野）
- */
+/** A5.2 G3 — TerrainContext 纯函数测试。 */
 import { describe, expect, it } from "vitest";
 import {
   buildTerrainContext,

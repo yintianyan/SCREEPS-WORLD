@@ -1,13 +1,4 @@
-/**
- * TestWorld — 完整 Screeps Runtime 模拟器。
- *
- * 设计原则：
- *   - 模拟 Screeps 引擎（Game/Room/Creep/Structure/Source），不 mock AI 内部逻辑。
- *   - 生产代码（kernel.run()）读取 Game/Memory/RawMemory 全局对象，写入意图。
- *   - TestWorld 每 tick 推进物理（能量再生、container 衰减、孵化倒计时、creep 老化）。
- *   - 操作（harvest/transfer/withdraw/build/repair/upgrade）立即生效（与真实引擎一致）。
- *   - 移动立即生效（简化碰撞，足够测试 AI 决策逻辑）。
- */
+/** TestWorld — 完整 Screeps Runtime 模拟器。 */
 
 // ─── 类型定义 ───────────────────────────────────────────────
 
@@ -88,7 +79,7 @@ function genId(prefix: string): string {
 
 /**
  * 全局递增的 Game.time 基准 — 每个 TestWorld 实例分配唯一基准（100000 的倍数）。
- *
+
  * 根因：per-tick 缓存（objCache/structCache/pathShare/assignment 池/remoteThreats 等）
  * 以 Game.time 为 key。若每个 TestWorld 都从 Game.time=0 起，跨测试文件会撞值，
  * 后一个 TestWorld 在 installGlobals 前会读到前一个测试残留的缓存（如 tick=3 的

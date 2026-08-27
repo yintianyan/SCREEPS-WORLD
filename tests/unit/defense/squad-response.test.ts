@@ -1,13 +1,4 @@
-/**
- * M11 防御 L1 三件套测试。
- *
- * ① 小队威胁判定（isSquadThreat）：≥2 武装或武装+治疗组合才算小队 —
- *    独狼/纯拆迁/纯奶不触发全员避险（避免过度反应打断经济）。
- * ② 战时集结避险：squadThreat 在场时非战斗角色撤入核心集结区
- *    （不限 fleeRange），战斗角色（combat=true）豁免照常接敌。
- * ③ defender 双编制：squadThreat 时编制保底 2 只且优先级 P0。
- * ④ safe mode 舰队伤亡熔断：窗口内战损达阈值触发（黑匣子计数联动）。
- */
+/** M11 防御 L1 三件套测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isSquadThreat } from "../../../src/domain/defense/threat";
 import { evaluateDemand } from "../../../src/domain/spawn/demand";

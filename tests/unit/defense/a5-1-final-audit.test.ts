@@ -1,19 +1,4 @@
-/**
- * A5.1 FINAL AUDIT — Threat / Combat / Remote Defense 完整审计测试。
- *
- * 覆盖审计项：
- *   §4  G1 Threat Model 验证（8 场景）
- *   §5  G1 Evidence Audit（10 评估可追溯）
- *   §6  G2 Combat Capability Audit（部件组合）
- *   §7  G2 Boost Reality Audit（T1/T2/T3 倍率）
- *   §8  G2 Mobility Audit（estimate 标注）
- *   §9  G2 CombatPower Audit（反例场景 A/B/C）
- *   §10 G4 Remote Defense Audit（7 场景）
- *   §11 Remote Defense Expected Value 消费因素验证
- *   §12 ESCORT 权责审计（不直接 spawn）
- *   §13 RETREAT / ABORT 审计（不直接 kill）
- *   §15 Replay Audit（Hash 一致性 + Divergence）
- */
+/** A5.1 FINAL AUDIT — Threat / Combat / Remote Defense 完整审计测试。 */
 import { describe, expect, it } from "vitest";
 import {
   assessThreat,

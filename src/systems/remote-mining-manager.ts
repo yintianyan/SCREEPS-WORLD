@@ -1,11 +1,4 @@
-/**
- * Remote Mining Manager — P2 系统，远矿运营的中央调度器（interval 10）。
- * 数据流：room-observer（每 50 tick 采 intel）→ 本系统（每 10 tick 评估）→
- * selectRemoteTargets（纯函数筛选）→ evaluateRemoteDemand（纯函数生成请求）→
- * spawnQueue → spawn-manager（孵化执行）。
- * 安全门禁：colonyState 非 normal 暂停新远矿孵化；CPU conserve 以下不孵化；
- * RCL < minRcl 不启动；目标数不超过 maxOperations。P2 — 远矿是扩张行为，不阻塞本房经济。
- */
+/** Remote Mining Manager */
 import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext, ColonyState, RoomSnapshot } from "../kernel/contracts";
@@ -610,7 +603,7 @@ function maintainExistingOps(
 }
 
 /** 逐房「新开远矿」就绪门（Phase 1b，纯函数便于单测）。
- *
+
  * 帝国姿态放行（newRemoteOpsAllowed）之外的**本房**门槛：本房经济须自身成熟，
  * 才允许再新开远矿点——RCL≥roomMinRcl 且 colonyState=normal 且 storage 盈余
  * ≥roomMinStorage。防止新占嫩房（RCL4、无 storage 缓冲）过早分兵远矿。
@@ -639,7 +632,7 @@ function countActiveOps(remoteOps: Readonly<Record<string, RemoteOp>>): number {
  * 反馈闭环：manager 原本只看「账面」指标（sources/pathCost/netScore），看不到
  * 「编队实际在不在干活」— W36S58 线上实证：账面上 2 源近距高分房，实际编队
  * 被前任玩家墙线困住空转 44k tick、零产出、无限补员。本普查是吞吐反馈安全网。
- *
+
  * 空转判定（单只）：mode 为 idle/flee，或 stuckTicks ≥ CONFIG.remote.stallStuckTicks。
  * 通勤中的 acquire/work、正常采集搬运均计为工作。全员空转计时进 op.stallSince；
  * 任一成员恢复工作（或编队归零 — 孵化替换窗口）立即清零（抗抖动）。
@@ -708,10 +701,10 @@ function hasCreepInRoom(roomName: string): boolean {
 
 /**
  * 回收过量远矿 creep。
- *
+
  * 当某远矿目标的存活 creep 数超过配置上限时，标记多余的 creep 回收。
  * 回收标记由 spawn-manager 的 recyclePass 实际执行（spawn.recycleCreep）。
- *
+
  * 交接豁免（关键）：demand 的 findReplacement 会在老 creep 进入替换窗口时
  * 提前孵化替补 — 交接重叠期同角色 2 只并存是**设计行为**，不是超额。
  * 无豁免的后果（线上实测的孵化→秒杀→再孵化循环）：
@@ -724,7 +717,7 @@ function hasCreepInRoom(roomName: string): boolean {
  * 任其自然寿终 — 远矿角色被标记后跨房走回家的路程往往长于余命，
  * 回收残值拿不到还白丢交接期产出）；只有多只健康成员并存（双孵事故）
  * 才是真超额，保留最年轻、回收其余。
- *
+
  * @internal 导出仅供单元测试（tests/unit/remote/recycle-excess.test.ts）—
  *           业务代码唯一入口是 remoteMiningManagerSystem.run。
  */
@@ -869,7 +862,7 @@ export function classifyInvaderCores(input: {
 /**
  * 收集 InvaderCore 压制信息 — 检测 active 运营的远矿房是否被 InvaderCore 占据，并按
  * 核心等级二分（lesser/stronghold）。详见 classifyInvaderCores。
- *
+
  * InvaderCore 是敌对结构而非 creep，FIND_HOSTILE_CREEPS 检测不到 —
  * 「房里只有一个核心、没有 Invader creep」的场景在旧实现中完全漏报，
  * 运营继续送 harvester/reserver 空耗。检测需要视野（active 房通常有驻场 creep）。
@@ -897,7 +890,7 @@ export function collectRemoteBlockers(remoteOps: Readonly<Record<string, RemoteO
 
 /**
  * 回收 InvaderCore 压制房的现役远矿 creep。
- *
+
  * 核心压制期间该房是净亏损：source 被敌方预约压在 1500 容量、
  * reserver 打不动核心持续续期的预约。标记 recycle 后 role-runner 短路停工，
  * spawn-manager 的 recyclePass 引导回收；孵化冻结由 blockedRooms 负责，
@@ -922,7 +915,7 @@ function recycleBlockedRoomCreeps(
 
 /**
  * P0-A：远矿 container site 收编 — 消费 remoteHarvester 的 needContainer 申请标记。
- *
+
  * 职责（每 managerInterval tick 运行一次）：
  *   1. **siteCount 实测校正**（评审修正必须）：用 room.find 统计该房现存 container
  *      construction site 数，写回 op.siteCount — site 建成（变结构）/被移除/失效时
@@ -933,10 +926,10 @@ function recycleBlockedRoomCreeps(
  *      总量 ctx.globalSiteCount + remoteSiteTotal < maxGlobalSites。
  *   4. **创建 site**：在站桩位 creep 脚下创建 container site，成功后清标记 +
  *      递增 siteCount + 标记 normal 槽位已用；失败写 containerSiteCooldown 防重试。
- *
+
  * 回收：远矿 site 的孤儿清扫复用 construction-manager.ts 的 cleanOrphanConstructionSites
  * （abandoned 房不在 computeSiteKeepRooms 保留集，低频被 remove）— 不新增第二条删除路径。
- *
+
  * @internal 导出仅供单元测试 — 业务代码唯一入口是 remoteMiningManagerSystem.run。
  */
 export function fulfillContainerRequests(

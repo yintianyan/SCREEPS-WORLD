@@ -1,13 +1,4 @@
-/**
- * nextDirFromPath 单测 — 缓存路径提取下一步方向。
- *
- * 覆盖：
- *   - creep 在路径上 → 返回到下一格的方向；
- *   - 路径终点 / 跨房断点 → undefined；
- *   - 偏离路径且不相邻起点 → undefined；
- *   - 回归（修复橡皮筋 bug）：偏离路径但紧邻旧起点 path[0] → undefined（不再走向旧起点，
- *     否则 creep 被拉回旧起点→前进→再拉回 2-循环打转，线上 scout thrash 根因）。
- */
+/** nextDirFromPath 单测 — 缓存路径提取下一步方向。 */
 import { describe, expect, it } from "vitest";
 import { nextDirFromPath } from "../../../src/creeps/movement/intent";
 

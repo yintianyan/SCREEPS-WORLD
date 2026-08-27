@@ -1,12 +1,4 @@
-/**
- * P1-G 静态守卫 — dangerUntil 写入点仅存在于 remote-mining-manager。
- *
- * dangerUntil 从 intel[room] 迁移到 remoteOps[room] 后，remote-mining-manager
- * 是唯一写者。其他文件不应出现对 .dangerUntil 的赋值（写操作），
- * 防止新的双写者引入。
- *
- * 与 remote-site-guard 同款的源码扫描模式。
- */
+/** P1-G 静态守卫 — dangerUntil 写入点仅存在于 remote-mining-manager。 */
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";

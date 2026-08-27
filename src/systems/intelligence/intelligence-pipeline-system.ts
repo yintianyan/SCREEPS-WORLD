@@ -1,36 +1,4 @@
-/**
- * Intelligence Pipeline System — A6 智能层合并薄壳。
- *
- * R10 ADR 合并产物：将 A6.1–A6.6 六个独立 System 合并为 1 个 pipeline。
- *
- * 设计原理：
- *   - 六个 A6 System 全部是 P3 post 阶段、Shadow-Only（不执行 Game API、不修改 Strategy）
- *   - 它们有严格的 pipeline 依赖关系：experience → evaluation → prediction →
- *     calibration → intelligence-state → recommendation
- *   - interval 不同：experience=100t，其余=500t
- *   - 合并后 interval=100（取最小），内部按各阶段原始 interval 分频执行
- *   - 各阶段的 run() 逻辑完全保留，只是从独立 System 变为 pipeline 内部 stage 调用
- *   - 各阶段的 export 查询函数不变（仍从各自原文件 export）
- *
- * Cadence 保持（Phase 6 修复）：
- *   - experience-collector 每 100t 运行（与 pipeline interval 一致，始终执行）。
- *   - 其余 5 个 500t 阶段在 (tick - phase) % 500 === 0 时运行。
- *   - pipeline interval=100 意味着每 100t 进入 run()，500t 阶段在每 5 次进入中执行 1 次。
- *   - 由于所有 500t 阶段共享同一个 phase 偏移，它们在同 tick 串行执行，
- *     保持了原始的依赖顺序（experience 先于 evaluation 先于 prediction ...）。
- *   - 不存在 cadence 死锁：pipeline interval=100 保证 500t 阶段每 5 次进入有 1 次命中。
- *   - P14 cadence 修复（AU-6）：各 stage 内部门控已改为 (tick - phase) % N === 0，
- *     与 pipeline 外层 cadence 一致。
- *
- * 错误隔离（Phase 6 修复）：
- *   - 每个 stage 独立 safeRun 包裹，一个 stage 抛错不跳过后续独立 stage。
- *   - 错误带 pipeline 名 + stage 名 + tick，不误报为整 pipeline 失败。
- *   - A6 全部 Shadow-Only：pipeline 完全停止时帝国照常安全运行（不变式保持）。
- *
- * 安全不变式：本系统完全停止时，帝国必须照常安全运行（继承自 A6.1-A6.6 各阶段不变式）。
- *
- * 合同锚点：R10 ADR（ARCHITECTURE_FREEZE.md §15）+ A6.1-A6.6 各自合同。
- */
+/** Intelligence Pipeline System */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { safeRun } from "../../kernel/safe-run";
 import { systemPhase } from "../../kernel/phase";
@@ -65,7 +33,7 @@ const PIPELINE_NAME = "intelligence-pipeline";
 
 /**
  * Intelligence Pipeline — 合并后的单一 System 注册。
- *
+
  * interval=100（取最小），内部按各阶段原始 interval 分频调用。
  * 优先级 P3（post 阶段，在所有业务系统之后运行）。
  */
