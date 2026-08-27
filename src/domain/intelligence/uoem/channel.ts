@@ -1,4 +1,20 @@
 /**
+ * ⚠️ REFERENCE IMPLEMENTATION — NOT FOR PRODUCTION USE ⚠️
+ *
+ * 此文件是 UOEM Step 1.2 的 reference 实现，用于：
+ *   - 纯 Domain 层理论证明（不可变纯函数 + FIFO + bounded）
+ *   - tests/unit/phase38/uoem-step2-core.test.ts 的架构不变量验证
+ *
+ * 生产环境必须使用 src/kernel/outcome-channel.ts（cap=16，压缩字段名，
+ * 直接操作 Memory，满足 3.2KB 冻结契约）。
+ *
+ * 两套实现的差异：
+ *   - reference：cap=32，不可变纯函数，entries/seq/seen 全名段
+ *   - production：cap=16，mutable 直接操作 Memory，q/s/dr/oe 压缩字段名
+ *
+ * 安全不变式：此文件不被任何生产代码导入（仅测试导入），
+ * 两个实现不会被同时注册或同时写入 Memory。
+ *
  * UOEM Core — Memory-backed bounded OutcomeChannel.
  *
  * STEP 1.2：FIFO 有界 OutcomeChannel 实现。

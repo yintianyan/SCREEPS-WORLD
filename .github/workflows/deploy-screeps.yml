@@ -28,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          # 跟随 .nvmrc（22.23.1）— 单一真相源，防版本漂移。
+          # 跟随 .nvmrc — 单一真相源，防版本漂移。
           node-version-file: '.nvmrc'
           cache: npm
 

@@ -516,3 +516,118 @@ E2E 15/15 ✅ (13-corrupted-memory + 14-old-schema-migration 新增)
 - flaky benchmark：focusFirePlanHash 阈值 5ms→15ms（CI 环境性能波动，非 UOEM 逻辑）
 - 系统注册一致性：bootstrap.ts 36 个 registerSystem 调用，与 R10 ADR 一致
 - soak 验证：E2E-010（10000 tick 全量指标）已通过，Memory 从 1KB→9KB 稳定
+
+## Post-A5 Release Hardening 批次 — 2026-08-27
+
+来源：Post-A5 Release Hardening 任务书。目标：消除所有 CONDITIONAL PASS 遗留项。
+
+### RH-1: 统一 OutcomeChannel 实现
+
+**问题**：存在两套 OutcomeChannel 实现——`src/kernel/outcome-channel.ts`（生产，cap=16，
+压缩字段名）与 `src/domain/intelligence/uoem/channel.ts`（reference，cap=32，全名段），
+容量和序列化字段不同，存在混淆风险。
+
+**修复**：
+- 确认 `src/kernel/outcome-channel.ts` 为唯一生产实现（`expansion-manager.ts` +
+  `experience-collector-system.ts` 仅导入此模块）。
+- `src/domain/intelligence/uoem/channel.ts` 头部添加 `⚠️ REFERENCE IMPLEMENTATION —
+  NOT FOR PRODUCTION USE` 标注，明确说明两套实现的差异和安全不变式。
+- 新增 `tests/unit/phase38/uoem-channel-isolation.test.ts`（6 tests）证明：
+  两者容量不同（16 vs 32）、字段名不重叠、生产实现不创建 reference 字段、
+  reference 实现不写入 Memory。
+
+### RH-2: Memory Schema v41 迁移（OutcomeChannel 字段名压缩）
+
+**问题**：OutcomeChannel 的旧字段名（queue/seen/duplicateRejected/overflowEvicted）
+在 `getOutcomeChannel` 中有惰性迁移，但缺少正式 schema migration。
+AGENTS.md 要求"不得只依赖 getOutcomeChannel 的惰性迁移来代替正式 Memory migration"。
+
+**修复**：
+- 新增 v40→v41 迁移（`src/kernel/memory.ts` MIGRATIONS 数组）：
+  按幂等迁移五步合同（MEMORY_ARCHITECTURE §3）：
+  1. 先写新字段（q/s/dr/oe），仅在旧字段存在且新字段不存在时执行
+  2. 验证新字段类型有效（Array.isArray / typeof number）
+  3. 验证成功后删除旧字段
+  4. 所有步骤成功才升版本（migrateMemory 框架保证）
+  5. 幂等：重复执行无副作用
+- 不破坏 operationId/openedAt/closedAt/forcedAdvance。
+- `CONFIG.memory.schemaVersion` 从 40 升到 41。
+- 新增 `tests/unit/migration/v40-to-v41.test.ts`（8 tests）覆盖：
+  正常迁移、幂等性、坏数据、无 outcomeEvents 跳过、无 kernel 跳过、
+  不破坏 expansion 字段、部分迁移、空 outcomeEvents。
+- getOutcomeChannel 的惰性迁移保留作为运行时安全网。
+
+### RH-3: E2E 03-storage-construction 修复
+
+**问题**：mockup 的 `world.addBot()` 会把 controller 强制重置为 `level=1, progress=0`
+（mockup world.js:216）。fixture 预设的 RCL4 和 `sendConsole('controller.level=4')`
+均无效——前者被 addBot 覆盖，后者是 getter-only 属性，赋值在严格模式抛 TypeError、
+非严格模式静默失败。1500 tick 内 RCL 实际从 1 升到约 2，无法触发 storage 建造链路。
+
+**修复**（二阶段）：
+- 第一阶段（错误）：提升 builder tick 上限到 2800、maxTicks 到 5000。无效——
+  RCL1→4 需要 180200 energy 升级，1500 tick 不够。
+- 第二阶段（正确根因修复）：
+  - `ScenarioRunner.setup()` 新增 `controllerLevel?: number` 选项，在 addBot 之后、
+    server 启动前通过 `db['rooms.objects'].update()` 直接修正 controller level。
+  - 03 测试使用 `controllerLevel: 4`，移除无效的 `sendConsole` hack。
+  - builder 在 5810ms 内出现（3/3 通过）。
+- 不降低业务断言强度（仍要求 builder 角色出现 ≥1）。
+
+### RH-4: E2E 13/14 断言强化
+
+**问题**：E2E 13-corrupted-memory 和 14-old-schema-migration 中 UOEM 断言用 `if`
+包裹，验证字段存在但不验证迁移结果。
+
+**修复**：
+- 13：直接断言 `kernel` 存在；如果 `outcomeEvents` 存在则断言旧字段名（queue/seen/
+  duplicateRejected/overflowEvicted）不存在（迁移后应删除）。
+- 14：同理强化 outcomeEvents 和 expansion 子结构的断言。
+
+### RH-5: 发布门禁与回滚文档
+
+- 新建 `docs/implementation/RELEASE_GATE_AND_ROLLBACK.md`：发布前门禁清单
+  （7 项全部必须通过）、Node 版本要求（跟随 `.nvmrc`，当前 24.18.0）、
+  回滚规程（已提交用 `git revert`、未提交用补丁、禁止 `git checkout HEAD~1`）、
+  Canary 失败降级和人工灾难接管说明、发布说明分类（VERIFIED/ASSUMPTION/
+  BLOCKED/REMAINING RISK）、OutcomeChannel 实现隔离边界与 Schema 回滚风险。
+- 新建 `docs/implementation/CANARY_SOAK_PROCEDURE.md`：私服 10000 tick soak
+  验证项（OC-1~5、MEM-1~3、PIPE-1~4、CPU-1~3、RECOVER-1~4）、指标快照格式、
+  失败处置流程。
+
+**验证状态**（Release Readiness & Private-Server Canary 阶段重验，Node 24.18.0）：
+- typecheck ✅ 零错误 | unit 5076/5076 ✅ (330 文件，含 7 隔离测试 + 11 迁移测试) | build ✅
+- migration 测试：调用真实 `runMigrations()` 而非复制逻辑（11 tests 全绿）
+- E2E ✅ **17/17 suite、45/45 tests 全绿，EXIT_CODE=0，无 Errors，788s 自然收尾，
+  零孤儿进程、零端口残留**
+  - 03-storage-construction 3/3 通过（controllerLevel DB 修正后 builder 9.8s 内出现）
+  - 13/14 断言已强化：`schemaVersion === CONFIG.memory.schemaVersion === 41` 精确断言
+  - 旧字段（queue/seen/duplicateRejected/overflowEvicted）不存在断言
+  - CONFIG 导入做参照，不硬编码
+- 私服 10000 tick soak：✅ 已通过（2026-08-27，用户 111 @ W8N3，10001 ticks 连续运行，
+  MEM/OC/CPU/错误隔离全部 PASS，详见 [CANARY_SOAK_PROCEDURE.md](CANARY_SOAK_PROCEDURE.md) §5.4）
+
+### RH-6: vitest v2 E2E 进程退出兼容性
+
+**问题**：E2E 全量跑完后进程挂起不退出。根因链：
+1. screeps-server-mockup 的 storage 子进程无法优雅关闭；
+2. `@screeps/common` storage.js 断连后 `setTimeout(_connect, 1000)` 无限
+   重连，worker 事件循环永不空闲；
+3. vitest v2.1.9 正常结束走 `ctx.close()`（teardownTimeout 兑底只在
+   Ctrl+C 的 `ctx.exit()` 路径），`pool.close()` 等待 worker 永久挂起；
+4. 尝试过的错误方案：`--forceExit`（vitest v2 不支持该参数）、worker 内
+   `process.exit(0)`（被 patch 报 Uncaught Exception，退出码 1）、
+   `process.kill(SIGKILL)`（杀掉共享 fork worker，后续文件丢失）。
+
+**修复**（三层，全部验证通过）：
+1. `ServerHarness.dispose()`：对子进程 SIGKILL + disconnect IPC；
+2. `tests/e2e/global-setup.ts`（新增，运行在主进程，process.exit 不被
+   patch）：globalSetup teardown 在 pool.close() 之前运行，设置 5s
+   unref'd 强退 timer 兑底 — 若 pool.close() 自然完成则进程自然退出
+   （timer 不触发），否则 `process.exit(process.exitCode ?? 0)` 强退
+   （退出码沿用 vitest 已设值，失败仍为 1）；
+3. `tests/e2e/setup.ts` 注册 `process.on('disconnect')` → `reallyExit(0)`
+   防孤儿 worker（主进程死后 worker 被重连 timer 挂住变孤儿）。
+
+**验证**：双文件实验 2/2、6/6 全绿，无 Errors，EXIT_CODE=0，进程 40s 自然
+收尾，零孤儿进程、零端口残留。

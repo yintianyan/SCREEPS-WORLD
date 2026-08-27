@@ -21,7 +21,9 @@ export default defineConfig({
         singleFork: true, // 单进程，避免 screeps-server-mockup 原生模块冲突
       },
     },
-    forceExit: true, // screeps-server-mockup 的 storage 无法优雅关闭
+    // screeps-server-mockup 的 storage 无法优雅关闭：挂起兑底由
+    // global-setup.ts 在主进程处理（详见该文件根因说明）
     setupFiles: ["tests/e2e/setup.ts"],
+    globalSetup: ["tests/e2e/global-setup.ts"],
   },
 });

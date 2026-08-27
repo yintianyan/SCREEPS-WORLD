@@ -992,6 +992,64 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       // 首次调用时创建空结构）。幂等 no-op，仅升版本登记结构变更。
     },
   },
+  {
+    from: 40,
+    to: 41,
+    run: () => {
+      // v41：OutcomeChannel 字段名压缩迁移 — 将 outcomeEvents 中的旧字段名
+      // (queue/seen/duplicateRejected/overflowEvicted) 正式迁移到压缩字段名
+      // (q/s/dr/oe)。
+      //
+      // MEMORY_ARCHITECTURE §3 幂等迁移五步合同：
+      //   1. 先写新字段（如果旧字段存在且新字段不存在）
+      //   2. 验证新字段有效（类型检查）
+      //   3. 验证成功后删除旧字段
+      //   4. 所有步骤成功才升版本（由 migrateMemory 框架保证）
+      //   5. 幂等：重复执行无副作用（先检查目标态再动手）
+      //
+      // 注意：getOutcomeChannel 有惰性迁移作为运行时安全网，
+      // 但正式 migration 是 schema 层的确定性保证，不可省略。
+      //
+      // 不破坏 operationId/openedAt/closedAt/forcedAdvance 等已有字段。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+
+      const ch = kernel.outcomeEvents as Record<string, unknown> | undefined;
+      if (!ch) return;
+
+      // 步骤 1+2：先写新字段并验证（损坏的可选字段归一化为安全默认值）。
+      if (!ch.q && Array.isArray(ch.queue)) {
+        ch.q = ch.queue;
+      }
+      if (!Array.isArray(ch.q)) ch.q = [];
+      if (!ch.s && Array.isArray(ch.seen)) {
+        ch.s = ch.seen;
+      }
+      if (!Array.isArray(ch.s)) ch.s = [];
+      if (ch.dr === undefined && typeof ch.duplicateRejected === "number") {
+        ch.dr = ch.duplicateRejected;
+      }
+      if (typeof ch.dr !== "number") ch.dr = 0;
+      if (ch.oe === undefined && typeof ch.overflowEvicted === "number") {
+        ch.oe = ch.overflowEvicted;
+      }
+      if (typeof ch.oe !== "number") ch.oe = 0;
+
+      // 步骤 3：验证新字段有效后删除旧字段
+      if (ch.q !== undefined && ch.queue !== undefined) {
+        delete ch.queue;
+      }
+      if (ch.s !== undefined && ch.seen !== undefined) {
+        delete ch.seen;
+      }
+      if (ch.dr !== undefined && ch.duplicateRejected !== undefined) {
+        delete ch.duplicateRejected;
+      }
+      if (ch.oe !== undefined && ch.overflowEvicted !== undefined) {
+        delete ch.overflowEvicted;
+      }
+    },
+  },
 ];
 
 /**

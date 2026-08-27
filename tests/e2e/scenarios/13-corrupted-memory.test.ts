@@ -19,6 +19,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { debugSnapshot } from "../helpers/assertions";
+import { CONFIG } from "../../../src/config";
 
 describe("E2E-013 损坏 Memory 恢复", () => {
   const runner = new ScenarioRunner();
@@ -73,37 +74,40 @@ describe("E2E-013 损坏 Memory 恢复", () => {
       const mem = await runner.bot.getMemory();
       expect(mem, "Memory 应存在").toBeDefined();
 
-      // Phase 6: schemaVersion 必须存在且为当前版本
+      // 精确断言：schemaVersion 必须等于 CONFIG.memory.schemaVersion（=41）
       expect(mem.schemaVersion, "schemaVersion 必须存在").toBeDefined();
-      expect(
-        typeof mem.schemaVersion,
-        "schemaVersion 应为数字（迁移系统修正）",
-      ).toBe("number");
-      // 验证 kernel 结构恢复
-      expect(mem.kernel, "kernel 结构应存在").toBeDefined();
-      expect(typeof mem.kernel, "kernel 应为 object").toBe("object");
+      expect(mem.schemaVersion, "schemaVersion 必须等于 CONFIG.memory.schemaVersion").toBe(
+        CONFIG.memory.schemaVersion,
+      );
+      expect(mem.schemaVersion, "schemaVersion 必须等于 41").toBe(41);
+      expect(typeof mem.schemaVersion, "schemaVersion 应为数字").toBe("number");
+
+      // kernel 必须存在且为 object
+      expect(mem.kernel, "kernel 必须存在").toBeDefined();
+      expect(typeof mem.kernel, "kernel 必须为 object").toBe("object");
 
       // creeps 应为 object 或 undefined（不应该是 null）
       if (mem.creeps !== undefined) {
-        expect(
-          typeof mem.creeps,
-          "creeps 应为 object（迁移系统修正）",
-        ).toBe("object");
+        expect(typeof mem.creeps, "creeps 应为 object（迁移系统修正）").toBe("object");
       }
 
-      // Phase 6: 验证恢复后有实际生产/执行行为
-      // 检查 Memory.kernel 存在且有 creeps 在运行
-      expect(last.rawMemory?.kernel, "kernel 应存在").toBeDefined();
+      // 验证恢复后有实际生产/执行行为
+      expect(last.rawMemory?.kernel, "rawMemory.kernel 应存在").toBeDefined();
 
-      // Phase 6 UOEM: 验证 outcomeEvents channel 在损坏 Memory 恢复后正确初始化
+      // OutcomeChannel 必须被生产消费者初始化，并使用压缩字段名。
+      // 旧字段名不得残留。
       const kernel = last.rawMemory?.kernel as Record<string, unknown> | undefined;
-      if (kernel?.outcomeEvents) {
-        const ch = kernel.outcomeEvents as Record<string, unknown>;
-        expect(ch.q, "channel queue 应为数组").toBeInstanceOf(Array);
-        expect(ch.s, "channel seen 应为数组").toBeInstanceOf(Array);
-        expect(typeof ch.dr, "channel duplicateRejected 应为数字").toBe("number");
-        expect(typeof ch.oe, "channel overflowEvicted 应为数字").toBe("number");
-      }
+      expect(kernel, "kernel 应存在").toBeDefined();
+      const ch = kernel!.outcomeEvents as Record<string, unknown> | undefined;
+      expect(ch, "outcomeEvents 必须存在").toBeDefined();
+      expect(ch!.q, "channel q 必须为数组").toBeInstanceOf(Array);
+      expect(ch!.s, "channel s 必须为数组").toBeInstanceOf(Array);
+      expect(typeof ch!.dr, "channel dr 必须为数字").toBe("number");
+      expect(typeof ch!.oe, "channel oe 必须为数字").toBe("number");
+      expect(ch!.queue, "旧字段 queue 不得存在（已迁移到 q）").toBeUndefined();
+      expect(ch!.seen, "旧字段 seen 不得存在（已迁移到 s）").toBeUndefined();
+      expect(ch!.duplicateRejected, "旧字段 duplicateRejected 不得存在").toBeUndefined();
+      expect(ch!.overflowEvicted, "旧字段 overflowEvicted 不得存在").toBeUndefined();
     },
     120000,
   );

@@ -19,6 +19,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { debugSnapshot } from "../helpers/assertions";
+import { CONFIG } from "../../../src/config";
 
 describe("E2E-014 旧 Schema 迁移", () => {
   const runner = new ScenarioRunner();
@@ -51,23 +52,33 @@ describe("E2E-014 旧 Schema 迁移", () => {
       // 推进 1 tick：console 命令执行（注入旧版 Memory）+ loop 执行（迁移系统升级）
       await runner.tick();
 
-      // 验证迁移已执行——schemaVersion 从 1 升级到当前版本
+      // 精确断言：schemaVersion 必须等于 CONFIG.memory.schemaVersion（=41）
       const mem = await runner.bot.getMemory();
-      // Phase 6: schemaVersion 必须升级到当前版本
       expect(mem.schemaVersion, "schemaVersion 应存在").toBeDefined();
-      expect(mem.schemaVersion, "schemaVersion 应从 1 升级到当前版本（≥ 2）").toBeGreaterThanOrEqual(2);
+      expect(mem.schemaVersion, "schemaVersion 必须等于 CONFIG.memory.schemaVersion").toBe(
+        CONFIG.memory.schemaVersion,
+      );
+      expect(mem.schemaVersion, "schemaVersion 必须等于 41").toBe(41);
 
-      // Phase 6 UOEM: 验证迁移后 UOEM 字段结构正确（不破坏 outcomeEvents）
+      // kernel 必须存在
       const kernel = mem.kernel as Record<string, unknown> | undefined;
-      if (kernel?.outcomeEvents) {
-        const ch = kernel.outcomeEvents as Record<string, unknown>;
-        expect(ch.q, "channel queue 应为数组").toBeInstanceOf(Array);
-        expect(ch.s, "channel seen 应为数组").toBeInstanceOf(Array);
-      }
-      // 验证 expansion 子结构（如果有）的 UOEM 字段不丢失
-      if (kernel?.expansion) {
-        const exp = kernel.expansion as Record<string, unknown>;
-        // operationId/openedAt/forcedAdvance 是可选字段，迁移后应为 undefined 或正确类型
+      expect(kernel, "kernel 应存在").toBeDefined();
+
+      // outcomeEvents 必须由生产消费者初始化，且只能使用压缩字段名
+      const ch = kernel!.outcomeEvents as Record<string, unknown> | undefined;
+      expect(ch, "outcomeEvents 必须存在").toBeDefined();
+      expect(ch!.q, "channel q 必须为数组").toBeInstanceOf(Array);
+      expect(ch!.s, "channel s 必须为数组").toBeInstanceOf(Array);
+      expect(typeof ch!.dr, "channel dr 必须为数字").toBe("number");
+      expect(typeof ch!.oe, "channel oe 必须为数字").toBe("number");
+      expect(ch!.queue, "旧字段 queue 不得存在").toBeUndefined();
+      expect(ch!.seen, "旧字段 seen 不得存在").toBeUndefined();
+      expect(ch!.duplicateRejected, "旧字段 duplicateRejected 不得存在").toBeUndefined();
+      expect(ch!.overflowEvicted, "旧字段 overflowEvicted 不得存在").toBeUndefined();
+
+      // expansion 子结构类型验证
+      const exp = kernel!.expansion as Record<string, unknown> | undefined;
+      if (exp) {
         if (exp.operationId !== undefined) {
           expect(typeof exp.operationId, "operationId 应为 string").toBe("string");
         }
@@ -89,12 +100,13 @@ describe("E2E-014 旧 Schema 迁移", () => {
       const last = snapshots.at(-1)!;
 
       // Phase 6: 验证迁移完成且 kernel 恢复
+      // 精确断言：schemaVersion 必须等于 CONFIG.memory.schemaVersion（=41）
       const mem = await runner.bot.getMemory();
       expect(mem.schemaVersion, "schemaVersion 应存在").toBeDefined();
-      expect(
-        mem.schemaVersion,
-        "schemaVersion 应升级到当前版本（≥ 2）",
-      ).toBeGreaterThanOrEqual(2);
+      expect(mem.schemaVersion, "schemaVersion 必须等于 CONFIG.memory.schemaVersion").toBe(
+        CONFIG.memory.schemaVersion,
+      );
+      expect(mem.schemaVersion, "schemaVersion 必须等于 41").toBe(41);
       expect(mem.kernel, "kernel 应存在").toBeDefined();
 
       // 验证帝国正常运转
@@ -136,9 +148,12 @@ describe("E2E-014 旧 Schema 迁移", () => {
         `迁移有错误：\n${migrationErrors.join("\n")}`,
       ).toHaveLength(0);
 
-      // Phase 6: schemaVersion 稳定且不为 undefined
+      // 精确断言：schemaVersion 稳定且等于 41
       const mem = await runner.bot.getMemory();
-      expect(mem.schemaVersion, "schemaVersion 应保持稳定").toBeGreaterThanOrEqual(2);
+      expect(mem.schemaVersion, "schemaVersion 应保持稳定").toBe(
+        CONFIG.memory.schemaVersion,
+      );
+      expect(mem.schemaVersion, "schemaVersion 必须等于 41").toBe(41);
       // Phase 6: 验证有实际生产/执行行为
       expect(last.rawMemory?.kernel, "kernel 应存在").toBeDefined();
     },

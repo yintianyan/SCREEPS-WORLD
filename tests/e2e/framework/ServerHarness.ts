@@ -8,8 +8,8 @@
  *
  * 关键约束 [Facts]：
  *   - screeps-server-mockup 的 server.stop() 无法优雅关闭 storage
- *   - 官方建议 process.exit()，但会杀掉 vitest 进程
- *   - 解法：用 afterAll 钩子清理，配合 vitest --forceExit
+ *   - vitest v2 无 --forceExit CLI 参数，process.exit() 会被 vitest 拦截
+ *   - 解法：setup.ts afterAll 中用 process.kill(pid, SIGKILL) 绕过拦截
  */
 import { ScreepsServer } from "screeps-server-mockup";
 
@@ -62,17 +62,30 @@ export class ServerHarness {
   /**
    * 清理资源。
    *
-   * 注意：screeps-server-mockup 的 storage 无法优雅关闭。
-   * vitest 配置 --forceExit 确保进程退出。
-   * 不调用 process.exit() 以免影响 vitest。
+   * screeps-server-mockup 的 server.stop() 发 SIGTERM 但 storage 进程对 SIGTERM
+   * 不完全退出（只停 queue fetching）。@screeps/common storage.js 的 socket
+   * error/end handler 会 setTimeout(_connect, 1000) 无限重连，使 worker 事件
+   * 循环永不空闲。此处对残留子进程发 SIGKILL 并 disconnect IPC 通道，尽量
+   * 减少孤儿进程和重连 timer 对事件循环的 hold。最终进程退出由 setup.ts
+   * 的 afterAll 中 process.exit(0)（被 vitest 拦截但保证 run 完整）兜底。
    */
   dispose(): void {
     try {
       if (this._started) {
-        this.server.stop();
+        this.server.stop(); // SIGTERM all child processes
+        // storage 对 SIGTERM 不完全退出；SIGKILL 确保进程死透
+        for (const proc of Object.values((this.server as any).processes ?? {})) {
+          try {
+            (proc as any).kill("SIGKILL");
+            // disconnect IPC channel，释放 worker 侧 handle
+            (proc as any).disconnect?.();
+          } catch {
+            // 忽略：进程可能已退出
+          }
+        }
       }
     } catch {
-      // 忽略清理错误，vitest --forceExit 会处理进程退出
+      // 忽略清理错误
     }
     this._started = false;
   }

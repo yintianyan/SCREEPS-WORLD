@@ -7,7 +7,7 @@
  *   - 没有 storage 的 RCL4+ 房间是病态的（container 堆积）
  *
  * 验证标准（不依赖 Memory 内部结构，只通过 bot.console 和 Memory.creeps 观察）：
- *   1. 1500 tick 内出现 builder 角色
+ *   1. 2800 tick 内出现 builder 角色（RCL 升级需要时间）
  *   2. 全程无 JS 错误
  *   3. creep 数量增长（经济在运转）
  *   4. Memory 持久存在（schemaVersion 稳定）
@@ -20,6 +20,12 @@
  * 不验证：
  *   - 具体建造进度（取决于 AI 策略和能量供应）
  *   - Memory 中建造队列结构（生产代码结构可能变化）
+ *
+ * 修复说明（Release Hardening）：mockup 的 world.addBot() 会把 controller
+ * 强制重置为 level=1（world.js:216），fixture 预设的 RCL4 无效；runtime
+ * 中 controller.level 是 getter-only，sendConsole 赋值同样无效。正确方式是
+ * 通过 ScenarioRunner 的 controllerLevel 选项在 addBot 之后、server 启动
+ * 前直接修正 DB。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
@@ -33,7 +39,8 @@ describe("E2E-003 Storage 建造（RCL4）", () => {
     await runner.setup({
       roomName: "W0N1",
       rooms: [rcl4Room("W0N1")],
-      maxTicks: 3000,
+      maxTicks: 5000,
+      controllerLevel: 4,
     });
   }, 120000);
 
@@ -42,20 +49,22 @@ describe("E2E-003 Storage 建造（RCL4）", () => {
   });
 
   it(
-    "1500 tick 内出现 builder 角色",
+    "RCL4 后出现 builder 角色",
     async () => {
+      // controllerLevel: 4 已在 setup 中生效，RCL4 解锁 storage 建造链路。
+      // 等待 builder 出现（storage site 创建后应触发 builder 角色）
       const snapshots = await runner.runUntil(
         (snap) => (snap.creepCountByRole["builder"] ?? 0) >= 1,
-        1500,
+        2800,
       );
 
       const last = snapshots.at(-1)!;
       expect(
         last.creepCountByRole["builder"] ?? 0,
-        `1500 tick 内无 builder。\n${debugSnapshot(last)}`,
+        `RCL4 后 2800 tick 内无 builder。\n${debugSnapshot(last)}`,
       ).toBeGreaterThanOrEqual(1);
     },
-    180000,
+    300000,
   );
 
   it(

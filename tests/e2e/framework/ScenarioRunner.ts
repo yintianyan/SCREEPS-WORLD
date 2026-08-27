@@ -29,6 +29,19 @@ export interface ScenarioOptions {
   maxTicks?: number;
   /** 是否使用 stubWorld（默认 false，精细控制） */
   stubWorld?: boolean;
+  /**
+   * 强制设置 controller RCL（在 addBot 之后应用）。
+   *
+   * [Facts] mockup 的 world.addBot() 会强制把 controller 重置为
+   * level=1, progress=0（world.js:216）。fixture 中预设的 controller
+   * level 会被覆盖。此选项在 bot 注册后、server 启动前通过 DB 直
+   * 接修正，绕过 addBot 的重置行为。
+   *
+   * runtime 中 controller.level 是 getter-only 属性，通过 sendConsole
+   * 赋值无效（严格模式抛 TypeError，非严格模式静默失败），只能用 DB
+   * 更新。
+   */
+  controllerLevel?: number;
 }
 
 /**
@@ -90,6 +103,16 @@ export class ScenarioRunner {
       spawnPos,
     );
     await this._bot.registerTo(this._server.server);
+
+    // addBot 会把 controller 重置为 level=1；如有 controllerLevel 选项，
+    // 在 server 启动前通过 DB 直接修正。
+    if (opts.controllerLevel !== undefined) {
+      const { db } = this._server.server.common.storage;
+      await db["rooms.objects"].update(
+        { room: opts.roomName, type: "controller" },
+        { $set: { level: opts.controllerLevel, progress: 0, downgradeTime: null } },
+      );
+    }
 
     await this._server.start();
     this._inspector = new SnapshotInspector(this._bot);
