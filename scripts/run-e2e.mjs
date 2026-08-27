@@ -1,7 +1,7 @@
 /**
  * E2E 测试环境设置脚本。
  *
- * macOS 27 + Node 22 上 isolated-vm 编译需要显式指定 SDK 路径。
+ * macOS 27 + Node 24 上 isolated-vm 编译需要显式指定 SDK 路径。
  * 这个脚本设置正确的环境变量后运行 vitest。
  *
  * 用法：node scripts/run-e2e.mjs [vitest args]
