@@ -314,6 +314,11 @@ export function recordConstructionSkip(
   skips.total = 0;
 }
 
+/** 运行时 min-cut 产生的历史硬墙任务必须被拒绝，防止不可逆围城继续扩大。 */
+export function isRuntimeDefenseWallTask(task: BuildTask): boolean {
+  return task.structureType === STRUCTURE_WALL && task.key.startsWith("defense.mincut.");
+}
+
 /** 尝试从队列创建一个建造 site。成功创建返回 true。
  *  roomName：跳过原因计数归属房间（R2 可观测性）。
  *  mode："emergency" — 仅紧急重建任务（emergency 槽位语义：事件式签发，
@@ -362,9 +367,8 @@ export function tryCreateSite(
     s => s.structureType === STRUCTURE_ROAD,
   ).length;
   const sourceContainerSites = snapshot.myConstructionSites.filter(isSourceContainerSite).length;
-  // wall/rampart 独立计额 — min-cut v3 割集顶点改用 wall（阻挡通行），
-  // 核心覆盖 + 有结构位置的割集用 rampart。若归入 normalSites（上限 3），
-  // 防御建筑会被 extension 永久挤占，防御线建不起来。
+  // wall/rampart 独立计额 — 防御规划器当前只签发 rampart；保留 wall 计额
+  // 仅用于兼容既有世界中的人工/历史墙任务，不允许新 min-cut 增长硬墙。
   const wallSites = snapshot.myConstructionSites.filter(
     s => s.structureType === STRUCTURE_WALL,
   ).length;
@@ -390,6 +394,14 @@ export function tryCreateSite(
   ).length;
 
   for (const task of sorted) {
+    // 线上 min-cut 曾生成 constructed wall，可能永久封死未来蓝图位置。
+    // 防线硬墙必须来自版本化蓝图/显式迁移，不能由运行时临时签发；旧队列任务
+    // 在创建 site 前终止，避免部署修复后继续扩大不可逆损害。
+    if (isRuntimeDefenseWallTask(task)) {
+      task.state = "blocked";
+      task.attempts = 3;
+      continue;
+    }
     const isCritical = task.structureType === STRUCTURE_TOWER || task.structureType === STRUCTURE_SPAWN;
     const isRoad = task.structureType === STRUCTURE_ROAD;
     const isStorage = task.structureType === STRUCTURE_STORAGE;

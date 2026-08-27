@@ -13,7 +13,7 @@
  * v2：修复超级源汇与 (49,49) 拆点冲突；v3：4 邻接 → 8 邻接 + 切角规则，
  * 修盲点：旧图忽略对角线路径，割集可能漏封对角线入侵。
  */
-export const MINCUT_ALGO_VERSION = "v3";
+export const MINCUT_ALGO_VERSION = "v4";
 
 /** Min-Cut 计算结果。 */
 export interface MinCutResult {

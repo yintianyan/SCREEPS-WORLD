@@ -5,7 +5,7 @@
  *   - developmentGate：脆弱新房（claimSecure）抑制非紧急 site 创建，但紧急重建豁免。
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { developmentGate } from "../../../src/systems/construction-manager";
+import { developmentGate, isRuntimeDefenseWallTask } from "../../../src/systems/construction-manager";
 import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
 
 beforeEach(() => {
@@ -41,5 +41,25 @@ describe("developmentGate — claim-secure 抑制非紧急建造", () => {
     const snap = mockSnapshot({ threatCreeps: [hostile as any] });
     const ctx = mockContext(snap);
     expect(developmentGate(snap, ctx, { any: false } as any)).toBe(false);
+  });
+});
+
+describe("runtime defense wall guard", () => {
+  it("拒绝历史在线 min-cut 硬墙任务", () => {
+    expect(isRuntimeDefenseWallTask({
+      key: "defense.mincut.wall.20.20",
+      structureType: STRUCTURE_WALL,
+    } as BuildTask)).toBe(true);
+  });
+
+  it("不误伤 rampart 或显式非 min-cut wall 任务", () => {
+    expect(isRuntimeDefenseWallTask({
+      key: "defense.mincut.rampart.20.20",
+      structureType: STRUCTURE_RAMPART,
+    } as BuildTask)).toBe(false);
+    expect(isRuntimeDefenseWallTask({
+      key: "manual.wall.20.20",
+      structureType: STRUCTURE_WALL,
+    } as BuildTask)).toBe(false);
   });
 });

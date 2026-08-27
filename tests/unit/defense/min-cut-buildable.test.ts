@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isMinCutPositionBuildable } from "../../../src/systems/defense-planner";
+import { buildProtectedLayoutPositions, isMinCutPositionBuildable } from "../../../src/systems/defense-planner";
+import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-core-v2";
 
 /**
  * P1-2 min-cut 割集位置可建造性预校验单元测试。
@@ -72,5 +73,25 @@ describe("isMinCutPositionBuildable — min-cut 割集位置可建造性预校�
   it("边界内位置（x=2, y=2 / x=47, y=47）可建造", () => {
     expect(isMinCutPositionBuildable({ x: 2, y: 2 }, false)).toBe(true);
     expect(isMinCutPositionBuildable({ x: 47, y: 47 }, false)).toBe(true);
+  });
+});
+
+describe("未来蓝图 footprint 防护", () => {
+  it("无 anchor 时不伪造保护区", () => {
+    expect(buildProtectedLayoutPositions(undefined).size).toBe(0);
+  });
+
+  it("anchor 设置后保护所有 RCL 未来结构位置", () => {
+    const anchor = 25 * 50 + 25;
+    const protectedPositions = buildProtectedLayoutPositions({ anchor } as any);
+
+    expect(protectedPositions.size).toBeGreaterThan(0);
+    for (const cell of COMPACT_CORE_V2.cells) {
+      const x = 25 + cell.dx;
+      const y = 25 + cell.dy;
+      if (x >= 1 && x <= 48 && y >= 1 && y <= 48) {
+        expect(protectedPositions.has(x * 50 + y)).toBe(true);
+      }
+    }
   });
 });
