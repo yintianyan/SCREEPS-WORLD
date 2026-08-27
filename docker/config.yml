@@ -1,0 +1,51 @@
+# ─── Screeps 私服配置 ───────────────────────────────────────────
+# 被 docker-compose.yml 挂载到容器 /screeps/config.yml
+# launcher 读取此文件后自动 npm install 所有 mods
+#
+# 社区 mod 清单（均来自 ScreepsMods 组织，非自研）：
+#   screepsmod-mongo       — MongoDB + Redis 持久化（必装）
+#   screepsmod-auth        — HTTP API 认证（signin/register/password）
+#   screepsmod-admin-utils — 管理工具（tickRate 控制、暂停/恢复等）
+#   screepsmod-map-tool    — 地图生成工具（Web UI /maptool/ + CLI map.* 命令）
+
+# Steam API key：由 .env 的 STEAM_KEY 注入，不在此硬编码
+steamKey: ""
+
+# 依赖版本锁定（screeps-launcher 官方推荐）
+pinnedPackages:
+  ssri: 8.0.1
+  cacache: 15.3.0
+  passport-steam: 1.0.17
+  minipass-fetch: 2.1.2
+  express-rate-limit: 6.7.0
+
+# Node 版本（launcher 自动管理，默认 Node 24 Krypton）
+# nodeVersion: Krypton
+
+mods:
+  # 必需：mongo + redis 存储后端
+  - screepsmod-mongo
+  # 必需：让 config.yml 的 serverConfig 字段生效（tickRate 等）
+  - screepsmod-admin-utils
+  # HTTP API 认证（密码/Token 登录，无需 Steam 客户端）
+  # 注意：screepsmod-auth@2.9.0 与 screepsmod-mongo@2.13.2 存在加载时序 bug，
+  # 需配合 patches/screepsmod-auth-index.js 补丁使用（见该文件注释）
+  - screepsmod-auth
+  # 地图生成工具：Web UI + CLI map.generateMap() / map.generateRoom()
+  # 替代了原 auto-worldgen.js 自研 mod
+  - screepsmod-map-tool
+
+# 无内置 bot（空净世界，由 AI 代码自部署）
+bots: {}
+
+serverConfig:
+  # tick 间隔（毫秒）。100ms = 10× 官服速度
+  tickRate: 100
+  # 欢迎文本
+  welcomeText: |
+    <h1 style="text-align: center;">Screeps World Framework — Private Server</h1>
+    <p style="text-align: center;">
+      Mods: screepsmod-mongo + screepsmod-auth + screepsmod-admin-utils + screepsmod-map-tool<br>
+      Map Tool: <a href="/maptool/">/maptool/</a><br>
+      tickRate: 100ms (10× official)
+    </p>

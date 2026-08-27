@@ -1,0 +1,106 @@
+# ─── Screeps 私服 Docker 编排 ──────────────────────────────────
+# 迁移自 ~/Desktop/screeps-server，路径全部相对化。
+#
+# 架构：screeps (引擎+launcher) + client (浏览器客户端) + mongo (持久化) + redis (缓存)
+# 启动：cd docker && docker compose up -d
+# 日志：docker compose logs -f screeps
+# CLI： docker exec screeps-server curl -s -X POST http://127.0.0.1:21026/cli -d "JS"
+# 重置：node scripts/reset-private-server.js
+
+services:
+  screeps:
+    image: screepers/screeps-launcher:latest
+    container_name: screeps-server
+    volumes:
+      # 配置文件挂载（只读）
+      - ./config.yml:/screeps/config.yml:ro
+      # auth 补丁：挂载为 local mod，修复 screepsmod-auth 与 screepsmod-mongo 的加载时序 bug
+      # （config.mongo.client 在异步回调中赋值，auth 同步读取 → TypeError）
+      # 补丁内部 require 原始 npm 包 lib/ 文件，加守卫后正常初始化
+      - ./patches/screepsmod-auth-index.js:/screeps/mods/screepsmod-auth-patched.js:ro
+      # 服务端代码、mods、日志持久化
+      - screeps-data:/screeps
+    # root 运行：screeps-data 卷中 node_modules 属主为 root，
+    # 默认 USER=screeps(uid 1000) 无写权限 → yarn EACCES
+    user: "0:0"
+    ports:
+      # 21025 游戏端口（Steam / 浏览器客户端连接）
+      - "21025:21025/tcp"
+      # 21026 CLI 后门（HTTP POST /cli，body 为 JS 命令）
+      # 仅容器内 127.0.0.1 监听，映射到宿主机后需 docker exec 调用
+      - "21026:21026/tcp"
+    environment:
+      STEAM_KEY: ${STEAM_KEY:-}
+      MONGO_HOST: mongo
+      REDIS_HOST: redis
+      # screepsmod-map-tool 认证（从 process.env 读取）
+      MAPTOOL_USER: admin
+      MAPTOOL_PASS: ${MAPTOOL_PASS:-admin}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:21025/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+
+  # 浏览器客户端：screepers-steamless-client 把官方 package.nw 跑在浏览器里
+  # 访问：http://localhost:8080/(http://screeps:21025)/  （结尾 / 必需）
+  client:
+    image: node:24
+    container_name: screeps-client
+    working_dir: /app
+    command: >
+      sh -c 'npx --yes screepers-steamless-client
+      --package /screeps.nw
+      --host 0.0.0.0
+      --internal_backend http://screeps:21025
+      --public_hostname localhost
+      --public_port 8080'
+    volumes:
+      # Steam 官方客户端包（只读），路径通过 .env 可自定义
+      - "${SCREEPS_CLIENT_PACKAGE:-/Users/songhao/Library/Application Support/Steam/steamapps/common/Screeps/package.nw}:/screeps.nw:ro"
+      - client-npm-cache:/root/.npm
+    ports:
+      - "8080:8080/tcp"
+    depends_on:
+      screeps:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:8
+    container_name: screeps-mongo
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+
+  redis:
+    image: redis:8
+    container_name: screeps-redis
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+
+volumes:
+  screeps-data:
+  mongo-data:
+  redis-data:
+  client-npm-cache:
