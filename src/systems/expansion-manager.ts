@@ -3,6 +3,7 @@ import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
+import { log } from "../kernel/log";
 import { makeOperationId, type ExpansionResult, type OutcomeEvent, type MilestoneEvent } from "../domain/expansion/uoem-types";
 import { getOutcomeChannel, enqueueOutcome, makeEventId, type OutcomeChannelMemory } from "../kernel/outcome-channel";
 import {
@@ -94,7 +95,7 @@ export const expansionManagerSystem: System = {
         config: DEFAULT_COOLDOWN_CONFIG,
       });
       if (!cooldownResult.allowed) {
-        console.log(`[${ctx.tick}] expansion: ${cooldownResult.evidence}`);
+        log.info("expansion",`[${ctx.tick}] expansion: ${cooldownResult.evidence}`);
         return;
       }
       // A3.3：从 expansionPlans[] 消费 WAITING_EXECUTION Plan
@@ -151,7 +152,7 @@ function tryConsumePlan(ctx: TickContext): void {
 
   const gateResult = validateExecutionGate(gateInput);
   if (!gateResult.allPassed) {
-    console.log(`[${ctx.tick}] expansion-manager: Gate failed for ${plan.roomName}: ${gateResult.evidence}`);
+    log.info("expansion",`[${ctx.tick}] expansion-manager: Gate failed for ${plan.roomName}: ${gateResult.evidence}`);
     // 如果 Gate 持续失败，更新 Plan 状态为 CANCELLED
     if (gateResult.failedGates.includes("GATE_PLAN_VALID") ||
         gateResult.failedGates.includes("GATE_TARGET_CLAIMABLE") ||
@@ -187,7 +188,7 @@ function tryConsumePlan(ctx: TickContext): void {
     forcedAdvance: false,
   };
 
-  console.log(`[${ctx.tick}] expansion-manager: consuming plan ${plan.planId} for ${plan.roomName} (sponsor=${plan.sponsorRoom})`);
+  log.info("expansion",`[${ctx.tick}] expansion-manager: consuming plan ${plan.planId} for ${plan.roomName} (sponsor=${plan.sponsorRoom})`);
 
   // T3: 声明扩张期望 — 预期 2000 tick 内完成（标准扩张周期）
   declareExpected({
@@ -217,7 +218,7 @@ function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionStat
       // Gate 验证已在 tryConsumePlan 中完成，直接推进
       expansion.state = "preparing";
       expansion.startedAt = ctx.tick;
-      console.log(`[${ctx.tick}] expansion: validating → preparing`);
+      log.info("expansion",`[${ctx.tick}] expansion: validating → preparing`);
       break;
 
     case "preparing":
@@ -237,13 +238,13 @@ function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionStat
       const claimedRoom = Game.rooms[expansion.target];
       if (claimedRoom) {
         if (!seedLayoutAnchor(claimedRoom)) {
-          console.log(`[${ctx.tick}] expansion: no viable anchor in ${expansion.target}, aborting`);
+          log.info("expansion",`[${ctx.tick}] expansion: no viable anchor in ${expansion.target}, aborting`);
           abortExpansion(ctx, expansion, "ABANDONED");
           return;
         }
       }
       submitPioneers(ctx, expansion);
-      console.log(`[${ctx.tick}] expansion: claimed → bootstrapping (CP1 passed)`);
+      log.info("expansion",`[${ctx.tick}] expansion: claimed → bootstrapping (CP1 passed)`);
       break;
 
     case "bootstrapping":
@@ -260,7 +261,7 @@ function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionStat
 
     case "completed":
       // 已完成，清理扩张状态
-      console.log(`[${ctx.tick}] expansion: ${expansion.target} already completed, cleaning up`);
+      log.info("expansion",`[${ctx.tick}] expansion: ${expansion.target} already completed, cleaning up`);
       updatePlanStatus(expansion.planId ?? "", "COMPLETED");
       if (!Memory.kernel) Memory.kernel = {};
       Memory.kernel.expansion = undefined;
@@ -302,9 +303,9 @@ function advancePreparing(ctx: TickContext, expansion: ExpansionState, spawningA
     });
     if (reserveResult.success && reserveResult.reservation) {
       expansion.reservedEnergy = reserveResult.reservation.reservedEnergy;
-      console.log(`[${ctx.tick}] expansion: reserved ${expansion.reservedEnergy} energy for ${expansion.target}`);
+      log.info("expansion",`[${ctx.tick}] expansion: reserved ${expansion.reservedEnergy} energy for ${expansion.target}`);
     } else {
-      console.log(`[${ctx.tick}] expansion: resource reservation failed: ${reserveResult.failReason}`);
+      log.info("expansion",`[${ctx.tick}] expansion: resource reservation failed: ${reserveResult.failReason}`);
       // 预留失败不立即终止，重试
     }
   }
@@ -324,12 +325,12 @@ function advancePreparing(ctx: TickContext, expansion: ExpansionState, spawningA
   if (claimerAlive || claimerPending) {
     expansion.state = "claiming";
     expansion.startedAt = ctx.tick;
-    console.log(`[${ctx.tick}] expansion: preparing → claiming`);
+    log.info("expansion",`[${ctx.tick}] expansion: preparing → claiming`);
   }
 
   // 超时检查
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.claimTimeout) {
-    console.log(`[${ctx.tick}] expansion: preparing timed out, aborting`);
+    log.info("expansion",`[${ctx.tick}] expansion: preparing timed out, aborting`);
     abortExpansion(ctx, expansion, "TIMED_OUT");
   }
 }
@@ -346,13 +347,13 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
     expansion.startedAt = ctx.tick;
     // Phase 6 UOEM: P1 是 Milestone（CLAIMED），不进 OutcomeChannel
     emitMilestone(expansion, "CLAIMED", ctx.tick);
-    console.log(`[${ctx.tick}] expansion: claiming → claimed`);
+    log.info("expansion",`[${ctx.tick}] expansion: claiming → claimed`);
     return;
   }
 
   // 被他人抢占 → 立即放弃
   if (targetRoom?.controller?.owner && !targetRoom.controller.my) {
-    console.log(`[${ctx.tick}] expansion: ${expansion.target} taken by ${targetRoom.controller.owner.username}, aborting`);
+    log.info("expansion",`[${ctx.tick}] expansion: ${expansion.target} taken by ${targetRoom.controller.owner.username}, aborting`);
     // Phase 6 UOEM: abortExpansion 内部统一做 blacklist + reclaim + enqueue
     abortExpansion(ctx, expansion, "STOLEN");
     return;
@@ -360,7 +361,7 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
 
   // 超时 → 放弃
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.claimTimeout) {
-    console.log(`[${ctx.tick}] expansion: claim ${expansion.target} timed out, aborting`);
+    log.info("expansion",`[${ctx.tick}] expansion: claim ${expansion.target} timed out, aborting`);
     abortExpansion(ctx, expansion, "TIMED_OUT");
     return;
   }
@@ -370,7 +371,7 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
   if (!claimerAlive) {
     const dangerUntil = Memory.rooms[expansion.sponsor]?.remoteOps?.[expansion.target]?.dangerUntil;
     if (dangerUntil !== undefined && ctx.tick < dangerUntil) {
-      console.log(`[${ctx.tick}] expansion: ${expansion.target} hostile (claimer lost), aborting`);
+      log.info("expansion",`[${ctx.tick}] expansion: ${expansion.target} hostile (claimer lost), aborting`);
       // Phase 6 UOEM: abortExpansion 内部统一做 blacklist + reclaim + enqueue
       abortExpansion(ctx, expansion, "LOST");
       return;
@@ -390,10 +391,10 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
     // Phase 6 UOEM: terminal outcome 只由 abortExpansion 产生一次
     // P2/P3 的 LOST/STOLEN 直接传给 abortExpansion，不在前面调 record
     if (!targetRoom) {
-      console.log(`[${ctx.tick}] expansion: lost vision of ${expansion.target} during bootstrapping, aborting`);
+      log.info("expansion",`[${ctx.tick}] expansion: lost vision of ${expansion.target} during bootstrapping, aborting`);
       abortExpansion(ctx, expansion, "LOST");
     } else {
-      console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during bootstrapping, aborting`);
+      log.info("expansion",`[${ctx.tick}] expansion: lost ${expansion.target} during bootstrapping, aborting`);
       abortExpansion(ctx, expansion, "STOLEN");
     }
     return;
@@ -424,7 +425,7 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
       expansion.checkpointsPassed = Math.max(expansion.checkpointsPassed ?? 0, 2);
       expansion.state = "economic_startup";
       expansion.startedAt = ctx.tick;
-      console.log(`[${ctx.tick}] expansion: bootstrapping → economic_startup (CP2 passed)`);
+      log.info("expansion",`[${ctx.tick}] expansion: bootstrapping → economic_startup (CP2 passed)`);
       return;
     }
   }
@@ -440,7 +441,7 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
         (c.memory.role === "worker" || c.memory.role === "builder"),
     );
     if (!squadAlive) {
-      console.log(`[${ctx.tick}] expansion: ${expansion.target} squad wiped by hostiles, aborting`);
+      log.info("expansion",`[${ctx.tick}] expansion: ${expansion.target} squad wiped by hostiles, aborting`);
       // Phase 6 UOEM: terminal outcome 只由 abortExpansion 产生一次
       abortExpansion(ctx, expansion, "LOST");
       return;
@@ -449,14 +450,14 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
 
   // 超时
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.pioneerTimeout) {
-    console.log(`[${ctx.tick}] expansion: bootstrapping ${expansion.target} timed out`);
+    log.info("expansion",`[${ctx.tick}] expansion: bootstrapping ${expansion.target} timed out`);
     // Phase 6 UOEM: P5 是 Milestone（FORCED_ADVANCE），不进 OutcomeChannel
     emitMilestone(expansion, "FORCED_ADVANCE", ctx.tick);
     // 不直接 abort — 如果 spawn 已建成，尝试推进到 economic_startup
     if (spawns.length > 0) {
       expansion.state = "economic_startup";
       expansion.startedAt = ctx.tick;
-      console.log(`[${ctx.tick}] expansion: forcing bootstrapping → economic_startup (spawn exists)`);
+      log.info("expansion",`[${ctx.tick}] expansion: forcing bootstrapping → economic_startup (spawn exists)`);
       return;
     }
     abortExpansion(ctx, expansion, "TIMED_OUT");
@@ -475,7 +476,7 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
   const targetRoom = Game.rooms[expansion.target];
 
   if (!targetRoom?.controller?.my) {
-    console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during economic_startup, aborting`);
+    log.info("expansion",`[${ctx.tick}] expansion: lost ${expansion.target} during economic_startup, aborting`);
     // Phase 6 UOEM: terminal outcome 只由 abortExpansion 产生一次
     abortExpansion(ctx, expansion, "LOST");
     return;
@@ -514,7 +515,7 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
 
   if (cp3.passed) {
     expansion.checkpointsPassed = Math.max(expansion.checkpointsPassed ?? 0, 3);
-    console.log(`[${ctx.tick}] expansion: CP3 (Energy Loop) passed for ${expansion.target}`);
+    log.info("expansion",`[${ctx.tick}] expansion: CP3 (Energy Loop) passed for ${expansion.target}`);
   }
 
   // 检查基础基础设施
@@ -544,27 +545,27 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
 
   if (cp4.passed) {
     expansion.checkpointsPassed = Math.max(expansion.checkpointsPassed ?? 0, 4);
-    console.log(`[${ctx.tick}] expansion: CP4 (Basic Infra) passed for ${expansion.target}`);
+    log.info("expansion",`[${ctx.tick}] expansion: CP4 (Basic Infra) passed for ${expansion.target}`);
   }
 
   // CP3 + CP4 都通过 → 进入 integrating
   if (cp3.passed && cp4.passed) {
     expansion.state = "integrating";
     expansion.startedAt = ctx.tick;
-    console.log(`[${ctx.tick}] expansion: economic_startup → integrating`);
+    log.info("expansion",`[${ctx.tick}] expansion: economic_startup → integrating`);
     return;
   }
 
   // 超时检查（economic_startup 阶段给更长的时间）
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.pioneerTimeout * 2) {
-    console.log(`[${ctx.tick}] expansion: economic_startup timed out for ${expansion.target}`);
+    log.info("expansion",`[${ctx.tick}] expansion: economic_startup timed out for ${expansion.target}`);
     // 如果至少 energy loop 活跃，尝试强行推进
     if (cp3.passed) {
       // Phase 6 UOEM: P7 是 Milestone（FORCED_ADVANCE），不进 OutcomeChannel
       emitMilestone(expansion, "FORCED_ADVANCE", ctx.tick);
       expansion.state = "integrating";
       expansion.startedAt = ctx.tick;
-      console.log(`[${ctx.tick}] expansion: forcing economic_startup → integrating (energy loop active)`);
+      log.info("expansion",`[${ctx.tick}] expansion: forcing economic_startup → integrating (energy loop active)`);
       return;
     }
     abortExpansion(ctx, expansion, "TIMED_OUT");
@@ -577,7 +578,7 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
   const targetRoom = Game.rooms[expansion.target];
 
   if (!targetRoom?.controller?.my) {
-    console.log(`[${ctx.tick}] expansion: lost ${expansion.target} during integrating, aborting`);
+    log.info("expansion",`[${ctx.tick}] expansion: lost ${expansion.target} during integrating, aborting`);
     abortExpansion(ctx, expansion, "LOST");
     return;
   }
@@ -614,7 +615,7 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     expansion.consecutivePositiveTicks = 0;
   }
 
-  console.log(`[${ctx.tick}] expansion: integrating ${expansion.target} — ${econResult.evidence}`);
+  log.info("expansion",`[${ctx.tick}] expansion: integrating ${expansion.target} — ${econResult.evidence}`);
 
   // 评估帝国集成（A3.4 修复：从真实系统状态验证，不硬编码）
   const integrationInput: EmpireIntegrationInput = {
@@ -650,7 +651,7 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     // 全链路完成！
     expansion.checkpointsPassed = 5;
     expansion.state = "completed";
-    console.log(`[${ctx.tick}] expansion: integrating → completed (CP5 passed) — ${expansion.target} is now AUTONOMOUS`);
+    log.info("expansion",`[${ctx.tick}] expansion: integrating → completed (CP5 passed) — ${expansion.target} is now AUTONOMOUS`);
     // Phase 6 UOEM: P8 终态 COMPLETED，直接调 enqueueTerminalOutcome
     enqueueTerminalOutcome(expansion, ctx.tick, "COMPLETED");
     // A3.4：记录完成 tick，供 Cooldown 门禁消费
@@ -661,7 +662,7 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
   // 释放预留资源
   if (!Memory.kernel) Memory.kernel = {};
   if (expansion.reservedEnergy && expansion.reservedEnergy > 0) {
-    console.log(`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy for ${expansion.target}`);
+    log.info("expansion",`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy for ${expansion.target}`);
   }
   // 清理扩张状态
   Memory.kernel.expansion = undefined;
@@ -671,12 +672,12 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
   // 超时检查（integrating 阶段给最长的时间）
   const integratingTimeout = CONFIG.expansion.pioneerTimeout * 3;
   if (ctx.tick - expansion.startedAt > integratingTimeout) {
-    console.log(`[${ctx.tick}] expansion: integrating timed out for ${expansion.target} (netFlow=${econResult.netFlow})`);
+    log.info("expansion",`[${ctx.tick}] expansion: integrating timed out for ${expansion.target} (netFlow=${econResult.netFlow})`);
     // 如果经济至少在正方向，仍然算成功
     if (econResult.netFlow > 0 && integrationResult.integrated) {
       expansion.state = "completed";
       expansion.checkpointsPassed = 5;
-      console.log(`[${ctx.tick}] expansion: forcing integrating → completed (net positive + integrated)`);
+      log.info("expansion",`[${ctx.tick}] expansion: forcing integrating → completed (net positive + integrated)`);
       // Phase 6 UOEM: P9 终态 COMPLETED_FORCED（经历过 forced advance 的超时强推完成）
       enqueueTerminalOutcome(expansion, ctx.tick, "COMPLETED_FORCED");
       updatePlanStatus(expansion.planId ?? "", "COMPLETED");
@@ -702,7 +703,7 @@ function abortExpansion(ctx: TickContext, expansion: ExpansionState, outcome: Ex
   // 释放预留资源
   if (!Memory.kernel) Memory.kernel = {};
   if (expansion.reservedEnergy && expansion.reservedEnergy > 0) {
-    console.log(`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy (abort)`);
+    log.info("expansion",`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy (abort)`);
   }
   blacklistTarget(expansion.target, ctx.tick);
   reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
@@ -806,7 +807,7 @@ function enqueueTerminalOutcome(
   const enqueueResult = enqueueOutcome(channel, ev);
   if (enqueueResult === "DUPLICATE_REJECTED") {
     // 同一 operation 已有终态 outcome — 不覆盖（terminal-only 语义）
-    console.log(`[${tick}] expansion: duplicate terminal outcome rejected for ${operationId}`);
+    log.info("expansion",`[${tick}] expansion: duplicate terminal outcome rejected for ${operationId}`);
     return;
   }
 
@@ -906,7 +907,7 @@ function updateRhythmRing(kind: ExpansionOutcomeKind, tick: number): void {
     prev?.blacklistMultiplier !== result.blacklistMultiplier ||
     prev?.minSources !== result.minSources
   ) {
-    console.log(
+    log.info("expansion",
       `[${tick}] expansion-rhythm: multiplier=${result.blacklistMultiplier}` +
       ` minSources=${result.minSources} consecFail=${result.consecutiveFailures}`,
     );
@@ -919,7 +920,7 @@ function updateRhythmRing(kind: ExpansionOutcomeKind, tick: number): void {
   };
   if (result.pauseTicks > 0) {
     Memory.kernel!.expansionPausedUntil = tick + result.pauseTicks;
-    console.log(`[${tick}] expansion: ${result.consecutiveFailures} 连败 — 暂停扩张 ${result.pauseTicks} tick`);
+    log.info("expansion",`[${tick}] expansion: ${result.consecutiveFailures} 连败 — 暂停扩张 ${result.pauseTicks} tick`);
   }
 }
 
@@ -1023,7 +1024,7 @@ function runBootstrapLane(ctx: TickContext): void {
   for (const d of decisions) {
     if (d.action === "abandon") {
       if (Memory.rooms[d.room]) Memory.rooms[d.room]!.spawnQueue = [];
-      console.log(`[${ctx.tick}] bootstrap: abandon ${d.room} — ${d.reason}`);
+      log.info("expansion",`[${ctx.tick}] bootstrap: abandon ${d.room} — ${d.reason}`);
       recordEvent(EventKind.ExpansionOutcome, d.room, [1, 4, 0]);
       continue;
     }
@@ -1058,7 +1059,7 @@ function runBootstrapLane(ctx: TickContext): void {
         retries: 0,
       });
     }
-    console.log(
+    log.info("expansion",
       `[${ctx.tick}] bootstrap: dispatch ${room} wave${wave} via ${d.sponsor} (hostile=${hostile})`,
     );
   }

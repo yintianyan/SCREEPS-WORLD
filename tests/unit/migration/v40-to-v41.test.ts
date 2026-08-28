@@ -135,7 +135,10 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     });
   });
 
-  it("无 outcomeEvents 时安全跳过", () => {
+  it("无 outcomeEvents 时确定性初始化为空结构", () => {
+    // v41 迁移确定性保证 outcomeEvents 存在且字段完整，
+    // 即使之前从未被 getOutcomeChannel 惰性初始化。
+    // 这确保恢复/损坏 Memory 场景下 outcomeEvents 一定可用。
     (globalThis as any).Memory = {
       schemaVersion: 40,
       creeps: {},
@@ -144,9 +147,12 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     };
 
     expect(() => runMigrations()).not.toThrow();
-    expect(
-      (globalThis as any).Memory.kernel.outcomeEvents,
-    ).toBeUndefined();
+    const ch = (globalThis as any).Memory.kernel.outcomeEvents;
+    expect(ch).toBeDefined();
+    expect(ch.q).toEqual([]);
+    expect(ch.s).toEqual([]);
+    expect(ch.dr).toBe(0);
+    expect(ch.oe).toBe(0);
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 

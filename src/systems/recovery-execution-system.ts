@@ -33,6 +33,7 @@ import {
 import type { FailureNode } from "../domain/strategy/failure-propagation";
 import { mapAbortSignalsToRecoveryActions, type WarAbortSignal } from "../domain/military/abort-recovery";
 import { recordEvent, EventKind } from "../kernel/event-log";
+import { log } from "../kernel/log";
 import type { TacticalAbortSignal } from "../domain/tactical";
 
 /** 上次消费 warAbortSignals 的 tick（防止同一信号重复消费）。 */
@@ -143,7 +144,7 @@ export const recoveryExecutionSystem: System = {
         );
         submittedThisTick++;
 
-        console.log(
+        log.info("recovery",
           `[${tick}] recovery: SUBMITTED ${action.type}` +
           ` domain=${action.domain} priority=${action.priority}` +
           ` ref=${execResult.executionRef ?? "none"}` +
@@ -484,7 +485,7 @@ function submitCpuConserve(
   _correlationId: string,
 ): SubmitResult {
   // Kernel scheduler 有独立的四档 bucket 看门狗——Recovery System 只记录建议
-  console.log(`[${ctx.tick}] recovery: CPU_CONSERVE recommended — kernel bucket watchdog will handle`);
+  log.info("recovery",`[${ctx.tick}] recovery: CPU_CONSERVE recommended — kernel bucket watchdog will handle`);
   return { submitted: true, executionRef: "cpu-conserve", reason: "cpu conserve recommended (kernel handles)" };
 }
 
@@ -581,7 +582,7 @@ function submitDefenseResponse(
       roomMem.defenseState.safeModeRequestTick = ctx.tick;
       roomMem.defenseState.safeModeReason = `CRITICAL+${intent} corr=${correlationId}`;
     }
-    console.log(
+    log.info("recovery",
       `[${ctx.tick}] recovery: DEFENSE_RESPONSE safeMode requested` +
       ` room=${room} level=${level} intent=${intent} corr=${correlationId}`,
     );
@@ -633,7 +634,7 @@ function submitDefenseResponse(
     });
     roomMem.spawnQueue = queue;
 
-    console.log(
+    log.info("recovery",
       `[${ctx.tick}] recovery: DEFENSE_RESPONSE defender spawned` +
       ` room=${room} level=${level} intent=${intent} posture=${posture}` +
       ` corr=${correlationId}`,
@@ -731,7 +732,7 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
         const newRecord = markSucceeded(record, tick, verification);
         table.set(key, newRecord);
         beforeStates.delete(key);
-        console.log(
+        log.info("recovery",
           `[${tick}] recovery: SUCCEEDED ${record.type}` +
           ` domain=${record.domain} attempt=${record.attempts}` +
           ` corr=${record.correlationId}`,
@@ -764,7 +765,7 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
           });
 
           if (escalation.shouldEscalate) {
-            console.log(
+            log.info("recovery",
               `[${tick}] recovery: ESCALATION ${record.type}` +
               ` domain=${record.domain} reason="${escalation.reason}"` +
               ` corr=${record.correlationId}`,
@@ -782,7 +783,7 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
               tick,
             });
             if (unviability.unviable) {
-              console.log(
+              log.info("recovery",
                 `[${tick}] recovery: UNVIABLE ${record.type}` +
                 ` domain=${record.domain} room=${record.room ?? "global"}` +
                 ` reason="${unviability.reason}"` +
@@ -999,7 +1000,7 @@ function consumeWarAbortSignals(
       signal.spawned,
       actions.length,
     ]);
-    console.log(
+    log.info("recovery",
       `[${tick}] recovery: WAR_ABORT consumed` +
       ` reason=${signal.reason} outcome=${signal.outcome}` +
       ` sponsor=${signal.sponsor} target=${signal.targetRoom}` +
@@ -1072,7 +1073,7 @@ function consumeTacticalAbortSignals(
   const actions = mapAbortSignalsToRecoveryActions(warSignals);
 
   if (actions.length > 0) {
-    console.log(
+    log.info("recovery",
       `[${tick}] recovery: TACTICAL_ABORT consumed` +
       ` count=${warSignals.length} → actions=${actions.length}`,
     );

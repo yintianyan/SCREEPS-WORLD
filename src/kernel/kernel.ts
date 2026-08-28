@@ -13,7 +13,7 @@ import { requestSegments, flushSegments } from "./segment-store";
 import { measuredRun, safeRun, safeRunBuild } from "./safe-run";
 import { buildCadenceTable, resolveInterval, type CadenceTable } from "./cadence";
 import { createBudget } from "./scheduler";
-import { evaluateExpectations, P3_BYPASS_WINDOW_TICKS, type P3SystemRef } from "./expectations";
+import { evaluateExpectations, P3_BYPASS_WINDOW_TICKS, type P3SystemRef, type SpawnQueueSnapshot, type E3ViolationRecord, type RCLSnapshot, type BuildQueueSnapshot, type RecoverySnapshot, type MemorySizeSample } from "./expectations";
 import { EventKind, recordEvent } from "./event-log";
 import { emitSummary, initTelemetry } from "./telemetry";
 import {
@@ -355,7 +355,7 @@ export class Kernel {
     }
   }
 
-  /** 期望自检（E1 遥测新鲜度 / E2 P3 存活）→ 违例入 Memory + 事件；
+  /** 期望自检（E1 遥测新鲜度 / E2 P3 存活 / E3 spawn queue 持续非空）→ 违例入 Memory + 事件；
    * P3 饥饿时设置前馈旁路窗口（scheduler 消费），恢复后自动摘除。 */
   private runExpectations(ctx: Context): void {
     const kernelMem = Memory.kernel;
@@ -364,17 +364,62 @@ export class Kernel {
     const p3Systems: P3SystemRef[] = [...this.sortedSystems, ...this.postSystems]
       .filter((s) => s.priority === 3)
       .map((s) => ({ name: s.name, interval: s.interval }));
+    // E3: 采集每房 spawn queue 快照
+    const spawnQueues: SpawnQueueSnapshot[] = [];
+    const e3Prev: Record<string, E3ViolationRecord> =
+      (kernelMem.expectations as { e3?: Record<string, E3ViolationRecord> })?.e3 ?? {};
+    for (const [roomName, roomMem] of Object.entries(Memory.rooms ?? {})) {
+      const queue = roomMem?.spawnQueue;
+      if (!queue || queue.length === 0) {
+        spawnQueues.push({
+          room: roomName,
+          queueLength: 0,
+          spawning: false,
+          colonyState: roomMem?.colonyState,
+          rcl: roomMem?.lastRcl,
+        });
+        continue;
+      }
+      const oldest = queue[0]!;
+      const room = Game.rooms[roomName];
+      const spawns = room?.find?.(FIND_MY_SPAWNS) ?? [];
+      spawnQueues.push({
+        room: roomName,
+        queueLength: queue.length,
+        oldestRequestTick: oldest.createdAt,
+        oldestRequestKey: oldest.key,
+        oldestPriority: oldest.priority,
+        oldestRole: oldest.role,
+        rcl: room?.controller?.level ?? roomMem?.lastRcl,
+        energyAvailable: room?.energyAvailable ?? 0,
+        spawning: spawns.some((s) => s.spawning),
+        colonyState: roomMem?.colonyState,
+      });
+    }
     const res = evaluateExpectations({
       tick: ctx.tick,
       statsLastSample: kernelMem.stats?.lastSample,
       bootTick: kernelMem.bootTick,
       systemLastRun: g.systemLastRun ?? {},
       p3Systems,
+      spawnQueues,
+      e3Prev,
+      // E4: Memory 体积历史（从 Memory.kernel.memoryHistory 读取）
+      memoryHistory: (kernelMem as { memoryHistory?: MemorySizeSample[] }).memoryHistory,
+      // E5: RCL 快照（从每房 RoomMemory 采集）
+      rclSnapshots: this.collectRCLSnapshots(ctx),
+      // E6: buildQueue 快照（从每房 RoomMemory 采集）
+      buildQueues: this.collectBuildQueueSnapshots(ctx),
+      // E7: site 进度快照（暂不采集，需 game object 访问 — Phase 8 接线）
+      // E8: 路径失败快照（暂不采集，需 movement 系统接入 — Phase 8 接线）
+      // E9: recovery 状态快照（从每房 RoomMemory 采集）
+      recoverySnapshots: this.collectRecoverySnapshots(ctx),
     });
     if (res.violations.length > 0) {
       kernelMem.expectations = {
         tick: ctx.tick,
         violations: res.violations.map((v) => v.id + "(" + v.detail + ")").slice(0, 10),
+        e3: e3Prev as Record<string, unknown>,
       };
       recordEvent(EventKind.ExpectationViolation, "kernel", [res.violations.length]);
       if (res.p3Starved) {
@@ -384,9 +429,74 @@ export class Kernel {
         );
       }
     } else {
-      kernelMem.expectations = { tick: ctx.tick, violations: [] };
+      kernelMem.expectations = { tick: ctx.tick, violations: [], e3: e3Prev as Record<string, unknown> };
       if (kernelMem.p3StarveBypassUntil !== undefined) delete kernelMem.p3StarveBypassUntil;
     }
+  }
+
+  /** E5: 采集每房 RCL 快照（从 snapshot + RoomMemory 读取）。 */
+  private collectRCLSnapshots(ctx: Context): RCLSnapshot[] {
+    const result: RCLSnapshot[] = [];
+    for (const snap of ctx.snapshots()) {
+      const roomMem = Memory.rooms[snap.roomName];
+      result.push({
+        room: snap.roomName,
+        rcl: snap.rcl,
+        progress: snap.controller?.progress ?? 0,
+        progressTotal: snap.controller?.progressTotal ?? 0,
+        lastRclChange: roomMem?.lastRcl ?? 0,
+        hasUpgrader: false, // 从 Game.creeps 遍历获取太重，用 expectation 诊断字段补偿
+        storageEnergy: snap.storage?.store.energy ?? 0,
+      });
+    }
+    return result;
+  }
+
+  /** E6: 采集每房 buildQueue 快照（从 RoomMemory 读取）。 */
+  private collectBuildQueueSnapshots(ctx: Context): BuildQueueSnapshot[] {
+    const result: BuildQueueSnapshot[] = [];
+    for (const snap of ctx.snapshots()) {
+      const roomMem = Memory.rooms[snap.roomName];
+      const queue = roomMem?.buildQueue ?? [];
+      // 估算 builder 数量：遍历 Game.creeps 中 home=本房 且 role=builder 的存活 creep
+      let builderCount = 0;
+      for (const c of Object.values(Game.creeps)) {
+        if (c.memory.home === snap.roomName && c.memory.role === "builder" && !c.spawning) builderCount++;
+      }
+      result.push({
+        room: snap.roomName,
+        queueLength: queue.length,
+        oldestTaskTick: queue.length > 0 ? (queue[0] as { createdAt?: number }).createdAt : undefined,
+        oldestTaskType: queue.length > 0 ? (queue[0] as { type?: string }).type : undefined,
+        rcl: snap.rcl,
+        builderCount,
+        colonyState: roomMem?.colonyState,
+      });
+    }
+    return result;
+  }
+
+  /** E9: 采集每房 recovery 状态快照（从 RoomMemory 读取）。 */
+  private collectRecoverySnapshots(ctx: Context): RecoverySnapshot[] {
+    const result: RecoverySnapshot[] = [];
+    for (const snap of ctx.snapshots()) {
+      const roomMem = Memory.rooms[snap.roomName];
+      const colonyState = roomMem?.colonyState ?? "normal";
+      if (colonyState !== "recovery") continue;
+      // recoveryStartTick: 使用 colonyState 变化的粗略 tick（从 expectations e3 prev 获取或用 0 fallback）
+      const recoveryStart = (Memory.kernel?.expectations as { e3?: Record<string, { violationStartTick?: number }> })?.e3?.[snap.roomName]?.violationStartTick ?? 0;
+      result.push({
+        room: snap.roomName,
+        colonyState,
+        recoveryStartTick: recoveryStart,
+        missingStructures: 0,
+        missingRoles: 0,
+        storageEnergy: snap.storage?.store.energy ?? 0,
+        spawnQueueLength: (roomMem?.spawnQueue ?? []).length,
+        buildQueueLength: (roomMem?.buildQueue ?? []).length,
+      });
+    }
+    return result;
   }
 
   private shouldRunSystem(system: System, ctx: Context): boolean {

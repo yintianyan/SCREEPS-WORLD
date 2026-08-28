@@ -2,6 +2,7 @@
 import { CONFIG } from "../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
+import { log } from "../kernel/log";
 import {
   energyBuyAmount,
   energySellAmount,
@@ -89,7 +90,7 @@ export const terminalManagerSystem: System = {
     } else if (planRequestRooms.size > 0) {
       // Plan 存在且有 terminal 请求 — Plan 拥有 Decision Authority。
       // 自主互济跳过，由 Plan 驱动的 tryPlanDrivenSend 执行。
-      console.log(`[${ctx.tick}] terminal: Plan active (plannedAt=${logisticsPlan!.plannedAt}), self-aid skipped in favor of Plan-driven send`);
+      log.info("terminal",`[${ctx.tick}] terminal: Plan active (plannedAt=${logisticsPlan!.plannedAt}), self-aid skipped in favor of Plan-driven send`);
     }
 
     for (const snapshot of ctx.snapshots()) {
@@ -246,7 +247,7 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
       );
       if (newPrice !== undefined) {
         if (market.changeOrderPrice(order.id, newPrice) === OK) {
-          console.log(`[${Game.time}] market: 改价 ${order.id}（${order.resourceType} ${order.price}→${newPrice}）`);
+          log.info("terminal",`[${Game.time}] market: 改价 ${order.id}（${order.resourceType} ${order.price}→${newPrice}）`);
           continue; // 改价成功 — 不撤单，等新价成交
         }
       }
@@ -254,7 +255,7 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
 
     // 改价不适用（无 bid / 价变不足 / API 不可用）→ 撤单重挂。
     if (market.cancelOrder?.(order.id) === OK) {
-      console.log(`[${Game.time}] market: 撤单 ${order.id}（${order.resourceType} 超龄零成交）`);
+      log.info("terminal",`[${Game.time}] market: 撤单 ${order.id}（${order.resourceType} 超龄零成交）`);
     }
   }
 
@@ -294,7 +295,7 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
     roomName: snapshot.roomName,
   });
   if (result === OK) {
-    console.log(
+    log.info("terminal",
       `[${Game.time}] market: 挂单 sell ${plan.totalAmount} ${plan.resourceType} @ ${plan.price}（${snapshot.roomName}）`,
     );
   }
@@ -324,7 +325,7 @@ function trySellPixel(): void {
   const amount = Math.min(pixels, best.amount);
   if (Game.market.deal(best.id, amount) === OK) {
     recordEvent(EventKind.EnergyTransfer, "", [amount]);
-    console.log(`[${Game.time}] pixel: 卖出 ${amount} pixel @ ${best.price}`);
+    log.info("terminal",`[${Game.time}] pixel: 卖出 ${amount} pixel @ ${best.price}`);
   }
 }
 
@@ -369,7 +370,7 @@ function tryNukeSalvage(ctx: TickContext): void {
         salvageResourceCode(plan.resourceType),
         plan.amount,
       ]);
-      console.log(
+      log.info("terminal",
         `[${Game.time}] nuke-salvage: ${snapshot.roomName} → ${plan.to} ${plan.amount} ${plan.resourceType}`,
       );
     }
@@ -423,7 +424,7 @@ function tryEmpireEnergyAid(ctx: TickContext): void {
   const result = terminal.send(RESOURCE_ENERGY, plan.amount, plan.to);
   if (result === OK) {
     recordEvent(EventKind.EnergyTransfer, plan.to, [plan.amount]);
-    console.log(
+    log.info("terminal",
       `[${Game.time}] energy-aid: ${plan.from} → ${plan.to} ${plan.amount} energy (fee=${fee})`,
     );
   }
@@ -506,7 +507,7 @@ function executeDeal(
   if (cost > terminal.store.getUsedCapacity(RESOURCE_ENERGY)) return false;
   const result = Game.market.deal(order.id, amount, roomName);
   if (result === OK) {
-    console.log(
+    log.info("terminal",
       `[${Game.time}] terminal/${roomName}: deal ${order.id} amount=${amount} price=${order.price} energyCost=${cost}`,
     );
     return true;
@@ -588,7 +589,7 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
       const amount = Math.min(demand.amount, best.amount, CONFIG.market.maxDealAmount, affordable);
       if (amount <= 0) continue;
 
-      console.log(`[${Game.time}] terminal/${snapshot.roomName}: 买入 ${demand.resource} amount=${amount} priority=${demand.priority} reason=${demand.reason}`);
+      log.info("terminal",`[${Game.time}] terminal/${snapshot.roomName}: 买入 ${demand.resource} amount=${amount} priority=${demand.priority} reason=${demand.reason}`);
       return executeDeal(best, amount, terminal, snapshot.roomName);
     }
     // 需求表有需求但全部买入失败（无卖单/价超门禁）— 不回退到硬编码目标，
@@ -651,7 +652,7 @@ function trySellSurplusCompound(snapshot: RoomSnapshot, terminal: StructureTermi
     const amount = Math.min(surplusAmount, inTerminal, best.amount, CONFIG.market.maxDealAmount);
     if (amount <= 0) continue;
 
-    console.log(`[${Game.time}] terminal/${snapshot.roomName}: 卖出盈余化合物 ${res} amount=${amount} price=${best.price}`);
+    log.info("terminal",`[${Game.time}] terminal/${snapshot.roomName}: 卖出盈余化合物 ${res} amount=${amount} price=${best.price}`);
     return executeDeal(best, amount, terminal, snapshot.roomName);
   }
   return false;
@@ -706,7 +707,7 @@ function tryEmpireMineralAid(ctx: TickContext): void {
   const result = terminal.send(plan.mineral as ResourceConstant, plan.amount, plan.to);
   if (result === OK) {
     recordEvent(EventKind.MineralTransfer, plan.to, [plan.amount]);
-    console.log(
+    log.info("terminal",
       `[${Game.time}] mineral-aid: ${plan.from} → ${plan.to} ${plan.amount} ${plan.mineral} (fee=${fee})`,
     );
   }
@@ -767,7 +768,7 @@ function trySellCommodity(snapshot: RoomSnapshot, terminal: StructureTerminal): 
     const amount = Math.min(inTerminal, best.amount, CONFIG.market.maxDealAmount);
     if (amount <= 0) continue;
 
-    console.log(`[${Game.time}] terminal/${snapshot.roomName}: 卖出 commodity ${res} amount=${amount} price=${best.price}`);
+    log.info("terminal",`[${Game.time}] terminal/${snapshot.roomName}: 卖出 commodity ${res} amount=${amount} price=${best.price}`);
     return executeDeal(best, amount, terminal, snapshot.roomName);
   }
   return false;
@@ -943,7 +944,7 @@ function tryPlanDrivenSend(
     const result = terminal.send(resource, req.amount, req.destination.room);
     if (result === OK) {
       recordEvent(EventKind.MineralTransfer, req.destination.room, [req.amount]);
-      console.log(
+      log.info("terminal",
         `[${Game.time}] terminal/plan-driven: ${snapshot.roomName} → ${req.destination.room}` +
         ` ${req.amount} ${req.resource} (origin=${req.origin})`,
       );

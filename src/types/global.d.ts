@@ -555,7 +555,7 @@ declare global {
     /** 本次 boot 首个 tick（maintainMemory 记录）—— E2 相对宽限基准。 */
     bootTick?: number;
     /** 期望自检结果（kernel 写）：最近一次核验的违例清单。 */
-    expectations?: { tick: number; violations: string[] };
+    expectations?: { tick: number; violations: string[]; e3?: Record<string, unknown>; memoryHistory?: { tick: number; bytes: number; roomCount: number }[] };
     /** P3 饥饿旁路截止 tick（expectations E2 触发，scheduler 消费）。运行时字段无 schema 变更。 */
     p3StarveBypassUntil?: number;
     /**

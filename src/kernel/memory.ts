@@ -1015,7 +1015,13 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       if (!kernel) return;
 
       const ch = kernel.outcomeEvents as Record<string, unknown> | undefined;
-      if (!ch) return;
+      if (!ch) {
+        // 确定性初始化：outcomeEvents 惰性初始化在恢复/损坏 Memory 场景下
+        // 可能不被触发（无 expansion 事件 → getOutcomeChannel 不被调用）。
+        // v41 迁移确定性保证 outcomeEvents 存在且字段完整。
+        kernel.outcomeEvents = { q: [], s: [], dr: 0, oe: 0 };
+        return;
+      }
 
       // 步骤 1+2：先写新字段并验证（损坏的可选字段归一化为安全默认值）。
       if (!ch.q && Array.isArray(ch.queue)) {
