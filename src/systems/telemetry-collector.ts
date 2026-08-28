@@ -20,7 +20,6 @@ import {
 } from "../kernel/timeseries";
 import { drainEventBuffer, EventKind } from "../kernel/event-log";
 import { ringPush, ringToArray } from "../kernel/ring-buffer";
-import { getActionCpuSnapshot } from "../kernel/safe-run";
 import { log } from "../kernel/log";
 
 // ─── 系统定义 ───────────────────────────────────────────────
@@ -77,14 +76,6 @@ export const telemetryCollectorSystem: System = {
 
     // 5. 更新 Memory.kernel.stats 摘要
     updateStatsSummary(tick);
-
-    // 6. 输出结构化遥测行供外部采集器（WebSocket console 订阅）接收。
-    // 格式：@TELEMETRY {json} — 前缀过滤，不影响游戏控制台可读性。
-    emitTelemetryLine(tick, ctx);
-
-    // P2-1: 健康度告警最小版——每 10 tick 检查关键阈值，异常时 console.log 告警。
-    // 不向 Memory 写入（告警是瞬时信号，外部采集器按 @ALERT 前缀过滤）。
-    checkHealthAlerts(tick, ctx);
   },
 };
 
@@ -508,133 +499,6 @@ function updateStatsSummary(tick: number): void {
     // hotspot，误导线上诊断（本次事故实证：terminal-manager 陈旧值残留）。
     // 本 tick 仍有错误但 counts 为空的理论态不清理（粘滞语义，测试契约）。
     stats.errorHotspot = "";
-  }
-}
-
-// ─── 结构化 console 输出（外部采集通道）──────────────────────
-
-/**
- * 输出一行 @TELEMETRY 前缀的 JSON，供外部 WebSocket console 订阅器接收
- * （外部采集脚本按前缀过滤写入 telemetry.jsonl；同现于游戏控制台但不干扰阅读）。
- * CPU 开销：单次 console.log 约 0.02-0.05 CPU [Experience]；每 10 tick 评估一次，
- * 仅命中信号门禁的 tick 实际输出（摘要指标随信号行附带）。
- */
-function emitTelemetryLine(tick: number, ctx: TickContext): void {
-  // 显式守卫：不依赖外部调用顺序，Global Reset 后 telemetry 未重建时直接跳过。
-  const tel = globalCache().telemetry;
-  if (!tel || tel.tick !== tick) return;
-  const stats = Memory.kernel?.stats;
-
-  // 仅在有值得关注的信号时输出，避免健康 tick 刷屏：
-  // CPU > softLimit*0.7、有错误、有 skip 任一满足才输出。
-  // 修复：曾含 "|| stats != null" —— stats 首次采样后恒存在，条件恒真击穿门禁，
-  // 健康 tick 全量灌入 @TELEMETRY，外部采集通道信噪比归零（告警语义失效）。
-  const cpu = Game.cpu.getUsed();
-  const hasSignal = cpu > ctx.budget.softLimit * 0.7
-    || tel.errors > 0
-    || tel.skipped > 0;
-
-  if (!hasSignal) return;
-
-  const payload = {
-    t: tick,
-    cpu: Math.round(cpu * 10) / 10,
-    bk: Game.cpu.bucket ?? 0,
-    tier: ctx.budget.tier,
-    sk: tel.skipped,
-    er: tel.errors,
-    // 摘要指标（如果已更新）
-    avg: stats?.cpuAvg10 ?? 0,
-    max: stats?.cpuMax10 ?? 0,
-    bkm: stats?.bucketMin10 ?? 0,
-    crisis: stats?.crisisCount ?? 0,
-    errHot: stats?.errorHotspot ?? "",
-    skipHot: stats?.skipHotspot ?? "",
-    mem: stats?.memorySize ?? 0,
-  };
-
-  // actionProfiling 开启时附挂 top 3 action 热点（按 totalCpu 降序）。
-  // 格式："actionKey=totalCpu|count|maxCpu"，逗号分隔。
-  // 外部采集脚本可解析此字段定位 CPU 热点 action。
-  if (CONFIG.debug.actionProfiling) {
-    const actionData = getActionCpuSnapshot();
-    if (actionData && actionData.size > 0) {
-      const topActions = [...actionData.entries()]
-        .sort((a, b) => b[1].totalCpu - a[1].totalCpu)
-        .slice(0, 3);
-      (payload as Record<string, unknown>).act = topActions.map(([key, e]) =>
-        `${key}=${e.totalCpu.toFixed(2)}|${e.count}|${e.maxCpu.toFixed(2)}`,
-      ).join(",");
-    }
-  }
-
-  log.info("telemetry-collector", `@TELEMETRY ${JSON.stringify(payload)}`);
-}
-
-// ─── 健康度告警（P2-1）──────────────────────────────────────
-
-/** 健康度告警限频间隔（tick）——同类型告警至少间隔此 tick 数，防刷屏。 */
-const ALERT_THROTTLE = 100;
-
-/** 告警类型与上次告警 tick 的全局缓存（reset 后重建，非持久化）。 */
-function alertState(): Record<string, number> {
-  const g = globalCache() as Record<string, unknown>;
-  if (!g.__alertThrottle) g.__alertThrottle = {} as Record<string, number>;
-  return g.__alertThrottle as Record<string, number>;
-}
-
-/** 检查关键健康度阈值并告警。每 10 tick 调用一次（与 telemetry 采样同步）。
- * 告警格式：@ALERT {type}:{message} — 外部采集器按前缀过滤。
- * 告警不写 Memory（瞬时信号，限频防刷屏）。 */
-function checkHealthAlerts(tick: number, ctx: TickContext): void {
-  const stats = Memory.kernel?.stats;
-  const tel = globalCache().telemetry;
-  if (!tel || tel.tick !== tick) return;
-
-  const throttle = alertState();
-
-  /** 限频后输出告警。 */
-  function alert(type: string, msg: string): void {
-    const last = throttle[type] ?? 0;
-    if (tick - last < ALERT_THROTTLE) return;
-    throttle[type] = tick;
-    log.info("telemetry-collector", `@ALERT ${type}:${msg}`);
-  }
-
-  // 1. CPU 持续高位告警
-  if (stats && stats.cpuAvg10 >= ctx.budget.softLimit * 0.9) {
-    alert("cpu-high",
-      `cpuAvg10=${stats.cpuAvg10} >= softLimit*0.9=${(ctx.budget.softLimit * 0.9).toFixed(1)}` +
-      ` (tier=${ctx.budget.tier}, max10=${stats.cpuMax10})`,
-    );
-  }
-
-  // 2. bucket 危急告警
-  if (stats && stats.bucketMin10 < 2000) {
-    alert("bucket-critical",
-      `bucketMin10=${stats.bucketMin10} < 2000 (recovery threshold=1000)`,
-    );
-  }
-
-  // 3. 错误频发告警
-  if (tel.errors > 0 && stats?.errorHotspot) {
-    alert("error-hotspot",
-      `errors this cycle=${tel.errors}, hotspot=${stats.errorHotspot}`,
-    );
-  }
-
-  // 4. skip 频发告警
-  if (tel.skipped > 5 && stats?.skipHotspot) {
-    alert("skip-hotspot",
-      `skipped this cycle=${tel.skipped}, hotspot=${stats.skipHotspot}`,
-    );
-  }
-
-  // 5. Memory 体积告警（与 P0-1 联动，但这里是周期性检查而非仅采样时）
-  if (stats?.memorySize !== undefined && stats.memorySize > 1_500_000) {
-    alert("memory-size",
-      `memorySize=${stats.memorySize} (${(stats.memorySize / 1024 / 1024).toFixed(2)}MB) > 1.5MB`,
-    );
   }
 }
 

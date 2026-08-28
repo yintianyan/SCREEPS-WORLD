@@ -9,7 +9,7 @@ import { selectRecycleCandidates } from "../domain/spawn/recycle";
 import { moveToTarget, moveTowardRoom } from "../creeps/movement";
 import { recordSkip } from "../kernel/memory";
 import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
-import { recordExecution, declareExpected, resolveOutcome } from "../telemetry";
+import { recordExecution } from "../telemetry";
 import { log } from "../kernel/log";
 
 /**
@@ -459,19 +459,8 @@ export function trySpawn(
       spawnIdx++;
       recordExecution("spawn", "completed");
       // T3: 声明期望 — 孵化成功，期望该角色在 300 tick 内不因 starvation 死亡
-      const roleCount = Object.values(Game.creeps).filter(c => c.memory.role === req.role && c.memory.home === snapshot.roomName && !c.spawning).length + 1;
-      const expId = `spawn-${req.role}-${snapshot.roomName}-${Game.time}`;
-      declareExpected({
-        id: expId,
-        declaredAtTick: Game.time,
-        domain: "spawn",
-        decision: `SPAWN:${req.role}`,
-        target: snapshot.roomName,
-        expectedDeadlineTick: Game.time + 300,
-        expectedMetrics: { roleCount },
-        confidence: 0.8,
-      });
-      continue;
+continue;
+
     }
 
     if (result === ERR_BUSY) {
@@ -488,13 +477,6 @@ export function trySpawn(
       log.info("spawn-manager", `spawn/${snapshot.roomName}: spawnCreep returned ${result} for ${req.key} (retry ${req.retries})`,);
     }
     recordExecution("spawn", "failed");
-    // T3: 回填失败结果 — 孵化失败时 resolve 对应的 pending expectation
-    const roleCountFail = Object.values(Game.creeps).filter(c => c.memory.role === req.role && c.memory.home === snapshot.roomName && !c.spawning).length;
-    resolveOutcome(`spawn-${req.role}-${snapshot.roomName}-${Game.time}`, {
-      resolvedAtTick: Game.time,
-      actualMetrics: { roleCount: roleCountFail },
-      result: "FAILED",
-    });
   }
 }
 

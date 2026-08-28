@@ -63,10 +63,6 @@ vi.mock("../../../src/kernel/ring-buffer", () => ({
   ringToArray: () => [],
 }));
 
-vi.mock("../../../src/kernel/safe-run", () => ({
-  getActionCpuSnapshot: () => new Map(),
-}));
-
 vi.mock("../../../src/config", () => ({
   CONFIG: {
     telemetry: {
@@ -151,7 +147,7 @@ function makeSnapshot(overrides: Record<string, unknown> = {}) {
 
 // ── 测试 ──────────────────────────────────────────────
 
-describe("telemetry-collector — @TELEMETRY 输出门禁（stats 恒真回归）", () => {
+describe("telemetry-collector — @TELEMETRY 输出已移除（由 TelemetryFlush 统一处理）", () => {
   let logLines: string[] = [];
 
   beforeEach(() => {
@@ -177,42 +173,18 @@ describe("telemetry-collector — @TELEMETRY 输出门禁（stats 恒真回归�
     setLogSink(undefined);
   });
 
-  function telemetryLines(): string[] {
-    return logLines
-      .filter((s) => s.includes("@TELEMETRY"));
-  }
-
-  it("健康 tick（低 CPU / 无错误 / 无 skip，stats 存在）不输出 —— 门禁不得被 stats 击穿", () => {
-    mockGlobalCache.telemetry = { tick: 100, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
-    telemetryCollectorSystem.run(makeCtx("healthy", 100, []));
-    expect(telemetryLines()).toHaveLength(0);
-  });
-
-  it("有错误的 tick 输出且携带摘要指标", () => {
+  it("telemetry-collector 不再输出 @TELEMETRY 行（已由 TelemetryFlush 统一处理）", () => {
     mockGlobalCache.telemetry = { tick: 100, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 2 };
     telemetryCollectorSystem.run(makeCtx("healthy", 100, []));
-    const lines = telemetryLines();
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('"er":2');
-    expect(lines[0]).toContain('"mem":1234');
+    const telemetryLines = logLines.filter((s) => s.includes("@TELEMETRY"));
+    expect(telemetryLines).toHaveLength(0);
   });
 
-  it("高 CPU tick 输出（getUsed > softLimit*0.7 = 12.25）", () => {
-    (globalThis as Record<string, unknown>).Game = {
-      time: 100,
-      cpu: { bucket: 10000, getUsed: () => 15 },
-      creeps: {},
-      spawns: {},
-    };
-    mockGlobalCache.telemetry = { tick: 100, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
+  it("telemetry-collector 不再输出 @ALERT 行（已由 TelemetryFlush 统一处理）", () => {
+    mockGlobalCache.telemetry = { tick: 100, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 2 };
     telemetryCollectorSystem.run(makeCtx("healthy", 100, []));
-    expect(telemetryLines()).toHaveLength(1);
-  });
-
-  it("有 skip 的 tick 输出", () => {
-    mockGlobalCache.telemetry = { tick: 100, systemCpu: {}, roleCpu: {}, skipped: 7, errors: 0 };
-    telemetryCollectorSystem.run(makeCtx("healthy", 100, []));
-    expect(telemetryLines()).toHaveLength(1);
+    const alertLines = logLines.filter((s) => s.includes("@ALERT"));
+    expect(alertLines).toHaveLength(0);
   });
 });
 
@@ -390,9 +362,9 @@ describe("telemetry-collector — Memory 体积监控 (P0-1)", () => {
   });
 });
 
-// ── P2-1: 健康度告警 ──────────────────────────────────────
+// ── P2-1: 健康度告警已移除（由 TelemetryFlush 统一处理）─────────
 
-describe("telemetry-collector — 健康度告警 (P2-1)", () => {
+describe("telemetry-collector — 健康度告警已移除", () => {
   let logLines: string[] = [];
 
   beforeEach(() => {
@@ -416,8 +388,7 @@ describe("telemetry-collector — 健康度告警 (P2-1)", () => {
     setLogSink(undefined);
   });
 
-  it("cpuAvg10 >= softLimit*0.9 时输出 cpu-high 告警", () => {
-    // healthy tier: softLimit = 17.5, 0.9*17.5 = 15.75
+  it("telemetry-collector 不再输出 @ALERT 行（告警已移至 TelemetryFlush）", () => {
     (globalThis as Record<string, unknown>).Memory = {
       rooms: { W1N1: {} },
       kernel: {
@@ -432,11 +403,11 @@ describe("telemetry-collector — 健康度告警 (P2-1)", () => {
 
     telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
 
-    const alertLine = logLines.find(s => s.includes("@ALERT cpu-high"));
-    expect(alertLine).toBeDefined();
+    const alertLines = logLines.filter(s => s.includes("@ALERT"));
+    expect(alertLines).toHaveLength(0);
   });
 
-  it("bucketMin10 < 2000 时输出 bucket-critical 告警", () => {
+  it("bucket 危急时也不输出 @ALERT", () => {
     (globalThis as Record<string, unknown>).Memory = {
       rooms: { W1N1: {} },
       kernel: {
@@ -451,11 +422,11 @@ describe("telemetry-collector — 健康度告警 (P2-1)", () => {
 
     telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
 
-    const alertLine = logLines.find(s => s.includes("@ALERT bucket-critical"));
-    expect(alertLine).toBeDefined();
+    const alertLines = logLines.filter(s => s.includes("@ALERT"));
+    expect(alertLines).toHaveLength(0);
   });
 
-  it("errors > 0 且有 errorHotspot 时输出 error-hotspot 告警", () => {
+  it("错误频发时也不输出 @ALERT", () => {
     (globalThis as Record<string, unknown>).Memory = {
       rooms: { W1N1: {} },
       kernel: {
@@ -470,9 +441,8 @@ describe("telemetry-collector — 健康度告警 (P2-1)", () => {
 
     telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
 
-    const alertLine = logLines.find(s => s.includes("@ALERT error-hotspot"));
-    expect(alertLine).toBeDefined();
-    expect(alertLine).toContain("harvester.run");
+    const alertLines = logLines.filter(s => s.includes("@ALERT"));
+    expect(alertLines).toHaveLength(0);
   });
 
   it("健康状态下不输出任何告警", () => {
@@ -492,37 +462,5 @@ describe("telemetry-collector — 健康度告警 (P2-1)", () => {
 
     const alertLines = logLines.filter(s => s.includes("@ALERT"));
     expect(alertLines).toHaveLength(0);
-  });
-
-  it("同类告警限频——100 tick 内不重复输出", () => {
-    (globalThis as Record<string, unknown>).Memory = {
-      rooms: { W1N1: {} },
-      kernel: {
-        stats: {
-          lastSample: 105, cpuAvg10: 16, cpuMax10: 18,
-          bucketMin10: 9000, crisisCount: 0, tierTransitions: 0,
-          errorHotspot: "", skipHotspot: "",
-        },
-      },
-    };
-
-    // 第一次 tick=105
-    mockGlobalCache.telemetry = { tick: 105, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
-    telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
-    const firstAlerts = logLines.filter(s => s.includes("@ALERT cpu-high"));
-    expect(firstAlerts).toHaveLength(1);
-
-    // 第二次 tick=115（10 tick 后，< 100 tick 限频间隔）
-    mockGlobalCache.telemetry = { tick: 115, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 };
-    (globalThis as Record<string, unknown>).Game = {
-      time: 115,
-      cpu: { bucket: 10000, getUsed: () => 5 },
-      creeps: {},
-      spawns: {},
-    };
-    telemetryCollectorSystem.run(makeCtx("healthy", 115, [makeSnapshot()]));
-    const allAlerts = logLines.filter(s => s.includes("@ALERT cpu-high"));
-    // 仍然只有 1 条——限频生效
-    expect(allAlerts).toHaveLength(1);
   });
 });

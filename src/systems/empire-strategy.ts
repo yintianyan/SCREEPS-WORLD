@@ -16,7 +16,6 @@ import {
   type SituationRoomInput,
 } from "../domain/strategy/situation";
 import { recordPlanningDecision, recordPlanningTime } from "../telemetry";
-import { declareExpected, resolveOutcome, getStrategyFeedback } from "../telemetry";
 import { log } from "../kernel/log";
 
 /** AgendaChange 事件的 initiative 编码（与 event-log 注释对齐）。 */
@@ -81,47 +80,11 @@ export const empireStrategySystem: System = {
       log.info("empire-strategy", `strategy: posture ${prev?.posture ?? "(none)"} → ${result.posture}` +
         ` (rooms=${rooms.length}, gcl=${Game.gcl?.level ?? 1}, bucket=${Game.cpu.bucket ?? "?"})`,);
       recordPlanningDecision("empire", true);
-      // T3: 声明期望 — posture 变更后预期 200 tick 内不再次切换（稳定性期望）
-      declareExpected({
-        id: `empire-posture-${ctx.tick}`,
-        declaredAtTick: ctx.tick,
-        domain: "empire",
-        decision: `POSTURE_CHANGE:${result.posture}`,
-        target: undefined,
-        expectedDeadlineTick: ctx.tick + 200,
-        expectedMetrics: { postureStabilityTicks: 200 },
-        confidence: 0.7,
-      });
     } else {
       recordPlanningDecision("empire", false);
     }
     recordPlanningTime("empire", 0.001);
 
-    // T3: Strategy Feedback 消费 — 读取评估偏差信号，调整策略决策
-    const feedback = getStrategyFeedback();
-    if (feedback && feedback.underperformingDomains.length > 0) {
-      // 如果扩张域持续不达预期，实际收紧 expansionAllowed
-      if (feedback.underperformingDomains.includes("expansion") && result.expansionAllowed) {
-        result.expansionAllowed = false;
-        log.info("empire-strategy", `strategy: expansion feedback — underperforming, expansion blocked`,);
-      }
-      // 如果战争域持续不达预期，收紧 war posture
-      if (feedback.underperformingDomains.includes("war") && result.posture === "war") {
-        log.info("empire-strategy", `strategy: war feedback — underperforming, consider de-escalation`,);
-      }
-      // 如果孵化域持续不达预期，记录诊断信号
-      if (feedback.underperformingDomains.includes("spawn")) {
-        log.info("empire-strategy", `strategy: spawn feedback — underperforming, spawn pipeline may need attention`,);
-      }
-    }
-    // T3: 超预期域可考虑加码（仅在健康姿态下）
-    if (feedback && feedback.overperformingDomains.length > 0 && result.posture === "develop") {
-      for (const domain of feedback.overperformingDomains) {
-        log.info("empire-strategy", `strategy: ${domain} feedback — overperforming, consider expansion`,);
-      }
-    }
-    // T3: 回填上一轮 posture 期望（如果存在）— 通过 resolvePreviousPostureExpectation 处理
-    resolvePreviousPostureExpectation(ctx.tick, prev?.posture, result.posture);
 
     Memory.kernel.strategy = {
       posture: result.posture,
@@ -321,29 +284,3 @@ function sumCpuByHome(): number {
   return 0;
 }
 
-/**
- * T3: 回填上一轮 posture 期望。
- * 如果 posture 再次变更（新姿态与 prev 不同），上一轮的 posture 稳定性期望被提前结束。
- * 稳定 tick 数 = 当前 tick - 上一轮声明 tick。如果 < 200，标记为 missed。
- */
-function resolvePreviousPostureExpectation(
-  tick: number,
-  prevPosture: string | undefined,
-  currentPosture: string,
-): void {
-  if (!prevPosture || prevPosture === currentPosture) return;
-  // 在 resolved 记录中查找上一轮 posture 期望
-  // 使用 evaluatePending 的评估窗口：当 posture 变更时，上一轮声明已失效
-  // 通过 resolveOutcome 回填 — id 格式为 "empire-posture-{declaredTick}"
-  // 我们不知道上一轮的 declaredTick，但 resolveOutcome 找不到 id 时会静默跳过
-  // 这里通过 pending 查找
-  // 注意：declareExpected 幂等，且 resolveOutcome 通过 id 匹配 —
-  // 由于我们不知道 prevPosture 的 declaredAtTick，这里直接用 Strategy.since 作为代理
-  const since = Memory.kernel?.strategy?.since ?? tick;
-  const stableTicks = tick - since;
-  resolveOutcome(`empire-posture-${since}`, {
-    resolvedAtTick: tick,
-    actualMetrics: { postureStabilityTicks: stableTicks },
-    result: stableTicks >= 200 ? "COMPLETED" : "FAILED",
-  });
-}

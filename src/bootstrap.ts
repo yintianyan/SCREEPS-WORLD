@@ -42,8 +42,6 @@ import { remoteMiningManagerSystem } from "./systems/remote-mining-manager";
 import { specializationPlannerSystem } from "./systems/specialization-planner";
 import { empireHealthSystem } from "./systems/empire-health-system";
 import { recoveryExecutionSystem } from "./systems/recovery-execution-system";
-import { decisionTraceSystem } from "./systems/decision-trace-system";
-import { intelligencePipelineSystem } from "./systems/intelligence/intelligence-pipeline-system";
 import { warPlannerSystem } from "./systems/war-planner";
 import { warPlanningSystem } from "./systems/war-planning-system";
 import { tacticalRuntimePipelineSystem } from "./systems/tactical-runtime-pipeline";
@@ -51,7 +49,6 @@ import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
 import { spawnManagerSystem } from "./systems/spawn-manager";
 import { telemetryCollectorSystem } from "./systems/telemetry-collector";
-import { evaluationSystem } from "./systems/evaluation-system";
 import { terminalManagerSystem } from "./systems/terminal-manager";
 import { trafficManagerSystem } from "./systems/traffic-manager";
 import { tuningEngineSystem } from "./systems/tuning-engine";
@@ -72,7 +69,6 @@ import {
   registerEmpireMetrics,
   registerExpansionMetrics,
   registerDefenseMetrics,
-  registerEvaluationMetrics,
   initTelemetryFlush,
   resetFrequencyState,
 } from "./telemetry";
@@ -103,7 +99,6 @@ registerExecutionMetrics();
 registerEmpireMetrics();
 registerExpansionMetrics();
 registerDefenseMetrics();
-registerEvaluationMetrics();
 /** 组合根注册表 — 导出仅供一致性测试（role-config-parity）检视。 */
 export const registry = new Registry()
   // P0：房间状态（ColonyState，必须先于其他系统）
@@ -146,18 +141,6 @@ export const registry = new Registry()
   //   追踪 Action 生命周期 + Before/After World State 验证 + Retry/Escalation。
   //   在 empire-health 之后运行（同 P1 但 interval=10 远高于 100t，每 10t 消费一次）
   .registerSystem(recoveryExecutionSystem)
-  // P3：Decision Trace（A4.7 — 低频 100t post 阶段，采集各系统产出的决策信号，
-  //   构建 DecisionSnapshot + DecisionRecord 写入 Ring Buffer；不参与决策，
-  //   只做可观测性追踪 + Trace GC + Memory Budget 监控）。
-  .registerSystem(decisionTraceSystem)
-  // P3：Intelligence Pipeline（R10 ADR 合并 A6.1-A6.6 为 1 个 System — interval=100t
-  //   post 阶段，内部按各阶段原始 interval 分频执行 6 阶段 pipeline：
-  //   A6.1 experience-collector(100t) → A6.2 strategy-evaluation(500t) →
-  //   A6.3 prediction(500t) → A6.4 calibration-resolution(500t) →
-  //   A6.5 intelligence-state(500t) → A6.6 recommendation-engine(500t)。
-  //   全部 Shadow-Only：不执行 Game API，不修改 Strategy，结果不自动进入执行系统。
-  //   安全不变式：本系统完全停止时，帝国照常安全运行）
-  .registerSystem(intelligencePipelineSystem)
   // P2：战争规划（A5.3 — 低频 10t，domain 层纯函数薄壳；在 war-planner 之前运行，
   //   产出 WarPlan 写入 globalCache.warPlanCache + 兼容 Memory.kernel.warPlan。
   //   war-planner 消费 WarPlan 执行 spawn/止损/核验。纯函数不执行 Game action）
@@ -194,8 +177,6 @@ export const registry = new Registry()
   .registerSystem(prospectManagerSystem)
   // P3：遥测采集（低频采样）
   .registerSystem(telemetryCollectorSystem)
-  // P3：T3 AI Evaluation（低频 100t post 阶段，Expected vs Actual → Deviation → Strategy Feedback）
-  .registerSystem(evaluationSystem)
   // P3：参数自调优（每 500 tick 读遥测调角色边界覆盖值）
   .registerSystem(tuningEngineSystem)
   // P0（post 阶段）：交通解算 — 所有角色之后统一仲裁签发 move

@@ -45,8 +45,6 @@ import { evaluateColonyFailure } from "../domain/expansion/colony-failure";
 import { evaluateExpansionRoi, type EmpireSnapshot } from "../domain/expansion/roi-tracker";
 import { buildColonyStabilityDashboard } from "../domain/expansion/colony-dashboard";
 import { recordExpansionCompleted, recordExpansionFailed, recordPlanningDecision } from "../telemetry";
-import { declareExpected, resolveOutcome } from "../telemetry";
-
 /** ExpansionOutcome 事件编码（与 event-log 注释对齐）。 */
 const PHASE_CLAIM = 0;
 const PHASE_PIONEER = 1;
@@ -189,18 +187,6 @@ function tryConsumePlan(ctx: TickContext): void {
   };
 
   log.info("expansion",`[${ctx.tick}] expansion-manager: consuming plan ${plan.planId} for ${plan.roomName} (sponsor=${plan.sponsorRoom})`);
-
-  // T3: 声明扩张期望 — 预期 2000 tick 内完成（标准扩张周期）
-  declareExpected({
-    id: `expansion-${plan.roomName}-${ctx.tick}`,
-    declaredAtTick: ctx.tick,
-    domain: "expansion",
-    decision: `EXPAND:${plan.roomName}`,
-    target: plan.roomName,
-    expectedDeadlineTick: ctx.tick + 2000,
-    expectedMetrics: { durationTicks: 2000, energyCost: 10000 },
-    confidence: 0.6,
-  });
 }
 
 // ─── A3.3：完整状态机推进 ─────────────────────────────────────
@@ -825,12 +811,6 @@ function enqueueTerminalOutcome(
   }
   recordPlanningDecision("expansion", result === "COMPLETED" || result === "COMPLETED_FORCED");
 
-  // T3: 回填扩张期望 — Expected vs Actual 对比
-  resolveOutcome(`expansion-${expansion.target}-${openedAt}`, {
-    resolvedAtTick: tick,
-    actualMetrics: { durationTicks: tick - openedAt, energyCost: expansion.reservedEnergy ?? 0 },
-    result: result === "COMPLETED" || result === "COMPLETED_FORCED" ? "COMPLETED" : "FAILED",
-  });
 
   // 清理 globalCache().lastExpansionOutcome（兼容期：保留旧字段供未迁移消费者）
   // Phase 6 后 experience-collector 从 channel drain 读取，不再依赖此字段
