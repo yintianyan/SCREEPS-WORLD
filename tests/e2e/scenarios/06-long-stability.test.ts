@@ -1,6 +1,6 @@
 /** E2E-006 10000 tick 长期稳定性 — 验证长期运行不崩、不泄漏、不死亡螺旋。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { ScenarioRunner } from "../framework";
+import { ScenarioRunner, type BotSnapshot } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { debugSnapshot } from "../helpers/assertions";
 
@@ -37,7 +37,7 @@ describe("E2E-006 10000 tick 长期稳定性", () => {
       const WARMUP_TICKS = 50;
 
       let totalErrors: string[] = [];
-      let totalSnapshots: Array<{ tick: number; totalCreeps: number; consoleLogs: string[] }> = [];
+      let totalSnapshots: BotSnapshot[] = [];
 
       // 分段运行，每段 CHECKPOINT tick，共 5 段
       for (let segment = 1; segment <= TOTAL_TICKS / CHECKPOINT; segment++) {
@@ -45,11 +45,7 @@ describe("E2E-006 10000 tick 长期稳定性", () => {
 
         // 累积快照用于后续断言
         for (const snap of snapshots) {
-          totalSnapshots.push({
-            tick: snap.tick,
-            totalCreeps: snap.totalCreeps,
-            consoleLogs: snap.consoleLogs,
-          });
+          totalSnapshots.push(snap);
         }
 
         // 段内错误检查
@@ -129,6 +125,10 @@ describe("E2E-006 10000 tick 长期稳定性", () => {
           rawMemory: mem,
           consoleLogs: finalSnapshot.consoleLogs,
           notifications: [],
+          metrics: finalSnapshot.metrics,
+          colonyStates: finalSnapshot.colonyStates,
+          spawnQueues: finalSnapshot.spawnQueues,
+          rclByRoom: finalSnapshot.rclByRoom,
         })}`,
       ).toBeGreaterThan(0);
 

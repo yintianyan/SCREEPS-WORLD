@@ -1,5 +1,4 @@
 import { TaskPool } from "../domain/assignment/task-pool";
-import type { TraceState } from "./decision-trace";
 
 /** assignment-service 的单 tick 缓存。 */
 export interface AssignmentCache {
@@ -63,8 +62,8 @@ export interface GlobalCache {
    * 直送核心 sink — 否则能量锁进无人能取的仓库，energyAvailable 卡死在 spawn 自充值，
    * 全舰队孵化饥饿降级。 */
   distributorRooms?: ReadonlySet<string>;
-  /** 【G-H】DecisionTrace 分层 ring（volatile 调试设施）。 */
-  decisionTrace?: TraceState;
+  /** 【G-H】DecisionTrace 分层 ring（volatile 调试设施，已停用）。 */
+  decisionTrace?: unknown;
   /** 【F1/G-B】各系统 CPU 消耗 EMA（budgetCap 局部截断判据）。heap 存储，reset 后从零重建（EMA 快速收敛可接受）。 */
   systemBudgetEma?: Map<string, number>;
   /** P3 能量核算 L1 计数器（bumpEnergyCounter 写入；economy 系统每窗滚动消费）。 */
@@ -73,6 +72,7 @@ export interface GlobalCache {
   transportPool?: { tick: number; rooms: Record<string, unknown[]> };
   // 【F-DEAD-1 已删除】logisticsCounters — L1 物流指标从未落地，全库零引用。
   // 物流空载率指标为纸面功能，若需重引入须同时接线生产者与消费者。
+  // 【WO-4 已删除】lastDriftDiag — 只写不读的诊断字段，已清理。
   /** 本 tick 的 boost 报到分配表（lab-system 每 tick 写入）。
    * key = creep 名；ready = lab 内化合物已备足（≥ 单次 boost 用量）—
    * 报到拦截仅在 ready 时生效，避免 creep 罚站等 supplyLabs 搬运
@@ -173,10 +173,6 @@ export interface GlobalCache {
   cpuByHome?: Map<string, number>;
   /** 各系统最近一次实际执行 tick（kernel.runSystems 记录）—— 期望自检的 P3 存活判据输入。heap 存储。 */
   systemLastRun?: Record<string, number>;
-  /** P3 核算诊断：最近一次漂移事件的窗口分解（economy 写，观测/归因用）。
-   * 【WO-4 修复】弱消费诊断字段 — 只能 console 手查。若要保留应挂到
-   * decision-trace 或 Memory 短期快照；否则等于没记。保留在 heap 供 console 内省。 */
-  lastDriftDiag?: unknown;
   // 【F-DEAD-2 已删除】empireTransportRequests — A3.0 帝国级跨房调拨请求池
   // 连生产者都不存在（agenda-manager 不写、logistics 不读），只有 cache 槽位和
   // 文档描述。若 A3.0 帝国调拨进入路线图，须重新设计完整链路而非留假装存在的槽位。

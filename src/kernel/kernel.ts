@@ -674,7 +674,7 @@ export class Kernel {
 
     for (const { creep, role } of creepEntries) {
       // 每房殖民地状态门禁：recovery/bootstrap 时允许 P0/P1（能量链），跳过 P2+。
-      // 例外（R3a）：recovery 时允许角色自报的 survival/income 豁免（recoveryEligible）—
+      // 例外（R3a）：recovery/bootstrap 时允许角色自报的生存豁免（recoveryEligible）—
       // kernel 只读钩子，不再硬编码角色名（与 System recoveryEligible 同一模式）。
       // 例外（战争紧急旁路）：combat 角色在 war 姿态或本房有活敌时继续运行（见
       // colonyStateFreezesRole）。状态由 room-state 每 tick 写入 RoomMemory.colonyState。
@@ -682,7 +682,7 @@ export class Kernel {
       // 原先 budget.canStart 先挡住 P2 builder，使豁免形同虚设。
       const home = creep.memory.home;
       const roomState = home ? Memory.rooms[home]?.colonyState ?? "normal" : "normal";
-      const isRecoveryExempt = roomState === "recovery" && role.recoveryEligible === true;
+      const isRecoveryExempt = (roomState === "recovery" || roomState === "bootstrap") && role.recoveryEligible === true;
       // P0-3：combat 角色可能在远矿房作战 — 威胁检查同时看 home 和当前所在房。
       const inThreatRoom = liveThreatRooms.has(home ?? "") || liveThreatRooms.has(creep.room?.name ?? "");
       if (colonyStateFreezesRole(roomState, role, posture, inThreatRoom)) {
@@ -761,7 +761,7 @@ export function colonyStateFreezesRole(
 ): boolean {
   if (roomState !== "recovery" && roomState !== "bootstrap") return false;
   if (role.priority <= 1) return false; // P0/P1（能量链/防御）永远放行
-  if (roomState === "recovery" && role.recoveryEligible === true) return false; // R3a 豁免
+  if (role.recoveryEligible === true) return false; // 生存/脱困角色豁免（builder 重建基建、mineralMiner 不耗能收入）
   // 紧急旁路：战争或真实入侵时，作战单位必须照常运行（帝国存续所系）。
   if (role.combat === true && (posture === "war" || liveThreatInRoom)) return false;
   return true;

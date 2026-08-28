@@ -65,7 +65,7 @@ describe("Kernel recovery 门禁 — recoveryEligible 角色豁免（R3a）", ()
     expect(uSpy).not.toHaveBeenCalled();
   });
 
-  it("bootstrap 房：P2 全部跳过（豁免仅限 recovery）", () => {
+  it("bootstrap 房：recoveryEligible 角色同样豁免（builder 建造关键基建）", () => {
     const kernel = makeKernel();
     const mSpy = vi.spyOn(mineralMinerRole, "run").mockImplementation(() => {});
     const bSpy = vi.spyOn(builderRole, "run").mockImplementation(() => {});
@@ -77,8 +77,11 @@ describe("Kernel recovery 门禁 — recoveryEligible 角色豁免（R3a）", ()
 
     (kernel as any).runCreeps(makeCtx());
 
-    expect(mSpy).not.toHaveBeenCalled();
-    expect(bSpy).not.toHaveBeenCalled();
+    // builder 豁免：bootstrap 下建造关键基建是生存行为
+    expect(bSpy).toHaveBeenCalledTimes(1);
+    // mineralMiner 豁免：声明了 recoveryEligible，bootstrap 下也放行
+    // （spawn demand 端已控制 bootstrap 不孵 mineralMiner，存量 creep 仍可运行）
+    expect(mSpy).toHaveBeenCalledTimes(1);
   });
 
   it("recovery tier 预算：豁免角色以 P1 等效优先级通过（不被 maxPriority=1 拦截）", () => {

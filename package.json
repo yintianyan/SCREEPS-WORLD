@@ -8,7 +8,7 @@
     "node": ">=24.0.0 <25.0.0"
   },
   "scripts": {
-    "build": "rollup -c",
+    "build": "tsc --noEmit && rollup -c",
     "watch": "rollup -c -w",
     "deploy": "node tools/official/deploy-screeps.js",
     "typecheck": "tsc --noEmit",
@@ -22,6 +22,8 @@
     "collect:private:once": "node tools/private/empire-collector.js --once",
     "collect:private:snapshot": "node tools/private/empire-collector.js --snapshot",
     "collect:private:fast": "node tools/private/empire-collector.js --interval-tick 10 --snapshot-tick 500",
+    "archive:telemetry": "node tools/archive-telemetry.js",
+    "archive:telemetry:once": "node tools/archive-telemetry.js --once",
     "postinstall": "node scripts/rebuild-driver-snapshot.js"
   },
   "devDependencies": {

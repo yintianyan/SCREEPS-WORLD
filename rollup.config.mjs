@@ -9,7 +9,7 @@ export default {
   plugins: [
     resolve(),
     commonjs(),
-    typescript({ tsconfig: "./tsconfig.json" }),
+    typescript({ tsconfig: "./tsconfig.json", compilerOptions: { noEmitOnError: true } }),
     // 压缩产物 — 不只是省空间：global reset 时引擎要重新编译整个 bundle，
     // 未压缩 2MB 的加载成本可能超过低 bucket 时的 tickLimit(≈20 CPU)，
     // 与 bucket 清零撞车即触发 reload death loop（加载即被杀、永不回充）。

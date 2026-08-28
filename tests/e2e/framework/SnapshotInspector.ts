@@ -2,6 +2,37 @@
 import type { BotHarness } from "./BotHarness";
 
 /**
+ * 运行时指标快照 — 从 Memory.kernel.stats 提取的关键遥测数据。
+ * 用于 E2E 验收：CPU/bucket/skip/error/Memory 体积/spawn/RCL 等。
+ */
+export interface RuntimeMetrics {
+  /** CPU 档位（healthy/guarded/conserve/recovery）。 */
+  tier: string | undefined;
+  /** 最近 10 个采样点 CPU 均值。 */
+  cpuAvg10: number | undefined;
+  /** 最近 10 个采样点 CPU 峰值。 */
+  cpuMax10: number | undefined;
+  /** 最近 10 个采样点 bucket 最低值。 */
+  bucketMin10: number | undefined;
+  /** 危机计数（tier 降级次数）。 */
+  crisisCount: number | undefined;
+  /** tier 转换次数。 */
+  tierTransitions: number | undefined;
+  /** 错误热点（最频繁报错的 label）。 */
+  errorHotspot: string | undefined;
+  /** 跳过热点（最频繁跳过的 reason）。 */
+  skipHotspot: string | undefined;
+  /** 最近一次错误现场快照（label/msg/tick）。 */
+  lastError: { label: string; msg: string; tick: number } | undefined;
+  /** 最近一次采样 tick。 */
+  lastSample: number | undefined;
+  /** Memory 序列化大小（字节，估算）。 */
+  memorySize: number;
+  /** Skip reason 计数表（从 Memory.kernel.skipReasons 读取）。 */
+  skipReasons: Record<string, number> | undefined;
+}
+
+/**
  * Bot 状态快照。从 Memory 和 console 日志推导。
  */
 export interface BotSnapshot {
@@ -17,6 +48,14 @@ export interface BotSnapshot {
   consoleLogs: string[];
   /** 从上次快照以来的通知。 */
   notifications: Array<{ message: string; date: number }>;
+  /** 运行时指标（从 Memory.kernel.stats 提取）。 */
+  metrics: RuntimeMetrics;
+  /** 各房间的 colonyState。 */
+  colonyStates: Record<string, string>;
+  /** 各房间的 spawn queue 长度。 */
+  spawnQueues: Record<string, number>;
+  /** 各房间的 RCL。 */
+  rclByRoom: Record<string, number>;
 }
 
 /**
@@ -38,7 +77,6 @@ export class SnapshotInspector {
     const mem = await this._bot.getMemory();
 
     // 从 Memory.creeps 推导 role 分布
-    // 生产代码的 creep memory 应该有 role 字段（Screeps 惯例）
     const creepCountByRole: Record<string, number> = {};
     let totalCreeps = 0;
     if (mem.creeps && typeof mem.creeps === "object") {
@@ -49,6 +87,11 @@ export class SnapshotInspector {
       }
     }
 
+    const metrics = this.extractMetrics(mem);
+    const colonyStates = this.extractColonyStates(mem);
+    const spawnQueues = this.extractSpawnQueues(mem);
+    const rclByRoom = this.extractRCL(mem);
+
     return {
       tick: currentTick,
       creepCountByRole,
@@ -56,13 +99,77 @@ export class SnapshotInspector {
       rawMemory: mem,
       consoleLogs: this._bot.drainConsole(),
       notifications: this._bot.drainNotifications(),
+      metrics,
+      colonyStates,
+      spawnQueues,
+      rclByRoom,
     };
   }
 
   /**
+   * 从 Memory 提取运行时指标。
+   */
+  private extractMetrics(mem: any): RuntimeMetrics {
+    const kernel = mem?.kernel ?? {};
+    const stats = kernel?.stats ?? {};
+
+    return {
+      tier: kernel?.tier,
+      cpuAvg10: stats?.cpuAvg10,
+      cpuMax10: stats?.cpuMax10,
+      bucketMin10: stats?.bucketMin10,
+      crisisCount: stats?.crisisCount,
+      tierTransitions: stats?.tierTransitions,
+      errorHotspot: stats?.errorHotspot,
+      skipHotspot: stats?.skipHotspot,
+      lastError: stats?.lastError,
+      lastSample: stats?.lastSample,
+      memorySize: JSON.stringify(mem).length,
+      skipReasons: kernel?.skipReasons,
+    };
+  }
+
+  /**
+   * 从 Memory 提取各房间的 colonyState。
+   */
+  private extractColonyStates(mem: any): Record<string, string> {
+    const result: Record<string, string> = {};
+    const rooms = mem?.rooms ?? {};
+    for (const [roomName, roomMem] of Object.entries(rooms)) {
+      const state = (roomMem as any)?.colonyState;
+      if (typeof state === "string") result[roomName] = state;
+    }
+    return result;
+  }
+
+  /**
+   * 从 Memory 提取各房间的 spawn queue 长度。
+   */
+  private extractSpawnQueues(mem: any): Record<string, number> {
+    const result: Record<string, number> = {};
+    const rooms = mem?.rooms ?? {};
+    for (const [roomName, roomMem] of Object.entries(rooms)) {
+      const queue = (roomMem as any)?.spawnQueue;
+      if (Array.isArray(queue)) result[roomName] = queue.length;
+    }
+    return result;
+  }
+
+  /**
+   * 从 Memory 提取各房间的 RCL。
+   */
+  private extractRCL(mem: any): Record<string, number> {
+    const result: Record<string, number> = {};
+    const rooms = mem?.rooms ?? {};
+    for (const [roomName, roomMem] of Object.entries(rooms)) {
+      const rcl = (roomMem as any)?.rcl;
+      if (typeof rcl === "number") result[roomName] = rcl;
+    }
+    return result;
+  }
+
+  /**
    * 提取指定房间的 storage 能量。
-   * 从 Memory.rooms[roomName].storage 或类似字段读取。
-   * 注意：生产代码可能不存这个字段，需要通过其他方式观察。
    */
   getStorageEnergy(snapshot: BotSnapshot, roomName: string): number | undefined {
     const roomMem = snapshot.rawMemory?.rooms?.[roomName];
@@ -71,7 +178,6 @@ export class SnapshotInspector {
 
   /**
    * 提取 controller 等级。
-   * 从 Memory.rooms[roomName].controller.level 或类似字段读取。
    */
   getControllerLevel(snapshot: BotSnapshot, roomName: string): number | undefined {
     const roomMem = snapshot.rawMemory?.rooms?.[roomName];
@@ -97,6 +203,13 @@ export class SnapshotInspector {
         line.includes("TypeError") ||
         line.includes("undefined"),
     );
+  }
+
+  /**
+   * 检查快照中是否有运行时错误（从 Memory.kernel.stats.lastError）。
+   */
+  hasRuntimeError(snapshot: BotSnapshot): boolean {
+    return snapshot.metrics.lastError !== undefined;
   }
 
   /**

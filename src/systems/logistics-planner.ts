@@ -624,32 +624,4 @@ export function getLogisticsPlan(): TransportPlan | undefined {
   return cached.plan;
 }
 
-/**
- * 获取最近的 Logistics Dashboard。
- */
-export function getLogisticsDashboard(): LogisticsDashboard | undefined {
-  return globalCache().logisticsDashboard;
-}
 
-/**
- * 获取最近的 Logistics Health。
- */
-export function getLogisticsHealth(): LogisticsHealthResult | undefined {
-  return globalCache().logisticsHealth;
-}
-
-/**
- * 获取最近某房的扩缩编决策。
- */
-export function getScalingDecision(roomName: string): ScalingDecision | undefined {
-  const cached = globalCache().logisticsScaling;
-  if (!cached) return undefined;
-  return cached.decisions[roomName];
-}
-
-/**
- * 获取闲置 hauler 名称列表。
- */
-export function getIdleHaulers(): string[] {
-  return globalCache().logisticsIdleHaulers?.names ?? [];
-}

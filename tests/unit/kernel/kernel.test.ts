@@ -37,6 +37,10 @@ describe("colonyStateFreezesRole — recovery/bootstrap 冻结", () => {
     expect(colonyStateFreezesRole("recovery", p2CollectorExempt, "develop", false)).toBe(false);
   });
 
+  it("bootstrap 下 recoveryEligible 角色豁免（builder 建造关键基建）", () => {
+    expect(colonyStateFreezesRole("bootstrap", p2CollectorExempt, "develop", false)).toBe(false);
+  });
+
   it("P1 角色（如 defender）永不被冻结", () => {
     expect(colonyStateFreezesRole("recovery", p1Defender, "develop", false)).toBe(false);
   });

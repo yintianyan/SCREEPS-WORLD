@@ -168,27 +168,6 @@ export const economySystem: System = {
         st.driftStreak++;
         if (st.driftStreak === 2) {
           recordEvent(EventKind.AccountingDrift, roomName, [Math.round(w.drift), st.driftStreak]);
-          // 归因快照：窗口分解一次入 globalCache（观测/诊断消费，非生存路径）。
-          g.lastDriftDiag = {
-            t: ctx.tick,
-            room: roomName,
-            drift: w.drift,
-            income: w.income,
-            consumption: w.consumption,
-            refunds: w.refunds,
-            byBucket: { ...w.byBucket },
-            dPools: {
-              spawnExt: pools.spawnExt - st.lastPools.spawnExt,
-              containers: pools.containers - st.lastPools.containers,
-              storage: pools.storage - st.lastPools.storage,
-              terminal: pools.terminal - st.lastPools.terminal,
-              links: pools.links - st.lastPools.links,
-              carry: pools.carry - st.lastPools.carry,
-              towers: pools.towers - st.lastPools.towers,
-              loose: pools.loose - st.lastPools.loose,
-              other: pools.other - st.lastPools.other,
-            },
-          };
         }
       } else {
         st.driftStreak = 0;

@@ -3,5 +3,5 @@
 export { ServerHarness } from "./ServerHarness";
 export { BotHarness } from "./BotHarness";
 export { WorldBuilder, type RoomSetup, type ObjectSpec } from "./WorldBuilder";
-export { SnapshotInspector, type BotSnapshot } from "./SnapshotInspector";
+export { SnapshotInspector, type BotSnapshot, type RuntimeMetrics } from "./SnapshotInspector";
 export { ScenarioRunner, type ScenarioOptions, type TickPredicate } from "./ScenarioRunner";

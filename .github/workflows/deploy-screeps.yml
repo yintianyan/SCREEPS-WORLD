@@ -36,6 +36,7 @@ jobs:
         # --ignore-scripts 跳过原生插件编译：deploy 只需 rollup + typescript，
         # 用不到 isolated-vm（那是 E2E 测试用的 screeps-server-mockup 依赖）。
         # 跳过后既省 2-4 分钟编译，又彻底规避 isolated-vm 的 node-gyp 编译失败。
+        # integration 测试用 fake world，不需要原生模块。
         run: npm ci --ignore-scripts
 
       - name: Typecheck
@@ -45,6 +46,9 @@ jobs:
       # 「typecheck+test+build 全绿」纯靠本地自觉。单测 7s 级耗时，不构成瓶颈。
       - name: Unit tests
         run: npm run test:unit
+
+      - name: Integration tests
+        run: npm run test:integration
 
       - name: Build
         run: npm run build

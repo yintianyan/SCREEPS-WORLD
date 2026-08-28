@@ -1,0 +1,42 @@
+# ─── E2E 引擎验证 ─────────────────────────────────────────────
+# 在 PR 时运行真实引擎验证（screeps-server-mockup + dist/main.js）。
+# 与 deploy-screeps.yml 分离：deploy 用 --ignore-scripts 跳过原生模块，
+# E2E 需要完整的 isolated-vm 编译。
+name: E2E Engine Verification
+
+on:
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+
+      - name: Install dependencies
+        # 完整安装（含 isolated-vm 原生模块编译）—— E2E 需要 screeps-server-mockup
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: E2E Smoke Test
+        run: npx vitest run tests/e2e/scenarios/00-smoke.test.ts --config vitest.e2e.config.ts
+        timeout-minutes: 5
