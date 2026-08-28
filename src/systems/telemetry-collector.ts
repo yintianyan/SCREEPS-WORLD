@@ -21,6 +21,7 @@ import {
 import { drainEventBuffer, EventKind } from "../kernel/event-log";
 import { ringPush, ringToArray } from "../kernel/ring-buffer";
 import { getActionCpuSnapshot } from "../kernel/safe-run";
+import { log } from "../kernel/log";
 
 // ─── 系统定义 ───────────────────────────────────────────────
 
@@ -234,10 +235,8 @@ function sampleMemorySize(tick: number): void {
     }
     Memory.kernel.stats.memorySize = size;
     if (size > MEMORY_SIZE_ALERT) {
-      console.log(
-        `[${tick}] WARNING: Memory size ${size} bytes (${(size / 1024 / 1024).toFixed(2)}MB) ` +
-        `approaching 2MB limit — consider pruning Memory.rooms / remoteOps`,
-      );
+      log.warn("telemetry-collector", `WARNING: Memory size ${size} bytes (${(size / 1024 / 1024).toFixed(2)}MB) ` +
+        `approaching 2MB limit — consider pruning Memory.rooms / remoteOps`,);
     }
   } catch {
     // RawMemory 不可用（测试环境）——静默跳过。
@@ -569,7 +568,7 @@ function emitTelemetryLine(tick: number, ctx: TickContext): void {
     }
   }
 
-  console.log(`@TELEMETRY ${JSON.stringify(payload)}`);
+  log.info("telemetry-collector", `@TELEMETRY ${JSON.stringify(payload)}`);
 }
 
 // ─── 健康度告警（P2-1）──────────────────────────────────────
@@ -599,7 +598,7 @@ function checkHealthAlerts(tick: number, ctx: TickContext): void {
     const last = throttle[type] ?? 0;
     if (tick - last < ALERT_THROTTLE) return;
     throttle[type] = tick;
-    console.log(`@ALERT ${type}:${msg}`);
+    log.info("telemetry-collector", `@ALERT ${type}:${msg}`);
   }
 
   // 1. CPU 持续高位告警

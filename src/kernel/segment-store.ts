@@ -11,6 +11,7 @@ import type {
 } from "./timeseries";
 import type { EventLogSegmentData, GameEvent } from "./event-log";
 import { createRingBuffer, ringToArray, ringPush, type RingBuffer } from "./ring-buffer";
+import { log } from "./log";
 
 // ─── Segment ID 常量 ────────────────────────────────────────
 
@@ -293,7 +294,7 @@ function migrateLegacyTimeseries(legacy: LegacyTimeseriesData): void {
   if (cache.migrated) return;
   cache.migrated = true;
 
-  console.log("[segment] migrating legacy segment 1 → segment 1 (cpu) + segment 3 (economy)");
+  log.info("segment-store", "[segment] migrating legacy segment 1 → segment 1 (cpu) + segment 3 (economy)");
 
   // 重建 economy ring buffer — 过滤旧裁剪逻辑留下的 null/undefined 空洞。
   if (legacy.economy) {

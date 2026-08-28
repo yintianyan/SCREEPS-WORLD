@@ -17,6 +17,7 @@
 import { globalCache } from "../kernel/global-cache";
 import { recordOutcome } from "./DecisionRegistry";
 import { recordExpectationDeclared, recordExpectationFulfilled, recordExpectationMissed } from "./metrics/EvaluationMetrics";
+import { log } from "../kernel/log";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -248,7 +249,7 @@ export function evaluatePending(tick: number): StrategyFeedback {
         if (feedback.overperformingDomains.length > 0) {
             parts.push(`over: [${feedback.overperformingDomains.join(",")}]`);
         }
-        console.log(`@TELEMETRY evaluation: ${parts.join(" ")} at tick ${tick}`);
+        log.info("EvaluationRegistry", `@TELEMETRY evaluation: ${parts.join(" ")} at tick ${tick}`);
     }
 
     return feedback;

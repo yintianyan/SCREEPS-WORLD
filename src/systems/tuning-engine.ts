@@ -9,6 +9,7 @@ import { readCpuSegment, readEconomySegment } from "../kernel/segment-store";
 import { ringToArray } from "../kernel/ring-buffer";
 import type { EconomySample, CpuSample } from "../kernel/timeseries";
 import { recordEvent, EventKind, tuningParamCode } from "../kernel/event-log";
+import { log } from "../kernel/log";
 
 // ─── 自定义事件类型（扩展 EventKind）──
 // 调优事件写入 event-log（segment 2 有界 ring），console.log 仅作运维提醒；
@@ -46,9 +47,7 @@ export const tuningEngineSystem: System = {
       // lastEval 是诊断快照（per-room），清掉避免与 rooms 错位。
       delete Memory.kernel.tuning.lastEval;
       Memory.kernel.tuning.baselineVersion = CONFIG.tuning.baselineVersion;
-      console.log(
-        `[${ctx.tick}] tuning: baselineVersion ${oldVersion ?? "undefined"}→${CONFIG.tuning.baselineVersion}, rooms cleared`,
-      );
+      log.info("tuning-engine", `tuning: baselineVersion ${oldVersion ?? "undefined"}→${CONFIG.tuning.baselineVersion}, rooms cleared`,);
     }
 
     // 快照所有房间的当前 bounds —— 评估期间使用快照，避免多房循环中房间 A 的
@@ -118,7 +117,7 @@ function safeRunTuning(
       for (const p of criticalParams) {
         if (roomTuning.frozenParams?.[p]?.frozenUntil && roomTuning.frozenParams[p]!.frozenUntil > ctx.tick) {
           delete roomTuning.frozenParams[p];
-          console.log(`[${ctx.tick}] tuning/${roomName}: FORCE_UNFREEZE ${p} (srcRatio=${signals.srcRatio.toFixed(2)}, stallTicks=${srcStallTicks})`);
+          log.info("tuning-engine", `tuning/${roomName}: FORCE_UNFREEZE ${p} (srcRatio=${signals.srcRatio.toFixed(2)}, stallTicks=${srcStallTicks})`);
         }
         excludedParams.delete(p);
       }
@@ -199,9 +198,7 @@ function safeRunTuning(
     );
   } catch (error) {
     // 调优错误不得中断 tick——静默记录，下次再试。
-    console.log(
-      `[${ctx.tick}] tuning/${roomName}: error ${(error as Error).message}`,
-    );
+    log.error("tuning-engine", `tuning/${roomName}: error ${(error as Error).message}`,);
   }
 }
 
@@ -291,9 +288,7 @@ function applyRollbacksAndClearPending(
       rb.newValue,
       preAdjustValue,
     ]);
-    console.log(
-      `[${ctx.tick}] tuning/${roomName}: ROLLBACK ${rb.param} ${rb.oldValue}→${rb.newValue} (${rb.reason})`,
-    );
+    log.info("tuning-engine", `tuning/${roomName}: ROLLBACK ${rb.param} ${rb.oldValue}→${rb.newValue} (${rb.reason})`,);
   }
 
   // 清空 clearedParams 的 pendingValidation（验证完成，闭环结束）。
@@ -325,9 +320,7 @@ function writeFreezeEvents(
       fp.rollbackCount,
       fp.frozenUntil - ctx.tick,
     ]);
-    console.log(
-      `[${ctx.tick}] tuning/${roomName}: FROZEN ${f.param} (rollbackCount=${fp.rollbackCount}, until Δ=${fp.frozenUntil - ctx.tick})`,
-    );
+    log.info("tuning-engine", `tuning/${roomName}: FROZEN ${f.param} (rollbackCount=${fp.rollbackCount}, until Δ=${fp.frozenUntil - ctx.tick})`,);
   }
 }
 
@@ -354,9 +347,7 @@ function writeBlockedEventsAndDiag(
       pv?.preAdjustValue ?? 0,
       blockedDurationTicks,
     ]);
-    console.log(
-      `[${ctx.tick}] tuning/${roomName}: BLOCKED ${param} (blockedSince Δ=${blockedDurationTicks}, preAdjustValue=${pv?.preAdjustValue ?? 0})`,
-    );
+    log.info("tuning-engine", `tuning/${roomName}: BLOCKED ${param} (blockedSince Δ=${blockedDurationTicks}, preAdjustValue=${pv?.preAdjustValue ?? 0})`,);
     diag[param] = {
       blockedSinceTick,
       lastCheckedTick: ctx.tick,
@@ -384,9 +375,7 @@ function applyEvaluationAdjustments(
       adj.newValue,
       directionCode,
     ]);
-    console.log(
-      `[${ctx.tick}] tuning/${roomName}: ${adj.param} ${adj.oldValue}→${adj.newValue} (${adj.reason})`,
-    );
+    log.info("tuning-engine", `tuning/${roomName}: ${adj.param} ${adj.oldValue}→${adj.newValue} (${adj.reason})`,);
   }
 
   // 写 pendingValidation（覆盖旧记录，adjustTick 由 evaluator 填入）

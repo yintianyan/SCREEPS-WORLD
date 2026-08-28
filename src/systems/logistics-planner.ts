@@ -45,6 +45,7 @@ import {
   decideHaulerScaling,
   type ScalingDecision,
 } from "../domain/logistics/hauler-scaling";
+import { log } from "../kernel/log";
 
 // ─── 路由缓存（heap，跨 tick 持久） ─────────────────────────
 
@@ -265,14 +266,12 @@ export const logisticsPlannerSystem: System = {
 
     // ── 11. 控制台输出（观测用，低频不会刷屏） ──
     if (plan.requests.length > 0 || health.level !== "healthy") {
-      console.log(
-        `[${ctx.tick}] logistics-planner: ${plan.reason}, ` +
+      log.info("logistics-planner", `logistics-planner: ${plan.reason}, ` +
         `health=${health.level}(${health.score.toFixed(2)}), ` +
         `delivery=${(health.deliveryRate * 100).toFixed(0)}%, ` +
         `backlog=${health.backlogCount}, ` +
         `capacity_gap=H${capacity.totalHaulerGap}/C${capacity.totalCarrierGap}, ` +
-        `accounting=req=${accountingSummary.totalRequested}/del=${accountingSummary.totalDelivered}/lost=${accountingSummary.totalLost}`,
-      );
+        `accounting=req=${accountingSummary.totalRequested}/del=${accountingSummary.totalDelivered}/lost=${accountingSummary.totalLost}`,);
     }
   },
 };

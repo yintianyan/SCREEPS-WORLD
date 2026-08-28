@@ -6,6 +6,7 @@ import { exportPrometheusText } from "./exporters/PrometheusExporter";
 import { globalCache } from "../kernel/global-cache";
 import { TELEMETRY_CPU_BUDGET_RATIO } from "./schema";
 import { writePrometheusSegment } from "../kernel/segment-store";
+import { log } from "../kernel/log";
 
 // ─── Flush Pipeline ───────────────────────────────────────
 
@@ -83,7 +84,7 @@ export function runFlush(tier: string): FlushResult {
         // 2. 导出：console line（供外部采集器）
         const consoleLine = exportConsoleLine(pkg);
         if (consoleLine) {
-            console.log(consoleLine);
+            log.info("TelemetryFlush", consoleLine);
         }
 
         // 3. 导出：Prometheus text format → 写入 segment 4
@@ -97,9 +98,7 @@ export function runFlush(tier: string): FlushResult {
 
         // CPU 预算超支告警（不阻断本次，仅记录）
         if (cpuCost > budget) {
-            console.log(
-                `@ALERT telemetry-budget: flush cost ${cpuCost.toFixed(3)} > budget ${budget.toFixed(3)}`,
-            );
+            log.info("TelemetryFlush", `@ALERT telemetry-budget: flush cost ${cpuCost.toFixed(3)} > budget ${budget.toFixed(3)}`,);
         }
 
         return {
@@ -114,7 +113,7 @@ export function runFlush(tier: string): FlushResult {
     } catch (err) {
         // Telemetry Failure → AI continues running
         // 不向调用者抛出，静默吞掉
-        console.log(`@ALERT telemetry-flush-error: ${String(err).slice(0, 200)}`);
+        log.error("TelemetryFlush", `@ALERT telemetry-flush-error: ${String(err).slice(0, 200)}`);
         return {
             tick,
             flushed: false,

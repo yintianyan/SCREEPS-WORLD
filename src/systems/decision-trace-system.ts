@@ -31,6 +31,7 @@ import {
 } from "../domain/strategy/decision-trace";
 import type { ThreatAssessment, ThreatLevel, ThreatIntent } from "../domain/defense/threat-assessment";
 import type { RemoteDefenseDecision, RemoteDefenseAction } from "../domain/defense/remote-defense";
+import { log } from "../kernel/log";
 
 // ─── globalCache 字段类型 ──────────────────────────────────
 
@@ -99,10 +100,8 @@ export const decisionTraceSystem: System = {
         r => r.severity === "IMPORTANT" || r.severity === "CRITICAL",
       );
       if (important.length > 0) {
-        console.log(
-          `[${tick}] decision-trace: ${cache.ringBuffer.count} records, ` +
-            `recent IMPORTANT/CRITICAL: ${important.map(r => `${r.selectedAction}(${r.scope})`).join(", ")}`,
-        );
+        log.info("decision-trace-system", `decision-trace: ${cache.ringBuffer.count} records, ` +
+            `recent IMPORTANT/CRITICAL: ${important.map(r => `${r.selectedAction}(${r.scope})`).join(", ")}`,);
       }
     }
   },
@@ -1201,10 +1200,8 @@ function evictStaleSnapshots(cache: DecisionTraceCache): void {
   }
 
   if (evicted > 0 && cache.snapshotRegistry.size > 0) {
-    console.log(
-      `[decision-trace] snapshotRegistry evicted ${evicted} stale snapshots, ` +
-      `remaining: ${cache.snapshotRegistry.size}`,
-    );
+    log.info("decision-trace-system", `[decision-trace] snapshotRegistry evicted ${evicted} stale snapshots, ` +
+      `remaining: ${cache.snapshotRegistry.size}`,);
   }
 }
 

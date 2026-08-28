@@ -38,6 +38,9 @@ let lastScrapeTime = 0;
 let scrapeError = null;
 let totalScrapes = 0;
 let failedScrapes = 0;
+let authToken = SCREEPS_TOKEN;
+let consecutiveFailures = 0;
+const MAX_CONSECUTIVE_FAILURES = 10;
 
 // ─── HTTP helper ──────────────────────────────────────
 
@@ -48,11 +51,7 @@ function httpGet(url, headers = {}) {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve({ statusCode: res.statusCode, body: data, headers: res.headers });
-        } else {
-          reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
-        }
+        resolve({ statusCode: res.statusCode, body: data, headers: res.headers });
       });
     });
     req.on('error', reject);
@@ -92,12 +91,7 @@ function httpPost(url, body, headers = {}) {
 
 // ─── Screeps API ───────────────────────────────────────
 
-let authToken = SCREEPS_TOKEN;
-
-async function ensureAuth() {
-  if (authToken) return;
-
-  // Email/password login
+async function login() {
   const loginUrl = `${SCREEPS_HOST}/api/auth/signin`;
   const body = JSON.stringify({
     email: SCREEPS_USERNAME,
@@ -108,65 +102,81 @@ async function ensureAuth() {
     throw new Error(`Login failed: ${res.statusCode} ${res.body.slice(0, 200)}`);
   }
   const json = JSON.parse(res.body);
+  if (!json.token) throw new Error('No token in login response');
   authToken = json.token;
-  if (!authToken) throw new Error('No token in login response');
   console.log(`[screeps-exporter] Logged in as ${SCREEPS_USERNAME}`);
 }
 
-async function fetchSegment() {
-  await ensureAuth();
+async function ensureAuth() {
+  if (authToken) return;
+  await login();
+}
 
-  const url = `${SCREEPS_HOST}/api/user/memory-segment?segment=${METRICS_SEGMENT}&shard=${SCREEPS_SHARD}`;
-  const res = await httpGet(url, {
-    'X-Token': authToken,
-    'Authorization': `Bearer ${authToken}`,
-  });
+async function fetchSegmentWithRetry(maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Ensure we have a token
+    if (!authToken) {
+      await login();
+    }
 
-  // Token expired → re-auth and retry once
-  if (res.statusCode === 401) {
-    console.log('[screeps-exporter] Token expired, re-authenticating...');
-    authToken = '';
-    await ensureAuth();
-    const retryRes = await httpGet(url, {
+    const url = `${SCREEPS_HOST}/api/user/memory-segment?segment=${METRICS_SEGMENT}&shard=${SCREEPS_SHARD}`;
+    const res = await httpGet(url, {
       'X-Token': authToken,
       'Authorization': `Bearer ${authToken}`,
     });
-    if (retryRes.statusCode !== 200) {
-      throw new Error(`Segment fetch (retry) failed: ${retryRes.statusCode}`);
+
+    if (res.statusCode === 200) {
+      const json = JSON.parse(res.body);
+      if (json.ok === 1) {
+        return json.data || '';
+      }
+      throw new Error(`API error: ${JSON.stringify(json).slice(0, 200)}`);
     }
-    return parseSegmentResponse(retryRes.body);
-  }
 
-  if (res.statusCode !== 200) {
-    throw new Error(`Segment fetch failed: ${res.statusCode}`);
-  }
+    // 401 → token expired, clear and retry
+    if (res.statusCode === 401) {
+      console.log(`[screeps-exporter] Token expired (attempt ${attempt}/${maxRetries}), re-authenticating...`);
+      authToken = '';
+      // Re-auth on next loop iteration
+      if (attempt < maxRetries) {
+        await login();
+        continue;
+      }
+      throw new Error(`Segment fetch failed after ${maxRetries} retries: 401 Unauthorized`);
+    }
 
-  return parseSegmentResponse(res.body);
-}
-
-function parseSegmentResponse(body) {
-  const json = JSON.parse(body);
-  // API 返回 { data: "segment content string", ok: 1 }
-  // data 可能是 null（segment 未写入或未激活）
-  if (json.ok === 1) {
-    return json.data || '';
+    // Other HTTP errors
+    throw new Error(`Segment fetch failed: ${res.statusCode}: ${res.body.slice(0, 200)}`);
   }
-  throw new Error(`API error: ${JSON.stringify(json).slice(0, 200)}`);
+  throw new Error('Unreachable');
 }
 
 // ─── Scraper Loop ──────────────────────────────────────
 
 async function scrape() {
   try {
-    const text = await fetchSegment();
+    const text = await fetchSegmentWithRetry();
     cachedMetrics = text;
     lastScrapeTime = Date.now();
     scrapeError = null;
     totalScrapes++;
+    consecutiveFailures = 0;
   } catch (err) {
     scrapeError = err.message;
     failedScrapes++;
-    console.error(`[screeps-exporter] Scrape error: ${err.message}`);
+    consecutiveFailures++;
+
+    // Exponential backoff logging: only log every N failures to avoid spam
+    if (consecutiveFailures <= 3 || consecutiveFailures % 10 === 0) {
+      console.error(`[screeps-exporter] Scrape error (${consecutiveFailures} consecutive): ${err.message}`);
+    }
+
+    // If too many consecutive failures, force a full re-auth on next scrape
+    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      console.error(`[screeps-exporter] ${consecutiveFailures} consecutive failures — forcing full re-auth`);
+      authToken = '';
+      consecutiveFailures = 0; // Reset to avoid repeated force-reauth
+    }
   }
 }
 
@@ -191,6 +201,7 @@ const server = http.createServer((req, res) => {
       lastScrapeAge: age,
       totalScrapes,
       failedScrapes,
+      consecutiveFailures,
       error: scrapeError,
     }));
   } else if (req.url === '/') {

@@ -27,6 +27,7 @@ import {
   type ExperienceRingBuffer,
   getRecentExperiences,
 } from "../../domain/intelligence/experience";
+import { log } from "../../kernel/log";
 
 // ─── Evaluation Result Ring Buffer ────────────────────────
 
@@ -139,14 +140,12 @@ export const strategyEvaluationSystem: System = {
     if ((tick - sePhase) % 5000 === 0) {
       const evidence = buildEvaluationEvidence(evaluation, experiences);
       const completeness = validateEvidenceCompleteness(evaluation, experiences);
-      console.log(
-        `[${tick}] strategy-evaluation: verdict=${evaluation.score.verdict}, ` +
+      log.info("strategy-evaluation-system", `strategy-evaluation: verdict=${evaluation.score.verdict}, ` +
         `confidence=${evaluation.score.confidence.toFixed(2)}, ` +
         `infoScore=${evaluation.score.informationalScore.toFixed(3)}, ` +
         `findings=${evaluation.findings.length}, ` +
         `recommendations=${evaluation.recommendations.length}, ` +
-        `evidence_completeness=${completeness.completenessScore.toFixed(2)}`,
-      );
+        `evidence_completeness=${completeness.completenessScore.toFixed(2)}`,);
     }
   },
 };

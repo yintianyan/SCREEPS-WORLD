@@ -15,6 +15,7 @@ import {
   type RoomContext,
   type DefenseContext,
 } from "../domain/defense/threat-assessment";
+import { log } from "../kernel/log";
 
 /**
  * 房间状态系统 — P0，每 tick 运行，在所有其他系统之前（plan §5.4 统一状态）。
@@ -179,9 +180,7 @@ export const roomStateSystem: System = {
           if (g.seenNukeIds.has(n.id as string)) continue;
           g.seenNukeIds.add(n.id as string);
           recordEvent(EventKind.NukeDetected, snapshot.roomName, [n.timeToLand]);
-          console.log(
-            `[${ctx.tick}] nuke/${snapshot.roomName}: 落点预警！launch=${n.launchRoomName} timeToLand=${n.timeToLand} — 资产抢救链启动`,
-          );
+          log.info("room-state", `nuke/${snapshot.roomName}: 落点预警！launch=${n.launchRoomName} timeToLand=${n.timeToLand} — 资产抢救链启动`,);
         }
         for (const id of g.seenNukeIds) {
           if (!aliveIds.has(id)) g.seenNukeIds.delete(id);
@@ -199,9 +198,7 @@ export const roomStateSystem: System = {
         roomMem.observerSightings = Math.min((roomMem.observerSightings ?? 0) + 1, 100000);
         // 首次目击 + 每 500 tick 限流日志 — 盯防信号必须可见但不刷屏。
         if (firstSighting || ctx.tick % 500 === 0) {
-          console.log(
-            `[${ctx.tick}] observer/${snapshot.roomName}: 无害侦察目击 #${roomMem.observerSightings}（hostile=${snapshot.hostileCreeps.length}）`,
-          );
+          log.info("room-state", `observer/${snapshot.roomName}: 无害侦察目击 #${roomMem.observerSightings}（hostile=${snapshot.hostileCreeps.length}）`,);
         }
       }
 

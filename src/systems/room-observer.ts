@@ -2,6 +2,7 @@ import type { Priority, System, TickContext } from "../kernel/contracts";
 import type { ColonyPhase } from "../domain/economy/phase";
 import { computeSealedExits, scanNeighborIntel, type RoomIntel } from "../domain/intel";
 import { globalCache } from "../kernel/global-cache";
+import { log } from "../kernel/log";
 
 /**
  * 相位诊断日志的固定打印间隔（tick）。
@@ -319,10 +320,8 @@ function logPhaseIfChangedOrDue(
   const due = tick % PHASE_LOG_INTERVAL === 0;
   if (!due) return;
 
-  console.log(
-    `[PERIODIC] phase/${roomName}: phase=${newPhase}` +
+  log.info("room-observer", `[PERIODIC] phase/${roomName}: phase=${newPhase}` +
       ` reserve=${state.reserve} delta=${state.reserveDelta >= 0 ? "+" : ""}${state.reserveDelta}` +
       ` drain=${state.drainScore} harv=${state.harvesterCount}/${state.sourceCount} rcl=${state.rcl}` +
-      ` state=${Memory.rooms[roomName]?.colonyState ?? "?"}`,
-  );
+      ` state=${Memory.rooms[roomName]?.colonyState ?? "?"}`,);
 }

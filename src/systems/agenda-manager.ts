@@ -65,6 +65,7 @@ import {
   markRebalanced,
   type RebalanceEvent,
 } from "../domain/operation/rebalance";
+import { log } from "../kernel/log";
 
 /** 默认 Operation 超时（tick）。2000 tick ≈ 运输 + 验证 + 重试。 */
 const DEFAULT_OPERATION_DEADLINE = 2000;
@@ -438,7 +439,7 @@ export const agendaManagerSystem: System = {
       // 仍然标记 rebalance 完成（避免下个周期不必要的重算）。
       markRebalanced(rebalanceState, ctx.tick);
       if (supplyNodes.length > 0 && demandNodes.length > 0) {
-        console.log(`[${ctx.tick}] agenda: Plan active (plannedAt=${logisticsPlan!.plannedAt}), allocateNetwork skipped in favor of Plan-driven operations`);
+        log.info("agenda-manager", `agenda: Plan active (plannedAt=${logisticsPlan!.plannedAt}), allocateNetwork skipped in favor of Plan-driven operations`);
       }
     }
 
@@ -647,11 +648,9 @@ export const agendaManagerSystem: System = {
 
                   if (actualReceived < carrierCapacity) {
                     // 部分损失 — carrier 卸载了但 target 没全部收到
-                    console.log(
-                      `[${ctx.tick}] agenda: delivery validation ${op.id} ` +
+                    log.info("agenda-manager", `agenda: delivery validation ${op.id} ` +
                       `expected=${carrierCapacity}, actual=${actualReceived}, ` +
-                      `shortfall=${carrierCapacity - actualReceived}`,
-                    );
+                      `shortfall=${carrierCapacity - actualReceived}`,);
                   }
                 } else {
                   // Fallback：target storage 不可读或无快照 → 用 carrier 容量推断。
@@ -714,8 +713,8 @@ export const agendaManagerSystem: System = {
     prevHealth = health;
 
     if (metrics.activeCount > 0 || health.level !== "healthy") {
-      console.log(formatOperationMetrics(metrics));
-      console.log(`Network Health: ${health.level} (score=${health.score.toFixed(2)}, supply=${finalSnapshot.totalSupply}, demand=${finalSnapshot.totalRemaining})`);
+      log.info("agenda-manager", formatOperationMetrics(metrics));
+      log.info("agenda-manager", `Network Health: ${health.level} (score=${health.score.toFixed(2)}, supply=${finalSnapshot.totalSupply}, demand=${finalSnapshot.totalRemaining})`);
     }
   },
 };

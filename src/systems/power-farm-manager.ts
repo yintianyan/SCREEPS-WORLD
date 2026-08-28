@@ -18,6 +18,7 @@ import {
 } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
 import { querySquad } from "../kernel/global-cache";
+import { log } from "../kernel/log";
 
 export const powerFarmManagerSystem: System = {
   name: "power-farm-manager",
@@ -67,9 +68,7 @@ export const powerFarmManagerSystem: System = {
           // PB 消失（我方击破或自然到期）→ 转捡运：停战、收编队、派 collector。
           mission.phase = "collect";
           recordEvent(EventKind.PowerFarmOutcome, mission.targetRoom, [4, mission.spawned]);
-          console.log(
-            `[${Game.time}] power-farm: ${mission.targetRoom} PB 已消失，转 collect 阶段`,
-          );
+          log.info("power-farm-manager", `power-farm: ${mission.targetRoom} PB 已消失，转 collect 阶段`,);
         }
       }
       if (mission.phase === "strike") {
@@ -156,9 +155,7 @@ function startFarmIfWorth(ctx: TickContext): void {
     phase: "strike",
   };
   recordEvent(EventKind.PowerFarmOutcome, target.roomName, [4, 0]);
-  console.log(
-    `[${Game.time}] power-farm: 开任务 ${target.home} → ${target.roomName} (dist=${target.linearDistance})`,
-  );
+  log.info("power-farm-manager", `power-farm: 开任务 ${target.home} → ${target.roomName} (dist=${target.linearDistance})`,);
 }
 
 /** strike 阶段维持编队（attacker + healer，live+pending 编制补位）。 */
@@ -259,5 +256,5 @@ function concludeFarm(tick: number, reason: number): void {
     reason,
     mission.spawned ?? 0,
   ]);
-  console.log(`[${Game.time}] power-farm: 收摊 ${mission.targetRoom} (reason=${reason})`);
+  log.info("power-farm-manager", `power-farm: 收摊 ${mission.targetRoom} (reason=${reason})`);
 }

@@ -25,6 +25,7 @@ import {
 } from "../../domain/intelligence/prediction/spawn-starvation";
 import type { TimeSeries, TimeSeriesPoint } from "../../domain/intelligence/prediction/time-series";
 import { createTimeSeries, pushSample } from "../../domain/intelligence/prediction/time-series";
+import { log } from "../../kernel/log";
 
 // ─── Prediction Cache ─────────────────────────────────────
 
@@ -98,11 +99,9 @@ export const predictionSystem: System = {
     const predPhase = systemPhase("prediction", 500);
     if ((tick - predPhase) % 5000 === 0) {
       const stats = predictionStats(cache.ringBuffer);
-      console.log(
-        `[${tick}] prediction: total=${stats.total}, active=${stats.active}, ` +
+      log.info("prediction-system", `prediction: total=${stats.total}, active=${stats.active}, ` +
         `fulfilled=${stats.fulfilled}, expired=${stats.expired}, ` +
-        `fulfillmentRate=${stats.fulfillmentRate.toFixed(3)}`,
-      );
+        `fulfillmentRate=${stats.fulfillmentRate.toFixed(3)}`,);
     }
   },
 };

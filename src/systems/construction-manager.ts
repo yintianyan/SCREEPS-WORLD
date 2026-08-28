@@ -26,6 +26,7 @@ import {
   DISMANTLE_VALIDATION_DELAY,
 } from "./link-system";
 import type { DismantlePlan } from "../kernel/global-cache";
+import { log } from "../kernel/log";
 
 /**
  * 建造管理器 — 自有房 site 创建的唯一模块（远机房由 remote-mining-manager 负责）。
@@ -304,10 +305,8 @@ export function recordConstructionSkip(
     const queued = q.filter(t => t.state === "queued").length;
     const site = q.filter(t => t.state === "site").length;
     const blocked = q.filter(t => t.state === "blocked").length;
-    console.log(
-      `[construction-skip] t=${Game.time} room=${room} window=${interval}t ` +
-      `${reasons} queue=${q.length}(q${queued}/s${site}/b${blocked}) sites=${snapshot.myConstructionSites.length}`,
-    );
+    log.info("construction-manager", `[construction-skip] t=${Game.time} room=${room} window=${interval}t ` +
+      `${reasons} queue=${q.length}(q${queued}/s${site}/b${blocked}) sites=${snapshot.myConstructionSites.length}`,);
   }
   // 窗口清零（日志已承载窗口聚合值）。
   skips.rooms = {};
@@ -538,10 +537,8 @@ function processSinglePlan(
     markLinkConstrained(plan.roomName, tick);
     clearDismantlePlan(deadLinkId);
     clearDeadAssetLink(deadLinkId);
-    console.log(
-      `[dismantle] abort+constrained: ttl expired for link ${deadLinkId} in ${plan.roomName}, ` +
-      `marking linkConstrained to prevent churn`,
-    );
+    log.error("construction-manager", `[dismantle] abort+constrained: ttl expired for link ${deadLinkId} in ${plan.roomName}, ` +
+      `marking linkConstrained to prevent churn`,);
     return;
   }
 
@@ -551,7 +548,7 @@ function processSinglePlan(
     if (!replacementTask) {
       // 替代任务被清理（cleanTasks purge 或 blocked）→ abort。
       clearDismantlePlan(deadLinkId);
-      console.log(`[dismantle] abort: replacement task ${plan.replacementKey} not found for ${deadLinkId}`);
+      log.error("construction-manager", `[dismantle] abort: replacement task ${plan.replacementKey} not found for ${deadLinkId}`);
       return;
     }
     if (replacementTask.state === "done") {
@@ -561,7 +558,7 @@ function processSinglePlan(
       // 使用 transitionDismantlePlan 纯函数转移状态，写回 Map 保持单一状态机来源（DRY）。
       const updated = transitionDismantlePlan(plan, tick);
       globalCache().dismantlePlans?.set(deadLinkId, updated);
-      console.log(`[dismantle] validating: replacement built for ${deadLinkId}, waiting for energy`);
+      log.info("construction-manager", `[dismantle] validating: replacement built for ${deadLinkId}, waiting for energy`);
     }
     return;
   }
@@ -574,7 +571,7 @@ function processSinglePlan(
     if (!replacementLink) {
       // 替代 link 消失（被毁？）→ abort，保留旧 link。
       clearDismantlePlan(deadLinkId);
-      console.log(`[dismantle] abort: replacement link disappeared for ${deadLinkId}`);
+      log.error("construction-manager", `[dismantle] abort: replacement link disappeared for ${deadLinkId}`);
       return;
     }
     const replacementEnergy = replacementLink.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -586,7 +583,7 @@ function processSinglePlan(
         if (result === OK) {
           clearDismantlePlan(deadLinkId);
           clearDeadAssetLink(deadLinkId);
-          console.log(`[dismantle] success: destroyed dead link ${deadLinkId}, replacement energized`);
+          log.info("construction-manager", `[dismantle] success: destroyed dead link ${deadLinkId}, replacement energized`);
         }
       } else {
         // 旧 link 已不存在（可能被手动拆除）→ 清理计划。
@@ -602,10 +599,8 @@ function processSinglePlan(
       markLinkConstrained(plan.roomName, tick);
       clearDismantlePlan(deadLinkId);
       clearDeadAssetLink(deadLinkId);
-      console.log(
-        `[dismantle] fallback: replacement link not energized after ${DISMANTLE_VALIDATION_DELAY}t, ` +
-        `marking ${plan.roomName} linkConstrained`,
-      );
+      log.info("construction-manager", `[dismantle] fallback: replacement link not energized after ${DISMANTLE_VALIDATION_DELAY}t, ` +
+        `marking ${plan.roomName} linkConstrained`,);
     }
   }
 }

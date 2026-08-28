@@ -22,6 +22,7 @@ import { registerMove, registerAnchor, movePriorityFor, trafficEnabled } from ".
 import { moveToTarget, moveTowardRoom } from "../creeps/movement/pathfinding";
 import { packPos } from "../creeps/movement/traffic";
 import { recordSkip } from "../kernel/memory";
+import { log } from "../kernel/log";
 
 // ═══════════════════════════════════════════════════════════
 // §1. GlobalCache 扩展 — Squad Movement Runtime 状态
@@ -120,10 +121,8 @@ export const squadMovementSystem: System = {
       // 严重卡位 — 清除共享路径，下 tick 重算
       g.squadSharedPaths.delete(squadPlan.squadId);
       recordSkip("squad-movement/stuck");
-      console.log(
-        `[${tick}] squad-movement: ${stuckDetection.level} for squad=${squadPlan.squadId}` +
-        ` stuckTicks=${stuckDetection.anchorStuckTicks} reason="${stuckDetection.reason}"`,
-      );
+      log.info("squad-movement-runtime", `squad-movement: ${stuckDetection.level} for squad=${squadPlan.squadId}` +
+        ` stuckTicks=${stuckDetection.anchorStuckTicks} reason="${stuckDetection.reason}"`,);
     }
 
     // ── 9. 执行移动（PathFinder boundary） ──

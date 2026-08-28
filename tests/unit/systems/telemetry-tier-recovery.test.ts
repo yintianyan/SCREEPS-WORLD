@@ -18,6 +18,7 @@ import {
   P3_BOOT_GRACE_TICKS,
   TELEMETRY_STALE_TICKS,
 } from "../../../src/kernel/expectations";
+import { setLogSink } from "../../../src/kernel/log";
 
 // ── 模块 mock ──────────────────────────────────────────────
 
@@ -195,7 +196,7 @@ function evaluateExpectationsFor(tick: number, p3LastRun: number | undefined): {
 // ── 测试 ──────────────────────────────────────────────
 
 describe("P3-2: conserve→healthy telemetry 恢复链路", () => {
-  let logSpy: ReturnType<typeof vi.spyOn>;
+  let logLines: string[] = [];
 
   beforeEach(() => {
     ringBufferPushCount = 0;
@@ -214,11 +215,12 @@ describe("P3-2: conserve→healthy telemetry 恢复链路", () => {
       creeps: {},
       spawns: {},
     };
-    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    logLines = [];
+    setLogSink((line: string) => { logLines.push(line); });
   });
 
   afterEach(() => {
-    logSpy.mockRestore();
+    setLogSink(undefined);
   });
 
   describe("完整时间序列 healthy → conserve → recovery → conserve → guarded → healthy", () => {
@@ -357,9 +359,8 @@ describe("P3-2: conserve→healthy telemetry 恢复链路", () => {
     it("conserve 档跳过事件检测和输出，只做 CPU 采样", () => {
       runTelemetry("conserve", 200, 1500);
       // conserve 档不应输出 @TELEMETRY 行
-      const telLines = logSpy.mock.calls
-        .map(c => String(c[0]))
-        .filter(s => s.startsWith("@TELEMETRY"));
+const telLines = logLines
+.filter(s => s.includes("@TELEMETRY"));
       expect(telLines).toHaveLength(0);
       // 但 stats.lastSample 应更新
       expect(getStatsLastSample()).toBe(200);

@@ -24,6 +24,7 @@ import {
   type LogisticsContext,
   type MilitaryContext,
 } from "../domain/defense/remote-defense";
+import { log } from "../kernel/log";
 
 export const remoteMiningManagerSystem: System = {
   name: "remote-mining-manager",
@@ -103,10 +104,8 @@ export const remoteMiningManagerSystem: System = {
         for (let i = 0; i < activeCount - maxOpsWithCapacity; i++) {
           const [roomName, op] = active[i]!;
           op.state = "abandoned";
-          console.log(
-            `[${ctx.tick}] remote/${snapshot.roomName}: 超额收缩，废弃 ${roomName}` +
-            `（active ${activeCount} > 上限 ${maxOpsWithCapacity}，通勤成本=${costOf(roomName, op)}）`,
-          );
+          log.info("remote-mining-manager", `remote/${snapshot.roomName}: 超额收缩，废弃 ${roomName}` +
+            `（active ${activeCount} > 上限 ${maxOpsWithCapacity}，通勤成本=${costOf(roomName, op)}）`,);
         }
       }
 
@@ -282,10 +281,8 @@ export const remoteMiningManagerSystem: System = {
               recycleRemoteCreepsForRoom(snapshot.roomName, rn);
               op.state = decision.action === "ABORT" ? "abandoned" : "paused";
               op.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
-              console.log(
-                `[${ctx.tick}] remote/A5.1: ${snapshot.roomName} → ${rn} ` +
-                `${decision.action} (${decision.reason})`,
-              );
+              log.info("remote-mining-manager", `remote/A5.1: ${snapshot.roomName} → ${rn} ` +
+                `${decision.action} (${decision.reason})`,);
             }
           }
         }
@@ -418,10 +415,8 @@ export const remoteMiningManagerSystem: System = {
                 const oldNeed = targetOp.haulerNeed ?? 0;
                 targetOp.haulerNeed = planHaulerNeed;
                 const direction = planHaulerNeed > oldNeed ? "increase" : "decrease";
-                console.log(
-                  `[${ctx.tick}] remote/plan-calibrate: ${snapshot.roomName} → ${planReq.destination.room}` +
-                  ` haulerNeed=${planHaulerNeed} (Plan ${direction} from ${oldNeed}, amount=${planReq.amount})`,
-                );
+                log.info("remote-mining-manager", `remote/plan-calibrate: ${snapshot.roomName} → ${planReq.destination.room}` +
+                  ` haulerNeed=${planHaulerNeed} (Plan ${direction} from ${oldNeed}, amount=${planReq.amount})`,);
               }
             }
           }
@@ -472,11 +467,9 @@ function reevaluateActiveOps(
         op.lowScoreSince = tick; // 首次跌破 — 起算宽限期。
       } else if (tick - op.lowScoreSince > CONFIG.remote.lowScoreGrace) {
         op.state = "abandoned";
-        console.log(
-          `[${tick}] remote/${homeRoom}: 经济重估废弃 ${roomName}` +
+        log.info("remote-mining-manager", `remote/${homeRoom}: 经济重估废弃 ${roomName}` +
           `（netScore=${netScore.toFixed(1)} < ${CONFIG.remote.minNetScore}，` +
-          `持续 ${tick - op.lowScoreSince} tick）`,
-        );
+          `持续 ${tick - op.lowScoreSince} tick）`,);
       }
     } else if (op.lowScoreSince !== undefined) {
       op.lowScoreSince = undefined; // 回升到门槛以上 — 清除低分计时。
@@ -554,10 +547,8 @@ function maintainExistingOps(
         const exitDirs = Object.keys(exits).map(Number);
         if (exitDirs.length > 0 && exitDirs.every((d) => sealed.includes(d))) {
           op.state = "abandoned";
-          console.log(
-            "[" + tick + "] remote/" + (myUsername ?? "?") + ": 入口封死废弃 " + roomName +
-            "（sealedExits=[" + sealed.join(",") + "]，编队无法进入）",
-          );
+          log.info("remote-mining-manager", "[" + tick + "] remote/" + (myUsername ?? "?") + ": 入口封死废弃 " + roomName +
+            "（sealedExits=[" + sealed.join(",") + "]，编队无法进入）",);
           continue;
         }
       }
@@ -678,10 +669,8 @@ function censusStalledOps(
         op.stallSince = tick;
       } else if (tick - op.stallSince > CONFIG.remote.stallAbandonTicks) {
         op.state = "abandoned";
-        console.log(
-          "[" + tick + "] remote/" + homeRoom + ": 空转止损废弃 " + roomName +
-          "（编队 " + entry.total + " 只全员空转持续 " + (tick - op.stallSince) + " tick）",
-        );
+        log.info("remote-mining-manager", "[" + tick + "] remote/" + homeRoom + ": 空转止损废弃 " + roomName +
+          "（编队 " + entry.total + " 只全员空转持续 " + (tick - op.stallSince) + " tick）",);
       }
     } else if (op.stallSince !== undefined) {
       op.stallSince = undefined;

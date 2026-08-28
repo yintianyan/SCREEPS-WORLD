@@ -158,7 +158,7 @@ export const expansionPlannerSystem: System = {
         if (decision.outcome === "APPROVE") {
           let approved = updatePlanStatus(p, "APPROVED", ctx.tick);
           approved = updatePlanStatus(approved, "WAITING_EXECUTION", ctx.tick);
-          console.log(`[${ctx.tick}] expansion-planner: Plan ${p.planId} APPROVED → WAITING_EXECUTION`);
+          log.info("expansion-planner", `expansion-planner: Plan ${p.planId} APPROVED → WAITING_EXECUTION`);
           return approved;
         }
       }
@@ -216,7 +216,7 @@ export const expansionPlannerSystem: System = {
     };
 
     // ── 可观测性 ──
-    console.log(`[${ctx.tick}] expansion-planner: ${dashboard.summary}`);
+    log.info("expansion-planner", `expansion-planner: ${dashboard.summary}`);
   },
 };
 
@@ -376,6 +376,7 @@ import type { PaybackResult } from "../domain/expansion/payback";
 import type { RiskResult, RiskLevel } from "../domain/expansion/risk";
 import type { ExpansionReason } from "../domain/expansion/candidate";
 import type { PlanStatus, PlanPriority } from "../domain/expansion/plan";
+import { log } from "../kernel/log";
 
 // ─── A6.3 远矿采样寄生 ────────────────────────────────────
 

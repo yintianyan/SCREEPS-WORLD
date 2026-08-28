@@ -43,6 +43,7 @@ import {
   evaluateAutonomyStatus,
   type AutonomyStatus,
 } from "../domain/strategy/autonomy-metrics";
+import { log } from "../kernel/log";
 
 // ─── 历史数据追踪（heap，跨 tick 持久）──────────────────
 
@@ -236,26 +237,22 @@ export const empireHealthSystem: System = {
 
     // ── 11. 可观测性：等级变更时打日志 ──
     if (prevLevel !== healthResult.level) {
-      console.log(
-        `[${tick}] empire-health: ${prevLevel ?? "(none)"} → ${healthResult.level}` +
+      log.info("empire-health-system", `empire-health: ${prevLevel ?? "(none)"} → ${healthResult.level}` +
         ` score=${healthResult.score.toFixed(3)}` +
         ` bottleneck=${healthResult.bottleneck}` +
         ` recovering=${healthResult.recovering}` +
         (recoveryActions.length > 0 ? ` recoveryQueue=${recoveryActions.length}` : "") +
         ` autonomy=${autonomyStatus.score.score}(${autonomyStatus.score.level})` +
         (noProgress.detected ? ` NO_PROGRESS:${noProgress.stuckDimensions.join(",")}` : "") +
-        (thrashing.detected ? ` THRASHING:${thrashing.type}` : ""),
-      );
+        (thrashing.detected ? ` THRASHING:${thrashing.type}` : ""),);
     }
 
     // 紧急恢复动作打日志
     const urgent = recoveryActions.find(a => a.urgent);
     if (urgent) {
-      console.log(
-        `[${tick}] empire-health: URGENT recovery → ${urgent.type}` +
+      log.info("empire-health-system", `empire-health: URGENT recovery → ${urgent.type}` +
         ` domain=${urgent.domain} priority=${urgent.priority}` +
-        ` roi=${urgent.roi.toFixed(2)}: ${urgent.recommendation}`,
-      );
+        ` roi=${urgent.roi.toFixed(2)}: ${urgent.recommendation}`,);
     }
   },
 };

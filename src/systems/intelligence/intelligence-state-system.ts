@@ -22,6 +22,7 @@ import {
   guardRelNoNewSampler,
 } from "../../domain/intelligence/reliability/guards";
 import { INTELLIGENCE_STATE_INTERVAL } from "../../domain/intelligence/reliability/types";
+import { log } from "../../kernel/log";
 
 // ─── System 定义 ──────────────────────────────────────────
 
@@ -65,7 +66,7 @@ export const intelligenceStateSystem: System = {
       // 冷启动：empireHealth 尚未产出
       // P14 修复：改为相位相对判定 (tick-phase)%5000===0。
       if ((tick - isPhase) % 5000 === 0) {
-        console.log(`[${tick}] intelligence-state: cold start (no empireHealth)`);
+        log.info("intelligence-state-system", `intelligence-state: cold start (no empireHealth)`);
       }
       return;
     }
@@ -84,7 +85,7 @@ export const intelligenceStateSystem: System = {
     try {
       state = computeIntelligenceState(input);
     } catch (err) {
-      console.log(`[${tick}] intelligence-state: compute failed — ${String(err)}`);
+      log.error("intelligence-state-system", `intelligence-state: compute failed — ${String(err)}`);
       return;
     }
 
@@ -94,7 +95,7 @@ export const intelligenceStateSystem: System = {
       const violations = validateIntelligenceState(state);
       if (violations.length > 0) {
         for (const v of violations.slice(0, 5)) {
-          console.log(`[${tick}] intelligence-state guard ${v.guardId}: ${v.message}`);
+          log.info("intelligence-state-system", `intelligence-state guard ${v.guardId}: ${v.message}`);
         }
       }
 
@@ -105,7 +106,7 @@ export const intelligenceStateSystem: System = {
         guardRelNoNewSampler(intelligenceStateSystem),
       ].filter(v => !v.passed);
       for (const v of sysViolations) {
-        console.log(`[${tick}] intelligence-state guard ${v.guardId}: ${v.message}`);
+        log.info("intelligence-state-system", `intelligence-state guard ${v.guardId}: ${v.message}`);
       }
     }
 
@@ -113,7 +114,7 @@ export const intelligenceStateSystem: System = {
     // P14 修复：改为相位相对判定。
     if ((tick - isPhase) % 5000 === 0) {
       const summary = formatStateSummary(state);
-      console.log(`[${tick}] intelligence-state: ${summary}`);
+      log.info("intelligence-state-system", `intelligence-state: ${summary}`);
     }
   },
 };

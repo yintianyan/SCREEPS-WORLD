@@ -46,6 +46,7 @@ import {
   type SupplyContract,
   type ContractMemorySnapshot,
 } from "../domain/economy/supply-contract";
+import { log } from "../kernel/log";
 
 /**
  * Specialization Planner System — P1, interval=100。
@@ -80,17 +81,13 @@ export const specializationPlannerSystem: System = {
         // 通过 → 标记 APPROVED → 创建 RemoteMiningOperation
         const approved = approveOpportunity(opp, ctx.tick, "execution-gate-passed");
         createOperationFromOpportunity(approved, ctx.tick);
-        console.log(
-          `[${ctx.tick}] specialization-planner: APPROVED opportunity ${opp.id} ` +
-          `(${opp.homeRoom}→${opp.targetRoom})`,
-        );
+        log.info("specialization-planner", `specialization-planner: APPROVED opportunity ${opp.id} ` +
+          `(${opp.homeRoom}→${opp.targetRoom})`,);
       } else if (isGatePermanentFailure(result)) {
         // 永久失败 → REJECT
         rejectOpportunity(opp, ctx.tick, result.reason);
-        console.log(
-          `[${ctx.tick}] specialization-planner: REJECTED opportunity ${opp.id} ` +
-          `(${result.type}: ${result.reason})`,
-        );
+        log.info("specialization-planner", `specialization-planner: REJECTED opportunity ${opp.id} ` +
+          `(${result.type}: ${result.reason})`,);
       }
       // WAIT/NO_BUDGET/NO_DEMAND → 保持 WAITING_EXECUTION，下次再评估
     }
@@ -292,10 +289,8 @@ function maintainSupplyContracts(tick: number): void {
   saveContractsToMemory(activeContracts, tick);
 
   if (newContractsCreated > 0) {
-    console.log(
-      `[${tick}] specialization-planner: created ${newContractsCreated} supply contracts ` +
-      `(${activeContracts.length} active total)`,
-    );
+    log.info("specialization-planner", `specialization-planner: created ${newContractsCreated} supply contracts ` +
+      `(${activeContracts.length} active total)`,);
   }
 }
 

@@ -17,6 +17,7 @@ import {
 } from "../domain/strategy/situation";
 import { recordPlanningDecision, recordPlanningTime } from "../telemetry";
 import { declareExpected, resolveOutcome, getStrategyFeedback } from "../telemetry";
+import { log } from "../kernel/log";
 
 /** AgendaChange 事件的 initiative 编码（与 event-log 注释对齐）。 */
 const AGENDA_CODES: Record<string, number> = {
@@ -77,10 +78,8 @@ export const empireStrategySystem: System = {
 
     // 姿态变更时打日志 — 战略转向是帝国级事件，必须可观测。
     if (prev?.posture !== result.posture) {
-      console.log(
-        `[${ctx.tick}] strategy: posture ${prev?.posture ?? "(none)"} → ${result.posture}` +
-        ` (rooms=${rooms.length}, gcl=${Game.gcl?.level ?? 1}, bucket=${Game.cpu.bucket ?? "?"})`,
-      );
+      log.info("empire-strategy", `strategy: posture ${prev?.posture ?? "(none)"} → ${result.posture}` +
+        ` (rooms=${rooms.length}, gcl=${Game.gcl?.level ?? 1}, bucket=${Game.cpu.bucket ?? "?"})`,);
       recordPlanningDecision("empire", true);
       // T3: 声明期望 — posture 变更后预期 200 tick 内不再次切换（稳定性期望）
       declareExpected({
@@ -103,15 +102,11 @@ export const empireStrategySystem: System = {
     if (feedback && feedback.underperformingDomains.length > 0) {
       // 如果扩张域持续不达预期，收紧 expansionAllowed
       if (feedback.underperformingDomains.includes("expansion") && result.expansionAllowed) {
-        console.log(
-          `[${ctx.tick}] strategy: expansion feedback — underperforming, tightening`,
-        );
+        log.info("empire-strategy", `strategy: expansion feedback — underperforming, tightening`,);
       }
       // 如果战争域持续不达预期，收紧 war posture
       if (feedback.underperformingDomains.includes("war") && result.posture === "war") {
-        console.log(
-          `[${ctx.tick}] strategy: war feedback — underperforming, consider de-escalation`,
-        );
+        log.info("empire-strategy", `strategy: war feedback — underperforming, consider de-escalation`,);
       }
     }
     // T3: 回填上一轮 posture 期望（如果存在）— 通过 resolvePreviousPostureExpectation 处理
@@ -149,9 +144,7 @@ export const empireStrategySystem: System = {
         const duration = ctx.tick - (prevAgenda.since ?? ctx.tick);
         recordEvent(EventKind.AgendaOutcome, "", [AGENDA_CODES["rcl-push"]!, gained, duration]);
       }
-      console.log(
-        `[${ctx.tick}] agenda: ${prevAgenda?.initiative ?? "(none)"} → ${agenda.initiative}`,
-      );
+      log.info("empire-strategy", `agenda: ${prevAgenda?.initiative ?? "(none)"} → ${agenda.initiative}`,);
       recordPlanningDecision("agenda", true);
       recordEvent(EventKind.AgendaChange, "", [AGENDA_CODES[agenda.initiative] ?? 3]);
       progressBase = agenda.initiative === "rcl-push" ? totalProgress : undefined;
@@ -221,10 +214,8 @@ export const empireStrategySystem: System = {
       if (!prevIds.has(c.id)) recordEvent(EventKind.SituationChange, c.id, [c.severity]);
     }
     if (Memory.kernel.capacity?.tier !== capacity.tier) {
-      console.log(
-        `[${ctx.tick}] capacity: ${Memory.kernel.capacity?.tier ?? "(none)"} → ${capacity.tier}` +
-        ` (headroom=${Math.round(capacity.headroom * 100)}%, limit=${Math.min(Game.cpu.limit, Game.cpu.tickLimit)})`,
-      );
+      log.info("empire-strategy", `capacity: ${Memory.kernel.capacity?.tier ?? "(none)"} → ${capacity.tier}` +
+        ` (headroom=${Math.round(capacity.headroom * 100)}%, limit=${Math.min(Game.cpu.limit, Game.cpu.tickLimit)})`,);
     }
     Memory.kernel.capacity = {
       tier: capacity.tier,

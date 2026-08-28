@@ -294,14 +294,12 @@ function planStage0Prep(
         const diagnosis = diagnoseAnchor(spawn.pos.x, spawn.pos.y, {
           field, sources, controller, exits, mineral, getTerrain,
         });
-        console.log(
-          `[layout] anchor diagnosis ${snapshot.roomName}: ` +
+        log.info("layout-planner", `[layout] anchor diagnosis ${snapshot.roomName}: ` +
           `rank ${diagnosis.rank}/${diagnosis.total}, ` +
           `score ${diagnosis.candidate.score.toFixed(1)}, ` +
           `openness ${diagnosis.candidate.openness}, ` +
           `blocked ${diagnosis.candidate.blockedCells}, ` +
-          `srcDist ${diagnosis.candidate.avgSourceDist.toFixed(1)}`,
-        );
+          `srcDist ${diagnosis.candidate.avgSourceDist.toFixed(1)}`,);
       }
     } else if (layout.anchor !== anchorPacked) {
       layout.anchor = anchorPacked;
@@ -624,10 +622,8 @@ function planStage2Logistics(
     const storageGeometryBlocked = !storageLink && shouldHaveStorageLink(snapshot, data.queuedLinks);
     if (controllerGeometryBlocked && storageGeometryBlocked) {
       markLinkConstrained(snapshot.roomName, ctx.tick);
-      console.log(
-        `[layout] link constrained in ${snapshot.roomName}: ` +
-        `controller + storage link geometry blocked, retry after ${1000}t`,
-      );
+      log.info("layout-planner", `[layout] link constrained in ${snapshot.roomName}: ` +
+        `controller + storage link geometry blocked, retry after ${1000}t`,);
     }
 
     // 3.5d Source link（第二趟，maxNew=∞）。
@@ -671,10 +667,8 @@ function planStage2Logistics(
           { x: replacementTask.pos.x, y: replacementTask.pos.y },
           ctx.tick,
         );
-        console.log(
-          `[layout] dismantle plan created: dead link ${deadLinkId} in ${snapshot.roomName}, ` +
-          `replacement at (${replacementTask.pos.x},${replacementTask.pos.y})`,
-        );
+        log.info("layout-planner", `[layout] dismantle plan created: dead link ${deadLinkId} in ${snapshot.roomName}, ` +
+          `replacement at (${replacementTask.pos.x},${replacementTask.pos.y})`,);
       }
     }
   }
@@ -804,15 +798,11 @@ function planStage3RoadsAndFinalize(
       } else {
         buildPos = findSpawnRelocationPosition(room, anchorPos, occupiedSet);
         if (buildPos) {
-          console.log(
-            `[layout] spawn rebuild: anchor (${anchorPos.x},${anchorPos.y}) blocked, ` +
-            `relocating to (${buildPos.x},${buildPos.y}) in ${snapshot.roomName}`,
-          );
+          log.info("layout-planner", `[layout] spawn rebuild: anchor (${anchorPos.x},${anchorPos.y}) blocked, ` +
+            `relocating to (${buildPos.x},${buildPos.y}) in ${snapshot.roomName}`,);
         } else {
-          console.log(
-            `[layout] WARN: spawn rebuild stuck in ${snapshot.roomName}, ` +
-            `no relocation position found near anchor`,
-          );
+          log.warn("layout-planner", `[layout] WARN: spawn rebuild stuck in ${snapshot.roomName}, ` +
+            `no relocation position found near anchor`,);
         }
       }
       if (buildPos) {
@@ -852,10 +842,8 @@ function planStage3RoadsAndFinalize(
 
   // R2 队列治理观测：本周期背景任务上限拒绝计数（每规划周期至多一条日志）。
   if (data.capRejected > 0) {
-    console.log(
-      `[layout] queue cap reached in ${snapshot.roomName}: rejected ${data.capRejected} ` +
-      `background candidates (max ${CONFIG.construction.maxBackgroundQueuedPerRoom})`,
-    );
+    log.info("layout-planner", `[layout] queue cap reached in ${snapshot.roomName}: rejected ${data.capRejected} ` +
+      `background candidates (max ${CONFIG.construction.maxBackgroundQueuedPerRoom})`,);
   }
 
   // 仅在影响 creep 目标选择的结构入队时递增 revision。

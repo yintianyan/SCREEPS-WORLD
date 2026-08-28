@@ -2,6 +2,7 @@ import { CONFIG } from "../config";
 import { globalCache, type ActionCpuEntry } from "./global-cache";
 import { recordSkip } from "./memory";
 import { EventKind, recordEvent } from "./event-log";
+import { log } from "./log";
 
 function shouldSuppress(label: string, tick: number): boolean {
   const g = globalCache();
@@ -44,7 +45,7 @@ function handleError(label: string, error: unknown, critical: boolean): void {
   const g = globalCache();
 
   if (CONFIG.kernel.logErrors && !shouldSuppress(label, Game.time)) {
-    console.log(`[${Game.time}] ${label}: ${formatError(error)}`);
+    log.error("safe-run", `${label}: ${formatError(error)}`);
   }
   recordError();
   recordLastErrorSnapshot(label, error);

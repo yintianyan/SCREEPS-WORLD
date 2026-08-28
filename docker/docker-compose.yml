@@ -114,7 +114,7 @@ services:
     environment:
       SCREEPS_HOST: http://screeps:21025
       # 私服用 email/password 登录（screepsmod-auth）
-      SCREEPS_USERNAME: ${SCREEPS_EXPORTER_USER:-admin}
+      SCREEPS_USERNAME: ${SCREEPS_EXPORTER_USER:-111}
       SCREEPS_PASSWORD: ${SCREEPS_EXPORTER_PASS:-admin}
       SCREEPS_SHARD: ${SCREEPS_SHARD:-shard3}
       EXPORTER_PORT: "9115"

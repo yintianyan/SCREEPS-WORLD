@@ -5,6 +5,7 @@ import type {
   EnqueueResult,
   ChannelOverflowInfo,
 } from "../domain/expansion/uoem-types";
+import { log } from "./log";
 
 // ─── Memory 持久化结构（压缩字段名以满足 3.2KB 契约）────────
 
@@ -174,7 +175,7 @@ export function enqueueOutcome(
     const evicted = channel.q.shift();
     channel.oe++;
     if (evicted) {
-      console.log(`[OutcomeChannel] overflow evict: op=${evicted.oid} (evicted=${channel.oe})`);
+      log.info("outcome-channel", `[OutcomeChannel] overflow evict: op=${evicted.oid} (evicted=${channel.oe})`);
     }
   }
 

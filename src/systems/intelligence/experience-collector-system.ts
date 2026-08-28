@@ -37,6 +37,7 @@ import {
   type AttributionInput,
   collectAttribution,
 } from "../../domain/intelligence/attribution";
+import { log } from "../../kernel/log";
 
 // ─── globalCache 字段类型 ──────────────────────────────────
 
@@ -98,11 +99,9 @@ export const experienceCollectorSystem: System = {
     const ecPhase = systemPhase("experience-collector", 100);
     const stats = experienceStats(cache.ringBuffer);
     if (stats.total > 0 && (tick - ecPhase) % 1000 === 0) {
-      console.log(
-        `[${tick}] experience-collector: ${stats.total} experiences, ` +
+      log.info("experience-collector-system", `experience-collector: ${stats.total} experiences, ` +
         `${stats.attributed} attributed (${stats.unattributed} pending), ` +
-        `${stats.unknownAttribution} unknown attribution`,
-      );
+        `${stats.unknownAttribution} unknown attribution`,);
     }
   },
 };

@@ -2,6 +2,7 @@ import { CONFIG } from "../config";
 import { globalCache } from "./global-cache";
 import { recordCreepDeath } from "./event-log";
 import { readLayoutSegment, markLayoutDirty, layoutSegmentReady } from "./segment-store";
+import { log } from "./log";
 
 /** 从版本 N 到 N+1 的迁移函数。每个必须幂等。
  * ready（可选）：迁移依赖的外部资源（如 RawMemory segment）是否就绪 —
@@ -1089,10 +1090,8 @@ export function runMigrations(): void {
     // 选择是继续运行，但必须响亮可见；每次 global reset（模块重载）告警一次。
     if (!(globalThis as { __schemaDowngradeWarned?: boolean }).__schemaDowngradeWarned) {
       (globalThis as { __schemaDowngradeWarned?: boolean }).__schemaDowngradeWarned = true;
-      console.log(
-        "[schema] WARNING: Memory.schemaVersion=" + current + " > code " + CONFIG.memory.schemaVersion +
-          " — rolled-back code running on newer schema; no downgrade migration exists.",
-      );
+      log.warn("memory", "[schema] WARNING: Memory.schemaVersion=" + current + " > code " + CONFIG.memory.schemaVersion +
+          " — rolled-back code running on newer schema; no downgrade migration exists.",);
     }
   }
 }

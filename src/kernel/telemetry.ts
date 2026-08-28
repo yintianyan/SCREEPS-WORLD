@@ -2,6 +2,7 @@ import type { Budget } from "./contracts";
 import { CONFIG } from "../config";
 import { globalCache } from "./global-cache";
 import { getActionCpuSnapshot } from "./safe-run";
+import { log } from "./log";
 
 /** 在 global 中初始化单 tick 遥测对象。 */
 export function initTelemetry(tick: number): void {
@@ -66,7 +67,7 @@ export function emitSummary(budget: Budget): void {
   }
 
   if (totalCpu > budget.softLimit * 0.8 || t.errors > 0) {
-    console.log(parts.join(" "));
+    log.info("telemetry", parts.join(" "));
   }
 }
 

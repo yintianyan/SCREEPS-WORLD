@@ -68,6 +68,7 @@ import {
   validateRecommendationBuffer,
   validateSystemGuards,
 } from "../../domain/intelligence/recommendation/guards";
+import { log } from "../../kernel/log";
 
 // ─── System 定义 ──────────────────────────────────────────
 
@@ -108,7 +109,7 @@ export const recommendationEngineSystem: System = {
       // 冷启动：empireHealth 尚未产出
       // P14 修复：改为相位相对判定 (tick-phase)%5000===0。
       if ((tick - recPhase) % 5000 === 0) {
-        console.log(`[${tick}] recommendation-engine: cold start (no empireHealth)`);
+        log.info("recommendation-engine-system", `recommendation-engine: cold start (no empireHealth)`);
       }
       return;
     }
@@ -211,20 +212,16 @@ export const recommendationEngineSystem: System = {
       const ranked = rankRecommendations(getActiveRecommendations(buf));
       const topRecs = getTopRecommendations(ranked, 3);
 
-      console.log(
-        `[${tick}] recommendation-engine: total=${stats.total}, active=${stats.active}, ` +
+      log.info("recommendation-engine-system", `recommendation-engine: total=${stats.total}, active=${stats.active}, ` +
         `expired=${stats.expired}, superseded=${stats.superseded}, ` +
         `conflicts=${activeConflicts.length}, ` +
         `evidence_items=${evidenceItems.length}, ` +
-        `evidence_complete=${trace.complete}`,
-      );
+        `evidence_complete=${trace.complete}`,);
 
       if (topRecs.length > 0) {
         for (const r of topRecs) {
-          console.log(
-            `  ${r.recommendationId} [${r.urgency}] ${r.category}: ${r.description} ` +
-            `(conf=${r.confidence.toFixed(2)}, evidence=${r.evidence.length})`,
-          );
+          log.info("recommendation-engine-system", `  ${r.recommendationId} [${r.urgency}] ${r.category}: ${r.description} ` +
+            `(conf=${r.confidence.toFixed(2)}, evidence=${r.evidence.length})`,);
         }
       }
 
@@ -232,13 +229,13 @@ export const recommendationEngineSystem: System = {
       const guardViolations = validateRecommendationBuffer(buf);
       if (guardViolations.length > 0) {
         for (const v of guardViolations.slice(0, 5)) {
-          console.log(`  GUARD ${v.guardId}: ${v.message}`);
+          log.info("recommendation-engine-system", `  GUARD ${v.guardId}: ${v.message}`);
         }
       }
 
       const sysGuards = validateSystemGuards(recommendationEngineSystem);
       for (const v of sysGuards.filter(g => !g.passed)) {
-        console.log(`  SYS_GUARD ${v.guardId}: ${v.message}`);
+        log.info("recommendation-engine-system", `  SYS_GUARD ${v.guardId}: ${v.message}`);
       }
     }
   },

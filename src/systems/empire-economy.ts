@@ -33,6 +33,7 @@ import { evaluateMultiResourceHealth } from "../domain/strategy/multi-resource-h
 import { identifyBottlenecks } from "../domain/economy/bottleneck";
 import type { ResourceHealthStatus } from "../domain/economy/resource-health";
 import type { ResourceType } from "../domain/operation/agenda-item";
+import { log } from "../kernel/log";
 
 /**
  * Empire Economy 瘦快照（写入 Memory.kernel.empireEconomy）。
@@ -362,15 +363,13 @@ export const empireEconomySystem: System = {
       const mineralInfo = multiHealth.worstMineral !== null
         ? ` worstMineral=${multiHealth.worstMineral}:${multiHealth.worstMineralHealth}`
         : "";
-      console.log(
-        `[${ctx.tick}] empire-economy: health=${health.health} multiHealth=${multiHealth.health}` +
+      log.info("empire-economy", `empire-economy: health=${health.health} multiHealth=${multiHealth.health}` +
         ` readiness=${readiness.readiness}` +
         ` energy=${resourceView.totalEnergy} netFlow=${resourceView.totalNetFlow.toFixed(1)}` +
         ` surplus=${imbalance.surplusCount} deficit=${imbalance.deficitCount}` +
         ` safety=${safetyMargin.score.toFixed(2)}` +
         mineralInfo +
-        (bottlenecks.length > 0 ? ` bottleneck=${bottlenecks[0]?.resource}(${bottlenecks[0]?.score.toFixed(2)})` : ""),
-      );
+        (bottlenecks.length > 0 ? ` bottleneck=${bottlenecks[0]?.resource}(${bottlenecks[0]?.score.toFixed(2)})` : ""),);
     }
   },
 };

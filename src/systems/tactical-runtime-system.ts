@@ -35,6 +35,7 @@ import type { CombatCapability, AggregateCapability } from "../domain/combat/cap
 import type { TerrainContext, EffectiveCombatModifier } from "../domain/defense/terrain-context";
 import type { MultiDimensionalConfidence } from "../domain/defense/confidence";
 import { validateAuthorization } from "../domain/tactical/authorization";
+import { log } from "../kernel/log";
 
 // ═══════════════════════════════════════════════════════════
 // §1. GlobalCache 扩展 — Tactical Runtime 状态
@@ -899,13 +900,11 @@ function recordTacticalEvent(
 
   // console 输出（可观测性）
   if (event === "TACTICAL_ABORTED" || event === "RETREAT_DECIDED") {
-    console.log(
-      `[${tick}] tactical: ${event} op=${operationId}` +
+    log.info("tactical-runtime-system", `tactical: ${event} op=${operationId}` +
       ` squad=${squadId ?? "?"}` +
       ` reason="${reason}"` +
       ` conf=${confidence.toFixed(2)}` +
-      ` evidence=${evidence.slice(0, 3).join("; ")}`,
-    );
+      ` evidence=${evidence.slice(0, 3).join("; ")}`,);
   }
 }
 

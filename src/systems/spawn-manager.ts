@@ -10,6 +10,7 @@ import { moveToTarget, moveTowardRoom } from "../creeps/movement";
 import { recordSkip } from "../kernel/memory";
 import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
 import { recordExecution, declareExpected, resolveOutcome } from "../telemetry";
+import { log } from "../kernel/log";
 
 /**
  * 孵化管理器 — 唯一调用 spawnCreep 的模块。
@@ -79,7 +80,7 @@ export const spawnManagerSystem: System = {
           if (isLifeline) continue;
           const ttl = computeQuarantineTtl(key);
           roomMem.spawnBlacklist[key] = ctx.tick + ttl;
-          console.log(`[${ctx.tick}] spawn/${snapshot.roomName}: quarantined ${key} for ${ttl} ticks`);
+          log.info("spawn-manager", `spawn/${snapshot.roomName}: quarantined ${key} for ${ttl} ticks`);
         }
       }
       // P0-3：churn 熔断检查 — 在 cleanQueue 之后、evaluateDemand 之前。
@@ -436,9 +437,7 @@ export function trySpawn(
     if (capacity === 0) continue; // 【防御】同上：room 引用瞬态缺失时跳过本次请求。
     if (bodyCost(body) > capacity) {
       req.retries++;
-      console.log(
-        `[${Game.time}] spawn/${snapshot.roomName}: body exceeds capacity for ${req.key}`,
-      );
+      log.info("spawn-manager", `spawn/${snapshot.roomName}: body exceeds capacity for ${req.key}`,);
       continue;
     }
 
@@ -486,9 +485,7 @@ export function trySpawn(
     // 所有其他错误：递增重试次数并可能隔离。
     req.retries++;
     if (req.retries < CONFIG.spawn.maxRetries) {
-      console.log(
-        `[${Game.time}] spawn/${snapshot.roomName}: spawnCreep returned ${result} for ${req.key} (retry ${req.retries})`,
-      );
+      log.info("spawn-manager", `spawn/${snapshot.roomName}: spawnCreep returned ${result} for ${req.key} (retry ${req.retries})`,);
     }
     recordExecution("spawn", "failed");
     // T3: 回填失败结果 — 孵化失败时 resolve 对应的 pending expectation
@@ -634,9 +631,7 @@ export function checkChurnCircuitBreaker(
   for (const [role, count] of byRole) {
     if (count > CHURN_THRESHOLD && roomMem.churnFreezeUntil[role] === undefined) {
       roomMem.churnFreezeUntil[role] = ctx.tick + CHURN_FREEZE_TICKS;
-      console.log(
-        `[${ctx.tick}] spawn/${roomName}: CIRCUIT_BREAKER ${role} frozen for ${CHURN_FREEZE_TICKS} ticks (churn=${count}/${CHURN_WINDOW}t)`,
-      );
+      log.info("spawn-manager", `spawn/${roomName}: CIRCUIT_BREAKER ${role} frozen for ${CHURN_FREEZE_TICKS} ticks (churn=${count}/${CHURN_WINDOW}t)`,);
     }
   }
 

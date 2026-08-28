@@ -37,6 +37,7 @@ import {
 import {
   validateCalibrationBuffer,
 } from "../../domain/intelligence/calibration/guards";
+import { log } from "../../kernel/log";
 
 // ─── Calibration Cache ─────────────────────────────────────
 
@@ -148,9 +149,9 @@ export const calibrationResolutionSystem: System = {
     if ((tick - calPhase) % 5000 === 0) {
       const violations = validateCalibrationBuffer(cache.ringBuffer);
       if (violations.length > 0) {
-        console.log(`[${tick}] calibration: ${violations.length} guard violations`);
+        log.info("calibration-resolution-system", `calibration: ${violations.length} guard violations`);
         for (const v of violations.slice(0, 5)) {
-          console.log(`  ${v.guardId}: ${v.message}`);
+          log.info("calibration-resolution-system", `  ${v.guardId}: ${v.message}`);
         }
       }
     }
@@ -158,12 +159,10 @@ export const calibrationResolutionSystem: System = {
     // ── 7. Observability ──
     if ((tick - calPhase) % 5000 === 0) {
       const stats = calibrationBufferStats(cache.ringBuffer);
-      console.log(
-        `[${tick}] calibration: total=${stats.total}, calibratable=${stats.calibratable}, ` +
+      log.info("calibration-resolution-system", `calibration: total=${stats.total}, calibratable=${stats.calibratable}, ` +
         `resolved=${resolvedCount}, profiles=${stats.profileCount}, ` +
         `regimeChanged=${stats.regimeChanged}, externalInterfere=${stats.externalInterference}, ` +
-        `insufficientObs=${stats.insufficientObservation}`,
-      );
+        `insufficientObs=${stats.insufficientObservation}`,);
     }
   },
 };

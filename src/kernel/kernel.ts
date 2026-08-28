@@ -41,6 +41,7 @@ import { pruneDeadCreepCache } from "../creeps/movement/pathfinding";
 import { globalCache, type SquadIndexEntry } from "./global-cache";
 import { CONFIG } from "../config";
 import { classifyThreats } from "../domain/defense/threat";
+import { log } from "./log";
 
 /** 具体 TickContext，包含用于内核设置的内部变更方法。 */
 class Context implements TickContext {
@@ -426,9 +427,7 @@ export class Kernel {
       recordEvent(EventKind.ExpectationViolation, "kernel", [res.violations.length]);
       if (res.p3Starved) {
         kernelMem.p3StarveBypassUntil = ctx.tick + P3_BYPASS_WINDOW_TICKS;
-        console.log(
-          "[" + ctx.tick + "] expectations: P3 starvation — feed-forward bypass until " + kernelMem.p3StarveBypassUntil,
-        );
+        log.info("kernel", "[" + ctx.tick + "] expectations: P3 starvation — feed-forward bypass until " + kernelMem.p3StarveBypassUntil,);
       }
     } else {
       kernelMem.expectations = { tick: ctx.tick, violations: [], e3: e3Prev as Record<string, unknown> };
@@ -620,9 +619,7 @@ export class Kernel {
         creep.memory.targetId = undefined;
         creep.memory.assignment = undefined;
         safeRun(`creep/unknown-role/${creep.memory.role}`, () => {
-          console.log(
-            `[${Game.time}] creep/${creep.name}: unknown role '${creep.memory.role}', cleared targets`,
-          );
+          log.info("kernel", `creep/${creep.name}: unknown role '${creep.memory.role}', cleared targets`,);
         });
         continue;
       }

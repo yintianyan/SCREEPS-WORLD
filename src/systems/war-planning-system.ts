@@ -14,6 +14,7 @@ import type { PlayerIntelRecord } from "../domain/defense/player-intel";
 import type { MultiDimensionalConfidence } from "../domain/defense/confidence";
 import type { CombatPower } from "../domain/combat/capability";
 import { EventKind, recordEvent } from "../kernel/event-log";
+import { log } from "../kernel/log";
 
 // ═══════════════════════════════════════════════════════════
 // §1. 系统定义
@@ -61,13 +62,11 @@ export const warPlanningSystem: System = {
         PLAN_EVENT_CODES[plan.operation.status] ?? 0,
         plan.operation.priority.score,
       ]);
-      console.log(
-        `[${tick}] war-planning: plan=${plan.operation.operationId}` +
+      log.error("war-planning-system", `war-planning: plan=${plan.operation.operationId}` +
         ` type=${plan.operation.type} target=${plan.operation.target.roomName}` +
         ` posture=${plan.posture.posture} risk=${plan.risk.level}` +
         ` econGuard=${plan.economicGuard.passed ? "PASS" : "FAIL"}` +
-        ` netValue=${plan.expectedValue.netValue}`,
-      );
+        ` netValue=${plan.expectedValue.netValue}`,);
     } else {
       // 无计划（无威胁/未授权/经济护栏失败）— 清除旧兼容 Memory
       // 但不调 demobilize（那是 war-planner 的职责）

@@ -30,6 +30,7 @@ import { selectBody } from "../config/bodies";
 import { querySquad, globalCache } from "../kernel/global-cache";
 import { recordExecution, recordPlanningDecision } from "../telemetry";
 import { declareExpected, resolveOutcome } from "../telemetry";
+import { log } from "../kernel/log";
 
 /** 收摊原因编码（WarOutcome 事件 d[2]）。 */
 const REASON_POSTURE = 0;
@@ -212,9 +213,7 @@ export const warPlannerSystem: System = {
         if (nuker.launchNuke(pos) === OK) {
           recordNukeLaunch(plan.targetRoom, ctx.tick);
           recordEvent(EventKind.NukeLaunched, plan.targetRoom, [plan.towersSeen]);
-          console.log(
-            `[${Game.time}] nuke-launch: ${sponsor} → ${plan.targetRoom} (towers=${plan.towersSeen})`,
-          );
+          log.info("war-planner", `nuke-launch: ${sponsor} → ${plan.targetRoom} (towers=${plan.towersSeen})`,);
         }
       }
     }
@@ -337,11 +336,9 @@ export function demobilize(tick: number, reason: number): void {
       ? Math.floor(CONFIG.war.warBlacklistTicks / 2)
       : CONFIG.war.warBlacklistTicks;
     blacklistWarTarget(plan.targetRoom, tick + cooldown);
-    console.log(
-      `[${tick}] war: demobilize ${plan.targetRoom} outcome=${outcome}` +
+    log.info("war-planner", `war: demobilize ${plan.targetRoom} outcome=${outcome}` +
       ` (intel_age=${intel?.lastSeen !== undefined ? tick - intel.lastSeen : "never"},` +
-      ` blacklist=${cooldown}t, reason=${reason})`,
-    );
+      ` blacklist=${cooldown}t, reason=${reason})`,);
   }
 
   // A5.3.1 GAP-1 修复：写入止损信号供 recovery-execution-system 消费。
