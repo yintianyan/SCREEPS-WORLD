@@ -47,14 +47,7 @@ import {
   metricCount,
 } from "../../../src/telemetry/MetricRegistry";
 
-import {
-  recordEvent,
-  drainEvents,
-  shouldFlushEvents,
-  eventBufferSize,
-  totalEventsFlushed,
-  TELEMETRY_EVENT_TYPES,
-} from "../../../src/telemetry/EventRegistry";
+// EventRegistry 已停用 — 事件记录统一使用 kernel/event-log
 
 import {
   recordDecision,
@@ -86,7 +79,6 @@ import {
   counter,
   gauge,
   timer,
-  event,
   decision,
   outcome,
   registeredMetricCount,
@@ -200,39 +192,7 @@ describe("Telemetry SDK — MetricRegistry", () => {
   });
 });
 
-describe("Telemetry SDK — EventRegistry", () => {
-  it("should record and drain events", () => {
-    recordEvent("spawn.requested", { role: "harvester" }, "W1N1");
-    recordEvent("spawn.completed", { role: "harvester" }, "W1N1");
-    expect(eventBufferSize()).toBe(2);
-
-    const events = drainEvents();
-    expect(events).toHaveLength(2);
-    expect(events[0]!.type).toBe("spawn.requested");
-    expect(events[0]!.room).toBe("W1N1");
-    expect(eventBufferSize()).toBe(0);
-  });
-
-  it("should track total flushed", () => {
-    recordEvent("test.event", {});
-    drainEvents();
-    expect(totalEventsFlushed()).toBeGreaterThan(0);
-  });
-
-  it("should handle buffer overflow", () => {
-    for (let i = 0; i < 300; i++) {
-      recordEvent("overflow.test", { index: i });
-    }
-    // Should not crash, buffer capped
-    expect(eventBufferSize()).toBeLessThanOrEqual(200);
-  });
-
-  it("should export event type constants", () => {
-    expect(TELEMETRY_EVENT_TYPES.SPAWN_REQUESTED).toBe("spawn.requested");
-    expect(TELEMETRY_EVENT_TYPES.CREEP_DIED).toBe("creep.died");
-    expect(TELEMETRY_EVENT_TYPES.EXPANSION_STARTED).toBe("expansion.started");
-  });
-});
+// EventRegistry 已停用 — 跳过事件注册测试
 
 describe("Telemetry SDK — DecisionRegistry", () => {
   it("should record and drain decisions", () => {
@@ -393,13 +353,6 @@ describe("Telemetry SDK — Facade API", () => {
     expect(found).toBeDefined();
   });
 
-  it("should provide event() shorthand", () => {
-    event("expansion.started", { room: "W9N3" });
-    const events = drainEvents();
-    expect(events).toHaveLength(1);
-    expect(events[0]!.type).toBe("expansion.started");
-  });
-
   it("should provide decision() shorthand", () => {
     decision("empire", "EXPAND", "energy_surplus", { target: "W9N3", confidence: 0.87 });
     const decisions = drainDecisions();
@@ -418,7 +371,6 @@ describe("Telemetry SDK — Facade API", () => {
     counter("nonexistent.metric", 1);
     gauge("nonexistent.gauge", 42);
     timer("nonexistent.timer").end();
-    event("nonexistent.event", {});
     decision("test", "test", "test");
     // No error thrown
   });

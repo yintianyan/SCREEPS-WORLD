@@ -11,11 +11,6 @@ import {
     metricCount,
 } from "./MetricRegistry";
 import type { TimerHandle } from "./schema";
-import {
-    recordEvent as recordTelemetryEvent,
-    TELEMETRY_EVENT_TYPES,
-    type TelemetryEventType,
-} from "./EventRegistry";
 import { recordDecision } from "./DecisionRegistry";
 import { recordOutcome } from "./DecisionRegistry";
 import {
@@ -137,29 +132,6 @@ export function timer(shortName: string, labels: LabelSet = {}): TimerHandle {
 }
 
 /**
- * 记录一个离散事件。
- * @param type 事件类型（如 "expansion.started"）
- * @param data 事件数据
- * @param room 关联房间名
- * @param operation 关联操作名
-
- * 
- *   Telemetry.event("expansion.started", { room: targetRoom, operationType: "colonize" });
- */
-export function event(
-    type: string | TelemetryEventType,
-    data: Record<string, unknown> = {},
-    room?: string,
-    operation?: string,
-): void {
-    try {
-        recordTelemetryEvent(type, data, room, operation);
-    } catch {
-        // Telemetry 失败不得影响 AI
-    }
-}
-
-/**
  * 记录一个 AI 决策。
  * @param planner 决策者（如 "empire", "economy", "spawn"）
  * @param decision 决策内容（如 "EXPAND", "FORTIFY"）
@@ -237,6 +209,4 @@ export function registeredMetricCount(): number {
     }
 }
 
-// ─── Export event types for convenience ───────────────────
-
-export { TELEMETRY_EVENT_TYPES, buildMetricName };
+export { buildMetricName };

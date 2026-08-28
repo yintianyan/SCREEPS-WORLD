@@ -5,25 +5,16 @@ import type { MetricSnapshot } from "../MetricRegistry";
 
 /**
  * 将 flush package 导出为单行 @TELEMETRY JSON。
- * 仅输出有信号的 flush（非空 metrics/events/decisions）。
+ * 仅输出有信号的 flush（非空 metrics/decisions）。
  */
 export function exportConsoleLine(pkg: FlushPackage): string | null {
   // 空包不输出
-  if (pkg.metrics.length === 0 && pkg.events.length === 0 && pkg.decisions.length === 0) {
+  if (pkg.metrics.length === 0 && pkg.decisions.length === 0) {
     return null;
   }
 
   // 构建摘要 payload（不是全量指标，而是关键摘要）
   const summary = buildSummary(pkg);
-
-  // 如果有事件，附带事件列表
-  if (pkg.events.length > 0) {
-    summary.events = pkg.events.map(e => ({
-      t: e.type,
-      r: e.room,
-      ...(e.data ?? {}),
-    }));
-  }
 
   // 如果有决策，附带决策列表
   if (pkg.decisions.length > 0) {
@@ -44,7 +35,6 @@ function buildSummary(pkg: FlushPackage): Record<string, unknown> {
   const s: Record<string, unknown> = {
     tick: pkg.tick,
     mc: pkg.metrics.length, // metric count
-    ec: pkg.events.length,  // event count
     dc: pkg.decisions.length, // decision count
   };
 

@@ -3,8 +3,6 @@
 import { globalCache } from "../kernel/global-cache";
 import type { MetricSnapshot } from "./MetricRegistry";
 import { snapshotMetrics, resetCounters } from "./MetricRegistry";
-import type { TelemetryEvent } from "./schema";
-import { drainEvents, shouldFlushEvents } from "./EventRegistry";
 import type { DecisionRecord } from "./schema";
 import type { OutcomeRecord } from "./DecisionRegistry";
 import { drainDecisions, shouldFlushDecisions, drainOutcomes } from "./DecisionRegistry";
@@ -20,7 +18,7 @@ interface TelemetryBuffer {
   lastFlushCpu: number;
   /** 最近一次 flush 的 metric 数量 */
   lastMetricCount: number;
-  /** 最近一次 flush 的 event 数量 */
+  /** 最近一次 flush 的 event 数量（已停用 EventRegistry，恒为 0） */
   lastEventCount: number;
   /** 最近一次 flush 的 decision 数量 */
   lastDecisionCount: number;
@@ -48,7 +46,6 @@ function buffer(): TelemetryBuffer {
 export interface FlushPackage {
   readonly tick: number;
   readonly metrics: MetricSnapshot[];
-  readonly events: TelemetryEvent[];
   readonly decisions: DecisionRecord[];
   readonly outcomes: OutcomeRecord[];
 }
@@ -59,14 +56,12 @@ export interface FlushPackage {
  */
 export function collectFlushPackage(): FlushPackage {
   const metrics = snapshotMetrics();
-  const events = shouldFlushEvents() ? drainEvents() : [];
   const decisions = shouldFlushDecisions() ? drainDecisions() : [];
   const outcomes = drainOutcomes();
 
   return {
     tick: Game.time,
     metrics,
-    events,
     decisions,
     outcomes,
   };
@@ -107,7 +102,7 @@ export function flush(): FlushPackage {
   markFlushed(
     cpuAfter - cpuBefore,
     pkg.metrics.length,
-    pkg.events.length,
+    0, // events 已停用
     pkg.decisions.length,
   );
   return pkg;

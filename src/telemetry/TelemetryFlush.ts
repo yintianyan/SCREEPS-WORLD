@@ -15,7 +15,6 @@ export interface FlushResult {
     readonly flushed: boolean;
     readonly cpuCost: number;
     readonly metricCount: number;
-    readonly eventCount: number;
     readonly decisionCount: number;
     readonly skipped: boolean;
     readonly skipReason?: string;
@@ -37,7 +36,6 @@ export function runFlush(tier: string): FlushResult {
             flushed: false,
             cpuCost: 0,
             metricCount: 0,
-            eventCount: 0,
             decisionCount: 0,
             skipped: true,
             skipReason: `tier=${tier}`,
@@ -51,7 +49,6 @@ export function runFlush(tier: string): FlushResult {
             flushed: false,
             cpuCost: 0,
             metricCount: 0,
-            eventCount: 0,
             decisionCount: 0,
             skipped: true,
             skipReason: "not_due",
@@ -70,7 +67,6 @@ export function runFlush(tier: string): FlushResult {
             flushed: false,
             cpuCost: 0,
             metricCount: 0,
-            eventCount: 0,
             decisionCount: 0,
             skipped: true,
             skipReason: "cpu_near_limit",
@@ -106,7 +102,6 @@ export function runFlush(tier: string): FlushResult {
             flushed: true,
             cpuCost,
             metricCount: pkg.metrics.length,
-            eventCount: pkg.events.length,
             decisionCount: pkg.decisions.length,
             skipped: false,
         };
@@ -119,7 +114,6 @@ export function runFlush(tier: string): FlushResult {
             flushed: false,
             cpuCost: Game.cpu.getUsed() - cpuBefore,
             metricCount: 0,
-            eventCount: 0,
             decisionCount: 0,
             skipped: true,
             skipReason: "error",

@@ -5,14 +5,12 @@ export {
     counter,
     gauge,
     timer,
-    event,
     decision,
     outcome,
     registerMetricCounter,
     registerMetricGauge,
     registerMetricHistogram,
     registeredMetricCount,
-    TELEMETRY_EVENT_TYPES,
     buildMetricName,
 } from "./Telemetry";
 
@@ -25,7 +23,6 @@ export type {
     TelemetryDomain,
     AllowedLabel,
     LabelSet,
-    TelemetryEvent,
     DecisionRecord,
 } from "./schema";
 
