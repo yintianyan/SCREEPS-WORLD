@@ -62,8 +62,6 @@ export interface GlobalCache {
    * 直送核心 sink — 否则能量锁进无人能取的仓库，energyAvailable 卡死在 spawn 自充值，
    * 全舰队孵化饥饿降级。 */
   distributorRooms?: ReadonlySet<string>;
-  /** DecisionTrace 分层 ring（已停用，保留类型槽位避免下游推断退化）。 */
-  decisionTrace?: unknown;
   /** 【F1/G-B】各系统 CPU 消耗 EMA（budgetCap 局部截断判据）。heap 存储，reset 后从零重建（EMA 快速收敛可接受）。 */
   systemBudgetEma?: Map<string, number>;
   /** P3 能量核算 L1 计数器（bumpEnergyCounter 写入；economy 系统每窗滚动消费）。 */
