@@ -3,9 +3,33 @@ import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
+import { globalCache } from "../../kernel/global-cache";
 
 /** 目标房内可捡的 power 载荷（掉落堆或含 power 的废墟）。 */
 type PowerPickupTarget = { kind: "dropped"; resource: Resource } | { kind: "ruin"; ruin: Ruin };
+
+/** per-tick per-room 共享缓存：掉落 power 列表 + 含 power 的废墟列表。 */
+interface PbRoomCache {
+  tick: number;
+  droppedPower: Resource[];
+  powerRuins: Ruin[];
+}
+
+function getPbRoomCache(room: Room): PbRoomCache {
+  const g = globalCache();
+  if (!g.__pbRoomCache) g.__pbRoomCache = {};
+  const cached = g.__pbRoomCache[room.name];
+  if (cached && cached.tick === Game.time) return cached;
+  const droppedPower = room.find(FIND_DROPPED_RESOURCES, {
+    filter: r => r.resourceType === RESOURCE_POWER,
+  });
+  const powerRuins = room.find(FIND_RUINS, {
+    filter: r => (r.store[RESOURCE_POWER] ?? 0) > 0,
+  });
+  const entry: PbRoomCache = { tick: Game.time, droppedPower, powerRuins };
+  g.__pbRoomCache[room.name] = entry;
+  return entry;
+}
 
 /** 捡起目标房内的 power（空载相）。 */
 function pickupPower(): ActionCandidate<PowerPickupTarget> {
@@ -15,13 +39,13 @@ function pickupPower(): ActionCandidate<PowerPickupTarget> {
       const target = ac.creep.memory.remoteTarget;
       if (!target || ac.creep.room.name !== target) return undefined;
       if (ac.creep.store.getFreeCapacity(RESOURCE_POWER) <= 0) return undefined;
-      // 掉落堆优先（PB 直接掉落形态）；废墟兜底（被毁 container 里的 power）。
-      const dropped = ac.creep.room.find(FIND_DROPPED_RESOURCES)
-        .find(r => r.resourceType === RESOURCE_POWER);
-      if (dropped) return { kind: "dropped" as const, resource: dropped };
-      const ruin = ac.creep.room.find(FIND_RUINS)
-        .find(r => (r.store[RESOURCE_POWER] ?? 0) > 0);
-      if (ruin) return { kind: "ruin" as const, ruin };
+      const cache = getPbRoomCache(ac.creep.room);
+      if (cache.droppedPower.length > 0) {
+        return { kind: "dropped" as const, resource: cache.droppedPower[0]! };
+      }
+      if (cache.powerRuins.length > 0) {
+        return { kind: "ruin" as const, ruin: cache.powerRuins[0]! };
+      }
       return undefined;
     },
     execute: (ac, t) => {
@@ -64,16 +88,11 @@ function depositPower(): ActionCandidate<PowerDepositTarget> {
 
 /** 任务完成自检（gate）：背包空且目标房无掉落 power → 自标记 recycle。 */
 function collectorGate(ac: ActionContext): boolean {
-  // 仅在目标房内做完成判定（通勤中不误判）。
   const target = ac.creep.memory.remoteTarget;
   if (target && ac.creep.room.name === target) {
-    const carrying = ac.creep.store.getUsedCapacity(RESOURCE_POWER);
-    if (carrying === 0) {
-      const droppedLeft = ac.creep.room.find(FIND_DROPPED_RESOURCES)
-        .some(r => r.resourceType === RESOURCE_POWER);
-      const ruinsLeft = ac.creep.room.find(FIND_RUINS)
-        .some(r => (r.store[RESOURCE_POWER] ?? 0) > 0);
-      if (!droppedLeft && !ruinsLeft) {
+    if (ac.creep.store.getUsedCapacity(RESOURCE_POWER) === 0) {
+      const cache = getPbRoomCache(ac.creep.room);
+      if (cache.droppedPower.length === 0 && cache.powerRuins.length === 0) {
         ac.creep.memory.recycle = true;
         return false;
       }

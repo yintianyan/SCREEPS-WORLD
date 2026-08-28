@@ -2,16 +2,9 @@
 
 import { globalCache } from "../../kernel/global-cache";
 
-interface InvaderCoreCacheEntry {
-  tick: number;
-  cores: StructureInvaderCore[];
-}
-
 /** 探测房间内全部 InvaderCore（per-tick per-room 共享缓存）。 */
 export function findInvaderCores(room: Room): StructureInvaderCore[] {
-  const g = globalCache() as {
-    __remoteInvaderCore?: Record<string, InvaderCoreCacheEntry>;
-  };
+  const g = globalCache();
   if (!g.__remoteInvaderCore) g.__remoteInvaderCore = {};
   const cached = g.__remoteInvaderCore[room.name];
   if (cached && cached.tick === Game.time) return cached.cores;

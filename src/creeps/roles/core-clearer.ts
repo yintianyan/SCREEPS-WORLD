@@ -32,9 +32,7 @@ function findInvaderCore(creep: Creep): StructureInvaderCore | undefined {
  * 必须当场捡，否则 loot 永远丢失）。同款 per-tick per-room 缓存。
  */
 function findLootRuin(creep: Creep): Ruin | undefined {
-  const g = globalCache() as {
-    __remoteRuins?: Record<string, { tick: number; list: Ruin[] }>;
-  };
+  const g = globalCache();
   if (!g.__remoteRuins) g.__remoteRuins = {};
   const cached = g.__remoteRuins[creep.room.name];
   let ruins: Ruin[];

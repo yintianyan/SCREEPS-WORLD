@@ -17,7 +17,7 @@ const HAUL_CONTAINER_DISTANCE_WEIGHT = 10;
  * 同房多 defender 共享同数组，避免每只每 tick 全房 find；tick 内死亡者仍会被选中
  * 一次，attack 返回 ERR_INVALID_TARGET 由既有错误容忍处理。 */
 export function getHostilesCached(room: Room): Creep[] {
-  const g = globalCache() as { __hostilesCache?: Record<string, { tick: number; creeps: Creep[] }> };
+  const g = globalCache();
   if (!g.__hostilesCache) g.__hostilesCache = {};
   const cached = g.__hostilesCache[room.name];
   if (cached && cached.tick === Game.time) {

@@ -21,7 +21,7 @@ import { getSquadMovementIntent } from "./squad-movement-runtime";
 // ═══════════════════════════════════════════════════════════
 
 interface CombatMicroCache {
-  /** 当前 tick 的 MicroPlan（供 decision-trace / 调试消费）。key = squadId。 */
+  /** 当前 tick 的 MicroPlan（诊断观测用）。key = squadId。 */
   microPlans?: Map<string, MicroPlan>;
   /** 当前 tick 的 CombatMovementDecision 映射。key = creepName。 */
   microDecisions?: Map<string, CombatMovementDecision>;
@@ -382,7 +382,7 @@ export function getMicroDecision(creepName: string): CombatMovementDecision | nu
 }
 
 /**
- * 查询编队的 MicroPlan（供 decision-trace / 调试消费）。
+ * 查询编队的 MicroPlan（诊断观测用）。
  */
 export function getMicroPlan(squadId: string): MicroPlan | null {
   const g = globalCache() as unknown as GlobalCache & CombatMicroCache;

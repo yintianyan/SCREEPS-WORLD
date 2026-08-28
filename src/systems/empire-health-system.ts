@@ -2,12 +2,6 @@
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
 import {
-  createTimeSeries,
-  pushSample,
-  gcTimeSeries,
-  type TimeSeries,
-} from "../domain/intelligence/prediction/time-series";
-import {
   evaluateEmpireHealth,
   mapEconomicHealth,
   mapResourceHealth,
@@ -161,11 +155,9 @@ export const empireHealthSystem: System = {
       reserveHistory.push(empireEcon.tr);
     }
 
-    // 人口统计（RoomSnapshot 无 creeps 数组，用 Game.creeps 归属统计）
-    let totalPop = 0;
-    for (const _ of Object.values(Game.creeps)) {
-      totalPop++;
-    }
+    // 人口统计：用 Object.keys 计数避免创建完整数组。
+    // 待迁移：应由 Kernel.buildSnapshots 预构建总人口写入 globalCache 供消费。
+    const totalPop = Object.keys(Game.creeps).length;
     populationHistory.push(totalPop);
     failureCountHistory.push(activeFailures.length);
 
@@ -222,11 +214,6 @@ export const empireHealthSystem: System = {
 
     // 综合自治状态
     const autonomyStatus = evaluateAutonomyStatus(autonomyScore, noProgress, thrashing);
-
-    // ── 9. A6.3 预测采样寄生（复用既有 100t cadence，零额外调度）──
-    // PRED-010：不自建采样通道，寄生在 empire-health-system 的既有 cadence 中。
-    // 每个采样点 O(1) 成本（push + shift），global reset 后从空数组重建。
-    sampleForPredictions(g, ctx, tick, healthResult, spawnHealth);
 
     // ── 10. 写入 globalCache ──
     g.empireHealth = healthResult;
@@ -446,103 +433,3 @@ function countOwnedRooms(ctx: TickContext): number {
   return count;
 }
 
-// ─── A6.3 预测采样寄生 ────────────────────────────────────
-
-/** TimeSeries 容量上限（100 采样 × 100t interval = 10000t 历史 ≈ 8.3h）。 */
-const PREDICTION_TS_CAPACITY = 100;
-
-/**
- * A6.3 预测采样寄生函数 — 复用 empire-health-system 既有 100t cadence。
-
- * PRED-010：不自建采样通道，寄生在既有 cadence 中追加 4 个采样字段。
-
- * 采样内容：
- *   1. CPU bucket 历史（→ __cpuBucketHistory，预测目标 #7）
- *   2. Spawn 队列深度历史（→ __spawnQueueDepthHistory，预测目标 #2）
- *   3. 物流健康度历史（→ __logisticsHealthHistory，预测目标 #3）
- *   4. 房间健康度历史（→ __roomHealthHistory，预测目标 #4）
-
- * 远矿收益历史（#5）由 expansion-planner 的 cadence 采样，不在此处。
-
- * 每个采样点 O(1) 成本（push + 可能的 shift）。
- * global reset 后从空 TimeSeries 重建（可接受）。
- */
-function sampleForPredictions(
-  g: ReturnType<typeof globalCache>,
-  ctx: TickContext,
-  tick: number,
-  healthResult: ReturnType<typeof evaluateEmpireHealth>,
-  spawnHealth: DimensionResult,
-): void {
-  // ── 1. CPU bucket 历史 ──
-  // WO-8/P14：无消费者（prediction-system 不读此序列）。降频到每 500t 采样省 CPU，
-  // 数据保留供未来预测目标 #7 接线。接线后恢复每 100t 采样。
-  if (tick % 500 === 0) {
-    if (!g.__cpuBucketHistory) {
-      g.__cpuBucketHistory = createTimeSeries<number>(PREDICTION_TS_CAPACITY);
-    }
-    const game = globalThis as { Game?: { cpu?: { bucket?: number } } };
-    const bucket = game.Game?.cpu?.bucket ?? 0;
-    pushSample(g.__cpuBucketHistory, tick, bucket);
-    gcTimeSeries(g.__cpuBucketHistory, tick, PREDICTION_TS_CAPACITY * 200);
-  }
-
-  // ── 2. Spawn 队列深度历史 ──
-  // 唯一有消费者的序列：prediction-system + calibration-resolution 消费。
-  if (!g.__spawnQueueDepthHistory) {
-    g.__spawnQueueDepthHistory = createTimeSeries<number>(PREDICTION_TS_CAPACITY);
-  }
-  // 从各房 spawnQueue 聚合总队列深度
-  let totalQueueDepth = 0;
-  for (const snap of ctx.snapshots()) {
-    const roomMem = Memory.rooms[snap.roomName];
-    if (roomMem?.spawnQueue) {
-      totalQueueDepth += roomMem.spawnQueue.length;
-    }
-  }
-  pushSample(g.__spawnQueueDepthHistory, tick, totalQueueDepth);
-  gcTimeSeries(g.__spawnQueueDepthHistory, tick, PREDICTION_TS_CAPACITY * 200);
-
-  // ── 3. 物流健康度历史 ──
-  // WO-9/P14：无消费者。降频到每 500t 采样省 CPU。
-  if (tick % 500 === 0) {
-    if (!g.__logisticsHealthHistory) {
-      g.__logisticsHealthHistory = createTimeSeries<{ score: number; deliveryRate: number; lossRate: number }>(
-        PREDICTION_TS_CAPACITY,
-      );
-    }
-    const lh = g.logisticsHealth;
-    if (lh) {
-      pushSample(g.__logisticsHealthHistory, tick, {
-        score: lh.score,
-        deliveryRate: lh.deliveryRate,
-        lossRate: lh.lossRate,
-      });
-      gcTimeSeries(g.__logisticsHealthHistory, tick, PREDICTION_TS_CAPACITY * 200);
-    }
-  }
-
-  // ── 4. 房间健康度历史（per-room）──
-  // WO-10/P14：无消费者。降频到每 500t 采样省 CPU。
-  if (tick % 500 === 0) {
-  if (!g.__roomHealthHistory) {
-    g.__roomHealthHistory = new Map();
-  }
-  for (const snap of ctx.snapshots()) {
-    const roomMem = Memory.rooms[snap.roomName];
-    const colonyState = roomMem?.colonyState ?? "normal";
-    const roomScore = colonyState === "normal" ? 1.0
-      : colonyState === "defense" ? 0.5
-      : colonyState === "bootstrap" ? 0.3
-      : colonyState === "recovery" ? 0.1
-      : 0.5;
-    let roomTs = g.__roomHealthHistory.get(snap.roomName);
-    if (!roomTs) {
-      roomTs = createTimeSeries<{ score: number; level: string }>(PREDICTION_TS_CAPACITY);
-      g.__roomHealthHistory.set(snap.roomName, roomTs);
-    }
-    pushSample(roomTs, tick, { score: roomScore, level: colonyState });
-    gcTimeSeries(roomTs, tick, PREDICTION_TS_CAPACITY * 200);
-  }
-  } // end if (tick % 500 === 0)
-}

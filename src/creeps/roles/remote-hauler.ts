@@ -81,7 +81,7 @@ export function findRemoteContainer(creep: Creep): StructureContainer | undefine
   }
 
   // 首次或缓存失效：走 per-tick per-room 共享列表（同房多 hauler 一次 find）。
-  const g = globalCache() as { __remoteContainers?: Record<string, { tick: number; list: StructureContainer[] }> };
+  const g = globalCache();
   if (!g.__remoteContainers) g.__remoteContainers = {};
   const roomCached = g.__remoteContainers[creep.room.name];
   let containers: StructureContainer[];
@@ -128,7 +128,7 @@ export function findRemoteContainer(creep: Creep): StructureContainer | undefine
  * 违反「角色禁止全房 find」硬约束。缓存生命周期单 tick，同房多 hauler 共享。
  */
 function findDroppedEnergy(creep: Creep): Resource | undefined {
-  const g = globalCache() as { __remoteDropped?: Record<string, { tick: number; list: Resource[] }> };
+  const g = globalCache();
   if (!g.__remoteDropped) g.__remoteDropped = {};
   const cached = g.__remoteDropped[creep.room.name];
   let resources: Resource[];

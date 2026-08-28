@@ -122,16 +122,20 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 
 ## 5. 现状登记（待迁移差异，不改本蓝图）
 
-以下现状与蓝图冲突，按 AGENT.md 裁决规则 1 以本蓝图为目标收敛，登记进技术债台账
-（[TECH_DEBT_LEDGER.md](../implementation/TECH_DEBT_LEDGER.md)）：
+以下现状与蓝图冲突，按 AGENT.md 裁决规则 1 以本蓝图为目标收敛。
 
-| # | 现状 | 蓝图目标 |
-| --- | --- | --- |
-| 1 | `src/kernel/event-bus.ts` 存在 | 违反 KERNEL §1.1 否决清单（EventBus 中枢）——待删除或降级为分频触发器内联形态（调和 §6） |
-| 2 | `src/systems/assignment-service.ts` | Service 非 System：迁 `src/domain/assignment/`（§2 表 1.6 行落点） |
-| 3 | `src/systems/layout-planner.ts` 与 `src/domain/layout/` 并存 | 布局纯函数归 `src/domain/layout/`，系统侧只留队列推进与 site 签发（模块 1.8 落点） |
-| 4 | 模块 1.13（agenda-manager）、1.15（self-healing）、1.6 请求池、1.5 economy 系统侧文件未见独立落点 | 按本蓝图 §2 表补齐落点；实现顺序归 [IMPLEMENTATION_PHASES.md](IMPLEMENTATION_PHASES.md) |
-| 5 | `src/kernel/` 含 timeseries / ring-buffer / decision-trace / event-log 等待归类部件 | 属平台组设施，保留在 kernel 但须在八项之外登记为「内核部件」，不承载业务语义 |
+| # | 现状 | 蓝图目标 | 状态 |
+| --- | --- | --- | --- |
+| 1 | ~~`src/kernel/event-bus.ts` 存在~~ | 违反 KERNEL §1.1 否决清单（EventBus 中枢） | ✅ 已删除 |
+| 2 | `src/systems/assignment-service.ts` | Service 非 System：迁 `src/domain/assignment/`（§2 表 1.6 行落点） | ⏳ 待迁移 |
+| 3 | `src/systems/layout-planner.ts` 与 `src/domain/layout/` 并存 | 布局纯函数归 `src/domain/layout/`，系统侧只留队列推进与 site 签发（模块 1.8 落点） | ⏳ 待迁移 |
+| 4 | `src/systems/empire-health-system.ts` 承担 Self-Healing 职责 | 模块 1.15 蓝图落点为 `src/systems/self-healing.ts`；当前 empire-health + recovery-execution 共同承载自愈闭环 | ⏳ 待 ADR 裁决合并或保留 |
+| 5 | `src/kernel/` 含 ring-buffer / event-log 等待归类部件 | 属平台组设施，保留在 kernel 但须在八项之外登记为「内核部件」，不承载业务语义 | ⏳ 部分已清理 |
+| 6 | `src/kernel/decision-trace.ts` 已删除 | 原属内核部件；删减式重构移除后未同步更新本表 | ✅ 已删除 |
+| 7 | `src/telemetry/EvaluationRegistry.ts` 已删除 | 原属遥测管线；删减式重构移除 evaluation-system 后遥测 barrel 不再导出 | ✅ 已删除 |
+| 8 | bootstrap.ts 实际注册 34 系统 / 19 角色 | R10 调整上限为 36；差异来自 intelligence-pipeline / decision-trace / evaluation 未注册 | ⏳ 见 R10 ADR |
+| 9 | 角色层存在 `Room.find` / `Object.values(Game.creeps)` 违规 | 蓝图条款 ④ 禁止角色全房 find 和全局扫描 | ⏳ 待治理 |
+| 10 | Kernel 直接 import 业务模块（room-snapshot / defense / pathfinding） | 蓝图 §3.1 禁止 Kernel import 业务符号；唯一登记例外为 pruneDeadCreepCache | ⏳ 待治理 |
 
 ## 6. 一致性声明
 

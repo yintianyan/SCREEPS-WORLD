@@ -36,9 +36,7 @@ interface FocusFireAttackIntent {
  * 无指令时返回 null → 角色回退到 Legacy 行为。
  */
 function readTacticalIntent(creepName: string): TacticalIntent | null {
-  const g = globalCache() as Record<string, unknown> & {
-    tacticalRoleIntents?: Map<string, TacticalIntent>;
-  };
+  const g = globalCache() as { tacticalRoleIntents?: Map<string, TacticalIntent> };
   return g.tacticalRoleIntents?.get(creepName) ?? null;
 }
 
@@ -50,9 +48,7 @@ function readTacticalIntent(creepName: string): TacticalIntent | null {
  * 无指令时返回 null → 角色回退到 A5.4.1 TacticalIntent → Legacy 行为。
  */
 function readAttackIntent(creepName: string): FocusFireAttackIntent | null {
-  const g = globalCache() as Record<string, unknown> & {
-    attackIntents?: Map<string, FocusFireAttackIntent>;
-  };
+  const g = globalCache() as { attackIntents?: Map<string, FocusFireAttackIntent> };
   return g.attackIntents?.get(creepName) ?? null;
 }
 
@@ -82,7 +78,7 @@ function structureValueTier(t: StructureConstant): number {
 
 /** 目标房内敌结构列表（per-tick per-room 共享缓存，与 remote-hauler 同型模式）。 */
 function getHostileStructuresCached(room: Room): AnyStructure[] {
-  const g = globalCache() as { __warStructures?: Record<string, { tick: number; list: AnyStructure[] }> };
+  const g = globalCache();
   if (!g.__warStructures) g.__warStructures = {};
   const cached = g.__warStructures[room.name];
   if (cached && cached.tick === Game.time) return cached.list;
@@ -93,7 +89,7 @@ function getHostileStructuresCached(room: Room): AnyStructure[] {
 
 /** 目标房内 power bank（per-tick per-room 共享缓存 — PB 野采链，审计缺口 2）。 */
 function getPowerBankCached(room: Room): StructurePowerBank | undefined {
-  const g = globalCache() as { __powerBanks?: Record<string, { tick: number; pb: StructurePowerBank | undefined }> };
+  const g = globalCache();
   if (!g.__powerBanks) g.__powerBanks = {};
   const cached = g.__powerBanks[room.name];
   if (cached && cached.tick === Game.time) return cached.pb;

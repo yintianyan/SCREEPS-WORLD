@@ -149,6 +149,75 @@ describe("R6 roles 动作红线", () => {
   });
 });
 
+describe("R8 roles 禁止 Room.find 和全局扫描", () => {
+  const roleFiles = ALL_FILES.filter((f) => relative(SRC, f).startsWith("creeps/roles"));
+  // 已知违规豁免列表 — 每项为 "文件相对路径:违规类型"。
+  // 目标：逐步缩小豁免集至空，而非新增豁免。
+  const R8_EXEMPTIONS = new Set<string>([
+    "creeps/roles/remote-harvester.ts:room.find",
+    "creeps/roles/remote-hauler.ts:room.find",
+    "creeps/roles/remote-hauler.ts:Game.getObjectById",
+    "creeps/roles/pb-collector.ts:room.find",
+    "creeps/roles/core-clearer.ts:room.find",
+    "creeps/roles/attacker.ts:room.find",
+    "creeps/roles/attacker.ts:Game.getObjectById",
+    "creeps/roles/healer.ts:room.find",
+    "creeps/roles/healer.ts:Object.values(Game.creeps)",
+    "creeps/roles/healer.ts:Game.getObjectById",
+  ]);
+  it("禁 room.find / Object.values(Game.creeps) / Game.getObjectById", () => {
+    const bad: string[] = [];
+    for (const f of roleFiles) {
+      const rel = relative(SRC, f);
+      const code = codeLines(readFileSync(f, "utf8"));
+      if (/(?:^|[^.])\broom\.find\s*\(|creep\.room\.find\s*\(/.test(code) && !R8_EXEMPTIONS.has(rel + ":room.find")) {
+        bad.push(rel + ": room.find");
+      }
+      if (/Object\.values\(Game\.creeps\)/.test(code) && !R8_EXEMPTIONS.has(rel + ":Object.values(Game.creeps)")) {
+        bad.push(rel + ": Object.values(Game.creeps)");
+      }
+      if (/Game\.getObjectById/.test(code) && !R8_EXEMPTIONS.has(rel + ":Game.getObjectById")) {
+        bad.push(rel + ": Game.getObjectById");
+      }
+    }
+    expect(bad, bad.join(NL)).toHaveLength(0);
+  });
+});
+
+describe("R9 Kernel 禁止 import 业务模块", () => {
+  const kernelFiles = ALL_FILES.filter((f) => layerOf(f) === "kernel");
+  // 已登记白名单例外（ENGINEERING_BLUEPRINT §3.1 Dependencies 行）：
+  // - pruneDeadCreepCache from creeps/movement/pathfinding（R9 例外，KERNEL §8）
+  // - type-only 导入豁免（全局类型共享，无运行时副作用）
+  // - global-cache.ts 的 TaskPool type import 豁免
+  // - outcome-channel.ts 的 uoem-types type import 豁免
+  // - layout-metrics.ts 的 StructureGaps type import 豁免
+  // 已知值导入违规（待治理，暂豁免追踪）：
+  const R9_VALUE_EXEMPTIONS = new Set<string>([
+    "kernel/kernel.ts:systems/room-snapshot.ts",
+    "kernel/kernel.ts:domain/defense/threat.ts",
+    "kernel/layout-metrics.ts:domain/layout/min-cut-defense.ts",
+  ]);
+  it("值导入业务模块仅在白名单中", () => {
+    const bad: string[] = [];
+    for (const f of kernelFiles) {
+      const rel = relative(SRC, f);
+      for (const imp of importsOf(f)) {
+        if (imp.isType) continue; // type-only 豁免
+        const targetLayer = layerOf(imp.resolved);
+        if (targetLayer !== "systems" && targetLayer !== "creeps" && targetLayer !== "domain") continue;
+        // 已登记白名单：pruneDeadCreepCache
+        if (rel === "kernel/kernel.ts" && imp.resolved.includes("creeps/movement/pathfinding")) continue;
+        const targetRel = relative(SRC, imp.resolved);
+        const exemptKey = rel + ":" + targetRel;
+        if (R9_VALUE_EXEMPTIONS.has(exemptKey)) continue;
+        bad.push(rel + " -> " + targetRel);
+      }
+    }
+    expect(bad, bad.join(NL)).toHaveLength(0);
+  });
+});
+
 describe("R7 无循环依赖", () => {
   it("src 相对导入图无环（忽略 type-only）", () => {
     const graph = new Map<string, Set<string>>();

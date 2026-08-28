@@ -21,7 +21,7 @@ import { getSquadMovementIntent } from "./squad-movement-runtime";
 
 /** Tactical Engagement Runtime 在 globalCache 上的扩展字段。 */
 interface TacticalEngagementCache {
-  /** 当前 tick 的 FocusFirePlan（供 decision-trace / 调试消费）。key = squadId。 */
+  /** 当前 tick 的 FocusFirePlan（诊断观测用）。key = squadId。 */
   focusFirePlans?: Map<string, FocusFirePlan>;
   /** 当前 tick 的 AttackIntent 映射。key = creepName。 */
   attackIntents?: Map<string, AttackIntent>;
@@ -475,7 +475,7 @@ export function getAttackIntent(creepName: string): AttackIntent | null {
 }
 
 /**
- * 查询编队的 FocusFirePlan（供 decision-trace / 调试消费）。
+ * 查询编队的 FocusFirePlan（诊断观测用）。
  */
 export function getFocusFirePlan(squadId: string): FocusFirePlan | null {
   const g = globalCache() as unknown as GlobalCache & TacticalEngagementCache;

@@ -192,7 +192,7 @@ export const remoteMiningManagerSystem: System = {
       // 无视野 → 冷却未到期即维持威胁态（宁可少采一轮，不送一批兵）。
       // A5.1：有视野确认有威胁时，额外调用 decideRemoteDefenseAction() 做结构化决策。
       // decideRemoteDefenseAction 是纯函数 (O(1))，仅在有威胁时调用，CPU 影响可忽略。
-      // 决策结果写入 globalCache.remoteDefenseDecisions 供 decision-trace 消费。
+      // 决策结果写入 globalCache.remoteDefenseDecisions 供诊断观测。
       const gRemoteDecisions = globalCache().remoteDefenseDecisions ??= new Map();
       gRemoteDecisions.clear(); // 每 interval 清空旧决策
       const posture = Memory.kernel?.strategy?.posture ?? "develop";

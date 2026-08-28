@@ -47,7 +47,7 @@ interface TacticalRuntimeCache {
   tacticalObjectives?: Map<string, TacticalObjectiveRecord>;
   /** 当前 tick 的 RoleActionIntent 映射。key = creepName。 */
   tacticalRoleIntents?: Map<string, RoleActionIntent>;
-  /** 当前 tick 的 TacticalDecision 列表（供 decision-trace 消费）。 */
+  /** 当前 tick 的 TacticalDecision 列表（诊断观测用）。 */
   tacticalDecisions?: TacticalDecision[];
   /** 战术止损信号列表（供 recovery-execution-system 消费）。 */
   tacticalAbortSignals?: TacticalAbortSignal[];

@@ -21,9 +21,7 @@ interface TacticalIntent {
  * 无指令时返回 null → 角色回退到 Legacy 行为。
  */
 function readTacticalIntent(creepName: string): TacticalIntent | null {
-  const g = globalCache() as Record<string, unknown> & {
-    tacticalRoleIntents?: Map<string, TacticalIntent>;
-  };
+  const g = globalCache() as { tacticalRoleIntents?: Map<string, TacticalIntent> };
   return g.tacticalRoleIntents?.get(creepName) ?? null;
 }
 
@@ -31,9 +29,8 @@ function readTacticalIntent(creepName: string): TacticalIntent | null {
 function findBuddy(creep: Creep): Creep | undefined {
   let best: Creep | undefined;
   let bestRange = Infinity;
-  for (const c of Object.values(Game.creeps)) {
+  for (const c of creep.room.find(FIND_MY_CREEPS)) {
     if (c.memory.role !== "attacker") continue;
-    if (c.room?.name !== creep.room.name) continue;
     const range = creep.pos.getRangeTo(c.pos);
     if (range < bestRange) {
       bestRange = range;
@@ -47,8 +44,7 @@ function findBuddy(creep: Creep): Creep | undefined {
 function findWounded(creep: Creep): Creep | undefined {
   let best: Creep | undefined;
   let bestRange = Infinity;
-  for (const c of Object.values(Game.creeps)) {
-    if (c.room?.name !== creep.room.name) continue;
+  for (const c of creep.room.find(FIND_MY_CREEPS)) {
     if (c.hits >= c.hitsMax) continue;
     const range = creep.pos.getRangeTo(c.pos);
     if (range < bestRange) {

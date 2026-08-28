@@ -1,4 +1,4 @@
-import { TaskPool } from "../domain/assignment/task-pool";
+import type { TaskPool } from "../domain/assignment/task-pool";
 
 /** assignment-service 的单 tick 缓存。 */
 export interface AssignmentCache {
@@ -62,7 +62,7 @@ export interface GlobalCache {
    * 直送核心 sink — 否则能量锁进无人能取的仓库，energyAvailable 卡死在 spawn 自充值，
    * 全舰队孵化饥饿降级。 */
   distributorRooms?: ReadonlySet<string>;
-  /** 【G-H】DecisionTrace 分层 ring（volatile 调试设施，已停用）。 */
+  /** DecisionTrace 分层 ring（已停用，保留类型槽位避免下游推断退化）。 */
   decisionTrace?: unknown;
   /** 【F1/G-B】各系统 CPU 消耗 EMA（budgetCap 局部截断判据）。heap 存储，reset 后从零重建（EMA 快速收敛可接受）。 */
   systemBudgetEma?: Map<string, number>;
@@ -177,8 +177,8 @@ export interface GlobalCache {
   // 连生产者都不存在（agenda-manager 不写、logistics 不读），只有 cache 槽位和
   // 文档描述。若 A3.0 帝国调拨进入路线图，须重新设计完整链路而非留假装存在的槽位。
   /** A3.0：Agenda Manager 运行时指标快照（agenda-manager 每 100t 写入）。
-   * 【WO-3 修复】标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
-   * 供 console 内省归因使用。若后续接入 decision-trace 应明确接线。 */
+   * 标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
+   * 供 console 内省归因使用。 */
   agendaMetrics?: import("../domain/operation/metrics").OperationMetrics;
   /** A3.1：Resource Network Snapshot（agenda-manager 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
@@ -193,20 +193,20 @@ export interface GlobalCache {
    * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
   multiResourceHealth?: import("../domain/strategy/multi-resource-health").MultiResourceEmpireHealth;
   /** A4.2：资源瓶颈排序列表（empire-economy 每 100t 写入）。
-   * 【WO-1 修复】标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
-   * 供 console 内省归因使用。若后续接入 decision-trace 应明确接线。 */
+   * 标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
+   * 供 console 内省归因使用。 */
   resourceBottlenecks?: import("../domain/economy/bottleneck").BottleneckEntry[];
   /** A4.2：帝国级 Resource Ledger（empire-economy 每 100t 写入）。
-   * 【WO-2 修复】标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
-   * 供 console 内省归因使用。若后续接入 decision-trace 应明确接线。 */
+   * 标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
+   * 供 console 内省归因使用。 */
   empireResourceLedger?: import("../domain/economy/resource-ledger").ResourceLedger;
   /** A4.3：Empire Logistics Plan（logistics-planner 每 100t 写入）。
    * 包含 Transport Requests + Routes + 成本/时间/风险估算。
    * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
   logisticsPlan?: { tick: number; plan: import("../domain/logistics/transport-plan").TransportPlan };
   /** A4.3：Empire Logistics Dashboard（logistics-planner 每 100t 写入）。
-   * 【WO-5 修复】标注为观测仪表盘 — 目前无代码消费者（getLogisticsDashboard 零调用），
-   * 保留在 heap 供 console 内省。若后续接入 decision-trace metrics 快照即可接线。 */
+   * 标注为观测仪表盘 — 目前无代码消费者（getLogisticsDashboard 零调用），
+   * 保留在 heap 供 console 内省。 */
   logisticsDashboard?: import("../domain/logistics/dashboard").LogisticsDashboard;
   /** A4.3：Empire Logistics Health（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
@@ -224,8 +224,8 @@ export interface GlobalCache {
   logisticsIdleHaulers?: { tick: number; names: string[] };
   /** A4.4：Transport Accounting 运行时追踪（logistics-planner 每 100t 写入）。
    * 包含 summary 统计 + entries 每条 Request 的会计明细。
-   * 【WO-6 修复】标注为观测字段 — summary+entries 均无代码消费者，
-   * 保留在 heap 供 console 内省。若后续接入 decision-trace metrics 快照即可接线。 */
+   * 标注为观测字段 — summary+entries 均无代码消费者，
+   * 保留在 heap 供 console 内省。 */
   logisticsAccounting?: {
     tick: number;
     summary: {
@@ -295,19 +295,16 @@ export interface GlobalCache {
   recoveryStats?: import("../domain/strategy/recovery-lifecycle").RecoveryStats;
   /** A4.6：Recovery Before-State 快照（用于 Verification 的 Before/After 对比）。heap 存储。 */
   recoveryBeforeStates?: Map<string, import("../domain/strategy/recovery-lifecycle").RecoveryWorldSnapshot>;
-  /** A4.7：Decision Trace 缓存（Ring Buffer + Snapshot Registry + seq）。
-   * heap 存储 — global reset 丢失可接受（trace 是调试/可观测设施，非持久真相）。 */
-  __decisionTraceCache?: unknown;
   /** A5.1：per-tick 威胁评估结果（room-state 每 tick 对有威胁的自有房写入）。
    * key = roomName，value = ThreatAssessment。tower-defense / war-planner 消费。
    * heap 存储 — global reset 丢失可接受（下 tick 重建）。仅 threatCount > 0 的房有条目。 */
   threatAssessments?: Map<string, import("../domain/defense/threat-assessment").ThreatAssessment>;
   /** A5.1：per-tick 远矿防御决策结果（remote-mining-manager 按 interval 写入）。
-   * key = targetRoomName，value = RemoteDefenseDecision。供 decision-trace 消费。
+   * key = targetRoomName，value = RemoteDefenseDecision。诊断观测字段。
    * heap 存储 — global reset 丢失可接受。 */
   remoteDefenseDecisions?: Map<string, import("../domain/defense/remote-defense").RemoteDefenseDecision>;
   /** A5.3：per-interval 军事行动计划结果（war-planning-system 按 interval 写入）。
-   * 供 war-planner / decision-trace 消费。heap 存储 — global reset 丢失可接受。 */
+   * 供 war-planner 消费。heap 存储 — global reset 丢失可接受。 */
   warPlanCache?: { tick: number; plan: import("../domain/military/war-planning").WarPlan | undefined };
   /** A5.3：战争物流需求（war-planning-system 从 WarPlan.logisticsRequirement 提取写入）。
    * 供 logistics-planner 消费作为额外 demand node。heap 存储 — global reset 丢失可接受。 */
@@ -320,12 +317,6 @@ export interface GlobalCache {
     transport: number;
     replacement: number;
   };
-  /** A6.1：Experience Collector 缓存（Ring Buffer + seq + processedIds）。
-   * heap 存储 — global reset 丢失可接受（experience 是可观测设施，非持久真相）。 */
-  __experienceCache?: unknown;
-  /** A6.2：Strategy Evaluation 缓存（Ring Buffer + lastEvaluationTick）。
-   * heap 存储 — global reset 丢失可接受（evaluation 是可观测设施，非持久真相）。 */
-  __evaluationCache?: unknown;
   /** A5.3：战争止损信号（war-planner demobilize 时写入）。
    * 供 recovery-execution-system 消费，触发经济恢复动作。
    * A5.3.1 GAP-1 修复：recovery-execution-system 通过纯函数 mapAbortSignalsToRecoveryActions
@@ -338,7 +329,7 @@ export interface GlobalCache {
     sponsor: string;
     spawned: number;
     outcome: string;
-    /** A5.3 operationId（如果来自 A5.3 路径，供 Decision Trace 追踪）。 */
+    /** A5.3 operationId（如果来自 A5.3 路径，诊断关联用）。 */
     operationId?: string;
   };
 
@@ -365,62 +356,6 @@ export interface GlobalCache {
     decisionId?: string;
   };
 
-  // ── A6.3 Prediction Layer ──────────────────────────────────
-
-  /** A6.3：Prediction 缓存（PredictionRingBuffer + TimeSeries 集合 + seq）。
-   * heap 存储 — global reset 丢失可接受（prediction 是可观测设施，非持久真相）。
-   * PRED-001：预测层唯一可写的 globalCache 字段。 */
-  __predictionCache?: unknown;
-
-  /** A6.4：Calibration 缓存（CalibrationRingBuffer + profiles + failureStats）。
-   * heap 存储 — global reset 丢失可接受（calibration 是可观测设施，非持久真相）。
-   * CAL-001：校准层唯一可写的 globalCache 字段。 */
-  __calibrationCache?: unknown;
-
-  /** A6.3：CPU bucket 历史采样（寄生 empire-health-system 100t cadence）。
-   * 用于 CPU 压力预测（#7）。heap 存储 — global reset 后从空重建。
-   * 【WO-8 修复】采样器在跑但 prediction-system 不读此序列。待 A6.3 预测层
-   * 接入 #7 目标时接线，或在不使用预测时删除采样省 CPU。 */
-  __cpuBucketHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<number>;
-
-  /** A6.3：Spawn 队列深度历史采样（寄生 empire-health-system 100t cadence）。
-   * 用于孵化饥饿预测（#2）。heap 存储 — global reset 后从空重建。 */
-  __spawnQueueDepthHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<number>;
-
-  /** A6.3：物流健康度历史采样（寄生 empire-health-system 100t cadence）。
-   * 用于物流瓶颈预测（#3）。heap 存储 — global reset 后从空重建。
-   * 【WO-9 修复】采样器在跑但 prediction-system 不读此序列。待 A6.3 预测层
-   * 接入 #3 目标时接线，或在不使用预测时删除采样省 CPU。 */
-  __logisticsHealthHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<{
-    score: number;
-    deliveryRate: number;
-    lossRate: number;
-  }>;
-
-  /** A6.3：房间健康度历史采样（寄生 empire-health-system 100t cadence）。
-   * 用于房间崩溃预测（#4）。key = roomName, value = TimeSeries。
-   * heap 存储 — global reset 后从空重建。
-   * 【WO-10 修复】采样器在跑但 prediction-system 不读此序列。待 A6.3 预测层
-   * 接入 #4 目标时接线，或在不使用预测时删除采样省 CPU。 */
-  __roomHealthHistory?: Map<string, import("../domain/intelligence/prediction/time-series").TimeSeries<{
-    score: number;
-    level: string;
-  }>>;
-
-  /** A6.3：远矿收益历史采样（寄生 expansion-planner 100t cadence）。
-   * 用于远矿失败预测（#5）。heap 存储 — global reset 后从空重建。
-   * 【WO-11 修复】采样器在跑但 prediction-system 不读此序列。待 A6.3 预测层
-   * 接入 #5 目标时接线，或在不使用预测时删除采样省 CPU。 */
-  __remoteMiningHistory?: import("../domain/intelligence/prediction/time-series").TimeSeries<{
-    netIncome: number;
-    threatCount: number;
-  }>;
-
-  /** A6.6：Recommendation 缓存（RecommendationRingBuffer + lastRunTick）。
-   * heap 存储 — global reset 丢失可接受（recommendation 是可观测设施，非持久真相）。
-   * REC-001：Recommendation Engine 唯一可写的 globalCache 字段。 */
-  __recommendationCache?: unknown;
-
   /** E7: site 进度追踪 — 跨 tick 记录每个 site 的进度快照，用于检测长期无进展。
    * key = site id，value = { lastProgress, lastProgressTick, builderVisits }。
    * heap 存储 — global reset 丢失可接受（追踪数据是观测数据，reset 后重建）。 */
@@ -437,6 +372,27 @@ export interface GlobalCache {
     lastSuccessTick: number;
     consecutiveFailures: number;
   }>;
+
+  // ── Per-tick per-room shared find caches (roles layer) ──────────
+  // 角色层 per-tick 共享缓存：同房多 creep 共享一次 room.find 结果。
+  // 生命周期单 tick（tick 字段守卫）。global reset 后首 tick 重建。
+
+  /** 远矿房 container 列表（remote-hauler 共享）。 */
+  __remoteContainers?: Record<string, { tick: number; list: StructureContainer[] }>;
+  /** 远矿房掉落能量列表（remote-hauler 共享）。 */
+  __remoteDropped?: Record<string, { tick: number; list: Resource[] }>;
+  /** 房间内 hostile creep 列表（targeting + remote-defender 共享）。 */
+  __hostilesCache?: Record<string, { tick: number; creeps: Creep[] }>;
+  /** 远矿房 InvaderCore 列表（invader-core + core-clearer + reserver 共享）。 */
+  __remoteInvaderCore?: Record<string, { tick: number; cores: StructureInvaderCore[] }>;
+  /** 远矿房废墟列表（core-clearer 共享）。 */
+  __remoteRuins?: Record<string, { tick: number; list: Ruin[] }>;
+  /** 战争房敌方结构列表（attacker 共享）。 */
+  __warStructures?: Record<string, { tick: number; list: AnyStructure[] }>;
+  /** 战争房/PB 房 power bank（attacker 共享）。 */
+  __powerBanks?: Record<string, { tick: number; pb: StructurePowerBank | undefined }>;
+  /** PB 房掉落 power + 含 power 废墟（pb-collector 共享）。 */
+  __pbRoomCache?: Record<string, { tick: number; droppedPower: Resource[]; powerRuins: Ruin[] }>;
 }
 
 /**
