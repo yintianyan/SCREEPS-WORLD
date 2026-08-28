@@ -97,16 +97,27 @@ export const empireStrategySystem: System = {
     }
     recordPlanningTime("empire", 0.001);
 
-    // T3: Strategy Feedback 消费 — 读取评估偏差信号，调整姿态决策置信度
+    // T3: Strategy Feedback 消费 — 读取评估偏差信号，调整策略决策
     const feedback = getStrategyFeedback();
     if (feedback && feedback.underperformingDomains.length > 0) {
-      // 如果扩张域持续不达预期，收紧 expansionAllowed
+      // 如果扩张域持续不达预期，实际收紧 expansionAllowed
       if (feedback.underperformingDomains.includes("expansion") && result.expansionAllowed) {
-        log.info("empire-strategy", `strategy: expansion feedback — underperforming, tightening`,);
+        result.expansionAllowed = false;
+        log.info("empire-strategy", `strategy: expansion feedback — underperforming, expansion blocked`,);
       }
       // 如果战争域持续不达预期，收紧 war posture
       if (feedback.underperformingDomains.includes("war") && result.posture === "war") {
         log.info("empire-strategy", `strategy: war feedback — underperforming, consider de-escalation`,);
+      }
+      // 如果孵化域持续不达预期，记录诊断信号
+      if (feedback.underperformingDomains.includes("spawn")) {
+        log.info("empire-strategy", `strategy: spawn feedback — underperforming, spawn pipeline may need attention`,);
+      }
+    }
+    // T3: 超预期域可考虑加码（仅在健康姿态下）
+    if (feedback && feedback.overperformingDomains.length > 0 && result.posture === "develop") {
+      for (const domain of feedback.overperformingDomains) {
+        log.info("empire-strategy", `strategy: ${domain} feedback — overperforming, consider expansion`,);
       }
     }
     // T3: 回填上一轮 posture 期望（如果存在）— 通过 resolvePreviousPostureExpectation 处理
