@@ -162,9 +162,9 @@
 > segment 冷存（月级威胁记忆）+ §5 硬门槛查询。legacy `Memory.rooms[].intel`
 > 为**只读输入桥**（room-observer 写侧保持运行至消费者迁移 IntelQuery——迁移为
 > war 轨前置，两状态各自唯一写者不变）。A6 智能层 `intelligence-pipeline` /
-> `decision-trace` / `evaluation-system` 仍为 R11 裁决的 Shadow-Only 孤岛
-> （`src/domain/intelligence/`、`src/domain/strategy/decision-trace.ts`），本裁决
-> 不恢复之。详见 [INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0。
+> `decision-trace` / `evaluation-system` 已按 R11 裁决清理（B5，2026-08-29：
+> `src/domain/intelligence/`、`src/domain/strategy/decision-trace.ts` 已删除），
+> 本裁决不恢复之。详见 [INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0。
 
 | 项 | 契约 |
 | --- | --- |

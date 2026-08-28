@@ -21,7 +21,7 @@
 | 项 | 值 |
 | --- | --- |
 | 快照日期 | 2026-08-29 |
-| 基准 commit | `9731583`（dev 分支；本快照叠加重构 backlog B4 的工作树改动——注册数 32→33，详见 §6 B4） |
+| 基准 commit | `e7dc3ac`（dev 分支；本快照叠加重构 backlog B5 的工作树改动——Shadow-Only 清理 src 399→352 文件，详见 §6 B5） |
 | 运行模式 | 官方 Screeps World · TypeScript bot（`dist/main.js` 由 rollup 打包） |
 | 口径约定 | 概念模块 = SYSTEM_BOUNDARIES §1 的 15 模块；生产系统 = `bootstrap.ts` `registerSystem()` 实际注册项；源文件 = `src/systems/` 等实际文件。三者不是同一统计对象，不得互换 |
 
@@ -35,7 +35,7 @@
 | CpuTier 枚举 | **四档**：`healthy / guarded / conserve / recovery`（不存在第五档） | `src/kernel/contracts.ts` |
 | CpuTier bucket 阈值 | healthy 7000 / guarded 3000 / conserve 1000 / recovery 0（降级立即生效；恢复滞回 500 + 20 tick） | `src/config/index.ts` `CONFIG.cpu.tiers` |
 | Emergency Survival Mode | **设计态，未实现**（发布运行态规范，见 [implementation/RELEASE_GATE_AND_ROLLBACK.md](implementation/RELEASE_GATE_AND_ROLLBACK.md) §5.2；不是 CpuTier 成员） | — |
-| `src/` 规模 | 399 个 .ts / 103,906 行（kernel 19/5.5k、systems 41/19k、domain 260/66.5k、creeps 48/8k、telemetry 24/2.4k、config 4/1.6k、types 1/0.9k、根 2 文件） | 目录实测（刷新时重测） |
+| `src/` 规模 | 352 个 .ts / 87,064 行（kernel 19/5.3k、systems 41/19k、domain 213/49.6k、creeps 48/8k、telemetry 24/2.4k、config 4/1.6k、types 1/0.9k、根 2 文件；B5 清理 Shadow-Only 47 文件后实测） | 目录实测（刷新时重测） |
 | 市场成交唯一写者 | **TerminalManager**（`Game.market.deal` 唯一调用点；不存在 `MarketManager`） | `src/systems/terminal-manager.ts` |
 
 ## 3. 门禁结果（本快照 commit 实测）
@@ -43,9 +43,9 @@
 | 门禁 | 结果 |
 | --- | --- |
 | `npm run typecheck` | ✅ 0 error |
-| `npm test`（unit + integration） | ✅ 346 文件 / 5285 测试全绿（2026-08-29 实测 @ 基准 commit + B4 工作树；新增 2 文件 / 25 用例为 R14 情报架构测试） |
-| `npm run build` | ✅ `dist/main.js` 生成（8.9s） |
-| `npm run test:e2e` | ✅ smoke 3/3 通过（Node v24.18.0 实测；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致） |
+| `npm test`（unit + integration） | ✅ 322 文件 / 4666 测试全绿（2026-08-29 实测 @ B5 批 2；基线 346/5285 − 24 文件 / 619 用例为 B5 Shadow-Only 设计源码测试删除，逐一对应删除清单） |
+| `npm run build` | ✅ `dist/main.js` 生成（8.2s） |
+| `npm run test:e2e` | ✅ smoke 3/3 通过（Node v24.18.0 实测 @ B5；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致） |
 | `npm run check:docs` | ✅ 7 项文档一致性检查全过 |
 
 ## 4. 生产清单（15 概念模块 × 33 注册系统）
@@ -105,12 +105,11 @@
 | `src/systems/specialization-planner.ts` | empire-strategy（100t 相位门内调用） | 专业化规划（Opportunity 执行门控/远矿健康度/Supply Contract 维护）——原独立系统，B1 合并为 helper |
 | `src/systems/site-quota.ts` | construction-manager、remote-mining-manager、global-cache | site 配额共享实现 |
 
-**Shadow-Only（R11 裁决，不进生产 bundle、不被任何 src 文件导入）**：
-
-| 源码 | 内容 | 测试 | 处置 |
-| --- | --- | --- | --- |
-| `src/domain/intelligence/`（约 20 文件） | A6 智能层（attribution/baseline/calibration/experience/outcome/prediction/recommendation/reliability/strategy-evaluation/uoem） | `tests/unit/intelligence/*`——**只验证设计源码** | 后续分批清理；恢复须走新 ADR |
-| `src/domain/strategy/decision-trace.ts` | 决策追溯纯函数设计源码 | `tests/unit/strategy/a4-7-decision-trace.test.ts`——**只验证设计源码** | 同上 |
+**Shadow-Only（R11 裁决）——已清理（2026-08-29，B5）**：原孤岛 `src/domain/intelligence/`
+（46 文件，A6 智能层）与 `src/domain/strategy/decision-trace.ts` 已删除，仅验证设计源码的
+24 个测试文件（`tests/unit/intelligence/`、`tests/unit/phase37/closure/`、`tests/unit/calibration/`
+等）同步移除；src 无孤岛文件，bundle parity 守卫绿，`check:docs` 第 5 项继续守护已删文件
+不复活。恢复注册须走新 ADR（R14 裁决不恢复 A6 智能层）。
 
 > ⚠️ `tests/e2e/scenarios/11-decision-trace.test.ts` 断言生产运行日志出现 decision-trace
 > 输出；R11 后生产 bundle 无该模块与日志发射点，该 E2E 与 R11 冲突，在重定向或
@@ -121,7 +120,7 @@
 | 等级 | 当前状态 |
 | --- | --- |
 | Design-Verified | ✅ 十场景（Scenario A–J）+ 双红队闭合（冻结日 2026-08-23） |
-| Code-Verified | ✅ 基准 commit + B4 工作树：typecheck 0 error + 5285 测试全绿 + build 成功（§3） |
+| Code-Verified | ✅ 基准 commit + B5 工作树：typecheck 0 error + 4666 测试全绿 + build 成功 + smoke 3/3（§3） |
 | Integration-Verified | ◐ 单房私服链路有历史证据；多房/低 CPU 场景未覆盖（见 Blocked） |
 | Soak-Verified | ❌ **无当前版本 soak 证据**。旧数据集（sv=39 ≠ 当前 42）整体降级为 Historical Evidence 且 artifact 绑定待补（[CANARY_SOAK_PROCEDURE.md](implementation/CANARY_SOAK_PROCEDURE.md) §5） |
 | Release-Ready | ❌ 不满足（Soak-Verified 缺失 + 下列 Blocked 项） |
@@ -151,7 +150,7 @@
 | B2 | layout-planner D2 剩余下沉：`planStage0-3` 四个规划函数参数注入后下沉 `src/domain/layout/` | BLUEPRINT §5-3 | domain/layout 纯函数律 lint 绿；layout-planner 行数收敛至锚带 | ✅ 2026-08-28（四核下沉：`buildStage0PlanData`/`planCoreStage`/`planLogisticsStage`/`planSpawnRebuild`；layout-planner 1033→790 行；domain 纯函数律自检干净；四件套与 B1 同标准全绿） |
 | B3 | E2E-011（decision-trace）与 R11 对齐：重定向为遥测 outcome 断言或移除 | BLUEPRINT §5-13 | tests/e2e 无 R11 冲突断言；E2E 全套件可跑通 | ⏳ |
 | B4 | 情报架构 ADR 裁决：实现完整版（IntelState 唯一写者/segment/三分置信度）vs 登记生产简化版（`Memory.rooms[].intel`+lastSeen）为当前合同 | BLUEPRINT §5-14 | FREEZE §15 新 ADR 行 + 受影响文档同步标注 | ✅ 2026-08-29（**裁决：实现完整版**→ FREEZE R14：`intelligence` 系统注册 32→33，IntelState 唯一写者/三分置信度/TTL 分档/环形覆盖/玩家域 segment 冷存/硬门槛查询落地；legacy 桥只读并存，消费者迁移为 war 轨前置；新增 25 测试全绿） |
-| B5 | Shadow-Only 分批清理：`src/domain/intelligence/`（46 文件）+ `src/domain/strategy/decision-trace.ts` | FREEZE R11 · BLUEPRINT §5-11 | src 无孤岛文件；bundle parity 守卫绿；**前置依赖 B4 裁决**（选完整版则转恢复注册轨） | ⏳ 依赖 B4 |
+| B5 | Shadow-Only 分批清理：`src/domain/intelligence/`（46 文件）+ `src/domain/strategy/decision-trace.ts` | FREEZE R11 · BLUEPRINT §5-11 | src 无孤岛文件；bundle parity 守卫绿；**前置依赖 B4 裁决**（选完整版则转恢复注册轨） | ✅ 2026-08-29（**R14 裁决完整版落地但 A6 智能层不恢复（R14 原文），按清理轨执行**：src 孤岛 47 文件已删除（domain/intelligence 46 + decision-trace 1），测试侧删 24 文件 / 619 用例（channel-isolation 瘦身保留生产 outcome-channel 断言、a5-1 死 import 清理）；门禁全绿——typecheck 0 error、322 文件/4666 用例、build 成功、smoke 3/3 @Node24、compliance+bundle-parity 对新 dist 复跑绿、bundle 零 shadow 标记；契约文档 6 处同步） |
 | B6 | 验证轨启动（Blocked 项的执行编排，属代码/运行期，非纯重构）：低 CPU 私服 soak（触发 tier 降级链）→ global reset 注入 → sv=42 单房 soak 重跑 | STATUS §5 · CANARY §5 | §5 Blocked 前三项有当前版本证据；A1/A2 升级为 Code/Soak-Verified | ⏳ |
 | B7 | 情报消费者迁移：war-planner / expansion-manager / remote-mining-manager / power-farm-manager / prospect-manager / empire-strategy 从 legacy `Memory.rooms[].intel` 直读迁移到 IntelQuery 只读 API；迁移完成后 legacy 桥退役 | FREEZE R14 | 全部消费者走 IntelQuery；legacy `Memory.rooms[].intel` 写侧下线（schema 届时按迁移规范处理）；行为保持四件套 | ⏳ war 轨前置 |
 

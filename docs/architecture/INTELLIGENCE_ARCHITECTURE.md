@@ -17,17 +17,18 @@
 | 本文件 §1–§8 概念合同（Observation/Intel/Knowledge/Threat/Prediction/History、TTL、置信度、硬门槛） | **已实现核心（R14，2026-08-29）**：`intelligence` 系统（P2/10t）为 IntelState 唯一写者——三分置信度（来源信任 × 时效窗读侧派生）、TTL 分档 + expiry jitter、房间域 heap 活跃层（256 环形覆盖）、玩家域威胁记忆 segment 5 冷存（月级）、§5 硬门槛查询（`intelActionUsable`/`intelNeedsRescout`） |
 | 观察采集 | legacy `Memory.rooms[].intel` 只读输入桥采用（room-observer 写侧保持运行）+ 快照被动威胁信号；消费者迁移 IntelQuery 为 war 轨前置 |
 | segment 分片（§3） | 玩家域 segment 5 已落地；房间域 `intel-rooms-{hash}` 分片按规模触发（10+ 房）后启用（当前 heap 环形覆盖语义等价）；静态域由 `classifyRoomByName` 派生（inferred），市场域数据归市场系统所有 |
-| `intelligence-pipeline`（A6 智能层）、`decision-trace`、`evaluation-system` | **仍为 R11 裁决的 Shadow-Only**：`src/domain/intelligence/` 与 `src/domain/strategy/decision-trace.ts` 不进入生产 bundle；B5 分批清理（R14 不恢复之） |
-| 测试验证层级 | `tests/unit/intel/*` 验证 IntelState 领域模型（生产路径）；`tests/unit/intelligence/*` 只验证 A6 Shadow-Only 设计源码；E2E-011 冲突项见 backlog B3 |
+| `intelligence-pipeline`（A6 智能层）、`decision-trace`、`evaluation-system` | **已按 R11 裁决清理（2026-08-29，B5）**：`src/domain/intelligence/` 与 `src/domain/strategy/decision-trace.ts` 已删除（设计源码测试 24 文件同步移除）；R14 不恢复之，恢复须走新 ADR |
+| 测试验证层级 | `tests/unit/intel/*` 验证 IntelState 领域模型（生产路径）；原 `tests/unit/intelligence/*` 等设计源码测试已随 B5 清理删除；E2E-011 冲突项见 backlog B3 |
 
 **测试验证层级（防误读）**：
 
-- `tests/unit/intelligence/*`、`tests/unit/strategy/a4-7-decision-trace.test.ts`
-  ——验证 **Shadow-Only 设计源码**（`src/domain/intelligence/`、
-  `src/domain/strategy/decision-trace.ts`），通过不等于生产行为被验证；
+- 原 Shadow-Only 设计源码测试（`tests/unit/intelligence/*`、
+  `tests/unit/strategy/a4-7-decision-trace.test.ts` 等 24 文件）已随 B5 清理删除
+  （2026-08-29）；A6 智能层无生产实现亦无测试；
 - `tests/e2e/scenarios/11-decision-trace.test.ts`——断言生产运行日志中出现
   decision-trace 输出。R11 后生产 bundle 已无 decision-trace 模块与日志发射点，
-  **该 E2E 与 R11 冲突**，在按新 ADR 重定向或移除前不得作为生产行为证据引用。
+  **该 E2E 与 R11 冲突**，在按新 ADR 重定向或移除前不得作为生产行为证据引用
+  （backlog B3）。
 
 
 ## 1. 六概念合同

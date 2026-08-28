@@ -27,7 +27,7 @@ flowchart TD
 > IntelState 唯一写者（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）——
 > 图中 Intelligence 节点自 R14 起为生产现实。legacy `Memory.rooms[].intel` 为只读
 > 输入桥（消费者迁移 IntelQuery 为 war 轨前置）；A6 智能层
-> （intelligence-pipeline / decision-trace / evaluation-system）仍为 R11 Shadow-Only。
+> （intelligence-pipeline / decision-trace / evaluation-system）已按 R11 裁决清理删除（B5，2026-08-29）。
 
 感知流合同：
 

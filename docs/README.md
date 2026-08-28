@@ -35,7 +35,7 @@ IMPLEMENTATION_PHASES 迁移）；若蓝图未覆盖，以代码与内联注释�
 | 改建造 / 布局 | [CONSTRUCTION_ARCHITECTURE.md](architecture/CONSTRUCTION_ARCHITECTURE.md) |
 | 改远矿 / 扩张 | [EXPANSION_ARCHITECTURE.md](architecture/EXPANSION_ARCHITECTURE.md)、[PLANNING_ARCHITECTURE.md](architecture/PLANNING_ARCHITECTURE.md)（Agenda 契约） |
 | 改战争 / 防御 / 止损 | [MILITARY_ARCHITECTURE.md](architecture/MILITARY_ARCHITECTURE.md)、[DEFENSE_ARCHITECTURE.md](architecture/DEFENSE_ARCHITECTURE.md) |
-| 改情报 / 侦察 / intel | [INTELLIGENCE_ARCHITECTURE.md](architecture/INTELLIGENCE_ARCHITECTURE.md)（**R14 后** `intelligence` 系统为 IntelState 唯一写者，查询走其只读 API；A6 智能层 `intelligence-pipeline`/`decision-trace`/`evaluation-system` 仍为 Shadow-Only，恢复接线须走新 ADR，见该文件 §0） |
+| 改情报 / 侦察 / intel | [INTELLIGENCE_ARCHITECTURE.md](architecture/INTELLIGENCE_ARCHITECTURE.md)（**R14 后** `intelligence` 系统为 IntelState 唯一写者，查询走其只读 API；A6 智能层 `intelligence-pipeline`/`decision-trace`/`evaluation-system` 已按 R11/B5 清理删除，恢复须走新 ADR，见该文件 §0） |
 | 改 Agent/LLM 边界 | [AGENT_ARCHITECTURE.md](architecture/AGENT_ARCHITECTURE.md)、[LLM_BOUNDARY.md](architecture/LLM_BOUNDARY.md) |
 | 故障处置 / 自愈 / 告警 | [FAILURE_RECOVERY_ARCHITECTURE.md](architecture/FAILURE_RECOVERY_ARCHITECTURE.md) |
 | 写测试 / 发布门槛 | [TEST_ARCHITECTURE.md](architecture/TEST_ARCHITECTURE.md) |
