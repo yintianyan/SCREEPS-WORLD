@@ -33,13 +33,11 @@ import { powerFarmManagerSystem } from "./systems/power-farm-manager";
 import { agendaManagerSystem } from "./systems/agenda-manager";
 import { layoutPlannerSystem } from "./systems/layout-planner";
 import { logisticsSystem } from "./systems/logistics";
-import { logisticsPlannerSystem } from "./systems/logistics-planner";
 import { labSystem } from "./systems/lab-system";
 import { linkSystem } from "./systems/link-system";
 import { pixelSystem } from "./systems/pixel-system";
 import { prospectManagerSystem } from "./systems/prospect-manager";
 import { remoteMiningManagerSystem } from "./systems/remote-mining-manager";
-import { specializationPlannerSystem } from "./systems/specialization-planner";
 import { empireHealthSystem } from "./systems/empire-health-system";
 import { recoveryExecutionSystem } from "./systems/recovery-execution-system";
 import { warPlannerSystem } from "./systems/war-planner";
@@ -111,17 +109,16 @@ export const registry = new Registry()
   .registerSystem(spawnManagerSystem)
   // P0：塔防
   .registerSystem(towerDefenseSystem)
-  // P1：帝国姿态（先于战术消费者裁决扩张/收缩/备战）
+  // P1：帝国姿态（先于战术消费者裁决扩张/收缩/备战）；专业化规划
+  //   （Opportunity 执行门控 + Supply Contract 维护，每 100t 相位门）并入本系统
   .registerSystem(empireStrategySystem)
   // P1：帝国经济聚合（低频 100t——Empire Resource View / Health / Budget / Readiness）
   .registerSystem(empireEconomySystem)
   // P1：Agenda Manager（低频 100t——跨房调拨 Operation 生命周期管理）
   .registerSystem(agendaManagerSystem)
-  // P0：物流请求池（搬运 Demand 一等来源；先于 assignment-service 合并进任务槽）
+  // P0：物流请求池（搬运 Demand 一等来源；先于 assignment-service 合并进任务槽）。
+  //   帝国物流规划（TransportPlan/运力/健康度，每 100t 相位门）并入本系统
   .registerSystem(logisticsSystem)
-  // P1：Empire Logistics Planner（A4.3 — 低频 100t，domain 层纯函数薄壳；
-  //   在 agenda-manager 之后运行，消费 networkSnapshot 产出 TransportPlan）
-  .registerSystem(logisticsPlannerSystem)
   // P1：任务分配（先于 P1 角色）
   .registerSystem(assignmentSystem)
   // P1：link 能量传输（瞬移替代 hauler 往返）
@@ -132,8 +129,6 @@ export const registry = new Registry()
   .registerSystem(constructionManagerSystem)
   // P2：远矿管理（每 10 tick 评估目标）
   .registerSystem(remoteMiningManagerSystem)
-  // P1：专业化规划器（每 100 tick 消费 Opportunity + 评估经济健康度）
-  .registerSystem(specializationPlannerSystem)
   // P1：Empire Health（A4.5 — 低频 100t，综合 8 维度健康度 + Hysteresis +
   //   失败传播 + 恢复优先级 + 自治指标；在 specialization-planner 之后运行，
   //   消费 empireEconomy / logistics / network / colony 信号）

@@ -318,6 +318,9 @@ describe("R11 systems 间值导入审计", () => {
     "systems/tactical-runtime-pipeline.ts:systems/squad-movement-runtime.ts",
     "systems/tactical-runtime-pipeline.ts:systems/tactical-engagement-runtime.ts",
     "systems/tactical-runtime-pipeline.ts:systems/combat-micro-runtime.ts",
+    // 合并进父系统的规划模块（父系统内部门控调用，同架构单元编排）
+    "systems/logistics.ts:systems/logistics-planner.ts",
+    "systems/empire-strategy.ts:systems/specialization-planner.ts",
     // pipeline 内子阶段间的数据传递
     "systems/tactical-engagement-runtime.ts:systems/squad-movement-runtime.ts",
     "systems/combat-micro-runtime.ts:systems/tactical-engagement-runtime.ts",

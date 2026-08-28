@@ -1,6 +1,9 @@
 /** Empire Strategy */
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
+import { safeRun } from "../kernel/safe-run";
+import { systemPhase } from "../kernel/phase";
+import { runSpecializationPlanning } from "./specialization-planner";
 import {
   evaluateEmpirePosture,
   DEFAULT_POSTURE_OPTIONS,
@@ -25,6 +28,15 @@ const AGENDA_CODES: Record<string, number> = {
   "rcl-push": 2,
   develop: 3,
 };
+
+// ─── 专业化规划内部门控（原独立系统并入） ─────────────────
+// 原 specialization-planner 系统 interval=100；绝对相位门保持原调度节律
+// （父系统 interval=1 每 tick 运行，无 phase 交集问题）。其输入
+// networkSnapshot 来自 agenda-manager 的错峰写入，与原读取节律无同 tick
+// 交集，读取新鲜度与合并前一致。safeRun 独立标签保留原错误隔离边界；
+// canStart(P1) 复刻原预算车道语义。
+const SPEC_INTERVAL = 100;
+const SPEC_PHASE = systemPhase("specialization-planner", SPEC_INTERVAL);
 
 export const empireStrategySystem: System = {
   name: "empire-strategy",
@@ -200,6 +212,12 @@ export const empireStrategySystem: System = {
     // ── P1-3：环境画像 — 低频采样（每 100 tick），getAllOrders 是 CPU 大户 ──
     if (ctx.tick % 100 === 0) {
       sampleEnvironment(ctx);
+    }
+
+    // ── 专业化规划（并入的原独立系统，每 100t）──
+    // 独立 safeRun：其故障不得中断姿态求值主链。
+    if (ctx.tick % SPEC_INTERVAL === SPEC_PHASE && ctx.budget.canStart(1)) {
+      safeRun("specialization-planner", () => runSpecializationPlanning(ctx), false);
     }
   },
 };

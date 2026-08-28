@@ -1,7 +1,6 @@
-/** Logistics Planner 系统 */
-import type { Priority, System, TickContext, RoomSnapshot } from "../kernel/contracts";
+/** Logistics Planner — 帝国物流规划逻辑（由 logistics 系统内部门控调用） */
+import type { TickContext, RoomSnapshot } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
-import { CONFIG } from "../config";
 import {
   planLogistics,
   type PlannerInput,
@@ -57,14 +56,17 @@ const idleTicksByRoom = new Map<string, number>();
 // 每 100t 由 logistics-planner 从 Operation 状态同步 delivered/lost。
 const accountingByRequestId = new Map<string, TransportAccounting>();
 
-// ─── 系统定义 ─────────────────────────────────────────────
+// ─── 规划入口 ─────────────────────────────────────────────
 
-export const logisticsPlannerSystem: System = {
-  name: "logistics-planner",
-  priority: 1 as Priority,
-  interval: 100,
-
-  run(ctx: TickContext): void {
+/**
+ * 帝国物流规划： Supply Contract / 战争与战术需求注入 → 运力规划 →
+ * TransportPlan 产出 → Accounting 追踪 → 健康度 / 瓶颈 / 饥饿 / 闲置检测。
+ *
+ * 原 interval=100 的独立系统，合并后由 logistics 系统按
+ * `tick % 100 === systemPhase("logistics-planner", 100)` 门控调用，
+ * 调度节律与独立系统时期逐 tick 一致。
+ */
+export function runLogisticsPlanning(ctx: TickContext): void {
     // ── 1. 收集运行时数据 ──
     const snapshots = [...ctx.snapshots()];
 
@@ -247,8 +249,7 @@ export const logisticsPlannerSystem: System = {
         `capacity_gap=H${capacity.totalHaulerGap}/C${capacity.totalCarrierGap}, ` +
         `accounting=req=${accountingSummary.totalRequested}/del=${accountingSummary.totalDelivered}/lost=${accountingSummary.totalLost}`,);
     }
-  },
-};
+}
 
 // ─── 数据收集辅助函数 ─────────────────────────────────────
 

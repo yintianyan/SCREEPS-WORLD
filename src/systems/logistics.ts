@@ -2,6 +2,9 @@
 import type { System, TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
 import { EventKind, recordEvent } from "../kernel/event-log";
+import { safeRun } from "../kernel/safe-run";
+import { systemPhase } from "../kernel/phase";
+import { runLogisticsPlanning } from "./logistics-planner";
 import {
   applyShrink,
   buildTransportRequests,
@@ -26,6 +29,14 @@ interface RoomPoolState {
 const poolRooms = new Map<string, RoomPoolState>();
 
 const LATENCY_RING_CAP = 64;
+
+// ─── 帝国物流规划内部门控（原独立系统并入） ─────────────────
+// 原 logistics-planner 系统 interval=100；此处用绝对相位门保持原调度节律
+// （父系统 interval=1 每 tick 运行，不存在 phase.ts 相对门注释所述的
+// 「父相位与门取交集可能为空」问题）。safeRun 独立标签保留原错误隔离边界；
+// canStart(P1) 复刻原预算车道语义——预算耗尽时规划被跳过、物流核心照跑。
+const PLANNER_INTERVAL = 100;
+const PLANNER_PHASE = systemPhase("logistics-planner", PLANNER_INTERVAL);
 
 function stateFor(roomName: string): RoomPoolState {
   let st = poolRooms.get(roomName);
@@ -241,6 +252,15 @@ export const logisticsSystem: System = {
 
     // A3.0：empire scope 跨房调拨不再通过 transportPool — carrier 角色独立搬运，
     // 不走 hauler assignment 链。agenda-manager 直接提交 carrier spawn 请求。
+
+    // ── 帝国物流规划（并入的原独立系统，每 100t）──
+    // 时序合同：核心物流先跑（上方 V1/V2 去重读上一周期 Plan），规划后跑
+    // （覆写 logisticsPlan 供 agenda-manager / assignment 消费）——与合并前
+    // 「核心先行、规划随后」的跨系统读写序一致。规划独立 safeRun：其故障
+    // 不得中断 P0 物流核心。
+    if (ctx.tick % PLANNER_INTERVAL === PLANNER_PHASE && ctx.budget.canStart(1)) {
+      safeRun("logistics-planner", () => runLogisticsPlanning(ctx), false);
+    }
   },
 };
 

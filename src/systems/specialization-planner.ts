@@ -1,7 +1,6 @@
-/** Specialization Planner System */
+/** Specialization Planner — 专业化规划逻辑（由 empire-strategy 系统内部门控调用） */
 
-import { CONFIG } from "../config";
-import type { Priority, System, TickContext } from "../kernel/contracts";
+import type { TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
 import {
   filterWaitingExecution,
@@ -49,16 +48,14 @@ import {
 import { log } from "../kernel/log";
 
 /**
- * Specialization Planner System — P1, interval=100。
-
- * 每 100 tick 运行一次，消费 WAITING_EXECUTION Opportunities 并评估
- * 活跃远矿 Operation 的经济健康度。
+ * 专业化规划：消费 WAITING_EXECUTION Opportunities 并评估活跃远矿
+ * Operation 的经济健康度、维护 Supply Contract。
+ *
+ * 原 interval=100 的独立系统，合并后由 empire-strategy 系统按
+ * `tick % 100 === systemPhase("specialization-planner", 100)` 门控调用，
+ * 调度节律与独立系统时期逐 tick 一致。
  */
-export const specializationPlannerSystem: System = {
-  name: "specialization-planner",
-  priority: 1 as Priority,
-  interval: 100,
-  run(ctx: TickContext): void {
+export function runSpecializationPlanning(ctx: TickContext): void {
     // 1. 过期 Opportunities 清理
     const opportunities = getOpportunities();
     const freshOpps = expireStaleOpportunities(opportunities, ctx.tick);
@@ -113,8 +110,7 @@ export const specializationPlannerSystem: System = {
     // 4. 写回 Memory
     saveOpportunities(freshOpps);
     saveRemoteMiningOps(activeOps);
-  },
-};
+}
 
 // ─── Memory 读写辅助（系统侧薄壳独有）──────────────────
 

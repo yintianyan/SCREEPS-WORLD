@@ -142,7 +142,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | 9 | ~~角色层存在 `Room.find` / `Object.values(Game.creeps)` 违规~~ | 蓝图条款 ④ 禁止角色全房 find 和全局扫描 | ✅ 已收敛到 `creeps/support/room-scans.ts` |
 | 10 | ~~Kernel 直接 import 业务模块（room-snapshot / defense / pathfinding）~~ | 蓝图 §3.1 禁止 Kernel import 业务符号；唯一登记例外为 pruneDeadCreepCache | ✅ buildRoomSnapshot 通过 Registry 注入，classifyThreats 内联为 CONFIG 判定，MINCUT_ALGO_VERSION 改参数注入 |
 | 11 | `src/domain/intelligence/`（A6 智能层）与 `src/domain/strategy/decision-trace.ts` 为 Shadow-Only 孤岛 | R11 裁决：不进入生产 bundle、不被任何 src 文件导入；生产观察采集由 room-observer / prospect-manager 承担；后续分批清理，恢复注册须走新 ADR（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0） | ⏳ Shadow-Only 待清理 |
-| 12 | R10 批 3 有效合并未执行：specialization-planner→empire-strategy、logistics-planner→logistics（第三项 empire-health 合并已被 §5-4 ADR 取代，见 FREEZE R10 追记） | 批 3 完成后 `bootstrap.ts` 注册数 34→32 | ⏳ 重构 backlog B1 |
+| 12 | R10 批 3 有效合并未执行：specialization-planner→empire-strategy、logistics-planner→logistics（第三项 empire-health 合并已被 §5-4 ADR 取代，见 FREEZE R10 追记） | 批 3 完成后 `bootstrap.ts` 注册数 34→32 | ✅ 已完成（2026-08-28，B1：规划模块转为父系统内部门控 helper，行为保持四件套全绿） |
 | 13 | `tests/e2e/scenarios/11-decision-trace.test.ts` 断言生产日志出现 decision-trace 输出，与 R11 冲突（生产 bundle 已无该模块与日志发射点） | 按新 ADR 重定向（改为验证遥测 outcome 通道）或移除；重定向前不得作为生产行为证据 | ⏳ 重构 backlog B3 |
 | 14 | 蓝图情报架构（IntelState 唯一写者 / segment 冷存 / fact-stale-inferred 三分置信度）与生产简化版（分散 `Memory.rooms[].intel` + lastSeen 新鲜度）是两套实现 | 需一次 ADR 裁决：实现完整版，或登记简化版为当前合同（完整版降为 war 轨前置）。裁决前两套表述并存，以本行为准 | ⏳ 重构 backlog B4（裁决项） |
 
