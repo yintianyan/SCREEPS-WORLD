@@ -45,7 +45,7 @@
 | `npm run typecheck` | ✅ 0 error |
 | `npm test`（unit + integration） | ✅ 322 文件 / 4666 测试全绿（2026-08-29 实测 @ B5 批 2；基线 346/5285 − 24 文件 / 619 用例为 B5 Shadow-Only 设计源码测试删除，逐一对应删除清单） |
 | `npm run build` | ✅ `dist/main.js` 生成（8.2s） |
-| `npm run test:e2e` | ✅ smoke 3/3 通过（Node v24.18.0 实测 @ B5；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致） |
+| `npm run test:e2e` | ✅ 全套件 18 文件 / 54 用例全绿（2026-08-29 B3 实测 @Node v24.18.0，908s；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致） |
 | `npm run check:docs` | ✅ 7 项文档一致性检查全过 |
 
 ## 4. 生产清单（15 概念模块 × 33 注册系统）
@@ -111,9 +111,9 @@
 等）同步移除；src 无孤岛文件，bundle parity 守卫绿，`check:docs` 第 5 项继续守护已删文件
 不复活。恢复注册须走新 ADR（R14 裁决不恢复 A6 智能层）。
 
-> ⚠️ `tests/e2e/scenarios/11-decision-trace.test.ts` 断言生产运行日志出现 decision-trace
-> 输出；R11 后生产 bundle 无该模块与日志发射点，该 E2E 与 R11 冲突，在重定向或
-> 移除前不得作为生产行为证据（[INTELLIGENCE_ARCHITECTURE.md](architecture/INTELLIGENCE_ARCHITECTURE.md) §0）。
+> ~~tests/e2e/scenarios/11-decision-trace.test.ts 与 R11 冲突~~——已随 B3 移除（2026-08-29）：
+> 生产唯一 outcome 发射点为扩张完成路径，单房 E2E 场景不可达，重定向即空断言；
+> 通用长稳断言由 E2E-006（10000t）覆盖（[INTELLIGENCE_ARCHITECTURE.md](architecture/INTELLIGENCE_ARCHITECTURE.md) §0）。
 
 ## 5. 验证等级现状（等级定义见 [architecture/ARCHITECTURE_VALIDATION.md](architecture/ARCHITECTURE_VALIDATION.md) §0）
 
@@ -148,7 +148,7 @@
 | --- | --- | --- | --- | --- |
 | B1 | R10 批 3 有效合并：specialization-planner→empire-strategy、logistics-planner→logistics | FREEZE R10 追记 · BLUEPRINT §5-12 | 注册数 34→32 并经 §7 程序刷新 STATUS；行为保持四件套 | ✅ 2026-08-28（四件套：测试 344 文件/5260 用例与基线逐数一致、smoke 3/3 @Node24、合规测试含 R12 全绿、清单已刷新；相位核对 spec=16/logi-planner=4/agenda=72 两两错开，数据时序零漂移） |
 | B2 | layout-planner D2 剩余下沉：`planStage0-3` 四个规划函数参数注入后下沉 `src/domain/layout/` | BLUEPRINT §5-3 | domain/layout 纯函数律 lint 绿；layout-planner 行数收敛至锚带 | ✅ 2026-08-28（四核下沉：`buildStage0PlanData`/`planCoreStage`/`planLogisticsStage`/`planSpawnRebuild`；layout-planner 1033→790 行；domain 纯函数律自检干净；四件套与 B1 同标准全绿） |
-| B3 | E2E-011（decision-trace）与 R11 对齐：重定向为遥测 outcome 断言或移除 | BLUEPRINT §5-13 | tests/e2e 无 R11 冲突断言；E2E 全套件可跑通 | ⏳ |
+| B3 | E2E-011（decision-trace）与 R11 对齐：重定向为遥测 outcome 断言或移除 | BLUEPRINT §5-13 | tests/e2e 无 R11 冲突断言；E2E 全套件可跑通 | ✅ 2026-08-29（**裁决移除**——生产唯一 outcome 发射点为扩张完成路径，单房 E2E 场景不可达，重定向即空断言；通用长稳断言由 E2E-006（10000t，同断言更严）覆盖。全套件 18 文件 / 54 用例全绿 @Node v24.18.0（908s）；运行窗口内被移除的 11-decision-trace 文件记 1 个 failed suite 为删除工件，非测试失败） |
 | B4 | 情报架构 ADR 裁决：实现完整版（IntelState 唯一写者/segment/三分置信度）vs 登记生产简化版（`Memory.rooms[].intel`+lastSeen）为当前合同 | BLUEPRINT §5-14 | FREEZE §15 新 ADR 行 + 受影响文档同步标注 | ✅ 2026-08-29（**裁决：实现完整版**→ FREEZE R14：`intelligence` 系统注册 32→33，IntelState 唯一写者/三分置信度/TTL 分档/环形覆盖/玩家域 segment 冷存/硬门槛查询落地；legacy 桥只读并存，消费者迁移为 war 轨前置；新增 25 测试全绿） |
 | B5 | Shadow-Only 分批清理：`src/domain/intelligence/`（46 文件）+ `src/domain/strategy/decision-trace.ts` | FREEZE R11 · BLUEPRINT §5-11 | src 无孤岛文件；bundle parity 守卫绿；**前置依赖 B4 裁决**（选完整版则转恢复注册轨） | ✅ 2026-08-29（**R14 裁决完整版落地但 A6 智能层不恢复（R14 原文），按清理轨执行**：src 孤岛 47 文件已删除（domain/intelligence 46 + decision-trace 1），测试侧删 24 文件 / 619 用例（channel-isolation 瘦身保留生产 outcome-channel 断言、a5-1 死 import 清理）；门禁全绿——typecheck 0 error、322 文件/4666 用例、build 成功、smoke 3/3 @Node24、compliance+bundle-parity 对新 dist 复跑绿、bundle 零 shadow 标记；契约文档 6 处同步） |
 | B6 | 验证轨启动（Blocked 项的执行编排，属代码/运行期，非纯重构）：低 CPU 私服 soak（触发 tier 降级链）→ global reset 注入 → sv=42 单房 soak 重跑 | STATUS §5 · CANARY §5 | §5 Blocked 前三项有当前版本证据；A1/A2 升级为 Code/Soak-Verified | ⏳ |
