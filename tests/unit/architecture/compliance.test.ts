@@ -235,3 +235,63 @@ describe("R7 无循环依赖", () => {
     expect(cyclic, "circular dependency at " + cyclic).toBeUndefined();
   });
 });
+
+describe("R10 bootstrap 注册集合一致性", () => {
+  const bootstrapPath = resolve(SRC, "bootstrap.ts");
+  const bootstrapSrc = readFileSync(bootstrapPath, "utf8");
+
+  // 提取 registerSystem(...) 调用中的参数标识符
+  const systemCalls = [...bootstrapSrc.matchAll(/\.registerSystem\(\s*(\w+)\s*\)/g)].map(m => m[1]!);
+  // 提取 registerRole(...) 调用中的参数标识符
+  const roleCalls = [...bootstrapSrc.matchAll(/\.registerRole\(\s*(\w+)\s*\)/g)].map(m => m[1]!);
+
+  it("每个 registerSystem 参数都有对应 import 声明", () => {
+    const missing: string[] = [];
+    for (const ident of systemCalls) {
+      // 检查 bootstrap.ts 中是否有 import { ident } from "..." 声明
+      const re = new RegExp(`import\\s+[^{]*\\{[^}]*\\b${ident}\\b[^}]*\\}\\s+from\\s+["']`, "");
+      if (!re.test(bootstrapSrc)) {
+        missing.push(ident);
+      }
+    }
+    expect(missing, "registerSystem 参数无 import: " + missing.join(", ")).toHaveLength(0);
+  });
+
+  it("每个 registerRole 参数都有对应 import 声明", () => {
+    const missing: string[] = [];
+    for (const ident of roleCalls) {
+      const re = new RegExp(`import\\s+[^{]*\\{[^}]*\\b${ident}\\b[^}]*\\}\\s+from\\s+["']`, "");
+      if (!re.test(bootstrapSrc)) {
+        missing.push(ident);
+      }
+    }
+    expect(missing, "registerRole 参数无 import: " + missing.join(", ")).toHaveLength(0);
+  });
+
+  it("每个 import 的模块文件实际存在", () => {
+    const missing: string[] = [];
+    const importRe = /import\s+(?:type\s+)?[^{]*\{[^}]*\}\s+from\s+["'](\.\.\/[^"']+)["']/g;
+    let m: RegExpExecArray | null;
+    while ((m = importRe.exec(bootstrapSrc)) !== null) {
+      const spec = m[1]!;
+      const resolved = resolve(SRC, spec.replace(/^\.\.\//, "./"));
+      const tsFile = resolved + ".ts";
+      try {
+        readFileSync(tsFile, "utf8");
+      } catch {
+        missing.push(spec + " → " + relative(SRC, tsFile));
+      }
+    }
+    expect(missing, "import 目标文件不存在: " + missing.join(", ")).toHaveLength(0);
+  });
+
+  it("系统数量在合理范围内（30-40）", () => {
+    expect(systemCalls.length).toBeGreaterThanOrEqual(30);
+    expect(systemCalls.length).toBeLessThanOrEqual(40);
+  });
+
+  it("角色数量在合理范围内（15-25）", () => {
+    expect(roleCalls.length).toBeGreaterThanOrEqual(15);
+    expect(roleCalls.length).toBeLessThanOrEqual(25);
+  });
+});
