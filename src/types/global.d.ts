@@ -226,6 +226,10 @@ declare global {
     churnFreezeUntil?: Record<string, number>;
     buildQueue?: BuildTask[];
     lastRcl?: number;
+    /** room-state 维护：RCL 等级（变化检测用，与 layout-planner 的 lastRcl 独立）。 */
+    lastRclLevel?: number;
+    /** room-state 维护：RCL 等级变化 tick（期望自检 E5 停滞检测的年龄基准）。 */
+    lastRclChangeAt?: number;
     /** C2：邻居房情报（room-observer 每 50 tick 刷新，M7 远矿/扩张选址数据源）。 */
     intel?: Record<string, import("../domain/intel").RoomIntel>;
     layout?: {

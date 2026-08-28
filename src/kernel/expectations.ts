@@ -55,8 +55,8 @@ export interface RCLSnapshot {
   rcl: number;
   progress: number;
   progressTotal: number;
-  /** 最近一次 RCL 变化的 tick。 */
-  lastRclChange: number;
+  /** 最近一次 RCL 变化的 tick；undefined = 尚无观测基准（跳过检测）。 */
+  lastRclChange?: number;
   /** 是否有 upgrader 角色存活。 */
   hasUpgrader: boolean;
   /** storage 能量储备。 */
@@ -376,6 +376,7 @@ export function evaluateExpectations(input: {
   // E5 RCL 长期不增长（boot 宽限后生效）。
   if (bootAge >= P3_BOOT_GRACE_TICKS && input.rclSnapshots) {
     for (const rcl of input.rclSnapshots) {
+      if (rcl.lastRclChange === undefined) continue;
       const rclAge = input.tick - rcl.lastRclChange;
       if (rclAge > E5_STALE_TICKS) {
         // 误报保护：RCL8 不需要增长（已满级）

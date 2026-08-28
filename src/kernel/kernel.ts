@@ -444,7 +444,7 @@ export class Kernel {
         rcl: snap.rcl,
         progress: snap.controller?.progress ?? 0,
         progressTotal: snap.controller?.progressTotal ?? 0,
-        lastRclChange: roomMem?.lastRcl ?? 0,
+        lastRclChange: roomMem?.lastRclChangeAt,
         hasUpgrader: false, // 从 Game.creeps 遍历获取太重，用 expectation 诊断字段补偿
         storageEnergy: snap.storage?.store.energy ?? 0,
       });

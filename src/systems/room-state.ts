@@ -87,6 +87,13 @@ export const roomStateSystem: System = {
         }
       }
 
+      // 2.6b RCL 变更锚点：lastRclChangeAt 记录等级变化的 tick（期望自检 E5
+      // RCL 停滞检测的年龄基准；lastRclLevel 用于区分「变化」与「延续」）。
+      if (roomMem.lastRclLevel !== snapshot.rcl) {
+        roomMem.lastRclLevel = snapshot.rcl;
+        roomMem.lastRclChangeAt = ctx.tick;
+      }
+
       // 2.7 P0-1：storageDrainRate — 跨 tick storage 净流出率（E/tick），负值 = 流失。
       // 符号语义对齐 PhaseInput.storageDrainRate 与 DEFAULT_PHASE_OPTIONS.storageDrainThreshold=-2。
       const currentStorageEnergy = snapshot.storage

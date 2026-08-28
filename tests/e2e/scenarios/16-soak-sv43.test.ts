@@ -11,8 +11,10 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 
 const ROOM = "W0N1";
-const STAGE_TICKS = 5000;
-const STAGES = 4;
+// 深度 soak 由环境变量驱动（CANARY §5.1 要求 50,000+ tick；默认 4×5000=20k）。
+const STAGE_TICKS = Number(process.env.SOAK_STAGE_TICKS ?? 5000);
+const STAGES = Number(process.env.SOAK_STAGES ?? 4);
+const TOTAL_TICKS = STAGE_TICKS * STAGES;
 
 /** 判断日志行是否为 JS 错误。 */
 function isJsError(line: string): boolean {
@@ -32,7 +34,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
     await runner.setup({
       roomName: ROOM,
       rooms: [standardRoom(ROOM, 300, 1)],
-      maxTicks: STAGE_TICKS * STAGES + 1000,
+      maxTicks: TOTAL_TICKS + 1000,
     });
   }, 120000);
 
@@ -80,7 +82,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
 
       expect(
         finalRcl,
-        `20,000 tick 未完成 RCL1→2 晋级（rcl=${finalRcl}）`,
+        `${TOTAL_TICKS} tick 未完成 RCL1→2 晋级（rcl=${finalRcl}）`,
       ).toBeGreaterThanOrEqual(2);
       expect(
         totalErrors,
@@ -88,7 +90,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
       ).toBe(0);
 
       console.log(
-        `[soak-evidence] sv43-soak binding: schemaVersion=43 ticks=${STAGE_TICKS * STAGES} ` +
+        `[soak-evidence] sv43-soak binding: schemaVersion=43 ticks=${TOTAL_TICKS} ` +
           `room=${ROOM} rclFinal=${finalRcl} jsErrors=${totalErrors} ` +
           `collectedAt=${new Date().toISOString()}`,
       );

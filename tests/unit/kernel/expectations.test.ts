@@ -8,6 +8,7 @@ import {
   E3_RECOVERY_TICKS,
   type SpawnQueueSnapshot,
   type E3ViolationRecord,
+  E5_STALE_TICKS,
 } from "../../../src/kernel/expectations";
 
 const P3 = [{ name: "telemetry-collector", interval: 10 }];
@@ -333,5 +334,63 @@ describe("expectations — E3 spawn queue 持续非空", () => {
     expect(v).toBeDefined();
     expect(v!.detail).toContain("role=upgrader");
     expect(v!.detail).toContain("pri=2");
+  });
+});
+
+describe("expectations — E5 RCL 停滞", () => {
+  const BASE = {
+    tick: 100_000,
+    bootTick: 0,
+    statsLastSample: 100_000,
+    systemLastRun: {},
+    p3Systems: [],
+  };
+  const fresh = (lastRclChange: number | undefined, rcl = 3) => ({
+    room: "W1N1",
+    rcl,
+    progress: 0,
+    progressTotal: 135000,
+    lastRclChange,
+    hasUpgrader: false,
+    storageEnergy: 0,
+  });
+
+  it("无观测基准（lastRclChange undefined）→ 跳过检测（无数据 ≠ 停滞）", () => {
+    const r = evaluateExpectations({ ...BASE, rclSnapshots: [fresh(undefined)] });
+    expect(r.violations.some((v) => v.id.startsWith("rclStale:"))).toBe(false);
+  });
+
+  it("RCL 变化在阈值内 → 不违例", () => {
+    const r = evaluateExpectations({
+      ...BASE,
+      rclSnapshots: [fresh(BASE.tick - E5_STALE_TICKS + 100)],
+    });
+    expect(r.violations.some((v) => v.id.startsWith("rclStale:"))).toBe(false);
+  });
+
+  it("RCL 超阈值无增长 → rclStale 违例", () => {
+    const r = evaluateExpectations({
+      ...BASE,
+      rclSnapshots: [fresh(BASE.tick - E5_STALE_TICKS - 1)],
+    });
+    expect(r.violations.some((v) => v.id === "rclStale:W1N1")).toBe(true);
+  });
+
+  it("误报保护：RCL8 满级不判停滞", () => {
+    const r = evaluateExpectations({
+      ...BASE,
+      rclSnapshots: [fresh(BASE.tick - E5_STALE_TICKS - 1, 8)],
+    });
+    expect(r.violations.some((v) => v.id.startsWith("rclStale:"))).toBe(false);
+  });
+
+  it("boot 宽限期内不判停滞（相对 bootTick）", () => {
+    const r = evaluateExpectations({
+      ...BASE,
+      tick: P3_BOOT_GRACE_TICKS - 1,
+      bootTick: 0,
+      rclSnapshots: [fresh(0)],
+    });
+    expect(r.violations.some((v) => v.id.startsWith("rclStale:"))).toBe(false);
   });
 });
