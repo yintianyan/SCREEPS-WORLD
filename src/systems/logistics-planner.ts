@@ -31,20 +31,12 @@ import {
   summarizeAccounting,
   type TransportAccounting,
 } from "../domain/logistics/transport-accounting";
-import {
-  buildDashboard,
-  type LogisticsDashboard,
-} from "../domain/logistics/dashboard";
 import { detectBottleneck } from "../domain/logistics/bottleneck";
 import { detectStarvation } from "../domain/logistics/starvation";
 import {
   detectIdleHaulers,
   type HaulerIdleSummary,
 } from "../domain/logistics/idle-detection";
-import {
-  decideHaulerScaling,
-  type ScalingDecision,
-} from "../domain/logistics/hauler-scaling";
 import { log } from "../kernel/log";
 
 // ─── 路由缓存（heap，跨 tick 持久） ─────────────────────────
@@ -232,34 +224,16 @@ export const logisticsPlannerSystem: System = {
     }
 
     // ── 8. 扩缩编决策 ──
-    const scalingDecisions = new Map<string, ScalingDecision>();
-    for (const cap of capacity.rooms) {
-      const spawnAvailable = checkSpawnAvailable(snapshots.find(s => s.roomName === cap.room));
-      const economyPressure = getEconomyPressure(cap.room);
-      const idleTicks = idleTicksByRoom.get(cap.room) ?? 0;
-      scalingDecisions.set(cap.room, decideHaulerScaling(cap, spawnAvailable, economyPressure, idleTicks));
-    }
+    // 【WO-DEAD 已删除】logisticsScaling — 只写不读的观测字段，构建代码已清理。
 
     // ── 9. 构建 Dashboard ──
-    const haulers = collectHaulerCapacityInfo(snapshots);
-    const dashboard = buildDashboard(
-      plan.requests,
-      [], // assignments — 由执行层在运行时创建
-      plan.routes,
-      accounting,
-      haulers,
-      bottlenecks,
-      health,
-      ctx.tick,
-    );
+    // 【WO-DEAD 已删除】logisticsDashboard — 只写不读的仪表盘字段，构建代码已清理。
 
     // ── 10. 写入 globalCache 供下游消费 ──
     const g = globalCache();
     g.logisticsPlan = { tick: ctx.tick, plan };
-    g.logisticsDashboard = dashboard;
     g.logisticsHealth = health;
     g.logisticsCapacity = { tick: ctx.tick, result: capacity };
-    g.logisticsScaling = { tick: ctx.tick, decisions: Object.fromEntries(scalingDecisions) };
     g.logisticsIdleHaulers = { tick: ctx.tick, names: idleHaulerNames };
     // A4.4 修复 BYPASS-010：暴露 Accounting 到 globalCache 供 Observability 消费。
     g.logisticsAccounting = { tick: ctx.tick, summary: accountingSummary, entries: accounting };

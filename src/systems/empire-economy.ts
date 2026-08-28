@@ -315,8 +315,6 @@ export const empireEconomySystem: System = {
     // 写入 globalCache 供其他系统消费
     const g = globalCache();
     g.multiResourceHealth = multiHealth;
-    g.resourceBottlenecks = bottlenecks;
-    g.empireResourceLedger = empireLedger;
 
     // ── 写入 Memory 瘦快照 ──
     if (!Memory.kernel) Memory.kernel = {};

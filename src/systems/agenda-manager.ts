@@ -703,7 +703,6 @@ export const agendaManagerSystem: System = {
     // ── 19. 可观测性 ──
     const metrics = computeOperationMetrics(operations, ctx.tick);
     const g = globalCache();
-    g.agendaMetrics = metrics;
 
     // 存储 A3.1 可观测性数据
     g.networkSnapshot = finalSnapshot;

@@ -174,10 +174,7 @@ export interface GlobalCache {
   // 【F-DEAD-2 已删除】empireTransportRequests — A3.0 帝国级跨房调拨请求池
   // 连生产者都不存在（agenda-manager 不写、logistics 不读），只有 cache 槽位和
   // 文档描述。若 A3.0 帝国调拨进入路线图，须重新设计完整链路而非留假装存在的槽位。
-  /** A3.0：Agenda Manager 运行时指标快照（agenda-manager 每 100t 写入）。
-   * 标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
-   * 供 console 内省归因使用。 */
-  agendaMetrics?: import("../domain/operation/metrics").OperationMetrics;
+  // 【WO-DEAD 已删除】agendaMetrics — 只写不读的诊断字段，无消费者。
   /** A3.1：Resource Network Snapshot（agenda-manager 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   networkSnapshot?: import("../domain/operation/network-snapshot").NetworkSnapshot;
@@ -190,33 +187,20 @@ export interface GlobalCache {
   /** A4.2：多资源帝国健康度（empire-economy 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
   multiResourceHealth?: import("../domain/strategy/multi-resource-health").MultiResourceEmpireHealth;
-  /** A4.2：资源瓶颈排序列表（empire-economy 每 100t 写入）。
-   * 标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
-   * 供 console 内省归因使用。 */
-  resourceBottlenecks?: import("../domain/economy/bottleneck").BottleneckEntry[];
-  /** A4.2：帝国级 Resource Ledger（empire-economy 每 100t 写入）。
-   * 标注为诊断观测字段 — 目前无代码消费者，但保留在 heap 上
-   * 供 console 内省归因使用。 */
-  empireResourceLedger?: import("../domain/economy/resource-ledger").ResourceLedger;
+  // 【WO-DEAD 已删除】resourceBottlenecks — 只写不读的诊断字段，无消费者。
+  // 【WO-DEAD 已删除】empireResourceLedger — 只写不读的诊断字段，无消费者。
   /** A4.3：Empire Logistics Plan（logistics-planner 每 100t 写入）。
    * 包含 Transport Requests + Routes + 成本/时间/风险估算。
    * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
   logisticsPlan?: { tick: number; plan: import("../domain/logistics/transport-plan").TransportPlan };
-  /** A4.3：Empire Logistics Dashboard（logistics-planner 每 100t 写入）。
-   * 标注为观测仪表盘 — 目前无代码消费者（getLogisticsDashboard 零调用），
-   * 保留在 heap 供 console 内省。 */
-  logisticsDashboard?: import("../domain/logistics/dashboard").LogisticsDashboard;
+  // 【WO-DEAD 已删除】logisticsDashboard — 只写不读的仪表盘字段，无消费者。
   /** A4.3：Empire Logistics Health（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsHealth?: import("../domain/logistics/logistics-health").LogisticsHealthResult;
   /** A4.3：Empire Logistics Capacity（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsCapacity?: { tick: number; result: import("../domain/logistics/capacity-planning").EmpireCapacityResult };
-  /** A4.3：Hauler 扩缩编决策（logistics-planner 每 100t 写入）。
-   * key = roomName, value = ScalingDecision。
-   * 【WO-7 修复】标注为观测字段 — getScalingDecision 零调用方，
-   * 保留在 heap 供 console 内省。若后续接入 spawn-manager 扩缩编可接线。 */
-  logisticsScaling?: { tick: number; decisions: Record<string, import("../domain/logistics/hauler-scaling").ScalingDecision> };
+  // 【WO-DEAD 已删除】logisticsScaling — 只写不读的观测字段，无消费者。
   /** A4.3：闲置 hauler 名称列表（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsIdleHaulers?: { tick: number; names: string[] };

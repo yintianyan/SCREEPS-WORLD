@@ -1189,10 +1189,22 @@ export function flushSkips(): void {
   if (!Memory.kernel) Memory.kernel = {};
   if (!Memory.kernel.skipReasons) Memory.kernel.skipReasons = {};
 
+  // 防御性 key 数量上限：防止未知的动态 key 导致 Memory 膨胀。
+  // 现有调用方（role/system name）都是有限集合，但防御性编程要求不信任未来。
+  const MAX_SKIP_REASONS = 50;
+
   for (const [reason, count] of Object.entries(g.skipBuffer)) {
     // 累加但设上限，防止数字溢出。
     const current = Memory.kernel.skipReasons[reason] ?? 0;
     Memory.kernel.skipReasons[reason] = Math.min(current + count, 100000);
+  }
+
+  // 超过 key 数量上限时只保留计数最高的 MAX_SKIP_REASONS 个。
+  if (Object.keys(Memory.kernel.skipReasons).length > MAX_SKIP_REASONS) {
+    const sorted = Object.entries(Memory.kernel.skipReasons)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, MAX_SKIP_REASONS);
+    Memory.kernel.skipReasons = Object.fromEntries(sorted);
   }
   g.skipBuffer = {};
 
