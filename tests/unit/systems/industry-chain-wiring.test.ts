@@ -4,6 +4,7 @@ import { supplyLabs } from "../../../src/creeps/engine/actions/industry";
 import { computeLabDemands } from "../../../src/systems/lab-system";
 import { reclaimExpeditionCreeps } from "../../../src/systems/expansion-manager";
 import { syncTaskStates } from "../../../src/domain/construction/queue";
+import { syncSquadIndex } from "../../role-helpers";
 import type { LabPlan } from "../../../src/domain/industry/types";
 
 // ── 受限 store mock（复现引擎语义）────────────────────────────
@@ -287,6 +288,7 @@ describe("reclaimExpeditionCreeps — 扩张失败编队召回（TD-027）", () 
   it("拓荒者 home 改回 sponsor、标记 recycle、清空 remoteTarget/assignment", () => {
     const pioneer = { memory: { role: "worker", home: "W2N2", assignment: { id: "t1" } } as Record<string, unknown> };
     g.Game = { time: 100, creeps: { p1: pioneer } };
+    syncSquadIndex();
     reclaimExpeditionCreeps("W2N2", "W1N1");
     expect(pioneer.memory.home).toBe("W1N1");
     expect(pioneer.memory.recycle).toBe(true);
@@ -296,6 +298,7 @@ describe("reclaimExpeditionCreeps — 扩张失败编队召回（TD-027）", () 
   it("claimer（home=sponsor + remoteTarget=目标房）同样被召回", () => {
     const claimer = { memory: { role: "claimer", home: "W1N1", remoteTarget: "W2N2" } as Record<string, unknown> };
     g.Game = { time: 100, creeps: { c1: claimer } };
+    syncSquadIndex();
     reclaimExpeditionCreeps("W2N2", "W1N1");
     expect(claimer.memory.recycle).toBe(true);
     expect(claimer.memory.remoteTarget).toBeUndefined();
@@ -304,6 +307,7 @@ describe("reclaimExpeditionCreeps — 扩张失败编队召回（TD-027）", () 
   it("无关 creep 不受影响，sponsor 队列中目标房的 pending 请求被清除", () => {
     const local = { memory: { role: "hauler", home: "W1N1" } };
     g.Game = { time: 100, creeps: { h1: local } };
+    syncSquadIndex();
     reclaimExpeditionCreeps("W2N2", "W1N1");
     expect(local.memory).not.toHaveProperty("recycle", true);
     const queue = (Memory.rooms.W1N1 as { spawnQueue: { home: string }[] }).spawnQueue;

@@ -112,7 +112,7 @@ export function syncSquadIndex(): void {
   const creeps = (globalThis as any).Game?.creeps ?? {};
   for (const [name, creep] of Object.entries(creeps) as [string, any][]) {
     const mem = creep.memory ?? {};
-    if (!mem.remoteTarget && !mem.mission) continue;
+    if (!mem.remoteTarget && !mem.mission && !mem.home) continue;
     entries.push({
       name,
       role: mem.role ?? "unknown",

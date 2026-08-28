@@ -13,6 +13,7 @@ import {
   mockHostile,
   mockSnapshot,
   resetGlobals,
+  syncSquadIndex,
 } from "../../role-helpers";
 
 const g = (): any => globalThis as any;
@@ -335,6 +336,7 @@ describe("C-1/C-2 — expansion 状态机止损豁免", () => {
       name: "pioneer_1",
       memory: { role: "worker", home: "W9N9" },
     };
+    syncSquadIndex();
 
     expansionManagerSystem.run(mockContext(mockSnapshot(), mockBudget("healthy")));
 

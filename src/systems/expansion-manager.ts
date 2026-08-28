@@ -422,9 +422,8 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
       c.body.some(p => p.type === ATTACK || p.type === RANGED_ATTACK),
   });
   if (hostiles.length > 0) {
-    const squadAlive = Object.values(Game.creeps).some(
-      c => c.memory.home === expansion.target &&
-        (c.memory.role === "worker" || c.memory.role === "builder"),
+    const squadAlive = querySquad({ home: expansion.target }).some(
+      e => e.role === "worker" || e.role === "builder",
     );
     if (!squadAlive) {
       log.info("expansion",`[${ctx.tick}] expansion: ${expansion.target} squad wiped by hostiles, aborting`);
@@ -471,13 +470,9 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
   // 检查 harvester/物流活跃度。
   // Phantom Transporter Bug 修复：系统不存在 "transporter" 角色，实际运输由 hauler
   // 和 distributor 承担。此处检查 hauler 或 distributor 存在即为物流活跃。
-  const harvesterActive = Object.values(Game.creeps).some(
-    c => c.memory.home === expansion.target && c.memory.role === "harvester",
-  );
-  const logisticsActive = Object.values(Game.creeps).some(
-    c => c.memory.home === expansion.target &&
-      (c.memory.role === "hauler" || c.memory.role === "distributor"),
-  );
+  const harvesterActive = querySquad({ home: expansion.target, role: "harvester" }).length > 0;
+  const logisticsActive = querySquad({ home: expansion.target })
+    .some(e => e.role === "hauler" || e.role === "distributor");
 
   const spawns = targetRoom.find(FIND_MY_SPAWNS);
   const spawnCanSpawn = spawns.length > 0 && targetRoom.energyAvailable >= 300;
@@ -575,19 +570,13 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     energyConsumption: estimateEnergyConsumption(targetRoom),
     externalEnergyInflow: estimateExternalInflow(expansion.target, expansion.sponsor),
     consecutivePositiveTicks: expansion.consecutivePositiveTicks ?? 0,
-    hasHarvester: Object.values(Game.creeps).some(
-      c => c.memory.home === expansion.target && c.memory.role === "harvester",
-    ),
+    hasHarvester: querySquad({ home: expansion.target, role: "harvester" }).length > 0,
     // Phantom Transporter Bug 修复：检查 hauler 或 distributor 存在即为物流活跃。
     // 系统不存在 "transporter" 角色，实际运输由 hauler（源→sink）和
     // distributor（storage→sink）承担。
-    hasTransporter: Object.values(Game.creeps).some(
-      c => c.memory.home === expansion.target &&
-        (c.memory.role === "hauler" || c.memory.role === "distributor"),
-    ),
-    hasUpgrader: Object.values(Game.creeps).some(
-      c => c.memory.home === expansion.target && c.memory.role === "upgrader",
-    ),
+    hasTransporter: querySquad({ home: expansion.target })
+      .some(e => e.role === "hauler" || e.role === "distributor"),
+    hasUpgrader: querySquad({ home: expansion.target, role: "upgrader" }).length > 0,
     spawnActive: targetRoom.find(FIND_MY_SPAWNS).some(s => !s.spawning),
     tick: ctx.tick,
   };
@@ -923,13 +912,24 @@ function blacklistTarget(roomName: string, tick: number): void {
 }
 
 export function reclaimExpeditionCreeps(target: string, sponsor: string): void {
-  for (const creep of Object.values(Game.creeps)) {
-    const mem = creep.memory;
-    if (mem.home !== target && !(mem.remoteTarget === target && mem.role === "claimer")) continue;
-    mem.home = sponsor;
-    mem.remoteTarget = undefined;
-    mem.assignment = undefined;
-    mem.recycle = true;
+  // 回收远征队：home===target 的所有 creep + remoteTarget===target 的 claimer
+  for (const entry of querySquad({ home: target })) {
+    const creep = Game.creeps[entry.name];
+    if (!creep) continue;
+    creep.memory.home = sponsor;
+    creep.memory.remoteTarget = undefined;
+    creep.memory.assignment = undefined;
+    creep.memory.recycle = true;
+  }
+  // claimer 的 home 是 sponsor，remoteTarget 是 target — 需单独查
+  for (const entry of querySquad({ role: "claimer", remoteTarget: target })) {
+    const creep = Game.creeps[entry.name];
+    if (!creep) continue;
+    // claimer 的 home 可能已是 sponsor — 仍需清 remoteTarget + 标记 recycle
+    creep.memory.home = sponsor;
+    creep.memory.remoteTarget = undefined;
+    creep.memory.assignment = undefined;
+    creep.memory.recycle = true;
   }
   const queue = Memory.rooms[sponsor]?.spawnQueue;
   if (queue) cancelRequestsByHome(queue, target);
@@ -1116,10 +1116,8 @@ function submitPioneers(_ctx: TickContext, expansion: ExpansionState): void {
   const sponsorRcl = Game.rooms[expansion.sponsor]?.controller?.level ?? 4;
 
   const living: Record<string, number> = {};
-  for (const creep of Object.values(Game.creeps)) {
-    if (creep.memory.home !== expansion.target) continue;
-    const role = creep.memory.role;
-    living[role] = (living[role] ?? 0) + 1;
+  for (const entry of querySquad({ home: expansion.target })) {
+    living[entry.role] = (living[entry.role] ?? 0) + 1;
   }
 
   const squad: ReadonlyArray<{ role: string; count: number }> = [
@@ -1323,9 +1321,9 @@ function isDefenseCovered(ctx: TickContext, roomName: string): boolean {
 function estimateEnergyProduction(room: Room): number {
   const sources = room.find(FIND_SOURCES);
   // 每个 source 理论最大 10 energy/tick，实际取决于 harvester 数量
-  const harvesters = Object.values(Game.creeps).filter(
-    c => c.memory.home === room.name && c.memory.role === "harvester",
-  );
+  const harvesters = querySquad({ home: room.name, role: "harvester" })
+    .map(e => Game.creeps[e.name])
+    .filter((c): c is Creep => !!c);
   const harvesterParts = harvesters.reduce((sum, c) =>
     sum + c.body.filter(p => p.type === WORK).length, 0);
   // 每个 WORK 部件 5 energy/tick（减去移动消耗 1）
@@ -1364,21 +1362,18 @@ function estimateExternalInflow(targetRoom: string, sponsorRoom: string): number
 
   // 1. Resource Network 正常调拨 — carrier 角色跨房搬运
   //    carrier 的 home 是 sourceRoom（sponsor），remoteTarget 是 targetRoom
-  const carriers = Object.values(Game.creeps).filter(
-    c => c.memory.role === "carrier" &&
-      c.memory.remoteTarget === targetRoom &&
-      c.memory.home === sponsorRoom,
-  );
+  const carriers = querySquad({ role: "carrier", remoteTarget: targetRoom })
+    .map(e => Game.creeps[e.name])
+    .filter((c): c is Creep => !!c && c.memory.home === sponsorRoom);
   // 每个 carrier 的有效搬运量 ≈ carry capacity / 来回路程（简化 50/tick）
   inflow += carriers.length * 50;
 
   // 2. Bootstrap 输血 — Pioneer（worker/builder）从 sponsor 携带能量
   //    Pioneer 的 home 是 targetRoom，但在 sponsor 房被孵化并取能
-  const pioneers = Object.values(Game.creeps).filter(
-    c => c.memory.home === targetRoom &&
-      (c.memory.role === "worker" || c.memory.role === "builder") &&
-      c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
-  );
+  const pioneers = querySquad({ home: targetRoom })
+    .filter(e => e.role === "worker" || e.role === "builder")
+    .map(e => Game.creeps[e.name])
+    .filter((c): c is Creep => !!c && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
   // 每个 pioneer 携带的能量（一次性，不持续）— 仅在有 carrier 缺位时计入
   if (carriers.length === 0) {
     inflow += pioneers.length * 25; // 简化：每个 pioneer 平均 25 energy/tick
