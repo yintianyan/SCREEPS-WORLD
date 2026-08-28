@@ -100,6 +100,9 @@ export const enum EventKind {
    * 2=化合物/3=battery/4=基础矿物/5=能量), amount]；r = 抢救房名。
    * 接收房名见 console.log 明细（口径与 EnergyTransfer 对齐）。 */
   NukeSalvage = 34,
+  /** Emergency Survival Mode 进入/退出沿（Recovery 档内的紧急安全状态）。
+   * d = [direction(1=enter/0=exit)]；r = ""。 */
+  EmergencySurvival = 35,
   /** PB 野采任务收摊（野采链，审计缺口 2）：d = [reasonCode(0=done/1=attrition/
    * 2=timeout/3=war-preempt), spawned]；r = PB 目标房。开任务记 reasonCode=4。 */
   PowerFarmOutcome = 35,

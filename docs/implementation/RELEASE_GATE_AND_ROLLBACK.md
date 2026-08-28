@@ -200,7 +200,7 @@ collectedAt: 待补
 | Memory 状态 | 进入 / 退出各记一次遥测事件；**不新增 Memory schema 字段、不改变 CpuTier 持久化语义**（档位状态仍归四档看门狗的 Recovery 语义） |
 | 与 Recovery 的关系 | Recovery 是四档 CpuTier 的最低档；Emergency Survival 是 Recovery **之上**的再收缩层——包含关系，不是并列档位 |
 | 与人工灾难接管的边界 | 本状态持续超过接管阈值（bucket < 100 持续 500+ tick，§6.1）即升级为人工灾难接管信号；本状态是自动行为的下限，接管是人工动作 |
-| 实现状态 | **[Status: 设计态，未实现]** 当前代码（`CONFIG.cpu.tiers`、`scheduler.bucketToTier`）仅实现四档 CpuTier。实现前不得把「自动进入 Emergency Survival」描述为已发布能力；若实现涉及内核行为变化，须走 [ARCHITECTURE_FREEZE.md](../architecture/ARCHITECTURE_FREEZE.md) §15 登记 |
+| 实现状态 | **[Status: 已实现（R17，2026-08-29）]** 状态机在 `createBudget`（`bucket<100` 进入 / `≥500` 退出，带内保持）；`Budget.emergency` 旁路标志收缩允许集至 P0 车道 + harvester；进入/退出记 `EmergencySurvival` 遥测事件；无新增 Memory schema 字段。验证：scheduler 单测 + E2E-018 确定性注入全链 |
 
 ### 5.3 降级规则
 

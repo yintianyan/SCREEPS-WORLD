@@ -43,7 +43,7 @@
 | 门禁 | 结果 |
 | --- | --- |
 | `npm run typecheck` | ✅ 0 error |
-| `npm test`（unit + integration） | ✅ 324 文件 / 4674 测试全绿（2026-08-29 实测 @ B6 验证轨续：+p3-bypass-loop 整环集成 1 文件/1 用例、+E5 单测 5 用例） |
+| `npm test`（unit + integration） | ✅ 324 文件 / 4677 测试全绿（2026-08-29 实测：4674 + ESM 单测 3 用例；含 p3-bypass-loop 整环集成与 E5 单测） |
 | `npm run build` | ✅ `dist/main.js` 生成（8.1s） |
 | `npm run test:e2e` | ✅ 全套件 18 文件 / 54 用例全绿（2026-08-29 B7 实测 @Node v24.18.0，887s）＋B6 新增 E2E-015/016 soak 场景独立实测绿；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致 |
 | `npm run check:docs` | ✅ 7 项文档一致性检查全过 |
@@ -133,7 +133,7 @@
 - ✅ global reset 恢复实测：E2E-005 注入场景 @ sv43 全绿（2026-08-29）
 - ✅ tier 切换实测：四档全链 + 滞回爬升 @ sv43（E2E-015，此前历史 soak 全程 healthy）
 - ◐ 旧 soak 数据 schema 错位（sv=39 历史集为 Historical Evidence，代码 sv=43）：新深度 soak（50k+）继续积累 sv=43 证据
-- Emergency Survival Mode 未实现（设计态规范）
+- ✅ Emergency Survival Mode 已实现（R17，2026-08-29：createBudget 状态机 + P0 车道收缩 + E2E-018 注入全链验证；发现于 RELEASE_GATE §5.2 设计态规范的最后一项内核能力缺口）
 
 > 重构侧待办的唯一工作项清单见 §6 重构 backlog（B1–B6）；验证侧 Blocked 的执行
 > 顺序亦在该节统一编排。

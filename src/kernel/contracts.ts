@@ -82,6 +82,9 @@ export interface Budget {
   readonly tier: CpuTier;
   readonly softLimit: number;
   readonly hardLimit: number;
+  /** Emergency Survival Mode（Recovery 档内的紧急安全状态）：仅 P0 车道放行。
+   * undefined = 该 Budget 实现不感知 ESM（测试桩）。 */
+  readonly emergency?: boolean;
   canStart(priority: Priority): boolean;
   isExhausted(): boolean;
   spent(): number;

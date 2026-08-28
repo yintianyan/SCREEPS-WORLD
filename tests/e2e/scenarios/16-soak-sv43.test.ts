@@ -95,6 +95,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
           `collectedAt=${new Date().toISOString()}`,
       );
     },
-    1800000,
+    // 超时随深度走（实测 ~14ms/tick，留 2 倍余量）。
+    Math.max(1_800_000, TOTAL_TICKS * 30),
   );
 });

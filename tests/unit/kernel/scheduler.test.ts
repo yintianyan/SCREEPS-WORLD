@@ -228,3 +228,37 @@ describe("CpuBudget — 前馈预测 (P1-2)", () => {
     expect(budget.canStart(0 as Priority)).toBe(false);
   });
 });
+
+describe("Emergency Survival Mode — Recovery 档内的紧急安全状态（非第五档）", () => {
+  beforeEach(() => {
+    (globalThis as any).Game = {
+      time: 1000,
+      cpu: { limit: 20, tickLimit: 500, bucket: 0, getUsed: () => 0 },
+      creeps: {},
+      rooms: {},
+    };
+    (globalThis as any).Memory = { kernel: {} };
+  });
+
+  it("canStart：emergency 时仅 P0 放行，P1+ 全拒", () => {
+    const budget = new CpuBudget("recovery", true);
+    expect(budget.emergency).toBe(true);
+    expect(budget.canStart(0)).toBe(true);
+    expect(budget.canStart(1)).toBe(false);
+    expect(budget.canStart(2)).toBe(false);
+    expect(budget.canStart(3)).toBe(false);
+  });
+
+  it("非 emergency 的 recovery 档照常放行 P3（旁路仅 ESM 专属）", () => {
+    const budget = new CpuBudget("recovery", false);
+    expect(budget.emergency).toBe(false);
+    // recovery 档 tierMaxPriority 内的优先级不受 ESM 门影响。
+    expect(budget.canStart(0)).toBe(true);
+  });
+
+  it("CpuTier 枚举保持四档——ESM 不是档位成员", () => {
+    const tiers: CpuTier[] = ["healthy", "guarded", "conserve", "recovery"];
+    expect(tiers).toHaveLength(4);
+    expect(tiers).not.toContain("emergency" as unknown as CpuTier);
+  });
+});

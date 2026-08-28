@@ -675,6 +675,12 @@ export class Kernel {
     }
 
     for (const { creep, role } of creepEntries) {
+      // ESM：紧急安全状态下仅 harvester 最小采集（spawn 由 P0 系统承担，
+      // harvester 直采直填维持 spawn 能量线；其余角色全部让位）。
+      if (ctx.budget.emergency === true && role.name !== "harvester") {
+        recordSkip(`creep/${role.name}/emergency`);
+        continue;
+      }
       // 每房殖民地状态门禁：recovery/bootstrap 时允许 P0/P1（能量链），跳过 P2+。
       // 例外（R3a）：recovery/bootstrap 时允许角色自报的生存豁免（recoveryEligible）—
       // kernel 只读钩子，不再硬编码角色名（与 System recoveryEligible 同一模式）。

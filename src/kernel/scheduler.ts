@@ -1,4 +1,7 @@
 import { CONFIG, tierLimits, tierMaxPriority } from "../config";
+import { globalCache } from "./global-cache";
+import { log } from "./log";
+import { EventKind, recordEvent } from "./event-log";
 import type { Budget, CpuTier, Priority } from "./contracts";
 
 /** 各档位的 bucket 阈值（降级立即生效）。
@@ -85,9 +88,13 @@ export class CpuBudget implements Budget {
   readonly tier: CpuTier;
   readonly softLimit: number;
   readonly hardLimit: number;
+  /** Emergency Survival Mode（Recovery 档内的紧急安全状态，非第五档 CpuTier）：
+   * true 时仅 P0 车道放行。 */
+  readonly emergency: boolean;
 
-  constructor(tier: CpuTier) {
+  constructor(tier: CpuTier, emergency = false) {
     this.tier = tier;
+    this.emergency = emergency;
     const ratios = tierLimits(tier);
     // 有效 CPU 限制取 Game.cpu.limit 与 tickLimit 较小值：tickLimit 含 bucket 借用，
     // bucket 低位时可能临时低于 limit — 取较小值不透支当前 tick 真实预算。
@@ -113,6 +120,8 @@ export class CpuBudget implements Budget {
 
   canStart(priority: Priority): boolean {
     if (this.isExhausted()) return false;
+    // ESM：紧急安全状态下仅 P0 车道（spawn/快照/room-state/塔防/交通）放行。
+    if (this.emergency && priority > 0) return false;
     const max = tierMaxPriority(this.tier);
     if (priority > max) return false;
     // P0 始终尝试（必须保持廉价）。非 P0 遵守软上限。
@@ -163,6 +172,22 @@ export function createBudget(): Budget {
   const prevTier = Memory.kernel?.tier;
   const prevTicks = Memory.kernel?.recoveryTicks ?? 0;
 
+  // Emergency Survival Mode 状态机（Recovery 档内的再收缩层；进入 bucket<100、
+  // 退出 bucket≥500，保命态不做恢复滞回）。活动标志存 globalCache（heap 可重建，
+  // 不新增 Memory schema 字段）；进入/退出沿记遥测事件。
+  const gCache = globalCache();
+  const wasEmergency = gCache.emergencySurvival === true;
+  const emergency = wasEmergency ? bucket < 500 : bucket < 100;
+  if (emergency && !wasEmergency) {
+    gCache.emergencySurvival = true;
+    recordEvent(EventKind.EmergencySurvival, "kernel", [1]);
+    log.info("kernel", `emergency survival: ENTER (bucket=${bucket}) — P0 车道 + harvester 最小采集`);
+  } else if (!emergency && wasEmergency) {
+    gCache.emergencySurvival = false;
+    recordEvent(EventKind.EmergencySurvival, "kernel", [0]);
+    log.info("kernel", `emergency survival: EXIT (bucket=${bucket}) — 回 Recovery 常规语义`);
+  }
+
   // 自愿放血宽限：generatePixel 清零 bucket 后的窗口期内，
   // recovery 地板抬到 conserve（P2 经济角色照常运行）。
   const pixelAt = Memory.kernel?.pixelAt;
@@ -176,5 +201,5 @@ export function createBudget(): Budget {
   Memory.kernel.tier = tier;
   Memory.kernel.recoveryTicks = recoveryTicks;
 
-  return new CpuBudget(tier);
+  return new CpuBudget(tier, emergency);
 }
