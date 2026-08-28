@@ -47,7 +47,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | 1.12 Intelligence | System | `src/systems/room-observer.ts`＋`src/domain/intel.ts` | P2 | 2–3 文件 / 1k 行级 |
 | 1.13 Agenda 管理 | System | `src/systems/agenda-manager.ts`（复核纯函数在 `src/domain/strategy/`） | P2 | 2–3 文件 / 1k 行级 |
 | 1.14 Observability | System | `src/systems/telemetry-collector.ts`＋`src/kernel/telemetry.ts`（平台面） | P3＋P0 伴生 | 3–4 文件 / 1–2k 行 |
-| 1.15 Self-Healing | System | `src/systems/self-healing.ts`（处置表数据在 `src/domain/`，只读） | P1 | 2–3 文件 / 1k 行级 |
+| 1.15 Self-Healing | System | `src/systems/self-healing.ts`（概念性落点：实际由 `empire-health-system.ts` + `recovery-execution-system.ts` 协作实现，ADR 见 §5-4；处置表数据在 `src/domain/`，只读） | P1 | 2–3 文件 / 1k 行级 |
 | — domain Service 层 | Service | `src/domain/`（assignment / strategy / economy / spawn / construction / layout / defense / war / expansion / industry / remote / tuning / intel） | — | 合计 ~60 文件 / 11–13k 行 |
 | — 执行声明层 | — | `src/creeps/`（roles / support 合计） | — | 合计 ~25 文件 / 4–5k 行 |
 
@@ -129,7 +129,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | 1 | ~~`src/kernel/event-bus.ts` 存在~~ | 违反 KERNEL §1.1 否决清单（EventBus 中枢） | ✅ 已删除 |
 | 2 | ~~`src/systems/assignment-service.ts`~~ → `src/systems/assignment-system.ts` | 文件重命名：Service 后缀不准确（实现 System 接口并注册在 bootstrap）；纯函数已下沉 `domain/assignment/` | ✅ 已重命名 |
 | 3 | `src/systems/layout-planner.ts`（1033 行）与 `src/domain/layout/` 并存 | 布局纯函数归 `src/domain/layout/`，系统侧只留队列推进与 site 签发。D2 归位已完成 `makeTryAddTask`/`planHubRoads`/`shouldPlan`/`isPositionBuildable`/`findSpawnRelocationPosition` 五个函数下沉。`planStage0-3` 四个核心规划函数仍含 Game/Memory/globalCache 副作用，需进一步提取参数注入后下沉。 | ⏳ D2 归位部分完成 |
-| 4 | `src/systems/empire-health-system.ts`（435行）+ `recovery-execution-system.ts`（1083行） | 模块 1.15 蓝图落点为 `src/systems/self-healing.ts`。ADR 裁决：**保留分离**。两系统职责不同（empire-health=诊断/8维评估/失败传播图；recovery-execution=执行/spawn请求/任务抢占），各自有独立 CPU 节奏、状态所有权和降级序。合并为单文件将产生 1500+行巨文件，降低整洁度。蓝图落点 `self-healing.ts` 作为概念性容器，实际由两个系统协作实现。 | ✅ ADR 裁决保留分离 |
+| 4 | `src/systems/empire-health-system.ts`（435行）+ `recovery-execution-system.ts`（1083行） | 模块 1.15 蓝图落点为 `src/systems/self-healing.ts`（概念性落点）。ADR 裁决：**保留分离**。两系统职责不同（empire-health=诊断/8维评估/失败传播图；recovery-execution=执行/spawn请求/任务抢占），各自有独立 CPU 节奏、状态所有权和降级序。合并为单文件将产生 1500+行巨文件，降低整洁度。蓝图落点 `self-healing.ts` 作为概念性容器，实际由两个系统协作实现。 | ✅ ADR 裁决保留分离 |
 | 5 | `src/kernel/` 含 ring-buffer / event-log 等待归类部件 | 属平台组设施，保留在 kernel 但须在八项之外登记为「内核部件」，不承载业务语义 | ⏳ 部分已清理 |
 | 6 | `src/kernel/decision-trace.ts` 已删除 | 原属内核部件；删减式重构移除后未同步更新本表 | ✅ 已删除 |
 | 7 | `src/telemetry/EvaluationRegistry.ts` 已删除 | 原属遥测管线；删减式重构移除 evaluation-system 后遥测 barrel 不再导出 | ✅ 已删除 |

@@ -1,9 +1,10 @@
 # RESEARCH_INDEX · Phase 0 研究文档索引
 
-> Phase 1 第一步：完整消化 Phase 0 的 35 份研究文档（[docs/research/](../research/)，
+> Phase 1 第一步：完整消化 Phase 0 的 34 份研究文档（[docs/research/](../research/)，
 > 提交 f4d5fa3）后的结构化索引。列为：Topic / Key Findings / Important Decisions /
 > Conflicts（与其他研究文档或社区实践的冲突）。本文是 Phase 1 综合与调和的输入，
-> 不是新的研究结论。
+> 不是新的研究结论。**计数口径**：`docs/research/` 目录内全部 .md 文件（含 README，
+> 即 00–30 主题 31 份 + ADR + 来源台账 + README = 34）；全仓索引引用同一口径。
 
 ## A. 生态与事实层
 

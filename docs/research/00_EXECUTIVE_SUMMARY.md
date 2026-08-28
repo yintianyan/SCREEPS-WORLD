@@ -3,8 +3,10 @@
 > 总任务书（Screeps AI Empire 前期调研与总体架构研究）执行产物。
 > 执行日：2026-08-22。执行方式：Phase 0 全量调研（官方机制引擎常量级核查 +
 > 7 家 bot 源码级考古 + 社区经验挖掘 + 冲突裁决）→ 架构设计与 ADR → 红队评审
-> → 修订闭环。**顶层答案见 [../RESEARCH_EXECUTIVE_SUMMARY.md](../RESEARCH_EXECUTIVE_SUMMARY.md)
-> （只回答「今天开始开发该采用什么架构」的 14 点）**；本文是套件导航与结论索引。
+> → 修订闭环。**顶层答案见现行执行摘要（15 问）
+> [../architecture/ARCHITECTURE_EXECUTIVE_SUMMARY.md](../architecture/ARCHITECTURE_EXECUTIVE_SUMMARY.md)**；
+> Phase 0 时代的「今天开始开发该采用什么架构」14 点历史稿已迁出仓库
+> （`tmp/docs-moved/RESEARCH_EXECUTIVE_SUMMARY.md`，不入库）。本文是套件导航与结论索引。
 
 ## 1. 总结论（三句话）
 

@@ -12,6 +12,7 @@
     "watch": "rollup -c -w",
     "deploy": "node tools/official/deploy-screeps.js",
     "typecheck": "tsc --noEmit",
+    "check:docs": "node scripts/check-docs-consistency.mjs",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration --testTimeout=60000",

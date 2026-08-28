@@ -133,10 +133,10 @@ KERNEL §7.2；红队 A12）。
 | 8 反馈（遥测 / 自愈 / 调参） | ⑨⑩ |
 
 差异说明：八步的「感知」被拆出 Kernel 启动相位（迁移与看门狗必须先于一切）；
-「反馈」被拆出写回相位（segment 异步语义要求请求先于读取一个 tick）。实现层
-（[RUNTIME_IMPLEMENTATION.md](../implementation/RUNTIME_IMPLEMENTATION.md) §1 的
-segments-request 前置形态）与本序的差异属实现顺序登记：蓝图要求**请求在 ⑩ 发出、
-① 读取**，任何「请求即读」的形态都违反 segment 异步合同。
+「反馈」被拆出写回相位（segment 异步语义要求请求先于读取一个 tick）。实现层的
+segments-request 前置形态（`src/kernel/segment-store.ts`：请求先于迁移执行，
+reset 首 tick segment 未加载时守卫等待）与本序的差异属实现顺序登记：蓝图要求
+**请求在 ⑩ 发出、① 读取**，任何「请求即读」的形态都违反 segment 异步合同。
 
 ## 4. 一致性声明
 

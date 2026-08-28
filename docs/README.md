@@ -6,6 +6,7 @@
 
 | 层 | 位置 | 性质 | 真相源地位 |
 | --- | --- | --- | --- |
+| **当前实现状态** | [STATUS.md](STATUS.md) | 现状快照（系统注册数、schemaVersion、CpuTier、规模、门禁结果、验证等级、Blocked 项） | **当前实现状态唯一入口**：全仓状态类数字从这里引用，其他文档不得另存手写快照 |
 | **架构蓝图（冻结契约）** | [architecture/](architecture/) | Phase-1 冻结蓝图（36 份，2026-08-23 重执行）：合同体裁，结构裁决见 [ARCHITECTURE_FREEZE.md](architecture/ARCHITECTURE_FREEZE.md)（§15=唯一修订通道） | 已冻结领域以蓝图为目标、代码为待迁移现状（差距与迁移见 [IMPLEMENTATION_PHASES.md](architecture/IMPLEMENTATION_PHASES.md)；现状登记见 [ENGINEERING_BLUEPRINT.md](architecture/ENGINEERING_BLUEPRINT.md) §5） |
 | 调研存档 | [research/](research/) | Phase-0 调研（2026-08-22 重执行：官方机制引擎常量级核查 + 7 家 bot 源码考古 + 社区经验 + 双红队），导航 [research/00_EXECUTIVE_SUMMARY.md](research/00_EXECUTIVE_SUMMARY.md) | 证据链，不直接裁决实现；机制数值以 [research/03_SCREEPS_GAME_CONSTRAINTS.md](research/03_SCREEPS_GAME_CONSTRAINTS.md) 为单一真相源 |
 裁决规则：**蓝图与代码冲突时，若该领域蓝图已冻结则以蓝图为目标（代码按
@@ -15,6 +16,7 @@ IMPLEMENTATION_PHASES 迁移）；若蓝图未覆盖，以代码与内联注释�
 
 | 触发场景 | 阅读 |
 | --- | --- |
+| 当前跑的是什么 / 验证到什么等级 / Blocked 项 | [STATUS.md](STATUS.md) |
 | 总览 / 冻结契约 / 15 问 | [ARCHITECTURE_EXECUTIVE_SUMMARY.md](architecture/ARCHITECTURE_EXECUTIVE_SUMMARY.md)、[ARCHITECTURE_FREEZE.md](architecture/ARCHITECTURE_FREEZE.md)、[EMPIRE_ARCHITECTURE.mmd](architecture/EMPIRE_ARCHITECTURE.mmd) |
 | 概念语义（Goal/Policy/Demand/Task/Agenda…17 概念） | [EMPIRE_SYSTEM_MODEL.md](architecture/EMPIRE_SYSTEM_MODEL.md)、[GOAL_POLICY_PLAN_MODEL.md](architecture/GOAL_POLICY_PLAN_MODEL.md) |
 | 谁有权决定什么 / 冲突裁决 | [DECISION_AUTHORITY_MODEL.md](architecture/DECISION_AUTHORITY_MODEL.md) |

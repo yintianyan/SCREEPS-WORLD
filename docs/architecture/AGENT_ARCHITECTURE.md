@@ -53,7 +53,7 @@ Q1 是判据本体；Q2/Q3 是辅助鉴别——「聪明的启发式」「自�
 | **帝国战略层**（posture×budget 决策器，Policy 纯函数载体） | **受限 Agent（全系统唯一）** | 唯一拥有目标选择权（peace/fortify/war、扩张/收缩、预算分配）；本身是确定性纯函数，同输入同输出 |
 | Kernel（调度/隔离/预算/迁移四职能） | 确定性系统 | 维护运行秩序，不感知目标（见 KERNEL_ARCHITECTURE） |
 | Agenda 管理器（AgendaItem 生命周期） | 确定性系统 | 只执行创建/复核/取消规则；目标已由战略层选定 |
-| 各 System（spawn/物流/建造/远矿/防御/战争执行/市场/intel/交通/房间系统） | 确定性系统 | 全部是「如何执行既定目标」；唯一写者们管理独占写权（SpawnManager/ConstructionManager/RemoteMiningManager/MarketManager——Manager 仅保留给唯一写者资源代理，调和 §5） |
+| 各 System（spawn/物流/建造/远矿/防御/战争执行/市场/intel/交通/房间系统） | 确定性系统 | 全部是「如何执行既定目标」；唯一写者们管理独占写权（SpawnManager/ConstructionManager/RemoteMiningManager/TerminalManager——Manager 仅保留给唯一写者资源代理，调和 §5） |
 | RolePolicy / creep | 确定性执行器 | 声明式策略驱动的 FSM；无目标选择、无 spawn 请求权、无全房扫描权 |
 | 分配服务（评分认领/租约绑定） | 确定性系统 | 查表+排序；合同网的去协商化形态 |
 | 自愈监视 | 确定性系统 | 签名→处置表查表，不做猜测性修复（research/22） |

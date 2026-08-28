@@ -2,13 +2,17 @@
 
 本目录是文档三层体系中的**调研存档层**：证据链，不直接裁决实现（裁决规则见
 [../README.md](../README.md)）。本套件为总任务书「Screeps AI Empire 前期调研与
-总体架构研究」的完整执行产物（34 份文档），全部基于当轮真实网络调研（官方文档
-与引擎常量交叉核查 + 7 家 bot 源码级考古 + 社区经验挖掘），未沿用历史存档结论。
+总体架构研究」的完整执行产物（34 份文档；计数口径 = 目录内全部 .md 文件含本
+README：00–30 主题 31 份 + ADR + 来源台账 + README），全部基于当轮真实网络调研
+（官方文档与引擎常量交叉核查 + 7 家 bot 源码级考古 + 社区经验挖掘），未沿用历史
+存档结论。**本目录只作历史证据，不承担当前实现合同**（现状以
+[../STATUS.md](../STATUS.md) 与 `docs/architecture/` 为准）。
 
 ## 入口
 
 - **导航与总结论**：[00_EXECUTIVE_SUMMARY.md](00_EXECUTIVE_SUMMARY.md)
-- **「今天开始开发用什么架构」（14 点）**：[../RESEARCH_EXECUTIVE_SUMMARY.md](../RESEARCH_EXECUTIVE_SUMMARY.md)
+- **现行执行摘要（15 问）**：[../architecture/ARCHITECTURE_EXECUTIVE_SUMMARY.md](../architecture/ARCHITECTURE_EXECUTIVE_SUMMARY.md)
+  （Phase 0 时代的「今天开始开发用什么架构」14 点历史稿已迁出仓库至 `tmp/docs-moved/`，不入库）
 - **最终架构**：[26_FINAL_ARCHITECTURE.md](26_FINAL_ARCHITECTURE.md)
 - **裁决记录**：[ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)（ADR-001…012）
 - **机制事实基准**：[03_SCREEPS_GAME_CONSTRAINTS.md](03_SCREEPS_GAME_CONSTRAINTS.md)

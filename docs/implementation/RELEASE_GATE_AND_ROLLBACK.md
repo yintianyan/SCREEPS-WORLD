@@ -10,26 +10,32 @@
 
 ### 1.1 强制命令序列
 
+**Canonical gate（canonical 门禁，任何发布必须全绿）= ② typecheck + ③ `npm test` + ⑥ build**
+（与 AGENT.md 质量门槛一致）。④⑤ 是 canonical 门禁的**子集补充检查**（unit /
+integration 分层定位失败来源，不构成额外门禁，也不得用其通过替代 ③ 的全量口径）；
+⑦ E2E 按变更范围执行（其自身会再次触发 build，重复耗时属于已知成本）。
+
 ```bash
 # 1. Node 版本检查（必须 v24+）
 node --version
 
-# 2. 类型检查（0 error）
+# 2. 类型检查（0 error）【canonical gate】
 npm run typecheck
 
-# 3. 全量单元测试
+# 3. 全量单元测试（= test:unit + test:integration 的全集，vitest 默认配置）【canonical gate】
 npm test
 
-# 4. 单元测试子集
+# 4. 单元测试子集（补充检查：定位失败层，不替代 ③）
 npm run test:unit
 
-# 5. 集成测试
+# 5. 集成测试（补充检查：定位失败层，不替代 ③）
 npm run test:integration
 
-# 6. 构建
+# 6. 构建【canonical gate】
 npm run build
 
-# 7. E2E 测试（如果修改了 E2E 或核心路径）
+# 7. E2E 测试（按变更范围执行：修改了 E2E / 核心路径 / 发布级变更时必跑；
+#    会先再次触发 build）
 npm run test:e2e
 ```
 
