@@ -38,7 +38,8 @@ export interface ObjectSpec {
     | "rampart"
     | "wall"
     | "link"
-    | "constructedWall";
+    | "constructedWall"
+    | "terminal";
   x: number;
   y: number;
   /** 对象属性，如 source 的 energy/energyCapacity，controller 的 level */

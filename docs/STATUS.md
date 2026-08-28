@@ -43,7 +43,7 @@
 | 门禁 | 结果 |
 | --- | --- |
 | `npm run typecheck` | ✅ 0 error |
-| `npm test`（unit + integration） | ✅ 324 文件 / 4677 测试全绿（2026-08-29 实测：4674 + ESM 单测 3 用例；含 p3-bypass-loop 整环集成与 E5 单测） |
+| `npm test`（unit + integration） | ✅ 324 文件 / 4677 测试全绿（2026-08-29 实测：含 p3-bypass-loop 整环集成、E5 单测 5 例、ESM 单测 3 例） |
 | `npm run build` | ✅ `dist/main.js` 生成（8.1s） |
 | `npm run test:e2e` | ✅ 全套件 18 文件 / 54 用例全绿（2026-08-29 B7 实测 @Node v24.18.0，887s）＋B6 新增 E2E-015/016 soak 场景独立实测绿；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致 |
 | `npm run check:docs` | ✅ 7 项文档一致性检查全过 |
@@ -128,7 +128,7 @@
 **Blocked 项登记**（不得描述为已发布能力；B6 验证轨 2026-08-29 启动后状态）：
 
 - ◐ RCL1→8 私服 soak 覆盖：sv=43 已实测 RCL1→4（E2E-016 深度档 60k tick）；RCL5→8 待更长程 soak
-- ◐ 多房私服 soak：双自有房并行 + spawn 竞争 + 一房全灭故障隔离已实测（E2E-017 @ sv=43）；claim 授权全链、terminal 互济、site quota 极限注入待继续
+- ◐ 多房私服 soak：双自有房并行 + spawn 竞争 + 一房全灭故障隔离已实测（E2E-017）；terminal 决策权语义已锁定（E2E-019：Plan 活跃压制 self-aid）；claim 授权全链、Plan 驱动互济证据、site quota 极限注入待继续
 - ◐ 低 CPU 私服 soak：四档 tier 降级链 + bucket 逼近枯竭已实测（E2E-015）；P3 饥饿旁路 E2 整环闭环已实测（p3-bypass-loop，2026-08-29）——仅剩 E2 触发的自然 soak 窗口证据
 - ✅ global reset 恢复实测：E2E-005 注入场景 @ sv43 全绿（2026-08-29）
 - ✅ tier 切换实测：四档全链 + 滞回爬升 @ sv43（E2E-015，此前历史 soak 全程 healthy）
