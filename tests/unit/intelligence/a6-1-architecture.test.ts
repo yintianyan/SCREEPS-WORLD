@@ -82,15 +82,6 @@ describe("A6.1 Architecture Guards", () => {
     });
   });
 
-  describe("UT-043: INT-010 — 系统注册 interval ≥ 100, priority ≥ P3", () => {
-    it("experience-collector-system should have interval=100, priority=3, phase=post", () => {
-      const src = readSrc("systems/intelligence/experience-collector-system.ts");
-      expect(src).toMatch(/interval:\s*100/);
-      expect(src).toMatch(/priority:\s*3/);
-      expect(src).toMatch(/phase:\s*"post"/);
-    });
-  });
-
   describe("UT-045: INT-007 — Domain 纯函数不调用 Game API", () => {
     it("attribution.ts should not call Game API methods", () => {
       const src = readDomain("attribution.ts");
@@ -164,20 +155,6 @@ describe("A6.1 Architecture Guards", () => {
 
       // The result should be a new object
       expect(result).not.toBe(inputSnapshot);
-    });
-  });
-
-  describe("INT-015: A6 停止时帝国安全运行", () => {
-    it("experience-collector-system should not modify any A5 state", () => {
-      const src = readSrc("systems/intelligence/experience-collector-system.ts");
-      // Should not write to Memory.kernel.strategy
-      expect(src).not.toMatch(/Memory\.kernel\.strategy\s*=/);
-      // Should not write to Memory.rooms
-      expect(src).not.toMatch(/Memory\.rooms\[\w+\]\s*=/);
-      // Should not spawn creeps
-      expect(src).not.toMatch(/\.spawnCreep\(/);
-      // Should not create construction sites
-      expect(src).not.toMatch(/\.createConstructionSite\(/);
     });
   });
 
@@ -259,27 +236,6 @@ describe("A6.1 Architecture Guards", () => {
     });
   });
 
-  describe("INT-010-extended: 系统层不直接调 Game API", () => {
-    it("experience-collector-system should not call Game.creeps/rooms/spawns", () => {
-      const src = readSrc("systems/intelligence/experience-collector-system.ts");
-      // System 层可以读 globalCache 但不应直接调 Game API
-      expect(src).not.toMatch(/Game\.creeps/);
-      expect(src).not.toMatch(/Game\.rooms/);
-      expect(src).not.toMatch(/Game\.spawns/);
-      expect(src).not.toMatch(/Game\.structures/);
-      expect(src).not.toMatch(/Game\.constructionSites/);
-    });
-
-    it("experience-collector-system should not call Game API actions", () => {
-      const src = readSrc("systems/intelligence/experience-collector-system.ts");
-      expect(src).not.toMatch(/\.spawnCreep\(/);
-      expect(src).not.toMatch(/\.createConstructionSite\(/);
-      expect(src).not.toMatch(/\.move\(/);
-      expect(src).not.toMatch(/\.attack\(/);
-      expect(src).not.toMatch(/\.transfer\(/);
-      expect(src).not.toMatch(/\.harvest\(/);
-    });
-  });
 
   describe("INT-007-extended: Domain 纯函数不引用 CPU", () => {
     it("experience.ts should not reference Game.cpu", () => {
@@ -344,17 +300,4 @@ describe("A6.1 Architecture Guards", () => {
     });
   });
 
-  describe("Shadow-Only-extended: 系统层不修改 Strategy/Posture", () => {
-    it("experience-collector-system should not write posture", () => {
-      const src = readSrc("systems/intelligence/experience-collector-system.ts");
-      expect(src).not.toMatch(/\.posture\s*=/);
-      expect(src).not.toMatch(/Memory\.kernel\.strategy\.posture\s*=/);
-    });
-
-    it("experience-collector-system should not modify colonyState", () => {
-      const src = readSrc("systems/intelligence/experience-collector-system.ts");
-      expect(src).not.toMatch(/colonyState\s*=/);
-      expect(src).not.toMatch(/\.colonyState\s*=/);
-    });
-  });
 });

@@ -15,7 +15,6 @@ import {
   guardRelDeterminism,
   guardRelEvidenceTraceability,
 } from "../../../src/domain/intelligence/reliability/guards";
-import { intelligenceStateSystem } from "../../../src/systems/intelligence/intelligence-state-system";
 import type { Prediction } from "../../../src/domain/intelligence/prediction/types";
 import type { PredictionContext } from "../../../src/domain/intelligence/prediction/context";
 import { makePredictionContext, buildPredictionContextSignature } from "../../../src/domain/intelligence/prediction/context";
@@ -727,30 +726,10 @@ describe("CF-15: 守卫违规检测", () => {
     expect(firstState.stateHash.length).toBeGreaterThan(0);
   });
 
-  it("REL-001: intelligence-state-system 不写入 globalCache", () => {
-    const result = guardRelReadOnly(intelligenceStateSystem);
-    expect(result.passed).toBe(true);
-  });
 
-  it("REL-009: intelligence-state-system 不修改 Strategy", () => {
-    const result = guardRelNoStrategyMutation(intelligenceStateSystem);
-    expect(result.passed).toBe(true);
-  });
 
-  it("REL-007: intelligence-state-system 不新建采样通道", () => {
-    const result = guardRelNoNewSampler(intelligenceStateSystem);
-    expect(result.passed).toBe(true);
-  });
 
-  it("REL-011: intelligence-state-system 不解决冲突", () => {
-    const result = guardRelNoConflictResolution(intelligenceStateSystem);
-    expect(result.passed).toBe(true);
-  });
 
-  it("validateIntelligenceSystem: 全量系统守卫通过", () => {
-    const violations = validateIntelligenceSystem(intelligenceStateSystem);
-    expect(violations.length).toBe(0);
-  });
 });
 
 // ═══════════════════════════════════════════════════════════

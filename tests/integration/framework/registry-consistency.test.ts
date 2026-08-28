@@ -28,11 +28,6 @@ describe("Phase 4: 系统注册一致性", () => {
       expect(telemetrySystems).toHaveLength(1);
     });
 
-it("evaluation-system 已停用", () => {
-  const systems = registry.getSystems();
-  const evalSystems = systems.filter(s => s.name === "evaluation-system");
-  expect(evalSystems).toHaveLength(0);
-});
 
 
     it("traffic-manager 只注册一次", () => {
@@ -64,11 +59,6 @@ it("evaluation-system 已停用", () => {
       expect(telemetry!.phase).toBe("post");
     });
 
-it("evaluation-system 已停用（不注册）", () => {
-  const systems = registry.getSystems();
-  const evaluation = systems.find(s => s.name === "evaluation-system");
-  expect(evaluation).toBeUndefined();
-});
 
 
     it("traffic-manager 注册为 post 阶段", () => {

@@ -80,8 +80,9 @@ export class TickRunner {
     if (silent) {
       console.log = (...args: unknown[]) => {
         const msg = args.map(String).join(" ");
-        // 跳过遥测输出行（@TELEMETRY / @ALERT 前缀）
-        if (msg.startsWith("@TELEMETRY") || msg.startsWith("@ALERT")) return;
+        // 跳过遥测输出行（log.info 格式为 [t<tick>][INFO][Module] @TELEMETRY/@ALERT …）
+        if (msg.includes("@TELEMETRY") || msg.includes("@ALERT")) return;
+        // 排除 telemetry JSON payload 内的 "error"/"Error" 子串误匹配
         if (msg.includes("Error") || msg.includes("error") || msg.includes("TypeError")) {
           errors.push(msg);
         }

@@ -1,7 +1,6 @@
 /** Pipeline Runtime Tests — Phase 6 验证 pipeline 顺序和错误隔离。 */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { tacticalRuntimePipelineSystem } from "../../../src/systems/tactical-runtime-pipeline";
-import { intelligencePipelineSystem } from "../../../src/systems/intelligence/intelligence-pipeline-system";
 
 // ─── Mock ─────────────────────────────────────────────────
 
@@ -43,32 +42,6 @@ vi.mock("../../../src/systems/combat-micro-runtime", () => ({
   combatMicroSystem: { name: "combat-micro", priority: 2, interval: 3, run: (ctx: unknown) => combatMicroRun(ctx) },
 }));
 
-// Mock intelligence pipeline stages
-const experienceCollectorRun = vi.fn();
-const strategyEvaluationRun = vi.fn();
-const predictionRun = vi.fn();
-const calibrationResolutionRun = vi.fn();
-const intelligenceStateRun = vi.fn();
-const recommendationEngineRun = vi.fn();
-
-vi.mock("../../../src/systems/intelligence/experience-collector-system", () => ({
-  experienceCollectorSystem: { name: "experience-collector", priority: 3, interval: 100, phase: "post", run: (ctx: unknown) => experienceCollectorRun(ctx) },
-}));
-vi.mock("../../../src/systems/intelligence/strategy-evaluation-system", () => ({
-  strategyEvaluationSystem: { name: "strategy-evaluation", priority: 3, interval: 500, phase: "post", run: (ctx: unknown) => strategyEvaluationRun(ctx) },
-}));
-vi.mock("../../../src/systems/intelligence/prediction-system", () => ({
-  predictionSystem: { name: "prediction", priority: 3, interval: 500, phase: "post", run: (ctx: unknown) => predictionRun(ctx) },
-}));
-vi.mock("../../../src/systems/intelligence/calibration-resolution-system", () => ({
-  calibrationResolutionSystem: { name: "calibration-resolution", priority: 3, interval: 500, phase: "post", run: (ctx: unknown) => calibrationResolutionRun(ctx) },
-}));
-vi.mock("../../../src/systems/intelligence/intelligence-state-system", () => ({
-  intelligenceStateSystem: { name: "intelligence-state", priority: 3, interval: 500, phase: "post", run: (ctx: unknown) => intelligenceStateRun(ctx) },
-}));
-vi.mock("../../../src/systems/intelligence/recommendation-engine-system", () => ({
-  recommendationEngineSystem: { name: "recommendation-engine", priority: 3, interval: 500, phase: "post", run: (ctx: unknown) => recommendationEngineRun(ctx) },
-}));
 
 function makeCtx(tick: number) {
   return { tick, budget: { tier: "healthy" as const, softLimit: 20, hardLimit: 50, canStart: () => true, isExhausted: () => false, spent: () => 0 }, globalSiteCount: 0, getSnapshot: () => undefined, snapshots: () => [] } as any;
@@ -185,84 +158,3 @@ describe("Tactical Runtime Pipeline: 错误隔离", () => {
   });
 });
 
-// ─── Intelligence Pipeline Tests ──────────────────────────
-
-describe("Intelligence Pipeline: Stage 顺序", () => {
-  it("experience-collector 在 strategy-evaluation 之前运行", () => {
-    intelligencePipelineSystem.run(makeCtx(0));
-
-    const runOrder = safeRunCalls.map(c => c.label);
-    const ecIdx = runOrder.indexOf("intelligence-pipeline/experience-collector");
-    const seIdx = runOrder.indexOf("intelligence-pipeline/strategy-evaluation");
-    expect(ecIdx).toBeGreaterThanOrEqual(0);
-    expect(seIdx).toBeGreaterThanOrEqual(0);
-    expect(ecIdx).toBeLessThan(seIdx);
-  });
-
-  it("strategy-evaluation 在 prediction 之前运行", () => {
-    intelligencePipelineSystem.run(makeCtx(0));
-
-    const runOrder = safeRunCalls.map(c => c.label);
-    const seIdx = runOrder.indexOf("intelligence-pipeline/strategy-evaluation");
-    const pIdx = runOrder.indexOf("intelligence-pipeline/prediction");
-    expect(seIdx).toBeLessThan(pIdx);
-  });
-});
-
-describe("Intelligence Pipeline: Cadence", () => {
-  it("experience-collector 每 100t 运行（始终执行）", () => {
-    for (const tick of [0, 100, 200, 300]) {
-      experienceCollectorRun.mockClear();
-      intelligencePipelineSystem.run(makeCtx(tick));
-      expect(experienceCollectorRun).toHaveBeenCalledTimes(1);
-    }
-  });
-
-  it("500t 阶段在 tick%500===0 时运行", () => {
-    // tick=0: 500t stages run
-    intelligencePipelineSystem.run(makeCtx(0));
-    expect(strategyEvaluationRun).toHaveBeenCalledTimes(1);
-    expect(predictionRun).toHaveBeenCalledTimes(1);
-    expect(calibrationResolutionRun).toHaveBeenCalledTimes(1);
-    expect(intelligenceStateRun).toHaveBeenCalledTimes(1);
-    expect(recommendationEngineRun).toHaveBeenCalledTimes(1);
-
-    vi.clearAllMocks();
-    // tick=100: 500t stages don't run
-    intelligencePipelineSystem.run(makeCtx(100));
-    expect(strategyEvaluationRun).not.toHaveBeenCalled();
-    expect(predictionRun).not.toHaveBeenCalled();
-  });
-
-  it("cadence 不死锁：500t 阶段在 tick=500 时运行", () => {
-    intelligencePipelineSystem.run(makeCtx(500));
-    expect(strategyEvaluationRun).toHaveBeenCalledTimes(1);
-    expect(predictionRun).toHaveBeenCalledTimes(1);
-    expect(calibrationResolutionRun).toHaveBeenCalledTimes(1);
-    expect(intelligenceStateRun).toHaveBeenCalledTimes(1);
-    expect(recommendationEngineRun).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("Intelligence Pipeline: 错误隔离", () => {
-  it("experience-collector 抛错不跳过 strategy-evaluation", () => {
-    experienceCollectorRun.mockImplementationOnce(() => { throw new Error("test error"); });
-    intelligencePipelineSystem.run(makeCtx(0));
-
-    expect(strategyEvaluationRun).toHaveBeenCalled();
-    expect(predictionRun).toHaveBeenCalled();
-  });
-
-  it("pipeline 停止时 A6 不影响帝国主执行链（Shadow-Only 不变量）", () => {
-    // 如果 pipeline 完全不运行，帝国照常安全运行
-    // 这里验证的是：pipeline 的 safeRun label 不包含任何执行系统名
-    intelligencePipelineSystem.run(makeCtx(0));
-    const labels = safeRunCalls.map(c => c.label);
-    for (const label of labels) {
-      expect(label).not.toContain("spawn");
-      expect(label).not.toContain("war-planner");
-      expect(label).not.toContain("expansion-manager");
-      expect(label).not.toContain("economy");
-    }
-  });
-});

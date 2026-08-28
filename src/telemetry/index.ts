@@ -56,38 +56,6 @@ export { registerExecutionMetrics, recordExecution, recordExecutionLatency } fro
 export { registerEmpireMetrics, collectEmpireMetrics } from "./metrics/EmpireMetrics";
 export { registerExpansionMetrics, collectExpansionMetrics, recordExpansionCompleted, recordExpansionFailed } from "./metrics/ExpansionMetrics";
 export { registerDefenseMetrics, collectDefenseMetrics } from "./metrics/DefenseMetrics";
-export {
-    registerEvaluationMetrics,
-    recordExpectationDeclared,
-    recordExpectationFulfilled,
-    recordExpectationMissed,
-    recordExpectationExpired,
-    recordPendingCount,
-} from "./metrics/EvaluationMetrics";
-
-// ─── Evaluation Registry (T3: AI Evaluation) ───────────────
-export {
-    declareExpected,
-    resolveOutcome,
-    evaluatePending,
-    getStrategyFeedback,
-    pendingCount,
-    recentResolved,
-    shouldEvaluate,
-    resetEvaluation,
-    computeDeviations,
-    aggregate,
-    determineStatus,
-} from "./EvaluationRegistry";
-export type {
-    EvaluationDomain,
-    ExpectationStatus,
-    ExpectedOutcome,
-    ActualOutcome,
-    ResolvedExpectation,
-    StrategyFeedback,
-} from "./EvaluationRegistry";
-
 // ─── Exporters ────────────────────────────────────────────
 export { exportConsoleLine, exportAlertLine } from "./exporters/ConsoleExporter";
 export { exportPrometheusText, getRecordingRulesSuggestions } from "./exporters/PrometheusExporter";
