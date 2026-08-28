@@ -91,6 +91,8 @@ export const CONFIG = {
     towerStarveThreshold: 200,
     /** L2 池收缩门槛：风险缓冲（tick）低于此值 → 只保 P0/P1 请求（LOGISTICS §3）。 */
     shrinkRiskBufferTicks: 400,
+    /** hauler 空载判定阈值（tick）：无动作超过此值视为空载。 */
+    idleHaulerThreshold: 200,
   },
 
   telemetry: {

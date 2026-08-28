@@ -80,9 +80,9 @@
 
 | 项 | 契约 |
 | --- | --- |
-| Responsibility | 供需请求池维护与租约（lease）分配；link 网传输；terminal 均衡。市场订单签发由 MarketManager（唯一写者，Manager 类）承担，下单决策输入来自 Economy / Empire |
+| Responsibility | 供需请求池维护与租约（lease）分配；link 网传输；terminal 均衡。市场订单与 terminal 交易签发由 TerminalManager（唯一写者，Manager 类，生产入口 `src/systems/terminal-manager.ts`）承担，下单决策输入来自 Economy / Empire |
 | Input | Demand（搬运请求）；水位快照 |
-| Output | LogisticsRequest（租约，六态）；link / terminal 动作；市场订单（MarketManager 唯一，幂等键） |
+| Output | LogisticsRequest（租约，六态）；link / terminal 动作；市场订单 / `Game.market.deal`（TerminalManager 唯一，幂等键） |
 | Dependencies | 分配服务（domain 纯函数）；World Model |
 | Public Interface | `submitRequest()` / `claimLease()` |
 | State Ownership | 请求池（运行时瞬时，不持久化）；水位 Memory 瘦快照 |
@@ -156,6 +156,16 @@
 
 ### 1.12 Intelligence（情报 · System 类 · P2 · 事件式）
 
+> **当前生产状态（R11 裁决，2026-08-28）**：本节是冻结蓝图的概念合同，仍为目标架构；
+> 但 A6 智能层 `intelligence-pipeline` 与 `decision-trace` / `evaluation-system` 已从
+> 生产路径移除——`src/domain/intelligence/` 与 `src/domain/strategy/decision-trace.ts`
+> 为 **Shadow-Only 孤岛**（不进入生产 bundle、不被任何 src 文件导入），对应测试只验证
+> 设计源码、不验证生产路径。生产中观察采集由 `room-observer` / `prospect-manager`
+> 承担；统一 IntelState 写者系统尚未注册（蓝图与现状差距按 §5 登记口径管理）。
+> 恢复注册必须走 [ARCHITECTURE_FREEZE.md](ARCHITECTURE_FREEZE.md) §15 新 ADR，并附
+> CPU、Memory、消费者与 soak 证据。详见
+> [INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0。
+
 | 项 | 契约 |
 | --- | --- |
 | Responsibility | intel 采集与写入（四域：房间 / 玩家 / 资源 / 市场）；TTL 老化与置信度分级（fact / stale / inferred）；segment 分页与激活预算管理 |
@@ -215,7 +225,7 @@
 | **Agent** | 拥有运行时目标选择权的组件——仅帝国战略层，受限且确定性 | Empire 战略（Policy） |
 | **System** | 组合根注册的 tick 管线成员（P0–P3 优先级类） | room-state、tower-defense |
 | **Service** | 无状态纯逻辑集合（domain 层分配 / 评分纯函数） | assignment-service |
-| **Manager** | 唯一写者资源代理——仅当存在独占写权需要代理时 | SpawnManager、ConstructionManager、RemoteMiningManager、MarketManager |
+| **Manager** | 唯一写者资源代理——仅当存在独占写权需要代理时 | SpawnManager、ConstructionManager、RemoteMiningManager、TerminalManager |
 | **engine** | 执行框架 | role-runner、traffic resolver |
 
 - **禁止**后缀：Coordinator / Handler / Controller 及一切空转命名。

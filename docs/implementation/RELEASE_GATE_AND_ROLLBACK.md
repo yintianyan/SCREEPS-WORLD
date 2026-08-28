@@ -86,20 +86,47 @@ npm run test:e2e
 
 ## 3. 基础设施门禁
 
+> **证据等级说明**（等级定义见
+> [ARCHITECTURE_VALIDATION.md](../architecture/ARCHITECTURE_VALIDATION.md) §0）：
+> 本节所有基于 soak 数据的 [Fact] 已统一改标 **[Historical Evidence]**——该数据集
+> 采集自旧部署（`sv=39`，当前代码 `schemaVersion=42`，见 §2.2 绑定规则：旧 schema
+> 的 soak 数据不能作为当前版本运行正确的独立证据），且 artifact 绑定待补登记。
+> 将其升级为当前版本 [Fact] 需重新 soak 并按下方模板绑定证据。
+
+**Soak 证据绑定模板（每条 [Fact] 至少绑定）**：
+
+```text
+commit: <hash>
+schemaVersion: <number>
+artifact: <relative path or external record>
+room/tick range: <value>
+collectedAt: <timestamp>
+```
+
+当前历史数据集登记（待补全后才能升级为当前版本证据）：
+
+```text
+commit: 待补（旧部署，hash 未随数据留存）
+schemaVersion: 39（当前代码 42）
+artifact: 待补（原始采集记录未入库）
+room/tick range: 私服单房 W7N7，累计 2,340,004 tick
+collectedAt: 待补
+```
+
 ### 3.1 RCL 发展门禁
 
 | 检查项 | 要求 | 当前状态 |
 |--------|------|---------|
 | RCL1→RCL8 流程有证据 | soak 数据覆盖全 RCL 范围 | [Blocked] 缺 RCL1→RCL5 |
 | RCL2 不依赖 RCL3 emergency 自愈 | RCL2 能独立稳定运行 | [Assumption] 代码路径完整 |
-| storage 可完成 | RCL4 有 storage 建造证据 | [Fact] soak 数据有 |
-| link 可完成 | RCL5 有 link 建造证据 | [Fact] soak 数据有 |
-| terminal 可完成 | RCL6 有 terminal 建造证据 | [Fact] soak 数据有 |
-| lab 可完成 | RCL6+ 有 lab 建造证据 | [Fact] soak 数据有 |
-| factory 可完成 | RCL7+ 有 factory 建造证据 | [Fact] soak 数据有 |
-| observer 可完成 | RCL8 有 observer 建造证据 | [Fact] soak 数据有 |
-| powerSpawn 可完成 | RCL8 有 powerSpawn 建造证据 | [Fact] soak 数据有 |
-| nuker 可完成 | RCL8 有 nuker 建造证据 | [Fact] soak 数据有 |
+| storage 可完成 | RCL4 有 storage 建造证据 | [Historical Evidence] soak(sv=39) 数据有 |
+| link 可完成 | RCL5 有 link 建造证据 | [Historical Evidence] soak(sv=39) 数据有 |
+| terminal 可完成 | RCL6 有 terminal 建造证据 | [Historical Evidence] soak(sv=39) 数据有 |
+| lab 可完成 | RCL6+ 有 lab 建造证据 | [Historical Evidence] soak(sv=39) 数据有 |
+| factory 可完成 | RCL7+ 有 factory 建造证据 | [Historical Evidence] soak(sv=39) 数据有 |
+| observer 可完成 | RCL8 有 observer 建造证据 | [Historical Evidence] soak(sv=39) 数据有 |
+| powerSpawn 可完成 | RCL8 有 powerSpawn 建造证据 | [Historical Evidence] soak(sv=39) 数据有 |
+| nuker 可完成 | RCL8 有 nuker 建造证据 | [Historical Evidence] soak(sv=39) 数据有 |
 
 ### 3.2 关键路径门禁
 
@@ -107,15 +134,15 @@ npm run test:e2e
 |--------|------|---------|
 | builder 关键路径可达 | build site 从 queued → in_progress → done | [Fact] 代码+测试 |
 | hauler 关键路径可达 | fill task 从 assigned → done | [Fact] 代码+测试 |
-| harvester 关键路径可达 | harvest→container→hauler→storage | [Fact] soak 数据 |
-| upgrader 关键路径可达 | withdraw→upgrade→controller.progress | [Fact] soak 数据 |
+| harvester 关键路径可达 | harvest→container→hauler→storage | [Historical Evidence] soak(sv=39) 数据 |
+| upgrader 关键路径可达 | withdraw→upgrade→controller.progress | [Historical Evidence] soak(sv=39) 数据 |
 | wall/rampart 不占未来 footprint | 蓝图模板 structure positions 预标记 | [Fact] 代码审查 |
 | 不生成新的无约束 constructed wall | defense-planner 只签发 rampart | [Fact] 代码审查 |
 | queue/site/task 有界 | spawnQueue/buildQueue 有上限 | [Fact] 代码+测试 |
-| spawnQueue 无永久堆积 | soak 数据 max=7，无持续排队 | [Fact] soak 数据 |
-| buildQueue 无永久堆积 | soak 数据 max=11，无持续堆积 | [Fact] soak 数据 |
-| Memory 无异常增长 | soak 数据 ~10K→~12K | [Fact] soak 数据 |
-| path failure 有限 | stuck=0/1 运动数据存在 | [Fact] soak 数据 |
+| spawnQueue 无永久堆积 | soak 数据 max=7，无持续排队 | [Historical Evidence] soak(sv=39) 数据 |
+| buildQueue 无永久堆积 | soak 数据 max=11，无持续堆积 | [Historical Evidence] soak(sv=39) 数据 |
+| Memory 无异常增长 | soak 数据 ~10K→~12K | [Historical Evidence] soak(sv=39) 数据 |
+| path failure 有限 | stuck=0/1 运动数据存在 | [Historical Evidence] soak(sv=39) 数据 |
 | P0/P1 system liveness | expectations E1/E2 监控 | [Fact] 代码+测试 |
 
 ---
@@ -141,17 +168,35 @@ npm run test:e2e
 
 ## 5. 自动降级层级
 
-### 5.1 五档降级体系
+### 5.1 四档 CpuTier 降级体系（与代码一致）
 
-| 层级 | 名称 | 触发条件 | 允许系统 | 禁止系统 | 保留角色 | 建设 | 远矿 | 扩张 | 战争 | terminal | market | path 重算 | telemetry | 预算上限 | 退出条件 | 滞回条件 |
-|------|------|---------|---------|---------|---------|------|------|------|------|----------|--------|----------|----------|---------|---------|---------|
+自动降级**只有四档**，与 `src/kernel/contracts.ts` 的 `CpuTier` 枚举
+（`healthy / guarded / conserve / recovery`）和 `CONFIG.cpu.tiers` 阈值一一对应；
+本文档与 [KERNEL_ARCHITECTURE.md](../architecture/KERNEL_ARCHITECTURE.md) §3、
+[CPU_EXECUTION_MODEL.md](../architecture/CPU_EXECUTION_MODEL.md) §2 使用同一套术语，
+不存在第五个 `CpuTier`（Emergency Survival Mode 见 §5.2，它不是 CpuTier）。
+
+| 层级 | CpuTier | 触发条件 | 允许系统 | 禁止系统 | 保留角色 | 建设 | 远矿 | 扩张 | 战争 | terminal | market | path 重算 | telemetry | 预算上限 | 退出条件 | 滞回条件 |
+|------|---------|---------|---------|---------|---------|------|------|------|------|----------|--------|----------|----------|---------|---------|---------|
 | L0 | Healthy | bucket ≥ CONFIG.cpu.tiers.healthy.min | 全部 | 无 | 全部 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | softLimit×1.0 | — | — |
 | L1 | Guarded | bucket < CONFIG.cpu.tiers.guarded.min | P0-P2 | P3 | 全部 | ✅ | ✅ | ✅(受限) | ✅ | ✅(受限) | ✅(受限) | ✅ | ✅ | softLimit×0.8 | bucket 恢复 ≥ healthy.min + hysteresis，持续 recoveryTicks | 持续 recoveryTicks 个 tick |
 | L2 | Conserve | bucket < CONFIG.cpu.tiers.conserve.min | P0-P1 | P2+ | 生存+物流 | ✅(critical only) | ❌ | ❌ | ❌ | ❌ | ❌ | 限频 | 核心集 | softLimit×0.6 | bucket ≥ guarded.min + hysteresis | 持续 recoveryTicks |
 | L3 | Recovery | bucket < CONFIG.cpu.tiers.recovery.min | P0 | P1+ | 生存 only | ❌ | ❌ | ❌ | ❌(war 旁路) | ❌ | ❌ | 限频 | 核心集 | hardLimit | bucket ≥ conserve.min + hysteresis | 持续 recoveryTicks |
-| L4 | Emergency Survival | bucket < 100 或 CPU 持续触顶 | P0(仅 spawn+harvester) | 全部其他 | harvester+worker(spawn) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | hardLimit(绝对) | bucket ≥ 500 | 自动（bucket 恢复即退出） |
 
-### 5.2 降级规则
+### 5.2 Emergency Survival Mode（Recovery 档下的紧急安全状态——非第五档 CpuTier）
+
+| 条款 | 内容 |
+|------|------|
+| 定性 | **不是** `CpuTier` 枚举成员；`CpuTier` 保持四档（§5.1）。本状态是 Recovery 档内的**进一步紧急旁路 / 安全状态**：进入时 CpuTier 仍为 `recovery`，只是允许集进一步收缩到最小生存链 |
+| 触发条件 | bucket < 100，或 CPU 连续多 tick 触顶被 hardLimit 切断 |
+| 允许动作 | 仅 spawn（P0 车道 / 内核紧急直通）+ harvester 最小采集；其余系统、远矿、扩张、战争、terminal、market、path 重算、非核心遥测全部让位 |
+| 退出条件 | bucket ≥ 500 即自动退出回到 Recovery 档常规语义（保命态不做恢复滞回；Recovery→Guarded 的逐档滞回照常） |
+| Memory 状态 | 进入 / 退出各记一次遥测事件；**不新增 Memory schema 字段、不改变 CpuTier 持久化语义**（档位状态仍归四档看门狗的 Recovery 语义） |
+| 与 Recovery 的关系 | Recovery 是四档 CpuTier 的最低档；Emergency Survival 是 Recovery **之上**的再收缩层——包含关系，不是并列档位 |
+| 与人工灾难接管的边界 | 本状态持续超过接管阈值（bucket < 100 持续 500+ tick，§6.1）即升级为人工灾难接管信号；本状态是自动行为的下限，接管是人工动作 |
+| 实现状态 | **[Status: 设计态，未实现]** 当前代码（`CONFIG.cpu.tiers`、`scheduler.bucketToTier`）仅实现四档 CpuTier。实现前不得把「自动进入 Emergency Survival」描述为已发布能力；若实现涉及内核行为变化，须走 [ARCHITECTURE_FREEZE.md](../architecture/ARCHITECTURE_FREEZE.md) §15 登记 |
+
+### 5.3 降级规则
 
 - **降级立即生效**：bucket 低时必须马上限流，不等滞回
 - **升级需滞回**：bucket 超过上一档阈值 + recoveryHysteresis，持续 recoveryTicks 个 tick

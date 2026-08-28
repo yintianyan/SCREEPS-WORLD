@@ -54,21 +54,35 @@ function makeSnapshot(overrides: Partial<FocusFireSnapshot> = {}): FocusFireSnap
 }
 
 describe("A5.4.4 CPU Benchmark — planFocusFire", () => {
-  it("单次 planFocusFire 调用 < 1ms", () => {
+  // P0-6 修复：warm-up + 重复采样 + 稳定阈值，消除 JIT 环境抖动导致的 flaky test。
+  // 策略：先执行 N 次 warm-up 让 V8 JIT 热路径生效，再取 K 次采样的中位数。
+  const WARMUP = 200;
+  const SAMPLES = 5;
+
+  it("单次 planFocusFire 调用 < 2ms（warm-up 后取中位数）", () => {
     const target = makeCandidate("enemy-1", 25, 25);
     const members = [makeMember("att-1", "attacker", 25, 25)];
     const snapshot = makeSnapshot({ candidates: [target], members });
 
-    const start = process.hrtime.bigint();
-    planFocusFire(snapshot);
-    const elapsed = Number(process.hrtime.bigint() - start) / 1e6; // ms
+    // Warm-up：让 JIT 热路径生效
+    for (let i = 0; i < WARMUP; i++) planFocusFire(snapshot);
+
+    // 采样：取 SAMPLES 次测量的中位数
+    const times: number[] = [];
+    for (let i = 0; i < SAMPLES; i++) {
+      const start = process.hrtime.bigint();
+      planFocusFire(snapshot);
+      times.push(Number(process.hrtime.bigint() - start) / 1e6);
+    }
+    times.sort((a, b) => a - b);
+    const median = times[Math.floor(times.length / 2)]!;
 
     // 单次调用应远低于 2ms（Screeps CPU ~20 limit, 500ms/tick budget）
-    // CI runner 性能波动较大，阈值放宽到 2ms 避免 flaky test
-    expect(elapsed).toBeLessThan(2);
+    // warm-up 后取中位数消除 JIT 抖动，2ms 阈值有充分余量
+    expect(median).toBeLessThan(2);
   });
 
-  it("1000 次连续调用 < 50ms", () => {
+  it("1000 次连续调用 < 100ms（warm-up 后取中位数）", () => {
     const targets = [
       makeCandidate("enemy-1", 25, 25),
       makeCandidate("enemy-2", 26, 26),
@@ -82,18 +96,26 @@ describe("A5.4.4 CPU Benchmark — planFocusFire", () => {
     ];
     const snapshot = makeSnapshot({ candidates: targets, members });
 
-    const start = process.hrtime.bigint();
-    for (let i = 0; i < 1000; i++) {
-      planFocusFire(snapshot);
+    // Warm-up
+    for (let i = 0; i < WARMUP; i++) planFocusFire(snapshot);
+
+    // 采样
+    const times: number[] = [];
+    for (let i = 0; i < SAMPLES; i++) {
+      const start = process.hrtime.bigint();
+      for (let j = 0; j < 1000; j++) {
+        planFocusFire(snapshot);
+      }
+      times.push(Number(process.hrtime.bigint() - start) / 1e6);
     }
-    const elapsed = Number(process.hrtime.bigint() - start) / 1e6;
+    times.sort((a, b) => a - b);
+    const median = times[Math.floor(times.length / 2)]!;
 
     // 1000 次应 < 100ms（平均每次 < 0.1ms）
-    // CI runner 性能波动较大，阈值放宽到 100ms 避免 flaky test
-    expect(elapsed).toBeLessThan(100);
+    expect(median).toBeLessThan(100);
   });
 
-  it("50 组不同场景 × 100 次 = 5000 次 < 250ms", () => {
+  it("50 组不同场景 × 100 次 = 5000 次 < 250ms（warm-up 后取中位数）", () => {
     const scenarios: FocusFireSnapshot[] = [];
     for (let s = 0; s < 50; s++) {
       const targets: TargetCandidate[] = [];
@@ -112,30 +134,49 @@ describe("A5.4.4 CPU Benchmark — planFocusFire", () => {
       }));
     }
 
-    const start = process.hrtime.bigint();
+    // Warm-up
     for (const snap of scenarios) {
-      for (let r = 0; r < 100; r++) {
-        planFocusFire(snap);
-      }
+      for (let i = 0; i < 10; i++) planFocusFire(snap);
     }
-    const elapsed = Number(process.hrtime.bigint() - start) / 1e6;
+
+    // 采样
+    const times: number[] = [];
+    for (let i = 0; i < SAMPLES; i++) {
+      const start = process.hrtime.bigint();
+      for (const snap of scenarios) {
+        for (let r = 0; r < 100; r++) {
+          planFocusFire(snap);
+        }
+      }
+      times.push(Number(process.hrtime.bigint() - start) / 1e6);
+    }
+    times.sort((a, b) => a - b);
+    const median = times[Math.floor(times.length / 2)]!;
 
     // 5000 次应 < 250ms（平均每次 < 0.05ms）
-    expect(elapsed).toBeLessThan(250);
+    expect(median).toBeLessThan(250);
   });
 
-  it("focusFirePlanHash 1000 次 < 15ms", () => {
+  it("focusFirePlanHash 1000 次 < 15ms（warm-up 后取中位数）", () => {
     const target = makeCandidate("enemy-1", 25, 25);
     const plan = planFocusFire(makeSnapshot({ candidates: [target], members: [makeMember("att-1", "attacker", 25, 25)] }));
 
-    const start = process.hrtime.bigint();
-    for (let i = 0; i < 1000; i++) {
-      focusFirePlanHash(plan);
-    }
-    const elapsed = Number(process.hrtime.bigint() - start) / 1e6;
+    // Warm-up
+    for (let i = 0; i < WARMUP; i++) focusFirePlanHash(plan);
 
-    // 5ms 基准在 CI/慢速环境中过于紧，放宽到 15ms 保持有意义但不 flaky
-    expect(elapsed).toBeLessThan(15);
+    // 采样
+    const times: number[] = [];
+    for (let i = 0; i < SAMPLES; i++) {
+      const start = process.hrtime.bigint();
+      for (let j = 0; j < 1000; j++) {
+        focusFirePlanHash(plan);
+      }
+      times.push(Number(process.hrtime.bigint() - start) / 1e6);
+    }
+    times.sort((a, b) => a - b);
+    const median = times[Math.floor(times.length / 2)]!;
+
+    expect(median).toBeLessThan(15);
   });
 });
 

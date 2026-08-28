@@ -50,6 +50,11 @@ research/20 §10.1 的三档判据（每 tick / 每 N tick / 事件触发）在�
 | **Conserve** | 仅 P0 | 仅生存类（census 降频至 2–5） | **停** | **停** | 仅生存域 | 常备 |
 | **Recovery** | 仅 P0 + 能量自给 | **停** | **停** | **停** | **停** | **唯一内容**；饥饿老化不生效，持续超阈升级 TAKEOVER（KERNEL §5） |
 
+> 术语注记：本矩阵的看门狗档 = `CpuTier` 四档枚举（`healthy/guarded/conserve/recovery`，
+> 阈值唯一真相源 `CONFIG.cpu.tiers`）。Emergency Survival Mode 是 Recovery 档内的
+> 紧急再收缩安全状态，**不是第五档 CpuTier**，不在本矩阵内占行；定义见
+> [RELEASE_GATE_AND_ROLLBACK.md](../implementation/RELEASE_GATE_AND_ROLLBACK.md) §5.2。
+
 联动合同条款：
 
 1. 「砍高频 / 砍中频」指该频带成员整体跳过或降档运行，**不是**延期重算——

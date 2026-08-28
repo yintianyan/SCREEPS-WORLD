@@ -17,7 +17,7 @@
 | 资源 | 所有者 | 帝国的权力 | 房间的权力 | 禁止 |
 | --- | --- | --- | --- | --- |
 | 能量（本地储备+预算） | **Room** | **调拨权**（terminal 网络+战时征调），受 §1.2 门控 | 本地六闭环内按预算自由支配 | 帝国把全房能量当公共池抽调；房间越过预算消耗共享资源 |
-| 矿物 / commodity | Room（属地库存） | 互补调拨令+市场策略 | 本地 lab/factory 加工 | 房间直连市场下单（MarketManager 唯一写者） |
+| 矿物 / commodity | Room（属地库存） | 互补调拨令+市场策略 | 本地 lab/factory 加工 | 房间直连市场下单（TerminalManager 唯一写者） |
 | credits | **Empire** | 垄断 | 只读 | 房间级信用账户 |
 | CPU / 预算 | Empire（Policy 求值） | 五域预算下发 | 按预算行事 | 任何消耗决策只过能量账不过 CPU 账（research/20 §10.4） |
 
@@ -38,7 +38,7 @@
 | 必须全部满足才允许调拨 | ① 支援方**本土净流为正**（平滑值，[GOAL_POLICY_PLAN_MODEL.md](GOAL_POLICY_PLAN_MODEL.md) §4 能量域）；② 受援缺口经帝国复核确认（防报告腐化，research/04 §8-5）；③ 援助预算上限 = f(支援方净流)——援助雪崩防线（research/04 §8-1）。 |
 | 异常房例外策略 | alert/siege/evacuate 房**停止被均衡抽离、优先注入**（research/12 §10.4）；被援房进入独立降级，不拖垮支援房（research/04 §8-1）。 |
 | 战时征调 | 仅 war posture 授权后生效；消耗在战争基金预算线内，不与经济发展竞争（[GOAL_POLICY_PLAN_MODEL.md](GOAL_POLICY_PLAN_MODEL.md) §3）。 |
-| 禁止 | 房间绕过帝国直连 terminal 跨房调拨（影子通道，research/04 §8-4）；任何模块绕过 MarketManager 市场下单。 |
+| 禁止 | 房间绕过帝国直连 terminal 跨房调拨（影子通道，research/04 §8-4）；任何模块绕过 TerminalManager 市场下单。 |
 
 ## 2. 九概念合同
 
@@ -50,7 +50,7 @@
 | 2 | Production 生产 | lab/factory 链**按需生产**：加工任务由库存缺口与帝国 mineral 需求触发；「把加工搬到能量处」——加工放能量富余房，只在成品层长距移动（research/12 §10.4）。 | 为库存数字而满负荷生产；在能量贫房加工矿物。 |
 | 3 | Consumption 消费 | 五类消费者（孵化/建造/升级/塔/维修）按 §2.2 优先序分配；升级吃**净流盈余**（early-economy ≤30% 产能），不是默认消费者（research/10 §10.4）。 | 消费者越过优先序直取储备；升级预算侵占孵化预算。 |
 | 4 | Storage 储备 | 三容器分层：storage 主账本、link 通道、terminal 出入口；每层维持水位阈值区间，阈值目的是防「彻底清空」与「长期满载」（research/12 §4）。 | 把容器当无界缓冲（link 满载即断链信号，非正常态）；水位线写死不随 phase 调整。 |
-| 5 | Transfer 调拨/市场 | 跨房实物调拨＝帝国调拨令（§1.2）；远距缺口走市场买卖而非搬运（运费指数远距近全损，research/12 §10.4）；市场下单＝MarketManager 唯一写者，决策输入来自 Economy/Empire（[SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.6）。 | Economy 系统自行调拨（调拨权在 Empire，[SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.5）；远距实物搬运。 |
+| 5 | Transfer 调拨/市场 | 跨房实物调拨＝帝国调拨令（§1.2）；远距缺口走市场买卖而非搬运（运费指数远距近全损，research/12 §10.4）；市场下单＝TerminalManager 唯一写者，决策输入来自 Economy/Empire（[SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.6）。 | Economy 系统自行调拨（调拨权在 Empire，[SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.5）；远距实物搬运。 |
 | 6 | Budget 预算 | 五域（CPU/能量/人口/物流/军事）预算的能量域下钻，公式见 §2.3；输入复用遥测已采集量（research/20 §10.4）。 | 单 tick 原始值直接驱动预算切换（必须 EMA 平滑，[GOAL_POLICY_PLAN_MODEL.md](GOAL_POLICY_PLAN_MODEL.md) §4）。 |
 | 7 | Reservation 预留 | 三类显式预留，均从预算中扣除而非口头声称：① spawn 排产预留（`spawning`+已提交订单的能量占用，research/11 §6）；② tower 围城储备（siege 态能量会计的库存项，research/15 §10.4）；③ 战争基金（war posture 划出的预算线，[GOAL_POLICY_PLAN_MODEL.md](GOAL_POLICY_PLAN_MODEL.md) §3）。 | 隐式预留；战争基金无止损上限（基金耗尽→强制退 fortify）。 |
 | 8 | Demand 需求 | 经济域 Demand 产生者仅四类：①房间 census 人口缺口；②建造申请（`needContainer` 类标记）；③物流供需池水位缺口；④ AgendaItem 生命周期内维持的 Demand 流（research/11 §10.1、[EMPIRE_SYSTEM_MODEL.md](EMPIRE_SYSTEM_MODEL.md) §1）。Demand 瞬时不持久化。 | 消费者绕过 Demand 直取资源；Demand 写入 Memory（唯一例外：立项转译字段，调和 §2）。 |
@@ -137,6 +137,6 @@ sink 目标集由 Empire 以 AgendaItem 形式指定并复核；本地**不得**
 | 1 | 全帝国能量公共池（Empire 持所有权而非调拨权） | 违反故障域隔离（research/04 §6）；围城会计需要本地账主（research/15 §10.4） |
 | 2 | 消耗决策只过能量账不过 CPU 账 | 双账强制（research/20 §10.4） |
 | 3 | 把「RCL8 满配+GCL 满」诊断为故障并触发恢复 | 红队 A10：合理停滞误诊自造振荡 |
-| 4 | Economy 直接执行调拨或市场下单 | 调拨权在 Empire、市场在 MarketManager（[SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.5/§1.6） |
+| 4 | Economy 直接执行调拨或市场下单 | 调拨权在 Empire、市场在 TerminalManager（[SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.5/§1.6） |
 | 5 | 名义产能（source 总量）直接入 Income | 效率系数必须生效且自适应校准（research/10 §10.4、§12） |
 | 6 | 均衡/调拨抽离 alert/evacuate 异常房 | research/12 §10.4 例外策略 |

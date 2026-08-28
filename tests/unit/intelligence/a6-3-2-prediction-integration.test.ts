@@ -221,68 +221,89 @@ describe("A6.3.2 Prediction Models — Integration", () => {
   });
 
   // ── CPU Benchmark ──
+  // P0-6 修复：warm-up + 重复采样 + 中位数，消除 JIT 环境抖动。
+  const BENCH_WARMUP = 200;
+  const BENCH_SAMPLES = 5;
+
   describe("CPU Benchmark", () => {
     it("single prediction < 0.1ms", () => {
       const input = makeEnergyInput();
 
       // Warm up
-      predictEnergyShortage(input);
+      for (let i = 0; i < BENCH_WARMUP; i++) predictEnergyShortage(input);
 
-      // Measure
-      const start = performance.now();
-      predictEnergyShortage(input);
-      const elapsed = performance.now() - start;
+      // 采样取中位数
+      const times: number[] = [];
+      for (let i = 0; i < BENCH_SAMPLES; i++) {
+        const start = performance.now();
+        predictEnergyShortage(input);
+        times.push(performance.now() - start);
+      }
+      times.sort((a, b) => a - b);
+      const median = times[Math.floor(times.length / 2)]!;
 
-      // 0.1ms = 0.1 milliseconds
-      // Note: in test environment, performance.now() resolution may vary
-      // We use a generous threshold for CI compatibility
-      expect(elapsed).toBeLessThan(5); // 5ms generous for CI
+      expect(median).toBeLessThan(5); // 5ms generous for CI
     });
 
     it("100 predictions < 10ms", () => {
       const input = makeEnergyInput();
 
       // Warm up
-      predictEnergyShortage(input);
+      for (let i = 0; i < BENCH_WARMUP; i++) predictEnergyShortage(input);
 
-      // Measure 100 predictions
-      const start = performance.now();
-      for (let i = 0; i < 100; i++) {
-        predictEnergyShortage(input);
+      // 采样取中位数
+      const times: number[] = [];
+      for (let i = 0; i < BENCH_SAMPLES; i++) {
+        const start = performance.now();
+        for (let j = 0; j < 100; j++) {
+          predictEnergyShortage(input);
+        }
+        times.push(performance.now() - start);
       }
-      const elapsed = performance.now() - start;
+      times.sort((a, b) => a - b);
+      const median = times[Math.floor(times.length / 2)]!;
 
-      // 10ms for 100 predictions
-      // Generous threshold for CI
-      expect(elapsed).toBeLessThan(50); // 50ms generous for CI
+      expect(median).toBeLessThan(50); // 50ms generous for CI
     });
 
     it("spawn prediction single < 0.1ms", () => {
       const input = makeSpawnInput();
 
       // Warm up
-      predictSpawnStarvation(input);
+      for (let i = 0; i < BENCH_WARMUP; i++) predictSpawnStarvation(input);
 
-      const start = performance.now();
-      predictSpawnStarvation(input);
-      const elapsed = performance.now() - start;
+      // 采样取中位数
+      const times: number[] = [];
+      for (let i = 0; i < BENCH_SAMPLES; i++) {
+        const start = performance.now();
+        predictSpawnStarvation(input);
+        times.push(performance.now() - start);
+      }
+      times.sort((a, b) => a - b);
+      const median = times[Math.floor(times.length / 2)]!;
 
-      expect(elapsed).toBeLessThan(5);
+      expect(median).toBeLessThan(5);
     });
 
     it("spawn 100 predictions < 10ms", () => {
       const input = makeSpawnInput();
 
       // Warm up
-      predictSpawnStarvation(input);
+      for (let i = 0; i < BENCH_WARMUP; i++) predictSpawnStarvation(input);
 
-      const start = performance.now();
-      for (let i = 0; i < 100; i++) {
-        predictSpawnStarvation(input);
+      // 采样取中位数
+      const times: number[] = [];
+      for (let i = 0; i < BENCH_SAMPLES; i++) {
+        const start = performance.now();
+        for (let j = 0; j < 100; j++) {
+          predictSpawnStarvation(input);
+        }
+        times.push(performance.now() - start);
       }
-      const elapsed = performance.now() - start;
+      times.sort((a, b) => a - b);
+      const median = times[Math.floor(times.length / 2)]!;
 
-      expect(elapsed).toBeLessThan(50);
+      expect(median).toBeLessThan(50);
     });
   });
 

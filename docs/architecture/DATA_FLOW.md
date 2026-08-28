@@ -20,8 +20,14 @@ flowchart TD
   NORM_I -- 每 tick 增量 --> SIT[EmpireSituation 帝国态势<br/>※A1：N tick 全量 + 每 tick 增量]
   NORM_F -- 每 N tick 全量轮 --> SIT
   SIT -- 快照未刷新 --> POLICY_IN[沿用上次态势快照<br/>决策幂等 · ※A1]
-  GAME -. 观察事件式 .-> INTL[Intelligence intel 写入<br/>segment 四域 · 异步激活]
+  GAME -. 观察事件式 .-> INTL[Intelligence intel 写入<br/>segment 四域 · 异步激活<br/>※R11：Shadow-Only 目标态]
 ```
+
+> **R11 注记（图一/图三的 Intelligence 节点）**：`intelligence-pipeline` /
+> `decision-trace` / `evaluation-system` 已裁决从生产路径移除，`src/domain/intelligence/`
+> 为 Shadow-Only 孤岛（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）。
+> 图中 Intelligence 节点保留为**目标架构**；当前生产中观察采集由 `room-observer` /
+> `prospect-manager` 承担，统一 intel 写入侧尚未注册。
 
 感知流合同：
 
@@ -40,7 +46,7 @@ flowchart TD
 | RoomState（phase/收支/人口/健康度） | World Model（唯一写者） | 任意（只读） | Memory 瘦字段 + heap 派生 | 增量每 tick / 全量每 N；房间注销整节删除 |
 | 派生索引（目标池/需求池） | World Model | 分配服务、Logistics、Defense | heap 缓存条目 | TTL 到期 / 结构版本变化 / reset |
 | EmpireSituation | Empire（聚合重建） | Policy、Agenda 复核 | heap（N 全量 + 每 tick 增量） | 每轮聚合重建；历史走遥测 |
-| IntelEntry | Intelligence（唯一写者） | 扩张尽调、战争授权、市场 | segment 分页 | TTL 老化 + 置信度降级 + 环形覆盖 |
+| IntelEntry | Intelligence（唯一写者） | 扩张尽调、战争授权、市场 | segment 分页 | TTL 老化 + 置信度降级 + 环形覆盖（写者当前为 Shadow-Only 目标态，见上方 R11 注记） |
 
 ## 2. 图二：Strategy → Execution（决策流，环语义）
 
@@ -73,7 +79,7 @@ flowchart TD
 3. **绑定仲裁唯一**：Agenda 从不点名 creep；Demand→Task 的绑定只发生在分配服务
    （research/08 §8）。
 4. **写者收口**：通往 World 的出边**仅**四类——SpawnManager、Construction×2、
-   TrafficResolver（move）、MarketManager（图中略，同构）+ 执行运行时直发的非移动
+   TrafficResolver（move）、TerminalManager（市场 deal / terminal send，图中略，同构）+ 执行运行时直发的非移动
    动作（唯一写者语义下的角色动作出口）。
 
 **图二数据所有权与流向规则表**：
@@ -130,7 +136,7 @@ flowchart LR
 | --- | --- | --- |
 | **A1**（战略层每 tick 全量聚合） | 分频聚合 + 快照未刷新沿用上次决策 | 图一 `EmpireSituation` 节点（N 全量 + 每 tick 增量）与 `沿用上次态势快照` 节点；图三 `态势指标修正` 边（进 Policy 前先聚合） |
 | **A8**（tick 末仲裁 O(n²)） | 按房分桶 + 意图网格索引近似 O(n) | 图二 `TrafficResolver` 节点（分桶标注）；相位级语义见 [TICK_LIFECYCLE.md](TICK_LIFECYCLE.md) 相位 ⑧ |
-| **A12**（重复成交/重复对象） | 幂等键 + 唯一写者 + 成交核验三件套 | 图二 `分配层`（稳定 key 合并）、`SpawnManager/Construction×2/MarketManager`（唯一写者收口）；Outcome 回执即成交核验的读侧（图三） |
+| **A12**（重复成交/重复对象） | 幂等键 + 唯一写者 + 成交核验三件套 | 图二 `分配层`（稳定 key 合并）、`SpawnManager/Construction×2/TerminalManager`（唯一写者收口）；Outcome 回执即成交核验的读侧（图三） |
 
 ## 5. 一致性声明
 

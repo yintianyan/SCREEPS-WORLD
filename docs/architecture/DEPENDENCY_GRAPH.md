@@ -125,7 +125,7 @@ Dependencies 列同步登记、且不落入 §3 任何一禁——三处同步�
 | 7 | **兄弟系统横向 import 直读内部状态** | 跨系统只经 Public Interface（SYSTEM_BOUNDARIES §2.3-2）；已登记存量违规（layout-planner ↔ link-system dismantle 工具）按技术债台账收敛 |
 | 8 | **Kernel import 业务模块** | research/19 §8；风险 R-13；唯一例外 = R9（KERNEL §8，「3 个钩子即 registry 化」） |
 | 9 | **感知层依赖任何业务**：World Model import 战略 / 业务 / 执行模块 | 感知层是最上游（SYSTEM_BOUNDARIES §1.3）；引入将形成全图循环 |
-| 10 | **写者间横向互调**：SpawnManager ↔ ConstructionManager ↔ MarketManager 互 import | 唯一写者之间经各自队列 / 请求通道，不共享内部 |
+| 10 | **写者间横向互调**：SpawnManager ↔ ConstructionManager ↔ TerminalManager 互 import | 唯一写者之间经各自队列 / 请求通道，不共享内部 |
 
 ## 4. 循环依赖的静态检查义务（红队 A4 的防线落地）
 

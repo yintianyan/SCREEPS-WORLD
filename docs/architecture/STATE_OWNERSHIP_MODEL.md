@@ -102,6 +102,13 @@ Lifecycle=创建→更新→归档→清理；Persistence=存储层级；Frequen
 
 ### 3.8 IntelState（四域 / TTL / 置信度——segment）
 
+> **当前生产状态（R11）**：本节是冻结蓝图的唯一写者登记；`intelligence-pipeline` /
+> `decision-trace` / `evaluation-system` 已裁决移出生产路径，生产中无注册的
+> Intelligence 写者（观察采集由 `room-observer` / `prospect-manager` 承担），
+> `src/domain/intelligence/` 为 Shadow-Only 孤岛。恢复注册须走
+> [ARCHITECTURE_FREEZE.md](ARCHITECTURE_FREEZE.md) §15 新 ADR（详见
+> [INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）。
+
 | 字段组 | Owner | Reader | Writer | Lifecycle | Persistence | Frequency |
 | --- | --- | --- | --- | --- | --- | --- |
 | IntelEntry（四域：房间 / 玩家 / 资源 / 市场；TTL；置信度 fact / stale / inferred） | Intelligence 系统（唯一写者） | 扩张尽调、战争授权、市场决策（查询） | — | 观察触发写入；无视野随龄降级（fact→stale→inferred），超 TTL 清为「未知」；超容量环形覆盖 | segment（分页哈希 + 压缩；激活预算集中管理，research/18 §10.5） | 写事件式；老化低频；读按需（异步：本 tick 请求下 tick 可读，禁止进生存链路） |

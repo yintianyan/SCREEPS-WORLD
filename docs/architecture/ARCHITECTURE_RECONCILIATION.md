@@ -72,7 +72,8 @@ Demand 流（如人口缺口），Demand 被执行者认领即为 Task（租约�
 战略层，受限、确定性）；**System**=组合根注册的 tick 管线成员（P0–P3 优先级类）；
 **Service**=无状态纯逻辑集合（分配/评分纯函数，domain 层）；**Manager** 仅保留
 给「唯一写者资源代理」（SpawnManager/ConstructionManager/RemoteMiningManager/
-MarketManager——名实相符：管理独占写权）；**引擎/engine**=执行框架（role-runner/
+TerminalManager——名实相符：管理独占写权；市场 deal 与 terminal 动作同属其写权，
+不存在独立 `MarketManager`）；**引擎/engine**=执行框架（role-runner/
 traffic resolver）。禁止 Coordinator/Handler/Controller 等空转命名；一个模块若
 只是转发/调用/if-else 必须删除。
 **Reason**：05 号判据 + 26 号模块清单；「一个模块只调另一个模块=删除」是任务书

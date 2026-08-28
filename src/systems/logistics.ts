@@ -14,11 +14,14 @@ import {
 import type { AssignmentTaskEntry } from "../domain/assignment/service";
 import { CONFIG } from "../config";
 import type { TransportRequestV2 } from "../domain/logistics/transport-request";
+import { idleRatio } from "../domain/logistics/idle-detection";
 
-/** 每房 heap 态：key 注册表 + 延迟样本环。global reset 可丢（自动重播种）。 */
+/** 每房 heap 态：key 注册表 + 延迟样本环 + 空载观测。global reset 可丢（自动重播种）。 */
 interface RoomPoolState {
   registry: Map<string, RegistryEntry>;
   latencyRing: number[];
+  /** 本房 hauler 空载率快照（每 tick 更新供消费方读取）。 */
+  idleRatio: number;
 }
 const poolRooms = new Map<string, RoomPoolState>();
 
@@ -27,7 +30,7 @@ const LATENCY_RING_CAP = 64;
 function stateFor(roomName: string): RoomPoolState {
   let st = poolRooms.get(roomName);
   if (!st) {
-    st = { registry: new Map(), latencyRing: [] };
+    st = { registry: new Map(), latencyRing: [], idleRatio: 0 };
     poolRooms.set(roomName, st);
   }
   return st;
@@ -64,26 +67,50 @@ export const logisticsSystem: System = {
     const cfg = CONFIG.logistics;
 
     // 全房 creep 租约投影只扫一次（O(creeps)，复用 collectCreepRefs 模式）。
+    // 租约失效检测：assignment.leaseUntil 过期 → valid=false → 回收重挂。
     const leasesByRoom = new Map<string, LeaseSummary[]>();
     const claimsByRoom = new Map<string, Set<string>>();
+    // 用于空载率计算的 hauler 摘要（按 home 分桶）。
+    const haulerSummariesByRoom = new Map<string, { name: string; lastActionTick: number; ticksToLive: number; role: string }[]>();
     for (const creep of Object.values(Game.creeps)) {
       if (creep.spawning) continue;
       const home = creep.memory.home ?? creep.room?.name;
       if (!home) continue;
       const a = creep.memory.assignment;
+      const tick = ctx.tick;
+      // 租约超时检测：assignment 有 leaseUntil 且已过期 → valid=false。
+      const leaseExpired = a?.leaseUntil !== undefined && tick > a.leaseUntil;
       let leaseList = leasesByRoom.get(home);
       if (!leaseList) { leaseList = []; leasesByRoom.set(home, leaseList); }
       if (a?.kind === "haul" && a.id) {
-        leaseList.push({ sourceId: a.sourceId, valid: true });
-        let claims = claimsByRoom.get(home);
-        if (!claims) { claims = new Set(); claimsByRoom.set(home, claims); }
-        claims.add(a.id);
+        leaseList.push({ sourceId: a.sourceId, valid: !leaseExpired });
+        if (!leaseExpired) {
+          let claims = claimsByRoom.get(home);
+          if (!claims) { claims = new Set(); claimsByRoom.set(home, claims); }
+          claims.add(a.id);
+        }
+      }
+      // 收集 hauler 摘要供空载率计算。
+      const role = creep.memory.role;
+      if (role === "hauler" || role === "distributor") {
+        let summaries = haulerSummariesByRoom.get(home);
+        if (!summaries) { summaries = []; haulerSummariesByRoom.set(home, summaries); }
+        summaries.push({
+          name: creep.name,
+          lastActionTick: (creep.memory as { lastActionTick?: number }).lastActionTick ?? tick,
+          ticksToLive: creep.ticksToLive ?? 1500,
+          role,
+        });
       }
     }
 
     for (const snapshot of ctx.snapshots()) {
       const roomName = snapshot.roomName;
       const st = stateFor(roomName);
+
+      // 空载率计算：本房 hauler 摘要 → idleRatio。
+      const haulerSummaries = haulerSummariesByRoom.get(roomName) ?? [];
+      st.idleRatio = idleRatio(haulerSummaries, ctx.tick, cfg.idleHaulerThreshold);
 
       // 供给登记：含能非 controller container（controller container 是投递目标）。
       const ccId = snapshot.controllerContainer?.id;
@@ -175,6 +202,15 @@ export const logisticsSystem: System = {
 
       g.transportPool.rooms[roomName] = dedupedReqs.map(toTaskEntry);
 
+      // P3-3：tower 补给请求 — 塔低于饥渴阈值时生成独立补给请求。
+      // 不影响收集请求提级（已有 boostedPriority），补充一条从 supply 到 tower 的搬运任务。
+      if (towerStarving) {
+        const towerReqs = buildTowerSupplyRequests(roomName, supplies, cfg.towerStarveThreshold);
+        for (const tr of towerReqs) {
+          g.transportPool.rooms[roomName]?.push(toTaskEntry(tr));
+        }
+      }
+
       // A4.3：合并 logistics-planner 产出的 Plan 中 scope="room" 的请求。
       // Plan 驱动的请求适配为 AssignmentTaskEntry 格式，追加到本房任务槽。
       // scope="empire" 的请求不进 transportPool — 由 agenda-manager carrier 执行。
@@ -194,6 +230,15 @@ export const logisticsSystem: System = {
         }
       }
     }
+    // P3-2：空载率指标写入 globalCache 供消费方读取。
+    const allIdleRatios: Record<string, number> = {};
+    let maxIdleRatio = 0;
+    for (const [roomName, st] of poolRooms) {
+      allIdleRatios[roomName] = st.idleRatio;
+      if (st.idleRatio > maxIdleRatio) maxIdleRatio = st.idleRatio;
+    }
+    g.logisticsIdleRatio = { tick: ctx.tick, byRoom: allIdleRatios, max: maxIdleRatio };
+
     // A3.0：empire scope 跨房调拨不再通过 transportPool — carrier 角色独立搬运，
     // 不走 hauler assignment 链。agenda-manager 直接提交 carrier spawn 请求。
   },
@@ -202,6 +247,35 @@ export const logisticsSystem: System = {
 /** 查询口（观测用）：房间延迟样本环（只读副本）。 */
 export function logisticsLatencySamples(roomName: string): readonly number[] {
   return poolRooms.get(roomName)?.latencyRing ?? [];
+}
+
+/** 查询口（观测用）：房间空载率快照。 */
+export function logisticsIdleRatio(roomName: string): number {
+  return poolRooms.get(roomName)?.idleRatio ?? 0;
+}
+
+/**
+ * 为低能量塔生成补给搬运请求。
+ * 每个含能 container 都可作为一个 supply source，
+ * 优先级 P0（与 towerStarving 提级一致），确保 hauler 优先补塔。
+ */
+function buildTowerSupplyRequests(
+  roomName: string,
+  supplies: readonly SupplySource[],
+  _towerStarveThreshold: number,
+): TransportRequest[] {
+  const reqs: TransportRequest[] = [];
+  for (const s of supplies) {
+    reqs.push({
+      key: "tower-supply:" + roomName + ":" + s.id,
+      resource: "energy",
+      amount: s.available,
+      sourceId: s.id,
+      pos: s.pos,
+      priority: 0,
+    });
+  }
+  return reqs;
 }
 
 /**

@@ -52,7 +52,7 @@
 | --- | --- |
 | 阈值制 | 每房每资源维持 [min, max] 区间：超上限→挂卖或调拨邻房；低于下限→请求（research/12 §10.4）。能量作为运费单独记账。 |
 | 运费公式 | `ceil(amount×(1−e^(−distance/30)))`；样本：d=5→15.4%、d=10→28.3%、d=30→63.2%、d=60→86.5%、d=100→96.4%。**结论：近距调拨近乎免费、远距接近全损——远距缺口走市场买卖，不走搬运**（research/12 §10.4）。 |
-| 写权边界 | terminal 跨房 send 的决策权＝Empire（调拨令，[ECONOMY_ARCHITECTURE.md](ECONOMY_ARCHITECTURE.md) §1.2）；市场 deal＝MarketManager 唯一写者（幂等键）；Logistics 是动作执行载体（Writer）与房内阈值均衡 Owner（Owner/Writer 分离，[STATE_OWNERSHIP_MODEL.md](STATE_OWNERSHIP_MODEL.md) §1）。 |
+| 写权边界 | terminal 跨房 send 的决策权＝Empire（调拨令，[ECONOMY_ARCHITECTURE.md](ECONOMY_ARCHITECTURE.md) §1.2）；市场 deal＝TerminalManager 唯一写者（幂等键，生产入口 `src/systems/terminal-manager.ts`）；Logistics 是动作执行载体（Writer）与房内阈值均衡 Owner（Owner/Writer 分离，[STATE_OWNERSHIP_MODEL.md](STATE_OWNERSHIP_MODEL.md) §1）。 |
 | 市场数据 | getAllOrders 低频缓存（100+ tick 或事件驱动）；只处理已完成订单（核对 remainingAmount）（research/12 §10.4）。 |
 | 档位 | P2、每 N tick（[SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.6）。 |
 

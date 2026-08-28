@@ -342,3 +342,50 @@ describe("R11 systems 间值导入审计", () => {
     expect(bad, "未登记的系统间值导入: " + bad.join(", ")).toHaveLength(0);
   });
 });
+
+describe("R12 production bundle parity", () => {
+  // 审计文档 §3.2：bootstrap 注册集合、构建 bundle、运行时系统清单必须对齐。
+  // 此测试验证 dist/main.js 包含 bootstrap.ts 中所有 registerSystem 参数标识符。
+  // 如果 dist/main.js 不存在（未构建），跳过而非失败——CI 中 build 先于 test。
+  const distPath = resolve(process.cwd(), "dist/main.js");
+  let distSrc: string;
+  try {
+    distSrc = readFileSync(distPath, "utf8");
+  } catch {
+    it.skip("dist/main.js 不存在，跳过 bundle parity 检查（先运行 npm run build）", () => {});
+    return;
+  }
+
+  const bootstrapPath = resolve(SRC, "bootstrap.ts");
+  const bootstrapSrc = readFileSync(bootstrapPath, "utf8");
+  const systemCalls = [...bootstrapSrc.matchAll(/\.registerSystem\(\s*(\w+)\s*\)/g)].map(m => m[1]!);
+  const roleCalls = [...bootstrapSrc.matchAll(/\.registerRole\(\s*(\w+)\s*\)/g)].map(m => m[1]!);
+
+  it("每个 registerSystem 参数都出现在 dist/main.js 中", () => {
+    const missing: string[] = [];
+    for (const ident of systemCalls) {
+      // bundle 中变量名可能被 minify 但保留函数名/类名（terser keep_fnames）。
+      // 检查系统 name 字符串更可靠——registerSystem 调用会传入 name 属性。
+      // 但最可靠的是检查 system name 字面量是否出现在 bundle 中。
+    }
+    // 检查每个系统的 name 字符串是否出现在 bundle 中
+    const systemNames = [...bootstrapSrc.matchAll(/name:\s*["']([^"']+)["']/g)].map(m => m[1]!);
+    for (const name of systemNames) {
+      if (!distSrc.includes(name)) {
+        missing.push(name);
+      }
+    }
+    expect(missing, "系统 name 未出现在 dist/main.js 中: " + missing.join(", ")).toHaveLength(0);
+  });
+
+  it("dist/main.js 不包含已删除的 intelligence/decision-trace/evaluation 模块", () => {
+    const forbidden = ["intelligence-pipeline", "decision-trace", "evaluation-system", "EvaluationRegistry"];
+    const found: string[] = [];
+    for (const keyword of forbidden) {
+      if (distSrc.includes(keyword)) {
+        found.push(keyword);
+      }
+    }
+    expect(found, "dist/main.js 包含已删除模块: " + found.join(", ")).toHaveLength(0);
+  });
+});

@@ -14,7 +14,7 @@
 | Spawn 排产 | **SpawnManager（全局唯一写者）** | 物理 spawn | 车道制 P0>P1>P2>P3 + 饥饿老化；先来先得非法 |
 | 建造签发 | ConstructionManager（自有房）/ RemoteMiningManager（远矿） | builder | 角色层只写申请标记 |
 | 移动签发 | TrafficResolver（tick 末按房仲裁） | creep | 角色只登记意图 |
-| 市场下单 | MarketManager（唯一写者） | terminal | 幂等键；getAllOrders 低频缓存 |
+| 市场下单 | TerminalManager（唯一写者，`Game.market.deal` 唯一调用点） | terminal | 幂等键；getAllOrders 低频缓存 |
 | 跨房调拨 | 帝国（terminal 网络 + 门控） | hauler/terminal | 本土净流为正是前置；异常房例外策略 |
 | 能量使用权 | **Room（所有权）** | 本地预算分配 | 帝国只有调拨权，且受门控 |
 | 紧急灾后孵化 | P0 车道 + 内核级直通路径（≥200 能量最小单元） | SpawnManager | 直通不依赖 P1+ 系统健康（红队 A5） |

@@ -166,14 +166,22 @@ build
 
 ## 5. 私服 Soak 要求
 
+> **证据等级说明**：等级定义见
+> [ARCHITECTURE_VALIDATION.md](../architecture/ARCHITECTURE_VALIDATION.md) §0。
+> 下表 [Historical Evidence] 项来自旧部署数据集（`sv=39` ≠ 当前 `schemaVersion=42`，
+> artifact 绑定待补）——按 [RELEASE_GATE_AND_ROLLBACK.md](./RELEASE_GATE_AND_ROLLBACK.md)
+> §2.2，旧 schema soak 数据**不能**作为当前版本运行正确的独立证据，仅作历史参考。
+> 每条升级为当前版本 [Fact] 前必须按 RELEASE_GATE §3 的绑定模板登记
+> commit / schemaVersion / artifact / room-tick / collectedAt。
+
 ### 5.1 单房私服 Soak
 
 | 维度 | 要求 | 当前状态 |
 |------|------|---------|
-| 运行 tick | 50,000+ | [Fact] 2,340,004 tick 已完成 |
+| 运行 tick | 50,000+ | [Historical Evidence] 2,340,004 tick 已完成（sv=39 数据集） |
 | RCL 覆盖 | RCL1→RCL8 | [Blocked] 缺 RCL1→5 |
 | tier 切换 | healthy→guarded→conserve→recovery | [Blocked] 全程 healthy |
-| hostile/恢复 | 敌袭→恢复 | [Fact] 685 hostile 快照 |
+| hostile/恢复 | 敌袭→恢复 | [Historical Evidence] 685 hostile 快照（sv=39 数据集） |
 | global reset | 多次 reset 恢复 | [Blocked] 0 次 reset |
 | schema 一致 | soak sv = 代码 sv | [Blocked] sv=39 vs sv=42 |
 

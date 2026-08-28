@@ -8,12 +8,34 @@
 > [STATE_OWNERSHIP_MODEL.md](STATE_OWNERSHIP_MODEL.md) §3.8；模块八项见
 > [SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.12。
 
+## 0. 当前生产状态（R11 裁决 · 必读）
+
+**本文件全部章节是冻结蓝图的目标合同；下表区分「目标」与「当前生产现状」。**
+任何 coding agent 不得因本文件而恢复 R11 已删除的生产接线。
+
+| 项 | 状态 |
+| --- | --- |
+| 本文件 §1–§8 概念合同（Observation/Intel/Knowledge/Threat/Prediction/History、TTL、置信度、硬门槛） | **目标架构（Design-Verified）**，仍为冻结蓝图 |
+| `intelligence-pipeline`（A6 智能层）、`decision-trace`、`evaluation-system` | **Shadow-Only**：R11 裁决从生产路径移除；`src/domain/intelligence/` 与 `src/domain/strategy/decision-trace.ts` 不进入生产 bundle、不被任何 src 文件导入；后续分批清理 |
+| 生产中的观察采集 | 由 `room-observer`（低频房间观察）与 `prospect-manager`（扩张期侦察孵化）承担；统一 IntelState 写者系统尚未注册 |
+| 恢复注册条件 | 仅当 P0 运行时收口全部完成，且有明确消费者需求与 CPU/Memory 预算证明时，走 ARCHITECTURE_FREEZE §15 新 ADR |
+
+**测试验证层级（防误读）**：
+
+- `tests/unit/intelligence/*`、`tests/unit/strategy/a4-7-decision-trace.test.ts`
+  ——验证 **Shadow-Only 设计源码**（`src/domain/intelligence/`、
+  `src/domain/strategy/decision-trace.ts`），通过不等于生产行为被验证；
+- `tests/e2e/scenarios/11-decision-trace.test.ts`——断言生产运行日志中出现
+  decision-trace 输出。R11 后生产 bundle 已无 decision-trace 模块与日志发射点，
+  **该 E2E 与 R11 冲突**，在按新 ADR 重定向或移除前不得作为生产行为证据引用。
+
+
 ## 1. 六概念合同
 
 | 概念 | 是什么（必须语义） | 禁止 |
 | --- | --- | --- |
 | **Observation（观察）** | 三通道采集：①**被动可见**（自有 / 远矿房 RoomSnapshot 顺手沉淀——零边际成本，永远在线含 Recovery 档）；②**scout 巡访**（低频环路 + 目标导向任务；身体极简，损失按耗材计）；③**observer 定点**（RCL8、每房 1 座、射程 10 房的静态巡检网，research/03；无 cooldown 常量已核、散文未确认——P1 私服复核，[RESEARCH_SYNTHESIS.md](RESEARCH_SYNTHESIS.md) §5） | 无消费者的采集通道；多 observer 重复观察同一房（帝国层汇总去重生成统一巡检表） |
-| **Intel（情报）** | 四域冷存记录：**房间**（归属/RO/RCL/威胁快照/防御估值/source 数/矿物）、**玩家**（威胁指数/攻击历史/胜率估计/黑名单/最后活动房/宿敌距离）、**资源与地形**（资源估值字段 + 地形矩阵 + 世界结构先验）、**市场**（订单簿/价格历史——市场系统所有，本系统只读缓存，research/14 §10.7）；载体为 IntelEntry（§2） | 情报写主 Memory（序列化税，research/14 §11）；充当市场订单的采集写者（归 MarketManager） |
+| **Intel（情报）** | 四域冷存记录：**房间**（归属/RO/RCL/威胁快照/防御估值/source 数/矿物）、**玩家**（威胁指数/攻击历史/胜率估计/黑名单/最后活动房/宿敌距离）、**资源与地形**（资源估值字段 + 地形矩阵 + 世界结构先验）、**市场**（订单簿/价格历史——市场系统所有，本系统只读缓存，research/14 §10.7）；载体为 IntelEntry（§2） | 情报写主 Memory（序列化税，research/14 §11）；充当市场订单的采集写者（归 TerminalManager） |
 | **Knowledge（知识）** | 三分置信度：**fact**（本源直接观测且在新鲜度窗内）/ **stale**（曾观测、超窗未复核）/ **inferred**（先验推导：世界结构坐标推导、行为模式假设、盟友转述）；三分**禁止混用**（§5） | stale / inferred 冒充 fact；置信度二元化（逼消费方自行猜测，research/14 §11） |
 | **Threat（威胁）** | 四级威胁评估的 intel 输入接口：向 Defense 供给可见敌情（body/数量/boost/补给距离）与 PlayerIntel 威胁记忆；置信度随新鲜度衰减（分级消费归 [DEFENSE_ARCHITECTURE.md](DEFENSE_ARCHITECTURE.md) §3） | 情报系统直接触发军事 / 防御动作（开战权在战略层，research/14 §11） |
 | **Prediction（预测）** | **仅限显式模型**：威胁到达时间估计、敌方可持续时间区间（Economic estimate 类）；一切预测值**必须**标注 inferred（§5 使用规则） | 隐式预测（外推值当观测值存储）；预测值进入 fact 通道 |

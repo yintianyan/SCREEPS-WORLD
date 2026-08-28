@@ -204,6 +204,9 @@ export interface GlobalCache {
   /** A4.3：闲置 hauler 名称列表（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsIdleHaulers?: { tick: number; names: string[] };
+  /** P3：各房 hauler 空载率快照（logistics 每 tick 写入）。
+   * 消费方：self-healing 收缩判定、tuning-engine 调参、empire-economy 健康度。 */
+  logisticsIdleRatio?: { tick: number; byRoom: Record<string, number>; max: number };
   /** A4.4：Transport Accounting 运行时追踪（logistics-planner 每 100t 写入）。
    * 包含 summary 统计 + entries 每条 Request 的会计明细。
    * 标注为观测字段 — summary+entries 均无代码消费者，

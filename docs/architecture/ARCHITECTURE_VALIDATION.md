@@ -4,6 +4,25 @@
 > 架构响应链（逐层推演）/ 通过判据 / 薄弱点。依据：冻结层各契约 + research/24/29/30。
 > 本文档是冻结前的最后一道验证门，红队（ARCHITECTURE_RED_TEAM.md）在其后执行。
 
+## 0. 验证等级（唯一权威定义 · 全仓引用此处，不得另造术语）
+
+本文档十场景全部处于 **Design-Verified** 级。任何文档、测试报告或发布记录描述
+某个能力时必须标注下列等级之一；**禁止用「架构通过」推导「线上已经通过」**：
+
+| 等级 | 含义 | 证据形态 |
+| --- | --- | --- |
+| **Design-Verified** | 设计推演闭合（本文十场景、红队） | 本文场景链 + 通过判据 |
+| **Code-Verified** | 源码实现且测试覆盖 | 单元/集成测试在指定 commit 全绿 |
+| **Integration-Verified** | 模拟/集成场景通过（私服 mockup） | tests/integration、tests/e2e 场景记录 + commit |
+| **Soak-Verified** | 指定 commit 和数据文件的长期运行证据 | soak artifact（commit + schemaVersion + 文件 + tick 范围绑定） |
+| **Release-Ready** | 满足发布门禁（[RELEASE_GATE_AND_ROLLBACK.md](../implementation/RELEASE_GATE_AND_ROLLBACK.md) 全部门禁） | 发布记录模板填写完整 |
+
+当前全仓最高等级：Design-Verified（十场景）+ Code-Verified（单元/集成测试）；
+Soak-Verified 项因 schema 版本错位（旧 soak sv=39 vs 当前 sv=42）与 artifact 缺失
+整体降级为 **Historical Evidence**，登记见
+[CANARY_SOAK_PROCEDURE.md](../implementation/CANARY_SOAK_PROCEDURE.md) §5 与当前
+状态快照 [STATUS.md](../STATUS.md)。
+
 ## Scenario A · 单房间 RCL1 → RCL8
 
 **设定**：空 Memory、1 spawn 300 能量、零人工指令，发展到 RCL8。
@@ -101,7 +120,10 @@ tower 能量补给在围城期不断供（15 号能量会计）。
 ## Scenario J · CPU Overload
 
 **设定**：脚本超限→bucket 下滑→逼近 Recovery。
-**架构响应链**：四档看门狗比例化降级（立即生效）→ 牺牲序：P3（远矿/建造/军事
+**架构响应链**：四档看门狗比例化降级（立即生效；CpuTier 枚举仅四档，Emergency
+Survival Mode 是 Recovery 档内的紧急再收缩状态而非第五档，见
+[RELEASE_GATE_AND_ROLLBACK.md](../implementation/RELEASE_GATE_AND_ROLLBACK.md) §5.2）→
+牺牲序：P3（远矿/建造/军事
 集结）→P2 限流→P1 保核心经济→P0 永不动（spawn 恢复/防御）→ 恢复走滞回 →
 tickLimit 的 500 bucket 透支余量用于 global reset 后首 tick 重建峰值（红队 A11
 确认）。
@@ -113,4 +135,8 @@ tickLimit 的 500 bucket 透支余量用于 global reset 后首 tick 重建峰�
 
 十场景全部在既有契约内闭合：**无场景要求新增架构组件，无场景暴露不可修复的
 结构缺陷**。6 个薄弱点全部是参数级（已在 RESEARCH_SYNTHESIS §5 登记验证时点）
-或已由红队修订覆盖。**架构通过验证，进入红队评审。**
+或已由红队修订覆盖。**架构通过验证（Design-Verified 级，见 §0），进入红队评审。**
+本判定**仅覆盖设计层**：不等于 Code-Verified / Soak-Verified / Release-Ready，
+运行时验收状态以 [STATUS.md](../STATUS.md) 与
+[RELEASE_GATE_AND_ROLLBACK.md](../implementation/RELEASE_GATE_AND_ROLLBACK.md)
+的 Blocked 项登记为准。

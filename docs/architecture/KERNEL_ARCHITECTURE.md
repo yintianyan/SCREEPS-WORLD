@@ -87,6 +87,11 @@ P 序是**降级牺牲序而非重要度排名**：P0 的量永远最小，预�
 | Conserve | bucket 逼近硬线 | 仅 P0 + P1 降频（每 2–5 tick）；移动复用缓存路径 | P2/P3 运行；扩张立项 |
 | Recovery | bucket 触底 / 前一 tick 超时被切断 | 最小生存集（P0 + 能量自给），停一切中长程工作 | 一切发展 / 增长类工作；饥饿老化「必跑」标记（见 §5） |
 
+> 术语注记：看门狗**只有四档** `CpuTier`（`healthy/guarded/conserve/recovery`，
+> 阈值唯一真相源 `CONFIG.cpu.tiers`）。发布运行态中的 Emergency Survival Mode
+> （bucket < 100 级紧急安全状态）是 Recovery 档内的再收缩层，**不是第五档 CpuTier**；
+> 定义见 [RELEASE_GATE_AND_ROLLBACK.md](../implementation/RELEASE_GATE_AND_ROLLBACK.md) §5.2。
+
 ## 4. 熔断器（circuit breaker）
 
 1. 同一错误签名**连续失败 3 次** → 进入冷却 50–200 tick（时长按时长表，P 级越高

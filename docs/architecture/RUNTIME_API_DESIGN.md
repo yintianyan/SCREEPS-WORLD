@@ -30,7 +30,7 @@
 | `EmpireQuery` | `getEmpireState()` | — → posture / 预算 / 房间注册 / 活跃 Agenda 摘要 | EmpireState 只读视图；快照未刷新则返回上次决策（红队 A1） |
 | `RoomQuery` | `getRoomState(roomName)` | 房名 → phase / 能量收支 / 人口 / 建造 / 防御 / 健康度 | RoomState 归一化结果只读；全量每 N tick + 增量每 tick |
 | `ResourceQuery` | `queryStock(domain, room?)` | 资源域（能量/矿物/credits/CPU 预算）→ 水位与余量 | 供给任何门控判定的读侧；能量属 Room、帝国只有调拨权（调和 §10.1） |
-| `IntelQuery` | `query(domain, filter)` | intel 域 + 过滤器 → IntelEntry 列表（含置信度） | **异步激活语义**：本 tick 请求下 tick 可读；stale/inferred 禁当 fact（多源新鲜度硬门槛，红队 A7） |
+| `IntelQuery` | `query(domain, filter)` | intel 域 + 过滤器 → IntelEntry 列表（含置信度） | **异步激活语义**：本 tick 请求下 tick 可读；stale/inferred 禁当 fact（多源新鲜度硬门槛，红队 A7）。**当前生产状态（R11）**：本接口为蓝图概念合同；`intelligence-pipeline`/`decision-trace`/`evaluation-system` 已 Shadow-Only（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0），生产中无注册 Intelligence 查询入口，恢复须走新 ADR |
 
 ## 3. 服务组（domain 纯函数层）
 
@@ -50,6 +50,7 @@
 | `LogisticsService` | `submitRequest()` / `claimLease()` | LogisticsRequest → 租约 | 供需池与租约分配；link / terminal 是独立低频通道，不进 creep 物流池 |
 | `ConstructionService` | `requestSite()` / 标记 `needContainer` | 蓝图段 / 申请标记 → site 签发回执 | `createConstructionSite` 唯二入口（ConstructionManager 自有房 + RemoteMiningManager 远矿）；角色层只写申请标记 |
 | `MilitaryService` | `planWave(intel)` / `evaluateWarOutcome(intel)` | 新鲜 intel → 波次计划 / 战后核验结论 | war-planner 决策纯函数；仅 war 姿态活动；attacker 孵化经 `SpawnService` 提交；止损链不可绕过 |
+| `TerminalService` | `deal(orderId, amount, roomName)` / `send(resourceType, amount, dest, roomName)` | 市场订单 / 跨房调拨令 → 成交回执 / 发货回执 | `Game.market.deal` 与 terminal `send` 唯一入口（**TerminalManager**，生产入口 `src/systems/terminal-manager.ts`；不存在 `MarketManager`）；幂等键 + 成交核验（红队 A12）；下单决策输入来自 Economy / Empire，调拨令决策权在 Empire |
 
 ## 5. 平台组
 
@@ -72,6 +73,8 @@
 | Empire（战略） | ✔ 全部只读 | ✔（授权 / 复核） | ✔（读聚合摘要） | △³ | ✖ | StateStore（EmpireState）+ Metrics |
 | Agenda 管理器 | ✔ | Planning/Operation ✔ | Demand ✔（生命周期内声明） | ✖（不直接派单） | ✖ | StateStore（AgendaItem）+ Metrics |
 | 业务系统（Economy/Logistics/Defense/Military/Expansion/Intelligence） | ✔ | Military ✔（授权只读）⁴；其余 △⁵ | Demand ✔（推导登记） | 各自对应者 ✔⁶；其余 ✖ | ✖ | StateStore（自有状态）+ Metrics |
+
+> 注：Intelligence 行当前为 Shadow-Only（R11 裁决，[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）——矩阵保留其目标架构位置，生产中该行无注册载体。
 | 唯一写者（SpawnManager 等） | ✔（队列核算所需） | ✖ | ✔（消化请求池） | 写者间 ✖ | ✖ | StateStore（自有队列）+ Metrics |
 | Execution Runtime / RolePolicy | ✔（经快照） | ✖ | Task ✔（认领 / 续约）+ Demand △⁷ | Construction ✔（仅申请标记）⁸；Spawn ✖ | ✖ | StateStore（CreepState）+ Metrics |
 | Observability / Self-Healing | ✔（只读对账） | ✖ | ✖ | ✖（恢复动作经对应 owner 公开接口） | Kernel 采样只读 | Metrics ✔；StateStore ✖⁹ |
