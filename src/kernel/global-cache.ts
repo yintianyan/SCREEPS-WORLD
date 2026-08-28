@@ -424,6 +424,23 @@ export interface GlobalCache {
    * heap 存储 — global reset 丢失可接受（recommendation 是可观测设施，非持久真相）。
    * REC-001：Recommendation Engine 唯一可写的 globalCache 字段。 */
   __recommendationCache?: unknown;
+
+  /** E7: site 进度追踪 — 跨 tick 记录每个 site 的进度快照，用于检测长期无进展。
+   * key = site id，value = { lastProgress, lastProgressTick, builderVisits }。
+   * heap 存储 — global reset 丢失可接受（追踪数据是观测数据，reset 后重建）。 */
+  siteProgressTracker?: Map<string, {
+    lastProgress: number;
+    lastProgressTick: number;
+    builderVisits: number;
+  }>;
+
+  /** E8: 路径失败追踪 — 跨 tick 记录每个 creep 的移动失败次数和最近成功 tick。
+   * key = roomName:creepName，value = { lastSuccessTick, consecutiveFailures }。
+   * heap 存储 — global reset 丢失可接受（追踪数据是观测数据，reset 后重建）。 */
+  pathFailureTracker?: Map<string, {
+    lastSuccessTick: number;
+    consecutiveFailures: number;
+  }>;
 }
 
 /**

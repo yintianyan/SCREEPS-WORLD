@@ -13,7 +13,7 @@ import { requestSegments, flushSegments } from "./segment-store";
 import { measuredRun, safeRun, safeRunBuild } from "./safe-run";
 import { buildCadenceTable, resolveInterval, type CadenceTable } from "./cadence";
 import { createBudget } from "./scheduler";
-import { evaluateExpectations, P3_BYPASS_WINDOW_TICKS, type P3SystemRef, type SpawnQueueSnapshot, type E3ViolationRecord, type RCLSnapshot, type BuildQueueSnapshot, type RecoverySnapshot, type MemorySizeSample } from "./expectations";
+import { evaluateExpectations, P3_BYPASS_WINDOW_TICKS, type P3SystemRef, type SpawnQueueSnapshot, type E3ViolationRecord, type RCLSnapshot, type BuildQueueSnapshot, type RecoverySnapshot, type MemorySizeSample, type SiteProgressSnapshot, type PathFailureSnapshot } from "./expectations";
 import { EventKind, recordEvent } from "./event-log";
 import { emitSummary, initTelemetry } from "./telemetry";
 import {
@@ -410,8 +410,10 @@ export class Kernel {
       rclSnapshots: this.collectRCLSnapshots(ctx),
       // E6: buildQueue 快照（从每房 RoomMemory 采集）
       buildQueues: this.collectBuildQueueSnapshots(ctx),
-      // E7: site 进度快照（暂不采集，需 game object 访问 — Phase 8 接线）
-      // E8: 路径失败快照（暂不采集，需 movement 系统接入 — Phase 8 接线）
+      // E7: site 进度快照（从 Game.constructionSites 采集 + globalCache 追踪）
+      siteProgresses: this.collectSiteProgressSnapshots(ctx),
+      // E8: 路径失败快照（从 globalCache.pathFailureTracker 采集）
+      pathFailures: this.collectPathFailureSnapshots(ctx),
       // E9: recovery 状态快照（从每房 RoomMemory 采集）
       recoverySnapshots: this.collectRecoverySnapshots(ctx),
     });
@@ -471,6 +473,67 @@ export class Kernel {
         rcl: snap.rcl,
         builderCount,
         colonyState: roomMem?.colonyState,
+      });
+    }
+    return result;
+  }
+
+  /** E7: 采集 site 进度快照（从 Game.constructionSites + globalCache 追踪）。
+   * 遍历全局 construction sites（无需房间可见），对比上次进度判断是否停滞。
+   * builderVisits 从 buildQueue 中 site 状态任务估算。 */
+  private collectSiteProgressSnapshots(ctx: Context): SiteProgressSnapshot[] {
+    const result: SiteProgressSnapshot[] = [];
+    const tracker = globalCache().siteProgressTracker ??= new Map();
+    for (const id in Game.constructionSites) {
+      const site = Game.constructionSites[id];
+      if (!site) continue;
+      const roomName = site.pos.roomName;
+      const prev = tracker.get(id);
+      const currentProgress = site.progress;
+      const total = site.progressTotal;
+      const progressChanged = prev ? prev.lastProgress !== currentProgress : true;
+      const lastProgressTick = progressChanged ? ctx.tick : (prev?.lastProgressTick ?? ctx.tick);
+      const builderVisits = prev?.builderVisits ?? 0;
+      tracker.set(id, {
+        lastProgress: currentProgress,
+        lastProgressTick,
+        builderVisits,
+      });
+      result.push({
+        room: roomName,
+        siteId: id,
+        structureType: site.structureType,
+        progress: currentProgress,
+        progressTotal: total,
+        lastProgressTick,
+        builderVisits,
+        siteAge: ctx.tick - (prev?.lastProgressTick ?? ctx.tick),
+      });
+    }
+    // 清理已消失的 site 追踪条目（防 Map 无限增长）
+    for (const trackedId of tracker.keys()) {
+      if (!Game.constructionSites[trackedId]) tracker.delete(trackedId);
+    }
+    return result;
+  }
+
+  /** E8: 采集路径失败快照（从 globalCache.pathFailureTracker 采集）。
+   * 追踪器由 movement 系统在卡位/寻路失败时写入，这里只读取聚合。 */
+  private collectPathFailureSnapshots(ctx: Context): PathFailureSnapshot[] {
+    const tracker = globalCache().pathFailureTracker;
+    if (!tracker || tracker.size === 0) return [];
+    const result: PathFailureSnapshot[] = [];
+    for (const [key, val] of tracker) {
+      const sep = key.indexOf(":");
+      const room = sep > 0 ? key.substring(0, sep) : "?";
+      const creepName = sep > 0 ? key.substring(sep + 1) : key;
+      // 跳过已恢复的条目（连续失败=0 且有最近成功记录）
+      if (val.consecutiveFailures === 0) continue;
+      result.push({
+        room,
+        pathId: creepName,
+        lastSuccessTick: val.lastSuccessTick,
+        consecutiveFailures: val.consecutiveFailures,
       });
     }
     return result;

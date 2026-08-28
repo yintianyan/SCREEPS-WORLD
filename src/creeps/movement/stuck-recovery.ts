@@ -69,6 +69,37 @@ export function tryPullBlocker(creep: Creep, targetPos: RoomPosition): void {
   }
 }
 
+// ─── E8 路径失败追踪 ───
+
+/** 记录一次移动成功 — 重置连续失败计数，更新最近成功 tick。
+ * 由 pathfinding.ts 的 moveToTarget 在 move 返回 OK/ERR_TIRED 时调用。 */
+export function recordPathSuccess(creep: Creep): void {
+  const tracker = globalCache().pathFailureTracker ??= new Map();
+  const key = creep.room.name + ":" + creep.name;
+  const entry = tracker.get(key);
+  if (entry) {
+    entry.lastSuccessTick = Game.time;
+    entry.consecutiveFailures = 0;
+  }
+}
+
+/** 记录一次移动失败 — 递增连续失败计数。
+ * 由 pathfinding.ts 在 move 返回非 OK/ERR_TIRED/ERR_BUSY 时调用，
+ * 以及由 stuck-recovery 的 Level 3 弃目标时调用。 */
+export function recordPathFailure(creep: Creep): void {
+  const tracker = globalCache().pathFailureTracker ??= new Map();
+  const key = creep.room.name + ":" + creep.name;
+  const entry = tracker.get(key);
+  if (entry) {
+    entry.consecutiveFailures++;
+  } else {
+    tracker.set(key, {
+      lastSuccessTick: Game.time,
+      consecutiveFailures: 1,
+    });
+  }
+}
+
 // ─── 卡位检测 ───
 
 /**

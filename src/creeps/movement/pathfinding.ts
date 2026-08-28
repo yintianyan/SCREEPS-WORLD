@@ -4,7 +4,7 @@ import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
 import { recordSkip } from "../../kernel/memory";
 import { packPos, recordTraffic } from "./traffic";
-import { checkAndExecuteYield, tryPullBlocker, updateStuckTicks, clearTarget, DIR_DELTA } from "./stuck-recovery";
+import { checkAndExecuteYield, tryPullBlocker, updateStuckTicks, clearTarget, recordPathSuccess, recordPathFailure, DIR_DELTA } from "./stuck-recovery";
 import { movePriorityFor, nextDirFromPath, registerMove, trafficEnabled } from "./intent";
 
 // ─── CostMatrix 缓存（结构层）────────────────────────────
@@ -921,6 +921,7 @@ export function moveToTarget(
   // 不重置的后果（线上实测）：放弃分支不执行移动 → 位置不变 → stuckTicks 只增不减 → 每 tick
   // 直接进本分支 → 吸收态，虚假障碍消失后也永远出不来，全房 creep 集体静止。
   if (stuckTicks >= stuckThreshold + repathLimit) {
+    recordPathFailure(creep);
     clearTarget(creep);
     creep.memory.stuckTicks = 0;
     creep.memory.mode = "idle";
@@ -1031,6 +1032,9 @@ export function moveToTarget(
   };
 
   const result = creep.moveTo(pos, options);
-  if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+  if (result === OK || result === ERR_TIRED) {
+    recordTraffic(creep);
+    recordPathSuccess(creep);
+  }
   return result;
 }

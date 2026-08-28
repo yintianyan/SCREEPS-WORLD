@@ -475,6 +475,173 @@
         { "expr": "rate(screeps_planning_decisions_accepted_total[5m])", "legendFormat": "Accepted ({{planner}})", "refId": "A" },
         { "expr": "rate(screeps_planning_decisions_rejected_total[5m])", "legendFormat": "Rejected ({{planner}})", "refId": "B" }
       ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 48 },
+      "id": 104,
+      "title": "Alerts & Soak Health",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 2 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 6, "w": 4, "x": 0, "y": 49 },
+      "id": 50,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "title": "Active Alerts",
+      "type": "stat",
+      "targets": [
+        { "expr": "sum(ALERTS{alertstate=\"firing\"})", "legendFormat": "Firing", "refId": "A" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 6, "w": 4, "x": 4, "y": 49 },
+      "id": 51,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "title": "Pending Alerts",
+      "type": "stat",
+      "targets": [
+        { "expr": "sum(ALERTS{alertstate=\"pending\"})", "legendFormat": "Pending", "refId": "A" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1048576 },
+              { "color": "green", "value": 2097152 }
+            ]
+          },
+          "unit": "bytes"
+        }
+      },
+      "gridPos": { "h": 6, "w": 4, "x": 8, "y": 49 },
+      "id": 52,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "title": "Memory Size",
+      "type": "stat",
+      "targets": [
+        { "expr": "screeps_runtime_memory_bytes", "legendFormat": "Memory", "refId": "A" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 5 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 6, "w": 4, "x": 12, "y": 49 },
+      "id": 53,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "title": "Active Processes",
+      "type": "stat",
+      "targets": [
+        { "expr": "screeps_kernel_process_active", "legendFormat": "Processes", "refId": "A" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "bytes"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 55 },
+      "id": 54,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "title": "Memory Trend (Bloat Detection)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "screeps_runtime_memory_bytes", "legendFormat": "Memory (bytes)", "refId": "A" },
+        { "expr": "screeps_runtime_segment_bytes", "legendFormat": "Segments (bytes)", "refId": "B" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 50,
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 55 },
+      "id": 55,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "title": "Alert States Over Time",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "sum(ALERTS{alertstate=\"firing\"})", "legendFormat": "Firing", "refId": "A" },
+        { "expr": "sum(ALERTS{alertstate=\"pending\"})", "legendFormat": "Pending", "refId": "B" }
+      ]
     }
   ],
   "refresh": "15s",
