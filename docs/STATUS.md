@@ -1,5 +1,12 @@
 # STATUS · 当前实现状态快照（唯一入口）
 
+> **文档体系冻结声明（2026-08-28）**：自本快照起，docs/ 三层体系（本文件＝现状、
+> architecture/＝冻结契约、research/＝历史证据）作为唯一实现合同进入冻结态。
+> 契约文档改动只走 [ARCHITECTURE_FREEZE.md](architecture/ARCHITECTURE_FREEZE.md)
+> §15 ADR；本文件现状数字只经 §7 刷新程序与 `npm run docs:inventory` 更新；
+> `npm run check:docs` 七项一致性检查为合并门槛（[architecture/TEST_ARCHITECTURE.md](architecture/TEST_ARCHITECTURE.md) §2/§4）。
+> 下一步代码工作以 §6 重构 backlog 为唯一工作项来源（TEST_ARCHITECTURE §7 重构合同）。
+
 > **本文件是当前实现状态的唯一入口**（docs/README.md 三层体系中的现状层）：
 > 回答「现在生产里跑的是什么、验证到什么等级」。目标架构以
 > [architecture/](architecture/) 冻结蓝图为准；历史证据以 [research/](research/) 为准。
@@ -47,44 +54,46 @@
 R10 批 3 计划待合并；**Shadow-Only** = 设计源码存在但不进生产 bundle。
 证据列 = 主要测试入口（完整层级见 [architecture/TEST_ARCHITECTURE.md](architecture/TEST_ARCHITECTURE.md)）。
 
+<!-- inventory:begin —— 本表由 `npm run docs:inventory` 从 bootstrap.ts 生成合并（手工列按键保留），勿整表手工重排 -->
 | 概念模块 | 生产系统（注册名） | 源文件 | P 档 / 节奏 | 状态所有者要点 | 状态 | 证据 |
 | --- | --- | --- | --- | --- | --- | --- |
 | World Model | room-state | `src/systems/room-state.ts` | P0 / 每 tick | RoomState / ColonyState 唯一写者（必须最先运行） | Active | `tests/unit`（room/state 域） |
-| World Model | （世界模型构建器） | `src/systems/room-snapshot.ts` | P0 / 每 tick | RoomSnapshot 每 tick 重建（经 `registerWorldModelBuilder` 注入，非 registerSystem） | Active | 同上 |
 | Economy | economy | `src/systems/economy.ts` | P1 / 50t 房间错峰 | EconomyState（净流/储备/预算三指标） | Active | `tests/unit/economy/` |
-| Economy（生产） | lab-system | `src/systems/lab-system.ts` | P1 / 每 tick 门控 | lab 反应 + boost 库存 | Active | `tests/unit`（lab 域） |
-| Economy（生产） | factory-manager | `src/systems/factory-manager.ts` | P3 / 低频 | factory 商品 + powerSpawn battery 压缩 | Active | `tests/unit`（factory 域） |
-| Economy（Power） | power-creep-manager | `src/systems/power-creep-manager.ts` | P3 / 低频 | GPL 消费闭环（create/upgrade/spawn） | Active | `tests/unit`（power 域） |
 | Spawn | spawn-manager | `src/systems/spawn-manager.ts` | P0 / 每 tick | **spawnCreep 全局唯一写者**；SpawnState（车道/幂等 key/黑名单） | Active | `tests/unit`（spawn 域）+ integration |
+| Defense | tower-defense | `src/systems/tower-defense.ts` | P0 / 每 tick | 塔动作唯一签发 | Active | `tests/unit/defense/` |
+| Empire | empire-strategy | `src/systems/empire-strategy.ts` | P1 / 每 tick 姿态 | posture 求值（唯一目标选择权落点） | Active | `tests/unit/strategy/` |
+| Empire（聚合） | empire-economy | `src/systems/empire-economy.ts` | P1 / 100t | Empire Resource View / Health / Budget / Readiness 聚合 | Active | `tests/unit`（empire 域） |
+| Agenda 管理 | agenda-manager | `src/systems/agenda-manager.ts` | P1 / 100t | AgendaItem 生命周期唯一写者（跨房调拨 Operation） | Active | `tests/unit`（agenda 域） |
 | Logistics | logistics | `src/systems/logistics.ts` | P0 / 每 tick | 供需请求池（搬运 Demand 一等来源） | Active | `tests/unit/logistics/` |
 | Logistics | logistics-planner | `src/systems/logistics-planner.ts` | P1 / 100t | 消费 networkSnapshot 产出 TransportPlan | **Pending Migration**（R10 批 3：并入 logistics） | `tests/unit`（logistics 域） |
 | Logistics（分配） | assignment-system | `src/systems/assignment-system.ts` | P1 / 每 tick | 任务分配（先于 P1 角色；纯函数在 `src/domain/assignment/`） | Active | `tests/unit/logistics/assignment-*` |
 | Logistics（link） | link-system | `src/systems/link-system.ts` | P1 / 每 tick 冷却内跳过 | link 网传输（冷却内跳过） | Active | `tests/unit/systems/link-*` |
-| Logistics（terminal） | terminal-manager | `src/systems/terminal-manager.ts` | P3 / 低频 | **terminal 动作 + `Game.market.deal` 唯一写者**（TerminalManager） | Active | `tests/unit/logistics/terminal-*` |
-| Empire | empire-strategy | `src/systems/empire-strategy.ts` | P1 / 每 tick 姿态 | posture 求值（唯一目标选择权落点） | Active | `tests/unit/strategy/` |
-| Empire（聚合） | empire-economy | `src/systems/empire-economy.ts` | P1 / 100t | Empire Resource View / Health / Budget / Readiness 聚合 | Active | `tests/unit`（empire 域） |
-| Empire（专业化） | specialization-planner | `src/systems/specialization-planner.ts` | P1 / 100t | 专业化机会评估 + 经济健康评估 | **Pending Migration**（R10 批 3：并入 empire-strategy） | `tests/unit`（specialization 域） |
-| Agenda 管理 | agenda-manager | `src/systems/agenda-manager.ts` | P1 / 100t | AgendaItem 生命周期唯一写者（跨房调拨 Operation） | Active | `tests/unit`（agenda 域） |
+| Economy（生产） | lab-system | `src/systems/lab-system.ts` | P1 / 每 tick 门控 | lab 反应 + boost 库存 | Active | `tests/unit`（lab 域） |
 | Construction | construction-manager | `src/systems/construction-manager.ts` | P2 / 10–50t | `createConstructionSite` 写者之一（自有房）；BuildQueue | Active | `tests/unit`（construction 域） |
 | Construction（远矿） | remote-mining-manager | `src/systems/remote-mining-manager.ts` | P2 / 10t | `createConstructionSite` 写者之二（远矿房） | Active | `tests/unit/remote/` |
-| Construction（布局） | layout-planner | `src/systems/layout-planner.ts` | P3 / 低频 | 布局队列推进（D2 下沉进行中，[ENGINEERING_BLUEPRINT](architecture/ENGINEERING_BLUEPRINT.md) §5-3） | Active | `tests/unit`（layout 域） |
-| Defense | tower-defense | `src/systems/tower-defense.ts` | P0 / 每 tick | 塔动作唯一签发 | Active | `tests/unit/defense/` |
-| Defense（规划） | defense-planner | `src/systems/defense-planner.ts` | P3 / 低频 | 防御规划（仅签发 rampart） | Active | `tests/unit/defense/` |
+| Empire（专业化） | specialization-planner | `src/systems/specialization-planner.ts` | P1 / 100t | 专业化机会评估 + 经济健康评估 | **Pending Migration**（R10 批 3：并入 empire-strategy） | `tests/unit`（specialization 域） |
+| Self-Healing（诊断） | empire-health-system | `src/systems/empire-health-system.ts` | P1 / 100t | 8 维健康度 + Hysteresis + 失败传播 | **Pending Migration**（R10 批 3：并入 self-healing 概念容器，ADR 已裁决保留两系统分离） | `tests/unit`（empire-health 域） |
+| Self-Healing（执行） | recovery-execution-system | `src/systems/recovery-execution-system.ts` | P1 / 10t | 消费 recoveryActions 翻译为 spawn/agenda/terminal/remote 指令 | Active（同上 ADR） | `tests/unit`（recovery 域） |
 | Military | war-planning-system | `src/systems/war-planning-system.ts` | P2 / 10t | WarPlan 纯函数产出（写入 globalCache.warPlanCache） | Active | `tests/unit`（war 域） |
 | Military | war-planner | `src/systems/war-planner.ts` | P2 / 战时事件式 | 唯一进攻执行决策者；attacker 孵化 | Active | `tests/unit`（war 域） |
 | Military（战术） | tactical-runtime-pipeline | `src/systems/tactical-runtime-pipeline.ts` | P2 / 1t main + 内部分频 4 阶段 | R10 合并 A5.4.1–A5.4.4（war 姿态下运行） | Active | `tests/unit/tactical/` |
+| Construction（布局） | layout-planner | `src/systems/layout-planner.ts` | P3 / 低频 | 布局队列推进（D2 下沉进行中，[ENGINEERING_BLUEPRINT](architecture/ENGINEERING_BLUEPRINT.md) §5-3） | Active | `tests/unit`（layout 域） |
+| Defense（规划） | defense-planner | `src/systems/defense-planner.ts` | P3 / 低频 | 防御规划（仅签发 rampart） | Active | `tests/unit/defense/` |
+| Intelligence（观察） | room-observer | `src/systems/room-observer.ts` | P3 / 低频 | 房间观察（观察采集生产落点之一） | Active | `tests/unit`（observer 域） |
+| CPU 政策 | pixel-system | `src/systems/pixel-system.ts` | P3 / bucket 满载 | 仅 Healthy 档生成 pixel | Active | `tests/unit`（pixel 域） |
+| Logistics（terminal） | terminal-manager | `src/systems/terminal-manager.ts` | P3 / 低频 | **terminal 动作 + `Game.market.deal` 唯一写者**（TerminalManager） | Active | `tests/unit/logistics/terminal-*` |
+| Economy（生产） | factory-manager | `src/systems/factory-manager.ts` | P3 / 低频 | factory 商品 + powerSpawn battery 压缩 | Active | `tests/unit`（factory 域） |
+| Economy（Power） | power-creep-manager | `src/systems/power-creep-manager.ts` | P3 / 低频 | GPL 消费闭环（create/upgrade/spawn） | Active | `tests/unit`（power 域） |
 | Expansion | expansion-manager | `src/systems/expansion-manager.ts` | P3 / GCL 余量 | claim 新房执行（立项权在 Empire） | Active | `tests/unit`（expansion 域） |
 | Expansion（评估） | expansion-planner | `src/systems/expansion-planner.ts` | P3 / 低频 | Pressure/Candidate/Cost/Risk/Plan 评估（不执行 claim） | Active | `tests/unit`（expansion 域） |
-| Intelligence（观察） | room-observer | `src/systems/room-observer.ts` | P3 / 低频 | 房间观察（观察采集生产落点之一） | Active | `tests/unit`（observer 域） |
-| Intelligence（侦察） | prospect-manager | `src/systems/prospect-manager.ts` | P3 / expansionAllowed | 侦察兵孵化（观察采集生产落点之二） | Active | `tests/unit`（prospect 域） |
 | Military（准军事） | power-farm-manager | `src/systems/power-farm-manager.ts` | P3 / 低频 | PB 野采（power 自给，war 资源不双线） | Active | `tests/unit`（power-farm 域） |
+| Intelligence（侦察） | prospect-manager | `src/systems/prospect-manager.ts` | P3 / expansionAllowed | 侦察兵孵化（观察采集生产落点之二） | Active | `tests/unit`（prospect 域） |
 | Observability | telemetry-collector | `src/systems/telemetry-collector.ts` | P3 / 低频采样 | L2 采样聚合（采集预算 ≤3% limit） | Active | `tests/unit`（telemetry 域） |
-| Observability（kernel 面） | telemetry SDK 注册 | `src/telemetry/`（14 个 register*Metrics 调用） | 启动期 | L1 指标注册 + flush | Active | `tests/unit`（telemetry 域） |
-| Execution Runtime（交通） | traffic-manager | `src/systems/traffic-manager.ts` | P0（post 阶段）/ 每 tick | tick 末按房仲裁，唯一 move 签发 | Active | `tests/unit`（traffic 域） |
-| Self-Healing（诊断） | empire-health-system | `src/systems/empire-health-system.ts` | P1 / 100t | 8 维健康度 + Hysteresis + 失败传播 | **Pending Migration**（R10 批 3：并入 self-healing 概念容器，ADR 已裁决保留两系统分离） | `tests/unit`（empire-health 域） |
-| Self-Healing（执行） | recovery-execution-system | `src/systems/recovery-execution-system.ts` | P1 / 10t | 消费 recoveryActions 翻译为 spawn/agenda/terminal/remote 指令 | Active（同上 ADR） | `tests/unit`（recovery 域） |
 | 演化 / tuning | tuning-engine | `src/systems/tuning-engine.ts` | P3 / 500t | 读遥测调角色边界覆盖值（tuning 覆盖层） | Active | `tests/unit`（tuning 域） |
-| CPU 政策 | pixel-system | `src/systems/pixel-system.ts` | P3 / bucket 满载 | 仅 Healthy 档生成 pixel | Active | `tests/unit`（pixel 域） |
+| Execution Runtime（交通） | traffic-manager | `src/systems/traffic-manager.ts` | P0（post 阶段）/ 每 tick | tick 末按房仲裁，唯一 move 签发 | Active | `tests/unit`（traffic 域） |
+| World Model | （世界模型构建器） | `src/systems/room-snapshot.ts` | P0 / 每 tick | RoomSnapshot 每 tick 重建（经 `registerWorldModelBuilder` 注入，非 registerSystem） | Active | 同上 |
+| Observability（kernel 面） | telemetry SDK 注册 | `src/telemetry/`（14 个 register*Metrics 调用） | 启动期 | L1 指标注册 + flush | Active | `tests/unit`（telemetry 域） |
+<!-- inventory:end -->
 
 **注册角色（19）**：worker(P0 灾后恢复)、defender/harvester/hauler/distributor/remote-harvester/remote-hauler/remote-defender/core-clearer/carrier(P1)、upgrader/builder/reserver/claimer/mineral-miner/attacker/healer(P2)、scout/pb-collector(P3)——与 `CONFIG.roles` 白名单强制 parity（role-config-parity 测试）。
 
@@ -125,17 +134,36 @@ R10 批 3 计划待合并；**Shadow-Only** = 设计源码存在但不进生产 
 - tier 切换实测（历史 soak 全程 healthy）
 - 旧 soak 数据 schema 错位（sv=39 vs 42）
 - Emergency Survival Mode 未实现（设计态规范）
-- R10 批 3 系统合并未执行（specialization-planner / logistics-planner / empire-health 归并）
+- R10 批 3 系统合并未执行（specialization-planner / logistics-planner 归并——第三项 empire-health 已被 §5-4 ADR 取代，见 FREEZE R10 追记）
 
-## 6. 本文件维护方式
+> 重构侧待办的唯一工作项清单见 §6 重构 backlog（B1–B6）；验证侧 Blocked 的执行
+> 顺序亦在该节统一编排。
+
+## 6. 重构 backlog（现状治理轨 · 代码实现期唯一工作项来源）
+
+依据 TEST_ARCHITECTURE §7 重构合同执行：每项完成必须交付行为保持四件套
+（测试集合不变＋e2e smoke＋架构合规含 R12＋清单刷新）。**本表冻结为工作项清单；
+新增/删除/改序走 FREEZE §15。**
+
+| # | 工作项 | 合同依据 | 验收标准 | 状态 |
+| --- | --- | --- | --- | --- |
+| B1 | R10 批 3 有效合并：specialization-planner→empire-strategy、logistics-planner→logistics | FREEZE R10 追记 · BLUEPRINT §5-12 | 注册数 34→32 并经 §7 程序刷新 STATUS；行为保持四件套 | ⏳ |
+| B2 | layout-planner D2 剩余下沉：`planStage0-3` 四个规划函数参数注入后下沉 `src/domain/layout/` | BLUEPRINT §5-3 | domain/layout 纯函数律 lint 绿；layout-planner 行数收敛至锚带 | ⏳ |
+| B3 | E2E-011（decision-trace）与 R11 对齐：重定向为遥测 outcome 断言或移除 | BLUEPRINT §5-13 | tests/e2e 无 R11 冲突断言；E2E 全套件可跑通 | ⏳ |
+| B4 | 情报架构 ADR 裁决：实现完整版（IntelState 唯一写者/segment/三分置信度）vs 登记生产简化版（`Memory.rooms[].intel`+lastSeen）为当前合同 | BLUEPRINT §5-14 | FREEZE §15 新 ADR 行 + 受影响文档同步标注 | ⏳ 裁决项 |
+| B5 | Shadow-Only 分批清理：`src/domain/intelligence/`（46 文件）+ `src/domain/strategy/decision-trace.ts` | FREEZE R11 · BLUEPRINT §5-11 | src 无孤岛文件；bundle parity 守卫绿；**前置依赖 B4 裁决**（选完整版则转恢复注册轨） | ⏳ 依赖 B4 |
+| B6 | 验证轨启动（Blocked 项的执行编排，属代码/运行期，非纯重构）：低 CPU 私服 soak（触发 tier 降级链）→ global reset 注入 → sv=42 单房 soak 重跑 | STATUS §5 · CANARY §5 | §5 Blocked 前三项有当前版本证据；A1/A2 升级为 Code/Soak-Verified | ⏳ |
+
+## 7. 本文件维护方式
 
 固定刷新命令（更新对应章节后提交）：
 
 ```bash
 git rev-parse HEAD                      # §1 基准 commit
-grep -c "registerSystem(" src/bootstrap.ts   # §2 系统数（应为 34，变化须走 ADR）
+grep -c "registerSystem(" src/bootstrap.ts   # §2 系统数（变化须走 ADR）
 grep -c "registerRole(" src/bootstrap.ts     # §2 角色数
 grep "schemaVersion" src/config/index.ts     # §2 schema
 npm run typecheck && npm test && npm run build   # §3 门禁
-npm run check:docs                      # 校验本文件口径与源码一致
+npm run check:docs                      # 校验本文件口径与源码一致（七项）
+npm run docs:inventory                  # 重构后刷新 §4 生产清单（按系统名合并保留手工列）
 ```

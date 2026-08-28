@@ -28,28 +28,33 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 
 ## 2. 15 模块 → 目录落点映射表
 
+> **已被 R13 修订（2026-08-28）**：本表「规模量级」列原为冻结日口径，与现状
+> （398 文件 / 103k 行）脱节且跳档未登记；已按 R13 追认现状并重置为**带状锚**
+> （±25% 容差）。锚语义不变：超出锚带或数量级跳档须 ADR。当前实测规模唯一
+> 快照见 [../STATUS.md](../STATUS.md)。
+
 模块名与八项登记以 [SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.n 为准；P 档
 随八项登记，此处仅标注。规模量级是**量级锚**（数量级跳档须 ADR），非行数预算。
 
-| 模块（§1.n） | 类型 | 目录落点 | P 档 | 规模量级 |
+| 模块（§1.n） | 类型 | 目录落点 | P 档 | 规模量级（R13 追认锚） |
 | --- | --- | --- | --- | --- |
-| 1.1 Kernel | engine | `src/kernel/`（kernel / registry / safe-run / memory / segment-store / cadence / state-store / telemetry） | P0 | ~15–20 文件 / 4–5k 行 |
-| 1.2 Execution Runtime | engine | `src/creeps/engine/` ＋ `src/creeps/movement/` | P0/P1 | ~8–10 文件 / 2–3k 行 |
-| 1.3 World Model | System | `src/systems/room-snapshot.ts`＋`room-state.ts` | P0 | 2–3 文件 / 1–2k 行 |
-| 1.4 Empire | Agent 载体 System | `src/systems/empire-strategy.ts`＋`src/domain/strategy/` | P1 | 3–5 文件 / 1–2k 行 |
-| 1.5 Economy | System | `src/systems/economy.ts`＋`src/domain/economy/` | P1 | 3–5 文件 / 1–2k 行 |
-| 1.6 Logistics | System | `src/systems/`（请求池 / link-system / terminal-manager）＋`src/domain/assignment/` | P0/P1/P2 | 4–6 文件 / 2–3k 行 |
-| 1.7 Spawn | Manager | `src/systems/spawn-manager.ts`＋`src/domain/spawn/`（census / body） | P0 | 3–4 文件 / 1–2k 行 |
-| 1.8 Construction | Manager×2 | `src/systems/construction-manager.ts`＋`remote-mining-manager.ts`＋`site-quota.ts`＋`src/domain/construction/`＋`src/domain/layout/` | P2 | 8–12 文件 / 3–4k 行 |
-| 1.9 Defense | System | `src/systems/tower-defense.ts`＋`defense-planner.ts`＋`src/domain/defense/` | P0 | 3–5 文件 / 1–2k 行 |
-| 1.10 Military | Manager | `src/systems/war-planner.ts`＋`src/domain/war/` | P2 | 3–5 文件 / 1–2k 行 |
-| 1.11 Expansion | System | `src/systems/expansion-manager.ts`＋`src/domain/expansion/` | P2 | 3–4 文件 / 1–2k 行 |
-| 1.12 Intelligence | System | `src/systems/room-observer.ts`＋`src/domain/intel.ts` | P2 | 2–3 文件 / 1k 行级 |
-| 1.13 Agenda 管理 | System | `src/systems/agenda-manager.ts`（复核纯函数在 `src/domain/strategy/`） | P2 | 2–3 文件 / 1k 行级 |
-| 1.14 Observability | System | `src/systems/telemetry-collector.ts`＋`src/kernel/telemetry.ts`（平台面） | P3＋P0 伴生 | 3–4 文件 / 1–2k 行 |
-| 1.15 Self-Healing | System | `src/systems/self-healing.ts`（概念性落点：实际由 `empire-health-system.ts` + `recovery-execution-system.ts` 协作实现，ADR 见 §5-4；处置表数据在 `src/domain/`，只读） | P1 | 2–3 文件 / 1k 行级 |
-| — domain Service 层 | Service | `src/domain/`（assignment / strategy / economy / spawn / construction / layout / defense / war / expansion / industry / remote / tuning / intel） | — | 合计 ~60 文件 / 11–13k 行 |
-| — 执行声明层 | — | `src/creeps/`（roles / support 合计） | — | 合计 ~25 文件 / 4–5k 行 |
+| 1.1 Kernel | engine | `src/kernel/`（kernel / registry / safe-run / memory / segment-store / cadence / state-store / telemetry）＋`src/config/` | P0 | ~23 文件 / ~7k 行 |
+| 1.2 Execution Runtime | engine | `src/creeps/engine/` ＋ `src/creeps/movement/` | P0/P1 | ~23 文件 / ~4.5k 行 |
+| 1.3 World Model | System | `src/systems/room-snapshot.ts`＋`room-state.ts` | P0 | 2–3 文件 / ~1.5k 行 |
+| 1.4 Empire | Agent 载体 System | `src/systems/empire-strategy.ts`＋`empire-economy.ts`＋`specialization-planner.ts`＋`src/domain/strategy/` | P1 | ~30 文件 / ~8k 行 |
+| 1.5 Economy | System | `src/systems/economy.ts`＋`src/domain/economy/`＋`src/domain/industry/` | P1 | ~38 文件 / ~8k 行 |
+| 1.6 Logistics | System | `src/systems/`（logistics / logistics-planner / assignment-system / link-system / terminal-manager / site-quota）＋`src/domain/assignment/`＋`src/domain/logistics/` | P0/P1/P2 | ~42 文件 / ~8k 行 |
+| 1.7 Spawn | Manager | `src/systems/spawn-manager.ts`＋`src/domain/spawn/`（census / body） | P0 | 4–6 文件 / ~1.5k 行 |
+| 1.8 Construction | Manager×2 | `src/systems/construction-manager.ts`＋`remote-mining-manager.ts`＋`layout-planner.ts`＋`src/domain/construction/`＋`src/domain/layout/` | P2 | ~19 文件 / ~5k 行 |
+| 1.9 Defense | System | `src/systems/tower-defense.ts`＋`defense-planner.ts`＋`src/domain/defense/` | P0 | ~13 文件 / ~3.5k 行 |
+| 1.10 Military | Manager | `src/systems/war-planner.ts`＋`war-planning-system.ts`＋`tactical-runtime-pipeline.ts`＋4 阶段实现文件＋`src/domain/war/`＋`tactical/`＋`combat/`＋`military/` | P2 | ~29 文件 / ~9k 行 |
+| 1.11 Expansion | System | `src/systems/expansion-manager.ts`＋`expansion-planner.ts`＋`src/domain/expansion/` | P2 | ~35 文件 / ~5.5k 行 |
+| 1.12 Intelligence | System | `src/systems/room-observer.ts`＋`prospect-manager.ts`＋`src/domain/intel.ts`（生产）；`src/domain/intelligence/` 46 文件为 Shadow-Only 待清理（R11） | P2 | 生产 ~4 文件；Shadow-Only 46 文件 / 16k 行清理后归零 |
+| 1.13 Agenda 管理 | System | `src/systems/agenda-manager.ts`（复核纯函数在 `src/domain/operation/`） | P2 | ~20 文件 / ~4k 行 |
+| 1.14 Observability | System | `src/systems/telemetry-collector.ts`＋`src/telemetry/`＋`src/kernel/telemetry.ts`（平台面） | P3＋P0 伴生 | ~26 文件 / ~4.5k 行 |
+| 1.15 Self-Healing | System | `src/systems/self-healing.ts`（概念性落点：实际由 `empire-health-system.ts` + `recovery-execution-system.ts` 协作实现，ADR 见 §5-4；处置表数据在 `src/domain/`，只读） | P1 | 2–3 文件（+domain 处置表） |
+| — domain Service 层 | Service | `src/domain/`（19 子域合计） | — | ~260 文件 / ~66k 行（含 Shadow-Only 46；R11 清理后 ~214） |
+| — 执行声明层 | — | `src/creeps/`（roles 19 / support 6） | — | ~25 文件 / ~3.5k 行 |
 
 ## 3. 每目录六项合同
 
@@ -137,6 +142,9 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | 9 | ~~角色层存在 `Room.find` / `Object.values(Game.creeps)` 违规~~ | 蓝图条款 ④ 禁止角色全房 find 和全局扫描 | ✅ 已收敛到 `creeps/support/room-scans.ts` |
 | 10 | ~~Kernel 直接 import 业务模块（room-snapshot / defense / pathfinding）~~ | 蓝图 §3.1 禁止 Kernel import 业务符号；唯一登记例外为 pruneDeadCreepCache | ✅ buildRoomSnapshot 通过 Registry 注入，classifyThreats 内联为 CONFIG 判定，MINCUT_ALGO_VERSION 改参数注入 |
 | 11 | `src/domain/intelligence/`（A6 智能层）与 `src/domain/strategy/decision-trace.ts` 为 Shadow-Only 孤岛 | R11 裁决：不进入生产 bundle、不被任何 src 文件导入；生产观察采集由 room-observer / prospect-manager 承担；后续分批清理，恢复注册须走新 ADR（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0） | ⏳ Shadow-Only 待清理 |
+| 12 | R10 批 3 有效合并未执行：specialization-planner→empire-strategy、logistics-planner→logistics（第三项 empire-health 合并已被 §5-4 ADR 取代，见 FREEZE R10 追记） | 批 3 完成后 `bootstrap.ts` 注册数 34→32 | ⏳ 重构 backlog B1 |
+| 13 | `tests/e2e/scenarios/11-decision-trace.test.ts` 断言生产日志出现 decision-trace 输出，与 R11 冲突（生产 bundle 已无该模块与日志发射点） | 按新 ADR 重定向（改为验证遥测 outcome 通道）或移除；重定向前不得作为生产行为证据 | ⏳ 重构 backlog B3 |
+| 14 | 蓝图情报架构（IntelState 唯一写者 / segment 冷存 / fact-stale-inferred 三分置信度）与生产简化版（分散 `Memory.rooms[].intel` + lastSeen 新鲜度）是两套实现 | 需一次 ADR 裁决：实现完整版，或登记简化版为当前合同（完整版降为 war 轨前置）。裁决前两套表述并存，以本行为准 | ⏳ 重构 backlog B4（裁决项） |
 
 ## 6. 一致性声明
 

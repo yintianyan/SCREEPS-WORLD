@@ -36,7 +36,7 @@ L6 归 §5 canary 发布；L2–L5 展开为下表八类。每类**能证明 / �
 | Simulation / Scenario / Empire / Failure / PvP | 私服 e2e `tests/e2e/`（`npm run test:e2e`；冒烟 `test:e2e:smoke`），screeps-server-mockup 驱动 | hivemind mock 先例；场景脚本必须进矩阵（§6），禁止场外手写脚本不登记（research/28 §11） |
 | Stress / soak | 私服长跑＋官服 soak；数据经遥测采集 | 指标先有基线再跑（§3） |
 | 遥测断言 | L3 TelemetryFrame（segment）→ 体外只读采集器（`tools/private/empire-collector`）→ 断言 | 体外平面只读不写（research/21 §10.3） |
-| 架构回归 | dependency-cruiser 类工具以 [DEPENDENCY_GRAPH.md](DEPENDENCY_GRAPH.md) §1 图为期望集 diff；lint：`import/no-cycle`＋分区 `no-restricted-imports`（src/domain 禁 Game/Memory；src/kernel 禁业务 import，R9 白名单一行；角色目录禁 `Room.find`） | 任何新增环或未登记边即门槛红（DEPENDENCY_GRAPH §4） |
+| 架构回归 | dependency-cruiser 类工具以 [DEPENDENCY_GRAPH.md](DEPENDENCY_GRAPH.md) §1 图为期望集 diff；lint：`import/no-cycle`＋分区 `no-restricted-imports`（src/domain 禁 Game/Memory；src/kernel 禁业务 import，R9 白名单一行；角色目录禁 `Room.find`）；bundle parity 守卫（R12，`tests/unit/architecture/compliance.test.ts`：注册系统 name 全部出现在 `dist/main.js`、已裁决删除模块不得回流 bundle）；文档一致性 `npm run check:docs`（链接 / 术语 / schemaVersion / 注册数 / Shadow-Only / soak 标记 / 实现入口七项） | 任何新增环、未登记边、bundle 回流或文档失真即门槛红（DEPENDENCY_GRAPH §4 六项义务） |
 
 ## 3. 验收指标与遥测共用合同（一鱼两吃）
 
@@ -93,7 +93,19 @@ research/24 §10.3 新场景入库流程）。
 事故（或注入）→ 归类五层 → 登记 → 绑防线 → 进矩阵。矩阵与 research/24/27 三向
 对齐防漂移。
 
-## 7. 一致性声明
+## 7. 重构合同（行为保持证据要求）
+
+重构（系统合并 / 函数下沉 / 重命名 / 死代码清理）**不产生新自治能力**，其价值是
+把代码收敛到合同、降低维护成本；其唯一风险是行为漂移。合同如下：
+
+| 条款 | 内容 |
+| --- | --- |
+| 工作项来源 | 重构只允许以 [ARCHITECTURE_FREEZE.md](ARCHITECTURE_FREEZE.md) §15 已登记裁决 ＋ [ENGINEERING_BLUEPRINT.md](ENGINEERING_BLUEPRINT.md) §5 现状登记 ＋ [STATUS.md](../STATUS.md) 重构 backlog 为工作项来源；无登记来源的重构提案先走 ADR |
+| 行为保持证据（四件套，缺一不合并） | ① `npm test` 测试集合（文件数＋用例数）与断言语义不变——允许新增断言，**禁止删除断言来转绿**；② `npm run test:e2e:smoke` 通过；③ 架构合规测试全绿（含 R12 bundle parity：注册系统名全部在 bundle、已删模块不回流）；④ 受影响系统的 cadence/优先级注释与 [STATUS.md](../STATUS.md) 生产清单同步刷新（`npm run docs:inventory`） |
+| 禁止搭便车 | 重构变更禁止夹带行为变更（新功能 / 参数调整 / 阈值改动）——行为变更走 Phase 实施或 ADR，混入重构 PR 直接驳回 |
+| 完成定义 | backlog 项完成 ＝ 行为保持证据齐全 ＋ [STATUS.md](../STATUS.md) / [ENGINEERING_BLUEPRINT.md](ENGINEERING_BLUEPRINT.md) §5 状态列更新 ＋（注册数变化时）FREEZE §15 追记 |
+
+## 8. 一致性声明
 
 本文件与 AGENT.md 质量门槛、[ARCHITECTURE_VALIDATION.md](ARCHITECTURE_VALIDATION.md)
 （Scenario A–J ↔ §1 八类）、[FAILURE_RECOVERY_ARCHITECTURE.md](FAILURE_RECOVERY_ARCHITECTURE.md)

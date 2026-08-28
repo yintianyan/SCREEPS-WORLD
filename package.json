@@ -13,6 +13,8 @@
     "deploy": "node tools/official/deploy-screeps.js",
     "typecheck": "tsc --noEmit",
     "check:docs": "node scripts/check-docs-consistency.mjs",
+    "docs:inventory": "node scripts/generate-inventory.mjs",
+    "docs:inventory:check": "node scripts/generate-inventory.mjs --check",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration --testTimeout=60000",

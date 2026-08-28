@@ -2,6 +2,13 @@
 
 本目录是文档唯一索引入口。AGENT.md 只保留 agent 行为约束，不承载文档索引与历史台账。
 
+> **文档体系冻结状态（2026-08-28）**：本三层体系已冻结为实现合同——`architecture/`
+> 契约改动只走 [ARCHITECTURE_FREEZE.md](architecture/ARCHITECTURE_FREEZE.md) §15 ADR；
+> [STATUS.md](STATUS.md) 现状数字只经其 §7 程序与 `npm run docs:inventory` 刷新；
+> `npm run check:docs` / `npm run docs:inventory:check` 为一致性门槛（TEST_ARCHITECTURE §2/§4）。
+> 代码实现期工作项唯一来源 = [STATUS.md](STATUS.md) §6 重构 backlog（行为保持合同见
+> TEST_ARCHITECTURE §7）。
+
 ## 文档三层体系与真相源
 
 | 层 | 位置 | 性质 | 真相源地位 |
