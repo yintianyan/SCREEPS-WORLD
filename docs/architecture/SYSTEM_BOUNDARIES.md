@@ -159,9 +159,10 @@
 > **当前生产状态（R14 裁决，2026-08-29）**：本节概念合同已由 R14 落地——
 > `intelligence` 系统（`src/systems/intelligence.ts`，P2/10t）注册为 **IntelState
 > 唯一写者**：三分置信度 + TTL 分档 + 房间域 heap 活跃层（环形覆盖）+ 玩家域
-> segment 冷存（月级威胁记忆）+ §5 硬门槛查询。legacy `Memory.rooms[].intel`
-> 为**只读输入桥**（room-observer 写侧保持运行至消费者迁移 IntelQuery——迁移为
-> war 轨前置，两状态各自唯一写者不变）。A6 智能层 `intelligence-pipeline` /
+> segment 冷存（月级威胁记忆）+ §5 硬门槛查询。观察采集经观察交接通道
+> （room-observer 管线写 `globalCache.intelHandoff`，intelligence 采用后清空）；
+> legacy `Memory.rooms[].intel` 写侧已下线（v43 清理存量），消费者全部走
+> IntelQuery（R15/B7）。A6 智能层 `intelligence-pipeline` /
 > `decision-trace` / `evaluation-system` 已按 R11 裁决清理（B5，2026-08-29：
 > `src/domain/intelligence/`、`src/domain/strategy/decision-trace.ts` 已删除），
 > 本裁决不恢复之。详见 [INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0。

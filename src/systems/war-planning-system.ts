@@ -8,6 +8,7 @@ import {
   type WarPlan,
 } from "../domain/military/war-planning";
 import type { TargetCandidate } from "../domain/military/target-selection";
+import { queryRoomIntel } from "./intelligence";
 import type { ThreatAssessment } from "../domain/defense/threat-assessment";
 import type { TerrainContext } from "../domain/defense/terrain-context";
 import type { PlayerIntelRecord } from "../domain/defense/player-intel";
@@ -243,29 +244,24 @@ function buildTargetCandidates(tick: number): TargetCandidate[] {
 
   // 从 intel 采集候选
   const blacklist = Memory.kernel?.warBlacklist ?? {};
-  for (const home of Object.keys(Memory.rooms)) {
-    const intel = Memory.rooms[home]?.intel;
-    if (!intel) continue;
-    for (const roomName of Object.keys(intel)) {
-      const e = intel[roomName];
-      if (!e) continue;
-      // 只选有主非我方房
-      if (!e.owner || e.owner === myUsername) continue;
-      if (e.kind !== "normal") continue;
+  for (const entry of queryRoomIntel()) {
+    const e = entry.payload;
+    // 只选有主非我方房
+    if (!e.owner || e.owner === myUsername) continue;
+    if (e.kind !== "normal") continue;
 
-      candidates.push({
-        roomName,
-        occupied: occupied.has(roomName),
-        owner: e.owner,
-        towers: e.towers,
-        rcl: undefined,
-        distance: e.pathCost ?? 5,
-        intelAge: e.lastSeen !== undefined ? tick - e.lastSeen : 9999,
-        blacklisted: (blacklist[roomName] ?? 0) > tick,
-        isRemote: false,
-        isCore: false,
-      });
-    }
+    candidates.push({
+      roomName: entry.subject,
+      occupied: occupied.has(entry.subject),
+      owner: e.owner,
+      towers: e.towers,
+      rcl: undefined,
+      distance: e.pathCost ?? 5,
+      intelAge: tick - entry.observedAt,
+      blacklisted: (blacklist[entry.subject] ?? 0) > tick,
+      isRemote: false,
+      isCore: false,
+    });
   }
 
   return candidates;

@@ -1,6 +1,8 @@
 /** 现役 op 周期经济重估测试（组③ / A-3 + B-6）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
+import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
+import { globalCache } from "../../../src/kernel/global-cache";
 import { CONFIG } from "../../../src/config";
 import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
 
@@ -13,7 +15,16 @@ function seed(now: number, ops: Record<string, unknown>, intel: Record<string, u
   g.Game.rooms = {}; // 无视野 — 重估走 intel.pathCost + 线性距离。
   g.Game.creeps = {};
   syncSquadIndex();
-  g.Memory.rooms[homeRoom] = { colonyState: "normal", spawnQueue: [], remoteOps: ops, intel };
+  g.Memory.rooms[homeRoom] = { colonyState: "normal", spawnQueue: [], remoteOps: ops };
+  // IntelQuery 播种：handoff → intelligence 采用（重估读 payload 视图）。
+  __resetIntelStateForTests();
+  globalCache().intelHandoff = Object.entries(intel).map(([subject, p]) => ({
+    subject,
+    home: homeRoom,
+    source: "observer" as const,
+    payload: { kind: "normal", status: "normal", lastSeen: now, ...(p as object) } as never,
+  }));
+  intelligenceSystem.run({ tick: now, snapshots: () => [], budget: { canStart: () => true } } as never);
 }
 
 beforeEach(() => {

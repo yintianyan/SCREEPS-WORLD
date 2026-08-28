@@ -183,7 +183,7 @@ build
 | tier 切换 | healthy→guarded→conserve→recovery | [Blocked] 全程 healthy |
 | hostile/恢复 | 敌袭→恢复 | [Historical Evidence] 685 hostile 快照（sv=39 数据集） |
 | global reset | 多次 reset 恢复 | [Blocked] 0 次 reset |
-| schema 一致 | soak sv = 代码 sv | [Blocked] sv=39 vs sv=42 |
+| schema 一致 | soak sv = 代码 sv | [Blocked] sv=39 vs sv=43 |
 
 ### 5.2 多房私服 Soak
 

@@ -40,7 +40,7 @@ export function getWallTargetHits(
 
 export const CONFIG = {
   memory: {
-    schemaVersion: 42,
+    schemaVersion: 43,
     /** 【F1/G-C】数据族 TTL 表（FREEZE §9）：每族 {maxAge, sweepPolicy}。
      * sweepPolicy: "ring"（定长环自动截断）| "hook"（由既有清理钩子执行）| "planned"（消费者落地前占位）。
      * 本表 v1 为治理登记：ring/hook 两类由既有机制兑现，"planned" 行不产生行为。 */

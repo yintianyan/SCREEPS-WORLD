@@ -2,6 +2,7 @@
 
 import type { TickContext } from "../kernel/contracts";
 import { globalCache } from "../kernel/global-cache";
+import { getRoomIntel } from "./intelligence";
 import {
   filterWaitingExecution,
   expireStaleOpportunities,
@@ -160,10 +161,9 @@ function buildGateInput(
   tick: number,
 ): ExecutionGateInput | undefined {
   // 从 intel 获取 source 和 room 信息
-  const homeRoomMem = Memory.rooms[opp.homeRoom];
-  if (!homeRoomMem?.intel) return undefined;
-  const intel = homeRoomMem.intel[opp.targetRoom];
-  if (!intel) return undefined;
+  const entry = getRoomIntel(opp.targetRoom);
+  if (!entry) return undefined;
+  const intel = entry.payload;
 
   // 从 CONFIG 获取参数（A4.1 新增参数后续在 Phase 5 扩展 CONFIG 时添加，先用常量）
   const maxPathCost = 200;

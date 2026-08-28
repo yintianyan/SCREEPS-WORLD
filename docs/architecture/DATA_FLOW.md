@@ -25,8 +25,9 @@ flowchart TD
 
 > **R14 注记（图一/图三的 Intelligence 节点）**：`intelligence` 系统已注册为
 > IntelState 唯一写者（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）——
-> 图中 Intelligence 节点自 R14 起为生产现实。legacy `Memory.rooms[].intel` 为只读
-> 输入桥（消费者迁移 IntelQuery 为 war 轨前置）；A6 智能层
+> 图中 Intelligence 节点自 R14 起为生产现实。观察采集经观察交接通道
+> （room-observer 写 `globalCache.intelHandoff`，intelligence 采用）；legacy
+> `Memory.rooms[].intel` 写侧已下线（R15/B7）；A6 智能层
 > （intelligence-pipeline / decision-trace / evaluation-system）已按 R11 裁决清理删除（B5，2026-08-29）。
 
 感知流合同：

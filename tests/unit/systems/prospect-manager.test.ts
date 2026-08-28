@@ -1,6 +1,8 @@
 /** Prospect Manager 系统测试（R6b 主动情报 — 任务生命周期 + 止损链）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { prospectManagerSystem } from "../../../src/systems/prospect-manager";
+import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
+import { globalCache } from "../../../src/kernel/global-cache";
 import { mockBudget, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
 import { CONFIG } from "../../../src/config";
 
@@ -8,6 +10,7 @@ const TICK = 1000;
 
 beforeEach(() => {
   resetGlobals();
+  __resetIntelStateForTests();
 });
 
 function setPosture(expansionAllowed: boolean): void {
@@ -19,17 +22,20 @@ function setPosture(expansionAllowed: boolean): void {
   };
 }
 
-/** 建 sponsor 房 + 一条无视野候选 intel。 */
+/** 建 sponsor 房 + 一条无视野候选 intel（观察交接播种 → intelligence 采用）。 */
 function setupIntel(): void {
   (globalThis as any).Game.rooms = {
     W7N4: { controller: { my: true, owner: { username: "Me" } } },
   };
-  (globalThis as any).Memory.rooms.W7N4 = {
-    spawnQueue: [],
-    intel: {
-      W6N4: { kind: "normal", status: "normal", lastSeen: 500 }, // sources 未知
-    },
-  };
+  (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: [] };
+  __resetIntelStateForTests();
+  globalCache().intelHandoff = [{
+    subject: "W6N4",
+    home: "W7N4",
+    source: "observer",
+    payload: { kind: "normal", status: "normal", lastSeen: 500 } as never, // sources 未知
+  }];
+  intelligenceSystem.run({ tick: 1000, snapshots: () => [], budget: { canStart: () => true } } as never);
 }
 
 function makeContext(snapshot?: any): any {
@@ -136,9 +142,18 @@ describe("prospect-manager — 生命周期与止损", () => {
 
   it("成功：目标 intel 新鲜且 sources 已知 → 收摊 + 事件 success + 无冷却", () => {
     missionFixture();
-    (globalThis as any).Memory.rooms.W7N4.intel.W6N4 = {
-      kind: "normal", status: "normal", sources: 2, lastSeen: 990,
-    };
+    __resetIntelStateForTests();
+    globalCache().intelHandoff = [{
+      subject: "W6N4",
+      home: "W7N4",
+      source: "observer",
+      payload: { kind: "normal", status: "normal", sources: 2, lastSeen: 990 } as never,
+    }];
+    intelligenceSystem.run({
+      tick: TICK,
+      snapshots: () => [],
+      budget: mockBudget(),
+    } as never);
     syncSquadIndex();
     (globalThis as any).Game.creeps = {
       s1: { memory: { role: "scout", home: "W7N4", remoteTarget: "W6N4" } },

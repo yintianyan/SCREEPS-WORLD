@@ -1,6 +1,8 @@
 /** v33 远矿空转止损 + 入口封死废弃测试（remote-mining-manager）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
+import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
+import { globalCache } from "../../../src/kernel/global-cache";
 import { CONFIG } from "../../../src/config";
 import { mockContext, mockSnapshot, mockSource, resetGlobals, syncSquadIndex } from "../../role-helpers";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
@@ -55,8 +57,18 @@ function seed(opts: {
     colonyState: "normal",
     spawnQueue: [],
     remoteOps: opts.op ?? { [targetRoom]: activeOp() },
-    ...(opts.intel ? { intel: opts.intel } : {}),
   };
+  if (opts.intel) {
+    // IntelQuery 播种：handoff → intelligence 采用（与生产采集路径一致）。
+    __resetIntelStateForTests();
+    globalCache().intelHandoff = Object.entries(opts.intel).map(([subject, p]) => ({
+      subject,
+      home: homeRoom,
+      source: "observer" as const,
+      payload: { kind: "normal", status: "normal", lastSeen: 1000, ...(p as object) } as never,
+    }));
+    intelligenceSystem.run({ tick: 1000, snapshots: () => [], budget: { canStart: () => true } } as never);
+  }
   return mockSnapshot({
     roomName: homeRoom,
     rcl: 6,

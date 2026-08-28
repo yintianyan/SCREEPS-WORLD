@@ -30,7 +30,7 @@
 | `EmpireQuery` | `getEmpireState()` | — → posture / 预算 / 房间注册 / 活跃 Agenda 摘要 | EmpireState 只读视图；快照未刷新则返回上次决策（红队 A1） |
 | `RoomQuery` | `getRoomState(roomName)` | 房名 → phase / 能量收支 / 人口 / 建造 / 防御 / 健康度 | RoomState 归一化结果只读；全量每 N tick + 增量每 tick |
 | `ResourceQuery` | `queryStock(domain, room?)` | 资源域（能量/矿物/credits/CPU 预算）→ 水位与余量 | 供给任何门控判定的读侧；能量属 Room、帝国只有调拨权（调和 §10.1） |
-| `IntelQuery` | `query(domain, filter)` | intel 域 + 过滤器 → IntelEntry 列表（含置信度） | **异步激活语义**：本 tick 请求下 tick 可读；stale/inferred 禁当 fact（多源新鲜度硬门槛，红队 A7）。**当前生产状态（R14）**：`intelligence` 系统已注册为 IntelState 唯一写者，查询 API 落地（`getRoomIntel`/`getPlayerIntel`/`intelActionUsable`/`intelNeedsRescout`，[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）；legacy 消费者迁移中（war 轨前置） |
+| `IntelQuery` | `query(domain, filter)` | intel 域 + 过滤器 → IntelEntry 列表（含置信度） | **异步激活语义**：本 tick 请求下 tick 可读；stale/inferred 禁当 fact（多源新鲜度硬门槛，红队 A7）。**当前生产状态（R15）**：`intelligence` 系统为 IntelState 唯一写者，查询 API 落地——点查 `getRoomIntel`/`getPlayerIntel`、枚举 `queryRoomIntel`、payload 视图 `intelPayloadView`、硬门槛 `intelActionUsable`/`intelNeedsRescout`/`intelConfidence`（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）；全部消费者已迁移 IntelQuery，legacy `Memory.rooms[].intel` 桥退役（R15/B7） |
 
 ## 3. 服务组（domain 纯函数层）
 

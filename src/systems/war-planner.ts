@@ -19,6 +19,7 @@ import {
   type WarTargetInput,
 } from "../domain/war/planning";
 import { roomLinearDistance } from "../domain/remote/targeting";
+import { getRoomIntel, queryRoomIntel } from "./intelligence";
 import {
   countPending,
   hasRequest,
@@ -306,12 +307,12 @@ export function demobilize(tick: number, reason: number): void {
   if (!plan) return;
 
   // 战后核验：以 sponsor 记录的最新目标房 intel 判定战果。
-  const intel = Memory.rooms[plan.sponsor]?.intel?.[plan.targetRoom];
+  const entry = getRoomIntel(plan.targetRoom);
   const outcome = evaluateWarOutcome(
     plan.towersSeen,
-    intel?.towers,
-    intel?.owner,
-    intel?.lastSeen,
+    entry?.payload.towers,
+    entry?.payload.owner,
+    entry?.observedAt,
     tick,
     CONFIG.war.targetFreshness,
   );
@@ -323,7 +324,7 @@ export function demobilize(tick: number, reason: number): void {
       : CONFIG.war.warBlacklistTicks;
     blacklistWarTarget(plan.targetRoom, tick + cooldown);
     log.info("war-planner", `war: demobilize ${plan.targetRoom} outcome=${outcome}` +
-      ` (intel_age=${intel?.lastSeen !== undefined ? tick - intel.lastSeen : "never"},` +
+      ` (intel_age=${entry?.observedAt !== undefined ? tick - entry.observedAt : "never"},` +
       ` blacklist=${cooldown}t, reason=${reason})`,);
   }
 
@@ -451,23 +452,17 @@ function buildTargetInput(tick: number): WarTargetInput {
   }
 
   const candidates: WarTargetCandidate[] = [];
-  for (const home of Object.keys(Memory.rooms)) {
-    const intel = Memory.rooms[home]?.intel;
-    if (!intel) continue;
-    for (const roomName of Object.keys(intel)) {
-      const e = intel[roomName];
-      if (!e) continue;
-      candidates.push({
-        roomName,
-        home,
-        kind: e.kind,
-        owner: e.owner,
-        lastSeen: e.lastSeen,
-        towers: e.towers,
-        pathCost: e.pathCost,
-        occupied: occupied.has(roomName),
-      });
-    }
+  for (const e of queryRoomIntel()) {
+    candidates.push({
+      roomName: e.subject,
+      home: e.observedBy,
+      kind: e.payload.kind,
+      owner: e.payload.owner,
+      lastSeen: e.observedAt,
+      towers: e.payload.towers,
+      pathCost: e.payload.pathCost,
+      occupied: occupied.has(e.subject),
+    });
   }
 
   return {

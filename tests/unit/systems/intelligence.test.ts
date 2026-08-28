@@ -1,7 +1,8 @@
-/** Intelligence 系统（IntelState 唯一写者）：legacy 采用 / 被动威胁 / 老化 / 查询 API。 */
+/** Intelligence 系统（IntelState 唯一写者）：观察交接采用 / 被动威胁 / 老化 / 查询 API。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
 import { systemPhase } from "../../../src/kernel/phase";
+import { globalCache } from "../../../src/kernel/global-cache";
 import {
   intelligenceSystem,
   getRoomIntel,
@@ -10,8 +11,9 @@ import {
   intelNeedsRescout,
   intelConfidence,
   intelSize,
+  queryRoomIntel,
 } from "../../../src/systems/intelligence";
-import { ROOM_DYNAMIC_TTL, ROOM_THREAT_TTL } from "../../../src/domain/intel";
+import { ROOM_DYNAMIC_TTL, ROOM_THREAT_TTL, type RoomIntel } from "../../../src/domain/intel";
 
 /** 老化门触发 tick：(tick - PARENT_PHASE) % 100 === 0。 */
 const PARENT_PHASE = systemPhase("intelligence", 10);
@@ -19,8 +21,15 @@ function agingTick(base: number): number {
   return base + ((PARENT_PHASE - base) % 100 + 100) % 100;
 }
 
-function setMemoryIntel(room: string, subject: string, intel: Record<string, unknown>): void {
-  ((globalThis as any).Memory.rooms[room] ??= {}).intel = { [subject]: intel };
+/** 观察交接播种：向 globalCache.intelHandoff 推一条观测（home = 归属房）。 */
+function submitObs(home: string, subject: string, payload: Partial<RoomIntel>): void {
+  const g = globalCache();
+  (g.intelHandoff ??= []).push({
+    subject,
+    home,
+    source: "observer",
+    payload: { kind: "normal", status: "normal", lastSeen: 0, ...payload } as RoomIntel,
+  });
 }
 
 beforeEach(() => {
@@ -29,25 +38,24 @@ beforeEach(() => {
   (globalThis as any).Memory.rooms = {};
 });
 
-describe("Intelligence — legacy 输入桥采用", () => {
-  it("Memory.rooms[].intel 被上采为 IntelEntry，消费者可查询置信度与硬门槛", () => {
+describe("Intelligence — 观察交接采用", () => {
+  it("交接缓冲观测被采用为 IntelEntry，消费者可查询置信度与硬门槛；缓冲随即清空", () => {
     const tick = (globalThis as any).Game.time as number;
-    setMemoryIntel("W7N4", "W5N7", {
-      kind: "normal", status: "normal", owner: "Enemy", lastSeen: tick - 100,
-    });
+    submitObs("W7N4", "W5N7", { owner: "Enemy", lastSeen: tick - 100 });
     intelligenceSystem.run(mockContext(mockSnapshot()));
     expect(getRoomIntel("W5N7")).toBeDefined();
     expect(getRoomIntel("W5N7")!.observedAt).toBe(tick - 100);
+    expect(getRoomIntel("W5N7")!.observedBy).toBe("W7N4");
     expect(intelConfidence("W5N7", tick)).toBe("fact");
     expect(intelActionUsable("W5N7", tick)).toBe(true);
     expect(intelNeedsRescout("W5N7", tick)).toBe(false);
+    expect(globalCache().intelHandoff).toHaveLength(0);
+    expect(queryRoomIntel().some(e => e.subject === "W5N7")).toBe(true);
   });
 
   it("威胁字段（towers）走短窗——超窗后 stale 且拒绝行动、驱动侦察", () => {
     const tick = (globalThis as any).Game.time as number;
-    setMemoryIntel("W7N4", "W5N8", {
-      kind: "normal", status: "normal", towers: 3, lastSeen: tick - ROOM_THREAT_TTL - 1,
-    });
+    submitObs("W7N4", "W5N8", { towers: 3, lastSeen: tick - ROOM_THREAT_TTL - 1 });
     intelligenceSystem.run(mockContext(mockSnapshot()));
     expect(intelConfidence("W5N8", tick)).toBe("stale");
     expect(intelActionUsable("W5N8", tick)).toBe(false);
@@ -61,12 +69,10 @@ describe("Intelligence — legacy 输入桥采用", () => {
     expect(intelNeedsRescout("W1N1", tick)).toBe(true);
   });
 
-  it("玩家域：legacy owner 记录 + 黑名单命中记敌对", () => {
+  it("玩家域：观测 owner 记录 + 黑名单命中记敌对", () => {
     const tick = (globalThis as any).Game.time as number;
     (globalThis as any).Memory.kernel = { warBlacklist: { W5N9: tick + 1_000 } };
-    setMemoryIntel("W7N4", "W5N9", {
-      kind: "normal", status: "normal", owner: "HostileCorp", lastSeen: tick - 10,
-    });
+    submitObs("W7N4", "W5N9", { owner: "HostileCorp", lastSeen: tick - 10 });
     intelligenceSystem.run(mockContext(mockSnapshot()));
     const player = getPlayerIntel("HostileCorp");
     expect(player).toBeDefined();
@@ -76,9 +82,7 @@ describe("Intelligence — legacy 输入桥采用", () => {
 
   it("NPC Invader 不进玩家威胁记忆", () => {
     const tick = (globalThis as any).Game.time as number;
-    setMemoryIntel("W7N4", "W5N9", {
-      kind: "sk", status: "normal", owner: "Invader", lastSeen: tick,
-    });
+    submitObs("W7N4", "W5N9", { kind: "sk", owner: "Invader", lastSeen: tick });
     intelligenceSystem.run(mockContext(mockSnapshot()));
     expect(getPlayerIntel("Invader")).toBeUndefined();
   });
@@ -99,9 +103,7 @@ describe("Intelligence — 低频老化与容量", () => {
   it("老化门 tick 清理超期条目并驱动 intelSize 收缩", () => {
     const base = (globalThis as any).Game.time as number;
     const adoptedAt = base - ROOM_DYNAMIC_TTL - 1_000;
-    setMemoryIntel("W7N4", "W3N3", {
-      kind: "normal", status: "normal", lastSeen: adoptedAt,
-    });
+    submitObs("W7N4", "W3N3", { lastSeen: adoptedAt });
     intelligenceSystem.run(mockContext(mockSnapshot()));
     expect(getRoomIntel("W3N3")).toBeDefined(); // 采用即写入（虽已超期）
     const atAging = agingTick(base);
@@ -113,7 +115,7 @@ describe("Intelligence — 低频老化与容量", () => {
 
   it("预算车道耗尽时采集跳过（canStart(P2) false 不崩溃，下周期重采）", () => {
     const tick = (globalThis as any).Game.time as number;
-    setMemoryIntel("W7N4", "W5N7", { kind: "normal", status: "normal", lastSeen: tick });
+    submitObs("W7N4", "W5N7", { lastSeen: tick });
     const ctx = mockContext(mockSnapshot());
     const budget = ctx.budget as { canStart: (p: number) => boolean };
     budget.canStart = (p: number) => p < 2; // P2 车道禁用

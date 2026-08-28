@@ -18,7 +18,7 @@
 | **Release-Ready** | 满足发布门禁（[RELEASE_GATE_AND_ROLLBACK.md](../implementation/RELEASE_GATE_AND_ROLLBACK.md) 全部门禁） | 发布记录模板填写完整 |
 
 当前全仓最高等级：Design-Verified（十场景）+ Code-Verified（单元/集成测试）；
-Soak-Verified 项因 schema 版本错位（旧 soak sv=39 vs 当前 sv=42）与 artifact 缺失
+Soak-Verified 项因 schema 版本错位（旧 soak sv=39 vs 当前 sv=43）与 artifact 缺失
 整体降级为 **Historical Evidence**，登记见
 [CANARY_SOAK_PROCEDURE.md](../implementation/CANARY_SOAK_PROCEDURE.md) §5 与当前
 状态快照 [STATUS.md](../STATUS.md)。

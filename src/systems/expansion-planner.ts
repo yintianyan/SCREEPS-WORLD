@@ -3,6 +3,7 @@ import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { globalCache } from "../kernel/global-cache";
 import { queryEmpirePlannerInput } from "./empire-economy";
+import { queryRoomIntel } from "./intelligence";
 import { evaluateExpansionPressure } from "../domain/expansion/pressure";
 import { discoverCandidates } from "../domain/expansion/discovery";
 import { scoreCandidates } from "../domain/expansion/scoring";
@@ -59,11 +60,8 @@ export const expansionPlannerSystem: System = {
     // ── 步 2：Candidate Discovery ──
     const ownedRoomNames = Array.from(ctx.snapshots()).map(s => s.roomName);
     const intelBySponsor: Record<string, Record<string, RoomIntel>> = {};
-    for (const roomName of ownedRoomNames) {
-      const roomMem = Memory.rooms[roomName];
-      if (roomMem?.intel) {
-        intelBySponsor[roomName] = roomMem.intel as Record<string, RoomIntel>;
-      }
+    for (const entry of queryRoomIntel()) {
+      (intelBySponsor[entry.observedBy] ??= {})[entry.subject] = entry.payload;
     }
 
     // 从 Memory 恢复已有候选

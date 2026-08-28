@@ -10,6 +10,7 @@ import {
 } from "../domain/war/power-farm";
 import { decideHealerCount } from "../domain/war/planning";
 import { roomLinearDistance } from "../domain/remote/targeting";
+import { queryRoomIntel } from "./intelligence";
 import {
   countPendingByMission,
   hasRequest,
@@ -122,22 +123,17 @@ function startFarmIfWorth(ctx: TickContext): void {
   if (myRooms.size === 0) return;
 
   const candidates: PowerBankCandidate[] = [];
-  for (const home of Object.keys(Memory.rooms)) {
-    if (!myRooms.has(home)) continue;
-    const intel = Memory.rooms[home]?.intel;
-    if (!intel) continue;
-    for (const roomName of Object.keys(intel)) {
-      const e = intel[roomName];
-      if (!e?.powerBank) continue;
-      candidates.push({
-        roomName,
-        home,
-        lastSeen: e.lastSeen,
-        powerBank: true,
-        linearDistance: roomLinearDistance(home, roomName),
-        occupied: occupied.has(roomName),
-      });
-    }
+  for (const entry of queryRoomIntel()) {
+    if (!myRooms.has(entry.observedBy)) continue;
+    if (!entry.payload.powerBank) continue;
+    candidates.push({
+      roomName: entry.subject,
+      home: entry.observedBy,
+      lastSeen: entry.observedAt,
+      powerBank: true,
+      linearDistance: roomLinearDistance(entry.observedBy, entry.subject),
+      occupied: occupied.has(entry.subject),
+    });
   }
 
   const target = selectPowerBankTarget(candidates, ctx.tick, {

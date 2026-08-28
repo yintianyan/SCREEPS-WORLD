@@ -144,7 +144,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | 11 | `src/domain/intelligence/`（A6 智能层）与 `src/domain/strategy/decision-trace.ts` ~~为 Shadow-Only 孤岛~~（两处源码已删除，2026-08-29 B5） | R11 裁决：不进入生产 bundle、不被任何 src 文件导入；生产观察采集由 room-observer / prospect-manager 承担；R14 裁决不恢复 A6 智能层；B5 执行清理——src 删 47 文件、设计源码测试 24 文件同步移除，恢复注册须走新 ADR（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0） | ✅ 已完成（2026-08-29，B5） |
 | 12 | R10 批 3 有效合并未执行：specialization-planner→empire-strategy、logistics-planner→logistics（第三项 empire-health 合并已被 §5-4 ADR 取代，见 FREEZE R10 追记） | 批 3 完成后 `bootstrap.ts` 注册数 34→32 | ✅ 已完成（2026-08-28，B1：规划模块转为父系统内部门控 helper，行为保持四件套全绿） |
 | 13 | `tests/e2e/scenarios/11-decision-trace.test.ts` 断言生产日志出现 decision-trace 输出，与 R11 冲突（生产 bundle 已无该模块与日志发射点） | 按新 ADR 重定向（改为验证遥测 outcome 通道）或移除；重定向前不得作为生产行为证据 | ✅ 已完成（2026-08-29，B3：**裁决移除**——生产唯一 outcome 发射点为扩张完成路径，单房 E2E 场景不可达，重定向即空断言；其通用长稳断言已被 E2E-006（10000t，同断言更严）覆盖） |
-| 14 | 蓝图情报架构（IntelState 唯一写者 / segment 冷存 / fact-stale-inferred 三分置信度）与生产简化版（分散 `Memory.rooms[].intel` + lastSeen 新鲜度）是两套实现 | 需一次 ADR 裁决：实现完整版，或登记简化版为当前合同（完整版降为 war 轨前置）。裁决前两套表述并存，以本行为准 | ✅ 已裁决（2026-08-29，B4→R14）：完整版实现——`intelligence` 系统注册（注册数 32→33），简化版转为只读输入桥，消费者迁移为 war 轨前置 |
+| 14 | 蓝图情报架构（IntelState 唯一写者 / segment 冷存 / fact-stale-inferred 三分置信度）与生产简化版（分散 `Memory.rooms[].intel` + lastSeen 新鲜度）是两套实现 | 需一次 ADR 裁决：实现完整版，或登记简化版为当前合同（完整版降为 war 轨前置）。裁决前两套表述并存，以本行为准 | ✅ 已裁决并完成（2026-08-29，B4→R14 裁决完整版 + B7→R15 消费者迁移与 legacy 桥退役：全部消费者走 IntelQuery，简化版写侧下线，sv43 清理存量） |
 
 ## 6. 一致性声明
 

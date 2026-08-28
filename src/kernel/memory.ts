@@ -1074,6 +1074,19 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 42,
+    to: 43,
+    run: () => {
+      // v43：legacy 情报桥退役 — RoomMemory.intel（旧 RoomMemory 内嵌邻房情报）
+      // 写侧已下线，IntelState 为唯一情报状态；存量数据一次性清理（情报按
+      // 观察管线重访重建，无可恢复性损失）。幂等：仅当字段存在时删除。
+      for (const roomName in Memory.rooms) {
+        const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
+        if (room && "intel" in room) delete room.intel;
+      }
+    },
+  },
 ];
 
 /**

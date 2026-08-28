@@ -1,4 +1,6 @@
-/** v32 → v33 迁移独立测试（v33 完整情报：enemySpawns / wallCount / sealedExits 建档）。 */
+/** v32 → v33 迁移独立测试（完整情报字段建档净化）。
+ * 注：v43 已退役 legacy intel 桥（整记录清理），本文件断言链尾终态——
+ * 历史步行为由「链上不崩溃 + 终态 intel 不存在 + 其余字段无损」验证。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";
@@ -15,46 +17,30 @@ describe("migration v32 → v33（完整情报字段建档）", () => {
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 
-  it("合法字段保留", () => {
+  it("带合法 intel 的存量经全链迁移后 intel 清理、其余字段无损", () => {
     (globalThis as any).Memory = {
       schemaVersion: 32,
       creeps: {},
-      rooms: { W7N4: { intel: { W6N4: { enemySpawns: 1, wallCount: 8, sealedExits: [7] } } } },
+      rooms: { W7N4: { intel: { W6N4: { enemySpawns: 1, wallCount: 8, sealedExits: [7] } } }, },
       kernel: {},
     };
     runMigrations();
-    const info = (globalThis as any).Memory.rooms.W7N4.intel.W6N4;
-    expect(info.enemySpawns).toBe(1);
-    expect(info.wallCount).toBe(8);
-    expect(info.sealedExits).toEqual([7]);
+    const mem = (globalThis as any).Memory;
+    expect(mem.schemaVersion).toBe(CONFIG.memory.schemaVersion);
+    expect("intel" in mem.rooms.W7N4).toBe(false);
   });
 
-  it("数字字段非数字 → 删除", () => {
-    (globalThis as any).Memory = {
-      schemaVersion: 32,
-      creeps: {},
-      rooms: { W7N4: { intel: { W6N4: { enemySpawns: "1", wallCount: "many" } } } },
-      kernel: {},
-    };
-    runMigrations();
-    const info = (globalThis as any).Memory.rooms.W7N4.intel.W6N4;
-    expect(info.enemySpawns).toBeUndefined();
-    expect(info.wallCount).toBeUndefined();
-  });
-
-  it("sealedExits 非数组或含非数字 → 删除", () => {
+  it("畸形 intel 字段（非数字/非数组）经全链迁移不崩溃、终态清理", () => {
     (globalThis as any).Memory = {
       schemaVersion: 32,
       creeps: {},
       rooms: {
-        W7N4: { intel: { W6N4: { sealedExits: "7" }, W5N4: { sealedExits: [7, "3"] } } },
+        W7N4: { intel: { W6N4: { enemySpawns: "1", wallCount: "many" }, W5N4: { sealedExits: [7, "3"] } } },
       },
       kernel: {},
     };
-    runMigrations();
-    const info = (globalThis as any).Memory.rooms.W7N4.intel;
-    expect(info.W6N4.sealedExits).toBeUndefined();
-    expect(info.W5N4.sealedExits).toBeUndefined();
+    expect(() => runMigrations()).not.toThrow();
+    expect("intel" in (globalThis as any).Memory.rooms.W7N4).toBe(false);
   });
 
   it("幂等：重复执行不产生副作用", () => {

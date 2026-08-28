@@ -21,7 +21,7 @@
 | 项 | 值 |
 | --- | --- |
 | 快照日期 | 2026-08-29 |
-| 基准 commit | `e7dc3ac`（dev 分支；本快照叠加重构 backlog B5 的工作树改动——Shadow-Only 清理 src 399→352 文件，详见 §6 B5） |
+| 基准 commit | `b844a74`（dev 分支；本快照叠加重构 backlog B7 的工作树改动——IntelQuery 消费者迁移 + legacy 桥退役 sv43，详见 §6 B7） |
 | 运行模式 | 官方 Screeps World · TypeScript bot（`dist/main.js` 由 rollup 打包） |
 | 口径约定 | 概念模块 = SYSTEM_BOUNDARIES §1 的 15 模块；生产系统 = `bootstrap.ts` `registerSystem()` 实际注册项；源文件 = `src/systems/` 等实际文件。三者不是同一统计对象，不得互换 |
 
@@ -31,7 +31,7 @@
 | --- | --- | --- |
 | 生产注册系统数 | **33**（`registerSystem` 调用数；R10 记 36、R11 修正为 34、B1 批 3 合并后 32、B4 新增 intelligence 后 33） | `src/bootstrap.ts` |
 | 生产注册角色数 | **19**（`registerRole` 调用数） | `src/bootstrap.ts` |
-| Memory schemaVersion | **42**（迁移链 42 步：0→42，逐级迁移） | `src/config/index.ts` `CONFIG.memory.schemaVersion`、`src/kernel/memory.ts` `MIGRATIONS` |
+| Memory schemaVersion | **43**（迁移链 43 步：0→43，逐级迁移；v43 = legacy intel 桥退役清理，R15/B7） | `src/config/index.ts` `CONFIG.memory.schemaVersion`、`src/kernel/memory.ts` `MIGRATIONS` |
 | CpuTier 枚举 | **四档**：`healthy / guarded / conserve / recovery`（不存在第五档） | `src/kernel/contracts.ts` |
 | CpuTier bucket 阈值 | healthy 7000 / guarded 3000 / conserve 1000 / recovery 0（降级立即生效；恢复滞回 500 + 20 tick） | `src/config/index.ts` `CONFIG.cpu.tiers` |
 | Emergency Survival Mode | **设计态，未实现**（发布运行态规范，见 [implementation/RELEASE_GATE_AND_ROLLBACK.md](implementation/RELEASE_GATE_AND_ROLLBACK.md) §5.2；不是 CpuTier 成员） | — |
@@ -43,8 +43,8 @@
 | 门禁 | 结果 |
 | --- | --- |
 | `npm run typecheck` | ✅ 0 error |
-| `npm test`（unit + integration） | ✅ 322 文件 / 4666 测试全绿（2026-08-29 实测 @ B5 批 2；基线 346/5285 − 24 文件 / 619 用例为 B5 Shadow-Only 设计源码测试删除，逐一对应删除清单） |
-| `npm run build` | ✅ `dist/main.js` 生成（8.2s） |
+| `npm test`（unit + integration） | ✅ 323 文件 / 4668 测试全绿（2026-08-29 实测 @ B7：B5 后 322/4666 + v42-to-v43 迁移测试 1 文件 / 3 用例；含情报消费者迁移测试改造） |
+| `npm run build` | ✅ `dist/main.js` 生成（8.1s） |
 | `npm run test:e2e` | ✅ 全套件 18 文件 / 54 用例全绿（2026-08-29 B3 实测 @Node v24.18.0，908s；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致） |
 | `npm run check:docs` | ✅ 7 项文档一致性检查全过 |
 
@@ -152,7 +152,7 @@
 | B4 | 情报架构 ADR 裁决：实现完整版（IntelState 唯一写者/segment/三分置信度）vs 登记生产简化版（`Memory.rooms[].intel`+lastSeen）为当前合同 | BLUEPRINT §5-14 | FREEZE §15 新 ADR 行 + 受影响文档同步标注 | ✅ 2026-08-29（**裁决：实现完整版**→ FREEZE R14：`intelligence` 系统注册 32→33，IntelState 唯一写者/三分置信度/TTL 分档/环形覆盖/玩家域 segment 冷存/硬门槛查询落地；legacy 桥只读并存，消费者迁移为 war 轨前置；新增 25 测试全绿） |
 | B5 | Shadow-Only 分批清理：`src/domain/intelligence/`（46 文件）+ `src/domain/strategy/decision-trace.ts` | FREEZE R11 · BLUEPRINT §5-11 | src 无孤岛文件；bundle parity 守卫绿；**前置依赖 B4 裁决**（选完整版则转恢复注册轨） | ✅ 2026-08-29（**R14 裁决完整版落地但 A6 智能层不恢复（R14 原文），按清理轨执行**：src 孤岛 47 文件已删除（domain/intelligence 46 + decision-trace 1），测试侧删 24 文件 / 619 用例（channel-isolation 瘦身保留生产 outcome-channel 断言、a5-1 死 import 清理）；门禁全绿——typecheck 0 error、322 文件/4666 用例、build 成功、smoke 3/3 @Node24、compliance+bundle-parity 对新 dist 复跑绿、bundle 零 shadow 标记；契约文档 6 处同步） |
 | B6 | 验证轨启动（Blocked 项的执行编排，属代码/运行期，非纯重构）：低 CPU 私服 soak（触发 tier 降级链）→ global reset 注入 → sv=42 单房 soak 重跑 | STATUS §5 · CANARY §5 | §5 Blocked 前三项有当前版本证据；A1/A2 升级为 Code/Soak-Verified | ⏳ |
-| B7 | 情报消费者迁移：war-planner / expansion-manager / remote-mining-manager / power-farm-manager / prospect-manager / empire-strategy 从 legacy `Memory.rooms[].intel` 直读迁移到 IntelQuery 只读 API；迁移完成后 legacy 桥退役 | FREEZE R14 | 全部消费者走 IntelQuery；legacy `Memory.rooms[].intel` 写侧下线（schema 届时按迁移规范处理）；行为保持四件套 | ⏳ war 轨前置 |
+| B7 | 情报消费者迁移：war-planner / expansion-manager / remote-mining-manager / power-farm-manager / prospect-manager / empire-strategy 从 legacy `Memory.rooms[].intel` 直读迁移到 IntelQuery 只读 API；迁移完成后 legacy 桥退役 | FREEZE R14 | 全部消费者走 IntelQuery；legacy `Memory.rooms[].intel` 写侧下线（schema 届时按迁移规范处理）；行为保持四件套 | ✅ 2026-08-29（**FREEZE R15 ADR 登记**：11 消费者文件迁移 IntelQuery——B7 行名 6 系统 + 考古增补 war-planning-system / expansion-planner / tactical-runtime-system / specialization-planner / room-observer；IntelEntry 新增 observedBy 归属房；查询 API 扩充 queryRoomIntel 枚举 + intelPayloadView 视图；观察采集改 `globalCache.intelHandoff` 交接通道（room-observer 管线写、intelligence 采用清空，唯一写者不变）；legacy 桥写侧下线 + v43 迁移清理存量（sv 42→43，迁移测试 1 文件/3 用例）；R11 白名单 +11 条公开查询边。四件套：typecheck 0 error、323 文件/4668 用例全绿、build 成功、E2E 全套件 18 文件/54 用例 @Node24（887s）、compliance+bundle-parity 绿、check:docs 全绿。多房 subject 去重语义收敛已由 R15 追认，多房 soak 验证归验证轨持续项） |
 
 ## 7. 本文件维护方式
 

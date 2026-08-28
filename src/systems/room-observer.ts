@@ -1,6 +1,13 @@
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import type { ColonyPhase } from "../domain/economy/phase";
-import { computeSealedExits, scanNeighborIntel, type RoomIntel } from "../domain/intel";
+import {
+  computeSealedExits,
+  scanNeighborIntel,
+  type IntelSource,
+  type RoomIntel,
+  type RoomObservation,
+} from "../domain/intel";
+import { getRoomIntel } from "./intelligence";
 import { globalCache } from "../kernel/global-cache";
 import { log } from "../kernel/log";
 
@@ -19,9 +26,12 @@ const OBSERVE_INTERVAL = 25;
 /** intel 视野数据的陈旧阈值（tick）— 超过则值得用 observer 刷新。 */
 const INTEL_STALE_AFTER = 2000;
 
+/** 观察交接缓冲上限（条）。超限丢弃最旧——观察可复采，丢弃无损失风险。 */
+const INTEL_HANDOFF_CAP = 128;
+
 /**
  * 房间观察器 — P3 房间级诊断与情报采集。
-
+ *
  * 资源/归属字段需视野补全）；observer 视野调度。
  * 系统 interval 必须为 1：observeRoom 的视野只存续下一 tick — 本 tick 请求 → 下 tick
  * 捕获；内部各任务自带取模门控，非触发 tick 的开销仅为几次条件判断。
@@ -34,7 +44,7 @@ export const roomObserverSystem: System = {
   run(ctx: TickContext): void {
     // 上一 tick 通过 observer 请求的视野本 tick 生效 — 优先捕获（仅一次机会）。
     captureObservedIntel(ctx.tick);
-    // R6b：侦察兵视野捕获 — prospect 任务存续期间，scout 所在目标房的
+    // 侦察兵视野捕获 — prospect 任务存续期间，scout 所在目标房的
     // sources/owner/towers 落库为决策就绪情报（扩张评估器直接消费）。
     captureScoutVision(ctx.tick);
 
@@ -57,15 +67,15 @@ export const roomObserverSystem: System = {
 
       // 邻居房情报 — 远矿/扩张选址的数据源。
       if (ctx.tick % INTEL_SCAN_INTERVAL === 0) {
-        refreshNeighborIntel(snapshot.roomName, roomMem, ctx.tick);
+        refreshNeighborIntel(snapshot.roomName, ctx.tick);
         // 补算通勤成本：每次刷新至多为 1 个 pathCost 缺失的 normal 邻房计算，
         // 逐次分摊 PathFinder 开销（地形静态，算一次终身缓存）。
-        backfillPathCost(snapshot.roomName, roomMem);
+        backfillPathCost(snapshot.roomName);
       }
 
       // Observer 视野调度：挑最陈旧的邻房请求视野，下一 tick 捕获。
       if (snapshot.observer && ctx.tick % OBSERVE_INTERVAL === 0) {
-        requestObservation(snapshot.observer, snapshot.roomName, roomMem, ctx.tick);
+        requestObservation(snapshot.observer, snapshot.roomName, ctx.tick);
       }
     }
   },
@@ -75,7 +85,7 @@ export const roomObserverSystem: System = {
 interface PendingObservation {
   tick: number;
   targetRoom: string;
-  /** intel 归属的自有房名。 */
+  /** 观察归属的自有房名（sponsor 归属依据）。 */
   homeRoom: string;
 }
 
@@ -86,29 +96,41 @@ function pendingSlot(): { pending?: PendingObservation } {
 }
 
 /**
+ * 观察结果入队交接缓冲（intelligence 系统采用为 IntelEntry，本系统不直写状态）。
+ */
+function submitObservation(
+  subject: string,
+  home: string,
+  source: IntelSource,
+  payload: RoomIntel,
+): void {
+  const g = globalCache();
+  const buf = (g.intelHandoff ??= []);
+  if (buf.length >= INTEL_HANDOFF_CAP) buf.shift();
+  buf.push({ subject, home, source, payload });
+}
+
+/**
  * 挑选最值得刷新的邻房并请求 observer 视野。
  * 优先级：从未有过视野（sources 未知）> 视野数据最陈旧且超过阈值。
  */
-function requestObservation(
-  observer: StructureObserver,
-  homeRoom: string,
-  roomMem: RoomMemory,
-  tick: number,
-): void {
-  const intel = roomMem.intel;
-  if (!intel) return;
+function requestObservation(observer: StructureObserver, homeRoom: string, tick: number): void {
+  const exits = Game.map.describeExits(homeRoom);
+  if (!exits) return;
 
   let target: string | undefined;
   let staleness = -1;
-  for (const [neighbor, info] of Object.entries(intel)) {
-    if (info.kind === "highway") continue; // 公路房无 source/controller，观察无收益。
-    if (info.sources === undefined) {
+  for (const neighbor of Object.values(exits)) {
+    if (!neighbor) continue;
+    const payload = getRoomIntel(neighbor)?.payload;
+    if (payload?.kind === "highway") continue; // 公路房无 source/controller，观察无收益。
+    if (payload?.sources === undefined) {
       // 从未有过视野 — 最高优先。
       target = neighbor;
       staleness = Infinity;
       break;
     }
-    const age = tick - info.lastSeen;
+    const age = tick - payload.lastSeen;
     if (age > INTEL_STALE_AFTER && age > staleness) {
       target = neighbor;
       staleness = age;
@@ -136,42 +158,41 @@ function captureObservedIntel(tick: number): void {
   slot.pending = undefined;
 
   const room = Game.rooms[pending.targetRoom];
-  const roomMem = Memory.rooms[pending.homeRoom];
-  if (!room || !roomMem?.intel) return;
+  if (!room) return;
 
   const status = Game.map.getRoomStatus(pending.targetRoom).status;
-  roomMem.intel[pending.targetRoom] = scanNeighborIntel(
+  const payload = scanNeighborIntel(
     pending.targetRoom,
     status,
     tick,
     collectRoomVision(room),
-    roomMem.intel[pending.targetRoom], // prev — 保留危险冷却。
+    getRoomIntel(pending.targetRoom)?.payload, // prev — 保留 pathCost 等静态字段。
   );
+  submitObservation(pending.targetRoom, pending.homeRoom, "observer", payload);
 }
 
 /**
  * 刷新本房出口邻房的情报记录。
  * describeExits + getRoomStatus 无需视野；Game.rooms 有视野时补资源/归属字段。
- * 只写短字段（每邻房 ≤6 个标量），Memory 体积有界。
+ * 只写短字段（每邻房 ≤6 个标量），状态体积有界。
  */
-function refreshNeighborIntel(roomName: string, roomMem: RoomMemory, tick: number): void {
+function refreshNeighborIntel(roomName: string, tick: number): void {
   const exits = Game.map.describeExits(roomName);
   if (!exits) return;
 
-  const intel: Record<string, RoomIntel> = roomMem.intel ?? {};
   for (const neighbor of Object.values(exits)) {
     if (!neighbor) continue;
     const status = Game.map.getRoomStatus(neighbor).status;
     const visible = Game.rooms[neighbor];
-    intel[neighbor] = scanNeighborIntel(
+    const payload = scanNeighborIntel(
       neighbor,
       status,
       tick,
       visible ? collectRoomVision(visible) : undefined,
-      intel[neighbor], // prev — 保留危险冷却与上次观测值。
+      getRoomIntel(neighbor)?.payload, // prev — 保留上次观测值。
     );
+    submitObservation(neighbor, roomName, "observer", payload);
   }
-  roomMem.intel = intel;
 }
 
 /** 有视野时的完整房况载荷（scanNeighborIntel 的 visibleRoom 输入）。
@@ -238,8 +259,8 @@ function collectRoomVision(room: Room): RoomVisionIntel {
 }
 
 /**
- * 侦察兵视野捕获（R6b）：prospect 任务存续期间，把站在目标房内的 scout
- * 视野写回 sponsor 的 intel。只扫描一次 Game.creeps（仅任务存续期间），
+ * 侦察兵视野捕获：prospect 任务存续期间，把站在目标房内的 scout
+ * 视野写回情报状态。只扫描一次 Game.creeps（仅任务存续期间），
  * scout 站定即每 tick 刷新 lastSeen — prospect-manager 据此判成功。
  * 复用 scanNeighborIntel 的 prev 语义（保留 pathCost 等静态字段）。
  */
@@ -254,17 +275,15 @@ function captureScoutVision(tick: number): void {
     if (!target || !home || c.room.name !== target) continue;
     const room = Game.rooms[target];
     if (!room) continue;
-    const roomMem = Memory.rooms[home];
-    if (!roomMem) continue;
     const status = Game.map.getRoomStatus(target).status;
-    roomMem.intel ??= {};
-    roomMem.intel[target] = scanNeighborIntel(
+    const payload = scanNeighborIntel(
       target,
       status,
       tick,
       collectRoomVision(room),
-      roomMem.intel[target],
+      getRoomIntel(target)?.payload,
     );
+    submitObservation(target, home, "scout", payload);
   }
 }
 
@@ -277,27 +296,32 @@ function captureScoutVision(tick: number): void {
  * 不重试 — 地形静态，一次定终身。
 
  * 每次刷新至多算 1 个（PathFinder 是 CPU 大户，逐次分摊）；只算 normal 房
- * （只有它能做远矿候选）。
+ * （只有它能做远矿候选）。富化观测不前移 lastSeen（lastSeen 沿用既有条目）。
  */
-function backfillPathCost(homeRoom: string, roomMem: RoomMemory): void {
-  const intel = roomMem.intel;
-  if (!intel) return;
+function backfillPathCost(homeRoom: string): void {
   const home = Game.rooms[homeRoom];
   if (!home) return;
   const anchor = home.storage ?? home.find(FIND_MY_SPAWNS)[0];
   if (!anchor) return;
+  const exits = Game.map.describeExits(homeRoom);
+  if (!exits) return;
 
-  for (const neighbor in intel) {
-    const info = intel[neighbor]!;
-    if (info.kind !== "normal" || info.pathCost !== undefined) continue;
+  for (const neighbor of Object.values(exits)) {
+    if (!neighbor) continue;
+    const entry = getRoomIntel(neighbor);
+    if (!entry || entry.payload.kind !== "normal" || entry.payload.pathCost !== undefined) continue;
     const result = PathFinder.search(
       anchor.pos,
       { pos: new RoomPosition(25, 25, neighbor), range: 15 },
       { plainCost: 1, swampCost: 5, maxRooms: 2, maxOps: 4000 },
     );
-    info.pathCost = result.incomplete
-      ? Game.map.getRoomLinearDistance(homeRoom, neighbor) * 70
-      : result.cost;
+    const payload: RoomIntel = {
+      ...entry.payload,
+      pathCost: result.incomplete
+        ? Game.map.getRoomLinearDistance(homeRoom, neighbor) * 70
+        : result.cost,
+    };
+    submitObservation(neighbor, homeRoom, "observer", payload);
     return; // 每次只算一个，分摊 CPU。
   }
 }
@@ -319,9 +343,12 @@ function logPhaseIfChangedOrDue(
 ): void {
   const due = tick % PHASE_LOG_INTERVAL === 0;
   if (!due) return;
-
+  void newPhase;
   log.info("room-observer", `[PERIODIC] phase/${roomName}: phase=${newPhase}` +
       ` reserve=${state.reserve} delta=${state.reserveDelta >= 0 ? "+" : ""}${state.reserveDelta}` +
       ` drain=${state.drainScore} harv=${state.harvesterCount}/${state.sourceCount} rcl=${state.rcl}` +
       ` state=${Memory.rooms[roomName]?.colonyState ?? "?"}`,);
 }
+
+// RoomObservation 类型再导出占位（保持 import 面与语义一致）。
+export type { RoomObservation };

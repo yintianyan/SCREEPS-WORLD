@@ -3,6 +3,7 @@ import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache, querySquad, type GlobalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
 import { recordEvent, EventKind } from "../kernel/event-log";
+import { getRoomIntel } from "./intelligence";
 import {
   evaluateTacticalAction,
   assessObjectiveLifecycle,
@@ -421,8 +422,8 @@ function buildTacticalSnapshot(
   };
 
   // 情报置信度（简化——基于 intel 新鲜度）
-  const sponsorIntel = Memory.rooms[plan.sponsor]?.intel?.[plan.targetRoom];
-  const intelAge = sponsorIntel?.lastSeen !== undefined ? tick - sponsorIntel.lastSeen : Infinity;
+  const targetEntry = getRoomIntel(plan.targetRoom);
+  const intelAge = targetEntry !== undefined ? tick - targetEntry.observedAt : Infinity;
   const confidenceVal = intelAge <= 500 ? 0.8 : intelAge <= 2000 ? 0.5 : intelAge <= 10000 ? 0.2 : 0.05;
   const confidence: MultiDimensionalConfidence = {
     factConfidence: confidenceVal,

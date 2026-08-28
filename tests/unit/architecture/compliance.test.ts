@@ -310,6 +310,18 @@ describe("R11 systems 间值导入审计", () => {
     "systems/agenda-manager.ts:systems/economy.ts",
     "systems/empire-economy.ts:systems/economy.ts",
     "systems/expansion-planner.ts:systems/empire-economy.ts",
+    // IntelQuery 公开查询函数（消费者只读 API）
+    "systems/war-planner.ts:systems/intelligence.ts",
+    "systems/war-planning-system.ts:systems/intelligence.ts",
+    "systems/tactical-runtime-system.ts:systems/intelligence.ts",
+    "systems/power-farm-manager.ts:systems/intelligence.ts",
+    "systems/prospect-manager.ts:systems/intelligence.ts",
+    "systems/empire-strategy.ts:systems/intelligence.ts",
+    "systems/specialization-planner.ts:systems/intelligence.ts",
+    "systems/expansion-manager.ts:systems/intelligence.ts",
+    "systems/expansion-planner.ts:systems/intelligence.ts",
+    "systems/remote-mining-manager.ts:systems/intelligence.ts",
+    "systems/room-observer.ts:systems/intelligence.ts",
     // link-system 暴露的拆改/死资产协调接口
     "systems/layout-planner.ts:systems/link-system.ts",
     "systems/construction-manager.ts:systems/link-system.ts",

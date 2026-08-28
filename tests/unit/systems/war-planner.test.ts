@@ -1,6 +1,8 @@
 /** War Planner 系统测试（R3 战时闭环 + R4 自治升级）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { demobilize, warPlannerSystem } from "../../../src/systems/war-planner";
+import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
+import { globalCache } from "../../../src/kernel/global-cache";
 import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
 import { CONFIG } from "../../../src/config";
 
@@ -19,19 +21,30 @@ function setPosture(posture: "develop" | "expand" | "fortify" | "war"): void {
   };
 }
 
+/** 经观察交接通道播种情报（与生产采集路径一致）：写 handoff → intelligence 采用。 */
+function seedIntel(entries: Record<string, Record<string, unknown>>): void {
+  __resetIntelStateForTests();
+  const g = globalCache();
+  g.intelHandoff = Object.entries(entries).map(([subject, p]) => ({
+    subject,
+    home: "W7N4",
+    source: "observer" as const,
+    payload: { kind: "normal", status: "normal", lastSeen: 900, ...p } as never,
+  }));
+  intelligenceSystem.run(mockContext(mockSnapshot()));
+}
+
 /** 建立 home 房：我方控制器 + 邻居情报（默认 W6N4 合格 / W6N5 SK 不合格）。 */
 function setupHome(extraIntel: Record<string, any> = {}): void {
   (globalThis as any).Game.rooms = {
     W7N4: { controller: { my: true, owner: { username: "Me" } } },
   };
-  (globalThis as any).Memory.rooms.W7N4 = {
-    spawnQueue: [],
-    intel: {
-      W6N4: { kind: "normal", owner: "Enemy", lastSeen: 900, towers: 0 },
-      W6N5: { kind: "sk", owner: "Enemy", lastSeen: 900, towers: 0 },
-      ...extraIntel,
-    },
-  };
+  (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: [] };
+  seedIntel({
+    W6N4: { owner: "Enemy", towers: 0 },
+    W6N5: { kind: "sk", owner: "Enemy", towers: 0 },
+    ...extraIntel,
+  });
 }
 
 /** 在役编队计数（live）— heal-tank：attacker + healer 都计入编制。
@@ -147,7 +160,7 @@ describe("R3 — 姿态消费与编队孵化", () => {
     setupHome();
     setPosture("war");
     // 使唯一合格目标失效：owner 清空（无主房不是战争目标）。
-    (globalThis as any).Memory.rooms.W7N4.intel.W6N4.owner = undefined;
+    seedIntel({ W6N4: { towers: 0 } });
 
     warPlannerSystem.run(mockContext(mockSnapshot()));
 
@@ -170,9 +183,6 @@ describe("R4 — 收摊与战后核验", () => {
               createdAt: 900, expiresAt: 1900, retries: 0,
             },
           ],
-          intel: {
-            W6N4: { kind: "normal", owner: "Enemy", lastSeen: 900, towers: 1 },
-          },
         },
       },
       kernel: {
@@ -184,6 +194,7 @@ describe("R4 — 收摊与战后核验", () => {
       a1: { memory: { role: "attacker", home: "W7N4", remoteTarget: "W6N4" } },
       h1: { memory: { role: "healer", home: "W7N4", remoteTarget: "W6N4" } },
     };
+    seedIntel({ W6N4: { owner: "Enemy", towers: 1 } });
     syncSquadIndex();
   }
 
@@ -206,7 +217,7 @@ describe("R4 — 收摊与战后核验", () => {
 
   it("核验 success（塔网清零）→ 不黑名单", () => {
     warPlanFixture();
-    (globalThis as any).Memory.rooms.W7N4.intel.W6N4.towers = 0;
+    seedIntel({ W6N4: { owner: "Enemy", towers: 0 } });
     setPosture("develop");
 
     warPlannerSystem.run(mockContext(mockSnapshot()));
@@ -217,7 +228,7 @@ describe("R4 — 收摊与战后核验", () => {
 
   it("核验 success（敌人弃房）→ 不黑名单", () => {
     warPlanFixture({ towersSeen: 0 }); // 无塔目标：弃房即胜利
-    (globalThis as any).Memory.rooms.W7N4.intel.W6N4.owner = undefined;
+    seedIntel({ W6N4: { towers: 1 } });
     setPosture("develop");
 
     warPlannerSystem.run(mockContext(mockSnapshot()));
@@ -228,7 +239,7 @@ describe("R4 — 收摊与战后核验", () => {
 
   it("核验 unknown（情报过期）→ 黑名单（半额冷却 — P0-2 区分 “打不赢” 与 “没看到”）", () => {
     warPlanFixture();
-    (globalThis as any).Memory.rooms.W7N4.intel.W6N4.lastSeen = -600; // 距今 1600 > freshness 1500
+    seedIntel({ W6N4: { owner: "Enemy", towers: 1, lastSeen: -600 } }); // 距今 1600 > freshness 1500
     setPosture("develop");
 
     warPlannerSystem.run(mockContext(mockSnapshot()));
@@ -240,7 +251,7 @@ describe("R4 — 收摊与战后核验", () => {
 
   it("demobilize 幂等：重复调用仅动作一次", () => {
     warPlanFixture();
-    (globalThis as any).Memory.rooms.W7N4.intel.W6N4.towers = 0; // success：免黑名单，聚焦幂等断言
+    seedIntel({ W6N4: { owner: "Enemy", towers: 0 } }); // success：免黑名单，聚焦幂等断言
 
     demobilize(TICK, 0);
     demobilize(TICK, 0);

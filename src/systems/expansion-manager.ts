@@ -12,6 +12,7 @@ import {
   BOOTSTRAP_DEFENDER_BODY,
 } from "../domain/expansion/bootstrap";
 import { roomLinearDistance } from "../domain/remote/targeting";
+import { getRoomIntel } from "./intelligence";
 import {
   appendOutcome,
   evaluateExpansionRhythm,
@@ -23,7 +24,6 @@ import { selectAnchors } from "../domain/layout/anchor-selection";
 import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { packPos } from "../domain/layout/types";
 import { COMPACT_CORE_V2 } from "../domain/layout/templates/compact-core-v2";
-import type { RoomIntel } from "../domain/intel";
 import type { ExpansionPlan } from "../domain/expansion/plan";
 import type { ExecutionState } from "../domain/expansion/execution-state";
 import { transitionExecutionState, getExecutionProgress, describeExecutionState } from "../domain/expansion/execution-state";
@@ -1155,15 +1155,9 @@ function isRoomOwned(roomName: string): boolean {
 
 /** 检查 Intel 是否过期。 */
 function isIntelStale(roomName: string, tick: number): boolean {
-  // 简化：如果从未观测过，不算过期（让 Gate 验证去做）
-  // 如果有 intel 记录，检查 lastSeen
-  for (const roomMem of Object.values(Memory.rooms)) {
-    const intel = roomMem?.intel as Record<string, RoomIntel> | undefined;
-    if (intel?.[roomName]) {
-      return tick - intel[roomName].lastSeen > 10000;
-    }
-  }
-  return false;
+  // 从未观测过 = 不算过期（让 Gate 验证去做）；有记录按观察年龄判定。
+  const entry = getRoomIntel(roomName);
+  return entry !== undefined && tick - entry.observedAt > 10000;
 }
 
 /** 检查目标房是否可 claim。 */

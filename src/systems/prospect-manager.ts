@@ -7,6 +7,7 @@ import { roomLinearDistance } from "../domain/remote/targeting";
 import { countPending, hasRequest, removeRequestsByRole, spawnKey, submitRequest } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
 import { querySquad } from "../kernel/global-cache";
+import { getRoomIntel, queryRoomIntel } from "./intelligence";
 
 /** ProspectOutcome 事件 outcome 编码（与 event-log 注释对齐）。 */
 const OUTCOME_SUCCESS = 0;
@@ -75,11 +76,11 @@ export const prospectManagerSystem: System = {
     }
 
     // 成功判定：目标 intel 已新鲜且 sources 已知（决策就绪）。
-    const intel = Memory.rooms[mission.sponsor]?.intel?.[mission.target];
+    const intel = getRoomIntel(mission.target);
     if (
       intel &&
-      intel.sources !== undefined &&
-      ctx.tick - intel.lastSeen <= CONFIG.prospect.intelFreshness
+      intel.payload.sources !== undefined &&
+      ctx.tick - intel.observedAt <= CONFIG.prospect.intelFreshness
     ) {
       completeMission(ctx.tick, OUTCOME_SUCCESS, false);
       return;
@@ -197,13 +198,10 @@ function getMyUsername(): string {
  */
 function collectHostileRooms(myUsername: string): Set<string> {
   const hostile = new Set<string>();
-  for (const home of Object.keys(Memory.rooms)) {
-    const intel = Memory.rooms[home]?.intel;
-    if (!intel) continue;
-    for (const [rn, e] of Object.entries(intel)) {
-      if (e && ((e.owner && e.owner !== myUsername) || (e.enemySpawns ?? 0) > 0)) {
-        hostile.add(rn);
-      }
+  for (const entry of queryRoomIntel()) {
+    const e = entry.payload;
+    if ((e.owner && e.owner !== myUsername) || (e.enemySpawns ?? 0) > 0) {
+      hostile.add(entry.subject);
     }
   }
   return hostile;
@@ -239,28 +237,23 @@ function buildCandidates(tick: number): ProspectCandidate[] {
 
   // ── 已知房候选（intel 已收录）──
   const knownRooms = new Set<string>();
-  for (const home of Object.keys(Memory.rooms)) {
-    const intel = Memory.rooms[home]?.intel;
-    if (!intel) continue;
-    for (const roomName of Object.keys(intel)) {
-      knownRooms.add(roomName);
-      const e = intel[roomName];
-      if (!e) continue;
-      if (cooldown && (cooldown[roomName] ?? 0) > tick) continue;
-      candidates.push({
-        roomName,
-        home,
-        kind: e.kind,
-        status: e.status,
-        owner: e.owner,
-        reservedBy: e.reservedBy,
-        myUsername,
-        sources: e.sources,
-        lastSeen: e.lastSeen,
-        pathCost: e.pathCost,
-        occupied: occupied.has(roomName),
-      });
-    }
+  for (const entry of queryRoomIntel()) {
+    const e = entry.payload;
+    knownRooms.add(entry.subject);
+    if (cooldown && (cooldown[entry.subject] ?? 0) > tick) continue;
+    candidates.push({
+      roomName: entry.subject,
+      home: entry.observedBy,
+      kind: e.kind,
+      status: e.status,
+      owner: e.owner,
+      reservedBy: e.reservedBy,
+      myUsername,
+      sources: e.sources,
+      lastSeen: entry.observedAt,
+      pathCost: e.pathCost,
+      occupied: occupied.has(entry.subject),
+    });
   }
 
   // ── 前沿发现候选：已知房（含己方房）相邻、但 intel 尚未收录的房。

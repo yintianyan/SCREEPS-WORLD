@@ -29,7 +29,8 @@ describe("migration v15 → v16（dangerUntil 搬家）", () => {
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const room = (globalThis as any).Memory.rooms.W1N1;
-    expect(room.intel.W2N1.dangerUntil).toBeUndefined();
+    // v43 终态清理整个 intel 记录（legacy 桥退役）——dangerUntil 必然不在。
+    expect(room.intel?.W2N1?.dangerUntil).toBeUndefined();
     expect(room.remoteOps.W2N1.dangerUntil).toBe(5000);
   });
 
@@ -50,7 +51,7 @@ describe("migration v15 → v16（dangerUntil 搬家）", () => {
     runMigrations();
 
     const room = (globalThis as any).Memory.rooms.W1N1;
-    expect(room.intel.W3N1.dangerUntil).toBeUndefined();
+    expect(room.intel?.W3N1?.dangerUntil).toBeUndefined();
     expect(room.remoteOps.W3N1).toBeUndefined();
   });
 
@@ -73,7 +74,7 @@ describe("migration v15 → v16（dangerUntil 搬家）", () => {
     runMigrations();
 
     const room = (globalThis as any).Memory.rooms.W1N1;
-    expect(room.intel.W2N1.dangerUntil).toBeUndefined();
+    expect(room.intel?.W2N1?.dangerUntil).toBeUndefined();
     expect(room.remoteOps.W2N1.dangerUntil).toBeUndefined();
   });
 
@@ -99,7 +100,7 @@ describe("migration v15 → v16（dangerUntil 搬家）", () => {
 
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     const room = (globalThis as any).Memory.rooms.W1N1;
-    expect(room.intel.W2N1.dangerUntil).toBeUndefined();
+    expect(room.intel?.W2N1?.dangerUntil).toBeUndefined();
     expect(room.remoteOps.W2N1.dangerUntil).toBe(5000);
   });
 
@@ -123,7 +124,7 @@ describe("migration v15 → v16（dangerUntil 搬家）", () => {
 
     const room = (globalThis as any).Memory.rooms.W1N1;
     // remoteOps 侧已有值（9999），不覆盖；intel 侧旧值（5000）仍然删除。
-    expect(room.intel.W2N1.dangerUntil).toBeUndefined();
+    expect(room.intel?.W2N1?.dangerUntil).toBeUndefined();
     expect(room.remoteOps.W2N1.dangerUntil).toBe(9999);
   });
 

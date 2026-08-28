@@ -102,11 +102,12 @@ Lifecycle=创建→更新→归档→清理；Persistence=存储层级；Frequen
 
 ### 3.8 IntelState（四域 / TTL / 置信度——segment）
 
-> **当前生产状态（R14，2026-08-29）**：IntelState 唯一写者已注册——`intelligence`
-> 系统（`src/systems/intelligence.ts`）。房间域活跃层在 heap（环形覆盖，可由 legacy
-> 输入桥 + 快照重建）；玩家域威胁记忆在 segment 5（月级衰减不删除）。legacy
-> `Memory.rooms[].intel` 为只读输入桥（room-observer 写侧保持至消费者迁移
-> IntelQuery）。A6 智能层仍为 R11 Shadow-Only（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）。
+> **当前生产状态（R15，2026-08-29）**：IntelState 唯一写者已注册——`intelligence`
+> 系统（`src/systems/intelligence.ts`）。房间域活跃层在 heap（环形覆盖，可由观察
+> 交接通道 + 快照重建）；玩家域威胁记忆在 segment 5（月级衰减不删除）。观察采集
+> 经 `globalCache.intelHandoff` 交接（room-observer 管线写，intelligence 采用后清空）；
+> legacy `Memory.rooms[].intel` 写侧已下线（v43 清理存量），消费者全部走 IntelQuery
+> （R15/B7）。A6 智能层已按 R11 清理删除（B5）。
 
 | 字段组 | Owner | Reader | Writer | Lifecycle | Persistence | Frequency |
 | --- | --- | --- | --- | --- | --- | --- |

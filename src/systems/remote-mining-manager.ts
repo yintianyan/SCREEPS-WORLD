@@ -10,6 +10,7 @@ import { classifyThreats } from "../domain/defense/threat";
 import { submitRequest } from "../domain/spawn/queue";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
 import { globalCache, querySquad } from "../kernel/global-cache";
+import { intelPayloadView } from "./intelligence";
 import {
   assessThreat,
   type HostileSnapshot as ThreatHostileSnapshot,
@@ -51,6 +52,9 @@ export const remoteMiningManagerSystem: System = {
       if (Game.rooms[rn]?.controller?.my) ownedRooms.add(rn);
     }
 
+    // IntelQuery payload 视图（subject 全局去重；RoomIntel 字段集与 legacy 一致）。
+    const intel = intelPayloadView();
+
     for (const snapshot of ctx.snapshots()) {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
@@ -63,7 +67,7 @@ export const remoteMiningManagerSystem: System = {
       // 1. 评估现有运营：暂停过期、清理废弃、检测敌占/敌方预定、入口封死。
       //    RM-3：被自己 claim 的房 + 敌方预定的房 — 现役远矿 creep 一并回收。
       const { selfClaimed: selfClaimedRooms, hostileReserved: hostileReservedRooms } =
-        maintainExistingOps(remoteOps, roomMem.intel, ctx.tick, snapshot.controller?.owner?.username);
+        maintainExistingOps(remoteOps, intel, ctx.tick, snapshot.controller?.owner?.username);
 
       // 1b. v33 空转止损：编队全员空转超时的 op 废弃（物理上无法作业或
       //     全员卡死 — 线上实证 W36S58 墙线困编队空转 44k tick 无产出）。
@@ -94,7 +98,7 @@ export const remoteMiningManagerSystem: System = {
       //     （沉没成本已付，自然寿终榨干残值）。上限输入都是建筑级稳定量，不会抖动。
       if (activeCount > maxOpsWithCapacity) {
         const costOf = (roomName: string, op: RemoteOp): number =>
-          roomMem.intel?.[roomName]?.pathCost ?? (op.haulerNeed ?? 1) * 20;
+          intel[roomName]?.pathCost ?? (op.haulerNeed ?? 1) * 20;
         const active = Object.entries(remoteOps)
           .filter(([, op]) => op.state === "active")
           .sort((a, b) =>
@@ -124,7 +128,7 @@ export const remoteMiningManagerSystem: System = {
       // Plan 的 scope="operation" 请求拥有 Decision Authority（在下方 L295-316 消费）。
       const planForRemote = globalCache().logisticsPlan?.plan;
       const planIsActiveForRemote = planForRemote && planForRemote.plannedAt >= ctx.tick - 100;
-      reevaluateActiveOps(remoteOps, roomMem, snapshot.roomName, haulerCapacity, ctx.tick);
+      reevaluateActiveOps(remoteOps, intel, snapshot.roomName, haulerCapacity, ctx.tick);
 
       // A4.4：如果 Plan 有效，记录 reevaluateActiveOps 的 haulerNeed 信号到 Plan 消费日志。
       // Plan 消费逻辑（L295-316）会用 Plan 的 haulerNeed 覆写，reevaluateActiveOps 的结果
@@ -140,7 +144,7 @@ export const remoteMiningManagerSystem: System = {
       if (newOpsAllowed && roomReadyForNewRemote(snapshot, roomMem.colonyState) && activeCount < maxOpsWithCapacity) {
         const candidates = selectRemoteTargets({
           homeRoom: snapshot.roomName,
-          intel: roomMem.intel,
+          intel,
           existingOps: remoteOps,
           tick: ctx.tick,
           staleThreshold: CONFIG.remote.staleThreshold,
@@ -157,7 +161,7 @@ export const remoteMiningManagerSystem: System = {
           // clearer 而不是经济编队（否则第一波 harvester 进房即被核心压制、再走
           // 回收→失明）。有视野后 collectRemoteBlockers 会按 lesser/stronghold/clear 校正。
           const reservedByInvader =
-            roomMem.intel?.[candidate.roomName]?.reservedBy === INVADER_USERNAME;
+            intel[candidate.roomName]?.reservedBy === INVADER_USERNAME;
           remoteOps[candidate.roomName] = {
             state: "active",
             sources: candidate.sources,
@@ -231,7 +235,7 @@ export const remoteMiningManagerSystem: System = {
               creepCount: collectRemoteCreeps(snapshot.roomName)
                 .filter(c => c.remoteTarget === rn).length,
               creepInvestment: estimateCreepInvestment(op, snapshot.energyCapacityAvailable),
-              pathCost: roomMem.intel?.[rn]?.pathCost,
+              pathCost: intel[rn]?.pathCost,
               threatUntil: op.threatUntil,
               dangerUntil: op.dangerUntil,
               createdAt: op.createdAt,
@@ -249,7 +253,7 @@ export const remoteMiningManagerSystem: System = {
               ),
             };
             const logisticsContext: LogisticsContext = {
-              avgHaulerCommute: roomMem.intel?.[rn]?.pathCost ?? 1,
+              avgHaulerCommute: intel[rn]?.pathCost ?? 1,
               availableHaulers: collectRemoteCreeps(snapshot.roomName)
                 .filter(c => c.role === "remoteHauler").length,
             };
@@ -260,7 +264,7 @@ export const remoteMiningManagerSystem: System = {
               defenderSpawnCost: defenderBody.reduce(
                 (sum, p) => sum + BODYPART_COST[p], 0,
               ),
-              defenderCommuteTicks: (roomMem.intel?.[rn]?.pathCost ?? 1) * 50,
+              defenderCommuteTicks: (intel[rn]?.pathCost ?? 1) * 50,
               atWar: posture === "war",
             };
             const decision = decideRemoteDefenseAction({
@@ -387,7 +391,7 @@ export const remoteMiningManagerSystem: System = {
           blockedRooms,
           clearRooms,
           travelCosts: Object.fromEntries(
-            Object.keys(remoteOps).map(roomName => [roomName, roomMem.intel?.[roomName]?.pathCost]),
+            Object.keys(remoteOps).map(roomName => [roomName, intel[roomName]?.pathCost]),
           ),
         });
 
@@ -433,7 +437,7 @@ export const remoteMiningManagerSystem: System = {
       recycleExcessRemoteCreeps(
         snapshot.roomName,
         remoteOps,
-        roomMem.intel,
+        intel,
       );
     }
   },
@@ -446,14 +450,14 @@ export const remoteMiningManagerSystem: System = {
  */
 function reevaluateActiveOps(
   remoteOps: Record<string, RemoteOp>,
-  roomMem: RoomMemory,
+  intel: Record<string, import("../domain/intel").RoomIntel>,
   homeRoom: string,
   haulerCapacity: number,
   tick: number,
 ): void {
   for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") continue;
-    const info = roomMem.intel?.[roomName];
+    const info = intel[roomName];
     const { netScore, haulerNeed } = scoreRemoteCandidate({
       pathCost: info?.pathCost,
       linearDistance: roomLinearDistance(homeRoom, roomName),

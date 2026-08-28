@@ -15,9 +15,10 @@
 | 项 | 状态 |
 | --- | --- |
 | 本文件 §1–§8 概念合同（Observation/Intel/Knowledge/Threat/Prediction/History、TTL、置信度、硬门槛） | **已实现核心（R14，2026-08-29）**：`intelligence` 系统（P2/10t）为 IntelState 唯一写者——三分置信度（来源信任 × 时效窗读侧派生）、TTL 分档 + expiry jitter、房间域 heap 活跃层（256 环形覆盖）、玩家域威胁记忆 segment 5 冷存（月级）、§5 硬门槛查询（`intelActionUsable`/`intelNeedsRescout`） |
-| 观察采集 | legacy `Memory.rooms[].intel` 只读输入桥采用（room-observer 写侧保持运行）+ 快照被动威胁信号；消费者迁移 IntelQuery 为 war 轨前置 |
+| 观察采集 | **观察交接通道（R15/B7）**：room-observer 采集管线写入 `globalCache.intelHandoff`，`intelligence` 系统采用为 IntelEntry（唯一写者不变）+ 快照被动威胁信号；legacy `Memory.rooms[].intel` 写侧已下线（v43 清理存量）；消费者已全部走 IntelQuery（11 文件） |
 | segment 分片（§3） | 玩家域 segment 5 已落地；房间域 `intel-rooms-{hash}` 分片按规模触发（10+ 房）后启用（当前 heap 环形覆盖语义等价）；静态域由 `classifyRoomByName` 派生（inferred），市场域数据归市场系统所有 |
 | `intelligence-pipeline`（A6 智能层）、`decision-trace`、`evaluation-system` | **已按 R11 裁决清理（2026-08-29，B5）**：`src/domain/intelligence/` 与 `src/domain/strategy/decision-trace.ts` 已删除（设计源码测试 24 文件同步移除）；R14 不恢复之，恢复须走新 ADR |
+| 消费者迁移（R15/B7） | **已完成（2026-08-29）**：全部消费者（war-planner / war-planning-system / tactical-runtime-system / expansion-manager / expansion-planner / remote-mining-manager / power-farm-manager / prospect-manager / empire-strategy / specialization-planner）走 IntelQuery 只读 API；R11 白名单登记 11 条公开查询边 |
 | 测试验证层级 | `tests/unit/intel/*` 验证 IntelState 领域模型（生产路径）；原 `tests/unit/intelligence/*` 等设计源码测试已随 B5 清理删除；冲突 E2E-011 已随 B3 移除（2026-08-29） |
 
 **测试验证层级（防误读）**：
@@ -47,7 +48,8 @@
 ### 2.1 IntelEntry 字段
 
 `subject`（room/player id）、`observedAt`、`source`（passive/scout/observer/ally/derived）、
-`confidence`、`expiry`、`payload`（按域 schema）（research/14 §10.2）。
+`observedBy`（采集归属房，R15/B7——sponsor 归属与按房评分依据；多房重复观测按
+observedAt 最新归并）、`confidence`、`expiry`、`payload`（按域 schema）（research/14 §10.2）。
 
 ### 2.2 TTL 分档（初值 SPECULATION，soak 校准——research/14 §12）
 

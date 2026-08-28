@@ -1,6 +1,8 @@
 /** Power Farm Manager 系统生命周期测试（审计缺口 2）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { powerFarmManagerSystem } from "../../../src/systems/power-farm-manager";
+import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
+import { globalCache } from "../../../src/kernel/global-cache";
 import { CONFIG } from "../../../src/config";
 import { resetGlobals, syncSquadIndex } from "../../role-helpers";
 
@@ -20,19 +22,17 @@ function makeContext(tick: number): any {
   };
 }
 
-/** intel 里登记一个 PB 房。 */
+/** intel 里登记一个 PB 房（观察交接播种 → intelligence 采用）。 */
 function seedIntel(tick: number): void {
-  (globalThis as any).Memory.rooms[HOME] = {
-    spawnQueue: [],
-    intel: {
-      [TARGET]: {
-        kind: "highway",
-        status: "normal",
-        lastSeen: tick,
-        powerBank: true,
-      },
-    },
-  };
+  (globalThis as any).Memory.rooms[HOME] = { spawnQueue: [] };
+  __resetIntelStateForTests();
+  globalCache().intelHandoff = [{
+    subject: TARGET,
+    home: HOME,
+    source: "observer",
+    payload: { kind: "highway", status: "normal", lastSeen: tick, powerBank: true } as never,
+  }];
+  intelligenceSystem.run({ tick, snapshots: () => [], budget: { canStart: () => true } } as never);
 }
 
 beforeEach(() => {

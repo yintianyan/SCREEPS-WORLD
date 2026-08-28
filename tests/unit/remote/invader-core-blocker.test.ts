@@ -9,6 +9,8 @@ import {
 import { roomHasInvaderCore } from "../../../src/creeps/roles/reserver";
 import type { ColonyState } from "../../../src/kernel/contracts";
 import { mockContext, mockCreep, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
+import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
+import { globalCache } from "../../../src/kernel/global-cache";
 
 const tick = 100000;
 const homeRoom = "W1N1";
@@ -377,17 +379,19 @@ describe("remote-mining-manager — Invader 预定闭环（线上 W37S57 复现�
           sources: 2,
         },
       },
-      intel: {
-        [targetRoom]: {
-          kind: "normal",
-          status: "normal",
-          lastSeen: now - 15000,
-          sources: 2,
-          reservedBy: "Invader",
-          pathCost: 36,
-        },
-      },
     };
+    // IntelQuery 播种：reservedBy=Invader 经 view 被 maintainExistingOps 消费。
+    __resetIntelStateForTests();
+    globalCache().intelHandoff = [{
+      subject: targetRoom,
+      home: "W7N4",
+      source: "observer",
+      payload: {
+        kind: "normal", status: "normal", lastSeen: now - 15000,
+        sources: 2, reservedBy: "Invader", pathCost: 36,
+      } as never,
+    }];
+    intelligenceSystem.run({ tick: now, snapshots: () => [], budget: { canStart: () => true } } as never);
 
     remoteMiningManagerSystem.run(mockContext(mockSnapshot({
       rcl: 5,

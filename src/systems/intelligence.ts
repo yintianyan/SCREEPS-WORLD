@@ -2,6 +2,7 @@
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { systemPhase } from "../kernel/phase";
 import { safeRun } from "../kernel/safe-run";
+import { globalCache } from "../kernel/global-cache";
 import {
   readIntelPlayersSegment,
   markIntelPlayersDirty,
@@ -9,7 +10,7 @@ import {
 } from "../kernel/segment-store";
 import { log } from "../kernel/log";
 import {
-  adoptLegacyRoomIntel,
+  adoptRoomIntel,
   ageRooms,
   capRooms,
   upsertRoomEntry,
@@ -21,12 +22,14 @@ import {
   confidenceAt,
   INVADER_USERNAME,
   type IntelEntry,
+  type IntelSource,
   type PlayerIntelEntry,
+  type RoomIntel,
   INTEL_ROOMS_CAP,
 } from "../domain/intel";
 
 // ─── IntelState heap 层（模块级 = heap 语义；global reset 后由
-// legacy 输入桥 + segment 冷存惰性重建，符合三级存储分层）────────
+// 观察交接 + segment 冷存惰性重建，符合三级存储分层）────────
 
 /** 房间域活跃层：subject（房名）→ 条目。容量上限内环形覆盖。 */
 const roomEntries = new Map<string, IntelEntry>();
@@ -47,32 +50,26 @@ function isBlacklistedRoom(roomName: string, tick: number): boolean {
 }
 
 /**
- * legacy 输入桥采用：RoomMemory.intel（room-observer 侦察管线产出的邻房情报）
- * 只读上采为 IntelEntry。legacy 桥在消费者迁移到 IntelQuery 前保持运行；
- * 本系统对其只读，不构成第二写者。
+ * 观察交接采用：room-observer 采集管线写入 globalCache.intelHandoff，本系统
+ * 采用为 IntelEntry 并清空缓冲（IntelState 唯一写者；观察方不直写状态）。
  */
-function adoptLegacyIntel(tick: number): void {
-  for (const roomName in Memory.rooms) {
-    const intel = Memory.rooms[roomName]?.intel;
-    if (!intel) continue;
-    for (const subject in intel) {
-      const legacy = intel[subject];
-      if (!legacy) continue;
-      upsertRoomEntry(roomEntries, adoptLegacyRoomIntel(subject, legacy, tick));
-    }
-    // 玩家域信号：legacy 记录的 owner（排除 NPC Invader）→ 活动观测。
-    for (const subject in intel) {
-      const owner = intel[subject]?.owner;
-      if (!owner || owner === INVADER_USERNAME) continue;
+function adoptHandoff(tick: number): void {
+  const buf = globalCache().intelHandoff;
+  if (!buf || buf.length === 0) return;
+  for (const obs of buf) {
+    upsertRoomEntry(roomEntries, adoptRoomIntel(obs));
+    const owner = obs.payload.owner;
+    if (owner && owner !== INVADER_USERNAME) {
       upsertPlayerObservation(
         playerEntries,
         owner,
-        subject,
-        intel[subject]!.lastSeen,
-        isBlacklistedRoom(subject, tick),
+        obs.subject,
+        obs.payload.lastSeen,
+        isBlacklistedRoom(obs.subject, tick),
       );
     }
   }
+  buf.length = 0;
 }
 
 /** 被动威胁信号：自有房可见敌对单位 → owner 域敌对记忆单调前移。 */
@@ -111,6 +108,19 @@ export function getRoomIntel(subject: string): IntelEntry | undefined {
   return roomEntries.get(subject);
 }
 
+/** 房间域枚举查询（IntelQuery 的房间域落点）：全部活跃条目快照。 */
+export function queryRoomIntel(): IntelEntry[] {
+  return [...roomEntries.values()];
+}
+
+/** 房间域 payload 视图（subject → legacy RoomIntel 字段集）——消费方按
+ * payload 字段直读的便捷形态。subject 全局去重：多房重复观测取最新。 */
+export function intelPayloadView(): Record<string, RoomIntel> {
+  const view: Record<string, RoomIntel> = {};
+  for (const [subject, entry] of roomEntries) view[subject] = entry.payload;
+  return view;
+}
+
 /** 玩家域威胁记忆读取（segment 常驻激活，heap 即活跃层）。 */
 export function getPlayerIntel(owner: string): PlayerIntelEntry | undefined {
   return playerEntries.get(owner);
@@ -140,12 +150,19 @@ export function intelSize(): { rooms: number; players: number } {
   return { rooms: roomEntries.size, players: playerEntries.size };
 }
 
+/** 测试专用：清空 IntelState heap（单元测试跨用例隔离；生产路径不调用）。 */
+export function __resetIntelStateForTests(): void {
+  roomEntries.clear();
+  playerEntries.clear();
+}
+
 // ─── 系统定义 ─────────────────────────────────────────────
 
 /**
  * Intelligence — IntelState 唯一写者（房间域 heap + 玩家域 segment 冷存）。
- * 采集 = legacy 输入桥采用（只读）+ 快照被动威胁信号；老化 = 低频批处理；
- * 玩家域月级记忆经 segment 5 持久化。查询走本模块导出的只读 API。
+ * 采集 = 观察交接采用（room-observer 管线写入 globalCache.intelHandoff）+
+ * 快照被动威胁信号；老化 = 低频批处理；玩家域月级记忆经 segment 5 持久化。
+ * 查询走本模块导出的只读 API。
  */
 export const intelligenceSystem: System = {
   name: "intelligence",
@@ -153,9 +170,9 @@ export const intelligenceSystem: System = {
   interval: PARENT_INTERVAL,
 
   run(ctx: TickContext): void {
-    // 采集（写事件式轻量轮询）：legacy 桥采用 + 被动威胁信号。幂等 upsert。
+    // 采集（写事件式轻量轮询）：观察交接采用 + 被动威胁信号。幂等 upsert。
     safeRun("intelligence/adopt", () => {
-      adoptLegacyIntel(ctx.tick);
+      adoptHandoff(ctx.tick);
       adoptPassiveThreats(ctx);
     }, false);
 

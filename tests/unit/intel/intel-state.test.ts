@@ -1,7 +1,7 @@
-/** 完整版情报模型纯函数测试：三分置信度 / TTL 分档 / 硬门槛 / 采用桥 / 老化容量。 */
+/** 完整版情报模型纯函数测试：三分置信度 / TTL 分档 / 硬门槛 / 观察采用 / 老化容量。 */
 import { describe, expect, it } from "vitest";
 import {
-  adoptLegacyRoomIntel,
+  adoptRoomIntel,
   ageRooms,
   capRooms,
   confidenceAt,
@@ -23,6 +23,7 @@ function makeEntry(overrides?: Partial<IntelEntry>): IntelEntry {
     subject: "W5N7",
     observedAt: 10_000,
     source: "observer",
+    observedBy: "W7N4",
     expiry: 10_000 + ROOM_DYNAMIC_TTL + EXPIRY_JITTER,
     payload: { kind: "normal", status: "normal", lastSeen: 10_000 },
     ...overrides,
@@ -84,13 +85,18 @@ describe("isActionUsable / needsRescout — 不可逆行动硬门槛", () => {
   });
 });
 
-describe("adoptLegacyRoomIntel — legacy 输入桥采用", () => {
-  it("lastSeen → observedAt；observer 来源；expiry = lastSeen + TTL + jitter(subject)", () => {
-    const legacy = { kind: "normal" as const, status: "normal", owner: "Enemy", towers: 2, lastSeen: 5_000 };
-    const entry = adoptLegacyRoomIntel("W5N7", legacy, 6_000);
+describe("adoptRoomIntel — 观察交接采用", () => {
+  it("lastSeen → observedAt；来源与归属房保留；expiry = lastSeen + TTL + jitter(subject)", () => {
+    const entry = adoptRoomIntel({
+      subject: "W5N7",
+      home: "W7N4",
+      source: "scout",
+      payload: { kind: "normal", status: "normal", owner: "Enemy", towers: 2, lastSeen: 5_000 },
+    });
     expect(entry.subject).toBe("W5N7");
     expect(entry.observedAt).toBe(5_000);
-    expect(entry.source).toBe("observer");
+    expect(entry.source).toBe("scout");
+    expect(entry.observedBy).toBe("W7N4");
     expect(entry.payload.owner).toBe("Enemy");
     const ttl = ROOM_THREAT_TTL; // towers → 威胁短窗
     expect(entry.expiry).toBeGreaterThanOrEqual(5_000 + ttl);
@@ -98,9 +104,14 @@ describe("adoptLegacyRoomIntel — legacy 输入桥采用", () => {
   });
 
   it("expiry jitter 按房名稳定——同房名同 expiry", () => {
-    const legacy = { kind: "normal" as const, status: "normal", lastSeen: 5_000 };
-    const a = adoptLegacyRoomIntel("W4N4", legacy, 6_000);
-    const b = adoptLegacyRoomIntel("W4N4", legacy, 6_000);
+    const obs = {
+      subject: "W4N4",
+      home: "W7N4",
+      source: "observer" as const,
+      payload: { kind: "normal" as const, status: "normal", lastSeen: 5_000 },
+    };
+    const a = adoptRoomIntel(obs);
+    const b = adoptRoomIntel(obs);
     expect(a.expiry).toBe(b.expiry);
   });
 });
@@ -127,13 +138,20 @@ describe("老化与容量治理", () => {
     expect(map.has("r4")).toBe(true);
   });
 
-  it("upsertRoomEntry：仅更新的观测覆盖（采用幂等）", () => {
+  it("upsertRoomEntry：更新的观测覆盖；同 observedAt 也覆盖（富化观测/同 tick 多源）", () => {
     const map = new Map<string, IntelEntry>();
     expect(upsertRoomEntry(map, makeEntry({ subject: "W5N7", observedAt: 100 }))).toBe(true);
     expect(upsertRoomEntry(map, makeEntry({ subject: "W5N7", observedAt: 50 }))).toBe(false);
     expect(map.get("W5N7")!.observedAt).toBe(100);
     expect(upsertRoomEntry(map, makeEntry({ subject: "W5N7", observedAt: 200 }))).toBe(true);
     expect(map.get("W5N7")!.observedAt).toBe(200);
+    // 同 tick 富化（pathCost 补算不前移 lastSeen）：覆盖但 observedAt 不变。
+    expect(upsertRoomEntry(map, makeEntry({
+      subject: "W5N7",
+      observedAt: 200,
+      payload: { kind: "normal", status: "normal", lastSeen: 200, pathCost: 42 },
+    }))).toBe(true);
+    expect(map.get("W5N7")!.payload.pathCost).toBe(42);
   });
 });
 

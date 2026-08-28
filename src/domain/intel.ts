@@ -273,6 +273,9 @@ export interface IntelEntry {
   /** 最近一次有视野观测的 tick（无视野不前移——与 legacy lastSeen 语义一致）。 */
   observedAt: number;
   source: IntelSource;
+  /** 采集归属房（观察管线所在自有房）——sponsor 归属与按房评分的依据。
+   * 同一 subject 多房重复观测按 observedAt 最新归并，observedBy 取最新观测房。 */
+  observedBy: string;
   /** 过期时间戳 = observedAt + TTL + jitter(subject)；超期由老化清理为未知。 */
   expiry: number;
   payload: RoomIntelPayload;
@@ -346,25 +349,32 @@ export function needsRescout(entry: IntelEntry | undefined, tick: number): boole
 }
 
 /**
- * legacy 邻房 intel（RoomMemory.intel 记录）→ IntelEntry 采用转换。
- * 来源记 observer（room-observer 有视野扫描管线产出）；observedAt 取
- * legacy.lastSeen（无视野不前移的既有语义）；expiry 按 TTL 分档加 jitter。
- * pathCost 为地形静态实测值，随 payload 保留——条目过期后依赖重访重建
- * （消费方已有线性距离回退）。
+ * 观察交接条目（room-observer 采集管线 → IntelState 的输入形态）。
  */
-export function adoptLegacyRoomIntel(
-  subject: string,
-  legacy: RoomIntel,
-  nowTick: number,
-): IntelEntry {
-  const ttl = ttlForPayload(legacy);
-  const jitter = intelHash(subject) % (EXPIRY_JITTER + 1);
+export interface RoomObservation {
+  subject: string;
+  /** 采集归属房（观察管线的自有房）。 */
+  home: string;
+  source: IntelSource;
+  payload: RoomIntelPayload;
+}
+
+/**
+ * 观察交接条目 → IntelEntry。observedAt 取 payload.lastSeen（无视野不前移的
+ * 既有语义）；expiry 按 TTL 分档加 jitter。pathCost 为地形静态实测值，随
+ * payload 保留——条目过期后依赖重访重建（消费方已有线性距离回退）。
+ */
+export function adoptRoomIntel(obs: RoomObservation): IntelEntry {
+  const ttl = ttlForPayload(obs.payload);
+  const jitter = intelHash(obs.subject) % (EXPIRY_JITTER + 1);
+  const observedAt = obs.payload.lastSeen;
   return {
-    subject,
-    observedAt: legacy.lastSeen,
-    source: "observer",
-    expiry: legacy.lastSeen + ttl + jitter,
-    payload: { ...legacy },
+    subject: obs.subject,
+    observedAt,
+    source: obs.source,
+    observedBy: obs.home,
+    expiry: observedAt + ttl + jitter,
+    payload: { ...obs.payload },
   };
 }
 
@@ -389,10 +399,11 @@ export function capRooms(entries: Map<string, IntelEntry>, cap: number): number 
   return evict;
 }
 
-/** upsert 语义：仅当新条目更新（observedAt 更晚）时覆盖——采用/采集幂等。 */
+/** upsert 语义：观测更新的条目覆盖；同 observedAt 也覆盖（pathCost 补算
+ * 等不前移 lastSeen 的富化观测、同 tick 多源观测）——采用幂等。 */
 export function upsertRoomEntry(entries: Map<string, IntelEntry>, entry: IntelEntry): boolean {
   const prev = entries.get(entry.subject);
-  if (prev && prev.observedAt >= entry.observedAt) return false;
+  if (prev && prev.observedAt > entry.observedAt) return false;
   entries.set(entry.subject, entry);
   return true;
 }

@@ -4,6 +4,7 @@ import { globalCache } from "../kernel/global-cache";
 import { safeRun } from "../kernel/safe-run";
 import { systemPhase } from "../kernel/phase";
 import { runSpecializationPlanning } from "./specialization-planner";
+import { queryRoomIntel } from "./intelligence";
 import {
   evaluateEmpirePosture,
   DEFAULT_POSTURE_OPTIONS,
@@ -247,17 +248,11 @@ function sampleEnvironment(ctx: TickContext): void {
   }
 
   // 2. 邻居密度 — 从各房 intel 汇总。
-  let totalNeighbors = 0;
+  const intelEntries = queryRoomIntel();
+  const totalNeighbors = intelEntries.length;
   let ownedNeighbors = 0;
-  for (const roomName in Memory.rooms) {
-    const intel = Memory.rooms[roomName]?.intel;
-    if (!intel) continue;
-    for (const neighborName in intel) {
-      const entry = intel[neighborName];
-      if (!entry) continue;
-      totalNeighbors++;
-      if (entry.owner) ownedNeighbors++;
-    }
+  for (const entry of intelEntries) {
+    if (entry.payload.owner) ownedNeighbors++;
   }
 
   // 3. GCL 趋势 — 与上次采样对比。

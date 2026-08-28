@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { scoutRole } from "../../../src/creeps/roles/scout";
 import { roomObserverSystem } from "../../../src/systems/room-observer";
+import { globalCache } from "../../../src/kernel/global-cache";
 import { mockContext, mockCreep, mockPos, mockSnapshot, resetGlobals } from "../../role-helpers";
 
 beforeEach(() => {
@@ -79,11 +80,13 @@ describe("room-observer — 侦察视野捕获（R6b 接线）", () => {
 
     roomObserverSystem.run(mockContext(mockSnapshot()));
 
-    const intel = (globalThis as any).Memory.rooms.W7N4.intel.W6N4;
-    expect(intel).toBeDefined();
-    expect(intel.sources).toBe(2);
-    expect(intel.towers).toBe(1);
-    expect(intel.owner).toBeUndefined();
+    const obs = (globalCache().intelHandoff ?? []).find(
+      (o) => o.subject === "W6N4" && o.home === "W7N4",
+    );
+    expect(obs).toBeDefined();
+    expect(obs!.payload.sources).toBe(2);
+    expect(obs!.payload.towers).toBe(1);
+    expect(obs!.payload.owner).toBeUndefined();
   });
 
   it("无 prospect 任务 → 不扫描（零开销守卫）", () => {

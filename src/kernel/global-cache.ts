@@ -291,6 +291,10 @@ export interface GlobalCache {
   /** A5.3：per-interval 军事行动计划结果（war-planning-system 按 interval 写入）。
    * 供 war-planner 消费。heap 存储 — global reset 丢失可接受。 */
   warPlanCache?: { tick: number; plan: import("../domain/military/war-planning").WarPlan | undefined };
+  /** 观察交接缓冲：room-observer 采集管线写入，intelligence 系统采用后清空。
+   * heap 存储 — global reset 丢失可接受（情报按 TTL 重访重建）；写侧有界，
+   * 超限丢弃最旧（观察可复采，无丢失风险）。 */
+  intelHandoff?: import("../domain/intel").RoomObservation[];
   /** A5.3：战争物流需求（war-planning-system 从 WarPlan.logisticsRequirement 提取写入）。
    * 供 logistics-planner 消费作为额外 demand node。heap 存储 — global reset 丢失可接受。 */
   warLogisticsDemand?: {
