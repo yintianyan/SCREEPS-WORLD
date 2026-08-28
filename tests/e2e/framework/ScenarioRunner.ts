@@ -37,6 +37,11 @@ export interface ScenarioOptions {
   cpuLimit?: number;
   /** bot bucket 容量（mockup 默认 10000）。 */
   cpuBucket?: number;
+  /**
+   * 额外自有房：预置 controller 归属 bot（user = bot id）+ 等级 + 房间激活。
+   * 多房 soak 用——第二房的 spawn 由夹具提供（addBot 只建主房 spawn）。
+   */
+  ownedRooms?: { name: string; level: number }[];
 }
 
 /**
@@ -102,12 +107,32 @@ export class ScenarioRunner {
 
     // addBot 会把 controller 重置为 level=1；如有 controllerLevel 选项，
     // 在 server 启动前通过 DB 直接修正。
+    const { db } = this._server.server.common.storage;
     if (opts.controllerLevel !== undefined) {
-      const { db } = this._server.server.common.storage;
       await db["rooms.objects"].update(
         { room: opts.roomName, type: "controller" },
         { $set: { level: opts.controllerLevel, progress: 0, downgradeTime: null } },
       );
+    }
+    // 额外自有房：完整复刻 addBot 的房间初始化——controller 归属 + ACTIVE_ROOMS
+    // 注册 + store 制式 spawn（引擎只认 store 形态；legacy energy 形态计费分裂）。
+    if (opts.ownedRooms) {
+      const { env } = await (this._server.server as any).world.load();
+      const [user] = await db.users.find({ username: opts.botUsername ?? "bot" });
+      for (const r of opts.ownedRooms) {
+        await env.sadd(env.keys.ACTIVE_ROOMS, r.name);
+        await db.rooms.update({ _id: r.name }, { $set: { active: true } });
+        await db["rooms.objects"].update(
+          { room: r.name, type: "controller" },
+          { $set: { user: user._id, level: r.level, progress: 0, downgradeTime: null } },
+        );
+        await db["rooms.objects"].insert({
+          room: r.name, type: "spawn", x: 25, y: 25, user: user._id,
+          name: `Spawn2_${r.name}`, store: { energy: 300 },
+          storeCapacityResource: { energy: 300 }, hits: 5000, hitsMax: 5000,
+          spawning: null, notifyWhenAttacked: true,
+        });
+      }
     }
 
     await this._server.start();
@@ -194,6 +219,13 @@ export class ScenarioRunner {
    * 低 CPU soak 用它做确定性档位注入：driver 每 tick 从 db 重读用户账户，
    * 净收支 = cpu − 实际用量；cpu≈实际用量时注入的 bucket 稳定保持。
    */
+  /** 故障注入：移除指定房间的全部 creep（引擎侧删除，下一 tick 从 Game.creeps 消失）。 */
+  async removeCreeps(roomName: string): Promise<void> {
+    if (!this._server) throw new Error("setup() not called");
+    const { db } = this._server.server.common.storage;
+    await db["rooms.objects"].removeWhere({ type: "creep", room: roomName });
+  }
+
   async setUserCpu(opts: { cpu?: number; cpuAvailable?: number }): Promise<void> {
     if (!this._server || !this._bot) throw new Error("setup() not called");
     const { db } = this._server.server.common.storage;

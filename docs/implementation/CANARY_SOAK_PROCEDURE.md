@@ -189,12 +189,12 @@ build
 
 | 维度 | 要求 | 当前状态 |
 |------|------|---------|
-| 自有房数 | ≥ 2 | [Blocked] 单房 |
-| 第二房 Claim→Bootstrap | 完整验证 | [Blocked] |
-| 多房 spawn 竞争 | 验证公平性 | [Blocked] |
-| 多房 site quota | 验证不冲突 | [Blocked] |
-| 多房 energy 互济 | terminal 互济 | [Blocked] |
-| 一房异常不扩散 | 故障注入 | [Blocked] |
+| 自有房数 | ≥ 2 | ✅ 双自有房并行 5,000 tick @ sv=43（E2E-017，2026-08-29：主房 RCL6 + 殖民房 RCL4 各自 spawn/建造/运转） |
+| 第二房 Claim→Bootstrap | 完整验证 | ◐ 预置自有房的 bootstrap 侧已覆盖（殖民房全灭→灾后恢复孵化闭环）；**claim 授权流程未覆盖**（需 expansion 立项→claimer→claim 全链场景，继续项） |
+| 多房 spawn 竞争 | 验证公平性 | ✅ 双房各自 spawn 并行孵化无互抢（E2E-017 暖机 byHome=W0N1:4/W0N2:5） |
+| 多房 site quota | 验证不冲突 | ◐ 双房 buildQueue 并行有界观测（94 项，无越限）；极限配额注入未做 |
+| 多房 energy 互济 | terminal 互济 | [Blocked] terminal 互济场景未建（需双房 terminal + 调拨令注入，继续项） |
+| 一房异常不扩散 | 故障注入 | ✅ 殖民房编队全灭注入：母房不受影响（6 只稳定）、殖民房灾后恢复孵化闭环（E2E-017 recovered=true） |
 
 ### 5.3 低 CPU 私服 Soak
 
