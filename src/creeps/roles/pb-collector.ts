@@ -3,33 +3,10 @@ import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
-import { globalCache } from "../../kernel/global-cache";
+import { getPbRoomCache } from "../support/room-scans";
 
 /** 目标房内可捡的 power 载荷（掉落堆或含 power 的废墟）。 */
 type PowerPickupTarget = { kind: "dropped"; resource: Resource } | { kind: "ruin"; ruin: Ruin };
-
-/** per-tick per-room 共享缓存：掉落 power 列表 + 含 power 的废墟列表。 */
-interface PbRoomCache {
-  tick: number;
-  droppedPower: Resource[];
-  powerRuins: Ruin[];
-}
-
-function getPbRoomCache(room: Room): PbRoomCache {
-  const g = globalCache();
-  if (!g.__pbRoomCache) g.__pbRoomCache = {};
-  const cached = g.__pbRoomCache[room.name];
-  if (cached && cached.tick === Game.time) return cached;
-  const droppedPower = room.find(FIND_DROPPED_RESOURCES, {
-    filter: r => r.resourceType === RESOURCE_POWER,
-  });
-  const powerRuins = room.find(FIND_RUINS, {
-    filter: r => (r.store[RESOURCE_POWER] ?? 0) > 0,
-  });
-  const entry: PbRoomCache = { tick: Game.time, droppedPower, powerRuins };
-  g.__pbRoomCache[room.name] = entry;
-  return entry;
-}
 
 /** 捡起目标房内的 power（空载相）。 */
 function pickupPower(): ActionCandidate<PowerPickupTarget> {

@@ -5,6 +5,8 @@ import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { attackerHold, markRetreat } from "./attacker";
 import { globalCache } from "../../kernel/global-cache";
+import { findMyCreepsCached } from "../support/room-scans";
+import { getObjectById } from "../support/obj-cache";
 
 /** A5.4.1 战术指令接口（与 domain/tactical/role-intent.ts RoleActionIntent 对齐）。 */
 interface TacticalIntent {
@@ -29,7 +31,7 @@ function readTacticalIntent(creepName: string): TacticalIntent | null {
 function findBuddy(creep: Creep): Creep | undefined {
   let best: Creep | undefined;
   let bestRange = Infinity;
-  for (const c of creep.room.find(FIND_MY_CREEPS)) {
+  for (const c of findMyCreepsCached(creep.room)) {
     if (c.memory.role !== "attacker") continue;
     const range = creep.pos.getRangeTo(c.pos);
     if (range < bestRange) {
@@ -44,7 +46,7 @@ function findBuddy(creep: Creep): Creep | undefined {
 function findWounded(creep: Creep): Creep | undefined {
   let best: Creep | undefined;
   let bestRange = Infinity;
-  for (const c of creep.room.find(FIND_MY_CREEPS)) {
+  for (const c of findMyCreepsCached(creep.room)) {
     if (c.hits >= c.hitsMax) continue;
     const range = creep.pos.getRangeTo(c.pos);
     if (range < bestRange) {
@@ -75,7 +77,7 @@ export function healByTacticalIntent(): ActionCandidate<Creep> {
       }
       // 有治疗指令 + targetId → 查找目标
       if ((intent.combatDirective === "HEAL_TARGET" || intent.combatDirective === "RANGED_HEAL_TARGET") && intent.targetId) {
-        const target = Game.getObjectById(intent.targetId as Id<Creep>);
+        const target = getObjectById(intent.targetId as Id<Creep>);
         if (target) return target;
         // targetId 无效 → 回退 Legacy
       }

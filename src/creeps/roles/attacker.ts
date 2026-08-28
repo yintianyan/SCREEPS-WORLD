@@ -5,6 +5,8 @@ import { defineRole } from "../engine/role-runner";
 import { moveToTarget, parkIdleCreep } from "../movement";
 import { fleeToHome } from "../support";
 import { getHostilesCached } from "../support/targeting";
+import { getHostileStructuresCached, getPowerBankCached } from "../support/room-scans";
+import { getObjectById } from "../support/obj-cache";
 import { globalCache } from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
 
@@ -76,30 +78,9 @@ function structureValueTier(t: StructureConstant): number {
   }
 }
 
-/** 目标房内敌结构列表（per-tick per-room 共享缓存，与 remote-hauler 同型模式）。 */
-function getHostileStructuresCached(room: Room): AnyStructure[] {
-  const g = globalCache();
-  if (!g.__warStructures) g.__warStructures = {};
-  const cached = g.__warStructures[room.name];
-  if (cached && cached.tick === Game.time) return cached.list;
-  const list = room.find(FIND_HOSTILE_STRUCTURES);
-  g.__warStructures[room.name] = { tick: Game.time, list };
-  return list;
-}
+/** 目标房内敌结构列表 — per-tick per-room 共享缓存已收敛到 support/room-scans。 */
 
-/** 目标房内 power bank（per-tick per-room 共享缓存 — PB 野采链，审计缺口 2）。 */
-function getPowerBankCached(room: Room): StructurePowerBank | undefined {
-  const g = globalCache();
-  if (!g.__powerBanks) g.__powerBanks = {};
-  const cached = g.__powerBanks[room.name];
-  if (cached && cached.tick === Game.time) return cached.pb;
-  // FIND_STRUCTURES 全房 find 每 tick 一次/房（与 __warStructures 同预算口径）。
-  const pb = room.find(FIND_STRUCTURES).find(
-    s => s.structureType === STRUCTURE_POWER_BANK,
-  ) as StructurePowerBank | undefined;
-  g.__powerBanks[room.name] = { tick: Game.time, pb };
-  return pb;
-}
+/** 目标房内 power bank — per-tick per-room 共享缓存已收敛到 support/room-scans。 */
 
 /**
  * A5.4.3 Focus Fire AttackIntent 消费 — 最高优先级的攻击候选。
@@ -124,7 +105,7 @@ export function attackByFocusFire(): ActionCandidate<Creep | AnyStructure> {
       // NO_ATTACK → 不消费候选（目标不在射程，Movement 系统处理接近）
       if (intent.attackType === "NO_ATTACK") return undefined;
       // 解析目标
-      const target = Game.getObjectById(intent.targetId as Id<Creep | AnyStructure>);
+      const target = getObjectById(intent.targetId as Id<Creep | AnyStructure>);
       if (!target) return undefined; // 目标无效 → 回退
       // 攻击类型决定执行方式
       return target;
@@ -201,7 +182,7 @@ export function attackByTacticalIntent(): ActionCandidate<Creep | AnyStructure> 
       }
       // 有战斗指令 + targetId → 查找目标
       if (intent.combatDirective !== "NO_COMBAT" && intent.targetId) {
-        const target = Game.getObjectById(intent.targetId as Id<Creep | AnyStructure>);
+        const target = getObjectById(intent.targetId as Id<Creep | AnyStructure>);
         if (target) return target;
         // targetId 无效 → 回退 Legacy
       }

@@ -7,7 +7,8 @@ import {
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
-import { globalCache } from "../../kernel/global-cache";
+import { getObjectById } from "../support/obj-cache";
+import { findRemoteContainersCached, findDroppedEnergyCached } from "../support/room-scans";
 
 /** container 选择的距离权重（与本地 HAUL_CONTAINER_DISTANCE_WEIGHT 一致）：
  * 每格距离折算 10 能量。满溢的远 container 仍优先于近乎空的近 container。 */
@@ -70,9 +71,9 @@ function pickupRemoteDropped(): ActionCandidate<Resource> {
  * 各自全房 FIND_STRUCTURES，违反「角色禁止全房 find」硬约束（与 findDroppedEnergy 同一模式）。
  * 导出仅供接线测试验证共享缓存行为。 */
 export function findRemoteContainer(creep: Creep): StructureContainer | undefined {
-  // 优先使用缓存的 containerId — 避免每 tick room.find。
+  // 优先使用缓存的 containerId — 避免每 tick find。
   if (creep.memory.remoteContainerId) {
-    const cached = Game.getObjectById(creep.memory.remoteContainerId as Id<StructureContainer>);
+    const cached = getObjectById(creep.memory.remoteContainerId as Id<StructureContainer>);
     if (cached && cached.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
       return cached;
     }
@@ -81,20 +82,9 @@ export function findRemoteContainer(creep: Creep): StructureContainer | undefine
   }
 
   // 首次或缓存失效：走 per-tick per-room 共享列表（同房多 hauler 一次 find）。
-  const g = globalCache();
-  if (!g.__remoteContainers) g.__remoteContainers = {};
-  const roomCached = g.__remoteContainers[creep.room.name];
-  let containers: StructureContainer[];
-  if (roomCached && roomCached.tick === Game.time) {
-    containers = roomCached.list;
-  } else {
-    containers = creep.room.find(FIND_STRUCTURES, {
-      filter: (s) =>
-        s.structureType === STRUCTURE_CONTAINER &&
-        s.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
-    }) as StructureContainer[];
-    g.__remoteContainers[creep.room.name] = { tick: Game.time, list: containers };
-  }
+  const containers = findRemoteContainersCached(creep.room).filter(
+    c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+  );
   if (containers.length === 0) return undefined;
 
   // 加权分散（E-2 修复）：原纯 findClosestByRange 在 2-source 房（两 container）会让所有 hauler
@@ -128,18 +118,7 @@ export function findRemoteContainer(creep: Creep): StructureContainer | undefine
  * 违反「角色禁止全房 find」硬约束。缓存生命周期单 tick，同房多 hauler 共享。
  */
 function findDroppedEnergy(creep: Creep): Resource | undefined {
-  const g = globalCache();
-  if (!g.__remoteDropped) g.__remoteDropped = {};
-  const cached = g.__remoteDropped[creep.room.name];
-  let resources: Resource[];
-  if (cached && cached.tick === Game.time) {
-    resources = cached.list;
-  } else {
-    resources = creep.room.find(FIND_DROPPED_RESOURCES, {
-      filter: (r) => r.resourceType === RESOURCE_ENERGY,
-    });
-    g.__remoteDropped[creep.room.name] = { tick: Game.time, list: resources };
-  }
+  const resources = findDroppedEnergyCached(creep.room);
   if (resources.length === 0) return undefined;
   return creep.pos.findClosestByRange(resources) ?? resources[0];
 }

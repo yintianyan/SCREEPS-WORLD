@@ -151,20 +151,10 @@ describe("R6 roles 动作红线", () => {
 
 describe("R8 roles 禁止 Room.find 和全局扫描", () => {
   const roleFiles = ALL_FILES.filter((f) => relative(SRC, f).startsWith("creeps/roles"));
-  // 已知违规豁免列表 — 每项为 "文件相对路径:违规类型"。
-  // 目标：逐步缩小豁免集至空，而非新增豁免。
-  const R8_EXEMPTIONS = new Set<string>([
-    "creeps/roles/remote-harvester.ts:room.find",
-    "creeps/roles/remote-hauler.ts:room.find",
-    "creeps/roles/remote-hauler.ts:Game.getObjectById",
-    "creeps/roles/pb-collector.ts:room.find",
-    "creeps/roles/core-clearer.ts:room.find",
-    "creeps/roles/attacker.ts:room.find",
-    "creeps/roles/attacker.ts:Game.getObjectById",
-    "creeps/roles/healer.ts:room.find",
-    "creeps/roles/healer.ts:Object.values(Game.creeps)",
-    "creeps/roles/healer.ts:Game.getObjectById",
-  ]);
+  // R8 已修复：所有角色文件的 room.find / Game.getObjectById / Object.values(Game.creeps)
+  // 已收敛到 creeps/support/room-scans.ts 和 obj-cache.ts 的 per-tick per-room 共享缓存。
+  // 豁免列表已清空。
+  const R8_EXEMPTIONS = new Set<string>([]);
   it("禁 room.find / Object.values(Game.creeps) / Game.getObjectById", () => {
     const bad: string[] = [];
     for (const f of roleFiles) {

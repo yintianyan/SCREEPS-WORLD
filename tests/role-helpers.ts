@@ -66,6 +66,11 @@ export function resetGlobals(): void {
   delete g.__remoteInvaderCore;
   delete g.__remoteRuins;
   delete g.__hostilesCache;
+  delete g.__myCreepsCache;
+  delete g.__remoteSources;
+  delete g.__warStructures;
+  delete g.__powerBanks;
+  delete g.__pbRoomCache;
   delete g.boostAssignments;
   // action profiling 缓存
   delete g.actionCpu;

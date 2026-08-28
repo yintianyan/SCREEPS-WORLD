@@ -393,6 +393,10 @@ export interface GlobalCache {
   __powerBanks?: Record<string, { tick: number; pb: StructurePowerBank | undefined }>;
   /** PB 房掉落 power + 含 power 废墟（pb-collector 共享）。 */
   __pbRoomCache?: Record<string, { tick: number; droppedPower: Resource[]; powerRuins: Ruin[] }>;
+  /** 远矿房 source 列表（remote-harvester 共享）。 */
+  __remoteSources?: Record<string, { tick: number; sources: Source[] }>;
+  /** 房间内己方 creep 列表（remote-harvester/healer 共享）。 */
+  __myCreepsCache?: Record<string, { tick: number; creeps: Creep[] }>;
 }
 
 /**

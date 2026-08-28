@@ -3,8 +3,8 @@ import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
-import { globalCache } from "../../kernel/global-cache";
 import { findInvaderCores } from "../support/invader-core";
+import { findRuinsCached } from "../support/room-scans";
 
 /** 战利品捡取优先级：能量优先，其次按化合物顺序兜底（核心废墟可能含矿物）。 */
 const LOOT_RESOURCE_PRIORITY: ResourceConstant[] = [
@@ -32,16 +32,7 @@ function findInvaderCore(creep: Creep): StructureInvaderCore | undefined {
  * 必须当场捡，否则 loot 永远丢失）。同款 per-tick per-room 缓存。
  */
 function findLootRuin(creep: Creep): Ruin | undefined {
-  const g = globalCache();
-  if (!g.__remoteRuins) g.__remoteRuins = {};
-  const cached = g.__remoteRuins[creep.room.name];
-  let ruins: Ruin[];
-  if (cached && cached.tick === Game.time) {
-    ruins = cached.list;
-  } else {
-    ruins = creep.room.find(FIND_RUINS) as Ruin[];
-    g.__remoteRuins[creep.room.name] = { tick: Game.time, list: ruins };
-  }
+  const ruins = findRuinsCached(creep.room);
   for (const ruin of ruins) {
     if (ruin.store.getUsedCapacity() > 0) return ruin;
   }

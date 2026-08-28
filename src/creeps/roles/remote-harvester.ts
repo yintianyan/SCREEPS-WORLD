@@ -5,6 +5,7 @@ import { defineRole } from "../engine/role-runner";
 import { CONFIG } from "../../config";
 import { moveToTarget, registerAnchor, registerStaticBlocker } from "../movement";
 import { getObjectById } from "../support/obj-cache";
+import { findSourcesCached, findMyCreepsCached } from "../support/room-scans";
 
 /** 改绑阈值：连续 stuck 达到此值时重评绑定（stuckThreshold=2/repathLimit=2 →
  * L3 在 stuck≥4 重置，此值取 3 = 每个 L3 周期恰好在重置前查一次，零额外节流）。 */
@@ -56,7 +57,7 @@ export function getRemoteSource(creep: Creep): Source | undefined {
  * 已绑 sourceId 计绑定；未绑定的按物理站位计（range<=1 即实际站桩占用）—
  * 兜底同 tick 首绑竞态（两只同时入房、都还没写缓存时，站桩者已可见）。
  * P2-O：occupancy 统计仅在 sourceId 未缓存（首次/失效/改绑）时执行，
- * 且收窄到 room.find(FIND_MY_CREEPS)（此时 creep 已在 target 房）。
+ * 且收窄到 findMyCreepsCached（此时 creep 已在 target 房）。
  */
 function countSiblingOccupancy(
   creep: Creep,
@@ -64,7 +65,7 @@ function countSiblingOccupancy(
 ): Map<Id<Source>, number> {
   const target = creep.memory.remoteTarget;
   const occupancy = new Map<Id<Source>, number>();
-  for (const other of creep.room.find(FIND_MY_CREEPS)) {
+  for (const other of findMyCreepsCached(creep.room)) {
     if (other.name === creep.name) continue;
     if (other.memory.role !== "remoteHarvester") continue;
     if (other.memory.remoteTarget !== target) continue;
@@ -86,7 +87,7 @@ function countSiblingOccupancy(
 /** 首次绑定（或缓存失效）：占用最少者优先，平局用名哈希稳定散布。 */
 function bindInitialSource(creep: Creep): Source | undefined {
   const room = creep.room;
-  const sources = room.find(FIND_SOURCES);
+  const sources = findSourcesCached(room);
   if (sources.length === 0) return undefined;
   if (sources.length === 1) {
     creep.memory.sourceId = sources[0]!.id;
@@ -117,7 +118,7 @@ function bindInitialSource(creep: Creep): Source | undefined {
 
 /** 锁死改绑：房内存在无兄弟占用的 source 时改绑过去；无空缺返回 undefined。 */
 function rebindToVacantSource(creep: Creep, current: Source): Source | undefined {
-  const sources = creep.room.find(FIND_SOURCES);
+  const sources = findSourcesCached(creep.room);
   if (sources.length <= 1) return undefined;
   // 改绑冷却：改绑后原 source 即变「空缺」，无冷却会下一轮改回去 → A↔B 振荡。
   // 200 tick（约 4 个编队工作周期）足够验证新源是否可作业；新源也不可达时
