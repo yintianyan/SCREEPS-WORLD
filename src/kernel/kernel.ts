@@ -32,7 +32,7 @@ import {
   runFlush,
 } from "../telemetry";
 import { Registry } from "./registry";
-import { buildRoomSnapshot } from "../systems/room-snapshot";
+// buildRoomSnapshot 通过 Registry.registerWorldModelBuilder 注入，避免 kernel 直接 import systems 层。
 // ：kernel 直接 import 业务模块 pathfinding 的清理函数，形式上违反 §2.1「内核不感知业务」。
 // 权衡接受现状：pruneDeadCreepCache 本质是 global 状态卫生（清理死 creep 缓存残留），非经济策略/角色行为；
 //   100 tick 低频触发，无每 tick 耦合。为 1 个钩子引入 registry 维护钩子机制（接口+注册+遍历）属过度工程。
@@ -40,7 +40,6 @@ import { buildRoomSnapshot } from "../systems/room-snapshot";
 import { pruneDeadCreepCache } from "../creeps/movement/pathfinding";
 import { globalCache, type SquadIndexEntry } from "./global-cache";
 import { CONFIG } from "../config";
-import { classifyThreats } from "../domain/defense/threat";
 import { log } from "./log";
 
 /** 具体 TickContext，包含用于内核设置的内部变更方法。 */
@@ -296,7 +295,7 @@ export class Kernel {
     for (const room of Object.values(Game.rooms)) {
       if (!room.controller?.my) continue;
       const snapshot = safeRunBuild(room.name, () =>
-        buildRoomSnapshot(room, globalSourceOccupancy, globalCreepEnergy, globalPendingHarvesters),
+        this.registry.getWorldModelBuilder()(room, globalSourceOccupancy, globalCreepEnergy, globalPendingHarvesters),
         // K-1：快照是 P0 级基础设施 — 构建失败通常是确定性代码 bug，非 critical
         // 会在连续 3 次失败后冷却 80 tick，该房对所有消费快照的系统/角色隐身。
         // critical=true 让失败走限流日志暴露而非静默冷却，与 maintainMemory 同待遇。
@@ -662,12 +661,15 @@ export class Kernel {
     }
     for (const roomName of combatRooms) {
       const room = Game.rooms[roomName];
-      if (!room) continue; // 无视野
-      // FIND_HOSTILE_CREEPS 在非自有房也可用（需视野）。
-      // 复用 classifyThreats 统一威胁口径（THREAT_PARTS = ATTACK/RANGED_ATTACK/HEAL/WORK/CLAIM）—
-      // 与 room-snapshot / remote-mining-manager / flee 判定同口径，消除分裂。
+      if (!room) continue;
+      // 检测非自有房中的真实威胁 creep — 与 domain/defense/threat.ts 同口径
+      //（CONFIG.defense.threatParts + allies 白名单），但内联以避免 kernel import domain。
       const hostiles = room.find(FIND_HOSTILE_CREEPS);
-      if (classifyThreats(hostiles, CONFIG.defense.allies).length > 0) {
+      const hasThreat = hostiles.some(c =>
+        !CONFIG.defense.allies.includes(c.owner.username) &&
+        c.body.some(p => CONFIG.defense.threatParts.includes(p.type)),
+      );
+      if (hasThreat) {
         liveThreatRooms.add(roomName);
       }
     }

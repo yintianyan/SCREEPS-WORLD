@@ -500,6 +500,8 @@ export const CONFIG = {
   defense: {
     /** 联盟白名单：owner 命中者一律视为非威胁（不逃跑 / 不开火 / 不停经济）。 */
     allies: [] as readonly string[],
+    /** 威胁判定部件：具备任一即视为威胁 creep（与 domain/defense/threat.ts 同口径）。 */
+    threatParts: ["attack", "ranged_attack", "heal", "work", "claim"] as readonly BodyPartConstant[],
     /** 无塔时，威胁 creep 靠近 spawn/controller 至此 range 内才激活 safe mode（避免过境 scout 误烧）。 */
     safeModeTriggerRange: 5,
     /** 非战斗 creep 的逃跑触发距离：威胁 creep 在此范围内才逃跑（P1-1）—

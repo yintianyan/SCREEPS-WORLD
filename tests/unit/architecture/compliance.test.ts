@@ -192,12 +192,10 @@ describe("R9 Kernel 禁止 import 业务模块", () => {
   // - global-cache.ts 的 TaskPool type import 豁免
   // - outcome-channel.ts 的 uoem-types type import 豁免
   // - layout-metrics.ts 的 StructureGaps type import 豁免
-  // 已知值导入违规（待治理，暂豁免追踪）：
-  const R9_VALUE_EXEMPTIONS = new Set<string>([
-    "kernel/kernel.ts:systems/room-snapshot.ts",
-    "kernel/kernel.ts:domain/defense/threat.ts",
-    "kernel/layout-metrics.ts:domain/layout/min-cut-defense.ts",
-  ]);
+  // R9 已修复：buildRoomSnapshot 通过 Registry.registerWorldModelBuilder 注入，
+  // classifyThreats 内联为 CONFIG.defense.threatParts 判定，
+  // MINCUT_ALGO_VERSION 改为参数注入。豁免列表已清空。
+  const R9_VALUE_EXEMPTIONS = new Set<string>([]);
   it("值导入业务模块仅在白名单中", () => {
     const bad: string[] = [];
     for (const f of kernelFiles) {

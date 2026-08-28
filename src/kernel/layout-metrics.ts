@@ -1,7 +1,6 @@
 /** 布局可观测性指标（漏洞 #11）：为布局系统提供消费方驱动的反馈通道 — 死资产率、 */
 import type { RoomSnapshot } from "./contracts";
 import type { StructureGaps } from "../domain/layout/gaps";
-import { MINCUT_ALGO_VERSION } from "../domain/layout/min-cut-defense";
 
 /** 布局可观测性指标快照。 */
 export interface LayoutMetrics {
@@ -42,6 +41,7 @@ export function computeLayoutMetrics(
   dismantleCount: number,
   linkConstrained: boolean,
   defenseCut: DefenseCutInfo,
+  defenseAlgoVersion: string,
 ): LayoutMetrics {
   // ── link 指标 ──
   const totalLinks = snapshot.links.length;
@@ -67,7 +67,7 @@ export function computeLayoutMetrics(
     mvcGapCount,
     linkConstrained,
     defenseWallRatio: wallRatio,
-    defenseAlgoVersion: MINCUT_ALGO_VERSION,
+    defenseAlgoVersion,
     defenseRampartWeakPoints: rampartWeakPoints,
   };
 }

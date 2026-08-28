@@ -47,6 +47,7 @@ import { warPlanningSystem } from "./systems/war-planning-system";
 import { tacticalRuntimePipelineSystem } from "./systems/tactical-runtime-pipeline";
 import { roomObserverSystem } from "./systems/room-observer";
 import { roomStateSystem } from "./systems/room-state";
+import { buildRoomSnapshot } from "./systems/room-snapshot";
 import { spawnManagerSystem } from "./systems/spawn-manager";
 import { telemetryCollectorSystem } from "./systems/telemetry-collector";
 import { terminalManagerSystem } from "./systems/terminal-manager";
@@ -101,6 +102,7 @@ registerExpansionMetrics();
 registerDefenseMetrics();
 /** 组合根注册表 — 导出仅供一致性测试（role-config-parity）检视。 */
 export const registry = new Registry()
+  .registerWorldModelBuilder(buildRoomSnapshot)
   // P0：房间状态（ColonyState，必须先于其他系统）
   .registerSystem(roomStateSystem)
   // P1：能量收支核算（三指标，50tick 房间错峰；消费 L1 计数器产出 EconomyState）
