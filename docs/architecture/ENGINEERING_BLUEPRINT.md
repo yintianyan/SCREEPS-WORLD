@@ -128,8 +128,8 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | --- | --- | --- | --- |
 | 1 | ~~`src/kernel/event-bus.ts` 存在~~ | 违反 KERNEL §1.1 否决清单（EventBus 中枢） | ✅ 已删除 |
 | 2 | ~~`src/systems/assignment-service.ts`~~ → `src/systems/assignment-system.ts` | 文件重命名：Service 后缀不准确（实现 System 接口并注册在 bootstrap）；纯函数已下沉 `domain/assignment/` | ✅ 已重命名 |
-| 3 | `src/systems/layout-planner.ts` 与 `src/domain/layout/` 并存 | 布局纯函数归 `src/domain/layout/`，系统侧只留队列推进与 site 签发（模块 1.8 落点） | ⏳ 待迁移 |
-| 4 | `src/systems/empire-health-system.ts` 承担 Self-Healing 职责 | 模块 1.15 蓝图落点为 `src/systems/self-healing.ts`；当前 empire-health + recovery-execution 共同承载自愈闭环 | ⏳ 待 ADR 裁决合并或保留 |
+| 3 | `src/systems/layout-planner.ts`（1033 行）与 `src/domain/layout/` 并存 | 布局纯函数归 `src/domain/layout/`，系统侧只留队列推进与 site 签发。D2 归位已完成 `makeTryAddTask`/`planHubRoads`/`shouldPlan`/`isPositionBuildable`/`findSpawnRelocationPosition` 五个函数下沉。`planStage0-3` 四个核心规划函数仍含 Game/Memory/globalCache 副作用，需进一步提取参数注入后下沉。 | ⏳ D2 归位部分完成 |
+| 4 | `src/systems/empire-health-system.ts`（435行）+ `recovery-execution-system.ts`（1083行） | 模块 1.15 蓝图落点为 `src/systems/self-healing.ts`。ADR 裁决：**保留分离**。两系统职责不同（empire-health=诊断/8维评估/失败传播图；recovery-execution=执行/spawn请求/任务抢占），各自有独立 CPU 节奏、状态所有权和降级序。合并为单文件将产生 1500+行巨文件，降低整洁度。蓝图落点 `self-healing.ts` 作为概念性容器，实际由两个系统协作实现。 | ✅ ADR 裁决保留分离 |
 | 5 | `src/kernel/` 含 ring-buffer / event-log 等待归类部件 | 属平台组设施，保留在 kernel 但须在八项之外登记为「内核部件」，不承载业务语义 | ⏳ 部分已清理 |
 | 6 | `src/kernel/decision-trace.ts` 已删除 | 原属内核部件；删减式重构移除后未同步更新本表 | ✅ 已删除 |
 | 7 | `src/telemetry/EvaluationRegistry.ts` 已删除 | 原属遥测管线；删减式重构移除 evaluation-system 后遥测 barrel 不再导出 | ✅ 已删除 |
