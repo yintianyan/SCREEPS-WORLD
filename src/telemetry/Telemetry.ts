@@ -30,6 +30,7 @@ import {
 /**
  * 注册一个 Counter 指标。
  * 应在模块初始化时调用（bootstrap 或模块顶层）。
+ * @param cumulative 若为 true，flush 时不重置（累积计数器，适合低频事件）。
  */
 export function registerMetricCounter(
     domain: TelemetryDomain,
@@ -37,9 +38,10 @@ export function registerMetricCounter(
     help: string,
     labels: AllowedLabel[] = [],
     unit?: string,
+    cumulative?: boolean,
 ): void {
     try {
-        registerCounter(domain, metric, help, labels, unit);
+        registerCounter(domain, metric, help, labels, unit, cumulative);
     } catch {
         // Telemetry 失败不得影响 AI
     }

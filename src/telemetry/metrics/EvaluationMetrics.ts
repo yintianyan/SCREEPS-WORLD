@@ -9,10 +9,14 @@ export function registerEvaluationMetrics(): void {
     if (registered) return;
     registered = true;
 
-    registerMetricCounter("evaluation", "expectations_declared", "Total expectations declared", ["planner"], "total");
-    registerMetricCounter("evaluation", "expectations_fulfilled", "Fulfilled expectations", ["planner"], "total");
-    registerMetricCounter("evaluation", "expectations_missed", "Missed expectations", ["planner"], "total");
-    registerMetricCounter("evaluation", "expectations_expired", "Expired expectations", ["planner"], "total");
+    // T3 evaluation counters 标记为 cumulative（flush 时不重置）。
+    // 原因：T3 事件是低频的（posture 变更、spawn 成功/失败），每次 flush 窗口可能只有 0-1 次。
+    // 如果 flush 归零，Prometheus rate() 会频繁看到 0，导致告警规则无法正常触发。
+    // 累积 counter 通过 rate() 计算速率，符合 Prometheus counter 语义。
+    registerMetricCounter("evaluation", "expectations_declared", "Total expectations declared", ["planner"], "total", true);
+    registerMetricCounter("evaluation", "expectations_fulfilled", "Fulfilled expectations", ["planner"], "total", true);
+    registerMetricCounter("evaluation", "expectations_missed", "Missed expectations", ["planner"], "total", true);
+    registerMetricCounter("evaluation", "expectations_expired", "Expired expectations", ["planner"], "total", true);
     registerMetricGauge("evaluation", "deviation", "Aggregate deviation percentage", ["planner"], "percent");
     registerMetricGauge("evaluation", "pending", "Pending expectations count", ["planner"], "count");
 }

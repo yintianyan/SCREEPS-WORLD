@@ -49,6 +49,12 @@ interface MetricDescriptor {
   readonly help: string;
   readonly allowedLabels: readonly AllowedLabel[];
   readonly kind: "counter" | "gauge" | "histogram";
+  /**
+   * 若为 true，counter 在 flush 时不会重置（累积计数器）。
+   * 用于低频事件 counter（如 T3 evaluation），避免每次 flush 归零导致 Prometheus rate() 看到 0。
+   * 默认 false：flush 窗口内递增，flush 后归零（适合高频每 tick 递增的 counter）。
+   */
+  readonly cumulative?: boolean;
 }
 
 // ─── Storage on globalCache ───────────────────────────────
@@ -84,18 +90,22 @@ function store(): MetricStore {
 
 // ─── Public API ────────────────────────────────────────────
 
-/** 注册或获取一个 Counter。 */
+/**
+ * 注册或获取一个 Counter。
+ * @param cumulative 若为 true，flush 时不重置（累积计数器，适合低频事件如 T3 evaluation）。
+ */
 export function registerCounter(
   domain: TelemetryDomain,
   metric: string,
   help: string,
   labels: AllowedLabel[] = [],
   unit?: string,
+  cumulative?: boolean,
 ): void {
   const name = buildMetricName(domain, metric, unit);
   const s = store();
   if (!s.descriptors.has(name)) {
-    s.descriptors.set(name, { domain, metric, unit, help, allowedLabels: labels, kind: "counter" });
+    s.descriptors.set(name, { domain, metric, unit, help, allowedLabels: labels, kind: "counter", cumulative: cumulative === true });
     s.counters.set(name, new Map());
   }
 }
@@ -290,10 +300,15 @@ function parseLabelKey(key: string): LabelSet {
   return result;
 }
 
-/** 重置所有 Counter（flush 后调用）。Gauge 和 Histogram 不重置（保持当前值/累积）。 */
+/**
+ * 重置 Counter（flush 后调用）。Gauge 和 Histogram 不重置（保持当前值/累积）。
+ * 标记为 cumulative 的 counter 不重置（适合低频事件，依赖 Prometheus rate() 计算速率）。
+ */
 export function resetCounters(): void {
   const s = store();
-  for (const map of s.counters.values()) {
+  for (const [name, map] of s.counters) {
+    const desc = s.descriptors.get(name);
+    if (desc?.cumulative) continue; // 累积 counter 不重置
     for (const inst of map.values()) {
       inst.value = 0;
     }

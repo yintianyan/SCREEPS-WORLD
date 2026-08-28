@@ -10,7 +10,7 @@ type Sink = (line: string, level: LogLevel) => void;
 let sinkOverride: Sink | undefined;
 
 function currentLevel(): LogLevel {
-  const lv = (CONFIG.kernel as { logLevel?: LogLevel }).logLevel ?? "info";
+  const lv = (CONFIG as { kernel?: { logLevel?: LogLevel } })?.kernel?.logLevel ?? "info";
   return lv;
 }
 
