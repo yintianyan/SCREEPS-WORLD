@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
 import { CONFIG } from "../../../src/config";
-import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
 import type { ColonyState, RoomSnapshot } from "../../../src/kernel/contracts";
 
 const homeRoom = "W1N1";
@@ -50,6 +50,7 @@ function seed(opts: SeedOpts = {}): RoomSnapshot {
 
   g.Game.rooms = opts.rooms ?? {};
   g.Game.creeps = opts.creeps ?? {};
+  syncSquadIndex();
 
   g.Memory.rooms[homeRoom] = {
     // undefined 模拟 colonyState 字段缺失（roomMem.colonyState ?? "normal" 回退）

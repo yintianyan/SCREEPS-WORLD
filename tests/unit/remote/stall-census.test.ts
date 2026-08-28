@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
 import { CONFIG } from "../../../src/config";
-import { mockContext, mockSnapshot, mockSource, resetGlobals } from "../../role-helpers";
+import { mockContext, mockSnapshot, mockSource, resetGlobals, syncSquadIndex } from "../../role-helpers";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 
 const homeRoom = "W1N1";
@@ -50,6 +50,7 @@ function seed(opts: {
 } = {}): RoomSnapshot {
   const glob = g();
   glob.Game.creeps = opts.creeps ?? {};
+  syncSquadIndex();
   glob.Memory.rooms[homeRoom] = {
     colonyState: "normal",
     spawnQueue: [],
@@ -186,6 +187,7 @@ describe("v33-R11 op.sources 视野校正", () => {
   function seedWithVision(roomFind: (t: number) => any[]): RoomSnapshot {
     const glob = g();
     glob.Game.creeps = {};
+    syncSquadIndex();
     glob.Game.rooms = {
       [targetRoom]: { name: targetRoom, find: vi.fn(roomFind) },
     };

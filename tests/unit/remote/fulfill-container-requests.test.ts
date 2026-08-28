@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fulfillContainerRequests } from "../../../src/systems/remote-mining-manager";
 import { getTickSiteCounters } from "../../../src/systems/site-quota";
-import { resetGlobals, mockContext, mockSource } from "../../role-helpers";
+import { resetGlobals, mockContext, mockSource, syncSquadIndex } from "../../role-helpers";
 import { CONFIG } from "../../../src/config";
 
 beforeEach(() => {
@@ -89,6 +89,7 @@ function setupWorld(opts: {
   const creepMap: Record<string, any> = {};
   for (const c of creeps) creepMap[c.name] = c;
   (globalThis as any).Game.creeps = creepMap;
+  syncSquadIndex();
   // Game.getObjectById 不覆盖 — resetGlobals 已设置为读 role-helpers 的 objectRegistry，
   // mockSource 调用 registerObject 注册 source，默认 mock 自动找到。
 

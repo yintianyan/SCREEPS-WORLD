@@ -133,7 +133,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | 5 | `src/kernel/` 含 ring-buffer / event-log 等待归类部件 | 属平台组设施，保留在 kernel 但须在八项之外登记为「内核部件」，不承载业务语义 | ⏳ 部分已清理 |
 | 6 | `src/kernel/decision-trace.ts` 已删除 | 原属内核部件；删减式重构移除后未同步更新本表 | ✅ 已删除 |
 | 7 | `src/telemetry/EvaluationRegistry.ts` 已删除 | 原属遥测管线；删减式重构移除 evaluation-system 后遥测 barrel 不再导出 | ✅ 已删除 |
-| 8 | bootstrap.ts 实际注册 34 系统 / 19 角色 | R10 调整上限为 36；差异来自 intelligence-pipeline / decision-trace / evaluation 未注册 | ⏳ 见 R10 ADR |
+| 8 | bootstrap.ts 实际注册 34 系统 / 19 角色 | R10 预期 36 系统 → R11 ADR 裁决正式修正为 34（intelligence-pipeline/decision-trace/evaluation 正式删除） | ✅ R11 裁决完成 |
 | 9 | ~~角色层存在 `Room.find` / `Object.values(Game.creeps)` 违规~~ | 蓝图条款 ④ 禁止角色全房 find 和全局扫描 | ✅ 已收敛到 `creeps/support/room-scans.ts` |
 | 10 | ~~Kernel 直接 import 业务模块（room-snapshot / defense / pathfinding）~~ | 蓝图 §3.1 禁止 Kernel import 业务符号；唯一登记例外为 pruneDeadCreepCache | ✅ buildRoomSnapshot 通过 Registry 注入，classifyThreats 内联为 CONFIG 判定，MINCUT_ALGO_VERSION 改参数注入 |
 

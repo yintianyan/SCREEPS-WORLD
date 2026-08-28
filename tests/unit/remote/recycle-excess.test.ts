@@ -1,7 +1,7 @@
 /** 远矿超额回收测试 — 交接豁免语义。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { recycleExcessRemoteCreeps } from "../../../src/systems/remote-mining-manager";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals, syncSquadIndex } from "../../role-helpers";
 
 function remoteCreep(
   name: string,
@@ -28,6 +28,7 @@ function runWith(...creeps: any[]): void {
   const map: Record<string, any> = {};
   for (const c of creeps) map[c.name] = c;
   (globalThis as any).Game.creeps = map;
+  syncSquadIndex();
   recycleExcessRemoteCreeps("W7N4", OPS);
 }
 
@@ -52,6 +53,7 @@ describe("recycleExcessRemoteCreeps — 交接豁免", () => {
     const h1 = remoteCreep("rh_1", "remoteHarvester", { ttl: 1400 });
     const h2 = remoteCreep("rh_2", "remoteHarvester", { ttl: 1300 });
     (globalThis as any).Game.creeps = { rh_1: h1, rh_2: h2 };
+    syncSquadIndex();
     recycleExcessRemoteCreeps("W7N4", ops);
     // 配额=min(sources 2, max 2)=2 → 2 只都在编制内，不回收（修复前第 2 只被误杀）。
     expect(h1.memory.recycle).toBe(false);
@@ -63,6 +65,7 @@ describe("recycleExcessRemoteCreeps — 交接豁免", () => {
     const h1 = remoteCreep("rh_1", "remoteHarvester", { ttl: 1400 });
     const h2 = remoteCreep("rh_2", "remoteHarvester", { ttl: 1300 });
     (globalThis as any).Game.creeps = { rh_1: h1, rh_2: h2 };
+    syncSquadIndex();
     recycleExcessRemoteCreeps("W7N4", ops);
     // 配额=min(sources 1, max 2)=1 → 保留最年轻，回收较老的 1 只。
     expect([h1, h2].filter(h => h.memory.recycle)).toHaveLength(1);

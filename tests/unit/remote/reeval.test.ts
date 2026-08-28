@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
 import { CONFIG } from "../../../src/config";
-import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
 
 const homeRoom = "W7N4";
 const targetRoom = "W2N1"; // 与 W7N4 线性距离近，正常 pathCost 下达标。
@@ -12,6 +12,7 @@ function seed(now: number, ops: Record<string, unknown>, intel: Record<string, u
   const g = globalThis as any;
   g.Game.rooms = {}; // 无视野 — 重估走 intel.pathCost + 线性距离。
   g.Game.creeps = {};
+  syncSquadIndex();
   g.Memory.rooms[homeRoom] = { colonyState: "normal", spawnQueue: [], remoteOps: ops, intel };
 }
 

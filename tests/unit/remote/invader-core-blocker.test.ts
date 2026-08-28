@@ -8,7 +8,7 @@ import {
 } from "../../../src/systems/remote-mining-manager";
 import { roomHasInvaderCore } from "../../../src/creeps/roles/reserver";
 import type { ColonyState } from "../../../src/kernel/contracts";
-import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
 
 const tick = 100000;
 const homeRoom = "W1N1";
@@ -128,6 +128,7 @@ describe("remote-mining-manager — 压制房止损接线（run 级副作用，�
     const harvester = mockCreep({ name: "rh1", role: "remoteHarvester", home: "W7N4" });
     harvester.memory.remoteTarget = targetRoom;
     g.Game.creeps = { rh1: harvester };
+    syncSquadIndex();
 
     g.Memory.rooms.W7N4 = {
       colonyState: "normal",
@@ -166,6 +167,7 @@ describe("remote-mining-manager — 次级核心(lesser)清核接线", () => {
     const harvester = mockCreep({ name: "rh1", role: "remoteHarvester", home: "W7N4" });
     harvester.memory.remoteTarget = targetRoom;
     g.Game.creeps = { rh1: harvester };
+    syncSquadIndex();
 
     g.Memory.rooms.W7N4 = {
       colonyState: "normal",
@@ -410,6 +412,7 @@ describe("remote-mining-manager — Invader 预定闭环（线上 W37S57 复现�
     const clearer = mockCreep({ name: "cc1", role: "coreClearer", home: "W7N4" });
     clearer.memory.remoteTarget = targetRoom;
     g.Game.creeps = { cc1: clearer };
+    syncSquadIndex();
     g.Memory.rooms.W7N4 = {
       colonyState: "normal",
       spawnQueue: [],

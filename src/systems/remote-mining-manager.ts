@@ -9,7 +9,7 @@ import { remoteReplacementThreshold } from "../domain/remote/staffing";
 import { classifyThreats } from "../domain/defense/threat";
 import { submitRequest } from "../domain/spawn/queue";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
-import { globalCache } from "../kernel/global-cache";
+import { globalCache, querySquad } from "../kernel/global-cache";
 import {
   assessThreat,
   type HostileSnapshot as ThreatHostileSnapshot,
@@ -636,23 +636,23 @@ function censusStalledOps(
 ): void {
   // 单次遍历全部 creep，按 remoteTarget 归组（远矿编队规模小，Map 摊还成本可忽略）。
   const byTarget = new Map<string, { total: number; stalled: number }>();
-  for (const creep of Object.values(Game.creeps)) {
-    if (creep.spawning || creep.memory.recycle) continue;
-    if (creep.memory.home !== homeRoom) continue;
+  for (const entry of querySquad({ home: homeRoom })) {
+    const creep = Game.creeps[entry.name];
+    if (!creep || creep.spawning || creep.memory.recycle) continue;
     const target = creep.memory.remoteTarget;
     if (!target) continue;
     const op = remoteOps[target];
     if (!op || op.state !== "active") continue;
-    let entry = byTarget.get(target);
-    if (!entry) {
-      entry = { total: 0, stalled: 0 };
-      byTarget.set(target, entry);
+    let stallEntry = byTarget.get(target);
+    if (!stallEntry) {
+      stallEntry = { total: 0, stalled: 0 };
+      byTarget.set(target, stallEntry);
     }
-    entry.total++;
+    stallEntry.total++;
     const mode = creep.memory.mode;
     const stuck = creep.memory.stuckTicks ?? 0;
     if (mode === "idle" || mode === "flee" || stuck >= CONFIG.remote.stallStuckTicks) {
-      entry.stalled++;
+      stallEntry.stalled++;
     }
   }
 
@@ -682,10 +682,8 @@ function censusStalledOps(
 function hasCreepInRoom(roomName: string): boolean {
   const room = Game.rooms[roomName];
   if (!room) return false;
-  // 检查是否有自己的 creep 在该房间。
-  return Object.values(Game.creeps).some(
-    (c) => c.room.name === roomName && c.my,
-  );
+  // 检查是否有自己的 creep 在该房间——用 room.find 代替全局扫描。
+  return room.find(FIND_MY_CREEPS).length > 0;
 }
 
 /**
@@ -718,25 +716,26 @@ export function recycleExcessRemoteCreeps(
   // 收集每个 active 目标的远矿 creep，按角色分组。
   const byTarget = new Map<string, { harvester: Creep[]; hauler: Creep[]; reserver: Creep[]; defender: Creep[] }>();
 
-  for (const creep of Object.values(Game.creeps)) {
-    if (creep.memory.home !== homeRoom) continue;
+  for (const entry of querySquad({ home: homeRoom })) {
+    const creep = Game.creeps[entry.name];
+    if (!creep) continue;
     if (creep.memory.recycle) continue; // 已标记回收的跳过。
     const target = creep.memory.remoteTarget;
     if (!target) continue;
     const op = remoteOps[target];
     if (!op || op.state !== "active") continue;
 
-    let entry = byTarget.get(target);
-    if (!entry) {
-      entry = { harvester: [], hauler: [], reserver: [], defender: [] };
-      byTarget.set(target, entry);
+    let groupEntry = byTarget.get(target);
+    if (!groupEntry) {
+      groupEntry = { harvester: [], hauler: [], reserver: [], defender: [] };
+      byTarget.set(target, groupEntry);
     }
     const role = creep.memory.role;
     if (creep.spawning) continue;
-    if (role === "remoteHarvester") entry.harvester.push(creep);
-    else if (role === "remoteHauler") entry.hauler.push(creep);
-    else if (role === "reserver") entry.reserver.push(creep);
-    else if (role === "remoteDefender") entry.defender.push(creep);
+    if (role === "remoteHarvester") groupEntry.harvester.push(creep);
+    else if (role === "remoteHauler") groupEntry.hauler.push(creep);
+    else if (role === "reserver") groupEntry.reserver.push(creep);
+    else if (role === "remoteDefender") groupEntry.defender.push(creep);
   }
 
   // 替换窗口判定 — 与 demand 的 findReplacement 完全同口径。
@@ -780,8 +779,9 @@ export function recycleExcessRemoteCreeps(
 /** 收集归属于本房的所有远矿 creep 摘要。 */
 function collectRemoteCreeps(homeRoom: string): RemoteCreepSummary[] {
   const result: RemoteCreepSummary[] = [];
-  for (const creep of Object.values(Game.creeps)) {
-    if (creep.memory.home !== homeRoom) continue;
+  for (const entry of querySquad({ home: homeRoom })) {
+    const creep = Game.creeps[entry.name];
+    if (!creep) continue;
     // RD-1：回收中的 creep 不算编制 — 半血撤退的 defender / 被撤回的
     // 经济 creep 已退出战斗力序列，计入会挡住接替者的孵化。
     if (creep.memory.recycle === true) continue;
@@ -891,8 +891,9 @@ function recycleBlockedRoomCreeps(
   strongholdRooms: ReadonlySet<string> = new Set(),
 ): void {
   if (recycleRooms.size === 0) return;
-  for (const creep of Object.values(Game.creeps)) {
-    if (creep.memory.home !== homeRoom) continue;
+  for (const entry of querySquad({ home: homeRoom })) {
+    const creep = Game.creeps[entry.name];
+    if (!creep) continue;
     if (creep.memory.recycle) continue;
     const target = creep.memory.remoteTarget;
     if (!target || !recycleRooms.has(target)) continue;
@@ -934,8 +935,9 @@ export function fulfillContainerRequests(
   // 分桶仅保留 needContainer=true 且有 sourceId 的 creep，per-room 循环内
   // 二次按 sourceId 分组（与原逻辑等价）。
   const requestingByRemote = new Map<string, Creep[]>();
-  for (const creep of Object.values(Game.creeps)) {
-    if (creep.memory.home !== homeRoom) continue;
+  for (const entry of querySquad({ home: homeRoom })) {
+    const creep = Game.creeps[entry.name];
+    if (!creep) continue;
     if (!creep.memory.needContainer) continue;
     const target = creep.memory.remoteTarget;
     if (!target) continue;
@@ -1148,9 +1150,9 @@ function estimateCreepInvestment(op: RemoteOp, energyCapacity: number): number {
 
 /** 回收指定远矿目标房的所有远矿 creep（RETREAT/ABORT 时调用）。 */
 function recycleRemoteCreepsForRoom(homeRoom: string, targetRoom: string): void {
-  for (const creep of Object.values(Game.creeps)) {
-    if (creep.memory.home !== homeRoom) continue;
-    if (creep.memory.remoteTarget !== targetRoom) continue;
+  for (const entry of querySquad({ home: homeRoom, remoteTarget: targetRoom })) {
+    const creep = Game.creeps[entry.name];
+    if (!creep) continue;
     if (creep.memory.recycle) continue;
     // coreClearer 不回收（可能正在拆 InvaderCore，与威胁响应无关）。
     if (creep.memory.role === "coreClearer") continue;

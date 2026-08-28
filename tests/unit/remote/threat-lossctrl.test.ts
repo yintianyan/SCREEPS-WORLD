@@ -123,6 +123,7 @@ describe("RM-3 — 远矿房被自己 claim 后运营关停", () => {
       ticksToLive: 800,
       memory: { role: "remoteHarvester", home: "W7N4", remoteTarget: target },
     };
+    syncSquadIndex();
 
     remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
 

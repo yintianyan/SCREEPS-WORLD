@@ -1,7 +1,7 @@
 /** 敌方 reservation 运行时退出接线测试（组①-1c）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
-import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
 
 const targetRoom = "W2N1";
 const homeRoom = "W7N4"; // 与 mockSnapshot 默认 roomName 对齐。
@@ -51,6 +51,7 @@ describe("remote-mining-manager — 敌方 reservation 运行时退出", () => {
     const reserver = mockCreep({ name: "rs1", role: "reserver", home: homeRoom });
     reserver.memory.remoteTarget = targetRoom;
     g.Game.creeps = { rs1: reserver };
+    syncSquadIndex();
 
     seedMemory(now);
     remoteMiningManagerSystem.run(mockContext(ownedSnapshot("me")));

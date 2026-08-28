@@ -295,3 +295,50 @@ describe("R10 bootstrap 注册集合一致性", () => {
     expect(roleCalls.length).toBeLessThanOrEqual(25);
   });
 });
+
+describe("R11 systems 间值导入审计", () => {
+  const systemFiles = ALL_FILES.filter((f) => relative(SRC, f).startsWith("systems/"));
+
+  // 白名单：每条记录 "导入文件:被导入文件" 及其合法理由。
+  // 合法标准：被导入的是公开查询函数（query*）、共享账本（site-quota）、
+  // 或同一架构单元内的子系统编排（tactical-runtime-pipeline 及其子阶段）。
+  const R11_WHITELIST = new Set<string>([
+    // site-quota 是共享账本模块，非系统
+    "systems/construction-manager.ts:systems/site-quota.ts",
+    "systems/remote-mining-manager.ts:systems/site-quota.ts",
+    // 公开查询函数
+    "systems/agenda-manager.ts:systems/economy.ts",
+    "systems/empire-economy.ts:systems/economy.ts",
+    "systems/expansion-planner.ts:systems/empire-economy.ts",
+    // link-system 暴露的拆改/死资产协调接口
+    "systems/layout-planner.ts:systems/link-system.ts",
+    "systems/construction-manager.ts:systems/link-system.ts",
+    // tactical-runtime-pipeline 编排其 4 个子阶段
+    "systems/tactical-runtime-pipeline.ts:systems/tactical-runtime-system.ts",
+    "systems/tactical-runtime-pipeline.ts:systems/squad-movement-runtime.ts",
+    "systems/tactical-runtime-pipeline.ts:systems/tactical-engagement-runtime.ts",
+    "systems/tactical-runtime-pipeline.ts:systems/combat-micro-runtime.ts",
+    // pipeline 内子阶段间的数据传递
+    "systems/tactical-engagement-runtime.ts:systems/squad-movement-runtime.ts",
+    "systems/combat-micro-runtime.ts:systems/tactical-engagement-runtime.ts",
+    "systems/combat-micro-runtime.ts:systems/squad-movement-runtime.ts",
+  ]);
+
+  it("系统间值导入必须在白名单中", () => {
+    const bad: string[] = [];
+    for (const f of systemFiles) {
+      const rel = relative(SRC, f);
+      for (const imp of importsOf(f)) {
+        if (imp.isType) continue; // type-only 豁免
+        if (!imp.resolved.startsWith(SRC)) continue;
+        const targetRel = relative(SRC, imp.resolved);
+        if (!targetRel.startsWith("systems/")) continue;
+        if (targetRel === relative(SRC, f)) continue; // 自导入跳过
+        const key = rel + ":" + targetRel;
+        if (R11_WHITELIST.has(key)) continue;
+        bad.push(rel + " -> " + targetRel);
+      }
+    }
+    expect(bad, "未登记的系统间值导入: " + bad.join(", ")).toHaveLength(0);
+  });
+});
