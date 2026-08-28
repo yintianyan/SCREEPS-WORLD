@@ -8,17 +8,17 @@
 > [STATE_OWNERSHIP_MODEL.md](STATE_OWNERSHIP_MODEL.md) §3.8；模块八项见
 > [SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) §1.12。
 
-## 0. 当前生产状态（R11 裁决 · 必读）
+## 0. 当前生产状态（R14 裁决 · 必读）
 
-**本文件全部章节是冻结蓝图的目标合同；下表区分「目标」与「当前生产现状」。**
-任何 coding agent 不得因本文件而恢复 R11 已删除的生产接线。
+**本文件全部章节是冻结蓝图合同；下表区分「已实现」与「历史/待清理」。**
 
 | 项 | 状态 |
 | --- | --- |
-| 本文件 §1–§8 概念合同（Observation/Intel/Knowledge/Threat/Prediction/History、TTL、置信度、硬门槛） | **目标架构（Design-Verified）**，仍为冻结蓝图 |
-| `intelligence-pipeline`（A6 智能层）、`decision-trace`、`evaluation-system` | **Shadow-Only**：R11 裁决从生产路径移除；`src/domain/intelligence/` 与 `src/domain/strategy/decision-trace.ts` 不进入生产 bundle、不被任何 src 文件导入；后续分批清理 |
-| 生产中的观察采集 | 由 `room-observer`（低频房间观察）与 `prospect-manager`（扩张期侦察孵化）承担；统一 IntelState 写者系统尚未注册 |
-| 恢复注册条件 | 仅当 P0 运行时收口全部完成，且有明确消费者需求与 CPU/Memory 预算证明时，走 ARCHITECTURE_FREEZE §15 新 ADR |
+| 本文件 §1–§8 概念合同（Observation/Intel/Knowledge/Threat/Prediction/History、TTL、置信度、硬门槛） | **已实现核心（R14，2026-08-29）**：`intelligence` 系统（P2/10t）为 IntelState 唯一写者——三分置信度（来源信任 × 时效窗读侧派生）、TTL 分档 + expiry jitter、房间域 heap 活跃层（256 环形覆盖）、玩家域威胁记忆 segment 5 冷存（月级）、§5 硬门槛查询（`intelActionUsable`/`intelNeedsRescout`） |
+| 观察采集 | legacy `Memory.rooms[].intel` 只读输入桥采用（room-observer 写侧保持运行）+ 快照被动威胁信号；消费者迁移 IntelQuery 为 war 轨前置 |
+| segment 分片（§3） | 玩家域 segment 5 已落地；房间域 `intel-rooms-{hash}` 分片按规模触发（10+ 房）后启用（当前 heap 环形覆盖语义等价）；静态域由 `classifyRoomByName` 派生（inferred），市场域数据归市场系统所有 |
+| `intelligence-pipeline`（A6 智能层）、`decision-trace`、`evaluation-system` | **仍为 R11 裁决的 Shadow-Only**：`src/domain/intelligence/` 与 `src/domain/strategy/decision-trace.ts` 不进入生产 bundle；B5 分批清理（R14 不恢复之） |
+| 测试验证层级 | `tests/unit/intel/*` 验证 IntelState 领域模型（生产路径）；`tests/unit/intelligence/*` 只验证 A6 Shadow-Only 设计源码；E2E-011 冲突项见 backlog B3 |
 
 **测试验证层级（防误读）**：
 

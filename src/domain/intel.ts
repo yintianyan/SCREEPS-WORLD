@@ -232,3 +232,210 @@ export function getIntelConfidence(
   return "expired";
 }
 
+
+// ─── 完整版情报架构（IntelState 唯一写者的领域模型）────────────────
+//
+// 三分置信度是「来源信任」维度（fact=本源直接观测 / inferred=先验推导 / ally
+// 转述同属 inferred），与旧 getIntelConfidence 的「时效」维度正交：消费方先看
+// 来源可信度，再看新鲜窗。读侧派生（不落存储）实现「无视野随龄单调降级」，
+// 避免降级写风暴；物理清理只在超 expiry 后发生。
+
+/** 情报四域。市场域数据归市场系统所有，本模型只保留只读缓存位。 */
+export type IntelDomain = "rooms" | "players" | "static" | "market";
+
+/** 观测来源（IntelEntry.source）。ally/derived 永远是 inferred，不参与硬门槛。 */
+export type IntelSource = "passive" | "scout" | "observer" | "ally" | "derived";
+
+/** 三分置信度 + unknown（从未观测/已过期清空）。 */
+export type IntelTrust = "fact" | "stale" | "inferred" | "unknown";
+
+/** 本源直接观测来源（可进入 fact 通道）。 */
+const DIRECT_SOURCES: ReadonlySet<IntelSource> = new Set(["passive", "scout", "observer"]);
+
+/** 房间域动态字段 TTL（SPECULATION 初值，soak 校准——归属是慢变量，
+ * KasamiBot 20k 先例，取 ~5k–20k 区间中点）。 */
+export const ROOM_DYNAMIC_TTL = 10_000;
+/** 敌编队/威胁事实：可见期结束即降级（行情瞬变）。 */
+export const ROOM_THREAT_TTL = 200;
+/** 资源/估值字段 TTL（与估值刷新同频）。 */
+export const ROOM_RESOURCE_TTL = 20_000;
+/** expiry 抖动上限（防到期风暴：到期时间戳加 hash jitter）。 */
+export const EXPIRY_JITTER = 500;
+/** 房间域 heap 容量（超限按 observedAt 最旧环形覆盖）。 */
+export const INTEL_ROOMS_CAP = 256;
+
+/** 房间域 IntelEntry payload——复用 legacy RoomIntel 的字段集（观测即全量覆写语义）。 */
+export type RoomIntelPayload = RoomIntel;
+
+/** 房间域情报条目（subject = 房名）。 */
+export interface IntelEntry {
+  subject: string;
+  /** 最近一次有视野观测的 tick（无视野不前移——与 legacy lastSeen 语义一致）。 */
+  observedAt: number;
+  source: IntelSource;
+  /** 过期时间戳 = observedAt + TTL + jitter(subject)；超期由老化清理为未知。 */
+  expiry: number;
+  payload: RoomIntelPayload;
+}
+
+/** 玩家域威胁记忆条目（subject = owner 名，月级衰减不删除，segment 冷存）。 */
+export interface PlayerIntelEntry {
+  owner: string;
+  /** 最近一次确认活动的 tick。 */
+  lastSeenAt: number;
+  /** 最近一次敌对信号（在房威胁/黑名单命中）的 tick；0 = 无记录。 */
+  lastHostileAt: number;
+  /** 观测到活动的房间 → 最近观测 tick。 */
+  rooms: Record<string, number>;
+}
+
+/** 稳定字符串哈希（与 kernel 相位同族算法，仅用于 expiry jitter）。 */
+function intelHash(key: string): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+/** 该来源是否可进入 fact 通道（ally/derived 永远 inferred）。 */
+export function isDirectSource(source: IntelSource): boolean {
+  return DIRECT_SOURCES.has(source);
+}
+
+/** 该房 subject 的 TTL 分档：威胁字段短窗、动态字段中窗、资源字段长窗。
+ * 简化实现：payload 内 towers/enemySpawns/sealedExits 属威胁类，其余走动态窗。 */
+function ttlForPayload(payload: RoomIntelPayload): number {
+  if (payload.towers !== undefined || payload.enemySpawns !== undefined) {
+    return ROOM_THREAT_TTL;
+  }
+  if (payload.powerBank !== undefined) return ROOM_THREAT_TTL;
+  return ROOM_DYNAMIC_TTL;
+}
+
+/**
+ * 读侧派生置信度：ally/derived → inferred；直接来源按龄 fact → stale →
+ * unknown（超 expiry，条目应已被老化清理）。纯函数。
+ */
+export function confidenceAt(entry: IntelEntry, tick: number): IntelTrust {
+  if (!isDirectSource(entry.source)) return "inferred";
+  const age = tick - entry.observedAt;
+  if (age <= ttlForPayload(entry.payload)) return "fact";
+  if (tick < entry.expiry) return "stale";
+  return "unknown";
+}
+
+/**
+ * 不可逆行动硬门槛（进攻/占领/大额调拨）：只接受 fact 级，且可选更严的
+ * 观察年龄上限（战争授权的目标新鲜度）。inferred/stale 一律拒绝——
+ * stale 的合法用途仅是触发「先侦察后行动」两段式任务。
+ */
+export function isActionUsable(
+  entry: IntelEntry | undefined,
+  tick: number,
+  maxAge?: number,
+): boolean {
+  if (!entry) return false;
+  if (confidenceAt(entry, tick) !== "fact") return false;
+  if (maxAge !== undefined && tick - entry.observedAt > maxAge) return false;
+  return true;
+}
+
+/** stale/inferred/unknown 的合法用途：触发侦察任务（两段式），永不直接驱动行动。 */
+export function needsRescout(entry: IntelEntry | undefined, tick: number): boolean {
+  if (!entry) return true; // 未知 ≠ 安全：盲区驱动侦察
+  return confidenceAt(entry, tick) !== "fact";
+}
+
+/**
+ * legacy 邻房 intel（RoomMemory.intel 记录）→ IntelEntry 采用转换。
+ * 来源记 observer（room-observer 有视野扫描管线产出）；observedAt 取
+ * legacy.lastSeen（无视野不前移的既有语义）；expiry 按 TTL 分档加 jitter。
+ * pathCost 为地形静态实测值，随 payload 保留——条目过期后依赖重访重建
+ * （消费方已有线性距离回退）。
+ */
+export function adoptLegacyRoomIntel(
+  subject: string,
+  legacy: RoomIntel,
+  nowTick: number,
+): IntelEntry {
+  const ttl = ttlForPayload(legacy);
+  const jitter = intelHash(subject) % (EXPIRY_JITTER + 1);
+  return {
+    subject,
+    observedAt: legacy.lastSeen,
+    source: "observer",
+    expiry: legacy.lastSeen + ttl + jitter,
+    payload: { ...legacy },
+  };
+}
+
+/** 老化清理：超 expiry 的条目物理删除（读侧语义 = 未知）。返回删除数。 */
+export function ageRooms(entries: Map<string, IntelEntry>, tick: number): number {
+  let removed = 0;
+  for (const [subject, entry] of entries) {
+    if (tick >= entry.expiry) {
+      entries.delete(subject);
+      removed++;
+    }
+  }
+  return removed;
+}
+
+/** 容量治理：超限按 observedAt 最旧环形覆盖。 */
+export function capRooms(entries: Map<string, IntelEntry>, cap: number): number {
+  if (entries.size <= cap) return 0;
+  const byOldest = [...entries.entries()].sort((a, b) => a[1].observedAt - b[1].observedAt);
+  const evict = entries.size - cap;
+  for (let i = 0; i < evict; i++) entries.delete(byOldest[i]![0]);
+  return evict;
+}
+
+/** upsert 语义：仅当新条目更新（observedAt 更晚）时覆盖——采用/采集幂等。 */
+export function upsertRoomEntry(entries: Map<string, IntelEntry>, entry: IntelEntry): boolean {
+  const prev = entries.get(entry.subject);
+  if (prev && prev.observedAt >= entry.observedAt) return false;
+  entries.set(entry.subject, entry);
+  return true;
+}
+
+// ─── 玩家域：segment 结构化记录互转 ──────────────────────────
+
+/** 玩家域 segment 记录的结构形态（与 kernel segment-store 的结构化最小集对齐）。 */
+export interface PlayerIntelRecord {
+  lastSeenAt?: number;
+  lastHostileAt?: number;
+  rooms?: Record<string, number>;
+}
+
+export function toPlayersRecord(players: Map<string, PlayerIntelEntry>): Record<string, PlayerIntelRecord> {
+  const out: Record<string, PlayerIntelRecord> = {};
+  for (const [owner, e] of players) {
+    out[owner] = { lastSeenAt: e.lastSeenAt, lastHostileAt: e.lastHostileAt, rooms: { ...e.rooms } };
+  }
+  return out;
+}
+
+export function fromPlayersRecord(owner: string, rec: PlayerIntelRecord): PlayerIntelEntry {
+  return {
+    owner,
+    lastSeenAt: rec.lastSeenAt ?? 0,
+    lastHostileAt: rec.lastHostileAt ?? 0,
+    rooms: { ...(rec.rooms ?? {}) },
+  };
+}
+
+/** 玩家域观测 upsert：活动信号刷新 lastSeenAt/rooms；敌对信号单调前移 lastHostileAt。 */
+export function upsertPlayerObservation(
+  players: Map<string, PlayerIntelEntry>,
+  owner: string,
+  roomName: string,
+  tick: number,
+  hostile: boolean,
+): void {
+  const prev = players.get(owner);
+  const entry: PlayerIntelEntry = prev ?? { owner, lastSeenAt: 0, lastHostileAt: 0, rooms: {} };
+  if (tick > entry.lastSeenAt) entry.lastSeenAt = tick;
+  if (hostile && tick > entry.lastHostileAt) entry.lastHostileAt = tick;
+  const prevRoomTick = entry.rooms[roomName] ?? 0;
+  if (tick > prevRoomTick) entry.rooms[roomName] = tick;
+  players.set(owner, entry);
+}

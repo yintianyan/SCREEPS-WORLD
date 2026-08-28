@@ -102,12 +102,11 @@ Lifecycle=创建→更新→归档→清理；Persistence=存储层级；Frequen
 
 ### 3.8 IntelState（四域 / TTL / 置信度——segment）
 
-> **当前生产状态（R11）**：本节是冻结蓝图的唯一写者登记；`intelligence-pipeline` /
-> `decision-trace` / `evaluation-system` 已裁决移出生产路径，生产中无注册的
-> Intelligence 写者（观察采集由 `room-observer` / `prospect-manager` 承担），
-> `src/domain/intelligence/` 为 Shadow-Only 孤岛。恢复注册须走
-> [ARCHITECTURE_FREEZE.md](ARCHITECTURE_FREEZE.md) §15 新 ADR（详见
-> [INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）。
+> **当前生产状态（R14，2026-08-29）**：IntelState 唯一写者已注册——`intelligence`
+> 系统（`src/systems/intelligence.ts`）。房间域活跃层在 heap（环形覆盖，可由 legacy
+> 输入桥 + 快照重建）；玩家域威胁记忆在 segment 5（月级衰减不删除）。legacy
+> `Memory.rooms[].intel` 为只读输入桥（room-observer 写侧保持至消费者迁移
+> IntelQuery）。A6 智能层仍为 R11 Shadow-Only（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）。
 
 | 字段组 | Owner | Reader | Writer | Lifecycle | Persistence | Frequency |
 | --- | --- | --- | --- | --- | --- | --- |

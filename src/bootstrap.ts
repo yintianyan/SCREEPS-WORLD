@@ -38,6 +38,7 @@ import { linkSystem } from "./systems/link-system";
 import { pixelSystem } from "./systems/pixel-system";
 import { prospectManagerSystem } from "./systems/prospect-manager";
 import { remoteMiningManagerSystem } from "./systems/remote-mining-manager";
+import { intelligenceSystem } from "./systems/intelligence";
 import { empireHealthSystem } from "./systems/empire-health-system";
 import { recoveryExecutionSystem } from "./systems/recovery-execution-system";
 import { warPlannerSystem } from "./systems/war-planner";
@@ -129,6 +130,9 @@ export const registry = new Registry()
   .registerSystem(constructionManagerSystem)
   // P2：远矿管理（每 10 tick 评估目标）
   .registerSystem(remoteMiningManagerSystem)
+  // P2：情报（IntelState 唯一写者——legacy 输入桥采用 + 被动威胁信号采集 +
+  //   低频老化批处理；玩家域威胁记忆 segment 冷存；消费方走只读查询 API）
+  .registerSystem(intelligenceSystem)
   // P1：Empire Health（A4.5 — 低频 100t，综合 8 维度健康度 + Hysteresis +
   //   失败传播 + 恢复优先级 + 自治指标；在 specialization-planner 之后运行，
   //   消费 empireEconomy / logistics / network / colony 信号）

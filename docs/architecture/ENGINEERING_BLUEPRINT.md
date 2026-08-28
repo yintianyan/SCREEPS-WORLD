@@ -49,7 +49,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | 1.9 Defense | System | `src/systems/tower-defense.ts`＋`defense-planner.ts`＋`src/domain/defense/` | P0 | ~13 文件 / ~3.5k 行 |
 | 1.10 Military | Manager | `src/systems/war-planner.ts`＋`war-planning-system.ts`＋`tactical-runtime-pipeline.ts`＋4 阶段实现文件＋`src/domain/war/`＋`tactical/`＋`combat/`＋`military/` | P2 | ~29 文件 / ~9k 行 |
 | 1.11 Expansion | System | `src/systems/expansion-manager.ts`＋`expansion-planner.ts`＋`src/domain/expansion/` | P2 | ~35 文件 / ~5.5k 行 |
-| 1.12 Intelligence | System | `src/systems/room-observer.ts`＋`prospect-manager.ts`＋`src/domain/intel.ts`（生产）；`src/domain/intelligence/` 46 文件为 Shadow-Only 待清理（R11） | P2 | 生产 ~4 文件；Shadow-Only 46 文件 / 16k 行清理后归零 |
+| 1.12 Intelligence | System | `src/systems/intelligence.ts`（IntelState 唯一写者，R14）＋`room-observer.ts`＋`prospect-manager.ts`（观察采集）＋`src/domain/intel.ts`（模型） | P2 | ~5 文件；Shadow-Only 46 文件 / 16k 行清理后归零（§5-11） |
 | 1.13 Agenda 管理 | System | `src/systems/agenda-manager.ts`（复核纯函数在 `src/domain/operation/`） | P2 | ~20 文件 / ~4k 行 |
 | 1.14 Observability | System | `src/systems/telemetry-collector.ts`＋`src/telemetry/`＋`src/kernel/telemetry.ts`（平台面） | P3＋P0 伴生 | ~26 文件 / ~4.5k 行 |
 | 1.15 Self-Healing | System | `src/systems/self-healing.ts`（概念性落点：实际由 `empire-health-system.ts` + `recovery-execution-system.ts` 协作实现，ADR 见 §5-4；处置表数据在 `src/domain/`，只读） | P1 | 2–3 文件（+domain 处置表） |
@@ -144,7 +144,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | 11 | `src/domain/intelligence/`（A6 智能层）与 `src/domain/strategy/decision-trace.ts` 为 Shadow-Only 孤岛 | R11 裁决：不进入生产 bundle、不被任何 src 文件导入；生产观察采集由 room-observer / prospect-manager 承担；后续分批清理，恢复注册须走新 ADR（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0） | ⏳ Shadow-Only 待清理 |
 | 12 | R10 批 3 有效合并未执行：specialization-planner→empire-strategy、logistics-planner→logistics（第三项 empire-health 合并已被 §5-4 ADR 取代，见 FREEZE R10 追记） | 批 3 完成后 `bootstrap.ts` 注册数 34→32 | ✅ 已完成（2026-08-28，B1：规划模块转为父系统内部门控 helper，行为保持四件套全绿） |
 | 13 | `tests/e2e/scenarios/11-decision-trace.test.ts` 断言生产日志出现 decision-trace 输出，与 R11 冲突（生产 bundle 已无该模块与日志发射点） | 按新 ADR 重定向（改为验证遥测 outcome 通道）或移除；重定向前不得作为生产行为证据 | ⏳ 重构 backlog B3 |
-| 14 | 蓝图情报架构（IntelState 唯一写者 / segment 冷存 / fact-stale-inferred 三分置信度）与生产简化版（分散 `Memory.rooms[].intel` + lastSeen 新鲜度）是两套实现 | 需一次 ADR 裁决：实现完整版，或登记简化版为当前合同（完整版降为 war 轨前置）。裁决前两套表述并存，以本行为准 | ⏳ 重构 backlog B4（裁决项） |
+| 14 | 蓝图情报架构（IntelState 唯一写者 / segment 冷存 / fact-stale-inferred 三分置信度）与生产简化版（分散 `Memory.rooms[].intel` + lastSeen 新鲜度）是两套实现 | 需一次 ADR 裁决：实现完整版，或登记简化版为当前合同（完整版降为 war 轨前置）。裁决前两套表述并存，以本行为准 | ✅ 已裁决（2026-08-29，B4→R14）：完整版实现——`intelligence` 系统注册（注册数 32→33），简化版转为只读输入桥，消费者迁移为 war 轨前置 |
 
 ## 6. 一致性声明
 

@@ -20,8 +20,8 @@
 
 | 项 | 值 |
 | --- | --- |
-| 快照日期 | 2026-08-28 |
-| 基准 commit | `3fee35f`（dev 分支；本快照叠加重构 backlog B1 的工作树改动——注册数 34→32，详见 §6 B1） |
+| 快照日期 | 2026-08-29 |
+| 基准 commit | `9731583`（dev 分支；本快照叠加重构 backlog B4 的工作树改动——注册数 32→33，详见 §6 B4） |
 | 运行模式 | 官方 Screeps World · TypeScript bot（`dist/main.js` 由 rollup 打包） |
 | 口径约定 | 概念模块 = SYSTEM_BOUNDARIES §1 的 15 模块；生产系统 = `bootstrap.ts` `registerSystem()` 实际注册项；源文件 = `src/systems/` 等实际文件。三者不是同一统计对象，不得互换 |
 
@@ -29,13 +29,13 @@
 
 | 项 | 当前值 | 源码真相源 |
 | --- | --- | --- |
-| 生产注册系统数 | **32**（`registerSystem` 调用数；R10 记 36、R11 修正为 34、B1 批 3 合并后为 32） | `src/bootstrap.ts` |
+| 生产注册系统数 | **33**（`registerSystem` 调用数；R10 记 36、R11 修正为 34、B1 批 3 合并后 32、B4 新增 intelligence 后 33） | `src/bootstrap.ts` |
 | 生产注册角色数 | **19**（`registerRole` 调用数） | `src/bootstrap.ts` |
 | Memory schemaVersion | **42**（迁移链 42 步：0→42，逐级迁移） | `src/config/index.ts` `CONFIG.memory.schemaVersion`、`src/kernel/memory.ts` `MIGRATIONS` |
 | CpuTier 枚举 | **四档**：`healthy / guarded / conserve / recovery`（不存在第五档） | `src/kernel/contracts.ts` |
 | CpuTier bucket 阈值 | healthy 7000 / guarded 3000 / conserve 1000 / recovery 0（降级立即生效；恢复滞回 500 + 20 tick） | `src/config/index.ts` `CONFIG.cpu.tiers` |
 | Emergency Survival Mode | **设计态，未实现**（发布运行态规范，见 [implementation/RELEASE_GATE_AND_ROLLBACK.md](implementation/RELEASE_GATE_AND_ROLLBACK.md) §5.2；不是 CpuTier 成员） | — |
-| `src/` 规模 | 398 个 .ts / 103,242 行（kernel 19/5.3k、systems 40/19k、domain 260/65.9k、creeps 48/8k、telemetry 24/2.4k、config 4/1.6k、types 1/0.9k、根 2 文件） | 目录实测（刷新时重测） |
+| `src/` 规模 | 399 个 .ts / 103,906 行（kernel 19/5.5k、systems 41/19k、domain 260/66.5k、creeps 48/8k、telemetry 24/2.4k、config 4/1.6k、types 1/0.9k、根 2 文件） | 目录实测（刷新时重测） |
 | 市场成交唯一写者 | **TerminalManager**（`Game.market.deal` 唯一调用点；不存在 `MarketManager`） | `src/systems/terminal-manager.ts` |
 
 ## 3. 门禁结果（本快照 commit 实测）
@@ -43,12 +43,12 @@
 | 门禁 | 结果 |
 | --- | --- |
 | `npm run typecheck` | ✅ 0 error |
-| `npm test`（unit + integration） | ✅ 344 文件 / 5260 测试全绿（2026-08-28 实测 @ 基准 commit；审查稿记录的 4 个失败已被远矿修复收敛） |
+| `npm test`（unit + integration） | ✅ 346 文件 / 5285 测试全绿（2026-08-29 实测 @ 基准 commit + B4 工作树；新增 2 文件 / 25 用例为 R14 情报架构测试） |
 | `npm run build` | ✅ `dist/main.js` 生成（8.9s） |
 | `npm run test:e2e` | ✅ smoke 3/3 通过（Node v24.18.0 实测；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致） |
 | `npm run check:docs` | ✅ 7 项文档一致性检查全过 |
 
-## 4. 生产清单（15 概念模块 × 32 注册系统）
+## 4. 生产清单（15 概念模块 × 33 注册系统）
 
 状态列口径：**Active** = 已注册进生产 bundle；**Shadow-Only** = 设计源码存在但不进
 生产 bundle。证据列 = 主要测试入口（完整层级见
@@ -70,6 +70,7 @@
 | Economy（生产） | lab-system | `src/systems/lab-system.ts` | P1 / 每 tick 门控 | lab 反应 + boost 库存 | Active | `tests/unit`（lab 域） |
 | Construction | construction-manager | `src/systems/construction-manager.ts` | P2 / 10–50t | `createConstructionSite` 写者之一（自有房）；BuildQueue | Active | `tests/unit`（construction 域） |
 | Construction（远矿） | remote-mining-manager | `src/systems/remote-mining-manager.ts` | P2 / 10t | `createConstructionSite` 写者之二（远矿房） | Active | `tests/unit/remote/` |
+| Intelligence（写者） | intelligence | `src/systems/intelligence.ts` | P2 / 10t（老化 100t 相位门） | **IntelState 唯一写者**（R14）：三分置信度 + TTL 分档 + 房间域 heap 环形覆盖 + 玩家域 segment 冷存；查询走只读 API | Active | `tests/unit/intel/` + `tests/unit/systems/intelligence.test.ts` |
 | Self-Healing（诊断） | empire-health-system | `src/systems/empire-health-system.ts` | P1 / 100t | 8 维健康度 + Hysteresis + 失败传播（ADR 裁决与 recovery-execution 保留分离） | Active | `tests/unit`（empire-health 域） |
 | Self-Healing（执行） | recovery-execution-system | `src/systems/recovery-execution-system.ts` | P1 / 10t | 消费 recoveryActions 翻译为 spawn/agenda/terminal/remote 指令 | Active（同上 ADR） | `tests/unit`（recovery 域） |
 | Military | war-planning-system | `src/systems/war-planning-system.ts` | P2 / 10t | WarPlan 纯函数产出（写入 globalCache.warPlanCache） | Active | `tests/unit`（war 域） |
@@ -120,7 +121,7 @@
 | 等级 | 当前状态 |
 | --- | --- |
 | Design-Verified | ✅ 十场景（Scenario A–J）+ 双红队闭合（冻结日 2026-08-23） |
-| Code-Verified | ✅ 基准 commit + B1 工作树：typecheck 0 error + 5260 测试全绿 + build 成功（§3） |
+| Code-Verified | ✅ 基准 commit + B4 工作树：typecheck 0 error + 5285 测试全绿 + build 成功（§3） |
 | Integration-Verified | ◐ 单房私服链路有历史证据；多房/低 CPU 场景未覆盖（见 Blocked） |
 | Soak-Verified | ❌ **无当前版本 soak 证据**。旧数据集（sv=39 ≠ 当前 42）整体降级为 Historical Evidence 且 artifact 绑定待补（[CANARY_SOAK_PROCEDURE.md](implementation/CANARY_SOAK_PROCEDURE.md) §5） |
 | Release-Ready | ❌ 不满足（Soak-Verified 缺失 + 下列 Blocked 项） |
@@ -149,9 +150,10 @@
 | B1 | R10 批 3 有效合并：specialization-planner→empire-strategy、logistics-planner→logistics | FREEZE R10 追记 · BLUEPRINT §5-12 | 注册数 34→32 并经 §7 程序刷新 STATUS；行为保持四件套 | ✅ 2026-08-28（四件套：测试 344 文件/5260 用例与基线逐数一致、smoke 3/3 @Node24、合规测试含 R12 全绿、清单已刷新；相位核对 spec=16/logi-planner=4/agenda=72 两两错开，数据时序零漂移） |
 | B2 | layout-planner D2 剩余下沉：`planStage0-3` 四个规划函数参数注入后下沉 `src/domain/layout/` | BLUEPRINT §5-3 | domain/layout 纯函数律 lint 绿；layout-planner 行数收敛至锚带 | ✅ 2026-08-28（四核下沉：`buildStage0PlanData`/`planCoreStage`/`planLogisticsStage`/`planSpawnRebuild`；layout-planner 1033→790 行；domain 纯函数律自检干净；四件套与 B1 同标准全绿） |
 | B3 | E2E-011（decision-trace）与 R11 对齐：重定向为遥测 outcome 断言或移除 | BLUEPRINT §5-13 | tests/e2e 无 R11 冲突断言；E2E 全套件可跑通 | ⏳ |
-| B4 | 情报架构 ADR 裁决：实现完整版（IntelState 唯一写者/segment/三分置信度）vs 登记生产简化版（`Memory.rooms[].intel`+lastSeen）为当前合同 | BLUEPRINT §5-14 | FREEZE §15 新 ADR 行 + 受影响文档同步标注 | ⏳ 裁决项 |
+| B4 | 情报架构 ADR 裁决：实现完整版（IntelState 唯一写者/segment/三分置信度）vs 登记生产简化版（`Memory.rooms[].intel`+lastSeen）为当前合同 | BLUEPRINT §5-14 | FREEZE §15 新 ADR 行 + 受影响文档同步标注 | ✅ 2026-08-29（**裁决：实现完整版**→ FREEZE R14：`intelligence` 系统注册 32→33，IntelState 唯一写者/三分置信度/TTL 分档/环形覆盖/玩家域 segment 冷存/硬门槛查询落地；legacy 桥只读并存，消费者迁移为 war 轨前置；新增 25 测试全绿） |
 | B5 | Shadow-Only 分批清理：`src/domain/intelligence/`（46 文件）+ `src/domain/strategy/decision-trace.ts` | FREEZE R11 · BLUEPRINT §5-11 | src 无孤岛文件；bundle parity 守卫绿；**前置依赖 B4 裁决**（选完整版则转恢复注册轨） | ⏳ 依赖 B4 |
 | B6 | 验证轨启动（Blocked 项的执行编排，属代码/运行期，非纯重构）：低 CPU 私服 soak（触发 tier 降级链）→ global reset 注入 → sv=42 单房 soak 重跑 | STATUS §5 · CANARY §5 | §5 Blocked 前三项有当前版本证据；A1/A2 升级为 Code/Soak-Verified | ⏳ |
+| B7 | 情报消费者迁移：war-planner / expansion-manager / remote-mining-manager / power-farm-manager / prospect-manager / empire-strategy 从 legacy `Memory.rooms[].intel` 直读迁移到 IntelQuery 只读 API；迁移完成后 legacy 桥退役 | FREEZE R14 | 全部消费者走 IntelQuery；legacy `Memory.rooms[].intel` 写侧下线（schema 届时按迁移规范处理）；行为保持四件套 | ⏳ war 轨前置 |
 
 ## 7. 本文件维护方式
 

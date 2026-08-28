@@ -61,7 +61,9 @@ export const CONFIG = {
       economy: { id: 3 },
       // 4: Prometheus metrics segment（screeps-exporter 读取并暴露 /metrics）
       prometheus: { id: 4 },
-      // 5–9 预留。
+      // 5: 情报玩家域冷存（月级 TTL，heap reset 后须存活）
+      intelPlayers: { id: 5 },
+      // 6–9 预留。
     } as Record<string, { id: number } | number>,
   },
 

@@ -23,11 +23,11 @@ flowchart TD
   GAME -. 观察事件式 .-> INTL[Intelligence intel 写入<br/>segment 四域 · 异步激活<br/>※R11：Shadow-Only 目标态]
 ```
 
-> **R11 注记（图一/图三的 Intelligence 节点）**：`intelligence-pipeline` /
-> `decision-trace` / `evaluation-system` 已裁决从生产路径移除，`src/domain/intelligence/`
-> 为 Shadow-Only 孤岛（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）。
-> 图中 Intelligence 节点保留为**目标架构**；当前生产中观察采集由 `room-observer` /
-> `prospect-manager` 承担，统一 intel 写入侧尚未注册。
+> **R14 注记（图一/图三的 Intelligence 节点）**：`intelligence` 系统已注册为
+> IntelState 唯一写者（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0）——
+> 图中 Intelligence 节点自 R14 起为生产现实。legacy `Memory.rooms[].intel` 为只读
+> 输入桥（消费者迁移 IntelQuery 为 war 轨前置）；A6 智能层
+> （intelligence-pipeline / decision-trace / evaluation-system）仍为 R11 Shadow-Only。
 
 感知流合同：
 

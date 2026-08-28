@@ -156,15 +156,15 @@
 
 ### 1.12 Intelligence（情报 · System 类 · P2 · 事件式）
 
-> **当前生产状态（R11 裁决，2026-08-28）**：本节是冻结蓝图的概念合同，仍为目标架构；
-> 但 A6 智能层 `intelligence-pipeline` 与 `decision-trace` / `evaluation-system` 已从
-> 生产路径移除——`src/domain/intelligence/` 与 `src/domain/strategy/decision-trace.ts`
-> 为 **Shadow-Only 孤岛**（不进入生产 bundle、不被任何 src 文件导入），对应测试只验证
-> 设计源码、不验证生产路径。生产中观察采集由 `room-observer` / `prospect-manager`
-> 承担；统一 IntelState 写者系统尚未注册（蓝图与现状差距按 §5 登记口径管理）。
-> 恢复注册必须走 [ARCHITECTURE_FREEZE.md](ARCHITECTURE_FREEZE.md) §15 新 ADR，并附
-> CPU、Memory、消费者与 soak 证据。详见
-> [INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0。
+> **当前生产状态（R14 裁决，2026-08-29）**：本节概念合同已由 R14 落地——
+> `intelligence` 系统（`src/systems/intelligence.ts`，P2/10t）注册为 **IntelState
+> 唯一写者**：三分置信度 + TTL 分档 + 房间域 heap 活跃层（环形覆盖）+ 玩家域
+> segment 冷存（月级威胁记忆）+ §5 硬门槛查询。legacy `Memory.rooms[].intel`
+> 为**只读输入桥**（room-observer 写侧保持运行至消费者迁移 IntelQuery——迁移为
+> war 轨前置，两状态各自唯一写者不变）。A6 智能层 `intelligence-pipeline` /
+> `decision-trace` / `evaluation-system` 仍为 R11 裁决的 Shadow-Only 孤岛
+> （`src/domain/intelligence/`、`src/domain/strategy/decision-trace.ts`），本裁决
+> 不恢复之。详见 [INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0。
 
 | 项 | 契约 |
 | --- | --- |

@@ -28,6 +28,8 @@ export const SEGMENT_EVENT_LOG = segId("eventLog", 2);
 export const SEGMENT_ECONOMY = segId("economy", 3);
 /** Segment 4: Prometheus metrics text（screeps-exporter 读取）。 */
 export const SEGMENT_PROMETHEUS = segId("prometheus", 4);
+/** Segment 5: 情报玩家域冷存（月级 TTL 长记忆，heap reset 后须存活）。 */
+export const SEGMENT_INTEL_PLAYERS = segId("intelPlayers", 5);
 /** @deprecated 使用 SEGMENT_CPU。保留用于迁移期间的代码引用。 */
 export const SEGMENT_TIMESERIES = SEGMENT_CPU;
 
@@ -50,6 +52,21 @@ export interface LayoutSegmentData {
   };
 }
 
+/** Segment 5 的顶层结构：玩家域情报冷存（按 owner 名索引的威胁记忆）。
+ * 字段为结构化最小集——领域侧负责与 PlayerIntelEntry 模型互转。 */
+export interface IntelPlayersSegmentData {
+  /** 最后落盘 tick（脏数据增量写纪律的 epoch 标记）。 */
+  epoch: number;
+  players: Record<string, {
+    /** 最近一次确认该玩家活动（有视野观测到其结构/单位）的 tick。 */
+    lastSeenAt?: number;
+    /** 最近一次该玩家对我方构成敌对信号（在房威胁/黑名单命中）的 tick。 */
+    lastHostileAt?: number;
+    /** 观测到该玩家活动的房间 → 最近观测 tick。 */
+    rooms?: Record<string, number>;
+  }>;
+}
+
 // ─── 内部状态（挂在 globalCache 上）─────────────────────────
 
 interface SegmentCache {
@@ -64,6 +81,8 @@ interface SegmentCache {
   /** Prometheus text（纯文本 exposition format）。 */
   prometheusText?: string;
   prometheusDirty?: boolean;
+  intelPlayersSeg?: IntelPlayersSegmentData;
+  intelPlayersDirty?: boolean;
   requested?: boolean;
   /** 首次请求激活 segment 的 tick（global reset 后重建）— 可用性守卫用。 */
   requestedAt?: number;
@@ -116,6 +135,7 @@ export function requestSegments(): void {
     SEGMENT_EVENT_LOG,
     SEGMENT_ECONOMY,
     SEGMENT_PROMETHEUS,
+    SEGMENT_INTEL_PLAYERS,
   ]);
 }
 
@@ -278,6 +298,35 @@ export function markEconomyDirty(): void {
   segCache().economyDirty = true;
 }
 
+// ─── Intel players segment (Segment 5) ─────────────────────
+
+/** 读取玩家域情报 segment（带缓存）。global reset 后自动重建。 */
+export function readIntelPlayersSegment(): IntelPlayersSegmentData {
+  const cache = segCache();
+  if (cache.intelPlayersSeg) return cache.intelPlayersSeg;
+
+  // reset 后首 tick segment 未加载 — 返回临时空结构且不缓存（防空数据覆盖历史）。
+  if (segmentUnavailable(SEGMENT_INTEL_PLAYERS)) return { epoch: 0, players: {} };
+
+  const raw = RawMemory.segments[SEGMENT_INTEL_PLAYERS];
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as IntelPlayersSegmentData;
+      cache.intelPlayersSeg = parsed && parsed.players ? parsed : { epoch: 0, players: {} };
+    } catch {
+      cache.intelPlayersSeg = { epoch: 0, players: {} };
+    }
+  } else {
+    cache.intelPlayersSeg = { epoch: 0, players: {} };
+  }
+  return cache.intelPlayersSeg;
+}
+
+/** 标记玩家域情报 segment 为 dirty — tick 末尾 flush 时写回。 */
+export function markIntelPlayersDirty(): void {
+  segCache().intelPlayersDirty = true;
+}
+
 /** 创建带空环形缓冲区的初始经济 segment 数据。 */
 function createEmptyEconomySegment(): EconomySegmentData {
   return {
@@ -437,6 +486,22 @@ export function flushSegments(): void {
   if (cache.eventLogDirty && cache.eventLog) {
     RawMemory.segments[SEGMENT_EVENT_LOG] = JSON.stringify(cache.eventLog);
     cache.eventLogDirty = false;
+  }
+
+  // Intel players segment — 玩家威胁记忆（月级 TTL），低频写。
+  if (cache.intelPlayersDirty && cache.intelPlayersSeg) {
+    cache.intelPlayersSeg.epoch = Game.time;
+    let serialized = JSON.stringify(cache.intelPlayersSeg);
+    if (serialized.length > SEGMENT_SIZE_LIMIT) {
+      // 容量守卫：超出时按 lastSeenAt 最旧的玩家裁剪一半（防御性，正常远小于上限）。
+      const entries = Object.entries(cache.intelPlayersSeg.players)
+        .sort((a, b) => (a[1].lastSeenAt ?? 0) - (b[1].lastSeenAt ?? 0));
+      const keep = new Map(entries.slice(Math.floor(entries.length / 2)));
+      cache.intelPlayersSeg.players = Object.fromEntries(keep);
+      serialized = JSON.stringify(cache.intelPlayersSeg);
+    }
+    RawMemory.segments[SEGMENT_INTEL_PLAYERS] = serialized;
+    cache.intelPlayersDirty = false;
   }
 
   // Segment 4: Prometheus metrics — 存纯文本 Prom exposition format。
