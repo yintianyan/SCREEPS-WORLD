@@ -19,14 +19,23 @@ export class BotHarness {
   readonly username: string;
   readonly roomName: string;
   readonly spawnPos: { x: number; y: number };
+  private cpuLimit?: number;
+  private cpuBucket?: number;
   private _bot: any;
   private _consoleLogs: string[] = [];
   private _notifications: Array<{ message: string; date: number }> = [];
 
-  constructor(username: string, roomName: string, spawnPos: { x: number; y: number }) {
+  constructor(
+    username: string,
+    roomName: string,
+    spawnPos: { x: number; y: number },
+    opts: { cpu?: number; cpuBucket?: number } = {},
+  ) {
     this.username = username;
     this.roomName = roomName;
     this.spawnPos = spawnPos;
+    this.cpuLimit = opts.cpu;
+    this.cpuBucket = opts.cpuBucket;
   }
 
   /**
@@ -40,6 +49,10 @@ export class BotHarness {
       room: this.roomName,
       x: this.spawnPos.x,
       y: this.spawnPos.y,
+      // mockup 默认 cpu=100 / cpuAvailable=10000；低 CPU soak 按需压低 limit
+      // 以触发引擎 bucket 消耗与 bot 侧 CpuTier 降级链。
+      cpu: this.cpuLimit ?? 100,
+      cpuAvailable: this.cpuBucket ?? 10000,
       modules: { main: code },
     });
 

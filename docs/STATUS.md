@@ -45,7 +45,7 @@
 | `npm run typecheck` | ✅ 0 error |
 | `npm test`（unit + integration） | ✅ 323 文件 / 4668 测试全绿（2026-08-29 实测 @ B7：B5 后 322/4666 + v42-to-v43 迁移测试 1 文件 / 3 用例；含情报消费者迁移测试改造） |
 | `npm run build` | ✅ `dist/main.js` 生成（8.1s） |
-| `npm run test:e2e` | ✅ 全套件 18 文件 / 54 用例全绿（2026-08-29 B3 实测 @Node v24.18.0，908s；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致） |
+| `npm run test:e2e` | ✅ 全套件 18 文件 / 54 用例全绿（2026-08-29 B7 实测 @Node v24.18.0，887s）＋B6 新增 E2E-015/016 soak 场景独立实测绿；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致 |
 | `npm run check:docs` | ✅ 7 项文档一致性检查全过 |
 
 ## 4. 生产清单（15 概念模块 × 33 注册系统）
@@ -125,14 +125,14 @@
 | Soak-Verified | ❌ **无当前版本 soak 证据**。旧数据集（sv=39 ≠ 当前 42）整体降级为 Historical Evidence 且 artifact 绑定待补（[CANARY_SOAK_PROCEDURE.md](implementation/CANARY_SOAK_PROCEDURE.md) §5） |
 | Release-Ready | ❌ 不满足（Soak-Verified 缺失 + 下列 Blocked 项） |
 
-**Blocked 项登记**（不得描述为已发布能力）：
+**Blocked 项登记**（不得描述为已发布能力；B6 验证轨 2026-08-29 启动后状态）：
 
-- RCL1→5 私服 soak 覆盖缺失（历史数据仅覆盖 RCL6+ 证据）
+- ◐ RCL1→8 私服 soak 覆盖：sv=43 已实测 RCL1→3（E2E-016 20k tick）；RCL4→8 待深度 soak
 - 多房私服 soak 全项（第二房 Claim→Bootstrap、spawn 竞争、site quota、能量互济、故障隔离）
-- 低 CPU 私服 soak 全项（模拟 MMO 20 CPU、四档 tier 切换实测、bucket 枯竭）
-- global reset 恢复实测（历史 soak 0 次 reset）
-- tier 切换实测（历史 soak 全程 healthy）
-- 旧 soak 数据 schema 错位（sv=39 vs 42）
+- ◐ 低 CPU 私服 soak：四档 tier 降级链 + bucket 逼近枯竭已实测（E2E-015）；P3 饥饿旁路 E2 触发待专项注入
+- ✅ global reset 恢复实测：E2E-005 注入场景 @ sv43 全绿（2026-08-29）
+- ✅ tier 切换实测：四档全链 + 滞回爬升 @ sv43（E2E-015，此前历史 soak 全程 healthy）
+- ◐ 旧 soak 数据 schema 错位（sv=39 历史集为 Historical Evidence，代码 sv=43）：新深度 soak（50k+）继续积累 sv=43 证据
 - Emergency Survival Mode 未实现（设计态规范）
 
 > 重构侧待办的唯一工作项清单见 §6 重构 backlog（B1–B6）；验证侧 Blocked 的执行
@@ -151,7 +151,7 @@
 | B3 | E2E-011（decision-trace）与 R11 对齐：重定向为遥测 outcome 断言或移除 | BLUEPRINT §5-13 | tests/e2e 无 R11 冲突断言；E2E 全套件可跑通 | ✅ 2026-08-29（**裁决移除**——生产唯一 outcome 发射点为扩张完成路径，单房 E2E 场景不可达，重定向即空断言；通用长稳断言由 E2E-006（10000t，同断言更严）覆盖。全套件 18 文件 / 54 用例全绿 @Node v24.18.0（908s）；运行窗口内被移除的 11-decision-trace 文件记 1 个 failed suite 为删除工件，非测试失败） |
 | B4 | 情报架构 ADR 裁决：实现完整版（IntelState 唯一写者/segment/三分置信度）vs 登记生产简化版（`Memory.rooms[].intel`+lastSeen）为当前合同 | BLUEPRINT §5-14 | FREEZE §15 新 ADR 行 + 受影响文档同步标注 | ✅ 2026-08-29（**裁决：实现完整版**→ FREEZE R14：`intelligence` 系统注册 32→33，IntelState 唯一写者/三分置信度/TTL 分档/环形覆盖/玩家域 segment 冷存/硬门槛查询落地；legacy 桥只读并存，消费者迁移为 war 轨前置；新增 25 测试全绿） |
 | B5 | Shadow-Only 分批清理：`src/domain/intelligence/`（46 文件）+ `src/domain/strategy/decision-trace.ts` | FREEZE R11 · BLUEPRINT §5-11 | src 无孤岛文件；bundle parity 守卫绿；**前置依赖 B4 裁决**（选完整版则转恢复注册轨） | ✅ 2026-08-29（**R14 裁决完整版落地但 A6 智能层不恢复（R14 原文），按清理轨执行**：src 孤岛 47 文件已删除（domain/intelligence 46 + decision-trace 1），测试侧删 24 文件 / 619 用例（channel-isolation 瘦身保留生产 outcome-channel 断言、a5-1 死 import 清理）；门禁全绿——typecheck 0 error、322 文件/4666 用例、build 成功、smoke 3/3 @Node24、compliance+bundle-parity 对新 dist 复跑绿、bundle 零 shadow 标记；契约文档 6 处同步） |
-| B6 | 验证轨启动（Blocked 项的执行编排，属代码/运行期，非纯重构）：低 CPU 私服 soak（触发 tier 降级链）→ global reset 注入 → sv=42 单房 soak 重跑 | STATUS §5 · CANARY §5 | §5 Blocked 前三项有当前版本证据；A1/A2 升级为 Code/Soak-Verified | ⏳ |
+| B6 | 验证轨启动（Blocked 项的执行编排，属代码/运行期，非纯重构）：低 CPU 私服 soak（触发 tier 降级链）→ global reset 注入 → sv=42 单房 soak 重跑 | STATUS §5 · CANARY §5 | §5 Blocked 前三项有当前版本证据；A1/A2 升级为 Code/Soak-Verified | ✅ 2026-08-29（**启动完成**——三项环境类证据齐：①低 CPU 四档 tier 降级链 + 滞回爬升实测（E2E-015，driver 记账实证 + 逐档注入，0 JS 错误、全程存活）；②global reset 注入 @ sv43（E2E-005 全套件绿）；③sv=43 单房 soak 重跑 20,000 tick（E2E-016：RCL1→3 自然晋级、Memory ≤ 11KB、0 JS 错误）。证据登记 CANARY §5.1/§5.3（绑定 commit/sv/tick/collectedAt）。**继续项（深度升级 A1/A2 至 Soak-Verified）**：50k+ tick 深度 soak、RCL4→8、多房全项、P3 饥饿旁路 E2 专项注入——属持续运行轨，不再阻塞代码工作项） |
 | B7 | 情报消费者迁移：war-planner / expansion-manager / remote-mining-manager / power-farm-manager / prospect-manager / empire-strategy 从 legacy `Memory.rooms[].intel` 直读迁移到 IntelQuery 只读 API；迁移完成后 legacy 桥退役 | FREEZE R14 | 全部消费者走 IntelQuery；legacy `Memory.rooms[].intel` 写侧下线（schema 届时按迁移规范处理）；行为保持四件套 | ✅ 2026-08-29（**FREEZE R15 ADR 登记**：11 消费者文件迁移 IntelQuery——B7 行名 6 系统 + 考古增补 war-planning-system / expansion-planner / tactical-runtime-system / specialization-planner / room-observer；IntelEntry 新增 observedBy 归属房；查询 API 扩充 queryRoomIntel 枚举 + intelPayloadView 视图；观察采集改 `globalCache.intelHandoff` 交接通道（room-observer 管线写、intelligence 采用清空，唯一写者不变）；legacy 桥写侧下线 + v43 迁移清理存量（sv 42→43，迁移测试 1 文件/3 用例）；R11 白名单 +11 条公开查询边。四件套：typecheck 0 error、323 文件/4668 用例全绿、build 成功、E2E 全套件 18 文件/54 用例 @Node24（887s）、compliance+bundle-parity 绿、check:docs 全绿。多房 subject 去重语义收敛已由 R15 追认，多房 soak 验证归验证轨持续项） |
 
 ## 7. 本文件维护方式

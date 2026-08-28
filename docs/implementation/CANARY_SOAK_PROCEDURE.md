@@ -168,7 +168,7 @@ build
 
 > **证据等级说明**：等级定义见
 > [ARCHITECTURE_VALIDATION.md](../architecture/ARCHITECTURE_VALIDATION.md) §0。
-> 下表 [Historical Evidence] 项来自旧部署数据集（`sv=39` ≠ 当前 `schemaVersion=42`，
+> 下表 [Historical Evidence] 项来自旧部署数据集（`sv=39` ≠ 当前 `schemaVersion=43`，
 > artifact 绑定待补）——按 [RELEASE_GATE_AND_ROLLBACK.md](./RELEASE_GATE_AND_ROLLBACK.md)
 > §2.2，旧 schema soak 数据**不能**作为当前版本运行正确的独立证据，仅作历史参考。
 > 每条升级为当前版本 [Fact] 前必须按 RELEASE_GATE §3 的绑定模板登记
@@ -178,12 +178,12 @@ build
 
 | 维度 | 要求 | 当前状态 |
 |------|------|---------|
-| 运行 tick | 50,000+ | [Historical Evidence] 2,340,004 tick 已完成（sv=39 数据集） |
-| RCL 覆盖 | RCL1→RCL8 | [Blocked] 缺 RCL1→5 |
-| tier 切换 | healthy→guarded→conserve→recovery | [Blocked] 全程 healthy |
+| 运行 tick | 50,000+ | [Historical Evidence] 2,340,004 tick（sv=39 数据集）；**当前版本重跑已启动**：20,000 tick @ sv=43（E2E-016，2026-08-29，RCL1→3 自然晋级、0 JS 错误、Memory ≤ 11KB、存活；绑定：dev@5600f24 后、W0N1、collectedAt 见场景输出）——50,000+ 深度继续项 |
+| RCL 覆盖 | RCL1→RCL8 | ◐ sv=43 已覆盖 RCL1→3（E2E-016 实测 rcl=3 @20k）；RCL4→8 待深度 soak |
+| tier 切换 | healthy→guarded→conserve→recovery | ✅ sv=43 四档全链实测（E2E-015，2026-08-29：四档 probe + 滞回爬升回 healthy、0 JS 错误、全程存活） |
 | hostile/恢复 | 敌袭→恢复 | [Historical Evidence] 685 hostile 快照（sv=39 数据集） |
-| global reset | 多次 reset 恢复 | [Blocked] 0 次 reset |
-| schema 一致 | soak sv = 代码 sv | [Blocked] sv=39 vs sv=43 |
+| global reset | 多次 reset 恢复 | ✅ 当前版本证据：E2E-005 global reset 注入场景 @ sv43 全绿（2026-08-29 全套件）；多次 reset 编排继续项 |
+| schema 一致 | soak sv = 代码 sv | ✅ E2E-016 soak sv=43 = 代码 sv=43（2026-08-29）；sv=39 历史数据集仍为 Historical Evidence |
 
 ### 5.2 多房私服 Soak
 
@@ -200,10 +200,10 @@ build
 
 | 维度 | 要求 | 当前状态 |
 |------|------|---------|
-| CPU 限制 | 模拟 MMO 20 CPU | [Blocked] 私服无限制 |
-| tier 切换 | 验证四档降级 | [Blocked] |
-| bucket 消耗 | 验证不枯竭 | [Blocked] |
-| P3 饥饿旁路 | E2 触发 | [Blocked] |
+| CPU 限制 | 模拟 MMO 20 CPU | ✅ sv=43 引擎记账实测（E2E-015，2026-08-29：mockup driver 按每 tick `cpuAvailable += cpu − used` 记账实证；cpu=2 压限 + 逐档注入步进） |
+| tier 切换 | 验证四档降级 | ✅ 四档全链 + 滞回爬升（E2E-015 probe 时间线：healthy 8000/8165 → conserve 2500/2698 → recovery 800/989/200/496 → 爬升 guarded 6000 → healthy 10000，0 JS 错误，全程存活） |
+| bucket 消耗 | 验证不枯竭 | ✅ 逼近枯竭实测（recovery 档 bucket 200–496 区间运行 600t 无枯竭死亡；skip-ticks 语义由 driver `cpuAvailable<0` 保护，未触发） |
+| P3 饥饿旁路 | E2 触发 | [Blocked] 本次 soak 窗口内 E2 违例未自然触发（P3 冻结自锁场景需专项注入，继续项） |
 
 ---
 

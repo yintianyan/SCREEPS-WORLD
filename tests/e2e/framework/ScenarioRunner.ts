@@ -30,6 +30,13 @@ export interface ScenarioOptions {
    * 更新。
    */
   controllerLevel?: number;
+  /**
+   * bot CPU 上限（mockup 默认 100）。低 CPU soak 设为低于实际用量（如 2–4）
+   * 以触发 bucket 消耗与四档 tier 降级链（CANARY §5.3）。
+   */
+  cpuLimit?: number;
+  /** bot bucket 容量（mockup 默认 10000）。 */
+  cpuBucket?: number;
 }
 
 /**
@@ -89,6 +96,7 @@ export class ScenarioRunner {
       opts.botUsername ?? "bot",
       opts.roomName,
       spawnPos,
+      { cpu: opts.cpuLimit, cpuBucket: opts.cpuBucket },
     );
     await this._bot.registerTo(this._server.server);
 
@@ -179,6 +187,20 @@ export class ScenarioRunner {
   get bot(): BotHarness {
     if (!this._bot) throw new Error("bot not initialized");
     return this._bot;
+  }
+
+  /**
+   * 直接更新 bot 用户的引擎 CPU 账户（cpu = 每 tick 上限，cpuAvailable = bucket）。
+   * 低 CPU soak 用它做确定性档位注入：driver 每 tick 从 db 重读用户账户，
+   * 净收支 = cpu − 实际用量；cpu≈实际用量时注入的 bucket 稳定保持。
+   */
+  async setUserCpu(opts: { cpu?: number; cpuAvailable?: number }): Promise<void> {
+    if (!this._server || !this._bot) throw new Error("setup() not called");
+    const { db } = this._server.server.common.storage;
+    const $set: Record<string, number> = {};
+    if (opts.cpu !== undefined) $set.cpu = opts.cpu;
+    if (opts.cpuAvailable !== undefined) $set.cpuAvailable = opts.cpuAvailable;
+    await db.users.update({ username: this._bot.username }, { $set });
   }
 
   /**
