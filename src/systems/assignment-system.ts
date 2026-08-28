@@ -16,7 +16,7 @@ import { CONFIG } from "../config";
  * 本系统层负责从 Game/Memory 收集数据、调用纯函数、写回缓存。
  * P1 — 失败时角色回退到无 assignment 行为，允许 safeRun 冷却避免刷屏。
  */
-export const assignmentServiceSystem: System = {
+export const assignmentSystem: System = {
   name: "assignment-service",
   priority: 1 as Priority,
   run(ctx: TickContext): void {

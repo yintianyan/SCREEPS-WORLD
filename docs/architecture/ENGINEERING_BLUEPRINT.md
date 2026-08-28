@@ -127,7 +127,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | # | 现状 | 蓝图目标 | 状态 |
 | --- | --- | --- | --- |
 | 1 | ~~`src/kernel/event-bus.ts` 存在~~ | 违反 KERNEL §1.1 否决清单（EventBus 中枢） | ✅ 已删除 |
-| 2 | `src/systems/assignment-service.ts` | Service 非 System：迁 `src/domain/assignment/`（§2 表 1.6 行落点） | ⏳ 待迁移 |
+| 2 | ~~`src/systems/assignment-service.ts`~~ → `src/systems/assignment-system.ts` | 文件重命名：Service 后缀不准确（实现 System 接口并注册在 bootstrap）；纯函数已下沉 `domain/assignment/` | ✅ 已重命名 |
 | 3 | `src/systems/layout-planner.ts` 与 `src/domain/layout/` 并存 | 布局纯函数归 `src/domain/layout/`，系统侧只留队列推进与 site 签发（模块 1.8 落点） | ⏳ 待迁移 |
 | 4 | `src/systems/empire-health-system.ts` 承担 Self-Healing 职责 | 模块 1.15 蓝图落点为 `src/systems/self-healing.ts`；当前 empire-health + recovery-execution 共同承载自愈闭环 | ⏳ 待 ADR 裁决合并或保留 |
 | 5 | `src/kernel/` 含 ring-buffer / event-log 等待归类部件 | 属平台组设施，保留在 kernel 但须在八项之外登记为「内核部件」，不承载业务语义 | ⏳ 部分已清理 |

@@ -19,7 +19,7 @@ import { upgraderRole } from "./creeps/roles/upgrader";
 import { workerRole } from "./creeps/roles/worker";
 import { Kernel } from "./kernel/kernel";
 import { Registry } from "./kernel/registry";
-import { assignmentServiceSystem } from "./systems/assignment-service";
+import { assignmentSystem } from "./systems/assignment-system";
 import { constructionManagerSystem } from "./systems/construction-manager";
 import { economySystem } from "./systems/economy";
 import { defensePlannerSystem } from "./systems/defense-planner";
@@ -123,7 +123,7 @@ export const registry = new Registry()
   //   在 agenda-manager 之后运行，消费 networkSnapshot 产出 TransportPlan）
   .registerSystem(logisticsPlannerSystem)
   // P1：任务分配（先于 P1 角色）
-  .registerSystem(assignmentServiceSystem)
+  .registerSystem(assignmentSystem)
   // P1：link 能量传输（瞬移替代 hauler 往返）
   .registerSystem(linkSystem)
   // P1：lab 反应 + boost

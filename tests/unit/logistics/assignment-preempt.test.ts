@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldPreemptAssignments } from "../../../src/systems/assignment-service";
+import { shouldPreemptAssignments } from "../../../src/systems/assignment-system";
 
 describe("assignment-service — shouldPreemptAssignments (P1-2 边沿触发)", () => {
   it("正常 → 紧急（上升沿）：触发抢占（首次无冷却）", () => {

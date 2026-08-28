@@ -1,6 +1,6 @@
 /** assignment-service 紧急抢占接线测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { assignmentServiceSystem } from "../../../src/systems/assignment-service";
+import { assignmentSystem } from "../../../src/systems/assignment-system";
 import {
   mockContext,
   mockCreep,
@@ -32,7 +32,7 @@ describe("assignment-service — 紧急抢占接线（invalidate 副作用落到
 
     // energyAvailable 100 < 动态阈值 min(800*0.4, 300)=300 → 紧急。
     const snapshot = mockSnapshot({ energyAvailable: 100, energyCapacityAvailable: 800 });
-    assignmentServiceSystem.run(mockContext(snapshot));
+    assignmentSystem.run(mockContext(snapshot));
 
     // 接线断言：抢占必须穿透到 creep memory，而不只是纯函数返回 true。
     expect(creep.memory.assignment).toBeUndefined();
@@ -46,7 +46,7 @@ describe("assignment-service — 紧急抢占接线（invalidate 副作用落到
     (globalThis as any).Memory.rooms.W7N4.wasEmergency = false;
 
     const snapshot = mockSnapshot({ energyAvailable: 500, energyCapacityAvailable: 800 });
-    assignmentServiceSystem.run(mockContext(snapshot));
+    assignmentSystem.run(mockContext(snapshot));
 
     expect(creep.memory.assignment).toBeDefined();
   });
@@ -58,7 +58,7 @@ describe("assignment-service — 紧急抢占接线（invalidate 副作用落到
     (globalThis as any).Memory.rooms.W7N4.wasEmergency = true; // 上一 tick 已紧急
 
     const snapshot = mockSnapshot({ energyAvailable: 100, energyCapacityAvailable: 800 });
-    assignmentServiceSystem.run(mockContext(snapshot));
+    assignmentSystem.run(mockContext(snapshot));
 
     expect(creep.memory.assignment).toBeDefined();
   });
@@ -75,7 +75,7 @@ describe("assignment-service — 紧急抢占接线（invalidate 副作用落到
       energyCapacityAvailable: 800,
       threatCreeps: [hostile as any],
     });
-    assignmentServiceSystem.run(mockContext(snapshot));
+    assignmentSystem.run(mockContext(snapshot));
 
     expect(creep.memory.assignment).toBeUndefined();
   });
