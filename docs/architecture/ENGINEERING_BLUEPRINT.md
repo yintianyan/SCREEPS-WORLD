@@ -70,7 +70,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | --- | --- |
 | Purpose | 跨 creep / 跨房决策系统与唯一写者资源代理 |
 | Responsibilities | 15 模块中 11 个的行为载体（§2 表）；每个成员在 SYSTEM_BOUNDARIES §1 登记完整八项，未登记者不予合并 |
-| Dependencies | 按 [DEPENDENCY_GRAPH.md](DEPENDENCY_GRAPH.md) §1 图；兄弟系统间禁止横向 import 直读内部状态（跨系统只经 Public Interface）；写者间（Spawn ↔ Construction ↔ Market）禁止互调 |
+| Dependencies | 按 [DEPENDENCY_GRAPH.md](DEPENDENCY_GRAPH.md) §1 图；兄弟系统间禁止横向 import 直读内部状态（跨系统只经 Public Interface）；写者间（Spawn ↔ Construction ↔ Terminal）禁止互调 |
 | Public API | 各模块 Public Interface 行＝查询组 / 执行组接口（[RUNTIME_API_DESIGN.md](RUNTIME_API_DESIGN.md) §2/§4） |
 | State | STATE_OWNERSHIP §3.1–§3.8 各 Owner 字段（EmpireState / RoomState / SpawnState / EconomyState / MilitaryState / IntelState / AgendaItem / TelemetryState） |
 | Tests | `tests/unit/systems`＋各 domain 子域单测；integration 接线；e2e 场景 |
@@ -118,7 +118,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | ④ | **creeps＝RolePolicy＋engine**：roles/ 纯声明、engine/ 统一驱动；角色禁止全房 `find`、全局扫描、创建 Spawn 请求、调 `createConstructionSite`、每 tick `PathFinder.search`（AGENT.md；lint 分区规则） |
 | ⑤ | **分层一致性**：目录分层＝DEPENDENCY_GRAPH §1 分层（组合根→kernel→感知→战略→业务→写者→执行→横切）；import 权限＝调用权限（RUNTIME_API §7-3）；CI 架构回归以 §1 图为期望集 diff，新增边不在允许表即失败 |
 | ⑥ | **命名规约**：文件与模块名一律 kebab-case（如 `spawn-manager.ts`、`assignment-service.ts`）；测试文件 `*.test.ts` 镜像被测目录；目录名用单数领域词（domain/）或复数惯用词（systems/ / creeps/ / config/） |
-| ⑦ | **规模量级**：全仓 ~160 文件 / ~36k 行（现状盘点口径：kernel 20/4.3k、systems 25/10.5k、domain 61/11.5k、creeps 46/7.8k、config 4/1.6k）；蓝图约束的是**结构与职责归属**而非行数，任何使目录数量级跳档的扩张（如 domain 翻倍）须 ADR |
+| ⑦ | **规模量级**：本文**不载**手写文件数 / 行数快照——数字会过时且曾与本蓝图严重脱节（曾在 §4-⑦ 写「~160 文件 / ~36k 行」，2026-08-28 实测 `src/` 已 398 文件 / ~103k 行，`src/domain/` 单目录 260 文件）。当前规模、目录分布与系统注册清单的唯一快照入口是 [../STATUS.md](../STATUS.md)（由 `npm run check:docs` 中的规模口径校验与固定命令刷新）。蓝图约束的是**结构与职责归属**而非行数；任何使目录数量级跳档的扩张（如 domain 翻倍）须 ADR |
 
 ## 5. 现状登记（待迁移差异，不改本蓝图）
 
@@ -136,6 +136,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | 8 | bootstrap.ts 实际注册 34 系统 / 19 角色 | R10 预期 36 系统 → R11 ADR 裁决正式修正为 34（intelligence-pipeline/decision-trace/evaluation 正式删除） | ✅ R11 裁决完成 |
 | 9 | ~~角色层存在 `Room.find` / `Object.values(Game.creeps)` 违规~~ | 蓝图条款 ④ 禁止角色全房 find 和全局扫描 | ✅ 已收敛到 `creeps/support/room-scans.ts` |
 | 10 | ~~Kernel 直接 import 业务模块（room-snapshot / defense / pathfinding）~~ | 蓝图 §3.1 禁止 Kernel import 业务符号；唯一登记例外为 pruneDeadCreepCache | ✅ buildRoomSnapshot 通过 Registry 注入，classifyThreats 内联为 CONFIG 判定，MINCUT_ALGO_VERSION 改参数注入 |
+| 11 | `src/domain/intelligence/`（A6 智能层）与 `src/domain/strategy/decision-trace.ts` 为 Shadow-Only 孤岛 | R11 裁决：不进入生产 bundle、不被任何 src 文件导入；生产观察采集由 room-observer / prospect-manager 承担；后续分批清理，恢复注册须走新 ADR（[INTELLIGENCE_ARCHITECTURE.md](INTELLIGENCE_ARCHITECTURE.md) §0） | ⏳ Shadow-Only 待清理 |
 
 ## 6. 一致性声明
 
