@@ -35,7 +35,6 @@ import {
   type MilitaryContext,
   type RemoteDefenseDecision,
 } from "../../../src/domain/defense/remote-defense";
-import { snapshotHash, decisionHash } from "../../../src/domain/strategy/decision-trace";
 
 // ═══════════════════════════════════════════════════════════
 // 测试辅助
