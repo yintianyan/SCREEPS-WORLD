@@ -45,7 +45,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | 1.5 Economy | System | `src/systems/economy.ts`＋`src/domain/economy/`＋`src/domain/industry/` | P1 | ~38 文件 / ~8k 行 |
 | 1.6 Logistics | System | `src/systems/`（logistics / logistics-planner / assignment-system / link-system / terminal-manager / site-quota）＋`src/domain/assignment/`＋`src/domain/logistics/` | P0/P1/P2 | ~42 文件 / ~8k 行 |
 | 1.7 Spawn | Manager | `src/systems/spawn-manager.ts`＋`src/domain/spawn/`（census / body） | P0 | 4–6 文件 / ~1.5k 行 |
-| 1.8 Construction | Manager×2 | `src/systems/construction-manager.ts`＋`remote-mining-manager.ts`＋`layout-planner.ts`＋`src/domain/construction/`＋`src/domain/layout/` | P2 | ~19 文件 / ~5k 行 |
+| 1.8 Construction | Manager×2 | `src/systems/construction-manager.ts`＋`remote-mining-manager.ts`＋`layout-planner.ts`＋`site-quota.ts`＋`src/domain/construction/`＋`src/domain/layout/` | P2 | ~19 文件 / ~7k 行（R13 锚算术勘误 2026-08-28：原误记 ~5k，实测系统侧 2.6k＋domain 4.6k） |
 | 1.9 Defense | System | `src/systems/tower-defense.ts`＋`defense-planner.ts`＋`src/domain/defense/` | P0 | ~13 文件 / ~3.5k 行 |
 | 1.10 Military | Manager | `src/systems/war-planner.ts`＋`war-planning-system.ts`＋`tactical-runtime-pipeline.ts`＋4 阶段实现文件＋`src/domain/war/`＋`tactical/`＋`combat/`＋`military/` | P2 | ~29 文件 / ~9k 行 |
 | 1.11 Expansion | System | `src/systems/expansion-manager.ts`＋`expansion-planner.ts`＋`src/domain/expansion/` | P2 | ~35 文件 / ~5.5k 行 |
@@ -133,7 +133,7 @@ tests/{unit,integration,e2e} # 测试入口，对应 [TEST_ARCHITECTURE.md](TEST
 | --- | --- | --- | --- |
 | 1 | ~~`src/kernel/event-bus.ts` 存在~~ | 违反 KERNEL §1.1 否决清单（EventBus 中枢） | ✅ 已删除 |
 | 2 | ~~`src/systems/assignment-service.ts`~~ → `src/systems/assignment-system.ts` | 文件重命名：Service 后缀不准确（实现 System 接口并注册在 bootstrap）；纯函数已下沉 `domain/assignment/` | ✅ 已重命名 |
-| 3 | `src/systems/layout-planner.ts`（1033 行）与 `src/domain/layout/` 并存 | 布局纯函数归 `src/domain/layout/`，系统侧只留队列推进与 site 签发。D2 归位已完成 `makeTryAddTask`/`planHubRoads`/`shouldPlan`/`isPositionBuildable`/`findSpawnRelocationPosition` 五个函数下沉。`planStage0-3` 四个核心规划函数仍含 Game/Memory/globalCache 副作用，需进一步提取参数注入后下沉。 | ⏳ D2 归位部分完成 |
+| 3 | `src/systems/layout-planner.ts`（1033 行）与 `src/domain/layout/` 并存 | 布局纯函数归 `src/domain/layout/`，系统侧只留队列推进与 site 签发。D2 归位已完成 `makeTryAddTask`/`planHubRoads`/`shouldPlan`/`isPositionBuildable`/`findSpawnRelocationPosition` 五个函数下沉；`planStage0-3` 四个核心规划函数已全部提取参数注入后下沉（`buildStage0PlanData`/`planCoreStage`/`planLogisticsStage`/`planSpawnRebuild`），系统侧仅存编排薄壳（Memory/segment/globalCache 写、link-system 跨系统调用、site.remove 与日志）。layout-planner 1033→790 行。 | ✅ 已完成（2026-08-28，B2） |
 | 4 | `src/systems/empire-health-system.ts`（435行）+ `recovery-execution-system.ts`（1083行） | 模块 1.15 蓝图落点为 `src/systems/self-healing.ts`（概念性落点）。ADR 裁决：**保留分离**。两系统职责不同（empire-health=诊断/8维评估/失败传播图；recovery-execution=执行/spawn请求/任务抢占），各自有独立 CPU 节奏、状态所有权和降级序。合并为单文件将产生 1500+行巨文件，降低整洁度。蓝图落点 `self-healing.ts` 作为概念性容器，实际由两个系统协作实现。 | ✅ ADR 裁决保留分离 |
 | 5 | `src/kernel/` 含 ring-buffer / event-log 等待归类部件 | 属平台组设施，保留在 kernel 但须在八项之外登记为「内核部件」，不承载业务语义 | ⏳ 部分已清理 |
 | 6 | `src/kernel/decision-trace.ts` 已删除 | 原属内核部件；删减式重构移除后未同步更新本表 | ✅ 已删除 |

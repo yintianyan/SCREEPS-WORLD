@@ -4,36 +4,14 @@ import { roomPhase } from "../kernel/phase";
 import { globalCache } from "../kernel/global-cache";
 import { getRoomLayoutData, markLayoutDirty } from "../kernel/segment-store";
 import { COMPACT_CORE_V2 } from "../domain/layout/templates/compact-core-v2";
-import {
-  blueprintToTasks,
-  candidateToBuildTask,
-  relocateCandidate,
-  createSourceContainerTasks,
-  createControllerContainerTask,
-  createSourceLinkTasks,
-  createStorageLinkTask,
-  createControllerLinkTask,
-  shouldHaveStorageLink,
-  shouldHaveControllerLink,
-  createExtractorTask,
-  createMineralContainerTask,
-  type BuildTaskCandidate,
-} from "../domain/layout/task-factory";
-import {
-  collectCompletedKeys,
-  collectCompletedKeysFromStructures,
-  precomputeStructureCounts,
-  computeCommittedCounts,
-  buildOccupiedPositionSet,
-  buildObstaclePositionSet,
-} from "../domain/layout/validation";
+import type { BuildTaskCandidate } from "../domain/layout/task-factory";
 import { planRoads } from "../domain/layout/road-planner";
 import type { CorridorPathCacheStore } from "../domain/layout/corridor-roads";
 import { evaluateCandidate, scoreCandidate } from "../domain/layout/candidate-score";
 import { packPos, unpackPos } from "../domain/layout/types";
 import { computeDistanceField } from "../domain/layout/terrain-analysis";
 import { diagnoseAnchor } from "../domain/layout/anchor-selection";
-import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG } from "../domain/layout/constraint-placer";
+import type { ValidationOptions } from "../domain/layout/validation";
 import { log } from "../kernel/log";
 import { assessEmergencyRebuild, isEmergencyTask } from "../domain/construction/queue";
 import { auditStructureGaps, auditLinkRoleGaps, mergeLinkRoleGaps, type StructureGaps } from "../domain/layout/gaps";
@@ -50,9 +28,11 @@ import {
 import {
   makeTryAddTask as makeTryAddTaskDomain,
   planHubRoads as planHubRoadsDomain,
-  isPositionBuildable as isPositionBuildableDomain,
-  findSpawnRelocationPosition as findSpawnRelocationPositionDomain,
   shouldPlan as shouldPlanDomain,
+  buildStage0PlanData,
+  planCoreStage,
+  planLogisticsStage,
+  planSpawnRebuild,
   GAP_RETRY_INTERVAL,
   MAX_HUB_ROADS_PER_PLAN,
 } from "../domain/layout/planner";
@@ -89,15 +69,7 @@ interface PlanStageData {
   /** 矿物位置（room.find(FIND_MINERALS) 结果转写）。 */
   minerals: readonly { pos: { x: number; y: number } }[];
   /** 验证选项包（多字段组合，供 task-factory 各函数消费）。 */
-  validationOptions: {
-    completedKeys: Set<string>;
-    globalSiteCount: number;
-    maxGlobalSites: number;
-    minerals: readonly { pos: { x: number; y: number } }[];
-    structureCounts: Map<string, number>;
-    occupiedSet: Set<number>;
-    obstacleSet: Set<number>;
-  };
+  validationOptions: ValidationOptions;
   /** segment blocked 黑名单（stage 0 清理过期条目后的快照）。 */
   segBlocked: Record<string, { retryAt: number }>;
   /** 队列去重 key 集合（stages 1-3 累加）。 */
@@ -342,38 +314,17 @@ function planStage0Prep(
   // 执行规划 — stage 0 开始。
   layout.state = "building";
 
-  // 收集已完成 key 集合（用于依赖检查）。
-  const completedKeys = collectCompletedKeys(queue);
   const anchor = unpackPos(layout.anchor);
-  for (const key of collectCompletedKeysFromStructures(COMPACT_CORE_V2, anchor.x, anchor.y, snapshot)) {
-    completedKeys.add(key);
-  }
 
-  // 直接使用 RoomSnapshot 中的 minerals 数据。
-  const minerals = snapshot.minerals as readonly { pos: { x: number; y: number } }[];
-
-  // 预计算结构计数与占用集合 — 每规划周期构建一次，供所有 cell 验证复用。
-  const structureCounts = precomputeStructureCounts(snapshot);
-  const occupiedSet = buildOccupiedPositionSet(snapshot, minerals);
-  const obstacleSet = buildObstaclePositionSet(snapshot);
-
-  const validationOptions = {
-    completedKeys,
+  // D2 归位：规划数据预构建委托 domain 纯函数（已完成 key/计数/占用/障碍/
+  // 验证选项/去重索引/link 队列计数）。
+  const planData = buildStage0PlanData({
+    snapshot,
+    anchor,
+    queue,
     globalSiteCount: ctx.globalSiteCount,
     maxGlobalSites: CONFIG.construction.maxGlobalSites,
-    minerals,
-    structureCounts,
-    occupiedSet,
-    obstacleSet,
-  };
-
-  // 预构建队列 key 集合 — O(1) 去重。
-  const existingKeys = new Set<string>();
-  const existingPositions = new Set<string>();
-  for (const t of queue) {
-    existingKeys.add(t.key);
-    existingPositions.add(`${t.pos.x},${t.pos.y}`);
-  }
+  });
 
   // 阻塞黑名单：清理过期条目。
   const segBlocked = getRoomLayoutData(snapshot.roomName).blocked ?? {};
@@ -387,20 +338,11 @@ function planStage0Prep(
   // 写入 planStageData — stages 1-3 共享。
   setPlanStageData(snapshot.roomName, {
     startTick: ctx.tick,
-    anchor,
-    completedKeys,
-    structureCounts,
-    occupiedSet,
-    obstacleSet,
-    minerals,
-    validationOptions,
+    ...planData,
     segBlocked,
-    existingKeys,
-    existingPositions,
     tasksAdded: false,
     targetingChanged: false,
     capRejected: 0,
-    queuedLinks: queue.filter(t => t.structureType === STRUCTURE_LINK).length,
   });
 
   // 推进到 stage 1。
@@ -424,94 +366,39 @@ function planStage1Core(
   if (!room) return;
 
   const queue = roomMem.buildQueue ?? [];
-  const tryAddTask = makeTryAddTask(data, queue);
-  const { anchor, occupiedSet, validationOptions, existingKeys, existingPositions } = data;
+  const segData = getRoomLayoutData(snapshot.roomName);
 
-  if (CONFIG.layout.mode === "constraint") {
-    // ── 约束推导模式：从地形约束推导结构位置 ──
-    const terrain = room.getTerrain();
-    const getTerrain = (x: number, y: number): boolean => terrain.get(x, y) === TERRAIN_MASK_WALL;
-    const field = computeDistanceField(getTerrain);
-    const energyEndpoints: { x: number; y: number }[] = [];
-    for (const s of snapshot.sources) energyEndpoints.push({ x: s.pos.x, y: s.pos.y });
-    if (snapshot.controller) energyEndpoints.push({ x: snapshot.controller.pos.x, y: snapshot.controller.pos.y });
-    const placements = placeStructures(
-      anchor,
-      field,
-      getTerrain,
-      snapshot.rcl,
-      occupiedSet,
-      computeCommittedCounts(snapshot, queue),
-      DEFAULT_PLACER_CONFIG,
-      energyEndpoints,
-      snapshot.labs.map(l => ({ x: l.pos.x, y: l.pos.y })),
-      snapshot.roomName,
-      snapshot.controller
-        ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
-        : undefined,
-      snapshot.terminal
-        ? { x: snapshot.terminal.pos.x, y: snapshot.terminal.pos.y }
-        : undefined,
-      (shortfalls) => {
-        for (const s of shortfalls) {
-          log.warn("layout", "placement shortfall in " + (s.roomName ?? "?") + ": " + s.type + " need " + s.needed + " placed " + s.placed);
-        }
-      },
-    );
-    const constraintCandidates = placementsToCandidates(placements, snapshot.roomName);
-
-    for (const candidate of constraintCandidates) {
-      if (tryAddTask(candidate)) data.tasksAdded = true;
-    }
-  } else {
-    // ── 模板模式（默认）：固定蓝图偏移 + relocation ──
-    const segData = getRoomLayoutData(snapshot.roomName);
-    const overrides = new Map<string, number>(Object.entries(segData.overrides ?? {}));
-    const coreCandidates = blueprintToTasks(
-      COMPACT_CORE_V2,
-      anchor.x,
-      anchor.y,
-      snapshot.roomName,
-      room,
-      snapshot,
-      snapshot.rcl,
-      validationOptions,
-      overrides,
-    );
-
-    // 禁止落子集合：全部蓝图 cell 绝对坐标 + 队列任务坐标。
-    const forbidden = new Set<number>();
-    for (const cell of COMPACT_CORE_V2.cells) {
-      forbidden.add(packPos(anchor.x + cell.dx, anchor.y + cell.dy));
-    }
-    for (const t of queue) {
-      forbidden.add(packPos(t.pos.x, t.pos.y));
-    }
-    const cellByKey = new Map(COMPACT_CORE_V2.cells.map(c => [c.key, c]));
-    const RELOCATABLE_FAILURES: ReadonlySet<string> = new Set(["terrain", "occupied", "seal"]);
-
-    for (const candidate of coreCandidates) {
-      if (candidate.validation !== "ok") {
-        if (RELOCATABLE_FAILURES.has(candidate.validation) && !existingKeys.has(candidate.key)) {
-          const cell = cellByKey.get(candidate.key);
-          const relocated = cell
-            ? relocateCandidate(candidate, cell, room, snapshot, validationOptions, forbidden)
-            : undefined;
-          if (relocated) {
-            queue.push(candidateToBuildTask(relocated, ctx.tick));
-            existingKeys.add(relocated.key);
-            existingPositions.add(`${relocated.pos.x},${relocated.pos.y}`);
-            forbidden.add(packPos(relocated.pos.x, relocated.pos.y));
-            segData.overrides ??= {};
-            segData.overrides[relocated.key] = packPos(relocated.pos.x, relocated.pos.y);
-            markLayoutDirty();
-            data.tasksAdded = true;
-          }
-        }
-        continue;
+  // D2 归位：核心结构规划委托 domain 纯函数（constraint/template 双模式 +
+  // 失效 cell relocation 决策）。segment 覆盖写由系统侧落地并统一标脏。
+  const result = planCoreStage({
+    mode: CONFIG.layout.mode,
+    snapshot,
+    room,
+    anchor: data.anchor,
+    occupiedSet: data.occupiedSet,
+    validationOptions: data.validationOptions,
+    existingKeys: data.existingKeys,
+    existingPositions: data.existingPositions,
+    segBlocked: data.segBlocked,
+    overrides: new Map(Object.entries(segData.overrides ?? {})),
+    queue,
+    maxBackgroundQueued: CONFIG.construction.maxBackgroundQueuedPerRoom,
+    nowTick: ctx.tick,
+    capStats: data,
+    onShortfall: (shortfalls) => {
+      for (const s of shortfalls) {
+        log.warn("layout", "placement shortfall in " + (s.roomName ?? "?") + ": " + s.type + " need " + s.needed + " placed " + s.placed);
       }
-      if (tryAddTask(candidate)) data.tasksAdded = true;
+    },
+  });
+  if (result.tasksAdded) data.tasksAdded = true;
+  const overrideKeys = Object.keys(result.overrideWrites);
+  if (overrideKeys.length > 0) {
+    segData.overrides ??= {};
+    for (const key of overrideKeys) {
+      segData.overrides[key] = result.overrideWrites[key]!;
     }
+    markLayoutDirty();
   }
 
   roomMem.buildQueue = queue;
@@ -538,103 +425,25 @@ function planStage2Logistics(
 
   const queue = roomMem.buildQueue ?? [];
   const tryAddTask = makeTryAddTask(data, queue);
-  const { validationOptions } = data;
 
-  // 2. Source container 任务。
-  const sourceContainerCandidates = createSourceContainerTasks(snapshot, room, validationOptions);
-  for (const candidate of sourceContainerCandidates) {
-    if (tryAddTask(candidate)) {
-      data.tasksAdded = true;
-      data.targetingChanged = true;
-    }
-  }
-
-  // 3. Controller container 任务（RCL3+）。
-  const controllerContainer = createControllerContainerTask(snapshot, room, validationOptions);
-  if (controllerContainer) {
-    if (tryAddTask(controllerContainer)) {
-      data.tasksAdded = true;
-      data.targetingChanged = true;
-    }
-  }
-
-  // 3.5 Link 任务（RCL5+）— 按角色优先级分配有限 link 槽位。
-  // 分配顺序（2026-08-02 修订）：source(1) → controller → storage → source(rest)。
-  // RCL5 仅 2 槽位时落在 source + controller（避免 storage 几何失败后 controller 被
-  // 跳过、升级链断裂）。
-  // P1-3 link 几何受限（2026-08-02，fallback 链）：controller + storage 都几何放不下
-  // 时标记 linkConstrained，1000t 内跳过 link 任务创建避免空转；source link 不受影响
-  // （source 邻域通常开阔，几何失败罕见）。
-  if (isLinkConstrained(snapshot.roomName, ctx.tick)) {
-    // linkConstrained 标记期内：跳过 controller/storage link 创建，但仍尝试 source link
-    // （source link 是 link 网络的基础，不应因 controller/storage 受限而停建）。
-    const sourceLinkFirst = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks, 1);
-    for (const candidate of sourceLinkFirst) {
-      if (tryAddTask(candidate)) {
-        data.queuedLinks++;
-        data.tasksAdded = true;
-        data.targetingChanged = true;
-      }
-    }
-    const sourceLinkRest = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks);
-    for (const candidate of sourceLinkRest) {
-      if (tryAddTask(candidate)) {
-        data.queuedLinks++;
-        data.tasksAdded = true;
-        data.targetingChanged = true;
-      }
-    }
-  } else {
-    // 3.5a Source link（第一趟，maxNew=1）。
-    const sourceLinkFirst = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks, 1);
-    for (const candidate of sourceLinkFirst) {
-      if (tryAddTask(candidate)) {
-        data.queuedLinks++;
-        data.tasksAdded = true;
-        data.targetingChanged = true;
-      }
-    }
-
-    // 3.5b Controller link（RCL5+，先于 storage）。
-    const controllerLink = createControllerLinkTask(snapshot, room, validationOptions, data.queuedLinks);
-    if (controllerLink) {
-      if (tryAddTask(controllerLink)) {
-        data.queuedLinks++;
-        data.tasksAdded = true;
-        data.targetingChanged = true;
-      }
-    }
-
-    // 3.5c Storage link。
-    const storageLink = createStorageLinkTask(snapshot, room, validationOptions, data.queuedLinks);
-    if (storageLink) {
-      if (tryAddTask(storageLink)) {
-        data.queuedLinks++;
-        data.tasksAdded = true;
-        data.targetingChanged = true;
-      }
-    }
-
-    // P1-3 fallback 链终点：controller + storage 都几何放不下 → 标记 linkConstrained。
-    // 用 shouldHave* 谓词区分「几何放不下」与「正常跳过」（已建成/槽位满/RCL不足），
-    // 仅当两者都「应该有但放不下」才标记，避免误标正常状态。
-    const controllerGeometryBlocked = !controllerLink && shouldHaveControllerLink(snapshot, data.queuedLinks);
-    const storageGeometryBlocked = !storageLink && shouldHaveStorageLink(snapshot, data.queuedLinks);
-    if (controllerGeometryBlocked && storageGeometryBlocked) {
-      markLinkConstrained(snapshot.roomName, ctx.tick);
-      log.info("layout-planner", `[layout] link constrained in ${snapshot.roomName}: ` +
-        `controller + storage link geometry blocked, retry after ${1000}t`,);
-    }
-
-    // 3.5d Source link（第二趟，maxNew=∞）。
-    const sourceLinkRest = createSourceLinkTasks(snapshot, room, validationOptions, data.queuedLinks);
-    for (const candidate of sourceLinkRest) {
-      if (tryAddTask(candidate)) {
-        data.queuedLinks++;
-        data.tasksAdded = true;
-        data.targetingChanged = true;
-      }
-    }
+  // D2 归位：物流结构规划委托 domain 纯函数（container/link 槽位分配/
+  // extractor/mineral container；link 几何受限 fallback 以标记位返回，
+  // 系统侧据此记录受限冷却）。
+  const result = planLogisticsStage({
+    snapshot,
+    room,
+    validationOptions: data.validationOptions,
+    queuedLinks: data.queuedLinks,
+    linkConstrained: isLinkConstrained(snapshot.roomName, ctx.tick),
+    tryAdd: tryAddTask,
+  });
+  data.queuedLinks = result.queuedLinks;
+  if (result.tasksAdded) data.tasksAdded = true;
+  if (result.targetingChanged) data.targetingChanged = true;
+  if (result.controllerGeometryBlocked && result.storageGeometryBlocked) {
+    markLinkConstrained(snapshot.roomName, ctx.tick);
+    log.info("layout-planner", `[layout] link constrained in ${snapshot.roomName}: ` +
+      `controller + storage link geometry blocked, retry after ${1000}t`,);
   }
 
   // 3.6 P1-4 受限拆改：死资产 link 检测到替代位置后创建拆改计划。
@@ -670,22 +479,6 @@ function planStage2Logistics(
         log.info("layout-planner", `[layout] dismantle plan created: dead link ${deadLinkId} in ${snapshot.roomName}, ` +
           `replacement at (${replacementTask.pos.x},${replacementTask.pos.y})`,);
       }
-    }
-  }
-
-  // 3.7 Extractor 任务（RCL6+）。
-  {
-    const extractor = createExtractorTask(snapshot);
-    if (extractor) {
-      if (tryAddTask(extractor)) data.tasksAdded = true;
-    }
-  }
-
-  // 3.7b Mineral container 任务（RCL6+，需 extractor）。
-  {
-    const mineralContainer = createMineralContainerTask(snapshot, room, validationOptions);
-    if (mineralContainer) {
-      if (tryAddTask(mineralContainer)) data.tasksAdded = true;
     }
   }
 
@@ -787,41 +580,37 @@ function planStage3RoadsAndFinalize(
     );
   }
 
-  // ── 紧急 spawn 重建 ──
-  if (snapshot.spawns.length === 0 && layout.anchor !== undefined) {
-    const anchorPos = unpackPos(layout.anchor);
-    const spawnKey = `constraint.spawn.01`;
-    if (!existingKeys.has(spawnKey)) {
-      let buildPos: { x: number; y: number } | undefined;
-      if (isPositionBuildable(room, anchorPos.x, anchorPos.y, occupiedSet)) {
-        buildPos = { x: anchorPos.x, y: anchorPos.y };
-      } else {
-        buildPos = findSpawnRelocationPosition(room, anchorPos, occupiedSet);
-        if (buildPos) {
-          log.info("layout-planner", `[layout] spawn rebuild: anchor (${anchorPos.x},${anchorPos.y}) blocked, ` +
-            `relocating to (${buildPos.x},${buildPos.y}) in ${snapshot.roomName}`,);
-        } else {
-          log.warn("layout-planner", `[layout] WARN: spawn rebuild stuck in ${snapshot.roomName}, ` +
-            `no relocation position found near anchor`,);
-        }
-      }
-      if (buildPos) {
-        queue.push({
-          key: spawnKey,
-          pos: { x: buildPos.x, y: buildPos.y, roomName: snapshot.roomName },
-          structureType: STRUCTURE_SPAWN,
-          priority: 0,
-          state: "queued",
-          attempts: 0,
-          retryAt: 0,
-          queuedAt: ctx.tick,
-        });
-        existingKeys.add(spawnKey);
-        existingPositions.add(`${buildPos.x},${buildPos.y}`);
-        data.tasksAdded = true;
-        data.targetingChanged = true;
-      }
+  // ── 紧急 spawn 重建（D2 归位：决策下沉 domain，入队与日志在系统侧）──
+  const rebuild = planSpawnRebuild({
+    hasSpawn: snapshot.spawns.length > 0,
+    anchor,
+    existingKeys,
+    getTerrain: (x, y) => room.getTerrain().get(x, y) === TERRAIN_MASK_WALL,
+    occupiedSet,
+  });
+  if (rebuild?.kind === "stuck") {
+    log.warn("layout-planner", `[layout] WARN: spawn rebuild stuck in ${snapshot.roomName}, ` +
+      `no relocation position found near anchor`,);
+  } else if (rebuild) {
+    if (rebuild.kind === "relocated") {
+      log.info("layout-planner", `[layout] spawn rebuild: anchor (${anchor.x},${anchor.y}) blocked, ` +
+        `relocating to (${rebuild.pos.x},${rebuild.pos.y}) in ${snapshot.roomName}`,);
     }
+    const spawnKey = "constraint.spawn.01";
+    queue.push({
+      key: spawnKey,
+      pos: { x: rebuild.pos.x, y: rebuild.pos.y, roomName: snapshot.roomName },
+      structureType: STRUCTURE_SPAWN,
+      priority: 0,
+      state: "queued",
+      attempts: 0,
+      retryAt: 0,
+      queuedAt: ctx.tick,
+    });
+    existingKeys.add(spawnKey);
+    existingPositions.add(`${rebuild.pos.x},${rebuild.pos.y}`);
+    data.tasksAdded = true;
+    data.targetingChanged = true;
   }
 
   // 交通数据轮换（无论 RCL 都执行，确保 RCL4 时已有 prevTraffic 可用）。
@@ -966,38 +755,6 @@ function recordLayoutGaps(roomName: string, gaps: StructureGaps): void {
       return;
     }
   }
-}
-
-// ─── Spawn 重建 relocation（P0 修复：避免原位被占时死循环）──
-
-/**
- * D2 归位：spawn 重建 relocation 纯函数已下沉到 domain/layout/planner.ts。
- * 系统侧薄壳——从 room.getTerrain() 注入 getTerrain 函数。
- */
-function isPositionBuildable(
-  room: Room,
-  x: number,
-  y: number,
-  occupiedSet: Set<number>,
-): boolean {
-  const terrain = room.getTerrain();
-  return isPositionBuildableDomain(x, y, (tx, ty) => terrain.get(tx, ty) === TERRAIN_MASK_WALL, occupiedSet);
-}
-
-/**
- * 在锚点附近螺旋搜索可建 spawn 的替代位置。系统侧薄壳委托给纯函数。
- */
-function findSpawnRelocationPosition(
-  room: Room,
-  anchor: { x: number; y: number },
-  occupiedSet: Set<number>,
-): { x: number; y: number } | undefined {
-  const terrain = room.getTerrain();
-  return findSpawnRelocationPositionDomain(
-    anchor,
-    (x, y) => terrain.get(x, y) === TERRAIN_MASK_WALL,
-    occupiedSet,
-  );
 }
 
 // ─── P1-4 拆改辅助 ─────────────────────────────────────────

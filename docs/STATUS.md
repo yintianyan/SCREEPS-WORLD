@@ -75,7 +75,7 @@
 | Military | war-planning-system | `src/systems/war-planning-system.ts` | P2 / 10t | WarPlan 纯函数产出（写入 globalCache.warPlanCache） | Active | `tests/unit`（war 域） |
 | Military | war-planner | `src/systems/war-planner.ts` | P2 / 战时事件式 | 唯一进攻执行决策者；attacker 孵化 | Active | `tests/unit`（war 域） |
 | Military（战术） | tactical-runtime-pipeline | `src/systems/tactical-runtime-pipeline.ts` | P2 / 1t main + 内部分频 4 阶段 | R10 合并 A5.4.1–A5.4.4（war 姿态下运行） | Active | `tests/unit/tactical/` |
-| Construction（布局） | layout-planner | `src/systems/layout-planner.ts` | P3 / 低频 | 布局队列推进（D2 下沉进行中，[ENGINEERING_BLUEPRINT](architecture/ENGINEERING_BLUEPRINT.md) §5-3） | Active | `tests/unit`（layout 域） |
+| Construction（布局） | layout-planner | `src/systems/layout-planner.ts` | P3 / 低频 | 布局规划编排薄壳（stage 纯核已下沉 domain/layout，[ENGINEERING_BLUEPRINT](architecture/ENGINEERING_BLUEPRINT.md) §5-3 ✅） | Active | `tests/unit`（layout 域） |
 | Defense（规划） | defense-planner | `src/systems/defense-planner.ts` | P3 / 低频 | 防御规划（仅签发 rampart） | Active | `tests/unit/defense/` |
 | Intelligence（观察） | room-observer | `src/systems/room-observer.ts` | P3 / 低频 | 房间观察（观察采集生产落点之一） | Active | `tests/unit`（observer 域） |
 | CPU 政策 | pixel-system | `src/systems/pixel-system.ts` | P3 / bucket 满载 | 仅 Healthy 档生成 pixel | Active | `tests/unit`（pixel 域） |
@@ -147,7 +147,7 @@
 | # | 工作项 | 合同依据 | 验收标准 | 状态 |
 | --- | --- | --- | --- | --- |
 | B1 | R10 批 3 有效合并：specialization-planner→empire-strategy、logistics-planner→logistics | FREEZE R10 追记 · BLUEPRINT §5-12 | 注册数 34→32 并经 §7 程序刷新 STATUS；行为保持四件套 | ✅ 2026-08-28（四件套：测试 344 文件/5260 用例与基线逐数一致、smoke 3/3 @Node24、合规测试含 R12 全绿、清单已刷新；相位核对 spec=16/logi-planner=4/agenda=72 两两错开，数据时序零漂移） |
-| B2 | layout-planner D2 剩余下沉：`planStage0-3` 四个规划函数参数注入后下沉 `src/domain/layout/` | BLUEPRINT §5-3 | domain/layout 纯函数律 lint 绿；layout-planner 行数收敛至锚带 | ⏳ |
+| B2 | layout-planner D2 剩余下沉：`planStage0-3` 四个规划函数参数注入后下沉 `src/domain/layout/` | BLUEPRINT §5-3 | domain/layout 纯函数律 lint 绿；layout-planner 行数收敛至锚带 | ✅ 2026-08-28（四核下沉：`buildStage0PlanData`/`planCoreStage`/`planLogisticsStage`/`planSpawnRebuild`；layout-planner 1033→790 行；domain 纯函数律自检干净；四件套与 B1 同标准全绿） |
 | B3 | E2E-011（decision-trace）与 R11 对齐：重定向为遥测 outcome 断言或移除 | BLUEPRINT §5-13 | tests/e2e 无 R11 冲突断言；E2E 全套件可跑通 | ⏳ |
 | B4 | 情报架构 ADR 裁决：实现完整版（IntelState 唯一写者/segment/三分置信度）vs 登记生产简化版（`Memory.rooms[].intel`+lastSeen）为当前合同 | BLUEPRINT §5-14 | FREEZE §15 新 ADR 行 + 受影响文档同步标注 | ⏳ 裁决项 |
 | B5 | Shadow-Only 分批清理：`src/domain/intelligence/`（46 文件）+ `src/domain/strategy/decision-trace.ts` | FREEZE R11 · BLUEPRINT §5-11 | src 无孤岛文件；bundle parity 守卫绿；**前置依赖 B4 裁决**（选完整版则转恢复注册轨） | ⏳ 依赖 B4 |
