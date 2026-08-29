@@ -20,8 +20,8 @@
 
 | 项 | 值 |
 | --- | --- |
-| 快照日期 | 2026-08-29（W3 war 轨盘点刷新） |
-| 基准 commit | `cfd3d73`（dev 分支；W1 硬门槛接入 + W2 诱饵对抗 + W3 战争账本三验收落账，详见 §6 W1–W3） |
+| 快照日期 | 2026-08-29（war 轨 W1–W5 收口盘点） |
+| 基准 commit | `5df48ee`（dev 分支；war 轨五项验收全落账 + E2E-023 断言双路径化，详见 §6 W1–W5） |
 | 运行模式 | 官方 Screeps World · TypeScript bot（`dist/main.js` 由 rollup 打包） |
 | 口径约定 | 概念模块 = SYSTEM_BOUNDARIES §1 的 15 模块；生产系统 = `bootstrap.ts` `registerSystem()` 实际注册项；源文件 = `src/systems/` 等实际文件。三者不是同一统计对象，不得互换 |
 
@@ -43,9 +43,9 @@
 | 门禁 | 结果 |
 | --- | --- |
 | `npm run typecheck` | ✅ 0 error |
-| `npm test`（unit + integration） | ✅ 324 文件 / 4678 测试全绿（2026-08-29 W3 实测） |
+| `npm test`（unit + integration） | ✅ 324 文件 / 4678 测试全绿（2026-08-29 war 轨收口实测） |
 | `npm run build` | ✅ `dist/main.js` 生成 |
-| `npm run test:e2e` | ✅ 全套件 26 文件 / 62 用例全绿（2026-08-29 W3 实测 @Node v24.18.0，1958s，含 E2E-020 claim 链 / 021 诱饵对抗 / 022 战争账本）；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致 |
+| `npm run test:e2e` | ✅ 全套件 28 文件 / 64 用例全绿（2026-08-29 war 轨收口实测 @Node v24.18.0，2457s，含 E2E-020 claim 链 / 021 诱饵对抗 / 022 战争账本 / 023 止损链 / 024 战后核验）；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致 |
 | `npm run check:docs` | ✅ 7 项文档一致性检查全过 |
 
 ## 4. 生产清单（15 概念模块 × 33 注册系统）
@@ -129,7 +129,7 @@
 
 - ◐ RCL1→8 私服 soak 覆盖：sv=43 已实测 RCL1→4（E2E-016 深度档 60k tick）；RCL5→8 待更长程 soak
 - ◐ 多房私服 soak：双自有房并行 + spawn 竞争 + 一房全灭故障隔离已实测（E2E-017）；terminal 决策权语义已锁定（E2E-019：Plan 活跃压制 self-aid）；claim 授权全链已实测（E2E-020 @ sv43，2026-08-29）；Plan 驱动互济证据（E2E-019 energy-aid）；site quota 极限注入待继续
-- ◐ war 轨对抗验证：诱饵不触发授权（E2E-021 ✅）、fact 真目标授权 + 战争全程经济不越红线（E2E-022 ✅）——W4 止损链 / W5 战后核验战例待落地（§6）
+- ✅ war 轨对抗验证（Scenario F 四门槛）：诱饵不触发授权（E2E-021）、fact 真目标授权 + 经济不越红线（E2E-022）、止损触发即收摊（E2E-023，伤亡/经济双路径）、战后核验 intel 一致（E2E-024）——详见 §6 W1–W5
 - ◐ 低 CPU 私服 soak：四档 tier 降级链 + bucket 逼近枯竭已实测（E2E-015）；P3 饥饿旁路 E2 整环闭环已实测（p3-bypass-loop，2026-08-29）——仅剩 E2 触发的自然 soak 窗口证据
 - ✅ global reset 恢复实测：E2E-005 注入场景 @ sv43 全绿（2026-08-29）
 - ✅ tier 切换实测：四档全链 + 滞回爬升 @ sv43（E2E-015，此前历史 soak 全程 healthy）
