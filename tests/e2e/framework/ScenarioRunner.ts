@@ -219,6 +219,22 @@ export class ScenarioRunner {
    * 低 CPU soak 用它做确定性档位注入：driver 每 tick 从 db 重读用户账户，
    * 净收支 = cpu − 实际用量；cpu≈实际用量时注入的 bucket 稳定保持。
    */
+  /** 敌对玩家房预置：创建敌对用户并占有指定房间的 controller（war 目标场景）。 */
+  async addEnemyOwnedRoom(roomName: string, username = "Enemy", level = 1): Promise<void> {
+    if (!this._server) throw new Error("setup() not called");
+    const { db, env } = await (this._server.server as any).world.load();
+    let [user] = await db.users.find({ username });
+    if (!user) {
+      user = await db.users.insert({ username, cpu: 100, cpuAvailable: 10000, gcl: 1, active: 10000, badge: "enemy" });
+    }
+    await env.sadd(env.keys.ACTIVE_ROOMS, roomName);
+    await db.rooms.update({ _id: roomName }, { $set: { active: true } });
+    await db["rooms.objects"].update(
+      { room: roomName, type: "controller" },
+      { $set: { user: user._id, level, progress: 0, downgradeTime: null } },
+    );
+  }
+
   /** GCL 注入：设置 bot 用户的 GCL 等级（扩张 claim 的余量门使用）。 */
   async setUserGcl(level: number): Promise<void> {
     if (!this._server) throw new Error("setup() not called");

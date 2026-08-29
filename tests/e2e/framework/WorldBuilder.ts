@@ -121,6 +121,41 @@ export class WorldBuilder {
    * @param name creep 名称
    * @param owner 所有者用户名（默认 "invader"）
    */
+  /**
+   * 注入 bot 友方 creep（含 Memory.creeps 种子）——为场景提供生产采集路径的
+   * 视野源（如侦察诱饵房）。creep.memory 在 driver 中存于用户 Memory 内，
+   * 读-改-写注入种子；bot 首 tick 全量回写后由 bot 接管。
+   */
+  async addFriendlyCreep(
+    roomName: string,
+    x: number,
+    y: number,
+    body: string[],
+    name: string,
+    memory: Record<string, unknown>,
+    username = "bot",
+  ): Promise<void> {
+    const { db, env } = await this.world.load();
+    const [user] = await db.users.find({ username });
+    if (!user) throw new Error(`addFriendlyCreep: user ${username} not found`);
+    await this.world.addRoomObject(roomName, "creep", x, y, {
+      body: body.map((type) => ({ type, hits: 100 })),
+      name,
+      user: user._id,
+      hits: body.length * 100,
+      hitsMax: body.length * 100,
+      fatigue: 0,
+      spawning: false,
+      ticksToLive: 1500,
+    });
+    const memKey = env.keys.MEMORY + user._id;
+    const raw = await env.get(memKey);
+    const parsed = raw ? JSON.parse(raw) : {};
+    parsed.creeps ??= {};
+    parsed.creeps[name] = { ...memory };
+    await env.set(memKey, JSON.stringify(parsed));
+  }
+
   async addHostileCreep(
     roomName: string,
     x: number,
