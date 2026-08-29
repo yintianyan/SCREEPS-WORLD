@@ -20,7 +20,7 @@
 
 | 项 | 值 |
 | --- | --- |
-| 快照日期 | 2026-08-29 |
+| 快照日期 | 2026-08-29（B6 验证轨盘点刷新） |
 | 基准 commit | `b844a74`（dev 分支；本快照叠加重构 backlog B7 的工作树改动——IntelQuery 消费者迁移 + legacy 桥退役 sv43，详见 §6 B7） |
 | 运行模式 | 官方 Screeps World · TypeScript bot（`dist/main.js` 由 rollup 打包） |
 | 口径约定 | 概念模块 = SYSTEM_BOUNDARIES §1 的 15 模块；生产系统 = `bootstrap.ts` `registerSystem()` 实际注册项；源文件 = `src/systems/` 等实际文件。三者不是同一统计对象，不得互换 |
@@ -120,10 +120,10 @@
 | 等级 | 当前状态 |
 | --- | --- |
 | Design-Verified | ✅ 十场景（Scenario A–J）+ 双红队闭合（冻结日 2026-08-23） |
-| Code-Verified | ✅ 基准 commit + B6 验证轨工作树：typecheck 0 error + 4674 测试全绿 + build 成功 + smoke 3/3（§3） |
-| Integration-Verified | ◐ 单房私服链路有历史证据；多房/低 CPU 场景未覆盖（见 Blocked） |
-| Soak-Verified | ❌ **无当前版本 soak 证据**。旧数据集（sv=39 ≠ 当前 42）整体降级为 Historical Evidence 且 artifact 绑定待补（[CANARY_SOAK_PROCEDURE.md](implementation/CANARY_SOAK_PROCEDURE.md) §5） |
-| Release-Ready | ❌ 不满足（Soak-Verified 缺失 + 下列 Blocked 项） |
+| Code-Verified | ✅ 基准 commit + B6 验证轨工作树：typecheck 0 error + 4677 测试全绿 + build 成功 + smoke 3/3（§3） |
+| Integration-Verified | ✅ 私服 mockup 集成场景 @ sv43：单房全链（E2E-016 200k tick）+ 多房并行与故障隔离（E2E-017）+ 低 CPU 四档链（E2E-015）+ ESM 全链（E2E-018）+ terminal 决策权（E2E-019）+ P3 旁路整环（p3-bypass-loop） |
+| Soak-Verified | ◐ **sv=43 当前版本证据已建立**（E2E-016：200k tick / RCL1→6 / 0 JS 错误 / Memory ≤ 11KB，绑定齐全）；整体升级 Soak-Verified 待 hostile/恢复维度当前版本证据与 RCL7→8（[CANARY_SOAK_PROCEDURE.md](implementation/CANARY_SOAK_PROCEDURE.md) §5）；sv=39 旧数据集为 Historical Evidence |
+| Release-Ready | ❌ 不满足（Soak-Verified 整体升级待 hostile/恢复与 RCL7→8；发布流程未执行——见 RELEASE_GATE canary 序） |
 
 **Blocked 项登记**（不得描述为已发布能力；B6 验证轨 2026-08-29 启动后状态）：
 
