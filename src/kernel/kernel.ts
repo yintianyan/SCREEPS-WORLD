@@ -234,7 +234,10 @@ export class Kernel {
       creepLastSeen.set(creep.name, { r: creep.room.name, x: creep.pos.x, y: creep.pos.y });
       const home = creep.memory.home;
       if (home) {
-        const carried = creep.store.getUsedCapacity(RESOURCE_ENERGY);
+        // store 可选链防御：手工注入的 creep（e2e/mockup）可能无 store 字段，
+        // 引擎 Store 构造器会抛 TypeError 且本遍历在 safeRun 之外 —— 一只异常
+        // creep 不能杀死整个 tick（真机 store 恒存在，此守卫零行为差异）。
+        const carried = creep.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
         if (carried > 0) {
           globalCreepEnergy.set(home, (globalCreepEnergy.get(home) ?? 0) + carried);
         }

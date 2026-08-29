@@ -138,6 +138,11 @@ export class WorldBuilder {
     const { db, env } = await this.world.load();
     const [user] = await db.users.find({ username });
     if (!user) throw new Error(`addFriendlyCreep: user ${username} not found`);
+    // [Facts] 引擎 Store 构造器对 object.store 做 Object.entries（store.js）——
+    // 注入对象缺 store 字段时首次访问 .store 即抛 TypeError，且 bot 侧
+    // buildSnapshots 的 Game.creeps 遍历在 safeRun 之外 → 整 tick 静默死亡。
+    // creep 的 canonical DB 形态必须带 store + storeCapacityResource。
+    const carryCapacity = body.filter((t) => t === "carry").length * 50;
     await this.world.addRoomObject(roomName, "creep", x, y, {
       body: body.map((type) => ({ type, hits: 100 })),
       name,
@@ -147,6 +152,8 @@ export class WorldBuilder {
       fatigue: 0,
       spawning: false,
       ticksToLive: 1500,
+      store: {},
+      storeCapacityResource: { energy: carryCapacity },
     });
     const memKey = env.keys.MEMORY + user._id;
     const raw = await env.get(memKey);
@@ -170,6 +177,7 @@ export class WorldBuilder {
     // 真实 user id（mockup world.reset 预置 NPC：'2'=Invader、'3'=Source Keeper），
     // 传 owner 字符串会被 DB 存下但 getter 解析 undefined 直接抛 TypeError。
     const userId = owner === "source-keeper" ? "3" : "2";
+    const carryCapacity = bodyParts.filter((t) => t === "carry").length * 50;
     await this.world.addRoomObject(roomName, "creep", x, y, {
       body: bodyParts.map((type) => ({ type, hits: 100 })),
       name,
@@ -179,6 +187,8 @@ export class WorldBuilder {
       fatigue: 0,
       spawning: false,
       ticksToLive: 1500,
+      store: {},
+      storeCapacityResource: { energy: carryCapacity },
     });
   }
 }
