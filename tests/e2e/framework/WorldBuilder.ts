@@ -134,6 +134,7 @@ export class WorldBuilder {
     name: string,
     memory: Record<string, unknown>,
     username = "bot",
+    opts: { ticksToLive?: number } = {},
   ): Promise<void> {
     const { db, env } = await this.world.load();
     const [user] = await db.users.find({ username });
@@ -151,7 +152,7 @@ export class WorldBuilder {
       hitsMax: body.length * 100,
       fatigue: 0,
       spawning: false,
-      ticksToLive: 1500,
+      ticksToLive: opts.ticksToLive ?? 1500,
       store: {},
       storeCapacityResource: { energy: carryCapacity },
     });
@@ -189,6 +190,32 @@ export class WorldBuilder {
       ticksToLive: 1500,
       store: {},
       storeCapacityResource: { energy: carryCapacity },
+    });
+  }
+
+  /**
+   * 注入敌方有主塔（war 目标形态）。
+   * [Facts] 情报采集（collectRoomVision）与 attacker 目标搜索都用
+   * FIND_HOSTILE_STRUCTURES —— 无主建筑不算 hostile：塔必须带真实
+   * user id 才会进情报 towers 计数与军队目标列表。
+   */
+  async addHostileTower(
+    roomName: string,
+    x: number,
+    y: number,
+    username = "Enemy",
+  ): Promise<void> {
+    const { db } = await this.world.load();
+    const [user] = await db.users.find({ username });
+    if (!user) throw new Error(`addHostileTower: user ${username} not found`);
+    await this.world.addRoomObject(roomName, "tower", x, y, {
+      user: user._id,
+      hits: 1000,
+      hitsMax: 1000,
+      energy: 1000,
+      energyCapacity: 1000,
+      store: { energy: 1000 },
+      storeCapacityResource: { energy: 1000 },
     });
   }
 }
