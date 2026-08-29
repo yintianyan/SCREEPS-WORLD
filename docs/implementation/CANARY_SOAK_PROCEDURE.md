@@ -179,7 +179,7 @@ build
 | 维度 | 要求 | 当前状态 |
 |------|------|---------|
 | 运行 tick | 50,000+ | [Historical Evidence] 2,340,004 tick（sv=39 数据集）；✅ **当前版本 60,000 tick 达标**（E2E-016 深度档 @ sv=43，2026-08-29：RCL1→4 自然晋级、0 JS 错误、Memory ≤ 11KB、全程存活；绑定：schemaVersion=43 / ticks=60000 / W0N1 / collectedAt 见场景输出） |
-| RCL 覆盖 | RCL1→RCL8 | ◐ sv=43 已覆盖 RCL1→4（E2E-016 深度档 60k tick 实测 rcl=4）；RCL5→8 待更长程 soak |
+| RCL 覆盖 | RCL1→RCL8 | ◐ sv=43 已覆盖 **RCL1→7**：RCL1→6（E2E-016 260k tick，2026-08-29）+ RCL6→7（预置起点段 525k tick，2026-08-30 凌晨，RCL7 @ ~525k 达成）；两段全程 0 JS 错误、Memory 有界（≤18KB）；**RCL8 待长程**（3.6M 升级进度 ≈ 1.8M tick ≈ 7.5h，过夜跑进行中） |
 | tier 切换 | healthy→guarded→conserve→recovery | ✅ sv=43 四档全链实测（E2E-015，2026-08-29：四档 probe + 滞回爬升回 healthy、0 JS 错误、全程存活） |
 | hostile/恢复 | 敌袭→恢复 | [Historical Evidence] 685 hostile 快照（sv=39 数据集） |
 | global reset | 多次 reset 恢复 | ✅ 当前版本证据：E2E-005 global reset 注入场景 @ sv43 全绿（2026-08-29 全套件）；多次 reset 编排继续项 |
