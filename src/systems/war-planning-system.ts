@@ -8,7 +8,7 @@ import {
   type WarPlan,
 } from "../domain/military/war-planning";
 import type { TargetCandidate } from "../domain/military/target-selection";
-import { queryRoomIntel } from "./intelligence";
+import { queryRoomIntel, intelActionUsable } from "./intelligence";
 import type { ThreatAssessment } from "../domain/defense/threat-assessment";
 import type { TerrainContext } from "../domain/defense/terrain-context";
 import type { PlayerIntelRecord } from "../domain/defense/player-intel";
@@ -245,6 +245,8 @@ function buildTargetCandidates(tick: number): TargetCandidate[] {
   // 从 intel 采集候选
   const blacklist = Memory.kernel?.warBlacklist ?? {};
   for (const entry of queryRoomIntel()) {
+    // 授权硬门槛：非 fact 级情报不进入战争目标候选（INTELLIGENCE §5）。
+    if (!intelActionUsable(entry.subject, tick)) continue;
     const e = entry.payload;
     // 只选有主非我方房
     if (!e.owner || e.owner === myUsername) continue;

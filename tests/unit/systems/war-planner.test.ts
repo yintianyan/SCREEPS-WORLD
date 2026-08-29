@@ -237,6 +237,20 @@ describe("R4 — 收摊与战后核验", () => {
     expect(warOutcomeEvents()[0]?.d?.[0]).toBe(0);
   });
 
+  it("核验 success 但情报已超威胁短窗（非 fact）→ 降级 unknown（战后核验只信 fact 级复核）", () => {
+    warPlanFixture();
+    // towers 清零但观察已 300 tick（> 威胁短窗 200，< freshness 1500）——
+    // 旧口径判 success，硬门槛口径降级 unknown（两段式重验）。
+    seedIntel({ W6N4: { owner: "Enemy", towers: 0, lastSeen: TICK - 300 } });
+    setPosture("develop");
+
+    warPlannerSystem.run(mockContext(mockSnapshot()));
+
+    // unknown → 半额冷却。
+    expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(TICK + Math.floor(CONFIG.war.warBlacklistTicks / 2));
+    expect(warOutcomeEvents()[0]?.d?.[0]).toBe(2);
+  });
+
   it("核验 unknown（情报过期）→ 黑名单（半额冷却 — P0-2 区分 “打不赢” 与 “没看到”）", () => {
     warPlanFixture();
     seedIntel({ W6N4: { owner: "Enemy", towers: 1, lastSeen: -600 } }); // 距今 1600 > freshness 1500

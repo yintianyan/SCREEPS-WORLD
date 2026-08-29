@@ -19,7 +19,7 @@ import {
   type WarTargetInput,
 } from "../domain/war/planning";
 import { roomLinearDistance } from "../domain/remote/targeting";
-import { getRoomIntel, queryRoomIntel } from "./intelligence";
+import { getRoomIntel, queryRoomIntel, intelActionUsable, intelConfidence } from "./intelligence";
 import {
   countPending,
   hasRequest,
@@ -308,7 +308,7 @@ export function demobilize(tick: number, reason: number): void {
 
   // 战后核验：以 sponsor 记录的最新目标房 intel 判定战果。
   const entry = getRoomIntel(plan.targetRoom);
-  const outcome = evaluateWarOutcome(
+  let outcome = evaluateWarOutcome(
     plan.towersSeen,
     entry?.payload.towers,
     entry?.payload.owner,
@@ -316,6 +316,11 @@ export function demobilize(tick: number, reason: number): void {
     tick,
     CONFIG.war.targetFreshness,
   );
+  // 战后核验只信 fact 级复核：威胁短窗外（非 fact）的观察即使年龄未超
+  // freshness 也不可信 → 降级 unknown（两段式重验），防止陈旧 intel 误判战果。
+  if (outcome !== "unknown" && entry !== undefined && intelConfidence(plan.targetRoom, tick) !== "fact") {
+    outcome = "unknown";
+  }
   if (outcome !== "success") {
     // P0-2：unknown 用半额冷却 — intel 过期不是目标的错，缩短冷却让 intel 自然刷新后可重评。
     // failure 是确定性「打不赢」，用满额冷却防重选循环。
@@ -453,6 +458,9 @@ function buildTargetInput(tick: number): WarTargetInput {
 
   const candidates: WarTargetCandidate[] = [];
   for (const e of queryRoomIntel()) {
+    // 授权硬门槛（fact 级 + 年龄上限）：stale/inferred 不作为战争目标来源，
+    // 其合法用途是触发两段式侦察。freshness 内但超威胁短窗的 intel 同样拒绝。
+    if (!intelActionUsable(e.subject, tick, CONFIG.war.targetFreshness)) continue;
     candidates.push({
       roomName: e.subject,
       home: e.observedBy,
