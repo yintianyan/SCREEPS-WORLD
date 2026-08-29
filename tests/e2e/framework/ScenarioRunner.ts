@@ -219,6 +219,14 @@ export class ScenarioRunner {
    * 低 CPU soak 用它做确定性档位注入：driver 每 tick 从 db 重读用户账户，
    * 净收支 = cpu − 实际用量；cpu≈实际用量时注入的 bucket 稳定保持。
    */
+  /** GCL 注入：设置 bot 用户的 GCL 等级（扩张 claim 的余量门使用）。 */
+  async setUserGcl(level: number): Promise<void> {
+    if (!this._server) throw new Error("setup() not called");
+    const { db } = this._server.server.common.storage;
+    const username = "bot";
+    await db.users.update({ username }, { $set: { gcl: level === 1 ? 1 : 1000000 * (level - 1) + 1 } });
+  }
+
   /** 故障注入：移除指定房间的全部 creep（引擎侧删除，下一 tick 从 Game.creeps 消失）。 */
   async removeCreeps(roomName: string): Promise<void> {
     if (!this._server) throw new Error("setup() not called");

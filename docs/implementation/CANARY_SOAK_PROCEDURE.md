@@ -190,7 +190,7 @@ build
 | 维度 | 要求 | 当前状态 |
 |------|------|---------|
 | 自有房数 | ≥ 2 | ✅ 双自有房并行 5,000 tick @ sv=43（E2E-017，2026-08-29：主房 RCL6 + 殖民房 RCL4 各自 spawn/建造/运转） |
-| 第二房 Claim→Bootstrap | 完整验证 | ◐ 预置自有房的 bootstrap 侧已覆盖（殖民房全灭→灾后恢复孵化闭环）；**claim 授权流程未覆盖**（需 expansion 立项→claimer→claim 全链场景，继续项） |
+| 第二房 Claim→Bootstrap | 完整验证 | ◐ 全链场景已建（E2E-020 @ sv=43：GCL 预置 2/观察器邻房 intel/planner 发现 4 候选/Budget 门已通）；**Readiness 经济门（netFlow/health）在 mockup 需 >15k tick 成熟期**——G1–G5 门控的设计行为（Scenario B），自然放行长窗验证为继续项 |
 | 多房 spawn 竞争 | 验证公平性 | ✅ 双房各自 spawn 并行孵化无互抢（E2E-017 暖机 byHome=W0N1:4/W0N2:5） |
 | 多房 site quota | 验证不冲突 | ◐ 双房 buildQueue 并行有界观测（94 项，无越限）；极限配额注入未做 |
 | 多房 energy 互济 | terminal 互济 | ◐ 决策权语义已锁定（E2E-019 @ sv=43：Plan 活跃时 self-aid 压制——A4.4 决策权回归测试）；Plan 驱动的 terminal 调拨证据需 planner 输入构造（继续项） |

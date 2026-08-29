@@ -1,4 +1,7 @@
 /** ServerHarness — 封装 screeps-server-mockup 的 ScreepsServer 生命周期。 */
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ScreepsServer } from "screeps-server-mockup";
 
 // terrain 辅助函数定义在 WorldBuilder.ts 中，避免重复
@@ -13,7 +16,16 @@ export class ServerHarness {
   private _started = false;
 
   constructor() {
-    this.server = new ScreepsServer();
+    // 每实例独立 tmpdir + 随机端口：mockup 默认固定 `server/` 目录 + 21025 端口，
+    // 并发实例（长程 soak 与场景并行）会双冲突。端口从随机基址取，碰撞概率
+    // 可忽略；目录由 dispose 后留给 OS tmp 清理。
+    const dir = mkdtempSync(join(tmpdir(), "screeps-e2e-"));
+    const port = 21025 + 1000 + Math.floor(Math.random() * 8000);
+    this.server = new ScreepsServer({
+      path: join(dir, "server"),
+      logdir: join(dir, "server", "logs"),
+      port,
+    });
   }
 
   /**
