@@ -1,5 +1,11 @@
 /** TestWorld — 完整 Screeps Runtime 模拟器。 */
 
+// 官方常量唯一来源 = tests/support/constants（FREEZE R20②）。
+// 本文件此前手写的 RCL_PROGRESS / PART_COST / BUILD_COST / FIND_* 私有表已退役；
+// find() 的 case 值与 setup.ts 注入的全局常量同源，杜绝双表漂移。
+import { C } from "../../support/constants";
+import { flatTerrain, terrainWithSwamps, terrainWithWalls, type TerrainCell } from "../../support/terrain";
+
 // ─── 类型定义 ───────────────────────────────────────────────
 
 export interface WorldPos {
@@ -272,7 +278,7 @@ class MockController {
     this.pos = pos;
     this.level = level;
     this.progress = progress;
-    this.progressTotal = RCL_PROGRESS[level] ?? 45000;
+    this.progressTotal = C.CONTROLLER_LEVELS[level] ?? 45000;
     this.ticksToDowngrade = 20000;
     this.room = room;
   }
@@ -310,7 +316,7 @@ class MockSpawn implements MockStructureBase {
 
   spawnCreep(body: string[], name: string, opts?: { memory?: Record<string, unknown> }): number {
     if (this.spawning) return -4; // ERR_BUSY
-    const cost = body.reduce((sum, p) => sum + (PART_COST[p] ?? 0), 0);
+    const cost = body.reduce((sum, p) => sum + (C.BODYPART_COST[p] ?? 0), 0);
     const available = this.room.energyAvailable;
     if (cost > available) return -6; // ERR_NOT_ENOUGH_ENERGY
     if (body.length > 50) return -10; // ERR_INVALID_ARGS
@@ -338,7 +344,7 @@ class MockSpawn implements MockStructureBase {
   recycleCreep(creep: { name: string }): number {
     const target = this._world._creeps.find(c => c.name === creep.name);
     if (!target || target.room !== this.room) return -7; // ERR_INVALID_TARGET
-    const cost = target.body.reduce((sum, p) => sum + (PART_COST[p.type] ?? 0), 0);
+    const cost = target.body.reduce((sum, p) => sum + (C.BODYPART_COST[p.type] ?? 0), 0);
     const ttl = Math.max(0, target.ticksToLive ?? 1500);
     const refund = Math.ceil((cost * ttl) / 1500);
     this.store.energy = this.store.getCapacity() > this.store.energy + refund
@@ -529,7 +535,7 @@ class MockConstructionSite {
     this.structureType = structureType;
     this.room = room;
     this.progress = progress;
-    this.progressTotal = BUILD_COST[structureType] ?? 100;
+    this.progressTotal = C.CONSTRUCTION_COST[structureType] ?? 100;
   }
 }
 
@@ -708,7 +714,7 @@ class MockCreep {
     if (controller.progress >= controller.progressTotal) {
       controller.level++;
       controller.progress = 0;
-      controller.progressTotal = RCL_PROGRESS[controller.level] ?? 45000;
+      controller.progressTotal = C.CONTROLLER_LEVELS[controller.level] ?? 45000;
       this._world._onRclUp(controller);
     }
     return 0;
@@ -840,11 +846,11 @@ class MockRoom {
   find(type: number): unknown[] {
     const w = this._world;
     switch (type) {
-      case FIND_SOURCES:
+      case C.FIND_SOURCES:
         return w._sources.filter(s => s.room === this);
-      case FIND_MINERALS:
+      case C.FIND_MINERALS:
         return w._minerals.filter(m => m.room === this);
-      case FIND_MY_STRUCTURES: {
+      case C.FIND_MY_STRUCTURES: {
         const structs: unknown[] = [];
         for (const s of w._spawns) if (s.room === this) structs.push(s);
         for (const e of w._extensions) if (e.room === this) structs.push(e);
@@ -858,17 +864,17 @@ class MockRoom {
         if (this.controller) structs.push(this.controller);
         return structs;
       }
-      case FIND_STRUCTURES: {
-        return this.find(FIND_MY_STRUCTURES);
+      case C.FIND_STRUCTURES: {
+        return this.find(C.FIND_MY_STRUCTURES);
       }
-      case FIND_CONSTRUCTION_SITES:
-      case FIND_MY_CONSTRUCTION_SITES:
+      case C.FIND_CONSTRUCTION_SITES:
+      case C.FIND_MY_CONSTRUCTION_SITES:
         return w._sites.filter(s => s.room === this);
-      case FIND_HOSTILE_CREEPS:
+      case C.FIND_HOSTILE_CREEPS:
         return w._hostiles.filter(h => h.room === this);
-      case FIND_DROPPED_RESOURCES:
+      case C.FIND_DROPPED_RESOURCES:
         return w._dropped.filter(d => d.room === this);
-      case FIND_EXIT: {
+      case C.FIND_EXIT: {
         const exits: MockRoomPosition[] = [];
         for (let i = 0; i < 50; i++) {
           exits.push(this._pos(i, 0), this._pos(i, 49), this._pos(0, i), this._pos(49, i));
@@ -924,34 +930,6 @@ class MockRoom {
     return this._pos(x, y);
   }
 }
-
-// ─── 常量 ───────────────────────────────────────────────────
-
-const RCL_PROGRESS: Record<number, number> = {
-  1: 200, 2: 45000, 3: 135000, 4: 405000,
-  5: 1215000, 6: 3645000, 7: 10935000,
-};
-
-const PART_COST: Record<string, number> = {
-  move: 50, work: 100, carry: 50, attack: 80,
-  ranged_attack: 150, heal: 250, claim: 600, tough: 10,
-};
-
-const BUILD_COST: Record<string, number> = {
-  spawn: 30000, extension: 3000, road: 300, container: 5000,
-  tower: 5000, storage: 30000, link: 5000, constructedWall: 1,
-  rampart: 1, lab: 50000, terminal: 100000, factory: 100000,
-};
-
-// find 常量（与 setup.ts 一致）
-const FIND_SOURCES = 1;
-const FIND_MY_STRUCTURES = 6;
-const FIND_STRUCTURES = 5;
-const FIND_CONSTRUCTION_SITES = 7;
-const FIND_MY_CONSTRUCTION_SITES = 11;
-const FIND_HOSTILE_CREEPS = 4;
-const FIND_MINERALS = 116;
-const FIND_EXIT = 10;
 
 // ─── 统计 ───────────────────────────────────────────────────
 
@@ -1598,30 +1576,7 @@ export class TestWorld {
 }
 
 // ─── 地形工具 ───────────────────────────────────────────────
+// 唯一实现升格 tests/support/terrain（R20①）— 此处保持再导出以兼容
+// ScenarioBuilder / framework barrel 的既有引用。
 
-/** 生成全平地地形。 */
-export function flatTerrain(): number[][] {
-  return Array.from({ length: 50 }, () => Array(50).fill(0));
-}
-
-/** 生成带墙壁的地形。 */
-export function terrainWithWalls(walls: WorldPos[]): number[][] {
-  const grid = flatTerrain();
-  for (const w of walls) {
-    if (w.x >= 0 && w.x < 50 && w.y >= 0 && w.y < 50) {
-      grid[w.y]![w.x] = 1;
-    }
-  }
-  return grid;
-}
-
-/** 生成带沼泽的地形。 */
-export function terrainWithSwamps(swamps: WorldPos[]): number[][] {
-  const grid = flatTerrain();
-  for (const s of swamps) {
-    if (s.x >= 0 && s.x < 50 && s.y >= 0 && s.y < 50) {
-      grid[s.y]![s.x] = 2;
-    }
-  }
-  return grid;
-}
+export { flatTerrain, terrainWithSwamps, terrainWithWalls };

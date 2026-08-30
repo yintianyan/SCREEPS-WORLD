@@ -13,3 +13,19 @@
 import { constants as driverConstants } from "@screeps/driver";
 
 export const C = driverConstants;
+
+/**
+ * driver 未覆盖的官方全局常量补充表 — 本文件是唯一登记处（R20②）。
+ * 新增条目必须注释官方出处。
+ */
+export const SUPPLEMENTAL_CONSTANTS = {
+  // 官方全局 BASE_MINERALS（docs.screeps.com constants；driver constants 未导出，
+  // 消费方 src/domain/industry/procurement.ts）。
+  BASE_MINERALS: ["H", "O", "U", "L", "K", "Z", "X"],
+} as const;
+
+/** setup.ts 注入 globalThis 的完整官方常量集（driver 全量 + 补充表）。 */
+export const GAME_GLOBAL_CONSTANTS: Record<string, any> = {
+  ...C,
+  ...SUPPLEMENTAL_CONSTANTS,
+};

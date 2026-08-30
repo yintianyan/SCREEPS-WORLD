@@ -8,9 +8,6 @@ import {
 import { mockContext, mockCreep, mockPos, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";
 import { CONFIG } from "../../../src/config";
 
-const FIND_HOSTILE_CREEPS = 4;
-const FIND_HOSTILE_STRUCTURES = 109;
-
 beforeEach(() => {
   resetGlobals();
 });
@@ -19,7 +16,7 @@ function enemyCreep(name = "enemy_1"): any {
   return { id: name, name, pos: mockPos(10, 10), owner: { username: "Enemy" } };
 }
 
-/** 目标房 room mock：find 按常量分派。 */
+/** 目标房 room mock：find 按官方常量分派（值来自 setup.ts 注入的 SSOT，R20②）。 */
 function targetRoomMock(hostiles: any[], structs: any[]): any {
   return {
     name: "W6N4",
