@@ -34,6 +34,7 @@
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-typescript": "^12.1.2",
+    "@screeps/driver": "^5.3.0",
     "@types/node": "^22.10.2",
     "@types/screeps": "^3.3.8",
     "isolated-vm": "^5.0.4",
