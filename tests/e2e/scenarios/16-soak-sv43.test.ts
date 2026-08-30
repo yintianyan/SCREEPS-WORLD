@@ -65,7 +65,11 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
           '" cont=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="container").length + ' +
           '" link=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="link").length + ' +
           '" term=" + (Game.rooms.W0N1.terminal?1:0) + ' +
-          '" tower=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="tower").length)',
+          '" tower=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="tower").length + ' +
+          '" cap=" + (() => { const r = Game.rooms.W0N1; const lv = r.controller.level; ' +
+          'const ec = lv >= 8 ? 200 : lv >= 7 ? 100 : 50; ' +
+          'return r.find(FIND_MY_SPAWNS).length * 300 + ' +
+          'Object.values(r.find(FIND_STRUCTURES)).filter(s=>s.structureType==="extension").length * ec; })())',
         );
         const snapshots = await runner.runTicks(STAGE_TICKS);
         const last = snapshots.at(-1)!;
