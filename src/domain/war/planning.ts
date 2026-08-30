@@ -138,7 +138,7 @@ export type WarOutcome = "success" | "failure" | "unknown";
 
 /** 核弹发射的能量当量（引擎数值：launchNuke 每发消耗 50k energy + 5k G）。
  * 唯一定义点 — war-planner（发射就绪判定）与 actions/stockNuker（装填目标）共用。 */
-export const NUKE_ENERGY_COST = 50000;
+export const NUKE_ENERGY_COST = 300000;
 /** 核弹发射的 ghodium 当量。 */
 export const NUKE_GHODIUM_COST = 5000;
 /** 核弹飞行时长（引擎数值：发射到落地 50,000 tick）— 在途台账的到期基准。 */

@@ -31,7 +31,7 @@ Soak-Verified 项因 schema 版本错位（旧 soak sv=39 vs 当前 sv=43）与 
 蓝图逐段推进 → link 网自动化 → RCL8 后 sink 目标集（GCL farm/temple/power）接管
 富余能量（防 A10 停滞误诊）。
 **通过判据**：全程无人工 flag/console；模板冲突只标 blocked；能量净流在 phase3
-后持续为正；RCL7→8 纯升级期（≥72,900 tick）不发生人口断档。
+后持续为正；RCL7→8 纯升级期（官方 10,935,000 进度 ÷ 每房 15/tick 硬上限 = 最短 ≥729,000 tick）不发生人口断档。
 **薄弱点**：RCL6→7 建造高峰期的 spawn 争抢（车道制缓解）；极端地形的模板适配。
 
 ## Scenario B · 2 Room
