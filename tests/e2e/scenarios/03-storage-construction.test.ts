@@ -41,6 +41,23 @@ describe("E2E-003 Storage 建造（RCL4）", () => {
   );
 
   it(
+    "storage site 被创建（RCL4 建造链路真值，R20/T6）",
+    async () => {
+      // 轮询 5×300t：storage site 出现即止（layout 规划 + builder 落位真值，
+      // world.roomObjects 直读，替代只看角色出现的弱断言）。
+      let seen = 0;
+      for (let i = 0; i < 5; i++) {
+        await runner.runTicks(300);
+        const census = await runner.inspector.siteCensus("W0N1");
+        seen = census["storage"] ?? 0;
+        if (seen >= 1) break;
+      }
+      expect(seen, "RCL4 后 1500 tick 内未出现 storage site").toBeGreaterThanOrEqual(1);
+    },
+    300000,
+  );
+
+  it(
     "全程无 JS 错误，经济在运转",
     async () => {
       const snapshots = await runner.runTicks(1500);

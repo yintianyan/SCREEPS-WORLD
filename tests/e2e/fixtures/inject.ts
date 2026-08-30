@@ -51,3 +51,21 @@ export async function injectFriendlyCreep(
 ): Promise<void> {
   await runner.worldBuilder.addFriendlyCreep(room, x, y, body, name, memory);
 }
+
+/**
+ * L1 环境注入：spawn 能量水位（FREEZE R20/T6；07-energy-crisis 前提真实化）。
+ * store 与 legacy energy 双写 —— mockup 分裂脑缺陷：孵化容量检查读 legacy
+ * .energy 字段（见 ScenarioRunner.syncSpawnEnergyLegacy），只写 store 不生效。
+ */
+export async function injectSpawnEnergy(
+  runner: ScenarioRunner, room: string, energy: number,
+): Promise<void> {
+  const { db } = (runner as any)._server.server.common.storage;
+  const spawn = await db["rooms.objects"].findOne({ room, type: "spawn" });
+  if (!spawn) throw new Error(`injectSpawnEnergy: room ${room} 无 spawn`);
+  const store = { ...(spawn.store ?? {}), energy };
+  await db["rooms.objects"].update(
+    { _id: spawn._id },
+    { $set: { store, energy } },
+  );
+}

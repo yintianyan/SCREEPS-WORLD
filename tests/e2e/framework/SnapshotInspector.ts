@@ -216,6 +216,28 @@ export class SnapshotInspector {
       .sort((a, b) => a - b);
   }
 
+  /** 工地普查（structureType → 数量）——constructionSite 对象真值（R20/T6）。 */
+  async siteCensus(roomName?: string): Promise<Record<string, number>> {
+    const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
+    const census: Record<string, number> = {};
+    for (const o of objs as any[]) {
+      if (o.type !== "constructionSite" || typeof o.structureType !== "string") continue;
+      census[o.structureType] = (census[o.structureType] ?? 0) + 1;
+    }
+    return census;
+  }
+
+  /** 指定名称 creep 的血量真值；不存在（死亡/未生成）时 undefined（R20/T6）。 */
+  async creepHitPoints(
+    roomName: string | undefined,
+    name: string,
+  ): Promise<{ hits: number; hitsMax: number } | undefined> {
+    const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
+    const c = (objs as any[]).find((o) => o.type === "creep" && o.name === name);
+    if (!c) return undefined;
+    return { hits: c.hits ?? 0, hitsMax: c.hitsMax ?? 0 };
+  }
+
   /** controller 进度真值（progress/progressTotal/level）。房间无 controller 时 undefined。
    * driver DB 的 controller 对象不存 progressTotal（引擎按 CONTROLLER_LEVELS 现算），
    * 此处从 SSOT 补算——与游戏内 getter 语义一致。 */

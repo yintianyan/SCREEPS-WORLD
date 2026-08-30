@@ -49,9 +49,9 @@ describe("E2E-004 Tower 防御", () => {
       // 记录注入前的 Memory 状态
       const memBefore = await runner.bot.getMemory();
 
-      // 跑 20 tick，让 tower 有机会攻击
-      // [Facts] tower 每 tick 能攻击一次，20 tick 足够观察能量下降
-      const snapshots = await runner.runTicks(20);
+      // 跑 400 tick：塔初始空能量（0/1000），需先经经济链补能再开火 ——
+      // 20 tick 只够崩不崩检查，不够火力真值（R20/T6 前提修正）。
+      const snapshots = await runner.runTicks(400);
       const last = snapshots.at(-1)!;
 
       // 注入 hostile 后，AI 应该检测到威胁并响应
@@ -79,9 +79,15 @@ describe("E2E-004 Tower 防御", () => {
       }
 
       // 核心断言：注入 hostile 后系统继续运行不崩
-      // 真正的攻击行为验证由 integration 层的 tower 单元测试覆盖
-      // （E2E 层无法直接读取 tower.energy，只能通过 Memory/console 间接观察）
-      expect(snapshots.length, "应运行 20 tick").toBe(20);
+      expect(snapshots.length, "应运行 400 tick").toBe(400);
+
+      // 火力真值断言（R20/T6）：hostile 受伤或被击杀（roomObjects 直读 hits，
+      // 取代「E2E 无法读塔」的旧注释——经 inspector 的引擎真值查询已可读）。
+      const after = await runner.inspector.creepHitPoints("W0N1", "Invader1");
+      expect(
+        after === undefined || after.hits < after.hitsMax,
+        `hostile 400 tick 后无伤且未死亡（hits=${after?.hits}/${after?.hitsMax}）— tower 未开火`,
+      ).toBe(true);
     },
     120000,
   );
