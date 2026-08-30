@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { t0Base } from "../fixtures/base";
+import { isJsError } from "../../support/errors";
 
 const ROOM = "W0N1";
 // 深度 soak 由环境变量驱动（CANARY §5.1 要求 50,000+ tick；默认 4×5000=20k）。
@@ -17,16 +18,6 @@ const STAGE_TICKS = Number(process.env.SOAK_STAGE_TICKS ?? 5000);
 const STAGES = Number(process.env.SOAK_STAGES ?? 4);
 const START_RCL = Number(process.env.SOAK_START_RCL ?? 1);
 const TOTAL_TICKS = STAGE_TICKS * STAGES;
-
-/** 判断日志行是否为 JS 错误。 */
-function isJsError(line: string): boolean {
-  return (
-    line.includes("TypeError") ||
-    line.includes("ReferenceError") ||
-    line.includes("is not a function") ||
-    line.includes("Cannot read properties of undefined")
-  );
-}
 
 describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
   const runner = new ScenarioRunner();
@@ -70,35 +61,35 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
       for (let stage = 1; stage <= STAGES; stage++) {
         // 账本 1000t 采样（瞬态异常盲窗最小化）；重开销 census 每 5 采样一次。
         if ((stage - 1) % 5 === 0) {
-        await runner.bot.sendConsole(
-          'console.log("BUCKET t=" + Game.time + " v=" + Game.cpu.bucket)',
-        );
-        await runner.bot.sendConsole(
-          'console.log("CENSUS t=" + Game.time + " ext=" + ' +
-          'Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="extension").length + ' +
-          '" cont=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="container").length + ' +
-          '" link=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="link").length + ' +
-          '" term=" + (Game.rooms.W0N1.terminal?1:0) + ' +
-          '" tower=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="tower").length + ' +
-          '" roles=" + JSON.stringify(Object.values(Game.creeps).reduce((a,c)=>{const r=c.memory.role||"?";a[r]=(a[r]||0)+1;return a;},{})) + ' +
-          '" upW=" + JSON.stringify(Object.values(Game.creeps).filter(c=>c.memory.role==="upgrader").map(c=>c.body.filter(p=>p.type==="work").length)) + ' +
-          '" cap=" + (() => { const r = Game.rooms.W0N1; const lv = r.controller.level; ' +
-          'const ec = lv >= 8 ? 200 : lv >= 7 ? 100 : 50; ' +
-          'return r.find(FIND_MY_SPAWNS).length * 300 + ' +
-          'Object.values(r.find(FIND_STRUCTURES)).filter(s=>s.structureType==="extension").length * ec; })()) + ' +
-          '" prog=" + Game.rooms.W0N1.controller.progress + "/" + Game.rooms.W0N1.controller.progressTotal',
-        );
+          await runner.bot.sendConsole(
+            'console.log("BUCKET t=" + Game.time + " v=" + Game.cpu.bucket)',
+          );
         }
         const snapshots = await runner.runTicks(STAGE_TICKS);
         const last = snapshots.at(-1)!;
         for (const l of snapshots.flatMap((s) => s.consoleLogs)) {
           const bm = l.match(/BUCKET t=\d+ v=(-?\d+)/);
           if (bm) bucketProbe = Number(bm[1]);
-          if (l.includes("CENSUS")) {
-            console.log(l.replace(/^.*CENSUS /, "[census] "));
-            const pm = l.match(/prog=(\d+)\/(\d+)/);
-            if (pm) stageProgLog.push({ prog: Number(pm[1]), total: Number(pm[2]) });
-          }
+        }
+        // census 证据行（R20①/T3）：结构计数 / roles / upW / cap / prog 全部
+        // 走 world.roomObjects 真值（inspector 查询），替代原 bot 侧 CENSUS
+        // console 字符串拼装+解析。字段格式与原探针一致，CANARY §5.1 证据链
+        // 可连续比对；采样点为 stage 末端（原为 stage 首 tick——stageProgLog
+        // 仅喂证据行不断言，数值平移不影响语义）。
+        if ((stage - 1) % 5 === 0) {
+          const census = await runner.inspector.structureCensus(ROOM);
+          const upW = await runner.inspector.roleBodyPartHistogram(ROOM, "upgrader", "work");
+          const ctrl = await runner.inspector.controllerProgress(ROOM);
+          const lv = ctrl?.level ?? 1;
+          const ec = lv >= 8 ? 200 : lv >= 7 ? 100 : 50;
+          const cap = (census.spawn ?? 0) * 300 + (census.extension ?? 0) * ec;
+          console.log(
+            `[census] t=${last.tick} ext=${census.extension ?? 0} cont=${census.container ?? 0} ` +
+              `link=${census.link ?? 0} term=${census.terminal ?? 0} tower=${census.tower ?? 0} ` +
+              `roles=${JSON.stringify(last.creepCountByRole)} upW=${JSON.stringify(upW)} cap=${cap} ` +
+              `prog=${ctrl?.progress ?? 0}/${ctrl?.progressTotal ?? 0}`,
+          );
+          stageProgLog.push({ prog: ctrl?.progress ?? 0, total: ctrl?.progressTotal ?? 0 });
         }
         totalErrors += snapshots.flatMap((s) => s.consoleLogs).filter(isJsError).length;
 

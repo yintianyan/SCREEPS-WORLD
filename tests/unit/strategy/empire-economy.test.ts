@@ -104,6 +104,12 @@ function makeView(over?: Partial<EmpireResourceView>): EmpireResourceView {
   };
 }
 
+/** A2B 扩张就绪度预算 mock —— 原 A2B-007 / A2B-S2 两个 describe 内的孪生定义上提（R20①/T4 批①）。 */
+function makeBudget(over?: Partial<ReturnType<typeof allocateEmpireBudget>>) {
+  const base = allocateEmpireBudget(makeView(), "growing", 1000);
+  return { ...base, ...over };
+}
+
 // ─── A2B-006: Empire Economic Health ─────────────────────
 
 describe("A2B-006: Empire Economic Health", () => {
@@ -164,11 +170,6 @@ describe("A2B-006: Empire Economic Health", () => {
 // ─── A2B-007: Expansion Readiness ───────────────────────
 
 describe("A2B-007: Expansion Readiness", () => {
-  function makeBudget(over?: Partial<ReturnType<typeof allocateEmpireBudget>>) {
-    const base = allocateEmpireBudget(makeView(), "growing", 1000);
-    return { ...base, ...over };
-  }
-
   it("全部门控通过 → READY", () => {
     const view = makeView({ totalNetFlow: 10, coreRooms: 1, hasStruggling: false, hasLiveThreat: false });
     const budget = makeBudget({ expansion: 5000 });
@@ -492,11 +493,6 @@ describe("A2B-S1: Multi-Room Simulation (3 rooms)", () => {
 // ─── A2B-S2: Expansion Readiness Scenarios A–E ──────────
 
 describe("A2B-S2: Expansion Readiness Scenarios", () => {
-  function makeBudget(over?: Partial<ReturnType<typeof allocateEmpireBudget>>) {
-    const base = allocateEmpireBudget(makeView(), "growing", 1000);
-    return { ...base, ...over };
-  }
-
   it("Scenario A: Empire Healthy → STRONGLY_READY", () => {
     const view = makeView({
       totalNetFlow: 20, coreRooms: 2, minRiskBuffer: 1500,

@@ -14,19 +14,10 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
+import { isJsError } from "../../support/errors";
 
 const DONOR = "W0N1";
 const RECIPIENT = "W0N2";
-
-/** 判断日志行是否为 JS 错误。 */
-function isJsError(line: string): boolean {
-  return (
-    line.includes("TypeError") ||
-    line.includes("ReferenceError") ||
-    line.includes("is not a function") ||
-    line.includes("Cannot read properties of undefined")
-  );
-}
 
 /** 富余捐助房：storage 60k（≥ donorFloor 50k）+ terminal 20k（货量+运费+储备）。 */
 function donorRoom(): RoomSetup {

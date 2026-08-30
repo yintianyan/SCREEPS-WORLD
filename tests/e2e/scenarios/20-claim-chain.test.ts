@@ -13,19 +13,10 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
+import { isJsError } from "../../support/errors";
 
 const HOME = "W0N1";
 const TARGET = "W0N2";
-
-/** 判断日志行是否为 JS 错误。 */
-function isJsError(line: string): boolean {
-  return (
-    line.includes("TypeError") ||
-    line.includes("ReferenceError") ||
-    line.includes("is not a function") ||
-    line.includes("Cannot read properties of undefined")
-  );
-}
 
 describe("E2E-020 claim 授权全链 — 立项→claim→bootstrap", () => {
   const runner = new ScenarioRunner();

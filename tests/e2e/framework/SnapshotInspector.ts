@@ -1,5 +1,6 @@
 /** SnapshotInspector — 从 bot.memory 和 Game API 提取可断言的状态快照。 */
 import type { BotHarness } from "./BotHarness";
+import { C } from "../../support/constants";
 
 /**
  * 运行时指标快照 — 从 Memory.kernel.stats 提取的关键遥测数据。
@@ -168,54 +169,67 @@ export class SnapshotInspector {
     return result;
   }
 
-  /**
-   * 提取指定房间的 storage 能量。
-   */
-  getStorageEnergy(snapshot: BotSnapshot, roomName: string): number | undefined {
-    const roomMem = snapshot.rawMemory?.rooms?.[roomName];
-    return roomMem?.storageEnergy ?? roomMem?.storage?.energy;
+  // getStorageEnergy / getControllerLevel / hasRole / hasErrorLogs /
+  // hasRuntimeError / findLogs 已删除（R20⑤：审计确认场景零调用；
+  // 结构/进度真值查询见下方 structureCensus / controllerProgress）。
+
+  // ── 引擎真值查询（world.roomObjects，FREEZE R20①/T3）──────────────
+  // 以下方法替代场景内联的 CENSUS console 探针：结构计数/role body 直方图/
+  // controller 进度从 driver DB 读取，不再需要 bot 侧 console 字符串拼装与解析。
+
+  private world(): any {
+    // this._bot 是 BotHarness；mockup User 在其内层 _bot 字段，User._server 才是
+    // ScreepsServer（world.js addBot: new User(this.server, user)）。
+    const world = (this._bot as any)?._bot?._server?.world;
+    if (!world) throw new Error("SnapshotInspector: bot 未注册到 server（registerTo 未调用）");
+    return world;
   }
 
   /**
-   * 提取 controller 等级。
+   * 结构普查（structureType → 数量）。
+   * 只计真实结构——constructionSite/ruin/creep/资源不计数（与 FIND_STRUCTURES
+   * 语义一致：对象的 type 字段等于其 structureType 才是结构本体）。
    */
-  getControllerLevel(snapshot: BotSnapshot, roomName: string): number | undefined {
-    const roomMem = snapshot.rawMemory?.rooms?.[roomName];
-    return roomMem?.rcl ?? roomMem?.controller?.level;
+  async structureCensus(roomName?: string): Promise<Record<string, number>> {
+    const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
+    const census: Record<string, number> = {};
+    for (const o of objs as any[]) {
+      if (typeof o.structureType !== "string" || o.type !== o.structureType) continue;
+      census[o.structureType] = (census[o.structureType] ?? 0) + 1;
+    }
+    return census;
   }
 
   /**
-   * 检查快照中是否有指定角色的 creep。
+   * 指定角色 creep 的 body 部件数列表（升序）。
+   * 如 upW 证据 = roleBodyPartHistogram(room, "upgrader", "work")。
    */
-  hasRole(snapshot: BotSnapshot, role: string, minCount = 1): boolean {
-    return (snapshot.creepCountByRole[role] ?? 0) >= minCount;
+  async roleBodyPartHistogram(
+    roomName: string | undefined,
+    role: string,
+    part: string,
+  ): Promise<number[]> {
+    const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
+    return (objs as any[])
+      .filter((o) => o.type === "creep" && o.memory?.role === role)
+      .map((o) => (o.body ?? []).filter((p: any) => p.type === part).length)
+      .sort((a, b) => a - b);
   }
 
-  /**
-   * 检查快照中是否有错误日志（匹配 "error" / "Error" / "ERR"）。
-   */
-  hasErrorLogs(snapshot: BotSnapshot): boolean {
-    return snapshot.consoleLogs.some(
-      (line) =>
-        line.includes("error") ||
-        line.includes("Error") ||
-        line.includes("ERR") ||
-        line.includes("TypeError") ||
-        line.includes("undefined"),
-    );
-  }
-
-  /**
-   * 检查快照中是否有运行时错误（从 Memory.kernel.stats.lastError）。
-   */
-  hasRuntimeError(snapshot: BotSnapshot): boolean {
-    return snapshot.metrics.lastError !== undefined;
-  }
-
-  /**
-   * 查找包含指定关键字的日志。
-   */
-  findLogs(snapshot: BotSnapshot, keyword: string): string[] {
-    return snapshot.consoleLogs.filter((line) => line.includes(keyword));
+  /** controller 进度真值（progress/progressTotal/level）。房间无 controller 时 undefined。
+   * driver DB 的 controller 对象不存 progressTotal（引擎按 CONTROLLER_LEVELS 现算），
+   * 此处从 SSOT 补算——与游戏内 getter 语义一致。 */
+  async controllerProgress(
+    roomName?: string,
+  ): Promise<{ progress: number; progressTotal: number; level: number } | undefined> {
+    const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
+    const ctrl = (objs as any[]).find((o) => o.type === "controller");
+    if (!ctrl) return undefined;
+    const level = ctrl.level ?? 0;
+    return {
+      progress: ctrl.progress ?? 0,
+      progressTotal: ctrl.progressTotal ?? C.CONTROLLER_LEVELS[level] ?? 0,
+      level,
+    };
   }
 }

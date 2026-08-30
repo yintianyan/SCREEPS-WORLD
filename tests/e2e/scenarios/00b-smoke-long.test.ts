@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
+import { isJsError } from "../../support/errors";
 
 describe("E2E 长 smoke — 5000 tick 引擎稳定性 + 运行时指标采集", () => {
   const runner = new ScenarioRunner();
@@ -30,13 +31,7 @@ describe("E2E 长 smoke — 5000 tick 引擎稳定性 + 运行时指标采集", 
         const snapshots = await runner.runTicks(CHECKPOINT);
 
         // 检查 JS 错误
-        const errors = snapshots.flatMap((s) => s.consoleLogs).filter(
-          (line) =>
-            line.includes("TypeError") ||
-            line.includes("ReferenceError") ||
-            line.includes("is not a function") ||
-            line.includes("Cannot read properties of undefined"),
-        );
+        const errors = snapshots.flatMap((s) => s.consoleLogs).filter(isJsError);
         errorCount += errors.length;
 
         if (errors.length > 0 && segment <= 2) {

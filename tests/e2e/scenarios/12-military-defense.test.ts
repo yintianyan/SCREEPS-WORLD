@@ -2,16 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom, rcl3RoomWithTower } from "../fixtures/rooms";
-
-/** 判断日志行是否为 JS 错误。 */
-function isJsError(line: string): boolean {
-  return (
-    line.includes("TypeError") ||
-    line.includes("ReferenceError") ||
-    line.includes("is not a function") ||
-    line.includes("Cannot read properties of undefined")
-  );
-}
+import { isJsError } from "../../support/errors";
 
 /** 从日志中提取防御相关日志。 */
 function findDefenseLogs(logs: string[]): string[] {

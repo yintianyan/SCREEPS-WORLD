@@ -6,7 +6,13 @@
  * SAFE_MODE_* 等）。依赖树内既有（screeps 的依赖 + screeps-server-mockup
  * peerDep ^5.1.0），已升为显式 devDependency 锁定版本；类型经 driver.d.ts 声明。
  *
- * 防漂移：tests/e2e/scenarios/27-constants-parity.test.ts（T1）将玩家可见常量
+ * ⚠️ 安装耦合（2026-08-30 CI 事故教训）：driver 主模块 require 链拉起
+ * isolated-vm 原生模块 —— unit/integration 测试因此需要**完整安装**（postinstall
+ * 编译原生绑定）。`npm ci --ignore-scripts` / 跳过构建的安装会导致全部单测
+ * 套件加载失败（No native build for platform ...）。driver 无独立 constants
+ * 子文件可绕开（lib/ 仅 bulk/history/index/path-finder/queue/runtime）。
+ *
+ * 防漂移：tests/e2e/scenarios/28-constants-parity.test.ts（T1）将玩家可见常量
  * 子集与真实引擎运行时全局逐键比对。需要新增 driver 未覆盖的表时，必须在本文件
  * 登记并注释官方出处——禁止在 setup.ts / TestWorld / 场景文件里再出现常量字面值表。
  */

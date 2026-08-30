@@ -11,18 +11,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
+import { isJsError } from "../../support/errors";
 
 const ROOM = "W0N1";
-
-/** 判断日志行是否为 JS 错误。 */
-function isJsError(line: string): boolean {
-  return (
-    line.includes("TypeError") ||
-    line.includes("ReferenceError") ||
-    line.includes("is not a function") ||
-    line.includes("Cannot read properties of undefined")
-  );
-}
 
 describe("E2E-018 Emergency Survival Mode — 进入/保持/退出", () => {
   const runner = new ScenarioRunner();

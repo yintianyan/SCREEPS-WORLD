@@ -4,6 +4,7 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { debugSnapshot } from "../helpers/assertions";
 import { CONFIG } from "../../../src/config";
+import { isJsError } from "../../support/errors";
 
 describe("E2E-013 损坏 Memory 恢复", () => {
   const runner = new ScenarioRunner();
@@ -110,12 +111,7 @@ describe("E2E-013 损坏 Memory 恢复", () => {
 
       // 验证无 JS 错误
       const consoleLogs = runner.bot.drainConsole();
-      const errors = consoleLogs.filter(
-        (line) =>
-          line.includes("TypeError") ||
-          line.includes("Cannot read") ||
-          line.includes("is not a function"),
-      );
+      const errors = consoleLogs.filter(isJsError);
       expect(
         errors,
         `恢复期间有 JS 错误：\n${errors.join("\n")}`,

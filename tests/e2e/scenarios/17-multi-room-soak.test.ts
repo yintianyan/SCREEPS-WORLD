@@ -12,19 +12,10 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
+import { isJsError } from "../../support/errors";
 
 const HOME = "W0N1";
 const COLONY = "W0N2";
-
-/** 判断日志行是否为 JS 错误。 */
-function isJsError(line: string): boolean {
-  return (
-    line.includes("TypeError") ||
-    line.includes("ReferenceError") ||
-    line.includes("is not a function") ||
-    line.includes("Cannot read properties of undefined")
-  );
-}
 
 /** 从 rawMemory 统计各 home 的 creep 数。 */
 function creepsByHome(rawMem: any): Record<string, number> {

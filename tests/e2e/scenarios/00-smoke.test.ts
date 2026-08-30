@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
+import { isJsError } from "../../support/errors";
 
 describe("E2E 冒烟测试 — screeps-server-mockup + dist/main.js", () => {
   const runner = new ScenarioRunner();
@@ -49,13 +50,7 @@ describe("E2E 冒烟测试 — screeps-server-mockup + dist/main.js", () => {
 
       // 合并所有日志检查错误
       const allLogs = snapshots.flatMap((s) => s.consoleLogs);
-      const errorLogs = allLogs.filter(
-        (line) =>
-          line.includes("TypeError") ||
-          line.includes("ReferenceError") ||
-          line.includes("is not a function") ||
-          line.includes("Cannot read properties of undefined"),
-      );
+      const errorLogs = allLogs.filter(isJsError);
 
       expect(errorLogs, `检测到 JS 错误: ${errorLogs.join("; ")}`).toHaveLength(0);
     },

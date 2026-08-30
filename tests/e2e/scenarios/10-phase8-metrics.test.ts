@@ -4,16 +4,7 @@ import { writeFileSync } from "node:fs";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { debugSnapshot } from "../helpers/assertions";
-
-/** 判断日志行是否为 JS 错误。 */
-function isJsError(line: string): boolean {
-  return (
-    line.includes("TypeError") ||
-    line.includes("ReferenceError") ||
-    line.includes("is not a function") ||
-    line.includes("Cannot read properties of undefined")
-  );
-}
+import { isJsError } from "../../support/errors";
 
 /** 采样行：每 100 tick 采一次的关键指标。 */
 interface MetricsRow {

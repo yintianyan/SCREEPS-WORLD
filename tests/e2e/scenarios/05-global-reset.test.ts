@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { debugSnapshot } from "../helpers/assertions";
+import { isJsError } from "../../support/errors";
 
 describe("E2E-005 Global Reset 恢复韧性", () => {
   const runner = new ScenarioRunner();
@@ -63,13 +64,7 @@ describe("E2E-005 Global Reset 恢复韧性", () => {
       const last = snapshots.at(-1)!;
 
       // 全程无 JS 错误
-      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(
-        (line) =>
-          line.includes("TypeError") ||
-          line.includes("ReferenceError") ||
-          line.includes("global is not defined") ||
-          line.includes("Cannot read properties of undefined"),
-      );
+      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(isJsError);
       expect(
         errorLogs,
         `1000 tick 内检测到 JS 错误:\n${errorLogs.join("\n")}`,

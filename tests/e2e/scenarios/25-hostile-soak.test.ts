@@ -5,15 +5,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { t0Base } from "../fixtures/base";
-
-function isJsError(line: string): boolean {
-  return (
-    line.includes("TypeError") ||
-    line.includes("ReferenceError") ||
-    line.includes("is not a function") ||
-    line.includes("Cannot read properties of undefined")
-  );
-}
+import { isJsError } from "../../support/errors";
 
 describe("E2E-025 hostile/恢复长程统计", () => {
   const runner = new ScenarioRunner();

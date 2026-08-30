@@ -3,16 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner, type BotSnapshot } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { debugSnapshot } from "../helpers/assertions";
-
-/** 判断日志行是否为 JS 错误。 */
-function isJsError(line: string): boolean {
-  return (
-    line.includes("TypeError") ||
-    line.includes("ReferenceError") ||
-    line.includes("is not a function") ||
-    line.includes("Cannot read properties of undefined")
-  );
-}
+import { isJsError } from "../../support/errors";
 
 describe("E2E-006 10000 tick 长期稳定性", () => {
   const runner = new ScenarioRunner();

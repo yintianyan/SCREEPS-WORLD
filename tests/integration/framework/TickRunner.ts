@@ -163,5 +163,4 @@ export class TickRunner {
   }
 }
 
-/** 全局单例 TickRunner — 测试间共享。 */
-export const tickRunner = new TickRunner();
+// 全局单例 tickRunner 已删除（R20⑤：零引用孤儿；消费方自建实例）。

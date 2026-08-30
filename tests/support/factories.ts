@@ -178,6 +178,20 @@ export function mockStore(used: number, capacity: number) {
   };
 }
 
+/**
+ * 容量型纯对象 store mock（room-state 系测试归并，R20①/T4 批①）。
+ * 与 mockStore（vi.fn 版）的区别：纯对象零开销、仅 energy 资源语义。
+ */
+export function mockCapacityStore(
+  energy: number,
+  capacity: number,
+): { getUsedCapacity: (r: string) => number; getCapacity: (r: string) => number } {
+  return {
+    getUsedCapacity: (r: string) => (r === "energy" ? energy : 0),
+    getCapacity: () => capacity,
+  };
+}
+
 // ─── Creep Mock ─────────────────────────────────────────────
 
 interface MockCreepOpts {

@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { rcl4Room } from "../fixtures/rooms";
 import { debugSnapshot } from "../helpers/assertions";
+import { isJsError } from "../../support/errors";
 
 describe("E2E-003 Storage 建造（RCL4）", () => {
   const runner = new ScenarioRunner();
@@ -45,12 +46,7 @@ describe("E2E-003 Storage 建造（RCL4）", () => {
       const snapshots = await runner.runTicks(1500);
 
       // 无 JS 错误
-      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(
-        (line) =>
-          line.includes("TypeError") ||
-          line.includes("ReferenceError") ||
-          line.includes("Cannot read properties of undefined"),
-      );
+      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(isJsError);
       expect(
         errorLogs,
         `检测到 JS 错误:\n${errorLogs.join("\n")}`,

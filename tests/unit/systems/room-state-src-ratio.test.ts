@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { roomStateSystem } from "../../../src/systems/room-state";
 import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";
+import { mockCapacityStore } from "../../support/factories";
 
 /**
  * P0-1 room-state srcRatio + storageDrainRate 信号采集 — 单元测试。
@@ -14,12 +15,7 @@ import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";
  * 因 storageDrainThreshold=-2，0 < -2 不成立。
  */
 
-function makeStore(energy: number): { getUsedCapacity: (r: string) => number; getCapacity: (r: string) => number } {
-  return {
-    getUsedCapacity: (r: string) => (r === "energy" ? energy : 0),
-    getCapacity: () => 1000000,
-  };
-}
+const makeStore = (energy: number) => mockCapacityStore(energy, 1000000);
 
 function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return {

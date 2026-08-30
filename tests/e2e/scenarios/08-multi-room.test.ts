@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { remoteMiningRooms } from "../fixtures/rooms";
 import { debugSnapshot } from "../helpers/assertions";
+import { isJsError } from "../../support/errors";
 
 describe("E2E-008 多房间场景（remote mining 基础）", () => {
   const runner = new ScenarioRunner();
@@ -25,12 +26,7 @@ describe("E2E-008 多房间场景（remote mining 基础）", () => {
       const snapshots = await runner.runTicks(500);
 
       const last = snapshots.at(-1)!;
-      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(
-        (line) =>
-          line.includes("TypeError") ||
-          line.includes("ReferenceError") ||
-          line.includes("Cannot read properties of undefined"),
-      );
+      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(isJsError);
 
       expect(errorLogs, `双房场景检测到错误:\n${errorLogs.join("\n")}`).toHaveLength(0);
       console.log("双房场景最后快照:", debugSnapshot(last));

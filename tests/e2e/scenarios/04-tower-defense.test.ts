@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { rcl3RoomWithTower } from "../fixtures/rooms";
 import { debugSnapshot } from "../helpers/assertions";
+import { isJsError } from "../../support/errors";
 
 describe("E2E-004 Tower 防御", () => {
   const runner = new ScenarioRunner();
@@ -25,9 +26,7 @@ describe("E2E-004 Tower 防御", () => {
       const snapshots = await runner.runTicks(300);
 
       // 不崩即可
-      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(
-        (line) => line.includes("TypeError") || line.includes("ReferenceError"),
-      );
+      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(isJsError);
       expect(errorLogs, `检测到 JS 错误:\n${errorLogs.join("\n")}`).toHaveLength(0);
     },
     120000,
@@ -66,12 +65,7 @@ describe("E2E-004 Tower 防御", () => {
       );
 
       // 验证方式2：不崩（核心韧性——hostile 出现不能让 AI 崩溃）
-      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(
-        (line) =>
-          line.includes("TypeError") ||
-          line.includes("ReferenceError") ||
-          line.includes("Cannot read properties of undefined"),
-      );
+      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(isJsError);
       expect(errorLogs, `注入 hostile 后检测到 JS 错误:\n${errorLogs.join("\n")}`).toHaveLength(0);
 
       // 验证方式3：Memory 中可能有威胁记录或 tower 状态
@@ -99,11 +93,7 @@ describe("E2E-004 Tower 防御", () => {
       // 继续跑 100 tick，验证系统恢复
       const snapshots = await runner.runTicks(100);
 
-      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(
-        (line) =>
-          line.includes("TypeError") ||
-          line.includes("ReferenceError"),
-      );
+      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(isJsError);
       expect(errorLogs, `恢复阶段检测到 JS 错误:\n${errorLogs.join("\n")}`).toHaveLength(0);
     },
     120000,

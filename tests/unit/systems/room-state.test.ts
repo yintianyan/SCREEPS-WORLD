@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { roomStateSystem } from "../../../src/systems/room-state";
 import { CONFIG } from "../../../src/config";
 import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";
+import { mockCapacityStore } from "../../support/factories";
 
 /**
  * Room State System 单元测试。
@@ -10,12 +11,7 @@ import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";
  * 避免遗漏导致假性危机误判。
  */
 
-function makeStore(energy: number): { getUsedCapacity: (r: string) => number; getCapacity: (r: string) => number } {
-  return {
-    getUsedCapacity: (r: string) => (r === "energy" ? energy : 0),
-    getCapacity: () => 10000,
-  };
-}
+const makeStore = (energy: number) => mockCapacityStore(energy, 10000);
 
 function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return {

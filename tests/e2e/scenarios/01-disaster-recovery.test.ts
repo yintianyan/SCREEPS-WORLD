@@ -2,7 +2,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { disasterRoom } from "../fixtures/rooms";
-import { assertNoErrors, debugSnapshot } from "../helpers/assertions";
+import { debugSnapshot } from "../helpers/assertions";
+import { isJsError } from "../../support/errors";
 
 describe("E2E-001 灾后恢复（0 creep + 300 能量）", () => {
   const runner = new ScenarioRunner();
@@ -62,12 +63,7 @@ describe("E2E-001 灾后恢复（0 creep + 300 能量）", () => {
       const last = snapshots.at(-1)!;
 
       // 只检查严重的 JS 错误，不检查业务日志
-      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(
-        (line) =>
-          line.includes("TypeError") ||
-          line.includes("ReferenceError") ||
-          line.includes("is not a function"),
-      );
+      const errorLogs = snapshots.flatMap((s) => s.consoleLogs).filter(isJsError);
 
       expect(
         errorLogs,

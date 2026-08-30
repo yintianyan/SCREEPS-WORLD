@@ -158,15 +158,5 @@ export class GameInspector {
     return lines.join("\n");
   }
 
-  /** 查找卡死的 creep（连续 N tick 位置不变）。 */
-  stuckCreeps(records: TickRecord[], threshold = 10): string[] {
-    // 简化：检查当前 creep 是否 idle 且无 assignment
-    const stuck: string[] = [];
-    for (const c of this.world.creeps) {
-      if (c.memory.mode === "idle" && !c.memory.assignment) {
-        stuck.push(c.name);
-      }
-    }
-    return stuck;
-  }
+  // stuckCreeps 已删除（R20⑤：零引用孤儿方法）。
 }
