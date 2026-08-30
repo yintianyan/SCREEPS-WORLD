@@ -179,7 +179,7 @@ build
 | 维度 | 要求 | 当前状态 |
 |------|------|---------|
 | 运行 tick | 50,000+ | [Historical Evidence] 2,340,004 tick（sv=39 数据集）；✅ **当前版本 60,000 tick 达标**（E2E-016 深度档 @ sv=43，2026-08-29：RCL1→4 自然晋级、0 JS 错误、Memory ≤ 11KB、全程存活；绑定：schemaVersion=43 / ticks=60000 / W0N1 / collectedAt 见场景输出） |
-| RCL 覆盖 | RCL1→RCL8 | ◐ sv=43 已覆盖 **RCL1→7**（RCL7 持续 ~1.275M tick）：RCL1→6（260k）+ RCL6→7（600k 段，RCL7 @ ~525k）+ RCL7 持续（1.2M 过夜段）；三段全程 0 JS 错误、Memory 有界（≤18KB）；**RCL8 收尾段进行中**（3.6M 进度已积累 ~2.4M，剩 ~600k tick ≈ 2.5h） |
+| RCL 覆盖 | RCL1→RCL8 | ◐ **自举轨铸件进行中**（R19 合同 §5：t0→RCL8 无注入长跑，分阶段 census 对照 layout 契约——完成后为本版本动态/历史结论唯一合法来源）。既有预置段（RCL6→7 + RCL7 持续 ~2.5M tick，0 JS 错误、Memory ≤ 18KB）按 R19 §3 降级为**运行时稳定性证据**（速率结论作废——素房 1W upgrader 不代表 RCL7 经济） |
 | tier 切换 | healthy→guarded→conserve→recovery | ✅ sv=43 四档全链实测（E2E-015，2026-08-29：四档 probe + 滞回爬升回 healthy、0 JS 错误、全程存活） |
 | hostile/恢复 | 敌袭→恢复 | ✅ sv=43 当前版本证据（E2E-025，2026-08-30：6 波敌袭注入 → 每波间隙 colonyState 回 normal + 编队存活恢复 10/10 采样、0 JS 错误、Memory 有界；sv=39 的 685 快照仍为 Historical Evidence） |
 | global reset | 多次 reset 恢复 | ✅ 当前版本证据：E2E-005 global reset 注入场景 @ sv43 全绿（2026-08-29 全套件）；多次 reset 编排继续项 |
