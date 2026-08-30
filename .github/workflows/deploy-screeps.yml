@@ -47,11 +47,13 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
-      - name: Integration tests
-        run: npm run test:integration
-
+      # Build 在 Integration 之前：bundle-parity.test.ts（be82be9 起的 parity 门禁）
+      # 断言 dist/main.js 存在，CI 全新 checkout 无构建产物，必须先构建再跑集成。
       - name: Build
         run: npm run build
+
+      - name: Integration tests
+        run: npm run test:integration
 
       # Bundle 尺寸预算：global reset 时 bundle 加载成本与 tickLimit 直接相关
       # （见 CONFIG.pixel 注释的 reload death loop 事故）。超预算响亮失败，
