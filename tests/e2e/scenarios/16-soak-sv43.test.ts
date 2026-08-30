@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
-import { standardRoom } from "../fixtures/rooms";
+import { t0Base } from "../fixtures/base";
 
 const ROOM = "W0N1";
 // 深度 soak 由环境变量驱动（CANARY §5.1 要求 50,000+ tick；默认 4×5000=20k）。
@@ -33,8 +33,12 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
   let totalErrors = 0;
 
   beforeAll(async () => {
-    // 预置起始档：RCL6 起跑附带 storage（经济成熟态，直接进入 RCL6→7 爬升）。
-    const room = standardRoom(ROOM, 300, START_RCL);
+    // L0 基座（E2E_ENV_BASE_CONTRACT §1）+ L1 具名环境注入（§2 逐条登记）：
+    //   injectRcl(START_RCL)   —— controllerLevel 选项（>1 时；此环境非自举所得）
+    //   injectStorage(60k)     —— storage 水位（START_RCL>=6 时）
+    // 证据效力：本场景为注入轨——只回答运行时不变式（无错误/Memory 有界/存活），
+    // 爬级速率结论以自举轨工件为准（§3 铁律）。
+    const room = t0Base(ROOM);
     if (START_RCL >= 6) {
       room.objects!.push({ type: "storage", x: 24, y: 30, props: { store: { energy: 60000 } } });
     }

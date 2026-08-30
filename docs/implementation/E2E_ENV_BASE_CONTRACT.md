@@ -1,7 +1,7 @@
 # E2E_ENV_BASE_CONTRACT · E2E 环境基座与注入架构（设计合同 · 待 ADR 冻结）
 
-> 状态：设计合同（2026-08-30 起草）——实施前经评审批准，冻结须走
-> [ARCHITECTURE_FREEZE.md](../architecture/ARCHITECTURE_FREEZE.md) §15 登记。
+> 状态：**已冻结（R19，2026-08-30）**——登记见
+> [ARCHITECTURE_FREEZE.md](../architecture/ARCHITECTURE_FREEZE.md) §15。
 > 背景：SOAK_START_RCL 预置 RCL7 被当自然状态解读的失真教训（素房 1W upgrader
 > 速率外推 RCL8 时长被证伪）；夹具动物园（standardRoom/rcl4Room/… 各自为政）
 > 导致场景间不可比。
