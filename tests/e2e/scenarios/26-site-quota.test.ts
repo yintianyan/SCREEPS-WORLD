@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
-import { standardRoom } from "../fixtures/rooms";
+import { t0Base } from "../fixtures/base";
 
 function isJsError(line: string): boolean {
   return (
@@ -22,7 +22,7 @@ describe("E2E-026 site quota 极限注入", () => {
   beforeAll(async () => {
     await runner.setup({
       roomName: "W0N1",
-      rooms: [standardRoom("W0N1", 300, 5), standardRoom("W0N2", 300, 4)],
+      rooms: [t0Base("W0N1"), t0Base("W0N2")],
       maxTicks: 3200,
       controllerLevel: 5,
       ownedRooms: [{ name: "W0N2", level: 4 }],

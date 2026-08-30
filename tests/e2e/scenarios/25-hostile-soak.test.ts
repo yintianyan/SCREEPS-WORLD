@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
-import { standardRoom } from "../fixtures/rooms";
+import { t0Base } from "../fixtures/base";
 
 function isJsError(line: string): boolean {
   return (
@@ -22,7 +22,7 @@ describe("E2E-025 hostile/恢复长程统计", () => {
   let recoveries = 0;
 
   beforeAll(async () => {
-    const home = standardRoom("W0N1", 300, 6);
+    const home = t0Base("W0N1");
     home.objects!.push(
       { type: "tower", x: 20, y: 20, props: { energy: 1000, energyCapacity: 1000 } },
       { type: "storage", x: 24, y: 30, props: { store: { energy: 40000 } } },

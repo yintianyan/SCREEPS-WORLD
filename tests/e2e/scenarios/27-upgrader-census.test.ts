@@ -1,12 +1,12 @@
 /** E2E-027 诊断探针 — RCL7 素房 upgrader 供给链普查（速率根因定位）。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
-import { standardRoom } from "../fixtures/rooms";
+import { t0Base } from "../fixtures/base";
 
 describe("E2E-027 upgrader 供给链普查", () => {
   const runner = new ScenarioRunner();
   beforeAll(async () => {
-    const room = standardRoom("W0N1", 300, 7);
+    const room = t0Base("W0N1");
     room.objects!.push({ type: "storage", x: 24, y: 30, props: { store: { energy: 60000 } } });
     await runner.setup({ roomName: "W0N1", rooms: [room], maxTicks: 4200, controllerLevel: 7 });
   }, 120000);

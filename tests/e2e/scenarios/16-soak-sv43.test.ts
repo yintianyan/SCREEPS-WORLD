@@ -59,8 +59,19 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
     async () => {
       let finalRcl = 1;
       for (let stage = 1; stage <= STAGES; stage++) {
+        await runner.bot.sendConsole(
+          'console.log("CENSUS t=" + Game.time + " ext=" + ' +
+          'Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="extension").length + ' +
+          '" cont=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="container").length + ' +
+          '" link=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="link").length + ' +
+          '" term=" + (Game.rooms.W0N1.terminal?1:0) + ' +
+          '" tower=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="tower").length)',
+        );
         const snapshots = await runner.runTicks(STAGE_TICKS);
         const last = snapshots.at(-1)!;
+        for (const l of snapshots.flatMap((s) => s.consoleLogs)) {
+          if (l.includes("CENSUS")) console.log(l.replace(/^.*CENSUS /, "[census] "));
+        }
         totalErrors += snapshots.flatMap((s) => s.consoleLogs).filter(isJsError).length;
 
         const rawMem = last.rawMemory as any;
