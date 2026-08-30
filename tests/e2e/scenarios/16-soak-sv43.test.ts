@@ -68,6 +68,8 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
     async () => {
       let finalRcl = 1;
       for (let stage = 1; stage <= STAGES; stage++) {
+        // 账本 1000t 采样（瞬态异常盲窗最小化）；重开销 census 每 5 采样一次。
+        if ((stage - 1) % 5 === 0) {
         await runner.bot.sendConsole(
           'console.log("BUCKET t=" + Game.time + " v=" + Game.cpu.bucket)',
         );
@@ -86,6 +88,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
           'Object.values(r.find(FIND_STRUCTURES)).filter(s=>s.structureType==="extension").length * ec; })()) + ' +
           '" prog=" + Game.rooms.W0N1.controller.progress + "/" + Game.rooms.W0N1.controller.progressTotal',
         );
+        }
         const snapshots = await runner.runTicks(STAGE_TICKS);
         const last = snapshots.at(-1)!;
         for (const l of snapshots.flatMap((s) => s.consoleLogs)) {
