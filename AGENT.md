@@ -65,7 +65,9 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 ## 质量门槛（合并前强制）
 
 执行 `npm run typecheck`、`npm test`、`npm run build` 全绿。命令清单与
-package.json scripts 一致：typecheck / check:docs / test / test:unit / test:integration / build / watch。
+package.json scripts 一致：typecheck / check:docs / test / test:unit / test:integration / test:e2e / test:e2e:smoke / test:all / build / watch。
+（TEST_ARCHITECTURE §2 口径：e2e 冒烟 = `test:e2e:smoke`，为 CI 门禁成员；
+`test:e2e` 全套件与 `test:all` 为本地全量验收入口。）
 
 ## 硬约束（不可妥协）
 
