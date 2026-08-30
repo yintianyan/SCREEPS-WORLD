@@ -80,6 +80,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
           const census = await runner.inspector.structureCensus(ROOM);
           const upW = await runner.inspector.roleBodyPartHistogram(ROOM, "upgrader", "work");
           const ctrl = await runner.inspector.controllerProgress(ROOM);
+          const reserves = await runner.inspector.energyReserves(ROOM);
           const lv = ctrl?.level ?? 1;
           const ec = lv >= 8 ? 200 : lv >= 7 ? 100 : 50;
           const cap = (census.spawn ?? 0) * 300 + (census.extension ?? 0) * ec;
@@ -87,7 +88,8 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
             `[census] t=${last.tick} ext=${census.extension ?? 0} cont=${census.container ?? 0} ` +
               `link=${census.link ?? 0} term=${census.terminal ?? 0} tower=${census.tower ?? 0} ` +
               `roles=${JSON.stringify(last.creepCountByRole)} upW=${JSON.stringify(upW)} cap=${cap} ` +
-              `prog=${ctrl?.progress ?? 0}/${ctrl?.progressTotal ?? 0}`,
+              `prog=${ctrl?.progress ?? 0}/${ctrl?.progressTotal ?? 0} ` +
+              `storE=${reserves.storage} termE=${reserves.terminal} contE=${reserves.container}`,
           );
           stageProgLog.push({ prog: ctrl?.progress ?? 0, total: ctrl?.progressTotal ?? 0 });
         }

@@ -69,3 +69,31 @@ export async function injectSpawnEnergy(
     { $set: { store, energy } },
   );
 }
+
+/**
+ * L1 环境注入：夹具塔收编为 bot 现役塔 + canonical store 补能（R20/T6）。
+ * 夹具结构先于 addBot 插入（bot user id 当时未知）→ 缺 user 字段，
+ * FIND_MY_STRUCTURES 永远看不到它，塔防不可能开火（E2E-004 真值断言根因）。
+ * 同时补 canonical store 形态——mockup 分裂脑：引擎读 store，legacy energy 不生效。
+ */
+export async function injectFriendlyTower(
+  runner: ScenarioRunner, room: string, energy: number,
+): Promise<void> {
+  const { db } = (runner as any)._server.server.common.storage;
+  const [bot] = await db.users.find({ username: "bot" });
+  if (!bot) throw new Error("injectFriendlyTower: bot user 不存在");
+  const tower = await db["rooms.objects"].findOne({ room, type: "tower" });
+  if (!tower) throw new Error(`injectFriendlyTower: room ${room} 无塔`);
+  await db["rooms.objects"].update(
+    { _id: tower._id },
+    {
+      $set: {
+        user: bot._id,
+        store: { energy },
+        storeCapacityResource: { energy: 1000 },
+        hits: tower.hits ?? 3000,
+        hitsMax: tower.hitsMax ?? 3000,
+      },
+    },
+  );
+}

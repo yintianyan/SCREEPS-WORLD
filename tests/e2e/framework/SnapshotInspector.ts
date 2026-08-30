@@ -225,6 +225,19 @@ export class SnapshotInspector {
       .sort((a, b) => a - b);
   }
 
+  /** 能量储量真值（storage/terminal/container 逐结构 store.energy 求和）。 */
+  async energyReserves(roomName?: string): Promise<Record<string, number>> {
+    const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
+    const out: Record<string, number> = { storage: -1, terminal: -1, container: 0 };
+    for (const o of objs as any[]) {
+      const e = (o.store as any)?.energy ?? 0;
+      if (o.type === "storage") out.storage = e;
+      else if (o.type === "terminal") out.terminal = e;
+      else if (o.type === "container") out.container += e;
+    }
+    return out;
+  }
+
   /** 工地普查（structureType → 数量）——constructionSite 对象真值（R20/T6）。 */
   async siteCensus(roomName?: string): Promise<Record<string, number>> {
     const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
