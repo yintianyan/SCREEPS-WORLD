@@ -33,11 +33,10 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        # --ignore-scripts 跳过原生插件编译：deploy 只需 rollup + typescript，
-        # 用不到 isolated-vm（那是 E2E 测试用的 screeps-server-mockup 依赖）。
-        # 跳过后既省 2-4 分钟编译，又彻底规避 isolated-vm 的 node-gyp 编译失败。
-        # integration 测试用 fake world，不需要原生模块。
-        run: npm ci --ignore-scripts
+        # 完整安装（R20/T2）：e2e 冒烟已进门槛（TEST_ARCHITECTURE §4），需要
+        # screeps-server-mockup + isolated-vm（git 版 cb93efc 支持 Node24 编译，
+        # e2e-verify CI 实证 6m4s 全绿）。旧 --ignore-scripts 规避编译的理由失效。
+        run: npm ci
 
       - name: Typecheck
         run: npm run typecheck
@@ -54,6 +53,12 @@ jobs:
 
       - name: Integration tests
         run: npm run test:integration
+
+      # E2E 冒烟（TEST_ARCHITECTURE §4 门禁成员，R20/T2）—— 真实引擎跑
+      # dist/main.js 基础链路；全套件（~15min）留在 e2e-verify/本地。
+      - name: E2E smoke (real engine)
+        run: npx vitest run tests/e2e/scenarios/00-smoke.test.ts --config vitest.e2e.config.ts
+        timeout-minutes: 8
 
       # Bundle 尺寸预算：global reset 时 bundle 加载成本与 tickLimit 直接相关
       # （见 CONFIG.pixel 注释的 reload death loop 事故）。超预算响亮失败，

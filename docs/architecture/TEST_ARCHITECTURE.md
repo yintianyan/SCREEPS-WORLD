@@ -36,7 +36,7 @@ L6 归 §5 canary 发布；L2–L5 展开为下表八类。每类**能证明 / �
 | Simulation / Scenario / Empire / Failure / PvP | 私服 e2e `tests/e2e/`（`npm run test:e2e`；冒烟 `test:e2e:smoke`），screeps-server-mockup 驱动 | hivemind mock 先例；场景脚本必须进矩阵（§6），禁止场外手写脚本不登记（research/28 §11） |
 | Stress / soak | 私服长跑＋官服 soak；数据经遥测采集 | 指标先有基线再跑（§3） |
 | 遥测断言 | L3 TelemetryFrame（segment）→ 体外只读采集器（`tools/private/empire-collector`）→ 断言 | 体外平面只读不写（research/21 §10.3） |
-| 架构回归 | dependency-cruiser 类工具以 [DEPENDENCY_GRAPH.md](DEPENDENCY_GRAPH.md) §1 图为期望集 diff；lint：`import/no-cycle`＋分区 `no-restricted-imports`（src/domain 禁 Game/Memory；src/kernel 禁业务 import，R9 白名单一行；角色目录禁 `Room.find`）；bundle parity 守卫（R12，`tests/unit/architecture/compliance.test.ts`：注册系统 name 全部出现在 `dist/main.js`、已裁决删除模块不得回流 bundle）；文档一致性 `npm run check:docs`（链接 / 术语 / schemaVersion / 注册数 / Shadow-Only / soak 标记 / 实现入口七项） | 任何新增环、未登记边、bundle 回流或文档失真即门槛红（DEPENDENCY_GRAPH §4 六项义务） |
+| 架构回归 | dependency-cruiser 类工具以 [DEPENDENCY_GRAPH.md](DEPENDENCY_GRAPH.md) §1 图为期望集 diff；lint：`import/no-cycle`＋分区 `no-restricted-imports`（src/domain 禁 Game/Memory；src/kernel 禁业务 import，R9 白名单一行；角色目录禁 `Room.find`）；bundle parity 守卫（R12 登记 · R20③ 收敛至 `tests/integration/framework/bundle-parity.test.ts`——dist 仅在 build 后存在，守卫必须在 build 之后：注册系统/角色 name 全部出现在 `dist/main.js`、已裁决删除模块不得回流 bundle）；文档一致性 `npm run check:docs`（链接 / 术语 / schemaVersion / 注册数 / Shadow-Only / soak 标记 / 实现入口七项） | 任何新增环、未登记边、bundle 回流或文档失真即门槛红（DEPENDENCY_GRAPH §4 六项义务） |
 
 ## 3. 验收指标与遥测共用合同（一鱼两吃）
 

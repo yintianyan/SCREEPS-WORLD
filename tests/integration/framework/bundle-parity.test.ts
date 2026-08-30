@@ -53,4 +53,17 @@ describe("生产 bundle parity — bootstrap 注册集合 vs dist/main.js", () =
     expect(bundle).toContain("registry");
     expect(bundle).toContain("kernel");
   });
+
+  it("bundle 不包含已裁决删除的模块（R12③ 自 compliance.test.ts 迁移，R20③）", () => {
+    if (!existsSync(BUNDLE_PATH)) return;
+    const bundle = readFileSync(BUNDLE_PATH, "utf8");
+    const forbidden = [
+      "intelligence-pipeline",
+      "decision-trace",
+      "evaluation-system",
+      "EvaluationRegistry",
+    ];
+    const found = forbidden.filter((keyword) => bundle.includes(keyword));
+    expect(found, "dist/main.js 包含已删除模块: " + found.join(", ")).toHaveLength(0);
+  });
 });
