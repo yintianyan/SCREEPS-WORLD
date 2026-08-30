@@ -181,7 +181,7 @@ build
 | 运行 tick | 50,000+ | [Historical Evidence] 2,340,004 tick（sv=39 数据集）；✅ **当前版本 60,000 tick 达标**（E2E-016 深度档 @ sv=43，2026-08-29：RCL1→4 自然晋级、0 JS 错误、Memory ≤ 11KB、全程存活；绑定：schemaVersion=43 / ticks=60000 / W0N1 / collectedAt 见场景输出） |
 | RCL 覆盖 | RCL1→RCL8 | ◐ sv=43 已覆盖 **RCL1→7**（RCL7 持续 ~1.275M tick）：RCL1→6（260k）+ RCL6→7（600k 段，RCL7 @ ~525k）+ RCL7 持续（1.2M 过夜段）；三段全程 0 JS 错误、Memory 有界（≤18KB）；**RCL8 收尾段进行中**（3.6M 进度已积累 ~2.4M，剩 ~600k tick ≈ 2.5h） |
 | tier 切换 | healthy→guarded→conserve→recovery | ✅ sv=43 四档全链实测（E2E-015，2026-08-29：四档 probe + 滞回爬升回 healthy、0 JS 错误、全程存活） |
-| hostile/恢复 | 敌袭→恢复 | [Historical Evidence] 685 hostile 快照（sv=39 数据集） |
+| hostile/恢复 | 敌袭→恢复 | ✅ sv=43 当前版本证据（E2E-025，2026-08-30：6 波敌袭注入 → 每波间隙 colonyState 回 normal + 编队存活恢复 10/10 采样、0 JS 错误、Memory 有界；sv=39 的 685 快照仍为 Historical Evidence） |
 | global reset | 多次 reset 恢复 | ✅ 当前版本证据：E2E-005 global reset 注入场景 @ sv43 全绿（2026-08-29 全套件）；多次 reset 编排继续项 |
 | schema 一致 | soak sv = 代码 sv | ✅ E2E-016 soak sv=43 = 代码 sv=43（2026-08-29）；sv=39 历史数据集仍为 Historical Evidence |
 
@@ -192,7 +192,7 @@ build
 | 自有房数 | ≥ 2 | ✅ 双自有房并行 5,000 tick @ sv=43（E2E-017，2026-08-29：主房 RCL6 + 殖民房 RCL4 各自 spawn/建造/运转） |
 | 第二房 Claim→Bootstrap | 完整验证 | ◐ 全链场景已建（E2E-020 @ sv=43：GCL 预置 2/观察器邻房 intel/planner 发现 4 候选/Budget 门已通）；**Readiness 经济门（netFlow/health）在 mockup 需 >15k tick 成熟期**——G1–G5 门控的设计行为（Scenario B），自然放行长窗验证为继续项 |
 | 多房 spawn 竞争 | 验证公平性 | ✅ 双房各自 spawn 并行孵化无互抢（E2E-017 暖机 byHome=W0N1:4/W0N2:5） |
-| 多房 site quota | 验证不冲突 | ◐ 双房 buildQueue 并行有界观测（94 项，无越限）；极限配额注入未做 |
+| 多房 site quota | 验证不冲突 | ✅ 极限注入实测（E2E-026 @ sv=43：双房各预置 20 queued 任务 over-quota → 全局实际 site 数峰值 = 7 = maxGlobalSites 恰好封顶、无越限、0 JS 错误） |
 | 多房 energy 互济 | terminal 互济 | ◐ 决策权语义已锁定（E2E-019 @ sv=43：Plan 活跃时 self-aid 压制——A4.4 决策权回归测试）；Plan 驱动的 terminal 调拨证据需 planner 输入构造（继续项） |
 | 一房异常不扩散 | 故障注入 | ✅ 殖民房编队全灭注入：母房不受影响（6 只稳定）、殖民房灾后恢复孵化闭环（E2E-017 recovered=true） |
 
