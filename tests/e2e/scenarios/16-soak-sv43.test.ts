@@ -125,10 +125,12 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
             `${rateInfo} tier=${k.tier ?? "?"} cs=${rm.colonyState ?? "?"} ` +
             `viol=${violations.length} cpu10=${k.stats?.cpuAvg10 ?? "?"} ` +
             `cpuMax=${k.stats?.cpuMax10 ?? "?"} bucket=${bucketProbe ?? "?"} ` +
-            `queue=${(rm.spawnQueue ?? []).length} net=${rm.economy?.netFlow ?? "?"} ` +
+            `queue=${(rm.spawnQueue ?? []).length} net=${rm.economy ? (rm.economy.nf / 100).toFixed(2) : "?"} ` +
             `stor=${rm.phase?.storageEnergy ?? "?"} memHist=${((k.memoryHistory ?? []) as any[]).length} ` +
             `skip=${JSON.stringify(topSkips(k.skipReasons))} ` +
-            `tuned=${k.tuning?.lastTuned ?? "?"} err=${k.stats?.lastError ? 1 : 0}`,
+            `tuned=${k.tuning?.lastTuned ?? "?"} err=${k.stats?.lastError ? 1 : 0}` +
+            ` eld=${JSON.stringify((k.stats?.energyLedger?.rooms?.[ROOM] ?? {}))} ` +
+            `cpuSys=${JSON.stringify(k.stats?.cpuBySystem ?? {})}`,
         );
 
         expect(

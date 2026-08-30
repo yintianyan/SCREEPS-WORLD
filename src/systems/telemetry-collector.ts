@@ -225,6 +225,16 @@ function sampleMemorySize(tick: number): void {
       };
     }
     Memory.kernel.stats.memorySize = size;
+    // 能量守恒账本科目（boot 起累计，铸件/复盘侧差分得速率）+ per-system CPU EMA top10。
+    const g = globalCache() as any;
+    if (g.energyLedger?.rooms) {
+      (Memory.kernel.stats as any).energyLedger = { tick: g.energyLedger.tick, rooms: g.energyLedger.rooms };
+    }
+    if (g.systemBudgetEma instanceof Map && g.systemBudgetEma.size > 0) {
+      (Memory.kernel.stats as any).cpuBySystem = Object.fromEntries(
+        [...g.systemBudgetEma.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10),
+      );
+    }
     if (size > MEMORY_SIZE_ALERT) {
       log.warn("telemetry-collector", `WARNING: Memory size ${size} bytes (${(size / 1024 / 1024).toFixed(2)}MB) ` +
         `approaching 2MB limit — consider pruning Memory.rooms / remoteOps`,);
