@@ -38,6 +38,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
   const tierSet: Record<string, number> = {};
   const tierSeq: string[] = [];
   const stageProgLog: { prog: number; total: number }[] = [];
+  let bucketProbe: number | undefined;
 
   beforeAll(async () => {
     // L0 基座（E2E_ENV_BASE_CONTRACT §1）+ L1 具名环境注入（§2 逐条登记）：
@@ -68,6 +69,9 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
       let finalRcl = 1;
       for (let stage = 1; stage <= STAGES; stage++) {
         await runner.bot.sendConsole(
+          'console.log("BUCKET t=" + Game.time + " v=" + Game.cpu.bucket)',
+        );
+        await runner.bot.sendConsole(
           'console.log("CENSUS t=" + Game.time + " ext=" + ' +
           'Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="extension").length + ' +
           '" cont=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="container").length + ' +
@@ -85,7 +89,13 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
         const snapshots = await runner.runTicks(STAGE_TICKS);
         const last = snapshots.at(-1)!;
         for (const l of snapshots.flatMap((s) => s.consoleLogs)) {
-          if (l.includes("CENSUS")) console.log(l.replace(/^.*CENSUS /, "[census] "));
+          const bm = l.match(/BUCKET t=\d+ v=(-?\d+)/);
+          if (bm) bucketProbe = Number(bm[1]);
+          if (l.includes("CENSUS")) {
+            console.log(l.replace(/^.*CENSUS /, "[census] "));
+            const pm = l.match(/prog=(\d+)\/(\d+)/);
+            if (pm) stageProgLog.push({ prog: Number(pm[1]), total: Number(pm[2]) });
+          }
         }
         totalErrors += snapshots.flatMap((s) => s.consoleLogs).filter(isJsError).length;
 
@@ -94,9 +104,35 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
         const mem = await runner.bot.getMemory();
         const memSize = JSON.stringify(mem).length;
 
+        // 效率/健康账本：升级速率、tier、colonyState、期望违例、CPU、spawn 积压、
+        // storage、bucket、Memory 逐族历史、skip 热点、tuning、错误标记。
+        const k = (mem?.kernel ?? {}) as any;
+        const rm = ((mem?.rooms ?? {}) as any)[ROOM] ?? {};
+        const violations = (k.expectations?.violations ?? []) as string[];
+        const progNow = stageProgLog.at(-1)?.prog;
+        const rateInfo =
+          progNow !== undefined && lastProg !== undefined && progNow > lastProg
+            ? ` rate=${((progNow - lastProg) / STAGE_TICKS).toFixed(2)}/t`
+            : "";
+        if (progNow !== undefined) lastProg = progNow;
+        if (k.tier && tierSet[k.tier] === undefined) {
+          tierSet[k.tier] = last.tick;
+          tierSeq.push(`${k.tier}@${last.tick}`);
+        }
+        if (violations.length > 0) violationStages++;
+        if (last.totalCreeps < 5) lowPopStages++;
+        const topSkips = (sr?: Record<string, number>) =>
+          sr ? Object.entries(sr).sort((a, b) => b[1] - a[1]).slice(0, 3) : [];
         console.log(
           `[soak-evidence] sv43-soak stage=${stage} tick=${last.tick} ` +
-            `creeps=${last.totalCreeps} rcl=${finalRcl} memKB=${(memSize / 1024).toFixed(0)}`,
+            `creeps=${last.totalCreeps} rcl=${finalRcl} memKB=${(memSize / 1024).toFixed(0)}` +
+            `${rateInfo} tier=${k.tier ?? "?"} cs=${rm.colonyState ?? "?"} ` +
+            `viol=${violations.length} cpu10=${k.stats?.cpuAvg10 ?? "?"} ` +
+            `cpuMax=${k.stats?.cpuMax10 ?? "?"} bucket=${bucketProbe ?? "?"} ` +
+            `queue=${(rm.spawnQueue ?? []).length} net=${rm.economy?.netFlow ?? "?"} ` +
+            `stor=${rm.phase?.storageEnergy ?? "?"} memHist=${((k.memoryHistory ?? []) as any[]).length} ` +
+            `skip=${JSON.stringify(topSkips(k.skipReasons))} ` +
+            `tuned=${k.tuning?.lastTuned ?? "?"} err=${k.stats?.lastError ? 1 : 0}`,
         );
 
         expect(
