@@ -59,6 +59,13 @@ export interface BotSnapshot {
   rclByRoom: Record<string, number>;
 }
 
+/** STRUCTURE_* 常量值集合（SSOT）—— driver DB 对象的 type 判别用。 */
+const STRUCTURE_TYPE_VALUES = new Set(
+  Object.entries(C)
+    .filter(([k]) => k.startsWith("STRUCTURE_"))
+    .map(([, v]) => v as string),
+);
+
 /**
  * 状态检查器。封装从 bot 提取状态的逻辑。
  */
@@ -187,15 +194,17 @@ export class SnapshotInspector {
 
   /**
    * 结构普查（structureType → 数量）。
-   * 只计真实结构——constructionSite/ruin/creep/资源不计数（与 FIND_STRUCTURES
-   * 语义一致：对象的 type 字段等于其 structureType 才是结构本体）。
+   * [Facts] world.roomObjects 返回 driver DB 原始对象——只有 `type` 字段，
+   * 无 structureType（那是运行时视图字段，原 bot 侧探针经游戏内 getter 才有）。
+   * 故按 type ∈ STRUCTURE_* 值集合判别，与 FIND_STRUCTURES 语义一致
+   * （constructionSite/ruin/creep/资源不计数）。
    */
   async structureCensus(roomName?: string): Promise<Record<string, number>> {
     const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
     const census: Record<string, number> = {};
     for (const o of objs as any[]) {
-      if (typeof o.structureType !== "string" || o.type !== o.structureType) continue;
-      census[o.structureType] = (census[o.structureType] ?? 0) + 1;
+      if (typeof o.type !== "string" || !STRUCTURE_TYPE_VALUES.has(o.type)) continue;
+      census[o.type] = (census[o.type] ?? 0) + 1;
     }
     return census;
   }

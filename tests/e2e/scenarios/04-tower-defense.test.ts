@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { rcl3RoomWithTower } from "../fixtures/rooms";
+import { injectFriendlyTower } from "../fixtures/inject";
 import { debugSnapshot } from "../helpers/assertions";
 import { isJsError } from "../../support/errors";
 
@@ -14,6 +15,9 @@ describe("E2E-004 Tower 防御", () => {
       rooms: [rcl3RoomWithTower("W0N1")],
       maxTicks: 2000,
     });
+    // 夹具塔收编（R20/T6）：addBot 前插入的塔缺 user + store 形态，不收编则
+    // 塔防永远看不到它（见 injectFriendlyTower 注释）。
+    await injectFriendlyTower(runner, "W0N1", 600);
   }, 120000);
 
   afterAll(async () => {
@@ -81,9 +85,21 @@ describe("E2E-004 Tower 防御", () => {
       // 核心断言：注入 hostile 后系统继续运行不崩
       expect(snapshots.length, "应运行 400 tick").toBe(400);
 
-      // 火力真值断言（R20/T6）：hostile 受伤或被击杀（roomObjects 直读 hits，
-      // 取代「E2E 无法读塔」的旧注释——经 inspector 的引擎真值查询已可读）。
+      // 火力真值断言（R20/T6）：hostile 受伤或被击杀（roomObjects 直读 hits）。
+      // 失败时输出威胁/塔可见性/能量三档诊断，定位断链层级。
       const after = await runner.inspector.creepHitPoints("W0N1", "Invader1");
+      if (after !== undefined && after.hits >= after.hitsMax) {
+        const diagMem = (await runner.bot.getMemory()) as any;
+        const rm = diagMem?.rooms?.["W0N1"] ?? {};
+        const towers = await runner.inspector.structureCensus("W0N1");
+        console.log(
+          "[tower-diag] threat=" + JSON.stringify(rm.threat ?? rm.threatLevel ?? null) +
+          " hostiles=" + JSON.stringify(rm.hostiles ?? rm.lastHostileAt ?? null) +
+          " towerCensus=" + JSON.stringify(towers) +
+          " towerRaw=" + JSON.stringify(((await (runner.inspector as any).world().roomObjects("W0N1")) as any[]).filter((o) => o.type === "tower")).slice(0, 400) +
+          " colonyState=" + (rm.colonyState ?? "?"),
+        );
+      }
       expect(
         after === undefined || after.hits < after.hitsMax,
         `hostile 400 tick 后无伤且未死亡（hits=${after?.hits}/${after?.hitsMax}）— tower 未开火`,
