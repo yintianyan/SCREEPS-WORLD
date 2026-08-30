@@ -198,6 +198,7 @@ export function createBudget(): Budget {
 
   // 持久化档位跟踪，供下一 tick 使用。
   if (!Memory.kernel) Memory.kernel = {};
+  if (Memory.kernel.tier !== tier) Memory.kernel.tierChangedAt = Game.time;
   Memory.kernel.tier = tier;
   Memory.kernel.recoveryTicks = recoveryTicks;
 

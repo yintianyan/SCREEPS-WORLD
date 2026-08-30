@@ -225,6 +225,18 @@ function sampleMemorySize(tick: number): void {
       };
     }
     Memory.kernel.stats.memorySize = size;
+    // spawn 利用率（有 spawn 在孵的采样占比；引擎态直读，不依赖快照入参）。
+    const smp = (Memory.kernel.stats as any);
+    smp.spawnUtilSamples = (smp.spawnUtilSamples ?? 0) + 1;
+    let anySpawning = 0;
+    for (const r of Object.values(Game.rooms) as any[]) {
+      if (!r.controller?.my) continue;
+      for (const sp of (r.find?.(FIND_MY_SPAWNS) ?? []) as any[]) {
+        if (sp.spawning) { anySpawning = 1; break; }
+      }
+      if (anySpawning) break;
+    }
+    smp.spawnUtilSpawning = (smp.spawnUtilSpawning ?? 0) + anySpawning;
     // 能量守恒账本科目（boot 起累计，铸件/复盘侧差分得速率）+ per-system CPU EMA top10。
     const g = globalCache() as any;
     if (g.energyLedger?.rooms) {
