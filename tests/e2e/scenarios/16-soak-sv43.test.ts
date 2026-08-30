@@ -67,7 +67,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
           '" term=" + (Game.rooms.W0N1.terminal?1:0) + ' +
           '" tower=" + Object.values(Game.rooms.W0N1.find(FIND_STRUCTURES)).filter(s=>s.structureType==="tower").length + ' +
           '" roles=" + JSON.stringify(Object.values(Game.creeps).reduce((a,c)=>{const r=c.memory.role||"?";a[r]=(a[r]||0)+1;return a;},{})) + ' +
-          '" upW=" + JSON.stringify(Object.values(Game.creeps).filter(c=>c.memory.role==="upgrader").map(c=>c.body.filter(p=>p.type==="work").length)) + 
+          '" upW=" + JSON.stringify(Object.values(Game.creeps).filter(c=>c.memory.role==="upgrader").map(c=>c.body.filter(p=>p.type==="work").length)) + ' +
           '" cap=" + (() => { const r = Game.rooms.W0N1; const lv = r.controller.level; ' +
           'const ec = lv >= 8 ? 200 : lv >= 7 ? 100 : 50; ' +
           'return r.find(FIND_MY_SPAWNS).length * 300 + ' +
