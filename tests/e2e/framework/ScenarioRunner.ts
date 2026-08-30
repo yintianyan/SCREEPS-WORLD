@@ -37,6 +37,8 @@ export interface ScenarioOptions {
   cpuLimit?: number;
   /** bot bucket 容量（mockup 默认 10000）。 */
   cpuBucket?: number;
+  /** 断点续跑：挂载既有 server 目录（db.json 完整状态），跳过 reset/世界构造/addBot。 */
+  resumeFrom?: string;
   /**
    * 额外自有房：预置 controller 归属 bot（user = bot id）+ 等级 + 房间激活。
    * 多房 soak 用——第二房的 spawn 由夹具提供（addBot 只建主房 spawn）。
@@ -78,7 +80,15 @@ export class ScenarioRunner {
    * 初始化场景：创建 server，构建世界，注册 bot。
    */
   async setup(opts: ScenarioOptions): Promise<void> {
-    this._server = new ServerHarness();
+    this._server = new ServerHarness(opts.resumeFrom ? { path: opts.resumeFrom } : {});
+    if (opts.resumeFrom) {
+      // 断点续跑：bot 代码与 Memory 已在 db.json 中，挂接既有用户直接启动。
+      this._bot = new BotHarness(opts.botUsername ?? "bot", opts.roomName, { x: 25, y: 25 });
+      await this._bot.attachExisting(this._server.server, opts.botUsername ?? "bot");
+      await this._server.start();
+      this._inspector = new SnapshotInspector(this._bot);
+      return;
+    }
     await this._server.reset(opts.stubWorld ?? false);
 
     // 【Phase3A 修复】双 spawn 去重：mockup 的 addBot() 会自动在目标房创建一个

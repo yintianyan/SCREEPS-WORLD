@@ -15,10 +15,17 @@ export class ServerHarness {
   readonly server: ScreepsServer;
   private _started = false;
 
-  constructor() {
-    // 每实例独立 tmpdir + 随机端口：mockup 默认固定 `server/` 目录 + 21025 端口，
-    // 并发实例（长程 soak 与场景并行）会双冲突。端口从随机基址取，碰撞概率
-    // 可忽略；目录由 dispose 后留给 OS tmp 清理。
+  constructor(opts: { path?: string } = {}) {
+    // 断点续跑：给定既有 server 目录（db.json 完整状态）则直接挂载；
+    // 否则每实例独立 tmpdir + 随机端口（并发实例防冲突）。
+    if (opts.path) {
+      this.server = new ScreepsServer({
+        path: opts.path,
+        logdir: join(opts.path, "logs"),
+        port: 21025 + 1000 + Math.floor(Math.random() * 8000),
+      });
+      return;
+    }
     const dir = mkdtempSync(join(tmpdir(), "screeps-e2e-"));
     const port = 21025 + 1000 + Math.floor(Math.random() * 8000);
     this.server = new ScreepsServer({

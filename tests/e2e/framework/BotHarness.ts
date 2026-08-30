@@ -70,6 +70,24 @@ export class BotHarness {
   }
 
   /**
+   * 断点续跑：挂接 server 目录中已存在的 bot 用户（不重建、不清状态）。
+   */
+  async attachExisting(server: any, username = "bot"): Promise<void> {
+    const { db } = await server.world.load();
+    const [userData] = await db.users.find({ username });
+    if (!userData) throw new Error(`attachExisting: user not found: ${username}`);
+    const userMod = require("screeps-server-mockup/dist/src/user.js");
+    const User = userMod.default ?? userMod;
+    this._bot = new User(server, userData);
+    this._bot.on("console", (logs: string[], _r: any, _u: string, _n: string) => {
+      for (const line of logs) this._consoleLogs.push(line);
+    });
+    this._bot.on("notification", (message: string, date: number) => {
+      this._notifications.push({ message, date });
+    });
+  }
+
+  /**
    * 获取 bot 的 Memory 快照（JSON 字符串）。
    * 每次调用都从 server 拉取最新值。
    */

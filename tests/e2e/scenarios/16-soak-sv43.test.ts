@@ -47,6 +47,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
       rooms: [room],
       maxTicks: TOTAL_TICKS + 1000,
       controllerLevel: START_RCL > 1 ? START_RCL : undefined,
+      resumeFrom: process.env.SOAK_RESUME,
     });
   }, 120000);
 
@@ -71,7 +72,8 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
           '" cap=" + (() => { const r = Game.rooms.W0N1; const lv = r.controller.level; ' +
           'const ec = lv >= 8 ? 200 : lv >= 7 ? 100 : 50; ' +
           'return r.find(FIND_MY_SPAWNS).length * 300 + ' +
-          'Object.values(r.find(FIND_STRUCTURES)).filter(s=>s.structureType==="extension").length * ec; })())',
+          'Object.values(r.find(FIND_STRUCTURES)).filter(s=>s.structureType==="extension").length * ec; })()) + ' +
+          '" prog=" + Game.rooms.W0N1.controller.progress + "/" + Game.rooms.W0N1.controller.progressTotal',
         );
         const snapshots = await runner.runTicks(STAGE_TICKS);
         const last = snapshots.at(-1)!;
