@@ -298,6 +298,8 @@ declare global {
     tier?: CpuTier;
       /** 最近一次 CpuTier 变更 tick（驻留时长观测）。 */
       tierChangedAt?: number;
+      /** 最近一次 posture 变更 tick（决策质量观测）。 */
+      postureChangedAt?: number;
     recoveryTicks?: number;
     skipReasons?: Record<string, number>;
     /**

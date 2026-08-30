@@ -245,6 +245,11 @@ function sampleMemorySize(tick: number): void {
     if (g.energyLedger?.rooms) {
       (Memory.kernel.stats as any).energyLedger = { tick: g.energyLedger.tick, rooms: g.energyLedger.rooms };
     }
+    if (g.logisticsHealth) {
+      (Memory.kernel.stats as any).logisticsHealth = {
+        level: g.logisticsHealth.level, tick: Game.time,
+      };
+    }
     if (g.systemBudgetEma instanceof Map && g.systemBudgetEma.size > 0) {
       (Memory.kernel.stats as any).cpuBySystem = Object.fromEntries(
         [...g.systemBudgetEma.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10),

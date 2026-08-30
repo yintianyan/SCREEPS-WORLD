@@ -204,6 +204,9 @@ export const empireStrategySystem: System = {
       log.info("empire-strategy", `capacity: ${Memory.kernel.capacity?.tier ?? "(none)"} → ${capacity.tier}` +
         ` (headroom=${Math.round(capacity.headroom * 100)}%, limit=${Math.min(Game.cpu.limit, Game.cpu.tickLimit)})`,);
     }
+    if (Memory.kernel.strategy?.posture !== undefined) {
+      Memory.kernel.postureChangedAt = Game.time;
+    }
     Memory.kernel.capacity = {
       tier: capacity.tier,
       since: capacity.since,

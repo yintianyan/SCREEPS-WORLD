@@ -183,6 +183,10 @@ export const intelligenceSystem: System = {
         capRooms(roomEntries, INTEL_ROOMS_CAP);
         restorePlayersFromSegment();
         persistPlayersToSegment();
+        const statsAny = (Memory as any).kernel?.stats as any;
+        if (statsAny) {
+          statsAny.intelCoverage = { rooms: roomEntries.size, players: playerEntries.size, tick: ctx.tick };
+        }
         if (removed > 0) {
           log.info("intelligence", `intelligence: aged out ${removed} room entries ` +
             `(active=${roomEntries.size}, players=${playerEntries.size})`,);
