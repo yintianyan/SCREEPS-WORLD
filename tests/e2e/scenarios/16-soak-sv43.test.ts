@@ -12,8 +12,10 @@ import { standardRoom } from "../fixtures/rooms";
 
 const ROOM = "W0N1";
 // 深度 soak 由环境变量驱动（CANARY §5.1 要求 50,000+ tick；默认 4×5000=20k）。
+// SOAK_START_RCL：预置起始 RCL 档（分段续跑用——避免每次从 RCL1 重复前段）。
 const STAGE_TICKS = Number(process.env.SOAK_STAGE_TICKS ?? 5000);
 const STAGES = Number(process.env.SOAK_STAGES ?? 4);
+const START_RCL = Number(process.env.SOAK_START_RCL ?? 1);
 const TOTAL_TICKS = STAGE_TICKS * STAGES;
 
 /** 判断日志行是否为 JS 错误。 */
@@ -31,10 +33,16 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
   let totalErrors = 0;
 
   beforeAll(async () => {
+    // 预置起始档：RCL6 起跑附带 storage（经济成熟态，直接进入 RCL6→7 爬升）。
+    const room = standardRoom(ROOM, 300, START_RCL);
+    if (START_RCL >= 6) {
+      room.objects!.push({ type: "storage", x: 24, y: 30, props: { store: { energy: 60000 } } });
+    }
     await runner.setup({
       roomName: ROOM,
-      rooms: [standardRoom(ROOM, 300, 1)],
+      rooms: [room],
       maxTicks: TOTAL_TICKS + 1000,
+      controllerLevel: START_RCL > 1 ? START_RCL : undefined,
     });
   }, 120000);
 

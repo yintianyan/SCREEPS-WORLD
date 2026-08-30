@@ -168,3 +168,20 @@ P 序是**降级牺牲序而非重要度排名**：P0 的量永远最小，预�
 | [MEMORY_ARCHITECTURE.md](MEMORY_ARCHITECTURE.md) | 迁移规范正文、三级存储准入 |
 | [SYSTEM_BOUNDARIES.md](SYSTEM_BOUNDARIES.md) / [STATE_OWNERSHIP_MODEL.md](STATE_OWNERSHIP_MODEL.md) | 模块八项边界 / 状态所有权 |
 | [DATA_FLOW.md](DATA_FLOW.md) | 单 tick 八步数据流与写者唯一性落点 |
+
+## 9. 内核部件登记（八项合同之外的平台设施）
+
+> 登记合同（ENGINEERING_BLUEPRINT §5-5）：以下文件保留在 `src/kernel/`，是八项
+> 合同（§1–§2 管线与平台组接口）之外的平台设施——不承载业务语义，被全体经
+> 公开接口使用。新增内核部件须走 ADR 并入表。
+
+| 部件 | 职责（一句话） | 语义边界 |
+| --- | --- | --- |
+| `ring-buffer.ts` | 定长环形缓冲泛型（定长截断写） | 纯数据结构，无业务类型 |
+| `event-log.ts` | GameEvent 环形账（EventKind 枚举 + recordEvent） | 事件体为标量数组，不含业务对象 |
+| `timeseries.ts` | 遥测时间窗聚合（min/max/avg/最近 N 采样） | 纯数值管道 |
+| `expectations.ts` | 期望自检 E1–E9（不变式违例检出 + P3 旁路触发） | 自检输入由 kernel 采集，判据为通用不变式 |
+| `outcome-channel.ts` | UOEM outcome 事件的生产 Memory 通道（压缩字段环形账） | 通用 outcome 信封，不解析业务语义 |
+| `log.ts` | 分模块限频日志 | 纯输出设施 |
+| `layout-metrics.ts` | ⚠️ 布局可观测性指标（死资产率等，link-system 消费） | **承载布局业务语义**（import domain/layout 类型）——迁移落点 `src/domain/layout/metrics.ts`（domain 只读纯函数；该路径当前不存在，迁移时创建），迁移前登记为例外 |
+
