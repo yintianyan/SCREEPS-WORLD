@@ -454,6 +454,16 @@ export function trySpawn(
       if (queueIdx >= 0) queue.splice(queueIdx, 1);
       // P3 L1 核算：孵化成功即全额计费（gross；recycle 返还在回收通道冲销）。
       bumpEnergyCounter(snapshot.roomName, "spawned", bodyCost(body));
+      // P1 补位时延结算：匹配同角色死亡锚 → EMA（tick）。
+      const statsAny = (Memory as any).kernel?.stats as any;
+      const anchor = statsAny?.deathAnchor?.[req.role];
+      if (anchor !== undefined) {
+        const latency = Math.max(0, Game.time - anchor);
+        statsAny.replaceLatency = statsAny.replaceLatency ?? {};
+        const prev = statsAny.replaceLatency[req.role];
+        statsAny.replaceLatency[req.role] = prev === undefined ? latency : Math.round(prev * 0.8 + latency * 0.2);
+        delete statsAny.deathAnchor[req.role];
+      }
       // 扣减本地能量预算，换下一个空闲 spawn 继续消费队列。
       energyBudget -= bodyCost(body);
       spawnIdx++;
