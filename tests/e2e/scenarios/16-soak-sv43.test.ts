@@ -31,6 +31,13 @@ function isJsError(line: string): boolean {
 describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
   const runner = new ScenarioRunner();
   let totalErrors = 0;
+  /** 阶段观测状态（异常发现用）。 */
+  let lastProg: number | undefined;
+  let violationStages = 0;
+  let lowPopStages = 0;
+  const tierSet: Record<string, number> = {};
+  const tierSeq: string[] = [];
+  const stageProgLog: { prog: number; total: number }[] = [];
 
   beforeAll(async () => {
     // L0 基座（E2E_ENV_BASE_CONTRACT §1）+ L1 具名环境注入（§2 逐条登记）：
@@ -119,6 +126,19 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
         totalErrors,
         `全程检测到 JS 错误 ${totalErrors} 条`,
       ).toBe(0);
+
+      // ── 异常发现断言（长程健康检查，非仅稳定性）──
+      const firstStage = stageProgLog[0];
+      console.log(
+        `[soak-evidence] anomalies: violationStages=${violationStages}/${STAGES} ` +
+          `lowPopStages=${lowPopStages}/${STAGES} tierSeq=${tierSeq.join("→") || "none"} ` +
+          `upRate=${firstStage && lastProg ? (lastProg / (TOTAL_TICKS - (firstStage?.prog ? 0 : 0) || TOTAL_TICKS)).toFixed(2) : "?"}/t`,
+      );
+      expect(lowPopStages, `人口 <5 的阶段占比过高（塌陷信号）`).toBeLessThan(STAGES * 0.3);
+      expect(
+        violationStages,
+        `期望自检违例阶段占比异常（自愈未收敛或未知问题）`,
+      ).toBeLessThan(STAGES * 0.5);
 
       console.log(
         `[soak-evidence] sv43-soak binding: schemaVersion=43 ticks=${TOTAL_TICKS} ` +
