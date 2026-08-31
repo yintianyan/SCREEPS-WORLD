@@ -528,17 +528,24 @@ export class Kernel {
   }
 
   /** E8: 采集路径失败快照（从 globalCache.pathFailureTracker 采集）。
-   * 追踪器由 movement 系统在卡位/寻路失败时写入，这里只读取聚合。 */
+   * 追踪器由 movement 系统在卡位/寻路失败时写入，这里只读取聚合。
+   * 已死亡 creep 的条目会被清理，否则 lastSuccessTick 永不更新导致永久违例。 */
   private collectPathFailureSnapshots(ctx: Context): PathFailureSnapshot[] {
     const tracker = globalCache().pathFailureTracker;
     if (!tracker || tracker.size === 0) return [];
     const result: PathFailureSnapshot[] = [];
-    for (const [key, val] of tracker) {
+    // 清理已死亡 creep 的 tracker 条目（防 Memory 泄漏 + 防 E8 永久误报）
+    for (const key of tracker.keys()) {
       const sep = key.indexOf(":");
-      const room = sep > 0 ? key.substring(0, sep) : "?";
       const creepName = sep > 0 ? key.substring(sep + 1) : key;
+      if (!Game.creeps[creepName]) {
+        tracker.delete(key);
+        continue;
+      }
+      const val = tracker.get(key)!;
       // 跳过已恢复的条目（连续失败=0 且有最近成功记录）
       if (val.consecutiveFailures === 0) continue;
+      const room = sep > 0 ? key.substring(0, sep) : "?";
       result.push({
         room,
         pathId: creepName,
