@@ -1,7 +1,7 @@
 /** CostMatrix 结构成本合并测试 — 同格多结构（rampart 叠盾）不得洗白障碍。 */
 import { describe, expect, it } from "vitest";
 import { buildStructurePositions } from "../../../src/creeps/movement/pathfinding";
-import { mockPos } from "../../role-helpers";
+import { mockPos } from "../../support/factories";
 
 function structure(type: string, x: number, y: number, my = true): any {
   return { structureType: type, my, pos: mockPos(x, y) };

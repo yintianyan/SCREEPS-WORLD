@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { factoryManagerSystem } from "../../../src/systems/factory-manager";
 import { CONFIG } from "../../../src/config";
-import { mockBudget, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockBudget, mockSnapshot, resetGlobals } from "../../support/factories";
 
 /** 资源感知 store mock（方法不可枚举，与引擎 store 语义一致）。 */
 function resStore(resources: Record<string, number>, capacity = 5000): any {

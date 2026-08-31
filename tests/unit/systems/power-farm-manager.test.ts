@@ -4,7 +4,7 @@ import { powerFarmManagerSystem } from "../../../src/systems/power-farm-manager"
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { CONFIG } from "../../../src/config";
-import { resetGlobals, syncSquadIndex } from "../../role-helpers";
+import { resetGlobals, syncSquadIndex } from "../../support/factories";
 
 const HOME = "W7N4";
 const TARGET = "W2N1";

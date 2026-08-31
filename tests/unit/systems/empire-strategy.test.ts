@@ -1,7 +1,7 @@
 /** Empire Strategy 系统测试（R6a/R7a 发布层 — 容量分档 + 议程归因）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { empireStrategySystem } from "../../../src/systems/empire-strategy";
-import { mockBudget, mockController, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockBudget, mockController, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

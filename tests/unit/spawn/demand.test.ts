@@ -1,7 +1,7 @@
 /** Spawn 需求评估测试（A2 升级功率 + A4 替换路程项）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { evaluateDemand, estimateTravelTicks, needsReplacement } from "../../../src/domain/spawn/demand";
-import { mockController, mockCreep, mockHostile, mockSnapshot, mockSource, mockStructure, resetGlobals } from "../../role-helpers";
+import { mockController, mockCreep, mockHostile, mockSnapshot, mockSource, mockStructure, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

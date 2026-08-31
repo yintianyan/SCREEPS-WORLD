@@ -1,7 +1,7 @@
 /** 远矿超额回收测试 — 交接豁免语义。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { recycleExcessRemoteCreeps } from "../../../src/systems/remote-mining-manager";
-import { resetGlobals, syncSquadIndex } from "../../role-helpers";
+import { resetGlobals, syncSquadIndex } from "../../support/factories";
 
 function remoteCreep(
   name: string,

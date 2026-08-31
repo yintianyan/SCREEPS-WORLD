@@ -1,7 +1,7 @@
 /** fill 动作携非能量 cargo 放行门禁测试（回归）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { distributorFillTarget, haulFillTarget } from "../../../src/creeps/engine/actions/fill";
-import { mockCreep, mockContext, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";
+import { mockCreep, mockContext, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

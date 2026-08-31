@@ -1,7 +1,7 @@
 /** pathfinding 模块单元测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getCoreCenter } from "../../../src/creeps/movement";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

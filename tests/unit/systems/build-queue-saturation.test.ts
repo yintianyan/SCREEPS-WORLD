@@ -1,7 +1,7 @@
 /** BuildTask 类型饱和清理测试 — 幽灵任务（漂移遗留）的唯一出口。 */
 import { describe, expect, it } from "vitest";
 import { cleanTasks, syncTaskStates } from "../../../src/domain/construction/queue";
-import { mockSnapshot, mockStructure } from "../../role-helpers";
+import { mockSnapshot, mockStructure } from "../../support/factories";
 
 function task(overrides: Partial<BuildTask>): BuildTask {
   return {

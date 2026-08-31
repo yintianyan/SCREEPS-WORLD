@@ -1,7 +1,7 @@
 /** Distributor nuke 资产抢救搬运链测试（审计缺口 3 的 distributor 侧）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { distributorRole } from "../../../src/creeps/roles/distributor";
-import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../support/factories";
 
 const room = "W7N4";
 

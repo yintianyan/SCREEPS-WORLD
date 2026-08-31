@@ -4,7 +4,7 @@ import {
   getDistributorFillTarget,
   hasDistributorFillDemand,
 } from "../../../src/creeps/support/targeting";
-import { resetGlobals, mockSnapshot, mockStructure, mockCreep, mockPos } from "../../role-helpers";
+import { resetGlobals, mockSnapshot, mockStructure, mockCreep, mockPos } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

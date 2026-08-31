@@ -1,7 +1,7 @@
 /** 远矿威胁检测测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { shouldFleeForeignRoom, fleeToHome } from "../../../src/creeps/engine/lifecycle";
-import { resetGlobals, mockPos, mockCreep } from "../../role-helpers";
+import { resetGlobals, mockPos, mockCreep } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

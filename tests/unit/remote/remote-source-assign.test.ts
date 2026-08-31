@@ -1,7 +1,7 @@
 /** 远矿 harvester source 占用分散测试（组②-2b / E-1）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getRemoteSource } from "../../../src/creeps/roles/remote-harvester";
-import { mockCreep, mockSource, resetGlobals } from "../../role-helpers";
+import { mockCreep, mockSource, resetGlobals } from "../../support/factories";
 
 const targetRoom = "W2N1";
 

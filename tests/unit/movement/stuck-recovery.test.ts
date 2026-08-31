@@ -1,7 +1,7 @@
 /** 卡位检测测试 — updateStuckTicks 的疲劳豁免（MV-1 / G-MV-06 / G-MEM-07）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { updateStuckTicks } from "../../../src/creeps/movement";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 /** 最小 creep mock — updateStuckTicks 只读 fatigue/pos/memory。 */
 function makeCreep(x: number, y: number, fatigue: number, memory: Record<string, unknown> = {}): Creep {

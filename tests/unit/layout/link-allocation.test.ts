@@ -8,7 +8,7 @@ import {
 } from "../../../src/domain/layout/task-factory";
 import { classifyLinkRole } from "../../../src/domain/economy/links";
 import { buildObstaclePositionSet, type ValidationOptions } from "../../../src/domain/layout/validation";
-import { mockPos, resetGlobals } from "../../role-helpers";
+import { mockPos, resetGlobals } from "../../support/factories";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 
 beforeEach(() => {

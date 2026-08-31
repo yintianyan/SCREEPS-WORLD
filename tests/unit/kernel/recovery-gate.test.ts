@@ -5,7 +5,7 @@ import { Registry } from "../../../src/kernel/registry";
 import { mineralMinerRole } from "../../../src/creeps/roles/mineral-miner";
 import { builderRole } from "../../../src/creeps/roles/builder";
 import { upgraderRole } from "../../../src/creeps/roles/upgrader";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 function makeCreep(name: string, role: string, home = "W7N4") {
   return { name, memory: { role, home }, ticksToLive: 1000 };

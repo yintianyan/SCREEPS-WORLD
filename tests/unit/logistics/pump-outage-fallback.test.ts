@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { fillStorage } from "../../../src/creeps/engine/actions/fill";
 import { globalCache } from "../../../src/kernel/global-cache";
-import { mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";
+import { mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
 
 function makeAc(overrides: { fillTargets?: any[]; storage?: any } = {}): any {
   const storage = overrides.storage ?? mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });

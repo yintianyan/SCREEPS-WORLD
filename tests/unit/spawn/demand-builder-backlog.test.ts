@@ -1,7 +1,7 @@
 /** P1-1：builder 编制纳入 buildQueue backlog 测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { evaluateDemand } from "../../../src/domain/spawn/demand";
-import { mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

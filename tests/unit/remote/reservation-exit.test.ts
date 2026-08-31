@@ -1,7 +1,7 @@
 /** 敌方 reservation 运行时退出接线测试（组①-1c）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
-import { mockContext, mockCreep, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
 
 const targetRoom = "W2N1";
 const homeRoom = "W7N4"; // 与 mockSnapshot 默认 roomName 对齐。

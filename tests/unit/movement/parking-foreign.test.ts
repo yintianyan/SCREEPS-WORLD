@@ -1,7 +1,7 @@
 /** 异房归位（parkInForeignRoom）单测 — 2026-08-19「交通阻塞」修复的回归锁。 */
 import { describe, it, expect, beforeEach } from "vitest";
 import { parkIdleCreep } from "../../../src/creeps/movement";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 import { globalCache } from "../../../src/kernel/global-cache";
 
 const HOME = "W1N1";

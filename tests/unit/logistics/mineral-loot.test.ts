@@ -4,7 +4,7 @@ import { updateMode } from "../../../src/creeps/engine/lifecycle";
 import { lootRemains } from "../../../src/creeps/engine/actions/pickup";
 import { harvestMineral } from "../../../src/creeps/engine/actions/harvest";
 import { haulMineralsToStorage } from "../../../src/creeps/engine/actions/industry";
-import { mockCreep, mockContext, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";
+import { mockCreep, mockContext, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

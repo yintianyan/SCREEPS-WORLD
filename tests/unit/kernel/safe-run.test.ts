@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { safeRun } from "../../../src/kernel/safe-run";
 import { EventKind } from "../../../src/kernel/event-log";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 const g = (): any => globalThis as any;
 

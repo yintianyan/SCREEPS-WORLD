@@ -4,7 +4,7 @@ import { computeDistanceField } from "../../../src/domain/layout/terrain-analysi
 import { placeStructures } from "../../../src/domain/layout/constraint-placer";
 import { computeCommittedCounts } from "../../../src/domain/layout/validation";
 import { packPos } from "../../../src/domain/layout/types";
-import { mockSnapshot } from "../../role-helpers";
+import { mockSnapshot } from "../../support/factories";
 
 const noWalls = (_x: number, _y: number): boolean => false;
 const ANCHOR = { x: 25, y: 25 };

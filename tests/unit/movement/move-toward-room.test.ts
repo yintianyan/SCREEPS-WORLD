@@ -1,7 +1,7 @@
 /** moveTowardRoom 跨房路由测试（R6b 扩张修复 Fix #2）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { moveTowardRoom } from "../../../src/creeps/movement/pathfinding";
-import { mockCreep, mockPos, resetGlobals } from "../../role-helpers";
+import { mockCreep, mockPos, resetGlobals } from "../../support/factories";
 
 function scoutIn(roomName: string, target: string, avoidRooms?: string[]): any {
   const creep = mockCreep({ role: "scout", home: "W7N4", mode: "acquire", pos: mockPos(25, 25, roomName) });

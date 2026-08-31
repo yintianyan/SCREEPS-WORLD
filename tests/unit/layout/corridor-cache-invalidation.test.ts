@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { planCorridorRoads, DEFAULT_CORRIDOR_OPTIONS, type CorridorPathCacheStore } from "../../../src/domain/layout/corridor-roads";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 import { globalCache, type CorridorPathCacheEntry } from "../../../src/kernel/global-cache";
-import { mockPos, resetGlobals } from "../../role-helpers";
+import { mockPos, resetGlobals } from "../../support/factories";
 
 // ─── 房间 mock ──────────────────────────────────────────────
 // buildCorridorCostMatrix 需要 room.getTerrain()；

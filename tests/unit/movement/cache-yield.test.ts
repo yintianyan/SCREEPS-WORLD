@@ -8,7 +8,7 @@ import {
 } from "../../../src/creeps/movement";
 import { pruneDeadCreepCache } from "../../../src/creeps/movement/pathfinding";
 import { globalCache } from "../../../src/kernel/global-cache";
-import { mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockSnapshot, resetGlobals } from "../../support/factories";
 
 const g = (): any => globalThis as any;
 

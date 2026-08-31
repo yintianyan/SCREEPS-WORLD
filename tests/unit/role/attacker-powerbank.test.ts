@@ -1,7 +1,7 @@
 /** Attacker PB 分流测试（审计缺口 2 角色层）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { attackerRole, attackerHold } from "../../../src/creeps/roles/attacker";
-import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../support/factories";
 
 const homeRoom = "W7N4";
 const targetRoom = "W2N1";

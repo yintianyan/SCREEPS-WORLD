@@ -1,7 +1,7 @@
 /** 远矿 hauler container 加权分散测试（组②-2c / E-2）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { findRemoteContainer } from "../../../src/creeps/roles/remote-hauler";
-import { mockCreep, resetGlobals } from "../../role-helpers";
+import { mockCreep, resetGlobals } from "../../support/factories";
 
 const targetRoom = "W2N1";
 

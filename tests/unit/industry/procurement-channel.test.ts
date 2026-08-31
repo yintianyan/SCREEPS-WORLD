@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { globalCache, publishProcurementDemands } from "../../../src/kernel/global-cache";
 import type { ProcurementDemand } from "../../../src/kernel/global-cache";
 import { collectDemands } from "../../../src/domain/industry/procurement";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 function demand(resource: string, amount: number, priority: number, deadline: number, reason: string): ProcurementDemand {
   return { resource, amount, priority, deadline, reason };

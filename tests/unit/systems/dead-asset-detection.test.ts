@@ -8,7 +8,7 @@ import {
 } from "../../../src/systems/link-system";
 import { globalCache } from "../../../src/kernel/global-cache";
 import type { LinkInfo } from "../../../src/domain/economy/links";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 function makeLink(
   id: string,

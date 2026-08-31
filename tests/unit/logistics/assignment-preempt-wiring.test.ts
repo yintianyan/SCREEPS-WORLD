@@ -6,7 +6,7 @@ import {
   mockCreep,
   mockSnapshot,
   resetGlobals,
-} from "../../role-helpers";
+} from "../../support/factories";
 
 function upgradeAssignment(tick: number) {
   return {

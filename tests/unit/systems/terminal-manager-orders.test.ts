@@ -8,7 +8,7 @@ import {
   shouldCancelStaleOrder,
   shouldChangeOrderPrice,
 } from "../../../src/domain/industry/market-orders";
-import { mockBudget, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockBudget, mockSnapshot, resetGlobals } from "../../support/factories";
 
 function terminalMock(resources: Record<string, number> = {}): any {
   return {

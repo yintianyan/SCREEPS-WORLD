@@ -1,7 +1,7 @@
 /** RM-1 回归 — remote-harvester 自建 source container（终结 drop-mining 衰减税）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteHarvesterRole } from "../../../src/creeps/roles/remote-harvester";
-import { mockContext, mockSnapshot, mockCreep, mockSource, resetGlobals } from "../../role-helpers";
+import { mockContext, mockSnapshot, mockCreep, mockSource, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

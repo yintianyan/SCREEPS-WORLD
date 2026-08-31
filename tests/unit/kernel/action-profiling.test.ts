@@ -11,7 +11,7 @@ import {
   mockCreep,
   mockSnapshot,
   resetGlobals,
-} from "../../role-helpers";
+} from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

@@ -1,7 +1,7 @@
 /** Terminal Manager 能量网络系统测试（R5 经济主线）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/terminal-manager";
-import { mockBudget, mockSnapshot, mockStore, resetGlobals } from "../../role-helpers";
+import { mockBudget, mockSnapshot, mockStore, resetGlobals } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
 
 function terminalMock(opts: { energy?: number; cooldown?: number } = {}): any {

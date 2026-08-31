@@ -1,7 +1,7 @@
 /** Terminal Manager 工业链扩展测试 — battery 卖 / power 买 / 矿物互济。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/terminal-manager";
-import { mockBudget, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockBudget, mockSnapshot, resetGlobals } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
 
 /** 资源感知 store（方法不可枚举，Object.keys 只暴露资源键 — 引擎同款语义）。 */

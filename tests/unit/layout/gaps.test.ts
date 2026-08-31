@@ -12,7 +12,7 @@ import {
   type StructureBatch,
 } from "../../../src/domain/layout/constraint-placer";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
-import { mockSnapshot, mockStructure, mockConstructionSite, mockSource, mockController } from "../../role-helpers";
+import { mockSnapshot, mockStructure, mockConstructionSite, mockSource, mockController } from "../../support/factories";
 
 /** constraint-placer 负责放置的类型（与模块内 CONSTRAint_PLACED_TYPES 对齐）。 */
 const CONSTRAINT_TYPES: BuildableStructureConstant[] = [

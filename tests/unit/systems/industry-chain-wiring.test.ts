@@ -4,7 +4,7 @@ import { supplyLabs } from "../../../src/creeps/engine/actions/industry";
 import { computeLabDemands } from "../../../src/systems/lab-system";
 import { reclaimExpeditionCreeps } from "../../../src/systems/expansion-manager";
 import { syncTaskStates } from "../../../src/domain/construction/queue";
-import { syncSquadIndex } from "../../role-helpers";
+import { syncSquadIndex } from "../../support/factories";
 import type { LabPlan } from "../../../src/domain/industry/types";
 
 // ── 受限 store mock（复现引擎语义）────────────────────────────

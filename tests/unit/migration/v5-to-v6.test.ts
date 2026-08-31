@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { maintainMemory, runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

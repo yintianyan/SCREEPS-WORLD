@@ -1,7 +1,7 @@
 /** withdrawStorageLink ②b 守卫口径回归（A 修复，2026-08-01）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { withdrawStorageLink } from "../../../src/creeps/engine/actions/withdraw";
-import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
 
 function makeAc(opts: { ctrlLinkEnergy?: number; storageLinkEnergy?: number } = {}) {
   const { ctrlLinkEnergy = 799, storageLinkEnergy = 800 } = opts;

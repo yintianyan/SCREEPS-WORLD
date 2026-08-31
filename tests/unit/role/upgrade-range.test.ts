@@ -7,7 +7,7 @@ import {
   mockCreep,
   mockSnapshot,
   resetGlobals,
-} from "../../role-helpers";
+} from "../../support/factories";
 
 vi.mock("../../../src/creeps/movement", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../src/creeps/movement")>();

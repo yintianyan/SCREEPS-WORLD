@@ -5,7 +5,7 @@ import {
   diffRoomFlows,
   type RoomFlowSample,
 } from "../../../src/domain/economy/accounting";
-import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 import { globalCache } from "../../../src/kernel/global-cache";
 
 function sample(overrides: Partial<RoomFlowSample> = {}): RoomFlowSample {

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { CONFIG } from "../../../src/config";
 import { spawnManagerSystem } from "../../../src/systems/spawn-manager";
 import { removeRequestsByRole } from "../../../src/domain/spawn/queue";
-import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 
 function makeRequest(role: string, home: string, overrides: Partial<SpawnRequest> = {}): SpawnRequest {
   return {

@@ -1,7 +1,7 @@
 /** stockTerminalEnergy 无市场守卫测试（W7 止血）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { stockTerminalEnergy } from "../../../src/creeps/engine/actions/industry";
-import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
 
 describe("stockTerminalEnergy — 无市场守卫（W7 止血）", () => {
   beforeEach(() => {

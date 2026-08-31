@@ -5,7 +5,7 @@ import { preloadStructureCache } from "../../../src/creeps/movement";
 import { quantizeBlockKey, acquirePathBudget } from "../../../src/creeps/movement/pathfinding";
 import { CONFIG } from "../../../src/config";
 import { globalCache } from "../../../src/kernel/global-cache";
-import { mockCreep, resetGlobals } from "../../role-helpers";
+import { mockCreep, resetGlobals } from "../../support/factories";
 
 const G = (): any => globalThis;
 

@@ -1,7 +1,7 @@
 /** 远矿超额收缩测试 — spawn 产能维度接入后的存量治理。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
-import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

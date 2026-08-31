@@ -10,7 +10,7 @@ import {
   mockBudget,
   mockCreep,
   mockController,
-} from "../../role-helpers";
+} from "../../support/factories";
 import { createRingBuffer, ringPush } from "../../../src/kernel/ring-buffer";
 import type { RingBuffer } from "../../../src/kernel/ring-buffer";
 import type { EconomySample, CpuSample } from "../../../src/kernel/timeseries";

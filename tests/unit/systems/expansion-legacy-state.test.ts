@@ -1,7 +1,7 @@
 /** 旧版残留扩张状态防护 — 状态机无分支的 state 静默穿透会永久卡死扩张管道。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { expansionManagerSystem } from "../../../src/systems/expansion-manager";
-import { mockBudget, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
+import { mockBudget, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

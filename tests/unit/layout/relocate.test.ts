@@ -8,7 +8,7 @@ import {
 import { buildObstaclePositionSet, type ValidationOptions } from "../../../src/domain/layout/validation";
 import { packPos } from "../../../src/domain/layout/types";
 import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-core-v2";
-import { mockPos, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

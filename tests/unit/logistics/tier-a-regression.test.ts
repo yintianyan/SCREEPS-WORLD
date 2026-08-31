@@ -4,7 +4,7 @@ import { getAssignment } from "../../../src/creeps/support/assignment-adapter";
 import { TaskPool } from "../../../src/domain/assignment/task-pool";
 import { evaluateTuning } from "../../../src/domain/tuning/evaluator";
 import type { TuningSignals } from "../../../src/domain/tuning/types";
-import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
 
 const g = (): any => globalThis as any;
 

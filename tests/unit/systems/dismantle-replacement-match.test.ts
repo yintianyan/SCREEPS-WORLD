@@ -2,7 +2,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { findReplacementForDeadLink } from "../../../src/systems/layout-planner";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

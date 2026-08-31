@@ -1,7 +1,7 @@
 /** construction-manager 单元测试 — claim-secure 护栏。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { developmentGate, isRuntimeDefenseWallTask } from "../../../src/systems/construction-manager";
-import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

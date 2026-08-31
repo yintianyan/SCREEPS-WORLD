@@ -14,7 +14,7 @@ import {
   mockController,
   mockSource,
   resetGlobals,
-} from "../../role-helpers";
+} from "../../support/factories";
 
 const ROOM = "W1N1";
 

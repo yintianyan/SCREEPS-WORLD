@@ -1,7 +1,7 @@
 /** remote-hauler container 查找的共享缓存接线测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { findRemoteContainer } from "../../../src/creeps/roles/remote-hauler";
-import { mockPos, mockStore, registerObject, resetGlobals } from "../../role-helpers";
+import { mockPos, mockStore, registerObject, resetGlobals } from "../../support/factories";
 
 function makeRoom(find: ReturnType<typeof vi.fn>) {
   return { name: "W5N5", find };

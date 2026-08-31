@@ -4,7 +4,7 @@ import {
   computeSiteKeepRooms,
   cleanOrphanConstructionSites,
 } from "../../../src/systems/construction-manager";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

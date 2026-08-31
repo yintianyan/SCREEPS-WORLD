@@ -9,7 +9,7 @@ import {
   mockSnapshot,
   mockStructure,
   resetGlobals,
-} from "../../role-helpers";
+} from "../../support/factories";
 
 /** source 旁 container 场景（拓荒房：无 storage、仅 source container 有能量）。 */
 function pioneerScenario() {

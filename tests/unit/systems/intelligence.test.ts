@@ -1,6 +1,6 @@
 /** Intelligence 系统（IntelState 唯一写者）：观察交接采用 / 被动威胁 / 老化 / 查询 API。 */
 import { describe, expect, it, beforeEach } from "vitest";
-import { mockContext, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 import { systemPhase } from "../../../src/kernel/phase";
 import { globalCache } from "../../../src/kernel/global-cache";
 import {

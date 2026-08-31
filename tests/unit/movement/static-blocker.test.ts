@@ -1,7 +1,7 @@
 /** registerStaticBlocker 站桩占位自报测试（v33-R11）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { preloadStaticBlockers, registerStaticBlocker } from "../../../src/creeps/movement";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

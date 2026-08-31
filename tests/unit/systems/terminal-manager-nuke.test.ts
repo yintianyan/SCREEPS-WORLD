@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/terminal-manager";
 import type { CpuTier } from "../../../src/kernel/contracts";
-import { mockBudget, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockBudget, mockSnapshot, resetGlobals } from "../../support/factories";
 
 /** 多资源 terminal store mock（引擎语义：store 是资源→数量映射 + 容量方法）。 */
 function multiStore(resources: Record<string, number>, capacity = 300000): any {

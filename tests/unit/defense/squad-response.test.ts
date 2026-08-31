@@ -11,7 +11,7 @@ import {
   mockSnapshot,
   mockStructure,
   resetGlobals,
-} from "../../role-helpers";
+} from "../../support/factories";
 
 const A = "attack" as BodyPartConstant;
 const R = "ranged_attack" as BodyPartConstant;

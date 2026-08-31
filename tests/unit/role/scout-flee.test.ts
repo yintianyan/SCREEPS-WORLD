@@ -4,7 +4,7 @@ import { scoutRole } from "../../../src/creeps/roles/scout";
 import { defineRole } from "../../../src/creeps/engine/role-runner";
 import type { Priority } from "../../../src/kernel/contracts";
 import type { RolePolicy } from "../../../src/creeps/engine/action-types";
-import { mockContext, mockCreep, mockPos, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockPos, resetGlobals } from "../../support/factories";
 
 /** 带攻击 body 的敌方 creep（classifyThreats 才判为威胁，触发 foreign-room flee）。 */
 function hostileWithAttack(): any {

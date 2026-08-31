@@ -5,7 +5,7 @@ import {
   attackerRole,
   markRetreat,
 } from "../../../src/creeps/roles/attacker";
-import { mockContext, mockCreep, mockPos, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockPos, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
 
 beforeEach(() => {

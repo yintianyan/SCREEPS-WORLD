@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CONFIG } from "../../../src/config";
 import { trafficManagerSystem } from "../../../src/systems/traffic-manager";
 import { getIntentLedger, registerAnchor, registerMove } from "../../../src/creeps/movement/intent";
-import { mockContext, resetGlobals } from "../../role-helpers";
+import { mockContext, resetGlobals } from "../../support/factories";
 
 const setTraffic = (on: boolean): void => {
   (CONFIG.movement as { trafficManager: boolean }).trafficManager = on;

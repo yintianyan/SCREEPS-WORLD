@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
-import { resetGlobals, mockCreep, mockSnapshot, mockContext } from "../../role-helpers";
+import { resetGlobals, mockCreep, mockSnapshot, mockContext } from "../../support/factories";
 import { selectDroppedEnergy, selectHaulSourceContainer } from "../../../src/creeps/support/targeting";
 import { haulerRole } from "../../../src/creeps/roles/hauler";
 

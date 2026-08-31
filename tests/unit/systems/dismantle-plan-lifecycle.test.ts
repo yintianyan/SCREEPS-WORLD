@@ -17,7 +17,7 @@ import {
 } from "../../../src/systems/link-system";
 import { globalCache } from "../../../src/kernel/global-cache";
 import type { DismantlePlan } from "../../../src/kernel/global-cache";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

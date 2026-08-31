@@ -23,7 +23,7 @@ import {
   mockStructure,
   mockSource,
   mockContext,
-} from "../../role-helpers";
+} from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

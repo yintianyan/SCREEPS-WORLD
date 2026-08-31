@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { interceptForBoost } from "../../../src/creeps/engine/boost-report";
 import { BOOST_REPORT_TTL } from "../../../src/domain/industry/boost";
-import { mockCreep, mockPos, registerObject, resetGlobals } from "../../role-helpers";
+import { mockCreep, mockPos, registerObject, resetGlobals } from "../../support/factories";
 
 /** 在 globalCache（globalThis）上写入本 tick 的 boost 分配表。 */
 function setAssignments(byCreep: Record<string, { labId: string; ready: boolean }>): void {

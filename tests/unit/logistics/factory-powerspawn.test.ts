@@ -7,7 +7,7 @@ import {
 } from "../../../src/creeps/engine/actions/industry";
 import { NUKE_ENERGY_COST, NUKE_GHODIUM_COST } from "../../../src/domain/war/planning";
 import { CONFIG } from "../../../src/config";
-import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../support/factories";
 
 /**
  * 资源感知 store mock — Object.keys 只暴露资源键（方法不可枚举），

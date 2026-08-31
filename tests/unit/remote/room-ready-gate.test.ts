@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { roomReadyForNewRemote } from "../../../src/systems/remote-mining-manager";
 import { CONFIG } from "../../../src/config";
-import { mockSnapshot, mockStore } from "../../role-helpers";
+import { mockSnapshot, mockStore } from "../../support/factories";
 
 const minRcl = CONFIG.remote.roomMinRcl;
 const minStore = CONFIG.remote.roomMinStorage;

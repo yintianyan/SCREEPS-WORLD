@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteHarvesterRole } from "../../../src/creeps/roles/remote-harvester";
 import { getIntentLedger } from "../../../src/creeps/movement/intent";
 import { CONFIG } from "../../../src/config";
-import { mockContext, mockCreep, mockSnapshot, mockSource, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, mockSource, resetGlobals } from "../../support/factories";
 
 const homeRoom = "W7N4";
 const targetRoom = "W2N1";

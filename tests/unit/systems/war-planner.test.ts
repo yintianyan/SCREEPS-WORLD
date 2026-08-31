@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { demobilize, warPlannerSystem } from "../../../src/systems/war-planner";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
-import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
+import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
 
 const TICK = 1000;

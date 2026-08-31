@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { auditStructureGaps, auditLinkRoleGaps, mergeLinkRoleGaps } from "../../../src/domain/layout/gaps";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
-import { mockSnapshot } from "../../role-helpers";
+import { mockSnapshot } from "../../support/factories";
 
 // ── 位置布局（W3N7 复刻）──
 // source1 @ (10,10)、source2 @ (40,40)

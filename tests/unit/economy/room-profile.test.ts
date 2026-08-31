@@ -10,7 +10,7 @@ import {
   type RoomEconomicMemory,
 } from "../../../src/domain/economy/room-profile";
 import type { EconomyQueryInput } from "../../../src/domain/economy/room-profile";
-import { mockSnapshot, mockStore, mockSource } from "../../role-helpers";
+import { mockSnapshot, mockStore, mockSource } from "../../support/factories";
 
 // ─── 辅助构造器 ─────────────────────────────────────────────
 

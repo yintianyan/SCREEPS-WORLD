@@ -1,7 +1,7 @@
 /** getHostilesCached — per-tick per-room hostile 缓存测试（P1-C）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getHostilesCached } from "../../../src/creeps/support/targeting";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 const targetRoom = "W2N1";
 

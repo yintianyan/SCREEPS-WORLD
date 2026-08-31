@@ -1,7 +1,7 @@
 /** A5 — extractor 动态建造任务测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { createExtractorTask } from "../../../src/domain/layout/task-factory";
-import { mockPos, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

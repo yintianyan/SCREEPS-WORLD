@@ -16,7 +16,7 @@ import {
   mockSource,
   mockContext,
   mockBudget,
-} from "../../role-helpers";
+} from "../../support/factories";
 import type { RoomSnapshot, TickContext } from "../../../src/kernel/contracts";
 
 beforeEach(() => {

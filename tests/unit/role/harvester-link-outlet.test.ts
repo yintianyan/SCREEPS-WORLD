@@ -9,7 +9,7 @@ import {
   mockStructure,
   mockController,
   resetGlobals,
-} from "../../role-helpers";
+} from "../../support/factories";
 
 function posAt(x: number, y: number) {
   return {

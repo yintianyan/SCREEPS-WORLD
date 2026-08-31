@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ensureHome } from "../../../src/creeps/movement";
 import { systemPhase } from "../../../src/kernel/phase";
 import { CONFIG } from "../../../src/config";
-import { mockCreep, resetGlobals } from "../../role-helpers";
+import { mockCreep, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

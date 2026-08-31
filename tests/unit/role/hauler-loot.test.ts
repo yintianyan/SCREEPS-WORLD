@@ -10,7 +10,7 @@ import {
   mockStore,
   mockStructure,
   resetGlobals,
-} from "../../role-helpers";
+} from "../../support/factories";
 
 /** 含能量的坟墓/废墟 mock（withdraw 目标，非 pickup）。 */
 function mockRemains(id: string, energy: number): any {

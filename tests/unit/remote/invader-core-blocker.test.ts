@@ -8,7 +8,7 @@ import {
 } from "../../../src/systems/remote-mining-manager";
 import { roomHasInvaderCore } from "../../../src/creeps/roles/reserver";
 import type { ColonyState } from "../../../src/kernel/contracts";
-import { mockContext, mockCreep, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 

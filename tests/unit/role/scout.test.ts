@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { scoutRole } from "../../../src/creeps/roles/scout";
 import { roomObserverSystem } from "../../../src/systems/room-observer";
 import { globalCache } from "../../../src/kernel/global-cache";
-import { mockContext, mockCreep, mockPos, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

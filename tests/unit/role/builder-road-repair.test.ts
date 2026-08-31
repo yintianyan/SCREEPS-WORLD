@@ -7,7 +7,7 @@ import {
   mockSnapshot,
   mockStructure,
   resetGlobals,
-} from "../../role-helpers";
+} from "../../support/factories";
 
 function road(id: string, hits: number, hitsMax = 5000): any {
   return { id, hits, hitsMax, structureType: "road", pos: { x: 20, y: 20, getRangeTo: () => 1 } };

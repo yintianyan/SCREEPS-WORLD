@@ -4,7 +4,7 @@ import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-ma
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { CONFIG } from "../../../src/config";
-import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../role-helpers";
+import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
 
 const homeRoom = "W7N4";
 const targetRoom = "W2N1"; // 与 W7N4 线性距离近，正常 pathCost 下达标。

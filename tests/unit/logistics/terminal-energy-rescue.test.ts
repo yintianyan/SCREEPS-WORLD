@@ -2,7 +2,7 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { withdrawTerminalEnergy } from "../../../src/creeps/engine/actions/industry";
 import { haulerRole } from "../../../src/creeps/roles/hauler";
-import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../role-helpers";
+import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
 
 describe("withdrawTerminalEnergy — 无市场死能量回流（W7 止血）", () => {
   beforeEach(() => {

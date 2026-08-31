@@ -14,7 +14,7 @@ import {
   mockSnapshot,
   resetGlobals,
   syncSquadIndex,
-} from "../../role-helpers";
+} from "../../support/factories";
 
 const g = (): any => globalThis as any;
 

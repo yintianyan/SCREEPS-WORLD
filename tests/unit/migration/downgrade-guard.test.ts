@@ -1,7 +1,7 @@
 /** 迁移降版保护回归测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

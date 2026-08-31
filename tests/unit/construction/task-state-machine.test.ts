@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tryCreateSite } from "../../../src/systems/construction-manager";
 import { syncTaskStates, cleanTasks, assessEmergencyRebuild } from "../../../src/domain/construction/queue";
 import { makeTryAddTask } from "../../../src/domain/layout/planner";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

@@ -11,7 +11,7 @@ import {
   LINK_CONSTRAINED_RETRY_INTERVAL,
 } from "../../../src/systems/link-system";
 import { globalCache } from "../../../src/kernel/global-cache";
-import { mockPos, resetGlobals } from "../../role-helpers";
+import { mockPos, resetGlobals } from "../../support/factories";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 
 beforeEach(() => {

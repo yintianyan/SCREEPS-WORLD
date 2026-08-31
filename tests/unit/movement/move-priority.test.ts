@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { movePriorityFor } from "../../../src/creeps/movement/intent";
 import { CONFIG } from "../../../src/config";
-import { mockCreep, resetGlobals } from "../../role-helpers";
+import { mockCreep, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

@@ -1,7 +1,7 @@
 /** war-planner spawned 计数口径回归测试（churn 虚增修复）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { markSquadMaterialized, submitSquadRequest } from "../../../src/systems/war-planner";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 
 type Queue = NonNullable<RoomMemory["spawnQueue"]>;
 type Plan = NonNullable<KernelMemory["warPlan"]>;

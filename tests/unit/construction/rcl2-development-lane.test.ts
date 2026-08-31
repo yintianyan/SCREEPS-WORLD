@@ -10,7 +10,7 @@ import {
 } from "../../../src/domain/construction/queue";
 import { makeTryAddTask } from "../../../src/domain/layout/planner";
 import { CONFIG } from "../../../src/config";
-import { resetGlobals } from "../../role-helpers";
+import { resetGlobals } from "../../support/factories";
 import type { BuildTaskCandidate } from "../../../src/domain/layout/task-factory";
 
 beforeEach(() => {

@@ -2,7 +2,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { roomStateSystem } from "../../../src/systems/room-state";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
-import { mockPos, mockRoomStateCtx } from "../../role-helpers";
+import { mockPos, mockRoomStateCtx } from "../../support/factories";
 
 function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return {

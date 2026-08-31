@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { buildOccupiedPositionSet } from "../../../src/domain/layout/validation";
 import { packPos } from "../../../src/domain/layout/types";
-import { mockSnapshot, mockStructure } from "../../role-helpers";
+import { mockSnapshot, mockStructure } from "../../support/factories";
 
 /** 造一个落在指定坐标的结构。 */
 function at(type: string, x: number, y: number) {

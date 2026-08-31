@@ -4,7 +4,7 @@ import {
   resetGlobals,
   mockCreep,
   mockPos,
-} from "../../role-helpers";
+} from "../../support/factories";
 import { runAction, actOrMove } from "../../../src/creeps/engine/actions/helpers";
 
 // Screeps 错误码常量（测试环境未全局注入）。

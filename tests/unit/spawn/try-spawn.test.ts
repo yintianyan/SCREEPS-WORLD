@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { trySpawn } from "../../../src/systems/spawn-manager";
 import { CONFIG } from "../../../src/config";
-import { mockPos, mockSnapshot, resetGlobals } from "../../role-helpers";
+import { mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
 
 function mockSpawn(energyAvailable: number, capacity = 800): any {
   return {
