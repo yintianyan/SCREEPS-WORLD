@@ -77,8 +77,11 @@ export const CONFIG = {
     logLevel: "info" as "debug" | "info" | "warn" | "error",
     /** creep 被判定为卡位后重新寻路前的 tick 数。 */
     stuckThreshold: 2,
-    /** 释放目标前的最大重新寻路次数。 */
-    repathLimit: 2,
+    /** 释放目标前的最大重新寻路次数。
+     * 4（2026-08-31 从 2 调优）：RCL3 高密度交通期间 traffic-manager 需要多 tick
+     * 仲裁才能解算所有意图，2 tick 不足导致频繁 Level 3 弃目标→TD-001 黑名单
+     * 触发→任务 churn。4 tick 给 traffic 更多解算窗口，减少 pathFailure consec。 */
+    repathLimit: 4,
   },
 
   /**
