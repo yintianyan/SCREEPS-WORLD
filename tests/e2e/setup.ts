@@ -1,90 +1,35 @@
 /** E2E 测试全局 setup。 */
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve } from "node:path";
 import { afterAll, beforeAll } from "vitest";
 
-const DRIVER_SNAPSHOT_PATH = resolve(
-  process.cwd(),
-  "node_modules/@screeps/driver/build/runtime.snapshot.bin",
-);
-const DRIVER_SNAPSHOT_MARKER = resolve(
-  process.cwd(),
-  "node_modules/@screeps/driver/build/.snapshot-node-version",
-);
-const DRIVER_MAKE_SNAPSHOT = resolve(
-  process.cwd(),
-  "node_modules/@screeps/driver/make-runtime-snapshot.js",
-);
-
-const CURRENT_NODE_MAJOR = parseInt(
-  process.versions.node.split(".")[0]!,
-  10,
-);
-
 /**
  * 检测 @screeps/driver 的 runtime.snapshot.bin 是否与当前 Node 版本兼容。
- * 如果不兼容（V8 大版本不同），自动重新生成。
+ * 委托 scripts/rebuild-driver-snapshot.js（postinstall 同源逻辑），避免双实现。
  */
 function ensureDriverSnapshot(): void {
-  if (!existsSync(DRIVER_SNAPSHOT_PATH)) {
-    throw new Error(
-      "runtime.snapshot.bin not found. Run `npm install` to set up @screeps/driver.",
-    );
-  }
-
-  // 检查 marker 文件，判断 snapshot 是用哪个 Node 大版本生成的
-  let snapshotNodeMajor: number | null = null;
-  try {
-    snapshotNodeMajor = parseInt(
-      readFileSync(DRIVER_SNAPSHOT_MARKER, "utf8").trim(),
-      10,
-    );
-  } catch {
-    // marker 不存在 → 预编译的 snapshot，可能不兼容
-  }
-
-  if (snapshotNodeMajor === CURRENT_NODE_MAJOR) {
-    return; // 兼容，跳过
-  }
-
-  // 需要重新生成
-  if (!existsSync(DRIVER_MAKE_SNAPSHOT)) {
+  const rebuildScript = resolve(
+    process.cwd(),
+    "scripts/rebuild-driver-snapshot.js",
+  );
+  if (!existsSync(rebuildScript)) {
     console.warn(
-      `[e2e setup] make-runtime-snapshot.js not found at ${DRIVER_MAKE_SNAPSHOT}. ` +
-        `If e2e tests crash with "Version mismatch between V8 binary and snapshot", ` +
-        `run: cd node_modules/@screeps/driver && node --no-node-snapshot make-runtime-snapshot.js`,
+      "[e2e setup] scripts/rebuild-driver-snapshot.js not found. " +
+        "If e2e tests crash with 'Version mismatch between V8 binary and snapshot', " +
+        "run: node scripts/rebuild-driver-snapshot.js --force",
     );
     return;
   }
-
-  console.log(
-    `[e2e setup] Regenerating runtime.snapshot.bin for Node ${process.versions.node} ` +
-      `(was ${snapshotNodeMajor ?? "unknown"})...`,
-  );
-
-  // 设置 macOS SDK 路径
-  const env = { ...process.env };
   try {
-    const sdkPath = execSync("xcrun --show-sdk-path", { encoding: "utf8" }).trim();
-    if (sdkPath) {
-      env.SDKROOT = sdkPath;
-      env.CPLUS_INCLUDE_PATH = `${sdkPath}/usr/include/c++/v1`;
-    }
+    execSync(`node "${rebuildScript}"`, {
+      encoding: "utf8",
+      stdio: "pipe",
+      cwd: process.cwd(),
+    });
   } catch {
-    // 非 macOS
+    // rebuild 失败不阻塞 — 测试会在不兼容时自然报错
   }
-
-  execSync(`node --no-node-snapshot "${DRIVER_MAKE_SNAPSHOT}"`, {
-    encoding: "utf8",
-    stdio: "pipe",
-    cwd: resolve(DRIVER_MAKE_SNAPSHOT, ".."),
-    env,
-  });
-
-  mkdirSync(resolve(DRIVER_SNAPSHOT_MARKER, ".."), { recursive: true });
-  writeFileSync(DRIVER_SNAPSHOT_MARKER, String(CURRENT_NODE_MAJOR), "utf8");
-  console.log("[e2e setup] runtime.snapshot.bin regenerated.");
 }
 
 /**

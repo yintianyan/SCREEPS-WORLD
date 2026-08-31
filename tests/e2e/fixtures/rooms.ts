@@ -28,14 +28,6 @@ export function standardRoom(
 }
 
 /**
- * 灾后恢复房间：只有 spawn（300 能量），controller level 1，无 creep。
- * 用于测试 P0 灾后恢复逻辑。
- */
-export function disasterRoom(roomName: string): RoomSetup {
-  return standardRoom(roomName, 300, 1);
-}
-
-/**
  * RCL4 房间：已有 storage 建造需求，验证 storage 优先级。
  * controller level 4，spawn 满，5 个 extension。
  */

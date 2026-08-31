@@ -1,7 +1,7 @@
 /** E2E-001 灾后恢复 — 0 creep + 300 能量，AI 必须自恢复到有 creep 工作。 */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
-import { disasterRoom } from "../fixtures/rooms";
+import { standardRoom } from "../fixtures/rooms";
 import { debugSnapshot } from "../helpers/assertions";
 import { isJsError } from "../../support/errors";
 
@@ -11,7 +11,7 @@ describe("E2E-001 灾后恢复（0 creep + 300 能量）", () => {
   beforeAll(async () => {
     await runner.setup({
       roomName: "W0N1",
-      rooms: [disasterRoom("W0N1")],
+      rooms: [standardRoom("W0N1", 300, 1)],
       maxTicks: 2000,
     });
   }, 120000);
