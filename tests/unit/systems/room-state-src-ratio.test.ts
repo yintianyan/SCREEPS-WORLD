@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { roomStateSystem } from "../../../src/systems/room-state";
-import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";
-import { mockCapacityStore } from "../../support/factories";
+import type { RoomSnapshot } from "../../../src/kernel/contracts";
+import { mockCapacityStore, mockRoomStateCtx } from "../../support/factories";
 
 /**
  * P0-1 room-state srcRatio + storageDrainRate 信号采集 — 单元测试。
@@ -50,22 +50,7 @@ function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   } as unknown as RoomSnapshot;
 }
 
-function makeCtx(snapshots: RoomSnapshot[]): TickContext {
-  return {
-    tick: 100,
-    budget: {
-      tier: "healthy",
-      softLimit: 17.5,
-      hardLimit: 19.2,
-      canStart: () => true,
-      isExhausted: () => false,
-      spent: () => 0,
-    },
-    getSnapshot: (name: string) => snapshots.find(s => s.roomName === name),
-    snapshots: () => snapshots,
-    globalSiteCount: 0,
-  } as unknown as TickContext;
-}
+// makeCtx 已归并到 factories.mockRoomStateCtx（T4 批②）。
 
 describe("room-state — P0-1 srcRatio + storageDrainRate 信号采集", () => {
   let savedMemory: typeof Memory | undefined;
@@ -102,7 +87,7 @@ describe("room-state — P0-1 srcRatio + storageDrainRate 信号采集", () => {
         { id: "s2", energy: 2900, energyCapacity: 3000 } as Source,
       ],
     });
-    roomStateSystem.run(makeCtx([snap]));
+    roomStateSystem.run(mockRoomStateCtx([snap]));
     expect(getRoomMem().phase!.phase).not.toBe("crisis");
   });
 
@@ -111,7 +96,7 @@ describe("room-state — P0-1 srcRatio + storageDrainRate 信号采集", () => {
     const snap = makeSnapshot({
       sources: [{ id: "s1", energy: 2900 } as Source],
     });
-    expect(() => roomStateSystem.run(makeCtx([snap]))).not.toThrow();
+    expect(() => roomStateSystem.run(mockRoomStateCtx([snap]))).not.toThrow();
   });
 
   it("storage 净流出率跨 tick 计算正确（storageEnergyPrev 持久化更新）", () => {
@@ -132,7 +117,7 @@ describe("room-state — P0-1 srcRatio + storageDrainRate 信号采集", () => {
     const snap = makeSnapshot({
       storage: { store: makeStore(9000) } as unknown as StructureStorage,
     });
-    roomStateSystem.run(makeCtx([snap]));
+    roomStateSystem.run(mockRoomStateCtx([snap]));
     // 验证 storageEnergyPrev 更新为本 tick 的 9000（供下一 tick 计算）
     expect(getRoomMem().phase!.storageEnergyPrev).toBe(9000);
   });

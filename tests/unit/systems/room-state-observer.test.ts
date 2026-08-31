@@ -1,8 +1,8 @@
 /** 无害侦察观测测试（R7c）— room-state 记录「有人盯防」信号。 */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { roomStateSystem } from "../../../src/systems/room-state";
-import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";
-import { mockPos } from "../../role-helpers";
+import type { RoomSnapshot } from "../../../src/kernel/contracts";
+import { mockPos, mockRoomStateCtx } from "../../role-helpers";
 
 function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return {
@@ -37,22 +37,7 @@ function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   } as unknown as RoomSnapshot;
 }
 
-function makeCtx(snapshots: RoomSnapshot[], tick = 100): TickContext {
-  return {
-    tick,
-    budget: {
-      tier: "healthy",
-      softLimit: 17.5,
-      hardLimit: 19.2,
-      canStart: () => true,
-      isExhausted: () => false,
-      spent: () => 0,
-    },
-    getSnapshot: (name: string) => snapshots.find(s => s.roomName === name),
-    snapshots: () => snapshots,
-    globalSiteCount: 0,
-  } as unknown as TickContext;
-}
+// makeCtx 已归并到 factories.mockRoomStateCtx（T4 批②）。
 
 function scout(): any {
   return { id: "scout_1", name: "scout_1", owner: { username: "Enemy" }, body: [], hits: 100, hitsMax: 100, pos: mockPos(10, 10, "W1N1") };
@@ -83,7 +68,7 @@ describe("room-state — 无害侦察观测（R7c）", () => {
   it("敌对无威胁部件 → 写入 lastObserverAt + observerSightings", () => {
     const snapshot = makeSnapshot({ hostileCreeps: [scout()], threatCreeps: [] });
 
-    roomStateSystem.run(makeCtx([snapshot], 100));
+    roomStateSystem.run(mockRoomStateCtx([snapshot], 100));
 
     const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
     expect(roomMem.lastObserverAt).toBe(100);
@@ -93,8 +78,8 @@ describe("room-state — 无害侦察观测（R7c）", () => {
   it("重复目击计数累计（持续盯防信号）", () => {
     const snapshot = makeSnapshot({ hostileCreeps: [scout()], threatCreeps: [] });
 
-    roomStateSystem.run(makeCtx([snapshot], 100));
-    roomStateSystem.run(makeCtx([snapshot], 101));
+    roomStateSystem.run(mockRoomStateCtx([snapshot], 100));
+    roomStateSystem.run(mockRoomStateCtx([snapshot], 101));
 
     const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
     expect(roomMem.lastObserverAt).toBe(101);
@@ -105,7 +90,7 @@ describe("room-state — 无害侦察观测（R7c）", () => {
     const attacker = { ...scout(), body: [{ type: "attack", hits: 100 }] };
     const snapshot = makeSnapshot({ hostileCreeps: [attacker], threatCreeps: [attacker] });
 
-    roomStateSystem.run(makeCtx([snapshot], 100));
+    roomStateSystem.run(mockRoomStateCtx([snapshot], 100));
 
     const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
     expect(roomMem.lastObserverAt).toBeUndefined();

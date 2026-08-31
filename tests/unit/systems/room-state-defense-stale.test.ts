@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { roomStateSystem } from "../../../src/systems/room-state";
-import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";
-import { mockCapacityStore } from "../../support/factories";
+import type { RoomSnapshot } from "../../../src/kernel/contracts";
+import { mockCapacityStore, mockRoomStateCtx } from "../../support/factories";
 
 /**
  * P1-3 defense 误触发修复 — lastHostileAt 过期失效机制单元测试。
@@ -50,22 +50,7 @@ function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   } as unknown as RoomSnapshot;
 }
 
-function makeCtx(snapshots: RoomSnapshot[], tick = 100): TickContext {
-  return {
-    tick,
-    budget: {
-      tier: "healthy",
-      softLimit: 17.5,
-      hardLimit: 19.2,
-      canStart: () => true,
-      isExhausted: () => false,
-      spent: () => 0,
-    },
-    getSnapshot: (name: string) => snapshots.find(s => s.roomName === name),
-    snapshots: () => snapshots,
-    globalSiteCount: 0,
-  } as unknown as TickContext;
-}
+// makeCtx 已归并到 factories.mockRoomStateCtx（T4 批②）。
 
 /** 构造 n 个威胁 creep（只需 id 区分数量即可）。 */
 function makeThreat(n: number): Creep[] {
@@ -103,7 +88,7 @@ describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
   it("威胁首次到达（0→1）时 lastHostileAt 刷新且 colonyState=defense", () => {
     // prevThreatCount undefined → 0，threatCount=1 > 0 → threatIncreased → 刷新
     const snap = makeSnapshot({ threatCreeps: makeThreat(1) });
-    roomStateSystem.run(makeCtx([snap], 100));
+    roomStateSystem.run(mockRoomStateCtx([snap], 100));
 
     const rm = getRoomMem();
     expect(rm.lastHostileAt).toBe(100);
@@ -118,7 +103,7 @@ describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
     rm.lastHostileAt = 100;
     // 本 tick：仍 1 威胁（未增加），tick=150
     const snap = makeSnapshot({ threatCreeps: makeThreat(1) });
-    roomStateSystem.run(makeCtx([snap], 150));
+    roomStateSystem.run(mockRoomStateCtx([snap], 150));
 
     // lastHostileAt 应保持 100（威胁未增加，不刷新）
     const after = getRoomMem();
@@ -133,7 +118,7 @@ describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
     rm.lastHostileAt = 100;
     // 本 tick：2 威胁（增援到达），tick=150
     const snap = makeSnapshot({ threatCreeps: makeThreat(2) });
-    roomStateSystem.run(makeCtx([snap], 150));
+    roomStateSystem.run(mockRoomStateCtx([snap], 150));
 
     // lastHostileAt 应刷新为 150（威胁新增）
     const after = getRoomMem();
@@ -148,7 +133,7 @@ describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
     rm.lastHostileAt = 100;
     // 本 tick：威胁全部消失
     const snap = makeSnapshot({ threatCreeps: [] });
-    roomStateSystem.run(makeCtx([snap], 150));
+    roomStateSystem.run(mockRoomStateCtx([snap], 150));
 
     const after = getRoomMem();
     expect(after.prevThreatCount).toBe(0);
@@ -164,7 +149,7 @@ describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
     rm.lastHostileAt = 100;
     // 本 tick：仍 1 威胁（未增加），tick=250（距上次刷新 150 tick > 100）
     const snap = makeSnapshot({ threatCreeps: makeThreat(1) });
-    roomStateSystem.run(makeCtx([snap], 250));
+    roomStateSystem.run(mockRoomStateCtx([snap], 250));
 
     // stale → hasHostiles=false → colonyState 非 defense
     const after = getRoomMem();
@@ -180,7 +165,7 @@ describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
     rm.lastHostileAt = 100;
     // 本 tick：仍 1 威胁（未增加），tick=150（距上次刷新 50 tick ≤ 100）
     const snap = makeSnapshot({ threatCreeps: makeThreat(1) });
-    roomStateSystem.run(makeCtx([snap], 150));
+    roomStateSystem.run(mockRoomStateCtx([snap], 150));
 
     // 未 stale → hasHostiles=true → colonyState=defense
     const after = getRoomMem();
@@ -197,7 +182,7 @@ describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
     rm.prevThreatCount = 1;
     rm.lastHostileAt = undefined;
     const snap = makeSnapshot({ threatCreeps: makeThreat(1) });
-    roomStateSystem.run(makeCtx([snap], 1000));
+    roomStateSystem.run(mockRoomStateCtx([snap], 1000));
 
     expect(getRoomMem().colonyState).toBe("defense");
   });
@@ -206,7 +191,7 @@ describe("room-state — P1-3 lastHostileAt 过期失效机制", () => {
     // prevThreatCount undefined → 视为 0
     // threatCount=1 > 0 → threatIncreased=true → 刷新 lastHostileAt
     const snap = makeSnapshot({ threatCreeps: makeThreat(1) });
-    roomStateSystem.run(makeCtx([snap], 100));
+    roomStateSystem.run(mockRoomStateCtx([snap], 100));
 
     const after = getRoomMem();
     expect(after.lastHostileAt).toBe(100);
@@ -255,7 +240,7 @@ describe("room-state — P1-3 退出 defense 迟滞", () => {
     rm.prevThreatCount = 1;
     // 本 tick：威胁全部消失，tick=130（lastHostileAge=30 < 50）
     const snap = makeSnapshot({ threatCreeps: [] });
-    roomStateSystem.run(makeCtx([snap], 130));
+    roomStateSystem.run(mockRoomStateCtx([snap], 130));
 
     // 迟滞期内 → hasHostiles=true → colonyState=defense
     expect(getRoomMem().colonyState).toBe("defense");
@@ -269,7 +254,7 @@ describe("room-state — P1-3 退出 defense 迟滞", () => {
     rm.prevThreatCount = 1;
     // 本 tick：威胁全部消失，tick=160（lastHostileAge=60 >= 50）
     const snap = makeSnapshot({ threatCreeps: [] });
-    roomStateSystem.run(makeCtx([snap], 160));
+    roomStateSystem.run(mockRoomStateCtx([snap], 160));
 
     // 迟滞结束 → hasHostiles=false → colonyState 非 defense
     expect(getRoomMem().colonyState).not.toBe("defense");
@@ -283,7 +268,7 @@ describe("room-state — P1-3 退出 defense 迟滞", () => {
     rm.prevThreatCount = 1;
     // 本 tick：威胁全部消失，tick=130（lastHostileAge=30 < 50）
     const snap = makeSnapshot({ threatCreeps: [] });
-    roomStateSystem.run(makeCtx([snap], 130));
+    roomStateSystem.run(mockRoomStateCtx([snap], 130));
 
     // prevInDefense=false → 无迟滞 → hasHostiles=false → colonyState 非 defense
     expect(getRoomMem().colonyState).not.toBe("defense");
@@ -297,7 +282,7 @@ describe("room-state — P1-3 退出 defense 迟滞", () => {
     rm.prevThreatCount = 0; // 威胁已消失
     // 本 tick：威胁再次出现（0→1），tick=130
     const snap = makeSnapshot({ threatCreeps: makeThreat(1) });
-    roomStateSystem.run(makeCtx([snap], 130));
+    roomStateSystem.run(mockRoomStateCtx([snap], 130));
 
     // threatIncreased=true → 刷新 lastHostileAt=130
     const after = getRoomMem();

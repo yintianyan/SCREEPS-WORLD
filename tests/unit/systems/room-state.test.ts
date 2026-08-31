@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { roomStateSystem } from "../../../src/systems/room-state";
 import { CONFIG } from "../../../src/config";
-import type { TickContext, RoomSnapshot } from "../../../src/kernel/contracts";
-import { mockCapacityStore } from "../../support/factories";
+import type { RoomSnapshot } from "../../../src/kernel/contracts";
+import { mockCapacityStore, mockRoomStateCtx } from "../../support/factories";
 
 /**
  * Room State System 单元测试。
@@ -46,22 +46,7 @@ function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   } as unknown as RoomSnapshot;
 }
 
-function makeCtx(snapshots: RoomSnapshot[]): TickContext {
-  return {
-    tick: 100,
-    budget: {
-      tier: "healthy",
-      softLimit: 17.5,
-      hardLimit: 19.2,
-      canStart: () => true,
-      isExhausted: () => false,
-      spent: () => 0,
-    },
-    getSnapshot: (name: string) => snapshots.find(s => s.roomName === name),
-    snapshots: () => snapshots,
-    globalSiteCount: 0,
-  } as unknown as TickContext;
-}
+// makeCtx 已归并到 factories.mockRoomStateCtx（T4 批②）。
 
 describe("room-state system — TD-012 terminal 能量纳入 reserve", () => {
   let savedMemory: typeof Memory | undefined;
@@ -96,7 +81,7 @@ describe("room-state system — TD-012 terminal 能量纳入 reserve", () => {
       rcl: 6,
     });
 
-    roomStateSystem.run(makeCtx([snapshot]));
+    roomStateSystem.run(mockRoomStateCtx([snapshot]));
 
     const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
     // reserve = 300 (energyAvailable) + 10000 (storage) + 5000 (terminal) + 200 (creepEnergy) = 15500
@@ -113,7 +98,7 @@ describe("room-state system — TD-012 terminal 能量纳入 reserve", () => {
       rcl: 6,
     });
 
-    roomStateSystem.run(makeCtx([snapshot]));
+    roomStateSystem.run(mockRoomStateCtx([snapshot]));
 
     const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
     // reserve = 300 + 8000 + 0 + 100 = 8400
@@ -130,7 +115,7 @@ describe("room-state system — TD-012 terminal 能量纳入 reserve", () => {
       rcl: 6,
     });
 
-    roomStateSystem.run(makeCtx([snapshot]));
+    roomStateSystem.run(mockRoomStateCtx([snapshot]));
 
     const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
     // reserve = 200 + 0 + 3000 + 0 = 3200
@@ -150,7 +135,7 @@ describe("room-state system — TD-012 terminal 能量纳入 reserve", () => {
       sourceOccupancy: new Map([["src1", 2]]),
     });
 
-    roomStateSystem.run(makeCtx([snapshot]));
+    roomStateSystem.run(mockRoomStateCtx([snapshot]));
 
     const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
     // reserve = 50 + 1000 + 20000 = 21050 — 包含 terminal 后储备充足
@@ -190,7 +175,7 @@ describe("room-state system — TD-014 controllerDowngradeRisk 迟滞带", () =>
     const snapshot = makeSnapshot({
       controller: { my: true, level: 6, ticksToDowngrade: ttd } as unknown as StructureController,
     });
-    roomStateSystem.run(makeCtx([snapshot]));
+    roomStateSystem.run(mockRoomStateCtx([snapshot]));
     return getRoomMem().controllerDowngradeRisk;
   }
 
@@ -233,7 +218,7 @@ describe("room-state system — TD-014 controllerDowngradeRisk 迟滞带", () =>
     const snapshot = makeSnapshot({
       controller: { my: false, level: 6, ticksToDowngrade: 1000 } as unknown as StructureController,
     });
-    roomStateSystem.run(makeCtx([snapshot]));
+    roomStateSystem.run(mockRoomStateCtx([snapshot]));
     expect(getRoomMem().controllerDowngradeRisk).toBe(false);
   });
 });
@@ -266,7 +251,7 @@ describe("room-state system — TD-020 economyPressure 使用 CONFIG 常量", ()
 
   it("score=0 时 economyPressure=0", () => {
     const snapshot = makeSnapshot();
-    roomStateSystem.run(makeCtx([snapshot]));
+    roomStateSystem.run(mockRoomStateCtx([snapshot]));
     expect(getRoomMem().economyPressure).toBe(0);
   });
 

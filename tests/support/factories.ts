@@ -379,3 +379,30 @@ export function mockContext(snapshot?: RoomSnapshot, budget?: Budget): TickConte
     snapshots: vi.fn(function* () { yield snap; }),
   };
 }
+
+/**
+ * room-state 系测试的共享 TickContext 工厂（T4 批②归并）。
+ *
+ * 与 mockContext 的区别：接受 snapshots 数组 + 可选 tick（默认 100），
+ * getSnapshot 按 roomName 查找而非返回固定快照，snapshots 返回数组迭代器。
+ * 4 个 room-state 单元测试的 makeCtx 统一到此处。
+ */
+export function mockRoomStateCtx(
+  snapshots: RoomSnapshot[],
+  tick = 100,
+): TickContext {
+  return {
+    tick,
+    budget: {
+      tier: "healthy" as CpuTier,
+      softLimit: 17.5,
+      hardLimit: 19.2,
+      canStart: () => true,
+      isExhausted: () => false,
+      spent: () => 0,
+    } as unknown as Budget,
+    getSnapshot: (name: string) => snapshots.find(s => s.roomName === name),
+    snapshots: () => snapshots,
+    globalSiteCount: 0,
+  } as unknown as TickContext;
+}
