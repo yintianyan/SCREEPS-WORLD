@@ -166,7 +166,13 @@
 | T5 | 孤儿治理：integration Assertions 10 个零调用方法、tickRunner 单例、stuckCreeps、两 barrel 22 个死 re-export、SnapshotInspector 零调用方法、disasterRoom、run-e2e.mjs/smoke-e2e.cjs 删除；e2e/setup.ts 与 rebuild-driver-snapshot.js 双实现合一；fixtures/inject.ts 依 R19⑥ 触摸即迁移启用（16/25/26 soak 直调点先行） | FREEZE R20 · R19⑥ | 行为保持四件套；零引用导出清单清零或转在用 | ◐ 2026-08-31（**已完成**：Assertions 10 方法+工厂、GameInspector.stuckCreeps、tickRunner 单例、SnapshotInspector 6 查询方法、两 barrel 22 死 re-export、run-e2e.mjs/smoke-e2e.cjs 删除（`a9e5f7e`+`80bd7d1`）；inject.ts 转在用——injectSpawnEnergy/injectFriendlyTower 落地 07/04。**缓期项追加完成**：disasterRoom 删除（01-disaster-recovery 改用 standardRoom 直调）、e2e/setup.ts↔rebuild-driver-snapshot.js 双实现合一（setup 委托 scripts 调用，消除 60 行重复逻辑）（`eef16fa`）。**剩余缓期**：存量场景 inject 全量迁移——同 T4 并行轨避让） |
 | T6 | 标题-断言对齐：07-energy-crisis 前提真实化（新增 `injectSpawnEnergy` 具名注入，R19② 白名单登记）；03-storage-construction 补 storage site 断言；04-tower-defense 补 hostile hits 下降断言（world.roomObjects 真值） | FREEZE R20 · R19② | 三场景断言与标题一致且绿 | ✅ 2026-08-31（`80bd7d1`+`1b945db`：07 前提真实化后绿（recovery 档 200 能量可孵化）；03 补 storage site 真值断言绿（4/4）；04 补 hostile 受伤/击杀真值断言——**根因定位修复**：`addBot` 将 controller level 覆盖为 1，夹具 `rcl3RoomWithTower` 设的 level=3 被抹去，tower 在 RCL1 下 `checkStructureAgainstController` 返回 false → `attack` 返回 `ERR_RCL_NOT_ENOUGH`(-14)。E2E-004 与 E2E-012 setup 补 `controllerLevel: 3` 后 3/3 + 6/6 全绿。src/systems/tower-defense.ts 零改动——防御逻辑正确，断链在测试基础设施层 |
 
-## 7. 本文件维护方式
+## 7. 已知技术债（非阻塞，登记待后续修复）
+
+| ID | 描述 | 根因 | 影响 | 修复方向 |
+| --- | --- | --- | --- | --- |
+| TD-001 | pathFailure 循环：Level 3 弃目标后立即重新分配相同目标 | `clearTarget` 清除 `targetId` 但不记录黑名单；下一 tick `getAssignment` → `chooseTaskForRole` 可重新选中同方向目标 → 4 tick 后再次 Level 3 → 循环 | 100k soak stage 6-7（RCL3）`consec` 高达 155（upgrader）和 91（hauler）；不影响 bucket（10000 全程）或 JS 错误（0），但在 E8 产生噪音违例 | Level 3 后在 `creep.memory` 写入 `abandonedTargetId` + `abandonedAt` tick；`chooseTaskForRole` 过滤最近 N tick 内放弃的同 ID 任务 |
+
+## 8. 本文件维护方式
 
 固定刷新命令（更新对应章节后提交）：
 
