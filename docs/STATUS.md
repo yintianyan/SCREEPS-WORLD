@@ -127,7 +127,7 @@
 
 **Blocked 项登记**（不得描述为已发布能力；B6 验证轨 2026-08-29 启动后状态）：
 
-- ◐ RCL1→8 私服 soak 覆盖：sv=43 已实测 RCL1→5 自然晋级（E2E-016 深度档 20k+50k+100k+200k+300k tick，criticalViolations=0，RCL5@t=85k 自然达成，link 网络@t=105k 开始分散交通）；RCL6→8 待更长程 soak（controller progress 162k/1215k@t=105k）
+- ◐ RCL1→8 私服 soak 覆盖：sv=43 已实测 RCL1→5 自然晋级（E2E-016 自举轨 300k tick，criticalViolations=0，RCL5@t=85k 自然达成，link 网络@t=105k 开始分散交通）+ RCL6 注入轨 350k+ tick（criticalViolations=0，bucket=10000 全程，tier=healthy 全程，extensions@t=30k 建成 11 个，storage 耗尽后仍存活）；RCL7→8 待更长程 soak（controller progress 14267/3645000@t=35k，速率 0.23/t）
 - ◐ 多房私服 soak：双自有房并行 + spawn 竞争 + 一房全灭故障隔离已实测（E2E-017）；terminal 决策权语义已锁定（E2E-019：Plan 活跃压制 self-aid）；claim 授权全链已实测（E2E-020 @ sv43，2026-08-29）；Plan 驱动互济证据（E2E-019 energy-aid）；site quota 极限注入待继续
 - ✅ war 轨对抗验证（Scenario F 四门槛）：诱饵不触发授权（E2E-021）、fact 真目标授权 + 经济不越红线（E2E-022）、止损触发即收摊（E2E-023，伤亡/经济双路径）、战后核验 intel 一致（E2E-024）——详见 §6 W1–W5
 - ◐ 低 CPU 私服 soak：四档 tier 降级链 + bucket 逼近枯竭已实测（E2E-015）；P3 饥饿旁路 E2 整环闭环已实测（p3-bypass-loop，2026-08-29）——仅剩 E2 触发的自然 soak 窗口证据
