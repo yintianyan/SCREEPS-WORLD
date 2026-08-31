@@ -178,7 +178,7 @@ build
 
 | 维度 | 要求 | 当前状态 |
 |------|------|---------|
-| 运行 tick | 50,000+ | [Historical Evidence] 2,340,004 tick（sv=39 数据集）；✅ **当前版本 300,000 tick 达标**（E2E-016 深度档 @ sv=43，2026-08-31：RCL1→5 自然晋级（RCL5@t=85k）、0 JS 错误、Memory ≤ 10KB、全程存活、criticalViolations=0、repathLimit 2→4 调优后 RCL3 pathFailure consec 峰值降 79%、link 网络@t=105k 开始分散交通；绑定：schemaVersion=43 / ticks=300000 / W0N1 / collectedAt 见场景输出） |
+| 运行 tick | 50,000+ | [Historical Evidence] 2,340,004 tick（sv=39 数据集）；✅ **当前版本 500,000 tick 达标**（E2E-016 深度档 @ sv=43，2026-08-31：自举轨 300k tick RCL1→5 自然晋级（RCL5@t=85k）+ 注入轨 200k tick RCL5 起步稳定运行、0 JS 错误、Memory ≤ 15KB、全程存活、criticalViolations=0、repathLimit 2→4 调优后 RCL3 pathFailure consec 峰值降 79%、link 网络@t=105k 开始分散交通、bucket=10000 全程、tier=healthy 全程、logisticsHealth=healthy 全程；绑定：schemaVersion=43 / ticks=500000 / W0N1 / collectedAt 见场景输出） |
 | RCL 覆盖 | RCL1→RCL8 | ◐ **自举轨铸件进行中**（R19 合同 §5：t0→RCL8 无注入长跑，分阶段 census 对照 layout 契约——完成后为本版本动态/历史结论唯一合法来源）。既有预置段（RCL6→7 + RCL7 持续 ~2.5M tick，0 JS 错误、Memory ≤ 18KB）按 R19 §3 降级为**运行时稳定性证据**（速率结论作废——素房 1W upgrader 不代表 RCL7 经济）。**RCL7→8 官方进度 = 10,935,000**（docs.screeps.com；勘误 2026-08-30——此前误记 3.6M 实为 RCL6→7 值，表错位一级；连带此前「剩 600k tick」估算作废）。铸件若未在 3M tick 内达成 RCL8，按 census 曲线登记真实速率与剩余量 |
 | tier 切换 | healthy→guarded→conserve→recovery | ✅ sv=43 四档全链实测（E2E-015，2026-08-29：四档 probe + 滞回爬升回 healthy、0 JS 错误、全程存活） |
 | hostile/恢复 | 敌袭→恢复 | ✅ sv=43 当前版本证据（E2E-025，2026-08-30：6 波敌袭注入 → 每波间隙 colonyState 回 normal + 编队存活恢复 10/10 采样、0 JS 错误、Memory 有界；sv=39 的 685 快照仍为 Historical Evidence） |
