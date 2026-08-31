@@ -117,8 +117,11 @@ export interface PathFailureSnapshot {
 }
 
 // ── E9: recovery 状态持续过久 ───────────────────────────────
-/** recovery 持续触发违例的 tick 阈值。 */
-export const E9_STALE_TICKS = 2000;
+/** recovery 持续触发违例的 tick 阈值。
+ * 校准依据：灾后恢复（0 creep + 300 能量起步）需孵化 harvester→hauler→upgrader→builder
+ * 四个 creep，单 source 10 energy/tick 下恢复到 non-recovery 需 3000-5000 tick。
+ * 2000t 会产生 false positive——恢复进行中即触发违例。 */
+export const E9_STALE_TICKS = 5000;
 
 export interface RecoverySnapshot {
   room: string;
