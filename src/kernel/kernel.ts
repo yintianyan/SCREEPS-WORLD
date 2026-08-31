@@ -490,7 +490,7 @@ export class Kernel {
 
   /** E7: 采集 site 进度快照（从 Game.constructionSites + globalCache 追踪）。
    * 遍历全局 construction sites（无需房间可见），对比上次进度判断是否停滞。
-   * builderVisits 从 buildQueue 中 site 状态任务估算。 */
+   * builderVisits 从 site.progress 推断：progress > 0 说明 builder 到访过（引擎真值）。 */
   private collectSiteProgressSnapshots(ctx: Context): SiteProgressSnapshot[] {
     const result: SiteProgressSnapshot[] = [];
     const tracker = globalCache().siteProgressTracker ??= new Map();
@@ -503,7 +503,11 @@ export class Kernel {
       const total = site.progressTotal;
       const progressChanged = prev ? prev.lastProgress !== currentProgress : true;
       const lastProgressTick = progressChanged ? ctx.tick : (prev?.lastProgressTick ?? ctx.tick);
-      const builderVisits = prev?.builderVisits ?? 0;
+      // builderVisits 从 progress 推断：progress > 0 → builder 曾到访（≥1）；
+      // progress 变化 → 到访递增。progress=0 → 从未到访（0）。
+      let builderVisits = prev?.builderVisits ?? 0;
+      if (currentProgress > 0 && builderVisits === 0) builderVisits = 1;
+      if (progressChanged && currentProgress > 0) builderVisits++;
       tracker.set(id, {
         lastProgress: currentProgress,
         lastProgressTick,
