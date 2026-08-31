@@ -121,19 +121,19 @@
 | --- | --- |
 | Design-Verified | ✅ 十场景（Scenario A–J）+ 双红队闭合（冻结日 2026-08-23） |
 | Code-Verified | ✅ 基准 commit + B6 验证轨工作树：typecheck 0 error + 4727 测试全绿 + build 成功 + smoke 3/3（§3） |
-| Integration-Verified | ✅ 私服 mockup 集成场景 @ sv43：单房全链（E2E-016 20k+50k tick）+ 多房并行与故障隔离（E2E-017）+ 低 CPU 四档链（E2E-015）+ ESM 全链（E2E-018）+ terminal 决策权（E2E-019）+ P3 旁路整环（p3-bypass-loop） |
-| Soak-Verified | ◐ **sv=43 当前版本证据已建立**（E2E-016：20k+50k tick / RCL1→3 / 0 JS 错误 / Memory ≤ 12KB / criticalViolations=0，E8 pathFailureTracker 死 creep 清理 + E9 阈值校准 5000t，绑定齐全）；整体升级 Soak-Verified 待 hostile/恢复维度当前版本证据与 RCL7→8（[CANARY_SOAK_PROCEDURE.md](implementation/CANARY_SOAK_PROCEDURE.md) §5）；sv=39 旧数据集为 Historical Evidence |
+| Integration-Verified | ✅ 私服 mockup 集成场景 @ sv43：单房全链（E2E-016 20k+50k+100k tick）+ 多房并行与故障隔离（E2E-017）+ 低 CPU 四档链（E2E-015）+ ESM 全链（E2E-018）+ terminal 决策权（E2E-019）+ P3 旁路整环（p3-bypass-loop） |
+| Soak-Verified | ◐ **sv=43 当前版本证据已建立**（E2E-016：20k+50k+100k tick / RCL1→4 / 0 JS 错误 / Memory ≤ 12KB / criticalViolations=0，E7 builderVisits 从 progress 推断 + E7 阈值校准 5000t + E8 pathFailureTracker 死 creep 清理 + E9 阈值校准 5000t，绑定齐全）；整体升级 Soak-Verified 待 hostile/恢复维度当前版本证据与 RCL7→8（[CANARY_SOAK_PROCEDURE.md](implementation/CANARY_SOAK_PROCEDURE.md) §5）；sv=39 旧数据集为 Historical Evidence |
 | Release-Ready | ❌ 不满足（Soak-Verified 整体升级待 hostile/恢复与 RCL7→8；发布流程未执行——见 RELEASE_GATE canary 序） |
 
 **Blocked 项登记**（不得描述为已发布能力；B6 验证轨 2026-08-29 启动后状态）：
 
-- ◐ RCL1→8 私服 soak 覆盖：sv=43 已实测 RCL1→3（E2E-016 深度档 20k+50k tick，criticalViolations=0）；RCL4→8 待更长程 soak
+- ◐ RCL1→8 私服 soak 覆盖：sv=43 已实测 RCL1→4（E2E-016 深度档 20k+50k+100k tick，criticalViolations=0，RCL3→4 确认自然晋级）；RCL5→8 待更长程 soak
 - ◐ 多房私服 soak：双自有房并行 + spawn 竞争 + 一房全灭故障隔离已实测（E2E-017）；terminal 决策权语义已锁定（E2E-019：Plan 活跃压制 self-aid）；claim 授权全链已实测（E2E-020 @ sv43，2026-08-29）；Plan 驱动互济证据（E2E-019 energy-aid）；site quota 极限注入待继续
 - ✅ war 轨对抗验证（Scenario F 四门槛）：诱饵不触发授权（E2E-021）、fact 真目标授权 + 经济不越红线（E2E-022）、止损触发即收摊（E2E-023，伤亡/经济双路径）、战后核验 intel 一致（E2E-024）——详见 §6 W1–W5
 - ◐ 低 CPU 私服 soak：四档 tier 降级链 + bucket 逼近枯竭已实测（E2E-015）；P3 饥饿旁路 E2 整环闭环已实测（p3-bypass-loop，2026-08-29）——仅剩 E2 触发的自然 soak 窗口证据
 - ✅ global reset 恢复实测：E2E-005 注入场景 @ sv43 全绿（2026-08-29）
 - ✅ tier 切换实测：四档全链 + 滞回爬升 @ sv43（E2E-015，此前历史 soak 全程 healthy）
-- ◐ 旧 soak 数据 schema 错位（sv=39 历史集为 Historical Evidence，代码 sv=43）：sv=43 20k+50k tick 深度 soak 已绿（criticalViolations=0，E8/E9 修复后）；100k+ tick 继续积累
+- ◐ 旧 soak 数据 schema 错位（sv=39 历史集为 Historical Evidence，代码 sv=43）：sv=43 20k+50k+100k tick 深度 soak 已绿（criticalViolations=0，E7/E8/E9 修复后）；200k+ tick 继续积累
 - ✅ Emergency Survival Mode 已实现（R17，2026-08-29：createBudget 状态机 + P0 车道收缩 + E2E-018 注入全链验证；发现于 RELEASE_GATE §5.2 设计态规范的最后一项内核能力缺口）
 
 > 重构侧待办的唯一工作项清单见 §6 重构 backlog（B1–B6）；验证侧 Blocked 的执行
