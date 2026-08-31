@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { planLinkTransfers, classifyLinkRole, type LinkInfo } from "../../../src/domain/economy/links";
+import {
+  planLinkTransfers,
+  classifyLinkRole,
+  receivedAfterLoss,
+  sendForNeeds,
+  LINK_LOSS_RATE,
+  type LinkInfo,
+} from "../../../src/domain/economy/links";
 
 function link(
   id: string,
@@ -55,8 +62,11 @@ describe("Links — planLinkTransfers", () => {
       link("st", "storage", 200),
     ];
     const transfers = planLinkTransfers(links);
-    expect(transfers).toHaveLength(1);
+    // 损耗补偿：s1 发 500 → 到账 485，controller 仍缺 15；
+    // storage→controller 补缺口（sendForNeeds(15)=16）。
+    expect(transfers).toHaveLength(2);
     expect(transfers[0]).toEqual({ fromId: "s1", toId: "c1", amount: 500 });
+    expect(transfers[1]).toEqual({ fromId: "st", toId: "c1", amount: 16 });
   });
 
   it("controllerTargetEnergy=0（RCL8 停供）→ source 全流 storage hub", () => {
@@ -78,9 +88,10 @@ describe("Links — planLinkTransfers", () => {
       link("st", "storage", 200),
     ];
     const transfers = planLinkTransfers(links, { controllerTargetEnergy: 200 });
-    // s1 补 controller 100（到 200 目标）；s2 全流 storage。
+    // 损耗补偿：controller 缺 100 → sendForNeeds(100)=104，到账 100，需求归零。
+    // s1 发 104（到账 100，controller 到 200）；s2 全流 storage。
     expect(transfers).toEqual([
-      { fromId: "s1", toId: "c1", amount: 100 },
+      { fromId: "s1", toId: "c1", amount: 104 },
       { fromId: "s2", toId: "st", amount: 600 },
     ]);
   });
@@ -95,6 +106,8 @@ describe("Links — planLinkTransfers", () => {
 
   it("sends remaining source to storage via second link when first fills controller", () => {
     // link 每 tick 只能传输一次。两个 source link：一个填 controller，一个填 storage。
+    // 损耗补偿：s1 发 300 → 到账 291，controller 仍缺 9；
+    // s2 补 controller 缺口（sendForNeeds(9)=10），无余量去 storage。
     const links = [
       link("s1", "source", 300),
       link("s2", "source", 400),
@@ -104,7 +117,8 @@ describe("Links — planLinkTransfers", () => {
     const transfers = planLinkTransfers(links);
     expect(transfers).toHaveLength(2);
     expect(transfers[0]).toEqual({ fromId: "s1", toId: "c1", amount: 300 });
-    expect(transfers[1]).toEqual({ fromId: "s2", toId: "st", amount: 400 });
+    // s1 到账 291，controller 仍缺 9 → s2 发 10 补齐（到账 9）
+    expect(transfers[1]).toEqual({ fromId: "s2", toId: "c1", amount: 10 });
   });
 
   it("uses multiple source links to fill controller", () => {
@@ -114,6 +128,8 @@ describe("Links — planLinkTransfers", () => {
       link("c1", "controller", 100), // needs 700
     ];
     const transfers = planLinkTransfers(links);
+    // 损耗补偿：s1 发 200 → 到账 194，剩需 506；
+    // s2 发 300 → 到账 291，剩需 215（无法继续，无更多 source link）。
     expect(transfers).toHaveLength(2);
     expect(transfers[0]).toEqual({ fromId: "s1", toId: "c1", amount: 200 });
     expect(transfers[1]).toEqual({ fromId: "s2", toId: "c1", amount: 300 });
@@ -261,5 +277,114 @@ describe("Links — classifyLinkRole（最近锚获胜，根除优先级劫持�
 
   it("自定义 anchorRange=1：距 source=2 不再命中 → hub（口径可收紧回退）", () => {
     expect(classifyLinkRole(pt(40, 44), [pt(41, 46)], undefined, undefined, 1)).toBe("hub");
+  });
+});
+
+// ── 传输损耗补偿（3% engine loss）──
+describe("Links — 传输损耗补偿", () => {
+  it("LINK_LOSS_RATE = 0.03", () => {
+    expect(LINK_LOSS_RATE).toBe(0.03);
+  });
+
+  it("receivedAfterLoss: 发 800 → 到账 776", () => {
+    expect(receivedAfterLoss(800)).toBe(776); // floor(800 * 0.97)
+  });
+
+  it("receivedAfterLoss: 发 100 → 到账 97", () => {
+    expect(receivedAfterLoss(100)).toBe(97);
+  });
+
+  it("receivedAfterLoss: 发 1 → 到账 0（floor）", () => {
+    expect(receivedAfterLoss(1)).toBe(0); // floor(0.97) = 0
+  });
+
+  it("sendForNeeds: 需 700 → 发 722（ceil(700/0.97)）", () => {
+    expect(sendForNeeds(700)).toBe(722);
+  });
+
+  it("sendForNeeds: 需 100 → 发 104（ceil(100/0.97)）", () => {
+    expect(sendForNeeds(100)).toBe(104);
+  });
+
+  it("sendForNeeds: 需 0 → 发 0", () => {
+    expect(sendForNeeds(0)).toBe(0);
+  });
+
+  it("补偿后到账量 ≥ 原始需求", () => {
+    // 对任意 1..800 需求量，补偿后发送量的到账量必须 ≥ 需求
+    for (let needs = 1; needs <= 800; needs++) {
+      const received = receivedAfterLoss(sendForNeeds(needs));
+      expect(received).toBeGreaterThanOrEqual(needs);
+    }
+  });
+
+  it("controller 缺 700、source 有 800 → 受 targetFree 限制发 700（非 722）", () => {
+    const links = [
+      link("s1", "source", 800),
+      link("c1", "controller", 100), // needs 700, targetFree=700
+    ];
+    const transfers = planLinkTransfers(links);
+    expect(transfers).toHaveLength(1);
+    // sendForNeeds(700)=722, 但 targetFree=700 → min(800,700,722)=700
+    // 到账 679, 剩需 21（下 tick 再补）
+    // 当 target=capacity 时 needs==targetFree，损耗补偿受引擎容量硬约束
+    expect(transfers[0]).toEqual({ fromId: "s1", toId: "c1", amount: 700 });
+  });
+
+  it("controllerTarget=400、c1=300 → needs=100、targetFree=500 → 发 104（到账 100）", () => {
+    const links = [
+      link("s1", "source", 800),
+      link("c1", "controller", 300), // needs 100, targetFree=500
+    ];
+    const transfers = planLinkTransfers(links, { controllerTargetEnergy: 400 });
+    expect(transfers).toHaveLength(1);
+    // sendForNeeds(100)=104, targetFree=500, min(800,500,104)=104 → 发 104
+    // 到账 floor(104*0.97)=100, 剩需 0 ✓
+    expect(transfers[0]).toEqual({ fromId: "s1", toId: "c1", amount: 104 });
+    expect(receivedAfterLoss(104)).toBe(100);
+  });
+
+  it("storage→controller 损耗补偿：缺 100、storage 有 600 → 受 targetFree 限制发 100", () => {
+    const links = [
+      link("st", "storage", 600),
+      link("c1", "controller", 700), // needs 100, targetFree=100
+    ];
+    const transfers = planLinkTransfers(links);
+    expect(transfers).toHaveLength(1);
+    // sendForNeeds(100)=104, 但 targetFree=100 → min(600,100,104)=100
+    // 到账 97, 剩需 3（下 tick 再补）
+    expect(transfers[0]).toEqual({ fromId: "st", toId: "c1", amount: 100 });
+  });
+
+  it("storage→controller 损耗补偿：缺 200、storage 有 600、controller 600 → 受限发 200", () => {
+    const links = [
+      link("st", "storage", 600),
+      link("c1", "controller", 600), // needs 200, targetFree=200
+    ];
+    const transfers = planLinkTransfers(links);
+    expect(transfers).toHaveLength(1);
+    // controllerTarget 默认=800, needs=200, sendForNeeds(200)=207
+    // targetFree=200, min(600, 200, 207)=200 → 发 200
+    expect(transfers[0]).toEqual({ fromId: "st", toId: "c1", amount: 200 });
+  });
+
+  it("controllerTarget=200、c1=600 → controller 已超目标，不传输", () => {
+    const links = [
+      link("st", "storage", 600),
+      link("c1", "controller", 600), // target=200, energy=600 > 200 → needs=0
+    ];
+    const transfers = planLinkTransfers(links, { controllerTargetEnergy: 200 });
+    expect(transfers).toHaveLength(0);
+  });
+
+  it("controllerTarget=700、c1=600 → needs=100、targetFree=200 → 发 104（到账 100）", () => {
+    const links = [
+      link("st", "storage", 600),
+      link("c1", "controller", 600), // needs 100, targetFree=200
+    ];
+    const transfers = planLinkTransfers(links, { controllerTargetEnergy: 700 });
+    expect(transfers).toHaveLength(1);
+    // sendForNeeds(100)=104, targetFree=200, min(600,200,104)=104 → 发 104, 到账 100 ✓
+    expect(transfers[0]).toEqual({ fromId: "st", toId: "c1", amount: 104 });
   });
 });

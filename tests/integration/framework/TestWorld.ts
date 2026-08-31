@@ -467,8 +467,9 @@ class MockLink implements MockStructureBase {
     const amt = amount ?? this.store.getUsedCapacity();
     if (amt <= 0) return -6;
     if (target.store.getFreeCapacity() < amt) return -8; // ERR_FULL
+    // 引擎 3% 传输损耗：发送方扣 amt，接收方得 floor(amt * 0.97)
     this.store.energy -= amt;
-    target.store.energy += amt;
+    target.store.energy += Math.floor(amt * 0.97);
     this.cooldown = 1;
     return 0;
   }

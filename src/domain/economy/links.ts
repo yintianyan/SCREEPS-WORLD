@@ -1,6 +1,25 @@
-/** Link 能量传输决策（纯函数）。一个 link 每 tick 只能发起一次传输（引擎限制）； */
+/**
+ * Link 能量传输决策（纯函数）。一个 link 每 tick 只能发起一次传输（引擎限制）；
+ *
+ * 引擎传输损耗：发送方扣除 amount，接收方获得 floor(amount × (1 − LINK_LOSS_RATE))，
+ * 即 3% 损耗（官方文档确认）。planLinkTransfers 在计算传输量时对需求做损耗补偿：
+ * 若目标缺口为 N，则实际发送量 = ceil(N / (1 − LINK_LOSS_RATE))，确保到达量 ≥ N。
+ */
 
 import { CONFIG } from "../../config";
+
+/** 引擎传输损耗率（官方文档：3%）。 */
+export const LINK_LOSS_RATE = 0.03;
+
+/** 给定发送量，返回接收方实际到账量（向下取整，与引擎一致）。 */
+export function receivedAfterLoss(amount: number): number {
+  return Math.floor(amount * (1 - LINK_LOSS_RATE));
+}
+
+/** 给定目标缺口 needs，返回补偿损耗后需要发送的最小量（向上取整）。 */
+export function sendForNeeds(needs: number): number {
+  return Math.ceil(needs / (1 - LINK_LOSS_RATE));
+}
 
 /** Link 角色分类 — 由系统层根据 link 与 source/controller/storage 的距离判定。 */
 export type LinkRole = "source" | "controller" | "storage" | "hub";
@@ -84,6 +103,7 @@ export function planLinkTransfers(
 
   const controllerTarget = opts.controllerTargetEnergy ??
     (controllerLink ? controllerLink.energyCapacity : 0);
+  // controller 目标缺口（考虑传输损耗：需要发送 sendForNeeds(needs) 才能填满缺口）。
   let controllerNeeds = controllerLink
     ? Math.max(0, controllerTarget - controllerLink.energy)
     : 0;
@@ -99,29 +119,45 @@ export function planLinkTransfers(
     src.energy >= minTransfer || src.energy >= src.energyCapacity * NEAR_FULL_RATIO;
 
   // 1. source → controller（最高优先：站桩升级供能）
+  // 损耗补偿：目标缺口 N → 发送 sendForNeeds(N)，但不超源可用量与目标空闲容量。
   for (const src of sourceLinks) {
     if (controllerNeeds <= 0) break;
     if (!meetsThreshold(src) && !controllerUrgent) continue;
-    const amount = Math.min(src.energy, controllerNeeds);
-    transfers.push({ fromId: src.id, toId: controllerLink!.id, amount });
+    // 发送量 = min(源能量, 目标空闲容量, 损耗补偿后的需求发送量)
+    const targetFree = controllerLink
+      ? controllerLink.energyCapacity - controllerLink.energy
+      : 0;
+    const sendAmount = Math.min(
+      src.energy,
+      targetFree,
+      sendForNeeds(controllerNeeds),
+    );
+    if (sendAmount <= 0) continue;
+    transfers.push({ fromId: src.id, toId: controllerLink!.id, amount: sendAmount });
     sent.add(src.id);
-    controllerNeeds -= amount;
+    // 到账量 = receivedAfterLoss(sendAmount)，从剩余需求中扣除到账量。
+    controllerNeeds -= receivedAfterLoss(sendAmount);
   }
 
   // 2. source → storage（溢出回收）
+  // storage 回收不追求精确补偿损耗：溢出回收场景下多传少传均可，下 tick 会重新评估。
   if (storageLink) {
     let storageFree = storageLink.energyCapacity - storageLink.energy;
     for (const src of sourceLinks) {
       if (sent.has(src.id) || storageFree <= 0) continue;
       if (!meetsThreshold(src)) continue;
+      // 发送量不超过目标空闲容量（引擎会拒绝超容量的传输）。
       const amount = Math.min(src.energy, storageFree);
+      if (amount <= 0) continue;
       transfers.push({ fromId: src.id, toId: storageLink.id, amount });
       sent.add(src.id);
-      storageFree -= amount;
+      // 目标空闲按到账量扣减（到账量 ≤ 发送量）。
+      storageFree -= receivedAfterLoss(amount);
     }
   }
 
   // 3. storage → controller（controller 仍缺能时补充）
+  // 损耗补偿：同路由 1，发送 sendForNeeds(needs) 以确保到达量覆盖缺口。
   if (
     storageLink &&
     storageLink.cooldown === 0 &&
@@ -129,9 +165,14 @@ export function planLinkTransfers(
     controllerLink &&
     controllerNeeds > 0
   ) {
-    const amount = Math.min(storageLink.energy, controllerNeeds);
-    if (amount > 0) {
-      transfers.push({ fromId: storageLink.id, toId: controllerLink.id, amount });
+    const targetFree = controllerLink.energyCapacity - controllerLink.energy;
+    const sendAmount = Math.min(
+      storageLink.energy,
+      targetFree,
+      sendForNeeds(controllerNeeds),
+    );
+    if (sendAmount > 0) {
+      transfers.push({ fromId: storageLink.id, toId: controllerLink.id, amount: sendAmount });
     }
   }
 

@@ -351,7 +351,7 @@ export function createSourceLinkTasks(
     // 角色感知选位：只接受运行时分类为 source 的邻格 — source 邻近 storage/controller
     // 时部分邻格会被判为 storage/controller → harvester 拒灌 → 死 link。
     const adjacentPos = findAdjacentBuildable(
-      source.pos, room, snapshot, options, linkRolePredicate(snapshot, "source"),
+      source.pos, room, snapshot, options, linkRolePredicate(snapshot, "source"), 2,
     );
     // 密封守卫：link 是障碍结构，出生即密封或封死邻居的位置不放。
     if (adjacentPos && options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
@@ -393,7 +393,7 @@ export function createControllerLinkTask(
   const controller = snapshot.controller!;
 
   const adjacentPos = findAdjacentBuildable(
-    controller.pos, room, snapshot, options, linkRolePredicate(snapshot, "controller"),
+    controller.pos, room, snapshot, options, linkRolePredicate(snapshot, "controller"), 2,
   );
   if (!adjacentPos) return undefined;
   // 密封守卫：link 是障碍结构。
@@ -454,7 +454,7 @@ export function createStorageLinkTask(
 
   // 角色感知：只接受运行时分类为 storage 的邻格（link 无需站桩位）。
   const adjacentPos = findAdjacentBuildable(
-    storage.pos, room, snapshot, options, linkRolePredicate(snapshot, "storage"),
+    storage.pos, room, snapshot, options, linkRolePredicate(snapshot, "storage"), 2,
   );
   if (!adjacentPos) return undefined;
   // 密封守卫：link 是障碍结构。
@@ -581,6 +581,9 @@ function hasAdjacentStructure(
  * 全无时回退任意可建造格。
  * predicate（可选，默认恒真）：link 放置传 linkRolePredicate，闭合放置意图与
  * 运行时分类的裂缝；偏好与回退路径都先经其过滤，container 等调用方不变。
+ * searchRange（可选，默认 1）：搜索半径（Chebyshev）。container 保持 1
+ * （站桩 withdraw 需紧贴）；link 传 2（与 anchorRange 一致 — controller/storage
+ * 旁 range=1 全被墙/占用占满时，range=2 可找到分类一致的可放置格）。
  */
 function findAdjacentBuildable(
   center: RoomPosition,
@@ -588,14 +591,14 @@ function findAdjacentBuildable(
   snapshot: RoomSnapshot,
   options: ValidationOptions,
   predicate: (c: { x: number; y: number }) => boolean = () => true,
+  searchRange = 1,
 ): { x: number; y: number; roomName: string } | undefined {
   const terrain = room.getTerrain();
-  // 优先使用预计算的占用集合（每规划周期构建一次），否则回退到本地构建。
   const occupiedSet = options.occupiedSet ?? buildOccupiedSet(snapshot, options.minerals);
 
   const candidates: { x: number; y: number }[] = [];
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
+  for (let dx = -searchRange; dx <= searchRange; dx++) {
+    for (let dy = -searchRange; dy <= searchRange; dy++) {
       if (dx === 0 && dy === 0) continue;
       const x = center.x + dx;
       const y = center.y + dy;
@@ -608,7 +611,11 @@ function findAdjacentBuildable(
   }
   if (candidates.length === 0) return undefined;
 
-  // 优先返回有相邻站立格的候选。
+  // 优先返回距 center 更近且有相邻站立格的候选（近的优先，减少通勤）。
+  candidates.sort((a, b) =>
+    Math.max(Math.abs(a.x - center.x), Math.abs(a.y - center.y)) -
+    Math.max(Math.abs(b.x - center.x), Math.abs(b.y - center.y)),
+  );
   for (const c of candidates) {
     if (hasStandingTile(c.x, c.y, center.x, center.y, terrain)) {
       return { ...c, roomName: center.roomName };
