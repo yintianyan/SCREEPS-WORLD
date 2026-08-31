@@ -97,3 +97,104 @@ export async function injectFriendlyTower(
     },
   );
 }
+
+/**
+ * L1 环境注入：市场订单（NPC 卖单/买单）— 验证 terminal 市场交易链路。
+ *
+ * 向 db['market.orders'] 插入 NPC 订单，使 Game.market.getAllOrders 在
+ * screeps-server-mockup 引擎中返回真实订单数据。订单 user 字段设为
+ * "npc-trader"（非 bot 用户），active=true 使驱动层缓存可见。
+ *
+ * price 在 DB 中以 ×1000 存储（引擎 createOrder 处理器中 price/=1000），
+ * 但 getAllOrders 返回时也 /1000（driver runtime data.js）。为与 bot 代码
+ * 看到的价格一致，此处直接写入引擎运行时返回的 price 值（不 ×1000）。
+ *
+ * 证据效力：本注入只构造市场前提（订单存在性），不修改 bot 代码执行路径。
+ */
+export async function injectMarketOrder(
+  runner: ScenarioRunner,
+  opts: {
+    type: "buy" | "sell";
+    resourceType: string;
+    price: number;
+    amount: number;
+    roomName: string;
+  },
+): Promise<void> {
+  const { db } = (runner as any)._server.server.common.storage;
+  // 确认 npc-trader 用户存在（getAllOrders 不要求对方在线，但 deal 需要）
+  let [npcUser] = await db.users.find({ username: "npc-trader" });
+  if (!npcUser) {
+    npcUser = await db.users.insert({
+      username: "npc-trader",
+      cpu: 100,
+      cpuAvailable: 10000,
+      gcl: 1,
+      active: 10000,
+      badge: "npc",
+      money: 1000000,
+    });
+  }
+  // 确保 NPC 房间有 terminal（deal 需要对方有 terminal）
+  const npcRoom = opts.roomName;
+  const existingTerminal = await db["rooms.objects"].findOne({ room: npcRoom, type: "terminal" });
+  if (!existingTerminal) {
+    await db["rooms.objects"].insert({
+      type: "terminal",
+      room: npcRoom,
+      x: 20, y: 20,
+      user: npcUser._id,
+      store: opts.type === "sell"
+        ? { energy: 100000, [opts.resourceType]: opts.amount + 10000 }
+        : { energy: 100000 },
+      storeCapacity: 300000,
+      hits: 1,
+      hitsMax: 1,
+      cooldownTime: null,
+    });
+    const { env } = (runner as any)._server.server.common.storage;
+    await env.sadd(env.keys.ACTIVE_ROOMS, npcRoom);
+    await db.rooms.update({ _id: npcRoom }, { $set: { active: true } });
+  } else {
+    // 补货：确保 NPC terminal 有足够能量和资源
+    const store = existingTerminal.store ?? {};
+    store.energy = Math.max(store.energy ?? 0, 100000);
+    if (opts.type === "sell") {
+      store[opts.resourceType] = Math.max(store[opts.resourceType] ?? 0, opts.amount + 10000);
+    }
+    await db["rooms.objects"].update(
+      { _id: existingTerminal._id },
+      { $set: { store, user: npcUser._id } },
+    );
+  }
+
+  // 插入市场订单（price 在 DB 中以引擎运行时返回值存储）
+  const gameTime = await (runner as any)._server.server.world.gameTime;
+  await db["market.orders"].insert({
+    _id: `order-${opts.type}-${opts.resourceType}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    user: npcUser._id,
+    active: true,
+    type: opts.type,
+    resourceType: opts.resourceType,
+    price: opts.price,
+    amount: 0,
+    remainingAmount: opts.amount,
+    roomName: opts.roomName,
+    created: gameTime,
+    createdTimestamp: Date.now(),
+  });
+}
+
+/**
+ * L1 环境注入：bot 用户 credits（市场交易前提）。
+ * Game.market.deal 需要 credits >= price × amount + fee。
+ */
+export async function injectCredits(
+  runner: ScenarioRunner, credits: number,
+): Promise<void> {
+  const { db } = (runner as any)._server.server.common.storage;
+  await db.users.update(
+    { username: "bot" },
+    { $set: { money: credits } },
+  );
+}
