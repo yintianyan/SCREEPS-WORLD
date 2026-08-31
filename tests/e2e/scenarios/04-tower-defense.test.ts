@@ -14,6 +14,9 @@ describe("E2E-004 Tower 防御", () => {
       roomName: "W0N1",
       rooms: [rcl3RoomWithTower("W0N1")],
       maxTicks: 2000,
+      // addBot 会把 controller level 覆盖为 1；不修正则 tower 不活跃
+      //（CONTROLLER_STRUCTURES.tower[1] = 0），attack 返回 ERR_RCL_NOT_ENOUGH。
+      controllerLevel: 3,
     });
     // 夹具塔收编（R20/T6）：addBot 前插入的塔缺 user + store 形态，不收编则
     // 塔防永远看不到它（见 injectFriendlyTower 注释）。

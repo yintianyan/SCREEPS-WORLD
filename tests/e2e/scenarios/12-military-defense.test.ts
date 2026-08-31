@@ -47,6 +47,8 @@ describe("E2E-012 Military & Defense", () => {
       roomName: ROOM,
       rooms: [rcl3RoomWithTower(ROOM)],
       maxTicks: 6000,
+      // addBot 覆盖 controller level 为 1；不修正则 tower 不活跃（同 E2E-004 根因）。
+      controllerLevel: 3,
     });
   }, 120000);
 
