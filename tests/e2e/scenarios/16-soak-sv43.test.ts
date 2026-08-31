@@ -64,7 +64,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
       //   E9 recoveryStale: 阈值 5000t vs 災后恢复需 3000-5000t（已校准）
       //   E3 spawnQueueStale: 阈值 2000t vs 早期能量不足排队时间长
       //   E8 pathFailure: 早期单房拥堵、creep 生命周期短但 tracker 残留
-      //   E7 siteStale 已修复：builderVisits 从 progress 推断后不再误报
+      //   E7 siteStale: 阈值已校准至 5000t（builderVisits 从 progress 推断 + RCL3→4 调度差异宽容）
       const KNOWN_EARLY_VIOLATION_PREFIXES = [
         "rclStale:",
         "recoveryStale:",

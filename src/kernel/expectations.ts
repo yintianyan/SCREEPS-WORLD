@@ -83,8 +83,10 @@ export interface BuildQueueSnapshot {
 }
 
 // ── E7: site 长期无进度 ──────────────────────────────────────
-/** site 无进度触发违例的 tick 阈值。 */
-export const E7_STALE_TICKS = 2000;
+/** site 无进度触发违例的 tick 阈值。
+ * 5000t：RCL3→4 解锁大量 road/rampart，builder 按优先级先建 extension/核心结构，
+ * 低优先级 site 等 4000-5000t 才轮到是合理调度差异，不是自愈失败。 */
+export const E7_STALE_TICKS = 5000;
 
 export interface SiteProgressSnapshot {
   room: string;
