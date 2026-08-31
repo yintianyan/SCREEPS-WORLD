@@ -168,7 +168,13 @@ export async function injectMarketOrder(
     );
   }
 
-  // 插入市场订单（price 在 DB 中以引擎运行时返回值存储）
+  // 插入市场订单。
+  // 引擎 DB 中 price 以 ×1000 存储（createOrder 处理器在 bulk.insert 后执行
+  // intent.price /= 1000，但 order 对象已持有原始 intent.price）。
+  // getAllOrders / getOrderById / deal 运行时返回时均 price /= 1000。
+  // 因此 DB 中需存 opts.price * 1000，使 bot 代码看到 opts.price。
+  // deal 处理器使用 DB 原始 price 计算 dealCost = amount * dbPrice，
+  // 而 credits = money / 1000，所以 dealCost 与 money 同量纲。
   const gameTime = await (runner as any)._server.server.world.gameTime;
   await db["market.orders"].insert({
     _id: `order-${opts.type}-${opts.resourceType}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -176,7 +182,7 @@ export async function injectMarketOrder(
     active: true,
     type: opts.type,
     resourceType: opts.resourceType,
-    price: opts.price,
+    price: opts.price * 1000,
     amount: 0,
     remainingAmount: opts.amount,
     roomName: opts.roomName,
@@ -188,6 +194,7 @@ export async function injectMarketOrder(
 /**
  * L1 环境注入：bot 用户 credits（市场交易前提）。
  * Game.market.deal 需要 credits >= price × amount + fee。
+ * 引擎中 credits = user.money / 1000，所以 money = credits × 1000。
  */
 export async function injectCredits(
   runner: ScenarioRunner, credits: number,
@@ -195,6 +202,6 @@ export async function injectCredits(
   const { db } = (runner as any)._server.server.common.storage;
   await db.users.update(
     { username: "bot" },
-    { $set: { money: credits } },
+    { $set: { money: credits * 1000 } },
   );
 }
