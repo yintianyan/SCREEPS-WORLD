@@ -45,7 +45,7 @@
 | `npm run typecheck` | ✅ 0 error |
 | `npm test`（unit + integration） | ✅ 324 文件 / 4678 测试全绿（2026-08-29 war 轨收口实测） |
 | `npm run build` | ✅ `dist/main.js` 生成 |
-| `npm run test:e2e` | ✅ 全套件 28 文件 / 64 用例全绿（2026-08-29 war 轨收口实测 @Node v24.18.0，2457s，含 E2E-020 claim 链 / 021 诱饵对抗 / 022 战争账本 / 023 止损链 / 024 战后核验）；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致 |
+| `npm run test:e2e` | ✅ 全套件 29 文件 / 65 用例全绿（2026-08-31 市场链路验证实测 @Node v24.18.0，含 E2E-020 claim 链 / 021 诱饵对抗 / 022 战争账本 / 023 止损链 / 024 战后核验 / 026 市场交易链路）；**注意**：isolated-vm 原生模块绑定 Node 24 ABI，Node 22 shell 下 E2E 加载失败——E2E/发布环境必须 v24+，与 `package.json` engines 一致 |
 | `npm run check:docs` | ✅ 7 项文档一致性检查全过 |
 
 ## 4. 生产清单（15 概念模块 × 33 注册系统）
@@ -129,6 +129,7 @@
 
 - ◐ RCL1→8 私服 soak 覆盖：sv=43 已实测 RCL1→5 自然晋级（E2E-016 自举轨 300k tick，criticalViolations=0，RCL5@t=85k 自然达成，link 网络@t=105k 开始分散交通）+ RCL6 注入轨 500k tick 全通过（criticalViolations=0，jsErrors=0，bucket=10000 全程，tier=healthy 全程，extensions@t=30k 建成 11 个，storage 耗尽后仍存活 20k+ tick；upRate=0.03/t — 注入能量耗尽后 upgrader 停滞但帝国不死亡）；RCL7→8 待更长程 soak
 - ◐ 多房私服 soak：双自有房并行 + spawn 竞争 + 一房全灭故障隔离已实测（E2E-017）；terminal 决策权语义已锁定（E2E-019：Plan 活跃压制 self-aid）；claim 授权全链已实测（E2E-020 @ sv43，2026-08-29）；Plan 驱动互济证据（E2E-019 energy-aid）；site quota 极限注入待继续
+- ✅ 市场交易链路验证（E2E-026 @ sv43，2026-08-31）：NPC 订单 DB 注入 → Game.market.getAllOrders 返回 2 订单（1 sell + 1 buy）→ Game.market.deal/calcTransactionCost API 可用 → 0 JS 错误 → Memory 有界；动态定价系统（market-pricing + deal-scheduler + terminal-policy）纯函数层全链路审查通过；降级路径：tier≠healthy/guardied 或 bucket<minBucket 时 terminal-manager 跳过（非生存关键）；global reset 恢复：marketPrices heap 存储，reset 后首 tick refreshMarketPrices 重建，fallback 值在行情空窗期兜底
 - ✅ war 轨对抗验证（Scenario F 四门槛）：诱饵不触发授权（E2E-021）、fact 真目标授权 + 经济不越红线（E2E-022）、止损触发即收摊（E2E-023，伤亡/经济双路径）、战后核验 intel 一致（E2E-024）——详见 §6 W1–W5
 - ◐ 低 CPU 私服 soak：四档 tier 降级链 + bucket 逼近枯竭已实测（E2E-015）；P3 饥饿旁路 E2 整环闭环已实测（p3-bypass-loop，2026-08-29）——仅剩 E2 触发的自然 soak 窗口证据
 - ✅ global reset 恢复实测：E2E-005 注入场景 @ sv43 全绿（2026-08-29）
