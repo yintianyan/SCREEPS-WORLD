@@ -118,6 +118,9 @@ export const enum EventKind {
    * d = [statusCode(0=PLANNED~9=EXPIRED), priorityScore]；r = 目标房名。
    * 供战斗黑匣子复盘：计划创建时的初始状态与优先级。 */
   WarPlanCreated = 40,
+  /** 威胁在场但塔停火且未动用 safe mode（奶量压制型消耗战 — 守线不烧保底）。
+   * d = [威胁数, 敌方 HEAL 部件合计]；r = 房名。同房 200t 心跳重报防刷屏。 */
+  ThreatUnhandled = 41,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

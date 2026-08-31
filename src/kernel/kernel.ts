@@ -306,6 +306,15 @@ export class Kernel {
       );
       if (snapshot) ctx._addSnapshot(snapshot);
     }
+
+    // 远矿目标集合：扫描 Memory.rooms 的 remoteOps 键，供 economy 的 sampleRoomFlows
+    // 判定采样范围（owned 房 + 远矿目标），避免 economy 每 tick 全量扫描 Memory.rooms。
+    const remoteTargets = new Set<string>();
+    for (const roomMem of Object.values(Memory.rooms)) {
+      const ops = roomMem?.remoteOps;
+      if (ops) for (const target of Object.keys(ops)) remoteTargets.add(target);
+    }
+    globalCache().remoteTargetRooms = remoteTargets;
   }
 
   private runSystems(ctx: Context): void {

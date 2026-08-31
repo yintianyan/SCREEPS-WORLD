@@ -389,6 +389,14 @@ export interface GlobalCache {
   __remoteSources?: Record<string, { tick: number; sources: Source[] }>;
   /** 房间内己方 creep 列表（remote-harvester/healer 共享）。 */
   __myCreepsCache?: Record<string, { tick: number; creeps: Creep[] }>;
+
+  /** 威胁未决心跳上报限频（tower-defense 写）— 房间级最近一次上报 tick。
+   * heap 存储 — global reset 丢失可接受（威胁持续在场时快速重建）。 */
+  threatUnhandledAt?: Record<string, number>;
+
+  /** 远矿目标房间名集合（Kernel.buildSnapshots 预构建）。
+   * economy 的 sampleRoomFlows 消费：采样范围 = owned 房 + 此集合中的远矿目标。 */
+  remoteTargetRooms?: ReadonlySet<string>;
 }
 
 /**

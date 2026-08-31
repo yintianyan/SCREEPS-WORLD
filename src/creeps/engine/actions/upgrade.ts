@@ -2,7 +2,6 @@
 import { CONFIG } from "../../../config";
 import type { ActionCandidate } from "../action-types";
 import { moveToTarget, registerAnchor } from "../../movement";
-import { countedUpgrade } from "./helpers";
 
 /** upgradeController 的交互距离（官方机制：range ≤ 3 可升级）。 */
 const UPGRADE_RANGE = 3;
@@ -17,7 +16,7 @@ export function upgradeController(): ActionCandidate<StructureController> {
       return ctrl;
     },
     execute: (ac, ctrl) => {
-      if (countedUpgrade(ac.creep, ctrl) === ERR_NOT_IN_RANGE) {
+      if (ac.creep.upgradeController(ctrl) === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, ctrl, UPGRADE_RANGE);
       }
     },
@@ -65,7 +64,7 @@ export function stationaryUpgrade(): ActionCandidate<StationaryUpgradeTarget> {
       // 同 tick 取 + 升：稳态下 carry 恒接近满，升级永不断粮（满 WORK 效率）。返回码无需处理 —
       // carry 满时 withdraw 返回 ERR_FULL（无害 no-op），下一 tick 升级腾出空间即补。
       ac.creep.withdraw(t.source, RESOURCE_ENERGY);
-      countedUpgrade(ac.creep, t.controller);
+      ac.creep.upgradeController(t.controller);
       // 站桩锚定：防被过路 creep 从取能/升级位推离。
       registerAnchor(ac.creep, CONFIG.movement.trafficPriority.anchorStation);
     },
@@ -83,7 +82,7 @@ export function upgradeControllerGated(): ActionCandidate<StructureController> {
       return ctrl;
     },
     execute: (ac, ctrl) => {
-      if (countedUpgrade(ac.creep, ctrl) === ERR_NOT_IN_RANGE) {
+      if (ac.creep.upgradeController(ctrl) === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, ctrl, UPGRADE_RANGE);
       }
     },

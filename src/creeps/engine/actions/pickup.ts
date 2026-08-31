@@ -19,9 +19,11 @@ export function pickupDroppedEnergy(minAmount = 0): ActionCandidate<Resource> {
       return selectDroppedEnergy(ac.creep, candidates);
     },
     execute: (ac, resource) => {
+      // intent 计量：min(堆上现存, 背包空闲) — 动作前求值（官服结算延迟下唯一可靠）。
+      const free = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       runCountedAction(ac.creep, resource, "pickedUp", () => ac.creep.pickup(resource), {
         [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
-      });
+      }, () => Math.min(resource.amount, free));
     },
   };
 }
@@ -86,9 +88,10 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
       }
       const amount = Math.min(available, carryFree);
       // 墓碑/废墟取能＝散落资产回收，是真实经济流入（pickedUp），非搬运。
+      // 注意矿物捡拾不计量（账本是能量口径）— intentAmount 只在能量分支对齐。
       runCountedAction(ac.creep, remains, "pickedUp", () => ac.creep.withdraw(remains, resource, amount), {
         [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
-      });
+      }, () => (resource === RESOURCE_ENERGY ? amount : 0));
     },
   };
 }
@@ -108,9 +111,10 @@ export function pickupNearbyDroppedEnergy(range = 2): ActionCandidate<Resource> 
       return selectDroppedEnergy(ac.creep, nearby);
     },
     execute: (ac, resource) => {
+      const free = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       runCountedAction(ac.creep, resource, "pickedUp", () => ac.creep.pickup(resource), {
         [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
-      });
+      }, () => Math.min(resource.amount, free));
     },
   };
 }

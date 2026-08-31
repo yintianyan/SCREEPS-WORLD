@@ -45,8 +45,13 @@ describe("tower-engagement — assessEngagement 开火判定", () => {
     expect(d.engage).toBe(false);
   });
 
-  it("敌人突入核心区 → 无条件开火（结构损失 > 能量损失）", () => {
+  it("敌人突入核心区但被奶量压制 → 停火守线（不把塔能灌进奶盾）", () => {
     const d = assessEngagement([towerAt(20)], { totalHealParts: 15, breachingCore: true });
+    expect(d.engage).toBe(false);
+  });
+
+  it("突入核心区且净伤为正 → 开火（治疗可穿透）", () => {
+    const d = assessEngagement([towerAt(3)], { totalHealParts: 10, breachingCore: true });
     expect(d.engage).toBe(true);
   });
 

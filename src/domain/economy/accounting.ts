@@ -311,3 +311,48 @@ export function summarizeWindow(w: AccountingWindow): string {
     + " inc/t=" + w.incomePerTick.toFixed(2)
     + " looseD=" + Math.round(w.looseDelta);
 }
+
+// ─── 跨 tick 房间流采样（实测口径）─────────────────────────
+
+/** 单房流采样快照（heap 持有；global reset 丢失可接受 — 重见即重新播种）。 */
+export interface RoomFlowSample {
+  /** Σ source.energy。 */
+  sources: number;
+  /** controller.progress（仅 owned 房采集，非 owned 恒 0）。 */
+  progress: number;
+  /** 在建工地进度（siteId → [progress, progressTotal]）。 */
+  sites: Record<string, [number, number]>;
+}
+
+/**
+ * 跨 tick 实测差分 → 本 tick 流量（能量）。
+ * 官服引擎的资源结算发生在 tick 末 intent 解析：同 tick 的 creep 背包差值恒 0
+ * （线上实证 harvest 返回 OK 但 store 10→10；mockup 同步结算会掩盖此差异）。
+ * 相邻两次代码执行点之间，房间状态恰好结算完一个完整 tick 的 intent —
+ * 房间级状态差分是唯一与引擎语义无关的实测口径。
+ * 再生脉冲 / RCL 升级清零使差值为负 — clamp 0：漏记单 tick 的量，绝不记假账。
+ */
+export function diffRoomFlows(
+  prev: RoomFlowSample,
+  cur: RoomFlowSample,
+): { harvested: number; upgraded: number; built: number } {
+  return {
+    harvested: Math.max(0, prev.sources - cur.sources),
+    upgraded: Math.max(0, cur.progress - prev.progress),
+    built: diffSiteProgress(prev.sites, cur.sites),
+  };
+}
+
+/** 工地进度差分：完工离场的工地补记剩余量（取消出场的会高估 — 罕见，drift 门兜底）。 */
+function diffSiteProgress(
+  prev: Record<string, [number, number]>,
+  cur: Record<string, [number, number]>,
+): number {
+  let built = 0;
+  for (const [id, [prevProg, total]] of Object.entries(prev)) {
+    const now = cur[id];
+    if (now) built += Math.max(0, now[0] - prevProg);
+    else built += Math.max(0, total - prevProg);
+  }
+  return built;
+}

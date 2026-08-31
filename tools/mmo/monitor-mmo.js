@@ -157,7 +157,9 @@ function renderRoom(rm, phys, mem, tick) {
   mil.push(`rampart×${phys.struct.rampart || 0}`);
   mil.push(`wall×${phys.struct.constructedWall || 0}`);
   if (phys.hostiles > 0) mil.push(`🚨敌×${phys.hostiles}`);
-  const safeRemain = phys.safeMode > tick ? phys.safeMode - tick : phys.safeMode;
+  // room-objects 的 controller.safeMode 是「结束时的绝对 tick」：激活期为未来值，
+  // 过期后残留旧值不清零 — 只有大于当前 tick 才算在保，残留值一律视为 0。
+  const safeRemain = phys.safeMode > tick ? phys.safeMode - tick : 0;
   if (safeRemain > 0) mil.push(`🛡safeMode(剩${safeRemain}t)`);
   const downRemain = phys.downgrade > tick ? phys.downgrade - tick : (phys.downgrade ? -1 : 0);
   if (downRemain > 0 && downRemain < 20000) mil.push(`⏳降级(剩${downRemain}t)`);
@@ -199,7 +201,8 @@ function render(state) {
   let totalHostiles = 0, anySafe = 0, anyDown = 0;
   state.rooms.forEach(r => {
     totalHostiles += r.phys.hostiles;
-    const sr = r.phys.safeMode > state.tick ? r.phys.safeMode - state.tick : r.phys.safeMode;
+    // 同 renderRoom 口径：safeMode 为绝对结束 tick，过期残留值不算在保。
+    const sr = r.phys.safeMode > state.tick ? r.phys.safeMode - state.tick : 0;
     if (sr > 0) anySafe++;
     if (r.mem.controllerDowngradeRisk) anyDown++;
   });
@@ -274,7 +277,8 @@ function daemonRun() {
     const prev = loadState();
     const alerts = [];
     const rooms = s.rooms.map(r => {
-      const sr = r.phys.safeMode > tick ? r.phys.safeMode - tick : r.phys.safeMode;
+      // 同 renderRoom 口径：safeMode 为绝对结束 tick，过期残留值不算在保。
+      const sr = r.phys.safeMode > tick ? r.phys.safeMode - tick : 0;
       const dr = r.phys.downgrade > tick ? r.phys.downgrade - tick : (r.phys.downgrade ? -1 : 0);
       const bq = (r.mem.buildQueue || []).filter(t => t.state === "queued" || t.state === "site").length;
       const sq = (r.mem.spawnQueue || []).length;

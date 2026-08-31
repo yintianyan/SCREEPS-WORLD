@@ -48,8 +48,9 @@ export interface EngagementDecision {
 
 /**
  * 判定全塔集火是否有净收益：合计伤害 > 编队合计治疗 → 开火（每发都在真实掉血）；
- * 打不动且未突破核心 → 停火蓄能，等敌方近身或撤退；敌人突入核心区 → 无条件开火
- * （结构被拆的损失恒大于塔能量，且近身处塔伤接近满值，通常已过盈亏线）。
+ * 打不动 → 停火蓄能。核心区被突入不再强制开火 — 被奶量压制时开火等于把塔能量
+ * 白白灌进奶盾（线上实证：塔能耗尽后 safe mode 保底跟着烧掉）。守线交给
+ * 停火期应急维修与 safe mode 保底判据（核心结构正被拆毁 / 塔全空被突入）。
  */
 export function assessEngagement(
   towers: readonly TowerSummary[],
@@ -62,6 +63,6 @@ export function assessEngagement(
   }
   const expectedHeal = squad.totalHealParts * HEAL_POWER;
 
-  const engage = squad.breachingCore || expectedDamage > expectedHeal;
+  const engage = expectedDamage > expectedHeal;
   return { engage, expectedDamage, expectedHeal };
 }

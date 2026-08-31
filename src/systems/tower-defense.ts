@@ -7,26 +7,25 @@ import { assessEngagement, type TowerSummary } from "../domain/defense/tower-eng
 import { buildFortificationContext, classifyFortification, resolveUnderSiege, type FortificationContext } from "../domain/defense/fortification";
 import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
 
-/** P3 L1 核算：塔动作耗能按库存差值实测（attack/heal/repair 每次固定耗能）。 */
+/** P3 L1 核算：塔动作耗能按 intent 计（attack/heal/repair 每次 TOWER_ENERGY_COST）。
+ * 不可用库存差值实测 — 引擎资源结算在 tick 末，同 tick 差值恒 0（官服实证）。 */
 function countedTowerAction(
   roomName: string,
   tower: StructureTower,
   action: () => number,
 ): number {
-  const before = tower.store.getUsedCapacity(RESOURCE_ENERGY);
   const result = action();
-  if (result === OK) {
-    const spent = before - tower.store.getUsedCapacity(RESOURCE_ENERGY);
-    if (spent > 0) bumpEnergyCounter(roomName, "towerSpent", spent);
-  }
+  if (result === OK) bumpEnergyCounter(roomName, "towerSpent", TOWER_ENERGY_COST);
   return result;
 }
 
 /**
  * Tower 防御系统 — P0 系统，负责所有 Tower 操作和安全模式（防御是生存关键 — 永不被冷却）。
 
- * （关键结构 < 50% 血量）；再无事则维护 wall/rampart 到 RCL 分级目标血量；
- * 无 Tower 且有敌人时激活安全模式。
+ * 优先序：攻击敌人 > 停火期应急维修 > 紧急维修（关键结构 < 50%）；再无事则
+ * 维护 wall/rampart 到 RCL 分级目标血量。
+ * safe mode 是消耗性保底：无塔房核心被突破 / 有塔房核心结构正被拆毁 /
+ * 塔全空且攻击者突入 / 舰队伤亡熔断 — 四条真实损失证据链，缺一不动用。
  */
 export const towerDefenseSystem: System = {
   name: "tower-defense",
@@ -58,7 +57,8 @@ export const towerDefenseSystem: System = {
           if (target) {
             // 交战盈亏判定：全塔合计伤害（含距离衰减）必须超过敌方编队
             // 合计治疗量才开火，否则每发炮弹都被 HEAL 奶回、白耗能量
-            // （heal-tank 骗塔战术）。敌人突入核心区时无条件开火。
+            // （heal-tank 骗塔战术）— 核心区被突入也不例外（守线交给
+            // 停火期应急维修 + safe mode 保底判据，见下方 isCoreBeingDestroyed）。
             const towerSummaries: TowerSummary[] = snapshot.towers.map(t => ({
               energy: t.store.getUsedCapacity(RESOURCE_ENERGY),
               rangeToTarget: t.pos.getRangeTo(target.pos),
@@ -73,9 +73,8 @@ export const towerDefenseSystem: System = {
             });
             // A5.1：威胁意图集成 — SIEGE intent 意味着敌方有足够治疗扛塔伤，
             // 且未突入核心区。此时开火 = 白耗能量（每发都被 HEAL 奶回）。
-            // 塔应停火蓄能，等敌方近身或撤退。breachingCore 仍无条件开火
-            // （结构损失 > 能量价值）。这是对 assessEngagement 的 intent 维度增强，
-            // 不替换 assessEngagement 的净伤判定——两者互补：
+            // 塔应停火蓄能，等敌方近身或撤退。这是对 assessEngagement 的
+            // intent 维度增强，不替换其净伤判定——两者互补：
             // - assessEngagement：数学净伤判定（damage > heal）
             // - SIEGE override：战术意图判定（敌方在房外蹲坑消耗塔能量）
             let shouldEngage = decision.engage;
@@ -108,12 +107,35 @@ export const towerDefenseSystem: System = {
           }
         }
 
-        // 最后防线：敌人已突入核心区，但所有塔打不出火力
-        //（能量耗尽 / 被奶穿打不动）— 塔防线事实失效，激活 safe mode。
-        // 官方定位 safe mode 为「defense tactic of last resort」，
-        // 此前它只在「无塔」分支触发，塔被打空时反而没有兜底。
+        // 停火期应急维修：盈亏判定/SIEGE 选择不开火时，塔的本 tick 动作转入维修 —
+        // 引擎会对无动作的塔自动射击最近敌对 creep（每发 10 能量打进奶盾白耗），
+        // 显式维修既抑制无效自动射击，又同步修复被啃的防御工事。
+        // 优先级：关键结构（<50%）> 核心 wall/rampart（受袭升档目标血量）。
+        if (!fired) {
+          const threatRepairTarget = snapshot.criticalRepairTarget ?? findCriticalRepair(snapshot);
+          const threatFortCtx = buildFortificationContext(snapshot, Memory.rooms[snapshot.roomName]?.minCut?.positions);
+          const threatWallTarget = findWallRepairTarget(snapshot, snapshot.rcl, true, threatFortCtx);
+          if (threatRepairTarget || threatWallTarget) {
+            for (const tower of snapshot.towers) {
+              if (tower.store.getUsedCapacity(RESOURCE_ENERGY) < TOWER_ENERGY_COST) continue;
+              if (threatRepairTarget) {
+                countedTowerAction(snapshot.roomName, tower, () => tower.repair(threatRepairTarget));
+              } else {
+                countedTowerAction(snapshot.roomName, tower, () => tower.repair(threatWallTarget!));
+              }
+            }
+          }
+        }
+
+        // 最后防线收紧：safe mode 是消耗性保底（烧一次少一次），不因「打不出火力 +
+        // 近核」轻动用 — 奶量压制型入侵者会自行撤离，rampart + 停火期维修足以守线。
+        // 仅当出现不可逆损失证据才动用（isCoreBeingDestroyed）；纯消耗战转事件上报。
         if (!fired && breachingCore) {
-          tryActivateSafeMode(snapshot);
+          if (isCoreBeingDestroyed(snapshot)) {
+            tryActivateSafeMode(snapshot);
+          } else {
+            reportThreatUnhandled(snapshot);
+          }
         }
 
         // M11 舰队伤亡熔断：塔防线只保建筑不保舰队 — 收割型小队专杀
@@ -230,10 +252,59 @@ function isCoreBreached(snapshot: RoomSnapshot): boolean {
   return snapshot.threatCreeps.some(c => c.pos.getRangeTo(anchor.pos) <= range);
 }
 
+/** 威胁是否具备破坏能力（攻击 / 远程 / dismantle；纯 HEAL 侦察不构成拆毁威胁）。 */
+function hasOffensiveParts(creep: Creep): boolean {
+  return creep.body.some(p => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
+}
+
+/** 攻击方式的最大射程：rangedAttack = 3，attack / dismantle = 1 — 3 覆盖全部。 */
+const MAX_ATTACK_RANGE = 3;
+
+/**
+ * 核心结构正在被拆毁 — 有塔分支动用 safe mode 保底的判据。
+ * ① 任一核心结构（spawn/storage/terminal/tower）已受损且带攻击部件的威胁贴身；
+ * ② 塔全空（防线能量耗尽）且带攻击部件的威胁突入核心区。
+ * 纯接近 + 奶量压制（打不出火力）不构成动用理由 — 那是消耗战，不是失守：
+ * safe mode 烧一次少一次，留给真正守不住的时刻。
+ */
+function isCoreBeingDestroyed(snapshot: RoomSnapshot): boolean {
+  const threats = snapshot.threatCreeps as Creep[];
+  const attackerNear = (pos: RoomPosition) =>
+    threats.some(t => hasOffensiveParts(t) && t.pos.getRangeTo(pos) <= MAX_ATTACK_RANGE);
+  const core = [...snapshot.spawns, snapshot.storage, snapshot.terminal, ...snapshot.towers];
+  if (core.some(s => s !== undefined && s.hits < s.hitsMax && attackerNear(s.pos))) return true;
+  if (snapshot.towers.every(t => t.store.getUsedCapacity(RESOURCE_ENERGY) === 0)) {
+    const anchor = snapshot.spawns[0] ?? snapshot.controller;
+    if (anchor && threats.some(t => hasOffensiveParts(t) && t.pos.getRangeTo(anchor.pos) <= CONFIG.defense.safeModeTriggerRange)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 消耗战上报：核心被突破、塔打不出火力、但未达保底判据 — 威胁悬而未决，
+ * 必须可观测（守线策略是长时间对峙，静默会被误读为防御失灵）。
+ * 同房 200t 心跳重报，防环形缓冲被刷屏。
+ */
+function reportThreatUnhandled(snapshot: RoomSnapshot): void {
+  const g = globalCache();
+  const at = g.threatUnhandledAt ?? (g.threatUnhandledAt = {});
+  const last = at[snapshot.roomName];
+  if (last !== undefined && Game.time - last < 200) return;
+  at[snapshot.roomName] = Game.time;
+  const totalHeal = (snapshot.threatCreeps as Creep[]).reduce(
+    (sum, c) => sum + c.body.filter(p => p.type === HEAL).length,
+    0,
+  );
+  recordEvent(EventKind.ThreatUnhandled, snapshot.roomName, [snapshot.threatCreeps.length, totalHeal]);
+}
+
 /**
  * 激活 safe mode（带完整前置校验）。
- * 触发场景：① 无塔且核心被突破；② 有塔但全部打不出火力且核心被突破。
- * safe mode 是最后防线 — 校验 controller 归属 / 未激活 / 无冷却 / 有可用次数。
+ * 触发场景：① 无塔且核心被突破；② 有塔且核心结构正被拆毁 / 塔全空被突入；
+ * ③ 舰队伤亡熔断。safe mode 是最后防线 — 校验 controller 归属 / 未激活 /
+ * 无冷却 / 有可用次数。
  */
 function tryActivateSafeMode(snapshot: RoomSnapshot): void {
   const controller = snapshot.controller;

@@ -106,6 +106,10 @@ export function resetGlobals(): void {
   delete g.__warStructures;
   // P0-1：全局编队索引（kernel.buildSnapshots 预构建，测试中需手动同步）。
   delete g.squadIndex;
+  // kernel.buildSnapshots 预构建的远矿目标集合（economy sampleRoomFlows 消费）。
+  delete g.remoteTargetRooms;
+  // tower-defense 的威胁未决心跳限频（reportThreatUnhandled 写入）。
+  delete g.threatUnhandledAt;
 }
 
 /**

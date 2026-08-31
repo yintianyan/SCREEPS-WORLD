@@ -1,6 +1,6 @@
 /** Economy 系统 — 能量收支核算（模块 1.5，SYSTEM_BOUNDARIES §1.5 合同）。 */
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
-import { globalCache, type RoomEnergyCounters } from "../kernel/global-cache";
+import { globalCache, bumpEnergyCounter, type RoomEnergyCounters } from "../kernel/global-cache";
 import { EventKind, recordEvent } from "../kernel/event-log";
 import {
   INITIAL_EFFICIENCY_FACTOR,
@@ -14,8 +14,10 @@ import {
   estimateIncome,
   contractReserveOf,
   toMemorySnapshot,
+  diffRoomFlows,
   type EnergyLedger,
   type EnergyPools,
+  type RoomFlowSample,
 } from "../domain/economy/accounting";
 import { CONFIG } from "../config";
 
@@ -38,6 +40,52 @@ interface RoomEconState {
 
 /** heap 派生态（模块级；global reset 随堆消亡，由 Memory 快照恢复平滑值）。 */
 const econRooms = new Map<string, RoomEconState>();
+
+/** 每房流采样基线（同上 heap 态；失去视野后残留基线无消费方，重见即差分）。 */
+const flowSamples = new Map<string, RoomFlowSample>();
+
+/**
+ * 跨 tick 实测采样 — 每个有视野的运营房每 tick 执行（economy interval=1）。
+ * harvested / upgraded / built 的唯一可靠口径是房间状态差分：creep 侧 intent
+ * 延迟结算（官服 store 同 tick 差值恒 0），room 级差分跨过 tick 边界恰好
+ * 覆盖一整个结算窗。预算紧张导致本系统被跳过的 tick 由下次差分自动补账。
+ *
+ * owned 房复用 ctx 快照预构建的 sources / myConstructionSites，避免重复 room.find；
+ * 远矿目标房无快照（非 owned），仍用 room.find 直查。
+ */
+function sampleRoomFlows(ctx: TickContext): void {
+  // 采样范围：owned 房 + 远矿目标（外来房的 source 由别人采，不属本帝国收支）。
+  // remoteTargetRooms 由 Kernel.buildSnapshots 预构建，避免本系统每 tick 全量扫描 Memory.rooms。
+  const remoteTargets = globalCache().remoteTargetRooms;
+  for (const room of Object.values(Game.rooms)) {
+    const owned = room.controller?.my === true;
+    if (!owned && !(remoteTargets?.has(room.name))) continue;
+
+    // owned 房优先用快照（kernel 已预构建 sources + myConstructionSites），
+    // 避免对自有房重复 room.find；远矿房无快照，仍用 room.find 直查。
+    const snap = owned ? ctx.getSnapshot(room.name) : undefined;
+    const sources = snap?.sources ?? room.find(FIND_SOURCES);
+
+    const cur: RoomFlowSample = {
+      sources: sources.reduce((sum, s) => sum + s.energy, 0),
+      progress: owned ? (room.controller?.progress ?? 0) : 0,
+      sites: {},
+    };
+    const sites = snap?.myConstructionSites ?? room.find(FIND_MY_CONSTRUCTION_SITES);
+    for (const site of sites) {
+      cur.sites[site.id] = [site.progress, site.progressTotal];
+    }
+
+    const prev = flowSamples.get(room.name);
+    if (prev) {
+      const flows = diffRoomFlows(prev, cur);
+      if (flows.harvested > 0) bumpEnergyCounter(room.name, "harvested", flows.harvested);
+      if (flows.upgraded > 0) bumpEnergyCounter(room.name, "upgraded", flows.upgraded);
+      if (flows.built > 0) bumpEnergyCounter(room.name, "built", flows.built);
+    }
+    flowSamples.set(room.name, cur);
+  }
+}
 
 function stateFor(roomName: string): RoomEconState {
   let st = econRooms.get(roomName);
@@ -126,6 +174,7 @@ export const economySystem: System = {
   run(ctx: TickContext): void {
     const g = globalCache();
     const acc = CONFIG.economy.accounting;
+    sampleRoomFlows(ctx);
     for (const snapshot of ctx.snapshots()) {
       const roomName = snapshot.roomName;
       // 房间错峰：windowTicks 内稳定散列，避免同 tick 全房重算（ECONOMY §3 刷新合同）。

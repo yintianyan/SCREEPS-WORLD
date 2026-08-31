@@ -2,21 +2,19 @@
 import { moveToTarget } from "../../movement";
 import { bumpEnergyCounter } from "../../../kernel/global-cache";
 
-/** P3 能量核算入账字段（动作层可触达的子集；spawn/tower 归系统侧埋点）。 */
-export type CountedField = "harvested" | "pickedUp" | "upgraded" | "built" | "repaired";
-
-/** 动作成功后按背包差值入账（实测流量，不依赖引擎常量换算）。 */
-function accountFlow(creep: Creep, before: number, result: number, field: CountedField): void {
-  if (result !== OK) return;
-  const delta = creep.store.getUsedCapacity(RESOURCE_ENERGY) - before;
-  if (delta === 0) return;
-  // 采集为正增量、升级/建造/维修为负增量，均取绝对值记入各自字段。
-  bumpEnergyCounter(creep.memory.home ?? creep.room.name, field, Math.abs(delta));
-}
+/**
+ * P3 能量核算入账字段（intent 计量子集）。
+ * harvested / upgraded / built 归房间级跨 tick 差分采样（economy 系统）—
+ * 这三类流量用 creep 背包差值或 intent 推算都不可靠：官服引擎资源结算在
+ * tick 末 intent 解析，同 tick 的 store 差值恒 0；房间状态差分是唯一实测口径。
+ */
+export type CountedField = "pickedUp" | "repaired";
 
 /**
- * 带 L1 核算的动作执行（ENERGY_ACCOUNTING_MODEL §2）：以执行前后背包差值实测
- * 流量。result===OK 且差值非零才入账——ERR_FULL / ERR_NOT_IN_RANGE 天然零账。
+ * 带 L1 核算的动作执行：intentAmount 在动作执行**前**求值（动作参数与目标
+ * 状态推算意图量），result===OK 才入账 — ERR_FULL / ERR_NOT_IN_RANGE 天然零账。
+ * 不可用「执行前后背包差值」计量：官服结算延迟使差值恒 0（mockup 同步结算
+ * 会掩盖此差异，测试绿但线上失真）。
  */
 export function runCountedAction(
   creep: Creep,
@@ -24,27 +22,20 @@ export function runCountedAction(
   field: CountedField,
   action: () => number,
   handlers?: ErrorHandlers,
+  intentAmount?: () => number,
 ): number {
-  const before = creep.store.getUsedCapacity(RESOURCE_ENERGY);
+  const amount = intentAmount?.();
   const result = runAction(creep, target, action, handlers);
-  accountFlow(creep, before, result, field);
+  if (amount !== undefined && result === OK && amount > 0 && Number.isFinite(amount)) {
+    bumpEnergyCounter(creep.memory.home ?? creep.room.name, field, amount);
+  }
   return result;
 }
 
-/** 采集一次并入账（供裸调用点复用）；返回引擎结果码。 */
-export function countedHarvest(creep: Creep, source: Source): number {
-  const before = creep.store.getUsedCapacity(RESOURCE_ENERGY);
-  const result = creep.harvest(source);
-  accountFlow(creep, before, result, "harvested");
-  return result;
-}
-
-/** 升级控制器一次并入账；返回引擎结果码。 */
-export function countedUpgrade(creep: Creep, controller: StructureController): number {
-  const before = creep.store.getUsedCapacity(RESOURCE_ENERGY);
-  const result = creep.upgradeController(controller);
-  accountFlow(creep, before, result, "upgraded");
-  return result;
+/** 维修 intent 计量：hits 补量 = min(REPAIR_POWER × WORK 部件数, 目标缺口)。 */
+export function repairIntentAmount(creep: Creep, target: Structure): number {
+  const work = creep.body.filter(p => p.type === WORK).length;
+  return Math.min(REPAIR_POWER * work, target.hitsMax - target.hits);
 }
 
 /**

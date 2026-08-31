@@ -1,6 +1,6 @@
 /** Dump actions — harvester 站桩倒能（向身边 range<=2 结构卸载能量/矿物）。 */
 import type { ActionCandidate } from "../action-types";
-import { runAction, runCountedAction } from "./helpers";
+import { runAction } from "./helpers";
 
 /** 向身边 link 倒能（range <= 2）。 */
 export function dumpToNearbyLink(): ActionCandidate<StructureLink> {
@@ -79,7 +79,7 @@ export function buildNearbyContainerSite(): ActionCandidate<ConstructionSite> {
       return site;
     },
     execute: (ac, site) => {
-      runCountedAction(ac.creep, site, "built", () => ac.creep.build(site));
+      runAction(ac.creep, site, () => ac.creep.build(site));
     },
   };
 }

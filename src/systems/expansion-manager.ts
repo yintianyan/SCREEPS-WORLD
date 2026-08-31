@@ -63,12 +63,34 @@ const CHECKPOINT_IDS: CheckpointId[] = [
   "CP5_ECONOMIC_ACTIVATION",
 ];
 
+/** 状态机认识的全部分支 — Memory 中不在此列的 state 为旧版残留值。 */
+const EXECUTION_STATES: ReadonlySet<string> = new Set([
+  "validating",
+  "preparing",
+  "claiming",
+  "claimed",
+  "bootstrapping",
+  "economic_startup",
+  "integrating",
+  "completed",
+  "failed",
+  "aborted",
+]);
+
 export const expansionManagerSystem: System = {
   name: "expansion-manager",
   priority: 3 as Priority,
   interval: CONFIG.expansion.interval,
   run(ctx: TickContext): void {
     if (!Memory.kernel) Memory.kernel = {};
+    // 旧版残留状态防护：状态机没有对应分支的 state（如旧版 pioneering）每 tick
+    // 静默穿透，扩张记录永不消失，hasOtherExpansion 恒真挡住后续新扩张计划。
+    // 残留记录直接离场，扩张管道不因旧数据卡死。
+    const pending = Memory.kernel.expansion;
+    if (pending && !EXECUTION_STATES.has(pending.state)) {
+      log.info("expansion", `[${ctx.tick}] expansion: 清理旧版残留状态 ${pending.state}（target=${pending.target}）`);
+      Memory.kernel.expansion = undefined;
+    }
     // 自举车道（审计修复，W38S59 事故实证）：owned 无 spawn 的房不在扩张状态机
     // 覆盖内 —— 任务 success/aborted 即离场，本地 spawnQueue 无 spawn 永不可孵化，
     // 建造无 builder 可用，唯一活路是姊妹房代孵 bootstrap 组。生存级，独立于
@@ -256,6 +278,13 @@ function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionStat
     case "failed":
     case "aborted":
       // 已终止，清理
+      if (!Memory.kernel) Memory.kernel = {};
+      Memory.kernel.expansion = undefined;
+      break;
+
+    default:
+      // 未知状态（旧版残留等）— 与 run 入口的残留防护同口径，清理防穿透。
+      log.info("expansion", `[${ctx.tick}] expansion: 未知状态 ${expansion.state}（target=${expansion.target}），清理扩张记录`);
       if (!Memory.kernel) Memory.kernel = {};
       Memory.kernel.expansion = undefined;
       break;

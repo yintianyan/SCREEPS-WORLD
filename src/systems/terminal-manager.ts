@@ -221,6 +221,9 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
   const myOrders = Object.values(market.orders ?? {});
 
   // 本房挂单维护（改价/撤单）。
+  const ownOrderIds = new Set(Object.keys(market.orders ?? {}));
+  // 同一轮内竞品 ask 查询缓存 — 同一资源类型不重复 getAllOrders。
+  const askCache = new Map<string, number | undefined>();
   for (const order of myOrders) {
     if (order.type !== "sell" || order.roomName !== snapshot.roomName) continue;
     const stale = shouldCancelStaleOrder(
@@ -244,6 +247,11 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
         order.price ?? 0,
         best?.price,
         CONFIG.market.sellOrderMarkup,
+        {
+          competingAsk: bestCompetingAsk(order.resourceType, ownOrderIds, askCache),
+          floor: computeDynamicSellPrice(order.resourceType, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice),
+          step: CONFIG.market.sellUndercutStep,
+        },
       );
       if (newPrice !== undefined) {
         if (market.changeOrderPrice(order.id, newPrice) === OK) {
@@ -284,6 +292,11 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
     markup: CONFIG.market.sellOrderMarkup,
     maxOrderAmount: CONFIG.market.maxOrderAmount,
     minOrderAmount: CONFIG.market.minOrderAmount,
+    pricing: {
+      competingAsk: bestCompetingAsk(homeMineral, ownOrderIds, askCache),
+      floor: computeDynamicSellPrice(homeMineral, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice),
+      step: CONFIG.market.sellUndercutStep,
+    },
   });
   if (!plan) return;
 
@@ -493,6 +506,32 @@ function toSummaries(orders: readonly Order[]): MarketOrderSummary[] {
     amount: o.remainingAmount ?? o.amount,
     roomName: o.roomName,
   }));
+}
+
+/**
+ * 竞品最低卖价（排除自有挂单）。市场无自动撮合：买家只吃最低 ask，
+ * 挂单定价必须知道竞品卖盘才能抢先成交；排除自有单防止自我压价死循环。
+ * cache 为同一轮 tryManageSellOrders 内的本地缓存 — 同一资源类型不重复 getAllOrders。
+ */
+function bestCompetingAsk(
+  resourceType: string,
+  ownOrderIds: Set<string>,
+  cache?: Map<string, number | undefined>,
+): number | undefined {
+  if (cache) {
+    const cached = cache.get(resourceType);
+    if (cached !== undefined || cache.has(resourceType)) return cached;
+  }
+  const sells = toSummaries(
+    Game.market.getAllOrders({ type: ORDER_SELL, resourceType: resourceType as ResourceConstant }),
+  );
+  let best: number | undefined;
+  for (const o of sells) {
+    if (ownOrderIds.has(o.id)) continue;
+    if (best === undefined || o.price < best) best = o.price;
+  }
+  if (cache) cache.set(resourceType, best);
+  return best;
 }
 
 /** 能量运费校验后执行 deal。成功返回 true。 */

@@ -1,6 +1,6 @@
 /** Build actions — 建造 construction site。 */
 import type { ActionContext, ActionCandidate } from "../action-types";
-import { runCountedAction } from "./helpers";
+import { runAction } from "./helpers";
 import { getObjectById } from "../../support/obj-cache";
 import { releaseAssignment } from "../../support/assignment-adapter";
 
@@ -31,7 +31,8 @@ export function buildAssignmentSite(
       return site;
     },
     execute: (ac, site) => {
-      runCountedAction(ac.creep, site, "built", () => ac.creep.build(site), {
+      // 建造计量归 economy 的房间级差分采样（site.progress 跨 tick 实测）。
+      runAction(ac.creep, site, () => ac.creep.build(site), {
         [ERR_INVALID_TARGET]: () => releaseAssignment(ac.creep),
       });
     },
@@ -74,7 +75,7 @@ export function buildNearestSite(
       return undefined;
     },
     execute: (ac, site) => {
-      runCountedAction(ac.creep, site, "built", () => ac.creep.build(site), {
+      runAction(ac.creep, site, () => ac.creep.build(site), {
         [ERR_INVALID_TARGET]: () => { ac.creep.memory.targetId = undefined; },
       });
     },

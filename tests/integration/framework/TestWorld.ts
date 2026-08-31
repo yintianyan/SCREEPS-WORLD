@@ -49,7 +49,7 @@ export interface WorldConfig {
   }>;
   /** 地上掉落的能量资源（测试 hauler 捡 drop vs 抽 container 优先级用） */
   droppedResources?: Array<{ pos: WorldPos; amount: number }>;
-  /** 每 tick source 再生量（默认 10 = 3000/300） */
+  /** 每 tick source 平均再生量（默认 10 = 3000/300；按引擎语义 300t 脉冲结算） */
   sourceRegenPerTick?: number;
   /** 每 tick container 衰减 hits（默认 0 = 不衰减） */
   containerDecayPerTick?: number;
@@ -216,6 +216,7 @@ class MockSource {
   pos: MockRoomPosition;
   energy: number;
   energyCapacity: number;
+  ticksToRegeneration: number;
   room: MockRoom;
 
   constructor(id: string, pos: MockRoomPosition, capacity: number, room: MockRoom) {
@@ -223,6 +224,7 @@ class MockSource {
     this.pos = pos;
     this.energy = capacity;
     this.energyCapacity = capacity;
+    this.ticksToRegeneration = ENERGY_REGEN_TIME;
     this.room = room;
   }
 }
@@ -1209,10 +1211,15 @@ export class TestWorld {
     this._tick++;
     this._cpuUsed = 0;
 
-    // Source 再生
+    // Source 再生 — 引擎语义（ENERGY_REGEN_TIME=300t 脉冲补量，非逐 tick 连续）：
+    // 房间级跨 tick 差分核算（economy 收入采样）依赖此口径，连续回能会把实采差分抵消掉。
     const regen = this.config.sourceRegenPerTick ?? 10;
     for (const s of this._sources) {
-      s.energy = Math.min(s.energyCapacity, s.energy + regen);
+      s.ticksToRegeneration -= 1;
+      if (s.ticksToRegeneration <= 0) {
+        s.energy = Math.min(s.energyCapacity, s.energy + regen * ENERGY_REGEN_TIME);
+        s.ticksToRegeneration = ENERGY_REGEN_TIME;
+      }
     }
 
     // Container 衰减
