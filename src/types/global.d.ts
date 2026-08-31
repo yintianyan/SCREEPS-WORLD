@@ -49,6 +49,14 @@ declare global {
     /** 连续未移动的 tick 数。 */
     stuckTicks?: number;
     /**
+     * TD-001：Level 3 弃目标时记录被放弃的 assignment task id。
+     * chooseTaskForRole 在冷却期内过滤此 id，防止立即重新分配相同目标导致循环。
+     * per-creep 运行时状态，无需迁移（同 lastRepathAt 先例）。
+     */
+    abandonedTaskId?: string;
+    /** TD-001：abandonedTaskId 写入时的 tick，用于冷却判断。 */
+    abandonedAt?: number;
+    /**
      * P1-E 档 2：上次 PathFinder.search 重寻路 tick（docs/architecture/DATA_FLOW.md）。
      * 两次重寻路间隔 ≥ dynamicRepathInterval，冷却内沿旧路径走一步；
      * absent=0 → 冷却不生效（与改造前一致）。per-creep 运行时状态，无需迁移。

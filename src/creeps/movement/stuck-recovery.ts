@@ -127,8 +127,15 @@ export function updateStuckTicks(creep: Creep): number {
 
 // ─── 目标清除 ───
 
-/** 清除 creep 的目标和分配，进入安全空闲。 */
+/** 清除 creep 的目标和分配，进入安全空闲。
+ * TD-001：记录被放弃的 assignment task id + tick，供 chooseTaskForRole 过滤。 */
 export function clearTarget(creep: Creep): void {
+  // TD-001：在释放前记录被放弃的 task id，防止下一 tick 重新分配到同一目标。
+  const assignment = creep.memory.assignment;
+  if (assignment) {
+    creep.memory.abandonedTaskId = assignment.id;
+    creep.memory.abandonedAt = Game.time;
+  }
   releaseFromTask(creep);
   creep.memory.targetId = undefined;
   creep.memory.assignment = undefined;

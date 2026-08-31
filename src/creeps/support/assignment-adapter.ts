@@ -88,7 +88,24 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
   if (!roomTasks) return undefined;
 
   const role = creep.memory.role ?? "unknown";
-  const chosen = chooseTaskForRole(role, roomTasks, { x: creep.pos.x, y: creep.pos.y });
+
+  // TD-001：过滤掉最近放弃的任务，防止 Level 3 弃目标→重新分配→卡住→弃目标循环。
+  // 冷却期 = stuckThreshold + repathLimit + 10t buffer（够 creep 移动到新方向后恢复）。
+  const abandonedId = creep.memory.abandonedTaskId;
+  const abandonedAt = creep.memory.abandonedAt;
+  const cooldownTicks = CONFIG.kernel.stuckThreshold + CONFIG.kernel.repathLimit + 10;
+  let filteredTasks = roomTasks;
+  if (abandonedId && abandonedAt !== undefined && ctx.tick - abandonedAt < cooldownTicks) {
+    filteredTasks = roomTasks.filter(t => t.id !== abandonedId);
+    // 全部被过滤 → 回退原始列表（接受可能重新分配，优于无任务空闲导致饥饿）。
+    if (filteredTasks.length === 0) filteredTasks = roomTasks;
+  } else if (abandonedId) {
+    // 冷却期已过，清除黑名单。
+    creep.memory.abandonedTaskId = undefined;
+    creep.memory.abandonedAt = undefined;
+  }
+
+  const chosen = chooseTaskForRole(role, filteredTasks, { x: creep.pos.x, y: creep.pos.y });
   if (!chosen) return undefined;
 
   const layoutRevision = Memory.rooms[home]?.layout?.revision ?? 0;
@@ -103,6 +120,11 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
   };
 
   creep.memory.assignment = assignment;
+  // TD-001：成功分配到新任务后清除黑名单（新任务不同于被放弃的，循环已断）。
+  if (chosen.id !== abandonedId) {
+    creep.memory.abandonedTaskId = undefined;
+    creep.memory.abandonedAt = undefined;
+  }
   pool.assignCreep(chosen.id, creep.name);
   recordEvent(EventKind.AssignmentAssigned, home, [chosen.priority]);
   return assignment;
