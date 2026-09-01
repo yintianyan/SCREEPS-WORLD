@@ -17,13 +17,14 @@ import { assessEmergencyRebuild, isEmergencyTask } from "../domain/construction/
 import { auditStructureGaps, auditLinkRoleGaps, mergeLinkRoleGaps, type StructureGaps } from "../domain/layout/gaps";
 import {
   getDeadAssetLinks,
-  isLinkConstrained,
   markLinkConstrained,
-  isDismantleOnCooldown,
-  isRoomInDefense,
   createDismantlePlan,
-  getDismantlePlans,
 } from "./link-system";
+import {
+  isLinkConstrained as isLinkConstrainedDomain,
+  isDismantleOnCooldown as isDismantleOnCooldownDomain,
+  isRoomInDefense,
+} from "../domain/layout/dismantle";
 // D2 归位：纯函数已下沉到 domain/layout/planner.ts
 import {
   makeTryAddTask as makeTryAddTaskDomain,
@@ -434,7 +435,7 @@ function planStage2Logistics(
     room,
     validationOptions: data.validationOptions,
     queuedLinks: data.queuedLinks,
-    linkConstrained: isLinkConstrained(snapshot.roomName, ctx.tick),
+    linkConstrained: isLinkConstrainedDomain(globalCache().linkConstrained, snapshot.roomName, ctx.tick),
     tryAdd: tryAddTask,
   });
   data.queuedLinks = result.queuedLinks;
@@ -455,8 +456,8 @@ function planStage2Logistics(
   // 执行与验证由 construction-manager 负责（每 tick 消费 dismantlePlans）。
   {
     const deadAssets = getDeadAssetLinks(ctx.tick);
-    if (deadAssets.length > 0 && !isRoomInDefense(snapshot.roomName) && !isDismantleOnCooldown(snapshot.roomName, ctx.tick)) {
-      const existingPlans = getDismantlePlans();
+    if (deadAssets.length > 0 && !isRoomInDefense(Memory.rooms[snapshot.roomName]?.colonyState) && !isDismantleOnCooldownDomain(globalCache().lastDismantleTick, snapshot.roomName, ctx.tick)) {
+      const existingPlans = globalCache().dismantlePlans ?? new Map();
       for (const deadLinkId of deadAssets) {
         if (existingPlans.has(deadLinkId)) continue;
         // 死资产 link 必须属于本房（跨房死资产由各自 layout-planner 处理）。

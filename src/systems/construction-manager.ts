@@ -17,14 +17,14 @@ import {
 import { getRoomLayoutData, markLayoutDirty } from "../kernel/segment-store";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
 import {
-  getDismantlePlans,
-  clearDismantlePlan,
-  isRoomInDefense,
   markLinkConstrained,
   clearDeadAssetLink,
+} from "./link-system";
+import {
+  isRoomInDefense,
   transitionDismantlePlan,
   DISMANTLE_VALIDATION_DELAY,
-} from "./link-system";
+} from "../domain/layout/dismantle";
 import type { DismantlePlan } from "../kernel/global-cache";
 import { log } from "../kernel/log";
 
@@ -500,11 +500,11 @@ function processDismantlePlans(
   tick: number,
   queue: readonly BuildTask[],
 ): void {
-  const plans = getDismantlePlans();
+  const plans = globalCache().dismantlePlans ?? new Map();
   if (plans.size === 0) return;
 
   // 战时暂停：defense 状态下不处理拆改（保留计划待恢复 peace）。
-  if (isRoomInDefense(snapshot.roomName)) return;
+  if (isRoomInDefense(Memory.rooms[snapshot.roomName]?.colonyState)) return;
 
   for (const [deadLinkId, plan] of plans) {
     if (plan.roomName !== snapshot.roomName) continue;
@@ -535,7 +535,7 @@ function processSinglePlan(
   // 必须 markLinkConstrained + clearDeadAssetLink，否则 cooldown 过期后无限 churn。
   if (tick >= plan.expiresAt) {
     markLinkConstrained(plan.roomName, tick);
-    clearDismantlePlan(deadLinkId);
+    globalCache().dismantlePlans?.delete(deadLinkId);
     clearDeadAssetLink(deadLinkId);
     log.error("construction-manager", `[dismantle] abort+constrained: ttl expired for link ${deadLinkId} in ${plan.roomName}, ` +
       `marking linkConstrained to prevent churn`,);
@@ -547,7 +547,7 @@ function processSinglePlan(
     const replacementTask = queue.find(t => t.key === plan.replacementKey);
     if (!replacementTask) {
       // 替代任务被清理（cleanTasks purge 或 blocked）→ abort。
-      clearDismantlePlan(deadLinkId);
+      globalCache().dismantlePlans?.delete(deadLinkId);
       log.error("construction-manager", `[dismantle] abort: replacement task ${plan.replacementKey} not found for ${deadLinkId}`);
       return;
     }
@@ -570,7 +570,7 @@ function processSinglePlan(
     );
     if (!replacementLink) {
       // 替代 link 消失（被毁？）→ abort，保留旧 link。
-      clearDismantlePlan(deadLinkId);
+      globalCache().dismantlePlans?.delete(deadLinkId);
       log.error("construction-manager", `[dismantle] abort: replacement link disappeared for ${deadLinkId}`);
       return;
     }
@@ -581,13 +581,13 @@ function processSinglePlan(
       if (deadLink) {
         const result = deadLink.destroy();
         if (result === OK) {
-          clearDismantlePlan(deadLinkId);
+          globalCache().dismantlePlans?.delete(deadLinkId);
           clearDeadAssetLink(deadLinkId);
           log.info("construction-manager", `[dismantle] success: destroyed dead link ${deadLinkId}, replacement energized`);
         }
       } else {
         // 旧 link 已不存在（可能被手动拆除）→ 清理计划。
-        clearDismantlePlan(deadLinkId);
+        globalCache().dismantlePlans?.delete(deadLinkId);
         clearDeadAssetLink(deadLinkId);
       }
       return;
@@ -597,7 +597,7 @@ function processSinglePlan(
     if (tick - validatingSince >= DISMANTLE_VALIDATION_DELAY) {
       // 验证超时：替代位置也是死资产 → fallback（标记 linkConstrained，避免重复空转）。
       markLinkConstrained(plan.roomName, tick);
-      clearDismantlePlan(deadLinkId);
+      globalCache().dismantlePlans?.delete(deadLinkId);
       clearDeadAssetLink(deadLinkId);
       log.info("construction-manager", `[dismantle] fallback: replacement link not energized after ${DISMANTLE_VALIDATION_DELAY}t, ` +
         `marking ${plan.roomName} linkConstrained`,);

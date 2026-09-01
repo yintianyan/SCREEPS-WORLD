@@ -183,5 +183,5 @@ P 序是**降级牺牲序而非重要度排名**：P0 的量永远最小，预�
 | `expectations.ts` | 期望自检 E1–E9（不变式违例检出 + P3 旁路触发） | 自检输入由 kernel 采集，判据为通用不变式 |
 | `outcome-channel.ts` | UOEM outcome 事件的生产 Memory 通道（压缩字段环形账） | 通用 outcome 信封，不解析业务语义 |
 | `log.ts` | 分模块限频日志 | 纯输出设施 |
-| `layout-metrics.ts` | ⚠️ 布局可观测性指标（死资产率等，link-system 消费） | **承载布局业务语义**（import domain/layout 类型）——迁移落点 `src/domain/layout/metrics.ts`（domain 只读纯函数；该路径当前不存在，迁移时创建），迁移前登记为例外 |
+| `layout-metrics.ts` | 布局指标 Memory 持久化设施（recordLayoutMetrics / readDefenseCutPositions） | 纯函数已下沉 `src/domain/layout/metrics.ts`（computeLayoutMetrics 等）；kernel 侧仅保留 Memory 读写设施与 type re-export，不再承载业务语义 |
 

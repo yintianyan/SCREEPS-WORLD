@@ -122,7 +122,7 @@ Dependencies 列同步登记、且不落入 §3 任何一禁——三处同步�
 | 4 | **任何模块 import Kernel 内部**：绕过公开接口直取内核私有结构 | 只经 §2-1 公开面；Kernel 内部件重构不得波及业务 |
 | 5 | **domain 层访问 Game / Memory**：决策函数体内出现 `Game.` / `RawMemory.` 引用 | 纯函数律（research/28 §10.3，与 ADR-004 同级红线）；Game 动作只允许出现在唯一写者与执行运行时 |
 | 6 | **模块顶层访问 Game / Memory** | 组合根注入（AGENT.md bootstrap 条款） |
-| 7 | **兄弟系统横向 import 直读内部状态** | 跨系统只经 Public Interface（SYSTEM_BOUNDARIES §2.3-2）；已登记存量违规（layout-planner ↔ link-system dismantle 工具）按技术债台账收敛 |
+| 7 | **兄弟系统横向 import 直读内部状态** | 跨系统只经 Public Interface（SYSTEM_BOUNDARIES §2.3-2）；纯逻辑已下沉 `domain/layout/dismantle.ts`，link-system 仅保留 globalCache 操作封装作为 Public Interface |
 | 8 | **Kernel import 业务模块** | research/19 §8；风险 R-13；唯一例外 = R9（KERNEL §8，「3 个钩子即 registry 化」） |
 | 9 | **感知层依赖任何业务**：World Model import 战略 / 业务 / 执行模块 | 感知层是最上游（SYSTEM_BOUNDARIES §1.3）；引入将形成全图循环 |
 | 10 | **写者间横向互调**：SpawnManager ↔ ConstructionManager ↔ TerminalManager 互 import | 唯一写者之间经各自队列 / 请求通道，不共享内部 |

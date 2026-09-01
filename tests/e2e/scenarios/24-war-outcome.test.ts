@@ -24,6 +24,7 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
+import { injectEnemyRoom, injectHostileTower, injectFriendlyCreep, injectHostile } from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 const HOME = "W0N1";
@@ -111,7 +112,7 @@ async function setupWar(withTower: boolean): Promise<ScenarioRunner> {
     { type: "extension", x: 25, y: 21, props: { energy: 50, energyCapacity: 50 } },
   );
   await runner.setup({ roomName: HOME, rooms: [home, targetRoom], maxTicks: 12200, controllerLevel: 6 });
-  await runner.addEnemyOwnedRoom(TARGET, "Enemy", 1);
+  await injectEnemyRoom(runner, TARGET, "Enemy", 1);
   // 敌方 bot 塔防 AI（真实战损源）+ 不可破塔（war 期战损引擎，无论裁决路径）。
   await (runner.server.server.world as any).addBot({
     username: "Enemy", room: TARGET, x: 30, y: 30, cpu: 10, cpuAvailable: 1000,
@@ -130,17 +131,17 @@ module.exports.loop = function() {
 };
 ` },
   });
-  if (withTower) await runner.worldBuilder.addHostileTower(TARGET, 10, 25, "Enemy");
+  if (withTower) await injectHostileTower(runner, TARGET, 10, 25, "Enemy");
 
   // 种满编劳动力（同 E2E-023：初始 harvester×3 必须 t0 注入——mockup 对
   // post-t0 注入的 ticksToLive 语义异常（存活 <250t），t0 注入正常存活
   // 1500t；采集断档 → srcRatio 强制 crisis → recovery 闪烁 → war 不稳）。
-  await runner.worldBuilder.addFriendlyCreep(HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], "seed-harv-1", { role: "harvester", home: HOME });
-  await runner.worldBuilder.addFriendlyCreep(HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], "seed-harv-2", { role: "harvester", home: HOME });
-  await runner.worldBuilder.addFriendlyCreep(HOME, 26, 25, ["work", "work", "work", "work", "move", "move"], "seed-harv-3", { role: "harvester", home: HOME });
-  await runner.worldBuilder.addFriendlyCreep(HOME, 25, 26, ["carry", "carry", "carry", "carry", "move", "move", "move", "move"], "seed-hauler-1", { role: "hauler", home: HOME });
-  await runner.worldBuilder.addFriendlyCreep(HOME, 23, 30, ["carry", "carry", "carry", "move", "move"], "seed-dist-1", { role: "distributor", home: HOME });
-  await runner.worldBuilder.addFriendlyCreep(HOME, 11, 11, ["work", "work", "work", "carry", "move", "move"], "seed-upgr-1", { role: "upgrader", home: HOME });
+  await injectFriendlyCreep(runner, HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], "seed-harv-1", { role: "harvester", home: HOME });
+  await injectFriendlyCreep(runner, HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], "seed-harv-2", { role: "harvester", home: HOME });
+  await injectFriendlyCreep(runner, HOME, 26, 25, ["work", "work", "work", "work", "move", "move"], "seed-harv-3", { role: "harvester", home: HOME });
+  await injectFriendlyCreep(runner, HOME, 25, 26, ["carry", "carry", "carry", "carry", "move", "move", "move", "move"], "seed-hauler-1", { role: "hauler", home: HOME });
+  await injectFriendlyCreep(runner, HOME, 23, 30, ["carry", "carry", "carry", "move", "move"], "seed-dist-1", { role: "distributor", home: HOME });
+  await injectFriendlyCreep(runner, HOME, 11, 11, ["work", "work", "work", "carry", "move", "move"], "seed-upgr-1", { role: "upgrader", home: HOME });
   return runner;
 }
 
@@ -175,21 +176,21 @@ async function runWar(
     if (i < opts.invaderStopStage) {
       const spot = invaderSpots[i % invaderSpots.length] ?? [46, 46];
       const [ix, iy] = spot;
-      await runner.worldBuilder.addHostileCreep(HOME, ix, iy, ["attack", "move"], `invader-${i}`, "invader");
+      await injectHostile(runner, HOME, ix, iy, ["attack", "move"], `invader-${i}`, "invader");
     }
     // scout 每 500t 补种（it-1 在 removeTargetCreepsAt 后停种——移除+停种
     // 双管齐下情报才真正冻结，否则补种持续保鲜 → 核验时 intel 新鲜）。
     if (i % 2 === 0 && (opts.removeTargetCreepsAt === null || tick < opts.removeTargetCreepsAt)) {
       const spot = scoutSpots[(i / 2) % scoutSpots.length] ?? [45, 25];
       const [sx, sy] = spot;
-      await runner.worldBuilder.addFriendlyCreep(TARGET, sx, sy, ["move"], `scout-wt-${i}`, {
+      await injectFriendlyCreep(runner, TARGET, sx, sy, ["move"], `scout-wt-${i}`, {
         role: "scout", home: HOME, remoteTarget: TARGET,
       });
     }
     // harvester 每 1250t 补种（编制恒 ≥2 → bootstrap 永不发生 → anyRecovery 恒假）。
     if (i % 5 === 0) {
-      await runner.worldBuilder.addFriendlyCreep(HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-a`, { role: "harvester", home: HOME });
-      await runner.worldBuilder.addFriendlyCreep(HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-b`, { role: "harvester", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-a`, { role: "harvester", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-b`, { role: "harvester", home: HOME });
     }
     // 故障注入点：持续压制目标房 creep（it-1 情报冻结）——一次性移除不够：
     // 孵化中的 attacker 进房即成新视野源（refreshNeighborIntel 对可见邻房

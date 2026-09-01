@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { t0Base } from "../fixtures/base";
+import { injectHostile } from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 describe("E2E-025 hostile/恢复长程统计", () => {
@@ -29,7 +30,7 @@ describe("E2E-025 hostile/恢复长程统计", () => {
     for (let i = 0; i < 12; i++) {
       // 每 1000t 一波敌袭（6 波）。
       if (i % 2 === 0 && i < 12) {
-        await runner.worldBuilder.addHostileCreep("W0N1", 35, 35, ["attack", "move"], `inv-${i}`, "invader");
+        await injectHostile(runner, "W0N1", 35, 35, ["attack", "move"], `inv-${i}`, "invader");
         waves++;
       }
       const snaps = await runner.runTicks(500);

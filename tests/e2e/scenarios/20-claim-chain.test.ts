@@ -13,6 +13,7 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
+import { injectGcl } from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 const HOME = "W0N1";
@@ -46,7 +47,7 @@ describe("E2E-020 claim 授权全链 — 立项→claim→bootstrap", () => {
       maxTicks: 15200,
       controllerLevel: 6,
     });
-    await runner.setUserGcl(2);
+    await injectGcl(runner, 2);
   }, 120000);
 
   afterAll(async () => {

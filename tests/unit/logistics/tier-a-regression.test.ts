@@ -25,7 +25,7 @@ describe("AS-1 — assignment 续约的任务在池校验", () => {
 
   function assignedCreep(taskId: string): any {
     // 注册 container 使 sourceId 存在性检查通过 — 隔离「任务出池」这一条。
-    // revision=1 对齐 role-helpers 的 Memory.rooms.W7N4.layout.revision。
+    // revision=1 对齐 factories.ts 的 Memory.rooms.W7N4.layout.revision。
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
     void container;
     return mockCreep({

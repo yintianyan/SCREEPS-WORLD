@@ -1,7 +1,6 @@
 /** Fill actions — 向 fillTarget / storage / container 送能（与 dump 的区别： */
 import type { ActionCandidate } from "../action-types";
 import { globalCache } from "../../../kernel/global-cache";
-import { log } from "../../../kernel/log";
 import { runAction } from "./helpers";
 import { updateMode } from "../lifecycle";
 import {
@@ -28,14 +27,6 @@ export function fillTarget(): ActionCandidate<AnyOwnedStructure> {
       const target = getFillTarget(ac.creep, ac.snapshot);
       if (target) {
         ac.creep.memory.fillTargetId = target.id;
-      } else if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-        // 【TEMP-3A-DIAG】携能却无填充目标 —— 根因定位临时探针，修复后移除/降级。
-        log.warn(
-          "fill",
-          "carry=" + ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) +
-          " fillTargets=" + ac.snapshot.fillTargets.length +
-          " spawnE=" + (ac.snapshot.spawns[0]?.store ? ac.snapshot.spawns[0].store.getUsedCapacity(RESOURCE_ENERGY) : "n/a"),
-        );
       }
       return target;
     },

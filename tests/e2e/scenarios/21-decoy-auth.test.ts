@@ -15,6 +15,7 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
+import { injectEnemyRoom, injectFriendlyCreep, injectHostile } from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 const HOME = "W0N1";
@@ -48,7 +49,7 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
       maxTicks: 9200,
       controllerLevel: 6,
     });
-    await runner.addEnemyOwnedRoom(DECOY, "Enemy", 1);
+    await injectEnemyRoom(runner, DECOY, "Enemy", 1);
   }, 120000);
 
   afterAll(async () => {
@@ -64,18 +65,18 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
       // （posture.ts:163）→ since 重置重走 5000t 驻留。种子满编劳动力（生产角色，
       // 由 bot assignment 接管）跳过冷启动，war 门在场景开始即只依赖真实经济信号。
       // TTL 1500 自然死亡 → 替换走生产 spawn 路径（pendingHarvesters 防替换期假 bootstrap）。
-      await runner.worldBuilder.addFriendlyCreep(HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], "seed-harv-1", { role: "harvester", home: HOME });
-      await runner.worldBuilder.addFriendlyCreep(HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], "seed-harv-2", { role: "harvester", home: HOME });
-      await runner.worldBuilder.addFriendlyCreep(HOME, 26, 25, ["work", "work", "work", "work", "move", "move"], "seed-harv-3", { role: "harvester", home: HOME });
-      await runner.worldBuilder.addFriendlyCreep(HOME, 25, 26, ["carry", "carry", "carry", "carry", "move", "move", "move", "move"], "seed-hauler-1", { role: "hauler", home: HOME });
-      await runner.worldBuilder.addFriendlyCreep(HOME, 23, 30, ["carry", "carry", "carry", "move", "move"], "seed-dist-1", { role: "distributor", home: HOME });
-      await runner.worldBuilder.addFriendlyCreep(HOME, 11, 11, ["work", "work", "work", "carry", "move", "move"], "seed-upgr-1", { role: "upgrader", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], "seed-harv-1", { role: "harvester", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], "seed-harv-2", { role: "harvester", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 26, 25, ["work", "work", "work", "work", "move", "move"], "seed-harv-3", { role: "harvester", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 25, 26, ["carry", "carry", "carry", "carry", "move", "move", "move", "move"], "seed-hauler-1", { role: "hauler", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 23, 30, ["carry", "carry", "carry", "move", "move"], "seed-dist-1", { role: "distributor", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 11, 11, ["work", "work", "work", "carry", "move", "move"], "seed-upgr-1", { role: "upgrader", home: HOME });
 
       // 诱饵情报播种（生产路径）：t≈100 放一只 bot scout 进诱饵房 → 房间可见
       // → refreshNeighborIntel 带视野采集（owner=Enemy, towers=0, towers 字段
       // 触发威胁短窗 TTL 200t）。scout TTL 1500 自然死亡 → 视野消失 → 情报
       // 停在最后一次观测 → 决策时点（war 达成后）必然 stale（非 fact）。
-      await runner.worldBuilder.addFriendlyCreep(DECOY, 25, 25, ["move"], "scout-decoy", {
+      await injectFriendlyCreep(runner, DECOY, 25, 25, ["move"], "scout-decoy", {
         role: "scout", home: HOME, remoteTarget: DECOY,
       });
 
@@ -85,7 +86,7 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
         // 高频再注入：塔击杀保经济，目击刷新 lastHostileAt 维持 threatRecent——
         // 「反复试探性攻击维持战争姿态」是生产语义。
         if (tick >= 200 && tick <= 6000) {
-          await runner.worldBuilder.addHostileCreep(HOME, 35, 35, ["attack", "move"], `invader-${i}`, "invader");
+          await injectHostile(runner, HOME, 35, 35, ["attack", "move"], `invader-${i}`, "invader");
         }
 
         // war 门三条件探针：colonyState（anyRecovery）/ economyPressure（压力门）/

@@ -2,18 +2,25 @@ import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/cont
 import type { LinkInfo, LinkRole } from "../domain/economy/links";
 import { planLinkTransfers, classifyLinkRole, computeControllerLinkTarget } from "../domain/economy/links";
 import { linkHasOutlet } from "../domain/economy/link-outlet";
+import {
+  DEAD_ASSET_THRESHOLD,
+  DISMANTLE_COOLDOWN,
+  DISMANTLE_TTL,
+  LINK_CONSTRAINED_RETRY_INTERVAL,
+} from "../domain/layout/dismantle";
 import { globalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
 
-/** re-export（纯函数已下沉 domain/economy/links，保持 link-system 导入面兼容）。 */
+/** re-export（纯函数已下沉 domain 层，保持 link-system 导入面兼容）。 */
 export { computeControllerLinkTarget } from "../domain/economy/links";
-
-/**
- * 死资产判定阈值：source link 持续满足三重校验的 tick 数。
- * 500t 足以过滤瞬态（hauler 短暂离岗、link 刚建成未灌能），且不超过拆改冷却（1000t）—
- * 死资产检测到拆改启动应在同一周期内闭环。
- */
-export const DEAD_ASSET_THRESHOLD = 500;
+export {
+  DEAD_ASSET_THRESHOLD,
+  DISMANTLE_COOLDOWN,
+  DISMANTLE_TTL,
+  DISMANTLE_VALIDATION_DELAY,
+  LINK_CONSTRAINED_RETRY_INTERVAL,
+  transitionDismantlePlan,
+} from "../domain/layout/dismantle";
 
 /**
  * Link 能量传输系统 — P1 系统，管理 link 间瞬时能量传输 + 死资产检测。
@@ -141,13 +148,6 @@ export function clearDeadAssetLink(linkId: string): void {
 }
 
 /**
- * link 几何受限重试间隔：标记后 1000t 内跳过 link 任务创建，避免空转。
- * 1000t 足以覆盖拆改周期（500t 检测 + 1000t 拆改冷却），过期后自动重试
- * （RCL 升级或拆改完成可能解锁几何约束）。
- */
-export const LINK_CONSTRAINED_RETRY_INTERVAL = 1000;
-
-/**
  * 检查房间是否处于 link 几何受限状态（controller + storage link 都放不下）。
  * layout-planner 消费：标记期内跳过 link 任务创建；标记自动过期后重新评估。
  */
@@ -175,24 +175,6 @@ export function clearLinkConstrained(roomName: string): void {
 }
 
 // ─── P1-4 受限拆改通道 ───
-
-/**
- * 拆改冷却：每房每 1000t 最多启动 1 个拆改计划 — 足以覆盖单次拆改周期
- * （500t 检测 + 替代建造 + 500t 验证），避免受限地形频繁拆改空转。
- */
-export const DISMANTLE_COOLDOWN = 1000;
-
-/**
- * 拆改计划 ttl：1500t 未完成则 abort — 500t（死资产检测窗口）+ 1000t
- * （拆改执行窗口，含替代建造 + 验证）；超时表示替代 link 未建或验证未过，放弃拆改。
- */
-export const DISMANTLE_TTL = 1500;
-
-/**
- * 替代 link 灌能验证窗口：建成后等待 500t 确认 harvester 灌能 — 与
- * DEAD_ASSET_THRESHOLD 对齐，足以过滤瞬态且不超过 ttl 验证预算。
- */
-export const DISMANTLE_VALIDATION_DELAY = 500;
 
 /**
  * 检查房间是否处于拆改冷却期（1000t 内已启动过拆改）。
@@ -270,30 +252,7 @@ export function clearDismantlePlan(deadLinkId: string): void {
   globalCache().dismantlePlans?.delete(deadLinkId);
 }
 
-/**
- * 更新拆改计划状态（construction-manager 每 tick 调用）。
-
- * 纯函数版本便于单测状态机转移逻辑，实际 cache 写入由调用方负责。
- */
-export function transitionDismantlePlan(
-  plan: import("../kernel/global-cache").DismantlePlan,
-  tick: number,
-): import("../kernel/global-cache").DismantlePlan {
-  if (plan.state === "waiting") {
-    return { ...plan, state: "validating", validatingSince: tick };
-  }
-  return plan;
-}
-
-/**
- * 判定房间是否处于战时状态（colonyState === "defense"）。
-
- * layout-planner + construction-manager 消费：战时暂停拆改（不新建计划、不 destroy 旧 link），
- * 保留现有计划待恢复 peace 后继续。
- */
-export function isRoomInDefense(roomName: string): boolean {
-  return Memory.rooms[roomName]?.colonyState === "defense";
-}
+// transitionDismantlePlan and isRoomInDefense are re-exported from domain/layout/dismantle
 
 /**
  * 根据可与 source/controller/storage 的距离分类（委托纯函数 classifyLinkRole）。

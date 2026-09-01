@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { rcl3RoomWithTower } from "../fixtures/rooms";
-import { injectFriendlyTower } from "../fixtures/inject";
+import { injectFriendlyTower, injectHostile } from "../fixtures/inject";
 import { debugSnapshot } from "../helpers/assertions";
 import { isJsError } from "../../support/errors";
 
@@ -44,14 +44,15 @@ describe("E2E-004 Tower 防御", () => {
     async () => {
       // 在房间中心注入 hostile creep（tower 在 20,20）
       // hostile 靠近 tower，确保在攻击范围内（tower 攻击范围 20 格）
-      await runner.worldBuilder.addHostileCreep(
-        "W0N1",
-        22,
-        22,
-        ["attack", "move"],
-        "Invader1",
-        "invader",
-      );
+await injectHostile(
+      runner,
+      "W0N1",
+      22,
+      22,
+      ["attack", "move"],
+      "Invader1",
+      "invader",
+    );
 
       // 记录注入前的 Memory 状态
       const memBefore = await runner.bot.getMemory();

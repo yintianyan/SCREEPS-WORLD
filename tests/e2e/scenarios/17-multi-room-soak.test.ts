@@ -12,6 +12,7 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
+import { injectWipeCreeps } from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 const HOME = "W0N1";
@@ -81,7 +82,7 @@ describe("E2E-017 多房 soak — 双自有房 + 故障隔离", () => {
 
       // ── 阶段 2：故障注入 — 殖民房编队全灭（母房不动）──
       const homeBefore = byHome[HOME] ?? 0;
-      await runner.removeCreeps(COLONY);
+      await injectWipeCreeps(runner, COLONY);
 
       // 恢复窗 3000 tick：殖民房灾后恢复孵化，母房照常运转。
       let recovered = false;

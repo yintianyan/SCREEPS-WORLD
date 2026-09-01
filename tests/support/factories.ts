@@ -1,7 +1,7 @@
 /**
  * unit 工具层 — 共享 mock 工厂（FREEZE R20① / T4）。
  *
- * 自 tests/role-helpers.ts 升格入驻：unit 层 fixture 工厂的唯一实现。
+ * 原 tests/role-helpers.ts 已删除，本文件是 unit 层 fixture 工厂的唯一实现。
  * 审计确认的重复工厂（makeSnapshot×16 / makeContext×10 / makeCreep×6 /
  * makeStore×4 雷同等）按 T4 分批归并到本文件的 defaults+overrides 模式。
  */

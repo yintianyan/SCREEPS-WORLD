@@ -27,6 +27,7 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
+import { injectEnemyRoom, injectHostileTower, injectFriendlyCreep, injectHostile } from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 const HOME = "W0N1";
@@ -104,8 +105,8 @@ describe("E2E-022 war 账本 — 战争全程经济不越红线（Scenario F · 
       maxTicks: 9200,
       controllerLevel: 6,
     });
-    await runner.addEnemyOwnedRoom(TARGET, "Enemy", 1);
-    await runner.worldBuilder.addHostileTower(TARGET, 25, 25, "Enemy");
+    await injectEnemyRoom(runner, TARGET, "Enemy", 1);
+    await injectHostileTower(runner, TARGET, 25, 25, "Enemy");
   }, 120000);
 
   afterAll(async () => {
@@ -128,12 +129,12 @@ describe("E2E-022 war 账本 — 战争全程经济不越红线（Scenario F · 
       ];
 
       // ── 种满编劳动力（同 E2E-021：跳过零人口冷启动的 bootstrap 闪烁）──
-      await runner.worldBuilder.addFriendlyCreep(HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], "seed-harv-1", { role: "harvester", home: HOME });
-      await runner.worldBuilder.addFriendlyCreep(HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], "seed-harv-2", { role: "harvester", home: HOME });
-      await runner.worldBuilder.addFriendlyCreep(HOME, 26, 25, ["work", "work", "work", "work", "move", "move"], "seed-harv-3", { role: "harvester", home: HOME });
-      await runner.worldBuilder.addFriendlyCreep(HOME, 25, 26, ["carry", "carry", "carry", "carry", "move", "move", "move", "move"], "seed-hauler-1", { role: "hauler", home: HOME });
-      await runner.worldBuilder.addFriendlyCreep(HOME, 23, 30, ["carry", "carry", "carry", "move", "move"], "seed-dist-1", { role: "distributor", home: HOME });
-      await runner.worldBuilder.addFriendlyCreep(HOME, 11, 11, ["work", "work", "work", "carry", "move", "move"], "seed-upgr-1", { role: "upgrader", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], "seed-harv-1", { role: "harvester", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], "seed-harv-2", { role: "harvester", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 26, 25, ["work", "work", "work", "work", "move", "move"], "seed-harv-3", { role: "harvester", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 25, 26, ["carry", "carry", "carry", "carry", "move", "move", "move", "move"], "seed-hauler-1", { role: "hauler", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 23, 30, ["carry", "carry", "carry", "move", "move"], "seed-dist-1", { role: "distributor", home: HOME });
+      await injectFriendlyCreep(runner, HOME, 11, 11, ["work", "work", "work", "carry", "move", "move"], "seed-upgr-1", { role: "upgrader", home: HOME });
 
       const totalStages = 36;
       for (let i = 0; i < totalStages; i++) {
@@ -142,7 +143,7 @@ describe("E2E-022 war 账本 — 战争全程经济不越红线（Scenario F · 
         if (i % 2 === 0) {
           const spot = scoutSpots[(i / 2) % scoutSpots.length] ?? [25, 26];
           const [sx, sy] = spot;
-          await runner.worldBuilder.addFriendlyCreep(TARGET, sx, sy, ["move"], `scout-wt-${i}`, {
+          await injectFriendlyCreep(runner, TARGET, sx, sy, ["move"], `scout-wt-${i}`, {
             role: "scout", home: HOME, remoteTarget: TARGET,
           });
         }
@@ -150,7 +151,7 @@ describe("E2E-022 war 账本 — 战争全程经济不越红线（Scenario F · 
         // ——「反复试探性攻击维持战争姿态」是生产语义。从 t0 注入使 fortify
         // since≈2 → war≈5002，为 build(2500 boost 宽限)+孵化+行军留足窗口。
         if (tick <= 6000) {
-          await runner.worldBuilder.addHostileCreep(HOME, 35, 35, ["attack", "move"], `invader-${i}`, "invader");
+          await injectHostile(runner, HOME, 35, 35, ["attack", "move"], `invader-${i}`, "invader");
         }
 
         // 账本探针：红线四门（cs/p/wpt/stor）+ 账本两门（spawned/post）+ 战果（twr）

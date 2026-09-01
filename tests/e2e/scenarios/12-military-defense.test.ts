@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom, rcl3RoomWithTower } from "../fixtures/rooms";
+import { injectHostile } from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 /** 从日志中提取防御相关日志。 */
@@ -68,7 +69,7 @@ describe("E2E-012 Military & Defense", () => {
       ).toHaveLength(0);
 
       // 注入 NPC invader [ATTACK, MOVE]
-      await runner.worldBuilder.addHostileCreep(ROOM, 35, 35, ["attack", "move"], "invader-1", "invader");
+      await injectHostile(runner, ROOM, 35, 35, ["attack", "move"], "invader-1", "invader");
 
       // 运行 100t 让系统响应
       const responseSnaps = await runner.runTicks(100);
@@ -101,7 +102,8 @@ describe("E2E-012 Military & Defense", () => {
     "S2: Threat Trace Collection — 威胁存在时 decision-trace 采集 DEFENSE_PREP 记录",
     async () => {
       // 注入更强的威胁：2 只 [ATTACK, ATTACK, MOVE] hostile
-      await runner.worldBuilder.addHostileCreep(
+      await injectHostile(
+        runner,
         ROOM,
         30,
         30,
@@ -109,7 +111,8 @@ describe("E2E-012 Military & Defense", () => {
         "invader-2",
         "invader",
       );
-      await runner.worldBuilder.addHostileCreep(
+      await injectHostile(
+        runner,
         ROOM,
         32,
         32,
@@ -148,7 +151,8 @@ describe("E2E-012 Military & Defense", () => {
     async () => {
       // 注入强威胁：4 只 boosted creep 模拟 FULL_ASSAULT
       for (let i = 0; i < 4; i++) {
-        await runner.worldBuilder.addHostileCreep(
+        await injectHostile(
+          runner,
           ROOM,
           28 + i,
           28 + i,
@@ -263,7 +267,8 @@ describe("E2E-012 Military & Defense", () => {
     "S6: Memory Budget Under Threat — 威胁期间 Memory 预算安全",
     async () => {
       // 再注入一波威胁
-      await runner.worldBuilder.addHostileCreep(
+      await injectHostile(
+        runner,
         ROOM,
         20,
         20,

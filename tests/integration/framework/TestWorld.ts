@@ -1375,7 +1375,7 @@ export class TestWorld {
     delete g.__parkReservations;
     delete g.__parkReservationsTick;
     // per-tick 移动/对象缓存（Game.time 跨测试文件可能撞值，必须清理防陈旧对象泄漏，
-    // 与 role-helpers.resetGlobals 覆盖对齐）：
+    // 与 factories.resetGlobals 覆盖对齐）：
     delete g.__objCache;
     delete g.__objCacheTick;
     delete g.__structCache;

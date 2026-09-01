@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner, type BotSnapshot } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
+import { injectCpu } from "../fixtures/inject";
 import { CONFIG } from "../../../src/config";
 import { isJsError } from "../../support/errors";
 
@@ -85,16 +86,16 @@ describe("E2E-015 低 CPU soak — CpuTier 降级链", () => {
       // 段 1：cpu=2 / bucket=8000 — healthy 档基线。
       await runStage(400);
       // 段 2：注入 conserve 带（1000 ≤ b < 3000；guarded 为 3000–7000）。
-      await runner.setUserCpu({ cpuAvailable: 2500 });
+      await injectCpu(runner, { cpuAvailable: 2500 });
       await runStage(400);
       // 段 3：注入 conserve 档（b < 1000）。
-      await runner.setUserCpu({ cpuAvailable: 800 });
+      await injectCpu(runner, { cpuAvailable: 800 });
       await runStage(400);
       // 段 4：注入 recovery 档（b 极低，逼近枯竭语义）。
-      await runner.setUserCpu({ cpuAvailable: 200 });
+      await injectCpu(runner, { cpuAvailable: 200 });
       await runStage(600);
       // 段 5：恢复 cpu=100 + 半桶 — 回充 + 滞回爬升。
-      await runner.setUserCpu({ cpu: 100, cpuAvailable: 6000 });
+      await injectCpu(runner, { cpu: 100, cpuAvailable: 6000 });
       await runStage(1200);
 
       // ── 证据登记（CANARY §4.2 绑定模板要素，供文档归档）──

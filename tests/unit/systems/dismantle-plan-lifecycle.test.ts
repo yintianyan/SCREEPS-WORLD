@@ -1,19 +1,21 @@
 /** P1-4 受限拆改通道生命周期测试（staged link 拆改生命周期）。 */
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
-  isDismantleOnCooldown,
+  isDismantleOnCooldown as isDismantleOnCooldownDomain,
+  transitionDismantlePlan as transitionDismantlePlanDomain,
+  isRoomInDefense as isRoomInDefenseDomain,
+  isLinkConstrained as isLinkConstrainedDomain,
+  DISMANTLE_COOLDOWN,
+  DISMANTLE_TTL,
+  DISMANTLE_VALIDATION_DELAY,
+} from "../../../src/domain/layout/dismantle";
+import {
   recordDismantleStart,
   getDismantlePlans,
   createDismantlePlan,
   clearDismantlePlan,
-  transitionDismantlePlan,
-  isRoomInDefense,
   markLinkConstrained,
-  isLinkConstrained,
   clearDeadAssetLink,
-  DISMANTLE_COOLDOWN,
-  DISMANTLE_TTL,
-  DISMANTLE_VALIDATION_DELAY,
 } from "../../../src/systems/link-system";
 import { globalCache } from "../../../src/kernel/global-cache";
 import type { DismantlePlan } from "../../../src/kernel/global-cache";
@@ -33,26 +35,26 @@ beforeEach(() => {
 
 describe("P1-4 拆改冷却（DISMANTLE_COOLDOWN）", () => {
   it("未记录过冷却 → isDismantleOnCooldown 返回 false", () => {
-    expect(isDismantleOnCooldown("W7N4", 1000)).toBe(false);
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", 1000)).toBe(false);
   });
 
   it("recordDismantleStart 后冷却期内 → isDismantleOnCooldown 返回 true", () => {
     recordDismantleStart("W7N4", 1000);
-    expect(isDismantleOnCooldown("W7N4", 1000)).toBe(true);
-    expect(isDismantleOnCooldown("W7N4", 1999)).toBe(true);
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", 1000)).toBe(true);
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", 1999)).toBe(true);
   });
 
   it("超过 DISMANTLE_COOLDOWN 后冷却过期 → isDismantleOnCooldown 返回 false", () => {
     recordDismantleStart("W7N4", 1000);
     const expiry = 1000 + DISMANTLE_COOLDOWN;
-    expect(isDismantleOnCooldown("W7N4", expiry - 1)).toBe(true);
-    expect(isDismantleOnCooldown("W7N4", expiry)).toBe(false);
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", expiry - 1)).toBe(true);
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", expiry)).toBe(false);
   });
 
   it("不同房间独立冷却", () => {
     recordDismantleStart("W7N4", 1000);
-    expect(isDismantleOnCooldown("W7N4", 1000)).toBe(true);
-    expect(isDismantleOnCooldown("W3N7", 1000)).toBe(false);
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", 1000)).toBe(true);
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W3N7", 1000)).toBe(false);
   });
 
   it("冷却记录写入 globalCache.lastDismantleTick", () => {
@@ -87,7 +89,7 @@ describe("P1-4 createDismantlePlan — 计划创建", () => {
 
   it("createDismantlePlan 同时记录冷却 tick（原子化）", () => {
     createDismantlePlan("link1", "W7N4", "key1", { x: 10, y: 11 }, 1000);
-    expect(isDismantleOnCooldown("W7N4", 1000)).toBe(true);
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", 1000)).toBe(true);
     expect(globalCache().lastDismantleTick?.get("W7N4")).toBe(1000);
   });
 
@@ -138,7 +140,7 @@ describe("P1-4 transitionDismantlePlan — 状态转移纯函数", () => {
       expiresAt: 1000 + DISMANTLE_TTL,
       state: "waiting",
     };
-    const result = transitionDismantlePlan(plan, 1500);
+    const result = transitionDismantlePlanDomain(plan, 1500);
     expect(result.state).toBe("validating");
     expect(result.validatingSince).toBe(1500);
   });
@@ -154,7 +156,7 @@ describe("P1-4 transitionDismantlePlan — 状态转移纯函数", () => {
       state: "validating",
       validatingSince: 1500,
     };
-    const result = transitionDismantlePlan(plan, 1600);
+    const result = transitionDismantlePlanDomain(plan, 1600);
     expect(result.state).toBe("validating");
     expect(result.validatingSince).toBe(1500); // 不更新
   });
@@ -169,7 +171,7 @@ describe("P1-4 transitionDismantlePlan — 状态转移纯函数", () => {
       expiresAt: 1000 + DISMANTLE_TTL,
       state: "waiting",
     };
-    const result = transitionDismantlePlan(plan, 1500);
+    const result = transitionDismantlePlanDomain(plan, 1500);
     expect(plan.state).toBe("waiting"); // 原对象不变
     expect(result).not.toBe(plan); // 新对象
   });
@@ -179,26 +181,26 @@ describe("P1-4 transitionDismantlePlan — 状态转移纯函数", () => {
 
 describe("P1-4 isRoomInDefense — 战时判定", () => {
   it("colonyState 未设置 → false（peace）", () => {
-    expect(isRoomInDefense("W7N4")).toBe(false);
+    expect(isRoomInDefenseDomain(Memory.rooms["W7N4"]?.colonyState)).toBe(false);
   });
 
   it("colonyState === 'defense' → true", () => {
     (globalThis as any).Memory.rooms.W7N4.colonyState = "defense";
-    expect(isRoomInDefense("W7N4")).toBe(true);
+    expect(isRoomInDefenseDomain(Memory.rooms["W7N4"]?.colonyState)).toBe(true);
   });
 
   it("colonyState === 'normal' → false", () => {
     (globalThis as any).Memory.rooms.W7N4.colonyState = "normal";
-    expect(isRoomInDefense("W7N4")).toBe(false);
+    expect(isRoomInDefenseDomain(Memory.rooms["W7N4"]?.colonyState)).toBe(false);
   });
 
   it("colonyState === 'bootstrap' → false（早期不算战时）", () => {
     (globalThis as any).Memory.rooms.W7N4.colonyState = "bootstrap";
-    expect(isRoomInDefense("W7N4")).toBe(false);
+    expect(isRoomInDefenseDomain(Memory.rooms["W7N4"]?.colonyState)).toBe(false);
   });
 
   it("房间无 Memory 条目 → false", () => {
-    expect(isRoomInDefense("UNKNOWN_ROOM")).toBe(false);
+    expect(isRoomInDefenseDomain(Memory.rooms["UNKNOWN_ROOM"]?.colonyState)).toBe(false);
   });
 });
 
@@ -236,7 +238,7 @@ describe("P1-4 完整生命周期场景模拟", () => {
     expect(plan.state).toBe("waiting");
 
     // 2. 替代 link 建成 → 转 validating
-    const validatingPlan = transitionDismantlePlan(plan, 1500);
+    const validatingPlan = transitionDismantlePlanDomain(plan, 1500);
     expect(validatingPlan.state).toBe("validating");
     expect(validatingPlan.validatingSince).toBe(1500);
 
@@ -276,30 +278,30 @@ describe("P1-4 完整生命周期场景模拟", () => {
 
     expect(getDismantlePlans().has("deadLink1")).toBe(false);
     // linkConstrained 标记存在（避免重复拆改空转）
-    expect(isLinkConstrained("W7N4", validationExpiredTick)).toBe(true);
+    expect(isLinkConstrainedDomain(globalCache().linkConstrained, "W7N4", validationExpiredTick)).toBe(true);
   });
 
   it("场景4：战时暂停（defense 期间不处理，恢复 peace 后继续）", () => {
     createDismantlePlan("deadLink1", "W7N4", "replacement.key", { x: 15, y: 16 }, 1000);
     // 进入 defense 状态
     (globalThis as any).Memory.rooms.W7N4.colonyState = "defense";
-    expect(isRoomInDefense("W7N4")).toBe(true);
+    expect(isRoomInDefenseDomain(Memory.rooms["W7N4"]?.colonyState)).toBe(true);
 
     // 战时：计划保留（不被处理）
     expect(getDismantlePlans().has("deadLink1")).toBe(true);
 
     // 恢复 peace
     (globalThis as any).Memory.rooms.W7N4.colonyState = "normal";
-    expect(isRoomInDefense("W7N4")).toBe(false);
+    expect(isRoomInDefenseDomain(Memory.rooms["W7N4"]?.colonyState)).toBe(false);
     // 计划仍在（可继续处理）
     expect(getDismantlePlans().has("deadLink1")).toBe(true);
   });
 
   it("场景5：冷却期内不创建新计划（避免同房频繁拆改）", () => {
     createDismantlePlan("deadLink1", "W7N4", "key1", { x: 15, y: 16 }, 1000);
-    expect(isDismantleOnCooldown("W7N4", 1500)).toBe(true); // 冷却期内
-    expect(isDismantleOnCooldown("W7N4", 1999)).toBe(true);
-    expect(isDismantleOnCooldown("W7N4", 2000)).toBe(false); // 冷却过期
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", 1500)).toBe(true); // 冷却期内
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", 1999)).toBe(true);
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", 2000)).toBe(false); // 冷却过期
   });
 
   it("场景6：先建替代后拆旧（验证状态顺序）", () => {
@@ -393,7 +395,7 @@ describe("P1-1 回归：ttl 到期 abort 防 churn", () => {
 
     // 验证：三重副作用
     expect(getDismantlePlans().has("deadLink1")).toBe(false); // 计划清除
-    expect(isLinkConstrained("W7N4", 2500)).toBe(true); // 标记受限
+    expect(isLinkConstrainedDomain(globalCache().linkConstrained, "W7N4", 2500)).toBe(true); // 标记受限
     expect(cache.deadAssetSince.has("deadLink1")).toBe(false); // 死资产计时器清除
   });
 
@@ -402,12 +404,12 @@ describe("P1-1 回归：ttl 到期 abort 防 churn", () => {
     const plan = getDismantlePlans().get("deadLink1")!;
 
     simulateTtlAbort(plan, 2500);
-    expect(isLinkConstrained("W7N4", 2500)).toBe(true);
+    expect(isLinkConstrainedDomain(globalCache().linkConstrained, "W7N4", 2500)).toBe(true);
 
     // 模拟 layout-planner 检查：linkConstrained 期内跳过 link 任务创建
     //（isLinkConstrained 内部用 LINK_CONSTRAINED_RETRY_INTERVAL=1000 判定）
-    expect(isLinkConstrained("W7N4", 3499)).toBe(true); // 仍受限
-    expect(isLinkConstrained("W7N4", 3500)).toBe(false); // 过期，可重试
+    expect(isLinkConstrainedDomain(globalCache().linkConstrained, "W7N4", 3499)).toBe(true); // 仍受限
+    expect(isLinkConstrainedDomain(globalCache().linkConstrained, "W7N4", 3500)).toBe(false); // 过期，可重试
   });
 
   it("ttl 未到期 → 不触发 abort 副作用", () => {
@@ -419,7 +421,7 @@ describe("P1-1 回归：ttl 到期 abort 防 churn", () => {
     simulateTtlAbort(plan, 2499);
 
     expect(getDismantlePlans().has("deadLink1")).toBe(true); // 计划仍在
-    expect(isLinkConstrained("W7N4", 2499)).toBe(false); // 未标记受限
+    expect(isLinkConstrainedDomain(globalCache().linkConstrained, "W7N4", 2499)).toBe(false); // 未标记受限
   });
 
   it("ttl 到期 abort 与 fallback 策略一致（都标记 linkConstrained）", () => {
@@ -434,8 +436,8 @@ describe("P1-1 回归：ttl 到期 abort 防 churn", () => {
     clearDismantlePlan("deadB");
 
     // 两种路径都标记 linkConstrained — churn 防护一致
-    expect(isLinkConstrained("W7N4", 2500)).toBe(true);
-    expect(isLinkConstrained("W3N7", 2000)).toBe(true);
+    expect(isLinkConstrainedDomain(globalCache().linkConstrained, "W7N4", 2500)).toBe(true);
+    expect(isLinkConstrainedDomain(globalCache().linkConstrained, "W3N7", 2000)).toBe(true);
   });
 
   it("重开稳定性：global reset 后 linkConstrained 标记丢失 → 不影响死资产重新评估", () => {
@@ -444,13 +446,13 @@ describe("P1-1 回归：ttl 到期 abort 防 churn", () => {
     createDismantlePlan("deadLink1", "W7N4", "key1", { x: 15, y: 16 }, 1000);
     const plan = getDismantlePlans().get("deadLink1")!;
     simulateTtlAbort(plan, 2500);
-    expect(isLinkConstrained("W7N4", 2500)).toBe(true);
+    expect(isLinkConstrainedDomain(globalCache().linkConstrained, "W7N4", 2500)).toBe(true);
 
     // 模拟 global reset：清空 globalCache
     resetGlobals();
 
     // 重开后：linkConstrained 丢失 → 可重新评估（但需死资产检测重新积累）
-    expect(isLinkConstrained("W7N4", 9999)).toBe(false);
+    expect(isLinkConstrainedDomain(globalCache().linkConstrained, "W7N4", 9999)).toBe(false);
     expect(getDismantlePlans().size).toBe(0); // 计划也丢失
   });
 });

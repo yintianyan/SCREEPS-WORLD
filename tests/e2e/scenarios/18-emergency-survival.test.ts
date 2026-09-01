@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
+import { injectCpu } from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 const ROOM = "W0N1";
@@ -41,7 +42,7 @@ describe("E2E-018 Emergency Survival Mode — 进入/保持/退出", () => {
       errorsSeen += logs.filter(isJsError).length;
 
       // ── ①注入 bucket=50 → ESM 进入 ──
-      await runner.setUserCpu({ cpuAvailable: 50 });
+      await injectCpu(runner, { cpuAvailable: 50 });
       logs = (await runner.runTicks(200)).flatMap((s) => s.consoleLogs);
       errorsSeen += logs.filter(isJsError).length;
       const enterSeen = logs.some((l) => l.includes("emergency survival: ENTER"));
@@ -63,7 +64,7 @@ describe("E2E-018 Emergency Survival Mode — 进入/保持/退出", () => {
 
       // ── ②注入 bucket=400 + cpu=1（净流失）→ 带内保持（不退出）──
       // ESM 让位后用量低于 2，cpu=2 会净回流爬过 500 合法退出——cpu=1 保持带内。
-      await runner.setUserCpu({ cpu: 1, cpuAvailable: 400 });
+      await injectCpu(runner, { cpu: 1, cpuAvailable: 400 });
       logs = (await runner.runTicks(200)).flatMap((s) => s.consoleLogs);
       errorsSeen += logs.filter(isJsError).length;
       const exitDuringBand = logs.some((l) => l.includes("emergency survival: EXIT"));
@@ -73,7 +74,7 @@ describe("E2E-018 Emergency Survival Mode — 进入/保持/退出", () => {
       ).toBe(false);
 
       // ── ③注入 bucket=800 → 退出 ──
-      await runner.setUserCpu({ cpuAvailable: 800 });
+      await injectCpu(runner, { cpuAvailable: 800 });
       logs = (await runner.runTicks(200)).flatMap((s) => s.consoleLogs);
       errorsSeen += logs.filter(isJsError).length;
       const exitSeen = logs.some((l) => l.includes("emergency survival: EXIT"));

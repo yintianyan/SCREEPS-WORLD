@@ -52,6 +52,14 @@ export async function injectFriendlyCreep(
   await runner.worldBuilder.addFriendlyCreep(room, x, y, body, name, memory);
 }
 
+/** L2 场景注入：敌方有主塔（war 目标形态）。 */
+export async function injectHostileTower(
+  runner: ScenarioRunner, room: string, x: number, y: number,
+  username = "Enemy",
+): Promise<void> {
+  await runner.worldBuilder.addHostileTower(room, x, y, username);
+}
+
 /**
  * L1 环境注入：spawn 能量水位（FREEZE R20/T6；07-energy-crisis 前提真实化）。
  * store 与 legacy energy 双写 —— mockup 分裂脑缺陷：孵化容量检查读 legacy

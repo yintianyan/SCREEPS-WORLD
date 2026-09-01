@@ -25,6 +25,7 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
+import { injectEnemyRoom, injectHostileTower, injectFriendlyCreep, injectHostile } from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 const HOME = "W0N1";
@@ -137,7 +138,7 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
     });
     // 不可破塔（hits 100000），放在 W0N1 入口侧（x=10）——编队 advance 后进房
     // 即入火圈（range ≤10，300-450 伤害/发），战损波次快速累积触发止损。
-    await runner.worldBuilder.addHostileTower(TARGET, 10, 25, "Enemy");
+    await injectHostileTower(runner, TARGET, 10, 25, "Enemy");
   }, 120000);
 
   afterAll(async () => {
@@ -164,7 +165,7 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
         if (i % 2 === 0) {
           const spot = scoutSpots[(i / 2) % scoutSpots.length] ?? [45, 25];
           const [sx, sy] = spot;
-          await runner.worldBuilder.addFriendlyCreep(TARGET, sx, sy, ["move"], `scout-wt-${i}`, {
+          await injectFriendlyCreep(runner, TARGET, sx, sy, ["move"], `scout-wt-${i}`, {
             role: "scout", home: HOME, remoteTarget: TARGET,
           });
         }
@@ -173,8 +174,8 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
         // 路径（anyRecovery && !liveThreat）从经济侧彻底封死，war 姿态由
         // threatRecent（invader 注入刷新）单独稳定支撑。
         if (i % 5 === 0) {
-          await runner.worldBuilder.addFriendlyCreep(HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-a`, { role: "harvester", home: HOME });
-          await runner.worldBuilder.addFriendlyCreep(HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-b`, { role: "harvester", home: HOME });
+          await injectFriendlyCreep(runner, HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-a`, { role: "harvester", home: HOME });
+          await injectFriendlyCreep(runner, HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-b`, { role: "harvester", home: HOME });
         }
         // 每 1250t（i%5==0）补种驻留 invader（无甲 [attack,move]：defender 快速
         // 猎杀 → threatAssessments 窗口极短 → canonical planner 静默、legacy
@@ -182,7 +183,7 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
         if (i % 5 === 0) {
           const [ix, iy] = invaderSpots[invaderSeq % invaderSpots.length] ?? [46, 46];
           invaderSeq++;
-          await runner.worldBuilder.addHostileCreep(HOME, ix, iy, ["attack", "move"], `invader-${i}`, "invader");
+          await injectHostile(runner, HOME, ix, iy, ["attack", "move"], `invader-${i}`, "invader");
         }
 
         // 止损链探针：posture/spawned/tgt/phase + warBlacklist + warStandDownUntil。

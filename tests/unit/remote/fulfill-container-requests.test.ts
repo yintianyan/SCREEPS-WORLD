@@ -90,7 +90,7 @@ function setupWorld(opts: {
   for (const c of creeps) creepMap[c.name] = c;
   (globalThis as any).Game.creeps = creepMap;
   syncSquadIndex();
-  // Game.getObjectById 不覆盖 — resetGlobals 已设置为读 role-helpers 的 objectRegistry，
+  // Game.getObjectById 不覆盖 — resetGlobals 已设置为读 factories 的 objectRegistry，
   // mockSource 调用 registerObject 注册 source，默认 mock 自动找到。
 
   const roomMap: Record<string, any> = {};
