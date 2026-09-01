@@ -218,6 +218,13 @@ export const remoteMiningManagerSystem: System = {
           }
         }
 
+        // dangerUntil 失明保护：失明（observed=undefined）且 threatUntil 已清除但
+        // dangerUntil 仍有效时，继续冻结经济孵化。该房最近发生过危险事件，
+        // 冷却期内不给对手送兵。有视野时信任新鲜观测，不应用此保护。
+        if (observed === undefined && remoteThreats[rn] !== true && op.dangerUntil !== undefined && ctx.tick < op.dangerUntil) {
+          remoteThreats[rn] = true;
+        }
+
         // A5.1：对有视野且确认有威胁的远矿房做结构化防御决策。
         // 仅在有视野 (observed !== undefined) 且有威胁 (remoteThreats[rn] === true) 时调用。
         // 无视野时维持现有 threatUntil 逻辑（失明保持），不做决策（信息不足）。
