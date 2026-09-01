@@ -181,7 +181,7 @@ export function planLinkTransfers(
     controllerLink &&
     controllerNeeds > 0
   ) {
-    const targetFree = controllerLink.energyCapacity - controllerLink.energy;
+    const targetFree = controllerLink.energyCapacity - controllerLink.energy - controllerReceived;
     const sendAmount = Math.min(
       storageLink.energy,
       targetFree,

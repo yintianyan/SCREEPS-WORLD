@@ -63,10 +63,10 @@ describe("Links — planLinkTransfers", () => {
     ];
     const transfers = planLinkTransfers(links);
     // 损耗补偿：s1 发 500 → 到账 485，controller 仍缺 15；
-    // storage→controller 补缺口（sendForNeeds(15)=16）。
+    // storage→controller 补缺口（targetFree=15, sendForNeeds(15)=16 → 受 targetFree 限制发 15）。
     expect(transfers).toHaveLength(2);
     expect(transfers[0]).toEqual({ fromId: "s1", toId: "c1", amount: 500 });
-    expect(transfers[1]).toEqual({ fromId: "st", toId: "c1", amount: 16 });
+    expect(transfers[1]).toEqual({ fromId: "st", toId: "c1", amount: 15 });
   });
 
   it("controllerTargetEnergy=0（RCL8 停供）→ source 全流 storage hub", () => {
@@ -108,7 +108,7 @@ describe("Links — planLinkTransfers", () => {
     // link 每 tick 只能传输一次。两个 source link：一个填 controller，一个补缺口。
     // 损耗补偿：s1 发 300 → 到账 291，controller 仍缺 9；
     // s2 补 controller 缺口（targetFree=9, sendForNeeds(9)=10 → 受 targetFree 限制发 9，
-    // 到账 8，controller 仍缺 1 — 下 tick 补齐）。
+    // 到账 8，controller 仍缺 1 — 由 Step 3 storage→controller 补齐）。
     const links = [
       link("s1", "source", 300),
       link("s2", "source", 400),
@@ -116,10 +116,12 @@ describe("Links — planLinkTransfers", () => {
       link("st", "storage", 300),    // free 500
     ];
     const transfers = planLinkTransfers(links);
-    expect(transfers).toHaveLength(2);
+    expect(transfers).toHaveLength(3);
     expect(transfers[0]).toEqual({ fromId: "s1", toId: "c1", amount: 300 });
-    // s1 到账 291，controller 仍缺 9 → s2 发 9（targetFree=9 限制）
+    // s1 到账 291，controller 仍缺 9 → s2 发 9（targetFree=9 限制），到账 8
     expect(transfers[1]).toEqual({ fromId: "s2", toId: "c1", amount: 9 });
+    // controller 仍缺 1 → storage→controller 补齐（targetFree=1，发 1，到账 0 — 下 tick 再补）
+    expect(transfers[2]).toEqual({ fromId: "st", toId: "c1", amount: 1 });
   });
 
   it("uses multiple source links to fill controller", () => {
