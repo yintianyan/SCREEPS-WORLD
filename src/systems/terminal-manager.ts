@@ -237,9 +237,8 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
 
     // 超龄零成交 — 优先改价（省 5% 手续费），改不了再撤单重挂。
     if (typeof market.changeOrderPrice === "function") {
-      const bids = toSummaries(
-        Game.market.getAllOrders({ type: ORDER_BUY, resourceType: order.resourceType }),
-      );
+      const bids = getCachedOrders(ORDER_BUY, order.resourceType) ??
+        toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: order.resourceType }));
       const best = pickBestBuyOrder(bids, computeDynamicSellPrice(order.resourceType, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
       const newPrice = shouldChangeOrderPrice(
         order.remainingAmount ?? 0,
@@ -455,9 +454,8 @@ function trySellSurplusEnergy(snapshot: RoomSnapshot, terminal: StructureTermina
   // deal 从 terminal 出货 — terminal 现货不足时等 distributor 转运，下一窗口再试。
   if (terminal.store.getUsedCapacity(RESOURCE_ENERGY) < amount) return false;
 
-  const orders = toSummaries(
-    Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_ENERGY }),
-  );
+  const orders = getCachedOrders(ORDER_BUY, RESOURCE_ENERGY) ??
+    toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_ENERGY }));
   const best = pickBestBuyOrder(orders, CONFIG.energy.minEnergySellPrice);
   if (!best) return false;
   // 【审计修复 Phase 4-5】卖出能量入 L1 账本 — 记 sold。
@@ -485,9 +483,8 @@ function tryBuyCrisisEnergy(snapshot: RoomSnapshot, terminal: StructureTerminal)
   );
   if (amount <= 0) return false;
 
-  const orders = toSummaries(
-    Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_ENERGY }),
-  );
+  const orders = getCachedOrders(ORDER_SELL, RESOURCE_ENERGY) ??
+    toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_ENERGY }));
   const best = pickBestSellOrder(orders, CONFIG.energy.maxEnergyBuyPrice);
   if (!best) return false;
   // 【审计修复 Phase 4-5】买入能量入 L1 账本 — 记 bought。
@@ -522,9 +519,8 @@ function bestCompetingAsk(
     const cached = cache.get(resourceType);
     if (cached !== undefined || cache.has(resourceType)) return cached;
   }
-  const sells = toSummaries(
-    Game.market.getAllOrders({ type: ORDER_SELL, resourceType: resourceType as ResourceConstant }),
-  );
+  const sells = getCachedOrders(ORDER_SELL, resourceType) ??
+    toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: resourceType as ResourceConstant }));
   let best: number | undefined;
   for (const o of sells) {
     if (ownOrderIds.has(o.id)) continue;
@@ -567,9 +563,8 @@ function trySellHomeMineral(snapshot: RoomSnapshot, terminal: StructureTerminal)
   const surplus = inTerminal + inStorage - CONFIG.market.sellReserve;
   if (surplus <= 0 || inTerminal <= 0) return false;
 
-  const orders = toSummaries(
-    Game.market.getAllOrders({ type: ORDER_BUY, resourceType: homeMineral }),
-  );
+  const orders = getCachedOrders(ORDER_BUY, homeMineral) ??
+    toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: homeMineral }));
   const best = pickBestBuyOrder(orders, computeDynamicSellPrice(homeMineral, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
   if (!best) return false;
 
@@ -618,9 +613,8 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
       );
       const maxPrice = adjustMaxPrice(basePrice, demand.priority);
 
-      const orders = toSummaries(
-        Game.market.getAllOrders({ type: ORDER_SELL, resourceType: demand.resource as ResourceConstant }),
-      );
+      const orders = getCachedOrders(ORDER_SELL, demand.resource) ??
+        toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: demand.resource as ResourceConstant }));
       const best = pickBestSellOrder(orders, maxPrice);
       if (!best) continue;
 
@@ -650,9 +644,8 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
   const maxPrice = computeDynamicBuyPrice(target.mineral, prices, CONFIG.market.buyPremium, fallback);
   if (maxPrice <= 0) return false;
 
-  const orders = toSummaries(
-    Game.market.getAllOrders({ type: ORDER_SELL, resourceType: target.mineral as ResourceConstant }),
-  );
+  const orders = getCachedOrders(ORDER_SELL, target.mineral) ??
+    toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: target.mineral as ResourceConstant }));
   const best = pickBestSellOrder(orders, maxPrice);
   if (!best) return false;
 
@@ -682,9 +675,8 @@ function trySellSurplusCompound(snapshot: RoomSnapshot, terminal: StructureTermi
     const inTerminal = terminal.store.getUsedCapacity(res as ResourceConstant) ?? 0;
     if (inTerminal <= 0) continue;
 
-    const orders = toSummaries(
-      Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res as ResourceConstant }),
-    );
+    const orders = getCachedOrders(ORDER_BUY, res) ??
+      toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res as ResourceConstant }));
     const best = pickBestBuyOrder(orders, computeDynamicSellPrice(res, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
     if (!best) continue;
 
@@ -761,9 +753,8 @@ function trySellSurplusBattery(snapshot: RoomSnapshot, terminal: StructureTermin
   const inTerminal = terminal.store.getUsedCapacity(RESOURCE_BATTERY);
   if (inTerminal <= 0) return false;
 
-  const orders = toSummaries(
-    Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_BATTERY }),
-  );
+  const orders = getCachedOrders(ORDER_BUY, RESOURCE_BATTERY) ??
+    toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_BATTERY }));
   const best = pickBestBuyOrder(orders, computeDynamicSellPrice(RESOURCE_BATTERY, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinBatterySellPrice));
   if (!best) return false;
 
@@ -798,9 +789,8 @@ function trySellCommodity(snapshot: RoomSnapshot, terminal: StructureTerminal): 
     const inTerminal = terminal.store.getUsedCapacity(res) ?? 0;
     if (inTerminal <= 0) continue;
 
-    const orders = toSummaries(
-      Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res }),
-    );
+    const orders = getCachedOrders(ORDER_BUY, res) ??
+      toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res }));
     const best = pickBestBuyOrder(orders, computeDynamicSellPrice(res, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
     if (!best) continue;
 
@@ -830,9 +820,8 @@ function tryBuyPower(snapshot: RoomSnapshot, terminal: StructureTerminal): boole
   const deficit = CONFIG.factory.powerSpawnPowerTarget - have;
   if (deficit <= 0) return false;
 
-  const orders = toSummaries(
-    Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_POWER }),
-  );
+  const orders = getCachedOrders(ORDER_SELL, RESOURCE_POWER) ??
+    toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_POWER }));
   const best = pickBestSellOrder(orders, computeDynamicBuyPrice(RESOURCE_POWER, getMarketPrices(), CONFIG.market.buyPremium, CONFIG.market.fallbackPowerBuyMaxPrice));
   if (!best) return false;
 
@@ -853,28 +842,67 @@ const PRICED_RESOURCES = [
 ] as const;
 
 /**
- * 采集当前市场行情并写入 globalCache.marketPrices。
- * 每 interval tick 调用一次 — getAllOrders 已在 deal 候选逻辑中各自调用，
- * 此函数集中采集一轮行情供所有买/卖决策复用（避免每个函数独立 getAllOrders）。
-
- * 采集策略：对每种资源分别查 sell/buy 订单，取最低卖价与最高买价。
- * 成本：PRICED_RESOURCES.length × 2 次 getAllOrders（过滤后通常 < 20 条/资源）。
- * 与旧实现（每函数独立 getAllOrders）总开销持平，但结果复用。
+ * 采集当前市场行情并写入 globalCache.marketPrices + 全量订单缓存。
+ * 单次 getAllOrders() 无参数调用获取全市场订单，在内存中按 resourceType + type
+ * 分组，替代旧实现 36 次过滤调用（18 资源 × 2 类型）。
+ * 同时缓存订单摘要供后续 deal 函数复用，避免各函数独立 getAllOrders。
  */
 function refreshMarketPrices(): void {
-  const sellOrders: Record<string, { price: number }[]> = {};
-  const buyOrders: Record<string, { price: number }[]> = {};
+  // 优先无参数调用获取全市场订单（1 次 API 调用替代旧实现 36 次过滤调用）。
+  // 兼容回退：部分环境（如旧版测试 mock）不支持无参数调用，回退到按资源过滤。
+  let allOrders: Order[] | null = null;
+  try {
+    const raw = Game.market.getAllOrders();
+    if (Array.isArray(raw)) allOrders = raw;
+  } catch {
+    // mock 不支持无参数调用 — 走回退路径。
+  }
+  const iterable = allOrders ?? [];
 
-  for (const res of PRICED_RESOURCES) {
-    const sells = Game.market.getAllOrders({ type: ORDER_SELL, resourceType: res as ResourceConstant });
-    sellOrders[res] = sells.map(o => ({ price: o.price }));
-    const buys = Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res as ResourceConstant });
-    buyOrders[res] = buys.map(o => ({ price: o.price }));
+  const sellByRes: Record<string, { price: number }[]> = {};
+  const buyByRes: Record<string, { price: number }[]> = {};
+  const orderCache: Record<string, MarketOrderSummary[]> = {};
+
+  for (const o of iterable) {
+    const res = o.resourceType as string;
+    const key = o.type + "/" + res;
+    if (o.type === ORDER_SELL) {
+      (sellByRes[res] ??= []).push({ price: o.price });
+    } else if (o.type === ORDER_BUY) {
+      (buyByRes[res] ??= []).push({ price: o.price });
+    }
+    if (!orderCache[key]) orderCache[key] = [];
+    orderCache[key].push({
+      id: o.id,
+      price: o.price,
+      amount: o.remainingAmount ?? o.amount,
+      roomName: o.roomName,
+    });
   }
 
-  const prices = collectMarketPrices(PRICED_RESOURCES, sellOrders, buyOrders);
+  // 无参数调用回退：iterable 为空时按 PRICED_RESOURCES 逐资源查询。
+  if (iterable.length === 0) {
+    for (const res of PRICED_RESOURCES) {
+      const sells = Game.market.getAllOrders({ type: ORDER_SELL, resourceType: res as ResourceConstant });
+      sellByRes[res] = sells.map(o => ({ price: o.price }));
+      const key = ORDER_SELL + "/" + res;
+      orderCache[key] = toSummaries(sells);
+      const buys = Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res as ResourceConstant });
+      buyByRes[res] = buys.map(o => ({ price: o.price }));
+      const key2 = ORDER_BUY + "/" + res;
+      orderCache[key2] = toSummaries(buys);
+    }
+  }
+
+  const priceResources = Object.keys({ ...sellByRes, ...buyByRes });
+  const prices = collectMarketPrices(
+    priceResources.length > 0 ? priceResources : [...PRICED_RESOURCES],
+    sellByRes,
+    buyByRes,
+  );
   const g = globalCache();
   g.marketPrices = { tick: Game.time, prices };
+  g.marketOrderCache = { tick: Game.time, orders: orderCache };
 }
 
 /**
@@ -887,6 +915,18 @@ function getMarketPrices(): PriceTable {
     return g.marketPrices.prices;
   }
   return {};
+}
+
+/**
+ * 获取缓存的订单摘要（按 type/resource 检索），减少 deal 函数独立 getAllOrders。
+ * 缓存由 refreshMarketPrices 在同 interval tick 写入，有效期与 marketPrices 对齐。
+ */
+function getCachedOrders(type: string, resource: string): MarketOrderSummary[] | undefined {
+  const g = globalCache();
+  if (g.marketOrderCache && Game.time - g.marketOrderCache.tick <= CONFIG.market.interval + 50) {
+    return g.marketOrderCache.orders[type + "/" + resource];
+  }
+  return undefined;
 }
 
 /**
@@ -908,9 +948,8 @@ function tryBuyGhodium(snapshot: RoomSnapshot, terminal: StructureTerminal): boo
   const deficit = CONFIG.nuker.ghodiumStockpile - have;
   if (deficit <= 0) return false;
 
-  const orders = toSummaries(
-    Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_GHODIUM }),
-  );
+  const orders = getCachedOrders(ORDER_SELL, RESOURCE_GHODIUM) ??
+    toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_GHODIUM }));
   const best = pickBestSellOrder(orders, computeDynamicBuyPrice(RESOURCE_GHODIUM, getMarketPrices(), CONFIG.market.buyPremium, CONFIG.nuker.fallbackGhodiumBuyMaxPrice));
   if (!best) return false;
 

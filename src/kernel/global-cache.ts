@@ -164,6 +164,10 @@ export interface GlobalCache {
    * 所有买/卖决策以行情快照为基准计算动态价格门禁，替代 CONFIG 中的死价格。
    * heap 存储 — global reset 后首 tick 重建，无 schema 变更。 */
   marketPrices?: { tick: number; prices: Record<string, MarketPriceSnapshot> };
+  /** 市场全量订单缓存（与 marketPrices 同 interval 采集）。
+   * key = "type/resource"，value = 订单摘要列表。deal 函数优先从缓存读取，
+   * 缺失时回退独立 getAllOrders。heap 存储 — reset 后首 tick 重建。 */
+  marketOrderCache?: { tick: number; orders: Record<string, import("../domain/industry/terminal-policy").MarketOrderSummary[]> };
   /** Per-room CPU 记账：kernel.runCreeps 中每只 creep 执行后按 memory.home
    * 归集 CPU 消耗。telemetry-collector 采样写入 Memory.kernel.stats.cpuByHome，
    * 供 empire-strategy / capacity 模型评估每房真实 CPU 成本。

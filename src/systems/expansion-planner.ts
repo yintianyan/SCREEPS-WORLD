@@ -54,8 +54,42 @@ export const expansionPlannerSystem: System = {
       gclLevel: Game.gcl?.level ?? 1,
       ownedRoomCount: plannerInput.resourceView.roomCount,
       candidateCount: Memory.kernel?.expansionCandidates?.length ?? 0,
-      hasAdversaryPressure: false, // 简化：从 situation 派生，暂设 false
+      hasAdversaryPressure: false,
     });
+
+    // ── 步 5：从 Memory 反序列化已有 Plan（提前到 pressure 之后做早退判断） ──
+    let plans = deserializePlans(Memory.kernel?.expansionPlans);
+
+    // 早退：压力 LOW + 无活跃 Plan 需要重评 + 无候选变化 → 跳过全量管线。
+    // 仍持久化 dashboard 瘦快照保持外部可观测性，但跳过 step 2-4,6-9 的全量计算。
+    const hasActivePlan = plans.some(p =>
+      p.status === "EVALUATED" || p.status === "READY" ||
+      p.status === "APPROVED" || p.status === "WAITING_EXECUTION",
+    );
+    const existingCandidateCount = Memory.kernel?.expansionCandidates?.length ?? 0;
+    if (pressure.level === "LOW" && !hasActivePlan && existingCandidateCount === 0) {
+      if (!Memory.kernel) Memory.kernel = {};
+      const tieredBudgetFast = computeTieredBudget(plannerInput.budget);
+      Memory.kernel.expansionDashboard = {
+        tick: ctx.tick,
+        summary: `Expansion Dashboard @${ctx.tick} | Pressure=LOW(early-exit) | no candidates, no active plans`,
+      };
+      const g0 = globalCache();
+      g0.expansionDashboard = {
+        tick: ctx.tick,
+        pressure: { level: pressure.level, score: pressure.score, dimensions: pressure.dimensions },
+        readiness: {
+          readiness: plannerInput.readiness.readiness,
+          evidence: plannerInput.readiness.evidence,
+          failedGates: plannerInput.readiness.gates.filter(g => !g.passed).map(g => g.name),
+        },
+        budget: { available: tieredBudgetFast.availableExpansion, total: tieredBudgetFast.totalEnergy, coreInvaded: tieredBudgetFast.coreInvaded },
+        candidates: { total: 0, qualified: 0, rejected: 0, unknown: 0 },
+        plans: { active: 0, waitingExecution: 0 },
+        summary: `Expansion Dashboard @${ctx.tick} | Pressure=LOW(early-exit) | no candidates, no active plans`,
+      };
+      return;
+    }
 
     // ── 步 2：Candidate Discovery ──
     const ownedRoomNames = Array.from(ctx.snapshots()).map(s => s.roomName);
@@ -89,13 +123,9 @@ export const expansionPlannerSystem: System = {
     // ── 步 4：Candidate Ranking ──
     const ranked: RankedCandidate[] = rankCandidates(allCandidates, ctx.tick);
 
-    // ── 步 5：从 Memory 反序列化已有 Plan ──
-    let plans = deserializePlans(Memory.kernel?.expansionPlans);
-
     // ── 步 6：重评已有 Plan（经济/Intel 变化时） ──
     plans = plans.map(p => {
       if (needsReevaluation(p, ctx.tick)) {
-        // 简化重评：保持现有状态，仅更新 updatedAt
         return { ...p, updatedAt: ctx.tick };
       }
       return p;
@@ -112,8 +142,6 @@ export const expansionPlannerSystem: System = {
       ctx.tick - topCandidate.lastSeen,
       10000,
     ) : undefined;
-
-    // 评估 extended readiness (G12-G15)
     const extendedReadiness = evaluateExpansionReadinessExtended(
       topCandidate, cost, risk, tieredBudget,
     );
@@ -122,7 +150,6 @@ export const expansionPlannerSystem: System = {
     plans = plans.map(p => {
       if (p.status !== "EVALUATED" && p.status !== "READY") return p;
 
-      // 获取或创建 hysteresis 状态
       let h = hysteresisCache.get(p.planId);
       if (!h) {
         h = { plan: p, hysteresis: { readyTicks: 0, notReadyTicks: 0, lastEvalTick: ctx.tick } };
@@ -130,7 +157,6 @@ export const expansionPlannerSystem: System = {
         h = { plan: p, hysteresis: h.hysteresis };
       }
 
-      // 应用 hysteresis
       const result = applyHysteresis(h, isReady, ctx.tick);
       hysteresisCache.set(p.planId, result);
       return result.plan;
@@ -139,7 +165,6 @@ export const expansionPlannerSystem: System = {
     // ── 步 8：READY → APPROVED → WAITING_EXECUTION ──
     plans = plans.map(p => {
       if (p.status === "READY") {
-        // 检查决策是否 APPROVE
         const decision = explainDecision({
           plan: p,
           pressure,
@@ -171,9 +196,6 @@ export const expansionPlannerSystem: System = {
 
       const dedupResult = deduplicatePlans(plans, newPlan);
       plans = dedupResult.plans;
-      if (dedupResult.deduplicated) {
-        // 已有同 roomName Plan，检查是否需要更新评分
-      }
     }
 
     // ── 步 10：清理终态 Plan ──
@@ -194,17 +216,14 @@ export const expansionPlannerSystem: System = {
       plans,
     });
 
-    // ── 写入 heap 缓存 ──
     const g = globalCache();
     g.expansionDashboard = dashboard;
 
-    // ── 写入 Memory 瘦快照 ──
     Memory.kernel.expansionDashboard = {
       tick: ctx.tick,
       summary: dashboard.summary,
     };
 
-    // ── 可观测性 ──
     log.info("expansion-planner", `expansion-planner: ${dashboard.summary}`);
   },
 };

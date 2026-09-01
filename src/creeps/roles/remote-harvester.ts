@@ -145,24 +145,36 @@ function rebindToVacantSource(creep: Creep, current: Source): Source | undefined
   return undefined;
 }
 
+/** 容器扫描冷却 tick 数 — container 不常变，缓存失效时也无需每 tick 扫描。 */
+const CONTAINER_RESCAN_INTERVAL = 10;
+
 /**
  * 查找 source 旁的 container（range<=1）。
- * P2 优化：缓存 containerId 到 memory.sourceContainerId，避免每 tick 调 lookForAtArea
- * （0.05-0.1 CPU/次）。失效条件：container 被摧毁（getObjectById 返回 null）。
+ * 缓存 containerId 到 memory.sourceContainerId，避免每 tick 调 lookForAtArea。
+ * 缓存命中时直接 getObjectById 返回，零 lookForAtArea 开销。
+ * 缓存失效（container 被摧毁）时降频重扫，避免每 tick lookForAtArea。
  */
 function findSourceContainer(creep: Creep, source: Source): StructureContainer | undefined {
   // 优先使用缓存的 containerId。
   if (creep.memory.sourceContainerId) {
     const cached = getObjectById(creep.memory.sourceContainerId as Id<StructureContainer>);
     if (cached) {
-      // 验证仍在 source 旁（防御性：container 可能被回收后在别处重建）。
       if (cached.pos.getRangeTo(source.pos) <= 1) return cached;
     }
-    // 缓存失效 — 清除并重新扫描。
+    // 缓存失效 — container 被摧毁或移位。
     creep.memory.sourceContainerId = undefined;
+    // 降频重扫：仅在跨 tick 缓存失效时降频（用 lastContainerScanTick 区分
+    // 同 tick 内首次找到但 getObjectById 不认 vs 跨 tick 的 container 摧毁）。
+    // 同 tick 内（lastContainerScanTick === Game.time）不降频，直接重扫。
+    if (creep.memory.lastContainerScanTick !== undefined &&
+        creep.memory.lastContainerScanTick !== Game.time) {
+      const phase = (Game.time + hashName(creep.name)) % CONTAINER_RESCAN_INTERVAL;
+      if (phase !== 0) return undefined;
+    }
   }
 
-  // 首次或缓存失效：lookForAtArea 扫描 source 周围 3x3 区域。
+  // 首次查找或降频窗口到达：lookForAtArea 扫描 source 周围 3x3 区域。
+  creep.memory.lastContainerScanTick = Game.time;
   const structures = creep.room.lookForAtArea(
     LOOK_STRUCTURES,
     Math.max(0, source.pos.y - 1),
@@ -174,12 +186,20 @@ function findSourceContainer(creep: Creep, source: Source): StructureContainer |
   for (const entry of structures) {
     if (entry.structure.structureType === STRUCTURE_CONTAINER) {
       const container = entry.structure as StructureContainer;
-      // 缓存 containerId，后续 tick 直接用 getObjectById 取回。
       creep.memory.sourceContainerId = container.id as Id<StructureContainer>;
       return container;
     }
   }
   return undefined;
+}
+
+/** 轻量名哈希 — 用于相位偏移分散扫描。 */
+function hashName(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) {
+    h = (h * 31 + name.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
 }
 
 /** 远矿采集 + 站桩倒能。 */

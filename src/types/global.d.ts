@@ -34,6 +34,8 @@ declare global {
     sourceId?: Id<Source>;
     /** remote-harvester 缓存的 source 旁 container ID（避免每 tick lookForAtArea）。 */
     sourceContainerId?: Id<_HasId>;
+    /** remote-harvester 上次扫描 container 的 tick — 降频重扫用，防止 container 被摧毁后每 tick lookForAtArea。 */
+    lastContainerScanTick?: number;
     /**
      * 远矿 container 建 site 失败冷却到期 tick（RM-1，P0-A 收编后由 remote-mining-manager 写入）—
      * 持久失败时放行 dropEnergy；只阻断 create 路径，不阻断 build。

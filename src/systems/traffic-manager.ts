@@ -74,6 +74,32 @@ export const trafficManagerSystem: System = {
 
     // 逐房解算并签发。
     for (const [roomName, batch] of batches) {
+      // 快路径：单房仅 1 个移动意图且无锚定时，目标格未被占 → 直接签发，跳过完整解算。
+      if (batch.intents.length <= 1 && batch.anchors.size === 0) {
+        if (batch.intents.length === 1) {
+          const intent = batch.intents[0]!;
+          const creep = Game.creeps[intent.name];
+          if (creep && !batch.immovable.has(intent.name)) {
+            const occupied = batch.occupancy.get(intent.to);
+            if (occupied === undefined) {
+              const tx = Math.floor(intent.to / 50);
+              const ty = intent.to % 50;
+              const dir = creep.pos.getDirectionTo(tx, ty);
+              if (dir) {
+                const result = creep.move(dir);
+                if (result === OK || result === ERR_TIRED) {
+                  recordTraffic(creep);
+                } else if (result !== ERR_BUSY) {
+                  invalidateCreepPath(intent.name);
+                }
+              }
+              continue;
+            }
+          }
+        }
+        // 无可签发意图或目标被占 → 走完整解算。
+        if (batch.intents.length === 0) continue;
+      }
       safeRun(`traffic-manager/${roomName}`, () => resolveAndDispatch(roomName, batch, ctx.getSnapshot(roomName)), false);
     }
   },
