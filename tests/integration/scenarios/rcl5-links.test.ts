@@ -225,13 +225,13 @@ describe("RCL5 Links — Link 系统", () => {
   });
 
   it("storage link → hauler → storage 闭环（link 物流链最后一公里）", () => {
-    // 场景：storage link 预填 800 能量，spawn/extension 全满，
-    // hauler 应从 storage link 取能并存入 storage。
-    const world = rcl5World({
-      sourceLinkEnergy: 0,
-      controllerLinkEnergy: 0,
-      storageLinkEnergy: 800,
-    });
+// 场景：storage link 预填 800 能量，controller link 预填满（防 Step 3 抢走 storage link 能量），
+// spawn/extension 全满，hauler 应从 storage link 取能并存入 storage。
+const world = rcl5World({
+  sourceLinkEnergy: 0,
+  controllerLinkEnergy: 800,
+  storageLinkEnergy: 800,
+});
 
     // hauler 站在 storage link 旁
     world.addCreep("haul1", "hauler", 27, 26, [
