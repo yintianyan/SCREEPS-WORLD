@@ -39,5 +39,10 @@ Object.assign(globalThis as Record<string, unknown>, {
       const ty = t.y ?? t.pos?.y ?? 0;
       return Math.max(Math.abs(this.x - tx), Math.abs(this.y - ty));
     }
+    isEqualTo(x: number | { x?: number; y?: number; pos?: { x: number; y: number } }, y?: number): boolean {
+      const tx = typeof x === "number" ? x : (x.x ?? x.pos?.x ?? 0);
+      const ty = typeof x === "number" ? (y ?? 0) : (x.y ?? x.pos?.y ?? 0);
+      return this.x === tx && this.y === ty;
+    }
   },
 });
