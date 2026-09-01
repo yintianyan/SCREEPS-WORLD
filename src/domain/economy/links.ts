@@ -118,14 +118,27 @@ export function planLinkTransfers(
   const meetsThreshold = (src: LinkInfo): boolean =>
     src.energy >= minTransfer || src.energy >= src.energyCapacity * NEAR_FULL_RATIO;
 
+  // 跟踪 controller 本 tick 已接收量（快照 energy 不反映同 tick 前序传输）。
+  let controllerReceived = 0;
+
+  // 源 link 每 tick 只能发起一次传输（引擎限制）。当 controller 接近满
+  // （缺口 < minTransfer 且非 urgent）且源 link 快满了时，跳过 controller 传输，
+  // 保留传输机会给 Step 2 排空到 storage — 避免「source link 花 800 容量的
+  // 传输冷却去给 controller 传 50 能量、剩余 750 溢出」的浪费。controller 的
+  // 少量缺口由 Step 3（storage → controller）在 link-system 层补齐。
+
+  // controller 是否值得 source link 传输：缺口 >= minTransfer 或 urgent。
+  const controllerWantsSource =
+    controllerNeeds > 0 && (controllerUrgent || controllerNeeds >= minTransfer);
+
   // 1. source → controller（最高优先：站桩升级供能）
   // 损耗补偿：目标缺口 N → 发送 sendForNeeds(N)，但不超源可用量与目标空闲容量。
   for (const src of sourceLinks) {
-    if (controllerNeeds <= 0) break;
+    if (!controllerWantsSource) break;
     if (!meetsThreshold(src) && !controllerUrgent) continue;
-    // 发送量 = min(源能量, 目标空闲容量, 损耗补偿后的需求发送量)
+    // 动态空闲 = 容量 - 快照能量 - 本 tick 已接收量。
     const targetFree = controllerLink
-      ? controllerLink.energyCapacity - controllerLink.energy
+      ? controllerLink.energyCapacity - controllerLink.energy - controllerReceived
       : 0;
     const sendAmount = Math.min(
       src.energy,
@@ -135,8 +148,9 @@ export function planLinkTransfers(
     if (sendAmount <= 0) continue;
     transfers.push({ fromId: src.id, toId: controllerLink!.id, amount: sendAmount });
     sent.add(src.id);
-    // 到账量 = receivedAfterLoss(sendAmount)，从剩余需求中扣除到账量。
-    controllerNeeds -= receivedAfterLoss(sendAmount);
+    const arrived = receivedAfterLoss(sendAmount);
+    controllerNeeds -= arrived;
+    controllerReceived += arrived;
   }
 
   // 2. source → storage（溢出回收）
