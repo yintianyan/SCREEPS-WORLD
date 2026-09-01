@@ -24,6 +24,11 @@ function posAt(x: number, y: number) {
     getDirectionTo(): number {
       return 3;
     },
+    isEqualTo(tx: number | { x?: number; y?: number; pos?: { x: number; y: number } }, ty?: number): boolean {
+      const px = typeof tx === "number" ? tx : (tx.x ?? tx.pos?.x ?? 0);
+      const py = typeof tx === "number" ? (ty ?? 0) : (tx.y ?? tx.pos?.y ?? 0);
+      return x === px && y === py;
+    },
   };
 }
 

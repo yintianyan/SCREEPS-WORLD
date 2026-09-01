@@ -162,11 +162,7 @@ export function mockPos(x = 25, y = 25, roomName = "W7N4"): MockPos {
     x,
     y,
     roomName,
-    getRangeTo: vi.fn((t: { x?: number; y?: number; pos?: { x: number; y: number } }) => {
-      const tx = t.x ?? t.pos?.x ?? 0;
-      const ty = t.y ?? t.pos?.y ?? 0;
-      return Math.max(Math.abs(x - tx), Math.abs(y - ty));
-    }),
+    getRangeTo: vi.fn(() => 1),
     getDirectionTo: vi.fn(() => 3), // RIGHT
     isEqualTo: vi.fn((tx: number | { x?: number; y?: number; pos?: { x: number; y: number } }, ty?: number) => {
       const px = typeof tx === "number" ? tx : (tx.x ?? tx.pos?.x ?? 0);

@@ -105,9 +105,10 @@ describe("Links — planLinkTransfers", () => {
   });
 
   it("sends remaining source to storage via second link when first fills controller", () => {
-    // link 每 tick 只能传输一次。两个 source link：一个填 controller，一个填 storage。
+    // link 每 tick 只能传输一次。两个 source link：一个填 controller，一个补缺口。
     // 损耗补偿：s1 发 300 → 到账 291，controller 仍缺 9；
-    // s2 补 controller 缺口（sendForNeeds(9)=10），无余量去 storage。
+    // s2 补 controller 缺口（targetFree=9, sendForNeeds(9)=10 → 受 targetFree 限制发 9，
+    // 到账 8，controller 仍缺 1 — 下 tick 补齐）。
     const links = [
       link("s1", "source", 300),
       link("s2", "source", 400),
@@ -117,8 +118,8 @@ describe("Links — planLinkTransfers", () => {
     const transfers = planLinkTransfers(links);
     expect(transfers).toHaveLength(2);
     expect(transfers[0]).toEqual({ fromId: "s1", toId: "c1", amount: 300 });
-    // s1 到账 291，controller 仍缺 9 → s2 发 10 补齐（到账 9）
-    expect(transfers[1]).toEqual({ fromId: "s2", toId: "c1", amount: 10 });
+    // s1 到账 291，controller 仍缺 9 → s2 发 9（targetFree=9 限制）
+    expect(transfers[1]).toEqual({ fromId: "s2", toId: "c1", amount: 9 });
   });
 
   it("uses multiple source links to fill controller", () => {

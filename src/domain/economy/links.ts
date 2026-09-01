@@ -128,8 +128,10 @@ export function planLinkTransfers(
   // 少量缺口由 Step 3（storage → controller）在 link-system 层补齐。
 
   // controller 是否值得 source link 传输：缺口 >= minTransfer 或 urgent。
+  // 无 storage link 时不跳过：source link 能量无处排空，跳过只会溢出。
   const controllerWantsSource =
-    controllerNeeds > 0 && (controllerUrgent || controllerNeeds >= minTransfer);
+    controllerNeeds > 0 &&
+    (controllerUrgent || controllerNeeds >= minTransfer || !storageLink);
 
   // 1. source → controller（最高优先：站桩升级供能）
   // 损耗补偿：目标缺口 N → 发送 sendForNeeds(N)，但不超源可用量与目标空闲容量。
