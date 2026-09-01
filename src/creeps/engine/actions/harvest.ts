@@ -102,6 +102,13 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       if (linkStand && (ac.creep.pos.x !== linkStand.x || ac.creep.pos.y !== linkStand.y)) {
         moveToTarget(ac.creep, linkStand);
       }
+      // 不在 container 上且无 linkStand → 移动到 container 站桩位。
+      // harvest 返回 OK 说明在 source range 1 内，但可能不在 container 上——
+      // 如 source 旁有多格可站，creep 落在非 container 格上，能采但够不到 container
+      // 倒能。move 与 harvest 是独立 intent，移动期间继续采集，零吞吐损失。
+      else if (container && !ac.creep.pos.isEqualTo(container.pos)) {
+        moveToTarget(ac.creep, container.pos, 0);
+      }
       // 同 tick 倒能：link 优先，其次 container（均需 range<=1 且有空位）。
       if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
         const sink = linkUsable
