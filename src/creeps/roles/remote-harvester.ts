@@ -215,25 +215,31 @@ function remoteStationaryMine(): ActionCandidate<Source> {
         moveToTarget(ac.creep, source);
         return;
       }
+      // 站位修正：harvest 返回 OK 说明在 source range 1 内，但可能不在 container 格上 —
+      // 如 source 旁有多格可站，creep 落在非 container 格，能采但 transfer 够不到 container
+      // → 能量无法倒入 → 满载后走 dropEnergy → 地面堆积衰减（线上实证：远矿产能损失 ~40%）。
+      // 镜像本地 harvester 的 stationaryMine container 站位逻辑（harvest.ts L109-111）：
+      // move 与 harvest 是独立 intent，移动期间继续采集，零吞吐损失。
+      const container = findSourceContainer(ac.creep, source);
+      if (container && !ac.creep.pos.isEqualTo(container.pos)) {
+        moveToTarget(ac.creep, container.pos, 0);
+      }
       // 同 tick 倒能：背包有能量且旁边有 container 时倒入。
       // 维修期留税：container 血量低于维修线时每 tick 留 WORK 数能量不倒 —
       // 若全额倒空，下 tick repair 门禁（背包有料）在「采 N 倒 N」稳态下
       // 永远不满足（resolve 时刻背包恒空），维修链死锁（集成场景实证：
       // 600 tick 零维修、container 单调衰减）。留税让节拍变为
       // 「采 N 倒 N-W、修 W」交替，维修与采集并行不断流。
-      if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-        const container = findSourceContainer(ac.creep, source);
-        if (container) {
-          const freeCap = container.store.getFreeCapacity(RESOURCE_ENERGY);
-          if (freeCap > 0) {
-            const workParts = ac.creep.body.filter((p) => p.type === WORK).length;
-            const reserve = container.hits < container.hitsMax * CONTAINER_REPAIR_THRESHOLD
-              ? workParts
-              : 0;
-            const amount = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) - reserve;
-            if (amount > 0) {
-              ac.creep.transfer(container, RESOURCE_ENERGY, amount);
-            }
+      if (container && ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+        const freeCap = container.store.getFreeCapacity(RESOURCE_ENERGY);
+        if (freeCap > 0) {
+          const workParts = ac.creep.body.filter((p) => p.type === WORK).length;
+          const reserve = container.hits < container.hitsMax * CONTAINER_REPAIR_THRESHOLD
+            ? workParts
+            : 0;
+          const amount = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) - reserve;
+          if (amount > 0) {
+            ac.creep.transfer(container, RESOURCE_ENERGY, amount);
           }
         }
       }

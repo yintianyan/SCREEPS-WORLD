@@ -92,14 +92,19 @@ export function scoreRemoteCandidate(input: {
   reserved?: boolean;
   /** 是否为该房配 defender（默认 CONFIG.remote.enableDefender）。 */
   withDefender?: boolean;
+  /** 是否有道路覆盖（有路速度 ×2，等价 pathCost 减半）。默认 false 保守。 */
+  hasRoad?: boolean;
 }): { netScore: number; haulerNeed: number } {
   const pathCost = input.pathCost ?? input.linearDistance * 70;
   const sources = input.sources ?? 1; // 无视野保守估 1。
   const reserved = input.reserved ?? true;
   const withDefender = input.withDefender ?? CONFIG.remote.enableDefender;
+  const hasRoad = input.hasRoad ?? false;
   const perSource = reserved ? SOURCE_INCOME : SOURCE_INCOME_UNRESERVED;
   const demand = sources * perSource;
-  const perHauler = input.haulerCapacity / (2 * Math.max(1, pathCost));
+  // 有路时 hauler 速度翻倍（道路 fatigue-free），等价 pathCost 减半。
+  const effectivePathCost = hasRoad ? Math.max(1, pathCost / 2) : pathCost;
+  const perHauler = input.haulerCapacity / (2 * Math.max(1, effectivePathCost));
   const haulerNeed = Math.min(
     CONFIG.remote.haulersMax,
     Math.max(1, Math.ceil(demand / Math.max(0.01, perHauler))),

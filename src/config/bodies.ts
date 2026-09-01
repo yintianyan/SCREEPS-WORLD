@@ -29,11 +29,51 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     // 绝境档 [1T,1A,1M]：随时可战优先于等满配（bodies.test 要求最低档 minCapacity=200）。
     { parts: ["tough", "attack", "move"], minCapacity: 200 },
   ],
-  // 奶车（heal-tank 编队的治疗端）：1:1 HEAL:MOVE 平原无疲劳；贴身 heal 12/part/tick，
+  // 远程攻击者（kiting 战术）：RANGED_ATTACK 10 dmg/part/tick，射程 3，
+  // 无 counter-attack 风险（vs ATTACK 的 30 dmg 但被反击）。
+  // kiting = 边退边打，近战敌人永远够不到 — 对 NPC 入侵者/无 ranged 敌人无损。
+  // TOUGH 前置吸塔伤，RANGED_ATTACK 比 ATTACK 贵 70/部件（150 vs 80）。
+  // 用于：防御 NPC 入侵者、PvP kiting、highway 巡逻。
+  rangedAttacker: [
+    // RCL8 满编 [5T,10R,15M] @2750：10 RANGED_ATTACK = 100 dmg/tick，
+    // 5 TOUGH 吸 500 塔伤保住 RANGED_ATTACK 输出窗口。
+    // MOVE:非MOVE = 15:15 = 1:1 平原满速；kiting 需要高机动性。
+    { parts: ["tough","tough","tough","tough","tough","ranged_attack","ranged_attack","ranged_attack","ranged_attack","ranged_attack","ranged_attack","ranged_attack","ranged_attack","ranged_attack","ranged_attack","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move"], minCapacity: 2750 },
+    // RCL7 [3T,6R,9M] @1650：6 RANGED_ATTACK = 60 dmg/tick。
+    { parts: ["tough","tough","tough","ranged_attack","ranged_attack","ranged_attack","ranged_attack","ranged_attack","ranged_attack","move","move","move","move","move","move","move","move","move"], minCapacity: 1650 },
+    // RCL5 [1T,3R,4M] @650：3 RANGED_ATTACK = 30 dmg/tick。
+    { parts: ["tough","ranged_attack","ranged_attack","ranged_attack","move","move","move","move"], minCapacity: 650 },
+    // 最小档 [1R,1M] @200：10 dmg/tick，kiting 入侵者。
+    { parts: ["ranged_attack", "move"], minCapacity: 200 },
+  ],
+  // 拆迁者：WORK dismantle 50 dmg/part/tick（vs ATTACK 30 dmg），不触发 counter-attack。
+  // 用于拆 rampart/wall/high HP 结构 — dismantle 不产能量但伤害最高。
+  // TOUGH 前置吸塔伤，WORK 拆建筑，MOVE 保证机动。
+  dismantler: [
+    // RCL8 满编 [5T,10W,15M] @2150：10 WORK = 500 dmg/tick dismantle。
+    // 5 TOUGH 吸 500 塔伤保住 WORK 输出窗口。
+    { parts: ["tough","tough","tough","tough","tough","work","work","work","work","work","work","work","work","work","work","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move"], minCapacity: 2150 },
+    // RCL6 [3T,6W,9M] @1290：6 WORK = 300 dmg/tick。
+    { parts: ["tough","tough","tough","work","work","work","work","work","work","move","move","move","move","move","move","move","move","move"], minCapacity: 1290 },
+    // RCL4 [1T,3W,4M] @650：3 WORK = 150 dmg/tick。
+    { parts: ["tough","work","work","work","move","move","move","move"], minCapacity: 650 },
+    // 最小档 [1W,1M] @150：50 dmg/tick dismantle。
+    { parts: ["work", "move"], minCapacity: 150 },
+  ],
+  // 奶车（heal-tank 编队的治疗端）：1:1 HEAL:MOVE 平原无疲劳；贴身 heal 12/part/tick,
   // range 3 退化为 rangedHeal 4/part/tick。满档 10 HEAL = 120 hits/tick，
   // 双奶叠加可覆盖 2-3 塔集火的平均伤害（塔单发 600 衰减至 75）。
+  // TOUGH 前置变体（RCL7+）：塔伤按 body 顺序命中，TOUGH 先死保住后面的 HEAL
+  // 部件不备摧毁（社区标准实践 — Screeps Wiki Combat: TOUGH boosted 减伤）。
   healer: [
+    // RCL8 TOUGH 前置档 [4T,8H,12M] @2540：8 HEAL = 96 hits/tick 贴身治疗，
+    // 4 TOUGH 吸 400 塔伤保住 HEAL 部件 — 塔下生存率显著提升。
+    { parts: ["tough","tough","tough","tough","heal","heal","heal","heal","heal","heal","heal","heal","move","move","move","move","move","move","move","move","move","move","move","move"], minCapacity: 2540 },
+    // 无 TOUGH 满档 [10H,10M] @3000：纯治疗最大化，无塔威胁时最优。
     { parts: ["heal", "heal", "heal", "heal", "heal", "heal", "heal", "heal", "heal", "heal", "move", "move", "move", "move", "move", "move", "move", "move", "move", "move"], minCapacity: 3000 },
+    // RCL7 TOUGH 前置档 [2T,5H,7M] @1590：5 HEAL = 60 hits/tick。
+    { parts: ["tough","tough","heal","heal","heal","heal","heal","move","move","move","move","move","move","move"], minCapacity: 1590 },
+    // 无 TOUGH 中档 [6H,6M] @1800。
     { parts: ["heal", "heal", "heal", "heal", "heal", "heal", "move", "move", "move", "move", "move", "move"], minCapacity: 1800 },
     { parts: ["heal", "heal", "move", "move"], minCapacity: 600 },
   ],

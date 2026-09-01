@@ -485,6 +485,9 @@ export function planMilitaryOperation(input: WarPlanningInput): WarPlan | undefi
   if (forceReq.attacker > 0) {
     spawnRequirement.push({ role: "attacker", count: forceReq.attacker, priority: 2, home: targetSelection.selected.roomName });
   }
+  if (forceReq.ranged > 0) {
+    spawnRequirement.push({ role: "rangedAttacker", count: forceReq.ranged, priority: 2, home: targetSelection.selected.roomName });
+  }
   if (forceReq.healer > 0) {
     spawnRequirement.push({ role: "healer", count: forceReq.healer, priority: 2, home: targetSelection.selected.roomName });
   }
@@ -492,7 +495,7 @@ export function planMilitaryOperation(input: WarPlanningInput): WarPlan | undefi
     spawnRequirement.push({ role: "attacker", count: forceReq.tank, priority: 2, home: targetSelection.selected.roomName });
   }
   if (forceReq.dismantler > 0) {
-    spawnRequirement.push({ role: "attacker", count: forceReq.dismantler, priority: 2, home: targetSelection.selected.roomName });
+    spawnRequirement.push({ role: "dismantler", count: forceReq.dismantler, priority: 2, home: targetSelection.selected.roomName });
   }
 
   // 18. 构建 WarPlan

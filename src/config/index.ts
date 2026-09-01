@@ -582,6 +582,13 @@ export const CONFIG = {
     // 配比孵化，同样依赖此表作为 recyclePass 白名单。maxCount 4 覆盖 war 编队
     // （healerSquadRatio 上取整）与 PB 野采编队（2 healer）并行峰值。
     healer: { minCount: 0, maxCount: 4 },
+    // 远程攻击者（kiting 战术）：RANGED_ATTACK 射程 3 无反击风险。
+    // 仅 war/defense 姿态时孵化。maxCount 4 覆盖 kiting 编队 + 防御 NPC 入侵者。
+    // 依赖此表作为 recyclePass 白名单（与 attacker/healer 同口径）。
+    rangedAttacker: { minCount: 0, maxCount: 4 },
+    // 拆迁者（dismantle 战术）：WORK dismantle 50 dmg/part/tick，不触发 counter-attack。
+    // 仅 war 姿态时孵化。maxCount 2 覆盖 rampart/wall 拆迁编队。
+    dismantler: { minCount: 0, maxCount: 2 },
     // 侦察兵（R6b）：prospect 任务临时孵化，同一时刻至多 1 只。
     scout: { minCount: 0, maxCount: 1 },
     // PB 野采捡运者（审计缺口 2）：power-farm-manager collect 阶段一次性孵化，
