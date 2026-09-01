@@ -152,6 +152,7 @@ interface MockPos {
   roomName: string;
   getRangeTo: ReturnType<typeof vi.fn>;
   getDirectionTo: ReturnType<typeof vi.fn>;
+  isEqualTo: ReturnType<typeof vi.fn>;
   findClosestByRange: ReturnType<typeof vi.fn>;
   findPathTo: ReturnType<typeof vi.fn>;
 }
@@ -161,8 +162,17 @@ export function mockPos(x = 25, y = 25, roomName = "W7N4"): MockPos {
     x,
     y,
     roomName,
-    getRangeTo: vi.fn(() => 1),
+    getRangeTo: vi.fn((t: { x?: number; y?: number; pos?: { x: number; y: number } }) => {
+      const tx = t.x ?? t.pos?.x ?? 0;
+      const ty = t.y ?? t.pos?.y ?? 0;
+      return Math.max(Math.abs(x - tx), Math.abs(y - ty));
+    }),
     getDirectionTo: vi.fn(() => 3), // RIGHT
+    isEqualTo: vi.fn((tx: number | { x?: number; y?: number; pos?: { x: number; y: number } }, ty?: number) => {
+      const px = typeof tx === "number" ? tx : (tx.x ?? tx.pos?.x ?? 0);
+      const py = typeof tx === "number" ? (ty ?? 0) : (tx.y ?? tx.pos?.y ?? 0);
+      return x === px && y === py;
+    }),
     findClosestByRange: vi.fn((targets: any[]) => {
       if (!Array.isArray(targets) || targets.length === 0) return null;
       return targets[0];

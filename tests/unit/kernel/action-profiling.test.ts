@@ -181,7 +181,7 @@ describe("actionProfiling 开关 — 集成验证", () => {
       used: 50,
       capacity: 100,
       mode: "work",
-      pos: { x: 21, y: 21, roomName: "W7N4", getRangeTo: vi.fn(() => 5), getDirectionTo: vi.fn(() => 3), findClosestByRange: vi.fn(() => null), findPathTo: vi.fn(() => []) },
+      pos: { x: 21, y: 21, roomName: "W7N4", getRangeTo: vi.fn(() => 5), getDirectionTo: vi.fn(() => 3), isEqualTo: vi.fn(() => false), findClosestByRange: vi.fn(() => null), findPathTo: vi.fn(() => []) },
     });
 
     const fleeFn = vi.fn(() => false);

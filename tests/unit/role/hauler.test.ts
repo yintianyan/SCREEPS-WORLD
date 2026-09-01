@@ -315,22 +315,27 @@ describe("hauler — flee 安全充能（P0-2）", () => {
    * distances 是 "x,y" → 距离的映射，用于 getRangeTo(target) 的返回值。
    * target 的位置通过 target.pos.x/pos.y 推断。
    */
-  function mockPosWithDistances(x: number, y: number, distances: Record<string, number>) {
-    return {
-      x,
-      y,
-      roomName: "W7N4",
-      getRangeTo: vi.fn((target: { pos?: { x: number; y: number }; x?: number; y?: number }) => {
-        const tx = target?.pos?.x ?? target?.x;
-        const ty = target?.pos?.y ?? target?.y;
-        const key = `${tx},${ty}`;
-        return distances[key] ?? 1;
-      }),
-      getDirectionTo: vi.fn(() => 3),
-      findClosestByRange: vi.fn((targets: any[]) => targets[0] ?? null),
-      findPathTo: vi.fn(() => []),
-    };
-  }
+function mockPosWithDistances(x: number, y: number, distances: Record<string, number>) {
+return {
+x,
+y,
+roomName: "W7N4",
+getRangeTo: vi.fn((target: { pos?: { x: number; y: number }; x?: number; y?: number }) => {
+const tx = target?.pos?.x ?? target?.x;
+const ty = target?.pos?.y ?? target?.y;
+const key = `${tx},${ty}`;
+return distances[key] ?? 1;
+}),
+getDirectionTo: vi.fn(() => 3),
+isEqualTo: vi.fn((tx: number | { x?: number; y?: number; pos?: { x: number; y: number } }, ty?: number) => {
+const px = typeof tx === "number" ? tx : (tx.x ?? tx.pos?.x ?? 0);
+const py = typeof tx === "number" ? (ty ?? 0) : (tx.y ?? tx.pos?.y ?? 0);
+return x === px && y === py;
+}),
+findClosestByRange: vi.fn((targets: any[]) => targets[0] ?? null),
+findPathTo: vi.fn(() => []),
+};
+}
 
   it("hauler 距 spawn ≤3 且携带能量时，threat 存在优先给 tower 充能", () => {
     // 布局：spawn(20,20) | hauler(21,21) | tower(22,22) | hostile(15,15)
