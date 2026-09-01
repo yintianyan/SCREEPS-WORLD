@@ -20,6 +20,11 @@ function placeCreep(creep: any, x: number, y: number): void {
       return Math.max(Math.abs(tx - x), Math.abs(ty - y));
     }),
     getDirectionTo: vi.fn(() => 3),
+    isEqualTo: vi.fn((tx: any, ty?: number) => {
+      const px = typeof tx === "number" ? tx : (tx.x ?? tx.pos?.x ?? 0);
+      const py = typeof tx === "number" ? (ty ?? 0) : (tx.y ?? tx.pos?.y ?? 0);
+      return x === px && y === py;
+    }),
   };
 }
 

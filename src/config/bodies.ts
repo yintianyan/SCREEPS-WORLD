@@ -57,8 +57,8 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["tough","tough","tough","work","work","work","work","work","work","move","move","move","move","move","move","move","move","move"], minCapacity: 1290 },
     // RCL4 [1T,3W,4M] @650：3 WORK = 150 dmg/tick。
     { parts: ["tough","work","work","work","move","move","move","move"], minCapacity: 650 },
-    // 最小档 [1W,1M] @150：50 dmg/tick dismantle。
-    { parts: ["work", "move"], minCapacity: 150 },
+    // 最小档 [1W,1M] @200：50 dmg/tick dismantle。
+    { parts: ["work", "move"], minCapacity: 200 },
   ],
   // 奶车（heal-tank 编队的治疗端）：1:1 HEAL:MOVE 平原无疲劳；贴身 heal 12/part/tick,
   // range 3 退化为 rangedHeal 4/part/tick。满档 10 HEAL = 120 hits/tick，

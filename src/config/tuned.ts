@@ -29,6 +29,8 @@ export const TUNABLE_ROLES = [
   "scout",
   "mineralMiner",
   "attacker",
+  "rangedAttacker",
+  "dismantler",
   "healer",
   "pbCollector",
   "coreClearer",

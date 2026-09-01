@@ -678,12 +678,12 @@ export function evaluateDemand(
       upgraderTarget = pressure <= 0.5 ? 1 : 0;
     }
 
-    // RCL8 官方限速：controller 每 tick 最多吃 15 能量升级 — 按 body WORK 数折算
-    // creep 上限（15W → 1 个恰好顶满）。
-    if (snapshot.rcl >= 8) {
-      const maxCountByWork = Math.max(1, Math.floor(upgradeCfg.rcl8MaxWorkParts / workPerBody));
-      upgraderTarget = Math.min(upgraderTarget, maxCountByWork);
-    }
+    // WORK 部件限速：RCL8 为引擎硬限制（15 energy/tick），RCL<8 为自限速策略——
+    // 按 body WORK 数折算 creep 上限（15W → 1 个恰好顶满）。
+    // 统一限速避免 RCL8 前孵出 30 work 后满级时立即裁编的振荡。
+    const maxWorkParts = upgradeCfg.maxWorkParts ?? upgradeCfg.rcl8MaxWorkParts;
+    const maxCountByWork = Math.max(1, Math.floor(maxWorkParts / workPerBody));
+    upgraderTarget = Math.min(upgraderTarget, maxCountByWork);
     // 保级覆盖：控制器快降级时至少保留 minCount。
     if (crisisNeedsGuard || hasDowngradeRisk) {
       upgraderTarget = Math.max(upgraderTarget, upgraderConfig.minCount);

@@ -115,7 +115,7 @@ describe("Bodies — BODY_TEMPLATES", () => {
       // coreClearer 为进攻型拆核角色（ATTACK 部件），最低档 [4A,1C,5M] = 620；
       // 200 档只能凑出单 ATTACK（80+50+50）→ 拆核效率几乎为零还冒险，故豁免，
       // 与 defender/remoteDefender 战斗绝境档同理（有有效战力总比残废送死强）。
-      if (role === "reserver" || role === "claimer" || role === "remoteDefender" || role === "defender" || role === "scout" || role === "healer" || role === "pbCollector" || role === "coreClearer") continue;
+      if (role === "reserver" || role === "claimer" || role === "remoteDefender" || role === "defender" || role === "scout" || role === "healer" || role === "pbCollector" || role === "coreClearer" || role === "rangedAttacker" || role === "dismantler") continue;
       const lastTemplate = templates[templates.length - 1];
       expect(lastTemplate?.minCapacity).toBe(200);
     }

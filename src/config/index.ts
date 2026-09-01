@@ -383,13 +383,18 @@ export const CONFIG = {
      * = 控制器升级重置后的最大 ttd(20000)，确保 upgrader 一旦保住 controller 即解除护栏。
      */
     claimSecureExitTtd: 20000,
-    /** 升级功率控制（A2：storage 水位驱动 + RCL8 显式限速）。 */
+    /** 升级功率控制（A2：storage 水位驱动 + WORK 部件限速）。 */
     upgrade: {
       /** storage 能量 ≥ 此值且 pressure ≤ 0.3 时进入升级冲刺（燃烧库存换 RCL 复利）。 */
       sprintStorage: 50000,
       /** storage 能量 ≥ 此值时维持大 body 满功率升级（≈ 盈余全喂 controller）。 */
       sustainedStorage: 10000,
-      /** RCL8 官方升级功率上限（energy/tick），换算为 WORK 部件数。 */
+      /** upgrader 队列的 WORK 部件总数上限。
+       * RCL8 时为引擎硬限制（15 energy/tick）；RCL<8 时为自限速策略上限——
+       * 超过 15 work/tick 对 storage 消耗过快、维持成本高，且 RCL8 后必须裁回 15。
+       * 提前统一限速可避免 RCL8 前孵出 30 work 后 RCL8 满级时立即裁编的振荡。 */
+      maxWorkParts: 15,
+      /** @deprecated 使用 maxWorkParts 代替（保留向后兼容）。 */
       rcl8MaxWorkParts: 15,
       /** upgrader 单次从 storage 取能上限（防止 storage 突降触发 economyPressure）。 */
       perTickWithdrawLimit: 500,

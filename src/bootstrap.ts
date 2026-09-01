@@ -7,6 +7,8 @@ import { harvesterRole } from "./creeps/roles/harvester";
 import { haulerRole } from "./creeps/roles/hauler";
 import { mineralMinerRole } from "./creeps/roles/mineral-miner";
 import { attackerRole } from "./creeps/roles/attacker";
+import { rangedAttackerRole } from "./creeps/roles/ranged-attacker";
+import { dismantlerRole } from "./creeps/roles/dismantler";
 import { healerRole } from "./creeps/roles/healer";
 import { pbCollectorRole } from "./creeps/roles/pb-collector";
 import { remoteHarvesterRole } from "./creeps/roles/remote-harvester";
@@ -207,6 +209,10 @@ export const registry = new Registry()
   .registerRole(attackerRole)
   // P2：healer（heal-tank 编队治疗端，仅 war-planner 孵化）
   .registerRole(healerRole)
+  // P2：rangedAttacker（kiting 战术，仅 war-planner 孵化）
+  .registerRole(rangedAttackerRole)
+  // P2：dismantler（拆迁 rampart/wall，仅 war-planner 孵化）
+  .registerRole(dismantlerRole)
   // P3：scout（一次性侦察兵，仅 prospect-manager 孵化）
   .registerRole(scoutRole)
   // P3：pbCollector（一次性 PB power 捡运，仅 power-farm-manager 孵化）
