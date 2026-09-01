@@ -70,7 +70,9 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
   harvester: [
     // 站桩矿工：5 WORK 恰好匹配 source 再生速率（3000/300=10/tick）；按容量平滑降级，
     // 避免低容量卡在 1 WORK（2/tick）拖垮经济。
-    { parts: ["work", "work", "work", "work", "work", "carry", "move"], minCapacity: 600 },
+    // 2 MOVE：站桩后不需移动，但首次通勤到 container 时 1 MOVE 在沼泽上需 30 tick/步，
+    // 2 MOVE 降至 15 tick/步，平原 3 tick/步 vs 1 MOVE 的 6 tick/步。
+    { parts: ["work", "work", "work", "work", "work", "carry", "move", "move"], minCapacity: 650 },
     { parts: ["work", "work", "work", "work", "carry", "move"], minCapacity: 500 },
     { parts: ["work", "work", "work", "carry", "move"], minCapacity: 400 },
     { parts: ["work", "work", "carry", "move"], minCapacity: 300 },

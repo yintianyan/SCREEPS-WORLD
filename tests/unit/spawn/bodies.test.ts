@@ -19,7 +19,8 @@ describe("Bodies — bodyCost", () => {
 
 describe("Bodies — selectBody", () => {
   it("selects the best body that fits energy capacity", () => {
-    expect(selectBody("harvester", 600)).toEqual(["work", "work", "work", "work", "work", "carry", "move"]);
+    expect(selectBody("harvester", 650)).toEqual(["work", "work", "work", "work", "work", "carry", "move", "move"]);
+    expect(selectBody("harvester", 600)).toEqual(["work", "work", "work", "work", "carry", "move"]);
     expect(selectBody("harvester", 400)).toEqual(["work", "work", "work", "carry", "move"]);
     expect(selectBody("harvester", 200)).toEqual(["work", "carry", "move"]);
   });
