@@ -129,7 +129,16 @@ for (const [key, line] of rowByKey) {
   }
 }
 
-const newSection = [...pre, ...outRows, ...keptSpecial].join("\n") + "\n";
+// 尾部保真：保留 inventory 区最后一行表格之后的原始尾行（formatter 会在表格后
+// 插入空行；固定以单换行结尾的重建会丢掉它 → updated ≠ status → --check 假阳性，
+// 2026-09-02 审计实证：清单内容一致仍报不一致，根因即此）。表格行之间的非管道
+// 行仍被规范化丢弃——真实内容变化（行序/增删/状态改写）照常检出。
+let lastPipeIdx = header + 1; // rows 区无表格行时，尾行从分隔行之后起算
+for (let i = secLines.length - 1; i > header + 1; i--) {
+  if (secLines[i].startsWith("|")) { lastPipeIdx = i; break; }
+}
+const trailingLines = secLines.slice(lastPipeIdx + 1);
+const newSection = [...pre, ...outRows, ...keptSpecial, ...trailingLines].join("\n");
 const updated = status.slice(0, beginIdx) + newSection + status.slice(endIdx);
 const changed = updated !== status;
 

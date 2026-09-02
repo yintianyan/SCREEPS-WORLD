@@ -41,6 +41,13 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # 文档一致性门禁（TEST_ARCHITECTURE §2「合并门槛」落地进 CI）：审计发现
+      # bba8896 新增 rangedAttacker/dismantler 后 STATUS.md 角色数漂移（19→21）
+      # 未被拦截——该门禁此前仅靠本地自觉执行。纯 node 脚本秒级成本，漂移
+      # 在 push 时即响亮失败，防「文档冻结合同」静默失真。
+      - name: Docs consistency
+        run: npm run check:docs
+
       # 审计修复（P0）：此前 push 直推生产无任何门禁 —— plan.md §8 的
       # 「typecheck+test+build 全绿」纯靠本地自觉。单测 7s 级耗时，不构成瓶颈。
       - name: Unit tests

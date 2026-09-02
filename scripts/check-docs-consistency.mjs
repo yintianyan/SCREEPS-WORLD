@@ -82,7 +82,11 @@ const svMatch = config.match(/schemaVersion:\s*(\d+)/);
 if (!svMatch) fail("schema", "src/config/index.ts 未找到 schemaVersion");
 const svCode = svMatch ? Number(svMatch[1]) : NaN;
 const statusText = docText.get(join(ROOT, "docs/STATUS.md")) ?? "";
-const svDoc = statusText.match(/Memory schemaVersion \| \*\*(\d+)\*\*/);
+// 口径行正则说明：pipe 两侧用 [ \t]* 而非单空格 — markdown formatter 对
+// 表格做列对齐时会给单元格填充空白（如「生产注册系统数     | **33**」），
+// 单空格匹配会假阳性报「缺少口径行」（2026-09-02 审计事故实证）。仅容忍
+// 水平空白（不含换行），保持「同一表格行」语义，防跨行误匹配。
+const svDoc = statusText.match(/Memory schemaVersion[ \t]*\|[ \t]*\*\*(\d+)\*\*/);
 if (!svDoc) fail("schema", "docs/STATUS.md 缺少「Memory schemaVersion」口径行");
 else if (Number(svDoc[1]) !== svCode) {
   fail("schema", `STATUS.md schemaVersion=${svDoc[1]} ≠ CONFIG ${svCode}`);
@@ -100,8 +104,8 @@ checks.push(`3. schemaVersion：CONFIG=${svCode} ↔ STATUS.md + sv=39 标注`);
 const bootstrap = readFileSync(join(ROOT, "src/bootstrap.ts"), "utf8");
 const nSystems = (bootstrap.match(/\.registerSystem\(/g) ?? []).length;
 const nRoles = (bootstrap.match(/\.registerRole\(/g) ?? []).length;
-const sysDoc = statusText.match(/生产注册系统数 \| \*\*(\d+)\*\*/);
-const roleDoc = statusText.match(/生产注册角色数 \| \*\*(\d+)\*\*/);
+const sysDoc = statusText.match(/生产注册系统数[ \t]*\|[ \t]*\*\*(\d+)\*\*/);
+const roleDoc = statusText.match(/生产注册角色数[ \t]*\|[ \t]*\*\*(\d+)\*\*/);
 if (!sysDoc) fail("registry", "STATUS.md 缺少「生产注册系统数」口径行");
 else if (Number(sysDoc[1]) !== nSystems) {
   fail("registry", `STATUS.md 系统数 ${sysDoc[1]} ≠ bootstrap.ts ${nSystems}`);
