@@ -8,7 +8,7 @@ import {
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
-import { findRemoteContainersCached, findDroppedEnergyCached } from "../support/room-scans";
+import { findRemoteContainersCached, findDroppedEnergyCached, findRuinsCached, findTombstonesCached } from "../support/room-scans";
 
 /** container 选择的距离权重（与本地 HAUL_CONTAINER_DISTANCE_WEIGHT 一致）：
  * 每格距离折算 10 能量。满溢的远 container 仍优先于近乎空的近 container。 */
@@ -19,7 +19,6 @@ function withdrawRemoteContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "remote-hauler:withdraw-container",
     resolve: (ac) => {
-      // 只在 remoteTarget 房间内执行（ensureHome 保证已到达）。
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       return findRemoteContainer(ac.creep);
@@ -28,20 +27,42 @@ function withdrawRemoteContainer(): ActionCandidate<StructureContainer> {
       const available = container.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
-      if (amount <= 0) {
-        // container 空了 → 检查地上是否有 drop 的能量。
-        const dropped = findDroppedEnergy(ac.creep);
-        if (dropped) {
-          const result = ac.creep.pickup(dropped);
-          if (result === ERR_NOT_IN_RANGE) {
-            moveToTarget(ac.creep, dropped);
-          }
-        }
-        return;
-      }
+      if (amount <= 0) return;
       const result = ac.creep.withdraw(container, RESOURCE_ENERGY, amount);
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, container);
+      }
+    },
+  };
+}
+
+/** 从远矿房坟墓/废墟中提取遗留能量。
+ * 坟墓/废墟不能用 pickup，必须用 withdraw。远矿房 creep 死亡后留下坟墓，
+ * 坟墓在 5 tick 后消失，能量随之灭失——应优先于 container 回收（container 不衰减）。 */
+function lootRemoteRemains(): ActionCandidate<Tombstone | Ruin> {
+  return {
+    name: "remote-hauler:loot-remains",
+    resolve: (ac) => {
+      const remoteTarget = ac.creep.memory.remoteTarget;
+      if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
+      const candidates: (Tombstone | Ruin)[] = [];
+      for (const t of findTombstonesCached(ac.creep.room)) {
+        if (t.store.getUsedCapacity(RESOURCE_ENERGY) > 0) candidates.push(t);
+      }
+      for (const r of findRuinsCached(ac.creep.room)) {
+        if (r.store.getUsedCapacity(RESOURCE_ENERGY) > 0) candidates.push(r);
+      }
+      if (candidates.length === 0) return undefined;
+      return ac.creep.pos.findClosestByRange(candidates) ?? candidates[0];
+    },
+    execute: (ac, remains) => {
+      const available = remains.store.getUsedCapacity(RESOURCE_ENERGY);
+      const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
+      const amount = Math.min(available, carryFree);
+      if (amount <= 0) return;
+      const result = ac.creep.withdraw(remains, RESOURCE_ENERGY, amount);
+      if (result === ERR_NOT_IN_RANGE) {
+        moveToTarget(ac.creep, remains);
       }
     },
   };
@@ -133,10 +154,13 @@ const policy: RolePolicy = {
     return c.memory.mode === "work" && c.room.name === c.memory.home;
   },
   acquire: [
-    // 优先从 container 取能。
-    withdrawRemoteContainer(),
-    // 回退：拾取地上 drop 的能量。
+    // 衰减资源优先回收：坟墓/废墟中的能量会随时间灭失，而 container 中的能量不衰减。
+    // 与本地 hauler 设计一致——大额遗留优先于 container 取能。
+    lootRemoteRemains(),
+    // 地上掉落能量（remoteHarvester 溢出 drop 的）——同样在衰减，优先于 container。
     pickupRemoteDropped(),
+    // 从 container 取能（不衰减，可延后）。
+    withdrawRemoteContainer(),
   ],
   work: [
     // 存入 storage（RCL4+）。

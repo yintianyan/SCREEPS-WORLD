@@ -89,6 +89,19 @@ export function getPbRoomCache(room: Room): PbRoomCache {
   return entry;
 }
 
+// ─── remote-hauler: 坟墓列表 ────────────────────────────────
+
+/** per-tick per-room 共享缓存：房间内全部坟墓。 */
+export function findTombstonesCached(room: Room): Tombstone[] {
+  const g = globalCache();
+  if (!g.__remoteTombstones) g.__remoteTombstones = {};
+  const cached = g.__remoteTombstones[room.name];
+  if (cached && cached.tick === Game.time) return cached.list;
+  const list = room.find(FIND_TOMBSTONES) as Tombstone[];
+  g.__remoteTombstones[room.name] = { tick: Game.time, list };
+  return list;
+}
+
 // ─── core-clearer: 废墟列表（含 loot） ──────────────────────
 
 /** per-tick per-room 共享缓存：房间内全部废墟。 */

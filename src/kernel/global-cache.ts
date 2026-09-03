@@ -381,8 +381,10 @@ export interface GlobalCache {
   __hostilesCache?: Record<string, { tick: number; creeps: Creep[] }>;
   /** 远矿房 InvaderCore 列表（invader-core + core-clearer + reserver 共享）。 */
   __remoteInvaderCore?: Record<string, { tick: number; cores: StructureInvaderCore[] }>;
-  /** 远矿房废墟列表（core-clearer 共享）。 */
+  /** 远矿房废墟列表（core-clearer + remote-hauler 共享）。 */
   __remoteRuins?: Record<string, { tick: number; list: Ruin[] }>;
+  /** 远矿房坟墓列表（remote-hauler 共享）。 */
+  __remoteTombstones?: Record<string, { tick: number; list: Tombstone[] }>;
   /** 战争房敌方结构列表（attacker 共享）。 */
   __warStructures?: Record<string, { tick: number; list: AnyStructure[] }>;
   /** 战争房/PB 房 power bank（attacker 共享）。 */
