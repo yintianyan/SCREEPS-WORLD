@@ -38,6 +38,10 @@ import {
   type AutonomyStatus,
 } from "../domain/strategy/autonomy-metrics";
 import { log } from "../kernel/log";
+import { safeRun } from "../kernel/safe-run";
+import { reviewStrategy } from "../domain/strategy/strategy-reviewer";
+import { CONFIG } from "../config";
+import { EventKind, recordEvent } from "../kernel/event-log";
 
 // ─── 历史数据追踪（heap，跨 tick 持久）──────────────────
 
@@ -240,6 +244,45 @@ export const empireHealthSystem: System = {
       log.info("empire-health-system", `empire-health: URGENT recovery → ${urgent.type}` +
         ` domain=${urgent.domain} priority=${urgent.priority}` +
         ` roi=${urgent.roi.toFixed(2)}: ${urgent.recommendation}`,);
+    }
+
+    // ── 12. 自进化 L1：策略复盘（100t 末尾）──
+    // 从历史遥测推导姿态参数调整建议，写入 Memory.kernel.tuning.strategyOverrides。
+    // empire-strategy 每 tick 读取 override 合并到 CONFIG.posture 之上。
+    // 安全侧：CPU tier conserve/recovery 下跳过（外生信号不可信 + CPU 紧张）。
+    if (ctx.budget.tier === "healthy" || ctx.budget.tier === "guarded") {
+      safeRun("strategy-reviewer", () => {
+        const strategyResult = reviewStrategy({
+          postureHistory,
+          netFlowHistory,
+          reserveHistory,
+          healthHistory,
+          noProgress,
+          thrashing,
+          tick,
+          currentOverrides: Memory.kernel?.tuning?.strategyOverrides,
+          defaultPosture: CONFIG.posture as Record<string, number>,
+        });
+
+        if (strategyResult.suggestions.length > 0) {
+          if (!Memory.kernel) Memory.kernel = {};
+          if (!Memory.kernel.tuning) {
+            Memory.kernel.tuning = { lastTuned: 0, rooms: {} };
+          }
+          if (!Memory.kernel.tuning.strategyOverrides) {
+            Memory.kernel.tuning.strategyOverrides = {};
+          }
+          for (const s of strategyResult.suggestions) {
+            Memory.kernel.tuning.strategyOverrides[s.param] = {
+              value: s.value,
+              adjustedAt: tick,
+              reason: s.reason,
+            };
+          }
+          log.info("empire-health-system", strategyResult.summary);
+          recordEvent(EventKind.StrategyReview, "", [strategyResult.suggestions.length]);
+        }
+      }, false);
     }
   },
 };

@@ -1087,6 +1087,65 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 43,
+    to: 44,
+    run: () => {
+      // v44：自进化系统 L1 — 新增 TuningMemory.strategyOverrides
+      // （strategy-reviewer 唯一写者，empire-strategy 消费）。建档 + 畸形自愈：
+      // 非对象 → 删除；条目非 StrategyOverrideEntry 结构 → 删除该条目
+      // （缺失视为无 override，empire-strategy 回退 CONFIG.posture 默认）。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+      const tuning = kernel.tuning as Record<string, unknown> | undefined;
+      if (!tuning || typeof tuning !== "object") return;
+      const overrides = tuning.strategyOverrides as Record<string, unknown> | undefined;
+      if (overrides === undefined) return;
+      if (typeof overrides !== "object" || overrides === null || Array.isArray(overrides)) {
+        delete tuning.strategyOverrides;
+        return;
+      }
+      for (const key in overrides) {
+        const entry = overrides[key] as Record<string, unknown> | undefined;
+        if (!entry || typeof entry !== "object") {
+          delete overrides[key];
+          continue;
+        }
+        if (typeof entry.value !== "number" || typeof entry.adjustedAt !== "number") {
+          delete overrides[key];
+        }
+      }
+    },
+  },
+  {
+    from: 44,
+    to: 45,
+    run: () => {
+      // v45：自进化系统 L2 — 新增 TuningMemory.intakePending
+      // （tuning-intake-system 唯一写者，strategy-reviewer 复核后清空）。
+      // 建档 + 畸形自愈：非对象 → 删除；条目非 IntakePendingEntry 结构 → 删除该条目。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+      const tuning = kernel.tuning as Record<string, unknown> | undefined;
+      if (!tuning || typeof tuning !== "object") return;
+      const intake = tuning.intakePending as Record<string, unknown> | undefined;
+      if (intake === undefined) return;
+      if (typeof intake !== "object" || intake === null || Array.isArray(intake)) {
+        delete tuning.intakePending;
+        return;
+      }
+      for (const key in intake) {
+        const entry = intake[key] as Record<string, unknown> | undefined;
+        if (!entry || typeof entry !== "object") {
+          delete intake[key];
+          continue;
+        }
+        if (typeof entry.value !== "number" || typeof entry.originalValue !== "number" || typeof entry.receivedAt !== "number") {
+          delete intake[key];
+        }
+      }
+    },
+  },
 ];
 
 /**

@@ -121,6 +121,14 @@ export const enum EventKind {
   /** 威胁在场但塔停火且未动用 safe mode（奶量压制型消耗战 — 守线不烧保底）。
    * d = [威胁数, 敌方 HEAL 部件合计]；r = 房名。同房 200t 心跳重报防刷屏。 */
   ThreatUnhandled = 41,
+  /** 策略复盘建议（自进化系统 L1）：empire-health-system 100t 末尾调用
+   * strategy-reviewer 纯函数产出姿态参数调整建议。d = [suggestionCount]；r = ""。
+   * 建议明细见 console.log；此事件用于审计复盘频率与建议产出节奏。 */
+  StrategyReview = 42,
+/** L2 体外建议摄入（自进化系统 L2）：tuning-intake-system 每 1000t 从 segment 6
+ * 读取外部 LLM 建议包，经六层护栏校验后写入 intakePending。
+ * d = [acceptedCount, rejectedCount]；r = ""。 */
+L2Intake = 43,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

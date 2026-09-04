@@ -119,6 +119,25 @@ export function evaluateTuning(
     }
   }
 
+  // ── Phase 2：参数探索 ──
+  // 当本周期无任何调整（稳态信号）且不在探索冷却期内时，
+  // 随机选一个参数做 ±1 step 探针，走同一 pendingValidation 闭环。
+  if (adjustments.length === 0 && !excludedParams) {
+    const exploration = exploreParameter(signals, currentBounds, lastAdjusted, currentTick);
+    if (exploration) {
+      adjustments.push(exploration.adjustment);
+      if (!pendingValidations) pendingValidations = {};
+      pendingValidations[exploration.adjustment.param] = {
+        ...exploration.pendingValidation,
+        adjustTick: currentTick,
+      };
+      // 探索方向不写入 newTrend（探索不是趋势确认）
+    }
+  } else {
+    // 有调整或排除参数 → 重置稳态计数器（探索只在真正稳态时触发）
+    resetExplorationStableCount();
+  }
+
   const result: TuningEvaluation = { adjustments, signals: signalRecord, newTrend };
   if (pendingValidations) result.pendingValidations = pendingValidations;
   return result;
@@ -768,7 +787,102 @@ function parseParamPath(param: string): [string, string] | [undefined, undefined
   return [param.slice(0, idx), param.slice(idx + 1)];
 }
 
-// ─── 改进 A：冻结策略（P3）──────────────────────────────────
+// ─── Phase 2：参数探索（纯函数）────────────────────────────
+
+/** 探索冷却（同一参数两次探索间的最小间隔 tick）。 */
+const EXPLORATION_COOLDOWN = 5000;
+
+/** 连续 N 个评估周期无调整时触发探索。 */
+const EXPLORATION_STABLE_THRESHOLD = 3;
+
+/** 全局探索状态（heap，非 Memory 持久化 — global reset 后从 0 重新积累）。 */
+interface ExplorationState {
+  /** 连续无调整的评估周期计数。 */
+  stableCount: number;
+  /** 每个参数上次探索的 tick。 */
+  lastExplored: Record<string, number>;
+}
+const explorationState: ExplorationState = { stableCount: 0, lastExplored: {} };
+
+/**
+ * 参数探索：稳态时主动做 ±1 step 探针，走同一 pendingValidation 闭环验证。
+ * 护栏：CPU tier ≥ guarded、crisisRatio < 0.1、探索失败后 5000t 冷却、
+ * 同一房间同一时间只允许一个探索参数（pending-lock 已保证）。
+ */
+export function exploreParameter(
+  signals: TuningSignals,
+  currentBounds: Record<string, { minCount: number; maxCount: number }>,
+  lastAdjusted: Record<string, number>,
+  currentTick: number,
+): { adjustment: TuningAdjustment; pendingValidation: Omit<PendingValidation, "adjustTick"> } | null {
+  // 计数器递增（无调整周期）
+  explorationState.stableCount++;
+
+  // 未达连续阈值 → 不探索
+  if (explorationState.stableCount < EXPLORATION_STABLE_THRESHOLD) return null;
+
+  // 护栏：CPU tier >= guarded
+  if (signals.tierRank >= 2) return null;
+
+  // 护栏：crisisRatio < 0.1
+  if (signals.crisisRatio >= 0.1) return null;
+
+  // 从 TUNING_BOUNDS 中选一个不在冷却期、不在 pending 中的参数
+  const candidates: string[] = [];
+  for (const param of Object.keys(TUNING_BOUNDS)) {
+    if (isInCooldown(param, lastAdjusted[param], currentTick)) continue;
+    const lastExplored = explorationState.lastExplored[param];
+    if (lastExplored !== undefined && currentTick - lastExplored < EXPLORATION_COOLDOWN) continue;
+    candidates.push(param);
+  }
+
+  if (candidates.length === 0) return null;
+
+  // 随机选一个参数 + 随机方向（up/down）
+  const param = candidates[Math.floor(Math.random() * candidates.length)]!;
+  const boundsDef = TUNING_BOUNDS[param]!;
+  const direction: "up" | "down" = Math.random() < 0.5 ? "up" : "down";
+
+  // 获取当前值
+  const [role, field] = parseParamPath(param);
+  if (!role || !field) return null;
+  const bounds = currentBounds[role];
+  if (!bounds) return null;
+  const currentValue = field === "maxCount" ? bounds.maxCount : bounds.minCount;
+
+  // 边界检查
+  const newValue = direction === "up"
+    ? clampParam(param, currentValue + boundsDef.step)
+    : clampParam(param, currentValue - boundsDef.step);
+
+  if (newValue === currentValue) return null; // 已在边界
+
+  // 重置计数器 + 记录探索 tick
+  explorationState.stableCount = 0;
+  explorationState.lastExplored[param] = currentTick;
+
+  return {
+    adjustment: {
+      param,
+      oldValue: currentValue,
+      newValue,
+      reason: `Exploration probe: ${direction} ${param} from ${currentValue} to ${newValue} (stable ${EXPLORATION_STABLE_THRESHOLD}+ cycles)`,
+    },
+    pendingValidation: {
+      preAdjustSignals: capturePreAdjustSignals(param, signals),
+      expectedDirection: getExpectedDirection(param, direction),
+      adjustDirection: direction,
+      preAdjustValue: currentValue,
+    },
+  };
+}
+
+/** 重置探索稳态计数器（外部调用：当有调整触发时重置）。 */
+export function resetExplorationStableCount(): void {
+  explorationState.stableCount = 0;
+}
+
+// ─── 冻结策略（P3）──────────────────────────────────────────
 
 /**
  * 应用冻结策略：回滚次数达阈值则冻结参数。

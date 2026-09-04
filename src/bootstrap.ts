@@ -54,6 +54,7 @@ import { telemetryCollectorSystem } from "./systems/telemetry-collector";
 import { terminalManagerSystem } from "./systems/terminal-manager";
 import { trafficManagerSystem } from "./systems/traffic-manager";
 import { tuningEngineSystem } from "./systems/tuning-engine";
+import { tuningIntakeSystem } from "./systems/tuning-intake-system";
 import { towerDefenseSystem } from "./systems/tower-defense";
 
 import {
@@ -182,6 +183,9 @@ export const registry = new Registry()
   .registerSystem(telemetryCollectorSystem)
   // P3：参数自调优（每 500 tick 读遥测调角色边界覆盖值）
   .registerSystem(tuningEngineSystem)
+  // P3：L2 体外建议摄入（每 1000 tick 从 segment 6 读取外部 LLM 建议包，
+  //   经六层护栏校验后写入 intakePending，由 strategy-reviewer 复核后采纳）
+  .registerSystem(tuningIntakeSystem)
   // P0（post 阶段）：交通解算 — 所有角色之后统一仲裁签发 move
   .registerSystem(trafficManagerSystem)
   // P0：恢复 worker（启动期/灾后）

@@ -40,7 +40,7 @@ export function getWallTargetHits(
 
 export const CONFIG = {
   memory: {
-    schemaVersion: 43,
+    schemaVersion: 45,
     /** 【F1/G-C】数据族 TTL 表（FREEZE §9）：每族 {maxAge, sweepPolicy}。
      * sweepPolicy: "ring"（定长环自动截断）| "hook"（由既有清理钩子执行）| "planned"（消费者落地前占位）。
      * 本表 v1 为治理登记：ring/hook 两类由既有机制兑现，"planned" 行不产生行为。 */
@@ -63,7 +63,9 @@ export const CONFIG = {
       prometheus: { id: 4 },
       // 5: 情报玩家域冷存（月级 TTL，heap reset 后须存活）
       intelPlayers: { id: 5 },
-      // 6–9 预留。
+      // 6: L2 体外建议写入区（外部 LLM 写入，tuning-intake-system 只读）
+      l2Intake: { id: 6 },
+      // 7–9 预留。
     } as Record<string, { id: number } | number>,
   },
 

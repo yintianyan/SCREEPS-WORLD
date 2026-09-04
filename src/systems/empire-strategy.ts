@@ -19,6 +19,7 @@ import {
   buildEmpireSituation,
   type SituationRoomInput,
 } from "../domain/strategy/situation";
+import { selectEnvBaseline } from "../domain/strategy/posture-baseline";
 import { recordPlanningDecision, recordPlanningTime } from "../telemetry";
 import { log } from "../kernel/log";
 
@@ -84,8 +85,16 @@ export const empireStrategySystem: System = {
           Game.cpu.tickLimit ?? 20,
         ),
       },
-      // 姿态参数全部经 CONFIG 可调（修复原先写死 DEFAULT_POSTURE_OPTIONS 的隐藏 bug）。
-      { ...DEFAULT_POSTURE_OPTIONS, ...CONFIG.posture },
+      // 姿态参数合并链（优先级低→高）：
+      //   DEFAULT → CONFIG.posture → 环境基线 → strategyOverrides
+      // 环境基线：根据环境画像（邻居压力/市场/GCL）自动切换参数 profile，
+      //   解决换环境后参数不再最优的问题。strategyOverrides 仍可覆盖环境基线。
+      {
+        ...DEFAULT_POSTURE_OPTIONS,
+        ...CONFIG.posture,
+        ...selectEnvBaseline(buildEnvBaselineInput(rooms)),
+        ...resolveStrategyOverrides(Memory.kernel?.tuning?.strategyOverrides),
+      },
     );
 
     // 姿态变更时打日志 — 战略转向是帝国级事件，必须可观测。
@@ -298,5 +307,50 @@ function sumCpuByHome(): number {
     return sum;
   }
   return 0;
+}
+
+/**
+ * 自进化 L1：把 Memory.kernel.tuning.strategyOverrides（持久化条目）
+ * 展开为 PostureOptions 部分覆盖对象。
+ * key 格式 "posture.<paramName>" → 取 paramName 作为覆盖 key。
+ * 畸形数据（value 非数字）静默跳过。
+ */
+function resolveStrategyOverrides(
+  overrides?: Record<string, { value: number; adjustedAt: number; reason: string }>,
+): Partial<Record<string, number>> {
+  if (!overrides) return {};
+  const out: Record<string, number> = {};
+  for (const [key, entry] of Object.entries(overrides)) {
+    if (!entry || typeof entry.value !== "number") continue;
+    const paramName = key.startsWith("posture.") ? key.slice("posture.".length) : key;
+    out[paramName] = entry.value;
+  }
+  return out;
+}
+
+/**
+ * 环境自适应基线：从 Memory.kernel.environment（100t 采样）+ 当前威胁状态
+ * 构建 EnvBaselineInput。环境画像缺失时返回中性值（不产生覆盖）。
+ */
+function buildEnvBaselineInput(
+  rooms: RoomStrategyInput[],
+): import("../domain/strategy/posture-baseline").EnvBaselineInput {
+  const env = Memory.kernel?.environment;
+  if (!env) {
+    // 环境画像尚未采样 → 返回中性值（不产生任何覆盖，保持 CONFIG 默认）
+    return {
+      marketActivity: "moderate",
+      neighborPressure: "medium",
+      gclProgressRate: 0,
+      hasLiveThreat: false,
+    };
+  }
+  const hasLiveThreat = rooms.some(r => r.hasLiveThreat);
+  return {
+    marketActivity: env.marketActivity,
+    neighborPressure: env.neighborPressure,
+    gclProgressRate: env.gclProgressRate,
+    hasLiveThreat,
+  };
 }
 

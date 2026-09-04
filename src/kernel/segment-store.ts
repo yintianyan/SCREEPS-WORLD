@@ -30,6 +30,8 @@ export const SEGMENT_ECONOMY = segId("economy", 3);
 export const SEGMENT_PROMETHEUS = segId("prometheus", 4);
 /** Segment 5: 情报玩家域冷存（月级 TTL 长记忆，heap reset 后须存活）。 */
 export const SEGMENT_INTEL_PLAYERS = segId("intelPlayers", 5);
+/** Segment 6: L2 体外建议写入区（外部 LLM 写入，tuning-intake-system 只读）。 */
+export const SEGMENT_L2_INTAKE = segId("l2Intake", 6);
 /** @deprecated 使用 SEGMENT_CPU。保留用于迁移期间的代码引用。 */
 export const SEGMENT_TIMESERIES = SEGMENT_CPU;
 
@@ -136,6 +138,7 @@ export function requestSegments(): void {
     SEGMENT_ECONOMY,
     SEGMENT_PROMETHEUS,
     SEGMENT_INTEL_PLAYERS,
+    SEGMENT_L2_INTAKE,
   ]);
 }
 

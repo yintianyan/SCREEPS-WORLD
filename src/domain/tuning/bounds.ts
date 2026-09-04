@@ -114,6 +114,55 @@ export function getStorageThresholds(rcl: number): { surplus: number; low: numbe
   };
 }
 
+// ─── 策略参数边界（empire 级，非 room 级）──────────────────────
+
+/** 策略参数的安全约束。 */
+export interface StrategyParamBounds {
+  param: string;
+  floor: number;
+  ceiling: number;
+  step: number;
+}
+
+/**
+ * 姿态参数可调边界。初始值保守取 DEFAULT ± 20%。
+ * 边界依据：姿态参数影响帝国级行为，过大偏移可能导致姿态机失效
+ * （如 minDwell 过低 → 抖动；expandMinBucket 过低 → CPU 死亡螺旋）。
+ */
+export const STRATEGY_BOUNDS: Readonly<Record<string, StrategyParamBounds>> = {
+  "posture.minDwell": {
+    param: "posture.minDwell",
+    floor: 500,
+    ceiling: 3000,
+    step: 200,
+  },
+  "posture.warPatience": {
+    param: "posture.warPatience",
+    floor: 2000,
+    ceiling: 10000,
+    step: 1000,
+  },
+  "posture.expandMinBucket": {
+    param: "posture.expandMinBucket",
+    floor: 5000,
+    ceiling: 10000,
+    step: 500,
+  },
+  "posture.expandMaxPressure": {
+    param: "posture.expandMaxPressure",
+    floor: 0.2,
+    ceiling: 0.6,
+    step: 0.05,
+  },
+};
+
+/** 将策略参数值钳制在安全边界内。 */
+export function clampStrategyParam(param: string, value: number): number {
+  const bounds = STRATEGY_BOUNDS[param];
+  if (!bounds) return value;
+  return Math.max(bounds.floor, Math.min(bounds.ceiling, value));
+}
+
 /** 将值钳制在参数的安全边界内。 */
 export function clampParam(param: string, value: number): number {
   const bounds = TUNING_BOUNDS[param];
