@@ -43,25 +43,25 @@ function stationSnapshot(overrides: Parameters<typeof mockSnapshot>[0]) {
 }
 
 describe("A2 — storage 水位驱动升级功率", () => {
-  it("冲刺：storage ≥ 50k 且健康 → 1 个大 body upgrader（15W 限速，烧库存换 RCL）", () => {
+  it("冲刺：storage ≥ 50k 且健康 → 2 个大 body upgrader（烧库存换 RCL，RCL<8 不限速）", () => {
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
-    const snap = stationSnapshot({ storage, rcl: 6, energyCapacityAvailable: 2300 });
+    const snap = stationSnapshot({ storage, rcl: 7, energyCapacityAvailable: 5300 });
     const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
 
     const upgraders = requests.filter(r => r.role === "upgrader");
-    // maxWorkParts=15, workPerBody=15 → maxCountByWork=1 → 冲刺 2 被 WORK 限速裁到 1。
-    expect(upgraders).toHaveLength(1);
-    expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(15);
+    // RCL<8 解除自限速：冲刺 2 个 40W 大 body = 80/tick。
+    expect(upgraders).toHaveLength(2);
+    expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(40);
   });
 
-  it("维持：storage ≥ 10k → 1 个大 body upgrader（≈15/tick 吃满盈余）", () => {
+  it("维持：storage ≥ 10k → 1 个大 body upgrader（≈40/tick 吃满盈余）", () => {
     const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
-    const snap = stationSnapshot({ storage, rcl: 6, energyCapacityAvailable: 2300 });
+    const snap = stationSnapshot({ storage, rcl: 7, energyCapacityAvailable: 5300 });
     const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
 
     const upgraders = requests.filter(r => r.role === "upgrader");
     expect(upgraders).toHaveLength(1);
-    expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(15);
+    expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(40);
   });
 
   it("低水位：storage < 10k 且 pressure > 0.5 → 停升级攒库存", () => {

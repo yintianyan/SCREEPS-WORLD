@@ -633,8 +633,11 @@ export function evaluateDemand(
 
     const pressure = roomCtx.economyPressure;
     const upgradeCfg = CONFIG.economy.upgrade;
+    // RCL8 时引擎硬限制 15 energy/tick，选 15W body 即可顶满；RCL<8 时不限速，
+    // body 随容量放大（RCL7 可孵 40W body = 40/tick 升速）。
+    const bodyEnergyCap = snapshot.rcl >= 8 ? 1650 : energyCapacity;
     const workPerBody =
-      selectBody("upgrader", energyCapacity, { rcl: snapshot.rcl }).filter(p => p === "work").length || 1;
+      selectBody("upgrader", bodyEnergyCap, { rcl: snapshot.rcl }).filter(p => p === "work").length || 1;
     const hasStorage = snapshot.storage !== undefined;
     const storageEnergy = hasStorage ? snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) : 0;
 
@@ -678,12 +681,15 @@ export function evaluateDemand(
       upgraderTarget = pressure <= 0.5 ? 1 : 0;
     }
 
-    // WORK 部件限速：RCL8 为引擎硬限制（15 energy/tick），RCL<8 为自限速策略——
-    // 按 body WORK 数折算 creep 上限（15W → 1 个恰好顶满）。
-    // 统一限速避免 RCL8 前孵出 30 work 后满级时立即裁编的振荡。
-    const maxWorkParts = upgradeCfg.maxWorkParts ?? upgradeCfg.rcl8MaxWorkParts;
-    const maxCountByWork = Math.max(1, Math.floor(maxWorkParts / workPerBody));
-    upgraderTarget = Math.min(upgraderTarget, maxCountByWork);
+    // WORK 部件限速：仅 RCL8 时生效（引擎硬限制 15 energy/tick）。
+    // RCL<8 时无引擎上限——解除自限速策略，body 随容量放大（RCL7 可孵 40W body），
+    // upgrader 数量由 storage 水位 + economyPressure 驱动的 demand 逻辑自然调节。
+    // RCL8 时按 body WORK 数折算 creep 上限（15W → 1 个恰好顶满引擎 15/tick）。
+    if (snapshot.rcl >= 8) {
+      const maxWorkParts = upgradeCfg.maxWorkParts ?? upgradeCfg.rcl8MaxWorkParts;
+      const maxCountByWork = Math.max(1, Math.floor(maxWorkParts / workPerBody));
+      upgraderTarget = Math.min(upgraderTarget, maxCountByWork);
+    }
     // 保级覆盖：控制器快降级时至少保留 minCount。
     if (crisisNeedsGuard || hasDowngradeRisk) {
       upgraderTarget = Math.max(upgraderTarget, upgraderConfig.minCount);
@@ -695,7 +701,7 @@ export function evaluateDemand(
       for (let i = upgraderTotal; i < upgraderTarget; i++) {
         const key = spawnKey("upgrader", home, i);
         if (!hasKey(queue, key)) {
-          requests.push(createRequest("upgrader", home, i, key, upgraderPriority, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
+          requests.push(createRequest("upgrader", home, i, key, upgraderPriority, bodyEnergyCap, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
         }
       }
     }

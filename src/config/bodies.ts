@@ -155,7 +155,31 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
   ],
   upgrader: [
     // 站桩升级：1 CARRY 承接 withdraw、2 MOVE 通勤，其余全 WORK。
-    // [15W] RCL5(1800) 起可孵（官方 ext 配额 RCL5=30 → 容量 300+30×50=1800）；RCL8 单 creep 恰好顶满官方 15 energy/tick 上限。
+    // RCL<8 无引擎升级上限，大 body 直接提升升速（每 WORK = 1 energy/tick）。
+    // [40W,1C,2M] @4200：RCL7(5300) 冲刺档 — 40/tick 升速，比 15W 快 2.7x。
+    {
+      parts: [
+        "work", "work", "work", "work", "work", "work", "work", "work",
+        "work", "work", "work", "work", "work", "work", "work", "work",
+        "work", "work", "work", "work", "work", "work", "work", "work",
+        "work", "work", "work", "work", "work", "work", "work", "work",
+        "work", "work", "work", "work", "work", "work", "work", "work",
+        "carry", "move", "move",
+      ],
+      minCapacity: 4200,
+    },
+    // [25W,1C,2M] @2700：RCL6(3000) 冲刺档 — 25/tick 升速。
+    {
+      parts: [
+        "work", "work", "work", "work", "work", "work", "work", "work",
+        "work", "work", "work", "work", "work", "work", "work", "work",
+        "work", "work", "work", "work", "work", "work", "work", "work",
+        "work",
+        "carry", "move", "move",
+      ],
+      minCapacity: 2700,
+    },
+    // [15W,1C,2M] @1650：RCL5(1800) 起可孵；RCL8 单 creep 恰好顶满官方 15 energy/tick 上限。
     {
       parts: [
         "work", "work", "work", "work", "work", "work", "work", "work",

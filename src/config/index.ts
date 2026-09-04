@@ -391,10 +391,10 @@ export const CONFIG = {
       sprintStorage: 50000,
       /** storage 能量 ≥ 此值时维持大 body 满功率升级（≈ 盈余全喂 controller）。 */
       sustainedStorage: 10000,
-      /** upgrader 队列的 WORK 部件总数上限。
-       * RCL8 时为引擎硬限制（15 energy/tick）；RCL<8 时为自限速策略上限——
-       * 超过 15 work/tick 对 storage 消耗过快、维持成本高，且 RCL8 后必须裁回 15。
-       * 提前统一限速可避免 RCL8 前孵出 30 work 后 RCL8 满级时立即裁编的振荡。 */
+      /** RCL8 时引擎硬限制（15 energy/tick），RCL<8 时无引擎上限。
+       * 此值仅在 RCL8 时生效，用于匹配引擎硬限制；RCL<8 时不限速——
+       * upgrader 数量由 storage 水位 + economyPressure 驱动的 demand 逻辑自然调节。
+       * 参见 demand.ts 中的 maxCountByWork 逻辑（RCL<8 时不禁用）。 */
       maxWorkParts: 15,
       /** @deprecated 使用 maxWorkParts 代替（保留向后兼容）。 */
       rcl8MaxWorkParts: 15,
