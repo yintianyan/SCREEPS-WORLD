@@ -69,6 +69,12 @@ function reserveControllerAction(): ActionCandidate<StructureController> {
 }
 
 const policy: RolePolicy = {
+  // reserver 是远矿基础设施的关键角色 — 不消耗能量（CLAIM 只 reserve/attack
+  // controller）、不占 spawn 队列（已孵化）、CPU 开销极低。但它的优先级是 P2，
+  // 当 home 房处于 recovery/bootstrap 时会被 colonyStateFreezesRole 冻结。
+  // 冻结 reserver → 远矿房 reservation 过期 → source 被别人抢占 → 远矿产能归零，
+  // 与 recovery 的目标（恢复经济）背道而驰。因此声明 recoveryEligible 豁免。
+  recoveryEligible: true,
   acquire: [
     reserveControllerAction(),
   ],

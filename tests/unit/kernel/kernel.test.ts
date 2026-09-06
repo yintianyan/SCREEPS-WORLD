@@ -13,6 +13,10 @@ const p2CollectorExempt: RoleLike = { priority: 2, recoveryEligible: true };
 const p2Combat: RoleLike = { priority: 2, combat: true };
 const p1Defender: RoleLike = { priority: 1, combat: true };
 
+// reserver/claimer 是远矿基础设施角色 — P2 优先级但声明 recoveryEligible 豁免，
+// 确保 home 房 recovery 时不被冻结、远矿房 reservation 不中断。
+const p2ReserverExempt: RoleLike = { priority: 2, recoveryEligible: true };
+
 describe("colonyStateFreezesRole — 常态放行", () => {
   it("normal 态下任何角色都不冻结", () => {
     expect(colonyStateFreezesRole("normal", p2Civilian, "develop", false)).toBe(false);
@@ -62,5 +66,19 @@ describe("colonyStateFreezesRole — combat 紧急旁路", () => {
 
   it("undefined 姿态等同无 war → combat 角色冻结", () => {
     expect(colonyStateFreezesRole("recovery", p2Combat, undefined, false)).toBe(true);
+  });
+});
+
+describe("colonyStateFreezesRole — reserver/claimer 远矿豁免", () => {
+  it("recovery 下 reserver (P2, recoveryEligible) 不被冻结", () => {
+    expect(colonyStateFreezesRole("recovery", p2ReserverExempt, "develop", false)).toBe(false);
+  });
+
+  it("bootstrap 下 reserver (P2, recoveryEligible) 不被冻结", () => {
+    expect(colonyStateFreezesRole("bootstrap", p2ReserverExempt, "develop", false)).toBe(false);
+  });
+
+  it("normal 下 reserver 正常放行", () => {
+    expect(colonyStateFreezesRole("normal", p2ReserverExempt, "develop", false)).toBe(false);
   });
 });
