@@ -343,12 +343,17 @@ export const remoteMiningManagerSystem: System = {
         clearRooms.add(rn);
       }
 
+      // 路径阻断 wall 检测（有视野时）：通勤路径上若有 neutral wall（非我方建造），
+      // hauler 的寻路矩阵会标 255 导致绕行或卡死。标记 needWallClear 驱动 demand
+      // 孵 dismantler 前往拆除。与 foreign spawn dismantle 并行——两种拆除目标可同时存在。
+      detectPathWallBlockers(snapshot.roomName, remoteOps);
+
       // 外国前置 spawn 拆除任务检测（有视野时）：远矿房出现非我方已建成 spawn 且
       // controller 仍 neutral → 任务成立，evaluateRemoteDemand 孵 dismantler 去拆。
       // claim 前是唯一低成本拆除窗（neutral 房无塔无防御）；对方 claim 后任务不成立
       // —— 打 claimed 房是对等战争（safeMode 风险），改走 war 战役路径，在役
       // dismantler 标记归航。失明时维持上一判定（request key 幂等，不抖动）。
-      // 同时检测路径阻断 wall：通勤路径上的 neutral wall 导致路断，需 dismantler 拆除。
+      // 回收条件：既无 foreign spawn 也无 needWallClear（两种拆除任务共用 dismantler）。
       const dismantleTargets: Record<string, boolean> = {};
       for (const [rn, op] of Object.entries(remoteOps)) {
         if (op.state !== "active") continue;
@@ -360,13 +365,8 @@ export const remoteMiningManagerSystem: System = {
           filter: s => s.structureType === STRUCTURE_SPAWN,
         }).length > 0;
         dismantleTargets[rn] = neutralController && foreignSpawn;
-        if (!dismantleTargets[rn]) recycleRemoteDismantlers(snapshot.roomName, rn);
+        if (!dismantleTargets[rn] && !op.needWallClear) recycleRemoteDismantlers(snapshot.roomName, rn);
       }
-
-      // 路径阻断 wall 检测（有视野时）：通勤路径上若有 neutral wall（非我方建造），
-      // hauler 的寻路矩阵会标 255 导致绕行或卡死。标记 needWallClear 驱动 demand
-      // 孵 dismantler 前往拆除。与 foreign spawn dismantle 并行——两种拆除目标可同时存在。
-      detectPathWallBlockers(snapshot.roomName, remoteOps);
 
       // 远矿路径修路（enableRoadPlanning）：PathFinder 规划 home 锚→source container
       // 跨房路径，在远矿房侧铺 road site；施工由通勤 hauler（1W body）边走边建。
