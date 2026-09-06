@@ -42,6 +42,10 @@ export interface RemoteDemandInput {
    * 战役路径，避免 safeMode 风险）。任务存在时该 op 孵 1 只 dismantler 拆除外国
    * spawn，不阻塞经济孵化。 */
   dismantleTargets?: Readonly<Record<string, boolean | undefined>>;
+  /** 路径阻断 wall 待拆的远矿房集合 — 通勤路径上有 neutral wall 阻断通行，
+   * 需 dismantler 前往拆除。与 dismantleTargets 可同时成立（同一房既有 foreign
+   * spawn 又有阻断 wall）。不阻塞经济孵化。 */
+  wallClearRooms?: ReadonlySet<string>;
   /**
    * 被 InvaderCore 压制的远矿房集合 — 暂停该房一切孵化（含 defender）。
    * 拆核是纯送死（INVADER_CORE_HITS=100k，defender 20 dmg/tick × 1500 tick
@@ -106,6 +110,24 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     // 拆 5000 hits 仅 10 tick）。每 op 同时至多 1 只；不 continue —— 拆迁与
     // 经济采集并行，任务结束（拆完/对方 claim）由系统层回收标记。
     if (CONFIG.remote.enableDismantleForeignSpawn && (input.dismantleTargets?.[targetRoom] ?? false)) {
+      const dismantlePending = countRemotePending(spawnQueue, "dismantler", targetRoom);
+      const dismantleTotal = (counts.dismantler ?? 0) + dismantlePending;
+      if (dismantleTotal < 1) {
+        const key = spawnKey("dismantler", homeRoom, dismantleTotal, targetRoom);
+        const body = selectBody("dismantler", energyCapacityAvailable);
+        requests.push(createRemoteRequest(
+          "dismantler", homeRoom, targetRoom, dismantleTotal,
+          key, 1, body, tick,
+        ));
+      }
+    }
+
+    // 路径阻断 wall 拆除任务：通勤路径上有 neutral wall 导致 hauler 绕行或卡死。
+    // dismantler 前往拆除路径上的 wall（目标查找走 FIND_STRUCTURES 而非
+    // FIND_HOSTILE_STRUCTURES，因 neutral wall 无 owner 不属于敌方结构）。
+    // 与 foreign spawn dismantle 共享 dismantler 编制（至多 1 只 per op），
+    // 不继续 —— 拆墙与经济采集并行，墙拆完后系统层清除 needWallClear + 回收。
+    if (input.wallClearRooms?.has(targetRoom)) {
       const dismantlePending = countRemotePending(spawnQueue, "dismantler", targetRoom);
       const dismantleTotal = (counts.dismantler ?? 0) + dismantlePending;
       if (dismantleTotal < 1) {

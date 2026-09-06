@@ -348,6 +348,7 @@ export const remoteMiningManagerSystem: System = {
       // claim 前是唯一低成本拆除窗（neutral 房无塔无防御）；对方 claim 后任务不成立
       // —— 打 claimed 房是对等战争（safeMode 风险），改走 war 战役路径，在役
       // dismantler 标记归航。失明时维持上一判定（request key 幂等，不抖动）。
+      // 同时检测路径阻断 wall：通勤路径上的 neutral wall 导致路断，需 dismantler 拆除。
       const dismantleTargets: Record<string, boolean> = {};
       for (const [rn, op] of Object.entries(remoteOps)) {
         if (op.state !== "active") continue;
@@ -362,6 +363,11 @@ export const remoteMiningManagerSystem: System = {
         if (!dismantleTargets[rn]) recycleRemoteDismantlers(snapshot.roomName, rn);
       }
 
+      // 路径阻断 wall 检测（有视野时）：通勤路径上若有 neutral wall（非我方建造），
+      // hauler 的寻路矩阵会标 255 导致绕行或卡死。标记 needWallClear 驱动 demand
+      // 孵 dismantler 前往拆除。与 foreign spawn dismantle 并行——两种拆除目标可同时存在。
+      detectPathWallBlockers(snapshot.roomName, remoteOps);
+
       // 远矿路径修路（enableRoadPlanning）：PathFinder 规划 home 锚→source container
       // 跨房路径，在远矿房侧铺 road site；施工由通勤 hauler（1W body）边走边建。
       // 限速：每轮 ≤roadSitesPerRun 个新站，单 op 挂起 ≤maxRoadSitesPerOp，
@@ -369,6 +375,7 @@ export const remoteMiningManagerSystem: System = {
       if (CONFIG.remote.enableRoadPlanning) {
         planRemotePathRoads(snapshot.roomName, remoteOps, ctx);
       }
+
 
       // 威胁写入 remoteOps（P1-G：从 intel.dangerUntil 迁移至此）：出现威胁的远矿房
       // 打危险冷却 — 冷却期内不作为新远矿/扩张候选（止损：不给对手送兵）；现役运营
@@ -436,6 +443,11 @@ export const remoteMiningManagerSystem: System = {
             Object.keys(remoteOps).map(roomName => [roomName, false]),
           ),
           dismantleTargets,
+          wallClearRooms: new Set(
+            Object.entries(remoteOps)
+              .filter(([, op]) => op.needWallClear)
+              .map(([rn]) => rn),
+          ),
         });
 
         // A4.3：从 logistics-planner 产出的 Transport Plan 中提取 operation-scope 请求，
@@ -1318,6 +1330,77 @@ function planRemotePathRoads(
           // ERR_FULL / ERR_INVALID_TARGET（地形冲突等）：跳过该格，下轮重评。
           blockedKeys.add(`${pos.x},${pos.y}`);
         }
+      }
+    }
+  }
+}
+
+/**
+ * 检测远矿通勤路径上的阻断 wall — 有视野时每轮运行。
+ *
+ * PathFinder 规划 home 锚→source 路径（与 planRemotePathRoads 同口径，不带结构
+ * CostMatrix），路径会穿过 neutral wall 格子。但 creep 的 moveTo 带结构矩阵
+ * （wall = 255 不可通行），导致 hauler 绕行或卡死。此函数检测路径上的 wall 结构，
+ * 标记 needWallClear 驱动 demand 孵 dismantler 拆除。
+ *
+ * 失明时维持上一判定（不清除标记），防视野消失 → 清标 → 孵化恢复 → 路仍断 →
+ * 新视野 → 重新标记的抖动循环。墙被拆除后（路径上无 wall）清除标记 + 回收 dismantler。
+ */
+function detectPathWallBlockers(
+  homeRoom: string,
+  remoteOps: Record<string, RemoteOp>,
+): void {
+  const home = Game.rooms[homeRoom];
+  if (!home) return;
+  const anchor = home.storage ?? home.find(FIND_MY_SPAWNS)[0];
+  if (!anchor) return;
+
+  for (const [rn, op] of Object.entries(remoteOps)) {
+    if (op.state !== "active") continue;
+    const room = Game.rooms[rn];
+    if (!room) continue; // 失明：维持上一判定，不清标。
+
+    // 收集路径上（远矿房内）的 neutral wall。
+    const sources = room.find(FIND_SOURCES);
+    const walls = room.find(FIND_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_WALL,
+    }) as StructureWall[];
+    if (walls.length === 0) {
+      if (op.needWallClear) {
+        op.needWallClear = undefined;
+        recycleRemoteDismantlers(homeRoom, rn);
+      }
+      continue;
+    }
+
+    const wallKeys = new Set(walls.map(w => `${w.pos.x},${w.pos.y}`));
+    let foundWallOnPath = false;
+    for (const source of sources) {
+      if (foundWallOnPath) break;
+      const container = source.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: st => st.structureType === STRUCTURE_CONTAINER,
+      })[0] as StructureContainer | undefined;
+      const goal = container ? container.pos : source.pos;
+      const result = PathFinder.search(anchor.pos, { pos: goal, range: 1 }, {
+        maxRooms: 2,
+        plainCost: 2,
+        swampCost: 10,
+      });
+      for (const pos of result.path) {
+        if (pos.roomName !== rn) continue;
+        if (wallKeys.has(`${pos.x},${pos.y}`)) {
+          foundWallOnPath = true;
+          break;
+        }
+      }
+    }
+
+    if (foundWallOnPath) {
+      if (!op.needWallClear) op.needWallClear = true;
+    } else {
+      if (op.needWallClear) {
+        op.needWallClear = undefined;
+        recycleRemoteDismantlers(homeRoom, rn);
       }
     }
   }

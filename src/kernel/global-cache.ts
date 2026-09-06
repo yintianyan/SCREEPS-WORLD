@@ -403,6 +403,8 @@ export interface GlobalCache {
   __containersCache?: Record<string, { tick: number; containers: StructureContainer[] }>;
   /** remote-hauler 通勤建路扫描（room-scans.findMySitesCached）。 */
   __mySitesCache?: Record<string, { tick: number; sites: ConstructionSite[] }>;
+  /** dismantler 路径阻断墙扫描（room-scans.findWallsCached）。 */
+  __wallStructures?: Record<string, { tick: number; list: StructureWall[] }>;
 
   /** 威胁未决心跳上报限频（tower-defense 写）— 房间级最近一次上报 tick。
    * heap 存储 — global reset 丢失可接受（威胁持续在场时快速重建）。 */

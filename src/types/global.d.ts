@@ -961,6 +961,13 @@ receivedAt: number;
      * → 废弃运营。remote-mining-manager 唯一写者（managerInterval 采样）。
      */
     stallSince?: number;
+    /**
+     * 路径阻断墙标记 — 远矿通勤路径上检测到 neutral wall（非我方建造的
+     * STRUCTURE_WALL）阻断通行时置 true，驱动 demand 孵 dismantler 前往拆除。
+     * 有视野时每轮检测刷新；墙被拆除后清除。与 needCoreClear（InvaderCore）
+     * 互不干扰：墙阻断的是通勤路径，核心阻断的是 source 采集。
+     */
+    needWallClear?: boolean;
 
     // ─── A4.1 扩展：RemoteMiningOperation 关联字段 ────────
 

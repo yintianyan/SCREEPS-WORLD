@@ -168,3 +168,19 @@ export function findMySitesCached(room: Room): ConstructionSite[] {
   g.__mySitesCache[room.name] = { tick: Game.time, sites };
   return sites;
 }
+
+// ─── dismantler: neutral wall 列表（路径阻断墙拆除）─────────
+
+/** per-tick per-room 共享缓存：房间内全部 wall 结构（含我方与 neutral）。
+ * dismantler 用此查找路径阻断 wall 的拆除目标。 */
+export function findWallsCached(room: Room): StructureWall[] {
+  const g = globalCache();
+  if (!g.__wallStructures) g.__wallStructures = {};
+  const cached = g.__wallStructures[room.name];
+  if (cached && cached.tick === Game.time) return cached.list;
+  const list = room.find(FIND_STRUCTURES, {
+    filter: s => s.structureType === STRUCTURE_WALL,
+  }) as StructureWall[];
+  g.__wallStructures[room.name] = { tick: Game.time, list };
+  return list;
+}

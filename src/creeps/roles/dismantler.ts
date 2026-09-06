@@ -4,7 +4,7 @@ import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { attackerHold, markRetreat } from "./attacker";
-import { getHostileStructuresCached } from "../support/room-scans";
+import { getHostileStructuresCached, findWallsCached } from "../support/room-scans";
 
 /** 按建筑价值分档选择拆迁目标。 */
 function structureValueTier(t: StructureConstant): number {
@@ -51,12 +51,38 @@ export function dismantleStructures(): ActionCandidate<AnyStructure> {
   };
 }
 
+/**
+ * 拆除路径阻断 wall — dismantler 在远矿房时拆除路径上的 neutral wall。
+ *
+ * neutral wall 无 owner，不属于 FIND_HOSTILE_STRUCTURES，需走 FIND_STRUCTURES。
+ * 只在 needWallClear 标记成立时孵化到此房的 dismantler 会执行此 action。
+ * 拆最近 wall 即可：detectPathWallBlockers 已确认路径上有 wall，拆完后
+ * 标记自动清除 + 回收 dismantler。
+ */
+export function dismantlePathWalls(): ActionCandidate<StructureWall> {
+  return {
+    name: "dismantler:dismantle-path-walls",
+    resolve: (ac) => {
+      if (markRetreat(ac.creep)) return undefined;
+      const target = ac.creep.memory.remoteTarget;
+      if (!target || ac.creep.room.name !== target) return undefined;
+      const walls = findWallsCached(ac.creep.room);
+      if (walls.length === 0) return undefined;
+      return ac.creep.pos.findClosestByRange(walls) ?? walls[0];
+    },
+    execute: (ac, target) => {
+      const result = ac.creep.dismantle(target);
+      if (result === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, target);
+    },
+  };
+}
+
 const policy: RolePolicy = {
   combat: true,
   park: true,
   hold: attackerHold,
-  acquire: [dismantleStructures()],
-  work: [dismantleStructures()],
+  acquire: [dismantleStructures(), dismantlePathWalls()],
+  work: [dismantleStructures(), dismantlePathWalls()],
 };
 
 export const dismantlerRole = defineRole("dismantler", 2 as Priority, policy);
