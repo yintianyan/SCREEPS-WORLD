@@ -689,8 +689,10 @@ export const CONFIG = {
     harvestersMaxPerTarget: 2,
     /** 每个远矿目标的 hauler 数（评选期未算出 haulerNeed 时的回退值）。 */
     haulersPerTarget: 1,
-    /** 动态 hauler 编制上限 — 需要更多说明目标太远，评分门槛应已剔除它。 */
-    haulersMax: 3,
+    /** 动态 hauler 编制上限 — 道路修复后大多数 op 降到 1-2，但极远房
+     * （pathCost 150+）有路时仍可能需要 4。minNetScore 门槛通常已过滤
+     * 极远房，4 作为安全裕量。 */
+    haulersMax: 4,
     /** 净收益门槛（e/tick）— 评分低于此值的候选剔除：名额只有 maxOperations 个，
      * 烂目标（沼泽远房）占位比空置更亏。 */
     minNetScore: 3,

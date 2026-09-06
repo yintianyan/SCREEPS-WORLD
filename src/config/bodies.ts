@@ -448,8 +448,8 @@ export function selectBody(
   if (role === "remoteHauler" && options?.hasRoad === false) {
     const templates = BODY_TEMPLATES[role];
     if (templates) {
-      // 无路档索引：跳过 2:1 档（idx 0 和 2），只查 1:1 档（idx 1 和 3）及后续。
-      // 1:1 档的 minCapacity 标注了平原满速，2:1 档的注释标注了道路满速。
+      // 无路档索引：跳过 2:1 道路配比档（idx 0 和 3），只查 1:1 平原满速档及后续。
+      // idx 0 [24C,12M] 和 idx 3 [16C,8M] 是 2:1 配比（平原半速），其余为 1:1（平原满速）。
       const roadlessIndices = [1, 2, 4, 5, 6, 7, 8]; // 1:1 档 + fallback 档
       for (const idx of roadlessIndices) {
         if (idx >= templates.length) break;

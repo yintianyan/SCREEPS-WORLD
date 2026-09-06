@@ -5,7 +5,7 @@ import type { Priority, System, TickContext, ColonyState, RoomSnapshot } from ".
 import { selectRemoteTargets, shouldPauseOperation, effectiveMaxOperations, scoreRemoteCandidate, roomLinearDistance } from "../domain/remote/targeting";
 import { INVADER_USERNAME, isHostilePlayerReservation } from "../domain/intel";
 import { evaluateRemoteDemand, type RemoteCreepSummary } from "../domain/remote/demand";
-import { remoteReplacementThreshold } from "../domain/remote/staffing";
+import { remoteReplacementThreshold, computePerHaulerThroughput } from "../domain/remote/staffing";
 import { classifyThreats } from "../domain/defense/threat";
 import { submitRequest } from "../domain/spawn/queue";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
@@ -117,6 +117,11 @@ export const remoteMiningManagerSystem: System = {
       // 提前计算：既供新开点评选，也供现役 op 周期重估（A-3/B-6）。
       // hasRoad=false：远矿路径通常无道路，selectBody 选 1:1 平原满速配比档
       // （CARRY 少但 MOVE 多，无疲劳），carry 数与 2:1 档不同 → 必须同口径。
+      // 检测每个远矿房的道路覆盖状态：有视野时扫描通勤路径上已建成 road 的覆盖率。
+      // 失明时保守 false（无路），与现有逻辑一致。道路修好后切换 true，使 body 和
+      // haulerNeed 同步切到 2:1 道路满速档（运力 ×1.5，编制可缩编）。
+      const roadStatus = detectRoadCoverage(snapshot.roomName, remoteOps);
+      // haulerCapacity 取无路档（保守下界）做评选，避免道路未覆盖时高估运力。
       const haulerBody = selectBody("remoteHauler", snapshot.energyCapacityAvailable, { hasRoad: false });
       const haulerCapacity = haulerBody.filter(p => p === CARRY).length * CARRY_CAPACITY;
 
@@ -130,7 +135,7 @@ export const remoteMiningManagerSystem: System = {
       // Plan 的 scope="operation" 请求拥有 Decision Authority（在下方 L295-316 消费）。
       const planForRemote = globalCache().logisticsPlan?.plan;
       const planIsActiveForRemote = planForRemote && planForRemote.plannedAt >= ctx.tick - 100;
-      reevaluateActiveOps(remoteOps, intel, snapshot.roomName, haulerCapacity, ctx.tick);
+      reevaluateActiveOps(remoteOps, intel, snapshot.roomName, haulerCapacity, roadStatus, ctx.tick);
 
       // A4.4：如果 Plan 有效，记录 reevaluateActiveOps 的 haulerNeed 信号到 Plan 消费日志。
       // Plan 消费逻辑（L295-316）会用 Plan 的 haulerNeed 覆写，reevaluateActiveOps 的结果
@@ -436,12 +441,9 @@ export const remoteMiningManagerSystem: System = {
           travelCosts: Object.fromEntries(
             Object.keys(remoteOps).map(roomName => [roomName, intel[roomName]?.pathCost]),
           ),
-          // 远矿路径通常无道路覆盖 — 默认 hasRoad=false，让 selectBody 选 1:1 平原满速配比。
-          // 2:1 道路配比档在无路时平原半速，效率减半；1:1 档虽运力小但无疲劳，总吞吐更高。
-          // 修路后在此传 true 切换回 2:1 档（运力 ×1.5）。
-          roadStatus: Object.fromEntries(
-            Object.keys(remoteOps).map(roomName => [roomName, false]),
-          ),
+          // 道路覆盖状态驱动 body 档位选择：有路 → 2:1 道路满速档（运力大），
+          // 无路 → 1:1 平原满速档（无疲劳，效率高）。detectRoadCoverage 在上方算出。
+          roadStatus,
           dismantleTargets,
           wallClearRooms: new Set(
             Object.entries(remoteOps)
@@ -468,7 +470,18 @@ export const remoteMiningManagerSystem: System = {
             // Plan 指示的远矿目标房运力需求
             const targetOp = remoteOps[planReq.destination.room];
             if (targetOp && targetOp.state === "active") {
-              const planHaulerNeed = Math.ceil(planReq.amount / 1000); // 简化：1000 energy/hauler
+              // 基于实际 body carry + pathCost + 道路状态精确计算单只 hauler 吞吐量，
+              // 替代旧的 1000 energy/hauler 粗算。pathCost 缺失时回退保守粗算。
+              const hasRoad = roadStatus[planReq.destination.room] ?? false;
+              const pathCost = intel[planReq.destination.room]?.pathCost;
+              const haulerBodyForCalc = selectBody("remoteHauler", snapshot.energyCapacityAvailable, { hasRoad });
+              const carryParts = haulerBodyForCalc.filter(p => p === CARRY).length;
+              const planHaulerNeed = pathCost !== undefined
+                ? Math.max(1, Math.min(
+                    CONFIG.remote.haulersMax,
+                    Math.ceil(planReq.amount / Math.max(0.01, computePerHaulerThroughput(carryParts, pathCost, hasRoad).throughput)),
+                  ))
+                : Math.max(1, Math.min(CONFIG.remote.haulersMax, Math.ceil(planReq.amount / 1000)));
               // A4.4：Plan 拥有 Decision Authority — 可增可减。
               if (planHaulerNeed !== (targetOp.haulerNeed ?? 0)) {
                 const oldNeed = targetOp.haulerNeed ?? 0;
@@ -508,16 +521,19 @@ function reevaluateActiveOps(
   intel: Record<string, import("../domain/intel").RoomIntel>,
   homeRoom: string,
   haulerCapacity: number,
+  roadStatus: Readonly<Record<string, boolean>>,
   tick: number,
 ): void {
   for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") continue;
     const info = intel[roomName];
+    const hasRoad = roadStatus[roomName] ?? false;
     const { netScore, haulerNeed } = scoreRemoteCandidate({
       pathCost: info?.pathCost,
       linearDistance: roomLinearDistance(homeRoom, roomName),
       sources: op.sources ?? info?.sources,
       haulerCapacity,
+      hasRoad,
     });
     // 写回最新 haulerNeed（body 档位提升后单只运力增大 → 需要的 hauler 数下降）。
     op.haulerNeed = haulerNeed;
@@ -1404,4 +1420,60 @@ function detectPathWallBlockers(
       }
     }
   }
+}
+
+/**
+ * 检测远矿通勤路径的道路覆盖率。有视野时对每个 active op 做 PathFinder.search
+ * 获取 home 锚→source container 路径，统计路径上已建成 road 的格子占比。
+ * 覆盖率 ≥ 60% 视为「有路」（hauler 大部分路程 fatigue-free，2:1 配比有效）。
+ * 失明（无视野）时保守返回 false（无路），与旧硬编码行为一致。
+ */
+function detectRoadCoverage(
+  homeRoom: string,
+  remoteOps: Readonly<Record<string, RemoteOp>>,
+): Record<string, boolean> {
+  const result: Record<string, boolean> = {};
+  const home = Game.rooms[homeRoom];
+  const anchor = home?.storage ?? home?.find(FIND_MY_SPAWNS)?.[0];
+  if (!anchor) {
+    for (const rn of Object.keys(remoteOps)) result[rn] = false;
+    return result;
+  }
+  for (const [rn, op] of Object.entries(remoteOps)) {
+    if (op.state !== "active") { result[rn] = false; continue; }
+    const room = Game.rooms[rn];
+    if (!room) { result[rn] = false; continue; }
+    const sources = room.find(FIND_SOURCES);
+    if (sources.length === 0) { result[rn] = false; continue; }
+    const roadKeys = new Set<string>();
+    for (const s of room.find(FIND_STRUCTURES)) {
+      if (s.structureType === STRUCTURE_ROAD) roadKeys.add(`${s.pos.x},${s.pos.y}`);
+    }
+    const homeRoadKeys = new Set<string>();
+    for (const s of home!.find(FIND_STRUCTURES)) {
+      if (s.structureType === STRUCTURE_ROAD) homeRoadKeys.add(`${s.pos.x},${s.pos.y}`);
+    }
+    let totalPathTiles = 0;
+    let roadTiles = 0;
+    for (const source of sources) {
+      const container = source.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: st => st.structureType === STRUCTURE_CONTAINER,
+      })[0] as StructureContainer | undefined;
+      const goal = container ? container.pos : source.pos;
+      const searchResult = PathFinder.search(anchor.pos, { pos: goal, range: 1 }, {
+        maxRooms: 2,
+        plainCost: 2,
+        swampCost: 10,
+      });
+      for (const pos of searchResult.path) {
+        if (pos.roomName !== rn && pos.roomName !== homeRoom) continue;
+        const key = `${pos.x},${pos.y}`;
+        totalPathTiles++;
+        if (pos.roomName === rn && roadKeys.has(key)) roadTiles++;
+        else if (pos.roomName === homeRoom && homeRoadKeys.has(key)) roadTiles++;
+      }
+    }
+    result[rn] = totalPathTiles > 0 && roadTiles / totalPathTiles >= 0.6;
+  }
+  return result;
 }
