@@ -290,6 +290,7 @@ export function attackerHold(creep: Creep, ctx: TickContext): boolean {
 
 const policy: RolePolicy = {
   combat: true,
+  park: true,
   hold: attackerHold,
   // A5.4.3：focus-fire 最高优先 → A5.4.1 tactical-intent → Legacy 候选
   // 无 FocusFire 指令时回退到 A5.4.1 TacticalIntent → PB → enemies → structures

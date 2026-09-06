@@ -21,8 +21,10 @@ export function registerDefenseMetrics(): void {
 
 /** 采集 Defense Metrics。每 5 tick 调用。 */
 export function collectDefenseMetrics(snapshots: Iterable<RoomSnapshot>): void {
-    if (!shouldCollect("spawn")) return; // 与 spawn 同频（5 tick）
-    markCollected("spawn");
+    // 独立频率键：与 collectSpawnMetrics 同块执行，借用 "spawn" 键会被先执行的
+    // spawn 采集 markCollected 占掉窗口，defense 永远拿不到采集资格。
+    if (!shouldCollect("defense")) return;
+    markCollected("defense");
 
     try {
         let threatRooms = 0;

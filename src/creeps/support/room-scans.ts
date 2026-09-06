@@ -140,3 +140,31 @@ export function getPowerBankCached(room: Room): StructurePowerBank | undefined {
   g.__powerBanks[room.name] = { tick: Game.time, pb };
   return pb;
 }
+
+// ─── remote-defender: 防守位锚点（container/source 质心所需的扫描） ────────
+
+/** per-tick per-room 共享缓存：房间内全部 container。 */
+export function findContainersCached(room: Room): StructureContainer[] {
+  const g = globalCache();
+  if (!g.__containersCache) g.__containersCache = {};
+  const cached = g.__containersCache[room.name];
+  if (cached && cached.tick === Game.time) return cached.containers;
+  const containers = room.find(FIND_STRUCTURES, {
+    filter: s => s.structureType === STRUCTURE_CONTAINER,
+  }) as StructureContainer[];
+  g.__containersCache[room.name] = { tick: Game.time, containers };
+  return containers;
+}
+
+// ─── remote-hauler: 通勤建路（脚下/邻近 site 扫描） ─────────────────────
+
+/** per-tick per-room 共享缓存：房间内全部我方工地。 */
+export function findMySitesCached(room: Room): ConstructionSite[] {
+  const g = globalCache();
+  if (!g.__mySitesCache) g.__mySitesCache = {};
+  const cached = g.__mySitesCache[room.name];
+  if (cached && cached.tick === Game.time) return cached.sites;
+  const sites = room.find(FIND_MY_CONSTRUCTION_SITES);
+  g.__mySitesCache[room.name] = { tick: Game.time, sites };
+  return sites;
+}

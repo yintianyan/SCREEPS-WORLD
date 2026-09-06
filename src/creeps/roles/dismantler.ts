@@ -53,6 +53,7 @@ export function dismantleStructures(): ActionCandidate<AnyStructure> {
 
 const policy: RolePolicy = {
   combat: true,
+  park: true,
   hold: attackerHold,
   acquire: [dismantleStructures()],
   work: [dismantleStructures()],

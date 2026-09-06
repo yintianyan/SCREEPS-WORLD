@@ -53,6 +53,10 @@ export interface GlobalCache {
    * 本缓存是死亡位置的唯一来源（maintainMemory 先于 buildSnapshots 运行）。
    * global reset 后首 tick 为空 — 死亡事件降级为无位置记录，可接受。 */
   creepLastSeen?: ReadonlyMap<string, { r: string; x: number; y: number }>;
+  /** E5 RCL 进度停滞追踪（roomName → 上次采样进度与最后移动 tick）。
+   * collectRCLSnapshots 每 tick 更新；global reset 丢失可接受（重新播种后需
+   * 重新积累停滞时长，保守方向）。 */
+  rclProgressTracker?: Map<string, { progress: number; lastMoveTick: number }>;
   /** 近期战损记录（recordCreepDeath 对 natural=0 的死亡追加，惰性清理）。
    * safe mode 舰队伤亡熔断（M11）消费：窗口内本房战损达阈值且威胁在场即触发。
    * heap 存储 — global reset 丢失可接受（reset 极少，威胁持续在场时计数快速重建）。 */
@@ -395,6 +399,10 @@ export interface GlobalCache {
   __remoteSources?: Record<string, { tick: number; sources: Source[] }>;
   /** 房间内己方 creep 列表（remote-harvester/healer 共享）。 */
   __myCreepsCache?: Record<string, { tick: number; creeps: Creep[] }>;
+  /** remote-defender 防守位锚点扫描（room-scans.findContainersCached）。 */
+  __containersCache?: Record<string, { tick: number; containers: StructureContainer[] }>;
+  /** remote-hauler 通勤建路扫描（room-scans.findMySitesCached）。 */
+  __mySitesCache?: Record<string, { tick: number; sites: ConstructionSite[] }>;
 
   /** 威胁未决心跳上报限频（tower-defense 写）— 房间级最近一次上报 tick。
    * heap 存储 — global reset 丢失可接受（威胁持续在场时快速重建）。 */

@@ -4,6 +4,7 @@ import type { RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 
 const policy: RolePolicy = {
+  park: true,
   acquire: [],
   work: [],
   // recon push-through：钻进敌方过境房（如 Aguia 的 W38S58）时不 flee 回 home，

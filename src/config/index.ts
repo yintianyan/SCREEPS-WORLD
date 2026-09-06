@@ -701,6 +701,20 @@ export const CONFIG = {
     enableReserver: true,
     /** 是否启用 remoteDefender（远矿防御者，杀 NPC reserver/Invader）。 */
     enableDefender: true,
+    /** 是否启用外国前置 spawn 拆除任务：远矿房出现非我方已建成 spawn 且 controller
+     * 仍 neutral 时派 dismantler 拆除（claim 前是唯一低成本拆除窗）。对方 claim 后
+     * 任务自动不成立（对等战争走 war 战役路径）。 */
+    enableDismantleForeignSpawn: true,
+    /** 是否启用远矿路径修路：PathFinder 规划 home 锚→source container 跨房路径，
+     * 在远矿房侧铺 road site，由通勤 hauler（1W body）边走边建。 */
+    enableRoadPlanning: true,
+    /** 每次 manager 运行最多新下的 road site 数（全帝国口径，限速防挤占工地预算）。 */
+    roadSitesPerRun: 3,
+    /** 单个远矿 op 同时挂起的 road site 上限（铺完自然回落）。 */
+    maxRoadSitesPerOp: 20,
+    /** 全帝国待建 road site 总上限 —— 独立于 maxGlobalSites 的基建车道
+     * （自有房常规工地帽会被 lab/rampart 长周期大活顶满，道路被饿死）。 */
+    roadSitesPerOpTotal: 20,
     /** 远矿目标过期 tick 数（lastSeen 超过此值则暂停运营）。 */
     staleThreshold: 5000,
     /** 远矿启用 RCL 门限（低于此 RCL 不开远矿，集中能量发展本房）。 */

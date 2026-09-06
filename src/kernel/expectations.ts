@@ -57,6 +57,9 @@ export interface RCLSnapshot {
   progressTotal: number;
   /** 最近一次 RCL 变化的 tick；undefined = 尚无观测基准（跳过检测）。 */
   lastRclChange?: number;
+  /** controller.progress 距上次变化的 tick 数（进度停滞时长）。
+   * E5 用它替代「距上次升级的绝对时长」——冲级房升级缓慢但持续，绝对龄会永久误报。 */
+  progressStallTicks?: number;
   /** 是否有 upgrader 角色存活。 */
   hasUpgrader: boolean;
   /** storage 能量储备。 */
@@ -378,19 +381,21 @@ export function evaluateExpectations(input: {
     }
   }
 
-  // E5 RCL 长期不增长（boot 宽限后生效）。
+  // E5 RCL 进度长期停滞（boot 宽限后生效）。
+  // 口径 = controller.progress 停滞时长（进度一动就归零），而非距上次升级的绝对
+  // 时长——RCL7→8 按正常速率要 ~15 万 tick，绝对龄阈值会对正常冲级房永久误报。
   if (bootAge >= P3_BOOT_GRACE_TICKS && input.rclSnapshots) {
     for (const rcl of input.rclSnapshots) {
-      if (rcl.lastRclChange === undefined) continue;
-      const rclAge = input.tick - rcl.lastRclChange;
-      if (rclAge > E5_STALE_TICKS) {
-        // 误报保护：RCL8 不需要增长（已满级）
-        if (rcl.rcl < 8) {
-          violations.push({
-            id: "rclStale:" + rcl.room,
-            detail: "rcl=" + rcl.rcl + " age=" + rclAge + " upgrader=" + rcl.hasUpgrader + " storage=" + rcl.storageEnergy,
-          });
-        }
+      // 误报保护：RCL8 不需要增长（已满级）
+      if (rcl.rcl >= 8) continue;
+      // 停滞时长优先；tracker 缺失（reset 后首轮）回退绝对龄，方向保守。
+      const stall = rcl.progressStallTicks
+        ?? (rcl.lastRclChange !== undefined ? input.tick - rcl.lastRclChange : undefined);
+      if (stall !== undefined && stall > E5_STALE_TICKS) {
+        violations.push({
+          id: "rclStale:" + rcl.room,
+          detail: "rcl=" + rcl.rcl + " stall=" + stall + " upgrader=" + rcl.hasUpgrader + " storage=" + rcl.storageEnergy,
+        });
       }
     }
   }

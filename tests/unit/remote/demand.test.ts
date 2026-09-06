@@ -421,4 +421,54 @@ describe("remote demand — remoteDefender 威胁响应", () => {
     });
     expect(requests.filter((r) => r.role === "remoteDefender")).toHaveLength(0);
   });
+
+  // ── 外国前置 spawn 拆除任务（dismantleTargets）─────────────────
+
+  it("任务成立时生成 dismantler 请求且 remoteTarget 正确", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: fullStaff,
+      dismantleTargets: { [targetRoom]: true },
+    });
+    const dismantleReqs = requests.filter((r) => r.role === "dismantler");
+    expect(dismantleReqs).toHaveLength(1);
+    expect(dismantleReqs[0]!.memory.remoteTarget).toBe(targetRoom);
+  });
+
+  it("任务不成立时不生成 dismantler", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: fullStaff,
+      dismantleTargets: { [targetRoom]: false },
+    });
+    expect(requests.filter((r) => r.role === "dismantler")).toHaveLength(0);
+  });
+
+  it("dismantleTargets 未提供时不生成 dismantler（向后兼容）", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: fullStaff,
+    });
+    expect(requests.filter((r) => r.role === "dismantler")).toHaveLength(0);
+  });
+
+  it("已有存活 dismantler 时不重复孵化", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: [...fullStaff, ...makeCreeps("dismantler", 1, 1000)],
+      dismantleTargets: { [targetRoom]: true },
+    });
+    expect(requests.filter((r) => r.role === "dismantler")).toHaveLength(0);
+  });
+
+  it("拆除任务不阻塞经济孵化（并行执行）", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: [],
+      dismantleTargets: { [targetRoom]: true },
+    });
+    const roles = requests.map((r) => r.role);
+    expect(roles).toContain("dismantler");
+    expect(roles).toContain("remoteHarvester");
+  });
 });

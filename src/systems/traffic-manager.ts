@@ -131,6 +131,8 @@ function resolveAndDispatch(roomName: string, batch: RoomBatch, snapshot: RoomSn
       let score = 0;
       if (parkData?.critical.has(packed)) score += 100;
       if (parkData?.roads.has(packed)) score += 10;
+      // 推挤落格避开房间连接带 — 把被推挤者推上门坎格等于制造下一个堵点。
+      if (parkData?.portals.has(packed)) score += 50;
       scored.push({ packed, score });
     }
     scored.sort((a, b) => a.score - b.score);

@@ -866,10 +866,19 @@ export function ensureHome(creep: Creep): boolean {
     // InvaderCore 压制房正是此症状；被 recycle 标记的 creep 由 recyclePass 接管移动，不受此影响）。
     // carrier（A3.0 跨房调拨）：acquire/idle/flee → home（source room 取能），
     // work → remoteTarget（target room 卸能）。与 remoteHauler 方向对偶。
+    //
+    // 半载回程修复：remoteHauler 在 remoteTarget 房内 idle 且携带量 > 50% 容量时，
+    // 应回 home 卸货而非空等。原逻辑把 idle 在 remoteTarget 的 hauler 留在原地，
+    // 导致半载 hauler（store 70%）坐等 container 回填，既不装满也不卸货 — 线上
+    // 实测 9 只 hauler 中 2 只 mode=idle 空转，平均负载率仅 35%。
+    // 50% 门槛防止空载 hauler 振荡（空载回 home 无货可卸，纯浪费通勤）。
     const isCarrier = creep.memory.role === "carrier";
+    const isRemoteHauler = creep.memory.role === "remoteHauler";
+    const hasHalfLoad = creep.store.getUsedCapacity() > creep.store.getCapacity() * 0.5;
     const goHome = mode === "flee" ||
       (mode === "idle" && creep.room.name !== remoteTarget) ||
-      (mode === "work" && (creep.memory.role === "remoteHauler" || creep.memory.role === "coreClearer")) ||
+      (mode === "idle" && isRemoteHauler && creep.room.name === remoteTarget && hasHalfLoad) ||
+      (mode === "work" && (isRemoteHauler || creep.memory.role === "coreClearer")) ||
       (isCarrier && (mode === "acquire" || mode === "idle"));
     const dest = goHome ? home : remoteTarget;
     if (creep.room.name === dest) {

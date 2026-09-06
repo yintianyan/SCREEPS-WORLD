@@ -33,6 +33,15 @@ export interface RemoteDemandInput {
   remoteThreats?: Readonly<Record<string, boolean>>;
   /** 远矿通勤成本（来自 intel，运行时输入，不写入 RemoteOp）。 */
   travelCosts?: Readonly<Record<string, number | undefined>>;
+  /** 远矿路径道路覆盖状态（key = 目标房名，true = 有路）。
+   * 有路时 hauler body 走 2:1 道路满速配比（运力大），无路时走 1:1 平原满速配比（效率高）。
+   * 缺失时默认有路（保守：2:1 档运力更大优先选）。 */
+  roadStatus?: Readonly<Record<string, boolean | undefined>>;
+  /** 外国前置 spawn 拆除任务（key = 目标房名，value = 该房有非我方 spawn 且 controller
+   * 仍 neutral）。系统层有视野时检测；claim 一旦发生任务即不成立（对等战争走 war
+   * 战役路径，避免 safeMode 风险）。任务存在时该 op 孵 1 只 dismantler 拆除外国
+   * spawn，不阻塞经济孵化。 */
+  dismantleTargets?: Readonly<Record<string, boolean | undefined>>;
   /**
    * 被 InvaderCore 压制的远矿房集合 — 暂停该房一切孵化（含 defender）。
    * 拆核是纯送死（INVADER_CORE_HITS=100k，defender 20 dmg/tick × 1500 tick
@@ -90,6 +99,25 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       continue;
     }
 
+    // 外国前置 spawn 拆除任务：远矿房出现非我方已建成 spawn 且 controller 仍
+    // neutral —— spawn 完成 = 对方随时可 claim，claim 后本 op 变成入侵他人领土
+    // （塔 + safeMode 风险），拆除成本翻数倍。claim 前是唯一的低成本拆除窗
+    // （neutral 房无塔无防御，dismantle 免费伤害，顶档 dismantler 500 dmg/tick
+    // 拆 5000 hits 仅 10 tick）。每 op 同时至多 1 只；不 continue —— 拆迁与
+    // 经济采集并行，任务结束（拆完/对方 claim）由系统层回收标记。
+    if (CONFIG.remote.enableDismantleForeignSpawn && (input.dismantleTargets?.[targetRoom] ?? false)) {
+      const dismantlePending = countRemotePending(spawnQueue, "dismantler", targetRoom);
+      const dismantleTotal = (counts.dismantler ?? 0) + dismantlePending;
+      if (dismantleTotal < 1) {
+        const key = spawnKey("dismantler", homeRoom, dismantleTotal, targetRoom);
+        const body = selectBody("dismantler", energyCapacityAvailable);
+        requests.push(createRemoteRequest(
+          "dismantler", homeRoom, targetRoom, dismantleTotal,
+          key, 1, body, tick,
+        ));
+      }
+    }
+
     const pending = {
       remoteHarvester: countRemotePending(spawnQueue, "remoteHarvester", targetRoom),
       remoteHauler: countRemotePending(spawnQueue, "remoteHauler", targetRoom),
@@ -111,9 +139,13 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       }
     }
 
-    // RM-2：威胁在场（含失明冷却期，系统层已合并进 remoteThreats）暂停经济
-    // 孵化 — 经济 creep 零战力，威胁未清时补一批送一批；defender 已在上方评估。
-    if (hasThreats) continue;
+    // RM-2：威胁在场（含失明冷却期，系统层已合并进 remoteThreats）暂停经济**扩编**
+    // 孵化 — 经济 creep 零战力，威胁未清时扩一批送一批；defender 已在上方评估。
+    // 但**替补**放行（replacementKey 绑濒死者 + healthy+pending<target 双门控不变）：
+    // dangerUntil 窗口远长于实际袭击时长，连替补也停会让远矿出勤率整个窗口内塌方
+    // （线上实证：威胁窗内 remoteHarvester 换代停摆，提取量掉半）。编制不扩只补
+    // 濒死者——anti-添油语义保留在扩编侧。
+    const economySuppressed = hasThreats;
 
     // 1. Remote Harvester — 每 source 1 个（2-source 房需 2 只，否则第二源白费）；
     //    op.sources 缺失时回退 harvestersPerTarget，上限 harvestersMaxPerTarget
@@ -123,14 +155,15 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       CONFIG.remote.harvestersMaxPerTarget,
     );
     const harvesterTotal = (counts.remoteHarvester ?? 0) + pending.remoteHarvester;
-    if (harvesterTotal < harvesterTarget) {
+    if (harvesterTotal < harvesterTarget && !economySuppressed) {
       const key = spawnKey("remoteHarvester", homeRoom, harvesterTotal, targetRoom);
       const body = selectBody("remoteHarvester", energyCapacityAvailable);
       requests.push(createRemoteRequest(
         "remoteHarvester", homeRoom, targetRoom, harvesterTotal,
         key, 1, body, tick,
       ));
-    } else {
+    }
+    if (harvesterTotal >= harvesterTarget || economySuppressed) {
       const pathCost = input.travelCosts?.[targetRoom];
       const replacement = findReplacement(remoteCreeps, "remoteHarvester", targetRoom, pathCost);
       // 守卫：健康数（含孵化中替补）+ pending 不足编制才补，防替换风暴（见 countHealthyByRole 注释）。
@@ -157,21 +190,24 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     const harvestersReady = (counts.remoteHarvester ?? 0) + pending.remoteHarvester;
     const haulerTarget = remoteHaulerTarget(op.sources, op.haulerNeed, harvestersReady);
     const haulerTotal = (counts.remoteHauler ?? 0) + pending.remoteHauler;
-    if (haulerTotal < haulerTarget) {
+    if (haulerTotal < haulerTarget && !economySuppressed) {
       const key = spawnKey("remoteHauler", homeRoom, haulerTotal, targetRoom);
-      const body = selectBody("remoteHauler", energyCapacityAvailable);
+      const hasRoad = input.roadStatus?.[targetRoom] ?? true;
+      const body = selectBody("remoteHauler", energyCapacityAvailable, { hasRoad });
       requests.push(createRemoteRequest(
         "remoteHauler", homeRoom, targetRoom, haulerTotal,
         key, 1, body, tick,
       ));
-    } else {
+    }
+    if (haulerTotal >= haulerTarget || economySuppressed) {
       const pathCost = input.travelCosts?.[targetRoom];
       const replacement = findReplacement(remoteCreeps, "remoteHauler", targetRoom, pathCost);
       const healthy = countHealthyByRole(remoteCreeps, "remoteHauler", targetRoom, pathCost);
       if (replacement && healthy + pending.remoteHauler < haulerTarget) {
         // 稳定替补 key（同 harvester 分支）。
         const key = replacementKey("remoteHauler", homeRoom, targetRoom, replacement);
-        const body = selectBody("remoteHauler", energyCapacityAvailable);
+        const hasRoad = input.roadStatus?.[targetRoom] ?? true;
+        const body = selectBody("remoteHauler", energyCapacityAvailable, { hasRoad });
         requests.push(createRemoteRequest(
           "remoteHauler", homeRoom, targetRoom, haulerTotal,
           key, 1, body, tick, replacement,
@@ -183,7 +219,7 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     //    recovery 下 P2 角色被 kernel 门禁跳过，孵出即在 home 闲置白耗孵化窗。
     if (CONFIG.remote.enableReserver && colonyState === "normal") {
       const reserverTotal = (counts.reserver ?? 0) + pending.reserver;
-      if (reserverTotal < 1) {
+      if (reserverTotal < 1 && !economySuppressed) {
         const key = spawnKey("reserver", homeRoom, reserverTotal, targetRoom);
         const body = selectBody("reserver", energyCapacityAvailable);
         // CLAIM 需 650 能量，低容量时 body 选择回退到 RECOVERY_BODY —
@@ -194,7 +230,8 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
             key, 2, body, tick,
           ));
         }
-      } else {
+      }
+      if (reserverTotal >= 1 || economySuppressed) {
         const pathCost = input.travelCosts?.[targetRoom];
         const replacement = findReplacement(remoteCreeps, "reserver", targetRoom, pathCost);
         const healthy = countHealthyByRole(remoteCreeps, "reserver", targetRoom, pathCost);

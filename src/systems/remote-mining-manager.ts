@@ -115,7 +115,9 @@ export const remoteMiningManagerSystem: System = {
 
       // remoteHauler 单只运力：按当前能量档位的 body carry 数 ×50。
       // 提前计算：既供新开点评选，也供现役 op 周期重估（A-3/B-6）。
-      const haulerBody = selectBody("remoteHauler", snapshot.energyCapacityAvailable);
+      // hasRoad=false：远矿路径通常无道路，selectBody 选 1:1 平原满速配比档
+      // （CARRY 少但 MOVE 多，无疲劳），carry 数与 2:1 档不同 → 必须同口径。
+      const haulerBody = selectBody("remoteHauler", snapshot.energyCapacityAvailable, { hasRoad: false });
       const haulerCapacity = haulerBody.filter(p => p === CARRY).length * CARRY_CAPACITY;
 
       // 现役 op 周期重估：用当前 pathCost + 当前 body 运力重算 netScore/haulerNeed。
@@ -341,6 +343,33 @@ export const remoteMiningManagerSystem: System = {
         clearRooms.add(rn);
       }
 
+      // 外国前置 spawn 拆除任务检测（有视野时）：远矿房出现非我方已建成 spawn 且
+      // controller 仍 neutral → 任务成立，evaluateRemoteDemand 孵 dismantler 去拆。
+      // claim 前是唯一低成本拆除窗（neutral 房无塔无防御）；对方 claim 后任务不成立
+      // —— 打 claimed 房是对等战争（safeMode 风险），改走 war 战役路径，在役
+      // dismantler 标记归航。失明时维持上一判定（request key 幂等，不抖动）。
+      const dismantleTargets: Record<string, boolean> = {};
+      for (const [rn, op] of Object.entries(remoteOps)) {
+        if (op.state !== "active") continue;
+        const room = Game.rooms[rn];
+        if (!room) continue;
+        const neutralController =
+          room.controller !== undefined && !room.controller.my && room.controller.owner === undefined;
+        const foreignSpawn = room.find(FIND_HOSTILE_STRUCTURES, {
+          filter: s => s.structureType === STRUCTURE_SPAWN,
+        }).length > 0;
+        dismantleTargets[rn] = neutralController && foreignSpawn;
+        if (!dismantleTargets[rn]) recycleRemoteDismantlers(snapshot.roomName, rn);
+      }
+
+      // 远矿路径修路（enableRoadPlanning）：PathFinder 规划 home 锚→source container
+      // 跨房路径，在远矿房侧铺 road site；施工由通勤 hauler（1W body）边走边建。
+      // 限速：每轮 ≤roadSitesPerRun 个新站，单 op 挂起 ≤maxRoadSitesPerOp，
+      // 全局工地预算（maxGlobalSites）共用判定 —— 一次性 9K 级基建投入换疲劳减半。
+      if (CONFIG.remote.enableRoadPlanning) {
+        planRemotePathRoads(snapshot.roomName, remoteOps, ctx);
+      }
+
       // 威胁写入 remoteOps（P1-G：从 intel.dangerUntil 迁移至此）：出现威胁的远矿房
       // 打危险冷却 — 冷却期内不作为新远矿/扩张候选（止损：不给对手送兵）；现役运营
       // 不因此暂停 — defender 已接通，先应战再评估。大要塞压制房同样打冷却。
@@ -400,6 +429,13 @@ export const remoteMiningManagerSystem: System = {
           travelCosts: Object.fromEntries(
             Object.keys(remoteOps).map(roomName => [roomName, intel[roomName]?.pathCost]),
           ),
+          // 远矿路径通常无道路覆盖 — 默认 hasRoad=false，让 selectBody 选 1:1 平原满速配比。
+          // 2:1 道路配比档在无路时平原半速，效率减半；1:1 档虽运力小但无疲劳，总吞吐更高。
+          // 修路后在此传 true 切换回 2:1 档（运力 ×1.5）。
+          roadStatus: Object.fromEntries(
+            Object.keys(remoteOps).map(roomName => [roomName, false]),
+          ),
+          dismantleTargets,
         });
 
         // A4.3：从 logistics-planner 产出的 Transport Plan 中提取 operation-scope 请求，
@@ -797,8 +833,8 @@ function collectRemoteCreeps(homeRoom: string): RemoteCreepSummary[] {
     // 经济 creep 已退出战斗力序列，计入会挡住接替者的孵化。
     if (creep.memory.recycle === true) continue;
     const role = creep.memory.role ?? "unknown";
-    // 只收集远矿角色。
-    if (role !== "remoteHarvester" && role !== "remoteHauler" && role !== "reserver" && role !== "remoteDefender" && role !== "coreClearer") {
+    // 只收集远矿角色（dismantler = 外国前置 spawn 拆除任务编制，需计入挡重复孵化）。
+    if (role !== "remoteHarvester" && role !== "remoteHauler" && role !== "reserver" && role !== "remoteDefender" && role !== "coreClearer" && role !== "dismantler") {
       continue;
     }
     result.push({
@@ -1150,7 +1186,7 @@ function collectEmpireEnergyReserve(): number {
  */
 function estimateCreepInvestment(op: RemoteOp, energyCapacity: number): number {
   const harvesterBody = selectBody("remoteHarvester", energyCapacity);
-  const haulerBody = selectBody("remoteHauler", energyCapacity);
+  const haulerBody = selectBody("remoteHauler", energyCapacity, { hasRoad: false });
   const cost = (body: readonly BodyPartConstant[]): number =>
     body.reduce((sum, p) => sum + BODYPART_COST[p], 0);
   const harvesterCost = cost(harvesterBody) * (op.sources ?? 1);
@@ -1168,5 +1204,121 @@ function recycleRemoteCreepsForRoom(homeRoom: string, targetRoom: string): void 
     // coreClearer 不回收（可能正在拆 InvaderCore，与威胁响应无关）。
     if (creep.memory.role === "coreClearer") continue;
     creep.memory.recycle = true;
+  }
+}
+
+/**
+ * 从跨房路径中筛选远矿房侧可铺路的格子（纯函数，供单测）。
+ * 排除：已有 road / 任何工地 / container 等结构格 / source 近旁 1 格（采集位让给
+ * container 与站桩 harvester）。sites/roads/structures 以 "x,y" key 集合传入。
+ */
+export function selectRemoteRoadTiles(
+  path: RoomPosition[],
+  targetRoom: string,
+  sources: readonly { x: number; y: number }[],
+  blockedKeys: ReadonlySet<string>,
+): RoomPosition[] {
+  const out: RoomPosition[] = [];
+  const seen = new Set<string>();
+  for (const pos of path) {
+    if (pos.roomName !== targetRoom) continue;
+    const key = `${pos.x},${pos.y}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (blockedKeys.has(key)) continue;
+    if (pos.x <= 0 || pos.x >= 49 || pos.y <= 0 || pos.y >= 49) continue; // 出口行留给通行
+    let nearSource = false;
+    for (const s of sources) {
+      if (Math.abs(s.x - pos.x) <= 1 && Math.abs(s.y - pos.y) <= 1) { nearSource = true; break; }
+    }
+    if (nearSource) continue;
+    out.push(pos);
+  }
+  return out;
+}
+
+/** 拆除任务结束（spawn 拆完 / 对方 claim）→ 仅回收该房的 dismantler，经济 creep 不动。 */
+function recycleRemoteDismantlers(homeRoom: string, targetRoom: string): void {
+  for (const entry of querySquad({ home: homeRoom, remoteTarget: targetRoom, role: "dismantler" })) {
+    const creep = Game.creeps[entry.name];
+    if (!creep || creep.memory.recycle) continue;
+    creep.memory.recycle = true;
+  }
+}
+
+/**
+ * 远矿路径修路规划器 —— 每次运行对每个 active op：home 锚（storage 优先，退 spawn）
+ * → 各 source container 的跨房路径，筛出远矿房侧可铺格，限速下 road site。
+ * 施工不归本函数：通勤 hauler（1W body）经 buildRoadSiteUnderfoot 边走边建。
+ * 全部 site 写在远矿房（本系统是远矿房唯一 site 写者，架构合规）。
+ */
+function planRemotePathRoads(
+  homeRoom: string,
+  remoteOps: Readonly<Record<string, RemoteOp>>,
+  ctx: TickContext,
+): void {
+  const home = Game.rooms[homeRoom];
+  if (!home) return;
+  const anchor = home.storage ?? home.find(FIND_MY_SPAWNS)[0];
+  if (!anchor) return;
+  // 独立预算车道：远矿路径 road 不占 maxGlobalSites（自有房常规工地帽会被
+  // lab/rampart 长周期大活顶满，道路基建被无限饿死 —— 线上实证 maxGlobalSites=7
+  // 全被占用）。上限 = 全帝国待建 road ≤ roadSitesPerOpTotal，叠加每轮限额与
+  // 单 op 上限，仍然有界。
+  let empireRoadPending = 0;
+  for (const rn of Object.keys(remoteOps)) {
+    const room = Game.rooms[rn];
+    if (!room) continue;
+    empireRoadPending += room.find(FIND_MY_CONSTRUCTION_SITES)
+      .filter(s => s.structureType === STRUCTURE_ROAD).length;
+  }
+  let created = 0;
+  for (const [rn, op] of Object.entries(remoteOps)) {
+    if (created >= CONFIG.remote.roadSitesPerRun) return;
+    if (empireRoadPending >= CONFIG.remote.roadSitesPerOpTotal) return;
+    if (op.state !== "active") continue;
+    const room = Game.rooms[rn];
+    if (!room) continue; // 需视野建站（有 creep 即有视野）。
+
+    // 单 op 挂起 road site 数（含在建）超上限则跳过 —— 铺完自然回落。
+    const allSites = room.find(FIND_MY_CONSTRUCTION_SITES);
+    let roadSitesPending = allSites.filter(s => s.structureType === STRUCTURE_ROAD).length;
+    if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) continue;
+
+    // 阻挡集：已有 road / 任何工地 / 任何结构（container 等）。
+    const blockedKeys = new Set<string>();
+    for (const s of room.find(FIND_STRUCTURES)) blockedKeys.add(`${s.pos.x},${s.pos.y}`);
+    for (const s of allSites) blockedKeys.add(`${s.pos.x},${s.pos.y}`);
+    const sources = room.find(FIND_SOURCES);
+
+    for (const source of sources) {
+      if (created >= CONFIG.remote.roadSitesPerRun) break;
+      if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) break;
+      const container = source.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: st => st.structureType === STRUCTURE_CONTAINER,
+      })[0] as StructureContainer | undefined;
+      const goal = container ? container.pos : source.pos;
+      const result = PathFinder.search(anchor.pos, { pos: goal, range: 1 }, {
+        maxRooms: 2,
+        plainCost: 2,
+        swampCost: 10,
+      });
+      const tiles = selectRemoteRoadTiles(result.path, rn, sources.map(s => ({ x: s.pos.x, y: s.pos.y })), blockedKeys);
+      for (const pos of tiles) {
+        if (created >= CONFIG.remote.roadSitesPerRun) break;
+        if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) break;
+        if (empireRoadPending >= CONFIG.remote.roadSitesPerOpTotal) return;
+        const rc = room.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD);
+        if (rc === OK) {
+          created++;
+          roadSitesPending++;
+          empireRoadPending++;
+          blockedKeys.add(`${pos.x},${pos.y}`);
+        } else {
+          // ERR_FULL / ERR_INVALID_TARGET（地形冲突等）：跳过该格，下轮重评。
+          blockedKeys.add(`${pos.x},${pos.y}`);
+        }
+      }
+    }
   }
 }

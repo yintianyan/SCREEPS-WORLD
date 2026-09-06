@@ -57,6 +57,7 @@ export function rangedAttackStructures(): ActionCandidate<AnyStructure> {
 
 const policy: RolePolicy = {
   combat: true,
+  park: true,
   hold: attackerHold,
   acquire: [rangedAttackEnemies(), rangedAttackStructures()],
   work: [rangedAttackEnemies(), rangedAttackStructures()],

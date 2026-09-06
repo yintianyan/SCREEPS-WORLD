@@ -22,6 +22,8 @@ export interface ParkRoomData {
   critical: Set<number>;
   roads: Set<number>;
   blocking: Set<number>;
+  /** 房间连接带（距边界 ≤2 格）：门坎/通勤走廊，idle 停这里会堵住跨房通道。 */
+  portals: Set<number>;
 }
 
 /**
@@ -78,7 +80,15 @@ export function getParkRoomData(snapshot: RoomSnapshot): ParkRoomData {
   if (snapshot.factory) addIfBlocking(snapshot.factory.structureType, snapshot.factory.pos.x, snapshot.factory.pos.y);
   for (const site of snapshot.myConstructionSites) addIfBlocking(site.structureType, site.pos.x, site.pos.y);
 
-  const data: ParkRoomData = { critical, roads, blocking };
+  // 房间连接带：与 parkInForeignRoom 的走廊带同口径（距边界 ≤2 格）。
+  const portals = new Set<number>();
+  for (let x = 0; x < 50; x++) {
+    for (let y = 0; y < 50; y++) {
+      if (x <= 1 || x >= 48 || y <= 1 || y >= 48) portals.add(x * 50 + y);
+    }
+  }
+
+  const data: ParkRoomData = { critical, roads, blocking, portals };
   g.__parkRoomData[snapshot.roomName] = { tick: Game.time, data };
   return data;
 }
@@ -123,25 +133,38 @@ function parkInForeignRoom(creep: Creep): void {
     return;
   }
   const reserved = getParkReservations();
+  // 边界深度 = 距最近边界的格数（0 = 边界行，递增向房心）。出带可能需要 2 步
+  // （站在 y=0/49 时 8 邻域全在带内）—— 只挑「一步出带」格会卡死在边界排，
+  // 故回退接受「更深向房心」的带内格，逐 tick 爬出。
+  const borderDepth = (nx: number, ny: number): number =>
+    Math.min(nx, 49 - nx, ny, 49 - ny);
+  const curDepth = borderDepth(x, y);
   let best: { x: number; y: number; dist: number } | undefined;
+  let fallback: { x: number; y: number; dist: number } | undefined;
   for (const dir of Object.keys(DIR_DELTA)) {
     const delta = DIR_DELTA[Number(dir) as DirectionConstant];
     if (!delta) continue;
     const nx = x + delta[0];
     const ny = y + delta[1];
     if (nx < 0 || nx > 49 || ny < 0 || ny > 49) continue;
-    if (inCorridor(nx, ny)) continue; // 仍贴边 — 继续内移才有意义。
     if (!isWalkableTerrain(room, nx, ny)) continue;
     if (hasBlockingStructureAt(room, nx, ny)) continue;
     if (hasCreepAt(room, nx, ny)) continue;
     const packed = nx * 50 + ny;
     if (reserved.has(packed)) continue;
     const dist = Math.max(Math.abs(nx - 25), Math.abs(ny - 25));
-    if (!best || dist < best.dist) best = { x: nx, y: ny, dist };
+    if (!inCorridor(nx, ny)) {
+      // 一步出带 — 最优选（靠近房心）。
+      if (!best || dist < best.dist) best = { x: nx, y: ny, dist };
+    } else if (borderDepth(nx, ny) > curDepth) {
+      // 带内但更深向房心 — 逐格爬出的回退步。
+      if (!fallback || dist < fallback.dist) fallback = { x: nx, y: ny, dist };
+    }
   }
-  if (!best) return; // 无可用内移格 — 保持 idle，下 tick 再试。
-  reserved.add(best.x * 50 + best.y);
-  const spotPos = room.getPositionAt(best.x, best.y);
+  const pick = best ?? fallback;
+  if (!pick) return; // 无可用内移格 — 保持 idle，下 tick 再试。
+  reserved.add(pick.x * 50 + pick.y);
+  const spotPos = room.getPositionAt(pick.x, pick.y);
   if (!spotPos) return;
   const dir = creep.pos.getDirectionTo(spotPos);
   registerMove(creep, dir as DirectionConstant, CONFIG.movement.trafficPriority.parked);
@@ -156,6 +179,7 @@ export function isSafeSpot(creep: Creep, snapshot: RoomSnapshot): boolean {
   const data = getParkRoomData(snapshot);
   if (data.critical.has(packed)) return false;
   if (data.roads.has(packed)) return false;
+  if (data.portals.has(packed)) return false;
   return true;
 }
 
@@ -174,7 +198,8 @@ function findParkSpot(
   const coreX = snapshot.spawns[0]?.pos.x;
   const coreY = snapshot.spawns[0]?.pos.y;
   const currentPacked = packPos(creep.pos);
-  const onBlockingTile = data.critical.has(currentPacked) || data.roads.has(currentPacked);
+  const onBlockingTile =
+    data.critical.has(currentPacked) || data.roads.has(currentPacked) || data.portals.has(currentPacked);
 
   const coreDist = (x: number, y: number): number =>
     coreX !== undefined && coreY !== undefined
@@ -182,7 +207,7 @@ function findParkSpot(
       : 0;
 
   // 收集可站立邻格（地形可走、无阻挡结构、无 creep、未被预约）。
-  interface Candidate { x: number; y: number; critical: boolean; road: boolean; core: number }
+  interface Candidate { x: number; y: number; critical: boolean; road: boolean; portal: boolean; core: number }
   const candidates: Candidate[] = [];
   for (const dir of Object.keys(DIR_DELTA)) {
     const delta = DIR_DELTA[Number(dir) as DirectionConstant];
@@ -194,16 +219,20 @@ function findParkSpot(
     if (data.blocking.has(packed)) continue;
     if (hasCreepAt(room, nx, ny)) continue;
     if (reserved.has(packed)) continue;
-    candidates.push({ x: nx, y: ny, critical: data.critical.has(packed), road: data.roads.has(packed), core: coreDist(nx, ny) });
+    candidates.push({
+      x: nx, y: ny,
+      critical: data.critical.has(packed), road: data.roads.has(packed),
+      portal: data.portals.has(packed), core: coreDist(nx, ny),
+    });
   }
   if (candidates.length === 0) return undefined;
 
-  // 阶段 1（逃离）：当前在关键格/road 上时，只选「非关键且非 road」的真逃离格、取最靠近核心者 —
+  // 阶段 1（逃离）：当前在关键格/road/portal 上时，只选「三皆非」的真逃离格、取最靠近核心者 —
   // 保证只要存在逃离格一步就离开阻塞格，绝不会被 core 距离牵引进关键区深处振荡。
   if (onBlockingTile) {
     let escape: Candidate | undefined;
     for (const c of candidates) {
-      if (c.critical || c.road) continue;
+      if (c.critical || c.road || c.portal) continue;
       if (!escape || c.core < escape.core) escape = c;
     }
     if (escape) return { x: escape.x, y: escape.y };
@@ -216,6 +245,7 @@ function findParkSpot(
     if (!best) { best = c; continue; }
     if (c.critical !== best.critical) { if (!c.critical) best = c; continue; }
     if (c.road !== best.road) { if (!c.road) best = c; continue; }
+    if (c.portal !== best.portal) { if (!c.portal) best = c; continue; }
     if (c.core < best.core) best = c;
   }
   return best ? { x: best.x, y: best.y } : undefined;
@@ -251,8 +281,8 @@ export function parkIdleCreep(creep: Creep, snapshot: RoomSnapshot): void {
   const currentPacked = packPos(creep.pos);
   const data = getParkRoomData(snapshot);
 
-  // 已安全：预约本格，不动。
-  if (!data.critical.has(currentPacked) && !data.roads.has(currentPacked)) {
+  // 已安全：预约本格，不动（portal 带上不算安全 — 门坎格 idle 会堵跨房通道）。
+  if (!data.critical.has(currentPacked) && !data.roads.has(currentPacked) && !data.portals.has(currentPacked)) {
     reserved.add(currentPacked);
     return;
   }

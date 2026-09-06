@@ -142,6 +142,7 @@ export function healAllies(): ActionCandidate<Creep> {
 
 const policy: RolePolicy = {
   combat: true,
+  park: true,
   hold: attackerHold,
   // A5.4.1：tactical-intent 优先于 Legacy 候选；无指令时回退到 healAllies
   acquire: [healByTacticalIntent(), healAllies()],

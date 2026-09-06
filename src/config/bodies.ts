@@ -250,11 +250,23 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   remoteHauler: [
-    // RCL8 跨房大运力档 [24C,12M] @1800：1:1 配比平原满速，运力 1200/趟。
+    // RCL8 跨房大运力档 [24C,12M] @1800：2:1 配比道路满速，运力 1200/趟。
     // 远矿距离远、往返耗时长，大运力减少趟数 = 减少 CPU 消耗 + 更少 creep 编制。
+    // 注意：2:1 配比在无道路时平原半速（满载 24 非 MOVE / 12 MOVE，平原 fat=48/tick，
+    // 12 MOVE 消 24/tick → 净积累 24 → 隔 tick 才动一格）。远矿路径修路后此档最优。
     { parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","move","move","move","move","move","move","move","move","move","move","move","move"], minCapacity: 1800 },
+    // RCL7+ 无路平原满速大运力档 [20C,21M,1W] @2150：运力 1000/趟，平原零疲劳满速
+    // （非 MOVE 21 × 2 = 42 fatigue，21 MOVE 消 42/tick）。1 WORK = 通勤路上
+    // 边走边建规划器铺下的 road site（移动走意图仲裁，build 直发，同 tick 叠加，
+    // 不耽误运输）——5 只通勤 hauler 并行施工，30 格路径 ~1-2K tick 铺完。
+    { parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","work","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move"], minCapacity: 2150 },
+    // RCL8 无路平原满速档 [16C,17M,1W] @1800：运力 800/趟，平原零疲劳满速
+    // （17 非 MOVE × 2 = 34 fatigue，17 MOVE 消 34/tick）。1 WORK 同上 —— 通勤建路。
+    { parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","work","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move","move"], minCapacity: 1800 },
     // RCL7 跨房大运力档 [16C,8M] @1200：运力 800/趟，比 8C8M 翻倍。
     { parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","move","move","move","move","move","move","move","move"], minCapacity: 1200 },
+    // RCL7 无路平原满速档 [12C,13M,1W] @1350：运力 600/趟，平原零疲劳满速。1 WORK 通勤建路。
+    { parts: ["carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","carry","work","move","move","move","move","move","move","move","move","move","move","move","move","move","move"], minCapacity: 1350 },
     // hauler 同款 CARRY+MOVE，额外 MOVE 保证跨房无道路可行进。
     { parts: ["carry", "carry", "carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move", "move", "move"], minCapacity: 800 },
     { parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move", "move"], minCapacity: 600 },
@@ -424,12 +436,29 @@ export function bodyCost(body: readonly BodyPartConstant[]): number {
 /**
  * 选择适合 spawn 能量容量的最佳 body；无档位匹配时回退 RECOVERY_BODY，
  * 确保 P0 孵化不因 body 选择阻塞。options.rcl ≥ 4 时 hauler 走道路优化变体（HA-10）。
+ * options.hasRoad = false 时 remoteHauler 跳过 2:1 道路配比档，选 1:1 平原满速档。
  */
 export function selectBody(
   role: string,
   energyCapacityAvailable: number,
-  options?: { rcl?: number },
+  options?: { rcl?: number; hasRoad?: boolean },
 ): BodyPartConstant[] {
+  // 远矿 hauler 无路场景：跳过 2:1 配比档（第 0、2 档），选 1:1 平原满速档。
+  // hasRoad 默认 true（保守：有路优先），仅远矿路径明确无路时传 false。
+  if (role === "remoteHauler" && options?.hasRoad === false) {
+    const templates = BODY_TEMPLATES[role];
+    if (templates) {
+      // 无路档索引：跳过 2:1 档（idx 0 和 2），只查 1:1 档（idx 1 和 3）及后续。
+      // 1:1 档的 minCapacity 标注了平原满速，2:1 档的注释标注了道路满速。
+      const roadlessIndices = [1, 2, 4, 5, 6, 7, 8]; // 1:1 档 + fallback 档
+      for (const idx of roadlessIndices) {
+        if (idx >= templates.length) break;
+        const t = templates[idx]!;
+        if (energyCapacityAvailable >= t.minCapacity) return [...t.parts];
+      }
+    }
+  }
+
   if (options?.rcl !== undefined && options.rcl >= 4) {
     const roadTiers = ROAD_OPTIMIZED_BODIES[role];
     if (roadTiers) {

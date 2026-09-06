@@ -8,11 +8,50 @@ import {
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
-import { findRemoteContainersCached, findDroppedEnergyCached, findRuinsCached, findTombstonesCached } from "../support/room-scans";
+import {
+  findDroppedEnergyCached,
+  findMySitesCached,
+  findRemoteContainersCached,
+  findRuinsCached,
+  findTombstonesCached,
+} from "../support/room-scans";
 
 /** container 选择的距离权重（与本地 HAUL_CONTAINER_DISTANCE_WEIGHT 一致）：
  * 每格距离折算 10 能量。满溢的远 container 仍优先于近乎空的近 container。 */
 const REMOTE_CONTAINER_DISTANCE_WEIGHT = 10;
+
+/**
+ * 通勤建路 — 走到哪建到哪：规划器在远矿路径铺 road site，通勤 hauler 路过
+ * （build range 3）时顺手 build。build 是非移动动作、移动走意图仲裁，同 tick
+ * 叠加不耽误赶路；能量从 carry 出（回程满载腿承担，一次性基建投入）。
+ * 无 WORK 部件的旧世代 body build 会 ERR_NOT_ENOUGH_RESOURCES，无害跳过。
+ */
+function buildRoadSiteUnderfoot(creep: Creep): void {
+  if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return;
+  const sites = findMySitesCached(creep.room);
+  if (sites.length === 0) return;
+  let best: ConstructionSite | undefined;
+  let bestRange = 4;
+  for (const site of sites) {
+    const range = creep.pos.getRangeTo(site);
+    if (range >= bestRange) continue;
+    best = site;
+    bestRange = range;
+  }
+  if (best) creep.build(best);
+}
+
+/** 包装通勤候选：执行前先建脚下的路（移动意图由内层 execute 照常登记）。 */
+function withRoadBuild<T>(inner: ActionCandidate<T>): ActionCandidate<T> {
+  return {
+    name: inner.name,
+    resolve: inner.resolve,
+    execute: (ac, target) => {
+      buildRoadSiteUnderfoot(ac.creep);
+      inner.execute(ac, target);
+    },
+  };
+}
 
 /** 从远矿 container 取能。 */
 function withdrawRemoteContainer(): ActionCandidate<StructureContainer> {
@@ -156,17 +195,17 @@ const policy: RolePolicy = {
   acquire: [
     // 衰减资源优先回收：坟墓/废墟中的能量会随时间灭失，而 container 中的能量不衰减。
     // 与本地 hauler 设计一致——大额遗留优先于 container 取能。
-    lootRemoteRemains(),
+    withRoadBuild(lootRemoteRemains()),
     // 地上掉落能量（remoteHarvester 溢出 drop 的）——同样在衰减，优先于 container。
-    pickupRemoteDropped(),
+    withRoadBuild(pickupRemoteDropped()),
     // 从 container 取能（不衰减，可延后）。
-    withdrawRemoteContainer(),
+    withRoadBuild(withdrawRemoteContainer()),
   ],
   work: [
     // 存入 storage（RCL4+）。
-    fillStorage(),
+    withRoadBuild(fillStorage()),
     // 回退：直送 spawn/extension。
-    haulFillTarget(),
+    withRoadBuild(haulFillTarget()),
     // 所有 sink 满 — 待命（ensureHome 会导航回 home，parkIdleCreep 归位）。
   ],
 };

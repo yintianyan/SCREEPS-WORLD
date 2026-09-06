@@ -156,6 +156,7 @@ const policy: RolePolicy = {
   // 战斗角色 — 跳过过境房威胁逃跑检测，否则进入 hostile 房看到核心/Invader 即逃回 home，
   // 攻击候选永远轮不到执行。lesser 核心房间无守卫，跳过 flee 安全。
   combat: true,
+  park: true,
   acquire: [
     attackCoreAction(),
     lootRuinAction(),

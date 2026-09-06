@@ -128,6 +128,9 @@ export const COLLECTION_FREQUENCY: Record<string, number> = {
     // 每 5 tick
     room_energy: 5,
     spawn: 5,
+    // defense 与 spawn 同频但不能共用键——同一采集块内 spawn 先 markCollected
+    // 会把共用键的窗口占掉，defense 将永久拿不到采集资格。
+    defense: 5,
     // 每 10 tick
     creep: 10,
     economy: 10,

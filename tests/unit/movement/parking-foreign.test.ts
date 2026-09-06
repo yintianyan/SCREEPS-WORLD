@@ -118,13 +118,15 @@ describe("Parking — 异房归位（远矿/过境房启发式）", () => {
   });
 
   it("home 房 creep 不走异房分支（回归保护）", () => {
-    // home 房行为由 parking.test.ts 地形矩阵覆盖；此处仅验证分流：
-    // home 房 + 边界格 creep 走原逻辑（快照关键格判定），不因本改动改变入口。
+    // home 房行为由 parking.test.ts 地形矩阵覆盖；此处验证分流：
+    // home 房 + 边界格 creep 走 home 分支（快照 portals 口径），不进异房启发式。
+    // 统一规则后 (1,28) 属 portal 带 → 不再「已安全」，home 分支把它推离门坎一格。
     const room = makeRoom(HOME);
     const c = makeCreep("c1", room, 1, 28);
     parkIdleCreep(c, homeSnapshot);
-    // 原逻辑：开阔无结构 → (1,28) 非 critical 非 road → 「已安全」原地不动。
-    expect(c.pos.x).toBe(1);
-    expect(c.pos.y).toBe(28);
+    // 已离开 portal 带（距边界 ≥2 格）。
+    expect(c.pos.x).toBeGreaterThanOrEqual(2);
+    expect(c.pos.y).toBeGreaterThanOrEqual(2);
+    expect(c.pos.y).toBeLessThanOrEqual(47);
   });
 });

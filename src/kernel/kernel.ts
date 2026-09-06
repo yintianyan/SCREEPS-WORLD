@@ -173,7 +173,9 @@ export class Kernel {
       const tel = g.telemetry;
       const skipped = tel?.skipped ?? 0;
       const errors = tel?.errors ?? 0;
-      const snapshots = ctx.snapshots();
+      // ctx.snapshots() 返回 Map iterator：被第一个消费者（RoomMetrics）耗尽后，
+      // EconomyMetrics/DefenseMetrics 拿到空流，遥测永久零样本。物化为数组供多消费者复用。
+      const snapshots = Array.from(ctx.snapshots());
 
       collectRuntimeMetrics(budget, skipped, errors, 0);
       collectKernelMetrics(skipped, errors);
@@ -449,15 +451,32 @@ export class Kernel {
   /** E5: 采集每房 RCL 快照（从 snapshot + RoomMemory 读取）。 */
   private collectRCLSnapshots(ctx: Context): RCLSnapshot[] {
     const result: RCLSnapshot[] = [];
+    const tracker = (globalCache().rclProgressTracker ??= new Map());
+    // upgrader 普查：单遍 Game.creeps 按 home 聚合（~30 creeps，开销与
+    // collectBuildQueueSnapshots 的逐房遍历同量级）。
+    const upgradersByHome = new Map<string, number>();
+    for (const c of Object.values(Game.creeps)) {
+      if (c.memory.role !== "upgrader" || c.memory.recycle) continue;
+      const home = c.memory.home ?? c.room?.name;
+      if (home) upgradersByHome.set(home, (upgradersByHome.get(home) ?? 0) + 1);
+    }
     for (const snap of ctx.snapshots()) {
       const roomMem = Memory.rooms[snap.roomName];
+      // 进度停滞检测：progress 与上 tick 相同 → 停滞计时延续；变化 → 归零重计。
+      // 用停滞时长替代「距上次升级的绝对时长」——RCL7→8 本来就要数十万 tick，
+      // 固定龄阈值会对正常冲级房永久误报。
+      const progress = snap.controller?.progress ?? 0;
+      const prev = tracker.get(snap.roomName);
+      const lastMoveTick = prev && prev.progress === progress ? prev.lastMoveTick : ctx.tick;
+      tracker.set(snap.roomName, { progress, lastMoveTick });
       result.push({
         room: snap.roomName,
         rcl: snap.rcl,
-        progress: snap.controller?.progress ?? 0,
+        progress,
         progressTotal: snap.controller?.progressTotal ?? 0,
         lastRclChange: roomMem?.lastRclChangeAt,
-        hasUpgrader: false, // 从 Game.creeps 遍历获取太重，用 expectation 诊断字段补偿
+        progressStallTicks: ctx.tick - lastMoveTick,
+        hasUpgrader: (upgradersByHome.get(snap.roomName) ?? 0) > 0,
         storageEnergy: snap.storage?.store.energy ?? 0,
       });
     }

@@ -54,13 +54,15 @@ export function collectEconomyMetrics(snapshots: Iterable<RoomSnapshot>): void {
             setGauge("screeps_economy_energy_stored", stored, labels);
             totalStored += stored;
 
-            // Income/Expense — 从 Memory 读取 economy accounting
+            // Income/Net — 读 economy 系统持久化的核算快照（RoomMemory.economy，
+            // economy 系统唯一写者）。phase.energyIncome 从未存在过，旧读法恒为 0。
+            // ei=估计收入×10，nf=净流 EMA×100；expense 为推导值（收入−净流）。
             const roomMem = Memory.rooms[snap.roomName];
-            const econPhase = roomMem?.phase;
-            if (econPhase) {
-                const income = (econPhase as any).energyIncome ?? 0;
-                const expense = (econPhase as any).energyExpense ?? 0;
-                const net = income - expense;
+            const econSnap = roomMem?.economy;
+            if (econSnap) {
+                const income = econSnap.ei / 10;
+                const net = econSnap.nf / 100;
+                const expense = income - net;
 
                 setGauge("screeps_economy_energy_income", Math.round(income * 100) / 100, labels);
                 setGauge("screeps_economy_energy_expense", Math.round(expense * 100) / 100, labels);

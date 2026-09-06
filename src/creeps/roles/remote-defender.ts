@@ -4,6 +4,7 @@ import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/actio
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { getHostilesCached } from "../support/targeting";
+import { findContainersCached, findSourcesCached } from "../support/room-scans";
 
 /** 在 remoteTarget 房间内查找并攻击 hostile creep。 */
 function attackHostileAction(): ActionCandidate<Creep> {
@@ -39,15 +40,61 @@ function attackHostileAction(): ActionCandidate<Creep> {
   };
 }
 
+/**
+ * 无敌情归防守位 — 防守位 = 我方 container 质心（守护采集基建），无 container 用
+ * source 质心。远矿房常有 1 格宽的天然门坎（墙形所致），defender 到达后停在门口
+ * 节点会堵死整个远矿交通（reserver/hauler pathFailure 的元凶）；通用 park 只能
+ * 把它挪出边界带，挪到的下一格可能仍是门格 —— 归位到房间深处的防守位才是根治。
+ */
+function moveToDefensePost(): ActionCandidate<RoomPosition> {
+  return {
+    name: "remote-defender:move-to-post",
+    resolve: (ac) => {
+      const remoteTarget = ac.creep.memory.remoteTarget;
+      if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
+      // 有敌情时攻击候选接管 —— 本候选仅在无敌可打时兜底归位。
+      if (getHostilesCached(ac.creep.room).length > 0) return undefined;
+      const post = defensePostOf(ac.creep.room);
+      if (!post) return undefined;
+      if (ac.creep.pos.getRangeTo(post) <= 2) return undefined;
+      return post;
+    },
+    execute: (ac, post) => {
+      moveToTarget(ac.creep, post);
+    },
+  };
+}
+
+/** 防守位：我方 container 质心（守护采集产出），无 container 退而求其次用 source 质心。 */
+function defensePostOf(room: Room): RoomPosition | undefined {
+  const containers = findContainersCached(room);
+  const anchors = containers.length > 0
+    ? containers.map(c => c.pos)
+    : findSourcesCached(room).map(s => s.pos);
+  if (anchors.length === 0) return undefined;
+  let sx = 0;
+  let sy = 0;
+  for (const p of anchors) {
+    sx += p.x;
+    sy += p.y;
+  }
+  return room.getPositionAt(Math.round(sx / anchors.length), Math.round(sy / anchors.length)) ?? undefined;
+}
+
 const policy: RolePolicy = {
   // 战斗角色 — 豁免 flee 检测，否则到达远矿房看到敌人立刻逃回 home，攻击候选永远轮不到执行。
   combat: true,
+  // idle 时归位 — 无敌可打时停在门口走廊带会堵死远矿出入口（reserver 等
+  // 后续 creep pathFailure 的元凶），parkInForeignRoom 会把它推离边界带。
+  park: true,
   acquire: [
     attackHostileAction(),
+    moveToDefensePost(),
   ],
   work: [
     // 与 acquire 相同 — 无 CARRY 部件，mode 振荡不影响行为。
     attackHostileAction(),
+    moveToDefensePost(),
   ],
 };
 

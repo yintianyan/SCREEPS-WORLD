@@ -7,6 +7,7 @@ import {
   type WarPlanningInput,
   type WarPlan,
 } from "../domain/military/war-planning";
+import { isOffensive } from "../domain/military/operation";
 import type { TargetCandidate } from "../domain/military/target-selection";
 import { queryRoomIntel, intelActionUsable } from "./intelligence";
 import type { ThreatAssessment } from "../domain/defense/threat-assessment";
@@ -415,13 +416,27 @@ function writeCompatibleWarPlan(plan: WarPlan, tick: number): void {
 
   // A5.3 编队需求：写入 a5ForceReq 供 war-planner 消费
   // war-planner 用它替代旧 decideSquadSize/decideHealerCount
-  wp.a5ForceReq = {
+  const a5 = {
     attacker: plan.forceRequirement.attacker + plan.forceRequirement.ranged,
     healer: plan.forceRequirement.healer,
     tank: plan.forceRequirement.tank,
     dismantler: plan.forceRequirement.dismantler,
     total: plan.forceRequirement.total,
   };
+  // 防御性行动且目标为自有房：威胁在本房，塔 + 本地 defender 已覆盖，
+  // attacker/healer 编队（remoteTarget=自家）无敌可打、集结后只能整队回收
+  // （线上实证：编队从未出击即被回收，自有房反被拉进 warBlacklist）。
+  // 编队需求清零——战争姿态保留，进攻编队只对外。
+  const defensiveOwnTarget =
+    !isOffensive(plan.operation.type) && Game.rooms[targetRoom]?.controller?.my === true;
+  if (defensiveOwnTarget) {
+    a5.attacker = 0;
+    a5.healer = 0;
+    a5.tank = 0;
+    a5.dismantler = 0;
+    a5.total = 0;
+  }
+  wp.a5ForceReq = a5;
 }
 
 // ═══════════════════════════════════════════════════════════

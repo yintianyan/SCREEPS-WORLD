@@ -79,6 +79,7 @@ function collectorGate(ac: ActionContext): boolean {
 }
 
 const policy: RolePolicy = {
+  park: true,
   gate: collectorGate,
   acquire: [pickupPower()],
   work: [pickupPower(), depositPower()],
