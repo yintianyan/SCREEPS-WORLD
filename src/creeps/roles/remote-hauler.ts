@@ -1,5 +1,6 @@
 /** RemoteHauler */
 import type { Priority } from "../../kernel/contracts";
+import { CONFIG } from "../../config";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
   fillStorage,
@@ -77,19 +78,21 @@ function withdrawRemoteContainer(): ActionCandidate<StructureContainer> {
 
 /** 从远矿房坟墓/废墟中提取遗留能量。
  * 坟墓/废墟不能用 pickup，必须用 withdraw。远矿房 creep 死亡后留下坟墓，
- * 坟墓在 5 tick 后消失，能量随之灭失——应优先于 container 回收（container 不衰减）。 */
-function lootRemoteRemains(): ActionCandidate<Tombstone | Ruin> {
+ * 坟墓在 5 tick 后消失，能量随之灭失——应优先于 container 回收（container 不衰减）。
+ * minAmount 过滤零头：大额遗留值得专程，零头由链尾实例兜底（与本地 hauler 同构）。 */
+function lootRemoteRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
   return {
     name: "remote-hauler:loot-remains",
     resolve: (ac) => {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
+      const threshold = Math.max(1, minAmount);
       const candidates: (Tombstone | Ruin)[] = [];
       for (const t of findTombstonesCached(ac.creep.room)) {
-        if (t.store.getUsedCapacity(RESOURCE_ENERGY) > 0) candidates.push(t);
+        if (t.store.getUsedCapacity(RESOURCE_ENERGY) >= threshold) candidates.push(t);
       }
       for (const r of findRuinsCached(ac.creep.room)) {
-        if (r.store.getUsedCapacity(RESOURCE_ENERGY) > 0) candidates.push(r);
+        if (r.store.getUsedCapacity(RESOURCE_ENERGY) >= threshold) candidates.push(r);
       }
       if (candidates.length === 0) return undefined;
       return ac.creep.pos.findClosestByRange(candidates) ?? candidates[0];
@@ -107,14 +110,15 @@ function lootRemoteRemains(): ActionCandidate<Tombstone | Ruin> {
   };
 }
 
-/** 拾取远矿房地上掉落的能量（remoteHarvester drop 的）。 */
-function pickupRemoteDropped(): ActionCandidate<Resource> {
+/** 拾取远矿房地上掉落的能量（remoteHarvester drop 的）。
+ * minAmount 过滤零头：大额溢出值得专程，零头由链尾实例兜底（与本地 hauler 同构）。 */
+function pickupRemoteDropped(minAmount = 0): ActionCandidate<Resource> {
   return {
     name: "remote-hauler:pickup-dropped",
     resolve: (ac) => {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
-      return findDroppedEnergy(ac.creep);
+      return findDroppedEnergy(ac.creep, minAmount);
     },
     execute: (ac, dropped) => {
       const result = ac.creep.pickup(dropped);
@@ -177,8 +181,9 @@ export function findRemoteContainer(creep: Creep): StructureContainer | undefine
  * 若每 tick 直接 room.find，container 空档期内 acquire 链每 tick 都会全房扫描，
  * 违反「角色禁止全房 find」硬约束。缓存生命周期单 tick，同房多 hauler 共享。
  */
-function findDroppedEnergy(creep: Creep): Resource | undefined {
-  const resources = findDroppedEnergyCached(creep.room);
+function findDroppedEnergy(creep: Creep, minAmount = 0): Resource | undefined {
+  const all = findDroppedEnergyCached(creep.room);
+  const resources = minAmount > 0 ? all.filter(r => r.amount >= minAmount) : all;
   if (resources.length === 0) return undefined;
   return creep.pos.findClosestByRange(resources) ?? resources[0];
 }
@@ -193,13 +198,17 @@ const policy: RolePolicy = {
     return c.memory.mode === "work" && c.room.name === c.memory.home;
   },
   acquire: [
-    // 衰减资源优先回收：坟墓/废墟中的能量会随时间灭失，而 container 中的能量不衰减。
-    // 与本地 hauler 设计一致——大额遗留优先于 container 取能。
-    withRoadBuild(lootRemoteRemains()),
-    // 地上掉落能量（remoteHarvester 溢出 drop 的）——同样在衰减，优先于 container。
-    withRoadBuild(pickupRemoteDropped()),
-    // 从 container 取能（不衰减，可延后）。
+    // 大额衰减资源优先回收：坟墓/废墟/掉落堆在衰减或限时灭失，container 不衰减。
+    // 阈值（lootThreshold）挡住零头——只有值得专程的大额遗留才插队；
+    // 否则 container 满溢时 harvester 持续 drop 少量能量，hauler 每 tick 被零头吸引
+    // 离开 container、拾取少量又回来，来回抖动且满 container 始终没被抽干（溢出根源未除）。
+    withRoadBuild(lootRemoteRemains(CONFIG.economy.lootThreshold)),
+    withRoadBuild(pickupRemoteDropped(CONFIG.economy.lootThreshold)),
+    // 从 container 取能（不衰减，可延后）。先抽满 container 消除溢出根源。
     withRoadBuild(withdrawRemoteContainer()),
+    // 零头兜底 — 仅当无大额遗留且无 container 可取时才触发。
+    withRoadBuild(lootRemoteRemains(1)),
+    withRoadBuild(pickupRemoteDropped()),
   ],
   work: [
     // 存入 storage（RCL4+）。
