@@ -70,7 +70,8 @@ describe("remoteHarvester — 站桩锚定与占位自报", () => {
       CONFIG.movement.trafficPriority.anchorMiner,
     );
     const cache = (globalThis as any).__staticBlockersCache;
-    expect(cache[targetRoom].positions).toContain(11 * 50 + 10);
+    expect(cache[targetRoom].positions).toContain(11);
+    expect(cache[targetRoom].positions).toContain(10);
   });
 
   it("未到矿位（range>1）：不锚定不占位，走移动链路", () => {

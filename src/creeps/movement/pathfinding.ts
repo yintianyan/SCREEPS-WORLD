@@ -139,12 +139,20 @@ export function registerStaticBlocker(
 ): void {
   const g = globalCache() as any;
   if (!g.__staticBlockersCache) g.__staticBlockersCache = {};
-  const packed = pos.x * 50 + pos.y;
   const entry = g.__staticBlockersCache[roomName];
   if (entry && entry.checkedTick === Game.time) {
-    if (!entry.positions.includes(packed)) entry.positions.push(packed);
+    // 去重：线性扫描 positions 查找 (x, y) 对是否已存在。
+    // positions 是扁平 [x1, y1, x2, y2, ...] 格式（与 preloadStaticBlockers 一致）。
+    let exists = false;
+    for (let i = 0; i < entry.positions.length; i += 2) {
+      if (entry.positions[i] === pos.x && entry.positions[i + 1] === pos.y) {
+        exists = true;
+        break;
+      }
+    }
+    if (!exists) entry.positions.push(pos.x, pos.y);
   } else {
-    g.__staticBlockersCache[roomName] = { positions: [packed], checkedTick: Game.time };
+    g.__staticBlockersCache[roomName] = { positions: [pos.x, pos.y], checkedTick: Game.time };
   }
 }
 
