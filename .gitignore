@@ -29,14 +29,15 @@ coverage/
 .meituan-catpaw/
 .catpaw/
 .reasonix/
+.zcode/
 
 # Screeps
 *.screeps
 .screeps.json
 
 # Screeps telemetry & export data (generated, not source)
-tools/data/
-tools/private/data/
+tools/
+scripts/
 data/
 /server
 
@@ -47,7 +48,5 @@ data/
 *.tmp
 *.bak
 *.orig
-# 盯盘探针运行时状态（不入库）
-tools/mmo/.watch-state.json
 /tmp
 /docker
