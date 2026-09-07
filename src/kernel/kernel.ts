@@ -192,6 +192,12 @@ export class Kernel {
     safeRun("flush-skips", () => flushSkips(), true);
 
     safeRun("segments-flush", () => flushSegments(), true);
+
+    // 方向 3：保底可观测性层——不依赖任何 P3 系统运行，由 kernel 直接执行。
+    // 即使 recovery tier 下 telemetry-collector 跳过、tuning-engine 冻结，
+    // 也保证每 10 tick 采样一次关键指标写入 Memory.kernel.stats。
+    // 确保"最需要诊断时有最基本的数据可查"。
+    safeRun("baseline-telemetry", () => sampleBaselineMetrics(ctx.tick, budget), true);
   }
 
   private buildSnapshots(ctx: Context): void {
@@ -472,15 +478,15 @@ export class Kernel {
       if (res.p3Starved) {
         kernelMem.p3StarveBypassUntil = ctx.tick + P3_BYPASS_WINDOW_TICKS;
         const bucket = Game.cpu.bucket ?? 0;
-        if (bucket < 3000) {
-          log.warn("kernel", `[${ctx.tick}] P3 starvation BYPASS INEFFECTIVE — bucket=${bucket} < 3000, P3 systems frozen. Manual intervention may be needed (reduce rooms/pause expansion).`);
-          recordEvent(EventKind.P3StarvationFrozen, "", [bucket]);
-        }
+        // 方向 3 E-FINDING-04: 长期冻结跟踪（纯函数，可测试）
+        trackP3Frozen(ctx.tick, bucket, kernelMem);
         log.info("kernel", "[" + ctx.tick + "] expectations: P3 starvation — feed-forward bypass until " + kernelMem.p3StarveBypassUntil,);
       }
     } else {
       kernelMem.expectations = { tick: ctx.tick, violations: [], e3: e3Prev as Record<string, unknown> };
       if (kernelMem.p3StarveBypassUntil !== undefined) delete kernelMem.p3StarveBypassUntil;
+      // P3 不再饥饿：清除冻结跟踪
+      if (kernelMem.p3FrozenSince !== undefined) delete kernelMem.p3FrozenSince;
     }
   }
 
@@ -860,3 +866,70 @@ export function colonyStateFreezesRole(
 // P1-F：hasCriticalStructureGap 已搬到 src/domain/construction/queue.ts
 // （construction-manager 的 recoveryEligible 钩子）；kernel 经
 // system.recoveryEligible 钩子间接消费，不再直接持有。
+
+// ─── 方向 3：保底可观测性层 ────────────────────────────────────
+
+/** 保底可观测性采样间隔（tick）。即使在 recovery tier 也由 kernel 直接执行。 */
+const BASELINE_SAMPLE_INTERVAL = 10;
+
+/** 保底可观测性采样：每 10 tick 由 kernel 直接写入关键指标到 stats。
+ * 不依赖 telemetry-collector（P3）运行——recovery tier 下 collector 只做低频 drain。
+ * 采样内容：bucket/tier/creep count/room count —— 诊断恢复进度的最小数据集。
+ *
+ * 为什么需要这层：recovery tier 下 telemetry-collector 被完全禁用（E-FINDING-02），
+ * 如果没有保底采样，灾后恢复期间将完全没有可观测数据——"最需要诊断时最没诊断"。
+ * 这个函数由 kernel 在 safeRun(critical=true) 中直接调用，不经过 scheduler。 */
+export function sampleBaselineMetrics(tick: number, budget: Budget): void {
+  if (tick % BASELINE_SAMPLE_INTERVAL !== 0) return;
+
+  const kernelMem = Memory.kernel;
+  if (!kernelMem) return;
+  if (!kernelMem.stats) {
+    kernelMem.stats = {
+      lastSample: 0,
+      cpuAvg10: 0,
+      cpuMax10: 0,
+      bucketMin10: 0,
+      crisisCount: 0,
+      tierTransitions: 0,
+      errorHotspot: "",
+      skipHotspot: "",
+    };
+  }
+  const stats = kernelMem.stats;
+  stats.baselineBucket = Game.cpu.bucket ?? 0;
+  stats.baselineTier = budget.tier;
+  stats.baselineCreepCount = Object.keys(Game.creeps).length;
+  stats.baselineRoomCount = Object.keys(Game.rooms).length;
+  stats.baselineLastSample = tick;
+}
+
+/** P3 长期冻结告警阈值（tick）。超此值后每 500 tick 输出一次升级告警。 */
+const P3_FROZEN_ALERT_TICKS = 500;
+
+/** P3 长期冻结跟踪：检查 P3 frozen 状态并输出升级告警。
+ * 由 kernel.runExpectations 在 p3Starved=true 时调用。
+ * 当 bucket < 3000 旁路不生效时，跟踪冻结持续时长。 */
+export function trackP3Frozen(
+  tick: number,
+  bucket: number,
+  kernelMem: { p3FrozenSince?: number },
+): void {
+  if (bucket < 3000) {
+    if (kernelMem.p3FrozenSince === undefined) {
+      kernelMem.p3FrozenSince = tick;
+    }
+    const frozenDuration = tick - kernelMem.p3FrozenSince;
+    // 每 500 tick 输出一次升级告警（避免刷屏）
+    if (frozenDuration > 0 && frozenDuration % P3_FROZEN_ALERT_TICKS === 0) {
+      log.warn("kernel", `[${tick}] P3 FROZEN ${frozenDuration} ticks — bucket=${bucket} < 3000, bypass ineffective. P3 systems (telemetry/tuning/terminal/lab) have been frozen since tick ${kernelMem.p3FrozenSince}. URGENT: reduce rooms/pause expansion to restore CPU headroom.`);
+      recordEvent(EventKind.P3StarvationFrozen, "", [bucket, frozenDuration]);
+    } else if (frozenDuration === 0) {
+      // 首次冻结：记录事件
+      recordEvent(EventKind.P3StarvationFrozen, "", [bucket]);
+    }
+  } else {
+    // bucket >= 3000: 旁路生效，清除冻结跟踪
+    if (kernelMem.p3FrozenSince !== undefined) delete kernelMem.p3FrozenSince;
+  }
+}

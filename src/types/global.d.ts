@@ -359,7 +359,19 @@ declare global {
       heapUsed?: number;
       heapTotal?: number;
       heapLimit?: number;
+      /** 方向 3 保底可观测性：recovery tier 下 kernel 直接采样的关键指标。
+       * 每 10 tick 由 kernel 直接写入（不依赖 telemetry-collector P3 系统运行）。
+       * 确保最需要诊断时（灾后恢复期）有最基本的数据可查。 */
+      baselineBucket?: number;
+      baselineTier?: string;
+      baselineCreepCount?: number;
+      baselineRoomCount?: number;
+      baselineLastSample?: number;
     };
+    /** 方向 3 E-FINDING-04 补充：P3 长期冻结跟踪。
+     * 当 P3 旁路因 bucket < 3000 不生效时，记录冻结开始的 tick。
+     * 冻结持续超 P3_FROZEN_ALERT_TICKS 时输出升级告警。 */
+    p3FrozenSince?: number;
     /** 参数自调优状态（v7+）。tuning-engine 每 500 tick 更新。 */
     tuning?: TuningMemory;
     /**
