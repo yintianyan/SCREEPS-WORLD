@@ -309,11 +309,11 @@ export class Kernel {
       if (snapshot) ctx._addSnapshot(snapshot);
     }
 
-    // 远矿目标集合：扫描 Memory.rooms 的 remoteOps 键，供 economy 的 sampleRoomFlows
-    // 判定采样范围（owned 房 + 远矿目标），避免 economy 每 tick 全量扫描 Memory.rooms。
+    // 远矿目标集合：只从自有房的 Memory.rooms 中提取 remoteOps，
+    // 避免遍历全部 Memory.rooms（含失守房 grace 期残留数据）。
     const remoteTargets = new Set<string>();
-    for (const roomMem of Object.values(Memory.rooms)) {
-      const ops = roomMem?.remoteOps;
+    for (const snap of ctx.snapshots()) {
+      const ops = Memory.rooms[snap.roomName]?.remoteOps;
       if (ops) for (const target of Object.keys(ops)) remoteTargets.add(target);
     }
     globalCache().remoteTargetRooms = remoteTargets;
@@ -440,6 +440,11 @@ export class Kernel {
       recordEvent(EventKind.ExpectationViolation, "kernel", [res.violations.length]);
       if (res.p3Starved) {
         kernelMem.p3StarveBypassUntil = ctx.tick + P3_BYPASS_WINDOW_TICKS;
+        const bucket = Game.cpu.bucket ?? 0;
+        if (bucket < 3000) {
+          log.warn("kernel", `[${ctx.tick}] P3 starvation BYPASS INEFFECTIVE — bucket=${bucket} < 3000, P3 systems frozen. Manual intervention may be needed (reduce rooms/pause expansion).`);
+          recordEvent(EventKind.P3StarvationFrozen, "", [bucket]);
+        }
         log.info("kernel", "[" + ctx.tick + "] expectations: P3 starvation — feed-forward bypass until " + kernelMem.p3StarveBypassUntil,);
       }
     } else {
@@ -586,8 +591,10 @@ export class Kernel {
       const roomMem = Memory.rooms[snap.roomName];
       const colonyState = roomMem?.colonyState ?? "normal";
       if (colonyState !== "recovery") continue;
-      // recoveryStartTick: 使用 colonyState 变化的粗略 tick（从 expectations e3 prev 获取或用 0 fallback）
-      const recoveryStart = (Memory.kernel?.expectations as { e3?: Record<string, { violationStartTick?: number }> })?.e3?.[snap.roomName]?.violationStartTick ?? 0;
+      // recoveryStartTick: 使用 colonyState 变化时间（room-state-system 写入）。
+      const recoveryStart = roomMem?.colonyStateSince
+        ?? Memory.kernel?.bootTick
+        ?? 0;
       result.push({
         room: snap.roomName,
         colonyState,
@@ -717,9 +724,9 @@ export class Kernel {
     }
 
     for (const { creep, role } of creepEntries) {
-      // ESM：紧急安全状态下仅 harvester 最小采集（spawn 由 P0 系统承担，
-      // harvester 直采直填维持 spawn 能量线；其余角色全部让位）。
-      if (ctx.budget.emergency === true && role.name !== "harvester") {
+      // ESM：紧急安全状态下仅生命线角色（isLifeLine 自报）运行，
+      // 维持 spawn 能量线；其余角色全部让位。
+      if (ctx.budget.emergency === true && !role.isLifeLine) {
         recordSkip(`creep/${role.name}/emergency`);
         continue;
       }

@@ -32,8 +32,15 @@ export const telemetryCollectorSystem: System = {
   // 已被填充后再采样（main 阶段运行时 cpuByHome 是空 Map，采样无意义）。
   phase: "post",
   run(ctx: TickContext): void {
-    // P3 在 recovery 下不运行 — 采集是非关键的。
-    if (ctx.budget.tier === "recovery") return;
+    // Recovery tier 低频 drain：仅 flush 事件缓冲区，跳过 CPU/经济采样。
+    // 确保 recovery 期间关键事件不因 eventBuffer 截断而丢失。
+    if (ctx.budget.tier === "recovery") {
+      const tick = ctx.tick;
+      if (tick % CONFIG.telemetry.populationInterval === 0) {
+        flushEventBufferOnly();
+      }
+      return;
+    }
     // P2-9 修复：conserve 档做轻量 stats 更新（只采样 CPU，跳过事件检测和输出）。
     // 确保前馈预测使用新鲜 stats，避免 conserve→healthy 升级后前馈以旧值误判。
     if (ctx.budget.tier === "conserve") {
@@ -261,6 +268,18 @@ function sampleMemorySize(tick: number): void {
     }
   } catch {
     // RawMemory 不可用（测试环境）——静默跳过。
+  }
+}
+
+/** Recovery tier 最低限度事件 flush：只 drain eventBuffer 到 segment，跳过差分检测。 */
+function flushEventBufferOnly(): void {
+  const events = drainEventBuffer();
+  if (events.length > 0) {
+    const seg = readEventLogSegment();
+    for (const evt of events) {
+      ringPush(seg.events, evt);
+    }
+    markEventLogDirty();
   }
 }
 

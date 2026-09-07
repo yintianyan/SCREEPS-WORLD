@@ -1,4 +1,15 @@
 /** Recovery Execution System */
+
+/** Per-tick creep 缓存 — run() 入口构建一次，避免多次 Object.values(Game.creeps)。 */
+let __creepCache: { tick: number; creeps: Creep[] } | null = null;
+
+/** 获取本 tick 的 creep 缓存，未初始化时构建。 */
+function getCreepCache(): Creep[] {
+  if (!__creepCache || __creepCache.tick !== Game.time) {
+    __creepCache = { tick: Game.time, creeps: Object.values(Game.creeps) };
+  }
+  return __creepCache.creeps;
+}
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache, publishProcurementDemands } from "../kernel/global-cache";
 import { CONFIG } from "../config";
@@ -49,6 +60,9 @@ export const recoveryExecutionSystem: System = {
   run(ctx: TickContext): void {
     const g = globalCache();
     const tick = ctx.tick;
+    // 初始化 per-tick creep 缓存 — 供 submitEnergyRedirect/submitDefenseResponse/
+    // isExecutionRefActive 复用，避免多次 Object.values(Game.creeps) 全量遍历。
+    __creepCache = { tick, creeps: Object.values(Game.creeps) };
 
     // ── 1. 读取 recoveryActions + warAbortSignals ──
     // A5.3.1 GAP-1 修复：消费军事止损信号，通过纯函数转换为 RecoveryAction。
@@ -357,7 +371,7 @@ function submitEnergyRedirect(
   }
 
   // 统计存活 distributor
-  const livingDistributors = Object.values(Game.creeps).filter(
+  const livingDistributors = getCreepCache().filter(
     c => c.memory.role === "distributor" && c.memory.home === room,
   ).length;
 
@@ -596,7 +610,7 @@ function submitDefenseResponse(
   // HIGH/CRITICAL → 提交 defender spawn 请求
   if (level === "HIGH" || level === "CRITICAL") {
     // 检查是否已有存活 defender
-    const livingDefenders = Object.values(Game.creeps).filter(
+    const livingDefenders = getCreepCache().filter(
       c => c.memory.role === "defender" && c.memory.home === room && !c.spawning,
     ).length;
 
@@ -823,7 +837,7 @@ function isExecutionRefActive(executionRef: string | undefined, actionType: stri
     const room = parts[2] ?? "";
 
     // 如果已有存活 creep → 执行引用已转化为实际行动
-    const hasCreep = Object.values(Game.creeps).some(
+    const hasCreep = getCreepCache().some(
       c => c.memory.role === role && c.memory.home === room && !c.spawning,
     );
     if (hasCreep) return true; // creep 存活 = 仍在执行
@@ -874,8 +888,7 @@ function captureWorldSnapshot(
   }
 
   // 人口
-  let totalPop = 0;
-  for (const _ of Object.values(Game.creeps)) totalPop++;
+  const totalPop = Object.keys(Game.creeps).length;
   population = totalPop;
 
   // 物流投递率

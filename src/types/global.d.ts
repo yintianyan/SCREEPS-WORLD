@@ -130,6 +130,8 @@ declare global {
 
   interface RoomMemory {
     colonyState?: ColonyState;
+    /** colonyState 最近一次变化的 tick（由 room-state-system 写入）。 */
+    colonyStateSince?: number;
     /**
      * P3 能量核算瘦快照（schema v37，economy 系统唯一写者，50tick 错峰）。
      * 字段镜像 domain/economy/accounting.EconomyMemorySnapshot（整数化短字段，

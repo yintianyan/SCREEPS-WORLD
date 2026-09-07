@@ -15,6 +15,8 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
     priority,
     // R3a：recovery 豁免从 RolePolicy 透传（builder/mineralMiner 自报）。
     recoveryEligible: policy.recoveryEligible === true,
+    // 生命线角色透传：ESM 下仅此角色运行。
+    isLifeLine: policy.isLifeLine === true,
     // 战斗标志透传：供 kernel recovery 门禁紧急旁路（war/真实入侵时不冻结作战单位）。
     combat: policy.combat === true,
     run(creep: Creep, ctx: TickContext): void {

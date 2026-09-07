@@ -227,7 +227,11 @@ export const roomStateSystem: System = {
         && lastHostileAge < CONFIG.defense.defenseExitHysteresis;
       const hasHostiles = threatPresent || inExitHysteresis;
 
-      roomMem.colonyState = phaseToColonyState(phaseResult.phase, hasHostiles);
+      const newColonyState = phaseToColonyState(phaseResult.phase, hasHostiles);
+      if (newColonyState !== roomMem.colonyState) {
+        roomMem.colonyStateSince = ctx.tick;
+      }
+      roomMem.colonyState = newColonyState;
 
       // A5.1：威胁评估集成 — threatCount > 0 时调用 assessThreat() 纯函数，
       // 将结构化威胁评估（含 intent / combatPower / recommendedPosture）写入

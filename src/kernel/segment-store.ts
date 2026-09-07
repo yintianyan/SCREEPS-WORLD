@@ -487,7 +487,15 @@ export function flushSegments(): void {
   }
 
   if (cache.eventLogDirty && cache.eventLog) {
-    RawMemory.segments[SEGMENT_EVENT_LOG] = JSON.stringify(cache.eventLog);
+    let serialized = JSON.stringify(cache.eventLog);
+    if (serialized.length > SEGMENT_SIZE_LIMIT) {
+      cache.eventLog.events = trimRingBuffer(
+        cache.eventLog.events,
+        Math.floor(cache.eventLog.events.c * TRIM_KEEP_RATIO),
+      );
+      serialized = JSON.stringify(cache.eventLog);
+    }
+    RawMemory.segments[SEGMENT_EVENT_LOG] = serialized;
     cache.eventLogDirty = false;
   }
 

@@ -16,6 +16,7 @@ import {
 import { defineRole } from "../engine/role-runner";
 
 const policy: RolePolicy = {
+  isLifeLine: true,
   acquire: [
     // 0. 站桩采集并同 tick 倒能（source 旁有 container/link 时）— 消除采/倒互斥的产能损失。
     stationaryMine(),

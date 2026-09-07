@@ -77,13 +77,17 @@ export const logisticsSystem: System = {
     g.transportPool = { tick: ctx.tick, rooms: {} };
     const cfg = CONFIG.logistics;
 
+    // 全房 creep 缓存 — 本 tick 只遍历一次，logistics-planner 复用。
+    const allCreeps = Object.values(Game.creeps);
+    (g as any).__logisticsCreepCache = { tick: ctx.tick, creeps: allCreeps };
+
     // 全房 creep 租约投影只扫一次（O(creeps)，复用 collectCreepRefs 模式）。
     // 租约失效检测：assignment.leaseUntil 过期 → valid=false → 回收重挂。
     const leasesByRoom = new Map<string, LeaseSummary[]>();
     const claimsByRoom = new Map<string, Set<string>>();
     // 用于空载率计算的 hauler 摘要（按 home 分桶）。
     const haulerSummariesByRoom = new Map<string, { name: string; lastActionTick: number; ticksToLive: number; role: string }[]>();
-    for (const creep of Object.values(Game.creeps)) {
+    for (const creep of allCreeps) {
       if (creep.spawning) continue;
       const home = creep.memory.home ?? creep.room?.name;
       if (!home) continue;

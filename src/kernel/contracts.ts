@@ -71,6 +71,11 @@ export interface CreepRole {
    * 与 recoveryEligible 正交：combat 旁路只在「战争/真实入侵」下生效，不对经济角色开放。
    */
   readonly combat?: boolean;
+  /**
+   * 生命线角色自报：ESM（紧急安全模式）下仅声明 true 的角色运行。
+   * 典型：harvester（直采直填维持 spawn 能量线）。kernel 只读此标志，不硬编码角色名。
+   */
+  readonly isLifeLine?: boolean;
   run(creep: Creep, ctx: TickContext): void;
 }
 

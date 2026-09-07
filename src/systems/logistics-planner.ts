@@ -38,6 +38,13 @@ import {
 } from "../domain/logistics/idle-detection";
 import { log } from "../kernel/log";
 
+/** 获取本 tick 的 creep 缓存（由 logistics.run 入口构建）。未初始化时回退到全量遍历。 */
+function getCreepCache(tick: number): Creep[] {
+  const cache = (globalCache() as any).__logisticsCreepCache as { tick: number; creeps: Creep[] } | undefined;
+  if (cache && cache.tick === tick) return cache.creeps;
+  return Object.values(Game.creeps);
+}
+
 // ─── 路由缓存（heap，跨 tick 持久） ─────────────────────────
 
 /** 帝国级 RouteCache — 跨 tick 持久（heap），global reset 后重建。 */
@@ -275,10 +282,10 @@ function collectContracts(): SupplyContract[] {
 function collectCapacityInputs(snapshots: readonly RoomSnapshot[], tick: number): RoomCapacityInput[] {
   const result: RoomCapacityInput[] = [];
 
-  // 全房 creep 按 home 分桶
+  // 全房 creep 按 home 分桶（复用 logistics.run 入口缓存的 creep 列表）
   const haulersByRoom = new Map<string, Creep[]>();
   const carriersByRoom = new Map<string, Creep[]>();
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getCreepCache(tick)) {
     if (creep.spawning) continue;
     const home = creep.memory.home ?? creep.room?.name;
     if (!home) continue;
@@ -538,7 +545,7 @@ function computeAvgLatency(): number {
  */
 function collectHaulerSummaries(): HaulerIdleSummary[] {
   const result: HaulerIdleSummary[] = [];
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getCreepCache(Game.time)) {
     if (creep.spawning) continue;
     const role = creep.memory.role;
     if (role !== "hauler" && role !== "carrier" && role !== "remoteHauler") continue;
@@ -557,7 +564,7 @@ function collectHaulerSummaries(): HaulerIdleSummary[] {
  */
 function collectHaulerCapacityInfo(snapshots: readonly RoomSnapshot[]) {
   const haulers: { capacity: number; idle: boolean }[] = [];
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of getCreepCache(Game.time)) {
     if (creep.spawning) continue;
     const role = creep.memory.role;
     if (role !== "hauler" && role !== "carrier" && role !== "remoteHauler") continue;

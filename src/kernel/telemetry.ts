@@ -22,9 +22,10 @@ export function initTelemetry(tick: number): void {
     g.eventBuffer = { events: [] };
   } else {
     // 上一 tick 的残留事件（如果 telemetry-collector 未运行，如 recovery tier）
-    // 保留最多 50 条，防止无限增长。正常情况下 collector 每 10 tick flush。
-    if (g.eventBuffer.events.length > 50) {
-      g.eventBuffer.events = g.eventBuffer.events.slice(-50);
+    // 保留最多 200 条，防止无限增长。正常情况下 collector 每 10 tick flush。
+    // Recovery tier 下 collector 每 100 tick 才 drain，200 条容量容纳 100 tick 的高频事件。
+    if (g.eventBuffer.events.length > 200) {
+      g.eventBuffer.events = g.eventBuffer.events.slice(-200);
     }
   }
 }
