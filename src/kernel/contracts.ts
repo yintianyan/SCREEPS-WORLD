@@ -195,3 +195,29 @@ export interface TickContext {
   getSnapshot(roomName: string): RoomSnapshot | undefined;
   snapshots(): Iterable<RoomSnapshot>;
 }
+
+// ─── 威胁判定纯函数（B1-FINDING-05: kernel 和 domain/defense 共享） ─────
+
+/** 具备任一即视为威胁的部件类型。
+ *  此常量与 domain/defense/threat.ts 的 THREAT_PARTS 同口径，
+ *  提取到 contracts 层以消除 kernel 的内联重复。 */
+export const THREAT_PARTS: readonly BodyPartConstant[] = [
+  ATTACK,
+  RANGED_ATTACK,
+  HEAL,
+  WORK,
+  CLAIM,
+];
+
+/** 威胁判定的最小输入（便于纯函数测试，无需构造完整 Creep）。 */
+export interface ThreatInput {
+  readonly owner: string;
+  readonly bodyParts: readonly BodyPartConstant[];
+}
+
+/** 判定单个单位是否为威胁 — 非盟友且 body 含威胁部件。
+ *  kernel 和 domain/defense/threat.ts 共同消费此函数，消除口径分叉。 */
+export function isThreat(input: ThreatInput, allies: readonly string[]): boolean {
+  if (allies.includes(input.owner)) return false;
+  return input.bodyParts.some(p => THREAT_PARTS.includes(p));
+}

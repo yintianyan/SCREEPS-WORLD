@@ -17,6 +17,7 @@ import {
   sampleEconomy,
   type CpuSample,
   type PopulationSnapshot,
+  type HeapSample,
 } from "../kernel/timeseries";
 import { drainEventBuffer, EventKind } from "../kernel/event-log";
 import { ringPush, ringToArray } from "../kernel/ring-buffer";
@@ -202,6 +203,30 @@ function samplePopulationData(tick: number): void {
 
   const seg = readCpuSegment();
   seg.population = snapshot;
+
+  // C2-FINDING-01: heap 监控 — 每 100 tick 采样 IVM heap 使用量。
+  // 社区陷阱 I1/I5: IVM heap 限制 256MB，接近限制时 GC 暂停导致 tick 超时。
+  try {
+    const heapStats = (Game.cpu as unknown as { getHeapStatistics?: () => { heapTotal?: number; heapUsed?: number; heapLimit?: number } }).getHeapStatistics?.();
+    if (heapStats) {
+      const heap: HeapSample = {
+        t: tick,
+        used: heapStats.heapUsed ?? 0,
+        total: heapStats.heapTotal ?? 0,
+        limit: heapStats.heapLimit ?? 0,
+      };
+      seg.heap = heap;
+
+      // 告警：heap 使用超过 200MB（256MB 限制的 ~78%）
+      const HEAP_ALERT = 200 * 1024 * 1024;
+      if (heap.used > HEAP_ALERT) {
+        console.log(`[HEAP WARN] tick=${tick} used=${(heap.used / 1048576).toFixed(1)}MB total=${(heap.total / 1048576).toFixed(1)}MB limit=${(heap.limit / 1048576).toFixed(1)}MB`);
+      }
+    }
+  } catch {
+    // getHeapStatistics 可能不可用（私服/测试环境）
+  }
+
   markCpuDirty();
 }
 

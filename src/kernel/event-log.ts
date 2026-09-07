@@ -247,10 +247,11 @@ export function recordCreepDeath(name: string): void {
   const lifespan = role === "reserver" || role === "claimer" ? 600 : 1500;
   const natural = age >= lifespan - 60 ? 1 : 0;
   // P1 补位时延起点锚（同角色下次孵化成功时结算 EMA）。
-  const statsAny = (Memory as any).kernel?.stats as any;
-  if (statsAny) {
-    statsAny.deathAnchor = statsAny.deathAnchor ?? {};
-    statsAny.deathAnchor[role] = Game.time;
+  // E-FINDING-09: 移除 (Memory as any) 类型绕过，使用类型安全访问。
+  const stats = Memory.kernel?.stats;
+  if (stats) {
+    if (!stats.deathAnchor) stats.deathAnchor = {};
+    stats.deathAnchor[role] = Game.time;
   }
   const seen = globalCache().creepLastSeen?.get(name);
   recordEvent(EventKind.CreepDeath, seen?.r ?? "", [

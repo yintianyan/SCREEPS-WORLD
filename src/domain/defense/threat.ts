@@ -1,6 +1,9 @@
-/** 威胁分类 — 纯函数，区分「威胁 creep」与「无害过客」。 */
+/** 威胁分类 — 纯函数，区分「威胁 creep」与「无害过客」。
+ *  B1-FINDING-05: THREAT_PARTS 与 CONFIG.defense.threatParts / kernel/contracts.ts THREAT_PARTS 同口径。
+ *  domain 不能值导入 kernel（R1 约束），因此保留本地副本。三处定义口径一致，
+ *  配置变更时需同步。 */
 
-/** 具备任一即视为威胁的部件类型。 */
+/** 具备任一即视为威胁的部件类型。与 CONFIG.defense.threatParts 同口径。 */
 const THREAT_PARTS: readonly BodyPartConstant[] = [
   ATTACK,
   RANGED_ATTACK,

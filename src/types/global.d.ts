@@ -347,6 +347,13 @@ declare global {
        * RawMemory.get().length — 零 JSON 解析成本，只读字符串长度。
        * 官服上限 2MB（2*1024*1024）[Fact: typings 验证]；超 1.5MB 告警。 */
       memorySize?: number;
+      /** E-FINDING-09: P1 补位时延起点锚（同角色下次孵化成功时结算 EMA）。
+       * 由 recordCreepDeath 写入，maintainMemory 清理已灭绝角色。 */
+      deathAnchor?: Record<string, number>;
+      /** C2-FINDING-01: IVM heap 使用快照（每 100 tick 采样）。 */
+      heapUsed?: number;
+      heapTotal?: number;
+      heapLimit?: number;
     };
     /** 参数自调优状态（v7+）。tuning-engine 每 500 tick 更新。 */
     tuning?: TuningMemory;

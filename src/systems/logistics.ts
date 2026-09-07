@@ -246,9 +246,15 @@ export const logisticsSystem: System = {
       }
     }
     // P3-2：空载率指标写入 globalCache 供消费方读取。
+    // B8-F01 修复：清理失守房的 poolRooms 条目，防止 heap 膨胀 + 死房遍历。
+    const activeRoomNames = new Set(Array.from(ctx.snapshots()).map(s => s.roomName));
     const allIdleRatios: Record<string, number> = {};
     let maxIdleRatio = 0;
     for (const [roomName, st] of poolRooms) {
+      if (!activeRoomNames.has(roomName)) {
+        poolRooms.delete(roomName);
+        continue;
+      }
       allIdleRatios[roomName] = st.idleRatio;
       if (st.idleRatio > maxIdleRatio) maxIdleRatio = st.idleRatio;
     }

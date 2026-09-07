@@ -40,10 +40,12 @@ const ROLE_TASK_KINDS: Readonly<Record<string, readonly string[]>> = {
 export interface CreepAssignmentRef {
   name: string;
   home: string;
+  role?: string;
   assignment?: {
     id: string;
     kind: string;
     sourceId?: string;
+    targetId?: string;
   };
 }
 

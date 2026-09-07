@@ -120,12 +120,26 @@ export interface PopulationSnapshot {
 
 // ─── Segment 1 数据结构（CPU + 人口）──────────────────────────
 
-/** Segment 1 的顶层结构：CPU 时序 + 人口普查。 */
+/** Segment 1 的顶层结构：CPU 时序 + 人口普查 + heap 监控。 */
 export interface CpuSegmentData {
   /** CPU 时序环形缓冲（全局，每 10 tick 一条）。 */
   cpu: RingBuffer<CpuSample>;
   /** 最新人口普查快照（仅保留最后一份）。 */
   population?: PopulationSnapshot;
+  /** 最新 heap 使用快照（C2-FINDING-01: heap 监控）。 */
+  heap?: HeapSample;
+}
+
+/** IVM heap 使用快照（每 100 tick 采样一次，与人口普查同频率）。 */
+export interface HeapSample {
+  /** 采样 tick。 */
+  t: number;
+  /** 已使用堆内存 (bytes)。 */
+  used: number;
+  /** 堆内存总量 (bytes)。 */
+  total: number;
+  /** 堆内存上限 (bytes)。 */
+  limit: number;
 }
 
 // ─── Segment 3 数据结构（经济）──────────────────────────────

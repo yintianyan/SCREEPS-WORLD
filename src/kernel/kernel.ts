@@ -1,11 +1,12 @@
-import type {
-  Budget,
-  CreepRole,
-  CpuTier,
-  Priority,
-  RoomSnapshot,
-  System,
-  TickContext,
+import {
+  isThreat,
+  type Budget,
+  type CreepRole,
+  type CpuTier,
+  type Priority,
+  type RoomSnapshot,
+  type System,
+  type TickContext,
 } from "./contracts";
 import { recordSkip, flushSkips, maintainMemory, runMigrations } from "./memory";
 import { systemPhase } from "./phase";
@@ -711,12 +712,13 @@ export class Kernel {
     for (const roomName of combatRooms) {
       const room = Game.rooms[roomName];
       if (!room) continue;
-      // 检测非自有房中的真实威胁 creep — 与 domain/defense/threat.ts 同口径
-      //（CONFIG.defense.threatParts + allies 白名单），但内联以避免 kernel import domain。
+      // B1-FINDING-05: 使用 contracts 层共享的 isThreat 纯函数，消除内联 domain 逻辑。
       const hostiles = room.find(FIND_HOSTILE_CREEPS);
       const hasThreat = hostiles.some(c =>
-        !CONFIG.defense.allies.includes(c.owner.username) &&
-        c.body.some(p => CONFIG.defense.threatParts.includes(p.type)),
+        isThreat(
+          { owner: c.owner?.username ?? "?", bodyParts: c.body.map(b => b.type) },
+          CONFIG.defense.allies,
+        ),
       );
       if (hasThreat) {
         liveThreatRooms.add(roomName);

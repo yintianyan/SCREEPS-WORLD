@@ -1224,6 +1224,24 @@ export function maintainMemory(): void {
       }
     }
   }
+
+  // E-FINDING-09: 清理 deathAnchor 中已灭绝角色的条目。
+  // deathAnchor 由 recordCreepDeath 写入，记录最后死亡 tick 供 P1 补位 EMA 计算。
+  // 当某角色不再存活且超过 2000 tick（长于最长寿命 1500+缓冲），清理过期锚点。
+  const stats = Memory.kernel.stats;
+  if (stats?.deathAnchor) {
+    const activeRoles = new Set<string>();
+    for (const name in Memory.creeps) {
+      const role = name.split("-")[0];
+      if (role) activeRoles.add(role);
+    }
+    const STALE_ANCHOR_TICKS = 2000;
+    for (const role of Object.keys(stats.deathAnchor)) {
+      if (!activeRoles.has(role) && Game.time - stats.deathAnchor[role]! > STALE_ANCHOR_TICKS) {
+        delete stats.deathAnchor[role];
+      }
+    }
+  }
 }
 
 /** 按升序执行迁移（每个幂等）。ready() 未就绪时停在断点、保留版本，下 tick 续跑。

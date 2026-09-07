@@ -478,11 +478,13 @@ function syncAccountingFromOperations(tick: number): void {
 }
 
 /**
- * 从 Memory 读取 Operations。
+ * 从 Memory 读取 Operations（与 agenda-manager 的 loadOperations 同口径）。
+ * B8-F03 修复：原先读 global.__operations（从未被写入），改为读 Memory.kernel.agendas。
  */
 function loadOperations(): import("../domain/operation/agenda-item").OperationContext[] {
-  const stored = (global as unknown as { __operations?: import("../domain/operation/agenda-item").OperationContext[] }).__operations;
-  return stored ?? [];
+  const stored = Memory.kernel?.agendas;
+  if (!stored || !Array.isArray(stored)) return [];
+  return stored as unknown as import("../domain/operation/agenda-item").OperationContext[];
 }
 
 /**

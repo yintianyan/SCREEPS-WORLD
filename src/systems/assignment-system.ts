@@ -44,7 +44,7 @@ export const assignmentSystem: System = {
       // 导致 storage site 无人建造，经济中枢断裂。
       const needsStorage = snapshot.rcl >= 4 && snapshot.storage === undefined;
       if (needsStorage) {
-        releaseNonStorageBuilderAssignments(snapshot);
+        releaseNonStorageBuilderAssignments(snapshot, allCreepRefs);
       }
 
       generateRoomTasks(pool, snapshot, ctx, allCreepRefs);
@@ -89,11 +89,13 @@ function collectAllCreepRefs(): CreepAssignmentRef[] {
     refs.push({
       name: creep.name,
       home,
+      role: creep.memory.role,
       assignment: a
         ? {
             id: a.id,
             kind: a.kind,
             sourceId: a.sourceId ? (a.sourceId as string) : undefined,
+            targetId: a.targetId ? (a.targetId as string) : undefined,
           }
         : undefined,
     });
@@ -173,23 +175,28 @@ function invalidateAssignments(pool: TaskPool, roomName: string, minPriority: nu
  * 解锁更大 builder body，整体建造速率翻倍；全压 storage 反而拖慢 extension 重建。
  * storage site 不存在（被 block 或未规划）时不释放——避免 builder 永久 idle。
  */
-function releaseNonStorageBuilderAssignments(snapshot: RoomSnapshot): void {
+/**
+ * 主动失效非 storage/extension build assignment，强制 builder 重新选 storage。
+ * B8-F04 修复：复用 allCreepRefs 避免在房间循环内重复遍历 Game.creeps。
+ */
+function releaseNonStorageBuilderAssignments(snapshot: RoomSnapshot, allCreepRefs: readonly CreepAssignmentRef[]): void {
   // 必须存在 storage construction site 才释放——否则 builder 无 storage 可建。
   const hasStorageSite = snapshot.myConstructionSites.some(
     s => s.structureType === STRUCTURE_STORAGE,
   );
   if (!hasStorageSite) return;
 
-  for (const creep of Object.values(Game.creeps)) {
-    if (creep.memory.home !== snapshot.roomName) continue;
-    if (creep.memory.role !== "builder") continue;
-    const a = creep.memory.assignment;
+  for (const ref of allCreepRefs) {
+    if (ref.home !== snapshot.roomName) continue;
+    if (ref.role !== "builder") continue;
+    const a = ref.assignment;
     if (!a || a.kind !== "build" || !a.targetId) continue;
 
     const site = Game.getObjectById(a.targetId as Id<ConstructionSite>);
     // 保留 storage 和 extension site 上的 builder；释放其他（road/rampart/link 等）。
     if (site && site.structureType !== STRUCTURE_STORAGE && site.structureType !== STRUCTURE_EXTENSION) {
-      creep.memory.assignment = undefined;
+      const creep = Game.creeps[ref.name];
+      if (creep) creep.memory.assignment = undefined;
     }
   }
 }

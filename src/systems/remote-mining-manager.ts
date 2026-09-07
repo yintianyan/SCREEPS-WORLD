@@ -309,7 +309,7 @@ export const remoteMiningManagerSystem: System = {
       // 收集 InvaderCore 压制房（结构不是 creep，FIND_HOSTILE_CREEPS 检测不到）。
       // 核心 100,000 hits，defender/reserver 均无力处理 — 该房进入止损模式：
       // 打上危险冷却 + 暂停孵化 + 回收现役 creep，等核心自然 decay 后自动恢复。
-      const remoteBlockers = collectRemoteBlockers(remoteOps);
+      const remoteBlockers = collectRemoteBlockers(remoteOps, remoteThreats);
       // 压制状态持久化：瞬时视野检测 + Memory 冷却双轨合并 — 只用瞬时集合的死角：
       // 回收 creep 后该房失明 → 检测集合清空 → 孵化恢复 → 新 creep 发现核心 → 再回收
       // — 死循环每轮白送整编 creep。规则：有视野见核心 → 写/续期 blockedUntil；
@@ -543,8 +543,15 @@ function reevaluateActiveOps(
       haulerCapacity,
       hasRoad,
     });
-    // 写回最新 haulerNeed（body 档位提升后单只运力增大 → 需要的 hauler 数下降）。
-    op.haulerNeed = haulerNeed;
+    // B5b-F02 修复：Plan 有效时不覆写 op.haulerNeed（Plan 拥有 Decision Authority）。
+    // 仅在 Plan 不存在/过期时写入 haulerNeed 作为 fallback（DEGRADED MODE）。
+    const planActive = (() => {
+      const plan = globalCache().logisticsPlan?.plan;
+      return !!plan && plan.plannedAt >= tick - 100;
+    })();
+    if (!planActive) {
+      op.haulerNeed = haulerNeed;
+    }
     if (netScore < CONFIG.remote.minNetScore) {
       if (op.lowScoreSince === undefined) {
         op.lowScoreSince = tick; // 首次跌破 — 起算宽限期。
@@ -940,7 +947,10 @@ export function classifyInvaderCores(input: {
  * 运营继续送 harvester/reserver 空耗。检测需要视野（active 房通常有驻场 creep）。
  * 导出供接线测试验证检测链路。
  */
-export function collectRemoteBlockers(remoteOps: Readonly<Record<string, RemoteOp>>): Record<string, RemoteBlockerState> {
+export function collectRemoteBlockers(
+  remoteOps: Readonly<Record<string, RemoteOp>>,
+  remoteThreats?: Record<string, boolean>,
+): Record<string, RemoteBlockerState> {
   const blockers: Record<string, RemoteBlockerState> = {};
   for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") continue;
@@ -950,7 +960,10 @@ export function collectRemoteBlockers(remoteOps: Readonly<Record<string, RemoteO
       filter: (s) => s.structureType === STRUCTURE_INVADER_CORE,
     }) as StructureInvaderCore[];
     if (cores.length === 0) { blockers[roomName] = { kind: "clear" }; continue; }
-    const hostileCreepCount = room.find(FIND_HOSTILE_CREEPS).length;
+    // C1-FINDING-07: 复用 collectRemoteThreats 已采集的 hostile 信息，避免重复 FIND_HOSTILE_CREEPS
+    const hostileCreepCount = remoteThreats && remoteThreats[roomName] !== undefined
+      ? (remoteThreats[roomName] ? 1 : 0)
+      : room.find(FIND_HOSTILE_CREEPS).length;
     const kind = classifyInvaderCores({
       cores: cores.map((c) => ({ level: c.level })),
       hostileCreepCount,
@@ -1447,6 +1460,11 @@ function detectRoadCoverage(
     for (const rn of Object.keys(remoteOps)) result[rn] = false;
     return result;
   }
+  const homeRoadKeys = new Set<string>();
+  // C1-FINDING-07: hoist home!.find outside the loop — home room doesn't change per iteration.
+  for (const s of home!.find(FIND_STRUCTURES)) {
+    if (s.structureType === STRUCTURE_ROAD) homeRoadKeys.add(`${s.pos.x},${s.pos.y}`);
+  }
   for (const [rn, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") { result[rn] = false; continue; }
     const room = Game.rooms[rn];
@@ -1456,10 +1474,6 @@ function detectRoadCoverage(
     const roadKeys = new Set<string>();
     for (const s of room.find(FIND_STRUCTURES)) {
       if (s.structureType === STRUCTURE_ROAD) roadKeys.add(`${s.pos.x},${s.pos.y}`);
-    }
-    const homeRoadKeys = new Set<string>();
-    for (const s of home!.find(FIND_STRUCTURES)) {
-      if (s.structureType === STRUCTURE_ROAD) homeRoadKeys.add(`${s.pos.x},${s.pos.y}`);
     }
     let totalPathTiles = 0;
     let roadTiles = 0;
