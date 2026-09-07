@@ -1180,9 +1180,15 @@ export function maintainMemory(): void {
 
   // 每 tick 清理死亡 creep memory（小帝国安全且廉价）；清理前记录死亡事件
   // （战斗黑匣子 M9 — 这是死亡的唯一系统性检测点）。
+  // B3-F02 修复：recordCreepDeath 加 try/catch — 单个 creep 死亡记录异常
+  // 不应连坐失守房清理等后续逻辑。catch 中仍执行 delete 防止死者 Memory 滞留。
   for (const name in Memory.creeps) {
     if (!Game.creeps[name]) {
-      recordCreepDeath(name);
+      try {
+        recordCreepDeath(name);
+      } catch {
+        // recordCreepDeath 失败不阻塞清理 — 死者 Memory 仍需删除。
+      }
       delete Memory.creeps[name];
     }
   }
@@ -1281,7 +1287,8 @@ export function flushSkips(): void {
 
   // 防御性 key 数量上限：防止未知的动态 key 导致 Memory 膨胀。
   // 现有调用方（role/system name）都是有限集合，但防御性编程要求不信任未来。
-  const MAX_SKIP_REASONS = 50;
+  // B3-F05 修复：从 50 提高到 200 — 系统数×原因数的乘积可能超过 50。
+  const MAX_SKIP_REASONS = 200;
 
   for (const [reason, count] of Object.entries(g.skipBuffer)) {
     // 累加但设上限，防止数字溢出。
@@ -1298,8 +1305,10 @@ export function flushSkips(): void {
   }
   g.skipBuffer = {};
 
-  // 每 500 tick 重置统计窗口，保留最近数据，防止无限增长。
+  // B3-F09 修复：滑动窗口 — 保留上一窗口快照，而非完全清空。
+  // 防止外部采集器恰好在重置后拉取到空数据，丢失跨窗口趋势。
   if (Game.time % 500 === 0) {
+    Memory.kernel.prevSkipReasons = Memory.kernel.skipReasons;
     Memory.kernel.skipReasons = {};
   }
 }

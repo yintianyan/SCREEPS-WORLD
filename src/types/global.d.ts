@@ -314,6 +314,8 @@ declare global {
       postureChangedAt?: number;
     recoveryTicks?: number;
     skipReasons?: Record<string, number>;
+    /** B3-F09: 上一 500-tick 窗口的 skipReasons 快照（滑动窗口保留）。 */
+    prevSkipReasons?: Record<string, number>;
     /**
      * 最近一次 generatePixel 的 tick（自愿放血协议）：宽限窗口内 scheduler 把
      * tier 地板抬到 conserve，防看门狗把自愿放血误判为 CPU 失控进 recovery。
@@ -350,6 +352,9 @@ declare global {
       /** E-FINDING-09: P1 补位时延起点锚（同角色下次孵化成功时结算 EMA）。
        * 由 recordCreepDeath 写入，maintainMemory 清理已灭绝角色。 */
       deathAnchor?: Record<string, number>;
+      /** B4-F08: P1 补位时延 EMA（按角色分桶），由 spawn-manager 写入。
+       * replaceLatency[role] = prev * 0.8 + latency * 0.2。 */
+      replaceLatency?: Record<string, number>;
       /** C2-FINDING-01: IVM heap 使用快照（每 100 tick 采样）。 */
       heapUsed?: number;
       heapTotal?: number;

@@ -215,7 +215,9 @@ export interface EventBuffer {
 // ─── 公共 API ───────────────────────────────────────────────
 
 /** 记录一个离散事件：写入 globalCache().eventBuffer（heap），telemetry-collector 低频 flush 到 segment。
- * 可从任意系统安全调用 — 不访问 Memory/segment，CPU 开销极低（数组 push）。 */
+ * 可从任意系统安全调用 — 不访问 Memory/segment，CPU 开销极低（数组 push）。
+ * E-FINDING-10: soft cap 200 条 — 防止单 tick 突发事件压垮 eventBuffer。
+ * 超限时丢弃最老的事件（FIFO），保留最新事件。 */
 export function recordEvent(
   kind: EventKind,
   roomName: string,
@@ -223,7 +225,12 @@ export function recordEvent(
 ): void {
   const g = globalCache();
   if (!g.eventBuffer) g.eventBuffer = { events: [] };
-  g.eventBuffer.events.push({
+  const events = g.eventBuffer.events;
+  // E-FINDING-10: soft cap — 超过 200 条时丢弃最老的事件
+  if (events.length >= 200) {
+    events.shift();
+  }
+  events.push({
     t: Game.time,
     k: kind,
     r: roomName,

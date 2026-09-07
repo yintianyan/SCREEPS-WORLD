@@ -159,9 +159,9 @@ export const empireHealthSystem: System = {
       reserveHistory.push(empireEcon.tr);
     }
 
-    // 人口统计：用 Object.keys 计数避免创建完整数组。
-    // 待迁移：应由 Kernel.buildSnapshots 预构建总人口写入 globalCache 供消费。
-    const totalPop = Object.keys(Game.creeps).length;
+    // 人口统计：优先复用 buildSnapshots 预构建的 globalCache.totalPopulation。
+    // C1-F09: 消除 Object.keys(Game.creeps).length 的全量遍历。
+    const totalPop = globalCache().totalPopulation ?? Object.keys(Game.creeps).length;
     populationHistory.push(totalPop);
     failureCountHistory.push(activeFailures.length);
 

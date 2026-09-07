@@ -155,13 +155,13 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
     expect(roomMem.spawnBlacklist!["defender:" + ROOM + ":0"]).toBe(100 + 1000);
   });
 
-  it("近 200 tick 内 harvester churn > 20 次 → 触发 100 tick 熔断", () => {
-    // 在 tick=200 时记录 21 次 harvester churn。
+  it("近 200 tick 内 upgrader churn > 20 次 → 触发 100 tick 熔断", () => {
+    // B4-F04: harvester 豁免熔断，改用 upgrader（非生命线角色）。
     for (let i = 0; i < 21; i++) {
-      recordChurn(ROOM, "harvester", 200);
+      recordChurn(ROOM, "upgrader", 200);
     }
     const roomMem = runChurnCheck(200);
-    expect(roomMem.churnFreezeUntil!.harvester).toBe(200 + 100);
+    expect(roomMem.churnFreezeUntil!.upgrader).toBe(200 + 100);
   });
 
   it("熔断期间 demand 不生成 harvester 请求", () => {
@@ -211,15 +211,16 @@ describe("P0-3 spawn churn 熔断 — 边界条件", () => {
     expect(roomMem.churnFreezeUntil).toBeUndefined();
   });
 
-  it("不同 role 独立计数（harvester 21 次 + hauler 5 次 → 只熔断 harvester）", () => {
+  it("不同 role 独立计数（upgrader 21 次 + hauler 5 次 → 只熔断 upgrader）", () => {
+    // B4-F04: harvester 豁免熔断，改用 upgrader（非生命线角色）。
     for (let i = 0; i < 21; i++) {
-      recordChurn(ROOM, "harvester", 200);
+      recordChurn(ROOM, "upgrader", 200);
     }
     for (let i = 0; i < 5; i++) {
       recordChurn(ROOM, "hauler", 200);
     }
     const roomMem = runChurnCheck(200);
-    expect(roomMem.churnFreezeUntil!.harvester).toBeDefined();
+    expect(roomMem.churnFreezeUntil!.upgrader).toBeDefined();
     expect(roomMem.churnFreezeUntil!.hauler).toBeUndefined();
   });
 
@@ -256,11 +257,12 @@ describe("P0-3 spawn churn 熔断 — 异常情况", () => {
     expect((globalThis as any).Memory.rooms[ROOM].churnFreezeUntil).toBeUndefined();
 
     // 重新计数后正常工作。
+    // B4-F04: harvester 豁免熔断，改用 upgrader（非生命线角色）。
     for (let i = 0; i < 21; i++) {
-      recordChurn(ROOM, "harvester", 200);
+      recordChurn(ROOM, "upgrader", 200);
     }
     const roomMem = runChurnCheck(200);
-    expect(roomMem.churnFreezeUntil!.harvester).toBe(200 + 100);
+    expect(roomMem.churnFreezeUntil!.upgrader).toBe(200 + 100);
   });
 
   it("recordSkip key 格式异常（无 role 段）→ 跳过该条不计数", () => {
@@ -273,12 +275,13 @@ describe("P0-3 spawn churn 熔断 — 异常情况", () => {
     // 格式异常的 key（以 : 开头或空字符串 → role 解析为空），不应计数。
     onPurge(":W1N1:0");
     onPurge("");
-    // 21 条合法 harvester churn → 应触发熔断（异常 key 未占用 harvester 计数配额）。
+    // 21 条合法 upgrader churn → 应触发熔断（异常 key 未占用 upgrader 计数配额）。
+    // B4-F04: harvester/hauler/distributor 豁免熔断，改用 upgrader（非生命线角色）。
     for (let i = 0; i < 21; i++) {
-      onPurge("harvester:W1N1:0");
+      onPurge("upgrader:W1N1:0");
     }
     const roomMem = runChurnCheck(200);
-    expect(roomMem.churnFreezeUntil!.harvester).toBe(200 + 100);
+    expect(roomMem.churnFreezeUntil!.upgrader).toBe(200 + 100);
     // 异常 key 的 role="" 未被记录 → 不触发 "" 角色熔断。
     expect(roomMem.churnFreezeUntil![""]).toBeUndefined();
   });

@@ -297,6 +297,8 @@ export class Kernel {
     // P0-1：编队索引供 war-planner / power-farm-manager / prospect-manager /
     // expansion-manager 复用，消除各自独立全量遍历 Game.creeps。
     globalCache().squadIndex = squadIndex;
+    // C1-F09: 预构建总人口供 empire-health 消费，消除 Object.keys(Game.creeps).length。
+    globalCache().totalPopulation = Object.keys(Game.creeps).length;
 
     for (const room of Object.values(Game.rooms)) {
       if (!room.controller?.my) continue;

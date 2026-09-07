@@ -455,14 +455,15 @@ export function trySpawn(
       // P3 L1 核算：孵化成功即全额计费（gross；recycle 返还在回收通道冲销）。
       bumpEnergyCounter(snapshot.roomName, "spawned", bodyCost(body));
       // P1 补位时延结算：匹配同角色死亡锚 → EMA（tick）。
-      const statsAny = (Memory as any).kernel?.stats as any;
-      const anchor = statsAny?.deathAnchor?.[req.role];
-      if (anchor !== undefined) {
+      // B4-F08 修复：移除 (Memory as any) 类型绕过，使用类型安全访问。
+      const stats = Memory.kernel?.stats;
+      const anchor = stats?.deathAnchor?.[req.role];
+      if (anchor !== undefined && stats) {
         const latency = Math.max(0, Game.time - anchor);
-        statsAny.replaceLatency = statsAny.replaceLatency ?? {};
-        const prev = statsAny.replaceLatency[req.role];
-        statsAny.replaceLatency[req.role] = prev === undefined ? latency : Math.round(prev * 0.8 + latency * 0.2);
-        delete statsAny.deathAnchor[req.role];
+        if (!stats.replaceLatency) stats.replaceLatency = {};
+        const prev = stats.replaceLatency[req.role];
+        stats.replaceLatency[req.role] = prev === undefined ? latency : Math.round(prev * 0.8 + latency * 0.2);
+        if (stats.deathAnchor) delete stats.deathAnchor[req.role];
       }
       // 扣减本地能量预算，换下一个空闲 spawn 继续消费队列。
       energyBudget -= bodyCost(body);
@@ -615,12 +616,16 @@ export function checkChurnCircuitBreaker(
   g.__churnCounter[roomName] = freshRecords;
 
   // 2. 按 role 聚合，触发熔断（仅当 role 当前未冻结时）。
+  // B4-F04 修复：豁免 hauler/distributor — 它们是能量链命脉，熔断会导致恢复期能量断裂。
+  // 与隔离豁免（L78-80）口径一致：harvester/worker/hauler/distributor 都是生命线角色。
+  const LIFELINE_ROLES = new Set(["harvester", "worker", "hauler", "distributor"]);
   const byRole = new Map<string, number>();
   for (const r of freshRecords) {
     byRole.set(r.role, (byRole.get(r.role) ?? 0) + 1);
   }
   roomMem.churnFreezeUntil ??= {};
   for (const [role, count] of byRole) {
+    if (LIFELINE_ROLES.has(role)) continue; // 生命线角色豁免熔断
     if (count > CHURN_THRESHOLD && roomMem.churnFreezeUntil[role] === undefined) {
       roomMem.churnFreezeUntil[role] = ctx.tick + CHURN_FREEZE_TICKS;
       log.info("spawn-manager", `spawn/${roomName}: CIRCUIT_BREAKER ${role} frozen for ${CHURN_FREEZE_TICKS} ticks (churn=${count}/${CHURN_WINDOW}t)`,);

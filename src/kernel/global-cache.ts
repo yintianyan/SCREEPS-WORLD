@@ -150,6 +150,9 @@ export interface GlobalCache {
    * Game.creeps（4 系统 × O(creeps) → 1 次遍历 O(creeps)）。
    * heap 存储 — global reset 丢失可接受（next tick 重建）。 */
   squadIndex?: SquadIndexEntry[];
+  /** C1-F09: 全局 creep 总数 — 由 buildSnapshots 预构建，供 empire-health 消费。
+   * 消除 empire-health 每 100t 的 Object.keys(Game.creeps).length 调用。 */
+  totalPopulation?: number;
   /** 阶段 1 采购需求表（publishProcurementDemands 是唯一写入口）。
    * 信道契约（审计修复）：条目持久存在直到各自 deadline —— 旧实现的 tick 守卫
    * 使整表单 tick 存活，生产者/消费者相位错开时需求静默丢失。
