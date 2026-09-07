@@ -50,8 +50,9 @@ function attackCoreAction(): ActionCandidate<StructureInvaderCore> {
     },
     execute: (ac, core) => {
       // level 缺失按要塞保守处理（与 classifyInvaderCores 同口径）：轻量 clearer
-      // 打不过大要塞，立刻回收，等 manager 写 blockedUntil。
-      if ((core.level ?? 1) >= 1) {
+      // 打不过 level≥2 的大要塞，立刻回收，等 manager 写 blockedUntil。
+      // level=1 是最弱核心（3000 hits，无 WORK），clearer 可打。
+      if ((core.level ?? 1) >= 2) {
         ac.creep.memory.recycle = true;
         return;
       }

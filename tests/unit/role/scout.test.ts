@@ -29,14 +29,15 @@ function makeScout(roomName: string): any {
 }
 
 describe("scout 角色 — 执行端行为", () => {
-  it("站到目标房：无主动作（纯站桩提供视野）", () => {
+  it("站到目标房：执行侦察扫描后标记自回收", () => {
     const creep = makeScout("W6N4"); // 已在目标房
 
     scoutRole.run(creep, mockContext(mockSnapshot()));
 
     expect(creep.attack).not.toHaveBeenCalled();
     expect(creep.move).not.toHaveBeenCalled();
-    expect(creep.memory.recycle).toBeUndefined(); // 收摊由 prospect-manager 判定
+    // F13 修复：scout 到达后执行侦察扫描并自回收（不再空转 idle）。
+    expect(creep.memory.recycle).toBe(true);
   });
 
   it("在 home（未出发）：ensureHome 导航向目标房（findExitTo 被调用）", () => {

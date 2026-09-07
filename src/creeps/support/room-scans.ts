@@ -184,3 +184,16 @@ export function findWallsCached(room: Room): StructureWall[] {
   g.__wallStructures[room.name] = { tick: Game.time, list };
   return list;
 }
+
+// ─── remote-defender / scout: 房间出口列表 ──────────────────
+
+/** per-tick per-room 共享缓存：房间出口位置列表（FIND_EXIT）。 */
+export function findExitsCached(room: Room): RoomPosition[] {
+  const g = globalCache() as any;
+  if (!g.__exitsCache) g.__exitsCache = {};
+  const cached = g.__exitsCache[room.name];
+  if (cached && cached.tick === Game.time) return cached.list;
+  const list = room.find(FIND_EXIT);
+  g.__exitsCache[room.name] = { tick: Game.time, list };
+  return list;
+}

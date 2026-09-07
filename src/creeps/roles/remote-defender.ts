@@ -4,7 +4,7 @@ import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/actio
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { getHostilesCached } from "../support/targeting";
-import { findContainersCached, findSourcesCached } from "../support/room-scans";
+import { findContainersCached, findExitsCached, findSourcesCached } from "../support/room-scans";
 
 /** 在 remoteTarget 房间内查找并攻击 hostile creep。 */
 function attackHostileAction(): ActionCandidate<Creep> {
@@ -65,20 +65,43 @@ function moveToDefensePost(): ActionCandidate<RoomPosition> {
   };
 }
 
-/** 防守位：我方 container 质心（守护采集产出），无 container 退而求其次用 source 质心。 */
+/**
+ * 防守位：选择最能覆盖入口路径的位置。
+ * F15 修复：原质心算法在多 container 房会落在两 container 中间空地，
+ * 不在任何 container 旁 — 敌人到 container 时 defender 还要走过去。
+ * 改为：直接选最近入口的 container/source 作为防守位（最外层防线）。
+ * 单 container/source 时退化为本体位置（与原逻辑一致）。
+ */
 function defensePostOf(room: Room): RoomPosition | undefined {
   const containers = findContainersCached(room);
   const anchors = containers.length > 0
     ? containers.map(c => c.pos)
     : findSourcesCached(room).map(s => s.pos);
   if (anchors.length === 0) return undefined;
-  let sx = 0;
-  let sy = 0;
-  for (const p of anchors) {
-    sx += p.x;
-    sy += p.y;
+  if (anchors.length === 1) return anchors[0];
+
+  // 多锚点：选择距最近入口最近者（最外层防线，拦截路径最短）。
+  const exits = findExitsCached(room);
+  if (exits.length === 0) {
+    // 无出口数据（可能视野不全）— 退化为质心。
+    let sx = 0, sy = 0;
+    for (const p of anchors) { sx += p.x; sy += p.y; }
+    return room.getPositionAt(Math.round(sx / anchors.length), Math.round(sy / anchors.length)) ?? undefined;
   }
-  return room.getPositionAt(Math.round(sx / anchors.length), Math.round(sy / anchors.length)) ?? undefined;
+  let best = anchors[0]!;
+  let bestDist = Infinity;
+  for (const anchor of anchors) {
+    let nearestExitDist = Infinity;
+    for (const exit of exits) {
+      const d = anchor.getRangeTo(exit);
+      if (d < nearestExitDist) nearestExitDist = d;
+    }
+    if (nearestExitDist < bestDist) {
+      bestDist = nearestExitDist;
+      best = anchor;
+    }
+  }
+  return best;
 }
 
 const policy: RolePolicy = {

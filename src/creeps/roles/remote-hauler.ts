@@ -25,10 +25,12 @@ const REMOTE_CONTAINER_DISTANCE_WEIGHT = 10;
  * 通勤建路 — 走到哪建到哪：规划器在远矿路径铺 road site，通勤 hauler 路过
  * （build range 3）时顺手 build。build 是非移动动作、移动走意图仲裁，同 tick
  * 叠加不耽误赶路；能量从 carry 出（回程满载腿承担，一次性基建投入）。
- * 无 WORK 部件的旧世代 body build 会 ERR_NOT_ENOUGH_RESOURCES，无害跳过。
+ * 无 WORK 部件的 body build 会 ERR_NOT_ENOUGH_RESOURCES，无害跳过 — 但仍浪费
+ * CPU 做 find+range 计算，前置 WORK 检查消除无效开销。
  */
 function buildRoadSiteUnderfoot(creep: Creep): void {
   if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return;
+  if (creep.getActiveBodyparts(WORK) === 0) return; // 无 WORK 部件，build 必失败
   const sites = findMySitesCached(creep.room);
   if (sites.length === 0) return;
   let best: ConstructionSite | undefined;

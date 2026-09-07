@@ -12,7 +12,12 @@ function claimControllerAction(): ActionCandidate<StructureController> {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       const controller = ac.creep.room.controller;
-      if (!controller || controller.my) return undefined; // 已占领 — 使命完成。
+      if (!controller) return undefined;
+      // 已占领 — 使命完成，标记自回收。spawn-manager 引导归航释放人口。
+      if (controller.my) {
+        ac.creep.memory.recycle = true;
+        return undefined;
+      }
       return controller;
     },
     execute: (ac, controller) => {

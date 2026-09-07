@@ -2,10 +2,11 @@
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
-import { moveToTarget } from "../movement";
+import { moveToTarget, registerMove } from "../movement";
 import { attackerHold, markRetreat } from "./attacker";
 import { getHostilesCached } from "../support/targeting";
 import { getHostileStructuresCached } from "../support/room-scans";
+import { CONFIG } from "../../config";
 
 /** kiting 攻击：rangedAttack 射程 3，不在近战范围则边退边打。 */
 export function rangedAttackEnemies(): ActionCandidate<Creep> {
@@ -23,11 +24,15 @@ export function rangedAttackEnemies(): ActionCandidate<Creep> {
       const dist = ac.creep.pos.getRangeTo(target.pos);
       if (dist <= 3) {
         ac.creep.rangedAttack(target);
-        if (dist <= 1) {
-          // 近身敌人：kiting — 向远离方向移动保持射程
-          const dir = ac.creep.pos.getDirectionTo(target) as number;
-          const opposite = ((dir + 3) % 8) + 1;
-          ac.creep.move(opposite as DirectionConstant);
+        if (dist <= 1 && ac.creep.fatigue === 0) {
+          // 近身敌人：kiting — 向远离方向移动保持射程。
+          // 通过 registerMove 走 traffic-manager 意图仲裁（flee 优先级），
+          // 不绕过集中解算直接发引擎指令。
+          const dir = ac.creep.pos.getDirectionTo(target);
+          if (dir !== null) {
+            const opposite = ((dir + 3) % 8) + 1;
+            registerMove(ac.creep, opposite as DirectionConstant, CONFIG.movement.trafficPriority.flee);
+          }
         }
       } else {
         moveToTarget(ac.creep, target);

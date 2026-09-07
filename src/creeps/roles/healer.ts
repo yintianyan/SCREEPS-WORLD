@@ -27,12 +27,16 @@ function readTacticalIntent(creepName: string): TacticalIntent | null {
   return g.tacticalRoleIntents?.get(creepName) ?? null;
 }
 
-/** 目标房内己方 combat creep（attacker）— 跟随/救治对象。 */
+/** 战斗角色集合 — healer 可跟从的编队成员。 */
+const COMBAT_ROLES = new Set(["attacker", "rangedAttacker", "dismantler", "defender"]);
+
+/** 目标房内己方 combat creep — 跟随/救治对象。
+ * 不限于 attacker，rangedAttacker / dismantler / defender 也需要治疗覆盖。 */
 function findBuddy(creep: Creep): Creep | undefined {
   let best: Creep | undefined;
   let bestRange = Infinity;
   for (const c of findMyCreepsCached(creep.room)) {
-    if (c.memory.role !== "attacker") continue;
+    if (!COMBAT_ROLES.has(c.memory.role)) continue;
     const range = creep.pos.getRangeTo(c.pos);
     if (range < bestRange) {
       bestRange = range;

@@ -171,9 +171,11 @@ export function attackByTacticalIntent(): ActionCandidate<Creep | AnyStructure> 
       if (markRetreat(ac.creep)) return undefined;
       const intent = readTacticalIntent(ac.creep.name);
       if (!intent) return undefined; // 无战术指令 → 回退 Legacy
-      // HOLD_POSITION / NO_MOVE → 不消费攻击候选（移动由 traffic-manager 处理）
+      // HOLD_POSITION / NO_MOVE → 不消费攻击候选，移动由 traffic-manager 处理。
+      // 但如果同时有战斗指令（非 NO_COMBAT）+ targetId，仍继续解析目标执行攻击。
       if (intent.moveDirective === "HOLD_POSITION" || intent.moveDirective === "NO_MOVE") {
-        // 但如果有战斗指令，仍然攻击
+        // 原地驻守：不主动追击，但允许在射程内攻击。
+        // 不 return — fallthrough 到下方战斗指令解析。
       }
       // RETREAT → 标记回收让 spawn-manager 处理撤退
       if (intent.moveDirective === "RETREAT_TO_SAFE" || intent.moveDirective === "BREAK_CONTACT") {
@@ -215,6 +217,28 @@ export function attackPowerBank(): ActionCandidate<StructurePowerBank> {
   };
 }
 
+/** 过境房自卫 — 在非目标房通行时遇到敌对 creep 则就地反击。
+ * 防止通勤过程中被伏击空转等死。优先级排在目标房攻击之后。 */
+function defendInTransit(): ActionCandidate<Creep> {
+  return {
+    name: "attacker:defend-in-transit",
+    resolve: (ac) => {
+      if (markRetreat(ac.creep)) return undefined;
+      // 仅在非目标房且非 home 房的过境房触发
+      const target = ac.creep.memory.remoteTarget;
+      if (!target) return undefined;
+      if (ac.creep.room.name === target || ac.creep.room.name === ac.creep.memory.home) return undefined;
+      const hostiles = getHostilesCached(ac.creep.room);
+      if (hostiles.length === 0) return undefined;
+      return ac.creep.pos.findClosestByRange(hostiles) ?? hostiles[0];
+    },
+    execute: (ac, target) => {
+      const result = ac.creep.attack(target);
+      if (result === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, target);
+    },
+  };
+}
+
 export function attackEnemies(): ActionCandidate<Creep> {
   return {
     name: "attacker:attack-creeps",
@@ -245,9 +269,14 @@ export function attackStructures(): ActionCandidate<AnyStructure> {
       let best: AnyStructure | undefined;
       let bestScore = -Infinity;
       for (const s of structs) {
-        // 同价值档内优先拆受伤者（集火残血加速摧毁），距离只在同档内决胜。
+        // F17 修复：归一化 hits 差值到 [0,1) — 类型分档 ×1000 永远优先于残血差异。
+        // 原 hitsMax-hits 可达数千（如 rampart 50k→30k=20k），直接加到 tier*1000 上
+        // 会让高残血低价值结构（extension 残血）压过低残血高价值结构（spawn 满血）。
+        // 归一化后：tier 分档决胜，同档内残血比例高者优先（集火残血加速摧毁），
+        // 距离只在同档同残血比例时决胜。
+        const damageRatio = s.hitsMax > 0 ? (s.hitsMax - s.hits) / s.hitsMax : 0;
         const score = structureValueTier(s.structureType) * 1000
-          + s.hitsMax - s.hits
+          + damageRatio * 999
           - ac.creep.pos.getRangeTo(s);
         if (score > bestScore) {
           bestScore = score;
@@ -294,8 +323,11 @@ const policy: RolePolicy = {
   hold: attackerHold,
   // A5.4.3：focus-fire 最高优先 → A5.4.1 tactical-intent → Legacy 候选
   // 无 FocusFire 指令时回退到 A5.4.1 TacticalIntent → PB → enemies → structures
-  acquire: [attackByFocusFire(), attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures()],
-  work: [attackByFocusFire(), attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures()],
+  // A5.4.3：focus-fire 最高优先 → A5.4.1 tactical-intent → Legacy 候选
+  // 无 FocusFire 指令时回退到 A5.4.1 TacticalIntent → PB → enemies → structures
+  // defendInTransit 排末尾：目标房候选未命中（过境房）时才触发自卫反击
+  acquire: [attackByFocusFire(), attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures(), defendInTransit()],
+  work: [attackByFocusFire(), attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures(), defendInTransit()],
 };
 
 export const attackerRole = defineRole("attacker", 2 as Priority, policy);

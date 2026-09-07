@@ -129,6 +129,12 @@ function haulerOnFlee(ac: ActionContext): boolean {
  */
 function haulerGate(ac: ActionContext): boolean {
   const creep = ac.creep;
+  // F12 修复：被降级的 distributor 在 storage 重建后转回 distributor 角色。
+  if (creep.memory.distributorDegraded && ac.snapshot.storage) {
+    creep.memory.role = "distributor";
+    delete creep.memory.distributorDegraded;
+    return false; // 跳过本 tick，下一 tick 以 distributor 角色运行
+  }
   if (creep.memory.mode !== "acquire") return true;
   if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return true;
   const st = ac.snapshot.storage;

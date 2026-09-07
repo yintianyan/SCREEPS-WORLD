@@ -8,7 +8,6 @@ import {
   dumpToNearbyLink,
   fillEmptiestContainer,
   fillTarget,
-  harvestMineral,
   harvestSource,
   repairNearbyContainer,
   stationaryMine,
@@ -24,8 +23,8 @@ const policy: RolePolicy = {
     stationaryMine(),
     // 1. 无 source sink（早期无 container）时的通用采集（含拥挤迁移）。
     harvestSource(),
-    // source 再生期间：如果 extractor 存在（RCL6+），采集 mineral。
-    harvestMineral(),
+    // harvester 不兼采矿物 — 矿物采集是 mineralMiner 的职责。
+    // 采矿物会离岗从 source 移到 extractor，干扰能量核心职责导致经济断流。
   ],
 
   work: [

@@ -38,6 +38,8 @@ function reserveControllerAction(): ActionCandidate<StructureController> {
         if (result === ERR_NOT_IN_RANGE) {
           moveToTarget(ac.creep, controller);
         }
+        // attackController 有 cooldown — 成功时返回 OK 并触发 1000 tick cooldown。
+        // ERR_TIRED = cooldown 中，下次 attackController 前不应盲试。
         return;
       }
 
@@ -55,14 +57,22 @@ function reserveControllerAction(): ActionCandidate<StructureController> {
         registerStaticBlocker(ac.creep.room.name, ac.creep.pos);
       }
       if (result === ERR_INVALID_TARGET) {
-        // controller 被其他玩家/Invader 预定 → reserveController 返回 ERR_INVALID_TARGET →
-        // attackController 降低其预定期。attackController 有 1000 tick cooldown（cooldown 中
-        // 返回 ERR_TIRED），每次成功攻击降低 1 tick reservation — 缓慢但持续消耗敌方预定。
+        // F16 修复：缓存 attackController cooldown — 不在 cooldown 中每 tick 盲试。
+        // controller 被其他玩家/Invader 预定 → reserveController 返回 ERR_INVALID_TARGET。
+        // attackController 降低其预定期，但有 1000 tick cooldown（cooldown 中返回 ERR_TIRED）。
+        // 无 cooldown 缓存时每 tick 盲调 → ERR_TIRED 浪费 CPU。
+        const cooldownEnd = ac.creep.memory.attackCooldownEnd ?? 0;
+        if (Game.time < cooldownEnd) return; // cooldown 未结束，跳过
+
         const attackResult = ac.creep.attackController(controller);
         if (attackResult === ERR_NOT_IN_RANGE) {
           moveToTarget(ac.creep, controller);
+        } else if (attackResult === OK) {
+          // 成功攻击 — 记录 cooldown 截止 tick（attackController cooldown = 1000）。
+          ac.creep.memory.attackCooldownEnd = Game.time + 1000;
         }
-        // ERR_TIRED = cooldown 中，等待下一 tick 再试。
+        // ERR_TIRED = cooldown 仍存在（可能被其他 creep 触发），更新 cooldown 估算。
+        // ERR_INVALID_TARGET = controller 无主或己方，无需攻击。
       }
     },
   };

@@ -76,6 +76,10 @@ declare global {
     spawnIndex?: number;
     /** B1：标记为待回收 — spawn-manager 引导其走向最近 spawn 并 recycleCreep。 */
     recycle?: boolean;
+    /** F16：attackController cooldown 截止 tick — 避免在 cooldown 中盲调浪费 CPU。 */
+    attackCooldownEnd?: number;
+    /** F12：distributor 降级为 hauler 标记 — storage 重建后 hauler gate 检查此标记转回。 */
+    distributorDegraded?: boolean;
     /**
      * 远程角色目标房 — 远矿/扩张时的工作房间。ensureHome 按 mode+role 决定导航：
      * remoteHauler work→home、acquire→remoteTarget；remoteHarvester/reserver 恒 remoteTarget。

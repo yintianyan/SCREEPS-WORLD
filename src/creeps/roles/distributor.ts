@@ -68,10 +68,14 @@ function withdrawStorageForDistribution(): ActionCandidate {
  * acquire 返回 undefined → idle 空转。降级为 hauler 后从 container 取能、填充 spawn/extension，
  * 继续工作；storage 重建后 demand 会孵新 distributor。body 兼容：两者都是纯 CARRY+MOVE，
  * 角色转换安全。水位分级计算：每 tick 按 storage 水位写 distributorTier，供限取与目标过滤共用。
+ *
+ * F12 修复：标记 distributorDegraded，hauler gate 检查此标记 — storage 重建后转回 distributor，
+ * 避免永久降级。
  */
 function distributorGate(ac: ActionContext): boolean {
   if (!ac.snapshot.storage) {
     ac.creep.memory.role = "hauler";
+    ac.creep.memory.distributorDegraded = true;
     return false; // 跳过本 tick，下一 tick 以 hauler 角色运行
   }
   // 每 tick 重新计算水位档位，供本 tick 的 acquire/work 阶段读取。
