@@ -308,6 +308,11 @@ function planDefense(
 
         const key = `defense.mincut.rampart.${pos.x}.${pos.y}`;
         if (existingKeys.has(key)) continue;
+        // Respect the background queue cap to avoid unbounded backlog.
+        const backgroundQueued = queue.filter(
+          t => (t.state === "queued" || t.state === "blocked") && t.priority >= 2,
+        ).length;
+        if (backgroundQueued >= CONFIG.construction.maxBackgroundQueuedPerRoom) break;
         queue.push({
           key,
           pos: { x: pos.x, y: pos.y, roomName: snapshot.roomName },
@@ -316,6 +321,7 @@ function planDefense(
           state: "queued",
           attempts: 0,
           retryAt: 0,
+          queuedAt: Game.time,
         });
         existingKeys.add(key);
         added = true;
@@ -351,7 +357,12 @@ function planDefense(
 
   for (const candidate of defenseCandidates) {
     if (existingKeys.has(candidate.key)) continue;
-    queue.push(candidateToBuildTask(candidate));
+    // Respect the background queue cap to avoid unbounded backlog.
+    const backgroundQueued = queue.filter(
+      t => (t.state === "queued" || t.state === "blocked") && t.priority >= 2,
+    ).length;
+    if (backgroundQueued >= CONFIG.construction.maxBackgroundQueuedPerRoom) break;
+    queue.push(candidateToBuildTask(candidate, Game.time));
     existingKeys.add(candidate.key);
     added = true;
   }
@@ -392,13 +403,18 @@ function addCoreRampartCoverage(
   for (const s of snapshot.links) corePositions.push({ x: s.pos.x, y: s.pos.y });
   for (const s of snapshot.containers) corePositions.push({ x: s.pos.x, y: s.pos.y });
 
+  const maxBackgroundQueued = CONFIG.construction.maxBackgroundQueuedPerRoom;
   let added = false;
   for (const pos of corePositions) {
     const packed = pos.x * 50 + pos.y;
-    // 跳过已有 rampart 的位置
     if (existingRampartPositions.has(packed)) continue;
     const key = `defense.core.rampart.${pos.x}.${pos.y}`;
     if (existingKeys.has(key)) continue;
+    // Respect the background queue cap to avoid unbounded backlog.
+    const backgroundQueued = queue.filter(
+      t => (t.state === "queued" || t.state === "blocked") && t.priority >= 2,
+    ).length;
+    if (backgroundQueued >= maxBackgroundQueued) break;
     queue.push({
       key,
       pos: { x: pos.x, y: pos.y, roomName: snapshot.roomName },
@@ -407,6 +423,7 @@ function addCoreRampartCoverage(
       state: "queued",
       attempts: 0,
       retryAt: 0,
+      queuedAt: Game.time,
     });
     existingKeys.add(key);
     added = true;
