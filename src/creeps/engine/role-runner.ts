@@ -17,6 +17,12 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
     recoveryEligible: policy.recoveryEligible === true,
     // 生命线角色透传：ESM 下仅此角色运行。
     isLifeLine: policy.isLifeLine === true,
+    // 角色自报分类标签透传 — kernel 不硬编码角色名。
+    isRepairWorker: policy.isRepairWorker === true,
+    isDistributor: policy.isDistributor === true,
+    isHauler: policy.isHauler === true,
+    isSourceWorker: policy.isSourceWorker === true,
+    executionOrder: policy.executionOrder,
     // 战斗标志透传：供 kernel recovery 门禁紧急旁路（war/真实入侵时不冻结作战单位）。
     combat: policy.combat === true,
     run(creep: Creep, ctx: TickContext): void {

@@ -75,14 +75,6 @@ class Context implements TickContext {
 }
 
 /** 同优先级角色内的执行顺序（约束 X-19）：harvester 在 hauler 前，先填 container 再取，避免 hauler 空跑。 */
-const ROLE_EXECUTION_ORDER: Readonly<Record<string, number>> = {
-  worker: 0,
-  harvester: 1,
-  hauler: 2,
-  upgrader: 3,
-  builder: 4,
-};
-
 /**
  * Idle creep 降频执行的 tick 间隔（cadence）——按 CPU tier 自适应。
  * idle creep 每 N tick 检查一次是否有新任务，跳过的 tick 省 role-runner 管线开销。
@@ -236,6 +228,7 @@ export class Kernel {
     // 共享快照总线：在已有的 Game.creeps 遍历中顺便构建完整 creep 摘要数组，
     // 供 spawn-manager / assignment / logistics / logistics-planner / lab-system 消费。
     const creepRefs: CreepRef[] = [];
+    const roleMap = this.roleMap;
     for (const creep of Object.values(Game.creeps)) {
       creepLastSeen.set(creep.name, { r: creep.room.name, x: creep.pos.x, y: creep.pos.y });
       const home = creep.memory.home;
@@ -248,16 +241,18 @@ export class Kernel {
           globalCreepEnergy.set(home, (globalCreepEnergy.get(home) ?? 0) + carried);
         }
       }
-      const role = creep.memory.role;
-      if (role === "builder" || role === "worker") {
+      const roleName = creep.memory.role;
+      const roleDef = roleMap.get(roleName ?? "");
+      // 角色自报分类标签 — kernel 不硬编码角色名。
+      if (roleDef?.isRepairWorker) {
         const repairHome = home ?? creep.room.name;
         if (repairHome) globalRepairRooms.add(repairHome);
       }
-      if (role === "distributor") {
+      if (roleDef?.isDistributor) {
         const pumpHome = home ?? creep.room.name;
         if (pumpHome) globalDistributorRooms.add(pumpHome);
       }
-      if (role === "hauler") {
+      if (roleDef?.isHauler) {
         const haulHome = home ?? creep.room.name;
         if (haulHome) globalHaulerRooms.add(haulHome);
       }
@@ -265,7 +260,7 @@ export class Kernel {
       if (creep.memory.remoteTarget || creep.memory.mission) {
         squadIndex.push({
           name: creep.name,
-          role: role ?? "unknown",
+          role: roleName ?? "unknown",
           home: home ?? creep.room.name,
           remoteTarget: creep.memory.remoteTarget,
           mission: creep.memory.mission,
@@ -278,7 +273,7 @@ export class Kernel {
       const a = mem.assignment as Record<string, unknown> | undefined;
       creepRefs.push({
         name: creep.name,
-        role: role ?? "unknown",
+        role: roleName ?? "unknown",
         home: home ?? creep.room.name,
         spawning: creep.spawning === true,
         sourceId: creep.memory.sourceId,
@@ -300,7 +295,7 @@ export class Kernel {
         y: creep.pos.y,
         energyCarried: creep.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
       });
-      if (role !== "harvester" && role !== "worker") continue;
+      if (!roleDef?.isSourceWorker) continue;
       const sid = creep.memory.sourceId;
       if (sid) {
         globalSourceOccupancy.set(sid as string, (globalSourceOccupancy.get(sid as string) ?? 0) + 1);
@@ -527,13 +522,14 @@ export class Kernel {
   /** E6: 采集每房 buildQueue 快照（从 RoomMemory 读取）。 */
   private collectBuildQueueSnapshots(ctx: Context): BuildQueueSnapshot[] {
     const result: BuildQueueSnapshot[] = [];
+    // 消费共享快照总线，不独立遍历 Game.creeps。
+    const refs = globalCache().creepRefs ?? [];
     for (const snap of ctx.snapshots()) {
       const roomMem = Memory.rooms[snap.roomName];
       const queue = roomMem?.buildQueue ?? [];
-      // 估算 builder 数量：遍历 Game.creeps 中 home=本房 且 role=builder 的存活 creep
       let builderCount = 0;
-      for (const c of Object.values(Game.creeps)) {
-        if (c.memory.home === snap.roomName && c.memory.role === "builder" && !c.spawning) builderCount++;
+      for (const r of refs) {
+        if (r.home === snap.roomName && r.role === "builder" && !r.spawning) builderCount++;
       }
       result.push({
         room: snap.roomName,
@@ -713,8 +709,8 @@ export class Kernel {
     // 排序：角色优先级升序（P0 在前）→ 同优先级按执行顺序（X-19）→ ticksToLive 升序。
     creepEntries.sort((a, b) => {
       if (a.role.priority !== b.role.priority) return a.role.priority - b.role.priority;
-      const aOrder = ROLE_EXECUTION_ORDER[a.role.name] ?? 99;
-      const bOrder = ROLE_EXECUTION_ORDER[b.role.name] ?? 99;
+const aOrder = a.role.executionOrder ?? 99;
+const bOrder = b.role.executionOrder ?? 99;
       if (aOrder !== bOrder) return aOrder - bOrder;
       const aTtl = a.creep.ticksToLive ?? 1500;
       const bTtl = b.creep.ticksToLive ?? 1500;

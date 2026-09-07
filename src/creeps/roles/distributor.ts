@@ -81,6 +81,8 @@ function distributorGate(ac: ActionContext): boolean {
 
 const policy: RolePolicy = {
   park: true,
+  isDistributor: true,
+  isLifeLine: true,
   gate: distributorGate,
   acquire: [
     // nuke 资产抢救（nuke 警报房才激活，常态零开销）：storage → terminal 搬运，

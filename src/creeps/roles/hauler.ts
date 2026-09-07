@@ -143,6 +143,9 @@ function haulerGate(ac: ActionContext): boolean {
 
 const policy: RolePolicy = {
   park: true,
+  isHauler: true,
+  isLifeLine: true,
+  executionOrder: 2,
   gate: haulerGate,
   onFlee: haulerOnFlee,
   acquire: [

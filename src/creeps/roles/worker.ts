@@ -48,6 +48,9 @@ function fillAssignmentTarget(): ActionCandidate<AnyOwnedStructure> {
 
 const policy: RolePolicy = {
   park: true,
+  isRepairWorker: true,
+  isSourceWorker: true,
+  executionOrder: 0,
   acquire: [
     // 拾取地上掉落能量（衰减资源，优先于采集）。
     pickupDroppedEnergy(),

@@ -76,6 +76,37 @@ export interface CreepRole {
    * 典型：harvester（直采直填维持 spawn 能量线）。kernel 只读此标志，不硬编码角色名。
    */
   readonly isLifeLine?: boolean;
+  /**
+   * 维修角色自报：声明 true 的角色具备维修建筑能力（body 含 WORK）。
+   * buildSnapshots 用此标签构建 globalRepairRooms，替代硬编码 role === "builder" || "worker"。
+   * 典型：builder, worker。tower-defense 消费此索引决定是否让出非战斗维修。
+   */
+  readonly isRepairWorker?: boolean;
+  /**
+   * 分配泵角色自报：声明 true 的角色是 storage→spawn/extension 的唯一分发泵。
+   * buildSnapshots 用此标签构建 globalDistributorRooms，替代硬编码 role === "distributor"。
+   * 典型：distributor。hauler 的 fillStorage 消费此索引判定泵断供兜底。
+   */
+  readonly isDistributor?: boolean;
+  /**
+   * 运力角色自报：声明 true 的角色是 source→storage 的唯一运力。
+   * buildSnapshots 用此标签构建 globalHaulerRooms，替代硬编码 role === "hauler"。
+   * 典型：hauler。isLogisticsContainer 消费此索引判定 source container 是否有物流消费者。
+   */
+  readonly isHauler?: boolean;
+  /**
+   * 采矿角色自报：声明 true 的角色占用 source 采矿位（body 含 WORK 且 memory.sourceId）。
+   * buildSnapshots 用此标签构建 globalSourceOccupancy / globalPendingHarvesters，
+   * 替代硬编码 role === "harvester" || "worker"。
+   * 典型：harvester, worker。
+   */
+  readonly isSourceWorker?: boolean;
+  /**
+   * 执行顺序自报：值越小越先执行。runCreeps 按 executionOrder 升序排序，
+   * 替代 ROLE_EXECUTION_ORDER 硬编码角色名。缺省 99（最后执行）。
+   * 典型：worker=0, harvester=1, hauler=2, upgrader=3, builder=4。
+   */
+  readonly executionOrder?: number;
   run(creep: Creep, ctx: TickContext): void;
 }
 

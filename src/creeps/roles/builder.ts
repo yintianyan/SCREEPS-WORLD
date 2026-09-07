@@ -53,6 +53,8 @@ function builderStorageLimit(ac: ActionContext): number {
 
 const policy: RolePolicy = {
   park: true,
+  isRepairWorker: true,
+  executionOrder: 4,
   // R3a：builder 声明生存豁免 — recovery 重建被毁基建 + bootstrap 建造关键基建
   // 都是生存行为，不是发展。colonyStateFreezesRole 读此标志放行。
   recoveryEligible: true,

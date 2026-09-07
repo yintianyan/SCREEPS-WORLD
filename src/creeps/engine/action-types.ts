@@ -61,6 +61,16 @@ export interface RolePolicy {
   recoveryEligible?: boolean;
   /** 生命线角色自报：ESM 下仅声明 true 的角色运行。透传到 CreepRole.isLifeLine。 */
   isLifeLine?: boolean;
+  /** 维修角色自报：透传到 CreepRole.isRepairWorker。 */
+  isRepairWorker?: boolean;
+  /** 分配泵角色自报：透传到 CreepRole.isDistributor。 */
+  isDistributor?: boolean;
+  /** 运力角色自报：透传到 CreepRole.isHauler。 */
+  isHauler?: boolean;
+  /** 采矿角色自报：透传到 CreepRole.isSourceWorker。 */
+  isSourceWorker?: boolean;
+  /** 执行顺序自报：透传到 CreepRole.executionOrder。 */
+  executionOrder?: number;
   /**
    * 无候选时是否切 idle 的额外条件（P2-M）。
    * 默认：本地角色（无 remoteTarget）或到达 remoteTarget 房时切 idle；通勤中保持原 mode

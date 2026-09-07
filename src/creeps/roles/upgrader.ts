@@ -215,6 +215,7 @@ function upgradeAnchored(): ActionCandidate<StructureController> {
 
 const policy: RolePolicy = {
   gate: upgraderGate,
+  executionOrder: 3,
 
   acquire: [
     // 0. 站桩同 tick 取+升 — 贴 controller link 且够到 controller 时，withdraw+upgrade
