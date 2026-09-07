@@ -639,7 +639,17 @@ export function checkChurnCircuitBreaker(
   }
   roomMem.churnFreezeUntil ??= {};
   for (const [role, count] of byRole) {
-    if (LIFELINE_ROLES.has(role)) continue; // 生命线角色豁免熔断
+    if (LIFELINE_ROLES.has(role)) {
+      // FINDING-04 修复：生命线角色不冻结（防死亡螺旋），但 churn 超过高阈值时
+      // 输出 WARN 告警——配置错误（如 bodyCost 超过 energyCapacityAvailable）
+      // 会导致持续 churn 不被熔断捕获，需要可观测性兜底。
+      if (count > CHURN_THRESHOLD * 2 && (roomMem.churnWarnAt?.[role] ?? 0) <= ctx.tick) {
+        log.warn("spawn-manager", `spawn/${roomName}: LIFELINE churn WARNING ${role} churn=${count}/${CHURN_WINDOW}t (not frozen — death spiral protection)`);
+        roomMem.churnWarnAt ??= {};
+        roomMem.churnWarnAt[role] = ctx.tick + CHURN_WINDOW; // 限频：每窗口最多 1 条 WARN
+      }
+      continue;
+    }
     if (count > CHURN_THRESHOLD && roomMem.churnFreezeUntil[role] === undefined) {
       roomMem.churnFreezeUntil[role] = ctx.tick + CHURN_FREEZE_TICKS;
       log.info("spawn-manager", `spawn/${roomName}: CIRCUIT_BREAKER ${role} frozen for ${CHURN_FREEZE_TICKS} ticks (churn=${count}/${CHURN_WINDOW}t)`,);
@@ -657,5 +667,9 @@ export function checkChurnCircuitBreaker(
   // 4. 空对象回收（防 Memory 体积膨胀）。
   if (Object.keys(roomMem.churnFreezeUntil).length === 0) {
     delete roomMem.churnFreezeUntil;
+  }
+  // FINDING-04: churnWarnAt 空对象回收。
+  if (roomMem.churnWarnAt && Object.keys(roomMem.churnWarnAt).length === 0) {
+    delete roomMem.churnWarnAt;
   }
 }

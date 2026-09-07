@@ -33,11 +33,12 @@ export const remoteMiningManagerSystem: System = {
   interval: CONFIG.remote.managerInterval,
   run(ctx: TickContext): void {
     // 跨房去重：汇总全帝国已运营的远矿目标（非 abandoned）。
-    // 每个 home 房独立评选时必须排除兄弟房的现役目标 — 双编队抢同一
-    // source 收益不变成本翻倍（见 RemoteTargetingInput.globalActiveTargets）。
+    // FINDING-17 修复：只遍历自有房的 remoteOps（ctx.snapshots()），
+    // 不再遍历 Object.keys(Memory.rooms)——失守房 grace 期内残留的
+    // remoteOps 会被错误计入 globalActiveTargets，排除兄弟房可用远矿。
     const globalActiveTargets = new Set<string>();
-    for (const rn of Object.keys(Memory.rooms)) {
-      const ops = Memory.rooms[rn]?.remoteOps;
+    for (const snap of ctx.snapshots()) {
+      const ops = Memory.rooms[snap.roomName]?.remoteOps;
       if (!ops) continue;
       for (const [target, op] of Object.entries(ops)) {
         if (op.state !== "abandoned") globalActiveTargets.add(target);
@@ -246,7 +247,7 @@ export const remoteMiningManagerSystem: System = {
               state: op.state as "active" | "paused" | "abandoned",
               sources: op.sources ?? 1,
               haulerNeed: op.haulerNeed ?? 1,
-              creepCount: collectRemoteCreeps(snapshot.roomName)
+              creepCount: remoteCreeps
                 .filter(c => c.remoteTarget === rn).length,
               creepInvestment: estimateCreepInvestment(op, snapshot.energyCapacityAvailable),
               pathCost: intel[rn]?.pathCost,
@@ -268,12 +269,12 @@ export const remoteMiningManagerSystem: System = {
             };
             const logisticsContext: LogisticsContext = {
               avgHaulerCommute: intel[rn]?.pathCost ?? 1,
-              availableHaulers: collectRemoteCreeps(snapshot.roomName)
+              availableHaulers: remoteCreeps
                 .filter(c => c.role === "remoteHauler").length,
             };
             const defenderBody = selectBody("remoteDefender", snapshot.energyCapacityAvailable);
             const militaryContext: MilitaryContext = {
-              availableDefenders: collectRemoteCreeps(snapshot.roomName)
+              availableDefenders: remoteCreeps
                 .filter(c => c.role === "remoteDefender").length,
               defenderSpawnCost: defenderBody.reduce(
                 (sum, p) => sum + BODYPART_COST[p], 0,

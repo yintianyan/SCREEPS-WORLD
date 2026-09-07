@@ -45,6 +45,8 @@ export const warPlannerSystem: System = {
   name: "war-planner",
   priority: 2 as Priority,
   interval: CONFIG.war.interval,
+  // FINDING-08 修复：war 姿态下必须运行——编队补位/止损/核验不能因 Recovery tier 被跳过。
+  recoveryEligible: () => Memory.kernel?.strategy?.posture === "war",
   run(ctx: TickContext): void {
     pruneWarBlacklist(ctx.tick);
 
@@ -60,42 +62,49 @@ export const warPlannerSystem: System = {
     // 休战闸挡「A 止损 → 立刻打 B → 再止损 → 打 C」的跨目标添油循环。
     if ((Memory.kernel?.warStandDownUntil ?? 0) > ctx.tick) return;
     // 1. 维护战争计划：无计划 / 计划超期 → 重新选目标。
-    //    LEGACY_COMPATIBILITY_ONLY：selectWarTarget / decideSquadSize 是 Legacy 路径，
-    //    只在 A5.3 war-planning-system 未产出 WarPlan 时作为 fallback。
-    //    删除条件：当 war-planning-system 完全接管 WarPlan 产出后，
-    //    此块可安全删除（包括 selectWarTarget/decideSquadSize import）。
-    //    不产生新决策权——最终 WarPlan 由 war-planning-system 的 planMilitaryOperation() 裁决。
+    //    FINDING-08 修复：war-planning-system 现已声明 recoveryEligible（war 姿态下 Recovery tier
+    //    仍运行），会通过 writeCompatibleWarPlan 写入 Memory.kernel.warPlan + a5ForceReq。
+    //    以下 LEGACY_COMPATIBILITY_ONLY fallback 路径（selectWarTarget/decideSquadSize）
+    //    只在 war-planning-system 因异常/safeRun 报错跳过时作为最终安全网——
+    //    不再产生编制震荡（A5.3 下次运行会覆盖）。
+    //    退役条件：war-planning-system 稳定运行 + recoveryEligible 生效后，此块可安全删除。
     const existing = Memory.kernel?.warPlan;
     const needSelect = !existing || ctx.tick - existing.since > CONFIG.war.planTimeout;
     if (needSelect) {
-      // LEGACY_COMPATIBILITY_ONLY: selectWarTarget fallback
-      const next = selectWarTarget(buildTargetInput(ctx.tick));
-      if (!next) {
-        // 无合格目标（情报全过期 / 无玩家邻居 / 目标全在黑名单）：
-        // 收摊并核验旧计划战果（无证据核验 → unknown → 黑名单）。
-        demobilize(ctx.tick, REASON_NO_TARGET);
-        return;
+      // 检查 war-planning-system 是否已在本 tick 产出了新鲜 WarPlan
+      const warPlanCache = globalCache().warPlanCache;
+      if (warPlanCache && warPlanCache.tick === ctx.tick && warPlanCache.plan) {
+        // A5.3 已产出 WarPlan 并通过 writeCompatibleWarPlan 写入 Memory.kernel.warPlan。
+        // 重新读取——existing 可能已被更新。
+        // 不走 Legacy fallback，直接进入编队维持逻辑。
+      } else {
+        // LEGACY_COMPATIBILITY_ONLY fallback：war-planning-system 未运行或未产出 WarPlan。
+        // 此路径产出的 squadSize 会被 A5.3 的 a5ForceReq 在运行时覆盖。
+        const next = selectWarTarget(buildTargetInput(ctx.tick));
+        if (!next) {
+          demobilize(ctx.tick, REASON_NO_TARGET);
+          return;
+        }
+        const keep = existing && existing.targetRoom === next.roomName;
+        if (!keep) demobilize(ctx.tick, REASON_PLAN_TIMEOUT);
+        if (!Memory.kernel) Memory.kernel = {};
+        Memory.kernel.warPlan = {
+          targetRoom: next.roomName,
+          sponsor: next.sponsor,
+          squadSize: decideSquadSize(next.towersSeen, CONFIG.war.squadBase, CONFIG.war.squadPerTower),
+          since: ctx.tick,
+          towersSeen: next.towersSeen,
+          phase: keep && existing!.phase ? existing!.phase : "build",
+          spawned: keep ? (existing!.spawned ?? 0) : 0,
+          spawnedKeys: keep ? existing!.spawnedKeys : undefined,
+        };
       }
-      const keep = existing && existing.targetRoom === next.roomName;
-      if (!keep) demobilize(ctx.tick, REASON_PLAN_TIMEOUT);
-      if (!Memory.kernel) Memory.kernel = {};
-      Memory.kernel.warPlan = {
-        targetRoom: next.roomName,
-        sponsor: next.sponsor,
-        // LEGACY_COMPATIBILITY_ONLY: decideSquadSize fallback (A5.3 a5ForceReq overrides at runtime)
-        squadSize: decideSquadSize(next.towersSeen, CONFIG.war.squadBase, CONFIG.war.squadPerTower),
-        since: ctx.tick,
-        towersSeen: next.towersSeen,
-        // 同目标续期：保留相位与止损账本（spawned 是消耗战判定的依据，不能重置）。
-        phase: keep && existing!.phase ? existing!.phase : "build",
-        spawned: keep ? (existing!.spawned ?? 0) : 0,
-        spawnedKeys: keep ? existing!.spawnedKeys : undefined,
-      };
-
       // T3: 声明战争期望 — 预期 500 tick 内达成目标或可探失
     }
 
-    const plan = Memory.kernel!.warPlan!;
+    // NEW-01 修复：去掉双重非空断言，安全访问 warPlan。
+    const plan = Memory.kernel?.warPlan;
+    if (!plan) return;
     const sponsor = plan.sponsor;
     const queue = Memory.rooms[sponsor]?.spawnQueue;
     if (!queue) return; // sponsor 失守/条目标丢 — 下轮 occupied 排除后会换目标
@@ -174,13 +183,18 @@ export const warPlannerSystem: System = {
     //     在途判定走台账（引擎无全局核弹查询 API，FIND_NUKES 需目标房视野 —
     //     自发核弹只能自查）；发射成功后台账 push + cooldown 5000 双保险，
     //     同目标在途期间不重复发射（重叠只是把当量堆在同一片废墟上）。
-    //     已知取舍（发射不可取消）：核弹 50k tick 落地，若期间我方占领目标房，
-    //     落地时自伤 — 缓解：扩张目标重合不射 + 塔数门槛保证只射编队啃不动的
-    //     重防房（短期不会被占领）。
+    //     FINDING-14 修复：核弹 50k tick 不可取消。除当前扩张目标外，
+    //     还检查扩张候选计划列表（expansionPlans）——防止对即将扩张的房发射核弹。
     pruneNukeLedger(ctx.tick);
     const nuker = sponsorSnapshot?.nuker;
     const kernel = Memory.kernel;
-    if (nuker && kernel && kernel.expansion?.target !== plan.targetRoom) {
+    // 收集所有扩张相关目标（当前扩张 + WAITING_EXECUTION 计划），排除这些房
+    const expansionTargets = new Set<string>();
+    if (kernel?.expansion?.target) expansionTargets.add(kernel.expansion.target);
+    for (const p of kernel?.expansionPlans ?? []) {
+      if (p.st === "WAITING_EXECUTION") expansionTargets.add(p.rn);
+    }
+    if (nuker && kernel && !expansionTargets.has(plan.targetRoom)) {
       const nukerReady =
         nuker.store.getUsedCapacity(RESOURCE_ENERGY) >= NUKE_ENERGY_COST &&
         (nuker.store.getUsedCapacity(RESOURCE_GHODIUM) ?? 0) >= NUKE_GHODIUM_COST &&

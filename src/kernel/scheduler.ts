@@ -173,19 +173,22 @@ export function createBudget(): Budget {
   const prevTicks = Memory.kernel?.recoveryTicks ?? 0;
 
   // Emergency Survival Mode 状态机（Recovery 档内的再收缩层；进入 bucket<100、
-  // 退出 bucket≥500，保命态不做恢复滞回）。活动标志存 globalCache（heap 可重建，
-  // 不新增 Memory schema 字段）；进入/退出沿记遥测事件。
-  const gCache = globalCache();
-  const wasEmergency = gCache.emergencySurvival === true;
+  // 退出 bucket≥500，保命态不做恢复滞回）。
+  // FINDING-02 修复：状态持久化到 Memory.kernel（1 个布尔字段），
+  // global reset 后首 tick 仍能正确判定滞回阈值——不再依赖 heap 中的
+  // wasEmergency（reset 后丢失导致阈值回退到更严格的 <100 入口）。
+  const wasEmergency = Memory.kernel?.emergencySurvival === true;
   const emergency = wasEmergency ? bucket < 500 : bucket < 100;
-  if (emergency && !wasEmergency) {
-    gCache.emergencySurvival = true;
-    recordEvent(EventKind.EmergencySurvival, "kernel", [1]);
-    log.info("kernel", `emergency survival: ENTER (bucket=${bucket}) — P0 车道 + harvester 最小采集`);
-  } else if (!emergency && wasEmergency) {
-    gCache.emergencySurvival = false;
-    recordEvent(EventKind.EmergencySurvival, "kernel", [0]);
-    log.info("kernel", `emergency survival: EXIT (bucket=${bucket}) — 回 Recovery 常规语义`);
+  if (emergency !== wasEmergency) {
+    if (!Memory.kernel) Memory.kernel = {};
+    Memory.kernel.emergencySurvival = emergency;
+    if (emergency) {
+      recordEvent(EventKind.EmergencySurvival, "kernel", [1]);
+      log.info("kernel", `emergency survival: ENTER (bucket=${bucket}) — P0 车道 + harvester 最小采集`);
+    } else {
+      recordEvent(EventKind.EmergencySurvival, "kernel", [0]);
+      log.info("kernel", `emergency survival: EXIT (bucket=${bucket}) — 回 Recovery 常规语义`);
+    }
   }
 
   // 自愿放血宽限：generatePixel 清零 bucket 后的窗口期内，

@@ -28,8 +28,11 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
     run(creep: Creep, ctx: TickContext): void {
       // finally 块在 CONFIG.debug.statusLight 关闭时为零开销（函数内首行即 return）。
       try {
-        const snapshot = ctx.getSnapshot(creep.memory.home!);
-        if (!snapshot) return;
+        // FINDING-06 修复：去掉非空断言。home 为空时跳过 snapshot 依赖逻辑，
+        // 直接到 ensureHome（它会用 creep.room.name 设置 home）。下一 tick 正常工作。
+        const home = creep.memory.home;
+        const snapshot = home ? ctx.getSnapshot(home) : undefined;
+        if (home && !snapshot) return;
 
         // B1：已标记回收的 creep 停止角色工作（移动由 spawn-manager 接管）。
         if (creep.memory.recycle) {
@@ -41,6 +44,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         // 威胁来源按实际所在房选择：外部房（远矿房/过境中间房）无 snapshot，直接扫当前房
         // （shouldFleeForeignRoom，修复 transit 盲区——必须排在 ensureHome 之前）；
         // home 房用 snapshot 的 threatCreeps（shouldFlee）。
+        // FINDING-06: home 为空时 snapshot 为 undefined，跳过 snapshot 依赖逻辑到 ensureHome。
         const inForeignRoom = creep.room.name !== creep.memory.home;
         // pushThrough（recon scout）：跳过过境房威胁逃跑检测，继续向侦察目标推进。
         // 否则 scout 钻进敌方房（如 Aguia 的 W38S58）即 flee 回 home，永远到不了 remoteTarget。
@@ -49,6 +53,10 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
           fleeToHome(creep);
           return;
         }
+        // 以下逻辑依赖 snapshot——home 为空时跳过到 ensureHome。
+        if (!snapshot) {
+          // ensureHome 会用 creep.room.name 设置 home，下一 tick 正常工作。
+        } else {
         // M11 战时集结避险：小队威胁在场时非战斗角色全员撤入核心集结区。
         // 不限 fleeRange——小队会主动追猎，散布全房各自逃跑就是被逐个点名；撤入塔火力圈反杀。
         if (!policy.combat && !inForeignRoom && snapshot.squadThreat) {
@@ -85,6 +93,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
           }
           return;
         }
+        } // end of snapshot-dependent flee logic
 
         // 威胁消除后重置 flee mode：ensureHome 先于 updateMode，残留 mode=flee 会触发
         // ensureHome 回 home 导航并短路 updateMode，mode 永不被重置（remoteHarvester 到站不采集）。
@@ -111,11 +120,18 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
           return;
         }
 
+        // ensureHome 后 home 已确保设置——重新获取 snapshot。
+        // FINDING-06: home 可能在 ensureHome 中刚被设置，原 snapshot 为 undefined。
+        const homeAfter = creep.memory.home;
+        if (!homeAfter) return; // 防御性检查——ensureHome 返回 true 后不应命中
+        const snap = ctx.getSnapshot(homeAfter);
+        if (!snap) return;
+
         updateMode(creep);
         const assignment = getAssignment(creep, ctx);
         const ac: ActionContext = {
           creep,
-          snapshot,
+          snapshot: snap,
           assignment,
           budget: ctx.budget,
           ctx,
@@ -159,7 +175,7 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
 
         // 无匹配候选 → idle（移动角色先归位）。
         if (policy.park) {
-          parkIdleCreep(creep, snapshot);
+          parkIdleCreep(creep, snap);
         }
         // 远矿角色不在目标房间时不切 idle——idle 会让 ensureHome 导航回 home，
         // 形成 idle→updateMode→acquire→fail→idle 死循环，永远到不了 remoteTarget。

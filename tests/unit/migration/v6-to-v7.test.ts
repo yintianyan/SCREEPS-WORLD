@@ -137,6 +137,7 @@ describe("migration v6 → v7（tuning 结构自愈）", () => {
       lostRooms: {},
       bootTick: (globalThis as any).Game.time,
       outcomeEvents: { q: [], s: [], dr: 0, oe: 0 },
+      migrationCheckpoint: CONFIG.memory.schemaVersion,
     });
   });
 

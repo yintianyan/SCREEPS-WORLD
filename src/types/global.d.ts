@@ -236,6 +236,11 @@ declare global {
      * churn > 20 次则冻结孵化 100 tick；spawn-manager 写、demand 读、到期自清理。
      */
     churnFreezeUntil?: Record<string, number>;
+    /**
+     * FINDING-04 修复：生命线角色 churn WARN 限频表。
+     * role → 下次允许输出 WARN 的 tick。每 CHURN_WINDOW 最多 1 条 WARN。
+     */
+    churnWarnAt?: Record<string, number>;
     buildQueue?: BuildTask[];
     lastRcl?: number;
     /** room-state 维护：RCL 等级（变化检测用，与 layout-planner 的 lastRcl 独立）。 */
@@ -602,6 +607,18 @@ declare global {
     expectations?: { tick: number; violations: string[]; e3?: Record<string, unknown>; memoryHistory?: { tick: number; bytes: number; roomCount: number }[] };
     /** P3 饥饿旁路截止 tick（expectations E2 触发，scheduler 消费）。运行时字段无 schema 变更。 */
     p3StarveBypassUntil?: number;
+    /**
+     * FINDING-02 修复：ESM (Emergency Survival Mode) 持久化标志。
+     * 存 Memory.kernel 而非 globalCache — global reset 后首 tick 仍能正确判定
+     * ESM 滞回阈值（进入 <100，退出 >=500）。运行时字段无 schema 变更。
+     */
+    emergencySurvival?: boolean;
+    /**
+     * FINDING-11 修复：迁移链快照——migrateMemory 成功执行后记录的最终版本。
+     * 新 Memory（schemaVersion=0）但 checkpoint 存在时直接跳到 checkpoint，
+     * 避免重跑 45 个迁移。只前进不后退（防止回滚后锁住新版本）。
+     */
+    migrationCheckpoint?: number;
     /**
      * 侦察任务（v29+，prospect-manager 写入）：同一时刻至多一个。
      * 姿态 expansionAllowed 时主动为扩张候选房获取视野（决策就绪情报）。

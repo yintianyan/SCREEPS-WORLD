@@ -32,12 +32,7 @@ import { evaluateCheckpoint, type CheckpointId } from "../domain/expansion/check
 import { evaluateEconomicActivation, type EconomicActivationInput } from "../domain/expansion/economic-activation";
 import { evaluateEmpireIntegration, canHandover, type EmpireIntegrationInput } from "../domain/expansion/empire-integration";
 import { evaluateThreatEscalation, type ThreatEscalationInput } from "../domain/expansion/threat-escalation";
-import {
-  tryReserve,
-  releaseReservation,
-  isReservationExpired,
-  type ResourceReservation,
-} from "../domain/expansion/resource-reservation";
+import { tryReserve } from "../domain/expansion/resource-reservation";
 import { evaluateExpansionCooldown, DEFAULT_COOLDOWN_CONFIG } from "../domain/expansion/expansion-cooldown";
 import { evaluateAutonomyAge } from "../domain/expansion/autonomy";
 import { evaluateStabilityScore } from "../domain/expansion/stability-score";
@@ -186,6 +181,16 @@ function tryConsumePlan(ctx: TickContext): void {
   const gclLevel = Game.gcl?.level ?? 1;
   const ownedCount = Array.from(ctx.snapshots()).filter(s => s.controller?.my).length;
   if (gclLevel <= ownedCount) return;
+
+  // FINDING-14 修复：在途核弹目标排除——核弹 50k tick 不可取消，
+  // 对有在途核弹的房扩张 = 落地时自伤。排除所有在途核弹目标。
+  const nukesInFlight = Memory.kernel?.nukesInFlight ?? {};
+  const nukesForTarget = nukesInFlight[plan.roomName] ?? [];
+  const liveNukes = nukesForTarget.filter(landAt => landAt > ctx.tick);
+  if (liveNukes.length > 0) {
+    log.info("expansion",`[${ctx.tick}] expansion: ${plan.roomName} has ${liveNukes.length} nuke(s) in flight, skipping`);
+    return;
+  }
 
   // 标记 Plan 为 EXECUTING
   updatePlanStatus(plan.planId, "EXECUTING");
@@ -663,14 +668,14 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     Memory.kernel.lastExpansionCompletedTick = ctx.tick;
     // 标记 Plan 为 COMPLETED
     updatePlanStatus(expansion.planId ?? "", "COMPLETED");
-  // 释放预留资源
-  if (!Memory.kernel) Memory.kernel = {};
-  if (expansion.reservedEnergy && expansion.reservedEnergy > 0) {
-    log.info("expansion",`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy for ${expansion.target}`);
-  }
-  // 清理扩张状态
-  Memory.kernel.expansion = undefined;
-  return;
+    // 释放预留资源（预留对象未持久化到 expansion，仅 log 标记；
+    // tryReserve 的预留有 tick 过期机制，不释放也会自然过期）
+    if (expansion.reservedEnergy && expansion.reservedEnergy > 0) {
+      log.info("expansion",`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy for ${expansion.target}`);
+    }
+    // 清理扩张状态
+    Memory.kernel.expansion = undefined;
+    return;
   }
 
   // 超时检查（integrating 阶段给最长的时间）
@@ -704,8 +709,8 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
 function abortExpansion(ctx: TickContext, expansion: ExpansionState, outcome: ExpansionResult): void {
   // Phase 6 UOEM: 唯一终态写入 — enqueueTerminalOutcome 幂等去重
   enqueueTerminalOutcome(expansion, ctx.tick, outcome);
-  // 释放预留资源
-  if (!Memory.kernel) Memory.kernel = {};
+  // 释放预留资源（预留对象未持久化到 expansion，仅 log 标记；
+  // tryReserve 的预留有 tick 过期机制，不释放也会自然过期）
   if (expansion.reservedEnergy && expansion.reservedEnergy > 0) {
     log.info("expansion",`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy (abort)`);
   }
@@ -715,6 +720,7 @@ function abortExpansion(ctx: TickContext, expansion: ExpansionState, outcome: Ex
   if (expansion.planId) {
     updatePlanStatus(expansion.planId, "CANCELLED");
   }
+  if (!Memory.kernel) Memory.kernel = {};
   Memory.kernel.expansion = undefined;
 }
 

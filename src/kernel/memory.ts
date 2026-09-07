@@ -1252,15 +1252,41 @@ export function maintainMemory(): void {
 
 /** 按升序执行迁移（每个幂等）。ready() 未就绪时停在断点、保留版本，下 tick 续跑。
  * 版本号只随实际执行的迁移递增，不做无条件盖章：若未来出现断号，版本停在
- * 缺口处暴露问题，而不是被盖章静默掩盖、永久丢失缺口步骤。 */
+ * 缺口处暴露问题，而不是被盖章静默掩盖、永久丢失缺口步骤。
+ *
+ * FINDING-11 修复：迁移链快照——已迁移到的版本记录到 Memory.kernel.migrationCheckpoint。
+ * 新 Memory（schemaVersion=0）但 checkpoint 存在时（global reset 不清 Memory），
+ * 直接跳到 checkpoint 继续，避免重跑 45 个迁移。
+ * 只对新 Memory 首次启动有实质收益（global reset 不重置 schemaVersion）。
+ */
 function migrateMemory(currentVersion: number): void {
+  // 快速跳过：如果 currentVersion=0 但有 checkpoint，跳到 checkpoint。
+  // checkpoint 只在 migrateMemory 成功执行后才写入，保证只跳过已执行的迁移。
+  // 安全前提：每个迁移幂等——即使 checkpoint 过期（代码回滚），从旧 checkpoint
+  // 继续也不会出错（幂等的迁移重复执行不改变状态）。
+  const checkpoint = Memory.kernel?.migrationCheckpoint;
   let version = currentVersion;
+  if (version === 0 && checkpoint !== undefined && checkpoint > 0 && checkpoint <= CONFIG.memory.schemaVersion) {
+    version = checkpoint;
+    Memory.schemaVersion = version;
+    log.info("memory", `[schema] fast-forward from v0 to v${version} (checkpoint)`);
+  }
+
   for (const migration of MIGRATIONS) {
     if (version !== migration.from) continue;
     if (migration.ready && !migration.ready()) break;
     migration.run();
     version = migration.to;
     Memory.schemaVersion = version;
+  }
+
+  // 更新快照：只前进不后退（防止回滚后 checkpoint 锁住新版本）。
+  // 只在 kernel 已存在时写入——不在「迁移不创建 kernel」的测试场景中意外创建。
+  if (version > 0 && Memory.kernel) {
+    const existing = Memory.kernel.migrationCheckpoint ?? 0;
+    if (version > existing) {
+      Memory.kernel.migrationCheckpoint = version;
+    }
   }
 }
 

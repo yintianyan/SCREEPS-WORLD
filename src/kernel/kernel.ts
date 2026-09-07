@@ -494,12 +494,13 @@ export class Kernel {
   private collectRCLSnapshots(ctx: Context): RCLSnapshot[] {
     const result: RCLSnapshot[] = [];
     const tracker = (globalCache().rclProgressTracker ??= new Map());
-    // upgrader 普查：单遍 Game.creeps 按 home 聚合（~30 creeps，开销与
-    // collectBuildQueueSnapshots 的逐房遍历同量级）。
+    // upgrader 普查：消费共享快照总线（creepRefs），不再独立遍历 Game.creeps。
+    // FINDING-01 修复：与 collectBuildQueueSnapshots 同口径。
     const upgradersByHome = new Map<string, number>();
-    for (const c of Object.values(Game.creeps)) {
-      if (c.memory.role !== "upgrader" || c.memory.recycle) continue;
-      const home = c.memory.home ?? c.room?.name;
+    const refs = globalCache().creepRefs ?? [];
+    for (const c of refs) {
+      if (c.role !== "upgrader" || c.recycle) continue;
+      const home = c.home;
       if (home) upgradersByHome.set(home, (upgradersByHome.get(home) ?? 0) + 1);
     }
     for (const snap of ctx.snapshots()) {

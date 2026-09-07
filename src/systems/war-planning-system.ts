@@ -26,6 +26,10 @@ export const warPlanningSystem: System = {
   name: "war-planning",
   priority: 2 as Priority,
   interval: CONFIG.war.interval,
+  // FINDING-08 修复：war 姿态下必须运行——否则 Recovery tier 跳过 war-planning-system，
+  // war-planner 的 Legacy fallback 路径会产出与 A5.3 不一致的编制（decideSquadSize vs a5ForceReq），
+  // 导致编队在两套逻辑间震荡。
+  recoveryEligible: () => Memory.kernel?.strategy?.posture === "war",
 
   run(ctx: TickContext): void {
     const tick = ctx.tick;
