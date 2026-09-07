@@ -81,26 +81,46 @@ function initAssignmentCache(tick: number): TaskPool {
  * P1-1：从 generateRoomTasks 提取到循环外，避免每房间重复遍历。
  */
 function collectAllCreepRefs(): CreepAssignmentRef[] {
-  const refs: CreepAssignmentRef[] = [];
-  for (const creep of Object.values(Game.creeps)) {
-    const home = creep.memory.home ?? creep.room?.name;
-    if (!home) continue;
-    const a = creep.memory.assignment;
-    refs.push({
-      name: creep.name,
-      home,
-      role: creep.memory.role,
-      assignment: a
+  // 消费共享快照总线 — 不再独立遍历 Game.creeps。
+  const refs = globalCache().creepRefs;
+  if (!refs) {
+    // Fallback：buildSnapshots 未运行（如测试环境）时回退到全量遍历。
+    const fallback: CreepAssignmentRef[] = [];
+    for (const creep of Object.values(Game.creeps)) {
+      const home = creep.memory.home ?? creep.room?.name;
+      if (!home) continue;
+      const a = creep.memory.assignment;
+      fallback.push({
+        name: creep.name,
+        home,
+        role: creep.memory.role,
+        assignment: a
+          ? {
+              id: a.id,
+              kind: a.kind,
+              sourceId: a.sourceId ? (a.sourceId as string) : undefined,
+              targetId: a.targetId ? (a.targetId as string) : undefined,
+            }
+          : undefined,
+      });
+    }
+    return fallback;
+  }
+  return refs
+    .filter(r => r.home)
+    .map(r => ({
+      name: r.name,
+      home: r.home,
+      role: r.role,
+      assignment: r.assignment
         ? {
-            id: a.id,
-            kind: a.kind,
-            sourceId: a.sourceId ? (a.sourceId as string) : undefined,
-            targetId: a.targetId ? (a.targetId as string) : undefined,
+            id: r.assignment.id,
+            kind: r.assignment.kind,
+            sourceId: r.assignment.sourceId,
+            targetId: r.assignment.targetId,
           }
         : undefined,
-    });
-  }
-  return refs;
+    }));
 }
 
 /**

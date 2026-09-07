@@ -77,23 +77,28 @@ export const logisticsSystem: System = {
     g.transportPool = { tick: ctx.tick, rooms: {} };
     const cfg = CONFIG.logistics;
 
-    // 全房 creep 缓存 — 本 tick 只遍历一次，logistics-planner 复用。
-    const allCreeps = Object.values(Game.creeps);
-    (g as any).__logisticsCreepCache = { tick: ctx.tick, creeps: allCreeps };
+    // 消费共享快照总线 — 不再独立遍历 Game.creeps。
+    const creepRefs = globalCache().creepRefs;
+    const allCreeps = creepRefs ?? Object.values(Game.creeps).map(c => ({
+      name: c.name,
+      role: c.memory.role ?? "unknown",
+      home: c.memory.home ?? c.room.name,
+      spawning: c.spawning === true,
+      lastActionTick: (c.memory as { lastActionTick?: number }).lastActionTick,
+      ticksToLive: c.ticksToLive,
+      assignment: c.memory.assignment as { id: string; kind: string; sourceId?: Id<Source>; leaseUntil?: number } | undefined,
+    }));
 
-    // 全房 creep 租约投影只扫一次（O(creeps)，复用 collectCreepRefs 模式）。
-    // 租约失效检测：assignment.leaseUntil 过期 → valid=false → 回收重挂。
+    // 租约投影 + hauler 摘要：从共享快照消费，不再独立遍历。
     const leasesByRoom = new Map<string, LeaseSummary[]>();
     const claimsByRoom = new Map<string, Set<string>>();
-    // 用于空载率计算的 hauler 摘要（按 home 分桶）。
     const haulerSummariesByRoom = new Map<string, { name: string; lastActionTick: number; ticksToLive: number; role: string }[]>();
-    for (const creep of allCreeps) {
-      if (creep.spawning) continue;
-      const home = creep.memory.home ?? creep.room?.name;
+    const tick = ctx.tick;
+    for (const ref of allCreeps) {
+      if (ref.spawning) continue;
+      const home = ref.home;
       if (!home) continue;
-      const a = creep.memory.assignment;
-      const tick = ctx.tick;
-      // 租约超时检测：assignment 有 leaseUntil 且已过期 → valid=false。
+      const a = ref.assignment;
       const leaseExpired = a?.leaseUntil !== undefined && tick > a.leaseUntil;
       let leaseList = leasesByRoom.get(home);
       if (!leaseList) { leaseList = []; leasesByRoom.set(home, leaseList); }
@@ -105,15 +110,14 @@ export const logisticsSystem: System = {
           claims.add(a.id);
         }
       }
-      // 收集 hauler 摘要供空载率计算。
-      const role = creep.memory.role;
+      const role = ref.role;
       if (role === "hauler" || role === "distributor") {
         let summaries = haulerSummariesByRoom.get(home);
         if (!summaries) { summaries = []; haulerSummariesByRoom.set(home, summaries); }
         summaries.push({
-          name: creep.name,
-          lastActionTick: (creep.memory as { lastActionTick?: number }).lastActionTick ?? tick,
-          ticksToLive: creep.ticksToLive ?? 1500,
+          name: ref.name,
+          lastActionTick: ref.lastActionTick ?? tick,
+          ticksToLive: ref.ticksToLive ?? 1500,
           role,
         });
       }

@@ -496,24 +496,38 @@ continue;
  * 供纯函数 evaluateDemand 消费，避免领域层直接访问 Game。
  */
 function collectCreepSummaries(): CreepSummary[] {
-  const result: CreepSummary[] = [];
-  for (const creep of Object.values(Game.creeps)) {
-    // 跳过孵化中的 creep — 它们由 collectSpawningSummaries 单独收集。
-    // Screeps 中孵化中的 creep 已存在于 Game.creeps（spawning=true），
-    // 若两个列表各计一次，countCreepsByRole 会双重计数，抑制孵化期间的真实需求。
-    if (creep.spawning) continue;
-    result.push({
-      name: creep.name,
-      role: creep.memory.role ?? "unknown",
-      home: creep.memory.home ?? creep.room.name,
-      ticksToLive: creep.ticksToLive,
-      bodyLength: creep.body.length,
-      sourceId: creep.memory.sourceId,
-      spawnIndex: creep.memory.spawnIndex,
-      recycle: creep.memory.recycle === true,
-    });
+  // 消费共享快照总线 — 不再独立遍历 Game.creeps。
+  const refs = globalCache().creepRefs;
+  if (!refs) {
+    // Fallback：buildSnapshots 未运行（如测试环境）时回退到全量遍历。
+    const result: CreepSummary[] = [];
+    for (const creep of Object.values(Game.creeps)) {
+      if (creep.spawning) continue;
+      result.push({
+        name: creep.name,
+        role: creep.memory.role ?? "unknown",
+        home: creep.memory.home ?? creep.room.name,
+        ticksToLive: creep.ticksToLive,
+        bodyLength: creep.body.length,
+        sourceId: creep.memory.sourceId,
+        spawnIndex: creep.memory.spawnIndex,
+        recycle: creep.memory.recycle === true,
+      });
+    }
+    return result;
   }
-  return result;
+  return refs
+    .filter(r => !r.spawning)
+    .map(r => ({
+      name: r.name,
+      role: r.role,
+      home: r.home,
+      ticksToLive: r.ticksToLive,
+      bodyLength: r.bodyLength,
+      sourceId: r.sourceId,
+      spawnIndex: r.spawnIndex,
+      recycle: r.recycle,
+    }));
 }
 
 /**

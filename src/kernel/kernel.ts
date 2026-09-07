@@ -39,7 +39,7 @@ import { Registry } from "./registry";
 //   100 tick 低频触发，无每 tick 耦合。为 1 个钩子引入 registry 维护钩子机制（接口+注册+遍历）属过度工程。
 // 演化条件：当出现 3+ 个周期性维护钩子时，提取为 registry 维护钩子机制（kernel 只遍历注册表）。
 import { pruneDeadCreepCache } from "../creeps/movement/pathfinding";
-import { globalCache, type SquadIndexEntry } from "./global-cache";
+import { globalCache, type SquadIndexEntry, type CreepRef } from "./global-cache";
 import { CONFIG } from "../config";
 import { log } from "./log";
 
@@ -233,6 +233,9 @@ export class Kernel {
     // （harvester/hauler/builder/upgrader/distributor 无 remoteTarget）不进索引，
     // 减少内存占用。
     const squadIndex: SquadIndexEntry[] = [];
+    // 共享快照总线：在已有的 Game.creeps 遍历中顺便构建完整 creep 摘要数组，
+    // 供 spawn-manager / assignment / logistics / logistics-planner / lab-system 消费。
+    const creepRefs: CreepRef[] = [];
     for (const creep of Object.values(Game.creeps)) {
       creepLastSeen.set(creep.name, { r: creep.room.name, x: creep.pos.x, y: creep.pos.y });
       const home = creep.memory.home;
@@ -270,6 +273,33 @@ export class Kernel {
           spawning: creep.spawning === true,
         });
       }
+      // 共享快照总线：push 当前 creep 的完整摘要。
+      const mem = creep.memory as unknown as Record<string, unknown>;
+      const a = mem.assignment as Record<string, unknown> | undefined;
+      creepRefs.push({
+        name: creep.name,
+        role: role ?? "unknown",
+        home: home ?? creep.room.name,
+        spawning: creep.spawning === true,
+        sourceId: creep.memory.sourceId,
+        spawnIndex: creep.memory.spawnIndex,
+        recycle: creep.memory.recycle === true,
+        ticksToLive: creep.ticksToLive,
+        bodyLength: creep.body.length,
+        body: creep.body,
+        assignment: a ? {
+          id: a.id as string,
+          kind: a.kind as string,
+          sourceId: a.sourceId ? (a.sourceId as string) : undefined,
+          targetId: a.targetId ? (a.targetId as string) : undefined,
+          leaseUntil: typeof a.leaseUntil === "number" ? a.leaseUntil : undefined,
+        } : undefined,
+        lastActionTick: typeof mem.lastActionTick === "number" ? mem.lastActionTick : undefined,
+        roomName: creep.room.name,
+        x: creep.pos.x,
+        y: creep.pos.y,
+        energyCarried: creep.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
+      });
       if (role !== "harvester" && role !== "worker") continue;
       const sid = creep.memory.sourceId;
       if (sid) {
@@ -281,6 +311,9 @@ export class Kernel {
         }
       }
     }
+
+    // 共享快照总线发布 — 所有消费系统通过 globalCache().creepRefs 取数据。
+    globalCache().creepRefs = creepRefs;
 
     // 孵化中的 creep 已存在于 Game.creeps（spawning=true），上方循环已覆盖 —
     // 再遍历 Game.spawns 会把同一 creep 二次计入 pending，虚增 harvesterCount、

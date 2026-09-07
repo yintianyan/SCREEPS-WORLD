@@ -153,6 +153,10 @@ export interface GlobalCache {
   /** C1-F09: 全局 creep 总数 — 由 buildSnapshots 预构建，供 empire-health 消费。
    * 消除 empire-health 每 100t 的 Object.keys(Game.creeps).length 调用。 */
   totalPopulation?: number;
+  /** 共享快照总线：buildSnapshots 单次遍历 Game.creeps 产出的完整 creep 摘要数组。
+   * spawn-manager / assignment / logistics / logistics-planner / lab-system 消费，
+   * 消除各自独立全量遍历 Game.creeps（5+ 系统 × O(M) → 1 × O(M)）。 */
+  creepRefs?: CreepRef[];
   /** 阶段 1 采购需求表（publishProcurementDemands 是唯一写入口）。
    * 信道契约（审计修复）：条目持久存在直到各自 deadline —— 旧实现的 tick 守卫
    * 使整表单 tick 存活，生产者/消费者相位错开时需求静默丢失。
@@ -482,6 +486,36 @@ export interface SquadIndexEntry {
   boosted: boolean;
   /** 是否正在孵化（spawning=true — war-planner 编队统计计入 live 而非 pending）。 */
   spawning: boolean;
+}
+
+/**
+ * 共享快照总线 — buildSnapshots 单次遍历 Game.creeps 产出的完整 creep 摘要。
+ * 消除 5+ 系统各自独立遍历 Game.creeps 的冗余（spawn-manager / assignment /
+ * logistics / logistics-planner / lab-system），250 creep × 7 遍历 → 1 遍历。
+ */
+export interface CreepRef {
+  name: string;
+  role: string;
+  home: string;
+  spawning: boolean;
+  sourceId?: Id<Source>;
+  spawnIndex?: number;
+  recycle: boolean;
+  ticksToLive?: number;
+  bodyLength: number;
+  body: BodyPartDefinition[];
+  assignment?: {
+    id: string;
+    kind: string;
+    sourceId?: string;
+    targetId?: string;
+    leaseUntil?: number;
+  };
+  lastActionTick?: number;
+  roomName: string;
+  x: number;
+  y: number;
+  energyCarried: number;
 }
 
 /**

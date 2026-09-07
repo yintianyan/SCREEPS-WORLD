@@ -284,16 +284,15 @@ export const labSystem: System = {
       }
 
       // ── 1. Boost 决策 ──
-      // warBuildPhase：编队 build 相位放宽报到窗口（编队集结本就是待命，
-      // 化合物前馈未到位时窗口不该把强化机会关死 — 见 boost.ts）。
-      const creepSummaries = Object.values(Game.creeps)
-        .filter(c => c.memory.home === snapshot.roomName)
-        .map(c => ({
-          name: c.name,
-          role: c.memory.role ?? "unknown",
-          ticksToLive: c.ticksToLive ?? 0,
-          boosted: (industryMem.boostedCreeps ?? []).includes(c.name),
-          body: c.body,
+      // 消费共享快照总线 — 不再独立遍历 Game.creeps。
+      const creepSummaries = (globalCache().creepRefs ?? [])
+        .filter(r => r.home === snapshot.roomName)
+        .map(r => ({
+          name: r.name,
+          role: r.role,
+          ticksToLive: r.ticksToLive ?? 0,
+          boosted: (industryMem.boostedCreeps ?? []).includes(r.name),
+          body: r.body,
         }));
 
       const boostRequests = evaluateBoostRequests(

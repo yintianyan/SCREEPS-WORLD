@@ -1,6 +1,6 @@
 /** Logistics Planner — 帝国物流规划逻辑（由 logistics 系统内部门控调用） */
 import type { TickContext, RoomSnapshot } from "../kernel/contracts";
-import { globalCache } from "../kernel/global-cache";
+import { globalCache, type CreepRef } from "../kernel/global-cache";
 import {
   planLogistics,
   type PlannerInput,
@@ -38,11 +38,35 @@ import {
 } from "../domain/logistics/idle-detection";
 import { log } from "../kernel/log";
 
-/** 获取本 tick 的 creep 缓存（由 logistics.run 入口构建）。未初始化时回退到全量遍历。 */
-function getCreepCache(tick: number): Creep[] {
-  const cache = (globalCache() as any).__logisticsCreepCache as { tick: number; creeps: Creep[] } | undefined;
-  if (cache && cache.tick === tick) return cache.creeps;
-  return Object.values(Game.creeps);
+/** 获取本 tick 的共享快照总线。未初始化时回退到全量遍历。 */
+function getCreepRefs(): CreepRef[] {
+  const refs = globalCache().creepRefs;
+  if (refs) return refs;
+  // Fallback：buildSnapshots 未运行时回退。
+  return Object.values(Game.creeps).map(c => ({
+    name: c.name,
+    role: c.memory.role ?? "unknown",
+    home: c.memory.home ?? c.room.name,
+    spawning: c.spawning === true,
+    recycle: c.memory.recycle === true,
+    bodyLength: c.body.length,
+    body: c.body,
+    roomName: c.room.name,
+    x: c.pos.x,
+    y: c.pos.y,
+    energyCarried: c.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
+    ticksToLive: c.ticksToLive,
+    lastActionTick: (c.memory as { lastActionTick?: number }).lastActionTick,
+    sourceId: c.memory.sourceId,
+    spawnIndex: c.memory.spawnIndex,
+    assignment: c.memory.assignment ? {
+      id: (c.memory.assignment as { id: string }).id,
+      kind: (c.memory.assignment as { kind: string }).kind,
+      sourceId: c.memory.assignment.sourceId ? (c.memory.assignment.sourceId as string) : undefined,
+      targetId: c.memory.assignment.targetId ? (c.memory.assignment.targetId as string) : undefined,
+      leaseUntil: (c.memory.assignment as { leaseUntil?: number }).leaseUntil,
+    } : undefined,
+  }));
 }
 
 // ─── 路由缓存（heap，跨 tick 持久） ─────────────────────────
@@ -282,22 +306,22 @@ function collectContracts(): SupplyContract[] {
 function collectCapacityInputs(snapshots: readonly RoomSnapshot[], tick: number): RoomCapacityInput[] {
   const result: RoomCapacityInput[] = [];
 
-  // 全房 creep 按 home 分桶（复用 logistics.run 入口缓存的 creep 列表）
-  const haulersByRoom = new Map<string, Creep[]>();
-  const carriersByRoom = new Map<string, Creep[]>();
-  for (const creep of getCreepCache(tick)) {
-    if (creep.spawning) continue;
-    const home = creep.memory.home ?? creep.room?.name;
+  // 全房 creep 按 home 分桶 — 消费共享快照总线。
+  const haulersByRoom = new Map<string, CreepRef[]>();
+  const carriersByRoom = new Map<string, CreepRef[]>();
+  for (const ref of getCreepRefs()) {
+    if (ref.spawning) continue;
+    const home = ref.home;
     if (!home) continue;
-    const role = creep.memory.role;
+    const role = ref.role;
     if (role === "hauler") {
       let arr = haulersByRoom.get(home);
       if (!arr) { arr = []; haulersByRoom.set(home, arr); }
-      arr.push(creep);
+      arr.push(ref);
     } else if (role === "carrier") {
       let arr = carriersByRoom.get(home);
       if (!arr) { arr = []; carriersByRoom.set(home, arr); }
-      arr.push(creep);
+      arr.push(ref);
     }
   }
 
@@ -547,14 +571,14 @@ function computeAvgLatency(): number {
  */
 function collectHaulerSummaries(): HaulerIdleSummary[] {
   const result: HaulerIdleSummary[] = [];
-  for (const creep of getCreepCache(Game.time)) {
-    if (creep.spawning) continue;
-    const role = creep.memory.role;
+  for (const ref of getCreepRefs()) {
+    if (ref.spawning) continue;
+    const role = ref.role;
     if (role !== "hauler" && role !== "carrier" && role !== "remoteHauler") continue;
     result.push({
-      name: creep.name,
-      lastActionTick: (creep.memory as { lastActionTick?: number }).lastActionTick ?? Game.time,
-      ticksToLive: creep.ticksToLive ?? 1500,
+      name: ref.name,
+      lastActionTick: ref.lastActionTick ?? Game.time,
+      ticksToLive: ref.ticksToLive ?? 1500,
       role,
     });
   }
@@ -566,7 +590,8 @@ function collectHaulerSummaries(): HaulerIdleSummary[] {
  */
 function collectHaulerCapacityInfo(snapshots: readonly RoomSnapshot[]) {
   const haulers: { capacity: number; idle: boolean }[] = [];
-  for (const creep of getCreepCache(Game.time)) {
+  // 此处需要 creep.store API（getCapacity/getUsedCapacity），CreepRef 不包含 — 直接遍历 Game.creeps。
+  for (const creep of Object.values(Game.creeps)) {
     if (creep.spawning) continue;
     const role = creep.memory.role;
     if (role !== "hauler" && role !== "carrier" && role !== "remoteHauler") continue;
