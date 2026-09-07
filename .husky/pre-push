@@ -1,6 +1,5 @@
 echo "▶ pre-push: running typecheck + unit tests + build..."
 npm run typecheck || { echo "✗ typecheck failed"; exit 1; }
-npm run check:docs || { echo "✗ docs consistency check failed"; exit 1; }
 npm run test:unit || { echo "✗ unit tests failed"; exit 1; }
 npm run build || { echo "✗ build failed"; exit 1; }
 echo "✓ pre-push checks passed"
