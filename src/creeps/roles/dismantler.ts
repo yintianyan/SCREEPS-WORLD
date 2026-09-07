@@ -2,9 +2,10 @@
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
-import { moveToTarget } from "../movement";
+import { moveToTarget, registerStaticBlocker, registerAnchor } from "../movement";
 import { attackerHold, markRetreat } from "./attacker";
 import { getHostileStructuresCached, findWallsCached } from "../support/room-scans";
+import { CONFIG } from "../../config";
 
 /** 按建筑价值分档选择拆迁目标。 */
 function structureValueTier(t: StructureConstant): number {
@@ -72,7 +73,17 @@ export function dismantlePathWalls(): ActionCandidate<StructureWall> {
     },
     execute: (ac, target) => {
       const result = ac.creep.dismantle(target);
-      if (result === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, target);
+      if (result === ERR_NOT_IN_RANGE) {
+        moveToTarget(ac.creep, target);
+      } else if (result === OK) {
+        // 原地拆墙时登记静态阻挡 + 锚定，让其他 creep 的 PathFinder
+        // 天然绕行 dismantler 所在格，避免拆墙期间长期阻塞通勤路径。
+        // registerStaticBlocker 把 dismantler 位置标 255，PathFinder 会绕行；
+        // registerAnchor 防止被 traffic-resolver 低优先级 creep 推挤（推走后
+        // 下 tick role-runner 又移回墙旁 → 循环振荡）。
+        registerStaticBlocker(ac.creep.room.name, ac.creep.pos);
+        registerAnchor(ac.creep, CONFIG.movement.trafficPriority.work);
+      }
     },
   };
 }
