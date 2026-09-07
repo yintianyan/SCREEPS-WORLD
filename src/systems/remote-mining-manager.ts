@@ -371,6 +371,14 @@ export const remoteMiningManagerSystem: System = {
         }).length > 0;
         dismantleTargets[rn] = neutralController && foreignSpawn;
         if (!dismantleTargets[rn] && !op.needWallClear) recycleRemoteDismantlers(snapshot.roomName, rn);
+        // 反向清除：当 needWallClear 或 dismantleTargets 有效时，清除旧 tick 遗留的
+        // recycle 标记 — 否则 dismantler 被 spawn-manager 回收，无法执行拆墙任务。
+        if (dismantleTargets[rn] || op.needWallClear) {
+          for (const entry of querySquad({ home: snapshot.roomName, remoteTarget: rn, role: "dismantler" })) {
+            const c = Game.creeps[entry.name];
+            if (c && c.memory.recycle) c.memory.recycle = false;
+          }
+        }
       }
 
       // 远矿路径修路（enableRoadPlanning）：PathFinder 规划 home 锚→source container
