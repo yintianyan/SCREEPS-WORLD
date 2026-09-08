@@ -40,15 +40,11 @@ describe("computeEnergyPrice", () => {
 });
 
 describe("supplyElasticity", () => {
-  it("价格正常（>= 0.2）时为 1.0（不缩编）", () => {
+  it("恒返回 1.0（供给端不通过价格缩放编制）", () => {
+    expect(supplyElasticity(0.0)).toBe(1.0);
+    expect(supplyElasticity(0.1)).toBe(1.0);
     expect(supplyElasticity(0.5)).toBe(1.0);
     expect(supplyElasticity(1.0)).toBe(1.0);
-    expect(supplyElasticity(0.2)).toBe(1.0);
-  });
-
-  it("价格极低（< 0.2）时为 1.5（扩编采集）", () => {
-    expect(supplyElasticity(0.1)).toBe(1.5);
-    expect(supplyElasticity(0.0)).toBe(1.5);
   });
 });
 

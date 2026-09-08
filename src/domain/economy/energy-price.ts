@@ -26,12 +26,13 @@ export function computeEnergyPrice(
 }
 
 /**
- * 供给端弹性系数（harvester）：低弹性。
- * 价格极低（能量严重紧缺）时扩编至 1.5×，否则不变。
- * 供给端是生产基础——只在严重赤字时扩编，不因价格高就缩编。
+ * 供给端弹性系数（harvester）：无弹性（恒 1.0）。
+ * 供给端是生产基础——不通过价格信号缩放编制。
+ * 供需平衡通过压缩消费端（demandElasticity）和保留物流端（logisticsElasticity）
+ * 来实现：消费少了、物流保住了，自然有更多能量给采集端。
+ * 直接扩编 harvester 会与替换机制叠加导致超编振荡（live-anomaly-reproduction 实证）。
  */
-export function supplyElasticity(price: number): number {
-  if (price < 0.2) return 1.5;
+export function supplyElasticity(_price: number): number {
   return 1.0;
 }
 

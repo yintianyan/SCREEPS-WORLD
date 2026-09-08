@@ -4,7 +4,7 @@ import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import { countPending, spawnKey } from "./queue";
 import { classifyLinkRole } from "../economy/links";
-import { supplyElasticity, demandElasticity, logisticsElasticity } from "../economy/energy-price";
+import { demandElasticity, logisticsElasticity } from "../economy/energy-price";
 
 /** 各角色降级时必须保留的最小部件；hauler/distributor 无需 WORK。 */
 export const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConstant[]>> = {
@@ -262,10 +262,9 @@ export function evaluateDemand(
   const inCrisis = colonyState === "recovery";
   // Storage 满仓信号 — 限采 + 加速消费。
   const storageNearFull = roomCtx.storageNearFull === true;
-  // 供需价格信号 — 0=紧缺（抑制消费、鼓励采集），1=充裕（鼓励消费）。
+  // 供需价格信号 — 0=紧缺（抑制消费），1=充裕（鼓励消费）。
   const energyPrice = roomCtx.energyPrice ?? 0.5;
-  // 各端弹性系数（crisis 时不应用弹性调节 — crisis 路径已有独立收缩逻辑）。
-  const supplyFactor = inCrisis ? 1.0 : supplyElasticity(energyPrice);
+  // 消费端 + 物流端弹性系数（crisis 时不应用弹性调节 — crisis 路径已有独立收缩逻辑）。
   const demandFactor = inCrisis ? 0.0 : demandElasticity(energyPrice);
   const logisticsFactor = inCrisis ? 1.0 : logisticsElasticity(energyPrice);
 
@@ -359,14 +358,9 @@ export function evaluateDemand(
     Math.ceil(CONFIG.economy.harvestWorkingParts / workPerHarvester),
   );
   const saturationTarget = snapshot.sources.length * minersPerSource;
-  const baseHarvesterTarget = storageNearFull
+  const harvesterTarget = storageNearFull
     ? Math.min(snapshot.sources.length, harvesterConfig.minCount)
     : Math.min(harvesterConfig.minCount, saturationTarget);
-  // 供给端弹性：能量严重紧缺时扩编（supplyFactor > 1），充裕时不缩编（保底 minCount）。
-  const harvesterTarget = Math.max(1, Math.min(
-    harvesterConfig.maxCount,
-    Math.ceil(baseHarvesterTarget * supplyFactor),
-  ));
   if (harvesterTotal < harvesterTarget && !frozenRoles.has("harvester")) {
     // 专职口径占用映射（排除 worker 等流动角色）；循环内累加避免同轮重复分配同源。
     const localOccupancy = buildHarvesterOccupancy(creeps, queue, home);
