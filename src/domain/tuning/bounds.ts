@@ -23,7 +23,9 @@ export interface ParamBounds {
 /**
  * 可调参数的安全约束目录。边界依据 [Experience]：
  *   hauler.max 2–8（<2 物流断链，>8 单房 CPU/spawn 窗口不可承受）、
- *   hauler.min 2–4、harvester.max 2–6（<2 单点故障，>6 拥堵 source）、
+ *   hauler.min 1–4（link 网络完全建立后单 hauler 排空绰绰有余，floor=1 允许
+ *   tuning 收缩到 1 头；无 link 的早期阶段 demand 的动态信号会自然保持 2+）、
+ *   harvester.max 2–6（<2 单点故障，>6 拥堵 source）、
  *   upgrader.max 1–4（>4 在 20 CPU 下不可承受）、builder.max 1–6（>6 抢占经济能量）。
  * 冷却 1000 tick = 2 次评估间隔（tuning-engine 每 500 tick 评估一次），
  * 确保上次调整的效果先在遥测数据中体现、至少跳过一次评估。
@@ -39,7 +41,7 @@ export const TUNING_BOUNDS: Readonly<Record<string, ParamBounds>> = {
   },
   "hauler.minCount": {
     param: "hauler.minCount",
-    floor: 2,
+    floor: 1,
     ceiling: 4,
     step: 1,
     cooldownTicks: 1000,

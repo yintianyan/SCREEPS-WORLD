@@ -3,6 +3,7 @@
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { getRoleBounds, TUNABLE_ROLES } from "../config/tuned";
+import { classifyLinkRole } from "../domain/economy/links";
 import { evaluateTuning, verifyPendingAdjustments, applyFreezePolicy } from "../domain/tuning/evaluator";
 import type { TuningSignals, RoomTuningState, PendingValidation, FrozenParamState } from "../domain/tuning/types";
 import { readCpuSegment, readEconomySegment } from "../kernel/segment-store";
@@ -503,9 +504,42 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
   const snapshot = ctx.getSnapshot(roomName);
   if (!snapshot) return null;
 
-  // container 填充率
+  // container 填充率 — 剔除已被 source link 覆盖的 container（link 网络建立后
+  // 这类 container 不再产生 hauler 需求，其积压是 link 背压的间接症状而非
+  // hauler 运力不足；纳入会让 tuning 误判 hauler 编制不足而拒绝缩编）。
   let containerFillRatio = 0;
-  if (snapshot.containers.length > 0) {
+  const sourceLinks = new Set<string>();
+  if (snapshot.links.length > 0) {
+    const linkAnchors = snapshot.links.map(l => ({ id: l.id, x: l.pos.x, y: l.pos.y }));
+    const sourceAnchors = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
+    const ctrlAnchor = snapshot.controller ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y } : undefined;
+    const storAnchor = snapshot.storage ? { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y } : undefined;
+    for (const la of linkAnchors) {
+      if (classifyLinkRole(la, sourceAnchors, ctrlAnchor, storAnchor) === "source") {
+        sourceLinks.add(la.id);
+      }
+    }
+  }
+  const linklessContainers = snapshot.containers.filter(c => {
+    // controllerContainer 不属于 source container，不应被剔除
+    if (snapshot.controllerContainer && c.id === snapshot.controllerContainer.id) return true;
+    // container 旁有 source link → 已被 link 覆盖，剔除
+    for (const sl of snapshot.links) {
+      if (sourceLinks.has(sl.id) && c.pos.getRangeTo(sl) <= 2) return false;
+    }
+    return true;
+  });
+  if (linklessContainers.length > 0) {
+    let totalFill = 0;
+    for (const c of linklessContainers) {
+      const cap = c.store.getCapacity(RESOURCE_ENERGY) || 1;
+      totalFill += c.store.getUsedCapacity(RESOURCE_ENERGY) / cap;
+    }
+    containerFillRatio = totalFill / linklessContainers.length;
+  } else if (snapshot.containers.length > 0) {
+    // 所有 container 都被 link 覆盖 — 用全部 container 的填充率作为退化信号
+    //（此时 container 积压确实是 link 系统问题而非 hauler 编制问题，
+    // 但保留一个非零信号避免 evaluator 的边界行为异常）。
     let totalFill = 0;
     for (const c of snapshot.containers) {
       const cap = c.store.getCapacity(RESOURCE_ENERGY) || 1;

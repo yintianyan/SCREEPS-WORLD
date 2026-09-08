@@ -137,8 +137,15 @@ export function withdrawStorage(): ActionCandidate<StructureStorage> {
  * source link 无法再传，整条链路背压瘫痪。优先级：link-system (P1) 先于 creep 运行，
  * 已先将 storage link → controller link 传输（controller 缺能时），hauler 排空剩余部分。
  * 限量取能：取 min(可用, 空闲)，避免 ERR_NOT_ENOUGH_RESOURCES。
+ *
+ * 守卫 fallthrough 阻断（设计 4）：当 storage link 有能量但被 controller link 灌能优先
+ * 守卫拦截时，返回 null 哨兵而非 undefined — role-runner 将 execute 作为一个 no-op
+ * （保持 acquire 模式、原地待命），阻止 hauler fallthrough 到低 dq/dt 任务（如远处坟墓
+ * 回收）。这确保下一 tick link-system 规则3（storage→controller）冷却到期执行后，
+ * hauler 仍在 storage link 旁立即可抽。参考 Overmind dq/dt 模型：storage link 排空
+ * 的 dq/dt ≈ 200 E/tick 远高于远处拾取的 ≈15 E/tick，不应因守卫临时拦截而放弃。
  */
-export function withdrawStorageLink(): ActionCandidate<StructureLink> {
+export function withdrawStorageLink(): ActionCandidate<StructureLink | null> {
   return {
     name: "withdraw:storage-link",
     resolve: (ac) => {
@@ -173,13 +180,17 @@ export function withdrawStorageLink(): ActionCandidate<StructureLink> {
             ctrlLink.store.getCapacity(RESOURCE_ENERGY),
           );
           if (ctrlLink.store.getUsedCapacity(RESOURCE_ENERGY) < ctrlTarget) {
-            return undefined;
+            // 守卫拦截：返回 null 哨兵阻止 fallthrough，execute 执行 no-op 原地待命。
+            return null;
           }
         }
       }
       return storageLink;
     },
     execute: (ac, link) => {
+      // null 哨兵：守卫拦截但 storage link 有能量 → 原地待命，等待下一 tick link-system
+      // 冷却到期把能量路由到 controller link 后，storage link 仍有残余可抽。
+      if (link === null) return;
       const available = link.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);

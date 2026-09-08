@@ -56,8 +56,8 @@ describe("withdrawStorageLink — 守卫口径（computeControllerLinkTarget）"
 
   it("RCL8 停供 + 降级风险（target=200）→ controller link < 200 才挡", () => {
     const base = { rcl: 8, ticksToDowngrade: 5000 };
-    // controller link = 199 < 200 → 挡
-    expect(withdrawStorageLink().resolve!(makeAc({ ...base, ctrlLinkEnergy: 199 }).ac)).toBeUndefined();
+    // controller link = 199 < 200 → 挡（返回 null 哨兵阻止 fallthrough，非 undefined）
+    expect(withdrawStorageLink().resolve!(makeAc({ ...base, ctrlLinkEnergy: 199 }).ac)).toBeNull();
     // controller link = 200 = target → 不挡
     const { ac, storageLink } = makeAc({ ...base, ctrlLinkEnergy: 200 });
     expect(withdrawStorageLink().resolve!(ac)).toBe(storageLink);
@@ -78,7 +78,7 @@ describe("withdrawStorageLink — 守卫口径（computeControllerLinkTarget）"
     const { ac } = makeAc({
       rcl: 7, ctrlLinkEnergy: 159, storageEnergy: 0, storageLinkEnergy: 799,
     });
-    expect(withdrawStorageLink().resolve!(ac)).toBeUndefined();
+    expect(withdrawStorageLink().resolve!(ac)).toBeNull(); // 守卫触发 → null 哨兵
   });
 
   it("RCL6 storage=0 → target=160，controller link=300（> target, < minTransfer）→ 不挡", () => {
@@ -96,7 +96,7 @@ describe("withdrawStorageLink — 守卫口径（computeControllerLinkTarget）"
     const { ac } = makeAc({
       rcl: 7, ctrlLinkEnergy: 500, storageEnergy: 10000, storageLinkEnergy: 800,
     });
-    expect(withdrawStorageLink().resolve!(ac)).toBeUndefined();
+    expect(withdrawStorageLink().resolve!(ac)).toBeNull(); // 守卫触发 → null 哨兵
   });
 
   it("RCL7 storage=10k → target=800，controller link=800 → 不挡", () => {
@@ -134,6 +134,7 @@ describe("withdrawStorageLink — 守卫口径（computeControllerLinkTarget）"
     const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 300, mode: "acquire" });
     const ctx = mockContext(snap);
     const ac = { creep, snapshot: snap, assignment: undefined, budget: ctx.budget, ctx };
+    // storage link 无能量 → undefined（与守卫 null 哨兵不同）
     expect(withdrawStorageLink().resolve!(ac)).toBeUndefined();
   });
 
