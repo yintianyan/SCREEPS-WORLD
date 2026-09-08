@@ -134,6 +134,7 @@ export const spawnManagerSystem: System = {
         controllerDowngradeRisk: roomMem.controllerDowngradeRisk === true,
         energyAvailable: Game.rooms[snapshot.roomName]?.energyAvailable ?? 200,
         economyPressure: roomMem.economyPressure ?? 0,
+        energyPrice: roomMem.energyPrice ?? 0.5,
         storageNearFull: roomMem.storageNearFull === true,
         liquidityScore: roomMem.phase?.liquidityScore ?? 0,
         drainScore: roomMem.phase?.drainScore ?? 0,

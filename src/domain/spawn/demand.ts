@@ -4,6 +4,7 @@ import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
 import { countPending, spawnKey } from "./queue";
 import { classifyLinkRole } from "../economy/links";
+import { supplyElasticity, demandElasticity, logisticsElasticity } from "../economy/energy-price";
 
 /** 各角色降级时必须保留的最小部件；hauler/distributor 无需 WORK。 */
 export const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConstant[]>> = {
@@ -44,6 +45,8 @@ export interface RoomDemandContext {
   energyAvailable: number;
   /** 经济压力梯度 (0–1)，0=健康、1=危机；用于梯度缩放 P2 角色数量。 */
   economyPressure: number;
+  /** 能量边际价值 (0..1)，0=紧缺、1=充裕；用于弹性调节供需编制。 */
+  energyPrice?: number;
   /** storage 超满仓阈值 — 触发限采 + 加速消费。 */
   storageNearFull?: boolean;
   /** 流动性危机分 (0-100)（方案 C）：能量冻在 container / spawn 破产的物流死锁；
@@ -259,6 +262,12 @@ export function evaluateDemand(
   const inCrisis = colonyState === "recovery";
   // Storage 满仓信号 — 限采 + 加速消费。
   const storageNearFull = roomCtx.storageNearFull === true;
+  // 供需价格信号 — 0=紧缺（抑制消费、鼓励采集），1=充裕（鼓励消费）。
+  const energyPrice = roomCtx.energyPrice ?? 0.5;
+  // 各端弹性系数（crisis 时不应用弹性调节 — crisis 路径已有独立收缩逻辑）。
+  const supplyFactor = inCrisis ? 1.0 : supplyElasticity(energyPrice);
+  const demandFactor = inCrisis ? 0.0 : demandElasticity(energyPrice);
+  const logisticsFactor = inCrisis ? 1.0 : logisticsElasticity(energyPrice);
 
   // P1-J：迟滞输出缓冲 — 从 prevHysteresis 复制（未变更字段透传），各评估块写入后返回。
   const nextHysteresis: HysteresisState = {
@@ -350,9 +359,14 @@ export function evaluateDemand(
     Math.ceil(CONFIG.economy.harvestWorkingParts / workPerHarvester),
   );
   const saturationTarget = snapshot.sources.length * minersPerSource;
-  const harvesterTarget = storageNearFull
+  const baseHarvesterTarget = storageNearFull
     ? Math.min(snapshot.sources.length, harvesterConfig.minCount)
     : Math.min(harvesterConfig.minCount, saturationTarget);
+  // 供给端弹性：能量严重紧缺时扩编（supplyFactor > 1），充裕时不缩编（保底 minCount）。
+  const harvesterTarget = Math.max(1, Math.min(
+    harvesterConfig.maxCount,
+    Math.ceil(baseHarvesterTarget * supplyFactor),
+  ));
   if (harvesterTotal < harvesterTarget && !frozenRoles.has("harvester")) {
     // 专职口径占用映射（排除 worker 等流动角色）；循环内累加避免同轮重复分配同源。
     const localOccupancy = buildHarvesterOccupancy(creeps, queue, home);
@@ -459,6 +473,8 @@ export function evaluateDemand(
     }
     // 至少 minCount（保证基本物流不断），至多 maxCount。
     dynamicHaulerTarget = Math.min(haulerConfig.maxCount, Math.max(haulerConfig.minCount, dynamicHaulerTarget));
+    // 物流端弹性：价格信号缩放（充裕时满编、紧缺时保留 50% 保命运力）。
+    dynamicHaulerTarget = Math.max(1, Math.round(dynamicHaulerTarget * logisticsFactor));
 
     // TD-015：economyPressure>0.6 时线性衰减（1.0 缩至 minCount），物流端平滑感知压力，
     // 而非 inCrisis 二值开关突砍。
@@ -522,6 +538,8 @@ export function evaluateDemand(
     const distBody = estimatePlannedBody("distributor", energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl);
     const fillPerDistributor = Math.max(2, Math.floor((countBodyParts(distBody, "carry") * 50) / 150));
     distTarget = Math.min(distConfig.maxCount, Math.max(distConfig.minCount, Math.ceil(fillCount / fillPerDistributor)));
+    // 物流端弹性：价格信号缩放。
+    distTarget = Math.max(1, Math.round(distTarget * logisticsFactor));
     // 高耗远距 sink 排空反馈（镜像 hauler 积压反馈，方向相反）：fillCount 把 cc 当
     // 「1 个待填结构」，但 cc 是高抽取率 sink（upgrader 连续抽）且常远离 storage，
     // 缺的是并行运力而非「多算 1 个目标」（大 body 的 fillPerDistributor 会稀释）。
@@ -681,6 +699,11 @@ export function evaluateDemand(
       upgraderTarget = pressure <= 0.5 ? 1 : 0;
     }
 
+    // 消费端弹性：价格信号缩放 upgrader 编制（保级/冲刺不受影响）。
+    if (!hasDowngradeRisk && !crisisNeedsGuard) {
+      upgraderTarget = Math.round(upgraderTarget * demandFactor);
+    }
+
     // WORK 部件限速：仅 RCL8 时生效（引擎硬限制 15 energy/tick）。
     // RCL<8 时无引擎上限——解除自限速策略，body 随容量放大（RCL7 可孵 40W body），
     // upgrader 数量由 storage 水位 + economyPressure 驱动的 demand 逻辑自然调节。
@@ -771,6 +794,8 @@ export function evaluateDemand(
       builderTarget = Math.round(dynamicBuilderTarget + t * (builderConfig.minCount - dynamicBuilderTarget));
       builderTarget = Math.max(builderTarget, builderConfig.minCount);
     }
+    // 消费端弹性：价格信号缩放 builder 编制。
+    builderTarget = Math.max(0, Math.round(builderTarget * demandFactor));
     if (builderTotal < builderTarget) {
       // recovery 时提升为 P1（重建被毁基建是生存行为）；normal 时保持 P2（发展）。
       const builderPriority: 0 | 1 | 2 | 3 | 4 = inCrisis ? 1 : 2;

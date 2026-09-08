@@ -6,6 +6,7 @@ import {
   computeClaimSecure,
   type PhaseState,
 } from "../domain/economy/phase";
+import { computeEnergyPrice } from "../domain/economy/energy-price";
 import { EventKind, recordEvent } from "../kernel/event-log";
 import { globalCache } from "../kernel/global-cache";
 import {
@@ -266,6 +267,17 @@ export const roomStateSystem: System = {
       roomMem.economyPressure = Math.min(1, score <= midpoint
         ? (score / midpoint) * 0.5
         : 0.5 + ((score - midpoint) / range) * 0.5);
+
+      // 5.6 energyPrice — 能量边际价值（价格信号），供 demand 弹性调节各角色编制。
+      // 基于 economy 系统核算的 netFlow EMA 和 estimatedIncome；未核算过时为中性 0.5。
+      const econMem = roomMem.economy;
+      if (econMem) {
+        const nf = econMem.nf / 100;
+        const ei = econMem.ei / 10;
+        roomMem.energyPrice = computeEnergyPrice(nf, ei);
+      } else {
+        roomMem.energyPrice = 0.5;
+      }
 
       // 6. Storage 满仓检测 — 超过阈值时标记，供 demand 限采 + 加速消费
       // （满仓 = 能量在源头被 harvester drop 浪费，必须加速升级/建造消化盈余）。

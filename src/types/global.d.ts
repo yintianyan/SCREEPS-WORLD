@@ -162,6 +162,13 @@ declare global {
      * 用它做梯度缩放，替代二值 crisis/normal 开关。
      */
     economyPressure?: number;
+    /**
+     * 能量边际价值（价格信号，0..1）：0=紧缺（抑制消费、鼓励采集），
+     * 1=充裕（鼓励消费、不鼓励扩编）。room-state 每 tick 从 economy
+     * 核算的 netFlow EMA 和 estimatedIncome 派生，供 demand 弹性调节。
+     * 未核算时为 0.5（中性）。
+     */
+    energyPrice?: number;
     controllerDowngradeRisk?: boolean;
     /**
      * 脆弱新房护栏标记（claim-secure，v-next，room-state 每 tick 写入）：
