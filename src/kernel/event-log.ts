@@ -125,7 +125,7 @@ export const enum EventKind {
    * strategy-reviewer 纯函数产出姿态参数调整建议。d = [suggestionCount]；r = ""。
    * 建议明细见 console.log；此事件用于审计复盘频率与建议产出节奏。 */
   StrategyReview = 42,
-  /** P3 饥饿旁路失效（bucket < 3000，P3 系统长期冻结）。d = [bucket]。 */
+  /** P3 饥饿旁路失效（bucket < conserve 最低值，P3 系统长期冻结）。d = [bucket]。 */
   P3StarvationFrozen = 44,
 /** L2 体外建议摄入（自进化系统 L2）：tuning-intake-system 每 1000t 从 segment 6
  * 读取外部 LLM 建议包，经六层护栏校验后写入 intakePending。

@@ -13,8 +13,8 @@ function getCreepCache(): Creep[] {
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { globalCache, publishProcurementDemands } from "../kernel/global-cache";
 import { CONFIG } from "../config";
-import { RECOVERY_BODY } from "../config/bodies";
-import { submitRequest, hasRequest } from "../domain/spawn/queue";
+import { RECOVERY_BODY, selectBody, degradeBody, minimalBodyFor } from "../config/bodies";
+import { submitRequest, hasRequest, spawnKey } from "../domain/spawn/queue";
 import {
   type RecoveryAction,
 } from "../domain/strategy/recovery-priority";
@@ -267,20 +267,24 @@ function submitSpawnRecovery(
   }
 
   const queue = roomMem.spawnQueue ?? [];
-  const key = `recovery:worker:${room}:0`;
+  const key = spawnKey("worker", room, 0);
 
   // 幂等检查：已有同 key 请求
   if (hasRequest(queue, key)) {
     return { submitted: true, executionRef: key, reason: "already in queue (idempotent)" };
   }
 
-  // 提交 P0 紧急孵化请求
+  const energyCapacity = Game.rooms[room]?.energyCapacityAvailable ?? 300;
+  const energyAvailable = Game.rooms[room]?.energyAvailable ?? 0;
+  const rcl = Game.rooms[room]?.controller?.level ?? 1;
+  const body = degradeBody(selectBody("worker", energyCapacity, { rcl }), energyAvailable, ["work", "carry", "move"]) ?? [...RECOVERY_BODY];
+
   submitRequest(queue, {
     key,
     role: "worker",
     home: room,
     priority: 0,
-    body: [...RECOVERY_BODY],
+    body,
     memory: {
       role: "worker",
       home: room,
@@ -314,15 +318,16 @@ function submitLogisticsFix(
   }
 
   const queue = roomMem.spawnQueue ?? [];
-  const key = `recovery:hauler:${room}:0`;
+  const key = spawnKey("hauler", room, 0);
 
   if (hasRequest(queue, key)) {
     return { submitted: true, executionRef: key, reason: "already in queue (idempotent)" };
   }
 
-  // 选择 hauler body（基于房间 energyCapacityAvailable）
   const energyCapacity = Game.rooms[room]?.energyCapacityAvailable ?? 300;
-  const body = simpleHaulerBody(energyCapacity);
+  const energyAvailable = Game.rooms[room]?.energyAvailable ?? 0;
+  const rcl = Game.rooms[room]?.controller?.level ?? 1;
+  const body = degradeBody(selectBody("hauler", energyCapacity, { rcl }), energyAvailable, ["carry", "move"]) ?? minimalBodyFor("hauler");
 
   submitRequest(queue, {
     key,
@@ -380,18 +385,23 @@ function submitEnergyRedirect(
   }
 
   const queue = roomMem.spawnQueue ?? [];
-  const key = `recovery:distributor:${room}:0`;
+  const key = spawnKey("distributor", room, 0);
 
   if (hasRequest(queue, key)) {
     return { submitted: true, executionRef: key, reason: "already in queue (idempotent)" };
   }
+
+  const energyCapacity = Game.rooms[room]?.energyCapacityAvailable ?? 300;
+  const energyAvailable = Game.rooms[room]?.energyAvailable ?? 0;
+  const rcl = Game.rooms[room]?.controller?.level ?? 1;
+  const body = degradeBody(selectBody("distributor", energyCapacity, { rcl }), energyAvailable, ["carry", "move"]) ?? [CARRY, CARRY, MOVE, MOVE];
 
   submitRequest(queue, {
     key,
     role: "distributor",
     home: room,
     priority: 1,
-    body: [CARRY, CARRY, MOVE, MOVE],
+    body,
     memory: {
       role: "distributor",
       home: room,
@@ -520,8 +530,13 @@ function submitPopulationRebuild(
   }
 
   const queue = roomMem.spawnQueue ?? [];
-  const harvesterKey = `recovery:harvester:${room}:0`;
+  const harvesterKey = spawnKey("harvester", room, 0);
   let submitted = false;
+
+  const energyCapacity = Game.rooms[room]?.energyCapacityAvailable ?? 300;
+  const energyAvailable = Game.rooms[room]?.energyAvailable ?? 0;
+  const rcl = Game.rooms[room]?.controller?.level ?? 1;
+  const harvesterBody = degradeBody(selectBody("harvester", energyCapacity, { rcl }), energyAvailable, ["work", "carry", "move"]) ?? [WORK, CARRY, MOVE];
 
   // 提交 harvester 请求
   if (!hasRequest(queue, harvesterKey)) {
@@ -530,7 +545,7 @@ function submitPopulationRebuild(
       role: "harvester",
       home: room,
       priority: 1,
-      body: [WORK, CARRY, MOVE],
+      body: harvesterBody,
       memory: {
         role: "harvester",
         home: room,
@@ -620,15 +635,16 @@ function submitDefenseResponse(
 
     // 提交 defender spawn 请求
     const queue = roomMem.spawnQueue ?? [];
-    const key = `recovery:defender:${room}:0`;
+    const key = spawnKey("defender", room, 0);
 
     if (hasRequest(queue, key)) {
       return { submitted: true, executionRef: key, reason: "defender already in queue (idempotent)" };
     }
 
-    // defender body：基于房间 energyCapacityAvailable
     const energyCapacity = Game.rooms[room]?.energyCapacityAvailable ?? 300;
-    const body = simpleDefenderBody(energyCapacity);
+    const energyAvailable = Game.rooms[room]?.energyAvailable ?? 0;
+    const rcl = Game.rooms[room]?.controller?.level ?? 1;
+    const body = degradeBody(selectBody("defender", energyCapacity, { rcl }), energyAvailable, ["attack", "move"]) ?? [ATTACK, MOVE];
 
     submitRequest(queue, {
       key,
@@ -831,10 +847,10 @@ function isExecutionRefActive(executionRef: string | undefined, actionType: stri
       actionType === "population_rebuild" || actionType === "energy_redirect" ||
       actionType === "defense_response") {
     // 检查是否已有对应 creep 存活
-    // executionRef 格式: "recovery:role:room:index"
+    // executionRef 格式: "role:room:index"（与 spawnKey 统一）
     const parts = executionRef.split(":");
-    const role = parts[1] ?? "";
-    const room = parts[2] ?? "";
+    const role = parts[0] ?? "";
+    const room = parts[1] ?? "";
 
     // 如果已有存活 creep → 执行引用已转化为实际行动
     const hasCreep = getCreepCache().some(
@@ -944,27 +960,6 @@ function countActiveRecoveries(table: RecoveryActionTable): number {
   return count;
 }
 
-/**
- * 简化的 hauler body 生成。
- */
-function simpleHaulerBody(energyCapacity: number): BodyPartConstant[] {
-  if (energyCapacity >= 400) return [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE];
-  if (energyCapacity >= 300) return [CARRY, CARRY, CARRY, MOVE, MOVE, MOVE];
-  return [CARRY, CARRY, MOVE, MOVE];
-}
-
-/**
- * 简化的 defender body 生成（近战 + 远程混合）。
-
- * 优先 [ATTACK, MOVE] × N（高机动近战），
- * 能量充足时加入 RANGED_ATTACK 和 TOUGH 前排。
- */
-function simpleDefenderBody(energyCapacity: number): BodyPartConstant[] {
-  if (energyCapacity >= 600) return [TOUGH, TOUGH, ATTACK, ATTACK, RANGED_ATTACK, MOVE, MOVE, MOVE, MOVE];
-  if (energyCapacity >= 400) return [TOUGH, ATTACK, ATTACK, MOVE, MOVE, MOVE];
-  if (energyCapacity >= 250) return [ATTACK, ATTACK, MOVE, MOVE];
-  return [ATTACK, MOVE];
-}
 
 // ─── A5.3.1 GAP-1: War Abort Signal 消费 ──────────────────
 

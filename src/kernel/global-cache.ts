@@ -504,6 +504,10 @@ export interface CreepRef {
   ticksToLive?: number;
   bodyLength: number;
   body: BodyPartDefinition[];
+  /** memory.remoteTarget — 远程目标房（scout 侦察目标等）。 */
+  remoteTarget?: string;
+  /** memory.mode — 当前模式（acquire/work/idle/flee）。 */
+  mode?: string;
   assignment?: {
     id: string;
     kind: string;

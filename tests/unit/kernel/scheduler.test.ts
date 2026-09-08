@@ -201,7 +201,7 @@ describe("CpuBudget — 前馈预测 (P1-2)", () => {
     expect(budget.canStart(3 as Priority)).toBe(true);
   });
 
-  it("P3 饥饿旁路：bypass 生效时 max10 触顶也放行 P2/P3（自锁解除）；bucket 低位失效", () => {
+  it("P3 饥饿旁路：bypass 生效时 max10 触顶也放行 P2/P3（自锁解除）；recovery tier 旁路失效", () => {
     (globalThis as any).Memory = {
       kernel: { stats: { cpuMax10: 19.5, cpuAvg10: 18 }, p3StarveBypassUntil: 82450000 + 600 },
     };
@@ -210,10 +210,14 @@ describe("CpuBudget — 前馈预测 (P1-2)", () => {
     const budget = new CpuBudget("healthy");
     expect(budget.canStart(2 as Priority)).toBe(true);
     expect(budget.canStart(3 as Priority)).toBe(true);
-    // bucket 低位 → 旁路失效（不拿生存换观测）
+    // bucket 在 conserve tier（≥ 1000）→ 旁路仍生效，P2 不受前馈限制
     (globalThis as any).Game.cpu.bucket = 2000;
-    const budgetLow = new CpuBudget("healthy");
-    expect(budgetLow.canStart(3 as Priority)).toBe(false);
+    const budgetConserve = new CpuBudget("healthy");
+    expect(budgetConserve.canStart(2 as Priority)).toBe(true);
+    // bucket 在 recovery tier（< 1000）→ 旁路失效，前馈重新生效
+    (globalThis as any).Game.cpu.bucket = 500;
+    const budgetRecovery = new CpuBudget("healthy");
+    expect(budgetRecovery.canStart(3 as Priority)).toBe(false);
   });
 
   it("isExhausted 优先于前馈检查", () => {

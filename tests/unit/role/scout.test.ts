@@ -78,6 +78,21 @@ describe("room-observer — 侦察视野捕获（R6b 接线）", () => {
     };
     const creep = makeScout("W6N4");
     (globalThis as any).Game.creeps = { scout_1: creep };
+    // ISSUE-008: captureScoutVision 消费 creepRefs 而非 Game.creeps
+    globalCache().creepRefs = [{
+      name: "scout_1",
+      role: "scout",
+      home: "W7N4",
+      spawning: false,
+      recycle: false,
+      ticksToLive: 1000,
+      bodyLength: 1,
+      body: [],
+      remoteTarget: "W6N4",
+      roomName: "W6N4",
+      x: 25, y: 25,
+      energyCarried: 0,
+    }];
 
     roomObserverSystem.run(mockContext(mockSnapshot()));
 

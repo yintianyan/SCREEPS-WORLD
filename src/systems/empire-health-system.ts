@@ -160,8 +160,8 @@ export const empireHealthSystem: System = {
     }
 
     // 人口统计：优先复用 buildSnapshots 预构建的 globalCache.totalPopulation。
-    // C1-F09: 消除 Object.keys(Game.creeps).length 的全量遍历。
-    const totalPop = globalCache().totalPopulation ?? Object.keys(Game.creeps).length;
+    // C1-F09 / ISSUE-008: 消除 Object.keys(Game.creeps).length 的全量遍历。
+    const totalPop = globalCache().totalPopulation ?? 0;
     populationHistory.push(totalPop);
     failureCountHistory.push(activeFailures.length);
 

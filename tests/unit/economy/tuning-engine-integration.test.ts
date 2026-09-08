@@ -14,12 +14,15 @@ import { createRingBuffer, ringPush } from "../../../src/kernel/ring-buffer";
 import type { RingBuffer } from "../../../src/kernel/ring-buffer";
 import type { EconomySample, CpuSample } from "../../../src/kernel/timeseries";
 import type { RoomSnapshot, TickContext, Budget } from "../../../src/kernel/contracts";
+import { globalCache } from "../../../src/kernel/global-cache";
 
 beforeEach(() => {
   resetGlobals();
   delete (globalThis as any).__segStore;
   // Mock RawMemory for segment-store migration checks.
   (globalThis as any).RawMemory = { segments: {}, setActiveSegments: () => {} };
+  // ISSUE-008: 清理 creepRefs，防跨用例污染（setupCreeps 会写入）。
+  globalCache().creepRefs = undefined;
 });
 
 // ─── Ring buffer builders ───────────────────────────────────
@@ -83,7 +86,9 @@ function setupTimeseries(
   };
 }
 
-/** 向 Game.creeps 追加指定角色的 creep（多次调用可累积多房 creep）。 */
+/** 向 Game.creeps 追加指定角色的 creep（多次调用可累积多房 creep）。
+ *  ISSUE-008: 同步写入 globalCache().creepRefs，因为 tuning-engine
+ *  不再直接遍历 Game.creeps 而是消费共享快照总线。 */
 function setupCreeps(
   roomName: string,
   roles: Record<string, number>,
@@ -97,6 +102,21 @@ function setupCreeps(
     }
   }
   (globalThis as any).Game.creeps = existing;
+  // 同步构建 creepRefs 供 tuning-engine 消费
+  const g = globalCache();
+  g.creepRefs = Object.values(existing).map((c: any) => ({
+    name: c.name,
+    role: c.memory.role ?? "unknown",
+    home: c.memory.home ?? c.room?.name ?? roomName,
+    spawning: false,
+    recycle: false,
+    ticksToLive: c.ticksToLive,
+    bodyLength: 1,
+    body: [],
+    roomName: roomName,
+    x: 25, y: 25,
+    energyCarried: 0,
+  }));
 }
 
 /** 创建带 container 的快照，fillRatio 控制填充率。 */

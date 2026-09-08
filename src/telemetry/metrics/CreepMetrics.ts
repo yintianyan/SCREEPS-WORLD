@@ -3,6 +3,7 @@
 import { registerMetricGauge, registerMetricCounter, registerMetricHistogram } from "../Telemetry";
 import { setGauge, incrementCounter, observeHistogram } from "../MetricRegistry";
 import { shouldCollect, markCollected } from "../TickAggregator";
+import { globalCache } from "../../kernel/global-cache";
 
 let registered = false;
 
@@ -31,15 +32,17 @@ export function collectCreepMetrics(): void {
         const ttls: Record<string, number[]> = {};
         const modes: Record<string, { acquire: number; work: number; idle: number; flee: number }> = {};
 
-        for (const creep of Object.values(Game.creeps)) {
-            const role = creep.memory.role ?? "unknown";
+        // ISSUE-008: 消费共享快照总线 creepRefs，不再独立全量遍历 Game.creeps。
+        const refs = globalCache().creepRefs ?? [];
+        for (const c of refs) {
+            const role = c.role ?? "unknown";
             counts[role] = (counts[role] ?? 0) + 1;
-            const ttl = creep.ticksToLive ?? 1500;
+            const ttl = c.ticksToLive ?? 1500;
             if (!ttls[role]) ttls[role] = [];
             ttls[role].push(ttl);
 
             if (!modes[role]) modes[role] = { acquire: 0, work: 0, idle: 0, flee: 0 };
-            const mode = creep.memory.mode ?? "idle";
+            const mode = c.mode ?? "idle";
             if (mode in modes[role]) {
                 modes[role][mode as keyof typeof modes[string]]++;
             }

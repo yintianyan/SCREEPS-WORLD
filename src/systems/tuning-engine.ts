@@ -9,6 +9,7 @@ import { readCpuSegment, readEconomySegment } from "../kernel/segment-store";
 import { ringToArray } from "../kernel/ring-buffer";
 import type { EconomySample, CpuSample } from "../kernel/timeseries";
 import { recordEvent, EventKind, tuningParamCode } from "../kernel/event-log";
+import { globalCache } from "../kernel/global-cache";
 import { log } from "../kernel/log";
 
 // ─── 自定义事件类型（扩展 EventKind）──
@@ -604,15 +605,15 @@ function avg(values: number[]): number {
   return sum / values.length;
 }
 
-/** 统计指定 home 房间各角色的存活 creep 数。 */
+/** 统计指定 home 房间各角色的存活 creep 数。
+ *  ISSUE-008: 消费共享快照总线 creepRefs，不再独立全量遍历 Game.creeps。 */
 function countRolesByHome(roomName: string): Record<string, number> {
   const counts: Record<string, number> = {};
-  for (const name in Game.creeps) {
-    const creep = Game.creeps[name];
-    if (!creep) continue;
-    if ((creep.memory.home ?? creep.room.name) !== roomName) continue;
-    const role = creep.memory.role ?? "unknown";
-    counts[role] = (counts[role] ?? 0) + 1;
+  const refs = globalCache().creepRefs;
+  if (!refs) return counts;
+  for (const r of refs) {
+    if (r.home !== roomName) continue;
+    counts[r.role] = (counts[r.role] ?? 0) + 1;
   }
   return counts;
 }

@@ -41,7 +41,7 @@ export function collectEmpireMetrics(): void {
         setGauge("screeps_empire_rooms", myRooms.length);
         setGauge("screeps_empire_rcl_avg", myRooms.length > 0 ? totalRcl / myRooms.length : 0);
         setGauge("screeps_empire_energy", totalEnergy);
-        setGauge("screeps_empire_creeps", Object.keys(Game.creeps).length);
+        setGauge("screeps_empire_creeps", globalCache().totalPopulation ?? 0);
         setGauge("screeps_empire_gcl", Game.gcl?.level ?? 0);
         setGauge("screeps_empire_gpl", Game.gpl?.level ?? 0);
 

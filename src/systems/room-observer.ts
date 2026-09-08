@@ -260,19 +260,20 @@ function collectRoomVision(room: Room): RoomVisionIntel {
 
 /**
  * 侦察兵视野捕获：prospect 任务存续期间，把站在目标房内的 scout
- * 视野写回情报状态。只扫描一次 Game.creeps（仅任务存续期间），
+ * 视野写回情报状态。消费共享快照总线 creepRefs（不再全量遍历 Game.creeps），
  * scout 站定即每 tick 刷新 lastSeen — prospect-manager 据此判成功。
  * 复用 scanNeighborIntel 的 prev 语义（保留 pathCost 等静态字段）。
  */
 function captureScoutVision(tick: number): void {
   const mission = Memory.kernel?.prospect;
   if (!mission) return;
-  for (const name in Game.creeps) {
-    const c = Game.creeps[name];
-    if (!c || c.memory.role !== "scout") continue;
-    const target = c.memory.remoteTarget;
-    const home = c.memory.home;
-    if (!target || !home || c.room.name !== target) continue;
+  const refs = globalCache().creepRefs;
+  if (!refs) return;
+  for (const c of refs) {
+    if (c.role !== "scout") continue;
+    const target = c.remoteTarget;
+    const home = c.home;
+    if (!target || !home || c.roomName !== target) continue;
     const room = Game.rooms[target];
     if (!room) continue;
     const status = Game.map.getRoomStatus(target).status;

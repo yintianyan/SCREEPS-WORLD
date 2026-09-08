@@ -288,6 +288,8 @@ export class Kernel {
         ticksToLive: creep.ticksToLive,
         bodyLength: creep.body.length,
         body: creep.body,
+        remoteTarget: creep.memory.remoteTarget,
+        mode: typeof mem.mode === "string" ? mem.mode : undefined,
         assignment: a ? {
           id: a.id as string,
           kind: a.kind as string,
@@ -910,27 +912,27 @@ const P3_FROZEN_ALERT_TICKS = 500;
 
 /** P3 长期冻结跟踪：检查 P3 frozen 状态并输出升级告警。
  * 由 kernel.runExpectations 在 p3Starved=true 时调用。
- * 当 bucket < 3000 旁路不生效时，跟踪冻结持续时长。 */
+ * 当 bucket < conserve 最低值（旁路不生效）时，跟踪冻结持续时长。 */
 export function trackP3Frozen(
   tick: number,
   bucket: number,
   kernelMem: { p3FrozenSince?: number },
 ): void {
-  if (bucket < 3000) {
+  if (bucket < CONFIG.cpu.tiers.conserve.min) {
     if (kernelMem.p3FrozenSince === undefined) {
       kernelMem.p3FrozenSince = tick;
     }
     const frozenDuration = tick - kernelMem.p3FrozenSince;
     // 每 500 tick 输出一次升级告警（避免刷屏）
     if (frozenDuration > 0 && frozenDuration % P3_FROZEN_ALERT_TICKS === 0) {
-      log.warn("kernel", `[${tick}] P3 FROZEN ${frozenDuration} ticks — bucket=${bucket} < 3000, bypass ineffective. P3 systems (telemetry/tuning/terminal/lab) have been frozen since tick ${kernelMem.p3FrozenSince}. URGENT: reduce rooms/pause expansion to restore CPU headroom.`);
+      log.warn("kernel", `[${tick}] P3 FROZEN ${frozenDuration} ticks — bucket=${bucket} < ${CONFIG.cpu.tiers.conserve.min}, bypass ineffective. P3 systems (telemetry/tuning/terminal/lab) have been frozen since tick ${kernelMem.p3FrozenSince}. URGENT: reduce rooms/pause expansion to restore CPU headroom.`);
       recordEvent(EventKind.P3StarvationFrozen, "", [bucket, frozenDuration]);
     } else if (frozenDuration === 0) {
       // 首次冻结：记录事件
       recordEvent(EventKind.P3StarvationFrozen, "", [bucket]);
     }
   } else {
-    // bucket >= 3000: 旁路生效，清除冻结跟踪
+    // bucket >= conserve 最低值: 旁路生效，清除冻结跟踪
     if (kernelMem.p3FrozenSince !== undefined) delete kernelMem.p3FrozenSince;
   }
 }

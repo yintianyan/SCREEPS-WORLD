@@ -208,11 +208,9 @@ export const logisticsSystem: System = {
       // V1 过滤：如果 Plan V2 已覆盖该 source，跳过 V1 Request。
       const dedupedReqs = planIsActive && planCoveredSourceIds.size > 0
         ? finalReqs.filter(r => {
-            // V1 Request 的 key 格式: "collect:room:containerId"
-            // 如果 Plan V2 已覆盖该 containerId，跳过。
-            const parts = r.key.split(":");
-            const containerId = parts[2];
-            if (containerId && planCoveredSourceIds.has(containerId)) {
+            // V1 TransportRequest.sourceId 即 containerId（request-pool.ts L98: sourceId: s.id）。
+            // 直接读 sourceId 字段，不依赖 key 字符串格式解析（消除隐式耦合）。
+            if (r.sourceId && planCoveredSourceIds.has(r.sourceId)) {
               return false; // Plan V2 已覆盖，跳过 V1
             }
             return true;

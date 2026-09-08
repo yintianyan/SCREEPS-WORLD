@@ -116,10 +116,24 @@ export class CpuBudget implements Budget {
       0,
       Math.min(effectiveLimit * ratios.softRatio, this.hardLimit - 1),
     );
+    // 近限安全余量：取 cpuReserve 的一半，覆盖典型单次操作 CPU 成本。
+    // 极端低 limit 时 hardLimit 可能小于 nearLimitThreshold，
+    // 此时 hardLimit - nearLimitThreshold 为负，非 P0 全拒（正确的极限降级）。
+    this.nearLimitThreshold = CONFIG.kernel.cpuReserve / 2;
   }
+
+  /** 近限安全余量：非 P0 操作在接近 hardLimit 时提前拒绝。
+   * Game.cpu.getUsed() 是回溯性的，不包含即将执行的操作成本。
+   * 没有此余量时，getUsed() 略低于 hardLimit 即放行，操作自身消耗
+   * 会造成 1-3 CPU 的超限。取 cpuReserve 的一半作为阈值——覆盖典型
+   * 单次操作成本，不过度收窄可用窗口。P0 不受影响（必须始终尝试）。 */
+  private readonly nearLimitThreshold: number;
 
   canStart(priority: Priority): boolean {
     if (this.isExhausted()) return false;
+    // 近限安全余量：非 P0 操作在 hardLimit 附近提前拒绝，
+    // 防止操作自身的 CPU 成本导致超限。
+    if (priority > 0 && this.spent() >= this.hardLimit - this.nearLimitThreshold) return false;
     // ESM：紧急安全状态下仅 P0 车道（spawn/快照/room-state/塔防/交通）放行。
     if (this.emergency && priority > 0) return false;
     const max = tierMaxPriority(this.tier);
@@ -141,10 +155,15 @@ export class CpuBudget implements Budget {
     //   - 峰值判据仅在「上窗真实触顶」(max10 ≥ hardLimit) 时硬拒 P2+；
     //   - 基线压力由 avg 把守：avg ≥ softLimit 拒 P3+（P2 仍放行）。
     // 自愈旁路（expectations E2 触发时由 kernel 设置）：P3 饥饿期间跳过前馈
-    // 拒绝，让冻结系统复活、窗口 max 自然回落打破自锁；软/硬上限仍生效，
-    // bucket 低位时旁路自动失效（不拿生存换观测）。
+    // 拒绝，让冻结系统复活、窗口 max 自然回落打破自锁；软/硬上限仍生效。
+    // bucket 门限取 conserve tier 最低值：recovery tier（bucket < 1000）时
+    // 旁路不生效——此时 P2/P3 已被 tierMaxPriority 拒绝，旁路无意义；
+    // conserve tier（bucket ≥ 1000）时旁路生效，P2 不受冻结 stats 前馈限制
+    // （P3 仍被 tierMaxPriority 拒绝：conserve max=2 < 3=P3，属正确的降级）。
+    // ESM（bucket < 100）是独立最终保护层，不依赖此旁路。
     const p3Escape =
-      (Memory.kernel?.p3StarveBypassUntil ?? 0) > Game.time && (Game.cpu.bucket ?? 0) >= 3000;
+      (Memory.kernel?.p3StarveBypassUntil ?? 0) > Game.time &&
+      (Game.cpu.bucket ?? 0) >= TIER_BUCKET_MIN.conserve;
     if (priority >= 2 && !p3Escape) {
       const stats = Memory.kernel?.stats;
       if (stats && (stats.cpuMax10 ?? 0) > 0 && (stats.cpuAvg10 ?? 0) > 0) {

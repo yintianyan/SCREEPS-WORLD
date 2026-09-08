@@ -3,6 +3,7 @@
 import { registerMetricGauge } from "../Telemetry";
 import { setGauge } from "../MetricRegistry";
 import { shouldCollect, markCollected } from "../TickAggregator";
+import { globalCache } from "../../kernel/global-cache";
 import type { RoomSnapshot } from "../../kernel/contracts";
 
 let registered = false;
@@ -32,13 +33,13 @@ export function collectRoomMetrics(snapshots: Iterable<RoomSnapshot>): void {
     markCollected("room_energy");
 
     try {
-        // 角色计数
+        // 角色计数 — ISSUE-008: 消费共享快照总线 creepRefs
         const roomRoles: Record<string, Record<string, number>> = {};
-        for (const creep of Object.values(Game.creeps)) {
-            const home = creep.memory.home ?? creep.room?.name ?? "unknown";
-            const role = creep.memory.role ?? "unknown";
+        const refs = globalCache().creepRefs ?? [];
+        for (const c of refs) {
+            const home = c.home ?? "unknown";
             if (!roomRoles[home]) roomRoles[home] = {};
-            roomRoles[home][role] = (roomRoles[home][role] ?? 0) + 1;
+            roomRoles[home][c.role] = (roomRoles[home][c.role] ?? 0) + 1;
         }
 
         for (const snap of snapshots) {

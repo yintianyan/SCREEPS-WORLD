@@ -93,48 +93,47 @@ describe("sampleBaselineMetrics — 保底可观测性采样", () => {
 });
 
 describe("trackP3Frozen — P3 长期冻结跟踪", () => {
-  it("bucket < 3000 时设置 p3FrozenSince", () => {
+  it("bucket < conserve 最低值时设置 p3FrozenSince", () => {
     const mem: { p3FrozenSince?: number } = {};
-    trackP3Frozen(1000, 2000, mem);
+    trackP3Frozen(1000, 500, mem);
     expect(mem.p3FrozenSince).toBe(1000);
   });
 
   it("首次冻结记录事件", () => {
     const mem: { p3FrozenSince?: number } = {};
-    trackP3Frozen(1000, 2000, mem);
+    trackP3Frozen(1000, 500, mem);
     const events = drainEventBuffer();
     expect(events).toHaveLength(1);
     expect(events[0]!.k).toBe(EventKind.P3StarvationFrozen);
   });
 
-  it("bucket >= 3000 时清除 p3FrozenSince", () => {
+  it("bucket >= conserve 最低值时清除 p3FrozenSince", () => {
     const mem: { p3FrozenSince?: number } = { p3FrozenSince: 500 };
-    trackP3Frozen(600, 5000, mem);
+    trackP3Frozen(600, 1500, mem);
     expect(mem.p3FrozenSince).toBeUndefined();
   });
 
   it("冻结持续 500 tick 时输出升级告警", () => {
     const mem: { p3FrozenSince?: number } = {};
-    // 首次冻结
-    trackP3Frozen(1000, 2000, mem);
+    // 首次冻结（bucket < conserve.min = 1000）
+    trackP3Frozen(1000, 500, mem);
     // 清空首次事件
     drainEventBuffer();
     // 500 tick 后
-    trackP3Frozen(1500, 2000, mem);
+    trackP3Frozen(1500, 500, mem);
     const events = drainEventBuffer();
     expect(events).toHaveLength(1);
     expect(events[0]!.k).toBe(EventKind.P3StarvationFrozen);
-    expect(events[0]!.d).toContain(2000);
     expect(events[0]!.d).toContain(500);
   });
 
   it("冻结持续 1000 tick 时再次输出告警", () => {
     const mem: { p3FrozenSince?: number } = {};
-    trackP3Frozen(1000, 2000, mem);
+    trackP3Frozen(1000, 500, mem);
     drainEventBuffer();
-    trackP3Frozen(1500, 2000, mem);
+    trackP3Frozen(1500, 500, mem);
     drainEventBuffer();
-    trackP3Frozen(2000, 2000, mem);
+    trackP3Frozen(2000, 500, mem);
     const events = drainEventBuffer();
     expect(events).toHaveLength(1);
     expect(events[0]!.d).toContain(1000);
@@ -142,24 +141,24 @@ describe("trackP3Frozen — P3 长期冻结跟踪", () => {
 
   it("冻结非 500 倍数 tick 不输出升级告警", () => {
     const mem: { p3FrozenSince?: number } = {};
-    trackP3Frozen(1000, 2000, mem);
+    trackP3Frozen(1000, 500, mem);
     drainEventBuffer();
     // 100 tick 后（非 500 倍数）
-    trackP3Frozen(1100, 2000, mem);
+    trackP3Frozen(1100, 500, mem);
     const events = drainEventBuffer();
     expect(events).toHaveLength(0);
   });
 
   it("从冻结恢复后再次冻结重新计时", () => {
     const mem: { p3FrozenSince?: number } = {};
-    // 首次冻结
-    trackP3Frozen(1000, 2000, mem);
+    // 首次冻结（bucket < conserve.min）
+    trackP3Frozen(1000, 500, mem);
     expect(mem.p3FrozenSince).toBe(1000);
-    // 恢复
-    trackP3Frozen(1200, 5000, mem);
+    // 恢复（bucket >= conserve.min）
+    trackP3Frozen(1200, 1500, mem);
     expect(mem.p3FrozenSince).toBeUndefined();
     // 再次冻结
-    trackP3Frozen(1500, 1500, mem);
+    trackP3Frozen(1500, 800, mem);
     expect(mem.p3FrozenSince).toBe(1500);
   });
 });

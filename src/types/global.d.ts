@@ -378,7 +378,7 @@ declare global {
       baselineLastSample?: number;
     };
     /** 方向 3 E-FINDING-04 补充：P3 长期冻结跟踪。
-     * 当 P3 旁路因 bucket < 3000 不生效时，记录冻结开始的 tick。
+     * 当 P3 旁路因 bucket < conserve 最低值不生效时，记录冻结开始的 tick。
      * 冻结持续超 P3_FROZEN_ALERT_TICKS 时输出升级告警。 */
     p3FrozenSince?: number;
     /** 参数自调优状态（v7+）。tuning-engine 每 500 tick 更新。 */

@@ -258,3 +258,28 @@ describe("trySpawn — 泵断供降级（distributor 存活数 0）", () => {
     expect(queue[0]!.retries).toBe(0);
   });
 });
+
+describe("trySpawn — ISSUE-007 reserve 不叠加", () => {
+  beforeEach(() => {
+    resetGlobals();
+    (globalThis as any).Memory.rooms.W7N4 = { colonyState: "normal", economyPressure: 0 };
+  });
+
+  it("三条件同时满足时 reserve 仍为单份（不叠加为 3×）", () => {
+    // 条件 1: collectorCount=1（≤1 → 预留）
+    // 条件 2: econSnap.rb/10 < lowRiskBufferTicks 且 cr > 0 → 预留
+    // 条件 3: replacementReserve=true → 预留
+    // 修复前：reserve = 200×3 = 600；修复后：reserve = 200。
+    // 能量 500 - reserve 200 = 300 ≥ 200（请求成本）→ 孵化成功。
+    // 若叠加（600）：500-600 = -100 < 200 → 不孵化。
+    (globalThis as any).Memory.rooms.W7N4.economy = {
+      t: 1000, nf: 0, cr: 500, rb: 100, dr: 0, ei: 50, ef: 70,
+    };
+    const spawn = mockSpawn(500);
+    const queue = [makeRequest()];
+
+    trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 1, 1, true);
+
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+  });
+});

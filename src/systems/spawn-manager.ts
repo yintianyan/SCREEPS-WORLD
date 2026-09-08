@@ -328,8 +328,12 @@ export function trySpawn(
   if (!primaryRoom) return;
   let energyBudget = primaryRoom.energyAvailable;
   // ：非 P0 请求可用的预算（P0 本身可动用全部能量）。
-  let reserve = collectorCount <= 1 ? CONFIG.spawn.recoveryEnergyReserve : 0;
-  // P3 Reservation①扩展（ECONOMY §2.1-7）：RCL4+ 有中央储备时，风险缓冲低于地板
+  // 三个条件保护同一目标——为 P0 恢复/采集链预留孵化能量；取最大值而非累加，
+  // 避免叠加（3× = 600）把非 P0 角色完全阻塞（ISSUE-007 修复）。
+  let reserve = 0;
+  // 条件 1: 采集链濒临断裂（collectorCount ≤ 1）。
+  if (collectorCount <= 1) reserve = CONFIG.spawn.recoveryEnergyReserve;
+  // 条件 2: P3 Reservation①扩展（ECONOMY §2.1-7）：RCL4+ 有中央储备时，风险缓冲低于地板
   // （断供耐受 tick 数不足）即同样为非 P0 预留恢复能源——堵 B1 类「P2 支出抽干
   // 替换能力」的死锁路径。仅 storage/terminal/link 任一存在时生效（低容量房无
   // 合同储备口径，维持原动态，避免 RCL1 孵化被饿死）。
@@ -339,12 +343,12 @@ export function trySpawn(
     && econSnap.cr > 0
     && econSnap.rb / 10 < CONFIG.spawn.lowRiskBufferTicks
   ) {
-    reserve += CONFIG.spawn.recoveryEnergyReserve;
+    reserve = Math.max(reserve, CONFIG.spawn.recoveryEnergyReserve);
   }
-  // Reservation①前馈（低容量房形态）：采集者进入替换窗口（TTL < horizon）时同样预留——
+  // 条件 3: Reservation①前馈（低容量房形态）：采集者进入替换窗口（TTL < horizon）时同样预留——
   // 防「P2 支出抽干孵化现金 → 首代替换失败级联」（B1 定量归因见 P3_BASELINE.md §6）。
   if (replacementReserve) {
-    reserve += CONFIG.spawn.recoveryEnergyReserve;
+    reserve = Math.max(reserve, CONFIG.spawn.recoveryEnergyReserve);
   }
 
   // 如果有待处理的 P0 请求，不处理更低优先级的请求。

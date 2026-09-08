@@ -316,6 +316,8 @@ export function summarizeWindow(w: AccountingWindow): string {
 
 /** 单房流采样快照（heap 持有；global reset 丢失可接受 — 重见即重新播种）。 */
 export interface RoomFlowSample {
+  /** 采样 tick — gap > 1 时跳过 bump（再生抵消采集导致差分不可靠）。 */
+  tick: number;
   /** Σ source.energy。 */
   sources: number;
   /** controller.progress（仅 owned 房采集，非 owned 恒 0）。 */

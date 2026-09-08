@@ -67,6 +67,7 @@ function sampleRoomFlows(ctx: TickContext): void {
     const sources = snap?.sources ?? room.find(FIND_SOURCES);
 
     const cur: RoomFlowSample = {
+      tick: ctx.tick,
       sources: sources.reduce((sum, s) => sum + s.energy, 0),
       progress: owned ? (room.controller?.progress ?? 0) : 0,
       sites: {},
@@ -78,10 +79,15 @@ function sampleRoomFlows(ctx: TickContext): void {
 
     const prev = flowSamples.get(room.name);
     if (prev) {
-      const flows = diffRoomFlows(prev, cur);
-      if (flows.harvested > 0) bumpEnergyCounter(room.name, "harvested", flows.harvested);
-      if (flows.upgraded > 0) bumpEnergyCounter(room.name, "upgraded", flows.upgraded);
-      if (flows.built > 0) bumpEnergyCounter(room.name, "built", flows.built);
+      const gap = ctx.tick - prev.tick;
+      if (gap === 1) {
+        const flows = diffRoomFlows(prev, cur);
+        if (flows.harvested > 0) bumpEnergyCounter(room.name, "harvested", flows.harvested);
+        if (flows.upgraded > 0) bumpEnergyCounter(room.name, "upgraded", flows.upgraded);
+        if (flows.built > 0) bumpEnergyCounter(room.name, "built", flows.built);
+      }
+      // gap > 1: economy 被跳过，source 再生抵消采集使差分不可靠 → 跳过 bump，只重置基线。
+      // 累计 L1 计数器会偏低，但窗口级会计在断档后同样重播种不计算 — 两层一致。
     }
     flowSamples.set(room.name, cur);
   }

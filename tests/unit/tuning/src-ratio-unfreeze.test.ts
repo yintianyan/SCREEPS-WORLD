@@ -15,6 +15,7 @@ import { createRingBuffer, ringPush } from "../../../src/kernel/ring-buffer";
 import type { RingBuffer } from "../../../src/kernel/ring-buffer";
 import type { EconomySample, CpuSample } from "../../../src/kernel/timeseries";
 import type { RoomSnapshot, TickContext, Budget } from "../../../src/kernel/contracts";
+import { globalCache } from "../../../src/kernel/global-cache";
 import type { FrozenParamState, PendingValidation } from "../../../src/domain/tuning/types";
 
 const ROOM = "W7N4";
@@ -25,6 +26,8 @@ beforeEach(() => {
   delete (globalThis as any).__segStore;
   // Mock RawMemory for segment-store migration checks.
   (globalThis as any).RawMemory = { segments: {}, setActiveSegments: () => {} };
+  // ISSUE-008: 清理 creepRefs，防跨用例污染。
+  globalCache().creepRefs = undefined;
 });
 
 // ─── Ring buffer builders ───────────────────────────────────
@@ -88,7 +91,8 @@ function setupTimeseries(
   };
 }
 
-/** 向 Game.creeps 追加指定角色的 creep。 */
+/** 向 Game.creeps 追加指定角色的 creep。
+ *  ISSUE-008: 同步写入 globalCache().creepRefs 供 tuning-engine 消费。 */
 function setupCreeps(
   roomName: string,
   roles: Record<string, number>,
@@ -102,6 +106,20 @@ function setupCreeps(
     }
   }
   (globalThis as any).Game.creeps = existing;
+  const g = globalCache();
+  g.creepRefs = Object.values(existing).map((c: any) => ({
+    name: c.name,
+    role: c.memory.role ?? "unknown",
+    home: c.memory.home ?? c.room?.name ?? roomName,
+    spawning: false,
+    recycle: false,
+    ticksToLive: c.ticksToLive,
+    bodyLength: 1,
+    body: [],
+    roomName: roomName,
+    x: 25, y: 25,
+    energyCarried: 0,
+  }));
 }
 
 // ─── Snapshot / Context builders ────────────────────────────

@@ -9,7 +9,7 @@ import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories
 import { globalCache } from "../../../src/kernel/global-cache";
 
 function sample(overrides: Partial<RoomFlowSample> = {}): RoomFlowSample {
-  return { sources: 3000, progress: 0, sites: {}, ...overrides };
+  return { tick: 0, sources: 3000, progress: 0, sites: {}, ...overrides };
 }
 
 describe("diffRoomFlows — 跨 tick 差分纯函数", () => {
@@ -149,5 +149,22 @@ describe("economy — sampleRoomFlows 跨 tick 入账", () => {
     runEconomy(world);
 
     expect(ledger().W37S57.harvested).toBe(50);
+  });
+
+  it("gap > 1（economy 被跳过）→ 跳过 bump，不记假账", () => {
+    const state = { srcEnergy: 3000, progress: 0 };
+    const world = makeWorld("W7N6", state);
+    (globalThis as any).Game.rooms = { W7N6: world };
+    (globalThis as any).Memory = { rooms: {}, kernel: {} };
+    (globalThis as any).Game.creeps = {};
+
+    runEconomy(world); // tick 1001, 播种基线
+    // 模拟 economy 被跳过 1 tick：Game.time 直接 +2（跳过 tick 1002）
+    (globalThis as any).Game.time += 2; // 现在是 1003，gap = 1003 - 1001 = 2
+    // source 稳态：再生 20 = 采集 20，energy 不变
+    runEconomy(world);
+
+    // gap=2 → 跳过 bump，harvested 不入账
+    expect(ledger().W7N6).toBeUndefined();
   });
 });
