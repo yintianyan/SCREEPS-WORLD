@@ -1,18 +1,11 @@
 /** Withdraw actions — 从结构取能。命名约定：Richest*=从最满 container 取；Closest*=从最近取； */
 import type { ActionCandidate, ActionContext } from "../action-types";
 import { runAction } from "./helpers";
-import { moveToTarget } from "../../movement";
 import { globalCache } from "../../../kernel/global-cache";
 import {
   findClosestContainerWithEnergy,
   findRichestContainer,
 } from "../../support/targeting";
-import { computeControllerLinkTarget } from "../../../domain/economy/links"; /** 从 storage link 取能的目标（含守卫标记）。 */
-interface StorageLinkTarget {
-  link: StructureLink;
-  /** true=守卫拦截，不抽但需移动到 link 旁等待；false=正常排空。 */
-  guarded: boolean;
-}
 
 /** 从最满 container 取能。 */
 export function withdrawRichestContainer(): ActionCandidate<StructureContainer> {
@@ -140,17 +133,19 @@ export function withdrawStorage(): ActionCandidate<StructureStorage> {
  * 从 storage 旁 link 取能 — link 物流链的「最后一公里」。
  * 链路：Harvester → Source Link →(link-system 瞬移)→ Storage Link →(本 action)→ Hauler → Storage。
  * 无人排空 storage link 则链堵死：storage link 满后 planLinkTransfers 的 storageFree=0，
- * source link 无法再传，整条链路背压瘫痪。优先级：link-system (P1) 先于 creep 运行，
- * 已先将 storage link → controller link 传输（controller 缺能时），hauler 排空剩余部分。
- * 限量取能：取 min(可用, 空闲)，避免 ERR_NOT_ENOUGH_RESOURCES。
+ * source link 无法再传，整条链路背压瘫痪。
  *
- * 守卫 fallthrough 阻断（设计 4）：当 storage link 有能量但被 controller link 灌能优先
- * 守卫拦截时，返回 {guarded:true} 而非 undefined — role-runner 命中 execute，在其中
- * 移动到 storage link 旁等待而非 fallthrough 到低 dq/dt 任务。这确保守卫解除的 tick
- * hauler 已在 range≤1 可立即 withdraw。参考 Overmind dq/dt 模型：storage link 排空
- * 的 dq/dt ≈ 200 E/tick 远高于远处拾取的 ≈15 E/tick，不应因守卫临时拦截而放弃。
+ * link-system (P1 系统) 先于 creep (P1 角色) 执行，已先将 storage link → controller link
+ * 传输（controller 缺能时）。hauler 排空的是 link-system 传输后的剩余能量，不会抢走
+ * controller link 的供能。旧守卫（controller link < target 时阻止 hauler 排空）基于
+ * 两个错误假设已移除：(1) hauler 会抢能量 — 但 link-system 先执行已路由完毕；
+ * (2) distributor 会向 storage link 灌能 — 但 distributor 只灌 spawn/extension/tower/container。
+ * 守卫导致 storage link 始终在 799/800（free=1-3），source→storage 传输量 1-3，
+ * 经 3% 损耗后到账 0-2 → 近零有效 → 整条链路背压瘫痪。
+ *
+ * 限量取能：取 min(可用, 空闲)，避免 ERR_NOT_ENOUGH_RESOURCES。
  */
-export function withdrawStorageLink(): ActionCandidate<StorageLinkTarget> {
+export function withdrawStorageLink(): ActionCandidate<StructureLink> {
   return {
     name: "withdraw:storage-link",
     resolve: (ac) => {
@@ -160,44 +155,9 @@ export function withdrawStorageLink(): ActionCandidate<StorageLinkTarget> {
         l => l.pos.getRangeTo(st) <= 2 && l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
       if (!storageLink) return undefined;
-      // 灌能优先守卫：controller link 仍未达目标水位时，storage link 能量应由 link-system
-      // 规则3 路由到 controller link 供 0 通勤升级（link-system P1 先于 creep 运行）。但规则3
-      // 受 link 冷却限制（每 ~18 tick 一次），若 hauler 在冷却间隙每 tick 抽走则 controller
-      // link 断粮，且与 distributor 灌入形成 storage→link→storage 空转。故 controller link
-      // 未达目标时不抽。
-      //
-      // 守卫口径用 computeControllerLinkTarget（与 planLinkTransfers 同一目标值）：
-      //   target=0（RCL8 停供）→ 永不挡（controller 不需要能量）
-      //   target=160（低水位保级）→ controller link < 160 才挡
-      //   target=800（满功率冲刺）→ controller link < 800 才挡
-      // 旧口径用 minTransfer(400) 硬编码判急需，当 target < 400 时（低水位保级 target=160）
-      // controller link 已达 target 但 < 400 → 守卫误触发 → hauler 被禁 → storage link 锁死。
-      const ctrl = ac.snapshot.controller;
-      if (ctrl) {
-        const ctrlLink = ac.snapshot.links.find(
-          l => l.id !== storageLink.id && l.pos.getRangeTo(ctrl) <= 2,
-        );
-        if (ctrlLink) {
-          const ctrlTarget = computeControllerLinkTarget(
-            ac.snapshot.rcl,
-            ctrl,
-            ac.snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
-            ctrlLink.store.getCapacity(RESOURCE_ENERGY),
-          );
-          if (ctrlLink.store.getUsedCapacity(RESOURCE_ENERGY) < ctrlTarget) {
-            return { link: storageLink, guarded: true };
-          }
-        }
-      }
-      return { link: storageLink, guarded: false };
+      return storageLink;
     },
-    execute: (ac, target) => {
-      if (target.guarded) {
-        // 守卫拦截：不抽，但移动到 link 旁等待，确保解除时可立即 withdraw。
-        moveToTarget(ac.creep, target.link);
-        return;
-      }
-      const link = target.link;
+    execute: (ac, link) => {
       const available = link.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);

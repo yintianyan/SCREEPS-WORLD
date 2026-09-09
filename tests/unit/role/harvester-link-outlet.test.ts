@@ -138,4 +138,20 @@ describe("harvester — source link 灌能出口判定", () => {
 
     expect(creep.transfer).toHaveBeenCalledWith(link, "energy");
   });
+
+  // storage link 满（free=0）→ linkHasOutlet=false → harvester 灌 container 而非 source link。
+  // 场景：hauler 暂时不在（死亡/刷新），storage link 积满 → source link 无出口。
+  it("有 storage link 但 storage link 满（free=0）→ 灌 container 而非 source link", () => {
+    const { creep, container, link, snap, ctx } = setup({ withStorageLink: true, rcl: 8 });
+    // 将 storage link 和 controller link 都设为满 → 无出口
+    const sl = snap.links.find(l => l.id === "stLink")! as any;
+    sl.store.getUsedCapacity = () => 800;
+    sl.store.getFreeCapacity = () => 0;
+    const cl = snap.links.find(l => l.id === "ctrlLink")! as any;
+    cl.store.getUsedCapacity = () => 800;
+    cl.store.getFreeCapacity = () => 0;
+    harvesterRole.run(creep, ctx);
+    expect(creep.transfer).toHaveBeenCalledWith(container, "energy");
+    expect(creep.transfer).not.toHaveBeenCalledWith(link, "energy");
+  });
 });

@@ -146,7 +146,9 @@ function linkHasOutlet(ac: ActionContext, link: StructureLink): boolean {
     const storageLink = snap.links.find(
       l => l.id !== link.id && l.pos.getRangeTo(snap.storage!) <= 2,
     );
-    if (storageLink) return true;
+    // storage link 存在且有空闲容量 → source link 有出口（hauler 排空 + link-system 传输）。
+    // storage link 满（free=0）→ 无出口 → harvester 应倒 container 而非灌满 source link。
+    if (storageLink && storageLink.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return true;
   }
   const ctrl = snap.controller;
   if (!ctrl || !ctrl.my) return false;
