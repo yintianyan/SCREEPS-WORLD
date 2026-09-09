@@ -51,16 +51,21 @@ describe("withdrawStorageLink — 守卫口径（computeControllerLinkTarget）"
   it("RCL8 停供后 controller link 残留 799（free=1）→ 不挡排空", () => {
     // target=0 → controller 不需要能量 → 守卫不触发
     const { ac, storageLink } = makeAc({ rcl: 8, ctrlLinkEnergy: 799 });
-    expect(withdrawStorageLink().resolve!(ac)).toBe(storageLink);
+    const r = withdrawStorageLink().resolve!(ac)!;
+    expect(r.link).toBe(storageLink);
+    expect(r.guarded).toBe(false);
   });
 
   it("RCL8 停供 + 降级风险（target=200）→ controller link < 200 才挡", () => {
     const base = { rcl: 8, ticksToDowngrade: 5000 };
-    // controller link = 199 < 200 → 挡（返回 null 哨兵阻止 fallthrough，非 undefined）
-    expect(withdrawStorageLink().resolve!(makeAc({ ...base, ctrlLinkEnergy: 199 }).ac)).toBeNull();
+    // controller link = 199 < 200 → 挡（guarded=true 阻止 fallthrough）
+    const r1 = withdrawStorageLink().resolve!(makeAc({ ...base, ctrlLinkEnergy: 199 }).ac)!;
+    expect(r1.guarded).toBe(true);
     // controller link = 200 = target → 不挡
     const { ac, storageLink } = makeAc({ ...base, ctrlLinkEnergy: 200 });
-    expect(withdrawStorageLink().resolve!(ac)).toBe(storageLink);
+    const r2 = withdrawStorageLink().resolve!(ac)!;
+    expect(r2.link).toBe(storageLink);
+    expect(r2.guarded).toBe(false);
   });
 
   // ── 低水位保级场景（target=160，storage=0）── 这是本次修复的核心回归 ──
@@ -71,14 +76,17 @@ describe("withdrawStorageLink — 守卫口径（computeControllerLinkTarget）"
     const { ac, storageLink } = makeAc({
       rcl: 7, ctrlLinkEnergy: 160, storageEnergy: 0, storageLinkEnergy: 799,
     });
-    expect(withdrawStorageLink().resolve!(ac)).toBe(storageLink);
+    const r = withdrawStorageLink().resolve!(ac)!;
+    expect(r.link).toBe(storageLink);
+    expect(r.guarded).toBe(false);
   });
 
   it("RCL7 storage=0 → target=160，controller link=159（缺口 1）→ 挡（让路升级链）", () => {
     const { ac } = makeAc({
       rcl: 7, ctrlLinkEnergy: 159, storageEnergy: 0, storageLinkEnergy: 799,
     });
-    expect(withdrawStorageLink().resolve!(ac)).toBeNull(); // 守卫触发 → null 哨兵
+    const r = withdrawStorageLink().resolve!(ac)!;
+    expect(r.guarded).toBe(true); // 守卫触发 → guarded=true
   });
 
   it("RCL6 storage=0 → target=160，controller link=300（> target, < minTransfer）→ 不挡", () => {
@@ -87,7 +95,9 @@ describe("withdrawStorageLink — 守卫口径（computeControllerLinkTarget）"
     const { ac, storageLink } = makeAc({
       rcl: 6, ctrlLinkEnergy: 300, storageEnergy: 0, storageLinkEnergy: 500,
     });
-    expect(withdrawStorageLink().resolve!(ac)).toBe(storageLink);
+    const r = withdrawStorageLink().resolve!(ac)!;
+    expect(r.link).toBe(storageLink);
+    expect(r.guarded).toBe(false);
   });
 
   // ── 满功率冲刺场景（target=800）──
@@ -96,14 +106,17 @@ describe("withdrawStorageLink — 守卫口径（computeControllerLinkTarget）"
     const { ac } = makeAc({
       rcl: 7, ctrlLinkEnergy: 500, storageEnergy: 10000, storageLinkEnergy: 800,
     });
-    expect(withdrawStorageLink().resolve!(ac)).toBeNull(); // 守卫触发 → null 哨兵
+    const r = withdrawStorageLink().resolve!(ac)!;
+    expect(r.guarded).toBe(true); // 守卫触发 → guarded=true
   });
 
   it("RCL7 storage=10k → target=800，controller link=800 → 不挡", () => {
     const { ac, storageLink } = makeAc({
       rcl: 7, ctrlLinkEnergy: 800, storageEnergy: 10000, storageLinkEnergy: 500,
     });
-    expect(withdrawStorageLink().resolve!(ac)).toBe(storageLink);
+    const r = withdrawStorageLink().resolve!(ac)!;
+    expect(r.link).toBe(storageLink);
+    expect(r.guarded).toBe(false);
   });
 
   // ── 边界场景 ──
@@ -116,7 +129,9 @@ describe("withdrawStorageLink — 守卫口径（computeControllerLinkTarget）"
     const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 300, mode: "acquire" });
     const ctx = mockContext(snap);
     const ac = { creep, snapshot: snap, assignment: undefined, budget: ctx.budget, ctx };
-    expect(withdrawStorageLink().resolve!(ac)).toBe(storageLink);
+    const r = withdrawStorageLink().resolve!(ac)!;
+    expect(r.link).toBe(storageLink);
+    expect(r.guarded).toBe(false);
   });
 
   it("storage link 无能量 → undefined", () => {
@@ -152,6 +167,8 @@ describe("withdrawStorageLink — 守卫口径（computeControllerLinkTarget）"
     const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 300, mode: "acquire" });
     const ctx = mockContext(snap);
     const ac = { creep, snapshot: snap, assignment: undefined, budget: ctx.budget, ctx };
-    expect(withdrawStorageLink().resolve!(ac)).toBe(storageLink);
+    const r = withdrawStorageLink().resolve!(ac)!;
+    expect(r.link).toBe(storageLink);
+    expect(r.guarded).toBe(false);
   });
 });
