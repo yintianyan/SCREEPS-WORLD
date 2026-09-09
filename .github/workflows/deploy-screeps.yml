@@ -73,9 +73,8 @@ jobs:
             exit 1
           fi
 
-      # TODO: deploy script was removed during cleanup; re-enable when replacement is ready
-      # - name: Upload code to Screeps (API)
-      #   env:
-      #     SCREEPS_TOKEN: ${{ secrets.SCREEPS_TOKEN }}
-      #     SCREEPS_BRANCH: ${{ vars.SCREEPS_BRANCH || 'default' }}
-      #   run: node tools/official/deploy-screeps.js
+      - name: Upload code to Screeps (API)
+        env:
+          SCREEPS_TOKEN: ${{ secrets.SCREEPS_TOKEN }}
+          SCREEPS_BRANCH: ${{ vars.SCREEPS_BRANCH || 'default' }}
+        run: node tools/official/deploy-screeps.js

@@ -534,7 +534,7 @@ findPathTo: vi.fn(() => []),
 describe("hauler — H-2 满载矿物搬运活锁修复", () => {
   it("满载能量的 hauler 遇矿物 container 不再抢占 — 放行 fillStorage", () => {
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
-    (container.store as any).H = 500; // container 含矿物
+    (container.store as any).H = 1500; // container 含矿物，阈值=1400, 1500>=1400 ✓
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({ rcl: 4, containers: [container], storage });
     // 满载能量：free=0 → withdraw 相 resolve 必须返回 undefined。
@@ -550,7 +550,7 @@ describe("hauler — H-2 满载矿物搬运活锁修复", () => {
 
   it("work 态携能量+空位+矿物 container → 能量先入库，取矿不退抢占 fillStorage（回归保护）", () => {
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
-    (container.store as any).H = 500;
+    (container.store as any).H = 1500;
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({ rcl: 4, containers: [container], storage });
     const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 25, capacity: 50, mode: "work" });
@@ -564,9 +564,9 @@ describe("hauler — H-2 满载矿物搬运活锁修复", () => {
     expect(creep.withdraw).not.toHaveBeenCalledWith(container, "H");
   });
 
-  it("acquire 态空仓 hauler 遇矿物 container → 经 haulMineralTopUp 取矿（矿物搬运不停摆）", () => {
+  it("acquire 态空仓 hauler 遇矿物 container（量≥70%容量）→ 经 haulMineralTopUp 取矿（矿物搬运不停摆）", () => {
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
-    (container.store as any).H = 500;
+    (container.store as any).H = 1400; // container 容量 2000, 阈值=1400, 1400>=1400 ✓
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({ rcl: 4, containers: [container], storage });
     const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 50, mode: "acquire" });
@@ -576,6 +576,20 @@ describe("hauler — H-2 满载矿物搬运活锁修复", () => {
 
     // 能量源为空时，acquire 链末端的 haulMineralTopUp 接管取矿，矿物搬运不断档。
     expect(creep.withdraw).toHaveBeenCalledWith(container, "H");
+  });
+
+  it("acquire 态空仓 hauler 遇矿物 container（量<70%容量）→ 不取矿（避免少量矿物往返浪费）", () => {
+    const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
+    (container.store as any).H = 1399; // container 容量 2000, 阈值=1400, 1399<1400 → 不触发
+    const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
+    const snap = mockSnapshot({ rcl: 4, containers: [container], storage });
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 50, mode: "acquire" });
+    const ctx = mockContext(snap);
+
+    haulerRole.run(creep, ctx);
+
+    // 矿物量低于阈值 → 不取矿，避免 hauler 为少量矿物跑一趟往返。
+    expect(creep.withdraw).not.toHaveBeenCalledWith(container, "H");
   });
 });
 
@@ -637,7 +651,7 @@ describe("hauler — work 链优先级：能量入库优先于取矿补仓（sto
   it("work 态携能量+空位+矿物 container → 先 fillStorage 倒能，不取矿", () => {
     const storage = mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
     const mineralContainer = mockStructure("container", { id: "mc", energy: 0, capacity: 2000 });
-    (mineralContainer.store as any).Z = 100; // 含矿物（非 energy）
+    (mineralContainer.store as any).Z = 1500; // 含矿物（非 energy），阈值=1400, 1500>=1400
     const snap = mockSnapshot({ storage, containers: [mineralContainer] });
     // 携能量 200、容量 800 → 有空位；work 态（updateMode 因 used>0 保持 work）。
     const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 200, capacity: 800, mode: "work" });
@@ -652,10 +666,11 @@ describe("hauler — work 链优先级：能量入库优先于取矿补仓（sto
     expect(creep.withdraw).not.toHaveBeenCalledWith(mineralContainer, "Z", expect.any(Number));
   });
 
-  it("haulMineralTopUp：能量已入库后、work 链尾部有余量才取矿（矿物搬运能力不丢）", () => {
+  it("haulMineralTopUp：能量已入库后、work 链尾部有余量才取矿（矿物量≥70%容器容量时）", () => {
     const storage = mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
     const mineralContainer = mockStructure("container", { id: "mc", energy: 0, capacity: 2000 });
-    (mineralContainer.store as any).Z = 100;
+    // container 容量 2000, 阈值=1400, Z=1500 >= 1400 ✓
+    (mineralContainer.store as any).Z = 1500;
     const snap = mockSnapshot({ storage, containers: [mineralContainer] });
     const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 100, capacity: 800, mode: "work" });
     const ctx = mockContext(snap);
@@ -666,5 +681,20 @@ describe("hauler — work 链优先级：能量入库优先于取矿补仓（sto
     expect(target).toBe(mineralContainer);
     action.execute(ac, target as never);
     expect(creep.withdraw).toHaveBeenCalledWith(mineralContainer, "Z");
+  });
+
+  it("haulMineralTopUp：矿物量<70%容器容量时不取矿（避免少量矿物往返浪费）", () => {
+    const storage = mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
+    const mineralContainer = mockStructure("container", { id: "mc", energy: 0, capacity: 2000 });
+    // container 容量 2000, 阈值=1400, Z=1000 < 1400 → 不触发
+    (mineralContainer.store as any).Z = 1000;
+    const snap = mockSnapshot({ storage, containers: [mineralContainer] });
+    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 100, capacity: 800, mode: "work" });
+    const ctx = mockContext(snap);
+    const ac = { creep, snapshot: snap, budget: ctx.budget, ctx } as never;
+
+    const action = haulMineralTopUp();
+    const target = action.resolve!(ac);
+    expect(target).toBeUndefined();
   });
 });

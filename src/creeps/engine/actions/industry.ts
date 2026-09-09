@@ -64,11 +64,21 @@ export function haulMineralTopUp(): ActionCandidate<StructureContainer> {
     resolve: (ac) => {
       if (ac.creep.store.getFreeCapacity() === 0) return undefined;
       if (!ac.snapshot.storage && !ac.snapshot.terminal) return undefined;
+      // 矿物量阈值：mineral container 中矿物量低于 container 总容量的 70% 时不触发 —
+      // 矿物产能极低（~10/tick），container 积累很慢；hauler 为少量矿物专程跑一趟
+      // 往返几十 tick 纯浪费（线上实证：hauler 每次只拉 30-110 矿物）。
+      // 阈值 = container 总容量 × 70% = 1400（container 总容量恒为 2000），
+      // 确保每次取矿量值得往返成本，且 container 不会因矿物积压而挡住能量位。
+      const containerCapacity = 2000; // StructureContainer 总容量恒为 2000
+      const mineralThreshold = Math.floor(containerCapacity * 0.7);
       const source = ac.snapshot.containers.find(c => {
+        let mineralTotal = 0;
         for (const res of Object.keys(c.store) as ResourceConstant[]) {
-          if (res !== RESOURCE_ENERGY && c.store[res]! > 0) return true;
+          if (res === RESOURCE_ENERGY) continue;
+          const qty = c.store[res];
+          if (typeof qty === "number") mineralTotal += qty;
         }
-        return false;
+        return mineralTotal >= mineralThreshold;
       });
       if (!source) return undefined;
       return source;
