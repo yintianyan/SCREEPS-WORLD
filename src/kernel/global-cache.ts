@@ -406,6 +406,8 @@ export interface GlobalCache {
   __remoteSources?: Record<string, { tick: number; sources: Source[] }>;
   /** 房间内己方 creep 列表（remote-harvester/healer 共享）。 */
   __myCreepsCache?: Record<string, { tick: number; creeps: Creep[] }>;
+  /** 跨房 remoteHarvester 查询（remote-harvester occupancy 统计用）。 */
+  __remoteHarvestersByTarget?: Record<string, { tick: number; creeps: Creep[] }>;
   /** remote-defender 防守位锚点扫描（room-scans.findContainersCached）。 */
   __containersCache?: Record<string, { tick: number; containers: StructureContainer[] }>;
   /** remote-hauler 通勤建路扫描（room-scans.findMySitesCached）。 */

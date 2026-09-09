@@ -76,6 +76,7 @@ export function resetGlobals(): void {
   delete g.__remoteRuins;
   delete g.__hostilesCache;
   delete g.__myCreepsCache;
+  delete g.__remoteHarvestersByTarget;
   delete g.__remoteSources;
   delete g.__warStructures;
   delete g.__powerBanks;

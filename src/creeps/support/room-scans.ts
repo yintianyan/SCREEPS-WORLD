@@ -34,6 +34,27 @@ export function findMyCreepsCached(room: Room): Creep[] {
   return creeps;
 }
 
+// ─── remote-harvester: 跨房兄弟查询（occupancy 统计用）────────
+
+/**
+ * per-tick 缓存：匹配指定 remoteTarget 的全部 remoteHarvester（不限房间）。
+ *
+ * 用于 bindInitialSource 的 occupancy 统计 — 兄弟 harvester 可能在通勤路上
+ * （home 房或中间房），仅扫本房会漏掉已绑 sourceId 的兄弟 → 竞态绑同一 source。
+ * 此函数在 support 层封装 Object.values(Game.creeps)，避免角色层直接全局扫描（R8）。
+ */
+export function findRemoteHarvestersByTarget(targetRoom: string): Creep[] {
+  const g = globalCache();
+  if (!g.__remoteHarvestersByTarget) g.__remoteHarvestersByTarget = {};
+  const cached = g.__remoteHarvestersByTarget[targetRoom];
+  if (cached && cached.tick === Game.time) return cached.creeps;
+  const creeps = Object.values(Game.creeps).filter(
+    c => c.memory.role === "remoteHarvester" && c.memory.remoteTarget === targetRoom,
+  );
+  g.__remoteHarvestersByTarget[targetRoom] = { tick: Game.time, creeps };
+  return creeps;
+}
+
 // ─── remote-hauler: container 列表 ──────────────────────────
 
 /** per-tick per-room 共享缓存：房间内全部 container（含 source container）。 */

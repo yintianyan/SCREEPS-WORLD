@@ -5,7 +5,7 @@ import { defineRole } from "../engine/role-runner";
 import { CONFIG } from "../../config";
 import { moveToTarget, registerAnchor, registerStaticBlocker } from "../movement";
 import { getObjectById } from "../support/obj-cache";
-import { findSourcesCached, findMyCreepsCached } from "../support/room-scans";
+import { findSourcesCached, findRemoteHarvestersByTarget } from "../support/room-scans";
 
 /** 改绑阈值：连续 stuck 达到此值时重评绑定（stuckThreshold=2/repathLimit=2 →
  * L3 在 stuck≥4 重置，此值取 3 = 每个 L3 周期恰好在重置前查一次，零额外节流）。 */
@@ -57,7 +57,7 @@ export function getRemoteSource(creep: Creep): Source | undefined {
  * 已绑 sourceId 计绑定；未绑定的按物理站位计（range<=1 即实际站桩占用）—
  * 兜底同 tick 首绑竞态（两只同时入房、都还没写缓存时，站桩者已可见）。
  * P2-O：occupancy 统计仅在 sourceId 未缓存（首次/失效/改绑）时执行，
- * 且收窄到 findMyCreepsCached（此时 creep 已在 target 房）。
+ * 通过 findRemoteHarvestersByTarget 跨房扫描含通勤路上的兄弟。
  */
 function countSiblingOccupancy(
   creep: Creep,
@@ -65,7 +65,15 @@ function countSiblingOccupancy(
 ): Map<Id<Source>, number> {
   const target = creep.memory.remoteTarget;
   const occupancy = new Map<Id<Source>, number>();
-  for (const other of findMyCreepsCached(creep.room)) {
+  if (!target) return occupancy;
+  // 扫描全帝国 creeps 而非仅同房 — 兄弟 harvester 可能仍在通勤路上
+  // （home 房或中间房），如果只看同房则看不到已绑 sourceId 的兄弟 →
+  // 两个 harvester 不同 tick到达远矿房、各自绑定时看不到对方 → 名哈希
+  // 偏移相同 → 绑同一 source（线上实证：W36S58 两只 5work harvester 挤
+  // source 0、source 1 空缺）。
+  // 已绑 sourceId 的兄弟无论在哪个房都计入占用；未绑的（首绑竞态）按
+  // 物理站位计（仅同房可见）。
+  for (const other of findRemoteHarvestersByTarget(target)) {
     if (other.name === creep.name) continue;
     if (other.memory.role !== "remoteHarvester") continue;
     if (other.memory.remoteTarget !== target) continue;
@@ -74,6 +82,9 @@ function countSiblingOccupancy(
       occupancy.set(sid, (occupancy.get(sid) ?? 0) + 1);
       continue;
     }
+    // 未绑 sourceId 的兄弟仅在远矿房内按站位计 —
+    // 在路上的兄弟没有远矿房视野，无法按站位计。
+    if (other.room.name !== creep.room.name) continue;
     for (const s of sources) {
       if (other.pos.getRangeTo(s.pos) <= 1) {
         occupancy.set(s.id, (occupancy.get(s.id) ?? 0) + 1);
