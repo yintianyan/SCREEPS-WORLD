@@ -201,14 +201,9 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       }
     }
 
-    // 2. Remote Hauler — 编制按评选期算出的 haulerNeed（通勤越远配越多）；
-    //    存量运营无此字段时回退 haulersPerTarget。
-    //    采集端联动收缩（2026-08-19）：haulerNeed 按理论满产（sources×10 e/tick）算，
-    //    但采集爬坡期（harvester 未就位/阵亡/替补中）实际产出远低于理论 — 全额配
-    //    hauler 会造出「container 常年被抽成 0 + 运力全员 idle 扎堆矿房边界」的
-    //    过剩（线上实证 W36S58：2 harvester 爬坡 + 4 hauler，7 只 remoteHauler
-    //    同批 idle 等货，视觉即「交通阻塞」）。按就位 harvester 数（含孵化中）等比
-    //    收缩，下限 1 保物流连通；采集满编自动恢复全额编制，无迟滞字段、零状态。
+    // 2. Remote Hauler — 每 source 最多 1 个 hauler。远矿是外入能量，
+    //    孵化成本 > 通勤损耗，hauler 多于 source 只会瓜分产出导致半载往返。
+    //    按就位 harvester 数收缩（爬坡期不配满），下限 1 保物流连通。
     const harvestersReady = (counts.remoteHarvester ?? 0) + pending.remoteHarvester;
     const haulerTarget = remoteHaulerTarget(op.sources, op.haulerNeed, harvestersReady);
     const haulerTotal = (counts.remoteHauler ?? 0) + pending.remoteHauler;

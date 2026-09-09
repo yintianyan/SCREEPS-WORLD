@@ -1,20 +1,20 @@
 import { CONFIG } from "../../config";
 
 /**
- * 远矿 hauler 的孵化编制。满产需求按当前已就位（或已排队）采集者等比收缩；
- * 这是"少孵"的软上限，不用于回收健康现役 hauler——远矿通勤反馈长，已付出的
- * 运力应留到采集端恢复，避免低能量期把收缩放大成断供。
+ * 远矿 hauler 的孵化编制。每 source 最多 1 个 hauler — 远矿是外入能量，
+ * 孵化成本 > 0 且通勤有损耗，hauler 数量超过 source 数意味着多个 hauler
+ * 瓜分同一 container 的产出，每次都半载而归（运力浪费）。
+ * 1 hauler/source 保证每次满载往返；采集 > 运输时能量在 container 积攒，
+ * 下一趟满载取走，不亏。
  */
 export function remoteHaulerTarget(
   sources: number | undefined,
-  haulerNeed: number | undefined,
+  _haulerNeed: number | undefined,
   harvestersReady: number,
 ): number {
   const sourcesTotal = Math.max(1, sources ?? CONFIG.remote.harvestersPerTarget);
   const effectiveSources = Math.min(sourcesTotal, Math.max(1, harvestersReady));
-  return Math.max(1, Math.ceil(
-    (haulerNeed ?? CONFIG.remote.haulersPerTarget) * (effectiveSources / sourcesTotal),
-  ));
+  return Math.max(1, effectiveSources);
 }
 
 /**

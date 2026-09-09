@@ -104,7 +104,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
     expect(haulerReqs).toHaveLength(0);
   });
 
-  it("op.haulerNeed=2 且采集满编时已有 1 只仍继续补第 2 只（动态编制放大目标）", () => {
+  it("2-source 且采集满编时已有 1 只仍补第 2 只（每 source 1 hauler）", () => {
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
       remoteOps: {
@@ -115,14 +115,14 @@ describe("remote demand — evaluateRemoteDemand", () => {
         ...makeCreeps("remoteHarvester", 2), // 采集端满编（2 source 全就位）。
       ],
     });
-    // 回退档（target=1）时这 1 只已满足、不再补；haulerNeed=2 且采集满编时仍补第 2 只。
+    // 每 source 1 hauler → 2 source 目标=2，已有 1 → 补 1。
     const haulerReqs = requests.filter((r) => r.role === "remoteHauler");
     expect(haulerReqs).toHaveLength(1);
   });
 
-  it("采集端联动收缩（2026-08-19）：harvester 未满编时 hauler 编制等比收缩", () => {
-    // 场景（线上实证 W36S58）：sources=2 + haulerNeed=2，但 harvester 0 就位（爬坡期）
-    // → 旧逻辑全额配 2 只 hauler 扎堆 idle 等货；新逻辑收缩为 1 只保物流连通。
+  it("采集端联动收缩：harvester 未满编时 hauler 编制等比收缩", () => {
+    // 每 source 1 hauler，按就位 harvester 数收缩。
+    // 场景：sources=2，harvester 0 就位（爬坡期）→ hauler target=1（下限）。
     const ramping = evaluateRemoteDemand({
       ...baseInput,
       remoteOps: {
@@ -130,9 +130,9 @@ describe("remote demand — evaluateRemoteDemand", () => {
       },
       remoteCreeps: makeCreeps("remoteHauler", 1), // 已有 1 只 hauler，0 harvester。
     });
-    expect(ramping.requests.filter((r) => r.role === "remoteHauler")).toHaveLength(0); // 收缩后已满足。
+    expect(ramping.requests.filter((r) => r.role === "remoteHauler")).toHaveLength(0); // 收缩后 target=1，已满足。
 
-    // 采集半编（2 source 只有 1 harvester）→ haulerNeed=2 收缩为 ceil(2×0.5)=1。
+    // 采集半编（2 source 只有 1 harvester）→ hauler target=1。
     const half = evaluateRemoteDemand({
       ...baseInput,
       remoteOps: {
@@ -141,9 +141,9 @@ describe("remote demand — evaluateRemoteDemand", () => {
       remoteCreeps: makeCreeps("remoteHarvester", 1), // 半编，无 hauler。
     });
     const haulerReqs = half.requests.filter((r) => r.role === "remoteHauler");
-    expect(haulerReqs).toHaveLength(1); // 只孵 1 只（收缩后目标）。
+    expect(haulerReqs).toHaveLength(1); // 只孵 1 只（收缩后目标=1）。
 
-    // 采集满编 → 恢复全额 2 只。
+    // 采集满编 → target=2（每 source 1 hauler），已有 1 → 补 1。
     const full = evaluateRemoteDemand({
       ...baseInput,
       remoteOps: {
@@ -157,12 +157,12 @@ describe("remote demand — evaluateRemoteDemand", () => {
     expect(full.requests.filter((r) => r.role === "remoteHauler")).toHaveLength(1);
   });
 
-  it("op 无 haulerNeed 时回退 haulersPerTarget=1（存量运营兼容）", () => {
+  it("op 无 haulerNeed 时回退每 source 1 只（存量运营兼容）", () => {
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
       remoteCreeps: makeCreeps("remoteHauler", 1), // 已有 1 只。
     });
-    // 回退 target=1，已满足 → 不再补。
+    // 单 source → target=1，已满足 → 不再补。
     const haulerReqs = requests.filter((r) => r.role === "remoteHauler");
     expect(haulerReqs).toHaveLength(0);
   });
