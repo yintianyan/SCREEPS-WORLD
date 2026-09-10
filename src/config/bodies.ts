@@ -1220,11 +1220,90 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   remoteDefender: [
-    // [2A,2M] 20 damage/tick，10 tick 击杀 NPC reserver（200 hits；其无攻击能力，
-    // defender 不会受伤）。
-    { parts: ["attack", "attack", "move", "move"], minCapacity: 520 },
-    // [A,M] 最小配置：10 damage/tick，20 tick 击杀 NPC reserver。
-    { parts: ["attack", "move"], minCapacity: 130 },
+    // 远矿防御者改用 RANGED_ATTACK kiting 战术 — 边退边打，近战 NPC 入侵者永远
+    // 够不到，实现无损击杀。对 RANGED_ATTACK 型入侵者也能在射程内对射不落下风
+    // （我方有 TOUGH 吸伤 + 数量优势）。
+    //
+    // 社区最佳实践（screepspl.us Combat 指南）：RANGED_ATTACK 射程 3 无 counter-attack
+    // 风险，kiting = 边退边打使近战敌人永远够不到 — 对 NPC 入侵者/无 ranged 敌人无损。
+    // TOUGH 前置吸伤保住 RANGED_ATTACK 输出窗口。MOVE:非MOVE = 1:1 平原满速。
+    //
+    // NPC 入侵者数据（docs.screeps.com/invaders）：
+    //   轻型（RCL<4）：Melee [3T,5A,5M] 1500hp / Ranged [3T,3R,3M,1H] 1200hp
+    //   重型（RCL≥4）：Melee [7T,11A,11M] 3700hp / Ranged [5T,7R,7M,3H] 2900hp
+    // 需要的击杀时间（单只 3R kiter = 30 dmg/tick）：
+    //   轻型 melee 1500hp → 50 tick；重型 melee 3700hp → 124 tick
+    //   轻型 ranged 1200hp → 40 tick；重型 ranged 2900hp → 97 tick
+    // 多只 kiter 车轮战可显著缩短：3 只 3R = 90 dmg/tick → 重型 melee 41 tick、
+    // 重型 ranged 32 tick。配合 flee 机制（经济 creep 撤离），defender 有充足时间。
+
+    // RCL8 满编 [3T,6R,9M] @1650：6 RANGED_ATTACK = 60 dmg/tick，
+    // 3 TOUGH 吸 300 伤保住输出窗口。9:9 = 1:1 平原满速 kiting。
+    {
+      parts: [
+        "tough",
+        "tough",
+        "tough",
+        "ranged_attack",
+        "ranged_attack",
+        "ranged_attack",
+        "ranged_attack",
+        "ranged_attack",
+        "ranged_attack",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+      ],
+      minCapacity: 1650,
+    },
+    // RCL6 [2T,4R,6M] @1100：4 RANGED_ATTACK = 40 dmg/tick。
+    {
+      parts: [
+        "tough",
+        "tough",
+        "ranged_attack",
+        "ranged_attack",
+        "ranged_attack",
+        "ranged_attack",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+      ],
+      minCapacity: 1100,
+    },
+    // RCL4 [1T,3R,4M] @650：3 RANGED_ATTACK = 30 dmg/tick。
+    // 与 rangedAttacker 的 RCL5 档一致 — 远矿 defender 在无塔环境下需自给火力。
+    {
+      parts: [
+        "tough",
+        "ranged_attack",
+        "ranged_attack",
+        "ranged_attack",
+        "move",
+        "move",
+        "move",
+        "move",
+      ],
+      minCapacity: 650,
+    },
+    // RCL3 [1T,2R,3M] @460：2 RANGED_ATTACK = 20 dmg/tick。
+    // 75 tick 击杀轻型 melee 入侵者 — 配合经济 creep flee 撤离，时间窗口充裕。
+    {
+      parts: ["tough", "ranged_attack", "ranged_attack", "move", "move", "move"],
+      minCapacity: 460,
+    },
+    // 最小档 [1R,1M] @200：10 dmg/tick，kiting 入侵者。
+    // 即使最低能量也能产出有效战力 — kiting 使其不会被近战入侵者击杀。
+    { parts: ["ranged_attack", "move"], minCapacity: 200 },
   ],
   defender: [
     // 本房防御者：与塔协同贴脸输出，1:1 ATTACK:MOVE 无路面也能追击。

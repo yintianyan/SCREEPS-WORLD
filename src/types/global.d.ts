@@ -32,6 +32,8 @@ declare global {
     urgentRoadId?: Id<_HasId>;
     /** harvester/miner 绑定的 source。 */
     sourceId?: Id<Source>;
+    /** remote-harvester 的远矿 source 槽位索引（0-based），spawn 时由 demand 预分配。 */
+    sourceSlot?: number;
     /** remote-harvester 缓存的 source 旁 container ID（避免每 tick lookForAtArea）。 */
     sourceContainerId?: Id<_HasId>;
     /** remote-harvester 上次扫描 container 的 tick — 降频重扫用，防止 container 被摧毁后每 tick lookForAtArea。 */

@@ -19,10 +19,10 @@ const CONTAINER_REPAIR_THRESHOLD = 0.8;
 
 /**
  * 获取远矿 source — 从缓存 sourceId 或占用感知分配。首次入房执行一次 find，之后复用 sourceId。
- * 占用感知（E-1 修复）：远矿房无 RoomSnapshot/sourceOccupancy，改为统计同房同 target 的兄弟
- * remoteHarvester 已绑 sourceId。原实现单纯选最近 + 入房位置偏置 → 2-source 房两只挤同一
- * source，第二源白白再生浪费。现选占用最少者；平局用名哈希决定遍历起点（每 tick 稳定不抖动），
- * 把多只稳定散布到不同 source。导出仅供接线测试验证占用分散行为。
+ * Source 槽位预分配：spawn 时 demand 已为每只 harvester 分配 sourceSlot 索引，
+ * 首绑直接按槽位选 FIND_SOURCES[sourceSlot]，不依赖 occupancy 扫描 — 彻底消除
+ * 「两只 harvester 不同 tick 到达、各自首绑时看不到对方」的竞态窗口。
+ * sourceSlot 缺失时（存量 creep / 兼容回退）走 occupancy 分配。
  */
 export function getRemoteSource(creep: Creep): Source | undefined {
   // 优先使用缓存的 sourceId。
@@ -36,11 +36,6 @@ export function getRemoteSource(creep: Creep): Source | undefined {
       ) {
         return source;
       }
-      // 锁死改绑自愈：长期够不到自己的 source（矿位被占/被封，stuck 连续累积）
-      // 时重评占用 — 房内存在无主 source 则改绑，终结「两人挤一源、另一源空缺」
-      // （线上实证：W36S58 采集者矿位被占锁死 + W37S57 双源只配一只的变体）。
-      // 自限：改绑后新 source 即被自身占用；下次重评时原 source 由兄弟占着、
-      // 无空缺 → 不会来回振荡。
       const rebound = rebindToVacantSource(creep, source);
       if (rebound) return rebound;
       return source;
@@ -92,7 +87,12 @@ function countSiblingOccupancy(creep: Creep, sources: readonly Source[]): Map<Id
   return occupancy;
 }
 
-/** 首次绑定（或缓存失效）：占用最少者优先，平局用名哈希稳定散布。 */
+/**
+ * 首次绑定（或缓存失效）：sourceSlot 优先，occupancy 兜底。
+ * sourceSlot 由 demand 侧在 spawn 时预分配（纯函数占用映射），
+ * 直接选 FIND_SOURCES[slot] — 无竞态窗口。
+ * sourceSlot 缺失时走 occupancy 分配（存量兼容）。
+ */
 function bindInitialSource(creep: Creep): Source | undefined {
   const room = creep.room;
   const sources = findSourcesCached(room);
@@ -102,6 +102,15 @@ function bindInitialSource(creep: Creep): Source | undefined {
     return sources[0]!;
   }
 
+  // sourceSlot 预分配优先：直接选第 N 个 source。
+  const slot = creep.memory.sourceSlot as number | undefined;
+  if (slot !== undefined && slot >= 0 && slot < sources.length) {
+    const target = sources[slot]!;
+    creep.memory.sourceId = target.id;
+    return target;
+  }
+
+  // 兼容回退：无 sourceSlot 时走 occupancy 分配。
   const occupancy = countSiblingOccupancy(creep, sources);
 
   // 名哈希决定遍历起点：占用平局时稳定散布到不同 source。

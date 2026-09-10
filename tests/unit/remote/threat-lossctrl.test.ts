@@ -220,11 +220,15 @@ describe("RD-1 — remote-defender 半血撤退", () => {
     remoteDefenderRole.run(creep, mockContext(snap));
 
     expect(creep.memory.recycle).toBe(true);
-    expect(creep.attack).not.toHaveBeenCalled();
+    expect(creep.rangedAttack).not.toHaveBeenCalled();
   });
 
   it("血量健康时照常接敌（回归保护）", () => {
-    const hostile = { owner: { username: "enemy" }, pos: { x: 25, y: 25 } };
+    const hostile = {
+      owner: { username: "enemy" },
+      pos: { x: 25, y: 25 },
+      body: [{ type: "attack", hits: 100 }],
+    };
     const creep = mockCreep({ name: "rd_1", role: "remoteDefender", home: "W7N4" });
     creep.memory.remoteTarget = "W8N4";
     creep.room.name = "W8N4";
@@ -238,7 +242,7 @@ describe("RD-1 — remote-defender 半血撤退", () => {
 
     remoteDefenderRole.run(creep, mockContext(snap));
 
-    expect(creep.attack).toHaveBeenCalledWith(hostile);
+    expect(creep.rangedAttack).toHaveBeenCalledWith(hostile);
   });
 });
 

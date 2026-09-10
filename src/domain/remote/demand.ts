@@ -14,6 +14,8 @@ export interface RemoteCreepSummary {
   remoteTarget?: string;
   ticksToLive?: number;
   bodyLength: number;
+  /** 已绑定的远矿 source 槽位索引（0-based），用于 spawn 侧预分配。 */
+  sourceSlot?: number;
 }
 
 export interface RemoteDemandInput {
@@ -183,6 +185,9 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     };
 
     // Remote Defender — 有威胁时生成（先应战）。
+    // kiting 战术下单只 defender 可无损击杀近战入侵者；对 RANGED_ATTACK 型入侵者
+    // 也能在射程内对射。半血撤退后 demand 自动孵接替者（自然车轮战）。
+    // 保守策略：每次只孵 1 只 — kiting 无损 + 半血替换机制已足够应对 NPC 入侵者。
     const hasThreats = input.remoteThreats?.[targetRoom] ?? false;
     if (CONFIG.remote.enableDefender && hasThreats) {
       const defenderPending = countRemotePending(spawnQueue, "remoteDefender", targetRoom);
@@ -216,12 +221,19 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     // 1. Remote Harvester — 每 source 1 个（2-source 房需 2 只，否则第二源白费）；
     //    op.sources 缺失时回退 harvestersPerTarget，上限 harvestersMaxPerTarget
     //    防未知房 sources 异常虚增编制。
+    //
+    //    Source 槽位预分配：spawn 时为每只 harvester 分配 sourceSlot 索引，
+    //    角色侧首绑直接按槽位选 source（FIND_SOURCES[sourceSlot]），
+    //    彻底消除「两只 harvester 不同 tick 到达、各自首绑时看不到对方」
+    //    的竞态窗口。占用映射：存活 + pending 已占的槽位计入，新 harvester
+    //    分配到最少占用的槽位。
     const harvesterTarget = Math.min(
       op.sources ?? CONFIG.remote.harvestersPerTarget,
       CONFIG.remote.harvestersMaxPerTarget,
     );
     const harvesterTotal = (counts.remoteHarvester ?? 0) + pending.remoteHarvester;
     if (harvesterTotal < harvesterTarget && !economySuppressed) {
+      const slot = pickRemoteSourceSlot(remoteCreeps, spawnQueue, targetRoom, harvesterTarget);
       const key = spawnKey("remoteHarvester", homeRoom, harvesterTotal, targetRoom);
       const body = selectBody("remoteHarvester", energyCapacityAvailable);
       requests.push(
@@ -234,6 +246,8 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
           1,
           body,
           tick,
+          undefined,
+          slot,
         ),
       );
     }
@@ -244,6 +258,10 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       const healthy = countHealthyByRole(remoteCreeps, "remoteHarvester", targetRoom, pathCost);
       if (replacement && healthy + pending.remoteHarvester < harvesterTarget) {
         // 替补 key 绑定濒死 creep 名而非 total 索引：submitRequest 按 key 幂等合并，队列内始终只有一条替补。
+        // 替补继承被替换者的 sourceSlot — 无缝接班同一 source。
+        const dyingSlot = remoteCreeps.find(c => c.name === replacement)?.sourceSlot;
+        const slot =
+          dyingSlot ?? pickRemoteSourceSlot(remoteCreeps, spawnQueue, targetRoom, harvesterTarget);
         const key = replacementKey("remoteHarvester", homeRoom, targetRoom, replacement);
         const body = selectBody("remoteHarvester", energyCapacityAvailable);
         requests.push(
@@ -257,6 +275,7 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
             body,
             tick,
             replacement,
+            slot,
           ),
         );
       }
@@ -491,6 +510,7 @@ function createRemoteRequest(
   body: BodyPartConstant[],
   tick: number,
   replaceBy?: string,
+  sourceSlot?: number,
 ): SpawnRequest {
   const req: SpawnRequest = {
     key,
@@ -504,6 +524,7 @@ function createRemoteRequest(
       mode: "acquire",
       spawnIndex: index,
       remoteTarget: target,
+      ...(sourceSlot !== undefined ? { sourceSlot } : {}),
     },
     createdAt: tick,
     // 请求带 TTL：需求消失（运营 paused/abandoned）后的 stale 请求
@@ -515,4 +536,41 @@ function createRemoteRequest(
     req.replaceBy = tick;
   }
   return req;
+}
+
+/**
+ * 为新 remoteHarvester 选择最少占用的 source 槽位。
+ * 统计同 target 的存活 + pending remoteHarvester 已占槽位，
+ * 返回占用数最少的槽位索引（平局取最小索引）。
+ */
+function pickRemoteSourceSlot(
+  remoteCreeps: readonly RemoteCreepSummary[],
+  spawnQueue: readonly SpawnRequest[],
+  targetRoom: string,
+  slotCount: number,
+): number {
+  const occupancy = new Array<number>(slotCount).fill(0);
+  for (const c of remoteCreeps) {
+    if (c.role !== "remoteHarvester" || c.remoteTarget !== targetRoom) continue;
+    if (c.sourceSlot !== undefined && c.sourceSlot >= 0 && c.sourceSlot < slotCount) {
+      occupancy[c.sourceSlot] = (occupancy[c.sourceSlot] ?? 0) + 1;
+    }
+  }
+  for (const req of spawnQueue) {
+    if (req.role !== "remoteHarvester") continue;
+    if (req.memory.remoteTarget !== targetRoom) continue;
+    const slot = req.memory.sourceSlot as number | undefined;
+    if (slot !== undefined && slot >= 0 && slot < slotCount) {
+      occupancy[slot] = (occupancy[slot] ?? 0) + 1;
+    }
+  }
+  let best = 0;
+  let bestCount = occupancy[0]!;
+  for (let i = 1; i < slotCount; i++) {
+    if (occupancy[i]! < bestCount) {
+      bestCount = occupancy[i]!;
+      best = i;
+    }
+  }
+  return best;
 }

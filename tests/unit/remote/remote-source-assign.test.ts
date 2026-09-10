@@ -303,3 +303,133 @@ describe("remote-harvester — v33-R11 绑定自愈", () => {
     expect(h1.memory.sourceId).toBe("srcA");
   });
 });
+
+// ─── sourceSlot 预分配（spawn 侧根治竞态）──────────────────────
+
+describe("remote-harvester — sourceSlot 预分配", () => {
+  /** 带独立坐标的 source，getRangeTo 按 Chebyshev 距离计算。 */
+  function posSource(id: string, x: number, y: number): any {
+    const s = mockSource(id);
+    s.pos = {
+      x,
+      y,
+      roomName: targetRoom,
+      getRangeTo: vi.fn((t: any) => {
+        const tx = t.x ?? t.pos?.x ?? 0;
+        const ty = t.y ?? t.pos?.y ?? 0;
+        return Math.max(Math.abs(tx - x), Math.abs(ty - y));
+      }),
+    };
+    return s;
+  }
+
+  function makeRoom(sources: any[]): any {
+    return {
+      name: targetRoom,
+      find: vi.fn((t: number) => {
+        if (t === FIND_SOURCES) return sources;
+        return [];
+      }),
+    };
+  }
+
+  it("sourceSlot=0 → 选 FIND_SOURCES[0]", () => {
+    const g = globalThis as any;
+    const srcA = posSource("srcA", 10, 10);
+    const srcB = posSource("srcB", 30, 30);
+
+    const h1 = mockCreep({ name: "rh-1", role: "remoteHarvester" });
+    h1.memory.remoteTarget = targetRoom;
+    h1.memory.sourceSlot = 0;
+    h1.room = makeRoom([srcA, srcB]);
+    g.Game.creeps = { "rh-1": h1 };
+
+    const chosen = getRemoteSource(h1);
+
+    expect(chosen?.id).toBe("srcA");
+    expect(h1.memory.sourceId).toBe("srcA");
+  });
+
+  it("sourceSlot=1 → 选 FIND_SOURCES[1]", () => {
+    const g = globalThis as any;
+    const srcA = posSource("srcA", 10, 10);
+    const srcB = posSource("srcB", 30, 30);
+
+    const h1 = mockCreep({ name: "rh-1", role: "remoteHarvester" });
+    h1.memory.remoteTarget = targetRoom;
+    h1.memory.sourceSlot = 1;
+    h1.room = makeRoom([srcA, srcB]);
+    g.Game.creeps = { "rh-1": h1 };
+
+    const chosen = getRemoteSource(h1);
+
+    expect(chosen?.id).toBe("srcB");
+    expect(h1.memory.sourceId).toBe("srcB");
+  });
+
+  it("两只 harvester 各带不同 sourceSlot → 分绑不同 source（无竞态）", () => {
+    const g = globalThis as any;
+    const srcA = posSource("srcA", 10, 10);
+    const srcB = posSource("srcB", 30, 30);
+    const sources = [srcA, srcB];
+
+    // 模拟 spawn 侧预分配：h1=slot0, h2=slot1。
+    // 即使 h2 还没到远矿房（在 home 房通勤中），h1 首绑时不需要 occupancy 扫描。
+    const h1 = mockCreep({ name: "rh-1", role: "remoteHarvester" });
+    h1.memory.remoteTarget = targetRoom;
+    h1.memory.sourceSlot = 0;
+    h1.room = makeRoom(sources);
+
+    const h2 = mockCreep({ name: "rh-2", role: "remoteHarvester" });
+    h2.memory.remoteTarget = targetRoom;
+    h2.memory.sourceSlot = 1;
+    // h2 在 home 房通勤中，但首绑时仍需 room.find — 给 home 房也提供 sources。
+    h2.room = makeRoom(sources);
+
+    g.Game.creeps = { "rh-1": h1, "rh-2": h2 };
+
+    const s1 = getRemoteSource(h1);
+    // h2 不在远矿房，无需调用 getRemoteSource — 但即使调用也不会影响 h1。
+    const s2 = getRemoteSource(h2);
+
+    expect(s1?.id).toBe("srcA");
+    expect(s2?.id).toBe("srcB");
+    expect(h1.memory.sourceId).not.toBe(h2.memory.sourceId);
+  });
+
+  it("sourceSlot 超出 sources.length → 回退 occupancy 分配", () => {
+    const g = globalThis as any;
+    const srcA = posSource("srcA", 10, 10);
+    const srcB = posSource("srcB", 30, 30);
+
+    // sourceSlot=5 但只有 2 个 source → 越界回退。
+    const h1 = mockCreep({ name: "rh-1", role: "remoteHarvester" });
+    h1.memory.remoteTarget = targetRoom;
+    h1.memory.sourceSlot = 5;
+    h1.room = makeRoom([srcA, srcB]);
+    g.Game.creeps = { "rh-1": h1 };
+
+    const chosen = getRemoteSource(h1);
+
+    // 应回退到 occupancy 分配（首绑全 0 → 名哈希选一个）。
+    expect(chosen).toBeDefined();
+    expect(h1.memory.sourceId).toBeDefined();
+  });
+
+  it("无 sourceSlot → 走 occupancy 兼容回退（存量 creep）", () => {
+    const g = globalThis as any;
+    const srcA = posSource("srcA", 10, 10);
+    const srcB = posSource("srcB", 30, 30);
+
+    const h1 = mockCreep({ name: "rh-1", role: "remoteHarvester" });
+    h1.memory.remoteTarget = targetRoom;
+    // 不设 sourceSlot — 模拟存量 creep。
+    h1.room = makeRoom([srcA, srcB]);
+    g.Game.creeps = { "rh-1": h1 };
+
+    const chosen = getRemoteSource(h1);
+
+    expect(chosen).toBeDefined();
+    expect(h1.memory.sourceId).toBeDefined();
+  });
+});

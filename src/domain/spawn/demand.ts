@@ -14,7 +14,7 @@ export const ROLE_REQUIRED_PARTS: Readonly<Record<string, readonly BodyPartConst
   remoteHauler: ["carry", "move"],
   reserver: ["claim", "move"],
   claimer: ["claim", "move"],
-  remoteDefender: ["attack", "move"],
+  remoteDefender: ["ranged_attack", "move"],
   defender: ["attack", "move"],
 };
 
@@ -344,32 +344,51 @@ export function evaluateDemand(
   // 威胁清除后不补充，存量自然到期（minCount=0）。M11：小队威胁（≥2 武装或武装+治疗）
   // 升级响应 — 保底 2 只且优先级升 P0（插队所有经济孵化）。定位是清剿护航，不是救火
   // （救火归塔与集结避险）。
+  //
+  // 优化：有塔且有足够能量时，单 NPC 入侵者由塔独自处理即可 —
+  // defender body 大孵化慢（满配 24 tick+），等孵出来仗都打完了，纯浪费能量。
+  // 仅在以下情况孵化 defender：
+  //   1) 无塔（RCL<3 或塔被摧毁）— defender 是唯一防线
+  //   2) 小队威胁（≥2 武装或武装+治疗）— 塔可能被奶量压制，需 defender 补火力
+  //   3) 塔能量不足（全部塔 < TOWER_ENERGY_COST=10）— 塔无法开火，defender 接管
+  // 社区实践（screepspl.us）："a tower's effectiveness depends on the distance to
+  // the target. Use towers to set up automatic defense of your room." —
+  // 塔设计上就是自动防御，单 NPC 入侵者在其射程内会被秒杀。
   if (snapshot.threatCreeps.length > 0) {
     const defenderConfig = getRoleBounds("defender", home);
     const defenderPending = countPending(queue, "defender", home);
     const defenderTotal = (counts.defender ?? 0) + defenderPending;
     const squad = snapshot.squadThreat;
-    const defenderTarget = squad
-      ? Math.min(Math.max(2, snapshot.threatCreeps.length), defenderConfig.maxCount)
-      : Math.min(snapshot.threatCreeps.length, defenderConfig.maxCount);
-    const defenderPriority = squad ? 0 : 1;
-    for (let i = defenderTotal; i < defenderTarget; i++) {
-      const key = spawnKey("defender", home, i);
-      if (!hasKey(queue, key)) {
-        requests.push(
-          createRequest(
-            "defender",
-            home,
-            i,
-            key,
-            defenderPriority,
-            energyCapacity,
-            roomCtx.energyAvailable,
-            colonyState,
-            snapshot.rcl,
-            tick,
-          ),
-        );
+    // 有塔且有能量时，单入侵者不需要 defender（塔独自处理）。
+    const hasTowers = snapshot.towers.length > 0;
+    const towersHaveEnergy =
+      hasTowers && snapshot.towers.some(t => t.store.getUsedCapacity(RESOURCE_ENERGY) >= 10);
+    const towerSufficient = hasTowers && towersHaveEnergy && !squad;
+    if (towerSufficient) {
+      // 塔足以应对 — 不孵化 defender。跳过整个 defender 评估块。
+    } else {
+      const defenderTarget = squad
+        ? Math.min(Math.max(2, snapshot.threatCreeps.length), defenderConfig.maxCount)
+        : Math.min(snapshot.threatCreeps.length, defenderConfig.maxCount);
+      const defenderPriority = squad ? 0 : 1;
+      for (let i = defenderTotal; i < defenderTarget; i++) {
+        const key = spawnKey("defender", home, i);
+        if (!hasKey(queue, key)) {
+          requests.push(
+            createRequest(
+              "defender",
+              home,
+              i,
+              key,
+              defenderPriority,
+              energyCapacity,
+              roomCtx.energyAvailable,
+              colonyState,
+              snapshot.rcl,
+              tick,
+            ),
+          );
+        }
       }
     }
   }

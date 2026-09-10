@@ -957,6 +957,7 @@ function collectRemoteCreeps(homeRoom: string): RemoteCreepSummary[] {
       remoteTarget: creep.memory.remoteTarget,
       ticksToLive: creep.ticksToLive,
       bodyLength: creep.body.length,
+      sourceSlot: creep.memory.sourceSlot as number | undefined,
     });
   }
   return result;

@@ -278,6 +278,7 @@ export function mockCreep(opts: MockCreepOpts = {}): any {
     upgradeController: vi.fn(() => 0),
     repair: vi.fn(() => 0),
     attack: vi.fn(() => 0),
+    rangedAttack: vi.fn(() => 0),
     hits: 1000,
     hitsMax: 1000,
     moveTo: vi.fn(() => 0),
