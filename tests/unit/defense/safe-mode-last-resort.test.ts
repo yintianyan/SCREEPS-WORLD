@@ -58,7 +58,9 @@ function makeOutgunnedThreat(id: string, rangeToAnchor = 3): any {
 }
 
 function threatUnhandledEvents(): any[] {
-  return ((globalThis as any).eventBuffer?.events ?? []).filter((e: any) => e.k === 41);
+  // ThreatUnhandled = 42 (EventKind enum)。
+  // WarPlanCreated = 41 在 ThreatUnhandled 之前插入，导致枚举值偏移。
+  return ((globalThis as any).eventBuffer?.events ?? []).filter((e: any) => e.k === 42);
 }
 
 function makeSnapshot(opts: {
