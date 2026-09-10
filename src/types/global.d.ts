@@ -91,7 +91,7 @@ declare global {
      * 仅作导航安全网；真正路线优选由 prospect 评分惩罚（hostileAdjacent）在源头完成。
      */
     avoidRooms?: string[];
-    /** remoteHauler 缓存的远矿 containerId — 避免每 tick room.find。 */
+    /** @deprecated remoteHauler 不再缓存 containerId — 每 tick 重新评估（就近优先）。 */
     remoteContainerId?: Id<StructureContainer>;
     /** Distributor 水位分级档位（0-3），由 distributor gate 每 tick 按 storage 水位计算。 */
     distributorTier?: 0 | 1 | 2 | 3;

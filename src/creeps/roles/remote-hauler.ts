@@ -8,7 +8,6 @@ import {
 } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
-import { getObjectById } from "../support/obj-cache";
 import {
   findDroppedEnergyCached,
   findMySitesCached,
@@ -17,9 +16,8 @@ import {
   findTombstonesCached,
 } from "../support/room-scans";
 
-/** container 选择的距离权重（与本地 HAUL_CONTAINER_DISTANCE_WEIGHT 一致）：
- * 每格距离折算 10 能量。满溢的远 container 仍优先于近乎空的近 container。 */
-const REMOTE_CONTAINER_DISTANCE_WEIGHT = 10;
+/** 就近选择的「值得专程」阈值比例：低于背包空闲 30% 的 container 不值得专程跑。 */
+const REMOTE_WORTHWHILE_RATIO = 0.3;
 
 /**
  * 通勤建路 — 走到哪建到哪：规划器在远矿路径铺 road site，通勤 hauler 路过
@@ -131,50 +129,54 @@ function pickupRemoteDropped(minAmount = 0): ActionCandidate<Resource> {
   };
 }
 
-/** 在远矿房查找有能量的 container（双层缓存避免每 tick find）。
- * 第一层 per-creep：remoteContainerId 仍有能量时直接复用。
- * 第二层 per-tick per-room 共享：container 空窗期内若无共享缓存，每只 remoteHauler 每 tick
- * 各自全房 FIND_STRUCTURES，违反「角色禁止全房 find」硬约束（与 findDroppedEnergy 同一模式）。
- * 导出仅供接线测试验证共享缓存行为。 */
+/** 在远矿房按就近原则查找 container 取能。
+ *
+ * 目标：以最快速度满载运回主房。近处 source 能满载就不跑远处；
+ * 近处不足时去远处，绝不停在一处等资源——取完即走，下 tick 重新评估。
+ *
+ * 三层贪心：
+ * Round 1 — 最近的「够满载」的 container (available ≥ carryFree) → 一次取满，距离最近者
+ * Round 2 — 无够满载时，最近的「值得专程」的 container (≥ carryFree × 30%) → 取完即走
+ * Round 3 — 都不值得专程时，选能量最大的（去积攒处比在空 container 旁等强）
+ *
+ * container 列表走 per-tick per-room 共享缓存（同房多 hauler 一次 find），
+ * 消除「角色禁止全房 find」硬约束违规。每 tick 重新评估目标——
+ * 不缓存 containerId，实现取完近处即走、不停留等回填。 */
 export function findRemoteContainer(creep: Creep): StructureContainer | undefined {
-  // 优先使用缓存的 containerId — 避免每 tick find。
-  if (creep.memory.remoteContainerId) {
-    const cached = getObjectById(creep.memory.remoteContainerId as Id<StructureContainer>);
-    if (cached && cached.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-      return cached;
-    }
-    // 缓存失效 — container 被摧毁或空了，清除并重新 find。
-    creep.memory.remoteContainerId = undefined;
-  }
-
-  // 首次或缓存失效：走 per-tick per-room 共享列表（同房多 hauler 一次 find）。
   const containers = findRemoteContainersCached(creep.room).filter(
     c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
   );
   if (containers.length === 0) return undefined;
 
-  // 加权分散（E-2 修复）：原纯 findClosestByRange 在 2-source 房（两 container）会让所有 hauler
-  // 挤最近那个、远 container 积压溢出（羊群）。改为「能量 - 距离×权重」打分 + 名哈希起点散布，
-  // 照本地 selectHaulSourceContainer 的已验证手法。
-  let nameHash = 0;
-  for (let i = 0; i < creep.name.length; i++) {
-    nameHash = (nameHash * 31 + creep.name.charCodeAt(i)) | 0;
+  const carryFree = creep.store.getFreeCapacity(RESOURCE_ENERGY);
+  if (carryFree <= 0) return undefined;
+
+  // 按距离从近到远排序。
+  const sorted = containers
+    .map(c => ({
+      container: c,
+      energy: c.store.getUsedCapacity(RESOURCE_ENERGY),
+      dist: creep.pos.getRangeTo(c),
+    }))
+    .sort((a, b) => a.dist - b.dist);
+
+  // Round 1：最近的「够满载」的 container。
+  for (const e of sorted) {
+    if (e.energy >= carryFree) return e.container;
   }
-  const offset = Math.abs(nameHash) % containers.length;
-  let best = containers[offset]!;
-  let bestScore = -Infinity;
-  for (let i = 0; i < containers.length; i++) {
-    const c = containers[(offset + i) % containers.length]!;
-    const energy = c.store.getUsedCapacity(RESOURCE_ENERGY);
-    const score = energy - creep.pos.getRangeTo(c) * REMOTE_CONTAINER_DISTANCE_WEIGHT;
-    if (score > bestScore) {
-      bestScore = score;
-      best = c;
-    }
+
+  // Round 2：最近的「值得专程」的 container。
+  const worthwhile = carryFree * REMOTE_WORTHWHILE_RATIO;
+  for (const e of sorted) {
+    if (e.energy >= worthwhile) return e.container;
   }
-  // 缓存 containerId，后续 tick 直接用 getObjectById 取回。
-  creep.memory.remoteContainerId = best.id as Id<StructureContainer>;
-  return best;
+
+  // Round 3：都不值得专程 — 选能量最大的（去积攒处比在空 container 旁等强）。
+  let best = sorted[0]!;
+  for (const e of sorted) {
+    if (e.energy > best.energy) best = e;
+  }
+  return best.container;
 }
 
 /** 在远矿房查找最近的掉落能量。
