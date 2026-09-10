@@ -548,34 +548,20 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
+  // Distributor — storage→spawn/extension/tower 短距离快速分发。
+  // 设计原则：distributor 不是 hauler！hauler 走长距离（container→storage 20-50 格），
+  // 需要大运力减少往返。distributor 走短距离（storage→sink 3-10 格），需要的是
+  // 快速响应 + 快速孵化 + 高频次小批量。body 太大 = 孵化慢(每部件 3 tick) + 闲置时
+  // 纯浪费（所有 sink 满了后 distributor 无事可做，大 body 的摊销成本更高）。
+  // 理想运力 = 一轮核心 sink 需求（spawn 300 + extension 50×N）：
+  //   RCL4: 1s+2ext=400, RCL5: 1s+4ext=500, RCL6: 1s+6ext=600,
+  //   RCL7: 1s+8ext=700, RCL8: 1s+10ext=800
+  // 但不需要一趟填满 — 距离短可以多跑几趟，小 body 快孵快响更划算。
   distributor: [
-    // 与 hauler 同型（纯 CARRY+MOVE 物流，storage→spawn/extension/tower 分发）。
-    // RCL7+ 无路大运力档 [10C,10M] @1000。
-    {
-      parts: [
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-      ],
-      minCapacity: 1000,
-    },
+    // 无路平原档：1:1 CARRY:MOVE 保证平原满速（无疲劳），快速响应。
+    // [6C,6M] @600：carry=300 — 一趟填满 spawn(300) 或 6 个 extension。
+    // RCL4(1300) 起孵，5-6 格距离 2-3 趟覆盖全部核心 sink。
+    // 孵化时间 18 tick — 远快于 10C10M 的 30 tick。
     {
       parts: [
         "carry",
@@ -593,14 +579,13 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
       ],
       minCapacity: 600,
     },
-    {
-      parts: ["carry", "carry", "carry", "carry", "carry", "move", "move", "move", "move", "move"],
-      minCapacity: 500,
-    },
+    // [4C,4M] @400：carry=200 — RCL3(800) 起用，一趟填 4 个 extension 或 2/3 个 spawn。
+    // 孵化 12 tick，极快响应。早期核心 sink 少，200 运力够用。
     {
       parts: ["carry", "carry", "carry", "carry", "move", "move", "move", "move"],
       minCapacity: 400,
     },
+    // [3C,3M] @300：carry=150 — 最低档，保底能填 3 个 extension 或半管 spawn。
     { parts: ["carry", "carry", "carry", "move", "move", "move"], minCapacity: 300 },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
@@ -738,9 +723,11 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["work", "carry", "move"], minCapacity: 200 },
   ],
   builder: [
-    // RCL8 大工地档 [16W,8C,12M] @2600：16 WORK = 16/tick 建造速度，
-    // 8 CARRY = 400 运力减少往返，12 MOVE ≥ 24非MOVE/2 道路满速。
-    // RCL8 大量 rampart/wall 工地时显著缩短建造周期。
+    // RCL8 大工地档 [16W,4C,10M] @2200：16 WORK = 16/tick 建造速度。
+    // CARRY 降至 4C=200 — builder 取能受水位限制（满载档满取、中水位 200/趟、低水 50/趟），
+    // 8C=400 在中水位取不满纯浪费；4C=200 恰好匹配中水位上限，减少无效 CARRY 投资。
+    // 10 MOVE ≥ 20非MOVE/2 道路满速（20非MOVE = 16W+4C）。
+    // 孵化 30 tick → 旧 36W body 孵化 36 tick，快 17%。
     {
       parts: [
         "work",
@@ -763,12 +750,6 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
         "carry",
         "carry",
         "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "move",
-        "move",
         "move",
         "move",
         "move",
@@ -780,9 +761,11 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
         "move",
         "move",
       ],
-      minCapacity: 2600,
+      minCapacity: 2200,
     },
-    // RCL7 大工地档 [12W,6C,9M] @1950：12 WORK = 12/tick，比 8W 快 50%。
+    // RCL7 大工地档 [12W,3C,8M] @1550：12 WORK = 12/tick，比 8W 快 50%。
+    // 3C=150 匹配 sustained 水位 200/趟的上限（取 150 不超限，留余量给建造消耗）。
+    // 8 MOVE = 15非MOVE/2 向上取整 = 8，道路满速。
     {
       parts: [
         "work",
@@ -800,10 +783,6 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
         "carry",
         "carry",
         "carry",
-        "carry",
-        "carry",
-        "carry",
-        "move",
         "move",
         "move",
         "move",
@@ -813,9 +792,10 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
         "move",
         "move",
       ],
-      minCapacity: 1950,
+      minCapacity: 1550,
     },
-    // [8W,4C,6M] RCL4 主力档：MOVE ≥ 非MOVE/2 道路上满速；大工地几下拍完减少往返取能。
+    // [8W,2C,5M] @1150：RCL4 主力档。5M ≥ 10非MOVE/2 道路满速。
+    // 2C=100 匹配低水位 50/趟两趟能量，不多投资 CARRY。
     {
       parts: [
         "work",
@@ -828,16 +808,13 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
         "work",
         "carry",
         "carry",
-        "carry",
-        "carry",
-        "move",
         "move",
         "move",
         "move",
         "move",
         "move",
       ],
-      minCapacity: 1300,
+      minCapacity: 1150,
     },
     // [4W,2C,3M] @650：RCL3(800) 过渡档。
     {
@@ -1498,91 +1475,16 @@ const ROAD_OPTIMIZED_BODIES: Readonly<Record<string, readonly BodyTemplate[]>> =
     },
     { parts: ["carry", "carry", "carry", "carry", "move", "move"], minCapacity: 300 },
   ],
+  // Distributor 道路优化 — distributor 专属设计，不与 hauler 共用！
+  // hauler 走长距离（container→storage 20-50 格），需要大运力减少往返。
+  // distributor 走短距离（storage→sink 3-10 格），核心需求是快速响应。
+  // 道路上 1 MOVE 可带 2 CARRY（fatigue-free），用 2:1 配比降低 MOVE 投入。
+  // 但 CARRY 上限控制在 8C=400 — 一趟填满 spawn(300)+2 个 ext 或覆盖大部分核心 sink。
+  // 大于 8C 的 carry 在所有 sink 满后就是纯闲置浪费（distributor 无 WORK 不能升级/建造）。
   distributor: [
-    // RCL8 道路顶档 [32C,16M] @2400：与 hauler 同型。
-    {
-      parts: [
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-      ],
-      minCapacity: 2400,
-    },
-    // 与 hauler 相同的道路优化 body。
-    {
-      parts: [
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "carry",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-        "move",
-      ],
-      minCapacity: 1200,
-    },
+    // RCL5+ 道路档 [8C,4M] @600：carry=400 — 道路满速，一趟覆盖 spawn+2ext 或 8 个 ext。
+    // 孵化 12 tick，快速响应。距离短（5 格）则 1 趟/tick 即可填满一轮。
+    // 不用更大的 body：distributor 闲置时大 body 摊销成本 = 纯支出无收益。
     {
       parts: [
         "carry",
@@ -1600,6 +1502,13 @@ const ROAD_OPTIMIZED_BODIES: Readonly<Record<string, readonly BodyTemplate[]>> =
       ],
       minCapacity: 600,
     },
+    // RCL4 道路档 [6C,3M] @450：carry=300 — 一趟填满 spawn 或 6 个 ext。
+    // 孵化 9 tick。RCL4(1300) 容量充裕，但 distributor 不需要大 body。
+    {
+      parts: ["carry", "carry", "carry", "carry", "carry", "carry", "move", "move", "move"],
+      minCapacity: 450,
+    },
+    // RCL4 入门档 [4C,2M] @300：carry=200 — 早期 sink 少，够用。
     { parts: ["carry", "carry", "carry", "carry", "move", "move"], minCapacity: 300 },
   ],
 };

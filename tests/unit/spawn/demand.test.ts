@@ -836,9 +836,10 @@ describe("Body 感知配额 — 数量按单体能力折算，防大 body 时代
     expect(requests.filter(r => r.role === "hauler")).toHaveLength(2);
   });
 
-  it("distributor：大运力 body → 单头承接更多 fillTarget，头数减员", () => {
-    // 容量 1300 @ RCL5 → 16C = 800 运力 → 每头承接 floor(800/150)=5 个 fillTarget。
-    // 6 个 fillTarget → ceil(6/5) = 2（原口径 ceil(6/2)=3）。
+  it("distributor：小 body 快速响应 → 运力折算后头数适当扩编", () => {
+    // 容量 1300 @ RCL5 → distributor 道路优化 8C = 400 运力 → 每头承接 floor(400/150)=2 个 fillTarget。
+    // 6 个 fillTarget → ceil(6/2) = 3，但 maxCount=3 封顶。
+    // distributor body 缩小后单头运力下降，需要更多头数补偿 — 但 maxCount 是硬上界。
     // 预置已满的升编确认窗口 — 本测试验证运力折算，不验证升编时序。
     const storage = mockStructure("storage", { id: "st", energy: 50000, capacity: 1000000 });
     const snap = mockSnapshot({
@@ -857,7 +858,8 @@ describe("Body 感知配额 — 数量按单体能力折算，防大 body 时代
       normalCtx(0, { distScaleUpSince: 800 }),
       1000,
     );
-    expect(requests.filter(r => r.role === "distributor")).toHaveLength(2);
+    // 6 fillTargets / 2 perDistributor = 3 → 但 maxCount=3 封顶，实际 3 个请求。
+    expect(requests.filter(r => r.role === "distributor")).toHaveLength(3);
   });
 
   it("危机口径对齐：recovery 时按 energyAvailable 降级 body 估算，头数随之放宽", () => {

@@ -174,10 +174,11 @@ describe("Bodies — A1 大 body 档位（随 RCL 容量放大）", () => {
     expect(bodyCost(rcl2)).toBe(500);
   });
 
-  it("builder RCL4(1300) 选 8W4C6M；RCL3(800) 选 4W2C3M", () => {
+  it("builder RCL4(1300) 选 8W2C5M；RCL3(800) 选 4W2C3M", () => {
+    // CARRY 从 4C 降至 2C — builder 取能受水位限制(200/趟)，4C=200 取不满纯浪费。
     const rcl4 = selectBody("builder", 1300, { rcl: 4 });
     expect(rcl4.filter(p => p === "work")).toHaveLength(8);
-    expect(bodyCost(rcl4)).toBe(1300);
+    expect(bodyCost(rcl4)).toBe(1150);
 
     const rcl3 = selectBody("builder", 800, { rcl: 3 });
     expect(rcl3.filter(p => p === "work")).toHaveLength(4);
@@ -279,22 +280,23 @@ describe("Bodies — RCL7/RCL8 高档模板补充", () => {
     expect(body.filter(p => p === "attack")).toHaveLength(10);
   });
 
-  it("builder RCL8(12300) 选 [16W,8C,12M] 大工地档", () => {
+  it("builder RCL8(12300) 选 [16W,4C,10M] 大工地档", () => {
+    // CARRY 从 8C 降至 4C — 水位限制下大 CARRY 纯浪费。
     const body = selectBody("builder", 12300, { rcl: 8 });
     expect(body.filter(p => p === "work")).toHaveLength(16);
-    expect(body.filter(p => p === "carry")).toHaveLength(8);
-    expect(body.filter(p => p === "move")).toHaveLength(12);
+    expect(body.filter(p => p === "carry")).toHaveLength(4);
+    expect(body.filter(p => p === "move")).toHaveLength(10);
   });
 
-  it("builder RCL7(5300) 选 [12W,6C,9M] 档", () => {
-    // 5300 < 2600(RCL8档)，所以选到 RCL7 档 [12W,6C,9M] minCapacity=1950
+  it("builder RCL7(1950) 选 [12W,3C,8M] 档", () => {
+    // CARRY 从 6C 降至 3C — 匹配 sustained 水位 200/趟上限。
     const body = selectBody("builder", 1950, { rcl: 7 });
     expect(body.filter(p => p === "work")).toHaveLength(12);
-    expect(body.filter(p => p === "carry")).toHaveLength(6);
-    expect(body.filter(p => p === "move")).toHaveLength(9);
+    expect(body.filter(p => p === "carry")).toHaveLength(3);
+    expect(body.filter(p => p === "move")).toHaveLength(8);
   });
 
-  it("builder RCL4(1300) 仍选 [8W,4C,6M] 主力档", () => {
+  it("builder RCL4(1300) 仍选 [8W,2C,5M] 主力档", () => {
     const body = selectBody("builder", 1300, { rcl: 4 });
     expect(body.filter(p => p === "work")).toHaveLength(8);
   });
@@ -311,10 +313,12 @@ describe("Bodies — RCL7/RCL8 高档模板补充", () => {
     expect(body.filter(p => p === "move")).toHaveLength(16);
   });
 
-  it("distributor 道路 RCL8(12300) 选 [32C,16M] 顶档", () => {
+  it("distributor 道路 RCL8(12300) 选 [8C,4M] 快速响应档", () => {
+    // distributor 不是 hauler — 短距离快速分发，小 body 快孵快响应。
+    // 顶档 8C4M@600：carry=400，一趟填满 spawn+2ext，孵化 12 tick。
     const body = selectBody("distributor", 12300, { rcl: 8 });
-    expect(body.filter(p => p === "carry")).toHaveLength(32);
-    expect(body.filter(p => p === "move")).toHaveLength(16);
+    expect(body.filter(p => p === "carry")).toHaveLength(8);
+    expect(body.filter(p => p === "move")).toHaveLength(4);
   });
 
   it("remoteHauler RCL8(12300) 选 [24C,12M] 跨房大运力档", () => {
