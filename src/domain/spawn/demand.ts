@@ -769,12 +769,6 @@ export function evaluateDemand(
 
     const pressure = roomCtx.economyPressure;
     const upgradeCfg = CONFIG.economy.upgrade;
-    // RCL8 时引擎硬限制 15 energy/tick，选 15W body 即可顶满；RCL<8 时不限速，
-    // body 随容量放大（RCL7 可孵 40W body = 40/tick 升速）。
-    const bodyEnergyCap = snapshot.rcl >= 8 ? 1650 : energyCapacity;
-    const workPerBody =
-      selectBody("upgrader", bodyEnergyCap, { rcl: snapshot.rcl }).filter(p => p === "work")
-        .length || 1;
     const hasStorage = snapshot.storage !== undefined;
     const storageEnergy = hasStorage ? snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) : 0;
 
@@ -783,6 +777,23 @@ export function evaluateDemand(
     const agendaPush = roomCtx.agendaInitiative === "rcl-push";
     const sprintStorageGate = agendaPush ? upgradeCfg.sustainedStorage : upgradeCfg.sprintStorage;
     const sprintPressureGate = agendaPush ? 0.4 : 0.3;
+
+    // Body 分阶：upgrader body 不是越大越好 — 升级阶段决定 body 大小。
+    // 冲刺（storage ≥ sprintGate + pressure 低）：用满配 body（RCL7 可 40W），烧库换 RCL 复利。
+    // 维持（storage ≥ sustained）：用 15W body（minCapacity=1650），RCL8 恰好顶满引擎 15/tick、
+    //   RCL<8 也平衡效率（15/tick ≈ 盈余全喂 controller）。
+    // 保级/低水位（storage < sustained）：用 8W body（minCapacity=950），最小够保级的 body，
+    //   不抽干 storage。降级风险时 demand 拉满 maxCount，用数量补偿小 body 的低升速。
+    // 无 storage（RCL1-3）：用满配 body（早期猛冲，能量不升级也浪费）。
+    const isSprintPhase =
+      (hasStorage && storageEnergy >= sprintStorageGate && pressure <= sprintPressureGate) ||
+      !hasStorage;
+    const isSustainedPhase = hasStorage && storageEnergy >= upgradeCfg.sustainedStorage;
+    const bodyEnergyCap =
+      snapshot.rcl >= 8 || !isSprintPhase ? (isSustainedPhase ? 1650 : 950) : energyCapacity;
+    const workPerBody =
+      selectBody("upgrader", bodyEnergyCap, { rcl: snapshot.rcl }).filter(p => p === "work")
+        .length || 1;
 
     let upgraderTarget: number;
     if (hasDowngradeRisk || crisisNeedsGuard) {

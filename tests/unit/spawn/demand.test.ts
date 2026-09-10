@@ -74,7 +74,9 @@ describe("A2 — storage 水位驱动升级功率", () => {
     expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(40);
   });
 
-  it("维持：storage ≥ 10k → 1 个大 body upgrader（≈40/tick 吃满盈余）", () => {
+  it("维持：storage ≥ 10k 且 < 50k → 1 个 15W body upgrader（≈15/tick 平衡效率）", () => {
+    // body 分阶：维持阶段不选 40W 大 body（那是冲刺档），而选 15W（RCL8 引擎上限 15/tick，
+    // RCL<8 也平衡效率）。40W body 在维持阶段会过度抽干 storage — storage 20k 不够 40W 烧。
     const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
     const snap = stationSnapshot({ storage, rcl: 7, energyCapacityAvailable: 5300 });
     const { requests } = evaluateDemand(
@@ -89,7 +91,7 @@ describe("A2 — storage 水位驱动升级功率", () => {
 
     const upgraders = requests.filter(r => r.role === "upgrader");
     expect(upgraders).toHaveLength(1);
-    expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(40);
+    expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(15);
   });
 
   it("低水位：storage < 10k 且 pressure > 0.5 → 停升级攒库存", () => {
