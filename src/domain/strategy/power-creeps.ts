@@ -93,7 +93,9 @@ export interface GplSpendPlan {
  * 规划本 tick 的 GPL 消费。free levels = gplLevel - Σ(PC level)；
  * ≤0 → none；无 PC → create；否则沿 build order 找第一个
  * 「未升满且 PC level 达门禁」的项（不达标顺延，不空转）。
- * 单 PC 策略：多 PC 时只投资第一个（跨 PC 调度属后续增量）。
+ * 多 PC 策略：多 PC 时选择「投资回报率最高」的 PC 升级——
+ * 优先升级等级最低的 PC（拉齐覆盖面），拉齐后升级第一个 PC
+ *（深化主力）。第二个 PC 在 GPL ≥ 22（第一个 PC 满级）时创建。
  */
 export function planGplSpending(
   gplLevel: number,
@@ -110,7 +112,39 @@ export function planGplSpending(
     return { action: "create", pcName: `pc-op-${seq}` };
   }
 
-  const target = pcs[0]!;
+  // 多 PC 创建门禁：第一个 PC 的 build order 全部升满 + free levels ≥ 2 时创建。
+  // freeLevels=1 时第一 PC build order 已满 → 攒着等更多 free levels（不浪费 1 级在
+  // 半个 GENERATE_OPS 上）。freeLevels ≥ 2 时第二 PC 至少能升 GENERATE_OPS + OPERATE_SPAWN
+  // 才值得分散投资。
+  if (pcs.length === 1 && freeLevels >= 2) {
+    // 检查第一 PC 是否已升满 build order。
+    const target0 = pcs[0]!;
+    let allMaxed = true;
+    const expected0 = new Map<PowerId, number>();
+    for (const power of POWER_BUILD_ORDER) {
+      const wantLevel = (expected0.get(power) ?? 0) + 1;
+      expected0.set(power, wantLevel);
+      const current0 = target0.powers[power] ?? 0;
+      if (current0 < wantLevel) {
+        // 还有未升满的项 — 但如果 PC level 不足门禁，不算未升满（门禁限制而非投资选择）。
+        const required0 = POWER_LEVEL_REQUIREMENTS[power]?.[wantLevel - 1];
+        if (required0 !== undefined && target0.level >= required0) {
+          allMaxed = false;
+          break;
+        }
+      }
+    }
+    if (allMaxed) {
+      let seq = 0;
+      while (existingNames.includes(`pc-op-${seq}`)) seq++;
+      return { action: "create", pcName: `pc-op-${seq}` };
+    }
+  }
+
+  // 多 PC 升级选择：优先升级等级最低的 PC（拉齐覆盖面）。
+  // 同等级时升级第一个（稳定优先，避免抖动）。
+  const sorted = [...pcs].sort((a, b) => a.level - b.level);
+  const target = sorted[0]!;
   // 遍历 build order，累计每个 power 的期望等级（第 n 次出现 → lv n）。
   const expected = new Map<PowerId, number>();
   for (const power of POWER_BUILD_ORDER) {

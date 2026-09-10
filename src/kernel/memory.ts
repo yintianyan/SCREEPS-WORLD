@@ -1146,6 +1146,42 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
     },
   },
+  {
+    from: 45,
+    to: 46,
+    run: () => {
+      // v46：PB 多任务并行 — 将 KernelMemory.powerFarm（单对象）迁移为
+      // KernelMemory.powerFarmMissions（数组）。旧对象 → [旧对象]。
+      const kernel = Memory.kernel as Record<string, unknown> | undefined;
+      if (!kernel) return;
+      const oldFarm = kernel.powerFarm as Record<string, unknown> | undefined;
+      if (oldFarm === undefined) {
+        // 无旧任务 → 无需迁移。
+        delete kernel.powerFarm;
+        return;
+      }
+      if (typeof oldFarm !== "object" || oldFarm === null || Array.isArray(oldFarm)) {
+        // 畸形 → 删除。
+        delete kernel.powerFarm;
+        return;
+      }
+      // 将旧对象包装为数组元素。
+      const phase = oldFarm.phase as string | undefined;
+      if (phase !== "strike" && phase !== "collect") {
+        delete kernel.powerFarm;
+        return;
+      }
+      kernel.powerFarmMissions = [{
+        targetRoom: oldFarm.targetRoom as string,
+        sponsor: oldFarm.sponsor as string,
+        since: oldFarm.since as number,
+        spawned: oldFarm.spawned as number ?? 0,
+        phase: phase as "strike" | "collect",
+        collectorSpawnedAt: oldFarm.collectorSpawnedAt as number | undefined,
+      }];
+      delete kernel.powerFarm;
+    },
+  },
 ];
 
 /**

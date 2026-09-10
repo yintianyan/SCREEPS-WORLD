@@ -46,22 +46,25 @@ export const powerCreepManagerSystem: System = {
       }
     }
 
-    // ── ② 驻留分配（Memory 粘性）──
-    const home = resolveHome(pcs, ctx);
-    if (!home) return; // 帝国尚无 powerSpawn（RCL8 前）→ 全部运营无从谈起
+  // ── ② 驻留分配（多 PC 多房，Memory 粘性）──
+  const homeMap = resolveHomes(pcs, ctx);
+  if (homeMap.size === 0) return; // 帝国尚无 powerSpawn（RCL8 前）→ 全部运营无从谈起
 
-    // ── ③④ 逐 PC 孵化 / 运营 ──
-    for (const pc of pcs) {
-      if (!pc.ticksToLive) {
-        // 未孵化：在驻留房 powerSpawn 孵化（ERR_TIRED = 死亡冷却中）。
-        if (home.powerSpawn && pc.spawn(home.powerSpawn) === OK) {
-          recordEvent(EventKind.PowerCreepMilestone, home.roomName, [2]);
-        }
-        continue;
+  // ── ③④ 逐 PC 孵化 / 运营 ──
+  for (const pc of pcs) {
+    if (!pc.ticksToLive) {
+      // 未孵化：在驻留房 powerSpawn 孵化（ERR_TIRED = 死亡冷却中）。
+      const home = homeMap.get(pc.name);
+      if (home?.powerSpawn && pc.spawn(home.powerSpawn) === OK) {
+        recordEvent(EventKind.PowerCreepMilestone, home.roomName, [2]);
       }
-      runSpawnedPc(pc, home, ctx);
+      continue;
     }
-  },
+    const home = homeMap.get(pc.name);
+    if (!home) continue;
+    runSpawnedPc(pc, home, ctx);
+  }
+},
 };
 
 /** 从 PC 的 powers 表采集 level 映射（cooldown 由运营路径单独采）。 */
@@ -74,13 +77,18 @@ function collectPowerLevels(pc: PowerCreep): Record<number, number> {
 }
 
 /**
- * 解析 PC 驻留房：第一增量单 PC 单房 — 有 powerSpawn 的第一个 snapshot。
+ * 解析多 PC 驻留房：每个 PC 分配到一个有 powerSpawn 的房间。
  * 粘性：Memory.kernel.powerCreeps.homeAssignments 已指向有效房则沿用
- * （PC 长途换房成本高）；失守/无 PC 的死条目顺带清理。
+ *（PC 长途换房成本高）；失守/无 PC 的死条目顺带清理。
+ * 多 PC 多房策略：每个 PC 尽量驻留不同房间，最大化覆盖面。
+ * PC 数量超过有 powerSpawn 的房间数时，多余 PC 共享驻留房。
  */
-function resolveHome(pcs: readonly PowerCreep[], ctx: TickContext): RoomSnapshot | undefined {
+function resolveHomes(
+  pcs: readonly PowerCreep[],
+  ctx: TickContext,
+): Map<string, RoomSnapshot> {
   const candidates = [...ctx.snapshots()].filter((s) => s.powerSpawn);
-  if (candidates.length === 0) return undefined;
+  if (candidates.length === 0) return new Map();
 
   // kernel 由 runMigrations/建档保证存在；防御性兜底（缺失视为无驻留）。
   Memory.kernel ??= {};
@@ -94,16 +102,49 @@ function resolveHome(pcs: readonly PowerCreep[], ctx: TickContext): RoomSnapshot
     }
   }
 
-  const first = pcs[0];
-  if (!first) return candidates[0];
-  const assigned = assignments[first.name];
-  if (assigned) {
-    const sticky = candidates.find((s) => s.roomName === assigned);
-    if (sticky) return sticky;
+  const result = new Map<string, RoomSnapshot>();
+  const usedRooms = new Set<string>();
+
+  // 第一轮：粘性分配 — 已有有效驻留的 PC 沿用。
+  for (const pc of pcs) {
+    const assigned = assignments[pc.name];
+    if (assigned) {
+      const sticky = candidates.find((s) => s.roomName === assigned);
+      if (sticky) {
+        result.set(pc.name, sticky);
+        usedRooms.add(sticky.roomName);
+        continue;
+      }
+    }
   }
-  // 新分配 / 粘性失效 → 写入第一个候选并沿用。
-  assignments[first.name] = candidates[0]!.roomName;
-  return candidates[0];
+
+  // 第二轮：新分配 — 未驻留的 PC 分配到最少使用且空闲的房间。
+  for (const pc of pcs) {
+    if (result.has(pc.name)) continue;
+    // 找最少使用的候选房（已分配 PC 数最少）。
+    const roomPcCount = new Map<string, number>();
+    for (const snap of candidates) {
+      let count = 0;
+      for (const [, home] of result) {
+        if (home.roomName === snap.roomName) count++;
+      }
+      roomPcCount.set(snap.roomName, count);
+    }
+    // 选最少的（同数量取第一个 — 稳定优先）。
+    let bestRoom = candidates[0]!;
+    let bestCount = roomPcCount.get(bestRoom.roomName) ?? 0;
+    for (const snap of candidates) {
+      const count = roomPcCount.get(snap.roomName) ?? 0;
+      if (count < bestCount) {
+        bestRoom = snap;
+        bestCount = count;
+      }
+    }
+    result.set(pc.name, bestRoom);
+    assignments[pc.name] = bestRoom.roomName;
+  }
+
+  return result;
 }
 
 /** 已孵化 PC 的运营执行：采集 → 纯函数裁决 → moveTo + 签发意图。 */

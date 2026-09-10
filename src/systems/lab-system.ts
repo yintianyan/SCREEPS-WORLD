@@ -11,6 +11,7 @@ import { collectFullInventory } from "../domain/industry/inventory";
 import { expandReactionDemands } from "../domain/industry/procurement";
 import type { ProcurementDemand } from "../kernel/global-cache";
 import { systemPhase } from "../kernel/phase";
+import { moveToTarget } from "../creeps/movement";
 
 // ─── Boost/装料常量（引擎数值：boostCreep 每部件 30 矿物 + 20 能量）────
 
@@ -61,10 +62,10 @@ function collectCompoundInventory(snapshot: RoomSnapshot): Record<string, number
 // ─── Lab 分配 ───────────────────────────────────────────────
 
 /**
- * 规划 lab 分配：优先 boost，剩余做反应。
- * 策略：1 个 lab 专门 boost（有请求时）→ 剩余取贪心多三元组（各组 2 input + 1 output）
+ * 规划 lab 分配：优先 boost 排队序列，剩余做反应。
+ * 策略：每个待 boost 请求分配 1 个 lab（按优先级降序）→ 剩余 lab 取贪心多三元组
  * 并行执行同一反应步骤 → 未参与反应的 idle。
- * RCL8 有 10 个 lab — 多三元组并行可把产能从 5/tick 提到 15/tick（3 组）。
+ * RCL8 有 10 个 lab — 3 boost 并行 + 2 组反应（6 lab）可同时服务编队和经济。
  */
 function planLabs(
   snapshot: RoomSnapshot,
@@ -80,10 +81,15 @@ function planLabs(
 
   let labIndex = 0;
 
-  // 1. Boost lab（第一个 lab）
-  if (boostRequests.length > 0 && labs.length > 0) {
+  // 1. Boost labs — 排队序列：每个 boost 请求分配一个 lab。
+  // RCL6 有 3 lab，最多 1 boost + 0 反应（剩余 2 不足三元组）— boost 优先。
+  // RCL7 有 6 lab，最多 2 boost + 1 反应三元组。
+  // RCL8 有 10 lab，最多 3 boost + 2 反应三元组（或 1 boost + 3 反应组）。
+  // boost 请求已按优先级降序传入，高优先级先占 lab。
+  const boostCount = Math.min(boostRequests.length, labs.length);
+  for (let i = 0; i < boostCount; i++) {
     const boostLab = labs[labIndex]!;
-    const req = boostRequests[0]!;
+    const req = boostRequests[i]!;
     assignments.push({
       labId: boostLab.id,
       role: "boost",
@@ -283,6 +289,49 @@ export const labSystem: System = {
         );
       }
 
+      // ── 0.5 Unboost 回收 ──
+      // 被标记回收（recycle=true）的 boosted creep 先去 lab 执行 unboostCreep，
+      // 回收 50% 矿物化合物后再去 spawn 回收残值能量。
+      // unboost 与 boost/reaction 共享 lab — 优先级最高（recycle 的 creep
+      // 时钟在倒计时，错过即矿物随尸体灭失）。同 tick 最多 1 个 lab 执行 unboost
+      //（冷却长，多 lab 并行 unboost 无意义）。
+      let unboostLab: StructureLab | undefined;
+      let unboostCreep: Creep | undefined;
+      const recycleCreeps = (globalCache().creepRefs ?? [])
+        .filter(r => r.home === snapshot.roomName && r.recycle);
+      for (const ref of recycleCreeps) {
+        const creep = Game.creeps[ref.name];
+        if (!creep) continue;
+        // 只处理有 boost 部件的 creep。
+        if (!creep.body.some(p => p.boost !== undefined && p.boost !== null)) continue;
+        // 找一个可用的 lab（无冷却、creep 相邻或在可达范围）。
+        for (const lab of snapshot.labs) {
+          const labObj = Game.getObjectById(lab.id as Id<StructureLab>);
+          if (!labObj || labObj.cooldown > 0) continue;
+          if (creep.pos.getRangeTo(labObj) <= 1) {
+            // 相邻 — 可执行 unboost。
+            const result = labObj.unboostCreep(creep);
+            if (result === OK) {
+              // unboost 成功 — 矿物掉落在 creep 脚下，hauler 会自动回收。
+              unboostLab = labObj;
+              unboostCreep = creep;
+            }
+            break;
+          }
+          // 不相邻 — 记录为候选，引导 creep 前往（下方引导逻辑）。
+          if (!unboostLab) {
+            unboostLab = labObj;
+            unboostCreep = creep;
+          }
+        }
+        if (unboostCreep && unboostLab && unboostCreep === creep) break;
+      }
+      // 引导 recycle+boosted creep 去最近的 lab（spawn-manager 的 recyclePass
+      // 也会引导去 spawn，但 unboost 优先 — 矿物价值远高于残值能量）。
+      if (unboostCreep && unboostLab && unboostCreep.pos.getRangeTo(unboostLab) > 1) {
+        moveToTarget(unboostCreep, unboostLab);
+      }
+
       // ── 1. Boost 决策 ──
       // 消费共享快照总线 — 不再独立遍历 Game.creeps。
       const creepSummaries = (globalCache().creepRefs ?? [])
@@ -435,12 +484,13 @@ export const labSystem: System = {
         g.labDemands.byRoom[snapshot.roomName] = demandTable;
       }
 
-      // ── 3.5 发布 boost 报到分配 ──
+      // ── 3.5 发布 boost 报到分配（排队序列）──
       // 把「creep → boost lab」写入 globalCache，供 role-runner 引导新生 creep
       // 走到 lab 旁（boostCreep 要求相邻）。系统先于角色运行，同 tick 数据可达。
       // ready = lab 内化合物与能量均已备足（boostCreep 每部件 30 矿物 + 20 能量，
       // 缺任一项都会 ERR_NOT_ENOUGH_RESOURCES）：未备足时不引导报到
       //（creep 先正常干活，supplyLabs 搬运到位后的评估周期再来），防止在 lab 旁空等。
+      // 排队序列：多个 boost assignment 各自映射到不同 lab，多个 creep 可同时报到。
       for (const assignment of labPlan.assignments) {
         if (assignment.role !== "boost" || !assignment.boostTarget) continue;
         const g = globalCache();
@@ -457,7 +507,7 @@ export const labSystem: System = {
         };
       }
 
-      // ── 4. 执行 boost ──
+      // ── 4. 执行 boost（排队序列：多个 lab 可同 tick 执行不同 creep 的 boost）──
       for (const assignment of labPlan.assignments) {
         if (assignment.role !== "boost" || !assignment.boostTarget || !assignment.boostCompound) continue;
 

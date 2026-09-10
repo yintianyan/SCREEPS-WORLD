@@ -40,7 +40,7 @@ export function getWallTargetHits(
 
 export const CONFIG = {
   memory: {
-    schemaVersion: 45,
+    schemaVersion: 46,
     /** 【F1/G-C】数据族 TTL 表（FREEZE §9）：每族 {maxAge, sweepPolicy}。
      * sweepPolicy: "ring"（定长环自动截断）| "hook"（由既有清理钩子执行）| "planned"（消费者落地前占位）。
      * 本表 v1 为治理登记：ring/hook 两类由既有机制兑现，"planned" 行不产生行为。 */
@@ -999,6 +999,8 @@ export const CONFIG = {
   powerFarm: {
     /** 任务管理器运行间隔（tick）。 */
     interval: 50,
+    /** 最大并行任务数：同时追踪多个 PB 目标。2 个任务需 2×4=8 attacker + 2 healer。 */
+    maxConcurrentMissions: 2,
     /** PB 情报新鲜度上限（tick）：PB 出现后 ~5000 tick 自动消失，旧情报大概率扑空。 */
     intelFreshness: 2000,
     /** 派遣最大线性距离（房）。 */

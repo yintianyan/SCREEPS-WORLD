@@ -234,9 +234,13 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
 
     // 3. Reserver — 每目标 1 个（RCL 门禁由系统层检查）。R3b：仅 normal 生成 —
     //    recovery 下 P2 角色被 kernel 门禁跳过，孵出即在 home 闲置白耗孵化窗。
+    //    reserver 不受 economySuppressed 冻结：它是无战力纯 CLAIM 单位，不参与战斗；
+    //    reservation 过期 → source 容量减半（3000→1500）→ 5W harvester 采集速率
+    //    10/tick > 再生 5/tick → source 被采空 → harvester 空窗，产能损失远大于
+    //    reserver 孵化成本（650 能量/600 tick）。
     if (CONFIG.remote.enableReserver && colonyState === "normal") {
       const reserverTotal = (counts.reserver ?? 0) + pending.reserver;
-      if (reserverTotal < 1 && !economySuppressed) {
+      if (reserverTotal < 1) {
         const key = spawnKey("reserver", homeRoom, reserverTotal, targetRoom);
         const body = selectBody("reserver", energyCapacityAvailable);
         // CLAIM 需 650 能量，低容量时 body 选择回退到 RECOVERY_BODY —
@@ -248,7 +252,7 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
           ));
         }
       }
-      if (reserverTotal >= 1 || economySuppressed) {
+      if (reserverTotal >= 1) {
         const pathCost = input.travelCosts?.[targetRoom];
         const replacement = findReplacement(remoteCreeps, "reserver", targetRoom, pathCost);
         const healthy = countHealthyByRole(remoteCreeps, "reserver", targetRoom, pathCost);

@@ -321,6 +321,43 @@ describe("remote demand — evaluateRemoteDemand", () => {
     expect(requests.filter((r) => r.role === "reserver")).toHaveLength(0);
   });
 
+  // ── reserver 不受 economySuppressed 冻结（reservation 断裂修复）──
+
+  it("威胁在场时 reserver 仍生成初始孵化请求（不因 economySuppressed 冻结）", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteThreats: { [targetRoom]: true },
+    });
+    const reserverReqs = requests.filter((r) => r.role === "reserver");
+    expect(reserverReqs).toHaveLength(1);
+  });
+
+  it("威胁在场时 reserver 濒死者仍生成替补请求（reservation 不能断）", () => {
+    const dying: RemoteCreepSummary = {
+      name: "reserver-dying", role: "reserver",
+      remoteTarget: targetRoom, ticksToLive: 30, bodyLength: 2,
+    };
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteCreeps: [dying],
+      remoteThreats: { [targetRoom]: true },
+    });
+    const reserverReqs = requests.filter((r) => r.role === "reserver");
+    expect(reserverReqs).toHaveLength(1);
+    expect(reserverReqs[0]!.replaceBy).toBe(tick);
+  });
+
+  it("威胁在场时 harvester/hauler 仍被冻结（仅 reserver 豁免）", () => {
+    const { requests } = evaluateRemoteDemand({
+      ...baseInput,
+      remoteThreats: { [targetRoom]: true },
+    });
+    const roles = requests.map((r) => r.role);
+    expect(roles).not.toContain("remoteHarvester");
+    expect(roles).not.toContain("remoteHauler");
+    expect(roles).toContain("reserver");
+  });
+
   it("creep 寿命充足时不生成替换请求", () => {
     const healthyCreep: RemoteCreepSummary = {
       name: "remoteHarvester-healthy",

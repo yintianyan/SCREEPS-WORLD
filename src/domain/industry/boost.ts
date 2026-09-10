@@ -15,6 +15,20 @@ export const DEFAULT_BOOST_POLICY: BoostPolicy = {
     // X 系 T3 是编队战力的数量级提升，无 boost 的编队在塔下即送。
     attacker: "XUH2O",   // attack ×4
     healer: "XLHO2",     // heal ×4
+    // rangedAttacker kiting 编队：rangedAttack ×3，远程压制。
+    rangedAttacker: "XKHO2",  // rangedAttack ×3
+    // dismantler 拆迁编队：dismantle ×4，快速拆墙。
+    dismantler: "XZH2O",      // dismantle ×4
+  },
+  // 降级 boost 链：T3 库存不足时按序降级到 T2/T1。
+  // 降级 boost 远好于零 boost：T2 upgrade ×1.8 vs 无 boost ×1.0。
+  // 降级只用于经济角色（upgrader/harvester/builder）—
+  // 战斗角色（attacker/healer/defender/rangedAttacker/dismantler）
+  // 不降级：T2 战斗 boost 倍率不足以在塔下存活，裸攻止损链兜底更安全。
+  fallbackBoosts: {
+    upgrader: ["GH2O", "GH"],      // T2 → T1
+    harvester: ["UHO2", "UO"],     // T2 → T1
+    builder: ["LH2O", "LH"],       // T2 → T1
   },
   minRcl: 6,
   reserveAmount: 100, // 保留 100 单位化合物用于反应链
@@ -27,6 +41,8 @@ const ROLE_BOOST_PRIORITY: Readonly<Record<string, number>> = {
   healer: 25,
   // defender 只在威胁期存在，boost 属即时战力而非长期投资。
   defender: 20,
+  rangedAttacker: 18,
+  dismantler: 15,
   upgrader: 10,
   harvester: 8,
   builder: 5,
@@ -43,7 +59,9 @@ const ROLE_BOOST_PRIORITY: Readonly<Record<string, number>> = {
 export const BOOST_REPORT_TTL = 1400;
 
 /** war 编队角色（战时放宽报到窗口的适用范围）。 */
-export const WAR_BOOST_ROLES: ReadonlySet<string> = new Set(["attacker", "healer"]);
+export const WAR_BOOST_ROLES: ReadonlySet<string> = new Set([
+  "attacker", "healer", "rangedAttacker", "dismantler",
+]);
 
 /**
  * 报到窗口判定：通用窗口内 → true；war 编队角色在 build 相位 → 全程可报到。
@@ -90,8 +108,30 @@ export interface BoostCreepSummary {
 }
 
 /**
+ * 从 storage 中选择可用的 boost 化合物：首选 → fallback 降级链。
+ * 返回 undefined = 无可用化合物（库存均不足 reserveAmount + 30）。
+ * 降级只走 fallbackBoosts 中声明的替代品；未声明 fallback 的角色仅用首选。
+ */
+export function selectBoostCompound(
+  role: string,
+  storage: Readonly<Record<string, number>>,
+  policy: BoostPolicy,
+): Compound | undefined {
+  const primary = policy.roleBoosts[role];
+  if (primary && (storage[primary] ?? 0) - policy.reserveAmount >= 30) return primary;
+  // 降级链：按 fallback 声明顺序尝试更低 tier 的化合物。
+  const fallbacks = policy.fallbackBoosts?.[role];
+  if (!fallbacks) return undefined;
+  for (const fb of fallbacks) {
+    if ((storage[fb] ?? 0) - policy.reserveAmount >= 30) return fb;
+  }
+  return undefined;
+}
+
+/**
  * 计算当前 tick 的 boost 请求列表（按优先级降序）；policy 默认 DEFAULT_BOOST_POLICY。
  * warBuildPhase：war 编队 build 相位时放宽报到窗口（见 isWithinBoostWindow）。
+ * 降级 boost：当首选 T3 库存不足时，自动沿 fallbackBoosts 链降级到 T2/T1。
  */
 export function evaluateBoostRequests(
   creeps: readonly BoostCreepSummary[],
@@ -109,11 +149,9 @@ export function evaluateBoostRequests(
 
     if (!isWithinBoostWindow(creep.role, creep.ticksToLive, warBuildPhase)) continue;
 
-    const targetCompound = policy.roleBoosts[creep.role];
+    // 降级 boost 选择：首选 T3 不足时自动降级到 T2/T1。
+    const targetCompound = selectBoostCompound(creep.role, storage, policy);
     if (!targetCompound) continue;
-
-    const available = (storage[targetCompound] ?? 0) - policy.reserveAmount;
-    if (available < 30) continue; // boost 成本 = bodyParts × 30
 
     // 按实际可强化部件数备料（传入 body 时）：备料不足时 lab-system 执行端
     // 会按库存封顶做部分强化 — 部分强化优于零强化，剩余部件等前馈补产。

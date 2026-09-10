@@ -322,6 +322,22 @@ declare global {
     };
   }
 
+  /** PB 野采任务（多任务并行支持）。 */
+  interface PowerFarmMission {
+    /** PB 目标房（通常 highway）。 */
+    targetRoom: string;
+    /** 代孵 sponsor 房名。 */
+    sponsor: string;
+    /** 任务建立 tick（超时基准）。 */
+    since: number;
+    /** 累计提交的战斗编队孵化请求数（止损账本）。 */
+    spawned: number;
+    /** PB 已击破，进入捡运阶段（collector 已派/待派）。 */
+    phase: "strike" | "collect";
+    /** collector 首次提交孵化请求的 tick（collect 宽限窗基准）。 */
+    collectorSpawnedAt?: number;
+  }
+
   interface KernelMemory {
     tier?: CpuTier;
       /** 最近一次 CpuTier 变更 tick（驻留时长观测）。 */
@@ -658,26 +674,14 @@ declare global {
      */
     prospectCooldown?: Record<string, number>;
     /**
-     * PB 野采任务（v36+，power-farm-manager 唯一写者，审计缺口 2）：同一时刻
-     * 至多一个。PB 击破后（编队房内视野确认）转 collect 阶段孵 collector 捡运
+     * PB 野采任务列表（v37+，power-farm-manager 唯一写者）：支持多任务并行。
+     * PB 击破后（编队房内视野确认）转 collect 阶段孵 collector 捡运
      * 掉落 power；collector 消失/超时/止损时清除并回收编队。war 姿态时不建
      * （军事资源不双线，warPlan 存续即冻结新任务）。
+     * 向后兼容：单任务时数组长度=1。读取代码改为遍历数组。
      */
-    powerFarm?: {
-      /** PB 目标房（通常 highway）。 */
-      targetRoom: string;
-      /** 代孵 sponsor 房名。 */
-      sponsor: string;
-      /** 任务建立 tick（超时基准）。 */
-      since: number;
-      /** 累计提交的战斗编队孵化请求数（止损账本）。 */
-      spawned: number;
-      /** PB 已击破，进入捡运阶段（collector 已派/待派）。 */
-      phase: "strike" | "collect";
-      /** collector 首次提交孵化请求的 tick（collect 宽限窗基准；per-mission
-       * 运行时字段，缺失视为未派 — 与 lastRepathAt 同先例免迁移）。 */
-      collectorSpawnedAt?: number;
-    };
+    powerFarmMissions?: PowerFarmMission[];
+
     /**
      * 环境画像（P1-3，empire-strategy 每 100 tick 采样写入）：市场活跃度 +
      * 邻居竞争压力 + GCL 进度速率。供策略层调整扩张节奏/市场交易参数。

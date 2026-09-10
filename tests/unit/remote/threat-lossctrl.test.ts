@@ -145,13 +145,16 @@ describe("evaluateRemoteDemand — 威胁在场暂停经济孵化", () => {
     spawnQueue: [],
   };
 
-  it("hasThreats：仅 defender，无 harvester/hauler/reserver", () => {
+  it("hasThreats：仅 defender + reserver，无 harvester/hauler", () => {
     const { requests } = evaluateRemoteDemand({ ...base, remoteThreats: { W8N4: true } });
     const roles = requests.map(r => r.role);
     expect(roles).toContain("remoteDefender");
     expect(roles).not.toContain("remoteHarvester");
     expect(roles).not.toContain("remoteHauler");
-    expect(roles).not.toContain("reserver");
+    // reserver 不受 economySuppressed 冻结：它是无战力纯 CLAIM 单位，
+    // reservation 过期 → source 容量减半 → harvester 采集空窗，
+    // 产能损失远大于 reserver 孵化成本。
+    expect(roles).toContain("reserver");
   });
 
   it("无威胁：经济孵化照常（回归保护）", () => {
