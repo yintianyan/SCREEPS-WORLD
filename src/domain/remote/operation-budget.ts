@@ -100,12 +100,7 @@ export interface BudgetConsumptionRecord {
 /**
  * 预算消耗类别。
  */
-export type BudgetConsumptionCategory =
-  | "spawn"
-  | "transport"
-  | "infrastructure"
-  | "risk"
-  | "other";
+export type BudgetConsumptionCategory = "spawn" | "transport" | "infrastructure" | "risk" | "other";
 
 /**
  * 记录一次预算消耗。
@@ -131,10 +126,7 @@ export function createConsumptionRecord(
  * 检测预算是否超支。
  * 纯函数。
  */
-export function isBudgetOverrun(
-  limit: number,
-  consumed: number,
-): boolean {
+export function isBudgetOverrun(limit: number, consumed: number): boolean {
   return consumed > limit;
 }
 
@@ -142,11 +134,7 @@ export function isBudgetOverrun(
  * 检测预算是否即将超支（消耗比例 > 阈值）。
  * 纯函数。
  */
-export function isBudgetNearOverrun(
-  limit: number,
-  consumed: number,
-  threshold: number,
-): boolean {
+export function isBudgetNearOverrun(limit: number, consumed: number, threshold: number): boolean {
   if (limit <= 0) return true;
   return consumed / limit >= threshold;
 }
@@ -198,9 +186,7 @@ export function allocateBudget(
  * 汇总多个 Operation 的预算消耗。
  * 纯函数。
  */
-export function aggregateBudgetConsumption(
-  records: readonly BudgetConsumptionRecord[],
-): {
+export function aggregateBudgetConsumption(records: readonly BudgetConsumptionRecord[]): {
   totalConsumed: number;
   byCategory: Record<BudgetConsumptionCategory, number>;
 } {

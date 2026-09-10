@@ -29,10 +29,10 @@ export const POWER_LEVEL_REQUIREMENTS: Readonly<Record<number, readonly number[]
 
 /** usePower 各动作的 ops 消耗（官方 Power 文档）。 */
 export const OPS_COST: Readonly<Record<number, number>> = {
-  2: 100,  // OPERATE_SPAWN
-  4: 100,  // OPERATE_STORAGE
-  6: 2,    // OPERATE_EXTENSION
-  7: 100,  // OPERATE_TOWER
+  2: 100, // OPERATE_SPAWN
+  4: 100, // OPERATE_STORAGE
+  6: 2, // OPERATE_EXTENSION
+  7: 100, // OPERATE_TOWER
   12: 100, // OPERATE_CONTROLLER
   14: 100, // OPERATE_FACTORY
 };
@@ -67,8 +67,8 @@ export const POWER_BUILD_ORDER: readonly PowerId[] = [
   7, // OPERATE_TOWER lv1：战时塔效率 +33%（姿态路由赋能，审计缺口 7）
   12, // OPERATE_CONTROLLER lv1：rcl-push 冲级 +200% 进度（审计缺口 7）
   14, // OPERATE_FACTORY lv1：解锁 factory level 1（commodity T1+ 生产门禁 —
-      // PC level 达标即升，factory 常态是 RCL7 终局结构，比 boost 优先级低
-      // 但先于 lv2 深化拿到，确保 commodity 链不被 PC 技能卡死）
+  // PC level 达标即升，factory 常态是 RCL7 终局结构，比 boost 优先级低
+  // 但先于 lv2 深化拿到，确保 commodity 链不被 PC 技能卡死）
 ];
 
 /** GPL 消费决策输入中的 PC 摘要。 */
@@ -243,7 +243,11 @@ export function selectPowerAction(
   // ops 补给优先于一切消耗 ops 的动作（断供连锁停摆）。
   const gopsLevel = pc.powerLevels[1] ?? 0;
   const gopsCooldown = pc.cooldowns[1];
-  if (gopsLevel > 0 && pc.opsCarried < t.opsBuffer && !(gopsCooldown !== undefined && gopsCooldown > 0)) {
+  if (
+    gopsLevel > 0 &&
+    pc.opsCarried < t.opsBuffer &&
+    !(gopsCooldown !== undefined && gopsCooldown > 0)
+  ) {
     return { kind: "generateOps" };
   }
 
@@ -262,7 +266,10 @@ export function selectPowerAction(
   // OPERATE_CONTROLLER（议程路由）：rcl-push 窗口 + 效果缺失/临期。
   // 仅和平期（combatContext 时不冲级 — 塔赋能已在上方截停）。
   if (
-    hasLevel(12) && opsReady(12) && room.rclPush && !room.combatContext &&
+    hasLevel(12) &&
+    opsReady(12) &&
+    room.rclPush &&
+    !room.combatContext &&
     room.controllerId !== undefined
   ) {
     const remaining = room.controllerEffectRemaining ?? 0;
@@ -281,7 +288,9 @@ export function selectPowerAction(
 
   // OPERATE_EXTENSION：能量缺口超门禁且 storage 有货（能量从目标结构扣）。
   if (
-    hasLevel(6) && opsReady(6) && room.storageId !== undefined &&
+    hasLevel(6) &&
+    opsReady(6) &&
+    room.storageId !== undefined &&
     room.energyCapacity > 0 &&
     1 - room.energyAvailable / room.energyCapacity > t.extensionFillGap &&
     (room.storageEnergy ?? 0) > 0
@@ -301,8 +310,11 @@ export function selectPowerAction(
   // PC 技能等级直接决定 factory 可用等级，未赋能则 commodity 链全卡死。
   // 仅和平期：combatContext 塔赋能已在上方截停，rclPush 冲级已在上方截停。
   if (
-    hasLevel(14) && opsReady(14) && room.factoryId !== undefined &&
-    !room.combatContext && !room.rclPush &&
+    hasLevel(14) &&
+    opsReady(14) &&
+    room.factoryId !== undefined &&
+    !room.combatContext &&
+    !room.rclPush &&
     room.factoryLevel < (pc.powerLevels[14] ?? 0)
   ) {
     const remaining = room.factoryEffectRemaining ?? 0;

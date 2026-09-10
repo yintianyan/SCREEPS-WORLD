@@ -9,16 +9,56 @@ export type BaseMineral = "H" | "O" | "U" | "L" | "K" | "Z" | "X";
 export type Compound =
   | BaseMineral
   // Tier 1
-  | "UH" | "UO" | "ZH" | "ZO" | "LH" | "LO" | "KH" | "KO" | "GH" | "GO"
+  | "UH"
+  | "UO"
+  | "ZH"
+  | "ZO"
+  | "LH"
+  | "LO"
+  | "KH"
+  | "KO"
+  | "GH"
+  | "GO"
   // Tier 2
-  | "UH2O" | "UHO2" | "ZH2O" | "ZHO2" | "LH2O" | "LHO2" | "KH2O" | "KHO2" | "GH2O" | "GHO2"
+  | "UH2O"
+  | "UHO2"
+  | "ZH2O"
+  | "ZHO2"
+  | "LH2O"
+  | "LHO2"
+  | "KH2O"
+  | "KHO2"
+  | "GH2O"
+  | "GHO2"
   // Tier 3 (X-compounds)
-  | "XUH2O" | "XUHO2" | "XZH2O" | "XZHO2" | "XLH2O" | "XLHO2" | "XKH2O" | "XKHO2" | "XGH2O" | "XGHO2"
+  | "XUH2O"
+  | "XUHO2"
+  | "XZH2O"
+  | "XZHO2"
+  | "XLH2O"
+  | "XLHO2"
+  | "XKH2O"
+  | "XKHO2"
+  | "XGH2O"
+  | "XGHO2"
   // 中间产物
-  | "OH" | "ZK" | "UL" | "G";
+  | "OH"
+  | "ZK"
+  | "UL"
+  | "G";
 
 /** Boost 效果类别。 */
-export type BoostEffect = "harvest" | "upgrade" | "attack" | "rangedAttack" | "heal" | "repair" | "dismantle" | "carry" | "move" | "tough";
+export type BoostEffect =
+  | "harvest"
+  | "upgrade"
+  | "attack"
+  | "rangedAttack"
+  | "heal"
+  | "repair"
+  | "dismantle"
+  | "carry"
+  | "move"
+  | "tough";
 
 // ─── 反应规划 ───────────────────────────────────────────────
 
@@ -130,7 +170,10 @@ export interface TerminalTransfer {
 /** Terminal 策略接口 — 未来多房间资源调度的扩展点。 */
 export interface TerminalPolicy {
   /** 计算本 tick 的传输计划。 */
-  planTransfers(roomName: string, available: Readonly<Record<string, number>>): readonly TerminalTransfer[];
+  planTransfers(
+    roomName: string,
+    available: Readonly<Record<string, number>>,
+  ): readonly TerminalTransfer[];
 }
 
 // ─── 反应配方表 ─────────────────────────────────────────────
@@ -181,27 +224,54 @@ export const REACTIONS: Readonly<Record<string, readonly [Compound, Compound]>> 
  * 线路易记错（UH=attack 而非 harvest，harvest 是 UO 线），映射错则整条反应链产废料。 */
 export const BOOST_EFFECTS: Readonly<Record<string, BoostEffect>> = {
   // U 线：UH = attack，UO = harvest。
-  UH: "attack", UH2O: "attack", XUH2O: "attack",
-  UO: "harvest", UHO2: "harvest", XUHO2: "harvest",
+  UH: "attack",
+  UH2O: "attack",
+  XUH2O: "attack",
+  UO: "harvest",
+  UHO2: "harvest",
+  XUHO2: "harvest",
   // G 线：GH = upgrade，GO = tough（承伤减免）。
-  GH: "upgrade", GH2O: "upgrade", XGH2O: "upgrade",
-  GO: "tough", GHO2: "tough", XGHO2: "tough",
+  GH: "upgrade",
+  GH2O: "upgrade",
+  XGH2O: "upgrade",
+  GO: "tough",
+  GHO2: "tough",
+  XGHO2: "tough",
   // L 线：LH = build/repair，LO = heal。
-  LH: "repair", LH2O: "repair", XLH2O: "repair",
-  LO: "heal", LHO2: "heal", XLHO2: "heal",
+  LH: "repair",
+  LH2O: "repair",
+  XLH2O: "repair",
+  LO: "heal",
+  LHO2: "heal",
+  XLHO2: "heal",
   // Z 线：ZH = dismantle，ZO = move（疲劳减免）。
-  ZH: "dismantle", ZH2O: "dismantle", XZH2O: "dismantle",
-  ZO: "move", ZHO2: "move", XZHO2: "move",
+  ZH: "dismantle",
+  ZH2O: "dismantle",
+  XZH2O: "dismantle",
+  ZO: "move",
+  ZHO2: "move",
+  XZHO2: "move",
   // K 线：KH = carry，KO = rangedAttack。
-  KH: "carry", KH2O: "carry", XKH2O: "carry",
-  KO: "rangedAttack", KHO2: "rangedAttack", XKHO2: "rangedAttack",
+  KH: "carry",
+  KH2O: "carry",
+  XKH2O: "carry",
+  KO: "rangedAttack",
+  KHO2: "rangedAttack",
+  XKHO2: "rangedAttack",
 };
 
 /** Boost 效果 → 受强化 body part 类型（用于封顶可强化部件数与备料量计算）。
  * 与 BOOST_EFFECTS 配套 — 供 lab-system（执行封顶）与 boost 决策（请求生成）
  * 共用，单一来源防两处映射漂移。 */
 export const BOOST_EFFECT_PART: Readonly<Record<BoostEffect, BodyPartConstant>> = {
-  harvest: WORK, upgrade: WORK, repair: WORK, dismantle: WORK,
-  attack: ATTACK, rangedAttack: RANGED_ATTACK, heal: HEAL,
-  carry: CARRY, move: MOVE, tough: TOUGH,
+  harvest: WORK,
+  upgrade: WORK,
+  repair: WORK,
+  dismantle: WORK,
+  attack: ATTACK,
+  rangedAttack: RANGED_ATTACK,
+  heal: HEAL,
+  carry: CARRY,
+  move: MOVE,
+  tough: TOUGH,
 };

@@ -9,12 +9,7 @@ import { cleanQueue, spawnKey } from "../../../src/domain/spawn/queue";
 import { evaluateDemand } from "../../../src/domain/spawn/demand";
 import { CONFIG } from "../../../src/config";
 import type { TickContext } from "../../../src/kernel/contracts";
-import {
-  mockSnapshot,
-  mockController,
-  mockSource,
-  resetGlobals,
-} from "../../support/factories";
+import { mockSnapshot, mockController, mockSource, resetGlobals } from "../../support/factories";
 
 const ROOM = "W1N1";
 
@@ -29,7 +24,12 @@ beforeEach(() => {
 // ─── 测试工厂函数 ──────────────────────────────────────────────
 
 /** 造一个达到 maxRetries 的孵化请求。 */
-function makeRequest(role: string, home: string, index: number, retries = CONFIG.spawn.maxRetries): SpawnRequest {
+function makeRequest(
+  role: string,
+  home: string,
+  index: number,
+  retries = CONFIG.spawn.maxRetries,
+): SpawnRequest {
   return {
     key: spawnKey(role, home, index),
     role,
@@ -70,15 +70,17 @@ function snapshotWithHarvester() {
 
 /** 一台存活 harvester 的摘要（home 指向 ROOM，绑定 src1）。 */
 function livingHarvester() {
-  return [{
-    name: "harvester_1",
-    role: "harvester",
-    home: ROOM,
-    ticksToLive: 1200,
-    bodyLength: 7,
-    sourceId: "src1" as Id<Source>,
-    spawnIndex: 0,
-  }];
+  return [
+    {
+      name: "harvester_1",
+      role: "harvester",
+      home: ROOM,
+      ticksToLive: 1200,
+      bodyLength: 7,
+      sourceId: "src1" as Id<Source>,
+      spawnIndex: 0,
+    },
+  ];
 }
 
 /** normal 状态的 RoomDemandContext。 */
@@ -101,20 +103,23 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
     // （W37S58 死亡螺旋根因：1cca151 在 normal 态把 harvester 关 500 tick → 某 source 停产）。
     const queue = [makeRequest("harvester", ROOM, 0)];
     const purgedKeys = cleanQueue(queue, 100, CONFIG.spawn.maxRetries, () => {});
-    expect(purgedKeys).toContain("harvester:" + ROOM + ":0");
+    expect(purgedKeys).toContain(`harvester:${ROOM}:0`);
 
     // 模拟 spawn-manager 的黑名单写入逻辑（经济命脉角色跳过，不写黑名单）。
     const roomMem = (globalThis as any).Memory.rooms[ROOM] as RoomMemory;
     roomMem.spawnBlacklist = {};
     for (const key of purgedKeys) {
-      const isLifeline = key.startsWith("worker:") || key.startsWith("harvester:")
-        || key.startsWith("hauler:") || key.startsWith("distributor:");
+      const isLifeline =
+        key.startsWith("worker:") ||
+        key.startsWith("harvester:") ||
+        key.startsWith("hauler:") ||
+        key.startsWith("distributor:");
       if (isLifeline) continue; // 经济命脉永远豁免隔离（pre-1cca151 自愈语义）
       const ttl = computeQuarantineTtl(key);
       roomMem.spawnBlacklist[key] = 100 + ttl;
     }
     // 采集角色不进黑名单 — 这是修复后的契约，防死亡螺旋复发。
-    expect(roomMem.spawnBlacklist!["harvester:" + ROOM + ":0"]).toBeUndefined();
+    expect(roomMem.spawnBlacklist![`harvester:${ROOM}:0`]).toBeUndefined();
   });
 
   it("物流角色（hauler/distributor）达 maxRetries 也永不进黑名单（2026-08-18 二次螺旋修复）", () => {
@@ -124,26 +129,29 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
     // 同时进黑名单）。修复后与采集角色同享豁免，churn 熔断兜底防真配置错误无限翻炒。
     const queue = [makeRequest("hauler", ROOM, 0), makeRequest("distributor", ROOM, 0)];
     const purgedKeys = cleanQueue(queue, 100, CONFIG.spawn.maxRetries, () => {});
-    expect(purgedKeys).toContain("hauler:" + ROOM + ":0");
-    expect(purgedKeys).toContain("distributor:" + ROOM + ":0");
+    expect(purgedKeys).toContain(`hauler:${ROOM}:0`);
+    expect(purgedKeys).toContain(`distributor:${ROOM}:0`);
 
     const roomMem = (globalThis as any).Memory.rooms[ROOM] as RoomMemory;
     roomMem.spawnBlacklist = {};
     for (const key of purgedKeys) {
-      const isLifeline = key.startsWith("worker:") || key.startsWith("harvester:")
-        || key.startsWith("hauler:") || key.startsWith("distributor:");
+      const isLifeline =
+        key.startsWith("worker:") ||
+        key.startsWith("harvester:") ||
+        key.startsWith("hauler:") ||
+        key.startsWith("distributor:");
       if (isLifeline) continue;
       const ttl = computeQuarantineTtl(key);
       roomMem.spawnBlacklist[key] = 100 + ttl;
     }
-    expect(roomMem.spawnBlacklist!["hauler:" + ROOM + ":0"]).toBeUndefined();
-    expect(roomMem.spawnBlacklist!["distributor:" + ROOM + ":0"]).toBeUndefined();
+    expect(roomMem.spawnBlacklist![`hauler:${ROOM}:0`]).toBeUndefined();
+    expect(roomMem.spawnBlacklist![`distributor:${ROOM}:0`]).toBeUndefined();
   });
 
   it("非命脉角色（defender）达 maxRetries → 长冷却 1000 tick（无回归）", () => {
     const queue = [makeRequest("defender", ROOM, 0)];
     const purgedKeys = cleanQueue(queue, 100, CONFIG.spawn.maxRetries, () => {});
-    expect(purgedKeys).toContain("defender:" + ROOM + ":0");
+    expect(purgedKeys).toContain(`defender:${ROOM}:0`);
 
     const roomMem = (globalThis as any).Memory.rooms[ROOM] as RoomMemory;
     roomMem.spawnBlacklist = {};
@@ -152,7 +160,7 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
       roomMem.spawnBlacklist[key] = 100 + ttl;
     }
     // 非命脉角色长冷却 = requestTtl = 1000 tick。
-    expect(roomMem.spawnBlacklist!["defender:" + ROOM + ":0"]).toBe(100 + 1000);
+    expect(roomMem.spawnBlacklist![`defender:${ROOM}:0`]).toBe(100 + 1000);
   });
 
   it("近 200 tick 内 upgrader churn > 20 次 → 触发 100 tick 熔断", () => {
@@ -171,7 +179,15 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
 
     const snap = snapshotWithHarvester();
     // tick=250 < 300 → harvester 被冻结。
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(0, { harvester: 300 }), 250);
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(0, { harvester: 300 }),
+      250,
+    );
     expect(requests.filter(r => r.role === "harvester")).toHaveLength(0);
   });
 
@@ -182,7 +198,15 @@ describe("P0-3 spawn churn 熔断 — 正常路径", () => {
     const snap = snapshotWithHarvester();
     // tick=301 > 300 → 熔断已过期，harvester 恢复评估。
     // 注意：livingHarvester 只有 1 只，harvesterConfig.minCount=2 → 应生成补编请求。
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvester(), [], normalCtx(), 301);
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(),
+      301,
+    );
     expect(requests.filter(r => r.role === "harvester").length).toBeGreaterThan(0);
   });
 });

@@ -63,13 +63,13 @@ export function evaluatePayback(
   const expectedIncomePerTick = Math.round(grossIncome * 0.5);
 
   // 回收周期
-  const paybackTicks = expectedIncomePerTick > 0
-    ? Math.ceil(cost.totalCost / expectedIncomePerTick)
-    : Infinity;
+  const paybackTicks =
+    expectedIncomePerTick > 0 ? Math.ceil(cost.totalCost / expectedIncomePerTick) : Infinity;
 
   // ROI：在 maxPaybackTicks 内的总收益 / 总成本
   // 成熟期效率更高，假设回收期后半段进入成熟期
-  const matureIncome = sourceCount * options.nominalIncomePerSource * options.matureEfficiency * 0.5;
+  const matureIncome =
+    sourceCount * options.nominalIncomePerSource * options.matureEfficiency * 0.5;
   const avgIncome = (expectedIncomePerTick + matureIncome) / 2;
   const lifetimeRevenue = avgIncome * options.maxPaybackTicks;
   const roi = cost.totalCost > 0 ? lifetimeRevenue / cost.totalCost : 0;
@@ -79,7 +79,7 @@ export function evaluatePayback(
   const evidence = [
     `cost=${cost.totalCost}`,
     `income=${expectedIncomePerTick}/t(bootstrap)→${Math.round(matureIncome)}/t(mature)`,
-    `payback=${paybackTicks === Infinity ? "∞" : paybackTicks + "t"}`,
+    `payback=${paybackTicks === Infinity ? "∞" : `${paybackTicks}t`}`,
     `roi=${roi.toFixed(2)}`,
     worthwhile ? "WORTHWHILE" : "NOT_WORTHWHILE",
   ].join(" ");

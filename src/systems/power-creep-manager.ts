@@ -25,7 +25,7 @@ export const powerCreepManagerSystem: System = {
     const names = Object.keys(Game.powerCreeps);
 
     // ── ① GPL 消费（create / upgrade）──
-    const summaries: PcSummary[] = pcs.map((pc) => ({
+    const summaries: PcSummary[] = pcs.map(pc => ({
       name: pc.name,
       level: pc.level,
       powers: collectPowerLevels(pc),
@@ -46,25 +46,25 @@ export const powerCreepManagerSystem: System = {
       }
     }
 
-  // ── ② 驻留分配（多 PC 多房，Memory 粘性）──
-  const homeMap = resolveHomes(pcs, ctx);
-  if (homeMap.size === 0) return; // 帝国尚无 powerSpawn（RCL8 前）→ 全部运营无从谈起
+    // ── ② 驻留分配（多 PC 多房，Memory 粘性）──
+    const homeMap = resolveHomes(pcs, ctx);
+    if (homeMap.size === 0) return; // 帝国尚无 powerSpawn（RCL8 前）→ 全部运营无从谈起
 
-  // ── ③④ 逐 PC 孵化 / 运营 ──
-  for (const pc of pcs) {
-    if (!pc.ticksToLive) {
-      // 未孵化：在驻留房 powerSpawn 孵化（ERR_TIRED = 死亡冷却中）。
-      const home = homeMap.get(pc.name);
-      if (home?.powerSpawn && pc.spawn(home.powerSpawn) === OK) {
-        recordEvent(EventKind.PowerCreepMilestone, home.roomName, [2]);
+    // ── ③④ 逐 PC 孵化 / 运营 ──
+    for (const pc of pcs) {
+      if (!pc.ticksToLive) {
+        // 未孵化：在驻留房 powerSpawn 孵化（ERR_TIRED = 死亡冷却中）。
+        const home = homeMap.get(pc.name);
+        if (home?.powerSpawn && pc.spawn(home.powerSpawn) === OK) {
+          recordEvent(EventKind.PowerCreepMilestone, home.roomName, [2]);
+        }
+        continue;
       }
-      continue;
+      const home = homeMap.get(pc.name);
+      if (!home) continue;
+      runSpawnedPc(pc, home, ctx);
     }
-    const home = homeMap.get(pc.name);
-    if (!home) continue;
-    runSpawnedPc(pc, home, ctx);
-  }
-},
+  },
 };
 
 /** 从 PC 的 powers 表采集 level 映射（cooldown 由运营路径单独采）。 */
@@ -83,11 +83,8 @@ function collectPowerLevels(pc: PowerCreep): Record<number, number> {
  * 多 PC 多房策略：每个 PC 尽量驻留不同房间，最大化覆盖面。
  * PC 数量超过有 powerSpawn 的房间数时，多余 PC 共享驻留房。
  */
-function resolveHomes(
-  pcs: readonly PowerCreep[],
-  ctx: TickContext,
-): Map<string, RoomSnapshot> {
-  const candidates = [...ctx.snapshots()].filter((s) => s.powerSpawn);
+function resolveHomes(pcs: readonly PowerCreep[], ctx: TickContext): Map<string, RoomSnapshot> {
+  const candidates = [...ctx.snapshots()].filter(s => s.powerSpawn);
   if (candidates.length === 0) return new Map();
 
   // kernel 由 runMigrations/建档保证存在；防御性兜底（缺失视为无驻留）。
@@ -109,7 +106,7 @@ function resolveHomes(
   for (const pc of pcs) {
     const assigned = assignments[pc.name];
     if (assigned) {
-      const sticky = candidates.find((s) => s.roomName === assigned);
+      const sticky = candidates.find(s => s.roomName === assigned);
       if (sticky) {
         result.set(pc.name, sticky);
         usedRooms.add(sticky.roomName);
@@ -171,13 +168,11 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
   // rcl-push 议程 = 冲级窗口。
   const posture = Memory.kernel?.strategy?.posture;
   const agenda = Memory.kernel?.agenda?.initiative;
-  const combatContext = posture === "war" || posture === "fortify"
-    || snapshot.threatCreeps.length > 0;
+  const combatContext =
+    posture === "war" || posture === "fortify" || snapshot.threatCreeps.length > 0;
 
   const factory = snapshot.factory;
-  const factoryEffect = factory?.effects?.find(
-    (e) => e.effect === PWR.OPERATE_FACTORY,
-  );
+  const factoryEffect = factory?.effects?.find(e => e.effect === PWR.OPERATE_FACTORY);
 
   const action = selectPowerAction(
     {
@@ -201,7 +196,7 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
       rclPush: agenda === "rcl-push",
       controllerId: snapshot.controller?.id,
       controllerEffectRemaining: snapshot.controller?.effects?.find(
-        (e) => e.effect === PWR.OPERATE_CONTROLLER,
+        e => e.effect === PWR.OPERATE_CONTROLLER,
       )?.ticksRemaining,
       factoryId: factory?.id,
       factoryEffectRemaining: factoryEffect?.ticksRemaining,
@@ -257,21 +252,21 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
       const target = Game.getObjectById(action.targetId as Id<Structure>);
       if (!target) return;
       if (pc.pos.getRangeTo(target) <= USE_POWER_RANGE) {
-        const power = action.kind === "operateSpawn"
-          ? PWR.OPERATE_SPAWN
-          : action.kind === "operateExtension"
-            ? PWR.OPERATE_EXTENSION
-            : action.kind === "operateStorage"
-              ? PWR.OPERATE_STORAGE
-              : PWR.OPERATE_FACTORY;
+        const power =
+          action.kind === "operateSpawn"
+            ? PWR.OPERATE_SPAWN
+            : action.kind === "operateExtension"
+              ? PWR.OPERATE_EXTENSION
+              : action.kind === "operateStorage"
+                ? PWR.OPERATE_STORAGE
+                : PWR.OPERATE_FACTORY;
         pc.usePower(power, target);
       } else {
         pc.moveTo(target, { range: USE_POWER_RANGE });
       }
-      return;
+      break;
     }
     case "idle":
-      return;
   }
 }
 
@@ -280,6 +275,6 @@ function findEffectRemaining(
   structure: StructureSpawn | StructureTower | undefined,
   power: number,
 ): number | undefined {
-  const effect = structure?.effects?.find((e) => e.effect === power);
+  const effect = structure?.effects?.find(e => e.effect === power);
   return effect?.ticksRemaining;
 }

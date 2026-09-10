@@ -83,7 +83,9 @@ describe("room-state system — TD-012 terminal 能量纳入 reserve", () => {
 
     roomStateSystem.run(mockRoomStateCtx([snapshot]));
 
-    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
+    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms[
+      "W1N1"
+    ]!;
     // reserve = 300 (energyAvailable) + 10000 (storage) + 5000 (terminal) + 200 (creepEnergy) = 15500
     expect(roomMem.phase!.reserve).toBe(300 + 10000 + terminalEnergy + 200);
   });
@@ -100,7 +102,9 @@ describe("room-state system — TD-012 terminal 能量纳入 reserve", () => {
 
     roomStateSystem.run(mockRoomStateCtx([snapshot]));
 
-    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
+    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms[
+      "W1N1"
+    ]!;
     // reserve = 300 + 8000 + 0 + 100 = 8400
     expect(roomMem.phase!.reserve).toBe(8400);
   });
@@ -117,7 +121,9 @@ describe("room-state system — TD-012 terminal 能量纳入 reserve", () => {
 
     roomStateSystem.run(mockRoomStateCtx([snapshot]));
 
-    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
+    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms[
+      "W1N1"
+    ]!;
     // reserve = 200 + 0 + 3000 + 0 = 3200
     expect(roomMem.phase!.reserve).toBe(3200);
   });
@@ -137,7 +143,9 @@ describe("room-state system — TD-012 terminal 能量纳入 reserve", () => {
 
     roomStateSystem.run(mockRoomStateCtx([snapshot]));
 
-    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
+    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms[
+      "W1N1"
+    ]!;
     // reserve = 50 + 1000 + 20000 = 21050 — 包含 terminal 后储备充足
     expect(roomMem.phase!.reserve).toBe(21050);
     // colonyState 不应为 recovery（有充足储备）

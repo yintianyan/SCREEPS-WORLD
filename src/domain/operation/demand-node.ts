@@ -185,10 +185,7 @@ export function applyAging(node: DemandNode, tick: number, starvationThreshold =
  * 估算 deficit 需求量。
  * 基于 riskBuffer 和 estimatedIncome 推导。
  */
-function estimateDeficitAmount(
-  deficit: RoomRegistryEntry,
-  inTransit: number,
-): number {
+function estimateDeficitAmount(deficit: RoomRegistryEntry, inTransit: number): number {
   if (deficit.hasStorage && deficit.storageCapacity > 0) {
     const safetyTarget = deficit.storageCapacity * 0.3;
     const need = Math.max(0, safetyTarget - deficit.storageEnergy - inTransit);
@@ -214,10 +211,14 @@ function deriveCriticality(entry: RoomRegistryEntry): Criticality {
  */
 function criticalityToPriority(c: Criticality): OperationPriority {
   switch (c) {
-    case "critical": return 0;
-    case "high": return 1;
-    case "normal": return 2;
-    case "low": return 3;
+    case "critical":
+      return 0;
+    case "high":
+      return 1;
+    case "normal":
+      return 2;
+    case "low":
+      return 3;
   }
 }
 
@@ -226,9 +227,13 @@ function criticalityToPriority(c: Criticality): OperationPriority {
  */
 function criticalityRank(c: Criticality): number {
   switch (c) {
-    case "critical": return 0;
-    case "high": return 1;
-    case "normal": return 2;
-    case "low": return 3;
+    case "critical":
+      return 0;
+    case "high":
+      return 1;
+    case "normal":
+      return 2;
+    case "low":
+      return 3;
   }
 }

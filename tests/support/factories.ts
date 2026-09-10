@@ -30,8 +30,12 @@ export function resetGlobals(): void {
     (globalThis as any).PathFinder = {
       CostMatrix: class {
         private _data = new Uint8Array(2500);
-        set(x: number, y: number, cost: number) { this._data[x * 50 + y] = cost; }
-        get(x: number, y: number) { return this._data[x * 50 + y] ?? 0; }
+        set(x: number, y: number, cost: number) {
+          this._data[x * 50 + y] = cost;
+        }
+        get(x: number, y: number) {
+          return this._data[x * 50 + y] ?? 0;
+        }
       },
       search: vi.fn(() => ({ path: [], incomplete: true, ops: 0, cost: 0 })),
     };
@@ -120,8 +124,13 @@ export function resetGlobals(): void {
  */
 export function syncSquadIndex(): void {
   const entries: Array<{
-    name: string; role: string; home: string;
-    remoteTarget?: string; mission?: string; boosted: boolean; spawning: boolean;
+    name: string;
+    role: string;
+    home: string;
+    remoteTarget?: string;
+    mission?: string;
+    boosted: boolean;
+    spawning: boolean;
   }> = [];
   const creeps = (globalThis as any).Game?.creeps ?? {};
   for (const [name, creep] of Object.entries(creeps) as [string, any][]) {
@@ -165,11 +174,13 @@ export function mockPos(x = 25, y = 25, roomName = "W7N4"): MockPos {
     roomName,
     getRangeTo: vi.fn(() => 1),
     getDirectionTo: vi.fn(() => 3), // RIGHT
-    isEqualTo: vi.fn((tx: number | { x?: number; y?: number; pos?: { x: number; y: number } }, ty?: number) => {
-      const px = typeof tx === "number" ? tx : (tx.x ?? tx.pos?.x ?? 0);
-      const py = typeof tx === "number" ? (ty ?? 0) : (tx.y ?? tx.pos?.y ?? 0);
-      return x === px && y === py;
-    }),
+    isEqualTo: vi.fn(
+      (tx: number | { x?: number; y?: number; pos?: { x: number; y: number } }, ty?: number) => {
+        const px = typeof tx === "number" ? tx : (tx.x ?? tx.pos?.x ?? 0);
+        const py = typeof tx === "number" ? (ty ?? 0) : (tx.y ?? tx.pos?.y ?? 0);
+        return x === px && y === py;
+      },
+    ),
     findClosestByRange: vi.fn((targets: any[]) => {
       if (!Array.isArray(targets) || targets.length === 0) return null;
       return targets[0];
@@ -277,8 +288,17 @@ export function mockCreep(opts: MockCreepOpts = {}): any {
 
 // ─── Structure Mocks ────────────────────────────────────────
 
-export function mockStructure(type: string, opts: { id?: string; energy?: number; capacity?: number; hits?: number; hitsMax?: number } = {}) {
-  const { id = `${type}_${Math.random().toString(36).slice(2, 8)}`, energy = 0, capacity = 1000, hits = 1000, hitsMax = 1000 } = opts;
+export function mockStructure(
+  type: string,
+  opts: { id?: string; energy?: number; capacity?: number; hits?: number; hitsMax?: number } = {},
+) {
+  const {
+    id = `${type}_${Math.random().toString(36).slice(2, 8)}`,
+    energy = 0,
+    capacity = 1000,
+    hits = 1000,
+    hitsMax = 1000,
+  } = opts;
   const obj: any = {
     id,
     structureType: type,
@@ -298,9 +318,18 @@ export function mockSource(id = "source_1", energy = 3000) {
   return obj;
 }
 
-export function mockController(opts: { my?: boolean; ticksToDowngrade?: number; level?: number } = {}): any {
+export function mockController(
+  opts: { my?: boolean; ticksToDowngrade?: number; level?: number } = {},
+): any {
   const { my = true, ticksToDowngrade = 20000, level = 3 } = opts;
-  return { id: "controller_1", my, ticksToDowngrade, level, pos: mockPos(), structureType: "controller" };
+  return {
+    id: "controller_1",
+    my,
+    ticksToDowngrade,
+    level,
+    pos: mockPos(),
+    structureType: "controller",
+  };
 }
 
 export function mockConstructionSite(type = "extension", opts: { id?: string } = {}) {
@@ -383,7 +412,9 @@ export function mockContext(snapshot?: RoomSnapshot, budget?: Budget): TickConte
     budget: b,
     globalSiteCount: snap.myConstructionSites.length,
     getSnapshot: vi.fn((_room: string) => snap),
-    snapshots: vi.fn(function* () { yield snap; }),
+    snapshots: vi.fn(function* () {
+      yield snap;
+    }),
   };
 }
 
@@ -394,10 +425,7 @@ export function mockContext(snapshot?: RoomSnapshot, budget?: Budget): TickConte
  * getSnapshot 按 roomName 查找而非返回固定快照，snapshots 返回数组迭代器。
  * 4 个 room-state 单元测试的 makeCtx 统一到此处。
  */
-export function mockRoomStateCtx(
-  snapshots: RoomSnapshot[],
-  tick = 100,
-): TickContext {
+export function mockRoomStateCtx(snapshots: RoomSnapshot[], tick = 100): TickContext {
   return {
     tick,
     budget: {

@@ -64,10 +64,7 @@ const ENERGY_DEFINITION: ResourceDefinition = {
  * 矿物资源定义工厂。
  * 所有基础矿物共享相同属性，仅 displayName 和 resource 不同。
  */
-function mineralDefinition(
-  resource: MineralConstant,
-  displayName: string,
-): ResourceDefinition {
+function mineralDefinition(resource: MineralConstant, displayName: string): ResourceDefinition {
   return {
     resource,
     category: "mineral",
@@ -163,7 +160,7 @@ export function getAllResourceTypes(): ResourceType[] {
  * 获取所有矿物类型列表。纯函数。
  */
 export function getAllMineralTypes(): MineralConstant[] {
-  return (Object.values(RESOURCE_DEFINITIONS)
+  return Object.values(RESOURCE_DEFINITIONS)
     .filter(d => d.category === "mineral")
-    .map(d => d.resource)) as MineralConstant[];
+    .map(d => d.resource) as MineralConstant[];
 }

@@ -59,10 +59,7 @@ export function getRemoteSource(creep: Creep): Source | undefined {
  * P2-O：occupancy 统计仅在 sourceId 未缓存（首次/失效/改绑）时执行，
  * 通过 findRemoteHarvestersByTarget 跨房扫描含通勤路上的兄弟。
  */
-function countSiblingOccupancy(
-  creep: Creep,
-  sources: readonly Source[],
-): Map<Id<Source>, number> {
+function countSiblingOccupancy(creep: Creep, sources: readonly Source[]): Map<Id<Source>, number> {
   const target = creep.memory.remoteTarget;
   const occupancy = new Map<Id<Source>, number>();
   if (!target) return occupancy;
@@ -177,8 +174,10 @@ function findSourceContainer(creep: Creep, source: Source): StructureContainer |
     // 降频重扫：仅在跨 tick 缓存失效时降频（用 lastContainerScanTick 区分
     // 同 tick 内首次找到但 getObjectById 不认 vs 跨 tick 的 container 摧毁）。
     // 同 tick 内（lastContainerScanTick === Game.time）不降频，直接重扫。
-    if (creep.memory.lastContainerScanTick !== undefined &&
-        creep.memory.lastContainerScanTick !== Game.time) {
+    if (
+      creep.memory.lastContainerScanTick !== undefined &&
+      creep.memory.lastContainerScanTick !== Game.time
+    ) {
       const phase = (Game.time + hashName(creep.name)) % CONTAINER_RESCAN_INTERVAL;
       if (phase !== 0) return undefined;
     }
@@ -217,7 +216,7 @@ function hashName(name: string): number {
 function remoteStationaryMine(): ActionCandidate<Source> {
   return {
     name: "remote-harvest:stationary-mine",
-    resolve: (ac) => {
+    resolve: ac => {
       const source = getRemoteSource(ac.creep);
       if (!source) return undefined;
       // 检查是否在采集范围内。
@@ -264,10 +263,9 @@ function remoteStationaryMine(): ActionCandidate<Source> {
       if (container && ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
         const freeCap = container.store.getFreeCapacity(RESOURCE_ENERGY);
         if (freeCap > 0) {
-          const workParts = ac.creep.body.filter((p) => p.type === WORK).length;
-          const reserve = container.hits < container.hitsMax * CONTAINER_REPAIR_THRESHOLD
-            ? workParts
-            : 0;
+          const workParts = ac.creep.body.filter(p => p.type === WORK).length;
+          const reserve =
+            container.hits < container.hitsMax * CONTAINER_REPAIR_THRESHOLD ? workParts : 0;
           const amount = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) - reserve;
           if (amount > 0) {
             ac.creep.transfer(container, RESOURCE_ENERGY, amount);
@@ -282,7 +280,7 @@ function remoteStationaryMine(): ActionCandidate<Source> {
 function remoteHarvestSource(): ActionCandidate<Source> {
   return {
     name: "remote-harvest:move-and-mine",
-    resolve: (ac) => {
+    resolve: ac => {
       const source = getRemoteSource(ac.creep);
       if (!source) return undefined;
       // range≤1 时让位：acquire 链由前置 stationaryMine 接管；work 链必须
@@ -303,15 +301,13 @@ function remoteHarvestSource(): ActionCandidate<Source> {
 }
 
 /** dropEnergy 的 resolve 返回类型。 */
-type DropEnergyTarget =
-  | { type: "transfer"; container: StructureContainer }
-  | { type: "drop" };
+type DropEnergyTarget = { type: "transfer"; container: StructureContainer } | { type: "drop" };
 
 /** 采满且无 container 时 drop 能量（避免产能停滞）。 */
 function dropEnergy(): ActionCandidate<DropEnergyTarget> {
   return {
     name: "remote-harvest:drop",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return undefined;
       // 检查旁边是否有 container 可倒入。
       const source = getRemoteSource(ac.creep);
@@ -335,9 +331,7 @@ function dropEnergy(): ActionCandidate<DropEnergyTarget> {
 }
 
 /** buildSourceContainer 的 resolve 返回类型。 */
-type ContainerBuildTarget =
-  | { kind: "build"; site: ConstructionSite }
-  | { kind: "request" };
+type ContainerBuildTarget = { kind: "build"; site: ConstructionSite } | { kind: "request" };
 
 /**
  * RM-1：满载时自建 source container — 终结 drop-mining 衰减税。
@@ -352,7 +346,7 @@ type ContainerBuildTarget =
 function buildSourceContainer(): ActionCandidate<ContainerBuildTarget> {
   return {
     name: "remote-harvest:build-container",
-    resolve: (ac) => {
+    resolve: ac => {
       // 仅满载时投入建造 — 半载继续采集（建造用的是必然溢出的能量）。
       if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) return undefined;
       const source = getRemoteSource(ac.creep);
@@ -412,7 +406,7 @@ function buildSourceContainer(): ActionCandidate<ContainerBuildTarget> {
 function repairSourceContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "remote-harvest:repair-container",
-    resolve: (ac) => {
+    resolve: ac => {
       // 背包空 → 让位采集链（维修无料，采集优先回补）。
       if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) return undefined;
       const source = getRemoteSource(ac.creep);

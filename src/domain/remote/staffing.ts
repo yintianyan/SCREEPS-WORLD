@@ -113,9 +113,10 @@ export function computePerHaulerThroughput(
  * 纯函数。
  */
 export function computeHaulerSizing(input: HaulerSizingInput): HaulerSizingResult {
-  const effectiveProduction = input.actualProduction > 0
-    ? Math.max(input.actualProduction, input.expectedProduction * 0.5)
-    : input.expectedProduction;
+  const effectiveProduction =
+    input.actualProduction > 0
+      ? Math.max(input.actualProduction, input.expectedProduction * 0.5)
+      : input.expectedProduction;
 
   const { throughput, roundTripTime } = computePerHaulerThroughput(
     input.haulerCarryParts,
@@ -125,10 +126,7 @@ export function computeHaulerSizing(input: HaulerSizingInput): HaulerSizingResul
 
   const requiredHaulers = Math.max(
     1,
-    Math.min(
-      Math.ceil(effectiveProduction / Math.max(0.1, throughput)),
-      input.maxHaulers,
-    ),
+    Math.min(Math.ceil(effectiveProduction / Math.max(0.1, throughput)), input.maxHaulers),
   );
 
   const totalTransportCapacity = requiredHaulers * throughput;
@@ -165,9 +163,7 @@ export function validateTransportCapacity(
   deficit: number;
   ratio: number;
 } {
-  const ratio = expectedProduction > 0
-    ? transportCapacity / expectedProduction
-    : 1;
+  const ratio = expectedProduction > 0 ? transportCapacity / expectedProduction : 1;
   return {
     sufficient: transportCapacity >= expectedProduction,
     deficit: Math.max(0, expectedProduction - transportCapacity),

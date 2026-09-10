@@ -7,7 +7,12 @@ import { log } from "./log";
 /** 从版本 N 到 N+1 的迁移函数。每个必须幂等。
  * ready（可选）：迁移依赖的外部资源（如 RawMemory segment）是否就绪 —
  * 未就绪时迁移链在此中断，版本停在断点，下 tick 重试。 */
-const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolean; run: () => void }> = [
+const MIGRATIONS: ReadonlyArray<{
+  from: number;
+  to: number;
+  ready?: () => boolean;
+  run: () => void;
+}> = [
   {
     from: 0,
     to: 1,
@@ -149,7 +154,11 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
           if (typeof t.rooms !== "object" || t.rooms === null) t.rooms = {};
           // lastEval 从早期单对象格式 { tick, room, adjustments, signals, skipped }
           // 迁移为 Record<room, {...}>。
-          if (t.lastEval !== undefined && typeof t.lastEval === "object" && !Array.isArray(t.lastEval)) {
+          if (
+            t.lastEval !== undefined &&
+            typeof t.lastEval === "object" &&
+            !Array.isArray(t.lastEval)
+          ) {
             const oldEval = t.lastEval as any;
             if (typeof oldEval.room === "string" && typeof oldEval.tick === "number") {
               const room = oldEval.room;
@@ -229,7 +238,10 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       if (kernel.expansion !== undefined && typeof kernel.expansion !== "object") {
         delete kernel.expansion;
       }
-      if (kernel.expansionBlacklist !== undefined && typeof kernel.expansionBlacklist !== "object") {
+      if (
+        kernel.expansionBlacklist !== undefined &&
+        typeof kernel.expansionBlacklist !== "object"
+      ) {
         delete kernel.expansionBlacklist;
       }
       if (kernel.lostRooms !== undefined && typeof kernel.lostRooms !== "object") {
@@ -372,10 +384,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       if (!kernel) return;
       const tuning = kernel.tuning as Record<string, unknown> | undefined;
       if (!tuning) return;
-      if (
-        tuning.baselineVersion !== undefined &&
-        typeof tuning.baselineVersion !== "number"
-      ) {
+      if (tuning.baselineVersion !== undefined && typeof tuning.baselineVersion !== "number") {
         delete tuning.baselineVersion;
       }
     },
@@ -392,10 +401,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
         if (!room) continue;
-        if (
-          room.distScaleUpSince !== undefined &&
-          typeof room.distScaleUpSince !== "number"
-        ) {
+        if (room.distScaleUpSince !== undefined && typeof room.distScaleUpSince !== "number") {
           delete room.distScaleUpSince;
         }
         if (
@@ -434,13 +440,16 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
           } else {
             for (const param in room.pendingValidation) {
               const pv = room.pendingValidation[param];
-              if (!pv || typeof pv !== "object" ||
-                  typeof pv.adjustTick !== "number" ||
-                  typeof pv.preAdjustValue !== "number" ||
-                  typeof pv.expectedDirection !== "string" ||
-                  typeof pv.adjustDirection !== "string" ||
-                  (pv.expectedDirection !== "improve" && pv.expectedDirection !== "worsen") ||
-                  (pv.adjustDirection !== "up" && pv.adjustDirection !== "down")) {
+              if (
+                !pv ||
+                typeof pv !== "object" ||
+                typeof pv.adjustTick !== "number" ||
+                typeof pv.preAdjustValue !== "number" ||
+                typeof pv.expectedDirection !== "string" ||
+                typeof pv.adjustDirection !== "string" ||
+                (pv.expectedDirection !== "improve" && pv.expectedDirection !== "worsen") ||
+                (pv.adjustDirection !== "up" && pv.adjustDirection !== "down")
+              ) {
                 delete room.pendingValidation[param];
               }
             }
@@ -456,10 +465,13 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
           } else {
             for (const param in room.frozenParams) {
               const fp = room.frozenParams[param];
-              if (!fp || typeof fp !== "object" ||
-                  typeof fp.frozenAt !== "number" ||
-                  typeof fp.frozenUntil !== "number" ||
-                  typeof fp.rollbackCount !== "number") {
+              if (
+                !fp ||
+                typeof fp !== "object" ||
+                typeof fp.frozenAt !== "number" ||
+                typeof fp.frozenUntil !== "number" ||
+                typeof fp.rollbackCount !== "number"
+              ) {
                 delete room.frozenParams[param];
               }
             }
@@ -485,10 +497,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
         if (!room) continue;
         const layout = room.layout as Record<string, unknown> | undefined;
         if (!layout) continue;
-        if (
-          layout.nextGapPlanTick !== undefined &&
-          typeof layout.nextGapPlanTick !== "number"
-        ) {
+        if (layout.nextGapPlanTick !== undefined && typeof layout.nextGapPlanTick !== "number") {
           delete layout.nextGapPlanTick;
         }
       }
@@ -526,16 +535,10 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
         if (!room) continue;
         const phase = room.phase as Record<string, unknown> | undefined;
         if (!phase || typeof phase !== "object") continue;
-        if (
-          phase.srcStallTicks !== undefined &&
-          typeof phase.srcStallTicks !== "number"
-        ) {
+        if (phase.srcStallTicks !== undefined && typeof phase.srcStallTicks !== "number") {
           delete phase.srcStallTicks;
         }
-        if (
-          phase.storageEnergyPrev !== undefined &&
-          typeof phase.storageEnergyPrev !== "number"
-        ) {
+        if (phase.storageEnergyPrev !== undefined && typeof phase.storageEnergyPrev !== "number") {
           delete phase.storageEnergyPrev;
         }
       }
@@ -581,10 +584,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
         if (!room) continue;
         const phase = room.phase as Record<string, unknown> | undefined;
         if (!phase || typeof phase !== "object") continue;
-        if (
-          phase.storageDrainAccum !== undefined &&
-          typeof phase.storageDrainAccum !== "number"
-        ) {
+        if (phase.storageDrainAccum !== undefined && typeof phase.storageDrainAccum !== "number") {
           delete phase.storageDrainAccum;
         }
       }
@@ -600,10 +600,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       for (const roomName in Memory.rooms) {
         const room = Memory.rooms[roomName] as Record<string, unknown> | undefined;
         if (!room) continue;
-        if (
-          room.prevThreatCount !== undefined &&
-          typeof room.prevThreatCount !== "number"
-        ) {
+        if (room.prevThreatCount !== undefined && typeof room.prevThreatCount !== "number") {
           delete room.prevThreatCount;
         }
       }
@@ -663,10 +660,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
         }
       }
 
-      if (
-        kernel.warStandDownUntil !== undefined &&
-        typeof kernel.warStandDownUntil !== "number"
-      ) {
+      if (kernel.warStandDownUntil !== undefined && typeof kernel.warStandDownUntil !== "number") {
         delete kernel.warStandDownUntil;
       }
 
@@ -851,8 +845,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       // 含非数字条目 → 删除（缺失视为未知封口状态，不触发封死废弃）。
       for (const roomName in Memory.rooms) {
         const intel = Memory.rooms[roomName]?.intel as
-          | Record<string, Record<string, unknown>>
-          | undefined;
+          Record<string, Record<string, unknown>> | undefined;
         if (!intel) continue;
         for (const target in intel) {
           const info = intel[target];
@@ -864,8 +857,9 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
             delete info.wallCount;
           }
           if (info.sealedExits !== undefined) {
-            const valid = Array.isArray(info.sealedExits) &&
-              (info.sealedExits as unknown[]).every((d) => typeof d === "number");
+            const valid =
+              Array.isArray(info.sealedExits) &&
+              (info.sealedExits as unknown[]).every(d => typeof d === "number");
             if (!valid) delete info.sealedExits;
           }
         }
@@ -926,7 +920,7 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
       }
       for (const target in ledger) {
         const entries = ledger[target];
-        if (!Array.isArray(entries) || !entries.every((v) => typeof v === "number")) {
+        if (!Array.isArray(entries) || !entries.every(v => typeof v === "number")) {
           delete ledger[target];
         }
       }
@@ -986,8 +980,8 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
     from: 39,
     to: 40,
     run: () => {
-// v40：Phase 6 UOEM — 新增 KernelMemory.outcomeEvents（OutcomeChannel Memory
-// 持久化，cap=16，压缩字段名，≤3.2KB）+ KernelMemory.expansion 新增 operationId/openedAt/
+      // v40：Phase 6 UOEM — 新增 KernelMemory.outcomeEvents（OutcomeChannel Memory
+      // 持久化，cap=16，压缩字段名，≤3.2KB）+ KernelMemory.expansion 新增 operationId/openedAt/
       // forcedAdvance 三个可选字段。存量 expansion 无新字段 → 下次 consume 时铸造
       // operationId，当前用 ?? 默认值兜底。outcomeEvents 惰性初始化（getOutcomeChannel
       // 首次调用时创建空结构）。幂等 no-op，仅升版本登记结构变更。
@@ -1140,7 +1134,11 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
           delete intake[key];
           continue;
         }
-        if (typeof entry.value !== "number" || typeof entry.originalValue !== "number" || typeof entry.receivedAt !== "number") {
+        if (
+          typeof entry.value !== "number" ||
+          typeof entry.originalValue !== "number" ||
+          typeof entry.receivedAt !== "number"
+        ) {
           delete intake[key];
         }
       }
@@ -1171,14 +1169,16 @@ const MIGRATIONS: ReadonlyArray<{ from: number; to: number; ready?: () => boolea
         delete kernel.powerFarm;
         return;
       }
-      kernel.powerFarmMissions = [{
-        targetRoom: oldFarm.targetRoom as string,
-        sponsor: oldFarm.sponsor as string,
-        since: oldFarm.since as number,
-        spawned: oldFarm.spawned as number ?? 0,
-        phase: phase as "strike" | "collect",
-        collectorSpawnedAt: oldFarm.collectorSpawnedAt as number | undefined,
-      }];
+      kernel.powerFarmMissions = [
+        {
+          targetRoom: oldFarm.targetRoom as string,
+          sponsor: oldFarm.sponsor as string,
+          since: oldFarm.since as number,
+          spawned: (oldFarm.spawned as number) ?? 0,
+          phase: phase as "strike" | "collect",
+          collectorSpawnedAt: oldFarm.collectorSpawnedAt as number | undefined,
+        },
+      ];
       delete kernel.powerFarm;
     },
   },
@@ -1198,8 +1198,12 @@ export function runMigrations(): void {
     // 选择是继续运行，但必须响亮可见；每次 global reset（模块重载）告警一次。
     if (!(globalThis as { __schemaDowngradeWarned?: boolean }).__schemaDowngradeWarned) {
       (globalThis as { __schemaDowngradeWarned?: boolean }).__schemaDowngradeWarned = true;
-      log.warn("memory", "[schema] WARNING: Memory.schemaVersion=" + current + " > code " + CONFIG.memory.schemaVersion +
-          " — rolled-back code running on newer schema; no downgrade migration exists.",);
+      log.warn(
+        "memory",
+        `[schema] WARNING: Memory.schemaVersion=${current} > code ${
+          CONFIG.memory.schemaVersion
+        } — rolled-back code running on newer schema; no downgrade migration exists.`,
+      );
     }
   }
 }
@@ -1254,7 +1258,7 @@ export function maintainMemory(): void {
       if (lostRooms[roomName] !== undefined) delete lostRooms[roomName];
       continue;
     }
-    const lostAt = lostRooms[roomName] ??= Game.time;
+    const lostAt = (lostRooms[roomName] ??= Game.time);
     if (Game.time - lostAt > LOST_ROOM_GRACE) {
       delete Memory.rooms[roomName];
       delete lostRooms[roomName];
@@ -1302,7 +1306,12 @@ function migrateMemory(currentVersion: number): void {
   // 继续也不会出错（幂等的迁移重复执行不改变状态）。
   const checkpoint = Memory.kernel?.migrationCheckpoint;
   let version = currentVersion;
-  if (version === 0 && checkpoint !== undefined && checkpoint > 0 && checkpoint <= CONFIG.memory.schemaVersion) {
+  if (
+    version === 0 &&
+    checkpoint !== undefined &&
+    checkpoint > 0 &&
+    checkpoint <= CONFIG.memory.schemaVersion
+  ) {
     version = checkpoint;
     Memory.schemaVersion = version;
     log.info("memory", `[schema] fast-forward from v0 to v${version} (checkpoint)`);

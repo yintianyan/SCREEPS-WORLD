@@ -55,9 +55,9 @@ describe("evaluateDevelopmentGate — 结构化原因码", () => {
 
   it("威胁 creep（含 emergency 路径）→ threat", () => {
     expect(evaluateDevelopmentGate(gateInputs({ threatCount: 1 }))).toBe("threat");
-    expect(
-      evaluateDevelopmentGate(gateInputs({ emergencyAny: true, threatCount: 1 })),
-    ).toBe("threat");
+    expect(evaluateDevelopmentGate(gateInputs({ emergencyAny: true, threatCount: 1 }))).toBe(
+      "threat",
+    );
   });
 
   it("P0 孵化请求 → p0-spawn", () => {
@@ -72,9 +72,11 @@ describe("evaluateDevelopmentGate — 结构化原因码", () => {
 
   it("全局 site 满额 → global-site-cap", () => {
     expect(
-      evaluateDevelopmentGate(gateInputs({
-        globalSiteCount: CONFIG.construction.maxGlobalSites,
-      })),
+      evaluateDevelopmentGate(
+        gateInputs({
+          globalSiteCount: CONFIG.construction.maxGlobalSites,
+        }),
+      ),
     ).toBe("global-site-cap");
   });
 
@@ -122,9 +124,7 @@ describe("evaluateDevelopmentLane — RCL2 关键发展通道", () => {
   });
 
   it("conserve 档 + 能量地板满足 → 仍放行（修复核心场景）", () => {
-    expect(
-      evaluateDevelopmentLane(laneInputs({ budgetTier: "conserve" })),
-    ).toBe("ok");
+    expect(evaluateDevelopmentLane(laneInputs({ budgetTier: "conserve" }))).toBe("ok");
   });
 
   it("recovery 档 → 拒绝（内核 maxPriority 语义一致）", () => {
@@ -134,9 +134,7 @@ describe("evaluateDevelopmentLane — RCL2 关键发展通道", () => {
   it("威胁 → threat；P0 孵化缺口 → p0-spawn；生存级紧急缺口 → survival-gap", () => {
     expect(evaluateDevelopmentLane(laneInputs({ threatCount: 1 }))).toBe("threat");
     expect(evaluateDevelopmentLane(laneInputs({ hasP0SpawnRequest: true }))).toBe("p0-spawn");
-    expect(
-      evaluateDevelopmentLane(laneInputs({ survivalGapActive: true })),
-    ).toBe("survival-gap");
+    expect(evaluateDevelopmentLane(laneInputs({ survivalGapActive: true }))).toBe("survival-gap");
   });
 
   it("source container 缺失（经济效率缺口）不阻塞通道 — 仅 spawn/tower/storage 计入 survival-gap", () => {
@@ -146,18 +144,22 @@ describe("evaluateDevelopmentLane — RCL2 关键发展通道", () => {
 
   it("能量低于绝对地板 → energy-floor（conserve 下同样拦截）", () => {
     expect(
-      evaluateDevelopmentLane(laneInputs({
-        budgetTier: "conserve",
-        energyAvailable: CONFIG.construction.developmentLaneEnergyFloor - 1,
-      })),
+      evaluateDevelopmentLane(
+        laneInputs({
+          budgetTier: "conserve",
+          energyAvailable: CONFIG.construction.developmentLaneEnergyFloor - 1,
+        }),
+      ),
     ).toBe("energy-floor");
   });
 
   it("全局 site 满额 → global-site-cap（通道不绕过全局配额）", () => {
     expect(
-      evaluateDevelopmentLane(laneInputs({
-        globalSiteCount: CONFIG.construction.maxGlobalSites,
-      })),
+      evaluateDevelopmentLane(
+        laneInputs({
+          globalSiteCount: CONFIG.construction.maxGlobalSites,
+        }),
+      ),
     ).toBe("global-site-cap");
   });
 
@@ -188,16 +190,15 @@ describe("isCriticalDevelopmentTask — 通道任务分类", () => {
 
   it("controller 邻接 container 属通道", () => {
     const snap = { sources: [], controller: { pos: { x: 30, y: 30 } } } as any;
-    expect(
-      isCriticalDevelopmentTask(task(STRUCTURE_CONTAINER, 31, 30), snap),
-    ).toBe(true);
+    expect(isCriticalDevelopmentTask(task(STRUCTURE_CONTAINER, 31, 30), snap)).toBe(true);
   });
 
   it("source 邻接 container 不属通道（归 emergency 车道）", () => {
-    const snap = { sources: [{ pos: { x: 20, y: 20 } }], controller: { pos: { x: 30, y: 30 } } } as any;
-    expect(
-      isCriticalDevelopmentTask(task(STRUCTURE_CONTAINER, 21, 20), snap),
-    ).toBe(false);
+    const snap = {
+      sources: [{ pos: { x: 20, y: 20 } }],
+      controller: { pos: { x: 30, y: 30 } },
+    } as any;
+    expect(isCriticalDevelopmentTask(task(STRUCTURE_CONTAINER, 21, 20), snap)).toBe(false);
   });
 
   it("道路 / 塔 / spawn 不属通道", () => {
@@ -300,7 +301,9 @@ describe("makeTryAddTask — 背景任务队列硬上限", () => {
       maxBackgroundQueued: 2,
       nowTick: 5,
     });
-    expect(tryAdd(candidate({ key: "ext", priority: 1, structureType: STRUCTURE_EXTENSION }))).toBe(true);
+    expect(tryAdd(candidate({ key: "ext", priority: 1, structureType: STRUCTURE_EXTENSION }))).toBe(
+      true,
+    );
     expect(queue).toHaveLength(3);
     expect(queue[2]!.queuedAt).toBe(5);
   });

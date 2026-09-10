@@ -106,11 +106,6 @@ export function computeTieredBudget(
 /**
  * 检查计划成本是否在预算内（Core Protection Constraint）。
  */
-export function isWithinBudget(
-  planCost: number,
-  tieredBudget: TieredExpansionBudget,
-): boolean {
-  return planCost > 0
-    && planCost <= tieredBudget.availableExpansion
-    && !tieredBudget.coreInvaded;
+export function isWithinBudget(planCost: number, tieredBudget: TieredExpansionBudget): boolean {
+  return planCost > 0 && planCost <= tieredBudget.availableExpansion && !tieredBudget.coreInvaded;
 }

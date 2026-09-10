@@ -102,7 +102,10 @@ export function applyIntakeGuardrail(
   // ── 3. 统计窗口约束 ──
   const ageTicks = currentTick - p.t;
   if (ageTicks > MAX_ADVICE_AGE_TICKS) {
-    rejected.push({ param: "package", reason: `stale (age=${ageTicks}t > ${MAX_ADVICE_AGE_TICKS}t)` });
+    rejected.push({
+      param: "package",
+      reason: `stale (age=${ageTicks}t > ${MAX_ADVICE_AGE_TICKS}t)`,
+    });
     return { accepted, rejected, summary: `intake: rejected (stale ${ageTicks}t)` };
   }
 
@@ -140,9 +143,10 @@ export function applyIntakeGuardrail(
     });
   }
 
-  const summary = accepted.length > 0
-    ? `intake: ${accepted.length} accepted, ${rejected.length} rejected`
-    : `intake: 0 accepted, ${rejected.length} rejected`;
+  const summary =
+    accepted.length > 0
+      ? `intake: ${accepted.length} accepted, ${rejected.length} rejected`
+      : `intake: 0 accepted, ${rejected.length} rejected`;
 
   return { accepted, rejected, summary };
 }
@@ -156,7 +160,8 @@ function isValidPayload(payload: unknown): payload is IntakePayload {
   for (const s of p.sug) {
     if (!s || typeof s !== "object") return false;
     const sg = s as Record<string, unknown>;
-    if (typeof sg.p !== "string" || typeof sg.v !== "number" || typeof sg.r !== "string") return false;
+    if (typeof sg.p !== "string" || typeof sg.v !== "number" || typeof sg.r !== "string")
+      return false;
   }
   return true;
 }

@@ -58,10 +58,7 @@ function buildEconomyRing(
   return buf;
 }
 
-function buildCpuRing(
-  count: number,
-  overrides: Partial<CpuSample> = {},
-): RingBuffer<CpuSample> {
+function buildCpuRing(count: number, overrides: Partial<CpuSample> = {}): RingBuffer<CpuSample> {
   const buf = createRingBuffer<CpuSample>(500);
   for (let i = 0; i < count; i++) {
     ringPush(buf, {
@@ -73,17 +70,19 @@ function buildCpuRing(
       hl: 19.2,
       sk: 0,
       er: 0,
-      s1: "", v1: 0, s2: "", v2: 0, s3: "", v3: 0,
+      s1: "",
+      v1: 0,
+      s2: "",
+      v2: 0,
+      s3: "",
+      v3: 0,
       ...overrides,
     });
   }
   return buf;
 }
 
-function setupTimeseries(
-  econ: RingBuffer<EconomySample>,
-  cpu: RingBuffer<CpuSample>,
-): void {
+function setupTimeseries(econ: RingBuffer<EconomySample>, cpu: RingBuffer<CpuSample>): void {
   (globalThis as any).__segStore = {
     cpuSeg: { cpu },
     economySeg: { economy: econ },
@@ -93,10 +92,7 @@ function setupTimeseries(
 
 /** 向 Game.creeps 追加指定角色的 creep。
  *  ISSUE-008: 同步写入 globalCache().creepRefs 供 tuning-engine 消费。 */
-function setupCreeps(
-  roomName: string,
-  roles: Record<string, number>,
-): void {
+function setupCreeps(roomName: string, roles: Record<string, number>): void {
   const existing = (globalThis as any).Game.creeps ?? {};
   let idx = Object.keys(existing).length;
   for (const [role, count] of Object.entries(roles)) {
@@ -116,8 +112,9 @@ function setupCreeps(
     ticksToLive: c.ticksToLive,
     bodyLength: 1,
     body: [],
-    roomName: roomName,
-    x: 25, y: 25,
+    roomName,
+    x: 25,
+    y: 25,
     energyCarried: 0,
   }));
 }
@@ -152,18 +149,12 @@ function snapshotWithSources(
   });
 }
 
-function buildContext(
-  snapshots: RoomSnapshot[],
-  budget: Budget,
-  tick = TICK,
-): TickContext {
+function buildContext(snapshots: RoomSnapshot[], budget: Budget, tick = TICK): TickContext {
   return {
     tick,
     budget,
     globalSiteCount: snapshots.reduce((sum, s) => sum + s.myConstructionSites.length, 0),
-    getSnapshot: vi.fn((room: string) =>
-      snapshots.find(s => s.roomName === room),
-    ),
+    getSnapshot: vi.fn((room: string) => snapshots.find(s => s.roomName === room)),
     snapshots: vi.fn(function* () {
       for (const s of snapshots) yield s;
     }),
@@ -401,8 +392,12 @@ describe("P1-2 srcRatio 信号 + 危机解锁冻结", () => {
       });
 
       const calls = logSpy.mock.calls.map(c => c[0] as string);
-      const harvesterLog = calls.find(s => s.includes("FORCE_UNFREEZE") && s.includes("harvester.maxCount"));
-      const haulerLog = calls.find(s => s.includes("FORCE_UNFREEZE") && s.includes("hauler.maxCount"));
+      const harvesterLog = calls.find(
+        s => s.includes("FORCE_UNFREEZE") && s.includes("harvester.maxCount"),
+      );
+      const haulerLog = calls.find(
+        s => s.includes("FORCE_UNFREEZE") && s.includes("hauler.maxCount"),
+      );
 
       // 两个 critical 参数都输出诊断
       expect(harvesterLog).toBeDefined();

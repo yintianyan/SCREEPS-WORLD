@@ -123,9 +123,10 @@ export function assessEconomicHealth(
   if (threatLevel >= 3 || budget.exhausted) {
     return {
       health: "suspended",
-      reason: threatLevel >= 3
-        ? `threat-critical-level-${threatLevel}`
-        : `budget-exhausted-remaining-${budget.remaining}`,
+      reason:
+        threatLevel >= 3
+          ? `threat-critical-level-${threatLevel}`
+          : `budget-exhausted-remaining-${budget.remaining}`,
       degraded: true,
       improved: false,
       recommendedAction: "suspend",
@@ -146,19 +147,19 @@ export function assessEconomicHealth(
   // 3. 运输效率低 或 净价值低于阈值持续 → DEGRADED
   if (
     (efficiency < config.transportEfficiencyThreshold && input.isEconomicallyActive) ||
-    (netValue < config.healthyNetValueThreshold && netValue > 0 &&
+    (netValue < config.healthyNetValueThreshold &&
+      netValue > 0 &&
       input.unhealthyStreak >= config.degradedStreakThreshold)
   ) {
     return {
       health: "degraded",
-      reason: efficiency < config.transportEfficiencyThreshold
-        ? `transport-efficiency-${efficiency.toFixed(2)}-below-${config.transportEfficiencyThreshold}`
-        : `netValue-${netValue.toFixed(1)}-below-${config.healthyNetValueThreshold}`,
+      reason:
+        efficiency < config.transportEfficiencyThreshold
+          ? `transport-efficiency-${efficiency.toFixed(2)}-below-${config.transportEfficiencyThreshold}`
+          : `netValue-${netValue.toFixed(1)}-below-${config.healthyNetValueThreshold}`,
       degraded: true,
       improved: false,
-      recommendedAction: isOverproducing(flow, input.containerCapacity)
-        ? "add_hauler"
-        : "monitor",
+      recommendedAction: isOverproducing(flow, input.containerCapacity) ? "add_hauler" : "monitor",
     };
   }
 

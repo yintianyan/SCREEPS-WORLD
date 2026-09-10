@@ -223,13 +223,12 @@ export function evaluateExpectations(input: {
   const bootAge = input.tick - (input.bootTick ?? -Infinity);
 
   // E1 遥测新鲜度。
-  const sampleAge = input.statsLastSample !== undefined
-    ? input.tick - input.statsLastSample
-    : Infinity;
+  const sampleAge =
+    input.statsLastSample !== undefined ? input.tick - input.statsLastSample : Infinity;
   if (sampleAge > TELEMETRY_STALE_TICKS) {
     violations.push({
       id: "telemetryStale",
-      detail: "lastSample age=" + (Number.isFinite(sampleAge) ? sampleAge : "never"),
+      detail: `lastSample age=${Number.isFinite(sampleAge) ? sampleAge : "never"}`,
     });
   }
 
@@ -242,8 +241,8 @@ export function evaluateExpectations(input: {
       const age = last === undefined ? Infinity : input.tick - last;
       if (age > grace) {
         violations.push({
-          id: "p3Starved:" + s.name,
-          detail: "age=" + (Number.isFinite(age) ? age : "never") + " grace=" + grace,
+          id: `p3Starved:${s.name}`,
+          detail: `age=${Number.isFinite(age) ? age : "never"} grace=${grace}`,
         });
         p3Starved = true;
       }
@@ -284,15 +283,14 @@ export function evaluateExpectations(input: {
             }
             // 违例持续中
             violations.push({
-              id: "spawnQueueStale:" + sq.room,
-              detail: "queue=" + sq.queueLength + " oldestAge=" + oldestAge +
-                " key=" + (sq.oldestRequestKey ?? "?") +
-                " role=" + (sq.oldestRole ?? "?") +
-                " pri=" + (sq.oldestPriority ?? "?") +
-                " rcl=" + (sq.rcl ?? "?") +
-                " e=" + (sq.energyAvailable ?? "?") +
-                " spawn=" + sq.spawning +
-                " dur=" + (input.tick - existing.violationStartTick),
+              id: `spawnQueueStale:${sq.room}`,
+              detail: `queue=${sq.queueLength} oldestAge=${oldestAge} key=${
+                sq.oldestRequestKey ?? "?"
+              } role=${sq.oldestRole ?? "?"} pri=${sq.oldestPriority ?? "?"} rcl=${
+                sq.rcl ?? "?"
+              } e=${sq.energyAvailable ?? "?"} spawn=${sq.spawning} dur=${
+                input.tick - existing.violationStartTick
+              }`,
             });
           } else {
             // 新违例
@@ -312,11 +310,10 @@ export function evaluateExpectations(input: {
               emptyStreak: 0,
             };
             violations.push({
-              id: "spawnQueueStale:" + sq.room,
-              detail: "queue=" + sq.queueLength + " oldestAge=" + oldestAge +
-                " key=" + (sq.oldestRequestKey ?? "?") +
-                " role=" + (sq.oldestRole ?? "?") +
-                " pri=" + (sq.oldestPriority ?? "?"),
+              id: `spawnQueueStale:${sq.room}`,
+              detail: `queue=${sq.queueLength} oldestAge=${oldestAge} key=${
+                sq.oldestRequestKey ?? "?"
+              } role=${sq.oldestRole ?? "?"} pri=${sq.oldestPriority ?? "?"}`,
             });
           }
         }
@@ -358,8 +355,8 @@ export function evaluateExpectations(input: {
         // 误报保护：房间数增长导致的合理增长
         if (latest.roomCount <= prev.roomCount) {
           violations.push({
-            id: "memoryGrowth:" + latest.roomCount,
-            detail: "bytes=" + latest.bytes + " prev=" + prev.bytes + " growth=" + growthPct.toFixed(1) + "%",
+            id: `memoryGrowth:${latest.roomCount}`,
+            detail: `bytes=${latest.bytes} prev=${prev.bytes} growth=${growthPct.toFixed(1)}%`,
           });
         }
       }
@@ -374,7 +371,7 @@ export function evaluateExpectations(input: {
         if (slope > E4_SLOPE_THRESHOLD && roomGrowth === 0) {
           violations.push({
             id: "memorySlope",
-            detail: "slope=" + slope.toFixed(1) + " bytes/sample over " + tickSpan + " tick",
+            detail: `slope=${slope.toFixed(1)} bytes/sample over ${tickSpan} tick`,
           });
         }
       }
@@ -389,12 +386,15 @@ export function evaluateExpectations(input: {
       // 误报保护：RCL8 不需要增长（已满级）
       if (rcl.rcl >= 8) continue;
       // 停滞时长优先；tracker 缺失（reset 后首轮）回退绝对龄，方向保守。
-      const stall = rcl.progressStallTicks
-        ?? (rcl.lastRclChange !== undefined ? input.tick - rcl.lastRclChange : undefined);
+      const stall =
+        rcl.progressStallTicks ??
+        (rcl.lastRclChange !== undefined ? input.tick - rcl.lastRclChange : undefined);
       if (stall !== undefined && stall > E5_STALE_TICKS) {
         violations.push({
-          id: "rclStale:" + rcl.room,
-          detail: "rcl=" + rcl.rcl + " stall=" + stall + " upgrader=" + rcl.hasUpgrader + " storage=" + rcl.storageEnergy,
+          id: `rclStale:${rcl.room}`,
+          detail: `rcl=${rcl.rcl} stall=${stall} upgrader=${rcl.hasUpgrader} storage=${
+            rcl.storageEnergy
+          }`,
         });
       }
     }
@@ -409,8 +409,10 @@ export function evaluateExpectations(input: {
           // 误报保护：recovery/bootstrap colonyState 下的排队是预期行为
           if (bq.colonyState !== "recovery" && bq.colonyState !== "bootstrap") {
             violations.push({
-              id: "buildQueueStale:" + bq.room,
-              detail: "queue=" + bq.queueLength + " oldestAge=" + oldestAge + " builder=" + bq.builderCount + " type=" + (bq.oldestTaskType ?? "?"),
+              id: `buildQueueStale:${bq.room}`,
+              detail: `queue=${bq.queueLength} oldestAge=${oldestAge} builder=${
+                bq.builderCount
+              } type=${bq.oldestTaskType ?? "?"}`,
             });
           }
         }
@@ -424,8 +426,10 @@ export function evaluateExpectations(input: {
       const noProgressAge = input.tick - sp.lastProgressTick;
       if (noProgressAge > E7_STALE_TICKS && sp.builderVisits === 0) {
         violations.push({
-          id: "siteStale:" + sp.room + ":" + sp.siteId,
-          detail: "type=" + sp.structureType + " prog=" + sp.progress + "/" + sp.progressTotal + " age=" + sp.siteAge + " noProg=" + noProgressAge,
+          id: `siteStale:${sp.room}:${sp.siteId}`,
+          detail: `type=${sp.structureType} prog=${sp.progress}/${sp.progressTotal} age=${
+            sp.siteAge
+          } noProg=${noProgressAge}`,
         });
       }
     }
@@ -437,8 +441,8 @@ export function evaluateExpectations(input: {
       const failAge = input.tick - pf.lastSuccessTick;
       if (failAge > E8_STALE_TICKS || pf.consecutiveFailures > 10) {
         violations.push({
-          id: "pathFailure:" + pf.room + ":" + pf.pathId,
-          detail: "failAge=" + failAge + " consec=" + pf.consecutiveFailures,
+          id: `pathFailure:${pf.room}:${pf.pathId}`,
+          detail: `failAge=${failAge} consec=${pf.consecutiveFailures}`,
         });
       }
     }
@@ -451,8 +455,10 @@ export function evaluateExpectations(input: {
         const recoveryDuration = input.tick - rec.recoveryStartTick;
         if (recoveryDuration > E9_STALE_TICKS) {
           violations.push({
-            id: "recoveryStale:" + rec.room,
-            detail: "dur=" + recoveryDuration + " missStruct=" + rec.missingStructures + " missRole=" + rec.missingRoles + " storage=" + rec.storageEnergy,
+            id: `recoveryStale:${rec.room}`,
+            detail: `dur=${recoveryDuration} missStruct=${rec.missingStructures} missRole=${
+              rec.missingRoles
+            } storage=${rec.storageEnergy}`,
           });
         }
       }

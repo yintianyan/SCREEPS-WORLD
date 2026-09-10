@@ -14,41 +14,83 @@ import type { TacticalState, TargetScope } from "../../../src/domain/tactical/ty
 
 function makeCapability(overrides: Partial<CombatCapability> = {}): CombatCapability {
   return {
-    attack: 0, rangedAttack: 0, heal: 0, rangedHeal: 0,
-    dismantle: 0, claim: 0, effectiveHP: 1000, mobility: 1,
-    support: 0, toughParts: 0, boosted: false, maxBoostTier: 0,
-    totalParts: 10, activeParts: 10, ...overrides,
+    attack: 0,
+    rangedAttack: 0,
+    heal: 0,
+    rangedHeal: 0,
+    dismantle: 0,
+    claim: 0,
+    effectiveHP: 1000,
+    mobility: 1,
+    support: 0,
+    toughParts: 0,
+    boosted: false,
+    maxBoostTier: 0,
+    totalParts: 10,
+    activeParts: 10,
+    ...overrides,
   };
 }
 
 function makeMember(name: string, role: string, x: number, y: number): FocusFireMemberSnapshot {
   return {
-    name, role,
+    name,
+    role,
     capability: makeCapability(
-      role === "attacker" ? { attack: 120 } :
-      role === "ranged" ? { rangedAttack: 40 } :
-      role === "healer" ? { heal: 48 } :
-      { attack: 60 },
+      role === "attacker"
+        ? { attack: 120 }
+        : role === "ranged"
+          ? { rangedAttack: 40 }
+          : role === "healer"
+            ? { heal: 48 }
+            : { attack: 60 },
     ),
-    pos: x * 50 + y, room: "W2N1",
-    hits: 1000, hitsMax: 1000, alive: true,
+    pos: x * 50 + y,
+    room: "W2N1",
+    hits: 1000,
+    hitsMax: 1000,
+    alive: true,
   };
 }
 
-function makeCandidate(id: string, x: number, y: number, overrides: Partial<TargetCandidate> = {}): TargetCandidate {
-  const base = buildTargetCandidate(id, x * 50 + y, "W2N1", "", 1000, 1000, makeCapability({ attack: 60 }), 60, 25 * 50 + 25, "W2N1", 100);
+function makeCandidate(
+  id: string,
+  x: number,
+  y: number,
+  overrides: Partial<TargetCandidate> = {},
+): TargetCandidate {
+  const base = buildTargetCandidate(
+    id,
+    x * 50 + y,
+    "W2N1",
+    "",
+    1000,
+    1000,
+    makeCapability({ attack: 60 }),
+    60,
+    25 * 50 + 25,
+    "W2N1",
+    100,
+  );
   return { ...base, ...overrides };
 }
 
 function makeSnapshot(overrides: Partial<FocusFireSnapshot> = {}): FocusFireSnapshot {
   return {
-    tick: 100, squadId: "squad-test", objectiveId: "obj-test",
-    anchorPos: 25 * 50 + 25, anchorRoom: "W2N1",
+    tick: 100,
+    squadId: "squad-test",
+    objectiveId: "obj-test",
+    anchorPos: 25 * 50 + 25,
+    anchorRoom: "W2N1",
     tacticalState: "ENGAGING" as TacticalState,
     targetScope: "LOCAL" as TargetScope,
-    authorizedTargetRoom: "W2N1", warPosture: "war",
-    candidates: [], members: [], prevPlan: null,
-    cohesionStatus: "INTACT", inEngagementRange: true,
+    authorizedTargetRoom: "W2N1",
+    warPosture: "war",
+    candidates: [],
+    members: [],
+    prevPlan: null,
+    cohesionStatus: "INTACT",
+    inEngagementRange: true,
     ...overrides,
   };
 }
@@ -120,18 +162,25 @@ describe("A5.4.4 CPU Benchmark — planFocusFire", () => {
     for (let s = 0; s < 50; s++) {
       const targets: TargetCandidate[] = [];
       for (let i = 0; i < (s % 3) + 1; i++) {
-        targets.push(makeCandidate(`enemy-${s}-${i}`, 20 + i * 3, 20 + i * 5, {
-          hp: 200 + i * 200, effectiveHP: 200 + i * 200,
-        }));
+        targets.push(
+          makeCandidate(`enemy-${s}-${i}`, 20 + i * 3, 20 + i * 5, {
+            hp: 200 + i * 200,
+            effectiveHP: 200 + i * 200,
+          }),
+        );
       }
       const members: FocusFireMemberSnapshot[] = [];
       for (let i = 0; i < (s % 4) + 1; i++) {
         const role = i % 3 === 0 ? "attacker" : i % 3 === 1 ? "ranged" : "healer";
         members.push(makeMember(`att-${s}-${i}`, role, 20 + i, 20 + i));
       }
-      scenarios.push(makeSnapshot({
-        tick: 100 + s, candidates: targets, members,
-      }));
+      scenarios.push(
+        makeSnapshot({
+          tick: 100 + s,
+          candidates: targets,
+          members,
+        }),
+      );
     }
 
     // Warm-up
@@ -159,7 +208,9 @@ describe("A5.4.4 CPU Benchmark — planFocusFire", () => {
 
   it("focusFirePlanHash 1000 次 < 15ms（warm-up 后取中位数）", () => {
     const target = makeCandidate("enemy-1", 25, 25);
-    const plan = planFocusFire(makeSnapshot({ candidates: [target], members: [makeMember("att-1", "attacker", 25, 25)] }));
+    const plan = planFocusFire(
+      makeSnapshot({ candidates: [target], members: [makeMember("att-1", "attacker", 25, 25)] }),
+    );
 
     // Warm-up
     for (let i = 0; i < WARMUP; i++) focusFirePlanHash(plan);
@@ -182,10 +233,7 @@ describe("A5.4.4 CPU Benchmark — planFocusFire", () => {
 
 describe("A5.4.4 Memory Audit — FocusFirePlan 序列化大小", () => {
   it("FocusFirePlan JSON.stringify 长度 < 2000 字符", () => {
-    const targets = [
-      makeCandidate("enemy-1", 25, 25),
-      makeCandidate("enemy-2", 26, 26),
-    ];
+    const targets = [makeCandidate("enemy-1", 25, 25), makeCandidate("enemy-2", 26, 26)];
     const members = [
       makeMember("att-1", "attacker", 25, 25),
       makeMember("att-2", "attacker", 25, 26),
@@ -201,7 +249,9 @@ describe("A5.4.4 Memory Audit — FocusFirePlan 序列化大小", () => {
 
   it("AttackIntent JSON.stringify 长度 < 500 字符", () => {
     const target = makeCandidate("enemy-1", 25, 25);
-    const plan = planFocusFire(makeSnapshot({ candidates: [target], members: [makeMember("att-1", "attacker", 25, 25)] }));
+    const plan = planFocusFire(
+      makeSnapshot({ candidates: [target], members: [makeMember("att-1", "attacker", 25, 25)] }),
+    );
 
     const intent = plan.attackIntents[0]!;
     const serialized = JSON.stringify(intent);
@@ -228,7 +278,9 @@ describe("A5.4.4 Memory Audit — FocusFirePlan 序列化大小", () => {
     // 验证 planFocusFire 不修改 Memory
     // （纯函数不引用 Memory，此处验证设计约束）
     const target = makeCandidate("enemy-1", 25, 25);
-    const plan = planFocusFire(makeSnapshot({ candidates: [target], members: [makeMember("att-1", "attacker", 25, 25)] }));
+    const plan = planFocusFire(
+      makeSnapshot({ candidates: [target], members: [makeMember("att-1", "attacker", 25, 25)] }),
+    );
 
     // Plan 应只在 heap 上，不写入 Memory
     // 验证方式：plan.decisionHash 是确定性字符串（不含引用）

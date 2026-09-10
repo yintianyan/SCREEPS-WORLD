@@ -149,7 +149,5 @@ export function countPending(queue: readonly SpawnRequest[], role: string, home?
 
 /** 构建稳定去重 key：role:room:source?:index */
 export function spawnKey(role: string, home: string, index: number, sourceId?: string): string {
-  return sourceId
-    ? `${role}:${home}:${sourceId}:${index}`
-    : `${role}:${home}:${index}`;
+  return sourceId ? `${role}:${home}:${sourceId}:${index}` : `${role}:${home}:${index}`;
 }

@@ -1,0 +1,11 @@
+dist/
+node_modules/
+tmp/
+tools/
+scripts/
+coverage/
+.husky/
+*.config.mjs
+*.config.ts
+package-lock.json
+observer.db

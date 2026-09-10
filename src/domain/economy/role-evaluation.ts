@@ -135,14 +135,14 @@ export interface RoleEvaluationResult {
  */
 const ROLE_WEIGHTS: Record<EmpireRoomRole, Record<string, number>> = {
   core: {
-    rcl: 0.20,
-    storage: 0.20,
+    rcl: 0.2,
+    storage: 0.2,
     stability: 0.25,
-    netFlow: 0.20,
+    netFlow: 0.2,
     riskBuffer: 0.15,
   },
   production: {
-    efficiency: 0.30,
+    efficiency: 0.3,
     income: 0.25,
     sourceCount: 0.15,
     stability: 0.15,
@@ -150,17 +150,17 @@ const ROLE_WEIGHTS: Record<EmpireRoomRole, Record<string, number>> = {
   },
   support: {
     terminal: 0.25,
-    centrality: 0.30,
-    connectivity: 0.20,
+    centrality: 0.3,
+    connectivity: 0.2,
     stability: 0.15,
-    storage: 0.10,
+    storage: 0.1,
   },
   remote: {
     activeOps: 0.25,
     netScore: 0.25,
     productionRatio: 0.25,
     stability: 0.15,
-    capacity: 0.10,
+    capacity: 0.1,
   },
 };
 
@@ -172,10 +172,7 @@ const ROLE_WEIGHTS: Record<EmpireRoomRole, Record<string, number>> = {
  * 硬门控——不满足时该角色分数直接为 0。
  * 纯函数。
  */
-export function meetsPrerequisites(
-  role: EmpireRoomRole,
-  input: RoleEvaluationInput,
-): boolean {
+export function meetsPrerequisites(role: EmpireRoomRole, input: RoleEvaluationInput): boolean {
   const { profile } = input;
 
   // 所有角色都要求 colonyState = normal（困难房不能有职能）
@@ -209,7 +206,8 @@ function clamp01(v: number): number {
 
 /** RCL 评分：RCL 8 = 1.0, RCL 6 = 0.8, RCL 4 = 0.4, RCL < 4 = 0。 */
 function scoreRcl(rcl: number): RoleDimensionScore {
-  const score = rcl >= 8 ? 1.0 : rcl >= 7 ? 0.9 : rcl >= 6 ? 0.8 : rcl >= 5 ? 0.6 : rcl >= 4 ? 0.4 : 0;
+  const score =
+    rcl >= 8 ? 1.0 : rcl >= 7 ? 0.9 : rcl >= 6 ? 0.8 : rcl >= 5 ? 0.6 : rcl >= 4 ? 0.4 : 0;
   return { dimension: "rcl", score, evidence: `rcl=${rcl}` };
 }
 
@@ -219,7 +217,11 @@ function scoreStorage(profile: RoomEconomicProfile): RoleDimensionScore {
     return { dimension: "storage", score: 0, evidence: "no storage" };
   }
   const score = clamp01(profile.storageRatio * 2); // ratio 0.5 → 1.0
-  return { dimension: "storage", score, evidence: `storageRatio=${profile.storageRatio.toFixed(2)}` };
+  return {
+    dimension: "storage",
+    score,
+    evidence: `storageRatio=${profile.storageRatio.toFixed(2)}`,
+  };
 }
 
 /** 稳定性评分：非困难态 + 无降级风险 + 无活威胁 = 高分。 */
@@ -240,7 +242,11 @@ function scoreStability(profile: RoomEconomicProfile): RoleDimensionScore {
 /** 净流评分：净流 > 0 且值越高越好。 */
 function scoreNetFlow(profile: RoomEconomicProfile): RoleDimensionScore {
   if (!profile.netFlowPositive) {
-    return { dimension: "netFlow", score: 0, evidence: `netFlow=${profile.netFlow.toFixed(1)} (negative)` };
+    return {
+      dimension: "netFlow",
+      score: 0,
+      evidence: `netFlow=${profile.netFlow.toFixed(1)} (negative)`,
+    };
   }
   // netFlow 0-20 e/tick 线性映射到 0.5-1.0
   const score = clamp01(0.5 + Math.min(0.5, profile.netFlow / 40));
@@ -250,7 +256,11 @@ function scoreNetFlow(profile: RoomEconomicProfile): RoleDimensionScore {
 /** 风险缓冲评分：riskBuffer ≥ 1000 = 1.0, 线性递减到 0。 */
 function scoreRiskBuffer(profile: RoomEconomicProfile): RoleDimensionScore {
   const score = clamp01(profile.riskBuffer / 1000);
-  return { dimension: "riskBuffer", score, evidence: `riskBuffer=${Math.round(profile.riskBuffer)}` };
+  return {
+    dimension: "riskBuffer",
+    score,
+    evidence: `riskBuffer=${Math.round(profile.riskBuffer)}`,
+  };
 }
 
 /** 效率评分：与帝国均值比较。 */
@@ -258,10 +268,12 @@ function scoreEfficiency(input: RoleEvaluationInput): RoleDimensionScore {
   const eff = input.profile.efficiency;
   const avg = input.empireAvgEfficiency || 0;
   // 高于均值 → 高分；低于均值 → 低分
-  const score = avg > 0
-    ? clamp01(0.5 + (eff - avg) / (2 * avg))
-    : clamp01(eff);
-  return { dimension: "efficiency", score, evidence: `eff=${eff.toFixed(2)} avg=${avg.toFixed(2)}` };
+  const score = avg > 0 ? clamp01(0.5 + (eff - avg) / (2 * avg)) : clamp01(eff);
+  return {
+    dimension: "efficiency",
+    score,
+    evidence: `eff=${eff.toFixed(2)} avg=${avg.toFixed(2)}`,
+  };
 }
 
 /** 产能评分：与帝国均值比较。 */
@@ -269,10 +281,12 @@ function scoreIncome(input: RoleEvaluationInput): RoleDimensionScore {
   const income = input.profile.estimatedIncome;
   const avg = input.empireAvgIncome || 0;
   // 高于均值 → 高分
-  const score = avg > 0
-    ? clamp01(0.5 + (income - avg) / (2 * avg))
-    : clamp01(income / 20);
-  return { dimension: "income", score, evidence: `income=${income.toFixed(1)} avg=${avg.toFixed(1)}` };
+  const score = avg > 0 ? clamp01(0.5 + (income - avg) / (2 * avg)) : clamp01(income / 20);
+  return {
+    dimension: "income",
+    score,
+    evidence: `income=${income.toFixed(1)} avg=${avg.toFixed(1)}`,
+  };
 }
 
 /** source 数评分：2 source = 1.0, 1 source = 0.5。 */
@@ -287,7 +301,8 @@ function scoreCapacityUtilization(capacity: RoomCapacityProfile): RoleDimensionS
   // 0.5-0.8 为最佳区间（高效但不饱和）
   let score: number;
   if (util >= 0.5 && util <= 0.8) score = 1.0;
-  else if (util > 0.8) score = 0.7; // 饱和——无扩展余量
+  else if (util > 0.8)
+    score = 0.7; // 饱和——无扩展余量
   else if (util >= 0.3) score = 0.5;
   else score = 0.3;
   return { dimension: "capacityUtilization", score, evidence: `utilization=${util.toFixed(2)}` };
@@ -335,7 +350,11 @@ function scoreRemoteNetScore(input: RoleEvaluationInput): RoleDimensionScore {
 /** 远矿产出占比评分。 */
 function scoreRemoteProductionRatio(input: RoleEvaluationInput): RoleDimensionScore {
   const score = clamp01(input.remoteProductionRatio);
-  return { dimension: "productionRatio", score, evidence: `ratio=${input.remoteProductionRatio.toFixed(2)}` };
+  return {
+    dimension: "productionRatio",
+    score,
+    evidence: `ratio=${input.remoteProductionRatio.toFixed(2)}`,
+  };
 }
 
 /** 远矿产能评分：有远矿时 storage 余量越大越好。 */
@@ -345,7 +364,11 @@ function scoreRemoteCapacity(profile: RoomEconomicProfile): RoleDimensionScore {
   }
   // storageRatio 低于 0.8 = 有消化远矿产出的余量
   const score = profile.storageRatio < 0.8 ? 1.0 : 0.4;
-  return { dimension: "capacity", score, evidence: `storageRatio=${profile.storageRatio.toFixed(2)}` };
+  return {
+    dimension: "capacity",
+    score,
+    evidence: `storageRatio=${profile.storageRatio.toFixed(2)}`,
+  };
 }
 
 // ─── 角色评分函数 ─────────────────────────────────────────
@@ -364,10 +387,7 @@ function scoreCoreRole(input: RoleEvaluationInput): RoleScore {
   ];
 
   const weights = ROLE_WEIGHTS.core;
-  const totalScore = dims.reduce(
-    (sum, d) => sum + d.score * (weights[d.dimension] ?? 0),
-    0,
-  );
+  const totalScore = dims.reduce((sum, d) => sum + d.score * (weights[d.dimension] ?? 0), 0);
 
   const evidence = `CORE score=${totalScore.toFixed(2)} | ${dims.map(d => `${d.dimension}=${d.score.toFixed(2)}`).join(" ")}`;
 
@@ -394,10 +414,7 @@ function scoreProductionRole(input: RoleEvaluationInput): RoleScore {
   ];
 
   const weights = ROLE_WEIGHTS.production;
-  const totalScore = dims.reduce(
-    (sum, d) => sum + d.score * (weights[d.dimension] ?? 0),
-    0,
-  );
+  const totalScore = dims.reduce((sum, d) => sum + d.score * (weights[d.dimension] ?? 0), 0);
 
   const evidence = `PRODUCTION score=${totalScore.toFixed(2)} | ${dims.map(d => `${d.dimension}=${d.score.toFixed(2)}`).join(" ")}`;
 
@@ -424,10 +441,7 @@ function scoreSupportRole(input: RoleEvaluationInput): RoleScore {
   ];
 
   const weights = ROLE_WEIGHTS.support;
-  const totalScore = dims.reduce(
-    (sum, d) => sum + d.score * (weights[d.dimension] ?? 0),
-    0,
-  );
+  const totalScore = dims.reduce((sum, d) => sum + d.score * (weights[d.dimension] ?? 0), 0);
 
   const evidence = `SUPPORT score=${totalScore.toFixed(2)} | ${dims.map(d => `${d.dimension}=${d.score.toFixed(2)}`).join(" ")}`;
 
@@ -454,10 +468,7 @@ function scoreRemoteRole(input: RoleEvaluationInput): RoleScore {
   ];
 
   const weights = ROLE_WEIGHTS.remote;
-  const totalScore = dims.reduce(
-    (sum, d) => sum + d.score * (weights[d.dimension] ?? 0),
-    0,
-  );
+  const totalScore = dims.reduce((sum, d) => sum + d.score * (weights[d.dimension] ?? 0), 0);
 
   const evidence = `REMOTE score=${totalScore.toFixed(2)} | ${dims.map(d => `${d.dimension}=${d.score.toFixed(2)}`).join(" ")}`;
 
@@ -506,10 +517,18 @@ export function evaluateRoomRole(
     }
 
     switch (role) {
-      case "core": scores[role] = scoreCoreRole(input); break;
-      case "production": scores[role] = scoreProductionRole(input); break;
-      case "support": scores[role] = scoreSupportRole(input); break;
-      case "remote": scores[role] = scoreRemoteRole(input); break;
+      case "core":
+        scores[role] = scoreCoreRole(input);
+        break;
+      case "production":
+        scores[role] = scoreProductionRole(input);
+        break;
+      case "support":
+        scores[role] = scoreSupportRole(input);
+        break;
+      case "remote":
+        scores[role] = scoreRemoteRole(input);
+        break;
     }
   }
 

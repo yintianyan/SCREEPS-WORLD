@@ -29,10 +29,12 @@ const STATION_RANGE = 3;
  * 该动作作为 acquire 链兜底：已在站桩位 → resolve undefined（正常 idle 等补给）；
  * 不在 → 移动过去。到位后 hauler 一填 container 立即取能开工，零通勤延迟。
  */
-function moveToStation(): ActionCandidate<StructureContainer | StructureController | StructureLink> {
+function moveToStation(): ActionCandidate<
+  StructureContainer | StructureController | StructureLink
+> {
   return {
     name: "move:controller-station",
-    resolve: (ac) => resolveStationAnchor(ac),
+    resolve: ac => resolveStationAnchor(ac),
     execute: (ac, anchor) => {
       moveToTarget(ac.creep, anchor);
     },
@@ -40,7 +42,9 @@ function moveToStation(): ActionCandidate<StructureContainer | StructureControll
 }
 
 /** 解析站桩锚点；已在站桩位或无锚点时返回 undefined。 */
-function resolveStationAnchor(ac: ActionContext): StructureContainer | StructureController | StructureLink | undefined {
+function resolveStationAnchor(
+  ac: ActionContext,
+): StructureContainer | StructureController | StructureLink | undefined {
   const ctrl = ac.snapshot.controller;
   // 站桩锚点真相源（优先级）：controller link > controller container > controller 本体。
   //   - controller link 优先：link 网络瞬移供能、无 hauler 依赖，是最优站桩取能位；
@@ -106,19 +110,24 @@ function upgraderGate(ac: ActionContext): boolean {
   // 若只有 source container 有能量，upgrader 会落到 harvestSource 与 spawn 竞争。
   // 注意：storage 不在此列 — storage 低于 floor 时正是要保护它不被 upgrader 抽干。
   const hasNonSourceContainerEnergy = ac.snapshot.containers.some(
-    c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0 &&
+    c =>
+      c.store.getUsedCapacity(RESOURCE_ENERGY) > 0 &&
       !ac.snapshot.sources.some(s => c.pos.getRangeTo(s.pos) <= 1),
   );
-  const hasLinkEnergy = ac.snapshot.links.some(
-    l => l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
-  );
+  const hasLinkEnergy = ac.snapshot.links.some(l => l.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
   if (hasNonSourceContainerEnergy || hasLinkEnergy) return true;
 
   // 无替代能量源 — upgrader 只能直接采集，此时用能量地板门禁防止与孵化竞争。
   const hasStorage = ac.snapshot.storage !== undefined;
-  const belowFloor = ac.snapshot.rcl >= 4 && hasStorage
-    ? ac.snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.economy.upgradeEnergyFloorStorage
-    : ac.snapshot.energyAvailable < Math.min(CONFIG.economy.upgradeEnergyFloor, Math.floor(ac.snapshot.energyCapacityAvailable * 0.4));
+  const belowFloor =
+    ac.snapshot.rcl >= 4 && hasStorage
+      ? ac.snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) <
+        CONFIG.economy.upgradeEnergyFloorStorage
+      : ac.snapshot.energyAvailable <
+        Math.min(
+          CONFIG.economy.upgradeEnergyFloor,
+          Math.floor(ac.snapshot.energyCapacityAvailable * 0.4),
+        );
 
   if (belowFloor) {
     // 门禁拦截前先归站：gate 返回 false 会直接 idle（不走 acquire 链的归站兜底），
@@ -172,8 +181,8 @@ function dynamicStorageLimit(ac: ActionContext): number {
   // 与 upgraderGate 的 isEmergency 同一阈值（controllerDowngradeThreshold），
   // 但 gate 已放行 acquire — 此处再豁免门禁确保 storage 取能不被拦截。
   const ctrl = ac.snapshot.controller;
-  const hasDowngradeRisk = ctrl?.my === true &&
-    ctrl.ticksToDowngrade < cfg.controllerDowngradeThreshold;
+  const hasDowngradeRisk =
+    ctrl?.my === true && ctrl.ticksToDowngrade < cfg.controllerDowngradeThreshold;
   if (!hasDowngradeRisk) {
     // P0-4：storage 净流出率检查 — 跨 tick 跟踪
     // 复用 P0-1 写入的 roomMem.phase.storageEnergyPrev（room-state 每 tick 写入）。

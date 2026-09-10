@@ -4,8 +4,18 @@ import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
 import { log } from "../kernel/log";
-import { makeOperationId, type ExpansionResult, type OutcomeEvent, type MilestoneEvent } from "../domain/expansion/uoem-types";
-import { getOutcomeChannel, enqueueOutcome, makeEventId, type OutcomeChannelMemory } from "../kernel/outcome-channel";
+import {
+  makeOperationId,
+  type ExpansionResult,
+  type OutcomeEvent,
+  type MilestoneEvent,
+} from "../domain/expansion/uoem-types";
+import {
+  getOutcomeChannel,
+  enqueueOutcome,
+  makeEventId,
+  type OutcomeChannelMemory,
+} from "../kernel/outcome-channel";
 import {
   decideBootstrapRooms,
   BOOTSTRAP_WORKER_BODY,
@@ -26,20 +36,41 @@ import { packPos } from "../domain/layout/types";
 import { COMPACT_CORE_V2 } from "../domain/layout/templates/compact-core-v2";
 import type { ExpansionPlan } from "../domain/expansion/plan";
 import type { ExecutionState } from "../domain/expansion/execution-state";
-import { transitionExecutionState, getExecutionProgress, describeExecutionState } from "../domain/expansion/execution-state";
+import {
+  transitionExecutionState,
+  getExecutionProgress,
+  describeExecutionState,
+} from "../domain/expansion/execution-state";
 import { validateExecutionGate, type ExecutionGateInput } from "../domain/expansion/execution-gate";
 import { evaluateCheckpoint, type CheckpointId } from "../domain/expansion/checkpoint";
-import { evaluateEconomicActivation, type EconomicActivationInput } from "../domain/expansion/economic-activation";
-import { evaluateEmpireIntegration, canHandover, type EmpireIntegrationInput } from "../domain/expansion/empire-integration";
-import { evaluateThreatEscalation, type ThreatEscalationInput } from "../domain/expansion/threat-escalation";
+import {
+  evaluateEconomicActivation,
+  type EconomicActivationInput,
+} from "../domain/expansion/economic-activation";
+import {
+  evaluateEmpireIntegration,
+  canHandover,
+  type EmpireIntegrationInput,
+} from "../domain/expansion/empire-integration";
+import {
+  evaluateThreatEscalation,
+  type ThreatEscalationInput,
+} from "../domain/expansion/threat-escalation";
 import { tryReserve } from "../domain/expansion/resource-reservation";
-import { evaluateExpansionCooldown, DEFAULT_COOLDOWN_CONFIG } from "../domain/expansion/expansion-cooldown";
+import {
+  evaluateExpansionCooldown,
+  DEFAULT_COOLDOWN_CONFIG,
+} from "../domain/expansion/expansion-cooldown";
 import { evaluateAutonomyAge } from "../domain/expansion/autonomy";
 import { evaluateStabilityScore } from "../domain/expansion/stability-score";
 import { evaluateColonyFailure } from "../domain/expansion/colony-failure";
 import { evaluateExpansionRoi, type EmpireSnapshot } from "../domain/expansion/roi-tracker";
 import { buildColonyStabilityDashboard } from "../domain/expansion/colony-dashboard";
-import { recordExpansionCompleted, recordExpansionFailed, recordPlanningDecision } from "../telemetry";
+import {
+  recordExpansionCompleted,
+  recordExpansionFailed,
+  recordPlanningDecision,
+} from "../telemetry";
 /** ExpansionOutcome 事件编码（与 event-log 注释对齐）。 */
 const PHASE_CLAIM = 0;
 const PHASE_PIONEER = 1;
@@ -83,7 +114,10 @@ export const expansionManagerSystem: System = {
     // 残留记录直接离场，扩张管道不因旧数据卡死。
     const pending = Memory.kernel.expansion;
     if (pending && !EXECUTION_STATES.has(pending.state)) {
-      log.info("expansion", `[${ctx.tick}] expansion: 清理旧版残留状态 ${pending.state}（target=${pending.target}）`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: 清理旧版残留状态 ${pending.state}（target=${pending.target}）`,
+      );
       Memory.kernel.expansion = undefined;
     }
     // 自举车道（审计修复，W38S59 事故实证）：owned 无 spawn 的房不在扩张状态机
@@ -110,7 +144,7 @@ export const expansionManagerSystem: System = {
         config: DEFAULT_COOLDOWN_CONFIG,
       });
       if (!cooldownResult.allowed) {
-        log.info("expansion",`[${ctx.tick}] expansion: ${cooldownResult.evidence}`);
+        log.info("expansion", `[${ctx.tick}] expansion: ${cooldownResult.evidence}`);
         return;
       }
       // A3.3：从 expansionPlans[] 消费 WAITING_EXECUTION Plan
@@ -167,11 +201,16 @@ function tryConsumePlan(ctx: TickContext): void {
 
   const gateResult = validateExecutionGate(gateInput);
   if (!gateResult.allPassed) {
-    log.info("expansion",`[${ctx.tick}] expansion-manager: Gate failed for ${plan.roomName}: ${gateResult.evidence}`);
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion-manager: Gate failed for ${plan.roomName}: ${gateResult.evidence}`,
+    );
     // 如果 Gate 持续失败，更新 Plan 状态为 CANCELLED
-    if (gateResult.failedGates.includes("GATE_PLAN_VALID") ||
-        gateResult.failedGates.includes("GATE_TARGET_CLAIMABLE") ||
-        gateResult.failedGates.includes("GATE_NOT_OWNED")) {
+    if (
+      gateResult.failedGates.includes("GATE_PLAN_VALID") ||
+      gateResult.failedGates.includes("GATE_TARGET_CLAIMABLE") ||
+      gateResult.failedGates.includes("GATE_NOT_OWNED")
+    ) {
       updatePlanStatus(plan.planId, "EXECUTING");
     }
     return;
@@ -188,7 +227,10 @@ function tryConsumePlan(ctx: TickContext): void {
   const nukesForTarget = nukesInFlight[plan.roomName] ?? [];
   const liveNukes = nukesForTarget.filter(landAt => landAt > ctx.tick);
   if (liveNukes.length > 0) {
-    log.info("expansion",`[${ctx.tick}] expansion: ${plan.roomName} has ${liveNukes.length} nuke(s) in flight, skipping`);
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion: ${plan.roomName} has ${liveNukes.length} nuke(s) in flight, skipping`,
+    );
     return;
   }
 
@@ -213,7 +255,10 @@ function tryConsumePlan(ctx: TickContext): void {
     forcedAdvance: false,
   };
 
-  log.info("expansion",`[${ctx.tick}] expansion-manager: consuming plan ${plan.planId} for ${plan.roomName} (sponsor=${plan.sponsorRoom})`);
+  log.info(
+    "expansion",
+    `[${ctx.tick}] expansion-manager: consuming plan ${plan.planId} for ${plan.roomName} (sponsor=${plan.sponsorRoom})`,
+  );
 }
 
 // ─── A3.3：完整状态机推进 ─────────────────────────────────────
@@ -225,13 +270,17 @@ function tryConsumePlan(ctx: TickContext): void {
  * 覆盖完整链路：preparing → claiming → claimed → bootstrapping →
  * economic_startup → integrating → completed
  */
-function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
+function advanceExecutionStateMachine(
+  ctx: TickContext,
+  expansion: ExpansionState,
+  spawningAllowed: boolean,
+): void {
   switch (expansion.state) {
     case "validating":
       // Gate 验证已在 tryConsumePlan 中完成，直接推进
       expansion.state = "preparing";
       expansion.startedAt = ctx.tick;
-      log.info("expansion",`[${ctx.tick}] expansion: validating → preparing`);
+      log.info("expansion", `[${ctx.tick}] expansion: validating → preparing`);
       break;
 
     case "preparing":
@@ -242,7 +291,7 @@ function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionStat
       advanceClaiming(ctx, expansion, spawningAllowed);
       break;
 
-    case "claimed":
+    case "claimed": {
       // Checkpoint 1: Claimed — 直接推进到 bootstrapping
       expansion.state = "bootstrapping";
       expansion.startedAt = ctx.tick;
@@ -251,14 +300,18 @@ function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionStat
       const claimedRoom = Game.rooms[expansion.target];
       if (claimedRoom) {
         if (!seedLayoutAnchor(claimedRoom)) {
-          log.info("expansion",`[${ctx.tick}] expansion: no viable anchor in ${expansion.target}, aborting`);
+          log.info(
+            "expansion",
+            `[${ctx.tick}] expansion: no viable anchor in ${expansion.target}, aborting`,
+          );
           abortExpansion(ctx, expansion, "ABANDONED");
           return;
         }
       }
       submitPioneers(ctx, expansion);
-      log.info("expansion",`[${ctx.tick}] expansion: claimed → bootstrapping (CP1 passed)`);
+      log.info("expansion", `[${ctx.tick}] expansion: claimed → bootstrapping (CP1 passed)`);
       break;
+    }
 
     case "bootstrapping":
       advanceBootstrapping(ctx, expansion, spawningAllowed);
@@ -274,7 +327,10 @@ function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionStat
 
     case "completed":
       // 已完成，清理扩张状态
-      log.info("expansion",`[${ctx.tick}] expansion: ${expansion.target} already completed, cleaning up`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: ${expansion.target} already completed, cleaning up`,
+      );
       updatePlanStatus(expansion.planId ?? "", "COMPLETED");
       if (!Memory.kernel) Memory.kernel = {};
       Memory.kernel.expansion = undefined;
@@ -289,7 +345,10 @@ function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionStat
 
     default:
       // 未知状态（旧版残留等）— 与 run 入口的残留防护同口径，清理防穿透。
-      log.info("expansion", `[${ctx.tick}] expansion: 未知状态 ${expansion.state}（target=${expansion.target}），清理扩张记录`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: 未知状态 ${expansion.state}（target=${expansion.target}），清理扩张记录`,
+      );
       if (!Memory.kernel) Memory.kernel = {};
       Memory.kernel.expansion = undefined;
       break;
@@ -312,7 +371,11 @@ function advanceExecutionStateMachine(ctx: TickContext, expansion: ExpansionStat
 
 // ── preparing ──────────────────────────────────────────────
 
-function advancePreparing(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
+function advancePreparing(
+  ctx: TickContext,
+  expansion: ExpansionState,
+  spawningAllowed: boolean,
+): void {
   // 尝试预留资源
   if (!expansion.reservedEnergy || expansion.reservedEnergy === 0) {
     const reserveResult = tryReserve({
@@ -323,9 +386,15 @@ function advancePreparing(ctx: TickContext, expansion: ExpansionState, spawningA
     });
     if (reserveResult.success && reserveResult.reservation) {
       expansion.reservedEnergy = reserveResult.reservation.reservedEnergy;
-      log.info("expansion",`[${ctx.tick}] expansion: reserved ${expansion.reservedEnergy} energy for ${expansion.target}`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: reserved ${expansion.reservedEnergy} energy for ${expansion.target}`,
+      );
     } else {
-      log.info("expansion",`[${ctx.tick}] expansion: resource reservation failed: ${reserveResult.failReason}`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: resource reservation failed: ${reserveResult.failReason}`,
+      );
       // 预留失败不立即终止，重试
     }
   }
@@ -345,20 +414,23 @@ function advancePreparing(ctx: TickContext, expansion: ExpansionState, spawningA
   if (claimerAlive || claimerPending) {
     expansion.state = "claiming";
     expansion.startedAt = ctx.tick;
-    log.info("expansion",`[${ctx.tick}] expansion: preparing → claiming`);
+    log.info("expansion", `[${ctx.tick}] expansion: preparing → claiming`);
   }
 
   // 超时检查
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.claimTimeout) {
-    log.info("expansion",`[${ctx.tick}] expansion: preparing timed out, aborting`);
+    log.info("expansion", `[${ctx.tick}] expansion: preparing timed out, aborting`);
     abortExpansion(ctx, expansion, "TIMED_OUT");
   }
 }
 
-
 // ── claiming ────────────────────────────────────────────────
 
-function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
+function advanceClaiming(
+  ctx: TickContext,
+  expansion: ExpansionState,
+  spawningAllowed: boolean,
+): void {
   const targetRoom = Game.rooms[expansion.target];
 
   // 占领成功 → 进入 claimed
@@ -367,13 +439,16 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
     expansion.startedAt = ctx.tick;
     // Phase 6 UOEM: P1 是 Milestone（CLAIMED），不进 OutcomeChannel
     emitMilestone(expansion, "CLAIMED", ctx.tick);
-    log.info("expansion",`[${ctx.tick}] expansion: claiming → claimed`);
+    log.info("expansion", `[${ctx.tick}] expansion: claiming → claimed`);
     return;
   }
 
   // 被他人抢占 → 立即放弃
   if (targetRoom?.controller?.owner && !targetRoom.controller.my) {
-    log.info("expansion",`[${ctx.tick}] expansion: ${expansion.target} taken by ${targetRoom.controller.owner.username}, aborting`);
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion: ${expansion.target} taken by ${targetRoom.controller.owner.username}, aborting`,
+    );
     // Phase 6 UOEM: abortExpansion 内部统一做 blacklist + reclaim + enqueue
     abortExpansion(ctx, expansion, "STOLEN");
     return;
@@ -381,7 +456,7 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
 
   // 超时 → 放弃
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.claimTimeout) {
-    log.info("expansion",`[${ctx.tick}] expansion: claim ${expansion.target} timed out, aborting`);
+    log.info("expansion", `[${ctx.tick}] expansion: claim ${expansion.target} timed out, aborting`);
     abortExpansion(ctx, expansion, "TIMED_OUT");
     return;
   }
@@ -391,7 +466,10 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
   if (!claimerAlive) {
     const dangerUntil = Memory.rooms[expansion.sponsor]?.remoteOps?.[expansion.target]?.dangerUntil;
     if (dangerUntil !== undefined && ctx.tick < dangerUntil) {
-      log.info("expansion",`[${ctx.tick}] expansion: ${expansion.target} hostile (claimer lost), aborting`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: ${expansion.target} hostile (claimer lost), aborting`,
+      );
       // Phase 6 UOEM: abortExpansion 内部统一做 blacklist + reclaim + enqueue
       abortExpansion(ctx, expansion, "LOST");
       return;
@@ -403,7 +481,11 @@ function advanceClaiming(ctx: TickContext, expansion: ExpansionState, spawningAl
 
 // ── bootstrapping（旧 pioneering 的升级版）──────────────────
 
-function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawningAllowed: boolean): void {
+function advanceBootstrapping(
+  ctx: TickContext,
+  expansion: ExpansionState,
+  spawningAllowed: boolean,
+): void {
   const targetRoom = Game.rooms[expansion.target];
 
   // 失守/失明检查（与旧 advancePioneering 相同逻辑）
@@ -411,10 +493,16 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
     // Phase 6 UOEM: terminal outcome 只由 abortExpansion 产生一次
     // P2/P3 的 LOST/STOLEN 直接传给 abortExpansion，不在前面调 record
     if (!targetRoom) {
-      log.info("expansion",`[${ctx.tick}] expansion: lost vision of ${expansion.target} during bootstrapping, aborting`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: lost vision of ${expansion.target} during bootstrapping, aborting`,
+      );
       abortExpansion(ctx, expansion, "LOST");
     } else {
-      log.info("expansion",`[${ctx.tick}] expansion: lost ${expansion.target} during bootstrapping, aborting`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: lost ${expansion.target} during bootstrapping, aborting`,
+      );
       abortExpansion(ctx, expansion, "STOLEN");
     }
     return;
@@ -445,14 +533,18 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
       expansion.checkpointsPassed = Math.max(expansion.checkpointsPassed ?? 0, 2);
       expansion.state = "economic_startup";
       expansion.startedAt = ctx.tick;
-      log.info("expansion",`[${ctx.tick}] expansion: bootstrapping → economic_startup (CP2 passed)`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: bootstrapping → economic_startup (CP2 passed)`,
+      );
       return;
     }
   }
 
   // 威胁止损
   const hostiles = targetRoom.find(FIND_HOSTILE_CREEPS, {
-    filter: c => !CONFIG.defense.allies.includes(c.owner?.username ?? "") &&
+    filter: c =>
+      !CONFIG.defense.allies.includes(c.owner?.username ?? "") &&
       c.body.some(p => p.type === ATTACK || p.type === RANGED_ATTACK),
   });
   if (hostiles.length > 0) {
@@ -460,7 +552,10 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
       e => e.role === "worker" || e.role === "builder",
     );
     if (!squadAlive) {
-      log.info("expansion",`[${ctx.tick}] expansion: ${expansion.target} squad wiped by hostiles, aborting`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: ${expansion.target} squad wiped by hostiles, aborting`,
+      );
       // Phase 6 UOEM: terminal outcome 只由 abortExpansion 产生一次
       abortExpansion(ctx, expansion, "LOST");
       return;
@@ -469,14 +564,17 @@ function advanceBootstrapping(ctx: TickContext, expansion: ExpansionState, spawn
 
   // 超时
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.pioneerTimeout) {
-    log.info("expansion",`[${ctx.tick}] expansion: bootstrapping ${expansion.target} timed out`);
+    log.info("expansion", `[${ctx.tick}] expansion: bootstrapping ${expansion.target} timed out`);
     // Phase 6 UOEM: P5 是 Milestone（FORCED_ADVANCE），不进 OutcomeChannel
     emitMilestone(expansion, "FORCED_ADVANCE", ctx.tick);
     // 不直接 abort — 如果 spawn 已建成，尝试推进到 economic_startup
     if (spawns.length > 0) {
       expansion.state = "economic_startup";
       expansion.startedAt = ctx.tick;
-      log.info("expansion",`[${ctx.tick}] expansion: forcing bootstrapping → economic_startup (spawn exists)`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: forcing bootstrapping → economic_startup (spawn exists)`,
+      );
       return;
     }
     abortExpansion(ctx, expansion, "TIMED_OUT");
@@ -495,7 +593,10 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
   const targetRoom = Game.rooms[expansion.target];
 
   if (!targetRoom?.controller?.my) {
-    log.info("expansion",`[${ctx.tick}] expansion: lost ${expansion.target} during economic_startup, aborting`);
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion: lost ${expansion.target} during economic_startup, aborting`,
+    );
     // Phase 6 UOEM: terminal outcome 只由 abortExpansion 产生一次
     abortExpansion(ctx, expansion, "LOST");
     return;
@@ -505,8 +606,9 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
   // Phantom Transporter Bug 修复：系统不存在 "transporter" 角色，实际运输由 hauler
   // 和 distributor 承担。此处检查 hauler 或 distributor 存在即为物流活跃。
   const harvesterActive = querySquad({ home: expansion.target, role: "harvester" }).length > 0;
-  const logisticsActive = querySquad({ home: expansion.target })
-    .some(e => e.role === "hauler" || e.role === "distributor");
+  const logisticsActive = querySquad({ home: expansion.target }).some(
+    e => e.role === "hauler" || e.role === "distributor",
+  );
 
   const spawns = targetRoom.find(FIND_MY_SPAWNS);
   const spawnCanSpawn = spawns.length > 0 && targetRoom.energyAvailable >= 300;
@@ -530,7 +632,10 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
 
   if (cp3.passed) {
     expansion.checkpointsPassed = Math.max(expansion.checkpointsPassed ?? 0, 3);
-    log.info("expansion",`[${ctx.tick}] expansion: CP3 (Energy Loop) passed for ${expansion.target}`);
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion: CP3 (Energy Loop) passed for ${expansion.target}`,
+    );
   }
 
   // 检查基础基础设施
@@ -560,27 +665,36 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
 
   if (cp4.passed) {
     expansion.checkpointsPassed = Math.max(expansion.checkpointsPassed ?? 0, 4);
-    log.info("expansion",`[${ctx.tick}] expansion: CP4 (Basic Infra) passed for ${expansion.target}`);
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion: CP4 (Basic Infra) passed for ${expansion.target}`,
+    );
   }
 
   // CP3 + CP4 都通过 → 进入 integrating
   if (cp3.passed && cp4.passed) {
     expansion.state = "integrating";
     expansion.startedAt = ctx.tick;
-    log.info("expansion",`[${ctx.tick}] expansion: economic_startup → integrating`);
+    log.info("expansion", `[${ctx.tick}] expansion: economic_startup → integrating`);
     return;
   }
 
   // 超时检查（economic_startup 阶段给更长的时间）
   if (ctx.tick - expansion.startedAt > CONFIG.expansion.pioneerTimeout * 2) {
-    log.info("expansion",`[${ctx.tick}] expansion: economic_startup timed out for ${expansion.target}`);
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion: economic_startup timed out for ${expansion.target}`,
+    );
     // 如果至少 energy loop 活跃，尝试强行推进
     if (cp3.passed) {
       // Phase 6 UOEM: P7 是 Milestone（FORCED_ADVANCE），不进 OutcomeChannel
       emitMilestone(expansion, "FORCED_ADVANCE", ctx.tick);
       expansion.state = "integrating";
       expansion.startedAt = ctx.tick;
-      log.info("expansion",`[${ctx.tick}] expansion: forcing economic_startup → integrating (energy loop active)`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: forcing economic_startup → integrating (energy loop active)`,
+      );
       return;
     }
     abortExpansion(ctx, expansion, "TIMED_OUT");
@@ -593,7 +707,10 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
   const targetRoom = Game.rooms[expansion.target];
 
   if (!targetRoom?.controller?.my) {
-    log.info("expansion",`[${ctx.tick}] expansion: lost ${expansion.target} during integrating, aborting`);
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion: lost ${expansion.target} during integrating, aborting`,
+    );
     abortExpansion(ctx, expansion, "LOST");
     return;
   }
@@ -608,8 +725,9 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     // Phantom Transporter Bug 修复：检查 hauler 或 distributor 存在即为物流活跃。
     // 系统不存在 "transporter" 角色，实际运输由 hauler（源→sink）和
     // distributor（storage→sink）承担。
-    hasTransporter: querySquad({ home: expansion.target })
-      .some(e => e.role === "hauler" || e.role === "distributor"),
+    hasTransporter: querySquad({ home: expansion.target }).some(
+      e => e.role === "hauler" || e.role === "distributor",
+    ),
     hasUpgrader: querySquad({ home: expansion.target, role: "upgrader" }).length > 0,
     spawnActive: targetRoom.find(FIND_MY_SPAWNS).some(s => !s.spawning),
     tick: ctx.tick,
@@ -624,7 +742,10 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     expansion.consecutivePositiveTicks = 0;
   }
 
-  log.info("expansion",`[${ctx.tick}] expansion: integrating ${expansion.target} — ${econResult.evidence}`);
+  log.info(
+    "expansion",
+    `[${ctx.tick}] expansion: integrating ${expansion.target} — ${econResult.evidence}`,
+  );
 
   // 评估帝国集成（A3.4 修复：从真实系统状态验证，不硬编码）
   const integrationInput: EmpireIntegrationInput = {
@@ -660,7 +781,10 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     // 全链路完成！
     expansion.checkpointsPassed = 5;
     expansion.state = "completed";
-    log.info("expansion",`[${ctx.tick}] expansion: integrating → completed (CP5 passed) — ${expansion.target} is now AUTONOMOUS`);
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion: integrating → completed (CP5 passed) — ${expansion.target} is now AUTONOMOUS`,
+    );
     // Phase 6 UOEM: P8 终态 COMPLETED，直接调 enqueueTerminalOutcome
     enqueueTerminalOutcome(expansion, ctx.tick, "COMPLETED");
     // A3.4：记录完成 tick，供 Cooldown 门禁消费
@@ -671,7 +795,10 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
     // 释放预留资源（预留对象未持久化到 expansion，仅 log 标记；
     // tryReserve 的预留有 tick 过期机制，不释放也会自然过期）
     if (expansion.reservedEnergy && expansion.reservedEnergy > 0) {
-      log.info("expansion",`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy for ${expansion.target}`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy for ${expansion.target}`,
+      );
     }
     // 清理扩张状态
     Memory.kernel.expansion = undefined;
@@ -681,12 +808,18 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
   // 超时检查（integrating 阶段给最长的时间）
   const integratingTimeout = CONFIG.expansion.pioneerTimeout * 3;
   if (ctx.tick - expansion.startedAt > integratingTimeout) {
-    log.info("expansion",`[${ctx.tick}] expansion: integrating timed out for ${expansion.target} (netFlow=${econResult.netFlow})`);
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion: integrating timed out for ${expansion.target} (netFlow=${econResult.netFlow})`,
+    );
     // 如果经济至少在正方向，仍然算成功
     if (econResult.netFlow > 0 && integrationResult.integrated) {
       expansion.state = "completed";
       expansion.checkpointsPassed = 5;
-      log.info("expansion",`[${ctx.tick}] expansion: forcing integrating → completed (net positive + integrated)`);
+      log.info(
+        "expansion",
+        `[${ctx.tick}] expansion: forcing integrating → completed (net positive + integrated)`,
+      );
       // Phase 6 UOEM: P9 终态 COMPLETED_FORCED（经历过 forced advance 的超时强推完成）
       enqueueTerminalOutcome(expansion, ctx.tick, "COMPLETED_FORCED");
       updatePlanStatus(expansion.planId ?? "", "COMPLETED");
@@ -706,13 +839,20 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
  * 不再调用旧 recordExpansionOutcome — 消除配对双写。
  * blacklistTarget/reclaimExpeditionCreeps 在此统一执行，调用方不需重复。
  */
-function abortExpansion(ctx: TickContext, expansion: ExpansionState, outcome: ExpansionResult): void {
+function abortExpansion(
+  ctx: TickContext,
+  expansion: ExpansionState,
+  outcome: ExpansionResult,
+): void {
   // Phase 6 UOEM: 唯一终态写入 — enqueueTerminalOutcome 幂等去重
   enqueueTerminalOutcome(expansion, ctx.tick, outcome);
   // 释放预留资源（预留对象未持久化到 expansion，仅 log 标记；
   // tryReserve 的预留有 tick 过期机制，不释放也会自然过期）
   if (expansion.reservedEnergy && expansion.reservedEnergy > 0) {
-    log.info("expansion",`[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy (abort)`);
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion: releasing ${expansion.reservedEnergy} reserved energy (abort)`,
+    );
   }
   blacklistTarget(expansion.target, ctx.tick);
   reclaimExpeditionCreeps(expansion.target, expansion.sponsor);
@@ -746,13 +886,10 @@ let __uoemEventSeq = 0;
  * 发射 MilestoneEvent — 非终态事件，不进入 OutcomeChannel。
  * P1 claim 成功、P5 forced advance、P7 forced success 调用此函数。
  */
-function emitMilestone(
-  expansion: ExpansionState,
-  milestone: string,
-  tick: number,
-): void {
-  const operationId = expansion.operationId
-    ?? makeOperationId(expansion.target, expansion.openedAt ?? expansion.startedAt);
+function emitMilestone(expansion: ExpansionState, milestone: string, tick: number): void {
+  const operationId =
+    expansion.operationId ??
+    makeOperationId(expansion.target, expansion.openedAt ?? expansion.startedAt);
 
   // FORCED_ADVANCE 标志传播
   if (milestone === "FORCED_ADVANCE" && !expansion.forcedAdvance) {
@@ -788,12 +925,14 @@ function enqueueTerminalOutcome(
   tick: number,
   result: ExpansionResult,
 ): void {
-  const operationId = expansion.operationId
-    ?? makeOperationId(expansion.target, expansion.openedAt ?? expansion.startedAt);
+  const operationId =
+    expansion.operationId ??
+    makeOperationId(expansion.target, expansion.openedAt ?? expansion.startedAt);
   const openedAt = expansion.openedAt ?? expansion.startedAt;
 
   // recordEvent 保留（eventLog 不变）
-  const phaseCode = expansion.state === "claiming" || expansion.state === "preparing" ? PHASE_CLAIM : PHASE_PIONEER;
+  const phaseCode =
+    expansion.state === "claiming" || expansion.state === "preparing" ? PHASE_CLAIM : PHASE_PIONEER;
   const outcomeCode = resultToOutcomeCode(result);
   recordEvent(EventKind.ExpansionOutcome, expansion.target, [
     phaseCode,
@@ -817,7 +956,10 @@ function enqueueTerminalOutcome(
   const enqueueResult = enqueueOutcome(channel, ev);
   if (enqueueResult === "DUPLICATE_REJECTED") {
     // 同一 operation 已有终态 outcome — 不覆盖（terminal-only 语义）
-    log.info("expansion",`[${tick}] expansion: duplicate terminal outcome rejected for ${operationId}`);
+    log.info(
+      "expansion",
+      `[${tick}] expansion: duplicate terminal outcome rejected for ${operationId}`,
+    );
     return;
   }
 
@@ -834,7 +976,6 @@ function enqueueTerminalOutcome(
     recordExpansionFailed(result);
   }
   recordPlanningDecision("expansion", result === "COMPLETED" || result === "COMPLETED_FORCED");
-
 
   // 清理 globalCache().lastExpansionOutcome（兼容期：保留旧字段供未迁移消费者）
   // Phase 6 后 experience-collector 从 channel drain 读取，不再依赖此字段
@@ -911,9 +1052,10 @@ function updateRhythmRing(kind: ExpansionOutcomeKind, tick: number): void {
     prev?.blacklistMultiplier !== result.blacklistMultiplier ||
     prev?.minSources !== result.minSources
   ) {
-    log.info("expansion",
+    log.info(
+      "expansion",
       `[${tick}] expansion-rhythm: multiplier=${result.blacklistMultiplier}` +
-      ` minSources=${result.minSources} consecFail=${result.consecutiveFailures}`,
+        ` minSources=${result.minSources} consecFail=${result.consecutiveFailures}`,
     );
   }
 
@@ -924,7 +1066,10 @@ function updateRhythmRing(kind: ExpansionOutcomeKind, tick: number): void {
   };
   if (result.pauseTicks > 0) {
     Memory.kernel!.expansionPausedUntil = tick + result.pauseTicks;
-    log.info("expansion",`[${tick}] expansion: ${result.consecutiveFailures} 连败 — 暂停扩张 ${result.pauseTicks} tick`);
+    log.info(
+      "expansion",
+      `[${tick}] expansion: ${result.consecutiveFailures} 连败 — 暂停扩张 ${result.pauseTicks} tick`,
+    );
   }
 }
 
@@ -986,7 +1131,12 @@ function runBootstrapLane(ctx: TickContext): void {
 
   // A3.4 防重门禁：已 COMPLETED 的 Colony 不重新进入 Bootstrap
   // 只有 owned 无 spawn 的房间才需要 Bootstrap
-  const rooms: { room: string; ttd?: number; hostileCount: number; sponsor?: { room: string; capacityAvailable: number } }[] = [];
+  const rooms: {
+    room: string;
+    ttd?: number;
+    hostileCount: number;
+    sponsor?: { room: string; capacityAvailable: number };
+  }[] = [];
   const sponsorPool: { room: string; capacityAvailable: number }[] = [];
 
   for (const snapshot of ctx.snapshots()) {
@@ -994,8 +1144,14 @@ function runBootstrapLane(ctx: TickContext): void {
     if (!room || typeof room.find !== "function") continue;
     if (room.find(FIND_MY_SPAWNS).length > 0) {
       delete kernel.bootstrap[snapshot.roomName];
-      if (snapshot.rcl >= CONFIG.expansion.sponsorMinRcl && Memory.rooms[snapshot.roomName]?.colonyState === "normal") {
-        sponsorPool.push({ room: snapshot.roomName, capacityAvailable: snapshot.energyCapacityAvailable });
+      if (
+        snapshot.rcl >= CONFIG.expansion.sponsorMinRcl &&
+        Memory.rooms[snapshot.roomName]?.colonyState === "normal"
+      ) {
+        sponsorPool.push({
+          room: snapshot.roomName,
+          capacityAvailable: snapshot.energyCapacityAvailable,
+        });
       }
       continue;
     }
@@ -1039,7 +1195,7 @@ function runBootstrapLane(ctx: TickContext): void {
   for (const d of decisions) {
     if (d.action === "abandon") {
       if (Memory.rooms[d.room]) Memory.rooms[d.room]!.spawnQueue = [];
-      log.info("expansion",`[${ctx.tick}] bootstrap: abandon ${d.room} — ${d.reason}`);
+      log.info("expansion", `[${ctx.tick}] bootstrap: abandon ${d.room} — ${d.reason}`);
       recordEvent(EventKind.ExpansionOutcome, d.room, [1, 4, 0]);
       continue;
     }
@@ -1047,7 +1203,7 @@ function runBootstrapLane(ctx: TickContext): void {
     const queue = Memory.rooms[d.sponsor]?.spawnQueue;
     if (!queue) continue;
     const room = d.room;
-    const hostile = rooms.find((r) => r.room === room)?.hostileCount ?? 0;
+    const hostile = rooms.find(r => r.room === room)?.hostileCount ?? 0;
     const wave = kernel.bootstrap[room]?.waves ?? 0;
     const base = `bootstrap.${room}.${wave}`;
     submitRequest(queue, {
@@ -1074,7 +1230,8 @@ function runBootstrapLane(ctx: TickContext): void {
         retries: 0,
       });
     }
-    log.info("expansion",
+    log.info(
+      "expansion",
       `[${ctx.tick}] bootstrap: dispatch ${room} wave${wave} via ${d.sponsor} (hostile=${hostile})`,
     );
   }
@@ -1207,7 +1364,9 @@ function isTargetClaimable(roomName: string): boolean {
 }
 
 /** 获取 Tiered Budget（简化版）。 */
-function getTieredBudget(_ctx: TickContext): import("../domain/expansion/budget").TieredExpansionBudget {
+function getTieredBudget(
+  _ctx: TickContext,
+): import("../domain/expansion/budget").TieredExpansionBudget {
   // 从 globalCache 获取或构建简化版
   const totalEnergy = Object.values(Game.rooms)
     .filter(r => r.controller?.my)
@@ -1288,7 +1447,16 @@ function deserializePlanMemory(m: ExpansionPlanMemory): ExpansionPlan | null {
     payback,
     risk,
     candidate,
-    status: m.st as "DISCOVERED" | "EVALUATED" | "READY" | "APPROVED" | "WAITING_EXECUTION" | "EXECUTING" | "COMPLETED" | "CANCELLED" | "BLACKLISTED",
+    status: m.st as
+      | "DISCOVERED"
+      | "EVALUATED"
+      | "READY"
+      | "APPROVED"
+      | "WAITING_EXECUTION"
+      | "EXECUTING"
+      | "COMPLETED"
+      | "CANCELLED"
+      | "BLACKLISTED",
     createdAt: m.ca,
     updatedAt: m.ua ?? m.ca,
     approvedAt: m.aa,
@@ -1330,8 +1498,11 @@ function isRoomInEconomyStats(ctx: TickContext, roomName: string): boolean {
 function isSpawnManaged(ctx: TickContext, roomName: string): boolean {
   // spawn-manager 覆盖所有有 spawnQueue 的 owned rooms
   const snap = ctx.getSnapshot(roomName);
-  return snap !== undefined && snap.controller?.my === true &&
-    Memory.rooms[roomName]?.spawnQueue !== undefined;
+  return (
+    snap !== undefined &&
+    snap.controller?.my === true &&
+    Memory.rooms[roomName]?.spawnQueue !== undefined
+  );
 }
 
 /**
@@ -1353,8 +1524,10 @@ function estimateEnergyProduction(room: Room): number {
   const harvesters = querySquad({ home: room.name, role: "harvester" })
     .map(e => Game.creeps[e.name])
     .filter((c): c is Creep => !!c);
-  const harvesterParts = harvesters.reduce((sum, c) =>
-    sum + c.body.filter(p => p.type === WORK).length, 0);
+  const harvesterParts = harvesters.reduce(
+    (sum, c) => sum + c.body.filter(p => p.type === WORK).length,
+    0,
+  );
   // 每个 WORK 部件 5 energy/tick（减去移动消耗 1）
   return Math.min(sources.length * 10, harvesterParts * 5);
 }

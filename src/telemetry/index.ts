@@ -2,35 +2,31 @@
 
 // ─── Facade API ──────────────────────────────────
 export {
-    counter,
-    gauge,
-    timer,
-    decision,
-    outcome,
-    registerMetricCounter,
-    registerMetricGauge,
-    registerMetricHistogram,
-    registeredMetricCount,
-    buildMetricName,
+  counter,
+  gauge,
+  timer,
+  decision,
+  outcome,
+  registerMetricCounter,
+  registerMetricGauge,
+  registerMetricHistogram,
+  registeredMetricCount,
+  buildMetricName,
 } from "./Telemetry";
 
 // ─── Schema Types ───────────────────────────
 export type {
-    CounterMetric,
-    GaugeMetric,
-    HistogramMetric,
-    TimerHandle,
-    TelemetryDomain,
-    AllowedLabel,
-    LabelSet,
-    DecisionRecord,
+  CounterMetric,
+  GaugeMetric,
+  HistogramMetric,
+  TimerHandle,
+  TelemetryDomain,
+  AllowedLabel,
+  LabelSet,
+  DecisionRecord,
 } from "./schema";
 
-export {
-    TELEMETRY_DOMAINS,
-    ALLOWED_LABELS,
-    COLLECTION_FREQUENCY,
-} from "./schema";
+export { TELEMETRY_DOMAINS, ALLOWED_LABELS, COLLECTION_FREQUENCY } from "./schema";
 
 // ─── Metric Registry ──────────────────────────────────────
 export type { MetricSnapshot } from "./MetricRegistry";
@@ -51,10 +47,23 @@ export { registerCreepMetrics, collectCreepMetrics } from "./metrics/CreepMetric
 export { registerSpawnMetrics, collectSpawnMetrics } from "./metrics/SpawnMetrics";
 export { registerEconomyMetrics, collectEconomyMetrics } from "./metrics/EconomyMetrics";
 export { registerLogisticsMetrics, collectLogisticsMetrics } from "./metrics/LogisticsMetrics";
-export { registerPlanningMetrics, recordPlanningDecision, recordPlanningTime } from "./metrics/PlanningMetrics";
-export { registerExecutionMetrics, recordExecution, recordExecutionLatency } from "./metrics/ExecutionMetrics";
+export {
+  registerPlanningMetrics,
+  recordPlanningDecision,
+  recordPlanningTime,
+} from "./metrics/PlanningMetrics";
+export {
+  registerExecutionMetrics,
+  recordExecution,
+  recordExecutionLatency,
+} from "./metrics/ExecutionMetrics";
 export { registerEmpireMetrics, collectEmpireMetrics } from "./metrics/EmpireMetrics";
-export { registerExpansionMetrics, collectExpansionMetrics, recordExpansionCompleted, recordExpansionFailed } from "./metrics/ExpansionMetrics";
+export {
+  registerExpansionMetrics,
+  collectExpansionMetrics,
+  recordExpansionCompleted,
+  recordExpansionFailed,
+} from "./metrics/ExpansionMetrics";
 export { registerDefenseMetrics, collectDefenseMetrics } from "./metrics/DefenseMetrics";
 // ─── Exporters ────────────────────────────────────────────
 export { exportConsoleLine, exportAlertLine } from "./exporters/ConsoleExporter";

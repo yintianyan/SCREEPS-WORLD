@@ -12,7 +12,13 @@ import {
   type StructureBatch,
 } from "../../../src/domain/layout/constraint-placer";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
-import { mockSnapshot, mockStructure, mockConstructionSite, mockSource, mockController } from "../../support/factories";
+import {
+  mockSnapshot,
+  mockStructure,
+  mockConstructionSite,
+  mockSource,
+  mockController,
+} from "../../support/factories";
 
 /** constraint-placer 负责放置的类型（与模块内 CONSTRAint_PLACED_TYPES 对齐）。 */
 const CONSTRAINT_TYPES: BuildableStructureConstant[] = [
@@ -56,9 +62,8 @@ describe("constraint-placer — 单一真相源派生（CONTROLLER_STRUCTURES）
       const expected = expectedStructureCounts(rcl);
       for (const type of CONSTRAINT_TYPES) {
         // 锚点 spawn 豁免：批次从第 2 个 spawn 开始派生（锚点由玩家/扩张放置）。
-        const batchExpected = type === STRUCTURE_SPAWN
-          ? Math.max(0, (expected[type] ?? 0) - 1)
-          : expected[type] ?? 0;
+        const batchExpected =
+          type === STRUCTURE_SPAWN ? Math.max(0, (expected[type] ?? 0) - 1) : (expected[type] ?? 0);
         expect(totals[type] ?? 0, `${type}@RCL${rcl}`).toBe(batchExpected);
       }
     }
@@ -77,8 +82,7 @@ describe("constraint-placer — 单一真相源派生（CONTROLLER_STRUCTURES）
     for (let rcl = 2; rcl <= 8; rcl++) {
       const batches = buildRclBatches(rcl);
       const sum = (type: string): number =>
-        batches.filter((b: StructureBatch) => b.type === type)
-          .reduce((acc, b) => acc + b.count, 0);
+        batches.filter((b: StructureBatch) => b.type === type).reduce((acc, b) => acc + b.count, 0);
       extByRcl.set(rcl, sum(STRUCTURE_EXTENSION) - prevExt);
       towerByRcl.set(rcl, sum(STRUCTURE_TOWER) - prevTower);
       spawnByRcl.set(rcl, sum(STRUCTURE_SPAWN) - prevSpawn);
@@ -315,15 +319,17 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
     const srcLink = linkAt(10, 11, "link_src");
     const snap = snapshotWithAnchors(5, [srcLink]);
     // 队列中有 controller link 任务（pos 紧邻 controller）
-    const queue: BuildTask[] = [{
-      key: "logistics.link.controller",
-      pos: { x: 20, y: 21, roomName: "W7N4" },
-      structureType: STRUCTURE_LINK,
-      priority: 1,
-      state: "queued",
-      attempts: 0,
-      retryAt: 0,
-    }];
+    const queue: BuildTask[] = [
+      {
+        key: "logistics.link.controller",
+        pos: { x: 20, y: 21, roomName: "W7N4" },
+        structureType: STRUCTURE_LINK,
+        priority: 1,
+        state: "queued",
+        attempts: 0,
+        retryAt: 0,
+      },
+    ];
     const gaps = auditLinkRoleGaps(snap, queue);
     // controller 缺口已由 queued 任务闭合 → 0
     expect(gaps).toEqual({ source: 0, controller: 0, storage: 0, hub: 0 });

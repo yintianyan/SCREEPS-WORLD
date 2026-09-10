@@ -5,7 +5,11 @@ import { spawnManagerSystem } from "../../../src/systems/spawn-manager";
 import { removeRequestsByRole } from "../../../src/domain/spawn/queue";
 import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 
-function makeRequest(role: string, home: string, overrides: Partial<SpawnRequest> = {}): SpawnRequest {
+function makeRequest(
+  role: string,
+  home: string,
+  overrides: Partial<SpawnRequest> = {},
+): SpawnRequest {
   return {
     key: `${role}:${home}:0`,
     role,
@@ -56,7 +60,9 @@ describe("spawn-manager — 请求撤销接线（幽灵需求回收）", () => {
     const snapshot = mockSnapshot({ threatCreeps: [] });
     spawnManagerSystem.run(mockContext(snapshot));
 
-    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(r => r.role);
+    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(
+      r => r.role,
+    );
     expect(roles).not.toContain("defender");
     expect(roles).toContain("hauler");
   });
@@ -72,12 +78,19 @@ describe("spawn-manager — 请求撤销接线（幽灵需求回收）", () => {
     const snapshot = mockSnapshot({ threatCreeps: [hostile as any] });
     spawnManagerSystem.run(mockContext(snapshot));
 
-    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(r => r.role);
+    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(
+      r => r.role,
+    );
     expect(roles).toContain("defender");
   });
 
   it("recovery 且无降级风险时撤销 pending upgrader 请求", () => {
-    const queue = [makeRequest("upgrader", "W7N4", { priority: 2, body: ["work", "carry", "move"] as BodyPartConstant[] })];
+    const queue = [
+      makeRequest("upgrader", "W7N4", {
+        priority: 2,
+        body: ["work", "carry", "move"] as BodyPartConstant[],
+      }),
+    ];
     (globalThis as any).Memory.rooms.W7N4 = {
       spawnQueue: queue,
       colonyState: "recovery",
@@ -86,12 +99,19 @@ describe("spawn-manager — 请求撤销接线（幽灵需求回收）", () => {
 
     spawnManagerSystem.run(mockContext(mockSnapshot()));
 
-    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(r => r.role);
+    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(
+      r => r.role,
+    );
     expect(roles).not.toContain("upgrader");
   });
 
   it("recovery 但有降级风险时 upgrader 请求保留（保级豁免）", () => {
-    const queue = [makeRequest("upgrader", "W7N4", { priority: 2, body: ["work", "carry", "move"] as BodyPartConstant[] })];
+    const queue = [
+      makeRequest("upgrader", "W7N4", {
+        priority: 2,
+        body: ["work", "carry", "move"] as BodyPartConstant[],
+      }),
+    ];
     (globalThis as any).Memory.rooms.W7N4 = {
       spawnQueue: queue,
       colonyState: "recovery",
@@ -100,7 +120,9 @@ describe("spawn-manager — 请求撤销接线（幽灵需求回收）", () => {
 
     spawnManagerSystem.run(mockContext(mockSnapshot()));
 
-    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(r => r.role);
+    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(
+      r => r.role,
+    );
     expect(roles).toContain("upgrader");
   });
 
@@ -118,7 +140,10 @@ describe("spawn-manager — 请求撤销接线（幽灵需求回收）", () => {
 
   it("填充需求清零且编制达地板时撤销 pending distributor 请求（尖峰残留回收）", () => {
     const queue = [
-      makeRequest("distributor", "W7N4", { key: "distributor:W7N4:1", body: ["carry", "move"] as BodyPartConstant[] }),
+      makeRequest("distributor", "W7N4", {
+        key: "distributor:W7N4:1",
+        body: ["carry", "move"] as BodyPartConstant[],
+      }),
       makeRequest("hauler", "W7N4"),
     ];
     (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: queue, colonyState: "normal" };
@@ -127,31 +152,49 @@ describe("spawn-manager — 请求撤销接线（幽灵需求回收）", () => {
     // fillTargets 空 = 孵化尖峰已被在途编制消化 → 扩编请求是幽灵需求。
     spawnManagerSystem.run(mockContext(mockSnapshot({ fillTargets: [] })));
 
-    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(r => r.role);
+    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(
+      r => r.role,
+    );
     expect(roles).not.toContain("distributor");
     expect(roles).toContain("hauler");
   });
 
   it("填充需求仍在时 distributor 请求保留", () => {
-    const queue = [makeRequest("distributor", "W7N4", { key: "distributor:W7N4:1", body: ["carry", "move"] as BodyPartConstant[] })];
+    const queue = [
+      makeRequest("distributor", "W7N4", {
+        key: "distributor:W7N4:1",
+        body: ["carry", "move"] as BodyPartConstant[],
+      }),
+    ];
     (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: queue, colonyState: "normal" };
     addLivingDistributor();
 
-    const spawn = { id: "sp1", structureType: "spawn", store: { getUsedCapacity: () => 100, getCapacity: () => 300, getFreeCapacity: () => 200 }, pos: { x: 25, y: 25, getRangeTo: () => 5 } };
+    const spawn = {
+      id: "sp1",
+      structureType: "spawn",
+      store: { getUsedCapacity: () => 100, getCapacity: () => 300, getFreeCapacity: () => 200 },
+      pos: { x: 25, y: 25, getRangeTo: () => 5 },
+    };
     spawnManagerSystem.run(mockContext(mockSnapshot({ fillTargets: [spawn as any] })));
 
-    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(r => r.role);
+    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(
+      r => r.role,
+    );
     expect(roles).toContain("distributor");
   });
 
   it("存活编制低于 minCount 时不撤销（保护 storage 刚建成的首个 distributor 请求）", () => {
-    const queue = [makeRequest("distributor", "W7N4", { body: ["carry", "move"] as BodyPartConstant[] })];
+    const queue = [
+      makeRequest("distributor", "W7N4", { body: ["carry", "move"] as BodyPartConstant[] }),
+    ];
     (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: queue, colonyState: "normal" };
     // Game.creeps 无 distributor → 存活 0 < minCount 1 → 保留。
 
     spawnManagerSystem.run(mockContext(mockSnapshot({ fillTargets: [] })));
 
-    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(r => r.role);
+    const roles = ((globalThis as any).Memory.rooms.W7N4.spawnQueue as SpawnRequest[]).map(
+      r => r.role,
+    );
     expect(roles).toContain("distributor");
   });
 });
@@ -184,7 +227,9 @@ describe("spawn-manager — SP-2 黑名单闭环（隔离 → 冷却拒重建 �
 
     const roomMem = (globalThis as any).Memory.rooms.W7N4;
     // 黑名单已写入（冷却 = requestTtl）。
-    expect(roomMem.spawnBlacklist["defender:W7N4:0"]).toBeGreaterThan((globalThis as any).Game.time);
+    expect(roomMem.spawnBlacklist["defender:W7N4:0"]).toBeGreaterThan(
+      (globalThis as any).Game.time,
+    );
     // 冷却期内重建被拒 — 队列中无 defender（翻炒循环被打破）。
     const roles = (roomMem.spawnQueue as SpawnRequest[]).map(r => r.role);
     expect(roles).not.toContain("defender");

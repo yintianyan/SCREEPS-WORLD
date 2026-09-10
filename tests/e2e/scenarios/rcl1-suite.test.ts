@@ -56,35 +56,45 @@ describe("RCL1 经济场景套件", () => {
           storeE = o.store ? o.store.energy : undefined;
         }
       }
-      rows.push({ tick: gameTime, memCreeps: n, roles, colonyState: mem.rooms?.W0N1?.colonyState, spawnLegacyE: legacyE, spawnStoreE: storeE });
+      rows.push({
+        tick: gameTime,
+        memCreeps: n,
+        roles,
+        colonyState: mem.rooms?.W0N1?.colonyState,
+        spawnLegacyE: legacyE,
+        spawnStoreE: storeE,
+      });
     }
     expect(rows.length).toBeGreaterThan(1000);
   }, 480000);
 
   it("TEST1 Bootstrap：t1500 前人口 ≥2 且含非 worker 角色", () => {
-    const at = rows.find((r) => r.tick >= 1500);
+    const at = rows.find(r => r.tick >= 1500);
     expect(at).toBeDefined();
     expect(at!.memCreeps).toBeGreaterThanOrEqual(2);
     expect(Object.keys(at!.roles).length).toBeGreaterThanOrEqual(2);
   });
 
   it("TEST2 无灭绝：warmup 后全程 creep>0", () => {
-    const zeros = rows.filter((r) => r.tick > 50 && r.memCreeps === 0);
+    const zeros = rows.filter(r => r.tick > 50 && r.memCreeps === 0);
     expect(zeros, JSON.stringify(zeros.slice(0, 3))).toHaveLength(0);
   });
 
   it("TEST3 角色多样性成长：t4000 时角色 ≥4 种", () => {
-    const at = rows.filter((r) => r.tick >= 4000).at(-1)!;
+    const at = rows.filter(r => r.tick >= 4000).at(-1)!;
     expect(Object.keys(at.roles).length).toBeGreaterThanOrEqual(4);
   });
 
   it("TEST4 spawn 空仓不黏滞：稳态期连续 <50e 的最长时段 ≤100t（死亡螺旋特征为黏滞数干倍）", () => {
-    const steady = rows.filter((r) => r.tick > 1000);
+    const steady = rows.filter(r => r.tick > 1000);
     let maxRun = 0;
     let run = 0;
     for (const r of steady) {
       const v = Math.max(r.spawnStoreE ?? 0, r.spawnLegacyE ?? 0);
-      if (v < 50) { run++; maxRun = Math.max(maxRun, run); } else run = 0;
+      if (v < 50) {
+        run++;
+        maxRun = Math.max(maxRun, run);
+      } else run = 0;
     }
     // 死亡螺旋特征：spawn 恒 0 且无回填 → 连续时段 = 整个稳态（数千样本）。
     // 健康节奏：孵化清空 → harvester ~50t 内回填 → 连续 <50 段远小于 20 样本(100t)。

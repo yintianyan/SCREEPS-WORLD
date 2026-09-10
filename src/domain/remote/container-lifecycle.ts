@@ -6,12 +6,7 @@
  * Container Lifecycle State — 远矿 container 的六状态。
  */
 export type ContainerLifecycleState =
-  | "missing"
-  | "planned"
-  | "building"
-  | "active"
-  | "damaged"
-  | "destroyed";
+  "missing" | "planned" | "building" | "active" | "damaged" | "destroyed";
 
 /** 所有状态。 */
 export const CONTAINER_STATES: readonly ContainerLifecycleState[] = [
@@ -34,9 +29,7 @@ export function isContainerUsable(state: ContainerLifecycleState): boolean {
 }
 
 /** 判定状态是否需要建造动作。纯函数。 */
-export function isContainerUnderConstruction(
-  state: ContainerLifecycleState,
-): boolean {
+export function isContainerUnderConstruction(state: ContainerLifecycleState): boolean {
   return state === "planned" || state === "building";
 }
 
@@ -157,10 +150,7 @@ export function deriveContainerState(input: {
   if (input.needContainer) return "planned";
 
   // 5. 之前有 container（ACTIVE/DAMAGED），现在没了 → DESTROYED
-  if (
-    input.prevState === "active" ||
-    input.prevState === "damaged"
-  ) {
+  if (input.prevState === "active" || input.prevState === "damaged") {
     return "destroyed";
   }
 
@@ -210,9 +200,7 @@ export interface ContainerSnapshotSerialized {
  * 序列化 Container 快照。
  * 纯函数。
  */
-export function serializeContainerSnapshot(
-  snap: ContainerSnapshot,
-): ContainerSnapshotSerialized {
+export function serializeContainerSnapshot(snap: ContainerSnapshot): ContainerSnapshotSerialized {
   return {
     si: snap.sourceId,
     rn: snap.roomName,
@@ -229,9 +217,7 @@ export function serializeContainerSnapshot(
  * 反序列化 Container 快照。
  * 纯函数。
  */
-export function deserializeContainerSnapshot(
-  s: ContainerSnapshotSerialized,
-): ContainerSnapshot {
+export function deserializeContainerSnapshot(s: ContainerSnapshotSerialized): ContainerSnapshot {
   return {
     sourceId: s.si,
     roomName: s.rn,

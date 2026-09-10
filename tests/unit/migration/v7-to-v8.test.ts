@@ -10,13 +10,22 @@ beforeEach(() => {
 
 describe("migration v7 → v8（清除 working 遗留字段）", () => {
   it("v7 Memory 升级到 v8，working 字段被删除", () => {
-    const creepNames = ["harvester-W1N1-0-1000-abc", "hauler-W1N1-1-1001-def", "upgrader-W1N1-2-1002-ghi"];
+    const creepNames = [
+      "harvester-W1N1-0-1000-abc",
+      "hauler-W1N1-1-1001-def",
+      "upgrader-W1N1-2-1002-ghi",
+    ];
     // 同步 Game.creeps，避免 maintainMemory 的死亡清理删除测试 creep。
     for (const n of creepNames) (globalThis as any).Game.creeps[n] = { name: n };
     (globalThis as any).Memory = {
       schemaVersion: 7,
       creeps: {
-        "harvester-W1N1-0-1000-abc": { role: "harvester", home: "W1N1", mode: "work", working: true },
+        "harvester-W1N1-0-1000-abc": {
+          role: "harvester",
+          home: "W1N1",
+          mode: "work",
+          working: true,
+        },
         "hauler-W1N1-1-1001-def": { role: "hauler", home: "W1N1", mode: "acquire", working: false },
         "upgrader-W1N1-2-1002-ghi": { role: "upgrader", home: "W1N1", mode: "work", working: true },
       },
@@ -36,7 +45,9 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
   });
 
   it("无 working 字段的 creep 不受影响", () => {
-    (globalThis as any).Game.creeps["harvester-W1N1-0-1000-abc"] = { name: "harvester-W1N1-0-1000-abc" };
+    (globalThis as any).Game.creeps["harvester-W1N1-0-1000-abc"] = {
+      name: "harvester-W1N1-0-1000-abc",
+    };
     (globalThis as any).Memory = {
       schemaVersion: 7,
       creeps: {
@@ -59,7 +70,7 @@ describe("migration v7 → v8（清除 working 遗留字段）", () => {
     (globalThis as any).Memory = {
       schemaVersion: 7,
       creeps: {
-        "creep1": { role: "harvester", mode: "work", working: true },
+        creep1: { role: "harvester", mode: "work", working: true },
       },
       kernel: {},
       rooms: {},

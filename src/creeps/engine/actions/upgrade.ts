@@ -10,7 +10,7 @@ const UPGRADE_RANGE = 3;
 export function upgradeController(): ActionCandidate<StructureController> {
   return {
     name: "upgrade:controller",
-    resolve: (ac) => {
+    resolve: ac => {
       const ctrl = ac.snapshot.controller;
       if (!ctrl || !ctrl.my) return undefined;
       return ctrl;
@@ -41,13 +41,14 @@ interface StationaryUpgradeTarget {
 export function stationaryUpgrade(): ActionCandidate<StationaryUpgradeTarget> {
   return {
     name: "upgrade:stationary",
-    resolve: (ac) => {
+    resolve: ac => {
       const ctrl = ac.snapshot.controller;
       if (!ctrl || !ctrl.my) return undefined;
       if (ac.creep.pos.getRangeTo(ctrl.pos) > UPGRADE_RANGE) return undefined;
       // 优先 controller link（瞬移供能、无 hauler 依赖）。
       const link = ac.snapshot.links.find(
-        l => l.pos.getRangeTo(ctrl.pos) <= 2 &&
+        l =>
+          l.pos.getRangeTo(ctrl.pos) <= 2 &&
           ac.creep.pos.getRangeTo(l.pos) <= 1 &&
           l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
@@ -55,7 +56,11 @@ export function stationaryUpgrade(): ActionCandidate<StationaryUpgradeTarget> {
       // 回退 controller container（无 link 名额/非主房）。snapshot.controllerContainer 是预算的
       // 「controller 旁 container」，天然近 controller，只需校验紧邻取能 + 有能量。
       const cc = ac.snapshot.controllerContainer;
-      if (cc && ac.creep.pos.getRangeTo(cc.pos) <= 1 && cc.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+      if (
+        cc &&
+        ac.creep.pos.getRangeTo(cc.pos) <= 1 &&
+        cc.store.getUsedCapacity(RESOURCE_ENERGY) > 0
+      ) {
         return { controller: ctrl, source: cc };
       }
       return undefined;
@@ -75,7 +80,7 @@ export function stationaryUpgrade(): ActionCandidate<StationaryUpgradeTarget> {
 export function upgradeControllerGated(): ActionCandidate<StructureController> {
   return {
     name: "upgrade:controller-gated",
-    resolve: (ac) => {
+    resolve: ac => {
       const ctrl = ac.snapshot.controller;
       if (!ctrl || !ctrl.my) return undefined;
       if (ac.snapshot.energyAvailable < CONFIG.economy.upgradeEnergyFloor) return undefined;

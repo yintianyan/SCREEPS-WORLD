@@ -54,14 +54,24 @@ describe("集结避险 — squadThreat 时非战斗角色撤向核心", () => {
   it("hauler 在小队威胁下不执行常规链，mode 转 flee 并向 storage 集结", () => {
     const storage = mockStructure("storage", { id: "st", energy: 10000, capacity: 1000000 });
     const container = mockStructure("container", { id: "c1", energy: 1500, capacity: 2000 });
-    const hostile = { id: "h1", pos: { x: 40, y: 40, getRangeTo: () => 30 }, owner: { username: "enemy" } };
+    const hostile = {
+      id: "h1",
+      pos: { x: 40, y: 40, getRangeTo: () => 30 },
+      owner: { username: "enemy" },
+    };
     const snap = mockSnapshot({
       storage,
       containers: [container],
       threatCreeps: [hostile] as any,
       squadThreat: true,
     });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 300, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 300,
+      mode: "acquire",
+    });
     creep.pos.getRangeTo = vi.fn(() => 20); // 距 storage/威胁都很远（fleeRange 外）。
 
     haulerRole.run(creep, mockContext(snap));
@@ -87,10 +97,17 @@ describe("defender 编制 — 威胁分级响应", () => {
       economyPressure: 0,
     };
     // 存活 harvester：避免触发 P0 团灭恢复短路（那个分支有自己的 defender 逻辑）。
-    const alive = [{
-      name: "harvester_1", role: "harvester", home: "W7N4", ticksToLive: 1200,
-      bodyLength: 7, sourceId: "source_1" as Id<Source>, spawnIndex: 0,
-    }];
+    const alive = [
+      {
+        name: "harvester_1",
+        role: "harvester",
+        home: "W7N4",
+        ticksToLive: 1200,
+        bodyLength: 7,
+        sourceId: "source_1" as Id<Source>,
+        spawnIndex: 0,
+      },
+    ];
     return evaluateDemand(snap, [], "normal", alive as any, [], roomCtx as any, 1000);
   }
 

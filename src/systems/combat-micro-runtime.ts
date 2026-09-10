@@ -127,8 +127,14 @@ function buildMicroSnapshot(
     const creep = Game.creeps[entry.name];
     if (!creep) {
       members.push({
-        name: entry.name, role: entry.role, pos: 25 * 50 + 25,
-        room: warPlan.sponsor, hits: 0, hitsMax: 0, fatigue: 0, alive: false,
+        name: entry.name,
+        role: entry.role,
+        pos: 25 * 50 + 25,
+        room: warPlan.sponsor,
+        hits: 0,
+        hitsMax: 0,
+        fatigue: 0,
+        alive: false,
         capability: emptyCapability(),
         bodyState: deriveBodyAwareState(emptyCapability(), entry.role, 0),
       });
@@ -138,10 +144,16 @@ function buildMicroSnapshot(
     const enemyMobility = 0.5; // 简化：后续从敌方快照取
     const bodyState = deriveBodyAwareState(capability, entry.role, enemyMobility);
     members.push({
-      name: entry.name, role: entry.role,
-      pos: creep.pos.x * 50 + creep.pos.y, room: creep.pos.roomName,
-      hits: creep.hits, hitsMax: creep.hitsMax, fatigue: creep.fatigue,
-      alive: creep.hits > 0, capability, bodyState,
+      name: entry.name,
+      role: entry.role,
+      pos: creep.pos.x * 50 + creep.pos.y,
+      room: creep.pos.roomName,
+      hits: creep.hits,
+      hitsMax: creep.hitsMax,
+      fatigue: creep.fatigue,
+      alive: creep.hits > 0,
+      capability,
+      bodyState,
     });
   }
 
@@ -198,15 +210,32 @@ function buildMicroSnapshot(
 
 function emptyCapability(): CombatCapability {
   return {
-    attack: 0, rangedAttack: 0, heal: 0, rangedHeal: 0, dismantle: 0,
-    claim: 0, effectiveHP: 0, mobility: 0, support: 0, toughParts: 0,
-    boosted: false, maxBoostTier: 0, totalParts: 0, activeParts: 0,
+    attack: 0,
+    rangedAttack: 0,
+    heal: 0,
+    rangedHeal: 0,
+    dismantle: 0,
+    claim: 0,
+    effectiveHP: 0,
+    mobility: 0,
+    support: 0,
+    toughParts: 0,
+    boosted: false,
+    maxBoostTier: 0,
+    totalParts: 0,
+    activeParts: 0,
   };
 }
 
 function buildCreepCapability(creep: Creep): CombatCapability {
-  let attack = 0, rangedAttack = 0, heal = 0, rangedHeal = 0;
-  let dismantle = 0, claim = 0, support = 0, toughParts = 0;
+  let attack = 0,
+    rangedAttack = 0,
+    heal = 0,
+    rangedHeal = 0;
+  let dismantle = 0,
+    claim = 0,
+    support = 0,
+    toughParts = 0;
   const totalParts = creep.body.length;
   let activeParts = 0;
   let maxBoostTier: 0 | 1 | 2 | 3 = 0;
@@ -219,11 +248,23 @@ function buildCreepCapability(creep: Creep): CombatCapability {
     if (tier > maxBoostTier) maxBoostTier = tier;
     const mult = part.boost ? 4 : 1;
     switch (part.type) {
-      case ATTACK: attack += 30 * mult; break;
-      case RANGED_ATTACK: rangedAttack += 10 * mult; break;
-      case HEAL: heal += 12 * mult; rangedHeal += 4 * mult; break;
-      case WORK: dismantle += 50 * mult; support += 1; break;
-      case CLAIM: claim += mult; break;
+      case ATTACK:
+        attack += 30 * mult;
+        break;
+      case RANGED_ATTACK:
+        rangedAttack += 10 * mult;
+        break;
+      case HEAL:
+        heal += 12 * mult;
+        rangedHeal += 4 * mult;
+        break;
+      case WORK:
+        dismantle += 50 * mult;
+        support += 1;
+        break;
+      case CLAIM:
+        claim += mult;
+        break;
     }
   }
 
@@ -233,9 +274,20 @@ function buildCreepCapability(creep: Creep): CombatCapability {
   const mobility = bodyWeight > 0 ? moveParts / bodyWeight : moveParts > 0 ? 1 : 0;
 
   return {
-    attack, rangedAttack, heal, rangedHeal, dismantle, claim,
-    effectiveHP, mobility, support, toughParts, boosted, maxBoostTier,
-    totalParts, activeParts,
+    attack,
+    rangedAttack,
+    heal,
+    rangedHeal,
+    dismantle,
+    claim,
+    effectiveHP,
+    mobility,
+    support,
+    toughParts,
+    boosted,
+    maxBoostTier,
+    totalParts,
+    activeParts,
   };
 }
 
@@ -243,7 +295,9 @@ function collectEnemySnapshots(targetRoom: string): MicroEnemySnapshot[] {
   const room = Game.rooms[targetRoom];
   if (!room) return [];
 
-  const g = globalCache() as { __tacticalHostiles?: Record<string, { tick: number; list: Creep[] }> };
+  const g = globalCache() as {
+    __tacticalHostiles?: Record<string, { tick: number; list: Creep[] }>;
+  };
   if (!g.__tacticalHostiles) g.__tacticalHostiles = {};
   const cached = g.__tacticalHostiles[room.name];
   let hostiles: Creep[];
@@ -274,8 +328,14 @@ function collectEnemySnapshots(targetRoom: string): MicroEnemySnapshot[] {
 }
 
 function buildHostileCapability(hostile: Creep): CombatCapability {
-  let attack = 0, rangedAttack = 0, heal = 0, rangedHeal = 0;
-  let dismantle = 0, claim = 0, support = 0, toughParts = 0;
+  let attack = 0,
+    rangedAttack = 0,
+    heal = 0,
+    rangedHeal = 0;
+  let dismantle = 0,
+    claim = 0,
+    support = 0,
+    toughParts = 0;
   const totalParts = hostile.body.length;
   let activeParts = 0;
   let maxBoostTier: 0 | 1 | 2 | 3 = 0;
@@ -288,11 +348,23 @@ function buildHostileCapability(hostile: Creep): CombatCapability {
     if (tier > maxBoostTier) maxBoostTier = tier;
     const mult = part.boost ? 4 : 1;
     switch (part.type) {
-      case ATTACK: attack += 30 * mult; break;
-      case RANGED_ATTACK: rangedAttack += 10 * mult; break;
-      case HEAL: heal += 12 * mult; rangedHeal += 4 * mult; break;
-      case WORK: dismantle += 50 * mult; support += 1; break;
-      case CLAIM: claim += mult; break;
+      case ATTACK:
+        attack += 30 * mult;
+        break;
+      case RANGED_ATTACK:
+        rangedAttack += 10 * mult;
+        break;
+      case HEAL:
+        heal += 12 * mult;
+        rangedHeal += 4 * mult;
+        break;
+      case WORK:
+        dismantle += 50 * mult;
+        support += 1;
+        break;
+      case CLAIM:
+        claim += mult;
+        break;
     }
   }
 
@@ -302,9 +374,20 @@ function buildHostileCapability(hostile: Creep): CombatCapability {
   const mobility = bodyWeight > 0 ? moveParts / bodyWeight : moveParts > 0 ? 1 : 0;
 
   return {
-    attack, rangedAttack, heal, rangedHeal, dismantle, claim,
-    effectiveHP, mobility, support, toughParts, boosted, maxBoostTier,
-    totalParts, activeParts,
+    attack,
+    rangedAttack,
+    heal,
+    rangedHeal,
+    dismantle,
+    claim,
+    effectiveHP,
+    mobility,
+    support,
+    toughParts,
+    boosted,
+    maxBoostTier,
+    totalParts,
+    activeParts,
   };
 }
 
@@ -348,10 +431,19 @@ function getTerrainContext(roomName: string, tick: number): TerrainContext {
 
 function getTerrainModifier(terrain: TerrainContext): EffectiveCombatModifier {
   const towerMap: Record<string, number> = {
-    NONE: 0, LOW: 0.3, MEDIUM: 0.6, HIGH: 0.85, CRITICAL: 1.0, UNKNOWN: 0.5,
+    NONE: 0,
+    LOW: 0.3,
+    MEDIUM: 0.6,
+    HIGH: 0.85,
+    CRITICAL: 1.0,
+    UNKNOWN: 0.5,
   };
   const retreatMap: Record<string, number> = {
-    VERY_GOOD: 0.5, GOOD: 0.8, POOR: 1.3, CRITICAL: 2.0, UNKNOWN: 1.0,
+    VERY_GOOD: 0.5,
+    GOOD: 0.8,
+    POOR: 1.3,
+    CRITICAL: 2.0,
+    UNKNOWN: 1.0,
   };
   const significantChokepoints = terrain.chokepoints.filter(c => c.significance > 0.5).length;
   return {

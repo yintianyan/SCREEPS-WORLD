@@ -21,12 +21,7 @@ import type { OperationPriority, ResourceType } from "../operation/agenda-item";
  * - CANCELLED: 取消——因不可恢复原因终止（房失守/角色变更等）
  */
 export type ContractStatus =
-  | "proposed"
-  | "active"
-  | "degraded"
-  | "suspended"
-  | "completed"
-  | "cancelled";
+  "proposed" | "active" | "degraded" | "suspended" | "completed" | "cancelled";
 
 /**
  * 所有 Contract 状态值（用于遍历/初始化）。
@@ -227,8 +222,16 @@ export function createActiveSupplyContract(
   reason: string = "role-based-specialization",
 ): SupplyContract {
   const contract = createSupplyContract(
-    sourceRoom, targetRoom, resource, targetRate, minimumReserve,
-    priority, tick, sourceRole, targetRole, reason,
+    sourceRoom,
+    targetRoom,
+    resource,
+    targetRate,
+    minimumReserve,
+    priority,
+    tick,
+    sourceRole,
+    targetRole,
+    reason,
   );
   return {
     ...contract,
@@ -247,9 +250,12 @@ export function createActiveSupplyContract(
  */
 export function effectiveRate(contract: SupplyContract): number {
   switch (contract.status) {
-    case "active": return contract.targetRate;
-    case "degraded": return contract.targetRate * contract.degradedRateMultiplier;
-    default: return 0;
+    case "active":
+      return contract.targetRate;
+    case "degraded":
+      return contract.targetRate * contract.degradedRateMultiplier;
+    default:
+      return 0;
   }
 }
 
@@ -267,10 +273,7 @@ export function effectiveRate(contract: SupplyContract): number {
  * @param contract 供应契约
  * @param intervalTicks 周期间隔 tick 数（默认 100，与 empire-economy 同频）
  */
-export function computeCycleAmount(
-  contract: SupplyContract,
-  intervalTicks: number = 100,
-): number {
+export function computeCycleAmount(contract: SupplyContract, intervalTicks: number = 100): number {
   const rate = effectiveRate(contract);
   return Math.max(0, Math.floor(rate * intervalTicks));
 }
@@ -299,9 +302,7 @@ export function recordDelivery(
     totalDelivered,
     lastInjectionTick: tick,
     updatedAt: tick,
-    consecutiveShortfall: shortfall
-      ? contract.consecutiveShortfall + 1
-      : 0,
+    consecutiveShortfall: shortfall ? contract.consecutiveShortfall + 1 : 0,
   };
 }
 
@@ -338,9 +339,7 @@ export function hasActiveContract(
  * 过滤出所有活跃 Contract（ACTIVE 或 DEGRADED）。
  * 纯函数。
  */
-export function filterActiveContracts(
-  contracts: readonly SupplyContract[],
-): SupplyContract[] {
+export function filterActiveContracts(contracts: readonly SupplyContract[]): SupplyContract[] {
   return contracts.filter(c => isContractActive(c.status));
 }
 
@@ -348,9 +347,7 @@ export function filterActiveContracts(
  * 过滤出所有终态 Contract（可归档删除）。
  * 纯函数。
  */
-export function filterTerminalContracts(
-  contracts: readonly SupplyContract[],
-): SupplyContract[] {
+export function filterTerminalContracts(contracts: readonly SupplyContract[]): SupplyContract[] {
   return contracts.filter(c => isContractTerminal(c.status));
 }
 
@@ -362,9 +359,7 @@ export function getContractsBySource(
   contracts: readonly SupplyContract[],
   sourceRoom: string,
 ): SupplyContract[] {
-  return contracts.filter(c =>
-    c.sourceRoom === sourceRoom && isContractActive(c.status),
-  );
+  return contracts.filter(c => c.sourceRoom === sourceRoom && isContractActive(c.status));
 }
 
 /**
@@ -375,9 +370,7 @@ export function getContractsByTarget(
   contracts: readonly SupplyContract[],
   targetRoom: string,
 ): SupplyContract[] {
-  return contracts.filter(c =>
-    c.targetRoom === targetRoom && isContractActive(c.status),
-  );
+  return contracts.filter(c => c.targetRoom === targetRoom && isContractActive(c.status));
 }
 
 // ─── 序列化 / 反序列化 ───────────────────────────────────
@@ -462,12 +455,18 @@ export function serializeContract(c: SupplyContract): ContractMemorySnapshot {
   };
   const statusCode = (s: ContractStatus): string => {
     switch (s) {
-      case "proposed": return "P";
-      case "active": return "A";
-      case "degraded": return "D";
-      case "suspended": return "S";
-      case "completed": return "C";
-      case "cancelled": return "X";
+      case "proposed":
+        return "P";
+      case "active":
+        return "A";
+      case "degraded":
+        return "D";
+      case "suspended":
+        return "S";
+      case "completed":
+        return "C";
+      case "cancelled":
+        return "X";
     }
   };
   return {
@@ -501,22 +500,34 @@ export function deserializeContract(s: ContractMemorySnapshot): SupplyContract {
   const codeToRole = (c: string | undefined): EmpireRoomRole | undefined => {
     if (!c) return undefined;
     switch (c) {
-      case "C": return "core";
-      case "P": return "production";
-      case "S": return "support";
-      case "R": return "remote";
-      default: return undefined;
+      case "C":
+        return "core";
+      case "P":
+        return "production";
+      case "S":
+        return "support";
+      case "R":
+        return "remote";
+      default:
+        return undefined;
     }
   };
   const codeToStatus = (c: string): ContractStatus => {
     switch (c) {
-      case "P": return "proposed";
-      case "A": return "active";
-      case "D": return "degraded";
-      case "S": return "suspended";
-      case "C": return "completed";
-      case "X": return "cancelled";
-      default: return "proposed";
+      case "P":
+        return "proposed";
+      case "A":
+        return "active";
+      case "D":
+        return "degraded";
+      case "S":
+        return "suspended";
+      case "C":
+        return "completed";
+      case "X":
+        return "cancelled";
+      default:
+        return "proposed";
     }
   };
   return {

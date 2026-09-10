@@ -66,7 +66,9 @@ describe("D-FINDING-05: 低 CPU + 威胁竞争预算", () => {
       budget,
       globalSiteCount: 0,
       getSnapshot: () => mockSnapshot(),
-      snapshots: function* () { yield mockSnapshot(); },
+      *snapshots() {
+        yield mockSnapshot();
+      },
     };
 
     const emergency = true; // ctx.budget.emergency

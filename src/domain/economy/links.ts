@@ -60,7 +60,6 @@ export interface LinkInfo {
   role: LinkRole;
 }
 
-
 export interface LinkTransfer {
   fromId: string;
   toId: string;
@@ -94,19 +93,14 @@ export function planLinkTransfers(
   const transfers: LinkTransfer[] = [];
   const sent = new Set<string>();
 
-  const sourceLinks = links.filter(
-    l => l.role === "source" && l.energy > 0 && l.cooldown === 0,
-  );
+  const sourceLinks = links.filter(l => l.role === "source" && l.energy > 0 && l.cooldown === 0);
   const controllerLink = links.find(l => l.role === "controller");
   const storageLink = links.find(l => l.role === "storage");
 
-
-  const controllerTarget = opts.controllerTargetEnergy ??
-    (controllerLink ? controllerLink.energyCapacity : 0);
+  const controllerTarget =
+    opts.controllerTargetEnergy ?? (controllerLink ? controllerLink.energyCapacity : 0);
   // controller 目标缺口（考虑传输损耗：需要发送 sendForNeeds(needs) 才能填满缺口）。
-  let controllerNeeds = controllerLink
-    ? Math.max(0, controllerTarget - controllerLink.energy)
-    : 0;
+  let controllerNeeds = controllerLink ? Math.max(0, controllerTarget - controllerLink.energy) : 0;
 
   // controller 急需：目标>0 且能量低于 min(目标, minTransfer) → 豁免 source 阈值。
   // target=0 时永不 urgent（停供）。
@@ -130,8 +124,7 @@ export function planLinkTransfers(
   // controller 是否值得 source link 传输：缺口 >= minTransfer 或 urgent。
   // 无 storage link 时不跳过：source link 能量无处排空，跳过只会溢出。
   const controllerWantsSource =
-    controllerNeeds > 0 &&
-    (controllerUrgent || controllerNeeds >= minTransfer || !storageLink);
+    controllerNeeds > 0 && (controllerUrgent || controllerNeeds >= minTransfer || !storageLink);
 
   // 1. source → controller（最高优先：站桩升级供能）
   // 损耗补偿：目标缺口 N → 发送 sendForNeeds(N)，但不超源可用量与目标空闲容量。
@@ -142,11 +135,7 @@ export function planLinkTransfers(
     const targetFree = controllerLink
       ? controllerLink.energyCapacity - controllerLink.energy - controllerReceived
       : 0;
-    const sendAmount = Math.min(
-      src.energy,
-      targetFree,
-      sendForNeeds(controllerNeeds),
-    );
+    const sendAmount = Math.min(src.energy, targetFree, sendForNeeds(controllerNeeds));
     if (sendAmount <= 0) continue;
     transfers.push({ fromId: src.id, toId: controllerLink!.id, amount: sendAmount });
     sent.add(src.id);
@@ -182,11 +171,7 @@ export function planLinkTransfers(
     controllerNeeds > 0
   ) {
     const targetFree = controllerLink.energyCapacity - controllerLink.energy - controllerReceived;
-    const sendAmount = Math.min(
-      storageLink.energy,
-      targetFree,
-      sendForNeeds(controllerNeeds),
-    );
+    const sendAmount = Math.min(storageLink.energy, targetFree, sendForNeeds(controllerNeeds));
     if (sendAmount > 0) {
       transfers.push({ fromId: storageLink.id, toId: controllerLink.id, amount: sendAmount });
     }
@@ -230,9 +215,9 @@ export function classifyLinkRole(
   const candidates: { role: LinkRole; dist: number; pri: number }[] = [];
   if (dSource <= anchorRange) candidates.push({ role: "source", dist: dSource, pri: 0 });
   if (dStorage <= anchorRange) candidates.push({ role: "storage", dist: dStorage, pri: 1 });
-  if (dController <= anchorRange) candidates.push({ role: "controller", dist: dController, pri: 2 });
+  if (dController <= anchorRange)
+    candidates.push({ role: "controller", dist: dController, pri: 2 });
   if (candidates.length === 0) return "hub";
-
 
   candidates.sort((a, b) => a.dist - b.dist || b.pri - a.pri);
   return candidates[0]!.role;

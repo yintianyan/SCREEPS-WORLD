@@ -17,8 +17,7 @@ interface MilestoneEvent extends BaseEvent {
   readonly at: number;
 }
 type ExpansionResult =
-  | "COMPLETED" | "COMPLETED_FORCED"
-  | "TIMED_OUT" | "LOST" | "STOLEN" | "ABANDONED";
+  "COMPLETED" | "COMPLETED_FORCED" | "TIMED_OUT" | "LOST" | "STOLEN" | "ABANDONED";
 interface OutcomeEvent extends BaseEvent {
   readonly kind: "OUTCOME";
   readonly domain: "expansion";
@@ -117,10 +116,7 @@ interface ExperienceLike {
   outcome?: { result: ExpansionResult; durationTicks: number; forcedAdvance: boolean };
   unresolved?: boolean;
 }
-function collectorConsume(
-  pending: ExperienceLike[],
-  channel: OutcomeChannel,
-): void {
+function collectorConsume(pending: ExperienceLike[], channel: OutcomeChannel): void {
   const events = channel.drain();
   for (const exp of pending) {
     const ev = events.find(e => e.operationId === exp.operationId);

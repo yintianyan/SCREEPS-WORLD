@@ -48,14 +48,23 @@ describe("DIAG v5 人口曲线", () => {
     }
     for (const t of timeline) console.log(JSON.stringify(t));
     botLines.push(...runner.bot.drainConsole());
-    const interestingBot = botLines.filter(l => l.includes('[TEMP]') || l.includes('WARN') || l.includes('spawn-manager:') || l.includes('quarantined'));
-    console.log('=== BOT INTERESTING (' + interestingBot.length + '/' + botLines.length + ') ===');
+    const interestingBot = botLines.filter(
+      l =>
+        l.includes("[TEMP]") ||
+        l.includes("WARN") ||
+        l.includes("spawn-manager:") ||
+        l.includes("quarantined"),
+    );
+    console.log(`=== BOT INTERESTING (${interestingBot.length}/${botLines.length}) ===`);
     for (const l of interestingBot.slice(0, 20)) console.log(l);
-    if (interestingBot.length > 20) { console.log('...'); for (const l of interestingBot.slice(-10)) console.log(l); }
+    if (interestingBot.length > 20) {
+      console.log("...");
+      for (const l of interestingBot.slice(-10)) console.log(l);
+    }
     writeFileSync("/tmp/diag-v5.json", JSON.stringify(timeline));
     expect(timeline.length).toBeGreaterThan(100);
     const endMem2 = await runner.bot.getMemory();
-    console.log("LAST_ERROR_STACK=" + JSON.stringify((endMem2.kernel as any)?.stats?.lastError));
+    console.log(`LAST_ERROR_STACK=${JSON.stringify((endMem2.kernel as any)?.stats?.lastError)}`);
   }, 1200000);
 
   afterAll(async () => {

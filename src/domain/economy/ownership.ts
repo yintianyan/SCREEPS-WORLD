@@ -69,9 +69,6 @@ export function computeTransferableBulk(
  * 计算房间总需求量（deficit 侧）。
  * = target 缺口量 - 已在途量（已分配的 Operation 的 requestedAmount - deliveredAmount）。
  */
-export function computeRemainingDeficit(
-  targetDeficit: number,
-  inTransitAmount: number,
-): number {
+export function computeRemainingDeficit(targetDeficit: number, inTransitAmount: number): number {
   return Math.max(0, targetDeficit - inTransitAmount);
 }

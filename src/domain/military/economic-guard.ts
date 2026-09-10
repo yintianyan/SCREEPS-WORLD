@@ -58,10 +58,13 @@ export function checkEconomicGuard(input: EconomicGuardInput): EconomicGuardResu
   const minReserve = input.isDefensive ? 500 : 5000;
 
   // 1. Energy Reserve — 能量储备是否足够
-  const energyOk = input.empireEnergyReserve >= minReserve
-    && input.warCost <= input.empireEnergyReserve * maxCostRatio;
+  const energyOk =
+    input.empireEnergyReserve >= minReserve &&
+    input.warCost <= input.empireEnergyReserve * maxCostRatio;
   if (!energyOk) {
-    reasons.push(`energy: reserve=${input.empireEnergyReserve} < ${minReserve} or cost=${input.warCost} > ${input.empireEnergyReserve * maxCostRatio}`);
+    reasons.push(
+      `energy: reserve=${input.empireEnergyReserve} < ${minReserve} or cost=${input.warCost} > ${input.empireEnergyReserve * maxCostRatio}`,
+    );
   }
 
   // 2. Spawn Capacity — 有空闲 spawn
@@ -71,12 +74,14 @@ export function checkEconomicGuard(input: EconomicGuardInput): EconomicGuardResu
   // 3. Replacement Capacity — 能重建损失
   const replacementThreshold = input.isDefensive ? 0.1 : 0.3;
   const replacementOk = input.replacementCapacity >= replacementThreshold;
-  if (!replacementOk) reasons.push(`replacement: ${input.replacementCapacity} < ${replacementThreshold}`);
+  if (!replacementOk)
+    reasons.push(`replacement: ${input.replacementCapacity} < ${replacementThreshold}`);
 
   // 4. Logistics Reliability — 物流能支撑
   const logisticsThreshold = input.isDefensive ? 0.2 : 0.5;
   const logisticsOk = input.logisticsReliability >= logisticsThreshold;
-  if (!logisticsOk) reasons.push(`logistics: ${input.logisticsReliability} < ${logisticsThreshold}`);
+  if (!logisticsOk)
+    reasons.push(`logistics: ${input.logisticsReliability} < ${logisticsThreshold}`);
 
   // 5. Recovery Capacity — 能恢复
   const recoveryThreshold = input.isDefensive ? 0.05 : 0.2;
@@ -88,8 +93,13 @@ export function checkEconomicGuard(input: EconomicGuardInput): EconomicGuardResu
     reasons.push("empireHealth=critical → 禁止非防御性军事行动");
   }
 
-  const allPassed = energyOk && spawnOk && replacementOk && logisticsOk && recoveryOk
-    && (input.empireHealth !== "critical" || input.isDefensive);
+  const allPassed =
+    energyOk &&
+    spawnOk &&
+    replacementOk &&
+    logisticsOk &&
+    recoveryOk &&
+    (input.empireHealth !== "critical" || input.isDefensive);
 
   let recommendation = "";
   if (!allPassed) {

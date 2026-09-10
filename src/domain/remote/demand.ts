@@ -16,7 +16,6 @@ export interface RemoteCreepSummary {
   bodyLength: number;
 }
 
-
 export interface RemoteDemandInput {
   homeRoom: string;
   /** ColonyState（bootstrap 暂停、recovery 限补员，见 R3b 门禁）。 */
@@ -24,7 +23,9 @@ export interface RemoteDemandInput {
   energyCapacityAvailable: number;
   tick: number;
   /** 远矿运营列表（key = 目标房名）。 */
-  remoteOps: Readonly<Record<string, { state: string; sources?: number; haulerNeed?: number; lastSeen: number }>>;
+  remoteOps: Readonly<
+    Record<string, { state: string; sources?: number; haulerNeed?: number; lastSeen: number }>
+  >;
   /** 所有存活 + 孵化中的远矿 creep 摘要。 */
   remoteCreeps: readonly RemoteCreepSummary[];
   /** 孵化队列（用于 pending 计数）。 */
@@ -66,7 +67,15 @@ export interface RemoteDemandResult {
 
 /** 评估远矿孵化需求：遍历 active 运营，按目标编制与替换窗口生成 SpawnRequest。纯函数。 */
 export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResult {
-  const { homeRoom, colonyState, energyCapacityAvailable, tick, remoteOps, remoteCreeps, spawnQueue } = input;
+  const {
+    homeRoom,
+    colonyState,
+    energyCapacityAvailable,
+    tick,
+    remoteOps,
+    remoteCreeps,
+    spawnQueue,
+  } = input;
   const requests: SpawnRequest[] = [];
 
   // 安全门禁（R3b）：bootstrap 暂停（保命孵化优先）；recovery 允许现役 op 补员
@@ -95,10 +104,18 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       if (clearerTotal < 1) {
         const key = spawnKey("coreClearer", homeRoom, clearerTotal, targetRoom);
         const body = selectBody("coreClearer", energyCapacityAvailable);
-        requests.push(createRemoteRequest(
-          "coreClearer", homeRoom, targetRoom, clearerTotal,
-          key, 1, body, tick,
-        ));
+        requests.push(
+          createRemoteRequest(
+            "coreClearer",
+            homeRoom,
+            targetRoom,
+            clearerTotal,
+            key,
+            1,
+            body,
+            tick,
+          ),
+        );
       }
       continue;
     }
@@ -109,16 +126,27 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     // （neutral 房无塔无防御，dismantle 免费伤害，顶档 dismantler 500 dmg/tick
     // 拆 5000 hits 仅 10 tick）。每 op 同时至多 1 只；不 continue —— 拆迁与
     // 经济采集并行，任务结束（拆完/对方 claim）由系统层回收标记。
-    if (CONFIG.remote.enableDismantleForeignSpawn && (input.dismantleTargets?.[targetRoom] ?? false)) {
+    if (
+      CONFIG.remote.enableDismantleForeignSpawn &&
+      (input.dismantleTargets?.[targetRoom] ?? false)
+    ) {
       const dismantlePending = countRemotePending(spawnQueue, "dismantler", targetRoom);
       const dismantleTotal = (counts.dismantler ?? 0) + dismantlePending;
       if (dismantleTotal < 1) {
         const key = spawnKey("dismantler", homeRoom, dismantleTotal, targetRoom);
         const body = selectBody("dismantler", energyCapacityAvailable);
-        requests.push(createRemoteRequest(
-          "dismantler", homeRoom, targetRoom, dismantleTotal,
-          key, 1, body, tick,
-        ));
+        requests.push(
+          createRemoteRequest(
+            "dismantler",
+            homeRoom,
+            targetRoom,
+            dismantleTotal,
+            key,
+            1,
+            body,
+            tick,
+          ),
+        );
       }
     }
 
@@ -133,10 +161,18 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       if (dismantleTotal < 1) {
         const key = spawnKey("dismantler", homeRoom, dismantleTotal, targetRoom);
         const body = selectBody("dismantler", energyCapacityAvailable);
-        requests.push(createRemoteRequest(
-          "dismantler", homeRoom, targetRoom, dismantleTotal,
-          key, 1, body, tick,
-        ));
+        requests.push(
+          createRemoteRequest(
+            "dismantler",
+            homeRoom,
+            targetRoom,
+            dismantleTotal,
+            key,
+            1,
+            body,
+            tick,
+          ),
+        );
       }
     }
 
@@ -154,10 +190,18 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       if (defenderTotal < 1) {
         const key = spawnKey("remoteDefender", homeRoom, defenderTotal, targetRoom);
         const body = selectBody("remoteDefender", energyCapacityAvailable);
-        requests.push(createRemoteRequest(
-          "remoteDefender", homeRoom, targetRoom, defenderTotal,
-          key, 1, body, tick,
-        ));
+        requests.push(
+          createRemoteRequest(
+            "remoteDefender",
+            homeRoom,
+            targetRoom,
+            defenderTotal,
+            key,
+            1,
+            body,
+            tick,
+          ),
+        );
       }
     }
 
@@ -180,10 +224,18 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     if (harvesterTotal < harvesterTarget && !economySuppressed) {
       const key = spawnKey("remoteHarvester", homeRoom, harvesterTotal, targetRoom);
       const body = selectBody("remoteHarvester", energyCapacityAvailable);
-      requests.push(createRemoteRequest(
-        "remoteHarvester", homeRoom, targetRoom, harvesterTotal,
-        key, 1, body, tick,
-      ));
+      requests.push(
+        createRemoteRequest(
+          "remoteHarvester",
+          homeRoom,
+          targetRoom,
+          harvesterTotal,
+          key,
+          1,
+          body,
+          tick,
+        ),
+      );
     }
     if (harvesterTotal >= harvesterTarget || economySuppressed) {
       const pathCost = input.travelCosts?.[targetRoom];
@@ -194,10 +246,19 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
         // 替补 key 绑定濒死 creep 名而非 total 索引：submitRequest 按 key 幂等合并，队列内始终只有一条替补。
         const key = replacementKey("remoteHarvester", homeRoom, targetRoom, replacement);
         const body = selectBody("remoteHarvester", energyCapacityAvailable);
-        requests.push(createRemoteRequest(
-          "remoteHarvester", homeRoom, targetRoom, harvesterTotal,
-          key, 1, body, tick, replacement,
-        ));
+        requests.push(
+          createRemoteRequest(
+            "remoteHarvester",
+            homeRoom,
+            targetRoom,
+            harvesterTotal,
+            key,
+            1,
+            body,
+            tick,
+            replacement,
+          ),
+        );
       }
     }
 
@@ -211,10 +272,9 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       const key = spawnKey("remoteHauler", homeRoom, haulerTotal, targetRoom);
       const hasRoad = input.roadStatus?.[targetRoom] ?? true;
       const body = selectBody("remoteHauler", energyCapacityAvailable, { hasRoad });
-      requests.push(createRemoteRequest(
-        "remoteHauler", homeRoom, targetRoom, haulerTotal,
-        key, 1, body, tick,
-      ));
+      requests.push(
+        createRemoteRequest("remoteHauler", homeRoom, targetRoom, haulerTotal, key, 1, body, tick),
+      );
     }
     if (haulerTotal >= haulerTarget || economySuppressed) {
       const pathCost = input.travelCosts?.[targetRoom];
@@ -225,10 +285,19 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
         const key = replacementKey("remoteHauler", homeRoom, targetRoom, replacement);
         const hasRoad = input.roadStatus?.[targetRoom] ?? true;
         const body = selectBody("remoteHauler", energyCapacityAvailable, { hasRoad });
-        requests.push(createRemoteRequest(
-          "remoteHauler", homeRoom, targetRoom, haulerTotal,
-          key, 1, body, tick, replacement,
-        ));
+        requests.push(
+          createRemoteRequest(
+            "remoteHauler",
+            homeRoom,
+            targetRoom,
+            haulerTotal,
+            key,
+            1,
+            body,
+            tick,
+            replacement,
+          ),
+        );
       }
     }
 
@@ -246,10 +315,18 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
         // CLAIM 需 650 能量，低容量时 body 选择回退到 RECOVERY_BODY —
         // 无 claim 部件则跳过，等容量提升后再孵化。
         if (body.includes("claim" as BodyPartConstant)) {
-          requests.push(createRemoteRequest(
-            "reserver", homeRoom, targetRoom, reserverTotal,
-            key, 2, body, tick,
-          ));
+          requests.push(
+            createRemoteRequest(
+              "reserver",
+              homeRoom,
+              targetRoom,
+              reserverTotal,
+              key,
+              2,
+              body,
+              tick,
+            ),
+          );
         }
       }
       if (reserverTotal >= 1) {
@@ -261,10 +338,19 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
           const key = replacementKey("reserver", homeRoom, targetRoom, replacement);
           const body = selectBody("reserver", energyCapacityAvailable);
           if (body.includes("claim" as BodyPartConstant)) {
-            requests.push(createRemoteRequest(
-              "reserver", homeRoom, targetRoom, reserverTotal,
-              key, 2, body, tick, replacement,
-            ));
+            requests.push(
+              createRemoteRequest(
+                "reserver",
+                homeRoom,
+                targetRoom,
+                reserverTotal,
+                key,
+                2,
+                body,
+                tick,
+                replacement,
+              ),
+            );
           }
         }
       }
@@ -360,7 +446,12 @@ function findReplacement(
  * 不用 spawnKey(role, home, total, target)：total 随 pending 每周期漂移，
  * 同一濒死者会产生一串不同 key 的重复请求；creep 名生命周期内唯一稳定，天然幂等。
  */
-function replacementKey(role: string, home: string, target: string, dyingCreepName: string): string {
+function replacementKey(
+  role: string,
+  home: string,
+  target: string,
+  dyingCreepName: string,
+): string {
   return `${role}:${home}:${target}:repl:${dyingCreepName}`;
 }
 

@@ -10,7 +10,10 @@ import {
   type MicroEnemySnapshot,
 } from "../../../src/domain/tactical/combat-micro";
 import type { CombatCapability } from "../../../src/domain/combat/capability";
-import type { TerrainContext, EffectiveCombatModifier } from "../../../src/domain/defense/terrain-context";
+import type {
+  TerrainContext,
+  EffectiveCombatModifier,
+} from "../../../src/domain/defense/terrain-context";
 import type { AttackIntent } from "../../../src/domain/tactical/focus-fire";
 import type { CohesionMetric, FormationSlot } from "../../../src/domain/tactical/squad-formation";
 
@@ -18,19 +21,46 @@ import type { CohesionMetric, FormationSlot } from "../../../src/domain/tactical
 
 function makeCap(overrides: Partial<CombatCapability> = {}): CombatCapability {
   return {
-    attack: 120, rangedAttack: 40, heal: 0, rangedHeal: 0,
-    dismantle: 0, claim: 0, effectiveHP: 1000, mobility: 1,
-    support: 0, toughParts: 0, boosted: false, maxBoostTier: 0,
-    totalParts: 10, activeParts: 10,
+    attack: 120,
+    rangedAttack: 40,
+    heal: 0,
+    rangedHeal: 0,
+    dismantle: 0,
+    claim: 0,
+    effectiveHP: 1000,
+    mobility: 1,
+    support: 0,
+    toughParts: 0,
+    boosted: false,
+    maxBoostTier: 0,
+    totalParts: 10,
+    activeParts: 10,
     ...overrides,
   };
 }
 
-function makeMember(name: string, role: string, x: number, y: number, room = "W2N1"): MicroMemberSnapshot {
-  const cap = role === "healer" ? makeCap({ attack: 0, heal: 48 }) : role === "ranged" ? makeCap({ attack: 0, rangedAttack: 40 }) : makeCap();
+function makeMember(
+  name: string,
+  role: string,
+  x: number,
+  y: number,
+  room = "W2N1",
+): MicroMemberSnapshot {
+  const cap =
+    role === "healer"
+      ? makeCap({ attack: 0, heal: 48 })
+      : role === "ranged"
+        ? makeCap({ attack: 0, rangedAttack: 40 })
+        : makeCap();
   return {
-    name, role, pos: x * 50 + y, room,
-    hits: 1000, hitsMax: 1000, fatigue: 0, alive: true,
+    name,
+    role,
+    pos: x * 50 + y,
+    room,
+    hits: 1000,
+    hitsMax: 1000,
+    fatigue: 0,
+    alive: true,
     capability: cap,
     bodyState: deriveBodyAwareState(cap, role, 0.5),
   };
@@ -38,33 +68,60 @@ function makeMember(name: string, role: string, x: number, y: number, room = "W2
 
 function makeEnemy(id: string, x: number, y: number, room = "W2N1"): MicroEnemySnapshot {
   return {
-    id, name: `enemy-${id}`, pos: x * 50 + y, room,
-    hits: 1000, hitsMax: 1000,
+    id,
+    name: `enemy-${id}`,
+    pos: x * 50 + y,
+    room,
+    hits: 1000,
+    hitsMax: 1000,
     capability: makeCap({ attack: 100, mobility: 1 }),
-    role: "attacker", lastSeenTick: 100,
+    role: "attacker",
+    lastSeenTick: 100,
   };
 }
 
 function makeTerrain(): TerrainContext {
   return {
-    roomName: "W2N1", terrainType: "OPEN", walkability: "FULL",
-    openTileRatio: 0.8, wallDensity: 0.1, chokepoints: [], corridors: [],
-    rampartCoverage: "NONE", towerCoverage: "NONE", coreExposure: 0.3,
-    retreatQuality: "GOOD", mobilityModifier: 1.0, tick: 100,
+    roomName: "W2N1",
+    terrainType: "OPEN",
+    walkability: "FULL",
+    openTileRatio: 0.8,
+    wallDensity: 0.1,
+    chokepoints: [],
+    corridors: [],
+    rampartCoverage: "NONE",
+    towerCoverage: "NONE",
+    coreExposure: 0.3,
+    retreatQuality: "GOOD",
+    mobilityModifier: 1.0,
+    tick: 100,
   };
 }
 
 function makeModifier(): EffectiveCombatModifier {
-  return { mobilityModifier: 1.0, towerDamageFactor: 0, retreatDifficulty: 1.0, approachFactor: 1.0 };
+  return {
+    mobilityModifier: 1.0,
+    towerDamageFactor: 0,
+    retreatDifficulty: 1.0,
+    approachFactor: 1.0,
+  };
 }
 
 function makeAttackIntent(creepId: string, targetId: string): AttackIntent {
   return {
-    squadId: "squad-test", creepId, targetId,
-    targetPos: 12 * 50 + 10, targetRoom: "W2N1",
-    attackType: "ATTACK", priority: "PRIMARY",
-    expectedDamage: 120, targetExpectedHP: 880,
-    reason: "test", confidence: 0.85, tick: 100, requiresMovement: false,
+    squadId: "squad-test",
+    creepId,
+    targetId,
+    targetPos: 12 * 50 + 10,
+    targetRoom: "W2N1",
+    attackType: "ATTACK",
+    priority: "PRIMARY",
+    expectedDamage: 120,
+    targetExpectedHP: 880,
+    reason: "test",
+    confidence: 0.85,
+    tick: 100,
+    requiresMovement: false,
   };
 }
 
@@ -75,9 +132,11 @@ function generateSnapshots(count: number): MicroSnapshot[] {
   for (let i = 0; i < count; i++) {
     // 变化参数：成员数 2-10, 敌人数 1-5, tick, 地形, tower coverage
     const memberCount = 2 + (i % 9); // 2-10
-    const enemyCount = 1 + (i % 5);  // 1-5
+    const enemyCount = 1 + (i % 5); // 1-5
     const tick = 100 + i * 10;
-    const towerCoverage = ["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"][i % 5] as TerrainContext["towerCoverage"];
+    const towerCoverage = ["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"][
+      i % 5
+    ] as TerrainContext["towerCoverage"];
     const terrain: TerrainContext = {
       ...makeTerrain(),
       towerCoverage,
@@ -90,7 +149,7 @@ function generateSnapshots(count: number): MicroSnapshot[] {
 
     const members: MicroMemberSnapshot[] = [];
     for (let m = 0; m < memberCount; m++) {
-      const role = m === 0 ? "attacker" : m === 1 ? "ranged" : (m % 3 === 0 ? "healer" : "attacker");
+      const role = m === 0 ? "attacker" : m === 1 ? "ranged" : m % 3 === 0 ? "healer" : "attacker";
       members.push(makeMember(`s${i}-m${m}`, role, 10 + m, 10 + (m % 3)));
     }
 
@@ -134,11 +193,22 @@ function generateSnapshots(count: number): MicroSnapshot[] {
     }
 
     snapshots.push({
-      tick, squadId: `squad-${i}`, objectiveId: `tac-${i}`,
-      tacticalState: "ENGAGING", warPosture: "war", authorizedTargetRoom: "W2N1",
-      members, enemies, terrain, terrainModifier: modifier,
-      cohesion, slots, anchor: null, prevPlan: null,
-      attackIntents, prevMicroDecisions: [],
+      tick,
+      squadId: `squad-${i}`,
+      objectiveId: `tac-${i}`,
+      tacticalState: "ENGAGING",
+      warPosture: "war",
+      authorizedTargetRoom: "W2N1",
+      members,
+      enemies,
+      terrain,
+      terrainModifier: modifier,
+      cohesion,
+      slots,
+      anchor: null,
+      prevPlan: null,
+      attackIntents,
+      prevMicroDecisions: [],
       targetLocks: new Map(),
     });
   }
@@ -187,16 +257,15 @@ describe("A5.5 Deterministic Replay (100 Snapshots × 1000 Replays)", () => {
   });
 
   it("每个 decision 的 decisionHash 在 replay 中完全一致", () => {
-    for (const snapshot of snapshots.slice(0, 10)) { // 取前 10 个以控制运行时间
+    for (const snapshot of snapshots.slice(0, 10)) {
+      // 取前 10 个以控制运行时间
       const firstPlan = planCombatMicro(snapshot);
 
       for (let rep = 0; rep < 100; rep++) {
         const replayPlan = planCombatMicro(snapshot);
         expect(replayPlan.decisions.length).toBe(firstPlan.decisions.length);
         for (let j = 0; j < replayPlan.decisions.length; j++) {
-          expect(replayPlan.decisions[j]!.decisionHash).toBe(
-            firstPlan.decisions[j]!.decisionHash,
-          );
+          expect(replayPlan.decisions[j]!.decisionHash).toBe(firstPlan.decisions[j]!.decisionHash);
         }
       }
     }
@@ -210,13 +279,23 @@ describe("A5.5 Deterministic Replay (100 Snapshots × 1000 Replays)", () => {
     const attackIntent1 = makeAttackIntent("aaa", "e1");
     const attackIntent2 = makeAttackIntent("bbb", "e1");
     const snapshot: MicroSnapshot = {
-      tick: 100, squadId: "squad-test", objectiveId: "tac-test",
-      tacticalState: "ENGAGING", warPosture: "war", authorizedTargetRoom: "W2N1",
-      members: [member1, member2], enemies: [enemy],
-      terrain: makeTerrain(), terrainModifier: makeModifier(),
-      cohesion: null, slots: [], anchor: null, prevPlan: null,
+      tick: 100,
+      squadId: "squad-test",
+      objectiveId: "tac-test",
+      tacticalState: "ENGAGING",
+      warPosture: "war",
+      authorizedTargetRoom: "W2N1",
+      members: [member1, member2],
+      enemies: [enemy],
+      terrain: makeTerrain(),
+      terrainModifier: makeModifier(),
+      cohesion: null,
+      slots: [],
+      anchor: null,
+      prevPlan: null,
       attackIntents: [attackIntent1, attackIntent2],
-      prevMicroDecisions: [], targetLocks: new Map(),
+      prevMicroDecisions: [],
+      targetLocks: new Map(),
     };
 
     // 多次 replay

@@ -25,8 +25,8 @@ describe("scheduler — bucket 阈值以 CONFIG.cpu.tiers 为唯一真相源", (
     // 达到阈值但未满驻留：计数递增。
     expect(resolveTier("guarded", 0, threshold)).toEqual({ tier: "guarded", recoveryTicks: 1 });
     // 驻留满：升档。
-    expect(
-      resolveTier("guarded", CONFIG.cpu.tiers.guarded.recoveryTicks - 1, threshold).tier,
-    ).toBe("healthy");
+    expect(resolveTier("guarded", CONFIG.cpu.tiers.guarded.recoveryTicks - 1, threshold).tier).toBe(
+      "healthy",
+    );
   });
 });

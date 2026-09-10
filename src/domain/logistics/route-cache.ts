@@ -51,10 +51,9 @@ export function needsReeval(
  * 纯函数。
  */
 export function anyInvalidated(rule: RouteInvalidationRule): boolean {
-  return rule.structureRevisionChanged ||
-    rule.threatChanged ||
-    rule.routeBlocked ||
-    rule.ttlExpired;
+  return (
+    rule.structureRevisionChanged || rule.threatChanged || rule.routeBlocked || rule.ttlExpired
+  );
 }
 
 // ─── Route Cache ──────────────────────────────────────────
@@ -84,11 +83,7 @@ export class RouteCache {
    * 更新路由。
    * 同时更新结构版本和威胁等级快照。
    */
-  set(
-    route: Route,
-    structureRevision?: number,
-    threatLevel?: number,
-  ): void {
+  set(route: Route, structureRevision?: number, threatLevel?: number): void {
     this.cache.set(route.routeId, route);
     if (structureRevision !== undefined) {
       this.lastStructureRevision.set(route.from, structureRevision);

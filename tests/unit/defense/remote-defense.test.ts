@@ -13,13 +13,43 @@ import type { ThreatAssessment } from "../../../src/domain/defense/threat-assess
 
 // ─── 测试辅助 ────────────────────────────────────────────────
 
-function makeThreat(level: ThreatAssessment["level"], intent: ThreatAssessment["estimatedIntent"]["intent"]): ThreatAssessment {
+function makeThreat(
+  level: ThreatAssessment["level"],
+  intent: ThreatAssessment["estimatedIntent"]["intent"],
+): ThreatAssessment {
   return {
     level,
-    score: { combat: 0, intent: 0, proximity: 0, objective: 0, boost: 0, defense: 0, economicImpact: 0, total: 0 },
+    score: {
+      combat: 0,
+      intent: 0,
+      proximity: 0,
+      objective: 0,
+      boost: 0,
+      defense: 0,
+      economicImpact: 0,
+      total: 0,
+    },
     confidence: "fact",
-    estimatedPower: { attack: 30, rangedAttack: 0, heal: 0, effectiveHP: 100, dismantle: 0, toughParts: 0, boosted: false, maxBoostTier: 0 },
-    enemyCombatPower: { burstDamage: 30, effectiveHP: 100, healOutput: 0, dismantlePower: 0, powerScore: 30, creepCount: 1, mobility: 1, boosted: false },
+    estimatedPower: {
+      attack: 30,
+      rangedAttack: 0,
+      heal: 0,
+      effectiveHP: 100,
+      dismantle: 0,
+      toughParts: 0,
+      boosted: false,
+      maxBoostTier: 0,
+    },
+    enemyCombatPower: {
+      burstDamage: 30,
+      effectiveHP: 100,
+      healOutput: 0,
+      dismantlePower: 0,
+      powerScore: 30,
+      creepCount: 1,
+      mobility: 1,
+      boosted: false,
+    },
     estimatedIntent: { intent, confidence: 0.8, evidence: ["test"] },
     timeToImpact: 100,
     sources: ["player"],
@@ -86,25 +116,31 @@ function makeInput(opts: Partial<RemoteDefenseInput> = {}): RemoteDefenseInput {
 
 describe("G4 — decideRemoteDefenseAction", () => {
   it("R01: 威胁 NONE → CONTINUE", () => {
-    const decision = decideRemoteDefenseAction(makeInput({
-      threat: makeThreat("NONE", "UNKNOWN"),
-    }));
+    const decision = decideRemoteDefenseAction(
+      makeInput({
+        threat: makeThreat("NONE", "UNKNOWN"),
+      }),
+    );
     expect(decision.action).toBe("CONTINUE");
     expect(decision.reason).toContain("NONE");
   });
 
   it("R02: 威胁 LOW + 风险低 → CONTINUE", () => {
-    const decision = decideRemoteDefenseAction(makeInput({
-      threat: makeThreat("LOW", "HARASSMENT"),
-    }));
+    const decision = decideRemoteDefenseAction(
+      makeInput({
+        threat: makeThreat("LOW", "HARASSMENT"),
+      }),
+    );
     // LOW → risk = 0.1 ≤ 0.15 → CONTINUE
     expect(decision.action).toBe("CONTINUE");
   });
 
   it("R03: 威胁 MEDIUM + 风险高 → PAUSE", () => {
-    const decision = decideRemoteDefenseAction(makeInput({
-      threat: makeThreat("MEDIUM", "HARASSMENT"),
-    }));
+    const decision = decideRemoteDefenseAction(
+      makeInput({
+        threat: makeThreat("MEDIUM", "HARASSMENT"),
+      }),
+    );
     // MEDIUM → risk = 0.3 > 0.15 → PAUSE
     expect(decision.action).toBe("PAUSE");
     expect(decision.reason).toContain("暂停");
@@ -117,11 +153,13 @@ describe("G4 — decideRemoteDefenseAction", () => {
     // grossValue = 20 × 200 = 4000
     // escortedNetValue = (4000 - 260) × (1 - 0.6 × 0.3) = 3740 × 0.82 = 3066.8
     // > 0 → ESCORT
-    const decision = decideRemoteDefenseAction(makeInput({
-      threat: makeThreat("HIGH", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
-      militaryContext: makeMilitaryContext({ atWar: false, defenderSpawnCost: 260 }),
-    }));
+    const decision = decideRemoteDefenseAction(
+      makeInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
+        militaryContext: makeMilitaryContext({ atWar: false, defenderSpawnCost: 260 }),
+      }),
+    );
     expect(decision.action).toBe("ESCORT");
     expect(decision.escortDemand).toBeDefined();
     expect(decision.escortDemand?.count).toBe(2); // HIGH → 2 defender
@@ -133,11 +171,13 @@ describe("G4 — decideRemoteDefenseAction", () => {
     // = 50000 × 0.6 × 0.4 = 12000
     // netValue = (4000 - 12000 - 260) × (1 - 0.6) = -8260 × 0.4 = -3304
     // < 0 → RETREAT (pathCost ≤ 3 可安全返回)
-    const decision = decideRemoteDefenseAction(makeInput({
-      threat: makeThreat("HIGH", "SIEGE"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 2 }),
-      militaryContext: makeMilitaryContext({ atWar: false }),
-    }));
+    const decision = decideRemoteDefenseAction(
+      makeInput({
+        threat: makeThreat("HIGH", "SIEGE"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 2 }),
+        militaryContext: makeMilitaryContext({ atWar: false }),
+      }),
+    );
     expect(decision.action).toBe("RETREAT");
     expect(decision.reason).toContain("撤退");
   });
@@ -146,30 +186,36 @@ describe("G4 — decideRemoteDefenseAction", () => {
     // CRITICAL → risk = 0.9
     // creepInvestment = 50000, empireEnergyReserve = 100000
     // replacementCostRatio = 50000/100000 = 0.5 > 0.2 → ABORT
-    const decision = decideRemoteDefenseAction(makeInput({
-      threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
-      empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
-    }));
+    const decision = decideRemoteDefenseAction(
+      makeInput({
+        threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
+        empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
+      }),
+    );
     expect(decision.action).toBe("ABORT");
     expect(decision.reason).toContain("长期不可维持");
   });
 
   it("R07: war 姿态 + 威胁 HIGH → RETREAT（不护航）", () => {
-    const decision = decideRemoteDefenseAction(makeInput({
-      threat: makeThreat("HIGH", "HARASSMENT"),
-      empireContext: makeEmpireContext({ posture: "war" }),
-    }));
+    const decision = decideRemoteDefenseAction(
+      makeInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+        empireContext: makeEmpireContext({ posture: "war" }),
+      }),
+    );
     expect(decision.action).toBe("RETREAT");
     expect(decision.reason).toContain("war姿态");
   });
 
   it("R07b: RETREAT + pathCost > 3 → ABORT（无法安全撤退）", () => {
-    const decision = decideRemoteDefenseAction(makeInput({
-      threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 5 }),
-      empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
-    }));
+    const decision = decideRemoteDefenseAction(
+      makeInput({
+        threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 5 }),
+        empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
+      }),
+    );
     // CRITICAL + netValue < 0 + pathCost=5 > 3 → ABORT
     // ABORT 可能由两个路径触发：replacementCostRatio > 0.2 或 pathCost > 3
     expect(decision.action).toBe("ABORT");
@@ -182,29 +228,37 @@ describe("G4 — decideRemoteDefenseAction", () => {
 
 describe("G4 — evaluateRemoteExpectedValue", () => {
   it("正确计算运营价值 = sources × 10", () => {
-    const ev = evaluateRemoteExpectedValue(makeInput({
-      remoteOp: makeRemoteOp({ sources: 3 }),
-    }));
+    const ev = evaluateRemoteExpectedValue(
+      makeInput({
+        remoteOp: makeRemoteOp({ sources: 3 }),
+      }),
+    );
     expect(ev.operationValue).toBe(30); // 3 × 10
   });
 
   it("风险系数映射正确", () => {
-    const evNone = evaluateRemoteExpectedValue(makeInput({
-      threat: makeThreat("NONE", "UNKNOWN"),
-    }));
+    const evNone = evaluateRemoteExpectedValue(
+      makeInput({
+        threat: makeThreat("NONE", "UNKNOWN"),
+      }),
+    );
     expect(evNone.risk).toBe(0);
 
-    const evCritical = evaluateRemoteExpectedValue(makeInput({
-      threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
-    }));
+    const evCritical = evaluateRemoteExpectedValue(
+      makeInput({
+        threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
+      }),
+    );
     expect(evCritical.risk).toBe(0.9);
   });
 
   it("期望损失 = creepInvestment × risk × min(duration/500, 1)", () => {
-    const ev = evaluateRemoteExpectedValue(makeInput({
-      threat: makeThreat("MEDIUM", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ creepInvestment: 10000 }),
-    }));
+    const ev = evaluateRemoteExpectedValue(
+      makeInput({
+        threat: makeThreat("MEDIUM", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ creepInvestment: 10000 }),
+      }),
+    );
     // risk = 0.3, duration = 200 (HARASSMENT)
     // expectedLoss = 10000 × 0.3 × min(200/500, 1) = 10000 × 0.3 × 0.4 = 1200
     expect(ev.expectedLoss).toBe(1200);
@@ -215,11 +269,13 @@ describe("G4 — evaluateRemoteExpectedValue", () => {
 
 describe("G4 — rejectedAlternatives 可追溯", () => {
   it("ABORT 决策包含被拒绝的替代方案", () => {
-    const decision = decideRemoteDefenseAction(makeInput({
-      threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
-      empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
-    }));
+    const decision = decideRemoteDefenseAction(
+      makeInput({
+        threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
+        empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
+      }),
+    );
     expect(decision.action).toBe("ABORT");
     expect(decision.rejectedAlternatives.length).toBeGreaterThan(0);
     const rejectedActions = decision.rejectedAlternatives.map(a => a.action);

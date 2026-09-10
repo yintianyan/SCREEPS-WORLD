@@ -61,7 +61,13 @@ function threatUnhandledEvents(): any[] {
   return ((globalThis as any).eventBuffer?.events ?? []).filter((e: any) => e.k === 41);
 }
 
-function makeSnapshot(opts: { tower: any; threat: any; controller: any; spawn?: any; ramparts?: any[] }): any {
+function makeSnapshot(opts: {
+  tower: any;
+  threat: any;
+  controller: any;
+  spawn?: any;
+  ramparts?: any[];
+}): any {
   return mockSnapshot({
     roomName: "W7N4",
     rcl: 7,

@@ -220,8 +220,8 @@ export class SnapshotInspector {
   ): Promise<number[]> {
     const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
     return (objs as any[])
-      .filter((o) => o.type === "creep" && o.memory?.role === role)
-      .map((o) => (o.body ?? []).filter((p: any) => p.type === part).length)
+      .filter(o => o.type === "creep" && o.memory?.role === role)
+      .map(o => (o.body ?? []).filter((p: any) => p.type === part).length)
       .sort((a, b) => a - b);
   }
 
@@ -255,7 +255,7 @@ export class SnapshotInspector {
     name: string,
   ): Promise<{ hits: number; hitsMax: number } | undefined> {
     const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
-    const c = (objs as any[]).find((o) => o.type === "creep" && o.name === name);
+    const c = (objs as any[]).find(o => o.type === "creep" && o.name === name);
     if (!c) return undefined;
     return { hits: c.hits ?? 0, hitsMax: c.hitsMax ?? 0 };
   }
@@ -267,7 +267,7 @@ export class SnapshotInspector {
     roomName?: string,
   ): Promise<{ progress: number; progressTotal: number; level: number } | undefined> {
     const objs = await this.world().roomObjects(roomName ?? this._bot.roomName);
-    const ctrl = (objs as any[]).find((o) => o.type === "controller");
+    const ctrl = (objs as any[]).find(o => o.type === "controller");
     if (!ctrl) return undefined;
     const level = ctrl.level ?? 0;
     return {

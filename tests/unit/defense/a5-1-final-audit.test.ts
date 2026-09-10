@@ -112,13 +112,43 @@ function makeCreep(
   };
 }
 
-function makeThreat(level: ThreatAssessment["level"], intent: ThreatAssessment["estimatedIntent"]["intent"]): ThreatAssessment {
+function makeThreat(
+  level: ThreatAssessment["level"],
+  intent: ThreatAssessment["estimatedIntent"]["intent"],
+): ThreatAssessment {
   return {
     level,
-    score: { combat: 0, intent: 0, proximity: 0, objective: 0, boost: 0, defense: 0, economicImpact: 0, total: 0 },
+    score: {
+      combat: 0,
+      intent: 0,
+      proximity: 0,
+      objective: 0,
+      boost: 0,
+      defense: 0,
+      economicImpact: 0,
+      total: 0,
+    },
     confidence: "fact",
-    estimatedPower: { attack: 30, rangedAttack: 0, heal: 0, effectiveHP: 100, dismantle: 0, toughParts: 0, boosted: false, maxBoostTier: 0 },
-    enemyCombatPower: { burstDamage: 30, effectiveHP: 100, healOutput: 0, dismantlePower: 0, powerScore: 30, creepCount: 1, mobility: 1, boosted: false },
+    estimatedPower: {
+      attack: 30,
+      rangedAttack: 0,
+      heal: 0,
+      effectiveHP: 100,
+      dismantle: 0,
+      toughParts: 0,
+      boosted: false,
+      maxBoostTier: 0,
+    },
+    enemyCombatPower: {
+      burstDamage: 30,
+      effectiveHP: 100,
+      healOutput: 0,
+      dismantlePower: 0,
+      powerScore: 30,
+      creepCount: 1,
+      mobility: 1,
+      boosted: false,
+    },
     estimatedIntent: { intent, confidence: 0.8, evidence: ["test"] },
     timeToImpact: 100,
     sources: ["player"],
@@ -156,7 +186,10 @@ function makeEmpireContext(opts: Partial<EmpireContext> = {}): EmpireContext {
 }
 
 function makeLogisticsContext(opts: Partial<LogisticsContext> = {}): LogisticsContext {
-  return { avgHaulerCommute: opts.avgHaulerCommute ?? 50, availableHaulers: opts.availableHaulers ?? 2 };
+  return {
+    avgHaulerCommute: opts.avgHaulerCommute ?? 50,
+    availableHaulers: opts.availableHaulers ?? 2,
+  };
 }
 
 function makeMilitaryContext(opts: Partial<MilitaryContext> = {}): MilitaryContext {
@@ -184,10 +217,10 @@ function makeRemoteInput(opts: Partial<RemoteDefenseInput> = {}): RemoteDefenseI
 
 describe("§4 G1 Threat Model — 8 场景验证", () => {
   it("S1: 单 Invader 无 Boost → LOW/MEDIUM（根据 Capability）", () => {
-    const invader = makeHostile(
-      [{ type: ATTACK }, { type: MOVE }],
-      { owner: "Invader", pos: 40 * 50 + 40 },
-    );
+    const invader = makeHostile([{ type: ATTACK }, { type: MOVE }], {
+      owner: "Invader",
+      pos: 40 * 50 + 40,
+    });
     const result = assessThreat(makeThreatInput({ hostiles: [invader] }));
     expect(result.sources).toContain("npc_invader");
     expect(result.level).not.toBe("NONE");
@@ -196,15 +229,29 @@ describe("§4 G1 Threat Model — 8 场景验证", () => {
   });
 
   it("S2: Boosted Attacker → Threat 显著上升", () => {
-    const normal = assessThreat(makeThreatInput({
-      hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy", pos: 40 * 50 + 40 })],
-    }));
-    const boosted = assessThreat(makeThreatInput({
-      hostiles: [makeHostile(
-        [{ type: TOUGH, boost: "XGHO2" }, { type: ATTACK, boost: "XUH2O" }, { type: ATTACK, boost: "XUH2O" }, { type: MOVE }, { type: MOVE }],
-        { owner: "enemy", pos: 40 * 50 + 40 },
-      )],
-    }));
+    const normal = assessThreat(
+      makeThreatInput({
+        hostiles: [
+          makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy", pos: 40 * 50 + 40 }),
+        ],
+      }),
+    );
+    const boosted = assessThreat(
+      makeThreatInput({
+        hostiles: [
+          makeHostile(
+            [
+              { type: TOUGH, boost: "XGHO2" },
+              { type: ATTACK, boost: "XUH2O" },
+              { type: ATTACK, boost: "XUH2O" },
+              { type: MOVE },
+              { type: MOVE },
+            ],
+            { owner: "enemy", pos: 40 * 50 + 40 },
+          ),
+        ],
+      }),
+    );
     expect(boosted.score.boost).toBeGreaterThan(normal.score.boost);
     expect(boosted.score.combat).toBeGreaterThan(normal.score.combat);
     expect(boosted.estimatedPower.boosted).toBe(true);
@@ -213,7 +260,10 @@ describe("§4 G1 Threat Model — 8 场景验证", () => {
 
   it("S3: Boosted Healer → Heal Capability 影响 Assessment（不只是 Attack）", () => {
     const healerBody: { type: BodyPartConstant; boost?: string }[] = [
-      ...Array.from({ length: 10 }, () => ({ type: HEAL as BodyPartConstant, boost: "XLHO2" as string })),
+      ...Array.from({ length: 10 }, () => ({
+        type: HEAL as BodyPartConstant,
+        boost: "XLHO2" as string,
+      })),
       ...Array.from({ length: 10 }, () => ({ type: MOVE as BodyPartConstant })),
     ];
     const healer = makeHostile(healerBody, { owner: "enemy", pos: 48 * 50 + 48 });
@@ -225,10 +275,10 @@ describe("§4 G1 Threat Model — 8 场景验证", () => {
   });
 
   it("S4: CLAIM Creep → CLAIM Intent（非普通 Attack）", () => {
-    const claimer = makeHostile(
-      [{ type: CLAIM }, { type: MOVE }, { type: MOVE }],
-      { owner: "enemy_player", pos: 40 * 50 + 40 },
-    );
+    const claimer = makeHostile([{ type: CLAIM }, { type: MOVE }, { type: MOVE }], {
+      owner: "enemy_player",
+      pos: 40 * 50 + 40,
+    });
     const result = assessThreat(makeThreatInput({ hostiles: [claimer] }));
     expect(result.estimatedIntent.intent).toBe("CLAIM");
   });
@@ -238,41 +288,59 @@ describe("§4 G1 Threat Model — 8 场景验证", () => {
       [{ type: ATTACK }, { type: MOVE }],
       { owner: "enemy_player", pos: 26 * 50 + 26 }, // 距 core (25,25) = 1
     );
-    const result = assessThreat(makeThreatInput({
-      hostiles: [nearController],
-      roomContext: makeRoomContext({ corePos: 25 * 50 + 25, rcl: 4 }),
-    }));
+    const result = assessThreat(
+      makeThreatInput({
+        hostiles: [nearController],
+        roomContext: makeRoomContext({ corePos: 25 * 50 + 25, rcl: 4 }),
+      }),
+    );
     // 接近 core + attack + rcl > 0 → CONTROLLER_ATTACK
     expect(result.estimatedIntent.intent).toBe("CONTROLLER_ATTACK");
     expect(result.score.proximity).toBeGreaterThan(50);
   });
 
   it("S6: 远矿 Hostile → REMOTE_MINING_ATTACK", () => {
-    const harasser = makeHostile(
-      [{ type: ATTACK }, { type: MOVE }],
-      { owner: "enemy_player", pos: 10 * 50 + 10 },
-    );
-    const result = assessThreat(makeThreatInput({
-      hostiles: [harasser],
-      roomContext: makeRoomContext({
-        isRemoteRoom: true, towerCount: 0, towerEnergyTotal: 0,
-        rcl: 0, hasStorage: false, hasSpawn: false,
+    const harasser = makeHostile([{ type: ATTACK }, { type: MOVE }], {
+      owner: "enemy_player",
+      pos: 10 * 50 + 10,
+    });
+    const result = assessThreat(
+      makeThreatInput({
+        hostiles: [harasser],
+        roomContext: makeRoomContext({
+          isRemoteRoom: true,
+          towerCount: 0,
+          towerEnergyTotal: 0,
+          rcl: 0,
+          hasStorage: false,
+          hasSpawn: false,
+        }),
       }),
-    }));
+    );
     expect(result.estimatedIntent.intent).toBe("REMOTE_MINING_ATTACK");
   });
 
   it("S7: PlayerIntel 高 ThreatIndex → 提高 Confidence，不直接变 HIGH", () => {
     const playerIntel = new Map([
-      ["nemesis", { username: "nemesis", threatIndex: 90, blacklist: true, lastActiveRoom: "W5N5", nemesisDistance: 3 }],
+      [
+        "nemesis",
+        {
+          username: "nemesis",
+          threatIndex: 90,
+          blacklist: true,
+          lastActiveRoom: "W5N5",
+          nemesisDistance: 3,
+        },
+      ],
     ]);
-    const result = assessThreat(makeThreatInput({
-      hostiles: [makeHostile(
-        [{ type: ATTACK }, { type: MOVE }],
-        { owner: "nemesis", pos: 40 * 50 + 40 },
-      )],
-      playerIntel,
-    }));
+    const result = assessThreat(
+      makeThreatInput({
+        hostiles: [
+          makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "nemesis", pos: 40 * 50 + 40 }),
+        ],
+        playerIntel,
+      }),
+    );
     // PlayerIntel 不直接拉高级别，但影响 confidence / evidence
     expect(result.estimatedIntent.evidence.length).toBeGreaterThan(0);
     // 单只 [ATTACK, MOVE] 不应该直接是 CRITICAL
@@ -295,15 +363,77 @@ describe("§5 G1 Evidence Audit — 10 评估可追溯", () => {
   // 生成 10 个不同的 ThreatAssessment
   const scenarios: Array<{ name: string; input: ThreatAssessmentInput }> = [
     { name: "无威胁", input: makeThreatInput({ hostiles: [] }) },
-    { name: "NPC Invader", input: makeThreatInput({ hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "Invader" })] }) },
-    { name: "Scout", input: makeThreatInput({ hostiles: [makeHostile([{ type: MOVE }, { type: MOVE }], { owner: "enemy" })] }) },
-    { name: "Boosted Attacker", input: makeThreatInput({ hostiles: [makeHostile([{ type: ATTACK, boost: "XUH2O" }, { type: MOVE }], { owner: "enemy" })] }) },
-    { name: "Heal Stack", input: makeThreatInput({ hostiles: [makeHostile(Array.from({ length: 26 }, () => ({ type: HEAL as BodyPartConstant })).concat(Array.from({ length: 26 }, () => ({ type: MOVE as BodyPartConstant }))), { owner: "enemy", pos: 48 * 50 + 48 })], roomContext: makeRoomContext({ towerCount: 1, towerEnergyTotal: 1000 }) }) },
-    { name: "Claim", input: makeThreatInput({ hostiles: [makeHostile([{ type: CLAIM }, { type: MOVE }], { owner: "enemy" })] }) },
-    { name: "Full Assault", input: makeThreatInput({ hostiles: Array.from({ length: 4 }, (_, i) => makeHostile([{ type: TOUGH, boost: "XGHO2" }, { type: ATTACK, boost: "XUH2O" }, { type: MOVE }], { owner: "enemy", pos: (40 + i) * 50 + 40, id: `c${i}` })) }) },
-    { name: "Nuke", input: makeThreatInput({ roomContext: makeRoomContext({ incomingNukes: 1 }) }) },
-    { name: "Remote Harass", input: makeThreatInput({ hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy" })], roomContext: makeRoomContext({ isRemoteRoom: true, towerCount: 0, rcl: 0 }) }) },
-    { name: "Near Controller", input: makeThreatInput({ hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy", pos: 26 * 50 + 26 })], roomContext: makeRoomContext({ rcl: 4 }) }) },
+    {
+      name: "NPC Invader",
+      input: makeThreatInput({
+        hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "Invader" })],
+      }),
+    },
+    {
+      name: "Scout",
+      input: makeThreatInput({
+        hostiles: [makeHostile([{ type: MOVE }, { type: MOVE }], { owner: "enemy" })],
+      }),
+    },
+    {
+      name: "Boosted Attacker",
+      input: makeThreatInput({
+        hostiles: [
+          makeHostile([{ type: ATTACK, boost: "XUH2O" }, { type: MOVE }], { owner: "enemy" }),
+        ],
+      }),
+    },
+    {
+      name: "Heal Stack",
+      input: makeThreatInput({
+        hostiles: [
+          makeHostile(
+            Array.from({ length: 26 }, () => ({ type: HEAL as BodyPartConstant })).concat(
+              Array.from({ length: 26 }, () => ({ type: MOVE as BodyPartConstant })),
+            ),
+            { owner: "enemy", pos: 48 * 50 + 48 },
+          ),
+        ],
+        roomContext: makeRoomContext({ towerCount: 1, towerEnergyTotal: 1000 }),
+      }),
+    },
+    {
+      name: "Claim",
+      input: makeThreatInput({
+        hostiles: [makeHostile([{ type: CLAIM }, { type: MOVE }], { owner: "enemy" })],
+      }),
+    },
+    {
+      name: "Full Assault",
+      input: makeThreatInput({
+        hostiles: Array.from({ length: 4 }, (_, i) =>
+          makeHostile(
+            [{ type: TOUGH, boost: "XGHO2" }, { type: ATTACK, boost: "XUH2O" }, { type: MOVE }],
+            { owner: "enemy", pos: (40 + i) * 50 + 40, id: `c${i}` },
+          ),
+        ),
+      }),
+    },
+    {
+      name: "Nuke",
+      input: makeThreatInput({ roomContext: makeRoomContext({ incomingNukes: 1 }) }),
+    },
+    {
+      name: "Remote Harass",
+      input: makeThreatInput({
+        hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy" })],
+        roomContext: makeRoomContext({ isRemoteRoom: true, towerCount: 0, rcl: 0 }),
+      }),
+    },
+    {
+      name: "Near Controller",
+      input: makeThreatInput({
+        hostiles: [
+          makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy", pos: 26 * 50 + 26 }),
+        ],
+        roomContext: makeRoomContext({ rcl: 4 }),
+      }),
+    },
   ];
 
   for (const { name, input } of scenarios) {
@@ -358,12 +488,16 @@ describe("§6 G2 Combat Capability — 部件组合维度独立", () => {
 
   it("TOUGH → effectiveHP 维度（减伤）", () => {
     // 无 boost TOUGH：不减伤，effectiveHP = 3 parts × 100 = 300
-    const unboosted = evaluateCombatCapability(makeCreep([{ type: TOUGH }, { type: ATTACK }, { type: MOVE }]));
+    const unboosted = evaluateCombatCapability(
+      makeCreep([{ type: TOUGH }, { type: ATTACK }, { type: MOVE }]),
+    );
     expect(unboosted.toughParts).toBe(1);
     expect(unboosted.effectiveHP).toBe(300);
 
     // T3 boost TOUGH：减伤系数 0.3，toughHP = 100/0.3 ≈ 333 → effectiveHP > 400
-    const boosted = evaluateCombatCapability(makeCreep([{ type: TOUGH, boost: "XGHO2" }, { type: ATTACK }, { type: MOVE }]));
+    const boosted = evaluateCombatCapability(
+      makeCreep([{ type: TOUGH, boost: "XGHO2" }, { type: ATTACK }, { type: MOVE }]),
+    );
     expect(boosted.toughParts).toBe(1);
     expect(boosted.effectiveHP).toBeGreaterThan(400); // TOUGH 减伤增加等效 HP
   });
@@ -418,7 +552,9 @@ describe("§7 G2 Boost Reality — 引擎常量核对", () => {
     expect(BOOST_MULTIPLIERS.tough[2]).toBe(0.5);
     expect(BOOST_MULTIPLIERS.tough[3]).toBe(0.3);
     // T3 TOUGH 的 effectiveHP = 100 / 0.3 ≈ 333
-    const t3 = evaluateCombatCapability(makeCreep([{ type: TOUGH, boost: "XGHO2" }, { type: MOVE }]));
+    const t3 = evaluateCombatCapability(
+      makeCreep([{ type: TOUGH, boost: "XGHO2" }, { type: MOVE }]),
+    );
     // nonToughHP = 100 (MOVE), toughHP = 100/0.3 ≈ 333.33
     expect(t3.effectiveHP).toBeGreaterThan(400);
   });
@@ -460,10 +596,16 @@ describe("§8 G2 Mobility — estimate 语义验证", () => {
   });
 
   it("mobility 不等于 MOVE 数量", () => {
-    const cap = evaluateCombatCapability(makeCreep([
-      { type: MOVE }, { type: MOVE }, { type: MOVE },
-      { type: ATTACK }, { type: ATTACK }, { type: ATTACK },
-    ]));
+    const cap = evaluateCombatCapability(
+      makeCreep([
+        { type: MOVE },
+        { type: MOVE },
+        { type: MOVE },
+        { type: ATTACK },
+        { type: ATTACK },
+        { type: ATTACK },
+      ]),
+    );
     // mobility = 3*1*2 / (3*2) = 1, 不是 3
     expect(cap.mobility).not.toBe(3);
     expect(cap.mobility).toBeCloseTo(1, 0);
@@ -476,12 +618,18 @@ describe("§8 G2 Mobility — estimate 语义验证", () => {
 
 describe("§9 G2 CombatPower — 反例场景验证", () => {
   it("Scenario A: 高 powerScore 无 Heal vs 低 powerScore 高 Heal → 不能仅看 powerScore", () => {
-    const noHeal = evaluateCombatCapability(makeCreep([
-      { type: ATTACK }, { type: ATTACK }, { type: ATTACK }, { type: ATTACK }, { type: MOVE },
-    ]));
-    const highHeal = evaluateCombatCapability(makeCreep([
-      { type: HEAL }, { type: HEAL }, { type: HEAL }, { type: HEAL }, { type: MOVE },
-    ]));
+    const noHeal = evaluateCombatCapability(
+      makeCreep([
+        { type: ATTACK },
+        { type: ATTACK },
+        { type: ATTACK },
+        { type: ATTACK },
+        { type: MOVE },
+      ]),
+    );
+    const highHeal = evaluateCombatCapability(
+      makeCreep([{ type: HEAL }, { type: HEAL }, { type: HEAL }, { type: HEAL }, { type: MOVE }]),
+    );
     const powerNoHeal = computeCombatPower([noHeal]);
     const powerHighHeal = computeCombatPower([highHeal]);
     // powerScore 可能 noHeal > highHeal，但 highHeal 的 healOutput 远高于 noHeal
@@ -491,19 +639,27 @@ describe("§9 G2 CombatPower — 反例场景验证", () => {
   });
 
   it("Scenario B: 高攻击进 Tower 区域 → powerScore 不等于 Victory", () => {
-    const attacker = evaluateCombatCapability(makeCreep([
-      { type: ATTACK }, { type: ATTACK }, { type: MOVE },
-    ]));
-    const noTower = computeCombatPower([attacker], { towerCoverage: 0, terrain: "plain", boosted: false });
-    const fullTower = computeCombatPower([attacker], { towerCoverage: 1, terrain: "plain", boosted: false });
+    const attacker = evaluateCombatCapability(
+      makeCreep([{ type: ATTACK }, { type: ATTACK }, { type: MOVE }]),
+    );
+    const noTower = computeCombatPower([attacker], {
+      towerCoverage: 0,
+      terrain: "plain",
+      boosted: false,
+    });
+    const fullTower = computeCombatPower([attacker], {
+      towerCoverage: 1,
+      terrain: "plain",
+      boosted: false,
+    });
     // tower 覆盖高时 powerScore 降低
     expect(fullTower.powerScore).toBeLessThanOrEqual(noTower.powerScore);
   });
 
   it("Scenario C: 高 Dismantle 无 Attack → Capability 维度仍然独立", () => {
-    const dismantler = evaluateCombatCapability(makeCreep([
-      { type: WORK }, { type: WORK }, { type: WORK }, { type: MOVE },
-    ]));
+    const dismantler = evaluateCombatCapability(
+      makeCreep([{ type: WORK }, { type: WORK }, { type: WORK }, { type: MOVE }]),
+    );
     expect(dismantler.dismantle).toBe(3 * DISMANTLE_POWER);
     expect(dismantler.attack).toBe(0);
     expect(dismantler.support).toBe(3); // WORK 的辅助维度
@@ -525,56 +681,68 @@ describe("§10 G4 Remote Defense — 7 场景验证", () => {
   });
 
   it("S2: 低 Threat → PAUSE（风险 > 0.15）", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({ threat: makeThreat("MEDIUM", "HARASSMENT") }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({ threat: makeThreat("MEDIUM", "HARASSMENT") }),
+    );
     expect(d.action).toBe("PAUSE");
   });
 
   it("S3: Harassment → 根据 EV 决定 CONTINUE/PAUSE/ESCORT", () => {
     // HIGH HARASSMENT + 默认投资 → ESCORT（EV 正）
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
-      militaryContext: makeMilitaryContext({ atWar: false }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
+        militaryContext: makeMilitaryContext({ atWar: false }),
+      }),
+    );
     expect(["ESCORT", "PAUSE", "CONTINUE"]).toContain(d.action);
     // 默认场景应 ESCORT（护航后净价值正）
     expect(d.action).toBe("ESCORT");
   });
 
   it("S4: 强攻击 → RETREAT", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "SIEGE"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 2 }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "SIEGE"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 2 }),
+      }),
+    );
     expect(d.action).toBe("RETREAT");
   });
 
   it("S5: 不可恢复 → ABORT", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
-      empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
+        empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
+      }),
+    );
     expect(d.action).toBe("ABORT");
   });
 
   it("S6: Escort 收益高 → ESCORT", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ sources: 3, creepInvestment: 2000 }),
-      militaryContext: makeMilitaryContext({ atWar: false, defenderSpawnCost: 260 }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 3, creepInvestment: 2000 }),
+        militaryContext: makeMilitaryContext({ atWar: false, defenderSpawnCost: 260 }),
+      }),
+    );
     expect(d.action).toBe("ESCORT");
     expect(d.escortDemand).toBeDefined();
   });
 
   it("S7: Escort 成本高 → 不 ESCORT", () => {
     // 极高 defenderSpawnCost + 低 sources → 护航不划算
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "SIEGE"),
-      remoteOp: makeRemoteOp({ sources: 1, creepInvestment: 50000, pathCost: 2 }),
-      militaryContext: makeMilitaryContext({ defenderSpawnCost: 5000 }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "SIEGE"),
+        remoteOp: makeRemoteOp({ sources: 1, creepInvestment: 50000, pathCost: 2 }),
+        militaryContext: makeMilitaryContext({ defenderSpawnCost: 5000 }),
+      }),
+    );
     expect(d.action).not.toBe("ESCORT");
   });
 });
@@ -585,52 +753,70 @@ describe("§10 G4 Remote Defense — 7 场景验证", () => {
 
 describe("§11 Remote Defense EV — 消费因素验证", () => {
   it("EV 消费 Mining Income (sources)", () => {
-    const ev2 = evaluateRemoteExpectedValue(makeRemoteInput({ remoteOp: makeRemoteOp({ sources: 2 }) }));
-    const ev4 = evaluateRemoteExpectedValue(makeRemoteInput({ remoteOp: makeRemoteOp({ sources: 4 }) }));
+    const ev2 = evaluateRemoteExpectedValue(
+      makeRemoteInput({ remoteOp: makeRemoteOp({ sources: 2 }) }),
+    );
+    const ev4 = evaluateRemoteExpectedValue(
+      makeRemoteInput({ remoteOp: makeRemoteOp({ sources: 4 }) }),
+    );
     expect(ev4.operationValue).toBeGreaterThan(ev2.operationValue);
   });
 
   it("EV 消费 Replacement Cost (creepInvestment)", () => {
-    const ev = evaluateRemoteExpectedValue(makeRemoteInput({
-      threat: makeThreat("MEDIUM", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ creepInvestment: 10000 }),
-    }));
+    const ev = evaluateRemoteExpectedValue(
+      makeRemoteInput({
+        threat: makeThreat("MEDIUM", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ creepInvestment: 10000 }),
+      }),
+    );
     expect(ev.expectedLoss).toBeGreaterThan(0);
     expect(ev.replacementCost).toBe(10000);
   });
 
   it("EV 消费 Escort Cost (defenderSpawnCost + commute)", () => {
-    const ev = evaluateRemoteExpectedValue(makeRemoteInput({
-      militaryContext: makeMilitaryContext({ defenderSpawnCost: 500, defenderCommuteTicks: 100 }),
-    }));
+    const ev = evaluateRemoteExpectedValue(
+      makeRemoteInput({
+        militaryContext: makeMilitaryContext({ defenderSpawnCost: 500, defenderCommuteTicks: 100 }),
+      }),
+    );
     expect(ev.escortCost).toBeGreaterThan(500);
   });
 
   it("EV 消费 Threat (risk 映射)", () => {
-    const evLow = evaluateRemoteExpectedValue(makeRemoteInput({ threat: makeThreat("LOW", "HARASSMENT") }));
-    const evHigh = evaluateRemoteExpectedValue(makeRemoteInput({ threat: makeThreat("HIGH", "HARASSMENT") }));
+    const evLow = evaluateRemoteExpectedValue(
+      makeRemoteInput({ threat: makeThreat("LOW", "HARASSMENT") }),
+    );
+    const evHigh = evaluateRemoteExpectedValue(
+      makeRemoteInput({ threat: makeThreat("HIGH", "HARASSMENT") }),
+    );
     expect(evHigh.risk).toBeGreaterThan(evLow.risk);
     expect(evHigh.expectedLoss).toBeGreaterThanOrEqual(evLow.expectedLoss);
   });
 
   it("EV 消费 Reinforcement ETA (defenderCommuteTicks)", () => {
-    const ev = evaluateRemoteExpectedValue(makeRemoteInput({
-      militaryContext: makeMilitaryContext({ defenderCommuteTicks: 100 }),
-    }));
+    const ev = evaluateRemoteExpectedValue(
+      makeRemoteInput({
+        militaryContext: makeMilitaryContext({ defenderCommuteTicks: 100 }),
+      }),
+    );
     // commuteTicks 影响 escortCost
     expect(ev.escortCost).toBeGreaterThan(260);
   });
 
   it("决策不只根据 ThreatLevel switch", () => {
     // 相同 ThreatLevel 不同经济参数 → 不同决策
-    const d1 = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
-    }));
-    const d2 = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ sources: 1, creepInvestment: 50000 }),
-    }));
+    const d1 = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
+      }),
+    );
+    const d2 = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 1, creepInvestment: 50000 }),
+      }),
+    );
     // 同 HIGH 但不同经济参数 → 不同决策
     expect(d1.action).not.toBe(d2.action);
   });
@@ -642,11 +828,13 @@ describe("§11 Remote Defense EV — 消费因素验证", () => {
 
 describe("§12 ESCORT 权责审计 — 不直接 spawn", () => {
   it("ESCORT 决策输出 escortDemand（需求标记），不调用 spawnCreep", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
-      militaryContext: makeMilitaryContext({ atWar: false }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
+        militaryContext: makeMilitaryContext({ atWar: false }),
+      }),
+    );
     expect(d.action).toBe("ESCORT");
     expect(d.escortDemand).toBeDefined();
     expect(d.escortDemand!.count).toBeGreaterThan(0);
@@ -655,11 +843,13 @@ describe("§12 ESCORT 权责审计 — 不直接 spawn", () => {
   });
 
   it("ESCORT 决策的 RemoteDefenseDecision 不包含任何 spawn 指令", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("MEDIUM", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
-      militaryContext: makeMilitaryContext({ atWar: false }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("MEDIUM", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
+        militaryContext: makeMilitaryContext({ atWar: false }),
+      }),
+    );
     // Decision 只包含 action/reason/expectedValue/escortDemand/rejectedAlternatives
     // 不包含 spawnCreep / submitRequest / createOperation 等执行指令
     const keys = Object.keys(d);
@@ -675,11 +865,13 @@ describe("§12 ESCORT 权责审计 — 不直接 spawn", () => {
 
   it("ESCORT 链路：Decision → escortDemand → (外部消费) → Spawn Queue → spawn-manager", () => {
     // 验证决策输出的 escortDemand 是数据标记，不是执行引用
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ sources: 3, creepInvestment: 2000 }),
-      militaryContext: makeMilitaryContext({ atWar: false, defenderSpawnCost: 260 }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 3, creepInvestment: 2000 }),
+        militaryContext: makeMilitaryContext({ atWar: false, defenderSpawnCost: 260 }),
+      }),
+    );
     expect(d.action).toBe("ESCORT");
     // escortDemand 是纯数据：count + cost + commuteTicks
     // remote-mining-manager 消费此标记后通过 evaluateRemoteDemand → submitRequest → spawn-manager
@@ -696,10 +888,12 @@ describe("§12 ESCORT 权责审计 — 不直接 spawn", () => {
 
 describe("§13 RETREAT / ABORT 审计", () => {
   it("RETREAT 只输出决策，不直接 kill creep", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "SIEGE"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 2 }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "SIEGE"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 2 }),
+      }),
+    );
     expect(d.action).toBe("RETREAT");
     // Decision 只包含 action + reason + expectedValue + rejectedAlternatives
     // 不包含 killCreep / recycleCreep 等执行指令
@@ -711,11 +905,13 @@ describe("§13 RETREAT / ABORT 审计", () => {
   });
 
   it("ABORT 正确结束 Operation（状态变更由消费方执行）", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
-      empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
+        empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
+      }),
+    );
     expect(d.action).toBe("ABORT");
     // ABORT 不包含直接 kill 指令
     expect(d.action).toBe("ABORT");
@@ -724,22 +920,26 @@ describe("§13 RETREAT / ABORT 审计", () => {
 
   it("RETREAT 检查撤退安全性（pathCost）", () => {
     // pathCost > 3 → 无法安全撤退 → ABORT
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "SIEGE"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 5 }),
-      empireContext: makeEmpireContext({ empireEnergyReserve: 500000 }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "SIEGE"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 5 }),
+        empireContext: makeEmpireContext({ empireEnergyReserve: 500000 }),
+      }),
+    );
     // pathCost=5 > 3 → 无法安全撤退 → ABORT
     expect(d.action).toBe("ABORT");
     expect(d.reason).toContain("距离过远");
   });
 
   it("ABORT 不造成不可恢复状态（op.state 由消费方修改）", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
-      empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
+        empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
+      }),
+    );
     expect(d.action).toBe("ABORT");
     // Decision 不修改 op.state — remote-mining-manager 负责设置 op.state = "abandoned"
     // Decision 只是建议，不执行
@@ -758,16 +958,29 @@ describe("§14 Decision Trace — 6 类 Decision 可记录性", () => {
   //   decisionHash, createdAt, lifecycle
 
   const traceFields = [
-    "decisionId", "tick", "category", "actor", "scope",
-    "reasons", "evidence", "selectedAction", "rejectedAlternatives",
-    "expectedOutcome", "correlationId", "severity", "decisionHash",
-    "createdAt", "lifecycle",
+    "decisionId",
+    "tick",
+    "category",
+    "actor",
+    "scope",
+    "reasons",
+    "evidence",
+    "selectedAction",
+    "rejectedAlternatives",
+    "expectedOutcome",
+    "correlationId",
+    "severity",
+    "decisionHash",
+    "createdAt",
+    "lifecycle",
   ];
 
   it("1. Threat Assessment → 可生成 DEFENSE_PREP DecisionRecord", () => {
-    const assessment = assessThreat(makeThreatInput({
-      hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy" })],
-    }));
+    const assessment = assessThreat(
+      makeThreatInput({
+        hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy" })],
+      }),
+    );
     // decision-trace-system.collectDefenseDecisions 消费 assessment 生成 Record
     // 验证 assessment 有足够字段生成 Record
     expect(assessment.level).toBeDefined();
@@ -778,8 +991,16 @@ describe("§14 Decision Trace — 6 类 Decision 可记录性", () => {
 
   it("2. Intent Inference → 可追溯 Evidence", () => {
     const intents: ThreatAssessment["estimatedIntent"]["intent"][] = [
-      "NUCLEAR", "CLAIM", "ECONOMIC_ATTACK", "SIEGE", "FULL_ASSAULT",
-      "REMOTE_MINING_ATTACK", "CONTROLLER_ATTACK", "HARASSMENT", "SCOUTING", "UNKNOWN",
+      "NUCLEAR",
+      "CLAIM",
+      "ECONOMIC_ATTACK",
+      "SIEGE",
+      "FULL_ASSAULT",
+      "REMOTE_MINING_ATTACK",
+      "CONTROLLER_ATTACK",
+      "HARASSMENT",
+      "SCOUTING",
+      "UNKNOWN",
     ];
     for (const intent of intents) {
       // 每种 intent 都应该有对应的 evidence 生成路径
@@ -795,9 +1016,11 @@ describe("§14 Decision Trace — 6 类 Decision 可记录性", () => {
   });
 
   it("3. Remote Defense → 可生成 REMOTE DecisionRecord", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "HARASSMENT"),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+      }),
+    );
     // decision-trace-system.collectDefenseDecisions 消费 decision 生成 Record
     expect(d.action).toBeDefined();
     expect(d.reason).toBeDefined();
@@ -806,31 +1029,37 @@ describe("§14 Decision Trace — 6 类 Decision 可记录性", () => {
   });
 
   it("4. ESCORT → DecisionRecord 包含 escortDemand", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
-      militaryContext: makeMilitaryContext({ atWar: false }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
+        militaryContext: makeMilitaryContext({ atWar: false }),
+      }),
+    );
     expect(d.action).toBe("ESCORT");
     expect(d.escortDemand).toBeDefined();
     // decision-trace-system 会将 escortDemand 写入 reasons
   });
 
   it("5. RETREAT → DecisionRecord reason 包含撤退原因", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "SIEGE"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 2 }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "SIEGE"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 2 }),
+      }),
+    );
     expect(d.action).toBe("RETREAT");
     expect(d.reason).toContain("撤退");
   });
 
   it("6. ABORT → DecisionRecord reason 包含放弃原因", () => {
-    const d = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
-      remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
-      empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
-    }));
+    const d = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
+        empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
+      }),
+    );
     expect(d.action).toBe("ABORT");
     expect(d.reason).toContain("不可维持");
   });
@@ -842,29 +1071,180 @@ describe("§14 Decision Trace — 6 类 Decision 可记录性", () => {
 
 describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
   // 生成 20 个不同的 G1/G4 Decision
-  const scenarios: Array<{ name: string; input: ThreatAssessmentInput | RemoteDefenseInput; type: "threat" | "remote" }> = [
+  const scenarios: Array<{
+    name: string;
+    input: ThreatAssessmentInput | RemoteDefenseInput;
+    type: "threat" | "remote";
+  }> = [
     // G1 Threat Scenarios (10)
     { name: "T1-无威胁", type: "threat", input: makeThreatInput({ hostiles: [] }) },
-    { name: "T2-NPC-Invader", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "Invader" })] }) },
-    { name: "T3-Scout", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([{ type: MOVE }, { type: MOVE }], { owner: "enemy" })] }) },
-    { name: "T4-Boosted-Attacker", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([{ type: ATTACK, boost: "XUH2O" }, { type: MOVE }], { owner: "enemy" })] }) },
-    { name: "T5-Heal-Stack", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([...Array.from({ length: 10 }, () => ({ type: HEAL as BodyPartConstant, boost: "XLHO2" as string })), ...Array.from({ length: 10 }, () => ({ type: MOVE as BodyPartConstant, boost: undefined as string | undefined }))], { owner: "enemy", pos: 48 * 50 + 48 })] }) },
-    { name: "T6-Claim", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([{ type: CLAIM }, { type: MOVE }], { owner: "enemy" })] }) },
-    { name: "T7-Full-Assault", type: "threat", input: makeThreatInput({ hostiles: Array.from({ length: 4 }, (_, i) => makeHostile([{ type: TOUGH, boost: "XGHO2" }, { type: ATTACK, boost: "XUH2O" }, { type: MOVE }], { owner: "enemy", pos: (40 + i) * 50 + 40, id: `c${i}` })) }) },
-    { name: "T8-Nuke", type: "threat", input: makeThreatInput({ roomContext: makeRoomContext({ incomingNukes: 1 }) }) },
-    { name: "T9-Remote-Harass", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy" })], roomContext: makeRoomContext({ isRemoteRoom: true, towerCount: 0, rcl: 0 }) }) },
-    { name: "T10-Near-Core", type: "threat", input: makeThreatInput({ hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy", pos: 26 * 50 + 26 })], roomContext: makeRoomContext({ rcl: 4 }) }) },
+    {
+      name: "T2-NPC-Invader",
+      type: "threat",
+      input: makeThreatInput({
+        hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "Invader" })],
+      }),
+    },
+    {
+      name: "T3-Scout",
+      type: "threat",
+      input: makeThreatInput({
+        hostiles: [makeHostile([{ type: MOVE }, { type: MOVE }], { owner: "enemy" })],
+      }),
+    },
+    {
+      name: "T4-Boosted-Attacker",
+      type: "threat",
+      input: makeThreatInput({
+        hostiles: [
+          makeHostile([{ type: ATTACK, boost: "XUH2O" }, { type: MOVE }], { owner: "enemy" }),
+        ],
+      }),
+    },
+    {
+      name: "T5-Heal-Stack",
+      type: "threat",
+      input: makeThreatInput({
+        hostiles: [
+          makeHostile(
+            [
+              ...Array.from({ length: 10 }, () => ({
+                type: HEAL as BodyPartConstant,
+                boost: "XLHO2" as string,
+              })),
+              ...Array.from({ length: 10 }, () => ({
+                type: MOVE as BodyPartConstant,
+                boost: undefined as string | undefined,
+              })),
+            ],
+            { owner: "enemy", pos: 48 * 50 + 48 },
+          ),
+        ],
+      }),
+    },
+    {
+      name: "T6-Claim",
+      type: "threat",
+      input: makeThreatInput({
+        hostiles: [makeHostile([{ type: CLAIM }, { type: MOVE }], { owner: "enemy" })],
+      }),
+    },
+    {
+      name: "T7-Full-Assault",
+      type: "threat",
+      input: makeThreatInput({
+        hostiles: Array.from({ length: 4 }, (_, i) =>
+          makeHostile(
+            [{ type: TOUGH, boost: "XGHO2" }, { type: ATTACK, boost: "XUH2O" }, { type: MOVE }],
+            { owner: "enemy", pos: (40 + i) * 50 + 40, id: `c${i}` },
+          ),
+        ),
+      }),
+    },
+    {
+      name: "T8-Nuke",
+      type: "threat",
+      input: makeThreatInput({ roomContext: makeRoomContext({ incomingNukes: 1 }) }),
+    },
+    {
+      name: "T9-Remote-Harass",
+      type: "threat",
+      input: makeThreatInput({
+        hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy" })],
+        roomContext: makeRoomContext({ isRemoteRoom: true, towerCount: 0, rcl: 0 }),
+      }),
+    },
+    {
+      name: "T10-Near-Core",
+      type: "threat",
+      input: makeThreatInput({
+        hostiles: [
+          makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy", pos: 26 * 50 + 26 }),
+        ],
+        roomContext: makeRoomContext({ rcl: 4 }),
+      }),
+    },
     // G4 Remote Defense Scenarios (10)
-    { name: "R1-Continue", type: "remote", input: makeRemoteInput({ threat: makeThreat("NONE", "UNKNOWN") }) },
-    { name: "R2-Pause", type: "remote", input: makeRemoteInput({ threat: makeThreat("MEDIUM", "HARASSMENT") }) },
-    { name: "R3-Escort", type: "remote", input: makeRemoteInput({ threat: makeThreat("HIGH", "HARASSMENT"), remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }), militaryContext: makeMilitaryContext({ atWar: false }) }) },
-    { name: "R4-Retreat", type: "remote", input: makeRemoteInput({ threat: makeThreat("HIGH", "SIEGE"), remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 2 }) }) },
-    { name: "R5-Abort", type: "remote", input: makeRemoteInput({ threat: makeThreat("CRITICAL", "FULL_ASSAULT"), remoteOp: makeRemoteOp({ creepInvestment: 50000 }), empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }) }) },
-    { name: "R6-Low-Threat-Continue", type: "remote", input: makeRemoteInput({ threat: makeThreat("LOW", "SCOUTING"), remoteOp: makeRemoteOp({ sources: 1 }) }) },
-    { name: "R7-War-Retreat", type: "remote", input: makeRemoteInput({ threat: makeThreat("HIGH", "SIEGE"), empireContext: makeEmpireContext({ posture: "war" }), remoteOp: makeRemoteOp({ creepInvestment: 2000 }) }) },
-    { name: "R8-Abort-Far", type: "remote", input: makeRemoteInput({ threat: makeThreat("HIGH", "SIEGE"), remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 5 }), empireContext: makeEmpireContext({ empireEnergyReserve: 500000 }) }) },
-    { name: "R9-Escort-High-Value", type: "remote", input: makeRemoteInput({ threat: makeThreat("MEDIUM", "HARASSMENT"), remoteOp: makeRemoteOp({ sources: 3, creepInvestment: 2000 }), militaryContext: makeMilitaryContext({ atWar: false }) }) },
-    { name: "R10-Critical-Nuke", type: "remote", input: makeRemoteInput({ threat: makeThreat("CRITICAL", "NUCLEAR"), remoteOp: makeRemoteOp({ creepInvestment: 50000 }), empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }) }) },
+    {
+      name: "R1-Continue",
+      type: "remote",
+      input: makeRemoteInput({ threat: makeThreat("NONE", "UNKNOWN") }),
+    },
+    {
+      name: "R2-Pause",
+      type: "remote",
+      input: makeRemoteInput({ threat: makeThreat("MEDIUM", "HARASSMENT") }),
+    },
+    {
+      name: "R3-Escort",
+      type: "remote",
+      input: makeRemoteInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
+        militaryContext: makeMilitaryContext({ atWar: false }),
+      }),
+    },
+    {
+      name: "R4-Retreat",
+      type: "remote",
+      input: makeRemoteInput({
+        threat: makeThreat("HIGH", "SIEGE"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 2 }),
+      }),
+    },
+    {
+      name: "R5-Abort",
+      type: "remote",
+      input: makeRemoteInput({
+        threat: makeThreat("CRITICAL", "FULL_ASSAULT"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
+        empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
+      }),
+    },
+    {
+      name: "R6-Low-Threat-Continue",
+      type: "remote",
+      input: makeRemoteInput({
+        threat: makeThreat("LOW", "SCOUTING"),
+        remoteOp: makeRemoteOp({ sources: 1 }),
+      }),
+    },
+    {
+      name: "R7-War-Retreat",
+      type: "remote",
+      input: makeRemoteInput({
+        threat: makeThreat("HIGH", "SIEGE"),
+        empireContext: makeEmpireContext({ posture: "war" }),
+        remoteOp: makeRemoteOp({ creepInvestment: 2000 }),
+      }),
+    },
+    {
+      name: "R8-Abort-Far",
+      type: "remote",
+      input: makeRemoteInput({
+        threat: makeThreat("HIGH", "SIEGE"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000, pathCost: 5 }),
+        empireContext: makeEmpireContext({ empireEnergyReserve: 500000 }),
+      }),
+    },
+    {
+      name: "R9-Escort-High-Value",
+      type: "remote",
+      input: makeRemoteInput({
+        threat: makeThreat("MEDIUM", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 3, creepInvestment: 2000 }),
+        militaryContext: makeMilitaryContext({ atWar: false }),
+      }),
+    },
+    {
+      name: "R10-Critical-Nuke",
+      type: "remote",
+      input: makeRemoteInput({
+        threat: makeThreat("CRITICAL", "NUCLEAR"),
+        remoteOp: makeRemoteOp({ creepInvestment: 50000 }),
+        empireContext: makeEmpireContext({ empireEnergyReserve: 100000 }),
+      }),
+    },
   ];
 
   for (const { name, type, input } of scenarios) {
@@ -925,28 +1305,44 @@ describe("§15 Replay Audit — Hash 一致性与 Divergence", () => {
 
   it("Divergence: 修改关键输入（LOW→HIGH）→ 决策必须不同", () => {
     // 原始：LOW 威胁
-    const lowResult = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("LOW", "SCOUTING"),
-      remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
-    }));
+    const lowResult = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("LOW", "SCOUTING"),
+        remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
+      }),
+    );
     // 修改：HIGH 威胁
-    const highResult = decideRemoteDefenseAction(makeRemoteInput({
-      threat: makeThreat("HIGH", "HARASSMENT"),
-      remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
-    }));
+    const highResult = decideRemoteDefenseAction(
+      makeRemoteInput({
+        threat: makeThreat("HIGH", "HARASSMENT"),
+        remoteOp: makeRemoteOp({ sources: 2, creepInvestment: 2000 }),
+      }),
+    );
     // 决策必须产生 Divergence
-    const lowStr = JSON.stringify({ action: lowResult.action, netValue: lowResult.expectedValue.netValue });
-    const highStr = JSON.stringify({ action: highResult.action, netValue: highResult.expectedValue.netValue });
+    const lowStr = JSON.stringify({
+      action: lowResult.action,
+      netValue: lowResult.expectedValue.netValue,
+    });
+    const highStr = JSON.stringify({
+      action: highResult.action,
+      netValue: highResult.expectedValue.netValue,
+    });
     expect(lowStr).not.toBe(highStr);
   });
 
   it("Divergence: 修改 Threat Assessment 输入（无 boost → T3 boost）→ 评估必须不同", () => {
-    const unboosted = assessThreat(makeThreatInput({
-      hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy" })],
-    }));
-    const boosted = assessThreat(makeThreatInput({
-      hostiles: [makeHostile([{ type: ATTACK, boost: "XUH2O" }, { type: MOVE }], { owner: "enemy" })],
-    }));
+    const unboosted = assessThreat(
+      makeThreatInput({
+        hostiles: [makeHostile([{ type: ATTACK }, { type: MOVE }], { owner: "enemy" })],
+      }),
+    );
+    const boosted = assessThreat(
+      makeThreatInput({
+        hostiles: [
+          makeHostile([{ type: ATTACK, boost: "XUH2O" }, { type: MOVE }], { owner: "enemy" }),
+        ],
+      }),
+    );
     // Boost 必须改变评估结果
     expect(boosted.score.boost).not.toBe(unboosted.score.boost);
     expect(boosted.score.combat).not.toBe(unboosted.score.combat);

@@ -28,7 +28,7 @@ import type { ExpansionCandidateV2 } from "../domain/expansion/candidate";
 import type { RoomIntel } from "../domain/intel";
 
 /** heap 缓存的 hysteresis 状态（Plan planId → PlanWithHysteresis）。 */
-let hysteresisCache: Map<string, PlanWithHysteresis> = new Map();
+const hysteresisCache: Map<string, PlanWithHysteresis> = new Map();
 
 /**
  * Expansion Planner 系统 — Intelligence 层薄壳。
@@ -62,9 +62,12 @@ export const expansionPlannerSystem: System = {
 
     // 早退：压力 LOW + 无活跃 Plan 需要重评 + 无候选变化 → 跳过全量管线。
     // 仍持久化 dashboard 瘦快照保持外部可观测性，但跳过 step 2-4,6-9 的全量计算。
-    const hasActivePlan = plans.some(p =>
-      p.status === "EVALUATED" || p.status === "READY" ||
-      p.status === "APPROVED" || p.status === "WAITING_EXECUTION",
+    const hasActivePlan = plans.some(
+      p =>
+        p.status === "EVALUATED" ||
+        p.status === "READY" ||
+        p.status === "APPROVED" ||
+        p.status === "WAITING_EXECUTION",
     );
     const existingCandidateCount = Memory.kernel?.expansionCandidates?.length ?? 0;
     if (pressure.level === "LOW" && !hasActivePlan && existingCandidateCount === 0) {
@@ -83,7 +86,11 @@ export const expansionPlannerSystem: System = {
           evidence: plannerInput.readiness.evidence,
           failedGates: plannerInput.readiness.gates.filter(g => !g.passed).map(g => g.name),
         },
-        budget: { available: tieredBudgetFast.availableExpansion, total: tieredBudgetFast.totalEnergy, coreInvaded: tieredBudgetFast.coreInvaded },
+        budget: {
+          available: tieredBudgetFast.availableExpansion,
+          total: tieredBudgetFast.totalEnergy,
+          coreInvaded: tieredBudgetFast.coreInvaded,
+        },
         candidates: { total: 0, qualified: 0, rejected: 0, unknown: 0 },
         plans: { active: 0, waitingExecution: 0 },
         summary: `Expansion Dashboard @${ctx.tick} | Pressure=LOW(early-exit) | no candidates, no active plans`,
@@ -109,15 +116,17 @@ export const expansionPlannerSystem: System = {
     });
 
     // ── 步 3：Candidate Scoring (7-Factor) ──
-    const evaluable = discoveryResult.candidates.filter(c =>
-      c.status === "DISCOVERED" && c.sourceCount !== undefined && !c.vetoReason,
+    const evaluable = discoveryResult.candidates.filter(
+      c => c.status === "DISCOVERED" && c.sourceCount !== undefined && !c.vetoReason,
     );
     const scored = scoreCandidates(evaluable, {}, ctx.tick);
 
     // 合并已评分和未评分候选
     const allCandidates = [
       ...scored,
-      ...discoveryResult.candidates.filter(c => c.status !== "DISCOVERED" || c.vetoReason || c.sourceCount === undefined),
+      ...discoveryResult.candidates.filter(
+        c => c.status !== "DISCOVERED" || c.vetoReason || c.sourceCount === undefined,
+      ),
     ];
 
     // ── 步 4：Candidate Ranking ──
@@ -136,14 +145,21 @@ export const expansionPlannerSystem: System = {
     const topCandidate = ranked[0]?.candidate;
     const cost = topCandidate ? estimateExpansionCost(topCandidate) : undefined;
     const payback = topCandidate && cost ? evaluatePayback(topCandidate, cost) : undefined;
-    const risk = topCandidate && cost ? evaluateRisk(
-      topCandidate, cost,
-      plannerInput.budget.reserve,
-      ctx.tick - topCandidate.lastSeen,
-      10000,
-    ) : undefined;
+    const risk =
+      topCandidate && cost
+        ? evaluateRisk(
+            topCandidate,
+            cost,
+            plannerInput.budget.reserve,
+            ctx.tick - topCandidate.lastSeen,
+            10000,
+          )
+        : undefined;
     const extendedReadiness = evaluateExpansionReadinessExtended(
-      topCandidate, cost, risk, tieredBudget,
+      topCandidate,
+      cost,
+      risk,
+      tieredBudget,
     );
     const isReady = extendedReadiness.allPassed && plannerInput.readiness.readiness !== "NOT_READY";
 
@@ -176,7 +192,10 @@ export const expansionPlannerSystem: System = {
         if (decision.outcome === "APPROVE") {
           let approved = updatePlanStatus(p, "APPROVED", ctx.tick);
           approved = updatePlanStatus(approved, "WAITING_EXECUTION", ctx.tick);
-          log.info("expansion-planner", `expansion-planner: Plan ${p.planId} APPROVED → WAITING_EXECUTION`);
+          log.info(
+            "expansion-planner",
+            `expansion-planner: Plan ${p.planId} APPROVED → WAITING_EXECUTION`,
+          );
           return approved;
         }
       }
@@ -184,7 +203,14 @@ export const expansionPlannerSystem: System = {
     });
 
     // ── 步 9：为新合格候选拉创建新 Plan ──
-    if (topCandidate && topCandidate.status === "QUALIFIED" && payback?.worthwhile && cost && payback && risk) {
+    if (
+      topCandidate &&
+      topCandidate.status === "QUALIFIED" &&
+      payback?.worthwhile &&
+      cost &&
+      payback &&
+      risk
+    ) {
       const newPlan = createPlan({
         candidate: topCandidate,
         reason: "resource",
@@ -355,7 +381,9 @@ function serializeCandidate(c: ExpansionCandidateV2): ExpansionCandidateMemory {
 }
 
 /** 从 Memory 反序列化候选。 */
-function deserializeCandidates(stored: ExpansionCandidateMemory[] | undefined): ExpansionCandidateV2[] {
+function deserializeCandidates(
+  stored: ExpansionCandidateMemory[] | undefined,
+): ExpansionCandidateV2[] {
   if (!stored || !Array.isArray(stored)) return [];
   return stored.map(m => ({
     roomName: m.rn,
@@ -385,4 +413,3 @@ import type { RiskResult, RiskLevel } from "../domain/expansion/risk";
 import type { ExpansionReason } from "../domain/expansion/candidate";
 import type { PlanStatus, PlanPriority } from "../domain/expansion/plan";
 import { log } from "../kernel/log";
-

@@ -3,7 +3,6 @@
 import { isHostilePlayerReservation, INVADER_USERNAME, type RoomIntel } from "../intel";
 import { CONFIG } from "../../config";
 
-
 export interface RemoteCandidate {
   roomName: string;
   /** intel 中记录的 source 数（无视野时 undefined）。 */
@@ -15,7 +14,6 @@ export interface RemoteCandidate {
   /** 动态 hauler 编制（按通勤成本算出，1-haulersMax）。 */
   haulerNeed: number;
 }
-
 
 export interface RemoteTargetingInput {
   /** 本房名（用于排除自身）。 */

@@ -92,9 +92,7 @@ describe("migration v41 → v42（BuildTask.queuedAt 回填）", () => {
     (globalThis as any).Game = { ...(globalThis as any).Game, time: 5 };
 
     expect(() => runMigrations()).not.toThrow();
-    expect((globalThis as any).Memory.schemaVersion).toBe(
-      CONFIG.memory.schemaVersion,
-    );
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect((globalThis as any).Memory.rooms.W2N2.buildQueue[1].queuedAt).toBe(5);
   });
 

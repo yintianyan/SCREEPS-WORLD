@@ -1,6 +1,10 @@
 /** A5.3 确定性验证 — warPlanHash 可重现性测试。 */
 import { describe, expect, it } from "vitest";
-import { planMilitaryOperation, warPlanHash, type WarPlanningInput } from "../../../src/domain/military/war-planning";
+import {
+  planMilitaryOperation,
+  warPlanHash,
+  type WarPlanningInput,
+} from "../../../src/domain/military/war-planning";
 import type { CombatPower } from "../../../src/domain/combat/capability";
 import type { ThreatAssessment } from "../../../src/domain/defense/threat-assessment";
 import type { EmpireHealthResult } from "../../../src/domain/strategy/empire-health";
@@ -23,7 +27,16 @@ function makeBasePower(): CombatPower {
 function makeThreat(level: ThreatAssessment["level"], score: number): ThreatAssessment {
   return {
     level,
-    score: { combat: score, intent: 0, proximity: 0, objective: 0, boost: 0, defense: 0, economicImpact: 0, total: score },
+    score: {
+      combat: score,
+      intent: 0,
+      proximity: 0,
+      objective: 0,
+      boost: 0,
+      defense: 0,
+      economicImpact: 0,
+      total: score,
+    },
     confidence: "inferred",
     multiConfidence: {
       factConfidence: 0.9,
@@ -91,11 +104,19 @@ function makeInput(
     empireHealth: makeEmpireHealth("stable"),
     empireEnergyReserve: energyReserve,
     cpuTier: "healthy",
-    threatAssessments: [
-      { roomName: "W5N5", assessment: makeThreat(threatLevel, threatScore) },
-    ],
+    threatAssessments: [{ roomName: "W5N5", assessment: makeThreat(threatLevel, threatScore) }],
     targetCandidates: [
-      { roomName: "W6N6", occupied: false, owner: "Enemy", towers: 1, distance: 3, intelAge: 100, blacklisted: false, isRemote: false, isCore: false },
+      {
+        roomName: "W6N6",
+        occupied: false,
+        owner: "Enemy",
+        towers: 1,
+        distance: 3,
+        intelAge: 100,
+        blacklisted: false,
+        isRemote: false,
+        isCore: false,
+      },
     ],
     ourPower: makeBasePower(),
     spawnCapacity: 2,

@@ -21,14 +21,7 @@ export type CreepMode = "acquire" | "work" | "idle" | "flee";
 export type FortificationRole = "perimeter" | "core" | "utility";
 
 /** assignment-service 可分发的任务类型。 */
-export type TaskKind =
-  | "harvest"
-  | "haul"
-  | "fill"
-  | "upgrade"
-  | "build"
-  | "repair"
-  | "reserve";
+export type TaskKind = "harvest" | "haul" | "fill" | "upgrade" | "build" | "repair" | "reserve";
 
 export interface System {
   readonly name: string;
@@ -156,7 +149,9 @@ export interface RoomSnapshot {
   readonly energyAvailable: number;
   readonly energyCapacityAvailable: number;
   /** 可接收能量的结构（有空闲容量的 spawn + extension + tower + controller container）。 */
-  readonly fillTargets: readonly (StructureSpawn | StructureExtension | StructureTower | StructureContainer)[];
+  readonly fillTargets: readonly (
+    StructureSpawn | StructureExtension | StructureTower | StructureContainer
+  )[];
   /** 当房间没有 spawn 或没有可采集的 creep 时为 true。 */
   readonly needsRecovery: boolean;
   /** 每个.source ID 对应的已分配 creep 数量（用于免全局扫描的负载均衡）。 */
@@ -232,13 +227,7 @@ export interface TickContext {
 /** 具备任一即视为威胁的部件类型。
  *  此常量与 domain/defense/threat.ts 的 THREAT_PARTS 同口径，
  *  提取到 contracts 层以消除 kernel 的内联重复。 */
-export const THREAT_PARTS: readonly BodyPartConstant[] = [
-  ATTACK,
-  RANGED_ATTACK,
-  HEAL,
-  WORK,
-  CLAIM,
-];
+export const THREAT_PARTS: readonly BodyPartConstant[] = [ATTACK, RANGED_ATTACK, HEAL, WORK, CLAIM];
 
 /** 威胁判定的最小输入（便于纯函数测试，无需构造完整 Creep）。 */
 export interface ThreatInput {

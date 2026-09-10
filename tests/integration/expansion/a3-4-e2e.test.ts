@@ -1,13 +1,8 @@
 /** A3.4 E2E Tests — Colony Autonomy & Stability 端到端测试。 */
 
 import { describe, it, expect } from "vitest";
-import {
-  evaluateAutonomyAge,
-  AUTONOMY_MILESTONES,
-} from "../../../src/domain/expansion/autonomy";
-import {
-  evaluateStabilityScore,
-} from "../../../src/domain/expansion/stability-score";
+import { evaluateAutonomyAge, AUTONOMY_MILESTONES } from "../../../src/domain/expansion/autonomy";
+import { evaluateStabilityScore } from "../../../src/domain/expansion/stability-score";
 import {
   evaluateColonyFailure,
   getRecoveryAction,
@@ -20,9 +15,7 @@ import {
   evaluateExpansionRoi,
   type EmpireSnapshot,
 } from "../../../src/domain/expansion/roi-tracker";
-import {
-  buildColonyStabilityDashboard,
-} from "../../../src/domain/expansion/colony-dashboard";
+import { buildColonyStabilityDashboard } from "../../../src/domain/expansion/colony-dashboard";
 import {
   evaluateEconomicActivation,
   type EconomicActivationInput,

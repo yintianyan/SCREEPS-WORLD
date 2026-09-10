@@ -74,8 +74,18 @@ describe("recordCreepDeath — 死亡事件字段", () => {
 describe("roleCode/roleName — 编码往返", () => {
   it("全部在册角色编码可逆", () => {
     for (const role of [
-      "harvester", "hauler", "distributor", "upgrader", "builder", "worker",
-      "defender", "remoteHarvester", "remoteHauler", "reserver", "claimer", "remoteDefender",
+      "harvester",
+      "hauler",
+      "distributor",
+      "upgrader",
+      "builder",
+      "worker",
+      "defender",
+      "remoteHarvester",
+      "remoteHauler",
+      "reserver",
+      "claimer",
+      "remoteDefender",
     ]) {
       expect(roleName(roleCode(role))).toBe(role);
     }

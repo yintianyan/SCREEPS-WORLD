@@ -1,7 +1,13 @@
 /** RM-1 回归 — remote-harvester 自建 source container（终结 drop-mining 衰减税）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteHarvesterRole } from "../../../src/creeps/roles/remote-harvester";
-import { mockContext, mockSnapshot, mockCreep, mockSource, resetGlobals } from "../../support/factories";
+import {
+  mockContext,
+  mockSnapshot,
+  mockCreep,
+  mockSource,
+  resetGlobals,
+} from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();
@@ -12,8 +18,12 @@ beforeEach(() => {
 function stationedHarvester(opts: { sites?: any[]; containers?: any[] } = {}): any {
   const source = mockSource("rs1");
   const creep = mockCreep({
-    name: "rh_1", role: "remoteHarvester", used: 100, capacity: 100,
-    mode: "work", sourceId: "rs1",
+    name: "rh_1",
+    role: "remoteHarvester",
+    used: 100,
+    capacity: 100,
+    mode: "work",
+    sourceId: "rs1",
   });
   creep.memory.remoteTarget = "W8N4";
   creep.room = {
@@ -55,10 +65,12 @@ describe("RM-1 — remote-harvester 自建 source container", () => {
 
   it("container 已建成 → 不再触发建造链（倒能路径接管）", () => {
     const container = {
-      id: "rc1", structureType: "container",
+      id: "rc1",
+      structureType: "container",
       pos: { getRangeTo: vi.fn(() => 1), x: 25, y: 26 },
       // 满血 → 倒能不留维修税（RM-2 留税只在血量 < 80% 时生效）。
-      hits: 250000, hitsMax: 250000,
+      hits: 250000,
+      hitsMax: 250000,
       store: { getFreeCapacity: vi.fn(() => 1000), getUsedCapacity: vi.fn(() => 0) },
     };
     const creep = stationedHarvester({ containers: [container] });

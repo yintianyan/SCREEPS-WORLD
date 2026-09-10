@@ -1,25 +1,18 @@
 /** A3.1 Simulation Tests — Multi-Room Resource Network Stability */
 import { describe, expect, it } from "vitest";
-import {
-  buildSupplyNodes,
-  type SupplyNode,
-} from "../../../src/domain/operation/supply-node";
+import { buildSupplyNodes, type SupplyNode } from "../../../src/domain/operation/supply-node";
 import {
   buildDemandNodes,
   updateFulfillment,
   applyAging,
   type DemandNode,
 } from "../../../src/domain/operation/demand-node";
-import {
-  buildNetworkSnapshot,
-} from "../../../src/domain/operation/network-snapshot";
+import { buildNetworkSnapshot } from "../../../src/domain/operation/network-snapshot";
 import {
   allocateNetwork,
   MAX_GLOBAL_OPERATIONS,
 } from "../../../src/domain/operation/allocation-policy";
-import {
-  computeNetworkHealth,
-} from "../../../src/domain/operation/network-health";
+import { computeNetworkHealth } from "../../../src/domain/operation/network-health";
 import {
   RebalanceState,
   decideRebalance,
@@ -77,8 +70,13 @@ function makeSupply(room: string, transferable: number): SupplyNode {
   };
 }
 
-function makeDemand(room: string, requested: number, criticality: DemandNode["criticality"] = "normal"): DemandNode {
-  const priority = criticality === "critical" ? 0 : criticality === "high" ? 1 : criticality === "normal" ? 2 : 3;
+function makeDemand(
+  room: string,
+  requested: number,
+  criticality: DemandNode["criticality"] = "normal",
+): DemandNode {
+  const priority =
+    criticality === "critical" ? 0 : criticality === "high" ? 1 : criticality === "normal" ? 2 : 3;
   return {
     room,
     resource: "energy",
@@ -95,14 +93,8 @@ function makeDemand(room: string, requested: number, criticality: DemandNode["cr
 
 describe("A3.1 Simulation — 4 Room (2 surplus + 2 deficit)", () => {
   it("distributes from 2 sources to 2 targets correctly", () => {
-    const supply = [
-      makeSupply("A", 50000),
-      makeSupply("B", 30000),
-    ];
-    const demand = [
-      makeDemand("C", 20000, "critical"),
-      makeDemand("D", 15000, "high"),
-    ];
+    const supply = [makeSupply("A", 50000), makeSupply("B", 30000)];
+    const demand = [makeDemand("C", 20000, "critical"), makeDemand("D", 15000, "high")];
 
     const result = allocateNetwork(supply, demand, new Map(), new Map(), new Map(), TICK);
     expect(result.totalAllocated).toBeGreaterThan(0);

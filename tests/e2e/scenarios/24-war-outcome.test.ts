@@ -19,12 +19,17 @@
  * 8000+3000=11000 衰减 → posture war→develop（~11501）→ demobilize(POSTURE)
  * → towersSeen(1) vs intelTowers(0) 新鲜 fact → outcome=success → 不进黑名单
  * （success 裁决静默无日志，正向证据走探针链）。
- */import { describe, it, expect, afterAll } from "vitest";
+ */ import { describe, it, expect, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
-import { injectEnemyRoom, injectHostileTower, injectFriendlyCreep, injectHostile } from "../fixtures/inject";
+import {
+  injectEnemyRoom,
+  injectHostileTower,
+  injectFriendlyCreep,
+  injectHostile,
+} from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 const HOME = "W0N1";
@@ -71,16 +76,22 @@ interface DemobEvent {
 }
 
 function parseDemob(logs: string[]): DemobEvent[] {
-  return logs.flatMap((l) => {
-    const m = l.match(/\[t(\d+)\]\[\w+\]\[war-planner\] war: demobilize (\S+) outcome=(\w+) \(intel_age=(\S+), blacklist=(\d+)t, reason=(\d+)\)/);
-    return m ? [{
-      tick: Number(m[1]!),
-      target: m[2]!,
-      outcome: m[3]!,
-      intelAge: m[4]!,
-      blacklist: Number(m[5]!),
-      reason: Number(m[6]!),
-    }] : [];
+  return logs.flatMap(l => {
+    const m = l.match(
+      /\[t(\d+)\]\[\w+\]\[war-planner\] war: demobilize (\S+) outcome=(\w+) \(intel_age=(\S+), blacklist=(\d+)t, reason=(\d+)\)/,
+    );
+    return m
+      ? [
+          {
+            tick: Number(m[1]!),
+            target: m[2]!,
+            outcome: m[3]!,
+            intelAge: m[4]!,
+            blacklist: Number(m[5]!),
+            reason: Number(m[6]!),
+          },
+        ]
+      : [];
   });
 }
 
@@ -111,12 +122,23 @@ async function setupWar(withTower: boolean): Promise<ScenarioRunner> {
     { type: "extension", x: 29, y: 25, props: { energy: 50, energyCapacity: 50 } },
     { type: "extension", x: 25, y: 21, props: { energy: 50, energyCapacity: 50 } },
   );
-  await runner.setup({ roomName: HOME, rooms: [home, targetRoom], maxTicks: 12200, controllerLevel: 6 });
+  await runner.setup({
+    roomName: HOME,
+    rooms: [home, targetRoom],
+    maxTicks: 12200,
+    controllerLevel: 6,
+  });
   await injectEnemyRoom(runner, TARGET, "Enemy", 1);
   // 敌方 bot 塔防 AI（真实战损源）+ 不可破塔（war 期战损引擎，无论裁决路径）。
   await (runner.server.server.world as any).addBot({
-    username: "Enemy", room: TARGET, x: 30, y: 30, cpu: 10, cpuAvailable: 1000,
-    modules: { main: `
+    username: "Enemy",
+    room: TARGET,
+    x: 30,
+    y: 30,
+    cpu: 10,
+    cpuAvailable: 1000,
+    modules: {
+      main: `
 module.exports.loop = function() {
   for (const rn in Game.rooms) {
     const room = Game.rooms[rn];
@@ -129,33 +151,96 @@ module.exports.loop = function() {
     if (towers[0].store.getUsedCapacity(RESOURCE_ENERGY) >= 10) towers[0].attack(hostiles[0]);
   }
 };
-` },
+`,
+    },
   });
   if (withTower) await injectHostileTower(runner, TARGET, 10, 25, "Enemy");
 
   // 种满编劳动力（同 E2E-023：初始 harvester×3 必须 t0 注入——mockup 对
   // post-t0 注入的 ticksToLive 语义异常（存活 <250t），t0 注入正常存活
   // 1500t；采集断档 → srcRatio 强制 crisis → recovery 闪烁 → war 不稳）。
-  await injectFriendlyCreep(runner, HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], "seed-harv-1", { role: "harvester", home: HOME });
-  await injectFriendlyCreep(runner, HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], "seed-harv-2", { role: "harvester", home: HOME });
-  await injectFriendlyCreep(runner, HOME, 26, 25, ["work", "work", "work", "work", "move", "move"], "seed-harv-3", { role: "harvester", home: HOME });
-  await injectFriendlyCreep(runner, HOME, 25, 26, ["carry", "carry", "carry", "carry", "move", "move", "move", "move"], "seed-hauler-1", { role: "hauler", home: HOME });
-  await injectFriendlyCreep(runner, HOME, 23, 30, ["carry", "carry", "carry", "move", "move"], "seed-dist-1", { role: "distributor", home: HOME });
-  await injectFriendlyCreep(runner, HOME, 11, 11, ["work", "work", "work", "carry", "move", "move"], "seed-upgr-1", { role: "upgrader", home: HOME });
+  await injectFriendlyCreep(
+    runner,
+    HOME,
+    11,
+    40,
+    ["work", "work", "work", "work", "move", "move"],
+    "seed-harv-1",
+    { role: "harvester", home: HOME },
+  );
+  await injectFriendlyCreep(
+    runner,
+    HOME,
+    40,
+    11,
+    ["work", "work", "work", "work", "move", "move"],
+    "seed-harv-2",
+    { role: "harvester", home: HOME },
+  );
+  await injectFriendlyCreep(
+    runner,
+    HOME,
+    26,
+    25,
+    ["work", "work", "work", "work", "move", "move"],
+    "seed-harv-3",
+    { role: "harvester", home: HOME },
+  );
+  await injectFriendlyCreep(
+    runner,
+    HOME,
+    25,
+    26,
+    ["carry", "carry", "carry", "carry", "move", "move", "move", "move"],
+    "seed-hauler-1",
+    { role: "hauler", home: HOME },
+  );
+  await injectFriendlyCreep(
+    runner,
+    HOME,
+    23,
+    30,
+    ["carry", "carry", "carry", "move", "move"],
+    "seed-dist-1",
+    { role: "distributor", home: HOME },
+  );
+  await injectFriendlyCreep(
+    runner,
+    HOME,
+    11,
+    11,
+    ["work", "work", "work", "carry", "move", "move"],
+    "seed-upgr-1",
+    { role: "upgrader", home: HOME },
+  );
   return runner;
 }
 
 /** 52 stage × 250t 主循环。 */
 async function runWar(
   runner: ScenarioRunner,
-  opts: { removeTargetCreepsAt: number | null; removeTowerAt: number | null; removeSpawnAt: number | null; invaderStopStage: number; captureAt: number | null; enemyUserId?: string },
+  opts: {
+    removeTargetCreepsAt: number | null;
+    removeTowerAt: number | null;
+    removeSpawnAt: number | null;
+    invaderStopStage: number;
+    captureAt: number | null;
+    enemyUserId?: string;
+  },
 ): Promise<{ probes: ProbeSample[]; warLogs: string[]; errors: number; posture: string[] }> {
   const probes: ProbeSample[] = [];
   const warLogs: string[] = [];
   let errors = 0;
   const posture: string[] = [];
   const scoutSpots: Array<[number, number]> = [
-    [45, 5], [36, 36], [38, 38], [42, 38], [44, 25], [40, 10], [44, 15], [44, 35],
+    [45, 5],
+    [36, 36],
+    [38, 38],
+    [42, 38],
+    [44, 25],
+    [40, 10],
+    [44, 15],
+    [44, 35],
   ];
 
   for (let i = 0; i < 52; i++) {
@@ -171,7 +256,14 @@ async function runWar(
     // 需与断档同帧才翻转——概率压死）。每次注入 count 0→1 新增 →
     // lastHostileAt 刷新 → threatRecent 永续。
     const invaderSpots: Array<[number, number]> = [
-      [46, 46], [45, 46], [46, 45], [45, 45], [47, 46], [46, 47], [45, 47], [47, 45],
+      [46, 46],
+      [45, 46],
+      [46, 45],
+      [45, 45],
+      [47, 46],
+      [46, 47],
+      [45, 47],
+      [47, 45],
     ];
     if (i < opts.invaderStopStage) {
       const spot = invaderSpots[i % invaderSpots.length] ?? [46, 46];
@@ -184,13 +276,31 @@ async function runWar(
       const spot = scoutSpots[(i / 2) % scoutSpots.length] ?? [45, 25];
       const [sx, sy] = spot;
       await injectFriendlyCreep(runner, TARGET, sx, sy, ["move"], `scout-wt-${i}`, {
-        role: "scout", home: HOME, remoteTarget: TARGET,
+        role: "scout",
+        home: HOME,
+        remoteTarget: TARGET,
       });
     }
     // harvester 每 1250t 补种（编制恒 ≥2 → bootstrap 永不发生 → anyRecovery 恒假）。
     if (i % 5 === 0) {
-      await injectFriendlyCreep(runner, HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-a`, { role: "harvester", home: HOME });
-      await injectFriendlyCreep(runner, HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-b`, { role: "harvester", home: HOME });
+      await injectFriendlyCreep(
+        runner,
+        HOME,
+        11,
+        40,
+        ["work", "work", "work", "work", "move", "move"],
+        `seed-harv-${i}-a`,
+        { role: "harvester", home: HOME },
+      );
+      await injectFriendlyCreep(
+        runner,
+        HOME,
+        40,
+        11,
+        ["work", "work", "work", "work", "move", "move"],
+        `seed-harv-${i}-b`,
+        { role: "harvester", home: HOME },
+      );
     }
     // 故障注入点：持续压制目标房 creep（it-1 情报冻结）——一次性移除不够：
     // 孵化中的 attacker 进房即成新视野源（refreshNeighborIntel 对可见邻房
@@ -212,19 +322,21 @@ async function runWar(
       // 攻占：删除有主 controller 并重建无主 controller——$set user:null 可能
       // 被引擎/存储层忽略，删除重建保证 owner getter 返回 undefined。
       await db["rooms.objects"].removeWhere({ room: TARGET, type: "controller" });
-      await (runner.server.server.world as any).addRoomObject(TARGET, "controller", 10, 10, { level: 0 });
+      await (runner.server.server.world as any).addRoomObject(TARGET, "controller", 10, 10, {
+        level: 0,
+      });
     }
     await runner.bot.sendConsole(
       'console.log("PROBE t=" + Game.time + " post=" + Memory.kernel.strategy?.posture +' +
-      ' " spawned=" + Memory.kernel.warPlan?.spawned + " tgt=" + Memory.kernel.warPlan?.targetRoom +' +
-      ' " tc=" + Game.rooms["W0N1"].find(FIND_HOSTILE_CREEPS).length +' +
-      ' " wc=" + Game.rooms["W0N1"].find(FIND_STRUCTURES).filter(function(s){ return s.structureType === "constructedWall"; }).length +' +
-      ' " bl=" + (Memory.kernel.warBlacklist ?' +
-      ' Object.keys(Memory.kernel.warBlacklist).map(function(k){ return k + "@" + Memory.kernel.warBlacklist[k]; }).join(";") : "none"))',
+        ' " spawned=" + Memory.kernel.warPlan?.spawned + " tgt=" + Memory.kernel.warPlan?.targetRoom +' +
+        ' " tc=" + Game.rooms["W0N1"].find(FIND_HOSTILE_CREEPS).length +' +
+        ' " wc=" + Game.rooms["W0N1"].find(FIND_STRUCTURES).filter(function(s){ return s.structureType === "constructedWall"; }).length +' +
+        ' " bl=" + (Memory.kernel.warBlacklist ?' +
+        ' Object.keys(Memory.kernel.warBlacklist).map(function(k){ return k + "@" + Memory.kernel.warBlacklist[k]; }).join(";") : "none"))',
     );
     const snaps = await runner.runTicks(250);
-    errors += snaps.flatMap((s) => s.consoleLogs).filter(isJsError).length;
-    for (const l of snaps.flatMap((s) => s.consoleLogs)) {
+    errors += snaps.flatMap(s => s.consoleLogs).filter(isJsError).length;
+    for (const l of snaps.flatMap(s => s.consoleLogs)) {
       const sample = parseProbe(l);
       if (sample) probes.push(sample);
       if (/demobilize|war:|posture |WarOutcome/.test(l)) warLogs.push(l.slice(0, 400));
@@ -243,72 +355,66 @@ describe("E2E-024 战后核验 — demobilize 全链路核验与 intel 状态一
     for (const r of runners) await r.teardown();
   });
 
-  it(
-    "战后核验全链路：demobilize 触发 → evaluateWarOutcome 按核验时点 intel 裁决 → failure 满额拉黑",
-    async () => {
-      // 有塔敌房（towersSeen=1 入 plan）+ 全程 scout 保鲜（核验时点 intel
-      // 必然 fresh fact towers=1——塔未破 → outcome=failure → 满额拉黑）。
-      // 本场景证明的合同（W5）：demobilize 是唯一核验入口，evaluateWarOutcome
-      // 只消费核验时点的 intel（confidenceAt 非 fact 一律降级 unknown——
-      // 单测层覆盖 stale/never-seen → unknown 半额、tower 摧毁 → success
-      // 无黑名单分支；E2E 构造「战后情报失明」与编队视野保鲜动力学冲突，
-      // 登记为结构限制，见 STATUS W5 行）。
-      const runner = await setupWar(true);
-      runners.push(runner);
-      const { probes, warLogs, errors, posture } = await runWar(runner, {
-        removeTargetCreepsAt: null, removeTowerAt: null, removeSpawnAt: null,
-        invaderStopStage: 52, captureAt: null,
-      });
+  it("战后核验全链路：demobilize 触发 → evaluateWarOutcome 按核验时点 intel 裁决 → failure 满额拉黑", async () => {
+    // 有塔敌房（towersSeen=1 入 plan）+ 全程 scout 保鲜（核验时点 intel
+    // 必然 fresh fact towers=1——塔未破 → outcome=failure → 满额拉黑）。
+    // 本场景证明的合同（W5）：demobilize 是唯一核验入口，evaluateWarOutcome
+    // 只消费核验时点的 intel（confidenceAt 非 fact 一律降级 unknown——
+    // 单测层覆盖 stale/never-seen → unknown 半额、tower 摧毁 → success
+    // 无黑名单分支；E2E 构造「战后情报失明」与编队视野保鲜动力学冲突，
+    // 登记为结构限制，见 STATUS W5 行）。
+    const runner = await setupWar(true);
+    runners.push(runner);
+    const { probes, warLogs, errors, posture } = await runWar(runner, {
+      removeTargetCreepsAt: null,
+      removeTowerAt: null,
+      removeSpawnAt: null,
+      invaderStopStage: 52,
+      captureAt: null,
+    });
 
-      const firstPlan = probes.find((s) => s.targetRoom === TARGET);
-      const demobs = parseDemob(warLogs);
-      const verdict = demobs.find((e) => e.target === TARGET);
-      const afterVerdict = verdict ? probes.filter((s) => s.tick > verdict.tick) : [];
-      const blAfter = afterVerdict.map((s) => s.blacklist).find((b) => b.includes(TARGET));
-      console.log(`[soak-evidence] w5-outcome: firstPlan=${firstPlan?.tick ?? "never"} ` +
-        `demobs=${JSON.stringify(demobs)} verdict=${JSON.stringify(verdict ?? null)} blAfter=${blAfter ?? "(none)"}`);
-      console.log(`[soak-evidence] w5-outcome posture: ${posture.join(" | ")}`);
+    const firstPlan = probes.find(s => s.targetRoom === TARGET);
+    const demobs = parseDemob(warLogs);
+    const verdict = demobs.find(e => e.target === TARGET);
+    const afterVerdict = verdict ? probes.filter(s => s.tick > verdict.tick) : [];
+    const blAfter = afterVerdict.map(s => s.blacklist).find(b => b.includes(TARGET));
+    console.log(
+      `[soak-evidence] w5-outcome: firstPlan=${firstPlan?.tick ?? "never"} ` +
+        `demobs=${JSON.stringify(demobs)} verdict=${JSON.stringify(verdict ?? null)} blAfter=${blAfter ?? "(none)"}`,
+    );
+    console.log(`[soak-evidence] w5-outcome posture: ${posture.join(" | ")}`);
 
-      // 前置：war 立项 + 核验发生。
-      expect(firstPlan, `未立项 warPlan：\n${posture.join(", ")}`).toBeDefined();
+    // 前置：war 立项 + 核验发生。
+    expect(firstPlan, `未立项 warPlan：\n${posture.join(", ")}`).toBeDefined();
+    expect(
+      verdict,
+      `未观测到 W1N1 核验事件（R4 止损/姿态翻转/planTimeout 任一路径都应触发 demobilize）：\n${warLogs.join("\n")}`,
+    ).toBeDefined();
+    // 核验 = failure（核验时点 fresh fact towers=1——塔未破不判胜）。
+    expect(
+      verdict!.outcome,
+      `裁决 outcome=${verdict!.outcome} ≠ failure——fresh fact + 塔在应判未胜`,
+    ).toBe("failure");
+    // 满额冷却 20000t（对照：unknown→10000 半额、success→无黑名单，单测层）。
+    expect(verdict!.blacklist, `failure 核验黑名单 ${verdict!.blacklist}t ≠ 满额 20000t`).toBe(
+      20000,
+    );
+    expect(blAfter, `核验后 warBlacklist 未登记 ${TARGET}`).toBeDefined();
+    if (blAfter) {
+      const blRaw = blAfter.replace(/&#x3E;/g, ">").replace(/&#x22;/g, '"');
+      const m = blRaw.match(new RegExp(`${TARGET}@(\\d+)`));
+      const until = m ? Number(m[1]) : 0;
       expect(
-        verdict,
-        `未观测到 W1N1 核验事件（R4 止损/姿态翻转/planTimeout 任一路径都应触发 demobilize）：\n${warLogs.join("\n")}`,
-      ).toBeDefined();
-      // 核验 = failure（核验时点 fresh fact towers=1——塔未破不判胜）。
-      expect(
-        verdict!.outcome,
-        `裁决 outcome=${verdict!.outcome} ≠ failure——fresh fact + 塔在应判未胜`,
-      ).toBe("failure");
-      // 满额冷却 20000t（对照：unknown→10000 半额、success→无黑名单，单测层）。
-      expect(
-        verdict!.blacklist,
-        `failure 核验黑名单 ${verdict!.blacklist}t ≠ 满额 20000t`,
-      ).toBe(20000);
-      expect(blAfter, `核验后 warBlacklist 未登记 ${TARGET}`).toBeDefined();
-      if (blAfter) {
-        const blRaw = blAfter.replace(/&#x3E;/g, ">").replace(/&#x22;/g, '"');
-        const m = blRaw.match(new RegExp(`${TARGET}@(\\d+)`));
-        const until = m ? Number(m[1]) : 0;
-        expect(
-          until,
-          `黑名单冷却不足（bl=${blRaw}，核验 tick=${verdict!.tick}）——failure 应满额 20000t`,
-        ).toBeGreaterThanOrEqual(verdict!.tick + 19000);
-      }
-      // 核验后 plan 清除（收摊执行）。
-      const planGone = afterVerdict.filter((s) => s.targetRoom !== TARGET);
-      expect(
-        planGone.length,
-        `核验后 warPlan 未清除——收摊未执行`,
-      ).toBeGreaterThan(0);
-      // 冷却期内不重立项。
-      const rePlanned = afterVerdict.some((s) => s.targetRoom === TARGET);
-      expect(
-        rePlanned,
-        `黑名单冷却期内 ${TARGET} 被重新立项——冷却失效`,
-      ).toBe(false);
-      expect(errors, `全程检测到 JS 错误 ${errors} 条`).toBe(0);
-    },
-    1200000,
-  );
+        until,
+        `黑名单冷却不足（bl=${blRaw}，核验 tick=${verdict!.tick}）——failure 应满额 20000t`,
+      ).toBeGreaterThanOrEqual(verdict!.tick + 19000);
+    }
+    // 核验后 plan 清除（收摊执行）。
+    const planGone = afterVerdict.filter(s => s.targetRoom !== TARGET);
+    expect(planGone.length, `核验后 warPlan 未清除——收摊未执行`).toBeGreaterThan(0);
+    // 冷却期内不重立项。
+    const rePlanned = afterVerdict.some(s => s.targetRoom === TARGET);
+    expect(rePlanned, `黑名单冷却期内 ${TARGET} 被重新立项——冷却失效`).toBe(false);
+    expect(errors, `全程检测到 JS 错误 ${errors} 条`).toBe(0);
+  }, 1200000);
 });

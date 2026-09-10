@@ -98,7 +98,10 @@ export function computeBatchSize(input: BatchSizingInput): BatchSizingResult {
 
   if (emergency) {
     // 紧急模式：至少 minBatch，最多 maxBatch
-    batchSize = Math.min(theoretical, Math.max(minBatch, input.haulerCapacity > 0 ? input.haulerCapacity : minBatch));
+    batchSize = Math.min(
+      theoretical,
+      Math.max(minBatch, input.haulerCapacity > 0 ? input.haulerCapacity : minBatch),
+    );
     reason = `emergency (priority=${input.priority}, remaining=${remainingTime}t)`;
   } else {
     batchSize = economic;
@@ -115,9 +118,7 @@ export function computeBatchSize(input: BatchSizingInput): BatchSizingResult {
   }
 
   // trips
-  const trips = input.haulerCapacity > 0
-    ? Math.ceil(batchSize / input.haulerCapacity)
-    : 1;
+  const trips = input.haulerCapacity > 0 ? Math.ceil(batchSize / input.haulerCapacity) : 1;
 
   return {
     batchSize,
@@ -157,11 +158,7 @@ export function quickBatchSize(
  * 当可用量 < minBatch 时不应运输。
  * 纯函数。
  */
-export function shouldBatch(
-  available: number,
-  minBatch: number,
-  haulerCapacity: number,
-): boolean {
+export function shouldBatch(available: number, minBatch: number, haulerCapacity: number): boolean {
   if (available < minBatch) return false;
   // 如果不够一趟满载，也不值得运
   if (haulerCapacity > 0 && available < haulerCapacity * 0.5) return false;

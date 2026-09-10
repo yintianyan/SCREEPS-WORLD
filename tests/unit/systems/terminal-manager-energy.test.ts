@@ -12,7 +12,9 @@ function terminalMock(opts: { energy?: number; cooldown?: number } = {}): any {
   };
 }
 
-function roomSnapshot(opts: { roomName?: string; storageEnergy?: number; terminal?: any } = {}): any {
+function roomSnapshot(
+  opts: { roomName?: string; storageEnergy?: number; terminal?: any } = {},
+): any {
   const { roomName = "W7N4", storageEnergy = 0, terminal = terminalMock() } = opts;
   const overrides: any = { roomName, terminal };
   if (storageEnergy > 0) {
@@ -59,21 +61,31 @@ describe("terminal-manager — 帝国能量互济", () => {
   it("盈余房 → 危机房：terminal.send 一次，量三重约束封顶", () => {
     setupMarket();
     // 10000(货) + 100(运费) + 2000(储备) = 12100 ≤ 13000 → 预算充足。
-    const donor = roomSnapshot({ roomName: "W7N4", storageEnergy: 80000, terminal: terminalMock({ energy: 13000 }) });
-    const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 5000, terminal: terminalMock({ cooldown: 99 }) });
+    const donor = roomSnapshot({
+      roomName: "W7N4",
+      storageEnergy: 80000,
+      terminal: terminalMock({ energy: 13000 }),
+    });
+    const needy = roomSnapshot({
+      roomName: "W8N4",
+      storageEnergy: 5000,
+      terminal: terminalMock({ cooldown: 99 }),
+    });
 
     terminalManagerSystem.run(makeContext([donor, needy]));
 
     // 缺口 15000、盈余 30000、上限 10000 → 10000。
     expect(donor.terminal.send).toHaveBeenCalledWith("energy", 10000, "W8N4");
-    expect(transferEvents()).toEqual([
-      expect.objectContaining({ k: 24, r: "W8N4", d: [10000] }),
-    ]);
+    expect(transferEvents()).toEqual([expect.objectContaining({ k: 24, r: "W8N4", d: [10000] })]);
   });
 
   it("捐赠方 terminal 能量不足（货量+运费+储备地板）→ 不发送", () => {
     setupMarket();
-    const donor = roomSnapshot({ roomName: "W7N4", storageEnergy: 80000, terminal: terminalMock({ energy: 11000 }) });
+    const donor = roomSnapshot({
+      roomName: "W7N4",
+      storageEnergy: 80000,
+      terminal: terminalMock({ energy: 11000 }),
+    });
     // 10000 + 100(fee) + 2000(reserve) = 12100 > 11000 → 预算不足。
     const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 5000 });
 
@@ -94,7 +106,11 @@ describe("terminal-manager — 帝国能量互济", () => {
 
   it("捐赠方 terminal 冷却中（canSend=false）→ 不发送", () => {
     setupMarket();
-    const donor = roomSnapshot({ roomName: "W7N4", storageEnergy: 80000, terminal: terminalMock({ cooldown: 5 }) });
+    const donor = roomSnapshot({
+      roomName: "W7N4",
+      storageEnergy: 80000,
+      terminal: terminalMock({ cooldown: 5 }),
+    });
     const needy = roomSnapshot({ roomName: "W8N4", storageEnergy: 5000 });
 
     terminalManagerSystem.run(makeContext([donor, needy]));
@@ -155,7 +171,9 @@ describe("terminal-manager — 能量市场交易", () => {
   });
 
   it("买单价格低于底线 → 不贱卖", () => {
-    const getAllOrders = resourceAwareOrders({ energy: energyBuyOrders(CONFIG.energy.minEnergySellPrice - 0.01) });
+    const getAllOrders = resourceAwareOrders({
+      energy: energyBuyOrders(CONFIG.energy.minEnergySellPrice - 0.01),
+    });
     setupMarket({ getAllOrders });
     const room = roomSnapshot({
       roomName: "W7N4",
@@ -184,7 +202,9 @@ describe("terminal-manager — 能量市场交易", () => {
   });
 
   it("卖单价格超上限 → 不买（宁可压缩运营）", () => {
-    const getAllOrders = resourceAwareOrders({ energy: energySellOrders(CONFIG.energy.maxEnergyBuyPrice + 0.01) });
+    const getAllOrders = resourceAwareOrders({
+      energy: energySellOrders(CONFIG.energy.maxEnergyBuyPrice + 0.01),
+    });
     setupMarket({ getAllOrders });
     const room = roomSnapshot({
       roomName: "W7N4",

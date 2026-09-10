@@ -32,11 +32,28 @@ export type LedgerField = keyof EnergyLedger;
 
 /** 消费类字段——风险缓冲的 P0/P1 速率分母取此子集（spawn/tower/repair）。 */
 const CONSUMPTION_FIELDS: readonly LedgerField[] = [
-  "spawned", "recycledRefund", "upgraded", "built", "repaired", "towerSpent", "sold",
+  "spawned",
+  "recycledRefund",
+  "upgraded",
+  "built",
+  "repaired",
+  "towerSpent",
+  "sold",
 ];
 
 export function emptyLedger(): EnergyLedger {
-  return { harvested: 0, pickedUp: 0, spawned: 0, recycledRefund: 0, upgraded: 0, built: 0, repaired: 0, towerSpent: 0, bought: 0, sold: 0 };
+  return {
+    harvested: 0,
+    pickedUp: 0,
+    spawned: 0,
+    recycledRefund: 0,
+    upgraded: 0,
+    built: 0,
+    repaired: 0,
+    towerSpent: 0,
+    bought: 0,
+    sold: 0,
+  };
 }
 
 /**
@@ -99,7 +116,17 @@ export interface EnergyPools {
 }
 
 export function emptyPools(): EnergyPools {
-  return { spawnExt: 0, containers: 0, storage: 0, terminal: 0, links: 0, carry: 0, towers: 0, loose: 0, other: 0 };
+  return {
+    spawnExt: 0,
+    containers: 0,
+    storage: 0,
+    terminal: 0,
+    links: 0,
+    carry: 0,
+    towers: 0,
+    loose: 0,
+    other: 0,
+  };
 }
 
 /** 合同「储备」口径：storage + terminal + link 折算水位（Reservation 扣除基数）。 */
@@ -113,7 +140,16 @@ export function contractReserveOf(pools: EnergyPools): number {
  * （任务书 §14「差异必须能解释」），不再是无主黑洞。
  */
 export function trackedPoolsOf(pools: EnergyPools): number {
-  return pools.spawnExt + pools.containers + pools.storage + pools.terminal + pools.links + pools.carry + pools.towers + pools.loose;
+  return (
+    pools.spawnExt +
+    pools.containers +
+    pools.storage +
+    pools.terminal +
+    pools.links +
+    pools.carry +
+    pools.towers +
+    pools.loose
+  );
 }
 
 // ─── 核算窗口 ────────────────────────────────────────────────
@@ -165,7 +201,8 @@ export function rollupWindow(
   const looseDelta = endPools.loose - startPools.loose;
   // loose（dropped/tombstone/ruin）自然衰减不属于核算缺陷——单独报告 looseDelta，
   // 从 drift 中排除以避免误报（测试「loose 衰减单独报告且不影响 drift」验证此不变量）。
-  const drift = (trackedEnd - trackedStart) - flowBalance - looseDelta - (endPools.other - startPools.other);
+  const drift =
+    trackedEnd - trackedStart - flowBalance - looseDelta - (endPools.other - startPools.other);
   return {
     t0,
     t1,
@@ -204,7 +241,11 @@ export function isDriftExcessive(w: AccountingWindow, floor: number, ratio: numb
  * 净流 EMA 更新。输入为本窗每 tick 流平衡（可负）；α 取 CONFIG.economy.accounting.netFlowAlpha。
  * 首窗直接取现值（无历史可平滑）。
  */
-export function updateNetFlowEma(prev: number | undefined, windowPerTick: number, alpha: number): number {
+export function updateNetFlowEma(
+  prev: number | undefined,
+  windowPerTick: number,
+  alpha: number,
+): number {
   if (prev === undefined || !Number.isFinite(prev)) return windowPerTick;
   return prev + alpha * (windowPerTick - prev);
 }
@@ -301,15 +342,15 @@ export function fromMemorySnapshot(s: Partial<EconomyMemorySnapshot> | undefined
 
 /** 从池快照组装受踪池/其他池差值都需要的中间量——采集端便捷函数。 */
 export function summarizeWindow(w: AccountingWindow): string {
-  return "t" + w.t0 + "-" + w.t1
-    + " inc=" + Math.round(w.income)
-    + " con=" + Math.round(w.consumption)
-    + " ref=" + Math.round(w.refunds)
-    + " net=" + (w.income - w.consumption + w.refunds >= 0 ? "+" : "") + Math.round(w.income - w.consumption + w.refunds)
-    + " drift=" + Math.round(w.drift)
-    + " p0p1/t=" + w.p0p1PerTick.toFixed(2)
-    + " inc/t=" + w.incomePerTick.toFixed(2)
-    + " looseD=" + Math.round(w.looseDelta);
+  return `t${w.t0}-${w.t1} inc=${Math.round(w.income)} con=${Math.round(
+    w.consumption,
+  )} ref=${Math.round(w.refunds)} net=${
+    w.income - w.consumption + w.refunds >= 0 ? "+" : ""
+  }${Math.round(w.income - w.consumption + w.refunds)} drift=${Math.round(
+    w.drift,
+  )} p0p1/t=${w.p0p1PerTick.toFixed(2)} inc/t=${w.incomePerTick.toFixed(2)} looseD=${Math.round(
+    w.looseDelta,
+  )}`;
 }
 
 // ─── 跨 tick 房间流采样（实测口径）─────────────────────────

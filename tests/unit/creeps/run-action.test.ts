@@ -1,10 +1,6 @@
 /** runAction 统一错误处理策略测试。 */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import {
-  resetGlobals,
-  mockCreep,
-  mockPos,
-} from "../../support/factories";
+import { resetGlobals, mockCreep, mockPos } from "../../support/factories";
 import { runAction, actOrMove } from "../../../src/creeps/engine/actions/helpers";
 
 // Screeps 错误码常量（测试环境未全局注入）。
@@ -160,20 +156,30 @@ describe("runAction — 多 handler 共存", () => {
     const invalidHandler = vi.fn();
 
     // ERR_FULL → fullHandler
-    runAction(creep, target(), vi.fn(() => ERR_FULL), {
-      [ERR_FULL]: fullHandler,
-      [ERR_INVALID_TARGET]: invalidHandler,
-    });
+    runAction(
+      creep,
+      target(),
+      vi.fn(() => ERR_FULL),
+      {
+        [ERR_FULL]: fullHandler,
+        [ERR_INVALID_TARGET]: invalidHandler,
+      },
+    );
     expect(fullHandler).toHaveBeenCalledTimes(1);
     expect(invalidHandler).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
 
     // ERR_INVALID_TARGET → invalidHandler
-    runAction(creep, target(), vi.fn(() => ERR_INVALID_TARGET), {
-      [ERR_FULL]: fullHandler,
-      [ERR_INVALID_TARGET]: invalidHandler,
-    });
+    runAction(
+      creep,
+      target(),
+      vi.fn(() => ERR_INVALID_TARGET),
+      {
+        [ERR_FULL]: fullHandler,
+        [ERR_INVALID_TARGET]: invalidHandler,
+      },
+    );
     expect(fullHandler).not.toHaveBeenCalled();
     expect(invalidHandler).toHaveBeenCalledTimes(1);
   });
@@ -183,12 +189,17 @@ describe("runAction — 多 handler 共存", () => {
     let sideEffectA = false;
     let sideEffectB = false;
 
-    runAction(creep, target(), vi.fn(() => ERR_FULL), {
-      [ERR_FULL]: () => {
-        sideEffectA = true;
-        sideEffectB = true;
+    runAction(
+      creep,
+      target(),
+      vi.fn(() => ERR_FULL),
+      {
+        [ERR_FULL]: () => {
+          sideEffectA = true;
+          sideEffectB = true;
+        },
       },
-    });
+    );
 
     expect(sideEffectA).toBe(true);
     expect(sideEffectB).toBe(true);
@@ -199,11 +210,16 @@ describe("runAction — handler 闭包捕获上下文", () => {
   it("handler 可访问 creep.memory 并修改状态", () => {
     const creep = mockCreep({ mode: "acquire" });
 
-    runAction(creep, target(), vi.fn(() => ERR_FULL), {
-      [ERR_FULL]: () => {
-        creep.memory.mode = "idle";
+    runAction(
+      creep,
+      target(),
+      vi.fn(() => ERR_FULL),
+      {
+        [ERR_FULL]: () => {
+          creep.memory.mode = "idle";
+        },
       },
-    });
+    );
 
     expect(creep.memory.mode).toBe("idle");
   });
@@ -212,11 +228,16 @@ describe("runAction — handler 闭包捕获上下文", () => {
     const creep = mockCreep();
     creep.memory.targetId = "site_abc" as any;
 
-    runAction(creep, target(), vi.fn(() => ERR_INVALID_TARGET), {
-      [ERR_INVALID_TARGET]: () => {
-        creep.memory.targetId = undefined;
+    runAction(
+      creep,
+      target(),
+      vi.fn(() => ERR_INVALID_TARGET),
+      {
+        [ERR_INVALID_TARGET]: () => {
+          creep.memory.targetId = undefined;
+        },
       },
-    });
+    );
 
     expect(creep.memory.targetId).toBeUndefined();
   });

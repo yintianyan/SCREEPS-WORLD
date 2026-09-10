@@ -1,7 +1,13 @@
 /** 敌方 reservation 运行时退出接线测试（组①-1c）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
-import { mockContext, mockCreep, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
+import {
+  mockContext,
+  mockCreep,
+  mockSnapshot,
+  resetGlobals,
+  syncSquadIndex,
+} from "../../support/factories";
 
 const targetRoom = "W2N1";
 const homeRoom = "W7N4"; // 与 mockSnapshot 默认 roomName 对齐。
@@ -30,7 +36,13 @@ function seedMemory(now: number) {
     colonyState: "normal",
     spawnQueue: [],
     remoteOps: {
-      [targetRoom]: { state: "active", sources: 2, haulerNeed: 2, createdAt: now - 500, lastSeen: now },
+      [targetRoom]: {
+        state: "active",
+        sources: 2,
+        haulerNeed: 2,
+        createdAt: now - 500,
+        lastSeen: now,
+      },
     },
     intel: {
       [targetRoom]: { kind: "normal", status: "normal", lastSeen: now },

@@ -26,7 +26,7 @@ import { getObjectById } from "../support/obj-cache";
 function withdrawAssignmentContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:assignment-container",
-    resolve: (ac) => {
+    resolve: ac => {
       if (!ac.assignment?.sourceId) return undefined;
       const obj = getObjectById(ac.assignment.sourceId as unknown as Id<StructureContainer>);
       if (obj === null) return undefined;
@@ -94,7 +94,8 @@ function haulerOnFlee(ac: ActionContext): boolean {
   // hauler 必须已在 spawn 安全区内
   if (creep.pos.getRangeTo(spawn.pos) > safeRange) return false;
 
-  const nearestHostile = creep.pos.findClosestByRange(snapshot.threatCreeps as Creep[]) ?? undefined;
+  const nearestHostile =
+    creep.pos.findClosestByRange(snapshot.threatCreeps as Creep[]) ?? undefined;
 
   // 复用 getHaulFillTarget 的优先级层级（haulerFillTiers）选择防御圈内最近的需能量结构。
   // 不使用预约系统 — flee 是临时行为，不应消耗正常 hauler 的预约配额。

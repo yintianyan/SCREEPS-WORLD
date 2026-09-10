@@ -5,7 +5,10 @@ import {
   relocateCandidate,
   type BuildTaskCandidate,
 } from "../../../src/domain/layout/task-factory";
-import { buildObstaclePositionSet, type ValidationOptions } from "../../../src/domain/layout/validation";
+import {
+  buildObstaclePositionSet,
+  type ValidationOptions,
+} from "../../../src/domain/layout/validation";
 import { packPos } from "../../../src/domain/layout/types";
 import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-core-v2";
 import { mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
@@ -16,7 +19,9 @@ beforeEach(() => {
 
 const wallTerrain = (walls: [number, number][]) => {
   const set = new Set(walls.map(([x, y]) => `${x},${y}`));
-  return { get: (x: number, y: number) => (set.has(`${x},${y}`) ? 1 : 0) } as unknown as RoomTerrain;
+  return {
+    get: (x: number, y: number) => (set.has(`${x},${y}`) ? 1 : 0),
+  } as unknown as RoomTerrain;
 };
 
 function roomWith(terrain: RoomTerrain): Room {
@@ -25,7 +30,11 @@ function roomWith(terrain: RoomTerrain): Room {
 
 const extCell = COMPACT_CORE_V2.cells.find(c => c.key === "core.ext.04")!; // (2,0)
 
-function candidateAt(x: number, y: number, validation: BuildTaskCandidate["validation"]): BuildTaskCandidate {
+function candidateAt(
+  x: number,
+  y: number,
+  validation: BuildTaskCandidate["validation"],
+): BuildTaskCandidate {
   return {
     key: extCell.key,
     pos: { x, y, roomName: "W7N4" },
@@ -95,9 +104,14 @@ describe("layout — fallback relocation", () => {
     // 把 (+2,0) fallback 位置 (27,25) 用 7 个障碍围到只剩 (27,25) 自身空格——
     // 等等，(27,25) 是候选自身；围它 8 邻居中的 8 个（不含 (25,25) 墙格也算障碍）。
     const ring = [
-      { pos: mockPos(26, 24) }, { pos: mockPos(27, 24) }, { pos: mockPos(28, 24) },
-      { pos: mockPos(26, 25) }, { pos: mockPos(28, 25) },
-      { pos: mockPos(26, 26) }, { pos: mockPos(27, 26) }, { pos: mockPos(28, 26) },
+      { pos: mockPos(26, 24) },
+      { pos: mockPos(27, 24) },
+      { pos: mockPos(28, 24) },
+      { pos: mockPos(26, 25) },
+      { pos: mockPos(28, 25) },
+      { pos: mockPos(26, 26) },
+      { pos: mockPos(27, 26) },
+      { pos: mockPos(28, 26) },
     ].map((s, i) => ({ id: `e${i}`, structureType: "extension", ...s }));
     const snap = mockSnapshot({
       rcl: 8,
@@ -132,9 +146,23 @@ describe("layout — fallback relocation", () => {
       phase: "late",
       validation: "terrain",
     };
-    const spawnCell = { ...spawnCandidate, minRcl: 7, tags: ["core"] as const, requires: undefined, dx: -2, dy: 0 };
+    const spawnCell = {
+      ...spawnCandidate,
+      minRcl: 7,
+      tags: ["core"] as const,
+      requires: undefined,
+      dx: -2,
+      dy: 0,
+    };
 
-    const result = relocateCandidate(spawnCandidate, spawnCell as any, room, snap, options(snap), new Set());
+    const result = relocateCandidate(
+      spawnCandidate,
+      spawnCell as any,
+      room,
+      snap,
+      options(snap),
+      new Set(),
+    );
     expect(result).toBeUndefined();
   });
 
@@ -152,7 +180,14 @@ describe("layout — fallback relocation", () => {
       validation: "terrain",
     };
 
-    const result = relocateCandidate(towerCandidate, towerCell, room, snap, options(snap), new Set());
+    const result = relocateCandidate(
+      towerCandidate,
+      towerCell,
+      room,
+      snap,
+      options(snap),
+      new Set(),
+    );
     expect(result).toBeDefined();
     expect(result!.validation).toBe("ok");
     // 重定位后不在原位置。
@@ -163,8 +198,14 @@ describe("layout — fallback relocation", () => {
     // 候选点 + 全部 8 个 fallback 位置都是墙。
     const terrain = wallTerrain([
       [25, 25],
-      [27, 25], [23, 25], [25, 27], [25, 23],
-      [27, 27], [23, 27], [27, 23], [23, 23],
+      [27, 25],
+      [23, 25],
+      [25, 27],
+      [25, 23],
+      [27, 27],
+      [23, 27],
+      [27, 23],
+      [23, 23],
     ]);
     const room = roomWith(terrain);
     const snap = mockSnapshot({ rcl: 8, sources: [], controller: undefined });
@@ -188,7 +229,12 @@ describe("layout — fallback relocation", () => {
 
     const candidates = blueprintToTasks(
       COMPACT_CORE_V2,
-      25, 25, "W7N4", room, snap, 8,
+      25,
+      25,
+      "W7N4",
+      room,
+      snap,
+      8,
       options(snap),
       overrides,
     );

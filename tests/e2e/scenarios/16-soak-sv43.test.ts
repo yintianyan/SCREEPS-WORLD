@@ -80,7 +80,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
         }
         const snapshots = await runner.runTicks(STAGE_TICKS);
         const last = snapshots.at(-1)!;
-        for (const l of snapshots.flatMap((s) => s.consoleLogs)) {
+        for (const l of snapshots.flatMap(s => s.consoleLogs)) {
           const bm = l.match(/BUCKET t=\d+ v=(-?\d+)/);
           if (bm) bucketProbe = Number(bm[1]);
         }
@@ -106,7 +106,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
           );
           stageProgLog.push({ prog: ctrl?.progress ?? 0, total: ctrl?.progressTotal ?? 0 });
         }
-        totalErrors += snapshots.flatMap((s) => s.consoleLogs).filter(isJsError).length;
+        totalErrors += snapshots.flatMap(s => s.consoleLogs).filter(isJsError).length;
 
         const rawMem = last.rawMemory as any;
         finalRcl = (rawMem?.rooms?.[ROOM]?.phase?.rcl as number) ?? finalRcl;
@@ -131,12 +131,16 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
         if (violations.length > 0) violationStages++;
         // 排除早期帝国已知合理违例后的真正异常违例数
         const criticalVios = violations.filter(
-          (v: string) => !KNOWN_EARLY_VIOLATION_PREFIXES.some((p) => v.startsWith(p)),
+          (v: string) => !KNOWN_EARLY_VIOLATION_PREFIXES.some(p => v.startsWith(p)),
         );
         if (criticalVios.length > 0) criticalViolations++;
         if (last.totalCreeps < 5) lowPopStages++;
         const topSkips = (sr?: Record<string, number>) =>
-          sr ? Object.entries(sr).sort((a, b) => b[1] - a[1]).slice(0, 3) : [];
+          sr
+            ? Object.entries(sr)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3)
+            : [];
         console.log(
           `[soak-evidence] sv43-soak stage=${stage} tick=${last.tick} ` +
             `creeps=${last.totalCreeps} rcl=${finalRcl} memKB=${(memSize / 1024).toFixed(0)}` +
@@ -148,7 +152,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
             `skip=${JSON.stringify(topSkips(k.skipReasons))} ` +
             `tuned=${k.tuning?.lastTuned ?? "?"} err=${k.stats?.lastError ? 1 : 0}` +
             ` violIds=${JSON.stringify(violations)}` +
-            ` eld=${JSON.stringify((k.stats?.energyLedger?.rooms?.[ROOM] ?? {}))} ` +
+            ` eld=${JSON.stringify(k.stats?.energyLedger?.rooms?.[ROOM] ?? {})} ` +
             `cpuSys=${JSON.stringify(k.stats?.cpuBySystem ?? {})}` +
             ` logi=${k.stats?.logisticsHealth?.level ?? "?"} post@=${k.postureChangedAt ?? "?"} ` +
             `intel=${JSON.stringify(k.stats?.intelCoverage ?? {})} repl=${JSON.stringify(k.stats?.replaceLatency ?? {})}`,
@@ -177,10 +181,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
         finalRcl,
         `${TOTAL_TICKS} tick 未完成 RCL1→2 晋级（rcl=${finalRcl}）`,
       ).toBeGreaterThanOrEqual(2);
-      expect(
-        totalErrors,
-        `全程检测到 JS 错误 ${totalErrors} 条`,
-      ).toBe(0);
+      expect(totalErrors, `全程检测到 JS 错误 ${totalErrors} 条`).toBe(0);
 
       // ── 异常发现断言（长程健康检查，非仅稳定性）──
       const firstStage = stageProgLog[0];

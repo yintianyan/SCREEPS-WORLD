@@ -94,7 +94,7 @@ describe("心跳续期", () => {
   });
 
   it("heartbeat 不存在时无操作", () => {
-    let table: ReservationTable = new Map();
+    const table: ReservationTable = new Map();
     const result = heartbeatReservation(table, "nonexistent", TICK + 50);
     expect(result.size).toBe(0);
   });
@@ -116,7 +116,7 @@ describe("部分消耗 + 释放", () => {
   });
 
   it("reduceReservation 不存在时无操作", () => {
-    let table: ReservationTable = new Map();
+    const table: ReservationTable = new Map();
     const result = reduceReservation(table, "nonexistent", 500);
     expect(result.size).toBe(0);
   });

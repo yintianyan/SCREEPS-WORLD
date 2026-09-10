@@ -1,7 +1,7 @@
 /** Candidate Discovery */
 
 import type { RoomIntel } from "../intel";
-import { ExpansionCandidateV2, buildCandidate, isEvaluable } from "./candidate";
+import { type ExpansionCandidateV2, buildCandidate, isEvaluable } from "./candidate";
 
 /** Discovery 输入。 */
 export interface DiscoveryInput {
@@ -60,7 +60,14 @@ export function discoverCandidates(input: DiscoveryInput): DiscoveryResult {
         // 已有候选：检查 Intel 是否更新
         if (info.lastSeen > existing.lastSeen) {
           // Intel 刷新 → 重建候选（保留 discoveredAt 和 status 如果仍是 UNKNOWN）
-          const refreshed = buildCandidate(roomName, sponsor, info, ownedRoomNames, tick, myUsername);
+          const refreshed = buildCandidate(
+            roomName,
+            sponsor,
+            info,
+            ownedRoomNames,
+            tick,
+            myUsername,
+          );
           refreshed.discoveredAt = existing.discoveredAt;
           // 如果旧候选已评分，保留评分直到重新评估
           if (existing.score > 0 && isEvaluable(refreshed)) {
@@ -114,8 +121,6 @@ export function getQualifiedCandidates(
 /**
  * 获取候选房名集合（用于 Plan 去重检查）。
  */
-export function getCandidateRoomNames(
-  candidates: readonly ExpansionCandidateV2[],
-): Set<string> {
+export function getCandidateRoomNames(candidates: readonly ExpansionCandidateV2[]): Set<string> {
   return new Set(candidates.map(c => c.roomName));
 }

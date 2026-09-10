@@ -10,7 +10,9 @@ beforeEach(() => {
 
 /** 覆盖 Game.cpu.limit / tickLimit / getUsed。 */
 function setCpu(limit: number, tickLimit = limit, used = 0): void {
-  const cpu = (globalThis as { Game: { cpu: { limit: number; tickLimit: number; getUsed: () => number } } }).Game.cpu;
+  const cpu = (
+    globalThis as { Game: { cpu: { limit: number; tickLimit: number; getUsed: () => number } } }
+  ).Game.cpu;
   cpu.limit = limit;
   cpu.tickLimit = tickLimit;
   cpu.getUsed = () => used;

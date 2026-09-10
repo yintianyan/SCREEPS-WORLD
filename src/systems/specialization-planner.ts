@@ -57,60 +57,66 @@ import { log } from "../kernel/log";
  * 调度节律与独立系统时期逐 tick 一致。
  */
 export function runSpecializationPlanning(ctx: TickContext): void {
-    // 1. 过期 Opportunities 清理
-    const opportunities = getOpportunities();
-    const freshOpps = expireStaleOpportunities(opportunities, ctx.tick);
+  // 1. 过期 Opportunities 清理
+  const opportunities = getOpportunities();
+  const freshOpps = expireStaleOpportunities(opportunities, ctx.tick);
 
-    // 2. 评估 WAITING_EXECUTION Opportunities
-    const waiting = filterWaitingExecution(freshOpps);
-    const activeOps = getRemoteMiningOps();
+  // 2. 评估 WAITING_EXECUTION Opportunities
+  const waiting = filterWaitingExecution(freshOpps);
+  const activeOps = getRemoteMiningOps();
 
-    for (const opp of waiting) {
-      // 构建 Execution Gate 输入
-      const gateInput = buildGateInput(opp, activeOps, ctx.tick);
-      if (!gateInput) {
-        // 无法构建 Gate 输入（缺少数据）→ 跳过，下次再评估
-        continue;
-      }
-
-      const result = checkExecutionGate(gateInput);
-
-      if (isGatePassed(result)) {
-        // 通过 → 标记 APPROVED → 创建 RemoteMiningOperation
-        const approved = approveOpportunity(opp, ctx.tick, "execution-gate-passed");
-        createOperationFromOpportunity(approved, ctx.tick);
-        log.info("specialization-planner", `specialization-planner: APPROVED opportunity ${opp.id} ` +
-          `(${opp.homeRoom}→${opp.targetRoom})`,);
-      } else if (isGatePermanentFailure(result)) {
-        // 永久失败 → REJECT
-        rejectOpportunity(opp, ctx.tick, result.reason);
-        log.info("specialization-planner", `specialization-planner: REJECTED opportunity ${opp.id} ` +
-          `(${result.type}: ${result.reason})`,);
-      }
-      // WAIT/NO_BUDGET/NO_DEMAND → 保持 WAITING_EXECUTION，下次再评估
+  for (const opp of waiting) {
+    // 构建 Execution Gate 输入
+    const gateInput = buildGateInput(opp, activeOps, ctx.tick);
+    if (!gateInput) {
+      // 无法构建 Gate 输入（缺少数据）→ 跳过，下次再评估
+      continue;
     }
 
-    // 3. 重估活跃 Operation 的经济健康度
-    const activeRemoteOps = filterActiveRemoteMiningOps(activeOps);
-    for (const op of activeRemoteOps) {
-      const healthInput = buildHealthInput(op, ctx.tick);
-      if (!healthInput) continue;
-      const assessment = assessEconomicHealth(healthInput);
-      if (assessment.degraded || assessment.improved) {
-        updateEconomicHealth(op, assessment.health, ctx.tick);
-      }
+    const result = checkExecutionGate(gateInput);
+
+    if (isGatePassed(result)) {
+      // 通过 → 标记 APPROVED → 创建 RemoteMiningOperation
+      const approved = approveOpportunity(opp, ctx.tick, "execution-gate-passed");
+      createOperationFromOpportunity(approved, ctx.tick);
+      log.info(
+        "specialization-planner",
+        `specialization-planner: APPROVED opportunity ${opp.id} ` +
+          `(${opp.homeRoom}→${opp.targetRoom})`,
+      );
+    } else if (isGatePermanentFailure(result)) {
+      // 永久失败 → REJECT
+      rejectOpportunity(opp, ctx.tick, result.reason);
+      log.info(
+        "specialization-planner",
+        `specialization-planner: REJECTED opportunity ${opp.id} ` +
+          `(${result.type}: ${result.reason})`,
+      );
     }
+    // WAIT/NO_BUDGET/NO_DEMAND → 保持 WAITING_EXECUTION，下次再评估
+  }
 
-    // A4.4 修复 BYPASS-009：从 networkSnapshot 的 surplus/deficit 对创建 Supply Contract。
-    // Supply Contract 是 logistics-planner 的 contract → request 链条的输入源。
-    // 旧问题：createSupplyContract() 纯函数完整但从未被系统层调用 →
-    //   Memory.kernel.supplyContracts 永远为空 → Planner 的 contract→request 链路不产出。
-    // 修复：每 100t 从 networkSnapshot 提取 surplus/deficit 对，为每对创建 ACTIVE Contract。
-    maintainSupplyContracts(ctx.tick);
+  // 3. 重估活跃 Operation 的经济健康度
+  const activeRemoteOps = filterActiveRemoteMiningOps(activeOps);
+  for (const op of activeRemoteOps) {
+    const healthInput = buildHealthInput(op, ctx.tick);
+    if (!healthInput) continue;
+    const assessment = assessEconomicHealth(healthInput);
+    if (assessment.degraded || assessment.improved) {
+      updateEconomicHealth(op, assessment.health, ctx.tick);
+    }
+  }
 
-    // 4. 写回 Memory
-    saveOpportunities(freshOpps);
-    saveRemoteMiningOps(activeOps);
+  // A4.4 修复 BYPASS-009：从 networkSnapshot 的 surplus/deficit 对创建 Supply Contract。
+  // Supply Contract 是 logistics-planner 的 contract → request 链条的输入源。
+  // 旧问题：createSupplyContract() 纯函数完整但从未被系统层调用 →
+  //   Memory.kernel.supplyContracts 永远为空 → Planner 的 contract→request 链路不产出。
+  // 修复：每 100t 从 networkSnapshot 提取 surplus/deficit 对，为每对创建 ACTIVE Contract。
+  maintainSupplyContracts(ctx.tick);
+
+  // 4. 写回 Memory
+  saveOpportunities(freshOpps);
+  saveRemoteMiningOps(activeOps);
 }
 
 // ─── Memory 读写辅助（系统侧薄壳独有）──────────────────
@@ -121,7 +127,7 @@ export function runSpecializationPlanning(ctx: TickContext): void {
  */
 function getOpportunities(): RemoteOpportunity[] {
   // A4.1 阶段：暂从 globalCache 读取
-  const cache = (global as unknown as { __remoteOpportunities?: RemoteOpportunity[] });
+  const cache = global as unknown as { __remoteOpportunities?: RemoteOpportunity[] };
   return cache.__remoteOpportunities ?? [];
 }
 
@@ -129,14 +135,15 @@ function getOpportunities(): RemoteOpportunity[] {
  * 写回 Opportunities 到 globalCache。
  */
 function saveOpportunities(opps: RemoteOpportunity[]): void {
-  (global as unknown as { __remoteOpportunities?: RemoteOpportunity[] }).__remoteOpportunities = opps;
+  (global as unknown as { __remoteOpportunities?: RemoteOpportunity[] }).__remoteOpportunities =
+    opps;
 }
 
 /**
  * 从 globalCache 读取 RemoteMiningOperations。
  */
 function getRemoteMiningOps(): RemoteMiningOperationContext[] {
-  const cache = (global as unknown as { __remoteMiningOps?: RemoteMiningOperationContext[] });
+  const cache = global as unknown as { __remoteMiningOps?: RemoteMiningOperationContext[] };
   return cache.__remoteMiningOps ?? [];
 }
 
@@ -144,7 +151,8 @@ function getRemoteMiningOps(): RemoteMiningOperationContext[] {
  * 写回 RemoteMiningOperations 到 globalCache。
  */
 function saveRemoteMiningOps(ops: RemoteMiningOperationContext[]): void {
-  (global as unknown as { __remoteMiningOps?: RemoteMiningOperationContext[] }).__remoteMiningOps = ops;
+  (global as unknown as { __remoteMiningOps?: RemoteMiningOperationContext[] }).__remoteMiningOps =
+    ops;
 }
 
 // ─── Gate 输入构建 ──────────────────────────────────────
@@ -187,7 +195,12 @@ function buildGateInput(
     transportCost: opp.value.transportCost,
     maxTransportCost,
     hasActiveOp: activeOps.some(
-      o => o.sourceId === opp.sourceId && o.status !== "completed" && o.status !== "cancelled" && o.status !== "expired" && o.status !== "failed",
+      o =>
+        o.sourceId === opp.sourceId &&
+        o.status !== "completed" &&
+        o.status !== "cancelled" &&
+        o.status !== "expired" &&
+        o.status !== "failed",
     ),
     budgetSufficient: true, // A4.1 简化：默认预算充足，后续接入 operation-budget
     budgetRemaining: 5000,
@@ -285,8 +298,11 @@ function maintainSupplyContracts(tick: number): void {
   saveContractsToMemory(activeContracts, tick);
 
   if (newContractsCreated > 0) {
-    log.info("specialization-planner", `specialization-planner: created ${newContractsCreated} supply contracts ` +
-      `(${activeContracts.length} active total)`,);
+    log.info(
+      "specialization-planner",
+      `specialization-planner: created ${newContractsCreated} supply contracts ` +
+        `(${activeContracts.length} active total)`,
+    );
   }
 }
 
@@ -322,13 +338,20 @@ function isContractTerminalStatus(status: string): boolean {
 /**
  * 从 Criticality 推导 OperationPriority。
  */
-function criticalityToPriority(criticality: string): import("../domain/operation/agenda-item").OperationPriority {
+function criticalityToPriority(
+  criticality: string,
+): import("../domain/operation/agenda-item").OperationPriority {
   switch (criticality) {
-    case "critical": return 0;
-    case "high": return 1;
-    case "normal": return 2;
-    case "low": return 3;
-    default: return 2;
+    case "critical":
+      return 0;
+    case "high":
+      return 1;
+    case "normal":
+      return 2;
+    case "low":
+      return 3;
+    default:
+      return 2;
   }
 }
 
@@ -337,10 +360,7 @@ function criticalityToPriority(criticality: string): import("../domain/operation
 /**
  * 从 APPROVED Opportunity 创建 RemoteMiningOperation。
  */
-function createOperationFromOpportunity(
-  opp: RemoteOpportunity,
-  tick: number,
-): void {
+function createOperationFromOpportunity(opp: RemoteOpportunity, tick: number): void {
   const input: CreateRemoteMiningOpInput = {
     homeRoom: opp.homeRoom,
     targetRoom: opp.targetRoom,

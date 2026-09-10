@@ -24,19 +24,41 @@ describe("Hauler 取能优先级 — 抽 container 优先于捡溢出 drop", () 
       // 按衰减资源优先原则合法插队（含 assignment 之前），不属本用例语义。
       .droppedResource(17, 15, 99)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
       .cpu(10000)
       .preseedRoomState()
       // hauler 站在 (16,16)：与 container(16,15) 和 drop(17,15) 都相邻（range 1）
-      .creep("haul1", "hauler", 16, 16, [
-        { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-        { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-        { type: "move" }, { type: "move" }, { type: "move" }, { type: "move" }, { type: "move" },
-      ], { memory: { mode: "acquire" } })
+      .creep(
+        "haul1",
+        "hauler",
+        16,
+        16,
+        [
+          { type: "carry" },
+          { type: "carry" },
+          { type: "carry" },
+          { type: "carry" },
+          { type: "carry" },
+          { type: "carry" },
+          { type: "carry" },
+          { type: "carry" },
+          { type: "carry" },
+          { type: "carry" },
+          { type: "move" },
+          { type: "move" },
+          { type: "move" },
+          { type: "move" },
+          { type: "move" },
+        ],
+        { memory: { mode: "acquire" } },
+      )
       .build();
 
     const container = world.containers[0]!;
@@ -73,16 +95,31 @@ describe("Hauler 取能优先级 — 抽 container 优先于捡溢出 drop", () 
       // 无 container，只有 drop
       .droppedResource(16, 15, 100)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
       .cpu(10000)
       .preseedRoomState()
-      .creep("haul1", "hauler", 16, 16, [
-        { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-        { type: "move" }, { type: "move" }, { type: "move" },
-      ], { memory: { mode: "acquire" } })
+      .creep(
+        "haul1",
+        "hauler",
+        16,
+        16,
+        [
+          { type: "carry" },
+          { type: "carry" },
+          { type: "carry" },
+          { type: "carry" },
+          { type: "carry" },
+          { type: "move" },
+          { type: "move" },
+          { type: "move" },
+        ],
+        { memory: { mode: "acquire" } },
+      )
       .build();
 
     const dropBefore = world.droppedResources[0]?.amount ?? 0;

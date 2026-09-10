@@ -23,7 +23,6 @@ export interface CorridorPathCacheStore {
  * 路成后 hauler 移动成本 plain 2→1，等效运力翻倍，RCL2 即可生效。
  */
 
-
 export interface CorridorPair {
   readonly from: { x: number; y: number; roomName: string };
   readonly to: { x: number; y: number; roomName: string };
@@ -37,7 +36,6 @@ export interface CorridorRoadOptions {
 export const DEFAULT_CORRIDOR_OPTIONS: CorridorRoadOptions = {
   maxRoadsPerCycle: 12,
 };
-
 
 function isSourceContainer(c: StructureContainer, snapshot: RoomSnapshot): boolean {
   return snapshot.sources.some(
@@ -56,18 +54,15 @@ export function collectCorridorEndpoints(snapshot: RoomSnapshot): CorridorPair[]
 
   const pairs: CorridorPair[] = [];
 
-
   if (snapshot.controllerContainer) {
     const cc = snapshot.controllerContainer;
     pairs.push({ from: { x: cc.pos.x, y: cc.pos.y, roomName: snapshot.roomName }, to: core });
   }
 
-
   for (const c of snapshot.containers) {
     if (!isSourceContainer(c, snapshot)) continue;
     pairs.push({ from: { x: c.pos.x, y: c.pos.y, roomName: snapshot.roomName }, to: core });
   }
-
 
   if (snapshot.storage) {
     const st = snapshot.storage;
@@ -101,7 +96,12 @@ export function buildCorridorCostMatrix(
       if (terrain.get(x, y) === TERRAIN_MASK_WALL) cost.set(x, y, 255);
     }
   }
-  for (const s of [...snapshot.spawns, ...snapshot.extensions, ...snapshot.towers, ...snapshot.containers]) {
+  for (const s of [
+    ...snapshot.spawns,
+    ...snapshot.extensions,
+    ...snapshot.towers,
+    ...snapshot.containers,
+  ]) {
     cost.set(s.pos.x, s.pos.y, 255);
   }
   if (snapshot.storage) cost.set(snapshot.storage.pos.x, snapshot.storage.pos.y, 255);
@@ -109,7 +109,6 @@ export function buildCorridorCostMatrix(
   if (snapshot.controller) cost.set(snapshot.controller.pos.x, snapshot.controller.pos.y, 255);
   for (const s of snapshot.constructionSites) cost.set(s.pos.x, s.pos.y, 255);
   for (const r of snapshot.roads) cost.set(r.pos.x, r.pos.y, 1);
-
 
   if (protectedPositions) {
     for (const packed of protectedPositions) {
@@ -134,11 +133,15 @@ export function defaultPathFn(
   return (from, to) => {
     const fromPos = new RoomPosition(from.x, from.y, from.roomName);
     const toPos = new RoomPosition(to.x, to.y, to.roomName);
-    const ret = PathFinder.search(fromPos, { pos: toPos, range: 1 }, {
-      plainCost: 2,
-      swampCost: 10,
-      roomCallback: () => cost,
-    });
+    const ret = PathFinder.search(
+      fromPos,
+      { pos: toPos, range: 1 },
+      {
+        plainCost: 2,
+        swampCost: 10,
+        roomCallback: () => cost,
+      },
+    );
     return ret.path.map(p => ({ x: p.x, y: p.y }));
   };
 }
@@ -171,21 +174,28 @@ export function planCorridorRoads(
   const pairs = collectCorridorEndpoints(snapshot);
   if (pairs.length === 0) return [];
 
-
   const pair = pairs[0]!;
   const pairKey = `${pair.from.x},${pair.from.y}→${pair.to.x},${pair.to.y}`;
-
 
   // 路径缓存查询（仅当 anchor 提供且 cacheStore 注入时启用）。
   let path: { x: number; y: number }[];
   if (anchor && !pathFn && cacheStore) {
-    path = getCachedOrComputePath(snapshot.roomName, pairKey, pair, anchor, snapshot, room, tick!, protectedPositions, cacheStore);
+    path = getCachedOrComputePath(
+      snapshot.roomName,
+      pairKey,
+      pair,
+      anchor,
+      snapshot,
+      room,
+      tick!,
+      protectedPositions,
+      cacheStore,
+    );
   } else {
     // 单测注入 pathFn 或无 anchor 时不走缓存（保证测试确定性）。
     const fn = pathFn ?? defaultPathFn(snapshot, room, protectedPositions);
     path = fn(pair.from, pair.to);
   }
-
 
   // 已占用格：不能在其上修路，也不重复入队。
   const occupied = new Set<string>();
@@ -201,7 +211,8 @@ export function planCorridorRoads(
   }
   if (snapshot.storage) occupied.add(`${snapshot.storage.pos.x},${snapshot.storage.pos.y}`);
   for (const s of snapshot.sources) occupied.add(`${s.pos.x},${s.pos.y}`);
-  if (snapshot.controller) occupied.add(`${snapshot.controller.pos.x},${snapshot.controller.pos.y}`);
+  if (snapshot.controller)
+    occupied.add(`${snapshot.controller.pos.x},${snapshot.controller.pos.y}`);
 
   const seen = new Set<string>();
   const result: { x: number; y: number; roomName: string }[] = [];

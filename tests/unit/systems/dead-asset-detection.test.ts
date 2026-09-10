@@ -10,11 +10,7 @@ import { globalCache } from "../../../src/kernel/global-cache";
 import type { LinkInfo } from "../../../src/domain/economy/links";
 import { resetGlobals } from "../../support/factories";
 
-function makeLink(
-  id: string,
-  role: LinkInfo["role"],
-  energy = 0,
-): LinkInfo {
+function makeLink(id: string, role: LinkInfo["role"], energy = 0): LinkInfo {
   return { id, role, energy, energyCapacity: 800, cooldown: 0 };
 }
 
@@ -75,7 +71,10 @@ describe("computeDeadAssetSince — 三重校验纯函数", () => {
   });
 
   it("link 消失（不在 infos 中）→ 自动清理计时器", () => {
-    const prev = new Map([["src1", 500], ["src2", 600]]);
+    const prev = new Map([
+      ["src1", 500],
+      ["src2", 600],
+    ]);
     const infos = [makeLink("src1", "source", 0)]; // src2 消失
     const next = computeDeadAssetSince(infos, 1000, prev);
     expect(next.has("src1")).toBe(true);
@@ -83,10 +82,7 @@ describe("computeDeadAssetSince — 三重校验纯函数", () => {
   });
 
   it("W3N7 死资产场景：2 个 source link 死资产 + 无 controller/storage", () => {
-    const infos = [
-      makeLink("src_link1", "source", 0),
-      makeLink("src_link2", "source", 0),
-    ];
+    const infos = [makeLink("src_link1", "source", 0), makeLink("src_link2", "source", 0)];
     const next = computeDeadAssetSince(infos, 1000, new Map());
     expect(next.get("src_link1")).toBe(1000);
     expect(next.get("src_link2")).toBe(1000);
@@ -119,7 +115,7 @@ describe("getDeadAssetLinks — 持续阈值过滤", () => {
   it("多个死资产：达到阈值的返回，未达到的不返回", () => {
     const cache = globalCache();
     cache.deadAssetSince = new Map([
-      ["src1", 500],  // 1500-500=1000 >= 500 ✓
+      ["src1", 500], // 1500-500=1000 >= 500 ✓
       ["src2", 1100], // 1500-1100=400 < 500 ✗
     ]);
     expect(getDeadAssetLinks(1500)).toEqual(["src1"]);
@@ -140,7 +136,10 @@ describe("clearDeadAssetLink — 清除指定计时器", () => {
 
   it("清除指定 link id → getDeadAssetLinks 不再返回", () => {
     const cache = globalCache();
-    cache.deadAssetSince = new Map([["src1", 500], ["src2", 500]]);
+    cache.deadAssetSince = new Map([
+      ["src1", 500],
+      ["src2", 500],
+    ]);
     clearDeadAssetLink("src1");
     expect(getDeadAssetLinks(1500)).toEqual(["src2"]);
   });

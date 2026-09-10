@@ -20,13 +20,7 @@ const T2_CIRCUIT: CommodityRecipe = {
 describe("selectCommodityTarget — commodity 生产目标选择", () => {
   it("原料 = factory + storage 合计（跨容器合成）", () => {
     // factory 有 U 5、storage 有 U 5 → T1 wire 可产（合计 10 达标）。
-    const target = selectCommodityTarget(
-      { U: 5, energy: 50 },
-      { U: 5 },
-      0,
-      [T1_WIRE],
-      0,
-    );
+    const target = selectCommodityTarget({ U: 5, energy: 50 }, { U: 5 }, 0, [T1_WIRE], 0);
     expect(target?.resourceType).toBe("wire");
   });
 

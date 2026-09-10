@@ -28,9 +28,7 @@ import {
   extractBlockedCandidates,
   DEFAULT_DEFENSE_OPTIONS,
 } from "../../../src/domain/layout/task-factory";
-import {
-  collectCompletedKeysFromStructures,
-} from "../../../src/domain/layout/validation";
+import { collectCompletedKeysFromStructures } from "../../../src/domain/layout/validation";
 import { evaluateRoadCandidates } from "../../../src/domain/layout/road-policy";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 
@@ -57,9 +55,9 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
     walls: [],
     ramparts: [],
     storage: undefined,
-controllerContainer: undefined,
-links: [],
-sources: [],
+    controllerContainer: undefined,
+    links: [],
+    sources: [],
     constructionSites: [],
     myConstructionSites: [],
     hostileCreeps: [],
@@ -213,7 +211,8 @@ describe("Layout — COMPACT_CORE_V2", () => {
 describe("Layout — scoreCandidate", () => {
   it("higher buildable tiles = higher score", () => {
     const low: CandidateInput = {
-      x: 25, y: 25,
+      x: 25,
+      y: 25,
       buildableCoreTiles: 10,
       averageDistanceToSources: 5,
       distanceToController: 10,
@@ -226,7 +225,8 @@ describe("Layout — scoreCandidate", () => {
 
   it("more blocked cells = lower score", () => {
     const clean: CandidateInput = {
-      x: 25, y: 25,
+      x: 25,
+      y: 25,
       buildableCoreTiles: 10,
       averageDistanceToSources: 5,
       distanceToController: 10,
@@ -241,9 +241,33 @@ describe("Layout — scoreCandidate", () => {
 describe("Layout — selectBestCandidate", () => {
   it("returns highest scoring candidate", () => {
     const candidates: CandidateInput[] = [
-      { x: 10, y: 10, buildableCoreTiles: 5, averageDistanceToSources: 10, distanceToController: 20, exitRisk: 5, blockedTemplateCells: 3 },
-      { x: 25, y: 25, buildableCoreTiles: 20, averageDistanceToSources: 5, distanceToController: 10, exitRisk: 15, blockedTemplateCells: 0 },
-      { x: 40, y: 40, buildableCoreTiles: 10, averageDistanceToSources: 15, distanceToController: 25, exitRisk: 5, blockedTemplateCells: 1 },
+      {
+        x: 10,
+        y: 10,
+        buildableCoreTiles: 5,
+        averageDistanceToSources: 10,
+        distanceToController: 20,
+        exitRisk: 5,
+        blockedTemplateCells: 3,
+      },
+      {
+        x: 25,
+        y: 25,
+        buildableCoreTiles: 20,
+        averageDistanceToSources: 5,
+        distanceToController: 10,
+        exitRisk: 15,
+        blockedTemplateCells: 0,
+      },
+      {
+        x: 40,
+        y: 40,
+        buildableCoreTiles: 10,
+        averageDistanceToSources: 15,
+        distanceToController: 25,
+        exitRisk: 5,
+        blockedTemplateCells: 1,
+      },
     ];
     const best = selectBestCandidate(candidates);
     expect(best?.x).toBe(25);
@@ -259,7 +283,8 @@ describe("Layout — selectBestCandidate", () => {
 describe("Layout — validateBuildCell", () => {
   const cell: BlueprintCell = {
     key: "test.ext",
-    dx: 0, dy: 0,
+    dx: 0,
+    dy: 0,
     structureType: STRUCTURE_EXTENSION,
     minRcl: 2,
     phase: "rcl2",
@@ -296,7 +321,8 @@ describe("Layout — validateBuildCell", () => {
   it("returns 'dependency' when requires not met", () => {
     const dependentCell: BlueprintCell = {
       key: "test.link",
-      dx: 0, dy: 1,
+      dx: 0,
+      dy: 1,
       structureType: STRUCTURE_LINK,
       minRcl: 5,
       phase: "late",
@@ -305,14 +331,21 @@ describe("Layout — validateBuildCell", () => {
       requires: ["core.storage.01"],
     };
     const snapshot = mockSnapshot({ rcl: 5 });
-    const result = validateBuildCell(mockRoom(), dependentCell, { x: 25, y: 26 }, snapshot, defaultOptions);
+    const result = validateBuildCell(
+      mockRoom(),
+      dependentCell,
+      { x: 25, y: 26 },
+      snapshot,
+      defaultOptions,
+    );
     expect(result).toBe("dependency");
   });
 
   it("returns 'ok' when dependency is met", () => {
     const dependentCell: BlueprintCell = {
       key: "test.link",
-      dx: 0, dy: 1,
+      dx: 0,
+      dy: 1,
       structureType: STRUCTURE_LINK,
       minRcl: 5,
       phase: "late",
@@ -325,7 +358,13 @@ describe("Layout — validateBuildCell", () => {
       ...defaultOptions,
       completedKeys: new Set(["core.storage.01"]),
     };
-    const result = validateBuildCell(mockRoom(), dependentCell, { x: 25, y: 26 }, snapshot, options);
+    const result = validateBuildCell(
+      mockRoom(),
+      dependentCell,
+      { x: 25, y: 26 },
+      snapshot,
+      options,
+    );
     expect(result).toBe("ok");
   });
 
@@ -344,9 +383,33 @@ describe("Layout — validateBuildCell", () => {
 describe("Layout — collectCompletedKeys", () => {
   it("collects done and site state keys", () => {
     const queue: BuildTask[] = [
-      { key: "a", pos: { x: 0, y: 0, roomName: "W1N1" }, structureType: STRUCTURE_EXTENSION, priority: 1, state: "done", attempts: 0, retryAt: 0 },
-      { key: "b", pos: { x: 1, y: 0, roomName: "W1N1" }, structureType: STRUCTURE_EXTENSION, priority: 1, state: "site", attempts: 0, retryAt: 0 },
-      { key: "c", pos: { x: 2, y: 0, roomName: "W1N1" }, structureType: STRUCTURE_EXTENSION, priority: 1, state: "queued", attempts: 0, retryAt: 0 },
+      {
+        key: "a",
+        pos: { x: 0, y: 0, roomName: "W1N1" },
+        structureType: STRUCTURE_EXTENSION,
+        priority: 1,
+        state: "done",
+        attempts: 0,
+        retryAt: 0,
+      },
+      {
+        key: "b",
+        pos: { x: 1, y: 0, roomName: "W1N1" },
+        structureType: STRUCTURE_EXTENSION,
+        priority: 1,
+        state: "site",
+        attempts: 0,
+        retryAt: 0,
+      },
+      {
+        key: "c",
+        pos: { x: 2, y: 0, roomName: "W1N1" },
+        structureType: STRUCTURE_EXTENSION,
+        priority: 1,
+        state: "queued",
+        attempts: 0,
+        retryAt: 0,
+      },
     ];
     const completed = collectCompletedKeys(queue);
     expect(completed.has("a")).toBe(true);
@@ -380,7 +443,8 @@ describe("Layout — blueprintToTasks", () => {
     const snapshot = mockSnapshot({ rcl: 2 });
     const candidates = blueprintToTasks(
       COMPACT_CORE_V2,
-      25, 25,
+      25,
+      25,
       "W1N1",
       mockRoom(),
       snapshot,
@@ -400,7 +464,8 @@ describe("Layout — blueprintToTasks", () => {
     const snapshot = mockSnapshot({ rcl: 3 });
     const candidates = blueprintToTasks(
       COMPACT_CORE_V2,
-      25, 25,
+      25,
+      25,
       "W1N1",
       mockRoom(),
       snapshot,
@@ -445,7 +510,10 @@ describe("Layout — evaluateRoadCandidates", () => {
   });
 
   it("returns candidates with high traffic near endpoints", () => {
-    const spawn = { pos: { x: 25, y: 25 }, structureType: STRUCTURE_SPAWN } as unknown as StructureSpawn;
+    const spawn = {
+      pos: { x: 25, y: 25 },
+      structureType: STRUCTURE_SPAWN,
+    } as unknown as StructureSpawn;
     const source = { id: "src1", pos: { x: 30, y: 25, roomName: "W1N1" } } as unknown as Source;
     const snapshot = mockSnapshot({
       spawns: [spawn],
@@ -494,8 +562,16 @@ describe("Layout — createSourceContainerTasks", () => {
     const source1 = { id: "src1", pos: { x: 10, y: 10, roomName: "W1N1" } } as unknown as Source;
     const source2 = { id: "src2", pos: { x: 40, y: 40, roomName: "W1N1" } } as unknown as Source;
     // RCL2 container 上限是 5，但 sources 数量为 2 — 已有 2 个 container 即满足
-    const c1 = { id: "c1", structureType: STRUCTURE_CONTAINER, pos: { x: 11, y: 10, roomName: "W1N1" } } as unknown as StructureContainer;
-    const c2 = { id: "c2", structureType: STRUCTURE_CONTAINER, pos: { x: 41, y: 40, roomName: "W1N1" } } as unknown as StructureContainer;
+    const c1 = {
+      id: "c1",
+      structureType: STRUCTURE_CONTAINER,
+      pos: { x: 11, y: 10, roomName: "W1N1" },
+    } as unknown as StructureContainer;
+    const c2 = {
+      id: "c2",
+      structureType: STRUCTURE_CONTAINER,
+      pos: { x: 41, y: 40, roomName: "W1N1" },
+    } as unknown as StructureContainer;
     const snapshot = mockSnapshot({
       sources: [source1, source2],
       containers: [c1, c2],
@@ -509,13 +585,17 @@ describe("Layout — createSourceContainerTasks", () => {
 // ── task-factory.ts — createControllerContainerTask ──
 describe("Layout — createControllerContainerTask", () => {
   it("returns undefined when RCL < 2", () => {
-    const controller = { pos: { x: 30, y: 30, roomName: "W1N1" } } as unknown as StructureController;
+    const controller = {
+      pos: { x: 30, y: 30, roomName: "W1N1" },
+    } as unknown as StructureController;
     const snapshot = mockSnapshot({ controller, rcl: 1 });
     expect(createControllerContainerTask(snapshot, mockRoom(), defaultOptions)).toBeUndefined();
   });
 
   it("returns undefined when controller has adjacent container", () => {
-    const controller = { pos: { x: 30, y: 30, roomName: "W1N1" } } as unknown as StructureController;
+    const controller = {
+      pos: { x: 30, y: 30, roomName: "W1N1" },
+    } as unknown as StructureController;
     const container = {
       id: "c1",
       structureType: STRUCTURE_CONTAINER,
@@ -526,7 +606,9 @@ describe("Layout — createControllerContainerTask", () => {
   });
 
   it("creates a controller container task when no adjacent container", () => {
-    const controller = { pos: { x: 30, y: 30, roomName: "W1N1" } } as unknown as StructureController;
+    const controller = {
+      pos: { x: 30, y: 30, roomName: "W1N1" },
+    } as unknown as StructureController;
     const snapshot = mockSnapshot({ controller, rcl: 3 });
     const result = createControllerContainerTask(snapshot, mockRoom(), defaultOptions);
     expect(result).toBeDefined();
@@ -540,10 +622,38 @@ describe("Layout — createControllerContainerTask", () => {
 describe("Layout — extractBlockedCandidates", () => {
   it("extracts only terrain/occupied failures", () => {
     const candidates = [
-      { validation: "ok" as const, key: "k1", pos: { x: 0, y: 0, roomName: "W1N1" }, structureType: STRUCTURE_EXTENSION as BuildableStructureConstant, priority: 1 as const, phase: "rcl2" as const },
-      { validation: "terrain" as const, key: "k2", pos: { x: 0, y: 0, roomName: "W1N1" }, structureType: STRUCTURE_EXTENSION as BuildableStructureConstant, priority: 1 as const, phase: "rcl2" as const },
-      { validation: "occupied" as const, key: "k3", pos: { x: 0, y: 0, roomName: "W1N1" }, structureType: STRUCTURE_EXTENSION as BuildableStructureConstant, priority: 1 as const, phase: "rcl2" as const },
-      { validation: "rcl" as const, key: "k4", pos: { x: 0, y: 0, roomName: "W1N1" }, structureType: STRUCTURE_EXTENSION as BuildableStructureConstant, priority: 1 as const, phase: "rcl2" as const },
+      {
+        validation: "ok" as const,
+        key: "k1",
+        pos: { x: 0, y: 0, roomName: "W1N1" },
+        structureType: STRUCTURE_EXTENSION as BuildableStructureConstant,
+        priority: 1 as const,
+        phase: "rcl2" as const,
+      },
+      {
+        validation: "terrain" as const,
+        key: "k2",
+        pos: { x: 0, y: 0, roomName: "W1N1" },
+        structureType: STRUCTURE_EXTENSION as BuildableStructureConstant,
+        priority: 1 as const,
+        phase: "rcl2" as const,
+      },
+      {
+        validation: "occupied" as const,
+        key: "k3",
+        pos: { x: 0, y: 0, roomName: "W1N1" },
+        structureType: STRUCTURE_EXTENSION as BuildableStructureConstant,
+        priority: 1 as const,
+        phase: "rcl2" as const,
+      },
+      {
+        validation: "rcl" as const,
+        key: "k4",
+        pos: { x: 0, y: 0, roomName: "W1N1" },
+        structureType: STRUCTURE_EXTENSION as BuildableStructureConstant,
+        priority: 1 as const,
+        phase: "rcl2" as const,
+      },
     ];
     const blocked = extractBlockedCandidates(candidates);
     expect(blocked.map(c => c.key)).toEqual(["k2", "k3"]);
@@ -561,7 +671,12 @@ describe("Layout — collectCompletedKeysFromStructures", () => {
     } as unknown as StructureExtension;
     const snapshot = mockSnapshot({ extensions: [extension] });
 
-    const result = collectCompletedKeysFromStructures(COMPACT_CORE_V2, anchor.x, anchor.y, snapshot);
+    const result = collectCompletedKeysFromStructures(
+      COMPACT_CORE_V2,
+      anchor.x,
+      anchor.y,
+      snapshot,
+    );
     // 找出 COMPACT_CORE_V2 中 dx=2, dy=0 的 cell
     const matchingCell = COMPACT_CORE_V2.cells.find(c => c.dx === 2 && c.dy === 0);
     expect(matchingCell?.structureType).toBe(STRUCTURE_EXTENSION);
@@ -577,7 +692,12 @@ describe("Layout — collectCompletedKeysFromStructures", () => {
     } as unknown as StructureExtension;
     const snapshot = mockSnapshot({ extensions: [extension] });
 
-    const result = collectCompletedKeysFromStructures(COMPACT_CORE_V2, anchor.x, anchor.y, snapshot);
+    const result = collectCompletedKeysFromStructures(
+      COMPACT_CORE_V2,
+      anchor.x,
+      anchor.y,
+      snapshot,
+    );
     expect(result.size).toBe(0);
   });
 
@@ -591,7 +711,12 @@ describe("Layout — collectCompletedKeysFromStructures", () => {
     } as unknown as StructureExtension;
     const snapshot = mockSnapshot({ extensions: [extension] });
 
-    const result = collectCompletedKeysFromStructures(COMPACT_CORE_V2, newAnchor.x, newAnchor.y, snapshot);
+    const result = collectCompletedKeysFromStructures(
+      COMPACT_CORE_V2,
+      newAnchor.x,
+      newAnchor.y,
+      snapshot,
+    );
     // 不应包含任何 extension cell — 验证 anchor 变化后旧结构不会被误识别。
     for (const cell of COMPACT_CORE_V2.cells.filter(c => c.structureType === STRUCTURE_EXTENSION)) {
       expect(result.has(cell.key)).toBe(false);
@@ -622,22 +747,20 @@ describe("Layout — countExistingAndSites via validateBuildCell (road coverage)
     };
     // 在不同位置建 road — 不会触发 occupied（isOccupied 未含 road），
     // 也不会触发 rcl（250 上限未达）— 应返回 "ok"。
-    const result = validateBuildCell(
-      mockRoom(),
-      cell,
-      { x: 16, y: 16 },
-      snapshot,
-      defaultOptions,
-    );
+    const result = validateBuildCell(mockRoom(), cell, { x: 16, y: 16 }, snapshot, defaultOptions);
     expect(result).toBe("ok");
   });
 
   it("counts extensions correctly — RCL limit triggers rcl failure", () => {
     // 验证通用扫描能正确计数 extension：RCL2 上限 5，已有 5 个时应返回 "rcl"。
-    const extensions = Array.from({ length: 5 }, (_, i) => ({
-      structureType: STRUCTURE_EXTENSION,
-      pos: { x: 10 + i, y: 10, roomName: "W1N1" },
-    } as unknown as StructureExtension));
+    const extensions = Array.from(
+      { length: 5 },
+      (_, i) =>
+        ({
+          structureType: STRUCTURE_EXTENSION,
+          pos: { x: 10 + i, y: 10, roomName: "W1N1" },
+        }) as unknown as StructureExtension,
+    );
     const snapshot = mockSnapshot({ extensions, rcl: 2 });
     const cell: BlueprintCell = {
       key: "ext.test",
@@ -650,13 +773,7 @@ describe("Layout — countExistingAndSites via validateBuildCell (road coverage)
       tags: ["core"],
     };
     // 已有 5 个 extension（RCL2 上限），新位置应返回 "rcl"。
-    const result = validateBuildCell(
-      mockRoom(),
-      cell,
-      { x: 20, y: 20 },
-      snapshot,
-      defaultOptions,
-    );
+    const result = validateBuildCell(mockRoom(), cell, { x: 20, y: 20 }, snapshot, defaultOptions);
     expect(result).toBe("rcl");
   });
 });

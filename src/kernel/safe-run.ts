@@ -104,15 +104,15 @@ export function safeRunBuild<T>(label: string, factory: () => T, critical = fals
 /** 执行操作并测量其 CPU 消耗用于遥测。返回 CPU 消耗量。 */
 export function measuredRun(label: string, action: () => void): number {
   const before = Game.cpu.getUsed();
+  let cost = 0;
   try {
     action();
   } finally {
     const after = Game.cpu.getUsed();
-    const cost = after - before;
+    cost = after - before;
     recordCpu(label, cost);
-    return cost;
   }
-  return 0; // unreachable — try/finally 保证 return cost 已执行
+  return cost;
 }
 
 function recordError(): void {

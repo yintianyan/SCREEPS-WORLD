@@ -163,14 +163,11 @@ export interface ThrashingResult {
  */
 export function computeAutonomyScore(input: AutonomyScoreInput): AutonomyScoreResult {
   // ── 1. 经济闭环得分 ──
-  const economicLoopScore = input.economicLoopActive
-    ? Math.round(input.economicLoopRate * 100)
-    : 0;
+  const economicLoopScore = input.economicLoopActive ? Math.round(input.economicLoopRate * 100) : 0;
 
   // ── 2. 失败恢复得分 ──
-  const recoveryRate = input.totalFailuresDetected > 0
-    ? input.autoRecoveredFailures / input.totalFailuresDetected
-    : 1; // 无失败 = 满分
+  const recoveryRate =
+    input.totalFailuresDetected > 0 ? input.autoRecoveredFailures / input.totalFailuresDetected : 1; // 无失败 = 满分
   // 活跃失败数惩罚
   const activePenalty = Math.min(30, input.activeFailures * 5);
   const failureRecoveryScore = Math.max(0, Math.round(recoveryRate * 100 - activePenalty));
@@ -181,9 +178,7 @@ export function computeAutonomyScore(input: AutonomyScoreInput): AutonomyScoreRe
 
   // ── 4. 稳态维持得分 ──
   // 10000 tick 稳态 = 满分
-  const stabilityScore = Math.min(100, Math.round(
-    (input.consecutiveStableTicks / 10000) * 100,
-  ));
+  const stabilityScore = Math.min(100, Math.round((input.consecutiveStableTicks / 10000) * 100));
 
   // ── 5. 扰动恢复得分 ──
   let perturbationRecoveryScore: number;
@@ -194,18 +189,16 @@ export function computeAutonomyScore(input: AutonomyScoreInput): AutonomyScoreRe
     // 平均恢复时间
     const avgRecoveryTime = input.totalRecoveryTime / input.perturbationCount;
     // 500 tick 恢复 = 满分，5000 tick = 0 分
-    perturbationRecoveryScore = Math.max(0, Math.round(
-      100 * (1 - (avgRecoveryTime - 500) / 4500),
-    ));
+    perturbationRecoveryScore = Math.max(0, Math.round(100 * (1 - (avgRecoveryTime - 500) / 4500)));
   }
 
   // ── 加权汇总 ──
   const score = Math.round(
     economicLoopScore * 0.25 +
-    failureRecoveryScore * 0.25 +
-    manualInterventionScore * 0.20 +
-    stabilityScore * 0.15 +
-    perturbationRecoveryScore * 0.15,
+      failureRecoveryScore * 0.25 +
+      manualInterventionScore * 0.2 +
+      stabilityScore * 0.15 +
+      perturbationRecoveryScore * 0.15,
   );
 
   // ── 等级映射 ──
@@ -415,7 +408,9 @@ export function detectThrashing(input: ThrashingInput): ThrashingResult {
     `severity=${severity.toFixed(2)}`,
     `areas=${affectedAreas.join(",")}`,
     cyclingDomain ? `worst=${cyclingDomain}(${maxCycles}cycles)` : "",
-  ].filter(Boolean).join(" | ");
+  ]
+    .filter(Boolean)
+    .join(" | ");
 
   return {
     detected,
@@ -458,10 +453,7 @@ export function evaluateAutonomyStatus(
   noProgress: NoProgressResult,
   thrashing: ThrashingResult,
 ): AutonomyStatus {
-  const autonomous =
-    score.score >= 50 &&
-    !noProgress.detected &&
-    !thrashing.detected;
+  const autonomous = score.score >= 50 && !noProgress.detected && !thrashing.detected;
 
   const summary = [
     `AutonomyStatus @${score.tick}`,

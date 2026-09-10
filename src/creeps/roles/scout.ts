@@ -17,14 +17,14 @@ import { defineRole } from "../engine/role-runner";
 function reconRoomAction(): ActionCandidate<true> {
   return {
     name: "scout:recon-room",
-    resolve: (ac) => {
+    resolve: ac => {
       const target = ac.creep.memory.remoteTarget;
       if (!target || ac.creep.room.name !== target) return undefined;
       // 已标记回收 — 不重复执行
       if (ac.creep.memory.recycle) return undefined;
       return true;
     },
-    execute: (ac) => {
+    execute: ac => {
       // 侦察完成 — 标记自回收，spawn-manager 引导归航
       ac.creep.memory.recycle = true;
     },

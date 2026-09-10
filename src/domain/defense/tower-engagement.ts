@@ -38,7 +38,6 @@ export function towerDamageAt(range: number): number {
 
 /** 交战判定结果。 */
 export interface EngagementDecision {
-
   engage: boolean;
   /** 全塔合计期望伤害（诊断用）。 */
   expectedDamage: number;

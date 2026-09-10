@@ -13,12 +13,13 @@ import {
   type SquadStuckDetection,
 } from "../domain/tactical";
 import type { TerrainContext } from "../domain/defense/terrain-context";
-import type {
-  SquadPlan,
-  TacticalState,
-  FormationType,
-} from "../domain/tactical/types";
-import { registerMove, registerAnchor, movePriorityFor, trafficEnabled } from "../creeps/movement/intent";
+import type { SquadPlan, TacticalState, FormationType } from "../domain/tactical/types";
+import {
+  registerMove,
+  registerAnchor,
+  movePriorityFor,
+  trafficEnabled,
+} from "../creeps/movement/intent";
 import { moveToTarget, moveTowardRoom } from "../creeps/movement/pathfinding";
 import { packPos } from "../creeps/movement/traffic";
 import { recordSkip } from "../kernel/memory";
@@ -105,12 +106,7 @@ export const squadMovementSystem: System = {
     // ── 7. 编队级 Stuck Detection ──
     const prevPos = g.prevAnchorPos.get(squadPlan.squadId);
     const prevStuck = g.anchorStuckTicks.get(squadPlan.squadId) ?? 0;
-    const stuckDetection = detectSquadStuck(
-      squadSnapshot,
-      intent.anchor,
-      prevPos,
-      prevStuck,
-    );
+    const stuckDetection = detectSquadStuck(squadSnapshot, intent.anchor, prevPos, prevStuck);
 
     // 更新 stuck 跟踪
     g.prevAnchorPos.set(squadPlan.squadId, intent.anchor.pos);
@@ -121,8 +117,11 @@ export const squadMovementSystem: System = {
       // 严重卡位 — 清除共享路径，下 tick 重算
       g.squadSharedPaths.delete(squadPlan.squadId);
       recordSkip("squad-movement/stuck");
-      log.info("squad-movement-runtime", `squad-movement: ${stuckDetection.level} for squad=${squadPlan.squadId}` +
-        ` stuckTicks=${stuckDetection.anchorStuckTicks} reason="${stuckDetection.reason}"`,);
+      log.info(
+        "squad-movement-runtime",
+        `squad-movement: ${stuckDetection.level} for squad=${squadPlan.squadId}` +
+          ` stuckTicks=${stuckDetection.anchorStuckTicks} reason="${stuckDetection.reason}"`,
+      );
     }
 
     // ── 9. 执行移动（PathFinder boundary） ──
@@ -154,10 +153,7 @@ export const squadMovementSystem: System = {
  *   - 本模块是唯一调 PathFinder 的编队移动模块
  *   - 共享路径：Path Leader 算一次，其他成员复用
  */
-function executeSquadMovement(
-  intent: SquadMovementIntent,
-  stuck: SquadStuckDetection,
-): void {
+function executeSquadMovement(intent: SquadMovementIntent, stuck: SquadStuckDetection): void {
   const { anchor, slots, destination, destinationRoom, cohesion } = intent;
 
   // 无存活成员 — 无需移动
@@ -165,7 +161,11 @@ function executeSquadMovement(
 
   // ENGAGING 状态 — 不大范围移动，维持阵位
   // 只有严重卡位时才强制重算路径
-  if (intent.mode === "OBJECTIVE_RELATIVE" && cohesion.status === "INTACT" && stuck.level === "NONE") {
+  if (
+    intent.mode === "OBJECTIVE_RELATIVE" &&
+    cohesion.status === "INTACT" &&
+    stuck.level === "NONE"
+  ) {
     // 阵型完整且无卡位 — 只微调成员到 DesiredPosition
     adjustMembersToSlots(slots);
     return;
@@ -219,9 +219,7 @@ function executeSquadMovement(
  * 不调 PathFinder — 只走单步方向（getDirectionTo + registerMove）。
  * 长距离移动由 Path Leader 的 moveToTarget 处理。
  */
-function adjustMembersToSlots(
-  slots: readonly FormationSlot[],
-): void {
+function adjustMembersToSlots(slots: readonly FormationSlot[]): void {
   for (const slot of slots) {
     const creep = Game.creeps[slot.creepName];
     if (!creep) continue;
@@ -250,10 +248,7 @@ function adjustMembersToSlots(
     // 紧邻目标 — 单步直走
     if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
       if (dx === 0 && dy === 0) continue;
-      const dir = creep.pos.getDirectionTo(
-        creep.pos.x + dx,
-        creep.pos.y + dy,
-      );
+      const dir = creep.pos.getDirectionTo(creep.pos.x + dx, creep.pos.y + dy);
       if (dir !== null) {
         registerMove(creep, dir, movePriorityFor(creep));
       }
@@ -308,11 +303,20 @@ function buildSquadPlanFromWarPlan(
       boosted: entry.boosted,
       ticksToLive: creep?.ticksToLive,
       capability: {
-        attack: 0, rangedAttack: 0, heal: 0, rangedHeal: 0,
-        dismantle: 0, claim: 0, effectiveHP: creep?.hits ?? 0,
-        mobility: 0, support: 0, toughParts: 0,
-        boosted: entry.boosted, maxBoostTier: 0 as 0 | 1 | 2 | 3,
-        totalParts: 0, activeParts: 0,
+        attack: 0,
+        rangedAttack: 0,
+        heal: 0,
+        rangedHeal: 0,
+        dismantle: 0,
+        claim: 0,
+        effectiveHP: creep?.hits ?? 0,
+        mobility: 0,
+        support: 0,
+        toughParts: 0,
+        boosted: entry.boosted,
+        maxBoostTier: 0 as 0 | 1 | 2 | 3,
+        totalParts: 0,
+        activeParts: 0,
       },
     };
   });
@@ -337,10 +341,18 @@ function buildSquadPlanFromWarPlan(
       regroupThreshold: CONFIG.war.waveRegroupRatio,
       healerRequired: true,
       enemyCapability: {
-        totalAttack: 0, totalRangedAttack: 0, totalHeal: 0,
-        totalRangedHeal: 0, totalDismantle: 0, totalClaim: 0,
-        totalEffectiveHP: 0, avgMobility: 0, totalSupport: 0,
-        totalToughParts: 0, boostedCount: 0, maxBoostTier: 0,
+        totalAttack: 0,
+        totalRangedAttack: 0,
+        totalHeal: 0,
+        totalRangedHeal: 0,
+        totalDismantle: 0,
+        totalClaim: 0,
+        totalEffectiveHP: 0,
+        avgMobility: 0,
+        totalSupport: 0,
+        totalToughParts: 0,
+        boostedCount: 0,
+        maxBoostTier: 0,
         creepCount: 0,
       },
       terrainRisk: 0.5,
@@ -494,4 +506,3 @@ export function getCreepFormationSlot(
   }
   return null;
 }
-

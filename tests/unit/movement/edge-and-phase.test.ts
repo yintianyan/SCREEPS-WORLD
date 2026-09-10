@@ -19,7 +19,8 @@ describe("MV-4 — ensureHome 边界格内移", () => {
     creep.room.name = "W7N4";
     creep.room.getTerrain = () => ({
       get: (tx: number, ty: number) => {
-        void tx; void ty;
+        void tx;
+        void ty;
         return terrainWall ? 1 : 0; // TERRAIN_MASK_WALL = 1
       },
     });
@@ -53,10 +54,16 @@ describe("v33 — stepOffEdge 内侧格占用感知", () => {
     const dx = Math.sign(tx - fx);
     const dy = Math.sign(ty - fy);
     const table: Record<string, number> = {
-      "0,-1": 1, "1,-1": 2, "1,0": 3, "1,1": 4,
-      "0,1": 5, "-1,1": 6, "-1,0": 7, "-1,-1": 8,
+      "0,-1": 1,
+      "1,-1": 2,
+      "1,0": 3,
+      "1,1": 4,
+      "0,1": 5,
+      "-1,1": 6,
+      "-1,0": 7,
+      "-1,-1": 8,
     };
-    return table[dx + "," + dy] ?? 3;
+    return table[`${dx},${dy}`] ?? 3;
   }
 
   /**
@@ -70,14 +77,14 @@ describe("v33 — stepOffEdge 内侧格占用感知", () => {
   ): any {
     const creep = mockCreep({ name: "h_1", role: "hauler", home: "W7N4" });
     creep.pos = {
-      ...creep.pos, x, y,
+      ...creep.pos,
+      x,
+      y,
       getDirectionTo: vi.fn((tx: number, ty: number) => dirBetween(x, y, tx, ty)),
     };
     creep.room.name = "W7N4";
     creep.room.getTerrain = () => ({ get: () => 0 });
-    creep.room.lookForAt = vi.fn(
-      (type: string, tx: number, ty: number) => look(type, tx, ty),
-    );
+    creep.room.lookForAt = vi.fn((type: string, tx: number, ty: number) => look(type, tx, ty));
     return creep;
   }
 

@@ -20,27 +20,54 @@ export const HITS_PER_PART = 100;
 /** Boost 倍率表（引擎常量，T1/T2/T3）。 */
 export const BOOST_MULTIPLIERS = {
   // 战斗部件：×2/×3/×4
-  attack:     [1, 2, 3, 4] as const,
+  attack: [1, 2, 3, 4] as const,
   rangedAttack: [1, 2, 3, 4] as const,
-  heal:       [1, 2, 3, 4] as const,
+  heal: [1, 2, 3, 4] as const,
   // TOUGH 减伤系数：T1=0.7, T2=0.5, T3=0.3（值越低减伤越多）
-  tough:      [1, 0.7, 0.5, 0.3] as const,
+  tough: [1, 0.7, 0.5, 0.3] as const,
   // WORK (dismantle) 倍率：×1.5/×1.8/×2
-  dismantle:  [1, 1.5, 1.8, 2] as const,
+  dismantle: [1, 1.5, 1.8, 2] as const,
   // MOVE 倍率：×2/×3/×4（减少 fatigue）
-  move:       [1, 2, 3, 4] as const,
+  move: [1, 2, 3, 4] as const,
   // CLAIM 倍率：×2/×3/×4（不延长寿命）
-  claim:      [1, 2, 3, 4] as const,
+  claim: [1, 2, 3, 4] as const,
 } as const;
 
 /** Boost 矿物 → tier 映射（从矿物类型推断 boost 等级）。 */
 const BOOST_MINERAL_TIER: Record<string, 1 | 2 | 3> = {
   // T1 (base mineral)
-  UH: 1, UO: 1, KH: 1, KO: 1, LH: 1, LO: 1, ZH: 1, ZO: 1, GH: 1, GO: 1,
+  UH: 1,
+  UO: 1,
+  KH: 1,
+  KO: 1,
+  LH: 1,
+  LO: 1,
+  ZH: 1,
+  ZO: 1,
+  GH: 1,
+  GO: 1,
   // T2 (compound)
-  UH2O: 2, UHO2: 2, KH2O: 2, KHO2: 2, LH2O: 2, LHO2: 2, ZH2O: 2, ZHO2: 2, GH2O: 2, GHO2: 2,
+  UH2O: 2,
+  UHO2: 2,
+  KH2O: 2,
+  KHO2: 2,
+  LH2O: 2,
+  LHO2: 2,
+  ZH2O: 2,
+  ZHO2: 2,
+  GH2O: 2,
+  GHO2: 2,
   // T3 (crystal)
-  XUH2O: 3, XUHO2: 3, XKH2O: 3, XKHO2: 3, XLH2O: 3, XLHO2: 3, XZH2O: 3, XZHO2: 3, XGH2O: 3, XGHO2: 3,
+  XUH2O: 3,
+  XUHO2: 3,
+  XKH2O: 3,
+  XKHO2: 3,
+  XLH2O: 3,
+  XLHO2: 3,
+  XZH2O: 3,
+  XZHO2: 3,
+  XGH2O: 3,
+  XGHO2: 3,
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -165,7 +192,7 @@ export function evaluateCombatCapability(creep: CreepSnapshot): CombatCapability
   let claim = 0;
   let support = 0;
   let toughParts = 0;
-  let totalParts = creep.body.length;
+  const totalParts = creep.body.length;
   let activeParts = 0;
   let maxBoostTier: 0 | 1 | 2 | 3 = 0;
   let toughReductionSum = 0; // 用于 effectiveHP 计算
@@ -262,11 +289,12 @@ export function evaluateCombatCapability(creep: CreepSnapshot): CombatCapability
     }
   }
   const moveMult = BOOST_MULTIPLIERS.move[moveBoostTier];
-  const mobility = bodyWeight > 0
-    ? (moveParts * moveMult * 2) / (bodyWeight * 2) // 标准化到平原地形
-    : moveParts > 0
-      ? 1 // 全 MOVE creep
-      : 0; // 无 MOVE = 不可移动
+  const mobility =
+    bodyWeight > 0
+      ? (moveParts * moveMult * 2) / (bodyWeight * 2) // 标准化到平原地形
+      : moveParts > 0
+        ? 1 // 全 MOVE creep
+        : 0; // 无 MOVE = 不可移动
 
   return {
     attack,

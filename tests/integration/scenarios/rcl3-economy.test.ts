@@ -30,9 +30,15 @@ function rcl3World(opts?: {
     .container(34, 15, opts?.containerEnergy ?? 1200)
     // 10 extensions（RCL3 上限）
     .extensions([
-      { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-      { x: 26, y: 23 }, { x: 27, y: 24 }, { x: 23, y: 26 },
-      { x: 24, y: 27 }, { x: 25, y: 27 }, { x: 26, y: 27 },
+      { x: 23, y: 24 },
+      { x: 24, y: 23 },
+      { x: 25, y: 23 },
+      { x: 26, y: 23 },
+      { x: 27, y: 24 },
+      { x: 23, y: 26 },
+      { x: 24, y: 27 },
+      { x: 25, y: 27 },
+      { x: 26, y: 27 },
       { x: 27, y: 26 },
     ])
     .sourceRegen(10)
@@ -59,18 +65,52 @@ describe("RCL3 Economy — 经济形成", () => {
     const world = rcl3World();
 
     // 初始人口：2 harvester + 2 hauler
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 34, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("haul2", "hauler", 22, 22, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      34,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "haul2",
+      "hauler",
+      22,
+      22,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     // 填充 spawn + extensions
     world.spawns[0]!.store.energy = 300;
@@ -110,9 +150,14 @@ describe("RCL3 Economy — 经济形成", () => {
     worldWithCC.room._recalcEnergy();
 
     // P0 worker 预填能量 + work 模式
-    worldWithCC.addCreep("w1", "worker", 29, 35, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { mode: "work" });
+    worldWithCC.addCreep(
+      "w1",
+      "worker",
+      29,
+      35,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { mode: "work" },
+    );
     const worker = worldWithCC.creeps.find(c => c.name === "w1");
     if (worker) worker.store.energy = 50;
 
@@ -130,16 +175,52 @@ describe("RCL3 Economy — 经济形成", () => {
     // container 高 fillRatio（>80%）→ 应该请求更多 hauler
     const world = rcl3World({ containerEnergy: 1800 }); // 90% full
 
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 34, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      34,
+      16,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work" },
+    );
     // 只有 1 个 hauler — 不足以搬走 90% 满的 container
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -150,7 +231,7 @@ describe("RCL3 Economy — 经济形成", () => {
 
     // 运行 800 tick — spawn 应该补充 hauler
     const result = runner.run(world, 800, {
-      stopWhen: (w) => w.creepsByRole("hauler").length >= 2,
+      stopWhen: w => w.creepsByRole("hauler").length >= 2,
     });
 
     // container fillRatio > 80% 时 demand 应该请求额外 hauler
@@ -169,17 +250,25 @@ describe("RCL3 Economy — 经济形成", () => {
       .container(16, 15, 1000, 150000) // 60% hits — 低于 80% 阈值触发维修
       .tower(26, 25, 800)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
       .cpu(10000)
       .build();
 
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -202,21 +291,60 @@ describe("RCL3 Economy — 经济形成", () => {
     const world = rcl3World({ containerEnergy: 1000 });
 
     // 完整 RCL3 人口
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 34, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("haul2", "hauler", 22, 22, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("u1", "upgrader", 29, 35, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      34,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "haul2",
+      "hauler",
+      22,
+      22,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "u1",
+      "upgrader",
+      29,
+      35,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -241,9 +369,14 @@ describe("RCL3 Economy — 经济形成", () => {
     const world = rcl3World({ containerEnergy: 1500 });
 
     // 只给 1 个 harvester — 让 AI 需要补充人口
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work", ticksToLive: 200 });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work", ticksToLive: 200 },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;

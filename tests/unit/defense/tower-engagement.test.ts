@@ -57,20 +57,20 @@ describe("tower-engagement — assessEngagement 开火判定", () => {
 
   it("空能塔不计入火力", () => {
     // 两塔近距但其一无能量：600 vs 55 HEAL × 12 = 660 → 停火。
-    const d = assessEngagement(
-      [towerAt(3), towerAt(3, 0)],
-      { totalHealParts: 55, breachingCore: false },
-    );
+    const d = assessEngagement([towerAt(3), towerAt(3, 0)], {
+      totalHealParts: 55,
+      breachingCore: false,
+    });
     expect(d.expectedDamage).toBe(600);
     expect(d.engage).toBe(false);
   });
 
   it("多塔合力跨过盈亏线 → 开火", () => {
     // 三塔 range 10 各 450 = 1350 vs 100 HEAL × 12 = 1200。
-    const d = assessEngagement(
-      [towerAt(10), towerAt(10), towerAt(10)],
-      { totalHealParts: 100, breachingCore: false },
-    );
+    const d = assessEngagement([towerAt(10), towerAt(10), towerAt(10)], {
+      totalHealParts: 100,
+      breachingCore: false,
+    });
     expect(d.engage).toBe(true);
   });
 

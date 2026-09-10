@@ -243,25 +243,31 @@ describe("A3.3 Execution Gate", () => {
   });
 
   it("fails GATE_PLAN_VALID when status is not WAITING_EXECUTION", () => {
-    const result = validateExecutionGate(makeGateInput({
-      plan: makePlan({ status: "CANCELLED" }),
-    }));
+    const result = validateExecutionGate(
+      makeGateInput({
+        plan: makePlan({ status: "CANCELLED" }),
+      }),
+    );
     expect(result.allPassed).toBe(false);
     expect(result.failedGates).toContain("GATE_PLAN_VALID");
   });
 
   it("fails GATE_BUDGET_SUFFICIENT when budget < cost", () => {
-    const result = validateExecutionGate(makeGateInput({
-      budget: makeBudget({ availableExpansion: 1000 }),
-    }));
+    const result = validateExecutionGate(
+      makeGateInput({
+        budget: makeBudget({ availableExpansion: 1000 }),
+      }),
+    );
     expect(result.failedGates).toContain("GATE_BUDGET_SUFFICIENT");
     expect(result.allPassed).toBe(false);
   });
 
   it("fails GATE_CORE_SAFE when core invaded", () => {
-    const result = validateExecutionGate(makeGateInput({
-      budget: makeBudget({ coreInvaded: true }),
-    }));
+    const result = validateExecutionGate(
+      makeGateInput({
+        budget: makeBudget({ coreInvaded: true }),
+      }),
+    );
     expect(result.failedGates).toContain("GATE_CORE_SAFE");
   });
 
@@ -286,11 +292,13 @@ describe("A3.3 Execution Gate", () => {
   });
 
   it("records multiple failures with evidence string", () => {
-    const result = validateExecutionGate(makeGateInput({
-      alreadyOwned: true,
-      intelStale: true,
-      threatEscalated: true,
-    }));
+    const result = validateExecutionGate(
+      makeGateInput({
+        alreadyOwned: true,
+        intelStale: true,
+        threatEscalated: true,
+      }),
+    );
     expect(result.failedGates).toHaveLength(3);
     expect(result.evidence).toContain("GATE_NOT_OWNED");
     expect(result.evidence).toContain("GATE_INTEL_FRESH");
@@ -312,97 +320,119 @@ describe("A3.3 Execution Gate", () => {
 
 describe("A3.3 Execution State Machine", () => {
   it("VALIDATING → PREPARING when gate passed", () => {
-    const r = transitionExecutionState(makeTransitionInput({
-      currentState: "VALIDATING",
-      gatePassed: true,
-    }));
+    const r = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "VALIDATING",
+        gatePassed: true,
+      }),
+    );
     expect(r.transitioned).toBe(true);
     expect(r.newState).toBe("PREPARING");
   });
 
   it("VALIDATING → FAILED when gate failed", () => {
-    const r = transitionExecutionState(makeTransitionInput({
-      currentState: "VALIDATING",
-      gatePassed: false,
-    }));
+    const r = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "VALIDATING",
+        gatePassed: false,
+      }),
+    );
     expect(r.newState).toBe("FAILED");
   });
 
   it("PREPARING → CLAIMING when resources + claimer ready", () => {
-    const r = transitionExecutionState(makeTransitionInput({
-      currentState: "PREPARING",
-      resourcesReserved: true,
-      claimerCreated: true,
-    }));
+    const r = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "PREPARING",
+        resourcesReserved: true,
+        claimerCreated: true,
+      }),
+    );
     expect(r.newState).toBe("CLAIMING");
   });
 
   it("PREPARING stays PREPARING when not ready", () => {
-    const r = transitionExecutionState(makeTransitionInput({
-      currentState: "PREPARING",
-      resourcesReserved: false,
-      claimerCreated: false,
-    }));
+    const r = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "PREPARING",
+        resourcesReserved: false,
+        claimerCreated: false,
+      }),
+    );
     expect(r.transitioned).toBe(false);
     expect(r.newState).toBe("PREPARING");
   });
 
   it("CLAIMING → CLAIMED when controller claimed", () => {
-    const r = transitionExecutionState(makeTransitionInput({
-      currentState: "CLAIMING",
-      controllerClaimed: true,
-    }));
+    const r = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "CLAIMING",
+        controllerClaimed: true,
+      }),
+    );
     expect(r.newState).toBe("CLAIMED");
     expect(r.transitioned).toBe(true);
     expect(r.reason).toContain("controller claimed");
   });
 
   it("BOOTSTRAPPING → ECONOMIC_STARTUP when spawn + pioneer ready", () => {
-    const r = transitionExecutionState(makeTransitionInput({
-      currentState: "BOOTSTRAPPING",
-      spawnBuilt: true,
-      pioneerArrived: true,
-    }));
+    const r = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "BOOTSTRAPPING",
+        spawnBuilt: true,
+        pioneerArrived: true,
+      }),
+    );
     expect(r.newState).toBe("ECONOMIC_STARTUP");
   });
 
   it("ECONOMIC_STARTUP → INTEGRATING when energy loop + infra complete", () => {
-    const r = transitionExecutionState(makeTransitionInput({
-      currentState: "ECONOMIC_STARTUP",
-      energyLoopActive: true,
-      basicInfraComplete: true,
-    }));
+    const r = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "ECONOMIC_STARTUP",
+        energyLoopActive: true,
+        basicInfraComplete: true,
+      }),
+    );
     expect(r.newState).toBe("INTEGRATING");
   });
 
   it("INTEGRATING → COMPLETED when activated + integrated", () => {
-    const r = transitionExecutionState(makeTransitionInput({
-      currentState: "INTEGRATING",
-      economicallyActivated: true,
-      empireIntegrated: true,
-    }));
+    const r = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "INTEGRATING",
+        economicallyActivated: true,
+        empireIntegrated: true,
+      }),
+    );
     expect(r.newState).toBe("COMPLETED");
     expect(r.metadata?.checkpoint).toBe("EconomicActivation");
   });
 
   it("FAILED → REPLANNING by default", () => {
-    const r = transitionExecutionState(makeTransitionInput({
-      currentState: "FAILED",
-    }));
+    const r = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "FAILED",
+      }),
+    );
     expect(r.newState).toBe("REPLANNING");
   });
 
   it("REPLANNING → VALIDATING", () => {
-    const r = transitionExecutionState(makeTransitionInput({
-      currentState: "REPLANNING",
-    }));
+    const r = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "REPLANNING",
+      }),
+    );
     expect(r.newState).toBe("VALIDATING");
   });
 
   it("COMPLETED is terminal", () => {
-    const r = transitionExecutionState(makeTransitionInput({
-      currentState: "COMPLETED",
-    }));
+    const r = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "COMPLETED",
+      }),
+    );
     expect(r.transitioned).toBe(false);
     expect(r.newState).toBe("COMPLETED");
   });
@@ -438,122 +468,148 @@ describe("A3.3 Execution State Machine", () => {
 
 describe("A3.3 Checkpoint System", () => {
   it("CP1_CLAIMED passes when controller claimed", () => {
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP1_CLAIMED",
-      controllerClaimed: true,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP1_CLAIMED",
+        controllerClaimed: true,
+      }),
+    );
     expect(r.passed).toBe(true);
     expect(r.status).toBe("PASSED");
   });
 
   it("CP1_CLAIMED fails when controller not claimed", () => {
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP1_CLAIMED",
-      controllerClaimed: false,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP1_CLAIMED",
+        controllerClaimed: false,
+      }),
+    );
     expect(r.passed).toBe(false);
     expect(r.failReason).toContain("not claimed");
   });
 
   it("CP2_SPAWN_ACTIVE passes when spawn built + can spawn", () => {
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP2_SPAWN_ACTIVE",
-      spawnBuilt: true,
-      spawnCanSpawn: true,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP2_SPAWN_ACTIVE",
+        spawnBuilt: true,
+        spawnCanSpawn: true,
+      }),
+    );
     expect(r.passed).toBe(true);
   });
 
   it("CP2_SPAWN_ACTIVE fails when spawn has no energy", () => {
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP2_SPAWN_ACTIVE",
-      spawnBuilt: true,
-      spawnCanSpawn: false,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP2_SPAWN_ACTIVE",
+        spawnBuilt: true,
+        spawnCanSpawn: false,
+      }),
+    );
     expect(r.passed).toBe(false);
     expect(r.failReason).toContain("no energy");
   });
 
   it("CP3_ENERGY_LOOP requires harvester + transporter + spawn", () => {
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP3_ENERGY_LOOP",
-      harvesterActive: true,
-      transporterActive: true,
-      spawnCanSpawn: true,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP3_ENERGY_LOOP",
+        harvesterActive: true,
+        transporterActive: true,
+        spawnCanSpawn: true,
+      }),
+    );
     expect(r.passed).toBe(true);
 
-    const r2 = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP3_ENERGY_LOOP",
-      harvesterActive: false,
-      transporterActive: true,
-      spawnCanSpawn: true,
-    }));
+    const r2 = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP3_ENERGY_LOOP",
+        harvesterActive: false,
+        transporterActive: true,
+        spawnCanSpawn: true,
+      }),
+    );
     expect(r2.passed).toBe(false);
     expect(r2.failReason).toContain("harvester");
   });
 
   it("CP4_BASIC_INFRA requires extensions + container", () => {
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP4_BASIC_INFRA",
-      extensionsBuilt: true,
-      containerBuilt: true,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP4_BASIC_INFRA",
+        extensionsBuilt: true,
+        containerBuilt: true,
+      }),
+    );
     expect(r.passed).toBe(true);
 
-    const r2 = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP4_BASIC_INFRA",
-      extensionsBuilt: false,
-      containerBuilt: true,
-    }));
+    const r2 = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP4_BASIC_INFRA",
+        extensionsBuilt: false,
+        containerBuilt: true,
+      }),
+    );
     expect(r2.passed).toBe(false);
     expect(r2.failReason).toContain("extensions");
   });
 
   it("CP5_ECONOMIC_ACTIVATION requires net positive + integrated", () => {
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP5_ECONOMIC_ACTIVATION",
-      netEnergyFlowPositive: true,
-      empireIntegrated: true,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP5_ECONOMIC_ACTIVATION",
+        netEnergyFlowPositive: true,
+        empireIntegrated: true,
+      }),
+    );
     expect(r.passed).toBe(true);
 
-    const r2 = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP5_ECONOMIC_ACTIVATION",
-      netEnergyFlowPositive: false,
-      empireIntegrated: true,
-    }));
+    const r2 = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP5_ECONOMIC_ACTIVATION",
+        netEnergyFlowPositive: false,
+        empireIntegrated: true,
+      }),
+    );
     expect(r2.passed).toBe(false);
     expect(r2.failReason).toContain("energy flow");
   });
 
   it("shouldRetry is true when retries < maxRetries", () => {
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP2_SPAWN_ACTIVE",
-      spawnBuilt: false,
-      retryCount: 0,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP2_SPAWN_ACTIVE",
+        spawnBuilt: false,
+        retryCount: 0,
+      }),
+    );
     expect(r.shouldRetry).toBe(true);
   });
 
   it("shouldRetry is false when retries >= maxRetries", () => {
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP1_CLAIMED",
-      controllerClaimed: false,
-      retryCount: 1, // maxRetries=1 for CP1
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP1_CLAIMED",
+        controllerClaimed: false,
+        retryCount: 1, // maxRetries=1 for CP1
+      }),
+    );
     expect(r.shouldRetry).toBe(false);
     expect(r.status).toBe("FAILED");
   });
 
   it("fallbackTo is set when checkpoint fails permanently", () => {
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP3_ENERGY_LOOP",
-      harvesterActive: false,
-      transporterActive: false,
-      spawnCanSpawn: false,
-      retryCount: 5, // maxRetries=5
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP3_ENERGY_LOOP",
+        harvesterActive: false,
+        transporterActive: false,
+        spawnCanSpawn: false,
+        retryCount: 5, // maxRetries=5
+      }),
+    );
     expect(r.shouldRetry).toBe(false);
     expect(r.fallbackTo).toBe("CP2_SPAWN_ACTIVE");
   });
@@ -562,8 +618,11 @@ describe("A3.3 Checkpoint System", () => {
     const records = createAllCheckpointRecords();
     expect(records).toHaveLength(5);
     expect(records.map(r => r.id)).toEqual([
-      "CP1_CLAIMED", "CP2_SPAWN_ACTIVE", "CP3_ENERGY_LOOP",
-      "CP4_BASIC_INFRA", "CP5_ECONOMIC_ACTIVATION",
+      "CP1_CLAIMED",
+      "CP2_SPAWN_ACTIVE",
+      "CP3_ENERGY_LOOP",
+      "CP4_BASIC_INFRA",
+      "CP5_ECONOMIC_ACTIVATION",
     ]);
   });
 
@@ -595,78 +654,102 @@ describe("A3.3 Checkpoint System", () => {
 
 describe("A3.3 Economic Activation", () => {
   it("activates when all criteria met + 500 consecutive ticks", () => {
-    const r = evaluateEconomicActivation(makeEconomicInput({
-      consecutivePositiveTicks: 500,
-    }));
+    const r = evaluateEconomicActivation(
+      makeEconomicInput({
+        consecutivePositiveTicks: 500,
+      }),
+    );
     expect(r.activated).toBe(true);
     expect(r.ticksToActivation).toBe(0);
     expect(r.progress).toBe(100);
   });
 
   it("does not activate when consecutive ticks < 500", () => {
-    const r = evaluateEconomicActivation(makeEconomicInput({
-      consecutivePositiveTicks: 499,
-    }));
+    const r = evaluateEconomicActivation(
+      makeEconomicInput({
+        consecutivePositiveTicks: 499,
+      }),
+    );
     expect(r.activated).toBe(false);
     expect(r.ticksToActivation).toBe(1);
   });
 
   it("does not activate when energy loop inactive", () => {
-    const r = evaluateEconomicActivation(makeEconomicInput({
-      hasHarvester: false,
-    }));
+    const r = evaluateEconomicActivation(
+      makeEconomicInput({
+        hasHarvester: false,
+      }),
+    );
     expect(r.activated).toBe(false);
     expect(r.criteria.energyLoop.passed).toBe(false);
   });
 
   it("does not activate when net flow negative", () => {
-    const r = evaluateEconomicActivation(makeEconomicInput({
-      energyProduction: 5,
-      energyConsumption: 10,
-    }));
+    const r = evaluateEconomicActivation(
+      makeEconomicInput({
+        energyProduction: 5,
+        energyConsumption: 10,
+      }),
+    );
     expect(r.activated).toBe(false);
     expect(r.criteria.netPositive.passed).toBe(false);
     expect(r.netFlow).toBe(-5);
   });
 
   it("does not activate when still receiving external support", () => {
-    const r = evaluateEconomicActivation(makeEconomicInput({
-      externalEnergyInflow: 50,
-    }));
+    const r = evaluateEconomicActivation(
+      makeEconomicInput({
+        externalEnergyInflow: 50,
+      }),
+    );
     expect(r.activated).toBe(false);
     expect(r.criteria.selfSustaining.passed).toBe(false);
   });
 
   it("progress increases with consecutive positive ticks", () => {
-    const r0 = evaluateEconomicActivation(makeEconomicInput({
-      consecutivePositiveTicks: 0,
-      externalEnergyInflow: 50, // not self-sustaining
-    }));
-    const r250 = evaluateEconomicActivation(makeEconomicInput({
-      consecutivePositiveTicks: 250,
-      externalEnergyInflow: 50,
-    }));
+    const r0 = evaluateEconomicActivation(
+      makeEconomicInput({
+        consecutivePositiveTicks: 0,
+        externalEnergyInflow: 50, // not self-sustaining
+      }),
+    );
+    const r250 = evaluateEconomicActivation(
+      makeEconomicInput({
+        consecutivePositiveTicks: 250,
+        externalEnergyInflow: 50,
+      }),
+    );
     expect(r250.progress).toBeGreaterThan(r0.progress);
   });
 
   it("needsExternalSupport returns true when net flow negative", () => {
-    expect(needsExternalSupport(makeEconomicInput({
-      energyProduction: 5,
-      energyConsumption: 10,
-    }))).toBe(true);
+    expect(
+      needsExternalSupport(
+        makeEconomicInput({
+          energyProduction: 5,
+          energyConsumption: 10,
+        }),
+      ),
+    ).toBe(true);
   });
 
   it("needsExternalSupport returns true when receiving external inflow", () => {
-    expect(needsExternalSupport(makeEconomicInput({
-      externalEnergyInflow: 50,
-    }))).toBe(true);
+    expect(
+      needsExternalSupport(
+        makeEconomicInput({
+          externalEnergyInflow: 50,
+        }),
+      ),
+    ).toBe(true);
   });
 
   it("calculateRequiredSupport returns deficit + buffer", () => {
-    const support = calculateRequiredSupport(makeEconomicInput({
-      energyProduction: 5,
-      energyConsumption: 10,
-    }));
+    const support = calculateRequiredSupport(
+      makeEconomicInput({
+        energyProduction: 5,
+        energyConsumption: 10,
+      }),
+    );
     expect(support).toBe(55); // |5-10|=5 + 50 buffer
   });
 
@@ -697,54 +780,68 @@ describe("A3.3 Empire Integration", () => {
   });
 
   it("not integrated when not in owned rooms list", () => {
-    const r = evaluateEmpireIntegration(makeIntegrationInput({
-      inOwnedRoomsList: false,
-    }));
+    const r = evaluateEmpireIntegration(
+      makeIntegrationInput({
+        inOwnedRoomsList: false,
+      }),
+    );
     expect(r.integrated).toBe(false);
   });
 
   it("not integrated when snapshot missing", () => {
-    const r = evaluateEmpireIntegration(makeIntegrationInput({
-      hasSnapshot: false,
-    }));
+    const r = evaluateEmpireIntegration(
+      makeIntegrationInput({
+        hasSnapshot: false,
+      }),
+    );
     expect(r.integrated).toBe(false);
     expect(r.missingSystems).toContain("RoomSnapshot");
   });
 
   it("not integrated when economy stats missing", () => {
-    const r = evaluateEmpireIntegration(makeIntegrationInput({
-      inEconomyStats: false,
-    }));
+    const r = evaluateEmpireIntegration(
+      makeIntegrationInput({
+        inEconomyStats: false,
+      }),
+    );
     expect(r.integrated).toBe(false);
     expect(r.missingSystems).toContain("EconomyStats");
   });
 
   it("not integrated when spawn not managed", () => {
-    const r = evaluateEmpireIntegration(makeIntegrationInput({
-      spawnManaged: false,
-    }));
+    const r = evaluateEmpireIntegration(
+      makeIntegrationInput({
+        spawnManaged: false,
+      }),
+    );
     expect(r.missingSystems).toContain("SpawnManager");
   });
 
   it("not integrated when defense not covered", () => {
-    const r = evaluateEmpireIntegration(makeIntegrationInput({
-      defenseCovered: false,
-    }));
+    const r = evaluateEmpireIntegration(
+      makeIntegrationInput({
+        defenseCovered: false,
+      }),
+    );
     expect(r.missingSystems).toContain("DefenseSystem");
   });
 
   it("not integrated when layout missing", () => {
-    const r = evaluateEmpireIntegration(makeIntegrationInput({
-      hasVersionedLayout: false,
-    }));
+    const r = evaluateEmpireIntegration(
+      makeIntegrationInput({
+        hasVersionedLayout: false,
+      }),
+    );
     expect(r.missingSystems).toContain("LayoutPlanner");
   });
 
   it("progress reflects partial integration", () => {
-    const r = evaluateEmpireIntegration(makeIntegrationInput({
-      hasSnapshot: false,
-      defenseCovered: false,
-    }));
+    const r = evaluateEmpireIntegration(
+      makeIntegrationInput({
+        hasSnapshot: false,
+        defenseCovered: false,
+      }),
+    );
     expect(r.progress).toBe(60); // 3/5 = 60%
   });
 
@@ -776,75 +873,91 @@ describe("A3.3 Threat Escalation", () => {
   });
 
   it("RED when hostile creep in target → ABORT (pre-claim)", () => {
-    const r = evaluateThreatEscalation(makeThreatInput({
-      hasHostileCreep: true,
-      executionState: "PREPARING",
-    }));
+    const r = evaluateThreatEscalation(
+      makeThreatInput({
+        hasHostileCreep: true,
+        executionState: "PREPARING",
+      }),
+    );
     expect(r.level).toBe("RED");
     expect(r.action).toBe("ABORT");
     expect(r.shouldAbort).toBe(true);
   });
 
   it("RED when hostile tower → ABORT (pre-claim)", () => {
-    const r = evaluateThreatEscalation(makeThreatInput({
-      hasHostileTower: true,
-      executionState: "CLAIMING",
-    }));
+    const r = evaluateThreatEscalation(
+      makeThreatInput({
+        hasHostileTower: true,
+        executionState: "CLAIMING",
+      }),
+    );
     expect(r.level).toBe("RED");
     expect(r.action).toBe("ABORT");
   });
 
   it("RED when sponsor under attack → ABORT", () => {
-    const r = evaluateThreatEscalation(makeThreatInput({
-      sponsorUnderAttack: true,
-    }));
+    const r = evaluateThreatEscalation(
+      makeThreatInput({
+        sponsorUnderAttack: true,
+      }),
+    );
     expect(r.level).toBe("RED");
     expect(r.shouldAbort).toBe(true);
   });
 
   it("RED + post-claim → EVACUATE (protect investment)", () => {
-    const r = evaluateThreatEscalation(makeThreatInput({
-      hasHostileCreep: true,
-      executionState: "BOOTSTRAPPING",
-    }));
+    const r = evaluateThreatEscalation(
+      makeThreatInput({
+        hasHostileCreep: true,
+        executionState: "BOOTSTRAPPING",
+      }),
+    );
     expect(r.level).toBe("RED");
     expect(r.action).toBe("EVACUATE");
   });
 
   it("YELLOW when hostile reservation → PAUSE (pre-claim)", () => {
-    const r = evaluateThreatEscalation(makeThreatInput({
-      hasHostileReservation: true,
-      executionState: "PREPARING",
-    }));
+    const r = evaluateThreatEscalation(
+      makeThreatInput({
+        hasHostileReservation: true,
+        executionState: "PREPARING",
+      }),
+    );
     expect(r.level).toBe("YELLOW");
     expect(r.action).toBe("PAUSE");
     expect(r.shouldPause).toBe(true);
   });
 
   it("YELLOW + post-claim → CONTINUE (stay vigilant)", () => {
-    const r = evaluateThreatEscalation(makeThreatInput({
-      hasHostileReservation: true,
-      executionState: "CLAIMED",
-    }));
+    const r = evaluateThreatEscalation(
+      makeThreatInput({
+        hasHostileReservation: true,
+        executionState: "CLAIMED",
+      }),
+    );
     expect(r.level).toBe("YELLOW");
     expect(r.action).toBe("CONTINUE");
     expect(r.shouldPause).toBe(false);
   });
 
   it("YELLOW when path threat → PAUSE", () => {
-    const r = evaluateThreatEscalation(makeThreatInput({
-      hasPathThreat: true,
-      executionState: "VALIDATING",
-    }));
+    const r = evaluateThreatEscalation(
+      makeThreatInput({
+        hasPathThreat: true,
+        executionState: "VALIDATING",
+      }),
+    );
     expect(r.level).toBe("YELLOW");
     expect(r.action).toBe("PAUSE");
   });
 
   it("summary contains threat level + action", () => {
-    const r = evaluateThreatEscalation(makeThreatInput({
-      hasHostileCreep: true,
-      executionState: "CLAIMING",
-    }));
+    const r = evaluateThreatEscalation(
+      makeThreatInput({
+        hasHostileCreep: true,
+        executionState: "CLAIMING",
+      }),
+    );
     expect(r.summary).toContain("RED");
     expect(r.summary).toContain("ABORT");
   });
@@ -857,8 +970,10 @@ describe("A3.3 Threat Escalation", () => {
 describe("A3.3 Resource Reservation", () => {
   it("reserves when budget sufficient", () => {
     const r = tryReserve({
-      planId: "p1", energyNeeded: 5000,
-      availableExpansionBudget: 10000, tick: 1000,
+      planId: "p1",
+      energyNeeded: 5000,
+      availableExpansionBudget: 10000,
+      tick: 1000,
     });
     expect(r.success).toBe(true);
     expect(r.reservation?.reservedEnergy).toBe(5000);
@@ -868,8 +983,10 @@ describe("A3.3 Resource Reservation", () => {
 
   it("fails when budget insufficient", () => {
     const r = tryReserve({
-      planId: "p1", energyNeeded: 15000,
-      availableExpansionBudget: 10000, tick: 1000,
+      planId: "p1",
+      energyNeeded: 15000,
+      availableExpansionBudget: 10000,
+      tick: 1000,
     });
     expect(r.success).toBe(false);
     expect(r.failReason).toContain("insufficient");
@@ -878,8 +995,10 @@ describe("A3.3 Resource Reservation", () => {
 
   it("releaseReservation sets status + reason", () => {
     const reserved = tryReserve({
-      planId: "p1", energyNeeded: 5000,
-      availableExpansionBudget: 10000, tick: 1000,
+      planId: "p1",
+      energyNeeded: 5000,
+      availableExpansionBudget: 10000,
+      tick: 1000,
     }).reservation!;
     const released = releaseReservation(reserved, 2000, "abort");
     expect(released.status).toBe("RELEASED");
@@ -889,8 +1008,10 @@ describe("A3.3 Resource Reservation", () => {
 
   it("consumeReservation sets CONSUMED", () => {
     const reserved = tryReserve({
-      planId: "p1", energyNeeded: 5000,
-      availableExpansionBudget: 10000, tick: 1000,
+      planId: "p1",
+      energyNeeded: 5000,
+      availableExpansionBudget: 10000,
+      tick: 1000,
     }).reservation!;
     const consumed = consumeReservation(reserved, 1500);
     expect(consumed.status).toBe("CONSUMED");
@@ -899,8 +1020,10 @@ describe("A3.3 Resource Reservation", () => {
 
   it("isReservationExpired detects old reservations", () => {
     const reserved = tryReserve({
-      planId: "p1", energyNeeded: 5000,
-      availableExpansionBudget: 10000, tick: 1000,
+      planId: "p1",
+      energyNeeded: 5000,
+      availableExpansionBudget: 10000,
+      tick: 1000,
     }).reservation!;
     expect(isReservationExpired(reserved, 3500, 2000)).toBe(true);
     expect(isReservationExpired(reserved, 2500, 2000)).toBe(false);
@@ -909,17 +1032,30 @@ describe("A3.3 Resource Reservation", () => {
   it("isReservationExpired ignores non-RESERVED", () => {
     const released = releaseReservation(
       tryReserve({
-        planId: "p1", energyNeeded: 5000,
-        availableExpansionBudget: 10000, tick: 1000,
+        planId: "p1",
+        energyNeeded: 5000,
+        availableExpansionBudget: 10000,
+        tick: 1000,
       }).reservation!,
-      2000, "test",
+      2000,
+      "test",
     );
     expect(isReservationExpired(released, 99999, 1)).toBe(false);
   });
 
   it("cleanupExpiredReservations partitions active vs expired", () => {
-    const r1 = tryReserve({ planId: "p1", energyNeeded: 1000, availableExpansionBudget: 5000, tick: 1000 }).reservation!;
-    const r2 = tryReserve({ planId: "p2", energyNeeded: 2000, availableExpansionBudget: 5000, tick: 1000 }).reservation!;
+    const r1 = tryReserve({
+      planId: "p1",
+      energyNeeded: 1000,
+      availableExpansionBudget: 5000,
+      tick: 1000,
+    }).reservation!;
+    const r2 = tryReserve({
+      planId: "p2",
+      energyNeeded: 2000,
+      availableExpansionBudget: 5000,
+      tick: 1000,
+    }).reservation!;
     // tick=1500: 1500-1000=500 < 2000 → not expired
     const { active, expired } = cleanupExpiredReservations([r1, r2], 1500, 2000);
     expect(active).toHaveLength(2);
@@ -932,8 +1068,18 @@ describe("A3.3 Resource Reservation", () => {
   });
 
   it("getTotalReserved sums only RESERVED", () => {
-    const r1 = tryReserve({ planId: "p1", energyNeeded: 1000, availableExpansionBudget: 5000, tick: 1000 }).reservation!;
-    const r2 = tryReserve({ planId: "p2", energyNeeded: 2000, availableExpansionBudget: 5000, tick: 1000 }).reservation!;
+    const r1 = tryReserve({
+      planId: "p1",
+      energyNeeded: 1000,
+      availableExpansionBudget: 5000,
+      tick: 1000,
+    }).reservation!;
+    const r2 = tryReserve({
+      planId: "p2",
+      energyNeeded: 2000,
+      availableExpansionBudget: 5000,
+      tick: 1000,
+    }).reservation!;
     const released = releaseReservation(r2, 1001, "test");
     expect(getTotalReserved([r1, released])).toBe(1000);
   });
@@ -973,7 +1119,10 @@ describe("A3.3 Execution Operation", () => {
 
   it("updateOperation applies updates immutably", () => {
     const op = createExpansionOperation({
-      plan: makePlan(), type: "claim", tick: 1000, reservedEnergy: 5000,
+      plan: makePlan(),
+      type: "claim",
+      tick: 1000,
+      reservedEnergy: 5000,
     });
     const updated = updateOperation(op, { status: "ACTIVE" }, 1001);
     expect(updated.status).toBe("ACTIVE");
@@ -983,7 +1132,10 @@ describe("A3.3 Execution Operation", () => {
 
   it("completeStep adds to completedSteps", () => {
     const op = createExpansionOperation({
-      plan: makePlan(), type: "claim", tick: 1000, reservedEnergy: 5000,
+      plan: makePlan(),
+      type: "claim",
+      tick: 1000,
+      reservedEnergy: 5000,
     });
     const after = completeStep(op, "claimer reached target room", 1001);
     expect(after.completedSteps).toContain("claimer reached target room");
@@ -991,7 +1143,10 @@ describe("A3.3 Execution Operation", () => {
 
   it("isOperationComplete requires all criteria", () => {
     const op = createExpansionOperation({
-      plan: makePlan(), type: "claim", tick: 1000, reservedEnergy: 5000,
+      plan: makePlan(),
+      type: "claim",
+      tick: 1000,
+      reservedEnergy: 5000,
     });
     expect(isOperationComplete(op)).toBe(false);
     const complete = completeOperation(op, 2000);
@@ -1001,7 +1156,10 @@ describe("A3.3 Execution Operation", () => {
 
   it("failOperation sets failReason", () => {
     const op = createExpansionOperation({
-      plan: makePlan(), type: "claim", tick: 1000, reservedEnergy: 5000,
+      plan: makePlan(),
+      type: "claim",
+      tick: 1000,
+      reservedEnergy: 5000,
     });
     const failed = failOperation(op, "claimer died", 1005);
     expect(failed.status).toBe("FAILED");
@@ -1010,7 +1168,10 @@ describe("A3.3 Execution Operation", () => {
 
   it("activateOperation sets ACTIVE", () => {
     const op = createExpansionOperation({
-      plan: makePlan(), type: "claim", tick: 1000, reservedEnergy: 5000,
+      plan: makePlan(),
+      type: "claim",
+      tick: 1000,
+      reservedEnergy: 5000,
     });
     const active = activateOperation(op, 1001);
     expect(active.status).toBe("ACTIVE");
@@ -1018,7 +1179,10 @@ describe("A3.3 Execution Operation", () => {
 
   it("createColonizeFromClaim derives from claim op", () => {
     const claimOp = createExpansionOperation({
-      plan: makePlan(), type: "claim", tick: 1000, reservedEnergy: 5000,
+      plan: makePlan(),
+      type: "claim",
+      tick: 1000,
+      reservedEnergy: 5000,
     });
     const colonizeOp = createColonizeFromClaim(claimOp, 1001, 8000);
     expect(colonizeOp.type).toBe("colonize");
@@ -1076,9 +1240,11 @@ describe("A3.3 Execution Dashboard", () => {
   });
 
   it("includes economic activation data when provided", () => {
-    const econResult = evaluateEconomicActivation(makeEconomicInput({
-      consecutivePositiveTicks: 300,
-    }));
+    const econResult = evaluateEconomicActivation(
+      makeEconomicInput({
+        consecutivePositiveTicks: 300,
+      }),
+    );
     const d = buildExecutionDashboard({
       tick: 3000,
       executionState: "INTEGRATING",
@@ -1094,9 +1260,11 @@ describe("A3.3 Execution Dashboard", () => {
   });
 
   it("includes empire integration data when provided", () => {
-    const integrationResult = evaluateEmpireIntegration(makeIntegrationInput({
-      hasSnapshot: false,
-    }));
+    const integrationResult = evaluateEmpireIntegration(
+      makeIntegrationInput({
+        hasSnapshot: false,
+      }),
+    );
     const d = buildExecutionDashboard({
       tick: 4000,
       executionState: "INTEGRATING",
@@ -1110,10 +1278,12 @@ describe("A3.3 Execution Dashboard", () => {
   });
 
   it("includes threat data when provided", () => {
-    const threatResult = evaluateThreatEscalation(makeThreatInput({
-      hasHostileCreep: true,
-      executionState: "BOOTSTRAPPING",
-    }));
+    const threatResult = evaluateThreatEscalation(
+      makeThreatInput({
+        hasHostileCreep: true,
+        executionState: "BOOTSTRAPPING",
+      }),
+    );
     const d = buildExecutionDashboard({
       tick: 5000,
       executionState: "BOOTSTRAPPING",

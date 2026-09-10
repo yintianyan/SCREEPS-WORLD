@@ -61,9 +61,10 @@ export const roomStateSystem: System = {
       // spendableRatio：spawn 口袋可达能量占比，低 = spawn 实际破产。
       // frozenRatio：最满 container 填充率，高 = 能量积压搬不走。
       // 两者同时极端（spawn 空 + container 满）= 搬运能力缺失 = 真死锁，而非正常中转。
-      const spendableRatio = snapshot.energyCapacityAvailable > 0
-        ? snapshot.energyAvailable / snapshot.energyCapacityAvailable
-        : 0;
+      const spendableRatio =
+        snapshot.energyCapacityAvailable > 0
+          ? snapshot.energyAvailable / snapshot.energyCapacityAvailable
+          : 0;
       let frozenRatio = 0;
       for (const c of snapshot.containers) {
         const cap = c.store.getCapacity(RESOURCE_ENERGY);
@@ -103,9 +104,7 @@ export const roomStateSystem: System = {
       const prevStorageEnergy = roomMem.phase?.storageEnergyPrev ?? currentStorageEnergy;
       // drainRate = current - prev（流失为负，符合 PhaseInput 语义）；无 storage 时为 0；
       // 首次运行用 current 兜底 → drainRate=0，避免假流失。
-      const storageDrainRate = snapshot.storage
-        ? currentStorageEnergy - prevStorageEnergy
-        : 0;
+      const storageDrainRate = snapshot.storage ? currentStorageEnergy - prevStorageEnergy : 0;
 
       // 3. 评估殖民相位（带迟滞的纯函数），随后持久化相位状态供下一 tick 迟滞计算。
       const prevPhase: PhaseState = {
@@ -130,8 +129,8 @@ export const roomStateSystem: System = {
           storageDrainRate,
           // P2-3：storage 水位供 forceCrisis 满仓豁免。无 storage 时 undefined。
           storageRatio: snapshot.storage
-            ? snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY)
-              / snapshot.storage.store.getCapacity(RESOURCE_ENERGY)
+            ? snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY) /
+              snapshot.storage.store.getCapacity(RESOURCE_ENERGY)
             : undefined,
         },
         prevPhase,
@@ -188,7 +187,10 @@ export const roomStateSystem: System = {
           if (g.seenNukeIds.has(n.id as string)) continue;
           g.seenNukeIds.add(n.id as string);
           recordEvent(EventKind.NukeDetected, snapshot.roomName, [n.timeToLand]);
-          log.info("room-state", `nuke/${snapshot.roomName}: 落点预警！launch=${n.launchRoomName} timeToLand=${n.timeToLand} — 资产抢救链启动`,);
+          log.info(
+            "room-state",
+            `nuke/${snapshot.roomName}: 落点预警！launch=${n.launchRoomName} timeToLand=${n.timeToLand} — 资产抢救链启动`,
+          );
         }
         for (const id of g.seenNukeIds) {
           if (!aliveIds.has(id)) g.seenNukeIds.delete(id);
@@ -206,26 +208,30 @@ export const roomStateSystem: System = {
         roomMem.observerSightings = Math.min((roomMem.observerSightings ?? 0) + 1, 100000);
         // 首次目击 + 每 500 tick 限流日志 — 盯防信号必须可见但不刷屏。
         if (firstSighting || ctx.tick % 500 === 0) {
-          log.info("room-state", `observer/${snapshot.roomName}: 无害侦察目击 #${roomMem.observerSightings}（hostile=${snapshot.hostileCreeps.length}）`,);
+          log.info(
+            "room-state",
+            `observer/${snapshot.roomName}: 无害侦察目击 #${roomMem.observerSightings}（hostile=${snapshot.hostileCreeps.length}）`,
+          );
         }
       }
 
       // P1-3：威胁过期失效 — threatCreeps>0 但 lastHostileAt 超过 threatStaleTicks 未刷新
       // 视为 stale threat（旧威胁停留或快照未更新），不再触发 defense。
-      const lastHostileAge = roomMem.lastHostileAt !== undefined
-        ? ctx.tick - roomMem.lastHostileAt
-        : Infinity;
-      const threatStale = threatCount > 0
-        && roomMem.lastHostileAt !== undefined
-        && lastHostileAge > CONFIG.defense.threatStaleTicks;
+      const lastHostileAge =
+        roomMem.lastHostileAt !== undefined ? ctx.tick - roomMem.lastHostileAt : Infinity;
+      const threatStale =
+        threatCount > 0 &&
+        roomMem.lastHostileAt !== undefined &&
+        lastHostileAge > CONFIG.defense.threatStaleTicks;
       const threatPresent = threatCount > 0 && !threatStale;
       // P1-3：退出 defense 迟滞 — 威胁消除后仍维持 defense defenseExitHysteresis tick，
       // 防敌人短暂进出导致 colonyState 高频抖动（525 次/327k tick）绕过 phase 的
       // minBandTicks 保护；进入 defense 仍 1 tick 触发（防御不延迟）。
       const prevInDefense = roomMem.colonyState === "defense";
-      const inExitHysteresis = prevInDefense
-        && roomMem.lastHostileAt !== undefined
-        && lastHostileAge < CONFIG.defense.defenseExitHysteresis;
+      const inExitHysteresis =
+        prevInDefense &&
+        roomMem.lastHostileAt !== undefined &&
+        lastHostileAge < CONFIG.defense.defenseExitHysteresis;
       const hasHostiles = threatPresent || inExitHysteresis;
 
       const newColonyState = phaseToColonyState(phaseResult.phase, hasHostiles);
@@ -240,7 +246,7 @@ export const roomStateSystem: System = {
       // CPU 预算：仅在有威胁时调用（绝大多数 tick 无威胁 → 零成本）；
       // assessThreat 复杂度 O(hostiles × body.length)，hostiles 通常 ≤ 10。
       // 无威胁时从 Map 中移除旧条目（防跨 tick 残留）。
-      const gThreats = globalCache().threatAssessments ??= new Map();
+      const gThreats = (globalCache().threatAssessments ??= new Map());
       if (threatCount > 0 && threatPresent) {
         const threatAssessment = buildThreatAssessment(
           snapshot.threatCreeps,
@@ -264,9 +270,10 @@ export const roomStateSystem: System = {
       // 无 clamp 时深度危机输出 ~1.42，而所有消费端都假设 0..1 闭区间，超界会产生负乘数等失真。
       const { midpoint, range } = CONFIG.economy.economyPressure;
       const score = Math.max(phaseResult.drainScore, phaseResult.liquidityScore);
-      roomMem.economyPressure = Math.min(1, score <= midpoint
-        ? (score / midpoint) * 0.5
-        : 0.5 + ((score - midpoint) / range) * 0.5);
+      roomMem.economyPressure = Math.min(
+        1,
+        score <= midpoint ? (score / midpoint) * 0.5 : 0.5 + ((score - midpoint) / range) * 0.5,
+      );
 
       // 5.6 energyPrice — 能量边际价值（价格信号），供 demand 弹性调节各角色编制。
       // 基于 economy 系统核算的 netFlow EMA 和 estimatedIncome；未核算过时为中性 0.5。
@@ -284,8 +291,9 @@ export const roomStateSystem: System = {
       if (snapshot.storage) {
         const storageEnergy = snapshot.storage.store.getUsedCapacity(RESOURCE_ENERGY);
         const storageCapacity = snapshot.storage.store.getCapacity(RESOURCE_ENERGY);
-        roomMem.storageNearFull = storageCapacity > 0
-          && storageEnergy / storageCapacity >= CONFIG.economy.storageFullThreshold;
+        roomMem.storageNearFull =
+          storageCapacity > 0 &&
+          storageEnergy / storageCapacity >= CONFIG.economy.storageFullThreshold;
       } else {
         roomMem.storageNearFull = false;
       }
@@ -334,11 +342,13 @@ export const roomStateSystem: System = {
       const isStarving = hasP0Request && (energyAvailable < minSpawnEnergy || allSpawnsBusy);
 
       if (isStarving) {
-        const prev = (roomMem as RoomMemory & { spawnStarvationCount?: number }).spawnStarvationCount ?? 0;
+        const prev =
+          (roomMem as RoomMemory & { spawnStarvationCount?: number }).spawnStarvationCount ?? 0;
         (roomMem as RoomMemory & { spawnStarvationCount?: number }).spawnStarvationCount = prev + 1;
       } else {
         // 条件不满足 → 归零（恢复后重置）
-        const prev = (roomMem as RoomMemory & { spawnStarvationCount?: number }).spawnStarvationCount;
+        const prev = (roomMem as RoomMemory & { spawnStarvationCount?: number })
+          .spawnStarvationCount;
         if (prev !== undefined && prev > 0) {
           (roomMem as RoomMemory & { spawnStarvationCount?: number }).spawnStarvationCount = 0;
         }
@@ -392,11 +402,13 @@ function buildThreatAssessment(
 
   // RoomContext 构建 — 从 snapshot 提取防御相关静态信息。
   const towerEnergyTotal = snapshot.towers.reduce(
-    (sum: number, t) => sum + t.store.getUsedCapacity(RESOURCE_ENERGY), 0,
+    (sum: number, t) => sum + t.store.getUsedCapacity(RESOURCE_ENERGY),
+    0,
   );
-  const rampartCoverage = snapshot.ramparts.length > 0
-    ? Math.min(snapshot.ramparts.length / 20, 1) // 粗估：20 个 rampart = 满覆盖
-    : 0;
+  const rampartCoverage =
+    snapshot.ramparts.length > 0
+      ? Math.min(snapshot.ramparts.length / 20, 1) // 粗估：20 个 rampart = 满覆盖
+      : 0;
 
   const roomContext: RoomContext = {
     roomName: snapshot.roomName,
@@ -410,7 +422,9 @@ function buildThreatAssessment(
     hasStorage: snapshot.storage !== undefined,
     hasSpawn: snapshot.spawns.length > 0,
     friendlyCreepCount: snapshot.creepPositions
-      ? Array.from(snapshot.creepPositions.values()).filter((v: { name: string; my: boolean; fatigue: number }) => v.my).length
+      ? Array.from(snapshot.creepPositions.values()).filter(
+          (v: { name: string; my: boolean; fatigue: number }) => v.my,
+        ).length
       : 0,
     sourceCount: snapshot.sources.length,
     isRemoteRoom: false, // 自有房不是远矿房

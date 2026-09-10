@@ -35,7 +35,9 @@ vi.mock("../../../src/kernel/segment-store", () => ({
       h: 0,
       c: 0,
       // 模拟 ringBuffer push
-      push: (entry: unknown) => { ringBufferPushCount++; },
+      push: (entry: unknown) => {
+        ringBufferPushCount++;
+      },
     },
     population: null,
   }),
@@ -57,11 +59,20 @@ vi.mock("../../../src/kernel/timeseries", () => ({
 
 vi.mock("../../../src/kernel/event-log", () => ({
   EventKind: {
-    PhaseTransition: 0, TierDowngrade: 1, TierUpgrade: 2,
-    ColonyStateChange: 3, ControllerLevelUp: 4, ControllerDowngradeRisk: 5,
-    P0SpawnRequest: 6, EnemyInvasion: 7, EnemyCleared: 8,
-    SafeModeActivated: 9, PluginCooldown: 10, CreepStuck: 11,
-    BuildComplete: 12, StructureDestroyed: 13,
+    PhaseTransition: 0,
+    TierDowngrade: 1,
+    TierUpgrade: 2,
+    ColonyStateChange: 3,
+    ControllerLevelUp: 4,
+    ControllerDowngradeRisk: 5,
+    P0SpawnRequest: 6,
+    EnemyInvasion: 7,
+    EnemyCleared: 8,
+    SafeModeActivated: 9,
+    PluginCooldown: 10,
+    CreepStuck: 11,
+    BuildComplete: 12,
+    StructureDestroyed: 13,
   },
   drainEventBuffer: () => [],
 }));
@@ -95,7 +106,9 @@ let mockRawMemory: string = "{}";
   get: () => mockRawMemory,
   segments: {},
   setActiveSegments: () => undefined,
-  set: (v: string) => { mockRawMemory = v; },
+  set: (v: string) => {
+    mockRawMemory = v;
+  },
 };
 
 const { telemetryCollectorSystem } = await import("../../../src/systems/telemetry-collector");
@@ -117,8 +130,10 @@ interface PhaseState {
 }
 
 function makeCtx(tier: CpuTier, tick: number, bucket: number): TickContext {
-  const softLimit = tier === "healthy" ? 17.5 : tier === "guarded" ? 15 : tier === "conserve" ? 10 : 5;
-  const hardLimit = tier === "healthy" ? 19.2 : tier === "guarded" ? 18 : tier === "conserve" ? 15 : 10;
+  const softLimit =
+    tier === "healthy" ? 17.5 : tier === "guarded" ? 15 : tier === "conserve" ? 10 : 5;
+  const hardLimit =
+    tier === "healthy" ? 19.2 : tier === "guarded" ? 18 : tier === "conserve" ? 15 : 10;
   const maxPriority = tier === "healthy" ? 4 : tier === "guarded" ? 3 : tier === "conserve" ? 2 : 1;
 
   return {
@@ -173,7 +188,10 @@ function getStatsLastSample(): number | undefined {
   return Memory.kernel?.stats?.lastSample;
 }
 
-function evaluateExpectationsFor(tick: number, p3LastRun: number | undefined): {
+function evaluateExpectationsFor(
+  tick: number,
+  p3LastRun: number | undefined,
+): {
   e1: boolean;
   e2: boolean;
   p3Starved: boolean;
@@ -216,7 +234,9 @@ describe("P3-2: conserve→healthy telemetry 恢复链路", () => {
       spawns: {},
     };
     logLines = [];
-    setLogSink((line: string) => { logLines.push(line); });
+    setLogSink((line: string) => {
+      logLines.push(line);
+    });
   });
 
   afterEach(() => {
@@ -359,8 +379,7 @@ describe("P3-2: conserve→healthy telemetry 恢复链路", () => {
     it("conserve 档跳过事件检测和输出，只做 CPU 采样", () => {
       runTelemetry("conserve", 200, 1500);
       // conserve 档不应输出 @TELEMETRY 行
-const telLines = logLines
-.filter(s => s.includes("@TELEMETRY"));
+      const telLines = logLines.filter(s => s.includes("@TELEMETRY"));
       expect(telLines).toHaveLength(0);
       // 但 stats.lastSample 应更新
       expect(getStatsLastSample()).toBe(200);

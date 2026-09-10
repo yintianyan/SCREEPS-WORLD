@@ -77,13 +77,7 @@ export class WorldBuilder {
 
     if (setup.objects) {
       for (const obj of setup.objects) {
-        await this.world.addRoomObject(
-          setup.name,
-          obj.type,
-          obj.x,
-          obj.y,
-          obj.props ?? {},
-        );
+        await this.world.addRoomObject(setup.name, obj.type, obj.x, obj.y, obj.props ?? {});
       }
     }
   }
@@ -143,9 +137,9 @@ export class WorldBuilder {
     // 注入对象缺 store 字段时首次访问 .store 即抛 TypeError，且 bot 侧
     // buildSnapshots 的 Game.creeps 遍历在 safeRun 之外 → 整 tick 静默死亡。
     // creep 的 canonical DB 形态必须带 store + storeCapacityResource。
-    const carryCapacity = body.filter((t) => t === "carry").length * 50;
+    const carryCapacity = body.filter(t => t === "carry").length * 50;
     await this.world.addRoomObject(roomName, "creep", x, y, {
-      body: body.map((type) => ({ type, hits: 100 })),
+      body: body.map(type => ({ type, hits: 100 })),
       name,
       user: user._id,
       hits: body.length * 100,
@@ -173,14 +167,14 @@ export class WorldBuilder {
     owner = "invader",
   ): Promise<void> {
     // screeps-server-mockup 期望 body 为字符串数组（部件类型）
-    const bodyParts = body.map((b) => (typeof b === "string" ? b : b.type));
+    const bodyParts = body.map(b => (typeof b === "string" ? b : b.type));
     // 引擎的 creep.owner getter 是 runtimeData.users[o.user].username —— 注入必须带
     // 真实 user id（mockup world.reset 预置 NPC：'2'=Invader、'3'=Source Keeper），
     // 传 owner 字符串会被 DB 存下但 getter 解析 undefined 直接抛 TypeError。
     const userId = owner === "source-keeper" ? "3" : "2";
-    const carryCapacity = bodyParts.filter((t) => t === "carry").length * 50;
+    const carryCapacity = bodyParts.filter(t => t === "carry").length * 50;
     await this.world.addRoomObject(roomName, "creep", x, y, {
-      body: bodyParts.map((type) => ({ type, hits: 100 })),
+      body: bodyParts.map(type => ({ type, hits: 100 })),
       name,
       user: userId,
       hits: bodyParts.length * 100,
@@ -199,12 +193,7 @@ export class WorldBuilder {
    * FIND_HOSTILE_STRUCTURES —— 无主建筑不算 hostile：塔必须带真实
    * user id 才会进情报 towers 计数与军队目标列表。
    */
-  async addHostileTower(
-    roomName: string,
-    x: number,
-    y: number,
-    username = "Enemy",
-  ): Promise<void> {
+  async addHostileTower(roomName: string, x: number, y: number, username = "Enemy"): Promise<void> {
     const { db } = await this.world.load();
     const [user] = await db.users.find({ username });
     if (!user) throw new Error(`addHostileTower: user ${username} not found`);

@@ -62,9 +62,7 @@ export function estimateWarCost(input: WarCostInput): WarCost {
   evidence.push(`spawn=${input.squadSize}×${input.energyPerCreep}=${spawnEnergyCost}`);
 
   // 2. Boost Cost
-  const boostCost = input.needsBoost
-    ? input.squadSize * input.boostCostPerCreep
-    : 0;
+  const boostCost = input.needsBoost ? input.squadSize * input.boostCostPerCreep : 0;
   if (input.needsBoost) {
     evidence.push(`boost=${input.squadSize}×${input.boostCostPerCreep}=${boostCost}`);
   }
@@ -75,7 +73,9 @@ export function estimateWarCost(input: WarCostInput): WarCost {
 
   // 4. Transport Cost — 距离 × 常数（每房 50 energy/tick 等价）
   const transportCost = input.transportDistance * 50 * Math.max(1, input.expectedDuration / 100);
-  evidence.push(`transport=${input.transportDistance}×50×${(input.expectedDuration / 100).toFixed(1)}=${Math.round(transportCost)}`);
+  evidence.push(
+    `transport=${input.transportDistance}×50×${(input.expectedDuration / 100).toFixed(1)}=${Math.round(transportCost)}`,
+  );
 
   // 5. Healing Cost — 治疗损血所需能量（估计每单位 20% spawnEnergy）
   const healingCost = Math.round(spawnEnergyCost * 0.2 * (1 - input.expectedLossRate));
@@ -83,7 +83,9 @@ export function estimateWarCost(input: WarCostInput): WarCost {
 
   // 6. Opportunity Cost — 战争期间放弃的产出
   const opportunityCost = input.opportunityCostPerTick * input.expectedDuration;
-  evidence.push(`opportunity=${input.opportunityCostPerTick}/tick×${input.expectedDuration}=${Math.round(opportunityCost)}`);
+  evidence.push(
+    `opportunity=${input.opportunityCostPerTick}/tick×${input.expectedDuration}=${Math.round(opportunityCost)}`,
+  );
 
   // 7. CPU Cost — CPU 消耗（每 CPU 100 energy 等价）
   const cpuCost = Math.round(input.cpuPerTick * input.expectedDuration * 100);
@@ -93,8 +95,15 @@ export function estimateWarCost(input: WarCostInput): WarCost {
   const recoveryCost = Math.round(spawnEnergyCost * input.recoveryRatio);
   evidence.push(`recovery=spawnEnergy×${input.recoveryRatio}=${recoveryCost}`);
 
-  const total = spawnEnergyCost + boostCost + replacementCost + transportCost
-    + healingCost + Math.round(opportunityCost) + cpuCost + recoveryCost;
+  const total =
+    spawnEnergyCost +
+    boostCost +
+    replacementCost +
+    transportCost +
+    healingCost +
+    Math.round(opportunityCost) +
+    cpuCost +
+    recoveryCost;
 
   return {
     spawnEnergyCost,

@@ -34,9 +34,9 @@ export interface RemoteResourceValue {
  * 价值等级。
  */
 export type ValueGrade =
-  | "premium"    // netValue >= 15
+  | "premium" // netValue >= 15
   | "profitable" // netValue >= 8
-  | "marginal"   // netValue >= 3
+  | "marginal" // netValue >= 3
   | "unprofitable"; // netValue < 3
 
 // ─── 评估参数 ─────────────────────────────────────────────

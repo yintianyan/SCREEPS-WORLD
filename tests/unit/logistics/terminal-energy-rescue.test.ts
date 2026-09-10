@@ -1,8 +1,14 @@
 /** withdrawTerminalEnergy 饥饿压缩测试（W7 止血修正）。 */
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, beforeEach, type vi } from "vitest";
 import { withdrawTerminalEnergy } from "../../../src/creeps/engine/actions/industry";
 import { haulerRole } from "../../../src/creeps/roles/hauler";
-import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
+import {
+  mockContext,
+  mockCreep,
+  mockSnapshot,
+  mockStructure,
+  resetGlobals,
+} from "../../support/factories";
 
 describe("withdrawTerminalEnergy — 无市场死能量回流（W7 止血）", () => {
   beforeEach(() => {
@@ -11,8 +17,16 @@ describe("withdrawTerminalEnergy — 无市场死能量回流（W7 止血）", (
 
   function makeAc(opts: { terminalEnergy?: number; storageEnergy?: number } = {}) {
     const { terminalEnergy = 10400, storageEnergy = 0 } = opts;
-    const storage = mockStructure("storage", { id: "st", energy: storageEnergy, capacity: 1000000 });
-    const terminal = mockStructure("terminal", { id: "tm", energy: terminalEnergy, capacity: 1000000 });
+    const storage = mockStructure("storage", {
+      id: "st",
+      energy: storageEnergy,
+      capacity: 1000000,
+    });
+    const terminal = mockStructure("terminal", {
+      id: "tm",
+      energy: terminalEnergy,
+      capacity: 1000000,
+    });
     const snap = mockSnapshot({ storage, terminal });
     const creep = mockCreep({ role: "hauler", used: 0, capacity: 300 });
     const ctx = mockContext(snap);
@@ -81,7 +95,13 @@ describe("hauler 角色接线 — terminal 救援参与 acquire 链", () => {
     const storage = mockStructure("storage", { id: "st", energy: 0, capacity: 1000000 });
     const terminal = mockStructure("terminal", { id: "tm", energy: 10400, capacity: 1000000 });
     const snap = mockSnapshot({ storage, terminal });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 300, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 300,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);

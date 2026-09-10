@@ -46,7 +46,13 @@ function makeRoomMem(over?: Partial<RoomEconomicMemory>): RoomEconomicMemory {
       rcl: 6,
     },
     economy: {
-      t: 1000, nf: 500, cr: 30000, rb: 6000, dr: 0, ei: 140, ef: 70,
+      t: 1000,
+      nf: 500,
+      cr: 30000,
+      rb: 6000,
+      dr: 0,
+      ei: 140,
+      ef: 70,
     },
     ...over,
   };
@@ -159,7 +165,16 @@ describe("buildRoomEconomicProfile", () => {
     const snap = mockSnapshot({ rcl: 2, storage: undefined });
     const mem = makeRoomMem({
       colonyState: "normal",
-      phase: { phase: "growth", reserve: 500, reserveDelta: 10, drainScore: 0, liquidityScore: 0, harvesterCount: 1, sourceCount: 1, rcl: 2 },
+      phase: {
+        phase: "growth",
+        reserve: 500,
+        reserveDelta: 10,
+        drainScore: 0,
+        liquidityScore: 0,
+        harvesterCount: 1,
+        sourceCount: 1,
+        rcl: 2,
+      },
     });
     const econ = makeEconomy({ netFlow: 2, estimatedIncome: 10 });
 
@@ -177,7 +192,16 @@ describe("buildRoomEconomicProfile", () => {
     const mem = makeRoomMem({
       colonyState: "recovery",
       economyPressure: 0.8,
-      phase: { phase: "recovery", reserve: 1000, reserveDelta: -50, drainScore: 100, liquidityScore: 0, harvesterCount: 1, sourceCount: 2, rcl: 7 },
+      phase: {
+        phase: "recovery",
+        reserve: 1000,
+        reserveDelta: -50,
+        drainScore: 100,
+        liquidityScore: 0,
+        harvesterCount: 1,
+        sourceCount: 2,
+        rcl: 7,
+      },
     });
     const econ = makeEconomy({ netFlow: -3, estimatedIncome: 10 });
 
@@ -239,17 +263,35 @@ describe("canExportEnergy", () => {
   function profile(over?: Partial<RoomEconomicProfile>): RoomEconomicProfile {
     return {
       roomName: "W7N4",
-      rcl: 7, hasSpawn: true, hasStorage: true, hasTerminal: true,
-      netFlow: 5, contractReserve: 50000, riskBuffer: 1000,
-      estimatedIncome: 14, efficiency: 0.7, drift: 0, economyTick: 1000,
-      storageEnergy: 50000, storageCapacity: 1_000_000, storageRatio: 0.5,
-      energyAvailable: 500, energyCapacityAvailable: 800,
-      storageNearFull: false, sourceCount: 2,
-      colonyPhase: "growth", colonyState: "normal",
-      economyPressure: 0.1, lastHostileAt: undefined, hasLiveThreat: false,
-      controllerDowngradeRisk: false, claimSecure: false,
-      economicClass: "core", netFlowPositive: true,
-      selfSufficiency: 0.64, isStruggling: false,
+      rcl: 7,
+      hasSpawn: true,
+      hasStorage: true,
+      hasTerminal: true,
+      netFlow: 5,
+      contractReserve: 50000,
+      riskBuffer: 1000,
+      estimatedIncome: 14,
+      efficiency: 0.7,
+      drift: 0,
+      economyTick: 1000,
+      storageEnergy: 50000,
+      storageCapacity: 1_000_000,
+      storageRatio: 0.5,
+      energyAvailable: 500,
+      energyCapacityAvailable: 800,
+      storageNearFull: false,
+      sourceCount: 2,
+      colonyPhase: "growth",
+      colonyState: "normal",
+      economyPressure: 0.1,
+      lastHostileAt: undefined,
+      hasLiveThreat: false,
+      controllerDowngradeRisk: false,
+      claimSecure: false,
+      economicClass: "core",
+      netFlowPositive: true,
+      selfSufficiency: 0.64,
+      isStruggling: false,
       ...over,
     };
   }
@@ -285,17 +327,35 @@ describe("needsEnergyAid", () => {
   function profile(over?: Partial<RoomEconomicProfile>): RoomEconomicProfile {
     return {
       roomName: "W7N4",
-      rcl: 6, hasSpawn: true, hasStorage: true, hasTerminal: false,
-      netFlow: 5, contractReserve: 30000, riskBuffer: 600,
-      estimatedIncome: 14, efficiency: 0.7, drift: 0, economyTick: 1000,
-      storageEnergy: 30000, storageCapacity: 1_000_000, storageRatio: 0.3,
-      energyAvailable: 500, energyCapacityAvailable: 800,
-      storageNearFull: false, sourceCount: 2,
-      colonyPhase: "growth", colonyState: "normal",
-      economyPressure: 0.1, lastHostileAt: undefined, hasLiveThreat: false,
-      controllerDowngradeRisk: false, claimSecure: false,
-      economicClass: "core", netFlowPositive: true,
-      selfSufficiency: 0.64, isStruggling: false,
+      rcl: 6,
+      hasSpawn: true,
+      hasStorage: true,
+      hasTerminal: false,
+      netFlow: 5,
+      contractReserve: 30000,
+      riskBuffer: 600,
+      estimatedIncome: 14,
+      efficiency: 0.7,
+      drift: 0,
+      economyTick: 1000,
+      storageEnergy: 30000,
+      storageCapacity: 1_000_000,
+      storageRatio: 0.3,
+      energyAvailable: 500,
+      energyCapacityAvailable: 800,
+      storageNearFull: false,
+      sourceCount: 2,
+      colonyPhase: "growth",
+      colonyState: "normal",
+      economyPressure: 0.1,
+      lastHostileAt: undefined,
+      hasLiveThreat: false,
+      controllerDowngradeRisk: false,
+      claimSecure: false,
+      economicClass: "core",
+      netFlowPositive: true,
+      selfSufficiency: 0.64,
+      isStruggling: false,
       ...over,
     };
   }
@@ -309,30 +369,46 @@ describe("needsEnergyAid", () => {
   });
 
   it("净流为负 + riskBuffer < 400 → true", () => {
-    expect(needsEnergyAid(profile({
-      netFlowPositive: false,
-      riskBuffer: 300,
-    }))).toBe(true);
+    expect(
+      needsEnergyAid(
+        profile({
+          netFlowPositive: false,
+          riskBuffer: 300,
+        }),
+      ),
+    ).toBe(true);
   });
 
   it("净流为负 + riskBuffer ≥ 400 → false（缓冲足够）", () => {
-    expect(needsEnergyAid(profile({
-      netFlowPositive: false,
-      riskBuffer: 500,
-    }))).toBe(false);
+    expect(
+      needsEnergyAid(
+        profile({
+          netFlowPositive: false,
+          riskBuffer: 500,
+        }),
+      ),
+    ).toBe(false);
   });
 
   it("storageRatio < 0.1 + estimatedIncome < 5 → true", () => {
-    expect(needsEnergyAid(profile({
-      storageRatio: 0.05,
-      estimatedIncome: 3,
-    }))).toBe(true);
+    expect(
+      needsEnergyAid(
+        profile({
+          storageRatio: 0.05,
+          estimatedIncome: 3,
+        }),
+      ),
+    ).toBe(true);
   });
 
   it("storageRatio < 0.1 但 estimatedIncome ≥ 5 → false（有产能）", () => {
-    expect(needsEnergyAid(profile({
-      storageRatio: 0.05,
-      estimatedIncome: 8,
-    }))).toBe(false);
+    expect(
+      needsEnergyAid(
+        profile({
+          storageRatio: 0.05,
+          estimatedIncome: 8,
+        }),
+      ),
+    ).toBe(false);
   });
 });

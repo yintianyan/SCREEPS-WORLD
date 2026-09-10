@@ -157,7 +157,8 @@ function generateRoomTasks(
   if (tp && tp.tick === ctx.tick) {
     const transport = tp.rooms[roomName];
     if (transport && transport.length > 0) {
-      for (const t of transport) tasks.push(t as import("../domain/assignment/service").AssignmentTaskEntry);
+      for (const t of transport)
+        tasks.push(t as import("../domain/assignment/service").AssignmentTaskEntry);
       tasks.sort((a, b) => a.priority - b.priority);
     }
   }
@@ -199,7 +200,10 @@ function invalidateAssignments(pool: TaskPool, roomName: string, minPriority: nu
  * 主动失效非 storage/extension build assignment，强制 builder 重新选 storage。
  * B8-F04 修复：复用 allCreepRefs 避免在房间循环内重复遍历 Game.creeps。
  */
-function releaseNonStorageBuilderAssignments(snapshot: RoomSnapshot, allCreepRefs: readonly CreepAssignmentRef[]): void {
+function releaseNonStorageBuilderAssignments(
+  snapshot: RoomSnapshot,
+  allCreepRefs: readonly CreepAssignmentRef[],
+): void {
   // 必须存在 storage construction site 才释放——否则 builder 无 storage 可建。
   const hasStorageSite = snapshot.myConstructionSites.some(
     s => s.structureType === STRUCTURE_STORAGE,
@@ -214,7 +218,11 @@ function releaseNonStorageBuilderAssignments(snapshot: RoomSnapshot, allCreepRef
 
     const site = Game.getObjectById(a.targetId as Id<ConstructionSite>);
     // 保留 storage 和 extension site 上的 builder；释放其他（road/rampart/link 等）。
-    if (site && site.structureType !== STRUCTURE_STORAGE && site.structureType !== STRUCTURE_EXTENSION) {
+    if (
+      site &&
+      site.structureType !== STRUCTURE_STORAGE &&
+      site.structureType !== STRUCTURE_EXTENSION
+    ) {
       const creep = Game.creeps[ref.name];
       if (creep) creep.memory.assignment = undefined;
     }

@@ -58,10 +58,15 @@ export interface StructureBatch {
  * 排除类型：link（task-factory 按角色放置）、extractor（必须建在 mineral 格）、
  * road/container/rampart/constructedWall（无限或专用生成器）。
  */
-const BUILD_STRATEGY: Readonly<Record<string, {
-  readonly priority: (rcl: number) => BuildPriority;
-  readonly phaseFor: (rcl: number) => LayoutPhase;
-}>> = {
+const BUILD_STRATEGY: Readonly<
+  Record<
+    string,
+    {
+      readonly priority: (rcl: number) => BuildPriority;
+      readonly phaseFor: (rcl: number) => LayoutPhase;
+    }
+  >
+> = {
   [STRUCTURE_TOWER]: {
     priority: () => 0,
     // RCL8 解锁 +3（官方上限 6：RCL3+1、RCL5+1、RCL7+1、RCL8+3）。
@@ -71,7 +76,7 @@ const BUILD_STRATEGY: Readonly<Record<string, {
   [STRUCTURE_EXTENSION]: {
     // 与旧手写表逐级等价：RCL2-4 priority 1，RCL5+ priority 2（早期间歇、后期批量填充）。
     priority: r => (r <= 4 ? 1 : 2),
-    phaseFor: r => (r === 5 ? "late" : `rcl${r}` as LayoutPhase),
+    phaseFor: r => (r === 5 ? "late" : (`rcl${r}` as LayoutPhase)),
   },
   [STRUCTURE_SPAWN]: { priority: () => 1, phaseFor: r => `rcl${r}` as LayoutPhase },
   [STRUCTURE_TERMINAL]: { priority: () => 1, phaseFor: () => "rcl6" },
@@ -180,7 +185,8 @@ export function buildCandidateGrid(
   const { maxRadius, minOpenness } = config;
 
   // P2-N：增量模式 — prevCandidates 与 prevRadius 提供 且 maxRadius == prevRadius+1。
-  const useIncremental = prevCandidates !== undefined && prevRadius !== undefined && maxRadius === prevRadius + 1;
+  const useIncremental =
+    prevCandidates !== undefined && prevRadius !== undefined && maxRadius === prevRadius + 1;
 
   const scoreTile = (dx: number, dy: number): CandidateTile | undefined => {
     const x = anchor.x + dx;
@@ -216,7 +222,7 @@ export function buildCandidateGrid(
     const candidates: CandidateTile[] = [...prevCandidates!];
     for (let dx = -maxRadius; dx <= maxRadius; dx++) {
       for (let dy = -maxRadius; dy <= maxRadius; dy++) {
-        if (((dx + dy) % 2 + 2) % 2 !== 0) continue;
+        if ((((dx + dy) % 2) + 2) % 2 !== 0) continue;
         if (Math.abs(dx) !== maxRadius && Math.abs(dy) !== maxRadius) continue;
         const tile = scoreTile(dx, dy);
         if (tile) candidates.push(tile);
@@ -231,7 +237,7 @@ export function buildCandidateGrid(
   for (let dx = -maxRadius; dx <= maxRadius; dx++) {
     for (let dy = -maxRadius; dy <= maxRadius; dy++) {
       // 偶校验（棋盘格不变量）
-      if (((dx + dy) % 2 + 2) % 2 !== 0) continue;
+      if ((((dx + dy) % 2) + 2) % 2 !== 0) continue;
       const tile = scoreTile(dx, dy);
       if (tile) candidates.push(tile);
     }
@@ -252,7 +258,12 @@ function wouldSealLocal(
   occupied: ReadonlySet<number>,
   tolerance = 0,
 ): boolean {
-  const orthogonal: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const orthogonal: [number, number][] = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
   for (const [dx, dy] of orthogonal) {
     const nx = x + dx;
     const ny = y + dy;
@@ -264,7 +275,12 @@ function wouldSealLocal(
   // 容忍度分级（2026-08-01）：tolerance > 0 允许「正交全堵但斜向可达」— 斜向距离
   // = transfer 射程 1（Chebyshev），严格正交守卫会让破碎房 RCL7/8 批次放不满（W7N3 实证）。
   if (tolerance > 0) {
-    const diagonal: [number, number][] = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+    const diagonal: [number, number][] = [
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
+    ];
     for (const [dx, dy] of diagonal) {
       const nx = x + dx;
       const ny = y + dy;
@@ -406,10 +422,8 @@ function placeTowerBuckets(
   if (quota.controller > 0) {
     const controllerSorted = [...candidates].sort((a, b) => {
       const bucketOf = (c: CandidateTile): number =>
-        Math.floor(
-          (Math.abs(c.x - controllerPos.x) + Math.abs(c.y - controllerPos.y)) / 15,
-        );
-      return (bucketOf(a) - bucketOf(b)) || (b.score - a.score) || a.x - b.x || a.y - b.y;
+        Math.floor((Math.abs(c.x - controllerPos.x) + Math.abs(c.y - controllerPos.y)) / 15);
+      return bucketOf(a) - bucketOf(b) || b.score - a.score || a.x - b.x || a.y - b.y;
     });
     tryPlace(controllerSorted, quota.controller);
   }
@@ -419,7 +433,7 @@ function placeTowerBuckets(
     const chebyshev = (c: CandidateTile): number =>
       Math.max(Math.abs(c.x - anchor.x), Math.abs(c.y - anchor.y));
     const sortByScore = (a: CandidateTile, b: CandidateTile): number =>
-      (b.score - a.score) || a.x - b.x || a.y - b.y;
+      b.score - a.score || a.x - b.x || a.y - b.y;
     // 紧桶（≤5）
     const tightPool = candidates.filter(c => chebyshev(c) <= 5).sort(sortByScore);
     const placed = tryPlace(tightPool, quota.anchor);
@@ -465,7 +479,9 @@ export function placeStructures(
   roomName?: string,
   controllerPos?: { x: number; y: number },
   terminalPos?: { x: number; y: number },
-  diagnostics?: (shortfalls: readonly { type: string; needed: number; placed: number; roomName?: string }[]) => void,
+  diagnostics?: (
+    shortfalls: readonly { type: string; needed: number; placed: number; roomName?: string }[],
+  ) => void,
 ): ConstraintPlacement[] {
   // ── 自适应搜索半径 ──
   // 固定 maxRadius=7 候选池在多墙 + RCL7-8 高密度下会被密封守卫耗尽 → 静默少放。
@@ -474,7 +490,13 @@ export function placeStructures(
   // 现改为「一轮放置后仍有缺口 → 外扩重试」至 MAX_SEARCH_RADIUS；开阔地形
   // 首轮即放满，行为与旧实现一致。P2-N 增量外扩只评分新环带格，与全量等价。
   let effectiveRadius = config.maxRadius;
-  let candidates = buildCandidateGrid(anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints);
+  let candidates = buildCandidateGrid(
+    anchor,
+    field,
+    getTerrain,
+    { ...config, maxRadius: effectiveRadius },
+    energyEndpoints,
+  );
 
   const occupied = new Set<number>(preOccupied);
   // 锚点格被 spawn 占用
@@ -524,7 +546,14 @@ export function placeStructures(
 
       // Lab：集群放置
       if (type === STRUCTURE_LAB) {
-        const labResult = placeLabCluster(need, candidates, occupied, getTerrain, labPositions, terminalPos);
+        const labResult = placeLabCluster(
+          need,
+          candidates,
+          occupied,
+          getTerrain,
+          labPositions,
+          terminalPos,
+        );
         for (const pos of labResult) {
           labPositions.push(pos);
           placements.push({
@@ -543,7 +572,13 @@ export function placeStructures(
       // 无 controllerPos 时退化为通用池（向后兼容）。
       if (type === STRUCTURE_TOWER && controllerPos) {
         const towerResult = placeTowerBuckets(
-          need, phase, candidates, occupied, getTerrain, anchor, controllerPos,
+          need,
+          phase,
+          candidates,
+          occupied,
+          getTerrain,
+          anchor,
+          controllerPos,
           config.sealTolerance?.[type] ?? 0,
         );
         for (const pos of towerResult) {
@@ -567,9 +602,11 @@ export function placeStructures(
 
         // 密封守卫（障碍结构）
         const isObstacle = type !== STRUCTURE_ROAD && type !== STRUCTURE_CONTAINER;
-        if (isObstacle && wouldSealLocal(
-          c.x, c.y, getTerrain, occupied, config.sealTolerance?.[type] ?? 0,
-        )) continue;
+        if (
+          isObstacle &&
+          wouldSealLocal(c.x, c.y, getTerrain, occupied, config.sealTolerance?.[type] ?? 0)
+        )
+          continue;
 
         occupied.add(packed);
         placements.push({
@@ -592,8 +629,13 @@ export function placeStructures(
     if (remainingNeed === 0 || effectiveRadius >= MAX_SEARCH_RADIUS) break;
     effectiveRadius++;
     candidates = buildCandidateGrid(
-      anchor, field, getTerrain, { ...config, maxRadius: effectiveRadius }, energyEndpoints,
-      candidates, effectiveRadius - 1,
+      anchor,
+      field,
+      getTerrain,
+      { ...config, maxRadius: effectiveRadius },
+      energyEndpoints,
+      candidates,
+      effectiveRadius - 1,
     );
   }
 

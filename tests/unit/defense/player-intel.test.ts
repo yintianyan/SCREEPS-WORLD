@@ -192,12 +192,7 @@ describe("G5 — buildPlayerIntelRecord", () => {
   });
 
   it("T09: Unknown Player → no evidence → UNKNOWN", () => {
-    const record = buildPlayerIntelRecord(
-      "unknown1",
-      [],
-      CURRENT_TICK,
-      false,
-    );
+    const record = buildPlayerIntelRecord("unknown1", [], CURRENT_TICK, false);
     expect(record.aggregatedConfidence).toBe("UNKNOWN");
     expect(record.threatIndex).toBe(0);
   });

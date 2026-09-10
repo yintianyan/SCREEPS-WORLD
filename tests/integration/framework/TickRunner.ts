@@ -62,13 +62,7 @@ export class TickRunner {
       throw new Error("TickRunner: loop not set. Call setLoop() first.");
     }
 
-    const {
-      recordInterval = 1,
-      maxTicks = 20000,
-      onTick,
-      stopWhen,
-      silent = true,
-    } = opts;
+    const { recordInterval = 1, maxTicks = 20000, onTick, stopWhen, silent = true } = opts;
 
     const actualTicks = Math.min(ticks, maxTicks);
     const records: TickRecord[] = [];

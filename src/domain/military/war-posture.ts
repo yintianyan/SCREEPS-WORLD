@@ -9,11 +9,11 @@ import type { PlayerIntelRecord } from "../defense/player-intel";
 // ═══════════════════════════════════════════════════════════
 
 export type WarPosture =
-  | "DEFENSIVE"          // 纯防御，不进攻
-  | "CONTAIN"            // 遏制（骚扰/否定，不全面进攻）
-  | "LIMITED_OFFENSIVE"  // 有限进攻（特定目标）
-  | "FULL_OFFENSIVE"     // 全面进攻
-  | "CEASEFIRE";         // 停火（非 war 姿态）
+  | "DEFENSIVE" // 纯防御，不进攻
+  | "CONTAIN" // 遏制（骚扰/否定，不全面进攻）
+  | "LIMITED_OFFENSIVE" // 有限进攻（特定目标）
+  | "FULL_OFFENSIVE" // 全面进攻
+  | "CEASEFIRE"; // 停火（非 war 姿态）
 
 // ═══════════════════════════════════════════════════════════
 // §2. 输入类型
@@ -150,7 +150,9 @@ export function evaluateWarPosture(input: WarPostureInput): WarPostureResult {
 
   // LOW Confidence + HIGH Threat → CONTAIN (不进攻，但骚扰/遏制)
   if (overallConfidence < 0.4 || intelConfidence < 0.2) {
-    reasons.push(`threat=${maxThreat} + overallConfidence=${overallConfidence.toFixed(2)} < 0.4 → 情报不足，遏制`);
+    reasons.push(
+      `threat=${maxThreat} + overallConfidence=${overallConfidence.toFixed(2)} < 0.4 → 情报不足，遏制`,
+    );
     evidence.push(`intelConfidence=${intelConfidence.toFixed(2)}`);
     return {
       posture: "CONTAIN",
@@ -166,7 +168,9 @@ export function evaluateWarPosture(input: WarPostureInput): WarPostureResult {
   if (maxThreat === "CRITICAL") {
     // FULL_OFFENSIVE 需要严格条件
     if (input.empireHealth === "healthy" && input.spawnCapacity > 0 && overallConfidence >= 0.7) {
-      reasons.push(`threat=CRITICAL + health=healthy + confidence=${overallConfidence.toFixed(2)} ≥ 0.7 → 全面进攻`);
+      reasons.push(
+        `threat=CRITICAL + health=healthy + confidence=${overallConfidence.toFixed(2)} ≥ 0.7 → 全面进攻`,
+      );
       return {
         posture: "FULL_OFFENSIVE",
         offensiveAuthorized: true,
@@ -217,21 +221,24 @@ function levelRank(level: ThreatLevel): number {
  * FULL_OFFENSIVE: 全部
  * CEASEFIRE: 无进攻授权
  */
-export function isOperationAuthorized(
-  posture: WarPosture,
-  operationType: string,
-): boolean {
+export function isOperationAuthorized(posture: WarPosture, operationType: string): boolean {
   const defensive = ["DEFEND", "ESCORT", "RETREAT", "ABORT"];
   const contain = [...defensive, "HARASS", "REMOTE_DENIAL"];
   const limited = [...contain, "SIEGE", "RAID", "CONTROLLER_ATTACK", "RESERVE"];
   const full = [...limited, "ASSAULT", "CLAIM"];
 
   switch (posture) {
-    case "CEASEFIRE": return false;
-    case "DEFENSIVE": return defensive.includes(operationType);
-    case "CONTAIN": return contain.includes(operationType);
-    case "LIMITED_OFFENSIVE": return limited.includes(operationType);
-    case "FULL_OFFENSIVE": return full.includes(operationType);
-    default: return false;
+    case "CEASEFIRE":
+      return false;
+    case "DEFENSIVE":
+      return defensive.includes(operationType);
+    case "CONTAIN":
+      return contain.includes(operationType);
+    case "LIMITED_OFFENSIVE":
+      return limited.includes(operationType);
+    case "FULL_OFFENSIVE":
+      return full.includes(operationType);
+    default:
+      return false;
   }
 }

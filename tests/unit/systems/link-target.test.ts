@@ -11,8 +11,9 @@ describe("computeControllerLinkTarget — 需求驱动供能水位", () => {
   });
 
   it("RCL8 + 降级风险 → 保级水位 maintainTarget", () => {
-    expect(computeControllerLinkTarget(8, ctrl(5000), 60000, 800))
-      .toBe(CONFIG.economy.link.maintainTarget);
+    expect(computeControllerLinkTarget(8, ctrl(5000), 60000, 800)).toBe(
+      CONFIG.economy.link.maintainTarget,
+    );
   });
 
   it("RCL7 + storage ≥ sustained(10k) → 满功率供能", () => {
@@ -29,6 +30,8 @@ describe("computeControllerLinkTarget — 需求驱动供能水位", () => {
 
   it("无 controller / 非我方 → 0", () => {
     expect(computeControllerLinkTarget(7, undefined, 20000, 800)).toBe(0);
-    expect(computeControllerLinkTarget(7, { my: false, ticksToDowngrade: 20000 } as any, 20000, 800)).toBe(0);
+    expect(
+      computeControllerLinkTarget(7, { my: false, ticksToDowngrade: 20000 } as any, 20000, 800),
+    ).toBe(0);
   });
 });

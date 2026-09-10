@@ -112,7 +112,8 @@ export function buildRoomTasks(
   // assignment 对齐：集中 builder 工时优先完工，而非与 extension 平分。
   const needsStorage = snapshot.rcl >= 4 && snapshot.storage === undefined;
   for (const site of snapshot.myConstructionSites) {
-    const isCritical = site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
+    const isCritical =
+      site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
     const isStorageSite = needsStorage && site.structureType === STRUCTURE_STORAGE;
     // controller container 是站桩升级链路的核心基础设施 — 提升为 priority 1，
     // 确保 builder 优先建造它而非远处的 extension。

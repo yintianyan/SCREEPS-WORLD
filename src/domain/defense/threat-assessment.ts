@@ -348,7 +348,8 @@ export function inferThreatIntent(
   if (agg.totalDismantle > 0 && roomContext.hasStorage) {
     evidence.push(`dismantle=${agg.totalDismantle} + storage存在`);
     // 如果 dismantle 部件多且接近核心区
-    if (agg.totalDismantle >= 100) { // ≥2 WORK parts
+    if (agg.totalDismantle >= 100) {
+      // ≥2 WORK parts
       return { intent: "ECONOMIC_ATTACK", confidence: 0.8, evidence };
     }
   }
@@ -356,9 +357,7 @@ export function inferThreatIntent(
   // 4. SIEGE — heal ≥ 塔净伤 + 不突入
   // 塔净伤估计：每塔 600 × towerCount（满伤），但考虑衰减取保守值
   // 仅在有塔时检查 SIEGE（无塔时 heal ≥ 0 恒真，会误判所有带 HEAL 的 creep 为 SIEGE）
-  const towerNetDamage = roomContext.towerCount > 0
-    ? roomContext.towerCount * 600 * 0.5
-    : -1; // -1 确保 heal ≥ -1 不触发 SIEGE
+  const towerNetDamage = roomContext.towerCount > 0 ? roomContext.towerCount * 600 * 0.5 : -1; // -1 确保 heal ≥ -1 不触发 SIEGE
   if (agg.totalHeal >= towerNetDamage && hostiles.length >= 1 && roomContext.towerCount > 0) {
     // 检查是否在核心区外（SIEGE 通常在房边缘游走）
     let allOutside = true;
@@ -417,15 +416,21 @@ export function inferThreatIntent(
   }
 
   // 9. SCOUTING — 仅 MOVE / 无战斗部件
-  const hasCombatParts = agg.totalAttack > 0 || agg.totalRangedAttack > 0 ||
-    agg.totalHeal > 0 || agg.totalDismantle > 0 || agg.totalClaim > 0;
+  const hasCombatParts =
+    agg.totalAttack > 0 ||
+    agg.totalRangedAttack > 0 ||
+    agg.totalHeal > 0 ||
+    agg.totalDismantle > 0 ||
+    agg.totalClaim > 0;
   if (!hasCombatParts) {
     evidence.push(`无战斗部件(totalParts=${agg.creepCount > 0 ? hostiles.length : 0})`);
     return { intent: "SCOUTING", confidence: 0.9, evidence };
   }
 
   // 10. UNKNOWN — 信息不足
-  evidence.push(`信息不足(hostiles=${hostiles.length} combat=${agg.totalAttack + agg.totalRangedAttack})`);
+  evidence.push(
+    `信息不足(hostiles=${hostiles.length} combat=${agg.totalAttack + agg.totalRangedAttack})`,
+  );
   return { intent: "UNKNOWN", confidence: 0.3, evidence };
 }
 
@@ -461,8 +466,12 @@ function computeThreatScore(
   const agg = aggregateCombatCapability(capabilities);
 
   // combat 维度：总战力归一化
-  const combatRaw = agg.totalAttack + agg.totalRangedAttack + agg.totalHeal * 0.5 +
-    agg.totalEffectiveHP * 0.01 + agg.totalDismantle * 0.3;
+  const combatRaw =
+    agg.totalAttack +
+    agg.totalRangedAttack +
+    agg.totalHeal * 0.5 +
+    agg.totalEffectiveHP * 0.01 +
+    agg.totalDismantle * 0.3;
   const combat = Math.min(combatRaw / 10, 100); // 归一化到 0-100
 
   // intent 维度：按意图危险度映射
@@ -487,9 +496,7 @@ function computeThreatScore(
     if (dist < minDistance) minDistance = dist;
   }
   // 距离越近分数越高：dist=0 → 100, dist=50 → 0
-  const proximity = hostiles.length > 0
-    ? Math.max(0, 100 - minDistance * 2)
-    : 0;
+  const proximity = hostiles.length > 0 ? Math.max(0, 100 - minDistance * 2) : 0;
 
   // objective 维度：目标价值
   let objective = 0;
@@ -501,12 +508,11 @@ function computeThreatScore(
   objective = Math.min(objective, 100);
 
   // boost 维度
-  const boost = agg.maxBoostTier > 0
-    ? agg.maxBoostTier * 20 + (agg.boostedCount > 1 ? 10 : 0)
-    : 0;
+  const boost = agg.maxBoostTier > 0 ? agg.maxBoostTier * 20 + (agg.boostedCount > 1 ? 10 : 0) : 0;
 
   // defense 维度（反向）：我方防御越强威胁越低
-  const defenseRaw = roomContext.towerCount * 15 +
+  const defenseRaw =
+    roomContext.towerCount * 15 +
     roomContext.rampartCoverage * 30 +
     (roomContext.safeModeAvailable > 0 ? 10 : 0);
   const defense = Math.min(defenseRaw, 100); // 越高威胁分越低
@@ -522,15 +528,19 @@ function computeThreatScore(
   }
 
   // 总分 = 各维度加权（defense 是减项）
-  const total = Math.max(0, Math.min(100,
-    combat * 0.25 +
-    intentScore * 0.30 +
-    proximity * 0.15 +
-    objective * 0.10 +
-    boost * 0.10 +
-    economicImpact * 0.10 -
-    defense * 0.20,
-  ));
+  const total = Math.max(
+    0,
+    Math.min(
+      100,
+      combat * 0.25 +
+        intentScore * 0.3 +
+        proximity * 0.15 +
+        objective * 0.1 +
+        boost * 0.1 +
+        economicImpact * 0.1 -
+        defense * 0.2,
+    ),
+  );
 
   return {
     combat: Math.round(combat * 10) / 10,
@@ -558,11 +568,16 @@ function levelToPosture(level: ThreatLevel, intent: ThreatIntent): RecommendedPo
   // NUCLEAR intent 直接 EMERGENCY
   if (intent === "NUCLEAR") return "EMERGENCY";
   switch (level) {
-    case "NONE": return "NORMAL";
-    case "LOW": return "WATCH";
-    case "MEDIUM": return "ALERT";
-    case "HIGH": return "FORTIFY";
-    case "CRITICAL": return "EMERGENCY";
+    case "NONE":
+      return "NORMAL";
+    case "LOW":
+      return "WATCH";
+    case "MEDIUM":
+      return "ALERT";
+    case "HIGH":
+      return "FORTIFY";
+    case "CRITICAL":
+      return "EMERGENCY";
   }
 }
 
@@ -592,7 +607,16 @@ function levelToPosture(level: ThreatLevel, intent: ThreatIntent): RecommendedPo
  * 复杂度：O(hostiles.length × body.length)，hostiles 通常 ≤ 20，body ≤ 50。
  */
 export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
-  const { tick, hostiles, roomContext, defenseContext, playerIntel, playerIntelRecord, remoteContext, terrainContext } = input;
+  const {
+    tick,
+    hostiles,
+    roomContext,
+    defenseContext,
+    playerIntel,
+    playerIntelRecord,
+    remoteContext,
+    terrainContext,
+  } = input;
 
   // 无敌方单位 — 仍需检查 nuke 落点（引擎事实，不依赖 hostile 可见性）
   if (hostiles.length === 0) {
@@ -601,17 +625,33 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
       return {
         level: "CRITICAL",
         score: {
-          combat: 0, intent: 100, proximity: 0, objective: 0,
-          boost: 0, defense: 0, economicImpact: 0, total: 100,
+          combat: 0,
+          intent: 100,
+          proximity: 0,
+          objective: 0,
+          boost: 0,
+          defense: 0,
+          economicImpact: 0,
+          total: 100,
         },
         confidence: "fact",
         multiConfidence: mc,
         estimatedPower: {
-          attack: 0, rangedAttack: 0, heal: 0, effectiveHP: 0,
-          dismantle: 0, toughParts: 0, boosted: false, maxBoostTier: 0,
+          attack: 0,
+          rangedAttack: 0,
+          heal: 0,
+          effectiveHP: 0,
+          dismantle: 0,
+          toughParts: 0,
+          boosted: false,
+          maxBoostTier: 0,
         },
         enemyCombatPower: computeCombatPower([]),
-        estimatedIntent: { intent: "NUCLEAR", confidence: 1.0, evidence: [`nuke落点=${roomContext.incomingNukes}`] },
+        estimatedIntent: {
+          intent: "NUCLEAR",
+          confidence: 1.0,
+          evidence: [`nuke落点=${roomContext.incomingNukes}`],
+        },
         timeToImpact: Infinity,
         sources: [],
         recommendedPosture: "EMERGENCY",
@@ -622,14 +662,26 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
     return {
       level: "NONE",
       score: {
-        combat: 0, intent: 0, proximity: 0, objective: 0,
-        boost: 0, defense: 0, economicImpact: 0, total: 0,
+        combat: 0,
+        intent: 0,
+        proximity: 0,
+        objective: 0,
+        boost: 0,
+        defense: 0,
+        economicImpact: 0,
+        total: 0,
       },
       confidence: "fact",
       multiConfidence: mc0,
       estimatedPower: {
-        attack: 0, rangedAttack: 0, heal: 0, effectiveHP: 0,
-        dismantle: 0, toughParts: 0, boosted: false, maxBoostTier: 0,
+        attack: 0,
+        rangedAttack: 0,
+        heal: 0,
+        effectiveHP: 0,
+        dismantle: 0,
+        toughParts: 0,
+        boosted: false,
+        maxBoostTier: 0,
       },
       enemyCombatPower: computeCombatPower([]),
       estimatedIntent: { intent: "UNKNOWN", confidence: 0, evidence: ["无可见敌方单位"] },
@@ -647,9 +699,10 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
   // A5.2: TerrainContext 不修改 CombatCapability（G2 不变），
   // 只通过 EffectiveCombatModifier 影响 timeToImpact 等派生量。
   const enemyPower = computeCombatPower(capabilities, {
-    towerCoverage: roomContext.towerCount > 0
-      ? Math.min(roomContext.towerEnergyTotal / (roomContext.towerCount * 1000), 1)
-      : 0,
+    towerCoverage:
+      roomContext.towerCount > 0
+        ? Math.min(roomContext.towerEnergyTotal / (roomContext.towerCount * 1000), 1)
+        : 0,
     terrain: "plain",
     boosted: capabilities.some(c => c.boosted),
   });
@@ -659,7 +712,13 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
   const intentAssessment = inferThreatIntent(hostiles, capabilities, roomContext, playerIntel);
 
   // 4. 评分
-  const score = computeThreatScore(hostiles, capabilities, intentAssessment, roomContext, remoteContext);
+  const score = computeThreatScore(
+    hostiles,
+    capabilities,
+    intentAssessment,
+    roomContext,
+    remoteContext,
+  );
 
   // 5. 级别 + 姿态
   const level = scoreToLevel(score.total);
@@ -667,9 +726,7 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
 
   // 6. A5.2 多维度置信度计算
   const allBodiesVisible = hostiles.every(h => h.body.length > 0);
-  const allBoostsIdentified = capabilities.every(c =>
-    !c.boosted || c.maxBoostTier > 0,
-  );
+  const allBoostsIdentified = capabilities.every(c => !c.boosted || c.maxBoostTier > 0);
 
   const factConfidence = computeFactConfidence(
     roomContext.incomingNukes > 0,
@@ -678,9 +735,7 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
   );
   const combatConfidence = computeCombatConfidence(allBodiesVisible, allBoostsIdentified);
   const intentConfidence = computeIntentConfidence(intentAssessment.confidence);
-  const terrainConfidence = terrainContext
-    ? computeTerrainConfidence(terrainContext)
-    : 0.3; // 无 TerrainContext 时默认低置信度
+  const terrainConfidence = terrainContext ? computeTerrainConfidence(terrainContext) : 0.3; // 无 TerrainContext 时默认低置信度
   const intelConfidence = computeIntelConfidence(playerIntelRecord);
 
   const multiConfidence = aggregateConfidence(
@@ -692,9 +747,10 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
   );
 
   // 向后兼容：将 overallConfidence 映射为 A5.1 的 ThreatConfidence
-  const confidence = roomContext.incomingNukes > 0
-    ? "fact" as ThreatConfidence
-    : toThreatConfidence(multiConfidence.overallConfidence);
+  const confidence =
+    roomContext.incomingNukes > 0
+      ? ("fact" as ThreatConfidence)
+      : toThreatConfidence(multiConfidence.overallConfidence);
 
   // 7. timeToImpact 估计
   // A5.2: TerrainContext.mobilityModifier 影响移动估计

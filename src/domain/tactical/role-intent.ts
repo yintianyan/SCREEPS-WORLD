@@ -14,23 +14,23 @@ import type {
 
 /** 角色移动指令。 */
 export type RoleMoveDirective =
-  | "MOVE_TO_OBJECTIVE"     // 前进向目标
-  | "HOLD_POSITION"         // 原地据守
-  | "MOVE_TO_FLANK"         // 侧翼包抄
-  | "RETREAT_TO_SAFE"       // 撤退到安全房
-  | "MOVE_TO_REGROUP"       // 重新集结
-  | "MOVE_TO_TACTICAL_POS"  // 移动到战术阵位
-  | "BREAK_CONTACT"         // 脱离接触
-  | "NO_MOVE";              // 不移动
+  | "MOVE_TO_OBJECTIVE" // 前进向目标
+  | "HOLD_POSITION" // 原地据守
+  | "MOVE_TO_FLANK" // 侧翼包抄
+  | "RETREAT_TO_SAFE" // 撤退到安全房
+  | "MOVE_TO_REGROUP" // 重新集结
+  | "MOVE_TO_TACTICAL_POS" // 移动到战术阵位
+  | "BREAK_CONTACT" // 脱离接触
+  | "NO_MOVE"; // 不移动
 
 /** 角色战斗指令。 */
 export type RoleCombatDirective =
-  | "ATTACK_TARGET"         // 攻击指定目标
-  | "RANGED_ATTACK_TARGET"  // 远程攻击指定目标
-  | "HEAL_TARGET"           // 治疗指定目标
-  | "RANGED_HEAL_TARGET"    // 远程治疗指定目标
-  | "DISMANTLE_TARGET"      // 拆除指定目标
-  | "NO_COMBAT";            // 无战斗动作
+  | "ATTACK_TARGET" // 攻击指定目标
+  | "RANGED_ATTACK_TARGET" // 远程攻击指定目标
+  | "HEAL_TARGET" // 治疗指定目标
+  | "RANGED_HEAL_TARGET" // 远程治疗指定目标
+  | "DISMANTLE_TARGET" // 拆除指定目标
+  | "NO_COMBAT"; // 无战斗动作
 
 /** RoleActionIntent — 映射后的角色指令。 */
 export interface RoleActionIntent {
@@ -89,26 +89,40 @@ export function mapDecisionToRoleIntent(decision: TacticalDecision): RoleActionI
 /** MovementIntent → RoleMoveDirective 映射。 */
 function mapMovementIntent(intent: MovementIntent): RoleMoveDirective {
   switch (intent) {
-    case "ADVANCE":   return "MOVE_TO_OBJECTIVE";
-    case "HOLD":      return "HOLD_POSITION";
-    case "FLANK":     return "MOVE_TO_FLANK";
-    case "RETREAT":   return "RETREAT_TO_SAFE";
-    case "REGROUP":   return "MOVE_TO_REGROUP";
-    case "POSITION":  return "MOVE_TO_TACTICAL_POS";
-    default:          return "NO_MOVE";
+    case "ADVANCE":
+      return "MOVE_TO_OBJECTIVE";
+    case "HOLD":
+      return "HOLD_POSITION";
+    case "FLANK":
+      return "MOVE_TO_FLANK";
+    case "RETREAT":
+      return "RETREAT_TO_SAFE";
+    case "REGROUP":
+      return "MOVE_TO_REGROUP";
+    case "POSITION":
+      return "MOVE_TO_TACTICAL_POS";
+    default:
+      return "NO_MOVE";
   }
 }
 
 /** CombatIntent → RoleCombatDirective 映射。 */
 function mapCombatIntent(intent: CombatIntent): RoleCombatDirective {
   switch (intent) {
-    case "ATTACK":         return "ATTACK_TARGET";
-    case "RANGED_ATTACK":  return "RANGED_ATTACK_TARGET";
-    case "HEAL":           return "HEAL_TARGET";
-    case "RANGED_HEAL":    return "RANGED_HEAL_TARGET";
-    case "DISMANTLE":      return "DISMANTLE_TARGET";
-    case "NONE":           return "NO_COMBAT";
-    default:               return "NO_COMBAT";
+    case "ATTACK":
+      return "ATTACK_TARGET";
+    case "RANGED_ATTACK":
+      return "RANGED_ATTACK_TARGET";
+    case "HEAL":
+      return "HEAL_TARGET";
+    case "RANGED_HEAL":
+      return "RANGED_HEAL_TARGET";
+    case "DISMANTLE":
+      return "DISMANTLE_TARGET";
+    case "NONE":
+      return "NO_COMBAT";
+    default:
+      return "NO_COMBAT";
   }
 }
 
@@ -118,12 +132,12 @@ function mapCombatIntent(intent: CombatIntent): RoleCombatDirective {
 
 /** TacticalObjective 运行时生命周期状态。 */
 export type ObjectiveLifecycleState =
-  | "CREATED"    // 刚创建，待验证
-  | "ACCEPTED"   // 授权验证通过，待激活
-  | "ACTIVE"     // 已激活，正在执行
-  | "COMPLETED"  // 目标完成
-  | "REJECTED"   // 授权验证失败
-  | "ABORTED";   // 中止（止损 / 授权撤销 / 超时）
+  | "CREATED" // 刚创建，待验证
+  | "ACCEPTED" // 授权验证通过，待激活
+  | "ACTIVE" // 已激活，正在执行
+  | "COMPLETED" // 目标完成
+  | "REJECTED" // 授权验证失败
+  | "ABORTED"; // 中止（止损 / 授权撤销 / 超时）
 
 /** Objective 生命周期状态转换是否合法。 */
 export function canTransitionObjective(
@@ -131,12 +145,12 @@ export function canTransitionObjective(
   to: ObjectiveLifecycleState,
 ): boolean {
   const VALID: Record<ObjectiveLifecycleState, readonly ObjectiveLifecycleState[]> = {
-    CREATED:    ["ACCEPTED", "REJECTED"],
-    ACCEPTED:   ["ACTIVE", "REJECTED"],
-    ACTIVE:     ["COMPLETED", "ABORTED"],
-    COMPLETED:  [],
-    REJECTED:   [],
-    ABORTED:    [],
+    CREATED: ["ACCEPTED", "REJECTED"],
+    ACCEPTED: ["ACTIVE", "REJECTED"],
+    ACTIVE: ["COMPLETED", "ABORTED"],
+    COMPLETED: [],
+    REJECTED: [],
+    ABORTED: [],
   };
   return VALID[from]?.includes(to) ?? false;
 }
@@ -216,7 +230,16 @@ export interface LifecycleAssessmentResult {
 export function assessObjectiveLifecycle(
   input: LifecycleAssessmentInput,
 ): LifecycleAssessmentResult {
-  const { record, currentTick, authorizationValid, targetExists, targetInScope, squadValid, decisionState, hasAbortSignal } = input;
+  const {
+    record,
+    currentTick,
+    authorizationValid,
+    targetExists,
+    targetInScope,
+    squadValid,
+    decisionState,
+    hasAbortSignal,
+  } = input;
 
   // 终态不转换
   if (isObjectiveTerminal(record.state)) {
@@ -228,7 +251,11 @@ export function assessObjectiveLifecycle(
     if (authorizationValid) {
       return { newState: "ACCEPTED", reason: "authorization validated", shouldTransition: true };
     }
-    return { newState: "REJECTED", reason: "authorization invalid at creation", shouldTransition: true };
+    return {
+      newState: "REJECTED",
+      reason: "authorization invalid at creation",
+      shouldTransition: true,
+    };
   }
 
   // ACCEPTED → ACTIVE (squad valid) or REJECTED
@@ -244,40 +271,72 @@ export function assessObjectiveLifecycle(
   if (record.state === "ACTIVE") {
     // 止损信号 → ABORTED
     if (hasAbortSignal) {
-      return { newState: "ABORTED", reason: "tactical abort signal received", shouldTransition: true };
+      return {
+        newState: "ABORTED",
+        reason: "tactical abort signal received",
+        shouldTransition: true,
+      };
     }
 
     // 授权失效 → ABORTED
     if (!authorizationValid) {
-      return { newState: "ABORTED", reason: "authorization expired or revoked", shouldTransition: true };
+      return {
+        newState: "ABORTED",
+        reason: "authorization expired or revoked",
+        shouldTransition: true,
+      };
     }
 
     // 目标超出 scope → ABORTED
     if (!targetInScope) {
-      return { newState: "ABORTED", reason: "target moved outside operational scope", shouldTransition: true };
+      return {
+        newState: "ABORTED",
+        reason: "target moved outside operational scope",
+        shouldTransition: true,
+      };
     }
 
     // 编队无效 → ABORTED
     if (!squadValid) {
-      return { newState: "ABORTED", reason: "squad invalid (broken / no members)", shouldTransition: true };
+      return {
+        newState: "ABORTED",
+        reason: "squad invalid (broken / no members)",
+        shouldTransition: true,
+      };
     }
 
     // 目标消失 → COMPLETED (ENGAGE_ENEMY 完成语义) 或 ABORTED
     if (!targetExists) {
       if (decisionState === "ENGAGING" || decisionState === "COMPLETED") {
-        return { newState: "COMPLETED", reason: "target destroyed / cleared", shouldTransition: true };
+        return {
+          newState: "COMPLETED",
+          reason: "target destroyed / cleared",
+          shouldTransition: true,
+        };
       }
-      return { newState: "ABORTED", reason: "target disappeared before engagement", shouldTransition: true };
+      return {
+        newState: "ABORTED",
+        reason: "target disappeared before engagement",
+        shouldTransition: true,
+      };
     }
 
     // 决策状态为 COMPLETED → COMPLETED
     if (decisionState === "COMPLETED") {
-      return { newState: "COMPLETED", reason: "tactical state reached COMPLETED", shouldTransition: true };
+      return {
+        newState: "COMPLETED",
+        reason: "tactical state reached COMPLETED",
+        shouldTransition: true,
+      };
     }
 
     // 决策状态为 ABORTED → ABORTED
     if (decisionState === "ABORTED") {
-      return { newState: "ABORTED", reason: "tactical state reached ABORTED", shouldTransition: true };
+      return {
+        newState: "ABORTED",
+        reason: "tactical state reached ABORTED",
+        shouldTransition: true,
+      };
     }
   }
 

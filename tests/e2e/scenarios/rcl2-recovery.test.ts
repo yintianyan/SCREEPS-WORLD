@@ -111,9 +111,9 @@ describe("Phase R2 — RCL2 私服 canary（隔离世界，严格 rcl===2 窗口
   }, 900000);
 
   it("分区记账: rcl===1 / rcl===2 / rcl>=3 三分区样本数", () => {
-    const rcl1 = rows.filter((r) => r.rcl === 1).length;
-    const rcl2 = rows.filter((r) => r.rcl === 2).length;
-    const rcl3p = rows.filter((r) => r.rcl >= 3).length;
+    const rcl1 = rows.filter(r => r.rcl === 1).length;
+    const rcl2 = rows.filter(r => r.rcl === 2).length;
+    const rcl3p = rows.filter(r => r.rcl >= 3).length;
     console.log(
       `[canary] partition rcl1=${rcl1} rcl2=${rcl2} rcl>=3=${rcl3p} total=${rows.length}`,
     );
@@ -122,18 +122,18 @@ describe("Phase R2 — RCL2 私服 canary（隔离世界，严格 rcl===2 窗口
   }, 10000);
 
   it("验收: rcl===2 窗口内 extension/container site 出现", () => {
-    const rcl2 = rows.filter((r) => r.rcl === 2);
+    const rcl2 = rows.filter(r => r.rcl === 2);
     expect(rcl2.length).toBeGreaterThan(0);
     const withDev = rcl2.filter(
-      (r) => (r.siteTypes["extension"] ?? 0) + (r.siteTypes["container"] ?? 0) > 0,
+      r => (r.siteTypes["extension"] ?? 0) + (r.siteTypes["container"] ?? 0) > 0,
     );
     if (withDev.length === 0) {
-      const rcl3pHad = rows.filter((r) => r.rcl >= 3 && (
-        (r.siteTypes["extension"] ?? 0) + (r.siteTypes["container"] ?? 0) > 0
-      ));
+      const rcl3pHad = rows.filter(
+        r => r.rcl >= 3 && (r.siteTypes["extension"] ?? 0) + (r.siteTypes["container"] ?? 0) > 0,
+      );
       console.log(
         `[canary][FAIL] RCL2 窗口无 development site；RCL3+ 后才出现: ${rcl3pHad.length > 0} ` +
-        `(rcl3+ 有 site 的样本 ${rcl3pHad.length})`,
+          `(rcl3+ 有 site 的样本 ${rcl3pHad.length})`,
       );
     }
     // RCL2 阶段必须出现 site——RCL3 后才出现不算数（上面的分支会先打印诊断）。
@@ -142,23 +142,22 @@ describe("Phase R2 — RCL2 私服 canary（隔离世界，严格 rcl===2 窗口
 
   it("验收: 首个 development site tick 早于首次进入 RCL3 的 tick", () => {
     const firstDevSite = rows.find(
-      (r) => (r.siteTypes["extension"] ?? 0) + (r.siteTypes["container"] ?? 0) > 0,
+      r => (r.siteTypes["extension"] ?? 0) + (r.siteTypes["container"] ?? 0) > 0,
     );
     expect(firstDevSite).toBeDefined();
-    const firstRcl3 = rows.find((r) => r.rcl >= 3);
+    const firstRcl3 = rows.find(r => r.rcl >= 3);
     if (firstRcl3) {
       expect(firstDevSite!.tick).toBeLessThan(firstRcl3.tick);
     }
     // 首个 development site 必须出现在 rcl === 2 窗口内（RCL1 的 container 不算数）。
     const firstDevSiteInRcl2 = rows.find(
-      (r) => r.rcl === 2 &&
-        (r.siteTypes["extension"] ?? 0) + (r.siteTypes["container"] ?? 0) > 0,
+      r => r.rcl === 2 && (r.siteTypes["extension"] ?? 0) + (r.siteTypes["container"] ?? 0) > 0,
     );
     expect(firstDevSiteInRcl2).toBeDefined();
   }, 10000);
 
   it("验收: rcl===2 窗口内 queued>0 且 site=0 连续 ≤100 tick", () => {
-    const rcl2 = rows.filter((r) => r.rcl === 2);
+    const rcl2 = rows.filter(r => r.rcl === 2);
     let stallRun = 0;
     let maxStall = 0;
     for (const r of rcl2) {
@@ -195,9 +194,19 @@ describe("Phase R2 — RCL2 私服 canary（隔离世界，严格 rcl===2 窗口
       if (transitioned) break;
     }
     if (!transitioned) {
-      console.log("[canary][FAIL] 无任何 extension/container key 完成 queued→site 转移 — 最后 20 个采样:");
+      console.log(
+        "[canary][FAIL] 无任何 extension/container key 完成 queued→site 转移 — 最后 20 个采样:",
+      );
       for (const r of rows.slice(-20)) {
-        console.log(JSON.stringify({ tick: r.tick, rcl: r.rcl, devQueued: r.devQueuedKeys, devSite: r.devSiteKeys, sites: r.siteTypes }));
+        console.log(
+          JSON.stringify({
+            tick: r.tick,
+            rcl: r.rcl,
+            devQueued: r.devQueuedKeys,
+            devSite: r.devSiteKeys,
+            sites: r.siteTypes,
+          }),
+        );
       }
     }
     expect(transitioned).toBeDefined();
@@ -214,7 +223,7 @@ describe("Phase R2 — RCL2 私服 canary（隔离世界，严格 rcl===2 窗口
   it("验收: 经济未进入死亡螺旋（末段人口与 spawn 存活）", () => {
     const tail = rows.slice(-10);
     expect(tail.length).toBeGreaterThan(0);
-    const aliveCreep = tail.every((r) => r.creeps >= 1);
+    const aliveCreep = tail.every(r => r.creeps >= 1);
     const avgCreeps = tail.reduce((s, r) => s + r.creeps, 0) / tail.length;
     expect(aliveCreep || avgCreeps >= 2).toBe(true);
   }, 10000);

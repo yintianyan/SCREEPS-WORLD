@@ -6,7 +6,7 @@ import { runAction } from "./helpers";
 export function dumpToNearbyLink(): ActionCandidate<StructureLink> {
   return {
     name: "dump:nearby-link",
-    resolve: (ac) => {
+    resolve: ac => {
       const candidates = ac.snapshot.links.filter(
         l => ac.creep.pos.getRangeTo(l) <= 2 && l.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
       );
@@ -23,7 +23,7 @@ export function dumpToNearbyLink(): ActionCandidate<StructureLink> {
 export function dumpToNearbyContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "dump:nearby-container",
-    resolve: (ac) => {
+    resolve: ac => {
       const candidates = ac.snapshot.containers.filter(
         c => ac.creep.pos.getRangeTo(c) <= 2 && c.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
       );
@@ -48,20 +48,24 @@ interface MineralDumpTarget {
 export function dumpMineralsToNearbyContainer(): ActionCandidate<MineralDumpTarget> {
   return {
     name: "dump:minerals-to-container",
-    resolve: (ac) => {
-      const mineral = (Object.keys(ac.creep.store) as ResourceConstant[])
-        .find(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
+    resolve: ac => {
+      const mineral = (Object.keys(ac.creep.store) as ResourceConstant[]).find(
+        r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0,
+      );
       if (!mineral) return undefined;
       const candidates = ac.snapshot.containers.filter(
         c => ac.creep.pos.getRangeTo(c) <= 2 && (c.store.getFreeCapacity() ?? 0) > 0,
       );
       if (candidates.length === 0) return undefined;
-      const container = ac.creep.pos.findClosestByRange(candidates as StructureContainer[]) ?? undefined;
+      const container =
+        ac.creep.pos.findClosestByRange(candidates as StructureContainer[]) ?? undefined;
       if (!container) return undefined;
       return { container, mineral };
     },
     execute: (ac, target) => {
-      runAction(ac.creep, target.container, () => ac.creep.transfer(target.container, target.mineral));
+      runAction(ac.creep, target.container, () =>
+        ac.creep.transfer(target.container, target.mineral),
+      );
     },
   };
 }
@@ -70,10 +74,12 @@ export function dumpMineralsToNearbyContainer(): ActionCandidate<MineralDumpTarg
 export function buildNearbyContainerSite(): ActionCandidate<ConstructionSite> {
   return {
     name: "build:nearby-container-site",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.snapshot.myConstructionSites.length === 0) return undefined;
       const site = ac.creep.pos.findClosestByRange(
-        ac.snapshot.myConstructionSites.filter(s => s.structureType === STRUCTURE_CONTAINER) as ConstructionSite[],
+        ac.snapshot.myConstructionSites.filter(
+          s => s.structureType === STRUCTURE_CONTAINER,
+        ) as ConstructionSite[],
       );
       if (!site || ac.creep.pos.getRangeTo(site) > 3) return undefined;
       return site;

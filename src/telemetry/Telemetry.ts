@@ -1,24 +1,19 @@
 /** Telemetry — 统一 facade API）。 */
 
 import {
-    registerCounter,
-    registerGauge,
-    registerHistogram,
-    incrementCounter,
-    setGauge,
-    observeHistogram,
-    startTimer,
-    metricCount,
+  registerCounter,
+  registerGauge,
+  registerHistogram,
+  incrementCounter,
+  setGauge,
+  observeHistogram,
+  startTimer,
+  metricCount,
 } from "./MetricRegistry";
 import type { TimerHandle } from "./schema";
 import { recordDecision } from "./DecisionRegistry";
 import { recordOutcome } from "./DecisionRegistry";
-import {
-    buildMetricName,
-    type AllowedLabel,
-    type LabelSet,
-    type TelemetryDomain,
-} from "./schema";
+import { buildMetricName, type AllowedLabel, type LabelSet, type TelemetryDomain } from "./schema";
 
 // ─── Registration API ─────────────────────────────────────
 
@@ -28,49 +23,49 @@ import {
  * @param cumulative 若为 true，flush 时不重置（累积计数器，适合低频事件）。
  */
 export function registerMetricCounter(
-    domain: TelemetryDomain,
-    metric: string,
-    help: string,
-    labels: AllowedLabel[] = [],
-    unit?: string,
-    cumulative?: boolean,
+  domain: TelemetryDomain,
+  metric: string,
+  help: string,
+  labels: AllowedLabel[] = [],
+  unit?: string,
+  cumulative?: boolean,
 ): void {
-    try {
-        registerCounter(domain, metric, help, labels, unit, cumulative);
-    } catch {
-        // Telemetry 失败不得影响 AI
-    }
+  try {
+    registerCounter(domain, metric, help, labels, unit, cumulative);
+  } catch {
+    // Telemetry 失败不得影响 AI
+  }
 }
 
 /** 注册一个 Gauge 指标。 */
 export function registerMetricGauge(
-    domain: TelemetryDomain,
-    metric: string,
-    help: string,
-    labels: AllowedLabel[] = [],
-    unit?: string,
+  domain: TelemetryDomain,
+  metric: string,
+  help: string,
+  labels: AllowedLabel[] = [],
+  unit?: string,
 ): void {
-    try {
-        registerGauge(domain, metric, help, labels, unit);
-    } catch {
-        // Telemetry 失败不得影响 AI
-    }
+  try {
+    registerGauge(domain, metric, help, labels, unit);
+  } catch {
+    // Telemetry 失败不得影响 AI
+  }
 }
 
 /** 注册一个 Histogram 指标。 */
 export function registerMetricHistogram(
-    domain: TelemetryDomain,
-    metric: string,
-    help: string,
-    labels: AllowedLabel[] = [],
-    buckets?: number[],
-    unit?: string,
+  domain: TelemetryDomain,
+  metric: string,
+  help: string,
+  labels: AllowedLabel[] = [],
+  buckets?: number[],
+  unit?: string,
 ): void {
-    try {
-        registerHistogram(domain, metric, help, labels, buckets, unit);
-    } catch {
-        // Telemetry 失败不得影响 AI
-    }
+  try {
+    registerHistogram(domain, metric, help, labels, buckets, unit);
+  } catch {
+    // Telemetry 失败不得影响 AI
+  }
 }
 
 // ─── Recording API（业务代码调用）──────────────────────────
@@ -85,12 +80,12 @@ export function registerMetricHistogram(
  *   Telemetry.counter("spawn.requests.total", 1, { role: "miner" });
  */
 export function counter(shortName: string, value: number = 1, labels: LabelSet = {}): void {
-    try {
-        const name = resolveMetricName(shortName);
-        incrementCounter(name, value, labels);
-    } catch {
-        // Telemetry 失败不得影响 AI
-    }
+  try {
+    const name = resolveMetricName(shortName);
+    incrementCounter(name, value, labels);
+  } catch {
+    // Telemetry 失败不得影响 AI
+  }
 }
 
 /**
@@ -103,12 +98,12 @@ export function counter(shortName: string, value: number = 1, labels: LabelSet =
  *   Telemetry.gauge("economy.energy.net", netEnergy);
  */
 export function gauge(shortName: string, value: number, labels: LabelSet = {}): void {
-    try {
-        const name = resolveMetricName(shortName);
-        setGauge(name, value, labels);
-    } catch {
-        // Telemetry 失败不得影响 AI
-    }
+  try {
+    const name = resolveMetricName(shortName);
+    setGauge(name, value, labels);
+  } catch {
+    // Telemetry 失败不得影响 AI
+  }
 }
 
 /**
@@ -122,13 +117,13 @@ export function gauge(shortName: string, value: number, labels: LabelSet = {}): 
  *   timer.end();
  */
 export function timer(shortName: string, labels: LabelSet = {}): TimerHandle {
-    try {
-        const name = resolveMetricName(shortName);
-        return startTimer(name, labels);
-    } catch {
-        // Telemetry 失败不得影响 AI — 返回 noop timer
-        return { end: () => 0 };
-    }
+  try {
+    const name = resolveMetricName(shortName);
+    return startTimer(name, labels);
+  } catch {
+    // Telemetry 失败不得影响 AI — 返回 noop timer
+    return { end: () => 0 };
+  }
 }
 
 /**
@@ -146,20 +141,20 @@ export function timer(shortName: string, labels: LabelSet = {}): TimerHandle {
  *   });
  */
 export function decision(
-    planner: string,
-    decision: string,
-    reason: string,
-    options?: {
-        target?: string;
-        confidence?: number;
-        expectedOutcome?: Record<string, unknown>;
-    },
+  planner: string,
+  decision: string,
+  reason: string,
+  options?: {
+    target?: string;
+    confidence?: number;
+    expectedOutcome?: Record<string, unknown>;
+  },
 ): void {
-    try {
-        recordDecision(planner, decision, reason, options);
-    } catch {
-        // Telemetry 失败不得影响 AI
-    }
+  try {
+    recordDecision(planner, decision, reason, options);
+  } catch {
+    // Telemetry 失败不得影响 AI
+  }
 }
 
 /**
@@ -173,18 +168,18 @@ export function decision(
  * @param deviation 偏差百分比
  */
 export function outcome(
-    decisionTick: number,
-    planner: string,
-    decision: string,
-    expected: Record<string, unknown>,
-    actual: Record<string, unknown>,
-    deviation: number,
+  decisionTick: number,
+  planner: string,
+  decision: string,
+  expected: Record<string, unknown>,
+  actual: Record<string, unknown>,
+  deviation: number,
 ): void {
-    try {
-        recordOutcome(decisionTick, planner, decision, expected, actual, deviation);
-    } catch {
-        // Telemetry 失败不得影响 AI
-    }
+  try {
+    recordOutcome(decisionTick, planner, decision, expected, actual, deviation);
+  } catch {
+    // Telemetry 失败不得影响 AI
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────
@@ -196,17 +191,17 @@ export function outcome(
  * 点号自动转换为下划线以匹配 buildMetricName 的输出。
  */
 function resolveMetricName(shortName: string): string {
-    if (shortName.startsWith("screeps_")) return shortName;
-    return `screeps_${shortName.replace(/\./g, "_")}`;
+  if (shortName.startsWith("screeps_")) return shortName;
+  return `screeps_${shortName.replace(/\./g, "_")}`;
 }
 
 /** 获取已注册指标数量（R6 上限审计）。 */
 export function registeredMetricCount(): number {
-    try {
-        return metricCount();
-    } catch {
-        return 0;
-    }
+  try {
+    return metricCount();
+  } catch {
+    return 0;
+  }
 }
 
 export { buildMetricName };

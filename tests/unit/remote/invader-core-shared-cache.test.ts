@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { findInvaderCores, roomHasInvaderCore } from "../../../src/creeps/support/invader-core";
 import { resetGlobals } from "../../support/factories";
 
-function makeCoreRoom(name: string, coreCount = 1): { name: string; find: ReturnType<typeof vi.fn> } {
+function makeCoreRoom(
+  name: string,
+  coreCount = 1,
+): { name: string; find: ReturnType<typeof vi.fn> } {
   const find = vi.fn((type: number) => {
     if (type === FIND_HOSTILE_STRUCTURES) {
       return Array.from({ length: coreCount }, (_, i) => ({

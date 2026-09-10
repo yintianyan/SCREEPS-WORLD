@@ -148,22 +148,20 @@ export function evaluateRemoteExpectedValue(input: RemoteDefenseInput): RemoteEx
     FULL_ASSAULT: 3000,
     NUCLEAR: 50000,
   };
-  const expectedDuration = Math.max(
-    100,
-    intentDurationMap[threat.estimatedIntent.intent] ?? 200,
-  );
+  const expectedDuration = Math.max(100, intentDurationMap[threat.estimatedIntent.intent] ?? 200);
 
   // 期望损失：基于威胁持续时间和风险
   // 如果不撤退，威胁持续期间 creep 可能被杀
   // CRITICAL 级别时 creep 几乎肯定会全部损失（expectedLoss = creepInvestment）
   // 其他级别按 risk × duration 缩放
-  const expectedLoss = threat.level === "CRITICAL"
-    ? remoteOp.creepInvestment
-    : Math.round(remoteOp.creepInvestment * risk * Math.min(expectedDuration / 500, 1));
+  const expectedLoss =
+    threat.level === "CRITICAL"
+      ? remoteOp.creepInvestment
+      : Math.round(remoteOp.creepInvestment * risk * Math.min(expectedDuration / 500, 1));
 
   // 护航成本
-  const escortCost = militaryContext.defenderSpawnCost +
-    Math.round(militaryContext.defenderCommuteTicks * 0.5);
+  const escortCost =
+    militaryContext.defenderSpawnCost + Math.round(militaryContext.defenderCommuteTicks * 0.5);
 
   // 替换成本
   const replacementCost = remoteOp.creepInvestment;
@@ -263,11 +261,16 @@ export function decideRemoteDefenseAction(input: RemoteDefenseInput): RemoteDefe
   // POOR/CRITICAL retreat → 撤退更危险，可能需要 ESCORT 而非 RETREAT
   // VERY_GOOD/GOOD retreat → 撤退更安全，更倾向 RETREAT
   const retreatQuality = terrainContext?.retreatQuality ?? "UNKNOWN";
-  const terrainRetreatBonus = retreatQuality === "VERY_GOOD" ? 1
-    : retreatQuality === "GOOD" ? 0
-      : retreatQuality === "POOR" ? -1
-        : retreatQuality === "CRITICAL" ? -2
-          : 0; // UNKNOWN
+  const terrainRetreatBonus =
+    retreatQuality === "VERY_GOOD"
+      ? 1
+      : retreatQuality === "GOOD"
+        ? 0
+        : retreatQuality === "POOR"
+          ? -1
+          : retreatQuality === "CRITICAL"
+            ? -2
+            : 0; // UNKNOWN
   // 撤退路径有效距离 = pathCost + terrainRetreatBonus（越好越短）
   const effectivePathCost = Math.max(0, (remoteOp.pathCost ?? 1) - terrainRetreatBonus);
 
@@ -294,11 +297,15 @@ export function decideRemoteDefenseAction(input: RemoteDefenseInput): RemoteDefe
   }
 
   // CRITICAL + 净价值为负 + 替换成本高 → ABORT
-  const replacementCostRatio = empireContext.empireEnergyReserve > 0
-    ? remoteOp.creepInvestment / empireContext.empireEnergyReserve
-    : 1;
+  const replacementCostRatio =
+    empireContext.empireEnergyReserve > 0
+      ? remoteOp.creepInvestment / empireContext.empireEnergyReserve
+      : 1;
   if (threat.level === "CRITICAL" && ev.netValue < 0 && replacementCostRatio > 0.2) {
-    rejected.push({ action: "RETREAT", reason: `CRITICAL + 净价值${ev.netValue}<0 + 替换成本占比${replacementCostRatio.toFixed(2)}>0.2` });
+    rejected.push({
+      action: "RETREAT",
+      reason: `CRITICAL + 净价值${ev.netValue}<0 + 替换成本占比${replacementCostRatio.toFixed(2)}>0.2`,
+    });
     rejected.push({ action: "ESCORT", reason: "CRITICAL 威胁下护航不足以保证安全" });
     rejected.push({ action: "CONTINUE", reason: "CRITICAL 威胁下继续运营等于送兵" });
     return {
@@ -327,7 +334,10 @@ export function decideRemoteDefenseAction(input: RemoteDefenseInput): RemoteDefe
       // 距离太远无法安全返回 → ABORT
       // A5.2: 但如果 retreatQuality 好，可能仍然可以撤退
       if (retreatQuality === "VERY_GOOD" || retreatQuality === "GOOD") {
-        rejected.push({ action: "ABORT", reason: `retreatQuality=${retreatQuality}，仍有安全撤退可能` });
+        rejected.push({
+          action: "ABORT",
+          reason: `retreatQuality=${retreatQuality}，仍有安全撤退可能`,
+        });
         rejected.push({ action: "CONTINUE", reason: `威胁${threat.level}继续运营风险过高` });
         return {
           action: "RETREAT",
@@ -336,7 +346,10 @@ export function decideRemoteDefenseAction(input: RemoteDefenseInput): RemoteDefe
           rejectedAlternatives: rejected,
         };
       }
-      rejected.push({ action: "RETREAT", reason: `pathCost=${remoteOp.pathCost} > 3，无法安全撤退` });
+      rejected.push({
+        action: "RETREAT",
+        reason: `pathCost=${remoteOp.pathCost} > 3，无法安全撤退`,
+      });
       return {
         action: "ABORT",
         reason: `威胁${threat.level} + 距离过远(pathCost=${remoteOp.pathCost}) → 撤退不安全，放弃`,

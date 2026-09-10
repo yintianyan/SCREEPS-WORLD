@@ -3,7 +3,10 @@
 import { describe, it, expect } from "vitest";
 import { CONFIG } from "../../../src/config";
 import { evaluateCheckpoint, type CheckpointInput } from "../../../src/domain/expansion/checkpoint";
-import { evaluateEconomicActivation, type EconomicActivationInput } from "../../../src/domain/expansion/economic-activation";
+import {
+  evaluateEconomicActivation,
+  type EconomicActivationInput,
+} from "../../../src/domain/expansion/economic-activation";
 
 // ─── 验证 "transporter" 角色不存在于系统 ───────────────────
 

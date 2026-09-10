@@ -15,16 +15,18 @@ describe("E7 site progress — 真实接线", () => {
   const bootTick = 0;
 
   it("site 长期无进度且无 builder → 违例", () => {
-    const siteProgresses: SiteProgressSnapshot[] = [{
-      room: "W1N1",
-      siteId: "abc123",
-      structureType: "spawn",
-      progress: 100,
-      progressTotal: 1000,
-      lastProgressTick: baseTick - E7_STALE_TICKS - 1,
-      builderVisits: 0,
-      siteAge: E7_STALE_TICKS + 1,
-    }];
+    const siteProgresses: SiteProgressSnapshot[] = [
+      {
+        room: "W1N1",
+        siteId: "abc123",
+        structureType: "spawn",
+        progress: 100,
+        progressTotal: 1000,
+        lastProgressTick: baseTick - E7_STALE_TICKS - 1,
+        builderVisits: 0,
+        siteAge: E7_STALE_TICKS + 1,
+      },
+    ];
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
@@ -36,16 +38,18 @@ describe("E7 site progress — 真实接线", () => {
   });
 
   it("有 builder 到达 → 不违例", () => {
-    const siteProgresses: SiteProgressSnapshot[] = [{
-      room: "W1N1",
-      siteId: "abc123",
-      structureType: "extension",
-      progress: 100,
-      progressTotal: 1000,
-      lastProgressTick: baseTick - E7_STALE_TICKS - 1,
-      builderVisits: 1,
-      siteAge: E7_STALE_TICKS + 1,
-    }];
+    const siteProgresses: SiteProgressSnapshot[] = [
+      {
+        room: "W1N1",
+        siteId: "abc123",
+        structureType: "extension",
+        progress: 100,
+        progressTotal: 1000,
+        lastProgressTick: baseTick - E7_STALE_TICKS - 1,
+        builderVisits: 1,
+        siteAge: E7_STALE_TICKS + 1,
+      },
+    ];
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
@@ -57,16 +61,18 @@ describe("E7 site progress — 真实接线", () => {
   });
 
   it("近期有进度变化 → 不违例", () => {
-    const siteProgresses: SiteProgressSnapshot[] = [{
-      room: "W1N1",
-      siteId: "abc123",
-      structureType: "road",
-      progress: 500,
-      progressTotal: 1000,
-      lastProgressTick: baseTick - 100,
-      builderVisits: 0,
-      siteAge: 100,
-    }];
+    const siteProgresses: SiteProgressSnapshot[] = [
+      {
+        room: "W1N1",
+        siteId: "abc123",
+        structureType: "road",
+        progress: 500,
+        progressTotal: 1000,
+        lastProgressTick: baseTick - 100,
+        builderVisits: 0,
+        siteAge: 100,
+      },
+    ];
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
@@ -112,16 +118,18 @@ describe("E7 site progress — 真实接线", () => {
   });
 
   it("boot 宽限期内不违例", () => {
-    const siteProgresses: SiteProgressSnapshot[] = [{
-      room: "W1N1",
-      siteId: "abc123",
-      structureType: "spawn",
-      progress: 0,
-      progressTotal: 1000,
-      lastProgressTick: 0,
-      builderVisits: 0,
-      siteAge: 5000,
-    }];
+    const siteProgresses: SiteProgressSnapshot[] = [
+      {
+        room: "W1N1",
+        siteId: "abc123",
+        structureType: "spawn",
+        progress: 0,
+        progressTotal: 1000,
+        lastProgressTick: 0,
+        builderVisits: 0,
+        siteAge: 5000,
+      },
+    ];
     const res = evaluateExpectations({
       tick: 500,
       bootTick: 0,
@@ -139,12 +147,14 @@ describe("E8 path failure — 真实接线", () => {
   const bootTick = 0;
 
   it("路径持续失败超过阈值 → 违例", () => {
-    const pathFailures: PathFailureSnapshot[] = [{
-      room: "W1N1",
-      pathId: "creep_001",
-      lastSuccessTick: baseTick - E8_STALE_TICKS - 1,
-      consecutiveFailures: 5,
-    }];
+    const pathFailures: PathFailureSnapshot[] = [
+      {
+        room: "W1N1",
+        pathId: "creep_001",
+        lastSuccessTick: baseTick - E8_STALE_TICKS - 1,
+        consecutiveFailures: 5,
+      },
+    ];
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
@@ -156,12 +166,14 @@ describe("E8 path failure — 真实接线", () => {
   });
 
   it("连续失败超过 10 次 → 违例", () => {
-    const pathFailures: PathFailureSnapshot[] = [{
-      room: "W1N1",
-      pathId: "creep_002",
-      lastSuccessTick: baseTick - 100,
-      consecutiveFailures: 11,
-    }];
+    const pathFailures: PathFailureSnapshot[] = [
+      {
+        room: "W1N1",
+        pathId: "creep_002",
+        lastSuccessTick: baseTick - 100,
+        consecutiveFailures: 11,
+      },
+    ];
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
@@ -173,12 +185,14 @@ describe("E8 path failure — 真实接线", () => {
   });
 
   it("近期成功 → 不违例", () => {
-    const pathFailures: PathFailureSnapshot[] = [{
-      room: "W1N1",
-      pathId: "creep_003",
-      lastSuccessTick: baseTick - 50,
-      consecutiveFailures: 2,
-    }];
+    const pathFailures: PathFailureSnapshot[] = [
+      {
+        room: "W1N1",
+        pathId: "creep_003",
+        lastSuccessTick: baseTick - 50,
+        consecutiveFailures: 2,
+      },
+    ];
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
@@ -190,12 +204,14 @@ describe("E8 path failure — 真实接线", () => {
   });
 
   it("boot 宽限期内不违例", () => {
-    const pathFailures: PathFailureSnapshot[] = [{
-      room: "W1N1",
-      pathId: "creep_004",
-      lastSuccessTick: 0,
-      consecutiveFailures: 20,
-    }];
+    const pathFailures: PathFailureSnapshot[] = [
+      {
+        room: "W1N1",
+        pathId: "creep_004",
+        lastSuccessTick: 0,
+        consecutiveFailures: 20,
+      },
+    ];
     const res = evaluateExpectations({
       tick: 500,
       bootTick: 0,
@@ -262,7 +278,10 @@ describe("E7/E8 故障注入 — recordPathSuccess/recordPathFailure 状态流�
   });
 
   it("site progress tracker — 进度变化时更新 lastProgressTick", () => {
-    const tracker = new Map<string, { lastProgress: number; lastProgressTick: number; builderVisits: number }>();
+    const tracker = new Map<
+      string,
+      { lastProgress: number; lastProgressTick: number; builderVisits: number }
+    >();
     (globalThis as any).siteProgressTracker = tracker;
 
     // 首次记录
@@ -285,7 +304,10 @@ describe("E7/E8 故障注入 — recordPathSuccess/recordPathFailure 状态流�
   });
 
   it("site progress tracker — 进度不变时保持原 lastProgressTick", () => {
-    const tracker = new Map<string, { lastProgress: number; lastProgressTick: number; builderVisits: number }>();
+    const tracker = new Map<
+      string,
+      { lastProgress: number; lastProgressTick: number; builderVisits: number }
+    >();
     (globalThis as any).siteProgressTracker = tracker;
 
     tracker.set("site2", { lastProgress: 500, lastProgressTick: 100, builderVisits: 2 });
@@ -306,7 +328,10 @@ describe("E7/E8 故障注入 — recordPathSuccess/recordPathFailure 状态流�
   });
 
   it("已消失的 site 从 tracker 清理", () => {
-    const tracker = new Map<string, { lastProgress: number; lastProgressTick: number; builderVisits: number }>();
+    const tracker = new Map<
+      string,
+      { lastProgress: number; lastProgressTick: number; builderVisits: number }
+    >();
     (globalThis as any).siteProgressTracker = tracker;
 
     tracker.set("site1", { lastProgress: 100, lastProgressTick: 50, builderVisits: 0 });

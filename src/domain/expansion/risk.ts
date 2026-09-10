@@ -99,10 +99,7 @@ export function evaluateRisk(
 
   // ── 3. Distance Risk ──
   const distance = candidate.distance;
-  const distanceRisk = distance <= 1 ? 0.1
-    : distance === 2 ? 0.3
-    : distance === 3 ? 0.5
-    : 0.8;
+  const distanceRisk = distance <= 1 ? 0.1 : distance === 2 ? 0.3 : distance === 3 ? 0.5 : 0.8;
 
   // ── 4. Recovery Risk ──
   // 失败后回收资产难度：距离远 + 无 terminal = 难回收
@@ -114,7 +111,7 @@ export function evaluateRisk(
   // ── 5. Defense Risk ──
   // 敌塔 / 敌方 spawn / 邻接宿敌
   let defense = 0;
-  if ((candidate.controller.isHostileReserved)) defense = 0.8;
+  if (candidate.controller.isHostileReserved) defense = 0.8;
   if (candidate.terrain.wallCount > 0) defense = Math.max(defense, 0.3); // 前任工事
   // 出口少 = 易守 = 风险低
   defense = defense * (1 - (4 - candidate.terrain.exitCount) * 0.1);
@@ -124,17 +121,20 @@ export function evaluateRisk(
   const w = options.weights;
   const score = clamp01(
     w.economic * economic +
-    w.operational * operational +
-    w.distance * distanceRisk +
-    w.recovery * recovery +
-    w.defense * defense,
+      w.operational * operational +
+      w.distance * distanceRisk +
+      w.recovery * recovery +
+      w.defense * defense,
   );
 
   const level: RiskLevel =
-    score >= options.criticalThreshold ? "CRITICAL"
-    : score >= options.highThreshold ? "HIGH"
-    : score >= options.mediumThreshold ? "MEDIUM"
-    : "LOW";
+    score >= options.criticalThreshold
+      ? "CRITICAL"
+      : score >= options.highThreshold
+        ? "HIGH"
+        : score >= options.mediumThreshold
+          ? "MEDIUM"
+          : "LOW";
 
   const evidence = [
     `economic=${(economic * 100).toFixed(0)}%`,

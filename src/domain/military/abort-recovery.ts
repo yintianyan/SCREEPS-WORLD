@@ -9,10 +9,10 @@ import type { FailureDomain } from "../strategy/failure-propagation";
 
 /** 战争止损原因（与 war-planner.ts 的 REASON_* 编码对齐）。 */
 export type WarAbortReason =
-  | "POSTURE"        // 姿态退出（非 war）
-  | "ATTRITION"      // 消耗战失败
-  | "NO_TARGET"      // 无合格目标
-  | "PLAN_TIMEOUT";  // 计划超期
+  | "POSTURE" // 姿态退出（非 war）
+  | "ATTRITION" // 消耗战失败
+  | "NO_TARGET" // 无合格目标
+  | "PLAN_TIMEOUT"; // 计划超期
 
 /** 战后核验结果。 */
 export type WarOutcome = "success" | "failure" | "unknown";
@@ -58,15 +58,18 @@ export interface WarAbortSignal {
  * 如果未来 A5.3 完整 Operation lifecycle 接管止损，
  * AbortCondition 将通过本接口的 extendAbortReason 映射。
  */
-const ABORT_REASON_MAP: Record<string, {
-  actionType: RecoveryActionType;
-  domain: FailureDomain;
-  description: string;
-  recommendation: string;
-  cost: number;
-  time: number;
-  urgent: boolean;
-}> = {
+const ABORT_REASON_MAP: Record<
+  string,
+  {
+    actionType: RecoveryActionType;
+    domain: FailureDomain;
+    description: string;
+    recommendation: string;
+    cost: number;
+    time: number;
+    urgent: boolean;
+  }
+> = {
   POSTURE: {
     actionType: "expansion_pause",
     domain: "expansion",

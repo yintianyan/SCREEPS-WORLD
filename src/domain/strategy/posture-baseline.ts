@@ -25,9 +25,7 @@ export interface EnvBaselineInput {
  * - 高压环境更保守（缩短扩张窗口、提高门槛），低压环境更激进
  * - CPU 紧张环境通过 capacity 系统已有分档，此处不重复
  */
-export function selectEnvBaseline(
-  env: EnvBaselineInput,
-): Partial<PostureOptions> {
+export function selectEnvBaseline(env: EnvBaselineInput): Partial<PostureOptions> {
   const overrides: Partial<PostureOptions> = {};
 
   // ── 邻居压力 → 威胁/战争参数 ──
@@ -76,10 +74,7 @@ export function selectEnvBaseline(
   if (env.gclProgressRate > 0.0001) {
     // 有 GCL 进展 → 扩张门槛微降（可更快扩张）
     if (env.neighborPressure !== "high") {
-      overrides.expandMinBucket = Math.max(
-        5000,
-        (overrides.expandMinBucket ?? 7000) - 500,
-      );
+      overrides.expandMinBucket = Math.max(5000, (overrides.expandMinBucket ?? 7000) - 500);
     }
   }
   // GCL 速率无法区分停滞 vs 首次采样 → 不做「停滞」判定，

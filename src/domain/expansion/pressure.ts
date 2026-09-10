@@ -82,7 +82,8 @@ export function evaluateExpansionPressure(
   input: ExpansionPressureInput,
   options: PressureOptions = DEFAULT_PRESSURE_OPTIONS,
 ): ExpansionPressureResult {
-  const { view, capacityProfiles, gclLevel, ownedRoomCount, candidateCount, hasAdversaryPressure } = input;
+  const { view, capacityProfiles, gclLevel, ownedRoomCount, candidateCount, hasAdversaryPressure } =
+    input;
 
   // ── 1. Production Capacity ──
   // 帝国平均产能利用率；无房时 0。
@@ -102,9 +103,8 @@ export function evaluateExpansionPressure(
     totalReserveCapacity += cp.totalReserveCapacity;
     totalReserveUsed += cp.totalReserveCapacity * cp.reserveUtilization;
   }
-  const storageSaturation = totalReserveCapacity > 0
-    ? clamp01(totalReserveUsed / totalReserveCapacity)
-    : 0;
+  const storageSaturation =
+    totalReserveCapacity > 0 ? clamp01(totalReserveUsed / totalReserveCapacity) : 0;
 
   // ── 3. Spawn Capacity ──
   // 帝国平均孵化利用率。
@@ -128,8 +128,7 @@ export function evaluateExpansionPressure(
   // GCL 余量 + 候选池深度。
   const gclHeadroom = Math.max(0, gclLevel - ownedRoomCount);
   const growthOpportunity = clamp01(
-    (gclHeadroom > 0 ? 0.5 : 0) +
-    (candidateCount >= 3 ? 0.5 : candidateCount / 6),
+    (gclHeadroom > 0 ? 0.5 : 0) + (candidateCount >= 3 ? 0.5 : candidateCount / 6),
   );
 
   // ── 6. Strategic Position ──
@@ -142,32 +141,33 @@ export function evaluateExpansionPressure(
   for (const cp of capacityProfiles) {
     if (cp.bottleneck !== "none") bottleneckCount++;
   }
-  const infrastructureSaturation = capacityProfiles.length > 0
-    ? clamp01(bottleneckCount / capacityProfiles.length)
-    : 0;
+  const infrastructureSaturation =
+    capacityProfiles.length > 0 ? clamp01(bottleneckCount / capacityProfiles.length) : 0;
 
   // ── 综合评分 ──
   // 七维加权：产能/储备/孵化饱和度各 0.2，缺口 0.1，增长机会 0.1，战略 0.1，基建 0.1
   // （归一化后线性加权）
-  const deficitScore = resourceDeficit === "high" ? 1
-    : resourceDeficit === "medium" ? 0.6
-    : resourceDeficit === "low" ? 0.3
-    : 0;
+  const deficitScore =
+    resourceDeficit === "high"
+      ? 1
+      : resourceDeficit === "medium"
+        ? 0.6
+        : resourceDeficit === "low"
+          ? 0.3
+          : 0;
 
   const score = clamp01(
     productionCapacity * 0.2 +
-    storageSaturation * 0.2 +
-    spawnCapacity * 0.15 +
-    deficitScore * 0.1 +
-    growthOpportunity * 0.15 +
-    strategicPosition * 0.1 +
-    infrastructureSaturation * 0.1,
+      storageSaturation * 0.2 +
+      spawnCapacity * 0.15 +
+      deficitScore * 0.1 +
+      growthOpportunity * 0.15 +
+      strategicPosition * 0.1 +
+      infrastructureSaturation * 0.1,
   );
 
   const level: ExpansionPressureLevel =
-    score >= options.highThreshold ? "HIGH"
-    : score >= options.mediumThreshold ? "MEDIUM"
-    : "LOW";
+    score >= options.highThreshold ? "HIGH" : score >= options.mediumThreshold ? "MEDIUM" : "LOW";
 
   const evidence = [
     `prod=${(productionCapacity * 100).toFixed(0)}%`,

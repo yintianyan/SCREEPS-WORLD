@@ -23,11 +23,11 @@ export interface CandidateInput {
  */
 export function scoreCandidate(input: CandidateInput): number {
   return (
-    4 * input.buildableCoreTiles
-    - 2 * input.averageDistanceToSources
-    - 1 * input.distanceToController
-    + 3 * input.exitRisk
-    - 4 * input.blockedTemplateCells
+    4 * input.buildableCoreTiles -
+    2 * input.averageDistanceToSources -
+    1 * input.distanceToController +
+    3 * input.exitRisk -
+    4 * input.blockedTemplateCells
   );
 }
 
@@ -42,7 +42,6 @@ export function evaluateCandidate(
   const sources = room.find(FIND_SOURCES);
   const controller = room.controller;
 
-
   let buildableCoreTiles = 0;
   for (let dx = -3; dx <= 3; dx++) {
     for (let dy = -3; dy <= 3; dy++) {
@@ -53,7 +52,6 @@ export function evaluateCandidate(
     }
   }
 
-
   let avgDist = 0;
   if (sources.length > 0) {
     let total = 0;
@@ -63,14 +61,11 @@ export function evaluateCandidate(
     avgDist = total / sources.length;
   }
 
-
   const distCtrl = controller
     ? Math.abs(controller.pos.x - cx) + Math.abs(controller.pos.y - cy)
     : 50;
 
-
   const exitRisk = Math.min(cx, cy, 49 - cx, 49 - cy);
-
 
   let blocked = 0;
   for (const cell of blueprint.cells) {

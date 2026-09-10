@@ -18,15 +18,18 @@ export function buildAssignmentSite(
 ): ActionCandidate<ConstructionSite> {
   return {
     name: "build:assignment-site",
-    resolve: (ac) => {
+    resolve: ac => {
       if (options?.recoverySkip && ac.budget.tier === "recovery") return undefined;
       if (!ac.assignment?.targetId) return undefined;
       const site = getObjectById(ac.assignment.targetId as Id<ConstructionSite>);
       if (!site) return undefined;
       if (options?.conserveCriticalOnly && ac.budget.tier === "conserve") {
-        if (site.structureType !== STRUCTURE_SPAWN
-          && site.structureType !== STRUCTURE_TOWER
-          && site.structureType !== STRUCTURE_STORAGE) return undefined;
+        if (
+          site.structureType !== STRUCTURE_SPAWN &&
+          site.structureType !== STRUCTURE_TOWER &&
+          site.structureType !== STRUCTURE_STORAGE
+        )
+          return undefined;
       }
       return site;
     },
@@ -50,7 +53,7 @@ export function buildNearestSite(
 ): ActionCandidate<ConstructionSite> {
   return {
     name: "build:nearest-site",
-    resolve: (ac) => {
+    resolve: ac => {
       if (options?.recoverySkip && ac.budget.tier === "recovery") return undefined;
       const isCriticalOnly = typeof criticalOnly === "function" ? criticalOnly(ac) : criticalOnly;
       const sites = isCriticalOnly
@@ -76,14 +79,18 @@ export function buildNearestSite(
     },
     execute: (ac, site) => {
       runAction(ac.creep, site, () => ac.creep.build(site), {
-        [ERR_INVALID_TARGET]: () => { ac.creep.memory.targetId = undefined; },
+        [ERR_INVALID_TARGET]: () => {
+          ac.creep.memory.targetId = undefined;
+        },
       });
     },
   };
 }
 
 function isCriticalSite(site: ConstructionSite): boolean {
-  return site.structureType === STRUCTURE_SPAWN
-    || site.structureType === STRUCTURE_TOWER
-    || site.structureType === STRUCTURE_STORAGE;
+  return (
+    site.structureType === STRUCTURE_SPAWN ||
+    site.structureType === STRUCTURE_TOWER ||
+    site.structureType === STRUCTURE_STORAGE
+  );
 }

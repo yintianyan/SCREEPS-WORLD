@@ -114,10 +114,7 @@ export function auditLinkRoleGaps(
  * 全 0 时保持总缺口不变（总数够且角色分布对）。Memory schema 兼容：
  * v21 迁移只校验「值是 number」，linkSource 等 key 不会被删，recordLayoutGaps 无需改。
  */
-export function mergeLinkRoleGaps(
-  gaps: StructureGaps,
-  linkRoleGaps: LinkRoleGaps,
-): void {
+export function mergeLinkRoleGaps(gaps: StructureGaps, linkRoleGaps: LinkRoleGaps): void {
   const hasRoleGap =
     linkRoleGaps.source > 0 ||
     linkRoleGaps.controller > 0 ||

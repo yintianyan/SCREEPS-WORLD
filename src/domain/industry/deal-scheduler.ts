@@ -46,9 +46,7 @@ export const GHODIUM_PRIORITY = 10;
  * priority 相同时保持插入顺序（稳定排序）。
  * 返回 undefined = 无可执行候选。
  */
-export function pickBestCandidate(
-  candidates: readonly DealCandidate[],
-): DealCandidate | undefined {
+export function pickBestCandidate(candidates: readonly DealCandidate[]): DealCandidate | undefined {
   if (candidates.length === 0) return undefined;
   let best: DealCandidate | undefined;
   for (const c of candidates) {
@@ -69,9 +67,7 @@ export function pickBestCandidate(
  * @param candidates 候选列表（会被按 priority 降序排列）。
  * @returns 是否有候选成功成交。
  */
-export function executeBestCandidate(
-  candidates: DealCandidate[],
-): boolean {
+export function executeBestCandidate(candidates: DealCandidate[]): boolean {
   if (candidates.length === 0) return false;
   // 按 priority 降序排序（稳定排序保持插入顺序）。
   const sorted = [...candidates].sort((a, b) => b.priority - a.priority);

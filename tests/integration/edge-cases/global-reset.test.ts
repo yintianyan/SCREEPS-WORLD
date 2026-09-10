@@ -71,7 +71,7 @@ describe("Global Reset 恢复韧性", () => {
 
     // ── 2. 运行 300 tick 建立稳态（产生 creep + 填充 Memory + heap 缓存）──
     const result1 = runner.run(world, 300, {
-      stopWhen: (w) => w.creeps.length >= 3,
+      stopWhen: w => w.creeps.length >= 3,
     });
 
     const assertions1 = new Assertions(world, result1.records);

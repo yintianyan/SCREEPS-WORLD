@@ -4,7 +4,7 @@ import fs from "fs";
 
 function loadSeg(n: number): string {
   try {
-    return fs.readFileSync("/tmp/s" + n + ".txt", "utf8");
+    return fs.readFileSync(`/tmp/s${n}.txt`, "utf8");
   } catch {
     return "";
   }
@@ -38,7 +38,22 @@ describe("telemetry live repro — 真实官服 segment 数据", () => {
     };
     // 清 globalCache 字段
     for (const k of Object.keys(g)) {
-      if (typeof k === "string" && (k.startsWith("__") || ["telemetry","errorLog","errorCounts","pluginCooldowns","eventBuffer","skipBuffer","assignment","roomTraffic","prevRoomTraffic"].includes(k))) delete g[k];
+      if (
+        typeof k === "string" &&
+        (k.startsWith("__") ||
+          [
+            "telemetry",
+            "errorLog",
+            "errorCounts",
+            "pluginCooldowns",
+            "eventBuffer",
+            "skipBuffer",
+            "assignment",
+            "roomTraffic",
+            "prevRoomTraffic",
+          ].includes(k))
+      )
+        delete g[k];
     }
   });
 
@@ -48,10 +63,19 @@ describe("telemetry live repro — 真实官服 segment 数据", () => {
     requestSegments();
     const ctx: any = {
       tick: 82450000,
-      budget: { tier: "healthy", softLimit: 17.5, hardLimit: 19.2, canStart: () => true, isExhausted: () => false, spent: () => 3 },
+      budget: {
+        tier: "healthy",
+        softLimit: 17.5,
+        hardLimit: 19.2,
+        canStart: () => true,
+        isExhausted: () => false,
+        spent: () => 3,
+      },
       globalSiteCount: 0,
       getSnapshot: () => undefined,
-      snapshots: function* () { /* 空 */ },
+      *snapshots() {
+        /* 空 */
+      },
     };
     let err: unknown;
     try {
@@ -67,7 +91,10 @@ describe("telemetry live repro — 真实官服 segment 数据", () => {
       err = e;
     }
     console.log("REPRO err:", err instanceof Error ? err.stack : String(err));
-    console.log("REPRO stats:", JSON.stringify((globalThis as any).Memory.kernel.stats).slice(0, 400));
+    console.log(
+      "REPRO stats:",
+      JSON.stringify((globalThis as any).Memory.kernel.stats).slice(0, 400),
+    );
     expect(err).toBeUndefined();
   });
 });

@@ -1,7 +1,17 @@
 /** RoleRunner — 共享角色生命周期 + Action-Candidate 评估引擎。 */
 import type { CreepRole, Priority, TickContext } from "../../kernel/contracts";
 import type { ActionContext, RolePolicy } from "./action-types";
-import { ensureHome, flee, getAssignment, shouldFlee, shouldFleeForeignRoom, fleeToHome, shelterAtCore, updateMode, releaseAssignment } from "../support";
+import {
+  ensureHome,
+  flee,
+  getAssignment,
+  shouldFlee,
+  shouldFleeForeignRoom,
+  fleeToHome,
+  shelterAtCore,
+  updateMode,
+  releaseAssignment,
+} from "../support";
 import { parkIdleCreep } from "../movement";
 import { drawStatusLight } from "./status-light";
 import { interceptForBoost } from "./boost-report";
@@ -48,7 +58,12 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         const inForeignRoom = creep.room.name !== creep.memory.home;
         // pushThrough（recon scout）：跳过过境房威胁逃跑检测，继续向侦察目标推进。
         // 否则 scout 钻进敌方房（如 Aguia 的 W38S58）即 flee 回 home，永远到不了 remoteTarget。
-        if (!policy.combat && !policy.pushThrough && inForeignRoom && shouldFleeForeignRoom(creep)) {
+        if (
+          !policy.combat &&
+          !policy.pushThrough &&
+          inForeignRoom &&
+          shouldFleeForeignRoom(creep)
+        ) {
           creep.memory.mode = "flee";
           fleeToHome(creep);
           return;
@@ -57,42 +72,42 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         if (!snapshot) {
           // ensureHome 会用 creep.room.name 设置 home，下一 tick 正常工作。
         } else {
-        // M11 战时集结避险：小队威胁在场时非战斗角色全员撤入核心集结区。
-        // 不限 fleeRange——小队会主动追猎，散布全房各自逃跑就是被逐个点名；撤入塔火力圈反杀。
-        if (!policy.combat && !inForeignRoom && snapshot.squadThreat) {
-          creep.memory.mode = "flee";
-          shelterAtCore(creep, snapshot);
-          return;
-        }
-        if (!policy.combat && !inForeignRoom && shouldFlee(creep, snapshot)) {
-          creep.memory.mode = "flee";
-          // G-SM-05: flee 期间释放普通 assignment，仅移动到安全位置。
-          if (creep.memory.assignment) {
-            releaseAssignment(creep);
+          // M11 战时集结避险：小队威胁在场时非战斗角色全员撤入核心集结区。
+          // 不限 fleeRange——小队会主动追猎，散布全房各自逃跑就是被逐个点名；撤入塔火力圈反杀。
+          if (!policy.combat && !inForeignRoom && snapshot.squadThreat) {
+            creep.memory.mode = "flee";
+            shelterAtCore(creep, snapshot);
+            return;
           }
-          // P0-2: 调用角色级 onFlee 钩子 — 角色可自行处理安全区行为（如防御圈内充能）。
-          // 返回 true 表示已处理，跳过通用 flee 移动；返回 false 表示需要通用 flee 接管。
-          const fleeAc: ActionContext = {
-            creep,
-            snapshot,
-            assignment: undefined,
-            budget: ctx.budget,
-            ctx,
-          };
-          if (policy.onFlee) {
-            if (CONFIG.debug.actionProfiling) {
-              const before = Game.cpu.getUsed();
-              const handled = policy.onFlee(fleeAc);
-              recordActionCpu(`${name}/onFlee`, Game.cpu.getUsed() - before);
-              if (!handled) flee(creep, snapshot);
-            } else {
-              if (!policy.onFlee(fleeAc)) flee(creep, snapshot);
+          if (!policy.combat && !inForeignRoom && shouldFlee(creep, snapshot)) {
+            creep.memory.mode = "flee";
+            // G-SM-05: flee 期间释放普通 assignment，仅移动到安全位置。
+            if (creep.memory.assignment) {
+              releaseAssignment(creep);
             }
-          } else {
-            flee(creep, snapshot);
+            // P0-2: 调用角色级 onFlee 钩子 — 角色可自行处理安全区行为（如防御圈内充能）。
+            // 返回 true 表示已处理，跳过通用 flee 移动；返回 false 表示需要通用 flee 接管。
+            const fleeAc: ActionContext = {
+              creep,
+              snapshot,
+              assignment: undefined,
+              budget: ctx.budget,
+              ctx,
+            };
+            if (policy.onFlee) {
+              if (CONFIG.debug.actionProfiling) {
+                const before = Game.cpu.getUsed();
+                const handled = policy.onFlee(fleeAc);
+                recordActionCpu(`${name}/onFlee`, Game.cpu.getUsed() - before);
+                if (!handled) flee(creep, snapshot);
+              } else {
+                if (!policy.onFlee(fleeAc)) flee(creep, snapshot);
+              }
+            } else {
+              flee(creep, snapshot);
+            }
+            return;
           }
-          return;
-        }
         } // end of snapshot-dependent flee logic
 
         // 威胁消除后重置 flee mode：ensureHome 先于 updateMode，残留 mode=flee 会触发
@@ -182,7 +197,11 @@ export function defineRole(name: string, priority: Priority, policy: RolePolicy)
         // P2-M：原 remoteHauler work-at-home 硬编码下沉为 RolePolicy 钩子，
         // 由角色 policy 声明"无候选时是否切 idle"，引擎不再感知角色名。
         const remoteTarget = creep.memory.remoteTarget;
-        if (!remoteTarget || creep.room.name === remoteTarget || policy.shouldIdleWhenNoCandidate?.(ac) === true) {
+        if (
+          !remoteTarget ||
+          creep.room.name === remoteTarget ||
+          policy.shouldIdleWhenNoCandidate?.(ac) === true
+        ) {
           creep.memory.mode = "idle";
         }
       } finally {

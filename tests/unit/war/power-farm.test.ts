@@ -31,38 +31,22 @@ describe("selectPowerBankTarget — PB 野采目标选择", () => {
   });
 
   it("过期 intel（PB 可能已自灭）→ 排除", () => {
-    const result = selectPowerBankTarget(
-      [pb({ roomName: "A", lastSeen: 100 })],
-      5000,
-      opts,
-    );
+    const result = selectPowerBankTarget([pb({ roomName: "A", lastSeen: 100 })], 5000, opts);
     expect(result).toBeUndefined();
   });
 
   it("超最大距离 → 排除", () => {
-    const result = selectPowerBankTarget(
-      [pb({ roomName: "A", linearDistance: 8 })],
-      1500,
-      opts,
-    );
+    const result = selectPowerBankTarget([pb({ roomName: "A", linearDistance: 8 })], 1500, opts);
     expect(result).toBeUndefined();
   });
 
   it("占用房（远矿 op/扩张目标）→ 排除", () => {
-    const result = selectPowerBankTarget(
-      [pb({ roomName: "A", occupied: true })],
-      1500,
-      opts,
-    );
+    const result = selectPowerBankTarget([pb({ roomName: "A", occupied: true })], 1500, opts);
     expect(result).toBeUndefined();
   });
 
   it("intel 无 PB 标记 → 排除", () => {
-    const result = selectPowerBankTarget(
-      [pb({ roomName: "A", powerBank: false })],
-      1500,
-      opts,
-    );
+    const result = selectPowerBankTarget([pb({ roomName: "A", powerBank: false })], 1500, opts);
     expect(result).toBeUndefined();
   });
 

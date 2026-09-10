@@ -6,21 +6,21 @@
 
 /** 情报置信度等级。 */
 export type IntelConfidence =
-  | "CONFIRMED"  // 引擎事实或亲眼所见（如 body 解析）
-  | "HIGH"       // 多源交叉验证
-  | "MEDIUM"     // 单一可靠来源
-  | "LOW"        // 推断或旧情报
-  | "STALE"      // 过期但有参考价值
-  | "UNKNOWN";   // 无情报
+  | "CONFIRMED" // 引擎事实或亲眼所见（如 body 解析）
+  | "HIGH" // 多源交叉验证
+  | "MEDIUM" // 单一可靠来源
+  | "LOW" // 推断或旧情报
+  | "STALE" // 过期但有参考价值
+  | "UNKNOWN"; // 无情报
 
 /** 情报来源类型。 */
 export type IntelSource =
-  | "OBSERVED"       // 本 tick 或近 tick 直接观察到
-  | "ROOM_HISTORY"   // 房间历史记录
-  | "COMBAT_LOG"     // 战斗日志
+  | "OBSERVED" // 本 tick 或近 tick 直接观察到
+  | "ROOM_HISTORY" // 房间历史记录
+  | "COMBAT_LOG" // 战斗日志
   | "PLAYER_PROFILE" // 玩家档案（如 leaderboard）
-  | "ALLY_REPORT"    // 盟友报告
-  | "INFERENCE"      // 推断
+  | "ALLY_REPORT" // 盟友报告
+  | "INFERENCE" // 推断
   | "UNKNOWN";
 
 /** 情报类别——严格区分 Fact / Inference / Prediction。 */
@@ -86,12 +86,12 @@ export const FRESHNESS_THRESHOLDS = {
 
 /** 不同来源的默认可信度权重（不是「永远正确」，只是初始倾向）。 */
 export const SOURCE_DEFAULT_WEIGHT: Record<IntelSource, number> = {
-  OBSERVED: 1.0,        // 直接观察最可靠
-  COMBAT_LOG: 0.9,      // 战斗日志可靠但可能过时
-  ROOM_HISTORY: 0.7,    // 房间历史有参考价值
-  PLAYER_PROFILE: 0.5,  // 玩家档案可能过时
-  ALLY_REPORT: 0.4,     // 盟友报告可能有偏差
-  INFERENCE: 0.3,       // 推断最不可靠
+  OBSERVED: 1.0, // 直接观察最可靠
+  COMBAT_LOG: 0.9, // 战斗日志可靠但可能过时
+  ROOM_HISTORY: 0.7, // 房间历史有参考价值
+  PLAYER_PROFILE: 0.5, // 玩家档案可能过时
+  ALLY_REPORT: 0.4, // 盟友报告可能有偏差
+  INFERENCE: 0.3, // 推断最不可靠
   UNKNOWN: 0.1,
 };
 
@@ -124,10 +124,7 @@ export function computeFreshness(age: number): "FRESH" | "RECENT" | "STALE" | "E
 
  * 过期情报必须降低 Confidence，禁止旧情报永久保持 HIGH。
  */
-export function applyFreshnessDecay(
-  confidence: IntelConfidence,
-  age: number,
-): IntelConfidence {
+export function applyFreshnessDecay(confidence: IntelConfidence, age: number): IntelConfidence {
   const freshness = computeFreshness(age);
 
   switch (freshness) {
@@ -213,7 +210,16 @@ export function detectIntelConflict(evidence: IntelEvidence[]): ConflictResult {
 /** 简单的矛盾检测——基于关键词匹配。 */
 function isContradictory(a: string, b: string): boolean {
   const peaceKeywords = ["peace", "peaceful", "和平", "无威胁", "passive"];
-  const hostileKeywords = ["attack", "boosted", "military", "siege", "assault", "攻击", "军事", "boost"];
+  const hostileKeywords = [
+    "attack",
+    "boosted",
+    "military",
+    "siege",
+    "assault",
+    "攻击",
+    "军事",
+    "boost",
+  ];
 
   const aPeace = peaceKeywords.some(k => a.toLowerCase().includes(k));
   const bHostile = hostileKeywords.some(k => b.toLowerCase().includes(k));
@@ -302,10 +308,7 @@ function valueToConfidence(value: number): IntelConfidence {
  * 影响 ThreatAssessment 的 confidence 和 intent 推断，
  * 但不直接决定 Threat Level。
  */
-export function evaluatePlayerThreatIndex(
-  evidence: IntelEvidence[],
-  hasConflict: boolean,
-): number {
+export function evaluatePlayerThreatIndex(evidence: IntelEvidence[], hasConflict: boolean): number {
   if (evidence.length === 0) return 0;
 
   let threatSum = 0;
@@ -317,9 +320,7 @@ export function evaluatePlayerThreatIndex(
     const sourceWeight = SOURCE_DEFAULT_WEIGHT[e.source];
 
     // FACT 的威胁权重最高
-    const categoryWeight = e.category === "FACT" ? 1.0
-      : e.category === "INFERENCE" ? 0.5
-        : 0.2;
+    const categoryWeight = e.category === "FACT" ? 1.0 : e.category === "INFERENCE" ? 0.5 : 0.2;
 
     const weight = sourceWeight * categoryWeight * confidenceValue;
     // 从证据描述中提取威胁信号

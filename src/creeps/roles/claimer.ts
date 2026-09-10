@@ -8,7 +8,7 @@ import { defineRole } from "../engine/role-runner";
 function claimControllerAction(): ActionCandidate<StructureController> {
   return {
     name: "claimer:claim-controller",
-    resolve: (ac) => {
+    resolve: ac => {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       const controller = ac.creep.room.controller;
@@ -35,9 +35,7 @@ const policy: RolePolicy = {
   // 与 reserver 同理 — claimer 是远矿/扩张基础设施角色，P2 优先级但无能量消耗，
   // recovery 冻结会导致已孵化的 claimer 停在路上无法完成任务。
   recoveryEligible: true,
-  acquire: [
-    claimControllerAction(),
-  ],
+  acquire: [claimControllerAction()],
   work: [
     // 与 acquire 相同 — 无 CARRY 部件，mode 振荡不影响行为。
     claimControllerAction(),

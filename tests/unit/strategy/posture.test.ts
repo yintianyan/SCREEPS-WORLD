@@ -46,9 +46,9 @@ describe("empire posture — 和平姿态选择", () => {
 
   it("bucket 不足 / 经济压力高 / 有房非 normal → 均不扩张", () => {
     expect(evaluateEmpirePosture(input({ bucket: 3000 })).posture).toBe("develop");
-    expect(
-      evaluateEmpirePosture(input({ rooms: [room({ economyPressure: 0.8 })] })).posture,
-    ).toBe("develop");
+    expect(evaluateEmpirePosture(input({ rooms: [room({ economyPressure: 0.8 })] })).posture).toBe(
+      "develop",
+    );
     expect(
       evaluateEmpirePosture(input({ rooms: [room({ colonyState: "recovery" })] })).posture,
     ).toBe("develop");
@@ -281,7 +281,8 @@ describe("empire posture — 降级滞回", () => {
 });
 
 describe("empire posture — R4 war 可持续退出（经济止损）", () => {
-  const pressureRoom = (pressure: number) => room({ lastHostileAt: tick - 100, economyPressure: pressure });
+  const pressureRoom = (pressure: number) =>
+    room({ lastHostileAt: tick - 100, economyPressure: pressure });
 
   it("war + 压力持续超标达到耐心窗口 → 立即降 fortify（不等 minDwell 驻留期）", () => {
     const r = evaluateEmpirePosture(
@@ -344,9 +345,7 @@ describe("empire posture — R4 war 可持续退出（经济止损）", () => {
 
 describe("empire posture — since 语义", () => {
   it("姿态不变时 since 保持，变更时刷新", () => {
-    const kept = evaluateEmpirePosture(
-      input({ prev: { posture: "expand", since: tick - 500 } }),
-    );
+    const kept = evaluateEmpirePosture(input({ prev: { posture: "expand", since: tick - 500 } }));
     expect(kept.since).toBe(tick - 500);
 
     const changed = evaluateEmpirePosture(

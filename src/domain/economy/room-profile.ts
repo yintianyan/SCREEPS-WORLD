@@ -204,11 +204,7 @@ export function classifyRoomEconomic(
   hasStorage: boolean,
   colonyState: ColonyState,
 ): RoomEconomicClass {
-  if (
-    colonyState === "bootstrap" ||
-    colonyState === "recovery" ||
-    colonyState === "defense"
-  ) {
+  if (colonyState === "bootstrap" || colonyState === "recovery" || colonyState === "defense") {
     return "struggling";
   }
   if (rcl < 4 || !hasStorage) {
@@ -225,10 +221,7 @@ export function classifyRoomEconomic(
  * 净流接近 0（收支平衡）→ 自给度高；净流偏离 0（入不敷出或大量盈余）→ 自给度低。
  * 纯函数。
  */
-export function computeSelfSufficiency(
-  netFlow: number,
-  estimatedIncome: number,
-): number {
+export function computeSelfSufficiency(netFlow: number, estimatedIncome: number): number {
   if (estimatedIncome <= 0) return 0;
   const ratio = Math.abs(netFlow) / estimatedIncome;
   return Math.max(0, Math.min(1, 1 - ratio));
@@ -297,9 +290,7 @@ export function buildRoomEconomicProfile(
   const netFlowPositive = netFlow > 0;
   const selfSufficiency = computeSelfSufficiency(netFlow, estimatedIncome);
   const isStruggling =
-    colonyState === "bootstrap" ||
-    colonyState === "recovery" ||
-    colonyState === "defense";
+    colonyState === "bootstrap" || colonyState === "recovery" || colonyState === "defense";
 
   return {
     roomName: snapshot.roomName,

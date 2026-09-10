@@ -66,7 +66,7 @@ export function computeFairQuota(
 
   const quota = new Map<string, number>();
   for (const [room, weight] of weights) {
-    quota.set(room, totalWeight > 0 ? Math.floor(totalCapacity * weight / totalWeight) : 0);
+    quota.set(room, totalWeight > 0 ? Math.floor((totalCapacity * weight) / totalWeight) : 0);
   }
   return quota;
 }

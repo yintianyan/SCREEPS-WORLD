@@ -27,7 +27,13 @@ describe("migration v26 → v27（R4 战争自治升级建档）", () => {
       creeps: {},
       rooms: {},
       kernel: {
-        warPlan: { targetRoom: "W6N4", sponsor: "W7N4", squadSize: 3, phase: "advance", spawned: 5 },
+        warPlan: {
+          targetRoom: "W6N4",
+          sponsor: "W7N4",
+          squadSize: 3,
+          phase: "advance",
+          spawned: 5,
+        },
         warBlacklist: { W5N5: 21000 },
         strategy: { posture: "war", since: 900, warPressureTicks: 120 },
       },

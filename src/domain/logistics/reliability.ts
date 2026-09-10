@@ -53,11 +53,11 @@ export interface ReliabilityFactors {
  * 总和 = 1.0。
  */
 export const RELIABILITY_WEIGHTS = {
-  successRate: 0.40,
-  routeSafety: 0.20,
+  successRate: 0.4,
+  routeSafety: 0.2,
   threatSafety: 0.15,
-  trafficFlow: 0.10,
-  creepSurvival: 0.10,
+  trafficFlow: 0.1,
+  creepSurvival: 0.1,
   pathStability: 0.05,
 } as const;
 
@@ -101,11 +101,11 @@ export function computeReliability(input: ReliabilityInput): ReliabilityResult {
 
   const reliability = clamp01(
     factors.successRateContribution +
-    factors.routeSafetyContribution +
-    factors.threatSafetyContribution +
-    factors.trafficFlowContribution +
-    factors.creepSurvivalContribution +
-    factors.pathStabilityContribution,
+      factors.routeSafetyContribution +
+      factors.threatSafetyContribution +
+      factors.trafficFlowContribution +
+      factors.creepSurvivalContribution +
+      factors.pathStabilityContribution,
   );
 
   // 诊断消息
@@ -131,20 +131,20 @@ export function computeReliability(input: ReliabilityInput): ReliabilityResult {
  * 可靠性等级。
  */
 export type ReliabilityGrade =
-  | "excellent"  // >= 0.90
-  | "good"       // >= 0.75
-  | "fair"       // >= 0.50
-  | "poor"       // >= 0.25
-  | "critical";  // < 0.25
+  | "excellent" // >= 0.90
+  | "good" // >= 0.75
+  | "fair" // >= 0.50
+  | "poor" // >= 0.25
+  | "critical"; // < 0.25
 
 /**
  * 根据可靠性评分判定等级。
  * 纯函数。
  */
 export function gradeReliability(reliability: number): ReliabilityGrade {
-  if (reliability >= 0.90) return "excellent";
+  if (reliability >= 0.9) return "excellent";
   if (reliability >= 0.75) return "good";
-  if (reliability >= 0.50) return "fair";
+  if (reliability >= 0.5) return "fair";
   if (reliability >= 0.25) return "poor";
   return "critical";
 }
@@ -153,10 +153,7 @@ export function gradeReliability(reliability: number): ReliabilityGrade {
  * 判断是否达到最低可靠性阈值。
  * 纯函数。
  */
-export function meetsReliabilityThreshold(
-  reliability: number,
-  threshold: number = 0.50,
-): boolean {
+export function meetsReliabilityThreshold(reliability: number, threshold: number = 0.5): boolean {
   return reliability >= threshold;
 }
 

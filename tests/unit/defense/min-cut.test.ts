@@ -56,7 +56,11 @@ describe("min-cut-defense — 基本功能", () => {
   it("割集位置不在 source/sink 上", () => {
     const terrain = corridorTerrain(25, 2);
     const core = [{ x: 35, y: 25 }];
-    const exits = [{ x: 0, y: 25 }, { x: 0, y: 24 }, { x: 0, y: 26 }];
+    const exits = [
+      { x: 0, y: 25 },
+      { x: 0, y: 24 },
+      { x: 0, y: 26 },
+    ];
 
     const result = computeMinCutDefense(terrain, core, exits, 30);
     if (result.complete) {
@@ -84,8 +88,10 @@ describe("min-cut-defense — 开放地形 fallback", () => {
     // 4 方向出口 → 割集需要封锁核心周围（~8+ 格），设 maxRamparts=3 触发 fallback
     const core = [{ x: 25, y: 25 }];
     const exits = [
-      { x: 0, y: 25 }, { x: 49, y: 25 },
-      { x: 25, y: 0 }, { x: 25, y: 49 },
+      { x: 0, y: 25 },
+      { x: 49, y: 25 },
+      { x: 25, y: 0 },
+      { x: 25, y: 49 },
     ];
 
     const result = computeMinCutDefense(noWalls, core, exits, 3);
@@ -123,8 +129,10 @@ describe("min-cut-defense — SUPER_SOURCE/SINK 冲突回归", () => {
     // 出口在四边中点（不含 (49,49) 本身），核心在中心。
     const core = [{ x: 25, y: 25 }];
     const exits = [
-      { x: 0, y: 25 }, { x: 49, y: 25 },
-      { x: 25, y: 0 }, { x: 25, y: 49 },
+      { x: 0, y: 25 },
+      { x: 49, y: 25 },
+      { x: 25, y: 0 },
+      { x: 25, y: 49 },
     ];
 
     const result = computeMinCutDefense(noWalls, core, exits, 30);
@@ -175,7 +183,10 @@ describe("min-cut-defense — 多出口", () => {
     // 走廊 y=24..26，出口在 x=0 和 x=49 两端
     const terrain = corridorTerrain(25, 1);
     const core = [{ x: 25, y: 25 }]; // 核心在走廊中间
-    const exits = [{ x: 0, y: 25 }, { x: 49, y: 25 }];
+    const exits = [
+      { x: 0, y: 25 },
+      { x: 49, y: 25 },
+    ];
 
     const result = computeMinCutDefense(terrain, core, exits, 30);
     expect(result.complete).toBe(true);
@@ -186,10 +197,16 @@ describe("min-cut-defense — 多出口", () => {
 
 describe("min-cut-defense — 性能", () => {
   it("50×50 全开放地形在合理时间内完成", () => {
-    const core = [{ x: 25, y: 25 }, { x: 26, y: 25 }, { x: 24, y: 25 }];
+    const core = [
+      { x: 25, y: 25 },
+      { x: 26, y: 25 },
+      { x: 24, y: 25 },
+    ];
     const exits = [
-      { x: 0, y: 25 }, { x: 49, y: 25 },
-      { x: 25, y: 0 }, { x: 25, y: 49 },
+      { x: 0, y: 25 },
+      { x: 49, y: 25 },
+      { x: 25, y: 0 },
+      { x: 25, y: 49 },
     ];
 
     // 预热：首次调用包含 V8 JIT 编译开销（可达 ~50ms），
@@ -240,10 +257,16 @@ function verifyCutBlocksAllPaths(
   }
 
   const orthogonal: ReadonlyArray<readonly [number, number]> = [
-    [1, 0], [-1, 0], [0, 1], [0, -1],
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
   ];
   const diagonals: ReadonlyArray<readonly [number, number]> = [
-    [1, 1], [1, -1], [-1, 1], [-1, -1],
+    [1, 1],
+    [1, -1],
+    [-1, 1],
+    [-1, -1],
   ];
 
   while (queue.length > 0) {
@@ -299,8 +322,10 @@ describe("min-cut-defense — v3 对角线路径封锁", () => {
   it("开放地形 4 出口：v3 割集阻断所有方向（含对角线）", () => {
     const core = [{ x: 25, y: 25 }];
     const exits = [
-      { x: 0, y: 25 }, { x: 49, y: 25 },
-      { x: 25, y: 0 }, { x: 25, y: 49 },
+      { x: 0, y: 25 },
+      { x: 49, y: 25 },
+      { x: 25, y: 0 },
+      { x: 25, y: 49 },
     ];
 
     const result = computeMinCutDefense(noWalls, core, exits, 50);
@@ -330,11 +355,15 @@ describe("min-cut-defense — v3 对角线路径封锁", () => {
 
   it("多核心格：v3 割集封锁所有核心的 8 邻接路径", () => {
     const core = [
-      { x: 24, y: 25 }, { x: 25, y: 25 }, { x: 26, y: 25 },
-      { x: 25, y: 24 }, { x: 25, y: 26 },
+      { x: 24, y: 25 },
+      { x: 25, y: 25 },
+      { x: 26, y: 25 },
+      { x: 25, y: 24 },
+      { x: 25, y: 26 },
     ];
     const exits = [
-      { x: 0, y: 25 }, { x: 49, y: 25 },
+      { x: 0, y: 25 },
+      { x: 49, y: 25 },
     ];
 
     const result = computeMinCutDefense(noWalls, core, exits, 50);

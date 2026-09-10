@@ -69,7 +69,8 @@ describe("MV-3 — yield 请求 TTL", () => {
     // 请求方推 blocker 沿方向 3。
     const requester = {
       pos: {
-        x: 25, y: 25,
+        x: 25,
+        y: 25,
         getDirectionTo: vi.fn(() => 3),
       },
       room: { lookForAt: vi.fn(() => [blocker]) },

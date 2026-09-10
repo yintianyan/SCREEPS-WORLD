@@ -46,10 +46,7 @@ export function rankCandidates(
 
   const ranked = qualified.map(c => {
     // 距离惩罚（远 = 惩罚大）
-    const distPenalty = c.distance <= 1 ? 0
-      : c.distance === 2 ? 0.2
-      : c.distance === 3 ? 0.4
-      : 0.6;
+    const distPenalty = c.distance <= 1 ? 0 : c.distance === 2 ? 0.2 : c.distance === 3 ? 0.4 : 0.6;
     const distanceFactor = 1 - options.distanceWeight * distPenalty;
 
     // source 奖励

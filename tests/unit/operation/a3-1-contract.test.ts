@@ -42,10 +42,7 @@ import {
   decideRebalance,
   markRebalanced,
 } from "../../../src/domain/operation/rebalance";
-import {
-  createOperation,
-  type OperationContext,
-} from "../../../src/domain/operation/agenda-item";
+import { createOperation, type OperationContext } from "../../../src/domain/operation/agenda-item";
 import type { RoomRegistryEntry } from "../../../src/domain/strategy/room-registry";
 import type { ReservationTable } from "../../../src/domain/operation/reservation";
 
@@ -141,8 +138,30 @@ describe("A3.1-002: Supply Node — buildSupplyNodes batch", () => {
 describe("A3.1-003: Supply Node — sumSupplyTransferable", () => {
   it("sums all transferable", () => {
     const nodes: SupplyNode[] = [
-      { room: "A", resource: "energy", available: 100000, reserved: 5000, safety: 5000, transferable: 30000, priority: 3, health: 0.8, capacity: 300000, timestamp: TICK },
-      { room: "B", resource: "energy", available: 200000, reserved: 10000, safety: 5000, transferable: 50000, priority: 3, health: 0.9, capacity: 300000, timestamp: TICK },
+      {
+        room: "A",
+        resource: "energy",
+        available: 100000,
+        reserved: 5000,
+        safety: 5000,
+        transferable: 30000,
+        priority: 3,
+        health: 0.8,
+        capacity: 300000,
+        timestamp: TICK,
+      },
+      {
+        room: "B",
+        resource: "energy",
+        available: 200000,
+        reserved: 10000,
+        safety: 5000,
+        transferable: 50000,
+        priority: 3,
+        health: 0.9,
+        capacity: 300000,
+        timestamp: TICK,
+      },
     ];
     expect(sumSupplyTransferable(nodes)).toBe(80000);
   });
@@ -180,7 +199,13 @@ describe("A3.1-005: Supply Node — priority derivation", () => {
 
 describe("A3.1-006: Demand Node — buildDemandNode basic", () => {
   it("creates demand node from deficit entry", () => {
-    const entry = makeEntry({ roomName: "C", needsAid: true, riskBuffer: 50, storageEnergy: 10000, storageCapacity: 300000 });
+    const entry = makeEntry({
+      roomName: "C",
+      needsAid: true,
+      riskBuffer: 50,
+      storageEnergy: 10000,
+      storageCapacity: 300000,
+    });
     const node = buildDemandNode(entry, 0, TICK);
     expect(node).toBeDefined();
     expect(node!.room).toBe("C");
@@ -197,27 +222,47 @@ describe("A3.1-006: Demand Node — buildDemandNode basic", () => {
 
 describe("A3.1-007: Demand Node — criticality levels", () => {
   it("critical for struggling room", () => {
-    const entry = makeEntry({ needsAid: true, isStruggling: true, storageEnergy: 1000, storageCapacity: 300000 });
+    const entry = makeEntry({
+      needsAid: true,
+      isStruggling: true,
+      storageEnergy: 1000,
+      storageCapacity: 300000,
+    });
     const node = buildDemandNode(entry, 0, TICK);
     expect(node!.criticality).toBe("critical");
     expect(node!.priority).toBe(0);
   });
 
   it("high for riskBuffer < 400", () => {
-    const entry = makeEntry({ needsAid: true, riskBuffer: 200, storageEnergy: 50000, storageCapacity: 300000 });
+    const entry = makeEntry({
+      needsAid: true,
+      riskBuffer: 200,
+      storageEnergy: 50000,
+      storageCapacity: 300000,
+    });
     const node = buildDemandNode(entry, 0, TICK);
     expect(node!.criticality).toBe("high");
     expect(node!.priority).toBe(1);
   });
 
   it("normal for riskBuffer < 1000", () => {
-    const entry = makeEntry({ needsAid: true, riskBuffer: 600, storageEnergy: 50000, storageCapacity: 300000 });
+    const entry = makeEntry({
+      needsAid: true,
+      riskBuffer: 600,
+      storageEnergy: 50000,
+      storageCapacity: 300000,
+    });
     const node = buildDemandNode(entry, 0, TICK);
     expect(node!.criticality).toBe("normal");
   });
 
   it("low for riskBuffer >= 1000", () => {
-    const entry = makeEntry({ needsAid: true, riskBuffer: 1500, storageEnergy: 80000, storageCapacity: 300000 });
+    const entry = makeEntry({
+      needsAid: true,
+      riskBuffer: 1500,
+      storageEnergy: 80000,
+      storageCapacity: 300000,
+    });
     const node = buildDemandNode(entry, 0, TICK);
     expect(node!.criticality).toBe("low");
   });
@@ -225,7 +270,12 @@ describe("A3.1-007: Demand Node — criticality levels", () => {
 
 describe("A3.1-008: Demand Node — fulfillment tracking", () => {
   it("updateFulfillment increases fulfilled, decreases remaining", () => {
-    const entry = makeEntry({ needsAid: true, riskBuffer: 50, storageEnergy: 10000, storageCapacity: 300000 });
+    const entry = makeEntry({
+      needsAid: true,
+      riskBuffer: 50,
+      storageEnergy: 10000,
+      storageCapacity: 300000,
+    });
     const node = buildDemandNode(entry, 0, TICK)!;
     const updated = updateFulfillment(node, 10000, TICK + 100);
     expect(updated.fulfilled).toBe(10000);
@@ -233,7 +283,12 @@ describe("A3.1-008: Demand Node — fulfillment tracking", () => {
   });
 
   it("isFulfilled returns true when remaining <= 0", () => {
-    const entry = makeEntry({ needsAid: true, riskBuffer: 50, storageEnergy: 10000, storageCapacity: 300000 });
+    const entry = makeEntry({
+      needsAid: true,
+      riskBuffer: 50,
+      storageEnergy: 10000,
+      storageCapacity: 300000,
+    });
     const node = buildDemandNode(entry, 0, TICK)!;
     const fulfilled = updateFulfillment(node, node.requested, TICK + 100);
     expect(isFulfilled(fulfilled)).toBe(true);
@@ -242,14 +297,24 @@ describe("A3.1-008: Demand Node — fulfillment tracking", () => {
 
 describe("A3.1-009: Demand Node — starvation + aging", () => {
   it("isStarving returns true after threshold", () => {
-    const entry = makeEntry({ needsAid: true, riskBuffer: 600, storageEnergy: 50000, storageCapacity: 300000 });
+    const entry = makeEntry({
+      needsAid: true,
+      riskBuffer: 600,
+      storageEnergy: 50000,
+      storageCapacity: 300000,
+    });
     const node = buildDemandNode(entry, 0, TICK, TICK + 2000, TICK)!;
     expect(isStarving(node, TICK + 1100, 1000)).toBe(true);
     expect(isStarving(node, TICK + 500, 1000)).toBe(false);
   });
 
   it("applyAging boosts priority for starving demand", () => {
-    const entry = makeEntry({ needsAid: true, riskBuffer: 600, storageEnergy: 50000, storageCapacity: 300000 });
+    const entry = makeEntry({
+      needsAid: true,
+      riskBuffer: 600,
+      storageEnergy: 50000,
+      storageCapacity: 300000,
+    });
     const node = buildDemandNode(entry, 0, TICK, TICK + 2000, TICK)!;
     const aged = applyAging(node, TICK + 1000, 1000);
     expect(aged.priority).toBeLessThanOrEqual(node.priority);
@@ -259,8 +324,20 @@ describe("A3.1-009: Demand Node — starvation + aging", () => {
 describe("A3.1-010: Demand Node — batch build sorted by criticality", () => {
   it("critical before low", () => {
     const entries = [
-      makeEntry({ roomName: "Low", needsAid: true, riskBuffer: 1500, storageEnergy: 80000, storageCapacity: 300000 }),
-      makeEntry({ roomName: "Critical", needsAid: true, riskBuffer: 50, storageEnergy: 10000, storageCapacity: 300000 }),
+      makeEntry({
+        roomName: "Low",
+        needsAid: true,
+        riskBuffer: 1500,
+        storageEnergy: 80000,
+        storageCapacity: 300000,
+      }),
+      makeEntry({
+        roomName: "Critical",
+        needsAid: true,
+        riskBuffer: 50,
+        storageEnergy: 10000,
+        storageCapacity: 300000,
+      }),
     ];
     const nodes = buildDemandNodes(entries, new Map(), TICK);
     expect(nodes[0]!.room).toBe("Critical");
@@ -273,10 +350,32 @@ describe("A3.1-010: Demand Node — batch build sorted by criticality", () => {
 describe("A3.1-011: Network Snapshot — buildNetworkSnapshot", () => {
   it("computes totals correctly", () => {
     const supply: SupplyNode[] = [
-      { room: "A", resource: "energy", available: 100000, reserved: 0, safety: 5000, transferable: 50000, priority: 3, health: 0.8, capacity: 300000, timestamp: TICK },
+      {
+        room: "A",
+        resource: "energy",
+        available: 100000,
+        reserved: 0,
+        safety: 5000,
+        transferable: 50000,
+        priority: 3,
+        health: 0.8,
+        capacity: 300000,
+        timestamp: TICK,
+      },
     ];
     const demand: DemandNode[] = [
-      { room: "B", resource: "energy", requested: 80000, priority: 0, deadline: TICK + 2000, criticality: "critical", fulfilled: 0, remaining: 80000, firstSeen: TICK, timestamp: TICK },
+      {
+        room: "B",
+        resource: "energy",
+        requested: 80000,
+        priority: 0,
+        deadline: TICK + 2000,
+        criticality: "critical",
+        fulfilled: 0,
+        remaining: 80000,
+        firstSeen: TICK,
+        timestamp: TICK,
+      },
     ];
     const ops: OperationContext[] = [];
     const reservations: ReservationTable = new Map();
@@ -291,21 +390,81 @@ describe("A3.1-011: Network Snapshot — buildNetworkSnapshot", () => {
 
 describe("A3.1-012: Network Snapshot — needsRebalance", () => {
   it("returns true for first snapshot", () => {
-    const snap = { tick: TICK, supplyNodes: [], demandNodes: [], reservationCount: 0, activeOperationCount: 0, allocationPlans: [], totalSupply: 0, totalDemand: 0, totalRemaining: 0, totalFulfilled: 0, gap: 0 };
+    const snap = {
+      tick: TICK,
+      supplyNodes: [],
+      demandNodes: [],
+      reservationCount: 0,
+      activeOperationCount: 0,
+      allocationPlans: [],
+      totalSupply: 0,
+      totalDemand: 0,
+      totalRemaining: 0,
+      totalFulfilled: 0,
+      gap: 0,
+    };
     expect(needsRebalance(snap as any, undefined)).toBe(true);
   });
 
   it("returns false when no significant change", () => {
-    const snap1 = { tick: TICK, supplyNodes: [], demandNodes: [], reservationCount: 0, activeOperationCount: 0, allocationPlans: [], totalSupply: 100000, totalDemand: 50000, totalRemaining: 50000, totalFulfilled: 0, gap: -50000 };
-    const snap2 = { tick: TICK + 100, supplyNodes: [], demandNodes: [], reservationCount: 0, activeOperationCount: 0, allocationPlans: [], totalSupply: 101000, totalDemand: 50000, totalRemaining: 50000, totalFulfilled: 0, gap: -51000 };
+    const snap1 = {
+      tick: TICK,
+      supplyNodes: [],
+      demandNodes: [],
+      reservationCount: 0,
+      activeOperationCount: 0,
+      allocationPlans: [],
+      totalSupply: 100000,
+      totalDemand: 50000,
+      totalRemaining: 50000,
+      totalFulfilled: 0,
+      gap: -50000,
+    };
+    const snap2 = {
+      tick: TICK + 100,
+      supplyNodes: [],
+      demandNodes: [],
+      reservationCount: 0,
+      activeOperationCount: 0,
+      allocationPlans: [],
+      totalSupply: 101000,
+      totalDemand: 50000,
+      totalRemaining: 50000,
+      totalFulfilled: 0,
+      gap: -51000,
+    };
     expect(needsRebalance(snap2 as any, snap1 as any)).toBe(false);
   });
 });
 
 describe("A3.1-013: Network Snapshot — gap sign reversal triggers rebalance", () => {
   it("gap sign reversal triggers rebalance", () => {
-    const snap1 = { tick: TICK, supplyNodes: [], demandNodes: [], reservationCount: 0, activeOperationCount: 0, allocationPlans: [], totalSupply: 50000, totalDemand: 30000, totalRemaining: 30000, totalFulfilled: 0, gap: -20000 };
-    const snap2 = { tick: TICK + 100, supplyNodes: [], demandNodes: [], reservationCount: 0, activeOperationCount: 0, allocationPlans: [], totalSupply: 30000, totalDemand: 50000, totalRemaining: 50000, totalFulfilled: 0, gap: 20000 };
+    const snap1 = {
+      tick: TICK,
+      supplyNodes: [],
+      demandNodes: [],
+      reservationCount: 0,
+      activeOperationCount: 0,
+      allocationPlans: [],
+      totalSupply: 50000,
+      totalDemand: 30000,
+      totalRemaining: 30000,
+      totalFulfilled: 0,
+      gap: -20000,
+    };
+    const snap2 = {
+      tick: TICK + 100,
+      supplyNodes: [],
+      demandNodes: [],
+      reservationCount: 0,
+      activeOperationCount: 0,
+      allocationPlans: [],
+      totalSupply: 30000,
+      totalDemand: 50000,
+      totalRemaining: 50000,
+      totalFulfilled: 0,
+      gap: 20000,
+    };
     expect(needsRebalance(snap2 as any, snap1 as any)).toBe(true);
   });
 });
@@ -315,11 +474,44 @@ describe("A3.1-013: Network Snapshot — gap sign reversal triggers rebalance", 
 describe("A3.1-014: Allocation Policy v2 — TOCTOU prevention", () => {
   it("does not double-allocate from same source", () => {
     const supply: SupplyNode[] = [
-      { room: "A", resource: "energy", available: 100000, reserved: 0, safety: 5000, transferable: 20000, priority: 3, health: 0.8, capacity: 300000, timestamp: TICK },
+      {
+        room: "A",
+        resource: "energy",
+        available: 100000,
+        reserved: 0,
+        safety: 5000,
+        transferable: 20000,
+        priority: 3,
+        health: 0.8,
+        capacity: 300000,
+        timestamp: TICK,
+      },
     ];
     const demand: DemandNode[] = [
-      { room: "B", resource: "energy", requested: 15000, priority: 0, deadline: TICK + 2000, criticality: "critical", fulfilled: 0, remaining: 15000, firstSeen: TICK, timestamp: TICK },
-      { room: "C", resource: "energy", requested: 10000, priority: 1, deadline: TICK + 2000, criticality: "high", fulfilled: 0, remaining: 10000, firstSeen: TICK, timestamp: TICK },
+      {
+        room: "B",
+        resource: "energy",
+        requested: 15000,
+        priority: 0,
+        deadline: TICK + 2000,
+        criticality: "critical",
+        fulfilled: 0,
+        remaining: 15000,
+        firstSeen: TICK,
+        timestamp: TICK,
+      },
+      {
+        room: "C",
+        resource: "energy",
+        requested: 10000,
+        priority: 1,
+        deadline: TICK + 2000,
+        criticality: "high",
+        fulfilled: 0,
+        remaining: 10000,
+        firstSeen: TICK,
+        timestamp: TICK,
+      },
     ];
 
     const result = allocateNetwork(supply, demand, new Map(), new Map(), new Map(), TICK);
@@ -331,11 +523,44 @@ describe("A3.1-014: Allocation Policy v2 — TOCTOU prevention", () => {
 describe("A3.1-015: Allocation Policy v2 — Multi-Source Fulfillment", () => {
   it("multiple sources satisfy one demand", () => {
     const supply: SupplyNode[] = [
-      { room: "A", resource: "energy", available: 100000, reserved: 0, safety: 5000, transferable: 5000, priority: 3, health: 0.8, capacity: 300000, timestamp: TICK },
-      { room: "B", resource: "energy", available: 100000, reserved: 0, safety: 5000, transferable: 5000, priority: 3, health: 0.8, capacity: 300000, timestamp: TICK },
+      {
+        room: "A",
+        resource: "energy",
+        available: 100000,
+        reserved: 0,
+        safety: 5000,
+        transferable: 5000,
+        priority: 3,
+        health: 0.8,
+        capacity: 300000,
+        timestamp: TICK,
+      },
+      {
+        room: "B",
+        resource: "energy",
+        available: 100000,
+        reserved: 0,
+        safety: 5000,
+        transferable: 5000,
+        priority: 3,
+        health: 0.8,
+        capacity: 300000,
+        timestamp: TICK,
+      },
     ];
     const demand: DemandNode[] = [
-      { room: "C", resource: "energy", requested: 8000, priority: 0, deadline: TICK + 2000, criticality: "critical", fulfilled: 0, remaining: 8000, firstSeen: TICK, timestamp: TICK },
+      {
+        room: "C",
+        resource: "energy",
+        requested: 8000,
+        priority: 0,
+        deadline: TICK + 2000,
+        criticality: "critical",
+        fulfilled: 0,
+        remaining: 8000,
+        firstSeen: TICK,
+        timestamp: TICK,
+      },
     ];
 
     const result = allocateNetwork(supply, demand, new Map(), new Map(), new Map(), TICK);
@@ -350,14 +575,32 @@ describe("A3.1-016: Allocation Policy v2 — Operation Storm prevention", () => 
   it("respects MAX_GLOBAL_OPERATIONS", () => {
     // Create more demands than MAX_GLOBAL_OPERATIONS
     const supply: SupplyNode[] = [
-      { room: "A", resource: "energy", available: 1000000, reserved: 0, safety: 5000, transferable: 999000, priority: 3, health: 0.8, capacity: 1000000, timestamp: TICK },
+      {
+        room: "A",
+        resource: "energy",
+        available: 1000000,
+        reserved: 0,
+        safety: 5000,
+        transferable: 999000,
+        priority: 3,
+        health: 0.8,
+        capacity: 1000000,
+        timestamp: TICK,
+      },
     ];
     const demand: DemandNode[] = [];
     for (let i = 0; i < MAX_GLOBAL_OPERATIONS + 10; i++) {
       demand.push({
-        room: `D${i}`, resource: "energy", requested: 5000, priority: 2,
-        deadline: TICK + 2000, criticality: "normal", fulfilled: 0, remaining: 5000,
-        firstSeen: TICK, timestamp: TICK,
+        room: `D${i}`,
+        resource: "energy",
+        requested: 5000,
+        priority: 2,
+        deadline: TICK + 2000,
+        criticality: "normal",
+        fulfilled: 0,
+        remaining: 5000,
+        firstSeen: TICK,
+        timestamp: TICK,
       });
     }
 
@@ -367,14 +610,32 @@ describe("A3.1-016: Allocation Policy v2 — Operation Storm prevention", () => 
 
   it("respects MAX_TARGETS_PER_SOURCE", () => {
     const supply: SupplyNode[] = [
-      { room: "A", resource: "energy", available: 1000000, reserved: 0, safety: 5000, transferable: 999000, priority: 3, health: 0.8, capacity: 1000000, timestamp: TICK },
+      {
+        room: "A",
+        resource: "energy",
+        available: 1000000,
+        reserved: 0,
+        safety: 5000,
+        transferable: 999000,
+        priority: 3,
+        health: 0.8,
+        capacity: 1000000,
+        timestamp: TICK,
+      },
     ];
     const demand: DemandNode[] = [];
     for (let i = 0; i < MAX_TARGETS_PER_SOURCE + 5; i++) {
       demand.push({
-        room: `D${i}`, resource: "energy", requested: 5000, priority: 2,
-        deadline: TICK + 2000, criticality: "normal", fulfilled: 0, remaining: 5000,
-        firstSeen: TICK, timestamp: TICK,
+        room: `D${i}`,
+        resource: "energy",
+        requested: 5000,
+        priority: 2,
+        deadline: TICK + 2000,
+        criticality: "normal",
+        fulfilled: 0,
+        remaining: 5000,
+        firstSeen: TICK,
+        timestamp: TICK,
       });
     }
 
@@ -387,10 +648,32 @@ describe("A3.1-016: Allocation Policy v2 — Operation Storm prevention", () => 
 describe("A3.1-017: Allocation Policy v2 — explainable reasons", () => {
   it("generates reason for each plan", () => {
     const supply: SupplyNode[] = [
-      { room: "A", resource: "energy", available: 100000, reserved: 0, safety: 5000, transferable: 50000, priority: 3, health: 0.8, capacity: 300000, timestamp: TICK },
+      {
+        room: "A",
+        resource: "energy",
+        available: 100000,
+        reserved: 0,
+        safety: 5000,
+        transferable: 50000,
+        priority: 3,
+        health: 0.8,
+        capacity: 300000,
+        timestamp: TICK,
+      },
     ];
     const demand: DemandNode[] = [
-      { room: "B", resource: "energy", requested: 10000, priority: 0, deadline: TICK + 2000, criticality: "critical", fulfilled: 0, remaining: 10000, firstSeen: TICK, timestamp: TICK },
+      {
+        room: "B",
+        resource: "energy",
+        requested: 10000,
+        priority: 0,
+        deadline: TICK + 2000,
+        criticality: "critical",
+        fulfilled: 0,
+        remaining: 10000,
+        firstSeen: TICK,
+        timestamp: TICK,
+      },
     ];
 
     const result = allocateNetwork(supply, demand, new Map(), new Map(), new Map(), TICK);
@@ -431,10 +714,27 @@ describe("A3.1-018: Preemption — classification", () => {
 describe("A3.1-019: Preemption — attemptPreemption", () => {
   it("preempts low-priority ops to satisfy critical request", () => {
     const ops = [
-      makeOp({ id: "supply:A:C:energy", sourceRoom: "A", targetRoom: "C", priority: 2, status: "planned", reservedAmount: 5000 }),
-      makeOp({ id: "supply:A:D:energy", sourceRoom: "A", targetRoom: "D", priority: 3, status: "planned", reservedAmount: 3000 }),
+      makeOp({
+        id: "supply:A:C:energy",
+        sourceRoom: "A",
+        targetRoom: "C",
+        priority: 2,
+        status: "planned",
+        reservedAmount: 5000,
+      }),
+      makeOp({
+        id: "supply:A:D:energy",
+        sourceRoom: "A",
+        targetRoom: "D",
+        priority: 3,
+        status: "planned",
+        reservedAmount: 3000,
+      }),
     ];
-    const carrierInTransit = new Map<string, boolean>([["supply:A:C:energy", false], ["supply:A:D:energy", false]]);
+    const carrierInTransit = new Map<string, boolean>([
+      ["supply:A:C:energy", false],
+      ["supply:A:D:energy", false],
+    ]);
 
     const result = attemptPreemption(ops, 7000, 0, carrierInTransit);
     expect(result.preemptedOps.length).toBe(2);

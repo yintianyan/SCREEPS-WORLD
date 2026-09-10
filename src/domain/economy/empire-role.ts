@@ -74,12 +74,7 @@ export const ROLE_CHARACTERISTICS: Record<EmpireRoomRole, RoleCharacteristic> = 
       "远矿运营 sponsor",
       "战争动员的后勤基地",
     ],
-    prerequisites: [
-      "RCL ≥ 6",
-      "有 storage",
-      "colonyState = normal",
-      "净流为正且稳定",
-    ],
+    prerequisites: ["RCL ≥ 6", "有 storage", "colonyState = normal", "净流为正且稳定"],
     economicBehavior: {
       priorityHauler: false,
       priorityProductionBudget: true,
@@ -93,11 +88,7 @@ export const ROLE_CHARACTERISTICS: Record<EmpireRoomRole, RoleCharacteristic> = 
   production: {
     role: "production",
     description: "产能中心 — 高效率 + 高 source 数的产出型房间",
-    responsibilities: [
-      "最大化能量产出",
-      "为帝国提供净能量盈余",
-      "支持 CORE 房间的调拨需求",
-    ],
+    responsibilities: ["最大化能量产出", "为帝国提供净能量盈余", "支持 CORE 房间的调拨需求"],
     prerequisites: [
       "RCL ≥ 4",
       "有 storage",
@@ -117,11 +108,7 @@ export const ROLE_CHARACTERISTICS: Record<EmpireRoomRole, RoleCharacteristic> = 
   support: {
     role: "support",
     description: "物流枢纽 — 地理中心或调拨路径交汇处的中继房间",
-    responsibilities: [
-      "作为跨房调拨的中继节点",
-      "承担 terminal 转运",
-      "降低帝国平均运输成本",
-    ],
+    responsibilities: ["作为跨房调拨的中继节点", "承担 terminal 转运", "降低帝国平均运输成本"],
     prerequisites: [
       "有 terminal（或 RCL ≥ 6 可建 terminal）",
       "位于帝国地理中心或多房之间",
@@ -140,16 +127,8 @@ export const ROLE_CHARACTERISTICS: Record<EmpireRoomRole, RoleCharacteristic> = 
   remote: {
     role: "remote",
     description: "远矿基地 — 以远矿产出为主要经济来源的房间",
-    responsibilities: [
-      "运营远矿网络",
-      "将远矿能量汇入帝国经济",
-      "扩展帝国资源触达范围",
-    ],
-    prerequisites: [
-      "有活跃远矿运营（remoteOps ≥ 1）",
-      "远矿净收益为正",
-      "colonyState = normal",
-    ],
+    responsibilities: ["运营远矿网络", "将远矿能量汇入帝国经济", "扩展帝国资源触达范围"],
+    prerequisites: ["有活跃远矿运营（remoteOps ≥ 1）", "远矿净收益为正", "colonyState = normal"],
     economicBehavior: {
       priorityHauler: true,
       priorityProductionBudget: false,
@@ -201,10 +180,14 @@ export function isLogisticsHubRole(role: EmpireRoomRole): boolean {
  */
 export function roleToCode(role: EmpireRoomRole): string {
   switch (role) {
-    case "core": return "C";
-    case "production": return "P";
-    case "support": return "S";
-    case "remote": return "R";
+    case "core":
+      return "C";
+    case "production":
+      return "P";
+    case "support":
+      return "S";
+    case "remote":
+      return "R";
   }
 }
 
@@ -215,10 +198,15 @@ export function roleToCode(role: EmpireRoomRole): string {
 export function codeToRole(code: string | undefined): EmpireRoomRole | undefined {
   if (!code) return undefined;
   switch (code) {
-    case "C": return "core";
-    case "P": return "production";
-    case "S": return "support";
-    case "R": return "remote";
-    default: return undefined;
+    case "C":
+      return "core";
+    case "P":
+      return "production";
+    case "S":
+      return "support";
+    case "R":
+      return "remote";
+    default:
+      return undefined;
   }
 }

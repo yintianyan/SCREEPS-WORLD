@@ -21,18 +21,25 @@ describe("E2E-026 site quota 极限注入", () => {
     });
   }, 120000);
 
-  afterAll(async () => { await runner.teardown(); });
+  afterAll(async () => {
+    await runner.teardown();
+  });
 
   it("双房各 20 队列任务 → 全局实际 site 数 ≤ maxGlobalSites", async () => {
     // 双房 buildQueue 各预置 20 个 queued 任务（over-quota 注入，console 写 Memory）。
-    const mkQueue = (room: string) => JSON.stringify(
-      Array.from({ length: 20 }, (_, i) => ({
-        key: `ext.q${i}.${room}`,
-        pos: { x: 20 + (i % 5) * 2, y: 20 + Math.floor(i / 5) * 2, roomName: room },
-        structureType: "extension", priority: 2, state: "queued",
-        attempts: 0, retryAt: 0, queuedAt: 0,
-      })),
-    );
+    const mkQueue = (room: string) =>
+      JSON.stringify(
+        Array.from({ length: 20 }, (_, i) => ({
+          key: `ext.q${i}.${room}`,
+          pos: { x: 20 + (i % 5) * 2, y: 20 + Math.floor(i / 5) * 2, roomName: room },
+          structureType: "extension",
+          priority: 2,
+          state: "queued",
+          attempts: 0,
+          retryAt: 0,
+          queuedAt: 0,
+        })),
+      );
     for (const room of ["W0N1", "W0N2"]) {
       await runner.bot.sendConsole(
         `Memory.rooms["${room}"].buildQueue = ${mkQueue(room)}; console.log("QSEEDED ${room}=" + Memory.rooms["${room}"].buildQueue.length)`,
@@ -42,7 +49,7 @@ describe("E2E-026 site quota 极限注入", () => {
     let maxSites = 0;
     for (let i = 0; i < 6; i++) {
       const snaps = await runner.runTicks(500);
-      errorsSeen += snaps.flatMap((s) => s.consoleLogs).filter(isJsError).length;
+      errorsSeen += snaps.flatMap(s => s.consoleLogs).filter(isJsError).length;
       const last = snaps.at(-1)!;
       const raw = last.rawMemory as any;
       let sites = 0;

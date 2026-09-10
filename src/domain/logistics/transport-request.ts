@@ -60,14 +60,7 @@ export function isActiveRequest(status: TransportStatus): boolean {
  * 运输端点类型。
  */
 export type EndpointType =
-  | "storage"
-  | "container"
-  | "terminal"
-  | "spawn"
-  | "extension"
-  | "tower"
-  | "lab"
-  | "factory";
+  "storage" | "container" | "terminal" | "spawn" | "extension" | "tower" | "lab" | "factory";
 
 /**
  * 运输端点（源或目标）。
@@ -251,7 +244,9 @@ export function remainingAmount(req: TransportRequestV2, deliveredAmount: number
  * 过滤出活跃 Request（非终态）。
  * 纯函数。
  */
-export function filterActiveRequests(requests: readonly TransportRequestV2[]): TransportRequestV2[] {
+export function filterActiveRequests(
+  requests: readonly TransportRequestV2[],
+): TransportRequestV2[] {
   return requests.filter(r => isActiveRequest(r.status));
 }
 
@@ -259,7 +254,9 @@ export function filterActiveRequests(requests: readonly TransportRequestV2[]): T
  * 过滤出可归档的终态 Request。
  * 纯函数。
  */
-export function filterTerminalRequests(requests: readonly TransportRequestV2[]): TransportRequestV2[] {
+export function filterTerminalRequests(
+  requests: readonly TransportRequestV2[],
+): TransportRequestV2[] {
   return requests.filter(r => isTerminal(r.status));
 }
 
@@ -341,62 +338,100 @@ export interface TransportRequestSnapshot {
 /** Endpoint type 编码。 */
 function encodeEndpointType(type: EndpointType): string {
   switch (type) {
-    case "storage": return "S";
-    case "container": return "C";
-    case "terminal": return "T";
-    case "spawn": return "W";
-    case "extension": return "E";
-    case "tower": return "R";
-    case "lab": return "L";
-    case "factory": return "F";
+    case "storage":
+      return "S";
+    case "container":
+      return "C";
+    case "terminal":
+      return "T";
+    case "spawn":
+      return "W";
+    case "extension":
+      return "E";
+    case "tower":
+      return "R";
+    case "lab":
+      return "L";
+    case "factory":
+      return "F";
   }
 }
 
 /** Endpoint type 解码。 */
 function decodeEndpointType(code: string): EndpointType {
   switch (code) {
-    case "S": return "storage";
-    case "C": return "container";
-    case "T": return "terminal";
-    case "W": return "spawn";
-    case "E": return "extension";
-    case "R": return "tower";
-    case "L": return "lab";
-    case "F": return "factory";
-    default: return "storage";
+    case "S":
+      return "storage";
+    case "C":
+      return "container";
+    case "T":
+      return "terminal";
+    case "W":
+      return "spawn";
+    case "E":
+      return "extension";
+    case "R":
+      return "tower";
+    case "L":
+      return "lab";
+    case "F":
+      return "factory";
+    default:
+      return "storage";
   }
 }
 
 /** TransportStatus 编码。 */
 function encodeStatus(status: TransportStatus): string {
   switch (status) {
-    case "pending": return "P";
-    case "planned": return "L";
-    case "assigned": return "A";
-    case "in_transit": return "T";
-    case "delivering": return "D";
-    case "delivered": return "X";
-    case "partial": return "R";
-    case "blocked": return "B";
-    case "failed": return "F";
-    case "cancelled": return "C";
+    case "pending":
+      return "P";
+    case "planned":
+      return "L";
+    case "assigned":
+      return "A";
+    case "in_transit":
+      return "T";
+    case "delivering":
+      return "D";
+    case "delivered":
+      return "X";
+    case "partial":
+      return "R";
+    case "blocked":
+      return "B";
+    case "failed":
+      return "F";
+    case "cancelled":
+      return "C";
   }
 }
 
 /** TransportStatus 解码。 */
 function decodeStatus(code: string): TransportStatus {
   switch (code) {
-    case "P": return "pending";
-    case "L": return "planned";
-    case "A": return "assigned";
-    case "T": return "in_transit";
-    case "D": return "delivering";
-    case "X": return "delivered";
-    case "R": return "partial";
-    case "B": return "blocked";
-    case "F": return "failed";
-    case "C": return "cancelled";
-    default: return "pending";
+    case "P":
+      return "pending";
+    case "L":
+      return "planned";
+    case "A":
+      return "assigned";
+    case "T":
+      return "in_transit";
+    case "D":
+      return "delivering";
+    case "X":
+      return "delivered";
+    case "R":
+      return "partial";
+    case "B":
+      return "blocked";
+    case "F":
+      return "failed";
+    case "C":
+      return "cancelled";
+    default:
+      return "pending";
   }
 }
 
@@ -463,7 +498,9 @@ export function deserializeRequest(s: TransportRequestSnapshot): TransportReques
  * 批量序列化。
  * 纯函数。
  */
-export function serializeRequests(requests: readonly TransportRequestV2[]): TransportRequestSnapshot[] {
+export function serializeRequests(
+  requests: readonly TransportRequestV2[],
+): TransportRequestSnapshot[] {
   return requests.map(serializeRequest);
 }
 
@@ -471,6 +508,8 @@ export function serializeRequests(requests: readonly TransportRequestV2[]): Tran
  * 批量反序列化。
  * 纯函数。
  */
-export function deserializeRequests(snapshots: readonly TransportRequestSnapshot[]): TransportRequestV2[] {
+export function deserializeRequests(
+  snapshots: readonly TransportRequestSnapshot[],
+): TransportRequestV2[] {
   return snapshots.map(deserializeRequest);
 }

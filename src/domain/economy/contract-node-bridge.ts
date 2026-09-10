@@ -44,9 +44,7 @@ export type UnifiedDemandNode = DemandNode | ContractDemandNode;
  * 判断 SupplyNode 是否由 Contract 驱动。
  * 纯函数（类型守卫）。
  */
-export function isContractSupplyNode(
-  node: UnifiedSupplyNode,
-): node is ContractSupplyNode {
+export function isContractSupplyNode(node: UnifiedSupplyNode): node is ContractSupplyNode {
   return (node as ContractSupplyNode).contractDriven === true;
 }
 
@@ -54,9 +52,7 @@ export function isContractSupplyNode(
  * 判断 DemandNode 是否由 Contract 驱动。
  * 纯函数（类型守卫）。
  */
-export function isContractDemandNode(
-  node: UnifiedDemandNode,
-): node is ContractDemandNode {
+export function isContractDemandNode(node: UnifiedDemandNode): node is ContractDemandNode {
   return (node as ContractDemandNode).contractDriven === true;
 }
 
@@ -122,10 +118,7 @@ export function bridgeToSupplyNode(
 
   const cycleAmount = computeCycleAmount(contract, intervalTicks);
   const safety = Math.max(producer.storageCapacity * 0.2, contract.minimumReserve);
-  const transferable = Math.max(0, Math.min(
-    cycleAmount,
-    producer.transferable,
-  ));
+  const transferable = Math.max(0, Math.min(cycleAmount, producer.transferable));
 
   if (transferable <= 0) return undefined;
 
@@ -324,9 +317,13 @@ export function mergeDemandNodes(
  */
 function criticalityToPriority(c: Criticality): OperationPriority {
   switch (c) {
-    case "critical": return 0;
-    case "high": return 1;
-    case "normal": return 2;
-    case "low": return 3;
+    case "critical":
+      return 0;
+    case "high":
+      return 1;
+    case "normal":
+      return 2;
+    case "low":
+      return 3;
   }
 }

@@ -174,10 +174,14 @@ export function sampleCpu(
 ): CpuSample {
   const cpu = Game.cpu.getUsed();
   const bucket = Game.cpu.bucket ?? 0;
-  const tierRank = budget.tier === "healthy" ? 0
-    : budget.tier === "guarded" ? 1
-    : budget.tier === "conserve" ? 2
-    : 3;
+  const tierRank =
+    budget.tier === "healthy"
+      ? 0
+      : budget.tier === "guarded"
+        ? 1
+        : budget.tier === "conserve"
+          ? 2
+          : 3;
 
   const sys = Object.entries(telemetry.systemCpu)
     .sort((a, b) => b[1] - a[1])
@@ -234,11 +238,16 @@ export function sampleEconomy(
     controllerContainerEnergy?: number;
   },
 ): EconomySample {
-  const phaseRank = phase.phase === "bootstrap" ? 0
-    : phase.phase === "growth" ? 1
-    : phase.phase === "crisis" ? 2
-    : phase.phase === "recovery" ? 3
-    : 4; // steady
+  const phaseRank =
+    phase.phase === "bootstrap"
+      ? 0
+      : phase.phase === "growth"
+        ? 1
+        : phase.phase === "crisis"
+          ? 2
+          : phase.phase === "recovery"
+            ? 3
+            : 4; // steady
 
   return {
     t: tick,

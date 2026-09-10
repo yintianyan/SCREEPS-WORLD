@@ -297,7 +297,7 @@ declare global {
       complete: boolean;
     };
     /** Builder pressure 迟滞状态（TD-016）：进入收缩 pressure > 0.35，退出 ≤ 0.25，带内保持不变。 */
-    builderPressureState?: 'full' | 'shrinking';
+    builderPressureState?: "full" | "shrinking";
     /**
      * Distributor 扩编需求首次出现 tick：需求持续超 distributorScaleUpDelay
      * 才允许扩编，回落即清除 — 防 fillTargets 尖峰催生过量 distributor。
@@ -340,10 +340,10 @@ declare global {
 
   interface KernelMemory {
     tier?: CpuTier;
-      /** 最近一次 CpuTier 变更 tick（驻留时长观测）。 */
-      tierChangedAt?: number;
-      /** 最近一次 posture 变更 tick（决策质量观测）。 */
-      postureChangedAt?: number;
+    /** 最近一次 CpuTier 变更 tick（驻留时长观测）。 */
+    tierChangedAt?: number;
+    /** 最近一次 posture 变更 tick（决策质量观测）。 */
+    postureChangedAt?: number;
     recoveryTicks?: number;
     skipReasons?: Record<string, number>;
     /** B3-F09: 上一 500-tick 窗口的 skipReasons 快照（滑动窗口保留）。 */
@@ -502,16 +502,19 @@ declare global {
      * （字段见 LayoutMetrics）。仅变化时写入；消费方：deadAssetRate>0.5 触发拆改评估、
      * linkUtilization<0.3 触发 link 审查、defenseWallRatio<0.7 防线弱点过多告警。
      */
-    layoutMetrics?: Record<string, {
-      deadAssetRate: number;
-      linkUtilization: number;
-      dismantleCount: number;
-      mvcGapCount: number;
-      linkConstrained: boolean;
-      defenseWallRatio: number;
-      defenseAlgoVersion: string;
-      defenseRampartWeakPoints: number;
-    }>;
+    layoutMetrics?: Record<
+      string,
+      {
+        deadAssetRate: number;
+        linkUtilization: number;
+        dismantleCount: number;
+        mvcGapCount: number;
+        linkConstrained: boolean;
+        defenseWallRatio: number;
+        defenseAlgoVersion: string;
+        defenseRampartWeakPoints: number;
+      }
+    >;
     /**
      * 帝国战争计划（v26+，war-planner 写入；v27 R4 扩展）：仅 war 姿态时存在，
      * 同一时刻至多一个攻击编队（不并行开多线）；姿态退出/目标失效/战损止损时
@@ -631,7 +634,12 @@ declare global {
     /** 本次 boot 首个 tick（maintainMemory 记录）—— E2 相对宽限基准。 */
     bootTick?: number;
     /** 期望自检结果（kernel 写）：最近一次核验的违例清单。 */
-    expectations?: { tick: number; violations: string[]; e3?: Record<string, unknown>; memoryHistory?: { tick: number; bytes: number; roomCount: number }[] };
+    expectations?: {
+      tick: number;
+      violations: string[];
+      e3?: Record<string, unknown>;
+      memoryHistory?: { tick: number; bytes: number; roomCount: number }[];
+    };
     /** P3 饥饿旁路截止 tick（expectations E2 触发，scheduler 消费）。运行时字段无 schema 变更。 */
     p3StarveBypassUntil?: number;
     /**
@@ -790,16 +798,16 @@ declare global {
 
   /** A3.3 扩展：扩张执行状态机的完整状态集合。 */
   type ExpansionExecutionState =
-    | "validating"        // 执行 Gate 验证中
-    | "preparing"         // 预留资源 + 准备 Claimer
-    | "claiming"          // Claimer 出发 + claimController（向后兼容旧 claiming）
-    | "claimed"           // Claim 成功，controller 已拥有
-    | "bootstrapping"     // Pioneer 到达 + 基础设施建设（向后兼容旧 pioneering）
-    | "economic_startup"  // 能量环路建立（harvest + transport + spawn）
-    | "integrating"       // 经济激活 → 帝国集成
-    | "completed"         // 自主运行
-    | "failed"            // 执行失败
-    | "aborted";          // 主动终止
+    | "validating" // 执行 Gate 验证中
+    | "preparing" // 预留资源 + 准备 Claimer
+    | "claiming" // Claimer 出发 + claimController（向后兼容旧 claiming）
+    | "claimed" // Claim 成功，controller 已拥有
+    | "bootstrapping" // Pioneer 到达 + 基础设施建设（向后兼容旧 pioneering）
+    | "economic_startup" // 能量环路建立（harvest + transport + spawn）
+    | "integrating" // 经济激活 → 帝国集成
+    | "completed" // 自主运行
+    | "failed" // 执行失败
+    | "aborted"; // 主动终止
 
   /** A3.2 扩张计划的 Memory 瘦结构（只存 ID/枚举/少量数字/短 key）。 */
   interface ExpansionPlanMemory {
@@ -871,45 +879,45 @@ declare global {
     vr?: string;
   }
 
-/** 策略参数 override 条目（empire 级，非 room 级）。 */
-interface StrategyOverrideEntry {
-/** override 值。 */
-value: number;
-/** 写入 tick（冷却检查用）。 */
-adjustedAt: number;
-/** 建议理由（诊断）。 */
-reason: string;
-}
+  /** 策略参数 override 条目（empire 级，非 room 级）。 */
+  interface StrategyOverrideEntry {
+    /** override 值。 */
+    value: number;
+    /** 写入 tick（冷却检查用）。 */
+    adjustedAt: number;
+    /** 建议理由（诊断）。 */
+    reason: string;
+  }
 
-/** L2 体外建议暂存条目（tuning-intake-system 写入，strategy-reviewer 复核后清空）。 */
-interface IntakePendingEntry {
-/** 经钳制后的建议值。 */
-value: number;
-/** LLM 原始建议值（钳制前，诊断用）。 */
-originalValue: number;
-/** 建议理由。 */
-reason: string;
-/** 摄入 tick。 */
-receivedAt: number;
-}
+  /** L2 体外建议暂存条目（tuning-intake-system 写入，strategy-reviewer 复核后清空）。 */
+  interface IntakePendingEntry {
+    /** 经钳制后的建议值。 */
+    value: number;
+    /** LLM 原始建议值（钳制前，诊断用）。 */
+    originalValue: number;
+    /** 建议理由。 */
+    reason: string;
+    /** 摄入 tick。 */
+    receivedAt: number;
+  }
 
   /** 参数自调优的持久化状态。 */
   interface TuningMemory {
     /** 上次调优 tick。 */
     lastTuned: number;
-  /**
-   * 策略参数 override（empire 级姿态参数，strategy-reviewer 写入）。
-   * key = 参数路径如 "posture.minDwell"，value = StrategyOverrideEntry。
-   * 消费方：empire-strategy.ts 合并到 CONFIG.posture 之上。
-   */
-  strategyOverrides?: Record<string, StrategyOverrideEntry>;
-  /**
-   * L2 体外建议暂存（自进化系统 L2）：tuning-intake-system 从 segment 6 读取
-   * 外部 LLM 建议包，经护栏校验后写入此字段。strategy-reviewer 在 100t 复盘窗口
-   * 复核后清空。不直接消费——需复核通过才写入 strategyOverrides。
-   * key = 参数路径，value = IntakePendingEntry。
-   */
-  intakePending?: Record<string, IntakePendingEntry>;
+    /**
+     * 策略参数 override（empire 级姿态参数，strategy-reviewer 写入）。
+     * key = 参数路径如 "posture.minDwell"，value = StrategyOverrideEntry。
+     * 消费方：empire-strategy.ts 合并到 CONFIG.posture 之上。
+     */
+    strategyOverrides?: Record<string, StrategyOverrideEntry>;
+    /**
+     * L2 体外建议暂存（自进化系统 L2）：tuning-intake-system 从 segment 6 读取
+     * 外部 LLM 建议包，经护栏校验后写入此字段。strategy-reviewer 在 100t 复盘窗口
+     * 复核后清空。不直接消费——需复核通过才写入 strategyOverrides。
+     * key = 参数路径，value = IntakePendingEntry。
+     */
+    intakePending?: Record<string, IntakePendingEntry>;
     /**
      * 生成 rooms 覆盖所基于的 CONFIG.tuning.baselineVersion（P1-I）：tuning-engine
      * 每次评估前比对，不匹配即清空 rooms 覆盖（旧值可能基于过时经济假设）从新基线
@@ -919,44 +927,56 @@ receivedAt: number;
     /** 每房间的调优覆盖值。key = 房间名。 */
     rooms: Record<string, RoomTuningState>;
     /** 每房间最近一次评估的诊断快照（供控制台查看）。key = 房间名。 */
-    lastEval?: Record<string, {
-      tick: number;
-      adjustments: string[];
-      signals: Record<string, number>;
-      skipped?: string;
-      /**
-       * P3 修复（附录 E.2）：verify pass 被跳过时的原因 — 危机/低 bucket 期间外生
-       * 信号不可信，verify 跳过保留 pending。取值 "verify_skipped_crisis" /
-       * "verify_skipped_cpu_tier" / "verify_skipped_rcl"。
-       */
-      verifySkipped?: string;
-      /** 本次评估产生的趋势记录（P1-1 调整置信度）。 */
-      trend?: Record<string, "up" | "down" | "none">;
-      /**
-       * 改进 A：本次评估时 pending 验证中的参数诊断（精简版，控体积；
-       * 完整 preAdjustSignals 在 Memory.kernel.tuning.rooms）。
-       */
-      pendingValidations?: Record<string, {
-        adjustTick: number;
-        expectedDirection: "improve" | "worsen";
-        adjustDirection: "up" | "down";
-        contractBlocked?: boolean;
-      }>;
-      /** 改进 A：本次评估时的冻结参数诊断（精简版）。 */
-      frozenParams?: Record<string, {
-        frozenUntil: number;
-        rollbackCount: number;
-        reason: string;
-      }>;
-      /**
-       * P1 修复（附录 E.2）：人口合同 blocked 参数诊断 — roleCount 持续未达新边界时
-       * 记录 blockedSinceTick，连续 2 个 verifyDelay 窗口仍未达 → 回滚 + 计 1 次回滚。
-       */
-      blockedParams?: Record<string, {
-        blockedSinceTick: number;
-        lastCheckedTick: number;
-      }>;
-    }>;
+    lastEval?: Record<
+      string,
+      {
+        tick: number;
+        adjustments: string[];
+        signals: Record<string, number>;
+        skipped?: string;
+        /**
+         * P3 修复（附录 E.2）：verify pass 被跳过时的原因 — 危机/低 bucket 期间外生
+         * 信号不可信，verify 跳过保留 pending。取值 "verify_skipped_crisis" /
+         * "verify_skipped_cpu_tier" / "verify_skipped_rcl"。
+         */
+        verifySkipped?: string;
+        /** 本次评估产生的趋势记录（P1-1 调整置信度）。 */
+        trend?: Record<string, "up" | "down" | "none">;
+        /**
+         * 改进 A：本次评估时 pending 验证中的参数诊断（精简版，控体积；
+         * 完整 preAdjustSignals 在 Memory.kernel.tuning.rooms）。
+         */
+        pendingValidations?: Record<
+          string,
+          {
+            adjustTick: number;
+            expectedDirection: "improve" | "worsen";
+            adjustDirection: "up" | "down";
+            contractBlocked?: boolean;
+          }
+        >;
+        /** 改进 A：本次评估时的冻结参数诊断（精简版）。 */
+        frozenParams?: Record<
+          string,
+          {
+            frozenUntil: number;
+            rollbackCount: number;
+            reason: string;
+          }
+        >;
+        /**
+         * P1 修复（附录 E.2）：人口合同 blocked 参数诊断 — roleCount 持续未达新边界时
+         * 记录 blockedSinceTick，连续 2 个 verifyDelay 窗口仍未达 → 回滚 + 计 1 次回滚。
+         */
+        blockedParams?: Record<
+          string,
+          {
+            blockedSinceTick: number;
+            lastCheckedTick: number;
+          }
+        >;
+      }
+    >;
   }
 
   /**

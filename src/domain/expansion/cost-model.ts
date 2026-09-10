@@ -97,7 +97,8 @@ export function estimateExpansionCost(
   // 基建
   const infrastructureCost = options.infrastructureBase;
 
-  const totalCost = claimerCost + pioneerCost + spawnCost + travelCost + bootstrapEnergy + infrastructureCost;
+  const totalCost =
+    claimerCost + pioneerCost + spawnCost + travelCost + bootstrapEnergy + infrastructureCost;
 
   const evidence = [
     `claimer=${claimerCost}`,

@@ -54,7 +54,8 @@ describe("intel — computeSealedExits 入口封死判定", () => {
     // 地形墙天然阻断出口，describeExits 不会列出该方向；
     // 即便列出，可通行格无人工墙覆盖 → 不封死（防御性语义）。
     const terrain = (x: number, y: number): number => {
-      void x; void y;
+      void x;
+      void y;
       return 1; // 全地形墙
     };
     expect(computeSealedExits(input({ getTerrain: terrain }))).toEqual([]);
@@ -70,7 +71,11 @@ describe("intel — computeSealedExits 入口封死判定", () => {
     expect(
       computeSealedExits(
         input({
-          artificialWalls: packed([[24, 0], [25, 0], [26, 0]]),
+          artificialWalls: packed([
+            [24, 0],
+            [25, 0],
+            [26, 0],
+          ]),
           getTerrain: terrain,
         }),
       ),
@@ -88,6 +93,8 @@ describe("intel — computeSealedExits 入口封死判定", () => {
     const walls: Array<[number, number]> = [];
     for (let y = 0; y < 50; y++) walls.push([0, y], [1, y], [48, y], [49, y]);
     for (let x = 0; x < 50; x++) walls.push([x, 0], [x, 1], [x, 48], [x, 49]);
-    expect(computeSealedExits(input({ artificialWalls: packed(walls) })).sort()).toEqual([1, 3, 5, 7]);
+    expect(computeSealedExits(input({ artificialWalls: packed(walls) })).sort()).toEqual([
+      1, 3, 5, 7,
+    ]);
   });
 });

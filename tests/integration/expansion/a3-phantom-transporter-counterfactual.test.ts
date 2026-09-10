@@ -24,21 +24,55 @@ function makePlan(over: Partial<ExpansionPlan> = {}): ExpansionPlan {
     reason: "resource",
     priority: "P1",
     candidateScore: 0.75,
-    cost: { roomName: "W5N5", totalCost: 5000, claimerCost: 650, pioneerCost: 1000, spawnCost: 5000, travelCost: 200, infrastructureCost: 500, bootstrapEnergy: 3000, evidence: "" },
-    payback: { roomName: "W5N5", totalCost: 5000, expectedIncomePerTick: 10, paybackTicks: 500, roi: 2.0, worthwhile: true, evidence: "" },
-    risk: { roomName: "W5N5", score: 0.3, level: "LOW", dimensions: { economic: 0.2, operational: 0.1, distance: 0.3, recovery: 0.2, defense: 0.1 }, evidence: "" },
+    cost: {
+      roomName: "W5N5",
+      totalCost: 5000,
+      claimerCost: 650,
+      pioneerCost: 1000,
+      spawnCost: 5000,
+      travelCost: 200,
+      infrastructureCost: 500,
+      bootstrapEnergy: 3000,
+      evidence: "",
+    },
+    payback: {
+      roomName: "W5N5",
+      totalCost: 5000,
+      expectedIncomePerTick: 10,
+      paybackTicks: 500,
+      roi: 2.0,
+      worthwhile: true,
+      evidence: "",
+    },
+    risk: {
+      roomName: "W5N5",
+      score: 0.3,
+      level: "LOW",
+      dimensions: { economic: 0.2, operational: 0.1, distance: 0.3, recovery: 0.2, defense: 0.1 },
+      evidence: "",
+    },
     candidate: {
-      roomName: "W5N5", sponsorRoom: "W1N1", kind: "normal", roomStatus: "normal",
-      sourceCount: 2, mineral: "H",
+      roomName: "W5N5",
+      sponsorRoom: "W1N1",
+      kind: "normal",
+      roomStatus: "normal",
+      sourceCount: 2,
+      mineral: "H",
       terrain: { exitCount: 3, sealedExitCount: 1, wallCount: 0 },
       controller: { hasOwner: false, isMine: false, isHostileReserved: false },
-      pathCost: 100, lastSeen: 1000, distance: 1,
-      neighborRooms: ["W4N5", "W6N5"], score: 0.75,
-      status: "QUALIFIED", discoveredAt: 1000,
+      pathCost: 100,
+      lastSeen: 1000,
+      distance: 1,
+      neighborRooms: ["W4N5", "W6N5"],
+      score: 0.75,
+      status: "QUALIFIED",
+      discoveredAt: 1000,
     },
     status: "WAITING_EXECUTION",
-    createdAt: 1000, updatedAt: 1000,
-    cancelConditions: [], dependencies: [],
+    createdAt: 1000,
+    updatedAt: 1000,
+    cancelConditions: [],
+    dependencies: [],
     explanation: "test plan",
     ...over,
   };
@@ -90,10 +124,12 @@ function makeTransitionInput(over: Partial<StateTransitionInput> = {}): StateTra
 }
 
 // 模拟 expansion-manager 中的 logisticsActive 检查逻辑
-function checkLogisticsActive(creeps: { home: string; role: string }[], targetRoom: string): boolean {
+function checkLogisticsActive(
+  creeps: { home: string; role: string }[],
+  targetRoom: string,
+): boolean {
   return creeps.some(
-    c => c.home === targetRoom &&
-      (c.role === "hauler" || c.role === "distributor"),
+    c => c.home === targetRoom && (c.role === "hauler" || c.role === "distributor"),
   );
 }
 
@@ -119,10 +155,12 @@ describe("CF-1: 需求存在 + 没有 hauler/distributor → logisticsActive=fal
 
 describe("CF-2: 无 hauler/distributor → CP3 不通过", () => {
   it("harvester 存在但无 hauler → CP3 失败，原因为 logistics", () => {
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      harvesterActive: true,
-      transporterActive: false, // 修复后传入的是 logisticsActive=false
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        harvesterActive: true,
+        transporterActive: false, // 修复后传入的是 logisticsActive=false
+      }),
+    );
     expect(r.passed).toBe(false);
     expect(r.failReason).toContain("transporter"); // 字段名仍是 transporterActive
   });
@@ -138,10 +176,12 @@ describe("CF-3: hauler 存在 → CP3 通过", () => {
     const logisticsActive = checkLogisticsActive(creeps, "W5N5");
     expect(logisticsActive).toBe(true);
 
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      harvesterActive: true,
-      transporterActive: logisticsActive,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        harvesterActive: true,
+        transporterActive: logisticsActive,
+      }),
+    );
     expect(r.passed).toBe(true);
   });
 
@@ -150,10 +190,12 @@ describe("CF-3: hauler 存在 → CP3 通过", () => {
     const logisticsActive = checkLogisticsActive(creeps, "W5N5");
     expect(logisticsActive).toBe(true);
 
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      harvesterActive: true,
-      transporterActive: logisticsActive,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        harvesterActive: true,
+        transporterActive: logisticsActive,
+      }),
+    );
     expect(r.passed).toBe(true);
   });
 });
@@ -175,19 +217,23 @@ describe("CF-4: hauler 存在但不在目标房 → logisticsActive=false", () =
 
 describe("CF-5: hauler alive + active → economic activation 逐步提高", () => {
   it("hauler 存在 + 能量净流为正 → economic activation progress > 0", () => {
-    const r = evaluateEconomicActivation(makeEconomicInput({
-      hasTransporter: true, // 修复后传入 logisticsActive=true
-      consecutivePositiveTicks: 0,
-    }));
+    const r = evaluateEconomicActivation(
+      makeEconomicInput({
+        hasTransporter: true, // 修复后传入 logisticsActive=true
+        consecutivePositiveTicks: 0,
+      }),
+    );
     expect(r.progress).toBeGreaterThan(0);
     expect(r.criteria.energyLoop.passed).toBe(true);
   });
 
   it("hauler 存在 + 500 tick 净流为正 → economic activation = true", () => {
-    const r = evaluateEconomicActivation(makeEconomicInput({
-      hasTransporter: true,
-      consecutivePositiveTicks: 500,
-    }));
+    const r = evaluateEconomicActivation(
+      makeEconomicInput({
+        hasTransporter: true,
+        consecutivePositiveTicks: 500,
+      }),
+    );
     expect(r.activated).toBe(true);
   });
 });
@@ -206,9 +252,11 @@ describe("CF-6: hauler 死亡 → logisticsActive 恢复 false → CP3 失败", 
     expect(checkLogisticsActive(creeps, "W5N5")).toBe(false);
 
     // CP3 回到失败状态
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      transporterActive: false,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        transporterActive: false,
+      }),
+    );
     expect(r.passed).toBe(false);
   });
 });
@@ -241,9 +289,11 @@ describe("CF-8: hauler 在 spawn 队列但未孵化 → logisticsActive=false", 
     expect(checkLogisticsActive(creeps, "W5N5")).toBe(false);
 
     // CP3 不通过
-    const r = evaluateCheckpoint(makeCheckpointInput({
-      transporterActive: false,
-    }));
+    const r = evaluateCheckpoint(
+      makeCheckpointInput({
+        transporterActive: false,
+      }),
+    );
     expect(r.passed).toBe(false);
   });
 });
@@ -255,8 +305,8 @@ describe("CF-8: hauler 在 spawn 队列但未孵化 → logisticsActive=false", 
 describe("CF-9: multi-colony → hauler 不跨 colony 错计", () => {
   it("Colony A 的 hauler 不计入 Colony B", () => {
     const creeps = [
-      { home: "W5N5", role: "hauler" },   // Colony A
-      { home: "W6N5", role: "hauler" },   // Colony B
+      { home: "W5N5", role: "hauler" }, // Colony A
+      { home: "W6N5", role: "hauler" }, // Colony B
     ];
     expect(checkLogisticsActive(creeps, "W5N5")).toBe(true);
     expect(checkLogisticsActive(creeps, "W6N5")).toBe(true);
@@ -272,18 +322,22 @@ describe("CF-9: multi-colony → hauler 不跨 colony 错计", () => {
 
 describe("CF-10: bootstrap timeout → 不绕过 readiness", () => {
   it("无 hauler → economic activation 不通过 → 不进入 completed", () => {
-    const r = evaluateEconomicActivation(makeEconomicInput({
-      hasTransporter: false,
-      consecutivePositiveTicks: 500,
-    }));
+    const r = evaluateEconomicActivation(
+      makeEconomicInput({
+        hasTransporter: false,
+        consecutivePositiveTicks: 500,
+      }),
+    );
     expect(r.activated).toBe(false);
 
     // 状态机不应进入 COMPLETED
-    const tr = transitionExecutionState(makeTransitionInput({
-      currentState: "INTEGRATING",
-      economicallyActivated: false,
-      empireIntegrated: true,
-    }));
+    const tr = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "INTEGRATING",
+        economicallyActivated: false,
+        empireIntegrated: true,
+      }),
+    );
     expect(tr.newState).not.toBe("COMPLETED");
   });
 });
@@ -294,14 +348,18 @@ describe("CF-10: bootstrap timeout → 不绕过 readiness", () => {
 
 describe("CF-11: hauler trend improving → progress 增加", () => {
   it("从无 hauler 到有 hauler → economic activation progress 增加", () => {
-    const before = evaluateEconomicActivation(makeEconomicInput({
-      hasTransporter: false,
-      consecutivePositiveTicks: 0,
-    }));
-    const after = evaluateEconomicActivation(makeEconomicInput({
-      hasTransporter: true,
-      consecutivePositiveTicks: 100,
-    }));
+    const before = evaluateEconomicActivation(
+      makeEconomicInput({
+        hasTransporter: false,
+        consecutivePositiveTicks: 0,
+      }),
+    );
+    const after = evaluateEconomicActivation(
+      makeEconomicInput({
+        hasTransporter: true,
+        consecutivePositiveTicks: 100,
+      }),
+    );
     expect(after.progress).toBeGreaterThan(before.progress);
   });
 });
@@ -312,17 +370,21 @@ describe("CF-11: hauler trend improving → progress 增加", () => {
 
 describe("CF-12: hauler trend degrading → 重新 demand", () => {
   it("hauler 死亡 → economic activation 回退", () => {
-    const before = evaluateEconomicActivation(makeEconomicInput({
-      hasTransporter: true,
-      consecutivePositiveTicks: 500,
-    }));
+    const before = evaluateEconomicActivation(
+      makeEconomicInput({
+        hasTransporter: true,
+        consecutivePositiveTicks: 500,
+      }),
+    );
     expect(before.activated).toBe(true);
 
     // hauler 死亡
-    const after = evaluateEconomicActivation(makeEconomicInput({
-      hasTransporter: false,
-      consecutivePositiveTicks: 500, // 仍然连续 500 tick（历史值）
-    }));
+    const after = evaluateEconomicActivation(
+      makeEconomicInput({
+        hasTransporter: false,
+        consecutivePositiveTicks: 500, // 仍然连续 500 tick（历史值）
+      }),
+    );
     expect(after.activated).toBe(false);
     expect(after.criteria.energyLoop.passed).toBe(false);
   });
@@ -339,9 +401,11 @@ describe("Recovery: hauler 死亡 → demand 恢复 → CP3 回退 → 重新孵
     let logisticsActive = checkLogisticsActive(creeps, "W5N5");
     expect(logisticsActive).toBe(true);
 
-    let cp3 = evaluateCheckpoint(makeCheckpointInput({
-      transporterActive: logisticsActive,
-    }));
+    let cp3 = evaluateCheckpoint(
+      makeCheckpointInput({
+        transporterActive: logisticsActive,
+      }),
+    );
     expect(cp3.passed).toBe(true);
 
     // hauler 死亡
@@ -349,9 +413,11 @@ describe("Recovery: hauler 死亡 → demand 恢复 → CP3 回退 → 重新孵
     logisticsActive = checkLogisticsActive(creeps, "W5N5");
     expect(logisticsActive).toBe(false);
 
-    cp3 = evaluateCheckpoint(makeCheckpointInput({
-      transporterActive: logisticsActive,
-    }));
+    cp3 = evaluateCheckpoint(
+      makeCheckpointInput({
+        transporterActive: logisticsActive,
+      }),
+    );
     expect(cp3.passed).toBe(false);
 
     // spawn-manager 通过 evaluateDemand 重新产生 hauler demand
@@ -364,9 +430,11 @@ describe("Recovery: hauler 死亡 → demand 恢复 → CP3 回退 → 重新孵
     logisticsActive = checkLogisticsActive(creeps, "W5N5");
     expect(logisticsActive).toBe(true);
 
-    cp3 = evaluateCheckpoint(makeCheckpointInput({
-      transporterActive: logisticsActive,
-    }));
+    cp3 = evaluateCheckpoint(
+      makeCheckpointInput({
+        transporterActive: logisticsActive,
+      }),
+    );
     expect(cp3.passed).toBe(true);
   });
 });
@@ -378,24 +446,28 @@ describe("Recovery: hauler 死亡 → demand 恢复 → CP3 回退 → 重新孵
 describe("Multi-Colony: Colony A + Colony B 无 cross-colony contamination", () => {
   it("两个殖民地各自的 hauler 不互相计入", () => {
     const creeps = [
-      { home: "W5N5", role: "hauler" },   // Colony A
-      { home: "W6N5", role: "hauler" },   // Colony B
+      { home: "W5N5", role: "hauler" }, // Colony A
+      { home: "W6N5", role: "hauler" }, // Colony B
       { home: "W5N5", role: "harvester" }, // Colony A harvester
       { home: "W6N5", role: "harvester" }, // Colony B harvester
     ];
 
     // Colony A 检查
     const aLogistics = checkLogisticsActive(creeps, "W5N5");
-    const aCp3 = evaluateCheckpoint(makeCheckpointInput({
-      transporterActive: aLogistics,
-    }));
+    const aCp3 = evaluateCheckpoint(
+      makeCheckpointInput({
+        transporterActive: aLogistics,
+      }),
+    );
     expect(aCp3.passed).toBe(true);
 
     // Colony B 检查
     const bLogistics = checkLogisticsActive(creeps, "W6N5");
-    const bCp3 = evaluateCheckpoint(makeCheckpointInput({
-      transporterActive: bLogistics,
-    }));
+    const bCp3 = evaluateCheckpoint(
+      makeCheckpointInput({
+        transporterActive: bLogistics,
+      }),
+    );
     expect(bCp3.passed).toBe(true);
 
     // Colony C（不存在）检查
@@ -457,12 +529,14 @@ describe("INV-4 Assignment Truth: 只有绑定目标 room 的 hauler 才计入",
 
 describe("INV-5 Contribution Truth: 存在 hauler ≠ logistics ready，还需 netFlow > 0", () => {
   it("有 hauler 但净流为负 → 不激活", () => {
-    const r = evaluateEconomicActivation(makeEconomicInput({
-      hasTransporter: true,
-      energyProduction: 5,
-      energyConsumption: 10,
-      consecutivePositiveTicks: 0,
-    }));
+    const r = evaluateEconomicActivation(
+      makeEconomicInput({
+        hasTransporter: true,
+        energyProduction: 5,
+        energyConsumption: 10,
+        consecutivePositiveTicks: 0,
+      }),
+    );
     expect(r.activated).toBe(false);
     expect(r.criteria.netPositive.passed).toBe(false);
   });
@@ -484,17 +558,21 @@ describe("INV-6 Recovery Truth: hauler 死亡 → demand → spawn → replaceme
 
 describe("INV-7 Expansion Truth: 不得因 phantom transporter 提前进入 COMPLETED", () => {
   it("无 hauler → economic activation 不通过 → 不进入 COMPLETED", () => {
-    const econ = evaluateEconomicActivation(makeEconomicInput({
-      hasTransporter: false,
-      consecutivePositiveTicks: 500,
-    }));
+    const econ = evaluateEconomicActivation(
+      makeEconomicInput({
+        hasTransporter: false,
+        consecutivePositiveTicks: 500,
+      }),
+    );
     expect(econ.activated).toBe(false);
 
-    const tr = transitionExecutionState(makeTransitionInput({
-      currentState: "INTEGRATING",
-      economicallyActivated: econ.activated,
-      empireIntegrated: true,
-    }));
+    const tr = transitionExecutionState(
+      makeTransitionInput({
+        currentState: "INTEGRATING",
+        economicallyActivated: econ.activated,
+        empireIntegrated: true,
+      }),
+    );
     expect(tr.newState).not.toBe("COMPLETED");
   });
 });

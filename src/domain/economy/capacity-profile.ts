@@ -99,20 +99,19 @@ export function buildRoomCapacityProfile(
   const nominalCapacity = sourceCount * NOMINAL_INCOME_PER_SOURCE;
   const efficiency = profile.efficiency;
   const effectiveCapacity = profile.estimatedIncome;
-  const utilization = nominalCapacity > 0
-    ? Math.max(0, Math.min(1, effectiveCapacity / nominalCapacity))
-    : 0;
+  const utilization =
+    nominalCapacity > 0 ? Math.max(0, Math.min(1, effectiveCapacity / nominalCapacity)) : 0;
 
   const storageCapacity = profile.storageCapacity;
   const totalReserveCapacity = storageCapacity + terminalCapacity + linkCapacity;
-  const reserveUtilization = totalReserveCapacity > 0
-    ? Math.max(0, Math.min(1, profile.contractReserve / totalReserveCapacity))
-    : 0;
+  const reserveUtilization =
+    totalReserveCapacity > 0
+      ? Math.max(0, Math.min(1, profile.contractReserve / totalReserveCapacity))
+      : 0;
 
   const spawnCapacity = profile.energyCapacityAvailable;
-  const spawnUtilization = spawnCapacity > 0
-    ? Math.max(0, Math.min(1, profile.energyAvailable / spawnCapacity))
-    : 0;
+  const spawnUtilization =
+    spawnCapacity > 0 ? Math.max(0, Math.min(1, profile.energyAvailable / spawnCapacity)) : 0;
 
   const logisticsThroughput = Math.round((haulerCount * referenceCarry) / 50);
   const constructionThroughput = builderCount * 50;

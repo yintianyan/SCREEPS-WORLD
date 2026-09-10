@@ -69,68 +69,61 @@ describe("E2E-017 多房 soak — 双自有房 + 故障隔离", () => {
     await runner.teardown();
   });
 
-  it(
-    "双房并行运转 + 一房全灭后隔离恢复 + Memory 有界",
-    async () => {
-      // ── 阶段 1：双房并行暖机 2000 tick ──
-      let warmSnap = (await runner.runTicks(2000)).at(-1)!;
-      let byHome = creepsByHome(warmSnap.rawMemory);
-      console.log(
-        `[soak-evidence] multi-room warm: tick=${warmSnap.tick} byHome=${JSON.stringify(byHome)} ` +
-          `queues=${countSites(warmSnap.rawMemory)}`,
-      );
+  it("双房并行运转 + 一房全灭后隔离恢复 + Memory 有界", async () => {
+    // ── 阶段 1：双房并行暖机 2000 tick ──
+    const warmSnap = (await runner.runTicks(2000)).at(-1)!;
+    let byHome = creepsByHome(warmSnap.rawMemory);
+    console.log(
+      `[soak-evidence] multi-room warm: tick=${warmSnap.tick} byHome=${JSON.stringify(byHome)} ` +
+        `queues=${countSites(warmSnap.rawMemory)}`,
+    );
 
-      // ── 阶段 2：故障注入 — 殖民房编队全灭（母房不动）──
-      const homeBefore = byHome[HOME] ?? 0;
-      await injectWipeCreeps(runner, COLONY);
+    // ── 阶段 2：故障注入 — 殖民房编队全灭（母房不动）──
+    const homeBefore = byHome[HOME] ?? 0;
+    await injectWipeCreeps(runner, COLONY);
 
-      // 恢复窗 3000 tick：殖民房灾后恢复孵化，母房照常运转。
-      let recovered = false;
-      let minColonyAfter = Infinity;
-      let minHomeDuring = Infinity;
-      for (let i = 0; i < 6; i++) {
-        const snaps = await runner.runTicks(500);
-        const last = snaps.at(-1)!;
-        errorsSeen += snaps.flatMap((s) => s.consoleLogs).filter(isJsError).length;
-        byHome = creepsByHome(last.rawMemory);
-        const colony = byHome[COLONY] ?? 0;
-        const home = byHome[HOME] ?? 0;
-        minColonyAfter = Math.min(minColonyAfter, colony);
-        minHomeDuring = Math.min(minHomeDuring, home);
-        if (colony >= 3) recovered = true;
-        if (i === 5) {
-          console.log(
-            `[soak-evidence] multi-room inject: tick=${last.tick} byHome=${JSON.stringify(byHome)} ` +
-              `recovered=${recovered}`,
-          );
-        }
+    // 恢复窗 3000 tick：殖民房灾后恢复孵化，母房照常运转。
+    let recovered = false;
+    let minColonyAfter = Infinity;
+    let minHomeDuring = Infinity;
+    for (let i = 0; i < 6; i++) {
+      const snaps = await runner.runTicks(500);
+      const last = snaps.at(-1)!;
+      errorsSeen += snaps.flatMap(s => s.consoleLogs).filter(isJsError).length;
+      byHome = creepsByHome(last.rawMemory);
+      const colony = byHome[COLONY] ?? 0;
+      const home = byHome[HOME] ?? 0;
+      minColonyAfter = Math.min(minColonyAfter, colony);
+      minHomeDuring = Math.min(minHomeDuring, home);
+      if (colony >= 3) recovered = true;
+      if (i === 5) {
+        console.log(
+          `[soak-evidence] multi-room inject: tick=${last.tick} byHome=${JSON.stringify(byHome)} ` +
+            `recovered=${recovered}`,
+        );
       }
+    }
 
-      // ── 断言 ──
-      // 母房在注入前确有编队（前置有效性）。
-      expect(homeBefore, "暖机后母房应有编队").toBeGreaterThanOrEqual(1);
-      // 故障隔离：母房在殖民房全灭期间不塌方。
-      expect(
-        minHomeDuring,
-        `殖民房全灭期间母房编队塌方: ${JSON.stringify(byHome)}`,
-      ).toBeGreaterThanOrEqual(1);
-      // 殖民房灾后恢复（P0 最小产能回来）。
-      expect(
-        recovered,
-        `殖民房全灭后未恢复孵化（colony=${minColonyAfter}）`,
-      ).toBe(true);
+    // ── 断言 ──
+    // 母房在注入前确有编队（前置有效性）。
+    expect(homeBefore, "暖机后母房应有编队").toBeGreaterThanOrEqual(1);
+    // 故障隔离：母房在殖民房全灭期间不塌方。
+    expect(
+      minHomeDuring,
+      `殖民房全灭期间母房编队塌方: ${JSON.stringify(byHome)}`,
+    ).toBeGreaterThanOrEqual(1);
+    // 殖民房灾后恢复（P0 最小产能回来）。
+    expect(recovered, `殖民房全灭后未恢复孵化（colony=${minColonyAfter}）`).toBe(true);
 
-      // Memory 有界 + 全程无 JS 错误。
-      const mem = await runner.bot.getMemory();
-      const memSize = JSON.stringify(mem).length;
-      expect(memSize, `多房 soak Memory 过大: ${memSize} bytes`).toBeLessThan(500_000);
-      expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);
+    // Memory 有界 + 全程无 JS 错误。
+    const mem = await runner.bot.getMemory();
+    const memSize = JSON.stringify(mem).length;
+    expect(memSize, `多房 soak Memory 过大: ${memSize} bytes`).toBeLessThan(500_000);
+    expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);
 
-      console.log(
-        `[soak-evidence] multi-room binding: schemaVersion=43 ticks=5000 ` +
-          `rooms=${HOME}+${COLONY} collectedAt=${new Date().toISOString()}`,
-      );
-    },
-    900000,
-  );
+    console.log(
+      `[soak-evidence] multi-room binding: schemaVersion=43 ticks=5000 ` +
+        `rooms=${HOME}+${COLONY} collectedAt=${new Date().toISOString()}`,
+    );
+  }, 900000);
 });

@@ -4,19 +4,19 @@ import type { RoomIntel, RoomKind } from "../intel";
 
 /** 候选房生命周期状态。 */
 export type CandidateStatus =
-  | "UNKNOWN"        // 仅从房名分类推断，无视野
-  | "DISCOVERED"     // 有过视野，Intel 已采集
-  | "EVALUATED"      // 已完成七因子评分
-  | "QUALIFIED"     // 评分 ≥ 阈值，进入候选池
-  | "REJECTED"       // 评分 < 阈值 或 硬否决
-  | "BLACKLISTED";   // 失败冷却中
+  | "UNKNOWN" // 仅从房名分类推断，无视野
+  | "DISCOVERED" // 有过视野，Intel 已采集
+  | "EVALUATED" // 已完成七因子评分
+  | "QUALIFIED" // 评分 ≥ 阈值，进入候选池
+  | "REJECTED" // 评分 < 阈值 或 硬否决
+  | "BLACKLISTED"; // 失败冷却中
 
 /** 四类扩张动机（EXPANSION_ARCHITECTURE §1.1）。 */
 export type ExpansionReason =
-  | "resource"      // 资源产能
-  | "gcl"           // GCL 复利
-  | "strategic"     // 战略位置
-  | "resilience";   // 避险分散
+  | "resource" // 资源产能
+  | "gcl" // GCL 复利
+  | "strategic" // 战略位置
+  | "resilience"; // 避险分散
 
 /** 候选房地形摘要（从 Intel 派生）。 */
 export interface TerrainSummary {
@@ -125,9 +125,10 @@ export function buildCandidate(
   // 控制器信息
   const hasOwner = intel.owner !== undefined;
   const isMine = intel.owner === myUsername;
-  const isHostileReserved = intel.reservedBy !== undefined
-    && intel.reservedBy !== myUsername
-    && intel.reservedBy !== "Invader";
+  const isHostileReserved =
+    intel.reservedBy !== undefined &&
+    intel.reservedBy !== myUsername &&
+    intel.reservedBy !== "Invader";
   const controller: ControllerInfo = {
     hasOwner,
     owner: intel.owner,
@@ -175,9 +176,11 @@ export function buildCandidate(
  * 检查候选是否可评估（已侦察 + 非否决）。
  */
 export function isEvaluable(candidate: ExpansionCandidateV2): boolean {
-  return candidate.status === "DISCOVERED"
-    && candidate.sourceCount !== undefined
-    && !candidate.vetoReason;
+  return (
+    candidate.status === "DISCOVERED" &&
+    candidate.sourceCount !== undefined &&
+    !candidate.vetoReason
+  );
 }
 
 /**

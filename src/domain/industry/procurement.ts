@@ -108,7 +108,11 @@ export function collectDemands(
  * @returns 采购需求列表（基础矿 + 中间产物缺口）。
  */
 export function expandReactionDemands(
-  reactionPlan: { steps: ReadonlyArray<{ input1: string; input2: string; output: string; amount: number }>; target: string; targetAmount: number },
+  reactionPlan: {
+    steps: ReadonlyArray<{ input1: string; input2: string; output: string; amount: number }>;
+    target: string;
+    targetAmount: number;
+  },
   inventory: Readonly<Record<string, number>>,
   tick: number,
   deadlineOffset: number,

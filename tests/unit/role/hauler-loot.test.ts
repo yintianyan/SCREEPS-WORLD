@@ -35,8 +35,19 @@ describe("hauler — 遗留能量优先回收（衰减资源优先）", () => {
     const bigDrop = mockDropped("d1", 2500);
     const snap = mockSnapshot({ containers: [c1], droppedEnergy: [bigDrop] as any });
     const creep = mockCreep({
-      name: "hauler_1", role: "hauler", used: 0, capacity: 300, mode: "acquire",
-      assignment: { id: "t1", kind: "haul", sourceId: "c1", revision: 1, assignedAt: 900, leaseUntil: 2000 },
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 300,
+      mode: "acquire",
+      assignment: {
+        id: "t1",
+        kind: "haul",
+        sourceId: "c1",
+        revision: 1,
+        assignedAt: 900,
+        leaseUntil: 2000,
+      },
     });
 
     haulerRole.run(creep, mockContext(snap));
@@ -49,7 +60,13 @@ describe("hauler — 遗留能量优先回收（衰减资源优先）", () => {
     const c1 = mockStructure("container", { id: "c1", energy: 800, capacity: 2000 });
     const tomb = mockRemains("tomb1", 300);
     const snap = mockSnapshot({ containers: [c1], tombstones: [tomb] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
 
     haulerRole.run(creep, mockContext(snap));
 
@@ -61,7 +78,13 @@ describe("hauler — 遗留能量优先回收（衰减资源优先）", () => {
     const c1 = mockStructure("container", { id: "c1", energy: 800, capacity: 2000 });
     const ruin = mockRemains("ruin1", 5000);
     const snap = mockSnapshot({ containers: [c1], ruins: [ruin] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
 
     haulerRole.run(creep, mockContext(snap));
 
@@ -72,7 +95,13 @@ describe("hauler — 遗留能量优先回收（衰减资源优先）", () => {
     const c1 = mockStructure("container", { id: "c1", energy: 800, capacity: 2000 });
     const drop = mockDropped("d1", CONFIG.economy.lootThreshold);
     const snap = mockSnapshot({ containers: [c1], droppedEnergy: [drop] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
 
     haulerRole.run(creep, mockContext(snap));
 
@@ -84,7 +113,13 @@ describe("hauler — 遗留能量优先回收（衰减资源优先）", () => {
     const c1 = mockStructure("container", { id: "c1", energy: 800, capacity: 2000 });
     const drop = mockDropped("d1", CONFIG.economy.lootThreshold - 1);
     const snap = mockSnapshot({ containers: [c1], droppedEnergy: [drop] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
 
     haulerRole.run(creep, mockContext(snap));
 
@@ -96,7 +131,13 @@ describe("hauler — 遗留能量优先回收（衰减资源优先）", () => {
     const c1 = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
     const tomb = mockRemains("tomb1", 40);
     const snap = mockSnapshot({ containers: [c1], tombstones: [tomb] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
 
     haulerRole.run(creep, mockContext(snap));
 
@@ -108,7 +149,13 @@ describe("hauler — 遗留能量优先回收（衰减资源优先）", () => {
     const tomb = mockRemains("tomb1", 150);
     const ruin = mockRemains("ruin1", 900);
     const snap = mockSnapshot({ tombstones: [tomb], ruins: [ruin] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
 
     haulerRole.run(creep, mockContext(snap));
 

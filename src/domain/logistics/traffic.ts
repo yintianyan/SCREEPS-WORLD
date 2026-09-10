@@ -20,11 +20,11 @@ export interface TrafficResult {
  * 拥堵程度。
  */
 export type TrafficLevel =
-  | "clear"       // 0 haulers or under capacity
-  | "light"       // at capacity
-  | "moderate"    // 1.5× capacity
-  | "heavy"       // 2× capacity
-  | "severe";     // 3×+ capacity
+  | "clear" // 0 haulers or under capacity
+  | "light" // at capacity
+  | "moderate" // 1.5× capacity
+  | "heavy" // 2× capacity
+  | "severe"; // 3×+ capacity
 
 // ─── 配置参数 ──────────────────────────────────────────────
 
@@ -89,10 +89,10 @@ export function computeTrafficPenalty(
     penalty = 0.15 + (ratio - 1.5) * PENALTY_PER_EXCESS * 10;
   } else if (ratio <= 3.0) {
     level = "heavy";
-    penalty = 0.30 + (ratio - 2.0) * PENALTY_PER_EXCESS * 10;
+    penalty = 0.3 + (ratio - 2.0) * PENALTY_PER_EXCESS * 10;
   } else {
     level = "severe";
-    penalty = Math.min(MAX_PENALTY, 0.50 + (ratio - 3.0) * PENALTY_PER_EXCESS * 10);
+    penalty = Math.min(MAX_PENALTY, 0.5 + (ratio - 3.0) * PENALTY_PER_EXCESS * 10);
   }
 
   penalty = Math.min(MAX_PENALTY, penalty);
@@ -137,8 +137,6 @@ export function batchComputeTraffic(
  * 判断是否需要因交通拥堵而限制新 hauler 分配。
  * 纯函数。
  */
-export function shouldThrottleHaulers(
-  result: TrafficResult,
-): boolean {
+export function shouldThrottleHaulers(result: TrafficResult): boolean {
   return result.level === "heavy" || result.level === "severe";
 }

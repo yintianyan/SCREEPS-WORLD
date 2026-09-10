@@ -91,12 +91,8 @@ export function prunePlans(
 /**
  * 获取 Active Plan 列表（截断到 MAX_ACTIVE_PLANS）。
  */
-export function getActivePlans(
-  plans: readonly ExpansionPlan[],
-): ExpansionPlan[] {
-  return plans
-    .filter(p => ACTIVE_STATUSES.has(p.status))
-    .slice(0, MAX_ACTIVE_PLANS);
+export function getActivePlans(plans: readonly ExpansionPlan[]): ExpansionPlan[] {
+  return plans.filter(p => ACTIVE_STATUSES.has(p.status)).slice(0, MAX_ACTIVE_PLANS);
 }
 
 /**
@@ -109,9 +105,10 @@ export function isRebuildBlocked(
   options: LifecycleOptions = DEFAULT_LIFECYCLE_OPTIONS,
 ): boolean {
   return plans.some(
-    p => p.roomName === roomName
-    && (p.status === "CANCELLED" || p.status === "BLACKLISTED")
-    && tick - p.updatedAt < options.rebuildCooldown,
+    p =>
+      p.roomName === roomName &&
+      (p.status === "CANCELLED" || p.status === "BLACKLISTED") &&
+      tick - p.updatedAt < options.rebuildCooldown,
   );
 }
 

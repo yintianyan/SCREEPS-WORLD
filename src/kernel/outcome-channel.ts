@@ -100,7 +100,10 @@ export function deserializeOutcome(s: SerializedOutcomeEvent): OutcomeEvent {
     forcedAdvance: s.fa,
   };
   if (s.ob !== undefined && s.oa2 !== undefined) {
-    (ev as { observation?: { before: number; after: number } }).observation = { before: s.ob, after: s.oa2 };
+    (ev as { observation?: { before: number; after: number } }).observation = {
+      before: s.ob,
+      after: s.oa2,
+    };
   }
   if (s.ds !== undefined && s.df !== undefined) {
     (ev as { delta?: { succeededSinceOpen: number; failedSinceOpen: number } }).delta = {
@@ -160,10 +163,7 @@ export function getOutcomeChannel(mem: { kernel?: Record<string, unknown> }): Ou
  * - 超过容量时最老事件被丢弃（overflowEvicted 计数 + 日志告警）。
  * - 返回入队结果。
  */
-export function enqueueOutcome(
-  channel: OutcomeChannelMemory,
-  ev: OutcomeEvent,
-): EnqueueResult {
+export function enqueueOutcome(channel: OutcomeChannelMemory, ev: OutcomeEvent): EnqueueResult {
   // 幂等去重：同一 operationId 只接受第一条
   if (channel.s.includes(ev.operationId)) {
     channel.dr++;
@@ -175,7 +175,10 @@ export function enqueueOutcome(
     const evicted = channel.q.shift();
     channel.oe++;
     if (evicted) {
-      log.info("outcome-channel", `[OutcomeChannel] overflow evict: op=${evicted.oid} (evicted=${channel.oe})`);
+      log.info(
+        "outcome-channel",
+        `[OutcomeChannel] overflow evict: op=${evicted.oid} (evicted=${channel.oe})`,
+      );
     }
   }
 

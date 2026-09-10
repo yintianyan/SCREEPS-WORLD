@@ -10,7 +10,10 @@ const noWalls = (_x: number, _y: number): boolean => false;
 const ANCHOR = { x: 25, y: 25 };
 
 /** 把首代 placements 的前 K 个视为「已建成」，构造二代推导的输入。 */
-function simulateBuilt(placements: readonly { pos: { x: number; y: number }; structureType: string }[], k: number) {
+function simulateBuilt(
+  placements: readonly { pos: { x: number; y: number }; structureType: string }[],
+  k: number,
+) {
   const preOccupied = new Set<number>();
   const committed = new Map<string, number>();
   for (const p of placements.slice(0, k)) {
@@ -56,8 +59,9 @@ describe("constraint-placer — 代际稳定性（TD-012）", () => {
   it("spawn 锚点豁免：锚点 spawn 不抵扣批次 spawn（RCL8 满建时放 0，仅锚点时放 2）", () => {
     const field = computeDistanceField(noWalls);
     const countSpawns = (committed: Map<string, number>) =>
-      placeStructures(ANCHOR, field, noWalls, 8, new Set(), committed)
-        .filter(p => p.structureType === STRUCTURE_SPAWN).length;
+      placeStructures(ANCHOR, field, noWalls, 8, new Set(), committed).filter(
+        p => p.structureType === STRUCTURE_SPAWN,
+      ).length;
 
     // 只有锚点 spawn（committed=1）→ RCL7/8 批次的 2 个仍需放置。
     expect(countSpawns(new Map([[STRUCTURE_SPAWN, 1]]))).toBe(2);
@@ -77,7 +81,17 @@ describe("constraint-placer — 代际稳定性（TD-012）", () => {
     const preOccupied = new Set<number>(builtLabs.map(p => packPos(p.x, p.y)));
     const committed = new Map<string, number>([[STRUCTURE_LAB, 3]]);
     // RCL7 批次 +3 lab（累计 6，抵扣 3 → 放 3），必须续接既有 trio。
-    const gen2 = placeStructures(ANCHOR, field, noWalls, 7, preOccupied, committed, undefined, [], builtLabs);
+    const gen2 = placeStructures(
+      ANCHOR,
+      field,
+      noWalls,
+      7,
+      preOccupied,
+      committed,
+      undefined,
+      [],
+      builtLabs,
+    );
     const newLabs = gen2.filter(p => p.structureType === STRUCTURE_LAB);
     expect(newLabs).toHaveLength(3);
     // 链式续接契约（与 placeLabCluster 一致）：每个新 lab 与「既有集群 ∪ 更早

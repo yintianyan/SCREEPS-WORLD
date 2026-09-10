@@ -21,7 +21,7 @@ describe("migration v32 → v33（完整情报字段建档）", () => {
     (globalThis as any).Memory = {
       schemaVersion: 32,
       creeps: {},
-      rooms: { W7N4: { intel: { W6N4: { enemySpawns: 1, wallCount: 8, sealedExits: [7] } } }, },
+      rooms: { W7N4: { intel: { W6N4: { enemySpawns: 1, wallCount: 8, sealedExits: [7] } } } },
       kernel: {},
     };
     runMigrations();
@@ -35,7 +35,9 @@ describe("migration v32 → v33（完整情报字段建档）", () => {
       schemaVersion: 32,
       creeps: {},
       rooms: {
-        W7N4: { intel: { W6N4: { enemySpawns: "1", wallCount: "many" }, W5N4: { sealedExits: [7, "3"] } } },
+        W7N4: {
+          intel: { W6N4: { enemySpawns: "1", wallCount: "many" }, W5N4: { sealedExits: [7, "3"] } },
+        },
       },
       kernel: {},
     };

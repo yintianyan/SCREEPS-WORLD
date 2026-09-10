@@ -29,7 +29,14 @@ describe("builder — work 模式正常建造", () => {
       used: 50,
       capacity: 50,
       mode: "work",
-      assignment: { id: "t1", kind: "build", targetId: "site_1", leaseUntil: 2000, revision: 1, assignedAt: 990 },
+      assignment: {
+        id: "t1",
+        kind: "build",
+        targetId: "site_1",
+        leaseUntil: 2000,
+        revision: 1,
+        assignedAt: 990,
+      },
     });
     const ctx = mockContext(snap);
 
@@ -41,7 +48,13 @@ describe("builder — work 模式正常建造", () => {
   it("无 assignment 时建造最近 site", () => {
     const site = mockConstructionSite("extension", { id: "site_1" });
     const snap = mockSnapshot({ myConstructionSites: [site] });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -58,7 +71,14 @@ describe("builder — work 模式正常建造", () => {
       used: 50,
       capacity: 50,
       mode: "work",
-      assignment: { id: "t1", kind: "build", targetId: "site_1", leaseUntil: 2000, revision: 1, assignedAt: 990 },
+      assignment: {
+        id: "t1",
+        kind: "build",
+        targetId: "site_1",
+        leaseUntil: 2000,
+        revision: 1,
+        assignedAt: 990,
+      },
     });
     creep.build.mockReturnValue(-7); // ERR_INVALID_TARGET
     const ctx = mockContext(snap);
@@ -80,7 +100,14 @@ describe("builder — CPU 门禁", () => {
       used: 50,
       capacity: 50,
       mode: "work",
-      assignment: { id: "t1", kind: "build", targetId: "site_1", leaseUntil: 2000, revision: 1, assignedAt: 990 },
+      assignment: {
+        id: "t1",
+        kind: "build",
+        targetId: "site_1",
+        leaseUntil: 2000,
+        revision: 1,
+        assignedAt: 990,
+      },
     });
     const budget = mockBudget("recovery");
     const ctx = mockContext(snap, budget);
@@ -103,7 +130,14 @@ describe("builder — CPU 门禁", () => {
       used: 50,
       capacity: 50,
       mode: "work",
-      assignment: { id: "t1", kind: "build", targetId: "ext_site", leaseUntil: 2000, revision: 1, assignedAt: 990 },
+      assignment: {
+        id: "t1",
+        kind: "build",
+        targetId: "ext_site",
+        leaseUntil: 2000,
+        revision: 1,
+        assignedAt: 990,
+      },
     });
     const budget = mockBudget("conserve");
     const ctx = mockContext(snap, budget);
@@ -120,7 +154,13 @@ describe("builder — CPU 门禁", () => {
     const spawnSite = mockConstructionSite("spawn", { id: "spawn_site" });
     const extSite = mockConstructionSite("extension", { id: "ext_site" });
     const snap = mockSnapshot({ myConstructionSites: [extSite, spawnSite] });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const budget = mockBudget("conserve");
     const ctx = mockContext(snap, budget);
 
@@ -134,7 +174,13 @@ describe("builder — CPU 门禁", () => {
     const extSite = mockConstructionSite("extension", { id: "ext_site" });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ myConstructionSites: [extSite], fillTargets: [spawn] });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const budget = mockBudget("conserve");
     const ctx = mockContext(snap, budget);
 
@@ -156,7 +202,13 @@ describe("builder — CPU 门禁", () => {
       controller,
       energyAvailable: 500,
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap, mockBudget("recovery"));
 
     builderRole.run(creep, ctx);
@@ -175,7 +227,13 @@ describe("builder — CPU 门禁", () => {
       controller,
       energyAvailable: 500,
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap, mockBudget("conserve"));
 
     builderRole.run(creep, ctx);
@@ -189,7 +247,13 @@ describe("builder — fallback 链", () => {
   it("无 site 时填充 spawn/extension", () => {
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ myConstructionSites: [], fillTargets: [spawn] });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -198,13 +262,25 @@ describe("builder — fallback 链", () => {
   });
 
   it("无 fillTarget 时修复 critical 结构（血量 < 50%）", () => {
-    const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 300, capacity: 300, hits: 400, hitsMax: 1000 });
+    const damagedSpawn = mockStructure("spawn", {
+      id: "sp1",
+      energy: 300,
+      capacity: 300,
+      hits: 400,
+      hitsMax: 1000,
+    });
     const snap = mockSnapshot({
       myConstructionSites: [],
       fillTargets: [],
       spawns: [damagedSpawn],
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -214,13 +290,25 @@ describe("builder — fallback 链", () => {
 
   // P2 修复：repairCritical 现在位于 fillTarget 之前。
   it("repairCritical 优先于 fillTarget（结构快塌了比填能量更紧急）", () => {
-    const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300, hits: 400, hitsMax: 1000 });
+    const damagedSpawn = mockStructure("spawn", {
+      id: "sp1",
+      energy: 100,
+      capacity: 300,
+      hits: 400,
+      hitsMax: 1000,
+    });
     const snap = mockSnapshot({
       myConstructionSites: [],
       fillTargets: [damagedSpawn],
       spawns: [damagedSpawn],
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -237,7 +325,13 @@ describe("builder — fallback 链", () => {
       fillTargets: [],
       roads: [road],
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -255,7 +349,13 @@ describe("builder — fallback 链", () => {
       controller,
       energyAvailable: 500,
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -271,7 +371,13 @@ describe("builder — fallback 链", () => {
       fillTargets: [],
       roads: [road],
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     creep.memory.repairTargetId = "r1" as any;
     const ctx = mockContext(snap);
 
@@ -290,7 +396,13 @@ describe("builder — fallback 链", () => {
       containers: [container],
       roads: [road],
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     // 模拟缓存泄漏：repairTargetId 指向 road（上一 tick 由 repairRoads 设置）
     creep.memory.repairTargetId = "r1" as any;
     const ctx = mockContext(snap);
@@ -314,7 +426,13 @@ describe("builder — fallback 链", () => {
       controller,
       energyAvailable: 500, // >= upgradeEnergyFloor (300)
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -334,7 +452,13 @@ describe("builder — fallback 链", () => {
       controller,
       energyAvailable: 100, // < upgradeEnergyFloor (300)，但 builder 已携能
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -351,7 +475,13 @@ describe("builder — acquire 模式", () => {
     c1.pos.getRangeTo.mockReturnValue(5); // 非 source 相邻
     c2.pos.getRangeTo.mockReturnValue(5);
     const snap = mockSnapshot({ containers: [c1, c2] });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     // c1 更近（getRangeTo 默认返回 1）。
     creep.pos.getRangeTo.mockImplementation((target: any) => {
       if (target.id === "c1") return 2;
@@ -368,8 +498,18 @@ describe("builder — acquire 模式", () => {
 
   it("无 container 时回退到 harvest", () => {
     const source = mockSource("s1");
-    const snap = mockSnapshot({ containers: [], sources: [source], sourceOccupancy: new Map([["s1", 0]]) });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 0, capacity: 50, mode: "acquire" });
+    const snap = mockSnapshot({
+      containers: [],
+      sources: [source],
+      sourceOccupancy: new Map([["s1", 0]]),
+    });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -383,7 +523,13 @@ describe("builder — flee", () => {
     const hostile = mockHostile();
     const site = mockConstructionSite("extension", { id: "site_1" });
     const snap = mockSnapshot({ hostileCreeps: [hostile], myConstructionSites: [site] });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -403,7 +549,13 @@ describe("builder — flee", () => {
       ramparts: [rampart],
       storage,
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -416,7 +568,8 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
   it("盈余门禁满足时修复血量最低的 rampart", () => {
     const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
     // 独立坐标（不与 storage 同格）→ 无 min-cut 情报时按 perimeter 全额维护。
-    rampart.pos.x = 40; rampart.pos.y = 40;
+    rampart.pos.x = 40;
+    rampart.pos.y = 40;
     // 和平期全额灌墙门槛为 sprintStorage(50k)。
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = mockSnapshot({
@@ -427,7 +580,13 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
       rcl: 3, // wallTargetHits rcl3_4 = 100K，rampart 50K 低于 perimeter 目标
       energyAvailable: 100,
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -445,7 +604,13 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
       storage: undefined,
       rcl: 3,
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -465,7 +630,13 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
       controller,
       energyAvailable: 500, // >= upgradeEnergyFloor → 升级兜底
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -484,7 +655,13 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
       ramparts: [rampart],
       storage,
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap, mockBudget("conserve"));
 
     builderRole.run(creep, ctx);
@@ -506,7 +683,13 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
       rcl: 3, // 目标 100K，rampart 150K 已达标
       energyAvailable: 500,
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -529,7 +712,13 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
       storage,
       rcl: 3, // wallTargetHits rcl3_4 = 100K
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -552,7 +741,13 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
       storage,
       rcl: 3, // wallTargetHits rcl3_4 = 100K, rampart 150K > 100K, wall 500 < 100K
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -567,7 +762,13 @@ describe("builder — storage 水位分级取能", () => {
     // storage 25000/100000 = 25% → 满载
     const storage = mockStructure("storage", { id: "st1", energy: 25000, capacity: 100000 });
     const snap = mockSnapshot({ storage });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -580,7 +781,13 @@ describe("builder — storage 水位分级取能", () => {
     // storage 15000/100000 = 15% → 限 200
     const storage = mockStructure("storage", { id: "st1", energy: 15000, capacity: 100000 });
     const snap = mockSnapshot({ storage });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 0, capacity: 300, mode: "acquire" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 0,
+      capacity: 300,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -593,7 +800,13 @@ describe("builder — storage 水位分级取能", () => {
     // storage 5000/100000 = 5% → 限 50
     const storage = mockStructure("storage", { id: "st1", energy: 5000, capacity: 100000 });
     const snap = mockSnapshot({ storage });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 0, capacity: 300, mode: "acquire" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 0,
+      capacity: 300,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -609,7 +822,13 @@ describe("builder — 新生 rampart 急救（防「建了就塌」死循环）"
     const rampart = mockStructure("rampart", { id: "r1", hits: 1, hitsMax: 300000 });
     const site = mockConstructionSite("extension", { id: "site_1" });
     const snap = mockSnapshot({ myConstructionSites: [site], ramparts: [rampart] });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -622,7 +841,13 @@ describe("builder — 新生 rampart 急救（防「建了就塌」死循环）"
     const rampart = mockStructure("rampart", { id: "r1", hits: 10000, hitsMax: 300000 });
     const site = mockConstructionSite("extension", { id: "site_1" });
     const snap = mockSnapshot({ myConstructionSites: [site], ramparts: [rampart] });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -636,8 +861,19 @@ describe("builder — 新生 rampart 急救（防「建了就塌」死循环）"
     // 但新生 rampart 急救是止损（保住刚投入的建造资产），必须绕过。
     const rampart = mockStructure("rampart", { id: "r1", hits: 300, hitsMax: 300000 });
     const storage = mockStructure("storage", { id: "st", energy: 500, capacity: 1000000 });
-    const snap = mockSnapshot({ myConstructionSites: [], fillTargets: [], ramparts: [rampart], storage });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      fillTargets: [],
+      ramparts: [rampart],
+      storage,
+    });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -649,7 +885,13 @@ describe("builder — 新生 rampart 急救（防「建了就塌」死循环）"
     const r1 = mockStructure("rampart", { id: "r1", hits: 5000, hitsMax: 300000 });
     const r2 = mockStructure("rampart", { id: "r2", hits: 1, hitsMax: 300000 });
     const snap = mockSnapshot({ myConstructionSites: [], fillTargets: [], ramparts: [r1, r2] });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     builderRole.run(creep, ctx);
@@ -664,8 +906,19 @@ describe("builder — 防御工事分层维护", () => {
     // rampart 50k 已过急救线但低于全额目标 — 和平期储备不足不灌墙，能量留给 RCL。
     const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
     const storage = mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
-    const snap = mockSnapshot({ myConstructionSites: [], fillTargets: [], ramparts: [rampart], storage });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      fillTargets: [],
+      ramparts: [rampart],
+      storage,
+    });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
 
     builderRole.run(creep, mockContext(snap));
 
@@ -675,10 +928,21 @@ describe("builder — 防御工事分层维护", () => {
   it("受袭姿态：盈余门槛放宽至 sustainedStorage(10k)，立即灌墙", () => {
     const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
     const storage = mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
-    const snap = mockSnapshot({ myConstructionSites: [], fillTargets: [], ramparts: [rampart], storage });
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      fillTargets: [],
+      ramparts: [rampart],
+      storage,
+    });
     // 近期有敌对活动 → underSiege。
     (globalThis as any).Memory.rooms.W7N4 = { lastHostileAt: 900 };
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
 
     builderRole.run(creep, mockContext(snap));
 
@@ -688,15 +952,26 @@ describe("builder — 防御工事分层维护", () => {
   it("container 叠盾（utility 档）只保地板：过线后不再灌注", () => {
     // rampart 与 container 同格 → utility 档，目标 = 急救地板 10k；50k 已远超 → 不修。
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
-    container.pos.x = 30; container.pos.y = 30;
+    container.pos.x = 30;
+    container.pos.y = 30;
     const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
-    rampart.pos.x = 30; rampart.pos.y = 30;
+    rampart.pos.x = 30;
+    rampart.pos.y = 30;
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = mockSnapshot({
-      myConstructionSites: [], fillTargets: [],
-      ramparts: [rampart], containers: [container], storage,
+      myConstructionSites: [],
+      fillTargets: [],
+      ramparts: [rampart],
+      containers: [container],
+      storage,
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
 
     builderRole.run(creep, mockContext(snap));
 
@@ -706,14 +981,25 @@ describe("builder — 防御工事分层维护", () => {
   it("core 档（结构叠盾）按折扣目标维护：低于 30% 全额时修，高于则达标", () => {
     // rampart 与 storage 同格 → core 档。RCL3 全额 100k × 0.3 = 30k 目标。
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
-    storage.pos.x = 20; storage.pos.y = 20;
+    storage.pos.x = 20;
+    storage.pos.y = 20;
     const belowCore = mockStructure("rampart", { id: "r1", hits: 20000, hitsMax: 300000 });
-    belowCore.pos.x = 20; belowCore.pos.y = 20;
+    belowCore.pos.x = 20;
+    belowCore.pos.y = 20;
     const snap = mockSnapshot({
-      myConstructionSites: [], fillTargets: [],
-      ramparts: [belowCore], storage, rcl: 3,
+      myConstructionSites: [],
+      fillTargets: [],
+      ramparts: [belowCore],
+      storage,
+      rcl: 3,
     });
-    const creep = mockCreep({ name: "builder_1", role: "builder", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "builder_1",
+      role: "builder",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
 
     builderRole.run(creep, mockContext(snap));
 

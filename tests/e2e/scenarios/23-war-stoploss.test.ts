@@ -25,7 +25,12 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
-import { injectEnemyRoom, injectHostileTower, injectFriendlyCreep, injectHostile } from "../fixtures/inject";
+import {
+  injectEnemyRoom,
+  injectHostileTower,
+  injectFriendlyCreep,
+  injectHostile,
+} from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 const HOME = "W0N1";
@@ -94,12 +99,7 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
     const targetRoom: RoomSetup = {
       name: TARGET,
       terrain: emptyTerrain(),
-      objects: [
-        controller(10, 10, 1),
-        source(10, 40),
-        source(40, 10),
-        mineral(40, 40),
-      ],
+      objects: [controller(10, 10, 1), source(10, 40), source(40, 10), mineral(40, 40)],
     };
     const home = standardRoom(HOME, 300, 6);
     home.objects!.push(
@@ -145,181 +145,224 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
     await runner.teardown();
   });
 
-  it(
-    "止损三链：超限收摊、黑名单冷却、满编才推进",
-    async () => {
-      // scout 种在塔射程外（东侧，距塔 (10,25) ≥33 格 > 射程 20）——视野保鲜且不被塔点名。
-      const scoutSpots: Array<[number, number]> = [
-        [45, 5], [45, 45], [40, 40], [42, 38], [44, 25], [40, 10], [44, 15], [44, 35],
-      ];
+  it("止损三链：超限收摊、黑名单冷却、满编才推进", async () => {
+    // scout 种在塔射程外（东侧，距塔 (10,25) ≥33 格 > 射程 20）——视野保鲜且不被塔点名。
+    const scoutSpots: Array<[number, number]> = [
+      [45, 5],
+      [45, 45],
+      [40, 40],
+      [42, 38],
+      [44, 25],
+      [40, 10],
+      [44, 15],
+      [44, 35],
+    ];
 
-      // 驻留 invader 轮换位（家塔 (20,20) 射程外 ≥35 格）：TTL 1500 > 注入间隔
-      // 1250t，必须轮换格子——同格注入撞上仍存活的前代会被引擎静默拒绝，
-      // 世代链断裂 → liveThreat 空窗 → war 姿态被 anyRecovery 打回。
-      const invaderSpots: Array<[number, number]> = [[46, 46], [45, 46], [46, 45], [45, 45]];
-      let invaderSeq = 0;
-      const totalStages = 48;
-      for (let i = 0; i < totalStages; i++) {
-        const tick = i * 250;
-        // 每 500t（偶数 stage）补种 scout（视野 = fact 情报生命线，同 E2E-022）。
-        if (i % 2 === 0) {
-          const spot = scoutSpots[(i / 2) % scoutSpots.length] ?? [45, 25];
-          const [sx, sy] = spot;
-          await injectFriendlyCreep(runner, TARGET, sx, sy, ["move"], `scout-wt-${i}`, {
-            role: "scout", home: HOME, remoteTarget: TARGET,
-          });
-        }
-        // 每 1250t（i%5==0）补种 2 只 harvester（TTL 1500 → 新旧重叠）：编制恒 ≥2
-        // → understaffed/bootstrap 永不发生 → anyRecovery 恒假 → war→fortify 降级
-        // 路径（anyRecovery && !liveThreat）从经济侧彻底封死，war 姿态由
-        // threatRecent（invader 注入刷新）单独稳定支撑。
-        if (i % 5 === 0) {
-          await injectFriendlyCreep(runner, HOME, 11, 40, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-a`, { role: "harvester", home: HOME });
-          await injectFriendlyCreep(runner, HOME, 40, 11, ["work", "work", "work", "work", "move", "move"], `seed-harv-${i}-b`, { role: "harvester", home: HOME });
-        }
-        // 每 1250t（i%5==0）补种驻留 invader（无甲 [attack,move]：defender 快速
-        // 猎杀 → threatAssessments 窗口极短 → canonical planner 静默、legacy
-        // W1N1 plan 不被覆盖；count 增长刷新 lastHostileAt → threatRecent 恒鲜）。
-        if (i % 5 === 0) {
-          const [ix, iy] = invaderSpots[invaderSeq % invaderSpots.length] ?? [46, 46];
-          invaderSeq++;
-          await injectHostile(runner, HOME, ix, iy, ["attack", "move"], `invader-${i}`, "invader");
-        }
+    // 驻留 invader 轮换位（家塔 (20,20) 射程外 ≥35 格）：TTL 1500 > 注入间隔
+    // 1250t，必须轮换格子——同格注入撞上仍存活的前代会被引擎静默拒绝，
+    // 世代链断裂 → liveThreat 空窗 → war 姿态被 anyRecovery 打回。
+    const invaderSpots: Array<[number, number]> = [
+      [46, 46],
+      [45, 46],
+      [46, 45],
+      [45, 45],
+    ];
+    let invaderSeq = 0;
+    const totalStages = 48;
+    for (let i = 0; i < totalStages; i++) {
+      const tick = i * 250;
+      // 每 500t（偶数 stage）补种 scout（视野 = fact 情报生命线，同 E2E-022）。
+      if (i % 2 === 0) {
+        const spot = scoutSpots[(i / 2) % scoutSpots.length] ?? [45, 25];
+        const [sx, sy] = spot;
+        await injectFriendlyCreep(runner, TARGET, sx, sy, ["move"], `scout-wt-${i}`, {
+          role: "scout",
+          home: HOME,
+          remoteTarget: TARGET,
+        });
+      }
+      // 每 1250t（i%5==0）补种 2 只 harvester（TTL 1500 → 新旧重叠）：编制恒 ≥2
+      // → understaffed/bootstrap 永不发生 → anyRecovery 恒假 → war→fortify 降级
+      // 路径（anyRecovery && !liveThreat）从经济侧彻底封死，war 姿态由
+      // threatRecent（invader 注入刷新）单独稳定支撑。
+      if (i % 5 === 0) {
+        await injectFriendlyCreep(
+          runner,
+          HOME,
+          11,
+          40,
+          ["work", "work", "work", "work", "move", "move"],
+          `seed-harv-${i}-a`,
+          { role: "harvester", home: HOME },
+        );
+        await injectFriendlyCreep(
+          runner,
+          HOME,
+          40,
+          11,
+          ["work", "work", "work", "work", "move", "move"],
+          `seed-harv-${i}-b`,
+          { role: "harvester", home: HOME },
+        );
+      }
+      // 每 1250t（i%5==0）补种驻留 invader（无甲 [attack,move]：defender 快速
+      // 猎杀 → threatAssessments 窗口极短 → canonical planner 静默、legacy
+      // W1N1 plan 不被覆盖；count 增长刷新 lastHostileAt → threatRecent 恒鲜）。
+      if (i % 5 === 0) {
+        const [ix, iy] = invaderSpots[invaderSeq % invaderSpots.length] ?? [46, 46];
+        invaderSeq++;
+        await injectHostile(runner, HOME, ix, iy, ["attack", "move"], `invader-${i}`, "invader");
+      }
 
-        // 止损链探针：posture/spawned/tgt/phase + warBlacklist + warStandDownUntil。
-        // bl 用无引号格式（mockup console 会把引号转义成 &#x22;，JSON.parse 不可用）。
-        await runner.bot.sendConsole(
-          'console.log("PROBE t=" + Game.time + " post=" + Memory.kernel.strategy?.posture +' +
+      // 止损链探针：posture/spawned/tgt/phase + warBlacklist + warStandDownUntil。
+      // bl 用无引号格式（mockup console 会把引号转义成 &#x22;，JSON.parse 不可用）。
+      await runner.bot.sendConsole(
+        'console.log("PROBE t=" + Game.time + " post=" + Memory.kernel.strategy?.posture +' +
           ' " since=" + Memory.kernel.strategy?.since +' +
           ' " spawned=" + Memory.kernel.warPlan?.spawned + " tgt=" + Memory.kernel.warPlan?.targetRoom +' +
           ' " ph=" + Memory.kernel.warPlan?.phase +' +
           ' " bl=" + (Memory.kernel.warBlacklist ?' +
           ' Object.keys(Memory.kernel.warBlacklist).map(function(k){ return k + "@" + Memory.kernel.warBlacklist[k]; }).join(";") : "none") +' +
           ' " sdu=" + (Memory.kernel.warStandDownUntil ?? -1))',
-        );
-        const snaps = await runner.runTicks(250);
-        errorsSeen += snaps.flatMap((s) => s.consoleLogs).filter(isJsError).length;
-        for (const l of snaps.flatMap((s) => s.consoleLogs)) {
-          const sample = parseProbe(l);
-          if (sample) probes.push(sample);
-          if (/demobilize|war:|posture |WarOutcome/.test(l)) warLogs.push(l.slice(0, 400));
-        }
-        const last = snaps.at(-1)!;
-        const mem = await runner.bot.getMemory();
-        postureTimeline.push(`t${last.tick}:${mem?.kernel?.strategy?.posture ?? "?"}`);
+      );
+      const snaps = await runner.runTicks(250);
+      errorsSeen += snaps.flatMap(s => s.consoleLogs).filter(isJsError).length;
+      for (const l of snaps.flatMap(s => s.consoleLogs)) {
+        const sample = parseProbe(l);
+        if (sample) probes.push(sample);
+        if (/demobilize|war:|posture |WarOutcome/.test(l)) warLogs.push(l.slice(0, 400));
       }
+      const last = snaps.at(-1)!;
+      const mem = await runner.bot.getMemory();
+      postureTimeline.push(`t${last.tick}:${mem?.kernel?.strategy?.posture ?? "?"}`);
+    }
 
-      // ── 证据登记 ──
-      const firstPlan = probes.find((s) => s.targetRoom === TARGET);
-      const maxSpawned = Math.max(...probes.map((s) => s.spawned));
-      const advanceSamples = probes.filter((s) => s.phase === "advance");
-      // 止损事件从 war-planner 日志解析（权威字段：reason/outcome/blacklist），
-      // spawned 阈值采样会漏检（19→21+ 可发生在一个 250t 采样窗内）。
-      const demobEvents = warLogs.flatMap((l) => {
-        const m = l.match(/\[t(\d+)\]\[\w+\]\[war-planner\] war: demobilize (\S+) outcome=(\w+) \(intel_age=(\S+), blacklist=(\d+)t, reason=(\d+)\)/);
-        return m ? [{ tick: Number(m[1]), target: m[2], outcome: m[3], intelAge: m[4], blacklist: Number(m[5]), reason: Number(m[6]) }] : [];
-      });
-      const attrition = demobEvents.find((e) => e.reason === 1 && e.target === TARGET);
-      // 止损核验统一取首个 W1N1 demobilize（ATTRITION 或经济止损 POSTURE 均算
-      // ——MILITARY 止损链中「伤亡阈值收摊」与「经济超标退 fortify」并列）。
-      const stopLossEvent = demobEvents.find((e) => e.target === TARGET);
-      const afterStopLoss = stopLossEvent ? probes.filter((s) => s.tick > stopLossEvent.tick) : [];
-      const planCleared = stopLossEvent ? afterStopLoss.every((s) => s.targetRoom !== TARGET) : false;
-      const blAfterStop = stopLossEvent
-        ? afterStopLoss.map((s) => s.blacklist).find((b) => b.includes(TARGET))
-        : undefined;
-      const sduAfterStop = stopLossEvent ? afterStopLoss.find((s) => s.standDown > 0)?.standDown ?? -1 : -1;
-      console.log(`[soak-evidence] w4-stoploss: firstPlan=${firstPlan?.tick ?? "never"} ` +
-        `maxSpawned=${maxSpawned} demobEvents=${JSON.stringify(demobEvents)}`);
-      console.log(`[soak-evidence] w4-stoploss: attrition=${JSON.stringify(attrition ?? null)} ` +
+    // ── 证据登记 ──
+    const firstPlan = probes.find(s => s.targetRoom === TARGET);
+    const maxSpawned = Math.max(...probes.map(s => s.spawned));
+    const advanceSamples = probes.filter(s => s.phase === "advance");
+    // 止损事件从 war-planner 日志解析（权威字段：reason/outcome/blacklist），
+    // spawned 阈值采样会漏检（19→21+ 可发生在一个 250t 采样窗内）。
+    const demobEvents = warLogs.flatMap(l => {
+      const m = l.match(
+        /\[t(\d+)\]\[\w+\]\[war-planner\] war: demobilize (\S+) outcome=(\w+) \(intel_age=(\S+), blacklist=(\d+)t, reason=(\d+)\)/,
+      );
+      return m
+        ? [
+            {
+              tick: Number(m[1]),
+              target: m[2],
+              outcome: m[3],
+              intelAge: m[4],
+              blacklist: Number(m[5]),
+              reason: Number(m[6]),
+            },
+          ]
+        : [];
+    });
+    const attrition = demobEvents.find(e => e.reason === 1 && e.target === TARGET);
+    // 止损核验统一取首个 W1N1 demobilize（ATTRITION 或经济止损 POSTURE 均算
+    // ——MILITARY 止损链中「伤亡阈值收摊」与「经济超标退 fortify」并列）。
+    const stopLossEvent = demobEvents.find(e => e.target === TARGET);
+    const afterStopLoss = stopLossEvent ? probes.filter(s => s.tick > stopLossEvent.tick) : [];
+    const planCleared = stopLossEvent ? afterStopLoss.every(s => s.targetRoom !== TARGET) : false;
+    const blAfterStop = stopLossEvent
+      ? afterStopLoss.map(s => s.blacklist).find(b => b.includes(TARGET))
+      : undefined;
+    const sduAfterStop = stopLossEvent
+      ? (afterStopLoss.find(s => s.standDown > 0)?.standDown ?? -1)
+      : -1;
+    console.log(
+      `[soak-evidence] w4-stoploss: firstPlan=${firstPlan?.tick ?? "never"} ` +
+        `maxSpawned=${maxSpawned} demobEvents=${JSON.stringify(demobEvents)}`,
+    );
+    console.log(
+      `[soak-evidence] w4-stoploss: attrition=${JSON.stringify(attrition ?? null)} ` +
         `planCleared=${planCleared} blAfterStop=${blAfterStop ?? "(none)"} standDownUntil=${sduAfterStop} ` +
-        `advanceSamples=${advanceSamples.length}`);
-      console.log(`[soak-evidence] w4-stoploss spawned timeline: ` +
-        probes.filter((s, idx) => s.spawned !== probes[idx - 1]?.spawned)
-          .map((s) => `t${s.tick}:${s.spawned}${s.targetRoom === TARGET ? "*" : ""}`).join(","));
-      console.log(`[soak-evidence] w4-stoploss warLogs (${warLogs.length}):\n  ${warLogs.slice(0, 10).join("\n  ")}`);
-      console.log(`[soak-evidence] w4-stoploss binding: schemaVersion=43 gcl=1 collectedAt=${new Date().toISOString()}`);
+        `advanceSamples=${advanceSamples.length}`,
+    );
+    console.log(
+      `[soak-evidence] w4-stoploss spawned timeline: ${probes
+        .filter((s, idx) => s.spawned !== probes[idx - 1]?.spawned)
+        .map(s => `t${s.tick}:${s.spawned}${s.targetRoom === TARGET ? "*" : ""}`)
+        .join(",")}`,
+    );
+    console.log(
+      `[soak-evidence] w4-stoploss warLogs (${warLogs.length}):\n  ${warLogs.slice(0, 10).join("\n  ")}`,
+    );
+    console.log(
+      `[soak-evidence] w4-stoploss binding: schemaVersion=43 gcl=1 collectedAt=${new Date().toISOString()}`,
+    );
 
-      // ── 前置：战争实际发生 ──
+    // ── 前置：战争实际发生 ──
+    expect(
+      firstPlan,
+      `12000 tick 内未立项 warPlan（fortify 驻留 + 威胁维持应升 war 并授权）：\n${postureTimeline.join(", ")}`,
+    ).toBeDefined();
+    expect(
+      maxSpawned,
+      `编队未孵化（maxSpawned=${maxSpawned}）——止损链无从谈起`,
+    ).toBeGreaterThanOrEqual(8);
+
+    // ── 断言 1：满编才 advance ──
+    // boost 门：sponsor 无 lab（canBoost=false）→ 降级豁免立即裸攻，无宽限等待；
+    // 满编闸：advance 样本的账本承诺必须已达满编（fullSquadSize 8）。
+    for (const s of advanceSamples) {
       expect(
-        firstPlan,
-        `12000 tick 内未立项 warPlan（fortify 驻留 + 威胁维持应升 war 并授权）：\n${postureTimeline.join(", ")}`,
-      ).toBeDefined();
-      expect(
-        maxSpawned,
-        `编队未孵化（maxSpawned=${maxSpawned}）——止损链无从谈起`,
+        s.spawned,
+        `t${s.tick} 已 advance 但 spawned=${s.spawned} < fullSquadSize(8)——未满编即推进`,
       ).toBeGreaterThanOrEqual(8);
+    }
 
-      // ── 断言 1：满编才 advance ──
-      // boost 门：sponsor 无 lab（canBoost=false）→ 降级豁免立即裸攻，无宽限等待；
-      // 满编闸：advance 样本的账本承诺必须已达满编（fullSquadSize 8）。
-      for (const s of advanceSamples) {
-        expect(
-          s.spawned,
-          `t${s.tick} 已 advance 但 spawned=${s.spawned} < fullSquadSize(8)——未满编即推进`,
-        ).toBeGreaterThanOrEqual(8);
-      }
+    // ── 断言 2：止损触发即收摊（双路径）──
+    // 主路径 REASON_ATTRITION（spawned>20 战损止损）；并发负载下孵化脉冲
+    // 时序漂移可能让 R4 经济止损（warPressureTicks 持续超限 → posture
+    // war→fortify → POSTURE 核验）先行——MILITARY 止损链中两者并列，
+    // 「止损触发即收摊」对两条路径都成立。
+    const stopLossVerdict =
+      attrition ?? demobEvents.find(e => e.target === TARGET && e.reason === 0);
+    expect(
+      stopLossVerdict,
+      `未观测到任何止损收摊事件（ATTRITION 或经济止损 POSTURE）：\n${warLogs.join("\n")}`,
+    ).toBeDefined();
+    expect(planCleared, `止损收摊后 warPlan 未被清除——超限未收摊`).toBe(true);
 
-      // ── 断言 2：止损触发即收摊（双路径）──
-      // 主路径 REASON_ATTRITION（spawned>20 战损止损）；并发负载下孵化脉冲
-      // 时序漂移可能让 R4 经济止损（warPressureTicks 持续超限 → posture
-      // war→fortify → POSTURE 核验）先行——MILITARY 止损链中两者并列，
-      // 「止损触发即收摊」对两条路径都成立。
-      const stopLossVerdict = attrition ?? demobEvents.find((e) => e.target === TARGET && e.reason === 0);
+    // ── 断言 3：warBlacklist 满额冷却（failure：不可破塔 + fact 核验）──
+    expect(
+      stopLossVerdict?.outcome,
+      `止损核验 outcome=${stopLossVerdict?.outcome} ≠ failure——不可破塔应判确定性失败`,
+    ).toBe("failure");
+    expect(
+      stopLossVerdict?.blacklist,
+      `黑名单冷却 ${stopLossVerdict?.blacklist}t ≠ 满额 20000t`,
+    ).toBe(20000);
+    expect(blAfterStop, `收摊后 warBlacklist 未登记 ${TARGET}——失败目标可被立即重选`).toBeDefined();
+    if (blAfterStop && stopLossEvent) {
+      // mockup console 会转义部分字符（> → &#x3E; 等），防御性反转义后提取。
+      const blRaw = blAfterStop.replace(/&#x3E;/g, ">").replace(/&#x22;/g, '"');
+      const blMatch = blRaw.match(new RegExp(`${TARGET}@(\\d+)`));
+      const blUntil = blMatch ? Number(blMatch[1]) : 0;
       expect(
-        stopLossVerdict,
-        `未观测到任何止损收摊事件（ATTRITION 或经济止损 POSTURE）：\n` +
-        warLogs.join("\n"),
-      ).toBeDefined();
-      expect(
-        planCleared,
-        `止损收摊后 warPlan 未被清除——超限未收摊`,
-      ).toBe(true);
+        blUntil,
+        `黑名单冷却不足（bl=${blRaw}，收摊 tick=${stopLossEvent.tick}）——failure 应满额 20000t`,
+      ).toBeGreaterThanOrEqual(stopLossEvent.tick + 19000);
+    }
+    // 冷却期内不再立项（收摊后 tgt 不应重新出现）。
+    const rePlanned = afterStopLoss.some(s => s.targetRoom === TARGET);
+    expect(rePlanned, `黑名单冷却期内 ${TARGET} 被重新立项——冷却失效`).toBe(false);
 
-      // ── 断言 3：warBlacklist 满额冷却（failure：不可破塔 + fact 核验）──
+    // ── 断言 4：整军休战闸（仅 ATTRITION 路径置位）──
+    // warStandDownUntil 是战损止损专属（war-planner ATTRITION 分支写入）；
+    // 经济止损路径的休战由 posture 驻留语义承担（minDwell + warPatience
+    // 重走），不置位此闸——两条路径的防添油机制不同但等价。
+    if (attrition) {
       expect(
-        stopLossVerdict?.outcome,
-        `止损核验 outcome=${stopLossVerdict?.outcome} ≠ failure——不可破塔应判确定性失败`,
-      ).toBe("failure");
-      expect(
-        stopLossVerdict?.blacklist,
-        `黑名单冷却 ${stopLossVerdict?.blacklist}t ≠ 满额 20000t`,
-      ).toBe(20000);
-      expect(
-        blAfterStop,
-        `收摊后 warBlacklist 未登记 ${TARGET}——失败目标可被立即重选`,
-      ).toBeDefined();
-      if (blAfterStop && stopLossEvent) {
-        // mockup console 会转义部分字符（> → &#x3E; 等），防御性反转义后提取。
-        const blRaw = blAfterStop.replace(/&#x3E;/g, ">").replace(/&#x22;/g, '"');
-        const blMatch = blRaw.match(new RegExp(`${TARGET}@(\\d+)`));
-        const blUntil = blMatch ? Number(blMatch[1]) : 0;
-        expect(
-          blUntil,
-          `黑名单冷却不足（bl=${blRaw}，收摊 tick=${stopLossEvent.tick}）——failure 应满额 20000t`,
-        ).toBeGreaterThanOrEqual(stopLossEvent.tick + 19000);
-      }
-      // 冷却期内不再立项（收摊后 tgt 不应重新出现）。
-      const rePlanned = afterStopLoss.some((s) => s.targetRoom === TARGET);
-      expect(
-        rePlanned,
-        `黑名单冷却期内 ${TARGET} 被重新立项——冷却失效`,
-      ).toBe(false);
+        sduAfterStop,
+        `战损止损收摊后 warStandDownUntil 未置位——跨目标添油循环闸缺失`,
+      ).toBeGreaterThan(0);
+    }
 
-      // ── 断言 4：整军休战闸（仅 ATTRITION 路径置位）──
-      // warStandDownUntil 是战损止损专属（war-planner ATTRITION 分支写入）；
-      // 经济止损路径的休战由 posture 驻留语义承担（minDwell + warPatience
-      // 重走），不置位此闸——两条路径的防添油机制不同但等价。
-      if (attrition) {
-        expect(
-          sduAfterStop,
-          `战损止损收摊后 warStandDownUntil 未置位——跨目标添油循环闸缺失`,
-        ).toBeGreaterThan(0);
-      }
-
-      // 全程无 JS 错误。
-      expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);
-    },
-    1200000,
-  );
+    // 全程无 JS 错误。
+    expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);
+  }, 1200000);
 });

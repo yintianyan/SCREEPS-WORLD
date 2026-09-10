@@ -105,7 +105,15 @@ export function registerCounter(
   const name = buildMetricName(domain, metric, unit);
   const s = store();
   if (!s.descriptors.has(name)) {
-    s.descriptors.set(name, { domain, metric, unit, help, allowedLabels: labels, kind: "counter", cumulative: cumulative === true });
+    s.descriptors.set(name, {
+      domain,
+      metric,
+      unit,
+      help,
+      allowedLabels: labels,
+      kind: "counter",
+      cumulative: cumulative === true,
+    });
     s.counters.set(name, new Map());
   }
 }
@@ -138,7 +146,14 @@ export function registerHistogram(
   const name = buildMetricName(domain, metric, unit);
   const s = store();
   if (!s.descriptors.has(name)) {
-    s.descriptors.set(name, { domain, metric, unit, help, allowedLabels: labels, kind: "histogram" });
+    s.descriptors.set(name, {
+      domain,
+      metric,
+      unit,
+      help,
+      allowedLabels: labels,
+      kind: "histogram",
+    });
     s.histograms.set(name, new Map());
     s.histogramBuckets.set(name, buckets);
   }

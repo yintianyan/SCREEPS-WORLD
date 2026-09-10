@@ -113,7 +113,10 @@ export function planDeathRecovery(input: DeathRecoveryInput): DeathRecoveryPlan 
   } else if (request) {
     remainingDemand = request.amount;
   } else if (assignment) {
-    remainingDemand = Math.max(0, assignment.assignedAmount - assignment.deliveredAmount - assignment.lostAmount);
+    remainingDemand = Math.max(
+      0,
+      assignment.assignedAmount - assignment.deliveredAmount - assignment.lostAmount,
+    );
   }
 
   // 步骤 4: New Assignment
@@ -152,8 +155,6 @@ export function planDeathRecovery(input: DeathRecoveryInput): DeathRecoveryPlan 
  * 批量规划多个死亡恢复。
  * 纯函数。
  */
-export function batchPlanDeathRecovery(
-  inputs: readonly DeathRecoveryInput[],
-): DeathRecoveryPlan[] {
+export function batchPlanDeathRecovery(inputs: readonly DeathRecoveryInput[]): DeathRecoveryPlan[] {
   return inputs.map(planDeathRecovery);
 }

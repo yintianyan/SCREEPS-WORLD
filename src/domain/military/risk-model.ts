@@ -61,7 +61,9 @@ export function assessOperationRisk(input: RiskInput): RiskResult {
   const ourScore = input.ourPower.powerScore;
   const ratio = ourScore > 0 ? enemyScore / ourScore : 99;
   const capabilityGap = Math.min(1, Math.max(0, (ratio - 0.5) / 2));
-  evidence.push(`enemy=${enemyScore.toFixed(0)} vs our=${ourScore.toFixed(0)} ratio=${ratio.toFixed(2)}`);
+  evidence.push(
+    `enemy=${enemyScore.toFixed(0)} vs our=${ourScore.toFixed(0)} ratio=${ratio.toFixed(2)}`,
+  );
 
   // 2. Terrain Risk — 地形不利增加风险
   const terrainRisk = computeTerrainRisk(input.terrain);
@@ -76,15 +78,23 @@ export function assessOperationRisk(input: RiskInput): RiskResult {
   evidence.push(`safeMode=${input.targetSafeModeAvailable} risk=${safeModeRisk.toFixed(2)}`);
 
   // 5. Reinforcement Risk — 增援慢增加风险
-  const reinforcementRisk = input.reinforcementETA > 200 ? 0.6
-    : input.reinforcementETA > 100 ? 0.3
-      : input.reinforcementETA > 50 ? 0.15
-        : 0;
+  const reinforcementRisk =
+    input.reinforcementETA > 200
+      ? 0.6
+      : input.reinforcementETA > 100
+        ? 0.3
+        : input.reinforcementETA > 50
+          ? 0.15
+          : 0;
   evidence.push(`reinforcementETA=${input.reinforcementETA} risk=${reinforcementRisk.toFixed(2)}`);
 
   // 6. Retreat Risk — 撤退质量差增加风险
   const retreatRiskMap: Record<string, number> = {
-    VERY_GOOD: 0, GOOD: 0.15, POOR: 0.4, CRITICAL: 0.7, UNKNOWN: 0.3,
+    VERY_GOOD: 0,
+    GOOD: 0.15,
+    POOR: 0.4,
+    CRITICAL: 0.7,
+    UNKNOWN: 0.3,
   };
   const retreatRisk = retreatRiskMap[input.terrain.retreatQuality] ?? 0.3;
   evidence.push(`retreatQuality=${input.terrain.retreatQuality} risk=${retreatRisk.toFixed(2)}`);
@@ -96,20 +106,24 @@ export function assessOperationRisk(input: RiskInput): RiskResult {
 
   // 8. Logistics Risk — 物流不可靠
   const logisticsRisk = 1 - input.logisticsReliability;
-  evidence.push(`logisticsReliability=${input.logisticsReliability.toFixed(2)} risk=${logisticsRisk.toFixed(2)}`);
+  evidence.push(
+    `logisticsReliability=${input.logisticsReliability.toFixed(2)} risk=${logisticsRisk.toFixed(2)}`,
+  );
 
   // 9. Recovery Risk — 恢复能力不足
   const recoveryRisk = 1 - input.recoveryCapability;
-  evidence.push(`recoveryCapability=${input.recoveryCapability.toFixed(2)} risk=${recoveryRisk.toFixed(2)}`);
+  evidence.push(
+    `recoveryCapability=${input.recoveryCapability.toFixed(2)} risk=${recoveryRisk.toFixed(2)}`,
+  );
 
   // 加权汇总
   const weights = {
     capabilityGap: 0.25,
-    terrainRisk: 0.10,
-    towerRisk: 0.10,
+    terrainRisk: 0.1,
+    towerRisk: 0.1,
     safeModeRisk: 0.08,
-    reinforcementRisk: 0.10,
-    retreatRisk: 0.10,
+    reinforcementRisk: 0.1,
+    retreatRisk: 0.1,
     intelRisk: 0.12,
     logisticsRisk: 0.08,
     recoveryRisk: 0.07,
@@ -126,10 +140,8 @@ export function assessOperationRisk(input: RiskInput): RiskResult {
     logisticsRisk * weights.logisticsRisk +
     recoveryRisk * weights.recoveryRisk;
 
-  const level: RiskLevel = score >= 0.7 ? "CRITICAL"
-    : score >= 0.45 ? "HIGH"
-      : score >= 0.2 ? "MEDIUM"
-        : "LOW";
+  const level: RiskLevel =
+    score >= 0.7 ? "CRITICAL" : score >= 0.45 ? "HIGH" : score >= 0.2 ? "MEDIUM" : "LOW";
 
   return {
     level,
@@ -152,26 +164,42 @@ export function assessOperationRisk(input: RiskInput): RiskResult {
 function computeTerrainRisk(terrain: TerrainContext): number {
   // 敌方有利地形增加风险
   switch (terrain.terrainType) {
-    case "FORTIFIED": return 0.8;   // 敌方有 rampart
-    case "CORE_DEFENSE": return 0.7; // 敌方塔密集
-    case "CHOKEPOINT": return 0.5;  // 瓶颈难突破
-    case "CONFINED": return 0.4;
-    case "CORRIDOR": return 0.3;
-    case "OPEN": return 0.2;
-    case "OPEN_FIELD": return 0.1;  // 开阔地对我有利
-    case "UNKNOWN": return 0.5;     // 未知取中等
-    default: return 0.5;
+    case "FORTIFIED":
+      return 0.8; // 敌方有 rampart
+    case "CORE_DEFENSE":
+      return 0.7; // 敌方塔密集
+    case "CHOKEPOINT":
+      return 0.5; // 瓶颈难突破
+    case "CONFINED":
+      return 0.4;
+    case "CORRIDOR":
+      return 0.3;
+    case "OPEN":
+      return 0.2;
+    case "OPEN_FIELD":
+      return 0.1; // 开阔地对我有利
+    case "UNKNOWN":
+      return 0.5; // 未知取中等
+    default:
+      return 0.5;
   }
 }
 
 function computeTowerRisk(terrain: TerrainContext): number {
   switch (terrain.towerCoverage) {
-    case "NONE": return 0;
-    case "LOW": return 0.2;
-    case "MEDIUM": return 0.4;
-    case "HIGH": return 0.65;
-    case "CRITICAL": return 0.85;
-    case "UNKNOWN": return 0.5;
-    default: return 0.5;
+    case "NONE":
+      return 0;
+    case "LOW":
+      return 0.2;
+    case "MEDIUM":
+      return 0.4;
+    case "HIGH":
+      return 0.65;
+    case "CRITICAL":
+      return 0.85;
+    case "UNKNOWN":
+      return 0.5;
+    default:
+      return 0.5;
   }
 }

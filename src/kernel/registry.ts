@@ -33,7 +33,10 @@ export class Registry {
   }
 
   getWorldModelBuilder(): WorldModelBuilder {
-    if (!this.worldModelBuilder) throw new Error("WorldModelBuilder not registered — bootstrap must call registerWorldModelBuilder()");
+    if (!this.worldModelBuilder)
+      throw new Error(
+        "WorldModelBuilder not registered — bootstrap must call registerWorldModelBuilder()",
+      );
     return this.worldModelBuilder;
   }
 

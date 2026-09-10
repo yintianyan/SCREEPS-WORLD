@@ -18,13 +18,7 @@ import { hasActiveRemoteMiningOp } from "../operation/remote-mining-op";
  * - NO_DEMAND: 帝国无需求——资源已饱和
  */
 export type GateResultType =
-  | "pass"
-  | "wait"
-  | "block"
-  | "replan"
-  | "duplicate"
-  | "no_budget"
-  | "no_demand";
+  "pass" | "wait" | "block" | "replan" | "duplicate" | "no_budget" | "no_demand";
 
 /**
  * Execution Gate 检查结果。

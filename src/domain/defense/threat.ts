@@ -4,13 +4,7 @@
  *  配置变更时需同步。 */
 
 /** 具备任一即视为威胁的部件类型。与 CONFIG.defense.threatParts 同口径。 */
-const THREAT_PARTS: readonly BodyPartConstant[] = [
-  ATTACK,
-  RANGED_ATTACK,
-  HEAL,
-  WORK,
-  CLAIM,
-];
+const THREAT_PARTS: readonly BodyPartConstant[] = [ATTACK, RANGED_ATTACK, HEAL, WORK, CLAIM];
 
 /** 威胁判定的最小输入（便于纯函数测试，无需构造完整 Creep）。 */
 export interface ThreatInput {
@@ -24,10 +18,7 @@ export function isThreat(input: ThreatInput, allies: readonly string[]): boolean
   return input.bodyParts.some(p => THREAT_PARTS.includes(p));
 }
 
-export function classifyThreats(
-  hostiles: readonly Creep[],
-  allies: readonly string[],
-): Creep[] {
+export function classifyThreats(hostiles: readonly Creep[], allies: readonly string[]): Creep[] {
   return hostiles.filter(c =>
     isThreat(
       // owner 缺失（私服注入/NPC 边缘形态）记 "?"——非盟友名，按威胁部件判定，

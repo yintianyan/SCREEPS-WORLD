@@ -4,7 +4,12 @@ import { moveTowardRoom } from "../../../src/creeps/movement/pathfinding";
 import { mockCreep, mockPos, resetGlobals } from "../../support/factories";
 
 function scoutIn(roomName: string, target: string, avoidRooms?: string[]): any {
-  const creep = mockCreep({ role: "scout", home: "W7N4", mode: "acquire", pos: mockPos(25, 25, roomName) });
+  const creep = mockCreep({
+    role: "scout",
+    home: "W7N4",
+    mode: "acquire",
+    pos: mockPos(25, 25, roomName),
+  });
   creep.memory.remoteTarget = target;
   if (avoidRooms) creep.memory.avoidRooms = avoidRooms;
   creep.room = { name: roomName, findExitTo: vi.fn(() => 3), lookForAt: vi.fn(() => []) };

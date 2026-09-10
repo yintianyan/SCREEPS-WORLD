@@ -60,22 +60,19 @@ export function createExpansionOperation(input: OperationInput): ExpansionOperat
   const operationId = `op-${type}-${plan.planId}`;
 
   // 根据类型设置完成条件
-  const completionCriteria = type === "claim"
-    ? [
-        "claimer reached target room",
-        "claimController() succeeded",
-        "controller.my === true",
-      ]
-    : [
-        "pioneer reached target room",
-        "spawn construction complete",
-        "harvester deployed",
-        "hauler or distributor deployed",
-        "energy loop active",
-        "net energy flow positive",
-        "economic activation achieved",
-        "empire integration complete",
-      ];
+  const completionCriteria =
+    type === "claim"
+      ? ["claimer reached target room", "claimController() succeeded", "controller.my === true"]
+      : [
+          "pioneer reached target room",
+          "spawn construction complete",
+          "harvester deployed",
+          "hauler or distributor deployed",
+          "energy loop active",
+          "net energy flow positive",
+          "economic activation achieved",
+          "empire integration complete",
+        ];
 
   return {
     operationId,
@@ -136,10 +133,7 @@ export function isOperationComplete(op: ExpansionOperation): boolean {
 /**
  * 标记 Operation 完成。
  */
-export function completeOperation(
-  op: ExpansionOperation,
-  tick: number,
-): ExpansionOperation {
+export function completeOperation(op: ExpansionOperation, tick: number): ExpansionOperation {
   return {
     ...op,
     status: "COMPLETED",
@@ -168,10 +162,7 @@ export function failOperation(
 /**
  * 标记 Operation 活跃。
  */
-export function activateOperation(
-  op: ExpansionOperation,
-  tick: number,
-): ExpansionOperation {
+export function activateOperation(op: ExpansionOperation, tick: number): ExpansionOperation {
   return {
     ...op,
     status: "ACTIVE",

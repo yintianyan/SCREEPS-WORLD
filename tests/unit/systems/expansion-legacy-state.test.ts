@@ -13,7 +13,9 @@ function makeContext(): any {
     budget: mockBudget("healthy"),
     globalSiteCount: 0,
     getSnapshot: () => mockSnapshot(),
-    snapshots: function* () { yield mockSnapshot(); },
+    *snapshots() {
+      yield mockSnapshot();
+    },
   };
 }
 
@@ -24,7 +26,12 @@ describe("expansion-manager — 旧版残留状态清理", () => {
       creeps: {},
       rooms: { W37S58: { spawnQueue: [], buildQueue: [] } },
       kernel: {
-        strategy: { posture: "develop", since: 900, expansionAllowed: false, newRemoteOpsAllowed: true },
+        strategy: {
+          posture: "develop",
+          since: 900,
+          expansionAllowed: false,
+          newRemoteOpsAllowed: true,
+        },
         expansion: { state: "pioneering", target: "W37S55", sponsor: "W37S58", startedAt: 100 },
       },
     };
@@ -48,8 +55,18 @@ describe("expansion-manager — 旧版残留状态清理", () => {
       creeps: {},
       rooms: { W37S58: { spawnQueue: [], buildQueue: [] } },
       kernel: {
-        strategy: { posture: "develop", since: 900, expansionAllowed: false, newRemoteOpsAllowed: true },
-        expansion: { state: "some_future_state", target: "W36S58", sponsor: "W37S58", startedAt: 100 },
+        strategy: {
+          posture: "develop",
+          since: 900,
+          expansionAllowed: false,
+          newRemoteOpsAllowed: true,
+        },
+        expansion: {
+          state: "some_future_state",
+          target: "W36S58",
+          sponsor: "W37S58",
+          startedAt: 100,
+        },
       },
     };
     syncSquadIndex();
@@ -72,7 +89,12 @@ describe("expansion-manager — 旧版残留状态清理", () => {
       creeps: {},
       rooms: { W37S58: { spawnQueue: [], buildQueue: [] } },
       kernel: {
-        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
+        strategy: {
+          posture: "expand",
+          since: 900,
+          expansionAllowed: true,
+          newRemoteOpsAllowed: true,
+        },
         expansion: { state: "preparing", target: "W36S58", sponsor: "W37S58", startedAt: tick },
       },
     };

@@ -98,7 +98,7 @@ function structureValueTier(t: StructureConstant): number {
 export function attackByFocusFire(): ActionCandidate<Creep | AnyStructure> {
   return {
     name: "attacker:focus-fire",
-    resolve: (ac) => {
+    resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       const intent = readAttackIntent(ac.creep.name);
       if (!intent) return undefined; // 无 FocusFire 指令 → 回退 A5.4.1
@@ -167,7 +167,7 @@ export function attackByFocusFire(): ActionCandidate<Creep | AnyStructure> {
 export function attackByTacticalIntent(): ActionCandidate<Creep | AnyStructure> {
   return {
     name: "attacker:tactical-intent",
-    resolve: (ac) => {
+    resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       const intent = readTacticalIntent(ac.creep.name);
       if (!intent) return undefined; // 无战术指令 → 回退 Legacy
@@ -203,7 +203,7 @@ export function attackByTacticalIntent(): ActionCandidate<Creep | AnyStructure> 
 export function attackPowerBank(): ActionCandidate<StructurePowerBank> {
   return {
     name: "attacker:attack-power-bank",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.creep.memory.mission !== "powerBank") return undefined;
       if (markRetreat(ac.creep)) return undefined;
       const target = ac.creep.memory.remoteTarget;
@@ -222,12 +222,13 @@ export function attackPowerBank(): ActionCandidate<StructurePowerBank> {
 function defendInTransit(): ActionCandidate<Creep> {
   return {
     name: "attacker:defend-in-transit",
-    resolve: (ac) => {
+    resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       // 仅在非目标房且非 home 房的过境房触发
       const target = ac.creep.memory.remoteTarget;
       if (!target) return undefined;
-      if (ac.creep.room.name === target || ac.creep.room.name === ac.creep.memory.home) return undefined;
+      if (ac.creep.room.name === target || ac.creep.room.name === ac.creep.memory.home)
+        return undefined;
       const hostiles = getHostilesCached(ac.creep.room);
       if (hostiles.length === 0) return undefined;
       return ac.creep.pos.findClosestByRange(hostiles) ?? hostiles[0];
@@ -242,7 +243,7 @@ function defendInTransit(): ActionCandidate<Creep> {
 export function attackEnemies(): ActionCandidate<Creep> {
   return {
     name: "attacker:attack-creeps",
-    resolve: (ac) => {
+    resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       const target = ac.creep.memory.remoteTarget;
       if (!target || ac.creep.room.name !== target) return undefined;
@@ -260,7 +261,7 @@ export function attackEnemies(): ActionCandidate<Creep> {
 export function attackStructures(): ActionCandidate<AnyStructure> {
   return {
     name: "attacker:attack-structures",
-    resolve: (ac) => {
+    resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       const target = ac.creep.memory.remoteTarget;
       if (!target || ac.creep.room.name !== target) return undefined;
@@ -275,9 +276,10 @@ export function attackStructures(): ActionCandidate<AnyStructure> {
         // 归一化后：tier 分档决胜，同档内残血比例高者优先（集火残血加速摧毁），
         // 距离只在同档同残血比例时决胜。
         const damageRatio = s.hitsMax > 0 ? (s.hitsMax - s.hits) / s.hitsMax : 0;
-        const score = structureValueTier(s.structureType) * 1000
-          + damageRatio * 999
-          - ac.creep.pos.getRangeTo(s);
+        const score =
+          structureValueTier(s.structureType) * 1000 +
+          damageRatio * 999 -
+          ac.creep.pos.getRangeTo(s);
         if (score > bestScore) {
           bestScore = score;
           best = s;
@@ -326,8 +328,22 @@ const policy: RolePolicy = {
   // A5.4.3：focus-fire 最高优先 → A5.4.1 tactical-intent → Legacy 候选
   // 无 FocusFire 指令时回退到 A5.4.1 TacticalIntent → PB → enemies → structures
   // defendInTransit 排末尾：目标房候选未命中（过境房）时才触发自卫反击
-  acquire: [attackByFocusFire(), attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures(), defendInTransit()],
-  work: [attackByFocusFire(), attackByTacticalIntent(), attackPowerBank(), attackEnemies(), attackStructures(), defendInTransit()],
+  acquire: [
+    attackByFocusFire(),
+    attackByTacticalIntent(),
+    attackPowerBank(),
+    attackEnemies(),
+    attackStructures(),
+    defendInTransit(),
+  ],
+  work: [
+    attackByFocusFire(),
+    attackByTacticalIntent(),
+    attackPowerBank(),
+    attackEnemies(),
+    attackStructures(),
+    defendInTransit(),
+  ],
 };
 
 export const attackerRole = defineRole("attacker", 2 as Priority, policy);

@@ -33,7 +33,20 @@ function snapshotAt(rcl: number, overrides: Partial<RoomSnapshot> = {}): RoomSna
       pos: mockPos(40, 10),
       structureType: "controller",
     } as any,
-    spawns: [{ id: "spawn1", pos: mockPos(25, 25), structureType: "spawn", store: { getUsedCapacity: () => 0, getFreeCapacity: () => 300, getCapacity: () => 300, energy: 0 } as any, my: true } as any],
+    spawns: [
+      {
+        id: "spawn1",
+        pos: mockPos(25, 25),
+        structureType: "spawn",
+        store: {
+          getUsedCapacity: () => 0,
+          getFreeCapacity: () => 300,
+          getCapacity: () => 300,
+          energy: 0,
+        } as any,
+        my: true,
+      } as any,
+    ],
     extensions: [],
     towers: [],
     containers: [],
@@ -44,7 +57,12 @@ function snapshotAt(rcl: number, overrides: Partial<RoomSnapshot> = {}): RoomSna
       id: "storage1",
       pos: mockPos(26, 25),
       structureType: "storage",
-      store: { getUsedCapacity: () => 0, getFreeCapacity: () => 1000000, getCapacity: () => 1000000, energy: 0 } as any,
+      store: {
+        getUsedCapacity: () => 0,
+        getFreeCapacity: () => 1000000,
+        getCapacity: () => 1000000,
+        energy: 0,
+      } as any,
       my: true,
     } as any,
     controllerContainer: undefined,
@@ -92,14 +110,21 @@ describe("P1-3 shouldHaveControllerLink", () => {
 
   it("RCL5：controller 附近已有 link → 不应有", () => {
     const snap = snapshotAt(5, {
-      links: [{
-        id: "link1",
-        pos: mockPos(41, 10),
-        structureType: "link",
-        store: { getUsedCapacity: () => 0, getFreeCapacity: () => 800, getCapacity: () => 800, energy: 0 } as any,
-        cooldown: 0,
-        my: true,
-      } as any],
+      links: [
+        {
+          id: "link1",
+          pos: mockPos(41, 10),
+          structureType: "link",
+          store: {
+            getUsedCapacity: () => 0,
+            getFreeCapacity: () => 800,
+            getCapacity: () => 800,
+            energy: 0,
+          } as any,
+          cooldown: 0,
+          my: true,
+        } as any,
+      ],
     });
     expect(shouldHaveControllerLink(snap, 0)).toBe(false);
   });
@@ -137,14 +162,21 @@ describe("P1-3 shouldHaveStorageLink", () => {
 
   it("RCL5：storage 附近已有 link → 不应有", () => {
     const snap = snapshotAt(5, {
-      links: [{
-        id: "link1",
-        pos: mockPos(26, 26),
-        structureType: "link",
-        store: { getUsedCapacity: () => 0, getFreeCapacity: () => 800, getCapacity: () => 800, energy: 0 } as any,
-        cooldown: 0,
-        my: true,
-      } as any],
+      links: [
+        {
+          id: "link1",
+          pos: mockPos(26, 26),
+          structureType: "link",
+          store: {
+            getUsedCapacity: () => 0,
+            getFreeCapacity: () => 800,
+            getCapacity: () => 800,
+            energy: 0,
+          } as any,
+          cooldown: 0,
+          my: true,
+        } as any,
+      ],
     });
     expect(shouldHaveStorageLink(snap, 0)).toBe(false);
   });

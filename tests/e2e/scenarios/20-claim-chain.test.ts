@@ -30,7 +30,9 @@ describe("E2E-020 claim 授权全链 — 立项→claim→bootstrap", () => {
     const home = standardRoom(HOME, 300, 6);
     for (let i = 0; i < 10; i++) {
       home.objects!.push({
-        type: "extension", x: 20 + (i % 5) * 2, y: 20 + Math.floor(i / 5) * 2,
+        type: "extension",
+        x: 20 + (i % 5) * 2,
+        y: 20 + Math.floor(i / 5) * 2,
         props: { energy: 50, energyCapacity: 50 },
       });
     }
@@ -54,51 +56,47 @@ describe("E2E-020 claim 授权全链 — 立项→claim→bootstrap", () => {
     await runner.teardown();
   });
 
-  it(
-    "自然授权链触发 claim 并完成（或登记精确阻塞点）",
-    async () => {
-      const dbgLines: string[] = [];
-  const interesting = [
-        "expansion-manager: consuming plan",
-        "expansion: preparing → claiming",
-        "expansion: claimed",
-        "claimed → bootstrapping",
-        "expansion:",
-        "expansion-planner:",
-      ];
-      for (let i = 0; i < 30; i++) {
-        const snaps = await runner.runTicks(500);
-        errorsSeen += snaps.flatMap((s) => s.consoleLogs).filter(isJsError).length;
-        const logs = snaps.flatMap((s) => s.consoleLogs);
-        for (const l of logs) {
-          for (const key of interesting) {
-            if (l.includes(key) && milestones[key] === undefined) {
-              milestones[key] = snaps.at(-1)!.tick;
-              console.log(`[claim-evidence] ${key} @ tick ${snaps.at(-1)!.tick}: ${l.slice(0, 400)}`);
-            }
-            if (l.includes("Readiness=") && !dbgLines.includes(l)) dbgLines.push(l);
+  it("自然授权链触发 claim 并完成（或登记精确阻塞点）", async () => {
+    const dbgLines: string[] = [];
+    const interesting = [
+      "expansion-manager: consuming plan",
+      "expansion: preparing → claiming",
+      "expansion: claimed",
+      "claimed → bootstrapping",
+      "expansion:",
+      "expansion-planner:",
+    ];
+    for (let i = 0; i < 30; i++) {
+      const snaps = await runner.runTicks(500);
+      errorsSeen += snaps.flatMap(s => s.consoleLogs).filter(isJsError).length;
+      const logs = snaps.flatMap(s => s.consoleLogs);
+      for (const l of logs) {
+        for (const key of interesting) {
+          if (l.includes(key) && milestones[key] === undefined) {
+            milestones[key] = snaps.at(-1)!.tick;
+            console.log(`[claim-evidence] ${key} @ tick ${snaps.at(-1)!.tick}: ${l.slice(0, 400)}`);
           }
+          if (l.includes("Readiness=") && !dbgLines.includes(l)) dbgLines.push(l);
         }
       }
+    }
 
-      if (dbgLines.length > 0) console.log(`[claim-dbg] first: ${dbgLines[0]}`);
-      if (dbgLines.length > 0) console.log(`[claim-dbg] last: ${dbgLines.at(-1)}`);
-      const mem = await runner.bot.getMemory();
-      const expansion = mem?.kernel?.expansion;
-      console.log(
-        `[claim-evidence] final: state=${expansion?.state ?? "(none)"} target=${expansion?.target ?? "?"} ` +
-          `milestones=${JSON.stringify(milestones)} jsErrors=${errorsSeen}`,
-      );
-      console.log(
-        `[claim-evidence] binding: schemaVersion=43 gcl=2 collectedAt=${new Date().toISOString()}`,
-      );
+    if (dbgLines.length > 0) console.log(`[claim-dbg] first: ${dbgLines[0]}`);
+    if (dbgLines.length > 0) console.log(`[claim-dbg] last: ${dbgLines.at(-1)}`);
+    const mem = await runner.bot.getMemory();
+    const expansion = mem?.kernel?.expansion;
+    console.log(
+      `[claim-evidence] final: state=${expansion?.state ?? "(none)"} target=${expansion?.target ?? "?"} ` +
+        `milestones=${JSON.stringify(milestones)} jsErrors=${errorsSeen}`,
+    );
+    console.log(
+      `[claim-evidence] binding: schemaVersion=43 gcl=2 collectedAt=${new Date().toISOString()}`,
+    );
 
-      // 全程无 JS 错误。
-      expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);
-      // Memory 有界。
-      const memSize = JSON.stringify(mem).length;
-      expect(memSize, `claim soak Memory 过大: ${memSize} bytes`).toBeLessThan(500_000);
-    },
-    1200000,
-  );
+    // 全程无 JS 错误。
+    expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);
+    // Memory 有界。
+    const memSize = JSON.stringify(mem).length;
+    expect(memSize, `claim soak Memory 过大: ${memSize} bytes`).toBeLessThan(500_000);
+  }, 1200000);
 });

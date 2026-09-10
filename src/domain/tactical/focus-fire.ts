@@ -1,9 +1,6 @@
 /** Tactical Engagement & Focus Fire */
 
-import type {
-  TacticalState,
-  TargetScope,
-} from "./types";
+import type { TacticalState, TargetScope } from "./types";
 import type { CombatCapability } from "../combat/capability";
 
 // ═══════════════════════════════════════════════════════════
@@ -57,12 +54,12 @@ export interface TargetCandidate {
 
 /** 目标可达性状态。 */
 export type TargetAccessibility =
-  | "IN_MELEE_RANGE"     // 近身攻击范围内（≤1 格）
-  | "IN_RANGED_RANGE"   // 远程攻击范围内（≤3 格）
+  | "IN_MELEE_RANGE" // 近身攻击范围内（≤1 格）
+  | "IN_RANGED_RANGE" // 远程攻击范围内（≤3 格）
   | "IN_ENGAGEMENT_RANGE" // 交战范围内（≤5 格，需移动接近）
-  | "OUT_OF_RANGE"      // 超出范围（需要 Movement Intent）
-  | "BLOCKED"           // 被阻挡（地形/友方/不可达）
-  | "INVALID";          // 目标无效（已死/消失）
+  | "OUT_OF_RANGE" // 超出范围（需要 Movement Intent）
+  | "BLOCKED" // 被阻挡（地形/友方/不可达）
+  | "INVALID"; // 目标无效（已死/消失）
 
 /**
  * TacticalValueBreakdown — 多维战术价值评分。
@@ -97,11 +94,11 @@ export interface TacticalValueBreakdown {
 
 /** 攻击类型 — 区分 Melee / Ranged。 */
 export type AttackType =
-  | "ATTACK"            // 近身攻击（range ≤ 1）
-  | "RANGED_ATTACK"     // 远程攻击（range ≤ 3）
+  | "ATTACK" // 近身攻击（range ≤ 1）
+  | "RANGED_ATTACK" // 远程攻击（range ≤ 3）
   | "RANGED_MASS_ATTACK" // 范围攻击（多个目标，需特殊条件）
-  | "DISMANTLE"         // 拆除（对建筑）
-  | "NO_ATTACK";        // 不攻击（目标不在射程 → 产生 MovementIntent）
+  | "DISMANTLE" // 拆除（对建筑）
+  | "NO_ATTACK"; // 不攻击（目标不在射程 → 产生 MovementIntent）
 
 /** 目标优先级。 */
 export type TargetPriority = "PRIMARY" | "SECONDARY" | "NO_TARGET";
@@ -291,18 +288,18 @@ export interface RejectedTarget {
  *   TARGET_OUT_OF_RANGE → REQUEST_MOVEMENT（不直接进入 Strategic Planning）
  */
 export type EngagementState =
-  | "IDLE"                // 无目标待命
-  | "TARGET_ACQUIRED"     // 已选择目标
-  | "ATTACKING"           // 正在攻击
-  | "TARGET_DYING"        // 目标即将死亡（HP < 30%）
-  | "TARGET_DEAD"         // 目标已死亡
-  | "TARGET_LOST"         // 目标突然消失（不在视野/被其他单位击杀）
+  | "IDLE" // 无目标待命
+  | "TARGET_ACQUIRED" // 已选择目标
+  | "ATTACKING" // 正在攻击
+  | "TARGET_DYING" // 目标即将死亡（HP < 30%）
+  | "TARGET_DEAD" // 目标已死亡
+  | "TARGET_LOST" // 目标突然消失（不在视野/被其他单位击杀）
   | "TARGET_OUT_OF_RANGE" // 目标超出射程
-  | "TARGET_ESCAPED"      // 目标逃跑（连续多 tick OUT_OF_RANGE）
-  | "TARGET_BLOCKED"      // 目标被阻挡（地形/友方）
-  | "REASSESSING"         // 重新评估中
-  | "REQUEST_MOVEMENT"    // 请求移动进入射程
-  | "REGROUP";            // 需要重新集结（不打）
+  | "TARGET_ESCAPED" // 目标逃跑（连续多 tick OUT_OF_RANGE）
+  | "TARGET_BLOCKED" // 目标被阻挡（地形/友方）
+  | "REASSESSING" // 重新评估中
+  | "REQUEST_MOVEMENT" // 请求移动进入射程
+  | "REGROUP"; // 需要重新集结（不打）
 
 // ═══════════════════════════════════════════════════════════
 // §7. FocusFireSnapshot — 纯函数输入
@@ -387,7 +384,19 @@ export interface FocusFireMemberSnapshot {
  * 纯函数 — 相同输入必产生相同输出。
  */
 export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
-  const { tick, squadId, objectiveId, tacticalState, targetScope, warPosture, candidates, members, prevPlan, cohesionStatus, authorizedTargetRoom } = snapshot;
+  const {
+    tick,
+    squadId,
+    objectiveId,
+    tacticalState,
+    targetScope,
+    warPosture,
+    candidates,
+    members,
+    prevPlan,
+    cohesionStatus,
+    authorizedTargetRoom,
+  } = snapshot;
 
   const rejected: RejectedTarget[] = [];
   const evidence: string[] = [];
@@ -397,21 +406,35 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
   if (warPosture !== "war") {
     evidence.push(`warPosture=${warPosture} (requires war for offensive)`);
     return buildEmptyPlan(
-      squadId, objectiveId, tick,
+      squadId,
+      objectiveId,
+      tick,
       "IDLE",
       `warPosture=${warPosture} → no offensive intent`,
-      evidence, rejected, prevPlan,
+      evidence,
+      rejected,
+      prevPlan,
     );
   }
 
   // RETREATING / DISENGAGING / REGROUPING / COMPLETED / ABORTED → 禁止 AttackIntent
-  if (tacticalState === "RETREATING" || tacticalState === "DISENGAGING" || tacticalState === "REGROUPING" || tacticalState === "COMPLETED" || tacticalState === "ABORTED") {
+  if (
+    tacticalState === "RETREATING" ||
+    tacticalState === "DISENGAGING" ||
+    tacticalState === "REGROUPING" ||
+    tacticalState === "COMPLETED" ||
+    tacticalState === "ABORTED"
+  ) {
     evidence.push(`tacticalState=${tacticalState} → no attack intent`);
     return buildEmptyPlan(
-      squadId, objectiveId, tick,
+      squadId,
+      objectiveId,
+      tick,
       "REGROUP",
       `tacticalState=${tacticalState} → disengage`,
-      evidence, rejected, prevPlan,
+      evidence,
+      rejected,
+      prevPlan,
     );
   }
 
@@ -419,10 +442,14 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
   if (cohesionStatus === "BROKEN" || cohesionStatus === "CRITICAL") {
     evidence.push(`cohesion=${cohesionStatus} → regroup before engagement`);
     return buildEmptyPlan(
-      squadId, objectiveId, tick,
+      squadId,
+      objectiveId,
+      tick,
       "REGROUP",
       `cohesion ${cohesionStatus} → regroup`,
-      evidence, rejected, prevPlan,
+      evidence,
+      rejected,
+      prevPlan,
     );
   }
 
@@ -430,7 +457,10 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
   const validCandidates = candidates.filter(c => {
     // 目标必须授权目标房间内
     if (c.room !== authorizedTargetRoom) {
-      rejected.push({ targetId: c.id, reason: `room=${c.room} outside authorized=${authorizedTargetRoom}` });
+      rejected.push({
+        targetId: c.id,
+        reason: `room=${c.room} outside authorized=${authorizedTargetRoom}`,
+      });
       return false;
     }
     // 目标必须可达（非 INVALID / BLOCKED）
@@ -449,15 +479,22 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
     evidence.push("no valid candidates after scope filter");
     // 根据状态机推导结果决定返回什么状态
     const stateForEmpty: EngagementState =
-      engagementState === "TARGET_DEAD" ? "TARGET_DEAD" :
-      engagementState === "TARGET_LOST" ? "TARGET_LOST" :
-      engagementState === "TARGET_OUT_OF_RANGE" ? "TARGET_OUT_OF_RANGE" :
-      "IDLE";
+      engagementState === "TARGET_DEAD"
+        ? "TARGET_DEAD"
+        : engagementState === "TARGET_LOST"
+          ? "TARGET_LOST"
+          : engagementState === "TARGET_OUT_OF_RANGE"
+            ? "TARGET_OUT_OF_RANGE"
+            : "IDLE";
     return buildEmptyPlan(
-      squadId, objectiveId, tick,
+      squadId,
+      objectiveId,
+      tick,
       stateForEmpty,
       "no valid engagement targets",
-      evidence, rejected, prevPlan,
+      evidence,
+      rejected,
+      prevPlan,
     );
   }
 
@@ -465,10 +502,14 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
   // REGROUP → 不产出攻击
   if (engagementState === "REGROUP") {
     return buildEmptyPlan(
-      squadId, objectiveId, tick,
+      squadId,
+      objectiveId,
+      tick,
       "REGROUP",
       "engagement state REGROUP",
-      evidence, rejected, prevPlan,
+      evidence,
+      rejected,
+      prevPlan,
     );
   }
 
@@ -493,10 +534,14 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
   });
 
   const primary = scored[0]!.candidate;
-  evidence.push(`primary target=${primary.id} (priority=${primary.tacticalValue.tacticalPriority})`);
+  evidence.push(
+    `primary target=${primary.id} (priority=${primary.tacticalValue.tacticalPriority})`,
+  );
 
   // ── 6. Overkill 计算 ──
-  const aliveAttackers = members.filter(m => m.alive && (m.role === "attacker" || m.role === "ranged"));
+  const aliveAttackers = members.filter(
+    m => m.alive && (m.role === "attacker" || m.role === "ranged"),
+  );
   const aliveHealers = members.filter(m => m.alive && m.role === "healer");
 
   // 计算每个 attacker 对主目标的预期伤害
@@ -516,13 +561,16 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
 
   // ── 7. Attack Assignment ──
   const attackIntents: AttackIntent[] = [];
-  let assignedToPrimary: string[] = [];
-  let assignedToSecondary: string[] = [];
+  const assignedToPrimary: string[] = [];
+  const assignedToSecondary: string[] = [];
 
   if (needsRedistribution && scored.length > 1) {
     // 分流：计算需要多少 attacker 击杀主目标，多余的分配给次目标
     const secondary = scored[1]!.candidate;
-    const requiredForPrimary = Math.max(1, Math.ceil(targetEffectiveHP / Math.max(1, attackerDamages[0]!.damage)));
+    const requiredForPrimary = Math.max(
+      1,
+      Math.ceil(targetEffectiveHP / Math.max(1, attackerDamages[0]!.damage)),
+    );
 
     // 按伤害降序排序（高伤害优先分配给主目标）
     const sortedAttackers = [...attackerDamages].sort((a, b) => {
@@ -541,7 +589,9 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
       }
     }
 
-    evidence.push(`overkill: totalDamage=${totalDamage} > threshold=${overkillThreshold.toFixed(0)} → ${requiredForPrimary} primary, ${sortedAttackers.length - requiredForPrimary} secondary`);
+    evidence.push(
+      `overkill: totalDamage=${totalDamage} > threshold=${overkillThreshold.toFixed(0)} → ${requiredForPrimary} primary, ${sortedAttackers.length - requiredForPrimary} secondary`,
+    );
   } else {
     // 不需要分流：全部分配给主目标
     for (const a of attackerDamages) {
@@ -567,8 +617,12 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
     primaryTargetPos: primary.pos,
     primaryTargetPriority: "PRIMARY",
     secondaryTargetId: assignedToSecondary.length > 0 ? scored[1]!.candidate.id : null,
-    assignedAttackers: assignedToPrimary.filter(n => attackerDamages.find(a => a.name === n && a.role === "attacker")),
-    assignedRanged: assignedToPrimary.filter(n => attackerDamages.find(a => a.name === n && a.role === "ranged")),
+    assignedAttackers: assignedToPrimary.filter(n =>
+      attackerDamages.find(a => a.name === n && a.role === "attacker"),
+    ),
+    assignedRanged: assignedToPrimary.filter(n =>
+      attackerDamages.find(a => a.name === n && a.role === "ranged"),
+    ),
     assignedHealers: aliveHealers.map(h => h.name),
     expectedDamage: totalDamage,
     expectedHeal: healCoverage?.expectedHeal ?? 0,
@@ -666,9 +720,12 @@ function scoreCandidate(c: TargetCandidate, snapshot: FocusFireSnapshot): Tactic
 
   // 9. TacticalPriority 维度（healer 优先 > 高伤害 > 残血 > 其他）
   let tacticalPriority = 50; // 基础优先级
-  if (c.role === "healer") tacticalPriority = 100; // 治疗者优先
-  else if (c.attackCapability > 0 || c.rangedCapability > 0) tacticalPriority = 70; // 武装单位
-  else if (c.hp < c.maxHp * 0.3) tacticalPriority = 60; // 残血优先
+  if (c.role === "healer")
+    tacticalPriority = 100; // 治疗者优先
+  else if (c.attackCapability > 0 || c.rangedCapability > 0)
+    tacticalPriority = 70; // 武装单位
+  else if (c.hp < c.maxHp * 0.3)
+    tacticalPriority = 60; // 残血优先
   else tacticalPriority = 30; // 其他
 
   // Boost 加成
@@ -816,11 +873,12 @@ function assessEnemyHealSupport(
 ): EnemyHealSupport | null {
   // 找到在目标治疗范围内的敌方 healer
   // HEAL range = 1 (melee heal), RANGED_HEAL range = 3
-  const healers = allCandidates.filter(c =>
-    c.id !== target.id &&
-    c.healCapability > 0 &&
-    c.room === target.room &&
-    chebyshevDist(c.pos, target.pos) <= 3,
+  const healers = allCandidates.filter(
+    c =>
+      c.id !== target.id &&
+      c.healCapability > 0 &&
+      c.room === target.room &&
+      chebyshevDist(c.pos, target.pos) <= 3,
   );
 
   const totalHealPerTick = healers.reduce((s, h) => s + h.healCapability, 0);
@@ -874,8 +932,8 @@ function deriveEngagementState(
   if (!prevTarget) {
     // 目标不在候选列表 — 可能死亡或离开视野
     // 检查是否有 OUT_OF_RANGE 候选匹配
-    const outOfRangeMatch = snapshot.candidates.find(c =>
-      c.id === prevPlan.primaryTargetId && c.accessibility === "OUT_OF_RANGE",
+    const outOfRangeMatch = snapshot.candidates.find(
+      c => c.id === prevPlan.primaryTargetId && c.accessibility === "OUT_OF_RANGE",
     );
     if (outOfRangeMatch) {
       return "TARGET_OUT_OF_RANGE";
@@ -931,7 +989,15 @@ function computeConfidence(
 const VALID_ENGAGEMENT_TRANSITIONS: Record<EngagementState, readonly EngagementState[]> = {
   IDLE: ["TARGET_ACQUIRED", "REGROUP"],
   TARGET_ACQUIRED: ["ATTACKING", "TARGET_LOST", "REGROUP"],
-  ATTACKING: ["TARGET_DYING", "TARGET_DEAD", "TARGET_LOST", "TARGET_OUT_OF_RANGE", "TARGET_ESCAPED", "TARGET_BLOCKED", "REGROUP"],
+  ATTACKING: [
+    "TARGET_DYING",
+    "TARGET_DEAD",
+    "TARGET_LOST",
+    "TARGET_OUT_OF_RANGE",
+    "TARGET_ESCAPED",
+    "TARGET_BLOCKED",
+    "REGROUP",
+  ],
   TARGET_DYING: ["TARGET_DEAD", "TARGET_LOST", "ATTACKING"],
   TARGET_DEAD: ["REASSESSING"],
   TARGET_LOST: ["REASSESSING", "REGROUP"],
@@ -1041,9 +1107,10 @@ export function buildTargetCandidate(
   }
 
   // 有效 HP（含 tough 减伤）
-  const toughReduction = enemyCapability.toughParts > 0
-    ? 1 / Math.max(0.1, enemyCapability.toughParts * 0.1) // 简化估计
-    : 1;
+  const toughReduction =
+    enemyCapability.toughParts > 0
+      ? 1 / Math.max(0.1, enemyCapability.toughParts * 0.1) // 简化估计
+      : 1;
   const effectiveHP = Math.floor(enemyHits * toughReduction);
 
   // 推断角色
@@ -1064,7 +1131,12 @@ export function buildTargetCandidate(
     enemyHealSupport: enemyCapability.heal,
     distance: dist === Infinity ? 0 : Math.max(0, 100 - dist * 10),
     position: 50,
-    tacticalPriority: role === "healer" ? 100 : (enemyCapability.attack > 0 || enemyCapability.rangedAttack > 0 ? 70 : 30),
+    tacticalPriority:
+      role === "healer"
+        ? 100
+        : enemyCapability.attack > 0 || enemyCapability.rangedAttack > 0
+          ? 70
+          : 30,
   };
 
   return {

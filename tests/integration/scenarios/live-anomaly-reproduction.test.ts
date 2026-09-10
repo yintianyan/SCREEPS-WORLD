@@ -77,19 +77,45 @@ describe("Live Anomaly: Hauler 不足死锁", () => {
     });
 
     // 2 harvester（正常采矿）+ 0 hauler（物流断裂）
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 37, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      37,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work" },
+    );
 
     const runner = new TickRunner();
     runner.setLoop(loop);
 
     // 运行 1000 tick — 系统应该能孵出 hauler（即使是降级 body）
     const result = runner.run(world, 1000, {
-      stopWhen: (w) => w.creepsByRole("hauler").length >= 1,
+      stopWhen: w => w.creepsByRole("hauler").length >= 1,
     });
 
     const assertions = new Assertions(world, result.records);
@@ -114,17 +140,59 @@ describe("Live Anomaly: Hauler 不足死锁", () => {
     });
 
     // 2 harvester + 1 hauler（运力不足）
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 37, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "move" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      37,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     const runner = new TickRunner();
     runner.setLoop(loop);
@@ -160,26 +228,97 @@ describe("Live Anomaly: Phase 振荡（Flip-Flop）", () => {
     });
 
     // 完整人口
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 37, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "move" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("haul2", "hauler", 22, 22, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "move" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      37,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "haul2",
+      "hauler",
+      22,
+      22,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
     // harvester 即将死亡 → 触发替换孵化（脉冲消耗）
-    world.addCreep("h_dying", "harvester", 13, 14, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work", ticksToLive: 80 });
+    world.addCreep(
+      "h_dying",
+      "harvester",
+      13,
+      14,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work", ticksToLive: 80 },
+    );
 
     const runner = new TickRunner();
     runner.setLoop(loop);
@@ -210,17 +349,59 @@ describe("Live Anomaly: Phase 振荡（Flip-Flop）", () => {
     });
 
     // 多个 creep 同时临死 → 同时触发替换 → 脉冲消耗
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work", ticksToLive: 60 });
-    world.addCreep("h2", "harvester", 37, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work", ticksToLive: 60 });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "move" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire", ticksToLive: 60 });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work", ticksToLive: 60 },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      37,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work", ticksToLive: 60 },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire", ticksToLive: 60 },
+    );
 
     const runner = new TickRunner();
     runner.setLoop(loop);
@@ -256,26 +437,78 @@ describe("Live Anomaly: Distributor 空转浪费", () => {
     });
 
     // 2 harvester + 1 hauler + 3 distributor（复现线上人口结构）
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 37, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      37,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
     // 3 个 idle distributor（storage=0，无事可做）
-    world.addCreep("dist1", "distributor", 24, 24, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "idle" });
-    world.addCreep("dist2", "distributor", 25, 24, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "idle" });
-    world.addCreep("dist3", "distributor", 26, 24, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "idle" });
+    world.addCreep(
+      "dist1",
+      "distributor",
+      24,
+      24,
+      [{ type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+      { mode: "idle" },
+    );
+    world.addCreep(
+      "dist2",
+      "distributor",
+      25,
+      24,
+      [{ type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+      { mode: "idle" },
+    );
+    world.addCreep(
+      "dist3",
+      "distributor",
+      26,
+      24,
+      [{ type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+      { mode: "idle" },
+    );
 
     const runner = new TickRunner();
     runner.setLoop(loop);
@@ -307,17 +540,59 @@ describe("Live Anomaly: Harvester 计数振荡", () => {
     });
 
     // 2 harvester 正常 + 1 即将死亡（触发替换）
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 37, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work", ticksToLive: 100 });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "move" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      37,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work", ticksToLive: 100 },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     const runner = new TickRunner();
     runner.setLoop(loop);
@@ -365,16 +640,53 @@ describe("Live Anomaly: W37S58 完整症状链", () => {
     });
 
     // 最小人口：2 harvester + 1 hauler（运力严重不足）
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 37, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      37,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     const runner = new TickRunner();
     runner.setLoop(loop);

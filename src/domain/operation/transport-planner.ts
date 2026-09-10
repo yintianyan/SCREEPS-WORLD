@@ -135,8 +135,6 @@ export function planTransportsBatch(
 /**
  * 过滤可达且有有效 request 的运输计划。
  */
-export function filterExecutable(
-  plans: readonly TransportPlan[],
-): TransportPlan[] {
+export function filterExecutable(plans: readonly TransportPlan[]): TransportPlan[] {
   return plans.filter(p => p.request !== null && p.eta > 0);
 }

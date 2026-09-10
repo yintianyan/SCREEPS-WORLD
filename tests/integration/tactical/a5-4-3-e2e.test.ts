@@ -49,9 +49,11 @@ function makeMember(
     name,
     role,
     capability: makeCapability(
-      role === "attacker" ? { attack: 120 } :
-      role === "ranged" ? { rangedAttack: 40 } :
-      { heal: 48 },
+      role === "attacker"
+        ? { attack: 120 }
+        : role === "ranged"
+          ? { rangedAttack: 40 }
+          : { heal: 48 },
     ),
     pos: x * 50 + y,
     room,
@@ -85,9 +87,7 @@ function makeCandidate(
   return { ...base, ...overrides };
 }
 
-function makeSnapshot(
-  overrides: Partial<FocusFireSnapshot> = {},
-): FocusFireSnapshot {
+function makeSnapshot(overrides: Partial<FocusFireSnapshot> = {}): FocusFireSnapshot {
   return {
     tick: 100,
     squadId: "squad-e2e",
@@ -119,7 +119,7 @@ describe("COMBAT-E2E-001: 完整交战周期", () => {
       maxHp: 1000,
       effectiveHP: 240,
     });
-    let targetB = makeCandidate("enemy-B", 26, 26, "W2N1", {
+    const targetB = makeCandidate("enemy-B", 26, 26, "W2N1", {
       hp: 800,
       maxHp: 1000,
       effectiveHP: 800,
@@ -184,24 +184,28 @@ describe("COMBAT-E2E-001: 完整交战周期", () => {
     let prevPlan: FocusFirePlan | null = null;
 
     // Tick 100: 首次选择目标
-    const plan1 = planFocusFire(makeSnapshot({
-      tick: 100,
-      candidates: [target],
-      members: [attacker],
-      prevPlan: null,
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        tick: 100,
+        candidates: [target],
+        members: [attacker],
+        prevPlan: null,
+      }),
+    );
     prevPlan = plan1;
 
     expect(plan1.engagementState).toBe("IDLE");
 
     // Tick 103: 目标仍在，HP > 30% → ATTACKING
     target = { ...target, hp: 500, effectiveHP: 500 };
-    const plan2 = planFocusFire(makeSnapshot({
-      tick: 103,
-      candidates: [target],
-      members: [attacker],
-      prevPlan,
-    }));
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        candidates: [target],
+        members: [attacker],
+        prevPlan,
+      }),
+    );
     prevPlan = plan2;
 
     expect(plan2.primaryTargetId).toBe("enemy-1");
@@ -209,12 +213,14 @@ describe("COMBAT-E2E-001: 完整交战周期", () => {
 
     // Tick 106: 目标 HP 降到 25% (< 30%) → TARGET_DYING
     target = { ...target, hp: 250, maxHp: 1000, effectiveHP: 250 };
-    const plan3 = planFocusFire(makeSnapshot({
-      tick: 106,
-      candidates: [target],
-      members: [attacker],
-      prevPlan,
-    }));
+    const plan3 = planFocusFire(
+      makeSnapshot({
+        tick: 106,
+        candidates: [target],
+        members: [attacker],
+        prevPlan,
+      }),
+    );
 
     expect(plan3.primaryTargetId).toBe("enemy-1");
     expect(plan3.engagementState).toBe("TARGET_DYING");
@@ -248,10 +254,12 @@ describe("COMBAT-E2E-002: 多目标优先级链", () => {
     });
 
     // 三个目标同时存在 → healer 优先 (tacticalPriority=100)
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [lowHpTarget, attackerEnemy, healer],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [lowHpTarget, attackerEnemy, healer],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     expect(plan.primaryTargetId).toBe("enemy-healer");
   });
@@ -283,10 +291,12 @@ describe("COMBAT-E2E-002: 多目标优先级链", () => {
       },
     });
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [lowHpTarget, attackerEnemy],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [lowHpTarget, attackerEnemy],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     // attacker (priority=70) > unknown low-hp (priority=30)
     expect(plan.primaryTargetId).toBe("enemy-attacker");
@@ -320,10 +330,12 @@ describe("COMBAT-E2E-003: Overkill 分流 → 多目标同时压制", () => {
       makeMember("att-5", "attacker", 24, 25),
     ];
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [targetA, targetB],
-      members,
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [targetA, targetB],
+        members,
+      }),
+    );
 
     // 验证分流
     expect(plan.primaryTargetId).toBe("enemy-A");
@@ -365,23 +377,27 @@ describe("COMBAT-E2E-003: Overkill 分流 → 多目标同时压制", () => {
     ];
 
     // Tick 1: 初始分流
-    const plan1 = planFocusFire(makeSnapshot({
-      tick: 100,
-      candidates: [targetA, targetB],
-      members,
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        tick: 100,
+        candidates: [targetA, targetB],
+        members,
+      }),
+    );
 
     expect(plan1.secondaryTargetId).toBe("enemy-B");
     const primaryCount1 = plan1.attackIntents.filter(i => i.priority === "PRIMARY").length;
 
     // Tick 2: targetA HP 降低但仍在 → 继续分流
     targetA = { ...targetA, hp: 180, effectiveHP: 180 };
-    const plan2 = planFocusFire(makeSnapshot({
-      tick: 103,
-      candidates: [targetA, targetB],
-      members,
-      prevPlan: plan1,
-    }));
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        candidates: [targetA, targetB],
+        members,
+        prevPlan: plan1,
+      }),
+    );
 
     // 仍然分流（180*1.5=270 < 600）
     expect(plan2.secondaryTargetId).toBe("enemy-B");
@@ -409,12 +425,14 @@ describe("COMBAT-E2E-004: 目标逃跑 → 重新接敌", () => {
     let prevPlan: FocusFirePlan | null = null;
 
     // Tick 100: 接敌
-    const plan1 = planFocusFire(makeSnapshot({
-      tick: 100,
-      candidates: [target],
-      members: [attacker],
-      prevPlan: null,
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        tick: 100,
+        candidates: [target],
+        members: [attacker],
+        prevPlan: null,
+      }),
+    );
     prevPlan = plan1;
 
     expect(plan1.primaryTargetId).toBe("enemy-1");
@@ -428,12 +446,14 @@ describe("COMBAT-E2E-004: 目标逃跑 → 重新接敌", () => {
       distance: 15,
     });
 
-    const plan2 = planFocusFire(makeSnapshot({
-      tick: 103,
-      candidates: [target],
-      members: [attacker],
-      prevPlan,
-    }));
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        candidates: [target],
+        members: [attacker],
+        prevPlan,
+      }),
+    );
 
     // 目标仍在候选中但超出射程
     expect(plan2.primaryTargetId).toBe("enemy-1");
@@ -456,22 +476,26 @@ describe("COMBAT-E2E-004: 目标逃跑 → 重新接敌", () => {
     const attacker = makeMember("att-1", "attacker", 25, 25);
 
     // Tick 100: 攻击 enemy-1
-    const plan1 = planFocusFire(makeSnapshot({
-      tick: 100,
-      candidates: [target],
-      members: [attacker],
-      prevPlan: null,
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        tick: 100,
+        candidates: [target],
+        members: [attacker],
+        prevPlan: null,
+      }),
+    );
 
     expect(plan1.primaryTargetId).toBe("enemy-1");
 
     // Tick 103: enemy-1 消失（不在候选中），enemy-2 出现
-    const plan2 = planFocusFire(makeSnapshot({
-      tick: 103,
-      candidates: [newTarget],
-      members: [attacker],
-      prevPlan: plan1,
-    }));
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        candidates: [newTarget],
+        members: [attacker],
+        prevPlan: plan1,
+      }),
+    );
 
     // 应选择新目标
     expect(plan2.primaryTargetId).toBe("enemy-2");
@@ -497,10 +521,12 @@ describe("COMBAT-E2E-005: 治疗覆盖评估", () => {
       hitsMax: 1000,
     });
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [woundedAttacker],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [woundedAttacker],
+      }),
+    );
 
     expect(plan.healCoverage).not.toBeNull();
     expect(plan.healCoverage!.healerCount).toBe(0);
@@ -517,14 +543,16 @@ describe("COMBAT-E2E-005: 治疗覆盖评估", () => {
     const members = [
       makeMember("att-1", "attacker", 25, 25, "W2N1", { hits: 800, hitsMax: 1000 }),
       makeMember("healer-1", "healer", 25, 26, "W2N1", {
-         capability: makeCapability({ heal: 240 }),
+        capability: makeCapability({ heal: 240 }),
       }),
     ];
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members,
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members,
+      }),
+    );
 
     expect(plan.healCoverage).not.toBeNull();
     expect(plan.healCoverage!.healerCount).toBe(1);
@@ -544,11 +572,13 @@ describe("COMBAT-E2E-006: 非 war 姿态 → 安全降级", () => {
       effectiveHP: 500,
     });
 
-    const plan = planFocusFire(makeSnapshot({
-      warPosture: "develop",
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        warPosture: "develop",
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     expect(plan.attackIntents).toHaveLength(0);
     expect(plan.primaryTargetId).toBeNull();
@@ -564,11 +594,13 @@ describe("COMBAT-E2E-006: 非 war 姿态 → 安全降级", () => {
       effectiveHP: 500,
     });
 
-    const plan = planFocusFire(makeSnapshot({
-      warPosture: "fortify",
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        warPosture: "fortify",
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     expect(plan.attackIntents).toHaveLength(0);
     expect(plan.engagementState).toBe("IDLE");
@@ -580,20 +612,24 @@ describe("COMBAT-E2E-006: 非 war 姿态 → 安全降级", () => {
       effectiveHP: 500,
     });
 
-    const plan1 = planFocusFire(makeSnapshot({
-      tick: 100,
-      warPosture: "develop",
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        tick: 100,
+        warPosture: "develop",
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
-    const plan2 = planFocusFire(makeSnapshot({
-      tick: 103,
-      warPosture: "develop",
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      prevPlan: plan1,
-    }));
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        warPosture: "develop",
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        prevPlan: plan1,
+      }),
+    );
 
     // 两 tick 都无 AttackIntent
     expect(plan1.attackIntents).toHaveLength(0);
@@ -621,13 +657,12 @@ describe("AttackIntent 消费验证", () => {
       effectiveHP: 500,
     });
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [targetA, targetB],
-      members: [
-        makeMember("att-1", "attacker", 25, 25),
-        makeMember("att-2", "attacker", 25, 26),
-      ],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [targetA, targetB],
+        members: [makeMember("att-1", "attacker", 25, 25), makeMember("att-2", "attacker", 25, 26)],
+      }),
+    );
 
     const validIds = new Set(["enemy-A", "enemy-B"]);
     for (const intent of plan.attackIntents) {
@@ -650,10 +685,12 @@ describe("AttackIntent 消费验证", () => {
     // ranged attacker at distance 2
     const rangedAttacker = makeMember("att-ranged", "ranged", 27, 27);
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [meleeAttacker, rangedAttacker],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [meleeAttacker, rangedAttacker],
+      }),
+    );
 
     const meleeIntent = plan.attackIntents.find(i => i.creepId === "att-melee");
     const rangedIntent = plan.attackIntents.find(i => i.creepId === "att-ranged");
@@ -687,10 +724,9 @@ describe("EngagementState 状态机转换合法性", () => {
     for (let i = 0; i < cycle.length - 1; i++) {
       const from = cycle[i]!;
       const to = cycle[i + 1]!;
-      expect(
-        canTransitionEngagement(from, to),
-        `transition ${from} → ${to} should be valid`,
-      ).toBe(true);
+      expect(canTransitionEngagement(from, to), `transition ${from} → ${to} should be valid`).toBe(
+        true,
+      );
     }
   });
 

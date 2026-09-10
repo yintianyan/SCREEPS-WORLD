@@ -121,9 +121,7 @@ export function computeTransportCost(
  * = container 摊销 + 维修成本
  * 纯函数。
  */
-export function computeInfrastructureCost(
-  config: EconomicAccountingConfig,
-): number {
+export function computeInfrastructureCost(config: EconomicAccountingConfig): number {
   return config.containerAmortization + config.containerRepairRate;
 }
 
@@ -132,18 +130,19 @@ export function computeInfrastructureCost(
  * = Σ(creep body cost / lifespan × count)
  * 纯函数。
  */
-export function computeSpawnCost(
-  config: EconomicAccountingConfig,
-): number {
-  const harvesterAmort = config.harvesterCount > 0
-    ? (config.harvesterBodyCost / config.harvesterLifespan) * config.harvesterCount
-    : 0;
-  const haulerAmort = config.haulerCount > 0
-    ? (config.haulerBodyCost / config.haulerLifespan) * config.haulerCount
-    : 0;
-  const reserverAmort = config.reserverCount > 0
-    ? (config.reserverBodyCost / config.reserverLifespan) * config.reserverCount
-    : 0;
+export function computeSpawnCost(config: EconomicAccountingConfig): number {
+  const harvesterAmort =
+    config.harvesterCount > 0
+      ? (config.harvesterBodyCost / config.harvesterLifespan) * config.harvesterCount
+      : 0;
+  const haulerAmort =
+    config.haulerCount > 0
+      ? (config.haulerBodyCost / config.haulerLifespan) * config.haulerCount
+      : 0;
+  const reserverAmort =
+    config.reserverCount > 0
+      ? (config.reserverBodyCost / config.reserverLifespan) * config.reserverCount
+      : 0;
   return harvesterAmort + haulerAmort + reserverAmort;
 }
 
@@ -223,10 +222,7 @@ export function isProfitable(result: EconomicAccountingResult): boolean {
  * 判定经济核算结果是否净价值低于阈值。
  * 纯函数。
  */
-export function isBelowThreshold(
-  result: EconomicAccountingResult,
-  threshold: number,
-): boolean {
+export function isBelowThreshold(result: EconomicAccountingResult, threshold: number): boolean {
   return result.netValue < threshold;
 }
 

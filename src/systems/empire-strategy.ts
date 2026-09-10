@@ -15,10 +15,7 @@ import { evaluateCapacity } from "../domain/strategy/capacity";
 import { evaluateEnvironment } from "../domain/strategy/environment";
 import { CONFIG } from "../config";
 import { EventKind, recordEvent } from "../kernel/event-log";
-import {
-  buildEmpireSituation,
-  type SituationRoomInput,
-} from "../domain/strategy/situation";
+import { buildEmpireSituation, type SituationRoomInput } from "../domain/strategy/situation";
 import { selectEnvBaseline } from "../domain/strategy/posture-baseline";
 import { recordPlanningDecision, recordPlanningTime } from "../telemetry";
 import { log } from "../kernel/log";
@@ -80,10 +77,7 @@ export const empireStrategySystem: System = {
         // P2-2：per-room CPU 记账 → 扩张 ROI 门禁。从 stats.cpuByHome 汇总
         // 各房归属 CPU 总量，与有效 CPU limit 对比。CPU 余量不足时拒绝扩张。
         totalCreepCpu: sumCpuByHome(),
-        effectiveCpuLimit: Math.min(
-          Game.cpu.limit ?? 20,
-          Game.cpu.tickLimit ?? 20,
-        ),
+        effectiveCpuLimit: Math.min(Game.cpu.limit ?? 20, Game.cpu.tickLimit ?? 20),
       },
       // 姿态参数合并链（优先级低→高）：
       //   DEFAULT → CONFIG.posture → 环境基线 → strategyOverrides
@@ -99,14 +93,16 @@ export const empireStrategySystem: System = {
 
     // 姿态变更时打日志 — 战略转向是帝国级事件，必须可观测。
     if (prev?.posture !== result.posture) {
-      log.info("empire-strategy", `strategy: posture ${prev?.posture ?? "(none)"} → ${result.posture}` +
-        ` (rooms=${rooms.length}, gcl=${Game.gcl?.level ?? 1}, bucket=${Game.cpu.bucket ?? "?"})`,);
+      log.info(
+        "empire-strategy",
+        `strategy: posture ${prev?.posture ?? "(none)"} → ${result.posture}` +
+          ` (rooms=${rooms.length}, gcl=${Game.gcl?.level ?? 1}, bucket=${Game.cpu.bucket ?? "?"})`,
+      );
       recordPlanningDecision("empire", true);
     } else {
       recordPlanningDecision("empire", false);
     }
     recordPlanningTime("empire", 0.001);
-
 
     Memory.kernel.strategy = {
       posture: result.posture,
@@ -140,7 +136,10 @@ export const empireStrategySystem: System = {
         const duration = ctx.tick - (prevAgenda.since ?? ctx.tick);
         recordEvent(EventKind.AgendaOutcome, "", [AGENDA_CODES["rcl-push"]!, gained, duration]);
       }
-      log.info("empire-strategy", `agenda: ${prevAgenda?.initiative ?? "(none)"} → ${agenda.initiative}`,);
+      log.info(
+        "empire-strategy",
+        `agenda: ${prevAgenda?.initiative ?? "(none)"} → ${agenda.initiative}`,
+      );
       recordPlanningDecision("agenda", true);
       recordEvent(EventKind.AgendaChange, "", [AGENDA_CODES[agenda.initiative] ?? 3]);
       progressBase = agenda.initiative === "rcl-push" ? totalProgress : undefined;
@@ -180,7 +179,7 @@ export const empireStrategySystem: System = {
         rcl: snapshot.rcl,
         hasSpawn: snapshot.spawns.length > 0,
         ttd: room?.controller?.ticksToDowngrade,
-        threats: snapshot.threatCreeps.map((c) => ({ owner: c.owner?.username ?? "?" })),
+        threats: snapshot.threatCreeps.map(c => ({ owner: c.owner?.username ?? "?" })),
         colonyState: Memory.rooms[snapshot.roomName]?.colonyState ?? "normal",
       });
     }
@@ -201,17 +200,24 @@ export const empireStrategySystem: System = {
     Memory.kernel.situation = {
       tick: situation.tick,
       adversaries: Object.fromEntries(
-        situation.adversaries.slice(0, 8).map((a) => [a.username, { rooms: a.rooms, lastSeen: a.lastSeen }]),
+        situation.adversaries
+          .slice(0, 8)
+          .map(a => [a.username, { rooms: a.rooms, lastSeen: a.lastSeen }]),
       ),
-      conditions: situation.conditions.slice(0, 12).map((c) => ({ id: c.id, severity: c.severity, detail: c.detail })),
+      conditions: situation.conditions
+        .slice(0, 12)
+        .map(c => ({ id: c.id, severity: c.severity, detail: c.detail })),
     };
-    const prevIds = new Set((prevSit?.conditions ?? []).map((c) => c.id));
+    const prevIds = new Set((prevSit?.conditions ?? []).map(c => c.id));
     for (const c of situation.conditions) {
       if (!prevIds.has(c.id)) recordEvent(EventKind.SituationChange, c.id, [c.severity]);
     }
     if (Memory.kernel.capacity?.tier !== capacity.tier) {
-      log.info("empire-strategy", `capacity: ${Memory.kernel.capacity?.tier ?? "(none)"} → ${capacity.tier}` +
-        ` (headroom=${Math.round(capacity.headroom * 100)}%, limit=${Math.min(Game.cpu.limit, Game.cpu.tickLimit)})`,);
+      log.info(
+        "empire-strategy",
+        `capacity: ${Memory.kernel.capacity?.tier ?? "(none)"} → ${capacity.tier}` +
+          ` (headroom=${Math.round(capacity.headroom * 100)}%, limit=${Math.min(Game.cpu.limit, Game.cpu.tickLimit)})`,
+      );
     }
     if (Memory.kernel.strategy?.posture !== undefined) {
       Memory.kernel.postureChangedAt = Game.time;
@@ -353,4 +359,3 @@ function buildEnvBaselineInput(
     hasLiveThreat,
   };
 }
-

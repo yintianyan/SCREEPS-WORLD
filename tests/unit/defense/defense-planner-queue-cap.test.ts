@@ -15,7 +15,9 @@ function makeSnapshot(rcl = 7): any {
     sources: [{ id: "s1", pos: { x: 20, y: 20 } }],
     controller: { pos: { x: 30, y: 30 } },
     spawns: [{ pos: { x: 25, y: 25 }, id: "sp1" }],
-    extensions: Array.from({ length: 50 }, (_, i) => ({ pos: { x: 26 + (i % 10), y: 26 + Math.floor(i / 10) } })),
+    extensions: Array.from({ length: 50 }, (_, i) => ({
+      pos: { x: 26 + (i % 10), y: 26 + Math.floor(i / 10) },
+    })),
     towers: [{ pos: { x: 24, y: 24 }, id: "tw1" }],
     containers: [{ pos: { x: 21, y: 20 }, id: "c1" }],
     roads: [],

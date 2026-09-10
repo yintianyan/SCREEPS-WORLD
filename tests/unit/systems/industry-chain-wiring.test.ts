@@ -18,13 +18,13 @@ function makeLabStore(contents: Record<string, number>): Record<string, unknown>
     enumerable: false,
     value: (resource?: string) => {
       if (resource === undefined) return null; // 引擎行为：受限 store 无参返回 null
-      const used = (contents[resource] ?? 0);
+      const used = contents[resource] ?? 0;
       return resource === "energy" ? ENERGY_CAP - used : MINERAL_CAP - used;
     },
   });
   Object.defineProperty(store, "getUsedCapacity", {
     enumerable: false,
-    value: (resource?: string) => (resource === undefined ? null : contents[resource] ?? 0),
+    value: (resource?: string) => (resource === undefined ? null : (contents[resource] ?? 0)),
   });
   return store;
 }
@@ -39,7 +39,7 @@ function makeStore(contents: Record<string, number>, capacity = 2000): Record<st
   });
   Object.defineProperty(store, "getUsedCapacity", {
     enumerable: false,
-    value: (resource?: string) => (resource === undefined ? total() : contents[resource] ?? 0),
+    value: (resource?: string) => (resource === undefined ? total() : (contents[resource] ?? 0)),
   });
   return store;
 }
@@ -61,7 +61,9 @@ describe("computeLabDemands — 需求表推导（TD-024/025）", () => {
   it("boost lab 空仓：发布化合物（parts×30）与能量（parts×20）装料需求", () => {
     labById.L1 = makeLab("L1", {});
     const plan: LabPlan = {
-      assignments: [{ labId: "L1", role: "boost", boostTarget: "c1", boostCompound: "XUH2O", boostParts: 5 }],
+      assignments: [
+        { labId: "L1", role: "boost", boostTarget: "c1", boostCompound: "XUH2O", boostParts: 5 },
+      ],
     };
     const table = computeLabDemands(plan);
     expect(table.loads).toContainEqual({ labId: "L1", resource: "XUH2O", amount: 150 });
@@ -72,7 +74,9 @@ describe("computeLabDemands — 需求表推导（TD-024/025）", () => {
   it("boost lab 装错矿：发布卸料需求且不发化合物装料（先清位再装）", () => {
     labById.L1 = makeLab("L1", { GH: 500 });
     const plan: LabPlan = {
-      assignments: [{ labId: "L1", role: "boost", boostTarget: "c1", boostCompound: "XUH2O", boostParts: 5 }],
+      assignments: [
+        { labId: "L1", role: "boost", boostTarget: "c1", boostCompound: "XUH2O", boostParts: 5 },
+      ],
     };
     const table = computeLabDemands(plan);
     expect(table.unloads).toContainEqual({ labId: "L1", resource: "GH" });
@@ -120,7 +124,11 @@ describe("supplyLabs — 按需求表搬运（TD-023 回归 + TD-024）", () => 
     terminalStore?: Record<string, number>;
     labs?: unknown[];
   }): Record<string, unknown> {
-    const storage = { id: "storage1", store: makeStore(opts.storageStore ?? {}, 100000), structureType: "storage" };
+    const storage = {
+      id: "storage1",
+      store: makeStore(opts.storageStore ?? {}, 100000),
+      structureType: "storage",
+    };
     const terminal = opts.terminalStore
       ? { id: "terminal1", store: makeStore(opts.terminalStore, 100000), structureType: "terminal" }
       : undefined;
@@ -209,9 +217,18 @@ describe("supplyLabs — 按需求表搬运（TD-023 回归 + TD-024）", () => 
 describe("syncTaskStates — rampart/road 建成判定（TD-028）", () => {
   function makeSnapshot(overrides: Record<string, unknown>): never {
     return {
-      spawns: [], extensions: [], towers: [], containers: [], links: [],
-      ramparts: [], walls: [], roads: [], labs: [],
-      storage: undefined, terminal: undefined, extractor: undefined,
+      spawns: [],
+      extensions: [],
+      towers: [],
+      containers: [],
+      links: [],
+      ramparts: [],
+      walls: [],
+      roads: [],
+      labs: [],
+      storage: undefined,
+      terminal: undefined,
+      extractor: undefined,
       myConstructionSites: [],
       ...overrides,
     } as never;
@@ -250,7 +267,11 @@ describe("syncTaskStates — rampart/road 建成判定（TD-028）", () => {
 
   it("共格隔离：extension 已建而同格 rampart 未建 → rampart 保持 queued", () => {
     const queue = [
-      makeTask({ key: "core.ext.10.10", structureType: "extension" as BuildableStructureConstant, state: "site" }),
+      makeTask({
+        key: "core.ext.10.10",
+        structureType: "extension" as BuildableStructureConstant,
+        state: "site",
+      }),
       makeTask({ key: "defense.core.rampart.10.10", state: "queued" }),
     ];
     const snapshot = makeSnapshot({
@@ -262,7 +283,13 @@ describe("syncTaskStates — rampart/road 建成判定（TD-028）", () => {
   });
 
   it("road site 消失且已建成 → done（road 同属旧实现的判定盲区）", () => {
-    const queue = [makeTask({ key: "road.10.10", structureType: "road" as BuildableStructureConstant, state: "site" })];
+    const queue = [
+      makeTask({
+        key: "road.10.10",
+        structureType: "road" as BuildableStructureConstant,
+        state: "site",
+      }),
+    ];
     const snapshot = makeSnapshot({
       roads: [{ pos: { x: 10, y: 10 }, structureType: "road" }],
     });
@@ -286,7 +313,9 @@ describe("reclaimExpeditionCreeps — 扩张失败编队召回（TD-027）", () 
   });
 
   it("拓荒者 home 改回 sponsor、标记 recycle、清空 remoteTarget/assignment", () => {
-    const pioneer = { memory: { role: "worker", home: "W2N2", assignment: { id: "t1" } } as Record<string, unknown> };
+    const pioneer = {
+      memory: { role: "worker", home: "W2N2", assignment: { id: "t1" } } as Record<string, unknown>,
+    };
     g.Game = { time: 100, creeps: { p1: pioneer } };
     syncSquadIndex();
     reclaimExpeditionCreeps("W2N2", "W1N1");
@@ -296,7 +325,9 @@ describe("reclaimExpeditionCreeps — 扩张失败编队召回（TD-027）", () 
   });
 
   it("claimer（home=sponsor + remoteTarget=目标房）同样被召回", () => {
-    const claimer = { memory: { role: "claimer", home: "W1N1", remoteTarget: "W2N2" } as Record<string, unknown> };
+    const claimer = {
+      memory: { role: "claimer", home: "W1N1", remoteTarget: "W2N2" } as Record<string, unknown>,
+    };
     g.Game = { time: 100, creeps: { c1: claimer } };
     syncSquadIndex();
     reclaimExpeditionCreeps("W2N2", "W1N1");

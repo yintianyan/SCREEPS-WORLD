@@ -137,10 +137,7 @@ export function batchDemands(input: BatchInput): TransportRequestV2[] {
 
  * 纯函数 — 不访问 Game/Memory。
  */
-export function splitBatch(
-  req: TransportRequestV2,
-  maxBatch: number,
-): TransportRequestV2[] {
+export function splitBatch(req: TransportRequestV2, maxBatch: number): TransportRequestV2[] {
   if (req.amount <= maxBatch) return [req];
 
   const parts: TransportRequestV2[] = [];

@@ -19,7 +19,7 @@ export { roomHasInvaderCore };
 function reserveControllerAction(): ActionCandidate<StructureController> {
   return {
     name: "reserver:reserve-controller",
-    resolve: (ac) => {
+    resolve: ac => {
       // 只在 remoteTarget 房间内执行。
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
@@ -85,9 +85,7 @@ const policy: RolePolicy = {
   // 冻结 reserver → 远矿房 reservation 过期 → source 被别人抢占 → 远矿产能归零，
   // 与 recovery 的目标（恢复经济）背道而驰。因此声明 recoveryEligible 豁免。
   recoveryEligible: true,
-  acquire: [
-    reserveControllerAction(),
-  ],
+  acquire: [reserveControllerAction()],
   work: [
     // 与 acquire 相同 — 无 CARRY 部件，mode 振荡不影响行为。
     reserveControllerAction(),

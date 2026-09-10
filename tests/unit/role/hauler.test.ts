@@ -25,7 +25,13 @@ describe("hauler — acquire 模式", () => {
     const c2 = mockStructure("container", { id: "c2", energy: 200, capacity: 2000 });
     const snap = mockSnapshot({ containers: [c1, c2] });
     // hauler 空载，容量 100。
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -37,7 +43,13 @@ describe("hauler — acquire 模式", () => {
   it("container 可用量 < carryFree 时取可用量", () => {
     const c1 = mockStructure("container", { id: "c1", energy: 30, capacity: 2000 });
     const snap = mockSnapshot({ containers: [c1] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -49,7 +61,13 @@ describe("hauler — acquire 模式", () => {
   it("container 空时进入 idle（不尝试 harvest）", () => {
     const c1 = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
     const snap = mockSnapshot({ containers: [c1] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -61,7 +79,13 @@ describe("hauler — acquire 模式", () => {
   it("无 container 时不从 storage 取能（hauler 是收集者，storage 取能由 distributor 负责）", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
     const snap = mockSnapshot({ containers: [], storage });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -73,7 +97,13 @@ describe("hauler — acquire 模式", () => {
 
   it("无任何能量来源时 idle", () => {
     const snap = mockSnapshot({ containers: [], storage: undefined });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -91,7 +121,14 @@ describe("hauler — acquire 模式", () => {
       used: 0,
       capacity: 100,
       mode: "acquire",
-      assignment: { id: "t1", kind: "haul", sourceId: "c2", leaseUntil: 2000, revision: 1, assignedAt: 990 },
+      assignment: {
+        id: "t1",
+        kind: "haul",
+        sourceId: "c2",
+        leaseUntil: 2000,
+        revision: 1,
+        assignedAt: 990,
+      },
     });
     const ctx = mockContext(snap);
 
@@ -106,7 +143,13 @@ describe("hauler — work 模式", () => {
   it("向 fillTarget 运送能量", () => {
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ fillTargets: [spawn] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -121,7 +164,13 @@ describe("hauler — work 模式", () => {
       controllerContainer: cc,
       fillTargets: [spawn, cc],
     });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -133,7 +182,13 @@ describe("hauler — work 模式", () => {
   it("fillTargets 全满时回退到 storage", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 0, capacity: 100000 });
     const snap = mockSnapshot({ fillTargets: [], storage });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -153,7 +208,13 @@ describe("hauler — work 模式", () => {
       fillTargets: [], // cc 已满，不在 fillTargets 中
       storage,
     });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -170,9 +231,15 @@ describe("hauler — work 模式", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 500, capacity: 100000 });
     const snap = mockSnapshot({
       fillTargets: [spawn], // spawn 不满，haulFillTarget predicate = true
-      storage,              // storage 有空闲容量，fillStorage predicate = true
+      storage, // storage 有空闲容量，fillStorage predicate = true
     });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -190,7 +257,13 @@ describe("hauler — work 模式", () => {
       fillTargets: [spawn],
       storage,
     });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -205,7 +278,13 @@ describe("hauler — work 模式", () => {
       fillTargets: [spawn],
       storage: undefined, // RCL1-3 无 storage
     });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -217,7 +296,13 @@ describe("hauler — work 模式", () => {
   it("无 storage 且所有 sink 满时原地待命（不升级控制器）", () => {
     const controller = mockController();
     const snap = mockSnapshot({ fillTargets: [], storage: undefined, controller });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -230,7 +315,13 @@ describe("hauler — work 模式", () => {
 
   it("无任何目标时 idle", () => {
     const snap = mockSnapshot({ fillTargets: [], storage: undefined, controller: undefined });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -241,7 +332,13 @@ describe("hauler — work 模式", () => {
   it("ERR_FULL 时触发 updateMode 切换", () => {
     const spawn = mockStructure("spawn", { id: "sp1", energy: 290, capacity: 300 });
     const snap = mockSnapshot({ fillTargets: [spawn] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     creep.transfer.mockReturnValue(-8); // ERR_FULL
     const ctx = mockContext(snap);
 
@@ -258,8 +355,20 @@ describe("hauler — reservation 去重", () => {
     const ext = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
     const snap = mockSnapshot({ fillTargets: [spawn, ext] });
 
-    const hauler1 = mockCreep({ name: "hauler_1", role: "hauler", used: 80, capacity: 100, mode: "work" });
-    const hauler2 = mockCreep({ name: "hauler_2", role: "hauler", used: 80, capacity: 100, mode: "work" });
+    const hauler1 = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
+    const hauler2 = mockCreep({
+      name: "hauler_2",
+      role: "hauler",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(hauler1, ctx);
@@ -279,7 +388,13 @@ describe("hauler — flee", () => {
   it("有敌人时进入 flee 且不执行经济动作", () => {
     const hostile = mockHostile();
     const snap = mockSnapshot({ hostileCreeps: [hostile] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 50, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 50,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -315,27 +430,29 @@ describe("hauler — flee 安全充能（P0-2）", () => {
    * distances 是 "x,y" → 距离的映射，用于 getRangeTo(target) 的返回值。
    * target 的位置通过 target.pos.x/pos.y 推断。
    */
-function mockPosWithDistances(x: number, y: number, distances: Record<string, number>) {
-return {
-x,
-y,
-roomName: "W7N4",
-getRangeTo: vi.fn((target: { pos?: { x: number; y: number }; x?: number; y?: number }) => {
-const tx = target?.pos?.x ?? target?.x;
-const ty = target?.pos?.y ?? target?.y;
-const key = `${tx},${ty}`;
-return distances[key] ?? 1;
-}),
-getDirectionTo: vi.fn(() => 3),
-isEqualTo: vi.fn((tx: number | { x?: number; y?: number; pos?: { x: number; y: number } }, ty?: number) => {
-const px = typeof tx === "number" ? tx : (tx.x ?? tx.pos?.x ?? 0);
-const py = typeof tx === "number" ? (ty ?? 0) : (tx.y ?? tx.pos?.y ?? 0);
-return x === px && y === py;
-}),
-findClosestByRange: vi.fn((targets: any[]) => targets[0] ?? null),
-findPathTo: vi.fn(() => []),
-};
-}
+  function mockPosWithDistances(x: number, y: number, distances: Record<string, number>) {
+    return {
+      x,
+      y,
+      roomName: "W7N4",
+      getRangeTo: vi.fn((target: { pos?: { x: number; y: number }; x?: number; y?: number }) => {
+        const tx = target?.pos?.x ?? target?.x;
+        const ty = target?.pos?.y ?? target?.y;
+        const key = `${tx},${ty}`;
+        return distances[key] ?? 1;
+      }),
+      getDirectionTo: vi.fn(() => 3),
+      isEqualTo: vi.fn(
+        (tx: number | { x?: number; y?: number; pos?: { x: number; y: number } }, ty?: number) => {
+          const px = typeof tx === "number" ? tx : (tx.x ?? tx.pos?.x ?? 0);
+          const py = typeof tx === "number" ? (ty ?? 0) : (tx.y ?? tx.pos?.y ?? 0);
+          return x === px && y === py;
+        },
+      ),
+      findClosestByRange: vi.fn((targets: any[]) => targets[0] ?? null),
+      findPathTo: vi.fn(() => []),
+    };
+  }
 
   it("hauler 距 spawn ≤3 且携带能量时，threat 存在优先给 tower 充能", () => {
     // 布局：spawn(20,20) | hauler(21,21) | tower(22,22) | hostile(15,15)
@@ -538,7 +655,13 @@ describe("hauler — H-2 满载矿物搬运活锁修复", () => {
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({ rcl: 4, containers: [container], storage });
     // 满载能量：free=0 → withdraw 相 resolve 必须返回 undefined。
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -553,7 +676,13 @@ describe("hauler — H-2 满载矿物搬运活锁修复", () => {
     (container.store as any).H = 1500;
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({ rcl: 4, containers: [container], storage });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 25, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 25,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -569,7 +698,13 @@ describe("hauler — H-2 满载矿物搬运活锁修复", () => {
     (container.store as any).H = 1400; // container 容量 2000, 阈值=1400, 1400>=1400 ✓
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({ rcl: 4, containers: [container], storage });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -583,7 +718,13 @@ describe("hauler — H-2 满载矿物搬运活锁修复", () => {
     (container.store as any).H = 1399; // container 容量 2000, 阈值=1400, 1399<1400 → 不触发
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({ rcl: 4, containers: [container], storage });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -596,7 +737,13 @@ describe("hauler — H-2 满载矿物搬运活锁修复", () => {
 describe("hauler — HL-1 战时 tower 补给优先于囤积", () => {
   /** 威胁在场但在 fleeRange(10) 外（不触发 flee）。 */
   function farThreatCreep(): any {
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     creep.pos.getRangeTo = vi.fn(() => 15); // 威胁距离 15 > fleeRange 10
     return creep;
   }
@@ -606,8 +753,11 @@ describe("hauler — HL-1 战时 tower 补给优先于囤积", () => {
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({
-      rcl: 4, storage, towers: [tower],
-      fillTargets: [tower], hostileCreeps: [hostile],
+      rcl: 4,
+      storage,
+      towers: [tower],
+      fillTargets: [tower],
+      hostileCreeps: [hostile],
     });
     const creep = farThreatCreep();
     const ctx = mockContext(snap);
@@ -622,7 +772,10 @@ describe("hauler — HL-1 战时 tower 补给优先于囤积", () => {
     const hostile = mockHostile();
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({
-      rcl: 4, storage, fillTargets: [], hostileCreeps: [hostile],
+      rcl: 4,
+      storage,
+      fillTargets: [],
+      hostileCreeps: [hostile],
     });
     const creep = farThreatCreep();
     const ctx = mockContext(snap);
@@ -636,9 +789,19 @@ describe("hauler — HL-1 战时 tower 补给优先于囤积", () => {
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({
-      rcl: 4, storage, towers: [tower], fillTargets: [tower], hostileCreeps: [],
+      rcl: 4,
+      storage,
+      towers: [tower],
+      fillTargets: [tower],
+      hostileCreeps: [],
     });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     haulerRole.run(creep, ctx);
@@ -654,7 +817,13 @@ describe("hauler — work 链优先级：能量入库优先于取矿补仓（sto
     (mineralContainer.store as any).Z = 1500; // 含矿物（非 energy），阈值=1400, 1500>=1400
     const snap = mockSnapshot({ storage, containers: [mineralContainer] });
     // 携能量 200、容量 800 → 有空位；work 态（updateMode 因 used>0 保持 work）。
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 200, capacity: 800, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 200,
+      capacity: 800,
+      mode: "work",
+    });
 
     haulerRole.run(creep, mockContext(snap));
 
@@ -672,7 +841,13 @@ describe("hauler — work 链优先级：能量入库优先于取矿补仓（sto
     // container 容量 2000, 阈值=1400, Z=1500 >= 1400 ✓
     (mineralContainer.store as any).Z = 1500;
     const snap = mockSnapshot({ storage, containers: [mineralContainer] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 100, capacity: 800, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 100,
+      capacity: 800,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
     const ac = { creep, snapshot: snap, budget: ctx.budget, ctx } as never;
 
@@ -689,7 +864,13 @@ describe("hauler — work 链优先级：能量入库优先于取矿补仓（sto
     // container 容量 2000, 阈值=1400, Z=1000 < 1400 → 不触发
     (mineralContainer.store as any).Z = 1000;
     const snap = mockSnapshot({ storage, containers: [mineralContainer] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 100, capacity: 800, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 100,
+      capacity: 800,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
     const ac = { creep, snapshot: snap, budget: ctx.budget, ctx } as never;
 

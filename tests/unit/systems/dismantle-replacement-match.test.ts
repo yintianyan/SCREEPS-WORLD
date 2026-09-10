@@ -9,16 +9,35 @@ beforeEach(() => {
 });
 
 /** 构造最小 RoomSnapshot（findReplacementForDeadLink 只用 sources + links）。 */
-function makeSnapshot(sources: { x: number; y: number }[], links: { id: string; pos: { x: number; y: number } }[] = []): RoomSnapshot {
+function makeSnapshot(
+  sources: { x: number; y: number }[],
+  links: { id: string; pos: { x: number; y: number } }[] = [],
+): RoomSnapshot {
   return {
     roomName: "W7N4",
-    sources: sources.map((s, i) => ({ id: `source${i}` as Id<Source>, pos: { x: s.x, y: s.y, roomName: "W7N4" } })),
-    links: links.map(l => ({ id: l.id as Id<StructureLink>, pos: { x: l.pos.x, y: l.pos.y, roomName: "W7N4" }, store: { getUsedCapacity: () => 0, getFreeCapacity: () => 800, getCapacity: () => 800 } as any })),
+    sources: sources.map((s, i) => ({
+      id: `source${i}` as Id<Source>,
+      pos: { x: s.x, y: s.y, roomName: "W7N4" },
+    })),
+    links: links.map(l => ({
+      id: l.id as Id<StructureLink>,
+      pos: { x: l.pos.x, y: l.pos.y, roomName: "W7N4" },
+      store: {
+        getUsedCapacity: () => 0,
+        getFreeCapacity: () => 800,
+        getCapacity: () => 800,
+      } as any,
+    })),
   } as unknown as RoomSnapshot;
 }
 
 /** 构造 link build task。 */
-function makeLinkTask(key: string, x: number, y: number, state: BuildTask["state"] = "queued"): BuildTask {
+function makeLinkTask(
+  key: string,
+  x: number,
+  y: number,
+  state: BuildTask["state"] = "queued",
+): BuildTask {
   return {
     key,
     pos: { x, y, roomName: "W7N4" },

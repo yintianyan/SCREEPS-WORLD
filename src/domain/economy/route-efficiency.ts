@@ -27,11 +27,11 @@ export interface RouteEfficiency {
  * 效率等级。
  */
 export type EfficiencyGrade =
-  | "excellent"  // ratio >= 10
-  | "good"       // ratio >= 5
-  | "fair"       // ratio >= 2
-  | "poor"       // ratio >= 1
-  | "bad";       // ratio < 1
+  | "excellent" // ratio >= 10
+  | "good" // ratio >= 5
+  | "fair" // ratio >= 2
+  | "poor" // ratio >= 1
+  | "bad"; // ratio < 1
 
 /**
  * 效率阈值配置。
@@ -97,9 +97,7 @@ export function evaluateRouteEfficiency(
   cost: TransportCostBreakdown,
   thresholds: EfficiencyThresholds = DEFAULT_EFFICIENCY_THRESHOLDS,
 ): RouteEfficiency {
-  const ratio = cost.total > 0
-    ? delivered / cost.total
-    : (delivered > 0 ? Infinity : 0);
+  const ratio = cost.total > 0 ? delivered / cost.total : delivered > 0 ? Infinity : 0;
 
   const grade = gradeEfficiency(ratio, thresholds);
   const shouldMaintain = ratio >= thresholds.maintainThreshold;
@@ -167,10 +165,10 @@ export interface EfficiencyRecommendation {
  * 效率建议动作。
  */
 export type EfficiencyAction =
-  | "maintain"      // 维持现状
-  | "investigate"   // 调查低效原因
-  | "renegotiate"   // 重新谈判（寻找替代 Producer）
-  | "cancel";       // 取消 Contract
+  | "maintain" // 维持现状
+  | "investigate" // 调查低效原因
+  | "renegotiate" // 重新谈判（寻找替代 Producer）
+  | "cancel"; // 取消 Contract
 
 /**
  * 根据路由效率生成建议。
@@ -256,9 +254,12 @@ export function selectBestProducer(
   let bestRatio = -1;
 
   for (const candidate of candidates) {
-    const ratio = candidate.cost.total > 0
-      ? candidate.expectedDelivered / candidate.cost.total
-      : (candidate.expectedDelivered > 0 ? Infinity : 0);
+    const ratio =
+      candidate.cost.total > 0
+        ? candidate.expectedDelivered / candidate.cost.total
+        : candidate.expectedDelivered > 0
+          ? Infinity
+          : 0;
 
     if (ratio > bestRatio) {
       bestRatio = ratio;

@@ -9,10 +9,7 @@ import {
   planEnergyAid,
   type RoomEnergyState,
 } from "../domain/economy/energy-logistics";
-import {
-  planMineralAid,
-  type RoomMineralState,
-} from "../domain/economy/mineral-logistics";
+import { planMineralAid, type RoomMineralState } from "../domain/economy/mineral-logistics";
 import {
   pickSalvageRecipient,
   planSalvageShipment,
@@ -90,7 +87,10 @@ export const terminalManagerSystem: System = {
     } else if (planRequestRooms.size > 0) {
       // Plan 存在且有 terminal 请求 — Plan 拥有 Decision Authority。
       // 自主互济跳过，由 Plan 驱动的 tryPlanDrivenSend 执行。
-      log.info("terminal",`[${ctx.tick}] terminal: Plan active (plannedAt=${logisticsPlan!.plannedAt}), self-aid skipped in favor of Plan-driven send`);
+      log.info(
+        "terminal",
+        `[${ctx.tick}] terminal: Plan active (plannedAt=${logisticsPlan!.plannedAt}), self-aid skipped in favor of Plan-driven send`,
+      );
     }
 
     for (const snapshot of ctx.snapshots()) {
@@ -237,9 +237,20 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
 
     // 超龄零成交 — 优先改价（省 5% 手续费），改不了再撤单重挂。
     if (typeof market.changeOrderPrice === "function") {
-      const bids = getCachedOrders(ORDER_BUY, order.resourceType) ??
-        toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: order.resourceType }));
-      const best = pickBestBuyOrder(bids, computeDynamicSellPrice(order.resourceType, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
+      const bids =
+        getCachedOrders(ORDER_BUY, order.resourceType) ??
+        toSummaries(
+          Game.market.getAllOrders({ type: ORDER_BUY, resourceType: order.resourceType }),
+        );
+      const best = pickBestBuyOrder(
+        bids,
+        computeDynamicSellPrice(
+          order.resourceType,
+          getMarketPrices(),
+          CONFIG.market.sellDiscount,
+          CONFIG.market.fallbackMinSellPrice,
+        ),
+      );
       const newPrice = shouldChangeOrderPrice(
         order.remainingAmount ?? 0,
         order.totalAmount ?? 0,
@@ -248,13 +259,21 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
         CONFIG.market.sellOrderMarkup,
         {
           competingAsk: bestCompetingAsk(order.resourceType, ownOrderIds, askCache),
-          floor: computeDynamicSellPrice(order.resourceType, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice),
+          floor: computeDynamicSellPrice(
+            order.resourceType,
+            getMarketPrices(),
+            CONFIG.market.sellDiscount,
+            CONFIG.market.fallbackMinSellPrice,
+          ),
           step: CONFIG.market.sellUndercutStep,
         },
       );
       if (newPrice !== undefined) {
         if (market.changeOrderPrice(order.id, newPrice) === OK) {
-          log.info("terminal",`[${Game.time}] market: 改价 ${order.id}（${order.resourceType} ${order.price}→${newPrice}）`);
+          log.info(
+            "terminal",
+            `[${Game.time}] market: 改价 ${order.id}（${order.resourceType} ${order.price}→${newPrice}）`,
+          );
           continue; // 改价成功 — 不撤单，等新价成交
         }
       }
@@ -262,7 +281,10 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
 
     // 改价不适用（无 bid / 价变不足 / API 不可用）→ 撤单重挂。
     if (market.cancelOrder?.(order.id) === OK) {
-      log.info("terminal",`[${Game.time}] market: 撤单 ${order.id}（${order.resourceType} 超龄零成交）`);
+      log.info(
+        "terminal",
+        `[${Game.time}] market: 撤单 ${order.id}（${order.resourceType} 超龄零成交）`,
+      );
     }
   }
 
@@ -282,7 +304,15 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
   const bids = toSummaries(
     Game.market.getAllOrders({ type: ORDER_BUY, resourceType: homeMineral }),
   );
-  const best = pickBestBuyOrder(bids, computeDynamicSellPrice(homeMineral, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
+  const best = pickBestBuyOrder(
+    bids,
+    computeDynamicSellPrice(
+      homeMineral,
+      getMarketPrices(),
+      CONFIG.market.sellDiscount,
+      CONFIG.market.fallbackMinSellPrice,
+    ),
+  );
   const plan = planSellOrder({
     resourceType: homeMineral,
     surplus,
@@ -293,7 +323,12 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
     minOrderAmount: CONFIG.market.minOrderAmount,
     pricing: {
       competingAsk: bestCompetingAsk(homeMineral, ownOrderIds, askCache),
-      floor: computeDynamicSellPrice(homeMineral, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice),
+      floor: computeDynamicSellPrice(
+        homeMineral,
+        getMarketPrices(),
+        CONFIG.market.sellDiscount,
+        CONFIG.market.fallbackMinSellPrice,
+      ),
       step: CONFIG.market.sellUndercutStep,
     },
   });
@@ -307,7 +342,8 @@ function tryManageSellOrders(snapshot: RoomSnapshot): void {
     roomName: snapshot.roomName,
   });
   if (result === OK) {
-    log.info("terminal",
+    log.info(
+      "terminal",
       `[${Game.time}] market: 挂单 sell ${plan.totalAmount} ${plan.resourceType} @ ${plan.price}（${snapshot.roomName}）`,
     );
   }
@@ -329,7 +365,17 @@ function trySellPixel(): void {
   for (const o of toSummaries(
     Game.market.getAllOrders({ type: ORDER_BUY, resourceType: "pixel" }),
   )) {
-    if (o.price < computeDynamicSellPrice("pixel", getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinPixelSellPrice) || o.amount <= 0) continue;
+    if (
+      o.price <
+        computeDynamicSellPrice(
+          "pixel",
+          getMarketPrices(),
+          CONFIG.market.sellDiscount,
+          CONFIG.market.fallbackMinPixelSellPrice,
+        ) ||
+      o.amount <= 0
+    )
+      continue;
     if (!best || o.price > best.price) best = o;
   }
   if (!best) return;
@@ -337,7 +383,7 @@ function trySellPixel(): void {
   const amount = Math.min(pixels, best.amount);
   if (Game.market.deal(best.id, amount) === OK) {
     recordEvent(EventKind.EnergyTransfer, "", [amount]);
-    log.info("terminal",`[${Game.time}] pixel: 卖出 ${amount} pixel @ ${best.price}`);
+    log.info("terminal", `[${Game.time}] pixel: 卖出 ${amount} pixel @ ${best.price}`);
   }
 }
 
@@ -382,7 +428,8 @@ function tryNukeSalvage(ctx: TickContext): void {
         salvageResourceCode(plan.resourceType),
         plan.amount,
       ]);
-      log.info("terminal",
+      log.info(
+        "terminal",
         `[${Game.time}] nuke-salvage: ${snapshot.roomName} → ${plan.to} ${plan.amount} ${plan.resourceType}`,
       );
     }
@@ -436,7 +483,8 @@ function tryEmpireEnergyAid(ctx: TickContext): void {
   const result = terminal.send(RESOURCE_ENERGY, plan.amount, plan.to);
   if (result === OK) {
     recordEvent(EventKind.EnergyTransfer, plan.to, [plan.amount]);
-    log.info("terminal",
+    log.info(
+      "terminal",
       `[${Game.time}] energy-aid: ${plan.from} → ${plan.to} ${plan.amount} energy (fee=${fee})`,
     );
   }
@@ -454,7 +502,8 @@ function trySellSurplusEnergy(snapshot: RoomSnapshot, terminal: StructureTermina
   // deal 从 terminal 出货 — terminal 现货不足时等 distributor 转运，下一窗口再试。
   if (terminal.store.getUsedCapacity(RESOURCE_ENERGY) < amount) return false;
 
-  const orders = getCachedOrders(ORDER_BUY, RESOURCE_ENERGY) ??
+  const orders =
+    getCachedOrders(ORDER_BUY, RESOURCE_ENERGY) ??
     toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_ENERGY }));
   const best = pickBestBuyOrder(orders, CONFIG.energy.minEnergySellPrice);
   if (!best) return false;
@@ -483,7 +532,8 @@ function tryBuyCrisisEnergy(snapshot: RoomSnapshot, terminal: StructureTerminal)
   );
   if (amount <= 0) return false;
 
-  const orders = getCachedOrders(ORDER_SELL, RESOURCE_ENERGY) ??
+  const orders =
+    getCachedOrders(ORDER_SELL, RESOURCE_ENERGY) ??
     toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_ENERGY }));
   const best = pickBestSellOrder(orders, CONFIG.energy.maxEnergyBuyPrice);
   if (!best) return false;
@@ -519,8 +569,14 @@ function bestCompetingAsk(
     const cached = cache.get(resourceType);
     if (cached !== undefined || cache.has(resourceType)) return cached;
   }
-  const sells = getCachedOrders(ORDER_SELL, resourceType) ??
-    toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: resourceType as ResourceConstant }));
+  const sells =
+    getCachedOrders(ORDER_SELL, resourceType) ??
+    toSummaries(
+      Game.market.getAllOrders({
+        type: ORDER_SELL,
+        resourceType: resourceType as ResourceConstant,
+      }),
+    );
   let best: number | undefined;
   for (const o of sells) {
     if (ownOrderIds.has(o.id)) continue;
@@ -542,7 +598,8 @@ function executeDeal(
   if (cost > terminal.store.getUsedCapacity(RESOURCE_ENERGY)) return false;
   const result = Game.market.deal(order.id, amount, roomName);
   if (result === OK) {
-    log.info("terminal",
+    log.info(
+      "terminal",
       `[${Game.time}] terminal/${roomName}: deal ${order.id} amount=${amount} price=${order.price} energyCost=${cost}`,
     );
     return true;
@@ -563,9 +620,18 @@ function trySellHomeMineral(snapshot: RoomSnapshot, terminal: StructureTerminal)
   const surplus = inTerminal + inStorage - CONFIG.market.sellReserve;
   if (surplus <= 0 || inTerminal <= 0) return false;
 
-  const orders = getCachedOrders(ORDER_BUY, homeMineral) ??
+  const orders =
+    getCachedOrders(ORDER_BUY, homeMineral) ??
     toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: homeMineral }));
-  const best = pickBestBuyOrder(orders, computeDynamicSellPrice(homeMineral, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
+  const best = pickBestBuyOrder(
+    orders,
+    computeDynamicSellPrice(
+      homeMineral,
+      getMarketPrices(),
+      CONFIG.market.sellDiscount,
+      CONFIG.market.fallbackMinSellPrice,
+    ),
+  );
   if (!best) return false;
 
   const amount = Math.min(surplus, inTerminal, best.amount, CONFIG.market.maxDealAmount);
@@ -584,7 +650,11 @@ function trySellHomeMineral(snapshot: RoomSnapshot, terminal: StructureTerminal)
  * 向后兼容：无需求表时回退到旧的 getMineralDeficits（硬编码 MINERAL_RESERVE_TARGET）。
  * 每次运行只处理一种（控制 getAllOrders 开销）。
  */
-function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx: TickContext): boolean {
+function tryBuyDeficit(
+  snapshot: RoomSnapshot,
+  terminal: StructureTerminal,
+  ctx: TickContext,
+): boolean {
   if (Game.market.credits < CONFIG.market.creditFloor) return false;
 
   // ── 阶段 1：优先消费需求表 ──
@@ -606,15 +676,25 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
       // 买入上限 = 市场最低卖价 × buyPremium（行情缺失时回退 fallback）。
       // 高优先级需求(priority≥30)允许上浮50% — boost/war 时间价值 > 价格差异。
       const prices = getMarketPrices();
-      const fallback = CONFIG.market.fallbackMaxBuyPrice[demand.resource] ??
+      const fallback =
+        CONFIG.market.fallbackMaxBuyPrice[demand.resource] ??
         Math.max(...Object.values(CONFIG.market.fallbackMaxBuyPrice));
       const basePrice = computeDynamicBuyPrice(
-        demand.resource, prices, CONFIG.market.buyPremium, fallback,
+        demand.resource,
+        prices,
+        CONFIG.market.buyPremium,
+        fallback,
       );
       const maxPrice = adjustMaxPrice(basePrice, demand.priority);
 
-      const orders = getCachedOrders(ORDER_SELL, demand.resource) ??
-        toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: demand.resource as ResourceConstant }));
+      const orders =
+        getCachedOrders(ORDER_SELL, demand.resource) ??
+        toSummaries(
+          Game.market.getAllOrders({
+            type: ORDER_SELL,
+            resourceType: demand.resource as ResourceConstant,
+          }),
+        );
       const best = pickBestSellOrder(orders, maxPrice);
       if (!best) continue;
 
@@ -622,7 +702,10 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
       const amount = Math.min(demand.amount, best.amount, CONFIG.market.maxDealAmount, affordable);
       if (amount <= 0) continue;
 
-      log.info("terminal",`[${Game.time}] terminal/${snapshot.roomName}: 买入 ${demand.resource} amount=${amount} priority=${demand.priority} reason=${demand.reason}`);
+      log.info(
+        "terminal",
+        `[${Game.time}] terminal/${snapshot.roomName}: 买入 ${demand.resource} amount=${amount} priority=${demand.priority} reason=${demand.reason}`,
+      );
       return executeDeal(best, amount, terminal, snapshot.roomName);
     }
     // 需求表有需求但全部买入失败（无卖单/价超门禁）— 不回退到硬编码目标，
@@ -639,13 +722,25 @@ function tryBuyDeficit(snapshot: RoomSnapshot, terminal: StructureTerminal, ctx:
   deficits.sort((a, b) => b.deficit - a.deficit);
   const target = deficits[0]!;
   const prices = getMarketPrices();
-  const fallback = CONFIG.market.fallbackMaxBuyPrice[target.mineral] ??
+  const fallback =
+    CONFIG.market.fallbackMaxBuyPrice[target.mineral] ??
     Math.max(...Object.values(CONFIG.market.fallbackMaxBuyPrice));
-  const maxPrice = computeDynamicBuyPrice(target.mineral, prices, CONFIG.market.buyPremium, fallback);
+  const maxPrice = computeDynamicBuyPrice(
+    target.mineral,
+    prices,
+    CONFIG.market.buyPremium,
+    fallback,
+  );
   if (maxPrice <= 0) return false;
 
-  const orders = getCachedOrders(ORDER_SELL, target.mineral) ??
-    toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: target.mineral as ResourceConstant }));
+  const orders =
+    getCachedOrders(ORDER_SELL, target.mineral) ??
+    toSummaries(
+      Game.market.getAllOrders({
+        type: ORDER_SELL,
+        resourceType: target.mineral as ResourceConstant,
+      }),
+    );
   const best = pickBestSellOrder(orders, maxPrice);
   if (!best) return false;
 
@@ -675,15 +770,29 @@ function trySellSurplusCompound(snapshot: RoomSnapshot, terminal: StructureTermi
     const inTerminal = terminal.store.getUsedCapacity(res as ResourceConstant) ?? 0;
     if (inTerminal <= 0) continue;
 
-    const orders = getCachedOrders(ORDER_BUY, res) ??
-      toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res as ResourceConstant }));
-    const best = pickBestBuyOrder(orders, computeDynamicSellPrice(res, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
+    const orders =
+      getCachedOrders(ORDER_BUY, res) ??
+      toSummaries(
+        Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res as ResourceConstant }),
+      );
+    const best = pickBestBuyOrder(
+      orders,
+      computeDynamicSellPrice(
+        res,
+        getMarketPrices(),
+        CONFIG.market.sellDiscount,
+        CONFIG.market.fallbackMinSellPrice,
+      ),
+    );
     if (!best) continue;
 
     const amount = Math.min(surplusAmount, inTerminal, best.amount, CONFIG.market.maxDealAmount);
     if (amount <= 0) continue;
 
-    log.info("terminal",`[${Game.time}] terminal/${snapshot.roomName}: 卖出盈余化合物 ${res} amount=${amount} price=${best.price}`);
+    log.info(
+      "terminal",
+      `[${Game.time}] terminal/${snapshot.roomName}: 卖出盈余化合物 ${res} amount=${amount} price=${best.price}`,
+    );
     return executeDeal(best, amount, terminal, snapshot.roomName);
   }
   return false;
@@ -738,7 +847,8 @@ function tryEmpireMineralAid(ctx: TickContext): void {
   const result = terminal.send(plan.mineral as ResourceConstant, plan.amount, plan.to);
   if (result === OK) {
     recordEvent(EventKind.MineralTransfer, plan.to, [plan.amount]);
-    log.info("terminal",
+    log.info(
+      "terminal",
       `[${Game.time}] mineral-aid: ${plan.from} → ${plan.to} ${plan.amount} ${plan.mineral} (fee=${fee})`,
     );
   }
@@ -753,9 +863,18 @@ function trySellSurplusBattery(snapshot: RoomSnapshot, terminal: StructureTermin
   const inTerminal = terminal.store.getUsedCapacity(RESOURCE_BATTERY);
   if (inTerminal <= 0) return false;
 
-  const orders = getCachedOrders(ORDER_BUY, RESOURCE_BATTERY) ??
+  const orders =
+    getCachedOrders(ORDER_BUY, RESOURCE_BATTERY) ??
     toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: RESOURCE_BATTERY }));
-  const best = pickBestBuyOrder(orders, computeDynamicSellPrice(RESOURCE_BATTERY, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinBatterySellPrice));
+  const best = pickBestBuyOrder(
+    orders,
+    computeDynamicSellPrice(
+      RESOURCE_BATTERY,
+      getMarketPrices(),
+      CONFIG.market.sellDiscount,
+      CONFIG.market.fallbackMinBatterySellPrice,
+    ),
+  );
   if (!best) return false;
 
   const amount = Math.min(inTerminal, best.amount, CONFIG.market.maxDealAmount);
@@ -789,15 +908,27 @@ function trySellCommodity(snapshot: RoomSnapshot, terminal: StructureTerminal): 
     const inTerminal = terminal.store.getUsedCapacity(res) ?? 0;
     if (inTerminal <= 0) continue;
 
-    const orders = getCachedOrders(ORDER_BUY, res) ??
+    const orders =
+      getCachedOrders(ORDER_BUY, res) ??
       toSummaries(Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res }));
-    const best = pickBestBuyOrder(orders, computeDynamicSellPrice(res, getMarketPrices(), CONFIG.market.sellDiscount, CONFIG.market.fallbackMinSellPrice));
+    const best = pickBestBuyOrder(
+      orders,
+      computeDynamicSellPrice(
+        res,
+        getMarketPrices(),
+        CONFIG.market.sellDiscount,
+        CONFIG.market.fallbackMinSellPrice,
+      ),
+    );
     if (!best) continue;
 
     const amount = Math.min(inTerminal, best.amount, CONFIG.market.maxDealAmount);
     if (amount <= 0) continue;
 
-    log.info("terminal",`[${Game.time}] terminal/${snapshot.roomName}: 卖出 commodity ${res} amount=${amount} price=${best.price}`);
+    log.info(
+      "terminal",
+      `[${Game.time}] terminal/${snapshot.roomName}: 卖出 commodity ${res} amount=${amount} price=${best.price}`,
+    );
     return executeDeal(best, amount, terminal, snapshot.roomName);
   }
   return false;
@@ -820,12 +951,23 @@ function tryBuyPower(snapshot: RoomSnapshot, terminal: StructureTerminal): boole
   const deficit = CONFIG.factory.powerSpawnPowerTarget - have;
   if (deficit <= 0) return false;
 
-  const orders = getCachedOrders(ORDER_SELL, RESOURCE_POWER) ??
+  const orders =
+    getCachedOrders(ORDER_SELL, RESOURCE_POWER) ??
     toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_POWER }));
-  const best = pickBestSellOrder(orders, computeDynamicBuyPrice(RESOURCE_POWER, getMarketPrices(), CONFIG.market.buyPremium, CONFIG.market.fallbackPowerBuyMaxPrice));
+  const best = pickBestSellOrder(
+    orders,
+    computeDynamicBuyPrice(
+      RESOURCE_POWER,
+      getMarketPrices(),
+      CONFIG.market.buyPremium,
+      CONFIG.market.fallbackPowerBuyMaxPrice,
+    ),
+  );
   if (!best) return false;
 
-  const affordable = Math.floor((Game.market.credits - CONFIG.market.powerBuyCreditFloor) / best.price);
+  const affordable = Math.floor(
+    (Game.market.credits - CONFIG.market.powerBuyCreditFloor) / best.price,
+  );
   const amount = Math.min(deficit, best.amount, CONFIG.market.maxDealAmount, affordable);
   return executeDeal(best, amount, terminal, snapshot.roomName);
 }
@@ -834,10 +976,23 @@ function tryBuyPower(snapshot: RoomSnapshot, terminal: StructureTerminal): boole
 
 /** 需要采集行情的资源列表 — 覆盖所有交易涉及的资源类型。 */
 const PRICED_RESOURCES = [
-  "H", "O", "U", "L", "K", "Z", "X",
-  "OH", "ZK", "UL", "G",
-  "GO", "GH2O", "XGH2O",
-  "battery", "power", "pixel",
+  "H",
+  "O",
+  "U",
+  "L",
+  "K",
+  "Z",
+  "X",
+  "OH",
+  "ZK",
+  "UL",
+  "G",
+  "GO",
+  "GH2O",
+  "XGH2O",
+  "battery",
+  "power",
+  "pixel",
   "GHODIUM",
 ] as const;
 
@@ -865,7 +1020,7 @@ function refreshMarketPrices(): void {
 
   for (const o of iterable) {
     const res = o.resourceType as string;
-    const key = o.type + "/" + res;
+    const key = `${o.type}/${res}`;
     if (o.type === ORDER_SELL) {
       (sellByRes[res] ??= []).push({ price: o.price });
     } else if (o.type === ORDER_BUY) {
@@ -883,13 +1038,19 @@ function refreshMarketPrices(): void {
   // 无参数调用回退：iterable 为空时按 PRICED_RESOURCES 逐资源查询。
   if (iterable.length === 0) {
     for (const res of PRICED_RESOURCES) {
-      const sells = Game.market.getAllOrders({ type: ORDER_SELL, resourceType: res as ResourceConstant });
+      const sells = Game.market.getAllOrders({
+        type: ORDER_SELL,
+        resourceType: res as ResourceConstant,
+      });
       sellByRes[res] = sells.map(o => ({ price: o.price }));
-      const key = ORDER_SELL + "/" + res;
+      const key = `${ORDER_SELL}/${res}`;
       orderCache[key] = toSummaries(sells);
-      const buys = Game.market.getAllOrders({ type: ORDER_BUY, resourceType: res as ResourceConstant });
+      const buys = Game.market.getAllOrders({
+        type: ORDER_BUY,
+        resourceType: res as ResourceConstant,
+      });
       buyByRes[res] = buys.map(o => ({ price: o.price }));
-      const key2 = ORDER_BUY + "/" + res;
+      const key2 = `${ORDER_BUY}/${res}`;
       orderCache[key2] = toSummaries(buys);
     }
   }
@@ -924,7 +1085,7 @@ function getMarketPrices(): PriceTable {
 function getCachedOrders(type: string, resource: string): MarketOrderSummary[] | undefined {
   const g = globalCache();
   if (g.marketOrderCache && Game.time - g.marketOrderCache.tick <= CONFIG.market.interval + 50) {
-    return g.marketOrderCache.orders[type + "/" + resource];
+    return g.marketOrderCache.orders[`${type}/${resource}`];
   }
   return undefined;
 }
@@ -948,9 +1109,18 @@ function tryBuyGhodium(snapshot: RoomSnapshot, terminal: StructureTerminal): boo
   const deficit = CONFIG.nuker.ghodiumStockpile - have;
   if (deficit <= 0) return false;
 
-  const orders = getCachedOrders(ORDER_SELL, RESOURCE_GHODIUM) ??
+  const orders =
+    getCachedOrders(ORDER_SELL, RESOURCE_GHODIUM) ??
     toSummaries(Game.market.getAllOrders({ type: ORDER_SELL, resourceType: RESOURCE_GHODIUM }));
-  const best = pickBestSellOrder(orders, computeDynamicBuyPrice(RESOURCE_GHODIUM, getMarketPrices(), CONFIG.market.buyPremium, CONFIG.nuker.fallbackGhodiumBuyMaxPrice));
+  const best = pickBestSellOrder(
+    orders,
+    computeDynamicBuyPrice(
+      RESOURCE_GHODIUM,
+      getMarketPrices(),
+      CONFIG.market.buyPremium,
+      CONFIG.nuker.fallbackGhodiumBuyMaxPrice,
+    ),
+  );
   if (!best) return false;
 
   const affordable = Math.floor(
@@ -1007,13 +1177,18 @@ function tryPlanDrivenSend(
   roomRequests.sort((a, b) => a.priority - b.priority);
 
   for (const req of roomRequests) {
-    const resource = req.resource === "energy" ? RESOURCE_ENERGY : req.resource as ResourceConstant;
+    const resource =
+      req.resource === "energy" ? RESOURCE_ENERGY : (req.resource as ResourceConstant);
     const inTerminal = terminal.store.getUsedCapacity(resource) ?? 0;
     if (inTerminal < req.amount) continue; // 现货不足，等 distributor 转运
 
     // 能量运费校验
     if (typeof Game.market?.calcTransactionCost === "function") {
-      const fee = Game.market.calcTransactionCost(req.amount, req.source.room, req.destination.room);
+      const fee = Game.market.calcTransactionCost(
+        req.amount,
+        req.source.room,
+        req.destination.room,
+      );
       const energyInTerminal = terminal.store.getUsedCapacity(RESOURCE_ENERGY);
       if (energyInTerminal < fee + CONFIG.market.terminalEnergyReserveFloor) continue;
     }
@@ -1022,9 +1197,10 @@ function tryPlanDrivenSend(
     const result = terminal.send(resource, req.amount, req.destination.room);
     if (result === OK) {
       recordEvent(EventKind.MineralTransfer, req.destination.room, [req.amount]);
-      log.info("terminal",
+      log.info(
+        "terminal",
         `[${Game.time}] terminal/plan-driven: ${snapshot.roomName} → ${req.destination.room}` +
-        ` ${req.amount} ${req.resource} (origin=${req.origin})`,
+          ` ${req.amount} ${req.resource} (origin=${req.origin})`,
       );
       return true; // 占用 terminal 冷却
     }
@@ -1033,4 +1209,3 @@ function tryPlanDrivenSend(
 
   return false; // 没有可执行的请求
 }
-

@@ -22,12 +22,12 @@ describe("assignment-service — shouldPreemptAssignments (P1-2 边沿触发)", 
     // 模拟 tick 序列：正常 → 紧急 → 紧急 → 紧急 → 恢复 → 正常 → 再次紧急
     // lastPreemptTick 设为 undefined 表示首次或已过冷却期
     const sequence: [boolean, boolean, number | undefined, number][] = [
-      [true, false, undefined, 100],   // 进入紧急 → 触发
-      [true, true, undefined, 101],    // 持续 → 不触发
-      [true, true, undefined, 102],    // 持续 → 不触发
-      [false, true, undefined, 103],   // 恢复 → 不触发
-      [false, false, undefined, 104],  // 正常 → 不触发
-      [true, false, undefined, 105],   // 再次进入紧急 → 触发（无冷却限制）
+      [true, false, undefined, 100], // 进入紧急 → 触发
+      [true, true, undefined, 101], // 持续 → 不触发
+      [true, true, undefined, 102], // 持续 → 不触发
+      [false, true, undefined, 103], // 恢复 → 不触发
+      [false, false, undefined, 104], // 正常 → 不触发
+      [true, false, undefined, 105], // 再次进入紧急 → 触发（无冷却限制）
     ];
     const expected = [true, false, false, false, false, true];
     const results = sequence.map(([e, w, l, t]) => shouldPreemptAssignments(e, w, l, t));

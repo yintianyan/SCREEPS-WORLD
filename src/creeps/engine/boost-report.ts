@@ -11,9 +11,10 @@ export function interceptForBoost(creep: Creep): boolean {
   // isWithinBoostWindow 口径）：war 前馈产化合物需数百 tick，固定窗口
   // 会让编队永远错过强化；编队集结本就是待命，去 lab 报到无机会成本。
   const warPlan = Memory.kernel?.warPlan;
-  const warBuildPhase = warPlan?.phase === "build" &&
-    creep.memory.remoteTarget === warPlan.targetRoom;
-  if (!isWithinBoostWindow(creep.memory.role ?? "", creep.ticksToLive ?? 0, warBuildPhase)) return false;
+  const warBuildPhase =
+    warPlan?.phase === "build" && creep.memory.remoteTarget === warPlan.targetRoom;
+  if (!isWithinBoostWindow(creep.memory.role ?? "", creep.ticksToLive ?? 0, warBuildPhase))
+    return false;
 
   const assignments = globalCache().boostAssignments;
   if (!assignments || assignments.tick !== Game.time) return false;

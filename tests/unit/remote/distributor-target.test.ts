@@ -4,7 +4,13 @@ import {
   getDistributorFillTarget,
   hasDistributorFillDemand,
 } from "../../../src/creeps/support/targeting";
-import { resetGlobals, mockSnapshot, mockStructure, mockCreep, mockPos } from "../../support/factories";
+import {
+  resetGlobals,
+  mockSnapshot,
+  mockStructure,
+  mockCreep,
+  mockPos,
+} from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();
@@ -209,7 +215,7 @@ describe("hasDistributorFillDemand — 取能门禁口径", () => {
   it("controller container 兜底需求：tier 0-1 且无「正在供能的」controller link 时成立", () => {
     const cc = struct("container", 10, 10, 0, 2000);
     const servingLink = struct("link", 11, 11, 400, 800); // 有能量 = 正在供能
-    const deadLink = struct("link", 11, 11, 0, 800);       // 空 = 网络未通
+    const deadLink = struct("link", 11, 11, 0, 800); // 空 = 网络未通
     const noLinkSnap = mockSnapshot({
       controller: { pos: mockPos(10, 10) } as any,
       fillTargets: [] as any,

@@ -69,11 +69,12 @@ export function buildNetworkSnapshot(
     supplyNodes: [...supplyNodes],
     demandNodes: [...demandNodes],
     reservationCount: reservations.size,
-    activeOperationCount: operations.filter(op =>
-      op.status !== "completed" &&
-      op.status !== "failed" &&
-      op.status !== "cancelled" &&
-      op.status !== "expired"
+    activeOperationCount: operations.filter(
+      op =>
+        op.status !== "completed" &&
+        op.status !== "failed" &&
+        op.status !== "cancelled" &&
+        op.status !== "expired",
     ).length,
     allocationPlans: [...allocationPlans],
     totalSupply,

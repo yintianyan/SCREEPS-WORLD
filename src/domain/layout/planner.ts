@@ -27,7 +27,11 @@ import {
   type ValidationOptions,
 } from "./validation";
 import { computeDistanceField } from "./terrain-analysis";
-import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG } from "./constraint-placer";
+import {
+  placeStructures,
+  placementsToCandidates,
+  DEFAULT_PLACER_CONFIG,
+} from "./constraint-placer";
 import { COMPACT_CORE_V2 } from "./templates/compact-core-v2";
 
 // ─── 队列去重（makeTryAddTask 提取）──────────────────────────
@@ -63,10 +67,7 @@ export function makeTryAddTask(
     if (isBlacklisted(candidate.key)) return false;
     const posKey = `${candidate.pos.x},${candidate.pos.y}`;
     if (existingPositions.has(posKey)) return false;
-    if (
-      candidate.priority >= 2 &&
-      backgroundQueued() >= maxBackgroundQueued
-    ) {
+    if (candidate.priority >= 2 && backgroundQueued() >= maxBackgroundQueued) {
       if (opts?.stats) opts.stats.capRejected++;
       return false;
     }
@@ -116,7 +117,8 @@ export function planHubRoads(
     // 物流侧优先：距 anchor 近的邻格先铺（城区内网，不铺城外野路）。
     neighbors.sort(
       (a, b) =>
-        (Math.abs(a.x - anchor.x) + Math.abs(a.y - anchor.y)) -
+        Math.abs(a.x - anchor.x) +
+        Math.abs(a.y - anchor.y) -
         (Math.abs(b.x - anchor.x) + Math.abs(b.y - anchor.y)),
     );
 
@@ -267,7 +269,12 @@ export function buildStage0PlanData(input: {
   const { snapshot, anchor, queue, globalSiteCount, maxGlobalSites } = input;
 
   const completedKeys = collectCompletedKeys(queue);
-  for (const key of collectCompletedKeysFromStructures(COMPACT_CORE_V2, anchor.x, anchor.y, snapshot)) {
+  for (const key of collectCompletedKeysFromStructures(
+    COMPACT_CORE_V2,
+    anchor.x,
+    anchor.y,
+    snapshot,
+  )) {
     completedKeys.add(key);
   }
 
@@ -337,9 +344,21 @@ export function planCoreStage(input: {
   maxBackgroundQueued: number;
   nowTick: number;
   capStats?: { capRejected: number };
-  onShortfall?: (shortfalls: readonly { type: string; needed: number; placed: number; roomName?: string }[]) => void;
+  onShortfall?: (
+    shortfalls: readonly { type: string; needed: number; placed: number; roomName?: string }[],
+  ) => void;
 }): CoreStageResult {
-  const { snapshot, room, anchor, occupiedSet, validationOptions, existingKeys, existingPositions, segBlocked, queue } = input;
+  const {
+    snapshot,
+    room,
+    anchor,
+    occupiedSet,
+    validationOptions,
+    existingKeys,
+    existingPositions,
+    segBlocked,
+    queue,
+  } = input;
   const tryAddTask = makeTryAddTask(existingKeys, existingPositions, segBlocked, queue, {
     maxBackgroundQueued: input.maxBackgroundQueued,
     nowTick: input.nowTick,
@@ -354,7 +373,8 @@ export function planCoreStage(input: {
     const field = computeDistanceField(getTerrain);
     const energyEndpoints: { x: number; y: number }[] = [];
     for (const s of snapshot.sources) energyEndpoints.push({ x: s.pos.x, y: s.pos.y });
-    if (snapshot.controller) energyEndpoints.push({ x: snapshot.controller.pos.x, y: snapshot.controller.pos.y });
+    if (snapshot.controller)
+      energyEndpoints.push({ x: snapshot.controller.pos.x, y: snapshot.controller.pos.y });
     const placements = placeStructures(
       anchor,
       field,
@@ -369,9 +389,7 @@ export function planCoreStage(input: {
       snapshot.controller
         ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
         : undefined,
-      snapshot.terminal
-        ? { x: snapshot.terminal.pos.x, y: snapshot.terminal.pos.y }
-        : undefined,
+      snapshot.terminal ? { x: snapshot.terminal.pos.x, y: snapshot.terminal.pos.y } : undefined,
       input.onShortfall,
     );
     for (const candidate of placementsToCandidates(placements, snapshot.roomName)) {
@@ -487,31 +505,60 @@ export function planLogisticsStage(input: {
   // Link 任务（RCL5+）— 按角色优先级分配有限 link 槽位。
   if (input.linkConstrained) {
     // 受限标记期内：跳过 controller/storage link，仍尝试 source link。
-    for (const candidate of createSourceLinkTasks(snapshot, room, validationOptions, result.queuedLinks, 1)) {
+    for (const candidate of createSourceLinkTasks(
+      snapshot,
+      room,
+      validationOptions,
+      result.queuedLinks,
+      1,
+    )) {
       addLink(candidate);
     }
-    for (const candidate of createSourceLinkTasks(snapshot, room, validationOptions, result.queuedLinks)) {
+    for (const candidate of createSourceLinkTasks(
+      snapshot,
+      room,
+      validationOptions,
+      result.queuedLinks,
+    )) {
       addLink(candidate);
     }
     return result;
   }
 
   // Source link（第一趟，maxNew=1）。
-  for (const candidate of createSourceLinkTasks(snapshot, room, validationOptions, result.queuedLinks, 1)) {
+  for (const candidate of createSourceLinkTasks(
+    snapshot,
+    room,
+    validationOptions,
+    result.queuedLinks,
+    1,
+  )) {
     addLink(candidate);
   }
   // Controller link（RCL5+，先于 storage）。
-  const controllerLink = createControllerLinkTask(snapshot, room, validationOptions, result.queuedLinks);
+  const controllerLink = createControllerLinkTask(
+    snapshot,
+    room,
+    validationOptions,
+    result.queuedLinks,
+  );
   addLink(controllerLink);
   // Storage link。
   const storageLink = createStorageLinkTask(snapshot, room, validationOptions, result.queuedLinks);
   addLink(storageLink);
   // fallback 链终点判定：两者都「应该有但放不下」才算几何受限（用 shouldHave*
   // 谓词区分「几何放不下」与「正常跳过」——已建成/槽位满/RCL 不足）。
-  result.controllerGeometryBlocked = !controllerLink && shouldHaveControllerLink(snapshot, result.queuedLinks);
-  result.storageGeometryBlocked = !storageLink && shouldHaveStorageLink(snapshot, result.queuedLinks);
+  result.controllerGeometryBlocked =
+    !controllerLink && shouldHaveControllerLink(snapshot, result.queuedLinks);
+  result.storageGeometryBlocked =
+    !storageLink && shouldHaveStorageLink(snapshot, result.queuedLinks);
   // Source link（第二趟，maxNew=∞）。
-  for (const candidate of createSourceLinkTasks(snapshot, room, validationOptions, result.queuedLinks)) {
+  for (const candidate of createSourceLinkTasks(
+    snapshot,
+    room,
+    validationOptions,
+    result.queuedLinks,
+  )) {
     addLink(candidate);
   }
 

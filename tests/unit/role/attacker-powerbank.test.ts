@@ -32,7 +32,9 @@ describe("attacker — PB 野采分流", () => {
     creep.memory.remoteTarget = targetRoom;
     creep.memory.mission = "powerBank";
     creep.pos = {
-      x: 24, y: 25, roomName: targetRoom,
+      x: 24,
+      y: 25,
+      roomName: targetRoom,
       getRangeTo: vi.fn(() => 1),
       getDirectionTo: vi.fn(() => 3),
     };
@@ -47,7 +49,14 @@ describe("attacker — PB 野采分流", () => {
 
   it("mission=powerBank → hold 不集结（warPlan build 相位也放行）", () => {
     (globalThis as any).Memory.kernel = {
-      warPlan: { targetRoom: "W9N9", sponsor: homeRoom, squadSize: 3, since: 1000, towersSeen: 0, phase: "build" },
+      warPlan: {
+        targetRoom: "W9N9",
+        sponsor: homeRoom,
+        squadSize: 3,
+        since: 1000,
+        towersSeen: 0,
+        phase: "build",
+      },
     };
     const creep = mockCreep({ name: "attacker-1", role: "attacker" });
     creep.memory.home = homeRoom;
@@ -63,7 +72,9 @@ describe("attacker — PB 野采分流", () => {
     creep.memory.home = homeRoom;
     creep.memory.remoteTarget = targetRoom;
     creep.pos = {
-      x: 24, y: 25, roomName: targetRoom,
+      x: 24,
+      y: 25,
+      roomName: targetRoom,
       getRangeTo: vi.fn(() => 1),
       getDirectionTo: vi.fn(() => 3),
     };

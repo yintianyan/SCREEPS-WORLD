@@ -1,7 +1,11 @@
 /** Phase R2 验收加固 — BuildTask 状态机完备性单元测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tryCreateSite } from "../../../src/systems/construction-manager";
-import { syncTaskStates, cleanTasks, assessEmergencyRebuild } from "../../../src/domain/construction/queue";
+import {
+  syncTaskStates,
+  cleanTasks,
+  assessEmergencyRebuild,
+} from "../../../src/domain/construction/queue";
 import { makeTryAddTask } from "../../../src/domain/layout/planner";
 import { resetGlobals } from "../../support/factories";
 
@@ -166,7 +170,7 @@ describe("cleanTasks — done 清除与超龄边界", () => {
     site.state = "site";
     const queue = [done, site];
     const result = cleanTasks(queue, 1000, { maxQueuedAge: 3000 });
-    expect(queue.map((t) => t.key)).toEqual(["t-site"]);
+    expect(queue.map(t => t.key)).toEqual(["t-site"]);
     expect(result.blacklistedKeys).toEqual([]);
     expect(result.staleKeys).toEqual([]);
   });
@@ -184,12 +188,7 @@ describe("cleanTasks — done 清除与超龄边界", () => {
 describe("重规划去重与 lane RCL 守卫", () => {
   it("同 key 重规划被拒绝（key 已在队列）", () => {
     const queue = [makeTask("core.ext.01")];
-    const tryAdd = makeTryAddTask(
-      new Set(["core.ext.01"]),
-      new Set(["25,26"]),
-      {},
-      queue,
-    );
+    const tryAdd = makeTryAddTask(new Set(["core.ext.01"]), new Set(["25,26"]), {}, queue);
     expect(
       tryAdd({
         key: "core.ext.01",

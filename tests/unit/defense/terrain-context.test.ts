@@ -73,11 +73,7 @@ function makeFortifiedSnapshot(opts: Partial<TerrainSnapshot> = {}): TerrainSnap
     }
   }
   // 3 个塔在核心附近
-  const towers = [
-    (25 - 3) * 50 + 25,
-    (25 + 3) * 50 + 25,
-    25 * 50 + (25 + 3),
-  ];
+  const towers = [(25 - 3) * 50 + 25, (25 + 3) * 50 + 25, 25 * 50 + (25 + 3)];
 
   return {
     roomName: opts.roomName ?? "W3N3",

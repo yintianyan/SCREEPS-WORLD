@@ -114,9 +114,7 @@ export interface DashboardBuildInput {
 
  * 纯函数 — 不访问 Game/Memory。
  */
-export function buildRemoteDashboard(
-  input: DashboardBuildInput,
-): RemoteDashboard {
+export function buildRemoteDashboard(input: DashboardBuildInput): RemoteDashboard {
   const entries: RemoteDashboardEntry[] = [];
 
   let totalProduction = 0;
@@ -194,7 +192,8 @@ export function buildRemoteDashboard(
     }
   }
 
-  const summary = `active=${entries.length} healthy=${healthyOps} ` +
+  const summary =
+    `active=${entries.length} healthy=${healthyOps} ` +
     `degraded=${degradedOps} suspended=${suspendedOps} ` +
     `production=${totalProduction.toFixed(1)}e/t ` +
     `delivered=${totalDelivered.toFixed(1)}e/t ` +
@@ -273,9 +272,7 @@ export interface RemoteDashboardSnapshot {
  * 序列化 Dashboard 为瘦快照。
  * 纯函数。
  */
-export function serializeDashboard(
-  dashboard: RemoteDashboard,
-): RemoteDashboardSnapshot {
+export function serializeDashboard(dashboard: RemoteDashboard): RemoteDashboardSnapshot {
   return {
     t: dashboard.tick,
     ao: dashboard.activeOps,

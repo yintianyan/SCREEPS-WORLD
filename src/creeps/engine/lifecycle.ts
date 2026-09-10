@@ -1,7 +1,13 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
-import { moveTowardRoom, stepToward, findSafestExit, moveToTarget, registerAnchor } from "../movement";
+import {
+  moveTowardRoom,
+  stepToward,
+  findSafestExit,
+  moveToTarget,
+  registerAnchor,
+} from "../movement";
 import { releaseFromTask } from "../support/assignment-adapter";
 import { classifyThreats } from "../../domain/defense/threat";
 
@@ -131,7 +137,8 @@ export function flee(creep: Creep, snapshot: RoomSnapshot): void {
     creep.memory.assignment = undefined;
   }
 
-  const nearestHostile = creep.pos.findClosestByRange(snapshot.threatCreeps as Creep[]) ?? undefined;
+  const nearestHostile =
+    creep.pos.findClosestByRange(snapshot.threatCreeps as Creep[]) ?? undefined;
 
   // 策略 1：spawn 比最近敌人更近时走向 spawn（spawn 在安全侧、塔防范围内）。
   if (snapshot.spawns.length > 0 && nearestHostile) {

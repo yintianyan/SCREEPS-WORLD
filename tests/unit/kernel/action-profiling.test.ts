@@ -6,12 +6,7 @@ import { defineRole } from "../../../src/creeps/engine/role-runner";
 import { CONFIG } from "../../../src/config";
 import type { ActionCandidate, RolePolicy } from "../../../src/creeps/engine/action-types";
 import type { Priority } from "../../../src/kernel/contracts";
-import {
-  mockContext,
-  mockCreep,
-  mockSnapshot,
-  resetGlobals,
-} from "../../support/factories";
+import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();
@@ -83,7 +78,13 @@ describe("actionProfiling 开关 — 集成验证", () => {
     debug.actionProfiling = false;
 
     const snap = mockSnapshot();
-    const creep = mockCreep({ name: "h1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "h1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
 
     const action: ActionCandidate = {
       name: "test:withdraw",
@@ -115,11 +116,17 @@ describe("actionProfiling 开关 — 集成验证", () => {
     });
 
     const snap = mockSnapshot();
-    const creep = mockCreep({ name: "h1", role: "hauler", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "h1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
 
     const action: ActionCandidate = {
       name: "test:withdraw",
-      resolve: vi.fn(() => ({ id: "target_1" } as any)),
+      resolve: vi.fn(() => ({ id: "target_1" }) as any),
       execute: vi.fn(),
     };
 
@@ -163,7 +170,13 @@ describe("actionProfiling 开关 — 集成验证", () => {
 
     const hostile = {
       id: "h1",
-      pos: { x: 10, y: 10, roomName: "W7N4", getRangeTo: vi.fn(() => 5), getDirectionTo: vi.fn(() => 3) },
+      pos: {
+        x: 10,
+        y: 10,
+        roomName: "W7N4",
+        getRangeTo: vi.fn(() => 5),
+        getDirectionTo: vi.fn(() => 3),
+      },
       owner: { username: "enemy" },
       body: [{ type: "attack", hits: 100 }],
     } as any;
@@ -171,7 +184,14 @@ describe("actionProfiling 开关 — 集成验证", () => {
     const snap = mockSnapshot({
       hostileCreeps: [hostile],
       threatCreeps: [hostile],
-      spawns: [{ id: "sp1", pos: { x: 20, y: 20, roomName: "W7N4", getRangeTo: vi.fn(() => 1) }, store: { getUsedCapacity: () => 0, getFreeCapacity: () => 300 }, structureType: "spawn" } as any],
+      spawns: [
+        {
+          id: "sp1",
+          pos: { x: 20, y: 20, roomName: "W7N4", getRangeTo: vi.fn(() => 1) },
+          store: { getUsedCapacity: () => 0, getFreeCapacity: () => 300 },
+          structureType: "spawn",
+        } as any,
+      ],
       fillTargets: [],
     });
 
@@ -181,7 +201,16 @@ describe("actionProfiling 开关 — 集成验证", () => {
       used: 50,
       capacity: 100,
       mode: "work",
-      pos: { x: 21, y: 21, roomName: "W7N4", getRangeTo: vi.fn(() => 5), getDirectionTo: vi.fn(() => 3), isEqualTo: vi.fn(() => false), findClosestByRange: vi.fn(() => null), findPathTo: vi.fn(() => []) },
+      pos: {
+        x: 21,
+        y: 21,
+        roomName: "W7N4",
+        getRangeTo: vi.fn(() => 5),
+        getDirectionTo: vi.fn(() => 3),
+        isEqualTo: vi.fn(() => false),
+        findClosestByRange: vi.fn(() => null),
+        findPathTo: vi.fn(() => []),
+      },
     });
 
     const fleeFn = vi.fn(() => false);

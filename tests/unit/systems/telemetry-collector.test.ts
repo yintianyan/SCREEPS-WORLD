@@ -80,7 +80,9 @@ let mockRawMemory: string = "{}";
   get: () => mockRawMemory,
   segments: {},
   setActiveSegments: () => undefined,
-  set: (v: string) => { mockRawMemory = v; },
+  set: (v: string) => {
+    mockRawMemory = v;
+  },
 };
 
 // 导入被测模块（必须在 vi.mock 之后）
@@ -157,7 +159,17 @@ describe("telemetry-collector — @TELEMETRY 输出已移除（由 TelemetryFlus
     delete mockGlobalCache.__alertThrottle;
     (globalThis as Record<string, unknown>).Memory = {
       rooms: {},
-      kernel: { stats: { memorySize: 1234, cpuAvg10: 5, cpuMax10: 8, bucketMin10: 9000, crisisCount: 0, errorHotspot: "", skipHotspot: "" } },
+      kernel: {
+        stats: {
+          memorySize: 1234,
+          cpuAvg10: 5,
+          cpuMax10: 8,
+          bucketMin10: 9000,
+          crisisCount: 0,
+          errorHotspot: "",
+          skipHotspot: "",
+        },
+      },
     };
     (globalThis as Record<string, unknown>).Game = {
       time: 100,
@@ -166,7 +178,9 @@ describe("telemetry-collector — @TELEMETRY 输出已移除（由 TelemetryFlus
       spawns: {},
     };
     logLines = [];
-    setLogSink((line: string) => { logLines.push(line); });
+    setLogSink((line: string) => {
+      logLines.push(line);
+    });
   });
 
   afterEach(() => {
@@ -176,14 +190,14 @@ describe("telemetry-collector — @TELEMETRY 输出已移除（由 TelemetryFlus
   it("telemetry-collector 不再输出 @TELEMETRY 行（已由 TelemetryFlush 统一处理）", () => {
     mockGlobalCache.telemetry = { tick: 100, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 2 };
     telemetryCollectorSystem.run(makeCtx("healthy", 100, []));
-    const telemetryLines = logLines.filter((s) => s.includes("@TELEMETRY"));
+    const telemetryLines = logLines.filter(s => s.includes("@TELEMETRY"));
     expect(telemetryLines).toHaveLength(0);
   });
 
   it("telemetry-collector 不再输出 @ALERT 行（已由 TelemetryFlush 统一处理）", () => {
     mockGlobalCache.telemetry = { tick: 100, systemCpu: {}, roleCpu: {}, skipped: 0, errors: 2 };
     telemetryCollectorSystem.run(makeCtx("healthy", 100, []));
-    const alertLines = logLines.filter((s) => s.includes("@ALERT"));
+    const alertLines = logLines.filter(s => s.includes("@ALERT"));
     expect(alertLines).toHaveLength(0);
   });
 });
@@ -315,7 +329,9 @@ describe("telemetry-collector — Memory 体积监控 (P0-1)", () => {
     };
 
     const logLines: string[] = [];
-    setLogSink((line: string) => { logLines.push(line); });
+    setLogSink((line: string) => {
+      logLines.push(line);
+    });
     telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
     setLogSink(undefined);
 
@@ -336,7 +352,9 @@ describe("telemetry-collector — Memory 体积监控 (P0-1)", () => {
     };
 
     const logLines: string[] = [];
-    setLogSink((line: string) => { logLines.push(line); });
+    setLogSink((line: string) => {
+      logLines.push(line);
+    });
     telemetryCollectorSystem.run(makeCtx("healthy", 105, [makeSnapshot()]));
     setLogSink(undefined);
 
@@ -381,7 +399,9 @@ describe("telemetry-collector — 健康度告警已移除", () => {
       spawns: {},
     };
     logLines = [];
-    setLogSink((line: string) => { logLines.push(line); });
+    setLogSink((line: string) => {
+      logLines.push(line);
+    });
   });
 
   afterEach(() => {
@@ -393,9 +413,14 @@ describe("telemetry-collector — 健康度告警已移除", () => {
       rooms: { W1N1: {} },
       kernel: {
         stats: {
-          lastSample: 105, cpuAvg10: 16, cpuMax10: 18,
-          bucketMin10: 9000, crisisCount: 0, tierTransitions: 0,
-          errorHotspot: "", skipHotspot: "",
+          lastSample: 105,
+          cpuAvg10: 16,
+          cpuMax10: 18,
+          bucketMin10: 9000,
+          crisisCount: 0,
+          tierTransitions: 0,
+          errorHotspot: "",
+          skipHotspot: "",
         },
       },
     };
@@ -412,9 +437,14 @@ describe("telemetry-collector — 健康度告警已移除", () => {
       rooms: { W1N1: {} },
       kernel: {
         stats: {
-          lastSample: 105, cpuAvg10: 5, cpuMax10: 8,
-          bucketMin10: 1500, crisisCount: 0, tierTransitions: 0,
-          errorHotspot: "", skipHotspot: "",
+          lastSample: 105,
+          cpuAvg10: 5,
+          cpuMax10: 8,
+          bucketMin10: 1500,
+          crisisCount: 0,
+          tierTransitions: 0,
+          errorHotspot: "",
+          skipHotspot: "",
         },
       },
     };
@@ -431,9 +461,14 @@ describe("telemetry-collector — 健康度告警已移除", () => {
       rooms: { W1N1: {} },
       kernel: {
         stats: {
-          lastSample: 105, cpuAvg10: 5, cpuMax10: 8,
-          bucketMin10: 9000, crisisCount: 0, tierTransitions: 0,
-          errorHotspot: "harvester.run", skipHotspot: "",
+          lastSample: 105,
+          cpuAvg10: 5,
+          cpuMax10: 8,
+          bucketMin10: 9000,
+          crisisCount: 0,
+          tierTransitions: 0,
+          errorHotspot: "harvester.run",
+          skipHotspot: "",
         },
       },
     };
@@ -450,9 +485,14 @@ describe("telemetry-collector — 健康度告警已移除", () => {
       rooms: { W1N1: {} },
       kernel: {
         stats: {
-          lastSample: 105, cpuAvg10: 5, cpuMax10: 8,
-          bucketMin10: 9000, crisisCount: 0, tierTransitions: 0,
-          errorHotspot: "", skipHotspot: "",
+          lastSample: 105,
+          cpuAvg10: 5,
+          cpuMax10: 8,
+          bucketMin10: 9000,
+          crisisCount: 0,
+          tierTransitions: 0,
+          errorHotspot: "",
+          skipHotspot: "",
         },
       },
     };

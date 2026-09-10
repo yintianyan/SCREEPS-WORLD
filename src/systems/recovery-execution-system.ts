@@ -15,9 +15,7 @@ import { globalCache, publishProcurementDemands } from "../kernel/global-cache";
 import { CONFIG } from "../config";
 import { RECOVERY_BODY, selectBody, degradeBody, minimalBodyFor } from "../config/bodies";
 import { submitRequest, hasRequest, spawnKey } from "../domain/spawn/queue";
-import {
-  type RecoveryAction,
-} from "../domain/strategy/recovery-priority";
+import { type RecoveryAction } from "../domain/strategy/recovery-priority";
 import {
   recoveryIdempotencyKey,
   shouldSubmitAction,
@@ -42,7 +40,10 @@ import {
   type RecoveryWorldSnapshot,
 } from "../domain/strategy/recovery-lifecycle";
 import type { FailureNode } from "../domain/strategy/failure-propagation";
-import { mapAbortSignalsToRecoveryActions, type WarAbortSignal } from "../domain/military/abort-recovery";
+import {
+  mapAbortSignalsToRecoveryActions,
+  type WarAbortSignal,
+} from "../domain/military/abort-recovery";
 import { recordEvent, EventKind } from "../kernel/event-log";
 import { log } from "../kernel/log";
 import type { TacticalAbortSignal } from "../domain/tactical";
@@ -152,18 +153,16 @@ export const recoveryExecutionSystem: System = {
         // 提交成功
         record = markExecuting(record, tick);
         record.executionRef = execResult.executionRef;
-        (g.recoveryActionTable as RecoveryActionTable).set(
-          recoveryIdempotencyKey(action),
-          record,
-        );
+        (g.recoveryActionTable as RecoveryActionTable).set(recoveryIdempotencyKey(action), record);
         submittedThisTick++;
 
-        log.info("recovery",
+        log.info(
+          "recovery",
           `[${tick}] recovery: SUBMITTED ${action.type}` +
-          ` domain=${action.domain} priority=${action.priority}` +
-          ` ref=${execResult.executionRef ?? "none"}` +
-          ` attempt=${record.attempts}/${record.maxAttempts}` +
-          ` corr=${record.correlationId}`,
+            ` domain=${action.domain} priority=${action.priority}` +
+            ` ref=${execResult.executionRef ?? "none"}` +
+            ` attempt=${record.attempts}/${record.maxAttempts}` +
+            ` corr=${record.correlationId}`,
         );
       } else {
         // 提交失败
@@ -175,10 +174,7 @@ export const recoveryExecutionSystem: System = {
         } else {
           record = markFailed(record, tick, execResult.reason, true);
         }
-        (g.recoveryActionTable as RecoveryActionTable).set(
-          recoveryIdempotencyKey(action),
-          record,
-        );
+        (g.recoveryActionTable as RecoveryActionTable).set(recoveryIdempotencyKey(action), record);
       }
     }
 
@@ -277,7 +273,11 @@ function submitSpawnRecovery(
   const energyCapacity = Game.rooms[room]?.energyCapacityAvailable ?? 300;
   const energyAvailable = Game.rooms[room]?.energyAvailable ?? 0;
   const rcl = Game.rooms[room]?.controller?.level ?? 1;
-  const body = degradeBody(selectBody("worker", energyCapacity, { rcl }), energyAvailable, ["work", "carry", "move"]) ?? [...RECOVERY_BODY];
+  const body = degradeBody(selectBody("worker", energyCapacity, { rcl }), energyAvailable, [
+    "work",
+    "carry",
+    "move",
+  ]) ?? [...RECOVERY_BODY];
 
   submitRequest(queue, {
     key,
@@ -327,7 +327,11 @@ function submitLogisticsFix(
   const energyCapacity = Game.rooms[room]?.energyCapacityAvailable ?? 300;
   const energyAvailable = Game.rooms[room]?.energyAvailable ?? 0;
   const rcl = Game.rooms[room]?.controller?.level ?? 1;
-  const body = degradeBody(selectBody("hauler", energyCapacity, { rcl }), energyAvailable, ["carry", "move"]) ?? minimalBodyFor("hauler");
+  const body =
+    degradeBody(selectBody("hauler", energyCapacity, { rcl }), energyAvailable, [
+      "carry",
+      "move",
+    ]) ?? minimalBodyFor("hauler");
 
   submitRequest(queue, {
     key,
@@ -394,7 +398,10 @@ function submitEnergyRedirect(
   const energyCapacity = Game.rooms[room]?.energyCapacityAvailable ?? 300;
   const energyAvailable = Game.rooms[room]?.energyAvailable ?? 0;
   const rcl = Game.rooms[room]?.controller?.level ?? 1;
-  const body = degradeBody(selectBody("distributor", energyCapacity, { rcl }), energyAvailable, ["carry", "move"]) ?? [CARRY, CARRY, MOVE, MOVE];
+  const body = degradeBody(selectBody("distributor", energyCapacity, { rcl }), energyAvailable, [
+    "carry",
+    "move",
+  ]) ?? [CARRY, CARRY, MOVE, MOVE];
 
   submitRequest(queue, {
     key,
@@ -443,7 +450,11 @@ function submitRemoteStall(
 
   const op = roomMem.remoteOps[targetRoom];
   if (!op || op.state !== "active") {
-    return { submitted: true, executionRef: `${homeRoom}:${targetRoom}`, reason: "already paused/abandoned (idempotent)" };
+    return {
+      submitted: true,
+      executionRef: `${homeRoom}:${targetRoom}`,
+      reason: "already paused/abandoned (idempotent)",
+    };
   }
 
   op.state = "paused";
@@ -464,7 +475,11 @@ function submitExpansionPause(
 
   const existing = Memory.kernel.expansionPausedUntil ?? 0;
   if (existing > ctx.tick) {
-    return { submitted: true, executionRef: "expansion-pause", reason: "already paused (idempotent)" };
+    return {
+      submitted: true,
+      executionRef: "expansion-pause",
+      reason: "already paused (idempotent)",
+    };
   }
 
   // 暂停 1000 tick（让 Recovery 有时间恢复）
@@ -487,15 +502,25 @@ function submitTerminalTrade(
 
   // 从 action.recommendation 推断需要的资源
   // 当前简化：只处理能量交易
-  publishProcurementDemands(room, [{
-    resource: "energy",
-    amount: 5000,
-    priority: 50,
-    deadline: ctx.tick + 500,
-    reason: `recovery:${correlationId}`,
-  }], ctx.tick);
+  publishProcurementDemands(
+    room,
+    [
+      {
+        resource: "energy",
+        amount: 5000,
+        priority: 50,
+        deadline: ctx.tick + 500,
+        reason: `recovery:${correlationId}`,
+      },
+    ],
+    ctx.tick,
+  );
 
-  return { submitted: true, executionRef: `procurement:${room}`, reason: "procurement demand published" };
+  return {
+    submitted: true,
+    executionRef: `procurement:${room}`,
+    reason: "procurement demand published",
+  };
 }
 
 /**
@@ -509,8 +534,15 @@ function submitCpuConserve(
   _correlationId: string,
 ): SubmitResult {
   // Kernel scheduler 有独立的四档 bucket 看门狗——Recovery System 只记录建议
-  log.info("recovery",`[${ctx.tick}] recovery: CPU_CONSERVE recommended — kernel bucket watchdog will handle`);
-  return { submitted: true, executionRef: "cpu-conserve", reason: "cpu conserve recommended (kernel handles)" };
+  log.info(
+    "recovery",
+    `[${ctx.tick}] recovery: CPU_CONSERVE recommended — kernel bucket watchdog will handle`,
+  );
+  return {
+    submitted: true,
+    executionRef: "cpu-conserve",
+    reason: "cpu conserve recommended (kernel handles)",
+  };
 }
 
 /**
@@ -536,7 +568,11 @@ function submitPopulationRebuild(
   const energyCapacity = Game.rooms[room]?.energyCapacityAvailable ?? 300;
   const energyAvailable = Game.rooms[room]?.energyAvailable ?? 0;
   const rcl = Game.rooms[room]?.controller?.level ?? 1;
-  const harvesterBody = degradeBody(selectBody("harvester", energyCapacity, { rcl }), energyAvailable, ["work", "carry", "move"]) ?? [WORK, CARRY, MOVE];
+  const harvesterBody = degradeBody(
+    selectBody("harvester", energyCapacity, { rcl }),
+    energyAvailable,
+    ["work", "carry", "move"],
+  ) ?? [WORK, CARRY, MOVE];
 
   // 提交 harvester 请求
   if (!hasRequest(queue, harvesterKey)) {
@@ -561,7 +597,11 @@ function submitPopulationRebuild(
 
   roomMem.spawnQueue = queue;
   return submitted
-    ? { submitted: true, executionRef: harvesterKey, reason: "population rebuild: harvester submitted" }
+    ? {
+        submitted: true,
+        executionRef: harvesterKey,
+        reason: "population rebuild: harvester submitted",
+      }
     : { submitted: true, executionRef: harvesterKey, reason: "already in queue (idempotent)" };
 }
 
@@ -592,7 +632,10 @@ function submitDefenseResponse(
   const threatAssessment = g.threatAssessments?.get(room);
   if (!threatAssessment) {
     // 无威胁评估数据——防御有独立链路（tower-defense），标记不重复
-    return { submitted: false, reason: "no threat assessment available — tower-defense handles independently" };
+    return {
+      submitted: false,
+      reason: "no threat assessment available — tower-defense handles independently",
+    };
   }
 
   const level = threatAssessment.level;
@@ -601,9 +644,11 @@ function submitDefenseResponse(
 
   // CRITICAL + NUCLEAR/SIEGE + safeMode 可用 → 标记 safeMode 需求
   // 不直接调 Game.rooms[room].controller.activateSafeMode()——由 kernel 层在下一 tick 消费
-  if (level === "CRITICAL" &&
-      (intent === "NUCLEAR" || intent === "FULL_ASSAULT" || intent === "SIEGE") &&
-       (Game.rooms[room]?.controller?.safeModeAvailable ?? 0) > 0) {
+  if (
+    level === "CRITICAL" &&
+    (intent === "NUCLEAR" || intent === "FULL_ASSAULT" || intent === "SIEGE") &&
+    (Game.rooms[room]?.controller?.safeModeAvailable ?? 0) > 0
+  ) {
     // 标记 safeMode 需求到 room memory，供 kernel/consumers 读取
     if (!roomMem.defenseState) roomMem.defenseState = {} as RoomMemory["defenseState"];
     if (roomMem.defenseState) {
@@ -611,9 +656,10 @@ function submitDefenseResponse(
       roomMem.defenseState.safeModeRequestTick = ctx.tick;
       roomMem.defenseState.safeModeReason = `CRITICAL+${intent} corr=${correlationId}`;
     }
-    log.info("recovery",
+    log.info(
+      "recovery",
       `[${ctx.tick}] recovery: DEFENSE_RESPONSE safeMode requested` +
-      ` room=${room} level=${level} intent=${intent} corr=${correlationId}`,
+        ` room=${room} level=${level} intent=${intent} corr=${correlationId}`,
     );
     return {
       submitted: true,
@@ -630,7 +676,11 @@ function submitDefenseResponse(
     ).length;
 
     if (livingDefenders >= 2) {
-      return { submitted: true, executionRef: `defenders-existing:${room}`, reason: `${livingDefenders} defenders already alive` };
+      return {
+        submitted: true,
+        executionRef: `defenders-existing:${room}`,
+        reason: `${livingDefenders} defenders already alive`,
+      };
     }
 
     // 提交 defender spawn 请求
@@ -638,13 +688,20 @@ function submitDefenseResponse(
     const key = spawnKey("defender", room, 0);
 
     if (hasRequest(queue, key)) {
-      return { submitted: true, executionRef: key, reason: "defender already in queue (idempotent)" };
+      return {
+        submitted: true,
+        executionRef: key,
+        reason: "defender already in queue (idempotent)",
+      };
     }
 
     const energyCapacity = Game.rooms[room]?.energyCapacityAvailable ?? 300;
     const energyAvailable = Game.rooms[room]?.energyAvailable ?? 0;
     const rcl = Game.rooms[room]?.controller?.level ?? 1;
-    const body = degradeBody(selectBody("defender", energyCapacity, { rcl }), energyAvailable, ["attack", "move"]) ?? [ATTACK, MOVE];
+    const body = degradeBody(selectBody("defender", energyCapacity, { rcl }), energyAvailable, [
+      "attack",
+      "move",
+    ]) ?? [ATTACK, MOVE];
 
     submitRequest(queue, {
       key,
@@ -664,10 +721,11 @@ function submitDefenseResponse(
     });
     roomMem.spawnQueue = queue;
 
-    log.info("recovery",
+    log.info(
+      "recovery",
       `[${ctx.tick}] recovery: DEFENSE_RESPONSE defender spawned` +
-      ` room=${room} level=${level} intent=${intent} posture=${posture}` +
-      ` corr=${correlationId}`,
+        ` room=${room} level=${level} intent=${intent} posture=${posture}` +
+        ` corr=${correlationId}`,
     );
     return {
       submitted: true,
@@ -762,10 +820,11 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
         const newRecord = markSucceeded(record, tick, verification);
         table.set(key, newRecord);
         beforeStates.delete(key);
-        log.info("recovery",
+        log.info(
+          "recovery",
           `[${tick}] recovery: SUCCEEDED ${record.type}` +
-          ` domain=${record.domain} attempt=${record.attempts}` +
-          ` corr=${record.correlationId}`,
+            ` domain=${record.domain} attempt=${record.attempts}` +
+            ` corr=${record.correlationId}`,
         );
         break;
       }
@@ -774,9 +833,14 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
         continue;
       case "failed": {
         const policy = getRetryPolicy(record.type);
-        const retryable = record.attempts < record.maxAttempts &&
-          policy.classification === "retryable";
-        const newRecord = markFailed(record, tick, `verification: no improvement after ${elapsed}t`, retryable);
+        const retryable =
+          record.attempts < record.maxAttempts && policy.classification === "retryable";
+        const newRecord = markFailed(
+          record,
+          tick,
+          `verification: no improvement after ${elapsed}t`,
+          retryable,
+        );
         table.set(key, newRecord);
 
         // 检查是否需要 Escalation
@@ -795,10 +859,11 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
           });
 
           if (escalation.shouldEscalate) {
-            log.info("recovery",
+            log.info(
+              "recovery",
               `[${tick}] recovery: ESCALATION ${record.type}` +
-              ` domain=${record.domain} reason="${escalation.reason}"` +
-              ` corr=${record.correlationId}`,
+                ` domain=${record.domain} reason="${escalation.reason}"` +
+                ` corr=${record.correlationId}`,
             );
           }
 
@@ -813,11 +878,12 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
               tick,
             });
             if (unviability.unviable) {
-              log.info("recovery",
+              log.info(
+                "recovery",
                 `[${tick}] recovery: UNVIABLE ${record.type}` +
-                ` domain=${record.domain} room=${record.room ?? "global"}` +
-                ` reason="${unviability.reason}"` +
-                ` corr=${record.correlationId}`,
+                  ` domain=${record.domain} room=${record.room ?? "global"}` +
+                  ` reason="${unviability.reason}"` +
+                  ` corr=${record.correlationId}`,
               );
             }
           }
@@ -843,9 +909,13 @@ function isExecutionRefActive(executionRef: string | undefined, actionType: stri
   if (!executionRef) return false;
 
   // spawn 请求：检查是否还在队列
-  if (actionType === "spawn_recovery" || actionType === "logistics_fix" ||
-      actionType === "population_rebuild" || actionType === "energy_redirect" ||
-      actionType === "defense_response") {
+  if (
+    actionType === "spawn_recovery" ||
+    actionType === "logistics_fix" ||
+    actionType === "population_rebuild" ||
+    actionType === "energy_redirect" ||
+    actionType === "defense_response"
+  ) {
     // 检查是否已有对应 creep 存活
     // executionRef 格式: "role:room:index"（与 spawnKey 统一）
     const parts = executionRef.split(":");
@@ -898,14 +968,12 @@ function captureWorldSnapshot(
 
   // 房间级数据
   let energyAvailable: number | undefined;
-  let population: number | undefined;
   if (room && Game.rooms[room]) {
     energyAvailable = Game.rooms[room]!.energyAvailable;
   }
 
   // 人口
-  const totalPop = Object.keys(Game.creeps).length;
-  population = totalPop;
+  const population = Object.keys(Game.creeps).length;
 
   // 物流投递率
   const deliveryRate = g.logisticsHealth?.deliveryRate;
@@ -960,7 +1028,6 @@ function countActiveRecoveries(table: RecoveryActionTable): number {
   return count;
 }
 
-
 // ─── A5.3.1 GAP-1: War Abort Signal 消费 ──────────────────
 
 /**
@@ -981,10 +1048,7 @@ function countActiveRecoveries(table: RecoveryActionTable): number {
  * @param tick 当前 tick
  * @returns 转换后的 RecoveryAction 列表
  */
-function consumeWarAbortSignals(
-  g: ReturnType<typeof globalCache>,
-  tick: number,
-): RecoveryAction[] {
+function consumeWarAbortSignals(g: ReturnType<typeof globalCache>, tick: number): RecoveryAction[] {
   const signal = g.warAbortSignals;
   if (!signal) return [];
 
@@ -1008,12 +1072,13 @@ function consumeWarAbortSignals(
       signal.spawned,
       actions.length,
     ]);
-    log.info("recovery",
+    log.info(
+      "recovery",
       `[${tick}] recovery: WAR_ABORT consumed` +
-      ` reason=${signal.reason} outcome=${signal.outcome}` +
-      ` sponsor=${signal.sponsor} target=${signal.targetRoom}` +
-      ` → action=${action.type} priority=${action.priority}` +
-      ` urgent=${action.urgent}`,
+        ` reason=${signal.reason} outcome=${signal.outcome}` +
+        ` sponsor=${signal.sponsor} target=${signal.targetRoom}` +
+        ` → action=${action.type} priority=${action.priority}` +
+        ` urgent=${action.urgent}`,
     );
   }
 
@@ -1081,9 +1146,10 @@ function consumeTacticalAbortSignals(
   const actions = mapAbortSignalsToRecoveryActions(warSignals);
 
   if (actions.length > 0) {
-    log.info("recovery",
+    log.info(
+      "recovery",
       `[${tick}] recovery: TACTICAL_ABORT consumed` +
-      ` count=${warSignals.length} → actions=${actions.length}`,
+        ` count=${warSignals.length} → actions=${actions.length}`,
     );
   }
 

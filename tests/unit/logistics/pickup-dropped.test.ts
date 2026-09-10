@@ -1,6 +1,9 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { resetGlobals, mockCreep, mockSnapshot, mockContext } from "../../support/factories";
-import { selectDroppedEnergy, selectHaulSourceContainer } from "../../../src/creeps/support/targeting";
+import {
+  selectDroppedEnergy,
+  selectHaulSourceContainer,
+} from "../../../src/creeps/support/targeting";
 import { haulerRole } from "../../../src/creeps/roles/hauler";
 
 /** 构造掉落能量 mock：__range 供 creep.pos.getRangeTo 读取距该堆的距离。 */
@@ -90,7 +93,8 @@ describe("pickupDroppedEnergy — 装满前持续拾取", () => {
 /** 构造 container mock：__range 供 getRangeTo 读取，store 记能量。 */
 function containerMock(id: string, energy: number, range: number): any {
   return {
-    id, __range: range,
+    id,
+    __range: range,
     store: { getUsedCapacity: () => energy },
   };
 }

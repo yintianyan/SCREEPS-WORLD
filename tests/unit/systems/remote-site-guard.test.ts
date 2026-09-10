@@ -11,10 +11,12 @@ describe("P0-A 静态守卫 — remote-harvester 禁止调 createConstructionSit
     // 排除注释行（// 开头、* 开头的 JSDoc、块注释内的行）。
     const codeLines = source.split("\n").filter(l => {
       const trimmed = l.trim();
-      return trimmed !== "" &&
+      return (
+        trimmed !== "" &&
         !trimmed.startsWith("//") &&
         !trimmed.startsWith("*") &&
-        !trimmed.startsWith("/*");
+        !trimmed.startsWith("/*")
+      );
     });
     const code = codeLines.join("\n");
 

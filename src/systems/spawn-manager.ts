@@ -2,7 +2,13 @@ import { CONFIG } from "../config";
 import { bodyCost, degradeBody, RECOVERY_BODY } from "../config/bodies";
 import { getRoleBounds } from "../config/tuned";
 import type { Priority, System, TickContext } from "../kernel/contracts";
-import { evaluateDemand, ROLE_REQUIRED_PARTS, type CreepSummary, type SpawningSummary, type RoomDemandContext } from "../domain/spawn/demand";
+import {
+  evaluateDemand,
+  ROLE_REQUIRED_PARTS,
+  type CreepSummary,
+  type SpawningSummary,
+  type RoomDemandContext,
+} from "../domain/spawn/demand";
 import type { ColonyState } from "../kernel/contracts";
 import { cleanQueue, removeRequestsByRole, sortQueue, submitRequest } from "../domain/spawn/queue";
 import { selectRecycleCandidates } from "../domain/spawn/recycle";
@@ -51,17 +57,12 @@ export const spawnManagerSystem: System = {
       //    P2-K：onPurge 回调把两种 churn（retries 烧穿 / TTL 过期）转译为 recordSkip
       //    指标，按角色聚合 — key 形如 `role:home:source?:index`，split(':')[0] 取 role
       //    作标签（kebab-case 角色不含 ':'，split 安全）。
-      const purgedKeys = cleanQueue(
-        queue,
-        ctx.tick,
-        CONFIG.spawn.maxRetries,
-        (key, reason) => {
-          const role = key.split(":")[0] ?? "";
-          recordSkip(`spawn/churn/${role}/${reason}`);
-          // P0-3：同步写入 per-room churnCounter 供熔断判定（role 为空不计数防脏数据）。
-          if (role) recordChurn(snapshot.roomName, role, ctx.tick);
-        },
-      );
+      const purgedKeys = cleanQueue(queue, ctx.tick, CONFIG.spawn.maxRetries, (key, reason) => {
+        const role = key.split(":")[0] ?? "";
+        recordSkip(`spawn/churn/${role}/${reason}`);
+        // P0-3：同步写入 per-room churnCounter 供熔断判定（role 为空不计数防脏数据）。
+        if (role) recordChurn(snapshot.roomName, role, ctx.tick);
+      });
       if (purgedKeys.length > 0) {
         roomMem.spawnBlacklist ??= {};
         // P0-3：经济命脉角色（采集 harvester/worker + 物流 hauler/distributor）永远豁免隔离。
@@ -75,12 +76,18 @@ export const spawnManagerSystem: System = {
         // 失败只留队列重试，能量恢复即孵化（pre-1cca151 自愈语义）；真配置错误由独立的
         // churn 熔断（200t 窗口 >20 次 → 冻 100 tick）兜底，不会无限翻炒。
         for (const key of purgedKeys) {
-          const isLifeline = key.startsWith("worker:") || key.startsWith("harvester:")
-            || key.startsWith("hauler:") || key.startsWith("distributor:");
+          const isLifeline =
+            key.startsWith("worker:") ||
+            key.startsWith("harvester:") ||
+            key.startsWith("hauler:") ||
+            key.startsWith("distributor:");
           if (isLifeline) continue;
           const ttl = computeQuarantineTtl(key);
           roomMem.spawnBlacklist[key] = ctx.tick + ttl;
-          log.info("spawn-manager", `spawn/${snapshot.roomName}: quarantined ${key} for ${ttl} ticks`);
+          log.info(
+            "spawn-manager",
+            `spawn/${snapshot.roomName}: quarantined ${key} for ${ttl} ticks`,
+          );
         }
       }
       // P0-3：churn 熔断检查 — 在 cleanQueue 之后、evaluateDemand 之前。
@@ -113,13 +120,15 @@ export const spawnManagerSystem: System = {
       //     controllerContainer（容量 2000 几乎永远有空位），按整表判空时撤单条件
       //     在有 controller container 的房间近乎永不成立。
       const coreFillDemand = snapshot.fillTargets.some(
-        t => t.structureType === STRUCTURE_SPAWN ||
+        t =>
+          t.structureType === STRUCTURE_SPAWN ||
           t.structureType === STRUCTURE_EXTENSION ||
           t.structureType === STRUCTURE_TOWER,
       );
       if (!coreFillDemand) {
-        const livingDist = (creepsByRoom.get(snapshot.roomName) ?? [])
-          .filter(c => c.role === "distributor").length;
+        const livingDist = (creepsByRoom.get(snapshot.roomName) ?? []).filter(
+          c => c.role === "distributor",
+        ).length;
         if (livingDist >= getRoleBounds("distributor", snapshot.roomName).minCount) {
           removeRequestsByRole(queue, "distributor", snapshot.roomName);
         }
@@ -150,7 +159,10 @@ export const spawnManagerSystem: System = {
         // 【G-J 合规】churn 冻结表注入（写者=本系统 cleanQueue；domain 不触 Memory）。
         churnFreezeUntil: roomMem?.churnFreezeUntil as Record<string, number> | undefined,
         // 【G-J 合规】建造 backlog 注入（数据源=construction-manager 维护的 RoomMemory.buildQueue；本系统为读者）。
-        buildQueueBacklog: (roomMem?.buildQueue as readonly { state?: string }[] | undefined)?.filter(t => t.state === "queued").length ?? 0,
+        buildQueueBacklog:
+          (roomMem?.buildQueue as readonly { state?: string }[] | undefined)?.filter(
+            t => t.state === "queued",
+          ).length ?? 0,
       };
       const demandResult = evaluateDemand(
         snapshot,
@@ -190,14 +202,16 @@ export const spawnManagerSystem: System = {
       //    为 P0 恢复预留 recoveryEnergyReserve；存活 distributor 数传入 — 泵断供时
       //    distributor 请求立即降级速出。
       const roomCreeps = creepsByRoom.get(snapshot.roomName) ?? [];
-      const collectorCount = roomCreeps
-        .filter(c => c.role === "harvester" || c.role === "worker").length;
+      const collectorCount = roomCreeps.filter(
+        c => c.role === "harvester" || c.role === "worker",
+      ).length;
       const distributorCount = roomCreeps.filter(c => c.role === "distributor").length;
       // P3 Reservation①前馈：任一采集者进入替换窗口（B1 对策，P3_BASELINE §6）。
       const replacementReserve = roomCreeps.some(
-        c => (c.role === "harvester" || c.role === "worker")
-          && c.ticksToLive !== undefined
-          && c.ticksToLive < CONFIG.spawn.replacementHorizonTicks,
+        c =>
+          (c.role === "harvester" || c.role === "worker") &&
+          c.ticksToLive !== undefined &&
+          c.ticksToLive < CONFIG.spawn.replacementHorizonTicks,
       );
       trySpawn(snapshot, queue, collectorCount, distributorCount, replacementReserve);
 
@@ -247,10 +261,12 @@ function recyclePass(
   // roomCreeps 已按 home 预过滤，selectRecycleCandidates 内部 home 过滤为冗余 no-op，
   // 保留以维护纯函数自包含契约。
   // P1-1：tuning 下调 hauler.minCount 时传入下调目标，让 recyclePass 主动收敛。
-  const haulerPendingDown = Memory.kernel?.tuning?.rooms?.[home]?.pendingValidation?.["hauler.minCount"];
-  const haulerPendingDownTarget = haulerPendingDown?.adjustDirection === "down"
-    ? haulerPendingDown.preAdjustValue - 1
-    : undefined;
+  const haulerPendingDown =
+    Memory.kernel?.tuning?.rooms?.[home]?.pendingValidation?.["hauler.minCount"];
+  const haulerPendingDownTarget =
+    haulerPendingDown?.adjustDirection === "down"
+      ? haulerPendingDown.preAdjustValue - 1
+      : undefined;
   const marked = selectRecycleCandidates(
     roomCreeps,
     home,
@@ -340,9 +356,9 @@ export function trySpawn(
   // 合同储备口径，维持原动态，避免 RCL1 孵化被饿死）。
   const econSnap = Memory.rooms[snapshot.roomName]?.economy;
   if (
-    econSnap !== undefined
-    && econSnap.cr > 0
-    && econSnap.rb / 10 < CONFIG.spawn.lowRiskBufferTicks
+    econSnap !== undefined &&
+    econSnap.cr > 0 &&
+    econSnap.rb / 10 < CONFIG.spawn.lowRiskBufferTicks
   ) {
     reserve = Math.max(reserve, CONFIG.spawn.recoveryEnergyReserve);
   }
@@ -380,9 +396,8 @@ export function trySpawn(
     // 拦住采集者扩编会让「1 采集者 + 满能量」的房间永远孵不出第二只
     // （rcl1-survival 回归：预留挡住 harvester → spawn 永久 idle）。
     const isCollectorRole = req.role === "harvester" || req.role === "worker";
-    const effectiveBudget = req.priority === 0 || isCollectorRole
-      ? energyBudget
-      : energyBudget - reserve;
+    const effectiveBudget =
+      req.priority === 0 || isCollectorRole ? energyBudget : energyBudget - reserve;
 
     // 降级策略（六层）：
     //   1. P0 始终降级（紧急恢复）。
@@ -408,7 +423,8 @@ export function trySpawn(
       const starvedP1 = req.priority === 1 && waitTicks >= spawnTime * 2;
       const starvedP2 = req.priority === 2 && waitTicks >= spawnTime * 10 && economyPressure > 0.5;
       const pumpOutage = req.role === "distributor" && distributorCount === 0;
-      const allowDegrade = req.priority === 0 ||
+      const allowDegrade =
+        req.priority === 0 ||
         (req.priority === 1 && (roomState === "bootstrap" || roomState === "recovery")) ||
         starvedP1 ||
         starvedP2 ||
@@ -442,7 +458,7 @@ export function trySpawn(
     if (capacity === 0) continue; // 【防御】同上：room 引用瞬态缺失时跳过本次请求。
     if (bodyCost(body) > capacity) {
       req.retries++;
-      log.info("spawn-manager", `spawn/${snapshot.roomName}: body exceeds capacity for ${req.key}`,);
+      log.info("spawn-manager", `spawn/${snapshot.roomName}: body exceeds capacity for ${req.key}`);
       continue;
     }
 
@@ -467,7 +483,8 @@ export function trySpawn(
         const latency = Math.max(0, Game.time - anchor);
         if (!stats.replaceLatency) stats.replaceLatency = {};
         const prev = stats.replaceLatency[req.role];
-        stats.replaceLatency[req.role] = prev === undefined ? latency : Math.round(prev * 0.8 + latency * 0.2);
+        stats.replaceLatency[req.role] =
+          prev === undefined ? latency : Math.round(prev * 0.8 + latency * 0.2);
         if (stats.deathAnchor) delete stats.deathAnchor[req.role];
       }
       // 扣减本地能量预算，换下一个空闲 spawn 继续消费队列。
@@ -475,8 +492,7 @@ export function trySpawn(
       spawnIdx++;
       recordExecution("spawn", "completed");
       // T3: 声明期望 — 孵化成功，期望该角色在 300 tick 内不因 starvation 死亡
-continue;
-
+      continue;
     }
 
     if (result === ERR_BUSY) {
@@ -490,7 +506,10 @@ continue;
     // 所有其他错误：递增重试次数并可能隔离。
     req.retries++;
     if (req.retries < CONFIG.spawn.maxRetries) {
-      log.info("spawn-manager", `spawn/${snapshot.roomName}: spawnCreep returned ${result} for ${req.key} (retry ${req.retries})`,);
+      log.info(
+        "spawn-manager",
+        `spawn/${snapshot.roomName}: spawnCreep returned ${result} for ${req.key} (retry ${req.retries})`,
+      );
     }
     recordExecution("spawn", "failed");
   }
@@ -584,9 +603,7 @@ const CHURN_FREEZE_TICKS = 100;
  */
 export function computeQuarantineTtl(key: string): number {
   const isCollector = key.startsWith("worker:") || key.startsWith("harvester:");
-  return isCollector
-    ? Math.floor(CONFIG.spawn.requestTtl / 2)
-    : CONFIG.spawn.requestTtl;
+  return isCollector ? Math.floor(CONFIG.spawn.requestTtl / 2) : CONFIG.spawn.requestTtl;
 }
 
 /**
@@ -599,7 +616,9 @@ export function computeQuarantineTtl(key: string): number {
  * @internal 导出仅供单元测试 — 业务代码通过 cleanQueue 的 onPurge 回调间接调用。
  */
 export function recordChurn(roomName: string, role: string, tick: number): void {
-  const g = globalCache() as Record<string, unknown> & { __churnCounter?: Record<string, ChurnRecord[]> };
+  const g = globalCache() as Record<string, unknown> & {
+    __churnCounter?: Record<string, ChurnRecord[]>;
+  };
   if (!g.__churnCounter) g.__churnCounter = {};
   const perRoom = g.__churnCounter[roomName];
   if (perRoom) perRoom.push({ tick, role });
@@ -625,7 +644,9 @@ export function checkChurnCircuitBreaker(
   roomMem: RoomMemory,
   roomName: string,
 ): void {
-  const g = globalCache() as Record<string, unknown> & { __churnCounter?: Record<string, ChurnRecord[]> };
+  const g = globalCache() as Record<string, unknown> & {
+    __churnCounter?: Record<string, ChurnRecord[]>;
+  };
   if (!g.__churnCounter) g.__churnCounter = {};
 
   // 1. 清理过期记录（200 tick 滑窗），回写压缩后的数组。
@@ -649,7 +670,10 @@ export function checkChurnCircuitBreaker(
       // 输出 WARN 告警——配置错误（如 bodyCost 超过 energyCapacityAvailable）
       // 会导致持续 churn 不被熔断捕获，需要可观测性兜底。
       if (count > CHURN_THRESHOLD * 2 && (roomMem.churnWarnAt?.[role] ?? 0) <= ctx.tick) {
-        log.warn("spawn-manager", `spawn/${roomName}: LIFELINE churn WARNING ${role} churn=${count}/${CHURN_WINDOW}t (not frozen — death spiral protection)`);
+        log.warn(
+          "spawn-manager",
+          `spawn/${roomName}: LIFELINE churn WARNING ${role} churn=${count}/${CHURN_WINDOW}t (not frozen — death spiral protection)`,
+        );
         roomMem.churnWarnAt ??= {};
         roomMem.churnWarnAt[role] = ctx.tick + CHURN_WINDOW; // 限频：每窗口最多 1 条 WARN
       }
@@ -657,7 +681,10 @@ export function checkChurnCircuitBreaker(
     }
     if (count > CHURN_THRESHOLD && roomMem.churnFreezeUntil[role] === undefined) {
       roomMem.churnFreezeUntil[role] = ctx.tick + CHURN_FREEZE_TICKS;
-      log.info("spawn-manager", `spawn/${roomName}: CIRCUIT_BREAKER ${role} frozen for ${CHURN_FREEZE_TICKS} ticks (churn=${count}/${CHURN_WINDOW}t)`,);
+      log.info(
+        "spawn-manager",
+        `spawn/${roomName}: CIRCUIT_BREAKER ${role} frozen for ${CHURN_FREEZE_TICKS} ticks (churn=${count}/${CHURN_WINDOW}t)`,
+      );
     }
   }
 

@@ -24,9 +24,7 @@ import {
   evaluateExpansionRoi,
   type EmpireSnapshot,
 } from "../../../src/domain/expansion/roi-tracker";
-import {
-  buildColonyStabilityDashboard,
-} from "../../../src/domain/expansion/colony-dashboard";
+import { buildColonyStabilityDashboard } from "../../../src/domain/expansion/colony-dashboard";
 
 // ── 1. Autonomy Age ──────────────────────────────────────────
 
@@ -501,10 +499,16 @@ describe("A3.4-019: ROI — 改善判定", () => {
 describe("A3.4-020: ROI — 无改善判定", () => {
   it("所有指标下降 → improved=false", () => {
     const before: EmpireSnapshot = makeSnapshot({
-      totalProduction: 200, totalNetFlow: 20, totalReserve: 50000, roomCount: 1,
+      totalProduction: 200,
+      totalNetFlow: 20,
+      totalReserve: 50000,
+      roomCount: 1,
     });
     const after: EmpireSnapshot = makeSnapshot({
-      totalProduction: 150, totalNetFlow: -10, totalReserve: 10000, roomCount: 2,
+      totalProduction: 150,
+      totalNetFlow: -10,
+      totalReserve: 10000,
+      roomCount: 2,
     });
     const result = evaluateExpansionRoi({
       planId: "test@1",
@@ -522,12 +526,22 @@ describe("A3.4-020: ROI — 无改善判定", () => {
 describe("A3.4-021: ROI — 增量计算", () => {
   it("正确计算所有增量", () => {
     const before: EmpireSnapshot = makeSnapshot({
-      totalEnergy: 10000, totalProduction: 100, totalNetFlow: 5,
-      totalReserve: 5000, spawnCapacity: 300, totalPopulation: 5, roomCount: 1,
+      totalEnergy: 10000,
+      totalProduction: 100,
+      totalNetFlow: 5,
+      totalReserve: 5000,
+      spawnCapacity: 300,
+      totalPopulation: 5,
+      roomCount: 1,
     });
     const after: EmpireSnapshot = makeSnapshot({
-      totalEnergy: 20000, totalProduction: 200, totalNetFlow: 15,
-      totalReserve: 10000, spawnCapacity: 650, totalPopulation: 10, roomCount: 2,
+      totalEnergy: 20000,
+      totalProduction: 200,
+      totalNetFlow: 15,
+      totalReserve: 10000,
+      spawnCapacity: 650,
+      totalPopulation: 10,
+      roomCount: 2,
     });
     const result = evaluateExpansionRoi({
       planId: "test@1",
@@ -584,18 +598,20 @@ describe("A3.4-023: Colony Dashboard — 包含 Autonomy + Stability", () => {
       consecutivePositiveTicks: 4000,
       hadInterruption: false,
     });
-    const stabilityResult = evaluateStabilityScore(makeStabilityInput({
-      netEnergyFlow: 10,
-      consecutivePositiveTicks: 4000,
-      externalEnergyInflow: 0,
-      currentPopulation: 10,
-      targetPopulation: 10,
-      spawnAvailable: true,
-      spawnStarvationCount: 0,
-      estimatedProduction: 30,
-      estimatedConsumption: 15,
-      recentFailureCount: 0,
-    }));
+    const stabilityResult = evaluateStabilityScore(
+      makeStabilityInput({
+        netEnergyFlow: 10,
+        consecutivePositiveTicks: 4000,
+        externalEnergyInflow: 0,
+        currentPopulation: 10,
+        targetPopulation: 10,
+        spawnAvailable: true,
+        spawnStarvationCount: 0,
+        estimatedProduction: 30,
+        estimatedConsumption: 15,
+        recentFailureCount: 0,
+      }),
+    );
     const dashboard = buildColonyStabilityDashboard({
       tick: 5000,
       roomName: "W1N1",
@@ -623,12 +639,14 @@ describe("A3.4-023: Colony Dashboard — 包含 Autonomy + Stability", () => {
 
 describe("A3.4-024: Colony Dashboard — 失败检测反映", () => {
   it("failureResult.detected=true 时 dashboard 正确反映", () => {
-    const failureResult = evaluateColonyFailure(makeFailureInput({
-      netEnergyFlow: -10,
-      consecutiveNegativeTicks: 300,
-      storageEnergy: 0,
-      storageRatio: 0,
-    }));
+    const failureResult = evaluateColonyFailure(
+      makeFailureInput({
+        netEnergyFlow: -10,
+        consecutiveNegativeTicks: 300,
+        storageEnergy: 0,
+        storageRatio: 0,
+      }),
+    );
     const dashboard = buildColonyStabilityDashboard({
       tick: 5000,
       roomName: "W1N1",

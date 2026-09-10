@@ -9,10 +9,18 @@ const CARRY_CAPACITY = 50;
 describe("remote roadStatus — hasRoad 对 haulerNeed 的影响", () => {
   it("有路时 perHauler 翻倍（effectivePathCost 减半）", () => {
     const noRoad = scoreRemoteCandidate({
-      pathCost: 100, linearDistance: 1, sources: 1, haulerCapacity: 800, hasRoad: false,
+      pathCost: 100,
+      linearDistance: 1,
+      sources: 1,
+      haulerCapacity: 800,
+      hasRoad: false,
     });
     const hasRoad = scoreRemoteCandidate({
-      pathCost: 100, linearDistance: 1, sources: 1, haulerCapacity: 800, hasRoad: true,
+      pathCost: 100,
+      linearDistance: 1,
+      sources: 1,
+      haulerCapacity: 800,
+      hasRoad: true,
     });
     expect(hasRoad.haulerNeed).toBeLessThanOrEqual(noRoad.haulerNeed);
     if (noRoad.haulerNeed > 1) {
@@ -22,21 +30,33 @@ describe("remote roadStatus — hasRoad 对 haulerNeed 的影响", () => {
 
   it("近房有路时 haulerNeed 降到 1", () => {
     const result = scoreRemoteCandidate({
-      pathCost: 50, linearDistance: 1, sources: 1, haulerCapacity: 800, hasRoad: true,
+      pathCost: 50,
+      linearDistance: 1,
+      sources: 1,
+      haulerCapacity: 800,
+      hasRoad: true,
     });
     expect(result.haulerNeed).toBe(1);
   });
 
   it("远房有路仍可能需要多 hauler", () => {
     const result = scoreRemoteCandidate({
-      pathCost: 200, linearDistance: 3, sources: 1, haulerCapacity: 800, hasRoad: true,
+      pathCost: 200,
+      linearDistance: 3,
+      sources: 1,
+      haulerCapacity: 800,
+      hasRoad: true,
     });
     expect(result.haulerNeed).toBeGreaterThanOrEqual(2);
   });
 
   it("无路时 2-source 中距房 haulerNeed ≥ 2", () => {
     const result = scoreRemoteCandidate({
-      pathCost: 100, linearDistance: 1, sources: 2, haulerCapacity: 800, hasRoad: false,
+      pathCost: 100,
+      linearDistance: 1,
+      sources: 2,
+      haulerCapacity: 800,
+      hasRoad: false,
     });
     expect(result.haulerNeed).toBeGreaterThanOrEqual(2);
   });

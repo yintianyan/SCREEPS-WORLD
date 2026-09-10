@@ -123,7 +123,7 @@ export const empireHealthSystem: System = {
     }
 
     // ── 7. 计算恢复优先级 ──
-    const cooldowns = g.recoveryCooldowns ?? new Map() as CooldownTable;
+    const cooldowns = g.recoveryCooldowns ?? (new Map() as CooldownTable);
     const recoveryActions = prioritizeRecovery(
       activeFailures,
       rootCauseIds,
@@ -175,9 +175,10 @@ export const empireHealthSystem: System = {
     while (failureCountHistory.length > MAX_HISTORY) failureCountHistory.shift();
 
     // 计算 Autonomy Score
-    const consecutiveStableTicks = prevResult && prevResult.level !== "critical" && prevResult.level !== "degraded"
-      ? (g.__consecutiveStableTicks ?? 0) + 100
-      : 0;
+    const consecutiveStableTicks =
+      prevResult && prevResult.level !== "critical" && prevResult.level !== "degraded"
+        ? (g.__consecutiveStableTicks ?? 0) + 100
+        : 0;
     g.__consecutiveStableTicks = consecutiveStableTicks;
 
     const autonomyScore = computeAutonomyScore({
@@ -188,7 +189,8 @@ export const empireHealthSystem: System = {
       activeFailures: activeFailures.length,
       manualInterventions: 0, // 自治框架不追踪人工干预（需要 console hook）
       consecutiveStableTicks,
-      lastDegradedTick: prevResult?.level === "degraded" || prevResult?.level === "critical" ? tick : undefined,
+      lastDegradedTick:
+        prevResult?.level === "degraded" || prevResult?.level === "critical" ? tick : undefined,
       perturbationCount: g.__perturbationCount ?? 0,
       totalRecoveryTime: g.__totalRecoveryTime ?? 0,
       tick,
@@ -228,22 +230,28 @@ export const empireHealthSystem: System = {
 
     // ── 11. 可观测性：等级变更时打日志 ──
     if (prevLevel !== healthResult.level) {
-      log.info("empire-health-system", `empire-health: ${prevLevel ?? "(none)"} → ${healthResult.level}` +
-        ` score=${healthResult.score.toFixed(3)}` +
-        ` bottleneck=${healthResult.bottleneck}` +
-        ` recovering=${healthResult.recovering}` +
-        (recoveryActions.length > 0 ? ` recoveryQueue=${recoveryActions.length}` : "") +
-        ` autonomy=${autonomyStatus.score.score}(${autonomyStatus.score.level})` +
-        (noProgress.detected ? ` NO_PROGRESS:${noProgress.stuckDimensions.join(",")}` : "") +
-        (thrashing.detected ? ` THRASHING:${thrashing.type}` : ""),);
+      log.info(
+        "empire-health-system",
+        `empire-health: ${prevLevel ?? "(none)"} → ${healthResult.level}` +
+          ` score=${healthResult.score.toFixed(3)}` +
+          ` bottleneck=${healthResult.bottleneck}` +
+          ` recovering=${healthResult.recovering}${
+            recoveryActions.length > 0 ? ` recoveryQueue=${recoveryActions.length}` : ""
+          } autonomy=${autonomyStatus.score.score}(${autonomyStatus.score.level})${
+            noProgress.detected ? ` NO_PROGRESS:${noProgress.stuckDimensions.join(",")}` : ""
+          }${thrashing.detected ? ` THRASHING:${thrashing.type}` : ""}`,
+      );
     }
 
     // 紧急恢复动作打日志
     const urgent = recoveryActions.find(a => a.urgent);
     if (urgent) {
-      log.info("empire-health-system", `empire-health: URGENT recovery → ${urgent.type}` +
-        ` domain=${urgent.domain} priority=${urgent.priority}` +
-        ` roi=${urgent.roi.toFixed(2)}: ${urgent.recommendation}`,);
+      log.info(
+        "empire-health-system",
+        `empire-health: URGENT recovery → ${urgent.type}` +
+          ` domain=${urgent.domain} priority=${urgent.priority}` +
+          ` roi=${urgent.roi.toFixed(2)}: ${urgent.recommendation}`,
+      );
     }
 
     // ── 12. 自进化 L1：策略复盘（100t 末尾）──
@@ -251,38 +259,42 @@ export const empireHealthSystem: System = {
     // empire-strategy 每 tick 读取 override 合并到 CONFIG.posture 之上。
     // 安全侧：CPU tier conserve/recovery 下跳过（外生信号不可信 + CPU 紧张）。
     if (ctx.budget.tier === "healthy" || ctx.budget.tier === "guarded") {
-      safeRun("strategy-reviewer", () => {
-        const strategyResult = reviewStrategy({
-          postureHistory,
-          netFlowHistory,
-          reserveHistory,
-          healthHistory,
-          noProgress,
-          thrashing,
-          tick,
-          currentOverrides: Memory.kernel?.tuning?.strategyOverrides,
-          defaultPosture: CONFIG.posture as Record<string, number>,
-        });
+      safeRun(
+        "strategy-reviewer",
+        () => {
+          const strategyResult = reviewStrategy({
+            postureHistory,
+            netFlowHistory,
+            reserveHistory,
+            healthHistory,
+            noProgress,
+            thrashing,
+            tick,
+            currentOverrides: Memory.kernel?.tuning?.strategyOverrides,
+            defaultPosture: CONFIG.posture as Record<string, number>,
+          });
 
-        if (strategyResult.suggestions.length > 0) {
-          if (!Memory.kernel) Memory.kernel = {};
-          if (!Memory.kernel.tuning) {
-            Memory.kernel.tuning = { lastTuned: 0, rooms: {} };
+          if (strategyResult.suggestions.length > 0) {
+            if (!Memory.kernel) Memory.kernel = {};
+            if (!Memory.kernel.tuning) {
+              Memory.kernel.tuning = { lastTuned: 0, rooms: {} };
+            }
+            if (!Memory.kernel.tuning.strategyOverrides) {
+              Memory.kernel.tuning.strategyOverrides = {};
+            }
+            for (const s of strategyResult.suggestions) {
+              Memory.kernel.tuning.strategyOverrides[s.param] = {
+                value: s.value,
+                adjustedAt: tick,
+                reason: s.reason,
+              };
+            }
+            log.info("empire-health-system", strategyResult.summary);
+            recordEvent(EventKind.StrategyReview, "", [strategyResult.suggestions.length]);
           }
-          if (!Memory.kernel.tuning.strategyOverrides) {
-            Memory.kernel.tuning.strategyOverrides = {};
-          }
-          for (const s of strategyResult.suggestions) {
-            Memory.kernel.tuning.strategyOverrides[s.param] = {
-              value: s.value,
-              adjustedAt: tick,
-              reason: s.reason,
-            };
-          }
-          log.info("empire-health-system", strategyResult.summary);
-          recordEvent(EventKind.StrategyReview, "", [strategyResult.suggestions.length]);
-        }
-      }, false);
+        },
+        false,
+      );
     }
   },
 };
@@ -356,7 +368,11 @@ function deriveColonyHealth(g: ReturnType<typeof globalCache>, ctx: TickContext)
   if (roomCount === 0) {
     return { level: "critical", score: 0.1, evidence: "no-rooms" };
   }
-  return { level: worstLevel, score: dimensionScore(worstLevel), evidence: `rooms=${roomCount} worst=${worstLevel}` };
+  return {
+    level: worstLevel,
+    score: dimensionScore(worstLevel),
+    evidence: `rooms=${roomCount} worst=${worstLevel}`,
+  };
 }
 
 function deriveThreatHealth(g: ReturnType<typeof globalCache>): DimensionResult {
@@ -381,7 +397,11 @@ function deriveSpawnHealth(g: ReturnType<typeof globalCache>, ctx: TickContext):
     }
   }
   const level = mapSpawnHealth(spawnAvailable, starvationCount);
-  return { level, score: dimensionScore(level), evidence: `spawnAvail=${spawnAvailable} starvation=${starvationCount}` };
+  return {
+    level,
+    score: dimensionScore(level),
+    evidence: `spawnAvail=${spawnAvailable} starvation=${starvationCount}`,
+  };
 }
 
 function deriveCpuHealth(ctx: TickContext): DimensionResult {
@@ -436,7 +456,7 @@ function collectActiveFailures(
       id: `failure:logistics:${tick}`,
       domain: "logistics",
       severity: lh.level === "critical" ? "critical" : "warning",
-        description: `Logistics health ${lh.level}: ${lh.message}`,
+      description: `Logistics health ${lh.level}: ${lh.message}`,
       detectedAt: tick,
     });
   }
@@ -456,17 +476,28 @@ function collectActiveFailures(
   return failures;
 }
 
-function mapDimensionToDomain(dimName: string): import("../domain/strategy/failure-propagation").FailureDomain {
+function mapDimensionToDomain(
+  dimName: string,
+): import("../domain/strategy/failure-propagation").FailureDomain {
   switch (dimName) {
-    case "energy": return "energy";
-    case "mineral": return "mineral";
-    case "logistics": return "logistics";
-    case "network": return "network";
-    case "colony": return "colony";
-    case "threat": return "threat";
-    case "spawn": return "spawn";
-    case "cpu": return "cpu";
-    default: return "energy";
+    case "energy":
+      return "energy";
+    case "mineral":
+      return "mineral";
+    case "logistics":
+      return "logistics";
+    case "network":
+      return "network";
+    case "colony":
+      return "colony";
+    case "threat":
+      return "threat";
+    case "spawn":
+      return "spawn";
+    case "cpu":
+      return "cpu";
+    default:
+      return "energy";
   }
 }
 
@@ -475,4 +506,3 @@ function countOwnedRooms(ctx: TickContext): number {
   for (const _ of ctx.snapshots()) count++;
   return count;
 }
-

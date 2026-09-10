@@ -8,7 +8,7 @@ import { defineRole } from "../engine/role-runner";
 function attackNearestThreat(): ActionCandidate<Creep> {
   return {
     name: "defender:attack-threat",
-    resolve: (ac) => {
+    resolve: ac => {
       const threats = ac.snapshot.threatCreeps;
       if (threats.length === 0) return undefined;
       // DF-1：追击边界 — 参照 remote-defender 的房内限定模式。a) 被挤/弹出 home 房时不接敌
@@ -33,9 +33,7 @@ function attackNearestThreat(): ActionCandidate<Creep> {
 const policy: RolePolicy = {
   combat: true,
   park: true,
-  acquire: [
-    attackNearestThreat(),
-  ],
+  acquire: [attackNearestThreat()],
   work: [
     // 与 acquire 相同 — 无 CARRY 部件，mode 振荡不影响行为。
     attackNearestThreat(),

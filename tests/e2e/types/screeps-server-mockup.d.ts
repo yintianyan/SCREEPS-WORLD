@@ -39,7 +39,7 @@ declare module "screeps-server-mockup" {
     cpuAvailable?: number;
     active?: number;
     spawnName?: string;
-    modules?: {};
+    modules?: Record<string, unknown>;
   }
 
   export class User extends EventEmitter {
@@ -73,7 +73,7 @@ declare module "screeps-server-mockup" {
       type: string,
       x: number,
       y: number,
-      attributes?: {},
+      attributes?: Record<string, unknown>,
     ): Promise<any>;
     reset(): Promise<void>;
     stubWorld(): Promise<void>;

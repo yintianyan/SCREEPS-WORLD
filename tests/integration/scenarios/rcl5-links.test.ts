@@ -71,9 +71,22 @@ describe("RCL5 Links — Link 系统", () => {
     });
 
     // 给一个 harvester 在 source 旁
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -102,9 +115,14 @@ describe("RCL5 Links — Link 系统", () => {
     });
 
     // upgrader 站在 controller link 旁
-    world.addCreep("u1", "upgrader", 30, 38, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "u1",
+      "upgrader",
+      30,
+      38,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -151,18 +169,61 @@ describe("RCL5 Links — Link 系统", () => {
     });
 
     // 完整人口
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 37, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("u1", "upgrader", 30, 38, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      37,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "u1",
+      "upgrader",
+      30,
+      38,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -205,9 +266,14 @@ describe("RCL5 Links — Link 系统", () => {
       .preseedRoomState()
       .build();
 
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -225,18 +291,30 @@ describe("RCL5 Links — Link 系统", () => {
   });
 
   it("storage link → hauler → storage 闭环（link 物流链最后一公里）", () => {
-// 场景：storage link 预填 800 能量，controller link 预填满（防 Step 3 抢走 storage link 能量），
-// spawn/extension 全满，hauler 应从 storage link 取能并存入 storage。
-const world = rcl5World({
-  sourceLinkEnergy: 0,
-  controllerLinkEnergy: 800,
-  storageLinkEnergy: 800,
-});
+    // 场景：storage link 预填 800 能量，controller link 预填满（防 Step 3 抢走 storage link 能量），
+    // spawn/extension 全满，hauler 应从 storage link 取能并存入 storage。
+    const world = rcl5World({
+      sourceLinkEnergy: 0,
+      controllerLinkEnergy: 800,
+      storageLinkEnergy: 800,
+    });
 
     // hauler 站在 storage link 旁
-    world.addCreep("haul1", "hauler", 27, 26, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "haul1",
+      "hauler",
+      27,
+      26,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     // spawn/extension 全满 — hauler 无需 fill，直接走 fillStorage
     world.spawns[0]!.store.energy = 300;

@@ -185,10 +185,7 @@ export function estimatePlannedBody(
 }
 
 /** 统计 body 中指定部件的数量（至少 1，防除零）。 */
-export function countBodyParts(
-  body: readonly BodyPartConstant[],
-  part: BodyPartConstant,
-): number {
+export function countBodyParts(body: readonly BodyPartConstant[], part: BodyPartConstant): number {
   return Math.max(1, body.filter(p => p === part).length);
 }
 
@@ -307,11 +304,37 @@ export function evaluateDemand(
     if (snapshot.threatCreeps.length > 0) {
       const defKey = spawnKey("defender", home, 0);
       if (!hasKey(queue, defKey)) {
-        requests.push(createRequest("defender", home, 0, defKey, 0, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
+        requests.push(
+          createRequest(
+            "defender",
+            home,
+            0,
+            defKey,
+            0,
+            energyCapacity,
+            roomCtx.energyAvailable,
+            colonyState,
+            snapshot.rcl,
+            tick,
+          ),
+        );
       }
     }
     const key = spawnKey("worker", home, 0);
-    requests.push(createRequest("worker", home, 0, key, 0, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
+    requests.push(
+      createRequest(
+        "worker",
+        home,
+        0,
+        key,
+        0,
+        energyCapacity,
+        roomCtx.energyAvailable,
+        colonyState,
+        snapshot.rcl,
+        tick,
+      ),
+    );
     // P0 阻塞路径：迟滞状态透传 prevHysteresis（不更新，下一 tick 重新评估）。
     return { requests, nextHysteresis: roomCtx.prevHysteresis ?? {} };
   }
@@ -334,7 +357,18 @@ export function evaluateDemand(
       const key = spawnKey("defender", home, i);
       if (!hasKey(queue, key)) {
         requests.push(
-          createRequest("defender", home, i, key, defenderPriority, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick),
+          createRequest(
+            "defender",
+            home,
+            i,
+            key,
+            defenderPriority,
+            energyCapacity,
+            roomCtx.energyAvailable,
+            colonyState,
+            snapshot.rcl,
+            tick,
+          ),
         );
       }
     }
@@ -351,7 +385,13 @@ export function evaluateDemand(
   // Body 感知饱和封顶：source 再生 10/tick、5 个 WORK 即采空 → 每 source 矿工数 =
   // ceil(5/单体 WORK 数)，受 maxMinersPerSource 封顶。超出饱和线的头数无产出可采，
   // 纯浪费（tuned minCount 是头数思维，body 长大后不会自动缩）。
-  const harvesterBody = estimatePlannedBody("harvester", energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl);
+  const harvesterBody = estimatePlannedBody(
+    "harvester",
+    energyCapacity,
+    roomCtx.energyAvailable,
+    colonyState,
+    snapshot.rcl,
+  );
   const workPerHarvester = countBodyParts(harvesterBody, "work");
   const minersPerSource = Math.min(
     CONFIG.assignment.maxMinersPerSource,
@@ -376,7 +416,19 @@ export function evaluateDemand(
       if (!hasKey(queue, key)) {
         // 危机时 harvester 提为 P0：经济引擎优先于一切，尽快恢复采集。
         requests.push(
-          createRequest("harvester", home, 1, key, inCrisis ? 0 : 1, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick, sourceId),
+          createRequest(
+            "harvester",
+            home,
+            1,
+            key,
+            inCrisis ? 0 : 1,
+            energyCapacity,
+            roomCtx.energyAvailable,
+            colonyState,
+            snapshot.rcl,
+            tick,
+            sourceId,
+          ),
         );
       }
     }
@@ -409,15 +461,16 @@ export function evaluateDemand(
     if (canDeliver) {
       const sourceWithLink = new Set<string>();
       for (const s of snapshot.sources) {
-        const hasLink = snapshot.links.some(l =>
-          l.pos.getRangeTo(s.pos) <= CONFIG.economy.link.anchorRange &&
-          classifyLinkRole(
-            l.pos,
-            snapshot.sources.map(p => p.pos),
-            snapshot.controller?.pos,
-            snapshot.storage?.pos,
-            CONFIG.economy.link.anchorRange,
-          ) === "source",
+        const hasLink = snapshot.links.some(
+          l =>
+            l.pos.getRangeTo(s.pos) <= CONFIG.economy.link.anchorRange &&
+            classifyLinkRole(
+              l.pos,
+              snapshot.sources.map(p => p.pos),
+              snapshot.controller?.pos,
+              snapshot.storage?.pos,
+              CONFIG.economy.link.anchorRange,
+            ) === "source",
         );
         if (hasLink) sourceWithLink.add(s.id);
       }
@@ -435,9 +488,7 @@ export function evaluateDemand(
     // 2. Storage link 积压信号（RCL5+ link 网络最后一公里）：link-system 将 source link
     //    能量瞬移到 storage link，需 hauler 排空到 storage；无 storage 时不存在 storage link。
     if (snapshot.storage) {
-      const storageLink = snapshot.links.find(
-        l => l.pos.getRangeTo(snapshot.storage!) <= 2,
-      );
+      const storageLink = snapshot.links.find(l => l.pos.getRangeTo(snapshot.storage!) <= 2);
       if (storageLink) {
         // ②b 守卫：controller link 缺能时 storage link 被 distributor 用于灌升级链（非 source
         // 背压）且 withdrawStorageLink 挡住 hauler 不抽 — 满不代表需排空，不计入，避免过孵。
@@ -459,14 +510,23 @@ export function evaluateDemand(
     // 大 body 折减、小 body 扩编，头数 × 单体运力 ≈ 恒定总运力，消除「配额不随 body 变」
     // 的浪费（大 body 时代多孵的每一头都是纯闲置）。
     if (dynamicHaulerTarget > 0) {
-      const haulerBody = estimatePlannedBody("hauler", energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl);
+      const haulerBody = estimatePlannedBody(
+        "hauler",
+        energyCapacity,
+        roomCtx.energyAvailable,
+        colonyState,
+        snapshot.rcl,
+      );
       const carryPerHauler = countBodyParts(haulerBody, "carry") * 50;
       dynamicHaulerTarget = Math.ceil(
         (dynamicHaulerTarget * CONFIG.economy.referenceCarryCapacity) / carryPerHauler,
       );
     }
     // 至少 minCount（保证基本物流不断），至多 maxCount。
-    dynamicHaulerTarget = Math.min(haulerConfig.maxCount, Math.max(haulerConfig.minCount, dynamicHaulerTarget));
+    dynamicHaulerTarget = Math.min(
+      haulerConfig.maxCount,
+      Math.max(haulerConfig.minCount, dynamicHaulerTarget),
+    );
     // 物流端弹性：价格信号缩放（充裕时满编、紧缺时保留 50% 保命运力）。
     dynamicHaulerTarget = Math.max(1, Math.round(dynamicHaulerTarget * logisticsFactor));
 
@@ -474,7 +534,10 @@ export function evaluateDemand(
     // 而非 inCrisis 二值开关突砍。
     const haulerPressure = roomCtx.economyPressure;
     if (haulerPressure > 0.6) {
-      dynamicHaulerTarget = Math.max(haulerConfig.minCount, Math.round(dynamicHaulerTarget * (1 - (haulerPressure - 0.6) / 0.4)));
+      dynamicHaulerTarget = Math.max(
+        haulerConfig.minCount,
+        Math.round(dynamicHaulerTarget * (1 - (haulerPressure - 0.6) / 0.4)),
+      );
     }
   }
   // 能量危机收缩（仅偿付危机适用）：缩到 minCount，只保留搬能量回 spawn 供孵化的最小力量，
@@ -484,9 +547,10 @@ export function evaluateDemand(
   const liquidityScore = roomCtx.liquidityScore ?? 0;
   const drainScore = roomCtx.drainScore ?? 0;
   const liquidityDriven = liquidityScore >= 40 && liquidityScore >= drainScore;
-  haulerTarget = (inCrisis && !liquidityDriven)
-    ? Math.min(dynamicHaulerTarget, haulerConfig.minCount)
-    : dynamicHaulerTarget;
+  haulerTarget =
+    inCrisis && !liquidityDriven
+      ? Math.min(dynamicHaulerTarget, haulerConfig.minCount)
+      : dynamicHaulerTarget;
   // P2-2：tuning pending 期间收敛到合同目标（上调扩编/下调缩编），让 isContractMet 可满足；
   // 危机收缩优先级更高 — 危机时只留 minCount，合同延后到危机解除后验证。
   if (!(inCrisis && !liquidityDriven) && roomCtx.haulerPendingTarget !== undefined) {
@@ -496,7 +560,20 @@ export function evaluateDemand(
     for (let i = haulerTotal; i < haulerTarget; i++) {
       const key = spawnKey("hauler", home, i);
       if (!hasKey(queue, key)) {
-        requests.push(createRequest("hauler", home, i, key, 1, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
+        requests.push(
+          createRequest(
+            "hauler",
+            home,
+            i,
+            key,
+            1,
+            energyCapacity,
+            roomCtx.energyAvailable,
+            colonyState,
+            snapshot.rcl,
+            tick,
+          ),
+        );
       }
     }
   }
@@ -524,14 +601,29 @@ export function evaluateDemand(
     const fillCount = servesTowerFully
       ? snapshot.fillTargets.length
       : snapshot.fillTargets.filter(t => {
-          if (t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION) return true;
-          return t.structureType === STRUCTURE_TOWER &&
+          if (t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION)
+            return true;
+          return (
+            t.structureType === STRUCTURE_TOWER &&
             storageEnergy >= CONFIG.economy.distributorTiers.low &&
-            t.store.getUsedCapacity(RESOURCE_ENERGY) < towerAmmoFloor;
+            t.store.getUsedCapacity(RESOURCE_ENERGY) < towerAmmoFloor
+          );
         }).length;
-    const distBody = estimatePlannedBody("distributor", energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl);
-    const fillPerDistributor = Math.max(2, Math.floor((countBodyParts(distBody, "carry") * 50) / 150));
-    distTarget = Math.min(distConfig.maxCount, Math.max(distConfig.minCount, Math.ceil(fillCount / fillPerDistributor)));
+    const distBody = estimatePlannedBody(
+      "distributor",
+      energyCapacity,
+      roomCtx.energyAvailable,
+      colonyState,
+      snapshot.rcl,
+    );
+    const fillPerDistributor = Math.max(
+      2,
+      Math.floor((countBodyParts(distBody, "carry") * 50) / 150),
+    );
+    distTarget = Math.min(
+      distConfig.maxCount,
+      Math.max(distConfig.minCount, Math.ceil(fillCount / fillPerDistributor)),
+    );
     // 物流端弹性：价格信号缩放。
     distTarget = Math.max(1, Math.round(distTarget * logisticsFactor));
     // 高耗远距 sink 排空反馈（镜像 hauler 积压反馈，方向相反）：fillCount 把 cc 当
@@ -547,7 +639,8 @@ export function evaluateDemand(
       // 判据用「link 在场且有能量」而非仅在场：link 网络未通（持续空）时 distributor
       // 必须接管 cc 供能，否则 upgrader 半饿（link 在场却没通）。
       const controllerLinkServing = snapshot.links.some(
-        l => snapshot.controller != null &&
+        l =>
+          snapshot.controller != null &&
           l.pos.getRangeTo(snapshot.controller) <= 2 &&
           l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
@@ -563,7 +656,10 @@ export function evaluateDemand(
     // TD-015：economyPressure 梯度衰减 — 与 hauler 同公式，pressure > 0.6 时线性降低 distributor 配额。
     const distPressure = roomCtx.economyPressure;
     if (distPressure > 0.6) {
-      distTarget = Math.max(distConfig.minCount, Math.round(distTarget * (1 - (distPressure - 0.6) / 0.4)));
+      distTarget = Math.max(
+        distConfig.minCount,
+        Math.round(distTarget * (1 - (distPressure - 0.6) / 0.4)),
+      );
     }
     // 危机时收缩到 minCount。
     if (inCrisis) distTarget = Math.min(distTarget, distConfig.minCount);
@@ -596,7 +692,20 @@ export function evaluateDemand(
     for (let i = distTotal; i < distTarget; i++) {
       const key = spawnKey("distributor", home, i);
       if (!hasKey(queue, key)) {
-        requests.push(createRequest("distributor", home, i, key, 1, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
+        requests.push(
+          createRequest(
+            "distributor",
+            home,
+            i,
+            key,
+            1,
+            energyCapacity,
+            roomCtx.energyAvailable,
+            colonyState,
+            snapshot.rcl,
+            tick,
+          ),
+        );
       }
     }
   }
@@ -619,7 +728,20 @@ export function evaluateDemand(
     for (let i = minerTotal; i < minerConfig.maxCount; i++) {
       const key = spawnKey("mineralMiner", home, i);
       if (!hasKey(queue, key)) {
-        requests.push(createRequest("mineralMiner", home, i, key, 2, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
+        requests.push(
+          createRequest(
+            "mineralMiner",
+            home,
+            i,
+            key,
+            2,
+            energyCapacity,
+            roomCtx.energyAvailable,
+            colonyState,
+            snapshot.rcl,
+            tick,
+          ),
+        );
       }
     }
   }
@@ -641,7 +763,9 @@ export function evaluateDemand(
     const stationUpgradeOnline = snapshot.controllerContainer !== undefined;
     const ctrl = snapshot.controller;
     const crisisNeedsGuard =
-      inCrisis && ctrl !== undefined && ctrl.ticksToDowngrade < CONFIG.economy.crisis.downgradeGuard;
+      inCrisis &&
+      ctrl !== undefined &&
+      ctrl.ticksToDowngrade < CONFIG.economy.crisis.downgradeGuard;
 
     const pressure = roomCtx.economyPressure;
     const upgradeCfg = CONFIG.economy.upgrade;
@@ -649,7 +773,8 @@ export function evaluateDemand(
     // body 随容量放大（RCL7 可孵 40W body = 40/tick 升速）。
     const bodyEnergyCap = snapshot.rcl >= 8 ? 1650 : energyCapacity;
     const workPerBody =
-      selectBody("upgrader", bodyEnergyCap, { rcl: snapshot.rcl }).filter(p => p === "work").length || 1;
+      selectBody("upgrader", bodyEnergyCap, { rcl: snapshot.rcl }).filter(p => p === "work")
+        .length || 1;
     const hasStorage = snapshot.storage !== undefined;
     const storageEnergy = hasStorage ? snapshot.storage!.store.getUsedCapacity(RESOURCE_ENERGY) : 0;
 
@@ -718,11 +843,23 @@ export function evaluateDemand(
       for (let i = upgraderTotal; i < upgraderTarget; i++) {
         const key = spawnKey("upgrader", home, i);
         if (!hasKey(queue, key)) {
-          requests.push(createRequest("upgrader", home, i, key, upgraderPriority, bodyEnergyCap, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
+          requests.push(
+            createRequest(
+              "upgrader",
+              home,
+              i,
+              key,
+              upgraderPriority,
+              bodyEnergyCap,
+              roomCtx.energyAvailable,
+              colonyState,
+              snapshot.rcl,
+              tick,
+            ),
+          );
         }
       }
     }
-
   }
 
   // P2：Builder — 独立于 upgrader 门禁：recovery 时是生存角色必须允许 spawn；bootstrap 不孵。
@@ -739,7 +876,11 @@ export function evaluateDemand(
   // backlog，backlogWeighted 补盲；roomMem 由 construction-manager 每 tick 维护。
   const queuedBacklog = roomCtx.buildQueueBacklog ?? 0;
   const backlogWeighted = Math.floor(queuedBacklog * 0.5);
-  if (colonyState !== "bootstrap" && (snapshot.myConstructionSites.length > 0 || roadRepairDemand || backlogWeighted > 0) && !frozenRoles.has("builder")) {
+  if (
+    colonyState !== "bootstrap" &&
+    (snapshot.myConstructionSites.length > 0 || roadRepairDemand || backlogWeighted > 0) &&
+    !frozenRoles.has("builder")
+  ) {
     const builderConfig = getRoleBounds("builder", home);
     const builderTotal = (counts.builder ?? 0) + pending.builder;
     const economyCap = (counts.harvester ?? 0) + (counts.worker ?? 0) + 1;
@@ -772,20 +913,22 @@ export function evaluateDemand(
     // 带内保持状态，消除阈值附近的目标跳变振荡。P1-J：prev→next 显式传递，
     // domain 不直读写 Memory。
     const builderPressure = roomCtx.economyPressure;
-    let state = roomCtx.prevHysteresis?.builderPressureState ?? 'full';
-    if (state === 'full' && builderPressure > 0.35) {
-      state = 'shrinking';
-    } else if (state === 'shrinking' && builderPressure <= 0.25) {
-      state = 'full';
+    let state = roomCtx.prevHysteresis?.builderPressureState ?? "full";
+    if (state === "full" && builderPressure > 0.35) {
+      state = "shrinking";
+    } else if (state === "shrinking" && builderPressure <= 0.25) {
+      state = "full";
     }
     nextHysteresis.builderPressureState = state;
     let builderTarget: number;
-    if (state === 'full') {
+    if (state === "full") {
       builderTarget = dynamicBuilderTarget;
     } else {
       // shrinking：从 0.35 开始线性收缩，到 1.0 缩至 minCount。
       const t = Math.min(1, (builderPressure - 0.35) / 0.65);
-      builderTarget = Math.round(dynamicBuilderTarget + t * (builderConfig.minCount - dynamicBuilderTarget));
+      builderTarget = Math.round(
+        dynamicBuilderTarget + t * (builderConfig.minCount - dynamicBuilderTarget),
+      );
       builderTarget = Math.max(builderTarget, builderConfig.minCount);
     }
     // 消费端弹性：价格信号缩放 builder 编制。
@@ -796,7 +939,20 @@ export function evaluateDemand(
       for (let i = builderTotal; i < builderTarget; i++) {
         const key = spawnKey("builder", home, i);
         if (!hasKey(queue, key)) {
-          requests.push(createRequest("builder", home, i, key, builderPriority, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick));
+          requests.push(
+            createRequest(
+              "builder",
+              home,
+              i,
+              key,
+              builderPriority,
+              energyCapacity,
+              roomCtx.energyAvailable,
+              colonyState,
+              snapshot.rcl,
+              tick,
+            ),
+          );
         }
       }
     }
@@ -812,7 +968,8 @@ export function evaluateDemand(
     if (creep.home !== home) continue;
     // A4：harvester 的替换阈值计入 spawn→source 通勤路程，
     // 防止替补还没走到矿位老矿工已死、采集断档。
-    const travelTicks = creep.role === "harvester" ? estimateTravelTicks(snapshot, creep.sourceId) : 0;
+    const travelTicks =
+      creep.role === "harvester" ? estimateTravelTicks(snapshot, creep.sourceId) : 0;
     if (!needsReplacement(creep.ticksToLive, creep.bodyLength, travelTicks)) continue;
     const role = creep.role;
     const config = roleConfigs[role];
@@ -825,13 +982,15 @@ export function evaluateDemand(
     // 门禁 1：角色存在性 — worker 是紧急角色，harvester 建立后不再替换。
     if (role === "worker" && (counts.harvester ?? 0) + (counts.worker ?? 0) > 1) continue;
     // builder 无建造 site 且无道路维修需求时不替换（避免孵化无事可做的 builder）。
-    if (role === "builder" && snapshot.myConstructionSites.length === 0 && !roadRepairDemand) continue;
+    if (role === "builder" && snapshot.myConstructionSites.length === 0 && !roadRepairDemand)
+      continue;
     // upgrader 在 colonyState 不允许时不替换。
     if (role === "upgrader" && !allowUpgrader) continue;
 
     // 门禁 2：maxCount 硬上限。
     const livingCount = counts[role] ?? 0;
-    const pendingCount = countPending(queue, role, home) + requests.filter(r => r.role === role).length;
+    const pendingCount =
+      countPending(queue, role, home) + requests.filter(r => r.role === role).length;
     if (livingCount + pendingCount >= config.maxCount) continue;
 
     // 门禁 3：盈余检查 — 去掉将死者后仍 ≥ minCount 说明有多余，不替换；只有将死者是维持
@@ -850,9 +1009,22 @@ export function evaluateDemand(
       if (role === "harvester" && snapshot.sources.length > 0) {
         const occ = buildHarvesterOccupancy(creeps, queue, home, creep.name);
         assignSourceId =
-          (pickLeastCrowdedSource(snapshot.sources, occ)?.id as Id<Source> | undefined) ?? creep.sourceId;
+          (pickLeastCrowdedSource(snapshot.sources, occ)?.id as Id<Source> | undefined) ??
+          creep.sourceId;
       }
-      const req = createRequest(role, home, index, key, priority, energyCapacity, roomCtx.energyAvailable, colonyState, snapshot.rcl, tick, assignSourceId);
+      const req = createRequest(
+        role,
+        home,
+        index,
+        key,
+        priority,
+        energyCapacity,
+        roomCtx.energyAvailable,
+        colonyState,
+        snapshot.rcl,
+        tick,
+        assignSourceId,
+      );
       req.replaceBy = tick + req.body.length * 3 + CONFIG.spawn.replaceBuffer + travelTicks;
       requests.push(req);
     }

@@ -17,7 +17,7 @@ import { defineRole } from "../engine/role-runner";
 function fillAssignmentTarget(): ActionCandidate<AnyOwnedStructure> {
   return {
     name: "fill:assignment-target",
-    resolve: (ac) => {
+    resolve: ac => {
       if (!ac.assignment?.targetId) return undefined;
       const target = getObjectById(ac.assignment.targetId as Id<AnyOwnedStructure>);
       if (!target) return undefined;

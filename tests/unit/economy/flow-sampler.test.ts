@@ -1,10 +1,7 @@
 /** 跨 tick 房间流采样测试 — 官服 intent 延迟结算下唯一实测口径。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { economySystem } from "../../../src/systems/economy";
-import {
-  diffRoomFlows,
-  type RoomFlowSample,
-} from "../../../src/domain/economy/accounting";
+import { diffRoomFlows, type RoomFlowSample } from "../../../src/domain/economy/accounting";
 import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 import { globalCache } from "../../../src/kernel/global-cache";
 
@@ -24,7 +21,9 @@ describe("diffRoomFlows — 跨 tick 差分纯函数", () => {
   });
 
   it("controller.progress 增长 → upgraded = 差值；升级清零 → clamp 0", () => {
-    expect(diffRoomFlows(sample({ progress: 1000 }), sample({ progress: 1300 })).upgraded).toBe(300);
+    expect(diffRoomFlows(sample({ progress: 1000 }), sample({ progress: 1300 })).upgraded).toBe(
+      300,
+    );
     expect(diffRoomFlows(sample({ progress: 1000 }), sample({ progress: 5 })).upgraded).toBe(0);
   });
 
@@ -53,7 +52,13 @@ describe("economy — sampleRoomFlows 跨 tick 入账", () => {
     state: { srcEnergy: number; progress: number },
     owned = true,
   ): any {
-    const sources = [{ get energy() { return state.srcEnergy; } }];
+    const sources = [
+      {
+        get energy() {
+          return state.srcEnergy;
+        },
+      },
+    ];
     return {
       name,
       controller: {
@@ -62,8 +67,7 @@ describe("economy — sampleRoomFlows 跨 tick 入账", () => {
           return state.progress;
         },
       },
-      find: vi.fn((type: number) =>
-        type === FIND_SOURCES ? sources : []),
+      find: vi.fn((type: number) => (type === FIND_SOURCES ? sources : [])),
       // 暴露 sources 供 mockContext 快照引用同一动态对象。
       _sources: sources,
     };

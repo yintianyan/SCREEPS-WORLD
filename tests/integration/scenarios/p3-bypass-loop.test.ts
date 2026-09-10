@@ -43,8 +43,8 @@ describe("P3 饥饿旁路（E2）— 自愈闭环", () => {
 
     const p3Names = registry
       .getSystems()
-      .filter((s) => s.priority === 3)
-      .map((s) => s.name);
+      .filter(s => s.priority === 3)
+      .map(s => s.name);
     expect(p3Names.length, "注册表中应存在 P3 系统").toBeGreaterThan(0);
 
     const WARM = 60;
@@ -98,13 +98,12 @@ describe("P3 饥饿旁路（E2）— 自愈闭环", () => {
     expect(captured, "onTick 编排应捕获饥饿相位状态（tick 数不足）").toBeDefined();
     const cap = captured!;
     expect(
-      cap.violations.some((v) => v.startsWith("p3Starved:")),
+      cap.violations.some(v => v.startsWith("p3Starved:")),
       `E2 应检出 P3 饥饿，实际违例: ${JSON.stringify(cap.violations)}`,
     ).toBe(true);
-    expect(
-      cap.bypass,
-      "E2 检出后应置 p3StarveBypassUntil（前馈旁路窗口）",
-    ).toBeGreaterThan(cap.tick);
+    expect(cap.bypass, "E2 检出后应置 p3StarveBypassUntil（前馈旁路窗口）").toBeGreaterThan(
+      cap.tick,
+    );
 
     // ── 断言 ③④：旁路生效 → P3 复活 + 前馈窗口回落 ──
     const lastRun = globalCache().systemLastRun ?? {};

@@ -11,10 +11,7 @@ import {
   computeDeficit,
   candidatesToEmpireRequests,
 } from "../../../src/domain/strategy/imbalance";
-import {
-  allocateEmpireBudget,
-  DEFAULT_BUDGET_OPTIONS,
-} from "../../../src/domain/strategy/budget";
+import { allocateEmpireBudget, DEFAULT_BUDGET_OPTIONS } from "../../../src/domain/strategy/budget";
 import {
   evaluateExpansionReadiness,
   DEFAULT_READINESS_OPTIONS,
@@ -37,17 +34,35 @@ import type { EmpireResourceView } from "../../../src/domain/strategy/resource-v
 function makeProfile(over?: Partial<RoomEconomicProfile>): RoomEconomicProfile {
   return {
     roomName: "W7N4",
-    rcl: 7, hasSpawn: true, hasStorage: true, hasTerminal: true,
-    netFlow: 5, contractReserve: 50000, riskBuffer: 1000,
-    estimatedIncome: 14, efficiency: 0.7, drift: 0, economyTick: 1000,
-    storageEnergy: 50000, storageCapacity: 1_000_000, storageRatio: 0.5,
-    energyAvailable: 500, energyCapacityAvailable: 1000,
-    storageNearFull: false, sourceCount: 2,
-    colonyPhase: "growth", colonyState: "normal",
-    economyPressure: 0.1, lastHostileAt: undefined, hasLiveThreat: false,
-    controllerDowngradeRisk: false, claimSecure: false,
-    economicClass: "core", netFlowPositive: true,
-    selfSufficiency: 0.64, isStruggling: false,
+    rcl: 7,
+    hasSpawn: true,
+    hasStorage: true,
+    hasTerminal: true,
+    netFlow: 5,
+    contractReserve: 50000,
+    riskBuffer: 1000,
+    estimatedIncome: 14,
+    efficiency: 0.7,
+    drift: 0,
+    economyTick: 1000,
+    storageEnergy: 50000,
+    storageCapacity: 1_000_000,
+    storageRatio: 0.5,
+    energyAvailable: 500,
+    energyCapacityAvailable: 1000,
+    storageNearFull: false,
+    sourceCount: 2,
+    colonyPhase: "growth",
+    colonyState: "normal",
+    economyPressure: 0.1,
+    lastHostileAt: undefined,
+    hasLiveThreat: false,
+    controllerDowngradeRisk: false,
+    claimSecure: false,
+    economicClass: "core",
+    netFlowPositive: true,
+    selfSufficiency: 0.64,
+    isStruggling: false,
     ...over,
   };
 }
@@ -138,25 +153,45 @@ describe("A2B-006: Empire Economic Health", () => {
   });
 
   it("净流 ≥ 0 + riskBuffer 不足 → stable", () => {
-    const view = makeView({ totalNetFlow: 2, minRiskBuffer: 300, coreRooms: 1, empireSelfSufficiency: 0.4 });
+    const view = makeView({
+      totalNetFlow: 2,
+      minRiskBuffer: 300,
+      coreRooms: 1,
+      empireSelfSufficiency: 0.4,
+    });
     const r = evaluateEconomicHealth(view);
     expect(r.health).toBe("stable");
   });
 
   it("净流 > 0 + core≥1 + 自给度达标 → growing", () => {
-    const view = makeView({ totalNetFlow: 5, minRiskBuffer: 600, coreRooms: 1, empireSelfSufficiency: 0.6 });
+    const view = makeView({
+      totalNetFlow: 5,
+      minRiskBuffer: 600,
+      coreRooms: 1,
+      empireSelfSufficiency: 0.6,
+    });
     const r = evaluateEconomicHealth(view);
     expect(r.health).toBe("growing");
   });
 
   it("净流 > 0 + core≥2 + 自给度高 + riskBuffer≥1000 → healthy", () => {
-    const view = makeView({ totalNetFlow: 10, minRiskBuffer: 1200, coreRooms: 2, empireSelfSufficiency: 0.75 });
+    const view = makeView({
+      totalNetFlow: 10,
+      minRiskBuffer: 1200,
+      coreRooms: 2,
+      empireSelfSufficiency: 0.75,
+    });
     const r = evaluateEconomicHealth(view);
     expect(r.health).toBe("healthy");
   });
 
   it("growing 但不满足 healthy 条件 → growing（不升级）", () => {
-    const view = makeView({ totalNetFlow: 5, minRiskBuffer: 700, coreRooms: 1, empireSelfSufficiency: 0.6 });
+    const view = makeView({
+      totalNetFlow: 5,
+      minRiskBuffer: 700,
+      coreRooms: 1,
+      empireSelfSufficiency: 0.6,
+    });
     const r = evaluateEconomicHealth(view);
     expect(r.health).toBe("growing");
   });
@@ -171,7 +206,12 @@ describe("A2B-006: Empire Economic Health", () => {
 
 describe("A2B-007: Expansion Readiness", () => {
   it("全部门控通过 → READY", () => {
-    const view = makeView({ totalNetFlow: 10, coreRooms: 1, hasStruggling: false, hasLiveThreat: false });
+    const view = makeView({
+      totalNetFlow: 10,
+      coreRooms: 1,
+      hasStruggling: false,
+      hasLiveThreat: false,
+    });
     const budget = makeBudget({ expansion: 5000 });
     const r = evaluateExpansionReadiness(view, "growing", budget, "comfortable", true);
     expect(r.readiness).toBe("READY");
@@ -179,7 +219,12 @@ describe("A2B-007: Expansion Readiness", () => {
   });
 
   it("全部门控通过 + 强力条件 → STRONGLY_READY", () => {
-    const view = makeView({ totalNetFlow: 20, coreRooms: 2, hasStruggling: false, hasLiveThreat: false });
+    const view = makeView({
+      totalNetFlow: 20,
+      coreRooms: 2,
+      hasStruggling: false,
+      hasLiveThreat: false,
+    });
     const budget = makeBudget({ expansion: 5000 });
     const r = evaluateExpansionReadiness(view, "healthy", budget, "abundant", true);
     expect(r.readiness).toBe("STRONGLY_READY");
@@ -279,7 +324,13 @@ describe("A2B-008: Reserve Protection (Empire Budget)", () => {
   it("各预算域之和 ≤ totalEnergy", () => {
     const view = makeView({ totalEnergy: 10000 });
     const budget = allocateEmpireBudget(view, "growing", 1000);
-    const sum = budget.reserve + budget.survival + budget.production + budget.infrastructure + budget.expansion + budget.free;
+    const sum =
+      budget.reserve +
+      budget.survival +
+      budget.production +
+      budget.infrastructure +
+      budget.expansion +
+      budget.free;
     expect(sum).toBeLessThanOrEqual(10000);
   });
 });
@@ -297,13 +348,23 @@ describe("A2B-009/010: Resource Imbalance Detection + Request Scope", () => {
 
   it("surplus 房 + deficit 房 → 有 imbalance + 候选", () => {
     const surplusRoom = makeProfile({
-      roomName: "W7N4", storageEnergy: 80000, storageRatio: 0.8,
-      netFlow: 10, netFlowPositive: true, estimatedIncome: 14,
+      roomName: "W7N4",
+      storageEnergy: 80000,
+      storageRatio: 0.8,
+      netFlow: 10,
+      netFlowPositive: true,
+      estimatedIncome: 14,
     });
     const deficitRoom = makeProfile({
-      roomName: "W8N3", storageEnergy: 100, storageRatio: 0.01,
-      netFlow: -5, netFlowPositive: false, estimatedIncome: 3, riskBuffer: 100,
-      isStruggling: false, colonyState: "normal",
+      roomName: "W8N3",
+      storageEnergy: 100,
+      storageRatio: 0.01,
+      netFlow: -5,
+      netFlowPositive: false,
+      estimatedIncome: 3,
+      riskBuffer: 100,
+      isStruggling: false,
+      colonyState: "normal",
       economicClass: "production",
     });
     const profiles = [surplusRoom, deficitRoom];
@@ -318,14 +379,21 @@ describe("A2B-009/010: Resource Imbalance Detection + Request Scope", () => {
 
   it("困难房 deficit = true（needsEnergyAid）", () => {
     const struggling = makeProfile({
-      roomName: "W9N2", isStruggling: true, colonyState: "recovery",
+      roomName: "W9N2",
+      isStruggling: true,
+      colonyState: "recovery",
       economicClass: "struggling",
     });
     expect(computeDeficit(struggling)).toBeGreaterThan(0);
   });
 
   it("正常房 surplus = storageEnergy × 0.3", () => {
-    const p = makeProfile({ storageEnergy: 100000, storageRatio: 0.5, netFlow: 10, netFlowPositive: true });
+    const p = makeProfile({
+      storageEnergy: 100000,
+      storageRatio: 0.5,
+      netFlow: 10,
+      netFlowPositive: true,
+    });
     expect(computeSurplus(p, 0.3)).toBe(30000);
   });
 
@@ -336,13 +404,24 @@ describe("A2B-009/010: Resource Imbalance Detection + Request Scope", () => {
 
   it("candidatesToEmpireRequests 生成带 scope=empire 的请求", () => {
     const surplusRoom = makeProfile({
-      roomName: "W7N4", storageEnergy: 80000, storageRatio: 0.8,
-      netFlow: 10, netFlowPositive: true, estimatedIncome: 14,
+      roomName: "W7N4",
+      storageEnergy: 80000,
+      storageRatio: 0.8,
+      netFlow: 10,
+      netFlowPositive: true,
+      estimatedIncome: 14,
     });
     const deficitRoom = makeProfile({
-      roomName: "W8N3", storageEnergy: 100, storageRatio: 0.01,
-      netFlow: -5, netFlowPositive: false, estimatedIncome: 3, riskBuffer: 100,
-      isStruggling: false, colonyState: "normal", economicClass: "production",
+      roomName: "W8N3",
+      storageEnergy: 100,
+      storageRatio: 0.01,
+      netFlow: -5,
+      netFlowPositive: false,
+      estimatedIncome: 3,
+      riskBuffer: 100,
+      isStruggling: false,
+      colonyState: "normal",
+      economicClass: "production",
     });
     const profiles = [surplusRoom, deficitRoom];
     const view = buildEmpireResourceView(profiles, 1000);
@@ -357,8 +436,11 @@ describe("A2B-009/010: Resource Imbalance Detection + Request Scope", () => {
 
   it("不自己给自己调拨", () => {
     const surplusRoom = makeProfile({
-      roomName: "W7N4", storageEnergy: 80000, storageRatio: 0.8,
-      netFlow: 10, netFlowPositive: true,
+      roomName: "W7N4",
+      storageEnergy: 80000,
+      storageRatio: 0.8,
+      netFlow: 10,
+      netFlowPositive: true,
     });
     // 只有一个 surplus 房，无 deficit 房 → 无候选
     const profiles = [surplusRoom];
@@ -373,8 +455,13 @@ describe("A2B-009/010: Resource Imbalance Detection + Request Scope", () => {
 describe("A2B-012: Economic Trend / Safety Margin", () => {
   it("正常健康 → score > 0.5", () => {
     const view = makeView({
-      totalNetFlow: 10, minRiskBuffer: 1000, hasStruggling: false, hasLiveThreat: false,
-      empireSelfSufficiency: 0.7, strugglingRooms: 0, roomCount: 1,
+      totalNetFlow: 10,
+      minRiskBuffer: 1000,
+      hasStruggling: false,
+      hasLiveThreat: false,
+      empireSelfSufficiency: 0.7,
+      strugglingRooms: 0,
+      roomCount: 1,
     });
     const r = evaluateSafetyMargin(view, "growing");
     expect(r.score).toBeGreaterThan(0.5);
@@ -406,8 +493,13 @@ describe("A2B-012: Economic Trend / Safety Margin", () => {
 
   it("所有维度满分 → score = 1", () => {
     const view = makeView({
-      totalNetFlow: 20, minRiskBuffer: 2000, hasStruggling: false, hasLiveThreat: false,
-      empireSelfSufficiency: 0.9, strugglingRooms: 0, roomCount: 2,
+      totalNetFlow: 20,
+      minRiskBuffer: 2000,
+      hasStruggling: false,
+      hasLiveThreat: false,
+      empireSelfSufficiency: 0.9,
+      strugglingRooms: 0,
+      roomCount: 2,
     });
     const r = evaluateSafetyMargin(view, "healthy");
     expect(r.score).toBeCloseTo(1, 1);
@@ -415,9 +507,14 @@ describe("A2B-012: Economic Trend / Safety Margin", () => {
 
   it("库存高但产能低 → 低分（防假富裕）", () => {
     const view = makeView({
-      totalEnergy: 100000, totalNetFlow: -2, minRiskBuffer: 500,
-      hasStruggling: false, hasLiveThreat: false,
-      empireSelfSufficiency: 0.3, strugglingRooms: 0, roomCount: 1,
+      totalEnergy: 100000,
+      totalNetFlow: -2,
+      minRiskBuffer: 500,
+      hasStruggling: false,
+      hasLiveThreat: false,
+      empireSelfSufficiency: 0.3,
+      strugglingRooms: 0,
+      roomCount: 1,
     });
     const r = evaluateSafetyMargin(view, "deficit");
     expect(r.score).toBeLessThan(0.5);
@@ -429,19 +526,34 @@ describe("A2B-012: Economic Trend / Safety Margin", () => {
 describe("A2B-S1: Multi-Room Simulation (3 rooms)", () => {
   it("3 房帝国：core + production + deficit → 正确聚合", () => {
     const roomA = makeProfile({
-      roomName: "RoomA", storageEnergy: 50000, storageRatio: 0.5,
-      netFlow: 10, estimatedIncome: 14, economicClass: "core",
+      roomName: "RoomA",
+      storageEnergy: 50000,
+      storageRatio: 0.5,
+      netFlow: 10,
+      estimatedIncome: 14,
+      economicClass: "core",
     });
     const roomB = makeProfile({
-      roomName: "RoomB", storageEnergy: 30000, storageRatio: 0.3,
-      netFlow: 8, estimatedIncome: 12, economicClass: "production",
+      roomName: "RoomB",
+      storageEnergy: 30000,
+      storageRatio: 0.3,
+      netFlow: 8,
+      estimatedIncome: 12,
+      economicClass: "production",
       rcl: 5,
     });
     const roomC = makeProfile({
-      roomName: "RoomC", storageEnergy: 100, storageRatio: 0.01,
-      netFlow: -5, estimatedIncome: 3, riskBuffer: 100,
-      netFlowPositive: false, economicClass: "production",
-      isStruggling: false, colonyState: "normal", rcl: 4,
+      roomName: "RoomC",
+      storageEnergy: 100,
+      storageRatio: 0.01,
+      netFlow: -5,
+      estimatedIncome: 3,
+      riskBuffer: 100,
+      netFlowPositive: false,
+      economicClass: "production",
+      isStruggling: false,
+      colonyState: "normal",
+      rcl: 4,
     });
 
     const profiles = [roomA, roomB, roomC];
@@ -460,10 +572,19 @@ describe("A2B-S1: Multi-Room Simulation (3 rooms)", () => {
 
   it("Empire Planner Input 完整链路", () => {
     const roomA = makeProfile({ roomName: "RoomA", netFlow: 10, storageEnergy: 50000 });
-    const roomB = makeProfile({ roomName: "RoomB", netFlow: 5, storageEnergy: 30000, rcl: 5, economicClass: "production" });
+    const roomB = makeProfile({
+      roomName: "RoomB",
+      netFlow: 5,
+      storageEnergy: 30000,
+      rcl: 5,
+      economicClass: "production",
+    });
 
     const profiles = [roomA, roomB];
-    const capProfiles = [makeCapacityProfile({ roomName: "RoomA" }), makeCapacityProfile({ roomName: "RoomB" })];
+    const capProfiles = [
+      makeCapacityProfile({ roomName: "RoomA" }),
+      makeCapacityProfile({ roomName: "RoomB" }),
+    ];
 
     const view = buildEmpireResourceView(profiles, 1000);
     const health = evaluateEconomicHealth(view);
@@ -473,7 +594,15 @@ describe("A2B-S1: Multi-Room Simulation (3 rooms)", () => {
     const safety = evaluateSafetyMargin(view, health.health);
 
     const plannerInput = buildEmpirePlannerInput(
-      1000, profiles, capProfiles, view, health, imbalance, budget, readiness, safety,
+      1000,
+      profiles,
+      capProfiles,
+      view,
+      health,
+      imbalance,
+      budget,
+      readiness,
+      safety,
     );
 
     expect(plannerInput.tick).toBe(1000);
@@ -495,8 +624,12 @@ describe("A2B-S1: Multi-Room Simulation (3 rooms)", () => {
 describe("A2B-S2: Expansion Readiness Scenarios", () => {
   it("Scenario A: Empire Healthy → STRONGLY_READY", () => {
     const view = makeView({
-      totalNetFlow: 20, coreRooms: 2, minRiskBuffer: 1500,
-      hasStruggling: false, hasLiveThreat: false, empireSelfSufficiency: 0.8,
+      totalNetFlow: 20,
+      coreRooms: 2,
+      minRiskBuffer: 1500,
+      hasStruggling: false,
+      hasLiveThreat: false,
+      empireSelfSufficiency: 0.8,
     });
     const budget = makeBudget({ expansion: 5000 });
     const r = evaluateExpansionReadiness(view, "healthy", budget, "abundant", true);
@@ -512,8 +645,11 @@ describe("A2B-S2: Expansion Readiness Scenarios", () => {
 
   it("Scenario C: Storage High 但 Production Low → 不应 STRONGLY_READY", () => {
     const view = makeView({
-      totalEnergy: 100000, totalNetFlow: 2, minRiskBuffer: 1500,
-      coreRooms: 2, empireSelfSufficiency: 0.3,
+      totalEnergy: 100000,
+      totalNetFlow: 2,
+      minRiskBuffer: 1500,
+      coreRooms: 2,
+      empireSelfSufficiency: 0.3,
     });
     const budget = makeBudget({ expansion: 5000 });
     // netFlow=2 < stronglyMinNetFlow=15 → 不 STRONGLY_READY
@@ -531,8 +667,10 @@ describe("A2B-S2: Expansion Readiness Scenarios", () => {
 
   it("Scenario E: Core Room 处于 Recovery → 禁止扩张", () => {
     const view = makeView({
-      hasStruggling: true, strugglingRooms: 1,
-      totalNetFlow: -2, hasLiveThreat: false,
+      hasStruggling: true,
+      strugglingRooms: 1,
+      totalNetFlow: -2,
+      hasLiveThreat: false,
     });
     const budget = makeBudget();
     const r = evaluateExpansionReadiness(view, "critical", budget, "comfortable", true);
@@ -553,11 +691,49 @@ describe("A2B-011: Empire Resource View Aggregation", () => {
 
   it("5 房聚合：各指标正确", () => {
     const profiles: RoomEconomicProfile[] = [
-      makeProfile({ roomName: "A", storageEnergy: 10000, netFlow: 5, estimatedIncome: 14, economicClass: "core" }),
-      makeProfile({ roomName: "B", storageEnergy: 20000, netFlow: 3, estimatedIncome: 12, economicClass: "core", rcl: 8 }),
-      makeProfile({ roomName: "C", storageEnergy: 5000, netFlow: -2, estimatedIncome: 8, economicClass: "production", rcl: 5 }),
-      makeProfile({ roomName: "D", storageEnergy: 500, netFlow: -1, estimatedIncome: 2, economicClass: "candidate", rcl: 3, hasStorage: false, storageRatio: 0, storageCapacity: 0 }),
-      makeProfile({ roomName: "E", storageEnergy: 1000, netFlow: -3, estimatedIncome: 0, economicClass: "struggling", colonyState: "recovery", isStruggling: true }),
+      makeProfile({
+        roomName: "A",
+        storageEnergy: 10000,
+        netFlow: 5,
+        estimatedIncome: 14,
+        economicClass: "core",
+      }),
+      makeProfile({
+        roomName: "B",
+        storageEnergy: 20000,
+        netFlow: 3,
+        estimatedIncome: 12,
+        economicClass: "core",
+        rcl: 8,
+      }),
+      makeProfile({
+        roomName: "C",
+        storageEnergy: 5000,
+        netFlow: -2,
+        estimatedIncome: 8,
+        economicClass: "production",
+        rcl: 5,
+      }),
+      makeProfile({
+        roomName: "D",
+        storageEnergy: 500,
+        netFlow: -1,
+        estimatedIncome: 2,
+        economicClass: "candidate",
+        rcl: 3,
+        hasStorage: false,
+        storageRatio: 0,
+        storageCapacity: 0,
+      }),
+      makeProfile({
+        roomName: "E",
+        storageEnergy: 1000,
+        netFlow: -3,
+        estimatedIncome: 0,
+        economicClass: "struggling",
+        colonyState: "recovery",
+        isStruggling: true,
+      }),
     ];
     const view = buildEmpireResourceView(profiles, 1000);
     expect(view.roomCount).toBe(5);

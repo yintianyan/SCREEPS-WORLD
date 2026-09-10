@@ -5,12 +5,7 @@
 /**
  * Bottleneck 类型。
  */
-export type BottleneckType =
-  | "production"
-  | "logistics"
-  | "storage"
-  | "consumption"
-  | "spawn";
+export type BottleneckType = "production" | "logistics" | "storage" | "consumption" | "spawn";
 
 /**
  * Bottleneck Chain 链节。

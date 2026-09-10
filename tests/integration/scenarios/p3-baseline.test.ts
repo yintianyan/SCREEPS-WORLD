@@ -20,8 +20,14 @@ const SAMPLE_EVERY = 25;
 
 // body 部件能量成本（引擎常量快照；mockup 环境不依赖全局 BODYPART_COST）
 const PART_COST: Record<string, number> = {
-  work: 100, carry: 50, move: 50, attack: 80, ranged_attack: 150,
-  heal: 250, claim: 600, tough: 10,
+  work: 100,
+  carry: 50,
+  move: 50,
+  attack: 80,
+  ranged_attack: 150,
+  heal: 250,
+  claim: 600,
+  tough: 10,
 };
 
 interface Sample {
@@ -47,7 +53,12 @@ interface Sample {
   econ?: { t: number; nf: number; cr: number; rb: number; dr: number; ei: number; ef: number };
 }
 
-function sampleWorld(world: TestWorld, tick: number, known: Set<string>, spawnEnergy: number): Sample {
+function sampleWorld(
+  world: TestWorld,
+  tick: number,
+  known: Set<string>,
+  spawnEnergy: number,
+): Sample {
   const roles: Record<string, number> = {};
   for (const c of world.creeps) {
     const role = (c.memory.role as string) ?? "unknown";
@@ -60,7 +71,9 @@ function sampleWorld(world: TestWorld, tick: number, known: Set<string>, spawnEn
   let containers = 0;
   for (const c of world.containers) containers += c.store.energy;
   const storage = world.storage ? world.storage.store.energy : 0;
-  const memRoom = (globalThis as unknown as { Memory?: { rooms?: Record<string, { economy?: Sample["econ"] }> } }).Memory?.rooms?.[world.config.roomName];
+  const memRoom = (
+    globalThis as unknown as { Memory?: { rooms?: Record<string, { economy?: Sample["econ"] }> } }
+  ).Memory?.rooms?.[world.config.roomName];
   return {
     econ: memRoom?.economy,
     tick,
@@ -136,18 +149,21 @@ function windowReport(samples: Sample[], from: number, to: number): WindowReport
 }
 
 function summarize(label: string, windows: WindowReport[]): void {
-  console.log("\n[P3-BASELINE] === " + label + " ===");
+  console.log(`\n[P3-BASELINE] === ${label} ===`);
   for (const w of windows) {
     const consumed = w.upgradeEnergy + w.buildEnergy + w.spawnEnergy;
     console.log(
-      "[P3-BASELINE] t" + w.range[0] + "-" + w.range[1] + ": "
-      + "reserve " + w.reserveStart + "->" + w.reserveEnd + " (net " + (w.netFlow >= 0 ? "+" : "") + w.netFlow + ") | "
-      + "harvest " + w.harvest + " | upgE " + w.upgradeEnergy + " | buildE " + w.buildEnergy
-      + " | spawnE " + w.spawnEnergy + "(" + w.spawnedCount + ") | died " + w.died
-      + " | creeps~" + w.avgCreeps + " | E " + w.avgEnergyAvailable + "/" + w.avgEnergyCapacity
-      + " | spawnUtil " + w.spawnUtilization + "% | RCL " + w.rclStart + "->" + w.rclEnd
-      + " | sites~" + w.avgSites
-      + (consumed > 0 ? " | measuredConsume=" + consumed : ""),
+      `[P3-BASELINE] t${w.range[0]}-${w.range[1]}: ` +
+        `reserve ${w.reserveStart}->${w.reserveEnd} (net ${w.netFlow >= 0 ? "+" : ""}${
+          w.netFlow
+        }) | ` +
+        `harvest ${w.harvest} | upgE ${w.upgradeEnergy} | buildE ${w.buildEnergy} | spawnE ${
+          w.spawnEnergy
+        }(${w.spawnedCount}) | died ${w.died} | creeps~${w.avgCreeps} | E ${w.avgEnergyAvailable}/${
+          w.avgEnergyCapacity
+        } | spawnUtil ${w.spawnUtilization}% | RCL ${w.rclStart}->${w.rclEnd} | sites~${
+          w.avgSites
+        }${consumed > 0 ? ` | measuredConsume=${consumed}` : ""}`,
     );
   }
 }
@@ -176,13 +192,24 @@ function runWorld(label: string, world: TestWorld): { samples: Sample[]; runtime
 }
 
 const WINDOWS: Array<[number, number]> = SOAK
-  ? [[0, 1000], [1000, 25000], [25000, 50000]]
+  ? [
+      [0, 1000],
+      [1000, 25000],
+      [25000, 50000],
+    ]
   : FULL
-    ? [[0, 1000], [1000, 5000], [5000, 10000]]
-    : [[0, 500], [500, 1500]];
+    ? [
+        [0, 1000],
+        [1000, 5000],
+        [5000, 10000],
+      ]
+    : [
+        [0, 500],
+        [500, 1500],
+      ];
 
 describe("P3 Baseline — 经济基线采集", () => {
-  it("cold-start RCL1 冷启动轨迹（" + TICKS + " ticks）", () => {
+  it(`cold-start RCL1 冷启动轨迹（${TICKS} ticks）`, () => {
     const world = new ScenarioBuilder("W1N1")
       .rcl(1)
       .flat()
@@ -207,7 +234,7 @@ describe("P3 Baseline — 经济基线采集", () => {
     if (FULL) persist("cold-start", samples, windows);
   });
 
-  it("rcl4-storage RCL4 标准经济形态（" + TICKS + " ticks）", () => {
+  it(`rcl4-storage RCL4 标准经济形态（${TICKS} ticks）`, () => {
     const world = new ScenarioBuilder("W1N1")
       // B3 修正：progress 从 0 起——满值预置会压制 upgrade 观测（P3_BASELINE B3）
       .rcl(4, 0)
@@ -232,24 +259,82 @@ describe("P3 Baseline — 经济基线采集", () => {
       .build();
 
     // 标准人口（对齐 rcl4-automation 预设）
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 37, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("haul2", "hauler", 22, 22, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("u1", "upgrader", 29, 38, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("u2", "upgrader", 30, 37, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      37,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "haul2",
+      "hauler",
+      22,
+      22,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "u1",
+      "upgrader",
+      29,
+      38,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "u2",
+      "upgrader",
+      30,
+      37,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+      { mode: "acquire" },
+    );
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
     world.room._recalcEnergy();
@@ -267,7 +352,6 @@ describe("P3 Baseline — 经济基线采集", () => {
     if (FULL) persist("rcl4-storage", samples, windows);
   });
 });
-
 
 describe("P3 Accounting 接线冒烟", () => {
   it("核算窗结算后 Memory.rooms[r].economy 产出三指标瘦快照", () => {
@@ -287,20 +371,46 @@ describe("P3 Accounting 接线冒烟", () => {
     const seenEcon: unknown[] = [];
     runner.run(world, 600, {
       onTick: (_w, tick) => {
-        const mem = (globalThis as { Memory?: { rooms?: Record<string, { economy?: unknown }> } }).Memory?.rooms?.["W1N1"];
-        if (mem?.economy && (seenEcon.length === 0 || (seenEcon[seenEcon.length - 1] as { t?: number })?.t !== (mem.economy as { t?: number }).t)) {
+        const mem = (globalThis as { Memory?: { rooms?: Record<string, { economy?: unknown }> } })
+          .Memory?.rooms?.["W1N1"];
+        if (
+          mem?.economy &&
+          (seenEcon.length === 0 ||
+            (seenEcon[seenEcon.length - 1] as { t?: number })?.t !==
+              (mem.economy as { t?: number }).t)
+        ) {
           seenEcon.push(mem.economy);
-          console.log("[SMOKE] tick=" + tick + " econ=" + JSON.stringify(mem.economy));
+          console.log(`[SMOKE] tick=${tick} econ=${JSON.stringify(mem.economy)}`);
         }
       },
     });
-    console.log("[SMOKE-HIST] settlements=" + seenEcon.length + " " + JSON.stringify(seenEcon));
-    const led = (globalThis as unknown as { energyLedger?: { rooms: Record<string, unknown> } }).energyLedger;
-    console.log("[SMOKE-LEDGER] " + JSON.stringify(led));
+    console.log(`[SMOKE-HIST] settlements=${seenEcon.length} ${JSON.stringify(seenEcon)}`);
+    const led = (globalThis as unknown as { energyLedger?: { rooms: Record<string, unknown> } })
+      .energyLedger;
+    console.log(`[SMOKE-LEDGER] ${JSON.stringify(led)}`);
     const stats = world._stats;
-    console.log("[SMOKE-STATS] harvested=" + stats.totalHarvested + " spawned=" + stats.totalSpawned);
+    console.log(`[SMOKE-STATS] harvested=${stats.totalHarvested} spawned=${stats.totalSpawned}`);
 
-    const econ = (globalThis as { Memory?: { rooms?: Record<string, { economy?: { t: number; nf: number; cr: number; rb: number; dr: number; ei: number; ef: number } }> } }).Memory?.rooms?.["W1N1"]?.economy;
+    const econ = (
+      globalThis as {
+        Memory?: {
+          rooms?: Record<
+            string,
+            {
+              economy?: {
+                t: number;
+                nf: number;
+                cr: number;
+                rb: number;
+                dr: number;
+                ei: number;
+                ef: number;
+              };
+            }
+          >;
+        };
+      }
+    ).Memory?.rooms?.["W1N1"]?.economy;
     expect(econ).toBeDefined();
     expect(econ!.cr).toBeGreaterThanOrEqual(0); // 合同储备非负（RCL1 无 storage/link/terminal → 0）
     expect(typeof econ!.nf).toBe("number");
@@ -320,6 +430,8 @@ function persist(worldLabel: string, samples: Sample[], windows: WindowReport[])
     windows,
     samples,
   };
-  fs.writeFileSync(path.join(dir, "p3-baseline-" + worldLabel + ".json"), JSON.stringify(payload));
-  console.log("[P3-BASELINE] persisted -> tmp/docs-moved/phase3/data/p3-baseline-" + worldLabel + ".json");
+  fs.writeFileSync(path.join(dir, `p3-baseline-${worldLabel}.json`), JSON.stringify(payload));
+  console.log(
+    `[P3-BASELINE] persisted -> tmp/docs-moved/phase3/data/p3-baseline-${worldLabel}.json`,
+  );
 }

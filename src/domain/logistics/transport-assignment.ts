@@ -16,13 +16,7 @@ import type { ResourceType } from "../operation/agenda-item";
  * - recycled:   creep 被回收（终态）
  */
 export type AssignmentStatus =
-  | "assigned"
-  | "loading"
-  | "in_transit"
-  | "unloading"
-  | "completed"
-  | "failed"
-  | "recycled";
+  "assigned" | "loading" | "in_transit" | "unloading" | "completed" | "failed" | "recycled";
 
 /**
  * 判定 Assignment 状态是否终态。
@@ -187,7 +181,11 @@ export function markCompleted(a: TransportAssignment, tick: number): TransportAs
  * 标记为失败。
  * 纯函数 — 返回新对象。
  */
-export function markFailed(a: TransportAssignment, tick: number, reason?: string): TransportAssignment {
+export function markFailed(
+  a: TransportAssignment,
+  tick: number,
+  reason?: string,
+): TransportAssignment {
   return { ...a, status: "failed", updatedAt: tick };
 }
 
@@ -206,7 +204,11 @@ export function markRecycled(a: TransportAssignment, tick: number): TransportAss
  * loadedAmount 累加。
  * 纯函数 — 返回新对象。
  */
-export function recordLoaded(a: TransportAssignment, amount: number, tick: number): TransportAssignment {
+export function recordLoaded(
+  a: TransportAssignment,
+  amount: number,
+  tick: number,
+): TransportAssignment {
   return {
     ...a,
     loadedAmount: a.loadedAmount + Math.max(0, amount),
@@ -219,7 +221,11 @@ export function recordLoaded(a: TransportAssignment, amount: number, tick: numbe
  * deliveredAmount 累加。
  * 纯函数 — 返回新对象。
  */
-export function recordDelivered(a: TransportAssignment, amount: number, tick: number): TransportAssignment {
+export function recordDelivered(
+  a: TransportAssignment,
+  amount: number,
+  tick: number,
+): TransportAssignment {
   const deliveredAmount = a.deliveredAmount + Math.max(0, amount);
   const completed = deliveredAmount >= a.assignedAmount;
   return {
@@ -235,7 +241,11 @@ export function recordDelivered(a: TransportAssignment, amount: number, tick: nu
  * lostAmount 累加。
  * 纯函数 — 返回新对象。
  */
-export function recordLost(a: TransportAssignment, amount: number, tick: number): TransportAssignment {
+export function recordLost(
+  a: TransportAssignment,
+  amount: number,
+  tick: number,
+): TransportAssignment {
   return {
     ...a,
     lostAmount: a.lostAmount + Math.max(0, amount),
@@ -352,48 +362,72 @@ export interface TransportAssignmentSnapshot {
 /** TransportRole 编码。 */
 function encodeRole(role: TransportRole): string {
   switch (role) {
-    case "hauler": return "H";
-    case "carrier": return "C";
-    case "remoteHauler": return "R";
-    case "distributor": return "D";
+    case "hauler":
+      return "H";
+    case "carrier":
+      return "C";
+    case "remoteHauler":
+      return "R";
+    case "distributor":
+      return "D";
   }
 }
 
 /** TransportRole 解码。 */
 function decodeRole(code: string): TransportRole {
   switch (code) {
-    case "H": return "hauler";
-    case "C": return "carrier";
-    case "R": return "remoteHauler";
-    case "D": return "distributor";
-    default: return "hauler";
+    case "H":
+      return "hauler";
+    case "C":
+      return "carrier";
+    case "R":
+      return "remoteHauler";
+    case "D":
+      return "distributor";
+    default:
+      return "hauler";
   }
 }
 
 /** AssignmentStatus 编码。 */
 function encodeAssignmentStatus(status: AssignmentStatus): string {
   switch (status) {
-    case "assigned": return "A";
-    case "loading": return "L";
-    case "in_transit": return "T";
-    case "unloading": return "U";
-    case "completed": return "X";
-    case "failed": return "F";
-    case "recycled": return "R";
+    case "assigned":
+      return "A";
+    case "loading":
+      return "L";
+    case "in_transit":
+      return "T";
+    case "unloading":
+      return "U";
+    case "completed":
+      return "X";
+    case "failed":
+      return "F";
+    case "recycled":
+      return "R";
   }
 }
 
 /** AssignmentStatus 解码。 */
 function decodeAssignmentStatus(code: string): AssignmentStatus {
   switch (code) {
-    case "A": return "assigned";
-    case "L": return "loading";
-    case "T": return "in_transit";
-    case "U": return "unloading";
-    case "X": return "completed";
-    case "F": return "failed";
-    case "R": return "recycled";
-    default: return "assigned";
+    case "A":
+      return "assigned";
+    case "L":
+      return "loading";
+    case "T":
+      return "in_transit";
+    case "U":
+      return "unloading";
+    case "X":
+      return "completed";
+    case "F":
+      return "failed";
+    case "R":
+      return "recycled";
+    default:
+      return "assigned";
   }
 }
 

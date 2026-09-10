@@ -1,9 +1,6 @@
 /** A3-006: Operation Lifecycle 状态转换 */
 import { describe, expect, it } from "vitest";
-import {
-  createOperation,
-  type OperationContext,
-} from "../../../src/domain/operation/agenda-item";
+import { createOperation, type OperationContext } from "../../../src/domain/operation/agenda-item";
 import {
   markReady,
   markRunning,
@@ -132,7 +129,7 @@ describe("A3-013: Operation Retry", () => {
 
 describe("A3-014: 超时 → expired", () => {
   it("checkExpiry 超时自动转 expired", () => {
-    let op = createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 100, TICK);
+    const op = createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 100, TICK);
     const result = checkExpiry(op, TICK + 200);
     expect(result.op.status).toBe("expired");
   });

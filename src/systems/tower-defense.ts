@@ -4,16 +4,17 @@ import { EventKind, recordEvent } from "../kernel/event-log";
 import { findCriticalRepair } from "../creeps/support";
 import { selectTowerTarget, type TowerThreat } from "../domain/defense/tower-target";
 import { assessEngagement, type TowerSummary } from "../domain/defense/tower-engagement";
-import { buildFortificationContext, classifyFortification, resolveUnderSiege, type FortificationContext } from "../domain/defense/fortification";
+import {
+  buildFortificationContext,
+  classifyFortification,
+  resolveUnderSiege,
+  type FortificationContext,
+} from "../domain/defense/fortification";
 import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
 
 /** P3 L1 核算：塔动作耗能按 intent 计（attack/heal/repair 每次 TOWER_ENERGY_COST）。
  * 不可用库存差值实测 — 引擎资源结算在 tick 末，同 tick 差值恒 0（官服实证）。 */
-function countedTowerAction(
-  roomName: string,
-  tower: StructureTower,
-  action: () => number,
-): number {
+function countedTowerAction(roomName: string, tower: StructureTower, action: () => number): number {
   const result = action();
   if (result === OK) bumpEnergyCounter(roomName, "towerSpent", TOWER_ENERGY_COST);
   return result;
@@ -113,13 +114,23 @@ export const towerDefenseSystem: System = {
         // 优先级：关键结构（<50%）> 核心 wall/rampart（受袭升档目标血量）。
         if (!fired) {
           const threatRepairTarget = snapshot.criticalRepairTarget ?? findCriticalRepair(snapshot);
-          const threatFortCtx = buildFortificationContext(snapshot, Memory.rooms[snapshot.roomName]?.minCut?.positions);
-          const threatWallTarget = findWallRepairTarget(snapshot, snapshot.rcl, true, threatFortCtx);
+          const threatFortCtx = buildFortificationContext(
+            snapshot,
+            Memory.rooms[snapshot.roomName]?.minCut?.positions,
+          );
+          const threatWallTarget = findWallRepairTarget(
+            snapshot,
+            snapshot.rcl,
+            true,
+            threatFortCtx,
+          );
           if (threatRepairTarget || threatWallTarget) {
             for (const tower of snapshot.towers) {
               if (tower.store.getUsedCapacity(RESOURCE_ENERGY) < TOWER_ENERGY_COST) continue;
               if (threatRepairTarget) {
-                countedTowerAction(snapshot.roomName, tower, () => tower.repair(threatRepairTarget));
+                countedTowerAction(snapshot.roomName, tower, () =>
+                  tower.repair(threatRepairTarget),
+                );
               } else {
                 countedTowerAction(snapshot.roomName, tower, () => tower.repair(threatWallTarget!));
               }
@@ -178,7 +189,7 @@ export const towerDefenseSystem: System = {
       // 周界全额 / 核心折扣 / container 仅地板 — 塔安全网不为低值盾浪费弹药。
       const fortCtx = buildFortificationContext(snapshot, roomMemForSiege?.minCut?.positions);
       // 预选 wall/rampart 维护目标（所有 tower 共用，避免重复查找）。
-      let wallRepairTarget = findWallRepairTarget(snapshot, snapshot.rcl, underSiege, fortCtx);
+      const wallRepairTarget = findWallRepairTarget(snapshot, snapshot.rcl, underSiege, fortCtx);
       // 关键维修目标预计算值，提升到 tower 循环外避免重复调用。
       const repairTarget = snapshot.criticalRepairTarget ?? findCriticalRepair(snapshot);
 
@@ -201,7 +212,8 @@ export const towerDefenseSystem: System = {
         // G-DF-08：wall/rampart 维护（最低优先级）。
         // 门禁：colonyState 必须 normal + tower 能量 > 70%（保留应急储备）。
         if (wallRepairTarget && wallMaintenanceAllowed) {
-          const towerEnergyRatio = tower.store.getUsedCapacity(RESOURCE_ENERGY) / tower.store.getCapacity(RESOURCE_ENERGY);
+          const towerEnergyRatio =
+            tower.store.getUsedCapacity(RESOURCE_ENERGY) / tower.store.getCapacity(RESOURCE_ENERGY);
           if (towerEnergyRatio > 0.7) {
             countedTowerAction(snapshot.roomName, tower, () => tower.repair(wallRepairTarget));
           }
@@ -226,7 +238,10 @@ function hasRepairCreep(roomName: string): boolean {
  * 用纯函数 selectTowerTarget 按「奶妈优先 / 最脆优先 / 近距优先」排序；
  * 异常或选不出时回退到 findClosestByRange，保证防御不因选择逻辑失效而停火。
  */
-function selectFocusTarget(referenceTower: StructureTower, threats: readonly Creep[]): Creep | undefined {
+function selectFocusTarget(
+  referenceTower: StructureTower,
+  threats: readonly Creep[],
+): Creep | undefined {
   const summaries: TowerThreat[] = threats.map(c => ({
     id: c.id as string,
     healParts: c.body.filter(p => p.type === HEAL).length,
@@ -275,7 +290,14 @@ function isCoreBeingDestroyed(snapshot: RoomSnapshot): boolean {
   if (core.some(s => s !== undefined && s.hits < s.hitsMax && attackerNear(s.pos))) return true;
   if (snapshot.towers.every(t => t.store.getUsedCapacity(RESOURCE_ENERGY) === 0)) {
     const anchor = snapshot.spawns[0] ?? snapshot.controller;
-    if (anchor && threats.some(t => hasOffensiveParts(t) && t.pos.getRangeTo(anchor.pos) <= CONFIG.defense.safeModeTriggerRange)) {
+    if (
+      anchor &&
+      threats.some(
+        t =>
+          hasOffensiveParts(t) &&
+          t.pos.getRangeTo(anchor.pos) <= CONFIG.defense.safeModeTriggerRange,
+      )
+    ) {
       return true;
     }
   }
@@ -297,7 +319,10 @@ function reportThreatUnhandled(snapshot: RoomSnapshot): void {
     (sum, c) => sum + c.body.filter(p => p.type === HEAL).length,
     0,
   );
-  recordEvent(EventKind.ThreatUnhandled, snapshot.roomName, [snapshot.threatCreeps.length, totalHeal]);
+  recordEvent(EventKind.ThreatUnhandled, snapshot.roomName, [
+    snapshot.threatCreeps.length,
+    totalHeal,
+  ]);
 }
 
 /**
@@ -345,14 +370,22 @@ function findWallRepairTarget(
   let best: StructureWall | StructureRampart | undefined;
   let bestHits = Infinity;
   for (const wall of snapshot.walls) {
-    const target = getWallTargetHits(rcl, underSiege, classifyFortification(wall.pos.x, wall.pos.y, true, fortCtx));
+    const target = getWallTargetHits(
+      rcl,
+      underSiege,
+      classifyFortification(wall.pos.x, wall.pos.y, true, fortCtx),
+    );
     if (wall.hits < target && wall.hits < bestHits) {
       bestHits = wall.hits;
       best = wall;
     }
   }
   for (const rampart of snapshot.ramparts) {
-    const target = getWallTargetHits(rcl, underSiege, classifyFortification(rampart.pos.x, rampart.pos.y, false, fortCtx));
+    const target = getWallTargetHits(
+      rcl,
+      underSiege,
+      classifyFortification(rampart.pos.x, rampart.pos.y, false, fortCtx),
+    );
     if (rampart.hits < target && rampart.hits < bestHits) {
       bestHits = rampart.hits;
       best = rampart;

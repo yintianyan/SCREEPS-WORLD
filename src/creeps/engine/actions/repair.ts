@@ -5,7 +5,11 @@ import type { ActionCandidate } from "../action-types";
 import { runCountedAction, repairIntentAmount } from "./helpers";
 import { findCriticalRepair } from "../../support/targeting";
 import { getObjectById } from "../../support/obj-cache";
-import { buildFortificationContext, classifyFortification, resolveUnderSiege } from "../../../domain/defense/fortification";
+import {
+  buildFortificationContext,
+  classifyFortification,
+  resolveUnderSiege,
+} from "../../../domain/defense/fortification";
 
 /** 道路维修阈值 — 血量低于此比例才修（与 builder 维修需求信号共用 CONFIG 口径）。 */
 const ROAD_REPAIR_THRESHOLD: number = CONFIG.construction.roadRepairThreshold;
@@ -24,9 +28,16 @@ type Fortification = StructureWall | StructureRampart;
 export function repairCritical(): ActionCandidate<AnyStructure> {
   return {
     name: "repair:critical",
-    resolve: (ac) => findCriticalRepair(ac.snapshot),
+    resolve: ac => findCriticalRepair(ac.snapshot),
     execute: (ac, t) => {
-      runCountedAction(ac.creep, t, "repaired", () => ac.creep.repair(t), undefined, () => repairIntentAmount(ac.creep, t));
+      runCountedAction(
+        ac.creep,
+        t,
+        "repaired",
+        () => ac.creep.repair(t),
+        undefined,
+        () => repairIntentAmount(ac.creep, t),
+      );
     },
   };
 }
@@ -39,13 +50,17 @@ export function repairCritical(): ActionCandidate<AnyStructure> {
 export function repairContainerDecay(): ActionCandidate<StructureContainer> {
   return {
     name: "repair:container-decay",
-    resolve: (ac) => {
+    resolve: ac => {
       // 优先复用持久化目标 — 验证类型 + 仍需修复。
       // P1 修复：原先不检查 structureType，repairTargetId 指向 road/wall 时比例检查仍可能命中
       // （道路 hitsMax 5000，80% = 4000），导致道路被当 container 修，真正衰减的 container 被饿死。
       if (ac.creep.memory.repairTargetId) {
         const cached = getObjectById(ac.creep.memory.repairTargetId as Id<StructureContainer>);
-        if (cached && cached.structureType === STRUCTURE_CONTAINER && cached.hits < cached.hitsMax * 0.8) {
+        if (
+          cached &&
+          cached.structureType === STRUCTURE_CONTAINER &&
+          cached.hits < cached.hitsMax * 0.8
+        ) {
           return cached;
         }
       }
@@ -65,9 +80,18 @@ export function repairContainerDecay(): ActionCandidate<StructureContainer> {
       return worst;
     },
     execute: (ac, worst) => {
-      runCountedAction(ac.creep, worst, "repaired", () => ac.creep.repair(worst), {
-        [ERR_INVALID_TARGET]: () => { ac.creep.memory.repairTargetId = undefined; },
-      }, () => repairIntentAmount(ac.creep, worst));
+      runCountedAction(
+        ac.creep,
+        worst,
+        "repaired",
+        () => ac.creep.repair(worst),
+        {
+          [ERR_INVALID_TARGET]: () => {
+            ac.creep.memory.repairTargetId = undefined;
+          },
+        },
+        () => repairIntentAmount(ac.creep, worst),
+      );
     },
   };
 }
@@ -79,7 +103,7 @@ export function repairContainerDecay(): ActionCandidate<StructureContainer> {
 export function repairNearbyContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "repair:nearby-container",
-    resolve: (ac) => {
+    resolve: ac => {
       const candidates = ac.snapshot.containers.filter(
         c => ac.creep.pos.getRangeTo(c) <= 2 && c.hits < c.hitsMax * 0.8,
       );
@@ -87,7 +111,14 @@ export function repairNearbyContainer(): ActionCandidate<StructureContainer> {
       return ac.creep.pos.findClosestByRange(candidates as StructureContainer[]) ?? undefined;
     },
     execute: (ac, nearby) => {
-      runCountedAction(ac.creep, nearby, "repaired", () => ac.creep.repair(nearby), undefined, () => repairIntentAmount(ac.creep, nearby));
+      runCountedAction(
+        ac.creep,
+        nearby,
+        "repaired",
+        () => ac.creep.repair(nearby),
+        undefined,
+        () => repairIntentAmount(ac.creep, nearby),
+      );
     },
   };
 }
@@ -104,7 +135,7 @@ export function repairNearbyContainer(): ActionCandidate<StructureContainer> {
 export function repairFortifications(): ActionCandidate<Fortification> {
   return {
     name: "repair:fortifications",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.budget.tier === "recovery" || ac.budget.tier === "conserve") return undefined;
       if (ac.snapshot.threatCreeps.length > 0) return undefined;
 
@@ -133,10 +164,7 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       // 无 storage（RCL1-4）— 放宽门禁，靠 work chain 优先级保证不抢生存行为。
 
       // 分层分类上下文：min-cut 割集来自 Memory 持久化数据。
-      const fortCtx = buildFortificationContext(
-        ac.snapshot,
-        roomMemory?.minCut?.positions,
-      );
+      const fortCtx = buildFortificationContext(ac.snapshot, roomMemory?.minCut?.positions);
       const targetOf = (f: Fortification): number =>
         getWallTargetHits(
           ac.snapshot.rcl,
@@ -149,8 +177,9 @@ export function repairFortifications(): ActionCandidate<Fortification> {
         const cached = getObjectById(ac.creep.memory.repairTargetId as Id<Fortification>);
         if (cached) {
           if (
-            (cached.structureType === STRUCTURE_WALL || cached.structureType === STRUCTURE_RAMPART)
-            && cached.hits < targetOf(cached)
+            (cached.structureType === STRUCTURE_WALL ||
+              cached.structureType === STRUCTURE_RAMPART) &&
+            cached.hits < targetOf(cached)
           ) {
             return cached;
           }
@@ -165,9 +194,18 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       return target;
     },
     execute: (ac, t) => {
-      runCountedAction(ac.creep, t, "repaired", () => ac.creep.repair(t), {
-        [ERR_INVALID_TARGET]: () => { ac.creep.memory.repairTargetId = undefined; },
-      }, () => repairIntentAmount(ac.creep, t));
+      runCountedAction(
+        ac.creep,
+        t,
+        "repaired",
+        () => ac.creep.repair(t),
+        {
+          [ERR_INVALID_TARGET]: () => {
+            ac.creep.memory.repairTargetId = undefined;
+          },
+        },
+        () => repairIntentAmount(ac.creep, t),
+      );
     },
   };
 }
@@ -214,7 +252,7 @@ function findFortificationTarget(
 export function repairFreshRampart(): ActionCandidate<StructureRampart> {
   return {
     name: "repair:fresh-rampart",
-    resolve: (ac) => {
+    resolve: ac => {
       // 进场线/放手线分离（hysteresis）：进场 = bootstrapHits 的 15%（1500 ≈ 500 tick 死亡余量，
       // 真濒死）；放手 = bootstrapHits（10k）。教训（线上实测两轮）：以 10k 为进场线时，22 个
       // 9.4k-9.9k 亚健康 rampart（3000+ tick 才塌）永久占据急救层，链后危路急救（2% 血量）反被饿死。
@@ -242,7 +280,14 @@ export function repairFreshRampart(): ActionCandidate<StructureRampart> {
       return worst;
     },
     execute: (ac, t) => {
-      runCountedAction(ac.creep, t, "repaired", () => ac.creep.repair(t), undefined, () => repairIntentAmount(ac.creep, t));
+      runCountedAction(
+        ac.creep,
+        t,
+        "repaired",
+        () => ac.creep.repair(t),
+        undefined,
+        () => repairIntentAmount(ac.creep, t),
+      );
     },
   };
 }
@@ -281,7 +326,7 @@ function roadRepairAction(
   const ceiling = urgent ? ROAD_REPAIR_THRESHOLD : ROAD_REPAIR_CEILING;
   return {
     name,
-    resolve: (ac) => {
+    resolve: ac => {
       // 门禁：recovery 恒跳过；conserve 仅常规跳过（急救不省这个钱）；威胁在场恒跳过。
       if (ac.budget.tier === "recovery") return undefined;
       if (!urgent && ac.budget.tier === "conserve") return undefined;
@@ -294,7 +339,11 @@ function roadRepairAction(
       const cachedId = ac.creep.memory[cacheKey];
       if (cachedId) {
         const cached = getObjectById(cachedId as Id<StructureRoad>);
-        if (cached && cached.structureType === STRUCTURE_ROAD && cached.hits < cached.hitsMax * ceiling) {
+        if (
+          cached &&
+          cached.structureType === STRUCTURE_ROAD &&
+          cached.hits < cached.hitsMax * ceiling
+        ) {
           return cached;
         }
         ac.creep.memory[cacheKey] = undefined;
@@ -315,9 +364,18 @@ function roadRepairAction(
       return worst;
     },
     execute: (ac, worst) => {
-      runCountedAction(ac.creep, worst, "repaired", () => ac.creep.repair(worst), {
-        [ERR_INVALID_TARGET]: () => { ac.creep.memory.repairTargetId = undefined; },
-      }, () => repairIntentAmount(ac.creep, worst));
+      runCountedAction(
+        ac.creep,
+        worst,
+        "repaired",
+        () => ac.creep.repair(worst),
+        {
+          [ERR_INVALID_TARGET]: () => {
+            ac.creep.memory.repairTargetId = undefined;
+          },
+        },
+        () => repairIntentAmount(ac.creep, worst),
+      );
     },
   };
 }

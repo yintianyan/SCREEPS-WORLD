@@ -81,7 +81,7 @@ describe("A3-020: Carrier Full Chain — 完整链路", () => {
       expect(op.status).toBe("planned");
 
       // 2. planned → ready
-      let result = markReady(op, TICK);
+      const result = markReady(op, TICK);
       expect(result.ok).toBe(true);
       op = result.op;
       expect(op.status).toBe("ready");
@@ -298,16 +298,17 @@ describe("A3-020: Carrier Full Chain — 完整链路", () => {
 
   describe("幂等性", () => {
     it("同 (from, to, resource) 不重复创建活跃 Operation", () => {
-      const ops = [
-        createOperation("W1N1", "W2N1", "energy", 1000, 1, DEADLINE, TICK),
-      ];
+      const ops = [createOperation("W1N1", "W2N1", "energy", 1000, 1, DEADLINE, TICK)];
       expect(hasActiveOperation(ops, "W1N1", "W2N1", "energy")).toBe(true);
       expect(hasActiveOperation(ops, "W1N1", "W3N1", "energy")).toBe(false);
     });
 
     it("终态 Operation 不阻止新 Operation", () => {
       const ops = [
-        { ...createOperation("W1N1", "W2N1", "energy", 1000, 1, DEADLINE, TICK), status: "completed" as const },
+        {
+          ...createOperation("W1N1", "W2N1", "energy", 1000, 1, DEADLINE, TICK),
+          status: "completed" as const,
+        },
       ];
       expect(hasActiveOperation(ops, "W1N1", "W2N1", "energy")).toBe(false);
     });

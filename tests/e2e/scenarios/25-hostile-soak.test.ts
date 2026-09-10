@@ -23,7 +23,9 @@ describe("E2E-025 hostile/恢复长程统计", () => {
     await runner.setup({ roomName: "W0N1", rooms: [home], maxTicks: 7200, controllerLevel: 6 });
   }, 120000);
 
-  afterAll(async () => { await runner.teardown(); });
+  afterAll(async () => {
+    await runner.teardown();
+  });
 
   it("多波敌袭 → 每波后编队恢复 + Memory 有界 + 0 JS 错误", async () => {
     let creepsBeforeFirst = 0;
@@ -34,7 +36,7 @@ describe("E2E-025 hostile/恢复长程统计", () => {
         waves++;
       }
       const snaps = await runner.runTicks(500);
-      errorsSeen += snaps.flatMap((s) => s.consoleLogs).filter(isJsError).length;
+      errorsSeen += snaps.flatMap(s => s.consoleLogs).filter(isJsError).length;
       const last = snaps.at(-1)!;
       const mem = await runner.bot.getMemory();
       // 恢复判据：波后编队回补至 ≥1 且 colonyState 回 normal。

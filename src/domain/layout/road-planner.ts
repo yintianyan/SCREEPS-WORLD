@@ -4,7 +4,11 @@ import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { createCoreRoadTasks, candidateToBuildTask } from "./task-factory";
 import { evaluateRoadCandidates } from "./road-policy";
-import { planCorridorRoads, type CorridorPathCacheStore, DEFAULT_CORRIDOR_OPTIONS } from "./corridor-roads";
+import {
+  planCorridorRoads,
+  type CorridorPathCacheStore,
+  DEFAULT_CORRIDOR_OPTIONS,
+} from "./corridor-roads";
 
 /**
  * 统一道路规划 — 合并三种道路来源，由 layout-planner 编排器调用
@@ -13,7 +17,6 @@ import { planCorridorRoads, type CorridorPathCacheStore, DEFAULT_CORRIDOR_OPTION
  * 门禁：priority 0（tower/storage）的 queued 任务未清空前不生成核心路；
  * 走廊路每次只规划一条。rotateTraffic 独立于道路生成，每规划周期必调。
  */
-
 
 export interface RoadPlanContext {
   readonly snapshot: RoomSnapshot;
@@ -44,17 +47,16 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
 
   const batchKeys = new Set<string>();
 
-  const isDuplicate = (key: string): boolean =>
-    existingKeys.has(key) || batchKeys.has(key);
-  const markAdded = (key: string): void => { batchKeys.add(key); };
+  const isDuplicate = (key: string): boolean => existingKeys.has(key) || batchKeys.has(key);
+  const markAdded = (key: string): void => {
+    batchKeys.add(key);
+  };
 
   // 基础设施门禁：有 priority 0（tower/storage）的 queued 任务时不生成核心路。
   // 旧实现用 priority <= 1 导致 RCL2-4 阶段 extension 常排队、道路被永久冻结
   // （恰是 hauler 最需要路的时期）；道路为 priority 3 + 独立 site 名额
   // （maxRoadSitesPerRoom），不会挤占 extension/container，门禁只需护 priority 0。
-  const hasPendingCritical = queue.some(
-    t => t.priority === 0 && t.state === "queued",
-  );
+  const hasPendingCritical = queue.some(t => t.priority === 0 && t.state === "queued");
 
   // ── 1. 核心棋盘格路（RCL2+）──
   if (!hasPendingCritical) {
@@ -120,9 +122,14 @@ export function planRoads(ctx: RoadPlanContext): BuildTask[] {
     }
 
     const corridorRoads = planCorridorRoads(
-      room, snapshot, ctx.tick,
-      DEFAULT_CORRIDOR_OPTIONS, undefined, protectedPositions,
-      anchor, ctx.corridorCacheStore,
+      room,
+      snapshot,
+      ctx.tick,
+      DEFAULT_CORRIDOR_OPTIONS,
+      undefined,
+      protectedPositions,
+      anchor,
+      ctx.corridorCacheStore,
     );
     for (const pos of corridorRoads) {
       const key = `road.${snapshot.roomName}.${pos.x}.${pos.y}`;

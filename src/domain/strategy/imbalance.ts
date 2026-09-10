@@ -121,9 +121,7 @@ export function detectImbalance(
 
   // 贪心匹配：每个 deficit 房从 surplus 池中取
   // 使用剩余余量追踪（不修改原数组）
-  const surplusRemaining = new Map<string, number>(
-    surplusList.map(s => [s.room, s.amount]),
-  );
+  const surplusRemaining = new Map<string, number>(surplusList.map(s => [s.room, s.amount]));
 
   for (const d of deficitList) {
     for (const s of surplusList) {

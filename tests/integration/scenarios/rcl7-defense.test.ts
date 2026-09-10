@@ -56,7 +56,11 @@ function rcl7World(opts?: {
   // 添加敌方 creep
   for (let i = 0; i < (opts?.hostiles ?? 0); i++) {
     world.addHostile(`invader_${i}`, { x: 5 + i * 2, y: 5 }, [
-      { type: "attack" }, { type: "attack" }, { type: "tough" }, { type: "move" }, { type: "move" },
+      { type: "attack" },
+      { type: "attack" },
+      { type: "tough" },
+      { type: "move" },
+      { type: "move" },
     ]);
   }
 
@@ -65,18 +69,61 @@ function rcl7World(opts?: {
 
 /** 添加标准 RCL7 人口。 */
 function addRcl7Population(world: TestWorld): void {
-  world.addCreep("h1", "harvester", 11, 11, [
-    { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-  ], { sourceId: "s1", mode: "work" });
-  world.addCreep("h2", "harvester", 39, 11, [
-    { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-  ], { sourceId: "s2", mode: "work" });
-  world.addCreep("haul1", "hauler", 20, 20, [
-    { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-  ], { mode: "acquire" });
-  world.addCreep("u1", "upgrader", 29, 40, [
-    { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-  ], { mode: "acquire" });
+  world.addCreep(
+    "h1",
+    "harvester",
+    11,
+    11,
+    [
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "carry" },
+      { type: "move" },
+    ],
+    { sourceId: "s1", mode: "work" },
+  );
+  world.addCreep(
+    "h2",
+    "harvester",
+    39,
+    11,
+    [
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "carry" },
+      { type: "move" },
+    ],
+    { sourceId: "s2", mode: "work" },
+  );
+  world.addCreep(
+    "haul1",
+    "hauler",
+    20,
+    20,
+    [
+      { type: "carry" },
+      { type: "carry" },
+      { type: "carry" },
+      { type: "carry" },
+      { type: "move" },
+      { type: "move" },
+    ],
+    { mode: "acquire" },
+  );
+  world.addCreep(
+    "u1",
+    "upgrader",
+    29,
+    40,
+    [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+    { mode: "acquire" },
+  );
 
   world.spawns[0]!.store.energy = 300;
   for (const ext of world.extensions) ext.store.energy = 50;
@@ -127,7 +174,10 @@ describe("RCL7 Defense — 防御系统", () => {
 
     // 注入敌人
     world.addHostile("raider", { x: 20, y: 20 }, [
-      { type: "attack" }, { type: "attack" }, { type: "move" }, { type: "move" },
+      { type: "attack" },
+      { type: "attack" },
+      { type: "move" },
+      { type: "move" },
     ]);
 
     // 运行 20 tick — creep 应该进入 flee 模式
@@ -143,7 +193,10 @@ describe("RCL7 Defense — 防御系统", () => {
     addRcl7Population(world);
     // 威胁已突入核心区（spawn 25,25 旁 range 1 <= safeModeTriggerRange）→ 应烧 safe mode。
     world.addHostile("breacher", { x: 26, y: 26 }, [
-      { type: "attack" }, { type: "attack" }, { type: "move" }, { type: "move" },
+      { type: "attack" },
+      { type: "attack" },
+      { type: "move" },
+      { type: "move" },
     ]);
 
     const runner = new TickRunner();
@@ -231,7 +284,11 @@ describe("RCL7 Defense — 多威胁同时入侵 (P2-4)", () => {
     // 手动注入 5 组敌方 creep（不同位置模拟多方向入侵）
     for (let i = 0; i < 5; i++) {
       world.addHostile(`multi_invader_${i}`, { x: 5 + i * 8, y: 5 }, [
-        { type: "attack" }, { type: "attack" }, { type: "tough" }, { type: "move" }, { type: "move" },
+        { type: "attack" },
+        { type: "attack" },
+        { type: "tough" },
+        { type: "move" },
+        { type: "move" },
       ]);
     }
 
@@ -246,7 +303,8 @@ describe("RCL7 Defense — 多威胁同时入侵 (P2-4)", () => {
 
     // tower 能量应被消耗（攻击了敌人）
     const towerEnergyLeft = world.towers.reduce(
-      (sum, t) => sum + (t.store[RESOURCE_ENERGY] ?? 0), 0,
+      (sum, t) => sum + (t.store[RESOURCE_ENERGY] ?? 0),
+      0,
     );
     expect(towerEnergyLeft).toBeLessThan(3000); // 3 tower × 1000 初始 = 3000
 
@@ -270,7 +328,9 @@ describe("RCL7 Defense — 多威胁同时入侵 (P2-4)", () => {
     // 注入 3 组敌人
     for (let i = 0; i < 3; i++) {
       world.addHostile(`recover_invader_${i}`, { x: 10 + i * 10, y: 10 }, [
-        { type: "attack" }, { type: "move" }, { type: "move" },
+        { type: "attack" },
+        { type: "move" },
+        { type: "move" },
       ]);
     }
 

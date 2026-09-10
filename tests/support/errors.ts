@@ -15,7 +15,7 @@ export const JS_ERROR_PATTERNS = [
 
 /** 判断单条日志行是否为 JS 致命错误。 */
 export function isJsError(line: string): boolean {
-  return JS_ERROR_PATTERNS.some((p) => line.includes(p));
+  return JS_ERROR_PATTERNS.some(p => line.includes(p));
 }
 
 /** 过滤日志行集合中的 JS 致命错误行。 */

@@ -8,11 +8,11 @@ import { stockTotal } from "./resource-ledger";
 
 /** 单资源对账状态。 */
 export type ReconciliationStatus =
-  | "balanced"             // 账实一致
-  | "minor_drift"          // 轻微漂移（容差内）
-  | "major_drift"          // 严重漂移（超容差）
-  | "missing_in_ledger"    // 实际有库存但 ledger 无条目
-  | "missing_in_actual"     // ledger 有条目但实际无库存
+  | "balanced" // 账实一致
+  | "minor_drift" // 轻微漂移（容差内）
+  | "major_drift" // 严重漂移（超容差）
+  | "missing_in_ledger" // 实际有库存但 ledger 无条目
+  | "missing_in_actual" // ledger 有条目但实际无库存
   | "reconciliation_required"; // 需要重置
 
 /** 单资源对账结果。 */
@@ -67,9 +67,9 @@ export interface ReconciliationOptions {
 
 /** 默认参数。 */
 export const DEFAULT_RECONCILIATION_OPTIONS: ReconciliationOptions = {
-  minorDriftTolerance: 0.05,   // 5%
-  majorDriftThreshold: 0.20,    // 20%
-  majorDriftAbsolute: 500,      // 500 单位
+  minorDriftTolerance: 0.05, // 5%
+  majorDriftThreshold: 0.2, // 20%
+  majorDriftAbsolute: 500, // 500 单位
 };
 
 // ─── 对账函数 ──────────────────────────────────────────────
@@ -133,11 +133,12 @@ export function reconcileResource(
 
   // 判断 drift 严重度
   const absDiff = Math.abs(difference);
-  if (differenceRatio >= options.majorDriftThreshold
-    || absDiff >= options.majorDriftAbsolute) {
+  if (differenceRatio >= options.majorDriftThreshold || absDiff >= options.majorDriftAbsolute) {
     // 是否需要重置
-    if (differenceRatio >= options.majorDriftThreshold * 2
-      || absDiff >= options.majorDriftAbsolute * 5) {
+    if (
+      differenceRatio >= options.majorDriftThreshold * 2 ||
+      absDiff >= options.majorDriftAbsolute * 5
+    ) {
       return {
         resource,
         status: "reconciliation_required",
@@ -202,10 +203,7 @@ export function reconcileLedger(
   const reconciliationRequired: ResourceType[] = [];
 
   // 检查 ledger 中所有资源
-  const allResources = new Set<ResourceType>([
-    ...ledger.keys(),
-    ...actualStocks.keys(),
-  ]);
+  const allResources = new Set<ResourceType>([...ledger.keys(), ...actualStocks.keys()]);
 
   for (const resource of allResources) {
     const entry = ledger.get(resource);
@@ -223,10 +221,11 @@ export function reconcileLedger(
   // 统计
   const balanced = results.filter(r => r.status === "balanced").length;
   const minorDrift = results.filter(r => r.status === "minor_drift").length;
-  const majorDrift = results.filter(r =>
-    r.status === "major_drift"
-    || r.status === "missing_in_ledger"
-    || r.status === "missing_in_actual"
+  const majorDrift = results.filter(
+    r =>
+      r.status === "major_drift" ||
+      r.status === "missing_in_ledger" ||
+      r.status === "missing_in_actual",
   ).length;
 
   return {

@@ -22,10 +22,7 @@ export {
 } from "./targeting";
 export type { FillTarget } from "./targeting";
 
-export {
-  getAssignment,
-  releaseAssignment,
-} from "./assignment-adapter";
+export { getAssignment, releaseAssignment } from "./assignment-adapter";
 
 export {
   updateMode,

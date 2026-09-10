@@ -43,19 +43,11 @@ import {
   selectTarget,
 } from "../../../src/domain/military/target-selection";
 
-import {
-  estimateWarCost,
-  type WarCostInput,
-} from "../../../src/domain/military/war-cost";
+import { estimateWarCost, type WarCostInput } from "../../../src/domain/military/war-cost";
 
-import {
-  assessOperationRisk,
-  type RiskInput,
-} from "../../../src/domain/military/risk-model";
+import { assessOperationRisk, type RiskInput } from "../../../src/domain/military/risk-model";
 
-import {
-  evaluateOperationValue,
-} from "../../../src/domain/military/operation-value";
+import { evaluateOperationValue } from "../../../src/domain/military/operation-value";
 
 import {
   planMilitaryOperation,
@@ -90,12 +82,27 @@ function makeCombatPower(overrides: Partial<CombatPower> = {}): CombatPower {
 function makeThreatAssessment(overrides: Partial<ThreatAssessment> = {}): ThreatAssessment {
   return {
     level: "HIGH",
-    score: { combat: 40, intent: 60, proximity: 50, objective: 50, boost: 0, defense: 30, economicImpact: 30, total: 55 },
+    score: {
+      combat: 40,
+      intent: 60,
+      proximity: 50,
+      objective: 50,
+      boost: 0,
+      defense: 30,
+      economicImpact: 30,
+      total: 55,
+    },
     confidence: "inferred",
     multiConfidence: makeConfidence(),
     estimatedPower: {
-      attack: 100, rangedAttack: 50, heal: 80, effectiveHP: 1500,
-      dismantle: 0, toughParts: 2, boosted: false, maxBoostTier: 0,
+      attack: 100,
+      rangedAttack: 50,
+      heal: 80,
+      effectiveHP: 1500,
+      dismantle: 0,
+      toughParts: 2,
+      boosted: false,
+      maxBoostTier: 0,
     },
     enemyCombatPower: makeCombatPower({ burstDamage: 150, effectiveHP: 1500, powerScore: 350 }),
     estimatedIntent: { intent: "HARASSMENT", confidence: 0.7, evidence: ["test"] },
@@ -107,7 +114,9 @@ function makeThreatAssessment(overrides: Partial<ThreatAssessment> = {}): Threat
   };
 }
 
-function makeConfidence(overrides: Partial<MultiDimensionalConfidence> = {}): MultiDimensionalConfidence {
+function makeConfidence(
+  overrides: Partial<MultiDimensionalConfidence> = {},
+): MultiDimensionalConfidence {
   return {
     factConfidence: 0.9,
     combatConfidence: 0.9,
@@ -204,20 +213,36 @@ function makeWarPlanningInput(overrides: Partial<WarPlanningInput> = {}): WarPla
 
 describe("A5.3 §1 — Operation 模型", () => {
   const ALL_TYPES: OperationType[] = [
-    "DEFEND", "ESCORT", "HARASS", "SIEGE", "ASSAULT", "RAID",
-    "CONTROLLER_ATTACK", "REMOTE_DENIAL", "CLAIM", "RESERVE",
-    "RETREAT", "ABORT",
+    "DEFEND",
+    "ESCORT",
+    "HARASS",
+    "SIEGE",
+    "ASSAULT",
+    "RAID",
+    "CONTROLLER_ATTACK",
+    "REMOTE_DENIAL",
+    "CLAIM",
+    "RESERVE",
+    "RETREAT",
+    "ABORT",
   ];
 
   describe("isOffensive / isDefensive — 12 种分类", () => {
-    const offensive: OperationType[] = ["ASSAULT", "SIEGE", "RAID", "CONTROLLER_ATTACK", "REMOTE_DENIAL", "CLAIM"];
+    const offensive: OperationType[] = [
+      "ASSAULT",
+      "SIEGE",
+      "RAID",
+      "CONTROLLER_ATTACK",
+      "REMOTE_DENIAL",
+      "CLAIM",
+    ];
     const defensive: OperationType[] = ["DEFEND", "ESCORT", "RETREAT"];
 
-    it.each(offensive)("isOffensive(%s) = true", (type) => {
+    it.each(offensive)("isOffensive(%s) = true", type => {
       expect(isOffensive(type)).toBe(true);
     });
 
-    it.each(defensive)("isDefensive(%s) = true", (type) => {
+    it.each(defensive)("isDefensive(%s) = true", type => {
       expect(isDefensive(type)).toBe(true);
     });
 
@@ -254,11 +279,19 @@ describe("A5.3 §1 — Operation 模型", () => {
   });
 
   describe("isTerminal — 终态判定", () => {
-    it.each(["COMPLETED", "FAILED", "EXPIRED"] as OperationStatus[])("%s 是终态", (s) => {
+    it.each(["COMPLETED", "FAILED", "EXPIRED"] as OperationStatus[])("%s 是终态", s => {
       expect(isTerminal(s)).toBe(true);
     });
 
-    it.each(["PLANNED", "AUTHORIZED", "PREPARING", "READY", "ACTIVE", "DEGRADED", "ABORTING"] as OperationStatus[])("%s 非终态", (s) => {
+    it.each([
+      "PLANNED",
+      "AUTHORIZED",
+      "PREPARING",
+      "READY",
+      "ACTIVE",
+      "DEGRADED",
+      "ABORTING",
+    ] as OperationStatus[])("%s 非终态", s => {
       expect(isTerminal(s)).toBe(false);
     });
   });
@@ -305,8 +338,20 @@ describe("A5.3 §1 — Operation 模型", () => {
         priority: { score: 50, factor: "DEFENSIVE", evidence: [] },
         risk: "LOW",
         status: "PLANNED",
-        constraints: { maxCpuPerTick: 5, maxEnergyBudget: 1000, maxDuration: 5000, minIntelConfidence: 0.3, allowBoost: false, allowNuke: false, abortConditions: [] },
-        createdTick: 1, expiresTick: 5001, confidence: 0.7, reason: "test", evidence: [],
+        constraints: {
+          maxCpuPerTick: 5,
+          maxEnergyBudget: 1000,
+          maxDuration: 5000,
+          minIntelConfidence: 0.3,
+          allowBoost: false,
+          allowNuke: false,
+          abortConditions: [],
+        },
+        createdTick: 1,
+        expiresTick: 5001,
+        confidence: 0.7,
+        reason: "test",
+        evidence: [],
       };
 
       const next = transition(op, "AUTHORIZED", 100, "force ready");
@@ -324,8 +369,20 @@ describe("A5.3 §1 — Operation 模型", () => {
         priority: { score: 50, factor: "DEFENSIVE", evidence: [] },
         risk: "LOW",
         status: "COMPLETED",
-        constraints: { maxCpuPerTick: 5, maxEnergyBudget: 1000, maxDuration: 5000, minIntelConfidence: 0.3, allowBoost: false, allowNuke: false, abortConditions: [] },
-        createdTick: 1, expiresTick: 5001, confidence: 0.7, reason: "test", evidence: [],
+        constraints: {
+          maxCpuPerTick: 5,
+          maxEnergyBudget: 1000,
+          maxDuration: 5000,
+          minIntelConfidence: 0.3,
+          allowBoost: false,
+          allowNuke: false,
+          abortConditions: [],
+        },
+        createdTick: 1,
+        expiresTick: 5001,
+        confidence: 0.7,
+        reason: "test",
+        evidence: [],
       };
 
       const next = transition(op, "ACTIVE", 200, "should not work");
@@ -337,8 +394,12 @@ describe("A5.3 §1 — Operation 模型", () => {
   describe("checkPreparationGate — 准备门禁", () => {
     it("全通过 → ready=true, blockers=[]", () => {
       const result = checkPreparationGate({
-        forceReady: true, logisticsReady: true, intelReady: true,
-        targetValid: true, strategicAuthorization: true, recoveryReady: true,
+        forceReady: true,
+        logisticsReady: true,
+        intelReady: true,
+        targetValid: true,
+        strategicAuthorization: true,
+        recoveryReady: true,
       });
       expect(result.ready).toBe(true);
       expect(result.blockers).toHaveLength(0);
@@ -346,8 +407,12 @@ describe("A5.3 §1 — Operation 模型", () => {
 
     it("缺 force → blocker", () => {
       const result = checkPreparationGate({
-        forceReady: false, logisticsReady: true, intelReady: true,
-        targetValid: true, strategicAuthorization: true, recoveryReady: true,
+        forceReady: false,
+        logisticsReady: true,
+        intelReady: true,
+        targetValid: true,
+        strategicAuthorization: true,
+        recoveryReady: true,
       });
       expect(result.ready).toBe(false);
       expect(result.blockers).toContain("FORCE_NOT_READY");
@@ -355,8 +420,12 @@ describe("A5.3 §1 — Operation 模型", () => {
 
     it("全缺 → 6 个 blocker", () => {
       const result = checkPreparationGate({
-        forceReady: false, logisticsReady: false, intelReady: false,
-        targetValid: false, strategicAuthorization: false, recoveryReady: false,
+        forceReady: false,
+        logisticsReady: false,
+        intelReady: false,
+        targetValid: false,
+        strategicAuthorization: false,
+        recoveryReady: false,
       });
       expect(result.ready).toBe(false);
       expect(result.blockers).toHaveLength(6);
@@ -374,8 +443,20 @@ describe("A5.3 §1 — Operation 模型", () => {
         priority: { score: 50, factor: "DEFENSIVE", evidence: [] },
         risk: "LOW",
         status: "PLANNED",
-        constraints: { maxCpuPerTick: 5, maxEnergyBudget: 1000, maxDuration: 5000, minIntelConfidence: 0.3, allowBoost: false, allowNuke: false, abortConditions: [] },
-        createdTick: 1, expiresTick: 5001, confidence: 0.7, reason: "test", evidence: [],
+        constraints: {
+          maxCpuPerTick: 5,
+          maxEnergyBudget: 1000,
+          maxDuration: 5000,
+          minIntelConfidence: 0.3,
+          allowBoost: false,
+          allowNuke: false,
+          abortConditions: [],
+        },
+        createdTick: 1,
+        expiresTick: 5001,
+        confidence: 0.7,
+        reason: "test",
+        evidence: [],
       };
       const h1 = operationHash(op);
       const h2 = operationHash({ ...op });
@@ -392,8 +473,20 @@ describe("A5.3 §1 — Operation 模型", () => {
         priority: { score: 50, factor: "DEFENSIVE", evidence: [] },
         risk: "LOW",
         status: "PLANNED",
-        constraints: { maxCpuPerTick: 5, maxEnergyBudget: 1000, maxDuration: 5000, minIntelConfidence: 0.3, allowBoost: false, allowNuke: false, abortConditions: [] },
-        createdTick: 1, expiresTick: 5001, confidence: 0.7, reason: "test", evidence: [],
+        constraints: {
+          maxCpuPerTick: 5,
+          maxEnergyBudget: 1000,
+          maxDuration: 5000,
+          minIntelConfidence: 0.3,
+          allowBoost: false,
+          allowNuke: false,
+          abortConditions: [],
+        },
+        createdTick: 1,
+        expiresTick: 5001,
+        confidence: 0.7,
+        reason: "test",
+        evidence: [],
       };
       expect(operationHash(base)).not.toBe(operationHash({ ...base, status: "ACTIVE" }));
     });
@@ -408,8 +501,20 @@ describe("A5.3 §1 — Operation 模型", () => {
         priority: { score: 50, factor: "DEFENSIVE", evidence: [] },
         risk: "LOW",
         status: "PLANNED",
-        constraints: { maxCpuPerTick: 5, maxEnergyBudget: 1000, maxDuration: 5000, minIntelConfidence: 0.3, allowBoost: false, allowNuke: false, abortConditions: [] },
-        createdTick: 1, expiresTick: 5001, confidence: 0.7, reason: "test", evidence: [],
+        constraints: {
+          maxCpuPerTick: 5,
+          maxEnergyBudget: 1000,
+          maxDuration: 5000,
+          minIntelConfidence: 0.3,
+          allowBoost: false,
+          allowNuke: false,
+          abortConditions: [],
+        },
+        createdTick: 1,
+        expiresTick: 5001,
+        confidence: 0.7,
+        reason: "test",
+        evidence: [],
       };
       const h = operationHash(op);
       expect(h).toMatch(/^[0-9a-f]{8}$/);
@@ -647,9 +752,18 @@ describe("A5.3 §2 — WarPosture 授权矩阵", () => {
 
     it("FULL_OFFENSIVE → 全部授权（包括 ASSAULT + CLAIM）", () => {
       const allTypes: OperationType[] = [
-        "DEFEND", "ESCORT", "HARASS", "SIEGE", "ASSAULT", "RAID",
-        "CONTROLLER_ATTACK", "REMOTE_DENIAL", "CLAIM", "RESERVE",
-        "RETREAT", "ABORT",
+        "DEFEND",
+        "ESCORT",
+        "HARASS",
+        "SIEGE",
+        "ASSAULT",
+        "RAID",
+        "CONTROLLER_ATTACK",
+        "REMOTE_DENIAL",
+        "CLAIM",
+        "RESERVE",
+        "RETREAT",
+        "ABORT",
       ];
       for (const t of allTypes) {
         expect(isOperationAuthorized("FULL_OFFENSIVE", t)).toBe(true);
@@ -771,8 +885,14 @@ describe("A5.3 §3 — Capability 评估（deriveRequiredCapability × 12 type�
 
 describe("A5.3 §3b — computeCapabilityGap", () => {
   const required: RequiredCapability = {
-    attack: 200, rangedAttack: 100, heal: 120, effectiveHP: 2000,
-    dismantle: 100, mobility: 1.0, claim: 0, support: 1,
+    attack: 200,
+    rangedAttack: 100,
+    heal: 120,
+    effectiveHP: 2000,
+    dismantle: 100,
+    mobility: 1.0,
+    claim: 0,
+    support: 1,
   };
 
   it("完全满足 → gap=0, totalGapRatio=0", () => {
@@ -785,8 +905,14 @@ describe("A5.3 §3b — computeCapabilityGap", () => {
 
   it("部分不足 → gap>0, totalGapRatio>0", () => {
     const available: RequiredCapability = {
-      attack: 100, rangedAttack: 100, heal: 120, effectiveHP: 2000,
-      dismantle: 100, mobility: 1.0, claim: 0, support: 1,
+      attack: 100,
+      rangedAttack: 100,
+      heal: 120,
+      effectiveHP: 2000,
+      dismantle: 100,
+      mobility: 1.0,
+      claim: 0,
+      support: 1,
     };
     const gap = computeCapabilityGap(required, available, 0.8);
     expect(gap.gaps.attack).toBe(100);
@@ -798,8 +924,14 @@ describe("A5.3 §3b — computeCapabilityGap", () => {
 
   it("全不足 → totalGapRatio 趋近 1", () => {
     const available: RequiredCapability = {
-      attack: 0, rangedAttack: 0, heal: 0, effectiveHP: 0,
-      dismantle: 0, mobility: 0, claim: 0, support: 0,
+      attack: 0,
+      rangedAttack: 0,
+      heal: 0,
+      effectiveHP: 0,
+      dismantle: 0,
+      mobility: 0,
+      claim: 0,
+      support: 0,
     };
     const gap = computeCapabilityGap(required, available, 0.5);
     expect(gap.totalGapRatio).toBeGreaterThan(0.8);
@@ -821,8 +953,14 @@ describe("A5.3 §3b — computeCapabilityGap", () => {
 describe("A5.3 §3c — deriveForceComposition", () => {
   it("DEFEND: 推导 tank + attacker + healer", () => {
     const required: RequiredCapability = {
-      attack: 200, rangedAttack: 50, heal: 120, effectiveHP: 2000,
-      dismantle: 0, mobility: 0.5, claim: 0, support: 1,
+      attack: 200,
+      rangedAttack: 50,
+      heal: 120,
+      effectiveHP: 2000,
+      dismantle: 0,
+      mobility: 0.5,
+      claim: 0,
+      support: 1,
     };
     const force = deriveForceComposition("DEFEND", required);
     expect(force.tank).toBe(Math.ceil(2000 / 1000)); // 2
@@ -830,13 +968,21 @@ describe("A5.3 §3c — deriveForceComposition", () => {
     expect(force.healer).toBe(Math.ceil(120 / 36)); // 4
     expect(force.dismantler).toBe(0);
     expect(force.support).toBe(1);
-    expect(force.total).toBe(force.tank + force.attacker + force.ranged + force.healer + force.dismantler + force.support);
+    expect(force.total).toBe(
+      force.tank + force.attacker + force.ranged + force.healer + force.dismantler + force.support,
+    );
   });
 
   it("SIEGE: 推导 dismantler", () => {
     const required: RequiredCapability = {
-      attack: 50, rangedAttack: 30, heal: 180, effectiveHP: 3000,
-      dismantle: 200, mobility: 0.5, claim: 0, support: 1,
+      attack: 50,
+      rangedAttack: 30,
+      heal: 180,
+      effectiveHP: 3000,
+      dismantle: 200,
+      mobility: 0.5,
+      claim: 0,
+      support: 1,
     };
     const force = deriveForceComposition("SIEGE", required);
     expect(force.dismantler).toBe(Math.ceil(200 / 100)); // 2
@@ -845,8 +991,14 @@ describe("A5.3 §3c — deriveForceComposition", () => {
 
   it("CLAIM: 标记 claimer 需求", () => {
     const required: RequiredCapability = {
-      attack: 0, rangedAttack: 0, heal: 0, effectiveHP: 300,
-      dismantle: 0, mobility: 0.8, claim: 1, support: 0,
+      attack: 0,
+      rangedAttack: 0,
+      heal: 0,
+      effectiveHP: 300,
+      dismantle: 0,
+      mobility: 0.8,
+      claim: 1,
+      support: 0,
     };
     const force = deriveForceComposition("CLAIM", required);
     // claimer 不走标准编队但标记
@@ -855,8 +1007,14 @@ describe("A5.3 §3c — deriveForceComposition", () => {
 
   it("ABORT: 全零编队", () => {
     const required: RequiredCapability = {
-      attack: 0, rangedAttack: 0, heal: 0, effectiveHP: 0,
-      dismantle: 0, mobility: 0, claim: 0, support: 0,
+      attack: 0,
+      rangedAttack: 0,
+      heal: 0,
+      effectiveHP: 0,
+      dismantle: 0,
+      mobility: 0,
+      claim: 0,
+      support: 0,
     };
     const force = deriveForceComposition("ABORT", required);
     expect(force.total).toBe(0);
@@ -889,26 +1047,35 @@ describe("A5.3 §4 — Economic Guard（经济护栏）", () => {
   });
 
   it("能量不足 → FAIL + DOWNGRADE", () => {
-    const result = checkEconomicGuard(makeGuardInput({
-      empireEnergyReserve: 100,
-      warCost: 5000,
-      isDefensive: false,
-    }));
+    const result = checkEconomicGuard(
+      makeGuardInput({
+        empireEnergyReserve: 100,
+        warCost: 5000,
+        isDefensive: false,
+      }),
+    );
     expect(result.passed).toBe(false);
     expect(result.checks.energyReserve).toBe(false);
     expect(result.recommendation).toContain("DOWNGRADE");
   });
 
   it("防御性操作门槛更低（能量只需 500 而非 5000）", () => {
-    const offensive = checkEconomicGuard(makeGuardInput({
-      empireEnergyReserve: 400, isDefensive: false,
-    }));
+    const offensive = checkEconomicGuard(
+      makeGuardInput({
+        empireEnergyReserve: 400,
+        isDefensive: false,
+      }),
+    );
     expect(offensive.passed).toBe(false);
     expect(offensive.checks.energyReserve).toBe(false);
 
-    const defensive = checkEconomicGuard(makeGuardInput({
-      empireEnergyReserve: 600, isDefensive: true, warCost: 100,
-    }));
+    const defensive = checkEconomicGuard(
+      makeGuardInput({
+        empireEnergyReserve: 600,
+        isDefensive: true,
+        warCost: 100,
+      }),
+    );
     // 防御性 minReserve=500, maxCostRatio=0.5 → 600 >= 500 且 100 <= 600*0.5=300 → pass
     expect(defensive.checks.energyReserve).toBe(true);
   });
@@ -920,48 +1087,64 @@ describe("A5.3 §4 — Economic Guard（经济护栏）", () => {
   });
 
   it("replacementCapacity 不足 → FAIL", () => {
-    const result = checkEconomicGuard(makeGuardInput({
-      replacementCapacity: 0.1, isDefensive: false,
-    }));
+    const result = checkEconomicGuard(
+      makeGuardInput({
+        replacementCapacity: 0.1,
+        isDefensive: false,
+      }),
+    );
     expect(result.passed).toBe(false);
     expect(result.checks.replacementCapacity).toBe(false);
     // 防御性门槛 0.1 → 0.1 >= 0.1 → pass
-    const defensive = checkEconomicGuard(makeGuardInput({
-      replacementCapacity: 0.1, isDefensive: true,
-    }));
+    const defensive = checkEconomicGuard(
+      makeGuardInput({
+        replacementCapacity: 0.1,
+        isDefensive: true,
+      }),
+    );
     expect(defensive.checks.replacementCapacity).toBe(true);
   });
 
   it("logisticsReliability 不足 → FAIL", () => {
-    const result = checkEconomicGuard(makeGuardInput({
-      logisticsReliability: 0.3, isDefensive: false,
-    }));
+    const result = checkEconomicGuard(
+      makeGuardInput({
+        logisticsReliability: 0.3,
+        isDefensive: false,
+      }),
+    );
     expect(result.passed).toBe(false);
     expect(result.checks.logisticsReliability).toBe(false);
   });
 
   it("recoveryCapacity 不足 → FAIL", () => {
-    const result = checkEconomicGuard(makeGuardInput({
-      recoveryCapacity: 0.1, isDefensive: false,
-    }));
+    const result = checkEconomicGuard(
+      makeGuardInput({
+        recoveryCapacity: 0.1,
+        isDefensive: false,
+      }),
+    );
     expect(result.passed).toBe(false);
     expect(result.checks.recoveryCapacity).toBe(false);
   });
 
   it("empireHealth=critical + 非防御 → FAIL + ABORT_OFFENSIVE", () => {
-    const result = checkEconomicGuard(makeGuardInput({
-      empireHealth: "critical",
-      isDefensive: false,
-    }));
+    const result = checkEconomicGuard(
+      makeGuardInput({
+        empireHealth: "critical",
+        isDefensive: false,
+      }),
+    );
     expect(result.passed).toBe(false);
     expect(result.recommendation).toContain("ABORT_OFFENSIVE");
   });
 
   it("empireHealth=critical + 防御 → 不因 health 失败", () => {
-    const result = checkEconomicGuard(makeGuardInput({
-      empireHealth: "critical",
-      isDefensive: true,
-    }));
+    const result = checkEconomicGuard(
+      makeGuardInput({
+        empireHealth: "critical",
+        isDefensive: true,
+      }),
+    );
     // 防御时 critical health 不阻止
     expect(result.checks).toBeDefined();
     // 其他维度满足时可通过
@@ -972,27 +1155,47 @@ describe("A5.3 §4 — Economic Guard（经济护栏）", () => {
 
   it("recommendation 降级链：critical > energy > logistics > delay", () => {
     // critical health → ABORT_OFFENSIVE
-    expect(checkEconomicGuard(makeGuardInput({
-      empireHealth: "critical", isDefensive: false,
-    })).recommendation).toContain("ABORT_OFFENSIVE");
+    expect(
+      checkEconomicGuard(
+        makeGuardInput({
+          empireHealth: "critical",
+          isDefensive: false,
+        }),
+      ).recommendation,
+    ).toContain("ABORT_OFFENSIVE");
 
     // energy fail → DOWNGRADE
-    expect(checkEconomicGuard(makeGuardInput({
-      empireEnergyReserve: 100, isDefensive: false,
-    })).recommendation).toContain("DOWNGRADE");
+    expect(
+      checkEconomicGuard(
+        makeGuardInput({
+          empireEnergyReserve: 100,
+          isDefensive: false,
+        }),
+      ).recommendation,
+    ).toContain("DOWNGRADE");
 
     // logistics fail → DEGRADED
-    expect(checkEconomicGuard(makeGuardInput({
-      logisticsReliability: 0.1, isDefensive: false,
-      empireEnergyReserve: 50000,
-    })).recommendation).toContain("DEGRADED");
+    expect(
+      checkEconomicGuard(
+        makeGuardInput({
+          logisticsReliability: 0.1,
+          isDefensive: false,
+          empireEnergyReserve: 50000,
+        }),
+      ).recommendation,
+    ).toContain("DEGRADED");
 
     // other fail → DELAY
-    expect(checkEconomicGuard(makeGuardInput({
-      spawnCapacity: 0, isDefensive: false,
-      empireEnergyReserve: 50000,
-      logisticsReliability: 0.8,
-    })).recommendation).toContain("DELAY");
+    expect(
+      checkEconomicGuard(
+        makeGuardInput({
+          spawnCapacity: 0,
+          isDefensive: false,
+          empireEnergyReserve: 50000,
+          logisticsReliability: 0.8,
+        }),
+      ).recommendation,
+    ).toContain("DELAY");
   });
 });
 
@@ -1044,7 +1247,13 @@ describe("A5.3 §5 — Target 选择（scoreTarget + selectTarget）", () => {
   });
 
   describe("selectTarget — 候选过滤与排序", () => {
-    const baseOpts = { maxDistance: 10, freshnessThreshold: 2000, maxTowers: 6, blacklist: {} as Record<string, number>, currentTick: 1000 };
+    const baseOpts = {
+      maxDistance: 10,
+      freshnessThreshold: 2000,
+      maxTowers: 6,
+      blacklist: {} as Record<string, number>,
+      currentTick: 1000,
+    };
 
     it("选评分最高者", () => {
       const candidates = [
@@ -1052,7 +1261,15 @@ describe("A5.3 §5 — Target 选择（scoreTarget + selectTarget）", () => {
         makeTargetCandidate({ roomName: "W2N1", distance: 2 }),
         makeTargetCandidate({ roomName: "W3N1", distance: 8 }),
       ];
-      const result = selectTarget(candidates, "ASSAULT", baseOpts.maxDistance, baseOpts.freshnessThreshold, baseOpts.maxTowers, baseOpts.blacklist, baseOpts.currentTick);
+      const result = selectTarget(
+        candidates,
+        "ASSAULT",
+        baseOpts.maxDistance,
+        baseOpts.freshnessThreshold,
+        baseOpts.maxTowers,
+        baseOpts.blacklist,
+        baseOpts.currentTick,
+      );
       expect(result.selected).toBeDefined();
       expect(result.selected!.roomName).toBe("W2N1");
     });
@@ -1062,9 +1279,19 @@ describe("A5.3 §5 — Target 选择（scoreTarget + selectTarget）", () => {
         makeTargetCandidate({ roomName: "W1N1", occupied: true }),
         makeTargetCandidate({ roomName: "W2N1", occupied: false }),
       ];
-      const result = selectTarget(candidates, "ASSAULT", baseOpts.maxDistance, baseOpts.freshnessThreshold, baseOpts.maxTowers, baseOpts.blacklist, baseOpts.currentTick);
+      const result = selectTarget(
+        candidates,
+        "ASSAULT",
+        baseOpts.maxDistance,
+        baseOpts.freshnessThreshold,
+        baseOpts.maxTowers,
+        baseOpts.blacklist,
+        baseOpts.currentTick,
+      );
       expect(result.selected!.roomName).toBe("W2N1");
-      expect(result.rejectedAlternatives.some(r => r.roomName === "W1N1" && r.reason === "occupied")).toBe(true);
+      expect(
+        result.rejectedAlternatives.some(r => r.roomName === "W1N1" && r.reason === "occupied"),
+      ).toBe(true);
     });
 
     it("blacklisted 被过滤", () => {
@@ -1072,7 +1299,15 @@ describe("A5.3 §5 — Target 选择（scoreTarget + selectTarget）", () => {
         makeTargetCandidate({ roomName: "W1N1", blacklisted: true }),
         makeTargetCandidate({ roomName: "W2N1", blacklisted: false }),
       ];
-      const result = selectTarget(candidates, "ASSAULT", baseOpts.maxDistance, baseOpts.freshnessThreshold, baseOpts.maxTowers, baseOpts.blacklist, baseOpts.currentTick);
+      const result = selectTarget(
+        candidates,
+        "ASSAULT",
+        baseOpts.maxDistance,
+        baseOpts.freshnessThreshold,
+        baseOpts.maxTowers,
+        baseOpts.blacklist,
+        baseOpts.currentTick,
+      );
       expect(result.selected!.roomName).toBe("W2N1");
       expect(result.rejectedAlternatives.some(r => r.reason === "blacklisted")).toBe(true);
     });
@@ -1082,7 +1317,15 @@ describe("A5.3 §5 — Target 选择（scoreTarget + selectTarget）", () => {
         makeTargetCandidate({ roomName: "W1N1", intelAge: 3000 }),
         makeTargetCandidate({ roomName: "W2N1", intelAge: 100 }),
       ];
-      const result = selectTarget(candidates, "ASSAULT", baseOpts.maxDistance, baseOpts.freshnessThreshold, baseOpts.maxTowers, baseOpts.blacklist, baseOpts.currentTick);
+      const result = selectTarget(
+        candidates,
+        "ASSAULT",
+        baseOpts.maxDistance,
+        baseOpts.freshnessThreshold,
+        baseOpts.maxTowers,
+        baseOpts.blacklist,
+        baseOpts.currentTick,
+      );
       expect(result.selected!.roomName).toBe("W2N1");
     });
 
@@ -1091,7 +1334,15 @@ describe("A5.3 §5 — Target 选择（scoreTarget + selectTarget）", () => {
         makeTargetCandidate({ roomName: "W1N1", towers: 6 }),
         makeTargetCandidate({ roomName: "W2N1", towers: 1 }),
       ];
-      const result = selectTarget(candidates, "ASSAULT", baseOpts.maxDistance, baseOpts.freshnessThreshold, baseOpts.maxTowers, baseOpts.blacklist, baseOpts.currentTick);
+      const result = selectTarget(
+        candidates,
+        "ASSAULT",
+        baseOpts.maxDistance,
+        baseOpts.freshnessThreshold,
+        baseOpts.maxTowers,
+        baseOpts.blacklist,
+        baseOpts.currentTick,
+      );
       expect(result.selected!.roomName).toBe("W2N1");
     });
 
@@ -1100,7 +1351,15 @@ describe("A5.3 §5 — Target 选择（scoreTarget + selectTarget）", () => {
         makeTargetCandidate({ roomName: "W1N1", occupied: true }),
         makeTargetCandidate({ roomName: "W2N1", blacklisted: true }),
       ];
-      const result = selectTarget(candidates, "ASSAULT", baseOpts.maxDistance, baseOpts.freshnessThreshold, baseOpts.maxTowers, baseOpts.blacklist, baseOpts.currentTick);
+      const result = selectTarget(
+        candidates,
+        "ASSAULT",
+        baseOpts.maxDistance,
+        baseOpts.freshnessThreshold,
+        baseOpts.maxTowers,
+        baseOpts.blacklist,
+        baseOpts.currentTick,
+      );
       expect(result.selected).toBeUndefined();
       expect(result.evidence).toContain("no valid target found");
     });
@@ -1110,7 +1369,15 @@ describe("A5.3 §5 — Target 选择（scoreTarget + selectTarget）", () => {
         makeTargetCandidate({ roomName: "W1N1" }),
         makeTargetCandidate({ roomName: "W2N1" }),
       ];
-      const result = selectTarget(candidates, "ASSAULT", baseOpts.maxDistance, baseOpts.freshnessThreshold, baseOpts.maxTowers, baseOpts.blacklist, baseOpts.currentTick);
+      const result = selectTarget(
+        candidates,
+        "ASSAULT",
+        baseOpts.maxDistance,
+        baseOpts.freshnessThreshold,
+        baseOpts.maxTowers,
+        baseOpts.blacklist,
+        baseOpts.currentTick,
+      );
       expect(result.allScores).toHaveLength(2);
     });
   });
@@ -1224,7 +1491,9 @@ describe("A5.3 §6 — planMilitaryOperation 端到端 + Hash 确定性", () => 
       estimatedIntent: { intent: "SCOUTING", confidence: 0.9, evidence: [] },
     });
     const inputCore = makeWarPlanningInput({
-      threatAssessments: [{ roomName: "W1N1", assessment: threatCore, terrain: makeTerrainContext() }],
+      threatAssessments: [
+        { roomName: "W1N1", assessment: threatCore, terrain: makeTerrainContext() },
+      ],
     });
     // SCOUTING → isRemote=true → ESCORT
     const plan = planMilitaryOperation(inputCore);
@@ -1299,7 +1568,9 @@ describe("A5.3 §6 — planMilitaryOperation 端到端 + Hash 确定性", () => 
     const plan = planMilitaryOperation(input);
     expect(plan).toBeDefined();
     expect(plan!.expectedValue).toBeDefined();
-    expect(["PROCEED", "DOWNGRADE", "DELAY", "ABORT"]).toContain(plan!.expectedValue.recommendation);
+    expect(["PROCEED", "DOWNGRADE", "DELAY", "ABORT"]).toContain(
+      plan!.expectedValue.recommendation,
+    );
   });
 
   it("WarPlan 包含物流需求", () => {
@@ -1344,12 +1615,18 @@ describe("A5.3 §6b — warPlanHash 确定性", () => {
     const highThreat = makeThreatAssessment({ level: "HIGH" });
     const critThreat = makeThreatAssessment({ level: "CRITICAL" });
     const input1 = makeWarPlanningInput({
-      tick: 1000, seq: 1,
-      threatAssessments: [{ roomName: "W1N1", assessment: highThreat, terrain: makeTerrainContext() }],
+      tick: 1000,
+      seq: 1,
+      threatAssessments: [
+        { roomName: "W1N1", assessment: highThreat, terrain: makeTerrainContext() },
+      ],
     });
     const input2 = makeWarPlanningInput({
-      tick: 1000, seq: 1,
-      threatAssessments: [{ roomName: "W1N1", assessment: critThreat, terrain: makeTerrainContext() }],
+      tick: 1000,
+      seq: 1,
+      threatAssessments: [
+        { roomName: "W1N1", assessment: critThreat, terrain: makeTerrainContext() },
+      ],
     });
     const plan1 = planMilitaryOperation(input1);
     const plan2 = planMilitaryOperation(input2);
@@ -1421,7 +1698,9 @@ describe("A5.3 §7 — WarCost 估算", () => {
   });
 
   it("有 boost → boostCost = squadSize × boostCostPerCreep", () => {
-    const cost = estimateWarCost(makeCostInput({ needsBoost: true, squadSize: 5, boostCostPerCreep: 500 }));
+    const cost = estimateWarCost(
+      makeCostInput({ needsBoost: true, squadSize: 5, boostCostPerCreep: 500 }),
+    );
     expect(cost.boostCost).toBe(2500);
   });
 
@@ -1431,16 +1710,23 @@ describe("A5.3 §7 — WarCost 估算", () => {
   });
 
   it("replacementCost = spawnEnergy × expectedLossRate", () => {
-    const cost = estimateWarCost(makeCostInput({ squadSize: 5, energyPerCreep: 800, expectedLossRate: 0.4 }));
+    const cost = estimateWarCost(
+      makeCostInput({ squadSize: 5, energyPerCreep: 800, expectedLossRate: 0.4 }),
+    );
     expect(cost.replacementCost).toBe(Math.round(4000 * 0.4));
   });
 
   it("total = 各项之和", () => {
     const cost = estimateWarCost(makeCostInput());
     expect(cost.total).toBe(
-      cost.spawnEnergyCost + cost.boostCost + cost.replacementCost
-      + cost.transportCost + cost.healingCost + cost.opportunityCost
-      + cost.cpuCost + cost.recoveryCost,
+      cost.spawnEnergyCost +
+        cost.boostCost +
+        cost.replacementCost +
+        cost.transportCost +
+        cost.healingCost +
+        cost.opportunityCost +
+        cost.cpuCost +
+        cost.recoveryCost,
     );
   });
 
@@ -1471,19 +1757,23 @@ describe("A5.3 §8 — Risk Model", () => {
   }
 
   it("我强敌弱 → LOW risk", () => {
-    const result = assessOperationRisk(makeRiskInput({
-      enemyPower: makeCombatPower({ powerScore: 100 }),
-      ourPower: makeCombatPower({ powerScore: 500 }),
-    }));
+    const result = assessOperationRisk(
+      makeRiskInput({
+        enemyPower: makeCombatPower({ powerScore: 100 }),
+        ourPower: makeCombatPower({ powerScore: 500 }),
+      }),
+    );
     expect(result.level).toBe("LOW");
     expect(result.score).toBeLessThan(0.2);
   });
 
   it("敌强我弱 → MEDIUM+ risk", () => {
-    const result = assessOperationRisk(makeRiskInput({
-      enemyPower: makeCombatPower({ powerScore: 800 }),
-      ourPower: makeCombatPower({ powerScore: 100 }),
-    }));
+    const result = assessOperationRisk(
+      makeRiskInput({
+        enemyPower: makeCombatPower({ powerScore: 800 }),
+        ourPower: makeCombatPower({ powerScore: 100 }),
+      }),
+    );
     expect(["MEDIUM", "HIGH", "CRITICAL"]).toContain(result.level);
     expect(result.score).toBeGreaterThan(0.2);
   });
@@ -1500,12 +1790,16 @@ describe("A5.3 §8 — Risk Model", () => {
   });
 
   it("撤退质量差 → retreatRisk 高", () => {
-    const poor = assessOperationRisk(makeRiskInput({
-      terrain: makeTerrainContext({ retreatQuality: "CRITICAL" }),
-    }));
-    const good = assessOperationRisk(makeRiskInput({
-      terrain: makeTerrainContext({ retreatQuality: "VERY_GOOD" }),
-    }));
+    const poor = assessOperationRisk(
+      makeRiskInput({
+        terrain: makeTerrainContext({ retreatQuality: "CRITICAL" }),
+      }),
+    );
+    const good = assessOperationRisk(
+      makeRiskInput({
+        terrain: makeTerrainContext({ retreatQuality: "VERY_GOOD" }),
+      }),
+    );
     expect(poor.breakdown.retreatRisk).toBeGreaterThan(good.breakdown.retreatRisk);
   });
 
@@ -1549,9 +1843,15 @@ describe("A5.3 §9 — OperationValue 期望价值", () => {
       level: score >= 0.7 ? "CRITICAL" : score >= 0.45 ? "HIGH" : score >= 0.2 ? "MEDIUM" : "LOW",
       score,
       breakdown: {
-        capabilityGap: 0, terrainRisk: 0, towerRisk: 0, safeModeRisk: 0,
-        reinforcementRisk: 0, retreatRisk: 0, intelRisk: 0,
-        logisticsRisk: 0, recoveryRisk: 0,
+        capabilityGap: 0,
+        terrainRisk: 0,
+        towerRisk: 0,
+        safeModeRisk: 0,
+        reinforcementRisk: 0,
+        retreatRisk: 0,
+        intelRisk: 0,
+        logisticsRisk: 0,
+        recoveryRisk: 0,
       },
       evidence: [],
     };

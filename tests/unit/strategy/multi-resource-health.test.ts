@@ -1,7 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  evaluateMultiResourceHealth,
-} from "../../../src/domain/strategy/multi-resource-health";
+import { evaluateMultiResourceHealth } from "../../../src/domain/strategy/multi-resource-health";
 import {
   createResourceLedger,
   getOrCreateEntry,

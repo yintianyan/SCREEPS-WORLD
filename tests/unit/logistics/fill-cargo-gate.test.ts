@@ -1,7 +1,13 @@
 /** fill 动作携非能量 cargo 放行门禁测试（回归）。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import { distributorFillTarget, haulFillTarget } from "../../../src/creeps/engine/actions/fill";
-import { mockCreep, mockContext, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
+import {
+  mockCreep,
+  mockContext,
+  mockSnapshot,
+  mockStructure,
+  resetGlobals,
+} from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();
@@ -29,7 +35,12 @@ describe("fill 动作 — 携非能量 cargo 放行门禁（防 updateMode 总�
     const creep = mockCreep({ name: "dist_1", role: "distributor", mode: "work" });
     creep.store = multiStore({ energy: 0, GH: 50 }) as never;
     const ctx = mockContext(snap);
-    const target = distributorFillTarget().resolve!({ creep, snapshot: snap, budget: ctx.budget, ctx } as never);
+    const target = distributorFillTarget().resolve!({
+      creep,
+      snapshot: snap,
+      budget: ctx.budget,
+      ctx,
+    } as never);
     expect(target).toBeUndefined();
   });
 
@@ -39,7 +50,12 @@ describe("fill 动作 — 携非能量 cargo 放行门禁（防 updateMode 总�
     creep.store = multiStore({ energy: 50 }) as never;
     creep.memory.distributorTier = 0;
     const ctx = mockContext(snap);
-    const target = distributorFillTarget().resolve!({ creep, snapshot: snap, budget: ctx.budget, ctx } as never);
+    const target = distributorFillTarget().resolve!({
+      creep,
+      snapshot: snap,
+      budget: ctx.budget,
+      ctx,
+    } as never);
     expect(target).toBeTruthy();
   });
 
@@ -48,7 +64,12 @@ describe("fill 动作 — 携非能量 cargo 放行门禁（防 updateMode 总�
     const creep = mockCreep({ name: "hauler_1", role: "hauler", mode: "work" });
     creep.store = multiStore({ energy: 0, Z: 50 }) as never;
     const ctx = mockContext(snap);
-    const target = haulFillTarget().resolve!({ creep, snapshot: snap, budget: ctx.budget, ctx } as never);
+    const target = haulFillTarget().resolve!({
+      creep,
+      snapshot: snap,
+      budget: ctx.budget,
+      ctx,
+    } as never);
     expect(target).toBeUndefined();
   });
 });

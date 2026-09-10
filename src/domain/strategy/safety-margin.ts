@@ -89,9 +89,8 @@ export function evaluateSafetyMargin(
 ): SafetyMarginResult {
   // ── 1. Production Safety ──
   // 净流 ≤ 0 → 0；净流 ≥ fullMark → 1；中间线性
-  const productionSafety = view.totalNetFlow <= 0
-    ? 0
-    : lerpScore(view.totalNetFlow, 0, options.productionFullMark);
+  const productionSafety =
+    view.totalNetFlow <= 0 ? 0 : lerpScore(view.totalNetFlow, 0, options.productionFullMark);
 
   // ── 2. Reserve Safety ──
   const reserveSafety = lerpScore(
@@ -117,9 +116,7 @@ export function evaluateSafetyMargin(
 
   // ── 5. Population Safety ──
   // struggling 房占比越低越安全
-  const populationSafety = view.roomCount > 0
-    ? 1 - (view.strugglingRooms / view.roomCount)
-    : 0;
+  const populationSafety = view.roomCount > 0 ? 1 - view.strugglingRooms / view.roomCount : 0;
 
   // ── 综合 ──
   const score =

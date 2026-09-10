@@ -32,18 +32,14 @@ export function findActiveOperation(
 /**
  * 过滤出所有活跃操作（非终态）。
  */
-export function filterActive(
-  operations: readonly OperationContext[],
-): OperationContext[] {
+export function filterActive(operations: readonly OperationContext[]): OperationContext[] {
   return operations.filter(isActive);
 }
 
 /**
  * 过滤出所有终态操作（可归档删除）。
  */
-export function filterTerminal(
-  operations: readonly OperationContext[],
-): OperationContext[] {
+export function filterTerminal(operations: readonly OperationContext[]): OperationContext[] {
   return operations.filter(op => !isActive(op));
 }
 
@@ -51,18 +47,14 @@ export function filterTerminal(
  * 清理终态操作 — 返回仅含活跃操作的新数组。
  * 归档由调用方在清理前记录（AgendaOutcome 事件）。
  */
-export function pruneTerminal(
-  operations: readonly OperationContext[],
-): OperationContext[] {
+export function pruneTerminal(operations: readonly OperationContext[]): OperationContext[] {
   return filterActive(operations);
 }
 
 /**
  * 统计各状态的 Operation 数量。
  */
-export function countByStatus(
-  operations: readonly OperationContext[],
-): Record<string, number> {
+export function countByStatus(operations: readonly OperationContext[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const op of operations) {
     counts[op.status] = (counts[op.status] ?? 0) + 1;

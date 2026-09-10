@@ -58,19 +58,25 @@ export function evaluateOperationValue(input: OperationValueInput): OperationVal
   const expectedGain = Math.round(
     (input.targetEconomicValue + input.targetStrategicValue * 100) * input.expectedSuccessRate,
   );
-  evidence.push(`gain=${expectedGain} (targetEcon=${input.targetEconomicValue} + strategic=${input.targetStrategicValue}×100) × success=${input.expectedSuccessRate.toFixed(2)}`);
+  evidence.push(
+    `gain=${expectedGain} (targetEcon=${input.targetEconomicValue} + strategic=${input.targetStrategicValue}×100) × success=${input.expectedSuccessRate.toFixed(2)}`,
+  );
 
   // 预期损失 = 战争成本 × (1 - 成功率) × 风险系数
   const lossMultiplier = (1 - input.expectedSuccessRate) * (0.5 + input.risk.score * 0.5);
   const expectedLoss = Math.round(input.warCost.total * lossMultiplier);
-  evidence.push(`loss=${expectedLoss} (cost=${input.warCost.total} × ${(1 - input.expectedSuccessRate).toFixed(2)} × risk=${input.risk.score.toFixed(2)})`);
+  evidence.push(
+    `loss=${expectedLoss} (cost=${input.warCost.total} × ${(1 - input.expectedSuccessRate).toFixed(2)} × risk=${input.risk.score.toFixed(2)})`,
+  );
 
   // 军事成本
-  const militaryCost = input.warCost.spawnEnergyCost + input.warCost.boostCost + input.warCost.cpuCost;
+  const militaryCost =
+    input.warCost.spawnEnergyCost + input.warCost.boostCost + input.warCost.cpuCost;
   evidence.push(`militaryCost=${militaryCost}`);
 
   // 经济成本
-  const economicCost = input.warCost.opportunityCost + input.warCost.transportCost + input.warCost.recoveryCost;
+  const economicCost =
+    input.warCost.opportunityCost + input.warCost.transportCost + input.warCost.recoveryCost;
   evidence.push(`economicCost=${economicCost}`);
 
   // 战略价值

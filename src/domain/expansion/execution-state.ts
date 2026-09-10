@@ -4,17 +4,17 @@ import type { ExpansionPlan } from "./plan";
 
 /** 执行状态。 */
 export type ExecutionState =
-  | "VALIDATING"         // 执行 Gate 验证中
-  | "PREPARING"          // 预留资源 + 准备 Claimer
-  | "CLAIMING"           // Claimer 出发 + claimController
-  | "CLAIMED"            // Claim 成功，controller 已拥有
-  | "BOOTSTRAPPING"      // Pioneer 到达 + 基础设施建设
-  | "ECONOMIC_STARTUP"  // 能量环路建立（harvest + transport + spawn）
-  | "INTEGRATING"        // 经济激活 → 帝国集成
-  | "COMPLETED"         // 自主运行
-  | "FAILED"            // 执行失败
-  | "ABORTED"           // 主动终止
-  | "REPLANNING";       // 需要重新规划
+  | "VALIDATING" // 执行 Gate 验证中
+  | "PREPARING" // 预留资源 + 准备 Claimer
+  | "CLAIMING" // Claimer 出发 + claimController
+  | "CLAIMED" // Claim 成功，controller 已拥有
+  | "BOOTSTRAPPING" // Pioneer 到达 + 基础设施建设
+  | "ECONOMIC_STARTUP" // 能量环路建立（harvest + transport + spawn）
+  | "INTEGRATING" // 经济激活 → 帝国集成
+  | "COMPLETED" // 自主运行
+  | "FAILED" // 执行失败
+  | "ABORTED" // 主动终止
+  | "REPLANNING"; // 需要重新规划
 
 /** 状态转换结果。 */
 export interface StateTransitionResult {
@@ -98,7 +98,11 @@ export function transitionExecutionState(input: StateTransitionInput): StateTran
     // ── PREPARING → CLAIMING / FAILED ──
     case "PREPARING": {
       if (input.resourcesReserved && input.claimerCreated) {
-        return { newState: "CLAIMING", transitioned: true, reason: "resources reserved + claimer created" };
+        return {
+          newState: "CLAIMING",
+          transitioned: true,
+          reason: "resources reserved + claimer created",
+        };
       }
       if (input.failureReason) {
         return { newState: "FAILED", transitioned: true, reason: input.failureReason };
@@ -142,7 +146,11 @@ export function transitionExecutionState(input: StateTransitionInput): StateTran
       if (input.failureReason) {
         return { newState: "FAILED", transitioned: true, reason: input.failureReason };
       }
-      return { newState: "BOOTSTRAPPING", transitioned: false, reason: "building spawn + pioneer en route" };
+      return {
+        newState: "BOOTSTRAPPING",
+        transitioned: false,
+        reason: "building spawn + pioneer en route",
+      };
     }
 
     // ── ECONOMIC_STARTUP → INTEGRATING / FAILED ──
@@ -159,7 +167,11 @@ export function transitionExecutionState(input: StateTransitionInput): StateTran
       if (input.failureReason) {
         return { newState: "FAILED", transitioned: true, reason: input.failureReason };
       }
-      return { newState: "ECONOMIC_STARTUP", transitioned: false, reason: "establishing energy loop" };
+      return {
+        newState: "ECONOMIC_STARTUP",
+        transitioned: false,
+        reason: "establishing energy loop",
+      };
     }
 
     // ── INTEGRATING → COMPLETED / FAILED ──
@@ -176,7 +188,11 @@ export function transitionExecutionState(input: StateTransitionInput): StateTran
       if (input.failureReason) {
         return { newState: "FAILED", transitioned: true, reason: input.failureReason };
       }
-      return { newState: "INTEGRATING", transitioned: false, reason: "economic activation + empire integration" };
+      return {
+        newState: "INTEGRATING",
+        transitioned: false,
+        reason: "economic activation + empire integration",
+      };
     }
 
     // ── COMPLETED: 终态 ──

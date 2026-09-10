@@ -7,8 +7,14 @@ import { recordTraffic } from "./traffic";
 
 /** 方向 → (dx, dy) 偏移表。供 pathfinding 的前置绕路检测复用。 */
 export const DIR_DELTA: Record<number, [number, number]> = {
-  [TOP]: [0, -1], [TOP_RIGHT]: [1, -1], [RIGHT]: [1, 0], [BOTTOM_RIGHT]: [1, 1],
-  [BOTTOM]: [0, 1], [BOTTOM_LEFT]: [-1, 1], [LEFT]: [-1, 0], [TOP_LEFT]: [-1, -1],
+  [TOP]: [0, -1],
+  [TOP_RIGHT]: [1, -1],
+  [RIGHT]: [1, 0],
+  [BOTTOM_RIGHT]: [1, 1],
+  [BOTTOM]: [0, 1],
+  [BOTTOM_LEFT]: [-1, 1],
+  [LEFT]: [-1, 0],
+  [TOP_LEFT]: [-1, -1],
 };
 
 // ─── Yield/Pull 让路机制 ───
@@ -74,8 +80,8 @@ export function tryPullBlocker(creep: Creep, targetPos: RoomPosition): void {
 /** 记录一次移动成功 — 重置连续失败计数，更新最近成功 tick。
  * 由 pathfinding.ts 的 moveToTarget 在 move 返回 OK/ERR_TIRED 时调用。 */
 export function recordPathSuccess(creep: Creep): void {
-  const tracker = globalCache().pathFailureTracker ??= new Map();
-  const key = creep.room.name + ":" + creep.name;
+  const tracker = (globalCache().pathFailureTracker ??= new Map());
+  const key = `${creep.room.name}:${creep.name}`;
   const entry = tracker.get(key);
   if (entry) {
     entry.lastSuccessTick = Game.time;
@@ -87,8 +93,8 @@ export function recordPathSuccess(creep: Creep): void {
  * 由 pathfinding.ts 在 move 返回非 OK/ERR_TIRED/ERR_BUSY 时调用，
  * 以及由 stuck-recovery 的 Level 3 弃目标时调用。 */
 export function recordPathFailure(creep: Creep): void {
-  const tracker = globalCache().pathFailureTracker ??= new Map();
-  const key = creep.room.name + ":" + creep.name;
+  const tracker = (globalCache().pathFailureTracker ??= new Map());
+  const key = `${creep.room.name}:${creep.name}`;
   const entry = tracker.get(key);
   if (entry) {
     entry.consecutiveFailures++;
@@ -158,11 +164,20 @@ export function findSafestExit(creep: Creep, enemyPos: RoomPosition): RoomPositi
     let exitVecX = 0;
     let exitVecY = 0;
     switch (dir) {
-      case TOP: exitVecY = -1; break;
-      case RIGHT: exitVecX = 1; break;
-      case BOTTOM: exitVecY = 1; break;
-      case LEFT: exitVecX = -1; break;
-      default: continue;
+      case TOP:
+        exitVecY = -1;
+        break;
+      case RIGHT:
+        exitVecX = 1;
+        break;
+      case BOTTOM:
+        exitVecY = 1;
+        break;
+      case LEFT:
+        exitVecX = -1;
+        break;
+      default:
+        continue;
     }
     const dot = enemyDirX * exitVecX + enemyDirY * exitVecY;
     exitCandidates.push({ dir, dot });

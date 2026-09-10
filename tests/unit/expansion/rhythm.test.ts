@@ -28,10 +28,7 @@ describe("evaluateExpansionRhythm — 连续失败暂停", () => {
 
 describe("evaluateExpansionRhythm — stolen 频发收紧门禁", () => {
   it("窗口内 ≥2 次 stolen → minSources=2", () => {
-    const r = evaluateExpansionRhythm(
-      ["success", "stolen", "success", "stolen"],
-      O,
-    );
+    const r = evaluateExpansionRhythm(["success", "stolen", "success", "stolen"], O);
     expect(r.minSources).toBe(2);
   });
 
@@ -43,10 +40,7 @@ describe("evaluateExpansionRhythm — stolen 频发收紧门禁", () => {
 
 describe("evaluateExpansionRhythm — 黑名单缩放", () => {
   it("窗口 ≥3 且成功率达标 → ×0.5", () => {
-    const r = evaluateExpansionRhythm(
-      ["success", "success", "timeout"],
-      O,
-    );
+    const r = evaluateExpansionRhythm(["success", "success", "timeout"], O);
     expect(r.blacklistMultiplier).toBe(0.5);
   });
 
@@ -65,7 +59,18 @@ describe("appendOutcome — 有界 ring", () => {
   it("超长自动截断保留最新 ringSize 条", () => {
     const outcomes: ExpansionOutcomeKind[] = [];
     let ring = outcomes;
-    for (const k of ["lost", "lost", "lost", "lost", "stolen", "stolen", "stolen", "stolen", "success", "success"] as ExpansionOutcomeKind[]) {
+    for (const k of [
+      "lost",
+      "lost",
+      "lost",
+      "lost",
+      "stolen",
+      "stolen",
+      "stolen",
+      "stolen",
+      "success",
+      "success",
+    ] as ExpansionOutcomeKind[]) {
       ring = appendOutcome(ring, k, O.ringSize);
     }
     expect(ring).toHaveLength(O.ringSize);

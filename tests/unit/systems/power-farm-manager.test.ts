@@ -26,12 +26,14 @@ function makeContext(tick: number): any {
 function seedIntel(tick: number): void {
   (globalThis as any).Memory.rooms[HOME] = { spawnQueue: [] };
   __resetIntelStateForTests();
-  globalCache().intelHandoff = [{
-    subject: TARGET,
-    home: HOME,
-    source: "observer",
-    payload: { kind: "highway", status: "normal", lastSeen: tick, powerBank: true } as never,
-  }];
+  globalCache().intelHandoff = [
+    {
+      subject: TARGET,
+      home: HOME,
+      source: "observer",
+      payload: { kind: "highway", status: "normal", lastSeen: tick, powerBank: true } as never,
+    },
+  ];
   intelligenceSystem.run({ tick, snapshots: () => [], budget: { canStart: () => true } } as never);
 }
 
@@ -88,13 +90,15 @@ describe("power-farm-manager — 任务生命周期（多任务并行）", () =>
   });
 
   it("编队提供视野 + PB 消失 → phase=collect + 回收编队 + 孵 collector", () => {
-    (globalThis as any).Memory.kernel.powerFarmMissions = [{
-      targetRoom: TARGET,
-      sponsor: HOME,
-      since: 1000,
-      spawned: 6,
-      phase: "strike",
-    }];
+    (globalThis as any).Memory.kernel.powerFarmMissions = [
+      {
+        targetRoom: TARGET,
+        sponsor: HOME,
+        since: 1000,
+        spawned: 6,
+        phase: "strike",
+      },
+    ];
     syncSquadIndex();
     (globalThis as any).Memory.rooms[HOME] = { spawnQueue: [] };
     (globalThis as any).Game.rooms[TARGET] = {
@@ -123,13 +127,15 @@ describe("power-farm-manager — 任务生命周期（多任务并行）", () =>
   });
 
   it("超时 → 收摊清任务", () => {
-    (globalThis as any).Memory.kernel.powerFarmMissions = [{
-      targetRoom: TARGET,
-      sponsor: HOME,
-      since: 1000,
-      spawned: 0,
-      phase: "strike",
-    }];
+    (globalThis as any).Memory.kernel.powerFarmMissions = [
+      {
+        targetRoom: TARGET,
+        sponsor: HOME,
+        since: 1000,
+        spawned: 0,
+        phase: "strike",
+      },
+    ];
     syncSquadIndex();
     (globalThis as any).Memory.rooms[HOME] = { spawnQueue: [] };
 
@@ -139,13 +145,15 @@ describe("power-farm-manager — 任务生命周期（多任务并行）", () =>
   });
 
   it("止损：spawned 超编队 × 倍数 → 收摊清任务", () => {
-    (globalThis as any).Memory.kernel.powerFarmMissions = [{
-      targetRoom: TARGET,
-      sponsor: HOME,
-      since: 1000,
-      spawned: 13,
-      phase: "strike",
-    }];
+    (globalThis as any).Memory.kernel.powerFarmMissions = [
+      {
+        targetRoom: TARGET,
+        sponsor: HOME,
+        since: 1000,
+        spawned: 13,
+        phase: "strike",
+      },
+    ];
     syncSquadIndex();
     (globalThis as any).Memory.rooms[HOME] = { spawnQueue: [] };
 

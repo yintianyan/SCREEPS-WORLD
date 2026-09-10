@@ -21,8 +21,11 @@ describe("RCL2 Development — 基础建设", () => {
       .container(21, 20, 800)
       .container(31, 20, 800)
       .extensions([
-        { x: 24, y: 24 }, { x: 26, y: 24 }, { x: 24, y: 26 },
-        { x: 26, y: 26 }, { x: 25, y: 24 },
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+        { x: 24, y: 26 },
+        { x: 26, y: 26 },
+        { x: 25, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(5000)
@@ -53,13 +56,21 @@ describe("RCL2 Development — 基础建设", () => {
       .source("s1", 20, 20)
       .container(21, 20, 1000, 200000) // 已损耗的 container
       .extensions([
-        { x: 24, y: 24 }, { x: 26, y: 24 }, { x: 24, y: 26 },
-        { x: 26, y: 26 }, { x: 25, y: 24 },
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+        { x: 24, y: 26 },
+        { x: 26, y: 26 },
+        { x: 25, y: 24 },
       ])
       // 给一个 harvester 在 source 旁边
-      .creep("h1", "harvester", 21, 21, [
-        { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } })
+      .creep(
+        "h1",
+        "harvester",
+        21,
+        21,
+        [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } },
+      )
       .sourceRegen(10)
       .containerDecay(5000)
       .cpu(10000)
@@ -90,8 +101,11 @@ describe("RCL2 Development — 基础建设", () => {
       .controllerAt(30, 30)
       .source("s1", 22, 22)
       .extensions([
-        { x: 24, y: 24 }, { x: 26, y: 24 }, { x: 24, y: 26 },
-        { x: 26, y: 26 }, { x: 25, y: 24 },
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+        { x: 24, y: 26 },
+        { x: 26, y: 26 },
+        { x: 25, y: 24 },
       ])
       .sourceRegen(10)
       .cpu(10000)
@@ -109,7 +123,7 @@ describe("RCL2 Development — 基础建设", () => {
 
     // 运行足够长时间让 spawn 产生 creep
     const result = runner.run(world, 500, {
-      stopWhen: (w) => w.creeps.length > 0,
+      stopWhen: w => w.creeps.length > 0,
     });
 
     if (world.creeps.length > 0) {
@@ -131,12 +145,20 @@ describe("RCL2 Development — 基础建设", () => {
       .container(23, 22, 1000)
       .container(31, 22, 1000)
       .extensions([
-        { x: 24, y: 24 }, { x: 26, y: 24 }, { x: 24, y: 26 },
-        { x: 26, y: 26 }, { x: 25, y: 24 },
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+        { x: 24, y: 26 },
+        { x: 26, y: 26 },
+        { x: 25, y: 24 },
       ])
-      .creep("h1", "harvester", 23, 23, [
-        { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } })
+      .creep(
+        "h1",
+        "harvester",
+        23,
+        23,
+        [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } },
+      )
       .sourceRegen(10)
       .cpu(10000)
       .build();
@@ -159,7 +181,8 @@ describe("RCL2 Development — 基础建设", () => {
         world.killCreep(c.name);
       }
     }
-    const minersAfterKill = world.creepsByRole("harvester").length + world.creepsByRole("worker").length;
+    const minersAfterKill =
+      world.creepsByRole("harvester").length + world.creepsByRole("worker").length;
     expect(minersAfterKill).toBe(0);
 
     // 确保 spawn 有足够能量进行 P0 紧急恢复（模拟 spawn 仍有储备）。
@@ -169,7 +192,7 @@ describe("RCL2 Development — 基础建设", () => {
 
     // 继续运行 500 tick — 应该补充 harvester
     const result = runner.run(world, 500, {
-      stopWhen: (w) => w.creepsByRole("harvester").length > 0 || w.creepsByRole("worker").length > 0,
+      stopWhen: w => w.creepsByRole("harvester").length > 0 || w.creepsByRole("worker").length > 0,
     });
 
     // 必须有替代 creep 出现

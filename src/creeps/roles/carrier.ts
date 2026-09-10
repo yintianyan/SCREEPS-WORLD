@@ -8,7 +8,7 @@ import { moveToTarget } from "../movement";
 function withdrawSourceStorage(): ActionCandidate<StructureStorage> {
   return {
     name: "carrier:withdraw-storage",
-    resolve: (ac) => {
+    resolve: ac => {
       // 仅在 home 房执行取能（ensureHome 保证 acquire mode 已导航回 home）。
       if (ac.creep.room.name !== ac.creep.memory.home) return undefined;
       const storage = ac.creep.room.storage;
@@ -33,7 +33,7 @@ function withdrawSourceStorage(): ActionCandidate<StructureStorage> {
 function transferTargetStorage(): ActionCandidate<StructureStorage> {
   return {
     name: "carrier:transfer-storage",
-    resolve: (ac) => {
+    resolve: ac => {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget) return undefined;
       // 仅在 target 房执行卸能（ensureHome 保证 work mode 已导航到 remoteTarget）。

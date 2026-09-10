@@ -7,9 +7,7 @@ export type DistanceField = Uint8Array;
 const INF = 200;
 
 /** 计算 Chamfer 3-4 Distance Transform；getTerrain 注入以便 Vitest 无 Screeps 全局运行。 */
-export function computeDistanceField(
-  getTerrain: (x: number, y: number) => boolean,
-): DistanceField {
+export function computeDistanceField(getTerrain: (x: number, y: number) => boolean): DistanceField {
   const field = new Uint8Array(2500);
 
   for (let x = 0; x < 50; x++) {
@@ -66,7 +64,12 @@ export function opennessAt(field: DistanceField, x: number, y: number): number {
 export function findOpenRegion(
   field: DistanceField,
   threshold: number,
-  bounds: { minX: number; maxX: number; minY: number; maxY: number } = { minX: 3, maxX: 46, minY: 3, maxY: 46 },
+  bounds: { minX: number; maxX: number; minY: number; maxY: number } = {
+    minX: 3,
+    maxX: 46,
+    minY: 3,
+    maxY: 46,
+  },
 ): { x: number; y: number; openness: number }[] {
   const results: { x: number; y: number; openness: number }[] = [];
   for (let x = bounds.minX; x <= bounds.maxX; x++) {
@@ -90,7 +93,10 @@ export function countBlockedCells(
     for (let dy = -radius; dy <= radius; dy++) {
       const x = cx + dx;
       const y = cy + dy;
-      if (x < 1 || x > 48 || y < 1 || y > 48) { blocked++; continue; }
+      if (x < 1 || x > 48 || y < 1 || y > 48) {
+        blocked++;
+        continue;
+      }
       if (getTerrain(x, y)) blocked++;
     }
   }

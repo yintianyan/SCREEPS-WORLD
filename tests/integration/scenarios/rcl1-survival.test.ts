@@ -28,7 +28,7 @@ describe("RCL1 Survival — 新手生存", () => {
     runner.setLoop(loop);
 
     const result = runner.run(world, 500, {
-      stopWhen: (w) => (w.controller?.level ?? 0) >= 2,
+      stopWhen: w => (w.controller?.level ?? 0) >= 2,
     });
 
     const assertions = new Assertions(world, result.records);
@@ -65,7 +65,7 @@ describe("RCL1 Survival — 新手生存", () => {
     runner.setLoop(loop);
 
     const result = runner.run(world, 300, {
-      stopWhen: (w) => w.creeps.length > 0,
+      stopWhen: w => w.creeps.length > 0,
     });
 
     // 必须在 300 tick 内产生第一个 creep
@@ -92,7 +92,7 @@ describe("RCL1 Survival — 新手生存", () => {
     runner.setLoop(loop);
 
     const result = runner.run(world, 1500, {
-      stopWhen: (w) => w._stats.totalUpgraded > 0 || (w.controller?.level ?? 0) >= 2,
+      stopWhen: w => w._stats.totalUpgraded > 0 || (w.controller?.level ?? 0) >= 2,
     });
 
     // 1500 tick 内应该有升级进度（worker 自身也会 upgrade，或专门 upgrader 出现）
@@ -115,7 +115,7 @@ describe("RCL1 Survival — 新手生存", () => {
     runner.setLoop(loop);
 
     const result = runner.run(world, 2000, {
-      stopWhen: (w) => (w.controller?.level ?? 0) >= 2,
+      stopWhen: w => (w.controller?.level ?? 0) >= 2,
     });
 
     const assertions = new Assertions(world, result.records);
@@ -143,7 +143,7 @@ describe("RCL1 Survival — 新手生存", () => {
     runner.setLoop(loop);
 
     const result = runner.run(world, 1000, {
-      stopWhen: (w) => (w.controller?.level ?? 0) >= 2,
+      stopWhen: w => (w.controller?.level ?? 0) >= 2,
     });
 
     // 两个 source 都应该被采集过（能量低于满值）

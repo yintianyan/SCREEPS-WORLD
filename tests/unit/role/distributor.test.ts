@@ -20,7 +20,13 @@ describe("distributor — acquire 模式", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -32,7 +38,13 @@ describe("distributor — acquire 模式", () => {
   it("需求门禁：无 fillTarget 时不从 storage 取能（防 storage→storage 循环）", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
     const snap = mockSnapshot({ storage, fillTargets: [] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -46,7 +58,13 @@ describe("distributor — acquire 模式", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 0, capacity: 100000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -58,7 +76,13 @@ describe("distributor — acquire 模式", () => {
   it("无 storage 时降级为 hauler", () => {
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage: undefined, fillTargets: [spawn] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -72,7 +96,13 @@ describe("distributor — acquire 模式", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 30, capacity: 100000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 100, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 100,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -87,7 +117,13 @@ describe("distributor — work 模式", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -98,7 +134,13 @@ describe("distributor — work 模式", () => {
   it("fillTargets 全满时 idle（不回退到 fillStorage）", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
     const snap = mockSnapshot({ fillTargets: [], storage });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -113,7 +155,13 @@ describe("distributor — work 模式", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 100000 });
     // fillTargets 为空，distributor 携带能量但无下游 — 不能存回 storage。
     const snap = mockSnapshot({ fillTargets: [], storage });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -121,7 +169,7 @@ describe("distributor — work 模式", () => {
     // 核心架构约束：distributor 的 work 链没有 fillStorage。
     // 如果加了 fillStorage，就会重新引入 storage→storage 循环。
     const storageTransfers = creep.transfer.mock.calls.filter(
-      (call: any[]) => call[0]?.id === "storage_1"
+      (call: any[]) => call[0]?.id === "storage_1",
     );
     expect(storageTransfers.length).toBe(0);
   });
@@ -135,8 +183,20 @@ describe("distributor — reservation 去重", () => {
     const ext = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn, ext] });
 
-    const dist1 = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
-    const dist2 = mockCreep({ name: "dist_2", role: "distributor", used: 80, capacity: 100, mode: "work" });
+    const dist1 = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
+    const dist2 = mockCreep({
+      name: "dist_2",
+      role: "distributor",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(dist1, ctx);
@@ -159,11 +219,21 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
   const TIERS = CONFIG.economy.distributorTiers;
 
   it("tier 0（库存 ≥ full）：满载取能，所有 fillTarget 可服务", () => {
-    const storage = mockStructure("storage", { id: "storage_1", energy: TIERS.full + 10000, capacity: 1000000 });
+    const storage = mockStructure("storage", {
+      id: "storage_1",
+      energy: TIERS.full + 10000,
+      capacity: 1000000,
+    });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn, tower] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 200, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 200,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -174,10 +244,20 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
   });
 
   it("tier 0：work 阶段可填充 tower", () => {
-    const storage = mockStructure("storage", { id: "storage_1", energy: TIERS.full, capacity: 1000000 });
+    const storage = mockStructure("storage", {
+      id: "storage_1",
+      energy: TIERS.full,
+      capacity: 1000000,
+    });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const snap = mockSnapshot({ storage, fillTargets: [tower] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -190,7 +270,13 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 30000, capacity: 1000000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 200, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 200,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -204,7 +290,13 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 30000, capacity: 1000000 });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 }); // 100 < 地板 500
     const snap = mockSnapshot({ storage, fillTargets: [tower] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 200, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 200,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -218,7 +310,13 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 30000, capacity: 1000000 });
     const tower = mockStructure("tower", { id: "tw1", energy: 600, capacity: 1000 }); // 600 ≥ 地板 500
     const snap = mockSnapshot({ storage, fillTargets: [tower] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 200, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 200,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -227,11 +325,21 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
   });
 
   it("tier 1：work 阶段跳过 tower，填充 spawn", () => {
-    const storage = mockStructure("storage", { id: "storage_1", energy: TIERS.sustained, capacity: 1000000 });
+    const storage = mockStructure("storage", {
+      id: "storage_1",
+      energy: TIERS.sustained,
+      capacity: 1000000,
+    });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [tower, spawn] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -244,7 +352,13 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 5000, capacity: 1000000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 500, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 500,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -255,11 +369,21 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
   });
 
   it("tier 2：work 填充 extension（不再被锁死在仅 spawn 模式）", () => {
-    const storage = mockStructure("storage", { id: "storage_1", energy: TIERS.low, capacity: 1000000 });
+    const storage = mockStructure("storage", {
+      id: "storage_1",
+      energy: TIERS.low,
+      capacity: 1000000,
+    });
     const extension = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const snap = mockSnapshot({ storage, fillTargets: [tower, extension] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -269,10 +393,20 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
   });
 
   it("tier 3（库存 < low）：限取 200/tick", () => {
-    const storage = mockStructure("storage", { id: "storage_1", energy: TIERS.low - 500, capacity: 1000000 });
+    const storage = mockStructure("storage", {
+      id: "storage_1",
+      energy: TIERS.low - 500,
+      capacity: 1000000,
+    });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [spawn] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 500, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 500,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -288,7 +422,13 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
     const storage = mockStructure("storage", { id: "storage_1", energy: 1600, capacity: 1000000 });
     const extension = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
     const snap = mockSnapshot({ storage, fillTargets: [extension] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 0, capacity: 500, mode: "acquire" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 0,
+      capacity: 500,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -303,7 +443,13 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
     const extension = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const snap = mockSnapshot({ storage, fillTargets: [tower, extension] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);
@@ -318,7 +464,13 @@ describe("distributor — 水位分级调度（绝对能量阈值）", () => {
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ storage, fillTargets: [tower, spawn] });
-    const creep = mockCreep({ name: "dist_1", role: "distributor", used: 80, capacity: 100, mode: "work" });
+    const creep = mockCreep({
+      name: "dist_1",
+      role: "distributor",
+      used: 80,
+      capacity: 100,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     distributorRole.run(creep, ctx);

@@ -117,7 +117,13 @@ describe("Corridor — planCorridorRoads", () => {
       { x: 21, y: 21 },
       { x: 22, y: 22 },
     ];
-    const roads = planCorridorRoads(fakeRoom, corridorSnapshot(), 1000, DEFAULT_CORRIDOR_OPTIONS, pathFn);
+    const roads = planCorridorRoads(
+      fakeRoom,
+      corridorSnapshot(),
+      1000,
+      DEFAULT_CORRIDOR_OPTIONS,
+      pathFn,
+    );
     expect(roads).toEqual([
       { x: 20, y: 20, roomName: "W1N1" },
       { x: 21, y: 21, roomName: "W1N1" },
@@ -147,9 +153,21 @@ describe("Corridor — planCorridorRoads", () => {
     // controller container 走廊优先（collectCorridorEndpoints 排序）。
     const pathFn: PathFn = from =>
       from.x === 38
-        ? [{ x: 20, y: 20 }, { x: 30, y: 30 }]  // controller container 走廊
-        : [{ x: 20, y: 20 }, { x: 15, y: 15 }]; // source container 走廊
-    const roads = planCorridorRoads(fakeRoom, corridorSnapshot(), 1000, DEFAULT_CORRIDOR_OPTIONS, pathFn);
+        ? [
+            { x: 20, y: 20 },
+            { x: 30, y: 30 },
+          ] // controller container 走廊
+        : [
+            { x: 20, y: 20 },
+            { x: 15, y: 15 },
+          ]; // source container 走廊
+    const roads = planCorridorRoads(
+      fakeRoom,
+      corridorSnapshot(),
+      1000,
+      DEFAULT_CORRIDOR_OPTIONS,
+      pathFn,
+    );
     const keys = roads.map(r => `${r.x},${r.y}`);
     // 只包含第一条走廊的路径，不包含第二条走廊的 15,15。
     expect(keys).toContain("20,20");
@@ -164,7 +182,13 @@ describe("Corridor — planCorridorRoads", () => {
       { x: 3, y: 3 },
       { x: 4, y: 4 },
     ];
-    const roads = planCorridorRoads(fakeRoom, corridorSnapshot(), 1000, { maxRoadsPerCycle: 2 }, pathFn);
+    const roads = planCorridorRoads(
+      fakeRoom,
+      corridorSnapshot(),
+      1000,
+      { maxRoadsPerCycle: 2 },
+      pathFn,
+    );
     expect(roads).toHaveLength(2);
   });
 
@@ -174,13 +198,25 @@ describe("Corridor — planCorridorRoads", () => {
       { x: 49, y: 49 }, // 越界
       { x: 20, y: 20 },
     ];
-    const roads = planCorridorRoads(fakeRoom, corridorSnapshot(), 1000, DEFAULT_CORRIDOR_OPTIONS, pathFn);
+    const roads = planCorridorRoads(
+      fakeRoom,
+      corridorSnapshot(),
+      1000,
+      DEFAULT_CORRIDOR_OPTIONS,
+      pathFn,
+    );
     expect(roads).toEqual([{ x: 20, y: 20, roomName: "W1N1" }]);
   });
 
   it("returns empty when there are no corridor endpoints", () => {
     const pathFn: PathFn = () => [{ x: 20, y: 20 }];
-    const roads = planCorridorRoads(fakeRoom, mockSnapshot({ spawns: [] }), 1000, DEFAULT_CORRIDOR_OPTIONS, pathFn);
+    const roads = planCorridorRoads(
+      fakeRoom,
+      mockSnapshot({ spawns: [] }),
+      1000,
+      DEFAULT_CORRIDOR_OPTIONS,
+      pathFn,
+    );
     expect(roads).toEqual([]);
   });
 });

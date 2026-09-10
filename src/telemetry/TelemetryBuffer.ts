@@ -74,7 +74,12 @@ export function shouldFlush(): boolean {
 }
 
 /** 记录 flush 完成（更新计数器）。 */
-export function markFlushed(cpuCost: number, metricCount: number, eventCount: number, decisionCount: number): void {
+export function markFlushed(
+  cpuCost: number,
+  metricCount: number,
+  eventCount: number,
+  decisionCount: number,
+): void {
   const buf = buffer();
   buf.lastFlushTick = Game.time;
   buf.flushCount++;

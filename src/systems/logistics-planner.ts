@@ -1,10 +1,7 @@
 /** Logistics Planner — 帝国物流规划逻辑（由 logistics 系统内部门控调用） */
 import type { TickContext, RoomSnapshot } from "../kernel/contracts";
 import { globalCache, type CreepRef } from "../kernel/global-cache";
-import {
-  planLogistics,
-  type PlannerInput,
-} from "../domain/logistics/planner";
+import { planLogistics, type PlannerInput } from "../domain/logistics/planner";
 import type { TransportPlan } from "../domain/logistics/transport-plan";
 import { createEmptyPlan } from "../domain/logistics/transport-plan";
 import {
@@ -32,10 +29,7 @@ import {
 } from "../domain/logistics/transport-accounting";
 import { detectBottleneck } from "../domain/logistics/bottleneck";
 import { detectStarvation } from "../domain/logistics/starvation";
-import {
-  detectIdleHaulers,
-  type HaulerIdleSummary,
-} from "../domain/logistics/idle-detection";
+import { detectIdleHaulers, type HaulerIdleSummary } from "../domain/logistics/idle-detection";
 import { log } from "../kernel/log";
 
 /** 获取本 tick 的共享快照总线。未初始化时回退到全量遍历。 */
@@ -59,13 +53,19 @@ function getCreepRefs(): CreepRef[] {
     lastActionTick: (c.memory as { lastActionTick?: number }).lastActionTick,
     sourceId: c.memory.sourceId,
     spawnIndex: c.memory.spawnIndex,
-    assignment: c.memory.assignment ? {
-      id: (c.memory.assignment as { id: string }).id,
-      kind: (c.memory.assignment as { kind: string }).kind,
-      sourceId: c.memory.assignment.sourceId ? (c.memory.assignment.sourceId as string) : undefined,
-      targetId: c.memory.assignment.targetId ? (c.memory.assignment.targetId as string) : undefined,
-      leaseUntil: (c.memory.assignment as { leaseUntil?: number }).leaseUntil,
-    } : undefined,
+    assignment: c.memory.assignment
+      ? {
+          id: (c.memory.assignment as { id: string }).id,
+          kind: (c.memory.assignment as { kind: string }).kind,
+          sourceId: c.memory.assignment.sourceId
+            ? (c.memory.assignment.sourceId as string)
+            : undefined,
+          targetId: c.memory.assignment.targetId
+            ? (c.memory.assignment.targetId as string)
+            : undefined,
+          leaseUntil: (c.memory.assignment as { leaseUntil?: number }).leaseUntil,
+        }
+      : undefined,
   }));
 }
 
@@ -98,188 +98,191 @@ const accountingByRequestId = new Map<string, TransportAccounting>();
  * 调度节律与独立系统时期逐 tick 一致。
  */
 export function runLogisticsPlanning(ctx: TickContext): void {
-    // ── 1. 收集运行时数据 ──
-    const snapshots = [...ctx.snapshots()];
+  // ── 1. 收集运行时数据 ──
+  const snapshots = [...ctx.snapshots()];
 
-    // 1a. 收集 Supply Contracts（从 Memory.kernel.supplyContracts 读取）
-    const contracts = collectContracts();
+  // 1a. 收集 Supply Contracts（从 Memory.kernel.supplyContracts 读取）
+  const contracts = collectContracts();
 
-    // 1b. 收集 Supply/Demand Nodes（复用 agenda-manager 已写入 globalCache 的 networkSnapshot）
-    const networkSnapshot = globalCache().networkSnapshot;
-    const surpluses: SupplyNode[] = networkSnapshot?.supplyNodes ?? [];
-    const deficits: DemandNode[] = networkSnapshot?.demandNodes ?? [];
+  // 1b. 收集 Supply/Demand Nodes（复用 agenda-manager 已写入 globalCache 的 networkSnapshot）
+  const networkSnapshot = globalCache().networkSnapshot;
+  const surpluses: SupplyNode[] = networkSnapshot?.supplyNodes ?? [];
+  const deficits: DemandNode[] = networkSnapshot?.demandNodes ?? [];
 
-    // 1b-A5.3. 战争物流需求注入：从 globalCache.warLogisticsDemand 提取
-    //   WarPlan 产出的 energy/boost/transport/replacement 需求，
-    //   适配为 DemandNode 注入物流规划，使战争物资进入物流网络。
-    const warLogi = globalCache().warLogisticsDemand;
-    if (warLogi && warLogi.tick >= ctx.tick - 100) {
-      // 能量需求（孵化 + 运输）— 战争物资优先级 high
-      if (warLogi.energy > 0) {
-        deficits.push({
-          room: warLogi.sponsor,
-          resource: "energy" as const,
-          requested: warLogi.energy,
-          priority: 1 as OperationPriority,
-          deadline: ctx.tick + 2000,
-          criticality: "high" as const,
-          fulfilled: 0,
-          remaining: warLogi.energy,
-          firstSeen: warLogi.tick,
-          timestamp: warLogi.tick,
-        });
-      }
-    }
-
-    // 1b-A5.4.1. 战术补给需求注入：从 globalCache.tacticalSupplyDemands 提取
-    //   Tactical Runtime 产出的 energy 补给需求，
-    //   适配为 DemandNode 注入物流规划，使战术物资进入物流网络。
-    const tacG = globalCache() as ReturnType<typeof globalCache> & {
-      tacticalSupplyDemands?: Array<{
-        squadId: string;
-        operationId: string;
-        resource: string;
-        amount: number;
-        targetRoom: string;
-        priority: 0 | 1 | 2 | 3;
-        tick: number;
-        reason: string;
-      }>;
-    };
-    const tacSupplies = tacG.tacticalSupplyDemands;
-    if (tacSupplies && tacSupplies.length > 0) {
-      for (const td of tacSupplies) {
-        if (td.amount <= 0) continue;
-        deficits.push({
-          room: td.targetRoom,
-          resource: td.resource as "energy",
-          requested: td.amount,
-          priority: td.priority as OperationPriority,
-          deadline: ctx.tick + 2000,
-          criticality: "high" as const,
-          fulfilled: 0,
-          remaining: td.amount,
-          firstSeen: td.tick,
-          timestamp: td.tick,
-        });
-      }
-    }
-
-    // 1c. 收集运力规划输入
-    const capacityInputs = collectCapacityInputs(snapshots, ctx.tick);
-
-    // 1d. 执行运力规划
-    const capacity = planEmpireCapacity(capacityInputs);
-    lastCapacityResult = capacity;
-
-    // 1e. 更新路由缓存
-    refreshRouteCache(snapshots, ctx.tick);
-
-    // 1f. 收集威胁评估
-    const threats = collectThreats(snapshots);
-
-    // ── 2. 调用纯函数：planLogistics ──
-    const plannerInput: PlannerInput = {
-      contracts,
-      deficits,
-      surpluses,
-      capacity,
-      routeCache,
-      threats,
-      tick: ctx.tick,
-    };
-
-    const plan = planLogistics(plannerInput);
-
-    // ── 3. 收集 Accounting ──
-    // A4.4 修复 BYPASS-010：跨 tick Accounting 追踪。
-    // 旧问题：collectAccounting 只从 Plan requests 创建初始 Accounting（delivered/lost=0），
-    //   无跨 tick 累积 → Logistics Health 基于空数据 → deliveryRate/lossRate 不可信。
-    // 修复：
-    //   1. 为 Plan 中的新 requests 创建初始 Accounting
-    //   2. 从 Memory 中的 Operation 状态同步 delivered/lost
-    //   3. 写入 globalCache 供其他系统消费
-    const accounting = collectAccountingWithTracking(plan, ctx.tick);
-    const accountingSummary = summarizeAccounting(accounting);
-
-    // ── 4. 计算 Logistics Health ──
-    // A4.4 修复 BYPASS-011：Health 基于真实 Accounting 数据，不再全为 0。
-    const avgLatency = computeAvgLatency();
-    const health = computeLogisticsHealth(accounting, plan.requests, avgLatency, ctx.tick);
-
-    // ── 5. 检测瓶颈 ──
-    const bottlenecks = capacity.rooms.map(r => {
-      const input = capacityInputs.find(c => c.room === r.room);
-      return detectBottleneck(
-        input?.productionRate ?? 0,   // productionRate
-        r.actualCapacity,              // logisticsCapacity
-        0,                              // storageCapacity（由系统侧填充）
-        input?.consumptionRate ?? 0,   // consumptionRate
-        r.room,                         // room
-      );
-    });
-
-    // ── 6. 检测饥饿 ──
-    const empireTotalSupply = surpluses.reduce((s, n) => s + n.transferable, 0);
-    const empireTotalDemand = deficits.reduce((s, n) => s + n.remaining, 0);
-    const starvationResults = snapshots.map(s =>
-      detectStarvation(
-        s.roomName,
-        0, // deficitDuration — 需跨 tick 追踪（Phase 8 测试验证）
-        empireTotalSupply,
-        empireTotalDemand,
-      ),
-    );
-
-    // ── 7. 检测闲置 hauler ──
-    const haulerSummaries = collectHaulerSummaries();
-    const idleThreshold = 200;
-    const idleHaulerNames = detectIdleHaulers(haulerSummaries, ctx.tick, idleThreshold);
-
-    // 更新闲置 tick 计数
-    for (const [roomName, ticks] of idleTicksByRoom) {
-      // 如果该房没有闲置 hauler，递减计数
-      const roomHasIdle = idleHaulerNames.some(name => {
-        const creep = Game.creeps[name];
-        return creep?.memory?.home === roomName;
+  // 1b-A5.3. 战争物流需求注入：从 globalCache.warLogisticsDemand 提取
+  //   WarPlan 产出的 energy/boost/transport/replacement 需求，
+  //   适配为 DemandNode 注入物流规划，使战争物资进入物流网络。
+  const warLogi = globalCache().warLogisticsDemand;
+  if (warLogi && warLogi.tick >= ctx.tick - 100) {
+    // 能量需求（孵化 + 运输）— 战争物资优先级 high
+    if (warLogi.energy > 0) {
+      deficits.push({
+        room: warLogi.sponsor,
+        resource: "energy" as const,
+        requested: warLogi.energy,
+        priority: 1 as OperationPriority,
+        deadline: ctx.tick + 2000,
+        criticality: "high" as const,
+        fulfilled: 0,
+        remaining: warLogi.energy,
+        firstSeen: warLogi.tick,
+        timestamp: warLogi.tick,
       });
-      if (!roomHasIdle) {
-        idleTicksByRoom.set(roomName, Math.max(0, ticks - 1));
-      }
     }
-    // 对有闲置 hauler 的房间递增
-    for (const name of idleHaulerNames) {
+  }
+
+  // 1b-A5.4.1. 战术补给需求注入：从 globalCache.tacticalSupplyDemands 提取
+  //   Tactical Runtime 产出的 energy 补给需求，
+  //   适配为 DemandNode 注入物流规划，使战术物资进入物流网络。
+  const tacG = globalCache() as ReturnType<typeof globalCache> & {
+    tacticalSupplyDemands?: Array<{
+      squadId: string;
+      operationId: string;
+      resource: string;
+      amount: number;
+      targetRoom: string;
+      priority: 0 | 1 | 2 | 3;
+      tick: number;
+      reason: string;
+    }>;
+  };
+  const tacSupplies = tacG.tacticalSupplyDemands;
+  if (tacSupplies && tacSupplies.length > 0) {
+    for (const td of tacSupplies) {
+      if (td.amount <= 0) continue;
+      deficits.push({
+        room: td.targetRoom,
+        resource: td.resource as "energy",
+        requested: td.amount,
+        priority: td.priority as OperationPriority,
+        deadline: ctx.tick + 2000,
+        criticality: "high" as const,
+        fulfilled: 0,
+        remaining: td.amount,
+        firstSeen: td.tick,
+        timestamp: td.tick,
+      });
+    }
+  }
+
+  // 1c. 收集运力规划输入
+  const capacityInputs = collectCapacityInputs(snapshots, ctx.tick);
+
+  // 1d. 执行运力规划
+  const capacity = planEmpireCapacity(capacityInputs);
+  lastCapacityResult = capacity;
+
+  // 1e. 更新路由缓存
+  refreshRouteCache(snapshots, ctx.tick);
+
+  // 1f. 收集威胁评估
+  const threats = collectThreats(snapshots);
+
+  // ── 2. 调用纯函数：planLogistics ──
+  const plannerInput: PlannerInput = {
+    contracts,
+    deficits,
+    surpluses,
+    capacity,
+    routeCache,
+    threats,
+    tick: ctx.tick,
+  };
+
+  const plan = planLogistics(plannerInput);
+
+  // ── 3. 收集 Accounting ──
+  // A4.4 修复 BYPASS-010：跨 tick Accounting 追踪。
+  // 旧问题：collectAccounting 只从 Plan requests 创建初始 Accounting（delivered/lost=0），
+  //   无跨 tick 累积 → Logistics Health 基于空数据 → deliveryRate/lossRate 不可信。
+  // 修复：
+  //   1. 为 Plan 中的新 requests 创建初始 Accounting
+  //   2. 从 Memory 中的 Operation 状态同步 delivered/lost
+  //   3. 写入 globalCache 供其他系统消费
+  const accounting = collectAccountingWithTracking(plan, ctx.tick);
+  const accountingSummary = summarizeAccounting(accounting);
+
+  // ── 4. 计算 Logistics Health ──
+  // A4.4 修复 BYPASS-011：Health 基于真实 Accounting 数据，不再全为 0。
+  const avgLatency = computeAvgLatency();
+  const health = computeLogisticsHealth(accounting, plan.requests, avgLatency, ctx.tick);
+
+  // ── 5. 检测瓶颈 ──
+  const bottlenecks = capacity.rooms.map(r => {
+    const input = capacityInputs.find(c => c.room === r.room);
+    return detectBottleneck(
+      input?.productionRate ?? 0, // productionRate
+      r.actualCapacity, // logisticsCapacity
+      0, // storageCapacity（由系统侧填充）
+      input?.consumptionRate ?? 0, // consumptionRate
+      r.room, // room
+    );
+  });
+
+  // ── 6. 检测饥饿 ──
+  const empireTotalSupply = surpluses.reduce((s, n) => s + n.transferable, 0);
+  const empireTotalDemand = deficits.reduce((s, n) => s + n.remaining, 0);
+  const starvationResults = snapshots.map(s =>
+    detectStarvation(
+      s.roomName,
+      0, // deficitDuration — 需跨 tick 追踪（Phase 8 测试验证）
+      empireTotalSupply,
+      empireTotalDemand,
+    ),
+  );
+
+  // ── 7. 检测闲置 hauler ──
+  const haulerSummaries = collectHaulerSummaries();
+  const idleThreshold = 200;
+  const idleHaulerNames = detectIdleHaulers(haulerSummaries, ctx.tick, idleThreshold);
+
+  // 更新闲置 tick 计数
+  for (const [roomName, ticks] of idleTicksByRoom) {
+    // 如果该房没有闲置 hauler，递减计数
+    const roomHasIdle = idleHaulerNames.some(name => {
       const creep = Game.creeps[name];
-      const home = creep?.memory?.home ?? creep?.room?.name;
-      if (home) {
-        idleTicksByRoom.set(home, (idleTicksByRoom.get(home) ?? 0) + 1);
-      }
+      return creep?.memory?.home === roomName;
+    });
+    if (!roomHasIdle) {
+      idleTicksByRoom.set(roomName, Math.max(0, ticks - 1));
     }
+  }
+  // 对有闲置 hauler 的房间递增
+  for (const name of idleHaulerNames) {
+    const creep = Game.creeps[name];
+    const home = creep?.memory?.home ?? creep?.room?.name;
+    if (home) {
+      idleTicksByRoom.set(home, (idleTicksByRoom.get(home) ?? 0) + 1);
+    }
+  }
 
-    // ── 8. 扩缩编决策 ──
-    // 【WO-DEAD 已删除】logisticsScaling — 只写不读的观测字段，构建代码已清理。
+  // ── 8. 扩缩编决策 ──
+  // 【WO-DEAD 已删除】logisticsScaling — 只写不读的观测字段，构建代码已清理。
 
-    // ── 9. 构建 Dashboard ──
-    // 【WO-DEAD 已删除】logisticsDashboard — 只写不读的仪表盘字段，构建代码已清理。
+  // ── 9. 构建 Dashboard ──
+  // 【WO-DEAD 已删除】logisticsDashboard — 只写不读的仪表盘字段，构建代码已清理。
 
-    // ── 10. 写入 globalCache 供下游消费 ──
-    const g = globalCache();
-    g.logisticsPlan = { tick: ctx.tick, plan };
-    g.logisticsHealth = health;
-    g.logisticsCapacity = { tick: ctx.tick, result: capacity };
-    g.logisticsIdleHaulers = { tick: ctx.tick, names: idleHaulerNames };
-    // A4.4 修复 BYPASS-010：暴露 Accounting 到 globalCache 供 Observability 消费。
-    g.logisticsAccounting = { tick: ctx.tick, summary: accountingSummary, entries: accounting };
+  // ── 10. 写入 globalCache 供下游消费 ──
+  const g = globalCache();
+  g.logisticsPlan = { tick: ctx.tick, plan };
+  g.logisticsHealth = health;
+  g.logisticsCapacity = { tick: ctx.tick, result: capacity };
+  g.logisticsIdleHaulers = { tick: ctx.tick, names: idleHaulerNames };
+  // A4.4 修复 BYPASS-010：暴露 Accounting 到 globalCache 供 Observability 消费。
+  g.logisticsAccounting = { tick: ctx.tick, summary: accountingSummary, entries: accounting };
 
-    // ── 11. 控制台输出（观测用，低频不会刷屏） ──
-    if (plan.requests.length > 0 || health.level !== "healthy") {
-      log.info("logistics-planner", `logistics-planner: ${plan.reason}, ` +
+  // ── 11. 控制台输出（观测用，低频不会刷屏） ──
+  if (plan.requests.length > 0 || health.level !== "healthy") {
+    log.info(
+      "logistics-planner",
+      `logistics-planner: ${plan.reason}, ` +
         `health=${health.level}(${health.score.toFixed(2)}), ` +
         `delivery=${(health.deliveryRate * 100).toFixed(0)}%, ` +
         `backlog=${health.backlogCount}, ` +
         `capacity_gap=H${capacity.totalHaulerGap}/C${capacity.totalCarrierGap}, ` +
-        `accounting=req=${accountingSummary.totalRequested}/del=${accountingSummary.totalDelivered}/lost=${accountingSummary.totalLost}`,);
-    }
+        `accounting=req=${accountingSummary.totalRequested}/del=${accountingSummary.totalDelivered}/lost=${accountingSummary.totalLost}`,
+    );
+  }
 }
 
 // ─── 数据收集辅助函数 ─────────────────────────────────────
@@ -303,7 +306,10 @@ function collectContracts(): SupplyContract[] {
  *   - haulerCapacity（从 body 计算）
  *   - currentHaulerCount / currentCarrierCount（从 Game.creeps 计数）
  */
-function collectCapacityInputs(snapshots: readonly RoomSnapshot[], tick: number): RoomCapacityInput[] {
+function collectCapacityInputs(
+  snapshots: readonly RoomSnapshot[],
+  tick: number,
+): RoomCapacityInput[] {
   const result: RoomCapacityInput[] = [];
 
   // 全房 creep 按 home 分桶 — 消费共享快照总线。
@@ -316,11 +322,17 @@ function collectCapacityInputs(snapshots: readonly RoomSnapshot[], tick: number)
     const role = ref.role;
     if (role === "hauler") {
       let arr = haulersByRoom.get(home);
-      if (!arr) { arr = []; haulersByRoom.set(home, arr); }
+      if (!arr) {
+        arr = [];
+        haulersByRoom.set(home, arr);
+      }
       arr.push(ref);
     } else if (role === "carrier") {
       let arr = carriersByRoom.get(home);
-      if (!arr) { arr = []; carriersByRoom.set(home, arr); }
+      if (!arr) {
+        arr = [];
+        carriersByRoom.set(home, arr);
+      }
       arr.push(ref);
     }
   }
@@ -332,7 +344,8 @@ function collectCapacityInputs(snapshots: readonly RoomSnapshot[], tick: number)
     // 消费率近似：fillTargets 缺口总量 / 100（粗略估算）
     let consumptionRate = 0;
     for (const ft of snap.fillTargets) {
-      const deficit = ft.store.getCapacity(RESOURCE_ENERGY) - ft.store.getUsedCapacity(RESOURCE_ENERGY);
+      const deficit =
+        ft.store.getCapacity(RESOURCE_ENERGY) - ft.store.getUsedCapacity(RESOURCE_ENERGY);
       consumptionRate += deficit / 100;
     }
 
@@ -344,9 +357,10 @@ function collectCapacityInputs(snapshots: readonly RoomSnapshot[], tick: number)
 
     // hauler 运力：从 body 计算
     const haulers = haulersByRoom.get(snap.roomName) ?? [];
-    const haulerCapacity = haulers.length > 0
-      ? haulers[0]!.body.filter(p => p.type === CARRY).length * CARRY_CAPACITY
-      : 100; // 默认 2 CARRY body
+    const haulerCapacity =
+      haulers.length > 0
+        ? haulers[0]!.body.filter(p => p.type === CARRY).length * CARRY_CAPACITY
+        : 100; // 默认 2 CARRY body
 
     result.push({
       room: snap.roomName,
@@ -519,7 +533,12 @@ function findMatchingRequests(sourceRoom: string, targetRoom: string, resource: 
   for (const [reqId] of accountingByRequestId) {
     // requestId 格式: tr:${scope}:${source}:${target}:${resource}:${seq}
     const parts = reqId.split(":");
-    if (parts.length >= 5 && parts[2] === sourceRoom && parts[3] === targetRoom && parts[4] === resource) {
+    if (
+      parts.length >= 5 &&
+      parts[2] === sourceRoom &&
+      parts[3] === targetRoom &&
+      parts[4] === resource
+    ) {
       result.push(reqId);
     }
   }
@@ -632,5 +651,3 @@ export function getLogisticsPlan(): TransportPlan | undefined {
   if (!cached) return undefined;
   return cached.plan;
 }
-
-

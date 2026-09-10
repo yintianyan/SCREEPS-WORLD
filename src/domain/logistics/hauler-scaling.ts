@@ -53,11 +53,7 @@ export function decideHaulerScaling(
   }
 
   // 缩编条件：利用率低且持续闲置
-  if (
-    capacity.utilization < SHRINK_UTILIZATION_THRESHOLD &&
-    idleTicks > 100 &&
-    capacity.requiredHaulers < capacity.requiredHaulers // 不会真缩到低于需求
-  ) {
+  if (capacity.utilization < SHRINK_UTILIZATION_THRESHOLD && idleTicks > 100) {
     // 只有当 currentHaulerCount > requiredHaulers 时才缩
     const currentHaulers = capacity.requiredHaulers + Math.max(0, -capacity.haulerGap);
     if (currentHaulers > capacity.requiredHaulers) {

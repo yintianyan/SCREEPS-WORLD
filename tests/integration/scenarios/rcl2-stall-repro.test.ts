@@ -173,7 +173,7 @@ describe("Phase R2 — RCL2 stall repro（可判定）", () => {
     const samples: Sample[] = [];
     const result = runner.run(world, 1500, {
       recordInterval: 50,
-      onTick: (w) => {
+      onTick: w => {
         if (w.tick % 50 === 0) samples.push(sampleWorld(w));
       },
     });
@@ -202,7 +202,7 @@ describe("Phase R2 — RCL2 stall repro（可判定）", () => {
     const samples: Sample[] = [];
     runner.run(world, 1500, {
       recordInterval: 50,
-      onTick: (w) => {
+      onTick: w => {
         if (w.tick % 50 === 0) samples.push(sampleWorld(w));
       },
     });

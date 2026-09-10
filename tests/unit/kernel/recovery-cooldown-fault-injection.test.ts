@@ -58,7 +58,13 @@ describe("P3-1 故障注入：recoveryEligible 与 safeRun cooldown", () => {
       failTimes("system/construction-manager", 3, true);
       let ran = false;
       g().Game.time += 1;
-      safeRun("system/construction-manager", () => { ran = true; }, true);
+      safeRun(
+        "system/construction-manager",
+        () => {
+          ran = true;
+        },
+        true,
+      );
       expect(ran).toBe(true);
     });
 
@@ -75,14 +81,18 @@ describe("P3-1 故障注入：recoveryEligible 与 safeRun cooldown", () => {
   describe("recoveryEligible=false（critical=false）普通系统连续失败", () => {
     it("连续 3 次失败进入普通 cooldown", () => {
       failTimes("system/remote-mining-manager", 3, false);
-      expect(g().pluginCooldowns?.get("system/remote-mining-manager")).toBeGreaterThan(g().Game.time);
+      expect(g().pluginCooldowns?.get("system/remote-mining-manager")).toBeGreaterThan(
+        g().Game.time,
+      );
     });
 
     it("cooldown 期间不执行", () => {
       failTimes("system/remote-mining-manager", 3, false);
       let ran = false;
       g().Game.time += 1;
-      safeRun("system/remote-mining-manager", () => { ran = true; });
+      safeRun("system/remote-mining-manager", () => {
+        ran = true;
+      });
       expect(ran).toBe(false);
       expect(g().skipBuffer["system/remote-mining-manager/cooldown"]).toBe(1);
     });
@@ -93,7 +103,9 @@ describe("P3-1 故障注入：recoveryEligible 与 safeRun cooldown", () => {
       // 快进到冷却期满
       g().Game.time = cooldownUntil + 1;
       let ran = false;
-      safeRun("system/remote-mining-manager", () => { ran = true; });
+      safeRun("system/remote-mining-manager", () => {
+        ran = true;
+      });
       expect(ran).toBe(true);
     });
   });
@@ -107,7 +119,9 @@ describe("P3-1 故障注入：recoveryEligible 与 safeRun cooldown", () => {
       // layout-planner 不应被影响
       let ran = false;
       g().Game.time += 1;
-      safeRun("system/layout-planner", () => { ran = true; });
+      safeRun("system/layout-planner", () => {
+        ran = true;
+      });
       expect(ran).toBe(true);
       expect(g().pluginCooldowns?.get("system/layout-planner")).toBeUndefined();
     });
@@ -124,7 +138,13 @@ describe("P3-1 故障注入：recoveryEligible 与 safeRun cooldown", () => {
       // spawn-manager（P0）不受影响
       let ran = false;
       g().Game.time += 1;
-      safeRun("system/spawn-manager", () => { ran = true; }, true);
+      safeRun(
+        "system/spawn-manager",
+        () => {
+          ran = true;
+        },
+        true,
+      );
       expect(ran).toBe(true);
       expect(g().pluginCooldowns?.get("system/spawn-manager")).toBeUndefined();
     });
@@ -141,7 +161,13 @@ describe("P3-1 故障注入：recoveryEligible 与 safeRun cooldown", () => {
       // 但 cooldown 只在 critical=false 时才设置
       // 成功一次清零计数（自愈路径）
       g().Game.time += 1;
-      safeRun("system/construction-manager", () => { /* 成功 */ }, false);
+      safeRun(
+        "system/construction-manager",
+        () => {
+          /* 成功 */
+        },
+        false,
+      );
       expect(g().errorCounts?.get("system/construction-manager")).toBeUndefined();
 
       // 现在再失败 3 次 → 应该进入 cooldown
@@ -174,9 +200,14 @@ describe("P3-1 故障注入：recoveryEligible 与 safeRun cooldown", () => {
 
       // 其他系统不受影响
       g().Game.time += 1;
-      let ranA = false, ranB = false;
-      safeRun("system/layout-planner", () => { ranA = true; });
-      safeRun("system/defense-planner", () => { ranB = true; });
+      let ranA = false,
+        ranB = false;
+      safeRun("system/layout-planner", () => {
+        ranA = true;
+      });
+      safeRun("system/defense-planner", () => {
+        ranB = true;
+      });
       expect(ranA).toBe(true);
       expect(ranB).toBe(true);
     });

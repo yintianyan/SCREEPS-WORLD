@@ -82,35 +82,131 @@ const PROPAGATION_RULES: Array<{
   condition: string;
 }> = [
   // Hauler 死亡 → 物流中断
-  { from: "logistics", to: "colony", delay: 200, probability: 0.8, condition: "hauler death → delivery stops → colony starvation" },
+  {
+    from: "logistics",
+    to: "colony",
+    delay: 200,
+    probability: 0.8,
+    condition: "hauler death → delivery stops → colony starvation",
+  },
   // 物流中断 → 殖民失败
-  { from: "logistics", to: "colony", delay: 500, probability: 0.6, condition: "logistics failure → colony energy deficit" },
+  {
+    from: "logistics",
+    to: "colony",
+    delay: 500,
+    probability: 0.6,
+    condition: "logistics failure → colony energy deficit",
+  },
   // Spawn 饥饿 → 人口崩溃
-  { from: "spawn", to: "colony", delay: 300, probability: 0.9, condition: "spawn starvation → no replacement creeps → population collapse" },
+  {
+    from: "spawn",
+    to: "colony",
+    delay: 300,
+    probability: 0.9,
+    condition: "spawn starvation → no replacement creeps → population collapse",
+  },
   // 人口崩溃 → 产能下降
-  { from: "colony", to: "energy", delay: 100, probability: 0.95, condition: "population collapse → no harvesters → production drop" },
+  {
+    from: "colony",
+    to: "energy",
+    delay: 100,
+    probability: 0.95,
+    condition: "population collapse → no harvesters → production drop",
+  },
   // 产能下降 → 经济赤字
-  { from: "energy", to: "network", delay: 500, probability: 0.7, condition: "production drop → net flow negative → imbalance" },
+  {
+    from: "energy",
+    to: "network",
+    delay: 500,
+    probability: 0.7,
+    condition: "production drop → net flow negative → imbalance",
+  },
   // 远矿停滞 → 资源缺口
-  { from: "remote", to: "energy", delay: 1000, probability: 0.5, condition: "remote mining stall → remote contribution lost" },
+  {
+    from: "remote",
+    to: "energy",
+    delay: 1000,
+    probability: 0.5,
+    condition: "remote mining stall → remote contribution lost",
+  },
   // 远矿停滞 → 矿物缺口
-  { from: "remote", to: "mineral", delay: 1000, probability: 0.4, condition: "remote mining stall → mineral supply lost" },
+  {
+    from: "remote",
+    to: "mineral",
+    delay: 1000,
+    probability: 0.4,
+    condition: "remote mining stall → mineral supply lost",
+  },
   // 路由阻断 → 远矿停滞
-  { from: "network", to: "remote", delay: 300, probability: 0.6, condition: "route blocked → remote hauler can't deliver" },
+  {
+    from: "network",
+    to: "remote",
+    delay: 300,
+    probability: 0.6,
+    condition: "route blocked → remote hauler can't deliver",
+  },
   // 威胁 → 远矿停滞
-  { from: "threat", to: "remote", delay: 0, probability: 0.9, condition: "hostile → remote ops frozen" },
+  {
+    from: "threat",
+    to: "remote",
+    delay: 0,
+    probability: 0.9,
+    condition: "hostile → remote ops frozen",
+  },
   // 威胁 → 防御需求增加
-  { from: "threat", to: "defense", delay: 0, probability: 1.0, condition: "hostile → defense activated" },
+  {
+    from: "threat",
+    to: "defense",
+    delay: 0,
+    probability: 1.0,
+    condition: "hostile → defense activated",
+  },
   // CPU 紧张 → 系统降级
-  { from: "cpu", to: "logistics", delay: 0, probability: 0.5, condition: "CPU bucket low → logistics planner skipped" },
-  { from: "cpu", to: "network", delay: 0, probability: 0.5, condition: "CPU bucket low → agenda manager skipped" },
-  { from: "cpu", to: "terminal", delay: 0, probability: 0.7, condition: "CPU bucket low → terminal manager skipped" },
+  {
+    from: "cpu",
+    to: "logistics",
+    delay: 0,
+    probability: 0.5,
+    condition: "CPU bucket low → logistics planner skipped",
+  },
+  {
+    from: "cpu",
+    to: "network",
+    delay: 0,
+    probability: 0.5,
+    condition: "CPU bucket low → agenda manager skipped",
+  },
+  {
+    from: "cpu",
+    to: "terminal",
+    delay: 0,
+    probability: 0.7,
+    condition: "CPU bucket low → terminal manager skipped",
+  },
   // Terminal 故障 → 市场交易停止
-  { from: "terminal", to: "mineral", delay: 500, probability: 0.3, condition: "terminal unavailable → mineral trading stops" },
+  {
+    from: "terminal",
+    to: "mineral",
+    delay: 500,
+    probability: 0.3,
+    condition: "terminal unavailable → mineral trading stops",
+  },
   // 扩张失败 → 殖民失败
-  { from: "expansion", to: "colony", delay: 0, probability: 0.8, condition: "expansion failed → new colony stalls" },
+  {
+    from: "expansion",
+    to: "colony",
+    delay: 0,
+    probability: 0.8,
+    condition: "expansion failed → new colony stalls",
+  },
   // 矿物缺口 → 工厂停止
-  { from: "mineral", to: "logistics", delay: 200, probability: 0.2, condition: "mineral deficit → lab/factory demand changes" },
+  {
+    from: "mineral",
+    to: "logistics",
+    delay: 200,
+    probability: 0.2,
+    condition: "mineral deficit → lab/factory demand changes",
+  },
 ];
 
 // ─── 根因检测结果 ──────────────────────────────────────────
@@ -211,10 +307,7 @@ export function buildFailureGraph(
  * @param symptomId 症状节点 ID
  * @returns 根因检测结果
  */
-export function detectRootCause(
-  graph: FailureGraph,
-  symptomId: string,
-): RootCauseResult | null {
+export function detectRootCause(graph: FailureGraph, symptomId: string): RootCauseResult | null {
   const { nodes, edges } = graph;
   const symptomNode = nodes.find(n => n.id === symptomId);
   if (!symptomNode) return null;
@@ -240,12 +333,14 @@ export function detectRootCause(
     path: string[];
     totalDelay: number;
     confidence: number;
-  }> = [{
-    currentId: symptomId,
-    path: [symptomId],
-    totalDelay: 0,
-    confidence: 1,
-  }];
+  }> = [
+    {
+      currentId: symptomId,
+      path: [symptomId],
+      totalDelay: 0,
+      confidence: 1,
+    },
+  ];
 
   const visited = new Set<string>([symptomId]);
 
@@ -442,7 +537,8 @@ export function computeFailureSeverity(graph: FailureGraph): number {
   };
 
   // 节点严重度平均
-  const avgNodeSeverity = activeNodes.reduce((sum, n) => sum + severityWeight[n.severity], 0) / activeNodes.length;
+  const avgNodeSeverity =
+    activeNodes.reduce((sum, n) => sum + severityWeight[n.severity], 0) / activeNodes.length;
 
   // 传播密度（边数 / 可能的最大边数）
   const maxPossibleEdges = activeNodes.length * (activeNodes.length - 1);

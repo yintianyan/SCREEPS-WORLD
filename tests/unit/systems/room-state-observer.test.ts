@@ -40,7 +40,15 @@ function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
 // makeCtx 已归并到 factories.mockRoomStateCtx（T4 批②）。
 
 function scout(): any {
-  return { id: "scout_1", name: "scout_1", owner: { username: "Enemy" }, body: [], hits: 100, hitsMax: 100, pos: mockPos(10, 10, "W1N1") };
+  return {
+    id: "scout_1",
+    name: "scout_1",
+    owner: { username: "Enemy" },
+    body: [],
+    hits: 100,
+    hitsMax: 100,
+    pos: mockPos(10, 10, "W1N1"),
+  };
 }
 
 let savedMemory: typeof Memory | undefined;
@@ -70,7 +78,9 @@ describe("room-state — 无害侦察观测（R7c）", () => {
 
     roomStateSystem.run(mockRoomStateCtx([snapshot], 100));
 
-    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
+    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms[
+      "W1N1"
+    ]!;
     expect(roomMem.lastObserverAt).toBe(100);
     expect(roomMem.observerSightings).toBe(1);
   });
@@ -81,7 +91,9 @@ describe("room-state — 无害侦察观测（R7c）", () => {
     roomStateSystem.run(mockRoomStateCtx([snapshot], 100));
     roomStateSystem.run(mockRoomStateCtx([snapshot], 101));
 
-    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
+    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms[
+      "W1N1"
+    ]!;
     expect(roomMem.lastObserverAt).toBe(101);
     expect(roomMem.observerSightings).toBe(2);
   });
@@ -92,7 +104,9 @@ describe("room-state — 无害侦察观测（R7c）", () => {
 
     roomStateSystem.run(mockRoomStateCtx([snapshot], 100));
 
-    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms["W1N1"]!;
+    const roomMem = ((globalThis as Record<string, unknown>).Memory as typeof Memory).rooms[
+      "W1N1"
+    ]!;
     expect(roomMem.lastObserverAt).toBeUndefined();
     expect(roomMem.observerSightings).toBeUndefined();
     expect(roomMem.lastHostileAt).toBe(100); // 威胁记忆照常写入

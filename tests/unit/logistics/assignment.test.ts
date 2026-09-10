@@ -95,7 +95,10 @@ describe("Assignment — buildRoomTasks (pure)", () => {
   });
 
   it("generates fill task when fillTargets exist", () => {
-    const spawn = { pos: { x: 25, y: 25 }, store: { getFreeCapacity: () => 100 } } as unknown as StructureSpawn;
+    const spawn = {
+      pos: { x: 25, y: 25 },
+      store: { getFreeCapacity: () => 100 },
+    } as unknown as StructureSpawn;
     const snapshot = mockSnapshot({
       spawns: [spawn],
       fillTargets: [spawn],
@@ -111,7 +114,11 @@ describe("Assignment — buildRoomTasks (pure)", () => {
   });
 
   it("generates build tasks for construction sites", () => {
-    const site = { id: "site1", pos: { x: 20, y: 20 }, structureType: STRUCTURE_EXTENSION } as unknown as ConstructionSite;
+    const site = {
+      id: "site1",
+      pos: { x: 20, y: 20 },
+      structureType: STRUCTURE_EXTENSION,
+    } as unknown as ConstructionSite;
     const snapshot = mockSnapshot({ myConstructionSites: [site] });
 
     const tasks = buildRoomTasks(snapshot, [], mockFlags());
@@ -125,8 +132,16 @@ describe("Assignment — buildRoomTasks (pure)", () => {
   // 根因：RCL4+ 无 storage 时 lease 机制让 builder 保持旧 extension assignment，
   // storage site 无人建造。修复：buildRoomTasks 将 storage site 标记为 priority=1, maxWorkers=3。
   it("RCL4+ 无 storage 时 storage site 提升为 priority=1, maxWorkers=3", () => {
-    const storageSite = { id: "site-storage", pos: { x: 24, y: 23 }, structureType: STRUCTURE_STORAGE } as unknown as ConstructionSite;
-    const extSite = { id: "site-ext", pos: { x: 20, y: 20 }, structureType: STRUCTURE_EXTENSION } as unknown as ConstructionSite;
+    const storageSite = {
+      id: "site-storage",
+      pos: { x: 24, y: 23 },
+      structureType: STRUCTURE_STORAGE,
+    } as unknown as ConstructionSite;
+    const extSite = {
+      id: "site-ext",
+      pos: { x: 20, y: 20 },
+      structureType: STRUCTURE_EXTENSION,
+    } as unknown as ConstructionSite;
     const snapshot = mockSnapshot({
       rcl: 5,
       storage: undefined,
@@ -153,7 +168,11 @@ describe("Assignment — buildRoomTasks (pure)", () => {
   });
 
   it("RCL3 不对 storage site 特殊处理（未解锁 storage）", () => {
-    const storageSite = { id: "site-storage", pos: { x: 24, y: 23 }, structureType: STRUCTURE_STORAGE } as unknown as ConstructionSite;
+    const storageSite = {
+      id: "site-storage",
+      pos: { x: 24, y: 23 },
+      structureType: STRUCTURE_STORAGE,
+    } as unknown as ConstructionSite;
     const snapshot = mockSnapshot({
       rcl: 3,
       storage: undefined,
@@ -170,7 +189,11 @@ describe("Assignment — buildRoomTasks (pure)", () => {
   });
 
   it("storage 已建成时 storage site 不特殊处理", () => {
-    const storageSite = { id: "site-storage", pos: { x: 24, y: 23 }, structureType: STRUCTURE_STORAGE } as unknown as ConstructionSite;
+    const storageSite = {
+      id: "site-storage",
+      pos: { x: 24, y: 23 },
+      structureType: STRUCTURE_STORAGE,
+    } as unknown as ConstructionSite;
     const builtStorage = {
       id: "built-storage",
       pos: { x: 25, y: 25 },
@@ -192,7 +215,11 @@ describe("Assignment — buildRoomTasks (pure)", () => {
   });
 
   it("generates upgrade task in normal state", () => {
-    const controller = { id: "ctrl1", my: true, pos: { x: 30, y: 30 } } as unknown as StructureController;
+    const controller = {
+      id: "ctrl1",
+      my: true,
+      pos: { x: 30, y: 30 },
+    } as unknown as StructureController;
     const snapshot = mockSnapshot({ controller });
 
     const tasks = buildRoomTasks(snapshot, [], mockFlags({ colonyState: "normal" }));
@@ -202,7 +229,11 @@ describe("Assignment — buildRoomTasks (pure)", () => {
   });
 
   it("does not generate upgrade task in bootstrap", () => {
-    const controller = { id: "ctrl1", my: true, pos: { x: 30, y: 30 } } as unknown as StructureController;
+    const controller = {
+      id: "ctrl1",
+      my: true,
+      pos: { x: 30, y: 30 },
+    } as unknown as StructureController;
     const snapshot = mockSnapshot({ controller });
 
     const tasks = buildRoomTasks(snapshot, [], mockFlags({ colonyState: "bootstrap" }));
@@ -212,7 +243,11 @@ describe("Assignment — buildRoomTasks (pure)", () => {
   });
 
   it("aggregates assigned creeps across multiple task types in single pass", () => {
-    const site = { id: "site1", pos: { x: 20, y: 20 }, structureType: STRUCTURE_EXTENSION } as unknown as ConstructionSite;
+    const site = {
+      id: "site1",
+      pos: { x: 20, y: 20 },
+      structureType: STRUCTURE_EXTENSION,
+    } as unknown as ConstructionSite;
     const snapshot = mockSnapshot({
       myConstructionSites: [site],
       fillTargets: [{ id: "ext1" } as unknown as StructureExtension],
@@ -250,9 +285,7 @@ describe("Assignment — validateAssignmentRules (pure)", () => {
   };
 
   it("returns false when lease expired", () => {
-    expect(
-      validateAssignmentRules(validAssignment, 130, 0, true, true),
-    ).toBe(false);
+    expect(validateAssignmentRules(validAssignment, 130, 0, true, true)).toBe(false);
   });
 
   it("returns false when target disappeared", () => {
@@ -264,21 +297,15 @@ describe("Assignment — validateAssignmentRules (pure)", () => {
       assignedAt: 90,
       leaseUntil: 120,
     };
-    expect(
-      validateAssignmentRules(assignment, 100, 0, false, true),
-    ).toBe(false);
+    expect(validateAssignmentRules(assignment, 100, 0, false, true)).toBe(false);
   });
 
   it("returns false when source disappeared", () => {
-    expect(
-      validateAssignmentRules(validAssignment, 100, 0, true, false),
-    ).toBe(false);
+    expect(validateAssignmentRules(validAssignment, 100, 0, true, false)).toBe(false);
   });
 
   it("returns true for valid assignment", () => {
-    expect(
-      validateAssignmentRules(validAssignment, 100, 0, true, true),
-    ).toBe(true);
+    expect(validateAssignmentRules(validAssignment, 100, 0, true, true)).toBe(true);
   });
 
   it("returns true when no targetId (targetExists irrelevant)", () => {
@@ -290,9 +317,7 @@ describe("Assignment — validateAssignmentRules (pure)", () => {
       leaseUntil: 120,
     };
     // targetExists=false 不影响 — 无 targetId 时跳过检查。
-    expect(
-      validateAssignmentRules(assignment, 100, 0, false, true),
-    ).toBe(true);
+    expect(validateAssignmentRules(assignment, 100, 0, false, true)).toBe(true);
   });
 
   it("returns false when layout revision changed", () => {
@@ -308,15 +333,9 @@ describe("Assignment — validateAssignmentRules (pure)", () => {
   });
 
   it("returns true when revision matches current layout", () => {
-    expect(
-      validateAssignmentRules(
-        { ...validAssignment, revision: 2 },
-        100,
-        2,
-        true,
-        true,
-      ),
-    ).toBe(true);
+    expect(validateAssignmentRules({ ...validAssignment, revision: 2 }, 100, 2, true, true)).toBe(
+      true,
+    );
   });
 });
 
@@ -326,15 +345,38 @@ describe("Assignment — chooseTaskForRole (pure)", () => {
     // 即使存在 fill 之外的任务，harvester 也只接受 fill；
     // source 分配不经 assignment，故无 harvest 任务可选。
     const tasks = [
-      { id: "haul:W1N1", kind: "haul", sourceId: "c1", priority: 1, maxWorkers: 3, assignedCreeps: [], structureType: undefined },
-      { id: "upgrade:W1N1", kind: "upgrade", priority: 2, maxWorkers: 3, assignedCreeps: [], structureType: undefined },
+      {
+        id: "haul:W1N1",
+        kind: "haul",
+        sourceId: "c1",
+        priority: 1,
+        maxWorkers: 3,
+        assignedCreeps: [],
+        structureType: undefined,
+      },
+      {
+        id: "upgrade:W1N1",
+        kind: "upgrade",
+        priority: 2,
+        maxWorkers: 3,
+        assignedCreeps: [],
+        structureType: undefined,
+      },
     ];
     const chosen = chooseTaskForRole("harvester", tasks);
     expect(chosen).toBeUndefined();
   });
 
   it("hauler selects haul task and respects maxWorkers", () => {
-    const haulTask = { id: "haul:W1N1", kind: "haul", sourceId: "c1", priority: 1, maxWorkers: 3, assignedCreeps: [] as string[], structureType: undefined };
+    const haulTask = {
+      id: "haul:W1N1",
+      kind: "haul",
+      sourceId: "c1",
+      priority: 1,
+      maxWorkers: 3,
+      assignedCreeps: [] as string[],
+      structureType: undefined,
+    };
     const chosen = chooseTaskForRole("hauler", [haulTask]);
     expect(chosen).toBeDefined();
     expect(chosen!.kind).toBe("haul");
@@ -352,7 +394,14 @@ describe("Assignment — chooseTaskForRole (pure)", () => {
 
   it("skips tasks not in role's allowed kinds", () => {
     const tasks = [
-      { id: "upgrade:W1N1", kind: "upgrade", priority: 2, maxWorkers: 3, assignedCreeps: [], structureType: undefined },
+      {
+        id: "upgrade:W1N1",
+        kind: "upgrade",
+        priority: 2,
+        maxWorkers: 3,
+        assignedCreeps: [],
+        structureType: undefined,
+      },
     ];
     // harvester 不能做 upgrade。
     const chosen = chooseTaskForRole("harvester", tasks);
@@ -360,8 +409,24 @@ describe("Assignment — chooseTaskForRole (pure)", () => {
   });
 
   it("builder reserves road task only when no critical build gap", () => {
-    const roadTask = { id: "build:W1N1:r1", kind: "build", targetId: "r1", structureType: STRUCTURE_ROAD, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[] };
-    const criticalTask = { id: "build:W1N1:ext1", kind: "build", targetId: "ext1", structureType: STRUCTURE_EXTENSION, priority: 1, maxWorkers: 2, assignedCreeps: [] as string[] };
+    const roadTask = {
+      id: "build:W1N1:r1",
+      kind: "build",
+      targetId: "r1",
+      structureType: STRUCTURE_ROAD,
+      priority: 2,
+      maxWorkers: 1,
+      assignedCreeps: [] as string[],
+    };
+    const criticalTask = {
+      id: "build:W1N1:ext1",
+      kind: "build",
+      targetId: "ext1",
+      structureType: STRUCTURE_EXTENSION,
+      priority: 1,
+      maxWorkers: 2,
+      assignedCreeps: [] as string[],
+    };
     // 有 critical 缺口时 → builder 应选 critical 而非道路。
     const chosen1 = chooseTaskForRole("builder", [criticalTask, roadTask]);
     expect(chosen1!.id).toBe("build:W1N1:ext1");
@@ -376,13 +441,23 @@ describe("Assignment — chooseTaskForRole (pure)", () => {
     // P0 修复验证：storage 未建成时，storage site priority=1 > extension priority=2。
     // builder 即使离 extension 更近，也应选 priority 更高的 storage。
     const storageTask = {
-      id: "build:W1N1:storage1", kind: "build", targetId: "storage1",
-      structureType: STRUCTURE_STORAGE, priority: 1, maxWorkers: 3, assignedCreeps: [] as string[],
+      id: "build:W1N1:storage1",
+      kind: "build",
+      targetId: "storage1",
+      structureType: STRUCTURE_STORAGE,
+      priority: 1,
+      maxWorkers: 3,
+      assignedCreeps: [] as string[],
       pos: { x: 24, y: 23 },
     };
     const extTask = {
-      id: "build:W1N1:ext1", kind: "build", targetId: "ext1",
-      structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[],
+      id: "build:W1N1:ext1",
+      kind: "build",
+      targetId: "ext1",
+      structureType: STRUCTURE_EXTENSION,
+      priority: 2,
+      maxWorkers: 1,
+      assignedCreeps: [] as string[],
       pos: { x: 20, y: 20 },
     };
     // creep 在 (20,20) — 离 ext 更近，但 storage priority=1 优先
@@ -393,32 +468,100 @@ describe("Assignment — chooseTaskForRole (pure)", () => {
 
   // ── P2-4 距离感知选择 ──
   it("同优先级中选距离 creep 最近的任务", () => {
-    const near = { id: "build:W1N1:near", kind: "build", targetId: "near", structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 10, y: 10 } };
-    const far = { id: "build:W1N1:far", kind: "build", targetId: "far", structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 40, y: 40 } };
+    const near = {
+      id: "build:W1N1:near",
+      kind: "build",
+      targetId: "near",
+      structureType: STRUCTURE_EXTENSION,
+      priority: 2,
+      maxWorkers: 1,
+      assignedCreeps: [] as string[],
+      pos: { x: 10, y: 10 },
+    };
+    const far = {
+      id: "build:W1N1:far",
+      kind: "build",
+      targetId: "far",
+      structureType: STRUCTURE_EXTENSION,
+      priority: 2,
+      maxWorkers: 1,
+      assignedCreeps: [] as string[],
+      pos: { x: 40, y: 40 },
+    };
     // creep 在 (8,8) — 距 near 4，距 far 64。
     const chosen = chooseTaskForRole("builder", [far, near], { x: 8, y: 8 });
     expect(chosen!.id).toBe("build:W1N1:near");
   });
 
   it("优先级主导：高优先级任务即使更远也优先", () => {
-    const criticalFar = { id: "build:W1N1:crit", kind: "build", targetId: "crit", structureType: STRUCTURE_TOWER, priority: 1, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 45, y: 45 } };
-    const normalNear = { id: "build:W1N1:norm", kind: "build", targetId: "norm", structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 10, y: 10 } };
+    const criticalFar = {
+      id: "build:W1N1:crit",
+      kind: "build",
+      targetId: "crit",
+      structureType: STRUCTURE_TOWER,
+      priority: 1,
+      maxWorkers: 1,
+      assignedCreeps: [] as string[],
+      pos: { x: 45, y: 45 },
+    };
+    const normalNear = {
+      id: "build:W1N1:norm",
+      kind: "build",
+      targetId: "norm",
+      structureType: STRUCTURE_EXTENSION,
+      priority: 2,
+      maxWorkers: 1,
+      assignedCreeps: [] as string[],
+      pos: { x: 10, y: 10 },
+    };
     // creep 在 (10,10) — normal 更近，但 critical 优先级更高。
     const chosen = chooseTaskForRole("builder", [normalNear, criticalFar], { x: 10, y: 10 });
     expect(chosen!.id).toBe("build:W1N1:crit");
   });
 
   it("不传 creepPos 时退化为首个匹配（向后兼容）", () => {
-    const a = { id: "build:W1N1:a", kind: "build", targetId: "a", structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 40, y: 40 } };
-    const b = { id: "build:W1N1:b", kind: "build", targetId: "b", structureType: STRUCTURE_EXTENSION, priority: 2, maxWorkers: 1, assignedCreeps: [] as string[], pos: { x: 10, y: 10 } };
+    const a = {
+      id: "build:W1N1:a",
+      kind: "build",
+      targetId: "a",
+      structureType: STRUCTURE_EXTENSION,
+      priority: 2,
+      maxWorkers: 1,
+      assignedCreeps: [] as string[],
+      pos: { x: 40, y: 40 },
+    };
+    const b = {
+      id: "build:W1N1:b",
+      kind: "build",
+      targetId: "b",
+      structureType: STRUCTURE_EXTENSION,
+      priority: 2,
+      maxWorkers: 1,
+      assignedCreeps: [] as string[],
+      pos: { x: 10, y: 10 },
+    };
     // 无 creepPos → 返回数组首个。
     const chosen = chooseTaskForRole("builder", [a, b]);
     expect(chosen!.id).toBe("build:W1N1:a");
   });
 
   it("同优先级下无 pos 任务排后有 pos 任务", () => {
-    const noPos = { id: "fill:W1N1", kind: "fill", priority: 1, maxWorkers: 3, assignedCreeps: [] as string[] };
-    const withPos = { id: "haul:W1N1", kind: "haul", sourceId: "c1", priority: 1, maxWorkers: 3, assignedCreeps: [] as string[], pos: { x: 20, y: 20 } };
+    const noPos = {
+      id: "fill:W1N1",
+      kind: "fill",
+      priority: 1,
+      maxWorkers: 3,
+      assignedCreeps: [] as string[],
+    };
+    const withPos = {
+      id: "haul:W1N1",
+      kind: "haul",
+      sourceId: "c1",
+      priority: 1,
+      maxWorkers: 3,
+      assignedCreeps: [] as string[],
+      pos: { x: 20, y: 20 },
+    };
     // hauler 在 (20,20)：haul 有位置（距离 0），fill 无位置（Infinity）→ 选 haul。
     const chosen = chooseTaskForRole("hauler", [noPos, withPos], { x: 20, y: 20 });
     expect(chosen!.id).toBe("haul:W1N1");
@@ -429,9 +572,31 @@ describe("Assignment — chooseTaskForRole (pure)", () => {
 describe("Assignment — getInvalidatedCreepNames (pure)", () => {
   it("collects creep names from tasks with priority >= minPriority", () => {
     const tasks = [
-      { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1", priority: 1, maxWorkers: 5, assignedCreeps: ["c1", "c2"], structureType: undefined },
-      { id: "fill:W1N1", kind: "fill", priority: 0, maxWorkers: 3, assignedCreeps: ["c3"], structureType: undefined },
-      { id: "upgrade:W1N1", kind: "upgrade", priority: 2, maxWorkers: 3, assignedCreeps: ["c4", "c5"], structureType: undefined },
+      {
+        id: "harvest:W1N1:src1",
+        kind: "harvest",
+        sourceId: "src1",
+        priority: 1,
+        maxWorkers: 5,
+        assignedCreeps: ["c1", "c2"],
+        structureType: undefined,
+      },
+      {
+        id: "fill:W1N1",
+        kind: "fill",
+        priority: 0,
+        maxWorkers: 3,
+        assignedCreeps: ["c3"],
+        structureType: undefined,
+      },
+      {
+        id: "upgrade:W1N1",
+        kind: "upgrade",
+        priority: 2,
+        maxWorkers: 3,
+        assignedCreeps: ["c4", "c5"],
+        structureType: undefined,
+      },
     ];
     // priority >= 1 → harvest (c1,c2) + upgrade (c4,c5)，不含 fill (priority=0)。
     const names = getInvalidatedCreepNames(tasks, 1);
@@ -442,7 +607,14 @@ describe("Assignment — getInvalidatedCreepNames (pure)", () => {
 
   it("returns empty array when no tasks match", () => {
     const tasks = [
-      { id: "fill:W1N1", kind: "fill", priority: 0, maxWorkers: 3, assignedCreeps: ["c1"], structureType: undefined },
+      {
+        id: "fill:W1N1",
+        kind: "fill",
+        priority: 0,
+        maxWorkers: 3,
+        assignedCreeps: ["c1"],
+        structureType: undefined,
+      },
     ];
     const names = getInvalidatedCreepNames(tasks, 1);
     expect(names).toEqual([]);
@@ -455,7 +627,15 @@ describe("Assignment — TaskPool.releaseCreep", () => {
     const pool = new TaskPool();
     pool.init(100);
     const tasks = [
-      { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1", priority: 1, maxWorkers: 5, assignedCreeps: ["c1", "c2", "c3"], structureType: undefined },
+      {
+        id: "harvest:W1N1:src1",
+        kind: "harvest",
+        sourceId: "src1",
+        priority: 1,
+        maxWorkers: 5,
+        assignedCreeps: ["c1", "c2", "c3"],
+        structureType: undefined,
+      },
     ];
     pool.setRoomTasks("W1N1", tasks);
     pool.releaseCreep("harvest:W1N1:src1", "c2");
@@ -466,7 +646,15 @@ describe("Assignment — TaskPool.releaseCreep", () => {
     const pool = new TaskPool();
     pool.init(100);
     const tasks = [
-      { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1", priority: 1, maxWorkers: 5, assignedCreeps: ["c1", "c3"], structureType: undefined },
+      {
+        id: "harvest:W1N1:src1",
+        kind: "harvest",
+        sourceId: "src1",
+        priority: 1,
+        maxWorkers: 5,
+        assignedCreeps: ["c1", "c3"],
+        structureType: undefined,
+      },
     ];
     pool.setRoomTasks("W1N1", tasks);
     pool.releaseCreep("harvest:W1N1:src1", "c99");
@@ -505,9 +693,31 @@ describe("Assignment — TaskPool.invalidate", () => {
     const pool = new TaskPool();
     pool.init(100);
     const tasks = [
-      { id: "harvest:W1N1:src1", kind: "harvest", sourceId: "src1", priority: 1, maxWorkers: 5, assignedCreeps: ["c1", "c2"], structureType: undefined },
-      { id: "fill:W1N1", kind: "fill", priority: 0, maxWorkers: 3, assignedCreeps: ["c3"], structureType: undefined },
-      { id: "upgrade:W1N1", kind: "upgrade", priority: 2, maxWorkers: 3, assignedCreeps: ["c4", "c5"], structureType: undefined },
+      {
+        id: "harvest:W1N1:src1",
+        kind: "harvest",
+        sourceId: "src1",
+        priority: 1,
+        maxWorkers: 5,
+        assignedCreeps: ["c1", "c2"],
+        structureType: undefined,
+      },
+      {
+        id: "fill:W1N1",
+        kind: "fill",
+        priority: 0,
+        maxWorkers: 3,
+        assignedCreeps: ["c3"],
+        structureType: undefined,
+      },
+      {
+        id: "upgrade:W1N1",
+        kind: "upgrade",
+        priority: 2,
+        maxWorkers: 3,
+        assignedCreeps: ["c4", "c5"],
+        structureType: undefined,
+      },
     ];
     pool.setRoomTasks("W1N1", tasks);
     const names = pool.invalidate("W1N1", 1);
@@ -529,7 +739,14 @@ describe("Assignment — TaskPool.assignCreep", () => {
     const pool = new TaskPool();
     pool.init(100);
     pool.setRoomTasks("W1N1", [
-      { id: "fill:W1N1", kind: "fill", priority: 0, maxWorkers: 3, assignedCreeps: [], structureType: undefined },
+      {
+        id: "fill:W1N1",
+        kind: "fill",
+        priority: 0,
+        maxWorkers: 3,
+        assignedCreeps: [],
+        structureType: undefined,
+      },
     ]);
     expect(pool.assignCreep("fill:W1N1", "c1")).toBe(true);
     const task = pool.findTask("fill:W1N1")!;
@@ -540,7 +757,14 @@ describe("Assignment — TaskPool.assignCreep", () => {
     const pool = new TaskPool();
     pool.init(100);
     pool.setRoomTasks("W1N1", [
-      { id: "fill:W1N1", kind: "fill", priority: 0, maxWorkers: 3, assignedCreeps: ["c1"], structureType: undefined },
+      {
+        id: "fill:W1N1",
+        kind: "fill",
+        priority: 0,
+        maxWorkers: 3,
+        assignedCreeps: ["c1"],
+        structureType: undefined,
+      },
     ]);
     expect(pool.assignCreep("fill:W1N1", "c1")).toBe(false);
     const task = pool.findTask("fill:W1N1")!;

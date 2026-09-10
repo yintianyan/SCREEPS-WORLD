@@ -100,9 +100,9 @@ const DIMENSION_WEIGHTS: Record<string, number> = {
   energy: 0.25,
   logistics: 0.18,
   colony: 0.15,
-  network: 0.10,
-  cpu: 0.10,
-  spawn: 0.10,
+  network: 0.1,
+  cpu: 0.1,
+  spawn: 0.1,
   mineral: 0.06,
   threat: 0.06,
 };
@@ -120,11 +120,11 @@ const DIMENSION_WEIGHTS: Record<string, number> = {
  * 降级到 STABLE：< 0.85（分数低于 85% → 降级）
  */
 const HYSTERESIS = {
-  enterDegraded: 0.70,
-  recoverToStable: 0.80,
-  enterCritical: 0.40,
+  enterDegraded: 0.7,
+  recoverToStable: 0.8,
+  enterCritical: 0.4,
   recoverToDegraded: 0.55,
-  enterHealthy: 0.90,
+  enterHealthy: 0.9,
   downgradeFromHealthy: 0.85,
 } as const;
 
@@ -161,14 +161,54 @@ const RANK_TO_HEALTH: Record<number, DimensionHealth> = {
 export function evaluateEmpireHealth(input: EmpireHealthInput): EmpireHealthResult {
   // ── 1. 构建维度评分列表 ──
   const dimensions: HealthDimensionScore[] = [
-    { name: "energy", level: input.energyHealth, score: input.energyScore, evidence: `score=${input.energyScore.toFixed(2)}` },
-    { name: "mineral", level: input.mineralHealth, score: input.mineralScore, evidence: `score=${input.mineralScore.toFixed(2)}` },
-    { name: "logistics", level: input.logisticsHealth, score: input.logisticsScore, evidence: `score=${input.logisticsScore.toFixed(2)}` },
-    { name: "network", level: input.networkHealth, score: input.networkScore, evidence: `score=${input.networkScore.toFixed(2)}` },
-    { name: "colony", level: input.colonyHealth, score: input.colonyScore, evidence: `score=${input.colonyScore.toFixed(2)}` },
-    { name: "threat", level: input.threatHealth, score: input.threatScore, evidence: `score=${input.threatScore.toFixed(2)}` },
-    { name: "spawn", level: input.spawnHealth, score: input.spawnScore, evidence: `score=${input.spawnScore.toFixed(2)}` },
-    { name: "cpu", level: input.cpuHealth, score: input.cpuScore, evidence: `score=${input.cpuScore.toFixed(2)}` },
+    {
+      name: "energy",
+      level: input.energyHealth,
+      score: input.energyScore,
+      evidence: `score=${input.energyScore.toFixed(2)}`,
+    },
+    {
+      name: "mineral",
+      level: input.mineralHealth,
+      score: input.mineralScore,
+      evidence: `score=${input.mineralScore.toFixed(2)}`,
+    },
+    {
+      name: "logistics",
+      level: input.logisticsHealth,
+      score: input.logisticsScore,
+      evidence: `score=${input.logisticsScore.toFixed(2)}`,
+    },
+    {
+      name: "network",
+      level: input.networkHealth,
+      score: input.networkScore,
+      evidence: `score=${input.networkScore.toFixed(2)}`,
+    },
+    {
+      name: "colony",
+      level: input.colonyHealth,
+      score: input.colonyScore,
+      evidence: `score=${input.colonyScore.toFixed(2)}`,
+    },
+    {
+      name: "threat",
+      level: input.threatHealth,
+      score: input.threatScore,
+      evidence: `score=${input.threatScore.toFixed(2)}`,
+    },
+    {
+      name: "spawn",
+      level: input.spawnHealth,
+      score: input.spawnScore,
+      evidence: `score=${input.spawnScore.toFixed(2)}`,
+    },
+    {
+      name: "cpu",
+      level: input.cpuHealth,
+      score: input.cpuScore,
+      evidence: `score=${input.cpuScore.toFixed(2)}`,
+    },
   ];
 
   // ── 2. 加权汇总分数 ──
@@ -193,10 +233,12 @@ export function evaluateEmpireHealth(input: EmpireHealthInput): EmpireHealthResu
   // 如果最差维度是 critical 但加权分数还行，降级为 degraded（防一个维度拖垮全局）。
   // 但如果 ≥ 2 个维度是 critical，直接 critical。
   const criticalCount = dimensions.filter(d => d.level === "critical").length;
-  const degradedCount = dimensions.filter(d => d.level === "degraded" || d.level === "critical").length;
+  const degradedCount = dimensions.filter(
+    d => d.level === "degraded" || d.level === "critical",
+  ).length;
 
   let rawLevel: EmpireHealthLevel;
-  if (criticalCount >= 2 || weightedScore < 0.30) {
+  if (criticalCount >= 2 || weightedScore < 0.3) {
     rawLevel = "critical";
   } else if (worstRank <= HEALTH_RANK.degraded && weightedScore < HYSTERESIS.enterDegraded) {
     rawLevel = "degraded";
@@ -231,9 +273,7 @@ export function evaluateEmpireHealth(input: EmpireHealthInput): EmpireHealthResu
   }
 
   // ── 8. 证据链 ──
-  const dimSummary = dimensions
-    .map(d => `${d.name}=${d.level}(${d.score.toFixed(2)})`)
-    .join(", ");
+  const dimSummary = dimensions.map(d => `${d.name}=${d.level}(${d.score.toFixed(2)})`).join(", ");
   const evidence = [
     `EmpireHealth @${input.tick}`,
     `level=${finalLevel} score=${weightedScore.toFixed(3)}`,
@@ -322,9 +362,12 @@ function applyHysteresis(
  */
 export function mapEconomicHealth(health: string): DimensionHealth {
   switch (health) {
-    case "critical": return "critical";
-    case "deficit": return "degraded";
-    case "stable": return "stable";
+    case "critical":
+      return "critical";
+    case "deficit":
+      return "degraded";
+    case "stable":
+      return "stable";
     case "growing":
     case "healthy":
       return "healthy";
@@ -344,9 +387,12 @@ export function mapEconomicHealth(health: string): DimensionHealth {
  */
 export function mapResourceHealth(health: string): DimensionHealth {
   switch (health) {
-    case "critical": return "critical";
-    case "deficit": return "degraded";
-    case "surplus": return "stable";
+    case "critical":
+      return "critical";
+    case "deficit":
+      return "degraded";
+    case "surplus":
+      return "stable";
     case "balanced":
     case "healthy":
       return "healthy";
@@ -360,9 +406,12 @@ export function mapResourceHealth(health: string): DimensionHealth {
  */
 export function mapLogisticsHealth(level: string): DimensionHealth {
   switch (level) {
-    case "critical": return "critical";
-    case "degraded": return "degraded";
-    case "stable": return "stable";
+    case "critical":
+      return "critical";
+    case "degraded":
+      return "degraded";
+    case "stable":
+      return "stable";
     case "healthy":
       return "healthy";
     default:
@@ -375,9 +424,12 @@ export function mapLogisticsHealth(level: string): DimensionHealth {
  */
 export function mapNetworkHealth(level: string): DimensionHealth {
   switch (level) {
-    case "critical": return "critical";
-    case "degraded": return "degraded";
-    case "stable": return "stable";
+    case "critical":
+      return "critical";
+    case "degraded":
+      return "degraded";
+    case "stable":
+      return "stable";
     case "healthy":
       return "healthy";
     default:
@@ -396,9 +448,12 @@ export function mapNetworkHealth(level: string): DimensionHealth {
  */
 export function mapColonyHealth(level: string): DimensionHealth {
   switch (level) {
-    case "CRITICAL": return "critical";
-    case "DEGRADED": return "degraded";
-    case "GOOD": return "stable";
+    case "CRITICAL":
+      return "critical";
+    case "DEGRADED":
+      return "degraded";
+    case "GOOD":
+      return "stable";
     case "EXCELLENT":
       return "healthy";
     default:
@@ -417,9 +472,12 @@ export function mapColonyHealth(level: string): DimensionHealth {
  */
 export function mapThreatHealth(posture: string): DimensionHealth {
   switch (posture) {
-    case "war": return "critical";
-    case "fortify": return "degraded";
-    case "develop": return "stable";
+    case "war":
+      return "critical";
+    case "fortify":
+      return "degraded";
+    case "develop":
+      return "stable";
     case "expand":
       return "healthy";
     default:
@@ -438,9 +496,12 @@ export function mapThreatHealth(posture: string): DimensionHealth {
  */
 export function mapCpuHealth(tier: string): DimensionHealth {
   switch (tier) {
-    case "recovery": return "critical";
-    case "conserve": return "degraded";
-    case "guarded": return "stable";
+    case "recovery":
+      return "critical";
+    case "conserve":
+      return "degraded";
+    case "guarded":
+      return "stable";
     case "healthy":
       return "healthy";
     default:
@@ -454,7 +515,10 @@ export function mapCpuHealth(tier: string): DimensionHealth {
  * @param spawnAvailable 是否有可用 spawn
  * @param spawnStarvationCount 最近 spawn 饥饿次数
  */
-export function mapSpawnHealth(spawnAvailable: boolean, spawnStarvationCount: number): DimensionHealth {
+export function mapSpawnHealth(
+  spawnAvailable: boolean,
+  spawnStarvationCount: number,
+): DimensionHealth {
   if (!spawnAvailable) return "critical";
   if (spawnStarvationCount >= 10) return "critical";
   if (spawnStarvationCount >= 3) return "degraded";
@@ -472,10 +536,15 @@ export function mapSpawnHealth(spawnAvailable: boolean, spawnStarvationCount: nu
  */
 export function dimensionScore(level: DimensionHealth): number {
   switch (level) {
-    case "healthy": return 1.0;
-    case "stable": return 0.75;
-    case "degraded": return 0.5;
-    case "critical": return 0.1;
-    default: return 0.5;
+    case "healthy":
+      return 1.0;
+    case "stable":
+      return 0.75;
+    case "degraded":
+      return 0.5;
+    case "critical":
+      return 0.1;
+    default:
+      return 0.5;
   }
 }

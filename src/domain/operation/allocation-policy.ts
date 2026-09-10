@@ -96,16 +96,14 @@ export function allocateNetwork(
   let totalUnsatisfied = 0;
 
   // 对 demand 按 7 因子综合评分排序
-  const sortedDemand = [...demandNodes].sort((a, b) =>
-    scoreDemand(b, tick) - scoreDemand(a, tick)
-  );
+  const sortedDemand = [...demandNodes].sort((a, b) => scoreDemand(b, tick) - scoreDemand(a, tick));
 
   for (const demand of sortedDemand) {
     let remaining = demand.remaining;
 
     // 遍历 supply（按 7 因子匹配度排序）
-    const sortedSupply = [...supplyNodes].sort((a, b) =>
-      scoreSupplyForDemand(b, demand, routes) - scoreSupplyForDemand(a, demand, routes)
+    const sortedSupply = [...supplyNodes].sort(
+      (a, b) => scoreSupplyForDemand(b, demand, routes) - scoreSupplyForDemand(a, demand, routes),
     );
 
     for (const supply of sortedSupply) {
@@ -185,7 +183,7 @@ function scoreDemand(demand: DemandNode, tick: number): number {
   const criticalityScore = criticalityToScore(demand.criticality) * 40;
 
   // Priority 评分（0=最高 → 3=最低，反转后归一化）
-  const priorityScore = (3 - demand.priority) / 3 * 20;
+  const priorityScore = ((3 - demand.priority) / 3) * 20;
 
   // Remaining 评分（需求量越大越紧急，上限 10000）
   const remainingScore = Math.min(1, demand.remaining / 10000) * 15;
@@ -202,8 +200,14 @@ function scoreDemand(demand: DemandNode, tick: number): number {
   // 用 criticality 代理）
   const healthScore = (1 - criticalityToScore(demand.criticality)) * 5;
 
-  return criticalityScore + priorityScore + remainingScore +
-    deadlineScore + starvationScore + healthScore;
+  return (
+    criticalityScore +
+    priorityScore +
+    remainingScore +
+    deadlineScore +
+    starvationScore +
+    healthScore
+  );
 }
 
 /**
@@ -239,10 +243,9 @@ function scoreSupplyForDemand(
   const safetyScore = Math.min(1, safetyRatio * 5) * 15;
 
   // Priority 评分（source 优先级越低 = 越适合调出）
-  const priorityScore = (3 - supply.priority) / 3 * 10;
+  const priorityScore = ((3 - supply.priority) / 3) * 10;
 
-  return transferableScore + distanceScore + healthScore +
-    safetyScore + priorityScore;
+  return transferableScore + distanceScore + healthScore + safetyScore + priorityScore;
 }
 
 /**
@@ -269,9 +272,13 @@ function explainPlan(
  */
 function criticalityToScore(c: Criticality): number {
   switch (c) {
-    case "critical": return 1.0;
-    case "high": return 0.75;
-    case "normal": return 0.5;
-    case "low": return 0.25;
+    case "critical":
+      return 1.0;
+    case "high":
+      return 0.75;
+    case "normal":
+      return 0.5;
+    case "low":
+      return 0.25;
   }
 }

@@ -10,11 +10,11 @@ import type { ExpansionReadinessResult } from "../strategy/readiness";
 
 /** 决策结论。 */
 export type DecisionOutcome =
-  | "APPROVE"      // 批准扩张
-  | "HOLD"         // 暂缓（条件接近满足但防抖未过）
-  | "REJECT"       // 不推荐
+  | "APPROVE" // 批准扩张
+  | "HOLD" // 暂缓（条件接近满足但防抖未过）
+  | "REJECT" // 不推荐
   | "INSUFFICIENT_BUDGET" // 预算不足
-  | "NOT_READY";   // 就绪度不足
+  | "NOT_READY"; // 就绪度不足
 
 /** 决策解释结果。 */
 export interface DecisionExplanation {
@@ -85,7 +85,9 @@ export function explainDecision(input: {
   }
 
   // ── Payback ──
-  evidence.push(`Payback: ${plan.payback.paybackTicks === Infinity ? "∞" : plan.payback.paybackTicks + "t"} ROI=${plan.payback.roi.toFixed(2)}`);
+  evidence.push(
+    `Payback: ${plan.payback.paybackTicks === Infinity ? "∞" : `${plan.payback.paybackTicks}t`} ROI=${plan.payback.roi.toFixed(2)}`,
+  );
   if (plan.payback.worthwhile) {
     enablers.push(`payback ${plan.payback.paybackTicks}t, ROI ${plan.payback.roi.toFixed(2)}`);
   } else {
@@ -131,5 +133,5 @@ export function explainDecision(input: {
  * 生成简短决策摘要（用于 log / dashboard 一行展示）。
  */
 export function explainShort(plan: ExpansionPlan, outcome: DecisionOutcome): string {
-  return `${plan.roomName}: ${outcome} | score=${plan.candidateScore.toFixed(2)} cost=${plan.cost.totalCost} risk=${plan.risk.level} payback=${plan.payback.paybackTicks === Infinity ? "∞" : plan.payback.paybackTicks + "t"}`;
+  return `${plan.roomName}: ${outcome} | score=${plan.candidateScore.toFixed(2)} cost=${plan.cost.totalCost} risk=${plan.risk.level} payback=${plan.payback.paybackTicks === Infinity ? "∞" : `${plan.payback.paybackTicks}t`}`;
 }

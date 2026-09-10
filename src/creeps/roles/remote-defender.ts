@@ -10,7 +10,7 @@ import { findContainersCached, findExitsCached, findSourcesCached } from "../sup
 function attackHostileAction(): ActionCandidate<Creep> {
   return {
     name: "remote-defender:attack-hostile",
-    resolve: (ac) => {
+    resolve: ac => {
       // RD-1：血量护栏 — 「NPC reserver 无攻击能力 → defender 不会受伤」只对 reserver 成立；
       // 带 ATTACK/RANGED 的 Invader（demand 触发场景就包含它）会站桩互殴。半血即撤：标记
       // recycle → role-runner 短路 idle → spawn-manager recyclePass 归航；collectRemoteCreeps
@@ -49,7 +49,7 @@ function attackHostileAction(): ActionCandidate<Creep> {
 function moveToDefensePost(): ActionCandidate<RoomPosition> {
   return {
     name: "remote-defender:move-to-post",
-    resolve: (ac) => {
+    resolve: ac => {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       // 有敌情时攻击候选接管 —— 本候选仅在无敌可打时兜底归位。
@@ -74,9 +74,8 @@ function moveToDefensePost(): ActionCandidate<RoomPosition> {
  */
 function defensePostOf(room: Room): RoomPosition | undefined {
   const containers = findContainersCached(room);
-  const anchors = containers.length > 0
-    ? containers.map(c => c.pos)
-    : findSourcesCached(room).map(s => s.pos);
+  const anchors =
+    containers.length > 0 ? containers.map(c => c.pos) : findSourcesCached(room).map(s => s.pos);
   if (anchors.length === 0) return undefined;
   if (anchors.length === 1) return anchors[0];
 
@@ -84,9 +83,16 @@ function defensePostOf(room: Room): RoomPosition | undefined {
   const exits = findExitsCached(room);
   if (exits.length === 0) {
     // 无出口数据（可能视野不全）— 退化为质心。
-    let sx = 0, sy = 0;
-    for (const p of anchors) { sx += p.x; sy += p.y; }
-    return room.getPositionAt(Math.round(sx / anchors.length), Math.round(sy / anchors.length)) ?? undefined;
+    let sx = 0,
+      sy = 0;
+    for (const p of anchors) {
+      sx += p.x;
+      sy += p.y;
+    }
+    return (
+      room.getPositionAt(Math.round(sx / anchors.length), Math.round(sy / anchors.length)) ??
+      undefined
+    );
   }
   let best = anchors[0]!;
   let bestDist = Infinity;
@@ -110,10 +116,7 @@ const policy: RolePolicy = {
   // idle 时归位 — 无敌可打时停在门口走廊带会堵死远矿出入口（reserver 等
   // 后续 creep pathFailure 的元凶），parkInForeignRoom 会把它推离边界带。
   park: true,
-  acquire: [
-    attackHostileAction(),
-    moveToDefensePost(),
-  ],
+  acquire: [attackHostileAction(), moveToDefensePost()],
   work: [
     // 与 acquire 相同 — 无 CARRY 部件，mode 振荡不影响行为。
     attackHostileAction(),

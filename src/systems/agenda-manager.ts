@@ -78,7 +78,10 @@ const TERMINAL_RETENTION = 1000;
  * 旧逻辑：routeCache 永不失效（除非 global reset），与 logistics-planner 的 RouteCache（TTL=5000）不一致。
  * 修复后：routeCache 条目带 timestamp，超过 ROUTE_CACHE_TTL 后失效重算。 */
 const ROUTE_CACHE_TTL = 5000; // 与 logistics-planner RouteCache TTL 一致
-const routeCache = new Map<string, { from: string; to: string; hops: number; reachable: boolean; cachedAt: number }>();
+const routeCache = new Map<
+  string,
+  { from: string; to: string; hops: number; reachable: boolean; cachedAt: number }
+>();
 
 /** pending 重规划事件（heap 缓冲，下次 planning cycle 消费）。 */
 let pendingEvents: ReplanEvent[] = [];
@@ -111,7 +114,10 @@ export function queueRebalanceEvent(event: RebalanceEvent): void {
  * 失败/不可达时返回 hops=-1。
  * A4.4 修复 DUPLICATE-005：添加 TTL 失效条件，与 logistics-planner RouteCache 一致。
  */
-function computeRoute(from: string, to: string): { from: string; to: string; hops: number; reachable: boolean } {
+function computeRoute(
+  from: string,
+  to: string,
+): { from: string; to: string; hops: number; reachable: boolean } {
   const key = `${from}:${to}`;
   const tick = Game.time;
   const cached = routeCache.get(key);
@@ -358,7 +364,10 @@ export const agendaManagerSystem: System = {
 
     const inTransitByTarget = new Map<string, number>();
     for (const op of operations) {
-      if (isActive(op) && (op.status === "running" || op.status === "verifying" || op.status === "ready")) {
+      if (
+        isActive(op) &&
+        (op.status === "running" || op.status === "verifying" || op.status === "ready")
+      ) {
         const current = inTransitByTarget.get(op.targetRoom) ?? 0;
         inTransitByTarget.set(op.targetRoom, current + (op.requestedAmount - op.deliveredAmount));
       }
@@ -439,7 +448,10 @@ export const agendaManagerSystem: System = {
       // 仍然标记 rebalance 完成（避免下个周期不必要的重算）。
       markRebalanced(rebalanceState, ctx.tick);
       if (supplyNodes.length > 0 && demandNodes.length > 0) {
-        log.info("agenda-manager", `agenda: Plan active (plannedAt=${logisticsPlan!.plannedAt}), allocateNetwork skipped in favor of Plan-driven operations`);
+        log.info(
+          "agenda-manager",
+          `agenda: Plan active (plannedAt=${logisticsPlan!.plannedAt}), allocateNetwork skipped in favor of Plan-driven operations`,
+        );
       }
     }
 
@@ -614,7 +626,10 @@ export const agendaManagerSystem: System = {
       if (carrierName) {
         const carrier = Game.creeps[carrierName];
         if (carrier && !carrier.spawning) {
-          if (carrier.room.name === op.targetRoom && carrier.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
+          if (
+            carrier.room.name === op.targetRoom &&
+            carrier.store.getUsedCapacity(RESOURCE_ENERGY) === 0
+          ) {
             // A4.4 修复 BYPASS-003：接入 Delivery Validation。
             // 旧逻辑：用 carrier 的 carry 容量作为送达量（行为证据），不验证 target 实际收到量。
             // 新逻辑：用 target storage 的实际增量验证送达量。
@@ -631,7 +646,8 @@ export const agendaManagerSystem: System = {
                 // A4.4：尝试用 Delivery Validation 验证实际送达量。
                 const targetRoom = Game.rooms[op.targetRoom];
                 const targetStorage = targetRoom?.storage;
-                const storageBefore = (carrier.memory as { deliverySnapBefore?: number }).deliverySnapBefore;
+                const storageBefore = (carrier.memory as { deliverySnapBefore?: number })
+                  .deliverySnapBefore;
 
                 let deliveredAmount: number;
 
@@ -640,7 +656,10 @@ export const agendaManagerSystem: System = {
                   const storageAfter = targetStorage.store.getUsedCapacity(RESOURCE_ENERGY);
                   // otherContributions = 其他来源的能量变化（简化：用 0，后续可扩展）
                   const otherContributions = 0;
-                  const actualReceived = Math.max(0, storageAfter - storageBefore - otherContributions);
+                  const actualReceived = Math.max(
+                    0,
+                    storageAfter - storageBefore - otherContributions,
+                  );
                   deliveredAmount = Math.min(carrierCapacity, actualReceived);
 
                   // 清除快照（已消费）
@@ -648,9 +667,12 @@ export const agendaManagerSystem: System = {
 
                   if (actualReceived < carrierCapacity) {
                     // 部分损失 — carrier 卸载了但 target 没全部收到
-                    log.info("agenda-manager", `agenda: delivery validation ${op.id} ` +
-                      `expected=${carrierCapacity}, actual=${actualReceived}, ` +
-                      `shortfall=${carrierCapacity - actualReceived}`,);
+                    log.info(
+                      "agenda-manager",
+                      `agenda: delivery validation ${op.id} ` +
+                        `expected=${carrierCapacity}, actual=${actualReceived}, ` +
+                        `shortfall=${carrierCapacity - actualReceived}`,
+                    );
                   }
                 } else {
                   // Fallback：target storage 不可读或无快照 → 用 carrier 容量推断。
@@ -713,7 +735,10 @@ export const agendaManagerSystem: System = {
 
     if (metrics.activeCount > 0 || health.level !== "healthy") {
       log.info("agenda-manager", formatOperationMetrics(metrics));
-      log.info("agenda-manager", `Network Health: ${health.level} (score=${health.score.toFixed(2)}, supply=${finalSnapshot.totalSupply}, demand=${finalSnapshot.totalRemaining})`);
+      log.info(
+        "agenda-manager",
+        `Network Health: ${health.level} (score=${health.score.toFixed(2)}, supply=${finalSnapshot.totalSupply}, demand=${finalSnapshot.totalRemaining})`,
+      );
     }
   },
 };

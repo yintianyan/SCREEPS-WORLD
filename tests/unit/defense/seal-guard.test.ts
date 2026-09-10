@@ -44,9 +44,14 @@ describe("seal-guard — wouldSeal", () => {
   it("自身 8 邻居全是障碍 → 出生即密封，拒绝", () => {
     // 围绕 (25,25) 的 8 个障碍。
     const obstacles = [
-      obstacleAt(24, 24), obstacleAt(25, 24), obstacleAt(26, 24),
-      obstacleAt(24, 25), obstacleAt(26, 25),
-      obstacleAt(24, 26), obstacleAt(25, 26), obstacleAt(26, 26),
+      obstacleAt(24, 24),
+      obstacleAt(25, 24),
+      obstacleAt(26, 24),
+      obstacleAt(24, 25),
+      obstacleAt(26, 25),
+      obstacleAt(24, 26),
+      obstacleAt(25, 26),
+      obstacleAt(26, 26),
     ];
     const snap = mockSnapshot({ extensions: obstacles });
     const set = buildObstaclePositionSet(snap);
@@ -59,9 +64,13 @@ describe("seal-guard — wouldSeal", () => {
     // 候选 (25,25) 自身有 (24,25) 可站，但会封死 (26,25)。
     const obstacles = [
       obstacleAt(26, 25), // 邻居
-      obstacleAt(25, 24), obstacleAt(26, 24), obstacleAt(27, 24),
+      obstacleAt(25, 24),
+      obstacleAt(26, 24),
+      obstacleAt(27, 24),
       obstacleAt(27, 25),
-      obstacleAt(25, 26), obstacleAt(26, 26), obstacleAt(27, 26),
+      obstacleAt(25, 26),
+      obstacleAt(26, 26),
+      obstacleAt(27, 26),
     ];
     const snap = mockSnapshot({ extensions: obstacles });
     const set = buildObstaclePositionSet(snap);
@@ -100,11 +109,21 @@ describe("seal-guard — validateBuildCell 接入", () => {
   // 注意：mockSnapshot 默认 source/controller 放在 (25,25)，本组测试须显式清空。
   it("密封候选返回 seal；开阔候选返回 ok；非障碍类型不检查", () => {
     const obstacles = [
-      obstacleAt(24, 24), obstacleAt(25, 24), obstacleAt(26, 24),
-      obstacleAt(24, 25), obstacleAt(26, 25),
-      obstacleAt(24, 26), obstacleAt(25, 26), obstacleAt(26, 26),
+      obstacleAt(24, 24),
+      obstacleAt(25, 24),
+      obstacleAt(26, 24),
+      obstacleAt(24, 25),
+      obstacleAt(26, 25),
+      obstacleAt(24, 26),
+      obstacleAt(25, 26),
+      obstacleAt(26, 26),
     ];
-    const snap = mockSnapshot({ rcl: 8, extensions: obstacles, sources: [], controller: undefined });
+    const snap = mockSnapshot({
+      rcl: 8,
+      extensions: obstacles,
+      sources: [],
+      controller: undefined,
+    });
     const set = buildObstaclePositionSet(snap);
 
     // 密封 → "seal"
@@ -118,12 +137,26 @@ describe("seal-guard — validateBuildCell 接入", () => {
 
   it("未提供 obstacleSet 时跳过密封检查（向后兼容）", () => {
     const obstacles = [
-      obstacleAt(24, 24), obstacleAt(25, 24), obstacleAt(26, 24),
-      obstacleAt(24, 25), obstacleAt(26, 25),
-      obstacleAt(24, 26), obstacleAt(25, 26), obstacleAt(26, 26),
+      obstacleAt(24, 24),
+      obstacleAt(25, 24),
+      obstacleAt(26, 24),
+      obstacleAt(24, 25),
+      obstacleAt(26, 25),
+      obstacleAt(24, 26),
+      obstacleAt(25, 26),
+      obstacleAt(26, 26),
     ];
-    const snap = mockSnapshot({ rcl: 8, extensions: obstacles, sources: [], controller: undefined });
-    const opts: ValidationOptions = { completedKeys: new Set(), globalSiteCount: 0, maxGlobalSites: 7 };
+    const snap = mockSnapshot({
+      rcl: 8,
+      extensions: obstacles,
+      sources: [],
+      controller: undefined,
+    });
+    const opts: ValidationOptions = {
+      completedKeys: new Set(),
+      globalSiteCount: 0,
+      maxGlobalSites: 7,
+    };
 
     expect(validateBuildCell(room, extCell, { x: 25, y: 25 }, snap, opts)).toBe("ok");
   });

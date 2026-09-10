@@ -1,6 +1,10 @@
 /** MVC link 角色缺口端到端测试（link 角色期望表）。 */
 import { describe, expect, it } from "vitest";
-import { auditStructureGaps, auditLinkRoleGaps, mergeLinkRoleGaps } from "../../../src/domain/layout/gaps";
+import {
+  auditStructureGaps,
+  auditLinkRoleGaps,
+  mergeLinkRoleGaps,
+} from "../../../src/domain/layout/gaps";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 import { mockSnapshot } from "../../support/factories";
 

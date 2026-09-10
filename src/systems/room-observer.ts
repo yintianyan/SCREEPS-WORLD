@@ -226,7 +226,8 @@ function collectRoomVision(room: Room): RoomVisionIntel {
   // 人工墙口径与 movement CostMatrix 一致（pathfinding buildStructurePositions）：
   // constructedWall 恒 255；rampart 仅非我方时 255（我方 rampart 可通行，不封路）。
   const walls = structures.filter(
-    s => s.structureType === STRUCTURE_WALL ||
+    s =>
+      s.structureType === STRUCTURE_WALL ||
       (s.structureType === STRUCTURE_RAMPART && !(s as StructureRampart).my),
   );
   const powerBank = structures.some(s => s.structureType === STRUCTURE_POWER_BANK);
@@ -345,10 +346,13 @@ function logPhaseIfChangedOrDue(
   const due = tick % PHASE_LOG_INTERVAL === 0;
   if (!due) return;
   void newPhase;
-  log.info("room-observer", `[PERIODIC] phase/${roomName}: phase=${newPhase}` +
+  log.info(
+    "room-observer",
+    `[PERIODIC] phase/${roomName}: phase=${newPhase}` +
       ` reserve=${state.reserve} delta=${state.reserveDelta >= 0 ? "+" : ""}${state.reserveDelta}` +
       ` drain=${state.drainScore} harv=${state.harvesterCount}/${state.sourceCount} rcl=${state.rcl}` +
-      ` state=${Memory.rooms[roomName]?.colonyState ?? "?"}`,);
+      ` state=${Memory.rooms[roomName]?.colonyState ?? "?"}`,
+  );
 }
 
 // RoomObservation 类型再导出占位（保持 import 面与语义一致）。

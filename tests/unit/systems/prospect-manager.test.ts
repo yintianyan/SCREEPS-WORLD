@@ -29,13 +29,19 @@ function setupIntel(): void {
   };
   (globalThis as any).Memory.rooms.W7N4 = { spawnQueue: [] };
   __resetIntelStateForTests();
-  globalCache().intelHandoff = [{
-    subject: "W6N4",
-    home: "W7N4",
-    source: "observer",
-    payload: { kind: "normal", status: "normal", lastSeen: 500 } as never, // sources 未知
-  }];
-  intelligenceSystem.run({ tick: 1000, snapshots: () => [], budget: { canStart: () => true } } as never);
+  globalCache().intelHandoff = [
+    {
+      subject: "W6N4",
+      home: "W7N4",
+      source: "observer",
+      payload: { kind: "normal", status: "normal", lastSeen: 500 } as never, // sources 未知
+    },
+  ];
+  intelligenceSystem.run({
+    tick: 1000,
+    snapshots: () => [],
+    budget: { canStart: () => true },
+  } as never);
 }
 
 function makeContext(snapshot?: any): any {
@@ -46,7 +52,9 @@ function makeContext(snapshot?: any): any {
     budget: mockBudget("healthy"),
     globalSiteCount: 0,
     getSnapshot: (name: string) => map[name],
-    snapshots: function* () { yield snap; },
+    *snapshots() {
+      yield snap;
+    },
   };
 }
 
@@ -101,7 +109,10 @@ describe("prospect-manager — 任务开启", () => {
     setPosture(true);
     (globalThis as any).Game.cpu.bucket = 10000;
     (globalThis as any).Memory.kernel.expansion = {
-      state: "claiming", target: "W8N4", sponsor: "W7N4", startedAt: 900,
+      state: "claiming",
+      target: "W8N4",
+      sponsor: "W7N4",
+      startedAt: 900,
     };
     syncSquadIndex();
 
@@ -125,9 +136,17 @@ describe("prospect-manager — 生命周期与止损", () => {
         },
       },
       kernel: {
-        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
+        strategy: {
+          posture: "expand",
+          since: 900,
+          expansionAllowed: true,
+          newRemoteOpsAllowed: true,
+        },
         prospect: {
-          target: "W6N4", sponsor: "W7N4", startedAt: 900, spawned: 1,
+          target: "W6N4",
+          sponsor: "W7N4",
+          startedAt: 900,
+          spawned: 1,
           ...overrides,
         },
       },
@@ -143,12 +162,14 @@ describe("prospect-manager — 生命周期与止损", () => {
   it("成功：目标 intel 新鲜且 sources 已知 → 收摊 + 事件 success + 无冷却", () => {
     missionFixture();
     __resetIntelStateForTests();
-    globalCache().intelHandoff = [{
-      subject: "W6N4",
-      home: "W7N4",
-      source: "observer",
-      payload: { kind: "normal", status: "normal", sources: 2, lastSeen: 990 } as never,
-    }];
+    globalCache().intelHandoff = [
+      {
+        subject: "W6N4",
+        home: "W7N4",
+        source: "observer",
+        payload: { kind: "normal", status: "normal", sources: 2, lastSeen: 990 } as never,
+      },
+    ];
     intelligenceSystem.run({
       tick: TICK,
       snapshots: () => [],
@@ -178,8 +199,9 @@ describe("prospect-manager — 生命周期与止损", () => {
     prospectManagerSystem.run(makeContext());
 
     expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
-    expect((globalThis as any).Memory.kernel.prospectCooldown.W6N4)
-      .toBe(TICK + CONFIG.prospect.cooldownTicks);
+    expect((globalThis as any).Memory.kernel.prospectCooldown.W6N4).toBe(
+      TICK + CONFIG.prospect.cooldownTicks,
+    );
     expect(prospectEvents()[0]?.d?.[0]).toBe(1);
   });
 
@@ -200,8 +222,9 @@ describe("prospect-manager — 生命周期与止损", () => {
     prospectManagerSystem.run(makeContext());
 
     expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
-    expect((globalThis as any).Memory.kernel.prospectCooldown.W6N4)
-      .toBe(TICK + CONFIG.prospect.cooldownTicks);
+    expect((globalThis as any).Memory.kernel.prospectCooldown.W6N4).toBe(
+      TICK + CONFIG.prospect.cooldownTicks,
+    );
     expect(prospectEvents()[0]?.d?.[0]).toBe(2);
   });
 

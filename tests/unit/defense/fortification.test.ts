@@ -8,7 +8,11 @@ import {
 import { CONFIG, getWallTargetHits } from "../../../src/config";
 
 /** 手工构建分类上下文（绕过快照，直接控制三个集合）。 */
-function ctx(opts: { minCut?: [number, number][]; core?: [number, number][]; utility?: [number, number][] }) {
+function ctx(opts: {
+  minCut?: [number, number][];
+  core?: [number, number][];
+  utility?: [number, number][];
+}) {
   return {
     minCutSet: new Set((opts.minCut ?? []).map(([x, y]) => packFortXY(x, y))),
     coreSet: new Set((opts.core ?? []).map(([x, y]) => packFortXY(x, y))),

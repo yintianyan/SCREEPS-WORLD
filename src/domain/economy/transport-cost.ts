@@ -13,10 +13,7 @@
  * @param linearDistance 两房间间的线性距离（Game.map.getRoomLinearDistance）
  * @param weight 每单位距离的权重（默认 10）
  */
-export function computeDistanceCost(
-  linearDistance: number,
-  weight: number = 10,
-): number {
+export function computeDistanceCost(linearDistance: number, weight: number = 10): number {
   return Math.max(0, linearDistance * weight);
 }
 
@@ -113,9 +110,7 @@ export function computeTimeCost(
   if (body.capacity <= 0 || amount <= 0) return 0;
   const roundTrips = Math.ceil(amount / body.capacity);
   const moveSpeed = hasRoad ? 1 : 0.5;
-  const roundTripTicks = linearDistance > 0
-    ? Math.ceil((linearDistance * 2) / moveSpeed)
-    : 1;
+  const roundTripTicks = linearDistance > 0 ? Math.ceil((linearDistance * 2) / moveSpeed) : 1;
   const totalTicks = roundTrips * roundTripTicks;
   return totalTicks * cpuTimeValue;
 }
@@ -149,7 +144,10 @@ export interface TransportCostInput {
 /**
  * 默认运输成本参数。
  */
-export const DEFAULT_TRANSPORT_PARAMS: Omit<TransportCostInput, "amount" | "linearDistance" | "body"> = {
+export const DEFAULT_TRANSPORT_PARAMS: Omit<
+  TransportCostInput,
+  "amount" | "linearDistance" | "body"
+> = {
   hasRoad: true,
   decayPerTrip: 0,
   haulerLifespan: 1000,
@@ -185,13 +183,17 @@ export interface TransportCostBreakdown {
 
  * 纯函数。
  */
-export function computeTransportCost(
-  input: TransportCostInput,
-): TransportCostBreakdown {
+export function computeTransportCost(input: TransportCostInput): TransportCostBreakdown {
   const {
-    amount, linearDistance, body,
-    hasRoad, decayPerTrip, haulerLifespan,
-    distanceWeight, costPerSpawnEnergy, cpuTimeValue,
+    amount,
+    linearDistance,
+    body,
+    hasRoad,
+    decayPerTrip,
+    haulerLifespan,
+    distanceWeight,
+    costPerSpawnEnergy,
+    cpuTimeValue,
   } = input;
 
   const distance = computeDistanceCost(linearDistance, distanceWeight);
@@ -199,13 +201,9 @@ export function computeTransportCost(
   const energy = computeEnergyCost(amount, body, linearDistance, decayPerTrip);
 
   // 时间成本
-  const roundTrips = body.capacity > 0 && amount > 0
-    ? Math.ceil(amount / body.capacity)
-    : 0;
+  const roundTrips = body.capacity > 0 && amount > 0 ? Math.ceil(amount / body.capacity) : 0;
   const moveSpeed = hasRoad ? 1 : 0.5;
-  const roundTripTicks = linearDistance > 0
-    ? Math.ceil((linearDistance * 2) / moveSpeed)
-    : 1;
+  const roundTripTicks = linearDistance > 0 ? Math.ceil((linearDistance * 2) / moveSpeed) : 1;
   const estimatedTicks = roundTrips * roundTripTicks;
   const time = estimatedTicks * cpuTimeValue;
 

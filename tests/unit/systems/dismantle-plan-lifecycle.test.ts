@@ -47,8 +47,12 @@ describe("P1-4 拆改冷却（DISMANTLE_COOLDOWN）", () => {
   it("超过 DISMANTLE_COOLDOWN 后冷却过期 → isDismantleOnCooldown 返回 false", () => {
     recordDismantleStart("W7N4", 1000);
     const expiry = 1000 + DISMANTLE_COOLDOWN;
-    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", expiry - 1)).toBe(true);
-    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", expiry)).toBe(false);
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", expiry - 1)).toBe(
+      true,
+    );
+    expect(isDismantleOnCooldownDomain(globalCache().lastDismantleTick, "W7N4", expiry)).toBe(
+      false,
+    );
   });
 
   it("不同房间独立冷却", () => {
@@ -234,7 +238,7 @@ describe("P1-4 完整生命周期场景模拟", () => {
   it("场景1：waiting → validating → success（替代 link 灌能）", () => {
     // 1. 创建拆改计划
     createDismantlePlan("deadLink1", "W7N4", "replacement.key", { x: 15, y: 16 }, 1000);
-    let plan = getDismantlePlans().get("deadLink1")!;
+    const plan = getDismantlePlans().get("deadLink1")!;
     expect(plan.state).toBe("waiting");
 
     // 2. 替代 link 建成 → 转 validating
@@ -262,7 +266,7 @@ describe("P1-4 完整生命周期场景模拟", () => {
 
   it("场景3：validating → fallback（超时未灌能 → markLinkConstrained）", () => {
     createDismantlePlan("deadLink1", "W7N4", "replacement.key", { x: 15, y: 16 }, 1000);
-    let plan = getDismantlePlans().get("deadLink1")!;
+    const plan = getDismantlePlans().get("deadLink1")!;
 
     // 转 validating
     plan.state = "validating";
@@ -278,7 +282,9 @@ describe("P1-4 完整生命周期场景模拟", () => {
 
     expect(getDismantlePlans().has("deadLink1")).toBe(false);
     // linkConstrained 标记存在（避免重复拆改空转）
-    expect(isLinkConstrainedDomain(globalCache().linkConstrained, "W7N4", validationExpiredTick)).toBe(true);
+    expect(
+      isLinkConstrainedDomain(globalCache().linkConstrained, "W7N4", validationExpiredTick),
+    ).toBe(true);
   });
 
   it("场景4：战时暂停（defense 期间不处理，恢复 peace 后继续）", () => {

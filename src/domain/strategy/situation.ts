@@ -75,10 +75,9 @@ export function buildEmpireSituation(input: SituationInput): EmpireSituation {
         conditions.push({
           id: `newbornColonyRisk:${room.room}`,
           severity: ttdCritical ? 3 : 2,
-          detail:
-            `RCL${room.rcl} 无spawn` +
-            (underThreat ? ` 敌情x${room.threats.length}` : "") +
-            (ttdCritical ? ` TTD=${room.ttd}` : ""),
+          detail: `RCL${room.rcl} 无spawn${
+            underThreat ? ` 敌情x${room.threats.length}` : ""
+          }${ttdCritical ? ` TTD=${room.ttd}` : ""}`,
         });
       }
     }

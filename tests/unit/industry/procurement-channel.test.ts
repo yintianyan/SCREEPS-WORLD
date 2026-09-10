@@ -5,7 +5,13 @@ import type { ProcurementDemand } from "../../../src/kernel/global-cache";
 import { collectDemands } from "../../../src/domain/industry/procurement";
 import { resetGlobals } from "../../support/factories";
 
-function demand(resource: string, amount: number, priority: number, deadline: number, reason: string): ProcurementDemand {
+function demand(
+  resource: string,
+  amount: number,
+  priority: number,
+  deadline: number,
+  reason: string,
+): ProcurementDemand {
   return { resource, amount, priority, deadline, reason };
 }
 
@@ -20,7 +26,7 @@ describe("procurement channel — 多生产者合并语义", () => {
     publishProcurementDemands("W37S58", [demand("U", 300, 12, 1150, "factory-commodity")], 1010);
     const room = globalCache().procurementDemands!.byRoom.W37S58!;
     expect(room).toHaveLength(2);
-    expect(room.map((d) => d.resource).sort()).toEqual(["H", "U"]);
+    expect(room.map(d => d.resource).sort()).toEqual(["H", "U"]);
   });
 
   it("同资源新发布覆盖旧条目（取新量与新截止）", () => {
@@ -36,7 +42,7 @@ describe("procurement channel — 多生产者合并语义", () => {
     // tick 推进到 1100：H 的 deadline=1050 已过期
     publishProcurementDemands("W37S58", [demand("U", 300, 12, 1400, "factory-commodity")], 1100);
     const room = globalCache().procurementDemands!.byRoom.W37S58!;
-    expect(room.map((d) => d.resource)).toEqual(["U"]);
+    expect(room.map(d => d.resource)).toEqual(["U"]);
   });
 
   it("跨 tick 持久化：容器不被后续 tick 清空（旧 tick 守卫回归）", () => {
@@ -51,15 +57,16 @@ describe("procurement channel — 多生产者合并语义", () => {
 
 describe("procurement channel — 消费端视图（collectDemands 集成）", () => {
   it("合并后的表经 collectDemands 按 priority 降序输出且过滤过期", () => {
-    publishProcurementDemands("W37S58", [
-      demand("H", 500, 25, 1600, "lab-reaction"),
-      demand("ZK", 80, 30, 1900, "lab-reaction"),
-    ], 1000);
+    publishProcurementDemands(
+      "W37S58",
+      [demand("H", 500, 25, 1600, "lab-reaction"), demand("ZK", 80, 30, 1900, "lab-reaction")],
+      1000,
+    );
     publishProcurementDemands("W37S58", [demand("U", 300, 12, 1700, "factory-commodity")], 1010);
     const all = collectDemands(globalCache().procurementDemands!.byRoom, 1020);
-    expect(all.map((d) => d.resource)).toEqual(["ZK", "H", "U"]); // priority 降序
+    expect(all.map(d => d.resource)).toEqual(["ZK", "H", "U"]); // priority 降序
     // deadline 过滤：tick=1750 越过 H(1600)/U(1700)，仅高优先 ZK(1900) 存活
     const later = collectDemands(globalCache().procurementDemands!.byRoom, 1750);
-    expect(later.map((d) => d.resource)).toEqual(["ZK"]);
+    expect(later.map(d => d.resource)).toEqual(["ZK"]);
   });
 });

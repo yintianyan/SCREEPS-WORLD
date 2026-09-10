@@ -80,57 +80,53 @@ describe("E2E-015 低 CPU soak — CpuTier 降级链", () => {
     await runner.teardown();
   });
 
-  it(
-    "四档降级链全链发生（含滞回爬升）且 bot 存活、Memory 有界",
-    async () => {
-      // 段 1：cpu=2 / bucket=8000 — healthy 档基线。
-      await runStage(400);
-      // 段 2：注入 conserve 带（1000 ≤ b < 3000；guarded 为 3000–7000）。
-      await injectCpu(runner, { cpuAvailable: 2500 });
-      await runStage(400);
-      // 段 3：注入 conserve 档（b < 1000）。
-      await injectCpu(runner, { cpuAvailable: 800 });
-      await runStage(400);
-      // 段 4：注入 recovery 档（b 极低，逼近枯竭语义）。
-      await injectCpu(runner, { cpuAvailable: 200 });
-      await runStage(600);
-      // 段 5：恢复 cpu=100 + 半桶 — 回充 + 滞回爬升。
-      await injectCpu(runner, { cpu: 100, cpuAvailable: 6000 });
-      await runStage(1200);
+  it("四档降级链全链发生（含滞回爬升）且 bot 存活、Memory 有界", async () => {
+    // 段 1：cpu=2 / bucket=8000 — healthy 档基线。
+    await runStage(400);
+    // 段 2：注入 conserve 带（1000 ≤ b < 3000；guarded 为 3000–7000）。
+    await injectCpu(runner, { cpuAvailable: 2500 });
+    await runStage(400);
+    // 段 3：注入 conserve 档（b < 1000）。
+    await injectCpu(runner, { cpuAvailable: 800 });
+    await runStage(400);
+    // 段 4：注入 recovery 档（b 极低，逼近枯竭语义）。
+    await injectCpu(runner, { cpuAvailable: 200 });
+    await runStage(600);
+    // 段 5：恢复 cpu=100 + 半桶 — 回充 + 滞回爬升。
+    await injectCpu(runner, { cpu: 100, cpuAvailable: 6000 });
+    await runStage(1200);
 
-      // ── 证据登记（CANARY §4.2 绑定模板要素，供文档归档）──
-      const tiers = probes.map((p) => p.tier);
-      const distinctTiers = [...new Set(tiers)];
-      console.log(
-        `[soak-evidence] low-cpu: ticks≈3200 cpuStart=2 cpuRestored=100 ` +
-          `probes=${probes.map((p) => `${p.tick}:${p.bucket}(${p.tier})`).join(",")} ` +
-          `distinctTiers=${distinctTiers.join("/")} jsErrors=${errorsSeen}`,
-      );
+    // ── 证据登记（CANARY §4.2 绑定模板要素，供文档归档）──
+    const tiers = probes.map(p => p.tier);
+    const distinctTiers = [...new Set(tiers)];
+    console.log(
+      `[soak-evidence] low-cpu: ticks≈3200 cpuStart=2 cpuRestored=100 ` +
+        `probes=${probes.map(p => `${p.tick}:${p.bucket}(${p.tier})`).join(",")} ` +
+        `distinctTiers=${distinctTiers.join("/")} jsErrors=${errorsSeen}`,
+    );
 
-      // 四档全链发生（CANARY §5.3：tier 切换验证四档降级）。
-      for (const tier of ["healthy", "guarded", "conserve", "recovery"]) {
-        expect(
-          distinctTiers,
-          `CpuTier 时间线缺少 ${tier} 档: ${probes.map((p) => `${p.tick}:${p.bucket}(${p.tier})`).join(", ")}`,
-        ).toContain(tier);
-      }
-
-      // 爬升段：最终 probe 回到 healthy（滞回升级收敛）。
+    // 四档全链发生（CANARY §5.3：tier 切换验证四档降级）。
+    for (const tier of ["healthy", "guarded", "conserve", "recovery"]) {
       expect(
-        probes.at(-1)!.tier,
-        `恢复后未爬回 healthy: ${probes.map((p) => `${p.tick}:${p.bucket}(${p.tier})`).join(", ")}`,
-      ).toBe("healthy");
+        distinctTiers,
+        `CpuTier 时间线缺少 ${tier} 档: ${probes.map(p => `${p.tick}:${p.bucket}(${p.tier})`).join(", ")}`,
+      ).toContain(tier);
+    }
 
-      // 全程存活 + Memory 有界。
-      const lastSnap = (await runner.runTicks(1)).at(-1)!;
-      expect(
-        lastSnap.totalCreeps,
-        `低 CPU 降级链走完后无 creep — 死亡螺旋。\ntick=${lastSnap.tick}`,
-      ).toBeGreaterThanOrEqual(1);
-      const mem = await runner.bot.getMemory();
-      const memSize = JSON.stringify(mem).length;
-      expect(memSize, `低 CPU soak Memory 过大: ${memSize} bytes`).toBeLessThan(500_000);
-    },
-    600000,
-  );
+    // 爬升段：最终 probe 回到 healthy（滞回升级收敛）。
+    expect(
+      probes.at(-1)!.tier,
+      `恢复后未爬回 healthy: ${probes.map(p => `${p.tick}:${p.bucket}(${p.tier})`).join(", ")}`,
+    ).toBe("healthy");
+
+    // 全程存活 + Memory 有界。
+    const lastSnap = (await runner.runTicks(1)).at(-1)!;
+    expect(
+      lastSnap.totalCreeps,
+      `低 CPU 降级链走完后无 creep — 死亡螺旋。\ntick=${lastSnap.tick}`,
+    ).toBeGreaterThanOrEqual(1);
+    const mem = await runner.bot.getMemory();
+    const memSize = JSON.stringify(mem).length;
+    expect(memSize, `低 CPU soak Memory 过大: ${memSize} bytes`).toBeLessThan(500_000);
+  }, 600000);
 });

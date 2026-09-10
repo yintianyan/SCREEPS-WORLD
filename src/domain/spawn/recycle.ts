@@ -40,9 +40,8 @@ export function selectRecycleCandidates(
   // 让 recyclePass 主动收敛到新边界，避免 isContractMet 死锁。
   if (haulerTarget !== undefined) {
     const haulers = summaries.filter(s => s.home === home && s.role === "hauler");
-    const keep = haulerPendingDownTarget !== undefined
-      ? haulerPendingDownTarget + 1
-      : haulerTarget + 1;
+    const keep =
+      haulerPendingDownTarget !== undefined ? haulerPendingDownTarget + 1 : haulerTarget + 1;
     if (haulers.length > keep) {
       const sorted = [...haulers].sort((a, b) => (a.ticksToLive ?? 0) - (b.ticksToLive ?? 0));
       const excess = sorted.slice(0, sorted.length - keep);

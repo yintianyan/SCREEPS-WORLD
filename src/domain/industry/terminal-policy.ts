@@ -14,7 +14,10 @@ const MINERAL_RESERVE_TARGET: Readonly<Record<string, number>> = {
 
 /** 单房间阶段 no-op 策略；多房间时替换为实际调度。 */
 export const singleRoomTerminalPolicy: TerminalPolicy = {
-  planTransfers(_roomName: string, _available: Readonly<Record<string, number>>): readonly TerminalTransfer[] {
+  planTransfers(
+    _roomName: string,
+    _available: Readonly<Record<string, number>>,
+  ): readonly TerminalTransfer[] {
     return [];
   },
 };

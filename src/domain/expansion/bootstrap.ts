@@ -34,7 +34,17 @@ export const ABANDON_TTD_THRESHOLD = 800;
 export const BOOTSTRAP_MIN_SPONSOR_CAPACITY = 1000;
 
 /** worker：3W3C3M = 600 —— 单程自足建满 RCL1 前置。 */
-export const BOOTSTRAP_WORKER_BODY = [WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE] as const;
+export const BOOTSTRAP_WORKER_BODY = [
+  WORK,
+  WORK,
+  WORK,
+  CARRY,
+  CARRY,
+  CARRY,
+  MOVE,
+  MOVE,
+  MOVE,
+] as const;
 /** defender：远程风筝 2RA2M = 400 —— 对无防御部件的采矿/降级单位占优。 */
 export const BOOTSTRAP_DEFENDER_BODY = [RANGED_ATTACK, RANGED_ATTACK, MOVE, MOVE] as const;
 
@@ -61,7 +71,7 @@ export function decideBootstrapRooms(input: {
       decisions.push({
         room: r.room,
         action: "abandon",
-        reason: "ttd=" + r.ttd + "<" + ABANDON_TTD_THRESHOLD + " hostiles=" + r.hostileCount,
+        reason: `ttd=${r.ttd}<${ABANDON_TTD_THRESHOLD} hostiles=${r.hostileCount}`,
       });
       continue;
     }
@@ -77,7 +87,7 @@ export function decideBootstrapRooms(input: {
       room: r.room,
       action: "dispatch",
       sponsor: r.sponsor.room,
-      reason: "wave" + ((entry?.waves ?? 0) + 1),
+      reason: `wave${(entry?.waves ?? 0) + 1}`,
     });
   }
   return { decisions, ledgerUpdates };

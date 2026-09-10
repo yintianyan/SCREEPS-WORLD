@@ -1,4 +1,10 @@
-import type { Blueprint, BlueprintCell, BuildPriority, LayoutPhase, ValidationResult } from "./types";
+import type {
+  Blueprint,
+  BlueprintCell,
+  BuildPriority,
+  LayoutPhase,
+  ValidationResult,
+} from "./types";
 import { absPos, packPos, unpackPos } from "./types";
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { validateBuildCell, wouldSeal, type ValidationOptions } from "./validation";
@@ -63,9 +69,10 @@ export function blueprintToTasks(
     if (!phaseAllowed(cell.phase, rcl)) continue;
 
     const override = overrides?.get(cell.key);
-    const pos = override !== undefined
-      ? { ...unpackPos(override), roomName }
-      : absPos(anchorX, anchorY, cell, roomName);
+    const pos =
+      override !== undefined
+        ? { ...unpackPos(override), roomName }
+        : absPos(anchorX, anchorY, cell, roomName);
     const validation = validateBuildCell(room, cell, pos, snapshot, options);
 
     candidates.push({
@@ -90,8 +97,14 @@ export const RELOCATABLE_TYPES: ReadonlySet<string> = new Set(["extension", "tow
  * 新位置的 4 个正交邻居仍是奇校验走道格，密封安全由几何保证。
  */
 const RELOCATE_OFFSETS: ReadonlyArray<readonly [number, number]> = [
-  [2, 0], [-2, 0], [0, 2], [0, -2],
-  [2, 2], [-2, 2], [2, -2], [-2, -2],
+  [2, 0],
+  [-2, 0],
+  [0, 2],
+  [0, -2],
+  [2, 2],
+  [-2, 2],
+  [2, -2],
+  [-2, -2],
 ];
 
 /**
@@ -126,23 +139,28 @@ export function relocateCandidate(
 export function filterValidCandidates(
   candidates: readonly BuildTaskCandidate[],
 ): BuildTaskCandidate[] {
-  return candidates.filter(c => c.validation === "ok" || c.validation === "rcl" || c.validation === "dependency" || c.validation === "site-limit");
+  return candidates.filter(
+    c =>
+      c.validation === "ok" ||
+      c.validation === "rcl" ||
+      c.validation === "dependency" ||
+      c.validation === "site-limit",
+  );
 }
 
 /** 提取永久失败任务（用于 blocked 记录）；seal 除非邻居消失否则永不放行。 */
 export function extractBlockedCandidates(
   candidates: readonly BuildTaskCandidate[],
 ): BuildTaskCandidate[] {
-  return candidates.filter(c => c.validation === "terrain" || c.validation === "occupied" || c.validation === "seal");
+  return candidates.filter(
+    c => c.validation === "terrain" || c.validation === "occupied" || c.validation === "seal",
+  );
 }
 
 /** 候选 → BuildTask（state 初始 "queued"，推入 BuildQueue）。
  *  queuedAt：入队 tick（R2 队列治理 — 年龄观测/超龄清除），由调用方传入
  *  （domain 纯函数禁读 Game.time）。 */
-export function candidateToBuildTask(
-  candidate: BuildTaskCandidate,
-  queuedAt = 0,
-): BuildTask {
+export function candidateToBuildTask(candidate: BuildTaskCandidate, queuedAt = 0): BuildTask {
   return {
     key: candidate.key,
     pos: candidate.pos,
@@ -178,7 +196,9 @@ export function createSourceContainerTasks(
   // container，误用会导致被毁的 source container 永不补建。
   const adjacentToSource = (x: number, y: number): boolean =>
     snapshot.sources.some(s => Math.abs(s.pos.x - x) <= 1 && Math.abs(s.pos.y - y) <= 1);
-  const sourceContainerCount = snapshot.containers.filter(c => adjacentToSource(c.pos.x, c.pos.y)).length;
+  const sourceContainerCount = snapshot.containers.filter(c =>
+    adjacentToSource(c.pos.x, c.pos.y),
+  ).length;
   const sourceContainerSites = snapshot.constructionSites.filter(
     s => s.structureType === STRUCTURE_CONTAINER && adjacentToSource(s.pos.x, s.pos.y),
   ).length;
@@ -216,7 +236,8 @@ export function createControllerContainerTask(
   if (!snapshot.controller) return undefined;
 
   const controller = snapshot.controller;
-  if (hasAdjacentStructure(controller.pos.x, controller.pos.y, snapshot, STRUCTURE_CONTAINER)) return undefined;
+  if (hasAdjacentStructure(controller.pos.x, controller.pos.y, snapshot, STRUCTURE_CONTAINER))
+    return undefined;
 
   const maxContainers = CONTROLLER_STRUCTURES[STRUCTURE_CONTAINER]?.[snapshot.rcl] ?? 0;
   const existingContainers = snapshot.containers.length;
@@ -247,16 +268,13 @@ export function createControllerContainerTask(
  * anchorRange 取 2：必须与 CONFIG.economy.link.anchorRange / classifyLinkRole 默认值
  * 同步（放置侧纯函数不访问 CONFIG，改动需三处同步）。
  */
-function linkRoleMatch(
-  snapshot: RoomSnapshot,
-  x: number,
-  y: number,
-  expected: LinkRole,
-): boolean {
+function linkRoleMatch(snapshot: RoomSnapshot, x: number, y: number, expected: LinkRole): boolean {
   const role = classifyLinkRole(
     { x, y },
     snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
-    snapshot.controller ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y } : undefined,
+    snapshot.controller
+      ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
+      : undefined,
     snapshot.storage ? { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y } : undefined,
     2,
   );
@@ -340,28 +358,53 @@ export function createSourceLinkTasks(
     const adjacentLinkFeedable = [
       ...snapshot.links,
       ...snapshot.constructionSites.filter(s => s.structureType === STRUCTURE_LINK),
-    ].some(l =>
-      Math.abs(l.pos.x - source.pos.x) <= 1 &&
-      Math.abs(l.pos.y - source.pos.y) <= 1 &&
-      hasSourceLinkFeedStand(
-        l.pos.x, l.pos.y, source.pos.x, source.pos.y, terrain, occupiedSet, containerTiles,
-      ),
+    ].some(
+      l =>
+        Math.abs(l.pos.x - source.pos.x) <= 1 &&
+        Math.abs(l.pos.y - source.pos.y) <= 1 &&
+        hasSourceLinkFeedStand(
+          l.pos.x,
+          l.pos.y,
+          source.pos.x,
+          source.pos.y,
+          terrain,
+          occupiedSet,
+          containerTiles,
+        ),
     );
     if (adjacentLinkFeedable) continue;
     // 角色感知选位：只接受运行时分类为 source 的邻格 — source 邻近 storage/controller
     // 时部分邻格会被判为 storage/controller → harvester 拒灌 → 死 link。
     const adjacentPos = findAdjacentBuildable(
-      source.pos, room, snapshot, options, linkRolePredicate(snapshot, "source"), 2,
+      source.pos,
+      room,
+      snapshot,
+      options,
+      linkRolePredicate(snapshot, "source"),
+      2,
     );
     // 密封守卫：link 是障碍结构，出生即密封或封死邻居的位置不放。
-    if (adjacentPos && options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
+    if (
+      adjacentPos &&
+      options.obstacleSet &&
+      wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)
+    ) {
       continue;
     }
     // 可喂性守卫：必须存在可走、未占用的双贴站桩格（W7N3 source-2 实证
     // 双贴格全墙 → link 建成即死），放置前过滤。
-    if (adjacentPos && !hasSourceLinkFeedStand(
-      adjacentPos.x, adjacentPos.y, source.pos.x, source.pos.y, terrain, occupiedSet, containerTiles,
-    )) {
+    if (
+      adjacentPos &&
+      !hasSourceLinkFeedStand(
+        adjacentPos.x,
+        adjacentPos.y,
+        source.pos.x,
+        source.pos.y,
+        terrain,
+        occupiedSet,
+        containerTiles,
+      )
+    ) {
       continue;
     }
     if (adjacentPos) {
@@ -393,11 +436,19 @@ export function createControllerLinkTask(
   const controller = snapshot.controller!;
 
   const adjacentPos = findAdjacentBuildable(
-    controller.pos, room, snapshot, options, linkRolePredicate(snapshot, "controller"), 2,
+    controller.pos,
+    room,
+    snapshot,
+    options,
+    linkRolePredicate(snapshot, "controller"),
+    2,
   );
   if (!adjacentPos) return undefined;
   // 密封守卫：link 是障碍结构。
-  if (options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
+  if (
+    options.obstacleSet &&
+    wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)
+  ) {
     return undefined;
   }
 
@@ -416,18 +467,18 @@ export function createControllerLinkTask(
  * P1-3 fallback 链：layout-planner 以此区分「几何放不下」（标记 linkConstrained）
  * 与「正常跳过」（已建成 / 槽位满 / RCL 不足）。
  */
-export function shouldHaveControllerLink(
-  snapshot: RoomSnapshot,
-  queuedLinkCount = 0,
-): boolean {
+export function shouldHaveControllerLink(snapshot: RoomSnapshot, queuedLinkCount = 0): boolean {
   if (snapshot.rcl < 5) return false;
   if (!snapshot.controller) return false;
-  if (hasAdjacentStructure(
-    snapshot.controller.pos.x,
-    snapshot.controller.pos.y,
-    snapshot,
-    STRUCTURE_LINK,
-  )) return false;
+  if (
+    hasAdjacentStructure(
+      snapshot.controller.pos.x,
+      snapshot.controller.pos.y,
+      snapshot,
+      STRUCTURE_LINK,
+    )
+  )
+    return false;
   const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
   const existingLinks = snapshot.links.length;
   const linkSites = snapshot.constructionSites.filter(
@@ -454,11 +505,19 @@ export function createStorageLinkTask(
 
   // 角色感知：只接受运行时分类为 storage 的邻格（link 无需站桩位）。
   const adjacentPos = findAdjacentBuildable(
-    storage.pos, room, snapshot, options, linkRolePredicate(snapshot, "storage"), 2,
+    storage.pos,
+    room,
+    snapshot,
+    options,
+    linkRolePredicate(snapshot, "storage"),
+    2,
   );
   if (!adjacentPos) return undefined;
   // 密封守卫：link 是障碍结构。
-  if (options.obstacleSet && wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)) {
+  if (
+    options.obstacleSet &&
+    wouldSeal(adjacentPos.x, adjacentPos.y, room.getTerrain(), options.obstacleSet)
+  ) {
     return undefined;
   }
 
@@ -478,18 +537,13 @@ export function createStorageLinkTask(
  * P1-3 fallback 链：layout-planner 以此区分「几何放不下」（标记 linkConstrained）
  * 与「正常跳过」。
  */
-export function shouldHaveStorageLink(
-  snapshot: RoomSnapshot,
-  queuedLinkCount = 0,
-): boolean {
+export function shouldHaveStorageLink(snapshot: RoomSnapshot, queuedLinkCount = 0): boolean {
   if (snapshot.rcl < 5) return false;
   if (!snapshot.storage) return false;
-  if (hasAdjacentStructure(
-    snapshot.storage.pos.x,
-    snapshot.storage.pos.y,
-    snapshot,
-    STRUCTURE_LINK,
-  )) return false;
+  if (
+    hasAdjacentStructure(snapshot.storage.pos.x, snapshot.storage.pos.y, snapshot, STRUCTURE_LINK)
+  )
+    return false;
   const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK]?.[snapshot.rcl] ?? 0;
   const existingLinks = snapshot.links.length;
   const linkSites = snapshot.constructionSites.filter(
@@ -503,9 +557,7 @@ export function shouldHaveStorageLink(
  * occupied 检查（矿位会被误判为占用）；补齐「extractor → harvestMineral →
  * hauler 运回」产业链第一环。
  */
-export function createExtractorTask(
-  snapshot: RoomSnapshot,
-): BuildTaskCandidate | undefined {
+export function createExtractorTask(snapshot: RoomSnapshot): BuildTaskCandidate | undefined {
   if (snapshot.rcl < 6) return undefined;
   const mineral = snapshot.minerals[0];
   if (!mineral) return undefined;
@@ -543,7 +595,8 @@ export function createMineralContainerTask(
   const mineral = snapshot.minerals[0];
   if (!mineral) return undefined;
 
-  if (hasAdjacentStructure(mineral.pos.x, mineral.pos.y, snapshot, STRUCTURE_CONTAINER)) return undefined;
+  if (hasAdjacentStructure(mineral.pos.x, mineral.pos.y, snapshot, STRUCTURE_CONTAINER))
+    return undefined;
 
   const adjacentPos = findAdjacentBuildable(mineral.pos, room, snapshot, options);
   if (!adjacentPos) return undefined;
@@ -566,8 +619,7 @@ function hasAdjacentStructure(
   structureType: BuildableStructureConstant,
 ): boolean {
   const adjacent = (s: { pos: { x: number; y: number }; structureType: string }): boolean =>
-    s.structureType === structureType &&
-    Math.abs(s.pos.x - cx) <= 1 && Math.abs(s.pos.y - cy) <= 1;
+    s.structureType === structureType && Math.abs(s.pos.x - cx) <= 1 && Math.abs(s.pos.y - cy) <= 1;
 
   for (const s of snapshot.containers) if (adjacent(s)) return true;
   for (const s of snapshot.links) if (adjacent(s)) return true;
@@ -612,9 +664,10 @@ function findAdjacentBuildable(
   if (candidates.length === 0) return undefined;
 
   // 优先返回距 center 更近且有相邻站立格的候选（近的优先，减少通勤）。
-  candidates.sort((a, b) =>
-    Math.max(Math.abs(a.x - center.x), Math.abs(a.y - center.y)) -
-    Math.max(Math.abs(b.x - center.x), Math.abs(b.y - center.y)),
+  candidates.sort(
+    (a, b) =>
+      Math.max(Math.abs(a.x - center.x), Math.abs(a.y - center.y)) -
+      Math.max(Math.abs(b.x - center.x), Math.abs(b.y - center.y)),
   );
   for (const c of candidates) {
     if (hasStandingTile(c.x, c.y, center.x, center.y, terrain)) {
@@ -711,10 +764,17 @@ export function createCoreRoadTasks(
     if (cell.minRcl > snapshot.rcl) continue;
     structurePositions.add(packPos(anchorX + cell.dx, anchorY + cell.dy));
   }
-  for (const s of [...snapshot.spawns, ...snapshot.extensions, ...snapshot.towers, ...snapshot.containers, ...snapshot.links]) {
+  for (const s of [
+    ...snapshot.spawns,
+    ...snapshot.extensions,
+    ...snapshot.towers,
+    ...snapshot.containers,
+    ...snapshot.links,
+  ]) {
     structurePositions.add(packPos(s.pos.x, s.pos.y));
   }
-  if (snapshot.storage) structurePositions.add(packPos(snapshot.storage.pos.x, snapshot.storage.pos.y));
+  if (snapshot.storage)
+    structurePositions.add(packPos(snapshot.storage.pos.x, snapshot.storage.pos.y));
 
   // 扫描核心区（±7）奇校验格：正交相邻 ≥ 2 结构即高频走道。
   let generated = 0;
@@ -729,7 +789,12 @@ export function createCoreRoadTasks(
       if (occupiedSet.has(packPos(x, y))) continue;
 
       let adjacentStructures = 0;
-      const orthogonal: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      const orthogonal: ReadonlyArray<readonly [number, number]> = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ];
       for (const [ox, oy] of orthogonal) {
         if (structurePositions.has(packPos(x + ox, y + oy))) {
           adjacentStructures++;
@@ -779,7 +844,14 @@ export const DEFAULT_DEFENSE_OPTIONS: DefenseOptions = {
 
 /** 8 方向单位向量（对应 atan2 的 8 个 45° 扇区，0 = 东，顺时针）。 */
 const OCTANT_VECTORS: ReadonlyArray<readonly [number, number]> = [
-  [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1],
+  [1, 0],
+  [1, 1],
+  [0, 1],
+  [-1, 1],
+  [-1, 0],
+  [-1, -1],
+  [0, -1],
+  [1, -1],
 ];
 
 /** 垂直方向（逆时针旋转 90°）：(dx,dy) → (-dy,dx)。 */
@@ -840,7 +912,9 @@ export function createDefenseTasks(
 
   const terrain = room.getTerrain();
   // 本地可变副本：防止同线内重复落子（ReadonlySet 不可修改）。
-  const localOccupied = new Set<number>(options.occupiedSet ?? buildOccupiedSet(snapshot, options.minerals));
+  const localOccupied = new Set<number>(
+    options.occupiedSet ?? buildOccupiedSet(snapshot, options.minerals),
+  );
 
   for (const octant of exposedOctants) {
     const vec = OCTANT_VECTORS[octant]!;

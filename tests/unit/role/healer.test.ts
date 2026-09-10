@@ -1,7 +1,13 @@
 /** Healer 角色行为测试（heal-tank 最小闭环治疗端）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { healerRole } from "../../../src/creeps/roles/healer";
-import { mockContext, mockCreep, mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
+import {
+  mockContext,
+  mockCreep,
+  mockPos,
+  mockSnapshot,
+  resetGlobals,
+} from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

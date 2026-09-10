@@ -120,9 +120,8 @@ export function evaluateEmpirePosture(
   // 零滞回「此刻有敌」：任一房本 tick 有真实在房威胁（已剔除盟友）。这是冻结指令的
   // 真相来源——不读滞回记忆，只读当下视线。敌人撤离即清零，自治立即恢复。
   const liveThreat = rooms.some(r => r.hasLiveThreat === true);
-  const avgPressure = rooms.length > 0
-    ? rooms.reduce((sum, r) => sum + r.economyPressure, 0) / rooms.length
-    : 1;
+  const avgPressure =
+    rooms.length > 0 ? rooms.reduce((sum, r) => sum + r.economyPressure, 0) / rooms.length : 1;
   const allNormal = rooms.length > 0 && rooms.every(r => r.colonyState === "normal");
   // 经济生存态：任一房 recovery/bootstrap（能量闭环退化）即视为「打不起战争」。
   // 战争是盈余活动——危机下开战只会加重能量负担、拖垮恢复。姿态机必须把经济容量
@@ -205,7 +204,15 @@ export function evaluateEmpirePosture(
   // 健康门已在上方统一计算为 expandHealth（含 Phase 1a「核心成熟度 + 最新房自立」防过早
   // 殖民、稳定性模型取代 100k 库存死门槛等，详见上方注释）。此处仅据其选显示姿态，
   // 扩张授权本身由 finalize 复用同一 expandHealth 推导，与姿态显示解耦。
-  return finalize(expandHealth ? "expand" : "develop", prevPosture, since, tick, 0, liveThreat, expandHealth);
+  return finalize(
+    expandHealth ? "expand" : "develop",
+    prevPosture,
+    since,
+    tick,
+    0,
+    liveThreat,
+    expandHealth,
+  );
 }
 
 /**

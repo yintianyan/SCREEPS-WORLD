@@ -17,9 +17,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
       kernel: {},
     };
     expect(() => runMigrations()).not.toThrow();
-    expect((globalThis as any).Memory.schemaVersion).toBe(
-      CONFIG.memory.schemaVersion,
-    );
+    expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });
 
@@ -131,7 +129,10 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     // 坏数据使用安全默认值归一化，迁移仍可完成，避免永久卡在 v40。
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect((globalThis as any).Memory.kernel.outcomeEvents).toEqual({
-      q: [], s: [], dr: 0, oe: 0,
+      q: [],
+      s: [],
+      dr: 0,
+      oe: 0,
     });
   });
 
@@ -175,7 +176,9 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
       rooms: {},
       kernel: {
         outcomeEvents: {
-          queue: [{ eid: "E-1-0", oid: "op:W1N1:1000", r: "COMPLETED", oa: 1000, ca: 2000, fa: false }],
+          queue: [
+            { eid: "E-1-0", oid: "op:W1N1:1000", r: "COMPLETED", oa: 1000, ca: 2000, fa: false },
+          ],
           seen: ["op:W1N1:1000"],
           duplicateRejected: 0,
           overflowEvicted: 0,
@@ -280,9 +283,7 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     // 第一次迁移
     (globalThis as any).Memory = JSON.parse(JSON.stringify(v40Data));
     runMigrations();
-    const afterFirst = JSON.parse(
-      JSON.stringify((globalThis as any).Memory),
-    );
+    const afterFirst = JSON.parse(JSON.stringify((globalThis as any).Memory));
     expect(afterFirst.schemaVersion).toBe(CONFIG.memory.schemaVersion);
     expect(afterFirst.kernel.outcomeEvents.q).toHaveLength(1);
 
@@ -293,18 +294,10 @@ describe("migration v40 → v41（OutcomeChannel 字段名压缩）", () => {
     const afterReset = (globalThis as any).Memory;
 
     expect(afterReset.schemaVersion).toBe(CONFIG.memory.schemaVersion);
-    expect(afterReset.kernel.outcomeEvents.q).toEqual(
-      afterFirst.kernel.outcomeEvents.q,
-    );
-    expect(afterReset.kernel.outcomeEvents.s).toEqual(
-      afterFirst.kernel.outcomeEvents.s,
-    );
-    expect(afterReset.kernel.outcomeEvents.dr).toBe(
-      afterFirst.kernel.outcomeEvents.dr,
-    );
-    expect(afterReset.kernel.outcomeEvents.oe).toBe(
-      afterFirst.kernel.outcomeEvents.oe,
-    );
+    expect(afterReset.kernel.outcomeEvents.q).toEqual(afterFirst.kernel.outcomeEvents.q);
+    expect(afterReset.kernel.outcomeEvents.s).toEqual(afterFirst.kernel.outcomeEvents.s);
+    expect(afterReset.kernel.outcomeEvents.dr).toBe(afterFirst.kernel.outcomeEvents.dr);
+    expect(afterReset.kernel.outcomeEvents.oe).toBe(afterFirst.kernel.outcomeEvents.oe);
   });
 
   it("已有新字段时跳过旧字段迁移（前向兼容）", () => {

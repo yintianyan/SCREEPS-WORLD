@@ -30,21 +30,53 @@ const tacticalEngagementRun = vi.fn();
 const combatMicroRun = vi.fn();
 
 vi.mock("../../../src/systems/tactical-runtime-system", () => ({
-  tacticalRuntimeSystem: { name: "tactical-runtime", priority: 2, interval: 10, run: (ctx: unknown) => tacticalRuntimeRun(ctx) },
+  tacticalRuntimeSystem: {
+    name: "tactical-runtime",
+    priority: 2,
+    interval: 10,
+    run: (ctx: unknown) => tacticalRuntimeRun(ctx),
+  },
 }));
 vi.mock("../../../src/systems/squad-movement-runtime", () => ({
-  squadMovementSystem: { name: "squad-movement", priority: 2, interval: 1, run: (ctx: unknown) => squadMovementRun(ctx) },
+  squadMovementSystem: {
+    name: "squad-movement",
+    priority: 2,
+    interval: 1,
+    run: (ctx: unknown) => squadMovementRun(ctx),
+  },
 }));
 vi.mock("../../../src/systems/tactical-engagement-runtime", () => ({
-  tacticalEngagementSystem: { name: "tactical-engagement", priority: 2, interval: 3, run: (ctx: unknown) => tacticalEngagementRun(ctx) },
+  tacticalEngagementSystem: {
+    name: "tactical-engagement",
+    priority: 2,
+    interval: 3,
+    run: (ctx: unknown) => tacticalEngagementRun(ctx),
+  },
 }));
 vi.mock("../../../src/systems/combat-micro-runtime", () => ({
-  combatMicroSystem: { name: "combat-micro", priority: 2, interval: 3, run: (ctx: unknown) => combatMicroRun(ctx) },
+  combatMicroSystem: {
+    name: "combat-micro",
+    priority: 2,
+    interval: 3,
+    run: (ctx: unknown) => combatMicroRun(ctx),
+  },
 }));
 
-
 function makeCtx(tick: number) {
-  return { tick, budget: { tier: "healthy" as const, softLimit: 20, hardLimit: 50, canStart: () => true, isExhausted: () => false, spent: () => 0 }, globalSiteCount: 0, getSnapshot: () => undefined, snapshots: () => [] } as any;
+  return {
+    tick,
+    budget: {
+      tier: "healthy" as const,
+      softLimit: 20,
+      hardLimit: 50,
+      canStart: () => true,
+      isExhausted: () => false,
+      spent: () => 0,
+    },
+    globalSiteCount: 0,
+    getSnapshot: () => undefined,
+    snapshots: () => [],
+  } as any;
 }
 
 beforeEach(() => {
@@ -59,9 +91,7 @@ describe("Tactical Runtime Pipeline: Stage 顺序", () => {
     // tick=0: phase=0, all stages at intervals 10/1/3/3 → tactical-runtime(10%0==0), squad(always), engagement(3%0==0), micro(3%0==0)
     tacticalRuntimePipelineSystem.run(makeCtx(0));
 
-    const runOrder = [
-      ...safeRunCalls.map(c => c.label),
-    ];
+    const runOrder = [...safeRunCalls.map(c => c.label)];
 
     // tactical-runtime should be before squad-movement
     const trIdx = runOrder.indexOf("tactical-runtime-pipeline/tactical-runtime");
@@ -129,7 +159,9 @@ describe("Tactical Runtime Pipeline: Cadence", () => {
 
 describe("Tactical Runtime Pipeline: 错误隔离", () => {
   it("tactical-runtime 抛错不跳过后续 stage", () => {
-    tacticalRuntimeRun.mockImplementationOnce(() => { throw new Error("test error"); });
+    tacticalRuntimeRun.mockImplementationOnce(() => {
+      throw new Error("test error");
+    });
     // tick=0: all stages run
     tacticalRuntimePipelineSystem.run(makeCtx(0));
 
@@ -140,7 +172,9 @@ describe("Tactical Runtime Pipeline: 错误隔离", () => {
   });
 
   it("squad-movement 抛错不跳过后续 stage", () => {
-    squadMovementRun.mockImplementationOnce(() => { throw new Error("test error"); });
+    squadMovementRun.mockImplementationOnce(() => {
+      throw new Error("test error");
+    });
     tacticalRuntimePipelineSystem.run(makeCtx(0));
 
     expect(tacticalEngagementRun).toHaveBeenCalled();
@@ -157,4 +191,3 @@ describe("Tactical Runtime Pipeline: 错误隔离", () => {
     expect(labels).toContain("tactical-runtime-pipeline/combat-micro");
   });
 });
-

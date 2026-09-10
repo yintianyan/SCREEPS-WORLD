@@ -50,7 +50,9 @@ describe("factory-manager — processPower 调度接线", () => {
     const processPower = vi.fn(() => OK);
     const room = mockSnapshot({
       powerSpawn: { store: resStore({ power: 50, energy: 1000 }), processPower } as any,
-      storage: { store: resStore({ energy: CONFIG.factory.processEnergyFloor - 1 }, 1000000) } as any,
+      storage: {
+        store: resStore({ energy: CONFIG.factory.processEnergyFloor - 1 }, 1000000),
+      } as any,
     });
 
     factoryManagerSystem.run(makeCtx([room]));
@@ -60,7 +62,9 @@ describe("factory-manager — processPower 调度接线", () => {
 
   it("war 姿态 → 暂停（能量军事优先）", () => {
     (globalThis as any).Memory = {
-      kernel: { strategy: { posture: "war", since: 0, expansionAllowed: false, newRemoteOpsAllowed: false } },
+      kernel: {
+        strategy: { posture: "war", since: 0, expansionAllowed: false, newRemoteOpsAllowed: false },
+      },
     };
     const processPower = vi.fn(() => OK);
     const room = mockSnapshot({

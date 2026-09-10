@@ -20,7 +20,8 @@ function walk(dir: string): string[] {
 const ALL_FILES = walk(SRC);
 
 function codeLines(src: string): string {
-  return src.split(NL)
+  return src
+    .split(NL)
     .filter(l => {
       const t = l.trim();
       return !t.startsWith("*") && !t.startsWith("//") && !t.startsWith("/*");
@@ -93,10 +94,13 @@ describe("A5.4.1 TAC-R03: attacker.ts 不导入 systems 层", () => {
   it("attacker.ts 无 systems 导入", () => {
     const f = resolve(SRC, "creeps/roles/attacker.ts");
     const imports = importsOf(f);
-    const badImports = imports.filter(imp =>
-      imp.resolved.includes("../systems/") || imp.resolved.includes("../../systems/"),
+    const badImports = imports.filter(
+      imp => imp.resolved.includes("../systems/") || imp.resolved.includes("../../systems/"),
     );
-    expect(badImports, `attacker.ts 导入了 systems: ${badImports.map(b => b.resolved).join(", ")}`).toHaveLength(0);
+    expect(
+      badImports,
+      `attacker.ts 导入了 systems: ${badImports.map(b => b.resolved).join(", ")}`,
+    ).toHaveLength(0);
   });
 
   it("attacker.ts 使用 readTacticalIntent 而非 getTacticalIntent", () => {
@@ -113,10 +117,13 @@ describe("A5.4.1 TAC-R04: healer.ts 不导入 systems 层", () => {
   it("healer.ts 无 systems 导入", () => {
     const f = resolve(SRC, "creeps/roles/healer.ts");
     const imports = importsOf(f);
-    const badImports = imports.filter(imp =>
-      imp.resolved.includes("../systems/") || imp.resolved.includes("../../systems/"),
+    const badImports = imports.filter(
+      imp => imp.resolved.includes("../systems/") || imp.resolved.includes("../../systems/"),
     );
-    expect(badImports, `healer.ts 导入了 systems: ${badImports.map(b => b.resolved).join(", ")}`).toHaveLength(0);
+    expect(
+      badImports,
+      `healer.ts 导入了 systems: ${badImports.map(b => b.resolved).join(", ")}`,
+    ).toHaveLength(0);
   });
 
   it("healer.ts 使用 readTacticalIntent 而非 getTacticalIntent", () => {
@@ -136,7 +143,9 @@ describe("A5.4.1 TAC-R05: 不直接写 warAbortSignals", () => {
     const code = codeLines(src);
     // 允许在注释中提到 warAbortSignals，但代码行不得写入
     const writePattern = /g\.warAbortSignals\s*=/;
-    expect(writePattern.test(code), "tactical-runtime-system 直接写了 g.warAbortSignals").toBe(false);
+    expect(writePattern.test(code), "tactical-runtime-system 直接写了 g.warAbortSignals").toBe(
+      false,
+    );
   });
 });
 

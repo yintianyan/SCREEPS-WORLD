@@ -26,7 +26,13 @@ function scenario(overrides: { storageEnergy?: number; storageCap?: number } = {
   });
   const container = mockStructure("container", { id: "c1", energy: 1500, capacity: 2000 });
   const snap = mockSnapshot({ storage, containers: [container] });
-  const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 200, capacity: 800, mode: "acquire" });
+  const creep = mockCreep({
+    name: "hauler_1",
+    role: "hauler",
+    used: 200,
+    capacity: 800,
+    mode: "acquire",
+  });
   return { storage, container, snap, creep };
 }
 
@@ -43,7 +49,13 @@ describe("hauler — 顺路卸能（gate 伴随动作）", () => {
 
   it("空载时不卸（无能量可存）", () => {
     const { storage, snap } = scenario();
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 800, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 800,
+      mode: "acquire",
+    });
 
     haulerRole.run(creep, mockContext(snap));
 
@@ -52,7 +64,13 @@ describe("hauler — 顺路卸能（gate 伴随动作）", () => {
 
   it("work 模式不经 gate 卸货（卸货由 work 链的 fillStorage 负责）", () => {
     const { storage, snap } = scenario();
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 800, capacity: 800, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 800,
+      capacity: 800,
+      mode: "work",
+    });
 
     haulerRole.run(creep, mockContext(snap));
 

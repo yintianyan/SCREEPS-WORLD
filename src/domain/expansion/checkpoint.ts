@@ -82,12 +82,15 @@ export interface CheckpointResult {
 }
 
 /** Checkpoint 定义表。 */
-const CHECKPOINT_DEFINITIONS: Record<CheckpointId, {
-  description: string;
-  requiredState: ExecutionState;
-  maxRetries: number;
-  fallbackTo?: CheckpointId;
-}> = {
+const CHECKPOINT_DEFINITIONS: Record<
+  CheckpointId,
+  {
+    description: string;
+    requiredState: ExecutionState;
+    maxRetries: number;
+    fallbackTo?: CheckpointId;
+  }
+> = {
   CP1_CLAIMED: {
     description: "Controller claimed by our empire",
     requiredState: "CLAIMED",
@@ -148,7 +151,9 @@ export function evaluateCheckpoint(input: CheckpointInput): CheckpointResult {
 
     case "CP3_ENERGY_LOOP": {
       passed = input.harvesterActive && input.transporterActive && input.spawnCanSpawn;
-      evidence.push(`harvesterActive=${input.harvesterActive} transporterActive=${input.transporterActive} spawnCanSpawn=${input.spawnCanSpawn}`);
+      evidence.push(
+        `harvesterActive=${input.harvesterActive} transporterActive=${input.transporterActive} spawnCanSpawn=${input.spawnCanSpawn}`,
+      );
       if (!passed) {
         const missing: string[] = [];
         if (!input.harvesterActive) missing.push("harvester");
@@ -161,7 +166,9 @@ export function evaluateCheckpoint(input: CheckpointInput): CheckpointResult {
 
     case "CP4_BASIC_INFRA": {
       passed = input.extensionsBuilt && input.containerBuilt;
-      evidence.push(`extensionsBuilt=${input.extensionsBuilt} containerBuilt=${input.containerBuilt} roadsBuilt=${input.roadsBuilt}`);
+      evidence.push(
+        `extensionsBuilt=${input.extensionsBuilt} containerBuilt=${input.containerBuilt} roadsBuilt=${input.roadsBuilt}`,
+      );
       if (!passed) {
         const missing: string[] = [];
         if (!input.extensionsBuilt) missing.push("extensions");
@@ -173,7 +180,9 @@ export function evaluateCheckpoint(input: CheckpointInput): CheckpointResult {
 
     case "CP5_ECONOMIC_ACTIVATION": {
       passed = input.netEnergyFlowPositive && input.empireIntegrated;
-      evidence.push(`netEnergyFlowPositive=${input.netEnergyFlowPositive} empireIntegrated=${input.empireIntegrated}`);
+      evidence.push(
+        `netEnergyFlowPositive=${input.netEnergyFlowPositive} empireIntegrated=${input.empireIntegrated}`,
+      );
       if (!passed) {
         const missing: string[] = [];
         if (!input.netEnergyFlowPositive) missing.push("net energy flow not positive");
@@ -189,7 +198,7 @@ export function evaluateCheckpoint(input: CheckpointInput): CheckpointResult {
   }
 
   const shouldRetry = !passed && input.retryCount < def.maxRetries;
-  const status: CheckpointStatus = passed ? "PASSED" : (shouldRetry ? "PENDING" : "FAILED");
+  const status: CheckpointStatus = passed ? "PASSED" : shouldRetry ? "PENDING" : "FAILED";
 
   return {
     id: input.checkpointId,
@@ -240,7 +249,9 @@ export function getCheckpointProgress(passedCount: number): number {
 /**
  * 获取下一个未通过的 Checkpoint。
  */
-export function getNextPendingCheckpoint(records: CheckpointRecord[]): CheckpointRecord | undefined {
+export function getNextPendingCheckpoint(
+  records: CheckpointRecord[],
+): CheckpointRecord | undefined {
   return records.find(r => r.status === "PENDING" || r.status === "FAILED");
 }
 

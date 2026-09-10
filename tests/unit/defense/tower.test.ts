@@ -43,7 +43,12 @@ describe("A3 — tower-defense 维修权收窄", () => {
     (globalThis as any).repairRooms = new Set(["W7N4"]);
 
     const tower = makeTower("t1");
-    const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 300, hits: 400, hitsMax: 1000 });
+    const damagedSpawn = mockStructure("spawn", {
+      id: "sp1",
+      energy: 300,
+      hits: 400,
+      hitsMax: 1000,
+    });
     const snap = mockSnapshot({ towers: [tower], spawns: [damagedSpawn] });
 
     towerDefenseSystem.run(mockContext(snap));
@@ -56,7 +61,12 @@ describe("A3 — tower-defense 维修权收窄", () => {
     (globalThis as any).repairRooms = new Set(["W7N4"]);
 
     const tower = makeTower("t1");
-    const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 300, hits: 400, hitsMax: 1000 });
+    const damagedSpawn = mockStructure("spawn", {
+      id: "sp1",
+      energy: 300,
+      hits: 400,
+      hitsMax: 1000,
+    });
     const snap = mockSnapshot({ towers: [tower], spawns: [damagedSpawn] });
 
     towerDefenseSystem.run(mockContext(snap));
@@ -68,7 +78,12 @@ describe("A3 — tower-defense 维修权收窄", () => {
     // repairRooms 未设置 → hasRepairCreep 返回 false。
 
     const tower = makeTower("t1");
-    const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 300, hits: 400, hitsMax: 1000 });
+    const damagedSpawn = mockStructure("spawn", {
+      id: "sp1",
+      energy: 300,
+      hits: 400,
+      hitsMax: 1000,
+    });
     const snap = mockSnapshot({ towers: [tower], spawns: [damagedSpawn] });
 
     towerDefenseSystem.run(mockContext(snap));
@@ -81,7 +96,12 @@ describe("A3 — tower-defense 维修权收窄", () => {
     (globalThis as any).repairRooms = new Set(["W8N4"]);
 
     const tower = makeTower("t1");
-    const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 300, hits: 400, hitsMax: 1000 });
+    const damagedSpawn = mockStructure("spawn", {
+      id: "sp1",
+      energy: 300,
+      hits: 400,
+      hitsMax: 1000,
+    });
     const snap = mockSnapshot({ towers: [tower], spawns: [damagedSpawn] });
 
     towerDefenseSystem.run(mockContext(snap));

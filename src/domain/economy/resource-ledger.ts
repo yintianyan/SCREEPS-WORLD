@@ -12,11 +12,11 @@ import { getResourceCategory } from "./resource-definition";
  * （CONSUMED 是累计已消费量，不属于当前存量）。
  */
 export type ResourceState =
-  | "stored"      // 存储中（storage / terminal / container / carry）
-  | "reserved"    // 已预留（被 Reservation 锁定）
-  | "in_transit"  // 在途（被 Operation 分配，正在搬运）
-  | "allocated"   // 已分配（AllocationPlan 签发但未创建 Operation）
-  | "consumed";   // 已消费（spawn / build / upgrade / repair / tower）
+  | "stored" // 存储中（storage / terminal / container / carry）
+  | "reserved" // 已预留（被 Reservation 锁定）
+  | "in_transit" // 在途（被 Operation 分配，正在搬运）
+  | "allocated" // 已分配（AllocationPlan 签发但未创建 Operation）
+  | "consumed"; // 已消费（spawn / build / upgrade / repair / tower）
 
 // ─── L1 计数器（按 resourceType 分别记账）──────────────────
 
@@ -77,10 +77,7 @@ export function counterAdd(
 }
 
 /** 两份计数器逐字段差值（end − start）。纯函数。 */
-export function counterDelta(
-  start: ResourceCounters,
-  end: ResourceCounters,
-): ResourceCounters {
+export function counterDelta(start: ResourceCounters, end: ResourceCounters): ResourceCounters {
   const out = emptyCounters();
   for (const f of Object.keys(out) as (keyof ResourceCounters)[]) {
     out[f] = Math.max(0, end[f] - start[f]);
@@ -364,10 +361,7 @@ export function getLedgerEntry(
  * 可调拨量 = stockReserve - reserved - safetyReserve。
  * 纯函数。
  */
-export function computeTransferable(
-  entry: ResourceLedgerEntry,
-  safetyReserve: number,
-): number {
+export function computeTransferable(entry: ResourceLedgerEntry, safetyReserve: number): number {
   const reserve = stockReserve(entry.stock);
   return Math.max(0, reserve - entry.reserved - safetyReserve);
 }
@@ -410,9 +404,7 @@ export function createResourceLedger(): ResourceLedger {
  * 从一组资源类型初始化账本（预创建条目）。
  * 纯函数。
  */
-export function initResourceLedger(
-  resources: readonly ResourceType[],
-): ResourceLedger {
+export function initResourceLedger(resources: readonly ResourceType[]): ResourceLedger {
   const ledger = new Map<ResourceType, ResourceLedgerEntry>();
   for (const r of resources) {
     ledger.set(r, emptyLedgerEntry(r));
@@ -437,9 +429,7 @@ export function getActiveResources(ledger: ResourceLedger): ResourceType[] {
  * 帝国级聚合：将多个房间的 ResourceLedger 聚合为帝国级视图。
  * 纯函数。
  */
-export function aggregateLedgers(
-  roomLedgers: readonly ResourceLedger[],
-): ResourceLedger {
+export function aggregateLedgers(roomLedgers: readonly ResourceLedger[]): ResourceLedger {
   const empire = new Map<ResourceType, ResourceLedgerEntry>();
 
   for (const roomLedger of roomLedgers) {

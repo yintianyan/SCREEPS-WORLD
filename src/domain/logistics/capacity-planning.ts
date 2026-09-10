@@ -71,28 +71,26 @@ export function planRoomCapacity(input: RoomCapacityInput): RoomCapacityResult {
   } = input;
 
   // 本地 hauler 需求
-  const requiredHaulers = haulerCapacity > 0 && localRoundTripTicks > 0
-    ? Math.ceil((productionRate * localRoundTripTicks) / haulerCapacity)
-    : 0;
+  const requiredHaulers =
+    haulerCapacity > 0 && localRoundTripTicks > 0
+      ? Math.ceil((productionRate * localRoundTripTicks) / haulerCapacity)
+      : 0;
 
   // 跨房 carrier 需求（基于跨房供需）
   const crossRoomDemand = Math.max(0, productionRate - consumptionRate);
-  const requiredCarriers = haulerCapacity > 0 && crossRoomRoundTripTicks > 0
-    ? Math.ceil((crossRoomDemand * crossRoomRoundTripTicks) / haulerCapacity)
-    : 0;
+  const requiredCarriers =
+    haulerCapacity > 0 && crossRoomRoundTripTicks > 0
+      ? Math.ceil((crossRoomDemand * crossRoomRoundTripTicks) / haulerCapacity)
+      : 0;
 
   // 运力计算
-  const theoreticalCapacity = localRoundTripTicks > 0
-    ? (requiredHaulers * haulerCapacity) / localRoundTripTicks
-    : 0;
-  const actualCapacity = localRoundTripTicks > 0
-    ? (currentHaulerCount * haulerCapacity) / localRoundTripTicks
-    : 0;
+  const theoreticalCapacity =
+    localRoundTripTicks > 0 ? (requiredHaulers * haulerCapacity) / localRoundTripTicks : 0;
+  const actualCapacity =
+    localRoundTripTicks > 0 ? (currentHaulerCount * haulerCapacity) / localRoundTripTicks : 0;
 
   // 利用率
-  const utilization = actualCapacity > 0
-    ? Math.min(1, productionRate / actualCapacity)
-    : 0;
+  const utilization = actualCapacity > 0 ? Math.min(1, productionRate / actualCapacity) : 0;
 
   return {
     room,
@@ -149,9 +147,8 @@ export function planEmpireCapacity(rooms: readonly RoomCapacityInput[]): EmpireC
     totalProduction += rooms.find(x => x.room === r.room)?.productionRate ?? 0;
   }
 
-  const empireUtilization = totalActualCapacity > 0
-    ? Math.min(1, totalProduction / totalActualCapacity)
-    : 0;
+  const empireUtilization =
+    totalActualCapacity > 0 ? Math.min(1, totalProduction / totalActualCapacity) : 0;
 
   return {
     rooms: results,

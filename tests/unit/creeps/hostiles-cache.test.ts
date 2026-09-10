@@ -66,7 +66,7 @@ describe("getHostilesCached — per-tick per-room 缓存", () => {
     expect(a).not.toBe(b);
     expect(a[0]!.owner.username).toBe("a");
     expect(b[0]!.owner.username).toBe("b");
-    expect((roomA.find as any)).toHaveBeenCalledTimes(1);
-    expect((roomB.find as any)).toHaveBeenCalledTimes(1);
+    expect(roomA.find as any).toHaveBeenCalledTimes(1);
+    expect(roomB.find as any).toHaveBeenCalledTimes(1);
   });
 });

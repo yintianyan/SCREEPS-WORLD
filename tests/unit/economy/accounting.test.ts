@@ -1,10 +1,26 @@
 /** 能量核算纯函数单测——对账恒等式、不变量、三指标计算、Memory 快照往返。 */
 import { describe, it, expect } from "vitest";
 import {
-  emptyLedger, ledgerAdd, ledgerDelta, ledgerIncome, ledgerConsumption, ledgerP0P1Consumption,
-  emptyPools, contractReserveOf, trackedPoolsOf, rollupWindow, driftLimit, isDriftExcessive,
-  updateNetFlowEma, riskBufferTicks, RISK_BUFFER_CAP, updateEfficiencyFactor, estimateIncome,
-  toMemorySnapshot, fromMemorySnapshot, NOMINAL_INCOME_PER_SOURCE,
+  emptyLedger,
+  ledgerAdd,
+  ledgerDelta,
+  ledgerIncome,
+  ledgerConsumption,
+  ledgerP0P1Consumption,
+  emptyPools,
+  contractReserveOf,
+  trackedPoolsOf,
+  rollupWindow,
+  driftLimit,
+  isDriftExcessive,
+  updateNetFlowEma,
+  riskBufferTicks,
+  RISK_BUFFER_CAP,
+  updateEfficiencyFactor,
+  estimateIncome,
+  toMemorySnapshot,
+  fromMemorySnapshot,
+  NOMINAL_INCOME_PER_SOURCE,
   type EnergyLedger,
 } from "../../../src/domain/economy/accounting";
 
@@ -30,7 +46,14 @@ describe("EnergyLedger — L1 计数器", () => {
   });
 
   it("收入/消费/P0P1 分解口径正确", () => {
-    const l = led({ harvested: 30, pickedUp: 20, spawned: 25, towerSpent: 10, repaired: 5, upgraded: 100 });
+    const l = led({
+      harvested: 30,
+      pickedUp: 20,
+      spawned: 25,
+      towerSpent: 10,
+      repaired: 5,
+      upgraded: 100,
+    });
     expect(ledgerIncome(l)).toBe(50);
     expect(ledgerConsumption(l)).toBe(140);
     expect(ledgerP0P1Consumption(l)).toBe(40);
@@ -98,7 +121,7 @@ describe("三指标计算", () => {
   it("netFlow EMA 首窗取现值、后续平滑收敛", () => {
     expect(updateNetFlowEma(undefined, 5, 0.3)).toBe(5);
     const v1 = updateNetFlowEma(5, -5, 0.3);
-    expect(v1).toBeCloseTo(5 + 0.3 * (-10));
+    expect(v1).toBeCloseTo(5 + 0.3 * -10);
     const v2 = updateNetFlowEma(v1, -5, 0.3);
     expect(v2).toBeLessThan(v1);
   });

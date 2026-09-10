@@ -9,10 +9,7 @@ import { afterAll, beforeAll } from "vitest";
  * 委托 scripts/rebuild-driver-snapshot.js（postinstall 同源逻辑），避免双实现。
  */
 function ensureDriverSnapshot(): void {
-  const rebuildScript = resolve(
-    process.cwd(),
-    "scripts/rebuild-driver-snapshot.js",
-  );
+  const rebuildScript = resolve(process.cwd(), "scripts/rebuild-driver-snapshot.js");
   if (!existsSync(rebuildScript)) {
     console.warn(
       "[e2e setup] scripts/rebuild-driver-snapshot.js not found. " +
@@ -39,9 +36,8 @@ function ensureDriverSnapshot(): void {
  */
 function ensureIsolatedVmAbi(): void {
   try {
-    const ivmPath = require.resolve(
-      "@screeps/driver/node_modules/isolated-vm",
-    );
+    const ivmPath = require.resolve("@screeps/driver/node_modules/isolated-vm");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
     const ivm = require(ivmPath);
     const isolate = new ivm.Isolate();
     isolate.dispose();
@@ -78,9 +74,7 @@ function ensureIsolatedVmAbi(): void {
 beforeAll(() => {
   // 确保 dist/main.js 存在
   if (!existsSync("dist/main.js")) {
-    throw new Error(
-      "dist/main.js 不存在。E2E 测试需要先运行 `npm run build` 构建产物。",
-    );
+    throw new Error("dist/main.js 不存在。E2E 测试需要先运行 `npm run build` 构建产物。");
   }
 
   // macOS SDK 路径（用于 isolated-vm 原生模块编译）

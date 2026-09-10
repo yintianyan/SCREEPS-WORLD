@@ -49,9 +49,8 @@ export function anchorSellPrice(
   const bidAnchor = bestBuyPrice * markup;
   const ask = pricing?.competingAsk;
   // ask 锚先按市场报价粒度（0.001）取整，消除浮点减法噪声（68.5-0.01=68.4899…）。
-  const askAnchor = ask !== undefined && ask > 0
-    ? Math.round((ask - step) * 1000) / 1000
-    : bidAnchor;
+  const askAnchor =
+    ask !== undefined && ask > 0 ? Math.round((ask - step) * 1000) / 1000 : bidAnchor;
   // 向下取两位小数（两位保守）——floor 而非 round，防止取整后反弹回竞品 ask 之上；
   // +1e-6 容差吸收浮点表示噪声（68.49×100 = 6848.999…），不影响真实分数位。
   return Math.floor((Math.max(floor, Math.min(bidAnchor, askAnchor)) + 1e-6) * 100) / 100;

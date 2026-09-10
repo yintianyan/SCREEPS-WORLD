@@ -30,7 +30,6 @@ describe("G-G StateStore 族版本", () => {
   });
 });
 
-
 describe("G-I Logger", () => {
   beforeEach(() => {
     resetGlobals();
@@ -39,17 +38,17 @@ describe("G-I Logger", () => {
 
   it("级别门：默认 info 级别下 debug 不输出、info 输出", () => {
     const lines: string[] = [];
-    setLogSink((line) => lines.push(line));
+    setLogSink(line => lines.push(line));
     log.debug("m", "hidden-debug");
     log.info("m", "shown-info");
     setLogSink(undefined);
-    expect(lines.some((l) => l.includes("hidden-debug"))).toBe(false);
-    expect(lines.some((l) => l.includes("shown-info"))).toBe(true);
+    expect(lines.some(l => l.includes("hidden-debug"))).toBe(false);
+    expect(lines.some(l => l.includes("shown-info"))).toBe(true);
   });
 
   it("sink 注入捕获 error 并带模块前缀与 tick", () => {
     const lines: string[] = [];
-    setLogSink((line) => lines.push(line));
+    setLogSink(line => lines.push(line));
     log.error("spawn", "boom");
     setLogSink(undefined);
     expect(lines[0]).toContain("[ERROR][spawn]");

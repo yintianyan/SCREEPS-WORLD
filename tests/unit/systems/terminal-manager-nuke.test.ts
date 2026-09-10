@@ -9,8 +9,8 @@ function multiStore(resources: Record<string, number>, capacity = 300000): any {
   return {
     ...resources,
     getUsedCapacity: vi.fn((resource?: string) =>
-      resource ? (resources[resource] ?? 0)
-        : Object.values(resources).reduce((a, b) => a + b, 0)),
+      resource ? (resources[resource] ?? 0) : Object.values(resources).reduce((a, b) => a + b, 0),
+    ),
     getFreeCapacity: vi.fn(() => capacity - Object.values(resources).reduce((a, b) => a + b, 0)),
   };
 }
@@ -27,11 +27,13 @@ function nukeMock(id: string, timeToLand = 40000): any {
   return { id, timeToLand, launchRoomName: "W9N9", pos: { x: 25, y: 25, roomName: "W7N4" } };
 }
 
-function roomSnapshot(opts: {
-  roomName?: string;
-  terminal?: any;
-  nukes?: any[];
-} = {}): any {
+function roomSnapshot(
+  opts: {
+    roomName?: string;
+    terminal?: any;
+    nukes?: any[];
+  } = {},
+): any {
   return mockSnapshot({
     roomName: opts.roomName ?? "W7N4",
     terminal: opts.terminal,
@@ -82,9 +84,7 @@ describe("terminal-manager — nuke 资产抢救链", () => {
 
     // power 优先于 G/能量 — 一次一笔。
     expect(alert.terminal.send).toHaveBeenCalledWith("power", 500, "W8N4");
-    expect(salvageEvents()).toEqual([
-      expect.objectContaining({ k: 34, r: "W7N4", d: [0, 500] }),
-    ]);
+    expect(salvageEvents()).toEqual([expect.objectContaining({ k: 34, r: "W7N4", d: [0, 500] })]);
   });
 
   it("无市场 API（getAllOrders 缺失）时抢救依然执行 — send 不依赖市场", () => {

@@ -7,16 +7,16 @@ import type { FailureNode, FailureDomain } from "./failure-propagation";
 
 /** Recovery Action 执行状态。 */
 export type RecoveryActionState =
-  | "proposed"    // 已产生但尚未验证/提交
-  | "validated"   // 验证通过（前置条件满足）
-  | "submitted"   // 已提交到执行系统
-  | "executing"   // 执行系统正在处理
-  | "verifying"   // 执行完成，验证 World State
-  | "succeeded"   // 验证通过，World State 已改善
-  | "failed"      // 验证失败或执行失败
-  | "retryable"   // 失败但可重试（资源不足等暂时性问题）
-  | "terminal"    // 不可恢复的失败（maxAttempts 烧穿 / 不可行）
-  | "blocked";    // 被外部条件阻塞（威胁 / CPU 降级）
+  | "proposed" // 已产生但尚未验证/提交
+  | "validated" // 验证通过（前置条件满足）
+  | "submitted" // 已提交到执行系统
+  | "executing" // 执行系统正在处理
+  | "verifying" // 执行完成，验证 World State
+  | "succeeded" // 验证通过，World State 已改善
+  | "failed" // 验证失败或执行失败
+  | "retryable" // 失败但可重试（资源不足等暂时性问题）
+  | "terminal" // 不可恢复的失败（maxAttempts 烧穿 / 不可行）
+  | "blocked"; // 被外部条件阻塞（威胁 / CPU 降级）
 
 /** Recovery Action 追踪记录（跨 tick 持久，heap 存储）。 */
 export interface RecoveryActionRecord {
@@ -68,7 +68,7 @@ export type RecoveryActionTable = Map<string, RecoveryActionRecord>;
  */
 export function recoveryIdempotencyKey(action: RecoveryAction): string {
   const room = action.targetFailureId.includes(":")
-    ? action.targetFailureId.split(":")[1] ?? "global"
+    ? (action.targetFailureId.split(":")[1] ?? "global")
     : "global";
   return `${action.domain}:${action.type}:${room}`;
 }
@@ -81,11 +81,13 @@ export function recoveryIdempotencyKey(action: RecoveryAction): string {
  */
 export function isActionActive(record: RecoveryActionRecord | undefined): boolean {
   if (!record) return false;
-  return record.state === "proposed" ||
+  return (
+    record.state === "proposed" ||
     record.state === "validated" ||
     record.state === "submitted" ||
     record.state === "executing" ||
-    record.state === "verifying";
+    record.state === "verifying"
+  );
 }
 
 /**
@@ -241,8 +243,11 @@ export function markFailed(
   reason: string,
   retryable: boolean = false,
 ): RecoveryActionRecord {
-  const state: RecoveryActionState = retryable ? "retryable" :
-    record.attempts >= record.maxAttempts ? "terminal" : "failed";
+  const state: RecoveryActionState = retryable
+    ? "retryable"
+    : record.attempts >= record.maxAttempts
+      ? "terminal"
+      : "failed";
   return transitionAction(record, state, tick, {
     failureReason: reason,
   });
@@ -265,10 +270,10 @@ export function markBlocked(
 
 /** Recovery 验证结果。 */
 export type RecoveryVerificationResult =
-  | "success"       // World State 完全恢复
-  | "partial"       // 部分恢复（有改善但未达标）
-  | "failed"        // 无改善
-  | "no_progress";  // 提交成功但 World State 零变化
+  | "success" // World State 完全恢复
+  | "partial" // 部分恢复（有改善但未达标）
+  | "failed" // 无改善
+  | "no_progress"; // 提交成功但 World State 零变化
 
 /** Recovery 验证输入。 */
 export interface RecoveryVerificationInput {
@@ -318,12 +323,17 @@ export interface RecoveryWorldSnapshot {
  * @param input 验证输入
  * @returns 验证结果
  */
-export function evaluateRecoveryResult(input: RecoveryVerificationInput): RecoveryVerificationResult {
+export function evaluateRecoveryResult(
+  input: RecoveryVerificationInput,
+): RecoveryVerificationResult {
   const { beforeState, afterState, action, elapsedTicks } = input;
 
   // ── 1. 检查 domain level 是否改善 ──
   const levelRank: Record<string, number> = {
-    critical: 1, degraded: 2, stable: 3, healthy: 4,
+    critical: 1,
+    degraded: 2,
+    stable: 3,
+    healthy: 4,
   };
   const beforeRank = levelRank[beforeState.domainLevel] ?? 0;
   const afterRank = levelRank[afterState.domainLevel] ?? 0;
@@ -395,11 +405,11 @@ export function evaluateRecoveryResult(input: RecoveryVerificationInput): Recove
 
 /** Retry 分类。 */
 export type RetryClassification =
-  | "retryable"          // 可重试（暂时性问题：资源不足、spawn 忙）
-  | "non_retryable"      // 不可重试（永久性问题：body 超容量、目标消失）
-  | "blocked"            // 被阻塞（威胁/CPU 降级——等待外部条件解除）
+  | "retryable" // 可重试（暂时性问题：资源不足、spawn 忙）
+  | "non_retryable" // 不可重试（永久性问题：body 超容量、目标消失）
+  | "blocked" // 被阻塞（威胁/CPU 降级——等待外部条件解除）
   | "resource_constrained" // 资源受限（能量不足——等待能量恢复）
-  | "threat_blocked";    // 威胁阻塞（需要先处理威胁）
+  | "threat_blocked"; // 威胁阻塞（需要先处理威胁）
 
 /** Retry Policy 配置。 */
 export interface RetryPolicy {
@@ -575,7 +585,9 @@ export interface RecoveryUnviabilityResult {
  *   - 累计投入 > 5000 能量且无改善 → unviable
  *   - 累计恢复时间 > 5000 tick 且无改善 → unviable
  */
-export function evaluateRecoveryUnviability(input: RecoveryUnviabilityInput): RecoveryUnviabilityResult {
+export function evaluateRecoveryUnviability(
+  input: RecoveryUnviabilityInput,
+): RecoveryUnviabilityResult {
   if (input.totalAttempts > 10) {
     return {
       unviable: true,
@@ -639,8 +651,10 @@ export function evaluateEscalation(input: EscalationInput): EscalationResult {
     const reason = failedRecord.failureReason ?? "unknown";
 
     // spawn 失败因为能量不足 → 先修 Energy
-    if (failedRecord.type === "spawn_recovery" &&
-        (reason.includes("energy") || reason.includes("resource"))) {
+    if (
+      failedRecord.type === "spawn_recovery" &&
+      (reason.includes("energy") || reason.includes("resource"))
+    ) {
       return {
         shouldEscalate: true,
         reason: `spawn failed due to energy — root cause may be energy, not spawn`,
@@ -650,8 +664,10 @@ export function evaluateEscalation(input: EscalationInput): EscalationResult {
     }
 
     // logistics 失败因为威胁 → 先修 Defense
-    if (failedRecord.type === "logistics_fix" &&
-        (reason.includes("threat") || reason.includes("hostile"))) {
+    if (
+      failedRecord.type === "logistics_fix" &&
+      (reason.includes("threat") || reason.includes("hostile"))
+    ) {
       return {
         shouldEscalate: true,
         reason: `logistics failed due to threat — root cause may be defense`,
@@ -721,9 +737,7 @@ export function cleanupRecoveryTable(
   // 安全上限：最多保留 100 条记录
   if (newTable.size > 100) {
     // 删除最老的记录
-    const sorted = [...newTable.entries()].sort(
-      (a, b) => a[1].updatedAt - b[1].updatedAt,
-    );
+    const sorted = [...newTable.entries()].sort((a, b) => a[1].updatedAt - b[1].updatedAt);
     const toRemove = sorted.slice(0, newTable.size - 100);
     for (const [key] of toRemove) {
       newTable.delete(key);

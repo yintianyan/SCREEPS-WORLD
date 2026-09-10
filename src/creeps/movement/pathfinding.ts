@@ -4,7 +4,15 @@ import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
 import { recordSkip } from "../../kernel/memory";
 import { packPos, recordTraffic } from "./traffic";
-import { checkAndExecuteYield, tryPullBlocker, updateStuckTicks, clearTarget, recordPathSuccess, recordPathFailure, DIR_DELTA } from "./stuck-recovery";
+import {
+  checkAndExecuteYield,
+  tryPullBlocker,
+  updateStuckTicks,
+  clearTarget,
+  recordPathSuccess,
+  recordPathFailure,
+  DIR_DELTA,
+} from "./stuck-recovery";
 import { movePriorityFor, nextDirFromPath, registerMove, trafficEnabled } from "./intent";
 
 // ─── CostMatrix 缓存（结构层）────────────────────────────
@@ -97,10 +105,15 @@ export function preloadStructureCache(
   // MV-2：布局指纹变化才 bump revision — 持久化路径按 revision 失效。
   const fp = fingerprintPositions(positions);
   const prev: StructureCacheEntry | undefined = g.__structCache[roomName];
-  const revision = prev === undefined || prev.fingerprint !== fp
-    ? (prev?.revision ?? 0) + 1
-    : prev.revision;
-  g.__structCache[roomName] = { count, positions, checkedTick: Game.time, revision, fingerprint: fp };
+  const revision =
+    prev === undefined || prev.fingerprint !== fp ? (prev?.revision ?? 0) + 1 : prev.revision;
+  g.__structCache[roomName] = {
+    count,
+    positions,
+    checkedTick: Game.time,
+    revision,
+    fingerprint: fp,
+  };
 }
 
 // ─── 静态占位缓存（站桩 creep 位置）────────────────────────
@@ -116,10 +129,7 @@ interface StaticBlockerEntry {
  * （harvester 矿位）+ controllerContainer（upgrader 站桩位）。每 tick 重算（creep 可能消失），
  * 只存 globalCache 不进 Memory。
  */
-export function preloadStaticBlockers(
-  roomName: string,
-  positions: number[],
-): void {
+export function preloadStaticBlockers(roomName: string, positions: number[]): void {
   const g = globalCache() as any;
   if (!g.__staticBlockersCache) g.__staticBlockersCache = {};
   g.__staticBlockersCache[roomName] = { positions, checkedTick: Game.time };
@@ -133,10 +143,7 @@ export function preloadStaticBlockers(
  * 语义：per-tick 生命周期（与 preload 同缓存，next tick 失效重报）；
  * 已预载本 tick 时追加去重；先于预载调用则自建条目。成本：一次数组 push。
  */
-export function registerStaticBlocker(
-  roomName: string,
-  pos: { x: number; y: number },
-): void {
+export function registerStaticBlocker(roomName: string, pos: { x: number; y: number }): void {
   const g = globalCache() as any;
   if (!g.__staticBlockersCache) g.__staticBlockersCache = {};
   const entry = g.__staticBlockersCache[roomName];
@@ -199,10 +206,15 @@ function ensureStructureCache(roomName: string): StructureCacheEntry | undefined
   // 短路续期会返回畸形条目。回退路径与 preload 走完全相同的指纹/revision 计算。
   const built = buildStructurePositions(structures, sites);
   const fp = fingerprintPositions(built.positions);
-  const revision = entry === undefined || entry.fingerprint !== fp
-    ? (entry?.revision ?? 0) + 1
-    : entry.revision;
-  entry = { count: built.count, positions: built.positions, checkedTick: Game.time, revision, fingerprint: fp };
+  const revision =
+    entry === undefined || entry.fingerprint !== fp ? (entry?.revision ?? 0) + 1 : entry.revision;
+  entry = {
+    count: built.count,
+    positions: built.positions,
+    checkedTick: Game.time,
+    revision,
+    fingerprint: fp,
+  };
   g.__structCache[roomName] = entry;
   return entry;
 }
@@ -233,9 +245,14 @@ function adaptiveReusePath(creep: Creep, target: RoomPosition): number {
 // ─── 疲劳感知 swampCost ───
 
 const PART_WEIGHT: Record<string, number> = {
-  [WORK]: 2, [CARRY]: 2, [MOVE]: 2,
-  [ATTACK]: 3, [RANGED_ATTACK]: 3, [HEAL]: 3,
-  [TOUGH]: 1, [CLAIM]: 5,
+  [WORK]: 2,
+  [CARRY]: 2,
+  [MOVE]: 2,
+  [ATTACK]: 3,
+  [RANGED_ATTACK]: 3,
+  [HEAL]: 3,
+  [TOUGH]: 1,
+  [CLAIM]: 5,
 };
 
 function fatigueSwampCost(creep: Creep): number {
@@ -351,7 +368,10 @@ function tryCorridorPath(creep: Creep, target: RoomPosition): ScreepsReturnCode 
   if (targetDistToCore > CORRIDOR_ZONE_RADIUS) return undefined;
 
   // creep 已在区域内 — 不需要走廊（短距离直接 moveTo）。
-  const creepDistToCore = Math.max(Math.abs(creep.pos.x - center.x), Math.abs(creep.pos.y - center.y));
+  const creepDistToCore = Math.max(
+    Math.abs(creep.pos.x - center.x),
+    Math.abs(creep.pos.y - center.y),
+  );
   if (creepDistToCore <= CORRIDOR_ZONE_RADIUS + 1) return undefined;
 
   const cKey = corridorKey(creep.room.name, center);
@@ -597,9 +617,8 @@ function registerStepViaPathfinder(
   // cache miss — 需要重算。先过 P1-E 档 2/3 限频门。
   // 档 2：重寻路冷却。forceRepath（卡位）豁免 — 卡位 creep 必须拿到新路径。
   const interval = CONFIG.movement.dynamicRepathInterval;
-  const inCooldown = !forceRepath
-    && interval > 0
-    && Game.time - (creep.memory.lastRepathAt ?? 0) < interval;
+  const inCooldown =
+    !forceRepath && interval > 0 && Game.time - (creep.memory.lastRepathAt ?? 0) < interval;
 
   // 档 3：每房每 tick 寻路预算。超预算降级（战时保险丝）。
   const budgetMax = CONFIG.movement.maxSearchesPerRoomPerTick;
@@ -673,7 +692,12 @@ function getInterRoomCache(): Record<string, InterRoomCacheEntry> {
 }
 
 /** 缓存跨房间出口信息。 */
-function cacheInterRoomExit(fromRoom: string, toRoom: string, exitDir: ExitConstant, exitPos: RoomPosition): void {
+function cacheInterRoomExit(
+  fromRoom: string,
+  toRoom: string,
+  exitDir: ExitConstant,
+  exitPos: RoomPosition,
+): void {
   getInterRoomCache()[`${fromRoom}:${toRoom}`] = {
     exitDir,
     exitPos: { x: exitPos.x, y: exitPos.y },
@@ -716,7 +740,12 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
   // 时 findRoute 返回 ERR_NO_PATH，回退几何出口，由 scout 的 pushThrough 标志硬钻通过。
   let goalRoom = targetRoom;
   const avoidRooms = creep.memory.avoidRooms;
-  if (avoidRooms && avoidRooms.length > 0 && Game.map?.findRoute && creep.room.name !== targetRoom) {
+  if (
+    avoidRooms &&
+    avoidRooms.length > 0 &&
+    Game.map?.findRoute &&
+    creep.room.name !== targetRoom
+  ) {
     const avoid = new Set(avoidRooms);
     const route = Game.map.findRoute(creep.room.name, targetRoom, {
       // 对途经房打 Infinity 成本；起点房（fromRoomName 为空）不打，否则整条路由失败。
@@ -774,7 +803,13 @@ export function moveTowardRoom(creep: Creep, targetRoom: string): void {
   if (exit) {
     // traffic 开启：统一单步出口（卡位时强制重算 = reusePath: 0 等价语义）。
     if (trafficEnabled()) {
-      registerStepViaPathfinder(creep, exit, movePriorityFor(creep), stuckTicks >= stuckThreshold, 0);
+      registerStepViaPathfinder(
+        creep,
+        exit,
+        movePriorityFor(creep),
+        stuckTicks >= stuckThreshold,
+        0,
+      );
       return;
     }
     // Level 1：卡位 → reusePath: 0 强制重算路径。
@@ -827,8 +862,9 @@ function stepOffEdge(creep: Creep): boolean {
       if (canLook) {
         if (creep.room.lookForAt(LOOK_CREEPS, nx, ny).length > 0) continue;
         const structures = creep.room.lookForAt(LOOK_STRUCTURES, nx, ny) as AnyStructure[];
-        const blocked = structures.some((s) => {
-          if (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) return false;
+        const blocked = structures.some(s => {
+          if (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER)
+            return false;
           if (s.structureType === STRUCTURE_RAMPART && (s as StructureRampart).my) return false;
           return true;
         });
@@ -883,7 +919,8 @@ export function ensureHome(creep: Creep): boolean {
     const isCarrier = creep.memory.role === "carrier";
     const isRemoteHauler = creep.memory.role === "remoteHauler";
     const hasHalfLoad = creep.store.getUsedCapacity() > creep.store.getCapacity() * 0.5;
-    const goHome = mode === "flee" ||
+    const goHome =
+      mode === "flee" ||
       (mode === "idle" && creep.room.name !== remoteTarget) ||
       (mode === "idle" && isRemoteHauler && creep.room.name === remoteTarget && hasHalfLoad) ||
       (mode === "work" && (isRemoteHauler || creep.memory.role === "coreClearer")) ||
@@ -1031,7 +1068,13 @@ export function moveToTarget(
   // 卡位（Level 1+）时强制重算路径，与 reusePath: 0 等价。moveRange 透传：动作交互距离 > 1
   // （如 upgrade/build 的 range 3）时按实际距离求路 — range1 落点可能被静态阻挡/结构全部遮蔽。
   if (trafficEnabled()) {
-    return registerStepViaPathfinder(creep, pos, movePriorityFor(creep), stuckTicks >= stuckThreshold, moveRange);
+    return registerStepViaPathfinder(
+      creep,
+      pos,
+      movePriorityFor(creep),
+      stuckTicks >= stuckThreshold,
+      moveRange,
+    );
   }
 
   // ── 回退：moveTo（引擎内置缓存）──

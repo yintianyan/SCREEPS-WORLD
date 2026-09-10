@@ -277,7 +277,8 @@ describe("A5.3.1 Domain Purity — abort-recovery.ts", () => {
       ),
     );
     // 移除注释行
-    const codeLines = source.split("\n")
+    const codeLines = source
+      .split("\n")
       .filter(l => {
         const t = l.trim();
         return !t.startsWith("*") && !t.startsWith("//") && !t.startsWith("/*");

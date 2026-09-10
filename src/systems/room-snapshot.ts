@@ -29,15 +29,24 @@ export function buildRoomSnapshot(
   // 一次 find 获取所有中性结构，在 JS 层按类型分组 — 比多次带 filter 的 find
   // 更高效（减少 C++ ↔ JS 边界穿越）。
   const allStructures = room.find(FIND_STRUCTURES);
-  const containers = allStructures.filter(s => s.structureType === STRUCTURE_CONTAINER) as StructureContainer[];
+  const containers = allStructures.filter(
+    s => s.structureType === STRUCTURE_CONTAINER,
+  ) as StructureContainer[];
   const roads = allStructures.filter(s => s.structureType === STRUCTURE_ROAD) as StructureRoad[];
   const walls = allStructures.filter(s => s.structureType === STRUCTURE_WALL) as StructureWall[];
-  const ramparts = allStructures.filter(s => s.structureType === STRUCTURE_RAMPART) as StructureRampart[];
-  const extractor = allStructures.find(s => s.structureType === STRUCTURE_EXTRACTOR) as StructureExtractor | undefined;
-  const factory = allStructures.find(s => s.structureType === STRUCTURE_FACTORY) as StructureFactory | undefined;
-  const observer = allStructures.find(s => s.structureType === STRUCTURE_OBSERVER) as StructureObserver | undefined;
-  const powerSpawn = allStructures.find(s => s.structureType === STRUCTURE_POWER_SPAWN) as StructurePowerSpawn | undefined;
-  const nuker = allStructures.find(s => s.structureType === STRUCTURE_NUKER) as StructureNuker | undefined;
+  const ramparts = allStructures.filter(
+    s => s.structureType === STRUCTURE_RAMPART,
+  ) as StructureRampart[];
+  const extractor = allStructures.find(s => s.structureType === STRUCTURE_EXTRACTOR) as
+    StructureExtractor | undefined;
+  const factory = allStructures.find(s => s.structureType === STRUCTURE_FACTORY) as
+    StructureFactory | undefined;
+  const observer = allStructures.find(s => s.structureType === STRUCTURE_OBSERVER) as
+    StructureObserver | undefined;
+  const powerSpawn = allStructures.find(s => s.structureType === STRUCTURE_POWER_SPAWN) as
+    StructurePowerSpawn | undefined;
+  const nuker = allStructures.find(s => s.structureType === STRUCTURE_NUKER) as
+    StructureNuker | undefined;
 
   const storage = room.storage ?? undefined;
   const terminal = room.terminal ?? undefined;
@@ -74,9 +83,9 @@ export function buildRoomSnapshot(
   }
 
   // 掉落资源：采集地上散落的能量（creep 死亡掉落、harvester 溢出等）。
-  const droppedEnergy = room.find(FIND_DROPPED_RESOURCES).filter(
-    r => r.resourceType === RESOURCE_ENERGY,
-  );
+  const droppedEnergy = room
+    .find(FIND_DROPPED_RESOURCES)
+    .filter(r => r.resourceType === RESOURCE_ENERGY);
 
   // 遗留资源容器：坟墓（creep 死亡）与废墟（建筑被毁/拆除），均衰减灭失，hauler 优先回收。
   // 过滤口径为「任意资源总量 > 0」而非仅能量 — 否则只装矿物的坟墓（如满载矿物的
@@ -84,12 +93,8 @@ export function buildRoomSnapshot(
   let tombstones: Tombstone[] = [];
   let ruins: Ruin[] = [];
   try {
-    tombstones = room.find(FIND_TOMBSTONES).filter(
-      t => t.store.getUsedCapacity() > 0,
-    );
-    ruins = room.find(FIND_RUINS).filter(
-      r => r.store.getUsedCapacity() > 0,
-    );
+    tombstones = room.find(FIND_TOMBSTONES).filter(t => t.store.getUsedCapacity() > 0);
+    ruins = room.find(FIND_RUINS).filter(r => r.store.getUsedCapacity() > 0);
   } catch {
     // 常量未定义的环境（旧测试 mock）— 视为无遗留资源。
   }
@@ -112,9 +117,7 @@ export function buildRoomSnapshot(
     ...towers,
   ];
   if (controllerContainer) fillBase.push(controllerContainer);
-  const fillTargets = fillBase.filter(
-    s => s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-  );
+  const fillTargets = fillBase.filter(s => s.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
 
   // needsRecovery 仅基于 spawn 存在性；
   // 更精细的恢复判断由 Kernel.computeColonyState 负责（已统计 harvester 数量）。
@@ -153,7 +156,10 @@ export function buildRoomSnapshot(
       staticBlockerPositions.push(c.pos.x, c.pos.y);
     }
   }
-  if (controllerContainer && occupiedByMyCreep(controllerContainer.pos.x, controllerContainer.pos.y)) {
+  if (
+    controllerContainer &&
+    occupiedByMyCreep(controllerContainer.pos.x, controllerContainer.pos.y)
+  ) {
     staticBlockerPositions.push(controllerContainer.pos.x, controllerContainer.pos.y);
   }
   preloadStaticBlockers(room.name, staticBlockerPositions);
@@ -162,21 +168,33 @@ export function buildRoomSnapshot(
   // 供 tower-defense 和 builder actions 复用，避免各模块重复迭代。
   let criticalRepairTarget: AnyStructure | undefined;
   for (const s of spawns) {
-    if (s.hits < s.hitsMax * 0.5) { criticalRepairTarget = s; break; }
+    if (s.hits < s.hitsMax * 0.5) {
+      criticalRepairTarget = s;
+      break;
+    }
   }
   if (!criticalRepairTarget) {
     for (const s of extensions) {
-      if (s.hits < s.hitsMax * 0.5) { criticalRepairTarget = s; break; }
+      if (s.hits < s.hitsMax * 0.5) {
+        criticalRepairTarget = s;
+        break;
+      }
     }
   }
   if (!criticalRepairTarget) {
     for (const s of towers) {
-      if (s.hits < s.hitsMax * 0.5) { criticalRepairTarget = s; break; }
+      if (s.hits < s.hitsMax * 0.5) {
+        criticalRepairTarget = s;
+        break;
+      }
     }
   }
   if (!criticalRepairTarget) {
     for (const s of containers) {
-      if (s.hits < s.hitsMax * 0.5) { criticalRepairTarget = s; break; }
+      if (s.hits < s.hitsMax * 0.5) {
+        criticalRepairTarget = s;
+        break;
+      }
     }
   }
 
@@ -244,4 +262,3 @@ function isLink(s: AnyOwnedStructure): s is StructureLink {
 function isLab(s: AnyOwnedStructure): s is StructureLab {
   return s.structureType === STRUCTURE_LAB;
 }
-

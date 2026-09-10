@@ -47,8 +47,14 @@ const FRESH: PhaseState = {
 };
 
 /** 连续 n 次评估，reserve 每步变化 step。返回最终结果。 */
-function runDrain(state: PhaseState, start: number, step: number, n: number, options?: PhaseOptions) {
-  let s = state;
+function runDrain(
+  state: PhaseState,
+  start: number,
+  step: number,
+  n: number,
+  options?: PhaseOptions,
+) {
+  const s = state;
   let reserve = start;
   let last = evaluateColonyPhase(input({ reserve }), s, options);
   for (let i = 1; i < n; i++) {
@@ -89,7 +95,8 @@ describe("P0-1 srcRatio 累积净流失 crisis 通道 — 正常路径", () => {
     for (let i = 0; i < 19; i++) {
       state = evaluateColonyPhase(
         input({ srcRatio: 0.95, storageDrainRate: -5, reserve: 5000 }),
-        state, o,
+        state,
+        o,
       );
       expect(state.phase).not.toBe("crisis");
       expect(state.storageDrainAccum).toBe((i + 1) * 5);
@@ -98,14 +105,16 @@ describe("P0-1 srcRatio 累积净流失 crisis 通道 — 正常路径", () => {
     // 第 20 tick：accum=100，不大于阈值（> 才触发），srcStalled=false
     state = evaluateColonyPhase(
       input({ srcRatio: 0.95, storageDrainRate: -5, reserve: 5000 }),
-      state, o,
+      state,
+      o,
     );
     expect(state.storageDrainAccum).toBe(100);
     expect(state.srcStallTicks).toBe(0);
     // 第 21 tick：accum=105 > 100，srcStalled=true，srcStallTicks=1
     state = evaluateColonyPhase(
       input({ srcRatio: 0.95, storageDrainRate: -5, reserve: 5000 }),
-      state, o,
+      state,
+      o,
     );
     expect(state.srcStallTicks).toBe(1);
     expect(state.phase).not.toBe("crisis");
@@ -113,14 +122,16 @@ describe("P0-1 srcRatio 累积净流失 crisis 通道 — 正常路径", () => {
     for (let i = 0; i < 48; i++) {
       state = evaluateColonyPhase(
         input({ srcRatio: 0.95, storageDrainRate: -5, reserve: 5000 }),
-        state, o,
+        state,
+        o,
       );
       expect(state.phase).not.toBe("crisis");
     }
     // 第 70 tick：srcStallTicks=50，forceCrisis
     state = evaluateColonyPhase(
       input({ srcRatio: 0.95, storageDrainRate: -5, reserve: 5000 }),
-      state, o,
+      state,
+      o,
     );
     expect(state.phase).toBe("crisis");
     expect(state.srcStallTicks).toBe(50);
@@ -139,7 +150,8 @@ describe("P0-1 srcRatio 累积净流失 crisis 通道 — 正常路径", () => {
           spendableRatio: 0.8,
           reserve: 5000,
         }),
-        state, o,
+        state,
+        o,
       );
     }
     expect(state.phase).toBe("crisis");
@@ -309,7 +321,8 @@ describe("P0-1 累积净流失 crisis 通道 — 异常情况", () => {
     for (let i = 0; i < 70; i++) {
       state = evaluateColonyPhase(
         input({ srcRatio: 0.95, storageDrainRate: -5, reserve: 5000 }),
-        state, o,
+        state,
+        o,
       );
     }
     expect(state.phase).toBe("crisis");
@@ -318,7 +331,8 @@ describe("P0-1 累积净流失 crisis 通道 — 异常情况", () => {
     // 但 inCrisisBand=true 且 dwellSatisfied=false（bandTicks 不足 100）→ 停在 recovery
     state = evaluateColonyPhase(
       input({ srcRatio: 0.3, storageDrainRate: 5, reserve: 5000 }),
-      state, o,
+      state,
+      o,
     );
     expect(state.phase).toBe("recovery");
   });
@@ -333,7 +347,8 @@ describe("P2-3 forceCrisis 满仓豁免", () => {
     // 累积流失到超阈值
     state = evaluateColonyPhase(
       input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 5000, storageRatio: 0.9 }),
-      state, o,
+      state,
+      o,
     );
     // 满仓豁免：storageRatio=0.9 > 0.8 → srcStalled=false → srcStallTicks=0
     // 注意：storageDrainAccum 仍正常累积（800），但 srcStalled=false 不累加 srcStallTicks
@@ -347,7 +362,8 @@ describe("P2-3 forceCrisis 满仓豁免", () => {
     let state = FRESH;
     state = evaluateColonyPhase(
       input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 5000, storageRatio: 0.5 }),
-      state, o,
+      state,
+      o,
     );
     // 非满仓：storageRatio=0.5 <= 0.8 → srcStalled=true → srcStallTicks=1 >= 1 → forceCrisis
     expect(state.srcStallTicks).toBe(1);
@@ -359,7 +375,8 @@ describe("P2-3 forceCrisis 满仓豁免", () => {
     let state = FRESH;
     state = evaluateColonyPhase(
       input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 5000 }), // storageRatio undefined
-      state, o,
+      state,
+      o,
     );
     // 无 storage：storageRatio=undefined → (undefined ?? 0)=0 <= 0.8 → 不豁免
     expect(state.srcStallTicks).toBe(1);
@@ -375,7 +392,8 @@ describe("P2-3 forceCrisis 满仓豁免", () => {
     let state = FRESH;
     state = evaluateColonyPhase(
       input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 5000, storageRatio: 0.8 }),
-      state, o,
+      state,
+      o,
     );
     // storageRatio=0.8 不 > 0.8 → 不豁免 → srcStalled=true → srcStallTicks=1 >= 1 → forceCrisis
     expect(state.srcStallTicks).toBe(1);

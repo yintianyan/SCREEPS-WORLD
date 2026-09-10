@@ -22,16 +22,15 @@ export function getWallTargetHits(
   // utility（container 等低值资产）：只维持新生急救地板，受袭也不升档 —
   // 塌了损失有限，能量留给周界。
   if (role === "utility") return CONFIG.defense.rampartBootstrapHits;
-  const base = rcl >= 7
-    ? CONFIG.defense.wallTargetHits.rcl7_8
-    : rcl >= 5
-      ? CONFIG.defense.wallTargetHits.rcl5_6
-      : CONFIG.defense.wallTargetHits.rcl3_4;
+  const base =
+    rcl >= 7
+      ? CONFIG.defense.wallTargetHits.rcl7_8
+      : rcl >= 5
+        ? CONFIG.defense.wallTargetHits.rcl5_6
+        : CONFIG.defense.wallTargetHits.rcl3_4;
   // core（结构叠盾）：只需撑过「周界已破 → 塔/defender 处理」窗口，
   // 打折防内圈盾与周界同价维护的经济黑洞。
-  const scaled = role === "core"
-    ? Math.round(base * CONFIG.defense.coreRampartFactor)
-    : base;
+  const scaled = role === "core" ? Math.round(base * CONFIG.defense.coreRampartFactor) : base;
   if (!underSiege) return scaled;
   // 受袭姿态：以真实威胁校准防御深度，和平期不为假想敌过度投资
   // （修墙能量 = 少升的 RCL）；官方上限 300M 封顶防溢出。
@@ -141,9 +140,9 @@ export const CONFIG = {
      * 运行时 soft/hard = effectiveLimit × ratio（见 scheduler.CpuBudget）。 */
     limits: {
       healthy: { softRatio: 0.875, hardRatio: 0.96 },
-      guarded: { softRatio: 0.80, hardRatio: 0.925 },
-      conserve: { softRatio: 0.70, hardRatio: 0.85 },
-      recovery: { softRatio: 0.60, hardRatio: 0.775 },
+      guarded: { softRatio: 0.8, hardRatio: 0.925 },
+      conserve: { softRatio: 0.7, hardRatio: 0.85 },
+      recovery: { softRatio: 0.6, hardRatio: 0.775 },
     },
     /** 各档位允许的最大优先级。 */
     maxPriority: {
@@ -515,7 +514,13 @@ export const CONFIG = {
     /** 联盟白名单：owner 命中者一律视为非威胁（不逃跑 / 不开火 / 不停经济）。 */
     allies: [] as readonly string[],
     /** 威胁判定部件：具备任一即视为威胁 creep（与 domain/defense/threat.ts 同口径）。 */
-    threatParts: ["attack", "ranged_attack", "heal", "work", "claim"] as readonly BodyPartConstant[],
+    threatParts: [
+      "attack",
+      "ranged_attack",
+      "heal",
+      "work",
+      "claim",
+    ] as readonly BodyPartConstant[],
     /** 无塔时，威胁 creep 靠近 spawn/controller 至此 range 内才激活 safe mode（避免过境 scout 误烧）。 */
     safeModeTriggerRange: 5,
     /** 非战斗 creep 的逃跑触发距离：威胁 creep 在此范围内才逃跑（P1-1）—
@@ -880,7 +885,13 @@ export const CONFIG = {
      * 市场正常运行时由 sellMin × buyPremium 接管，此值不生效。
      */
     fallbackMaxBuyPrice: {
-      H: 370, O: 65, U: 13, L: 150, K: 15, Z: 16, X: 240,
+      H: 370,
+      O: 65,
+      U: 13,
+      L: 150,
+      K: 15,
+      Z: 16,
+      X: 240,
     } as Readonly<Record<string, number>>,
     /** 行情缺失时的兆底卖出价 — 低于此价不卖（防无买盘时 0 价格挂单）。 */
     fallbackMinSellPrice: 0.5,

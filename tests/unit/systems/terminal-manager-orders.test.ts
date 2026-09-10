@@ -55,20 +55,36 @@ describe("planSellOrder — 挂单决策纯函数", () => {
   };
 
   it("盈余 + bid 锚定 → 挂单价 = bid × markup（两位小数）", () => {
-    const plan = planSellOrder({ ...base, surplus: 8000, existingOrderId: undefined, bestBuyPrice: 0.8 });
+    const plan = planSellOrder({
+      ...base,
+      surplus: 8000,
+      existingOrderId: undefined,
+      bestBuyPrice: 0.8,
+    });
     expect(plan).toEqual({ resourceType: "U", price: 0.92, totalAmount: 5000 });
   });
 
   it("在途挂单 → 不重复挂", () => {
-    expect(planSellOrder({ ...base, surplus: 8000, existingOrderId: "o1", bestBuyPrice: 0.8 })).toBeUndefined();
+    expect(
+      planSellOrder({ ...base, surplus: 8000, existingOrderId: "o1", bestBuyPrice: 0.8 }),
+    ).toBeUndefined();
   });
 
   it("无 bid 锚定（死市场）→ 不挂", () => {
-    expect(planSellOrder({ ...base, surplus: 8000, existingOrderId: undefined, bestBuyPrice: undefined })).toBeUndefined();
+    expect(
+      planSellOrder({
+        ...base,
+        surplus: 8000,
+        existingOrderId: undefined,
+        bestBuyPrice: undefined,
+      }),
+    ).toBeUndefined();
   });
 
   it("盈余量低于下限 → 不挂（手续费不值得）", () => {
-    expect(planSellOrder({ ...base, surplus: 500, existingOrderId: undefined, bestBuyPrice: 0.8 })).toBeUndefined();
+    expect(
+      planSellOrder({ ...base, surplus: 500, existingOrderId: undefined, bestBuyPrice: 0.8 }),
+    ).toBeUndefined();
   });
 });
 
@@ -107,11 +123,13 @@ describe("shouldChangeOrderPrice — 改价决策（含竞品 ask 锚）", () =>
   });
 
   it("价格变化不足 5% → 不改价", () => {
-    expect(shouldChangeOrderPrice(5000, 5000, 68.49, 70, 1.15, {
-      competingAsk: 68.5,
-      floor: 0.5,
-      step: 0.01,
-    })).toBeUndefined();
+    expect(
+      shouldChangeOrderPrice(5000, 5000, 68.49, 70, 1.15, {
+        competingAsk: 68.5,
+        floor: 0.5,
+        step: 0.01,
+      }),
+    ).toBeUndefined();
   });
 });
 
@@ -208,7 +226,9 @@ describe("terminal-manager — 挂单与 pixel 集成", () => {
       ),
       calcTransactionCost: vi.fn(() => 100),
       deal: vi.fn(() => OK),
-      orders: { mine1: { type: "sell", roomName: "W7N4", resourceType: "O", remainingAmount: 5000 } },
+      orders: {
+        mine1: { type: "sell", roomName: "W7N4", resourceType: "O", remainingAmount: 5000 },
+      },
       createOrder,
       cancelOrder: vi.fn(() => OK),
     };
@@ -234,7 +254,8 @@ describe("terminal-manager — 挂单与 pixel 集成", () => {
       getAllOrders: vi.fn(({ resourceType }: any) =>
         resourceType === "pixel"
           ? [{ id: "px1", price: 500, remainingAmount: 100, roomName: undefined }]
-          : []),
+          : [],
+      ),
       calcTransactionCost: vi.fn(() => 100),
       deal,
       orders: {},
@@ -243,9 +264,10 @@ describe("terminal-manager — 挂单与 pixel 集成", () => {
     };
     (globalThis as any).Game.resources = { pixel: 50 };
 
-    terminalManagerSystem.run(makeContext([mockSnapshot({ roomName: "W7N4", terminal: terminalMock() })]));
+    terminalManagerSystem.run(
+      makeContext([mockSnapshot({ roomName: "W7N4", terminal: terminalMock() })]),
+    );
 
     expect(deal).toHaveBeenCalledWith("px1", 50);
   });
 });
-

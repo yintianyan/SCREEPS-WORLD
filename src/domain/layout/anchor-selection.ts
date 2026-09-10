@@ -23,7 +23,6 @@ export const DEFAULT_WEIGHTS: AnchorWeights = {
   mineralDist: -0.5,
 };
 
-
 export interface AnchorConstraint {
   /** 核心区域开放度（Distance Transform 值）。 */
   readonly openness: number;
@@ -39,13 +38,11 @@ export interface AnchorConstraint {
   readonly mineralDist: number;
 }
 
-
 export interface AnchorCandidate extends AnchorConstraint {
   readonly x: number;
   readonly y: number;
   readonly score: number;
 }
-
 
 export interface AnchorSelectionInput {
   readonly field: DistanceField;
@@ -66,12 +63,12 @@ export interface AnchorSelectionInput {
 /** 加权线性组合评分，分数越高越好。 */
 export function scoreAnchor(c: AnchorConstraint, w: AnchorWeights = DEFAULT_WEIGHTS): number {
   return (
-    w.openness * c.openness
-    + w.sourceDist * c.avgSourceDist
-    + w.controllerDist * c.controllerDist
-    + w.exitDistance * c.exitDistance
-    + w.blockedCells * c.blockedCells
-    + w.mineralDist * c.mineralDist
+    w.openness * c.openness +
+    w.sourceDist * c.avgSourceDist +
+    w.controllerDist * c.controllerDist +
+    w.exitDistance * c.exitDistance +
+    w.blockedCells * c.blockedCells +
+    w.mineralDist * c.mineralDist
   );
 }
 
@@ -79,7 +76,10 @@ export function scoreAnchor(c: AnchorConstraint, w: AnchorWeights = DEFAULT_WEIG
 export function evaluateAnchorAt(
   x: number,
   y: number,
-  input: Pick<AnchorSelectionInput, "field" | "sources" | "controller" | "exits" | "mineral" | "getTerrain">,
+  input: Pick<
+    AnchorSelectionInput,
+    "field" | "sources" | "controller" | "exits" | "mineral" | "getTerrain"
+  >,
   weights: AnchorWeights = DEFAULT_WEIGHTS,
 ): AnchorCandidate {
   const { field, sources, controller, exits, mineral, getTerrain } = input;
@@ -95,9 +95,7 @@ export function evaluateAnchorAt(
     avgSourceDist = 25; // 无 source 时给中性值
   }
 
-  const controllerDist = controller
-    ? Math.abs(controller.x - x) + Math.abs(controller.y - y)
-    : 25;
+  const controllerDist = controller ? Math.abs(controller.x - x) + Math.abs(controller.y - y) : 25;
 
   let exitDistance = 50;
   for (const e of exits) {
@@ -105,14 +103,17 @@ export function evaluateAnchorAt(
     if (d < exitDistance) exitDistance = d;
   }
 
-  const mineralDist = mineral
-    ? Math.abs(mineral.x - x) + Math.abs(mineral.y - y)
-    : 25;
+  const mineralDist = mineral ? Math.abs(mineral.x - x) + Math.abs(mineral.y - y) : 25;
 
   const blockedCells = countBlockedCells(x, y, 3, getTerrain);
 
   const constraint: AnchorConstraint = {
-    openness, avgSourceDist, controllerDist, exitDistance, blockedCells, mineralDist,
+    openness,
+    avgSourceDist,
+    controllerDist,
+    exitDistance,
+    blockedCells,
+    mineralDist,
   };
 
   return { x, y, ...constraint, score: scoreAnchor(constraint, weights) };
@@ -124,13 +125,17 @@ export function evaluateAnchorAt(
  */
 export function selectAnchors(input: AnchorSelectionInput): AnchorCandidate[] {
   const {
-    field, sources, controller, exits, mineral, getTerrain,
+    field,
+    sources,
+    controller,
+    exits,
+    mineral,
+    getTerrain,
     weights = DEFAULT_WEIGHTS,
     bounds = { minX: 5, maxX: 44, minY: 5, maxY: 44 },
     minOpenness = 4,
     maxCandidates = 5,
   } = input;
-
 
   const occupied = new Set<number>();
   for (const s of sources) occupied.add(s.x * 50 + s.y);
@@ -145,7 +150,12 @@ export function selectAnchors(input: AnchorSelectionInput): AnchorCandidate[] {
       const openness = opennessAt(field, x, y);
       if (openness < minOpenness) continue;
 
-      const candidate = evaluateAnchorAt(x, y, { field, sources, controller, exits, mineral, getTerrain }, weights);
+      const candidate = evaluateAnchorAt(
+        x,
+        y,
+        { field, sources, controller, exits, mineral, getTerrain },
+        weights,
+      );
       candidates.push(candidate);
     }
   }
@@ -162,7 +172,6 @@ export function diagnoseAnchor(
 ): { rank: number; total: number; candidate: AnchorCandidate } {
   const current = evaluateAnchorAt(currentX, currentY, input, input.weights);
   const all = selectAnchors(input);
-
 
   let rank = -1;
   for (let i = 0; i < all.length; i++) {

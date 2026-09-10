@@ -27,7 +27,7 @@ export function getHostilesCached(room: Room): Creep[] {
   // owner 缺失（私服注入/NPC 边缘形态）视为非盟友 → 敌对；不可让 filter 抛错
   // （该缓存被 attacker/remote-defender 逐 tick 调用，抛错即战斗失能）。
   const hostiles = room.find(FIND_HOSTILE_CREEPS, {
-    filter: (c) => !allies.includes(c.owner?.username ?? ""),
+    filter: c => !allies.includes(c.owner?.username ?? ""),
   });
   g.__hostilesCache[room.name] = { tick: Game.time, creeps: hostiles };
   return hostiles;
@@ -117,10 +117,7 @@ export function getSource(creep: Creep, snapshot: RoomSnapshot): Source | undefi
  * 查找最近的需能量结构（有空闲容量的 spawn 或 extension）。
  * 使用引擎原生 findClosestByRange 替代手动迭代。
  */
-export function getFillTarget(
-  creep: Creep,
-  snapshot: RoomSnapshot,
-): AnyOwnedStructure | undefined {
+export function getFillTarget(creep: Creep, snapshot: RoomSnapshot): AnyOwnedStructure | undefined {
   if (snapshot.fillTargets.length === 0) return undefined;
   return creep.pos.findClosestByRange(snapshot.fillTargets as AnyOwnedStructure[]) ?? undefined;
 }
@@ -139,9 +136,7 @@ export type FillTarget = StructureSpawn | StructureExtension | StructureTower | 
  * 由 getHaulFillTarget 在调用此函数之前自行处理，不包含在此通用层级中 —
  * flee 场景不需要补给 controller container（非生存关键）。
  */
-export function haulerFillTiers(
-  hasThreats: boolean,
-): readonly (readonly string[])[] {
+export function haulerFillTiers(hasThreats: boolean): readonly (readonly string[])[] {
   return hasThreats
     ? [[STRUCTURE_TOWER], [STRUCTURE_SPAWN, STRUCTURE_EXTENSION], []]
     : [[STRUCTURE_SPAWN, STRUCTURE_EXTENSION], [STRUCTURE_TOWER], []];
@@ -226,8 +221,7 @@ export function getHaulFillTarget(
 
   // 全部已预约 — 回退最近目标（允许共享）避免死锁。
   return (creep.pos.findClosestByRange(snapshot.fillTargets as FillTarget[]) ?? undefined) as
-    | AnyOwnedStructure
-    | undefined;
+    AnyOwnedStructure | undefined;
 }
 
 /**
@@ -299,7 +293,8 @@ export function storageLinkForControllerFeed(
   const st = snapshot.storage;
   if (!st) return undefined;
   return snapshot.links.find(
-    l => l.id !== exclude.id &&
+    l =>
+      l.id !== exclude.id &&
       l.pos.getRangeTo(st) <= 2 &&
       l.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
   );
@@ -366,12 +361,14 @@ export function getDistributorFillTarget(
   //    tier 3（< low）：生存优先，跳过。触发线语义保证低水位投入有上界。
   if (tier < 3) {
     const ammoFloor = CONFIG.economy.distributorTiers.towerAmmoFloor;
-    const towerPool = tier < 1
-      ? snapshot.fillTargets
-      : (snapshot.fillTargets as FillTarget[]).filter(
-          t => t.structureType !== STRUCTURE_TOWER ||
-            t.store.getUsedCapacity(RESOURCE_ENERGY) < ammoFloor,
-        );
+    const towerPool =
+      tier < 1
+        ? snapshot.fillTargets
+        : (snapshot.fillTargets as FillTarget[]).filter(
+            t =>
+              t.structureType !== STRUCTURE_TOWER ||
+              t.store.getUsedCapacity(RESOURCE_ENERGY) < ammoFloor,
+          );
     const tower = pickFillTarget(creep, towerPool, reserved, [STRUCTURE_TOWER]);
     if (tower) {
       reserved.add(tower.id);
@@ -411,9 +408,10 @@ export function getDistributorFillTarget(
   if (tier < 2) {
     const controllerLinkServing =
       snapshot.controller != null &&
-      snapshot.links.some(l =>
-        l.pos.getRangeTo(snapshot.controller!) <= 2 &&
-        l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      snapshot.links.some(
+        l =>
+          l.pos.getRangeTo(snapshot.controller!) <= 2 &&
+          l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
     if (!controllerLinkServing) {
       const cc = snapshot.controllerContainer;
@@ -430,13 +428,13 @@ export function getDistributorFillTarget(
     if (tier < 1) return true;
     if (t.structureType === STRUCTURE_SPAWN || t.structureType === STRUCTURE_EXTENSION) return true;
     // tier 1-2 的 tower 战备线口径与主路径一致。
-    return tier < 3 &&
+    return (
+      tier < 3 &&
       t.structureType === STRUCTURE_TOWER &&
-      t.store.getUsedCapacity(RESOURCE_ENERGY) < fallbackAmmoFloor;
+      t.store.getUsedCapacity(RESOURCE_ENERGY) < fallbackAmmoFloor
+    );
   });
-  return (creep.pos.findClosestByRange(fallbackPool) ?? undefined) as
-    | AnyOwnedStructure
-    | undefined;
+  return (creep.pos.findClosestByRange(fallbackPool) ?? undefined) as AnyOwnedStructure | undefined;
 }
 
 /**
@@ -464,7 +462,8 @@ export function hasDistributorFillDemand(snapshot: RoomSnapshot, tier: Distribut
   if (tier < 3) {
     const ammoFloor = CONFIG.economy.distributorTiers.towerAmmoFloor;
     const towerDemand = snapshot.fillTargets.some(
-      t => t.structureType === STRUCTURE_TOWER &&
+      t =>
+        t.structureType === STRUCTURE_TOWER &&
         (tier < 1 || t.store.getUsedCapacity(RESOURCE_ENERGY) < ammoFloor),
     );
     if (towerDemand) return true;
@@ -481,9 +480,10 @@ export function hasDistributorFillDemand(snapshot: RoomSnapshot, tier: Distribut
   if (tier < 2) {
     const controllerLinkServing =
       snapshot.controller != null &&
-      snapshot.links.some(l =>
-        l.pos.getRangeTo(snapshot.controller!) <= 2 &&
-        l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+      snapshot.links.some(
+        l =>
+          l.pos.getRangeTo(snapshot.controller!) <= 2 &&
+          l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
     if (!controllerLinkServing) {
       const cc = snapshot.controllerContainer;
@@ -674,9 +674,7 @@ export function selectDroppedEnergy(
  * 优先使用快照预计算的 criticalRepairTarget（零重复迭代）；
  * 快照未提供时回退到实时遍历（向后兼容）。
  */
-export function findCriticalRepair(
-  snapshot: RoomSnapshot,
-): AnyStructure | undefined {
+export function findCriticalRepair(snapshot: RoomSnapshot): AnyStructure | undefined {
   if (snapshot.criticalRepairTarget !== undefined) {
     return snapshot.criticalRepairTarget;
   }

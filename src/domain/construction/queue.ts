@@ -14,10 +14,7 @@ interface StructurePosRef {
  * queued + 结构已建成 → done；site + site 消失 → done（已建成）或 queued（被毁）。
  * 纯函数 — 不访问 Game/Memory，所有数据由参数传入。
  */
-export function syncTaskStates(
-  queue: BuildTask[],
-  snapshot: RoomSnapshot,
-): void {
+export function syncTaskStates(queue: BuildTask[], snapshot: RoomSnapshot): void {
   // 位置 → site 映射，用于 queued→site 转换。
   // 注意：同一位置只可能有一个 site，但不同结构类型的任务可能指向同一位置，
   // 匹配时额外检查 structureType，防止误匹配。
@@ -178,14 +175,15 @@ export function cleanTasks(
  * 缺失时 harvester 只能长途送能到 spawn，经济瘫痪；必须允许低能量/恢复状态下
  * 重建，否则陷入「能量低→不建造→无法重建→能量更低」死锁。
  */
-export function needsSourceContainerRebuild(
-  snapshot: RoomSnapshot,
-): boolean {
+export function needsSourceContainerRebuild(snapshot: RoomSnapshot): boolean {
   const adjacentContainer = (x: number, y: number): boolean =>
     snapshot.containers.some(c => Math.abs(c.pos.x - x) <= 1 && Math.abs(c.pos.y - y) <= 1);
   const adjacentContainerSite = (x: number, y: number): boolean =>
     snapshot.constructionSites.some(
-      s => s.structureType === STRUCTURE_CONTAINER && Math.abs(s.pos.x - x) <= 1 && Math.abs(s.pos.y - y) <= 1,
+      s =>
+        s.structureType === STRUCTURE_CONTAINER &&
+        Math.abs(s.pos.x - x) <= 1 &&
+        Math.abs(s.pos.y - y) <= 1,
     );
   return snapshot.sources.some(
     s => !adjacentContainer(s.pos.x, s.pos.y) && !adjacentContainerSite(s.pos.x, s.pos.y),
@@ -218,9 +216,7 @@ export interface EmergencyRebuildStatus {
  * construction-manager 的 developmentGate 不做此区分 — 缺 spawn 时无论初始
  * 还是重建都必须豁免门禁尽快恢复。
  */
-export function assessEmergencyRebuild(
-  snapshot: RoomSnapshot,
-): EmergencyRebuildStatus {
+export function assessEmergencyRebuild(snapshot: RoomSnapshot): EmergencyRebuildStatus {
   const sourceContainer = needsSourceContainerRebuild(snapshot);
   // RCL3 才解锁 tower；RCL < 3 时无塔是正常的，不算紧急。
   const tower = snapshot.rcl >= 3 && snapshot.towers.length === 0;
@@ -266,11 +262,16 @@ export function isEmergencyTask(
  * 钩子实现 — kernel 只读钩子不识系统名（docs/architecture/KERNEL_ARCHITECTURE.md）。
  */
 export function hasCriticalStructureGap(
-  rooms: Record<string, { buildQueue?: Array<{ priority: number; state: string; structureType: string }> } | undefined>,
+  rooms: Record<
+    string,
+    { buildQueue?: Array<{ priority: number; state: string; structureType: string }> } | undefined
+  >,
 ): boolean {
-  return Object.values(rooms).some(
-    r => r?.buildQueue?.some(
-      t => t.priority === 0 && t.state === "queued" &&
+  return Object.values(rooms).some(r =>
+    r?.buildQueue?.some(
+      t =>
+        t.priority === 0 &&
+        t.state === "queued" &&
         (t.structureType === STRUCTURE_STORAGE ||
           t.structureType === STRUCTURE_TOWER ||
           t.structureType === STRUCTURE_SPAWN),
@@ -326,9 +327,7 @@ export interface DevelopmentGateInputs {
  * 门禁顺序与阈值必须与历史行为逐条一致（本函数是唯一逻辑源，
  * systems 层 developmentGate 只是薄壳委托）。
  */
-export function evaluateDevelopmentGate(
-  inputs: DevelopmentGateInputs,
-): DevelopmentGateReason {
+export function evaluateDevelopmentGate(inputs: DevelopmentGateInputs): DevelopmentGateReason {
   if (!inputs.emergencyAny) {
     // 梯度门禁：pressure > 0.8 完全阻塞非紧急建造。
     if (inputs.economyPressure > 0.8) return "pressure";
@@ -346,9 +345,10 @@ export function evaluateDevelopmentGate(
     // 0.3–0.8 线性提高到容量 90%。
     const baseRatio = 0.6;
     const maxRatio = 0.9;
-    const ratio = inputs.economyPressure <= 0.3
-      ? baseRatio
-      : baseRatio + ((inputs.economyPressure - 0.3) / 0.5) * (maxRatio - baseRatio);
+    const ratio =
+      inputs.economyPressure <= 0.3
+        ? baseRatio
+        : baseRatio + ((inputs.economyPressure - 0.3) / 0.5) * (maxRatio - baseRatio);
     const buildThreshold = Math.min(
       Math.floor(inputs.energyCapacityAvailable * ratio),
       CONFIG.economy.buildEnergySurplus + CONFIG.spawn.recoveryEnergyReserve,
@@ -367,10 +367,7 @@ export function evaluateDevelopmentGate(
  * 后者归 emergency 车道）。extension 是 RCL2 唯一提升孵化容量的结构，是早期
  * 发展闭环的核心；controller container 让 upgrader 0 通勤站桩（RCL2 即解锁）。
  * 纯函数。 */
-export function isCriticalDevelopmentTask(
-  task: BuildTask,
-  snapshot: RoomSnapshot,
-): boolean {
+export function isCriticalDevelopmentTask(task: BuildTask, snapshot: RoomSnapshot): boolean {
   if (task.structureType === STRUCTURE_EXTENSION) return true;
   if (task.structureType === STRUCTURE_CONTAINER) {
     const adjacentToSource = snapshot.sources.some(
@@ -440,9 +437,7 @@ export interface DevelopmentLaneInputs {
  * 写者约束；创建仍消耗 normal tick 槽位（每 tick 全局 1 个 = 「每 tick 有限数量」）。
  * recovery 档由内核 maxPriority=1 拦截本系统（P2），此处显式拒绝保持语义一致。
  */
-export function evaluateDevelopmentLane(
-  inputs: DevelopmentLaneInputs,
-): DevelopmentLaneReason {
+export function evaluateDevelopmentLane(inputs: DevelopmentLaneInputs): DevelopmentLaneReason {
   if (inputs.rcl < 2 || inputs.rcl > inputs.laneMaxRcl) return "rcl-window";
   if (inputs.budgetTier === "recovery") return "recovery-tier";
   if (inputs.threatCount > 0) return "threat";

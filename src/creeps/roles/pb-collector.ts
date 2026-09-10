@@ -12,7 +12,7 @@ type PowerPickupTarget = { kind: "dropped"; resource: Resource } | { kind: "ruin
 function pickupPower(): ActionCandidate<PowerPickupTarget> {
   return {
     name: "pb-collector:pickup-power",
-    resolve: (ac) => {
+    resolve: ac => {
       const target = ac.creep.memory.remoteTarget;
       if (!target || ac.creep.room.name !== target) return undefined;
       if (ac.creep.store.getFreeCapacity(RESOURCE_POWER) <= 0) return undefined;
@@ -44,7 +44,7 @@ type PowerDepositTarget = StructureStorage | StructureTerminal;
 function depositPower(): ActionCandidate<PowerDepositTarget> {
   return {
     name: "pb-collector:deposit-power",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.creep.store.getUsedCapacity(RESOURCE_POWER) <= 0) return undefined;
       const home = ac.creep.memory.home;
       if (!home || ac.creep.room.name !== home) return undefined;

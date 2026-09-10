@@ -11,12 +11,14 @@ const homeRoom = "W1N1";
 const targetRoom = "W2N2";
 
 /** 构造 active 状态的 RemoteOp（避免 state 被推断为 string）。 */
-function activeOp(opts: {
-  sources?: number;
-  haulerNeed?: number;
-  lastSeen?: number;
-  lowScoreSince?: number;
-} = {}): RemoteOp {
+function activeOp(
+  opts: {
+    sources?: number;
+    haulerNeed?: number;
+    lastSeen?: number;
+    lowScoreSince?: number;
+  } = {},
+): RemoteOp {
   const tick = (globalThis as any).Game.time as number;
   return {
     state: "active",
@@ -69,7 +71,11 @@ function seed(opts: SeedOpts = {}): RoomSnapshot {
       source: "observer" as const,
       payload: { kind: "normal", status: "normal", lastSeen: 1000, ...(p as object) } as never,
     }));
-    intelligenceSystem.run({ tick: 1000, snapshots: () => [], budget: { canStart: () => true } } as never);
+    intelligenceSystem.run({
+      tick: 1000,
+      snapshots: () => [],
+      budget: { canStart: () => true },
+    } as never);
   }
 
   return mockSnapshot({
@@ -164,7 +170,9 @@ describe("P0-2 远矿 crisis 暂停 — 边界条件", () => {
       },
     });
     runRemoteMiningManager(snap);
-    expect((globalThis as any).Memory.rooms[homeRoom].remoteOps[targetRoom].state).toBe("abandoned");
+    expect((globalThis as any).Memory.rooms[homeRoom].remoteOps[targetRoom].state).toBe(
+      "abandoned",
+    );
   });
 
   it("crisis 期 reevaluateActiveOps 仍运行（不停止经济重估）", () => {
@@ -187,7 +195,9 @@ describe("P0-2 远矿 crisis 暂停 — 边界条件", () => {
       intel: { [targetRoom]: { kind: "normal", status: "normal", lastSeen: now, pathCost: 5000 } },
     });
     runRemoteMiningManager(snap);
-    expect((globalThis as any).Memory.rooms[homeRoom].remoteOps[targetRoom].state).toBe("abandoned");
+    expect((globalThis as any).Memory.rooms[homeRoom].remoteOps[targetRoom].state).toBe(
+      "abandoned",
+    );
   });
 
   it("colonyState 从 recovery 恢复 normal 后 ≤ 1 个 interval 内恢复 spawn 推送", () => {

@@ -11,7 +11,9 @@ beforeEach(() => {
 describe("movePriorityFor — 卡位升级", () => {
   it("未卡位：按 mode 定优先级", () => {
     expect(movePriorityFor(mockCreep({ mode: "work" }))).toBe(CONFIG.movement.trafficPriority.work);
-    expect(movePriorityFor(mockCreep({ mode: "acquire" }))).toBe(CONFIG.movement.trafficPriority.acquire);
+    expect(movePriorityFor(mockCreep({ mode: "acquire" }))).toBe(
+      CONFIG.movement.trafficPriority.acquire,
+    );
   });
 
   it("stuck 达阈值：acquire/work 升级到 stuckEscalation", () => {

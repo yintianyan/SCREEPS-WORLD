@@ -155,9 +155,8 @@ export function getPowerBankCached(room: Room): StructurePowerBank | undefined {
   if (!g.__powerBanks) g.__powerBanks = {};
   const cached = g.__powerBanks[room.name];
   if (cached && cached.tick === Game.time) return cached.pb;
-  const pb = room.find(FIND_STRUCTURES).find(
-    s => s.structureType === STRUCTURE_POWER_BANK,
-  ) as StructurePowerBank | undefined;
+  const pb = room.find(FIND_STRUCTURES).find(s => s.structureType === STRUCTURE_POWER_BANK) as
+    StructurePowerBank | undefined;
   g.__powerBanks[room.name] = { tick: Game.time, pb };
   return pb;
 }

@@ -1,10 +1,27 @@
 /** Lab System */
 import type { RoomSnapshot, System, TickContext } from "../kernel/contracts";
-import type { Compound, LabAssignment, LabDemandTable, LabLoadDemand, LabPlan, LabUnloadDemand, ReactionPlan } from "../domain/industry/types";
+import type {
+  Compound,
+  LabAssignment,
+  LabDemandTable,
+  LabLoadDemand,
+  LabPlan,
+  LabUnloadDemand,
+  ReactionPlan,
+} from "../domain/industry/types";
 import { BOOST_EFFECTS, BOOST_EFFECT_PART } from "../domain/industry/types";
-import { evaluateBoostRequests, decideWarReactionTarget, DEFAULT_BOOST_POLICY } from "../domain/industry/boost";
+import {
+  evaluateBoostRequests,
+  decideWarReactionTarget,
+  DEFAULT_BOOST_POLICY,
+} from "../domain/industry/boost";
 import { computeBoostSurplus } from "../domain/industry/boost-stockpile";
-import { getNextExecutableStep, planReactionChain, selectReactionTrios, LAB_REACTION_AMOUNT } from "../domain/industry/reactions";
+import {
+  getNextExecutableStep,
+  planReactionChain,
+  selectReactionTrios,
+  LAB_REACTION_AMOUNT,
+} from "../domain/industry/reactions";
 import { globalCache, publishProcurementDemands } from "../kernel/global-cache";
 import { CONFIG } from "../config";
 import { collectFullInventory } from "../domain/industry/inventory";
@@ -147,8 +164,9 @@ function planLabs(
 
 /** lab 当前装载的矿物（能量除外；空 lab 返回 undefined）。 */
 function heldMineral(lab: StructureLab): ResourceConstant | undefined {
-  return (Object.keys(lab.store) as ResourceConstant[])
-    .find(r => r !== RESOURCE_ENERGY && (lab.store[r] ?? 0) > 0);
+  return (Object.keys(lab.store) as ResourceConstant[]).find(
+    r => r !== RESOURCE_ENERGY && (lab.store[r] ?? 0) > 0,
+  );
 }
 
 /**
@@ -200,7 +218,11 @@ export function computeLabDemands(labPlan: LabPlan): LabDemandTable {
     }
 
     if (!held) continue;
-    if (assignment.role === "output" && reaction && held === (reaction.output as ResourceConstant)) {
+    if (
+      assignment.role === "output" &&
+      reaction &&
+      held === (reaction.output as ResourceConstant)
+    ) {
       // 本反应的正常产出 — 攒批回收，避免每 5 单位跑一趟。
       if ((lab.store[held] ?? 0) >= OUTPUT_RECLAIM_THRESHOLD) {
         unloads.push({ labId: assignment.labId, resource: held });
@@ -234,7 +256,8 @@ export const labSystem: System = {
       // 计划未立 — sponsor 未知时所有 RCL6+ 房先备料，反正化合物不浪费）。
       // 仅 sponsor 前馈：非参战房继续默认 XGH2O 生产线不受打扰。
       const warPlan = Memory.kernel?.warPlan;
-      const warActive = Memory.kernel?.strategy?.posture === "war" &&
+      const warActive =
+        Memory.kernel?.strategy?.posture === "war" &&
         (!warPlan || warPlan.sponsor === snapshot.roomName);
 
       // 原料断供休眠：单房间只产一种矿物，多矿种原料在市场/跨房补给接入前
@@ -256,12 +279,16 @@ export const labSystem: System = {
           industryMem.reactionTarget = "XGH2O";
           industryMem.reactionAmount = 300;
         }
-        if (!industryMem.reactionPlan || industryMem.reactionPlan.target !== industryMem.reactionTarget) {
-          industryMem.reactionPlan = planReactionChain(
-            industryMem.reactionTarget,
-            industryMem.reactionAmount ?? 300,
-            idleInventory,
-          ) ?? undefined;
+        if (
+          !industryMem.reactionPlan ||
+          industryMem.reactionPlan.target !== industryMem.reactionTarget
+        ) {
+          industryMem.reactionPlan =
+            planReactionChain(
+              industryMem.reactionTarget,
+              industryMem.reactionAmount ?? 300,
+              idleInventory,
+            ) ?? undefined;
         }
 
         // 发布采购需求 — terminal-manager 据此买入基础矿。
@@ -297,8 +324,9 @@ export const labSystem: System = {
       //（冷却长，多 lab 并行 unboost 无意义）。
       let unboostLab: StructureLab | undefined;
       let unboostCreep: Creep | undefined;
-      const recycleCreeps = (globalCache().creepRefs ?? [])
-        .filter(r => r.home === snapshot.roomName && r.recycle);
+      const recycleCreeps = (globalCache().creepRefs ?? []).filter(
+        r => r.home === snapshot.roomName && r.recycle,
+      );
       for (const ref of recycleCreeps) {
         const creep = Game.creeps[ref.name];
         if (!creep) continue;
@@ -358,15 +386,10 @@ export const labSystem: System = {
       // 化合物 > 默认 XGH2O。不抢占已设定的目标 — 反应批次很快完成，切目标浪费半成品。
       // G 合计口径 = 反应链可见库存（storage+terminal+labs）+ nuker 已装填当量。
       if (!industryMem.reactionTarget) {
-        const warTarget = decideWarReactionTarget(
-          warActive,
-          inventory,
-          CONFIG.war.boostStockpile,
-        );
-        const gTotal = (inventory[RESOURCE_GHODIUM] ?? 0) +
-          (snapshot.nuker?.store[RESOURCE_GHODIUM] ?? 0);
-        const gShort = snapshot.nuker !== undefined &&
-          gTotal < CONFIG.nuker.ghodiumStockpile;
+        const warTarget = decideWarReactionTarget(warActive, inventory, CONFIG.war.boostStockpile);
+        const gTotal =
+          (inventory[RESOURCE_GHODIUM] ?? 0) + (snapshot.nuker?.store[RESOURCE_GHODIUM] ?? 0);
+        const gShort = snapshot.nuker !== undefined && gTotal < CONFIG.nuker.ghodiumStockpile;
         if (warTarget) {
           industryMem.reactionTarget = warTarget;
           industryMem.reactionAmount = 300;
@@ -390,12 +413,13 @@ export const labSystem: System = {
 
       if (industryMem.reactionTarget && industryMem.reactionAmount) {
         // 使用持久化的反应计划
-        if (!industryMem.reactionPlan || industryMem.reactionPlan.target !== industryMem.reactionTarget) {
-          industryMem.reactionPlan = planReactionChain(
-            industryMem.reactionTarget,
-            industryMem.reactionAmount,
-            inventory,
-          ) ?? undefined;
+        if (
+          !industryMem.reactionPlan ||
+          industryMem.reactionPlan.target !== industryMem.reactionTarget
+        ) {
+          industryMem.reactionPlan =
+            planReactionChain(industryMem.reactionTarget, industryMem.reactionAmount, inventory) ??
+            undefined;
         }
 
         if (industryMem.reactionPlan) {
@@ -449,7 +473,8 @@ export const labSystem: System = {
           const boostEffect = BOOST_EFFECTS[res as Compound];
           if (!boostEffect) continue;
           const surplus = computeBoostSurplus(
-            res, qty,
+            res,
+            qty,
             CONFIG.war.boostStockpile,
             CONFIG.boost.dailyStockpile,
           );
@@ -498,9 +523,11 @@ export const labSystem: System = {
           g.boostAssignments = { tick: ctx.tick, byCreep: {} };
         }
         const boostLab = Game.getObjectById(assignment.labId as Id<StructureLab>);
-        const stocked = assignment.boostCompound !== undefined &&
-          ((boostLab?.store[assignment.boostCompound as ResourceConstant] ?? 0) >= LAB_BOOST_MINERAL) &&
-          ((boostLab?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) >= LAB_BOOST_ENERGY);
+        const stocked =
+          assignment.boostCompound !== undefined &&
+          (boostLab?.store[assignment.boostCompound as ResourceConstant] ?? 0) >=
+            LAB_BOOST_MINERAL &&
+          (boostLab?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) >= LAB_BOOST_ENERGY;
         g.boostAssignments.byCreep[assignment.boostTarget] = {
           labId: assignment.labId,
           ready: stocked,
@@ -509,7 +536,8 @@ export const labSystem: System = {
 
       // ── 4. 执行 boost（排队序列：多个 lab 可同 tick 执行不同 creep 的 boost）──
       for (const assignment of labPlan.assignments) {
-        if (assignment.role !== "boost" || !assignment.boostTarget || !assignment.boostCompound) continue;
+        if (assignment.role !== "boost" || !assignment.boostTarget || !assignment.boostCompound)
+          continue;
 
         const lab = Game.getObjectById(assignment.labId as Id<StructureLab>);
         const creep = Game.creeps[assignment.boostTarget];
@@ -549,7 +577,9 @@ export const labSystem: System = {
         // 三元组数量 = min(input1, input2, output) — planLabs 保证它们成对，
         // 但防御性取最小值防错配。
         const trioCount = Math.min(
-          input1Assignments.length, input2Assignments.length, outputAssignments.length,
+          input1Assignments.length,
+          input2Assignments.length,
+          outputAssignments.length,
         );
         for (let i = 0; i < trioCount; i++) {
           const input1Lab = Game.getObjectById(input1Assignments[i]!.labId as Id<StructureLab>);

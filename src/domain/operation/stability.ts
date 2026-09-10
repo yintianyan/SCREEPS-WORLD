@@ -31,10 +31,7 @@ export function isInHysteresis(op: OperationContext, tick: number): boolean {
  * @param op Operation 上下文
  * @param carrierHasRun carrier 是否已完成至少一次运输
  */
-export function hasMinimumCommitment(
-  op: OperationContext,
-  carrierHasRun: boolean,
-): boolean {
+export function hasMinimumCommitment(op: OperationContext, carrierHasRun: boolean): boolean {
   if (op.deliveredAmount > 0) return true;
   if (carrierHasRun) return true;
   return false;

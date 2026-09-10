@@ -1,6 +1,5 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
 
-
 export interface RoadCandidate {
   readonly key: string;
   readonly pos: { x: number; y: number; roomName: string };
@@ -62,7 +61,8 @@ export function evaluateRoadCandidates(
   for (const s of snapshot.spawns) endpoints.push({ x: s.pos.x, y: s.pos.y });
   for (const s of snapshot.sources) endpoints.push({ x: s.pos.x, y: s.pos.y });
   if (snapshot.storage) endpoints.push({ x: snapshot.storage.pos.x, y: snapshot.storage.pos.y });
-  if (snapshot.controller) endpoints.push({ x: snapshot.controller.pos.x, y: snapshot.controller.pos.y });
+  if (snapshot.controller)
+    endpoints.push({ x: snapshot.controller.pos.x, y: snapshot.controller.pos.y });
 
   const occupiedSet = new Set<string>();
   for (const s of [

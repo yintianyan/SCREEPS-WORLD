@@ -43,7 +43,7 @@ function findLootRuin(creep: Creep): Ruin | undefined {
 function attackCoreAction(): ActionCandidate<StructureInvaderCore> {
   return {
     name: "core-clearer:attack-core",
-    resolve: (ac) => {
+    resolve: ac => {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       return findInvaderCore(ac.creep);
@@ -73,7 +73,7 @@ function attackCoreAction(): ActionCandidate<StructureInvaderCore> {
 function lootRuinAction(): ActionCandidate<Ruin> {
   return {
     name: "core-clearer:loot-ruin",
-    resolve: (ac) => {
+    resolve: ac => {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       if (ac.creep.store.getFreeCapacity() <= 0) return undefined;
@@ -99,14 +99,14 @@ function lootRuinAction(): ActionCandidate<Ruin> {
 function returnHomeWhenDone(): ActionCandidate<true> {
   return {
     name: "core-clearer:return-home",
-    resolve: (ac) => {
+    resolve: ac => {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       if (findInvaderCore(ac.creep)) return undefined; // 仍有核心 → 继续拆。
       if (ac.creep.store.getFreeCapacity() > 0 && findLootRuin(ac.creep)) return undefined; // 继续捡。
       return true;
     },
-    execute: (ac) => {
+    execute: ac => {
       ac.creep.memory.mode = "work";
     },
   };
@@ -116,7 +116,7 @@ function returnHomeWhenDone(): ActionCandidate<true> {
 function depositHomeAction(): ActionCandidate<StructureStorage> {
   return {
     name: "core-clearer:deposit-home",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.creep.room.name !== ac.creep.memory.home) return undefined;
       if (ac.creep.store.getUsedCapacity() <= 0) return undefined;
       return ac.snapshot.storage;
@@ -130,7 +130,7 @@ function depositHomeAction(): ActionCandidate<StructureStorage> {
         return;
       }
       const mineral = LOOT_RESOURCE_PRIORITY.find(
-        (r) => r !== RESOURCE_ENERGY && ac.creep.store.getUsedCapacity(r) > 0,
+        r => r !== RESOURCE_ENERGY && ac.creep.store.getUsedCapacity(r) > 0,
       );
       if (mineral) {
         if (ac.creep.transfer(st, mineral) === ERR_NOT_IN_RANGE) moveToTarget(ac.creep, st);
@@ -143,11 +143,11 @@ function depositHomeAction(): ActionCandidate<StructureStorage> {
 function recycleDoneAction(): ActionCandidate<true> {
   return {
     name: "core-clearer:recycle-done",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.creep.store.getUsedCapacity() > 0) return undefined;
       return true;
     },
-    execute: (ac) => {
+    execute: ac => {
       ac.creep.memory.recycle = true;
     },
   };
@@ -158,15 +158,8 @@ const policy: RolePolicy = {
   // 攻击候选永远轮不到执行。lesser 核心房间无守卫，跳过 flee 安全。
   combat: true,
   park: true,
-  acquire: [
-    attackCoreAction(),
-    lootRuinAction(),
-    returnHomeWhenDone(),
-  ],
-  work: [
-    depositHomeAction(),
-    recycleDoneAction(),
-  ],
+  acquire: [attackCoreAction(), lootRuinAction(), returnHomeWhenDone()],
+  work: [depositHomeAction(), recycleDoneAction()],
 };
 
 export const coreClearerRole = defineRole("coreClearer", 1 as Priority, policy);

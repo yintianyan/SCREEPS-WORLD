@@ -85,7 +85,13 @@ describe("角色自报分类接口 — CreepRole 标签", () => {
     it("执行顺序符合 ROLE_EXECUTION_ORDER 原始值", () => {
       const roles: CreepRole[] = [workerRole, harvesterRole, haulerRole, upgraderRole, builderRole];
       const sorted = [...roles].sort((a, b) => (a.executionOrder ?? 99) - (b.executionOrder ?? 99));
-      expect(sorted.map(r => r.name)).toEqual(["worker", "harvester", "hauler", "upgrader", "builder"]);
+      expect(sorted.map(r => r.name)).toEqual([
+        "worker",
+        "harvester",
+        "hauler",
+        "upgrader",
+        "builder",
+      ]);
     });
   });
 
@@ -93,19 +99,40 @@ describe("角色自报分类接口 — CreepRole 标签", () => {
     // 验证 buildSnapshots 中的角色分类逻辑不依赖角色名字符串比较。
     // 这里的测试确保角色定义可以通过标签查询，而非名字匹配。
     it("可通过 isRepairWorker 标签找到所有维修角色", () => {
-      const allRoles: CreepRole[] = [harvesterRole, workerRole, haulerRole, distributorRole, builderRole, upgraderRole];
+      const allRoles: CreepRole[] = [
+        harvesterRole,
+        workerRole,
+        haulerRole,
+        distributorRole,
+        builderRole,
+        upgraderRole,
+      ];
       const repairWorkers = allRoles.filter(r => r.isRepairWorker);
       expect(repairWorkers.map(r => r.name).sort()).toEqual(["builder", "worker"]);
     });
 
     it("可通过 isSourceWorker 标签找到所有采矿角色", () => {
-      const allRoles: CreepRole[] = [harvesterRole, workerRole, haulerRole, distributorRole, builderRole, upgraderRole];
+      const allRoles: CreepRole[] = [
+        harvesterRole,
+        workerRole,
+        haulerRole,
+        distributorRole,
+        builderRole,
+        upgraderRole,
+      ];
       const sourceWorkers = allRoles.filter(r => r.isSourceWorker);
       expect(sourceWorkers.map(r => r.name).sort()).toEqual(["harvester", "worker"]);
     });
 
     it("可通过 isHauler + isDistributor 标签找到所有物流角色", () => {
-      const allRoles: CreepRole[] = [harvesterRole, workerRole, haulerRole, distributorRole, builderRole, upgraderRole];
+      const allRoles: CreepRole[] = [
+        harvesterRole,
+        workerRole,
+        haulerRole,
+        distributorRole,
+        builderRole,
+        upgraderRole,
+      ];
       const logistics = allRoles.filter(r => r.isHauler || r.isDistributor);
       expect(logistics.map(r => r.name).sort()).toEqual(["distributor", "hauler"]);
     });

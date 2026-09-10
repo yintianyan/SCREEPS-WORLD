@@ -89,7 +89,14 @@ describe("pickBestCandidate — 优先级竞争", () => {
   it("execute 被调用后返回结果", () => {
     let executed = false;
     const candidates: DealCandidate[] = [
-      { type: "buy-crisis-energy", priority: CRISIS_ENERGY_PRIORITY, execute: () => { executed = true; return true; } },
+      {
+        type: "buy-crisis-energy",
+        priority: CRISIS_ENERGY_PRIORITY,
+        execute: () => {
+          executed = true;
+          return true;
+        },
+      },
     ];
     const best = pickBestCandidate(candidates);
     const result = best!.execute();
@@ -121,8 +128,22 @@ describe("executeBestCandidate — fallback 语义", () => {
   it("最高 priority 候选成交时不再尝试后续", () => {
     const calls: string[] = [];
     const candidates: DealCandidate[] = [
-      { type: "sell-energy", priority: 45, execute: () => { calls.push("sell-energy"); return true; } },
-      { type: "buy-deficit", priority: 25, execute: () => { calls.push("buy-deficit"); return true; } },
+      {
+        type: "sell-energy",
+        priority: 45,
+        execute: () => {
+          calls.push("sell-energy");
+          return true;
+        },
+      },
+      {
+        type: "buy-deficit",
+        priority: 25,
+        execute: () => {
+          calls.push("buy-deficit");
+          return true;
+        },
+      },
     ];
     const result = executeBestCandidate(candidates);
     expect(result).toBe(true);
@@ -132,9 +153,30 @@ describe("executeBestCandidate — fallback 语义", () => {
   it("最高 priority 候选未成交时 fallback 到下一个", () => {
     const calls: string[] = [];
     const candidates: DealCandidate[] = [
-      { type: "sell-energy", priority: 45, execute: () => { calls.push("sell-energy"); return false; } },
-      { type: "sell-mineral", priority: 40, execute: () => { calls.push("sell-mineral"); return false; } },
-      { type: "buy-power", priority: 15, execute: () => { calls.push("buy-power"); return true; } },
+      {
+        type: "sell-energy",
+        priority: 45,
+        execute: () => {
+          calls.push("sell-energy");
+          return false;
+        },
+      },
+      {
+        type: "sell-mineral",
+        priority: 40,
+        execute: () => {
+          calls.push("sell-mineral");
+          return false;
+        },
+      },
+      {
+        type: "buy-power",
+        priority: 15,
+        execute: () => {
+          calls.push("buy-power");
+          return true;
+        },
+      },
     ];
     const result = executeBestCandidate(candidates);
     expect(result).toBe(true);
@@ -157,8 +199,22 @@ describe("executeBestCandidate — fallback 语义", () => {
   it("危机能量(80)优先尝试 → 成交时卖出不执行", () => {
     const calls: string[] = [];
     const candidates: DealCandidate[] = [
-      { type: "sell-energy", priority: 45, execute: () => { calls.push("sell-energy"); return true; } },
-      { type: "buy-crisis-energy", priority: CRISIS_ENERGY_PRIORITY, execute: () => { calls.push("buy-crisis-energy"); return true; } },
+      {
+        type: "sell-energy",
+        priority: 45,
+        execute: () => {
+          calls.push("sell-energy");
+          return true;
+        },
+      },
+      {
+        type: "buy-crisis-energy",
+        priority: CRISIS_ENERGY_PRIORITY,
+        execute: () => {
+          calls.push("buy-crisis-energy");
+          return true;
+        },
+      },
     ];
     const result = executeBestCandidate(candidates);
     expect(result).toBe(true);
@@ -168,10 +224,38 @@ describe("executeBestCandidate — fallback 语义", () => {
   it("需求表驱动的买入(priority=30)在卖出未成交后尝试", () => {
     const calls: string[] = [];
     const candidates: DealCandidate[] = [
-      { type: "sell-energy", priority: 45, execute: () => { calls.push("sell-energy"); return false; } },
-      { type: "sell-mineral", priority: 40, execute: () => { calls.push("sell-mineral"); return false; } },
-      { type: "sell-battery", priority: 35, execute: () => { calls.push("sell-battery"); return false; } },
-      { type: "buy-deficit", priority: 30, execute: () => { calls.push("buy-deficit"); return true; } },
+      {
+        type: "sell-energy",
+        priority: 45,
+        execute: () => {
+          calls.push("sell-energy");
+          return false;
+        },
+      },
+      {
+        type: "sell-mineral",
+        priority: 40,
+        execute: () => {
+          calls.push("sell-mineral");
+          return false;
+        },
+      },
+      {
+        type: "sell-battery",
+        priority: 35,
+        execute: () => {
+          calls.push("sell-battery");
+          return false;
+        },
+      },
+      {
+        type: "buy-deficit",
+        priority: 30,
+        execute: () => {
+          calls.push("buy-deficit");
+          return true;
+        },
+      },
     ];
     const result = executeBestCandidate(candidates);
     expect(result).toBe(true);

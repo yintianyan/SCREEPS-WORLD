@@ -20,7 +20,8 @@ function walk(dir: string): string[] {
 const ALL_FILES = walk(SRC);
 
 function codeLines(src: string): string {
-  return src.split(NL)
+  return src
+    .split(NL)
     .filter(l => {
       const t = l.trim();
       return !t.startsWith("*") && !t.startsWith("//") && !t.startsWith("/*");
@@ -39,9 +40,7 @@ function importsOf(file: string): string[] {
   return out;
 }
 
-const TACTICAL_FILES = ALL_FILES.filter(f =>
-  relative(SRC, f).startsWith("domain/tactical/"),
-);
+const TACTICAL_FILES = ALL_FILES.filter(f => relative(SRC, f).startsWith("domain/tactical/"));
 
 // ─── 规则 1: Domain Purity — 不引用 Runtime ───
 
@@ -50,7 +49,12 @@ describe("A5.4.0: Tactical Domain Purity", () => {
     const bad: string[] = [];
     for (const f of TACTICAL_FILES) {
       const code = codeLines(readFileSync(f, "utf8"));
-      if (/Game\./.test(code) || /Memory\./.test(code) || /RawMemory\./.test(code) || /console\./.test(code)) {
+      if (
+        /Game\./.test(code) ||
+        /Memory\./.test(code) ||
+        /RawMemory\./.test(code) ||
+        /console\./.test(code)
+      ) {
         bad.push(relative(SRC, f));
       }
     }
@@ -79,7 +83,7 @@ describe("A5.4.0: Tactical Domain 不 import 执行层", () => {
     for (const f of TACTICAL_FILES) {
       for (const imp of importsOf(f)) {
         if (imp.includes("systems/") || imp.includes("creeps/")) {
-          bad.push(relative(SRC, f) + " -> " + imp);
+          bad.push(`${relative(SRC, f)} -> ${imp}`);
         }
       }
     }
@@ -93,7 +97,7 @@ describe("A5.4.0: Tactical Domain 不 import 执行层", () => {
         if (imp.includes("kernel/")) {
           // kernel 类型导入可以接受（contracts 等），但运行时导入不行
           // 暂时全部禁止以保持纯净
-          bad.push(relative(SRC, f) + " -> " + imp);
+          bad.push(`${relative(SRC, f)} -> ${imp}`);
         }
       }
     }
@@ -108,10 +112,10 @@ describe("A5.4.0: Tactical 禁止执行函数", () => {
     const bad: string[] = [];
     for (const f of TACTICAL_FILES) {
       const code = codeLines(readFileSync(f, "utf8"));
-      if (/spawnCreep\s*\(/.test(code)) bad.push(relative(SRC, f) + " (spawnCreep)");
-      if (/submitRequest\s*\(/.test(code)) bad.push(relative(SRC, f) + " (submitRequest)");
-      if (/\.recycle\s*\(/.test(code)) bad.push(relative(SRC, f) + " (recycle)");
-      if (/activateSafeMode\s*\(/.test(code)) bad.push(relative(SRC, f) + " (activateSafeMode)");
+      if (/spawnCreep\s*\(/.test(code)) bad.push(`${relative(SRC, f)} (spawnCreep)`);
+      if (/submitRequest\s*\(/.test(code)) bad.push(`${relative(SRC, f)} (submitRequest)`);
+      if (/\.recycle\s*\(/.test(code)) bad.push(`${relative(SRC, f)} (recycle)`);
+      if (/activateSafeMode\s*\(/.test(code)) bad.push(`${relative(SRC, f)} (activateSafeMode)`);
     }
     expect(bad, `Forbidden functions: ${bad.join(", ")}`).toHaveLength(0);
   });
@@ -124,8 +128,8 @@ describe("A5.4.0: Tactical Determinism", () => {
     const bad: string[] = [];
     for (const f of TACTICAL_FILES) {
       const code = codeLines(readFileSync(f, "utf8"));
-      if (/Math\.random/.test(code)) bad.push(relative(SRC, f) + " (Math.random)");
-      if (/Date\.now/.test(code)) bad.push(relative(SRC, f) + " (Date.now)");
+      if (/Math\.random/.test(code)) bad.push(`${relative(SRC, f)} (Math.random)`);
+      if (/Date\.now/.test(code)) bad.push(`${relative(SRC, f)} (Date.now)`);
     }
     expect(bad, `Non-deterministic calls: ${bad.join(", ")}`).toHaveLength(0);
   });
@@ -155,8 +159,8 @@ describe("A5.4.0: Tactical 不引用 Game.rooms / Memory", () => {
     const bad: string[] = [];
     for (const f of TACTICAL_FILES) {
       const code = codeLines(readFileSync(f, "utf8"));
-      if (/Game\.rooms/.test(code)) bad.push(relative(SRC, f) + " (Game.rooms)");
-      if (/Memory\b/.test(code)) bad.push(relative(SRC, f) + " (Memory)");
+      if (/Game\.rooms/.test(code)) bad.push(`${relative(SRC, f)} (Game.rooms)`);
+      if (/Memory\b/.test(code)) bad.push(`${relative(SRC, f)} (Memory)`);
     }
     expect(bad).toHaveLength(0);
   });

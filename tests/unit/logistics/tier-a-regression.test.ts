@@ -4,7 +4,13 @@ import { getAssignment } from "../../../src/creeps/support/assignment-adapter";
 import { TaskPool } from "../../../src/domain/assignment/task-pool";
 import { evaluateTuning } from "../../../src/domain/tuning/evaluator";
 import type { TuningSignals } from "../../../src/domain/tuning/types";
-import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
+import {
+  mockContext,
+  mockCreep,
+  mockSnapshot,
+  mockStructure,
+  resetGlobals,
+} from "../../support/factories";
 
 const g = (): any => globalThis as any;
 
@@ -29,10 +35,17 @@ describe("AS-1 — assignment 续约的任务在池校验", () => {
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
     void container;
     return mockCreep({
-      name: "hauler_1", role: "hauler", used: 0, capacity: 100,
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 100,
       assignment: {
-        id: taskId, kind: "haul", sourceId: "c1",
-        revision: 1, assignedAt: 900, leaseUntil: g().Game.time + 30,
+        id: taskId,
+        kind: "haul",
+        sourceId: "c1",
+        revision: 1,
+        assignedAt: 900,
+        leaseUntil: g().Game.time + 30,
       },
     });
   }
@@ -50,10 +63,16 @@ describe("AS-1 — assignment 续约的任务在池校验", () => {
   });
 
   it("任务仍在池中：正常续约（保留 assignedAt，不走重选）", () => {
-    installPool([{
-      id: "haul:W7N4:c1", kind: "haul", sourceId: "c1",
-      priority: 1, maxWorkers: 1, assignedCreeps: ["hauler_1"],
-    }]);
+    installPool([
+      {
+        id: "haul:W7N4:c1",
+        kind: "haul",
+        sourceId: "c1",
+        priority: 1,
+        maxWorkers: 1,
+        assignedCreeps: ["hauler_1"],
+      },
+    ]);
     const creep = assignedCreep("haul:W7N4:c1");
     const ctx = mockContext(mockSnapshot());
 
@@ -81,10 +100,21 @@ describe("AS-1 — assignment 续约的任务在池校验", () => {
 describe("TU-1 — tuning upgrader 降编不误伤无 storage 房间", () => {
   function signals(overrides: Partial<TuningSignals> = {}): TuningSignals {
     return {
-      avgReserveDelta: 50, avgPressure: 0.2, avgDrainScore: 0, crisisRatio: 0,
-      avgStorageEnergy: 0, containerFillRatio: 0.4, spawnFillRatio: 0.7,
-      haulerCount: 2, harvesterCount: 2, upgraderCount: 2, builderCount: 1,
-      buildQueueBacklog: 1, srcRatio: 0, tierRank: 0, rcl: 3,
+      avgReserveDelta: 50,
+      avgPressure: 0.2,
+      avgDrainScore: 0,
+      crisisRatio: 0,
+      avgStorageEnergy: 0,
+      containerFillRatio: 0.4,
+      spawnFillRatio: 0.7,
+      haulerCount: 2,
+      harvesterCount: 2,
+      upgraderCount: 2,
+      builderCount: 1,
+      buildQueueBacklog: 1,
+      srcRatio: 0,
+      tierRank: 0,
+      rcl: 3,
       ...overrides,
     };
   }
@@ -101,12 +131,24 @@ describe("TU-1 — tuning upgrader 降编不误伤无 storage 房间", () => {
   });
 
   it("RCL4+ storage 枯竭（< 10k）：照常降编（原语义不回归）", () => {
-    const result = evaluateTuning(signals({ rcl: 5, avgStorageEnergy: 3000 }), bounds, {}, 5000, {});
+    const result = evaluateTuning(
+      signals({ rcl: 5, avgStorageEnergy: 3000 }),
+      bounds,
+      {},
+      5000,
+      {},
+    );
     expect(result.newTrend["upgrader.maxCount"]).toBe("down");
   });
 
   it("经济高压：无论 RCL 照常降编", () => {
-    const result = evaluateTuning(signals({ rcl: 3, avgStorageEnergy: 0, avgPressure: 0.6 }), bounds, {}, 5000, {});
+    const result = evaluateTuning(
+      signals({ rcl: 3, avgStorageEnergy: 0, avgPressure: 0.6 }),
+      bounds,
+      {},
+      5000,
+      {},
+    );
     expect(result.newTrend["upgrader.maxCount"]).toBe("down");
   });
 });

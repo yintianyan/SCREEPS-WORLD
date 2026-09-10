@@ -41,12 +41,7 @@ export interface MilestoneEvent extends BaseEvent {
  * - COMPLETED / COMPLETED_FORCED: 终态成功（后者经历过 forcedAdvance）
  * - TIMED_OUT / LOST / STOLEN / ABANDONED: 终态失败 */
 export type ExpansionResult =
-  | "COMPLETED"
-  | "COMPLETED_FORCED"
-  | "TIMED_OUT"
-  | "LOST"
-  | "STOLEN"
-  | "ABANDONED";
+  "COMPLETED" | "COMPLETED_FORCED" | "TIMED_OUT" | "LOST" | "STOLEN" | "ABANDONED";
 
 /** 终态结果的集合（用于运行时校验）。 */
 export const TERMINAL_RESULTS: ReadonlySet<string> = new Set<ExpansionResult>([

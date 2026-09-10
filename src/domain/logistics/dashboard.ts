@@ -91,28 +91,23 @@ export function buildDashboard(
   const utilizedCapacity = haulers.filter(h => !h.idle).reduce((s, h) => s + h.capacity, 0);
 
   // Route reliability
-  const avgReliability = routes.length > 0
-    ? routes.reduce((s, r) => s + r.reliability, 0) / routes.length
-    : 1;
+  const avgReliability =
+    routes.length > 0 ? routes.reduce((s, r) => s + r.reliability, 0) / routes.length : 1;
 
   // Accounting summary
   const accSummary = summarizeAccounting(accounting);
 
   // Backlog
-  const activeRequests = requests.filter(r =>
-    r.status !== "delivered" && r.status !== "failed" && r.status !== "cancelled",
+  const activeRequests = requests.filter(
+    r => r.status !== "delivered" && r.status !== "failed" && r.status !== "cancelled",
   );
   const backlogAmount = activeRequests.reduce((s, r) => s + r.amount, 0);
 
   // Starving rooms
-  const starvingRooms = bottlenecks
-    .filter(b => b.severity > 0.7)
-    .map(b => b.room);
+  const starvingRooms = bottlenecks.filter(b => b.severity > 0.7).map(b => b.room);
 
   // Avg ROI
-  const avgROI = accSummary.totalCost > 0
-    ? accSummary.totalDelivered / accSummary.totalCost
-    : 0;
+  const avgROI = accSummary.totalCost > 0 ? accSummary.totalDelivered / accSummary.totalCost : 0;
 
   return {
     tick,

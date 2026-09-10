@@ -49,13 +49,25 @@ export function getTickSiteCounters(): TickSiteCounters {
   }
   const entry = g.sitesCreatedThisTick;
   return {
-    get normal() { return entry.normal; },
-    get emergency() { return entry.emergency; },
+    get normal() {
+      return entry.normal;
+    },
+    get emergency() {
+      return entry.emergency;
+    },
     // normal 与 emergency 独立计额：construction-manager 可同 tick 创建两者。
     // 远矿让位 emergency 由远矿调用方自行检查 emergency > 0。
-    get canCreateNormal() { return entry.normal === 0; },
-    get canCreateEmergency() { return entry.emergency === 0; },
-    markNormal: () => { entry.normal++; },
-    markEmergency: () => { entry.emergency++; },
+    get canCreateNormal() {
+      return entry.normal === 0;
+    },
+    get canCreateEmergency() {
+      return entry.emergency === 0;
+    },
+    markNormal: () => {
+      entry.normal++;
+    },
+    markEmergency: () => {
+      entry.emergency++;
+    },
   };
 }

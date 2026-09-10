@@ -146,10 +146,18 @@ export function buildEmpireResourceView(
     }
 
     switch (p.economicClass) {
-      case "core": coreRooms++; break;
-      case "production": productionRooms++; break;
-      case "candidate": candidateRooms++; break;
-      case "struggling": strugglingRooms++; break;
+      case "core":
+        coreRooms++;
+        break;
+      case "production":
+        productionRooms++;
+        break;
+      case "candidate":
+        candidateRooms++;
+        break;
+      case "struggling":
+        strugglingRooms++;
+        break;
     }
 
     if (p.economyPressure > maxPressure) maxPressure = p.economyPressure;
@@ -165,9 +173,10 @@ export function buildEmpireResourceView(
   const hasImbalance = surplusRooms.length > 0 && deficitRooms.length > 0;
   const hasStruggling = strugglingRooms > 0;
   const empireNetFlowPositive = totalNetFlow > 0;
-  const empireSelfSufficiency = totalProduction > 0
-    ? Math.max(0, Math.min(1, 1 - Math.abs(totalNetFlow) / totalProduction))
-    : 0;
+  const empireSelfSufficiency =
+    totalProduction > 0
+      ? Math.max(0, Math.min(1, 1 - Math.abs(totalNetFlow) / totalProduction))
+      : 0;
 
   return {
     tick,

@@ -131,7 +131,12 @@ export function cleanupExpiredReservations(
 
   for (const r of reservations) {
     if (isReservationExpired(r, tick, timeoutTicks)) {
-      expired.push({ ...r, status: "RELEASED" as ReservationStatus, releasedAt: tick, releaseReason: "expired" });
+      expired.push({
+        ...r,
+        status: "RELEASED" as ReservationStatus,
+        releasedAt: tick,
+        releaseReason: "expired",
+      });
     } else {
       active.push(r);
     }

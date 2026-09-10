@@ -5,7 +5,14 @@ import type { StateStore } from "./contracts";
 /** 合法状态族（Intent 域）。新增族必须先在此登记。 */
 export type StateFamily = "intel" | "war" | "economy" | "build" | "layout" | "expansion";
 
-const ALL_FAMILIES: readonly StateFamily[] = ["intel", "war", "economy", "build", "layout", "expansion"];
+const ALL_FAMILIES: readonly StateFamily[] = [
+  "intel",
+  "war",
+  "economy",
+  "build",
+  "layout",
+  "expansion",
+];
 
 interface VersionsShape {
   stateVersions?: Partial<Record<StateFamily, number>>;

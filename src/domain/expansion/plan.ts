@@ -7,15 +7,15 @@ import type { RiskResult } from "./risk";
 
 /** Plan 生命周期状态。 */
 export type PlanStatus =
-  | "DISCOVERED"        // 候选已发现，待评估
-  | "EVALUATED"         // 已完成评分 + 成本 + 风险评估
-  | "READY"             // 所有门控通过，等待批准
-  | "APPROVED"          // 已批准，等待执行
+  | "DISCOVERED" // 候选已发现，待评估
+  | "EVALUATED" // 已完成评分 + 成本 + 风险评估
+  | "READY" // 所有门控通过，等待批准
+  | "APPROVED" // 已批准，等待执行
   | "WAITING_EXECUTION" // 等待 A3.3 执行层接管
-  | "EXECUTING"         // A3.3 执行中（A3.2 不进入此状态）
-  | "COMPLETED"         // 扩张成功
-  | "CANCELLED"         // 被取消（条件变化/失败止损）
-  | "BLACKLISTED";      // 失败黑名单冷却
+  | "EXECUTING" // A3.3 执行中（A3.2 不进入此状态）
+  | "COMPLETED" // 扩张成功
+  | "CANCELLED" // 被取消（条件变化/失败止损）
+  | "BLACKLISTED"; // 失败黑名单冷却
 
 /** Plan 优先级。 */
 export type PlanPriority = "P0" | "P1" | "P2" | "P3";
@@ -80,7 +80,16 @@ export interface PlanInput {
  * 从评估结果创建扩张计划（纯函数）。
  */
 export function createPlan(input: PlanInput): ExpansionPlan {
-  const { candidate, reason, cost, payback, risk, tick, dependencies = [], cancelConditions = [] } = input;
+  const {
+    candidate,
+    reason,
+    cost,
+    payback,
+    risk,
+    tick,
+    dependencies = [],
+    cancelConditions = [],
+  } = input;
 
   const planId = `${candidate.roomName}@${candidate.discoveredAt}`;
 
@@ -97,7 +106,7 @@ export function createPlan(input: PlanInput): ExpansionPlan {
 
   const explanation = [
     `Plan ${planId}: ${reason} priority=${priority}`,
-    `score=${candidate.score.toFixed(2)} cost=${cost.totalCost} payback=${payback.paybackTicks === Infinity ? "∞" : payback.paybackTicks + "t"} risk=${risk.level}`,
+    `score=${candidate.score.toFixed(2)} cost=${cost.totalCost} payback=${payback.paybackTicks === Infinity ? "∞" : `${payback.paybackTicks}t`} risk=${risk.level}`,
   ].join(" | ");
 
   return {
@@ -128,11 +137,7 @@ export function createPlan(input: PlanInput): ExpansionPlan {
  * P2: score ≥ 0.5, ROI ≥ 1.0, risk < CRITICAL
  * P3: 其他合格候选
  */
-export function derivePriority(
-  score: number,
-  roi: number,
-  riskScore: number,
-): PlanPriority {
+export function derivePriority(score: number, roi: number, riskScore: number): PlanPriority {
   if (score >= 0.8 && roi >= 2.0 && riskScore < 0.6) return "P0";
   if (score >= 0.6 && roi >= 1.5 && riskScore < 0.8) return "P1";
   if (score >= 0.5 && roi >= 1.0 && riskScore < 0.8) return "P2";
@@ -152,7 +157,9 @@ export function updatePlanStatus(
     ...plan,
     status: newStatus,
     updatedAt: tick,
-    approvedAt: newStatus === "APPROVED" || newStatus === "WAITING_EXECUTION" ? tick : plan.approvedAt,
-    cancelReason: newStatus === "CANCELLED" || newStatus === "BLACKLISTED" ? reason : plan.cancelReason,
+    approvedAt:
+      newStatus === "APPROVED" || newStatus === "WAITING_EXECUTION" ? tick : plan.approvedAt,
+    cancelReason:
+      newStatus === "CANCELLED" || newStatus === "BLACKLISTED" ? reason : plan.cancelReason,
   };
 }

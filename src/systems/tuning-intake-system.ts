@@ -40,64 +40,68 @@ export const tuningIntakeSystem: System = {
     // conserve/recovery 下跳过 — LLM 建议在 CPU 紧张时不可信且不紧急
     if (ctx.budget.tier === "conserve" || ctx.budget.tier === "recovery") return;
 
-    safeRun("tuning-intake", () => {
-      // ── 1. 读取 segment 6 ──
-      const raw = RawMemory.segments[SEGMENT_L2_INTAKE];
-      if (raw === undefined) return; // 未激活或未写入 — 无操作
+    safeRun(
+      "tuning-intake",
+      () => {
+        // ── 1. 读取 segment 6 ──
+        const raw = RawMemory.segments[SEGMENT_L2_INTAKE];
+        if (raw === undefined) return; // 未激活或未写入 — 无操作
 
-      let payload: unknown;
-      try {
-        payload = JSON.parse(raw);
-      } catch {
-        log.warn("tuning-intake", "segment 6 JSON parse failed — skipping");
-        recordEvent(EventKind.L2Intake, "", [0, 1]); // accepted=0, rejected=1
-        return;
-      }
-
-      // ── 2. 空包检测 ──
-      if (payload === null || payload === undefined) return;
-
-      // ── 3. 护栏校验 ──
-      const currentOverrides = Memory.kernel?.tuning?.strategyOverrides;
-      const result = applyIntakeGuardrail(
-        payload,
-        ctx.tick,
-        currentOverrides,
-        STRATEGY_COOLDOWN_TICKS,
-      );
-
-      // ── 4. 写入 intakePending ──
-      if (result.accepted.length > 0) {
-        if (!Memory.kernel) Memory.kernel = {};
-        if (!Memory.kernel.tuning) {
-          Memory.kernel.tuning = { lastTuned: 0, rooms: {} };
+        let payload: unknown;
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          log.warn("tuning-intake", "segment 6 JSON parse failed — skipping");
+          recordEvent(EventKind.L2Intake, "", [0, 1]); // accepted=0, rejected=1
+          return;
         }
-        // 覆盖式写入 — 每批 L2 建议替换上一批
-        const intakeMap: Record<string, IntakePendingEntry> = {};
-        for (const acc of result.accepted) {
-          intakeMap[acc.param] = {
-            value: acc.value,
-            originalValue: acc.originalValue,
-            reason: acc.reason,
-            receivedAt: ctx.tick,
-          };
-        }
-        Memory.kernel.tuning.intakePending = intakeMap;
-      } else {
-        // 无接受建议 → 清空 intakePending（避免上批残留被反复复核）
-        if (Memory.kernel?.tuning?.intakePending) {
-          delete Memory.kernel.tuning.intakePending;
-        }
-      }
 
-      // ── 5. 事件 + 日志 ──
-      recordEvent(EventKind.L2Intake, "", [result.accepted.length, result.rejected.length]);
-      if (result.accepted.length > 0) {
-        log.info("tuning-intake", result.summary);
-      } else if (result.rejected.length > 0) {
-        log.warn("tuning-intake", result.summary);
-      }
-    }, false);
+        // ── 2. 空包检测 ──
+        if (payload === null || payload === undefined) return;
+
+        // ── 3. 护栏校验 ──
+        const currentOverrides = Memory.kernel?.tuning?.strategyOverrides;
+        const result = applyIntakeGuardrail(
+          payload,
+          ctx.tick,
+          currentOverrides,
+          STRATEGY_COOLDOWN_TICKS,
+        );
+
+        // ── 4. 写入 intakePending ──
+        if (result.accepted.length > 0) {
+          if (!Memory.kernel) Memory.kernel = {};
+          if (!Memory.kernel.tuning) {
+            Memory.kernel.tuning = { lastTuned: 0, rooms: {} };
+          }
+          // 覆盖式写入 — 每批 L2 建议替换上一批
+          const intakeMap: Record<string, IntakePendingEntry> = {};
+          for (const acc of result.accepted) {
+            intakeMap[acc.param] = {
+              value: acc.value,
+              originalValue: acc.originalValue,
+              reason: acc.reason,
+              receivedAt: ctx.tick,
+            };
+          }
+          Memory.kernel.tuning.intakePending = intakeMap;
+        } else {
+          // 无接受建议 → 清空 intakePending（避免上批残留被反复复核）
+          if (Memory.kernel?.tuning?.intakePending) {
+            delete Memory.kernel.tuning.intakePending;
+          }
+        }
+
+        // ── 5. 事件 + 日志 ──
+        recordEvent(EventKind.L2Intake, "", [result.accepted.length, result.rejected.length]);
+        if (result.accepted.length > 0) {
+          log.info("tuning-intake", result.summary);
+        } else if (result.rejected.length > 0) {
+          log.warn("tuning-intake", result.summary);
+        }
+      },
+      false,
+    );
   },
 };
 

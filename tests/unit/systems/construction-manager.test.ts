@@ -1,6 +1,9 @@
 /** construction-manager 单元测试 — claim-secure 护栏。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { developmentGate, isRuntimeDefenseWallTask } from "../../../src/systems/construction-manager";
+import {
+  developmentGate,
+  isRuntimeDefenseWallTask,
+} from "../../../src/systems/construction-manager";
 import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
@@ -41,20 +44,26 @@ describe("developmentGate — claim-secure 抑制非紧急建造", () => {
 
 describe("runtime defense wall guard", () => {
   it("拒绝历史在线 min-cut 硬墙任务", () => {
-    expect(isRuntimeDefenseWallTask({
-      key: "defense.mincut.wall.20.20",
-      structureType: STRUCTURE_WALL,
-    } as BuildTask)).toBe(true);
+    expect(
+      isRuntimeDefenseWallTask({
+        key: "defense.mincut.wall.20.20",
+        structureType: STRUCTURE_WALL,
+      } as BuildTask),
+    ).toBe(true);
   });
 
   it("不误伤 rampart 或显式非 min-cut wall 任务", () => {
-    expect(isRuntimeDefenseWallTask({
-      key: "defense.mincut.rampart.20.20",
-      structureType: STRUCTURE_RAMPART,
-    } as BuildTask)).toBe(false);
-    expect(isRuntimeDefenseWallTask({
-      key: "manual.wall.20.20",
-      structureType: STRUCTURE_WALL,
-    } as BuildTask)).toBe(false);
+    expect(
+      isRuntimeDefenseWallTask({
+        key: "defense.mincut.rampart.20.20",
+        structureType: STRUCTURE_RAMPART,
+      } as BuildTask),
+    ).toBe(false);
+    expect(
+      isRuntimeDefenseWallTask({
+        key: "manual.wall.20.20",
+        structureType: STRUCTURE_WALL,
+      } as BuildTask),
+    ).toBe(false);
   });
 });

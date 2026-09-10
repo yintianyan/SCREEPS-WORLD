@@ -77,14 +77,43 @@ describe("D-FINDING-04: 多房远矿同时失守级联故障", () => {
     // 播种 intel
     __resetIntelStateForTests();
     globalCache().intelHandoff = [
-      { subject: target1, home: homeRoom1, source: "observer" as const, payload: { kind: "normal", status: "normal", lastSeen: 1000, pathCost: 60 } as never },
-      { subject: target2, home: homeRoom1, source: "observer" as const, payload: { kind: "normal", status: "normal", lastSeen: 1000, pathCost: 60 } as never },
-      { subject: target3, home: homeRoom2, source: "observer" as const, payload: { kind: "normal", status: "normal", lastSeen: 1000, pathCost: 60 } as never },
+      {
+        subject: target1,
+        home: homeRoom1,
+        source: "observer" as const,
+        payload: { kind: "normal", status: "normal", lastSeen: 1000, pathCost: 60 } as never,
+      },
+      {
+        subject: target2,
+        home: homeRoom1,
+        source: "observer" as const,
+        payload: { kind: "normal", status: "normal", lastSeen: 1000, pathCost: 60 } as never,
+      },
+      {
+        subject: target3,
+        home: homeRoom2,
+        source: "observer" as const,
+        payload: { kind: "normal", status: "normal", lastSeen: 1000, pathCost: 60 } as never,
+      },
     ];
-    intelligenceSystem.run({ tick: 2000, snapshots: () => [], budget: { canStart: () => true } } as never);
+    intelligenceSystem.run({
+      tick: 2000,
+      snapshots: () => [],
+      budget: { canStart: () => true },
+    } as never);
 
-    const snap1 = mockSnapshot({ roomName: homeRoom1, rcl: 6, spawns: [{} as never], energyCapacityAvailable: 1300 });
-    const snap2 = mockSnapshot({ roomName: homeRoom2, rcl: 6, spawns: [{} as never], energyCapacityAvailable: 1300 });
+    const snap1 = mockSnapshot({
+      roomName: homeRoom1,
+      rcl: 6,
+      spawns: [{} as never],
+      energyCapacityAvailable: 1300,
+    });
+    const snap2 = mockSnapshot({
+      roomName: homeRoom2,
+      rcl: 6,
+      spawns: [{} as never],
+      energyCapacityAvailable: 1300,
+    });
 
     // 运行两个房间的 remote-mining-manager
     const ctx = mockContext();
@@ -127,12 +156,26 @@ describe("D-FINDING-04: 多房远矿同时失守级联故障", () => {
 
     __resetIntelStateForTests();
     globalCache().intelHandoff = [
-      { subject: target3, home: homeRoom2, source: "observer" as const, payload: { kind: "normal", status: "normal", lastSeen: 1000, pathCost: 60 } as never },
+      {
+        subject: target3,
+        home: homeRoom2,
+        source: "observer" as const,
+        payload: { kind: "normal", status: "normal", lastSeen: 1000, pathCost: 60 } as never,
+      },
     ];
-    intelligenceSystem.run({ tick: 3000, snapshots: () => [], budget: { canStart: () => true } } as never);
+    intelligenceSystem.run({
+      tick: 3000,
+      snapshots: () => [],
+      budget: { canStart: () => true },
+    } as never);
 
     // 只有 homeRoom2 是自有房（snapshots 只包含 controller.my）
-    const snap2 = mockSnapshot({ roomName: homeRoom2, rcl: 6, spawns: [{} as never], energyCapacityAvailable: 1300 });
+    const snap2 = mockSnapshot({
+      roomName: homeRoom2,
+      rcl: 6,
+      spawns: [{} as never],
+      energyCapacityAvailable: 1300,
+    });
 
     expect(() => remoteMiningManagerSystem.run(mockContext(snap2))).not.toThrow();
 
@@ -171,12 +214,31 @@ describe("D-FINDING-04: 多房远矿同时失守级联故障", () => {
 
     __resetIntelStateForTests();
     globalCache().intelHandoff = [
-      { subject: target1, home: homeRoom1, source: "observer" as const, payload: { kind: "hostile", status: "hostile", lastSeen: 1000, pathCost: 60 } as never },
-      { subject: target2, home: homeRoom1, source: "observer" as const, payload: { kind: "hostile", status: "hostile", lastSeen: 1000, pathCost: 60 } as never },
+      {
+        subject: target1,
+        home: homeRoom1,
+        source: "observer" as const,
+        payload: { kind: "hostile", status: "hostile", lastSeen: 1000, pathCost: 60 } as never,
+      },
+      {
+        subject: target2,
+        home: homeRoom1,
+        source: "observer" as const,
+        payload: { kind: "hostile", status: "hostile", lastSeen: 1000, pathCost: 60 } as never,
+      },
     ];
-    intelligenceSystem.run({ tick: 4000, snapshots: () => [], budget: { canStart: () => true } } as never);
+    intelligenceSystem.run({
+      tick: 4000,
+      snapshots: () => [],
+      budget: { canStart: () => true },
+    } as never);
 
-    const snap = mockSnapshot({ roomName: homeRoom1, rcl: 6, spawns: [{} as never], energyCapacityAvailable: 1300 });
+    const snap = mockSnapshot({
+      roomName: homeRoom1,
+      rcl: 6,
+      spawns: [{} as never],
+      energyCapacityAvailable: 1300,
+    });
 
     // 系统不应崩溃
     expect(() => remoteMiningManagerSystem.run(mockContext(snap))).not.toThrow();
@@ -203,13 +265,20 @@ describe("D-FINDING-04: 多房远矿同时失守级联故障", () => {
       },
     };
 
-    const snap = mockSnapshot({ roomName: homeRoom1, rcl: 6, spawns: [{} as never], energyCapacityAvailable: 1300 });
+    const snap = mockSnapshot({
+      roomName: homeRoom1,
+      rcl: 6,
+      spawns: [{} as never],
+      energyCapacityAvailable: 1300,
+    });
 
     remoteMiningManagerSystem.run(mockContext(snap));
 
     // 暂停的远矿不应产生 spawn 请求
     const queue = g.Memory.rooms[homeRoom1].spawnQueue;
-    const remoteReqs = queue.filter((r: any) => typeof r.role === "string" && r.role.startsWith("remote"));
+    const remoteReqs = queue.filter(
+      (r: any) => typeof r.role === "string" && r.role.startsWith("remote"),
+    );
     expect(remoteReqs.length).toBe(0);
   });
 });

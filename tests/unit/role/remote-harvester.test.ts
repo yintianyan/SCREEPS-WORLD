@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteHarvesterRole } from "../../../src/creeps/roles/remote-harvester";
 import { getIntentLedger } from "../../../src/creeps/movement/intent";
 import { CONFIG } from "../../../src/config";
-import { mockContext, mockCreep, mockSnapshot, mockSource, resetGlobals } from "../../support/factories";
+import {
+  mockContext,
+  mockCreep,
+  mockSnapshot,
+  mockSource,
+  resetGlobals,
+} from "../../support/factories";
 
 const homeRoom = "W7N4";
 const targetRoom = "W2N1";
@@ -13,7 +19,9 @@ const targetRoom = "W2N1";
  *  如 source 对象 — 引擎语义下 getRangeTo(source) 取 source.pos）。 */
 function placeCreep(creep: any, x: number, y: number): void {
   creep.pos = {
-    x, y, roomName: targetRoom,
+    x,
+    y,
+    roomName: targetRoom,
     getRangeTo: vi.fn((t: any) => {
       const tx = t.x ?? t.pos?.x ?? 0;
       const ty = t.y ?? t.pos?.y ?? 0;
@@ -66,9 +74,7 @@ describe("remoteHarvester — 站桩锚定与占位自报", () => {
     remoteHarvesterRole.run(creep, mockContext(snap));
 
     expect(creep.harvest).toHaveBeenCalledWith(s1);
-    expect(getIntentLedger().anchors.get("rh-1")).toBe(
-      CONFIG.movement.trafficPriority.anchorMiner,
-    );
+    expect(getIntentLedger().anchors.get("rh-1")).toBe(CONFIG.movement.trafficPriority.anchorMiner);
     const cache = (globalThis as any).__staticBlockersCache;
     expect(cache[targetRoom].positions).toContain(11);
     expect(cache[targetRoom].positions).toContain(10);
@@ -97,7 +103,13 @@ describe("remoteHarvester — 站桩锚定与占位自报", () => {
     s1.pos = { x: 10, y: 10, roomName: targetRoom };
 
     // 满载 creep：used=capacity=50（mockCreep 的 store mock 用固定 used/capacity）。
-    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 50, capacity: 50 });
+    const creep = mockCreep({
+      name: "rh-1",
+      role: "remoteHarvester",
+      sourceId: "s1",
+      used: 50,
+      capacity: 50,
+    });
     creep.memory.home = homeRoom;
     creep.memory.remoteTarget = targetRoom;
     creep.memory.mode = "work";
@@ -127,7 +139,13 @@ describe("remoteHarvester — 站桩锚定与占位自报", () => {
     const s1 = mockSource("s1");
     s1.pos = { x: 10, y: 10, roomName: targetRoom };
 
-    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 25, capacity: 50 });
+    const creep = mockCreep({
+      name: "rh-1",
+      role: "remoteHarvester",
+      sourceId: "s1",
+      used: 25,
+      capacity: 50,
+    });
     creep.memory.home = homeRoom;
     creep.memory.remoteTarget = targetRoom;
     creep.memory.mode = "work";
@@ -164,8 +182,11 @@ describe("remoteHarvester — RM-2 source container 维修", () => {
     };
 
     const creep = mockCreep({
-      name: "rh-1", role: "remoteHarvester", sourceId: "s1",
-      used: 50, capacity: 50, // 满载（work 链的常态）
+      name: "rh-1",
+      role: "remoteHarvester",
+      sourceId: "s1",
+      used: 50,
+      capacity: 50, // 满载（work 链的常态）
     });
     creep.memory.home = homeRoom;
     creep.memory.remoteTarget = targetRoom;
@@ -210,12 +231,20 @@ describe("remoteHarvester — RM-2 source container 维修", () => {
     const s1 = mockSource("s1");
     s1.pos = { x: 10, y: 10, roomName: targetRoom };
     const container: any = {
-      id: "cont-1", structureType: "container",
+      id: "cont-1",
+      structureType: "container",
       pos: { x: 10, y: 11, roomName: targetRoom },
-      hits: 100000, hitsMax: 250000,
+      hits: 100000,
+      hitsMax: 250000,
       store: { getFreeCapacity: vi.fn(() => 0) },
     };
-    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 0, capacity: 50 });
+    const creep = mockCreep({
+      name: "rh-1",
+      role: "remoteHarvester",
+      sourceId: "s1",
+      used: 0,
+      capacity: 50,
+    });
     creep.memory.home = homeRoom;
     creep.memory.remoteTarget = targetRoom;
     creep.memory.mode = "work";
@@ -233,7 +262,13 @@ describe("remoteHarvester — RM-2 source container 维修", () => {
   it("无 container（衰减殆尽/未建）→ 不修，走建链或采集链", () => {
     const s1 = mockSource("s1");
     s1.pos = { x: 10, y: 10, roomName: targetRoom };
-    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 25, capacity: 50 });
+    const creep = mockCreep({
+      name: "rh-1",
+      role: "remoteHarvester",
+      sourceId: "s1",
+      used: 25,
+      capacity: 50,
+    });
     creep.memory.home = homeRoom;
     creep.memory.remoteTarget = targetRoom;
     creep.memory.mode = "work";
@@ -250,12 +285,20 @@ describe("remoteHarvester — RM-2 source container 维修", () => {
     const s1 = mockSource("s1");
     s1.pos = { x: 10, y: 10, roomName: targetRoom };
     const container: any = {
-      id: "cont-1", structureType: "container",
+      id: "cont-1",
+      structureType: "container",
       pos: { x: 10, y: 11, roomName: targetRoom },
-      hits: 100000, hitsMax: 250000,
+      hits: 100000,
+      hitsMax: 250000,
       store: { getFreeCapacity: vi.fn(() => 0) },
     };
-    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 25, capacity: 50 });
+    const creep = mockCreep({
+      name: "rh-1",
+      role: "remoteHarvester",
+      sourceId: "s1",
+      used: 25,
+      capacity: 50,
+    });
     creep.memory.home = homeRoom;
     creep.memory.remoteTarget = targetRoom;
     creep.memory.mode = "work";
@@ -275,13 +318,21 @@ describe("remoteHarvester — RM-2 source container 维修", () => {
     const s1 = mockSource("s1");
     s1.pos = { x: 10, y: 10, roomName: targetRoom };
     const container: any = {
-      id: "cont-1", structureType: "container",
+      id: "cont-1",
+      structureType: "container",
       pos: { x: 10, y: 11, roomName: targetRoom },
-      hits: 150000, hitsMax: 250000, // 0.6 < 0.8
+      hits: 150000,
+      hitsMax: 250000, // 0.6 < 0.8
       store: { getFreeCapacity: vi.fn(() => 0) },
     };
     // 半载（acquire 链常态）— mode 未设置时由 FSM 判空载/半载为 acquire。
-    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 10, capacity: 50 });
+    const creep = mockCreep({
+      name: "rh-1",
+      role: "remoteHarvester",
+      sourceId: "s1",
+      used: 10,
+      capacity: 50,
+    });
     creep.memory.home = homeRoom;
     creep.memory.remoteTarget = targetRoom;
     placeCreep(creep, 11, 10); // 矿位：距 source 1、距 container 1
@@ -300,12 +351,20 @@ describe("remoteHarvester — RM-2 source container 维修", () => {
     const s1 = mockSource("s1");
     s1.pos = { x: 10, y: 10, roomName: targetRoom };
     const container: any = {
-      id: "cont-1", structureType: "container",
+      id: "cont-1",
+      structureType: "container",
       pos: { x: 10, y: 11, roomName: targetRoom },
-      hits: 100000, hitsMax: 250000,
+      hits: 100000,
+      hitsMax: 250000,
       store: { getFreeCapacity: vi.fn(() => 0) },
     };
-    const creep = mockCreep({ name: "rh-1", role: "remoteHarvester", sourceId: "s1", used: 0, capacity: 50 });
+    const creep = mockCreep({
+      name: "rh-1",
+      role: "remoteHarvester",
+      sourceId: "s1",
+      used: 0,
+      capacity: 50,
+    });
     creep.memory.home = homeRoom;
     creep.memory.remoteTarget = targetRoom;
     placeCreep(creep, 11, 10);

@@ -41,9 +41,10 @@ export function handleOverdelivery(
     updatedAt: tick,
   };
 
-  const message = excess > 0
-    ? `overdelivery: ${deliveredAmount}/${request.amount} delivered, excess=${excess}`
-    : `exact delivery: ${deliveredAmount}/${request.amount}`;
+  const message =
+    excess > 0
+      ? `overdelivery: ${deliveredAmount}/${request.amount} delivered, excess=${excess}`
+      : `exact delivery: ${deliveredAmount}/${request.amount}`;
 
   return {
     excess,

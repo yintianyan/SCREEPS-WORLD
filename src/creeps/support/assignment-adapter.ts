@@ -52,7 +52,8 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
     // 不代表任务真消失 — 审查修正，防单次快照异常放大为全房重分配）。
     const validationPool = getPool(ctx);
     const roomTaskList = validationPool?.getRoomTasks(home);
-    const taskAlive = validationPool === undefined ||
+    const taskAlive =
+      validationPool === undefined ||
       roomTaskList === undefined ||
       validationPool.findTask(assignment.id) !== undefined;
 

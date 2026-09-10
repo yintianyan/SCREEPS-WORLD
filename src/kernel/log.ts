@@ -18,8 +18,8 @@ function out(level: LogLevel, module: string, msg: string): void {
   if (LEVEL_RANK[level] < LEVEL_RANK[currentLevel()]) return;
   // 安全访问 Game.time — 测试环境或 global reset 后首 tick 可能未定义
   const tick = (typeof Game !== "undefined" && Game?.time) ?? 0;
-  const line = "[t" + tick + "][" + level.toUpperCase() + "][" + module + "] " + msg;
-  const sink = sinkOverride ?? ((l) => console.log(l));
+  const line = `[t${tick}][${level.toUpperCase()}][${module}] ${msg}`;
+  const sink = sinkOverride ?? (l => console.log(l));
   sink(line, level);
 }
 

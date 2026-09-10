@@ -1,16 +1,7 @@
 /** Remote Mining Operation */
 
-import type {
-  OperationContext,
-  OperationStatus,
-  OperationPriority,
-} from "./agenda-item";
-import {
-  makeRemoteMiningOperationId,
-  isTerminalStatus,
-  isActive,
-  isExpired,
-} from "./agenda-item";
+import type { OperationContext, OperationStatus, OperationPriority } from "./agenda-item";
+import { makeRemoteMiningOperationId, isTerminalStatus, isActive, isExpired } from "./agenda-item";
 
 // ─── 检查点 ─────────────────────────────────────────────
 
@@ -85,12 +76,7 @@ export function nextCheckpoint(cp: RemoteCheckpoint): RemoteCheckpoint | undefin
  * - SUSPENDED:    威胁/预算耗尽/主动暂停 — 停止孵化回收 creep
  * - FAILED:        永久不可恢复（房间丢失/source 耗尽）— 归档删除
  */
-export type RemoteEconomicHealth =
-  | "healthy"
-  | "degraded"
-  | "unprofitable"
-  | "suspended"
-  | "failed";
+export type RemoteEconomicHealth = "healthy" | "degraded" | "unprofitable" | "suspended" | "failed";
 
 /** 判定健康度是否为终态。纯函数。 */
 export function isHealthTerminal(health: RemoteEconomicHealth): boolean {
@@ -129,10 +115,7 @@ export function isBudgetExhausted(budget: RemoteOperationBudget): boolean {
 }
 
 /** 判定剩余预算是否低于最小阈值。纯函数。 */
-export function isBudgetLow(
-  budget: RemoteOperationBudget,
-  minThreshold: number,
-): boolean {
+export function isBudgetLow(budget: RemoteOperationBudget, minThreshold: number): boolean {
   return budgetRemaining(budget) < minThreshold;
 }
 
@@ -403,11 +386,7 @@ export function incrementActivationWindow(
     ...op,
     activationWindow: window,
     ...(reached && op.checkpoint !== "economic_active"
-      ? advanceCheckpoint(
-          { ...op, activationWindow: window },
-          "economic_active",
-          tick,
-        )
+      ? advanceCheckpoint({ ...op, activationWindow: window }, "economic_active", tick)
       : {}),
     updatedAt: tick,
   };
@@ -453,9 +432,7 @@ export function consumeOpBudget(
  * 判定 Operation 是否已经济激活（checkpoint = economic_active）。
  * 纯函数。
  */
-export function isEconomicallyActive(
-  op: RemoteMiningOperationContext,
-): boolean {
+export function isEconomicallyActive(op: RemoteMiningOperationContext): boolean {
   return op.checkpoint === "economic_active";
 }
 
@@ -472,9 +449,11 @@ export function isMiningActive(op: RemoteMiningOperationContext): boolean {
  * 纯函数。
  */
 export function isLogisticsActive(op: RemoteMiningOperationContext): boolean {
-  return isAfter(op.checkpoint, "mining_active") ||
+  return (
+    isAfter(op.checkpoint, "mining_active") ||
     op.checkpoint === "logistics_active" ||
-    op.checkpoint === "economic_active";
+    op.checkpoint === "economic_active"
+  );
 }
 
 /**
@@ -502,10 +481,10 @@ export function lossRate(op: RemoteMiningOperationContext): number {
  * 使用短 key 节省 Memory。
  */
 export interface RemoteMiningOpSnapshot {
-  i: string;  // id
-  s: string;  // status code
-  h: string;  // homeRoom (sourceRoom)
-  t: string;  // targetRoom
+  i: string; // id
+  s: string; // status code
+  h: string; // homeRoom (sourceRoom)
+  t: string; // targetRoom
   si: string; // sourceId
   sc: number; // sourceCount
   ey: number; // expectedYield
@@ -602,9 +581,7 @@ const HEALTH_DECODE: Record<string, RemoteEconomicHealth> = {
  * 序列化 RemoteMiningOperation 为瘦快照。
  * 纯函数。
  */
-export function serializeRemoteMiningOp(
-  op: RemoteMiningOperationContext,
-): RemoteMiningOpSnapshot {
+export function serializeRemoteMiningOp(op: RemoteMiningOperationContext): RemoteMiningOpSnapshot {
   return {
     i: op.id,
     s: STATUS_CODES[op.status] ?? "P",
@@ -690,9 +667,7 @@ export function deserializeRemoteMiningOp(
 export function filterRemoteMiningOps(
   ops: readonly OperationContext[],
 ): RemoteMiningOperationContext[] {
-  return ops.filter(
-    (o): o is RemoteMiningOperationContext => o.type === "remote_mining",
-  );
+  return ops.filter((o): o is RemoteMiningOperationContext => o.type === "remote_mining");
 }
 
 /**

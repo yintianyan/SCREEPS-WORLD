@@ -113,7 +113,15 @@ describe("Resource Ledger", () => {
       const startStock = { ...emptyStock(), storage: 1000 };
       const endStock = { ...emptyStock(), storage: 1070 }; // +100 - 30 = +70
 
-      const w = rollupResourceWindow("energy", 0, 100, startCounters, endCounters, startStock, endStock);
+      const w = rollupResourceWindow(
+        "energy",
+        0,
+        100,
+        startCounters,
+        endCounters,
+        startStock,
+        endStock,
+      );
       expect(w.drift).toBe(0);
       expect(w.inflow).toBe(100);
       expect(w.outflow).toBe(30);
@@ -129,7 +137,15 @@ describe("Resource Ledger", () => {
       const startStock = { ...emptyStock(), storage: 1000 };
       const endStock = { ...emptyStock(), storage: 1050 }; // 应为 1100，drift = -50
 
-      const w = rollupResourceWindow("energy", 0, 100, startCounters, endCounters, startStock, endStock);
+      const w = rollupResourceWindow(
+        "energy",
+        0,
+        100,
+        startCounters,
+        endCounters,
+        startStock,
+        endStock,
+      );
       expect(w.drift).toBe(-50);
     });
   });
@@ -137,20 +153,38 @@ describe("Resource Ledger", () => {
   describe("drift 容差", () => {
     it("resourceDriftLimit = max(floor, throughput × ratio)", () => {
       const w = {
-        resource: "energy" as const, t0: 0, t1: 100, ticks: 100,
-        delta: emptyCounters(), inflow: 1000, outflow: 800, netFlow: 200,
-        stockStart: 5000, stockEnd: 5200, drift: 0,
-        productionRate: 10, consumptionRate: 8,
+        resource: "energy" as const,
+        t0: 0,
+        t1: 100,
+        ticks: 100,
+        delta: emptyCounters(),
+        inflow: 1000,
+        outflow: 800,
+        netFlow: 200,
+        stockStart: 5000,
+        stockEnd: 5200,
+        drift: 0,
+        productionRate: 10,
+        consumptionRate: 8,
       };
       expect(resourceDriftLimit(w, 50, 0.05)).toBe(90); // max(50, 1800*0.05)
     });
 
     it("isResourceDriftExcessive 超容差时 true", () => {
       const w = {
-        resource: "energy" as const, t0: 0, t1: 100, ticks: 100,
-        delta: emptyCounters(), inflow: 1000, outflow: 800, netFlow: 200,
-        stockStart: 5000, stockEnd: 5200, drift: 200,
-        productionRate: 10, consumptionRate: 8,
+        resource: "energy" as const,
+        t0: 0,
+        t1: 100,
+        ticks: 100,
+        delta: emptyCounters(),
+        inflow: 1000,
+        outflow: 800,
+        netFlow: 200,
+        stockStart: 5000,
+        stockEnd: 5200,
+        drift: 200,
+        productionRate: 10,
+        consumptionRate: 8,
       };
       expect(isResourceDriftExcessive(w, 50, 0.05)).toBe(true);
     });

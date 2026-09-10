@@ -105,32 +105,33 @@ export const enum EventKind {
   EmergencySurvival = 35,
   /** PB 野采任务收摊（野采链，审计缺口 2）：d = [reasonCode(0=done/1=attrition/
    * 2=timeout/3=war-preempt), spawned]；r = PB 目标房。开任务记 reasonCode=4。 */
-  PowerFarmOutcome = 35,
+  PowerFarmOutcome = 36,
+  // NOTE: SituationChange 及后续值已递增 1 以解决 PowerFarmOutcome 值冲突
   /** 态势条件变迁（empire-strategy 写）。d = [severity]。r = 条件 id。 */
-  SituationChange = 36,
+  SituationChange = 37,
   /** 期望自检违例（kernel 写 —— 帝国自我诊断通道）。d = [violationCount]。 */
-  ExpectationViolation = 37,
+  ExpectationViolation = 38,
   /** P3 能量核算连续漂移超容差（economy 写，先修核算再发展）。d = [drift, streak]。 */
-  AccountingDrift = 38,
+  AccountingDrift = 39,
   /** P3 物流请求 TTL 过期出池（不静默丢单回执）。r = 房间，d = [key]。 */
-  RequestExpired = 39,
+  RequestExpired = 40,
   /** A5.3 军事行动计划创建：war-planning-system 产出一个新 WarPlan。
    * d = [statusCode(0=PLANNED~9=EXPIRED), priorityScore]；r = 目标房名。
    * 供战斗黑匣子复盘：计划创建时的初始状态与优先级。 */
-  WarPlanCreated = 40,
+  WarPlanCreated = 41,
   /** 威胁在场但塔停火且未动用 safe mode（奶量压制型消耗战 — 守线不烧保底）。
    * d = [威胁数, 敌方 HEAL 部件合计]；r = 房名。同房 200t 心跳重报防刷屏。 */
-  ThreatUnhandled = 41,
+  ThreatUnhandled = 42,
   /** 策略复盘建议（自进化系统 L1）：empire-health-system 100t 末尾调用
    * strategy-reviewer 纯函数产出姿态参数调整建议。d = [suggestionCount]；r = ""。
    * 建议明细见 console.log；此事件用于审计复盘频率与建议产出节奏。 */
-  StrategyReview = 42,
+  StrategyReview = 43,
   /** P3 饥饿旁路失效（bucket < conserve 最低值，P3 系统长期冻结）。d = [bucket]。 */
-  P3StarvationFrozen = 44,
-/** L2 体外建议摄入（自进化系统 L2）：tuning-intake-system 每 1000t 从 segment 6
- * 读取外部 LLM 建议包，经六层护栏校验后写入 intakePending。
- * d = [acceptedCount, rejectedCount]；r = ""。 */
-L2Intake = 43,
+  P3StarvationFrozen = 45,
+  /** L2 体外建议摄入（自进化系统 L2）：tuning-intake-system 每 1000t 从 segment 6
+   * 读取外部 LLM 建议包，经六层护栏校验后写入 intakePending。
+   * d = [acceptedCount, rejectedCount]；r = ""。 */
+  L2Intake = 44,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────
@@ -218,11 +219,7 @@ export interface EventBuffer {
  * 可从任意系统安全调用 — 不访问 Memory/segment，CPU 开销极低（数组 push）。
  * E-FINDING-10: soft cap 200 条 — 防止单 tick 突发事件压垮 eventBuffer。
  * 超限时丢弃最老的事件（FIFO），保留最新事件。 */
-export function recordEvent(
-  kind: EventKind,
-  roomName: string,
-  data: number[],
-): void {
+export function recordEvent(kind: EventKind, roomName: string, data: number[]): void {
   const g = globalCache();
   if (!g.eventBuffer) g.eventBuffer = { events: [] };
   const events = g.eventBuffer.events;

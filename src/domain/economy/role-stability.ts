@@ -120,8 +120,9 @@ export function decideRoleStability(
   const minDurationMet = epochsSinceAssignment >= config.minDurationEpochs;
 
   // ── 情况 1：所有角色分数都低于 noRoleThreshold → 保持当前角色 ──
-  const allScoresLow = (Object.values(scores) as { totalScore: number }[])
-    .every(s => s.totalScore < config.noRoleThreshold);
+  const allScoresLow = (Object.values(scores) as { totalScore: number }[]).every(
+    s => s.totalScore < config.noRoleThreshold,
+  );
 
   if (allScoresLow) {
     return buildDecision(
@@ -210,7 +211,9 @@ export function decideRoleStability(
   // ── 默认：保持当前角色 ──
   const reasons: string[] = [];
   if (!hysteresisMet) {
-    reasons.push(`hysteresis-not-met: ${recommendedScore.toFixed(2)} ≤ ${currentScore.toFixed(2)} + ${config.hysteresisMargin}`);
+    reasons.push(
+      `hysteresis-not-met: ${recommendedScore.toFixed(2)} ≤ ${currentScore.toFixed(2)} + ${config.hysteresisMargin}`,
+    );
   }
   if (!minDurationMet) {
     reasons.push(`min-duration-not-met: ${epochsSinceAssignment} < ${config.minDurationEpochs}`);
@@ -291,10 +294,14 @@ export function serializeRoleStability(state: RoleStabilityState): {
   t: number; // lastEvaluatedTick
 } {
   // 延迟 import 避免循环依赖——直接内联 roleToCode 逻辑
-  const roleCode = state.currentRole === "core" ? "C"
-    : state.currentRole === "production" ? "P"
-    : state.currentRole === "support" ? "S"
-    : "R";
+  const roleCode =
+    state.currentRole === "core"
+      ? "C"
+      : state.currentRole === "production"
+        ? "P"
+        : state.currentRole === "support"
+          ? "S"
+          : "R";
   return {
     r: roleCode,
     a: state.assignedAtTick,
@@ -316,11 +323,16 @@ export function deserializeRoleStability(
   if (!data) {
     return createInitialRoleStability(fallbackRole, 0, fallbackTick);
   }
-  const role: EmpireRoomRole = data.r === "C" ? "core"
-    : data.r === "P" ? "production"
-    : data.r === "S" ? "support"
-    : data.r === "R" ? "remote"
-    : fallbackRole;
+  const role: EmpireRoomRole =
+    data.r === "C"
+      ? "core"
+      : data.r === "P"
+        ? "production"
+        : data.r === "S"
+          ? "support"
+          : data.r === "R"
+            ? "remote"
+            : fallbackRole;
   return {
     currentRole: role,
     assignedAtTick: data.a,

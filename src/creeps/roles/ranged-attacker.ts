@@ -12,7 +12,7 @@ import { CONFIG } from "../../config";
 export function rangedAttackEnemies(): ActionCandidate<Creep> {
   return {
     name: "rangedAttacker:attack-creeps",
-    resolve: (ac) => {
+    resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       const target = ac.creep.memory.remoteTarget;
       if (!target || ac.creep.room.name !== target) return undefined;
@@ -31,7 +31,11 @@ export function rangedAttackEnemies(): ActionCandidate<Creep> {
           const dir = ac.creep.pos.getDirectionTo(target);
           if (dir !== null) {
             const opposite = ((dir + 3) % 8) + 1;
-            registerMove(ac.creep, opposite as DirectionConstant, CONFIG.movement.trafficPriority.flee);
+            registerMove(
+              ac.creep,
+              opposite as DirectionConstant,
+              CONFIG.movement.trafficPriority.flee,
+            );
           }
         }
       } else {
@@ -45,7 +49,7 @@ export function rangedAttackEnemies(): ActionCandidate<Creep> {
 export function rangedAttackStructures(): ActionCandidate<AnyStructure> {
   return {
     name: "rangedAttacker:attack-structures",
-    resolve: (ac) => {
+    resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       const target = ac.creep.memory.remoteTarget;
       if (!target || ac.creep.room.name !== target) return undefined;

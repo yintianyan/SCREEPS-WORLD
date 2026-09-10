@@ -24,7 +24,10 @@ function posAt(x: number, y: number) {
     getDirectionTo(): number {
       return 3;
     },
-    isEqualTo(tx: number | { x?: number; y?: number; pos?: { x: number; y: number } }, ty?: number): boolean {
+    isEqualTo(
+      tx: number | { x?: number; y?: number; pos?: { x: number; y: number } },
+      ty?: number,
+    ): boolean {
       const px = typeof tx === "number" ? tx : (tx.x ?? tx.pos?.x ?? 0);
       const py = typeof tx === "number" ? (ty ?? 0) : (tx.y ?? tx.pos?.y ?? 0);
       return x === px && y === py;
@@ -69,9 +72,20 @@ function setup(opts: { withStorageLink: boolean; rcl: number; ctrlLinkEnergy?: n
     storage,
   });
   // 满载（used=50/50）：harvest 后立即触发同 tick 倒能。
-  const creep = mockCreep({ name: "harvester_1", role: "harvester", used: 50, capacity: 50, mode: "acquire" });
+  const creep = mockCreep({
+    name: "harvester_1",
+    role: "harvester",
+    used: 50,
+    capacity: 50,
+    mode: "acquire",
+  });
   creep.pos = posAt(10, 11) as never;
-  creep.room = { name: "W7N4", getTerrain: () => ({ get: () => 0 }), lookForAt: () => [], findExitTo: () => 3 } as never;
+  creep.room = {
+    name: "W7N4",
+    getTerrain: () => ({ get: () => 0 }),
+    lookForAt: () => [],
+    findExitTo: () => 3,
+  } as never;
   const ctx = mockContext(snap);
   return { creep, container, link, snap, ctx };
 }
@@ -111,7 +125,11 @@ describe("harvester — source link 灌能出口判定", () => {
   // 回归实证）。新逻辑让 harvester 在 controller link 消费出空闲前先灌 container，
   // link-system 下一 tick 把 source link 能量传走后 harvester 自然恢复灌 link。
   it("RCL5 无 storage link + controller link 充满（freeCapacity=0）→ 灌 container 避免能量卡死 source link", () => {
-    const { creep, container, link, ctx } = setup({ withStorageLink: false, rcl: 5, ctrlLinkEnergy: 800 });
+    const { creep, container, link, ctx } = setup({
+      withStorageLink: false,
+      rcl: 5,
+      ctrlLinkEnergy: 800,
+    });
 
     harvesterRole.run(creep, ctx);
 
@@ -120,7 +138,11 @@ describe("harvester — source link 灌能出口判定", () => {
   });
 
   it("RCL6 无 storage link + controller link 充满（freeCapacity=0）→ 灌 container", () => {
-    const { creep, container, link, ctx } = setup({ withStorageLink: false, rcl: 6, ctrlLinkEnergy: 800 });
+    const { creep, container, link, ctx } = setup({
+      withStorageLink: false,
+      rcl: 6,
+      ctrlLinkEnergy: 800,
+    });
 
     harvesterRole.run(creep, ctx);
 

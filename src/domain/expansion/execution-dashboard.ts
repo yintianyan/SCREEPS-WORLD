@@ -102,7 +102,9 @@ export function buildExecutionDashboard(input: {
     integrationResult?.integrated ? "INTEGRATED" : "",
     threatResult ? `threat=${threatResult.level}` : "",
     progress === 100 ? "AUTONOMOUS" : "",
-  ].filter(Boolean).join(" | ");
+  ]
+    .filter(Boolean)
+    .join(" | ");
 
   return {
     tick,

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { applyIntakeGuardrail, type IntakePayload } from "../../../src/domain/tuning/intake-guardrail";
+import {
+  applyIntakeGuardrail,
+  type IntakePayload,
+} from "../../../src/domain/tuning/intake-guardrail";
 
 describe("intake-guardrail", () => {
   const basePayload: IntakePayload = {
@@ -51,7 +54,12 @@ describe("intake-guardrail", () => {
   });
 
   it("陈旧建议包（age > 10000t）→ 整包拒绝", () => {
-    const stale: IntakePayload = { ...basePayload, t: 0, exp: 999999, sug: [{ p: "posture.minDwell", v: 800, r: "stale" }] };
+    const stale: IntakePayload = {
+      ...basePayload,
+      t: 0,
+      exp: 999999,
+      sug: [{ p: "posture.minDwell", v: 800, r: "stale" }],
+    };
     const result = applyIntakeGuardrail(stale, currentTick + 1, undefined, cooldownTicks);
     expect(result.accepted).toHaveLength(0);
     expect(result.rejected).toHaveLength(1);

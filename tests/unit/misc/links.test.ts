@@ -34,10 +34,7 @@ describe("Links — planLinkTransfers", () => {
   });
 
   it("transfers from source to controller when controller needs energy", () => {
-    const links = [
-      link("s1", "source", 500),
-      link("c1", "controller", 100),
-    ];
+    const links = [link("s1", "source", 500), link("c1", "controller", 100)];
     const transfers = planLinkTransfers(links);
     expect(transfers).toHaveLength(1);
     // source 有 500，controller 需要 700 → 传输 500（source 全部能量）。
@@ -97,10 +94,7 @@ describe("Links — planLinkTransfers", () => {
   });
 
   it("controllerTargetEnergy=0 且无 storage link → 不传输（controller 停供、无处可去）", () => {
-    const links = [
-      link("s1", "source", 500),
-      link("c1", "controller", 100),
-    ];
+    const links = [link("s1", "source", 500), link("c1", "controller", 100)];
     expect(planLinkTransfers(links, { controllerTargetEnergy: 0 })).toHaveLength(0);
   });
 
@@ -113,7 +107,7 @@ describe("Links — planLinkTransfers", () => {
       link("s1", "source", 300),
       link("s2", "source", 400),
       link("c1", "controller", 500), // needs 300
-      link("st", "storage", 300),    // free 500
+      link("st", "storage", 300), // free 500
     ];
     const transfers = planLinkTransfers(links);
     expect(transfers).toHaveLength(3);
@@ -139,10 +133,7 @@ describe("Links — planLinkTransfers", () => {
   });
 
   it("storage fills controller when no source links available", () => {
-    const links = [
-      link("st", "storage", 600),
-      link("c1", "controller", 100),
-    ];
+    const links = [link("st", "storage", 600), link("c1", "controller", 100)];
     const transfers = planLinkTransfers(links);
     expect(transfers).toHaveLength(1);
     // storage 有 600，controller 需要 700 → 传输 600（storage 全部能量）。
@@ -150,28 +141,19 @@ describe("Links — planLinkTransfers", () => {
   });
 
   it("skips source links on cooldown", () => {
-    const links = [
-      link("s1", "source", 500, { cooldown: 1 }),
-      link("c1", "controller", 100),
-    ];
+    const links = [link("s1", "source", 500, { cooldown: 1 }), link("c1", "controller", 100)];
     const transfers = planLinkTransfers(links);
     expect(transfers).toHaveLength(0);
   });
 
   it("skips source links with zero energy", () => {
-    const links = [
-      link("s1", "source", 0),
-      link("c1", "controller", 100),
-    ];
+    const links = [link("s1", "source", 0), link("c1", "controller", 100)];
     const transfers = planLinkTransfers(links);
     expect(transfers).toHaveLength(0);
   });
 
   it("does not transfer from storage to controller when controller is above half", () => {
-    const links = [
-      link("st", "storage", 600),
-      link("c1", "controller", 500, { capacity: 800 }),
-    ];
+    const links = [link("st", "storage", 600), link("c1", "controller", 500, { capacity: 800 })];
     // controller needs 300, but no source links → storage fills it
     const transfers = planLinkTransfers(links);
     // Actually storage will fill since controllerNeeds > 0
@@ -180,10 +162,7 @@ describe("Links — planLinkTransfers", () => {
   });
 
   it("ignores hub links", () => {
-    const links = [
-      link("h1", "hub", 700),
-      link("c1", "controller", 100),
-    ];
+    const links = [link("h1", "hub", 700), link("c1", "controller", 100)];
     const transfers = planLinkTransfers(links);
     expect(transfers).toHaveLength(0);
   });
@@ -266,7 +245,9 @@ describe("Links — classifyLinkRole（最近锚获胜，根除优先级劫持�
   });
 
   it("多 source 就近归属：仅靠近其中一个 source → source", () => {
-    expect(classifyLinkRole(pt(40, 44), [pt(12, 31), pt(41, 46)], pt(39, 12), pt(33, 29))).toBe("source");
+    expect(classifyLinkRole(pt(40, 44), [pt(12, 31), pt(41, 46)], pt(39, 12), pt(33, 29))).toBe(
+      "source",
+    );
   });
 
   it("都超出 anchorRange(2) → hub", () => {

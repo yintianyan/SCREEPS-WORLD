@@ -1,6 +1,9 @@
 /** 扩张目标评估器测试。 */
 import { describe, expect, it } from "vitest";
-import { selectExpansionTarget, type ExpansionInput } from "../../../src/domain/expansion/evaluator";
+import {
+  selectExpansionTarget,
+  type ExpansionInput,
+} from "../../../src/domain/expansion/evaluator";
 import type { RoomIntel } from "../../../src/domain/intel";
 
 const tick = 50000;

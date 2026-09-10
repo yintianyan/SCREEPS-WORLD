@@ -190,10 +190,7 @@ describe("FORM-006: computeSquadAnchor — 成员顺序无关性", () => {
 
 describe("FORM-007: computeFormationSlots — 基本分配", () => {
   it("为每个存活成员分配一个 slot", () => {
-    const members = [
-      makeMember("a1", "attacker", 25, 25),
-      makeMember("h1", "healer", 25, 25),
-    ];
+    const members = [makeMember("a1", "attacker", 25, 25), makeMember("h1", "healer", 25, 25)];
     const anchor = computeSquadAnchor(makeSquad(members));
     const slots = computeFormationSlots(anchor, "CLUSTER", members);
     expect(slots).toHaveLength(2);
@@ -215,10 +212,7 @@ describe("FORM-007: computeFormationSlots — 基本分配", () => {
 
 describe("FORM-008: computeFormationSlots — 角色优先级排序", () => {
   it("healer 优先于 attacker", () => {
-    const members = [
-      makeMember("a1", "attacker", 25, 25),
-      makeMember("h1", "healer", 25, 25),
-    ];
+    const members = [makeMember("a1", "attacker", 25, 25), makeMember("h1", "healer", 25, 25)];
     const anchor = computeSquadAnchor(makeSquad(members));
     const slots = computeFormationSlots(anchor, "CLUSTER", members);
     // healer 应该 slotIndex=0
@@ -236,10 +230,7 @@ describe("FORM-009: computeFormationSlots — 阵型类型偏移", () => {
   });
 
   it("LINE 阵型有前排和后排", () => {
-    const members = [
-      makeMember("a1", "attacker", 25, 25),
-      makeMember("h1", "healer", 25, 25),
-    ];
+    const members = [makeMember("a1", "attacker", 25, 25), makeMember("h1", "healer", 25, 25)];
     const anchor = { pos: 25 * 50 + 25, room: "W1N1", pathLeader: "h1", reason: "test" };
     const slots = computeFormationSlots(anchor, "LINE", members);
     // healer slotIndex=0 → 前排 (y-1)
@@ -259,10 +250,7 @@ describe("FORM-009: computeFormationSlots — 阵型类型偏移", () => {
 
 describe("FORM-010: computeFormationSlots — 确定性", () => {
   it("相同输入必产生相同输出", () => {
-    const members = [
-      makeMember("a1", "attacker", 20, 20),
-      makeMember("h1", "healer", 30, 30),
-    ];
+    const members = [makeMember("a1", "attacker", 20, 20), makeMember("h1", "healer", 30, 30)];
     const anchor = { pos: 25 * 50 + 25, room: "W1N1", pathLeader: "h1", reason: "test" };
     const s1 = computeFormationSlots(anchor, "WEDGE", members);
     const s2 = computeFormationSlots(anchor, "WEDGE", members);
@@ -276,10 +264,7 @@ describe("FORM-010: computeFormationSlots — 确定性", () => {
 
 describe("FORM-011: computeCohesion — INTACT", () => {
   it("成员紧密排列时 INTACT", () => {
-    const members = [
-      makeMember("a1", "attacker", 25, 25),
-      makeMember("h1", "healer", 25, 26),
-    ];
+    const members = [makeMember("a1", "attacker", 25, 25), makeMember("h1", "healer", 25, 26)];
     const squad = makeSquad(members);
     const anchor = computeSquadAnchor(squad);
     const slots = computeFormationSlots(anchor, "CLUSTER", members);
@@ -291,10 +276,7 @@ describe("FORM-011: computeCohesion — INTACT", () => {
 
 describe("FORM-012: computeCohesion — DEGRADED/BROKEN", () => {
   it("成员偏离较远时 DEGRADED", () => {
-    const members = [
-      makeMember("a1", "attacker", 10, 10),
-      makeMember("h1", "healer", 15, 15),
-    ];
+    const members = [makeMember("a1", "attacker", 10, 10), makeMember("h1", "healer", 15, 15)];
     const squad = makeSquad(members);
     const anchor = computeSquadAnchor(squad);
     const slots = computeFormationSlots(anchor, "CLUSTER", members);
@@ -304,10 +286,7 @@ describe("FORM-012: computeCohesion — DEGRADED/BROKEN", () => {
   });
 
   it("成员极度分散时 BROKEN", () => {
-    const members = [
-      makeMember("a1", "attacker", 0, 0),
-      makeMember("h1", "healer", 49, 49),
-    ];
+    const members = [makeMember("a1", "attacker", 0, 0), makeMember("h1", "healer", 49, 49)];
     const squad = makeSquad(members, { formation: "CLUSTER" });
     const anchor = computeSquadAnchor(squad);
     const slots = computeFormationSlots(anchor, "CLUSTER", members);
@@ -358,10 +337,7 @@ describe("FORM-015: produceSquadMovementIntent — MOVING 状态", () => {
 
 describe("FORM-016: produceSquadMovementIntent — Cohesion BROKEN 产出 REGROUP", () => {
   it("Cohesion BROKEN 时产出 REGROUP Intent", () => {
-    const members = [
-      makeMember("a1", "attacker", 0, 0),
-      makeMember("h1", "healer", 49, 49),
-    ];
+    const members = [makeMember("a1", "attacker", 0, 0), makeMember("h1", "healer", 49, 49)];
     const squad = makeSquad(members, { state: "ENGAGING", formation: "CLUSTER" });
     const intent = produceSquadMovementIntent(squad, "ENGAGING", makeTerrain());
     // Cohesion BROKEN → REGROUP
@@ -517,10 +493,18 @@ describe("FORM-025: buildSquadSnapshot — 快照构建", () => {
         regroupThreshold: 0.5,
         healerRequired: true,
         enemyCapability: {
-          totalAttack: 0, totalRangedAttack: 0, totalHeal: 0,
-          totalRangedHeal: 0, totalDismantle: 0, totalClaim: 0,
-          totalEffectiveHP: 0, avgMobility: 0, totalSupport: 0,
-          totalToughParts: 0, boostedCount: 0, maxBoostTier: 0 as 0 | 1 | 2 | 3,
+          totalAttack: 0,
+          totalRangedAttack: 0,
+          totalHeal: 0,
+          totalRangedHeal: 0,
+          totalDismantle: 0,
+          totalClaim: 0,
+          totalEffectiveHP: 0,
+          avgMobility: 0,
+          totalSupport: 0,
+          totalToughParts: 0,
+          boostedCount: 0,
+          maxBoostTier: 0 as 0 | 1 | 2 | 3,
           creepCount: 0,
         },
         terrainRisk: 0.5,
@@ -550,9 +534,7 @@ describe("FORM-025: buildSquadSnapshot — 快照构建", () => {
       state: "FORMING" as const,
       createdTick: 100,
     };
-    const runtimeMembers = [
-      makeMember("a1", "attacker", 25, 25),
-    ];
+    const runtimeMembers = [makeMember("a1", "attacker", 25, 25)];
     const snapshot = buildSquadSnapshot(plan, runtimeMembers, 150, "W2N1");
     expect(snapshot.squadId).toBe("squad-1");
     expect(snapshot.tick).toBe(150);
@@ -571,10 +553,7 @@ describe("FORM-025: buildSquadSnapshot — 快照构建", () => {
 
 describe("FORM-026: assessFormationDegradation — 退化级别评估", () => {
   it("INTACT cohesion → INTACT degradation", () => {
-    const members = [
-      makeMember("a1", "attacker", 25, 25),
-      makeMember("h1", "healer", 25, 26),
-    ];
+    const members = [makeMember("a1", "attacker", 25, 25), makeMember("h1", "healer", 25, 26)];
     const squad = makeSquad(members);
     const anchor = computeSquadAnchor(squad);
     const slots = computeFormationSlots(anchor, "CLUSTER", members);
@@ -584,9 +563,7 @@ describe("FORM-026: assessFormationDegradation — 退化级别评估", () => {
   });
 
   it("CRITICAL cohesion → FORMATION_BROKEN", () => {
-    const members = [
-      makeMember("a1", "attacker", 25, 25, "W1N1", { alive: false, hits: 0 }),
-    ];
+    const members = [makeMember("a1", "attacker", 25, 25, "W1N1", { alive: false, hits: 0 })];
     const squad = makeSquad(members);
     const anchor = computeSquadAnchor(squad);
     const slots = computeFormationSlots(anchor, "CLUSTER", members);
@@ -611,9 +588,7 @@ describe("FORM-027: computeRegroupPoint — 集结点计算", () => {
   });
 
   it("全灭时使用预设集结点", () => {
-    const members = [
-      makeMember("a1", "attacker", 25, 25, "W1N1", { alive: false, hits: 0 }),
-    ];
+    const members = [makeMember("a1", "attacker", 25, 25, "W1N1", { alive: false, hits: 0 })];
     const squad = makeSquad(members);
     const anchor = computeSquadAnchor(squad);
     const regroup = computeRegroupPoint(squad, anchor);

@@ -77,10 +77,7 @@ export function evaluateRouteSuspension(
 
   // 已暂停 → 检查恢复条件
   if (status === "suspended") {
-    const consecutiveGood = countConsecutiveAbove(
-      efficiencyHistory,
-      config.maintainThreshold,
-    );
+    const consecutiveGood = countConsecutiveAbove(efficiencyHistory, config.maintainThreshold);
     if (consecutiveGood >= config.resumeAfter) {
       return {
         action: "resume",
@@ -105,10 +102,7 @@ export function evaluateRouteSuspension(
   }
 
   // active / congested / degraded → 检查暂停条件
-  const consecutiveBad = countConsecutiveBelow(
-    efficiencyHistory,
-    config.maintainThreshold,
-  );
+  const consecutiveBad = countConsecutiveBelow(efficiencyHistory, config.maintainThreshold);
   if (consecutiveBad >= config.suspendAfter) {
     return {
       action: "suspend",
@@ -148,10 +142,7 @@ export function batchEvaluateSuspension(
 /**
  * 从历史末尾开始数连续低于阈值的次数。
  */
-function countConsecutiveBelow(
-  history: readonly number[],
-  threshold: number,
-): number {
+function countConsecutiveBelow(history: readonly number[], threshold: number): number {
   let count = 0;
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i]! < threshold) count++;
@@ -163,10 +154,7 @@ function countConsecutiveBelow(
 /**
  * 从历史末尾开始数连续高于阈值的次数。
  */
-function countConsecutiveAbove(
-  history: readonly number[],
-  threshold: number,
-): number {
+function countConsecutiveAbove(history: readonly number[], threshold: number): number {
   let count = 0;
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i]! >= threshold) count++;

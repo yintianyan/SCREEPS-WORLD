@@ -158,32 +158,62 @@ export function deriveRequiredCapability(
 
     case "CLAIM":
       return {
-        attack: 0, rangedAttack: 0, heal: 0,
-        effectiveHP: 300, dismantle: 0, mobility: 0.8, claim: 1, support: 0,
+        attack: 0,
+        rangedAttack: 0,
+        heal: 0,
+        effectiveHP: 300,
+        dismantle: 0,
+        mobility: 0.8,
+        claim: 1,
+        support: 0,
       };
 
     case "RESERVE":
       return {
-        attack: 0, rangedAttack: 0, heal: 0,
-        effectiveHP: 300, dismantle: 0, mobility: 0.8, claim: 1, support: 0,
+        attack: 0,
+        rangedAttack: 0,
+        heal: 0,
+        effectiveHP: 300,
+        dismantle: 0,
+        mobility: 0.8,
+        claim: 1,
+        support: 0,
       };
 
     case "RETREAT":
       return {
-        attack: 0, rangedAttack: 0, heal: 0,
-        effectiveHP: 200, dismantle: 0, mobility: 1.5, claim: 0, support: 0,
+        attack: 0,
+        rangedAttack: 0,
+        heal: 0,
+        effectiveHP: 200,
+        dismantle: 0,
+        mobility: 1.5,
+        claim: 0,
+        support: 0,
       };
 
     case "ABORT":
       return {
-        attack: 0, rangedAttack: 0, heal: 0,
-        effectiveHP: 0, dismantle: 0, mobility: 0, claim: 0, support: 0,
+        attack: 0,
+        rangedAttack: 0,
+        heal: 0,
+        effectiveHP: 0,
+        dismantle: 0,
+        mobility: 0,
+        claim: 0,
+        support: 0,
       };
 
     default:
       return {
-        attack: 0, rangedAttack: 0, heal: 0,
-        effectiveHP: 0, dismantle: 0, mobility: 0, claim: 0, support: 0,
+        attack: 0,
+        rangedAttack: 0,
+        heal: 0,
+        effectiveHP: 0,
+        dismantle: 0,
+        mobility: 0,
+        claim: 0,
+        support: 0,
       };
   }
 }
@@ -214,12 +244,24 @@ export function computeCapabilityGap(
   }
 
   // 总缺口比例
-  const reqSum = required.attack + required.rangedAttack + required.heal
-    + required.effectiveHP * 0.01 + required.dismantle + required.mobility * 100
-    + required.claim * 100 + required.support * 50;
-  const gapSum = gaps.attack + gaps.rangedAttack + gaps.heal
-    + gaps.effectiveHP * 0.01 + gaps.dismantle + gaps.mobility * 100
-    + gaps.claim * 100 + gaps.support * 50;
+  const reqSum =
+    required.attack +
+    required.rangedAttack +
+    required.heal +
+    required.effectiveHP * 0.01 +
+    required.dismantle +
+    required.mobility * 100 +
+    required.claim * 100 +
+    required.support * 50;
+  const gapSum =
+    gaps.attack +
+    gaps.rangedAttack +
+    gaps.heal +
+    gaps.effectiveHP * 0.01 +
+    gaps.dismantle +
+    gaps.mobility * 100 +
+    gaps.claim * 100 +
+    gaps.support * 50;
 
   const totalGapRatio = reqSum > 0 ? Math.min(1, gapSum / reqSum) : 0;
 
@@ -242,7 +284,12 @@ export function deriveForceComposition(
   required: RequiredCapability,
 ): ForceComposition {
   const evidence: string[] = [];
-  let tank = 0, attacker = 0, ranged = 0, healer = 0, dismantler = 0, support = 0;
+  let tank = 0,
+    attacker = 0,
+    ranged = 0,
+    healer = 0,
+    dismantler = 0,
+    support = 0;
 
   // 从能力需求推导编队（以能力为驱动，不是硬编码人数）
   if (required.effectiveHP > 0) {

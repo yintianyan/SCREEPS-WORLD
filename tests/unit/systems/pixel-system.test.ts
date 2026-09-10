@@ -79,7 +79,14 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
   it("war 姿态：healthy + 满 bucket 也不放血（bucket 突发容量留给战时计算）", () => {
     (CONFIG.pixel as { enabled: boolean }).enabled = true;
     (globalThis as any).Memory = {
-      kernel: { strategy: { posture: "war", since: 100, expansionAllowed: false, newRemoteOpsAllowed: false } },
+      kernel: {
+        strategy: {
+          posture: "war",
+          since: 100,
+          expansionAllowed: false,
+          newRemoteOpsAllowed: false,
+        },
+      },
     };
     pixelSystem.run(makeCtx("healthy"));
     expect(generatePixelSpy).not.toHaveBeenCalled();

@@ -76,120 +76,108 @@ describe("E2E-010 Phase 8 全量指标验证（10000 tick）", () => {
     await runner.teardown();
   });
 
-  it(
-    "10000 tick 全量指标采集 + 分段断言",
-    async () => {
-      const CHECKPOINT = 2000;
-      const TOTAL_TICKS = 10000;
-      const WARMUP_TICKS = 50;
-      const SAMPLE_INTERVAL = 100; // 每 100 tick 采一次指标
+  it("10000 tick 全量指标采集 + 分段断言", async () => {
+    const CHECKPOINT = 2000;
+    const TOTAL_TICKS = 10000;
+    const WARMUP_TICKS = 50;
+    const SAMPLE_INTERVAL = 100; // 每 100 tick 采一次指标
 
-      let totalErrors: string[] = [];
+    const totalErrors: string[] = [];
 
-      // 分段运行，每段 CHECKPOINT tick
-      for (let segment = 1; segment <= TOTAL_TICKS / CHECKPOINT; segment++) {
-        const snapshots = await runner.runTicks(CHECKPOINT);
+    // 分段运行，每段 CHECKPOINT tick
+    for (let segment = 1; segment <= TOTAL_TICKS / CHECKPOINT; segment++) {
+      const snapshots = await runner.runTicks(CHECKPOINT);
 
-        // 采样指标（每 100 tick）
-        for (let i = 0; i < snapshots.length; i += SAMPLE_INTERVAL) {
-          const snap = snapshots[i];
-          if (!snap) continue;
-          const mem = snap.rawMemory;
-          metricsRows.push(extractMetrics(mem, snap.tick));
-        }
-
-        // 段内错误检查
-        const segmentErrors = snapshots.flatMap((s) => s.consoleLogs).filter(isJsError);
-        if (segmentErrors.length > 0) {
-          totalErrors.push(...segmentErrors);
-        }
-
-        // 段内死亡螺旋检查（跳过全局 warmup）
-        const globalTickBase = (segment - 1) * CHECKPOINT;
-        if (globalTickBase >= WARMUP_TICKS) {
-          const afterWarmup = snapshots.slice(
-            Math.max(0, WARMUP_TICKS - globalTickBase),
-          );
-          const zeroCreepTicks = afterWarmup.filter((s) => s.totalCreeps === 0);
-          expect(
-            zeroCreepTicks.length,
-            `段 ${segment}（tick ${globalTickBase + 1}-${globalTickBase + CHECKPOINT}）` +
-              `有 ${zeroCreepTicks.length} 个 tick creep 数为 0（死亡螺旋）`,
-          ).toBe(0);
-        }
-
-        // 段末指标检查
-        const lastSnap = snapshots.at(-1)!;
-        const lastMem = lastSnap.rawMemory;
-        const lastMetrics = extractMetrics(lastMem, lastSnap.tick);
-
-        // 角色多样性（段 2 开始检查，段 1 在 warmup）
-        if (segment >= 2) {
-          const roleCount = Object.keys(lastMetrics.roles).length;
-          expect(
-            roleCount,
-            `段 ${segment} 结束时角色种类=${roleCount} < 2（角色退化）`,
-          ).toBeGreaterThanOrEqual(2);
-        }
-
-        // spawnQueue 不堆积
-        expect(
-          lastMetrics.spawnQueueLen,
-          `段 ${segment} 结束时 spawnQueue=${lastMetrics.spawnQueueLen} ≥ 10（饥饿堆积）`,
-        ).toBeLessThan(10);
-
-        // Memory 不膨胀
-        expect(
-          lastMetrics.memSizeKB,
-          `段 ${segment} 结束时 Memory=${lastMetrics.memSizeKB}KB ≥ 500KB（泄漏）`,
-        ).toBeLessThan(500);
-
-        console.log(
-          `段 ${segment}/${TOTAL_TICKS / CHECKPOINT}: tick=${lastSnap.tick} ` +
-            `creeps=${lastMetrics.totalCreeps} roles=${JSON.stringify(lastMetrics.roles)} ` +
-            `queue=${lastMetrics.spawnQueueLen} mem=${lastMetrics.memSizeKB}KB`,
-        );
+      // 采样指标（每 100 tick）
+      for (let i = 0; i < snapshots.length; i += SAMPLE_INTERVAL) {
+        const snap = snapshots[i];
+        if (!snap) continue;
+        const mem = snap.rawMemory;
+        metricsRows.push(extractMetrics(mem, snap.tick));
       }
 
-      // 全程无 JS 错误
-      expect(
-        totalErrors,
-        `10000 tick 内检测到 ${totalErrors.length} 个 JS 错误:\n${totalErrors.slice(0, 10).join("\n")}`,
-      ).toHaveLength(0);
+      // 段内错误检查
+      const segmentErrors = snapshots.flatMap(s => s.consoleLogs).filter(isJsError);
+      if (segmentErrors.length > 0) {
+        totalErrors.push(...segmentErrors);
+      }
 
-      // 最终 Memory 大小检查
-      const finalMem = await runner.bot.getMemory();
-      const finalMemSize = JSON.stringify(finalMem).length;
-      expect(
-        finalMemSize,
-        `10000 tick 后 Memory 大小 ${finalMemSize} bytes（${(finalMemSize / 1024).toFixed(1)}KB）过大`,
-      ).toBeLessThan(500 * 1024);
+      // 段内死亡螺旋检查（跳过全局 warmup）
+      const globalTickBase = (segment - 1) * CHECKPOINT;
+      if (globalTickBase >= WARMUP_TICKS) {
+        const afterWarmup = snapshots.slice(Math.max(0, WARMUP_TICKS - globalTickBase));
+        const zeroCreepTicks = afterWarmup.filter(s => s.totalCreeps === 0);
+        expect(
+          zeroCreepTicks.length,
+          `段 ${segment}（tick ${globalTickBase + 1}-${globalTickBase + CHECKPOINT}）` +
+            `有 ${zeroCreepTicks.length} 个 tick creep 数为 0（死亡螺旋）`,
+        ).toBe(0);
+      }
 
-      // 最终有 creep 在工作
-      const finalSnapshots = metricsRows.slice(-1);
-      const finalRow = finalSnapshots[0];
-      expect(
-        finalRow?.totalCreeps,
-        `10000 tick 后 creep 数为 0（死亡螺旋）`,
-      ).toBeGreaterThan(0);
+      // 段末指标检查
+      const lastSnap = snapshots.at(-1)!;
+      const lastMem = lastSnap.rawMemory;
+      const lastMetrics = extractMetrics(lastMem, lastSnap.tick);
 
-      // 经济运转信号：最终应有 harvester（能量采集闭环）
-      expect(
-        finalRow?.hasHarvester,
-        `10000 tick 后无 harvester（能量采集闭环断裂）`,
-      ).toBe(true);
+      // 角色多样性（段 2 开始检查，段 1 在 warmup）
+      if (segment >= 2) {
+        const roleCount = Object.keys(lastMetrics.roles).length;
+        expect(
+          roleCount,
+          `段 ${segment} 结束时角色种类=${roleCount} < 2（角色退化）`,
+        ).toBeGreaterThanOrEqual(2);
+      }
 
-      // 指标趋势分析
-      const firstRow = metricsRows[0];
-      const midRow = metricsRows[Math.floor(metricsRows.length / 2)];
+      // spawnQueue 不堆积
+      expect(
+        lastMetrics.spawnQueueLen,
+        `段 ${segment} 结束时 spawnQueue=${lastMetrics.spawnQueueLen} ≥ 10（饥饿堆积）`,
+      ).toBeLessThan(10);
+
+      // Memory 不膨胀
+      expect(
+        lastMetrics.memSizeKB,
+        `段 ${segment} 结束时 Memory=${lastMetrics.memSizeKB}KB ≥ 500KB（泄漏）`,
+      ).toBeLessThan(500);
+
       console.log(
-        `\n=== Phase 8 指标趋势 ===\n` +
-          `初始: tick=${firstRow?.tick} creeps=${firstRow?.totalCreeps} mem=${firstRow?.memSizeKB}KB\n` +
-          `中段: tick=${midRow?.tick} creeps=${midRow?.totalCreeps} mem=${midRow?.memSizeKB}KB\n` +
-          `最终: tick=${finalRow?.tick} creeps=${finalRow?.totalCreeps} mem=${finalRow?.memSizeKB}KB\n` +
-          `采样点: ${metricsRows.length} 条`,
+        `段 ${segment}/${TOTAL_TICKS / CHECKPOINT}: tick=${lastSnap.tick} ` +
+          `creeps=${lastMetrics.totalCreeps} roles=${JSON.stringify(lastMetrics.roles)} ` +
+          `queue=${lastMetrics.spawnQueueLen} mem=${lastMetrics.memSizeKB}KB`,
       );
-    },
-    1200000, // 20 分钟
-  );
+    }
+
+    // 全程无 JS 错误
+    expect(
+      totalErrors,
+      `10000 tick 内检测到 ${totalErrors.length} 个 JS 错误:\n${totalErrors.slice(0, 10).join("\n")}`,
+    ).toHaveLength(0);
+
+    // 最终 Memory 大小检查
+    const finalMem = await runner.bot.getMemory();
+    const finalMemSize = JSON.stringify(finalMem).length;
+    expect(
+      finalMemSize,
+      `10000 tick 后 Memory 大小 ${finalMemSize} bytes（${(finalMemSize / 1024).toFixed(1)}KB）过大`,
+    ).toBeLessThan(500 * 1024);
+
+    // 最终有 creep 在工作
+    const finalSnapshots = metricsRows.slice(-1);
+    const finalRow = finalSnapshots[0];
+    expect(finalRow?.totalCreeps, `10000 tick 后 creep 数为 0（死亡螺旋）`).toBeGreaterThan(0);
+
+    // 经济运转信号：最终应有 harvester（能量采集闭环）
+    expect(finalRow?.hasHarvester, `10000 tick 后无 harvester（能量采集闭环断裂）`).toBe(true);
+
+    // 指标趋势分析
+    const firstRow = metricsRows[0];
+    const midRow = metricsRows[Math.floor(metricsRows.length / 2)];
+    console.log(
+      `\n=== Phase 8 指标趋势 ===\n` +
+        `初始: tick=${firstRow?.tick} creeps=${firstRow?.totalCreeps} mem=${firstRow?.memSizeKB}KB\n` +
+        `中段: tick=${midRow?.tick} creeps=${midRow?.totalCreeps} mem=${midRow?.memSizeKB}KB\n` +
+        `最终: tick=${finalRow?.tick} creeps=${finalRow?.totalCreeps} mem=${finalRow?.memSizeKB}KB\n` +
+        `采样点: ${metricsRows.length} 条`,
+    );
+  }, 1200000); // 20 分钟
 });

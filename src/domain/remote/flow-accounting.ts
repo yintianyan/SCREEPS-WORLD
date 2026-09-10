@@ -50,60 +50,42 @@ export function createEmptyFlow(
 /**
  * 累加产出。纯函数 — 返回新对象。
  */
-export function addProduced(
-  flow: ResourceFlowSnapshot,
-  amount: number,
-): ResourceFlowSnapshot {
+export function addProduced(flow: ResourceFlowSnapshot, amount: number): ResourceFlowSnapshot {
   return { ...flow, produced: flow.produced + Math.max(0, amount) };
 }
 
 /**
  * 累加运输。纯函数 — 返回新对象。
  */
-export function addTransported(
-  flow: ResourceFlowSnapshot,
-  amount: number,
-): ResourceFlowSnapshot {
+export function addTransported(flow: ResourceFlowSnapshot, amount: number): ResourceFlowSnapshot {
   return { ...flow, transported: flow.transported + Math.max(0, amount) };
 }
 
 /**
  * 累加交付。纯函数 — 返回新对象。
  */
-export function addDelivered(
-  flow: ResourceFlowSnapshot,
-  amount: number,
-): ResourceFlowSnapshot {
+export function addDelivered(flow: ResourceFlowSnapshot, amount: number): ResourceFlowSnapshot {
   return { ...flow, delivered: flow.delivered + Math.max(0, amount) };
 }
 
 /**
  * 累加损失。纯函数 — 返回新对象。
  */
-export function addLost(
-  flow: ResourceFlowSnapshot,
-  amount: number,
-): ResourceFlowSnapshot {
+export function addLost(flow: ResourceFlowSnapshot, amount: number): ResourceFlowSnapshot {
   return { ...flow, lost: flow.lost + Math.max(0, amount) };
 }
 
 /**
  * 累加消费。纯函数 — 返回新对象。
  */
-export function addConsumed(
-  flow: ResourceFlowSnapshot,
-  amount: number,
-): ResourceFlowSnapshot {
+export function addConsumed(flow: ResourceFlowSnapshot, amount: number): ResourceFlowSnapshot {
   return { ...flow, consumed: flow.consumed + Math.max(0, amount) };
 }
 
 /**
  * 更新 container 存量。纯函数 — 返回新对象。
  */
-export function setStored(
-  flow: ResourceFlowSnapshot,
-  amount: number,
-): ResourceFlowSnapshot {
+export function setStored(flow: ResourceFlowSnapshot, amount: number): ResourceFlowSnapshot {
   return { ...flow, stored: Math.max(0, amount) };
 }
 
@@ -159,8 +141,7 @@ export function isOverproducing(
   containerCapacity: number,
 ): boolean {
   // 存量接近满 + 产出 > 运输
-  return flow.stored >= containerCapacity * 0.9 &&
-    flow.produced > flow.transported;
+  return flow.stored >= containerCapacity * 0.9 && flow.produced > flow.transported;
 }
 
 /**
@@ -183,10 +164,7 @@ export function isUnderproducing(
  * 合并两个资源流快照（同一 Operation 不同时间段）。
  * 纯函数。
  */
-export function mergeFlows(
-  a: ResourceFlowSnapshot,
-  b: ResourceFlowSnapshot,
-): ResourceFlowSnapshot {
+export function mergeFlows(a: ResourceFlowSnapshot, b: ResourceFlowSnapshot): ResourceFlowSnapshot {
   return {
     operationId: a.operationId,
     periodStart: Math.min(a.periodStart, b.periodStart),

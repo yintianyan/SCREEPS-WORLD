@@ -6,7 +6,11 @@ import {
   isHealthGood,
   DEFAULT_RESOURCE_HEALTH_OPTIONS,
 } from "../../../src/domain/economy/resource-health";
-import { emptyLedgerEntry, emptyStock, emptyCounters } from "../../../src/domain/economy/resource-ledger";
+import {
+  emptyLedgerEntry,
+  emptyStock,
+  emptyCounters,
+} from "../../../src/domain/economy/resource-ledger";
 import { counterAdd } from "../../../src/domain/economy/resource-ledger";
 
 describe("Resource Health", () => {

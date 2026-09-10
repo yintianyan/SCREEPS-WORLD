@@ -40,17 +40,35 @@ import { makeRegistryEntry } from "../../../src/domain/strategy/room-registry";
 function makeProfile(over?: Partial<RoomEconomicProfile>): RoomEconomicProfile {
   return {
     roomName: "W7N4",
-    rcl: 7, hasSpawn: true, hasStorage: true, hasTerminal: true,
-    netFlow: 5, contractReserve: 50000, riskBuffer: 1000,
-    estimatedIncome: 14, efficiency: 0.7, drift: 0, economyTick: 1000,
-    storageEnergy: 50000, storageCapacity: 1_000_000, storageRatio: 0.5,
-    energyAvailable: 500, energyCapacityAvailable: 1000,
-    storageNearFull: false, sourceCount: 2,
-    colonyPhase: "growth", colonyState: "normal",
-    economyPressure: 0.1, lastHostileAt: undefined, hasLiveThreat: false,
-    controllerDowngradeRisk: false, claimSecure: false,
-    economicClass: "core", netFlowPositive: true,
-    selfSufficiency: 0.64, isStruggling: false,
+    rcl: 7,
+    hasSpawn: true,
+    hasStorage: true,
+    hasTerminal: true,
+    netFlow: 5,
+    contractReserve: 50000,
+    riskBuffer: 1000,
+    estimatedIncome: 14,
+    efficiency: 0.7,
+    drift: 0,
+    economyTick: 1000,
+    storageEnergy: 50000,
+    storageCapacity: 1_000_000,
+    storageRatio: 0.5,
+    energyAvailable: 500,
+    energyCapacityAvailable: 1000,
+    storageNearFull: false,
+    sourceCount: 2,
+    colonyPhase: "growth",
+    colonyState: "normal",
+    economyPressure: 0.1,
+    lastHostileAt: undefined,
+    hasLiveThreat: false,
+    controllerDowngradeRisk: false,
+    claimSecure: false,
+    economicClass: "core",
+    netFlowPositive: true,
+    selfSufficiency: 0.64,
+    isStruggling: false,
     ...over,
   };
 }
@@ -58,13 +76,24 @@ function makeProfile(over?: Partial<RoomEconomicProfile>): RoomEconomicProfile {
 function makeCapacity(over?: Partial<RoomCapacityProfile>): RoomCapacityProfile {
   return {
     roomName: "W7N4",
-    sourceCount: 2, nominalCapacity: 20, efficiency: 0.7,
-    effectiveCapacity: 14, utilization: 0.7,
-    storageCapacity: 1_000_000, terminalCapacity: 30000, linkCapacity: 2000,
-    totalReserveCapacity: 1_032_000, reserveUtilization: 0.05,
-    spawnCapacity: 1000, spawnUtilization: 0.5, spawnCount: 1,
-    haulerCount: 3, referenceCarry: 300, logisticsThroughput: 18,
-    builderCount: 2, constructionThroughput: 100,
+    sourceCount: 2,
+    nominalCapacity: 20,
+    efficiency: 0.7,
+    effectiveCapacity: 14,
+    utilization: 0.7,
+    storageCapacity: 1_000_000,
+    terminalCapacity: 30000,
+    linkCapacity: 2000,
+    totalReserveCapacity: 1_032_000,
+    reserveUtilization: 0.05,
+    spawnCapacity: 1000,
+    spawnUtilization: 0.5,
+    spawnCount: 1,
+    haulerCount: 3,
+    referenceCarry: 300,
+    logisticsThroughput: 18,
+    builderCount: 2,
+    constructionThroughput: 100,
     bottleneck: "none",
     ...over,
   };
@@ -192,35 +221,72 @@ describe("role-evaluation.ts", () => {
 
     it("CORE 前置条件：RCL≥6 + storage + 正净流", () => {
       // RCL5 → 不满足
-      expect(meetsPrerequisites("core", makeRoleInput({
-        profile: makeProfile({ rcl: 5 }),
-      }))).toBe(false);
+      expect(
+        meetsPrerequisites(
+          "core",
+          makeRoleInput({
+            profile: makeProfile({ rcl: 5 }),
+          }),
+        ),
+      ).toBe(false);
       // RCL6 + storage + 正净流 → 满足
-      expect(meetsPrerequisites("core", makeRoleInput({
-        profile: makeProfile({ rcl: 6, hasStorage: true, netFlowPositive: true }),
-      }))).toBe(true);
+      expect(
+        meetsPrerequisites(
+          "core",
+          makeRoleInput({
+            profile: makeProfile({ rcl: 6, hasStorage: true, netFlowPositive: true }),
+          }),
+        ),
+      ).toBe(true);
       // 负净流 → 不满足
-      expect(meetsPrerequisites("core", makeRoleInput({
-        profile: makeProfile({ netFlowPositive: false }),
-      }))).toBe(false);
+      expect(
+        meetsPrerequisites(
+          "core",
+          makeRoleInput({
+            profile: makeProfile({ netFlowPositive: false }),
+          }),
+        ),
+      ).toBe(false);
     });
 
     it("PRODUCTION 前置条件：RCL≥4 + storage + 产能>0", () => {
-      expect(meetsPrerequisites("production", makeRoleInput({
-        profile: makeProfile({ rcl: 3 }),
-      }))).toBe(false);
-      expect(meetsPrerequisites("production", makeRoleInput({
-        profile: makeProfile({ rcl: 4, hasStorage: true, estimatedIncome: 10 }),
-      }))).toBe(true);
+      expect(
+        meetsPrerequisites(
+          "production",
+          makeRoleInput({
+            profile: makeProfile({ rcl: 3 }),
+          }),
+        ),
+      ).toBe(false);
+      expect(
+        meetsPrerequisites(
+          "production",
+          makeRoleInput({
+            profile: makeProfile({ rcl: 4, hasStorage: true, estimatedIncome: 10 }),
+          }),
+        ),
+      ).toBe(true);
     });
 
     it("REMOTE 前置条件：有活跃远矿 + 净收益>0", () => {
-      expect(meetsPrerequisites("remote", makeRoleInput({
-        activeRemoteOps: 0, remoteNetScore: 0,
-      }))).toBe(false);
-      expect(meetsPrerequisites("remote", makeRoleInput({
-        activeRemoteOps: 2, remoteNetScore: 15,
-      }))).toBe(true);
+      expect(
+        meetsPrerequisites(
+          "remote",
+          makeRoleInput({
+            activeRemoteOps: 0,
+            remoteNetScore: 0,
+          }),
+        ),
+      ).toBe(false);
+      expect(
+        meetsPrerequisites(
+          "remote",
+          makeRoleInput({
+            activeRemoteOps: 2,
+            remoteNetScore: 15,
+          }),
+        ),
+      ).toBe(true);
     });
   });
 
@@ -228,9 +294,13 @@ describe("role-evaluation.ts", () => {
     it("高 RCL + 高储备 + 正净流 → 推荐 CORE", () => {
       const input = makeRoleInput({
         profile: makeProfile({
-          rcl: 8, storageRatio: 0.7, netFlow: 10, riskBuffer: 2000,
+          rcl: 8,
+          storageRatio: 0.7,
+          netFlow: 10,
+          riskBuffer: 2000,
         }),
-        activeRemoteOps: 0, remoteNetScore: 0,
+        activeRemoteOps: 0,
+        remoteNetScore: 0,
       });
       const result = evaluateRoomRole(input);
       expect(result.recommendedRole).toBe("core");
@@ -240,12 +310,17 @@ describe("role-evaluation.ts", () => {
     it("高效率 + 高产能 → 推荐 PRODUCTION（当 CORE 分数低时）", () => {
       const input = makeRoleInput({
         profile: makeProfile({
-          rcl: 5, efficiency: 0.9, estimatedIncome: 18,
-          netFlow: 3, storageRatio: 0.3, riskBuffer: 300,
+          rcl: 5,
+          efficiency: 0.9,
+          estimatedIncome: 18,
+          netFlow: 3,
+          storageRatio: 0.3,
+          riskBuffer: 300,
         }),
         empireAvgIncome: 10,
         empireAvgEfficiency: 0.5,
-        activeRemoteOps: 0, remoteNetScore: 0,
+        activeRemoteOps: 0,
+        remoteNetScore: 0,
       });
       const result = evaluateRoomRole(input);
       // RCL5 → CORE 前置条件不满足 → PRODUCTION 应该胜出
@@ -257,15 +332,20 @@ describe("role-evaluation.ts", () => {
     it("有 terminal + 位于地理中心 → 推荐 SUPPORT", () => {
       const input = makeRoleInput({
         profile: makeProfile({
-          rcl: 6, efficiency: 0.5, estimatedIncome: 10,
-          netFlow: 1, storageRatio: 0.3, riskBuffer: 300,
+          rcl: 6,
+          efficiency: 0.5,
+          estimatedIncome: 10,
+          netFlow: 1,
+          storageRatio: 0.3,
+          riskBuffer: 300,
         }),
         hasTerminal: true,
         avgDistanceToOthers: 0.5, // 非常中心
         otherRoomCount: 4,
         empireAvgIncome: 14,
         empireAvgEfficiency: 0.7,
-        activeRemoteOps: 0, remoteNetScore: 0,
+        activeRemoteOps: 0,
+        remoteNetScore: 0,
       });
       const result = evaluateRoomRole(input);
       // SUPPORT 分数应该高于 PRODUCTION（因为效率/产能低但位置中心）
@@ -276,8 +356,12 @@ describe("role-evaluation.ts", () => {
     it("多远矿 + 高远矿收益 → 推荐 REMOTE", () => {
       const input = makeRoleInput({
         profile: makeProfile({
-          rcl: 6, efficiency: 0.5, estimatedIncome: 8,
-          netFlow: 1, storageRatio: 0.3, riskBuffer: 300,
+          rcl: 6,
+          efficiency: 0.5,
+          estimatedIncome: 8,
+          netFlow: 1,
+          storageRatio: 0.3,
+          riskBuffer: 300,
         }),
         activeRemoteOps: 3,
         remoteNetScore: 25,
@@ -294,7 +378,9 @@ describe("role-evaluation.ts", () => {
     it("所有前置条件不满足 → fallback 到 CORE", () => {
       const input = makeRoleInput({
         profile: makeProfile({
-          rcl: 2, hasStorage: false, isStruggling: true,
+          rcl: 2,
+          hasStorage: false,
+          isStruggling: true,
           colonyState: "bootstrap",
         }),
       });
@@ -352,9 +438,11 @@ describe("role-stability.ts", () => {
 
   describe("decideRoleStability", () => {
     it("推荐角色 = 当前角色 → 保持不变", () => {
-      const evalResult = evaluateRoomRole(makeRoleInput({
-        profile: makeProfile({ rcl: 8, storageRatio: 0.7, netFlow: 10, riskBuffer: 2000 }),
-      }));
+      const evalResult = evaluateRoomRole(
+        makeRoleInput({
+          profile: makeProfile({ rcl: 8, storageRatio: 0.7, netFlow: 10, riskBuffer: 2000 }),
+        }),
+      );
       const state = createInitialRoleStability("core", 0.5, 1000);
       const decision = decideRoleStability(evalResult, state, DEFAULT_ROLE_STABILITY_CONFIG, 1100);
 

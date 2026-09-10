@@ -5,33 +5,33 @@
 // ═══════════════════════════════════════════════════════════
 
 export type OperationType =
-  | "DEFEND"             // 防守核心房
-  | "ESCORT"             // 远矿护航
-  | "HARASS"             // 骚扰敌方经济
-  | "SIEGE"              // 围困敌方房间
-  | "ASSAULT"            // 全面进攻
-  | "RAID"               // 快速掠夺
-  | "CONTROLLER_ATTACK"  // 攻击 controller
-  | "REMOTE_DENIAL"      // 远矿否定（阻止敌方远矿）
-  | "CLAIM"              // 占领房间
-  | "RESERVE"            // 储备 controller
-  | "RETREAT"            // 撤退保存力量
-  | "ABORT";             // 终止行动
+  | "DEFEND" // 防守核心房
+  | "ESCORT" // 远矿护航
+  | "HARASS" // 骚扰敌方经济
+  | "SIEGE" // 围困敌方房间
+  | "ASSAULT" // 全面进攻
+  | "RAID" // 快速掠夺
+  | "CONTROLLER_ATTACK" // 攻击 controller
+  | "REMOTE_DENIAL" // 远矿否定（阻止敌方远矿）
+  | "CLAIM" // 占领房间
+  | "RESERVE" // 储备 controller
+  | "RETREAT" // 撤退保存力量
+  | "ABORT"; // 终止行动
 
 // ═══════════════════════════════════════════════════════════
 // §2. WarObjective — 为什么打
 // ═══════════════════════════════════════════════════════════
 
 export type WarObjective =
-  | "DEFEND_CORE"              // 防守核心房
-  | "DEFEND_REMOTE"            // 防守远矿
-  | "DENY_RESOURCE"            // 否定敌方资源
-  | "BREAK_SIEGE"              // 打破围困
-  | "DESTROY_ECONOMIC_ASSET"   // 摧毁敌方经济设施
-  | "DISRUPT_LOGISTICS"        // 破坏敌方物流
-  | "CAPTURE_CONTROLLER"       // 占领 controller
-  | "SECURE_ROOM"              // 安全化房间
-  | "ESCORT_OPERATION"         // 护航运营
+  | "DEFEND_CORE" // 防守核心房
+  | "DEFEND_REMOTE" // 防守远矿
+  | "DENY_RESOURCE" // 否定敌方资源
+  | "BREAK_SIEGE" // 打破围困
+  | "DESTROY_ECONOMIC_ASSET" // 摧毁敌方经济设施
+  | "DISRUPT_LOGISTICS" // 破坏敌方物流
+  | "CAPTURE_CONTROLLER" // 占领 controller
+  | "SECURE_ROOM" // 安全化房间
+  | "ESCORT_OPERATION" // 护航运营
   | "RETREAT_AND_PRESERVE_FORCE"; // 撤退保存力量
 
 // ═══════════════════════════════════════════════════════════
@@ -39,27 +39,27 @@ export type WarObjective =
 // ═══════════════════════════════════════════════════════════
 
 export type OperationStatus =
-  | "PLANNED"     // 已规划，待授权
-  | "AUTHORIZED"  // 已授权，待准备
-  | "PREPARING"   // 准备中（集结/boost/物流）
-  | "READY"       // 准备就绪
-  | "ACTIVE"      // 正在执行
-  | "DEGRADED"    // 降级运行（部分能力缺失/情报过期）
-  | "ABORTING"    // 正在终止
-  | "COMPLETED"   // 成功完成
-  | "FAILED"      // 执行失败
-  | "EXPIRED";    // 超时过期
+  | "PLANNED" // 已规划，待授权
+  | "AUTHORIZED" // 已授权，待准备
+  | "PREPARING" // 准备中（集结/boost/物流）
+  | "READY" // 准备就绪
+  | "ACTIVE" // 正在执行
+  | "DEGRADED" // 降级运行（部分能力缺失/情报过期）
+  | "ABORTING" // 正在终止
+  | "COMPLETED" // 成功完成
+  | "FAILED" // 执行失败
+  | "EXPIRED"; // 超时过期
 
 // ═══════════════════════════════════════════════════════════
 // §4. OperationPriority
 // ═══════════════════════════════════════════════════════════
 
 export type OperationPriorityFactor =
-  | "EMERGENCY"      // 紧急（核心房被攻）
-  | "STRATEGIC"      // 战略目标
-  | "ECONOMIC"       // 经济保护
-  | "DEFENSIVE"      // 防御
-  | "OFFENSIVE"      // 进攻
+  | "EMERGENCY" // 紧急（核心房被攻）
+  | "STRATEGIC" // 战略目标
+  | "ECONOMIC" // 经济保护
+  | "DEFENSIVE" // 防御
+  | "OFFENSIVE" // 进攻
   | "OPPORTUNISTIC"; // 机会主义
 
 export interface OperationPriority {
@@ -110,13 +110,13 @@ export interface OperationConstraints {
 }
 
 export type AbortCondition =
-  | "ENEMY_CAPABILITY_INCREASED"   // 敌方能力显著增加
-  | "INTEL_STALE"                  // 情报过期
-  | "LOGISTICS_COLLAPSED"          // 物流崩溃
-  | "REINFORCEMENT_TIMEOUT"        // 增援超时
-  | "RECOVERY_NOT_GUARANTEED"      // 恢复不可保证
-  | "EXPECTED_VALUE_NEGATIVE"       // 期望价值转负
-  | "CASUALTY_EXCEEDED";           // 伤亡超限
+  | "ENEMY_CAPABILITY_INCREASED" // 敌方能力显著增加
+  | "INTEL_STALE" // 情报过期
+  | "LOGISTICS_COLLAPSED" // 物流崩溃
+  | "REINFORCEMENT_TIMEOUT" // 增援超时
+  | "RECOVERY_NOT_GUARANTEED" // 恢复不可保证
+  | "EXPECTED_VALUE_NEGATIVE" // 期望价值转负
+  | "CASUALTY_EXCEEDED"; // 伤亡超限
 
 // ═══════════════════════════════════════════════════════════
 // §7. MilitaryOperation
@@ -185,7 +185,11 @@ export function transition(
   if (!canTransition(op.status, to)) {
     return op; // 非法转换，不变
   }
-  return { ...op, status: to, evidence: [...op.evidence, `[${tick}] ${op.status}→${to}: ${reason}`] };
+  return {
+    ...op,
+    status: to,
+    evidence: [...op.evidence, `[${tick}] ${op.status}→${to}: ${reason}`],
+  };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -201,7 +205,10 @@ export interface PreparationGate {
   recoveryReady: boolean;
 }
 
-export function checkPreparationGate(gate: PreparationGate): { ready: boolean; blockers: string[] } {
+export function checkPreparationGate(gate: PreparationGate): {
+  ready: boolean;
+  blockers: string[];
+} {
   const blockers: string[] = [];
   if (!gate.forceReady) blockers.push("FORCE_NOT_READY");
   if (!gate.logisticsReady) blockers.push("LOGISTICS_NOT_READY");
@@ -249,9 +256,14 @@ export function makeOperationId(tick: number, seq: number): string {
 }
 
 export function isOffensive(type: OperationType): boolean {
-  return type === "ASSAULT" || type === "SIEGE" || type === "RAID"
-    || type === "CONTROLLER_ATTACK" || type === "REMOTE_DENIAL"
-    || type === "CLAIM";
+  return (
+    type === "ASSAULT" ||
+    type === "SIEGE" ||
+    type === "RAID" ||
+    type === "CONTROLLER_ATTACK" ||
+    type === "REMOTE_DENIAL" ||
+    type === "CLAIM"
+  );
 }
 
 export function isDefensive(type: OperationType): boolean {

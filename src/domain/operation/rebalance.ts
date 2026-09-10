@@ -56,9 +56,7 @@ export class RebalanceState {
   /** 添加事件到缓冲。 */
   addEvent(event: RebalanceEvent): void {
     // 去重：同类型 + 同房间的事件只保留最新
-    this.events = this.events.filter(
-      e => !(e.trigger === event.trigger && e.room === event.room)
-    );
+    this.events = this.events.filter(e => !(e.trigger === event.trigger && e.room === event.room));
     this.events.push(event);
   }
 
@@ -91,10 +89,7 @@ export class RebalanceState {
 
  * 纯函数。
  */
-export function decideRebalance(
-  state: RebalanceState,
-  tick: number,
-): RebalanceDecision {
+export function decideRebalance(state: RebalanceState, tick: number): RebalanceDecision {
   const events = state.getPendingEvents();
 
   if (events.length === 0) {

@@ -1,11 +1,14 @@
 /** Attacker 角色行为测试（R3 战时闭环进攻执行端 + R4 波次集结）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { attackerHold, attackerRole, markRetreat } from "../../../src/creeps/roles/attacker";
 import {
-  attackerHold,
-  attackerRole,
-  markRetreat,
-} from "../../../src/creeps/roles/attacker";
-import { mockContext, mockCreep, mockPos, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
+  mockContext,
+  mockCreep,
+  mockPos,
+  mockSnapshot,
+  mockStructure,
+  resetGlobals,
+} from "../../support/factories";
 import { CONFIG } from "../../../src/config";
 
 beforeEach(() => {

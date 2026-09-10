@@ -54,5 +54,5 @@ export function demandElasticity(price: number): number {
 export function logisticsElasticity(price: number): number {
   if (price <= 0.1) return 0.5;
   if (price >= 0.5) return 1.0;
-  return 0.5 + 0.5 * (price - 0.1) / 0.4;
+  return 0.5 + (0.5 * (price - 0.1)) / 0.4;
 }

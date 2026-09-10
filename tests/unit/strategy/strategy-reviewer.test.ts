@@ -1,6 +1,9 @@
 /** 策略复盘纯函数单元测试。 */
 import { describe, expect, it } from "vitest";
-import { reviewStrategy, type StrategyReviewInput } from "../../../src/domain/strategy/strategy-reviewer";
+import {
+  reviewStrategy,
+  type StrategyReviewInput,
+} from "../../../src/domain/strategy/strategy-reviewer";
 import { STRATEGY_BOUNDS } from "../../../src/domain/tuning/bounds";
 
 /** 构造默认输入（全部无异常状态）。 */
@@ -83,9 +86,7 @@ describe("reviewStrategy", () => {
       score: 0.9,
     }));
     const reserveHistory = Array.from({ length: 10 }, (_, i) => 100000 + i * 10000);
-    const result = reviewStrategy(
-      makeInput({ healthHistory, reserveHistory, tick: 10000 }),
-    );
+    const result = reviewStrategy(makeInput({ healthHistory, reserveHistory, tick: 10000 }));
     expect(result.suggestions).toHaveLength(1);
     expect(result.suggestions[0]!.param).toBe("posture.expandMinBucket");
     expect(result.suggestions[0]!.value).toBe(6500); // 7000 - 500
@@ -197,9 +198,7 @@ describe("reviewStrategy", () => {
       score: 0.9,
     }));
     const reserveHistory = Array.from({ length: 5 }, () => 100000); // 不足 10 个
-    const result = reviewStrategy(
-      makeInput({ healthHistory, reserveHistory, tick: 10000 }),
-    );
+    const result = reviewStrategy(makeInput({ healthHistory, reserveHistory, tick: 10000 }));
     expect(result.suggestions).toHaveLength(0);
   });
 
@@ -210,9 +209,7 @@ describe("reviewStrategy", () => {
       score: 0.9,
     }));
     const reserveHistory = Array.from({ length: 10 }, (_, i) => 100000 + i * 10000);
-    const result = reviewStrategy(
-      makeInput({ healthHistory, reserveHistory, tick: 10000 }),
-    );
+    const result = reviewStrategy(makeInput({ healthHistory, reserveHistory, tick: 10000 }));
     expect(result.suggestions).toHaveLength(0);
   });
 
@@ -223,9 +220,7 @@ describe("reviewStrategy", () => {
       score: 0.9,
     }));
     const reserveHistory = Array.from({ length: 10 }, (_, i) => 200000 - i * 10000); // 下降
-    const result = reviewStrategy(
-      makeInput({ healthHistory, reserveHistory, tick: 10000 }),
-    );
+    const result = reviewStrategy(makeInput({ healthHistory, reserveHistory, tick: 10000 }));
     expect(result.suggestions).toHaveLength(0);
   });
 });

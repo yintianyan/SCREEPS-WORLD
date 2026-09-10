@@ -52,7 +52,9 @@ describe("confidenceAt — 来源信任 × 时效双维派生", () => {
 
   it("威胁类字段（towers）走短窗 TTL——同年龄下动态字段 fact 而威胁字段已 stale", () => {
     const tick = 10_000 + ROOM_THREAT_TTL + 1;
-    const withTowers = makeEntry({ payload: { kind: "normal", status: "normal", towers: 3, lastSeen: 10_000 } });
+    const withTowers = makeEntry({
+      payload: { kind: "normal", status: "normal", towers: 3, lastSeen: 10_000 },
+    });
     expect(confidenceAt(withTowers, tick)).toBe("stale");
     const noTowers = makeEntry();
     expect(confidenceAt(noTowers, tick)).toBe("fact");
@@ -146,11 +148,16 @@ describe("老化与容量治理", () => {
     expect(upsertRoomEntry(map, makeEntry({ subject: "W5N7", observedAt: 200 }))).toBe(true);
     expect(map.get("W5N7")!.observedAt).toBe(200);
     // 同 tick 富化（pathCost 补算不前移 lastSeen）：覆盖但 observedAt 不变。
-    expect(upsertRoomEntry(map, makeEntry({
-      subject: "W5N7",
-      observedAt: 200,
-      payload: { kind: "normal", status: "normal", lastSeen: 200, pathCost: 42 },
-    }))).toBe(true);
+    expect(
+      upsertRoomEntry(
+        map,
+        makeEntry({
+          subject: "W5N7",
+          observedAt: 200,
+          payload: { kind: "normal", status: "normal", lastSeen: 200, pathCost: 42 },
+        }),
+      ),
+    ).toBe(true);
     expect(map.get("W5N7")!.payload.pathCost).toBe(42);
   });
 });

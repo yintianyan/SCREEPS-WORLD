@@ -114,7 +114,9 @@ const MULTI_HEALTH_CODES: Record<ResourceHealthStatus, number> = {
  * 只采集矿物（非 energy），energy 由现有 EnergyLedger 链路处理。
  * 遍历 storage / terminal / container / lab / factory 中的矿物存量。
  */
-function collectMineralStock(snapshot: import("../kernel/contracts").RoomSnapshot): Map<string, ResourceStockSnapshot> {
+function collectMineralStock(
+  snapshot: import("../kernel/contracts").RoomSnapshot,
+): Map<string, ResourceStockSnapshot> {
   const minerals = getAllMineralTypes();
   const result = new Map<string, ResourceStockSnapshot>();
 
@@ -185,16 +187,22 @@ function mapEnergyHealthToResourceHealth(
   h: "critical" | "deficit" | "stable" | "growing" | "healthy",
 ): ResourceHealthStatus {
   switch (h) {
-    case "critical": return "critical";
-    case "deficit": return "deficit";
-    case "stable": return "stable";
-    case "growing": return "stable";
-    case "healthy": return "healthy";
+    case "critical":
+      return "critical";
+    case "deficit":
+      return "deficit";
+    case "stable":
+      return "stable";
+    case "growing":
+      return "stable";
+    case "healthy":
+      return "healthy";
   }
 }
 
 /** heap 缓存的 Planner Input（供同 tick 内其他系统只读消费）。 */
-let cachedPlannerInput: { tick: number; input: ReturnType<typeof buildEmpirePlannerInput> } | undefined;
+let cachedPlannerInput:
+  { tick: number; input: ReturnType<typeof buildEmpirePlannerInput> } | undefined;
 
 /**
  * 查询口：返回最近一次 Empire Planner Input（同 tick 内缓存）。
@@ -305,11 +313,7 @@ export const empireEconomySystem: System = {
     const allSnapshots = Array.from(ctx.snapshots());
     const empireLedger = buildEmpireResourceLedger(allSnapshots);
     const energyHealthStatus = mapEnergyHealthToResourceHealth(health.health);
-    const multiHealth = evaluateMultiResourceHealth(
-      ctx.tick,
-      empireLedger,
-      energyHealthStatus,
-    );
+    const multiHealth = evaluateMultiResourceHealth(ctx.tick, empireLedger, energyHealthStatus);
     const bottlenecks = identifyBottlenecks(empireLedger);
 
     // 写入 globalCache 供其他系统消费
@@ -321,14 +325,21 @@ export const empireEconomySystem: System = {
 
     // 瓶颈资源编码
     const BOTTLENECK_CODES: Record<string, number> = {
-      energy: 0, U: 1, L: 2, K: 3, Z: 4, O: 5, H: 6, X: 7,
+      energy: 0,
+      U: 1,
+      L: 2,
+      K: 3,
+      Z: 4,
+      O: 5,
+      H: 6,
+      X: 7,
     };
-    const bottleneckCode = multiHealth.bottleneck !== null
-      ? (BOTTLENECK_CODES[multiHealth.bottleneck] ?? 99)
-      : 99;
-    const worstMineralHealthCode = multiHealth.worstMineralHealth !== null
-      ? (MULTI_HEALTH_CODES[multiHealth.worstMineralHealth] ?? 0)
-      : 4; // 无矿物数据时默认 healthy
+    const bottleneckCode =
+      multiHealth.bottleneck !== null ? (BOTTLENECK_CODES[multiHealth.bottleneck] ?? 99) : 99;
+    const worstMineralHealthCode =
+      multiHealth.worstMineralHealth !== null
+        ? (MULTI_HEALTH_CODES[multiHealth.worstMineralHealth] ?? 0)
+        : 4; // 无矿物数据时默认 healthy
 
     const snapshot: EmpireEconomySnapshot = {
       t: ctx.tick,
@@ -358,16 +369,22 @@ export const empireEconomySystem: System = {
     // ── 可观测性：变更时打日志 ──
     const prev = Memory.kernel.empireEconomy;
     if (prev?.er !== snapshot.er || prev?.h !== snapshot.h || prev?.mh !== snapshot.mh) {
-      const mineralInfo = multiHealth.worstMineral !== null
-        ? ` worstMineral=${multiHealth.worstMineral}:${multiHealth.worstMineralHealth}`
-        : "";
-      log.info("empire-economy", `empire-economy: health=${health.health} multiHealth=${multiHealth.health}` +
-        ` readiness=${readiness.readiness}` +
-        ` energy=${resourceView.totalEnergy} netFlow=${resourceView.totalNetFlow.toFixed(1)}` +
-        ` surplus=${imbalance.surplusCount} deficit=${imbalance.deficitCount}` +
-        ` safety=${safetyMargin.score.toFixed(2)}` +
-        mineralInfo +
-        (bottlenecks.length > 0 ? ` bottleneck=${bottlenecks[0]?.resource}(${bottlenecks[0]?.score.toFixed(2)})` : ""),);
+      const mineralInfo =
+        multiHealth.worstMineral !== null
+          ? ` worstMineral=${multiHealth.worstMineral}:${multiHealth.worstMineralHealth}`
+          : "";
+      log.info(
+        "empire-economy",
+        `empire-economy: health=${health.health} multiHealth=${multiHealth.health}` +
+          ` readiness=${readiness.readiness}` +
+          ` energy=${resourceView.totalEnergy} netFlow=${resourceView.totalNetFlow.toFixed(1)}` +
+          ` surplus=${imbalance.surplusCount} deficit=${imbalance.deficitCount}` +
+          ` safety=${safetyMargin.score.toFixed(2)}${mineralInfo}${
+            bottlenecks.length > 0
+              ? ` bottleneck=${bottlenecks[0]?.resource}(${bottlenecks[0]?.score.toFixed(2)})`
+              : ""
+          }`,
+      );
     }
   },
 };

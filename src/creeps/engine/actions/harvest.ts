@@ -17,7 +17,7 @@ import { classifyLinkRole, computeControllerLinkTarget } from "../../../domain/e
 export function harvestSource(): ActionCandidate<Source> {
   return {
     name: "harvest:source",
-    resolve: (ac) => {
+    resolve: ac => {
       const source = getSource(ac.creep, ac.snapshot);
       if (!source || source.energy === 0) return undefined;
       return source;
@@ -46,7 +46,7 @@ interface StationaryMineTarget {
 export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
   return {
     name: "harvest:stationary-mine",
-    resolve: (ac) => {
+    resolve: ac => {
       const source = getSource(ac.creep, ac.snapshot);
       if (!source) return undefined;
       const container = sourceAdjacentContainer(ac, source);
@@ -63,11 +63,12 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       // 站位：默认站 container 之上（range 0 倒能）或 source 旁。特例——source link 与 container
       // 分居 source 两侧、站 container 够不到 link（range>1）时，改站「贴 source 且贴 link」格，
       // 同 tick 倒进 link，能量经 link 网络瞬移入库，免去远距离 hauler 往返（source#1 病灶）。
-      const linkStand = linkUsable
-        && ac.creep.pos.getRangeTo(link.pos) > 1
-        && !(container && container.pos.getRangeTo(link.pos) <= 1)
-        ? findSourceLinkStand(ac, source, link)
-        : undefined;
+      const linkStand =
+        linkUsable &&
+        ac.creep.pos.getRangeTo(link.pos) > 1 &&
+        !(container && container.pos.getRangeTo(link.pos) <= 1)
+          ? findSourceLinkStand(ac, source, link)
+          : undefined;
       const standTarget: RoomPosition | { pos: RoomPosition } = linkStand ?? container ?? source;
 
       // 已在矿位 → 登记高优先级锚：站桩矿工让出矿位 = 采集吞吐崩塌，
@@ -80,9 +81,9 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       // harvest 与 repair 互斥（不能同 tick），空手时先采一 tick 攒能量、本 tick 不倒，下一 tick 即修；
       // 防止 source container 坍塌断链（P0 物流 / P2-7 不离岗）。
       if (
-        container
-        && ac.creep.pos.getRangeTo(container) <= 1
-        && container.hits < container.hitsMax * 0.8
+        container &&
+        ac.creep.pos.getRangeTo(container) <= 1 &&
+        container.hits < container.hitsMax * 0.8
       ) {
         if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
           ac.creep.repair(container);
@@ -111,15 +112,16 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
       }
       // 同 tick 倒能：link 优先，其次 container（均需 range<=1 且有空位）。
       if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-        const sink = linkUsable
-          && ac.creep.pos.getRangeTo(link) <= 1
-          && link.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-          ? link
-          : container
-            && ac.creep.pos.getRangeTo(container) <= 1
-            && container.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-            ? container
-            : undefined;
+        const sink =
+          linkUsable &&
+          ac.creep.pos.getRangeTo(link) <= 1 &&
+          link.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+            ? link
+            : container &&
+                ac.creep.pos.getRangeTo(container) <= 1 &&
+                container.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+              ? container
+              : undefined;
         if (sink) {
           ac.creep.transfer(sink, RESOURCE_ENERGY);
         } else if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
@@ -152,9 +154,7 @@ function linkHasOutlet(ac: ActionContext, link: StructureLink): boolean {
   }
   const ctrl = snap.controller;
   if (!ctrl || !ctrl.my) return false;
-  const ctrlLink = snap.links.find(
-    l => l.id !== link.id && l.pos.getRangeTo(ctrl.pos) <= 2,
-  );
+  const ctrlLink = snap.links.find(l => l.id !== link.id && l.pos.getRangeTo(ctrl.pos) <= 2);
   if (!ctrlLink) return false;
   const target = computeControllerLinkTarget(
     snap.rcl,
@@ -176,7 +176,11 @@ function linkHasOutlet(ac: ActionContext, link: StructureLink): boolean {
  * 扫 source 八邻域：非墙 + 距 link range<=1 + 非 link 本格 + 无阻挡结构 → 首个命中即返回；
  * 找不到（几何无解）返回 undefined，调用方回退 container 站位。
  */
-function findSourceLinkStand(ac: ActionContext, source: Source, link: StructureLink): RoomPosition | undefined {
+function findSourceLinkStand(
+  ac: ActionContext,
+  source: Source,
+  link: StructureLink,
+): RoomPosition | undefined {
   // 防御：无 getTerrain（异常上下文）时放弃 link 站位、回退 container，不抛错。
   if (typeof ac.creep.room.getTerrain !== "function") return undefined;
   const terrain = ac.creep.room.getTerrain();
@@ -209,7 +213,10 @@ function tileHasObstacleStructure(ac: ActionContext, x: number, y: number): bool
 }
 
 /** 找到与 source 相邻（range<=1）的 container（站桩倒能点）。 */
-function sourceAdjacentContainer(ac: ActionContext, source: Source): StructureContainer | undefined {
+function sourceAdjacentContainer(
+  ac: ActionContext,
+  source: Source,
+): StructureContainer | undefined {
   return ac.snapshot.containers.find(c => c.pos.getRangeTo(source.pos) <= 1);
 }
 
@@ -223,8 +230,9 @@ function sourceAdjacentLink(ac: ActionContext, source: Source): StructureLink | 
   const ctrlPt = ac.snapshot.controller?.pos;
   const storagePt = ac.snapshot.storage?.pos;
   return ac.snapshot.links.find(
-    l => l.pos.getRangeTo(source.pos) <= range
-      && classifyLinkRole(l.pos, sourcePts, ctrlPt, storagePt, range) === "source",
+    l =>
+      l.pos.getRangeTo(source.pos) <= range &&
+      classifyLinkRole(l.pos, sourcePts, ctrlPt, storagePt, range) === "source",
   );
 }
 
@@ -240,7 +248,7 @@ interface MineralTarget {
 export function harvestMineral(): ActionCandidate<MineralTarget> {
   return {
     name: "harvest:mineral",
-    resolve: (ac) => {
+    resolve: ac => {
       if (!ac.snapshot.extractor) return undefined;
       if (ac.snapshot.minerals.length === 0) return undefined;
       const mineral = ac.snapshot.minerals[0]!;
@@ -254,8 +262,12 @@ export function harvestMineral(): ActionCandidate<MineralTarget> {
       const container = ac.snapshot.containers.find(c => c.pos.getRangeTo(mineral.pos) <= 1);
       const standTarget: RoomPosition | { pos: RoomPosition } = container ?? mineral;
       runAction(ac.creep, standTarget, () => ac.creep.harvest(mineral), {
-        [ERR_NOT_ENOUGH_RESOURCES]: () => { ac.creep.memory.mode = "idle"; },
-        [ERR_TIRED]: () => { ac.creep.memory.mode = "idle"; },
+        [ERR_NOT_ENOUGH_RESOURCES]: () => {
+          ac.creep.memory.mode = "idle";
+        },
+        [ERR_TIRED]: () => {
+          ac.creep.memory.mode = "idle";
+        },
       });
     },
   };

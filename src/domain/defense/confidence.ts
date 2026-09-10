@@ -20,17 +20,17 @@ import { CONFIDENCE_VALUE } from "./player-intel";
  */
 export interface MultiDimensionalConfidence {
   /** 引擎事实置信度（nuke/body 可见性等引擎层 facts）。 */
-  factConfidence: number;      // 0-1
+  factConfidence: number; // 0-1
   /** 战斗能力解析置信度（body 是否完整可见、boost 是否识别）。 */
-  combatConfidence: number;    // 0-1
+  combatConfidence: number; // 0-1
   /** 意图推断置信度（基于证据链强度）。 */
-  intentConfidence: number;    // 0-1
+  intentConfidence: number; // 0-1
   /** 地形上下文置信度（是否有视野、地形数据是否完整）。 */
-  terrainConfidence: number;   // 0-1
+  terrainConfidence: number; // 0-1
   /** 玩家情报置信度（PlayerIntel 聚合后的置信度）。 */
-  intelConfidence: number;     // 0-1
+  intelConfidence: number; // 0-1
   /** 聚合后的总体置信度。 */
-  overallConfidence: number;   // 0-1
+  overallConfidence: number; // 0-1
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -121,9 +121,7 @@ export function computeTerrainConfidence(terrain: TerrainContext): number {
 
  * 从 PlayerIntelRecord.aggregatedConfidence 映射到 0-1 数值。
  */
-export function computeIntelConfidence(
-  playerIntel?: PlayerIntelRecord,
-): number {
+export function computeIntelConfidence(playerIntel?: PlayerIntelRecord): number {
   if (!playerIntel) return 0.0; // 无情报
 
   const value = CONFIDENCE_VALUE[playerIntel.aggregatedConfidence];
@@ -153,11 +151,11 @@ export function computeIntelConfidence(
  * ⚠ 禁止简单 average——必须用加权聚合 + 冲突处理。
  */
 export const CONFIDENCE_WEIGHTS = {
-  fact: 0.30,
+  fact: 0.3,
   combat: 0.25,
-  intent: 0.20,
+  intent: 0.2,
   terrain: 0.15,
-  intel: 0.10,
+  intel: 0.1,
 } as const;
 
 /**
@@ -219,9 +217,7 @@ export function aggregateConfidence(
  * A5.1 的 ThreatConfidence 有 4 个等级：fact / stale / inferred / unknown。
  * A5.2 扩展为 6 维，但需要向后兼容 A5.1 的 ThreatAssessment.confidence 字段。
  */
-export function toThreatConfidence(
-  overall: number,
-): "fact" | "stale" | "inferred" | "unknown" {
+export function toThreatConfidence(overall: number): "fact" | "stale" | "inferred" | "unknown" {
   if (overall >= 0.8) return "fact";
   if (overall >= 0.5) return "inferred";
   if (overall >= 0.2) return "stale";

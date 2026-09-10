@@ -62,13 +62,15 @@ describe("trySpawn — SP-1 recovery 能量预留", () => {
   it("P0 请求豁免预留 — 恢复 body 可动用全部能量", () => {
     // 能量恰为 200：P0 请求 200 应立即孵化（预留是留给它的）。
     const spawn = mockSpawn(200);
-    const queue = [makeRequest({
-      key: "worker:W7N4:0",
-      role: "worker",
-      priority: 0,
-      body: ["work", "carry", "move"] as BodyPartConstant[], // 200 能量
-      memory: { role: "worker", home: "W7N4", mode: "acquire" } as CreepMemory,
-    })];
+    const queue = [
+      makeRequest({
+        key: "worker:W7N4:0",
+        role: "worker",
+        priority: 0,
+        body: ["work", "carry", "move"] as BodyPartConstant[], // 200 能量
+        memory: { role: "worker", home: "W7N4", mode: "acquire" } as CreepMemory,
+      }),
+    ];
 
     trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 0);
 
@@ -90,12 +92,14 @@ describe("trySpawn — SP-1 recovery 能量预留", () => {
     // 不豁免的后果（rcl1-survival 回归）：1 采集者 + 满能量的房间
     // 永远孵不出第二只采集者，spawn 永久 idle。
     const spawn = mockSpawn(300);
-    const queue = [makeRequest({
-      key: "harvester:W7N4:0",
-      role: "harvester",
-      body: ["work", "work", "carry", "move"] as BodyPartConstant[], // 300
-      memory: { role: "harvester", home: "W7N4", mode: "acquire" } as CreepMemory,
-    })];
+    const queue = [
+      makeRequest({
+        key: "harvester:W7N4:0",
+        role: "harvester",
+        body: ["work", "work", "carry", "move"] as BodyPartConstant[], // 300
+        memory: { role: "harvester", home: "W7N4", mode: "acquire" } as CreepMemory,
+      }),
+    ];
 
     trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 1);
 
@@ -109,7 +113,9 @@ describe("trySpawn — 管线本体基线（补测试债）", () => {
     const spawn = mockSpawn(100);
     const queue = [
       makeRequest({
-        key: "worker:W7N4:0", role: "worker", priority: 0,
+        key: "worker:W7N4:0",
+        role: "worker",
+        priority: 0,
         body: Array(10).fill("work") as BodyPartConstant[], // 1000 能量，无法降级到 100
       }),
       makeRequest(),
@@ -138,9 +144,11 @@ describe("trySpawn — 管线本体基线（补测试债）", () => {
 
   it("body 超容量：retries 递增（走隔离路径）", () => {
     const spawn = mockSpawn(2000, 300); // 容量仅 300
-    const queue = [makeRequest({
-      body: Array(10).fill("carry") as BodyPartConstant[], // 500 > 容量 300
-    })];
+    const queue = [
+      makeRequest({
+        body: Array(10).fill("carry") as BodyPartConstant[], // 500 > 容量 300
+      }),
+    ];
 
     trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 3);
 
@@ -155,8 +163,18 @@ describe("trySpawn — SP-10 饥饿降级成本地板", () => {
   function starvedHauler(): SpawnRequest {
     return makeRequest({
       body: [
-        "carry", "carry", "carry", "carry", "carry", "carry",
-        "move", "move", "move", "move", "move", "move",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
       ] as BodyPartConstant[],
       createdAt: (globalThis as any).Game.time - 500,
     });
@@ -189,13 +207,15 @@ describe("trySpawn — SP-10 饥饿降级成本地板", () => {
   it("P0 生存路径豁免地板：降级产物 200 < 300 也速出保命", () => {
     // [3W,C,M] = 400，能量 250 → 降到 [W,C,M] = 200 < 地板，但 P0 豁免。
     const spawn = mockSpawn(250);
-    const queue = [makeRequest({
-      key: "worker:W7N4:0",
-      role: "worker",
-      priority: 0,
-      body: ["work", "work", "work", "carry", "move"] as BodyPartConstant[],
-      memory: { role: "worker", home: "W7N4", mode: "acquire" } as CreepMemory,
-    })];
+    const queue = [
+      makeRequest({
+        key: "worker:W7N4:0",
+        role: "worker",
+        priority: 0,
+        body: ["work", "work", "work", "carry", "move"] as BodyPartConstant[],
+        memory: { role: "worker", home: "W7N4", mode: "acquire" } as CreepMemory,
+      }),
+    ];
 
     trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 0);
 
@@ -220,8 +240,18 @@ describe("trySpawn — 泵断供降级（distributor 存活数 0）", () => {
       key: "distributor:W7N4:0",
       role: "distributor",
       body: [
-        "carry", "carry", "carry", "carry", "carry", "carry",
-        "move", "move", "move", "move", "move", "move",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
       ] as BodyPartConstant[],
       memory: { role: "distributor", home: "W7N4", mode: "acquire" } as CreepMemory,
     });
@@ -273,7 +303,13 @@ describe("trySpawn — ISSUE-007 reserve 不叠加", () => {
     // 能量 500 - reserve 200 = 300 ≥ 200（请求成本）→ 孵化成功。
     // 若叠加（600）：500-600 = -100 < 200 → 不孵化。
     (globalThis as any).Memory.rooms.W7N4.economy = {
-      t: 1000, nf: 0, cr: 500, rb: 100, dr: 0, ei: 50, ef: 70,
+      t: 1000,
+      nf: 0,
+      cr: 500,
+      rb: 100,
+      dr: 0,
+      ei: 50,
+      ef: 70,
     };
     const spawn = mockSpawn(500);
     const queue = [makeRequest()];

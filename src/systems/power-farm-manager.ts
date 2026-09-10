@@ -81,13 +81,16 @@ function maintainMission(ctx: TickContext, mission: PowerFarmMission): boolean {
   if (mission.phase === "strike") {
     const targetRoom = Game.rooms[mission.targetRoom];
     if (targetRoom) {
-      const pbAlive = targetRoom.find(FIND_STRUCTURES).some(
-        s => s.structureType === STRUCTURE_POWER_BANK,
-      );
+      const pbAlive = targetRoom
+        .find(FIND_STRUCTURES)
+        .some(s => s.structureType === STRUCTURE_POWER_BANK);
       if (!pbAlive) {
         mission.phase = "collect";
         recordEvent(EventKind.PowerFarmOutcome, mission.targetRoom, [4, mission.spawned]);
-        log.info("power-farm-manager", `power-farm: ${mission.targetRoom} PB 已消失，转 collect 阶段`,);
+        log.info(
+          "power-farm-manager",
+          `power-farm: ${mission.targetRoom} PB 已消失，转 collect 阶段`,
+        );
       }
     }
     if (mission.phase === "strike") {
@@ -172,22 +175,25 @@ function startFarmIfWorth(ctx: TickContext, existingMissions: readonly PowerFarm
   };
   Memory.kernel.powerFarmMissions.push(newMission);
   recordEvent(EventKind.PowerFarmOutcome, target.roomName, [4, 0]);
-  log.info("power-farm-manager", `power-farm: 开任务 ${target.home} → ${target.roomName} (dist=${target.linearDistance})`,);
+  log.info(
+    "power-farm-manager",
+    `power-farm: 开任务 ${target.home} → ${target.roomName} (dist=${target.linearDistance})`,
+  );
 }
 
 /** strike 阶段维持编队（attacker + healer，live+pending 编制补位）。 */
-function maintainSquad(
-  ctx: TickContext,
-  mission: PowerFarmMission,
-  healerCount: number,
-): void {
+function maintainSquad(ctx: TickContext, mission: PowerFarmMission, healerCount: number): void {
   const queue = Memory.rooms[mission.sponsor]?.spawnQueue;
   if (!queue) return;
   const cap = ctx.getSnapshot(mission.sponsor)?.energyCapacityAvailable ?? 1300;
 
   let attackerLive = 0;
   let healerLive = 0;
-  const squad = querySquad({ home: mission.sponsor, remoteTarget: mission.targetRoom, mission: "powerBank" });
+  const squad = querySquad({
+    home: mission.sponsor,
+    remoteTarget: mission.targetRoom,
+    mission: "powerBank",
+  });
   for (const e of squad) {
     if (e.role === "attacker") attackerLive++;
     else if (e.role === "healer") healerLive++;
@@ -263,9 +269,6 @@ function concludeMission(mission: PowerFarmMission, tick: number, reason: number
     removeRequestsByMission(queue, "powerBank");
     removeRequestsByMission(queue, "powerCollect");
   }
-  recordEvent(EventKind.PowerFarmOutcome, mission.targetRoom, [
-    reason,
-    mission.spawned ?? 0,
-  ]);
+  recordEvent(EventKind.PowerFarmOutcome, mission.targetRoom, [reason, mission.spawned ?? 0]);
   log.info("power-farm-manager", `power-farm: 收摊 ${mission.targetRoom} (reason=${reason})`);
 }

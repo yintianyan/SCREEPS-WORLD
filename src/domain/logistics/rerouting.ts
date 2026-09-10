@@ -90,11 +90,8 @@ function findDirectAlternates(
   excludeRouteId: string,
 ): Route[] {
   const all = cache.all();
-  return all.filter(r =>
-    r.from === from &&
-    r.to === to &&
-    r.routeId !== excludeRouteId &&
-    isRouteUsable(r.status),
+  return all.filter(
+    r => r.from === from && r.to === to && r.routeId !== excludeRouteId && isRouteUsable(r.status),
   );
 }
 
@@ -102,11 +99,7 @@ function findDirectAlternates(
  * 查找中转路线 from→via→to。
  * 需要 from→via 和 via→to 都可用。
  */
-function findRelayAlternates(
-  cache: RouteCache,
-  from: string,
-  to: string,
-): Route[] {
+function findRelayAlternates(cache: RouteCache, from: string, to: string): Route[] {
   // 获取从 from 出发的所有路由
   const fromRoutes = cache.fromRoom(from);
   // 获取到达 to 的所有路由

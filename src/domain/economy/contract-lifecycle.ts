@@ -11,8 +11,14 @@ import { isContractActive, isContractTerminal } from "./supply-contract";
  */
 const VALID_TRANSITIONS: ReadonlyMap<ContractStatus, ReadonlySet<ContractStatus>> = new Map([
   ["proposed", new Set(["active", "cancelled"]) as ReadonlySet<ContractStatus>],
-  ["active", new Set(["degraded", "suspended", "completed", "cancelled"]) as ReadonlySet<ContractStatus>],
-  ["degraded", new Set(["active", "suspended", "completed", "cancelled"]) as ReadonlySet<ContractStatus>],
+  [
+    "active",
+    new Set(["degraded", "suspended", "completed", "cancelled"]) as ReadonlySet<ContractStatus>,
+  ],
+  [
+    "degraded",
+    new Set(["active", "suspended", "completed", "cancelled"]) as ReadonlySet<ContractStatus>,
+  ],
   ["suspended", new Set(["active", "degraded", "cancelled"]) as ReadonlySet<ContractStatus>],
   ["completed", new Set() as ReadonlySet<ContractStatus>],
   ["cancelled", new Set() as ReadonlySet<ContractStatus>],
@@ -41,20 +47,17 @@ export function transitionContract(
   if (!canTransition(contract.status, newStatus)) {
     throw new Error(
       `Invalid contract transition: ${contract.status} → ${newStatus} ` +
-      `(contract ${contract.id})`,
+        `(contract ${contract.id})`,
     );
   }
 
   if (contract.status === newStatus) return contract; // 幂等
 
   const updatedAt = tick;
-  const activatedAt = newStatus === "active" && contract.activatedAt === undefined
-    ? tick
-    : contract.activatedAt;
+  const activatedAt =
+    newStatus === "active" && contract.activatedAt === undefined ? tick : contract.activatedAt;
 
-  const terminatedAt = isContractTerminal(newStatus)
-    ? tick
-    : contract.terminatedAt;
+  const terminatedAt = isContractTerminal(newStatus) ? tick : contract.terminatedAt;
 
   return {
     ...contract,
@@ -295,8 +298,9 @@ export function detectFault(
     if (producerShortfall && contract.consecutiveShortfall >= config.producerShortfallThreshold) {
       return {
         newStatus: "degraded",
-        reason: `producer storage ${producer.storageEnergy} < reserve ${contract.minimumReserve} ` +
-                `for ${contract.consecutiveShortfall} cycles`,
+        reason:
+          `producer storage ${producer.storageEnergy} < reserve ${contract.minimumReserve} ` +
+          `for ${contract.consecutiveShortfall} cycles`,
         changed: true,
       };
     }

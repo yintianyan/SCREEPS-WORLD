@@ -20,10 +20,7 @@ export const LINK_CONSTRAINED_RETRY_INTERVAL = 1000;
  * 状态转移：waiting → validating（替代 link 建成后开始灌能验证）。
  * 纯函数，实际 cache 写入由调用方负责。
  */
-export function transitionDismantlePlan(
-  plan: DismantlePlan,
-  tick: number,
-): DismantlePlan {
+export function transitionDismantlePlan(plan: DismantlePlan, tick: number): DismantlePlan {
   if (plan.state === "waiting") {
     return { ...plan, state: "validating", validatingSince: tick };
   }

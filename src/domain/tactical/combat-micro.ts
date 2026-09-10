@@ -26,7 +26,8 @@ export function assessCombatPressure(snapshot: MicroSnapshot): CombatPressure {
   const { enemies, members, terrain, terrainModifier, cohesion } = snapshot;
 
   const enemyPressure = enemies.reduce(
-    (s, e) => s + e.capability.attack + e.capability.rangedAttack, 0,
+    (s, e) => s + e.capability.attack + e.capability.rangedAttack,
+    0,
   );
   const totalHeal = members
     .filter(m => m.alive && m.role === "healer")
@@ -36,32 +37,58 @@ export function assessCombatPressure(snapshot: MicroSnapshot): CombatPressure {
   const healDemand = members
     .filter(m => m.alive && m.hits < m.hitsMax)
     .reduce((s, m) => s + (m.hitsMax - m.hits), 0);
-  const healPressure = totalHeal > 0 ? healDemand / totalHeal : (healDemand > 0 ? Infinity : 0);
+  const healPressure = totalHeal > 0 ? healDemand / totalHeal : healDemand > 0 ? Infinity : 0;
 
   const towerMap: Record<string, number> = {
-    NONE: 0, LOW: 0.2, MEDIUM: 0.5, HIGH: 0.8, CRITICAL: 1.0, UNKNOWN: 0.3,
+    NONE: 0,
+    LOW: 0.2,
+    MEDIUM: 0.5,
+    HIGH: 0.8,
+    CRITICAL: 1.0,
+    UNKNOWN: 0.3,
   };
   const towerPressure = towerMap[terrain.towerCoverage] ?? 0.3;
 
   const ourMobility = avgMobility(members);
   const enemyMobility = avgMobilityEnemies(enemies);
-  const mobilityPressure = ourMobility > 0 ? enemyMobility / ourMobility : (enemyMobility > 0 ? Infinity : 1);
+  const mobilityPressure =
+    ourMobility > 0 ? enemyMobility / ourMobility : enemyMobility > 0 ? Infinity : 1;
 
   const formMap: Record<string, number> = { INTACT: 0, DEGRADED: 1, BROKEN: 2, CRITICAL: 3 };
   const formationPressure = formMap[cohesion?.status ?? "INTACT"] ?? 0;
 
-  const retreatMap: Record<string, number> = { VERY_GOOD: 0, GOOD: 1, POOR: 2, CRITICAL: 3, UNKNOWN: 4 };
+  const retreatMap: Record<string, number> = {
+    VERY_GOOD: 0,
+    GOOD: 1,
+    POOR: 2,
+    CRITICAL: 3,
+    UNKNOWN: 4,
+  };
   const retreatPressure = retreatMap[terrain.retreatQuality] ?? 4;
 
   const weights = [0.2, 0.25, 0.15, 0.15, 0.1, 0.1, 0.05];
-  const values = [enemyPressure, damagePressure, Math.min(healPressure, 10), towerPressure * 1000, mobilityPressure * 100, formationPressure * 100, retreatPressure * 100];
+  const values = [
+    enemyPressure,
+    damagePressure,
+    Math.min(healPressure, 10),
+    towerPressure * 1000,
+    mobilityPressure * 100,
+    formationPressure * 100,
+    retreatPressure * 100,
+  ];
   let weightedSum = 0;
   for (let i = 0; i < weights.length; i++) weightedSum += weights[i]! * values[i]!;
   const aggregateRisk = weightedSum;
 
   return {
-    enemyPressure, damagePressure, healPressure, towerPressure,
-    mobilityPressure, formationPressure, retreatPressure, aggregateRisk,
+    enemyPressure,
+    damagePressure,
+    healPressure,
+    towerPressure,
+    mobilityPressure,
+    formationPressure,
+    retreatPressure,
+    aggregateRisk,
     reason: `enemy=${enemyPressure}, dmg=${damagePressure}, heal=${healPressure === Infinity ? "INF" : healPressure.toFixed(1)}, tower=${towerPressure}, mob=${mobilityPressure.toFixed(2)}, form=${formationPressure}, retreat=${retreatPressure}`,
   };
 }
@@ -83,7 +110,9 @@ export interface BodyAwareTacticalState {
 }
 
 export function deriveBodyAwareState(
-  capability: CombatCapability, role: string, enemyMobility: number,
+  capability: CombatCapability,
+  role: string,
+  enemyMobility: number,
 ): BodyAwareTacticalState {
   const hasAttack = capability.attack > 0;
   const hasRanged = capability.rangedAttack > 0;
@@ -105,11 +134,28 @@ export function deriveBodyAwareState(
 
   let minRange = 0;
   let maxRange = 1;
-  if (hasRanged) { minRange = 2; maxRange = 3; }
-  else if (hasHeal) { minRange = 1; maxRange = 3; }
-  else if (hasAttack) { minRange = 0; maxRange = 1; }
+  if (hasRanged) {
+    minRange = 2;
+    maxRange = 3;
+  } else if (hasHeal) {
+    minRange = 1;
+    maxRange = 3;
+  } else if (hasAttack) {
+    minRange = 0;
+    maxRange = 1;
+  }
 
-  return { canFight, canKite, canRetreat, canSupport, canChase, canHold, optimalRange, minRange, maxRange };
+  return {
+    canFight,
+    canKite,
+    canRetreat,
+    canSupport,
+    canChase,
+    canHold,
+    optimalRange,
+    minRange,
+    maxRange,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -117,8 +163,15 @@ export function deriveBodyAwareState(
 // ═══════════════════════════════════════════════════════════
 
 export type MicroActionType =
-  | "RETREAT" | "SURVIVAL" | "HEAL_SUPPORT" | "ATTACK_RANGE"
-  | "KITE" | "FORMATION" | "REPOSITION" | "PATROL" | "HOLD";
+  | "RETREAT"
+  | "SURVIVAL"
+  | "HEAL_SUPPORT"
+  | "ATTACK_RANGE"
+  | "KITE"
+  | "FORMATION"
+  | "REPOSITION"
+  | "PATROL"
+  | "HOLD";
 
 export interface KiteIntent {
   readonly creepId: string;
@@ -293,8 +346,13 @@ export function planCombatMicro(snapshot: MicroSnapshot): MicroPlan {
   if (warPosture !== "war") {
     return buildEmptyMicroPlan(snapshot, `warPosture=${warPosture} → no offensive micro`);
   }
-  if (tacticalState === "RETREATING" || tacticalState === "DISENGAGING" ||
-      tacticalState === "REGROUPING" || tacticalState === "COMPLETED" || tacticalState === "ABORTED") {
+  if (
+    tacticalState === "RETREATING" ||
+    tacticalState === "DISENGAGING" ||
+    tacticalState === "REGROUPING" ||
+    tacticalState === "COMPLETED" ||
+    tacticalState === "ABORTED"
+  ) {
     return buildEmptyMicroPlan(snapshot, `tacticalState=${tacticalState} → no aggressive micro`);
   }
 
@@ -313,7 +371,8 @@ export function planCombatMicro(snapshot: MicroSnapshot): MicroPlan {
     if (cs === "BROKEN" || cs === "CRITICAL") {
       const deviating = computeDeviatingMembers(snapshot);
       reformIntents.push({
-        squadId, reformType: cs === "CRITICAL" ? "RETREAT" : "REGROUP",
+        squadId,
+        reformType: cs === "CRITICAL" ? "RETREAT" : "REGROUP",
         deviatingMembers: deviating,
         reason: `cohesion ${cs}: ${snapshot.cohesion.reason}`,
         tick,
@@ -322,8 +381,11 @@ export function planCombatMicro(snapshot: MicroSnapshot): MicroPlan {
       const deviating = computeDeviatingMembers(snapshot);
       if (deviating.length > 0) {
         reformIntents.push({
-          squadId, reformType: "REFORM", deviatingMembers: deviating,
-          reason: `cohesion DEGRADED: reform ${deviating.length} members`, tick,
+          squadId,
+          reformType: "REFORM",
+          deviatingMembers: deviating,
+          reason: `cohesion DEGRADED: reform ${deviating.length} members`,
+          tick,
         });
       }
     }
@@ -350,15 +412,31 @@ export function planCombatMicro(snapshot: MicroSnapshot): MicroPlan {
     if (towerIntent) towerIntents.push(towerIntent);
 
     const decision = arbitrateMicro(
-      member, snapshot, pressure, attackIntent, kiteIntent,
-      rangeIntent, reformIntents[0] ?? null, protectIntents[0] ?? null, towerIntent,
+      member,
+      snapshot,
+      pressure,
+      attackIntent,
+      kiteIntent,
+      rangeIntent,
+      reformIntents[0] ?? null,
+      protectIntents[0] ?? null,
+      towerIntent,
     );
     decisions.push(decision);
   }
 
   const plan: MicroPlan = {
-    squadId, tick, pressure, decisions, kiteIntents, rangeIntents,
-    switchIntents, protectIntents, reformIntents, towerIntents, decisionHash: "",
+    squadId,
+    tick,
+    pressure,
+    decisions,
+    kiteIntents,
+    rangeIntents,
+    switchIntents,
+    protectIntents,
+    reformIntents,
+    towerIntents,
+    decisionHash: "",
   };
   return { ...plan, decisionHash: microPlanHash(plan) };
 }
@@ -399,25 +477,72 @@ function arbitrateMicro(
   // Retreat state OR tower CRITICAL OR formation CRITICAL
   if (snapshot.tacticalState === "RETREATING" || snapshot.tacticalState === "DISENGAGING") {
     rejected.push({ action: "ATTACK_RANGE", reason: "retreating → no attack" });
-    return buildDecision(member, snapshot, "RETREAT", null, 1, false, null, rejected,
-      `tacticalState=${snapshot.tacticalState} → retreat`, 1.0, tick);
+    return buildDecision(
+      member,
+      snapshot,
+      "RETREAT",
+      null,
+      1,
+      false,
+      null,
+      rejected,
+      `tacticalState=${snapshot.tacticalState} → retreat`,
+      1.0,
+      tick,
+    );
   }
   if (towerIntent?.advisedAction === "RETREAT") {
     rejected.push({ action: "ATTACK_RANGE", reason: "tower CRITICAL → retreat" });
-    return buildDecision(member, snapshot, "RETREAT", null, 1, false, null, rejected,
-      `tower=${towerIntent.towerExposure} → retreat`, 0.9, tick);
+    return buildDecision(
+      member,
+      snapshot,
+      "RETREAT",
+      null,
+      1,
+      false,
+      null,
+      rejected,
+      `tower=${towerIntent.towerExposure} → retreat`,
+      0.9,
+      tick,
+    );
   }
   if (reformIntent?.reformType === "RETREAT") {
     rejected.push({ action: "ATTACK_RANGE", reason: "formation CRITICAL → retreat" });
-    return buildDecision(member, snapshot, "RETREAT", null, 1, false, null, rejected,
-      reformIntent.reason, 0.9, tick);
+    return buildDecision(
+      member,
+      snapshot,
+      "RETREAT",
+      null,
+      1,
+      false,
+      null,
+      rejected,
+      reformIntent.reason,
+      0.9,
+      tick,
+    );
   }
 
   // ── 2. SURVIVAL ── hp < 0.2 且 damagePressure > 0
   if (hpRatio < 0.2 && pressure.damagePressure > 0 && member.bodyState.canRetreat) {
-    rejected.push({ action: "ATTACK_RANGE", reason: `hp=${hpRatio.toFixed(2)} < 0.2 → survival retreat` });
-    return buildDecision(member, snapshot, "SURVIVAL", null, 1, false, null, rejected,
-      `hp ratio ${hpRatio.toFixed(2)} + damage pressure → survival`, 0.95, tick);
+    rejected.push({
+      action: "ATTACK_RANGE",
+      reason: `hp=${hpRatio.toFixed(2)} < 0.2 → survival retreat`,
+    });
+    return buildDecision(
+      member,
+      snapshot,
+      "SURVIVAL",
+      null,
+      1,
+      false,
+      null,
+      rejected,
+      `hp ratio ${hpRatio.toFixed(2)} + damage pressure → survival`,
+      0.95,
+      tick,
+    );
   }
 
   // ── 3. HEAL_SUPPORT ── healer 且有受伤队友
@@ -425,8 +550,19 @@ function arbitrateMicro(
     const wounded = snapshot.members.find(m => m.alive && m.hits < m.hitsMax * 0.5);
     if (wounded) {
       rejected.push({ action: "ATTACK_RANGE", reason: "healer → heal support" });
-      return buildDecision(member, snapshot, "HEAL_SUPPORT", null, 0, false, "HEAL", rejected,
-        `healer healing ${wounded.name}`, 0.85, tick);
+      return buildDecision(
+        member,
+        snapshot,
+        "HEAL_SUPPORT",
+        null,
+        0,
+        false,
+        "HEAL",
+        rejected,
+        `healer healing ${wounded.name}`,
+        0.85,
+        tick,
+      );
     }
   }
 
@@ -436,61 +572,158 @@ function arbitrateMicro(
     // Tower AVOID 时降低攻击优先级
     if (towerIntent?.advisedAction === "AVOID" && pressure.towerPressure > 0.5) {
       rejected.push({ action: "ATTACK_RANGE", reason: "tower avoidance priority" });
-      return buildDecision(member, snapshot, "REPOSITION", attackIntent.targetId, 1, false, null, rejected,
-        `tower avoid while target in range`, 0.7, tick);
+      return buildDecision(
+        member,
+        snapshot,
+        "REPOSITION",
+        attackIntent.targetId,
+        1,
+        false,
+        null,
+        rejected,
+        `tower avoid while target in range`,
+        0.7,
+        tick,
+      );
     }
     // Kite urgency 高时优先 kite
     if (kiteIntent && kiteIntent.urgency > 0.7 && member.bodyState.canKite) {
-      rejected.push({ action: "ATTACK_RANGE", reason: `kite urgency=${kiteIntent.urgency.toFixed(2)} > 0.7` });
-      return buildDecision(member, snapshot, "KITE", kiteIntent.targetId, kiteIntent.direction, false, null, rejected,
-        kiteIntent.reason, kiteIntent.confidence, tick);
+      rejected.push({
+        action: "ATTACK_RANGE",
+        reason: `kite urgency=${kiteIntent.urgency.toFixed(2)} > 0.7`,
+      });
+      return buildDecision(
+        member,
+        snapshot,
+        "KITE",
+        kiteIntent.targetId,
+        kiteIntent.direction,
+        false,
+        null,
+        rejected,
+        kiteIntent.reason,
+        kiteIntent.confidence,
+        tick,
+      );
     }
     // 正常攻击
     rejected.push({ action: "KITE", reason: "in range → attack priority" });
-    return buildDecision(member, snapshot, "ATTACK_RANGE", attackIntent.targetId, 0, true, attackIntent.attackType, rejected,
-      `attack target ${attackIntent.targetId}`, 0.85, tick);
+    return buildDecision(
+      member,
+      snapshot,
+      "ATTACK_RANGE",
+      attackIntent.targetId,
+      0,
+      true,
+      attackIntent.attackType,
+      rejected,
+      `attack target ${attackIntent.targetId}`,
+      0.85,
+      tick,
+    );
   }
 
   // ── 5. KITE ──
   if (kiteIntent && member.bodyState.canKite && kiteIntent.direction === 1) {
     rejected.push({ action: "FORMATION", reason: "kite priority over formation" });
-    return buildDecision(member, snapshot, "KITE", kiteIntent.targetId, kiteIntent.direction, false, null, rejected,
-      kiteIntent.reason, kiteIntent.confidence, tick);
+    return buildDecision(
+      member,
+      snapshot,
+      "KITE",
+      kiteIntent.targetId,
+      kiteIntent.direction,
+      false,
+      null,
+      rejected,
+      kiteIntent.reason,
+      kiteIntent.confidence,
+      tick,
+    );
   }
 
   // ── 6. FORMATION ──
-  if (reformIntent && (reformIntent.reformType === "REFORM" || reformIntent.reformType === "REGROUP")) {
+  if (
+    reformIntent &&
+    (reformIntent.reformType === "REFORM" || reformIntent.reformType === "REGROUP")
+  ) {
     const isDeviating = reformIntent.deviatingMembers.includes(member.name);
     if (isDeviating || reformIntent.reformType === "REGROUP") {
       rejected.push({ action: "REPOSITION", reason: "formation reform priority" });
-      return buildDecision(member, snapshot, "FORMATION", null, 0, false, null, rejected,
-        reformIntent.reason, 0.75, tick);
+      return buildDecision(
+        member,
+        snapshot,
+        "FORMATION",
+        null,
+        0,
+        false,
+        null,
+        rejected,
+        reformIntent.reason,
+        0.75,
+        tick,
+      );
     }
   }
 
   // ── 7. REPOSITION ── tower AVOID
   if (towerIntent?.advisedAction === "AVOID") {
     rejected.push({ action: "PATROL", reason: "tower avoid → reposition" });
-    return buildDecision(member, snapshot, "REPOSITION", null, 1, false, null, rejected,
-      towerIntent.reason, 0.7, tick);
+    return buildDecision(
+      member,
+      snapshot,
+      "REPOSITION",
+      null,
+      1,
+      false,
+      null,
+      rejected,
+      towerIntent.reason,
+      0.7,
+      tick,
+    );
   }
 
   // ── 8. PATROL / HOLD ──
   if (attackIntent && attackIntent.requiresMovement) {
     // 需要移动接近目标
-    return buildDecision(member, snapshot, "REPOSITION", attackIntent.targetId, -1, false, null, [],
-      `move to engage target ${attackIntent.targetId}`, 0.6, tick);
+    return buildDecision(
+      member,
+      snapshot,
+      "REPOSITION",
+      attackIntent.targetId,
+      -1,
+      false,
+      null,
+      [],
+      `move to engage target ${attackIntent.targetId}`,
+      0.6,
+      tick,
+    );
   }
 
-  return buildDecision(member, snapshot, "HOLD", null, 0, false, null, [],
-    `no action — hold position`, 0.5, tick);
+  return buildDecision(
+    member,
+    snapshot,
+    "HOLD",
+    null,
+    0,
+    false,
+    null,
+    [],
+    `no action — hold position`,
+    0.5,
+    tick,
+  );
 }
 
 // ═══════════════════════════════════════════════════════════
 // §9. 微操评估辅助函数
 // ═══════════════════════════════════════════════════════════
 
-function evaluateKiteIntent(member: MicroMemberSnapshot, snapshot: MicroSnapshot): KiteIntent | null {
+function evaluateKiteIntent(
+  member: MicroMemberSnapshot,
+  snapshot: MicroSnapshot,
+): KiteIntent | null {
   if (!member.bodyState.canKite) return null;
   let nearestThreat: MicroEnemySnapshot | null = null;
   let nearestDist = Infinity;
@@ -498,7 +731,10 @@ function evaluateKiteIntent(member: MicroMemberSnapshot, snapshot: MicroSnapshot
     if (enemy.room !== member.room) continue;
     if (enemy.capability.attack <= 0) continue;
     const dist = chebyshevDist(member.pos, enemy.pos);
-    if (dist <= 2 && dist < nearestDist) { nearestDist = dist; nearestThreat = enemy; }
+    if (dist <= 2 && dist < nearestDist) {
+      nearestDist = dist;
+      nearestThreat = enemy;
+    }
   }
   if (!nearestThreat) return null;
   const desiredRange = member.bodyState.maxRange;
@@ -506,32 +742,54 @@ function evaluateKiteIntent(member: MicroMemberSnapshot, snapshot: MicroSnapshot
   const direction = currentRange < desiredRange ? 1 : 0;
   const urgency = currentRange <= 1 ? 1.0 : Math.max(0, 1 - (currentRange - 1) / 2);
   return {
-    creepId: member.name, targetId: nearestThreat.id, desiredRange, currentRange,
-    direction, urgency, reason: `kite: enemy melee at dist=${currentRange}, desired=${desiredRange}`,
-    confidence: 0.8, tick: snapshot.tick,
+    creepId: member.name,
+    targetId: nearestThreat.id,
+    desiredRange,
+    currentRange,
+    direction,
+    urgency,
+    reason: `kite: enemy melee at dist=${currentRange}, desired=${desiredRange}`,
+    confidence: 0.8,
+    tick: snapshot.tick,
   };
 }
 
 function evaluateRangeControlIntent(
-  member: MicroMemberSnapshot, snapshot: MicroSnapshot, attackIntent: AttackIntent | undefined,
+  member: MicroMemberSnapshot,
+  snapshot: MicroSnapshot,
+  attackIntent: AttackIntent | undefined,
 ): RangeControlIntent | null {
   if (!attackIntent || attackIntent.attackType === "NO_ATTACK") return null;
   const target = snapshot.enemies.find(e => e.id === attackIntent.targetId);
   if (!target || target.room !== member.room) return null;
   const currentRange = chebyshevDist(member.pos, target.pos);
   const desiredRange = member.bodyState.optimalRange;
-  const inOptimalRange = currentRange >= member.bodyState.minRange && currentRange <= member.bodyState.maxRange;
+  const inOptimalRange =
+    currentRange >= member.bodyState.minRange && currentRange <= member.bodyState.maxRange;
   const requiresMovement = !inOptimalRange;
-  const moveDirection = currentRange < member.bodyState.minRange ? 1 : (currentRange > member.bodyState.maxRange ? -1 : 0);
+  const moveDirection =
+    currentRange < member.bodyState.minRange
+      ? 1
+      : currentRange > member.bodyState.maxRange
+        ? -1
+        : 0;
   return {
-    creepId: member.name, targetId: target.id, desiredRange, currentRange,
-    inOptimalRange, requiresMovement, moveDirection,
-    reason: `range: cur=${currentRange}, desired=${desiredRange}, inRange=${inOptimalRange}`, tick: snapshot.tick,
+    creepId: member.name,
+    targetId: target.id,
+    desiredRange,
+    currentRange,
+    inOptimalRange,
+    requiresMovement,
+    moveDirection,
+    reason: `range: cur=${currentRange}, desired=${desiredRange}, inRange=${inOptimalRange}`,
+    tick: snapshot.tick,
   };
 }
 
 function evaluateTargetSwitchIntent(
-  member: MicroMemberSnapshot, snapshot: MicroSnapshot, attackIntent: AttackIntent | undefined,
+  member: MicroMemberSnapshot,
+  snapshot: MicroSnapshot,
+  attackIntent: AttackIntent | undefined,
 ): TargetSwitchIntent | null {
   if (!attackIntent || !attackIntent.targetId) return null;
   const tick = snapshot.tick;
@@ -541,9 +799,15 @@ function evaluateTargetSwitchIntent(
   const currentTarget = snapshot.enemies.find(e => e.id === currentTargetId);
   if (!currentTarget) {
     return {
-      creepId: member.name, currentTargetId, candidateTargetId: null,
-      switchScore: Infinity, switchMargin: 0, lockUntil: 0, shouldSwitch: true,
-      reason: "current target disappeared → switch", tick,
+      creepId: member.name,
+      currentTargetId,
+      candidateTargetId: null,
+      switchScore: Infinity,
+      switchMargin: 0,
+      lockUntil: 0,
+      shouldSwitch: true,
+      reason: "current target disappeared → switch",
+      tick,
     };
   }
   let bestCandidate: MicroEnemySnapshot | null = null;
@@ -552,7 +816,10 @@ function evaluateTargetSwitchIntent(
     if (enemy.id === currentTargetId) continue;
     if (enemy.room !== member.room) continue;
     const score = scoreTargetForMicro(enemy, member, snapshot);
-    if (score > bestScore) { bestScore = score; bestCandidate = enemy; }
+    if (score > bestScore) {
+      bestScore = score;
+      bestCandidate = enemy;
+    }
   }
   const currentScore = scoreTargetForMicro(currentTarget, member, snapshot);
   const switchScore = bestCandidate ? bestScore - currentScore : 0;
@@ -560,29 +827,50 @@ function evaluateTargetSwitchIntent(
   let shouldSwitch = false;
   let reason = `locked until ${lockUntil}`;
   if (isLocked) {
-    if (switchScore > switchMargin * 2) { shouldSwitch = true; reason = `switch despite lock: score=${switchScore.toFixed(1)} > 2x margin`; }
+    if (switchScore > switchMargin * 2) {
+      shouldSwitch = true;
+      reason = `switch despite lock: score=${switchScore.toFixed(1)} > 2x margin`;
+    }
   } else {
-    if (switchScore > switchMargin) { shouldSwitch = true; reason = `switch: score=${switchScore.toFixed(1)} > margin=${switchMargin.toFixed(1)}`; }
-    else { reason = `keep: score=${switchScore.toFixed(1)} <= margin=${switchMargin.toFixed(1)}`; }
+    if (switchScore > switchMargin) {
+      shouldSwitch = true;
+      reason = `switch: score=${switchScore.toFixed(1)} > margin=${switchMargin.toFixed(1)}`;
+    } else {
+      reason = `keep: score=${switchScore.toFixed(1)} <= margin=${switchMargin.toFixed(1)}`;
+    }
   }
   return {
-    creepId: member.name, currentTargetId, candidateTargetId: bestCandidate?.id ?? null,
-    switchScore, switchMargin, lockUntil: shouldSwitch ? tick + 5 : lockUntil,
-    shouldSwitch, reason, tick,
+    creepId: member.name,
+    currentTargetId,
+    candidateTargetId: bestCandidate?.id ?? null,
+    switchScore,
+    switchMargin,
+    lockUntil: shouldSwitch ? tick + 5 : lockUntil,
+    shouldSwitch,
+    reason,
+    tick,
   };
 }
 
-function evaluateTowerAvoidanceIntent(member: MicroMemberSnapshot, snapshot: MicroSnapshot): TowerAvoidanceIntent | null {
+function evaluateTowerAvoidanceIntent(
+  member: MicroMemberSnapshot,
+  snapshot: MicroSnapshot,
+): TowerAvoidanceIntent | null {
   const tc = snapshot.terrain.towerCoverage;
   const df = snapshot.terrainModifier.towerDamageFactor;
   let act: "AVOID" | "PROCEED" | "RETREAT";
   if (tc === "CRITICAL") act = "RETREAT";
-  else if (tc === "HIGH" || tc === "MEDIUM") act = (member.bodyState.canRetreat && df > 0.6) ? "AVOID" : "PROCEED";
+  else if (tc === "HIGH" || tc === "MEDIUM")
+    act = member.bodyState.canRetreat && df > 0.6 ? "AVOID" : "PROCEED";
   else act = "PROCEED";
   if (act === "PROCEED" && df === 0) return null;
   return {
-    creepId: member.name, towerExposure: tc, damageFactor: df, advisedAction: act,
-    reason: `tower=${tc}, df=${df.toFixed(2)} → ${act}`, tick: snapshot.tick,
+    creepId: member.name,
+    towerExposure: tc,
+    damageFactor: df,
+    advisedAction: act,
+    reason: `tower=${tc}, df=${df.toFixed(2)} → ${act}`,
+    tick: snapshot.tick,
   };
 }
 
@@ -596,12 +884,17 @@ function assessHealerProtection(snapshot: MicroSnapshot): ProtectIntent | null {
       const dist = chebyshevDist(healer.pos, enemy.pos);
       if (dist <= 2) {
         const protectors = snapshot.members
-          .filter(m => m.alive && m.role !== "healer" && m.bodyState.canFight && m.room === healer.room)
+          .filter(
+            m => m.alive && m.role !== "healer" && m.bodyState.canFight && m.room === healer.room,
+          )
           .map(m => m.name);
         return {
-          healerId: healer.name, threatId: enemy.id, protectors,
+          healerId: healer.name,
+          threatId: enemy.id,
+          protectors,
           urgency: dist <= 1 ? 1.0 : 0.7,
-          reason: `healer ${healer.name} threatened by ${enemy.id} at dist=${dist}`, tick: snapshot.tick,
+          reason: `healer ${healer.name} threatened by ${enemy.id} at dist=${dist}`,
+          tick: snapshot.tick,
         };
       }
     }
@@ -615,33 +908,65 @@ function assessHealerProtection(snapshot: MicroSnapshot): ProtectIntent | null {
 
 function buildEmptyMicroPlan(snapshot: MicroSnapshot, reason: string): MicroPlan {
   const plan: MicroPlan = {
-    squadId: snapshot.squadId, tick: snapshot.tick,
+    squadId: snapshot.squadId,
+    tick: snapshot.tick,
     pressure: {
-      enemyPressure: 0, damagePressure: 0, healPressure: 0, towerPressure: 0,
-      mobilityPressure: 0, formationPressure: 0, retreatPressure: 0, aggregateRisk: 0, reason,
+      enemyPressure: 0,
+      damagePressure: 0,
+      healPressure: 0,
+      towerPressure: 0,
+      mobilityPressure: 0,
+      formationPressure: 0,
+      retreatPressure: 0,
+      aggregateRisk: 0,
+      reason,
     },
-    decisions: [], kiteIntents: [], rangeIntents: [], switchIntents: [],
-    protectIntents: [], reformIntents: [], towerIntents: [], decisionHash: "",
+    decisions: [],
+    kiteIntents: [],
+    rangeIntents: [],
+    switchIntents: [],
+    protectIntents: [],
+    reformIntents: [],
+    towerIntents: [],
+    decisionHash: "",
   };
   return { ...plan, decisionHash: microPlanHash(plan) };
 }
 
 function buildDecision(
-  member: MicroMemberSnapshot, snapshot: MicroSnapshot,
-  action: MicroActionType, targetId: string | null, moveDirection: number,
-  executeAttack: boolean, attackType: string | null,
-  rejected: readonly MicroRejectedAlternative[], reason: string, confidence: number, tick: number,
+  member: MicroMemberSnapshot,
+  snapshot: MicroSnapshot,
+  action: MicroActionType,
+  targetId: string | null,
+  moveDirection: number,
+  executeAttack: boolean,
+  attackType: string | null,
+  rejected: readonly MicroRejectedAlternative[],
+  reason: string,
+  confidence: number,
+  tick: number,
 ): CombatMovementDecision {
   const decision: CombatMovementDecision = {
-    creepId: member.name, squadId: snapshot.squadId, action, targetId,
-    moveDirection, executeAttack, attackType, rejectedAlternatives: rejected,
-    reason, confidence, decisionHash: "", tick,
+    creepId: member.name,
+    squadId: snapshot.squadId,
+    action,
+    targetId,
+    moveDirection,
+    executeAttack,
+    attackType,
+    rejectedAlternatives: rejected,
+    reason,
+    confidence,
+    decisionHash: "",
+    tick,
   };
   return { ...decision, decisionHash: microDecisionHash(decision) };
 }
 
 function scoreTargetForMicro(
-  enemy: MicroEnemySnapshot, member: MicroMemberSnapshot, snapshot: MicroSnapshot,
+  enemy: MicroEnemySnapshot,
+  member: MicroMemberSnapshot,
+  snapshot: MicroSnapshot,
 ): number {
   let score = 0;
   // healer 优先
@@ -651,7 +976,8 @@ function scoreTargetForMicro(
   // 残血优先
   if (enemy.hitsMax > 0 && enemy.hits < enemy.hitsMax * 0.3) score += 50;
   // 近距优先
-  if (enemy.room === member.room) score += Math.max(0, 50 - chebyshevDist(enemy.pos, member.pos) * 10);
+  if (enemy.room === member.room)
+    score += Math.max(0, 50 - chebyshevDist(enemy.pos, member.pos) * 10);
   // boosted 优先
   if (enemy.capability.maxBoostTier > 0) score += 10 * enemy.capability.maxBoostTier;
   return score;
@@ -663,7 +989,10 @@ function computeDeviatingMembers(snapshot: MicroSnapshot): string[] {
   for (const slot of snapshot.slots) {
     const m = snapshot.members.find(mm => mm.name === slot.creepName);
     if (!m || !m.alive) continue;
-    if (m.room !== slot.desiredRoom) { deviating.push(m.name); continue; }
+    if (m.room !== slot.desiredRoom) {
+      deviating.push(m.name);
+      continue;
+    }
     const dist = chebyshevDist(m.pos, slot.desiredPosition);
     if (dist > slot.tolerance) deviating.push(m.name);
   }

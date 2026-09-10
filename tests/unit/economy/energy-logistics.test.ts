@@ -27,29 +27,23 @@ function room(overrides: Partial<RoomEnergyState> = {}): RoomEnergyState {
 describe("planEnergyAid — 跨房能量互济决策", () => {
   it("无受助候选（全部高于救助地板）→ undefined", () => {
     expect(
-      planEnergyAid(
-        [room({ storageEnergy: 30000 }), room({ storageEnergy: 80000 })],
-        OPTS,
-      ),
+      planEnergyAid([room({ storageEnergy: 30000 }), room({ storageEnergy: 80000 })], OPTS),
     ).toBeUndefined();
   });
 
   it("无捐赠候选（全部低于捐赠地板）→ undefined", () => {
     expect(
-      planEnergyAid(
-        [room({ storageEnergy: 5000 }), room({ storageEnergy: 40000 })],
-        OPTS,
-      ),
+      planEnergyAid([room({ storageEnergy: 5000 }), room({ storageEnergy: 40000 })], OPTS),
     ).toBeUndefined();
   });
 
   it("最富者捐赠最饿者：量 = min(缺口, 盈余, 上限)", () => {
     const plan = planEnergyAid(
       [
-        room({ roomName: "W1N1", storageEnergy: 5000 }),        // 缺口 15000
-        room({ roomName: "W2N2", storageEnergy: 10000 }),       // 缺口 10000
-        room({ roomName: "W3N3", storageEnergy: 60000 }),       // 盈余 10000
-        room({ roomName: "W4N4", storageEnergy: 90000 }),       // 盈余 40000（最富）
+        room({ roomName: "W1N1", storageEnergy: 5000 }), // 缺口 15000
+        room({ roomName: "W2N2", storageEnergy: 10000 }), // 缺口 10000
+        room({ roomName: "W3N3", storageEnergy: 60000 }), // 盈余 10000
+        room({ roomName: "W4N4", storageEnergy: 90000 }), // 盈余 40000（最富）
       ],
       OPTS,
     );
@@ -59,8 +53,8 @@ describe("planEnergyAid — 跨房能量互济决策", () => {
   it("捐赠后捐赠方仍高于捐赠地板；受助方补到救助地板后仍低于捐赠地板（结构滞回）", () => {
     const plan = planEnergyAid(
       [
-        room({ roomName: "poor", storageEnergy: 18000 }),  // 缺口 2000（≥ minTransfer）
-        room({ roomName: "rich", storageEnergy: 55000 }),  // 盈余 5000
+        room({ roomName: "poor", storageEnergy: 18000 }), // 缺口 2000（≥ minTransfer）
+        room({ roomName: "rich", storageEnergy: 55000 }), // 盈余 5000
       ],
       OPTS,
     );

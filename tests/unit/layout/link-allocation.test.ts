@@ -7,7 +7,10 @@ import {
   hasSourceLinkFeedStand,
 } from "../../../src/domain/layout/task-factory";
 import { classifyLinkRole } from "../../../src/domain/economy/links";
-import { buildObstaclePositionSet, type ValidationOptions } from "../../../src/domain/layout/validation";
+import {
+  buildObstaclePositionSet,
+  type ValidationOptions,
+} from "../../../src/domain/layout/validation";
 import { mockPos, resetGlobals } from "../../support/factories";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 
@@ -47,7 +50,20 @@ function snapshotAt(rcl: number, overrides: Partial<RoomSnapshot> = {}): RoomSna
       pos: mockPos(40, 10),
       structureType: "controller",
     } as any,
-    spawns: [{ id: "spawn1", pos: mockPos(25, 25), structureType: "spawn", store: { getUsedCapacity: () => 0, getFreeCapacity: () => 300, getCapacity: () => 300, energy: 0 } as any, my: true } as any],
+    spawns: [
+      {
+        id: "spawn1",
+        pos: mockPos(25, 25),
+        structureType: "spawn",
+        store: {
+          getUsedCapacity: () => 0,
+          getFreeCapacity: () => 300,
+          getCapacity: () => 300,
+          energy: 0,
+        } as any,
+        my: true,
+      } as any,
+    ],
     extensions: [],
     towers: [],
     containers: [],
@@ -58,7 +74,12 @@ function snapshotAt(rcl: number, overrides: Partial<RoomSnapshot> = {}): RoomSna
       id: "storage1",
       pos: mockPos(26, 25),
       structureType: "storage",
-      store: { getUsedCapacity: () => 0, getFreeCapacity: () => 1000000, getCapacity: () => 1000000, energy: 0 } as any,
+      store: {
+        getUsedCapacity: () => 0,
+        getFreeCapacity: () => 1000000,
+        getCapacity: () => 1000000,
+        energy: 0,
+      } as any,
       my: true,
     } as any,
     controllerContainer: undefined,
@@ -154,7 +175,12 @@ describe("Link 分配策略 — createSourceLinkTasks", () => {
       id: "link1",
       pos: mockPos(11, 10),
       structureType: STRUCTURE_LINK,
-      store: { getUsedCapacity: () => 0, getFreeCapacity: () => 800, getCapacity: () => 800, energy: 0 } as any,
+      store: {
+        getUsedCapacity: () => 0,
+        getFreeCapacity: () => 800,
+        getCapacity: () => 800,
+        energy: 0,
+      } as any,
       cooldown: 0,
       my: true,
     } as any;
@@ -175,7 +201,16 @@ describe("Link 分配策略 — createSourceLinkTasks", () => {
     // 唯一可建 link 格 (11,10) 的 7 个非 source 邻格也全是墙 →
     // harvester 永远站不上双贴格（link 建成即死）。
     const deadStandTiles = new Set([
-      "9,9", "9,10", "9,11", "10,9", "10,11", "11,9", "11,11", "12,9", "12,10", "12,11",
+      "9,9",
+      "9,10",
+      "9,11",
+      "10,9",
+      "10,11",
+      "11,9",
+      "11,11",
+      "12,9",
+      "12,10",
+      "12,11",
     ]);
     const terrain = {
       get: (x: number, y: number) => (deadStandTiles.has(`${x},${y}`) ? 1 : 0),
@@ -255,10 +290,7 @@ describe("Link 分配策略 — createStorageLinkTask", () => {
     expect(candidate!.key).toBe("logistics.link.storage");
     expect(candidate!.priority).toBe(1);
     // 位置应在 storage (26,25) 附近 1 格内
-    const dist = Math.max(
-      Math.abs(candidate!.pos.x - 26),
-      Math.abs(candidate!.pos.y - 25),
-    );
+    const dist = Math.max(Math.abs(candidate!.pos.x - 26), Math.abs(candidate!.pos.y - 25));
     expect(dist).toBeLessThanOrEqual(1);
   });
 
@@ -277,7 +309,12 @@ describe("Link 分配策略 — createStorageLinkTask", () => {
       id: "link1",
       pos: mockPos(27, 25), // storage (26,25) 旁
       structureType: STRUCTURE_LINK,
-      store: { getUsedCapacity: () => 0, getFreeCapacity: () => 800, getCapacity: () => 800, energy: 0 } as any,
+      store: {
+        getUsedCapacity: () => 0,
+        getFreeCapacity: () => 800,
+        getCapacity: () => 800,
+        energy: 0,
+      } as any,
       cooldown: 0,
       my: true,
     } as any;

@@ -250,20 +250,76 @@ describe("remote-source.ts", () => {
       expect(s!.status).toBe("blocked");
     });
     it("非 normal 房返回 undefined", () => {
-      expect(deriveRemoteSource("W7N4", "W8N4", makeIntel({ kind: "sk" }), 1, 0, undefined, false, true, 1000)).toBeUndefined();
+      expect(
+        deriveRemoteSource(
+          "W7N4",
+          "W8N4",
+          makeIntel({ kind: "sk" }),
+          1,
+          0,
+          undefined,
+          false,
+          true,
+          1000,
+        ),
+      ).toBeUndefined();
     });
     it("非正常 status 返回 undefined", () => {
-      expect(deriveRemoteSource("W7N4", "W8N4", makeIntel({ status: "novice" }), 1, 0, undefined, false, true, 1000)).toBeUndefined();
+      expect(
+        deriveRemoteSource(
+          "W7N4",
+          "W8N4",
+          makeIntel({ status: "novice" }),
+          1,
+          0,
+          undefined,
+          false,
+          true,
+          1000,
+        ),
+      ).toBeUndefined();
     });
     it("有主返回 undefined", () => {
-      expect(deriveRemoteSource("W7N4", "W8N4", makeIntel({ owner: "Other" }), 1, 0, undefined, false, true, 1000)).toBeUndefined();
+      expect(
+        deriveRemoteSource(
+          "W7N4",
+          "W8N4",
+          makeIntel({ owner: "Other" }),
+          1,
+          0,
+          undefined,
+          false,
+          true,
+          1000,
+        ),
+      ).toBeUndefined();
     });
     it("pathCost 缺失回退线性距离×70", () => {
-      const s = deriveRemoteSource("W7N4", "W8N4", makeIntel({ pathCost: undefined }), 3, 0, undefined, false, true, 1000);
+      const s = deriveRemoteSource(
+        "W7N4",
+        "W8N4",
+        makeIntel({ pathCost: undefined }),
+        3,
+        0,
+        undefined,
+        false,
+        true,
+        1000,
+      );
       expect(s!.pathCost).toBe(210); // 3 × 70
     });
     it("sources 缺失默认 1", () => {
-      const s = deriveRemoteSource("W7N4", "W8N4", makeIntel({ sources: undefined }), 1, 0, undefined, false, true, 1000);
+      const s = deriveRemoteSource(
+        "W7N4",
+        "W8N4",
+        makeIntel({ sources: undefined }),
+        1,
+        0,
+        undefined,
+        false,
+        true,
+        1000,
+      );
       expect(s!.sourceCount).toBe(1);
     });
   });
@@ -290,9 +346,24 @@ describe("remote-source.ts", () => {
 
   describe("查询函数", () => {
     const sources = [
-      makeRemoteSource({ id: "remote:W7N4:W8N4", homeRoom: "W7N4", targetRoom: "W8N4", status: "available" }),
-      makeRemoteSource({ id: "remote:W7N4:W9N4", homeRoom: "W7N4", targetRoom: "W9N4", status: "assigned" }),
-      makeRemoteSource({ id: "remote:W7N3:W8N3", homeRoom: "W7N3", targetRoom: "W8N3", status: "degraded" }),
+      makeRemoteSource({
+        id: "remote:W7N4:W8N4",
+        homeRoom: "W7N4",
+        targetRoom: "W8N4",
+        status: "available",
+      }),
+      makeRemoteSource({
+        id: "remote:W7N4:W9N4",
+        homeRoom: "W7N4",
+        targetRoom: "W9N4",
+        status: "assigned",
+      }),
+      makeRemoteSource({
+        id: "remote:W7N3:W8N3",
+        homeRoom: "W7N3",
+        targetRoom: "W8N3",
+        status: "degraded",
+      }),
     ];
     it("getSourcesByHome", () => {
       expect(getSourcesByHome(sources, "W7N4")).toHaveLength(2);
@@ -375,10 +446,18 @@ describe("remote-value.ts", () => {
   });
 
   describe("gradeValue", () => {
-    it(">=15 → premium", () => { expect(gradeValue(15)).toBe("premium"); });
-    it(">=8 → profitable", () => { expect(gradeValue(8)).toBe("profitable"); });
-    it(">=3 → marginal", () => { expect(gradeValue(3)).toBe("marginal"); });
-    it("<3 → unprofitable", () => { expect(gradeValue(2.9)).toBe("unprofitable"); });
+    it(">=15 → premium", () => {
+      expect(gradeValue(15)).toBe("premium");
+    });
+    it(">=8 → profitable", () => {
+      expect(gradeValue(8)).toBe("profitable");
+    });
+    it(">=3 → marginal", () => {
+      expect(gradeValue(3)).toBe("marginal");
+    });
+    it("<3 → unprofitable", () => {
+      expect(gradeValue(2.9)).toBe("unprofitable");
+    });
   });
 
   describe("assessRemoteValue", () => {
@@ -396,7 +475,9 @@ describe("remote-value.ts", () => {
       expect(v.transportCost).toBeGreaterThan(0);
       expect(v.riskCost).toBeGreaterThan(0);
       expect(v.netValue).toBeLessThan(20);
-      expect(v.netValue).toBe(v.expectedYield - v.transportCost - v.riskCost - v.infrastructureCost);
+      expect(v.netValue).toBe(
+        v.expectedYield - v.transportCost - v.riskCost - v.infrastructureCost,
+      );
     });
     it("低风险近矿评估为 premium", () => {
       const s = makeRemoteSource({
@@ -643,7 +724,9 @@ describe("opportunity-ranking.ts", () => {
       const opp = makeOpportunity({});
       opp.sourceSnapshot.sourceCount = 0;
       opp.sourceSnapshot.expectedYield = 20;
-      expect(scoreReliability(opp)).toBe(Math.round(DEFAULT_RANKING_CONFIG.reliabilityWeight * 0.5));
+      expect(scoreReliability(opp)).toBe(
+        Math.round(DEFAULT_RANKING_CONFIG.reliabilityWeight * 0.5),
+      );
     });
   });
 
@@ -668,8 +751,18 @@ describe("opportunity-ranking.ts", () => {
   describe("rankOpportunities", () => {
     it("按总分降序排列", () => {
       const opps = [
-        makeOpportunity({ id: "low", targetRoom: "W1N1", valueGrade: "marginal", value: makeValue({ netValue: 4, targetRoom: "W1N1" }) }),
-        makeOpportunity({ id: "high", targetRoom: "W2N2", valueGrade: "premium", value: makeValue({ netValue: 18, targetRoom: "W2N2" }) }),
+        makeOpportunity({
+          id: "low",
+          targetRoom: "W1N1",
+          valueGrade: "marginal",
+          value: makeValue({ netValue: 4, targetRoom: "W1N1" }),
+        }),
+        makeOpportunity({
+          id: "high",
+          targetRoom: "W2N2",
+          valueGrade: "premium",
+          value: makeValue({ netValue: 18, targetRoom: "W2N2" }),
+        }),
       ];
       opps[0]!.sourceSnapshot.linearDistance = 3;
       opps[0]!.sourceSnapshot.riskLevel = 2;
@@ -689,9 +782,24 @@ describe("opportunity-ranking.ts", () => {
   describe("topOpportunities", () => {
     it("返回前 N 个", () => {
       const opps = [
-        makeOpportunity({ id: "a", targetRoom: "A", valueGrade: "premium", value: makeValue({ netValue: 18, targetRoom: "A" }) }),
-        makeOpportunity({ id: "b", targetRoom: "B", valueGrade: "profitable", value: makeValue({ netValue: 10, targetRoom: "B" }) }),
-        makeOpportunity({ id: "c", targetRoom: "C", valueGrade: "marginal", value: makeValue({ netValue: 4, targetRoom: "C" }) }),
+        makeOpportunity({
+          id: "a",
+          targetRoom: "A",
+          valueGrade: "premium",
+          value: makeValue({ netValue: 18, targetRoom: "A" }),
+        }),
+        makeOpportunity({
+          id: "b",
+          targetRoom: "B",
+          valueGrade: "profitable",
+          value: makeValue({ netValue: 10, targetRoom: "B" }),
+        }),
+        makeOpportunity({
+          id: "c",
+          targetRoom: "C",
+          valueGrade: "marginal",
+          value: makeValue({ netValue: 4, targetRoom: "C" }),
+        }),
       ];
       const top = topOpportunities(opps, 2);
       expect(top).toHaveLength(2);
@@ -702,8 +810,18 @@ describe("opportunity-ranking.ts", () => {
   describe("bestOpportunity", () => {
     it("返回排名第一", () => {
       const opps = [
-        makeOpportunity({ id: "a", targetRoom: "A", valueGrade: "marginal", value: makeValue({ netValue: 4, targetRoom: "A" }) }),
-        makeOpportunity({ id: "b", targetRoom: "B", valueGrade: "premium", value: makeValue({ netValue: 18, targetRoom: "B" }) }),
+        makeOpportunity({
+          id: "a",
+          targetRoom: "A",
+          valueGrade: "marginal",
+          value: makeValue({ netValue: 4, targetRoom: "A" }),
+        }),
+        makeOpportunity({
+          id: "b",
+          targetRoom: "B",
+          valueGrade: "premium",
+          value: makeValue({ netValue: 18, targetRoom: "B" }),
+        }),
       ];
       const best = bestOpportunity(opps);
       expect(best).toBeDefined();
@@ -717,8 +835,18 @@ describe("opportunity-ranking.ts", () => {
   describe("rankWorthInvesting", () => {
     it("只排序 worthInvesting=true", () => {
       const opps = [
-        makeOpportunity({ id: "good", targetRoom: "G", valueGrade: "premium", value: makeValue({ netValue: 18, targetRoom: "G", worthInvesting: true }) }),
-        makeOpportunity({ id: "bad", targetRoom: "B", valueGrade: "unprofitable", value: makeValue({ netValue: 1, targetRoom: "B", worthInvesting: false }) }),
+        makeOpportunity({
+          id: "good",
+          targetRoom: "G",
+          valueGrade: "premium",
+          value: makeValue({ netValue: 18, targetRoom: "G", worthInvesting: true }),
+        }),
+        makeOpportunity({
+          id: "bad",
+          targetRoom: "B",
+          valueGrade: "unprofitable",
+          value: makeValue({ netValue: 1, targetRoom: "B", worthInvesting: false }),
+        }),
       ];
       const ranked = rankWorthInvesting(opps);
       expect(ranked).toHaveLength(1);

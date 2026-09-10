@@ -67,7 +67,6 @@ function toTaskEntry(r: TransportRequest): AssignmentTaskEntry {
   };
 }
 
-
 export const logisticsSystem: System = {
   name: "logistics",
   priority: 0,
@@ -79,20 +78,26 @@ export const logisticsSystem: System = {
 
     // 消费共享快照总线 — 不再独立遍历 Game.creeps。
     const creepRefs = globalCache().creepRefs;
-    const allCreeps = creepRefs ?? Object.values(Game.creeps).map(c => ({
-      name: c.name,
-      role: c.memory.role ?? "unknown",
-      home: c.memory.home ?? c.room.name,
-      spawning: c.spawning === true,
-      lastActionTick: (c.memory as { lastActionTick?: number }).lastActionTick,
-      ticksToLive: c.ticksToLive,
-      assignment: c.memory.assignment as { id: string; kind: string; sourceId?: Id<Source>; leaseUntil?: number } | undefined,
-    }));
+    const allCreeps =
+      creepRefs ??
+      Object.values(Game.creeps).map(c => ({
+        name: c.name,
+        role: c.memory.role ?? "unknown",
+        home: c.memory.home ?? c.room.name,
+        spawning: c.spawning === true,
+        lastActionTick: (c.memory as { lastActionTick?: number }).lastActionTick,
+        ticksToLive: c.ticksToLive,
+        assignment: c.memory.assignment as
+          { id: string; kind: string; sourceId?: Id<Source>; leaseUntil?: number } | undefined,
+      }));
 
     // 租约投影 + hauler 摘要：从共享快照消费，不再独立遍历。
     const leasesByRoom = new Map<string, LeaseSummary[]>();
     const claimsByRoom = new Map<string, Set<string>>();
-    const haulerSummariesByRoom = new Map<string, { name: string; lastActionTick: number; ticksToLive: number; role: string }[]>();
+    const haulerSummariesByRoom = new Map<
+      string,
+      { name: string; lastActionTick: number; ticksToLive: number; role: string }[]
+    >();
     const tick = ctx.tick;
     for (const ref of allCreeps) {
       if (ref.spawning) continue;
@@ -101,19 +106,28 @@ export const logisticsSystem: System = {
       const a = ref.assignment;
       const leaseExpired = a?.leaseUntil !== undefined && tick > a.leaseUntil;
       let leaseList = leasesByRoom.get(home);
-      if (!leaseList) { leaseList = []; leasesByRoom.set(home, leaseList); }
+      if (!leaseList) {
+        leaseList = [];
+        leasesByRoom.set(home, leaseList);
+      }
       if (a?.kind === "haul" && a.id) {
         leaseList.push({ sourceId: a.sourceId, valid: !leaseExpired });
         if (!leaseExpired) {
           let claims = claimsByRoom.get(home);
-          if (!claims) { claims = new Set(); claimsByRoom.set(home, claims); }
+          if (!claims) {
+            claims = new Set();
+            claimsByRoom.set(home, claims);
+          }
           claims.add(a.id);
         }
       }
       const role = ref.role;
       if (role === "hauler" || role === "distributor") {
         let summaries = haulerSummariesByRoom.get(home);
-        if (!summaries) { summaries = []; haulerSummariesByRoom.set(home, summaries); }
+        if (!summaries) {
+          summaries = [];
+          haulerSummariesByRoom.set(home, summaries);
+        }
         summaries.push({
           name: ref.name,
           lastActionTick: ref.lastActionTick ?? tick,
@@ -160,8 +174,8 @@ export const logisticsSystem: System = {
       // L2 池收缩（断链 fallback 链）：风险缓冲低于地板 → 只保 P0/P1。
       // Economy → Logistics 的反馈闭环实例（任务书 §26）。
       const econSnap = Memory.rooms[roomName]?.economy;
-      const shrink = econSnap !== undefined && econSnap.cr > 0
-        && econSnap.rb / 10 < cfg.shrinkRiskBufferTicks;
+      const shrink =
+        econSnap !== undefined && econSnap.cr > 0 && econSnap.rb / 10 < cfg.shrinkRiskBufferTicks;
       const finalReqs = applyShrink(reqs, shrink);
 
       // 注册表对账：登记新 key / 过期回执（不静默丢单）/ 清失联项。
@@ -206,16 +220,17 @@ export const logisticsSystem: System = {
       }
 
       // V1 过滤：如果 Plan V2 已覆盖该 source，跳过 V1 Request。
-      const dedupedReqs = planIsActive && planCoveredSourceIds.size > 0
-        ? finalReqs.filter(r => {
-            // V1 TransportRequest.sourceId 即 containerId（request-pool.ts L98: sourceId: s.id）。
-            // 直接读 sourceId 字段，不依赖 key 字符串格式解析（消除隐式耦合）。
-            if (r.sourceId && planCoveredSourceIds.has(r.sourceId)) {
-              return false; // Plan V2 已覆盖，跳过 V1
-            }
-            return true;
-          })
-        : finalReqs;
+      const dedupedReqs =
+        planIsActive && planCoveredSourceIds.size > 0
+          ? finalReqs.filter(r => {
+              // V1 TransportRequest.sourceId 即 containerId（request-pool.ts L98: sourceId: s.id）。
+              // 直接读 sourceId 字段，不依赖 key 字符串格式解析（消除隐式耦合）。
+              if (r.sourceId && planCoveredSourceIds.has(r.sourceId)) {
+                return false; // Plan V2 已覆盖，跳过 V1
+              }
+              return true;
+            })
+          : finalReqs;
 
       g.transportPool.rooms[roomName] = dedupedReqs.map(toTaskEntry);
 
@@ -299,7 +314,7 @@ function buildTowerSupplyRequests(
   const reqs: TransportRequest[] = [];
   for (const s of supplies) {
     reqs.push({
-      key: "tower-supply:" + roomName + ":" + s.id,
+      key: `tower-supply:${roomName}:${s.id}`,
       resource: "energy",
       amount: s.available,
       sourceId: s.id,

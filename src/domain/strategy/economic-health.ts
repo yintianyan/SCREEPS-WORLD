@@ -11,12 +11,7 @@ import type { EmpireResourceView } from "./resource-view";
  * - Growing：净流 > 0 + 储备充足 + 无困难房 + 有核心房 → 可扩张
  * - Healthy：Growing 的强化版：多核心房 + 高自给度 + 充裕风险缓冲 → 强烈可扩张
  */
-export type EmpireEconomicHealth =
-  | "critical"
-  | "deficit"
-  | "stable"
-  | "growing"
-  | "healthy";
+export type EmpireEconomicHealth = "critical" | "deficit" | "stable" | "growing" | "healthy";
 
 /**
  * 健康度评估结果。

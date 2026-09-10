@@ -6,26 +6,42 @@ import {
 } from "../../../src/domain/economy/capacity-profile";
 import type { RoomEconomicProfile } from "../../../src/domain/economy/room-profile";
 import { NOMINAL_INCOME_PER_SOURCE } from "../../../src/domain/economy/accounting";
-import {
-  buildEmpireResourceView,
-} from "../../../src/domain/strategy/resource-view";
+import { buildEmpireResourceView } from "../../../src/domain/strategy/resource-view";
 
 // ─── 辅助 ─────────────────────────────────────────────────
 
 function makeProfile(over?: Partial<RoomEconomicProfile>): RoomEconomicProfile {
   return {
     roomName: "W7N4",
-    rcl: 7, hasSpawn: true, hasStorage: true, hasTerminal: true,
-    netFlow: 5, contractReserve: 50000, riskBuffer: 1000,
-    estimatedIncome: 14, efficiency: 0.7, drift: 0, economyTick: 1000,
-    storageEnergy: 50000, storageCapacity: 1_000_000, storageRatio: 0.5,
-    energyAvailable: 500, energyCapacityAvailable: 1000,
-    storageNearFull: false, sourceCount: 2,
-    colonyPhase: "growth", colonyState: "normal",
-    economyPressure: 0.1, lastHostileAt: undefined, hasLiveThreat: false,
-    controllerDowngradeRisk: false, claimSecure: false,
-    economicClass: "core", netFlowPositive: true,
-    selfSufficiency: 0.64, isStruggling: false,
+    rcl: 7,
+    hasSpawn: true,
+    hasStorage: true,
+    hasTerminal: true,
+    netFlow: 5,
+    contractReserve: 50000,
+    riskBuffer: 1000,
+    estimatedIncome: 14,
+    efficiency: 0.7,
+    drift: 0,
+    economyTick: 1000,
+    storageEnergy: 50000,
+    storageCapacity: 1_000_000,
+    storageRatio: 0.5,
+    energyAvailable: 500,
+    energyCapacityAvailable: 1000,
+    storageNearFull: false,
+    sourceCount: 2,
+    colonyPhase: "growth",
+    colonyState: "normal",
+    economyPressure: 0.1,
+    lastHostileAt: undefined,
+    hasLiveThreat: false,
+    controllerDowngradeRisk: false,
+    claimSecure: false,
+    economicClass: "core",
+    netFlowPositive: true,
+    selfSufficiency: 0.64,
+    isStruggling: false,
     ...over,
   };
 }
@@ -153,22 +169,35 @@ describe("buildEmpireResourceView", () => {
   it("多房混合分类", () => {
     const core = makeProfile({ roomName: "core1", economicClass: "core" });
     const prod = makeProfile({
-      roomName: "prod1", rcl: 5,
+      roomName: "prod1",
+      rcl: 5,
       economicClass: "production",
-      netFlow: 2, estimatedIncome: 10,
+      netFlow: 2,
+      estimatedIncome: 10,
     });
     const cand = makeProfile({
-      roomName: "cand1", rcl: 2, hasStorage: false,
-      storageEnergy: 0, storageCapacity: 0, storageRatio: 0,
+      roomName: "cand1",
+      rcl: 2,
+      hasStorage: false,
+      storageEnergy: 0,
+      storageCapacity: 0,
+      storageRatio: 0,
       economicClass: "candidate",
-      netFlow: 0, estimatedIncome: 5, contractReserve: 200,
+      netFlow: 0,
+      estimatedIncome: 5,
+      contractReserve: 200,
       riskBuffer: 0,
     });
     const strug = makeProfile({
-      roomName: "strug1", rcl: 7,
-      colonyState: "recovery", economicClass: "struggling",
-      netFlow: -3, estimatedIncome: 8, economyPressure: 0.8,
-      isStruggling: true, netFlowPositive: false,
+      roomName: "strug1",
+      rcl: 7,
+      colonyState: "recovery",
+      economicClass: "struggling",
+      netFlow: -3,
+      estimatedIncome: 8,
+      economyPressure: 0.8,
+      isStruggling: true,
+      netFlowPositive: false,
     });
 
     const v = buildEmpireResourceView([core, prod, cand, strug], 1000);
@@ -191,8 +220,10 @@ describe("buildEmpireResourceView", () => {
     // deficit: struggling → needsEnergyAid=true
     const deficit = makeProfile({
       roomName: "deficit1",
-      colonyState: "recovery", economicClass: "struggling",
-      isStruggling: true, netFlowPositive: false,
+      colonyState: "recovery",
+      economicClass: "struggling",
+      isStruggling: true,
+      netFlowPositive: false,
     });
 
     const v = buildEmpireResourceView([surplus, deficit], 1000);

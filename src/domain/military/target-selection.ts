@@ -102,23 +102,30 @@ export function scoreTarget(
 ): TargetScore {
   // 价值评分
   const resourceValue = candidate.towers ? 20 : 40; // 有塔房资源多
-  const economicImpact = candidate.rcl && candidate.rcl >= 6 ? 60
-    : candidate.rcl && candidate.rcl >= 3 ? 30 : 10;
+  const economicImpact =
+    candidate.rcl && candidate.rcl >= 6 ? 60 : candidate.rcl && candidate.rcl >= 3 ? 30 : 10;
   const strategicValue = candidate.isCore ? 80 : candidate.isRemote ? 30 : 50;
   const roomValue = (candidate.rcl ?? 0) * 10;
   const futureValue = candidate.isRemote ? 10 : 20;
   const replacementCost = (candidate.rcl ?? 0) * 5;
   const logisticsCost = candidate.distance * 5;
   const militaryCost = (candidate.towers ?? 0) * 15;
-  const valueScore = Math.max(0, Math.min(100,
-    resourceValue * 0.1 + economicImpact * 0.2 + strategicValue * 0.25
-    + roomValue * 0.15 + futureValue * 0.05 - logisticsCost * 0.1 - militaryCost * 0.15,
-  ));
+  const valueScore = Math.max(
+    0,
+    Math.min(
+      100,
+      resourceValue * 0.1 +
+        economicImpact * 0.2 +
+        strategicValue * 0.25 +
+        roomValue * 0.15 +
+        futureValue * 0.05 -
+        logisticsCost * 0.1 -
+        militaryCost * 0.15,
+    ),
+  );
 
   // 威胁评分
-  const threatScore = candidate.threatAssessment
-    ? candidate.threatAssessment.score.total
-    : 0;
+  const threatScore = candidate.threatAssessment ? candidate.threatAssessment.score.total : 0;
 
   // 距离评分
   const distanceScore = Math.max(0, 100 - (candidate.distance / Math.max(1, maxDistance)) * 100);
@@ -136,29 +143,30 @@ export function scoreTarget(
   const logisticsScore = Math.max(0, 100 - candidate.distance * 10);
 
   // 战略影响
-  const strategicImpactScore = Math.min(100,
+  const strategicImpactScore = Math.min(
+    100,
     economicImpact * 0.4 + strategicValue * 0.4 + (candidate.isCore ? 20 : 0),
   );
 
   // 总分加权
   const weights = {
-    valueScore: 0.20,
+    valueScore: 0.2,
     threatScore: 0.15,
-    distanceScore: 0.20,
+    distanceScore: 0.2,
     defenseScore: 0.15,
-    intelScore: 0.10,
-    logisticsScore: 0.10,
-    strategicImpactScore: 0.10,
+    intelScore: 0.1,
+    logisticsScore: 0.1,
+    strategicImpactScore: 0.1,
   };
 
   const total = Math.round(
     valueScore * weights.valueScore +
-    threatScore * weights.threatScore +
-    distanceScore * weights.distanceScore +
-    defenseScore * weights.defenseScore +
-    intelScore * weights.intelScore +
-    logisticsScore * weights.logisticsScore +
-    strategicImpactScore * weights.strategicImpactScore,
+      threatScore * weights.threatScore +
+      distanceScore * weights.distanceScore +
+      defenseScore * weights.defenseScore +
+      intelScore * weights.intelScore +
+      logisticsScore * weights.logisticsScore +
+      strategicImpactScore * weights.strategicImpactScore,
   );
 
   return {
@@ -204,17 +212,29 @@ export function selectTarget(
       continue;
     }
     if (c.intelAge > freshnessThreshold) {
-      rejectedAlternatives.push({ roomName: c.roomName, score: 0, reason: `intel stale (${c.intelAge} > ${freshnessThreshold})` });
+      rejectedAlternatives.push({
+        roomName: c.roomName,
+        score: 0,
+        reason: `intel stale (${c.intelAge} > ${freshnessThreshold})`,
+      });
       continue;
     }
     if ((c.towers ?? 0) >= maxTowers) {
-      rejectedAlternatives.push({ roomName: c.roomName, score: 0, reason: `towers=${c.towers} >= ${maxTowers}` });
+      rejectedAlternatives.push({
+        roomName: c.roomName,
+        score: 0,
+        reason: `towers=${c.towers} >= ${maxTowers}`,
+      });
       continue;
     }
     if (!c.owner) {
       // 无主房只对 CLAIM/RESERVE 有意义
       if (objective !== "CAPTURE_CONTROLLER" && objective !== "SECURE_ROOM") {
-        rejectedAlternatives.push({ roomName: c.roomName, score: 0, reason: "no owner (not claim target)" });
+        rejectedAlternatives.push({
+          roomName: c.roomName,
+          score: 0,
+          reason: "no owner (not claim target)",
+        });
         continue;
       }
     }
@@ -230,7 +250,9 @@ export function selectTarget(
 
   if (best && bestScore) {
     evidence.push(`selected=${best.roomName} score=${bestScore.total}`);
-    evidence.push(`value=${bestScore.valueScore} threat=${bestScore.threatScore} distance=${bestScore.distanceScore} defense=${bestScore.defenseScore} intel=${bestScore.intelScore}`);
+    evidence.push(
+      `value=${bestScore.valueScore} threat=${bestScore.threatScore} distance=${bestScore.distanceScore} defense=${bestScore.defenseScore} intel=${bestScore.intelScore}`,
+    );
   } else {
     evidence.push("no valid target found");
   }

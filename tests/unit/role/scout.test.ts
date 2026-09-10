@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { scoutRole } from "../../../src/creeps/roles/scout";
 import { roomObserverSystem } from "../../../src/systems/room-observer";
 import { globalCache } from "../../../src/kernel/global-cache";
-import { mockContext, mockCreep, mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
+import {
+  mockContext,
+  mockCreep,
+  mockPos,
+  mockSnapshot,
+  resetGlobals,
+} from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();
@@ -79,25 +85,28 @@ describe("room-observer — 侦察视野捕获（R6b 接线）", () => {
     const creep = makeScout("W6N4");
     (globalThis as any).Game.creeps = { scout_1: creep };
     // ISSUE-008: captureScoutVision 消费 creepRefs 而非 Game.creeps
-    globalCache().creepRefs = [{
-      name: "scout_1",
-      role: "scout",
-      home: "W7N4",
-      spawning: false,
-      recycle: false,
-      ticksToLive: 1000,
-      bodyLength: 1,
-      body: [],
-      remoteTarget: "W6N4",
-      roomName: "W6N4",
-      x: 25, y: 25,
-      energyCarried: 0,
-    }];
+    globalCache().creepRefs = [
+      {
+        name: "scout_1",
+        role: "scout",
+        home: "W7N4",
+        spawning: false,
+        recycle: false,
+        ticksToLive: 1000,
+        bodyLength: 1,
+        body: [],
+        remoteTarget: "W6N4",
+        roomName: "W6N4",
+        x: 25,
+        y: 25,
+        energyCarried: 0,
+      },
+    ];
 
     roomObserverSystem.run(mockContext(mockSnapshot()));
 
     const obs = (globalCache().intelHandoff ?? []).find(
-      (o) => o.subject === "W6N4" && o.home === "W7N4",
+      o => o.subject === "W6N4" && o.home === "W7N4",
     );
     expect(obs).toBeDefined();
     expect(obs!.payload.sources).toBe(2);

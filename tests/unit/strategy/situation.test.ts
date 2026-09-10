@@ -22,7 +22,12 @@ describe("situation — 对手画像聚合", () => {
       tick: TICK,
       rooms: [
         room({ threats: [{ owner: "Aguia" }] }),
-        room({ room: "W37S58", rcl: 7, hasSpawn: true, threats: [{ owner: "Aguia" }, { owner: "Other" }] }),
+        room({
+          room: "W37S58",
+          rcl: 7,
+          hasSpawn: true,
+          threats: [{ owner: "Aguia" }, { owner: "Other" }],
+        }),
       ],
       warBlacklist: {},
     });
@@ -39,7 +44,7 @@ describe("situation — 新生殖民地风险条件", () => {
       rooms: [room({ threats: [{ owner: "Aguia" }] })],
       warBlacklist: {},
     });
-    const c = s.conditions.find((c) => c.id === "newbornColonyRisk:W38S59");
+    const c = s.conditions.find(c => c.id === "newbornColonyRisk:W38S59");
     expect(c?.severity).toBe(2);
   });
 
@@ -49,7 +54,7 @@ describe("situation — 新生殖民地风险条件", () => {
       rooms: [room({ ttd: 160 })],
       warBlacklist: {},
     });
-    const c = s.conditions.find((c) => c.id === "newbornColonyRisk:W38S59");
+    const c = s.conditions.find(c => c.id === "newbornColonyRisk:W38S59");
     expect(c?.severity).toBe(3);
     expect(c?.detail).toContain("TTD=160");
   });
@@ -77,7 +82,9 @@ describe("situation — 控制器受压与扩张邻接条件", () => {
       rooms: [room({ room: "W37S58", rcl: 7, hasSpawn: true, ttd: 1800 })],
       warBlacklist: {},
     });
-    expect(s.conditions.some((c) => c.id === "controllerUnderAttack:W37S58" && c.severity === 3)).toBe(true);
+    expect(
+      s.conditions.some(c => c.id === "controllerUnderAttack:W37S58" && c.severity === 3),
+    ).toBe(true);
   });
 
   it("活跃扩张目标邻接宿敌 → expansionAdjacentHostile 条件（事前规避）", () => {
@@ -88,6 +95,6 @@ describe("situation — 控制器受压与扩张邻接条件", () => {
       hostileAdj: new Set(["W38S59"]),
       activeExpansionTarget: "W38S59",
     });
-    expect(s.conditions.some((c) => c.id === "expansionAdjacentHostile:W38S59")).toBe(true);
+    expect(s.conditions.some(c => c.id === "expansionAdjacentHostile:W38S59")).toBe(true);
   });
 });

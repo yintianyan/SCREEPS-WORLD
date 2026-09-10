@@ -21,12 +21,7 @@ import type { RemoteResourceValue, ValueGrade } from "./remote-value";
  * - EXPIRED: 过期——等待评估超过有效期
  */
 export type OpportunityStatus =
-  | "waiting_execution"
-  | "approved"
-  | "rejected"
-  | "executing"
-  | "completed"
-  | "expired";
+  "waiting_execution" | "approved" | "rejected" | "executing" | "completed" | "expired";
 
 /**
  * 判定 Opportunity 是否活跃（等待评估或已批准）。
@@ -189,10 +184,7 @@ export function rejectOpportunity(
  * 标记为执行中（APPROVED → EXECUTING）。
  * 纯函数。
  */
-export function markExecuting(
-  opp: RemoteOpportunity,
-  tick: number,
-): RemoteOpportunity {
+export function markExecuting(opp: RemoteOpportunity, tick: number): RemoteOpportunity {
   return updateOpportunityStatus(opp, "executing", tick, "remote-mining-manager-started");
 }
 
@@ -200,10 +192,7 @@ export function markExecuting(
  * 完成机会（→ COMPLETED）。
  * 纯函数。
  */
-export function completeOpportunity(
-  opp: RemoteOpportunity,
-  tick: number,
-): RemoteOpportunity {
+export function completeOpportunity(opp: RemoteOpportunity, tick: number): RemoteOpportunity {
   return updateOpportunityStatus(opp, "completed", tick, "operation-stable");
 }
 
@@ -211,10 +200,7 @@ export function completeOpportunity(
  * 过期机会（→ EXPIRED）。
  * 纯函数。
  */
-export function expireOpportunity(
-  opp: RemoteOpportunity,
-  tick: number,
-): RemoteOpportunity {
+export function expireOpportunity(opp: RemoteOpportunity, tick: number): RemoteOpportunity {
   return updateOpportunityStatus(opp, "expired", tick, "validity-expired");
 }
 
@@ -252,9 +238,7 @@ export function expireStaleOpportunities(
  * 过滤出等待评估的 Opportunities。
  * 纯函数。
  */
-export function filterWaitingExecution(
-  opps: readonly RemoteOpportunity[],
-): RemoteOpportunity[] {
+export function filterWaitingExecution(opps: readonly RemoteOpportunity[]): RemoteOpportunity[] {
   return opps.filter(o => o.status === "waiting_execution");
 }
 
@@ -262,9 +246,7 @@ export function filterWaitingExecution(
  * 过滤出活跃的 Opportunities。
  * 纯函数。
  */
-export function filterActiveOpportunities(
-  opps: readonly RemoteOpportunity[],
-): RemoteOpportunity[] {
+export function filterActiveOpportunities(opps: readonly RemoteOpportunity[]): RemoteOpportunity[] {
   return opps.filter(o => isOpportunityActive(o.status));
 }
 

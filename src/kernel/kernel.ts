@@ -14,7 +14,19 @@ import { requestSegments, flushSegments } from "./segment-store";
 import { measuredRun, safeRun, safeRunBuild } from "./safe-run";
 import { buildCadenceTable, resolveInterval, type CadenceTable } from "./cadence";
 import { createBudget } from "./scheduler";
-import { evaluateExpectations, P3_BYPASS_WINDOW_TICKS, type P3SystemRef, type SpawnQueueSnapshot, type E3ViolationRecord, type RCLSnapshot, type BuildQueueSnapshot, type RecoverySnapshot, type MemorySizeSample, type SiteProgressSnapshot, type PathFailureSnapshot } from "./expectations";
+import {
+  evaluateExpectations,
+  P3_BYPASS_WINDOW_TICKS,
+  type P3SystemRef,
+  type SpawnQueueSnapshot,
+  type E3ViolationRecord,
+  type RCLSnapshot,
+  type BuildQueueSnapshot,
+  type RecoverySnapshot,
+  type MemorySizeSample,
+  type SiteProgressSnapshot,
+  type PathFailureSnapshot,
+} from "./expectations";
 import { EventKind, recordEvent } from "./event-log";
 import { emitSummary, initTelemetry } from "./telemetry";
 import {
@@ -32,7 +44,7 @@ import {
   collectDefenseMetrics,
   runFlush,
 } from "../telemetry";
-import { Registry } from "./registry";
+import { type Registry } from "./registry";
 // buildRoomSnapshot 通过 Registry.registerWorldModelBuilder 注入，避免 kernel 直接 import systems 层。
 // ：kernel 直接 import 业务模块 pathfinding 的清理函数，形式上违反 §2.1「内核不感知业务」。
 // 权衡接受现状：pruneDeadCreepCache 本质是 global 状态卫生（清理死 creep 缓存残留），非经济策略/角色行为；
@@ -86,10 +98,14 @@ class Context implements TickContext {
  */
 function idleCadenceTicks(tier: CpuTier): number {
   switch (tier) {
-    case "healthy": return 5;
-    case "guarded": return 8;
-    case "conserve": return 12;
-    default: return 1; // recovery — 不跳过
+    case "healthy":
+      return 5;
+    case "guarded":
+      return 8;
+    case "conserve":
+      return 12;
+    default:
+      return 1; // recovery — 不跳过
   }
 }
 
@@ -290,13 +306,15 @@ export class Kernel {
         body: creep.body,
         remoteTarget: creep.memory.remoteTarget,
         mode: typeof mem.mode === "string" ? mem.mode : undefined,
-        assignment: a ? {
-          id: a.id as string,
-          kind: a.kind as string,
-          sourceId: a.sourceId ? (a.sourceId as string) : undefined,
-          targetId: a.targetId ? (a.targetId as string) : undefined,
-          leaseUntil: typeof a.leaseUntil === "number" ? a.leaseUntil : undefined,
-        } : undefined,
+        assignment: a
+          ? {
+              id: a.id as string,
+              kind: a.kind as string,
+              sourceId: a.sourceId ? (a.sourceId as string) : undefined,
+              targetId: a.targetId ? (a.targetId as string) : undefined,
+              leaseUntil: typeof a.leaseUntil === "number" ? a.leaseUntil : undefined,
+            }
+          : undefined,
         lastActionTick: typeof mem.lastActionTick === "number" ? mem.lastActionTick : undefined,
         roomName: creep.room.name,
         x: creep.pos.x,
@@ -306,11 +324,17 @@ export class Kernel {
       if (!roleDef?.isSourceWorker) continue;
       const sid = creep.memory.sourceId;
       if (sid) {
-        globalSourceOccupancy.set(sid as string, (globalSourceOccupancy.get(sid as string) ?? 0) + 1);
+        globalSourceOccupancy.set(
+          sid as string,
+          (globalSourceOccupancy.get(sid as string) ?? 0) + 1,
+        );
       } else {
         const pendingHome = home ?? creep.room.name;
         if (pendingHome) {
-          globalPendingHarvesters.set(pendingHome, (globalPendingHarvesters.get(pendingHome) ?? 0) + 1);
+          globalPendingHarvesters.set(
+            pendingHome,
+            (globalPendingHarvesters.get(pendingHome) ?? 0) + 1,
+          );
         }
       }
     }
@@ -338,8 +362,15 @@ export class Kernel {
 
     for (const room of Object.values(Game.rooms)) {
       if (!room.controller?.my) continue;
-      const snapshot = safeRunBuild(room.name, () =>
-        this.registry.getWorldModelBuilder()(room, globalSourceOccupancy, globalCreepEnergy, globalPendingHarvesters),
+      const snapshot = safeRunBuild(
+        room.name,
+        () =>
+          this.registry.getWorldModelBuilder()(
+            room,
+            globalSourceOccupancy,
+            globalCreepEnergy,
+            globalPendingHarvesters,
+          ),
         // K-1：快照是 P0 级基础设施 — 构建失败通常是确定性代码 bug，非 critical
         // 会在连续 3 次失败后冷却 80 tick，该房对所有消费快照的系统/角色隐身。
         // critical=true 让失败走限流日志暴露而非静默冷却，与 maintainMemory 同待遇。
@@ -372,9 +403,7 @@ export class Kernel {
       // - construction-manager: buildQueue 有 P0 queued 关键基建（hasCriticalStructureGap，在 domain/construction/queue.ts）
       // - layout-planner: 任一 snapshot 命中 assessEmergencyRebuild().any
       const isRecoveryExempt = system.recoveryEligible?.(ctx) === true;
-      const effectivePriority = isRecoveryExempt
-        ? (1 as Priority)
-        : system.priority;
+      const effectivePriority = isRecoveryExempt ? (1 as Priority) : system.priority;
       if (!ctx.budget.canStart(effectivePriority)) {
         recordSkip(`system/${system.name}/budget`);
         continue;
@@ -400,7 +429,10 @@ export class Kernel {
         const gEma = globalCache();
         const emaMap = gEma.systemBudgetEma ?? (gEma.systemBudgetEma = new Map<string, number>());
         const prevEma = emaMap.get(system.name);
-        emaMap.set(system.name, prevEma === undefined ? cpuCostSys : prevEma * 0.8 + cpuCostSys * 0.2);
+        emaMap.set(
+          system.name,
+          prevEma === undefined ? cpuCostSys : prevEma * 0.8 + cpuCostSys * 0.2,
+        );
       }
       const gRun = globalCache();
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
@@ -415,8 +447,8 @@ export class Kernel {
     if (!kernelMem) return;
     const g = globalCache();
     const p3Systems: P3SystemRef[] = [...this.sortedSystems, ...this.postSystems]
-      .filter((s) => s.priority === 3)
-      .map((s) => ({ name: s.name, interval: s.interval }));
+      .filter(s => s.priority === 3)
+      .map(s => ({ name: s.name, interval: s.interval }));
     // E3: 采集每房 spawn queue 快照
     const spawnQueues: SpawnQueueSnapshot[] = [];
     const e3Prev: Record<string, E3ViolationRecord> =
@@ -445,7 +477,7 @@ export class Kernel {
         oldestRole: oldest.role,
         rcl: room?.controller?.level ?? roomMem?.lastRcl,
         energyAvailable: room?.energyAvailable ?? 0,
-        spawning: spawns.some((s) => s.spawning),
+        spawning: spawns.some(s => s.spawning),
         colonyState: roomMem?.colonyState,
       });
     }
@@ -473,7 +505,7 @@ export class Kernel {
     if (res.violations.length > 0) {
       kernelMem.expectations = {
         tick: ctx.tick,
-        violations: res.violations.map((v) => v.id + "(" + v.detail + ")").slice(0, 10),
+        violations: res.violations.map(v => `${v.id}(${v.detail})`).slice(0, 10),
         e3: e3Prev as Record<string, unknown>,
       };
       recordEvent(EventKind.ExpectationViolation, "kernel", [res.violations.length]);
@@ -482,10 +514,19 @@ export class Kernel {
         const bucket = Game.cpu.bucket ?? 0;
         // 方向 3 E-FINDING-04: 长期冻结跟踪（纯函数，可测试）
         trackP3Frozen(ctx.tick, bucket, kernelMem);
-        log.info("kernel", "[" + ctx.tick + "] expectations: P3 starvation — feed-forward bypass until " + kernelMem.p3StarveBypassUntil,);
+        log.info(
+          "kernel",
+          `[${ctx.tick}] expectations: P3 starvation — feed-forward bypass until ${
+            kernelMem.p3StarveBypassUntil
+          }`,
+        );
       }
     } else {
-      kernelMem.expectations = { tick: ctx.tick, violations: [], e3: e3Prev as Record<string, unknown> };
+      kernelMem.expectations = {
+        tick: ctx.tick,
+        violations: [],
+        e3: e3Prev as Record<string, unknown>,
+      };
       if (kernelMem.p3StarveBypassUntil !== undefined) delete kernelMem.p3StarveBypassUntil;
       // P3 不再饥饿：清除冻结跟踪
       if (kernelMem.p3FrozenSince !== undefined) delete kernelMem.p3FrozenSince;
@@ -543,7 +584,8 @@ export class Kernel {
       result.push({
         room: snap.roomName,
         queueLength: queue.length,
-        oldestTaskTick: queue.length > 0 ? (queue[0] as { createdAt?: number }).createdAt : undefined,
+        oldestTaskTick:
+          queue.length > 0 ? (queue[0] as { createdAt?: number }).createdAt : undefined,
         oldestTaskType: queue.length > 0 ? (queue[0] as { type?: string }).type : undefined,
         rcl: snap.rcl,
         builderCount,
@@ -558,7 +600,7 @@ export class Kernel {
    * builderVisits 从 site.progress 推断：progress > 0 说明 builder 到访过（引擎真值）。 */
   private collectSiteProgressSnapshots(ctx: Context): SiteProgressSnapshot[] {
     const result: SiteProgressSnapshot[] = [];
-    const tracker = globalCache().siteProgressTracker ??= new Map();
+    const tracker = (globalCache().siteProgressTracker ??= new Map());
     for (const id in Game.constructionSites) {
       const site = Game.constructionSites[id];
       if (!site) continue;
@@ -633,9 +675,7 @@ export class Kernel {
       const colonyState = roomMem?.colonyState ?? "normal";
       if (colonyState !== "recovery") continue;
       // recoveryStartTick: 使用 colonyState 变化时间（room-state-system 写入）。
-      const recoveryStart = roomMem?.colonyStateSince
-        ?? Memory.kernel?.bootTick
-        ?? 0;
+      const recoveryStart = roomMem?.colonyStateSince ?? Memory.kernel?.bootTick ?? 0;
       result.push({
         room: snap.roomName,
         colonyState,
@@ -689,7 +729,10 @@ export class Kernel {
         const gEma = globalCache();
         const emaMap = gEma.systemBudgetEma ?? (gEma.systemBudgetEma = new Map<string, number>());
         const prevEma = emaMap.get(system.name);
-        emaMap.set(system.name, prevEma === undefined ? cpuCostPost : prevEma * 0.8 + cpuCostPost * 0.2);
+        emaMap.set(
+          system.name,
+          prevEma === undefined ? cpuCostPost : prevEma * 0.8 + cpuCostPost * 0.2,
+        );
       }
       const gRun = globalCache();
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
@@ -708,7 +751,10 @@ export class Kernel {
         creep.memory.targetId = undefined;
         creep.memory.assignment = undefined;
         safeRun(`creep/unknown-role/${creep.memory.role}`, () => {
-          log.info("kernel", `creep/${creep.name}: unknown role '${creep.memory.role}', cleared targets`,);
+          log.info(
+            "kernel",
+            `creep/${creep.name}: unknown role '${creep.memory.role}', cleared targets`,
+          );
         });
         continue;
       }
@@ -718,8 +764,8 @@ export class Kernel {
     // 排序：角色优先级升序（P0 在前）→ 同优先级按执行顺序（X-19）→ ticksToLive 升序。
     creepEntries.sort((a, b) => {
       if (a.role.priority !== b.role.priority) return a.role.priority - b.role.priority;
-const aOrder = a.role.executionOrder ?? 99;
-const bOrder = b.role.executionOrder ?? 99;
+      const aOrder = a.role.executionOrder ?? 99;
+      const bOrder = b.role.executionOrder ?? 99;
       if (aOrder !== bOrder) return aOrder - bOrder;
       const aTtl = a.creep.ticksToLive ?? 1500;
       const bTtl = b.creep.ticksToLive ?? 1500;
@@ -780,10 +826,12 @@ const bOrder = b.role.executionOrder ?? 99;
       // P1-2（CPU 死亡螺旋修复）：colony-state 门禁在 budget 检查之前执行 —
       // 原先 budget.canStart 先挡住 P2 builder，使豁免形同虚设。
       const home = creep.memory.home;
-      const roomState = home ? Memory.rooms[home]?.colonyState ?? "normal" : "normal";
-      const isRecoveryExempt = (roomState === "recovery" || roomState === "bootstrap") && role.recoveryEligible === true;
+      const roomState = home ? (Memory.rooms[home]?.colonyState ?? "normal") : "normal";
+      const isRecoveryExempt =
+        (roomState === "recovery" || roomState === "bootstrap") && role.recoveryEligible === true;
       // P0-3：combat 角色可能在远矿房作战 — 威胁检查同时看 home 和当前所在房。
-      const inThreatRoom = liveThreatRooms.has(home ?? "") || liveThreatRooms.has(creep.room?.name ?? "");
+      const inThreatRoom =
+        liveThreatRooms.has(home ?? "") || liveThreatRooms.has(creep.room?.name ?? "");
       if (colonyStateFreezesRole(roomState, role, posture, inThreatRoom)) {
         recordSkip(`creep/${role.name}/colony-state`);
         continue;
@@ -803,7 +851,8 @@ const bOrder = b.role.executionOrder ?? 99;
       //     否则 idle creep 在敌袭 tick 不会 flee——PvP 场景 5 tick 延迟可致命）
       const mode = creep.memory.mode ?? "acquire";
       const stuck = creep.memory.stuckTicks ?? 0;
-      const inThreatArea = liveThreatRooms.has(home ?? "") || liveThreatRooms.has(creep.room?.name ?? "");
+      const inThreatArea =
+        liveThreatRooms.has(home ?? "") || liveThreatRooms.has(creep.room?.name ?? "");
       const cadence = idleCadenceTicks(ctx.budget.tier);
       if (
         mode === "idle" &&
@@ -854,7 +903,11 @@ const bOrder = b.role.executionOrder ?? 99;
  */
 export function colonyStateFreezesRole(
   roomState: string,
-  role: { readonly priority: number; readonly recoveryEligible?: boolean; readonly combat?: boolean },
+  role: {
+    readonly priority: number;
+    readonly recoveryEligible?: boolean;
+    readonly combat?: boolean;
+  },
   posture: string | undefined,
   liveThreatInRoom: boolean,
 ): boolean {
@@ -925,7 +978,10 @@ export function trackP3Frozen(
     const frozenDuration = tick - kernelMem.p3FrozenSince;
     // 每 500 tick 输出一次升级告警（避免刷屏）
     if (frozenDuration > 0 && frozenDuration % P3_FROZEN_ALERT_TICKS === 0) {
-      log.warn("kernel", `[${tick}] P3 FROZEN ${frozenDuration} ticks — bucket=${bucket} < ${CONFIG.cpu.tiers.conserve.min}, bypass ineffective. P3 systems (telemetry/tuning/terminal/lab) have been frozen since tick ${kernelMem.p3FrozenSince}. URGENT: reduce rooms/pause expansion to restore CPU headroom.`);
+      log.warn(
+        "kernel",
+        `[${tick}] P3 FROZEN ${frozenDuration} ticks — bucket=${bucket} < ${CONFIG.cpu.tiers.conserve.min}, bypass ineffective. P3 systems (telemetry/tuning/terminal/lab) have been frozen since tick ${kernelMem.p3FrozenSince}. URGENT: reduce rooms/pause expansion to restore CPU headroom.`,
+      );
       recordEvent(EventKind.P3StarvationFrozen, "", [bucket, frozenDuration]);
     } else if (frozenDuration === 0) {
       // 首次冻结：记录事件

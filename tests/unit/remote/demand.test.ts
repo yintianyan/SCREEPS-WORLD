@@ -54,7 +54,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
   it("active 运营缺 harvester 时生成请求", () => {
     const { requests } = evaluateRemoteDemand(baseInput);
     expect(requests).toHaveLength(3); // harvester + hauler + reserver
-    const roles = requests.map((r) => r.role);
+    const roles = requests.map(r => r.role);
     expect(roles).toContain("remoteHarvester");
     expect(roles).toContain("remoteHauler");
     expect(roles).toContain("reserver");
@@ -65,7 +65,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ...baseInput,
       remoteCreeps: makeCreeps("remoteHarvester", 1),
     });
-    const harvesterReqs = requests.filter((r) => r.role === "remoteHarvester");
+    const harvesterReqs = requests.filter(r => r.role === "remoteHarvester");
     expect(harvesterReqs).toHaveLength(0);
   });
 
@@ -76,7 +76,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       remoteOps: makeRemoteOps("active", 2),
       remoteCreeps: makeCreeps("remoteHarvester", 1),
     });
-    expect(twoSource.requests.filter((r) => r.role === "remoteHarvester")).toHaveLength(1);
+    expect(twoSource.requests.filter(r => r.role === "remoteHarvester")).toHaveLength(1);
 
     // 2-source：已有 2 只 → 满足，不再补。
     const twoSourceFull = evaluateRemoteDemand({
@@ -84,7 +84,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       remoteOps: makeRemoteOps("active", 2),
       remoteCreeps: makeCreeps("remoteHarvester", 2),
     });
-    expect(twoSourceFull.requests.filter((r) => r.role === "remoteHarvester")).toHaveLength(0);
+    expect(twoSourceFull.requests.filter(r => r.role === "remoteHarvester")).toHaveLength(0);
 
     // 单源：已有 1 只 → 满足，不再补。
     const oneSource = evaluateRemoteDemand({
@@ -92,7 +92,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       remoteOps: makeRemoteOps("active", 1),
       remoteCreeps: makeCreeps("remoteHarvester", 1),
     });
-    expect(oneSource.requests.filter((r) => r.role === "remoteHarvester")).toHaveLength(0);
+    expect(oneSource.requests.filter(r => r.role === "remoteHarvester")).toHaveLength(0);
   });
 
   it("已有足够的 hauler 时不重复孵化", () => {
@@ -100,7 +100,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ...baseInput,
       remoteCreeps: makeCreeps("remoteHauler", 1),
     });
-    const haulerReqs = requests.filter((r) => r.role === "remoteHauler");
+    const haulerReqs = requests.filter(r => r.role === "remoteHauler");
     expect(haulerReqs).toHaveLength(0);
   });
 
@@ -116,7 +116,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ],
     });
     // 每 source 1 hauler → 2 source 目标=2，已有 1 → 补 1。
-    const haulerReqs = requests.filter((r) => r.role === "remoteHauler");
+    const haulerReqs = requests.filter(r => r.role === "remoteHauler");
     expect(haulerReqs).toHaveLength(1);
   });
 
@@ -130,7 +130,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       },
       remoteCreeps: makeCreeps("remoteHauler", 1), // 已有 1 只 hauler，0 harvester。
     });
-    expect(ramping.requests.filter((r) => r.role === "remoteHauler")).toHaveLength(0); // 收缩后 target=1，已满足。
+    expect(ramping.requests.filter(r => r.role === "remoteHauler")).toHaveLength(0); // 收缩后 target=1，已满足。
 
     // 采集半编（2 source 只有 1 harvester）→ hauler target=1。
     const half = evaluateRemoteDemand({
@@ -140,7 +140,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       },
       remoteCreeps: makeCreeps("remoteHarvester", 1), // 半编，无 hauler。
     });
-    const haulerReqs = half.requests.filter((r) => r.role === "remoteHauler");
+    const haulerReqs = half.requests.filter(r => r.role === "remoteHauler");
     expect(haulerReqs).toHaveLength(1); // 只孵 1 只（收缩后目标=1）。
 
     // 采集满编 → target=2（每 source 1 hauler），已有 1 → 补 1。
@@ -154,7 +154,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
         ...makeCreeps("remoteHauler", 1), // 已有 1 只，应补第 2 只。
       ],
     });
-    expect(full.requests.filter((r) => r.role === "remoteHauler")).toHaveLength(1);
+    expect(full.requests.filter(r => r.role === "remoteHauler")).toHaveLength(1);
   });
 
   it("op 无 haulerNeed 时回退每 source 1 只（存量运营兼容）", () => {
@@ -163,7 +163,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       remoteCreeps: makeCreeps("remoteHauler", 1), // 已有 1 只。
     });
     // 单 source → target=1，已满足 → 不再补。
-    const haulerReqs = requests.filter((r) => r.role === "remoteHauler");
+    const haulerReqs = requests.filter(r => r.role === "remoteHauler");
     expect(haulerReqs).toHaveLength(0);
   });
 
@@ -172,7 +172,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ...baseInput,
       remoteCreeps: makeCreeps("reserver", 1),
     });
-    const reserverReqs = requests.filter((r) => r.role === "reserver");
+    const reserverReqs = requests.filter(r => r.role === "reserver");
     expect(reserverReqs).toHaveLength(0);
   });
 
@@ -181,7 +181,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ...baseInput,
       colonyState: "recovery",
     });
-    const roles = requests.map((r) => r.role);
+    const roles = requests.map(r => r.role);
     // 经济收入角色照常补员（W7 贫困陷阱实证：recovery 冻结远矿 = 收入归零）。
     expect(roles).toContain("remoteHarvester");
     expect(roles).toContain("remoteHauler");
@@ -224,7 +224,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ...baseInput,
       energyCapacityAvailable: 300, // 不足以生成 CLAIM (650)
     });
-    const reserverReqs = requests.filter((r) => r.role === "reserver");
+    const reserverReqs = requests.filter(r => r.role === "reserver");
     expect(reserverReqs).toHaveLength(0);
     // harvester 和 hauler 仍应生成（它们有低容量回退档）。
     expect(requests.length).toBeGreaterThanOrEqual(2);
@@ -237,7 +237,12 @@ describe("remote demand — evaluateRemoteDemand", () => {
       home: homeRoom,
       priority: 1,
       body: ["work", "carry", "move"],
-      memory: { role: "remoteHarvester", home: homeRoom, mode: "acquire", remoteTarget: targetRoom },
+      memory: {
+        role: "remoteHarvester",
+        home: homeRoom,
+        mode: "acquire",
+        remoteTarget: targetRoom,
+      },
       createdAt: tick,
       retries: 0,
     };
@@ -245,7 +250,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ...baseInput,
       spawnQueue: [pendingReq],
     });
-    const harvesterReqs = requests.filter((r) => r.role === "remoteHarvester");
+    const harvesterReqs = requests.filter(r => r.role === "remoteHarvester");
     expect(harvesterReqs).toHaveLength(0);
   });
 
@@ -262,15 +267,18 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ...baseInput,
       remoteCreeps: [dyingCreep],
     });
-    const harvesterReqs = requests.filter((r) => r.role === "remoteHarvester");
+    const harvesterReqs = requests.filter(r => r.role === "remoteHarvester");
     expect(harvesterReqs).toHaveLength(1);
     expect(harvesterReqs[0]!.replaceBy).toBe(tick);
   });
 
   it("远距离路径提前交接，近距离不沿用固定 50 tick 过早替补", () => {
     const dying: RemoteCreepSummary = {
-      name: "remoteHarvester-dying", role: "remoteHarvester", remoteTarget: targetRoom,
-      ticksToLive: 95, bodyLength: 5,
+      name: "remoteHarvester-dying",
+      role: "remoteHarvester",
+      remoteTarget: targetRoom,
+      ticksToLive: 95,
+      bodyLength: 5,
     };
     // 未取得路径成本时保留历史 50 tick 回退：阈值 15 + 15 + 50 = 80。
     const unknown = evaluateRemoteDemand({ ...baseInput, remoteCreeps: [dying] });
@@ -288,37 +296,49 @@ describe("remote demand — evaluateRemoteDemand", () => {
   it("濒死者 + 已有健康替补并存时不再补（防替换风暴）", () => {
     // target=1（单源）。濒死者在窗口内，但已有 1 只健康替补 → 健康数达标，不补。
     const dying: RemoteCreepSummary = {
-      name: "remoteHarvester-dying", role: "remoteHarvester",
-      remoteTarget: targetRoom, ticksToLive: 50, bodyLength: 5, // <80 窗口内
+      name: "remoteHarvester-dying",
+      role: "remoteHarvester",
+      remoteTarget: targetRoom,
+      ticksToLive: 50,
+      bodyLength: 5, // <80 窗口内
     };
     const healthy: RemoteCreepSummary = {
-      name: "remoteHarvester-fresh", role: "remoteHarvester",
-      remoteTarget: targetRoom, ticksToLive: 1400, bodyLength: 5,
+      name: "remoteHarvester-fresh",
+      role: "remoteHarvester",
+      remoteTarget: targetRoom,
+      ticksToLive: 1400,
+      bodyLength: 5,
     };
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
       remoteOps: makeRemoteOps("active", 1), // 单源 → target 1
       remoteCreeps: [dying, healthy],
     });
-    expect(requests.filter((r) => r.role === "remoteHarvester")).toHaveLength(0);
+    expect(requests.filter(r => r.role === "remoteHarvester")).toHaveLength(0);
   });
 
   it("reserver 濒死者 + 孵化中替补（ttl 未定义）并存时不再补（防替换风暴根因）", () => {
     // 线上根因：单个 dying reserver 每周期反复触发替换，live 飙到 5。
     // 孵化中的替补 ttl 未定义 → 计为健康 → 健康数达标 → 不再重复补。
     const dying: RemoteCreepSummary = {
-      name: "reserver-dying", role: "reserver",
-      remoteTarget: targetRoom, ticksToLive: 30, bodyLength: 2,
+      name: "reserver-dying",
+      role: "reserver",
+      remoteTarget: targetRoom,
+      ticksToLive: 30,
+      bodyLength: 2,
     };
     const spawningRepl: RemoteCreepSummary = {
-      name: "reserver-fresh", role: "reserver",
-      remoteTarget: targetRoom, ticksToLive: undefined, bodyLength: 2,
+      name: "reserver-fresh",
+      role: "reserver",
+      remoteTarget: targetRoom,
+      ticksToLive: undefined,
+      bodyLength: 2,
     };
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
       remoteCreeps: [dying, spawningRepl],
     });
-    expect(requests.filter((r) => r.role === "reserver")).toHaveLength(0);
+    expect(requests.filter(r => r.role === "reserver")).toHaveLength(0);
   });
 
   // ── reserver 不受 economySuppressed 冻结（reservation 断裂修复）──
@@ -328,21 +348,24 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ...baseInput,
       remoteThreats: { [targetRoom]: true },
     });
-    const reserverReqs = requests.filter((r) => r.role === "reserver");
+    const reserverReqs = requests.filter(r => r.role === "reserver");
     expect(reserverReqs).toHaveLength(1);
   });
 
   it("威胁在场时 reserver 濒死者仍生成替补请求（reservation 不能断）", () => {
     const dying: RemoteCreepSummary = {
-      name: "reserver-dying", role: "reserver",
-      remoteTarget: targetRoom, ticksToLive: 30, bodyLength: 2,
+      name: "reserver-dying",
+      role: "reserver",
+      remoteTarget: targetRoom,
+      ticksToLive: 30,
+      bodyLength: 2,
     };
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
       remoteCreeps: [dying],
       remoteThreats: { [targetRoom]: true },
     });
-    const reserverReqs = requests.filter((r) => r.role === "reserver");
+    const reserverReqs = requests.filter(r => r.role === "reserver");
     expect(reserverReqs).toHaveLength(1);
     expect(reserverReqs[0]!.replaceBy).toBe(tick);
   });
@@ -352,7 +375,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ...baseInput,
       remoteThreats: { [targetRoom]: true },
     });
-    const roles = requests.map((r) => r.role);
+    const roles = requests.map(r => r.role);
     expect(roles).not.toContain("remoteHarvester");
     expect(roles).not.toContain("remoteHauler");
     expect(roles).toContain("reserver");
@@ -370,7 +393,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ...baseInput,
       remoteCreeps: [healthyCreep],
     });
-    const harvesterReqs = requests.filter((r) => r.role === "remoteHarvester");
+    const harvesterReqs = requests.filter(r => r.role === "remoteHarvester");
     expect(harvesterReqs).toHaveLength(0);
   });
 
@@ -390,7 +413,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       ...baseInput,
       remoteCreeps: [dyingCreep],
     });
-    const firstReq = first.requests.find((r) => r.role === "remoteHarvester");
+    const firstReq = first.requests.find(r => r.role === "remoteHarvester");
     expect(firstReq).toBeDefined();
 
     // 第二轮评估：替补已 pending（健康 0 + pending 1 = target 1）→ 不再生成。
@@ -401,7 +424,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       remoteCreeps: [dyingCreep],
       spawnQueue: [firstReq!],
     });
-    expect(second.requests.find((r) => r.role === "remoteHarvester")).toBeUndefined();
+    expect(second.requests.find(r => r.role === "remoteHarvester")).toBeUndefined();
   });
 
   it("请求携带 expiresAt TTL", () => {
@@ -428,7 +451,7 @@ describe("remote demand — remoteDefender 威胁响应", () => {
       remoteCreeps: fullStaff,
       remoteThreats: { [targetRoom]: true },
     });
-    const defenderReqs = requests.filter((r) => r.role === "remoteDefender");
+    const defenderReqs = requests.filter(r => r.role === "remoteDefender");
     expect(defenderReqs).toHaveLength(1);
     expect(defenderReqs[0]!.memory.remoteTarget).toBe(targetRoom);
   });
@@ -439,7 +462,7 @@ describe("remote demand — remoteDefender 威胁响应", () => {
       remoteCreeps: fullStaff,
       remoteThreats: { [targetRoom]: false },
     });
-    expect(requests.filter((r) => r.role === "remoteDefender")).toHaveLength(0);
+    expect(requests.filter(r => r.role === "remoteDefender")).toHaveLength(0);
   });
 
   it("remoteThreats 未提供时不生成 remoteDefender（向后兼容）", () => {
@@ -447,7 +470,7 @@ describe("remote demand — remoteDefender 威胁响应", () => {
       ...baseInput,
       remoteCreeps: fullStaff,
     });
-    expect(requests.filter((r) => r.role === "remoteDefender")).toHaveLength(0);
+    expect(requests.filter(r => r.role === "remoteDefender")).toHaveLength(0);
   });
 
   it("已有存活 defender 时不重复孵化", () => {
@@ -456,7 +479,7 @@ describe("remote demand — remoteDefender 威胁响应", () => {
       remoteCreeps: [...fullStaff, ...makeCreeps("remoteDefender", 1, 1000)],
       remoteThreats: { [targetRoom]: true },
     });
-    expect(requests.filter((r) => r.role === "remoteDefender")).toHaveLength(0);
+    expect(requests.filter(r => r.role === "remoteDefender")).toHaveLength(0);
   });
 
   // ── 外国前置 spawn 拆除任务（dismantleTargets）─────────────────
@@ -467,7 +490,7 @@ describe("remote demand — remoteDefender 威胁响应", () => {
       remoteCreeps: fullStaff,
       dismantleTargets: { [targetRoom]: true },
     });
-    const dismantleReqs = requests.filter((r) => r.role === "dismantler");
+    const dismantleReqs = requests.filter(r => r.role === "dismantler");
     expect(dismantleReqs).toHaveLength(1);
     expect(dismantleReqs[0]!.memory.remoteTarget).toBe(targetRoom);
   });
@@ -478,7 +501,7 @@ describe("remote demand — remoteDefender 威胁响应", () => {
       remoteCreeps: fullStaff,
       dismantleTargets: { [targetRoom]: false },
     });
-    expect(requests.filter((r) => r.role === "dismantler")).toHaveLength(0);
+    expect(requests.filter(r => r.role === "dismantler")).toHaveLength(0);
   });
 
   it("dismantleTargets 未提供时不生成 dismantler（向后兼容）", () => {
@@ -486,7 +509,7 @@ describe("remote demand — remoteDefender 威胁响应", () => {
       ...baseInput,
       remoteCreeps: fullStaff,
     });
-    expect(requests.filter((r) => r.role === "dismantler")).toHaveLength(0);
+    expect(requests.filter(r => r.role === "dismantler")).toHaveLength(0);
   });
 
   it("已有存活 dismantler 时不重复孵化", () => {
@@ -495,7 +518,7 @@ describe("remote demand — remoteDefender 威胁响应", () => {
       remoteCreeps: [...fullStaff, ...makeCreeps("dismantler", 1, 1000)],
       dismantleTargets: { [targetRoom]: true },
     });
-    expect(requests.filter((r) => r.role === "dismantler")).toHaveLength(0);
+    expect(requests.filter(r => r.role === "dismantler")).toHaveLength(0);
   });
 
   it("拆除任务不阻塞经济孵化（并行执行）", () => {
@@ -504,7 +527,7 @@ describe("remote demand — remoteDefender 威胁响应", () => {
       remoteCreeps: [],
       dismantleTargets: { [targetRoom]: true },
     });
-    const roles = requests.map((r) => r.role);
+    const roles = requests.map(r => r.role);
     expect(roles).toContain("dismantler");
     expect(roles).toContain("remoteHarvester");
   });

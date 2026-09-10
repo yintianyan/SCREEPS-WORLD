@@ -59,14 +59,17 @@ export interface LayoutSegmentData {
 export interface IntelPlayersSegmentData {
   /** 最后落盘 tick（脏数据增量写纪律的 epoch 标记）。 */
   epoch: number;
-  players: Record<string, {
-    /** 最近一次确认该玩家活动（有视野观测到其结构/单位）的 tick。 */
-    lastSeenAt?: number;
-    /** 最近一次该玩家对我方构成敌对信号（在房威胁/黑名单命中）的 tick。 */
-    lastHostileAt?: number;
-    /** 观测到该玩家活动的房间 → 最近观测 tick。 */
-    rooms?: Record<string, number>;
-  }>;
+  players: Record<
+    string,
+    {
+      /** 最近一次确认该玩家活动（有视野观测到其结构/单位）的 tick。 */
+      lastSeenAt?: number;
+      /** 最近一次该玩家对我方构成敌对信号（在房威胁/黑名单命中）的 tick。 */
+      lastHostileAt?: number;
+      /** 观测到该玩家活动的房间 → 最近观测 tick。 */
+      rooms?: Record<string, number>;
+    }
+  >;
 }
 
 // ─── 内部状态（挂在 globalCache 上）─────────────────────────
@@ -108,10 +111,7 @@ function segCache(): SegmentCache {
  * 未调用 requestSegments 的环境（单测）requestedAt 为 undefined，守卫不生效。
  */
 function segmentUnavailable(segmentId: number): boolean {
-  return (
-    RawMemory.segments[segmentId] === undefined &&
-    segCache().requestedAt === Game.time
-  );
+  return RawMemory.segments[segmentId] === undefined && segCache().requestedAt === Game.time;
 }
 
 /**
@@ -346,7 +346,10 @@ function migrateLegacyTimeseries(legacy: LegacyTimeseriesData): void {
   if (cache.migrated) return;
   cache.migrated = true;
 
-  log.info("segment-store", "[segment] migrating legacy segment 1 → segment 1 (cpu) + segment 3 (economy)");
+  log.info(
+    "segment-store",
+    "[segment] migrating legacy segment 1 → segment 1 (cpu) + segment 3 (economy)",
+  );
 
   // 重建 economy ring buffer — 过滤旧裁剪逻辑留下的 null/undefined 空洞。
   if (legacy.economy) {
@@ -505,8 +508,9 @@ export function flushSegments(): void {
     let serialized = JSON.stringify(cache.intelPlayersSeg);
     if (serialized.length > SEGMENT_SIZE_LIMIT) {
       // 容量守卫：超出时按 lastSeenAt 最旧的玩家裁剪一半（防御性，正常远小于上限）。
-      const entries = Object.entries(cache.intelPlayersSeg.players)
-        .sort((a, b) => (a[1].lastSeenAt ?? 0) - (b[1].lastSeenAt ?? 0));
+      const entries = Object.entries(cache.intelPlayersSeg.players).sort(
+        (a, b) => (a[1].lastSeenAt ?? 0) - (b[1].lastSeenAt ?? 0),
+      );
       const keep = new Map(entries.slice(Math.floor(entries.length / 2)));
       cache.intelPlayersSeg.players = Object.fromEntries(keep);
       serialized = JSON.stringify(cache.intelPlayersSeg);
@@ -521,9 +525,8 @@ export function flushSegments(): void {
   if (cache.prometheusDirty) {
     const text = cache.prometheusText ?? "";
     // 容量守卫：100KB 上限，超出截断（理论上不会超 — 指标数量有限）
-    RawMemory.segments[SEGMENT_PROMETHEUS] = text.length > 95 * 1024
-      ? text.slice(0, 95 * 1024)
-      : text;
+    RawMemory.segments[SEGMENT_PROMETHEUS] =
+      text.length > 95 * 1024 ? text.slice(0, 95 * 1024) : text;
     cache.prometheusDirty = false;
   }
 }

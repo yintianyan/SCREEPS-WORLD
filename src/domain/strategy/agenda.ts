@@ -48,14 +48,14 @@ export function evaluateAgenda(
   const { tick, rooms, prev } = input;
 
   const anyCrisis = rooms.some(
-    r => r.colonyState === "bootstrap" || r.colonyState === "recovery" || r.colonyState === "crisis",
+    r =>
+      r.colonyState === "bootstrap" || r.colonyState === "recovery" || r.colonyState === "crisis",
   );
   const threatRecent = rooms.some(
     r => r.lastHostileAt !== undefined && tick - r.lastHostileAt < options.threatWindow,
   );
-  const avgPressure = rooms.length > 0
-    ? rooms.reduce((sum, r) => sum + r.economyPressure, 0) / rooms.length
-    : 1;
+  const avgPressure =
+    rooms.length > 0 ? rooms.reduce((sum, r) => sum + r.economyPressure, 0) / rooms.length : 1;
   const canPushRcl =
     !threatRecent &&
     rooms.length > 0 &&

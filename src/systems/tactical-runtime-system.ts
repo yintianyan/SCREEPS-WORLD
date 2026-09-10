@@ -111,18 +111,14 @@ export const tacticalRuntimeSystem: System = {
         objectiveRecord.squadId,
         tick,
         "objective created from war plan",
-        ["warPlan found, posture=" + posture],
+        [`warPlan found, posture=${posture}`],
         0.5,
         [],
       );
     }
 
     // ── 4. 评估生命周期 ──
-    const lifecycleInput = buildLifecycleAssessmentInput(
-      objectiveRecord,
-      plan,
-      tick,
-    );
+    const lifecycleInput = buildLifecycleAssessmentInput(objectiveRecord, plan, tick);
     const lifecycleResult = assessObjectiveLifecycle(lifecycleInput);
 
     if (lifecycleResult.shouldTransition) {
@@ -424,7 +420,8 @@ function buildTacticalSnapshot(
   // 情报置信度（简化——基于 intel 新鲜度）
   const targetEntry = getRoomIntel(plan.targetRoom);
   const intelAge = targetEntry !== undefined ? tick - targetEntry.observedAt : Infinity;
-  const confidenceVal = intelAge <= 500 ? 0.8 : intelAge <= 2000 ? 0.5 : intelAge <= 10000 ? 0.2 : 0.05;
+  const confidenceVal =
+    intelAge <= 500 ? 0.8 : intelAge <= 2000 ? 0.5 : intelAge <= 10000 ? 0.2 : 0.05;
   const confidence: MultiDimensionalConfidence = {
     factConfidence: confidenceVal,
     combatConfidence: confidenceVal,
@@ -444,11 +441,17 @@ function buildTacticalSnapshot(
     totalDismantle: memberCaps.reduce((s, c) => s + c.dismantle, 0),
     totalClaim: memberCaps.reduce((s, c) => s + c.claim, 0),
     totalEffectiveHP: memberCaps.reduce((s, c) => s + c.effectiveHP, 0),
-    avgMobility: memberCaps.length > 0 ? memberCaps.reduce((s, c) => s + c.mobility, 0) / memberCaps.length : 0,
+    avgMobility:
+      memberCaps.length > 0
+        ? memberCaps.reduce((s, c) => s + c.mobility, 0) / memberCaps.length
+        : 0,
     totalSupport: memberCaps.reduce((s, c) => s + c.support, 0),
     totalToughParts: memberCaps.reduce((s, c) => s + c.toughParts, 0),
     boostedCount: memberCaps.filter(c => c.boosted).length,
-    maxBoostTier: memberCaps.reduce<0 | 1 | 2 | 3>((m, c) => c.maxBoostTier > m ? c.maxBoostTier : m, 0),
+    maxBoostTier: memberCaps.reduce<0 | 1 | 2 | 3>(
+      (m, c) => (c.maxBoostTier > m ? c.maxBoostTier : m),
+      0,
+    ),
     creepCount: memberCaps.length,
   };
 
@@ -677,10 +680,7 @@ function buildLifecycleAssessmentInput(
 }
 
 /** 清理终态 Objective 记录（防止表膨胀）。 */
-function cleanupTerminalObjectives(
-  g: GlobalCache & TacticalRuntimeCache,
-  tick: number,
-): void {
+function cleanupTerminalObjectives(g: GlobalCache & TacticalRuntimeCache, tick: number): void {
   const table = g.tacticalObjectives;
   if (!table || table.size === 0) return;
   // 保留最近 1000 tick 内进入终态的记录（供 Decision Trace 追溯）
@@ -784,10 +784,7 @@ function submitReinforcementDemand(
   // 这样避免双写 spawn queue（Tactical → Spawn 边界：只声明需求，war-planner 执行孵化）。
 
   // 但记录事件供追踪
-  recordEvent(EventKind.WarPlanCreated, plan.targetRoom, [
-    shortage.urgency,
-    shortage.count,
-  ]);
+  recordEvent(EventKind.WarPlanCreated, plan.targetRoom, [shortage.urgency, shortage.count]);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -901,11 +898,14 @@ function recordTacticalEvent(
 
   // console 输出（可观测性）
   if (event === "TACTICAL_ABORTED" || event === "RETREAT_DECIDED") {
-    log.info("tactical-runtime-system", `tactical: ${event} op=${operationId}` +
-      ` squad=${squadId ?? "?"}` +
-      ` reason="${reason}"` +
-      ` conf=${confidence.toFixed(2)}` +
-      ` evidence=${evidence.slice(0, 3).join("; ")}`,);
+    log.info(
+      "tactical-runtime-system",
+      `tactical: ${event} op=${operationId}` +
+        ` squad=${squadId ?? "?"}` +
+        ` reason="${reason}"` +
+        ` conf=${confidence.toFixed(2)}` +
+        ` evidence=${evidence.slice(0, 3).join("; ")}`,
+    );
   }
 }
 

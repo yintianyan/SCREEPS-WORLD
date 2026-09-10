@@ -11,7 +11,14 @@ import { resolveTraffic, type MoveIntent } from "../creeps/movement/traffic-reso
 
 /** 8 邻域偏移（含斜向）。 */
 const NEIGHBOR_DELTAS: readonly [number, number][] = [
-  [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1],
+  [0, -1],
+  [1, -1],
+  [1, 0],
+  [1, 1],
+  [0, 1],
+  [-1, 1],
+  [-1, 0],
+  [-1, -1],
 ];
 
 interface RoomBatch {
@@ -100,12 +107,20 @@ export const trafficManagerSystem: System = {
         // 无可签发意图或目标被占 → 走完整解算。
         if (batch.intents.length === 0) continue;
       }
-      safeRun(`traffic-manager/${roomName}`, () => resolveAndDispatch(roomName, batch, ctx.getSnapshot(roomName)), false);
+      safeRun(
+        `traffic-manager/${roomName}`,
+        () => resolveAndDispatch(roomName, batch, ctx.getSnapshot(roomName)),
+        false,
+      );
     }
   },
 };
 
-function resolveAndDispatch(roomName: string, batch: RoomBatch, snapshot: RoomSnapshot | undefined): void {
+function resolveAndDispatch(
+  roomName: string,
+  batch: RoomBatch,
+  snapshot: RoomSnapshot | undefined,
+): void {
   const room = Game.rooms[roomName];
   if (!room) return;
   // 能力守卫：精简 room mock（单元测试）无 getTerrain 时跳过 —

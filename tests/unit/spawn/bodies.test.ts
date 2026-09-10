@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { bodyCost, degradeBody, selectBody, RECOVERY_BODY, BODY_TEMPLATES } from "../../../src/config/bodies";
+import {
+  bodyCost,
+  degradeBody,
+  selectBody,
+  RECOVERY_BODY,
+  BODY_TEMPLATES,
+} from "../../../src/config/bodies";
 
 describe("Bodies — bodyCost", () => {
   it("calculates cost of [work, carry, move]", () => {
@@ -19,7 +25,16 @@ describe("Bodies — bodyCost", () => {
 
 describe("Bodies — selectBody", () => {
   it("selects the best body that fits energy capacity", () => {
-    expect(selectBody("harvester", 650)).toEqual(["work", "work", "work", "work", "work", "carry", "move", "move"]);
+    expect(selectBody("harvester", 650)).toEqual([
+      "work",
+      "work",
+      "work",
+      "work",
+      "work",
+      "carry",
+      "move",
+      "move",
+    ]);
     expect(selectBody("harvester", 600)).toEqual(["work", "work", "work", "work", "carry", "move"]);
     expect(selectBody("harvester", 400)).toEqual(["work", "work", "work", "carry", "move"]);
     expect(selectBody("harvester", 200)).toEqual(["work", "carry", "move"]);
@@ -71,8 +86,8 @@ describe("Bodies — degradeBody", () => {
     // 砍 1 个 CARRY → [2C,3M]=250；再砍 1 个 → 砍 MOVE 需 move>=1 满足 → [2C,2M]=200。
     // 结果满足 C/M=1，满载平原可动 —— 不再是独腿 body。
     const result = degradeBody(body, 200, ["carry", "move"]);
-    const c = result!.filter((p) => p === "carry").length;
-    const m = result!.filter((p) => p === "move").length;
+    const c = result!.filter(p => p === "carry").length;
+    const m = result!.filter(p => p === "move").length;
     expect(bodyCost(result!)).toBeLessThanOrEqual(200);
     expect(m).toBeGreaterThanOrEqual(Math.ceil(c / 2)); // 配比守卫：满载可动
   });
@@ -93,8 +108,8 @@ describe("Bodies — degradeBody", () => {
     for (const energy of [300, 450, 600, 800, 1000]) {
       const result = degradeBody(tmpl, energy, ["carry", "move"]);
       if (!result) continue;
-      const c = result.filter((p) => p === "carry").length;
-      const m = result.filter((p) => p === "move").length;
+      const c = result.filter(p => p === "carry").length;
+      const m = result.filter(p => p === "move").length;
       expect(bodyCost(result)).toBeLessThanOrEqual(energy);
       expect(m).toBeGreaterThanOrEqual(Math.ceil(c / 2));
     }
@@ -115,7 +130,19 @@ describe("Bodies — BODY_TEMPLATES", () => {
       // coreClearer 为进攻型拆核角色（ATTACK 部件），最低档 [4A,1C,5M] = 620；
       // 200 档只能凑出单 ATTACK（80+50+50）→ 拆核效率几乎为零还冒险，故豁免，
       // 与 defender/remoteDefender 战斗绝境档同理（有有效战力总比残废送死强）。
-      if (role === "reserver" || role === "claimer" || role === "remoteDefender" || role === "defender" || role === "scout" || role === "healer" || role === "pbCollector" || role === "coreClearer" || role === "rangedAttacker" || role === "dismantler") continue;
+      if (
+        role === "reserver" ||
+        role === "claimer" ||
+        role === "remoteDefender" ||
+        role === "defender" ||
+        role === "scout" ||
+        role === "healer" ||
+        role === "pbCollector" ||
+        role === "coreClearer" ||
+        role === "rangedAttacker" ||
+        role === "dismantler"
+      )
+        continue;
       const lastTemplate = templates[templates.length - 1];
       expect(lastTemplate?.minCapacity).toBe(200);
     }
@@ -178,7 +205,16 @@ describe("Bodies — A1 大 body 档位（随 RCL 容量放大）", () => {
   it("所有新档位成本 ≤ 其 minCapacity 对应的容量", () => {
     // selectBody 只在 capacity >= minCapacity 时选中，成本绝不超过容量。
     for (const capacity of [550, 800, 1300, 1800, 2300, 5300, 12300]) {
-      for (const role of ["upgrader", "builder", "hauler", "distributor", "remoteHauler", "attacker", "defender", "pbCollector"]) {
+      for (const role of [
+        "upgrader",
+        "builder",
+        "hauler",
+        "distributor",
+        "remoteHauler",
+        "attacker",
+        "defender",
+        "pbCollector",
+      ]) {
         const body = selectBody(role, capacity, { rcl: 8 });
         expect(bodyCost(body)).toBeLessThanOrEqual(capacity);
       }

@@ -113,7 +113,10 @@ describe("UOEM Implementation: OutcomeChannel FIFO + Idempotent", () => {
   it("容量上限：cap=32，超出时最老被丢弃", () => {
     const ch = makeChannel();
     for (let i = 0; i < OUTCOME_CHANNEL_CAPACITY + 5; i++) {
-      enqueueOutcome(ch, makeOutcome(makeOperationId(`R${i}`, 1000 + i), "COMPLETED", 1000 + i, 2000 + i));
+      enqueueOutcome(
+        ch,
+        makeOutcome(makeOperationId(`R${i}`, 1000 + i), "COMPLETED", 1000 + i, 2000 + i),
+      );
     }
     // 队列不应超过容量
     expect(getChannelSize(ch)).toBeLessThanOrEqual(OUTCOME_CHANNEL_CAPACITY);
@@ -174,7 +177,9 @@ describe("UOEM Implementation: Milestone 不进入 OutcomeChannel", () => {
     };
     // MilestoneEvent 缺 result/interval/forcedAdvance → 不能构造为 OutcomeEvent
     expect((milestone as unknown as { result?: string }).result).toBeUndefined();
-    expect(TERMINAL_RESULTS.has((milestone as unknown as { result?: string }).result ?? "")).toBe(false);
+    expect(TERMINAL_RESULTS.has((milestone as unknown as { result?: string }).result ?? "")).toBe(
+      false,
+    );
   });
 });
 
@@ -331,14 +336,20 @@ describe("UOEM Implementation: Memory 序列化上限", () => {
     const ch = makeChannel();
     // 第一批：填满 cap
     for (let i = 0; i < OUTCOME_CHANNEL_CAPACITY; i++) {
-      enqueueOutcome(ch, makeOutcome(makeOperationId(`A${i}`, 1000 + i), "COMPLETED", 1000 + i, 2000 + i));
+      enqueueOutcome(
+        ch,
+        makeOutcome(makeOperationId(`A${i}`, 1000 + i), "COMPLETED", 1000 + i, 2000 + i),
+      );
     }
     // drain 裁剪 seen 到 cap
     drainOutcomes(ch);
     expect(ch.s.length).toBeLessThanOrEqual(OUTCOME_CHANNEL_CAPACITY);
     // 第二批：再填满 cap — seen 最大 = cap(旧) + cap(新) = cap × 2
     for (let i = 0; i < OUTCOME_CHANNEL_CAPACITY; i++) {
-      enqueueOutcome(ch, makeOutcome(makeOperationId(`B${i}`, 1000 + i), "LOST", 1000 + i, 2000 + i));
+      enqueueOutcome(
+        ch,
+        makeOutcome(makeOperationId(`B${i}`, 1000 + i), "LOST", 1000 + i, 2000 + i),
+      );
     }
     // seen 在 drain 前最大 = cap × 2
     expect(ch.s.length).toBeLessThanOrEqual(OUTCOME_CHANNEL_CAPACITY * 2);
@@ -351,7 +362,10 @@ describe("UOEM Implementation: Memory 序列化上限", () => {
     const ch = makeChannel();
     // 入队 cap+10 条
     for (let i = 0; i < OUTCOME_CHANNEL_CAPACITY + 10; i++) {
-      enqueueOutcome(ch, makeOutcome(makeOperationId(`O${i}`, 1000 + i), "COMPLETED", 1000 + i, 2000 + i));
+      enqueueOutcome(
+        ch,
+        makeOutcome(makeOperationId(`O${i}`, 1000 + i), "COMPLETED", 1000 + i, 2000 + i),
+      );
     }
     // queue 不超 cap
     expect(getChannelSize(ch)).toBe(OUTCOME_CHANNEL_CAPACITY);

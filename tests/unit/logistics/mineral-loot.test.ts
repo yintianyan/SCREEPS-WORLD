@@ -1,10 +1,16 @@
 /** 矿物搬运链修复测试（updateMode 总量口径 + lootRemains 全资源）。 */
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, beforeEach, type vi } from "vitest";
 import { updateMode } from "../../../src/creeps/engine/lifecycle";
 import { lootRemains } from "../../../src/creeps/engine/actions/pickup";
 import { harvestMineral } from "../../../src/creeps/engine/actions/harvest";
 import { haulMineralsToStorage } from "../../../src/creeps/engine/actions/industry";
-import { mockCreep, mockContext, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
+import {
+  mockCreep,
+  mockContext,
+  mockSnapshot,
+  mockStructure,
+  resetGlobals,
+} from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();
@@ -66,8 +72,17 @@ describe("lootRemains — 搬运尸体内矿物（不只搬能量）", () => {
   it("尸体只有矿物(Z=200,无能量)→ withdraw 矿物 Z（旧 bug：只搬 energy 忽略矿物）", () => {
     const t = tomb({ Z: 200 });
     // 需有 storage/terminal 作矿物卸货出口，否则门禁不取矿物（防无处倒而冻结）。
-    const snap = mockSnapshot({ tombstones: [t] as never, storage: mockStructure("storage", { id: "st", energy: 0, capacity: 1000000 }) });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 800, mode: "acquire" });
+    const snap = mockSnapshot({
+      tombstones: [t] as never,
+      storage: mockStructure("storage", { id: "st", energy: 0, capacity: 1000000 }),
+    });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 800,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     const action = lootRemains(1);
@@ -81,7 +96,13 @@ describe("lootRemains — 搬运尸体内矿物（不只搬能量）", () => {
   it("尸体有能量+矿物 → 能量优先 withdraw energy", () => {
     const t = tomb({ energy: 300, Z: 200 });
     const snap = mockSnapshot({ tombstones: [t] as never });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 800, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 800,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     const action = lootRemains(1);
@@ -93,7 +114,12 @@ describe("lootRemains — 搬运尸体内矿物（不只搬能量）", () => {
 
 describe("harvestMineral — 站位以贴 mineral 的 container 为通勤终点（防穿梭）", () => {
   it("mineral 旁有 container → 通勤终点是 container（站上去零穿梭），非 mineral 本体", () => {
-    const mineral = { id: "min1", mineralType: "Z", mineralAmount: 50000, pos: { x: 7, y: 33, getRangeTo: () => 1 } };
+    const mineral = {
+      id: "min1",
+      mineralType: "Z",
+      mineralAmount: 50000,
+      pos: { x: 7, y: 33, getRangeTo: () => 1 },
+    };
     const container = mockStructure("container", { id: "mc", energy: 0, capacity: 2000 });
     container.pos = { x: 6, y: 33, getRangeTo: () => 1 } as never; // 贴 mineral（range 1）
     const extractor = mockStructure("extractor", { id: "ext1" });
@@ -103,7 +129,13 @@ describe("harvestMineral — 站位以贴 mineral 的 container 为通勤终点�
       extractor: extractor as never,
     });
     // creep 离 mineral 远 → harvest 返回 ERR_NOT_IN_RANGE → 朝站位移动。
-    const creep = mockCreep({ name: "mineralMiner_0", role: "mineralMiner", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "mineralMiner_0",
+      role: "mineralMiner",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     (creep.harvest as any).mockReturnValue(ERR_NOT_IN_RANGE);
     creep.pos.getRangeTo.mockReturnValue(5); // 离站位远 → moveToTarget 走 moveTo（非 range<=1 短路）
     const ctx = mockContext(snap);
@@ -121,7 +153,13 @@ describe("harvestMineral — 站位以贴 mineral 的 container 为通勤终点�
 describe("haulMineralsToStorage — deposit 目标容量感知（W7 定位 2026-08-01）", () => {
   /** work 模式、背 L 200 的 hauler。 */
   function carrier() {
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 800, mode: "work" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 800,
+      mode: "work",
+    });
     creep.store = multiStore({ energy: 0, L: 200 }, 800) as never;
     return creep;
   }

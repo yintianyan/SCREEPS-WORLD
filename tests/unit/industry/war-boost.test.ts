@@ -28,13 +28,18 @@ function makeLabStore(contents: Record<string, number>): Record<string, any> {
   });
   Object.defineProperty(store, "getUsedCapacity", {
     enumerable: false,
-    value: (resource?: string) => (resource === undefined ? null : contents[resource] ?? 0),
+    value: (resource?: string) => (resource === undefined ? null : (contents[resource] ?? 0)),
   });
   return store;
 }
 
 function makeLab(id: string, x: number, y: number, contents: Record<string, number> = {}): any {
-  const lab = { id, store: makeLabStore(contents), structureType: "lab", pos: { x, y, roomName: "W7N4" } };
+  const lab = {
+    id,
+    store: makeLabStore(contents),
+    structureType: "lab",
+    pos: { x, y, roomName: "W7N4" },
+  };
   registerObject(id, lab);
   return lab;
 }
@@ -109,14 +114,24 @@ describe("evaluateBoostRequests — attacker/healer 请求生成", () => {
     const requests = evaluateBoostRequests(
       [
         {
-          name: "a1", role: "attacker", ticksToLive: 1500, boosted: false,
+          name: "a1",
+          role: "attacker",
+          ticksToLive: 1500,
+          boosted: false,
           body: [
-            { type: "tough" }, { type: "attack" }, { type: "attack" },
-            { type: "attack" }, { type: "attack" }, { type: "move" },
+            { type: "tough" },
+            { type: "attack" },
+            { type: "attack" },
+            { type: "attack" },
+            { type: "attack" },
+            { type: "move" },
           ],
         },
         {
-          name: "h1", role: "healer", ticksToLive: 1500, boosted: false,
+          name: "h1",
+          role: "healer",
+          ticksToLive: 1500,
+          boosted: false,
           body: [
             ...Array.from({ length: 10 }, () => ({ type: "heal" as const })),
             ...Array.from({ length: 10 }, () => ({ type: "move" as const })),
@@ -136,10 +151,11 @@ describe("evaluateBoostRequests — attacker/healer 请求生成", () => {
     const requests = evaluateBoostRequests(
       [
         {
-          name: "a1", role: "attacker", ticksToLive: 1500, boosted: false,
-          body: [
-            { type: "attack", boost: "XUH2O" }, { type: "attack" },
-          ],
+          name: "a1",
+          role: "attacker",
+          ticksToLive: 1500,
+          boosted: false,
+          body: [{ type: "attack", boost: "XUH2O" }, { type: "attack" }],
         },
       ],
       6,
@@ -211,18 +227,17 @@ function runLabSystem(
   const snap = mockSnapshot({
     rcl: 6,
     labs: [makeLab("L1", 25, 25), makeLab("L2", 26, 25), makeLab("L3", 25, 26)],
-    storage: { id: "stor1", store: { energy: 5000, ...ALL_BASE_MINERALS, ...storageContents } } as any,
+    storage: {
+      id: "stor1",
+      store: { energy: 5000, ...ALL_BASE_MINERALS, ...storageContents },
+    } as any,
   });
   labSystem.run(mockContext(snap));
 }
 
 describe("lab-system — war 前馈接线", () => {
   it("war 姿态 + sponsor 房 + 化合物缺口 → reactionTarget 前馈为 XUH2O", () => {
-    runLabSystem(
-      {},
-      "war",
-      { targetRoom: "W6N4", sponsor: "W7N4", phase: "build" },
-    );
+    runLabSystem({}, "war", { targetRoom: "W6N4", sponsor: "W7N4", phase: "build" });
     expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XUH2O");
   });
 
@@ -232,29 +247,21 @@ describe("lab-system — war 前馈接线", () => {
   });
 
   it("war 姿态但本房非 sponsor → 不前馈（其他房继续默认生产）", () => {
-    runLabSystem(
-      {},
-      "war",
-      { targetRoom: "W6N4", sponsor: "W9N9", phase: "build" },
-    );
+    runLabSystem({}, "war", { targetRoom: "W6N4", sponsor: "W9N9", phase: "build" });
     expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XGH2O");
   });
 
   it("war 姿态 + 库存全达标 → 前馈让位默认生产", () => {
-    runLabSystem(
-      { XUH2O: 600, XLHO2: 600 },
-      "war",
-      { targetRoom: "W6N4", sponsor: "W7N4", phase: "build" },
-    );
+    runLabSystem({ XUH2O: 600, XLHO2: 600 }, "war", {
+      targetRoom: "W6N4",
+      sponsor: "W7N4",
+      phase: "build",
+    });
     expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XGH2O");
   });
 
   it("XUH2O 达标后前馈转向 XLHO2（多批生产自然推进到下一缺口）", () => {
-    runLabSystem(
-      { XUH2O: 600 },
-      "war",
-      { targetRoom: "W6N4", sponsor: "W7N4", phase: "build" },
-    );
+    runLabSystem({ XUH2O: 600 }, "war", { targetRoom: "W6N4", sponsor: "W7N4", phase: "build" });
     expect(g.Memory.rooms.W7N4.industry.reactionTarget).toBe("XLHO2");
   });
 

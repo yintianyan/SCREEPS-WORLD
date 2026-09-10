@@ -83,10 +83,23 @@ export function buildColonyStabilityDashboard(input: {
   resourceNetworkRole?: string;
 }): ColonyStabilityDashboard {
   const {
-    tick, roomName, rcl, colonyState, expansionStatus, bootstrapStatus,
-    netEnergyFlow, externalInflow, production, consumption,
-    population, targetPopulation, spawnAvailable, storageEnergy,
-    autonomyResult, stabilityResult, failureResult,
+    tick,
+    roomName,
+    rcl,
+    colonyState,
+    expansionStatus,
+    bootstrapStatus,
+    netEnergyFlow,
+    externalInflow,
+    production,
+    consumption,
+    population,
+    targetPopulation,
+    spawnAvailable,
+    storageEnergy,
+    autonomyResult,
+    stabilityResult,
+    failureResult,
     resourceNetworkRole = "unknown",
   } = input;
 

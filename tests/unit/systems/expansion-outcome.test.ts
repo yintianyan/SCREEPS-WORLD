@@ -14,7 +14,9 @@ function makeContext(): any {
     budget: mockBudget("healthy"),
     globalSiteCount: 0,
     getSnapshot: () => mockSnapshot(),
-    snapshots: function* () { yield mockSnapshot(); },
+    *snapshots() {
+      yield mockSnapshot();
+    },
   };
 }
 
@@ -29,7 +31,12 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
       creeps: {},
       rooms: { W7N4: { spawnQueue: [], buildQueue: [] } },
       kernel: {
-        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
+        strategy: {
+          posture: "expand",
+          since: 900,
+          expansionAllowed: true,
+          newRemoteOpsAllowed: true,
+        },
         expansion: { state: "claiming", target: "W6N4", sponsor: "W7N4", startedAt: 900 },
       },
     };
@@ -57,8 +64,21 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
       creeps: {},
       rooms: { W7N4: { spawnQueue: [], buildQueue: [] } },
       kernel: {
-        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
-        expansion: { state: "bootstrapping", target: "W6N4", sponsor: "W7N4", startedAt: 1100, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
+        strategy: {
+          posture: "expand",
+          since: 900,
+          expansionAllowed: true,
+          newRemoteOpsAllowed: true,
+        },
+        expansion: {
+          state: "bootstrapping",
+          target: "W6N4",
+          sponsor: "W7N4",
+          startedAt: 1100,
+          checkpointsPassed: 0,
+          reservedEnergy: 0,
+          consecutivePositiveTicks: 0,
+        },
       },
     };
     syncSquadIndex();
@@ -85,8 +105,21 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
       creeps: {},
       rooms: { W7N4: { spawnQueue: [], buildQueue: [] } },
       kernel: {
-        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
-        expansion: { state: "bootstrapping", target: "W6N4", sponsor: "W7N4", startedAt: 1100, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
+        strategy: {
+          posture: "expand",
+          since: 900,
+          expansionAllowed: true,
+          newRemoteOpsAllowed: true,
+        },
+        expansion: {
+          state: "bootstrapping",
+          target: "W6N4",
+          sponsor: "W7N4",
+          startedAt: 1100,
+          checkpointsPassed: 0,
+          reservedEnergy: 0,
+          consecutivePositiveTicks: 0,
+        },
       },
     };
     syncSquadIndex();
@@ -112,8 +145,21 @@ describe("expansion-manager — ExpansionOutcome 归因", () => {
       creeps: {},
       rooms: { W7N4: { spawnQueue: [], buildQueue: [] } },
       kernel: {
-        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
-        expansion: { state: "bootstrapping", target: "W6N4", sponsor: "W7N4", startedAt: 1100, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
+        strategy: {
+          posture: "expand",
+          since: 900,
+          expansionAllowed: true,
+          newRemoteOpsAllowed: true,
+        },
+        expansion: {
+          state: "bootstrapping",
+          target: "W6N4",
+          sponsor: "W7N4",
+          startedAt: 1100,
+          checkpointsPassed: 0,
+          reservedEnergy: 0,
+          consecutivePositiveTicks: 0,
+        },
       },
     };
     syncSquadIndex();
@@ -153,8 +199,18 @@ describe("expansion-manager — R7b 节奏自适应接线", () => {
       creeps: {},
       rooms: { W7N4: { spawnQueue: [], buildQueue: [] } },
       kernel: {
-        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
-        expansion: { state: "claiming", target: "W6N4", sponsor: "W7N4", startedAt: (globalThis as any).Game.time - CONFIG.expansion.claimTimeout - 100 }, // 已超时
+        strategy: {
+          posture: "expand",
+          since: 900,
+          expansionAllowed: true,
+          newRemoteOpsAllowed: true,
+        },
+        expansion: {
+          state: "claiming",
+          target: "W6N4",
+          sponsor: "W7N4",
+          startedAt: (globalThis as any).Game.time - CONFIG.expansion.claimTimeout - 100,
+        }, // 已超时
         expansionRhythm: { ring: [2, 2], blacklistMultiplier: 1.5, minSources: 1 }, // 已两连 timeout
       },
     };
@@ -171,10 +227,13 @@ describe("expansion-manager — R7b 节奏自适应接线", () => {
     const kernel = (globalThis as any).Memory.kernel;
     // 第三条 timeout 追加 → 连续 3 败 → 暂停。
     expect(kernel.expansionRhythm.ring).toEqual([2, 2, 2]);
-    expect(kernel.expansionPausedUntil).toBe((globalThis as any).Game.time + CONFIG.expansion.rhythm.pauseTicks);
+    expect(kernel.expansionPausedUntil).toBe(
+      (globalThis as any).Game.time + CONFIG.expansion.rhythm.pauseTicks,
+    );
     // 零成功窗口 → 黑名单 ×1.5。
-    expect(kernel.expansionBlacklist?.W6N4)
-      .toBe((globalThis as any).Game.time + Math.round(CONFIG.expansion.blacklistCooldown * 1.5));
+    expect(kernel.expansionBlacklist?.W6N4).toBe(
+      (globalThis as any).Game.time + Math.round(CONFIG.expansion.blacklistCooldown * 1.5),
+    );
   });
 
   it("暂停期内不开新扩张任务", () => {
@@ -189,7 +248,12 @@ describe("expansion-manager — R7b 节奏自适应接线", () => {
         },
       },
       kernel: {
-        strategy: { posture: "expand", since: 900, expansionAllowed: true, newRemoteOpsAllowed: true },
+        strategy: {
+          posture: "expand",
+          since: 900,
+          expansionAllowed: true,
+          newRemoteOpsAllowed: true,
+        },
         expansionPausedUntil: (globalThis as any).Game.time + 5000,
       },
     };

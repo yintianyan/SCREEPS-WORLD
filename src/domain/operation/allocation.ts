@@ -96,10 +96,7 @@ export function allocateMultiRoom(
  * 对于无 storage 的 candidate 房：
  *   need ≈ estimatedIncome × 500（约 500 tick 的收入量，作为种子能量）
  */
-function estimateDeficitAmount(
-  deficit: RoomRegistryEntry,
-  inTransit: number,
-): number {
+function estimateDeficitAmount(deficit: RoomRegistryEntry, inTransit: number): number {
   if (deficit.hasStorage && deficit.storageCapacity > 0) {
     const safetyTarget = deficit.storageCapacity * 0.3;
     const need = Math.max(0, safetyTarget - deficit.storageEnergy - inTransit);

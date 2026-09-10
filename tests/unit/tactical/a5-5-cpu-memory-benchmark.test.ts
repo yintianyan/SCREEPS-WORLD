@@ -9,17 +9,30 @@ import {
   type MicroEnemySnapshot,
 } from "../../../src/domain/tactical/combat-micro";
 import type { CombatCapability } from "../../../src/domain/combat/capability";
-import type { TerrainContext, EffectiveCombatModifier } from "../../../src/domain/defense/terrain-context";
+import type {
+  TerrainContext,
+  EffectiveCombatModifier,
+} from "../../../src/domain/defense/terrain-context";
 import type { AttackIntent } from "../../../src/domain/tactical/focus-fire";
 
 // ─── 辅助构造函数 ───
 
 function makeCap(overrides: Partial<CombatCapability> = {}): CombatCapability {
   return {
-    attack: 120, rangedAttack: 40, heal: 0, rangedHeal: 0,
-    dismantle: 0, claim: 0, effectiveHP: 1000, mobility: 1,
-    support: 0, toughParts: 0, boosted: false, maxBoostTier: 0,
-    totalParts: 10, activeParts: 10,
+    attack: 120,
+    rangedAttack: 40,
+    heal: 0,
+    rangedHeal: 0,
+    dismantle: 0,
+    claim: 0,
+    effectiveHP: 1000,
+    mobility: 1,
+    support: 0,
+    toughParts: 0,
+    boosted: false,
+    maxBoostTier: 0,
+    totalParts: 10,
+    activeParts: 10,
     ...overrides,
   };
 }
@@ -27,8 +40,14 @@ function makeCap(overrides: Partial<CombatCapability> = {}): CombatCapability {
 function makeMember(name: string, role: string, x: number, y: number): MicroMemberSnapshot {
   const cap = role === "healer" ? makeCap({ attack: 0, heal: 48 }) : makeCap();
   return {
-    name, role, pos: x * 50 + y, room: "W2N1",
-    hits: 1000, hitsMax: 1000, fatigue: 0, alive: true,
+    name,
+    role,
+    pos: x * 50 + y,
+    room: "W2N1",
+    hits: 1000,
+    hitsMax: 1000,
+    fatigue: 0,
+    alive: true,
     capability: cap,
     bodyState: deriveBodyAwareState(cap, role, 0.5),
   };
@@ -36,27 +55,50 @@ function makeMember(name: string, role: string, x: number, y: number): MicroMemb
 
 function makeEnemy(id: string, x: number, y: number): MicroEnemySnapshot {
   return {
-    id, name: `enemy-${id}`, pos: x * 50 + y, room: "W2N1",
-    hits: 1000, hitsMax: 1000,
+    id,
+    name: `enemy-${id}`,
+    pos: x * 50 + y,
+    room: "W2N1",
+    hits: 1000,
+    hitsMax: 1000,
     capability: makeCap({ attack: 100, mobility: 1 }),
-    role: "attacker", lastSeenTick: 100,
+    role: "attacker",
+    lastSeenTick: 100,
   };
 }
 
 function makeTerrain(): TerrainContext {
   return {
-    roomName: "W2N1", terrainType: "OPEN", walkability: "FULL",
-    openTileRatio: 0.8, wallDensity: 0.1, chokepoints: [], corridors: [],
-    rampartCoverage: "NONE", towerCoverage: "NONE", coreExposure: 0.3,
-    retreatQuality: "GOOD", mobilityModifier: 1.0, tick: 100,
+    roomName: "W2N1",
+    terrainType: "OPEN",
+    walkability: "FULL",
+    openTileRatio: 0.8,
+    wallDensity: 0.1,
+    chokepoints: [],
+    corridors: [],
+    rampartCoverage: "NONE",
+    towerCoverage: "NONE",
+    coreExposure: 0.3,
+    retreatQuality: "GOOD",
+    mobilityModifier: 1.0,
+    tick: 100,
   };
 }
 
 function makeModifier(): EffectiveCombatModifier {
-  return { mobilityModifier: 1.0, towerDamageFactor: 0, retreatDifficulty: 1.0, approachFactor: 1.0 };
+  return {
+    mobilityModifier: 1.0,
+    towerDamageFactor: 0,
+    retreatDifficulty: 1.0,
+    approachFactor: 1.0,
+  };
 }
 
-function makeSquadSnapshot(squadIdx: number, memberCount: number, enemyCount: number): MicroSnapshot {
+function makeSquadSnapshot(
+  squadIdx: number,
+  memberCount: number,
+  enemyCount: number,
+): MicroSnapshot {
   const members: MicroMemberSnapshot[] = [];
   for (let i = 0; i < memberCount; i++) {
     const role = i % 4 === 0 ? "healer" : "attacker";
@@ -67,20 +109,38 @@ function makeSquadSnapshot(squadIdx: number, memberCount: number, enemyCount: nu
     enemies.push(makeEnemy(`s${squadIdx}-e${i}`, 12 + i, 10 + (i % 3)));
   }
   const attackIntents: AttackIntent[] = members.map((m, i) => ({
-    squadId: `squad-${squadIdx}`, creepId: m.name,
+    squadId: `squad-${squadIdx}`,
+    creepId: m.name,
     targetId: enemies[i % enemies.length]!.id,
     targetPos: enemies[i % enemies.length]!.pos,
-    targetRoom: "W2N1", attackType: "ATTACK" as const,
-    priority: "PRIMARY" as const, expectedDamage: 120,
-    targetExpectedHP: 880, reason: "test", confidence: 0.85,
-    tick: 100, requiresMovement: false,
+    targetRoom: "W2N1",
+    attackType: "ATTACK" as const,
+    priority: "PRIMARY" as const,
+    expectedDamage: 120,
+    targetExpectedHP: 880,
+    reason: "test",
+    confidence: 0.85,
+    tick: 100,
+    requiresMovement: false,
   }));
   return {
-    tick: 100, squadId: `squad-${squadIdx}`, objectiveId: `tac-${squadIdx}`,
-    tacticalState: "ENGAGING", warPosture: "war", authorizedTargetRoom: "W2N1",
-    members, enemies, terrain: makeTerrain(), terrainModifier: makeModifier(),
-    cohesion: null, slots: [], anchor: null, prevPlan: null,
-    attackIntents, prevMicroDecisions: [], targetLocks: new Map(),
+    tick: 100,
+    squadId: `squad-${squadIdx}`,
+    objectiveId: `tac-${squadIdx}`,
+    tacticalState: "ENGAGING",
+    warPosture: "war",
+    authorizedTargetRoom: "W2N1",
+    members,
+    enemies,
+    terrain: makeTerrain(),
+    terrainModifier: makeModifier(),
+    cohesion: null,
+    slots: [],
+    anchor: null,
+    prevPlan: null,
+    attackIntents,
+    prevMicroDecisions: [],
+    targetLocks: new Map(),
   };
 }
 
@@ -122,7 +182,7 @@ describe("A5.5 CPU Benchmark", () => {
       const max = sorted[sorted.length - 1]!;
 
       // 输出（CI 中可查看）
-      // eslint-disable-next-line no-console
+
       console.log(
         `  ${cfg.squads}S×${cfg.members}M×${cfg.targets}T: avg=${avg.toFixed(2)}ms p95=${p95.toFixed(2)}ms max=${max.toFixed(2)}ms`,
       );
@@ -150,8 +210,9 @@ describe("A5.5 CPU Benchmark", () => {
     const p95 = sorted[Math.floor(sorted.length * 0.95)]!;
     const max = sorted[sorted.length - 1]!;
 
-    // eslint-disable-next-line no-console
-    console.log(`  1S×20M×50T: avg=${avg.toFixed(3)}ms p95=${p95.toFixed(3)}ms max=${max.toFixed(3)}ms`);
+    console.log(
+      `  1S×20M×50T: avg=${avg.toFixed(3)}ms p95=${p95.toFixed(3)}ms max=${max.toFixed(3)}ms`,
+    );
 
     expect(avg).toBeLessThan(5);
   });
@@ -168,11 +229,22 @@ describe("A5.5 Memory Boundedness", () => {
       members.push(makeMember(`m${i}`, i % 4 === 0 ? "healer" : "attacker", 10 + i, 10));
     }
     const snapshot: MicroSnapshot = {
-      tick: 100, squadId: "squad-test", objectiveId: "tac-test",
-      tacticalState: "ENGAGING", warPosture: "war", authorizedTargetRoom: "W2N1",
-      members, enemies: [makeEnemy("e1", 12, 10)], terrain: makeTerrain(),
-      terrainModifier: makeModifier(), cohesion: null, slots: [], anchor: null,
-      prevPlan: null, attackIntents: [], prevMicroDecisions: [],
+      tick: 100,
+      squadId: "squad-test",
+      objectiveId: "tac-test",
+      tacticalState: "ENGAGING",
+      warPosture: "war",
+      authorizedTargetRoom: "W2N1",
+      members,
+      enemies: [makeEnemy("e1", 12, 10)],
+      terrain: makeTerrain(),
+      terrainModifier: makeModifier(),
+      cohesion: null,
+      slots: [],
+      anchor: null,
+      prevPlan: null,
+      attackIntents: [],
+      prevMicroDecisions: [],
       targetLocks: new Map(),
     };
 
@@ -186,11 +258,23 @@ describe("A5.5 Memory Boundedness", () => {
     const members = [makeMember("m0", "ranged", 10, 10), makeMember("m1", "ranged", 11, 10)];
     const enemies = [makeEnemy("e0", 10, 11)];
     const snapshot: MicroSnapshot = {
-      tick: 100, squadId: "squad-test", objectiveId: "tac-test",
-      tacticalState: "ENGAGING", warPosture: "war", authorizedTargetRoom: "W2N1",
-      members, enemies, terrain: makeTerrain(), terrainModifier: makeModifier(),
-      cohesion: null, slots: [], anchor: null, prevPlan: null,
-      attackIntents: [], prevMicroDecisions: [], targetLocks: new Map(),
+      tick: 100,
+      squadId: "squad-test",
+      objectiveId: "tac-test",
+      tacticalState: "ENGAGING",
+      warPosture: "war",
+      authorizedTargetRoom: "W2N1",
+      members,
+      enemies,
+      terrain: makeTerrain(),
+      terrainModifier: makeModifier(),
+      cohesion: null,
+      slots: [],
+      anchor: null,
+      prevPlan: null,
+      attackIntents: [],
+      prevMicroDecisions: [],
+      targetLocks: new Map(),
     };
 
     const plan = planCombatMicro(snapshot);
@@ -218,11 +302,22 @@ describe("A5.5 Memory Boundedness", () => {
     const member = makeMember("a1", "attacker", 10, 10);
     const enemy = makeEnemy("e1", 11, 10);
     const snapshot: MicroSnapshot = {
-      tick: 100, squadId: "squad-test", objectiveId: "tac-test",
-      tacticalState: "ENGAGING", warPosture: "war", authorizedTargetRoom: "W2N1",
-      members: [member], enemies: [enemy], terrain: makeTerrain(),
-      terrainModifier: makeModifier(), cohesion: null, slots: [], anchor: null,
-      prevPlan: null, attackIntents: [], prevMicroDecisions: [],
+      tick: 100,
+      squadId: "squad-test",
+      objectiveId: "tac-test",
+      tacticalState: "ENGAGING",
+      warPosture: "war",
+      authorizedTargetRoom: "W2N1",
+      members: [member],
+      enemies: [enemy],
+      terrain: makeTerrain(),
+      terrainModifier: makeModifier(),
+      cohesion: null,
+      slots: [],
+      anchor: null,
+      prevPlan: null,
+      attackIntents: [],
+      prevMicroDecisions: [],
       targetLocks,
     };
 

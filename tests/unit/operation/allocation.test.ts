@@ -38,7 +38,15 @@ function makeEntry(overrides: Partial<RoomRegistryEntry> = {}): RoomRegistryEntr
 describe("A3-015: Multi-Room Allocation", () => {
   it("1 surplus → 1 deficit 单房分配", () => {
     const surplus = [makeEntry({ roomName: "A", transferable: 50000 })];
-    const deficit = [makeEntry({ roomName: "C", needsAid: true, riskBuffer: 100, storageCapacity: 300000, storageEnergy: 10000 })];
+    const deficit = [
+      makeEntry({
+        roomName: "C",
+        needsAid: true,
+        riskBuffer: 100,
+        storageCapacity: 300000,
+        storageEnergy: 10000,
+      }),
+    ];
 
     const plans = allocateMultiRoom(surplus, deficit);
     expect(plans.length).toBeGreaterThanOrEqual(0);
@@ -54,8 +62,20 @@ describe("A3-015: Multi-Room Allocation", () => {
   it("1 surplus → 2 deficit 分配（不超过 MAX_DEFICITS_PER_SOURCE=2）", () => {
     const surplus = [makeEntry({ roomName: "A", transferable: 100000 })];
     const deficit = [
-      makeEntry({ roomName: "B", needsAid: true, riskBuffer: 50, storageCapacity: 300000, storageEnergy: 50000 }),
-      makeEntry({ roomName: "C", needsAid: true, riskBuffer: 80, storageCapacity: 300000, storageEnergy: 30000 }),
+      makeEntry({
+        roomName: "B",
+        needsAid: true,
+        riskBuffer: 50,
+        storageCapacity: 300000,
+        storageEnergy: 50000,
+      }),
+      makeEntry({
+        roomName: "C",
+        needsAid: true,
+        riskBuffer: 80,
+        storageCapacity: 300000,
+        storageEnergy: 30000,
+      }),
     ];
 
     const plans = allocateMultiRoom(surplus, deficit);
@@ -66,7 +86,15 @@ describe("A3-015: Multi-Room Allocation", () => {
 
   it("已有在途量时扣除", () => {
     const surplus = [makeEntry({ roomName: "A", transferable: 50000 })];
-    const deficit = [makeEntry({ roomName: "C", needsAid: true, riskBuffer: 100, storageCapacity: 300000, storageEnergy: 50000 })];
+    const deficit = [
+      makeEntry({
+        roomName: "C",
+        needsAid: true,
+        riskBuffer: 100,
+        storageCapacity: 300000,
+        storageEnergy: 50000,
+      }),
+    ];
     const inTransit = new Map([["C", 30000]]);
 
     const plans = allocateMultiRoom(surplus, deficit, inTransit);
@@ -78,7 +106,15 @@ describe("A3-015: Multi-Room Allocation", () => {
 
   it("低于 MIN_TRANSFER_AMOUNT 不分配", () => {
     const surplus = [makeEntry({ roomName: "A", transferable: 500 })];
-    const deficit = [makeEntry({ roomName: "C", needsAid: true, riskBuffer: 100, storageCapacity: 300000, storageEnergy: 89000 })];
+    const deficit = [
+      makeEntry({
+        roomName: "C",
+        needsAid: true,
+        riskBuffer: 100,
+        storageCapacity: 300000,
+        storageEnergy: 89000,
+      }),
+    ];
     // deficit 需要 = 90000 - 89000 = 1000 = MIN_TRANSFER_AMOUNT
     const plans = allocateMultiRoom(surplus, deficit);
     // 边界情况，可能也可能不
@@ -129,9 +165,7 @@ describe("A3-017: Event-driven Replanning", () => {
   });
 
   it("carrier-death 标记 blocked", () => {
-    const ops = [
-      createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK),
-    ];
+    const ops = [createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK)];
     // 需要操作处于 running 状态
     // 先用 planned 状态测试（carrier-death 只在 running 时生效）
     const result = processReplanEvent(
@@ -149,23 +183,23 @@ describe("A3-017: Event-driven Replanning", () => {
       createOperation("W1N1", "W3N1", "energy", 2000, 1, TICK + 2000, TICK),
     ];
 
-    const result = processReplanEvent(ops, { type: "target-satisfied", targetRoom: "W2N1" }, TICK + 100);
+    const result = processReplanEvent(
+      ops,
+      { type: "target-satisfied", targetRoom: "W2N1" },
+      TICK + 100,
+    );
     expect(result[0]!.status).toBe("cancelled");
     expect(result[1]!.status).toBe("planned");
   });
 
   it("shouldReplan 检测状态变化", () => {
-    const ops = [
-      createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK),
-    ];
+    const ops = [createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK)];
     const newOps = processReplanEvent(ops, { type: "room-lost", roomName: "W1N1" }, TICK + 100);
     expect(shouldReplan(newOps, ops)).toBe(true);
   });
 
   it("shouldReplan 无变化返回 false", () => {
-    const ops = [
-      createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK),
-    ];
+    const ops = [createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK)];
     expect(shouldReplan(ops, ops)).toBe(false);
   });
 });

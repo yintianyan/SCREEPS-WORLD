@@ -63,7 +63,15 @@ describe("P1-1 — builder 编制纳入 buildQueue backlog", () => {
     const snap = mockSnapshot({
       myConstructionSites: [{ id: "site_1", structureType: "road" } as unknown as ConstructionSite],
     });
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvesters(4), [], normalCtx(0, 6), 1000);
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvesters(4),
+      [],
+      normalCtx(0, 6),
+      1000,
+    );
     expect(requests.filter(r => r.role === "builder")).toHaveLength(3);
   });
 
@@ -72,7 +80,15 @@ describe("P1-1 — builder 编制纳入 buildQueue backlog", () => {
     // if 条件扩展后 backlogWeighted > 0 也触发；target = min(4, 5, max(1, 0, 2, 0)) = 2
     setBuildQueue(buildTasks(4, "queued"));
     const snap = mockSnapshot({ myConstructionSites: [] });
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvesters(4), [], normalCtx(0, 4), 1000);
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvesters(4),
+      [],
+      normalCtx(0, 4),
+      1000,
+    );
     expect(requests.filter(r => r.role === "builder")).toHaveLength(2);
   });
 
@@ -81,7 +97,15 @@ describe("P1-1 — builder 编制纳入 buildQueue backlog", () => {
     // if 条件：sites>0 || roadRepair || backlogWeighted>0 → 全 false → 不进 builder 块
     setBuildQueue(buildTasks(1, "queued"));
     const snap = mockSnapshot({ myConstructionSites: [] });
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvesters(4), [], normalCtx(0, 1), 1000);
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvesters(4),
+      [],
+      normalCtx(0, 1),
+      1000,
+    );
     expect(requests.filter(r => r.role === "builder")).toHaveLength(0);
   });
 
@@ -90,7 +114,15 @@ describe("P1-1 — builder 编制纳入 buildQueue backlog", () => {
     // dynamicBuilderTarget = min(maxCount=4, economyCap=2, max(1, 0, 10, 0)) = 2
     setBuildQueue(buildTasks(20, "queued"));
     const snap = mockSnapshot({ myConstructionSites: [] });
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvesters(1), [], normalCtx(0, 20), 1000);
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvesters(1),
+      [],
+      normalCtx(0, 20),
+      1000,
+    );
     expect(requests.filter(r => r.role === "builder")).toHaveLength(2);
   });
 
@@ -99,7 +131,15 @@ describe("P1-1 — builder 编制纳入 buildQueue backlog", () => {
     // dynamicBuilderTarget = min(maxCount=4, economyCap=7, max(1, 0, 20, 0)) = 4
     setBuildQueue(buildTasks(40, "queued"));
     const snap = mockSnapshot({ myConstructionSites: [] });
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvesters(6), [], normalCtx(0, 40), 1000);
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvesters(6),
+      [],
+      normalCtx(0, 40),
+      1000,
+    );
     expect(requests.filter(r => r.role === "builder")).toHaveLength(4);
   });
 
@@ -109,8 +149,18 @@ describe("P1-1 — builder 编制纳入 buildQueue backlog", () => {
     const snap = mockSnapshot({
       myConstructionSites: [{ id: "site_1", structureType: "road" } as unknown as ConstructionSite],
     });
-    expect(() => evaluateDemand(snap, [], "normal", livingHarvesters(1), [], normalCtx(0), 1000)).not.toThrow();
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvesters(1), [], normalCtx(0), 1000);
+    expect(() =>
+      evaluateDemand(snap, [], "normal", livingHarvesters(1), [], normalCtx(0), 1000),
+    ).not.toThrow();
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvesters(1),
+      [],
+      normalCtx(0),
+      1000,
+    );
     expect(requests.filter(r => r.role === "builder")).toHaveLength(1);
   });
 
@@ -124,7 +174,15 @@ describe("P1-1 — builder 编制纳入 buildQueue backlog", () => {
       ...buildTasks(2, "blocked"),
     ]);
     const snap = mockSnapshot({ myConstructionSites: [] });
-    const { requests } = evaluateDemand(snap, [], "normal", livingHarvesters(4), [], normalCtx(0, 2), 1000);
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvesters(4),
+      [],
+      normalCtx(0, 2),
+      1000,
+    );
     expect(requests.filter(r => r.role === "builder")).toHaveLength(1);
   });
 });

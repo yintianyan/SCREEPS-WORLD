@@ -96,7 +96,7 @@ export function computeMinCutDefense(
     const isSource = exitSet.has(packed);
     const isSink = coreSet.has(packed);
     const isBlocked = blockedPositions?.has(packed) ?? false;
-    const vertexCap = (isSource || isSink || isBlocked) ? INF_CAP : 1;
+    const vertexCap = isSource || isSink || isBlocked ? INF_CAP : 1;
     addEdge(vIn, vOut, vertexCap);
 
     // 邻接边 v_out→neighbor_in（容量 INF）。v3：8 邻接 — 对角线仅在两个正交
@@ -106,7 +106,10 @@ export function computeMinCutDefense(
 
     // 正交 4 邻接（无切角限制）
     const orthogonal: ReadonlyArray<readonly [number, number]> = [
-      [x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1],
+      [x + 1, y],
+      [x - 1, y],
+      [x, y + 1],
+      [x, y - 1],
     ];
     for (const [nx, ny] of orthogonal) {
       if (nx < 0 || nx >= 50 || ny < 0 || ny >= 50) continue;
@@ -116,7 +119,10 @@ export function computeMinCutDefense(
 
     // 对角线 4 邻接（切角规则：两个正交角落格都非墙才连通）
     const diagonals: ReadonlyArray<readonly [number, number]> = [
-      [1, 1], [1, -1], [-1, 1], [-1, -1],
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
     ];
     for (const [dx, dy] of diagonals) {
       const nx = x + dx;
@@ -132,8 +138,8 @@ export function computeMinCutDefense(
   // 4. 超级源汇。关键：用 nodeCount/nodeCount+1（5000/5001），不能用 nodeCount-2/-1 —
   // nodeId(49,49,*) 占 4998/4999，旧实现超级源汇与之冲突：退化直连边 → maxFlow 爆炸、
   // 残余图 BFS 被污染 → 割集错误或恒 complete=false。
-  const SUPER_SOURCE = nodeCount;     // 5000，不与任何格冲突
-  const SUPER_SINK = nodeCount + 1;   // 5001
+  const SUPER_SOURCE = nodeCount; // 5000，不与任何格冲突
+  const SUPER_SINK = nodeCount + 1; // 5001
 
   for (const p of exitPositions) {
     if (getTerrain(p.x, p.y)) continue;

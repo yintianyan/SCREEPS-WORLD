@@ -6,12 +6,12 @@ import type { ResourceType } from "../operation/agenda-item";
 
 /** 资源损失分类。 */
 export type LossCategory =
-  | "production_loss"   // 生产点到存储点之间丢失
-  | "transport_loss"     // 运输过程中丢失
-  | "overflow_loss"      // 存储满溢出
-  | "death_loss"         // creep 死亡携带
-  | "decay_loss"         // 自然衰减
-  | "other_loss";        // 其他
+  | "production_loss" // 生产点到存储点之间丢失
+  | "transport_loss" // 运输过程中丢失
+  | "overflow_loss" // 存储满溢出
+  | "death_loss" // creep 死亡携带
+  | "decay_loss" // 自然衰减
+  | "other_loss"; // 其他
 
 /** 损失记录。 */
 export interface LossRecord {
@@ -136,8 +136,8 @@ export function buildResourceFlow(
   }
 
   // 期望期末存量
-  const expectedEnd = stockStart + produced + imported + bought
-    - exported - sold - consumed - totalLoss;
+  const expectedEnd =
+    stockStart + produced + imported + bought - exported - sold - consumed - totalLoss;
   const drift = stockEnd - expectedEnd;
 
   return {
@@ -164,10 +164,7 @@ export function buildResourceFlow(
 /**
  * 判断流图 drift 是否在容差内。纯函数。
  */
-export function isFlowGraphBalanced(
-  flow: ResourceFlowGraph,
-  tolerance: number,
-): boolean {
+export function isFlowGraphBalanced(flow: ResourceFlowGraph, tolerance: number): boolean {
   return Math.abs(flow.drift) <= tolerance;
 }
 
@@ -175,16 +172,18 @@ export function isFlowGraphBalanced(
  * 生成流图摘要文本（供日志/Dashboard）。纯函数。
  */
 export function summarizeFlowGraph(flow: ResourceFlowGraph): string {
-  return `${flow.resource}: `
-    + `prod=${Math.round(flow.produced)} `
-    + `imp=${Math.round(flow.imported)} `
-    + `buy=${Math.round(flow.bought)} `
-    + `exp=${Math.round(flow.exported)} `
-    + `sold=${Math.round(flow.sold)} `
-    + `con=${Math.round(flow.consumed)} `
-    + `loss=${Math.round(flow.totalLoss)} `
-    + `dStock=${Math.round(flow.stockDelta)} `
-    + `drift=${Math.round(flow.drift)}`;
+  return (
+    `${flow.resource}: ` +
+    `prod=${Math.round(flow.produced)} ` +
+    `imp=${Math.round(flow.imported)} ` +
+    `buy=${Math.round(flow.bought)} ` +
+    `exp=${Math.round(flow.exported)} ` +
+    `sold=${Math.round(flow.sold)} ` +
+    `con=${Math.round(flow.consumed)} ` +
+    `loss=${Math.round(flow.totalLoss)} ` +
+    `dStock=${Math.round(flow.stockDelta)} ` +
+    `drift=${Math.round(flow.drift)}`
+  );
 }
 
 // ─── Accounting Invariant ─────────────────────────────────

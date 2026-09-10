@@ -17,35 +17,35 @@ export type TerrainType =
 
 /** 可行走性描述。 */
 export type Walkability =
-  | "FULL"       // 大部分可通行，少量墙
-  | "PARTIAL"    // 有墙但有多条路径
+  | "FULL" // 大部分可通行，少量墙
+  | "PARTIAL" // 有墙但有多条路径
   | "RESTRICTED" // 墙多，路径有限
-  | "BLOCKED"    // 几乎不可通行
+  | "BLOCKED" // 几乎不可通行
   | "UNKNOWN";
 
 /** Tower 暴露等级。 */
 export type TowerExposure =
-  | "NONE"      // 无塔覆盖
-  | "LOW"       // 1 塔且距离远
-  | "MEDIUM"    // 1-2 塔中等距离
-  | "HIGH"      // 2+ 塔近距离
-  | "CRITICAL"  // 3+ 塔近距离（集火区）
+  | "NONE" // 无塔覆盖
+  | "LOW" // 1 塔且距离远
+  | "MEDIUM" // 1-2 塔中等距离
+  | "HIGH" // 2+ 塔近距离
+  | "CRITICAL" // 3+ 塔近距离（集火区）
   | "UNKNOWN";
 
 /** Rampart 覆盖等级。 */
 export type RampartCoverage =
-  | "NONE"           // 无 rampart
-  | "PARTIAL"        // 部分覆盖
-  | "HIGH"           // 大量覆盖
+  | "NONE" // 无 rampart
+  | "PARTIAL" // 部分覆盖
+  | "HIGH" // 大量覆盖
   | "CORE_FORTIFIED" // 核心区完全覆盖
   | "UNKNOWN";
 
 /** 撤退质量。 */
 export type RetreatQuality =
-  | "VERY_GOOD"  // 多条退路，无 chokepoint
-  | "GOOD"       // 有退路
-  | "POOR"       // 退路有限
-  | "CRITICAL"   // 几乎无退路
+  | "VERY_GOOD" // 多条退路，无 chokepoint
+  | "GOOD" // 有退路
+  | "POOR" // 退路有限
+  | "CRITICAL" // 几乎无退路
   | "UNKNOWN";
 
 /** 狭窄入口（军事意义重大）。 */
@@ -318,7 +318,7 @@ function identifyCorridors(snapshot: TerrainSnapshot): Corridor[] {
 
         // 尝试延伸走廊
         let length = 1;
-        let currentPacked = packed;
+        const currentPacked = packed;
         const { x: cx, y: cy } = unpackPos(currentPacked);
 
         // 简化：向邻居方向延伸
@@ -379,10 +379,7 @@ function computeRampartCoverage(snapshot: TerrainSnapshot): RampartCoverage {
 
  * 不简单用 towerCount 决定，必须考虑位置和可进入区域。
  */
-function computeTowerExposure(
-  snapshot: TerrainSnapshot,
-  hostilePos?: number,
-): TowerExposure {
+function computeTowerExposure(snapshot: TerrainSnapshot, hostilePos?: number): TowerExposure {
   if (!snapshot.hasVision) return "UNKNOWN";
   const towerCount = snapshot.towerPositions.length;
   if (towerCount === 0) return "NONE";
@@ -420,10 +417,7 @@ function computeTowerExposure(
 
  * 基于：到最近出口的距离（越近越暴露）、chokepoint 数量（越少越暴露）。
  */
-function computeCoreExposure(
-  snapshot: TerrainSnapshot,
-  chokepoints: Chokepoint[],
-): number {
+function computeCoreExposure(snapshot: TerrainSnapshot, chokepoints: Chokepoint[]): number {
   if (!snapshot.hasVision) return 0.5; // 未知时取中间值
 
   // 到最近出口的距离
@@ -434,9 +428,7 @@ function computeCoreExposure(
   }
 
   // 距离越近暴露越高（dist=0 → 1.0, dist=50 → 0.0）
-  const distanceExposure = minExitDist === Infinity
-    ? 0
-    : Math.max(0, 1 - minExitDist / 50);
+  const distanceExposure = minExitDist === Infinity ? 0 : Math.max(0, 1 - minExitDist / 50);
 
   // chokepoint 越多暴露越低（有天然屏障）
   const chokepointReduction = Math.min(chokepoints.length * 0.1, 0.5);
@@ -473,15 +465,11 @@ function computeRetreatQuality(
  * - 全沼泽 + 受限 = 0.3（移动严重受限）
  * - 正常平原 = 1.0
  */
-function computeMobilityModifier(
-  snapshot: TerrainSnapshot,
-  chokepoints: Chokepoint[],
-): number {
+function computeMobilityModifier(snapshot: TerrainSnapshot, chokepoints: Chokepoint[]): number {
   if (!snapshot.hasVision) return 1.0;
 
-  const roadRatio = snapshot.totalTiles > 0
-    ? snapshot.roadPositions.length / snapshot.totalTiles
-    : 0;
+  const roadRatio =
+    snapshot.totalTiles > 0 ? snapshot.roadPositions.length / snapshot.totalTiles : 0;
 
   // 道路加速
   let modifier = 1.0 + Math.min(roadRatio * 5, 0.5); // 最多 +0.5
@@ -527,7 +515,11 @@ function deriveTerrainType(
   if (wallDensity > 0.4) return "CONFINED";
 
   // OPEN_FIELD: 出口多 + 无 chokepoint + 无 rampart
-  if (snapshot.exitPositions.length >= 3 && chokepoints.length === 0 && rampartCoverage === "NONE") {
+  if (
+    snapshot.exitPositions.length >= 3 &&
+    chokepoints.length === 0 &&
+    rampartCoverage === "NONE"
+  ) {
     return "OPEN_FIELD";
   }
 

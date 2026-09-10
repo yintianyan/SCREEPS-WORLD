@@ -1,10 +1,24 @@
 /** 塔防侦察兵修复测试（R7c）— 满能量塔对贴身侦察兵不开火的根因与修复。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { towerDefenseSystem } from "../../../src/systems/tower-defense";
-import { mockContext, mockPos, mockSnapshot, mockStore, resetGlobals } from "../../support/factories";
+import {
+  mockContext,
+  mockPos,
+  mockSnapshot,
+  mockStore,
+  resetGlobals,
+} from "../../support/factories";
 
 function scoutMock(): any {
-  return { id: "scout_1", name: "scout_1", owner: { username: "Enemy" }, body: [], hits: 100, hitsMax: 100, pos: mockPos(10, 10, "W7N4") };
+  return {
+    id: "scout_1",
+    name: "scout_1",
+    owner: { username: "Enemy" },
+    body: [],
+    hits: 100,
+    hitsMax: 100,
+    pos: mockPos(10, 10, "W7N4"),
+  };
 }
 
 function towerMock(): any {
@@ -19,7 +33,13 @@ function towerMock(): any {
 }
 
 function repairTargetMock(): any {
-  return { id: "ext_1", structureType: "extension", hits: 100, hitsMax: 1000, pos: mockPos(22, 25, "W7N4") };
+  return {
+    id: "ext_1",
+    structureType: "extension",
+    hits: 100,
+    hitsMax: 1000,
+    pos: mockPos(22, 25, "W7N4"),
+  };
 }
 
 beforeEach(() => {
@@ -76,8 +96,12 @@ describe("tower-defense — 无害敌对在场（R7c 修复）", () => {
     };
     const tower = towerMock();
     const threat: any = {
-      id: "atk_1", name: "atk_1", owner: { username: "Enemy" },
-      body: [{ type: ATTACK, hits: 100 }], hits: 1000, hitsMax: 1000,
+      id: "atk_1",
+      name: "atk_1",
+      owner: { username: "Enemy" },
+      body: [{ type: ATTACK, hits: 100 }],
+      hits: 1000,
+      hitsMax: 1000,
       pos: mockPos(26, 25, "W7N4"),
     };
     const snap = mockSnapshot({

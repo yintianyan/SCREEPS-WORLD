@@ -51,7 +51,10 @@ describe("harvester — acquire 模式", () => {
     // s1 有 3 个 creep，s2 有 0 个 → fairShare = ceil(3/2) = 2，s1 超过 → 迁移。
     const snap = mockSnapshot({
       sources: [s1, s2],
-      sourceOccupancy: new Map([["s1", 3], ["s2", 0]]),
+      sourceOccupancy: new Map([
+        ["s1", 3],
+        ["s2", 0],
+      ]),
     });
     const creep = mockCreep({ used: 0, capacity: 50, sourceId: "s1" });
     const ctx = mockContext(snap);
@@ -81,7 +84,11 @@ describe("harvester — acquire 模式", () => {
   it("满载时 updateMode 切为 work（不执行 harvest）", () => {
     const source = mockSource("s1");
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
-    const snap = mockSnapshot({ sources: [source], sourceOccupancy: new Map([["s1", 1]]), fillTargets: [spawn] });
+    const snap = mockSnapshot({
+      sources: [source],
+      sourceOccupancy: new Map([["s1", 1]]),
+      fillTargets: [spawn],
+    });
     const creep = mockCreep({ used: 50, capacity: 50, sourceId: "s1", mode: "acquire" });
     const ctx = mockContext(snap);
 
@@ -232,7 +239,12 @@ describe("harvester — work 模式优先级链", () => {
 
   it("ERR_NOT_IN_RANGE 时调用 moveToTarget", () => {
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
-    const snap = mockSnapshot({ containers: [], links: [], fillTargets: [spawn], myConstructionSites: [] });
+    const snap = mockSnapshot({
+      containers: [],
+      links: [],
+      fillTargets: [spawn],
+      myConstructionSites: [],
+    });
     const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
     creep.transfer.mockReturnValue(-9); // ERR_NOT_IN_RANGE
     creep.pos.getRangeTo.mockReturnValue(5); // 不在范围内 → 走 moveTo 路径
@@ -298,7 +310,11 @@ describe("harvester — flee 与恢复", () => {
 
   it("敌人离开后 flee 恢复为 acquire（空载时）", () => {
     const source = mockSource("s1");
-    const snap = mockSnapshot({ hostileCreeps: [], sources: [source], sourceOccupancy: new Map([["s1", 1]]) });
+    const snap = mockSnapshot({
+      hostileCreeps: [],
+      sources: [source],
+      sourceOccupancy: new Map([["s1", 1]]),
+    });
     const creep = mockCreep({ used: 0, capacity: 50, mode: "flee", sourceId: "s1" });
     const ctx = mockContext(snap);
 

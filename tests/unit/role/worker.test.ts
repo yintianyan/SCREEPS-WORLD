@@ -21,7 +21,13 @@ describe("worker — acquire 模式", () => {
   it("从 source 采集", () => {
     const source = mockSource("s1");
     const snap = mockSnapshot({ sources: [source], sourceOccupancy: new Map([["s1", 1]]) });
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     workerRole.run(creep, ctx);
@@ -32,14 +38,27 @@ describe("worker — acquire 模式", () => {
   it("使用 assignment sourceId 指定的 source", () => {
     const s1 = mockSource("s1");
     const s2 = mockSource("s2");
-    const snap = mockSnapshot({ sources: [s1, s2], sourceOccupancy: new Map([["s1", 2], ["s2", 0]]) });
+    const snap = mockSnapshot({
+      sources: [s1, s2],
+      sourceOccupancy: new Map([
+        ["s1", 2],
+        ["s2", 0],
+      ]),
+    });
     const creep = mockCreep({
       name: "worker_1",
       role: "worker",
       used: 0,
       capacity: 50,
       mode: "acquire",
-      assignment: { id: "t1", kind: "harvest", sourceId: "s2", leaseUntil: 2000, revision: 1, assignedAt: 990 },
+      assignment: {
+        id: "t1",
+        kind: "harvest",
+        sourceId: "s2",
+        leaseUntil: 2000,
+        revision: 1,
+        assignedAt: 990,
+      },
     });
     const ctx = mockContext(snap);
 
@@ -52,7 +71,13 @@ describe("worker — acquire 模式", () => {
   it("source 能量为 0 时不尝试采集，进入 idle", () => {
     const source = mockSource("s1", 0);
     const snap = mockSnapshot({ sources: [source], sourceOccupancy: new Map([["s1", 1]]) });
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     workerRole.run(creep, ctx);
@@ -64,8 +89,18 @@ describe("worker — acquire 模式", () => {
   it("满载时 updateMode 切为 work", () => {
     const source = mockSource("s1");
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
-    const snap = mockSnapshot({ sources: [source], sourceOccupancy: new Map([["s1", 1]]), fillTargets: [spawn] });
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "acquire" });
+    const snap = mockSnapshot({
+      sources: [source],
+      sourceOccupancy: new Map([["s1", 1]]),
+      fillTargets: [spawn],
+    });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 50,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     workerRole.run(creep, ctx);
@@ -80,7 +115,13 @@ describe("worker — work 模式", () => {
   it("向 fillTarget 运送能量", () => {
     const spawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300 });
     const snap = mockSnapshot({ fillTargets: [spawn] });
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     workerRole.run(creep, ctx);
@@ -90,12 +131,24 @@ describe("worker — work 模式", () => {
 
   // P0 修复：worker 被 kernel 计入 repairRooms，必须有实际 repair action。
   it("修复血量 < 50% 的关键结构（无 fillTarget 时）", () => {
-    const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 300, capacity: 300, hits: 400, hitsMax: 1000 });
+    const damagedSpawn = mockStructure("spawn", {
+      id: "sp1",
+      energy: 300,
+      capacity: 300,
+      hits: 400,
+      hitsMax: 1000,
+    });
     const snap = mockSnapshot({
       fillTargets: [],
       spawns: [damagedSpawn],
     });
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     workerRole.run(creep, ctx);
@@ -104,12 +157,24 @@ describe("worker — work 模式", () => {
   });
 
   it("repairCritical 优先于 fillTarget（结构快塌了比填能量更紧急）", () => {
-    const damagedSpawn = mockStructure("spawn", { id: "sp1", energy: 100, capacity: 300, hits: 400, hitsMax: 1000 });
+    const damagedSpawn = mockStructure("spawn", {
+      id: "sp1",
+      energy: 100,
+      capacity: 300,
+      hits: 400,
+      hitsMax: 1000,
+    });
     const snap = mockSnapshot({
       fillTargets: [damagedSpawn],
       spawns: [damagedSpawn],
     });
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     workerRole.run(creep, ctx);
@@ -128,7 +193,14 @@ describe("worker — work 模式", () => {
       used: 50,
       capacity: 50,
       mode: "work",
-      assignment: { id: "t1", kind: "fill", targetId: "ext1", leaseUntil: 2000, revision: 1, assignedAt: 990 },
+      assignment: {
+        id: "t1",
+        kind: "fill",
+        targetId: "ext1",
+        leaseUntil: 2000,
+        revision: 1,
+        assignedAt: 990,
+      },
     });
     const ctx = mockContext(snap);
 
@@ -140,7 +212,13 @@ describe("worker — work 模式", () => {
   it("无 fillTarget 时回退到升级控制器", () => {
     const controller = mockController();
     const snap = mockSnapshot({ fillTargets: [], controller });
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     workerRole.run(creep, ctx);
@@ -150,7 +228,13 @@ describe("worker — work 模式", () => {
 
   it("无 fillTarget 无控制器时 idle", () => {
     const snap = mockSnapshot({ fillTargets: [], controller: undefined });
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     workerRole.run(creep, ctx);
@@ -161,7 +245,13 @@ describe("worker — work 模式", () => {
   it("ERR_FULL 时触发 updateMode", () => {
     const spawn = mockStructure("spawn", { id: "sp1", energy: 295, capacity: 300 });
     const snap = mockSnapshot({ fillTargets: [spawn] });
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     creep.transfer.mockReturnValue(-8); // ERR_FULL
     const ctx = mockContext(snap);
 
@@ -173,12 +263,27 @@ describe("worker — work 模式", () => {
   // W-1 回归：assignment 目标已满时 resolve 放行 fallthrough，不携能活锁。
   it("W-1：assignment 目标已满时释放并 fallthrough 到 repairCritical", () => {
     const fullSpawn = mockStructure("spawn", {
-      id: "sp1", energy: 300, capacity: 300, hits: 400, hitsMax: 1000,
+      id: "sp1",
+      energy: 300,
+      capacity: 300,
+      hits: 400,
+      hitsMax: 1000,
     });
     const snap = mockSnapshot({ fillTargets: [], spawns: [fullSpawn] });
     const creep = mockCreep({
-      name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work",
-      assignment: { id: "t1", kind: "fill", targetId: "sp1", leaseUntil: 2000, revision: 1, assignedAt: 990 },
+      name: "worker_1",
+      role: "worker",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+      assignment: {
+        id: "t1",
+        kind: "fill",
+        targetId: "sp1",
+        leaseUntil: 2000,
+        revision: 1,
+        assignedAt: 990,
+      },
     });
     const ctx = mockContext(snap);
 
@@ -195,8 +300,19 @@ describe("worker — work 模式", () => {
     const ext = mockStructure("extension", { id: "ext1", energy: 0, capacity: 50 });
     const snap = mockSnapshot({ fillTargets: [ext] });
     const creep = mockCreep({
-      name: "worker_1", role: "worker", used: 50, capacity: 50, mode: "work",
-      assignment: { id: "t1", kind: "fill", targetId: "ext1", leaseUntil: 2000, revision: 1, assignedAt: 990 },
+      name: "worker_1",
+      role: "worker",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+      assignment: {
+        id: "t1",
+        kind: "fill",
+        targetId: "ext1",
+        leaseUntil: 2000,
+        revision: 1,
+        assignedAt: 990,
+      },
     });
     const ctx = mockContext(snap);
 
@@ -211,7 +327,13 @@ describe("worker — flee", () => {
   it("有敌人时 flee 且不执行经济动作", () => {
     const hostile = mockHostile();
     const snap = mockSnapshot({ hostileCreeps: [hostile] });
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 30, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 30,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     workerRole.run(creep, ctx);
@@ -223,8 +345,19 @@ describe("worker — flee", () => {
 
   it("flee 恢复后继续工作", () => {
     const source = mockSource("s1");
-    const snap = mockSnapshot({ hostileCreeps: [], sources: [source], sourceOccupancy: new Map([["s1", 1]]) });
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 0, capacity: 50, mode: "flee", sourceId: "s1" });
+    const snap = mockSnapshot({
+      hostileCreeps: [],
+      sources: [source],
+      sourceOccupancy: new Map([["s1", 1]]),
+    });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 0,
+      capacity: 50,
+      mode: "flee",
+      sourceId: "s1",
+    });
     const ctx = mockContext(snap);
 
     workerRole.run(creep, ctx);
@@ -251,7 +384,13 @@ describe("worker — 边界情况", () => {
 
   it("不在 home 时 idle 并尝试回房", () => {
     const snap = mockSnapshot();
-    const creep = mockCreep({ name: "worker_1", role: "worker", used: 0, capacity: 50, home: "W7N4" });
+    const creep = mockCreep({
+      name: "worker_1",
+      role: "worker",
+      used: 0,
+      capacity: 50,
+      home: "W7N4",
+    });
     creep.room.name = "W6N4";
     const ctx = mockContext(snap);
 

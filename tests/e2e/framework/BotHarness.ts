@@ -76,6 +76,7 @@ export class BotHarness {
     const { db } = await server.world.load();
     const [userData] = await db.users.find({ username });
     if (!userData) throw new Error(`attachExisting: user not found: ${username}`);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
     const userMod = require("screeps-server-mockup/dist/src/user.js");
     const User = userMod.default ?? userMod;
     this._bot = new User(server, userData);

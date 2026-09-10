@@ -22,8 +22,8 @@ import type { DistributorTier } from "../support/targeting";
 const TIER_WITHDRAW_CAP: readonly [number, number, number, number] = [
   Infinity, // tier 0: 满载
   Infinity, // tier 1: 满载（但目标类型受限）
-  400,      // tier 2: 限取 400/tick
-  200,      // tier 3: 限取 200/tick
+  400, // tier 2: 限取 400/tick
+  200, // tier 3: 限取 200/tick
 ];
 
 /** 从 storage 限量取能 — 带水位分级节流。
@@ -37,7 +37,7 @@ const TIER_WITHDRAW_CAP: readonly [number, number, number, number] = [
 function withdrawStorageForDistribution(): ActionCandidate {
   return {
     name: "withdraw:storage-for-distribution",
-    resolve: (ac) => {
+    resolve: ac => {
       const st = ac.snapshot.storage;
       if (!st || st.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       // 需求门禁：本档位无可服务的 fillTarget 时禁止从 storage 取能。

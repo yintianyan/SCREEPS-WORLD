@@ -47,33 +47,21 @@ export const tacticalRuntimePipelineSystem: System = {
     // 本 tick 的 Game action 尚未执行（main 阶段在角色之前），各 stage
     // 消费的是上一 tick 的 globalCache 快照 + 本 tick 的 ctx.snapshots。
     if ((tick - phase) % STAGE_TACTICAL_RUNTIME_INTERVAL === 0) {
-      safeRun(
-        `${PIPELINE_NAME}/tactical-runtime`,
-        () => tacticalRuntimeSystem.run(ctx),
-      );
+      safeRun(`${PIPELINE_NAME}/tactical-runtime`, () => tacticalRuntimeSystem.run(ctx));
     }
 
     // ── Stage 2: Squad Movement (每 1t) — 消费 tactical-runtime 决策 ──
     // 始终执行（与 pipeline interval 一致）
-    safeRun(
-      `${PIPELINE_NAME}/squad-movement`,
-      () => squadMovementSystem.run(ctx),
-    );
+    safeRun(`${PIPELINE_NAME}/squad-movement`, () => squadMovementSystem.run(ctx));
 
     // ── Stage 3: Tactical Engagement (每 3t) — 消费编队状态 ──
     if ((tick - phase) % STAGE_TACTICAL_ENGAGEMENT_INTERVAL === 0) {
-      safeRun(
-        `${PIPELINE_NAME}/tactical-engagement`,
-        () => tacticalEngagementSystem.run(ctx),
-      );
+      safeRun(`${PIPELINE_NAME}/tactical-engagement`, () => tacticalEngagementSystem.run(ctx));
     }
 
     // ── Stage 4: Combat Micro (每 3t) — 消费接敌评估，产出微操 intent ──
     if ((tick - phase) % STAGE_COMBAT_MICRO_INTERVAL === 0) {
-      safeRun(
-        `${PIPELINE_NAME}/combat-micro`,
-        () => combatMicroSystem.run(ctx),
-      );
+      safeRun(`${PIPELINE_NAME}/combat-micro`, () => combatMicroSystem.run(ctx));
     }
   },
 };

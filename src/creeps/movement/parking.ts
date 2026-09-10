@@ -60,25 +60,40 @@ export function getParkRoomData(snapshot: RoomSnapshot): ParkRoomData {
   const blocking = new Set<number>();
   const addIfBlocking = (type: string, x: number, y: number): void => {
     // road/container/rampart 可站立（creep 能停上面），其余结构阻挡归位。
-    if (
-      type !== STRUCTURE_ROAD &&
-      type !== STRUCTURE_CONTAINER &&
-      type !== STRUCTURE_RAMPART
-    ) {
+    if (type !== STRUCTURE_ROAD && type !== STRUCTURE_CONTAINER && type !== STRUCTURE_RAMPART) {
       blocking.add(x * 50 + y);
     }
   };
   const allStructures: readonly { structureType: string; pos: RoomPosition }[] = [
-    ...snapshot.spawns, ...snapshot.extensions, ...snapshot.towers, ...snapshot.containers,
-    ...snapshot.roads, ...snapshot.walls, ...snapshot.ramparts, ...snapshot.links,
+    ...snapshot.spawns,
+    ...snapshot.extensions,
+    ...snapshot.towers,
+    ...snapshot.containers,
+    ...snapshot.roads,
+    ...snapshot.walls,
+    ...snapshot.ramparts,
+    ...snapshot.links,
     ...snapshot.labs,
   ];
   for (const s of allStructures) addIfBlocking(s.structureType, s.pos.x, s.pos.y);
-  if (snapshot.storage) addIfBlocking(snapshot.storage.structureType, snapshot.storage.pos.x, snapshot.storage.pos.y);
-  if (snapshot.terminal) addIfBlocking(snapshot.terminal.structureType, snapshot.terminal.pos.x, snapshot.terminal.pos.y);
-  if (snapshot.extractor) addIfBlocking(snapshot.extractor.structureType, snapshot.extractor.pos.x, snapshot.extractor.pos.y);
-  if (snapshot.factory) addIfBlocking(snapshot.factory.structureType, snapshot.factory.pos.x, snapshot.factory.pos.y);
-  for (const site of snapshot.myConstructionSites) addIfBlocking(site.structureType, site.pos.x, site.pos.y);
+  if (snapshot.storage)
+    addIfBlocking(snapshot.storage.structureType, snapshot.storage.pos.x, snapshot.storage.pos.y);
+  if (snapshot.terminal)
+    addIfBlocking(
+      snapshot.terminal.structureType,
+      snapshot.terminal.pos.x,
+      snapshot.terminal.pos.y,
+    );
+  if (snapshot.extractor)
+    addIfBlocking(
+      snapshot.extractor.structureType,
+      snapshot.extractor.pos.x,
+      snapshot.extractor.pos.y,
+    );
+  if (snapshot.factory)
+    addIfBlocking(snapshot.factory.structureType, snapshot.factory.pos.x, snapshot.factory.pos.y);
+  for (const site of snapshot.myConstructionSites)
+    addIfBlocking(site.structureType, site.pos.x, site.pos.y);
 
   // 房间连接带：与 parkInForeignRoom 的走廊带同口径（距边界 ≤2 格）。
   const portals = new Set<number>();
@@ -107,10 +122,11 @@ function hasCreepAt(room: Room, x: number, y: number): boolean {
 /** 该格是否有阻挡站立的结构（与 getParkRoomData.blocking 同口径，用于无快照的异房）。 */
 function hasBlockingStructureAt(room: Room, x: number, y: number): boolean {
   const structs = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
-  return structs.some(s =>
-    s.structureType !== STRUCTURE_ROAD &&
-    s.structureType !== STRUCTURE_CONTAINER &&
-    s.structureType !== STRUCTURE_RAMPART,
+  return structs.some(
+    s =>
+      s.structureType !== STRUCTURE_ROAD &&
+      s.structureType !== STRUCTURE_CONTAINER &&
+      s.structureType !== STRUCTURE_RAMPART,
   );
 }
 
@@ -136,8 +152,7 @@ function parkInForeignRoom(creep: Creep): void {
   // 边界深度 = 距最近边界的格数（0 = 边界行，递增向房心）。出带可能需要 2 步
   // （站在 y=0/49 时 8 邻域全在带内）—— 只挑「一步出带」格会卡死在边界排，
   // 故回退接受「更深向房心」的带内格，逐 tick 爬出。
-  const borderDepth = (nx: number, ny: number): number =>
-    Math.min(nx, 49 - nx, ny, 49 - ny);
+  const borderDepth = (nx: number, ny: number): number => Math.min(nx, 49 - nx, ny, 49 - ny);
   const curDepth = borderDepth(x, y);
   let best: { x: number; y: number; dist: number } | undefined;
   let fallback: { x: number; y: number; dist: number } | undefined;
@@ -199,7 +214,9 @@ function findParkSpot(
   const coreY = snapshot.spawns[0]?.pos.y;
   const currentPacked = packPos(creep.pos);
   const onBlockingTile =
-    data.critical.has(currentPacked) || data.roads.has(currentPacked) || data.portals.has(currentPacked);
+    data.critical.has(currentPacked) ||
+    data.roads.has(currentPacked) ||
+    data.portals.has(currentPacked);
 
   const coreDist = (x: number, y: number): number =>
     coreX !== undefined && coreY !== undefined
@@ -207,7 +224,14 @@ function findParkSpot(
       : 0;
 
   // 收集可站立邻格（地形可走、无阻挡结构、无 creep、未被预约）。
-  interface Candidate { x: number; y: number; critical: boolean; road: boolean; portal: boolean; core: number }
+  interface Candidate {
+    x: number;
+    y: number;
+    critical: boolean;
+    road: boolean;
+    portal: boolean;
+    core: number;
+  }
   const candidates: Candidate[] = [];
   for (const dir of Object.keys(DIR_DELTA)) {
     const delta = DIR_DELTA[Number(dir) as DirectionConstant];
@@ -220,9 +244,12 @@ function findParkSpot(
     if (hasCreepAt(room, nx, ny)) continue;
     if (reserved.has(packed)) continue;
     candidates.push({
-      x: nx, y: ny,
-      critical: data.critical.has(packed), road: data.roads.has(packed),
-      portal: data.portals.has(packed), core: coreDist(nx, ny),
+      x: nx,
+      y: ny,
+      critical: data.critical.has(packed),
+      road: data.roads.has(packed),
+      portal: data.portals.has(packed),
+      core: coreDist(nx, ny),
     });
   }
   if (candidates.length === 0) return undefined;
@@ -242,10 +269,22 @@ function findParkSpot(
   // 再取最靠近核心者，逐 tick 向外走直到出现逃离格。
   let best: Candidate | undefined;
   for (const c of candidates) {
-    if (!best) { best = c; continue; }
-    if (c.critical !== best.critical) { if (!c.critical) best = c; continue; }
-    if (c.road !== best.road) { if (!c.road) best = c; continue; }
-    if (c.portal !== best.portal) { if (!c.portal) best = c; continue; }
+    if (!best) {
+      best = c;
+      continue;
+    }
+    if (c.critical !== best.critical) {
+      if (!c.critical) best = c;
+      continue;
+    }
+    if (c.road !== best.road) {
+      if (!c.road) best = c;
+      continue;
+    }
+    if (c.portal !== best.portal) {
+      if (!c.portal) best = c;
+      continue;
+    }
     if (c.core < best.core) best = c;
   }
   return best ? { x: best.x, y: best.y } : undefined;
@@ -282,7 +321,11 @@ export function parkIdleCreep(creep: Creep, snapshot: RoomSnapshot): void {
   const data = getParkRoomData(snapshot);
 
   // 已安全：预约本格，不动（portal 带上不算安全 — 门坎格 idle 会堵跨房通道）。
-  if (!data.critical.has(currentPacked) && !data.roads.has(currentPacked) && !data.portals.has(currentPacked)) {
+  if (
+    !data.critical.has(currentPacked) &&
+    !data.roads.has(currentPacked) &&
+    !data.portals.has(currentPacked)
+  ) {
     reserved.add(currentPacked);
     return;
   }

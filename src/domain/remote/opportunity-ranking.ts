@@ -103,10 +103,14 @@ export function scoreValue(
   const grade = opp.valueGrade;
   const weight = config.valueWeight;
   switch (grade) {
-    case "premium": return weight;
-    case "profitable": return weight * 0.75;
-    case "marginal": return weight * 0.5;
-    case "unprofitable": return weight * 0.1;
+    case "premium":
+      return weight;
+    case "profitable":
+      return weight * 0.75;
+    case "marginal":
+      return weight * 0.5;
+    case "unprofitable":
+      return weight * 0.1;
   }
 }
 
@@ -124,7 +128,11 @@ export function scoreDistance(
   config: RankingConfig = DEFAULT_RANKING_CONFIG,
 ): number {
   const dist = opp.sourceSnapshot.linearDistance;
-  const { minReferenceDistance: minDist, maxReferenceDistance: maxDist, distanceWeight: weight } = config;
+  const {
+    minReferenceDistance: minDist,
+    maxReferenceDistance: maxDist,
+    distanceWeight: weight,
+  } = config;
   if (dist <= minDist) return weight;
   if (dist >= maxDist) return 0;
   const ratio = (maxDist - dist) / (maxDist - minDist);
@@ -151,10 +159,18 @@ export function scoreRisk(
   const weight = config.riskWeight;
   let score: number;
   switch (level) {
-    case 0: score = weight; break;
-    case 1: score = weight * 0.75; break;
-    case 2: score = weight * 0.5; break;
-    default: score = weight * 0.1; break;
+    case 0:
+      score = weight;
+      break;
+    case 1:
+      score = weight * 0.75;
+      break;
+    case 2:
+      score = weight * 0.5;
+      break;
+    default:
+      score = weight * 0.1;
+      break;
   }
   if (opp.sourceSnapshot.hasInvaderCore) score *= 0.5;
   return Math.round(score);
@@ -199,7 +215,14 @@ export function scoreOpportunity(
   const reliabilityScore = scoreReliability(opp, config);
   const totalScore = valueScore + distanceScore + riskScore + reliabilityScore;
 
-  const reason = buildReason(opp, totalScore, valueScore, distanceScore, riskScore, reliabilityScore);
+  const reason = buildReason(
+    opp,
+    totalScore,
+    valueScore,
+    distanceScore,
+    riskScore,
+    reliabilityScore,
+  );
 
   return {
     id: opp.id,
@@ -238,7 +261,7 @@ function buildReason(
   parts.push(`risk=${opp.sourceSnapshot.riskLevel}(${risk})`);
   parts.push(`rel(${reliability})`);
   if (opp.sourceSnapshot.hasInvaderCore) parts.push("invaderCore!");
-  return parts.join(" ") + ` = ${total}`;
+  return `${parts.join(" ")} = ${total}`;
 }
 
 // ─── 排序 ────────────────────────────────────────────────

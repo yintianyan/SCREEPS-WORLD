@@ -256,7 +256,7 @@ describe("重开稳定性 — layout-planner 从 Memory 重新规划", () => {
       sources: [source as any],
       containers: [container as any],
       towers: rcl >= 3 ? [mockStructure("tower", { id: `tw_${roomName}` }) as any] : [],
-      storage: rcl >= 4 ? mockStructure("storage", { id: `st_${roomName}` }) as any : undefined,
+      storage: rcl >= 4 ? (mockStructure("storage", { id: `st_${roomName}` }) as any) : undefined,
     });
 
     return { roomName, snap, spawnPos, anchor };

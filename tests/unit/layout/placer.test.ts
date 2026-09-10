@@ -1,14 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { computeDistanceField } from "../../../src/domain/layout/terrain-analysis";
-import { placeStructures, placementsToCandidates, DEFAULT_PLACER_CONFIG, buildCandidateGrid } from "../../../src/domain/layout/constraint-placer";
+import {
+  placeStructures,
+  placementsToCandidates,
+  DEFAULT_PLACER_CONFIG,
+  buildCandidateGrid,
+} from "../../../src/domain/layout/constraint-placer";
 import { packPos } from "../../../src/domain/layout/types";
 
 const noWalls = (_x: number, _y: number): boolean => false;
 
 /** 中心有 5×5 墙块的地形。 */
 function centerBlock(cx: number, cy: number, r: number) {
-  return (x: number, y: number): boolean =>
-    Math.abs(x - cx) <= r && Math.abs(y - cy) <= r;
+  return (x: number, y: number): boolean => Math.abs(x - cx) <= r && Math.abs(y - cy) <= r;
 }
 
 describe("constraint-placer — placeStructures", () => {
@@ -81,7 +85,7 @@ describe("constraint-placer — placeStructures", () => {
     for (const p of result) {
       const dx = p.pos.x - anchor.x;
       const dy = p.pos.y - anchor.y;
-      expect(((dx + dy) % 2 + 2) % 2).toBe(0);
+      expect((((dx + dy) % 2) + 2) % 2).toBe(0);
     }
   });
 
@@ -122,7 +126,12 @@ describe("constraint-placer — placeStructures", () => {
     occupied.add(packPos(25, 25)); // anchor
     for (const p of result) occupied.add(packPos(p.pos.x, p.pos.y));
 
-    const orthogonal: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const orthogonal: [number, number][] = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
     for (const p of result) {
       // 检查至少有 1 个正交邻居不在占用集中（可站格）
       let hasFree = false;
@@ -130,7 +139,10 @@ describe("constraint-placer — placeStructures", () => {
         const nx = p.pos.x + dx;
         const ny = p.pos.y + dy;
         if (nx < 1 || nx > 48 || ny < 1 || ny > 48) continue;
-        if (!occupied.has(packPos(nx, ny))) { hasFree = true; break; }
+        if (!occupied.has(packPos(nx, ny))) {
+          hasFree = true;
+          break;
+        }
       }
       expect(hasFree).toBe(true);
     }
@@ -150,15 +162,21 @@ describe("constraint-placer — placeStructures", () => {
     ]);
 
     // 严格守卫（显式 sealTolerance 为空 = 0）：目标格被拒绝。
-    const strict = placeStructures(
-      anchor, field, noWalls, 2, new Set(preOccupied), new Map(),
-      { ...DEFAULT_PLACER_CONFIG, sealTolerance: {} },
-    );
+    const strict = placeStructures(anchor, field, noWalls, 2, new Set(preOccupied), new Map(), {
+      ...DEFAULT_PLACER_CONFIG,
+      sealTolerance: {},
+    });
     expect(strict.some(p => p.pos.x === target.x && p.pos.y === target.y)).toBe(false);
 
     // 默认配置（extension tolerance=1）：目标格放行。
     const tolerant = placeStructures(
-      anchor, field, noWalls, 2, new Set(preOccupied), new Map(), DEFAULT_PLACER_CONFIG,
+      anchor,
+      field,
+      noWalls,
+      2,
+      new Set(preOccupied),
+      new Map(),
+      DEFAULT_PLACER_CONFIG,
     );
     const targetPlacement = tolerant.find(p => p.pos.x === target.x && p.pos.y === target.y);
     expect(targetPlacement).toBeDefined();
@@ -186,7 +204,8 @@ describe("constraint-placer — placeStructures", () => {
     // 每个 lab 至少与另一个 lab Chebyshev <= 2
     for (const lab of labs) {
       const hasNeighbor = labs.some(
-        other => other !== lab &&
+        other =>
+          other !== lab &&
           Math.max(Math.abs(other.pos.x - lab.pos.x), Math.abs(other.pos.y - lab.pos.y)) <= 2,
       );
       expect(hasNeighbor).toBe(true);
@@ -211,7 +230,10 @@ describe("constraint-placer — P2-N 增量与全量等价", () => {
     const field = computeDistanceField(noWalls);
     const anchor = { x: 25, y: 25 };
     const config = { ...DEFAULT_PLACER_CONFIG, maxRadius: 8 };
-    const eps = [{ x: 10, y: 10 }, { x: 40, y: 40 }];
+    const eps = [
+      { x: 10, y: 10 },
+      { x: 40, y: 40 },
+    ];
 
     const full = buildCandidateGrid(anchor, field, noWalls, config, eps);
     const prev = buildCandidateGrid(anchor, field, noWalls, { ...config, maxRadius: 7 }, eps);
@@ -341,7 +363,7 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     for (const p of result) {
       const dx = p.pos.x - 25;
       const dy = p.pos.y - 25;
-      expect(((dx + dy) % 2 + 2) % 2).toBe(0);
+      expect((((dx + dy) % 2) + 2) % 2).toBe(0);
       const packed = packPos(p.pos.x, p.pos.y);
       expect(positions.has(packed)).toBe(false);
       positions.add(packed);
@@ -373,7 +395,7 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     const preOccupied = new Set<number>();
     for (let dx = -7; dx <= 7; dx++) {
       for (let dy = -7; dy <= 7; dy++) {
-        if (((dx + dy) % 2 + 2) % 2 === 0) {
+        if ((((dx + dy) % 2) + 2) % 2 === 0) {
           preOccupied.add(packPos(25 + dx, 25 + dy));
         }
       }
@@ -392,8 +414,17 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     const anchor = { x: 25, y: 25 };
     const controller = { x: 25, y: 45 };
     const result = placeStructures(
-      anchor, field, noWalls, 8, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
+      anchor,
+      field,
+      noWalls,
+      8,
+      new Set(),
+      new Map(),
+      DEFAULT_PLACER_CONFIG,
+      [],
+      [],
+      "W1N1",
+      controller,
     );
     const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
     expect(towers.length).toBe(6);
@@ -409,13 +440,17 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     );
     expect(nearAnchor.length).toBeGreaterThanOrEqual(2);
     // 分桶后 tower 平均距 controller 应小于 extension（对照组）。
-    const towerDist = towers.reduce(
-      (a, t) => a + Math.abs(t.pos.x - controller.x) + Math.abs(t.pos.y - controller.y), 0,
-    ) / towers.length;
+    const towerDist =
+      towers.reduce(
+        (a, t) => a + Math.abs(t.pos.x - controller.x) + Math.abs(t.pos.y - controller.y),
+        0,
+      ) / towers.length;
     const exts = result.filter(p => p.structureType === STRUCTURE_EXTENSION);
-    const extDist = exts.reduce(
-      (a, t) => a + Math.abs(t.pos.x - controller.x) + Math.abs(t.pos.y - controller.y), 0,
-    ) / exts.length;
+    const extDist =
+      exts.reduce(
+        (a, t) => a + Math.abs(t.pos.x - controller.x) + Math.abs(t.pos.y - controller.y),
+        0,
+      ) / exts.length;
     expect(towerDist).toBeLessThan(extDist);
   });
 
@@ -446,14 +481,21 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     const preOccupied = new Set<number>();
     for (let dx = -2; dx <= 2; dx++) {
       for (let dy = -2; dy <= 2; dy++) {
-        if (((dx + dy) % 2 + 2) % 2 === 0) preOccupied.add(packPos(25 + dx, 25 + dy));
+        if ((((dx + dy) % 2) + 2) % 2 === 0) preOccupied.add(packPos(25 + dx, 25 + dy));
       }
     }
     // 已建 1 lab（anchored at 25,25），RCL7 需补 5 个（累计 6）。
     const committed = new Map([[STRUCTURE_LAB, 1]]);
     const result = placeStructures(
-      anchor, field, noWalls, 7, preOccupied, committed,
-      DEFAULT_PLACER_CONFIG, [], [{ x: 25, y: 25 }],
+      anchor,
+      field,
+      noWalls,
+      7,
+      preOccupied,
+      committed,
+      DEFAULT_PLACER_CONFIG,
+      [],
+      [{ x: 25, y: 25 }],
     );
     const newLabs = result.filter(p => p.structureType === STRUCTURE_LAB);
     // 降级路径必须补出 lab（旧实现：0）。
@@ -469,8 +511,18 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     const anchor = { x: 10, y: 10 }; // anchor 远离 terminal — 通用评分会倾向 anchor 侧
     const terminal = { x: 17, y: 10 }; // r7 池内边缘：邻域有候选，但通用评分低于 anchor 侧
     const result = placeStructures(
-      anchor, field, noWalls, 6, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", undefined, terminal,
+      anchor,
+      field,
+      noWalls,
+      6,
+      new Set(),
+      new Map(),
+      DEFAULT_PLACER_CONFIG,
+      [],
+      [],
+      "W1N1",
+      undefined,
+      terminal,
     );
     const labs = result.filter(p => p.structureType === STRUCTURE_LAB);
     expect(labs.length).toBe(3); // RCL6 首批 3 lab
@@ -481,11 +533,10 @@ describe("constraint-placer — 自适应搜索半径（受限地形后期放置
     ).toBeLessThanOrEqual(3);
     // 集群均值应显著优于对照组（锚定后整体向 terminal 收拢）。
     const meanToTerminal = (ls: typeof labs) =>
-      ls.reduce((a, l) => a + Math.abs(l.pos.x - terminal.x) + Math.abs(l.pos.y - terminal.y), 0) / ls.length;
+      ls.reduce((a, l) => a + Math.abs(l.pos.x - terminal.x) + Math.abs(l.pos.y - terminal.y), 0) /
+      ls.length;
     // 对照组：不传 terminalPos 时 lab 靠近 anchor（旧行为，验证规则开关）。
-    const baseline = placeStructures(
-      anchor, field, noWalls, 6, new Set(), new Map(),
-    );
+    const baseline = placeStructures(anchor, field, noWalls, 6, new Set(), new Map());
     const baselineLabs = baseline.filter(p => p.structureType === STRUCTURE_LAB);
     expect(meanToTerminal(labs)).toBeLessThan(meanToTerminal(baselineLabs));
   });
@@ -506,8 +557,17 @@ describe("constraint-placer — P1-2 tower 分桶 + anchor 硬约束", () => {
     const anchor = { x: 25, y: 25 };
     const controller = { x: 25, y: 45 };
     const result = placeStructures(
-      anchor, field, noWalls, 5, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
+      anchor,
+      field,
+      noWalls,
+      5,
+      new Set(),
+      new Map(),
+      DEFAULT_PLACER_CONFIG,
+      [],
+      [],
+      "W1N1",
+      controller,
     );
     const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
     expect(towers.length).toBe(2); // RCL3 +1 + RCL5 +1
@@ -526,8 +586,17 @@ describe("constraint-placer — P1-2 tower 分桶 + anchor 硬约束", () => {
     const anchor = { x: 25, y: 25 };
     const controller = { x: 25, y: 45 };
     const result = placeStructures(
-      anchor, field, noWalls, 7, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
+      anchor,
+      field,
+      noWalls,
+      7,
+      new Set(),
+      new Map(),
+      DEFAULT_PLACER_CONFIG,
+      [],
+      [],
+      "W1N1",
+      controller,
     );
     const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
     expect(towers.length).toBe(3); // RCL3 +1 + RCL5 +1 + RCL7 +1
@@ -541,8 +610,17 @@ describe("constraint-placer — P1-2 tower 分桶 + anchor 硬约束", () => {
     const anchor = { x: 25, y: 25 };
     const controller = { x: 25, y: 45 };
     const result = placeStructures(
-      anchor, field, noWalls, 8, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
+      anchor,
+      field,
+      noWalls,
+      8,
+      new Set(),
+      new Map(),
+      DEFAULT_PLACER_CONFIG,
+      [],
+      [],
+      "W1N1",
+      controller,
     );
     const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
     expect(towers.length).toBe(6);
@@ -556,8 +634,17 @@ describe("constraint-placer — P1-2 tower 分桶 + anchor 硬约束", () => {
     const anchor = { x: 25, y: 25 };
     const controller = { x: 25, y: 45 };
     const result = placeStructures(
-      anchor, field, noWalls, 8, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
+      anchor,
+      field,
+      noWalls,
+      8,
+      new Set(),
+      new Map(),
+      DEFAULT_PLACER_CONFIG,
+      [],
+      [],
+      "W1N1",
+      controller,
     );
     const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
     expect(towers.length).toBe(6);
@@ -574,8 +661,17 @@ describe("constraint-placer — P1-2 tower 分桶 + anchor 硬约束", () => {
     const anchor = { x: 25, y: 25 };
     const controller = { x: 25, y: 45 };
     const result = placeStructures(
-      anchor, field, noWalls, 8, new Set(), new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
+      anchor,
+      field,
+      noWalls,
+      8,
+      new Set(),
+      new Map(),
+      DEFAULT_PLACER_CONFIG,
+      [],
+      [],
+      "W1N1",
+      controller,
     );
     const rcl8Towers = result.filter(
       p => p.structureType === STRUCTURE_TOWER && p.phase === "rcl8",
@@ -597,14 +693,23 @@ describe("constraint-placer — P1-2 tower 分桶 + anchor 硬约束", () => {
     const preOccupied = new Set<number>();
     for (let dx = -5; dx <= 5; dx++) {
       for (let dy = -5; dy <= 5; dy++) {
-        if (((dx + dy) % 2 + 2) % 2 === 0) {
+        if ((((dx + dy) % 2) + 2) % 2 === 0) {
           preOccupied.add(packPos(25 + dx, 25 + dy));
         }
       }
     }
     const result = placeStructures(
-      anchor, field, noWalls, 8, preOccupied, new Map(),
-      DEFAULT_PLACER_CONFIG, [], [], "W1N1", controller,
+      anchor,
+      field,
+      noWalls,
+      8,
+      preOccupied,
+      new Map(),
+      DEFAULT_PLACER_CONFIG,
+      [],
+      [],
+      "W1N1",
+      controller,
     );
     const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
     expect(towers.length).toBe(6);
@@ -619,9 +724,7 @@ describe("constraint-placer — P1-2 tower 分桶 + anchor 硬约束", () => {
     const field = computeDistanceField(noWalls);
     const anchor = { x: 25, y: 25 };
     // 不传 controllerPos（第 11 个参数）
-    const result = placeStructures(
-      anchor, field, noWalls, 8, new Set(), new Map(),
-    );
+    const result = placeStructures(anchor, field, noWalls, 8, new Set(), new Map());
     const towers = result.filter(p => p.structureType === STRUCTURE_TOWER);
     expect(towers.length).toBe(6);
     // 无分桶 → 全部走通用池，openness 评分倾向 anchor 侧

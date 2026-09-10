@@ -45,7 +45,10 @@ describe("Edge Case: Spawn 异常", () => {
       .spawn("Spawn1", 25, 25)
       .controllerAt(30, 30)
       .source("s1", 22, 22)
-      .extensions([{ x: 24, y: 24 }, { x: 26, y: 24 }])
+      .extensions([
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+      ])
       .sourceRegen(10)
       .cpu(10000)
       .build();
@@ -71,9 +74,14 @@ describe("Edge Case: Spawn 异常", () => {
       .spawn("Spawn1", 25, 25)
       .controllerAt(30, 30)
       .source("s1", 22, 22)
-      .creep("h1", "harvester", 23, 22, [
-        { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } })
+      .creep(
+        "h1",
+        "harvester",
+        23,
+        22,
+        [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } },
+      )
       .sourceRegen(10)
       .cpu(10000)
       .build();
@@ -109,18 +117,36 @@ describe("Edge Case: Creep 异常", () => {
       .container(23, 22, 1500)
       .container(31, 22, 1500)
       .extensions([
-        { x: 24, y: 24 }, { x: 26, y: 24 }, { x: 24, y: 26 },
-        { x: 26, y: 26 }, { x: 25, y: 24 },
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+        { x: 24, y: 26 },
+        { x: 26, y: 26 },
+        { x: 25, y: 24 },
       ])
-      .creep("h1", "harvester", 23, 23, [
-        { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } })
-      .creep("h2", "harvester", 31, 23, [
-        { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s2" } })
-      .creep("u1", "upgrader", 29, 29, [
-        { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-      ], { memory: { role: "upgrader", home: "W1N1", mode: "work" } })
+      .creep(
+        "h1",
+        "harvester",
+        23,
+        23,
+        [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } },
+      )
+      .creep(
+        "h2",
+        "harvester",
+        31,
+        23,
+        [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s2" } },
+      )
+      .creep(
+        "u1",
+        "upgrader",
+        29,
+        29,
+        [{ type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+        { memory: { role: "upgrader", home: "W1N1", mode: "work" } },
+      )
       .sourceRegen(10)
       .cpu(10000)
       .build();
@@ -144,7 +170,7 @@ describe("Edge Case: Creep 异常", () => {
 
     // 恢复运行 — AI 应该重新孵化
     const result = runner.run(world, 800, {
-      stopWhen: (w) => w.creeps.length > 0,
+      stopWhen: w => w.creeps.length > 0,
     });
 
     const assertions = new Assertions(world, result.records);
@@ -161,9 +187,9 @@ describe("Edge Case: Creep 异常", () => {
       .spawn("Spawn1", 25, 25)
       .controllerAt(30, 30)
       .source("s1", 22, 22)
-      .creep("broken", "unknown", 24, 24, [
-        { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { home: "W1N1" } }) // 缺少 role 字段
+      .creep("broken", "unknown", 24, 24, [{ type: "work" }, { type: "carry" }, { type: "move" }], {
+        memory: { home: "W1N1" },
+      }) // 缺少 role 字段
       .sourceRegen(10)
       .cpu(10000)
       .build();
@@ -185,13 +211,21 @@ describe("Edge Case: Creep 异常", () => {
       .spawn("Spawn1", 25, 25)
       .controllerAt(30, 30)
       .source("s1", 22, 22)
-      .extensions([{ x: 24, y: 24 }, { x: 26, y: 24 }])
-      .creep("dying", "harvester", 23, 22, [
-        { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], {
-        ticksToLive: 1,
-        memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" },
-      })
+      .extensions([
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+      ])
+      .creep(
+        "dying",
+        "harvester",
+        23,
+        22,
+        [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        {
+          ticksToLive: 1,
+          memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" },
+        },
+      )
       .sourceRegen(10)
       .cpu(10000)
       .build();
@@ -204,7 +238,7 @@ describe("Edge Case: Creep 异常", () => {
     runner.setLoop(loop);
 
     const result = runner.run(world, 500, {
-      stopWhen: (w) => w.creeps.length > 0 && w.tick > 10,
+      stopWhen: w => w.creeps.length > 0 && w.tick > 10,
     });
 
     const assertions = new Assertions(world, result.records);
@@ -227,12 +261,20 @@ describe("Edge Case: 能量危机", () => {
       .source("s1", 22, 22)
       .container(23, 22, 1500)
       .extensions([
-        { x: 24, y: 24 }, { x: 26, y: 24 }, { x: 24, y: 26 },
-        { x: 26, y: 26 }, { x: 25, y: 24 },
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+        { x: 24, y: 26 },
+        { x: 26, y: 26 },
+        { x: 25, y: 24 },
       ])
-      .creep("h1", "harvester", 23, 23, [
-        { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } })
+      .creep(
+        "h1",
+        "harvester",
+        23,
+        23,
+        [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } },
+      )
       .sourceRegen(10)
       .cpu(10000)
       .build();
@@ -277,10 +319,18 @@ describe("Edge Case: 能量危机", () => {
       .controllerAt(28, 28)
       .source("s1", 22, 22)
       .container(23, 22, 1000)
-      .extensions([{ x: 24, y: 24 }, { x: 26, y: 24 }])
-      .creep("h1", "harvester", 23, 23, [
-        { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } })
+      .extensions([
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+      ])
+      .creep(
+        "h1",
+        "harvester",
+        23,
+        23,
+        [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } },
+      )
       .sourceRegen(10)
       .cpu(10000)
       .build();
@@ -371,9 +421,14 @@ describe("Edge Case: Memory 异常", () => {
       .spawn("Spawn1", 25, 25)
       .controllerAt(30, 30)
       .source("s1", 22, 22)
-      .creep("amnesia", "harvester", 23, 22, [
-        { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: undefined as unknown as Record<string, unknown> })
+      .creep(
+        "amnesia",
+        "harvester",
+        23,
+        22,
+        [{ type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: undefined as unknown as Record<string, unknown> },
+      )
       .sourceRegen(10)
       .cpu(10000)
       .build();
@@ -418,9 +473,14 @@ describe("Edge Case: CPU 压力", () => {
     const roles = ["harvester", "hauler", "upgrader", "builder"];
     for (let i = 0; i < 50; i++) {
       const role = roles[i % roles.length]!;
-      builder.creep(`creep_${i}`, role, 20 + (i % 10), 30 + Math.floor(i / 10), [
-        { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role, home: "W1N1", mode: "acquire" } });
+      builder.creep(
+        `creep_${i}`,
+        role,
+        20 + (i % 10),
+        30 + Math.floor(i / 10),
+        [{ type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role, home: "W1N1", mode: "acquire" } },
+      );
     }
 
     const world = builder.build();
@@ -448,13 +508,21 @@ describe("Edge Case: CPU 压力", () => {
       .controllerAt(30, 30)
       .source("s1", 22, 22)
       .container(23, 22, 1000)
-      .extensions([{ x: 24, y: 24 }, { x: 26, y: 24 }])
-      .creep("h1", "harvester", 23, 23, [
-        { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } })
-      .creep("u1", "upgrader", 29, 29, [
-        { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "upgrader", home: "W1N1", mode: "work" } })
+      .extensions([
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+      ])
+      .creep(
+        "h1",
+        "harvester",
+        23,
+        23,
+        [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } },
+      )
+      .creep("u1", "upgrader", 29, 29, [{ type: "work" }, { type: "carry" }, { type: "move" }], {
+        memory: { role: "upgrader", home: "W1N1", mode: "work" },
+      })
       .sourceRegen(10)
       .cpu(0) // bucket = 0 → recovery tier
       .build();
@@ -487,15 +555,28 @@ describe("Edge Case: 随机事件压力测试", () => {
       .container(21, 20, 1000)
       .container(31, 20, 1000)
       .extensions([
-        { x: 24, y: 24 }, { x: 26, y: 24 }, { x: 24, y: 26 },
-        { x: 26, y: 26 }, { x: 25, y: 24 },
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+        { x: 24, y: 26 },
+        { x: 26, y: 26 },
+        { x: 25, y: 24 },
       ])
-      .creep("h1", "harvester", 21, 21, [
-        { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } })
-      .creep("h2", "harvester", 31, 21, [
-        { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s2" } })
+      .creep(
+        "h1",
+        "harvester",
+        21,
+        21,
+        [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } },
+      )
+      .creep(
+        "h2",
+        "harvester",
+        31,
+        21,
+        [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s2" } },
+      )
       .sourceRegen(10)
       .containerDecay(0)
       .cpu(10000)
@@ -510,7 +591,10 @@ describe("Edge Case: 随机事件压力测试", () => {
 
     // 伪随机事件注入
     let seed = 42;
-    const rand = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
 
     const result = runner.run(world, 3000, {
       onTick: (w, tick) => {

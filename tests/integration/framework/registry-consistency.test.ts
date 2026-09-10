@@ -28,8 +28,6 @@ describe("Phase 4: 系统注册一致性", () => {
       expect(telemetrySystems).toHaveLength(1);
     });
 
-
-
     it("traffic-manager 只注册一次", () => {
       const systems = registry.getSystems();
       const trafficSystems = systems.filter(s => s.name === "traffic-manager");
@@ -43,9 +41,7 @@ describe("Phase 4: 系统注册一致性", () => {
       const mainNames = new Set(
         systems.filter(s => (s.phase ?? "main") === "main").map(s => s.name),
       );
-      const postNames = new Set(
-        systems.filter(s => s.phase === "post").map(s => s.name),
-      );
+      const postNames = new Set(systems.filter(s => s.phase === "post").map(s => s.name));
       // 检查无交集
       for (const name of mainNames) {
         expect(postNames.has(name)).toBe(false);
@@ -58,8 +54,6 @@ describe("Phase 4: 系统注册一致性", () => {
       expect(telemetry).toBeDefined();
       expect(telemetry!.phase).toBe("post");
     });
-
-
 
     it("traffic-manager 注册为 post 阶段", () => {
       const systems = registry.getSystems();

@@ -41,10 +41,14 @@ export function movePriorityFor(creep: Creep): number {
   const p = CONFIG.movement.trafficPriority;
   const base = (() => {
     switch (creep.memory.mode) {
-      case "flee": return p.flee;
-      case "work": return p.work;
-      case "acquire": return p.acquire;
-      default: return p.commute;
+      case "flee":
+        return p.flee;
+      case "work":
+        return p.work;
+      case "acquire":
+        return p.acquire;
+      default:
+        return p.commute;
     }
   })();
   const stuck = creep.memory.stuckTicks ?? 0;
@@ -60,7 +64,11 @@ export function movePriorityFor(creep: Creep): number {
  * 开关开启：疲劳中返 ERR_TIRED 不入账（引擎语义对齐）；目标格越界返 ERR_INVALID_ARGS；
  * 否则登记意图返 OK — 「登记成功」不保证最终移动（可能在解算中败给更高优意图）。
  */
-export function registerMove(creep: Creep, dir: DirectionConstant, priority: number): ScreepsReturnCode {
+export function registerMove(
+  creep: Creep,
+  dir: DirectionConstant,
+  priority: number,
+): ScreepsReturnCode {
   if (!trafficEnabled()) {
     const result = creep.move(dir);
     if (result === OK || result === ERR_TIRED) recordTraffic(creep);
@@ -107,7 +115,10 @@ export function registerAnchor(creep: Creep, priority: number): void {
  * 「上路」目标。偏离即重算，才是正确且自愈的行为（重算受 dynamicRepathInterval 冷却门限，
  * 冷却内退化为 getDirectionTo 直走，不会死循环）。
  */
-export function nextDirFromPath(creep: Creep, path: readonly RoomPosition[]): DirectionConstant | undefined {
+export function nextDirFromPath(
+  creep: Creep,
+  path: readonly RoomPosition[],
+): DirectionConstant | undefined {
   if (path.length === 0) return undefined;
   for (let i = 0; i < path.length; i++) {
     const p = path[i]!;

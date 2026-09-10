@@ -1,12 +1,7 @@
 /** assignment-service 紧急抢占接线测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { assignmentSystem } from "../../../src/systems/assignment-system";
-import {
-  mockContext,
-  mockCreep,
-  mockSnapshot,
-  resetGlobals,
-} from "../../support/factories";
+import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../support/factories";
 
 function upgradeAssignment(tick: number) {
   return {
@@ -26,7 +21,11 @@ beforeEach(() => {
 describe("assignment-service — 紧急抢占接线（invalidate 副作用落到 creep memory）", () => {
   it("正常 → 紧急上升沿：priority >= 1 的 assignment 被真实清除", () => {
     const tick = (globalThis as any).Game.time as number;
-    const creep = mockCreep({ name: "upg1", role: "upgrader", assignment: upgradeAssignment(tick) });
+    const creep = mockCreep({
+      name: "upg1",
+      role: "upgrader",
+      assignment: upgradeAssignment(tick),
+    });
     (globalThis as any).Game.creeps = { upg1: creep };
     (globalThis as any).Memory.rooms.W7N4.wasEmergency = false;
 
@@ -41,7 +40,11 @@ describe("assignment-service — 紧急抢占接线（invalidate 副作用落到
 
   it("非紧急：assignment 保留（抢占不误伤正常运转）", () => {
     const tick = (globalThis as any).Game.time as number;
-    const creep = mockCreep({ name: "upg1", role: "upgrader", assignment: upgradeAssignment(tick) });
+    const creep = mockCreep({
+      name: "upg1",
+      role: "upgrader",
+      assignment: upgradeAssignment(tick),
+    });
     (globalThis as any).Game.creeps = { upg1: creep };
     (globalThis as any).Memory.rooms.W7N4.wasEmergency = false;
 
@@ -53,7 +56,11 @@ describe("assignment-service — 紧急抢占接线（invalidate 副作用落到
 
   it("持续紧急（非上升沿）：不重复清除，lease 机制保留", () => {
     const tick = (globalThis as any).Game.time as number;
-    const creep = mockCreep({ name: "upg1", role: "upgrader", assignment: upgradeAssignment(tick) });
+    const creep = mockCreep({
+      name: "upg1",
+      role: "upgrader",
+      assignment: upgradeAssignment(tick),
+    });
     (globalThis as any).Game.creeps = { upg1: creep };
     (globalThis as any).Memory.rooms.W7N4.wasEmergency = true; // 上一 tick 已紧急
 
@@ -65,7 +72,11 @@ describe("assignment-service — 紧急抢占接线（invalidate 副作用落到
 
   it("敌袭上升沿同样触发抢占", () => {
     const tick = (globalThis as any).Game.time as number;
-    const creep = mockCreep({ name: "upg1", role: "upgrader", assignment: upgradeAssignment(tick) });
+    const creep = mockCreep({
+      name: "upg1",
+      role: "upgrader",
+      assignment: upgradeAssignment(tick),
+    });
     (globalThis as any).Game.creeps = { upg1: creep };
     (globalThis as any).Memory.rooms.W7N4.wasEmergency = false;
 

@@ -7,18 +7,18 @@ import type { RootCauseResult, ImpactAnalysisResult } from "./failure-propagatio
 
 /** 恢复动作类型。 */
 export type RecoveryActionType =
-  | "spawn_recovery"       // 恢复 spawn（紧急孵化）
-  | "logistics_fix"        // 修复物流（补充 hauler）
-  | "energy_redirect"      // 重定向能量（跨房调拨）
-  | "defense_response"     // 防御响应
-  | "population_rebuild"   // 人口重建
-  | "route_fix"            // 路由修复
-  | "remote_stall"         // 远矿暂停
-  | "expansion_pause"      // 扩张暂停
-  | "terminal_trade"       // 终端交易（买/卖）
-  | "cpu_conserve"         // CPU 降级
-  | "manual_intervention"  // 需要人工干预
-  | "auto_resolve";        // 自动恢复（无需特殊动作）
+  | "spawn_recovery" // 恢复 spawn（紧急孵化）
+  | "logistics_fix" // 修复物流（补充 hauler）
+  | "energy_redirect" // 重定向能量（跨房调拨）
+  | "defense_response" // 防御响应
+  | "population_rebuild" // 人口重建
+  | "route_fix" // 路由修复
+  | "remote_stall" // 远矿暂停
+  | "expansion_pause" // 扩张暂停
+  | "terminal_trade" // 终端交易（买/卖）
+  | "cpu_conserve" // CPU 降级
+  | "manual_intervention" // 需要人工干预
+  | "auto_resolve"; // 自动恢复（无需特殊动作）
 
 /** 单个恢复动作。 */
 export interface RecoveryAction {
@@ -165,19 +165,82 @@ const DOMAIN_WEIGHT: Record<FailureDomain, number> = {
 };
 
 /** 恢复动作推荐映射。 */
-const RECOVERY_RECOMMENDATIONS: Record<FailureDomain, { type: RecoveryActionType; recommendation: string; cost: number; time: number }> = {
-  energy: { type: "energy_redirect", recommendation: "redirect energy from surplus rooms via terminal or carrier", cost: 500, time: 200 },
-  logistics: { type: "logistics_fix", recommendation: "spawn replacement hauler + verify route", cost: 300, time: 150 },
-  spawn: { type: "spawn_recovery", recommendation: "emergency spawn [WORK,CARRY,MOVE] with available energy", cost: 200, time: 50 },
-  colony: { type: "population_rebuild", recommendation: "rebuild population via spawn priority adjustment", cost: 800, time: 500 },
-  network: { type: "energy_redirect", recommendation: "rebalance network via agenda-manager allocation", cost: 100, time: 100 },
-  threat: { type: "defense_response", recommendation: "activate defense: tower focus + defender spawn", cost: 1000, time: 10 },
-  cpu: { type: "cpu_conserve", recommendation: "activate CPU conservation mode: skip P3 systems", cost: 0, time: 0 },
-  remote: { type: "remote_stall", recommendation: "pause remote mining ops until route safe", cost: 0, time: 0 },
-  expansion: { type: "expansion_pause", recommendation: "pause expansion until stability restored", cost: 0, time: 0 },
-  terminal: { type: "terminal_trade", recommendation: "execute terminal trade to rebalance resources", cost: 200, time: 100 },
-  mineral: { type: "terminal_trade", recommendation: "buy missing minerals via terminal market", cost: 500, time: 200 },
-  defense: { type: "defense_response", recommendation: "activate safe mode + spawn defenders", cost: 1000, time: 5 },
+const RECOVERY_RECOMMENDATIONS: Record<
+  FailureDomain,
+  { type: RecoveryActionType; recommendation: string; cost: number; time: number }
+> = {
+  energy: {
+    type: "energy_redirect",
+    recommendation: "redirect energy from surplus rooms via terminal or carrier",
+    cost: 500,
+    time: 200,
+  },
+  logistics: {
+    type: "logistics_fix",
+    recommendation: "spawn replacement hauler + verify route",
+    cost: 300,
+    time: 150,
+  },
+  spawn: {
+    type: "spawn_recovery",
+    recommendation: "emergency spawn [WORK,CARRY,MOVE] with available energy",
+    cost: 200,
+    time: 50,
+  },
+  colony: {
+    type: "population_rebuild",
+    recommendation: "rebuild population via spawn priority adjustment",
+    cost: 800,
+    time: 500,
+  },
+  network: {
+    type: "energy_redirect",
+    recommendation: "rebalance network via agenda-manager allocation",
+    cost: 100,
+    time: 100,
+  },
+  threat: {
+    type: "defense_response",
+    recommendation: "activate defense: tower focus + defender spawn",
+    cost: 1000,
+    time: 10,
+  },
+  cpu: {
+    type: "cpu_conserve",
+    recommendation: "activate CPU conservation mode: skip P3 systems",
+    cost: 0,
+    time: 0,
+  },
+  remote: {
+    type: "remote_stall",
+    recommendation: "pause remote mining ops until route safe",
+    cost: 0,
+    time: 0,
+  },
+  expansion: {
+    type: "expansion_pause",
+    recommendation: "pause expansion until stability restored",
+    cost: 0,
+    time: 0,
+  },
+  terminal: {
+    type: "terminal_trade",
+    recommendation: "execute terminal trade to rebalance resources",
+    cost: 200,
+    time: 100,
+  },
+  mineral: {
+    type: "terminal_trade",
+    recommendation: "buy missing minerals via terminal market",
+    cost: 500,
+    time: 200,
+  },
+  defense: {
+    type: "defense_response",
+    recommendation: "activate safe mode + spawn defenders",
+    cost: 1000,
+    time: 5,
+  },
 };
 
 // ─── 核心函数 ──────────────────────────────────────────────
@@ -210,9 +273,7 @@ export function computeRecoveryPriority(
   const domainW = DOMAIN_WEIGHT[failure.domain] ?? 1.0;
 
   // 影响因子：受影响节点数
-  const impactFactor = impact
-    ? Math.min(2, 1 + impact.affectedNodes.length * 0.1)
-    : 1;
+  const impactFactor = impact ? Math.min(2, 1 + impact.affectedNodes.length * 0.1) : 1;
 
   // 紧急因子：critical 且无 cooldown → urgent
   const urgent = failure.severity === "critical" || failure.severity === "error";
@@ -229,9 +290,7 @@ export function computeRecoveryPriority(
   const roi = estimatedCost > 0 ? estimatedBenefit / estimatedCost : estimatedBenefit;
 
   // 最终优先级分数
-  const priority = Math.min(100, Math.round(
-    severityW * domainW * impactFactor * rootCauseBoost,
-  ));
+  const priority = Math.min(100, Math.round(severityW * domainW * impactFactor * rootCauseBoost));
 
   return {
     id: `recovery:${failure.id}`,
@@ -280,13 +339,7 @@ export function prioritizeRecovery(
     const isRoot = rootCauseIds.has(failure.id);
     const impact = impacts.get(failure.id) ?? null;
 
-    const action = computeRecoveryPriority(
-      failure,
-      isRoot,
-      impact,
-      cooldowns,
-      currentTick,
-    );
+    const action = computeRecoveryPriority(failure, isRoot, impact, cooldowns, currentTick);
 
     if (action) actions.push(action);
   }

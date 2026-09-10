@@ -52,12 +52,7 @@ function makeModerateHostile(): HostileSnapshot {
     id: "moderate-enemy",
     owner: "enemy2",
     pos: 30 * 50 + 30,
-    body: [
-      { type: ATTACK },
-      { type: ATTACK },
-      { type: MOVE },
-      { type: MOVE },
-    ],
+    body: [{ type: ATTACK }, { type: ATTACK }, { type: MOVE }, { type: MOVE }],
     hits: 400,
     hitsMax: 400,
     room: "W1N1",
@@ -272,8 +267,9 @@ describe("A5.2 Threat Integration — Terrain + Intel + Confidence", () => {
     });
 
     // Stale intel should have lower or equal confidence
-    expect(staleResult.multiConfidence?.intelConfidence)
-      .toBeLessThanOrEqual(freshResult.multiConfidence?.intelConfidence ?? 1);
+    expect(staleResult.multiConfidence?.intelConfidence).toBeLessThanOrEqual(
+      freshResult.multiConfidence?.intelConfidence ?? 1,
+    );
   });
 
   it("T06: Conflicting Intel → conflict recorded, confidence reduced", () => {

@@ -95,7 +95,7 @@ export function recordLost(acc: TransportAccounting, amount: number): TransportA
  * 纯函数 — 返回新对象。
  */
 export function setCost(acc: TransportAccounting, cost: number): TransportAccounting {
-  const roi = cost > 0 ? acc.delivered / cost : (acc.delivered > 0 ? Infinity : 0);
+  const roi = cost > 0 ? acc.delivered / cost : acc.delivered > 0 ? Infinity : 0;
   return { ...acc, cost: Math.max(0, cost), roi };
 }
 

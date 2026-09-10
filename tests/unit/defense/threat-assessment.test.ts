@@ -85,10 +85,10 @@ describe("G1 — assessThreat 无威胁场景", () => {
 
 describe("G1 — NPC invader 威胁", () => {
   it("T02: 单只 NPC invader [ATTACK, MOVE] → level ≤ MEDIUM", () => {
-    const invader = makeHostile(
-      [{ type: ATTACK }, { type: MOVE }],
-      { owner: "Invader", pos: 40 * 50 + 40 },
-    );
+    const invader = makeHostile([{ type: ATTACK }, { type: MOVE }], {
+      owner: "Invader",
+      pos: 40 * 50 + 40,
+    });
     const result = assessThreat(makeInput({ hostiles: [invader] }));
     expect(result.sources).toContain("npc_invader");
     expect(result.estimatedIntent.intent).toBe("HARASSMENT");
@@ -108,7 +108,9 @@ describe("G1 — Boosted attacker 威胁", () => {
         { type: ATTACK, boost: "XUH2O" },
         { type: ATTACK, boost: "XUH2O" },
         { type: ATTACK, boost: "XUH2O" },
-        { type: MOVE }, { type: MOVE }, { type: MOVE },
+        { type: MOVE },
+        { type: MOVE },
+        { type: MOVE },
       ],
       { owner: "enemy_player", pos: 40 * 50 + 40 },
     );
@@ -131,18 +133,21 @@ describe("G1 — SIEGE 检测", () => {
     // 需要 heal ≥ 900 → 76 个 HEAL 部件（76 × 12 = 912）
     // 测试用更少的塔：1 塔 → 净伤 = 300 → 26 HEAL 即可
     const siegeCreep = makeHostile(
-      Array.from({ length: 26 }, () => ({ type: HEAL as BodyPartConstant }))
-        .concat(Array.from({ length: 26 }, () => ({ type: MOVE as BodyPartConstant }))),
+      Array.from({ length: 26 }, () => ({ type: HEAL as BodyPartConstant })).concat(
+        Array.from({ length: 26 }, () => ({ type: MOVE as BodyPartConstant })),
+      ),
       { owner: "enemy_player", pos: 48 * 50 + 48 }, // 远离核心区
     );
-    const result = assessThreat(makeInput({
-      hostiles: [siegeCreep],
-      roomContext: makeRoomContext({
-        towerCount: 1,
-        towerEnergyTotal: 1000,
-        corePos: 25 * 50 + 25,
+    const result = assessThreat(
+      makeInput({
+        hostiles: [siegeCreep],
+        roomContext: makeRoomContext({
+          towerCount: 1,
+          towerEnergyTotal: 1000,
+          corePos: 25 * 50 + 25,
+        }),
       }),
-    }));
+    );
     expect(result.estimatedIntent.intent).toBe("SIEGE");
     expect(result.estimatedIntent.confidence).toBeGreaterThan(0.5);
   });
@@ -152,21 +157,23 @@ describe("G1 — SIEGE 检测", () => {
 
 describe("G1 — Remote mining attack", () => {
   it("T05: 远矿房 + 武装 creep → REMOTE_MINING_ATTACK", () => {
-    const harasser = makeHostile(
-      [{ type: ATTACK }, { type: MOVE }],
-      { owner: "enemy_player", pos: 10 * 50 + 10 },
-    );
-    const result = assessThreat(makeInput({
-      hostiles: [harasser],
-      roomContext: makeRoomContext({
-        isRemoteRoom: true,
-        towerCount: 0,
-        towerEnergyTotal: 0,
-        rcl: 0,
-        hasStorage: false,
-        hasSpawn: false,
+    const harasser = makeHostile([{ type: ATTACK }, { type: MOVE }], {
+      owner: "enemy_player",
+      pos: 10 * 50 + 10,
+    });
+    const result = assessThreat(
+      makeInput({
+        hostiles: [harasser],
+        roomContext: makeRoomContext({
+          isRemoteRoom: true,
+          towerCount: 0,
+          towerEnergyTotal: 0,
+          rcl: 0,
+          hasStorage: false,
+          hasSpawn: false,
+        }),
       }),
-    }));
+    );
     expect(result.estimatedIntent.intent).toBe("REMOTE_MINING_ATTACK");
     expect(result.estimatedIntent.confidence).toBeGreaterThanOrEqual(0.8);
   });
@@ -176,10 +183,10 @@ describe("G1 — Remote mining attack", () => {
 
 describe("G1 — Scout 检测", () => {
   it("T06: 仅 MOVE body → SCOUTING", () => {
-    const scout = makeHostile(
-      [{ type: MOVE }, { type: MOVE }],
-      { owner: "enemy_player", pos: 48 * 50 + 48 },
-    );
+    const scout = makeHostile([{ type: MOVE }, { type: MOVE }], {
+      owner: "enemy_player",
+      pos: 48 * 50 + 48,
+    });
     const result = assessThreat(makeInput({ hostiles: [scout] }));
     expect(result.estimatedIntent.intent).toBe("SCOUTING");
     expect(result.estimatedIntent.confidence).toBeGreaterThanOrEqual(0.8);
@@ -191,10 +198,12 @@ describe("G1 — Scout 检测", () => {
 
 describe("G1 — Nuke 检测", () => {
   it("T07: incomingNukes > 0 → NUCLEAR / EMERGENCY", () => {
-    const result = assessThreat(makeInput({
-      hostiles: [],
-      roomContext: makeRoomContext({ incomingNukes: 1 }),
-    }));
+    const result = assessThreat(
+      makeInput({
+        hostiles: [],
+        roomContext: makeRoomContext({ incomingNukes: 1 }),
+      }),
+    );
     expect(result.estimatedIntent.intent).toBe("NUCLEAR");
     expect(result.estimatedIntent.confidence).toBe(1.0);
     expect(result.recommendedPosture).toBe("EMERGENCY");
@@ -206,10 +215,10 @@ describe("G1 — Nuke 检测", () => {
 
 describe("G1 — Claim 检测", () => {
   it("T08: claim 部件 → CLAIM intent", () => {
-    const claimer = makeHostile(
-      [{ type: CLAIM }, { type: MOVE }, { type: MOVE }],
-      { owner: "enemy_player", pos: 40 * 50 + 40 },
-    );
+    const claimer = makeHostile([{ type: CLAIM }, { type: MOVE }, { type: MOVE }], {
+      owner: "enemy_player",
+      pos: 40 * 50 + 40,
+    });
     const result = assessThreat(makeInput({ hostiles: [claimer] }));
     expect(result.estimatedIntent.intent).toBe("CLAIM");
   });
@@ -221,15 +230,18 @@ describe("G1 — Full assault 检测", () => {
   it("T09: 4+ boosted creep → FULL_ASSAULT", () => {
     const creeps: HostileSnapshot[] = [];
     for (let i = 0; i < 4; i++) {
-      creeps.push(makeHostile(
-        [
-          { type: TOUGH, boost: "XGHO2" },
-          { type: ATTACK, boost: "XUH2O" },
-          { type: ATTACK, boost: "XUH2O" },
-          { type: MOVE }, { type: MOVE },
-        ],
-        { owner: "enemy_player", pos: (40 + i) * 50 + 40, id: `creep-${i}` },
-      ));
+      creeps.push(
+        makeHostile(
+          [
+            { type: TOUGH, boost: "XGHO2" },
+            { type: ATTACK, boost: "XUH2O" },
+            { type: ATTACK, boost: "XUH2O" },
+            { type: MOVE },
+            { type: MOVE },
+          ],
+          { owner: "enemy_player", pos: (40 + i) * 50 + 40, id: `creep-${i}` },
+        ),
+      );
     }
     const result = assessThreat(makeInput({ hostiles: creeps }));
     expect(result.estimatedIntent.intent).toBe("FULL_ASSAULT");
@@ -241,10 +253,10 @@ describe("G1 — Full assault 检测", () => {
 
 describe("G1 — Score 可拆解性", () => {
   it("T10: 评分包含各维度子分数", () => {
-    const attacker = makeHostile(
-      [{ type: ATTACK }, { type: MOVE }],
-      { owner: "enemy_player", pos: 20 * 50 + 20 },
-    );
+    const attacker = makeHostile([{ type: ATTACK }, { type: MOVE }], {
+      owner: "enemy_player",
+      pos: 20 * 50 + 20,
+    });
     const result = assessThreat(makeInput({ hostiles: [attacker] }));
     expect(result.score).toHaveProperty("combat");
     expect(result.score).toHaveProperty("intent");
@@ -264,10 +276,7 @@ describe("G1 — Score 可拆解性", () => {
 
 describe("G1 — analyzeHostileBody", () => {
   it("正确解析 hostile body 并返回 CombatCapability", () => {
-    const hostile = makeHostile([
-      { type: ATTACK, boost: "UH" },
-      { type: MOVE },
-    ]);
+    const hostile = makeHostile([{ type: ATTACK, boost: "UH" }, { type: MOVE }]);
     const cap = analyzeHostileBody(hostile);
     expect(cap.attack).toBe(60); // 30 × 2 (T1 boost)
     expect(cap.boosted).toBe(true);

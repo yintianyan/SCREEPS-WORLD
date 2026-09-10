@@ -20,7 +20,8 @@ function walk(dir: string): string[] {
 const ALL_FILES = walk(SRC);
 
 function codeLines(src: string): string {
-  return src.split(NL)
+  return src
+    .split(NL)
     .filter(l => {
       const t = l.trim();
       return !t.startsWith("*") && !t.startsWith("//") && !t.startsWith("/*");
@@ -45,9 +46,7 @@ describe("A5.4.1 AG-1: tactical-runtime-system 不导入 creeps 层", () => {
   it("不导入 creeps/roles/ 或 creeps/engine/", () => {
     const f = resolve(SRC, "systems/tactical-runtime-system.ts");
     const imports = importsOf(f);
-    const bad = imports.filter(p =>
-      p.includes("creeps/roles/") || p.includes("creeps/engine/"),
-    );
+    const bad = imports.filter(p => p.includes("creeps/roles/") || p.includes("creeps/engine/"));
     expect(bad, `导入了 creeps 层: ${bad.join(", ")}`).toHaveLength(0);
   });
 });
@@ -77,9 +76,7 @@ describe("A5.4.1 AG-3: 不调用 spawnCreep / submitRequest", () => {
 
 describe("A5.4.1 AG-4: creeps 层不导入 tactical-runtime-system", () => {
   it("零命中", () => {
-    const creepFiles = ALL_FILES.filter(f =>
-      relative(SRC, f).startsWith("creeps/"),
-    );
+    const creepFiles = ALL_FILES.filter(f => relative(SRC, f).startsWith("creeps/"));
     const bad: string[] = [];
     for (const f of creepFiles) {
       const imports = importsOf(f);

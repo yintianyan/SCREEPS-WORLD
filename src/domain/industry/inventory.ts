@@ -5,10 +5,7 @@ import type { RoomSnapshot } from "../../kernel/contracts";
  * 累加一个 store 中的非 energy 资源到 inventory 映射。
  * 接受引擎的 Store 类型（通过 unknown 中转换规避类型不兼容问题）。
  */
-function mergeStore(
-  store: unknown,
-  inventory: Record<string, number>,
-): void {
+function mergeStore(store: unknown, inventory: Record<string, number>): void {
   if (!store) return;
   const s = store as Record<string, number>;
   for (const resource of Object.keys(s)) {

@@ -142,7 +142,7 @@ export function intelNeedsRescout(subject: string, tick: number): boolean {
 /** 读侧派生置信度（fact/stale/inferred/unknown）。 */
 export function intelConfidence(subject: string, tick: number) {
   const entry = roomEntries.get(subject);
-  return entry ? confidenceAt(entry, tick) : "unknown" as const;
+  return entry ? confidenceAt(entry, tick) : ("unknown" as const);
 }
 
 /** 观测通道：IntelState 体积（观测用）。 */
@@ -171,27 +171,42 @@ export const intelligenceSystem: System = {
 
   run(ctx: TickContext): void {
     // 采集（写事件式轻量轮询）：观察交接采用 + 被动威胁信号。幂等 upsert。
-    safeRun("intelligence/adopt", () => {
-      adoptHandoff(ctx.tick);
-      adoptPassiveThreats(ctx);
-    }, false);
+    safeRun(
+      "intelligence/adopt",
+      () => {
+        adoptHandoff(ctx.tick);
+        adoptPassiveThreats(ctx);
+      },
+      false,
+    );
 
     // 老化批处理（低频相对相位门）：超期清理 + 容量覆盖 + 玩家域冷存落地。
     if ((ctx.tick - PARENT_PHASE) % AGING_INTERVAL === 0) {
-      safeRun("intelligence/aging", () => {
-        const removed = ageRooms(roomEntries, ctx.tick);
-        capRooms(roomEntries, INTEL_ROOMS_CAP);
-        restorePlayersFromSegment();
-        persistPlayersToSegment();
-        const statsAny = (Memory as any).kernel?.stats as any;
-        if (statsAny) {
-          statsAny.intelCoverage = { rooms: roomEntries.size, players: playerEntries.size, tick: ctx.tick };
-        }
-        if (removed > 0) {
-          log.info("intelligence", `intelligence: aged out ${removed} room entries ` +
-            `(active=${roomEntries.size}, players=${playerEntries.size})`,);
-        }
-      }, false);
+      safeRun(
+        "intelligence/aging",
+        () => {
+          const removed = ageRooms(roomEntries, ctx.tick);
+          capRooms(roomEntries, INTEL_ROOMS_CAP);
+          restorePlayersFromSegment();
+          persistPlayersToSegment();
+          const statsAny = (Memory as any).kernel?.stats as any;
+          if (statsAny) {
+            statsAny.intelCoverage = {
+              rooms: roomEntries.size,
+              players: playerEntries.size,
+              tick: ctx.tick,
+            };
+          }
+          if (removed > 0) {
+            log.info(
+              "intelligence",
+              `intelligence: aged out ${removed} room entries ` +
+                `(active=${roomEntries.size}, players=${playerEntries.size})`,
+            );
+          }
+        },
+        false,
+      );
     }
   },
 };

@@ -81,7 +81,12 @@ export function resolveTraffic(input: ResolveInput): ResolveOutput {
    * 尝试把静止 creep（blockerName，位于 tile）推挤出去。
    * 成功时写入 moves/reservedTiles 并返回 true。
    */
-  const tryShove = (blockerName: string, tile: number, moverPriority: number, depth: number): boolean => {
+  const tryShove = (
+    blockerName: string,
+    tile: number,
+    moverPriority: number,
+    depth: number,
+  ): boolean => {
     if (depth > MAX_SHOVE_DEPTH) return false;
     if (immovable.has(blockerName)) return false;
     if (intentByName.has(blockerName)) return false; // 有意图者不推挤 — 由仲裁/跟车处理。

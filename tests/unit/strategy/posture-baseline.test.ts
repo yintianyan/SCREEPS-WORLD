@@ -1,6 +1,9 @@
 /** 环境自适应姿态基线纯函数单元测试。 */
 import { describe, expect, it } from "vitest";
-import { selectEnvBaseline, type EnvBaselineInput } from "../../../src/domain/strategy/posture-baseline";
+import {
+  selectEnvBaseline,
+  type EnvBaselineInput,
+} from "../../../src/domain/strategy/posture-baseline";
 
 function makeInput(overrides: Partial<EnvBaselineInput> = {}): EnvBaselineInput {
   return {
@@ -61,17 +64,13 @@ describe("selectEnvBaseline", () => {
   });
 
   it("GCL 停滞 → 不升扩张门槛（无法区分停滞 vs 首次采样）", () => {
-    const result = selectEnvBaseline(
-      makeInput({ gclProgressRate: 0, neighborPressure: "medium" }),
-    );
+    const result = selectEnvBaseline(makeInput({ gclProgressRate: 0, neighborPressure: "medium" }));
     // GCL 速率=0 不触发停滞判定（防首次采样误升门槛）
     expect(result.expandMinBucket).toBeUndefined();
   });
 
   it("GCL 停滞 + 低邻居压力 → 低压力门槛不变", () => {
-    const result = selectEnvBaseline(
-      makeInput({ gclProgressRate: 0, neighborPressure: "low" }),
-    );
+    const result = selectEnvBaseline(makeInput({ gclProgressRate: 0, neighborPressure: "low" }));
     // 低压力设 6000，GCL=0 不触发停滞判定 → 保持 6000
     expect(result.expandMinBucket).toBe(6000);
   });

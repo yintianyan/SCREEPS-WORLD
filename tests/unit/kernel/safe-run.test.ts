@@ -37,7 +37,9 @@ describe("safeRun — 冷却触发与可观测性（K-2a/K-2c）", () => {
     // 冷却期间：action 不执行 + skipBuffer 记录。
     let ran = false;
     g().Game.time += 1;
-    safeRun("system/link-system", () => { ran = true; });
+    safeRun("system/link-system", () => {
+      ran = true;
+    });
     expect(ran).toBe(false);
     expect(g().skipBuffer["system/link-system/cooldown"]).toBe(1);
   });
@@ -80,7 +82,9 @@ describe("safeRun — 冷却时长真递增（K-2b）", () => {
   it("成功一次重置计数 — 自愈路径不回归", () => {
     failTimes("system/w", 2); // count=2，未冷却
     g().Game.time += 1;
-    safeRun("system/w", () => { /* 成功 */ });
+    safeRun("system/w", () => {
+      /* 成功 */
+    });
     // 计数已清零 — 再错 2 次仍不触发冷却。
     failTimes("system/w", 2);
     expect(g().pluginCooldowns?.get("system/w")).toBeUndefined();
@@ -97,7 +101,13 @@ describe("safeRun — critical 永不冷却", () => {
 
     let ran = false;
     g().Game.time += 1;
-    safeRun("memory", () => { ran = true; }, true);
+    safeRun(
+      "memory",
+      () => {
+        ran = true;
+      },
+      true,
+    );
     expect(ran).toBe(true);
   });
 });

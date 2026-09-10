@@ -26,9 +26,15 @@ describe("System Lifecycle — Container 衰减级联", () => {
       .container(16, 15, 1500)
       .container(34, 15, 1500)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 }, { x: 23, y: 26 },
-        { x: 24, y: 27 }, { x: 25, y: 27 }, { x: 26, y: 27 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
+        { x: 23, y: 26 },
+        { x: 24, y: 27 },
+        { x: 25, y: 27 },
+        { x: 26, y: 27 },
         { x: 27, y: 26 },
       ])
       .sourceRegen(10)
@@ -37,15 +43,37 @@ describe("System Lifecycle — Container 衰减级联", () => {
       .preseedRoomState()
       .build();
 
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 34, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      34,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -85,8 +113,11 @@ describe("System Lifecycle — Container 衰减级联", () => {
       // 低血量 container + 高衰减 → 很快归零
       .container(16, 15, 1000, 5000)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(5000) // 高衰减：每 tick 5000 hits
@@ -94,12 +125,22 @@ describe("System Lifecycle — Container 衰减级联", () => {
       .preseedRoomState()
       .build();
 
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("b1", "builder", 20, 20, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "b1",
+      "builder",
+      20,
+      20,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -151,21 +192,67 @@ describe("System Lifecycle — Storage 建造收敛", () => {
       .build();
 
     // 2 harvester + 1 hauler + 2 builder
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 37, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("b1", "builder", 24, 24, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("b2", "builder", 25, 24, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      37,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "b1",
+      "builder",
+      24,
+      24,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "b2",
+      "builder",
+      25,
+      24,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -201,8 +288,11 @@ describe("System Lifecycle — 紧急抢占边沿触发", () => {
       .source("s1", 15, 15)
       .container(16, 15, 300) // 低能量 container
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
@@ -211,15 +301,44 @@ describe("System Lifecycle — 紧急抢占边沿触发", () => {
       .build();
 
     // 多 hauler — 如果每 tick 清空 assignment，hauler 会永远在"重新获取"
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("haul2", "hauler", 22, 22, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "haul2",
+      "hauler",
+      22,
+      22,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     // 低能量 → 触发紧急状态
     world.spawns[0]!.store.energy = 50;
@@ -252,8 +371,11 @@ describe("System Lifecycle — 紧急抢占边沿触发", () => {
       .source("s1", 15, 15)
       .container(16, 15, 200)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
@@ -261,12 +383,29 @@ describe("System Lifecycle — 紧急抢占边沿触发", () => {
       .preseedRoomState()
       .build();
 
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     // 紧急状态
     world.spawns[0]!.store.energy = 30;
@@ -313,8 +452,11 @@ describe("System Lifecycle — Worker 回收", () => {
       .container(21, 20, 1000)
       .container(31, 20, 1000)
       .extensions([
-        { x: 24, y: 24 }, { x: 26, y: 24 }, { x: 24, y: 26 },
-        { x: 26, y: 26 }, { x: 25, y: 24 },
+        { x: 24, y: 24 },
+        { x: 26, y: 24 },
+        { x: 24, y: 26 },
+        { x: 26, y: 26 },
+        { x: 25, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
@@ -323,15 +465,30 @@ describe("System Lifecycle — Worker 回收", () => {
       .build();
 
     // 2 harvester（满编）+ 1 worker（应该被回收）
-    world.addCreep("h1", "harvester", 21, 21, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 31, 21, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("w1", "worker", 25, 26, [
-      { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      21,
+      21,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      31,
+      21,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "w1",
+      "worker",
+      25,
+      26,
+      [{ type: "work" }, { type: "carry" }, { type: "move" }],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -369,8 +526,11 @@ describe("System Lifecycle — Tower 能量反馈环", () => {
       .container(16, 15, 1800) // 高能量 container（hauler 取能源）
       .tower(26, 25, 500) // 中等能量 tower
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
@@ -378,12 +538,29 @@ describe("System Lifecycle — Tower 能量反馈环", () => {
       .preseedRoomState()
       .build();
 
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -393,7 +570,9 @@ describe("System Lifecycle — Tower 能量反馈环", () => {
     // 放在 (30,30)：距 harvester(16,16) Chebyshev=14（超出 fleeRange=10，harvester 不逃跑）
     // 距 hauler(20,20) Chebyshev=10（边界，hauler 可能逃跑但不影响测试核心）
     world.addHostile("invader_1", { x: 30, y: 30 }, [
-      { type: "attack" }, { type: "move" }, { type: "move" },
+      { type: "attack" },
+      { type: "move" },
+      { type: "move" },
     ]);
 
     const runner = new TickRunner();
@@ -424,7 +603,9 @@ describe("System Lifecycle — Tower 能量反馈环", () => {
       .container(16, 15, 1000)
       .tower(26, 25, 0) // 空 tower
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
@@ -432,12 +613,29 @@ describe("System Lifecycle — Tower 能量反馈环", () => {
       .preseedRoomState()
       .build();
 
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -445,7 +643,10 @@ describe("System Lifecycle — Tower 能量反馈环", () => {
 
     // hostile 在 creep 附近
     world.addHostile("invader_1", { x: 18, y: 18 }, [
-      { type: "attack" }, { type: "attack" }, { type: "move" }, { type: "move" },
+      { type: "attack" },
+      { type: "attack" },
+      { type: "move" },
+      { type: "move" },
     ]);
 
     const runner = new TickRunner();
@@ -491,15 +692,52 @@ describe("System Lifecycle — Link 背压", () => {
       .preseedRoomState()
       .build();
 
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("u1", "upgrader", 29, 38, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "u1",
+      "upgrader",
+      29,
+      38,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -545,12 +783,37 @@ describe("System Lifecycle — Link 背压", () => {
       .preseedRoomState()
       .build();
 
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("u1", "upgrader", 29, 38, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "u1",
+      "upgrader",
+      29,
+      38,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -590,8 +853,11 @@ describe("System Lifecycle — 多系统同时受损", () => {
       .container(34, 15, 1500)
       .tower(26, 25, 0) // 空 tower
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
@@ -599,15 +865,37 @@ describe("System Lifecycle — 多系统同时受损", () => {
       .preseedRoomState()
       .build();
 
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 34, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      34,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -624,7 +912,10 @@ describe("System Lifecycle — 多系统同时受损", () => {
       world.destroyContainer(c.id);
     }
     world.addHostile("invader_1", { x: 20, y: 20 }, [
-      { type: "attack" }, { type: "attack" }, { type: "move" }, { type: "move" },
+      { type: "attack" },
+      { type: "attack" },
+      { type: "move" },
+      { type: "move" },
     ]);
 
     // 继续运行 500 tick
@@ -652,9 +943,15 @@ describe("System Lifecycle — 多系统同时受损", () => {
       .container(16, 15, 1800)
       .container(34, 15, 1800)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 }, { x: 23, y: 26 },
-        { x: 24, y: 27 }, { x: 25, y: 27 }, { x: 26, y: 27 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
+        { x: 23, y: 26 },
+        { x: 24, y: 27 },
+        { x: 25, y: 27 },
+        { x: 26, y: 27 },
         { x: 27, y: 26 },
       ])
       .sourceRegen(10)
@@ -663,18 +960,52 @@ describe("System Lifecycle — 多系统同时受损", () => {
       .preseedRoomState()
       .build();
 
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 34, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("haul2", "hauler", 22, 22, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      34,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "haul2",
+      "hauler",
+      22,
+      22,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -700,7 +1031,7 @@ describe("System Lifecycle — 多系统同时受损", () => {
 
     // 运行 800 tick — 系统应该孵化新 hauler
     const result = runner.run(world, 800, {
-      stopWhen: (w) => w.creepsByRole("hauler").length >= 1,
+      stopWhen: w => w.creepsByRole("hauler").length >= 1,
     });
 
     const assertions = new Assertions(world, result.records);

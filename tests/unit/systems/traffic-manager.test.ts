@@ -14,8 +14,14 @@ function dirBetween(fx: number, fy: number, tx: number, ty: number): number {
   const dx = Math.sign(tx - fx);
   const dy = Math.sign(ty - fy);
   const table: Record<string, number> = {
-    "0,-1": TOP, "1,-1": TOP_RIGHT, "1,0": RIGHT, "1,1": BOTTOM_RIGHT,
-    "0,1": BOTTOM, "-1,1": BOTTOM_LEFT, "-1,0": LEFT, "-1,-1": TOP_LEFT,
+    "0,-1": TOP,
+    "1,-1": TOP_RIGHT,
+    "1,0": RIGHT,
+    "1,1": BOTTOM_RIGHT,
+    "0,1": BOTTOM,
+    "-1,1": BOTTOM_LEFT,
+    "-1,0": LEFT,
+    "-1,-1": TOP_LEFT,
   };
   return table[`${dx},${dy}`] ?? RIGHT;
 }
@@ -38,7 +44,9 @@ function trafficCreep(name: string, x: number, y: number, room: any, mode = "wor
     memory: { mode },
     move: vi.fn(() => 0),
     pos: {
-      x, y, roomName: "W7N4",
+      x,
+      y,
+      roomName: "W7N4",
       getDirectionTo: (tx: number, ty: number) => dirBetween(x, y, tx, ty),
       getRangeTo: () => 5,
       isEqualTo: () => false,
@@ -77,7 +85,10 @@ describe("intent — 登记双模", () => {
     expect(registerMove(creep, RIGHT as DirectionConstant, 60)).toBe(OK);
     expect(creep.move).not.toHaveBeenCalled();
     expect(getIntentLedger().intents.get("c1")).toEqual({
-      from: 25 * 50 + 25, to: 26 * 50 + 25, priority: 60, roomName: "W7N4",
+      from: 25 * 50 + 25,
+      to: 26 * 50 + 25,
+      priority: 60,
+      roomName: "W7N4",
     });
 
     const tired = trafficCreep("c2", 30, 30, room);

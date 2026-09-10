@@ -112,10 +112,11 @@ export const tacticalEngagementSystem: System = {
       members,
       prevPlan,
       cohesionStatus,
-      inEngagementRange: candidates.some(c =>
-        c.accessibility === "IN_MELEE_RANGE" ||
-        c.accessibility === "IN_RANGED_RANGE" ||
-        c.accessibility === "IN_ENGAGEMENT_RANGE",
+      inEngagementRange: candidates.some(
+        c =>
+          c.accessibility === "IN_MELEE_RANGE" ||
+          c.accessibility === "IN_RANGED_RANGE" ||
+          c.accessibility === "IN_ENGAGEMENT_RANGE",
       ),
     };
 
@@ -167,10 +168,20 @@ function buildSquadPlanFromWarPlan(
     boosted: entry.boosted,
     ticksToLive: 0,
     capability: {
-      attack: 0, rangedAttack: 0, heal: 0, rangedHeal: 0,
-      dismantle: 0, claim: 0, effectiveHP: 0, mobility: 0,
-      support: 0, toughParts: 0, boosted: entry.boosted,
-      maxBoostTier: 0 as 0 | 1 | 2 | 3, totalParts: 0, activeParts: 0,
+      attack: 0,
+      rangedAttack: 0,
+      heal: 0,
+      rangedHeal: 0,
+      dismantle: 0,
+      claim: 0,
+      effectiveHP: 0,
+      mobility: 0,
+      support: 0,
+      toughParts: 0,
+      boosted: entry.boosted,
+      maxBoostTier: 0 as 0 | 1 | 2 | 3,
+      totalParts: 0,
+      activeParts: 0,
     },
   }));
 
@@ -192,10 +203,18 @@ function buildSquadPlanFromWarPlan(
       regroupThreshold: CONFIG.war.waveRegroupRatio,
       healerRequired: true,
       enemyCapability: {
-        totalAttack: 0, totalRangedAttack: 0, totalHeal: 0,
-        totalRangedHeal: 0, totalDismantle: 0, totalClaim: 0,
-        totalEffectiveHP: 0, avgMobility: 0, totalSupport: 0,
-        totalToughParts: 0, boostedCount: 0, maxBoostTier: 0,
+        totalAttack: 0,
+        totalRangedAttack: 0,
+        totalHeal: 0,
+        totalRangedHeal: 0,
+        totalDismantle: 0,
+        totalClaim: 0,
+        totalEffectiveHP: 0,
+        avgMobility: 0,
+        totalSupport: 0,
+        totalToughParts: 0,
+        boostedCount: 0,
+        maxBoostTier: 0,
         creepCount: 0,
       },
       terrainRisk: 0.5,
@@ -356,10 +375,7 @@ function buildCreepCapability(creep: Creep): CombatCapability {
 // §5. 目标候选采集 — 从 Game.rooms 采集敌方 creep
 // ═══════════════════════════════════════════════════════════
 
-function collectTargetCandidates(
-  targetRoom: string,
-  squad: SquadPlan,
-): TargetCandidate[] {
+function collectTargetCandidates(targetRoom: string, squad: SquadPlan): TargetCandidate[] {
   const room = Game.rooms[targetRoom];
   if (!room) return [];
 
@@ -419,11 +435,23 @@ function buildHostileCapability(hostile: Creep): CombatCapability {
     if (tier > maxBoostTier) maxBoostTier = tier;
     const mult = part.boost ? 4 : 1;
     switch (part.type) {
-      case ATTACK: attack += 30 * mult; break;
-      case RANGED_ATTACK: rangedAttack += 10 * mult; break;
-      case HEAL: heal += 12 * mult; rangedHeal += 4 * mult; break;
-      case WORK: dismantle += 50 * mult; support += 1; break;
-      case CLAIM: claim += mult; break;
+      case ATTACK:
+        attack += 30 * mult;
+        break;
+      case RANGED_ATTACK:
+        rangedAttack += 10 * mult;
+        break;
+      case HEAL:
+        heal += 12 * mult;
+        rangedHeal += 4 * mult;
+        break;
+      case WORK:
+        dismantle += 50 * mult;
+        support += 1;
+        break;
+      case CLAIM:
+        claim += mult;
+        break;
     }
   }
 
@@ -433,9 +461,20 @@ function buildHostileCapability(hostile: Creep): CombatCapability {
   const mobility = bodyWeight > 0 ? moveParts / bodyWeight : moveParts > 0 ? 1 : 0;
 
   return {
-    attack, rangedAttack, heal, rangedHeal, dismantle, claim,
-    effectiveHP, mobility, support, toughParts, boosted, maxBoostTier,
-    totalParts, activeParts,
+    attack,
+    rangedAttack,
+    heal,
+    rangedHeal,
+    dismantle,
+    claim,
+    effectiveHP,
+    mobility,
+    support,
+    toughParts,
+    boosted,
+    maxBoostTier,
+    totalParts,
+    activeParts,
   };
 }
 
@@ -446,7 +485,9 @@ function estimateThreatScore(cap: CombatCapability): number {
 
 /** per-tick per-room hostile creep 共享缓存。 */
 function getHostilesCached(room: Room): Creep[] {
-  const g = globalCache() as { __tacticalHostiles?: Record<string, { tick: number; list: Creep[] }> };
+  const g = globalCache() as {
+    __tacticalHostiles?: Record<string, { tick: number; list: Creep[] }>;
+  };
   if (!g.__tacticalHostiles) g.__tacticalHostiles = {};
   const cached = g.__tacticalHostiles[room.name];
   if (cached && cached.tick === Game.time) return cached.list;

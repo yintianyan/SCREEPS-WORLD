@@ -166,9 +166,10 @@ export function reviewStrategy(input: StrategyReviewInput): StrategyReviewResult
     }
   }
 
-  const summary = reasons.length > 0
-    ? `strategy-review: ${reasons.join(", ")} → ${suggestions.length} suggestion(s)`
-    : "strategy-review: no suggestions (stable)";
+  const summary =
+    reasons.length > 0
+      ? `strategy-review: ${reasons.join(", ")} → ${suggestions.length} suggestion(s)`
+      : "strategy-review: no suggestions (stable)";
 
   return { suggestions, summary };
 }

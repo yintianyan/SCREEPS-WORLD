@@ -14,12 +14,13 @@ import { diagnoseAnchor } from "../domain/layout/anchor-selection";
 import type { ValidationOptions } from "../domain/layout/validation";
 import { log } from "../kernel/log";
 import { assessEmergencyRebuild, isEmergencyTask } from "../domain/construction/queue";
-import { auditStructureGaps, auditLinkRoleGaps, mergeLinkRoleGaps, type StructureGaps } from "../domain/layout/gaps";
 import {
-  getDeadAssetLinks,
-  markLinkConstrained,
-  createDismantlePlan,
-} from "./link-system";
+  auditStructureGaps,
+  auditLinkRoleGaps,
+  mergeLinkRoleGaps,
+  type StructureGaps,
+} from "../domain/layout/gaps";
+import { getDeadAssetLinks, markLinkConstrained, createDismantlePlan } from "./link-system";
 import {
   isLinkConstrained as isLinkConstrainedDomain,
   isDismantleOnCooldown as isDismantleOnCooldownDomain,
@@ -135,10 +136,7 @@ function makeTryAddTask(
  * 内部控制实际规划时机。只在 Green/Guarded 且非 BOOTSTRAP/RECOVERY/DEFENSE 运行。
  */
 export const layoutPlannerSystem: System & {
-  planRoom(
-    snapshot: import("../kernel/contracts").RoomSnapshot,
-    ctx: TickContext,
-  ): void;
+  planRoom(snapshot: import("../kernel/contracts").RoomSnapshot, ctx: TickContext): void;
 } = {
   name: "layout-planner",
   priority: 3 as Priority,
@@ -253,7 +251,8 @@ function planStage0Prep(
       // Phase 3 诊断：Distance Transform 锚点质量评估。
       {
         const terrain = room.getTerrain();
-        const getTerrain = (x: number, y: number): boolean => terrain.get(x, y) === TERRAIN_MASK_WALL;
+        const getTerrain = (x: number, y: number): boolean =>
+          terrain.get(x, y) === TERRAIN_MASK_WALL;
         const field = computeDistanceField(getTerrain);
         const exits = room.find(FIND_EXIT).map(p => ({ x: p.x, y: p.y }));
         const sources = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
@@ -265,14 +264,22 @@ function planStage0Prep(
           : undefined;
 
         const diagnosis = diagnoseAnchor(spawn.pos.x, spawn.pos.y, {
-          field, sources, controller, exits, mineral, getTerrain,
+          field,
+          sources,
+          controller,
+          exits,
+          mineral,
+          getTerrain,
         });
-        log.info("layout-planner", `[layout] anchor diagnosis ${snapshot.roomName}: ` +
-          `rank ${diagnosis.rank}/${diagnosis.total}, ` +
-          `score ${diagnosis.candidate.score.toFixed(1)}, ` +
-          `openness ${diagnosis.candidate.openness}, ` +
-          `blocked ${diagnosis.candidate.blockedCells}, ` +
-          `srcDist ${diagnosis.candidate.avgSourceDist.toFixed(1)}`,);
+        log.info(
+          "layout-planner",
+          `[layout] anchor diagnosis ${snapshot.roomName}: ` +
+            `rank ${diagnosis.rank}/${diagnosis.total}, ` +
+            `score ${diagnosis.candidate.score.toFixed(1)}, ` +
+            `openness ${diagnosis.candidate.openness}, ` +
+            `blocked ${diagnosis.candidate.blockedCells}, ` +
+            `srcDist ${diagnosis.candidate.avgSourceDist.toFixed(1)}`,
+        );
       }
     } else if (layout.anchor !== anchorPacked) {
       layout.anchor = anchorPacked;
@@ -386,9 +393,14 @@ function planStage1Core(
     maxBackgroundQueued: CONFIG.construction.maxBackgroundQueuedPerRoom,
     nowTick: ctx.tick,
     capStats: data,
-    onShortfall: (shortfalls) => {
+    onShortfall: shortfalls => {
       for (const s of shortfalls) {
-        log.warn("layout", "placement shortfall in " + (s.roomName ?? "?") + ": " + s.type + " need " + s.needed + " placed " + s.placed);
+        log.warn(
+          "layout",
+          `placement shortfall in ${s.roomName ?? "?"}: ${s.type} need ${s.needed} placed ${
+            s.placed
+          }`,
+        );
       }
     },
   });
@@ -435,7 +447,11 @@ function planStage2Logistics(
     room,
     validationOptions: data.validationOptions,
     queuedLinks: data.queuedLinks,
-    linkConstrained: isLinkConstrainedDomain(globalCache().linkConstrained, snapshot.roomName, ctx.tick),
+    linkConstrained: isLinkConstrainedDomain(
+      globalCache().linkConstrained,
+      snapshot.roomName,
+      ctx.tick,
+    ),
     tryAdd: tryAddTask,
   });
   data.queuedLinks = result.queuedLinks;
@@ -443,8 +459,11 @@ function planStage2Logistics(
   if (result.targetingChanged) data.targetingChanged = true;
   if (result.controllerGeometryBlocked && result.storageGeometryBlocked) {
     markLinkConstrained(snapshot.roomName, ctx.tick);
-    log.info("layout-planner", `[layout] link constrained in ${snapshot.roomName}: ` +
-      `controller + storage link geometry blocked, retry after ${1000}t`,);
+    log.info(
+      "layout-planner",
+      `[layout] link constrained in ${snapshot.roomName}: ` +
+        `controller + storage link geometry blocked, retry after ${1000}t`,
+    );
   }
 
   // 3.6 P1-4 受限拆改：死资产 link 检测到替代位置后创建拆改计划。
@@ -456,7 +475,11 @@ function planStage2Logistics(
   // 执行与验证由 construction-manager 负责（每 tick 消费 dismantlePlans）。
   {
     const deadAssets = getDeadAssetLinks(ctx.tick);
-    if (deadAssets.length > 0 && !isRoomInDefense(Memory.rooms[snapshot.roomName]?.colonyState) && !isDismantleOnCooldownDomain(globalCache().lastDismantleTick, snapshot.roomName, ctx.tick)) {
+    if (
+      deadAssets.length > 0 &&
+      !isRoomInDefense(Memory.rooms[snapshot.roomName]?.colonyState) &&
+      !isDismantleOnCooldownDomain(globalCache().lastDismantleTick, snapshot.roomName, ctx.tick)
+    ) {
       const existingPlans = globalCache().dismantlePlans ?? new Map();
       for (const deadLinkId of deadAssets) {
         if (existingPlans.has(deadLinkId)) continue;
@@ -477,8 +500,11 @@ function planStage2Logistics(
           { x: replacementTask.pos.x, y: replacementTask.pos.y },
           ctx.tick,
         );
-        log.info("layout-planner", `[layout] dismantle plan created: dead link ${deadLinkId} in ${snapshot.roomName}, ` +
-          `replacement at (${replacementTask.pos.x},${replacementTask.pos.y})`,);
+        log.info(
+          "layout-planner",
+          `[layout] dismantle plan created: dead link ${deadLinkId} in ${snapshot.roomName}, ` +
+            `replacement at (${replacementTask.pos.x},${replacementTask.pos.y})`,
+        );
       }
     }
   }
@@ -576,8 +602,14 @@ function planStage3RoadsAndFinalize(
   const economyOk = (Memory.rooms[snapshot.roomName]?.economyPressure ?? 0) < 0.5;
   if (economyOk && !snapshot.needsRecovery && snapshot.rcl >= 6 && snapshot.storage) {
     planHubRoads(
-      snapshot, room, anchor, occupiedSet,
-      queue, existingKeys, existingPositions, isBlacklisted,
+      snapshot,
+      room,
+      anchor,
+      occupiedSet,
+      queue,
+      existingKeys,
+      existingPositions,
+      isBlacklisted,
     );
   }
 
@@ -590,12 +622,18 @@ function planStage3RoadsAndFinalize(
     occupiedSet,
   });
   if (rebuild?.kind === "stuck") {
-    log.warn("layout-planner", `[layout] WARN: spawn rebuild stuck in ${snapshot.roomName}, ` +
-      `no relocation position found near anchor`,);
+    log.warn(
+      "layout-planner",
+      `[layout] WARN: spawn rebuild stuck in ${snapshot.roomName}, ` +
+        `no relocation position found near anchor`,
+    );
   } else if (rebuild) {
     if (rebuild.kind === "relocated") {
-      log.info("layout-planner", `[layout] spawn rebuild: anchor (${anchor.x},${anchor.y}) blocked, ` +
-        `relocating to (${rebuild.pos.x},${rebuild.pos.y}) in ${snapshot.roomName}`,);
+      log.info(
+        "layout-planner",
+        `[layout] spawn rebuild: anchor (${anchor.x},${anchor.y}) blocked, ` +
+          `relocating to (${rebuild.pos.x},${rebuild.pos.y}) in ${snapshot.roomName}`,
+      );
     }
     const spawnKey = "constraint.spawn.01";
     queue.push({
@@ -632,8 +670,11 @@ function planStage3RoadsAndFinalize(
 
   // R2 队列治理观测：本周期背景任务上限拒绝计数（每规划周期至多一条日志）。
   if (data.capRejected > 0) {
-    log.info("layout-planner", `[layout] queue cap reached in ${snapshot.roomName}: rejected ${data.capRejected} ` +
-      `background candidates (max ${CONFIG.construction.maxBackgroundQueuedPerRoom})`,);
+    log.info(
+      "layout-planner",
+      `[layout] queue cap reached in ${snapshot.roomName}: rejected ${data.capRejected} ` +
+        `background candidates (max ${CONFIG.construction.maxBackgroundQueuedPerRoom})`,
+    );
   }
 
   // 仅在影响 creep 目标选择的结构入队时递增 revision。
@@ -692,8 +733,15 @@ function planHubRoads(
   if (snapshot.factory) hubs.push({ x: snapshot.factory.pos.x, y: snapshot.factory.pos.y });
 
   planHubRoadsDomain(
-    snapshot.roomName, hubs, anchor, room.getTerrain(),
-    occupiedSet, queue, existingKeys, existingPositions, isBlacklisted,
+    snapshot.roomName,
+    hubs,
+    anchor,
+    room.getTerrain(),
+    occupiedSet,
+    queue,
+    existingKeys,
+    existingPositions,
+    isBlacklisted,
   );
 }
 
@@ -710,10 +758,11 @@ function shouldPlan(
   const roomMem = Memory.rooms[snapshot.roomName];
   const emergency = assessEmergencyRebuild(snapshot);
   const queue = roomMem?.buildQueue ?? [];
-  const hasPendingEmergencyTask = emergency.any && queue.some(
-    t => (t.state === "queued" || t.state === "site") &&
-      isEmergencyTask(t, snapshot, emergency),
-  );
+  const hasPendingEmergencyTask =
+    emergency.any &&
+    queue.some(
+      t => (t.state === "queued" || t.state === "site") && isEmergencyTask(t, snapshot, emergency),
+    );
   return shouldPlanDomain(
     layout.state,
     layout.nextPlanTick,
@@ -739,19 +788,19 @@ function recordLayoutGaps(roomName: string, gaps: StructureGaps): void {
   const keys = Object.keys(gaps);
   if (keys.length === 0) {
     if (prev !== undefined) {
-      const store = Memory.kernel.layoutGaps ??= {};
+      const store = (Memory.kernel.layoutGaps ??= {});
       delete store[roomName];
     }
     return;
   }
   if (prev === undefined || Object.keys(prev).length !== keys.length) {
-    const store = Memory.kernel.layoutGaps ??= {};
+    const store = (Memory.kernel.layoutGaps ??= {});
     store[roomName] = { ...gaps };
     return;
   }
   for (const k of keys) {
     if (prev[k] !== gaps[k]) {
-      const store = Memory.kernel.layoutGaps ??= {};
+      const store = (Memory.kernel.layoutGaps ??= {});
       store[roomName] = { ...gaps };
       return;
     }
@@ -783,7 +832,8 @@ export function findReplacementForDeadLink(
   // 只匹配 queued 状态：done 表示替代 link 已建成，此时死资产仍在说明替代也是
   // 死资产 → 不应创建拆改计划（应由 fallback 路径 markLinkConstrained 处理）。
   return newLinkTasks.find(
-    t => t.structureType === STRUCTURE_LINK &&
+    t =>
+      t.structureType === STRUCTURE_LINK &&
       t.state === "queued" &&
       Math.abs(t.pos.x - adjacentSource.pos.x) <= 1 &&
       Math.abs(t.pos.y - adjacentSource.pos.y) <= 1,

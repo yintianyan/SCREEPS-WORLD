@@ -22,7 +22,7 @@ const ALL_FILES = walk(SRC);
 function codeLines(src: string): string {
   return src
     .split(NL)
-    .filter((l) => {
+    .filter(l => {
       const t = l.trim();
       return !t.startsWith("*") && !t.startsWith("//") && !t.startsWith("/*");
     })
@@ -30,7 +30,7 @@ function codeLines(src: string): string {
 }
 
 function findFile(suffix: string): string {
-  const f = ALL_FILES.find((f) => relative(SRC, f).endsWith(suffix));
+  const f = ALL_FILES.find(f => relative(SRC, f).endsWith(suffix));
   if (!f) throw new Error(`File not found: ${suffix}`);
   return f;
 }
@@ -49,7 +49,7 @@ const ATTACKER_FILE = findFile("creeps/roles/attacker.ts");
 const HEALER_FILE = findFile("creeps/roles/healer.ts");
 
 // All domain/tactical/*.ts files
-const TACTICAL_DOMAIN_FILES = ALL_FILES.filter((f) =>
+const TACTICAL_DOMAIN_FILES = ALL_FILES.filter(f =>
   relative(SRC, f).startsWith("domain/tactical/"),
 );
 
@@ -86,7 +86,12 @@ describe("A5.4.4: Domain Purity (Guards 1-5)", () => {
       const violations: string[] = [];
       if (/\bCreep\b/.test(code) && !code.includes("CreepSnapshot")) violations.push("Creep");
       if (/\bPathFinder\b/.test(code)) violations.push("PathFinder");
-      if (/\bRoom\b/.test(code) && !/RoomPosition|roomName|targetRoom|retreatRoom|regroupRoom|anchorRoom|authorizedTargetRoom|desiredRoom|sameRoom|targetScope/.test(code)) {
+      if (
+        /\bRoom\b/.test(code) &&
+        !/RoomPosition|roomName|targetRoom|retreatRoom|regroupRoom|anchorRoom|authorizedTargetRoom|desiredRoom|sameRoom|targetScope/.test(
+          code,
+        )
+      ) {
         // Check if it's used as a type reference, not a Screeps Room object
         if (/\bRoom\b(?!\.)/.test(code) && !code.includes("TerrainContext")) {
           violations.push("Room");
@@ -96,7 +101,7 @@ describe("A5.4.4: Domain Purity (Guards 1-5)", () => {
     }
     // Room type is allowed in type contexts, but not as runtime object
     // Focus on Creep and PathFinder as hard blocks
-    const hardBlocks = bad.filter((b) => b.includes("Creep") || b.includes("PathFinder"));
+    const hardBlocks = bad.filter(b => b.includes("Creep") || b.includes("PathFinder"));
     expect(hardBlocks, `Hard runtime refs found: ${hardBlocks.join(", ")}`).toHaveLength(0);
   });
 
@@ -106,12 +111,18 @@ describe("A5.4.4: Domain Purity (Guards 1-5)", () => {
     for (const f of TACTICAL_DOMAIN_FILES) {
       const code = codeLines(readFileSync(f, "utf8"));
       const violations: string[] = [];
-      if (/\battack\s*\(/.test(code) && !/attackType|attackCapability|attackParts|ATTACK/.test(code)) {
+      if (
+        /\battack\s*\(/.test(code) &&
+        !/attackType|attackCapability|attackParts|ATTACK/.test(code)
+      ) {
         // Check if it's an actual function call (not a property name)
         if (/\.attack\s*\(/.test(code)) violations.push("attack()");
       }
       if (/\.rangedAttack\s*\(/.test(code)) violations.push("rangedAttack()");
-      if (/\.heal\s*\(/.test(code) && !/healCoverage|healCapability|healSupportDemand|healSupport|HEAL|rangedHeal/.test(code)) {
+      if (
+        /\.heal\s*\(/.test(code) &&
+        !/healCoverage|healCapability|healSupportDemand|healSupport|HEAL|rangedHeal/.test(code)
+      ) {
         if (/\.heal\s*\(/.test(code)) violations.push("heal()");
       }
       if (/\.dismantle\s*\(/.test(code) && !/dismantlePower|DISMANTLE/.test(code)) {
@@ -131,7 +142,10 @@ describe("A5.4.4: Domain Purity (Guards 1-5)", () => {
       const violations: string[] = [];
       if (/\bregisterMove\b/.test(code)) violations.push("registerMove");
       if (/\bspawnCreep\s*\(/.test(code)) violations.push("spawnCreep()");
-      if (/\b\.move\s*\(/.test(code) && !/moveTo|movement|MovementIntent|moveDirective|MovementMode|MOVE/.test(code)) {
+      if (
+        /\b\.move\s*\(/.test(code) &&
+        !/moveTo|movement|MovementIntent|moveDirective|MovementMode|MOVE/.test(code)
+      ) {
         violations.push("move()");
       }
       if (violations.length > 0) bad.push(`${relative(SRC, f)}: ${violations.join(", ")}`);
@@ -166,8 +180,8 @@ describe("A5.4.4: Tactical Runtime Boundary (Guards 6-8)", () => {
   it("7b. tactical-runtime-system.ts 不直接 import logistics-planner", () => {
     const src = readFileSync(TACTICAL_RUNTIME_FILE, "utf8");
     // tactical-runtime-system.ts may reference SupplyDemand type but should not import logistics-planner directly
-    expect(src).not.toContain("from \"../logistics-planner\"");
-    expect(src).not.toContain("from \"../logistics-system");
+    expect(src).not.toContain('from "../logistics-planner"');
+    expect(src).not.toContain('from "../logistics-system');
   });
 
   // Guard 8: Tactical 禁止 recovery
@@ -180,7 +194,7 @@ describe("A5.4.4: Tactical Runtime Boundary (Guards 6-8)", () => {
   it("8b. tactical-runtime-system.ts 不直接 import recovery-execution-system", () => {
     const src = readFileSync(TACTICAL_RUNTIME_FILE, "utf8");
     // May reference TacticalAbortSignal type but should not import recovery-execution-system directly
-    expect(src).not.toContain("from \"../recovery-execution-system\"");
+    expect(src).not.toContain('from "../recovery-execution-system"');
   });
 });
 
@@ -349,7 +363,7 @@ describe("A5.4.4: Domain Import Boundary", () => {
         imports.push(m[1]!);
       }
       const badImports = imports.filter(
-        (p) => p.includes("systems/") || p.includes("creeps/") || p.includes("kernel/"),
+        p => p.includes("systems/") || p.includes("creeps/") || p.includes("kernel/"),
       );
       if (badImports.length > 0) bad.push(`${relative(SRC, f)}: ${badImports.join(", ")}`);
     }

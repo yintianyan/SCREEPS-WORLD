@@ -36,7 +36,9 @@ describe("D-FINDING-02: 部分执行幂等性", () => {
       tier: "conserve",
       softLimit: 14,
       hardLimit: 17,
-      get emergency() { return conserveBudget.emergency; },
+      get emergency() {
+        return conserveBudget.emergency;
+      },
       canStart: (p: number) => {
         callCount++;
         // 前 3 次允许（P0 系统跑完），之后拒绝（模拟 CPU 耗尽）
@@ -52,7 +54,9 @@ describe("D-FINDING-02: 部分执行幂等性", () => {
       budget: exhaustionBudget,
       globalSiteCount: 0,
       getSnapshot: () => snap,
-      snapshots: function* () { yield snap; },
+      *snapshots() {
+        yield snap;
+      },
     };
 
     // 模拟多个系统尝试运行
@@ -88,7 +92,9 @@ describe("D-FINDING-02: 部分执行幂等性", () => {
       budget: restoredBudget,
       globalSiteCount: 0,
       getSnapshot: () => snap,
-      snapshots: function* () { yield snap; },
+      *snapshots() {
+        yield snap;
+      },
     };
 
     // 所有系统都应该能运行
@@ -161,7 +167,9 @@ describe("D-FINDING-02: 部分执行幂等性", () => {
       budget: conserveBudget,
       globalSiteCount: 0,
       getSnapshot: () => snap,
-      snapshots: function* () { yield snap; },
+      *snapshots() {
+        yield snap;
+      },
     };
 
     // P0 系统应运行
@@ -189,7 +197,9 @@ describe("D-FINDING-02: 部分执行幂等性", () => {
       budget: healthyBudget,
       globalSiteCount: 0,
       getSnapshot: () => snap,
-      snapshots: function* () { yield snap; },
+      *snapshots() {
+        yield snap;
+      },
     };
 
     // 所有优先级的系统都应能运行

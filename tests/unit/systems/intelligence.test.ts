@@ -18,7 +18,7 @@ import { ROOM_DYNAMIC_TTL, ROOM_THREAT_TTL, type RoomIntel } from "../../../src/
 /** 老化门触发 tick：(tick - PARENT_PHASE) % 100 === 0。 */
 const PARENT_PHASE = systemPhase("intelligence", 10);
 function agingTick(base: number): number {
-  return base + ((PARENT_PHASE - base) % 100 + 100) % 100;
+  return base + ((((PARENT_PHASE - base) % 100) + 100) % 100);
 }
 
 /** 观察交接播种：向 globalCache.intelHandoff 推一条观测（home = 归属房）。 */

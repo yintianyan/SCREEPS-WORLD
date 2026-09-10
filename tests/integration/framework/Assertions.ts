@@ -7,7 +7,10 @@ import { GameInspector } from "./GameInspector";
 export class Assertions {
   private inspector: GameInspector;
 
-  constructor(private world: TestWorld, private records: TickRecord[] = []) {
+  constructor(
+    private world: TestWorld,
+    private records: TickRecord[] = [],
+  ) {
     this.inspector = new GameInspector(world);
   }
 
@@ -42,34 +45,27 @@ export class Assertions {
     expect(errors, `No runtime errors expected. ${msg()}`).toHaveLength(0);
   }
 
-
-
-
   /** Spawn 不长期空闲（连续 N tick 无孵化且无 creep 在队列中）。 */
   assertSpawnActive(maxIdleTicks = 100, context = ""): void {
     if (this.records.length < maxIdleTicks) return;
     // 检查最后 maxIdleTicks 中是否有孵化活动
     const lastWindow = this.records.slice(-maxIdleTicks);
     const anySpawning = lastWindow.some(r => r.spawning.length > 0);
-    const anyCreepChange = lastWindow.some((r, i) =>
-      i > 0 && r.creepCount !== lastWindow[i - 1]!.creepCount,
+    const anyCreepChange = lastWindow.some(
+      (r, i) => i > 0 && r.creepCount !== lastWindow[i - 1]!.creepCount,
     );
-    const msg = () => this.inspector.failureReport(`Spawn idle > ${maxIdleTicks} ticks: ${context}`, this.records);
+    const msg = () =>
+      this.inspector.failureReport(`Spawn idle > ${maxIdleTicks} ticks: ${context}`, this.records);
     expect(anySpawning || anyCreepChange, `Spawn must be active. ${msg()}`).toBe(true);
   }
-
-
-
 
   /** Container 存活（hits > 0）。 */
   assertContainersAlive(context = ""): void {
     const dead = this.world.containers.filter(c => c.hits <= 0);
-    const msg = () => this.inspector.failureReport(`${dead.length} containers dead: ${context}`, this.records);
+    const msg = () =>
+      this.inspector.failureReport(`${dead.length} containers dead: ${context}`, this.records);
     expect(dead, `All containers must be alive. ${msg()}`).toHaveLength(0);
   }
-
-
-
 
   // assertPopulationBalanced / assertRclAtLeast / assertProgressGrowing / assertEnergyAbove /
   // assertRoleExists / assertRoleAbsent / assertHarvestRate / assertUpgradeRate /

@@ -2,16 +2,13 @@
 import type { ActionCandidate, ActionContext } from "../action-types";
 import { runAction } from "./helpers";
 import { globalCache } from "../../../kernel/global-cache";
-import {
-  findClosestContainerWithEnergy,
-  findRichestContainer,
-} from "../../support/targeting";
+import { findClosestContainerWithEnergy, findRichestContainer } from "../../support/targeting";
 
 /** 从最满 container 取能。 */
 export function withdrawRichestContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:richest-container",
-    resolve: (ac) => {
+    resolve: ac => {
       const best = findRichestContainer(ac.snapshot.containers);
       if (!best || best.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return best;
@@ -26,7 +23,7 @@ export function withdrawRichestContainer(): ActionCandidate<StructureContainer> 
 export function withdrawClosestContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:closest-container",
-    resolve: (ac) => findClosestContainerWithEnergy(ac.creep, ac.snapshot.containers),
+    resolve: ac => findClosestContainerWithEnergy(ac.creep, ac.snapshot.containers),
     execute: (ac, best) => {
       runAction(ac.creep, best, () => ac.creep.withdraw(best, RESOURCE_ENERGY));
     },
@@ -55,7 +52,7 @@ function isLogisticsContainer(c: StructureContainer, ac: ActionContext): boolean
 export function withdrawRichestNonSourceContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:richest-non-source-container",
-    resolve: (ac) => {
+    resolve: ac => {
       const candidates = ac.snapshot.containers.filter(
         c => !isLogisticsContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
@@ -71,7 +68,7 @@ export function withdrawRichestNonSourceContainer(): ActionCandidate<StructureCo
 export function withdrawClosestNonSourceContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:closest-non-source-container",
-    resolve: (ac) => {
+    resolve: ac => {
       const candidates = ac.snapshot.containers.filter(
         c => !isLogisticsContainer(c, ac) && c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
@@ -87,7 +84,7 @@ export function withdrawClosestNonSourceContainer(): ActionCandidate<StructureCo
 export function withdrawControllerContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "withdraw:controller-container",
-    resolve: (ac) => {
+    resolve: ac => {
       const cc = ac.snapshot.controllerContainer;
       if (!cc || cc.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return cc;
@@ -102,10 +99,12 @@ export function withdrawControllerContainer(): ActionCandidate<StructureContaine
 export function withdrawControllerLink(): ActionCandidate<StructureLink> {
   return {
     name: "withdraw:controller-link",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.snapshot.links.length === 0 || !ac.snapshot.controller) return undefined;
       return ac.snapshot.links.find(
-        l => l.pos.getRangeTo(ac.snapshot.controller!) <= 2 && l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+        l =>
+          l.pos.getRangeTo(ac.snapshot.controller!) <= 2 &&
+          l.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
       );
     },
     execute: (ac, ctrlLink) => {
@@ -118,7 +117,7 @@ export function withdrawControllerLink(): ActionCandidate<StructureLink> {
 export function withdrawStorage(): ActionCandidate<StructureStorage> {
   return {
     name: "withdraw:storage",
-    resolve: (ac) => {
+    resolve: ac => {
       const st = ac.snapshot.storage;
       if (!st || st.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return st;
@@ -148,7 +147,7 @@ export function withdrawStorage(): ActionCandidate<StructureStorage> {
 export function withdrawStorageLink(): ActionCandidate<StructureLink> {
   return {
     name: "withdraw:storage-link",
-    resolve: (ac) => {
+    resolve: ac => {
       const st = ac.snapshot.storage;
       if (!st) return undefined;
       const storageLink = ac.snapshot.links.find(
@@ -162,7 +161,9 @@ export function withdrawStorageLink(): ActionCandidate<StructureLink> {
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
       runAction(ac.creep, link, () => ac.creep.withdraw(link, RESOURCE_ENERGY, amount), {
-        [ERR_NOT_ENOUGH_RESOURCES]: () => { ac.creep.memory.mode = "idle"; },
+        [ERR_NOT_ENOUGH_RESOURCES]: () => {
+          ac.creep.memory.mode = "idle";
+        },
       });
     },
   };
@@ -184,7 +185,7 @@ export function withdrawStorageCapped(
 ): ActionCandidate<StorageCappedTarget> {
   return {
     name: "withdraw:storage-capped",
-    resolve: (ac) => {
+    resolve: ac => {
       const st = ac.snapshot.storage;
       if (!st || st.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       const effectiveLimit = typeof limit === "function" ? limit(ac) : limit;
@@ -199,7 +200,9 @@ export function withdrawStorageCapped(
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree, effectiveLimit);
       runAction(ac.creep, storage, () => ac.creep.withdraw(storage, RESOURCE_ENERGY, amount), {
-        [ERR_NOT_ENOUGH_RESOURCES]: () => { ac.creep.memory.mode = "idle"; },
+        [ERR_NOT_ENOUGH_RESOURCES]: () => {
+          ac.creep.memory.mode = "idle";
+        },
       });
     },
   };
@@ -211,7 +214,7 @@ export function withdrawCapped(
 ): ActionCandidate<StructureContainer | StructureStorage> {
   return {
     name: "withdraw:capped",
-    resolve: (ac) => {
+    resolve: ac => {
       const t = target(ac);
       if (!t || t.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return undefined;
       return t;
@@ -221,7 +224,9 @@ export function withdrawCapped(
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
       runAction(ac.creep, t, () => ac.creep.withdraw(t, RESOURCE_ENERGY, amount), {
-        [ERR_NOT_ENOUGH_RESOURCES]: () => { ac.creep.memory.mode = "idle"; },
+        [ERR_NOT_ENOUGH_RESOURCES]: () => {
+          ac.creep.memory.mode = "idle";
+        },
       });
     },
   };

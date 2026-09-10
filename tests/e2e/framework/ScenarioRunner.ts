@@ -94,25 +94,21 @@ export class ScenarioRunner {
     // 【Phase3A 修复】双 spawn 去重：mockup 的 addBot() 会自动在目标房创建一个
     // store 制式 spawn；若夹具再放一个 legacy 制式（energy 字段）spawn，两者能量
     // 计费口径分裂 —— transfer 只写 store、引擎容量检查读 legacy → 孵化容量恒 0，
-    
+
     // 因此 bot 所在房间的夹具 spawn 一律移除，由 addBot 统一提供。
-    const roomsForWorld = opts.rooms.map((r) => ({
+    const roomsForWorld = opts.rooms.map(r => ({
       ...r,
-      objects: (r.objects ?? []).filter(
-        (o) => !(o.type === "spawn" && r.name === opts.roomName),
-      ),
+      objects: (r.objects ?? []).filter(o => !(o.type === "spawn" && r.name === opts.roomName)),
     }));
 
     this._worldBuilder = new WorldBuilder(this._server.server.world);
     await this._worldBuilder.addRooms(roomsForWorld);
 
     const spawnPos = opts.spawnPos ?? { x: 25, y: 25 };
-    this._bot = new BotHarness(
-      opts.botUsername ?? "bot",
-      opts.roomName,
-      spawnPos,
-      { cpu: opts.cpuLimit, cpuBucket: opts.cpuBucket },
-    );
+    this._bot = new BotHarness(opts.botUsername ?? "bot", opts.roomName, spawnPos, {
+      cpu: opts.cpuLimit,
+      cpuBucket: opts.cpuBucket,
+    });
     await this._bot.registerTo(this._server.server);
 
     // addBot 会把 controller 重置为 level=1；如有 controllerLevel 选项，
@@ -137,10 +133,18 @@ export class ScenarioRunner {
           { $set: { user: user._id, level: r.level, progress: 0, downgradeTime: null } },
         );
         await db["rooms.objects"].insert({
-          room: r.name, type: "spawn", x: 25, y: 25, user: user._id,
-          name: `Spawn2_${r.name}`, store: { energy: 300 },
-          storeCapacityResource: { energy: 300 }, hits: 5000, hitsMax: 5000,
-          spawning: null, notifyWhenAttacked: true,
+          room: r.name,
+          type: "spawn",
+          x: 25,
+          y: 25,
+          user: user._id,
+          name: `Spawn2_${r.name}`,
+          store: { energy: 300 },
+          storeCapacityResource: { energy: 300 },
+          hits: 5000,
+          hitsMax: 5000,
+          spawning: null,
+          notifyWhenAttacked: true,
         });
       }
     }
@@ -175,7 +179,12 @@ export class ScenarioRunner {
       const world = (this._server as any).server.world;
       const objs = await world.roomObjects(this._bot?.roomName ?? "W0N1");
       for (const o of objs) {
-        if (o.type === "spawn" && o.store && typeof o.store.energy === "number" && o.energy !== o.store.energy) {
+        if (
+          o.type === "spawn" &&
+          o.store &&
+          typeof o.store.energy === "number" &&
+          o.energy !== o.store.energy
+        ) {
           o.energy = o.store.energy;
         }
       }
@@ -190,10 +199,7 @@ export class ScenarioRunner {
    * @param maxTicks 最大 tick 数（默认 2000）
    * @returns 快照序列（含最后一个满足条件的快照）
    */
-  async runUntil(
-    predicate: TickPredicate,
-    maxTicks = 2000,
-  ): Promise<BotSnapshot[]> {
+  async runUntil(predicate: TickPredicate, maxTicks = 2000): Promise<BotSnapshot[]> {
     const snapshots: BotSnapshot[] = [];
     const limit = Math.min(maxTicks, 5000); // 硬上限保护
 
@@ -235,7 +241,14 @@ export class ScenarioRunner {
     const { db, env } = await (this._server.server as any).world.load();
     let [user] = await db.users.find({ username });
     if (!user) {
-      user = await db.users.insert({ username, cpu: 100, cpuAvailable: 10000, gcl: 1, active: 10000, badge: "enemy" });
+      user = await db.users.insert({
+        username,
+        cpu: 100,
+        cpuAvailable: 10000,
+        gcl: 1,
+        active: 10000,
+        badge: "enemy",
+      });
     }
     await env.sadd(env.keys.ACTIVE_ROOMS, roomName);
     await db.rooms.update({ _id: roomName }, { $set: { active: true } });
@@ -250,7 +263,10 @@ export class ScenarioRunner {
     if (!this._server) throw new Error("setup() not called");
     const { db } = this._server.server.common.storage;
     const username = "bot";
-    await db.users.update({ username }, { $set: { gcl: level === 1 ? 1 : 1000000 * (level - 1) + 1 } });
+    await db.users.update(
+      { username },
+      { $set: { gcl: level === 1 ? 1 : 1000000 * (level - 1) + 1 } },
+    );
   }
 
   /** 故障注入：移除指定房间的全部 creep（引擎侧删除，下一 tick 从 Game.creeps 消失）。 */

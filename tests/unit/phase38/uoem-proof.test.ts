@@ -15,8 +15,7 @@ interface MilestoneEvent extends BaseEvent {
   readonly at: number;
 }
 type ExpansionResult =
-  | "COMPLETED" | "COMPLETED_FORCED"
-  | "TIMED_OUT" | "LOST" | "STOLEN" | "ABANDONED";
+  "COMPLETED" | "COMPLETED_FORCED" | "TIMED_OUT" | "LOST" | "STOLEN" | "ABANDONED";
 interface PairedObservation {
   readonly before: number;
   readonly after: number;
@@ -33,7 +32,12 @@ interface OutcomeEvent extends BaseEvent {
 type UOEMEvent = OutcomeEvent | MilestoneEvent;
 
 const TERMINAL_RESULTS: ReadonlySet<string> = new Set([
-  "COMPLETED", "COMPLETED_FORCED", "TIMED_OUT", "LOST", "STOLEN", "ABANDONED",
+  "COMPLETED",
+  "COMPLETED_FORCED",
+  "TIMED_OUT",
+  "LOST",
+  "STOLEN",
+  "ABANDONED",
 ]);
 
 function makeOpId(target: string, consumeTick: number): OpId {
@@ -82,7 +86,13 @@ class ExpansionEventProducer {
   /** EXP-1 :346/:571 类路径 —— 只能发 Milestone。 */
   emitMilestone(milestone: string, tick: number): MilestoneEvent {
     if (milestone === "FORCED_ADVANCE") this.forcedAdvance = true;
-    return { kind: "MILESTONE", milestone, at: tick, eventId: `E-${tick}-m`, operationId: this.operationId };
+    return {
+      kind: "MILESTONE",
+      milestone,
+      at: tick,
+      eventId: `E-${tick}-m`,
+      operationId: this.operationId,
+    };
   }
   /** 唯一的终态出口。 */
   close(result: ExpansionResult, tick: number, after?: number): OutcomeEvent {
@@ -109,10 +119,7 @@ interface ExperienceLike {
   outcome?: { result: ExpansionResult; durationTicks: number };
   unresolved?: boolean;
 }
-function collectorConsume(
-  pending: ExperienceLike[],
-  channel: OutcomeChannel,
-): void {
+function collectorConsume(pending: ExperienceLike[], channel: OutcomeChannel): void {
   const events = channel.drain();
   for (const exp of pending) {
     const ev = events.find(e => e.operationId === exp.operationId);
@@ -147,8 +154,8 @@ describe("UOEM × EXP-1: Premature SUCCESS / Milestone-as-Outcome", () => {
     collectorConsume([exp], ch);
 
     expect(exp.outcome).toBeDefined();
-    expect(exp.outcome!.result).toBe("TIMED_OUT");       // 真终态胜出
-    expect(exp.outcome!.durationTicks).toBe(30000);       // 真实生命周期
+    expect(exp.outcome!.result).toBe("TIMED_OUT"); // 真终态胜出
+    expect(exp.outcome!.durationTicks).toBe(30000); // 真实生命周期
   });
 
   it("配对双写路径（:394+:704 型）第二次入队被幂等拒绝且计数可见", () => {
@@ -156,21 +163,25 @@ describe("UOEM × EXP-1: Premature SUCCESS / Milestone-as-Outcome", () => {
     const opId = makeOpId("W6N4", 1000);
     const p1 = new ExpansionEventProducer(opId, ch); // 模拟直接 record 位点
     const p2 = new ExpansionEventProducer(opId, ch); // 模拟 abortExpansion 位点
-    p1.open(1000); p2.open(1000);
+    p1.open(1000);
+    p2.open(1000);
 
     expect(p1.close("LOST", 5000)).toBeDefined();
-    expect(p2.close("LOST", 5000)).toBeDefined();     // 同 opId 第二次
+    expect(p2.close("LOST", 5000)).toBeDefined(); // 同 opId 第二次
 
     const drained = ch.drain();
-    expect(drained).toHaveLength(1);                   // 通道里只有一条
-    expect(ch.overflowCount).toBe(1);                  // 且拒绝可观测
+    expect(drained).toHaveLength(1); // 通道里只有一条
+    expect(ch.overflowCount).toBe(1); // 且拒绝可观测
   });
 
   it("kind 分离：Milestone 在类型上不可进入 Outcome 通道（编译期保证的运行时等价检查）", () => {
     const ch = new OutcomeChannel();
     const m = {
-      kind: "MILESTONE" as const, milestone: "CLAIMED", at: 3000,
-      eventId: "E-3000-m", operationId: makeOpId("W6N4", 1000),
+      kind: "MILESTONE" as const,
+      milestone: "CLAIMED",
+      at: 3000,
+      eventId: "E-3000-m",
+      operationId: makeOpId("W6N4", 1000),
     };
     // @ts-expect-error — Milestone 结构性不满足 OutcomeEvent（缺 result/interval）
     const illegal = ch.enqueue(m);
@@ -210,7 +221,7 @@ describe("UOEM × EXP-2: Reset Identity Rebuild", () => {
     })();
     const legacyExp: ExperienceLike = { operationId: "UNKNOWN-LEGACY" }; // 无 opId 的旧记录
     collectorConsume([legacyExp], ch);
-    expect(legacyExp.outcome).toBeUndefined();   // 宁可 UNRESOLVED
+    expect(legacyExp.outcome).toBeUndefined(); // 宁可 UNRESOLVED
     expect(ev.operationId).not.toBe(legacyExp.operationId);
   });
 });
@@ -228,8 +239,8 @@ describe("UOEM × TMP-1: Duration 谎报", () => {
     }
     producer.close("COMPLETED", 30100);
     const [ev] = ch.drain();
-    expect(ev?.interval.openedAt).toBe(1000);              // 未被转换覆盖
-    expect(ev?.interval.closedAt! - ev!.interval.openedAt).toBe(29100); // 全生命周期而非末态 1100t
+    expect(ev?.interval.openedAt).toBe(1000); // 未被转换覆盖
+    expect(ev!.interval.closedAt - ev!.interval.openedAt).toBe(29100); // 全生命周期而非末态 1100t
   });
 });
 
@@ -239,15 +250,15 @@ describe("UOEM × A6-R: recoveryStats 累计污染", () => {
   it("delta.sinceOpen 由 producer 差分冻结，分类基于增量而非帝国累计", () => {
     // 生产缺陷对照：recoveryStats.succeededCount=98/total=100（历史平均 98%）
     // 本决策期间实际：成功 0 次失败 2 次 → 应判 FAILURE 而非继承 98%
-    const openSnapshot = { succeeded: 98, failed: 2 };   // open 时快照
-    const closeSnapshot = { succeeded: 98, failed: 4 };  // 终态时快照
+    const openSnapshot = { succeeded: 98, failed: 2 }; // open 时快照
+    const closeSnapshot = { succeeded: 98, failed: 4 }; // 终态时快照
     const delta = {
-      succeededSinceOpen: closeSnapshot.succeeded - openSnapshot.succeeded,   // 0
-      failedSinceOpen: closeSnapshot.failed - openSnapshot.failed,            // 2
+      succeededSinceOpen: closeSnapshot.succeeded - openSnapshot.succeeded, // 0
+      failedSinceOpen: closeSnapshot.failed - openSnapshot.failed, // 2
     };
-    const successRate = delta.succeededSinceOpen /
-      Math.max(1, delta.succeededSinceOpen + delta.failedSinceOpen);        // 0
-    expect(successRate).toBeLessThan(0.4);                 // → FAILURE 分类
+    const successRate =
+      delta.succeededSinceOpen / Math.max(1, delta.succeededSinceOpen + delta.failedSinceOpen); // 0
+    expect(successRate).toBeLessThan(0.4); // → FAILURE 分类
     expect(delta).toEqual({ succeededSinceOpen: 0, failedSinceOpen: 2 });
   });
 });
@@ -266,7 +277,7 @@ describe("UOEM × A6-SL: BEFORE/AFTER 错位", () => {
     expect(ev?.observation).toEqual({ before: 3, after: 0 });
     // 分类器输入是 Pair：queueDrained 判据看 after 端
     const queueDrained = ev?.observation?.after === 0;
-    expect(queueDrained).toBe(true);                       // 正确的 SUCCESS 依据
+    expect(queueDrained).toBe(true); // 正确的 SUCCESS 依据
   });
   it("logistics before 不再硬编码：before 来自决策时刻冻结值", () => {
     const ch = new OutcomeChannel();

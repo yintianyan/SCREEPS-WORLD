@@ -92,10 +92,10 @@ export function allocateEmpireBudget(
     reserveRatio += options.coreReserveRatio;
   }
   // critical/deficit 只保 emergency reserve
-  let reserve = Math.floor(totalEnergy * reserveRatio);
+  const reserve = Math.floor(totalEnergy * reserveRatio);
 
   // ── 2. 可用量 ──
-  let available = totalEnergy - reserve;
+  const available = totalEnergy - reserve;
 
   // ── 3. Survival ──
   let survival = 0;

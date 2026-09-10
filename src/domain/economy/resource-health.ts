@@ -8,12 +8,7 @@ import { isCriticalResource, defaultSafetyReserve } from "./resource-definition"
 // ─── 健康度枚举 ──────────────────────────────────────────────
 
 /** 单资源健康状态。 */
-export type ResourceHealthStatus =
-  | "healthy"
-  | "stable"
-  | "degraded"
-  | "deficit"
-  | "critical";
+export type ResourceHealthStatus = "healthy" | "stable" | "degraded" | "deficit" | "critical";
 
 // ─── 健康度评估结果 ───────────────────────────────────────────
 
@@ -151,9 +146,10 @@ export function evaluateResourceHealth(
     return {
       resource,
       health: "degraded",
-      evidence: netRate < 0
-        ? `netRate=${netRate.toFixed(2)}<0`
-        : `reserve=${reserve}<safety=${safetyReserve}`,
+      evidence:
+        netRate < 0
+          ? `netRate=${netRate.toFixed(2)}<0`
+          : `reserve=${reserve}<safety=${safetyReserve}`,
       reserve,
       safetyReserve,
       productionRate,
@@ -219,11 +215,16 @@ export function evaluateResourceHealth(
  */
 export function healthRank(h: ResourceHealthStatus): number {
   switch (h) {
-    case "critical": return 0;
-    case "deficit": return 1;
-    case "degraded": return 2;
-    case "stable": return 3;
-    case "healthy": return 4;
+    case "critical":
+      return 0;
+    case "deficit":
+      return 1;
+    case "degraded":
+      return 2;
+    case "stable":
+      return 3;
+    case "healthy":
+      return 4;
   }
 }
 

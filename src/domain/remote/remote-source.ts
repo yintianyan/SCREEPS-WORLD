@@ -17,12 +17,7 @@ import type { ResourceType } from "../operation/agenda-item";
  * - BLOCKED: 阻塞——不可运营（敌方占领/封路/novice 区域）
  * - INACTIVE: 非活跃——被主动放弃或永久不可用
  */
-export type RemoteSourceStatus =
-  | "available"
-  | "assigned"
-  | "degraded"
-  | "blocked"
-  | "inactive";
+export type RemoteSourceStatus = "available" | "assigned" | "degraded" | "blocked" | "inactive";
 
 /**
  * 所有 Remote Source 状态值。
@@ -255,9 +250,10 @@ export function deriveRemoteSource(
 
   const sourceCount = intel.sources ?? 1;
   const pathCost = intel.pathCost ?? linearDistance * 70;
-  const reserved = intel.reservedBy === undefined || intel.reservedBy === "Invader"
-    ? false  // 无预定或 Invader 预定 → 视为未预定（Invader 预定时无法 reserve）
-    : true;  // 己方预定 → reserved=true
+  const reserved =
+    intel.reservedBy === undefined || intel.reservedBy === "Invader"
+      ? false // 无预定或 Invader 预定 → 视为未预定（Invader 预定时无法 reserve）
+      : true; // 己方预定 → reserved=true
 
   // 如果有 InvaderCore 且状态未指定，默认为 blocked
   const effectiveStatus = hasInvaderCore && status === "available" ? "blocked" : status;
@@ -330,9 +326,7 @@ export function getSourcesByHome(
  * 过滤出可评估的 Remote Sources（AVAILABLE 或 DEGRADED）。
  * 纯函数。
  */
-export function filterEvaluatable(
-  sources: readonly RemoteSource[],
-): RemoteSource[] {
+export function filterEvaluatable(sources: readonly RemoteSource[]): RemoteSource[] {
   return sources.filter(s => isEvaluatable(s.status));
 }
 
@@ -340,9 +334,7 @@ export function filterEvaluatable(
  * 过滤出活跃运营的 Remote Sources（ASSIGNED 或 DEGRADED）。
  * 纯函数。
  */
-export function filterOperational(
-  sources: readonly RemoteSource[],
-): RemoteSource[] {
+export function filterOperational(sources: readonly RemoteSource[]): RemoteSource[] {
   return sources.filter(s => isOperational(s.status));
 }
 
@@ -365,9 +357,9 @@ export function findRemoteSource(
  * Remote Source 瘦快照（存入 Memory）。
  */
 export interface RemoteSourceSnapshot {
-  i: string;  // id
-  h: string;  // homeRoom
-  t: string;  // targetRoom
+  i: string; // id
+  h: string; // homeRoom
+  t: string; // targetRoom
   sc: number; // sourceCount
   ey: number; // expectedYield
   rv: number; // reserved (0/1)
@@ -389,11 +381,16 @@ export interface RemoteSourceSnapshot {
 export function serializeRemoteSource(s: RemoteSource): RemoteSourceSnapshot {
   const statusCode = (status: RemoteSourceStatus): string => {
     switch (status) {
-      case "available": return "A";
-      case "assigned": return "S";
-      case "degraded": return "D";
-      case "blocked": return "B";
-      case "inactive": return "I";
+      case "available":
+        return "A";
+      case "assigned":
+        return "S";
+      case "degraded":
+        return "D";
+      case "blocked":
+        return "B";
+      case "inactive":
+        return "I";
     }
   };
   return {
@@ -422,12 +419,18 @@ export function serializeRemoteSource(s: RemoteSource): RemoteSourceSnapshot {
 export function deserializeRemoteSource(snap: RemoteSourceSnapshot): RemoteSource {
   const codeToStatus = (c: string): RemoteSourceStatus => {
     switch (c) {
-      case "A": return "available";
-      case "S": return "assigned";
-      case "D": return "degraded";
-      case "B": return "blocked";
-      case "I": return "inactive";
-      default: return "available";
+      case "A":
+        return "available";
+      case "S":
+        return "assigned";
+      case "D":
+        return "degraded";
+      case "B":
+        return "blocked";
+      case "I":
+        return "inactive";
+      default:
+        return "available";
     }
   };
   return {

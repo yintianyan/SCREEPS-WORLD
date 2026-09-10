@@ -19,16 +19,18 @@ const BASE_INPUT = {
 } as const;
 
 /** 快速构造候选。 */
-function candidate(overrides: Partial<{
-  roomName: string;
-  home: string;
-  kind: string;
-  owner: string | undefined;
-  lastSeen: number;
-  towers: number | undefined;
-  pathCost: number | undefined;
-  occupied: boolean;
-}> = {}): any {
+function candidate(
+  overrides: Partial<{
+    roomName: string;
+    home: string;
+    kind: string;
+    owner: string | undefined;
+    lastSeen: number;
+    towers: number | undefined;
+    pathCost: number | undefined;
+    occupied: boolean;
+  }> = {},
+): any {
   return {
     roomName: "W6N4",
     home: "W7N4",
@@ -126,10 +128,7 @@ describe("selectWarTarget", () => {
   it("过滤已被我方占用的房", () => {
     const target = selectWarTarget({
       ...BASE_INPUT,
-      candidates: [
-        candidate({ occupied: true }),
-        candidate({ roomName: "W6N5", occupied: false }),
-      ],
+      candidates: [candidate({ occupied: true }), candidate({ roomName: "W6N5", occupied: false })],
     });
     expect(target?.roomName).toBe("W6N5");
   });
@@ -316,7 +315,9 @@ describe("nuker 战略威慑 — shouldLaunchNuke 发射判定", () => {
   });
 
   it("塔数低于门槛 → false（轻防目标地面编队足够，核弹留给重防）", () => {
-    expect(shouldLaunchNuke({ ...NUKE_BASE, towersSeen: NUKE_BASE.towerThreshold - 1 })).toBe(false);
+    expect(shouldLaunchNuke({ ...NUKE_BASE, towersSeen: NUKE_BASE.towerThreshold - 1 })).toBe(
+      false,
+    );
   });
 
   it("超射程 → false（保守预检，细判交给 launchNuke 返回码）", () => {

@@ -5,17 +5,17 @@ import type { TieredExpansionBudget } from "./budget";
 
 /** Gate 检查项。 */
 export type GateCheckId =
-  | "GATE_PLAN_VALID"        // Plan 仍然有效（非 CANCELLED/BLACKLISTED）
-  | "GATE_CANDIDATE_VALID"   // 候选仍然有效（未被占领/未变 hostile）
-  | "GATE_TARGET_CLAIMABLE"  // 目标 controller 仍然可 claim
-  | "GATE_EMPIRE_READY"      // Empire 仍然 READY
+  | "GATE_PLAN_VALID" // Plan 仍然有效（非 CANCELLED/BLACKLISTED）
+  | "GATE_CANDIDATE_VALID" // 候选仍然有效（未被占领/未变 hostile）
+  | "GATE_TARGET_CLAIMABLE" // 目标 controller 仍然可 claim
+  | "GATE_EMPIRE_READY" // Empire 仍然 READY
   | "GATE_BUDGET_SUFFICIENT" // 预算仍然足够
-  | "GATE_CORE_SAFE"         // Core Reserve 未被侵入
-  | "GATE_NOT_OWNED"         // 尚未拥有该房
-  | "GATE_NO_CONCURRENT_OP"  // 无同类 Operation
+  | "GATE_CORE_SAFE" // Core Reserve 未被侵入
+  | "GATE_NOT_OWNED" // 尚未拥有该房
+  | "GATE_NO_CONCURRENT_OP" // 无同类 Operation
   | "GATE_NO_OTHER_EXPANSION" // 无其他活跃 Expansion Operation
-  | "GATE_INTEL_FRESH"       // Intel 未过期
-  | "GATE_THREAT_UNCHANGED";  // 威胁未升级
+  | "GATE_INTEL_FRESH" // Intel 未过期
+  | "GATE_THREAT_UNCHANGED"; // 威胁未升级
 
 /** 单项 Gate 结果。 */
 export interface GateResult {
@@ -167,9 +167,7 @@ export function validateExecutionGate(input: ExecutionGateInput): ExecutionGateR
 
   const failedGates = gates.filter(g => !g.passed).map(g => g.id);
   const allPassed = failedGates.length === 0;
-  const evidence = allPassed
-    ? "all 11 gates passed"
-    : `failed: ${failedGates.join(", ")}`;
+  const evidence = allPassed ? "all 11 gates passed" : `failed: ${failedGates.join(", ")}`;
 
   return { gates, allPassed, failedGates, evidence };
 }

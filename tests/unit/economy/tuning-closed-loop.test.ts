@@ -5,7 +5,11 @@ import {
   verifyPendingAdjustments,
   applyFreezePolicy,
 } from "../../../src/domain/tuning/evaluator";
-import type { TuningSignals, PendingValidation, FrozenParamState } from "../../../src/domain/tuning/types";
+import type {
+  TuningSignals,
+  PendingValidation,
+  FrozenParamState,
+} from "../../../src/domain/tuning/types";
 import { CONFIG } from "../../../src/config";
 
 // ─── 辅助工厂 ────────────────────────────────────────────────
@@ -95,14 +99,23 @@ describe("D.8 pending-lock 竞态", () => {
     // T=1500（T+500）：反向信号出现（container 空），冷却期内 + pending-lock
     const signalsT1500 = healthySignals({ containerFillRatio: 0.15, haulerCount: 7 });
     const excluded = new Set(["hauler.maxCount"]);
-    const evalT1500 = evaluateTuning(signalsT1500, bounds, lastAdjusted, 1500, { "hauler.maxCount": "none" }, excluded);
+    const evalT1500 = evaluateTuning(
+      signalsT1500,
+      bounds,
+      lastAdjusted,
+      1500,
+      { "hauler.maxCount": "none" },
+      excluded,
+    );
     // 无调整
     expect(evalT1500.adjustments).toHaveLength(0);
     // pending-lock：excluded 参数 trend 强制为 "none"（不记录反向 "down"）
     expect(evalT1500.newTrend["hauler.maxCount"]).toBe("none");
 
     // 对比：若不排除（无 pending-lock），trend 会记录 "down"
-    const evalNoLock = evaluateTuning(signalsT1500, bounds, lastAdjusted, 1500, { "hauler.maxCount": "none" });
+    const evalNoLock = evaluateTuning(signalsT1500, bounds, lastAdjusted, 1500, {
+      "hauler.maxCount": "none",
+    });
     expect(evalNoLock.newTrend["hauler.maxCount"]).toBe("none"); // 冷却期内也是 none
   });
 
@@ -118,18 +131,29 @@ describe("D.8 pending-lock 竞态", () => {
     const excluded = new Set(["hauler.maxCount"]);
 
     // 有 pending-lock：trend="none"，无调整
-    const evalLocked = evaluateTuning(signalsT2000, bounds, lastAdjusted, 2000, { "hauler.maxCount": "none" }, excluded);
+    const evalLocked = evaluateTuning(
+      signalsT2000,
+      bounds,
+      lastAdjusted,
+      2000,
+      { "hauler.maxCount": "none" },
+      excluded,
+    );
     expect(evalLocked.newTrend["hauler.maxCount"]).toBe("none");
     expect(evalLocked.adjustments.find(a => a.param === "hauler.maxCount")).toBeUndefined();
 
     // 无 pending-lock：冷却已过 + 反向信号 → 记录 "down"（首次观察）
-    const evalUnlocked = evaluateTuning(signalsT2000, bounds, lastAdjusted, 2000, { "hauler.maxCount": "none" });
+    const evalUnlocked = evaluateTuning(signalsT2000, bounds, lastAdjusted, 2000, {
+      "hauler.maxCount": "none",
+    });
     expect(evalUnlocked.newTrend["hauler.maxCount"]).toBe("down");
   });
 
   it("T+1500 验证到期后清空 pending，下周期 trend 从 none 重新积累", () => {
     const pending: Record<string, PendingValidation> = {
-      "hauler.maxCount": pendingHaulerUp({ preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, roleCount: 6 } }),
+      "hauler.maxCount": pendingHaulerUp({
+        preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, roleCount: 6 },
+      }),
     };
     const bounds = boundsWithHaulerMax(7);
 
@@ -162,7 +186,9 @@ describe("D.8 人口合同 blocked", () => {
   it("上调后 roleCount 未达新边界 → 标 blocked，不回滚不计回滚次数", () => {
     // 场景：hauler.maxCount 6→7 上调，但 hauler 实际只 6（demand 阻塞未孵化到 7）
     const pending: Record<string, PendingValidation> = {
-      "hauler.maxCount": pendingHaulerUp({ preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, roleCount: 6 } }),
+      "hauler.maxCount": pendingHaulerUp({
+        preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, roleCount: 6 },
+      }),
     };
     const bounds = boundsWithHaulerMax(7);
 
@@ -177,7 +203,13 @@ describe("D.8 人口合同 blocked", () => {
 
     // applyFreezePolicy：无回滚 → 不计回滚次数、不冻结
     const frozenParams: Record<string, FrozenParamState> = {};
-    const freezeResult = applyFreezePolicy(frozenParams, verifyResult.rollbacks, verifyResult.clearedParams, configBaselines(), 2500);
+    const freezeResult = applyFreezePolicy(
+      frozenParams,
+      verifyResult.rollbacks,
+      verifyResult.clearedParams,
+      configBaselines(),
+      2500,
+    );
     expect(freezeResult.newlyFrozen).toHaveLength(0);
     expect(frozenParams["hauler.maxCount"]).toBeUndefined();
   });
@@ -189,7 +221,9 @@ describe("P1 人口合同 blocked TTL（附录 E.2 修复）", () => {
   it("首次 blocked → 写入 blockedSinceTick + contractBlocked，pending 保留", () => {
     // 场景：hauler.maxCount 6→7 上调，verifyDelay 到期但 roleCount=6（未达 7）
     const pending: Record<string, PendingValidation> = {
-      "hauler.maxCount": pendingHaulerUp({ preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, roleCount: 6 } }),
+      "hauler.maxCount": pendingHaulerUp({
+        preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, roleCount: 6 },
+      }),
     };
     const bounds = boundsWithHaulerMax(7);
 
@@ -232,7 +266,13 @@ describe("P1 人口合同 blocked TTL（附录 E.2 修复）", () => {
 
     // applyFreezePolicy：1 次回滚 → rollbackCount 累加到 1（不达冻结阈值 3）
     const frozenParams: Record<string, FrozenParamState> = {};
-    const freezeResult = applyFreezePolicy(frozenParams, verifyResult.rollbacks, verifyResult.clearedParams, configBaselines(), 5500);
+    const freezeResult = applyFreezePolicy(
+      frozenParams,
+      verifyResult.rollbacks,
+      verifyResult.clearedParams,
+      configBaselines(),
+      5500,
+    );
     expect(freezeResult.newlyFrozen).toHaveLength(0);
     expect(frozenParams["hauler.maxCount"]!.rollbackCount).toBe(1);
     expect(frozenParams["hauler.maxCount"]!.frozenUntil).toBe(0); // 未冻结
@@ -315,7 +355,9 @@ describe("D.8 人口合同 + 效果", () => {
     // 场景：hauler.maxCount 6→7 上调，hauler 已孵化到 7（合同满足），
     // 但 containerFill 反而升高（hauler 增加未改善物流）
     const pending: Record<string, PendingValidation> = {
-      "hauler.maxCount": pendingHaulerUp({ preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, roleCount: 6 } }),
+      "hauler.maxCount": pendingHaulerUp({
+        preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, roleCount: 6 },
+      }),
     };
     const bounds = boundsWithHaulerMax(7);
 
@@ -331,7 +373,13 @@ describe("D.8 人口合同 + 效果", () => {
 
     // applyFreezePolicy：1 次回滚，未达阈值 3 → 不冻结，但记录 rollbackCount
     const frozenParams: Record<string, FrozenParamState> = {};
-    const freezeResult = applyFreezePolicy(frozenParams, verifyResult.rollbacks, verifyResult.clearedParams, configBaselines(), 2500);
+    const freezeResult = applyFreezePolicy(
+      frozenParams,
+      verifyResult.rollbacks,
+      verifyResult.clearedParams,
+      configBaselines(),
+      2500,
+    );
     expect(freezeResult.newlyFrozen).toHaveLength(0);
     expect(frozenParams["hauler.maxCount"]).toBeDefined();
     expect(frozenParams["hauler.maxCount"]!.rollbackCount).toBe(1);
@@ -346,12 +394,18 @@ describe("D.8 下调护栏", () => {
     // 场景：hauler.maxCount 7→6 下调，containerFill 0.2→0.5（改善=hauler 减少后 container 更满），
     // 但 spawnFill 0.9→0.4（跌破 0.5 护栏且恶化）→ 护栏触发回滚
     const pending: Record<string, PendingValidation> = {
-      "hauler.maxCount": pendingHaulerDown({ preAdjustSignals: { containerFillRatio: 0.2, spawnFillRatio: 0.9, roleCount: 7 } }),
+      "hauler.maxCount": pendingHaulerDown({
+        preAdjustSignals: { containerFillRatio: 0.2, spawnFillRatio: 0.9, roleCount: 7 },
+      }),
     };
     const bounds = boundsWithHaulerMax(6); // 下调后 maxCount=6
 
     // T=2500：containerFill 0.5（改善），spawnFill 0.4（跌破护栏 0.5）
-    const signals = healthySignals({ containerFillRatio: 0.5, spawnFillRatio: 0.4, haulerCount: 6 });
+    const signals = healthySignals({
+      containerFillRatio: 0.5,
+      spawnFillRatio: 0.4,
+      haulerCount: 6,
+    });
     const verifyResult = verifyPendingAdjustments(signals, pending, bounds, 2500);
 
     // 主信号改善但护栏触发 → 回滚
@@ -363,12 +417,18 @@ describe("D.8 下调护栏", () => {
   it("hauler 下调后 containerFill 改善且 spawnFill 未跌破 → 不回滚", () => {
     // 对比用例：护栏未触发时不回滚
     const pending: Record<string, PendingValidation> = {
-      "hauler.maxCount": pendingHaulerDown({ preAdjustSignals: { containerFillRatio: 0.2, spawnFillRatio: 0.6, roleCount: 7 } }),
+      "hauler.maxCount": pendingHaulerDown({
+        preAdjustSignals: { containerFillRatio: 0.2, spawnFillRatio: 0.6, roleCount: 7 },
+      }),
     };
     const bounds = boundsWithHaulerMax(6);
 
     // T=2500：containerFill 0.5（改善），spawnFill 0.6（未跌破 0.5 护栏）
-    const signals = healthySignals({ containerFillRatio: 0.5, spawnFillRatio: 0.6, haulerCount: 6 });
+    const signals = healthySignals({
+      containerFillRatio: 0.5,
+      spawnFillRatio: 0.6,
+      haulerCount: 6,
+    });
     const verifyResult = verifyPendingAdjustments(signals, pending, bounds, 2500);
 
     expect(verifyResult.rollbacks).toHaveLength(0);
@@ -385,15 +445,20 @@ describe("P2 hauler 下调护栏 reserveDelta 分支（死代码修复）", () =
     // → reserveDelta 护栏触发回滚（即使主信号改善）
     const pending: Record<string, PendingValidation> = {
       "hauler.maxCount": pendingHaulerDown({
-        preAdjustSignals: { containerFillRatio: 0.2, spawnFillRatio: 0.9, avgReserveDelta: 50, roleCount: 7 },
+        preAdjustSignals: {
+          containerFillRatio: 0.2,
+          spawnFillRatio: 0.9,
+          avgReserveDelta: 50,
+          roleCount: 7,
+        },
       }),
     };
     const bounds = boundsWithHaulerMax(6);
 
     const signals = healthySignals({
       containerFillRatio: 0.5, // 主信号改善（hauler down 改善 = container 更满）
-      spawnFillRatio: 0.85,    // 未跌破 0.5 护栏
-      avgReserveDelta: -30,    // 转负（< RESERVE_DELTA_GUARDRAIL=0）且比 +50 恶化
+      spawnFillRatio: 0.85, // 未跌破 0.5 护栏
+      avgReserveDelta: -30, // 转负（< RESERVE_DELTA_GUARDRAIL=0）且比 +50 恶化
       haulerCount: 6,
     });
     const verifyResult = verifyPendingAdjustments(signals, pending, bounds, 2500);
@@ -408,15 +473,20 @@ describe("P2 hauler 下调护栏 reserveDelta 分支（死代码修复）", () =
     // 对比用例：reserveDelta 未转负（>= 0）时护栏不触发
     const pending: Record<string, PendingValidation> = {
       "hauler.maxCount": pendingHaulerDown({
-        preAdjustSignals: { containerFillRatio: 0.2, spawnFillRatio: 0.9, avgReserveDelta: 50, roleCount: 7 },
+        preAdjustSignals: {
+          containerFillRatio: 0.2,
+          spawnFillRatio: 0.9,
+          avgReserveDelta: 50,
+          roleCount: 7,
+        },
       }),
     };
     const bounds = boundsWithHaulerMax(6);
 
     const signals = healthySignals({
       containerFillRatio: 0.5, // 主信号改善
-      spawnFillRatio: 0.85,    // 未跌破护栏
-      avgReserveDelta: 30,     // 仍为正（未转负）→ 护栏不触发
+      spawnFillRatio: 0.85, // 未跌破护栏
+      avgReserveDelta: 30, // 仍为正（未转负）→ 护栏不触发
       haulerCount: 6,
     });
     const verifyResult = verifyPendingAdjustments(signals, pending, bounds, 2500);
@@ -435,7 +505,12 @@ describe("P2 hauler 下调护栏 reserveDelta 分支（死代码修复）", () =
     // current < 0 ✓ 但 current < rBefore - tol = -5.25? -5.1 > -5.25 → 未恶化 → 护栏不触发
     const pending: Record<string, PendingValidation> = {
       "hauler.maxCount": pendingHaulerDown({
-        preAdjustSignals: { containerFillRatio: 0.2, spawnFillRatio: 0.9, avgReserveDelta: -5, roleCount: 7 },
+        preAdjustSignals: {
+          containerFillRatio: 0.2,
+          spawnFillRatio: 0.9,
+          avgReserveDelta: -5,
+          roleCount: 7,
+        },
       }),
     };
     const bounds = boundsWithHaulerMax(6);
@@ -556,20 +631,35 @@ describe("P4 解冻时清零 rollbackCount（附录 E.2 修复）", () => {
     expect(frozenParams["hauler.maxCount"]).toBeUndefined();
 
     // 解冻后第 1 次回滚：rollbackCount 0→1（重新从 0 开始累积），未冻结
-    const rb1 = { param: "hauler.maxCount", oldValue: 7, newValue: 5, reason: "fail-after-unfreeze-1" };
+    const rb1 = {
+      param: "hauler.maxCount",
+      oldValue: 7,
+      newValue: 5,
+      reason: "fail-after-unfreeze-1",
+    };
     let result = applyFreezePolicy(frozenParams, [rb1], ["hauler.maxCount"], baselines, 11000);
     expect(result.newlyFrozen).toHaveLength(0); // 未冻结
     expect(frozenParams["hauler.maxCount"]!.rollbackCount).toBe(1);
     expect(frozenParams["hauler.maxCount"]!.frozenUntil).toBe(0);
 
     // 第 2 次回滚：rollbackCount 1→2，未冻结
-    const rb2 = { param: "hauler.maxCount", oldValue: 7, newValue: 5, reason: "fail-after-unfreeze-2" };
+    const rb2 = {
+      param: "hauler.maxCount",
+      oldValue: 7,
+      newValue: 5,
+      reason: "fail-after-unfreeze-2",
+    };
     result = applyFreezePolicy(frozenParams, [rb2], ["hauler.maxCount"], baselines, 11500);
     expect(result.newlyFrozen).toHaveLength(0);
     expect(frozenParams["hauler.maxCount"]!.rollbackCount).toBe(2);
 
     // 第 3 次回滚：rollbackCount 2→3，达阈值 → 再冻结
-    const rb3 = { param: "hauler.maxCount", oldValue: 7, newValue: 5, reason: "fail-after-unfreeze-3" };
+    const rb3 = {
+      param: "hauler.maxCount",
+      oldValue: 7,
+      newValue: 5,
+      reason: "fail-after-unfreeze-3",
+    };
     result = applyFreezePolicy(frozenParams, [rb3], ["hauler.maxCount"], baselines, 12000);
     expect(result.newlyFrozen).toHaveLength(1);
     expect(frozenParams["hauler.maxCount"]!.frozenUntil).toBe(12000 + 10000);
@@ -657,7 +747,9 @@ describe("闭环验证边界条件", () => {
   it("信号变化在容差范围内 → 不回滚（保守，避免误回滚）", () => {
     // containerFill 0.8→0.82，变化 0.02 < tol(0.04) → 无显著变化 → 不回滚
     const pending: Record<string, PendingValidation> = {
-      "hauler.maxCount": pendingHaulerUp({ preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, roleCount: 6 } }),
+      "hauler.maxCount": pendingHaulerUp({
+        preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, roleCount: 6 },
+      }),
     };
     const bounds = boundsWithHaulerMax(7);
 
@@ -692,8 +784,10 @@ describe("闭环验证边界条件", () => {
     const bounds = boundsWithHaulerMax(7);
     const lastAdjusted = { "hauler.maxCount": 1000, "harvester.maxCount": 500 };
     const signals = healthySignals({
-      containerFillRatio: 0.75, haulerCount: 7,
-      avgReserveDelta: -80, harvesterCount: 4,
+      containerFillRatio: 0.75,
+      haulerCount: 7,
+      avgReserveDelta: -80,
+      harvesterCount: 4,
     });
 
     // 同时排除两个参数

@@ -76,7 +76,7 @@ function sample(world: TestWorld): R2Sample {
     economyPressure: Math.round((roomMem.economyPressure ?? 0) * 100) / 100,
     tier: mem?.kernel?.tier ?? "?",
     claimSecure: roomMem.claimSecure ?? false,
-    spawnQueueP0: spawnQueue.filter((r) => r.priority === 0).length,
+    spawnQueueP0: spawnQueue.filter(r => r.priority === 0).length,
   };
 }
 
@@ -104,9 +104,9 @@ describe("Phase R2 — RCL2 建设闭环", () => {
 
     let firstExtensionSiteTick = -1;
     const result = runner.run(world, 600, {
-      onTick: (w) => {
+      onTick: w => {
         if (firstExtensionSiteTick < 0) {
-          const hasExtSite = w.sites.some((s) => (s as any).structureType === "extension");
+          const hasExtSite = w.sites.some(s => (s as any).structureType === "extension");
           if (hasExtSite) firstExtensionSiteTick = w.tick;
         }
       },
@@ -143,12 +143,12 @@ describe("Phase R2 — RCL2 建设闭环", () => {
     let sawConserve = false;
     const samples: R2Sample[] = [];
     const result = runner.run(world, 500, {
-      onTick: (w) => {
+      onTick: w => {
         collectEvery(w, samples, 100);
         const tier = (globalThis as any).Memory?.kernel?.tier;
         if (tier === "conserve") sawConserve = true;
         if (firstExtensionSiteTick < 0) {
-          const hasExtSite = w.sites.some((s) => (s as any).structureType === "extension");
+          const hasExtSite = w.sites.some(s => (s as any).structureType === "extension");
           if (hasExtSite) firstExtensionSiteTick = w.tick;
         }
       },
@@ -162,9 +162,9 @@ describe("Phase R2 — RCL2 建设闭环", () => {
       for (const s of samples) {
         console.log(
           `t=${s.tick} tier=${s.tier} energy=${s.energy}/${s.capacity} ` +
-          `p0spawn=${s.spawnQueueP0} sites=${s.gameSites} ` +
-          `siteTypes=${JSON.stringify(s.siteTypes)} q=${s.queueTotal} ` +
-          `byTS=${JSON.stringify(s.queueByTypeState)} roles=${JSON.stringify(s.roles)}`,
+            `p0spawn=${s.spawnQueueP0} sites=${s.gameSites} ` +
+            `siteTypes=${JSON.stringify(s.siteTypes)} q=${s.queueTotal} ` +
+            `byTS=${JSON.stringify(s.queueByTypeState)} roles=${JSON.stringify(s.roles)}`,
         );
       }
     }
@@ -191,13 +191,13 @@ describe("Phase R2 — RCL2 建设闭环", () => {
 
     let maxEnergy = 0;
     runner.run(world, 300, {
-      onTick: (w) => {
+      onTick: w => {
         maxEnergy = Math.max(maxEnergy, w.room.energyAvailable);
       },
     });
 
     expect(maxEnergy).toBeLessThan(150);
-    const extSites = world.sites.filter((s) => (s as any).structureType === "extension");
+    const extSites = world.sites.filter(s => (s as any).structureType === "extension");
     expect(extSites).toHaveLength(0);
   });
 
@@ -213,9 +213,14 @@ describe("Phase R2 — RCL2 建设闭环", () => {
       .source("s2", 32, 20)
       .container(23, 22, 1000)
       .container(31, 20, 1000)
-      .creep("h1", "harvester", 23, 23, [
-        { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-      ], { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } })
+      .creep(
+        "h1",
+        "harvester",
+        23,
+        23,
+        [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+        { memory: { role: "harvester", home: "W1N1", mode: "work", sourceId: "s1" } },
+      )
       .sourceRegen(10)
       .cpu(10000)
       .build();
@@ -239,14 +244,14 @@ describe("Phase R2 — RCL2 建设闭环", () => {
 
     let p0WindowTicks = 0;
     let extensionSiteGrewDuringP0 = false;
-    let lastExtSites = world.sites.filter((s) => (s as any).structureType === "extension").length;
+    let lastExtSites = world.sites.filter(s => (s as any).structureType === "extension").length;
     runner.run(world, 200, {
-      onTick: (w) => {
+      onTick: w => {
         const roomMem = (globalThis as any).Memory?.rooms?.W1N1 ?? {};
         const hasP0 = (roomMem.spawnQueue ?? []).some((r: any) => r.priority === 0);
         if (hasP0) {
           p0WindowTicks++;
-          const extSites = w.sites.filter((s) => (s as any).structureType === "extension").length;
+          const extSites = w.sites.filter(s => (s as any).structureType === "extension").length;
           if (extSites > lastExtSites) extensionSiteGrewDuringP0 = true;
           lastExtSites = extSites;
         }
@@ -278,12 +283,13 @@ describe("Phase R2 — RCL2 建设闭环", () => {
 
     const samples: R2Sample[] = [];
     runner.run(world, 300, {
-      onTick: (w) => collectEvery(w, samples, 50),
+      onTick: w => collectEvery(w, samples, 50),
     });
 
-    const sawThreat = samples.some((s) => s.roles["invader"] !== undefined) ||
-      world.sites.every((s) => (s as any).structureType !== "extension");
-    const extSites = world.sites.filter((s) => (s as any).structureType === "extension");
+    const sawThreat =
+      samples.some(s => s.roles["invader"] !== undefined) ||
+      world.sites.every(s => (s as any).structureType !== "extension");
+    const extSites = world.sites.filter(s => (s as any).structureType === "extension");
     // 威胁在场期间 extension site 不放行（门禁与车道一致拦截）。
     expect(extSites).toHaveLength(0);
     expect(sawThreat).toBe(true);
@@ -308,7 +314,7 @@ describe("Phase R2 — RCL2 建设闭环", () => {
 
     const samples: R2Sample[] = [];
     runner.run(world, 600, {
-      onTick: (w) => collectEvery(w, samples, 50),
+      onTick: w => collectEvery(w, samples, 50),
     });
 
     expect(samples.length).toBeGreaterThan(5);
@@ -435,13 +441,13 @@ describe("Phase R2 — RCL2 建设闭环", () => {
     let rcl2Tick = -1;
     let rcl3Tick = -1;
     runner.run(world, 3000, {
-      stopWhen: (w) => (w.controller?.level ?? 0) >= 3,
-      onTick: (w) => {
+      stopWhen: w => (w.controller?.level ?? 0) >= 3,
+      onTick: w => {
         const rcl = w.controller?.level ?? 0;
         if (rcl === 2 && rcl2Tick < 0) rcl2Tick = w.tick;
         if (rcl >= 3 && rcl3Tick < 0) rcl3Tick = w.tick;
         if (firstExtensionSiteTick < 0) {
-          const hasExtSite = w.sites.some((s) => (s as any).structureType === "extension");
+          const hasExtSite = w.sites.some(s => (s as any).structureType === "extension");
           if (hasExtSite) {
             firstExtensionSiteTick = w.tick;
             firstExtensionSiteRcl = rcl;
@@ -481,7 +487,7 @@ describe("Phase R2 — RCL2 建设闭环", () => {
 
     const samples: R2Sample[] = [];
     const result = runner.run(world, 1500, {
-      onTick: (w) => collectEvery(w, samples, 50),
+      onTick: w => collectEvery(w, samples, 50),
     });
 
     expect(result.runtimeErrors).toEqual([]);
@@ -497,13 +503,13 @@ describe("Phase R2 — RCL2 建设闭环", () => {
     }
 
     // 建设闭环：extension site 在长跑窗口内出现且保持存在。
-    const withExtSite = samples.filter((s) => (s.siteTypes["extension"] ?? 0) > 0);
+    const withExtSite = samples.filter(s => (s.siteTypes["extension"] ?? 0) > 0);
     expect(withExtSite.length).toBeGreaterThan(0);
 
     // 任务状态与实际 site 最终一致：site 状态任务数 ≥ Game site 中对应类型数
     // （site 任务可能已建成转 done，故为 ≥）。
     const last = samples[samples.length - 1]!;
-    const siteStateTasks = last.queueByTypeState.filter((e) => e.endsWith(":site")).length;
+    const siteStateTasks = last.queueByTypeState.filter(e => e.endsWith(":site")).length;
     expect(siteStateTasks).toBeGreaterThanOrEqual(last.gameSites);
   });
 
@@ -522,9 +528,14 @@ describe("Phase R2 — RCL2 建设闭环", () => {
       .source("s2", 32, 20)
       .container(21, 20, 500)
       .walls([
-        { x: 31, y: 19 }, { x: 32, y: 19 }, { x: 33, y: 19 },
-        { x: 31, y: 20 }, { x: 33, y: 20 },
-        { x: 31, y: 21 }, { x: 32, y: 21 }, { x: 33, y: 21 },
+        { x: 31, y: 19 },
+        { x: 32, y: 19 },
+        { x: 33, y: 19 },
+        { x: 31, y: 20 },
+        { x: 33, y: 20 },
+        { x: 31, y: 21 },
+        { x: 32, y: 21 },
+        { x: 33, y: 21 },
       ])
       .sourceRegen(10)
       .cpu(2000) // conserve tier — 严格门禁拒绝，通道是唯一放行路径。
@@ -539,11 +550,11 @@ describe("Phase R2 — RCL2 建设闭环", () => {
     let firstExtensionSiteTick = -1;
     let sawConserve = false;
     const result = runner.run(world, 600, {
-      onTick: (w) => {
+      onTick: w => {
         const tier = (globalThis as any).Memory?.kernel?.tier;
         if (tier === "conserve") sawConserve = true;
         if (firstExtensionSiteTick < 0) {
-          const hasExtSite = w.sites.some((s) => (s as any).structureType === "extension");
+          const hasExtSite = w.sites.some(s => (s as any).structureType === "extension");
           if (hasExtSite) firstExtensionSiteTick = w.tick;
         }
       },

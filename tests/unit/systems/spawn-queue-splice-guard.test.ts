@@ -69,8 +69,9 @@ describe("P1-H 静态守卫 — spawnQueue 直 splice 仅在 spawn-manager", () 
     expect(
       violations,
       `以下文件同时引用了 .spawnQueue 并调用 .splice( —— ` +
-        `队列属主是 spawn-manager，外模块应经 domain/spawn/queue 纯函数通道：\n` +
-        violations.join("\n"),
+        `队列属主是 spawn-manager，外模块应经 domain/spawn/queue 纯函数通道：\n${violations.join(
+          "\n",
+        )}`,
     ).toEqual([]);
   });
 

@@ -44,7 +44,12 @@ function transition(
       return { op, ok: false, reason: `illegal transition: ${op.status} → ${to}` };
     }
     // 从终态不允许转换
-    if (op.status === "completed" || op.status === "failed" || op.status === "cancelled" || op.status === "expired") {
+    if (
+      op.status === "completed" ||
+      op.status === "failed" ||
+      op.status === "cancelled" ||
+      op.status === "expired"
+    ) {
       return { op, ok: false, reason: `terminal state: ${op.status}` };
     }
   }
@@ -103,7 +108,11 @@ export function markFailed(op: OperationContext, tick: number, reason: string): 
 }
 
 /** 任意活跃态 → cancelled：外部取消（目标不再需要/Target 进入 Critical）。 */
-export function markCancelled(op: OperationContext, tick: number, reason: string): TransitionResult {
+export function markCancelled(
+  op: OperationContext,
+  tick: number,
+  reason: string,
+): TransitionResult {
   return transition(op, "cancelled", tick, reason);
 }
 
@@ -116,7 +125,12 @@ export function markExpired(op: OperationContext, tick: number): TransitionResul
  * 超时检查 — 如果操作已超时且仍活跃，转为 expired。
  */
 export function checkExpiry(op: OperationContext, tick: number): TransitionResult {
-  if (op.status !== "expired" && op.status !== "completed" && op.status !== "failed" && op.status !== "cancelled") {
+  if (
+    op.status !== "expired" &&
+    op.status !== "completed" &&
+    op.status !== "failed" &&
+    op.status !== "cancelled"
+  ) {
     if (tick > op.deadline) {
       return markExpired(op, tick);
     }

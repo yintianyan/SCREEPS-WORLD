@@ -7,10 +7,10 @@ import { isActive } from "./agenda-item";
  * Operation 抢占分类。
  */
 export type PreemptionClass =
-  | "critical"      // P0 生存级 — 不可抢占
-  | "committed"     // carrier 已在途中 — 不可抢占
-  | "preemptable"   // 可抢占（低优先级 + carrier 未孵化/未出发）
-  | "conditional";  // 条件可抢占（中等优先级 + carrier 已孵化但未出发）
+  | "critical" // P0 生存级 — 不可抢占
+  | "committed" // carrier 已在途中 — 不可抢占
+  | "preemptable" // 可抢占（低优先级 + carrier 未孵化/未出发）
+  | "conditional"; // 条件可抢占（中等优先级 + carrier 已孵化但未出发）
 
 /**
  * 抢占判定结果。
@@ -66,10 +66,7 @@ export function classifyPreemption(
 /**
  * 判定 Operation 是否可被抢占。
  */
-export function isPreemptable(
-  op: OperationContext,
-  carrierInTransit: boolean,
-): boolean {
+export function isPreemptable(op: OperationContext, carrierInTransit: boolean): boolean {
   const cls = classifyPreemption(op, carrierInTransit);
   return cls === "preemptable";
 }
@@ -145,7 +142,10 @@ export function attemptPreemption(
 
       preemptedOps.push(op.id);
       releasedAmount += reserved;
-      reasons.set(op.id, `conditionally preempted: P1 op for critical request, reserved=${reserved}`);
+      reasons.set(
+        op.id,
+        `conditionally preempted: P1 op for critical request, reserved=${reserved}`,
+      );
     }
   }
 

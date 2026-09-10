@@ -6,10 +6,16 @@
 import type { ScenarioRunner } from "../framework/ScenarioRunner";
 
 /** L1 环境注入：RCL 等级（addBot 后 DB 修正）。声明此环境非自举所得。 */
-export async function injectRcl(runner: ScenarioRunner, room: string, level: number): Promise<void> {
+export async function injectRcl(
+  runner: ScenarioRunner,
+  room: string,
+  level: number,
+): Promise<void> {
   const { db } = (runner as any)._server.server.common.storage;
   await db["rooms.objects"].update(
-    { room, type: "controller" }, { $set: { level, progress: 0, downgradeTime: null } });
+    { room, type: "controller" },
+    { $set: { level, progress: 0, downgradeTime: null } },
+  );
 }
 
 /** L1 环境注入：GCL 等级（扩张余量门）。 */
@@ -19,15 +25,21 @@ export async function injectGcl(runner: ScenarioRunner, level: number): Promise<
 
 /** L1 环境注入：引擎 CPU 账户（tier/ESM 驱动）。 */
 export async function injectCpu(
-  runner: ScenarioRunner, opts: { cpu?: number; cpuAvailable?: number },
+  runner: ScenarioRunner,
+  opts: { cpu?: number; cpuAvailable?: number },
 ): Promise<void> {
   await runner.setUserCpu(opts);
 }
 
 /** L2 场景注入：敌袭 creep（NPC 或具名敌对用户）。 */
 export async function injectHostile(
-  runner: ScenarioRunner, room: string, x: number, y: number,
-  body: string[], name: string, owner = "invader",
+  runner: ScenarioRunner,
+  room: string,
+  x: number,
+  y: number,
+  body: string[],
+  name: string,
+  owner = "invader",
 ): Promise<void> {
   await runner.worldBuilder.addHostileCreep(room, x, y, body, name, owner);
 }
@@ -39,22 +51,33 @@ export async function injectWipeCreeps(runner: ScenarioRunner, room: string): Pr
 
 /** L1 环境注入：敌对玩家占有 controller（war 目标形态）。 */
 export async function injectEnemyRoom(
-  runner: ScenarioRunner, room: string, username = "Enemy", level = 1,
+  runner: ScenarioRunner,
+  room: string,
+  username = "Enemy",
+  level = 1,
 ): Promise<void> {
   await runner.addEnemyOwnedRoom(room, username, level);
 }
 
 /** L1 环境注入：bot 友方 creep（生产采集路径的视野/人口源）。 */
 export async function injectFriendlyCreep(
-  runner: ScenarioRunner, room: string, x: number, y: number,
-  body: string[], name: string, memory: Record<string, unknown>,
+  runner: ScenarioRunner,
+  room: string,
+  x: number,
+  y: number,
+  body: string[],
+  name: string,
+  memory: Record<string, unknown>,
 ): Promise<void> {
   await runner.worldBuilder.addFriendlyCreep(room, x, y, body, name, memory);
 }
 
 /** L2 场景注入：敌方有主塔（war 目标形态）。 */
 export async function injectHostileTower(
-  runner: ScenarioRunner, room: string, x: number, y: number,
+  runner: ScenarioRunner,
+  room: string,
+  x: number,
+  y: number,
   username = "Enemy",
 ): Promise<void> {
   await runner.worldBuilder.addHostileTower(room, x, y, username);
@@ -66,16 +89,15 @@ export async function injectHostileTower(
  * .energy 字段（见 ScenarioRunner.syncSpawnEnergyLegacy），只写 store 不生效。
  */
 export async function injectSpawnEnergy(
-  runner: ScenarioRunner, room: string, energy: number,
+  runner: ScenarioRunner,
+  room: string,
+  energy: number,
 ): Promise<void> {
   const { db } = (runner as any)._server.server.common.storage;
   const spawn = await db["rooms.objects"].findOne({ room, type: "spawn" });
   if (!spawn) throw new Error(`injectSpawnEnergy: room ${room} 无 spawn`);
   const store = { ...(spawn.store ?? {}), energy };
-  await db["rooms.objects"].update(
-    { _id: spawn._id },
-    { $set: { store, energy } },
-  );
+  await db["rooms.objects"].update({ _id: spawn._id }, { $set: { store, energy } });
 }
 
 /**
@@ -85,7 +107,9 @@ export async function injectSpawnEnergy(
  * 同时补 canonical store 形态——mockup 分裂脑：引擎读 store，legacy energy 不生效。
  */
 export async function injectFriendlyTower(
-  runner: ScenarioRunner, room: string, energy: number,
+  runner: ScenarioRunner,
+  room: string,
+  energy: number,
 ): Promise<void> {
   const { db } = (runner as any)._server.server.common.storage;
   const [bot] = await db.users.find({ username: "bot" });
@@ -150,11 +174,13 @@ export async function injectMarketOrder(
     await db["rooms.objects"].insert({
       type: "terminal",
       room: npcRoom,
-      x: 20, y: 20,
+      x: 20,
+      y: 20,
       user: npcUser._id,
-      store: opts.type === "sell"
-        ? { energy: 100000, [opts.resourceType]: opts.amount + 10000 }
-        : { energy: 100000 },
+      store:
+        opts.type === "sell"
+          ? { energy: 100000, [opts.resourceType]: opts.amount + 10000 }
+          : { energy: 100000 },
       storeCapacity: 300000,
       hits: 1,
       hitsMax: 1,
@@ -204,12 +230,7 @@ export async function injectMarketOrder(
  * Game.market.deal 需要 credits >= price × amount + fee。
  * 引擎中 credits = user.money / 1000，所以 money = credits × 1000。
  */
-export async function injectCredits(
-  runner: ScenarioRunner, credits: number,
-): Promise<void> {
+export async function injectCredits(runner: ScenarioRunner, credits: number): Promise<void> {
   const { db } = (runner as any)._server.server.common.storage;
-  await db.users.update(
-    { username: "bot" },
-    { $set: { money: credits * 1000 } },
-  );
+  await db.users.update({ username: "bot" }, { $set: { money: credits * 1000 } });
 }

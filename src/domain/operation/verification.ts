@@ -87,10 +87,7 @@ export function verifyTransfer(
 /**
  * 判断是否应该放弃验证（超时 + 零增量）。
  */
-export function shouldAbortVerification(
-  op: OperationContext,
-  tick: number,
-): boolean {
+export function shouldAbortVerification(op: OperationContext, tick: number): boolean {
   if (op.status !== "verifying") return false;
   return tick > op.deadline && op.deliveredAmount === 0;
 }
@@ -98,10 +95,7 @@ export function shouldAbortVerification(
 /**
  * 判断是否应该部分满足后收尾（增量 > 0 但未达目标 + 超时）。
  */
-export function shouldPartialComplete(
-  op: OperationContext,
-  tick: number,
-): boolean {
+export function shouldPartialComplete(op: OperationContext, tick: number): boolean {
   if (op.status !== "verifying") return false;
   return tick > op.deadline && op.deliveredAmount > 0 && op.deliveredAmount < op.requestedAmount;
 }

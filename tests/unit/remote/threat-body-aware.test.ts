@@ -10,11 +10,14 @@ beforeEach(() => {
 });
 
 function hostile(bodyParts: string[]) {
-  return { owner: { username: "enemy" }, body: bodyParts.map((type) => ({ type })) };
+  return { owner: { username: "enemy" }, body: bodyParts.map(type => ({ type })) };
 }
 
 function roomWith(creeps: unknown[]) {
-  return { name: targetRoom, find: vi.fn((t: number) => (t === FIND_HOSTILE_CREEPS ? creeps : [])) };
+  return {
+    name: targetRoom,
+    find: vi.fn((t: number) => (t === FIND_HOSTILE_CREEPS ? creeps : [])),
+  };
 }
 
 const ops = { [targetRoom]: { state: "active", createdAt: 0, lastSeen: 0 } } as never;

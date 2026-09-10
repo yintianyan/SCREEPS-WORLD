@@ -64,12 +64,15 @@ export function planEnergyAid(
   return undefined;
 }
 
-
 /**
  * 能量卖出量：仅真实盈余（storage 高于 sellFloor）才卖，受单笔上限约束 —
  * 市场是能量出口，不是挤占运营库存的渠道。
  */
-export function energySellAmount(storageEnergy: number, sellFloor: number, maxDeal: number): number {
+export function energySellAmount(
+  storageEnergy: number,
+  sellFloor: number,
+  maxDeal: number,
+): number {
   const surplus = storageEnergy - sellFloor;
   return surplus > 0 ? Math.min(surplus, maxDeal) : 0;
 }

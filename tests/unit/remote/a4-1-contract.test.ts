@@ -53,11 +53,7 @@ import {
   calculateEconomicAccounting,
   type EconomicAccountingConfig,
 } from "../../../src/domain/remote/economic-accounting";
-import {
-  calculateROI,
-  isPositiveROI,
-  isNegativeROI,
-} from "../../../src/domain/remote/roi";
+import { calculateROI, isPositiveROI, isNegativeROI } from "../../../src/domain/remote/roi";
 import {
   computeBudgetStatus,
   isBudgetOverrun,
@@ -74,7 +70,10 @@ import {
   computeHaulerSizing,
   validateTransportCapacity,
 } from "../../../src/domain/remote/staffing";
-import { createOpportunity, approveOpportunity } from "../../../src/domain/remote/remote-opportunity";
+import {
+  createOpportunity,
+  approveOpportunity,
+} from "../../../src/domain/remote/remote-opportunity";
 import { createRemoteSource, makeRemoteSourceId } from "../../../src/domain/remote/remote-source";
 import { assessRemoteValue } from "../../../src/domain/remote/remote-value";
 
@@ -213,11 +212,17 @@ describe("A4.1-009: Container Lifecycle", () => {
     for (const s of states) {
       const snap = createContainerSnapshot("src1", "W2N1", 1000);
       // 通过 deriveContainerState 测试各种状态
-      expect(deriveContainerState({
-        hasContainer: false, hits: undefined, hitsMax: 250000,
-        hasSite: false, needContainer: false, prevState: undefined,
-        repairThresholdRatio: 0.5,
-      })).toBe("missing");
+      expect(
+        deriveContainerState({
+          hasContainer: false,
+          hits: undefined,
+          hitsMax: 250000,
+          hasSite: false,
+          needContainer: false,
+          prevState: undefined,
+          repairThresholdRatio: 0.5,
+        }),
+      ).toBe("missing");
     }
   });
 
@@ -237,8 +242,12 @@ describe("A4.1-009: Container Lifecycle", () => {
 
   it("should detect damaged container", () => {
     const state = deriveContainerState({
-      hasContainer: true, hits: 50000, hitsMax: 250000,
-      hasSite: false, needContainer: false, prevState: "active",
+      hasContainer: true,
+      hits: 50000,
+      hitsMax: 250000,
+      hasSite: false,
+      needContainer: false,
+      prevState: "active",
       repairThresholdRatio: 0.5,
     });
     // 50000 < 250000 × 0.5 = 125000 → DAMAGED
@@ -524,7 +533,10 @@ function createTestOp(homeRoom: string, targetRoom: string): RemoteMiningOperati
   });
 }
 
-function createPassGateInput(opp: ReturnType<typeof createTestOpportunity>, tick: number): ExecutionGateInput {
+function createPassGateInput(
+  opp: ReturnType<typeof createTestOpportunity>,
+  tick: number,
+): ExecutionGateInput {
   return {
     opportunity: opp,
     sourceExists: true,

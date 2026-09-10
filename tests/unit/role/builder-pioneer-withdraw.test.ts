@@ -17,7 +17,13 @@ function pioneerScenario() {
   const container = mockStructure("container", { id: "c1", energy: 558, capacity: 2000 });
   container.pos.getRangeTo = vi.fn(() => 1); // 紧邻 source → source container。
   const snap = mockSnapshot({ sources: [source], containers: [container] });
-  const creep = mockCreep({ name: "builder_1", role: "builder", used: 0, capacity: 50, mode: "acquire" });
+  const creep = mockCreep({
+    name: "builder_1",
+    role: "builder",
+    used: 0,
+    capacity: 50,
+    mode: "acquire",
+  });
   return { container, snap, creep };
 }
 

@@ -47,24 +47,82 @@ function economyWorld(opts?: {
 
 /** 添加标准 RCL4 经济人口。 */
 function addEconomyPopulation(world: TestWorld): void {
-  world.addCreep("h1", "harvester", 13, 13, [
-    { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-  ], { sourceId: "s1", mode: "work" });
-  world.addCreep("h2", "harvester", 37, 13, [
-    { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-  ], { sourceId: "s2", mode: "work" });
-  world.addCreep("haul1", "hauler", 20, 20, [
-    { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-  ], { mode: "acquire" });
-  world.addCreep("haul2", "hauler", 22, 22, [
-    { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-  ], { mode: "acquire" });
-  world.addCreep("u1", "upgrader", 29, 38, [
-    { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-  ], { mode: "acquire" });
-  world.addCreep("b1", "builder", 24, 24, [
-    { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-  ], { mode: "acquire" });
+  world.addCreep(
+    "h1",
+    "harvester",
+    13,
+    13,
+    [
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "carry" },
+      { type: "move" },
+    ],
+    { sourceId: "s1", mode: "work" },
+  );
+  world.addCreep(
+    "h2",
+    "harvester",
+    37,
+    13,
+    [
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "carry" },
+      { type: "move" },
+    ],
+    { sourceId: "s2", mode: "work" },
+  );
+  world.addCreep(
+    "haul1",
+    "hauler",
+    20,
+    20,
+    [
+      { type: "carry" },
+      { type: "carry" },
+      { type: "carry" },
+      { type: "carry" },
+      { type: "move" },
+      { type: "move" },
+    ],
+    { mode: "acquire" },
+  );
+  world.addCreep(
+    "haul2",
+    "hauler",
+    22,
+    22,
+    [
+      { type: "carry" },
+      { type: "carry" },
+      { type: "carry" },
+      { type: "carry" },
+      { type: "move" },
+      { type: "move" },
+    ],
+    { mode: "acquire" },
+  );
+  world.addCreep(
+    "u1",
+    "upgrader",
+    29,
+    38,
+    [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+    { mode: "acquire" },
+  );
+  world.addCreep(
+    "b1",
+    "builder",
+    24,
+    24,
+    [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+    { mode: "acquire" },
+  );
 
   world.spawns[0]!.store.energy = 300;
   for (const ext of world.extensions) ext.store.energy = 50;
@@ -182,8 +240,11 @@ describe("Economy Dynamics — Hauler 震荡防护", () => {
       // controllerContainer 有能量 — 这是 upgrader 的专属 supply
       .container(29, 34, 1500)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
@@ -192,26 +253,58 @@ describe("Economy Dynamics — Hauler 震荡防护", () => {
       .build();
 
     // 1 harvester + 2 hauler + 1 upgrader
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("haul2", "hauler", 22, 22, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("u1", "upgrader", 29, 35, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "haul2",
+      "hauler",
+      22,
+      22,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "u1",
+      "upgrader",
+      29,
+      35,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
     world.room._recalcEnergy();
 
-    const controllerContainer = world.containers.find(
-      c => c.pos.x === 29 && c.pos.y === 34,
-    )!;
+    const controllerContainer = world.containers.find(c => c.pos.x === 29 && c.pos.y === 34)!;
 
     const runner = new TickRunner();
     runner.setLoop(loop);
@@ -242,8 +335,11 @@ describe("Economy Dynamics — Hauler 震荡防护", () => {
       .container(16, 15, 1800)
       .container(34, 15, 1800)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
@@ -251,18 +347,52 @@ describe("Economy Dynamics — Hauler 震荡防护", () => {
       .preseedRoomState()
       .build();
 
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 34, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("haul2", "hauler", 22, 22, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      34,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "haul2",
+      "hauler",
+      22,
+      22,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -322,7 +452,7 @@ describe("Economy Dynamics — Spawn Queue 隔离", () => {
 
     // 运行 500 tick — P0 worker 应该被孵化
     const result = runner.run(world, 500, {
-      stopWhen: (w) => w.creeps.length > 0,
+      stopWhen: w => w.creeps.length > 0,
     });
 
     const assertions = new Assertions(world, result.records);
@@ -347,9 +477,14 @@ describe("Economy Dynamics — Spawn Queue 隔离", () => {
       .build();
 
     // 1 个 harvester 但 source 空
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work" },
+    );
 
     // 清空所有能量
     world.spawns[0]!.store.energy = 0;
@@ -383,9 +518,15 @@ describe("Economy Dynamics — Harvester 替换时序", () => {
       .container(16, 15, 1500)
       .container(34, 15, 1500)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 }, { x: 23, y: 26 },
-        { x: 24, y: 27 }, { x: 25, y: 27 }, { x: 26, y: 27 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
+        { x: 23, y: 26 },
+        { x: 24, y: 27 },
+        { x: 25, y: 27 },
+        { x: 26, y: 27 },
         { x: 27, y: 26 },
       ])
       .sourceRegen(10)
@@ -395,12 +536,22 @@ describe("Economy Dynamics — Harvester 替换时序", () => {
       .build();
 
     // 1 个即将死亡的 harvester + 1 个正常 harvester
-    world.addCreep("h_dying", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work", ticksToLive: 100 });
-    world.addCreep("h2", "harvester", 34, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
+    world.addCreep(
+      "h_dying",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work", ticksToLive: 100 },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      34,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s2", mode: "work" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -438,9 +589,15 @@ describe("Economy Dynamics — Harvester 替换时序", () => {
       .container(16, 15, 1500)
       .container(34, 15, 1500)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 }, { x: 23, y: 26 },
-        { x: 24, y: 27 }, { x: 25, y: 27 }, { x: 26, y: 27 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
+        { x: 23, y: 26 },
+        { x: 24, y: 27 },
+        { x: 25, y: 27 },
+        { x: 26, y: 27 },
         { x: 27, y: 26 },
       ])
       .sourceRegen(10)
@@ -450,12 +607,22 @@ describe("Economy Dynamics — Harvester 替换时序", () => {
       .build();
 
     // 两个 harvester 都只剩 30 tick
-    world.addCreep("h1", "harvester", 16, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work", ticksToLive: 30 });
-    world.addCreep("h2", "harvester", 34, 16, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work", ticksToLive: 30 });
+    world.addCreep(
+      "h1",
+      "harvester",
+      16,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s1", mode: "work", ticksToLive: 30 },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      34,
+      16,
+      [{ type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { sourceId: "s2", mode: "work", ticksToLive: 30 },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -466,7 +633,7 @@ describe("Economy Dynamics — Harvester 替换时序", () => {
 
     // 运行 800 tick — 两个 harvester 死亡后系统必须恢复
     const result = runner.run(world, 800, {
-      stopWhen: (w) => w.tick > 100 && w.creepsByRole("harvester").length >= 1,
+      stopWhen: w => w.tick > 100 && w.creepsByRole("harvester").length >= 1,
     });
 
     const assertions = new Assertions(world, result.records);

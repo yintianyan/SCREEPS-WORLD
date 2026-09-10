@@ -81,9 +81,7 @@ export function evaluateBottleneck(
 
   // 生产缺口分数：productionGap / max(consumptionRate, 1)，clamp [0, 1]
   const productionGap = Math.max(0, consumptionRate - productionRate);
-  const productionGapScore = consumptionRate > 0
-    ? Math.min(1, productionGap / consumptionRate)
-    : 0;
+  const productionGapScore = consumptionRate > 0 ? Math.min(1, productionGap / consumptionRate) : 0;
 
   // 健康度分数：越差越高（critical=1.0, deficit=0.8, degraded=0.6, stable=0.2, healthy=0.0）
   const healthScore = healthToScore(health);
@@ -92,9 +90,10 @@ export function evaluateBottleneck(
   const recoveryAmount = Math.max(0, safetyReserve - reserve);
 
   // 综合分数
-  let score = deficitScore * options.deficitWeight
-    + productionGapScore * options.productionGapWeight
-    + healthScore * options.healthWeight;
+  let score =
+    deficitScore * options.deficitWeight +
+    productionGapScore * options.productionGapWeight +
+    healthScore * options.healthWeight;
 
   // 关键资源加权
   if (critical) {
@@ -173,10 +172,15 @@ export function getTopBottleneck(
  */
 function healthToScore(h: ResourceHealthResult["health"]): number {
   switch (h) {
-    case "critical": return 1.0;
-    case "deficit": return 0.8;
-    case "degraded": return 0.6;
-    case "stable": return 0.2;
-    case "healthy": return 0.0;
+    case "critical":
+      return 1.0;
+    case "deficit":
+      return 0.8;
+    case "degraded":
+      return 0.6;
+    case "stable":
+      return 0.2;
+    case "healthy":
+      return 0.0;
   }
 }

@@ -201,9 +201,8 @@ export function evaluateColonyPhase(
   // P2-3：满仓豁免 — storage 高水位时流失是正常消费，不是采集失败。
   // 避免"满仓 → crisis → upgrader 冻结 → link 死锁"的正反馈循环。
   const storageHigh = (input.storageRatio ?? 0) > options.forceCrisisStorageHigh;
-  const srcStalled = srcRatioHigh
-    && storageDrainAccum > options.storageDrainAccumThreshold
-    && !storageHigh;
+  const srcStalled =
+    srcRatioHigh && storageDrainAccum > options.storageDrainAccumThreshold && !storageHigh;
   // 任一条件不再满足时立即归零，防残留累积导致误触发。
   const newStallTicks = srcStalled ? (prev.srcStallTicks ?? 0) + 1 : 0;
   const forceCrisis = newStallTicks >= options.srcStallEnterTicks;
@@ -225,7 +224,10 @@ export function evaluateColonyPhase(
     input.frozenRatio > options.liquidityFrozenRatio;
   const liquidityDelta = liquidityTrap ? options.liquidityStep : -options.liquidityRecoveryStep;
   const prevLiquidity = prev.liquidityScore ?? 0;
-  const liquidityScore = Math.max(0, Math.min(options.drainEnterScore, prevLiquidity + liquidityDelta));
+  const liquidityScore = Math.max(
+    0,
+    Math.min(options.drainEnterScore, prevLiquidity + liquidityDelta),
+  );
 
   // ── 合并双维度：任一爆表即危机 ──
   const crisisScore = Math.max(drainScore, liquidityScore);
@@ -274,7 +276,16 @@ export function evaluateColonyPhase(
   const stillInBand = phase === "crisis" || phase === "recovery";
   const bandTicks = stillInBand ? bandTicksSoFar + 1 : 0;
 
-  return { phase, prevReserve: input.reserve, drainScore, liquidityScore, bandTicks, reserveDelta, srcStallTicks: newStallTicks, storageDrainAccum };
+  return {
+    phase,
+    prevReserve: input.reserve,
+    drainScore,
+    liquidityScore,
+    bandTicks,
+    reserveDelta,
+    srcStallTicks: newStallTicks,
+    storageDrainAccum,
+  };
 }
 
 /**
@@ -282,10 +293,7 @@ export function evaluateColonyPhase(
  * （优先级最高）；bootstrap ← 采集者不足；recovery ← crisis/recovery；
  * normal ← growth/steady。
  */
-export function phaseToColonyState(
-  phase: ColonyPhase,
-  hasHostiles: boolean,
-): ColonyState {
+export function phaseToColonyState(phase: ColonyPhase, hasHostiles: boolean): ColonyState {
   if (hasHostiles) return "defense";
   if (phase === "bootstrap") return "bootstrap";
   if (phase === "crisis" || phase === "recovery") return "recovery";

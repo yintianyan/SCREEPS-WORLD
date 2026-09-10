@@ -3,10 +3,10 @@
 /** 指标消费后可触发的行动类型（约束 action 字段的取值域）。 */
 export type MetricAction =
   | "capacity-downgrade" // 触发 capacity 分档下移
-  | "agenda-switch"     // 触发议程切换评估
-  | "aid-trigger"       // 触发跨房互济
-  | "contraction"       // 触发结构性收缩议程
-  | "audit";            // 仅审计/复盘用途（须说明理由）
+  | "agenda-switch" // 触发议程切换评估
+  | "aid-trigger" // 触发跨房互济
+  | "contraction" // 触发结构性收缩议程
+  | "audit"; // 仅审计/复盘用途（须说明理由）
 
 export interface MetricEntry {
   /** 指标键（telemetry/timeseries 中的实际字段路径）。 */
@@ -20,28 +20,68 @@ export interface MetricEntry {
 }
 
 export const METRICS_CATALOG: readonly MetricEntry[] = [
-  { name: "cpu.usedTick", source: "kernel/telemetry", consumer: "watchdog", action: "capacity-downgrade" },
+  {
+    name: "cpu.usedTick",
+    source: "kernel/telemetry",
+    consumer: "watchdog",
+    action: "capacity-downgrade",
+  },
   { name: "cpu.p99", source: "timeseries.cpu", consumer: "capacity", action: "capacity-downgrade" },
   { name: "bucket", source: "Game.cpu", consumer: "scheduler.tier", action: "capacity-downgrade" },
   { name: "memory.bytes", source: "RawMemory", consumer: "maintenance", action: "contraction" },
   { name: "errors.rate", source: "safe-run", consumer: "expectations", action: "audit" },
   { name: "net.energy", source: "room-state/economy", consumer: "agenda", action: "agenda-switch" },
-  { name: "spawn.queueDepth", source: "spawn-manager", consumer: "spawn-starved detector", action: "contraction" },
-  { name: "task.ageP95", source: "assignment-service", consumer: "logistics gate", action: "audit" },
-  { name: "hauler.emptyRate", source: "role-runner", consumer: "unified-pool trigger", action: "audit" },
+  {
+    name: "spawn.queueDepth",
+    source: "spawn-manager",
+    consumer: "spawn-starved detector",
+    action: "contraction",
+  },
+  {
+    name: "task.ageP95",
+    source: "assignment-service",
+    consumer: "logistics gate",
+    action: "audit",
+  },
+  {
+    name: "hauler.emptyRate",
+    source: "role-runner",
+    consumer: "unified-pool trigger",
+    action: "audit",
+  },
   { name: "link.lossTotal", source: "link-system", consumer: "economy audit", action: "audit" },
-  { name: "terminal.freightShare", source: "terminal-manager", consumer: "economy audit", action: "audit" },
-  { name: "expansion.successRate", source: "ExpansionOutcome 台账", consumer: "rhythm-adaptive (R7b)", action: "contraction" },
-  { name: "war.spendRate", source: "war-planner", consumer: "fortify exit", action: "agenda-switch" },
+  {
+    name: "terminal.freightShare",
+    source: "terminal-manager",
+    consumer: "economy audit",
+    action: "audit",
+  },
+  {
+    name: "expansion.successRate",
+    source: "ExpansionOutcome 台账",
+    consumer: "rhythm-adaptive (R7b)",
+    action: "contraction",
+  },
+  {
+    name: "war.spendRate",
+    source: "war-planner",
+    consumer: "fortify exit",
+    action: "agenda-switch",
+  },
   { name: "threat.level", source: "defense FSM", consumer: "posture", action: "agenda-switch" },
-  { name: "intel.freshCoverage", source: "prospect/intel", consumer: "prospect scheduler", action: "audit" },
+  {
+    name: "intel.freshCoverage",
+    source: "prospect/intel",
+    consumer: "prospect scheduler",
+    action: "audit",
+  },
 ];
 
 /** 目录完整性自检用：全部 name 唯一。 */
 export function assertCatalogUnique(): void {
   const seen = new Set<string>();
   for (const m of METRICS_CATALOG) {
-    if (seen.has(m.name)) throw new Error("duplicate metric in catalog: " + m.name);
+    if (seen.has(m.name)) throw new Error(`duplicate metric in catalog: ${m.name}`);
     seen.add(m.name);
   }
 }

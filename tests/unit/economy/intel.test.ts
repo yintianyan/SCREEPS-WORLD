@@ -1,6 +1,11 @@
 /** 邻居房情报测试（C2）。 */
 import { describe, expect, it } from "vitest";
-import { classifyRoomByName, scanNeighborIntel, isHostilePlayerReservation, INVADER_USERNAME } from "../../../src/domain/intel";
+import {
+  classifyRoomByName,
+  scanNeighborIntel,
+  isHostilePlayerReservation,
+  INVADER_USERNAME,
+} from "../../../src/domain/intel";
 
 describe("intel — classifyRoomByName 房名分类", () => {
   it("任一坐标 mod 10 == 0 → 公路房", () => {
@@ -103,7 +108,9 @@ describe("intel — scanNeighborIntel 情报扫描", () => {
     });
     // 墙被拆净后的下一次有视野刷新。
     const next = scanNeighborIntel(
-      "W7N3", "normal", 2000,
+      "W7N3",
+      "normal",
+      2000,
       { sources: 2, wallCount: 0, sealedExits: [] },
       prev,
     );

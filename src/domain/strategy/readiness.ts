@@ -233,10 +233,30 @@ export function evaluateExpansionReadiness(
   const g11 = view.totalNetFlow >= options.stronglyMinNetFlow;
 
   const stronglyGates: ExpansionGate[] = [
-    { name: "G8: health strongly", passed: g8, value: health, condition: `health ≥ ${options.stronglyMinHealth}` },
-    { name: "G9: core rooms strongly", passed: g9, value: String(view.coreRooms), condition: `coreRooms ≥ ${options.stronglyMinCoreRooms}` },
-    { name: "G10: CPU tier strongly", passed: g10, value: cpuTier, condition: `tier ≤ ${options.stronglyMinCpuTier}` },
-    { name: "G11: net flow strongly", passed: g11, value: view.totalNetFlow.toFixed(1), condition: `netFlow ≥ ${options.stronglyMinNetFlow}` },
+    {
+      name: "G8: health strongly",
+      passed: g8,
+      value: health,
+      condition: `health ≥ ${options.stronglyMinHealth}`,
+    },
+    {
+      name: "G9: core rooms strongly",
+      passed: g9,
+      value: String(view.coreRooms),
+      condition: `coreRooms ≥ ${options.stronglyMinCoreRooms}`,
+    },
+    {
+      name: "G10: CPU tier strongly",
+      passed: g10,
+      value: cpuTier,
+      condition: `tier ≤ ${options.stronglyMinCpuTier}`,
+    },
+    {
+      name: "G11: net flow strongly",
+      passed: g11,
+      value: view.totalNetFlow.toFixed(1),
+      condition: `netFlow ≥ ${options.stronglyMinNetFlow}`,
+    },
   ];
 
   const allStronglyPassed = stronglyGates.every(g => g.passed);
@@ -288,12 +308,15 @@ export function evaluateExpansionReadinessExtended(
   });
 
   // G13: 预算 ≥ 成本
-  const g13 = cost !== undefined && tieredBudget !== undefined
-    && tieredBudget.availableExpansion >= cost.totalCost;
+  const g13 =
+    cost !== undefined &&
+    tieredBudget !== undefined &&
+    tieredBudget.availableExpansion >= cost.totalCost;
   gates.push({
     name: "G13: budget ≥ cost",
     passed: g13,
-    value: cost && tieredBudget ? `${tieredBudget.availableExpansion} ≥ ${cost.totalCost}` : "unknown",
+    value:
+      cost && tieredBudget ? `${tieredBudget.availableExpansion} ≥ ${cost.totalCost}` : "unknown",
     condition: "availableBudget ≥ estimatedCost",
   });
 

@@ -1,11 +1,21 @@
 /** 请求池纯函数单测——防超卖供给账/生成聚合/TTL 过期回执/饥饿老化。 */
 import { describe, it, expect } from "vitest";
 import {
-  supplyLedger, buildTransportRequests, reconcileRegistry, promoteAged, applyShrink,
-  type SupplySource, type LeaseSummary, type TransportRequest,
+  supplyLedger,
+  buildTransportRequests,
+  reconcileRegistry,
+  promoteAged,
+  applyShrink,
+  type SupplySource,
+  type LeaseSummary,
+  type TransportRequest,
 } from "../../../src/domain/assignment/request-pool";
 
-const src = (id: string, available: number): SupplySource => ({ id, pos: { x: 10, y: 10 }, available });
+const src = (id: string, available: number): SupplySource => ({
+  id,
+  pos: { x: 10, y: 10 },
+  available,
+});
 const lease = (sourceId?: string, valid = true): LeaseSummary => ({ sourceId, valid });
 
 describe("supplyLedger — 防超卖供给账", () => {
@@ -18,15 +28,16 @@ describe("supplyLedger — 防超卖供给账", () => {
 
 describe("buildTransportRequests — 生成/去重/聚合/提级", () => {
   it("每源一请求（拆分聚合），确定性 key 幂等", () => {
-    const mk = () => buildTransportRequests({
-      roomName: "W1N1",
-      supplies: [src("a", 500), src("b", 300)],
-      leases: [],
-      towerStarving: false,
-      maxConcurrentPerSource: 1,
-      basePriority: 1,
-      boostedPriority: 0,
-    });
+    const mk = () =>
+      buildTransportRequests({
+        roomName: "W1N1",
+        supplies: [src("a", 500), src("b", 300)],
+        leases: [],
+        towerStarving: false,
+        maxConcurrentPerSource: 1,
+        basePriority: 1,
+        boostedPriority: 0,
+      });
     const r1 = mk();
     const r2 = mk();
     expect(r1.map(r => r.key)).toEqual(["collect:W1N1:a", "collect:W1N1:b"]);
@@ -36,19 +47,26 @@ describe("buildTransportRequests — 生成/去重/聚合/提级", () => {
 
   it("塔饥渴 → 收集请求整体提级 P0（需求侧聚合）", () => {
     const reqs = buildTransportRequests({
-      roomName: "W1N1", supplies: [src("a", 100)], leases: [],
-      towerStarving: true, maxConcurrentPerSource: 1,
-      basePriority: 1, boostedPriority: 0,
+      roomName: "W1N1",
+      supplies: [src("a", 100)],
+      leases: [],
+      towerStarving: true,
+      maxConcurrentPerSource: 1,
+      basePriority: 1,
+      boostedPriority: 0,
     });
     expect(reqs[0]!.priority).toBe(0);
   });
 
   it("防超卖：并发占满的源不再生成请求；空源跳过", () => {
     const reqs = buildTransportRequests({
-      roomName: "R", supplies: [src("busy", 800), src("empty", 0), src("free", 200)],
+      roomName: "R",
+      supplies: [src("busy", 800), src("empty", 0), src("free", 200)],
       leases: [lease("busy")],
-      towerStarving: false, maxConcurrentPerSource: 1,
-      basePriority: 1, boostedPriority: 0,
+      towerStarving: false,
+      maxConcurrentPerSource: 1,
+      basePriority: 1,
+      boostedPriority: 0,
     });
     expect(reqs.map(r => r.sourceId)).toEqual(["free"]);
   });
@@ -57,14 +75,14 @@ describe("buildTransportRequests — 生成/去重/聚合/提级", () => {
 describe("reconcileRegistry — TTL 过期回执与登记", () => {
   it("TTL 到期未认领 → expired 回执；认领过离池不算过期", () => {
     const registry = new Map();
-    registry.set("k1", { firstSeen: 0, claimed: false });   // 300t 无认领 → expired
-    registry.set("k2", { firstSeen: 0, claimed: true });     // 认领后离池 → fulfilled 语义
-    registry.set("k3", { firstSeen: 250, claimed: false });  // 未到期即消失 → vanished
+    registry.set("k1", { firstSeen: 0, claimed: false }); // 300t 无认领 → expired
+    registry.set("k2", { firstSeen: 0, claimed: true }); // 认领后离池 → fulfilled 语义
+    registry.set("k3", { firstSeen: 250, claimed: false }); // 未到期即消失 → vanished
     const rec = reconcileRegistry(registry, new Set(["k4"]), 300, 300);
     expect(rec.expiredKeys).toEqual(["k1"]);
     expect(rec.vanishedKeys).toEqual(["k3"]);
     expect(registry.has("k1")).toBe(false);
-    expect(registry.has("k4")).toBe(true);                   // 新 key 登记 firstSeen
+    expect(registry.has("k4")).toBe(true); // 新 key 登记 firstSeen
     expect(registry.get("k4")!.firstSeen).toBe(300);
   });
 });
@@ -84,7 +102,10 @@ describe("applyShrink — L2 池收缩", () => {
 
 describe("promoteAged — 饥饿老化", () => {
   it("P≥2 且超龄提级一次；P0/P1 不适用", () => {
-    const registry = new Map<string, { firstSeen: number; claimed: boolean; promotedOnce?: boolean }>([
+    const registry = new Map<
+      string,
+      { firstSeen: number; claimed: boolean; promotedOnce?: boolean }
+    >([
       ["p3", { firstSeen: 0, claimed: false }],
       ["young", { firstSeen: 190, claimed: false }],
     ]);

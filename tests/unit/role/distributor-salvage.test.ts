@@ -10,8 +10,9 @@ function storageMock(resources: Record<string, number>): any {
   return {
     store: {
       ...resources,
-      getUsedCapacity: vi.fn((r?: string) => (r ? (resources[r] ?? 0)
-        : Object.values(resources).reduce((a, b) => a + b, 0))),
+      getUsedCapacity: vi.fn((r?: string) =>
+        r ? (resources[r] ?? 0) : Object.values(resources).reduce((a, b) => a + b, 0),
+      ),
       getFreeCapacity: vi.fn(() => 1000000),
       getCapacity: vi.fn(() => 1000000),
     },
@@ -54,10 +55,7 @@ describe("distributor — nuke 资产抢救搬运链", () => {
     distributorRole.run(creep, mockContext(snap));
 
     // U(5000) > Z(2000) → 取 U；能量虽然最多但优先级垫底。
-    expect(creep.withdraw).toHaveBeenCalledWith(
-      expect.anything(),
-      "U",
-    );
+    expect(creep.withdraw).toHaveBeenCalledWith(expect.anything(), "U");
   });
 
   it("警报房携能 → deposit 到 terminal", () => {

@@ -4,7 +4,12 @@
 // 本文件此前手写的 RCL_PROGRESS / PART_COST / BUILD_COST / FIND_* 私有表已退役；
 // find() 的 case 值与 setup.ts 注入的全局常量同源，杜绝双表漂移。
 import { C } from "../../support/constants";
-import { flatTerrain, terrainWithSwamps, terrainWithWalls, type TerrainCell } from "../../support/terrain";
+import {
+  flatTerrain,
+  terrainWithSwamps,
+  terrainWithWalls,
+  type TerrainCell,
+} from "../../support/terrain";
 
 // ─── 类型定义 ───────────────────────────────────────────────
 
@@ -29,7 +34,13 @@ export interface WorldConfig {
   roads?: Array<{ pos: WorldPos }>;
   walls?: Array<{ pos: WorldPos; hits?: number }>;
   ramparts?: Array<{ pos: WorldPos; hits?: number }>;
-  constructionSites?: Array<{ id?: string; pos: WorldPos; structureType: string; progress?: number; progressTotal?: number }>;
+  constructionSites?: Array<{
+    id?: string;
+    pos: WorldPos;
+    structureType: string;
+    progress?: number;
+    progressTotal?: number;
+  }>;
   /** 初始 creep 列表 */
   creeps?: Array<{
     name: string;
@@ -119,8 +130,12 @@ class MockStore {
     return this._capacity;
   }
 
-  get energy(): number { return this._energy; }
-  set energy(v: number) { this._energy = Math.max(0, Math.min(v, this._capacity)); }
+  get energy(): number {
+    return this._energy;
+  }
+  set energy(v: number) {
+    this._energy = Math.max(0, Math.min(v, this._capacity));
+  }
 }
 
 /** 模拟 RoomPosition */
@@ -137,12 +152,17 @@ class MockRoomPosition {
     this._world = world;
   }
 
-  getRangeTo(target: { pos?: MockRoomPosition } | MockRoomPosition | { x: number; y: number }): number {
+  getRangeTo(
+    target: { pos?: MockRoomPosition } | MockRoomPosition | { x: number; y: number },
+  ): number {
     const t = "x" in target ? target : (target as { pos: MockRoomPosition }).pos;
     return Math.max(Math.abs(this.x - t.x), Math.abs(this.y - t.y));
   }
 
-  getDirectionTo(xOrTarget: number | { pos?: MockRoomPosition } | MockRoomPosition | { x: number; y: number }, y?: number): number {
+  getDirectionTo(
+    xOrTarget: number | { pos?: MockRoomPosition } | MockRoomPosition | { x: number; y: number },
+    y?: number,
+  ): number {
     // 双重重载：getDirectionTo(tx, ty)（pathfinding 的 nextDirFromPath 用数字坐标）
     // 与 getDirectionTo(target)（引擎语义，target 可为 RoomPosition 或 RoomObject）。
     let tx: number;
@@ -160,10 +180,16 @@ class MockRoomPosition {
     const dy = Math.sign(ty - this.y);
     // 方向映射：TOP=1, TOP_RIGHT=2, RIGHT=3, BOTTOM_RIGHT=4, BOTTOM=5, BOTTOM_LEFT=6, LEFT=7, TOP_LEFT=8
     const dirMap: Record<string, number> = {
-      "0,-1": 1, "1,-1": 2, "1,0": 3, "1,1": 4,
-      "0,1": 5, "-1,1": 6, "-1,0": 7, "-1,-1": 8,
+      "0,-1": 1,
+      "1,-1": 2,
+      "1,0": 3,
+      "1,1": 4,
+      "0,1": 5,
+      "-1,1": 6,
+      "-1,0": 7,
+      "-1,-1": 8,
     };
-    return dirMap[dx + "," + dy] ?? 0;
+    return dirMap[`${dx},${dy}`] ?? 0;
   }
 
   findClosestByRange<T extends { pos: MockRoomPosition }>(targets: T[]): T | null {
@@ -349,9 +375,10 @@ class MockSpawn implements MockStructureBase {
     const cost = target.body.reduce((sum, p) => sum + (C.BODYPART_COST[p.type] ?? 0), 0);
     const ttl = Math.max(0, target.ticksToLive ?? 1500);
     const refund = Math.ceil((cost * ttl) / 1500);
-    this.store.energy = this.store.getCapacity() > this.store.energy + refund
-      ? this.store.energy + refund
-      : this.store.getCapacity();
+    this.store.energy =
+      this.store.getCapacity() > this.store.energy + refund
+        ? this.store.energy + refund
+        : this.store.getCapacity();
     this._world._creeps = this._world._creeps.filter(c => c !== target);
     this._world._stats.tickLog.push({ tick: this._world.tick, event: `recycled:${target.name}` });
     this.room._recalcEnergy();
@@ -532,7 +559,13 @@ class MockConstructionSite {
   my = true;
   room: MockRoom;
 
-  constructor(id: string, pos: MockRoomPosition, structureType: string, room: MockRoom, progress = 0) {
+  constructor(
+    id: string,
+    pos: MockRoomPosition,
+    structureType: string,
+    room: MockRoom,
+    progress = 0,
+  ) {
     this.id = id;
     this.pos = pos;
     this.structureType = structureType;
@@ -553,7 +586,13 @@ class MockHostileCreep {
   hits: number;
   hitsMax: number;
 
-  constructor(name: string, pos: MockRoomPosition, body: Array<{ type: string }>, room: MockRoom, owner = "Enemy") {
+  constructor(
+    name: string,
+    pos: MockRoomPosition,
+    body: Array<{ type: string }>,
+    room: MockRoom,
+    owner = "Enemy",
+  ) {
     this.id = genId("hostile");
     this.name = name;
     this.pos = pos;
@@ -623,7 +662,11 @@ class MockCreep {
     return 0;
   }
 
-  withdraw(target: MockContainer | MockStorage | MockLink | MockSpawn | MockTower, _resource?: string, amount?: number): number {
+  withdraw(
+    target: MockContainer | MockStorage | MockLink | MockSpawn | MockTower,
+    _resource?: string,
+    amount?: number,
+  ): number {
     if (this.pos.getRangeTo(target) > 1) return -9;
     const available = target.store.getUsedCapacity();
     if (available <= 0) return -6;
@@ -635,7 +678,18 @@ class MockCreep {
     return 0;
   }
 
-  transfer(target: MockSpawn | MockExtension | MockTower | MockStorage | MockContainer | MockLink | MockController, _resource?: string, amount?: number): number {
+  transfer(
+    target:
+      | MockSpawn
+      | MockExtension
+      | MockTower
+      | MockStorage
+      | MockContainer
+      | MockLink
+      | MockController,
+    _resource?: string,
+    amount?: number,
+  ): number {
     if (this.pos.getRangeTo(target) > 1) return -9;
     const carried = this.store.getUsedCapacity();
     if (carried <= 0) return -6;
@@ -732,8 +786,14 @@ class MockCreep {
 
   move(direction: number): number {
     const deltas: Record<number, [number, number]> = {
-      1: [0, -1], 2: [1, -1], 3: [1, 0], 4: [1, 1],
-      5: [0, 1], 6: [-1, 1], 7: [-1, 0], 8: [-1, -1],
+      1: [0, -1],
+      2: [1, -1],
+      3: [1, 0],
+      4: [1, 1],
+      5: [0, 1],
+      6: [-1, 1],
+      7: [-1, 0],
+      8: [-1, -1],
     };
     const d = deltas[direction];
     if (!d) return -10;
@@ -910,8 +970,16 @@ class MockRoom {
 
   /** 矩形扫描（remoteHarvester 的 source container / container site 扫描用）。
    * 参数序 (top, left, bottom, right, asArray)；返回 {structure}/{constructionSite} 条目数组。 */
-  lookForAtArea(type: string, top: number, left: number, bottom: number, right: number, _asArray?: boolean): unknown[] {
-    const inRect = (x: number, y: number): boolean => x >= left && x <= right && y >= top && y <= bottom;
+  lookForAtArea(
+    type: string,
+    top: number,
+    left: number,
+    bottom: number,
+    right: number,
+    _asArray?: boolean,
+  ): unknown[] {
+    const inRect = (x: number, y: number): boolean =>
+      x >= left && x <= right && y >= top && y <= bottom;
     const results: unknown[] = [];
     if (type === "structure") {
       for (const c of this._world._containers) {
@@ -951,8 +1019,13 @@ export interface WorldStats {
 export class TestWorld {
   readonly config: WorldConfig;
   readonly _stats: WorldStats = {
-    totalHarvested: 0, totalUpgraded: 0, totalBuilt: 0,
-    totalSpawned: 0, creepsDied: 0, runtimeErrors: [], tickLog: [],
+    totalHarvested: 0,
+    totalUpgraded: 0,
+    totalBuilt: 0,
+    totalSpawned: 0,
+    creepsDied: 0,
+    runtimeErrors: [],
+    tickLog: [],
   };
 
   // 实体集合
@@ -1021,7 +1094,13 @@ export class TestWorld {
 
     // Spawns
     for (const s of cfg.spawns) {
-      const spawn = new MockSpawn(s.id ?? genId("spawn"), s.name, room._pos(s.pos.x, s.pos.y), room, this);
+      const spawn = new MockSpawn(
+        s.id ?? genId("spawn"),
+        s.name,
+        room._pos(s.pos.x, s.pos.y),
+        room,
+        this,
+      );
       this._spawns.push(spawn);
       this._registerObject(spawn.id, spawn);
     }
@@ -1035,21 +1114,37 @@ export class TestWorld {
 
     // Containers
     for (const c of cfg.containers ?? []) {
-      const cont = new MockContainer(c.id ?? genId("cont"), room._pos(c.pos.x, c.pos.y), room, c.energy ?? 0, c.hits ?? 250000);
+      const cont = new MockContainer(
+        c.id ?? genId("cont"),
+        room._pos(c.pos.x, c.pos.y),
+        room,
+        c.energy ?? 0,
+        c.hits ?? 250000,
+      );
       this._containers.push(cont);
       this._registerObject(cont.id, cont);
     }
 
     // Towers
     for (const t of cfg.towers ?? []) {
-      const tower = new MockTower(t.id ?? genId("tower"), room._pos(t.pos.x, t.pos.y), room, t.energy ?? 0);
+      const tower = new MockTower(
+        t.id ?? genId("tower"),
+        room._pos(t.pos.x, t.pos.y),
+        room,
+        t.energy ?? 0,
+      );
       this._towers.push(tower);
       this._registerObject(tower.id, tower);
     }
 
     // Storage
     for (const s of cfg.storages ?? []) {
-      const storage = new MockStorage(s.id ?? genId("storage"), room._pos(s.pos.x, s.pos.y), room, s.energy ?? 0);
+      const storage = new MockStorage(
+        s.id ?? genId("storage"),
+        room._pos(s.pos.x, s.pos.y),
+        room,
+        s.energy ?? 0,
+      );
       this._storage = storage;
       room.storage = storage;
       this._registerObject(storage.id, storage);
@@ -1057,7 +1152,12 @@ export class TestWorld {
 
     // Links
     for (const l of cfg.links ?? []) {
-      const link = new MockLink(l.id ?? genId("link"), room._pos(l.pos.x, l.pos.y), room, l.energy ?? 0);
+      const link = new MockLink(
+        l.id ?? genId("link"),
+        room._pos(l.pos.x, l.pos.y),
+        room,
+        l.energy ?? 0,
+      );
       this._links.push(link);
       this._registerObject(link.id, link);
     }
@@ -1078,14 +1178,25 @@ export class TestWorld {
 
     // Ramparts
     for (const r of cfg.ramparts ?? []) {
-      const ramp = new MockRampart(genId("rampart"), room._pos(r.pos.x, r.pos.y), room, r.hits ?? 1);
+      const ramp = new MockRampart(
+        genId("rampart"),
+        room._pos(r.pos.x, r.pos.y),
+        room,
+        r.hits ?? 1,
+      );
       this._ramparts.push(ramp);
       this._registerObject(ramp.id, ramp);
     }
 
     // Construction sites
     for (const s of cfg.constructionSites ?? []) {
-      const site = new MockConstructionSite(s.id ?? genId("site"), room._pos(s.pos.x, s.pos.y), s.structureType, room, s.progress ?? 0);
+      const site = new MockConstructionSite(
+        s.id ?? genId("site"),
+        room._pos(s.pos.x, s.pos.y),
+        s.structureType,
+        room,
+        s.progress ?? 0,
+      );
       if (s.progressTotal) site.progressTotal = s.progressTotal;
       this._sites.push(site);
       this._registerObject(site.id, site);
@@ -1109,14 +1220,25 @@ export class TestWorld {
 
     // Hostiles
     for (const h of cfg.hostiles ?? []) {
-      const hostile = new MockHostileCreep(h.name, room._pos(h.pos.x, h.pos.y), h.body, room, h.owner);
+      const hostile = new MockHostileCreep(
+        h.name,
+        room._pos(h.pos.x, h.pos.y),
+        h.body,
+        room,
+        h.owner,
+      );
       this._hostiles.push(hostile);
       this._registerObject(hostile.id, hostile);
     }
 
     // Dropped resources
     for (const d of cfg.droppedResources ?? []) {
-      const dropped = new MockDroppedResource(genId("dropped"), room._pos(d.pos.x, d.pos.y), d.amount, room);
+      const dropped = new MockDroppedResource(
+        genId("dropped"),
+        room._pos(d.pos.x, d.pos.y),
+        d.amount,
+        room,
+      );
       this._dropped.push(dropped);
       this._registerObject(dropped.id, dropped);
     }
@@ -1154,7 +1276,13 @@ export class TestWorld {
         break;
       }
       case "spawn": {
-        const s = new MockSpawn(genId("spawn"), `Spawn_${this._spawns.length + 1}`, site.pos, room, this);
+        const s = new MockSpawn(
+          genId("spawn"),
+          `Spawn_${this._spawns.length + 1}`,
+          site.pos,
+          room,
+          this,
+        );
         this._spawns.push(s);
         this._registerObject(s.id, s);
         room._recalcEnergy();
@@ -1198,7 +1326,10 @@ export class TestWorld {
         break;
       }
     }
-    this._stats.tickLog.push({ tick: this._tick, event: `built:${site.structureType}@${site.pos.x},${site.pos.y}` });
+    this._stats.tickLog.push({
+      tick: this._tick,
+      event: `built:${site.structureType}@${site.pos.x},${site.pos.y}`,
+    });
   }
 
   _onRclUp(controller: MockController): void {
@@ -1302,6 +1433,7 @@ export class TestWorld {
 
   /** 将模拟的 Screeps 全局对象安装到 globalThis。 */
   installGlobals(): void {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const world = this;
     const room = this._room;
 
@@ -1397,7 +1529,11 @@ export class TestWorld {
 
     // PathFinder
     (globalThis as Record<string, unknown>).PathFinder = {
-      search: (origin: MockRoomPosition, goal: { pos: MockRoomPosition; range?: number }, _opts?: unknown) => {
+      search: (
+        origin: MockRoomPosition,
+        goal: { pos: MockRoomPosition; range?: number },
+        _opts?: unknown,
+      ) => {
         // 简单 A* 模拟：返回直线路径
         const path: MockRoomPosition[] = [];
         let cx = origin.x;
@@ -1418,17 +1554,29 @@ export class TestWorld {
       },
       CostMatrix: class {
         private _data = new Uint8Array(2500);
-        set(x: number, y: number, cost: number) { this._data[y * 50 + x] = cost; }
-        get(x: number, y: number) { return this._data[y * 50 + x]; }
-        clone() { const m = new (this.constructor as new () => { _data: Uint8Array })(); m._data = new Uint8Array(this._data); return m; }
+        set(x: number, y: number, cost: number) {
+          this._data[y * 50 + x] = cost;
+        }
+        get(x: number, y: number) {
+          return this._data[y * 50 + x];
+        }
+        clone() {
+          const m = new (this.constructor as new () => { _data: Uint8Array })();
+          m._data = new Uint8Array(this._data);
+          return m;
+        }
       },
     };
 
     // RoomPosition 构造器
     (globalThis as Record<string, unknown>).RoomPosition = class {
-      x: number; y: number; roomName: string;
+      x: number;
+      y: number;
+      roomName: string;
       constructor(x: number, y: number, roomName: string) {
-        this.x = x; this.y = y; this.roomName = roomName;
+        this.x = x;
+        this.y = y;
+        this.roomName = roomName;
       }
       getRangeTo(target: { x: number; y: number }) {
         return Math.max(Math.abs(this.x - target.x), Math.abs(this.y - target.y));
@@ -1459,20 +1607,48 @@ export class TestWorld {
 
   // ─── 查询 API ───
 
-  get tick(): number { return this._tick; }
-  get room(): MockRoom { return this._room; }
-  get creeps(): MockCreep[] { return this._creeps; }
-  get spawns(): MockSpawn[] { return this._spawns; }
-  get containers(): MockContainer[] { return this._containers; }
-  get sources(): MockSource[] { return this._sources; }
-  get sites(): MockConstructionSite[] { return this._sites; }
-  get extensions(): MockExtension[] { return this._extensions; }
-  get towers(): MockTower[] { return this._towers; }
-  get links(): MockLink[] { return this._links; }
-  get storage(): MockStorage | null { return this._storage; }
-  get hostiles(): MockHostileCreep[] { return this._hostiles; }
-  get droppedResources(): MockDroppedResource[] { return this._dropped; }
-  get controller(): MockController | null { return this._room.controller; }
+  get tick(): number {
+    return this._tick;
+  }
+  get room(): MockRoom {
+    return this._room;
+  }
+  get creeps(): MockCreep[] {
+    return this._creeps;
+  }
+  get spawns(): MockSpawn[] {
+    return this._spawns;
+  }
+  get containers(): MockContainer[] {
+    return this._containers;
+  }
+  get sources(): MockSource[] {
+    return this._sources;
+  }
+  get sites(): MockConstructionSite[] {
+    return this._sites;
+  }
+  get extensions(): MockExtension[] {
+    return this._extensions;
+  }
+  get towers(): MockTower[] {
+    return this._towers;
+  }
+  get links(): MockLink[] {
+    return this._links;
+  }
+  get storage(): MockStorage | null {
+    return this._storage;
+  }
+  get hostiles(): MockHostileCreep[] {
+    return this._hostiles;
+  }
+  get droppedResources(): MockDroppedResource[] {
+    return this._dropped;
+  }
+  get controller(): MockController | null {
+    return this._room.controller;
+  }
 
   creepsByRole(role: string): MockCreep[] {
     return this._creeps.filter(c => c.memory.role === role);
@@ -1491,7 +1667,11 @@ export class TestWorld {
   }
 
   /** 注入敌方 creep（用于防御测试）。 */
-  addHostile(name: string, pos: WorldPos, body: Array<{ type: string }> = [{ type: "attack" }]): void {
+  addHostile(
+    name: string,
+    pos: WorldPos,
+    body: Array<{ type: string }> = [{ type: "attack" }],
+  ): void {
     const hostile = new MockHostileCreep(name, this._room._pos(pos.x, pos.y), body, this._room);
     this._hostiles.push(hostile);
     this._registerObject(hostile.id, hostile);
@@ -1507,7 +1687,16 @@ export class TestWorld {
     memoryOverrides?: Record<string, unknown>,
   ): void {
     const memory = { role, home: this._room.name, ...memoryOverrides };
-    const creep = new MockCreep(name, this._room._pos(x, y), body, this._room, this, 0, 1500, memory);
+    const creep = new MockCreep(
+      name,
+      this._room._pos(x, y),
+      body,
+      this._room,
+      this,
+      0,
+      1500,
+      memory,
+    );
     this._creeps.push(creep);
     this._registerObject(creep.id, creep);
   }

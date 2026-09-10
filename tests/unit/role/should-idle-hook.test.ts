@@ -4,12 +4,7 @@ import { remoteHaulerRole } from "../../../src/creeps/roles/remote-hauler";
 import { defineRole } from "../../../src/creeps/engine/role-runner";
 import type { RolePolicy } from "../../../src/creeps/engine/action-types";
 import type { Priority } from "../../../src/kernel/contracts";
-import {
-  mockContext,
-  mockCreep,
-  mockSnapshot,
-  resetGlobals,
-} from "../../support/factories";
+import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();
@@ -21,11 +16,7 @@ beforeEach(() => {
  *   - work 在 home 房：snapshot 无 storage + fillTargets 空 → work 候选全 undefined
  *   - acquire 在 remoteTarget 房：room.find 返回空 → acquire 候选全 undefined
  */
-function makeRemoteHauler(opts: {
-  mode: string;
-  roomName: string;
-  used: number;
-}): any {
+function makeRemoteHauler(opts: { mode: string; roomName: string; used: number }): any {
   const creep = mockCreep({
     name: "rh1",
     role: "remoteHauler",

@@ -14,10 +14,17 @@ import {
   type CombatPressure,
 } from "../../../src/domain/tactical/combat-micro";
 import type { CombatCapability } from "../../../src/domain/combat/capability";
-import type { TerrainContext, EffectiveCombatModifier } from "../../../src/domain/defense/terrain-context";
+import type {
+  TerrainContext,
+  EffectiveCombatModifier,
+} from "../../../src/domain/defense/terrain-context";
 import type { TacticalState } from "../../../src/domain/tactical/types";
 import type { FocusFirePlan, AttackIntent } from "../../../src/domain/tactical/focus-fire";
-import type { CohesionMetric, FormationSlot, FormationAnchor } from "../../../src/domain/tactical/squad-formation";
+import type {
+  CohesionMetric,
+  FormationSlot,
+  FormationAnchor,
+} from "../../../src/domain/tactical/squad-formation";
 
 // ─── 辅助构造函数 ───
 
@@ -49,13 +56,14 @@ function makeMember(
   room = "W2N1",
   overrides: Partial<MicroMemberSnapshot> = {},
 ): MicroMemberSnapshot {
-  const cap = role === "attacker"
-    ? makeCapability({ attack: 120, mobility: 1 })
-    : role === "ranged"
-      ? makeCapability({ rangedAttack: 40, mobility: 1 })
-      : role === "healer"
-        ? makeCapability({ heal: 48, mobility: 1 })
-        : makeCapability();
+  const cap =
+    role === "attacker"
+      ? makeCapability({ attack: 120, mobility: 1 })
+      : role === "ranged"
+        ? makeCapability({ rangedAttack: 40, mobility: 1 })
+        : role === "healer"
+          ? makeCapability({ heal: 48, mobility: 1 })
+          : makeCapability();
   return {
     name,
     role,
@@ -111,7 +119,9 @@ function makeTerrain(overrides: Partial<TerrainContext> = {}): TerrainContext {
   };
 }
 
-function makeTerrainModifier(overrides: Partial<EffectiveCombatModifier> = {}): EffectiveCombatModifier {
+function makeTerrainModifier(
+  overrides: Partial<EffectiveCombatModifier> = {},
+): EffectiveCombatModifier {
   return {
     mobilityModifier: 1.0,
     towerDamageFactor: 0,
@@ -518,12 +528,14 @@ describe("MICRO-009: Chokepoint → Hold", () => {
     const member = makeMember("a1", "attacker", 10, 10);
     const terrain = makeTerrain({
       terrainType: "CHOKEPOINT",
-      chokepoints: [{
-        pos: 10 * 50 + 10,
-        width: 1,
-        direction: 0,
-        significance: 0.9,
-      }],
+      chokepoints: [
+        {
+          pos: 10 * 50 + 10,
+          width: 1,
+          direction: 0,
+          significance: 0.9,
+        },
+      ],
     });
     const modifier = makeTerrainModifier({ approachFactor: 0.8 });
     const snapshot = makeSnapshot({
@@ -768,9 +780,7 @@ describe("MICRO-015: 同 Snapshot → 1000 Replay 一致", () => {
       expect(replayPlan.decisionHash).toBe(firstHash);
       // 每个 decision hash 也必须一致
       for (let j = 0; j < replayPlan.decisions.length; j++) {
-        expect(replayPlan.decisions[j]!.decisionHash).toBe(
-          firstPlan.decisions[j]!.decisionHash,
-        );
+        expect(replayPlan.decisions[j]!.decisionHash).toBe(firstPlan.decisions[j]!.decisionHash);
       }
     }
   });
@@ -786,8 +796,18 @@ describe("MICRO-015: 同 Snapshot → 1000 Replay 一致", () => {
       requiresMovement: false,
     });
 
-    const snapshot1 = makeSnapshot({ members: [member], enemies: [enemy], attackIntents: [attackIntent], tick: 100 });
-    const snapshot2 = makeSnapshot({ members: [member], enemies: [enemy], attackIntents: [attackIntent], tick: 200 });
+    const snapshot1 = makeSnapshot({
+      members: [member],
+      enemies: [enemy],
+      attackIntents: [attackIntent],
+      tick: 100,
+    });
+    const snapshot2 = makeSnapshot({
+      members: [member],
+      enemies: [enemy],
+      attackIntents: [attackIntent],
+      tick: 200,
+    });
 
     const plan1 = planCombatMicro(snapshot1);
     const plan2 = planCombatMicro(snapshot2);

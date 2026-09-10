@@ -11,20 +11,37 @@
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { withdrawStorageLink } from "../../../src/creeps/engine/actions/withdraw";
-import { mockContext, mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
+import {
+  mockContext,
+  mockCreep,
+  mockSnapshot,
+  mockStructure,
+  resetGlobals,
+} from "../../support/factories";
 
-function makeAc(opts: {
-  storageLinkEnergy?: number;
-  storageEnergy?: number;
-} = {}) {
+function makeAc(
+  opts: {
+    storageLinkEnergy?: number;
+    storageEnergy?: number;
+  } = {},
+) {
   const { storageLinkEnergy = 800, storageEnergy = 0 } = opts;
   const storage = mockStructure("storage", { id: "st", energy: storageEnergy, capacity: 1000000 });
   const storageLink = mockStructure("link", { id: "sl", energy: storageLinkEnergy, capacity: 800 });
   storageLink.pos = { x: 33, y: 29, getRangeTo: () => 1 } as never;
   const snap = mockSnapshot({ storage, links: [storageLink] });
-  const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 300, mode: "acquire" });
+  const creep = mockCreep({
+    name: "hauler_1",
+    role: "hauler",
+    used: 0,
+    capacity: 300,
+    mode: "acquire",
+  });
   const ctx = mockContext(snap);
-  return { ac: { creep, snapshot: snap, assignment: undefined, budget: ctx.budget, ctx }, storageLink };
+  return {
+    ac: { creep, snapshot: snap, assignment: undefined, budget: ctx.budget, ctx },
+    storageLink,
+  };
 }
 
 describe("withdrawStorageLink — 无守卫直接排空", () => {
@@ -49,7 +66,13 @@ describe("withdrawStorageLink — 无守卫直接排空", () => {
 
   it("无 storage → undefined", () => {
     const snap = mockSnapshot({});
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 300, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 300,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
     const ac = { creep, snapshot: snap, assignment: undefined, budget: ctx.budget, ctx };
     expect(withdrawStorageLink().resolve!(ac)).toBeUndefined();
@@ -58,7 +81,13 @@ describe("withdrawStorageLink — 无守卫直接排空", () => {
   it("无 link → undefined", () => {
     const storage = mockStructure("storage", { id: "st", energy: 0, capacity: 1000000 });
     const snap = mockSnapshot({ storage, links: [] });
-    const creep = mockCreep({ name: "hauler_1", role: "hauler", used: 0, capacity: 300, mode: "acquire" });
+    const creep = mockCreep({
+      name: "hauler_1",
+      role: "hauler",
+      used: 0,
+      capacity: 300,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
     const ac = { creep, snapshot: snap, assignment: undefined, budget: ctx.budget, ctx };
     expect(withdrawStorageLink().resolve!(ac)).toBeUndefined();

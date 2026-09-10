@@ -2,10 +2,7 @@
  * 验证在 recovery tier 下 kernel 仍能直接采样关键指标，
  * 以及 P3 长期冻结告警的正确行为。 */
 import { describe, expect, it, beforeEach, vi } from "vitest";
-import {
-  sampleBaselineMetrics,
-  trackP3Frozen,
-} from "../../../src/kernel/kernel";
+import { sampleBaselineMetrics, trackP3Frozen } from "../../../src/kernel/kernel";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { EventKind, drainEventBuffer } from "../../../src/kernel/event-log";
 
@@ -35,8 +32,8 @@ describe("sampleBaselineMetrics — 保底可观测性采样", () => {
   it("10 倍数 tick 写入关键指标", () => {
     Game.time = 100;
     Game.cpu.bucket = 2500;
-    (Game as any).creeps = { "c1": {}, "c2": {}, "c3": {} };
-    (Game as any).rooms = { "W1N1": {}, "W2N1": {} };
+    (Game as any).creeps = { c1: {}, c2: {}, c3: {} };
+    (Game as any).rooms = { W1N1: {}, W2N1: {} };
 
     sampleBaselineMetrics(100, { tier: "recovery" } as any);
 
@@ -75,13 +72,13 @@ describe("sampleBaselineMetrics — 保底可观测性采样", () => {
   it("连续多次采样：值覆盖为最新", () => {
     Game.time = 10;
     Game.cpu.bucket = 1000;
-    (Game as any).creeps = { "c1": {} };
-    (Game as any).rooms = { "W1N1": {} };
+    (Game as any).creeps = { c1: {} };
+    (Game as any).rooms = { W1N1: {} };
     sampleBaselineMetrics(10, { tier: "recovery" } as any);
 
     Game.time = 20;
     Game.cpu.bucket = 2000;
-    (Game as any).creeps = { "c1": {}, "c2": {} };
+    (Game as any).creeps = { c1: {}, c2: {} };
     sampleBaselineMetrics(20, { tier: "conserve" } as any);
 
     const stats = (globalThis as any).Memory.kernel.stats;

@@ -145,10 +145,7 @@ export function createOperation(
  */
 export function isTerminalStatus(status: OperationStatus): boolean {
   return (
-    status === "completed" ||
-    status === "failed" ||
-    status === "cancelled" ||
-    status === "expired"
+    status === "completed" || status === "failed" || status === "cancelled" || status === "expired"
   );
 }
 
@@ -257,10 +254,7 @@ export function createColonizeOperation(
  * 格式："remote_mining:${homeRoom}:${targetRoom}"
  * 同一对 (homeRoom, targetRoom) 只允许一个活跃远矿 Operation。
  */
-export function makeRemoteMiningOperationId(
-  homeRoom: string,
-  targetRoom: string,
-): string {
+export function makeRemoteMiningOperationId(homeRoom: string, targetRoom: string): string {
   return `remote_mining:${homeRoom}:${targetRoom}`;
 }
 

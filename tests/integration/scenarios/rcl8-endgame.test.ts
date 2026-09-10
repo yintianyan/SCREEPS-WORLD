@@ -12,10 +12,7 @@ beforeAll(async () => {
 
 // ─── 辅助：构建 RCL8 世界 ───────────────────────────────────
 
-function rcl8World(opts?: {
-  cpuBucket?: number;
-  creepCount?: number;
-}): TestWorld {
+function rcl8World(opts?: { cpuBucket?: number; creepCount?: number }): TestWorld {
   const builder = new ScenarioBuilder("W1N1")
     .rcl(8, 10935000)
     .flat()
@@ -52,9 +49,14 @@ function rcl8World(opts?: {
     const role = roles[i % roles.length]!;
     const x = 15 + (i % 10) * 2;
     const y = 30 + Math.floor(i / 10) * 2;
-    world.addCreep(`creep_${i}`, role, x, y, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { mode: "acquire", sourceId: i % 2 === 0 ? "s1" : "s2" });
+    world.addCreep(
+      `creep_${i}`,
+      role,
+      x,
+      y,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }],
+      { mode: "acquire", sourceId: i % 2 === 0 ? "s1" : "s2" },
+    );
   }
 
   world.spawns[0]!.store.energy = 300;
@@ -170,24 +172,95 @@ describe("RCL8 End Game — 终局", () => {
     const world = rcl8World({ creepCount: 0 });
 
     // 精确配置各角色
-    world.addCreep("h1", "harvester", 9, 9, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 41, 9, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("haul2", "hauler", 22, 22, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("u1", "upgrader", 29, 42, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("b1", "builder", 24, 24, [
-      { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      9,
+      9,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      41,
+      9,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "haul2",
+      "hauler",
+      22,
+      22,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "u1",
+      "upgrader",
+      29,
+      42,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "b1",
+      "builder",
+      24,
+      24,
+      [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -211,8 +284,9 @@ describe("RCL8 End Game — 终局", () => {
     const spawnExtCapacity =
       world.spawns.reduce((s, sp) => s + sp.store.getCapacity(RESOURCE_ENERGY), 0) +
       world.extensions.reduce((s, e) => s + e.store.getCapacity(RESOURCE_ENERGY), 0);
-    expect(spawnExtEnergy, "spawn/extension 应有能量（水位分级 Tier 0 服务正常）")
-      .toBeGreaterThan(spawnExtCapacity * 0.5);
+    expect(spawnExtEnergy, "spawn/extension 应有能量（水位分级 Tier 0 服务正常）").toBeGreaterThan(
+      spawnExtCapacity * 0.5,
+    );
 
     // 各角色都在工作
     expect(result.finalSnapshot.stats.totalHarvested).toBeGreaterThan(3000);

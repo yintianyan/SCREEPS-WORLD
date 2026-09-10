@@ -68,11 +68,14 @@ export const warPlanningSystem: System = {
         PLAN_EVENT_CODES[plan.operation.status] ?? 0,
         plan.operation.priority.score,
       ]);
-      log.error("war-planning-system", `war-planning: plan=${plan.operation.operationId}` +
-        ` type=${plan.operation.type} target=${plan.operation.target.roomName}` +
-        ` posture=${plan.posture.posture} risk=${plan.risk.level}` +
-        ` econGuard=${plan.economicGuard.passed ? "PASS" : "FAIL"}` +
-        ` netValue=${plan.expectedValue.netValue}`,);
+      log.error(
+        "war-planning-system",
+        `war-planning: plan=${plan.operation.operationId}` +
+          ` type=${plan.operation.type} target=${plan.operation.target.roomName}` +
+          ` posture=${plan.posture.posture} risk=${plan.risk.level}` +
+          ` econGuard=${plan.economicGuard.passed ? "PASS" : "FAIL"}` +
+          ` netValue=${plan.expectedValue.netValue}`,
+      );
     } else {
       // 无计划（无威胁/未授权/经济护栏失败）— 清除旧兼容 Memory
       // 但不调 demobilize（那是 war-planner 的职责）
@@ -115,7 +118,11 @@ function buildWarPlanningInput(ctx: TickContext, tick: number): WarPlanningInput
 
   // 威胁评估
   const threatMap = g.threatAssessments;
-  const threatAssessments: { roomName: string; assessment: ThreatAssessment; terrain?: TerrainContext }[] = [];
+  const threatAssessments: {
+    roomName: string;
+    assessment: ThreatAssessment;
+    terrain?: TerrainContext;
+  }[] = [];
   if (threatMap) {
     for (const [roomName, assessment] of threatMap) {
       threatAssessments.push({ roomName, assessment });
@@ -149,12 +156,18 @@ function buildWarPlanningInput(ctx: TickContext, tick: number): WarPlanningInput
 
   // 物流可靠性（从 logisticsHealth 近似）
   const logisticsHealth = g.logisticsHealth;
-  const logisticsReliability = logisticsHealth ? Math.max(0, 1 - logisticsHealth.backlogCount / 20) : 0.5;
+  const logisticsReliability = logisticsHealth
+    ? Math.max(0, 1 - logisticsHealth.backlogCount / 20)
+    : 0.5;
 
   // 恢复能力
   const recoveryStats = g.recoveryStats;
   const recoveryCapability = recoveryStats
-    ? Math.min(1, recoveryStats.succeededCount / Math.max(1, recoveryStats.succeededCount + recoveryStats.failedCount))
+    ? Math.min(
+        1,
+        recoveryStats.succeededCount /
+          Math.max(1, recoveryStats.succeededCount + recoveryStats.failedCount),
+      )
     : 0.5;
 
   // 替换能力（spawn 空闲率近似）
@@ -167,14 +180,15 @@ function buildWarPlanningInput(ctx: TickContext, tick: number): WarPlanningInput
   const targetCandidates = buildTargetCandidates(tick);
 
   // 玩家情报（从 threatAssessments 中最高威胁房的 intelEvidence 推导）
-  const maxThreat = threatAssessments.length > 0
-    ? threatAssessments.reduce((max, t) => {
-      const rank: Record<string, number> = { NONE: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
-      const r = rank[t.assessment.level] ?? 0;
-      const mr = rank[max.assessment.level] ?? 0;
-      return r > mr ? t : max;
-    }, threatAssessments[0]!)
-    : undefined;
+  const maxThreat =
+    threatAssessments.length > 0
+      ? threatAssessments.reduce((max, t) => {
+          const rank: Record<string, number> = { NONE: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
+          const r = rank[t.assessment.level] ?? 0;
+          const mr = rank[max.assessment.level] ?? 0;
+          return r > mr ? t : max;
+        }, threatAssessments[0]!)
+      : undefined;
 
   const playerIntel: PlayerIntelRecord | undefined = undefined; // PlayerIntel 系统由 A5.2 管理
   const confidence: MultiDimensionalConfidence | undefined = maxThreat?.assessment.multiConfidence;
@@ -287,9 +301,9 @@ function buildTargetCandidates(tick: number): TargetCandidate[] {
 // ─── Screeps body part 常量 ────────────────────────────────
 // ATTACK=ATTACK, RANGED_ATTACK=RANGED_ATTACK, HEAL=HEAL, WORK=WORK, TOUGH=TOUGH, MOVE=MOVE
 // 均为 Screeps 全局常量。伤害值用硬编码（跨引擎一致）。
-const PART_ATTACK_POWER = 30;   // ATTACK part damage/tick
-const PART_RANGED_POWER = 10;  // RANGED_ATTACK part damage/tick
-const PART_HEAL_POWER = 12;    // HEAL part heal/tick (ranged: 4, melee: 12)
+const PART_ATTACK_POWER = 30; // ATTACK part damage/tick
+const PART_RANGED_POWER = 10; // RANGED_ATTACK part damage/tick
+const PART_HEAL_POWER = 12; // HEAL part heal/tick (ranged: 4, melee: 12)
 const PART_DISMANTLE_POWER = 50; // WORK part dismantle/tick
 
 function computeOurPower(g: ReturnType<typeof globalCache>): CombatPower {
@@ -308,8 +322,8 @@ function computeOurPower(g: ReturnType<typeof globalCache>): CombatPower {
   }
 
   // 只统计军事角色
-  const militaryCreeps = squadIndex.filter(e =>
-    e.role === "attacker" || e.role === "healer" || e.role === "defender",
+  const militaryCreeps = squadIndex.filter(
+    e => e.role === "attacker" || e.role === "healer" || e.role === "defender",
   );
 
   if (militaryCreeps.length === 0) {
@@ -338,12 +352,24 @@ function computeOurPower(g: ReturnType<typeof globalCache>): CombatPower {
     if (!creep || creep.spawning) continue;
     for (const part of creep.body) {
       switch (part.type) {
-        case ATTACK: totalAttack += PART_ATTACK_POWER; break;
-        case RANGED_ATTACK: totalRanged += PART_RANGED_POWER; break;
-        case HEAL: totalHeal += PART_HEAL_POWER; break;
-        case TOUGH: totalTough += 100; break;
-        case WORK: totalDismantle += PART_DISMANTLE_POWER; break;
-        case MOVE: totalMove++; break;
+        case ATTACK:
+          totalAttack += PART_ATTACK_POWER;
+          break;
+        case RANGED_ATTACK:
+          totalRanged += PART_RANGED_POWER;
+          break;
+        case HEAL:
+          totalHeal += PART_HEAL_POWER;
+          break;
+        case TOUGH:
+          totalTough += 100;
+          break;
+        case WORK:
+          totalDismantle += PART_DISMANTLE_POWER;
+          break;
+        case MOVE:
+          totalMove++;
+          break;
       }
       if (part.boost) boosted = true;
     }

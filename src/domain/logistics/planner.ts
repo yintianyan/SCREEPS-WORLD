@@ -139,9 +139,7 @@ export function planLogistics(input: PlannerInput): TransportPlan {
   }
 
   // 步骤 3: 估算总时间
-  const estimatedTime = routes.length > 0
-    ? Math.max(...routes.map(r => r.travelTime))
-    : 0;
+  const estimatedTime = routes.length > 0 ? Math.max(...routes.map(r => r.travelTime)) : 0;
 
   return {
     requests,

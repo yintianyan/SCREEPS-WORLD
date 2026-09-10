@@ -1,6 +1,12 @@
 /** 远矿目标选择测试。 */
 import { describe, expect, it } from "vitest";
-import { selectRemoteTargets, shouldPauseOperation, scoreRemoteCandidate, effectiveMaxOperations, roomLinearDistance } from "../../../src/domain/remote/targeting";
+import {
+  selectRemoteTargets,
+  shouldPauseOperation,
+  scoreRemoteCandidate,
+  effectiveMaxOperations,
+  roomLinearDistance,
+} from "../../../src/domain/remote/targeting";
 import type { RoomIntel } from "../../../src/domain/intel";
 
 const tick = 100000;
@@ -73,7 +79,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       staleThreshold,
       haulerCapacity: 800,
     });
-    const names = result.map((c) => c.roomName);
+    const names = result.map(c => c.roomName);
     expect(names).toContain("W2N1");
     expect(names).toContain("W1N2");
     expect(names).not.toContain("W0N1");
@@ -93,7 +99,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       staleThreshold,
       haulerCapacity: 800,
     });
-    expect(result.map((c) => c.roomName)).toEqual(["W1N2"]);
+    expect(result.map(c => c.roomName)).toEqual(["W1N2"]);
   });
 
   it("排除我方殖民地（权威 controller.my）— intel.owner 滞后为空也硬排除，防己方邻居房被误选 churn", () => {
@@ -111,7 +117,7 @@ describe("remote targeting — selectRemoteTargets", () => {
     });
     // W2N1 被 ownedRooms 硬排除（不依赖 intel.owner），只剩 W1N2 —
     // 否则己方房被当远矿目标反复开→self-claim 废弃→重选，形成 churn。
-    expect(result.map((c) => c.roomName)).toEqual(["W1N2"]);
+    expect(result.map(c => c.roomName)).toEqual(["W1N2"]);
   });
 
   it("排除被他人预定的房，己方续期中的房仍可选", () => {
@@ -119,7 +125,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       homeRoom: "W1N1",
       intel: {
         W2N1: makeIntel({ reservedBy: "enemy" }), // 敌方预定 → 排除。
-        W1N2: makeIntel({ reservedBy: "me" }),    // 己方续期 → 保留。
+        W1N2: makeIntel({ reservedBy: "me" }), // 己方续期 → 保留。
         W2N2: makeIntel({ reservedBy: undefined }), // 无预定 → 保留。
       },
       existingOps: undefined,
@@ -128,7 +134,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       haulerCapacity: 800,
       myUsername: "me",
     });
-    expect(result.map((c) => c.roomName).sort()).toEqual(["W1N2", "W2N2"]);
+    expect(result.map(c => c.roomName).sort()).toEqual(["W1N2", "W2N2"]);
   });
 
   it("Invader 预定不是玩家争矿 — 仍可选（Core 占坑由 coreClearer 拆，不能永久锁死远矿）", () => {
@@ -144,7 +150,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       haulerCapacity: 800,
       myUsername: "me",
     });
-    expect(result.map((c) => c.roomName)).toEqual(["W2N1"]);
+    expect(result.map(c => c.roomName)).toEqual(["W2N1"]);
   });
 
   it("无 myUsername 时 Invader 预定仍可选（NPC 与未知玩家预定必须分流）", () => {
@@ -159,7 +165,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       staleThreshold,
       haulerCapacity: 800,
     });
-    expect(result.map((c) => c.roomName)).toEqual(["W2N1"]);
+    expect(result.map(c => c.roomName)).toEqual(["W2N1"]);
   });
 
   it("无 myUsername 时任何 reservedBy 都视为他人预定（保守排除）", () => {
@@ -174,7 +180,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       staleThreshold,
       haulerCapacity: 800,
     });
-    expect(result.map((c) => c.roomName)).toEqual(["W1N2"]);
+    expect(result.map(c => c.roomName)).toEqual(["W1N2"]);
   });
 
   it("排除非正常状态房间（novice/respawn/closed）", () => {
@@ -190,7 +196,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       staleThreshold,
       haulerCapacity: 800,
     });
-    expect(result.map((c) => c.roomName)).toEqual(["W2N2"]);
+    expect(result.map(c => c.roomName)).toEqual(["W2N2"]);
   });
 
   it("排除自身房间", () => {
@@ -205,7 +211,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       staleThreshold,
       haulerCapacity: 800,
     });
-    expect(result.map((c) => c.roomName)).toEqual(["W2N1"]);
+    expect(result.map(c => c.roomName)).toEqual(["W2N1"]);
   });
 
   it("排除已有运营的房间（非 abandoned）", () => {
@@ -223,7 +229,7 @@ describe("remote targeting — selectRemoteTargets", () => {
       haulerCapacity: 800,
     });
     // W2N1 已有 active 运营，不应被再次选中
-    expect(result.map((c) => c.roomName)).toEqual(["W1N2"]);
+    expect(result.map(c => c.roomName)).toEqual(["W1N2"]);
   });
 
   it("近期视野排名靠前", () => {
@@ -273,18 +279,24 @@ describe("remote targeting — selectRemoteTargets", () => {
       staleThreshold,
       haulerCapacity: 800,
     });
-    expect(result.map((c) => c.roomName)).toEqual(["W2N1"]);
+    expect(result.map(c => c.roomName)).toEqual(["W2N1"]);
   });
 });
 
 describe("remote targeting — shouldPauseOperation", () => {
   it("abandoned 状态永远暂停", () => {
-    expect(shouldPauseOperation({ state: "abandoned", lastSeen: tick }, tick, staleThreshold)).toBe(true);
+    expect(shouldPauseOperation({ state: "abandoned", lastSeen: tick }, tick, staleThreshold)).toBe(
+      true,
+    );
   });
 
   it("lastSeen 超过阈值时暂停", () => {
     expect(
-      shouldPauseOperation({ state: "active", lastSeen: tick - staleThreshold - 1 }, tick, staleThreshold),
+      shouldPauseOperation(
+        { state: "active", lastSeen: tick - staleThreshold - 1 },
+        tick,
+        staleThreshold,
+      ),
     ).toBe(true);
   });
 
@@ -328,7 +340,7 @@ describe("remote targeting — 净收益评分与剔除", () => {
       homeRoom: "W1N1",
       intel: {
         W2N1: makeIntel({ sources: 2, pathCost: 150 }), // 中距
-        W1N2: makeIntel({ sources: 2, pathCost: 50 }),  // 近房
+        W1N2: makeIntel({ sources: 2, pathCost: 50 }), // 近房
       },
       existingOps: undefined,
       tick,
@@ -354,40 +366,68 @@ describe("remote targeting — 净收益评分与剔除", () => {
 
   it("无视野候选按 sources=1 保守评分", () => {
     const { netScore } = scoreRemoteCandidate({
-      pathCost: 50, linearDistance: 1, sources: undefined, haulerCapacity: 800,
+      pathCost: 50,
+      linearDistance: 1,
+      sources: undefined,
+      haulerCapacity: 800,
     });
     const known = scoreRemoteCandidate({
-      pathCost: 50, linearDistance: 1, sources: 1, haulerCapacity: 800,
+      pathCost: 50,
+      linearDistance: 1,
+      sources: 1,
+      haulerCapacity: 800,
     });
     expect(netScore).toBe(known.netScore); // undefined 等价于 1。
   });
 
   it("A-2 账本：计入 defender 后 netScore 下降", () => {
     const withDefender = scoreRemoteCandidate({
-      pathCost: 50, linearDistance: 1, sources: 2, haulerCapacity: 800, withDefender: true,
+      pathCost: 50,
+      linearDistance: 1,
+      sources: 2,
+      haulerCapacity: 800,
+      withDefender: true,
     });
     const noDefender = scoreRemoteCandidate({
-      pathCost: 50, linearDistance: 1, sources: 2, haulerCapacity: 800, withDefender: false,
+      pathCost: 50,
+      linearDistance: 1,
+      sources: 2,
+      haulerCapacity: 800,
+      withDefender: false,
     });
     expect(withDefender.netScore).toBeLessThan(noDefender.netScore);
   });
 
   it("A-2 账本：道路维护随 pathCost 增长（远房 netScore 更低）", () => {
     const near = scoreRemoteCandidate({
-      pathCost: 50, linearDistance: 1, sources: 2, haulerCapacity: 800,
+      pathCost: 50,
+      linearDistance: 1,
+      sources: 2,
+      haulerCapacity: 800,
     });
     const far = scoreRemoteCandidate({
-      pathCost: 300, linearDistance: 5, sources: 2, haulerCapacity: 800,
+      pathCost: 300,
+      linearDistance: 5,
+      sources: 2,
+      haulerCapacity: 800,
     });
     expect(far.netScore).toBeLessThan(near.netScore);
   });
 
   it("B-3 未预定：收益减半且不计 reserver 摊销", () => {
     const reserved = scoreRemoteCandidate({
-      pathCost: 50, linearDistance: 1, sources: 2, haulerCapacity: 800, reserved: true,
+      pathCost: 50,
+      linearDistance: 1,
+      sources: 2,
+      haulerCapacity: 800,
+      reserved: true,
     });
     const unreserved = scoreRemoteCandidate({
-      pathCost: 50, linearDistance: 1, sources: 2, haulerCapacity: 800, reserved: false,
+      pathCost: 50,
+      linearDistance: 1,
+      sources: 2,
+      haulerCapacity: 800,
+      reserved: false,
     });
     // 未预定单源收益 5 vs 10 → 吞吐减半，即便省了 reserver 摊销，净分仍更低。
     expect(unreserved.netScore).toBeLessThan(reserved.netScore);

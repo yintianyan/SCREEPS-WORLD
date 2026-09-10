@@ -70,9 +70,6 @@ export function batchCreateRemaining(
  * 判断是否需要生成剩余需求。
  * 纯函数。
  */
-export function needsRemainingRequest(
-  originalAmount: number,
-  deliveredAmount: number,
-): boolean {
+export function needsRemainingRequest(originalAmount: number, deliveredAmount: number): boolean {
   return deliveredAmount < originalAmount;
 }

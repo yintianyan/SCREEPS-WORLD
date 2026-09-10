@@ -70,7 +70,11 @@ function makeSupplyNode(room: string, transferable: number, capacity: number = 1
   };
 }
 
-function makeDemandNode(room: string, remaining: number, criticality: "normal" | "critical" = "normal"): DemandNode {
+function makeDemandNode(
+  room: string,
+  remaining: number,
+  criticality: "normal" | "critical" = "normal",
+): DemandNode {
   return {
     room,
     resource: "energy",
@@ -93,7 +97,9 @@ function makeRouteCacheWithRoutes(): RouteCache {
   const cache = new RouteCache();
   // 预填充一些常用路由
   const pairs: [string, string][] = [
-    ["W1N1", "W2N1"], ["W1N1", "W3N1"], ["W1N1", "W4N1"],
+    ["W1N1", "W2N1"],
+    ["W1N1", "W3N1"],
+    ["W1N1", "W4N1"],
   ];
   for (const [from, to] of pairs) {
     const route = createRoute(from, to, 2, 100, 200, TICK, []);
@@ -162,15 +168,18 @@ describe("A4.4-E2E-001: Double Transport 防护", () => {
 describe("A4.4-E2E-002: Duplicate Assignment 约束", () => {
   it("同一 request 最多一个 Assignment（单源满足）", () => {
     const req = createRequest(
-      "energy", 1000,
+      "energy",
+      1000,
       { room: "W1N1", type: "storage" },
       { room: "W2N1", type: "storage" },
-      2, "empire", TICK + 2000, TICK, "test",
+      2,
+      "empire",
+      TICK + 2000,
+      TICK,
+      "test",
     );
 
-    const assignment = createAssignment(
-      req.requestId, "hauler1", "hauler", "energy", 1000, TICK,
-    );
+    const assignment = createAssignment(req.requestId, "hauler1", "hauler", "energy", 1000, TICK);
 
     expect(assignment.requestId).toBe(req.requestId);
     expect(assignment.assignedAmount).toBe(1000);
@@ -178,10 +187,15 @@ describe("A4.4-E2E-002: Duplicate Assignment 约束", () => {
 
   it("Multi-Assignment 总量受 Remaining Demand 约束", () => {
     const req = createRequest(
-      "energy", 1000,
+      "energy",
+      1000,
       { room: "W1N1", type: "storage" },
       { room: "W2N1", type: "storage" },
-      2, "empire", TICK + 2000, TICK, "test",
+      2,
+      "empire",
+      TICK + 2000,
+      TICK,
+      "test",
     );
 
     // Source A: 400, Source B: 600 → 总量 = 1000 = requested
@@ -380,7 +394,9 @@ describe("A4.4-E2E-009: Route Cache 失效与重建", () => {
 describe("A4.4-E2E-010: Supply Contract → TransportRequestV2 闭环", () => {
   it("从 Supply Contract 派生 TransportRequestV2", () => {
     const contract = createActiveSupplyContract(
-      "W1N1", "W2N1", "energy",
+      "W1N1",
+      "W2N1",
+      "energy",
       10, // targetRate: 10 energy/tick
       5000, // minimumReserve
       2, // priority
@@ -436,10 +452,15 @@ describe("A4.4-E2E-010: Supply Contract → TransportRequestV2 闭环", () => {
 describe("A4.4-E2E-012: V1/V2 兼容性", () => {
   it("V2 Request 通过 adapter 可映射为 V1 TaskEntry", () => {
     const v2Req = createRequest(
-      "energy", 1000,
+      "energy",
+      1000,
       { room: "W1N1", type: "storage", structureId: "c123" },
       { room: "W1N1", type: "storage" },
-      2, "room", TICK + 2000, TICK, "test",
+      2,
+      "room",
+      TICK + 2000,
+      TICK,
+      "test",
     );
 
     // V2 Request 的关键字段
@@ -487,8 +508,13 @@ describe("A4.4-E2E-013: Multi-Resource 支持", () => {
 
     // 矿物请求通过 Contract 驱动
     const mineralContract = createActiveSupplyContract(
-      "W1N1", "W2N1", "U" as any,
-      1, 1000, 2, TICK,
+      "W1N1",
+      "W2N1",
+      "U" as any,
+      1,
+      1000,
+      2,
+      TICK,
     );
 
     const input: PlannerInput = {
@@ -507,7 +533,7 @@ describe("A4.4-E2E-013: Multi-Resource 支持", () => {
     expect(plan.requests.length).toBeGreaterThanOrEqual(1);
 
     // 矿物请求的 resource 应为 "U"
-    const mineralReq = plan.requests.find(r => r.resource === "U" as any);
+    const mineralReq = plan.requests.find(r => r.resource === ("U" as any));
     expect(mineralReq).toBeDefined();
   });
 });
@@ -520,7 +546,7 @@ describe("A4.4-E2E-014: Priority Conflict", () => {
       makeSupplyNode("W1N1", 3000), // 只有 3000 可调拨
     ];
     const demandNodes = [
-      makeDemandNode("W2N1", 2000, "normal"),   // normal
+      makeDemandNode("W2N1", 2000, "normal"), // normal
       makeDemandNode("W3N1", 2000, "critical"), // critical
     ];
 
@@ -556,8 +582,8 @@ describe("A4.4-E2E-015: Logistics Bottleneck 识别", () => {
     expect(capacity.totalCarrierGap).toBeGreaterThan(0);
 
     // 即使 supply > demand，运力不足意味着无法运输
-    const isLogisticsBottleneck = supply.transferable > deficit.remaining
-      && capacity.totalHaulerGap > 0;
+    const isLogisticsBottleneck =
+      supply.transferable > deficit.remaining && capacity.totalHaulerGap > 0;
     expect(isLogisticsBottleneck).toBe(true);
   });
 });
@@ -617,10 +643,10 @@ describe("A4.4 Convergence Score 验证", () => {
     let acc = createAccounting("r1", 1000);
 
     // 模拟跨 tick 的运输生命周期
-    acc = recordAssigned(acc, 1000);   // tick 100: 分配
-    acc = recordDelivered(acc, 600);   // tick 200: 部分交付
-    acc = recordDelivered(acc, 350);   // tick 300: 再次交付
-    acc = recordLost(acc, 50);         // tick 350: 损失
+    acc = recordAssigned(acc, 1000); // tick 100: 分配
+    acc = recordDelivered(acc, 600); // tick 200: 部分交付
+    acc = recordDelivered(acc, 350); // tick 300: 再次交付
+    acc = recordLost(acc, 50); // tick 350: 损失
 
     // 验证最终状态
     expect(acc.requested).toBe(1000);

@@ -17,16 +17,8 @@ import {
   isOffensive,
   canTransition,
 } from "./operation";
-import {
-  type WarPostureResult,
-  evaluateWarPosture,
-  isOperationAuthorized,
-} from "./war-posture";
-import {
-  type TargetCandidate,
-  type TargetSelectionResult,
-  selectTarget,
-} from "./target-selection";
+import { type WarPostureResult, evaluateWarPosture, isOperationAuthorized } from "./war-posture";
+import { type TargetCandidate, type TargetSelectionResult, selectTarget } from "./target-selection";
 import {
   type RequiredCapability,
   type CapabilityGap,
@@ -35,20 +27,9 @@ import {
   computeCapabilityGap,
   deriveForceComposition,
 } from "./force-requirement";
-import {
-  type WarCost,
-  estimateWarCost,
-  type WarCostInput,
-} from "./war-cost";
-import {
-  type RiskResult,
-  assessOperationRisk,
-  type RiskInput,
-} from "./risk-model";
-import {
-  type OperationValueResult,
-  evaluateOperationValue,
-} from "./operation-value";
+import { type WarCost, estimateWarCost, type WarCostInput } from "./war-cost";
+import { type RiskResult, assessOperationRisk, type RiskInput } from "./risk-model";
+import { type OperationValueResult, evaluateOperationValue } from "./operation-value";
 import {
   type EconomicGuardResult,
   checkEconomicGuard,
@@ -71,7 +52,11 @@ export interface WarPlanningInput {
   /** CPU tier。 */
   cpuTier: "healthy" | "guarded" | "conserve" | "recovery";
   /** 威胁评估列表。 */
-  threatAssessments: readonly { roomName: string; assessment: ThreatAssessment; terrain?: TerrainContext }[];
+  threatAssessments: readonly {
+    roomName: string;
+    assessment: ThreatAssessment;
+    terrain?: TerrainContext;
+  }[];
   /** 玩家情报。 */
   playerIntel?: PlayerIntelRecord;
   /** 置信度（最高威胁房的）。 */
@@ -251,7 +236,16 @@ function deriveTarget(
     };
     return {
       selected: target,
-      selectedScore: { valueScore: 80, threatScore: threat.assessment.score.total, distanceScore: 100, defenseScore: 50, intelScore: 50, logisticsScore: 100, strategicImpactScore: 80, total: 80 },
+      selectedScore: {
+        valueScore: 80,
+        threatScore: threat.assessment.score.total,
+        distanceScore: 100,
+        defenseScore: 50,
+        intelScore: 50,
+        logisticsScore: 100,
+        strategicImpactScore: 80,
+        total: 80,
+      },
       rejectedAlternatives: [],
       allScores: [],
       evidence: [`defensive target=${threat.roomName}`],
@@ -283,7 +277,10 @@ export function planMilitaryOperation(input: WarPlanningInput): WarPlan | undefi
     tick: input.tick,
     empireHealth: input.empireHealth.level,
     empireEnergyReserve: input.empireEnergyReserve,
-    threatAssessments: input.threatAssessments.map(t => ({ roomName: t.roomName, assessment: t.assessment })),
+    threatAssessments: input.threatAssessments.map(t => ({
+      roomName: t.roomName,
+      assessment: t.assessment,
+    })),
     playerIntel: input.playerIntel,
     confidence: input.confidence,
     cpuTier: input.cpuTier,
@@ -306,8 +303,9 @@ export function planMilitaryOperation(input: WarPlanningInput): WarPlan | undefi
   }, input.threatAssessments[0]!);
 
   // 3. 推导 OperationType + Objective
-  const isRemote = maxThreatEntry.assessment.estimatedIntent.intent === "REMOTE_MINING_ATTACK"
-    || maxThreatEntry.assessment.estimatedIntent.intent === "SCOUTING";
+  const isRemote =
+    maxThreatEntry.assessment.estimatedIntent.intent === "REMOTE_MINING_ATTACK" ||
+    maxThreatEntry.assessment.estimatedIntent.intent === "SCOUTING";
   const { type: opType, objective } = deriveOperationType(maxThreatEntry.assessment, isRemote);
 
   // 4. 检查 WarPosture 是否授权此 OperationType
@@ -353,7 +351,8 @@ export function planMilitaryOperation(input: WarPlanningInput): WarPlan | undefi
   evidence.push(...forceReq.evidence);
 
   // 10. 战争成本
-  const expectedLossRate = 1 - Math.min(1, input.ourPower.powerScore / Math.max(1, enemyPower.powerScore));
+  const expectedLossRate =
+    1 - Math.min(1, input.ourPower.powerScore / Math.max(1, enemyPower.powerScore));
   const warCostInput: WarCostInput = {
     squadSize: forceReq.total,
     energyPerCreep: input.energyPerCreep,
@@ -412,9 +411,13 @@ export function planMilitaryOperation(input: WarPlanningInput): WarPlan | undefi
   evidence.push(`economicGuard=${econGuard.passed ? "PASS" : "FAIL"}:${econGuard.recommendation}`);
 
   // 13. 期望价值
-  const successRate = Math.min(0.95, Math.max(0.05,
-    input.ourPower.powerScore / Math.max(1, enemyPower.powerScore) * (1 - risk.score * 0.5),
-  ));
+  const successRate = Math.min(
+    0.95,
+    Math.max(
+      0.05,
+      (input.ourPower.powerScore / Math.max(1, enemyPower.powerScore)) * (1 - risk.score * 0.5),
+    ),
+  );
   const expectedValue = evaluateOperationValue({
     targetStrategicValue: targetSelection.selectedScore?.strategicImpactScore ?? 50,
     targetEconomicValue: 1000,
@@ -483,19 +486,44 @@ export function planMilitaryOperation(input: WarPlanningInput): WarPlan | undefi
   // 17. Spawn 需求（标准格式，供 spawn-manager 消费）
   const spawnRequirement: WarPlan["spawnRequirement"] = [];
   if (forceReq.attacker > 0) {
-    spawnRequirement.push({ role: "attacker", count: forceReq.attacker, priority: 2, home: targetSelection.selected.roomName });
+    spawnRequirement.push({
+      role: "attacker",
+      count: forceReq.attacker,
+      priority: 2,
+      home: targetSelection.selected.roomName,
+    });
   }
   if (forceReq.ranged > 0) {
-    spawnRequirement.push({ role: "rangedAttacker", count: forceReq.ranged, priority: 2, home: targetSelection.selected.roomName });
+    spawnRequirement.push({
+      role: "rangedAttacker",
+      count: forceReq.ranged,
+      priority: 2,
+      home: targetSelection.selected.roomName,
+    });
   }
   if (forceReq.healer > 0) {
-    spawnRequirement.push({ role: "healer", count: forceReq.healer, priority: 2, home: targetSelection.selected.roomName });
+    spawnRequirement.push({
+      role: "healer",
+      count: forceReq.healer,
+      priority: 2,
+      home: targetSelection.selected.roomName,
+    });
   }
   if (forceReq.tank > 0) {
-    spawnRequirement.push({ role: "attacker", count: forceReq.tank, priority: 2, home: targetSelection.selected.roomName });
+    spawnRequirement.push({
+      role: "attacker",
+      count: forceReq.tank,
+      priority: 2,
+      home: targetSelection.selected.roomName,
+    });
   }
   if (forceReq.dismantler > 0) {
-    spawnRequirement.push({ role: "dismantler", count: forceReq.dismantler, priority: 2, home: targetSelection.selected.roomName });
+    spawnRequirement.push({
+      role: "dismantler",
+      count: forceReq.dismantler,
+      priority: 2,
+      home: targetSelection.selected.roomName,
+    });
   }
 
   // 18. 构建 WarPlan

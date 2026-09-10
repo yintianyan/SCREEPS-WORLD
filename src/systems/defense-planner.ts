@@ -1,9 +1,6 @@
 import { CONFIG } from "../config";
 import type { Priority, System, TickContext, RoomSnapshot } from "../kernel/contracts";
-import {
-  createDefenseTasks,
-  candidateToBuildTask,
-} from "../domain/layout/task-factory";
+import { createDefenseTasks, candidateToBuildTask } from "../domain/layout/task-factory";
 import {
   buildOccupiedPositionSet,
   buildObstaclePositionSet,
@@ -243,7 +240,8 @@ function planDefense(
   const corePositions: { x: number; y: number }[] = [];
   for (const s of snapshot.spawns) corePositions.push({ x: s.pos.x, y: s.pos.y });
   for (const s of snapshot.extensions) corePositions.push({ x: s.pos.x, y: s.pos.y });
-  if (snapshot.storage) corePositions.push({ x: snapshot.storage.pos.x, y: snapshot.storage.pos.y });
+  if (snapshot.storage)
+    corePositions.push({ x: snapshot.storage.pos.x, y: snapshot.storage.pos.y });
   for (const s of snapshot.towers) corePositions.push({ x: s.pos.x, y: s.pos.y });
 
   // ── 策略 1：Min-Cut（最少 rampart 完全封锁）──
@@ -265,7 +263,13 @@ function planDefense(
       // 保证生成的割集全部可建造（与 P1-2 入队预校验双重保险）。
       const blockedPositions = buildBlockedPositions();
       for (const packed of protectedLayoutPositions) blockedPositions.add(packed);
-      const computed = computeMinCutDefense(getTerrain, corePositions, exitPositions, MAX_CUT_RAMPARTS, blockedPositions);
+      const computed = computeMinCutDefense(
+        getTerrain,
+        corePositions,
+        exitPositions,
+        MAX_CUT_RAMPARTS,
+        blockedPositions,
+      );
       cutResult = {
         rampartPositions: computed.rampartPositions,
         complete: computed.complete,
@@ -326,7 +330,9 @@ function planDefense(
         existingKeys.add(key);
         added = true;
       }
-      if (added) { roomMem.buildQueue = queue; }
+      if (added) {
+        roomMem.buildQueue = queue;
+      }
       return; // min-cut 成功，不需要 fallback
     }
   }
@@ -348,12 +354,7 @@ function planDefense(
     obstacleSet: buildObstaclePositionSet(snapshot),
   };
 
-  const defenseCandidates = createDefenseTasks(
-    snapshot,
-    exitPositions,
-    room,
-    validationOptions,
-  );
+  const defenseCandidates = createDefenseTasks(snapshot, exitPositions, room, validationOptions);
 
   for (const candidate of defenseCandidates) {
     if (existingKeys.has(candidate.key)) continue;
@@ -398,7 +399,8 @@ function addCoreRampartCoverage(
   const corePositions: { x: number; y: number }[] = [];
   for (const s of snapshot.spawns) corePositions.push({ x: s.pos.x, y: s.pos.y });
   for (const s of snapshot.extensions) corePositions.push({ x: s.pos.x, y: s.pos.y });
-  if (snapshot.storage) corePositions.push({ x: snapshot.storage.pos.x, y: snapshot.storage.pos.y });
+  if (snapshot.storage)
+    corePositions.push({ x: snapshot.storage.pos.x, y: snapshot.storage.pos.y });
   for (const s of snapshot.towers) corePositions.push({ x: s.pos.x, y: s.pos.y });
   for (const s of snapshot.links) corePositions.push({ x: s.pos.x, y: s.pos.y });
   for (const s of snapshot.containers) corePositions.push({ x: s.pos.x, y: s.pos.y });

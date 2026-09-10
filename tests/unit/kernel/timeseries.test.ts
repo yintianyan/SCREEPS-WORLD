@@ -54,13 +54,19 @@ describe("Timeseries — sampleCpu", () => {
 
   it("ranks tier correctly", () => {
     const guarded = { ...mockBudget, tier: "guarded" as const };
-    expect(sampleCpu(100, guarded, { systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 }).ti).toBe(1);
+    expect(sampleCpu(100, guarded, { systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 }).ti).toBe(
+      1,
+    );
 
     const conserve = { ...mockBudget, tier: "conserve" as const };
-    expect(sampleCpu(100, conserve, { systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 }).ti).toBe(2);
+    expect(sampleCpu(100, conserve, { systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 }).ti).toBe(
+      2,
+    );
 
     const recovery = { ...mockBudget, tier: "recovery" as const };
-    expect(sampleCpu(100, recovery, { systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 }).ti).toBe(3);
+    expect(sampleCpu(100, recovery, { systemCpu: {}, roleCpu: {}, skipped: 0, errors: 0 }).ti).toBe(
+      3,
+    );
   });
 
   it("captures top-3 systems by CPU cost", () => {
@@ -99,7 +105,7 @@ describe("Timeseries — sampleCpu", () => {
 
   it("rounds CPU values to 1 decimal", () => {
     const sample = sampleCpu(100, mockBudget, {
-      systemCpu: { "test": 2.123456 },
+      systemCpu: { test: 2.123456 },
       roleCpu: {},
       skipped: 0,
       errors: 0,
@@ -165,8 +171,17 @@ describe("Timeseries — sampleEconomy", () => {
 
   it("rounds economyPressure to integer percentage", () => {
     const sample = sampleEconomy(
-      1, "W1N1",
-      { phase: "growth", reserve: 1000, reserveDelta: 0, drainScore: 0, harvesterCount: 2, sourceCount: 2, rcl: 4 },
+      1,
+      "W1N1",
+      {
+        phase: "growth",
+        reserve: 1000,
+        reserveDelta: 0,
+        drainScore: 0,
+        harvesterCount: 2,
+        sourceCount: 2,
+        rcl: 4,
+      },
       0.333,
       { energyAvailable: 300, energyCapacityAvailable: 1300, storageEnergy: 0 },
     );

@@ -7,7 +7,10 @@ import {
   type ExecutionState,
   type StateTransitionInput,
 } from "../../../src/domain/expansion/execution-state";
-import { validateExecutionGate, type ExecutionGateInput } from "../../../src/domain/expansion/execution-gate";
+import {
+  validateExecutionGate,
+  type ExecutionGateInput,
+} from "../../../src/domain/expansion/execution-gate";
 import {
   evaluateCheckpoint,
   createAllCheckpointRecords,
@@ -39,9 +42,7 @@ import {
   failOperation,
   type ExpansionOperation,
 } from "../../../src/domain/expansion/execution-operation";
-import {
-  buildExecutionDashboard,
-} from "../../../src/domain/expansion/execution-dashboard";
+import { buildExecutionDashboard } from "../../../src/domain/expansion/execution-dashboard";
 import type { ExpansionPlan } from "../../../src/domain/expansion/plan";
 import type { TieredExpansionBudget } from "../../../src/domain/expansion/budget";
 
@@ -55,21 +56,55 @@ function makePlan(over: Partial<ExpansionPlan> = {}): ExpansionPlan {
     reason: "resource",
     priority: "P1",
     candidateScore: 0.75,
-    cost: { roomName: "W5N5", totalCost: 5000, claimerCost: 650, pioneerCost: 1000, spawnCost: 5000, travelCost: 200, infrastructureCost: 500, bootstrapEnergy: 3000, evidence: "" },
-    payback: { roomName: "W5N5", totalCost: 5000, expectedIncomePerTick: 10, paybackTicks: 500, roi: 2.0, worthwhile: true, evidence: "" },
-    risk: { roomName: "W5N5", score: 0.3, level: "LOW", dimensions: { economic: 0.2, operational: 0.1, distance: 0.3, recovery: 0.2, defense: 0.1 }, evidence: "" },
+    cost: {
+      roomName: "W5N5",
+      totalCost: 5000,
+      claimerCost: 650,
+      pioneerCost: 1000,
+      spawnCost: 5000,
+      travelCost: 200,
+      infrastructureCost: 500,
+      bootstrapEnergy: 3000,
+      evidence: "",
+    },
+    payback: {
+      roomName: "W5N5",
+      totalCost: 5000,
+      expectedIncomePerTick: 10,
+      paybackTicks: 500,
+      roi: 2.0,
+      worthwhile: true,
+      evidence: "",
+    },
+    risk: {
+      roomName: "W5N5",
+      score: 0.3,
+      level: "LOW",
+      dimensions: { economic: 0.2, operational: 0.1, distance: 0.3, recovery: 0.2, defense: 0.1 },
+      evidence: "",
+    },
     candidate: {
-      roomName: "W5N5", sponsorRoom: "W1N1", kind: "normal", roomStatus: "normal",
-      sourceCount: 2, mineral: "H",
+      roomName: "W5N5",
+      sponsorRoom: "W1N1",
+      kind: "normal",
+      roomStatus: "normal",
+      sourceCount: 2,
+      mineral: "H",
       terrain: { exitCount: 3, sealedExitCount: 1, wallCount: 0 },
       controller: { hasOwner: false, isMine: false, isHostileReserved: false },
-      pathCost: 100, lastSeen: 1000, distance: 1,
-      neighborRooms: ["W4N5", "W6N5"], score: 0.75,
-      status: "QUALIFIED", discoveredAt: 1000,
+      pathCost: 100,
+      lastSeen: 1000,
+      distance: 1,
+      neighborRooms: ["W4N5", "W6N5"],
+      score: 0.75,
+      status: "QUALIFIED",
+      discoveredAt: 1000,
     },
     status: "WAITING_EXECUTION",
-    createdAt: 1000, updatedAt: 1000,
-    cancelConditions: [], dependencies: [],
+    createdAt: 1000,
+    updatedAt: 1000,
+    cancelConditions: [],
+    dependencies: [],
     explanation: "test plan",
     ...over,
   };
@@ -77,19 +112,30 @@ function makePlan(over: Partial<ExpansionPlan> = {}): ExpansionPlan {
 
 function makeBudget(over: Partial<TieredExpansionBudget> = {}): TieredExpansionBudget {
   return {
-    totalEnergy: 50000, emergencyReserve: 10000, coreReserve: 5000,
-    operationalReserve: 12000, availableExpansion: 23000,
-    tick: 1000, coreInvaded: false, evidence: "", ...over,
+    totalEnergy: 50000,
+    emergencyReserve: 10000,
+    coreReserve: 5000,
+    operationalReserve: 12000,
+    availableExpansion: 23000,
+    tick: 1000,
+    coreInvaded: false,
+    evidence: "",
+    ...over,
   };
 }
 
 function makeGateInput(over: Partial<ExecutionGateInput> = {}): ExecutionGateInput {
   return {
-    plan: makePlan(), budget: makeBudget(),
-    isEmpireReady: true, alreadyOwned: false,
-    hasConcurrentOp: false, hasOtherExpansion: false,
-    intelStale: false, threatEscalated: false,
-    targetClaimable: true, candidateValid: true,
+    plan: makePlan(),
+    budget: makeBudget(),
+    isEmpireReady: true,
+    alreadyOwned: false,
+    hasConcurrentOp: false,
+    hasOtherExpansion: false,
+    intelStale: false,
+    threatEscalated: false,
+    targetClaimable: true,
+    candidateValid: true,
     ...over,
   };
 }
@@ -97,28 +143,47 @@ function makeGateInput(over: Partial<ExecutionGateInput> = {}): ExecutionGateInp
 function makeCheckpointInput(over: Partial<CheckpointInput> = {}): CheckpointInput {
   return {
     checkpointId: "CP1_CLAIMED",
-    controllerClaimed: true, spawnBuilt: true, spawnCanSpawn: true,
-    harvesterActive: true, transporterActive: true,
-    extensionsBuilt: true, containerBuilt: true, roadsBuilt: true,
-    netEnergyFlowPositive: true, empireIntegrated: true,
-    tick: 1000, retryCount: 0,
+    controllerClaimed: true,
+    spawnBuilt: true,
+    spawnCanSpawn: true,
+    harvesterActive: true,
+    transporterActive: true,
+    extensionsBuilt: true,
+    containerBuilt: true,
+    roadsBuilt: true,
+    netEnergyFlowPositive: true,
+    empireIntegrated: true,
+    tick: 1000,
+    retryCount: 0,
     ...over,
   };
 }
 
 function makeEconomicInput(over: Partial<EconomicActivationInput> = {}): EconomicActivationInput {
   return {
-    energyProduction: 20, energyConsumption: 10, externalEnergyInflow: 0,
-    consecutivePositiveTicks: 500, hasHarvester: true, hasTransporter: true,
-    hasUpgrader: false, spawnActive: true, tick: 1000, ...over,
+    energyProduction: 20,
+    energyConsumption: 10,
+    externalEnergyInflow: 0,
+    consecutivePositiveTicks: 500,
+    hasHarvester: true,
+    hasTransporter: true,
+    hasUpgrader: false,
+    spawnActive: true,
+    tick: 1000,
+    ...over,
   };
 }
 
 function makeIntegrationInput(over: Partial<EmpireIntegrationInput> = {}): EmpireIntegrationInput {
   return {
-    inOwnedRoomsList: true, hasSnapshot: true, inEconomyStats: true,
-    spawnManaged: true, defenseCovered: true, hasVersionedLayout: true,
-    tick: 1000, ...over,
+    inOwnedRoomsList: true,
+    hasSnapshot: true,
+    inEconomyStats: true,
+    spawnManaged: true,
+    defenseCovered: true,
+    hasVersionedLayout: true,
+    tick: 1000,
+    ...over,
   };
 }
 
@@ -159,10 +224,10 @@ function simulateExecutionPath(
 describe("A3.3 E2E — Success Path", () => {
   it("full chain: VALIDATING → PREPARING → CLAIMING → CLAIMED → BOOTSTRAPPING → ECONOMIC_STARTUP → INTEGRATING → COMPLETED", () => {
     const { finalState, path } = simulateExecutionPath("VALIDATING", 1000, [
-      { gatePassed: true },                                    // → PREPARING
-      { resourcesReserved: true, claimerCreated: true },       // → CLAIMING
-      { controllerClaimed: true },                             // → CLAIMED
-      { spawnBuilt: true, pioneerArrived: true },               // → BOOTSTRAPPING (wait, CLAIMED auto-transitions)
+      { gatePassed: true }, // → PREPARING
+      { resourcesReserved: true, claimerCreated: true }, // → CLAIMING
+      { controllerClaimed: true }, // → CLAIMED
+      { spawnBuilt: true, pioneerArrived: true }, // → BOOTSTRAPPING (wait, CLAIMED auto-transitions)
     ]);
 
     // 实际上 CLAIMED → BOOTSTRAPPING is automatic, then BOOTSTRAPPING → ECONOMIC_STARTUP
@@ -172,21 +237,37 @@ describe("A3.3 E2E — Success Path", () => {
     let tick = 1000;
 
     // VALIDATING → PREPARING
-    let r = transitionExecutionState({ currentState: state, plan: makePlan(), tick, gatePassed: true });
+    let r = transitionExecutionState({
+      currentState: state,
+      plan: makePlan(),
+      tick,
+      gatePassed: true,
+    });
     expect(r.transitioned).toBe(true);
     state = r.newState;
     fullPath.push(state);
     tick++;
 
     // PREPARING → CLAIMING
-    r = transitionExecutionState({ currentState: state, plan: makePlan(), tick, resourcesReserved: true, claimerCreated: true });
+    r = transitionExecutionState({
+      currentState: state,
+      plan: makePlan(),
+      tick,
+      resourcesReserved: true,
+      claimerCreated: true,
+    });
     expect(r.newState).toBe("CLAIMING");
     state = r.newState;
     fullPath.push(state);
     tick++;
 
     // CLAIMING → CLAIMED
-    r = transitionExecutionState({ currentState: state, plan: makePlan(), tick, controllerClaimed: true });
+    r = transitionExecutionState({
+      currentState: state,
+      plan: makePlan(),
+      tick,
+      controllerClaimed: true,
+    });
     expect(r.newState).toBe("CLAIMED");
     state = r.newState;
     fullPath.push(state);
@@ -201,41 +282,73 @@ describe("A3.3 E2E — Success Path", () => {
     tick++;
 
     // BOOTSTRAPPING → ECONOMIC_STARTUP
-    r = transitionExecutionState({ currentState: state, plan: makePlan(), tick, spawnBuilt: true, pioneerArrived: true });
+    r = transitionExecutionState({
+      currentState: state,
+      plan: makePlan(),
+      tick,
+      spawnBuilt: true,
+      pioneerArrived: true,
+    });
     expect(r.newState).toBe("ECONOMIC_STARTUP");
     state = r.newState;
     fullPath.push(state);
     tick++;
 
     // ECONOMIC_STARTUP → INTEGRATING
-    r = transitionExecutionState({ currentState: state, plan: makePlan(), tick, energyLoopActive: true, basicInfraComplete: true });
+    r = transitionExecutionState({
+      currentState: state,
+      plan: makePlan(),
+      tick,
+      energyLoopActive: true,
+      basicInfraComplete: true,
+    });
     expect(r.newState).toBe("INTEGRATING");
     state = r.newState;
     fullPath.push(state);
     tick++;
 
     // INTEGRATING → COMPLETED
-    r = transitionExecutionState({ currentState: state, plan: makePlan(), tick, economicallyActivated: true, empireIntegrated: true });
+    r = transitionExecutionState({
+      currentState: state,
+      plan: makePlan(),
+      tick,
+      economicallyActivated: true,
+      empireIntegrated: true,
+    });
     expect(r.newState).toBe("COMPLETED");
     state = r.newState;
     fullPath.push(state);
 
     expect(fullPath).toEqual([
-      "VALIDATING", "PREPARING", "CLAIMING", "CLAIMED",
-      "BOOTSTRAPPING", "ECONOMIC_STARTUP", "INTEGRATING", "COMPLETED",
+      "VALIDATING",
+      "PREPARING",
+      "CLAIMING",
+      "CLAIMED",
+      "BOOTSTRAPPING",
+      "ECONOMIC_STARTUP",
+      "INTEGRATING",
+      "COMPLETED",
     ]);
     expect(getExecutionProgress(state)).toBe(100);
   });
 
   it("all 5 checkpoints pass in order", () => {
     const records = createAllCheckpointRecords();
-    const ids: CheckpointId[] = ["CP1_CLAIMED", "CP2_SPAWN_ACTIVE", "CP3_ENERGY_LOOP", "CP4_BASIC_INFRA", "CP5_ECONOMIC_ACTIVATION"];
+    const ids: CheckpointId[] = [
+      "CP1_CLAIMED",
+      "CP2_SPAWN_ACTIVE",
+      "CP3_ENERGY_LOOP",
+      "CP4_BASIC_INFRA",
+      "CP5_ECONOMIC_ACTIVATION",
+    ];
 
     let allPassed = true;
     for (let i = 0; i < ids.length; i++) {
-      const cp = evaluateCheckpoint(makeCheckpointInput({
-        checkpointId: ids[i]!,
-      }));
+      const cp = evaluateCheckpoint(
+        makeCheckpointInput({
+          checkpointId: ids[i]!,
+        }),
+      );
       if (cp.passed) {
         records[i]!.status = "PASSED";
         records[i]!.passedAtTick = 1000 + i * 100;
@@ -267,10 +380,12 @@ describe("A3.3 E2E — Success Path", () => {
 
       // Check activation on the last tick
       if (tick === 499) {
-        const finalResult = evaluateEconomicActivation(makeEconomicInput({
-          consecutivePositiveTicks: consecutivePositive,
-          tick: 1000 + tick,
-        }));
+        const finalResult = evaluateEconomicActivation(
+          makeEconomicInput({
+            consecutivePositiveTicks: consecutivePositive,
+            tick: 1000 + tick,
+          }),
+        );
         activated = finalResult.activated;
       }
     }
@@ -288,7 +403,10 @@ describe("A3.3 E2E — Success Path", () => {
 
   it("operation completed with all steps", () => {
     const op = createExpansionOperation({
-      plan: makePlan(), type: "colonize", tick: 1000, reservedEnergy: 10000,
+      plan: makePlan(),
+      type: "colonize",
+      tick: 1000,
+      reservedEnergy: 10000,
     });
     let current = op;
     for (const step of op.completionCriteria) {
@@ -328,7 +446,11 @@ describe("A3.3 E2E — Success Path", () => {
     expect(reserveResult.reservation!.reservedEnergy).toBe(5000);
 
     // Consume (after claim success)
-    const consumed = { ...reserveResult.reservation!, status: "CONSUMED" as const, consumedAt: 1500 };
+    const consumed = {
+      ...reserveResult.reservation!,
+      status: "CONSUMED" as const,
+      consumedAt: 1500,
+    };
     expect(consumed.status).toBe("CONSUMED");
 
     // Release remaining (after completion)
@@ -370,25 +492,31 @@ describe("A3.3 E2E — Failure Paths", () => {
   });
 
   it("Gate rejection: budget insufficient blocks execution", () => {
-    const gateResult = validateExecutionGate(makeGateInput({
-      budget: makeBudget({ availableExpansion: 1000 }), // < 5000 cost
-    }));
+    const gateResult = validateExecutionGate(
+      makeGateInput({
+        budget: makeBudget({ availableExpansion: 1000 }), // < 5000 cost
+      }),
+    );
     expect(gateResult.allPassed).toBe(false);
     expect(gateResult.failedGates).toContain("GATE_BUDGET_SUFFICIENT");
   });
 
   it("Gate rejection: target already owned", () => {
-    const gateResult = validateExecutionGate(makeGateInput({
-      alreadyOwned: true,
-    }));
+    const gateResult = validateExecutionGate(
+      makeGateInput({
+        alreadyOwned: true,
+      }),
+    );
     expect(gateResult.allPassed).toBe(false);
     expect(gateResult.failedGates).toContain("GATE_NOT_OWNED");
   });
 
   it("Gate rejection: threat escalated", () => {
-    const gateResult = validateExecutionGate(makeGateInput({
-      threatEscalated: true,
-    }));
+    const gateResult = validateExecutionGate(
+      makeGateInput({
+        threatEscalated: true,
+      }),
+    );
     expect(gateResult.allPassed).toBe(false);
     expect(gateResult.failedGates).toContain("GATE_THREAT_UNCHANGED");
   });
@@ -467,30 +595,37 @@ describe("A3.3 E2E — Failure Paths", () => {
   });
 
   it("Checkpoint failure: CP2 fails and falls back to CP1", () => {
-    const cp2 = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP2_SPAWN_ACTIVE",
-      spawnBuilt: false,
-      retryCount: 3, // maxRetries for CP2
-    }));
+    const cp2 = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP2_SPAWN_ACTIVE",
+        spawnBuilt: false,
+        retryCount: 3, // maxRetries for CP2
+      }),
+    );
     expect(cp2.passed).toBe(false);
     expect(cp2.shouldRetry).toBe(false);
     expect(cp2.fallbackTo).toBe("CP1_CLAIMED");
   });
 
   it("Checkpoint failure: CP5 fails without economic activation", () => {
-    const cp5 = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP5_ECONOMIC_ACTIVATION",
-      netEnergyFlowPositive: false,
-      empireIntegrated: false,
-      retryCount: 3,
-    }));
+    const cp5 = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP5_ECONOMIC_ACTIVATION",
+        netEnergyFlowPositive: false,
+        empireIntegrated: false,
+        retryCount: 3,
+      }),
+    );
     expect(cp5.passed).toBe(false);
     expect(cp5.failReason).toContain("energy flow");
   });
 
   it("Operation failure: claim operation fails", () => {
     const op = createExpansionOperation({
-      plan: makePlan(), type: "claim", tick: 1000, reservedEnergy: 5000,
+      plan: makePlan(),
+      type: "claim",
+      tick: 1000,
+      reservedEnergy: 5000,
     });
     const failed = failOperation(op, "claimer killed en route", 1005);
     expect(failed.status).toBe("FAILED");
@@ -509,32 +644,38 @@ describe("A3.3 E2E — Failure Paths", () => {
   });
 
   it("Economic activation not achieved: external support still needed", () => {
-    const result = evaluateEconomicActivation(makeEconomicInput({
-      externalEnergyInflow: 100,
-      consecutivePositiveTicks: 500,
-    }));
+    const result = evaluateEconomicActivation(
+      makeEconomicInput({
+        externalEnergyInflow: 100,
+        consecutivePositiveTicks: 500,
+      }),
+    );
     expect(result.activated).toBe(false);
     expect(result.criteria.selfSustaining.passed).toBe(false);
   });
 
   it("Empire integration not achieved: missing systems", () => {
-    const result = evaluateEmpireIntegration(makeIntegrationInput({
-      hasSnapshot: false,
-      spawnManaged: false,
-      hasVersionedLayout: false,
-    }));
+    const result = evaluateEmpireIntegration(
+      makeIntegrationInput({
+        hasSnapshot: false,
+        spawnManaged: false,
+        hasVersionedLayout: false,
+      }),
+    );
     expect(result.integrated).toBe(false);
     expect(result.missingSystems).toHaveLength(3);
     expect(result.progress).toBe(40);
   });
 
   it("Multiple gate failures accumulate evidence", () => {
-    const result = validateExecutionGate(makeGateInput({
-      alreadyOwned: true,
-      hasConcurrentOp: true,
-      intelStale: true,
-      threatEscalated: true,
-    }));
+    const result = validateExecutionGate(
+      makeGateInput({
+        alreadyOwned: true,
+        hasConcurrentOp: true,
+        intelStale: true,
+        threatEscalated: true,
+      }),
+    );
     expect(result.failedGates).toHaveLength(4);
     expect(result.evidence).toContain("GATE_NOT_OWNED");
     expect(result.evidence).toContain("GATE_NO_CONCURRENT_OP");
@@ -550,8 +691,14 @@ describe("A3.3 E2E — Failure Paths", () => {
 describe("A3.3 E2E — Dashboard Integration", () => {
   it("dashboard tracks progress through execution states", () => {
     const states: ExecutionState[] = [
-      "VALIDATING", "PREPARING", "CLAIMING", "CLAIMED",
-      "BOOTSTRAPPING", "ECONOMIC_STARTUP", "INTEGRATING", "COMPLETED",
+      "VALIDATING",
+      "PREPARING",
+      "CLAIMING",
+      "CLAIMED",
+      "BOOTSTRAPPING",
+      "ECONOMIC_STARTUP",
+      "INTEGRATING",
+      "COMPLETED",
     ];
     const progresses = states.map(s => getExecutionProgress(s));
     // Verify monotonically non-decreasing
@@ -661,18 +808,26 @@ describe("A3.3 E2E — Multi-tick Simulation", () => {
 
     // Tick 0: GREEN - no threats
     const t0 = evaluateThreatEscalation({
-      hasHostileCreep: false, hasHostileReservation: false, hasPathThreat: false,
-      sponsorUnderAttack: false, hasHostileTower: false,
-      executionState: state, tick: 1000,
+      hasHostileCreep: false,
+      hasHostileReservation: false,
+      hasPathThreat: false,
+      sponsorUnderAttack: false,
+      hasHostileTower: false,
+      executionState: state,
+      tick: 1000,
     });
     expect(t0.level).toBe("GREEN");
     expect(t0.action).toBe("CONTINUE");
 
     // Tick 100: YELLOW - hostile reservation detected
     const t100 = evaluateThreatEscalation({
-      hasHostileCreep: false, hasHostileReservation: true, hasPathThreat: false,
-      sponsorUnderAttack: false, hasHostileTower: false,
-      executionState: state, tick: 1100,
+      hasHostileCreep: false,
+      hasHostileReservation: true,
+      hasPathThreat: false,
+      sponsorUnderAttack: false,
+      hasHostileTower: false,
+      executionState: state,
+      tick: 1100,
     });
     expect(t100.level).toBe("YELLOW");
     expect(t100.action).toBe("PAUSE");
@@ -682,18 +837,26 @@ describe("A3.3 E2E — Multi-tick Simulation", () => {
 
     // Tick 200: YELLOW + post-claim → CONTINUE
     const t200 = evaluateThreatEscalation({
-      hasHostileCreep: false, hasHostileReservation: true, hasPathThreat: false,
-      sponsorUnderAttack: false, hasHostileTower: false,
-      executionState: state, tick: 1200,
+      hasHostileCreep: false,
+      hasHostileReservation: true,
+      hasPathThreat: false,
+      sponsorUnderAttack: false,
+      hasHostileTower: false,
+      executionState: state,
+      tick: 1200,
     });
     expect(t200.level).toBe("YELLOW");
     expect(t200.action).toBe("CONTINUE");
 
     // Tick 300: RED - hostile creep appears, post-claim → EVACUATE
     const t300 = evaluateThreatEscalation({
-      hasHostileCreep: true, hasHostileReservation: false, hasPathThreat: false,
-      sponsorUnderAttack: false, hasHostileTower: false,
-      executionState: "BOOTSTRAPPING", tick: 1300,
+      hasHostileCreep: true,
+      hasHostileReservation: false,
+      hasPathThreat: false,
+      sponsorUnderAttack: false,
+      hasHostileTower: false,
+      executionState: "BOOTSTRAPPING",
+      tick: 1300,
     });
     expect(t300.level).toBe("RED");
     expect(t300.action).toBe("EVACUATE");
@@ -704,11 +867,13 @@ describe("A3.3 E2E — Multi-tick Simulation", () => {
     let tick = 1000;
 
     // CP1: passes immediately
-    const cp1 = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP1_CLAIMED",
-      controllerClaimed: true,
-      tick,
-    }));
+    const cp1 = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP1_CLAIMED",
+        controllerClaimed: true,
+        tick,
+      }),
+    );
     expect(cp1.passed).toBe(true);
     records[0]!.status = "PASSED";
     records[0]!.passedAtTick = tick;
@@ -716,36 +881,42 @@ describe("A3.3 E2E — Multi-tick Simulation", () => {
 
     // CP2: fails twice, then passes (spawn construction)
     for (let retry = 0; retry < 2; retry++) {
-      const cp2 = evaluateCheckpoint(makeCheckpointInput({
-        checkpointId: "CP2_SPAWN_ACTIVE",
-        spawnBuilt: false,
-        retryCount: retry,
-        tick: tick + retry,
-      }));
+      const cp2 = evaluateCheckpoint(
+        makeCheckpointInput({
+          checkpointId: "CP2_SPAWN_ACTIVE",
+          spawnBuilt: false,
+          retryCount: retry,
+          tick: tick + retry,
+        }),
+      );
       expect(cp2.passed).toBe(false);
       expect(cp2.shouldRetry).toBe(true);
     }
     // Third attempt: spawn built
-    const cp2Final = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP2_SPAWN_ACTIVE",
-      spawnBuilt: true,
-      spawnCanSpawn: true,
-      retryCount: 2,
-      tick: tick + 2,
-    }));
+    const cp2Final = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP2_SPAWN_ACTIVE",
+        spawnBuilt: true,
+        spawnCanSpawn: true,
+        retryCount: 2,
+        tick: tick + 2,
+      }),
+    );
     expect(cp2Final.passed).toBe(true);
     records[1]!.status = "PASSED";
     records[1]!.passedAtTick = tick + 2;
     tick += 3;
 
     // CP3: passes (energy loop active)
-    const cp3 = evaluateCheckpoint(makeCheckpointInput({
-      checkpointId: "CP3_ENERGY_LOOP",
-      harvesterActive: true,
-      transporterActive: true,
-      spawnCanSpawn: true,
-      tick,
-    }));
+    const cp3 = evaluateCheckpoint(
+      makeCheckpointInput({
+        checkpointId: "CP3_ENERGY_LOOP",
+        harvesterActive: true,
+        transporterActive: true,
+        spawnCanSpawn: true,
+        tick,
+      }),
+    );
     expect(cp3.passed).toBe(true);
     records[2]!.status = "PASSED";
     records[2]!.passedAtTick = tick;

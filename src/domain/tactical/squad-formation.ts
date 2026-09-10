@@ -1,11 +1,6 @@
 /** Squad Formation & Tactical Movement */
 
-import type {
-  FormationType,
-  TacticalState,
-  SquadPlan,
-  SquadMemberSnapshot,
-} from "./types";
+import type { FormationType, TacticalState, SquadPlan, SquadMemberSnapshot } from "./types";
 import type { TerrainContext } from "../defense/terrain-context";
 
 // ═══════════════════════════════════════════════════════════
@@ -419,7 +414,7 @@ function wedgeOffsets(count: number): (readonly [number, number])[] {
     const width = row === 0 ? 1 : 2;
     const canPlace = Math.min(width, count - placed);
     for (let c = 0; c < canPlace; c++) {
-      const dx = row === 0 ? 0 : (c === 0 ? -1 : 1);
+      const dx = row === 0 ? 0 : c === 0 ? -1 : 1;
       result.push([dx, dy] as const);
       placed++;
     }
@@ -445,14 +440,14 @@ function columnOffsets(count: number): (readonly [number, number])[] {
 function clusterOffsets(count: number): (readonly [number, number])[] {
   // 8 邻域偏移（顺时针从上方开始）
   const NEIGHBORS: readonly (readonly [number, number])[] = [
-    [0, 0],   // 中心（第一个人）
-    [0, -1],  // 上
-    [1, -1],  // 右上
-    [1, 0],   // 右
-    [1, 1],   // 右下
-    [0, 1],   // 下
-    [-1, 1],  // 左下
-    [-1, 0],  // 左
+    [0, 0], // 中心（第一个人）
+    [0, -1], // 上
+    [1, -1], // 右上
+    [1, 0], // 右
+    [1, 1], // 右下
+    [0, 1], // 下
+    [-1, 1], // 左下
+    [-1, 0], // 左
     [-1, -1], // 左上
   ];
   // 超过 9 人时向外扩展第二圈
@@ -478,11 +473,26 @@ function scatterOffsets(count: number): (readonly [number, number])[] {
   // 螺旋分散，间距 2 格
   const positions: [number, number][] = [
     [0, 0],
-    [2, 0], [-2, 0], [0, 2], [0, -2],
-    [2, 2], [-2, -2], [2, -2], [-2, 2],
-    [4, 0], [-4, 0], [0, 4], [0, -4],
-    [4, 2], [-4, -2], [4, -2], [-4, 2],
-    [2, 4], [-2, -4], [2, -4], [-2, 4],
+    [2, 0],
+    [-2, 0],
+    [0, 2],
+    [0, -2],
+    [2, 2],
+    [-2, -2],
+    [2, -2],
+    [-2, 2],
+    [4, 0],
+    [-4, 0],
+    [0, 4],
+    [0, -4],
+    [4, 2],
+    [-4, -2],
+    [4, -2],
+    [-4, 2],
+    [2, 4],
+    [-2, -4],
+    [2, -4],
+    [-2, 4],
   ];
   for (let i = 0; i < count; i++) {
     if (i < positions.length) {
@@ -557,10 +567,10 @@ export interface CohesionMetric {
 
 /** 凝聚力评级。 */
 export type CohesionStatus =
-  | "INTACT"          // 阵型完整
-  | "DEGRADED"        // 阵型降级（部分偏离但可恢复）
-  | "BROKEN"          // 阵型破碎（需要 Regroup）
-  | "CRITICAL";       // 严重破碎（几乎全散）
+  | "INTACT" // 阵型完整
+  | "DEGRADED" // 阵型降级（部分偏离但可恢复）
+  | "BROKEN" // 阵型破碎（需要 Regroup）
+  | "CRITICAL"; // 严重破碎（几乎全散）
 
 /**
  * 计算编队凝聚力。
@@ -608,9 +618,10 @@ export function computeCohesion(
   let sumAnchorDist = 0;
   for (const m of alive) {
     // 跨房成员距离用房间名比较（不同房 = 远）
-    const dist = m.room !== anchor.room
-      ? 50 // 跨房距离用 50 作为占位（一个房间 50 格）
-      : chebyshevDist(m.pos, anchor.pos);
+    const dist =
+      m.room !== anchor.room
+        ? 50 // 跨房距离用 50 作为占位（一个房间 50 格）
+        : chebyshevDist(m.pos, anchor.pos);
     if (dist > maxAnchorDist) maxAnchorDist = dist;
     sumAnchorDist += dist;
   }
@@ -879,10 +890,7 @@ interface DestinationDecision {
  *   COMPLETED   → 当前位置（HOLD）
  *   ABORTED     → 撤退房间（ABSOLUTE）
  */
-function determineDestination(
-  squad: SquadSnapshot,
-  state: TacticalState,
-): DestinationDecision {
+function determineDestination(squad: SquadSnapshot, state: TacticalState): DestinationDecision {
   switch (state) {
     case "FORMING":
       return {
@@ -990,8 +998,8 @@ function determineDestination(
 
 /** Formation 退化级别。 */
 export type FormationDegradation =
-  | "INTACT"           // 阵型完整
-  | "DEGRADED"         // 阵型降级
+  | "INTACT" // 阵型完整
+  | "DEGRADED" // 阵型降级
   | "REGROUP_REQUIRED" // 需要重新集结
   | "FORMATION_BROKEN"; // 阵型完全破碎
 
@@ -1113,9 +1121,10 @@ export function checkHealerCohesion(squad: SquadSnapshot): HealerCohesionCheck {
     ok: lagging.length === 0,
     worstDistance: worst,
     laggingHealers: lagging,
-    reason: lagging.length === 0
-      ? `all ${healers.length} healers within ${HEALER_SAFE_DISTANCE} tiles`
-      : `${lagging.length}/${healers.length} healers lagging (worst=${worst})`,
+    reason:
+      lagging.length === 0
+        ? `all ${healers.length} healers within ${HEALER_SAFE_DISTANCE} tiles`
+        : `${lagging.length}/${healers.length} healers lagging (worst=${worst})`,
   };
 }
 
@@ -1164,22 +1173,22 @@ export function computeRetreatFormation(squad: SquadSnapshot): RetreatFormationD
   const alive = squad.members.filter(m => m.alive);
 
   // 撤退优先级排序：healer → 低 HP → 高 HP
-  const retreatOrder = [...alive].sort((a, b) => {
-    // Healer 优先
-    if (a.role === "healer" && b.role !== "healer") return -1;
-    if (a.role !== "healer" && b.role === "healer") return 1;
-    // HP 比例低者优先
-    const hpA = a.hitsMax > 0 ? a.hits / a.hitsMax : 0;
-    const hpB = b.hitsMax > 0 ? b.hits / b.hitsMax : 0;
-    if (hpA !== hpB) return hpA - hpB;
-    // 确定性 tie-break
-    return a.name < b.name ? -1 : 1;
-  }).map(m => m.name);
+  const retreatOrder = [...alive]
+    .sort((a, b) => {
+      // Healer 优先
+      if (a.role === "healer" && b.role !== "healer") return -1;
+      if (a.role !== "healer" && b.role === "healer") return 1;
+      // HP 比例低者优先
+      const hpA = a.hitsMax > 0 ? a.hits / a.hitsMax : 0;
+      const hpB = b.hitsMax > 0 ? b.hits / b.hitsMax : 0;
+      if (hpA !== hpB) return hpA - hpB;
+      // 确定性 tie-break
+      return a.name < b.name ? -1 : 1;
+    })
+    .map(m => m.name);
 
   // Anchor = 最脆弱成员位置（确保撤退速度不超过最慢成员）
-  const anchorMember = retreatOrder[0]
-    ? alive.find(m => m.name === retreatOrder[0])
-    : alive[0];
+  const anchorMember = retreatOrder[0] ? alive.find(m => m.name === retreatOrder[0]) : alive[0];
 
   if (!anchorMember) {
     return {
@@ -1208,11 +1217,11 @@ export function computeRetreatFormation(squad: SquadSnapshot): RetreatFormationD
 
 /** Stuck 级别。 */
 export type StuckLevel =
-  | "NONE"            // 无卡位
-  | "INDIVIDUAL"      // 个别成员卡位
-  | "SQUAD_LIGHT"     // 编队轻微卡位（Anchor 未前进但部分成员在动）
-  | "SQUAD_HEAVY"     // 编队严重卡位（Anchor 连续多 tick 未前进）
-  | "SQUAD_BLOCKED";  // 编队完全阻塞（需要 Replan）
+  | "NONE" // 无卡位
+  | "INDIVIDUAL" // 个别成员卡位
+  | "SQUAD_LIGHT" // 编队轻微卡位（Anchor 未前进但部分成员在动）
+  | "SQUAD_HEAVY" // 编队严重卡位（Anchor 连续多 tick 未前进）
+  | "SQUAD_BLOCKED"; // 编队完全阻塞（需要 Replan）
 
 /** 编队卡位检测结果。 */
 export interface SquadStuckDetection {
@@ -1252,8 +1261,7 @@ export function detectSquadStuck(
     .map(m => m.name);
 
   // Anchor 是否前进
-  const anchorMoved = prevAnchorPos !== undefined
-    && anchor.pos !== prevAnchorPos;
+  const anchorMoved = prevAnchorPos !== undefined && anchor.pos !== prevAnchorPos;
 
   const anchorStuckTicks = anchorMoved ? 0 : prevAnchorTicks + 1;
 

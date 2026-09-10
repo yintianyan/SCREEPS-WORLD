@@ -1,24 +1,30 @@
 /** Boost 决策 — 纯函数（无 Game API 依赖）。 */
-import { BOOST_EFFECTS, BOOST_EFFECT_PART, type BoostPolicy, type BoostRequest, type Compound } from "./types";
+import {
+  BOOST_EFFECTS,
+  BOOST_EFFECT_PART,
+  type BoostPolicy,
+  type BoostRequest,
+  type Compound,
+} from "./types";
 
 /** 默认 boost 策略：RCL6+ 启用，优先 upgrader。 */
 export const DEFAULT_BOOST_POLICY: BoostPolicy = {
   roleBoosts: {
     // 化合物线路与 types.ts BOOST_EFFECTS 对齐：GH=upgrade、UO=harvest、
     // LH=build/repair、UH=attack（勿混），倍率为 X 系 T3 最高档。
-    upgrader: "XGH2O",   // upgradeController ×2
-    harvester: "XUHO2",  // harvest ×7
-    builder: "XLH2O",    // build/repair ×2
+    upgrader: "XGH2O", // upgradeController ×2
+    harvester: "XUHO2", // harvest ×7
+    builder: "XLH2O", // build/repair ×2
     // defender 是威胁期短窗口角色，boost 属即时战力。
-    defender: "XUH2O",   // attack ×4
+    defender: "XUH2O", // attack ×4
     // war 编队（boost 战前强化链）：attacker 顶塔 DPS、healer 治疗翻倍 —
     // X 系 T3 是编队战力的数量级提升，无 boost 的编队在塔下即送。
-    attacker: "XUH2O",   // attack ×4
-    healer: "XLHO2",     // heal ×4
+    attacker: "XUH2O", // attack ×4
+    healer: "XLHO2", // heal ×4
     // rangedAttacker kiting 编队：rangedAttack ×3，远程压制。
-    rangedAttacker: "XKHO2",  // rangedAttack ×3
+    rangedAttacker: "XKHO2", // rangedAttack ×3
     // dismantler 拆迁编队：dismantle ×4，快速拆墙。
-    dismantler: "XZH2O",      // dismantle ×4
+    dismantler: "XZH2O", // dismantle ×4
   },
   // 降级 boost 链：T3 库存不足时按序降级到 T2/T1。
   // 降级 boost 远好于零 boost：T2 upgrade ×1.8 vs 无 boost ×1.0。
@@ -26,9 +32,9 @@ export const DEFAULT_BOOST_POLICY: BoostPolicy = {
   // 战斗角色（attacker/healer/defender/rangedAttacker/dismantler）
   // 不降级：T2 战斗 boost 倍率不足以在塔下存活，裸攻止损链兜底更安全。
   fallbackBoosts: {
-    upgrader: ["GH2O", "GH"],      // T2 → T1
-    harvester: ["UHO2", "UO"],     // T2 → T1
-    builder: ["LH2O", "LH"],       // T2 → T1
+    upgrader: ["GH2O", "GH"], // T2 → T1
+    harvester: ["UHO2", "UO"], // T2 → T1
+    builder: ["LH2O", "LH"], // T2 → T1
   },
   minRcl: 6,
   reserveAmount: 100, // 保留 100 单位化合物用于反应链
@@ -60,7 +66,10 @@ export const BOOST_REPORT_TTL = 1400;
 
 /** war 编队角色（战时放宽报到窗口的适用范围）。 */
 export const WAR_BOOST_ROLES: ReadonlySet<string> = new Set([
-  "attacker", "healer", "rangedAttacker", "dismantler",
+  "attacker",
+  "healer",
+  "rangedAttacker",
+  "dismantler",
 ]);
 
 /**
@@ -157,9 +166,8 @@ export function evaluateBoostRequests(
     // 会按库存封顶做部分强化 — 部分强化优于零强化，剩余部件等前馈补产。
     const effect = BOOST_EFFECTS[targetCompound];
     const partType = effect ? BOOST_EFFECT_PART[effect] : undefined;
-    const matchedParts = partType && creep.body
-      ? creep.body.filter(p => p.type === partType && !p.boost).length
-      : 0;
+    const matchedParts =
+      partType && creep.body ? creep.body.filter(p => p.type === partType && !p.boost).length : 0;
     const bodyParts = matchedParts > 0 ? matchedParts : 5;
 
     const priority = ROLE_BOOST_PRIORITY[creep.role] ?? 0;
@@ -175,7 +183,11 @@ export function evaluateBoostRequests(
   return requests;
 }
 
-export function isValidBoostForRole(role: string, compound: Compound, policy: BoostPolicy = DEFAULT_BOOST_POLICY): boolean {
+export function isValidBoostForRole(
+  role: string,
+  compound: Compound,
+  policy: BoostPolicy = DEFAULT_BOOST_POLICY,
+): boolean {
   return policy.roleBoosts[role] === compound;
 }
 

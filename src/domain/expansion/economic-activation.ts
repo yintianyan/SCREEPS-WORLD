@@ -59,7 +59,9 @@ const SELF_SUSTAINING_TICKS = 500;
  *   2. Net Energy Positive: netFlow > 0（连续 SELF_SUSTAINING_TICKS）
  *   3. Self-Sustaining: externalEnergyInflow === 0 且净流仍为正
  */
-export function evaluateEconomicActivation(input: EconomicActivationInput): EconomicActivationResult {
+export function evaluateEconomicActivation(
+  input: EconomicActivationInput,
+): EconomicActivationResult {
   const netFlow = input.energyProduction - input.energyConsumption;
   const energyLoopActive = input.hasHarvester && input.hasTransporter && input.spawnActive;
   const netPositive = netFlow > 0;

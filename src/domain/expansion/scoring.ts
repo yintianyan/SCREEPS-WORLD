@@ -29,12 +29,12 @@ export interface ScoringOptions {
 
 export const DEFAULT_SCORING_OPTIONS: ScoringOptions = {
   w1: 0.25,
-  w2: 0.10,
+  w2: 0.1,
   w3: 0.15,
   w4: 0.15,
   w5: 0.15,
-  w6: 0.10,
-  w7: 0.10,
+  w6: 0.1,
+  w7: 0.1,
   qualificationThreshold: 0.5,
   twoSourceValue: 1.0,
   oneSourceValue: 0.5,
@@ -71,11 +71,8 @@ export function scoreCandidate(
 
   // ── 1. sourceValue ──
   const sourceCount = candidate.sourceCount ?? 0;
-  const sourceValue = sourceCount >= 2
-    ? options.twoSourceValue
-    : sourceCount >= 1
-    ? options.oneSourceValue
-    : 0;
+  const sourceValue =
+    sourceCount >= 2 ? options.twoSourceValue : sourceCount >= 1 ? options.oneSourceValue : 0;
 
   // ── 2. mineralValue ──
   // 矿物密度 × 帝国矿种缺口权重
@@ -87,13 +84,14 @@ export function scoreCandidate(
 
   // ── 3. distanceScore ──
   const distance = candidate.distance;
-  const distanceScore = distance <= 1
-    ? options.distance1Score
-    : distance === 2
-    ? options.distance2Score
-    : distance === 3
-    ? options.distance3Score
-    : options.distanceFarScore;
+  const distanceScore =
+    distance <= 1
+      ? options.distance1Score
+      : distance === 2
+        ? options.distance2Score
+        : distance === 3
+          ? options.distance3Score
+          : options.distanceFarScore;
 
   // ── 4. neighborSafety ──
   // 周边邻接房的 owner 分布：全中立/无主 → 1，有宿敌 → 低
@@ -108,7 +106,7 @@ export function scoreCandidate(
       }
     }
     if (totalChecked > 0) {
-      neighborSafety = 1.0 - (hostileCount / totalChecked);
+      neighborSafety = 1.0 - hostileCount / totalChecked;
     }
   }
 
@@ -149,12 +147,12 @@ export function scoreCandidate(
   // ── 加权总分 ──
   const total = clamp01(
     options.w1 * sourceValue +
-    options.w2 * mineralValue +
-    options.w3 * distanceScore +
-    options.w4 * neighborSafety +
-    options.w5 * rivalProximity + // 正值，但在公式中是减项
-    options.w6 * defensibility +
-    options.w7 * layoutFitness,
+      options.w2 * mineralValue +
+      options.w3 * distanceScore +
+      options.w4 * neighborSafety +
+      options.w5 * rivalProximity + // 正值，但在公式中是减项
+      options.w6 * defensibility +
+      options.w7 * layoutFitness,
   );
 
   // 注意：公式中 rivalProximity 是减项，但在归一化时我们将其作为
@@ -164,12 +162,12 @@ export function scoreCandidate(
   // 重新计算：
   const adjustedTotal = clamp01(
     options.w1 * sourceValue +
-    options.w2 * mineralValue +
-    options.w3 * distanceScore +
-    options.w4 * neighborSafety +
-    options.w6 * defensibility +
-    options.w7 * layoutFitness -
-    options.w5 * rivalProximity,
+      options.w2 * mineralValue +
+      options.w3 * distanceScore +
+      options.w4 * neighborSafety +
+      options.w6 * defensibility +
+      options.w7 * layoutFitness -
+      options.w5 * rivalProximity,
   );
 
   const breakdown: CandidateScoreBreakdown = {

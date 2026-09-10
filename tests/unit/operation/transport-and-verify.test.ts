@@ -39,7 +39,10 @@ import {
   releaseReservation,
   getReservation,
 } from "../../../src/domain/operation/reservation";
-import { computeOperationMetrics, formatOperationMetrics } from "../../../src/domain/operation/metrics";
+import {
+  computeOperationMetrics,
+  formatOperationMetrics,
+} from "../../../src/domain/operation/metrics";
 import type { RoomRegistryEntry } from "../../../src/domain/strategy/room-registry";
 import {
   makeRegistryEntry,
@@ -206,7 +209,10 @@ describe("A3-007: Transfer Verification", () => {
   });
 
   it("computeExpectedDelta = requestedAmount - deliveredAmount", () => {
-    const op = { ...createOperation("W1N1", "W2N1", "energy", 2000, 1, TICK + 2000, TICK), deliveredAmount: 500 };
+    const op = {
+      ...createOperation("W1N1", "W2N1", "energy", 2000, 1, TICK + 2000, TICK),
+      deliveredAmount: 500,
+    };
     expect(computeExpectedDelta(op)).toBe(1500);
   });
 });
@@ -260,9 +266,7 @@ describe("A3-001: Room Registry", () => {
 
 describe("A3-019: Operation Failure 完整链路", () => {
   it("重试上限 → 失败 → 归档删除", () => {
-    let ops = [
-      createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK, 2),
-    ];
+    const ops = [createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK, 2)];
 
     // 模拟失败链路
     // blocked → retry → blocked → retry → blocked → maxRetries → failed
@@ -305,7 +309,10 @@ describe("Dedup 工具", () => {
   it("filterActive / filterTerminal 分离", () => {
     const ops = [
       createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK),
-      { ...createOperation("W1N1", "W3N1", "energy", 2000, 1, TICK + 2000, TICK), status: "completed" as const },
+      {
+        ...createOperation("W1N1", "W3N1", "energy", 2000, 1, TICK + 2000, TICK),
+        status: "completed" as const,
+      },
     ];
     expect(filterActive(ops)).toHaveLength(1);
     expect(filterTerminal(ops)).toHaveLength(1);
@@ -314,8 +321,14 @@ describe("Dedup 工具", () => {
   it("countByStatus 统计", () => {
     const ops = [
       createOperation("W1N1", "W2N1", "energy", 1000, 1, TICK + 2000, TICK),
-      { ...createOperation("W1N1", "W3N1", "energy", 2000, 1, TICK + 2000, TICK), status: "completed" as const },
-      { ...createOperation("W2N1", "W3N1", "energy", 3000, 1, TICK + 2000, TICK), status: "completed" as const },
+      {
+        ...createOperation("W1N1", "W3N1", "energy", 2000, 1, TICK + 2000, TICK),
+        status: "completed" as const,
+      },
+      {
+        ...createOperation("W2N1", "W3N1", "energy", 3000, 1, TICK + 2000, TICK),
+        status: "completed" as const,
+      },
     ];
     const counts = countByStatus(ops);
     expect(counts["planned"]).toBe(1);

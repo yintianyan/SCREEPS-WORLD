@@ -66,21 +66,40 @@ export function buildExpansionDashboard(input: {
   const { tick, pressure, readiness, budget, candidates, plans, topExplanation } = input;
 
   // 候选统计
-  let qualified = 0, rejected = 0, unknown = 0;
+  let qualified = 0,
+    rejected = 0,
+    unknown = 0;
   let topRoom: string | undefined;
   let topScore = 0;
   for (const c of candidates) {
     switch (c.status) {
-      case "QUALIFIED": qualified++; if (c.score > topScore) { topScore = c.score; topRoom = c.roomName; } break;
-      case "REJECTED": rejected++; break;
-      case "UNKNOWN": unknown++; break;
-      case "BLACKLISTED": rejected++; break;
+      case "QUALIFIED":
+        qualified++;
+        if (c.score > topScore) {
+          topScore = c.score;
+          topRoom = c.roomName;
+        }
+        break;
+      case "REJECTED":
+        rejected++;
+        break;
+      case "UNKNOWN":
+        unknown++;
+        break;
+      case "BLACKLISTED":
+        rejected++;
+        break;
     }
   }
 
   // Plan 统计
-  const activePlans = plans.filter(p =>
-    p.status === "DISCOVERED" || p.status === "EVALUATED" || p.status === "READY" || p.status === "APPROVED" || p.status === "WAITING_EXECUTION"
+  const activePlans = plans.filter(
+    p =>
+      p.status === "DISCOVERED" ||
+      p.status === "EVALUATED" ||
+      p.status === "READY" ||
+      p.status === "APPROVED" ||
+      p.status === "WAITING_EXECUTION",
   );
   const waitingExecution = plans.filter(p => p.status === "WAITING_EXECUTION");
   const topPlan = activePlans[0];

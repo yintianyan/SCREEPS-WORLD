@@ -6,11 +6,7 @@ import { isActive } from "./agenda-item";
 import type { DemandNode } from "./demand-node";
 
 /** 网络健康度四档。 */
-export type NetworkHealthLevel =
-  | "healthy"
-  | "constrained"
-  | "degraded"
-  | "critical";
+export type NetworkHealthLevel = "healthy" | "constrained" | "degraded" | "critical";
 
 /** 网络健康度结果。 */
 export interface NetworkHealthResult {
@@ -54,7 +50,7 @@ export function computeNetworkHealth(
 
   // 统计失败 Operation（最近 1000 tick 内）
   const failedCount = operations.filter(
-    op => op.status === "failed" && tick - op.updatedAt < 1000
+    op => op.status === "failed" && tick - op.updatedAt < 1000,
   ).length;
 
   // 统计活跃 Operation
@@ -66,18 +62,15 @@ export function computeNetworkHealth(
 
   // 统计 critical 房间
   const criticalRoomCount = snapshot.demandNodes.filter(
-    d => d.criticality === "critical" && d.remaining > 0
+    d => d.criticality === "critical" && d.remaining > 0,
   ).length;
 
   // Reservation 压力 = 活跃 Reservation 数 / (总供给量 + 1)
-  const reservationPressure = totalSupply > 0
-    ? snapshot.reservationCount / (totalSupply / 1000 + 1)
-    : 0;
+  const reservationPressure =
+    totalSupply > 0 ? snapshot.reservationCount / (totalSupply / 1000 + 1) : 0;
 
   // 健康分数（0..1）
-  const supplyRatio = totalRemaining > 0
-    ? Math.min(1, totalSupply / totalRemaining)
-    : 1;
+  const supplyRatio = totalRemaining > 0 ? Math.min(1, totalSupply / totalRemaining) : 1;
   const failurePenalty = Math.min(0.3, failedCount * 0.1);
   const pressurePenalty = Math.min(0.2, reservationPressure * 0.05);
   const criticalPenalty = Math.min(0.3, criticalRoomCount * 0.1);

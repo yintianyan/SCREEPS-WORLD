@@ -63,10 +63,7 @@ export function createReservation(
 /**
  * 释放预留（幂等：不存在时无操作）。
  */
-export function releaseReservation(
-  table: ReservationTable,
-  operationId: string,
-): ReservationTable {
+export function releaseReservation(table: ReservationTable, operationId: string): ReservationTable {
   const next = new Map(table);
   next.delete(operationId);
   return next;
@@ -117,10 +114,7 @@ export function sweepExpired(
  * 计算指定源房的活跃预留总量。
  * 用于 computeTransferable 的 activeReservations 参数。
  */
-export function sumReservationsByRoom(
-  table: ReservationTable,
-  roomName: string,
-): number {
+export function sumReservationsByRoom(table: ReservationTable, roomName: string): number {
   let sum = 0;
   for (const entry of table.values()) {
     if (entry.sourceRoom === roomName) {
@@ -133,10 +127,7 @@ export function sumReservationsByRoom(
 /**
  * 获取指定源房的所有活跃预留。
  */
-export function getReservationsByRoom(
-  table: ReservationTable,
-  roomName: string,
-): Reservation[] {
+export function getReservationsByRoom(table: ReservationTable, roomName: string): Reservation[] {
   const out: Reservation[] = [];
   for (const entry of table.values()) {
     if (entry.sourceRoom === roomName) {

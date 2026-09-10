@@ -25,11 +25,11 @@ export interface ThreatEscalationInput {
 
 /** 威胁响应动作。 */
 export type ThreatResponseAction =
-  | "CONTINUE"       // 继续执行
-  | "PAUSE"         // 暂停（等待威胁解除）
-  | "REINFORCE"     // 增援（调派防御部队）
-  | "ABORT"         // 终止扩张
-  | "EVACUATE";     // 撤离已有单位
+  | "CONTINUE" // 继续执行
+  | "PAUSE" // 暂停（等待威胁解除）
+  | "REINFORCE" // 增援（调派防御部队）
+  | "ABORT" // 终止扩张
+  | "EVACUATE"; // 撤离已有单位
 
 /** 威胁评估结果。 */
 export interface ThreatEscalationResult {
@@ -89,9 +89,8 @@ export function evaluateThreatEscalation(input: ThreatEscalationInput): ThreatEs
     evidence.push("pathThreat=true");
   }
 
-  const level: ThreatLevel = redThreats.length > 0 ? "RED"
-    : yellowThreats.length > 0 ? "YELLOW"
-    : "GREEN";
+  const level: ThreatLevel =
+    redThreats.length > 0 ? "RED" : yellowThreats.length > 0 ? "YELLOW" : "GREEN";
 
   // 响应动作判定
   let action: ThreatResponseAction = "CONTINUE";
@@ -132,11 +131,12 @@ export function evaluateThreatEscalation(input: ThreatEscalationInput): ThreatEs
       break;
   }
 
-  const threatSummary = redThreats.length > 0
-    ? `RED: ${redThreats.join("; ")}`
-    : yellowThreats.length > 0
-    ? `YELLOW: ${yellowThreats.join("; ")}`
-    : "GREEN: no threats";
+  const threatSummary =
+    redThreats.length > 0
+      ? `RED: ${redThreats.join("; ")}`
+      : yellowThreats.length > 0
+        ? `YELLOW: ${yellowThreats.join("; ")}`
+        : "GREEN: no threats";
 
   const summary = `ThreatEscalation @${input.tick}: ${level} → ${action} | ${threatSummary}`;
 

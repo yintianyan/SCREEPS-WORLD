@@ -16,10 +16,7 @@ import {
 } from "../domain/construction/queue";
 import { getRoomLayoutData, markLayoutDirty } from "../kernel/segment-store";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
-import {
-  markLinkConstrained,
-  clearDeadAssetLink,
-} from "./link-system";
+import { markLinkConstrained, clearDeadAssetLink } from "./link-system";
 import {
   isRoomInDefense,
   transitionDismantlePlan,
@@ -149,7 +146,9 @@ export const constructionManagerSystem: System = {
             globalSiteCount: ctx.globalSiteCount + getRemoteSiteTotal(),
             maxGlobalSites: CONFIG.construction.maxGlobalSites,
             readyLaneTaskCount: queue.filter(
-              t => t.state === "queued" && Game.time >= t.retryAt &&
+              t =>
+                t.state === "queued" &&
+                Game.time >= t.retryAt &&
                 isCriticalDevelopmentTask(t, snapshot),
             ).length,
           });
@@ -163,7 +162,8 @@ export const constructionManagerSystem: System = {
             recordConstructionSkip(
               snapshot.roomName,
               `lane:${laneReason}` as ConstructionSkipReason,
-              queue, snapshot,
+              queue,
+              snapshot,
             );
           }
         }
@@ -245,18 +245,20 @@ export function developmentGate(
   emergency: EmergencyRebuildStatus,
 ): boolean {
   const roomMem = Memory.rooms[snapshot.roomName];
-  return evaluateDevelopmentGate({
-    emergencyAny: emergency.any,
-    economyPressure: roomMem?.economyPressure ?? 0,
-    budgetTier: ctx.budget.tier,
-    claimSecure: roomMem?.claimSecure ?? false,
-    threatCount: snapshot.threatCreeps.length,
-    hasP0SpawnRequest: (roomMem?.spawnQueue ?? []).some(r => r.priority === 0),
-    energyAvailable: snapshot.energyAvailable,
-    energyCapacityAvailable: snapshot.energyCapacityAvailable,
-    globalSiteCount: ctx.globalSiteCount + getRemoteSiteTotal(),
-    maxGlobalSites: CONFIG.construction.maxGlobalSites,
-  }) === "ok";
+  return (
+    evaluateDevelopmentGate({
+      emergencyAny: emergency.any,
+      economyPressure: roomMem?.economyPressure ?? 0,
+      budgetTier: ctx.budget.tier,
+      claimSecure: roomMem?.claimSecure ?? false,
+      threatCount: snapshot.threatCreeps.length,
+      hasP0SpawnRequest: (roomMem?.spawnQueue ?? []).some(r => r.priority === 0),
+      energyAvailable: snapshot.energyAvailable,
+      energyCapacityAvailable: snapshot.energyCapacityAvailable,
+      globalSiteCount: ctx.globalSiteCount + getRemoteSiteTotal(),
+      maxGlobalSites: CONFIG.construction.maxGlobalSites,
+    }) === "ok"
+  );
 }
 
 // ─── R2：skip reason 结构化观测 ─────────────────────────────
@@ -305,8 +307,11 @@ export function recordConstructionSkip(
     const queued = q.filter(t => t.state === "queued").length;
     const site = q.filter(t => t.state === "site").length;
     const blocked = q.filter(t => t.state === "blocked").length;
-    log.info("construction-manager", `[construction-skip] t=${Game.time} room=${room} window=${interval}t ` +
-      `${reasons} queue=${q.length}(q${queued}/s${site}/b${blocked}) sites=${snapshot.myConstructionSites.length}`,);
+    log.info(
+      "construction-manager",
+      `[construction-skip] t=${Game.time} room=${room} window=${interval}t ` +
+        `${reasons} queue=${q.length}(q${queued}/s${site}/b${blocked}) sites=${snapshot.myConstructionSites.length}`,
+    );
   }
   // 窗口清零（日志已承载窗口聚合值）。
   skips.rooms = {};
@@ -401,7 +406,8 @@ export function tryCreateSite(
       task.attempts = 3;
       continue;
     }
-    const isCritical = task.structureType === STRUCTURE_TOWER || task.structureType === STRUCTURE_SPAWN;
+    const isCritical =
+      task.structureType === STRUCTURE_TOWER || task.structureType === STRUCTURE_SPAWN;
     const isRoad = task.structureType === STRUCTURE_ROAD;
     const isStorage = task.structureType === STRUCTURE_STORAGE;
     const isWall = task.structureType === STRUCTURE_WALL;
@@ -429,7 +435,12 @@ export function tryCreateSite(
     if (quotaBlocked) {
       if (roomName) {
         // R2 诊断：按「结构类型 × 拒绝原因」计数，定位哪类任务在持续吃配额拒绝。
-        recordConstructionSkip(roomName, `per-room-site-cap:${task.structureType}`, queue, snapshot);
+        recordConstructionSkip(
+          roomName,
+          `per-room-site-cap:${task.structureType}`,
+          queue,
+          snapshot,
+        );
       }
       continue;
     }
@@ -537,8 +548,11 @@ function processSinglePlan(
     markLinkConstrained(plan.roomName, tick);
     globalCache().dismantlePlans?.delete(deadLinkId);
     clearDeadAssetLink(deadLinkId);
-    log.error("construction-manager", `[dismantle] abort+constrained: ttl expired for link ${deadLinkId} in ${plan.roomName}, ` +
-      `marking linkConstrained to prevent churn`,);
+    log.error(
+      "construction-manager",
+      `[dismantle] abort+constrained: ttl expired for link ${deadLinkId} in ${plan.roomName}, ` +
+        `marking linkConstrained to prevent churn`,
+    );
     return;
   }
 
@@ -548,7 +562,10 @@ function processSinglePlan(
     if (!replacementTask) {
       // 替代任务被清理（cleanTasks purge 或 blocked）→ abort。
       globalCache().dismantlePlans?.delete(deadLinkId);
-      log.error("construction-manager", `[dismantle] abort: replacement task ${plan.replacementKey} not found for ${deadLinkId}`);
+      log.error(
+        "construction-manager",
+        `[dismantle] abort: replacement task ${plan.replacementKey} not found for ${deadLinkId}`,
+      );
       return;
     }
     if (replacementTask.state === "done") {
@@ -558,7 +575,10 @@ function processSinglePlan(
       // 使用 transitionDismantlePlan 纯函数转移状态，写回 Map 保持单一状态机来源（DRY）。
       const updated = transitionDismantlePlan(plan, tick);
       globalCache().dismantlePlans?.set(deadLinkId, updated);
-      log.info("construction-manager", `[dismantle] validating: replacement built for ${deadLinkId}, waiting for energy`);
+      log.info(
+        "construction-manager",
+        `[dismantle] validating: replacement built for ${deadLinkId}, waiting for energy`,
+      );
     }
     return;
   }
@@ -571,7 +591,10 @@ function processSinglePlan(
     if (!replacementLink) {
       // 替代 link 消失（被毁？）→ abort，保留旧 link。
       globalCache().dismantlePlans?.delete(deadLinkId);
-      log.error("construction-manager", `[dismantle] abort: replacement link disappeared for ${deadLinkId}`);
+      log.error(
+        "construction-manager",
+        `[dismantle] abort: replacement link disappeared for ${deadLinkId}`,
+      );
       return;
     }
     const replacementEnergy = replacementLink.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -583,7 +606,10 @@ function processSinglePlan(
         if (result === OK) {
           globalCache().dismantlePlans?.delete(deadLinkId);
           clearDeadAssetLink(deadLinkId);
-          log.info("construction-manager", `[dismantle] success: destroyed dead link ${deadLinkId}, replacement energized`);
+          log.info(
+            "construction-manager",
+            `[dismantle] success: destroyed dead link ${deadLinkId}, replacement energized`,
+          );
         }
       } else {
         // 旧 link 已不存在（可能被手动拆除）→ 清理计划。
@@ -599,8 +625,11 @@ function processSinglePlan(
       markLinkConstrained(plan.roomName, tick);
       globalCache().dismantlePlans?.delete(deadLinkId);
       clearDeadAssetLink(deadLinkId);
-      log.info("construction-manager", `[dismantle] fallback: replacement link not energized after ${DISMANTLE_VALIDATION_DELAY}t, ` +
-        `marking ${plan.roomName} linkConstrained`,);
+      log.info(
+        "construction-manager",
+        `[dismantle] fallback: replacement link not energized after ${DISMANTLE_VALIDATION_DELAY}t, ` +
+          `marking ${plan.roomName} linkConstrained`,
+      );
     }
   }
 }

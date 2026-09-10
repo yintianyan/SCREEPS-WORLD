@@ -56,7 +56,8 @@ export function canTransitionTactical(from: TacticalState, to: TacticalState): b
  * 确定性：相同 Snapshot 必须产生相同 Decision。
  */
 export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDecision {
-  const { tick, squad, objective, enemies, terrain, confidence, ourPower, ourCapability } = snapshot;
+  const { tick, squad, objective, enemies, terrain, confidence, ourPower, ourCapability } =
+    snapshot;
   const currentState = squad.state;
   const rejected: RejectedTacticalAlternative[] = [];
   const evidence: string[] = [];
@@ -68,9 +69,14 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
     evidence.push(...authCheck.evidence);
     rejected.push({ action: "CONTINUE_ENGAGEMENT", reason: "authorization invalid" });
     return buildDecision(
-      "ABORTED", "HOLD", "NONE", squad.formation,
+      "ABORTED",
+      "HOLD",
+      "NONE",
+      squad.formation,
       `authorization invalid: ${authCheck.reason}`,
-      evidence, rejected, snapshot,
+      evidence,
+      rejected,
+      snapshot,
     );
   }
   evidence.push("authorization valid");
@@ -81,9 +87,14 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
     evidence.push(...abortSignal.evidence);
     rejected.push({ action: "CONTINUE", reason: `abort: ${abortSignal.reason}` });
     return buildDecision(
-      "ABORTED", "RETREAT", "NONE", squad.formation,
+      "ABORTED",
+      "RETREAT",
+      "NONE",
+      squad.formation,
       `tactical abort: ${abortSignal.reason}`,
-      evidence, rejected, snapshot,
+      evidence,
+      rejected,
+      snapshot,
     );
   }
 
@@ -95,9 +106,14 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
     // STALE intel → regroup / reposition（不追击旧位置）
     if (canTransitionTactical(currentState, "REGROUPING")) {
       return buildDecision(
-        "REGROUPING", "REGROUP", "NONE", selectFormation(snapshot, "REGROUPING"),
+        "REGROUPING",
+        "REGROUP",
+        "NONE",
+        selectFormation(snapshot, "REGROUPING"),
         `intel ${intelFreshness} → regroup for fresh intel`,
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
   }
@@ -110,9 +126,14 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
     rejected.push({ action: "ENGAGE", reason: "enemy capability surge" });
     if (canTransitionTactical(currentState, "RETREATING")) {
       return buildDecision(
-        "RETREATING", "RETREAT", "NONE", "CLUSTER",
+        "RETREATING",
+        "RETREAT",
+        "NONE",
+        "CLUSTER",
         "enemy capability surge → retreat",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
   }
@@ -124,9 +145,14 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
     rejected.push({ action: "ENGAGE", reason: "squad broken" });
     if (canTransitionTactical(currentState, "REGROUPING")) {
       return buildDecision(
-        "REGROUPING", "REGROUP", "NONE", "CLUSTER",
+        "REGROUPING",
+        "REGROUP",
+        "NONE",
+        "CLUSTER",
         "squad broken → regroup",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
   }
@@ -138,9 +164,14 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
     rejected.push({ action: "ENGAGE", reason: "healer lost" });
     if (canTransitionTactical(currentState, "DISENGAGING")) {
       return buildDecision(
-        "DISENGAGING", "RETREAT", "NONE", "CLUSTER",
+        "DISENGAGING",
+        "RETREAT",
+        "NONE",
+        "CLUSTER",
         "healer lost → disengage",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
   }
@@ -148,20 +179,32 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
   // ── 7. 血量检查 ──
   const avgHpRatio = computeAvgHpRatio(squad);
   if (avgHpRatio < squad.engagementPolicy.retreatThreshold) {
-    evidence.push(`avgHpRatio=${avgHpRatio.toFixed(2)} < retreatThreshold=${squad.engagementPolicy.retreatThreshold}`);
+    evidence.push(
+      `avgHpRatio=${avgHpRatio.toFixed(2)} < retreatThreshold=${squad.engagementPolicy.retreatThreshold}`,
+    );
     rejected.push({ action: "ENGAGE", reason: "hp below retreat threshold" });
     if (canTransitionTactical(currentState, "DISENGAGING")) {
       return buildDecision(
-        "DISENGAGING", "RETREAT", "NONE", "CLUSTER",
+        "DISENGAGING",
+        "RETREAT",
+        "NONE",
+        "CLUSTER",
         `hp ratio ${avgHpRatio.toFixed(2)} below retreat threshold`,
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
     if (canTransitionTactical(currentState, "RETREATING")) {
       return buildDecision(
-        "RETREATING", "RETREAT", "NONE", "CLUSTER",
+        "RETREATING",
+        "RETREAT",
+        "NONE",
+        "CLUSTER",
         `hp ratio ${avgHpRatio.toFixed(2)} below retreat threshold`,
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
   }
@@ -178,9 +221,14 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
       const formation = selectFormation(snapshot, "MOVING");
       evidence.push(`forming complete, formation=${formation}`);
       return buildDecision(
-        "MOVING", "ADVANCE", "NONE", formation,
+        "MOVING",
+        "ADVANCE",
+        "NONE",
+        formation,
         "squad formed → advance",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
 
@@ -191,16 +239,26 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
         evidence.push("arrived at target room");
         const formation = selectFormation(snapshot, "POSITIONING");
         return buildDecision(
-          "POSITIONING", "POSITION", "NONE", formation,
+          "POSITIONING",
+          "POSITION",
+          "NONE",
+          formation,
           "arrived → position for engagement",
-          evidence, rejected, snapshot,
+          evidence,
+          rejected,
+          snapshot,
         );
       }
       evidence.push("in transit");
       return buildDecision(
-        "MOVING", "ADVANCE", "NONE", "COLUMN",
+        "MOVING",
+        "ADVANCE",
+        "NONE",
+        "COLUMN",
         "advancing to target room",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
 
@@ -211,16 +269,27 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
         evidence.push(`engagement target selected: ${target.id}`);
         const formation = selectFormation(snapshot, "ENGAGING");
         return buildDecision(
-          "ENGAGING", "ADVANCE", determineCombatIntent(snapshot, target.id),
-          formation, `engaging target ${target.id}`,
-          evidence, rejected, snapshot, target.id,
+          "ENGAGING",
+          "ADVANCE",
+          determineCombatIntent(snapshot, target.id),
+          formation,
+          `engaging target ${target.id}`,
+          evidence,
+          rejected,
+          snapshot,
+          target.id,
         );
       }
       evidence.push("no enemy in range, holding position");
       return buildDecision(
-        "POSITIONING", "HOLD", "NONE", squad.formation,
+        "POSITIONING",
+        "HOLD",
+        "NONE",
+        squad.formation,
         "holding position, awaiting enemy",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
 
@@ -231,9 +300,15 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
         evidence.push(`engaging target: ${target.id}`);
         const formation = selectFormation(snapshot, "ENGAGING");
         return buildDecision(
-          "ENGAGING", "HOLD", determineCombatIntent(snapshot, target.id),
-          formation, `engaged with ${target.id}`,
-          evidence, rejected, snapshot, target.id,
+          "ENGAGING",
+          "HOLD",
+          determineCombatIntent(snapshot, target.id),
+          formation,
+          `engaged with ${target.id}`,
+          evidence,
+          rejected,
+          snapshot,
+          target.id,
         );
       }
       // 无敌人 → 检查目标是否完成
@@ -241,16 +316,26 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
       if (objComplete) {
         evidence.push("objective complete");
         return buildDecision(
-          "COMPLETED", "HOLD", "NONE", squad.formation,
+          "COMPLETED",
+          "HOLD",
+          "NONE",
+          squad.formation,
           "objective completed",
-          evidence, rejected, snapshot,
+          evidence,
+          rejected,
+          snapshot,
         );
       }
       evidence.push("no enemy in range");
       return buildDecision(
-        "ENGAGING", "ADVANCE", "NONE", squad.formation,
+        "ENGAGING",
+        "ADVANCE",
+        "NONE",
+        squad.formation,
         "no enemy in range, advancing",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
 
@@ -261,17 +346,27 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
         evidence.push("successfully disengaged");
         if (canTransitionTactical("DISENGAGING", "RETREATING")) {
           return buildDecision(
-            "RETREATING", "RETREAT", "NONE", "CLUSTER",
+            "RETREATING",
+            "RETREAT",
+            "NONE",
+            "CLUSTER",
             "disengaged → retreating",
-            evidence, rejected, snapshot,
+            evidence,
+            rejected,
+            snapshot,
           );
         }
       }
       evidence.push("still disengaging");
       return buildDecision(
-        "DISENGAGING", "RETREAT", "NONE", "CLUSTER",
+        "DISENGAGING",
+        "RETREAT",
+        "NONE",
+        "CLUSTER",
         "disengaging from combat",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
 
@@ -281,16 +376,26 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
       if (safe) {
         evidence.push("reached safe room");
         return buildDecision(
-          "REGROUPING", "REGROUP", "NONE", "CLUSTER",
+          "REGROUPING",
+          "REGROUP",
+          "NONE",
+          "CLUSTER",
           "reached safe room → regroup",
-          evidence, rejected, snapshot,
+          evidence,
+          rejected,
+          snapshot,
         );
       }
       evidence.push("retreating");
       return buildDecision(
-        "RETREATING", "RETREAT", "NONE", "CLUSTER",
+        "RETREATING",
+        "RETREAT",
+        "NONE",
+        "CLUSTER",
         "retreating to safe room",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
 
@@ -301,38 +406,63 @@ export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDeci
         evidence.push("regroup complete");
         const formation = selectFormation(snapshot, "MOVING");
         return buildDecision(
-          "MOVING", "ADVANCE", "NONE", formation,
+          "MOVING",
+          "ADVANCE",
+          "NONE",
+          formation,
           "regrouped → advance",
-          evidence, rejected, snapshot,
+          evidence,
+          rejected,
+          snapshot,
         );
       }
       evidence.push("regrouping");
       return buildDecision(
-        "REGROUPING", "REGROUP", "NONE", "CLUSTER",
+        "REGROUPING",
+        "REGROUP",
+        "NONE",
+        "CLUSTER",
         "regrouping in progress",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
     }
 
     case "COMPLETED":
       return buildDecision(
-        "COMPLETED", "HOLD", "NONE", squad.formation,
+        "COMPLETED",
+        "HOLD",
+        "NONE",
+        squad.formation,
         "already completed",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
 
     case "ABORTED":
       return buildDecision(
-        "ABORTED", "RETREAT", "NONE", squad.formation,
+        "ABORTED",
+        "RETREAT",
+        "NONE",
+        squad.formation,
         "already aborted",
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
 
     default:
       return buildDecision(
-        currentState, "HOLD", "NONE", squad.formation,
+        currentState,
+        "HOLD",
+        "NONE",
+        squad.formation,
         `unknown state ${currentState}`,
-        evidence, rejected, snapshot,
+        evidence,
+        rejected,
+        snapshot,
       );
   }
 }
@@ -356,14 +486,18 @@ function checkAbortConditions(snapshot: TacticalSnapshot): TacticalAbortSignal |
   const aliveRatio = totalCount > 0 ? aliveCount / totalCount : 0;
   if (aliveRatio < squad.regroupPolicy.memberRatioThreshold) {
     reasons.push("CASUALTY_EXCEEDED");
-    evidence.push(`aliveRatio=${aliveRatio.toFixed(2)} < threshold=${squad.regroupPolicy.memberRatioThreshold}`);
+    evidence.push(
+      `aliveRatio=${aliveRatio.toFixed(2)} < threshold=${squad.regroupPolicy.memberRatioThreshold}`,
+    );
   }
 
   // INTEL_STALE: 情报过期
   const overallConf = confidence.overallConfidence;
   if (overallConf < objective.constraints.minIntelConfidence) {
     reasons.push("INTEL_STALE");
-    evidence.push(`confidence=${overallConf.toFixed(2)} < min=${objective.constraints.minIntelConfidence}`);
+    evidence.push(
+      `confidence=${overallConf.toFixed(2)} < min=${objective.constraints.minIntelConfidence}`,
+    );
   }
 
   // AUTHORIZATION_REVOKED
@@ -392,7 +526,9 @@ function checkAbortConditions(snapshot: TacticalSnapshot): TacticalAbortSignal |
   };
 }
 
-function assessIntelFreshness(snapshot: TacticalSnapshot): "FRESH" | "RECENT" | "STALE" | "EXPIRED" {
+function assessIntelFreshness(
+  snapshot: TacticalSnapshot,
+): "FRESH" | "RECENT" | "STALE" | "EXPIRED" {
   const { enemies, tick, confidence } = snapshot;
 
   if (enemies.length === 0) return "FRESH"; // 无敌人不需要情报
@@ -410,7 +546,10 @@ function checkEnemyCapabilitySurge(snapshot: TacticalSnapshot): boolean {
   const { enemies, ourPower, squad } = snapshot;
   if (enemies.length === 0) return false;
 
-  const enemyTotalAttack = enemies.reduce((s, e) => s + e.capability.attack + e.capability.rangedAttack, 0);
+  const enemyTotalAttack = enemies.reduce(
+    (s, e) => s + e.capability.attack + e.capability.rangedAttack,
+    0,
+  );
   const enemyTotalHeal = enemies.reduce((s, e) => s + e.capability.heal, 0);
   const enemyTotalHP = enemies.reduce((s, e) => s + e.capability.effectiveHP, 0);
 
@@ -446,7 +585,9 @@ function checkHealerLost(snapshot: TacticalSnapshot): boolean {
   return healers.length === 0;
 }
 
-function computeAvgHpRatio(squad: { members: readonly { hits: number; hitsMax: number }[] }): number {
+function computeAvgHpRatio(squad: {
+  members: readonly { hits: number; hitsMax: number }[];
+}): number {
   if (squad.members.length === 0) return 0;
   const totalRatio = squad.members.reduce((s, m) => {
     return s + (m.hitsMax > 0 ? m.hits / m.hitsMax : 0);
@@ -470,8 +611,10 @@ function checkDisengaged(snapshot: TacticalSnapshot): boolean {
   // 所有敌人距离 > 3 格视为脱离
   return enemies.every(e => {
     return squad.members.every(m => {
-      return Math.abs(Math.floor(e.pos / 50) - Math.floor(m.pos / 50)) > 3
-        || Math.abs(e.pos % 50 - m.pos % 50) > 3;
+      return (
+        Math.abs(Math.floor(e.pos / 50) - Math.floor(m.pos / 50)) > 3 ||
+        Math.abs((e.pos % 50) - (m.pos % 50)) > 3
+      );
     });
   });
 }
@@ -524,8 +667,9 @@ function selectEngagementTarget(snapshot: TacticalSnapshot): { id: string } | nu
 
   // 优先级：focus target > 敌方 creep > 敌方建筑
   if (squad.engagementPolicy.focusTargetId) {
-    const focus = enemies.find(e => e.id === squad.engagementPolicy.focusTargetId)
-      ?? enemyStructures.find(s => s.id === squad.engagementPolicy.focusTargetId);
+    const focus =
+      enemies.find(e => e.id === squad.engagementPolicy.focusTargetId) ??
+      enemyStructures.find(s => s.id === squad.engagementPolicy.focusTargetId);
     if (focus) return { id: focus.id };
   }
 
@@ -659,7 +803,10 @@ function buildDecision(
 
  * 相同 Snapshot + 相同 Decision → 相同 Hash。
  */
-export function tacticalDecisionHash(decision: TacticalDecision, snapshot: TacticalSnapshot): string {
+export function tacticalDecisionHash(
+  decision: TacticalDecision,
+  snapshot: TacticalSnapshot,
+): string {
   const payload = JSON.stringify({
     state: decision.newState,
     move: decision.movementIntent,

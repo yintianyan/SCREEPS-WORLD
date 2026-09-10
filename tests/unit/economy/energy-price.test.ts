@@ -1,6 +1,11 @@
 /** energyPrice 供需平衡价格信号测试。 */
 import { describe, expect, it } from "vitest";
-import { computeEnergyPrice, supplyElasticity, demandElasticity, logisticsElasticity } from "../../../src/domain/economy/energy-price";
+import {
+  computeEnergyPrice,
+  supplyElasticity,
+  demandElasticity,
+  logisticsElasticity,
+} from "../../../src/domain/economy/energy-price";
 
 describe("computeEnergyPrice", () => {
   it("收支平衡时返回 0.5", () => {

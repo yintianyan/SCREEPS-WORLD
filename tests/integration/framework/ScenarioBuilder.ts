@@ -1,5 +1,11 @@
 /** ScenarioBuilder — 流式 API 构建测试世界初始状态。 */
-import { TestWorld, flatTerrain, terrainWithWalls, type WorldConfig, type WorldPos } from "./TestWorld";
+import {
+  TestWorld,
+  flatTerrain,
+  terrainWithWalls,
+  type WorldConfig,
+  type WorldPos,
+} from "./TestWorld";
 
 export class ScenarioBuilder {
   private _roomName: string;
@@ -140,7 +146,12 @@ export class ScenarioBuilder {
   }
 
   /** 添加敌方 creep。 */
-  hostile(name: string, x: number, y: number, body: Array<{ type: string }> = [{ type: "attack" }]): this {
+  hostile(
+    name: string,
+    x: number,
+    y: number,
+    body: Array<{ type: string }> = [{ type: "attack" }],
+  ): this {
     this._hostiles.push({ name, pos: { x, y }, body });
     return this;
   }
@@ -251,8 +262,11 @@ export function rcl2Steady(roomName = "W1N1"): ScenarioBuilder {
     .container(16, 15, 500)
     .container(34, 15, 500)
     .extensions([
-      { x: 24, y: 24 }, { x: 26, y: 24 }, { x: 24, y: 26 },
-      { x: 26, y: 26 }, { x: 25, y: 24 },
+      { x: 24, y: 24 },
+      { x: 26, y: 24 },
+      { x: 24, y: 26 },
+      { x: 26, y: 26 },
+      { x: 25, y: 24 },
     ])
     .sourceRegen(10)
     .containerDecay(5000)

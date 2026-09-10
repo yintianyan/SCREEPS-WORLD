@@ -66,7 +66,11 @@ describe("evaluateCapacity — 滞回", () => {
     expect(r1.upgradeTicks).toBe(1);
 
     // 第 windowTicks-1 次满足 → 计数满 → 升档（本轮即第 windowTicks 次持续满足）。
-    const near = { tier: "comfortable" as const, since: TICK - 500, upgradeTicks: DEFAULT_CAPACITY_OPTIONS.upgradeWindowTicks - 1 };
+    const near = {
+      tier: "comfortable" as const,
+      since: TICK - 500,
+      upgradeTicks: DEFAULT_CAPACITY_OPTIONS.upgradeWindowTicks - 1,
+    };
     const r2 = evaluateCapacity(input({ cpuAvg10: 2 }), near, TICK);
     expect(r2.tier).toBe("abundant");
     expect(r2.upgradeTicks).toBe(0);

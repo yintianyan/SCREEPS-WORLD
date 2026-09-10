@@ -47,7 +47,13 @@ function makeMember(
   return {
     name,
     role,
-    capability: makeCapability(role === "attacker" ? { attack: 120 } : role === "ranged" ? { rangedAttack: 40 } : { heal: 48 }),
+    capability: makeCapability(
+      role === "attacker"
+        ? { attack: 120 }
+        : role === "ranged"
+          ? { rangedAttack: 40 }
+          : { heal: 48 },
+    ),
     pos: x * 50 + y,
     room,
     hits: 1000,
@@ -80,9 +86,7 @@ function makeCandidate(
   return { ...base, ...overrides };
 }
 
-function makeSnapshot(
-  overrides: Partial<FocusFireSnapshot> = {},
-): FocusFireSnapshot {
+function makeSnapshot(overrides: Partial<FocusFireSnapshot> = {}): FocusFireSnapshot {
   return {
     tick: 100,
     squadId: "squad-test",
@@ -587,10 +591,12 @@ describe("COMBAT-014: 同 Snapshot → 1000 次 Hash 一致", () => {
   });
 
   it("focusFirePlanHash should be deterministic", () => {
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [makeCandidate("enemy-1", 25, 25)],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [makeCandidate("enemy-1", 25, 25)],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     const hash1 = focusFirePlanHash(plan);
     const hash2 = focusFirePlanHash(plan);

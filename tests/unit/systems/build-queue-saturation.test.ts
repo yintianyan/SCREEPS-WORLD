@@ -18,19 +18,22 @@ function task(overrides: Partial<BuildTask>): BuildTask {
 
 /** 生成 n 个 extension 结构（位置与任务坐标错开）。 */
 function extensions(n: number): any[] {
-  return Array.from({ length: n }, (_, i) =>
-    mockStructure("extension", { id: `ext_${i}` }),
-  ).map((e, i) => {
-    e.pos = { x: 30 + (i % 10), y: 30 + Math.floor(i / 10) } as any;
-    return e;
-  });
+  return Array.from({ length: n }, (_, i) => mockStructure("extension", { id: `ext_${i}` })).map(
+    (e, i) => {
+      e.pos = { x: 30 + (i % 10), y: 30 + Math.floor(i / 10) } as any;
+      return e;
+    },
+  );
 }
 
 describe("syncTaskStates — 类型饱和判定", () => {
   it("extension 已建满当前 RCL 配额：坐标为空的 queued 任务转 done 并被清除", () => {
     // RCL5 上限 30（tests/setup.ts 的 CONTROLLER_STRUCTURES），建满 30 个。
     const snap = mockSnapshot({ rcl: 5, extensions: extensions(30) as any });
-    const queue = [task({}), task({ key: "constraint.extension.22", pos: { x: 11, y: 10, roomName: "W7N4" } })];
+    const queue = [
+      task({}),
+      task({ key: "constraint.extension.22", pos: { x: 11, y: 10, roomName: "W7N4" } }),
+    ];
 
     syncTaskStates(queue, snap);
     expect(queue.every(t => t.state === "done")).toBe(true);
@@ -50,10 +53,12 @@ describe("syncTaskStates — 类型饱和判定", () => {
   it("结构被毁计数下降：饱和判定自动解除（不影响紧急重建）", () => {
     // storage 任务 + storage 不存在 → 不饱和，任务保留。
     const snap = mockSnapshot({ rcl: 5, storage: undefined });
-    const queue = [task({
-      key: "constraint.storage.01",
-      structureType: "storage" as BuildableStructureConstant,
-    })];
+    const queue = [
+      task({
+        key: "constraint.storage.01",
+        structureType: "storage" as BuildableStructureConstant,
+      }),
+    ];
 
     syncTaskStates(queue, snap);
     expect(queue[0]!.state).toBe("queued");
@@ -61,11 +66,13 @@ describe("syncTaskStates — 类型饱和判定", () => {
 
   it("rampart 叠盾任务不受饱和判定影响（上限巨大）", () => {
     const snap = mockSnapshot({ rcl: 5, extensions: extensions(30) as any });
-    const queue = [task({
-      key: "defense.core.rampart.25.22",
-      structureType: "rampart" as BuildableStructureConstant,
-      pos: { x: 25, y: 22, roomName: "W7N4" },
-    })];
+    const queue = [
+      task({
+        key: "defense.core.rampart.25.22",
+        structureType: "rampart" as BuildableStructureConstant,
+        pos: { x: 25, y: 22, roomName: "W7N4" },
+      }),
+    ];
 
     syncTaskStates(queue, snap);
     expect(queue[0]!.state).toBe("queued");

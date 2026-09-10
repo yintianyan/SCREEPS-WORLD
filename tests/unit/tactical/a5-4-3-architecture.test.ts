@@ -20,7 +20,8 @@ function walk(dir: string): string[] {
 const ALL_FILES = walk(SRC);
 
 function codeLines(src: string): string {
-  return src.split(NL)
+  return src
+    .split(NL)
     .filter(l => {
       const t = l.trim();
       return !t.startsWith("*") && !t.startsWith("//") && !t.startsWith("/*");
@@ -166,8 +167,8 @@ describe("A5.4.3: Domain Import Boundary", () => {
     while ((m = re.exec(src)) !== null) {
       imports.push(m[1]!);
     }
-    const bad = imports.filter(p =>
-      p.includes("systems/") || p.includes("creeps/") || p.includes("kernel/"),
+    const bad = imports.filter(
+      p => p.includes("systems/") || p.includes("creeps/") || p.includes("kernel/"),
     );
     expect(bad, `Forbidden imports: ${bad.join(", ")}`).toHaveLength(0);
   });

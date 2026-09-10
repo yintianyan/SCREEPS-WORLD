@@ -17,11 +17,16 @@ function standardInput(): AnchorSelectionInput {
   const field = computeDistanceField(noWalls);
   return {
     field,
-    sources: [{ x: 10, y: 10 }, { x: 40, y: 40 }],
+    sources: [
+      { x: 10, y: 10 },
+      { x: 40, y: 40 },
+    ],
     controller: { x: 35, y: 15 },
     exits: [
-      { x: 0, y: 25 }, { x: 49, y: 25 },
-      { x: 25, y: 0 }, { x: 25, y: 49 },
+      { x: 0, y: 25 },
+      { x: 49, y: 25 },
+      { x: 25, y: 0 },
+      { x: 25, y: 49 },
     ],
     mineral: { x: 15, y: 40 },
     getTerrain: noWalls,
@@ -31,44 +36,72 @@ function standardInput(): AnchorSelectionInput {
 describe("anchor-selection — scoreAnchor", () => {
   it("高 openness + 低 blockedCells 得分高", () => {
     const good: AnchorConstraint = {
-      openness: 8, avgSourceDist: 10, controllerDist: 10,
-      exitDistance: 15, blockedCells: 0, mineralDist: 15,
+      openness: 8,
+      avgSourceDist: 10,
+      controllerDist: 10,
+      exitDistance: 15,
+      blockedCells: 0,
+      mineralDist: 15,
     };
     const bad: AnchorConstraint = {
-      openness: 3, avgSourceDist: 10, controllerDist: 10,
-      exitDistance: 15, blockedCells: 10, mineralDist: 15,
+      openness: 3,
+      avgSourceDist: 10,
+      controllerDist: 10,
+      exitDistance: 15,
+      blockedCells: 10,
+      mineralDist: 15,
     };
     expect(scoreAnchor(good)).toBeGreaterThan(scoreAnchor(bad));
   });
 
   it("靠近 source 得分更高（sourceDist 权重为负）", () => {
     const near: AnchorConstraint = {
-      openness: 5, avgSourceDist: 5, controllerDist: 10,
-      exitDistance: 15, blockedCells: 0, mineralDist: 15,
+      openness: 5,
+      avgSourceDist: 5,
+      controllerDist: 10,
+      exitDistance: 15,
+      blockedCells: 0,
+      mineralDist: 15,
     };
     const far: AnchorConstraint = {
-      openness: 5, avgSourceDist: 20, controllerDist: 10,
-      exitDistance: 15, blockedCells: 0, mineralDist: 15,
+      openness: 5,
+      avgSourceDist: 20,
+      controllerDist: 10,
+      exitDistance: 15,
+      blockedCells: 0,
+      mineralDist: 15,
     };
     expect(scoreAnchor(near)).toBeGreaterThan(scoreAnchor(far));
   });
 
   it("远离出口得分更高（exitDistance 权重为正）", () => {
     const safe: AnchorConstraint = {
-      openness: 5, avgSourceDist: 10, controllerDist: 10,
-      exitDistance: 25, blockedCells: 0, mineralDist: 15,
+      openness: 5,
+      avgSourceDist: 10,
+      controllerDist: 10,
+      exitDistance: 25,
+      blockedCells: 0,
+      mineralDist: 15,
     };
     const exposed: AnchorConstraint = {
-      openness: 5, avgSourceDist: 10, controllerDist: 10,
-      exitDistance: 5, blockedCells: 0, mineralDist: 15,
+      openness: 5,
+      avgSourceDist: 10,
+      controllerDist: 10,
+      exitDistance: 5,
+      blockedCells: 0,
+      mineralDist: 15,
     };
     expect(scoreAnchor(safe)).toBeGreaterThan(scoreAnchor(exposed));
   });
 
   it("自定义权重生效", () => {
     const c: AnchorConstraint = {
-      openness: 5, avgSourceDist: 10, controllerDist: 10,
-      exitDistance: 15, blockedCells: 0, mineralDist: 15,
+      openness: 5,
+      avgSourceDist: 10,
+      controllerDist: 10,
+      exitDistance: 15,
+      blockedCells: 0,
+      mineralDist: 15,
     };
     const w1 = { ...DEFAULT_WEIGHTS, openness: 100 };
     const w2 = { ...DEFAULT_WEIGHTS, openness: 0 };
@@ -150,14 +183,16 @@ describe("anchor-selection — selectAnchors", () => {
   });
 
   it("有墙地形：候选避开墙区域", () => {
-    const wallTerrain = (x: number, y: number): boolean =>
-      x >= 20 && x <= 30 && y >= 20 && y <= 30;
+    const wallTerrain = (x: number, y: number): boolean => x >= 20 && x <= 30 && y >= 20 && y <= 30;
     const field = computeDistanceField(wallTerrain);
     const input: AnchorSelectionInput = {
       field,
       sources: [{ x: 10, y: 10 }],
       controller: { x: 40, y: 40 },
-      exits: [{ x: 0, y: 25 }, { x: 49, y: 25 }],
+      exits: [
+        { x: 0, y: 25 },
+        { x: 49, y: 25 },
+      ],
       mineral: undefined,
       getTerrain: wallTerrain,
       minOpenness: 4,

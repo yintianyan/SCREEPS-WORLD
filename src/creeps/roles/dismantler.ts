@@ -26,7 +26,7 @@ function structureValueTier(t: StructureConstant): number {
 export function dismantleStructures(): ActionCandidate<AnyStructure> {
   return {
     name: "dismantler:dismantle-structures",
-    resolve: (ac) => {
+    resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       const target = ac.creep.memory.remoteTarget;
       if (!target || ac.creep.room.name !== target) return undefined;
@@ -35,9 +35,11 @@ export function dismantleStructures(): ActionCandidate<AnyStructure> {
       let best: AnyStructure | undefined;
       let bestScore = -Infinity;
       for (const s of structs) {
-        const score = structureValueTier(s.structureType) * 1000
-          + s.hitsMax - s.hits
-          - ac.creep.pos.getRangeTo(s);
+        const score =
+          structureValueTier(s.structureType) * 1000 +
+          s.hitsMax -
+          s.hits -
+          ac.creep.pos.getRangeTo(s);
         if (score > bestScore) {
           bestScore = score;
           best = s;
@@ -63,7 +65,7 @@ export function dismantleStructures(): ActionCandidate<AnyStructure> {
 export function dismantlePathWalls(): ActionCandidate<StructureWall> {
   return {
     name: "dismantler:dismantle-path-walls",
-    resolve: (ac) => {
+    resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       const target = ac.creep.memory.remoteTarget;
       if (!target || ac.creep.room.name !== target) return undefined;

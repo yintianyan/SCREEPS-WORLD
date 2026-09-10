@@ -15,7 +15,7 @@ import { getObjectById } from "../../support/obj-cache";
 export function fillTarget(): ActionCandidate<AnyOwnedStructure> {
   return {
     name: "fill:target",
-    resolve: (ac) => {
+    resolve: ac => {
       // 优先复用持久化目标 — 验证它仍需填充。
       if (ac.creep.memory.fillTargetId) {
         const cached = getObjectById(ac.creep.memory.fillTargetId as Id<AnyOwnedStructure>);
@@ -49,13 +49,16 @@ export function haulFillTarget(): ActionCandidate<AnyOwnedStructure> {
     // 严禁添加 `|| controllerContainer !== undefined` — controllerContainer 存在不等于需要填充：
     // 会导致 predicate 返回 true 而 execute 内 getHaulFillTarget 返回 undefined，FSM 在此
     // return 不再 fallthrough，hauler 永远无法到达 fillStorage() — storage 空置死锁。
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.snapshot.fillTargets.length === 0) return undefined;
       // 携非能量 cargo 但无能量时放行后续候选先卸货（同 distributorFillTarget）：
       // execute 只 transfer(RESOURCE_ENERGY)，携矿物会静默失败并终止候选链 →
       // 配 updateMode 总量口径 hauler 永久冻结（EN-1 公理：资格检查前置 resolve）。
-      if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0 &&
-          ac.creep.store.getUsedCapacity() > 0) return undefined;
+      if (
+        ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0 &&
+        ac.creep.store.getUsedCapacity() > 0
+      )
+        return undefined;
       return getHaulFillTarget(ac.creep, ac.snapshot);
     },
     execute: (ac, t) => {
@@ -74,13 +77,16 @@ export function haulFillTarget(): ActionCandidate<AnyOwnedStructure> {
 export function distributorFillTarget(): ActionCandidate<AnyOwnedStructure> {
   return {
     name: "fill:distributor-target",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.snapshot.fillTargets.length === 0) return undefined;
       // 携非能量 cargo（如 lab unload 化合物）但无能量时放行后续候选先卸货：
       // execute 只 transfer energy，携化合物静默失败并终止候选链 →
       // distributor 永久冻结（EN-1 公理：资格检查前置 resolve）。
-      if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0 &&
-          ac.creep.store.getUsedCapacity() > 0) return undefined;
+      if (
+        ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0 &&
+        ac.creep.store.getUsedCapacity() > 0
+      )
+        return undefined;
       // 读取 distributor gate 每 tick 计算的水位档位，用于过滤目标类型。
       const tier = (ac.creep.memory.distributorTier as 0 | 1 | 2 | 3) ?? 0;
       return getDistributorFillTarget(ac.creep, ac.snapshot, tier);
@@ -97,7 +103,7 @@ export function distributorFillTarget(): ActionCandidate<AnyOwnedStructure> {
 export function fillEmptiestContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "fill:emptiest-container",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.snapshot.containers.length === 0) return undefined;
       const best = findEmptiestContainer(ac.snapshot.containers);
       if (!best || best.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return undefined;
@@ -116,7 +122,7 @@ export function fillEmptiestContainer(): ActionCandidate<StructureContainer> {
 export function fillStorage(): ActionCandidate<StructureStorage> {
   return {
     name: "fill:storage",
-    resolve: (ac) => {
+    resolve: ac => {
       if (!ac.snapshot.storage) return undefined;
       // storage 有空闲容量时才送 — 满了则 fallthrough 到 haulFillTarget
       if (ac.snapshot.storage.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return undefined;
@@ -124,9 +130,7 @@ export function fillStorage(): ActionCandidate<StructureStorage> {
       // 放行 haulFillTarget（其内部把 tower 置顶）——否则入侵期间 hauler 把能量囤进 storage，
       // distributor 在 tier≥1 跳过 tower（水位节流）→ 双泵同时缺位，tower 断能真空。
       if (ac.snapshot.threatCreeps.length > 0) {
-        const towerStarved = ac.snapshot.fillTargets.some(
-          t => t.structureType === STRUCTURE_TOWER,
-        );
+        const towerStarved = ac.snapshot.fillTargets.some(t => t.structureType === STRUCTURE_TOWER);
         if (towerStarved) return undefined;
       }
       // 泵断供兜底：本房无存活 distributor（storage→spawn/extension 的唯一分发泵）且核心

@@ -59,7 +59,7 @@ function sampleRoomFlows(ctx: TickContext): void {
   const remoteTargets = globalCache().remoteTargetRooms;
   for (const room of Object.values(Game.rooms)) {
     const owned = room.controller?.my === true;
-    if (!owned && !(remoteTargets?.has(room.name))) continue;
+    if (!owned && !remoteTargets?.has(room.name)) continue;
 
     // owned 房优先用快照（kernel 已预构建 sources + myConstructionSites），
     // 避免对自有房重复 room.find；远矿房无快照，仍用 room.find 直查。
@@ -119,8 +119,9 @@ function collectPools(s: RoomSnapshot): EnergyPools {
   for (const d of s.droppedEnergy) loose += d.amount;
   for (const t of s.tombstones) loose += t.store.getUsedCapacity(RESOURCE_ENERGY);
   for (const r of s.ruins) loose += r.store.getUsedCapacity(RESOURCE_ENERGY);
-  const other = (s.factory?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0)
-    + (s.powerSpawn?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0);
+  const other =
+    (s.factory?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) +
+    (s.powerSpawn?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0);
   let towers = 0;
   for (const t of s.towers) towers += t.store.getUsedCapacity(RESOURCE_ENERGY);
   return {
@@ -203,7 +204,7 @@ export const economySystem: System = {
           st.netFlowEma = roomMem.economy.nf / 100;
           st.effFactor = roomMem.economy.ef / 100;
         }
-      continue;
+        continue;
       }
 
       // 合同初值语义：效率系数从 0.7 起点由实测 EMA 校准，而非首窗实测直取
@@ -213,7 +214,12 @@ export const economySystem: System = {
       const w = rollupWindow(st.lastTick, ctx.tick, st.lastLedger, cum, st.lastPools, pools);
       const netPerTick = (w.income - w.consumption + w.refunds) / w.ticks;
       st.netFlowEma = updateNetFlowEma(st.netFlowEma, netPerTick, acc.netFlowAlpha);
-      st.effFactor = updateEfficiencyFactor(st.effFactor, w.incomePerTick, snapshot.sources.length, acc.efficiencyAlpha);
+      st.effFactor = updateEfficiencyFactor(
+        st.effFactor,
+        w.incomePerTick,
+        snapshot.sources.length,
+        acc.efficiencyAlpha,
+      );
 
       const reserve = contractReserveOf(pools);
       const rb = riskBufferTicks(reserve, w.p0p1PerTick, acc.riskEpsilon);
@@ -227,7 +233,6 @@ export const economySystem: System = {
       } else {
         st.driftStreak = 0;
       }
-
 
       roomMem.economy = toMemorySnapshot(
         ctx.tick,

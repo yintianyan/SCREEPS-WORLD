@@ -49,7 +49,7 @@ function makeContext(snapshots: any[]): any {
     budget: mockBudget("healthy"),
     global_siteCount: 0,
     getSnapshot: (name: string) => map[name],
-    snapshots: function* () {
+    *snapshots() {
       for (const s of snapshots) yield s;
     },
   };

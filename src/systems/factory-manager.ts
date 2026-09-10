@@ -68,7 +68,11 @@ export const factoryManagerSystem: System = {
  * 与 FIND_NUKES 等引擎常量同防御口径）。battery/energy 之外的产出
  * 即 commodity（能量是解压回退，battery 走满仓链）。
  */
-function tryProduceCommodity(snapshot: RoomSnapshot, factory: StructureFactory, ctx: TickContext): void {
+function tryProduceCommodity(
+  snapshot: RoomSnapshot,
+  factory: StructureFactory,
+  ctx: TickContext,
+): void {
   const recipes = collectRecipes(factory.level ?? 0);
   if (recipes.length === 0) return;
 
@@ -120,7 +124,11 @@ function tryProduceCommodity(snapshot: RoomSnapshot, factory: StructureFactory, 
 
 /** 从引擎 COMMODITIES 裁剪配方表（梯度降序：T3 → T1；无 components 的跳过）。 */
 function collectRecipes(factoryLevel: number): CommodityRecipe[] {
-  const table = (globalThis as { COMMODITIES?: Record<string, { level?: number; components?: Record<string, number> }> }).COMMODITIES;
+  const table = (
+    globalThis as {
+      COMMODITIES?: Record<string, { level?: number; components?: Record<string, number> }>;
+    }
+  ).COMMODITIES;
   if (!table) return [];
   const recipes: CommodityRecipe[] = [];
   for (const [resourceType, def] of Object.entries(table)) {
@@ -157,12 +165,15 @@ function toStockView(store: Record<string, number>): StockView {
 function tryDecompressBattery(snapshot: RoomSnapshot, factory: StructureFactory): boolean {
   const batteryInFactory = factory.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
   const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY);
-  if (!shouldDecompressBattery({
-    storageEnergy,
-    batteryInFactory,
-    factoryCooldown: factory.cooldown,
-    energyCrisisFloor: CONFIG.energy.energyBuyFloor,
-  })) return false;
+  if (
+    !shouldDecompressBattery({
+      storageEnergy,
+      batteryInFactory,
+      factoryCooldown: factory.cooldown,
+      energyCrisisFloor: CONFIG.energy.energyBuyFloor,
+    })
+  )
+    return false;
 
   factory.produce(RESOURCE_ENERGY);
   return true;

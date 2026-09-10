@@ -178,16 +178,34 @@ describe("R4 — 收摊与战后核验", () => {
         W7N4: {
           spawnQueue: [
             {
-              key: "attacker:W7N4:W6N4:0", role: "attacker", home: "W7N4", priority: 2,
-              body: ["attack", "move"], memory: { role: "attacker", home: "W7N4", remoteTarget: "W6N4" },
-              createdAt: 900, expiresAt: 1900, retries: 0,
+              key: "attacker:W7N4:W6N4:0",
+              role: "attacker",
+              home: "W7N4",
+              priority: 2,
+              body: ["attack", "move"],
+              memory: { role: "attacker", home: "W7N4", remoteTarget: "W6N4" },
+              createdAt: 900,
+              expiresAt: 1900,
+              retries: 0,
             },
           ],
         },
       },
       kernel: {
-        strategy: { posture: "war", since: 900, expansionAllowed: false, newRemoteOpsAllowed: false },
-        warPlan: { targetRoom: "W6N4", sponsor: "W7N4", squadSize: 1, since: 900, towersSeen: 2, ...overrides },
+        strategy: {
+          posture: "war",
+          since: 900,
+          expansionAllowed: false,
+          newRemoteOpsAllowed: false,
+        },
+        warPlan: {
+          targetRoom: "W6N4",
+          sponsor: "W7N4",
+          squadSize: 1,
+          since: 900,
+          towersSeen: 2,
+          ...overrides,
+        },
       },
     };
     (globalThis as any).Game.creeps = {
@@ -210,7 +228,9 @@ describe("R4 — 收摊与战后核验", () => {
     // heal-tank：healer 与 attacker 同收（独存奶车无意义）。
     expect((globalThis as any).Game.creeps.h1.memory.recycle).toBe(true);
     // 塔网未清零（towersSeen=2，intel towers=1）且敌主仍在 → failure → 黑名单。
-    expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(TICK + CONFIG.war.warBlacklistTicks);
+    expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(
+      TICK + CONFIG.war.warBlacklistTicks,
+    );
     // 黑匣子事件：outcome=failure(1)。
     expect(warOutcomeEvents()[0]?.d?.[0]).toBe(1);
   });
@@ -247,7 +267,9 @@ describe("R4 — 收摊与战后核验", () => {
     warPlannerSystem.run(mockContext(mockSnapshot()));
 
     // unknown → 半额冷却。
-    expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(TICK + Math.floor(CONFIG.war.warBlacklistTicks / 2));
+    expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(
+      TICK + Math.floor(CONFIG.war.warBlacklistTicks / 2),
+    );
     expect(warOutcomeEvents()[0]?.d?.[0]).toBe(2);
   });
 
@@ -259,7 +281,9 @@ describe("R4 — 收摊与战后核验", () => {
     warPlannerSystem.run(mockContext(mockSnapshot()));
 
     // P0-2：unknown 用半额冷却 — intel 过期不是目标的错。
-    expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(TICK + Math.floor(CONFIG.war.warBlacklistTicks / 2));
+    expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(
+      TICK + Math.floor(CONFIG.war.warBlacklistTicks / 2),
+    );
     expect(warOutcomeEvents()[0]?.d?.[0]).toBe(2);
   });
 
@@ -283,16 +307,25 @@ describe("R4 — 战损止损与波次相位", () => {
     setupHome();
     setPosture("war");
     (globalThis as any).Memory.kernel.warPlan = {
-      targetRoom: "W6N4", sponsor: "W7N4", squadSize: 3, since: 900,
-      towersSeen: 0, phase: "advance", spawned: 14, // 14 > (3+2 healers) × 2.5 = 12.5
+      targetRoom: "W6N4",
+      sponsor: "W7N4",
+      squadSize: 3,
+      since: 900,
+      towersSeen: 0,
+      phase: "advance",
+      spawned: 14, // 14 > (3+2 healers) × 2.5 = 12.5
     };
 
     warPlannerSystem.run(mockContext(mockSnapshot()));
 
     expect((globalThis as any).Memory.kernel.warPlan).toBeUndefined();
-    expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(TICK + CONFIG.war.warBlacklistTicks);
+    expect((globalThis as any).Memory.kernel.warBlacklist.W6N4).toBe(
+      TICK + CONFIG.war.warBlacklistTicks,
+    );
     // 整军休战：止损后不立即换目标重开。
-    expect((globalThis as any).Memory.kernel.warStandDownUntil).toBe(TICK + CONFIG.war.standDownTicks);
+    expect((globalThis as any).Memory.kernel.warStandDownUntil).toBe(
+      TICK + CONFIG.war.standDownTicks,
+    );
     // 收摊原因 = attrition(1)。
     expect(warOutcomeEvents()[0]?.d?.[2]).toBe(1);
   });
@@ -330,8 +363,13 @@ describe("R4 — 战损止损与波次相位", () => {
     setupHome();
     setPosture("war");
     (globalThis as any).Memory.kernel.warPlan = {
-      targetRoom: "W6N4", sponsor: "W7N4", squadSize: 3, since: 900,
-      towersSeen: 0, phase: "advance", spawned: 3,
+      targetRoom: "W6N4",
+      sponsor: "W7N4",
+      squadSize: 3,
+      since: 900,
+      towersSeen: 0,
+      phase: "advance",
+      spawned: 3,
     };
     setLiveSquad(1); // 1 < (3+2) × 0.5 → 回落 build
 
@@ -345,8 +383,13 @@ describe("R4 — 战损止损与波次相位", () => {
     setupHome();
     setPosture("war");
     (globalThis as any).Memory.kernel.warPlan = {
-      targetRoom: "W6N4", sponsor: "W7N4", squadSize: 3, since: 900,
-      towersSeen: 0, phase: "build", spawned: 3,
+      targetRoom: "W6N4",
+      sponsor: "W7N4",
+      squadSize: 3,
+      since: 900,
+      towersSeen: 0,
+      phase: "build",
+      spawned: 3,
     };
     setLiveSquad(2); // 2 ≥ 1.5 但 < 5（合计编制）→ 未满编仍 build
 
@@ -372,8 +415,13 @@ describe("R4 — 战损止损与波次相位", () => {
     setupHome();
     setPosture("war");
     (globalThis as any).Memory.kernel.warPlan = {
-      targetRoom: "W6N4", sponsor: "W7N4", squadSize: 3, since: 900,
-      towersSeen: 0, phase: "advance", spawned: 3,
+      targetRoom: "W6N4",
+      sponsor: "W7N4",
+      squadSize: 3,
+      since: 900,
+      towersSeen: 0,
+      phase: "advance",
+      spawned: 3,
     };
     (globalThis as any).Memory.kernel.warBlacklist = { W6N4: TICK + CONFIG.war.warBlacklistTicks };
 
@@ -390,8 +438,13 @@ describe("boost 战前强化 — advance 门禁接线", () => {
     setupHome();
     setPosture("war");
     (globalThis as any).Memory.kernel.warPlan = {
-      targetRoom: "W6N4", sponsor: "W7N4", squadSize: 3, since,
-      towersSeen: 0, phase: "build", spawned: 5,
+      targetRoom: "W6N4",
+      sponsor: "W7N4",
+      squadSize: 3,
+      since,
+      towersSeen: 0,
+      phase: "build",
+      spawned: 5,
     };
     setLiveSquad(3, 2, boosted);
   }

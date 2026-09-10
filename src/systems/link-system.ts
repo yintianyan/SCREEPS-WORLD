@@ -1,6 +1,10 @@
 import type { Priority, RoomSnapshot, System, TickContext } from "../kernel/contracts";
 import type { LinkInfo, LinkRole } from "../domain/economy/links";
-import { planLinkTransfers, classifyLinkRole, computeControllerLinkTarget } from "../domain/economy/links";
+import {
+  planLinkTransfers,
+  classifyLinkRole,
+  computeControllerLinkTarget,
+} from "../domain/economy/links";
 import { linkHasOutlet } from "../domain/economy/link-outlet";
 import {
   DEAD_ASSET_THRESHOLD,
@@ -101,9 +105,7 @@ export function computeDeadAssetSince(
     currentIds.add(info.id);
     const otherLinks = infos.filter(i => i.id !== info.id);
     const isDead =
-      info.role === "source" &&
-      info.energy === 0 &&
-      !linkHasOutlet(info.role, otherLinks);
+      info.role === "source" && info.energy === 0 && !linkHasOutlet(info.role, otherLinks);
     if (isDead) {
       // 沿用已有计时器（首次记录 tick），否则记录当前 tick。
       next.set(info.id, prevSince.get(info.id) ?? tick);
@@ -201,7 +203,10 @@ export function recordDismantleStart(roomName: string, tick: number): void {
 /**
  * 获取所有活跃的拆改计划（construction-manager 每 tick 消费）。
  */
-export function getDismantlePlans(): ReadonlyMap<string, import("../kernel/global-cache").DismantlePlan> {
+export function getDismantlePlans(): ReadonlyMap<
+  string,
+  import("../kernel/global-cache").DismantlePlan
+> {
   return globalCache().dismantlePlans ?? new Map();
 }
 

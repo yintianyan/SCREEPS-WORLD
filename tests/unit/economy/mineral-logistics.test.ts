@@ -1,6 +1,9 @@
 /** planMineralAid — 跨房矿物互济纯函数决策测试。 */
 import { describe, expect, it } from "vitest";
-import { planMineralAid, type RoomMineralState } from "../../../src/domain/economy/mineral-logistics";
+import {
+  planMineralAid,
+  type RoomMineralState,
+} from "../../../src/domain/economy/mineral-logistics";
 
 const OPTS = { donorReserve: 3000, maxTransfer: 1000, minTransfer: 100 };
 
@@ -9,13 +12,18 @@ const OPTS = { donorReserve: 3000, maxTransfer: 1000, minTransfer: 100 };
  * 缺口函数对 7 种基础矿物全量计算 — 造数时未列出的矿种按 0 计成 500 缺口，
  * 会把无关房间误变成最大缺口方。除被测矿种外一律从 FULL 起步。
  */
-const FULL: Readonly<Record<string, number>> = { H: 500, O: 500, U: 500, L: 500, K: 500, Z: 500, X: 200 };
+const FULL: Readonly<Record<string, number>> = {
+  H: 500,
+  O: 500,
+  U: 500,
+  L: 500,
+  K: 500,
+  Z: 500,
+  X: 200,
+};
 
 /** 基准房间：home U 存量由参数指定，其余矿物 0。 */
-function room(
-  roomName: string,
-  overrides: Partial<RoomMineralState> = {},
-): RoomMineralState {
+function room(roomName: string, overrides: Partial<RoomMineralState> = {}): RoomMineralState {
   return {
     roomName,
     homeMineral: "U",
@@ -45,8 +53,16 @@ describe("planMineralAid — 正常路径", () => {
   it("缺口最大者优先 — 缺 U 500 的房先于缺 K 200 的房被服务", () => {
     const uDonor = room("W1N1", { homeStock: 4000, inventory: FULL });
     const kDonor = room("W3N1", { homeMineral: "K", homeStock: 4000, inventory: FULL });
-    const uNeedy = room("W2N1", { homeMineral: "K", homeStock: 4000, inventory: { ...FULL, U: 0 } }); // 仅 U 缺 500
-    const kNeedy = room("W4N1", { homeMineral: "Z", homeStock: 4000, inventory: { ...FULL, K: 300 } }); // 仅 K 缺 200
+    const uNeedy = room("W2N1", {
+      homeMineral: "K",
+      homeStock: 4000,
+      inventory: { ...FULL, U: 0 },
+    }); // 仅 U 缺 500
+    const kNeedy = room("W4N1", {
+      homeMineral: "Z",
+      homeStock: 4000,
+      inventory: { ...FULL, K: 300 },
+    }); // 仅 K 缺 200
     const plan = planMineralAid([kDonor, uDonor, kNeedy, uNeedy], OPTS);
     // U 缺口 500 > K 缺口 200 → 先补 U。
     expect(plan).toEqual({ from: "W1N1", to: "W2N1", mineral: "U", amount: 500 });

@@ -52,7 +52,10 @@ function rcl4World(opts?: {
     // P1-1：hostile 放置在 creep 活动区域附近（~7 格），
     // 确保 fleeRange(10) 内触发逃跑，而非远端过境不触发。
     world.addHostile("invader_1", { x: 19, y: 19 }, [
-      { type: "attack" }, { type: "attack" }, { type: "move" }, { type: "move" },
+      { type: "attack" },
+      { type: "attack" },
+      { type: "move" },
+      { type: "move" },
     ]);
   }
 
@@ -62,33 +65,96 @@ function rcl4World(opts?: {
 /** 给世界添加标准 RCL4 人口。 */
 function addRcl4Population(world: TestWorld): void {
   // 2 harvester（4W 站桩矿工）
-  world.addCreep("h1", "harvester", 13, 13, [
-    { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-  ], { sourceId: "s1", mode: "work" });
-  world.addCreep("h2", "harvester", 37, 13, [
-    { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" },
-  ], { sourceId: "s2", mode: "work" });
+  world.addCreep(
+    "h1",
+    "harvester",
+    13,
+    13,
+    [
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "carry" },
+      { type: "move" },
+    ],
+    { sourceId: "s1", mode: "work" },
+  );
+  world.addCreep(
+    "h2",
+    "harvester",
+    37,
+    13,
+    [
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "work" },
+      { type: "carry" },
+      { type: "move" },
+    ],
+    { sourceId: "s2", mode: "work" },
+  );
 
   // 2 hauler（物流链）
-  world.addCreep("haul1", "hauler", 20, 20, [
-    { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-  ], { mode: "acquire" });
-  world.addCreep("haul2", "hauler", 22, 22, [
-    { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "move" }, { type: "move" },
-  ], { mode: "acquire" });
+  world.addCreep(
+    "haul1",
+    "hauler",
+    20,
+    20,
+    [
+      { type: "carry" },
+      { type: "carry" },
+      { type: "carry" },
+      { type: "carry" },
+      { type: "move" },
+      { type: "move" },
+    ],
+    { mode: "acquire" },
+  );
+  world.addCreep(
+    "haul2",
+    "hauler",
+    22,
+    22,
+    [
+      { type: "carry" },
+      { type: "carry" },
+      { type: "carry" },
+      { type: "carry" },
+      { type: "move" },
+      { type: "move" },
+    ],
+    { mode: "acquire" },
+  );
 
   // 2 upgrader（站桩升级）
-  world.addCreep("u1", "upgrader", 29, 38, [
-    { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-  ], { mode: "acquire" });
-  world.addCreep("u2", "upgrader", 30, 37, [
-    { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-  ], { mode: "acquire" });
+  world.addCreep(
+    "u1",
+    "upgrader",
+    29,
+    38,
+    [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+    { mode: "acquire" },
+  );
+  world.addCreep(
+    "u2",
+    "upgrader",
+    30,
+    37,
+    [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+    { mode: "acquire" },
+  );
 
   // 1 builder
-  world.addCreep("b1", "builder", 24, 24, [
-    { type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" },
-  ], { mode: "acquire" });
+  world.addCreep(
+    "b1",
+    "builder",
+    24,
+    24,
+    [{ type: "work" }, { type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }],
+    { mode: "acquire" },
+  );
 
   // 填充 spawn + extensions
   world.spawns[0]!.store.energy = 300;
@@ -181,7 +247,7 @@ describe("RCL4 Automation — 自动化", () => {
 
     // 运行 600 tick — 应该补充 harvester
     const result = runner.run(world, 600, {
-      stopWhen: (w) => w.creepsByRole("harvester").length >= 2,
+      stopWhen: w => w.creepsByRole("harvester").length >= 2,
     });
 
     // 人口恢复

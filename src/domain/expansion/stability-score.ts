@@ -71,9 +71,9 @@ export interface StabilityScoreResult {
 /** 各维度权重（总和 = 1.0）。 */
 const WEIGHTS = {
   energy: 0.25,
-  population: 0.20,
-  spawn: 0.20,
-  production: 0.20,
+  population: 0.2,
+  spawn: 0.2,
+  production: 0.2,
   failures: 0.15,
 } as const;
 
@@ -99,10 +99,10 @@ export function evaluateStabilityScore(input: StabilityScoreInput): StabilitySco
 
   const totalScore = Math.round(
     energyScore.score * WEIGHTS.energy +
-    populationScore.score * WEIGHTS.population +
-    spawnScore.score * WEIGHTS.spawn +
-    productionScore.score * WEIGHTS.production +
-    failureScore.score * WEIGHTS.failures,
+      populationScore.score * WEIGHTS.population +
+      spawnScore.score * WEIGHTS.spawn +
+      productionScore.score * WEIGHTS.production +
+      failureScore.score * WEIGHTS.failures,
   );
 
   const level = scoreToLevel(totalScore);

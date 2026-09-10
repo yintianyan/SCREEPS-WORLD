@@ -12,13 +12,7 @@
  * - suspended:  长期不经济，暂停（ROI 持续低于阈值）
  * - failed:     永久失效（源/目标房失守）
  */
-export type RouteStatus =
-  | "active"
-  | "congested"
-  | "degraded"
-  | "blocked"
-  | "suspended"
-  | "failed";
+export type RouteStatus = "active" | "congested" | "degraded" | "blocked" | "suspended" | "failed";
 
 /**
  * 判定 Route 状态是否可用（可分配运输任务）。
@@ -233,10 +227,10 @@ export function updateRouteEvaluation(
  * 纯函数。
  */
 export function routeScore(route: Route): number {
-  const reliabilityScore = route.reliability * 0.40;
-  const costScore = (1 / (1 + route.cost / 1000)) * 0.30;
-  const safetyScore = (1 - route.risk) * 0.20;
-  const trafficScore = (1 - route.traffic) * 0.10;
+  const reliabilityScore = route.reliability * 0.4;
+  const costScore = (1 / (1 + route.cost / 1000)) * 0.3;
+  const safetyScore = (1 - route.risk) * 0.2;
+  const trafficScore = (1 - route.traffic) * 0.1;
   return reliabilityScore + costScore + safetyScore + trafficScore;
 }
 
@@ -277,11 +271,7 @@ export function filterRoutesTo(routes: readonly Route[], to: string): Route[] {
  * 查找从 from 到 to 的路由。
  * 纯函数。
  */
-export function findRoute(
-  routes: readonly Route[],
-  from: string,
-  to: string,
-): Route | undefined {
+export function findRoute(routes: readonly Route[], from: string, to: string): Route | undefined {
   return routes.find(r => r.from === from && r.to === to);
 }
 
@@ -327,25 +317,38 @@ export interface RouteSnapshot {
 /** RouteStatus 编码。 */
 function encodeRouteStatus(status: RouteStatus): string {
   switch (status) {
-    case "active": return "A";
-    case "congested": return "C";
-    case "degraded": return "D";
-    case "blocked": return "B";
-    case "suspended": return "S";
-    case "failed": return "F";
+    case "active":
+      return "A";
+    case "congested":
+      return "C";
+    case "degraded":
+      return "D";
+    case "blocked":
+      return "B";
+    case "suspended":
+      return "S";
+    case "failed":
+      return "F";
   }
 }
 
 /** RouteStatus 解码。 */
 function decodeRouteStatus(code: string): RouteStatus {
   switch (code) {
-    case "A": return "active";
-    case "C": return "congested";
-    case "D": return "degraded";
-    case "B": return "blocked";
-    case "S": return "suspended";
-    case "F": return "failed";
-    default: return "active";
+    case "A":
+      return "active";
+    case "C":
+      return "congested";
+    case "D":
+      return "degraded";
+    case "B":
+      return "blocked";
+    case "S":
+      return "suspended";
+    case "F":
+      return "failed";
+    default:
+      return "active";
   }
 }
 

@@ -4,7 +4,12 @@ import { updateStuckTicks } from "../../../src/creeps/movement";
 import { resetGlobals } from "../../support/factories";
 
 /** 最小 creep mock — updateStuckTicks 只读 fatigue/pos/memory。 */
-function makeCreep(x: number, y: number, fatigue: number, memory: Record<string, unknown> = {}): Creep {
+function makeCreep(
+  x: number,
+  y: number,
+  fatigue: number,
+  memory: Record<string, unknown> = {},
+): Creep {
   return { fatigue, pos: { x, y }, memory } as unknown as Creep;
 }
 

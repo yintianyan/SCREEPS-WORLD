@@ -55,15 +55,15 @@ function makeExtensionTask(key: string, roomName: string, x: number, y: number):
 describe("多房间公平性 — 全局 normal 槽位不被单房霸占", () => {
   it("房间 A 配额满(3 normal)后立即让位，房间 B 在下一 tick 获得 normal 槽位", () => {
     const g = globalThis as any;
-    g.Memory.rooms.W7N4 = { buildQueue: [
-      makeExtensionTask("a.ext.1", "W7N4", 25, 26),
-      makeExtensionTask("a.ext.2", "W7N4", 26, 24),
-      makeExtensionTask("a.ext.3", "W7N4", 24, 24),
-      makeExtensionTask("a.ext.4", "W7N4", 27, 25),
-    ] };
-    g.Memory.rooms.W7N3 = { buildQueue: [
-      makeExtensionTask("b.ext.1", "W7N3", 25, 26),
-    ] };
+    g.Memory.rooms.W7N4 = {
+      buildQueue: [
+        makeExtensionTask("a.ext.1", "W7N4", 25, 26),
+        makeExtensionTask("a.ext.2", "W7N4", 26, 24),
+        makeExtensionTask("a.ext.3", "W7N4", 24, 24),
+        makeExtensionTask("a.ext.4", "W7N4", 27, 25),
+      ],
+    };
+    g.Memory.rooms.W7N3 = { buildQueue: [makeExtensionTask("b.ext.1", "W7N3", 25, 26)] };
 
     const snapA = makeSnapshot("W7N4");
     const snapB = makeSnapshot("W7N3");
@@ -83,11 +83,23 @@ describe("多房间公平性 — 全局 normal 槽位不被单房霸占", () => 
     g.Game.rooms = { W7N4: roomA, W7N3: roomB };
 
     const ctx = {
-      get tick() { return g.Game.time; },
-      budget: { tier: "healthy", softLimit: 17, hardLimit: 19, canStart: () => true, isExhausted: () => false, spent: () => 0 },
+      get tick() {
+        return g.Game.time;
+      },
+      budget: {
+        tier: "healthy",
+        softLimit: 17,
+        hardLimit: 19,
+        canStart: () => true,
+        isExhausted: () => false,
+        spent: () => 0,
+      },
       globalSiteCount: 0,
       getSnapshot: (_r: string) => snapA,
-      snapshots: function* () { yield snapA; yield snapB; },
+      *snapshots() {
+        yield snapA;
+        yield snapB;
+      },
     } as unknown as TickContext;
 
     // tick 1–3：A 先迭代并占据 normal 槽位（各建 1 个 extension，共 3 = 每房配额）。
@@ -106,6 +118,8 @@ describe("多房间公平性 — 全局 normal 槽位不被单房霸占", () => 
     expect(roomB.createConstructionSite).toHaveBeenCalledTimes(1);
 
     // 总量 4 < 全局上限 7；B 未被永久饥饿。
-    expect(snapA.myConstructionSites.length + snapB.myConstructionSites.length).toBeLessThanOrEqual(7);
+    expect(snapA.myConstructionSites.length + snapB.myConstructionSites.length).toBeLessThanOrEqual(
+      7,
+    );
   });
 });

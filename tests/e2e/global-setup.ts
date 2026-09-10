@@ -2,7 +2,6 @@
 export default function globalSetup(): Promise<void> | (() => Promise<void>) {
   return async function teardown(): Promise<void> {
     const timer = setTimeout(() => {
-      // eslint-disable-next-line no-console
       console.warn(
         "[e2e-global-setup] pool close 挂起（storage 重连 timer hold 住 worker），强制退出主进程。",
       );

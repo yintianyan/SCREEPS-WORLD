@@ -63,7 +63,7 @@ describe("生产 bundle parity — bootstrap 注册集合 vs dist/main.js", () =
       "evaluation-system",
       "EvaluationRegistry",
     ];
-    const found = forbidden.filter((keyword) => bundle.includes(keyword));
-    expect(found, "dist/main.js 包含已删除模块: " + found.join(", ")).toHaveLength(0);
+    const found = forbidden.filter(keyword => bundle.includes(keyword));
+    expect(found, `dist/main.js 包含已删除模块: ${found.join(", ")}`).toHaveLength(0);
   });
 });

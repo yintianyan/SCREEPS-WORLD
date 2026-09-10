@@ -176,11 +176,14 @@ describe("selectPowerAction — 正常路径", () => {
 
   it("能量缺口超过门禁 → operateExtension（从 storage 灌）", () => {
     // spawn 效果仍在（剩 800 tick）→ 跳过 operateSpawn，落到 extension。
-    const { pc: p, room: r } = baseInput({}, {
-      spawnEffectRemaining: 800,
-      energyAvailable: 300,
-      energyCapacity: 1300,
-    });
+    const { pc: p, room: r } = baseInput(
+      {},
+      {
+        spawnEffectRemaining: 800,
+        energyAvailable: 300,
+        energyCapacity: 1300,
+      },
+    );
     expect(selectPowerAction(p, r, T)).toEqual({ kind: "operateExtension", targetId: "storage1" });
   });
 
@@ -196,10 +199,13 @@ describe("selectPowerAction — 正常路径", () => {
 describe("selectPowerAction — 边界条件", () => {
   it("spawn 效果剩余 > 续杯提前量 → 不续杯（落到下一优先级）", () => {
     // 剩 900 > margin 250；无 extension 缺口、无 nearFull → idle。
-    const { pc: p, room: r } = baseInput({}, {
-      spawnEffectRemaining: 900,
-      energyAvailable: 1300,
-    });
+    const { pc: p, room: r } = baseInput(
+      {},
+      {
+        spawnEffectRemaining: 900,
+        energyAvailable: 1300,
+      },
+    );
     expect(selectPowerAction(p, r, T)).toEqual({ kind: "idle" });
   });
 
@@ -219,7 +225,9 @@ describe("selectPowerAction — 边界条件", () => {
 
   it("议程路由：rcl-push 窗口 + CONTROLLER 已升 → operateController 优先于 spawn", () => {
     const { pc: p, room: r } = baseInput(
-      { powerLevels: { [PWR_GENERATE_OPS]: 1, [PWR_OPERATE_SPAWN]: 1, [PWR_OPERATE_CONTROLLER]: 1 } },
+      {
+        powerLevels: { [PWR_GENERATE_OPS]: 1, [PWR_OPERATE_SPAWN]: 1, [PWR_OPERATE_CONTROLLER]: 1 },
+      },
       { rclPush: true, controllerId: "ctrl1" },
     );
     expect(selectPowerAction(p, r, T)).toEqual({ kind: "operateController", targetId: "ctrl1" });
@@ -242,17 +250,22 @@ describe("selectPowerAction — 边界条件", () => {
 
   it("rcl-push 窗口但效果仍在 → 不重复赋能（落到 spawn）", () => {
     const { pc: p, room: r } = baseInput(
-      { powerLevels: { [PWR_GENERATE_OPS]: 1, [PWR_OPERATE_SPAWN]: 1, [PWR_OPERATE_CONTROLLER]: 1 } },
+      {
+        powerLevels: { [PWR_GENERATE_OPS]: 1, [PWR_OPERATE_SPAWN]: 1, [PWR_OPERATE_CONTROLLER]: 1 },
+      },
       { rclPush: true, controllerId: "ctrl1", controllerEffectRemaining: 800 },
     );
     expect(selectPowerAction(p, r, T)).toEqual({ kind: "operateSpawn", targetId: "spawn1" });
   });
 
   it("spawn 效果剩余 < 续杯提前量 → 续杯", () => {
-    const { pc: p, room: r } = baseInput({}, {
-      spawnEffectRemaining: 200,
-      energyAvailable: 1300,
-    });
+    const { pc: p, room: r } = baseInput(
+      {},
+      {
+        spawnEffectRemaining: 200,
+        energyAvailable: 1300,
+      },
+    );
     expect(selectPowerAction(p, r, T)).toEqual({ kind: "operateSpawn", targetId: "spawn1" });
   });
 
@@ -275,11 +288,14 @@ describe("selectPowerAction — 边界条件", () => {
   });
 
   it("extension 缺口但 storage 无货 → operateExtension 跳过", () => {
-    const { pc: p, room: r } = baseInput({}, {
-      spawnEffectRemaining: 800,
-      energyAvailable: 300,
-      storageEnergy: 0,
-    });
+    const { pc: p, room: r } = baseInput(
+      {},
+      {
+        spawnEffectRemaining: 800,
+        energyAvailable: 300,
+        storageEnergy: 0,
+      },
+    );
     expect(selectPowerAction(p, r, T)).toEqual({ kind: "idle" });
   });
 });

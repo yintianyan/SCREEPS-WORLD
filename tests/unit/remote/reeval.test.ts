@@ -8,7 +8,7 @@ import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../s
 
 const homeRoom = "W7N4";
 const targetRoom = "W2N1"; // 与 W7N4 线性距离近，正常 pathCost 下达标。
-const farRoom = "W7N9";    // 极远房，netScore 跌破门槛。
+const farRoom = "W7N9"; // 极远房，netScore 跌破门槛。
 
 function seed(now: number, ops: Record<string, unknown>, intel: Record<string, unknown>) {
   const g = globalThis as any;
@@ -24,7 +24,11 @@ function seed(now: number, ops: Record<string, unknown>, intel: Record<string, u
     source: "observer" as const,
     payload: { kind: "normal", status: "normal", lastSeen: now, ...(p as object) } as never,
   }));
-  intelligenceSystem.run({ tick: now, snapshots: () => [], budget: { canStart: () => true } } as never);
+  intelligenceSystem.run({
+    tick: now,
+    snapshots: () => [],
+    budget: { canStart: () => true },
+  } as never);
 }
 
 beforeEach(() => {
@@ -53,7 +57,15 @@ describe("remote-mining-manager — 现役 op 周期经济重估", () => {
     const started = now - CONFIG.remote.lowScoreGrace - 100; // 早已跌破。
     seed(
       now,
-      { [farRoom]: { state: "active", sources: 1, createdAt: started, lastSeen: now, lowScoreSince: started } },
+      {
+        [farRoom]: {
+          state: "active",
+          sources: 1,
+          createdAt: started,
+          lastSeen: now,
+          lowScoreSince: started,
+        },
+      },
       { [farRoom]: { kind: "normal", status: "normal", lastSeen: now, pathCost: 5000 } },
     );
     remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
@@ -66,7 +78,15 @@ describe("remote-mining-manager — 现役 op 周期经济重估", () => {
     const now = g.Game.time as number;
     seed(
       now,
-      { [targetRoom]: { state: "active", sources: 2, createdAt: now - 100, lastSeen: now, lowScoreSince: now - 50 } },
+      {
+        [targetRoom]: {
+          state: "active",
+          sources: 2,
+          createdAt: now - 100,
+          lastSeen: now,
+          lowScoreSince: now - 50,
+        },
+      },
       { [targetRoom]: { kind: "normal", status: "normal", lastSeen: now, pathCost: 60 } }, // 近房高分。
     );
     remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));

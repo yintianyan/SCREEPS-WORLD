@@ -149,8 +149,12 @@ function setupPathFinderMock(): void {
   }));
   pf.CostMatrix = class {
     private _data = new Uint8Array(2500);
-    set(x: number, y: number, cost: number) { this._data[x * 50 + y] = cost; }
-    get(x: number, y: number) { return this._data[x * 50 + y] ?? 0; }
+    set(x: number, y: number, cost: number) {
+      this._data[x * 50 + y] = cost;
+    }
+    get(x: number, y: number) {
+      return this._data[x * 50 + y] ?? 0;
+    }
   };
 }
 

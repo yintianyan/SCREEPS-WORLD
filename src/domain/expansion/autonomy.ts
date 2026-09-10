@@ -87,9 +87,7 @@ export function evaluateAutonomyAge(input: AutonomyAgeInput): AutonomyAgeResult 
     nextMilestone = null;
   }
 
-  const ticksToNextMilestone = nextMilestone !== null
-    ? Math.max(0, nextMilestone - age)
-    : 0;
+  const ticksToNextMilestone = nextMilestone !== null ? Math.max(0, nextMilestone - age) : 0;
 
   const evidence = [
     `AutonomyAge @${input.currentTick}`,

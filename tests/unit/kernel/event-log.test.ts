@@ -100,7 +100,9 @@ describe("Event Log — segment ring buffer integration", () => {
     ringPush(buf, { t: 200, k: EventKind.TierDowngrade, r: "", d: [0, 1] });
 
     const json = JSON.stringify({ events: buf });
-    const restored = JSON.parse(json) as { events: import("../../../src/kernel/ring-buffer").RingBuffer<GameEvent> };
+    const restored = JSON.parse(json) as {
+      events: import("../../../src/kernel/ring-buffer").RingBuffer<GameEvent>;
+    };
     const arr = ringToArray(restored.events);
     expect(arr).toHaveLength(2);
     expect(arr[0]!.k).toBe(EventKind.PhaseTransition);

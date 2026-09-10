@@ -42,11 +42,13 @@ describe("RM-2 — 远矿威胁失明持久化（threatUntil 双轨）", () => {
       name: target,
       find: vi.fn((type: number, opts?: any) => {
         if (type === FIND_HOSTILE_CREEPS) {
-          const hostiles = [{
-            owner: { username: "enemy" },
-            body: [{ type: "attack" }, { type: "move" }],
-            pos: { x: 25, y: 25 },
-          }];
+          const hostiles = [
+            {
+              owner: { username: "enemy" },
+              body: [{ type: "attack" }, { type: "move" }],
+              pos: { x: 25, y: 25 },
+            },
+          ];
           return opts?.filter ? hostiles.filter(opts.filter) : hostiles;
         }
         return [];
@@ -229,7 +231,8 @@ describe("RD-1 — remote-defender 半血撤退", () => {
     creep.hits = 1000;
     creep.hitsMax = 1000;
     creep.room.find = vi.fn((_t: number, opts?: any) =>
-      opts?.filter ? [hostile].filter(opts.filter) : [hostile]);
+      opts?.filter ? [hostile].filter(opts.filter) : [hostile],
+    );
     creep.pos.findClosestByRange = vi.fn(() => hostile);
     const snap = mockSnapshot();
 
@@ -242,7 +245,12 @@ describe("RD-1 — remote-defender 半血撤退", () => {
 // ─── W-3：P0 团灭恢复的 defense 态感知 ───────────────────────
 
 describe("W-3 — P0 恢复在威胁在场时先孵 defender", () => {
-  const ctx = { colonyState: "defense" as const, controllerDowngradeRisk: false, energyAvailable: 300, economyPressure: 0 };
+  const ctx = {
+    colonyState: "defense" as const,
+    controllerDowngradeRisk: false,
+    energyAvailable: 300,
+    economyPressure: 0,
+  };
 
   it("团灭 + 威胁在场：P0 defender 先于 P0 worker 入队", () => {
     const hostile = mockHostile();
@@ -258,7 +266,15 @@ describe("W-3 — P0 恢复在威胁在场时先孵 defender", () => {
 
   it("团灭无威胁：只孵 P0 worker（原行为不回归）", () => {
     const snap = mockSnapshot({ threatCreeps: [] });
-    const { requests } = evaluateDemand(snap, [], "recovery", [], [], { ...ctx, colonyState: "recovery" }, 1000);
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "recovery",
+      [],
+      [],
+      { ...ctx, colonyState: "recovery" },
+      1000,
+    );
 
     expect(requests).toHaveLength(1);
     expect(requests[0]!.role).toBe("worker");
@@ -271,7 +287,15 @@ describe("C-1/C-2 — expansion 状态机止损豁免", () => {
   it("C-1：conserve tier 下 pioneering 超时判定仍然运行（状态机不被门禁冻结）", () => {
     g().Game.time = 30000;
     g().Memory.kernel = {
-      expansion: { state: "bootstrapping", target: "W9N9", sponsor: "W7N4", startedAt: 1, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
+      expansion: {
+        state: "bootstrapping",
+        target: "W9N9",
+        sponsor: "W7N4",
+        startedAt: 1,
+        checkpointsPassed: 0,
+        reservedEnergy: 0,
+        consecutivePositiveTicks: 0,
+      },
     };
     g().Memory.rooms.W7N4 = { spawnQueue: [] };
     g().Game.rooms.W9N9 = {
@@ -289,7 +313,15 @@ describe("C-1/C-2 — expansion 状态机止损豁免", () => {
   it("C-2：拓荒编队全灭 + 威胁在场 → 放弃 + 黑名单冷却", () => {
     g().Game.time = 5000;
     g().Memory.kernel = {
-      expansion: { state: "bootstrapping", target: "W9N9", sponsor: "W7N4", startedAt: 4900, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
+      expansion: {
+        state: "bootstrapping",
+        target: "W9N9",
+        sponsor: "W7N4",
+        startedAt: 4900,
+        checkpointsPassed: 0,
+        reservedEnergy: 0,
+        consecutivePositiveTicks: 0,
+      },
     };
     g().Memory.rooms.W7N4 = { spawnQueue: [] };
     g().Game.rooms.W9N9 = {
@@ -297,11 +329,13 @@ describe("C-1/C-2 — expansion 状态机止损豁免", () => {
       controller: { my: true },
       find: vi.fn((type: number, opts?: any) => {
         if (type === FIND_HOSTILE_CREEPS) {
-          const hostiles = [{
-            owner: { username: "enemy" },
-            body: [{ type: "attack" }],
-            pos: { x: 20, y: 20 },
-          }];
+          const hostiles = [
+            {
+              owner: { username: "enemy" },
+              body: [{ type: "attack" }],
+              pos: { x: 20, y: 20 },
+            },
+          ];
           return opts?.filter ? hostiles.filter(opts.filter) : hostiles;
         }
         return []; // 无 spawn
@@ -318,7 +352,15 @@ describe("C-1/C-2 — expansion 状态机止损豁免", () => {
   it("C-2：威胁在场但编队存活 → 暂停补充不放弃（过境骚扰可恢复）", () => {
     g().Game.time = 5000;
     g().Memory.kernel = {
-      expansion: { state: "bootstrapping", target: "W9N9", sponsor: "W7N4", startedAt: 4900, checkpointsPassed: 0, reservedEnergy: 0, consecutivePositiveTicks: 0 },
+      expansion: {
+        state: "bootstrapping",
+        target: "W9N9",
+        sponsor: "W7N4",
+        startedAt: 4900,
+        checkpointsPassed: 0,
+        reservedEnergy: 0,
+        consecutivePositiveTicks: 0,
+      },
     };
     g().Memory.rooms.W7N4 = { spawnQueue: [] };
     g().Game.rooms.W9N9 = {
@@ -326,11 +368,13 @@ describe("C-1/C-2 — expansion 状态机止损豁免", () => {
       controller: { my: true },
       find: vi.fn((type: number, opts?: any) => {
         if (type === FIND_HOSTILE_CREEPS) {
-          const hostiles = [{
-            owner: { username: "enemy" },
-            body: [{ type: "attack" }],
-            pos: { x: 20, y: 20 },
-          }];
+          const hostiles = [
+            {
+              owner: { username: "enemy" },
+              body: [{ type: "attack" }],
+              pos: { x: 20, y: 20 },
+            },
+          ];
           return opts?.filter ? hostiles.filter(opts.filter) : hostiles;
         }
         return [];

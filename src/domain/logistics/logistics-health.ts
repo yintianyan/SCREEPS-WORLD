@@ -11,12 +11,7 @@ import { isActiveRequest } from "./transport-request";
  * Logistics 健康度等级。
  */
 export type LogisticsHealthLevel =
-  | "healthy"
-  | "stable"
-  | "degraded"
-  | "congested"
-  | "starved"
-  | "critical";
+  "healthy" | "stable" | "degraded" | "congested" | "starved" | "critical";
 
 /**
  * Logistics 健康度结果。

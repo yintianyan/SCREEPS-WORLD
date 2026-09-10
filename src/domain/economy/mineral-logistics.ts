@@ -61,13 +61,18 @@ export function planMineralAid(
   // 供给侧：各房 homeMineral 盈余（超出捐赠保留量），按盈余降序。
   const donors = rooms
     .filter(r => r.canSend && r.homeMineral !== undefined && r.homeStock > opts.donorReserve)
-    .map(r => ({ roomName: r.roomName, mineral: r.homeMineral!, surplus: r.homeStock - opts.donorReserve }))
+    .map(r => ({
+      roomName: r.roomName,
+      mineral: r.homeMineral!,
+      surplus: r.homeStock - opts.donorReserve,
+    }))
     .sort((a, b) => b.surplus - a.surplus);
   if (donors.length === 0) return undefined;
 
   for (const need of needs) {
     const donor = donors.find(
-      d => d.mineral === need.mineral && d.roomName !== need.roomName && d.surplus >= opts.minTransfer,
+      d =>
+        d.mineral === need.mineral && d.roomName !== need.roomName && d.surplus >= opts.minTransfer,
     );
     if (!donor) continue;
     const amount = Math.min(need.deficit, donor.surplus, opts.maxTransfer);

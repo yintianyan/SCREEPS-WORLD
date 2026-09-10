@@ -34,11 +34,22 @@ function opts(overrides: Partial<PhaseOptions> = {}): PhaseOptions {
 /** 关闭最短驻留的选项 — 用于只验证分数迟滞机制的用例。 */
 const NO_DWELL = opts({ minBandTicks: 0 });
 
-const FRESH: PhaseState = { phase: "growth", prevReserve: undefined, drainScore: 0, liquidityScore: 0 };
+const FRESH: PhaseState = {
+  phase: "growth",
+  prevReserve: undefined,
+  drainScore: 0,
+  liquidityScore: 0,
+};
 
 /** 连续 n 次评估，reserve 每步变化 step。返回最终结果。 */
-function runDrain(state: PhaseState, start: number, step: number, n: number, options?: PhaseOptions) {
-  let s = state;
+function runDrain(
+  state: PhaseState,
+  start: number,
+  step: number,
+  n: number,
+  options?: PhaseOptions,
+) {
+  const s = state;
   let reserve = start;
   let last = evaluateColonyPhase(input({ reserve }), s, options);
   for (let i = 1; i < n; i++) {
@@ -56,7 +67,10 @@ describe("Phase — evaluateColonyPhase", () => {
   });
 
   it("reports bootstrap when harvesters are fewer than sources", () => {
-    const r = evaluateColonyPhase(input({ harvesterCount: 1, sourceCount: 2, reserve: 2000 }), FRESH);
+    const r = evaluateColonyPhase(
+      input({ harvesterCount: 1, sourceCount: 2, reserve: 2000 }),
+      FRESH,
+    );
     expect(r.phase).toBe("bootstrap");
   });
 
@@ -133,13 +147,10 @@ describe("Phase — evaluateColonyPhase", () => {
 
   it("falling reserve with healthy spendableRatio does not accumulate drainScore (主动消费豁免)", () => {
     // spawn 口袋健康（≥ drainSpendableFloor 0.5）时的储备下降是升级/建造投资。
-    let s: PhaseState = FRESH;
+    const s: PhaseState = FRESH;
     let last = evaluateColonyPhase(input({ reserve: 5000, spendableRatio: 0.9 }), s);
     for (let i = 1; i < 15; i++) {
-      last = evaluateColonyPhase(
-        input({ reserve: 5000 - i * 100, spendableRatio: 0.9 }),
-        last,
-      );
+      last = evaluateColonyPhase(input({ reserve: 5000 - i * 100, spendableRatio: 0.9 }), last);
     }
     expect(last.drainScore).toBe(0);
     expect(last.phase).toBe("growth");
@@ -170,8 +181,13 @@ describe("Phase — evaluateColonyPhase", () => {
       phases.push(state.phase);
     }
     expect(phases).toEqual([
-      "crisis", "crisis", "crisis",
-      "recovery", "recovery", "recovery", "recovery",
+      "crisis",
+      "crisis",
+      "crisis",
+      "recovery",
+      "recovery",
+      "recovery",
+      "recovery",
       "growth",
     ]);
   });
@@ -205,7 +221,7 @@ describe("Phase — evaluateColonyPhase", () => {
 
   /** 连续 n 次处于流动性陷阱（spawn 空 + container 满），reserve 保持稳定（偿付健康）。 */
   function runLiquidityTrap(state: PhaseState, n: number, options?: PhaseOptions) {
-    let s = state;
+    const s = state;
     let last = evaluateColonyPhase(
       input({ reserve: 6000, spendableRatio: 0.05, frozenRatio: 0.94 }),
       s,

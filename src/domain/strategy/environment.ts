@@ -72,9 +72,8 @@ export function evaluateEnvironment(
   }
 
   // 邻居竞争压力分级。
-  const ownedRatio = density.totalNeighbors > 0
-    ? density.ownedNeighbors / density.totalNeighbors
-    : 0;
+  const ownedRatio =
+    density.totalNeighbors > 0 ? density.ownedNeighbors / density.totalNeighbors : 0;
   let neighborPressure: EnvironmentProfile["neighborPressure"];
   if (ownedRatio > 0.5) {
     neighborPressure = "high";

@@ -26,8 +26,15 @@ import {
   evaluateFormationTransition,
   FORMATION_SEMANTICS,
 } from "../../../src/domain/tactical";
-import type { CombatCapability, AggregateCapability, CombatPower } from "../../../src/domain/combat/capability";
-import type { TerrainContext, EffectiveCombatModifier } from "../../../src/domain/defense/terrain-context";
+import type {
+  CombatCapability,
+  AggregateCapability,
+  CombatPower,
+} from "../../../src/domain/combat/capability";
+import type {
+  TerrainContext,
+  EffectiveCombatModifier,
+} from "../../../src/domain/defense/terrain-context";
 import type { MultiDimensionalConfidence } from "../../../src/domain/defense/confidence";
 import type { MilitaryOperation, AbortCondition } from "../../../src/domain/military/operation";
 
@@ -65,7 +72,9 @@ function makeHealCapability(): CombatCapability {
   });
 }
 
-function makeAggregateCapability(overrides: Partial<AggregateCapability> = {}): AggregateCapability {
+function makeAggregateCapability(
+  overrides: Partial<AggregateCapability> = {},
+): AggregateCapability {
   return {
     totalAttack: 90,
     totalRangedAttack: 30,
@@ -84,7 +93,9 @@ function makeAggregateCapability(overrides: Partial<AggregateCapability> = {}): 
   };
 }
 
-function makeConfidence(overrides: Partial<MultiDimensionalConfidence> = {}): MultiDimensionalConfidence {
+function makeConfidence(
+  overrides: Partial<MultiDimensionalConfidence> = {},
+): MultiDimensionalConfidence {
   return {
     factConfidence: 0.95,
     combatConfidence: 0.8,
@@ -115,7 +126,9 @@ function makeTerrainContext(overrides: Partial<TerrainContext> = {}): TerrainCon
   };
 }
 
-function makeTerrainModifier(overrides: Partial<EffectiveCombatModifier> = {}): EffectiveCombatModifier {
+function makeTerrainModifier(
+  overrides: Partial<EffectiveCombatModifier> = {},
+): EffectiveCombatModifier {
   return {
     mobilityModifier: 1.0,
     towerDamageFactor: 0,
@@ -158,14 +171,22 @@ function makeObjective(overrides: Partial<TacticalObjective> = {}): TacticalObje
       maxPursuitDistance: 0,
     },
     deadline: DEFAULT_TICK + 5000,
-    abortConditions: ["CASUALTY_EXCEEDED", "INTEL_STALE", "LOGISTICS_COLLAPSED"] as readonly AbortCondition[],
+    abortConditions: [
+      "CASUALTY_EXCEEDED",
+      "INTEL_STALE",
+      "LOGISTICS_COLLAPSED",
+    ] as readonly AbortCondition[],
     evidence: ["test objective"],
     tick: DEFAULT_TICK,
     ...overrides,
   };
 }
 
-function makeSquadMember(name: string, role: string, overrides: Partial<SquadMemberSnapshot> = {}): SquadMemberSnapshot {
+function makeSquadMember(
+  name: string,
+  role: string,
+  overrides: Partial<SquadMemberSnapshot> = {},
+): SquadMemberSnapshot {
   return {
     name,
     role,
@@ -247,7 +268,9 @@ function makeEnemy(overrides: Partial<EnemySnapshot> = {}): EnemySnapshot {
   };
 }
 
-function makeEnemyStructure(overrides: Partial<EnemyStructureSnapshot> = {}): EnemyStructureSnapshot {
+function makeEnemyStructure(
+  overrides: Partial<EnemyStructureSnapshot> = {},
+): EnemyStructureSnapshot {
   return {
     id: "struct-001",
     structureType: "spawn",
@@ -556,7 +579,12 @@ describe("TAC-013: Equal Target Scores → Deterministic Tie Break", () => {
   it("equal score targets sorted by ID deterministically", () => {
     // Use weak enemies to avoid triggering enemyCapabilitySurge (which would
     // divert the decision to RETREATING instead of ENGAGING).
-    const weakCap = makeCombatCapability({ attack: 10, rangedAttack: 0, effectiveHP: 200, heal: 0 });
+    const weakCap = makeCombatCapability({
+      attack: 10,
+      rangedAttack: 0,
+      effectiveHP: 200,
+      heal: 0,
+    });
     const enemyA = makeEnemy({ id: "aaa", capability: weakCap });
     const enemyB = makeEnemy({ id: "bbb", capability: weakCap });
 

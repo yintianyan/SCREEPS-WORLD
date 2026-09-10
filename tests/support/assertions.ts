@@ -39,11 +39,7 @@ export function expectTotalCreepsInRange(
 }
 
 /** RCL ≥ level（无 controller 视野时显式失败，不静默通过）。 */
-export function expectRclAtLeast(
-  snap: TestSnapshot,
-  level: number,
-  message?: string,
-): void {
+export function expectRclAtLeast(snap: TestSnapshot, level: number, message?: string): void {
   const actual = snap.rcl;
   expect(
     actual,
@@ -53,10 +49,7 @@ export function expectRclAtLeast(
 }
 
 /** 快照日志中无 JS 致命错误（判定逻辑唯一来源 = support/errors）。 */
-export function expectNoJsErrors(
-  snap: TestSnapshot,
-  message?: string,
-): void {
+export function expectNoJsErrors(snap: TestSnapshot, message?: string): void {
   const errors = jsErrorLines(snap.consoleLogs);
   expect(
     errors,

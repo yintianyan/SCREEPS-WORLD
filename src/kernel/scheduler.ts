@@ -43,7 +43,11 @@ export function resolveTier(
   return result;
 }
 
-function resolveTierNatural(prevTier: CpuTier | undefined, prevRecoveryTicks: number, bucket: number): {
+function resolveTierNatural(
+  prevTier: CpuTier | undefined,
+  prevRecoveryTicks: number,
+  bucket: number,
+): {
   tier: CpuTier;
   recoveryTicks: number;
 } {
@@ -58,7 +62,8 @@ function resolveTierNatural(prevTier: CpuTier | undefined, prevRecoveryTicks: nu
   // 升级目标是当前档位的上一档（而非自然档位）。
   const currentRank = tierRank(prevTier);
   const targetTier = TIER_ORDER[currentRank - 1] ?? naturalTier;
-  const hysteresisThreshold = TIER_BUCKET_MIN[targetTier] + CONFIG.cpu.tiers[prevTier].recoveryHysteresis;
+  const hysteresisThreshold =
+    TIER_BUCKET_MIN[targetTier] + CONFIG.cpu.tiers[prevTier].recoveryHysteresis;
 
   if (bucket >= hysteresisThreshold) {
     const ticks = prevRecoveryTicks + 1;
@@ -99,10 +104,7 @@ export class CpuBudget implements Budget {
     // 有效 CPU 限制取 Game.cpu.limit 与 tickLimit 较小值：tickLimit 含 bucket 借用，
     // bucket 低位时可能临时低于 limit — 取较小值不透支当前 tick 真实预算。
     // Fallback 20 仅用于测试环境（Game.cpu 未注入）。
-    const effectiveLimit = Math.min(
-      Game.cpu.limit ?? 20,
-      Game.cpu.tickLimit ?? 20,
-    );
+    const effectiveLimit = Math.min(Game.cpu.limit ?? 20, Game.cpu.tickLimit ?? 20);
     // 双重保护：比例上限（随 limit 自适应）+ 绝对余量（保护低 limit 服务器，
     // 如 10 CPU 下 0.8 reserve 占比更高，防止系统开销挤占关键环）。
     this.hardLimit = Math.min(
@@ -112,10 +114,7 @@ export class CpuBudget implements Budget {
     // softLimit 兜底 0：极端低 limit（limit < reserve）时 hardLimit-reserve 可能为负，
     // 负 softLimit 使 spent()>=softLimit 恒真、canStart 语义混乱；softLimit=0 时
     // 非 P0 全拒是正确的极限降级行为。
-    this.softLimit = Math.max(
-      0,
-      Math.min(effectiveLimit * ratios.softRatio, this.hardLimit - 1),
-    );
+    this.softLimit = Math.max(0, Math.min(effectiveLimit * ratios.softRatio, this.hardLimit - 1));
     // 近限安全余量：取 cpuReserve 的一半，覆盖典型单次操作 CPU 成本。
     // 极端低 limit 时 hardLimit 可能小于 nearLimitThreshold，
     // 此时 hardLimit - nearLimitThreshold 为负，非 P0 全拒（正确的极限降级）。
@@ -203,7 +202,10 @@ export function createBudget(): Budget {
     Memory.kernel.emergencySurvival = emergency;
     if (emergency) {
       recordEvent(EventKind.EmergencySurvival, "kernel", [1]);
-      log.info("kernel", `emergency survival: ENTER (bucket=${bucket}) — P0 车道 + harvester 最小采集`);
+      log.info(
+        "kernel",
+        `emergency survival: ENTER (bucket=${bucket}) — P0 车道 + harvester 最小采集`,
+      );
     } else {
       recordEvent(EventKind.EmergencySurvival, "kernel", [0]);
       log.info("kernel", `emergency survival: EXIT (bucket=${bucket}) — 回 Recovery 常规语义`);
@@ -213,8 +215,7 @@ export function createBudget(): Budget {
   // 自愿放血宽限：generatePixel 清零 bucket 后的窗口期内，
   // recovery 地板抬到 conserve（P2 经济角色照常运行）。
   const pixelAt = Memory.kernel?.pixelAt;
-  const voluntaryDrain =
-    pixelAt !== undefined && Game.time - pixelAt < CONFIG.cpu.pixelGraceTicks;
+  const voluntaryDrain = pixelAt !== undefined && Game.time - pixelAt < CONFIG.cpu.pixelGraceTicks;
 
   const { tier, recoveryTicks } = resolveTier(prevTier, prevTicks, bucket, voluntaryDrain);
 

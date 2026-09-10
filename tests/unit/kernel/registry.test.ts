@@ -18,8 +18,9 @@ describe("Registry", () => {
     const registry = new Registry();
     registry.registerRole({ name: "worker", priority: 0, run: () => undefined });
 
-    expect(() => registry.registerRole({ name: "worker", priority: 0, run: () => undefined }))
-      .toThrow("Duplicate role registration: worker");
+    expect(() =>
+      registry.registerRole({ name: "worker", priority: 0, run: () => undefined }),
+    ).toThrow("Duplicate role registration: worker");
   });
 
   it("returns systems sorted by priority ascending", () => {

@@ -49,7 +49,7 @@ describe("F1 config tables", () => {
       expect(m.source.length, m.name).toBeGreaterThan(0);
       expect(m.consumer.length, m.name).toBeGreaterThan(0);
       expect(m.action!.length ?? 0, m.name).toBeGreaterThan(0);
-      expect(names.has(m.name), "duplicate " + m.name).toBe(false);
+      expect(names.has(m.name), `duplicate ${m.name}`).toBe(false);
       names.add(m.name);
     }
   });

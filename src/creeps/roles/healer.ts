@@ -70,7 +70,7 @@ function findWounded(creep: Creep): Creep | undefined {
 export function healByTacticalIntent(): ActionCandidate<Creep> {
   return {
     name: "healer:tactical-intent",
-    resolve: (ac) => {
+    resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       const intent = readTacticalIntent(ac.creep.name);
       if (!intent) return undefined; // 无战术指令 → 回退 Legacy
@@ -80,7 +80,11 @@ export function healByTacticalIntent(): ActionCandidate<Creep> {
         return undefined;
       }
       // 有治疗指令 + targetId → 查找目标
-      if ((intent.combatDirective === "HEAL_TARGET" || intent.combatDirective === "RANGED_HEAL_TARGET") && intent.targetId) {
+      if (
+        (intent.combatDirective === "HEAL_TARGET" ||
+          intent.combatDirective === "RANGED_HEAL_TARGET") &&
+        intent.targetId
+      ) {
         const target = getObjectById(intent.targetId as Id<Creep>);
         if (target) return target;
         // targetId 无效 → 回退 Legacy
@@ -110,7 +114,7 @@ export function healByTacticalIntent(): ActionCandidate<Creep> {
 export function healAllies(): ActionCandidate<Creep> {
   return {
     name: "healer:heal-allies",
-    resolve: (ac) => {
+    resolve: ac => {
       if (markRetreat(ac.creep)) return undefined;
       const target = ac.creep.memory.remoteTarget;
       if (!target || ac.creep.room.name !== target) return undefined;

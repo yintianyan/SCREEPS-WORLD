@@ -42,15 +42,15 @@ const ALLOWED_TRANSITIONS: ReadonlySet<string> = new Set([
  * 角色转换触发事件类型。
  */
 export type TransitionTrigger =
-  | "rcl_upgrade"        // RCL 升级解锁新能力
-  | "rcl_downgrade"      // RCL 降级失去能力
-  | "storage_built"      // storage 建成
-  | "terminal_built"     // terminal 建成
-  | "remote_opened"      // 新远矿开点
-  | "remote_closed"      // 远矿关闭/止损
-  | "economic_shift"     // 经济指标变化（效率/净流/储备）
-  | "empire_growth"      // 帝国扩张（新房加入影响地理中心性）
-  | "empire_shrink"      // 帝国收缩（失房影响地理中心性）
+  | "rcl_upgrade" // RCL 升级解锁新能力
+  | "rcl_downgrade" // RCL 降级失去能力
+  | "storage_built" // storage 建成
+  | "terminal_built" // terminal 建成
+  | "remote_opened" // 新远矿开点
+  | "remote_closed" // 远矿关闭/止损
+  | "economic_shift" // 经济指标变化（效率/净流/储备）
+  | "empire_growth" // 帝国扩张（新房加入影响地理中心性）
+  | "empire_shrink" // 帝国收缩（失房影响地理中心性）
   | "stability_hysteresis" // 稳定性迟滞触发
   | "prerequisites_lost" // 前置条件不再满足
   | "initial_assignment"; // 初始分配
@@ -208,11 +208,14 @@ function assessTransitionImpact(
   affectedContracts: number,
 ): RoleTransitionImpact {
   // 内联 ROLE_CHARACTERISTICS 查询避免循环依赖
-  const behaviorMap: Record<EmpireRoomRole, {
-    canBeProducer: boolean;
-    canBeConsumer: boolean;
-    canBeLogisticsHub: boolean;
-  }> = {
+  const behaviorMap: Record<
+    EmpireRoomRole,
+    {
+      canBeProducer: boolean;
+      canBeConsumer: boolean;
+      canBeLogisticsHub: boolean;
+    }
+  > = {
     core: { canBeProducer: true, canBeConsumer: false, canBeLogisticsHub: true },
     production: { canBeProducer: true, canBeConsumer: false, canBeLogisticsHub: false },
     support: { canBeProducer: true, canBeConsumer: true, canBeLogisticsHub: true },
@@ -234,9 +237,10 @@ function assessTransitionImpact(
   if (affectsConsumer) changes.push(`consumer:${from.canBeConsumer}→${to.canBeConsumer}`);
   if (affectsLogisticsHub) changes.push(`hub:${from.canBeLogisticsHub}→${to.canBeLogisticsHub}`);
 
-  const description = changes.length > 0
-    ? `behavior changes: ${changes.join(", ")}`
-    : "no behavior changes (same economic capabilities)";
+  const description =
+    changes.length > 0
+      ? `behavior changes: ${changes.join(", ")}`
+      : "no behavior changes (same economic capabilities)";
 
   return {
     affectsProducer,
@@ -285,10 +289,14 @@ export function inferTransitionTrigger(
  */
 export function getRoleTier(role: EmpireRoomRole): number {
   switch (role) {
-    case "core": return 3;
-    case "production": return 2;
-    case "support": return 2;
-    case "remote": return 1;
+    case "core":
+      return 3;
+    case "production":
+      return 2;
+    case "support":
+      return 2;
+    case "remote":
+      return 1;
   }
 }
 

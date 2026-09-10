@@ -22,21 +22,15 @@ const ALL_FILES = walk(SRC);
 function codeLines(src: string): string {
   return src
     .split(NL)
-    .filter((l) => {
+    .filter(l => {
       const t = l.trim();
       return !t.startsWith("*") && !t.startsWith("//") && !t.startsWith("/*");
     })
     .join(NL);
 }
 
-const COMBAT_MICRO_DOMAIN = readFileSync(
-  join(SRC, "domain/tactical/combat-micro.ts"),
-  "utf-8",
-);
-const COMBAT_MICRO_RUNTIME = readFileSync(
-  join(SRC, "systems/combat-micro-runtime.ts"),
-  "utf-8",
-);
+const COMBAT_MICRO_DOMAIN = readFileSync(join(SRC, "domain/tactical/combat-micro.ts"), "utf-8");
+const COMBAT_MICRO_RUNTIME = readFileSync(join(SRC, "systems/combat-micro-runtime.ts"), "utf-8");
 const DOMAIN_CODE = codeLines(COMBAT_MICRO_DOMAIN);
 const RUNTIME_CODE = codeLines(COMBAT_MICRO_RUNTIME);
 

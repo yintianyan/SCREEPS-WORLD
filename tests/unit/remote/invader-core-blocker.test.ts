@@ -8,7 +8,13 @@ import {
 } from "../../../src/systems/remote-mining-manager";
 import { roomHasInvaderCore } from "../../../src/creeps/roles/reserver";
 import type { ColonyState } from "../../../src/kernel/contracts";
-import { mockContext, mockCreep, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
+import {
+  mockContext,
+  mockCreep,
+  mockSnapshot,
+  resetGlobals,
+  syncSquadIndex,
+} from "../../support/factories";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 
@@ -29,14 +35,19 @@ const baseInput = {
 };
 
 /** 按 find 常量分发的远矿房 mock：仅 FIND_HOSTILE_STRUCTURES 返回核心（level 可选）。 */
-function makeCoreRoom(name: string, opts: { level?: number; hostiles?: boolean; reservedBy?: string } = {}) {
+function makeCoreRoom(
+  name: string,
+  opts: { level?: number; hostiles?: boolean; reservedBy?: string } = {},
+) {
   const level = opts.level ?? 1;
   const find = vi.fn((type: number) => {
     if (type === FIND_HOSTILE_STRUCTURES) {
       return [{ structureType: "invaderCore", hits: 100000, level, pos: { x: 25, y: 25 } }];
     }
     if (type === FIND_HOSTILE_CREEPS) {
-      return opts.hostiles ? [{ name: "inv", owner: { username: "Invader" }, pos: { x: 1, y: 1 } }] : [];
+      return opts.hostiles
+        ? [{ name: "inv", owner: { username: "Invader" }, pos: { x: 1, y: 1 } }]
+        : [];
     }
     return [];
   });
@@ -68,7 +79,7 @@ describe("remote demand — blockedRooms 止损（大要塞压制）", () => {
       ...baseInput,
       blockedRooms: new Set(["W9N9"]),
     });
-    expect(requests.map((r) => r.role)).toEqual(
+    expect(requests.map(r => r.role)).toEqual(
       expect.arrayContaining(["remoteHarvester", "remoteHauler", "reserver"]),
     );
   });
@@ -100,7 +111,9 @@ describe("remote-mining-manager — collectRemoteBlockers 检测（按核心等�
   });
 
   it("带守卫 creep 的 level-0 核心仍判 stronghold（保守规避，不送无治疗 clearer）", () => {
-    (globalThis as any).Game.rooms = { [targetRoom]: makeCoreRoom(targetRoom, { level: 0, hostiles: true }) };
+    (globalThis as any).Game.rooms = {
+      [targetRoom]: makeCoreRoom(targetRoom, { level: 0, hostiles: true }),
+    };
     const blockers = collectRemoteBlockers({
       [targetRoom]: { state: "active", createdAt: tick, lastSeen: tick },
     });
@@ -209,7 +222,13 @@ describe("remote-mining-manager — 次级核心(lesser)清核接线", () => {
       colonyState: "normal",
       spawnQueue: [],
       remoteOps: {
-        [targetRoom]: { state: "active", sources: 2, createdAt: now - 500, lastSeen: now, needCoreClear: true },
+        [targetRoom]: {
+          state: "active",
+          sources: 2,
+          createdAt: now - 500,
+          lastSeen: now,
+          needCoreClear: true,
+        },
       },
       intel: { [targetRoom]: { kind: "normal", status: "normal", lastSeen: now } },
     };
@@ -267,7 +286,9 @@ describe("remote-mining-manager — 压制状态持久化（防失明解封死�
     const now = g.Game.time as number;
     // 无视野：Game.rooms 不含目标房（creep 已被回收撤离）。
     const roomMem = setupHome({
-      state: "active", createdAt: now - 500, lastSeen: now - 100,
+      state: "active",
+      createdAt: now - 500,
+      lastSeen: now - 100,
       blockedUntil: now + 3000, // 冷却未到期
     });
 
@@ -288,7 +309,10 @@ describe("remote-mining-manager — 压制状态持久化（防失明解封死�
     // 有视野且无核心。
     g.Game.rooms[targetRoom] = { name: targetRoom, find: vi.fn(() => []) };
     const roomMem = setupHome({
-      state: "active", sources: 2, createdAt: now - 500, lastSeen: now,
+      state: "active",
+      sources: 2,
+      createdAt: now - 500,
+      lastSeen: now,
       blockedUntil: now + 3000,
     });
 
@@ -306,7 +330,10 @@ describe("remote-mining-manager — 压制状态持久化（防失明解封死�
     const g = globalThis as any;
     const now = g.Game.time as number;
     const roomMem = setupHome({
-      state: "active", sources: 2, createdAt: now - 8000, lastSeen: now - 100,
+      state: "active",
+      sources: 2,
+      createdAt: now - 8000,
+      lastSeen: now - 100,
       blockedUntil: now - 1, // 已到期
     });
 
@@ -322,13 +349,17 @@ describe("remote-mining-manager — 压制状态持久化（防失明解封死�
 
 describe("classifyInvaderCores — 纯函数（核心等级二分）", () => {
   it("level 1 核心 → stronghold（大要塞，规避）", () => {
-    expect(classifyInvaderCores({ cores: [{ level: 1 }], hostileCreepCount: 0 })).toBe("stronghold");
+    expect(classifyInvaderCores({ cores: [{ level: 1 }], hostileCreepCount: 0 })).toBe(
+      "stronghold",
+    );
   });
   it("level 0 无守卫核心 → lesser（可派 clearer 拆）", () => {
     expect(classifyInvaderCores({ cores: [{ level: 0 }], hostileCreepCount: 0 })).toBe("lesser");
   });
   it("level 0 但带守卫 creep → stronghold（保守规避）", () => {
-    expect(classifyInvaderCores({ cores: [{ level: 0 }], hostileCreepCount: 2 })).toBe("stronghold");
+    expect(classifyInvaderCores({ cores: [{ level: 0 }], hostileCreepCount: 2 })).toBe(
+      "stronghold",
+    );
   });
   it("level 缺失保守判 stronghold（不送无治疗 creep 进未知险境）", () => {
     expect(classifyInvaderCores({ cores: [{}], hostileCreepCount: 0 })).toBe("stronghold");
@@ -341,16 +372,24 @@ describe("remote demand — clearRooms 次级核心清核", () => {
       ...baseInput,
       clearRooms: new Set([targetRoom]),
     });
-    expect(requests.map((r) => r.role)).toEqual(["coreClearer"]);
+    expect(requests.map(r => r.role)).toEqual(["coreClearer"]);
   });
 
   it("已有 coreClearer 在场则不重复孵（单只节流）", () => {
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
       clearRooms: new Set([targetRoom]),
-      remoteCreeps: [{ name: "cc1", role: "coreClearer", remoteTarget: targetRoom, ticksToLive: 1000, bodyLength: 10 }],
+      remoteCreeps: [
+        {
+          name: "cc1",
+          role: "coreClearer",
+          remoteTarget: targetRoom,
+          ticksToLive: 1000,
+          bodyLength: 10,
+        },
+      ],
     });
-    expect(requests.filter((r) => r.role === "coreClearer")).toHaveLength(0);
+    expect(requests.filter(r => r.role === "coreClearer")).toHaveLength(0);
   });
 
   it("clearRooms 与 blockedRooms 互斥：clearRooms 房不冻结经济（只走清核分支）", () => {
@@ -382,22 +421,36 @@ describe("remote-mining-manager — Invader 预定闭环（线上 W37S57 复现�
     };
     // IntelQuery 播种：reservedBy=Invader 经 view 被 maintainExistingOps 消费。
     __resetIntelStateForTests();
-    globalCache().intelHandoff = [{
-      subject: targetRoom,
-      home: "W7N4",
-      source: "observer",
-      payload: {
-        kind: "normal", status: "normal", lastSeen: now - 15000,
-        sources: 2, reservedBy: "Invader", pathCost: 36,
-      } as never,
-    }];
-    intelligenceSystem.run({ tick: now, snapshots: () => [], budget: { canStart: () => true } } as never);
+    globalCache().intelHandoff = [
+      {
+        subject: targetRoom,
+        home: "W7N4",
+        source: "observer",
+        payload: {
+          kind: "normal",
+          status: "normal",
+          lastSeen: now - 15000,
+          sources: 2,
+          reservedBy: "Invader",
+          pathCost: 36,
+        } as never,
+      },
+    ];
+    intelligenceSystem.run({
+      tick: now,
+      snapshots: () => [],
+      budget: { canStart: () => true },
+    } as never);
 
-    remoteMiningManagerSystem.run(mockContext(mockSnapshot({
-      rcl: 5,
-      spawns: [{} as never],
-      storage: { store: { getUsedCapacity: () => 9800 } } as never,
-    })));
+    remoteMiningManagerSystem.run(
+      mockContext(
+        mockSnapshot({
+          rcl: 5,
+          spawns: [{} as never],
+          storage: { store: { getUsedCapacity: () => 9800 } } as never,
+        }),
+      ),
+    );
 
     const roomMem = g.Memory.rooms.W7N4;
     expect(roomMem.remoteOps[targetRoom].state).toBe("active");
@@ -423,7 +476,9 @@ describe("remote-mining-manager — Invader 预定闭环（线上 W37S57 复现�
       remoteOps: {
         [targetRoom]: { state: "active", createdAt: now - 500, lastSeen: now, needCoreClear: true },
       },
-      intel: { [targetRoom]: { kind: "normal", status: "normal", lastSeen: now, reservedBy: "Invader" } },
+      intel: {
+        [targetRoom]: { kind: "normal", status: "normal", lastSeen: now, reservedBy: "Invader" },
+      },
     };
 
     remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
@@ -433,6 +488,8 @@ describe("remote-mining-manager — Invader 预定闭环（线上 W37S57 复现�
     expect(roomMem.remoteOps[targetRoom].needCoreClear).toBeUndefined();
     expect(roomMem.remoteOps[targetRoom].blockedUntil).toBeGreaterThan(now);
     expect(clearer.memory.recycle).toBe(true);
-    expect(roomMem.spawnQueue.filter((r: SpawnRequest) => r.role === "coreClearer")).toHaveLength(0);
+    expect(roomMem.spawnQueue.filter((r: SpawnRequest) => r.role === "coreClearer")).toHaveLength(
+      0,
+    );
   });
 });

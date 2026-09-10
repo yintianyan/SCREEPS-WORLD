@@ -91,7 +91,11 @@ export const warPlannerSystem: System = {
         Memory.kernel.warPlan = {
           targetRoom: next.roomName,
           sponsor: next.sponsor,
-          squadSize: decideSquadSize(next.towersSeen, CONFIG.war.squadBase, CONFIG.war.squadPerTower),
+          squadSize: decideSquadSize(
+            next.towersSeen,
+            CONFIG.war.squadBase,
+            CONFIG.war.squadPerTower,
+          ),
           since: ctx.tick,
           towersSeen: next.towersSeen,
           phase: keep && existing!.phase ? existing!.phase : "build",
@@ -130,7 +134,9 @@ export const warPlannerSystem: System = {
     //    fallback 分支永远不会执行，可安全删除。
     const a5 = plan.a5ForceReq;
     const attackerTarget = a5 ? a5.attacker : plan.squadSize;
-    const healerCount = a5 ? a5.healer : decideHealerCount(plan.squadSize, CONFIG.war.healerSquadRatio);
+    const healerCount = a5
+      ? a5.healer
+      : decideHealerCount(plan.squadSize, CONFIG.war.healerSquadRatio);
     let attackerLive = 0;
     let healerLive = 0;
     let boostedLive = 0;
@@ -151,10 +157,26 @@ export const warPlannerSystem: System = {
     // pending 封顶编制，spawned 不会因空转膨胀。
     // A5.3：attackerTarget 来自 a5ForceReq（attacker+ranged 合并编制）。
     if (attackerLive + pendingAttackers < attackerTarget) {
-      submitSquadRequest(queue, plan, sponsor, "attacker", attackerLive + pendingAttackers, cap, ctx.tick);
+      submitSquadRequest(
+        queue,
+        plan,
+        sponsor,
+        "attacker",
+        attackerLive + pendingAttackers,
+        cap,
+        ctx.tick,
+      );
     }
     if (healerLive + pendingHealers < healerCount) {
-      submitSquadRequest(queue, plan, sponsor, "healer", healerLive + pendingHealers, cap, ctx.tick);
+      submitSquadRequest(
+        queue,
+        plan,
+        sponsor,
+        "healer",
+        healerLive + pendingHealers,
+        cap,
+        ctx.tick,
+      );
     }
 
     // 3. 波次相位（迟滞，合计口径 + boost 门禁）：满编且全员强化才 advance，
@@ -199,8 +221,9 @@ export const warPlannerSystem: System = {
         nuker.store.getUsedCapacity(RESOURCE_ENERGY) >= NUKE_ENERGY_COST &&
         (nuker.store.getUsedCapacity(RESOURCE_GHODIUM) ?? 0) >= NUKE_GHODIUM_COST &&
         nuker.cooldown === 0;
-      const inFlight = (kernel.nukesInFlight?.[plan.targetRoom] ?? [])
-        .filter(landAt => landAt > ctx.tick).length;
+      const inFlight = (kernel.nukesInFlight?.[plan.targetRoom] ?? []).filter(
+        landAt => landAt > ctx.tick,
+      ).length;
       const launch = shouldLaunchNuke({
         nukerReady,
         nukesInFlightToTarget: inFlight,
@@ -214,20 +237,17 @@ export const warPlannerSystem: System = {
         if (nuker.launchNuke(pos) === OK) {
           recordNukeLaunch(plan.targetRoom, ctx.tick);
           recordEvent(EventKind.NukeLaunched, plan.targetRoom, [plan.towersSeen]);
-          log.info("war-planner", `nuke-launch: ${sponsor} → ${plan.targetRoom} (towers=${plan.towersSeen})`,);
+          log.info(
+            "war-planner",
+            `nuke-launch: ${sponsor} → ${plan.targetRoom} (towers=${plan.towersSeen})`,
+          );
         }
       }
     }
 
     // 4. 战损止损（合计基数）：投入超过编制 × 倍数仍未见效 → 判消耗战失败收摊。
     //    A5.3：止损基数使用 fullSquadSize（attackerTarget + healerCount）。
-    if (
-      isAttritionLost(
-        plan.spawned ?? 0,
-        fullSquadSize,
-        CONFIG.war.casualtyMultiplier,
-      )
-    ) {
+    if (isAttritionLost(plan.spawned ?? 0, fullSquadSize, CONFIG.war.casualtyMultiplier)) {
       demobilize(ctx.tick, REASON_ATTRITION);
       // 收摊后整军休战 — 下一轮评估前先让经济喘息，防止换目标立即再送。
       Memory.kernel!.warStandDownUntil = ctx.tick + CONFIG.war.standDownTicks;
@@ -332,19 +352,27 @@ export function demobilize(tick: number, reason: number): void {
   );
   // 战后核验只信 fact 级复核：威胁短窗外（非 fact）的观察即使年龄未超
   // freshness 也不可信 → 降级 unknown（两段式重验），防止陈旧 intel 误判战果。
-  if (outcome !== "unknown" && entry !== undefined && intelConfidence(plan.targetRoom, tick) !== "fact") {
+  if (
+    outcome !== "unknown" &&
+    entry !== undefined &&
+    intelConfidence(plan.targetRoom, tick) !== "fact"
+  ) {
     outcome = "unknown";
   }
   if (outcome !== "success") {
     // P0-2：unknown 用半额冷却 — intel 过期不是目标的错，缩短冷却让 intel 自然刷新后可重评。
     // failure 是确定性「打不赢」，用满额冷却防重选循环。
-    const cooldown = outcome === "unknown"
-      ? Math.floor(CONFIG.war.warBlacklistTicks / 2)
-      : CONFIG.war.warBlacklistTicks;
+    const cooldown =
+      outcome === "unknown"
+        ? Math.floor(CONFIG.war.warBlacklistTicks / 2)
+        : CONFIG.war.warBlacklistTicks;
     blacklistWarTarget(plan.targetRoom, tick + cooldown);
-    log.info("war-planner", `war: demobilize ${plan.targetRoom} outcome=${outcome}` +
-      ` (intel_age=${entry?.observedAt !== undefined ? tick - entry.observedAt : "never"},` +
-      ` blacklist=${cooldown}t, reason=${reason})`,);
+    log.info(
+      "war-planner",
+      `war: demobilize ${plan.targetRoom} outcome=${outcome}` +
+        ` (intel_age=${entry?.observedAt !== undefined ? tick - entry.observedAt : "never"},` +
+        ` blacklist=${cooldown}t, reason=${reason})`,
+    );
   }
 
   // A5.3.1 GAP-1 修复：写入止损信号供 recovery-execution-system 消费。
@@ -377,7 +405,6 @@ export function demobilize(tick: number, reason: number): void {
     recordExecution("war", "failed");
   }
   recordPlanningDecision("war", outcome === "success");
-
 
   // P0-1：从全局编队索引取编队成员，按 name 精确定位 Creep 对象标记 recycle。
   // 只需遍历编队子集（通常 ≤ 十几条），而非全量 Game.creeps。

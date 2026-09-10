@@ -82,7 +82,10 @@ export interface GlobalCache {
   boostAssignments?: { tick: number; byCreep: Record<string, { labId: string; ready: boolean }> };
   /** 本 tick 的 lab 搬运需求表（lab-system 写入，supplyLabs 消费）。
    * lab 角色分配只有 lab-system 知道 — 此表是供料链的唯一化合物-lab 绑定通道。 */
-  labDemands?: { tick: number; byRoom: Record<string, import("../domain/industry/types").LabDemandTable> };
+  labDemands?: {
+    tick: number;
+    byRoom: Record<string, import("../domain/industry/types").LabDemandTable>;
+  };
   /** 归位：每房每 tick 推导的关键格/道路/阻挡格集合（parking.ts 构建）。 */
   __parkRoomData?: Record<string, { tick: number; data: unknown }>;
   /** 归位：本 tick 已被预约的停车位（packed pos 集合，防聚堆）。 */
@@ -178,7 +181,10 @@ export interface GlobalCache {
   /** 市场全量订单缓存（与 marketPrices 同 interval 采集）。
    * key = "type/resource"，value = 订单摘要列表。deal 函数优先从缓存读取，
    * 缺失时回退独立 getAllOrders。heap 存储 — reset 后首 tick 重建。 */
-  marketOrderCache?: { tick: number; orders: Record<string, import("../domain/industry/terminal-policy").MarketOrderSummary[]> };
+  marketOrderCache?: {
+    tick: number;
+    orders: Record<string, import("../domain/industry/terminal-policy").MarketOrderSummary[]>;
+  };
   /** Per-room CPU 记账：kernel.runCreeps 中每只 creep 执行后按 memory.home
    * 归集 CPU 消耗。telemetry-collector 采样写入 Memory.kernel.stats.cpuByHome，
    * 供 empire-strategy / capacity 模型评估每房真实 CPU 成本。
@@ -207,14 +213,20 @@ export interface GlobalCache {
   /** A4.3：Empire Logistics Plan（logistics-planner 每 100t 写入）。
    * 包含 Transport Requests + Routes + 成本/时间/风险估算。
    * heap 存储 — global reset 丢失可接受（下个周期重建）。 */
-  logisticsPlan?: { tick: number; plan: import("../domain/logistics/transport-plan").TransportPlan };
+  logisticsPlan?: {
+    tick: number;
+    plan: import("../domain/logistics/transport-plan").TransportPlan;
+  };
   // 【WO-DEAD 已删除】logisticsDashboard — 只写不读的仪表盘字段，无消费者。
   /** A4.3：Empire Logistics Health（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
   logisticsHealth?: import("../domain/logistics/logistics-health").LogisticsHealthResult;
   /** A4.3：Empire Logistics Capacity（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
-  logisticsCapacity?: { tick: number; result: import("../domain/logistics/capacity-planning").EmpireCapacityResult };
+  logisticsCapacity?: {
+    tick: number;
+    result: import("../domain/logistics/capacity-planning").EmpireCapacityResult;
+  };
   // 【WO-DEAD 已删除】logisticsScaling — 只写不读的观测字段，无消费者。
   /** A4.3：闲置 hauler 名称列表（logistics-planner 每 100t 写入）。
    * heap 存储 — global reset 丢失可接受。 */
@@ -294,7 +306,10 @@ export interface GlobalCache {
   /** A4.6：Recovery 统计数据（recovery-execution-system 每 interval tick 写入）。heap 存储。 */
   recoveryStats?: import("../domain/strategy/recovery-lifecycle").RecoveryStats;
   /** A4.6：Recovery Before-State 快照（用于 Verification 的 Before/After 对比）。heap 存储。 */
-  recoveryBeforeStates?: Map<string, import("../domain/strategy/recovery-lifecycle").RecoveryWorldSnapshot>;
+  recoveryBeforeStates?: Map<
+    string,
+    import("../domain/strategy/recovery-lifecycle").RecoveryWorldSnapshot
+  >;
   /** A5.1：per-tick 威胁评估结果（room-state 每 tick 对有威胁的自有房写入）。
    * key = roomName，value = ThreatAssessment。tower-defense / war-planner 消费。
    * heap 存储 — global reset 丢失可接受（下 tick 重建）。仅 threatCount > 0 的房有条目。 */
@@ -302,10 +317,16 @@ export interface GlobalCache {
   /** A5.1：per-tick 远矿防御决策结果（remote-mining-manager 按 interval 写入）。
    * key = targetRoomName，value = RemoteDefenseDecision。诊断观测字段。
    * heap 存储 — global reset 丢失可接受。 */
-  remoteDefenseDecisions?: Map<string, import("../domain/defense/remote-defense").RemoteDefenseDecision>;
+  remoteDefenseDecisions?: Map<
+    string,
+    import("../domain/defense/remote-defense").RemoteDefenseDecision
+  >;
   /** A5.3：per-interval 军事行动计划结果（war-planning-system 按 interval 写入）。
    * 供 war-planner 消费。heap 存储 — global reset 丢失可接受。 */
-  warPlanCache?: { tick: number; plan: import("../domain/military/war-planning").WarPlan | undefined };
+  warPlanCache?: {
+    tick: number;
+    plan: import("../domain/military/war-planning").WarPlan | undefined;
+  };
   /** @deprecated FINDING-02 修复：ESM 状态已迁移到 Memory.kernel.emergencySurvival。
    * 保留字段声明避免编译错误，但不再被 scheduler 使用。未来可安全删除。 */
   // emergencySurvival?: boolean;
@@ -366,19 +387,25 @@ export interface GlobalCache {
   /** E7: site 进度追踪 — 跨 tick 记录每个 site 的进度快照，用于检测长期无进展。
    * key = site id，value = { lastProgress, lastProgressTick, builderVisits }。
    * heap 存储 — global reset 丢失可接受（追踪数据是观测数据，reset 后重建）。 */
-  siteProgressTracker?: Map<string, {
-    lastProgress: number;
-    lastProgressTick: number;
-    builderVisits: number;
-  }>;
+  siteProgressTracker?: Map<
+    string,
+    {
+      lastProgress: number;
+      lastProgressTick: number;
+      builderVisits: number;
+    }
+  >;
 
   /** E8: 路径失败追踪 — 跨 tick 记录每个 creep 的移动失败次数和最近成功 tick。
    * key = roomName:creepName，value = { lastSuccessTick, consecutiveFailures }。
    * heap 存储 — global reset 丢失可接受（追踪数据是观测数据，reset 后重建）。 */
-  pathFailureTracker?: Map<string, {
-    lastSuccessTick: number;
-    consecutiveFailures: number;
-  }>;
+  pathFailureTracker?: Map<
+    string,
+    {
+      lastSuccessTick: number;
+      consecutiveFailures: number;
+    }
+  >;
 
   // ── Per-tick per-room shared find caches (roles layer) ──────────
   // 角色层 per-tick 共享缓存：同房多 creep 共享一次 room.find 结果。
@@ -595,11 +622,12 @@ export function querySquad(filter: {
 }): readonly SquadIndexEntry[] {
   const idx = globalCache().squadIndex;
   if (!idx) return [];
-  return idx.filter(e =>
-    (filter.home === undefined || e.home === filter.home) &&
-    (filter.remoteTarget === undefined || e.remoteTarget === filter.remoteTarget) &&
-    (filter.role === undefined || e.role === filter.role) &&
-    (filter.mission === undefined || e.mission === filter.mission),
+  return idx.filter(
+    e =>
+      (filter.home === undefined || e.home === filter.home) &&
+      (filter.remoteTarget === undefined || e.remoteTarget === filter.remoteTarget) &&
+      (filter.role === undefined || e.role === filter.role) &&
+      (filter.mission === undefined || e.mission === filter.mission),
   );
 }
 
@@ -632,13 +660,31 @@ export type EnergyCounterField = keyof RoomEnergyCounters;
  * 中间 tick 的账不丢。非法输入（非有限/非正）静默忽略，维持 ≥0 不变量。
  * global reset 清零可接受：economy 系统按「无基线/tick 断档」重新播种窗口起点。
  */
-export function bumpEnergyCounter(roomName: string, field: EnergyCounterField, amount: number): void {
+export function bumpEnergyCounter(
+  roomName: string,
+  field: EnergyCounterField,
+  amount: number,
+): void {
   if (!(amount > 0) || !Number.isFinite(amount)) return;
   const g = globalCache();
   if (g.energyLedger === undefined) {
-    g.energyLedger = { tick: (globalThis as { Game?: { time?: number } }).Game?.time ?? 0, rooms: {} };
+    g.energyLedger = {
+      tick: (globalThis as { Game?: { time?: number } }).Game?.time ?? 0,
+      rooms: {},
+    };
   }
-  const entry = g.energyLedger.rooms[roomName] ??= { harvested: 0, pickedUp: 0, spawned: 0, recycledRefund: 0, upgraded: 0, built: 0, repaired: 0, towerSpent: 0, bought: 0, sold: 0 };
+  const entry = (g.energyLedger.rooms[roomName] ??= {
+    harvested: 0,
+    pickedUp: 0,
+    spawned: 0,
+    recycledRefund: 0,
+    upgraded: 0,
+    built: 0,
+    repaired: 0,
+    towerSpent: 0,
+    bought: 0,
+    sold: 0,
+  });
   entry[field] += amount;
 }
 /** Screeps 沙箱 `global` 对象的类型安全访问器。

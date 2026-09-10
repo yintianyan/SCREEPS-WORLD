@@ -83,10 +83,7 @@ describe("SpawnQueue — sortQueue", () => {
   });
 
   it("breaks ties by createdAt ascending", () => {
-    const queue: SpawnRequest[] = [
-      makeRequest("late", 1, 200),
-      makeRequest("early", 1, 100),
-    ];
+    const queue: SpawnRequest[] = [makeRequest("late", 1, 200), makeRequest("early", 1, 100)];
     const sorted = sortQueue(queue);
     expect(sorted[0]?.key).toBe("early");
     expect(sorted[1]?.key).toBe("late");
@@ -135,7 +132,11 @@ describe("SpawnQueue — cleanQueue", () => {
 
   // ：达重试上限的 key 返回给调用方入黑名单 — 打破删除-重建翻炒。
   it("SP-2：返回被隔离的 key 列表（TTL 过期不入列）", () => {
-    const queue: SpawnRequest[] = [makeRequest("failed"), makeRequest("expired"), makeRequest("ok")];
+    const queue: SpawnRequest[] = [
+      makeRequest("failed"),
+      makeRequest("expired"),
+      makeRequest("ok"),
+    ];
     queue[0]!.retries = 5;
     queue[1]!.expiresAt = 50;
     const purged = cleanQueue(queue, 100, 5);
@@ -197,7 +198,11 @@ describe("SpawnQueue — cleanQueue onPurge 回调 (P2-K)", () => {
   });
 
   it("不传回调时行为完全等价于改动前（向后兼容）", () => {
-    const queue: SpawnRequest[] = [makeRequest("failed"), makeRequest("expired"), makeRequest("ok")];
+    const queue: SpawnRequest[] = [
+      makeRequest("failed"),
+      makeRequest("expired"),
+      makeRequest("ok"),
+    ];
     queue[0]!.retries = 5;
     queue[1]!.expiresAt = 50;
     const purged = cleanQueue(queue, 100, 5);
@@ -223,7 +228,7 @@ describe("SpawnQueue — cleanQueue onPurge 回调 (P2-K)", () => {
     ];
     queue[0]!.retries = 5;
     const roles: string[] = [];
-    cleanQueue(queue, 100, 5, (key) => roles.push(key.split(":")[0] ?? ""));
+    cleanQueue(queue, 100, 5, key => roles.push(key.split(":")[0] ?? ""));
     expect(roles).toEqual(["remote-hauler"]);
   });
 });

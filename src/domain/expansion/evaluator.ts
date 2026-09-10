@@ -40,7 +40,18 @@ export interface ExpansionInput {
 
 /** 从各 sponsor 房的邻居情报中评选扩张目标；返回最优候选，无可行目标（或 GCL 无余量）返回 undefined。 */
 export function selectExpansionTarget(input: ExpansionInput): ExpansionCandidate | undefined {
-  const { ownedRoomNames, gclLevel, intelBySponsor, dangerUntilBySponsor, tick, blacklist, hostileAdj, maxIntelAge = 10000, minSources = 1, myUsername } = input;
+  const {
+    ownedRoomNames,
+    gclLevel,
+    intelBySponsor,
+    dangerUntilBySponsor,
+    tick,
+    blacklist,
+    hostileAdj,
+    maxIntelAge = 10000,
+    minSources = 1,
+    myUsername,
+  } = input;
 
   // GCL 余量门禁：可占房数 = GCL 等级。
   if (gclLevel <= ownedRoomNames.length) return undefined;

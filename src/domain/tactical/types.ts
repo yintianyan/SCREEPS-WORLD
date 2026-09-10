@@ -12,30 +12,30 @@ import type { AbortCondition } from "../military/operation";
 
 /** Tactical 目标类型 — Operational Objective 在战术层的投影。 */
 export type TacticalObjectiveType =
-  | "ENGAGE_ENEMY"        // 接敌
-  | "DESTROY_STRUCTURE"   // 摧毁建筑
-  | "DEFEND_POSITION"     // 防守阵位
-  | "ESCORT"              // 护航
-  | "HARASS"              // 骚扰
-  | "DISMANTLE"           // 拆除
-  | "BREACH"              // 突破
-  | "HOLD_GROUND"         // 据守
-  | "REINFORCE"           // 增援
-  | "WITHDRAW";           // 撤出
+  | "ENGAGE_ENEMY" // 接敌
+  | "DESTROY_STRUCTURE" // 摧毁建筑
+  | "DEFEND_POSITION" // 防守阵位
+  | "ESCORT" // 护航
+  | "HARASS" // 骚扰
+  | "DISMANTLE" // 拆除
+  | "BREACH" // 突破
+  | "HOLD_GROUND" // 据守
+  | "REINFORCE" // 增援
+  | "WITHDRAW"; // 撤出
 
 /** 目标范围 — Tactical 严格受限的越权边界。 */
 export type TargetScope =
-  | "LOCAL"        // 当前视野内的局部目标排序（如先打 Tower A 还是 Tower B）
-  | "OPERATIONAL"  // Operational 层指定的目标（如 Enemy Tower Cluster）
-  | "STRATEGIC";   // Strategic 层目标（Tactical 禁止自行切换）
+  | "LOCAL" // 当前视野内的局部目标排序（如先打 Tower A 还是 Tower B）
+  | "OPERATIONAL" // Operational 层指定的目标（如 Enemy Tower Cluster）
+  | "STRATEGIC"; // Strategic 层目标（Tactical 禁止自行切换）
 
 /** Tactical 目标的目标类型。 */
 export type TacticalTargetType =
-  | "creep"        // 敌方 creep
-  | "structure"    // 敌方建筑
-  | "controller"   // controller
-  | "position"     // 阵位
-  | "room";        // 房间级
+  | "creep" // 敌方 creep
+  | "structure" // 敌方建筑
+  | "controller" // controller
+  | "position" // 阵位
+  | "room"; // 房间级
 
 /** TacticalObjective — 一个 Operational Objective 在战术层的投影。 */
 export interface TacticalObjective {
@@ -73,11 +73,11 @@ export interface TacticalObjective {
 
 /** 授权状态。 */
 export type AuthorizationState =
-  | "PENDING"     // 待授权
-  | "AUTHORIZED"  // 已授权
-  | "EXPIRED"     // 授权过期
-  | "REVOKED"     // 授权撤销（WarPlan abort / posture 变更）
-  | "DENIED";     // 授权拒绝
+  | "PENDING" // 待授权
+  | "AUTHORIZED" // 已授权
+  | "EXPIRED" // 授权过期
+  | "REVOKED" // 授权撤销（WarPlan abort / posture 变更）
+  | "DENIED"; // 授权拒绝
 
 /** TacticalAuthorization — 确认 Tactical 只在 WarPlan 授权下执行。 */
 export interface TacticalAuthorization {
@@ -137,15 +137,15 @@ export interface TacticalConstraints {
  *   再进入 RETREATING（撤退行军）。直接从 ENGAGING 跳到 RETREATING 会丢失"正在脱离接触"的语义。
  */
 export type TacticalState =
-  | "FORMING"       // 集结编队中
-  | "MOVING"        // 跨房行军中
-  | "POSITIONING"   // 到达目标房，选择战术阵位
-  | "ENGAGING"      // 接敌交战中
-  | "DISENGAGING"   // 脱离接触中
-  | "RETREATING"    // 撤退行军中
-  | "REGROUPING"    // 重新集结（被打散后重组）
-  | "COMPLETED"     // 目标完成
-  | "ABORTED";      // 目标中止
+  | "FORMING" // 集结编队中
+  | "MOVING" // 跨房行军中
+  | "POSITIONING" // 到达目标房，选择战术阵位
+  | "ENGAGING" // 接敌交战中
+  | "DISENGAGING" // 脱离接触中
+  | "RETREATING" // 撤退行军中
+  | "REGROUPING" // 重新集结（被打散后重组）
+  | "COMPLETED" // 目标完成
+  | "ABORTED"; // 目标中止
 
 // ═══════════════════════════════════════════════════════════
 // §5. SquadPlan — 编队计划
@@ -175,11 +175,11 @@ export interface SquadMemberSnapshot {
 
 /** 阵型类型。 */
 export type FormationType =
-  | "LINE"      // 线形 — 开阔地形正面展开
-  | "WEDGE"     // 楔形 — 开阔地形突击
-  | "COLUMN"    // 纵队 — 狭窄通道行军
-  | "CLUSTER"   // 密集 — 撤退/防守紧凑编队
-  | "SCATTER";  // 散开 — 规避 AoE / 分散吸引火力
+  | "LINE" // 线形 — 开阔地形正面展开
+  | "WEDGE" // 楔形 — 开阔地形突击
+  | "COLUMN" // 纵队 — 狭窄通道行军
+  | "CLUSTER" // 密集 — 撤退/防守紧凑编队
+  | "SCATTER"; // 散开 — 规避 AoE / 分散吸引火力
 
 /** EngagementPolicy — 交战策略。 */
 export interface EngagementPolicy {
@@ -336,21 +336,21 @@ export interface TacticalSnapshot {
 
 /** 移动意图 — Domain 层只决定 Intent，不执行 Path。 */
 export type MovementIntent =
-  | "ADVANCE"    // 前进向目标
-  | "HOLD"       // 原地据守
-  | "FLANK"      // 侧翼包抄
-  | "RETREAT"    // 撤退
-  | "REGROUP"    // 重新集结
-  | "POSITION";  // 移动到战术阵位
+  | "ADVANCE" // 前进向目标
+  | "HOLD" // 原地据守
+  | "FLANK" // 侧翼包抄
+  | "RETREAT" // 撤退
+  | "REGROUP" // 重新集结
+  | "POSITION"; // 移动到战术阵位
 
 /** CombatIntent — 角色层执行的战斗意图。 */
 export type CombatIntent =
-  | "ATTACK"         // 近身攻击
-  | "RANGED_ATTACK"  // 远程攻击
-  | "HEAL"           // 治疗
-  | "RANGED_HEAL"    // 远程治疗
-  | "DISMANTLE"      // 拆除
-  | "NONE";          // 无战斗动作（移动中）
+  | "ATTACK" // 近身攻击
+  | "RANGED_ATTACK" // 远程攻击
+  | "HEAL" // 治疗
+  | "RANGED_HEAL" // 远程治疗
+  | "DISMANTLE" // 拆除
+  | "NONE"; // 无战斗动作（移动中）
 
 /** TacticalDecision — 纯函数的输出。 */
 export interface TacticalDecision {
@@ -386,14 +386,14 @@ export interface RejectedTacticalAlternative {
 
 /** TacticalAbortReason — Tactical 层发现不可继续的原因。 */
 export type TacticalAbortReason =
-  | "SQUAD_BROKEN"             // 编队被打散
-  | "HEALER_LOST"              // 治疗者损失
-  | "ENEMY_CAPABILITY_SURGE"   // 敌方能力激增
-  | "INTEL_STALE"              // 情报过期
-  | "LOGISTICS_FAILURE"        // 后勤失败
-  | "CASUALTY_EXCEEDED"        // 伤亡超限
-  | "OBJECTIVE_UNACHIEVABLE"   // 目标不可达
-  | "AUTHORIZATION_REVOKED";   // 授权撤销
+  | "SQUAD_BROKEN" // 编队被打散
+  | "HEALER_LOST" // 治疗者损失
+  | "ENEMY_CAPABILITY_SURGE" // 敌方能力激增
+  | "INTEL_STALE" // 情报过期
+  | "LOGISTICS_FAILURE" // 后勤失败
+  | "CASUALTY_EXCEEDED" // 伤亡超限
+  | "OBJECTIVE_UNACHIEVABLE" // 目标不可达
+  | "AUTHORIZATION_REVOKED"; // 授权撤销
 
 /** TacticalAbortSignal — 交给 Operational / A4.6 处理。 */
 export interface TacticalAbortSignal {

@@ -81,11 +81,7 @@ export interface EmpireBalance {
 /**
  * 帝国经济健康度。
  */
-export type EmpireEconomicHealth =
-  | "thriving"
-  | "stable"
-  | "strained"
-  | "critical";
+export type EmpireEconomicHealth = "thriving" | "stable" | "strained" | "critical";
 
 // ─── 计算 ──────────────────────────────────────────────
 
@@ -131,13 +127,16 @@ export function computeEmpireBalance(
   const netProduction = totalProduction - totalConsumption;
 
   // 扩张压力
-  const expansionPressure = netProduction < 0 ||
-    (remoteProduction > 0 && remoteDelivered < remoteProduction * config.deliveryEfficiencyThreshold);
-  const pressureReason = netProduction < 0
-    ? `net-production-negative-${netProduction.toFixed(1)}`
-    : expansionPressure
-      ? `remote-delivery-below-${config.deliveryEfficiencyThreshold}`
-      : "no-pressure";
+  const expansionPressure =
+    netProduction < 0 ||
+    (remoteProduction > 0 &&
+      remoteDelivered < remoteProduction * config.deliveryEfficiencyThreshold);
+  const pressureReason =
+    netProduction < 0
+      ? `net-production-negative-${netProduction.toFixed(1)}`
+      : expansionPressure
+        ? `remote-delivery-below-${config.deliveryEfficiencyThreshold}`
+        : "no-pressure";
 
   // 经济健康度
   const health = classifyEmpireHealth(netProduction, totalReserve, activeRemoteOps, config);
@@ -196,7 +195,10 @@ export function classifyEmpireHealth(
   activeRemoteOps: number,
   config: EmpireBalanceConfig,
 ): EmpireEconomicHealth {
-  if (netProduction >= config.thrivingThreshold && totalReserve >= config.criticalReserveThreshold) {
+  if (
+    netProduction >= config.thrivingThreshold &&
+    totalReserve >= config.criticalReserveThreshold
+  ) {
     return "thriving";
   }
   if (netProduction >= config.stableThreshold && totalReserve >= config.criticalReserveThreshold) {
@@ -246,9 +248,7 @@ export function computeRemoteContribution(
     active: boolean;
   }[],
 ): RemoteContribution {
-  const myOps = remoteOps.filter(
-    o => o.homeRoom === homeRoom && o.active,
-  );
+  const myOps = remoteOps.filter(o => o.homeRoom === homeRoom && o.active);
   return {
     homeRoom,
     totalProduction: myOps.reduce((sum, o) => sum + o.productionRate, 0),

@@ -46,7 +46,9 @@ function requestingCreep(opts: {
       needContainer: true,
     },
     pos: {
-      x: 25, y: 25, roomName: remoteTarget,
+      x: 25,
+      y: 25,
+      roomName: remoteTarget,
       getRangeTo: vi.fn(() => atRange),
     },
     room: { name: remoteTarget },
@@ -66,13 +68,12 @@ function mockRemoteRoom(opts: {
   //   现按 flag 分发：sites 走 existingSites（补 pos stub，默认邻接=1），
   //   sources 走 sources 参数。不传 sources 时 find(FIND_SOURCES) 返回 []，
   //   sourcesWithSite 为空 — 不影响"无 site"或"仅校正 siteCount"的测试。
-  const sites = existingSites.map((s, i) => s.pos
-    ? s
-    : { ...s, pos: { x: 25 + i, y: 25 + i, roomName: name, getRangeTo: vi.fn(() => 1) } });
+  const sites = existingSites.map((s, i) =>
+    s.pos ? s : { ...s, pos: { x: 25 + i, y: 25 + i, roomName: name, getRangeTo: vi.fn(() => 1) } },
+  );
   return {
     name,
-    find: vi.fn((flag: number, _opts?: any) =>
-      flag === FIND_SOURCES ? sources : sites),
+    find: vi.fn((flag: number, _opts?: any) => (flag === FIND_SOURCES ? sources : sites)),
     createConstructionSite: vi.fn(() => createResult),
   };
 }
@@ -260,10 +261,7 @@ describe("fulfillContainerRequests — siteCount 实测校正", () => {
 
   it("记忆 siteCount=0 但实际 2 → 校正为 2", () => {
     const room = mockRemoteRoom({
-      existingSites: [
-        { structureType: "container" },
-        { structureType: "container" },
-      ],
+      existingSites: [{ structureType: "container" }, { structureType: "container" }],
     });
     const remoteOps: Record<string, RemoteOp> = { W8N4: activeOp({ siteCount: 0 }) };
 
@@ -292,8 +290,10 @@ describe("fulfillContainerRequests — R2 多源房隔离", () => {
     const site = {
       structureType: "container",
       pos: {
-        x: 10, y: 10, roomName: "W8N4",
-        getRangeTo: vi.fn((target: any) => target?.id === "src_A" ? 1 : 99),
+        x: 10,
+        y: 10,
+        roomName: "W8N4",
+        getRangeTo: vi.fn((target: any) => (target?.id === "src_A" ? 1 : 99)),
       },
     };
     const room = mockRemoteRoom({
@@ -327,8 +327,10 @@ describe("fulfillContainerRequests — R2 多源房隔离", () => {
     const site = {
       structureType: "container",
       pos: {
-        x: 10, y: 10, roomName: "W8N4",
-        getRangeTo: vi.fn((target: any) => target?.id === "src_A" ? 1 : 99),
+        x: 10,
+        y: 10,
+        roomName: "W8N4",
+        getRangeTo: vi.fn((target: any) => (target?.id === "src_A" ? 1 : 99)),
       },
     };
     const room = mockRemoteRoom({

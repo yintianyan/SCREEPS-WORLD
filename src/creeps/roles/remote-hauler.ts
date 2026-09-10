@@ -2,10 +2,7 @@
 import type { Priority } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
-import {
-  fillStorage,
-  haulFillTarget,
-} from "../engine/actions";
+import { fillStorage, haulFillTarget } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import {
@@ -58,7 +55,7 @@ function withRoadBuild<T>(inner: ActionCandidate<T>): ActionCandidate<T> {
 function withdrawRemoteContainer(): ActionCandidate<StructureContainer> {
   return {
     name: "remote-hauler:withdraw-container",
-    resolve: (ac) => {
+    resolve: ac => {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       return findRemoteContainer(ac.creep);
@@ -83,7 +80,7 @@ function withdrawRemoteContainer(): ActionCandidate<StructureContainer> {
 function lootRemoteRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
   return {
     name: "remote-hauler:loot-remains",
-    resolve: (ac) => {
+    resolve: ac => {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       const threshold = Math.max(1, minAmount);
@@ -115,7 +112,7 @@ function lootRemoteRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
 function pickupRemoteDropped(minAmount = 0): ActionCandidate<Resource> {
   return {
     name: "remote-hauler:pickup-dropped",
-    resolve: (ac) => {
+    resolve: ac => {
       const remoteTarget = ac.creep.memory.remoteTarget;
       if (!remoteTarget || ac.creep.room.name !== remoteTarget) return undefined;
       return findDroppedEnergy(ac.creep, minAmount);
@@ -197,7 +194,7 @@ const policy: RolePolicy = {
   // P2-M：原 role-runner 硬编码 `role === "remoteHauler" && mode === "work" && room === home`
   //   下沉为角色钩子。work 在 home 房无候选时切 idle（ensureHome 保持在家）；
   //   acquire 在 home 房不切 idle（保持 acquire mode，ensureHome 导航去 remoteTarget）。
-  shouldIdleWhenNoCandidate: (ac) => {
+  shouldIdleWhenNoCandidate: ac => {
     const c = ac.creep;
     return c.memory.mode === "work" && c.room.name === c.memory.home;
   },

@@ -1,5 +1,13 @@
 /** E2E 场景夹具 — 基于 Screeps 真实常量构建标准房间。 */
-import { WorldBuilder, type RoomSetup, source, controller, mineral, spawn, emptyTerrain } from "../framework/WorldBuilder";
+import {
+  WorldBuilder,
+  type RoomSetup,
+  source,
+  controller,
+  mineral,
+  spawn,
+  emptyTerrain,
+} from "../framework/WorldBuilder";
 
 /**
  * 标准单房间：spawn + 2 source + 1 controller + 1 mineral。
@@ -9,11 +17,7 @@ import { WorldBuilder, type RoomSetup, source, controller, mineral, spawn, empty
  * @param spawnEnergy spawn 初始能量（默认 300，灾后恢复用）
  * @param rcl controller 初始等级（默认 1）
  */
-export function standardRoom(
-  roomName: string,
-  spawnEnergy = 300,
-  rcl = 1,
-): RoomSetup {
+export function standardRoom(roomName: string, spawnEnergy = 300, rcl = 1): RoomSetup {
   return {
     name: roomName,
     terrain: emptyTerrain(),
@@ -50,9 +54,7 @@ export function rcl4Room(roomName: string): RoomSetup {
  */
 export function rcl3RoomWithTower(roomName: string): RoomSetup {
   const room = standardRoom(roomName, 300, 3);
-  room.objects!.push(
-    { type: "tower", x: 20, y: 20, props: { energy: 0, energyCapacity: 1000 } },
-  );
+  room.objects!.push({ type: "tower", x: 20, y: 20, props: { energy: 0, energyCapacity: 1000 } });
   return room;
 }
 

@@ -71,7 +71,17 @@ export const COMPACT_CORE_V2: Blueprint = {
     cell("core.ext.30", -4, 4, STRUCTURE_EXTENSION, 5, "late", 2, ["core"]),
 
     cell("core.tower.02", -2, -2, STRUCTURE_TOWER, 5, "late", 0, ["defense", "core"]),
-    cell("core.link.01", 1, 1, STRUCTURE_LINK, 5, "late", 2, ["core", "logistics"], ["core.storage.01"]),
+    cell(
+      "core.link.01",
+      1,
+      1,
+      STRUCTURE_LINK,
+      5,
+      "late",
+      2,
+      ["core", "logistics"],
+      ["core.storage.01"],
+    ),
 
     // ── RCL6: +10 extension（共 40）──
     cell("core.ext.31", 4, -4, STRUCTURE_EXTENSION, 6, "rcl6", 2, ["core"]),

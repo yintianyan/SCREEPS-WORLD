@@ -12,18 +12,28 @@ import { selectDroppedEnergy } from "../../support/targeting";
 export function pickupDroppedEnergy(minAmount = 0): ActionCandidate<Resource> {
   return {
     name: "pickup:dropped-energy",
-    resolve: (ac) => {
-      const candidates = minAmount > 0
-        ? ac.snapshot.droppedEnergy.filter(r => r.amount >= minAmount)
-        : ac.snapshot.droppedEnergy;
+    resolve: ac => {
+      const candidates =
+        minAmount > 0
+          ? ac.snapshot.droppedEnergy.filter(r => r.amount >= minAmount)
+          : ac.snapshot.droppedEnergy;
       return selectDroppedEnergy(ac.creep, candidates);
     },
     execute: (ac, resource) => {
       // intent 计量：min(堆上现存, 背包空闲) — 动作前求值（官服结算延迟下唯一可靠）。
       const free = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
-      runCountedAction(ac.creep, resource, "pickedUp", () => ac.creep.pickup(resource), {
-        [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
-      }, () => Math.min(resource.amount, free));
+      runCountedAction(
+        ac.creep,
+        resource,
+        "pickedUp",
+        () => ac.creep.pickup(resource),
+        {
+          [ERR_FULL]: () => {
+            ac.creep.memory.mode = "work";
+          },
+        },
+        () => Math.min(resource.amount, free),
+      );
     },
   };
 }
@@ -37,7 +47,7 @@ export function pickupDroppedEnergy(minAmount = 0): ActionCandidate<Resource> {
 export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
   return {
     name: "loot:remains",
-    resolve: (ac) => {
+    resolve: ac => {
       // 遗留物按「任意资源总量」筛选（不限能量）— 只装矿物的坟墓同样值得回收，
       // 否则满载矿物的 mineralMiner 死后，其矿物随尸体灭失（线上实证）。
       const candidates: (Tombstone | Ruin)[] = [];
@@ -80,7 +90,10 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
         let bestAmt = 0;
         for (const res of Object.keys(remains.store) as ResourceConstant[]) {
           const amt = remains.store.getUsedCapacity(res) ?? 0;
-          if (amt > bestAmt) { bestAmt = amt; best = res; }
+          if (amt > bestAmt) {
+            bestAmt = amt;
+            best = res;
+          }
         }
         if (!best) return;
         resource = best;
@@ -89,9 +102,18 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
       const amount = Math.min(available, carryFree);
       // 墓碑/废墟取能＝散落资产回收，是真实经济流入（pickedUp），非搬运。
       // 注意矿物捡拾不计量（账本是能量口径）— intentAmount 只在能量分支对齐。
-      runCountedAction(ac.creep, remains, "pickedUp", () => ac.creep.withdraw(remains, resource, amount), {
-        [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
-      }, () => (resource === RESOURCE_ENERGY ? amount : 0));
+      runCountedAction(
+        ac.creep,
+        remains,
+        "pickedUp",
+        () => ac.creep.withdraw(remains, resource, amount),
+        {
+          [ERR_FULL]: () => {
+            ac.creep.memory.mode = "work";
+          },
+        },
+        () => (resource === RESOURCE_ENERGY ? amount : 0),
+      );
     },
   };
 }
@@ -104,17 +126,24 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
 export function pickupNearbyDroppedEnergy(range = 2): ActionCandidate<Resource> {
   return {
     name: "pickup:nearby-dropped-energy",
-    resolve: (ac) => {
-      const nearby = ac.snapshot.droppedEnergy.filter(
-        r => ac.creep.pos.getRangeTo(r) <= range,
-      );
+    resolve: ac => {
+      const nearby = ac.snapshot.droppedEnergy.filter(r => ac.creep.pos.getRangeTo(r) <= range);
       return selectDroppedEnergy(ac.creep, nearby);
     },
     execute: (ac, resource) => {
       const free = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
-      runCountedAction(ac.creep, resource, "pickedUp", () => ac.creep.pickup(resource), {
-        [ERR_FULL]: () => { ac.creep.memory.mode = "work"; },
-      }, () => Math.min(resource.amount, free));
+      runCountedAction(
+        ac.creep,
+        resource,
+        "pickedUp",
+        () => ac.creep.pickup(resource),
+        {
+          [ERR_FULL]: () => {
+            ac.creep.memory.mode = "work";
+          },
+        },
+        () => Math.min(resource.amount, free),
+      );
     },
   };
 }

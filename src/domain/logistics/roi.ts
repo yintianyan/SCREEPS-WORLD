@@ -38,7 +38,7 @@ export function computeLogisticsROI(
 ): LogisticsROIResult {
   const resourceValue = deliveredAmount * resourceValuePerUnit;
   const netValue = resourceValue - transportCost - riskCost;
-  const roi = transportCost > 0 ? netValue / transportCost : (netValue > 0 ? Infinity : 0);
+  const roi = transportCost > 0 ? netValue / transportCost : netValue > 0 ? Infinity : 0;
 
   let grade: string;
   if (roi >= 5) grade = "excellent";

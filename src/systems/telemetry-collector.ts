@@ -207,7 +207,11 @@ function samplePopulationData(tick: number): void {
   // C2-FINDING-01: heap 监控 — 每 100 tick 采样 IVM heap 使用量。
   // 社区陷阱 I1/I5: IVM heap 限制 256MB，接近限制时 GC 暂停导致 tick 超时。
   try {
-    const heapStats = (Game.cpu as unknown as { getHeapStatistics?: () => { heapTotal?: number; heapUsed?: number; heapLimit?: number } }).getHeapStatistics?.();
+    const heapStats = (
+      Game.cpu as unknown as {
+        getHeapStatistics?: () => { heapTotal?: number; heapUsed?: number; heapLimit?: number };
+      }
+    ).getHeapStatistics?.();
     if (heapStats) {
       const heap: HeapSample = {
         t: tick,
@@ -220,7 +224,9 @@ function samplePopulationData(tick: number): void {
       // 告警：heap 使用超过 200MB（256MB 限制的 ~78%）
       const HEAP_ALERT = 200 * 1024 * 1024;
       if (heap.used > HEAP_ALERT) {
-        console.log(`[HEAP WARN] tick=${tick} used=${(heap.used / 1048576).toFixed(1)}MB total=${(heap.total / 1048576).toFixed(1)}MB limit=${(heap.limit / 1048576).toFixed(1)}MB`);
+        console.log(
+          `[HEAP WARN] tick=${tick} used=${(heap.used / 1048576).toFixed(1)}MB total=${(heap.total / 1048576).toFixed(1)}MB limit=${(heap.limit / 1048576).toFixed(1)}MB`,
+        );
       }
     }
   } catch {
@@ -260,26 +266,35 @@ function sampleMemorySize(tick: number): void {
     // spawn 利用率（有 spawn 在孵的采样占比；引擎态直读，不依赖快照入参）。
     // 独立错误边界：测试最小 mock 下 Game.rooms 形态不保证，采样失败不拖累告警。
     try {
-      const smp = (Memory.kernel.stats as any);
+      const smp = Memory.kernel.stats as any;
       smp.spawnUtilSamples = (smp.spawnUtilSamples ?? 0) + 1;
       let anySpawning = 0;
       for (const r of Object.values(Game.rooms ?? {}) as any[]) {
         if (!r?.controller?.my) continue;
         for (const sp of (r.find?.(FIND_MY_SPAWNS) ?? []) as any[]) {
-          if (sp.spawning) { anySpawning = 1; break; }
+          if (sp.spawning) {
+            anySpawning = 1;
+            break;
+          }
         }
         if (anySpawning) break;
       }
       smp.spawnUtilSpawning = (smp.spawnUtilSpawning ?? 0) + anySpawning;
-    } catch { /* 采样失败不放大 */ }
+    } catch {
+      /* 采样失败不放大 */
+    }
     // 能量守恒账本科目（boot 起累计，铸件/复盘侧差分得速率）+ per-system CPU EMA top10。
     const g = globalCache() as any;
     if (g.energyLedger?.rooms) {
-      (Memory.kernel.stats as any).energyLedger = { tick: g.energyLedger.tick, rooms: g.energyLedger.rooms };
+      (Memory.kernel.stats as any).energyLedger = {
+        tick: g.energyLedger.tick,
+        rooms: g.energyLedger.rooms,
+      };
     }
     if (g.logisticsHealth) {
       (Memory.kernel.stats as any).logisticsHealth = {
-        level: g.logisticsHealth.level, tick: Game.time,
+        level: g.logisticsHealth.level,
+        tick: Game.time,
       };
     }
     if (g.systemBudgetEma instanceof Map && g.systemBudgetEma.size > 0) {
@@ -288,8 +303,11 @@ function sampleMemorySize(tick: number): void {
       );
     }
     if (size > MEMORY_SIZE_ALERT) {
-      log.warn("telemetry-collector", `WARNING: Memory size ${size} bytes (${(size / 1024 / 1024).toFixed(2)}MB) ` +
-        `approaching 2MB limit — consider pruning Memory.rooms / remoteOps`,);
+      log.warn(
+        "telemetry-collector",
+        `WARNING: Memory size ${size} bytes (${(size / 1024 / 1024).toFixed(2)}MB) ` +
+          `approaching 2MB limit — consider pruning Memory.rooms / remoteOps`,
+      );
     }
   } catch {
     // RawMemory 不可用（测试环境）——静默跳过。
@@ -321,14 +339,17 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
 
   const prev = g.__telemetryPrevState as {
     tier?: string;
-    rooms?: Record<string, {
-      phase?: string;
-      colonyState?: string;
-      rcl?: number;
-      hadThreats?: boolean;
-      downgradeRisk?: boolean;
-      structures?: { sp: number; tw: number; ct: number; st: number };
-    }>;
+    rooms?: Record<
+      string,
+      {
+        phase?: string;
+        colonyState?: string;
+        rcl?: number;
+        hadThreats?: boolean;
+        downgradeRisk?: boolean;
+        structures?: { sp: number; tw: number; ct: number; st: number };
+      }
+    >;
   };
 
   // 1. Tier 转换检测
@@ -364,11 +385,10 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
       currentPhase !== undefined &&
       prevRoom.phase !== currentPhase
     ) {
-      pushEventDirect(
-        EventKind.PhaseTransition,
-        roomName,
-        [phaseRank(prevRoom.phase), phaseRank(currentPhase)],
-      );
+      pushEventDirect(EventKind.PhaseTransition, roomName, [
+        phaseRank(prevRoom.phase),
+        phaseRank(currentPhase),
+      ]);
       // 进入 crisis 计数
       if (currentPhase === "crisis") {
         incrementCrisisCount();
@@ -383,26 +403,17 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
       currentColony !== undefined &&
       prevRoom.colonyState !== currentColony
     ) {
-      pushEventDirect(
-        EventKind.ColonyStateChange,
-        roomName,
-        [colonyStateRank(prevRoom.colonyState), colonyStateRank(currentColony)],
-      );
+      pushEventDirect(EventKind.ColonyStateChange, roomName, [
+        colonyStateRank(prevRoom.colonyState),
+        colonyStateRank(currentColony),
+      ]);
     }
     prev.rooms[roomName].colonyState = currentColony;
 
     // RCL 变化
     const currentRcl = snapshot.rcl;
-    if (
-      prevRoom.rcl !== undefined &&
-      prevRoom.rcl !== currentRcl &&
-      currentRcl > prevRoom.rcl
-    ) {
-      pushEventDirect(
-        EventKind.ControllerLevelUp,
-        roomName,
-        [prevRoom.rcl, currentRcl],
-      );
+    if (prevRoom.rcl !== undefined && prevRoom.rcl !== currentRcl && currentRcl > prevRoom.rcl) {
+      pushEventDirect(EventKind.ControllerLevelUp, roomName, [prevRoom.rcl, currentRcl]);
     }
     prev.rooms[roomName].rcl = currentRcl;
 
@@ -412,7 +423,9 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
       if (hasThreats && !prevRoom.hadThreats) {
         // 战斗黑匣子（M9）：入侵事件附带敌方编队构成（数量/治疗/远程/近战
         // 部件合计），供事后复盘敌方火力与杀伤链。
-        let heals = 0, ranged = 0, melee = 0;
+        let heals = 0,
+          ranged = 0,
+          melee = 0;
         for (const h of snapshot.threatCreeps as Creep[]) {
           for (const p of h.body) {
             if (p.type === HEAL) heals++;
@@ -421,7 +434,10 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
           }
         }
         pushEventDirect(EventKind.EnemyInvasion, roomName, [
-          snapshot.threatCreeps.length, heals, ranged, melee,
+          snapshot.threatCreeps.length,
+          heals,
+          ranged,
+          melee,
         ]);
       } else if (!hasThreats && prevRoom.hadThreats) {
         pushEventDirect(EventKind.EnemyCleared, roomName, []);
@@ -448,16 +464,32 @@ function detectAndFlushEvents(tick: number, ctx: TickContext): void {
     };
     if (prevRoom.structures) {
       if (currStructures.sp < prevRoom.structures.sp) {
-        pushEventDirect(EventKind.StructureDestroyed, roomName, [0, prevRoom.structures.sp, currStructures.sp]);
+        pushEventDirect(EventKind.StructureDestroyed, roomName, [
+          0,
+          prevRoom.structures.sp,
+          currStructures.sp,
+        ]);
       }
       if (currStructures.tw < prevRoom.structures.tw) {
-        pushEventDirect(EventKind.StructureDestroyed, roomName, [1, prevRoom.structures.tw, currStructures.tw]);
+        pushEventDirect(EventKind.StructureDestroyed, roomName, [
+          1,
+          prevRoom.structures.tw,
+          currStructures.tw,
+        ]);
       }
       if (currStructures.ct < prevRoom.structures.ct) {
-        pushEventDirect(EventKind.StructureDestroyed, roomName, [2, prevRoom.structures.ct, currStructures.ct]);
+        pushEventDirect(EventKind.StructureDestroyed, roomName, [
+          2,
+          prevRoom.structures.ct,
+          currStructures.ct,
+        ]);
       }
       if (currStructures.st < prevRoom.structures.st) {
-        pushEventDirect(EventKind.StructureDestroyed, roomName, [3, prevRoom.structures.st, currStructures.st]);
+        pushEventDirect(EventKind.StructureDestroyed, roomName, [
+          3,
+          prevRoom.structures.st,
+          currStructures.st,
+        ]);
       }
     }
     prev.rooms[roomName].structures = currStructures;
@@ -579,25 +611,23 @@ function updateStatsSummary(tick: number): void {
 // ─── 辅助函数 ───────────────────────────────────────────────
 
 function tierRank(tier: string): number {
-  return tier === "healthy" ? 0
-    : tier === "guarded" ? 1
-    : tier === "conserve" ? 2
-    : 3;
+  return tier === "healthy" ? 0 : tier === "guarded" ? 1 : tier === "conserve" ? 2 : 3;
 }
 
 function phaseRank(phase: string): number {
-  return phase === "bootstrap" ? 0
-    : phase === "growth" ? 1
-    : phase === "crisis" ? 2
-    : phase === "recovery" ? 3
-    : 4; // steady
+  return phase === "bootstrap"
+    ? 0
+    : phase === "growth"
+      ? 1
+      : phase === "crisis"
+        ? 2
+        : phase === "recovery"
+          ? 3
+          : 4; // steady
 }
 
 function colonyStateRank(state: string): number {
-  return state === "bootstrap" ? 0
-    : state === "recovery" ? 1
-    : state === "normal" ? 2
-    : 3; // defense
+  return state === "bootstrap" ? 0 : state === "recovery" ? 1 : state === "normal" ? 2 : 3; // defense
 }
 
 function incrementCrisisCount(): void {

@@ -69,10 +69,18 @@ export function computeOperationMetrics(
     totalRetries += op.retries;
 
     switch (op.status) {
-      case "expired": expiredCount++; break;
-      case "failed": failedCount++; break;
-      case "cancelled": cancelledCount++; break;
-      case "completed": completedCount++; break;
+      case "expired":
+        expiredCount++;
+        break;
+      case "failed":
+        failedCount++;
+        break;
+      case "cancelled":
+        cancelledCount++;
+        break;
+      case "completed":
+        completedCount++;
+        break;
     }
   }
 
@@ -104,7 +112,7 @@ export function formatOperationMetrics(m: OperationMetrics): string {
     "---------------------",
     `Active: ${m.activeCount}  Terminal: ${m.terminalCount}`,
     `Requested: ${m.totalRequested.toLocaleString()}  Delivered: ${m.totalDelivered.toLocaleString()}  Fulfillment: ${(m.fulfillmentRate * 100).toFixed(1)}%`,
-    `Completed: ${((m.completionRate) * 100).toFixed(1)}%  Expired: ${m.expiredCount}  Failed: ${m.failedCount}  Cancelled: ${m.cancelledCount}`,
+    `Completed: ${(m.completionRate * 100).toFixed(1)}%  Expired: ${m.expiredCount}  Failed: ${m.failedCount}  Cancelled: ${m.cancelledCount}`,
     `Retries: ${m.totalRetries}`,
   ];
   return lines.join("\n");

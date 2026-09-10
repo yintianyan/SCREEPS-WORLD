@@ -97,13 +97,18 @@ type RclBucket = "early" | "mid" | "late";
  * early(RCL≤4) 小库存即盈余、可烧库存冲级；mid(RCL5-6) 保持默认值最小化行为变化；
  * late(RCL7-8) 5 万是正常发展储备，25 万才算盈余（贴近 W8N3 实测 32 万，略低留余量）。
  */
-const STORAGE_THRESHOLDS_BY_RCL: Readonly<Record<RclBucket, {
-  surplusPct: number;
-  lowPct: number;
-}>> = {
+const STORAGE_THRESHOLDS_BY_RCL: Readonly<
+  Record<
+    RclBucket,
+    {
+      surplusPct: number;
+      lowPct: number;
+    }
+  >
+> = {
   early: { surplusPct: 0.02, lowPct: 0.002 }, // surplus=2万 / low=2千
-  mid:   { surplusPct: 0.05, lowPct: 0.01 },  // surplus=5万 / low=1万（保持当前默认值）
-  late:  { surplusPct: 0.25, lowPct: 0.05 },  // surplus=25万 / low=5万
+  mid: { surplusPct: 0.05, lowPct: 0.01 }, // surplus=5万 / low=1万（保持当前默认值）
+  late: { surplusPct: 0.25, lowPct: 0.05 }, // surplus=25万 / low=5万
 };
 
 /** 按 RCL 返回 storage 盈余/低位阈值（绝对值；surplus 触发上调、low 触发下调）。 */

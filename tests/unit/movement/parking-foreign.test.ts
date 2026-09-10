@@ -36,8 +36,14 @@ function makeCreep(name: string, room: any, x: number, y: number): any {
     pos: { x, y, roomName: room.name },
     move: (dir: number) => {
       const delta: Record<number, [number, number]> = {
-        1: [0, -1], 2: [1, -1], 3: [1, 0], 4: [1, 1],
-        5: [0, 1], 6: [-1, 1], 7: [-1, 0], 8: [-1, -1],
+        1: [0, -1],
+        2: [1, -1],
+        3: [1, 0],
+        4: [1, 1],
+        5: [0, 1],
+        6: [-1, 1],
+        7: [-1, 0],
+        8: [-1, -1],
       };
       const d = delta[dir];
       if (!d) return -6;
@@ -50,8 +56,14 @@ function makeCreep(name: string, room: any, x: number, y: number): any {
     const dx = Math.sign(t.x - c.pos.x);
     const dy = Math.sign(t.y - c.pos.y);
     const table: Record<string, number> = {
-      "0,-1": 1, "1,-1": 2, "1,0": 3, "1,1": 4,
-      "0,1": 5, "-1,1": 6, "-1,0": 7, "-1,-1": 8,
+      "0,-1": 1,
+      "1,-1": 2,
+      "1,0": 3,
+      "1,1": 4,
+      "0,1": 5,
+      "-1,1": 6,
+      "-1,0": 7,
+      "-1,-1": 8,
     };
     return table[`${dx},${dy}`] ?? 3;
   };
@@ -61,9 +73,19 @@ function makeCreep(name: string, room: any, x: number, y: number): any {
 /** home 快照 mock — 异房分支只读 roomName；home 分支需空集合字段。 */
 const homeSnapshot: any = {
   roomName: HOME,
-  sources: [], spawns: [], controller: undefined, storage: undefined,
-  extensions: [], towers: [], containers: [], roads: [], walls: [],
-  ramparts: [], links: [], labs: [], myConstructionSites: [],
+  sources: [],
+  spawns: [],
+  controller: undefined,
+  storage: undefined,
+  extensions: [],
+  towers: [],
+  containers: [],
+  roads: [],
+  walls: [],
+  ramparts: [],
+  links: [],
+  labs: [],
+  myConstructionSites: [],
 };
 
 beforeEach(() => {

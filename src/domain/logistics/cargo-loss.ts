@@ -53,10 +53,7 @@ export interface CargoLossResult {
 
  * 纯函数。
  */
-export function recordCargoLoss(
-  acc: TransportAccounting,
-  loss: CargoLossEvent,
-): CargoLossResult {
+export function recordCargoLoss(acc: TransportAccounting, loss: CargoLossEvent): CargoLossResult {
   const lossAmount = Math.max(0, loss.cargoAmount);
 
   if (lossAmount <= 0) {
@@ -95,9 +92,7 @@ export function totalCargoLoss(events: readonly CargoLossEvent[]): number {
  * 按资源类型分组计算损失。
  * 纯函数。
  */
-export function cargoLossByResource(
-  events: readonly CargoLossEvent[],
-): Map<ResourceType, number> {
+export function cargoLossByResource(events: readonly CargoLossEvent[]): Map<ResourceType, number> {
   const byResource = new Map<ResourceType, number>();
   for (const e of events) {
     const current = byResource.get(e.resourceType) ?? 0;
@@ -110,9 +105,7 @@ export function cargoLossByResource(
  * 按房间分组计算损失。
  * 纯函数。
  */
-export function cargoLossByRoom(
-  events: readonly CargoLossEvent[],
-): Map<string, number> {
+export function cargoLossByRoom(events: readonly CargoLossEvent[]): Map<string, number> {
   const byRoom = new Map<string, number>();
   for (const e of events) {
     const current = byRoom.get(e.deathRoom) ?? 0;

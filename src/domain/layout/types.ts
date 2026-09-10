@@ -1,9 +1,9 @@
 /** 布局阶段 — 对应 RCL 等级区间。 */
-export type LayoutPhase = "bootstrap" | "rcl2" | "rcl3" | "rcl4" | "late" | "rcl6" | "rcl7" | "rcl8";
+export type LayoutPhase =
+  "bootstrap" | "rcl2" | "rcl3" | "rcl4" | "late" | "rcl6" | "rcl7" | "rcl8";
 
 /** 建造优先级 — 0 最高（关键），3 最低。 */
 export type BuildPriority = 0 | 1 | 2 | 3;
-
 
 export type StructureTag = "core" | "logistics" | "defense" | "road" | "industry";
 
@@ -29,7 +29,6 @@ export interface Blueprint {
   readonly cells: readonly BlueprintCell[];
 }
 
-
 export type ValidationResult =
   | "ok"
   | "rcl"
@@ -44,7 +43,6 @@ export type ValidationResult =
 export function packPos(x: number, y: number): number {
   return x * 50 + y;
 }
-
 
 export function unpackPos(packed: number): { x: number; y: number } {
   return { x: Math.floor(packed / 50), y: packed % 50 };

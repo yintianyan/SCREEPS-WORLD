@@ -5,7 +5,8 @@ import { globalCache } from "../../../src/kernel/global-cache";
 import { mockCreep, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
 
 function makeAc(overrides: { fillTargets?: any[]; storage?: any } = {}): any {
-  const storage = overrides.storage ?? mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
+  const storage =
+    overrides.storage ?? mockStructure("storage", { id: "st", energy: 30000, capacity: 1000000 });
   return {
     creep: mockCreep({ role: "hauler", home: "W7N4" }),
     snapshot: mockSnapshot({
@@ -45,7 +46,9 @@ describe("fillStorage — 泵断供让位", () => {
 
   it("泵断供但核心 sink 无缺口：照常囤积（不为 controllerContainer 让位）", () => {
     setPumpRooms([]);
-    const ac = makeAc({ fillTargets: [mockStructure("container", { energy: 100, capacity: 2000 })] });
+    const ac = makeAc({
+      fillTargets: [mockStructure("container", { energy: 100, capacity: 2000 })],
+    });
 
     expect(fillStorage().resolve!(ac)).toBe(ac.snapshot.storage);
   });

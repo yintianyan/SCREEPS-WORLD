@@ -8,7 +8,14 @@ import type {
   PendingValidation,
   AdjustSignalsSnapshot,
 } from "./types";
-import { TUNING_BOUNDS, clampParam, isInCooldown, getStorageThresholds, ROLLBACK_FREEZE_THRESHOLD, FROZEN_DURATION } from "./bounds";
+import {
+  TUNING_BOUNDS,
+  clampParam,
+  isInCooldown,
+  getStorageThresholds,
+  ROLLBACK_FREEZE_THRESHOLD,
+  FROZEN_DURATION,
+} from "./bounds";
 
 // ─── 信号阈值常量 ─────────────────────────────────────────────
 
@@ -93,11 +100,56 @@ export function evaluateTuning(
   // ── 逐参数评估 ──
 
   const allEvals: Array<[string, ParamEvaluation]> = [
-    ["hauler.maxCount", evaluateHaulerMaxCount(signals, currentBounds, lastAdjusted, currentTick, prevTrend["hauler.maxCount"] ?? "none")],
-    ["hauler.minCount", evaluateHaulerMinCount(signals, currentBounds, lastAdjusted, currentTick, prevTrend["hauler.minCount"] ?? "none")],
-    ["harvester.maxCount", evaluateHarvesterMaxCount(signals, currentBounds, lastAdjusted, currentTick, prevTrend["harvester.maxCount"] ?? "none")],
-    ["upgrader.maxCount", evaluateUpgraderMaxCount(signals, currentBounds, lastAdjusted, currentTick, prevTrend["upgrader.maxCount"] ?? "none")],
-    ["builder.maxCount", evaluateBuilderMaxCount(signals, currentBounds, lastAdjusted, currentTick, prevTrend["builder.maxCount"] ?? "none")],
+    [
+      "hauler.maxCount",
+      evaluateHaulerMaxCount(
+        signals,
+        currentBounds,
+        lastAdjusted,
+        currentTick,
+        prevTrend["hauler.maxCount"] ?? "none",
+      ),
+    ],
+    [
+      "hauler.minCount",
+      evaluateHaulerMinCount(
+        signals,
+        currentBounds,
+        lastAdjusted,
+        currentTick,
+        prevTrend["hauler.minCount"] ?? "none",
+      ),
+    ],
+    [
+      "harvester.maxCount",
+      evaluateHarvesterMaxCount(
+        signals,
+        currentBounds,
+        lastAdjusted,
+        currentTick,
+        prevTrend["harvester.maxCount"] ?? "none",
+      ),
+    ],
+    [
+      "upgrader.maxCount",
+      evaluateUpgraderMaxCount(
+        signals,
+        currentBounds,
+        lastAdjusted,
+        currentTick,
+        prevTrend["upgrader.maxCount"] ?? "none",
+      ),
+    ],
+    [
+      "builder.maxCount",
+      evaluateBuilderMaxCount(
+        signals,
+        currentBounds,
+        lastAdjusted,
+        currentTick,
+        prevTrend["builder.maxCount"] ?? "none",
+      ),
+    ],
   ];
 
   for (const [param, evalResult] of allEvals) {
@@ -181,8 +233,7 @@ function evaluateHaulerMaxCount(
   ) {
     desired = "up";
     reason = `Containers ${(s.containerFillRatio * 100).toFixed(0)}% full, storage ${s.avgStorageEnergy.toFixed(0)}/${storageSurplus} (consumer unsaturated), haulers at max ${current}`;
-  }
-  else if (
+  } else if (
     s.containerFillRatio < CONTAINER_LOW &&
     s.haulerCount > (bounds.hauler?.minCount ?? 2) &&
     economyHealthy &&
@@ -337,9 +388,10 @@ function evaluateUpgraderMaxCount(
     current > boundsDef.floor
   ) {
     desired = "down";
-    reason = s.avgStorageEnergy < storageLow
-      ? `Storage low (${s.avgStorageEnergy.toFixed(0)}, threshold ${storageLow}, RCL${s.rcl}), conserving upgrade capacity`
-      : `Economy pressure high (${(s.avgPressure * 100).toFixed(0)}%), reducing upgrade capacity`;
+    reason =
+      s.avgStorageEnergy < storageLow
+        ? `Storage low (${s.avgStorageEnergy.toFixed(0)}, threshold ${storageLow}, RCL${s.rcl}), conserving upgrade capacity`
+        : `Economy pressure high (${(s.avgPressure * 100).toFixed(0)}%), reducing upgrade capacity`;
   }
 
   return confirmAndBuild(param, desired, prevDirection, current, boundsDef.step, reason, s);
@@ -378,14 +430,12 @@ function evaluateBuilderMaxCount(
     reason = `Build backlog ${s.buildQueueBacklog} items with builders at max ${current}`;
   }
   // ↓ 减少：buildQueue 空 OR 经济压力高
-  else if (
-    (s.buildQueueBacklog === 0 || economyStressed) &&
-    current > boundsDef.floor
-  ) {
+  else if ((s.buildQueueBacklog === 0 || economyStressed) && current > boundsDef.floor) {
     desired = "down";
-    reason = s.buildQueueBacklog === 0
-      ? `No build backlog, reducing builder capacity from ${current}`
-      : `Economy pressure high (${(s.avgPressure * 100).toFixed(0)}%), reducing builder capacity`;
+    reason =
+      s.buildQueueBacklog === 0
+        ? `No build backlog, reducing builder capacity from ${current}`
+        : `Economy pressure high (${(s.avgPressure * 100).toFixed(0)}%), reducing builder capacity`;
   }
 
   return confirmAndBuild(param, desired, prevDirection, current, boundsDef.step, reason, s);
@@ -416,9 +466,10 @@ function confirmAndBuild(
 
   // 连续 2 次同方向 — 触发调整，重置趋势
   if (prevDirection === desired) {
-    const newValue = desired === "up"
-      ? clampParam(param, currentValue + step)
-      : clampParam(param, currentValue - step);
+    const newValue =
+      desired === "up"
+        ? clampParam(param, currentValue + step)
+        : clampParam(param, currentValue - step);
     return {
       adjustment: { param, oldValue: currentValue, newValue, reason },
       newDirection: "none", // 调整后重置，下次需重新积累 2 次确认
@@ -503,7 +554,10 @@ function getRoleCount(param: string, s: TuningSignals): number {
  * upgrader up=worsen（烧库存）/down=improve（攒库存）；
  * builder up=improve（消除积压）/down=worsen（主动降产）。
  */
-function getExpectedDirection(param: string, adjustDirection: TrendDirection): "improve" | "worsen" {
+function getExpectedDirection(
+  param: string,
+  adjustDirection: TrendDirection,
+): "improve" | "worsen" {
   if (param.startsWith("hauler.")) return "improve";
   if (param.startsWith("harvester.")) return adjustDirection === "up" ? "improve" : "worsen";
   if (param.startsWith("upgrader.")) return adjustDirection === "up" ? "worsen" : "improve";
@@ -814,7 +868,10 @@ export function exploreParameter(
   currentBounds: Record<string, { minCount: number; maxCount: number }>,
   lastAdjusted: Record<string, number>,
   currentTick: number,
-): { adjustment: TuningAdjustment; pendingValidation: Omit<PendingValidation, "adjustTick"> } | null {
+): {
+  adjustment: TuningAdjustment;
+  pendingValidation: Omit<PendingValidation, "adjustTick">;
+} | null {
   // 计数器递增（无调整周期）
   explorationState.stableCount++;
 
@@ -851,9 +908,10 @@ export function exploreParameter(
   const currentValue = field === "maxCount" ? bounds.maxCount : bounds.minCount;
 
   // 边界检查
-  const newValue = direction === "up"
-    ? clampParam(param, currentValue + boundsDef.step)
-    : clampParam(param, currentValue - boundsDef.step);
+  const newValue =
+    direction === "up"
+      ? clampParam(param, currentValue + boundsDef.step)
+      : clampParam(param, currentValue - boundsDef.step);
 
   if (newValue === currentValue) return null; // 已在边界
 

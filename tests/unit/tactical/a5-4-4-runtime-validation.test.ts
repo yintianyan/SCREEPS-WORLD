@@ -17,7 +17,11 @@ import {
   validateTargetScope,
 } from "../../../src/domain/tactical/authorization";
 import type { CombatCapability } from "../../../src/domain/combat/capability";
-import type { TacticalState, TargetScope, TacticalObjective } from "../../../src/domain/tactical/types";
+import type {
+  TacticalState,
+  TargetScope,
+  TacticalObjective,
+} from "../../../src/domain/tactical/types";
 
 // ─── 辅助构造函数 ───
 
@@ -53,10 +57,13 @@ function makeMember(
     name,
     role,
     capability: makeCapability(
-      role === "attacker" ? { attack: 120 } :
-      role === "ranged" ? { rangedAttack: 40 } :
-      role === "healer" ? { heal: 48 } :
-      { attack: 60 },
+      role === "attacker"
+        ? { attack: 120 }
+        : role === "ranged"
+          ? { rangedAttack: 40 }
+          : role === "healer"
+            ? { heal: 48 }
+            : { attack: 60 },
     ),
     pos: x * 50 + y,
     room,
@@ -90,9 +97,7 @@ function makeCandidate(
   return { ...base, ...overrides };
 }
 
-function makeSnapshot(
-  overrides: Partial<FocusFireSnapshot> = {},
-): FocusFireSnapshot {
+function makeSnapshot(overrides: Partial<FocusFireSnapshot> = {}): FocusFireSnapshot {
   return {
     tick: 100,
     squadId: "squad-test",
@@ -112,9 +117,7 @@ function makeSnapshot(
   };
 }
 
-function makeObjective(
-  overrides: Partial<TacticalObjective> = {},
-): TacticalObjective {
+function makeObjective(overrides: Partial<TacticalObjective> = {}): TacticalObjective {
   return {
     objectiveId: "obj-test",
     operationId: "war-W2N1",
@@ -173,12 +176,14 @@ describe("COMBAT-RUNTIME-001: Target Death Race", () => {
     ];
 
     // Tick N: plan1 selects targetX (lower effectiveHP → higher score)
-    const plan1 = planFocusFire(makeSnapshot({
-      tick: 100,
-      candidates: [targetX, targetY],
-      members: attackers,
-      prevPlan: null,
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        tick: 100,
+        candidates: [targetX, targetY],
+        members: attackers,
+        prevPlan: null,
+      }),
+    );
 
     expect(plan1.primaryTargetId).toBe("target-X");
     expect(plan1.attackIntents).toHaveLength(3);
@@ -186,12 +191,14 @@ describe("COMBAT-RUNTIME-001: Target Death Race", () => {
 
     // Tick N+1: targetX is dead (hp=0, INVALID)
     targetX = { ...targetX, hp: 0, accessibility: "INVALID" };
-    const plan2 = planFocusFire(makeSnapshot({
-      tick: 103,
-      candidates: [targetX, targetY],
-      members: attackers,
-      prevPlan: plan1,
-    }));
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        candidates: [targetX, targetY],
+        members: attackers,
+        prevPlan: plan1,
+      }),
+    );
 
     // B/C must NOT continue attacking dead targetX
     expect(plan2.primaryTargetId).toBe("target-Y");
@@ -232,15 +239,14 @@ describe("COMBAT-RUNTIME-001: Target Death Race", () => {
       effectiveHP: 800,
     });
 
-    const plan = planFocusFire(makeSnapshot({
-      tick: 103,
-      candidates: [targetY],
-      members: [
-        makeMember("att-B", "attacker", 25, 26),
-        makeMember("att-C", "attacker", 26, 25),
-      ],
-      prevPlan,
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        candidates: [targetY],
+        members: [makeMember("att-B", "attacker", 25, 26), makeMember("att-C", "attacker", 26, 25)],
+        prevPlan,
+      }),
+    );
 
     // Must select new target, not stale targetX
     expect(plan.primaryTargetId).toBe("target-Y");
@@ -261,10 +267,12 @@ describe("COMBAT-RUNTIME-002: Target Escape", () => {
       distance: 15,
     });
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [targetFar],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [targetFar],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     expect(plan.primaryTargetId).toBe("enemy-1");
     expect(plan.attackIntents[0]!.requiresMovement).toBe(true);
@@ -280,12 +288,14 @@ describe("COMBAT-RUNTIME-002: Target Escape", () => {
     let prevPlan: FocusFirePlan | null = null;
 
     // Tick 100: in range
-    const plan1 = planFocusFire(makeSnapshot({
-      tick: 100,
-      candidates: [target],
-      members: [attacker],
-      prevPlan: null,
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        tick: 100,
+        candidates: [target],
+        members: [attacker],
+        prevPlan: null,
+      }),
+    );
     prevPlan = plan1;
 
     expect(plan1.attackIntents[0]!.requiresMovement).toBe(false);
@@ -296,12 +306,14 @@ describe("COMBAT-RUNTIME-002: Target Escape", () => {
       distance: 15,
     });
 
-    const plan2 = planFocusFire(makeSnapshot({
-      tick: 103,
-      candidates: [target],
-      members: [attacker],
-      prevPlan,
-    }));
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        candidates: [target],
+        members: [attacker],
+        prevPlan,
+      }),
+    );
 
     expect(plan2.attackIntents[0]!.requiresMovement).toBe(true);
     expect(plan2.attackIntents[0]!.attackType).toBe("NO_ATTACK");
@@ -316,11 +328,13 @@ describe("COMBAT-RUNTIME-003: Formation Conflict", () => {
   it("Cohesion BROKEN → REGROUP（不产出攻击）", () => {
     const target = makeCandidate("enemy-1", 25, 25);
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      cohesionStatus: "BROKEN",
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        cohesionStatus: "BROKEN",
+      }),
+    );
 
     expect(plan.engagementState).toBe("REGROUP");
     expect(plan.attackIntents).toHaveLength(0);
@@ -330,11 +344,13 @@ describe("COMBAT-RUNTIME-003: Formation Conflict", () => {
   it("Cohesion CRITICAL → REGROUP", () => {
     const target = makeCandidate("enemy-1", 25, 25);
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      cohesionStatus: "CRITICAL",
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        cohesionStatus: "CRITICAL",
+      }),
+    );
 
     expect(plan.engagementState).toBe("REGROUP");
     expect(plan.attackIntents).toHaveLength(0);
@@ -343,11 +359,13 @@ describe("COMBAT-RUNTIME-003: Formation Conflict", () => {
   it("Cohesion DEGRADED → 仍可攻击（不阻断）", () => {
     const target = makeCandidate("enemy-1", 25, 25);
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      cohesionStatus: "DEGRADED",
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        cohesionStatus: "DEGRADED",
+      }),
+    );
 
     // DEGRADED is not BROKEN — can still attack
     expect(plan.attackIntents.length).toBeGreaterThan(0);
@@ -362,11 +380,13 @@ describe("COMBAT-RUNTIME-004: Retreat Safety", () => {
   it("RETREATING → 0 AttackIntent", () => {
     const target = makeCandidate("enemy-1", 25, 25);
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      tacticalState: "RETREATING",
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        tacticalState: "RETREATING",
+      }),
+    );
 
     expect(plan.attackIntents).toHaveLength(0);
     expect(plan.engagementState).toBe("REGROUP");
@@ -375,11 +395,13 @@ describe("COMBAT-RUNTIME-004: Retreat Safety", () => {
   it("DISENGAGING → 0 AttackIntent", () => {
     const target = makeCandidate("enemy-1", 25, 25);
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      tacticalState: "DISENGAGING",
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        tacticalState: "DISENGAGING",
+      }),
+    );
 
     expect(plan.attackIntents).toHaveLength(0);
   });
@@ -387,11 +409,13 @@ describe("COMBAT-RUNTIME-004: Retreat Safety", () => {
   it("ABORTED → 0 AttackIntent", () => {
     const target = makeCandidate("enemy-1", 25, 25);
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      tacticalState: "ABORTED",
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        tacticalState: "ABORTED",
+      }),
+    );
 
     expect(plan.attackIntents).toHaveLength(0);
   });
@@ -401,12 +425,14 @@ describe("COMBAT-RUNTIME-004: Retreat Safety", () => {
       accessibility: "IN_MELEE_RANGE",
     });
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      tacticalState: "RETREATING",
-      inEngagementRange: true,
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        tacticalState: "RETREATING",
+        inEngagementRange: true,
+      }),
+    );
 
     // Even though target is in range, RETREATING suppresses attack
     expect(plan.attackIntents).toHaveLength(0);
@@ -421,11 +447,13 @@ describe("COMBAT-RUNTIME-005: Authorization Denied", () => {
   it("warPosture=develop → 0 AttackIntent", () => {
     const target = makeCandidate("enemy-1", 25, 25);
 
-    const plan = planFocusFire(makeSnapshot({
-      warPosture: "develop",
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        warPosture: "develop",
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     expect(plan.attackIntents).toHaveLength(0);
     expect(plan.primaryTargetId).toBeNull();
@@ -435,11 +463,13 @@ describe("COMBAT-RUNTIME-005: Authorization Denied", () => {
   it("warPosture=fortify → 0 AttackIntent", () => {
     const target = makeCandidate("enemy-1", 25, 25);
 
-    const plan = planFocusFire(makeSnapshot({
-      warPosture: "fortify",
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        warPosture: "fortify",
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     expect(plan.attackIntents).toHaveLength(0);
   });
@@ -447,11 +477,13 @@ describe("COMBAT-RUNTIME-005: Authorization Denied", () => {
   it("warPosture=alert → 0 AttackIntent", () => {
     const target = makeCandidate("enemy-1", 25, 25);
 
-    const plan = planFocusFire(makeSnapshot({
-      warPosture: "alert",
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        warPosture: "alert",
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     expect(plan.attackIntents).toHaveLength(0);
   });
@@ -459,11 +491,13 @@ describe("COMBAT-RUNTIME-005: Authorization Denied", () => {
   it("warPosture=contain → 0 AttackIntent", () => {
     const target = makeCandidate("enemy-1", 25, 25);
 
-    const plan = planFocusFire(makeSnapshot({
-      warPosture: "contain",
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        warPosture: "contain",
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     expect(plan.attackIntents).toHaveLength(0);
   });
@@ -471,11 +505,13 @@ describe("COMBAT-RUNTIME-005: Authorization Denied", () => {
   it("warPosture=peace → 0 AttackIntent", () => {
     const target = makeCandidate("enemy-1", 25, 25);
 
-    const plan = planFocusFire(makeSnapshot({
-      warPosture: "peace",
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        warPosture: "peace",
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     expect(plan.attackIntents).toHaveLength(0);
   });
@@ -578,10 +614,12 @@ describe("COMBAT-RUNTIME-006: Focus Fire Overkill", () => {
       makeMember("att-D", "attacker", 26, 26),
     ];
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [targetA, targetB],
-      members,
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [targetA, targetB],
+        members,
+      }),
+    );
 
     expect(plan.secondaryTargetId).toBe("enemy-B");
     // Not all 4 on primary
@@ -600,10 +638,12 @@ describe("COMBAT-RUNTIME-006: Focus Fire Overkill", () => {
       makeMember("att-3", "attacker", 26, 25),
     ];
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [targetA],
-      members,
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [targetA],
+        members,
+      }),
+    );
 
     expect(plan.secondaryTargetId).toBeNull();
     expect(plan.attackIntents).toHaveLength(3);
@@ -631,10 +671,12 @@ describe("COMBAT-RUNTIME-007: Enemy Healer Priority", () => {
       effectiveHP: 500,
     });
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [attacker, healer],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [attacker, healer],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     expect(plan.primaryTargetId).toBe("enemy-healer");
   });
@@ -653,10 +695,12 @@ describe("COMBAT-RUNTIME-008: Boosted Enemy", () => {
       effectiveHP: 500,
     });
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [boostedTarget],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [boostedTarget],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
 
     // Boosted target should have higher tacticalPriority than base
     expect(plan.primaryTargetId).toBe("enemy-boosted");
@@ -673,8 +717,8 @@ describe("COMBAT-RUNTIME-009: Deterministic Replay (50 scenarios × 1000 replays
     const targetCount = [1, 3, 5][idx % 3]!;
     const targets: TargetCandidate[] = [];
     for (let i = 0; i < targetCount; i++) {
-      const x = 20 + (i * 3) % 20;
-      const y = 20 + (i * 5) % 20;
+      const x = 20 + ((i * 3) % 20);
+      const y = 20 + ((i * 5) % 20);
       const hp = 200 + i * 200;
       targets.push(
         makeCandidate(`enemy-${idx}-${i}`, x, y, "W2N1", {
@@ -686,7 +730,7 @@ describe("COMBAT-RUNTIME-009: Deterministic Replay (50 scenarios × 1000 replays
           attackCapability: i === 1 ? 60 : 0,
           accessibility: i === 0 ? "IN_MELEE_RANGE" : "IN_RANGED_RANGE",
           boosted: idx % 7 === 0,
-          boostTier: idx % 3 as 0 | 1 | 2 | 3,
+          boostTier: (idx % 3) as 0 | 1 | 2 | 3,
         }),
       );
     }
@@ -698,7 +742,12 @@ describe("COMBAT-RUNTIME-009: Deterministic Replay (50 scenarios × 1000 replays
       members.push(makeMember(`att-${idx}-${i}`, role, 20 + i, 20 + i));
     }
 
-    const tacticalStates: TacticalState[] = ["ENGAGING", "POSITIONING", "RETREATING", "DISENGAGING"];
+    const tacticalStates: TacticalState[] = [
+      "ENGAGING",
+      "POSITIONING",
+      "RETREATING",
+      "DISENGAGING",
+    ];
     const warPostures = ["war", "develop", "fortify", "alert", "contain"];
     const cohesionStatuses = ["INTACT", "DEGRADED", "BROKEN", "CRITICAL"];
 
@@ -745,10 +794,12 @@ describe("COMBAT-RUNTIME-010: Mixed Melee + Ranged", () => {
     const melee = makeMember("att-melee", "attacker", 25, 25);
     const ranged = makeMember("att-ranged", "ranged", 27, 27);
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [melee, ranged],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [melee, ranged],
+      }),
+    );
 
     const meleeIntent = plan.attackIntents.find(i => i.creepId === "att-melee");
     const rangedIntent = plan.attackIntents.find(i => i.creepId === "att-ranged");
@@ -774,21 +825,25 @@ describe("COMBAT-RUNTIME-011: Low HP Target", () => {
     let prevPlan: FocusFirePlan | null = null;
 
     // First tick
-    const plan1 = planFocusFire(makeSnapshot({
-      tick: 100,
-      candidates: [target],
-      members: [attacker],
-      prevPlan: null,
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        tick: 100,
+        candidates: [target],
+        members: [attacker],
+        prevPlan: null,
+      }),
+    );
     prevPlan = plan1;
 
     // Second tick: same target, now low HP
-    const plan2 = planFocusFire(makeSnapshot({
-      tick: 103,
-      candidates: [target],
-      members: [attacker],
-      prevPlan,
-    }));
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        candidates: [target],
+        members: [attacker],
+        prevPlan,
+      }),
+    );
 
     expect(plan2.engagementState).toBe("TARGET_DYING");
   });
@@ -802,12 +857,14 @@ describe("COMBAT-RUNTIME-012: TargetScope LOCAL", () => {
   it("LOCAL scope 同房目标不拒绝", () => {
     const target = makeCandidate("enemy-1", 25, 25, "W2N1");
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      targetScope: "LOCAL",
-      authorizedTargetRoom: "W2N1",
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        targetScope: "LOCAL",
+        authorizedTargetRoom: "W2N1",
+      }),
+    );
 
     expect(plan.primaryTargetId).toBe("enemy-1");
     expect(plan.rejectedTargets).toHaveLength(0);
@@ -819,11 +876,13 @@ describe("COMBAT-RUNTIME-013: TargetScope — 越界拒绝", () => {
     const inRoom = makeCandidate("enemy-1", 25, 25, "W2N1");
     const outRoom = makeCandidate("enemy-2", 25, 25, "W3N1");
 
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [inRoom, outRoom],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      authorizedTargetRoom: "W2N1",
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [inRoom, outRoom],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        authorizedTargetRoom: "W2N1",
+      }),
+    );
 
     expect(plan.primaryTargetId).toBe("enemy-1");
     expect(plan.rejectedTargets.some(r => r.targetId === "enemy-2")).toBe(true);
@@ -849,12 +908,20 @@ describe("COMBAT-RUNTIME-013: TargetScope — 越界拒绝", () => {
   });
 });
 
-
 describe("COMBAT-RUNTIME-014: Authorization Expired", () => {
   it("expired -> EXPIRED", () => {
     const result = validateAuthorization(
-      { state: "AUTHORIZED", operationId: "war-test", warPosture: "war", targetRoom: "W2N1", expiry: 50, operationAborted: false, reason: "test" },
-      100, true,
+      {
+        state: "AUTHORIZED",
+        operationId: "war-test",
+        warPosture: "war",
+        targetRoom: "W2N1",
+        expiry: 50,
+        operationAborted: false,
+        reason: "test",
+      },
+      100,
+      true,
     );
     expect(result.valid).toBe(false);
     expect(result.state).toBe("EXPIRED");
@@ -862,8 +929,17 @@ describe("COMBAT-RUNTIME-014: Authorization Expired", () => {
 
   it("operationAborted -> REVOKED", () => {
     const result = validateAuthorization(
-      { state: "AUTHORIZED", operationId: "war-test", warPosture: "war", targetRoom: "W2N1", expiry: 10000, operationAborted: true, reason: "test" },
-      100, true,
+      {
+        state: "AUTHORIZED",
+        operationId: "war-test",
+        warPosture: "war",
+        targetRoom: "W2N1",
+        expiry: 10000,
+        operationAborted: true,
+        reason: "test",
+      },
+      100,
+      true,
     );
     expect(result.valid).toBe(false);
     expect(result.state).toBe("REVOKED");
@@ -871,51 +947,74 @@ describe("COMBAT-RUNTIME-014: Authorization Expired", () => {
 
   it("PENDING -> false", () => {
     const result = validateAuthorization(
-      { state: "PENDING", operationId: "war-test", warPosture: "war", targetRoom: "W2N1", expiry: 10000, operationAborted: false, reason: "test" },
-      100, true,
+      {
+        state: "PENDING",
+        operationId: "war-test",
+        warPosture: "war",
+        targetRoom: "W2N1",
+        expiry: 10000,
+        operationAborted: false,
+        reason: "test",
+      },
+      100,
+      true,
     );
     expect(result.valid).toBe(false);
   });
 
   it("DENIED -> false", () => {
     const result = validateAuthorization(
-      { state: "DENIED", operationId: "war-test", warPosture: "war", targetRoom: "W2N1", expiry: 10000, operationAborted: false, reason: "test" },
-      100, true,
+      {
+        state: "DENIED",
+        operationId: "war-test",
+        warPosture: "war",
+        targetRoom: "W2N1",
+        expiry: 10000,
+        operationAborted: false,
+        reason: "test",
+      },
+      100,
+      true,
     );
     expect(result.valid).toBe(false);
   });
 });
 
-
 describe("COMBAT-RUNTIME-015: DISENGAGING", () => {
   it("DISENGAGING -> 0 AttackIntent", () => {
     const target = makeCandidate("enemy-1", 25, 25);
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      tacticalState: "DISENGAGING",
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        tacticalState: "DISENGAGING",
+      }),
+    );
     expect(plan.attackIntents).toHaveLength(0);
     expect(plan.engagementState).toBe("REGROUP");
   });
 
   it("REGROUPING -> 0 AttackIntent", () => {
     const target = makeCandidate("enemy-1", 25, 25);
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      tacticalState: "REGROUPING",
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        tacticalState: "REGROUPING",
+      }),
+    );
     expect(plan.attackIntents).toHaveLength(0);
   });
 
   it("COMPLETED -> 0 AttackIntent", () => {
     const target = makeCandidate("enemy-1", 25, 25);
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target],
-      members: [makeMember("att-1", "attacker", 25, 25)],
-      tacticalState: "COMPLETED",
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+        tacticalState: "COMPLETED",
+      }),
+    );
     expect(plan.attackIntents).toHaveLength(0);
   });
 });
@@ -923,48 +1022,81 @@ describe("COMBAT-RUNTIME-015: DISENGAGING", () => {
 describe("COMBAT-RUNTIME-016: multi-tick state continuity", () => {
   it("ATTACKING -> TARGET_DYING -> TARGET_DEAD chain", () => {
     const target = makeCandidate("enemy-1", 25, 25, "W2N1", {
-      hp: 800, maxHp: 1000, effectiveHP: 800,
+      hp: 800,
+      maxHp: 1000,
+      effectiveHP: 800,
     });
     const attacker = makeMember("att-1", "attacker", 25, 25);
     let prevPlan: FocusFirePlan | null = null;
 
-    const plan1 = planFocusFire(makeSnapshot({
-      tick: 100, candidates: [target], members: [attacker], prevPlan: null,
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        tick: 100,
+        candidates: [target],
+        members: [attacker],
+        prevPlan: null,
+      }),
+    );
     prevPlan = plan1;
     expect(plan1.engagementState).toBe("IDLE");
 
-    const plan2 = planFocusFire(makeSnapshot({
-      tick: 103, candidates: [target], members: [attacker], prevPlan,
-    }));
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        candidates: [target],
+        members: [attacker],
+        prevPlan,
+      }),
+    );
     prevPlan = plan2;
     expect(plan2.engagementState).toBe("ATTACKING");
 
     const dyingTarget = { ...target, hp: 200, effectiveHP: 200 };
-    const plan3 = planFocusFire(makeSnapshot({
-      tick: 106, candidates: [dyingTarget], members: [attacker], prevPlan,
-    }));
+    const plan3 = planFocusFire(
+      makeSnapshot({
+        tick: 106,
+        candidates: [dyingTarget],
+        members: [attacker],
+        prevPlan,
+      }),
+    );
     prevPlan = plan3;
     expect(plan3.engagementState).toBe("TARGET_DYING");
 
     const deadTarget = { ...target, hp: 0, effectiveHP: 0, accessibility: "INVALID" as const };
-    const plan4 = planFocusFire(makeSnapshot({
-      tick: 109, candidates: [deadTarget], members: [attacker], prevPlan,
-    }));
+    const plan4 = planFocusFire(
+      makeSnapshot({
+        tick: 109,
+        candidates: [deadTarget],
+        members: [attacker],
+        prevPlan,
+      }),
+    );
     expect(plan4.engagementState).toBe("TARGET_DEAD");
   });
 
   it("target disappears -> TARGET_LOST", () => {
     const target = makeCandidate("enemy-1", 25, 25, "W2N1", {
-      hp: 800, effectiveHP: 800,
+      hp: 800,
+      effectiveHP: 800,
     });
     const attacker = makeMember("att-1", "attacker", 25, 25);
-    const plan1 = planFocusFire(makeSnapshot({
-      tick: 100, candidates: [target], members: [attacker], prevPlan: null,
-    }));
-    const plan2 = planFocusFire(makeSnapshot({
-      tick: 103, candidates: [], members: [attacker], prevPlan: plan1,
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        tick: 100,
+        candidates: [target],
+        members: [attacker],
+        prevPlan: null,
+      }),
+    );
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        candidates: [],
+        members: [attacker],
+        prevPlan: plan1,
+      }),
+    );
     expect(plan2.engagementState).toBe("TARGET_LOST");
     expect(plan2.primaryTargetId).toBeNull();
   });
@@ -973,10 +1105,14 @@ describe("COMBAT-RUNTIME-016: multi-tick state continuity", () => {
 describe("COMBAT-RUNTIME-017: Overkill redistribution after HP drop", () => {
   it("primary HP drops -> more attackers to secondary", () => {
     const targetA_high = makeCandidate("enemy-A", 25, 25, "W2N1", {
-      hp: 300, maxHp: 300, effectiveHP: 300,
+      hp: 300,
+      maxHp: 300,
+      effectiveHP: 300,
     });
     const targetB = makeCandidate("enemy-B", 26, 26, "W2N1", {
-      hp: 2000, maxHp: 2000, effectiveHP: 2000,
+      hp: 2000,
+      maxHp: 2000,
+      effectiveHP: 2000,
     });
     const members = [
       makeMember("att-A", "attacker", 25, 25),
@@ -984,20 +1120,30 @@ describe("COMBAT-RUNTIME-017: Overkill redistribution after HP drop", () => {
       makeMember("att-C", "attacker", 26, 25),
       makeMember("att-D", "attacker", 26, 26),
     ];
-    const plan1 = planFocusFire(makeSnapshot({
-      tick: 100, candidates: [targetA_high, targetB], members,
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        tick: 100,
+        candidates: [targetA_high, targetB],
+        members,
+      }),
+    );
     const primaryCount1 = plan1.attackIntents.filter(i => i.priority === "PRIMARY").length;
     const secondaryCount1 = plan1.attackIntents.filter(i => i.priority === "SECONDARY").length;
     expect(primaryCount1).toBeLessThan(4);
     expect(secondaryCount1).toBeGreaterThan(0);
 
     const targetA_low = makeCandidate("enemy-A", 25, 25, "W2N1", {
-      hp: 100, maxHp: 300, effectiveHP: 100,
+      hp: 100,
+      maxHp: 300,
+      effectiveHP: 100,
     });
-    const plan2 = planFocusFire(makeSnapshot({
-      tick: 103, candidates: [targetA_low, targetB], members,
-    }));
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        tick: 103,
+        candidates: [targetA_low, targetB],
+        members,
+      }),
+    );
     const primaryCount2 = plan2.attackIntents.filter(i => i.priority === "PRIMARY").length;
     const secondaryCount2 = plan2.attackIntents.filter(i => i.priority === "SECONDARY").length;
     expect(primaryCount2).toBeLessThanOrEqual(primaryCount1);
@@ -1008,16 +1154,20 @@ describe("COMBAT-RUNTIME-017: Overkill redistribution after HP drop", () => {
 describe("COMBAT-RUNTIME-018: all attackers out of range", () => {
   it("all out of range -> all requiresMovement + NO_ATTACK", () => {
     const target = makeCandidate("enemy-1", 45, 45, "W2N1", {
-      accessibility: "OUT_OF_RANGE", distance: 20,
+      accessibility: "OUT_OF_RANGE",
+      distance: 20,
     });
     const members = [
       makeMember("att-1", "attacker", 10, 10),
       makeMember("att-2", "attacker", 11, 11),
       makeMember("att-3", "attacker", 12, 12),
     ];
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target], members,
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members,
+      }),
+    );
     expect(plan.attackIntents.length).toBe(3);
     expect(plan.attackIntents.every(i => i.requiresMovement)).toBe(true);
     expect(plan.attackIntents.every(i => i.attackType === "NO_ATTACK")).toBe(true);
@@ -1029,9 +1179,12 @@ describe("COMBAT-RUNTIME-018: all attackers out of range", () => {
     });
     const inRangeMember = makeMember("att-in", "attacker", 25, 25);
     const outOfRangeMember = makeMember("att-out", "attacker", 45, 45);
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target], members: [inRangeMember, outOfRangeMember],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [inRangeMember, outOfRangeMember],
+      }),
+    );
     const inIntent = plan.attackIntents.find(i => i.creepId === "att-in");
     const outIntent = plan.attackIntents.find(i => i.creepId === "att-out");
     expect(inIntent!.requiresMovement).toBe(false);
@@ -1043,11 +1196,15 @@ describe("COMBAT-RUNTIME-019: HealCoverage retreatRecommended", () => {
   it("no healer + wounded -> retreatRecommended = true", () => {
     const target = makeCandidate("enemy-1", 25, 25);
     const woundedAttacker = makeMember("att-1", "attacker", 25, 25, "W2N1", {
-      hits: 200, hitsMax: 1000,
+      hits: 200,
+      hitsMax: 1000,
     });
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target], members: [woundedAttacker],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [woundedAttacker],
+      }),
+    );
     expect(plan.healCoverage).not.toBeNull();
     expect(plan.healCoverage!.healerCount).toBe(0);
     expect(plan.healCoverage!.woundedCount).toBe(1);
@@ -1058,12 +1215,16 @@ describe("COMBAT-RUNTIME-019: HealCoverage retreatRecommended", () => {
     const target = makeCandidate("enemy-1", 25, 25);
     // heal=48/tick, 缺口=50 → coverageRatio=0.96 ≥ 0.3 → 不推荐撤退
     const woundedAttacker = makeMember("att-1", "attacker", 25, 25, "W2N1", {
-      hits: 950, hitsMax: 1000,
+      hits: 950,
+      hitsMax: 1000,
     });
     const healer = makeMember("heal-1", "healer", 25, 26);
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target], members: [woundedAttacker, healer],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [woundedAttacker, healer],
+      }),
+    );
     expect(plan.healCoverage).not.toBeNull();
     expect(plan.healCoverage!.healerCount).toBe(1);
     expect(plan.healCoverage!.retreatRecommended).toBe(false);
@@ -1072,9 +1233,12 @@ describe("COMBAT-RUNTIME-019: HealCoverage retreatRecommended", () => {
   it("no wounded -> retreatRecommended = false", () => {
     const target = makeCandidate("enemy-1", 25, 25);
     const attacker = makeMember("att-1", "attacker", 25, 25);
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target], members: [attacker],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [attacker],
+      }),
+    );
     expect(plan.healCoverage).not.toBeNull();
     expect(plan.healCoverage!.woundedCount).toBe(0);
     expect(plan.healCoverage!.retreatRecommended).toBe(false);
@@ -1084,17 +1248,23 @@ describe("COMBAT-RUNTIME-019: HealCoverage retreatRecommended", () => {
 describe("COMBAT-RUNTIME-020: decisionHash non-empty and deterministic", () => {
   it("normal scenario -> decisionHash non-empty", () => {
     const target = makeCandidate("enemy-1", 25, 25);
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target], members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
     expect(plan.decisionHash).not.toBe("");
     expect(plan.decisionHash.length).toBeGreaterThanOrEqual(1);
   });
 
   it("empty scenario -> decisionHash still non-empty", () => {
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [], members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
     expect(plan.decisionHash).not.toBe("");
   });
 
@@ -1110,20 +1280,29 @@ describe("COMBAT-RUNTIME-020: decisionHash non-empty and deterministic", () => {
   it("different input -> different decisionHash", () => {
     const target1 = makeCandidate("enemy-1", 25, 25);
     const target2 = makeCandidate("enemy-2", 25, 25);
-    const plan1 = planFocusFire(makeSnapshot({
-      candidates: [target1], members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
-    const plan2 = planFocusFire(makeSnapshot({
-      candidates: [target2], members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan1 = planFocusFire(
+      makeSnapshot({
+        candidates: [target1],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
+    const plan2 = planFocusFire(
+      makeSnapshot({
+        candidates: [target2],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
     expect(plan1.decisionHash).not.toBe(plan2.decisionHash);
   });
 
   it("focusFirePlanHash is deterministic", () => {
     const target = makeCandidate("enemy-1", 25, 25);
-    const plan = planFocusFire(makeSnapshot({
-      candidates: [target], members: [makeMember("att-1", "attacker", 25, 25)],
-    }));
+    const plan = planFocusFire(
+      makeSnapshot({
+        candidates: [target],
+        members: [makeMember("att-1", "attacker", 25, 25)],
+      }),
+    );
     const rehashed = focusFirePlanHash(plan);
     expect(rehashed).toBe(plan.decisionHash);
   });

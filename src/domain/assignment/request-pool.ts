@@ -49,9 +49,16 @@ export function supplyLedger(
   leases: readonly LeaseSummary[],
   maxConcurrentPerSource: number,
 ): Map<string, { activeLeases: number; remainingSlots: number; available: number }> {
-  const out = new Map<string, { activeLeases: number; remainingSlots: number; available: number }>();
+  const out = new Map<
+    string,
+    { activeLeases: number; remainingSlots: number; available: number }
+  >();
   for (const s of sources) {
-    out.set(s.id, { activeLeases: 0, remainingSlots: maxConcurrentPerSource, available: s.available });
+    out.set(s.id, {
+      activeLeases: 0,
+      remainingSlots: maxConcurrentPerSource,
+      available: s.available,
+    });
   }
   for (const l of leases) {
     if (!l.valid || !l.sourceId) continue;
@@ -92,7 +99,7 @@ export function buildTransportRequests(input: BuildInputs): TransportRequest[] {
     const e = ledger.get(s.id)!;
     if (e.remainingSlots <= 0 || s.available <= 0) continue;
     reqs.push({
-      key: "collect:" + input.roomName + ":" + s.id,
+      key: `collect:${input.roomName}:${s.id}`,
       resource: "energy",
       amount: s.available,
       sourceId: s.id,

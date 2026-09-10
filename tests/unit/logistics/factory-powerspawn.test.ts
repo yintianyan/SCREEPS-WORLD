@@ -80,7 +80,9 @@ describe("reclaimFactoryOutput — factory battery 回收", () => {
   });
 
   it("battery 低于阈值 → undefined（攒批减少往返）", () => {
-    const { ac } = makeAc({ factoryStore: { battery: CONFIG.factory.batteryReclaimThreshold - 1 } });
+    const { ac } = makeAc({
+      factoryStore: { battery: CONFIG.factory.batteryReclaimThreshold - 1 },
+    });
     expect(reclaimFactoryOutput().resolve!(ac as any)).toBeUndefined();
   });
 

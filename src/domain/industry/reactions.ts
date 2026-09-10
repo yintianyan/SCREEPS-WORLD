@@ -142,15 +142,16 @@ export function selectReactionTrios(labs: readonly LabPos[]): ReactionTrio[] {
   // 预计算每个 lab 周围的可用邻居。
   const neighbors = new Map<string, LabPos[]>();
   for (const lab of labs) {
-    neighbors.set(lab.id, labs.filter(
-      l => l.id !== lab.id && chebyshev(l, lab) <= REACTION_RANGE,
-    ));
+    neighbors.set(
+      lab.id,
+      labs.filter(l => l.id !== lab.id && chebyshev(l, lab) <= REACTION_RANGE),
+    );
   }
 
   // 按「可用 input 数降序」排列 output 候选（邻居多的 output 优先锁定，
   // 避免被邻居少的 output 先占走共享 lab 导致总组数减少）。
   const outputCandidates = [...labs].sort(
-    (a, b) => (neighbors.get(b.id)!.length) - (neighbors.get(a.id)!.length),
+    (a, b) => neighbors.get(b.id)!.length - neighbors.get(a.id)!.length,
   );
 
   for (const output of outputCandidates) {

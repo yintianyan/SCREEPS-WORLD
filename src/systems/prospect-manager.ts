@@ -4,7 +4,13 @@ import type { Priority, System, TickContext } from "../kernel/contracts";
 import { EventKind, recordEvent } from "../kernel/event-log";
 import { selectProspectTarget, type ProspectCandidate } from "../domain/strategy/prospect";
 import { roomLinearDistance } from "../domain/remote/targeting";
-import { countPending, hasRequest, removeRequestsByRole, spawnKey, submitRequest } from "../domain/spawn/queue";
+import {
+  countPending,
+  hasRequest,
+  removeRequestsByRole,
+  spawnKey,
+  submitRequest,
+} from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
 import { querySquad } from "../kernel/global-cache";
 import { getRoomIntel, queryRoomIntel } from "./intelligence";
@@ -35,11 +41,9 @@ export const prospectManagerSystem: System = {
       if ((Game.cpu.bucket ?? 0) < CONFIG.prospect.minBucket) return;
       if (Memory.kernel.expansion) return; // claimer/拓荒已在路上，侦察让位。
 
-      const target = selectProspectTarget(
-        buildCandidates(ctx.tick),
-        ctx.tick,
-        { intelFreshness: CONFIG.prospect.intelFreshness },
-      );
+      const target = selectProspectTarget(buildCandidates(ctx.tick), ctx.tick, {
+        intelFreshness: CONFIG.prospect.intelFreshness,
+      });
       if (!target) return;
 
       Memory.kernel.prospect = {
@@ -58,7 +62,7 @@ export const prospectManagerSystem: System = {
     // 脱敏——仅当 (a) 现场有活敌（hasLiveThreat，零滞回真相），或 (b) posture 持续非
     // expand 超过 grace 窗口，才中止任务。目标无过错、重新允许时自然再评；真实战略撤退
     // （war/持续 develop）由 grace 兜底收摊。
-    const liveThreat = [...ctx.snapshots()].some((s) => (s.threatCreeps?.length ?? 0) > 0);
+    const liveThreat = [...ctx.snapshots()].some(s => (s.threatCreeps?.length ?? 0) > 0);
     if (liveThreat) {
       completeMission(ctx.tick, OUTCOME_ABORTED, false);
       return;
@@ -95,7 +99,11 @@ export const prospectManagerSystem: System = {
     // 侦察兵全灭判定：live + pending 均为 0 且已孵化过 → 死光了。
     // P0-1：从全局编队索引取 scout 存活数，替代独立全量遍历 Game.creeps。
     let live = 0;
-    const scouts = querySquad({ role: "scout", home: mission.sponsor, remoteTarget: mission.target });
+    const scouts = querySquad({
+      role: "scout",
+      home: mission.sponsor,
+      remoteTarget: mission.target,
+    });
     for (const e of scouts) {
       if (!e.spawning) live++;
     }
@@ -113,7 +121,11 @@ export const prospectManagerSystem: System = {
 };
 
 /** 提交一个稳定 key 的 scout 孵化请求（幂等：同 key 合并），并计入 spawned。 */
-function submitScoutRequest(ctx: TickContext, mission: NonNullable<KernelMemory["prospect"]>, avoidRooms: string[]): void {
+function submitScoutRequest(
+  ctx: TickContext,
+  mission: NonNullable<KernelMemory["prospect"]>,
+  avoidRooms: string[],
+): void {
   const queue = Memory.rooms[mission.sponsor]?.spawnQueue;
   if (!queue) return;
   const key = spawnKey("scout", mission.sponsor, mission.spawned, mission.target);
@@ -259,7 +271,7 @@ function buildCandidates(tick: number): ProspectCandidate[] {
   // ── 前沿发现候选：已知房（含己方房）相邻、但 intel 尚未收录的房。
   // 以「最近己方房」为 sponsor（scout 从其 spawn 孵化、intel 落其名下），
   // 只探 horizon 圈数内、未被占用/冷却的未知房。
-  const owned = Object.keys(Game.rooms).filter((r) => Game.rooms[r]?.controller?.my);
+  const owned = Object.keys(Game.rooms).filter(r => Game.rooms[r]?.controller?.my);
   if (owned.length > 0 && horizon > 0 && Game.map?.describeExits) {
     const baseRooms = new Set(knownRooms);
     for (const o of owned) baseRooms.add(o);
@@ -269,7 +281,10 @@ function buildCandidates(tick: number): ProspectCandidate[] {
       let bestD = Infinity;
       for (const o of owned) {
         const d = roomLinearDistance(o, roomName);
-        if (d < bestD) { bestD = d; best = o; }
+        if (d < bestD) {
+          bestD = d;
+          best = o;
+        }
       }
       return best;
     };
@@ -286,7 +301,7 @@ function buildCandidates(tick: number): ProspectCandidate[] {
         // hostile 相邻判定：候选房的正交邻居中存在已知 hostile 房 → 评分惩罚（scout 需穿越
         // 敌方房才能 recon，会被吓退/阵亡）。describeExits 按坐标计算，无需视野。
         const exits = Game.map?.describeExits(neighbor);
-        const hostileAdj = !!(exits && Object.values(exits).some((ex) => ex && hostileRooms.has(ex)));
+        const hostileAdj = !!(exits && Object.values(exits).some(ex => ex && hostileRooms.has(ex)));
         candidates.push({
           roomName: neighbor,
           home: sponsor,

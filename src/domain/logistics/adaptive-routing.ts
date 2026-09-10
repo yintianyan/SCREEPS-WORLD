@@ -37,16 +37,16 @@ const FAILURE_PENALTY_THRESHOLD = 3;
 const SUCCESS_BONUS_THRESHOLD = 5;
 
 /** 每次连续失败的 penalty 幅度。 */
-const FAILURE_PENALTY = 0.10;
+const FAILURE_PENALTY = 0.1;
 
 /** 每次连续成功的 bonus 幅度。 */
 const SUCCESS_BONUS = 0.05;
 
 /** 最大 penalty（不超过此值）。 */
-const MAX_PENALTY = 0.50;
+const MAX_PENALTY = 0.5;
 
 /** 最大 bonus（不超过此值）。 */
-const MAX_BONUS = 0.20;
+const MAX_BONUS = 0.2;
 
 /** 历史窗口大小（只看最近 N 次 trip）。 */
 const HISTORY_WINDOW = 20;
@@ -72,9 +72,7 @@ export function adaptRouteScore(
   const original = route.reliability;
 
   // 取最近 N 次 trip（按时间倒序）
-  const window = recentTrips
-    .slice(-HISTORY_WINDOW)
-    .sort((a, b) => b.tick - a.tick);
+  const window = recentTrips.slice(-HISTORY_WINDOW).sort((a, b) => b.tick - a.tick);
 
   if (window.length === 0) {
     return {
@@ -108,12 +106,14 @@ export function adaptRouteScore(
 
   // 计算 penalty
   let penalty = 0;
-  let reasonParts: string[] = [];
+  const reasonParts: string[] = [];
 
   if (consecutiveFailures > FAILURE_PENALTY_THRESHOLD) {
     const excessFailures = consecutiveFailures - FAILURE_PENALTY_THRESHOLD;
     penalty = Math.min(MAX_PENALTY, excessFailures * FAILURE_PENALTY);
-    reasonParts.push(`${consecutiveFailures} consecutive failures (-${(penalty * 100).toFixed(0)}%)`);
+    reasonParts.push(
+      `${consecutiveFailures} consecutive failures (-${(penalty * 100).toFixed(0)}%)`,
+    );
   }
 
   // 计算 bonus
@@ -121,13 +121,17 @@ export function adaptRouteScore(
   if (consecutiveSuccesses > SUCCESS_BONUS_THRESHOLD) {
     const excessSuccesses = consecutiveSuccesses - SUCCESS_BONUS_THRESHOLD;
     bonus = Math.min(MAX_BONUS, excessSuccesses * SUCCESS_BONUS);
-    reasonParts.push(`${consecutiveSuccesses} consecutive successes (+${(bonus * 100).toFixed(0)}%)`);
+    reasonParts.push(
+      `${consecutiveSuccesses} consecutive successes (+${(bonus * 100).toFixed(0)}%)`,
+    );
   }
 
   // confidence adjustment
-  const confidenceAdjustment = (confidence - 1); // 负数表示降低
+  const confidenceAdjustment = confidence - 1; // 负数表示降低
   if (confidenceAdjustment < 0) {
-    reasonParts.push(`window success rate ${windowSuccessRate.toFixed(2)} (confidence ${confidence.toFixed(2)})`);
+    reasonParts.push(
+      `window success rate ${windowSuccessRate.toFixed(2)} (confidence ${confidence.toFixed(2)})`,
+    );
   }
 
   // 最终调整

@@ -15,11 +15,15 @@ function makeContext(snapshot?: any): any {
     budget: b,
     globalSiteCount: 0,
     getSnapshot: () => snap,
-    snapshots: function* () { yield snap; },
+    *snapshots() {
+      yield snap;
+    },
   };
 }
 
-function setupRoom(opts: { pressure?: number; storage?: number; progress?: number; hostileAgo?: number } = {}): any {
+function setupRoom(
+  opts: { pressure?: number; storage?: number; progress?: number; hostileAgo?: number } = {},
+): any {
   const { pressure = 0.1, storage = 40000, progress = 12000, hostileAgo } = opts;
   const controller: any = mockController({ my: true });
   controller.progress = progress;
@@ -33,7 +37,9 @@ function setupRoom(opts: { pressure?: number; storage?: number; progress?: numbe
     buildQueue: [],
     colonyState: "normal",
     economyPressure: pressure,
-    ...(hostileAgo !== undefined ? { lastHostileAt: (globalThis as any).Game.time - hostileAgo } : {}),
+    ...(hostileAgo !== undefined
+      ? { lastHostileAt: (globalThis as any).Game.time - hostileAgo }
+      : {}),
   };
   return snap;
 }
@@ -63,7 +69,10 @@ describe("empire-strategy — 容量发布（R7a）", () => {
     (globalThis as any).Memory.kernel = {};
     (globalThis as any).Memory.kernel.stats = { cpuAvg10: 4, cpuMax10: 4 };
     (globalThis as any).Game.cpu = {
-      limit: 100, tickLimit: 10, bucket: 10000, getUsed: () => 0,
+      limit: 100,
+      tickLimit: 10,
+      bucket: 10000,
+      getUsed: () => 0,
     };
     const snap = setupRoom({ hostileAgo: 99999 });
     empireStrategySystem.run(makeContext(snap));
@@ -83,7 +92,10 @@ describe("empire-strategy — 议程归因（R7a AgendaOutcome）", () => {
     };
     (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
     (globalThis as any).Game.cpu = {
-      limit: 20, tickLimit: 500, bucket: 10000, getUsed: () => 0,
+      limit: 20,
+      tickLimit: 500,
+      bucket: 10000,
+      getUsed: () => 0,
     };
     // storage 低于冲级线 → 议程目标 develop（驻留已满 → 切换）。
     const snap = setupRoom({ storage: 5000, progress: 12500, hostileAgo: 99999 });
@@ -100,7 +112,10 @@ describe("empire-strategy — 议程归因（R7a AgendaOutcome）", () => {
     (globalThis as any).Memory.kernel = {};
     (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
     (globalThis as any).Game.cpu = {
-      limit: 20, tickLimit: 500, bucket: 10000, getUsed: () => 0,
+      limit: 20,
+      tickLimit: 500,
+      bucket: 10000,
+      getUsed: () => 0,
     };
     // 首次评估（无 prev）：直接采纳 rcl-push（storage 充足、无威胁）。
     const snap = setupRoom({ storage: 90000, progress: 8000, hostileAgo: 99999 });

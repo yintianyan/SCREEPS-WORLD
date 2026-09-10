@@ -443,7 +443,7 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
       sources: [source as any],
       containers: [container as any],
       towers: rcl >= 3 ? [mockStructure("tower", { id: `tw_${roomName}` }) as any] : [],
-      storage: rcl >= 4 ? mockStructure("storage", { id: `st_${roomName}` }) as any : undefined,
+      storage: rcl >= 4 ? (mockStructure("storage", { id: `st_${roomName}` }) as any) : undefined,
     });
 
     return { roomName, snap, spawnPos, anchor };
@@ -674,7 +674,8 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     expect((globalThis as any).__planStageData?.W7N4).toBeUndefined();
 
     // nextPlanTick 更新为 ctx.tick + planInterval + roomPhase（P1-F 相位偏移）
-    const expectedNext = ctx.tick + CONFIG.layout.planInterval + roomPhase("W7N4", CONFIG.layout.planInterval);
+    const expectedNext =
+      ctx.tick + CONFIG.layout.planInterval + roomPhase("W7N4", CONFIG.layout.planInterval);
     expect(layout.nextPlanTick).toBe(expectedNext);
     // 缺口闭合 → 清除 gap 节流字段与观测条目。
     expect(layout.nextGapPlanTick).toBeUndefined();
@@ -697,8 +698,7 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
 
     const layout = (globalThis as any).Memory.rooms.W7N4.layout;
     expect(layout.planStage).toBe(0);
-    const expectedNext =
-      ctx.tick + 500 + roomPhase("W7N4", 500);
+    const expectedNext = ctx.tick + 500 + roomPhase("W7N4", 500);
     expect(layout.nextPlanTick).toBe(expectedNext); // 慢速重试
     expect(layout.nextGapPlanTick).toBe(1500); // gap-force 同步节流
     // 缺口仍可见：可观测信号（console 采样 + 人工介入依据）
@@ -723,7 +723,8 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
 
     const queue = (globalThis as any).Memory.rooms.W7N4.buildQueue;
     const hubRoads = queue.filter(
-      (t: any) => t.structureType === STRUCTURE_ROAD &&
+      (t: any) =>
+        t.structureType === STRUCTURE_ROAD &&
         t.priority === 3 &&
         Math.abs(t.pos.x - 30) + Math.abs(t.pos.y - 30) === 1,
     );
@@ -779,7 +780,9 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
     expect(layout.planStage).toBe(0);
     expect((globalThis as any).__planStageData?.W7N4).toBeUndefined();
     // nextPlanTick 包含 P1-F 相位偏移
-    expect(layout.nextPlanTick).toBe(1003 + CONFIG.layout.planInterval + roomPhase("W7N4", CONFIG.layout.planInterval));
+    expect(layout.nextPlanTick).toBe(
+      1003 + CONFIG.layout.planInterval + roomPhase("W7N4", CONFIG.layout.planInterval),
+    );
     void spawnPos;
   });
 });
@@ -857,7 +860,7 @@ describe("P1-F.5 — R1: 4-stage 分片 vs 单 tick 等价性", () => {
       sources: [source as any],
       containers: [container as any],
       towers: rcl >= 3 ? [mockStructure("tower", { id: `tw_${roomName}` }) as any] : [],
-      storage: rcl >= 4 ? mockStructure("storage", { id: `st_${roomName}` }) as any : undefined,
+      storage: rcl >= 4 ? (mockStructure("storage", { id: `st_${roomName}` }) as any) : undefined,
     });
 
     return { roomName, snap };
@@ -898,7 +901,7 @@ describe("P1-F.5 — R1: 4-stage 分片 vs 单 tick 等价性", () => {
     return JSON.stringify(
       [...queue]
         .sort((a, b) => a.key.localeCompare(b.key))
-        .map((t) => ({
+        .map(t => ({
           key: t.key,
           pos: { x: t.pos.x, y: t.pos.y },
           structureType: t.structureType,

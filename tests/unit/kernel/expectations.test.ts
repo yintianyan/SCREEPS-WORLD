@@ -21,7 +21,7 @@ describe("expectations — E1 遥测新鲜度", () => {
       systemLastRun: {},
       p3Systems: [],
     });
-    expect(r.violations.some((v) => v.id === "telemetryStale")).toBe(true);
+    expect(r.violations.some(v => v.id === "telemetryStale")).toBe(true);
   });
 
   it("新鲜采样不违例", () => {
@@ -61,7 +61,7 @@ describe("expectations — E2 P3 存活", () => {
     });
     // E1（遥测未流）可合理触发；本回归锁定的是 E2 不把 post-reset 待跑误判为饥饿
     expect(r.p3Starved).toBe(false);
-    expect(r.violations.some((v) => v.id.startsWith("p3Starved:"))).toBe(false);
+    expect(r.violations.some(v => v.id.startsWith("p3Starved:"))).toBe(false);
   });
 
   it("宽限期后仍未见执行 → p3Starved（含从未运行）", () => {
@@ -72,7 +72,7 @@ describe("expectations — E2 P3 存活", () => {
       p3Systems: P3,
     });
     expect(r.p3Starved).toBe(true);
-    expect(r.violations.some((v) => v.id === "p3Starved:telemetry-collector")).toBe(true);
+    expect(r.violations.some(v => v.id === "p3Starved:telemetry-collector")).toBe(true);
   });
 
   it("interval×GRACE 内跑过 → 健康", () => {
@@ -91,12 +91,16 @@ describe("expectations — E2 P3 存活", () => {
 describe("expectations — E3 spawn queue 持续非空", () => {
   const baseTick = P3_BOOT_GRACE_TICKS + 100;
 
-  function makeQueue(room: string, oldestAge: number, opts?: Partial<SpawnQueueSnapshot>): SpawnQueueSnapshot {
+  function makeQueue(
+    room: string,
+    oldestAge: number,
+    opts?: Partial<SpawnQueueSnapshot>,
+  ): SpawnQueueSnapshot {
     return {
       room,
       queueLength: opts?.queueLength ?? 1,
       oldestRequestTick: baseTick - oldestAge,
-      oldestRequestKey: opts?.oldestRequestKey ?? "harvester:" + room,
+      oldestRequestKey: opts?.oldestRequestKey ?? `harvester:${room}`,
       oldestPriority: opts?.oldestPriority ?? 1,
       oldestRole: opts?.oldestRole ?? "harvester",
       rcl: opts?.rcl ?? 4,
@@ -116,7 +120,7 @@ describe("expectations — E3 spawn queue 持续非空", () => {
       spawnQueues: [makeQueue("W1N1", E3_QUEUE_STALE_TICKS + 100)],
       e3Prev: {},
     });
-    expect(r.violations.some((v) => v.id.startsWith("spawnQueueStale:"))).toBe(false);
+    expect(r.violations.some(v => v.id.startsWith("spawnQueueStale:"))).toBe(false);
   });
 
   it("队列空 → 不违例", () => {
@@ -129,7 +133,7 @@ describe("expectations — E3 spawn queue 持续非空", () => {
       spawnQueues: [{ room: "W1N1", queueLength: 0, spawning: false }],
       e3Prev: {},
     });
-    expect(r.violations.some((v) => v.id.startsWith("spawnQueueStale:"))).toBe(false);
+    expect(r.violations.some(v => v.id.startsWith("spawnQueueStale:"))).toBe(false);
   });
 
   it("队首年轻 → 不违例", () => {
@@ -142,7 +146,7 @@ describe("expectations — E3 spawn queue 持续非空", () => {
       spawnQueues: [makeQueue("W1N1", 100)],
       e3Prev: {},
     });
-    expect(r.violations.some((v) => v.id.startsWith("spawnQueueStale:"))).toBe(false);
+    expect(r.violations.some(v => v.id.startsWith("spawnQueueStale:"))).toBe(false);
   });
 
   it("队首超期 → 违例 + 记录创建", () => {
@@ -156,7 +160,7 @@ describe("expectations — E3 spawn queue 持续非空", () => {
       spawnQueues: [makeQueue("W1N1", E3_QUEUE_STALE_TICKS + 1)],
       e3Prev,
     });
-    expect(r.violations.some((v) => v.id === "spawnQueueStale:W1N1")).toBe(true);
+    expect(r.violations.some(v => v.id === "spawnQueueStale:W1N1")).toBe(true);
     expect(e3Prev["W1N1"]).toBeDefined();
     expect(e3Prev["W1N1"]!.violationStartTick).toBe(baseTick);
   });
@@ -171,7 +175,7 @@ describe("expectations — E3 spawn queue 持续非空", () => {
       spawnQueues: [makeQueue("W1N1", E3_QUEUE_STALE_TICKS + 1, { colonyState: "recovery" })],
       e3Prev: {},
     });
-    expect(r.violations.some((v) => v.id.startsWith("spawnQueueStale:"))).toBe(false);
+    expect(r.violations.some(v => v.id.startsWith("spawnQueueStale:"))).toBe(false);
   });
 
   it("bootstrap colonyState → 不违例（正常排队）", () => {
@@ -184,7 +188,7 @@ describe("expectations — E3 spawn queue 持续非空", () => {
       spawnQueues: [makeQueue("W1N1", E3_QUEUE_STALE_TICKS + 1, { colonyState: "bootstrap" })],
       e3Prev: {},
     });
-    expect(r.violations.some((v) => v.id.startsWith("spawnQueueStale:"))).toBe(false);
+    expect(r.violations.some(v => v.id.startsWith("spawnQueueStale:"))).toBe(false);
   });
 
   it("已有违例 + 队列清空 → 滞回恢复", () => {
@@ -252,14 +256,11 @@ describe("expectations — E3 spawn queue 持续非空", () => {
       statsLastSample: baseTick - 5,
       systemLastRun: {},
       p3Systems: [],
-      spawnQueues: [
-        makeQueue("W1N1", E3_QUEUE_STALE_TICKS + 1),
-        makeQueue("W2N2", 100),
-      ],
+      spawnQueues: [makeQueue("W1N1", E3_QUEUE_STALE_TICKS + 1), makeQueue("W2N2", 100)],
       e3Prev,
     });
-    expect(r.violations.some((v) => v.id === "spawnQueueStale:W1N1")).toBe(true);
-    expect(r.violations.some((v) => v.id === "spawnQueueStale:W2N2")).toBe(false);
+    expect(r.violations.some(v => v.id === "spawnQueueStale:W1N1")).toBe(true);
+    expect(r.violations.some(v => v.id === "spawnQueueStale:W2N2")).toBe(false);
     expect(e3Prev["W1N1"]).toBeDefined();
     expect(e3Prev["W2N2"]).toBeUndefined();
   });
@@ -322,15 +323,17 @@ describe("expectations — E3 spawn queue 持续非空", () => {
       statsLastSample: baseTick - 5,
       systemLastRun: {},
       p3Systems: [],
-      spawnQueues: [makeQueue("W7N7", E3_QUEUE_STALE_TICKS + 1, {
-        oldestRole: "upgrader",
-        oldestPriority: 2,
-        rcl: 5,
-        energyAvailable: 1300,
-      })],
+      spawnQueues: [
+        makeQueue("W7N7", E3_QUEUE_STALE_TICKS + 1, {
+          oldestRole: "upgrader",
+          oldestPriority: 2,
+          rcl: 5,
+          energyAvailable: 1300,
+        }),
+      ],
       e3Prev,
     });
-    const v = r.violations.find((v) => v.id === "spawnQueueStale:W7N7");
+    const v = r.violations.find(v => v.id === "spawnQueueStale:W7N7");
     expect(v).toBeDefined();
     expect(v!.detail).toContain("role=upgrader");
     expect(v!.detail).toContain("pri=2");
@@ -357,7 +360,7 @@ describe("expectations — E5 RCL 停滞", () => {
 
   it("无观测基准（lastRclChange undefined）→ 跳过检测（无数据 ≠ 停滞）", () => {
     const r = evaluateExpectations({ ...BASE, rclSnapshots: [fresh(undefined)] });
-    expect(r.violations.some((v) => v.id.startsWith("rclStale:"))).toBe(false);
+    expect(r.violations.some(v => v.id.startsWith("rclStale:"))).toBe(false);
   });
 
   it("RCL 变化在阈值内 → 不违例", () => {
@@ -365,7 +368,7 @@ describe("expectations — E5 RCL 停滞", () => {
       ...BASE,
       rclSnapshots: [fresh(BASE.tick - E5_STALE_TICKS + 100)],
     });
-    expect(r.violations.some((v) => v.id.startsWith("rclStale:"))).toBe(false);
+    expect(r.violations.some(v => v.id.startsWith("rclStale:"))).toBe(false);
   });
 
   it("RCL 超阈值无增长 → rclStale 违例", () => {
@@ -373,7 +376,7 @@ describe("expectations — E5 RCL 停滞", () => {
       ...BASE,
       rclSnapshots: [fresh(BASE.tick - E5_STALE_TICKS - 1)],
     });
-    expect(r.violations.some((v) => v.id === "rclStale:W1N1")).toBe(true);
+    expect(r.violations.some(v => v.id === "rclStale:W1N1")).toBe(true);
   });
 
   it("误报保护：RCL8 满级不判停滞", () => {
@@ -381,7 +384,7 @@ describe("expectations — E5 RCL 停滞", () => {
       ...BASE,
       rclSnapshots: [fresh(BASE.tick - E5_STALE_TICKS - 1, 8)],
     });
-    expect(r.violations.some((v) => v.id.startsWith("rclStale:"))).toBe(false);
+    expect(r.violations.some(v => v.id.startsWith("rclStale:"))).toBe(false);
   });
 
   it("boot 宽限期内不判停滞（相对 bootTick）", () => {
@@ -391,6 +394,6 @@ describe("expectations — E5 RCL 停滞", () => {
       bootTick: 0,
       rclSnapshots: [fresh(0)],
     });
-    expect(r.violations.some((v) => v.id.startsWith("rclStale:"))).toBe(false);
+    expect(r.violations.some(v => v.id.startsWith("rclStale:"))).toBe(false);
   });
 });

@@ -131,8 +131,17 @@ describe("Telemetry SDK — MetricRegistry", () => {
   });
 
   it("should register and observe a histogram", () => {
-    registerMetricHistogram("kernel", "process_execution", "Process time", ["process_type"], undefined, "seconds");
-    observeHistogram("screeps_kernel_process_execution_seconds", 0.001, { process_type: "economy" });
+    registerMetricHistogram(
+      "kernel",
+      "process_execution",
+      "Process time",
+      ["process_type"],
+      undefined,
+      "seconds",
+    );
+    observeHistogram("screeps_kernel_process_execution_seconds", 0.001, {
+      process_type: "economy",
+    });
     observeHistogram("screeps_kernel_process_execution_seconds", 0.05, { process_type: "economy" });
     observeHistogram("screeps_kernel_process_execution_seconds", 0.3, { process_type: "economy" });
 
@@ -172,7 +181,14 @@ describe("Telemetry SDK — MetricRegistry", () => {
   });
 
   it("should handle timer", () => {
-    registerMetricHistogram("planning", "plan_generation", "Plan time", ["planner"], undefined, "seconds");
+    registerMetricHistogram(
+      "planning",
+      "plan_generation",
+      "Plan time",
+      ["planner"],
+      undefined,
+      "seconds",
+    );
     const t = startTimer("screeps_planning_plan_generation_seconds", { planner: "empire" });
     mockCpuUsed += 0.1; // simulate CPU usage
     const elapsed = t.end();
@@ -342,7 +358,14 @@ describe("Telemetry SDK — Facade API", () => {
   });
 
   it("should provide timer() shorthand", () => {
-    registerMetricHistogram("planning", "generation", "Plan time", ["planner"], undefined, "seconds");
+    registerMetricHistogram(
+      "planning",
+      "generation",
+      "Plan time",
+      ["planner"],
+      undefined,
+      "seconds",
+    );
     const t = timer("planning.generation.seconds", { planner: "empire" });
     mockCpuUsed += 0.05;
     const elapsed = t.end();
@@ -377,7 +400,9 @@ describe("Telemetry SDK — Facade API", () => {
 
   it("should build metric names correctly", () => {
     expect(buildMetricName("runtime", "cpu_used")).toBe("screeps_runtime_cpu_used");
-    expect(buildMetricName("economy", "energy_net", "ratio")).toBe("screeps_economy_energy_net_ratio");
+    expect(buildMetricName("economy", "energy_net", "ratio")).toBe(
+      "screeps_economy_energy_net_ratio",
+    );
   });
 
   it("should track registered metric count", () => {
@@ -408,7 +433,13 @@ describe("Telemetry SDK — Exporters", () => {
     registerMetricGauge("runtime", "cpu_used", "CPU used this tick", [], "");
     setGauge("screeps_runtime_cpu_used", 0.72);
 
-    registerMetricCounter("kernel", "process_failed", "Failed processes", ["process_type"], "total");
+    registerMetricCounter(
+      "kernel",
+      "process_failed",
+      "Failed processes",
+      ["process_type"],
+      "total",
+    );
     incrementCounter("screeps_kernel_process_failed_total", 3, { process_type: "economy" });
 
     const pkg = collectFlushPackage();

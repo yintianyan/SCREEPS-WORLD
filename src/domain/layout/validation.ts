@@ -149,22 +149,40 @@ export function precomputeStructureCounts(snapshot: RoomSnapshot): Map<string, n
     }
   }
   if (snapshot.storage) {
-    counts.set(snapshot.storage.structureType, (counts.get(snapshot.storage.structureType) ?? 0) + 1);
+    counts.set(
+      snapshot.storage.structureType,
+      (counts.get(snapshot.storage.structureType) ?? 0) + 1,
+    );
   }
   if (snapshot.terminal) {
-    counts.set(snapshot.terminal.structureType, (counts.get(snapshot.terminal.structureType) ?? 0) + 1);
+    counts.set(
+      snapshot.terminal.structureType,
+      (counts.get(snapshot.terminal.structureType) ?? 0) + 1,
+    );
   }
   if (snapshot.extractor) {
-    counts.set(snapshot.extractor.structureType, (counts.get(snapshot.extractor.structureType) ?? 0) + 1);
+    counts.set(
+      snapshot.extractor.structureType,
+      (counts.get(snapshot.extractor.structureType) ?? 0) + 1,
+    );
   }
   if (snapshot.factory) {
-    counts.set(snapshot.factory.structureType, (counts.get(snapshot.factory.structureType) ?? 0) + 1);
+    counts.set(
+      snapshot.factory.structureType,
+      (counts.get(snapshot.factory.structureType) ?? 0) + 1,
+    );
   }
   if (snapshot.observer) {
-    counts.set(snapshot.observer.structureType, (counts.get(snapshot.observer.structureType) ?? 0) + 1);
+    counts.set(
+      snapshot.observer.structureType,
+      (counts.get(snapshot.observer.structureType) ?? 0) + 1,
+    );
   }
   if (snapshot.powerSpawn) {
-    counts.set(snapshot.powerSpawn.structureType, (counts.get(snapshot.powerSpawn.structureType) ?? 0) + 1);
+    counts.set(
+      snapshot.powerSpawn.structureType,
+      (counts.get(snapshot.powerSpawn.structureType) ?? 0) + 1,
+    );
   }
   if (snapshot.nuker) {
     counts.set(snapshot.nuker.structureType, (counts.get(snapshot.nuker.structureType) ?? 0) + 1);
@@ -343,9 +361,7 @@ function countExistingAndSites(
   }
   // storage 是单例字段单独处理。
   if (snapshot.storage && snapshot.storage.structureType === structureType) count++;
-  count += snapshot.constructionSites.filter(
-    s => s.structureType === structureType,
-  ).length;
+  count += snapshot.constructionSites.filter(s => s.structureType === structureType).length;
   return count;
 }
 
@@ -413,7 +429,13 @@ export function collectCompletedKeysFromStructures(
 
   // 预构建位置 → 结构类型映射（packed numeric key，消除字符串分配）。
   const structureMap = new Map<number, string>();
-  for (const s of [...snapshot.spawns, ...snapshot.extensions, ...snapshot.towers, ...snapshot.containers, ...snapshot.links]) {
+  for (const s of [
+    ...snapshot.spawns,
+    ...snapshot.extensions,
+    ...snapshot.towers,
+    ...snapshot.containers,
+    ...snapshot.links,
+  ]) {
     structureMap.set(packPos(s.pos.x, s.pos.y), s.structureType);
   }
   if (snapshot.storage) {

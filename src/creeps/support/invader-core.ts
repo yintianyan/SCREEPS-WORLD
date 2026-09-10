@@ -10,7 +10,7 @@ export function findInvaderCores(room: Room): StructureInvaderCore[] {
   if (cached && cached.tick === Game.time) return cached.cores;
 
   const cores = room.find(FIND_HOSTILE_STRUCTURES, {
-    filter: (s) => s.structureType === STRUCTURE_INVADER_CORE,
+    filter: s => s.structureType === STRUCTURE_INVADER_CORE,
   }) as StructureInvaderCore[];
   g.__remoteInvaderCore[room.name] = { tick: Game.time, cores };
   return cores;

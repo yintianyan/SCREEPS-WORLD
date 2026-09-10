@@ -21,7 +21,13 @@ describe("upgrader — work 模式", () => {
   it("满载时升级控制器", () => {
     const controller = mockController();
     const snap = mockSnapshot({ controller });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -32,7 +38,13 @@ describe("upgrader — work 模式", () => {
   it("ERR_NOT_IN_RANGE 时移动到控制器", () => {
     const controller = mockController();
     const snap = mockSnapshot({ controller });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     creep.upgradeController.mockReturnValue(-9); // ERR_NOT_IN_RANGE
     creep.pos.getRangeTo.mockReturnValue(5); // 不在范围内 → 走 moveTo 路径
     const ctx = mockContext(snap);
@@ -44,7 +56,13 @@ describe("upgrader — work 模式", () => {
 
   it("无控制器时 idle", () => {
     const snap = mockSnapshot({ controller: undefined });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -57,7 +75,13 @@ describe("upgrader — RCL8 满级停烧（W7N4 存不下能量主因修复）",
   it("RCL8 无降级风险 → gate 拦截：不升级、转 idle", () => {
     const controller = mockController({ level: 8, ticksToDowngrade: 20000 });
     const snap = mockSnapshot({ rcl: 8, controller });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -69,7 +93,13 @@ describe("upgrader — RCL8 满级停烧（W7N4 存不下能量主因修复）",
   it("RCL8 + 降级风险 → 保级放行（紧急覆盖，照常升级）", () => {
     const controller = mockController({ level: 8, ticksToDowngrade: 5000 });
     const snap = mockSnapshot({ rcl: 8, controller });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -91,7 +121,13 @@ describe("upgrader — 空闲归站（不在 spawn 出口石化挡路）", () =>
       sources: [], // 无 source → harvestSource 落空 → 归站兜底触发
       energyAvailable: 500, // 高于地板 → gate 放行
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     creep.pos.getRangeTo.mockReturnValue(10); // 远离站桩位
     const ctx = mockContext(snap);
 
@@ -110,7 +146,13 @@ describe("upgrader — 空闲归站（不在 spawn 出口石化挡路）", () =>
       sources: [],
       energyAvailable: 500,
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     creep.pos.getRangeTo.mockReturnValue(1); // 已在站桩位
     const ctx = mockContext(snap);
 
@@ -137,7 +179,13 @@ describe("upgrader — 空闲归站（不在 spawn 出口石化挡路）", () =>
       sources: [],
       energyAvailable: 500,
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     creep.pos.getRangeTo.mockReturnValue(10); // 远离站桩位 → 触发归站移动
     const ctx = mockContext(snap);
 
@@ -160,7 +208,13 @@ describe("upgrader — 空闲归站（不在 spawn 出口石化挡路）", () =>
       energyAvailable: 100, // 低于地板
       energyCapacityAvailable: 800,
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     creep.pos.getRangeTo.mockReturnValue(10);
     const ctx = mockContext(snap);
 
@@ -183,7 +237,13 @@ describe("upgrader — 能量地板门禁（U-02）", () => {
       sources: [source],
       sourceOccupancy: new Map([["s1", 0]]),
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -204,7 +264,13 @@ describe("upgrader — 能量地板门禁（U-02）", () => {
       links: [],
       energyAvailable: 800,
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -221,7 +287,13 @@ describe("upgrader — 能量地板门禁（U-02）", () => {
       storage: undefined,
     });
     // 满载 → updateMode 将 acquire→work。
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -245,7 +317,13 @@ describe("upgrader — 紧急覆盖（防降级）", () => {
       containers: [],
       links: [],
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -268,7 +346,13 @@ describe("upgrader — 站桩升级取能链", () => {
     });
     // 让 link.pos.getRangeTo(controller) <= 2。
     link.pos.getRangeTo = vi.fn(() => 1);
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -285,7 +369,13 @@ describe("upgrader — 站桩升级取能链", () => {
       links: [],
       energyAvailable: 500,
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -303,7 +393,13 @@ describe("upgrader — 站桩升级取能链", () => {
       energyAvailable: 500,
     });
     // work 模式也应触发（stationaryUpgrade 同置 acquire[0] 与 work[0]）。
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 10, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 10,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -324,7 +420,13 @@ describe("upgrader — 站桩升级取能链", () => {
       rcl: 4,
       energyAvailable: 500,
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -344,7 +446,13 @@ describe("upgrader — 站桩升级取能链", () => {
       containers: [c1],
       energyAvailable: 500,
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -365,7 +473,13 @@ describe("upgrader — 站桩升级取能链", () => {
       sourceOccupancy: new Map([["s1", 0]]),
       energyAvailable: 500,
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -379,7 +493,13 @@ describe("upgrader — flee", () => {
     const hostile = mockHostile();
     const controller = mockController();
     const snap = mockSnapshot({ hostileCreeps: [hostile], controller });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -394,7 +514,13 @@ describe("upgrader — 站桩同 tick 取+升（stationaryUpgrade / ③）", () 
     const controller = mockController();
     const link = mockStructure("link", { id: "clink", energy: 700, capacity: 800 });
     const snap = mockSnapshot({ controller, links: [link] });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -408,7 +534,13 @@ describe("upgrader — 站桩同 tick 取+升（stationaryUpgrade / ③）", () 
     const controller = mockController();
     const link = mockStructure("link", { id: "clink", energy: 700, capacity: 800 });
     const snap = mockSnapshot({ controller, links: [link] });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -420,7 +552,13 @@ describe("upgrader — 站桩同 tick 取+升（stationaryUpgrade / ③）", () 
   it("无 controller link → 回退常规升级（不 withdraw）", () => {
     const controller = mockController();
     const snap = mockSnapshot({ controller, links: [] });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -433,7 +571,13 @@ describe("upgrader — 站桩同 tick 取+升（stationaryUpgrade / ③）", () 
     const controller = mockController();
     const emptyLink = mockStructure("link", { id: "clink", energy: 0, capacity: 800 });
     const snap = mockSnapshot({ controller, links: [emptyLink] });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 50, capacity: 50, mode: "work" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);
@@ -462,7 +606,13 @@ describe("upgrader — claim-secure 护栏（脆弱新房放宽取能地板）",
       containers: [],
       links: [],
     });
-    const creep = mockCreep({ name: "upgrader_1", role: "upgrader", used: 0, capacity: 50, mode: "acquire" });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
     const ctx = mockContext(snap);
 
     upgraderRole.run(creep, ctx);

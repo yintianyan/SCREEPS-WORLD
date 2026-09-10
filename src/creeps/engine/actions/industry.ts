@@ -26,20 +26,19 @@ type MineralHaulTarget = {
 export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
   return {
     name: "haul:minerals-to-storage",
-    resolve: (ac) => {
+    resolve: ac => {
       if (!ac.snapshot.storage && !ac.snapshot.terminal) return undefined;
 
       // 如果 creep 正在 carrying 非 energy 资源，送到 storage/terminal
-      const carriedMineral = (Object.keys(ac.creep.store) as ResourceConstant[])
-        .find(r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0);
+      const carriedMineral = (Object.keys(ac.creep.store) as ResourceConstant[]).find(
+        r => r !== RESOURCE_ENERGY && ac.creep.store[r]! > 0,
+      );
       if (!carriedMineral) return undefined; // 不携矿物 → 放行后续候选（fillStorage 先倒能）
 
       // W7 定位（2026-08-01 部署验证）：terminal 总容量 300,000，矿物堆满时 transfer 必返
       // ERR_FULL 且被 runAction 静默忽略 → hauler 永久背矿物锁死（W7N3 实测 terminal 恰满）。
       // 修正：deposit 目标按剩余容量选择——terminal 有空位优先（贸易/工业链），满则落 storage 兜底。
-      const terminalFree = ac.snapshot.terminal
-        ? ac.snapshot.terminal.store.getFreeCapacity()
-        : 0;
+      const terminalFree = ac.snapshot.terminal ? ac.snapshot.terminal.store.getFreeCapacity() : 0;
       const dest = terminalFree > 0 ? ac.snapshot.terminal : ac.snapshot.storage;
       if (dest) return { dest, mineral: carriedMineral, phase: "deposit" as const };
       return undefined;
@@ -61,7 +60,7 @@ export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
 export function haulMineralTopUp(): ActionCandidate<StructureContainer> {
   return {
     name: "haul:mineral-topup",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.creep.store.getFreeCapacity() === 0) return undefined;
       if (!ac.snapshot.storage && !ac.snapshot.terminal) return undefined;
       // 矿物量阈值：mineral container 中矿物量低于 container 总容量的 70% 时不触发 —
@@ -84,8 +83,9 @@ export function haulMineralTopUp(): ActionCandidate<StructureContainer> {
       return source;
     },
     execute: (ac, source) => {
-      const mineral = (Object.keys(source.store) as ResourceConstant[])
-        .find(r => r !== RESOURCE_ENERGY && source.store[r]! > 0);
+      const mineral = (Object.keys(source.store) as ResourceConstant[]).find(
+        r => r !== RESOURCE_ENERGY && source.store[r]! > 0,
+      );
       if (!mineral) return;
       runAction(ac.creep, source, () => ac.creep.withdraw(source, mineral));
     },
@@ -96,7 +96,12 @@ export function haulMineralTopUp(): ActionCandidate<StructureContainer> {
 type LabSupplyTarget =
   | { dest: StructureLab; resource: ResourceConstant; phase: "deposit" }
   | { dest: StructureStorage | StructureTerminal; resource: ResourceConstant; phase: "dump" }
-  | { source: StructureStorage | StructureTerminal; resource: ResourceConstant; amount: number; phase: "withdraw" }
+  | {
+      source: StructureStorage | StructureTerminal;
+      resource: ResourceConstant;
+      amount: number;
+      phase: "withdraw";
+    }
   | { source: StructureLab; resource: ResourceConstant; phase: "unload" };
 
 /** storage 能量地板：低于此值不为 lab 抽能 — boost 能量不与 spawn/tower 补给抢血。
@@ -115,7 +120,7 @@ const labEnergyStorageFloor = (): number => CONFIG.economy.distributorTiers.low;
 export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
   return {
     name: "haul:supply-labs",
-    resolve: (ac) => {
+    resolve: ac => {
       if (ac.snapshot.labs.length === 0) return undefined;
       const storage = ac.snapshot.storage;
       if (!storage) return undefined;
@@ -125,8 +130,9 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
       if (!table) return undefined;
 
       const store = ac.creep.store;
-      const carriedCompound = (Object.keys(store) as ResourceConstant[])
-        .find(r => r !== RESOURCE_ENERGY && store[r]! > 0);
+      const carriedCompound = (Object.keys(store) as ResourceConstant[]).find(
+        r => r !== RESOURCE_ENERGY && store[r]! > 0,
+      );
 
       // 1. 携带化合物：送到需要它的 lab；无需求方则倒回 storage 解堵。
       if (carriedCompound) {
@@ -198,8 +204,7 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
 
 /** stockTerminalEnergy 的 resolve 返回类型。 */
 type TerminalStockTarget =
-  | { dest: StructureTerminal; phase: "deposit" }
-  | { source: StructureStorage; phase: "withdraw" };
+  { dest: StructureTerminal; phase: "deposit" } | { source: StructureStorage; phase: "withdraw" };
 
 /**
  * 维持 terminal 能量储备（storage → terminal）。市场 deal 无论买卖都从本方 terminal 扣能量运费 —
@@ -209,7 +214,7 @@ type TerminalStockTarget =
 export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
   return {
     name: "haul:stock-terminal-energy",
-    resolve: (ac) => {
+    resolve: ac => {
       // 无市场（真无 market API 的服务器）时禁止向 terminal 灌能量——能量无消费方会永久锁死；
       // 有市场时靠下方 D-1 水位门禁（storage ≥ 20k 才备货）。与 terminal-manager 的 no-market 守卫同款。
       if (typeof Game.market?.getAllOrders !== "function") return undefined;
@@ -254,7 +259,7 @@ type FactoryComponentTarget =
 export function stockFactoryComponents(): ActionCandidate<FactoryComponentTarget> {
   return {
     name: "haul:stock-factory-components",
-    resolve: (ac) => {
+    resolve: ac => {
       const factory = ac.snapshot.factory;
       const storage = ac.snapshot.storage;
       if (!factory || !storage) return undefined;
@@ -262,15 +267,22 @@ export function stockFactoryComponents(): ActionCandidate<FactoryComponentTarget
       const g = globalCache() as { factoryTargets?: Record<string, string> };
       const target = g.factoryTargets?.[ac.snapshot.roomName];
       if (!target) return undefined;
-      const table = (globalThis as { COMMODITIES?: Record<string, { components?: Record<string, number> }> }).COMMODITIES;
+      const table = (
+        globalThis as { COMMODITIES?: Record<string, { components?: Record<string, number> }> }
+      ).COMMODITIES;
       const components = table?.[target]?.components;
       if (!components) return undefined;
 
       // deposit 相：背包携任意组件资源即送 factory。
-      const carried = Object.entries(ac.creep.store as unknown as Record<string, number>)
-        .find(([res, amount]) => amount > 0 && (components[res] ?? 0) > 0);
+      const carried = Object.entries(ac.creep.store as unknown as Record<string, number>).find(
+        ([res, amount]) => amount > 0 && (components[res] ?? 0) > 0,
+      );
       if (carried) {
-        return { dest: factory, resourceType: carried[0] as ResourceConstant, phase: "deposit" as const };
+        return {
+          dest: factory,
+          resourceType: carried[0] as ResourceConstant,
+          phase: "deposit" as const,
+        };
       }
       // withdraw 相：挑缺口最大且 storage 有货的组件。
       let pick: { res: string; gap: number } | undefined;
@@ -282,7 +294,11 @@ export function stockFactoryComponents(): ActionCandidate<FactoryComponentTarget
         if (!pick || gap > pick.gap) pick = { res, gap };
       }
       if (!pick) return undefined;
-      return { source: storage, resourceType: pick.res as ResourceConstant, phase: "withdraw" as const };
+      return {
+        source: storage,
+        resourceType: pick.res as ResourceConstant,
+        phase: "withdraw" as const,
+      };
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
@@ -310,7 +326,7 @@ type SalvageTransferTarget =
 export function salvageStorageToTerminal(): ActionCandidate<SalvageTransferTarget> {
   return {
     name: "salvage:storage-to-terminal",
-    resolve: (ac) => {
+    resolve: ac => {
       // 仅 nuke 警报房激活（常态零开销 — 一个字段判空）。
       if ((ac.snapshot.incomingNukes?.length ?? 0) === 0) return undefined;
       const terminal = ac.snapshot.terminal;
@@ -319,8 +335,9 @@ export function salvageStorageToTerminal(): ActionCandidate<SalvageTransferTarge
       if (terminal.store.getFreeCapacity() <= 0) return undefined;
 
       // deposit 相：背包有任意资源即送 terminal。
-      const carried = Object.entries(ac.creep.store as unknown as Record<string, number>)
-        .find(([, amount]) => amount > 0);
+      const carried = Object.entries(ac.creep.store as unknown as Record<string, number>).find(
+        ([, amount]) => amount > 0,
+      );
       if (carried) {
         return {
           dest: terminal,
@@ -329,11 +346,13 @@ export function salvageStorageToTerminal(): ActionCandidate<SalvageTransferTarge
         };
       }
       // withdraw 相：挑 storage 中存量最大的非能量资源（价值密度优先），无则能量。
-      const entries = Object.entries(storage.store as unknown as Record<string, number>)
-        .filter(([resourceType, amount]) => amount > 0 && resourceType !== RESOURCE_ENERGY);
-      const pick = entries.length > 0
-        ? entries.reduce((a, b) => (b[1] > a[1] ? b : a))
-        : (["energy", storage.store[RESOURCE_ENERGY] ?? 0] as [string, number]);
+      const entries = Object.entries(storage.store as unknown as Record<string, number>).filter(
+        ([resourceType, amount]) => amount > 0 && resourceType !== RESOURCE_ENERGY,
+      );
+      const pick =
+        entries.length > 0
+          ? entries.reduce((a, b) => (b[1] > a[1] ? b : a))
+          : (["energy", storage.store[RESOURCE_ENERGY] ?? 0] as [string, number]);
       if (pick[1] <= 0) return undefined;
       return {
         source: storage,
@@ -364,7 +383,7 @@ export function salvageStorageToTerminal(): ActionCandidate<SalvageTransferTarge
 export function withdrawTerminalEnergy(): ActionCandidate<StructureTerminal> {
   return {
     name: "withdraw:terminal-energy-rescue",
-    resolve: (ac) => {
+    resolve: ac => {
       const terminal = ac.snapshot.terminal;
       const storage = ac.snapshot.storage;
       if (!terminal || !storage) return undefined;
@@ -398,8 +417,7 @@ export function withdrawTerminalEnergy(): ActionCandidate<StructureTerminal> {
 
 /** stockFactoryEnergy 的 resolve 返回类型。 */
 type FactoryStockTarget =
-  | { dest: StructureFactory; phase: "deposit" }
-  | { source: StructureStorage; phase: "withdraw" };
+  { dest: StructureFactory; phase: "deposit" } | { source: StructureStorage; phase: "withdraw" };
 
 /**
  * 为 factory 补给压缩原料能量（storage → factory）。仅在 storage 满仓信号下触发 —
@@ -409,7 +427,7 @@ type FactoryStockTarget =
 export function stockFactoryEnergy(): ActionCandidate<FactoryStockTarget> {
   return {
     name: "haul:stock-factory-energy",
-    resolve: (ac) => {
+    resolve: ac => {
       const factory = ac.snapshot.factory;
       const storage = ac.snapshot.storage;
       if (!factory || !storage) return undefined;
@@ -449,7 +467,7 @@ const FACTORY_CRISIS_BATTERY_TARGET = 25;
 export function stockFactoryBattery(): ActionCandidate<FactoryBatteryTarget> {
   return {
     name: "haul:stock-factory-battery",
-    resolve: (ac) => {
+    resolve: ac => {
       const factory = ac.snapshot.factory;
       const storage = ac.snapshot.storage;
       if (!factory || !storage) return undefined;
@@ -506,7 +524,7 @@ const FACTORY_RECLAIM_THRESHOLD = 100;
 export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
   return {
     name: "haul:reclaim-factory-output",
-    resolve: (ac) => {
+    resolve: ac => {
       const factory = ac.snapshot.factory;
       if (!factory) return undefined;
 
@@ -523,7 +541,11 @@ export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
           // deposit 相：creep 携带能量 → 送 storage（crisis 时 storage 优先于 terminal）。
           const carrying = ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
           if (carrying > 0 && ac.snapshot.storage) {
-            return { dest: ac.snapshot.storage, resource: RESOURCE_ENERGY, phase: "deposit" as const };
+            return {
+              dest: ac.snapshot.storage,
+              resource: RESOURCE_ENERGY,
+              phase: "deposit" as const,
+            };
           }
           // withdraw 相：从 factory 取能量。
           if (ac.creep.store.getFreeCapacity() > 0) {
@@ -541,13 +563,15 @@ export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
       }
 
       // deposit 相：creep 携带产出资源 → 送 terminal（有市场有空位）或 storage。
-      const carriedOutput = (Object.keys(ac.creep.store) as ResourceConstant[])
-        .find(r => r !== RESOURCE_ENERGY && (ac.creep.store[r] ?? 0) > 0);
+      const carriedOutput = (Object.keys(ac.creep.store) as ResourceConstant[]).find(
+        r => r !== RESOURCE_ENERGY && (ac.creep.store[r] ?? 0) > 0,
+      );
       if (carriedOutput) {
         const marketAvailable = typeof Game.market?.getAllOrders === "function";
-        const terminalFree = marketAvailable && ac.snapshot.terminal
-          ? (ac.snapshot.terminal.store.getFreeCapacity(carriedOutput) ?? 0)
-          : 0;
+        const terminalFree =
+          marketAvailable && ac.snapshot.terminal
+            ? (ac.snapshot.terminal.store.getFreeCapacity(carriedOutput) ?? 0)
+            : 0;
         const dest = terminalFree > 0 ? ac.snapshot.terminal : ac.snapshot.storage;
         if (dest) return { dest, resource: carriedOutput, phase: "deposit" as const };
         return undefined;
@@ -558,9 +582,10 @@ export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
       if (ac.creep.store.getFreeCapacity() === 0) return undefined;
       let pick: { res: ResourceConstant; qty: number } | undefined;
       for (const o of outputs) {
-        const threshold = o.res === RESOURCE_BATTERY
-          ? CONFIG.factory.batteryReclaimThreshold
-          : FACTORY_RECLAIM_THRESHOLD;
+        const threshold =
+          o.res === RESOURCE_BATTERY
+            ? CONFIG.factory.batteryReclaimThreshold
+            : FACTORY_RECLAIM_THRESHOLD;
         if (o.qty < threshold) continue;
         if (!pick || o.qty > pick.qty) pick = o;
       }
@@ -602,7 +627,7 @@ type NukerStockTarget =
 export function stockNuker(): ActionCandidate<NukerStockTarget> {
   return {
     name: "haul:stock-nuker",
-    resolve: (ac) => {
+    resolve: ac => {
       const nuker = ac.snapshot.nuker;
       const storage = ac.snapshot.storage;
       if (!nuker || !storage) return undefined;
@@ -611,8 +636,9 @@ export function stockNuker(): ActionCandidate<NukerStockTarget> {
       const ghodiumShort = (nuker.store[RESOURCE_GHODIUM] ?? 0) < NUKE_GHODIUM_COST;
 
       // 携带 energy/G：nuker 缺该资源才认领（不劫持经济能量 — 与 stockPowerSpawn 同款防呆）。
-      const carried = ([RESOURCE_ENERGY, RESOURCE_GHODIUM] as ResourceConstant[])
-        .find(r => (ac.creep.store[r] ?? 0) > 0);
+      const carried = ([RESOURCE_ENERGY, RESOURCE_GHODIUM] as ResourceConstant[]).find(
+        r => (ac.creep.store[r] ?? 0) > 0,
+      );
       if (carried) {
         const wanted = carried === RESOURCE_ENERGY ? energyShort : ghodiumShort;
         if (wanted && (nuker.store.getFreeCapacity(carried) ?? 0) > 0) {
@@ -662,17 +688,20 @@ export function stockNuker(): ActionCandidate<NukerStockTarget> {
 export function stockPowerSpawn(): ActionCandidate<PowerSpawnStockTarget> {
   return {
     name: "haul:stock-power-spawn",
-    resolve: (ac) => {
+    resolve: ac => {
       const ps = ac.snapshot.powerSpawn;
       const storage = ac.snapshot.storage;
       if (!ps || !storage) return undefined;
 
-      const energyShort = ps.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.factory.powerSpawnEnergyTarget;
-      const powerShort = ps.store.getUsedCapacity(RESOURCE_POWER) < CONFIG.factory.powerSpawnPowerTarget;
+      const energyShort =
+        ps.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.factory.powerSpawnEnergyTarget;
+      const powerShort =
+        ps.store.getUsedCapacity(RESOURCE_POWER) < CONFIG.factory.powerSpawnPowerTarget;
 
       // 携带能量/power：只有 powerSpawn 缺该资源才认领（否则放行给经济 sink）。
-      const carried = ([RESOURCE_ENERGY, RESOURCE_POWER] as ResourceConstant[])
-        .find(r => (ac.creep.store[r] ?? 0) > 0);
+      const carried = ([RESOURCE_ENERGY, RESOURCE_POWER] as ResourceConstant[]).find(
+        r => (ac.creep.store[r] ?? 0) > 0,
+      );
       if (carried) {
         const wanted = carried === RESOURCE_ENERGY ? energyShort : powerShort;
         if (wanted && (ps.store.getFreeCapacity(carried) ?? 0) > 0) {

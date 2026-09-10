@@ -20,12 +20,7 @@ const ROOM = "W1N1";
 const INITIAL_HITS = 150000;
 
 /** 站桩矿工身体：1 work（采 2/tick、修 100 hits/tick）+ 基础移动件。 */
-const MINER_BODY = [
-  { type: "work" },
-  { type: "carry" },
-  { type: "move" },
-  { type: "move" },
-];
+const MINER_BODY = [{ type: "work" }, { type: "carry" }, { type: "move" }, { type: "move" }];
 
 describe("远矿 container 维修闭环 — 衰减中自维护，不吞噬产能", () => {
   it("container 在持续衰减下被采集者维护，血量净增且 source 持续开采", () => {
@@ -49,8 +44,8 @@ describe("远矿 container 维修闭环 — 衰减中自维护，不吞噬产能
       })
       .build();
 
-    const container = world.containers.find((c) => c.id === "cont-1")!;
-    const source = world.sources.find((s) => s.id === "s1")!;
+    const container = world.containers.find(c => c.id === "cont-1")!;
+    const source = world.sources.find(s => s.id === "s1")!;
     expect(container.hits).toBe(INITIAL_HITS);
 
     const runner = new TickRunner();

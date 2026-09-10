@@ -4,8 +4,17 @@ import type { Priority, System, TickContext } from "../kernel/contracts";
 import { CONFIG } from "../config";
 import { getRoleBounds, TUNABLE_ROLES } from "../config/tuned";
 import { classifyLinkRole } from "../domain/economy/links";
-import { evaluateTuning, verifyPendingAdjustments, applyFreezePolicy } from "../domain/tuning/evaluator";
-import type { TuningSignals, RoomTuningState, PendingValidation, FrozenParamState } from "../domain/tuning/types";
+import {
+  evaluateTuning,
+  verifyPendingAdjustments,
+  applyFreezePolicy,
+} from "../domain/tuning/evaluator";
+import type {
+  TuningSignals,
+  RoomTuningState,
+  PendingValidation,
+  FrozenParamState,
+} from "../domain/tuning/types";
 import { readCpuSegment, readEconomySegment } from "../kernel/segment-store";
 import { ringToArray } from "../kernel/ring-buffer";
 import type { EconomySample, CpuSample } from "../kernel/timeseries";
@@ -49,7 +58,10 @@ export const tuningEngineSystem: System = {
       // lastEval 是诊断快照（per-room），清掉避免与 rooms 错位。
       delete Memory.kernel.tuning.lastEval;
       Memory.kernel.tuning.baselineVersion = CONFIG.tuning.baselineVersion;
-      log.info("tuning-engine", `tuning: baselineVersion ${oldVersion ?? "undefined"}→${CONFIG.tuning.baselineVersion}, rooms cleared`,);
+      log.info(
+        "tuning-engine",
+        `tuning: baselineVersion ${oldVersion ?? "undefined"}→${CONFIG.tuning.baselineVersion}, rooms cleared`,
+      );
     }
 
     // 快照所有房间的当前 bounds —— 评估期间使用快照，避免多房循环中房间 A 的
@@ -60,7 +72,10 @@ export const tuningEngineSystem: System = {
     // 4 角色。evaluator 当前只对前 4 角色产出调整，其余快照项无规则消费即空转；
     // 补全集是为「未来 evaluator 加入新角色规则时无需改 tuning-engine」的前置准备。
     const snapshots = [...ctx.snapshots()];
-    const roomBoundsSnapshot = new Map<string, Record<string, { minCount: number; maxCount: number }>>();
+    const roomBoundsSnapshot = new Map<
+      string,
+      Record<string, { minCount: number; maxCount: number }>
+    >();
     for (const snap of snapshots) {
       const boundsMap: Record<string, { minCount: number; maxCount: number }> = {};
       for (const role of TUNABLE_ROLES) {
@@ -117,9 +132,15 @@ function safeRunTuning(
     if (signals.srcRatio > 0.9 && srcStallTicks > 50) {
       const criticalParams = ["harvester.maxCount", "hauler.maxCount"];
       for (const p of criticalParams) {
-        if (roomTuning.frozenParams?.[p]?.frozenUntil && roomTuning.frozenParams[p]!.frozenUntil > ctx.tick) {
+        if (
+          roomTuning.frozenParams?.[p]?.frozenUntil &&
+          roomTuning.frozenParams[p]!.frozenUntil > ctx.tick
+        ) {
           delete roomTuning.frozenParams[p];
-          log.info("tuning-engine", `tuning/${roomName}: FORCE_UNFREEZE ${p} (srcRatio=${signals.srcRatio.toFixed(2)}, stallTicks=${srcStallTicks})`);
+          log.info(
+            "tuning-engine",
+            `tuning/${roomName}: FORCE_UNFREEZE ${p} (srcRatio=${signals.srcRatio.toFixed(2)}, stallTicks=${srcStallTicks})`,
+          );
         }
         excludedParams.delete(p);
       }
@@ -139,17 +160,15 @@ function safeRunTuning(
       clearedParams: [],
       blockedParams: [],
     };
-    let freezeResult: { newlyFrozen: Array<{ param: string; reason: string }> } = { newlyFrozen: [] };
+    let freezeResult: { newlyFrozen: Array<{ param: string; reason: string }> } = {
+      newlyFrozen: [],
+    };
     // P1 诊断：blocked 参数的 blockedSinceTick + lastCheckedTick（仅在 verify 执行时填充）
-    let blockedDiag: Record<string, { blockedSinceTick: number; lastCheckedTick: number }> | undefined;
+    let blockedDiag:
+      Record<string, { blockedSinceTick: number; lastCheckedTick: number }> | undefined;
 
     if (verifyGate.passed) {
-      verifyResult = verifyPendingAdjustments(
-        signals,
-        pendingBefore,
-        boundsSnapshot,
-        ctx.tick,
-      );
+      verifyResult = verifyPendingAdjustments(signals, pendingBefore, boundsSnapshot, ctx.tick);
 
       // 5. [A] 冻结策略：确保 frozenParams 容器存在后调用（applyFreezePolicy 原地修改）
       if (!roomTuning.frozenParams) {
@@ -188,19 +207,13 @@ function safeRunTuning(
 
     // 9. 保存 lastTrend + lastEval 诊断（含 pending/frozen 精简快照 + P3 verifySkipped + P1 blockedParams）
     roomTuning.lastTrend = evaluation.newTrend;
-    saveLastEval(
-      ctx,
-      roomName,
-      evaluation,
-      roomTuning,
-      {
-        ...(verifyGate.skippedReason ? { verifySkipped: verifyGate.skippedReason } : {}),
-        ...(blockedDiag ? { blockedParams: blockedDiag } : {}),
-      },
-    );
+    saveLastEval(ctx, roomName, evaluation, roomTuning, {
+      ...(verifyGate.skippedReason ? { verifySkipped: verifyGate.skippedReason } : {}),
+      ...(blockedDiag ? { blockedParams: blockedDiag } : {}),
+    });
   } catch (error) {
     // 调优错误不得中断 tick——静默记录，下次再试。
-    log.error("tuning-engine", `tuning/${roomName}: error ${(error as Error).message}`,);
+    log.error("tuning-engine", `tuning/${roomName}: error ${(error as Error).message}`);
   }
 }
 
@@ -275,7 +288,10 @@ function applyRollbacksAndClearPending(
   ctx: TickContext,
   roomName: string,
   roomTuning: RoomTuningState,
-  verifyResult: { rollbacks: Array<{ param: string; oldValue: number; newValue: number; reason: string }>; clearedParams: string[] },
+  verifyResult: {
+    rollbacks: Array<{ param: string; oldValue: number; newValue: number; reason: string }>;
+    clearedParams: string[];
+  },
   pendingBefore: Record<string, PendingValidation>,
 ): void {
   // 应用回滚值（applyFreezePolicy 可能已把冻结参数的 newValue 改为 CONFIG 基线）
@@ -290,7 +306,10 @@ function applyRollbacksAndClearPending(
       rb.newValue,
       preAdjustValue,
     ]);
-    log.info("tuning-engine", `tuning/${roomName}: ROLLBACK ${rb.param} ${rb.oldValue}→${rb.newValue} (${rb.reason})`,);
+    log.info(
+      "tuning-engine",
+      `tuning/${roomName}: ROLLBACK ${rb.param} ${rb.oldValue}→${rb.newValue} (${rb.reason})`,
+    );
   }
 
   // 清空 clearedParams 的 pendingValidation（验证完成，闭环结束）。
@@ -322,7 +341,10 @@ function writeFreezeEvents(
       fp.rollbackCount,
       fp.frozenUntil - ctx.tick,
     ]);
-    log.info("tuning-engine", `tuning/${roomName}: FROZEN ${f.param} (rollbackCount=${fp.rollbackCount}, until Δ=${fp.frozenUntil - ctx.tick})`,);
+    log.info(
+      "tuning-engine",
+      `tuning/${roomName}: FROZEN ${f.param} (rollbackCount=${fp.rollbackCount}, until Δ=${fp.frozenUntil - ctx.tick})`,
+    );
   }
 }
 
@@ -349,7 +371,10 @@ function writeBlockedEventsAndDiag(
       pv?.preAdjustValue ?? 0,
       blockedDurationTicks,
     ]);
-    log.info("tuning-engine", `tuning/${roomName}: BLOCKED ${param} (blockedSince Δ=${blockedDurationTicks}, preAdjustValue=${pv?.preAdjustValue ?? 0})`,);
+    log.info(
+      "tuning-engine",
+      `tuning/${roomName}: BLOCKED ${param} (blockedSince Δ=${blockedDurationTicks}, preAdjustValue=${pv?.preAdjustValue ?? 0})`,
+    );
     diag[param] = {
       blockedSinceTick,
       lastCheckedTick: ctx.tick,
@@ -365,7 +390,10 @@ function applyEvaluationAdjustments(
   ctx: TickContext,
   roomName: string,
   roomTuning: RoomTuningState,
-  evaluation: { adjustments: Array<{ param: string; oldValue: number; newValue: number; reason: string }>; pendingValidations?: Record<string, PendingValidation> },
+  evaluation: {
+    adjustments: Array<{ param: string; oldValue: number; newValue: number; reason: string }>;
+    pendingValidations?: Record<string, PendingValidation>;
+  },
 ): void {
   for (const adj of evaluation.adjustments) {
     applyAdjustment(roomName, adj.param, adj.newValue, ctx.tick);
@@ -377,7 +405,10 @@ function applyEvaluationAdjustments(
       adj.newValue,
       directionCode,
     ]);
-    log.info("tuning-engine", `tuning/${roomName}: ${adj.param} ${adj.oldValue}→${adj.newValue} (${adj.reason})`,);
+    log.info(
+      "tuning-engine",
+      `tuning/${roomName}: ${adj.param} ${adj.oldValue}→${adj.newValue} (${adj.reason})`,
+    );
   }
 
   // 写 pendingValidation（覆盖旧记录，adjustTick 由 evaluator 填入）
@@ -399,7 +430,12 @@ function applyEvaluationAdjustments(
 function saveLastEval(
   ctx: TickContext,
   roomName: string,
-  evaluation: { adjustments: Array<{ param: string; oldValue: number; newValue: number; reason: string }>; signals: Record<string, number>; skipped?: string; newTrend: Record<string, "up" | "down" | "none"> },
+  evaluation: {
+    adjustments: Array<{ param: string; oldValue: number; newValue: number; reason: string }>;
+    signals: Record<string, number>;
+    skipped?: string;
+    newTrend: Record<string, "up" | "down" | "none">;
+  },
   roomTuning: RoomTuningState,
   diagnostics?: {
     /** P3：verify pass 被跳过的原因（危机/低 bucket/rcl 过低）。 */
@@ -428,14 +464,35 @@ function saveLastEval(
 }
 
 /** 构造 pendingValidation 精简诊断（不含 preAdjustSignals 完整快照，控体积）。 */
-function buildPendingDiag(
-  pending: Record<string, PendingValidation> | undefined,
-): Record<string, { adjustTick: number; expectedDirection: "improve" | "worsen"; adjustDirection: "up" | "down"; contractBlocked?: boolean }> | undefined {
+function buildPendingDiag(pending: Record<string, PendingValidation> | undefined):
+  | Record<
+      string,
+      {
+        adjustTick: number;
+        expectedDirection: "improve" | "worsen";
+        adjustDirection: "up" | "down";
+        contractBlocked?: boolean;
+      }
+    >
+  | undefined {
   if (!pending || Object.keys(pending).length === 0) return undefined;
-  const result: Record<string, { adjustTick: number; expectedDirection: "improve" | "worsen"; adjustDirection: "up" | "down"; contractBlocked?: boolean }> = {};
+  const result: Record<
+    string,
+    {
+      adjustTick: number;
+      expectedDirection: "improve" | "worsen";
+      adjustDirection: "up" | "down";
+      contractBlocked?: boolean;
+    }
+  > = {};
   for (const param in pending) {
     const pv = pending[param]!;
-    const diag: { adjustTick: number; expectedDirection: "improve" | "worsen"; adjustDirection: "up" | "down"; contractBlocked?: boolean } = {
+    const diag: {
+      adjustTick: number;
+      expectedDirection: "improve" | "worsen";
+      adjustDirection: "up" | "down";
+      contractBlocked?: boolean;
+    } = {
       adjustTick: pv.adjustTick,
       expectedDirection: pv.expectedDirection,
       adjustDirection: pv.adjustDirection,
@@ -483,22 +540,19 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
   const avgReserveDelta = avg(recentEconomy.map(s => s.d));
   const avgPressure = avg(recentEconomy.map(s => s.p / 100));
   const avgDrainScore = avg(recentEconomy.map(s => s.ds));
-  const crisisRatio = recentEconomy.filter(s => s.ph === 2 || s.ph === 3).length / recentEconomy.length;
+  const crisisRatio =
+    recentEconomy.filter(s => s.ph === 2 || s.ph === 3).length / recentEconomy.length;
   const avgStorageEnergy = avg(recentEconomy.map(s => s.se));
 
   // 消费端饱和度：spawn+extension 平均填充率 — 从 EconomySample.ea/ec 计算，
   // 反映评估窗口内的趋势而非瞬时值；ec 为 0（无 spawn）的采样点跳过，避免除零。
   const fillSamples = recentEconomy.filter(s => s.ec > 0);
-  const avgSpawnFillRatio = fillSamples.length > 0
-    ? avg(fillSamples.map(s => s.ea / s.ec))
-    : 0;
+  const avgSpawnFillRatio = fillSamples.length > 0 ? avg(fillSamples.map(s => s.ea / s.ec)) : 0;
 
   // ── CPU 信号（从 CPU ring buffer，全局）──
   const cpuSamples = ringToArray(cpuSeg.cpu) as CpuSample[];
   const recentCpu = cpuSamples.slice(-EVAL_WINDOW_SIZE);
-  const tierRank = recentCpu.length > 0
-    ? Math.round(avg(recentCpu.map(s => s.ti)))
-    : 0;
+  const tierRank = recentCpu.length > 0 ? Math.round(avg(recentCpu.map(s => s.ti))) : 0;
 
   // ── 活快照信号 ──
   const snapshot = ctx.getSnapshot(roomName);
@@ -512,8 +566,12 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
   if (snapshot.links.length > 0) {
     const linkAnchors = snapshot.links.map(l => ({ id: l.id, x: l.pos.x, y: l.pos.y }));
     const sourceAnchors = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
-    const ctrlAnchor = snapshot.controller ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y } : undefined;
-    const storAnchor = snapshot.storage ? { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y } : undefined;
+    const ctrlAnchor = snapshot.controller
+      ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
+      : undefined;
+    const storAnchor = snapshot.storage
+      ? { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y }
+      : undefined;
     for (const la of linkAnchors) {
       if (classifyLinkRole(la, sourceAnchors, ctrlAnchor, storAnchor) === "source") {
         sourceLinks.add(la.id);
@@ -589,12 +647,7 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
 // ─── 调整应用 ───────────────────────────────────────────────
 
 /** 将调整写入 Memory.kernel.tuning。 */
-function applyAdjustment(
-  roomName: string,
-  param: string,
-  newValue: number,
-  tick: number,
-): void {
+function applyAdjustment(roomName: string, param: string, newValue: number, tick: number): void {
   const roomTuning = getOrCreateRoomTuning(roomName);
 
   // param 格式: "role.field"，如 "hauler.maxCount"

@@ -145,7 +145,9 @@ describe("remote-harvester — v33-R11 绑定自愈", () => {
   function posSource(id: string, x: number, y: number): any {
     const s = mockSource(id);
     s.pos = {
-      x, y, roomName: targetRoom,
+      x,
+      y,
+      roomName: targetRoom,
       getRangeTo: vi.fn((t: any) => {
         const tx = t.x ?? t.pos?.x ?? 0;
         const ty = t.y ?? t.pos?.y ?? 0;
@@ -159,7 +161,9 @@ describe("remote-harvester — v33-R11 绑定自愈", () => {
    *  兼容 RoomPosition 与 RoomObject 两种目标形态）。 */
   function placeCreep(creep: any, x: number, y: number): void {
     creep.pos = {
-      x, y, roomName: targetRoom,
+      x,
+      y,
+      roomName: targetRoom,
       getRangeTo: vi.fn((t: any) => {
         const tx = t.x ?? t.pos?.x ?? 0;
         const ty = t.y ?? t.pos?.y ?? 0;

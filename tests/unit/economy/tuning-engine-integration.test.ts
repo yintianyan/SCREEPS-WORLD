@@ -53,10 +53,7 @@ function buildEconomyRing(
   return buf;
 }
 
-function buildCpuRing(
-  count: number,
-  overrides: Partial<CpuSample> = {},
-): RingBuffer<CpuSample> {
+function buildCpuRing(count: number, overrides: Partial<CpuSample> = {}): RingBuffer<CpuSample> {
   const buf = createRingBuffer<CpuSample>(500);
   for (let i = 0; i < count; i++) {
     ringPush(buf, {
@@ -68,17 +65,19 @@ function buildCpuRing(
       hl: 19.2,
       sk: 0,
       er: 0,
-      s1: "", v1: 0, s2: "", v2: 0, s3: "", v3: 0,
+      s1: "",
+      v1: 0,
+      s2: "",
+      v2: 0,
+      s3: "",
+      v3: 0,
       ...overrides,
     });
   }
   return buf;
 }
 
-function setupTimeseries(
-  econ: RingBuffer<EconomySample>,
-  cpu: RingBuffer<CpuSample>,
-): void {
+function setupTimeseries(econ: RingBuffer<EconomySample>, cpu: RingBuffer<CpuSample>): void {
   (globalThis as any).__segStore = {
     cpuSeg: { cpu },
     economySeg: { economy: econ },
@@ -89,10 +88,7 @@ function setupTimeseries(
 /** 向 Game.creeps 追加指定角色的 creep（多次调用可累积多房 creep）。
  *  ISSUE-008: 同步写入 globalCache().creepRefs，因为 tuning-engine
  *  不再直接遍历 Game.creeps 而是消费共享快照总线。 */
-function setupCreeps(
-  roomName: string,
-  roles: Record<string, number>,
-): void {
+function setupCreeps(roomName: string, roles: Record<string, number>): void {
   const existing = (globalThis as any).Game.creeps ?? {};
   let idx = Object.keys(existing).length;
   for (const [role, count] of Object.entries(roles)) {
@@ -113,18 +109,15 @@ function setupCreeps(
     ticksToLive: c.ticksToLive,
     bodyLength: 1,
     body: [],
-    roomName: roomName,
-    x: 25, y: 25,
+    roomName,
+    x: 25,
+    y: 25,
     energyCarried: 0,
   }));
 }
 
 /** 创建带 container 的快照，fillRatio 控制填充率。 */
-function snapshotWithContainers(
-  roomName: string,
-  fillRatio: number,
-  rcl = 4,
-): RoomSnapshot {
+function snapshotWithContainers(roomName: string, fillRatio: number, rcl = 4): RoomSnapshot {
   const capacity = 2000;
   const energy = Math.round(capacity * fillRatio);
   const container = mockStructure("container", {
@@ -141,18 +134,12 @@ function snapshotWithContainers(
 }
 
 /** 构建多快照 TickContext。 */
-function buildContext(
-  snapshots: RoomSnapshot[],
-  budget: Budget,
-  tick = 5000,
-): TickContext {
+function buildContext(snapshots: RoomSnapshot[], budget: Budget, tick = 5000): TickContext {
   return {
     tick,
     budget,
     globalSiteCount: snapshots.reduce((sum, s) => sum + s.myConstructionSites.length, 0),
-    getSnapshot: vi.fn((room: string) =>
-      snapshots.find(s => s.roomName === room),
-    ),
+    getSnapshot: vi.fn((room: string) => snapshots.find(s => s.roomName === room)),
     snapshots: vi.fn(function* () {
       for (const s of snapshots) yield s;
     }),
@@ -278,16 +265,30 @@ describe("tuning-engine integration — run() 完整链路", () => {
       ringPush(econ, {
         t: 1000 + i * 50,
         r: roomA,
-        rs: 50000, d: 50, ds: 5, p: 10,
-        ea: 5000, ec: 8000, se: 20000,
-        hc: 2, sc: 2, ph: 4,
+        rs: 50000,
+        d: 50,
+        ds: 5,
+        p: 10,
+        ea: 5000,
+        ec: 8000,
+        se: 20000,
+        hc: 2,
+        sc: 2,
+        ph: 4,
       });
       ringPush(econ, {
         t: 1000 + i * 50,
         r: roomB,
-        rs: 40000, d: 50, ds: 5, p: 10,
-        ea: 4000, ec: 8000, se: 15000,
-        hc: 2, sc: 2, ph: 4,
+        rs: 40000,
+        d: 50,
+        ds: 5,
+        p: 10,
+        ea: 4000,
+        ec: 8000,
+        se: 15000,
+        hc: 2,
+        sc: 2,
+        ph: 4,
       });
     }
     const cpu = buildCpuRing(15);
@@ -331,9 +332,15 @@ describe("tuning-engine integration — run() 完整链路", () => {
       ringPush(econ, {
         t: 1000 + i * 50,
         r: roomName,
-        rs: 50000, d: 50, ds: 5, p: 10,
-        ea: 5000, ec: 8000, se: 20000,
-        hc: 2, sc: 2,
+        rs: 50000,
+        d: 50,
+        ds: 5,
+        p: 10,
+        ea: 5000,
+        ec: 8000,
+        se: 20000,
+        hc: 2,
+        sc: 2,
         ph: i < 6 ? 2 : 4,
       });
     }
@@ -465,14 +472,32 @@ describe("tuning-engine 边界场景 — 多房间独立评估", () => {
     const econ = createRingBuffer<EconomySample>(300);
     for (let i = 0; i < 15; i++) {
       ringPush(econ, {
-        t: 1000 + i * 50, r: roomA,
-        rs: 50000, d: 50, ds: 5, p: 10,
-        ea: 4000, ec: 8000, se: 20000, hc: 2, sc: 2, ph: 4,
+        t: 1000 + i * 50,
+        r: roomA,
+        rs: 50000,
+        d: 50,
+        ds: 5,
+        p: 10,
+        ea: 4000,
+        ec: 8000,
+        se: 20000,
+        hc: 2,
+        sc: 2,
+        ph: 4,
       });
       ringPush(econ, {
-        t: 1000 + i * 50, r: roomB,
-        rs: 50000, d: 50, ds: 5, p: 10,
-        ea: 4000, ec: 8000, se: 20000, hc: 2, sc: 2, ph: 4,
+        t: 1000 + i * 50,
+        r: roomB,
+        rs: 50000,
+        d: 50,
+        ds: 5,
+        p: 10,
+        ea: 4000,
+        ec: 8000,
+        se: 20000,
+        hc: 2,
+        sc: 2,
+        ph: 4,
       });
     }
     const cpu = buildCpuRing(15);
@@ -550,8 +575,8 @@ describe("tuning-engine 边界场景 — 空房间与信号缺失", () => {
     const tuning = (globalThis as any).Memory.kernel.tuning;
     expect(tuning.lastEval[roomName].signals.containerFillRatio).toBe(0);
     // containerFillRatio=0 < CONTAINER_LOW(0.2) + haulerCount(3) > minCount(2) → 触发 hauler.maxCount 减少
-    const haulerAdj = tuning.lastEval[roomName].adjustments.find(
-      (a: string) => a.includes("hauler.maxCount"),
+    const haulerAdj = tuning.lastEval[roomName].adjustments.find((a: string) =>
+      a.includes("hauler.maxCount"),
     );
     expect(haulerAdj).toBeDefined();
   });
@@ -608,8 +633,8 @@ describe("tuning-engine 边界场景 — 钳制边界", () => {
     // 仍为 8，不超 ceiling
     expect(tuning.rooms[roomName].roleBounds.hauler.maxCount).toBe(8);
     // 不应有 hauler.maxCount 调整
-    const haulerAdj = tuning.lastEval[roomName].adjustments.find(
-      (a: string) => a.includes("hauler.maxCount=8→"),
+    const haulerAdj = tuning.lastEval[roomName].adjustments.find((a: string) =>
+      a.includes("hauler.maxCount=8→"),
     );
     expect(haulerAdj).toBeUndefined();
   });
@@ -622,9 +647,17 @@ describe("tuning-engine 边界场景 — 经济相位震荡", () => {
     const econ = createRingBuffer<EconomySample>(300);
     for (let i = 0; i < 10; i++) {
       ringPush(econ, {
-        t: 1000 + i * 50, r: roomName,
-        rs: 50000, d: 50, ds: 5, p: 10,
-        ea: 4000, ec: 8000, se: 20000, hc: 2, sc: 2,
+        t: 1000 + i * 50,
+        r: roomName,
+        rs: 50000,
+        d: 50,
+        ds: 5,
+        p: 10,
+        ea: 4000,
+        ec: 8000,
+        se: 20000,
+        hc: 2,
+        sc: 2,
         ph: i < 3 ? 2 : 4, // 前 3 个 crisis
       });
     }
@@ -650,9 +683,17 @@ describe("tuning-engine 边界场景 — 经济相位震荡", () => {
     const econ = createRingBuffer<EconomySample>(300);
     for (let i = 0; i < 10; i++) {
       ringPush(econ, {
-        t: 1000 + i * 50, r: roomName,
-        rs: 50000, d: 50, ds: 5, p: 10,
-        ea: 4000, ec: 8000, se: 20000, hc: 2, sc: 2,
+        t: 1000 + i * 50,
+        r: roomName,
+        rs: 50000,
+        d: 50,
+        ds: 5,
+        p: 10,
+        ea: 4000,
+        ec: 8000,
+        se: 20000,
+        hc: 2,
+        sc: 2,
         ph: i < 4 ? 2 : 4,
       });
     }
@@ -676,18 +717,18 @@ describe("tuning-engine 边界场景 — 多参数联动", () => {
   it("container满 + storage高位 + buildQueue积压 + 储备下降 → 多参数同时调整", () => {
     const roomName = "W7N4";
     const econ = buildEconomyRing(roomName, 15, {
-      d: -80,    // 储备下降 → harvester.maxCount ↑
+      d: -80, // 储备下降 → harvester.maxCount ↑
       se: 60000, // storage 高位 → upgrader.maxCount ↑
-      ea: 4000,  // spawn 未饱和
+      ea: 4000, // spawn 未饱和
       ec: 8000,
     });
     const cpu = buildCpuRing(15);
     setupTimeseries(econ, cpu);
 
     setupCreeps(roomName, {
-      hauler: 6,   // 达 maxCount → hauler.maxCount ↑ (container满 + spawn未饱和)
+      hauler: 6, // 达 maxCount → hauler.maxCount ↑ (container满 + spawn未饱和)
       harvester: 4, // 达 maxCount → harvester.maxCount ↑ (储备下降)
-      upgrader: 3,  // 达 maxCount → upgrader.maxCount ↑ (storage高位)
+      upgrader: 3, // 达 maxCount → upgrader.maxCount ↑ (storage高位)
       builder: 1,
     });
 
@@ -695,7 +736,9 @@ describe("tuning-engine 边界场景 — 多参数联动", () => {
     (globalThis as any).Memory.rooms = {
       [roomName]: {
         buildQueue: Array.from({ length: 5 }, (_, i) => ({
-          id: `site_${i}`, state: "queued", structureType: "extension",
+          id: `site_${i}`,
+          state: "queued",
+          structureType: "extension",
         })),
       },
     };
@@ -748,8 +791,8 @@ describe("tuning-engine 边界场景 — 慢振荡验证", () => {
     expect(tuning3.rooms[roomName].roleBounds.hauler.maxCount).toBe(7); // 仍为 7
 
     // 无振荡：maxCount 从 6→7 后稳定在 7
-    const haulerAdjs = tuning3.lastEval[roomName].adjustments.filter(
-      (a: string) => a.includes("hauler.maxCount"),
+    const haulerAdjs = tuning3.lastEval[roomName].adjustments.filter((a: string) =>
+      a.includes("hauler.maxCount"),
     );
     expect(haulerAdjs).toHaveLength(0);
   });
@@ -898,9 +941,17 @@ describe("tuning-engine — P3 verify 全局门禁", () => {
     const econ = createRingBuffer<EconomySample>(300);
     for (let i = 0; i < 15; i++) {
       ringPush(econ, {
-        t: 1000 + i * 50, r: roomName,
-        rs: 50000, d: 50, ds: 5, p: 10,
-        ea: 4000, ec: 8000, se: 20000, hc: 2, sc: 2,
+        t: 1000 + i * 50,
+        r: roomName,
+        rs: 50000,
+        d: 50,
+        ds: 5,
+        p: 10,
+        ea: 4000,
+        ec: 8000,
+        se: 20000,
+        hc: 2,
+        sc: 2,
         ph: i < 6 ? 2 : 4, // 前 6 个 crisis
       });
     }
@@ -922,7 +973,12 @@ describe("tuning-engine — P3 verify 全局门禁", () => {
             lastAdjusted: { "hauler.maxCount": 3000 },
             pendingValidation: {
               "hauler.maxCount": {
-                preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, avgReserveDelta: 50, roleCount: 6 },
+                preAdjustSignals: {
+                  containerFillRatio: 0.8,
+                  spawnFillRatio: 0.5,
+                  avgReserveDelta: 50,
+                  roleCount: 6,
+                },
                 expectedDirection: "improve",
                 adjustDirection: "up",
                 adjustTick: 3000,
@@ -957,9 +1013,17 @@ describe("tuning-engine — P3 verify 全局门禁", () => {
     const econCrisis = createRingBuffer<EconomySample>(300);
     for (let i = 0; i < 15; i++) {
       ringPush(econCrisis, {
-        t: 1000 + i * 50, r: roomName,
-        rs: 50000, d: 50, ds: 5, p: 10,
-        ea: 4000, ec: 8000, se: 20000, hc: 2, sc: 2,
+        t: 1000 + i * 50,
+        r: roomName,
+        rs: 50000,
+        d: 50,
+        ds: 5,
+        p: 10,
+        ea: 4000,
+        ec: 8000,
+        se: 20000,
+        hc: 2,
+        sc: 2,
         ph: i < 6 ? 2 : 4,
       });
     }
@@ -980,7 +1044,12 @@ describe("tuning-engine — P3 verify 全局门禁", () => {
             lastAdjusted: { "hauler.maxCount": 3000 },
             pendingValidation: {
               "hauler.maxCount": {
-                preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.7, avgReserveDelta: 50, roleCount: 6 },
+                preAdjustSignals: {
+                  containerFillRatio: 0.8,
+                  spawnFillRatio: 0.7,
+                  avgReserveDelta: 50,
+                  roleCount: 6,
+                },
                 expectedDirection: "improve",
                 adjustDirection: "up",
                 adjustTick: 3000,
@@ -1009,7 +1078,9 @@ describe("tuning-engine — P3 verify 全局门禁", () => {
     const tuningAfterRecover = (globalThis as any).Memory.kernel.tuning;
 
     // verify 恢复执行：pending 被消费（cleared）
-    expect(tuningAfterRecover.rooms[roomName].pendingValidation?.["hauler.maxCount"]).toBeUndefined();
+    expect(
+      tuningAfterRecover.rooms[roomName].pendingValidation?.["hauler.maxCount"],
+    ).toBeUndefined();
     expect(tuningAfterRecover.lastEval[roomName].verifySkipped).toBeUndefined();
     // 信号未改善 → 回滚到 preAdjustValue(6)
     expect(tuningAfterRecover.rooms[roomName].roleBounds.hauler.maxCount).toBe(6);
@@ -1034,7 +1105,12 @@ describe("tuning-engine — P3 verify 全局门禁", () => {
             lastAdjusted: { "hauler.maxCount": 3000 },
             pendingValidation: {
               "hauler.maxCount": {
-                preAdjustSignals: { containerFillRatio: 0.8, spawnFillRatio: 0.5, avgReserveDelta: 50, roleCount: 6 },
+                preAdjustSignals: {
+                  containerFillRatio: 0.8,
+                  spawnFillRatio: 0.5,
+                  avgReserveDelta: 50,
+                  roleCount: 6,
+                },
                 expectedDirection: "improve",
                 adjustDirection: "up",
                 adjustTick: 3000,

@@ -256,7 +256,12 @@ describe("A4.6 E2E-007: Verification — domainLevel 改善 → success", () => 
     const after = makeSnapshot({ domainLevel: "healthy", domainScore: 0.9 });
     const action = makeRecoveryAction({ estimatedRecoveryTime: 50 });
 
-    const result = evaluateRecoveryResult({ beforeState: before, afterState: after, action, elapsedTicks: 60 });
+    const result = evaluateRecoveryResult({
+      beforeState: before,
+      afterState: after,
+      action,
+      elapsedTicks: 60,
+    });
     expect(result).toBe("success");
   });
 
@@ -265,7 +270,12 @@ describe("A4.6 E2E-007: Verification — domainLevel 改善 → success", () => 
     const after = makeSnapshot({ domainLevel: "stable", domainScore: 0.7 });
     const action = makeRecoveryAction({ estimatedRecoveryTime: 50 });
 
-    const result = evaluateRecoveryResult({ beforeState: before, afterState: after, action, elapsedTicks: 60 });
+    const result = evaluateRecoveryResult({
+      beforeState: before,
+      afterState: after,
+      action,
+      elapsedTicks: 60,
+    });
     expect(result).toBe("success");
   });
 });
@@ -276,65 +286,158 @@ describe("A4.6 E2E-008: Verification — domainScore 改善 → partial", () => 
     const after = makeSnapshot({ domainLevel: "degraded", domainScore: 0.5 });
     const action = makeRecoveryAction({ estimatedRecoveryTime: 50 });
 
-    const result = evaluateRecoveryResult({ beforeState: before, afterState: after, action, elapsedTicks: 60 });
+    const result = evaluateRecoveryResult({
+      beforeState: before,
+      afterState: after,
+      action,
+      elapsedTicks: 60,
+    });
     expect(result).toBe("partial");
   });
 
   it("活跃失败数减少 → partial", () => {
-    const before = makeSnapshot({ activeFailureCount: 5, domainLevel: "degraded", domainScore: 0.4 });
-    const after = makeSnapshot({ activeFailureCount: 3, domainLevel: "degraded", domainScore: 0.4 });
+    const before = makeSnapshot({
+      activeFailureCount: 5,
+      domainLevel: "degraded",
+      domainScore: 0.4,
+    });
+    const after = makeSnapshot({
+      activeFailureCount: 3,
+      domainLevel: "degraded",
+      domainScore: 0.4,
+    });
     const action = makeRecoveryAction({ estimatedRecoveryTime: 50 });
 
-    const result = evaluateRecoveryResult({ beforeState: before, afterState: after, action, elapsedTicks: 60 });
+    const result = evaluateRecoveryResult({
+      beforeState: before,
+      afterState: after,
+      action,
+      elapsedTicks: 60,
+    });
     expect(result).toBe("partial");
   });
 
   it("spawn_recovery 人口增长 → partial", () => {
-    const before = makeSnapshot({ population: 3, domainLevel: "degraded", domainScore: 0.4, activeFailureCount: 2 });
-    const after = makeSnapshot({ population: 5, domainLevel: "degraded", domainScore: 0.4, activeFailureCount: 2 });
+    const before = makeSnapshot({
+      population: 3,
+      domainLevel: "degraded",
+      domainScore: 0.4,
+      activeFailureCount: 2,
+    });
+    const after = makeSnapshot({
+      population: 5,
+      domainLevel: "degraded",
+      domainScore: 0.4,
+      activeFailureCount: 2,
+    });
     const action = makeRecoveryAction({ type: "spawn_recovery", estimatedRecoveryTime: 50 });
 
-    const result = evaluateRecoveryResult({ beforeState: before, afterState: after, action, elapsedTicks: 60 });
+    const result = evaluateRecoveryResult({
+      beforeState: before,
+      afterState: after,
+      action,
+      elapsedTicks: 60,
+    });
     expect(result).toBe("partial");
   });
 
   it("logistics_fix 投递率改善 → partial", () => {
-    const before = makeSnapshot({ deliveryRate: 0.3, domainLevel: "degraded", domainScore: 0.4, activeFailureCount: 2 });
-    const after = makeSnapshot({ deliveryRate: 0.5, domainLevel: "degraded", domainScore: 0.4, activeFailureCount: 2 });
+    const before = makeSnapshot({
+      deliveryRate: 0.3,
+      domainLevel: "degraded",
+      domainScore: 0.4,
+      activeFailureCount: 2,
+    });
+    const after = makeSnapshot({
+      deliveryRate: 0.5,
+      domainLevel: "degraded",
+      domainScore: 0.4,
+      activeFailureCount: 2,
+    });
     const action = makeRecoveryAction({ type: "logistics_fix", estimatedRecoveryTime: 50 });
 
-    const result = evaluateRecoveryResult({ beforeState: before, afterState: after, action, elapsedTicks: 60 });
+    const result = evaluateRecoveryResult({
+      beforeState: before,
+      afterState: after,
+      action,
+      elapsedTicks: 60,
+    });
     expect(result).toBe("partial");
   });
 
   it("remote_stall 活跃远矿数减少 → success", () => {
-    const before = makeSnapshot({ activeRemoteOps: 3, domainLevel: "degraded", domainScore: 0.4, activeFailureCount: 2 });
-    const after = makeSnapshot({ activeRemoteOps: 2, domainLevel: "degraded", domainScore: 0.4, activeFailureCount: 2 });
+    const before = makeSnapshot({
+      activeRemoteOps: 3,
+      domainLevel: "degraded",
+      domainScore: 0.4,
+      activeFailureCount: 2,
+    });
+    const after = makeSnapshot({
+      activeRemoteOps: 2,
+      domainLevel: "degraded",
+      domainScore: 0.4,
+      activeFailureCount: 2,
+    });
     const action = makeRecoveryAction({ type: "remote_stall", estimatedRecoveryTime: 10 });
 
-    const result = evaluateRecoveryResult({ beforeState: before, afterState: after, action, elapsedTicks: 20 });
+    const result = evaluateRecoveryResult({
+      beforeState: before,
+      afterState: after,
+      action,
+      elapsedTicks: 20,
+    });
     expect(result).toBe("success");
   });
 });
 
 describe("A4.6 E2E-009: Verification — 无改善 + 超时 → failed", () => {
   it("超过 2× estimatedRecoveryTime 仍无改善 → failed", () => {
-    const before = makeSnapshot({ domainLevel: "degraded", domainScore: 0.4, activeFailureCount: 2, population: 5 });
-    const after = makeSnapshot({ domainLevel: "degraded", domainScore: 0.4, activeFailureCount: 2, population: 5 });
+    const before = makeSnapshot({
+      domainLevel: "degraded",
+      domainScore: 0.4,
+      activeFailureCount: 2,
+      population: 5,
+    });
+    const after = makeSnapshot({
+      domainLevel: "degraded",
+      domainScore: 0.4,
+      activeFailureCount: 2,
+      population: 5,
+    });
     const action = makeRecoveryAction({ type: "spawn_recovery", estimatedRecoveryTime: 50 });
 
-    const result = evaluateRecoveryResult({ beforeState: before, afterState: after, action, elapsedTicks: 120 });
+    const result = evaluateRecoveryResult({
+      beforeState: before,
+      afterState: after,
+      action,
+      elapsedTicks: 120,
+    });
     expect(result).toBe("failed");
   });
 });
 
 describe("A4.6 E2E-010: Verification — 未到恢复时间 → no_progress", () => {
   it("提交成功但没改善且未超时 → no_progress", () => {
-    const before = makeSnapshot({ domainLevel: "degraded", domainScore: 0.4, activeFailureCount: 2, population: 5 });
-    const after = makeSnapshot({ domainLevel: "degraded", domainScore: 0.4, activeFailureCount: 2, population: 5 });
+    const before = makeSnapshot({
+      domainLevel: "degraded",
+      domainScore: 0.4,
+      activeFailureCount: 2,
+      population: 5,
+    });
+    const after = makeSnapshot({
+      domainLevel: "degraded",
+      domainScore: 0.4,
+      activeFailureCount: 2,
+      population: 5,
+    });
     const action = makeRecoveryAction({ type: "spawn_recovery", estimatedRecoveryTime: 100 });
 
-    const result = evaluateRecoveryResult({ beforeState: before, afterState: after, action, elapsedTicks: 30 });
+    const result = evaluateRecoveryResult({
+      beforeState: before,
+      afterState: after,
+      action,
+      elapsedTicks: 30,
+    });
     expect(result).toBe("no_progress");
   });
 });
@@ -632,12 +735,15 @@ describe("A4.6 E2E-020: Cleanup 过期记录", () => {
     const table: RecoveryActionTable = new Map();
     // 用 blocked 状态（保留 500 tick），TICK+200 确保不过期
     for (let i = 0; i < 105; i++) {
-      table.set(`key-${i}`, makeRecord({
-        state: "blocked",
-        updatedAt: TICK + i,
-        actionId: `action-${i}`,
-        correlationId: `rcv-${i}`,
-      }));
+      table.set(
+        `key-${i}`,
+        makeRecord({
+          state: "blocked",
+          updatedAt: TICK + i,
+          actionId: `action-${i}`,
+          correlationId: `rcv-${i}`,
+        }),
+      );
     }
     // TICK+200 - (TICK+0) = 200 < 500，不过期；但超过 100 条上限
     const result = cleanupRecoveryTable(table, TICK + 200);
@@ -651,12 +757,15 @@ describe("A4.6 E2E-020: Cleanup 过期记录", () => {
   it("succeeded 记录全部过期时清理到 0", () => {
     const table: RecoveryActionTable = new Map();
     for (let i = 0; i < 105; i++) {
-      table.set(`key-${i}`, makeRecord({
-        state: "succeeded",
-        updatedAt: TICK + i,
-        actionId: `action-${i}`,
-        correlationId: `rcv-${i}`,
-      }));
+      table.set(
+        `key-${i}`,
+        makeRecord({
+          state: "succeeded",
+          updatedAt: TICK + i,
+          actionId: `action-${i}`,
+          correlationId: `rcv-${i}`,
+        }),
+      );
     }
     // succeeded 记录保留 500 tick；TICK+10000 - (TICK+0) = 10000 > 500
     // 所以所有 105 条都先被清理到 0 条，100 上限不触发
@@ -679,11 +788,33 @@ describe("A4.6 E2E-020: Cleanup 过期记录", () => {
 describe("A4.6 E2E-021: Recovery Stats 计算", () => {
   it("正确统计各状态数量", () => {
     const table: RecoveryActionTable = new Map();
-    table.set("a1", makeRecord({ state: "executing", actionId: "a1", correlationId: "c1", attempts: 1 }));
-    table.set("a2", makeRecord({ state: "succeeded", actionId: "a2", correlationId: "c2", attempts: 2, submittedAt: TICK, updatedAt: TICK + 60 }));
-    table.set("a3", makeRecord({ state: "failed", actionId: "a3", correlationId: "c3", attempts: 1 }));
-    table.set("a4", makeRecord({ state: "terminal", actionId: "a4", correlationId: "c4", attempts: 3 }));
-    table.set("a5", makeRecord({ state: "blocked", actionId: "a5", correlationId: "c5", attempts: 1 }));
+    table.set(
+      "a1",
+      makeRecord({ state: "executing", actionId: "a1", correlationId: "c1", attempts: 1 }),
+    );
+    table.set(
+      "a2",
+      makeRecord({
+        state: "succeeded",
+        actionId: "a2",
+        correlationId: "c2",
+        attempts: 2,
+        submittedAt: TICK,
+        updatedAt: TICK + 60,
+      }),
+    );
+    table.set(
+      "a3",
+      makeRecord({ state: "failed", actionId: "a3", correlationId: "c3", attempts: 1 }),
+    );
+    table.set(
+      "a4",
+      makeRecord({ state: "terminal", actionId: "a4", correlationId: "c4", attempts: 3 }),
+    );
+    table.set(
+      "a5",
+      makeRecord({ state: "blocked", actionId: "a5", correlationId: "c5", attempts: 1 }),
+    );
 
     const stats = computeRecoveryStats(table, TICK + 100);
     expect(stats.activeCount).toBe(1);

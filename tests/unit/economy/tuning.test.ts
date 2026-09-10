@@ -111,53 +111,28 @@ describe("Tuning Bounds", () => {
 
 describe("Tuning Evaluator — 全局门禁", () => {
   it("CPU tier conserve 跳过所有调优", () => {
-    const result = evaluateTwice(
-      healthySignals({ tierRank: 2 }),
-      DEFAULT_BOUNDS,
-      {},
-      1000,
-    );
+    const result = evaluateTwice(healthySignals({ tierRank: 2 }), DEFAULT_BOUNDS, {}, 1000);
     expect(result.skipped).toBe("cpu_tier_conserve_or_worse");
     expect(result.adjustments).toHaveLength(0);
   });
 
   it("CPU tier recovery 跳过所有调优", () => {
-    const result = evaluateTwice(
-      healthySignals({ tierRank: 3 }),
-      DEFAULT_BOUNDS,
-      {},
-      1000,
-    );
+    const result = evaluateTwice(healthySignals({ tierRank: 3 }), DEFAULT_BOUNDS, {}, 1000);
     expect(result.skipped).toBe("cpu_tier_conserve_or_worse");
   });
 
   it("危机比例过高跳过所有调优", () => {
-    const result = evaluateTwice(
-      healthySignals({ crisisRatio: 0.4 }),
-      DEFAULT_BOUNDS,
-      {},
-      1000,
-    );
+    const result = evaluateTwice(healthySignals({ crisisRatio: 0.4 }), DEFAULT_BOUNDS, {}, 1000);
     expect(result.skipped).toBe("economy_unstable");
   });
 
   it("RCL < 2 跳过所有调优", () => {
-    const result = evaluateTwice(
-      healthySignals({ rcl: 1 }),
-      DEFAULT_BOUNDS,
-      {},
-      1000,
-    );
+    const result = evaluateTwice(healthySignals({ rcl: 1 }), DEFAULT_BOUNDS, {}, 1000);
     expect(result.skipped).toBe("rcl_too_low");
   });
 
   it("健康状态不跳过", () => {
-    const result = evaluateTwice(
-      healthySignals(),
-      DEFAULT_BOUNDS,
-      {},
-      1000,
-    );
+    const result = evaluateTwice(healthySignals(), DEFAULT_BOUNDS, {}, 1000);
     expect(result.skipped).toBeUndefined();
   });
 });
@@ -454,8 +429,8 @@ describe("Tuning Evaluator — 多参数联动", () => {
       healthySignals({
         containerFillRatio: 0.75, // hauler.maxCount ↑
         haulerCount: 6,
-        avgStorageEnergy: 15000,  // < early surplus=20000 → consumerSaturated=false
-        buildQueueBacklog: 0,     // builder.maxCount ↓
+        avgStorageEnergy: 15000, // < early surplus=20000 → consumerSaturated=false
+        buildQueueBacklog: 0, // builder.maxCount ↓
       }),
       DEFAULT_BOUNDS,
       {},
@@ -695,13 +670,7 @@ describe("Tuning Evaluator — 趋势确认 (P1-1)", () => {
   });
 
   it("全局门禁跳过时不产生趋势记录", () => {
-    const result = evaluateTuning(
-      healthySignals({ tierRank: 2 }),
-      DEFAULT_BOUNDS,
-      {},
-      1000,
-      {},
-    );
+    const result = evaluateTuning(healthySignals({ tierRank: 2 }), DEFAULT_BOUNDS, {}, 1000, {});
 
     expect(result.skipped).toBe("cpu_tier_conserve_or_worse");
     expect(result.newTrend).toEqual({});

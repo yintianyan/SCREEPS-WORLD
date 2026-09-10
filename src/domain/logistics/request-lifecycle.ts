@@ -31,16 +31,16 @@ export interface TransitionResult {
  * - partial → planned（生成 remaining request）
  */
 const VALID_TRANSITIONS: ReadonlyMap<TransportStatus, ReadonlySet<TransportStatus>> = new Map([
-  ["pending",    new Set(["planned", "cancelled"] as const)],
-  ["planned",    new Set(["assigned", "cancelled"] as const)],
-  ["assigned",   new Set(["in_transit", "blocked", "failed", "cancelled"] as const)],
+  ["pending", new Set(["planned", "cancelled"] as const)],
+  ["planned", new Set(["assigned", "cancelled"] as const)],
+  ["assigned", new Set(["in_transit", "blocked", "failed", "cancelled"] as const)],
   ["in_transit", new Set(["delivering", "blocked", "failed", "cancelled"] as const)],
   ["delivering", new Set(["delivered", "partial", "failed", "cancelled"] as const)],
-  ["delivered",  new Set() as ReadonlySet<TransportStatus>],
-  ["partial",    new Set(["planned", "cancelled"] as const)],
-  ["blocked",    new Set(["planned", "failed", "cancelled"] as const)],
-  ["failed",     new Set() as ReadonlySet<TransportStatus>],
-  ["cancelled",  new Set() as ReadonlySet<TransportStatus>],
+  ["delivered", new Set() as ReadonlySet<TransportStatus>],
+  ["partial", new Set(["planned", "cancelled"] as const)],
+  ["blocked", new Set(["planned", "failed", "cancelled"] as const)],
+  ["failed", new Set() as ReadonlySet<TransportStatus>],
+  ["cancelled", new Set() as ReadonlySet<TransportStatus>],
 ]);
 
 /**
@@ -137,7 +137,11 @@ export function markPartial(req: TransportRequestV2, tick: number): TransitionRe
  * 任意活跃态 → blocked：路径/资源阻塞。
  * 纯函数。
  */
-export function markBlocked(req: TransportRequestV2, tick: number, reason?: string): TransitionResult {
+export function markBlocked(
+  req: TransportRequestV2,
+  tick: number,
+  reason?: string,
+): TransitionResult {
   return transition(req, "blocked", tick, reason);
 }
 
@@ -161,7 +165,11 @@ export function replanFromPartial(req: TransportRequestV2, tick: number): Transi
  * 任意活跃态 → failed：不可恢复失败。
  * 纯函数。
  */
-export function markFailed(req: TransportRequestV2, tick: number, reason?: string): TransitionResult {
+export function markFailed(
+  req: TransportRequestV2,
+  tick: number,
+  reason?: string,
+): TransitionResult {
   return transition(req, "failed", tick, reason);
 }
 
@@ -169,7 +177,11 @@ export function markFailed(req: TransportRequestV2, tick: number, reason?: strin
  * 任意活跃态 → cancelled：外部取消。
  * 纯函数。
  */
-export function markCancelled(req: TransportRequestV2, tick: number, reason?: string): TransitionResult {
+export function markCancelled(
+  req: TransportRequestV2,
+  tick: number,
+  reason?: string,
+): TransitionResult {
   return transition(req, "cancelled", tick, reason);
 }
 

@@ -24,8 +24,11 @@ describe("A1 自举链路 — RCL2→RCL3 爬升与 tower 自然开建", () => {
       .container(37, 12, 1500)
       .container(29, 37, 1500)
       .extensions([
-        { x: 23, y: 24 }, { x: 24, y: 23 }, { x: 25, y: 23 },
-        { x: 26, y: 23 }, { x: 27, y: 24 },
+        { x: 23, y: 24 },
+        { x: 24, y: 23 },
+        { x: 25, y: 23 },
+        { x: 26, y: 23 },
+        { x: 27, y: 24 },
       ])
       .sourceRegen(10)
       .containerDecay(0)
@@ -35,22 +38,69 @@ describe("A1 自举链路 — RCL2→RCL3 爬升与 tower 自然开建", () => {
 
     // 最小人口：2 静态矿工 + 1 搬运 + 1 升级者。builder 不种——必须由
     // census→demand 管道在 site 出现后自然孵化（自举链的最后一环）。
-    world.addCreep("h1", "harvester", 13, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" },
-      { type: "carry" }, { type: "move" },
-    ], { sourceId: "s1", mode: "work" });
-    world.addCreep("h2", "harvester", 37, 13, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" },
-      { type: "carry" }, { type: "move" },
-    ], { sourceId: "s2", mode: "work" });
-    world.addCreep("haul1", "hauler", 20, 20, [
-      { type: "carry" }, { type: "carry" }, { type: "carry" }, { type: "carry" },
-      { type: "move" }, { type: "move" },
-    ], { mode: "acquire" });
-    world.addCreep("u1", "upgrader", 29, 38, [
-      { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" }, { type: "work" },
-      { type: "carry" }, { type: "move" },
-    ], { mode: "acquire" });
+    world.addCreep(
+      "h1",
+      "harvester",
+      13,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s1", mode: "work" },
+    );
+    world.addCreep(
+      "h2",
+      "harvester",
+      37,
+      13,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { sourceId: "s2", mode: "work" },
+    );
+    world.addCreep(
+      "haul1",
+      "hauler",
+      20,
+      20,
+      [
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "carry" },
+        { type: "move" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
+    world.addCreep(
+      "u1",
+      "upgrader",
+      29,
+      38,
+      [
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "work" },
+        { type: "carry" },
+        { type: "move" },
+      ],
+      { mode: "acquire" },
+    );
 
     world.spawns[0]!.store.energy = 300;
     for (const ext of world.extensions) ext.store.energy = 50;
@@ -78,8 +128,8 @@ describe("A1 自举链路 — RCL2→RCL3 爬升与 tower 自然开建", () => {
     ).toBeDefined();
 
     // 断言 3：tower site 由 AI 创建（或已建成）——「tower 在建」门槛判据。
-    const towerAppears = world.towers.length >= 1
-      || world.sites.some(s => s.structureType === "tower");
+    const towerAppears =
+      world.towers.length >= 1 || world.sites.some(s => s.structureType === "tower");
     expect(
       towerAppears,
       `6000 tick 内无 tower site/结构。sites=${world.sites.map(s => s.structureType).join(",")}`,
@@ -87,9 +137,6 @@ describe("A1 自举链路 — RCL2→RCL3 爬升与 tower 自然开建", () => {
 
     // 断言 4：builder 由 census 自然孵化（零人工补位链）。
     const builderSeen = result.records.some(r => (r.creepsByRole.builder ?? 0) >= 1);
-    expect(
-      builderSeen,
-      "全程未出现 builder 角色——site 出现后 census 未自然补位",
-    ).toBe(true);
+    expect(builderSeen, "全程未出现 builder 角色——site 出现后 census 未自然补位").toBe(true);
   });
 });

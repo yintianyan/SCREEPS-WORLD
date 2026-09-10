@@ -7,7 +7,7 @@ export type { LayoutMetrics, DefenseCutInfo } from "../domain/layout/metrics";
  * 序列化抖动，与 recordLayoutGaps 同策略）；房间无指标时删除条目（不留历史）。 */
 export function recordLayoutMetrics(roomName: string, metrics: LayoutMetrics): void {
   Memory.kernel ??= {};
-  const store = Memory.kernel.layoutMetrics ??= {};
+  const store = (Memory.kernel.layoutMetrics ??= {});
   const prev = store[roomName];
 
   if (prev === undefined) {

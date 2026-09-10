@@ -156,11 +156,16 @@ export function evaluateMultiResourceHealth(
  */
 function healthRank(h: ResourceHealthStatus): number {
   switch (h) {
-    case "critical": return 0;
-    case "deficit": return 1;
-    case "degraded": return 2;
-    case "stable": return 3;
-    case "healthy": return 4;
+    case "critical":
+      return 0;
+    case "deficit":
+      return 1;
+    case "degraded":
+      return 2;
+    case "stable":
+      return 3;
+    case "healthy":
+      return 4;
   }
 }
 

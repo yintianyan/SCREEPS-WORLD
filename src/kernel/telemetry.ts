@@ -61,7 +61,9 @@ export function emitSummary(budget: Budget): void {
       if (topActions.length > 0) {
         parts.push("topActions:");
         for (const [key, entry] of topActions) {
-          parts.push(`  ${key}=${entry.totalCpu.toFixed(2)}(×${entry.count},max=${entry.maxCpu.toFixed(2)})`);
+          parts.push(
+            `  ${key}=${entry.totalCpu.toFixed(2)}(×${entry.count},max=${entry.maxCpu.toFixed(2)})`,
+          );
         }
       }
     }
@@ -71,5 +73,3 @@ export function emitSummary(budget: Budget): void {
     log.info("telemetry", parts.join(" "));
   }
 }
-
-

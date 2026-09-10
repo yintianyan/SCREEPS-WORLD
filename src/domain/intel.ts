@@ -232,7 +232,6 @@ export function getIntelConfidence(
   return "expired";
 }
 
-
 // ─── 完整版情报架构（IntelState 唯一写者的领域模型）────────────────
 //
 // 三分置信度是「来源信任」维度（fact=本源直接观测 / inferred=先验推导 / ally
@@ -417,10 +416,16 @@ export interface PlayerIntelRecord {
   rooms?: Record<string, number>;
 }
 
-export function toPlayersRecord(players: Map<string, PlayerIntelEntry>): Record<string, PlayerIntelRecord> {
+export function toPlayersRecord(
+  players: Map<string, PlayerIntelEntry>,
+): Record<string, PlayerIntelRecord> {
   const out: Record<string, PlayerIntelRecord> = {};
   for (const [owner, e] of players) {
-    out[owner] = { lastSeenAt: e.lastSeenAt, lastHostileAt: e.lastHostileAt, rooms: { ...e.rooms } };
+    out[owner] = {
+      lastSeenAt: e.lastSeenAt,
+      lastHostileAt: e.lastHostileAt,
+      rooms: { ...e.rooms },
+    };
   }
   return out;
 }

@@ -48,10 +48,7 @@ export interface ROIResult {
 
  * 纯函数。
  */
-export function computeExpectedROI(
-  expectedProduction: number,
-  expectedCost: number,
-): number {
+export function computeExpectedROI(expectedProduction: number, expectedCost: number): number {
   if (expectedCost <= 0) return expectedProduction > 0 ? Infinity : 0;
   return (expectedProduction - expectedCost) / expectedCost;
 }
@@ -64,10 +61,7 @@ export function computeExpectedROI(
 
  * 纯函数。
  */
-export function computeActualROI(
-  actualDelivered: number,
-  actualCost: number,
-): number {
+export function computeActualROI(actualDelivered: number, actualCost: number): number {
   if (actualCost <= 0) return actualDelivered > 0 ? Infinity : 0;
   return (actualDelivered - actualCost) / actualCost;
 }
@@ -97,9 +91,8 @@ export function calculateROI(
   const expectedROI = computeExpectedROI(expectedProduction, expectedCost);
   const actualROI = computeActualROI(actualDelivered, actualCost);
   const roiDelta = actualROI - expectedROI;
-  const roiAchievement = expectedROI !== 0 && isFinite(expectedROI)
-    ? actualROI / expectedROI
-    : (actualROI > 0 ? 1 : 0);
+  const roiAchievement =
+    expectedROI !== 0 && isFinite(expectedROI) ? actualROI / expectedROI : actualROI > 0 ? 1 : 0;
   const meetsExpectation = roiAchievement >= achievementThreshold;
 
   return {
@@ -126,9 +119,10 @@ export function calculateROI(
 
  * 纯函数。
  */
-export function buildActualROIInput(
-  accounting: EconomicAccountingResult,
-): { actualCost: number; duration: number } {
+export function buildActualROIInput(accounting: EconomicAccountingResult): {
+  actualCost: number;
+  duration: number;
+} {
   const duration = Math.max(1, accounting.periodEnd - accounting.periodStart);
   return {
     actualCost: accounting.totalCost * duration,
@@ -158,9 +152,6 @@ export function isNegativeROI(roi: number): boolean {
  * 判定实际 ROI 是否显著低于预期（差距超阈值）。
  * 纯函数。
  */
-export function isSignificantlyBelowExpectation(
-  result: ROIResult,
-  threshold: number,
-): boolean {
+export function isSignificantlyBelowExpectation(result: ROIResult, threshold: number): boolean {
   return result.roiAchievement < threshold;
 }

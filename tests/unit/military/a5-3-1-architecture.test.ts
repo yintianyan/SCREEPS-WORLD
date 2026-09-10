@@ -20,7 +20,8 @@ function walk(dir: string): string[] {
 const ALL_FILES = walk(SRC);
 
 function codeLines(src: string): string {
-  return src.split(NL)
+  return src
+    .split(NL)
     .filter(l => {
       const t = l.trim();
       return !t.startsWith("*") && !t.startsWith("//") && !t.startsWith("/*");
@@ -51,7 +52,11 @@ describe("A5.3.1 GAP-2: Legacy import 限制", () => {
       const lines = src.split(NL);
       let hasImport = false;
       for (const line of lines) {
-        if (line.includes("selectWarTarget") && !line.trim().startsWith("//") && !line.trim().startsWith("*")) {
+        if (
+          line.includes("selectWarTarget") &&
+          !line.trim().startsWith("//") &&
+          !line.trim().startsWith("*")
+        ) {
           // 如果是 import 块的一部分（以 import 开头或以逗号结尾或包含 from）
           if (/^\s*(import|selectWarTarget|\})/.test(line) || line.includes("from")) {
             hasImport = true;
@@ -143,7 +148,12 @@ describe("A5.3.1 GAP-2: domain/military/ Domain Purity", () => {
     const bad: string[] = [];
     for (const f of militaryDomainFiles) {
       const code = codeLines(readFileSync(f, "utf8"));
-      if (/Game\./.test(code) || /Memory\./.test(code) || /RawMemory\./.test(code) || /console\./.test(code)) {
+      if (
+        /Game\./.test(code) ||
+        /Memory\./.test(code) ||
+        /RawMemory\./.test(code) ||
+        /console\./.test(code)
+      ) {
         bad.push(relative(SRC, f));
       }
     }
@@ -155,7 +165,7 @@ describe("A5.3.1 GAP-2: domain/military/ Domain Purity", () => {
     for (const f of militaryDomainFiles) {
       for (const imp of importsOf(f)) {
         if (imp.includes("systems/") || imp.includes("creeps/")) {
-          bad.push(relative(SRC, f) + " -> " + imp);
+          bad.push(`${relative(SRC, f)} -> ${imp}`);
         }
       }
     }
@@ -210,7 +220,12 @@ describe("A5.3.1 GAP-2: LEGACY_COMPATIBILITY_ONLY 标记", () => {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!;
       // 检测实际调用（非注释行，包含 selectWarTarget 和括号）
-      if (line.includes("selectWarTarget") && line.includes("(") && !line.trim().startsWith("//") && !line.trim().startsWith("*")) {
+      if (
+        line.includes("selectWarTarget") &&
+        line.includes("(") &&
+        !line.trim().startsWith("//") &&
+        !line.trim().startsWith("*")
+      ) {
         // 查找前 15 行是否有 LEGACY 标记
         for (let j = Math.max(0, i - 15); j <= i; j++) {
           if (lines[j]!.includes("LEGACY")) {
@@ -221,7 +236,9 @@ describe("A5.3.1 GAP-2: LEGACY_COMPATIBILITY_ONLY 标记", () => {
         if (!foundLegacyMark) break;
       }
     }
-    expect(foundLegacyMark, "selectWarTarget call lacks LEGACY_COMPATIBILITY_ONLY marker").toBe(true);
+    expect(foundLegacyMark, "selectWarTarget call lacks LEGACY_COMPATIBILITY_ONLY marker").toBe(
+      true,
+    );
   });
 
   it("war-planner.ts 中 decideSquadSize 调用处有 LEGACY 标记", () => {
@@ -232,7 +249,12 @@ describe("A5.3.1 GAP-2: LEGACY_COMPATIBILITY_ONLY 标记", () => {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!;
       // 检测实际调用（非注释行，包含 decideSquadSize 和括号）
-      if (line.includes("decideSquadSize") && line.includes("(") && !line.trim().startsWith("//") && !line.trim().startsWith("*")) {
+      if (
+        line.includes("decideSquadSize") &&
+        line.includes("(") &&
+        !line.trim().startsWith("//") &&
+        !line.trim().startsWith("*")
+      ) {
         for (let j = Math.max(0, i - 15); j <= i; j++) {
           if (lines[j]!.includes("LEGACY")) {
             foundLegacyMark = true;
@@ -242,7 +264,9 @@ describe("A5.3.1 GAP-2: LEGACY_COMPATIBILITY_ONLY 标记", () => {
         if (!foundLegacyMark) break;
       }
     }
-    expect(foundLegacyMark, "decideSquadSize call lacks LEGACY_COMPATIBILITY_ONLY marker").toBe(true);
+    expect(foundLegacyMark, "decideSquadSize call lacks LEGACY_COMPATIBILITY_ONLY marker").toBe(
+      true,
+    );
   });
 
   it("domain/war/planning.ts 头部有 LEGACY 标记", () => {

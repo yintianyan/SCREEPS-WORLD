@@ -31,7 +31,10 @@ describe("migration v27 → v28（agenda 建档）", () => {
 
     runMigrations();
 
-    expect((globalThis as any).Memory.kernel.agenda).toEqual({ initiative: "rcl-push", since: 900 });
+    expect((globalThis as any).Memory.kernel.agenda).toEqual({
+      initiative: "rcl-push",
+      since: 900,
+    });
   });
 
   it("initiative 不在枚举 → 删除整个字段", () => {

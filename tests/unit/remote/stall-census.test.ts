@@ -4,7 +4,13 @@ import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-ma
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { CONFIG } from "../../../src/config";
-import { mockContext, mockSnapshot, mockSource, resetGlobals, syncSquadIndex } from "../../support/factories";
+import {
+  mockContext,
+  mockSnapshot,
+  mockSource,
+  resetGlobals,
+  syncSquadIndex,
+} from "../../support/factories";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 
 const homeRoom = "W1N1";
@@ -45,11 +51,13 @@ function remoteCreep(
   };
 }
 
-function seed(opts: {
-  creeps?: Record<string, any>;
-  intel?: Record<string, any>;
-  op?: Record<string, RemoteOp>;
-} = {}): RoomSnapshot {
+function seed(
+  opts: {
+    creeps?: Record<string, any>;
+    intel?: Record<string, any>;
+    op?: Record<string, RemoteOp>;
+  } = {},
+): RoomSnapshot {
   const glob = g();
   glob.Game.creeps = opts.creeps ?? {};
   syncSquadIndex();
@@ -67,7 +75,11 @@ function seed(opts: {
       source: "observer" as const,
       payload: { kind: "normal", status: "normal", lastSeen: 1000, ...(p as object) } as never,
     }));
-    intelligenceSystem.run({ tick: 1000, snapshots: () => [], budget: { canStart: () => true } } as never);
+    intelligenceSystem.run({
+      tick: 1000,
+      snapshots: () => [],
+      budget: { canStart: () => true },
+    } as never);
   }
   return mockSnapshot({
     roomName: homeRoom,
@@ -218,13 +230,15 @@ describe("v33-R11 op.sources 视野校正", () => {
 
   it("有视野：实测 source 数与快照不符 → 校正 op.sources（需求侧随之补齐配员）", () => {
     // 线上实证 W37S57：开点记 1 源，实际 2 源 → 南源长期无采集者。
-    const snap = seedWithVision((t) => (t === FIND_SOURCES ? [mockSource("a"), mockSource("b")] : []));
+    const snap = seedWithVision(t =>
+      t === FIND_SOURCES ? [mockSource("a"), mockSource("b")] : [],
+    );
     run(snap);
     expect(g().Memory.rooms[homeRoom].remoteOps[targetRoom].sources).toBe(2);
   });
 
   it("实测与快照一致 → 不重复写入（幂等）", () => {
-    const snap = seedWithVision((t) => (t === FIND_SOURCES ? [mockSource("a")] : []));
+    const snap = seedWithVision(t => (t === FIND_SOURCES ? [mockSource("a")] : []));
     run(snap);
     expect(g().Memory.rooms[homeRoom].remoteOps[targetRoom].sources).toBe(1);
   });

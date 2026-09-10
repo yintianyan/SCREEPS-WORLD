@@ -22,7 +22,10 @@ export interface FortificationContext {
  * [x0,y0,x1,y1,...]，无数据传 undefined。
  */
 export function buildFortificationContext(
-  snapshot: Pick<RoomSnapshot, "spawns" | "extensions" | "towers" | "links" | "containers" | "storage">,
+  snapshot: Pick<
+    RoomSnapshot,
+    "spawns" | "extensions" | "towers" | "links" | "containers" | "storage"
+  >,
   minCutPositions: readonly number[] | undefined,
 ): FortificationContext {
   const minCutSet = new Set<number>();

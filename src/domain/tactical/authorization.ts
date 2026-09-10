@@ -1,10 +1,6 @@
 /** Tactical Authorization */
 
-import type {
-  TacticalAuthorization,
-  AuthorizationState,
-  TacticalObjective,
-} from "./types";
+import type { TacticalAuthorization, AuthorizationState, TacticalObjective } from "./types";
 import type { MilitaryOperation } from "../military/operation";
 
 // ═══════════════════════════════════════════════════════════
@@ -111,8 +107,9 @@ export function buildAuthorization(
   expiryTick: number,
 ): TacticalAuthorization {
   const isOff = isOffensiveOperation(operation.type);
-  const valid = !operationAborted
-    && (isOff ? warPosture === "war" : warPosture === "war" || warPosture === "fortify");
+  const valid =
+    !operationAborted &&
+    (isOff ? warPosture === "war" : warPosture === "war" || warPosture === "fortify");
 
   return {
     state: valid ? "AUTHORIZED" : operationAborted ? "REVOKED" : "PENDING",
@@ -131,12 +128,14 @@ export function buildAuthorization(
 
 /** 判断 OperationType 是否为进攻性。 */
 export function isOffensiveOperation(type: string): boolean {
-  return type === "ASSAULT"
-    || type === "RAID"
-    || type === "SIEGE"
-    || type === "HARASS"
-    || type === "CONTROLLER_ATTACK"
-    || type === "REMOTE_DENIAL";
+  return (
+    type === "ASSAULT" ||
+    type === "RAID" ||
+    type === "SIEGE" ||
+    type === "HARASS" ||
+    type === "CONTROLLER_ATTACK" ||
+    type === "REMOTE_DENIAL"
+  );
 }
 
 // ═══════════════════════════════════════════════════════════

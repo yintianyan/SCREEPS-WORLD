@@ -2,7 +2,13 @@
 import { CONFIG } from "../config";
 import { selectBody } from "../config/bodies";
 import type { Priority, System, TickContext, ColonyState, RoomSnapshot } from "../kernel/contracts";
-import { selectRemoteTargets, shouldPauseOperation, effectiveMaxOperations, scoreRemoteCandidate, roomLinearDistance } from "../domain/remote/targeting";
+import {
+  selectRemoteTargets,
+  shouldPauseOperation,
+  effectiveMaxOperations,
+  scoreRemoteCandidate,
+  roomLinearDistance,
+} from "../domain/remote/targeting";
 import { INVADER_USERNAME, isHostilePlayerReservation } from "../domain/intel";
 import { evaluateRemoteDemand, type RemoteCreepSummary } from "../domain/remote/demand";
 import { remoteReplacementThreshold, computePerHaulerThroughput } from "../domain/remote/staffing";
@@ -80,10 +86,7 @@ export const remoteMiningManagerSystem: System = {
       const activeCount = countActiveOps(remoteOps);
       const newOpsAllowed = Memory.kernel?.strategy?.newRemoteOpsAllowed === true;
       // 上限 = 消化能力（storage 有无）与生产能力（spawn 数）取最小。
-      const maxOps = effectiveMaxOperations(
-        snapshot.storage !== undefined,
-        snapshot.spawns.length,
-      );
+      const maxOps = effectiveMaxOperations(snapshot.storage !== undefined, snapshot.spawns.length);
       // R7b：算力容量加码 — abundant 档（余量稳定充足）放宽 1 个远矿点，
       // constrained/tight 不额外收紧（本地收缩已由 tier 看门狗与 posture 处理）。
       const capacityTier = Memory.kernel?.capacity?.tier;
@@ -102,15 +105,15 @@ export const remoteMiningManagerSystem: System = {
           intel[roomName]?.pathCost ?? (op.haulerNeed ?? 1) * 20;
         const active = Object.entries(remoteOps)
           .filter(([, op]) => op.state === "active")
-          .sort((a, b) =>
-            costOf(b[0], b[1]) - costOf(a[0], a[1]) ||
-            a[0].localeCompare(b[0]),
-          );
+          .sort((a, b) => costOf(b[0], b[1]) - costOf(a[0], a[1]) || a[0].localeCompare(b[0]));
         for (let i = 0; i < activeCount - maxOpsWithCapacity; i++) {
           const [roomName, op] = active[i]!;
           op.state = "abandoned";
-          log.info("remote-mining-manager", `remote/${snapshot.roomName}: 超额收缩，废弃 ${roomName}` +
-            `（active ${activeCount} > 上限 ${maxOpsWithCapacity}，通勤成本=${costOf(roomName, op)}）`,);
+          log.info(
+            "remote-mining-manager",
+            `remote/${snapshot.roomName}: 超额收缩，废弃 ${roomName}` +
+              `（active ${activeCount} > 上限 ${maxOpsWithCapacity}，通勤成本=${costOf(roomName, op)}）`,
+          );
         }
       }
 
@@ -123,7 +126,9 @@ export const remoteMiningManagerSystem: System = {
       // haulerNeed 同步切到 2:1 道路满速档（运力 ×1.5，编制可缩编）。
       const roadStatus = detectRoadCoverage(snapshot.roomName, remoteOps);
       // haulerCapacity 取无路档（保守下界）做评选，避免道路未覆盖时高估运力。
-      const haulerBody = selectBody("remoteHauler", snapshot.energyCapacityAvailable, { hasRoad: false });
+      const haulerBody = selectBody("remoteHauler", snapshot.energyCapacityAvailable, {
+        hasRoad: false,
+      });
       const haulerCapacity = haulerBody.filter(p => p === CARRY).length * CARRY_CAPACITY;
 
       // 现役 op 周期重估：用当前 pathCost + 当前 body 运力重算 netScore/haulerNeed。
@@ -136,7 +141,14 @@ export const remoteMiningManagerSystem: System = {
       // Plan 的 scope="operation" 请求拥有 Decision Authority（在下方 L295-316 消费）。
       const planForRemote = globalCache().logisticsPlan?.plan;
       const planIsActiveForRemote = planForRemote && planForRemote.plannedAt >= ctx.tick - 100;
-      reevaluateActiveOps(remoteOps, intel, snapshot.roomName, haulerCapacity, roadStatus, ctx.tick);
+      reevaluateActiveOps(
+        remoteOps,
+        intel,
+        snapshot.roomName,
+        haulerCapacity,
+        roadStatus,
+        ctx.tick,
+      );
 
       // A4.4：如果 Plan 有效，记录 reevaluateActiveOps 的 haulerNeed 信号到 Plan 消费日志。
       // Plan 消费逻辑（L295-316）会用 Plan 的 haulerNeed 覆写，reevaluateActiveOps 的结果
@@ -149,7 +161,11 @@ export const remoteMiningManagerSystem: System = {
       // 逐房就绪门（Phase 1b）：帝国姿态放行（newOpsAllowed）之外，本房还须自身经济
       // 成熟才「新开」远矿 — RCL≥roomMinRcl 且 colonyState=normal 且 storage 盈余，
       // 防 RCL4 新占嫩房过早分兵远矿（本该闷头冲级）。现役 op 维护/重估不受影响。
-      if (newOpsAllowed && roomReadyForNewRemote(snapshot, roomMem.colonyState) && activeCount < maxOpsWithCapacity) {
+      if (
+        newOpsAllowed &&
+        roomReadyForNewRemote(snapshot, roomMem.colonyState) &&
+        activeCount < maxOpsWithCapacity
+      ) {
         const candidates = selectRemoteTargets({
           homeRoom: snapshot.roomName,
           intel,
@@ -168,8 +184,7 @@ export const remoteMiningManagerSystem: System = {
           // Invader 预定 = Core 占坑：无视野时也先标 needCoreClear，demand 首波孵
           // clearer 而不是经济编队（否则第一波 harvester 进房即被核心压制、再走
           // 回收→失明）。有视野后 collectRemoteBlockers 会按 lesser/stronghold/clear 校正。
-          const reservedByInvader =
-            intel[candidate.roomName]?.reservedBy === INVADER_USERNAME;
+          const reservedByInvader = intel[candidate.roomName]?.reservedBy === INVADER_USERNAME;
           remoteOps[candidate.roomName] = {
             state: "active",
             sources: candidate.sources,
@@ -205,7 +220,7 @@ export const remoteMiningManagerSystem: System = {
       // A5.1：有视野确认有威胁时，额外调用 decideRemoteDefenseAction() 做结构化决策。
       // decideRemoteDefenseAction 是纯函数 (O(1))，仅在有威胁时调用，CPU 影响可忽略。
       // 决策结果写入 globalCache.remoteDefenseDecisions 供诊断观测。
-      const gRemoteDecisions = globalCache().remoteDefenseDecisions ??= new Map();
+      const gRemoteDecisions = (globalCache().remoteDefenseDecisions ??= new Map());
       gRemoteDecisions.clear(); // 每 interval 清空旧决策
       const posture = Memory.kernel?.strategy?.posture ?? "develop";
       const cpuTier = Memory.kernel?.capacity?.tier ?? "comfortable";
@@ -229,7 +244,12 @@ export const remoteMiningManagerSystem: System = {
         // dangerUntil 失明保护：失明（observed=undefined）且 threatUntil 已清除但
         // dangerUntil 仍有效时，继续冻结经济孵化。该房最近发生过危险事件，
         // 冷却期内不给对手送兵。有视野时信任新鲜观测，不应用此保护。
-        if (observed === undefined && remoteThreats[rn] !== true && op.dangerUntil !== undefined && ctx.tick < op.dangerUntil) {
+        if (
+          observed === undefined &&
+          remoteThreats[rn] !== true &&
+          op.dangerUntil !== undefined &&
+          ctx.tick < op.dangerUntil
+        ) {
           remoteThreats[rn] = true;
         }
 
@@ -238,7 +258,11 @@ export const remoteMiningManagerSystem: System = {
         // 无视野时维持现有 threatUntil 逻辑（失明保持），不做决策（信息不足）。
         if (remoteThreats[rn] === true) {
           const remoteThreatAssessment = buildRemoteThreatAssessment(
-            rn, snapshot.roomName, ctx.tick, op, roomMem.colonyState ?? "normal",
+            rn,
+            snapshot.roomName,
+            ctx.tick,
+            op,
+            roomMem.colonyState ?? "normal",
           );
           if (remoteThreatAssessment) {
             const remoteOpState: RemoteOperationState = {
@@ -247,8 +271,7 @@ export const remoteMiningManagerSystem: System = {
               state: op.state as "active" | "paused" | "abandoned",
               sources: op.sources ?? 1,
               haulerNeed: op.haulerNeed ?? 1,
-              creepCount: remoteCreeps
-                .filter(c => c.remoteTarget === rn).length,
+              creepCount: remoteCreeps.filter(c => c.remoteTarget === rn).length,
               creepInvestment: estimateCreepInvestment(op, snapshot.energyCapacityAvailable),
               pathCost: intel[rn]?.pathCost,
               threatUntil: op.threatUntil,
@@ -269,16 +292,12 @@ export const remoteMiningManagerSystem: System = {
             };
             const logisticsContext: LogisticsContext = {
               avgHaulerCommute: intel[rn]?.pathCost ?? 1,
-              availableHaulers: remoteCreeps
-                .filter(c => c.role === "remoteHauler").length,
+              availableHaulers: remoteCreeps.filter(c => c.role === "remoteHauler").length,
             };
             const defenderBody = selectBody("remoteDefender", snapshot.energyCapacityAvailable);
             const militaryContext: MilitaryContext = {
-              availableDefenders: remoteCreeps
-                .filter(c => c.role === "remoteDefender").length,
-              defenderSpawnCost: defenderBody.reduce(
-                (sum, p) => sum + BODYPART_COST[p], 0,
-              ),
+              availableDefenders: remoteCreeps.filter(c => c.role === "remoteDefender").length,
+              defenderSpawnCost: defenderBody.reduce((sum, p) => sum + BODYPART_COST[p], 0),
               defenderCommuteTicks: (intel[rn]?.pathCost ?? 1) * 50,
               atWar: posture === "war",
             };
@@ -300,8 +319,11 @@ export const remoteMiningManagerSystem: System = {
               recycleRemoteCreepsForRoom(snapshot.roomName, rn);
               op.state = decision.action === "ABORT" ? "abandoned" : "paused";
               op.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
-              log.info("remote-mining-manager", `remote/A5.1: ${snapshot.roomName} → ${rn} ` +
-                `${decision.action} (${decision.reason})`,);
+              log.info(
+                "remote-mining-manager",
+                `remote/A5.1: ${snapshot.roomName} → ${rn} ` +
+                  `${decision.action} (${decision.reason})`,
+              );
             }
           }
         }
@@ -366,16 +388,24 @@ export const remoteMiningManagerSystem: System = {
         const room = Game.rooms[rn];
         if (!room) continue;
         const neutralController =
-          room.controller !== undefined && !room.controller.my && room.controller.owner === undefined;
-        const foreignSpawn = room.find(FIND_HOSTILE_STRUCTURES, {
-          filter: s => s.structureType === STRUCTURE_SPAWN,
-        }).length > 0;
+          room.controller !== undefined &&
+          !room.controller.my &&
+          room.controller.owner === undefined;
+        const foreignSpawn =
+          room.find(FIND_HOSTILE_STRUCTURES, {
+            filter: s => s.structureType === STRUCTURE_SPAWN,
+          }).length > 0;
         dismantleTargets[rn] = neutralController && foreignSpawn;
-        if (!dismantleTargets[rn] && !op.needWallClear) recycleRemoteDismantlers(snapshot.roomName, rn);
+        if (!dismantleTargets[rn] && !op.needWallClear)
+          recycleRemoteDismantlers(snapshot.roomName, rn);
         // 反向清除：当 needWallClear 或 dismantleTargets 有效时，清除旧 tick 遗留的
         // recycle 标记 — 否则 dismantler 被 spawn-manager 回收，无法执行拆墙任务。
         if (dismantleTargets[rn] || op.needWallClear) {
-          for (const entry of querySquad({ home: snapshot.roomName, remoteTarget: rn, role: "dismantler" })) {
+          for (const entry of querySquad({
+            home: snapshot.roomName,
+            remoteTarget: rn,
+            role: "dismantler",
+          })) {
             const c = Game.creeps[entry.name];
             if (c && c.memory.recycle) c.memory.recycle = false;
           }
@@ -389,7 +419,6 @@ export const remoteMiningManagerSystem: System = {
       if (CONFIG.remote.enableRoadPlanning) {
         planRemotePathRoads(snapshot.roomName, remoteOps, ctx);
       }
-
 
       // 威胁写入 remoteOps（P1-G：从 intel.dangerUntil 迁移至此）：出现威胁的远矿房
       // 打危险冷却 — 冷却期内不作为新远矿/扩张候选（止损：不给对手送兵）；现役运营
@@ -432,9 +461,7 @@ export const remoteMiningManagerSystem: System = {
       // 运行完毕，本块只跳过新请求推送；下方 recycleExcessRemoteCreeps 仍执行
       // （清理双孵事故冗余）。恢复 normal 后下次 run（≤ managerInterval）即恢复推送。
       const crisisPaused =
-        colonyState === "recovery" ||
-        colonyState === "bootstrap" ||
-        colonyState === "defense";
+        colonyState === "recovery" || colonyState === "bootstrap" || colonyState === "defense";
       if (!crisisPaused) {
         const { requests } = evaluateRemoteDemand({
           homeRoom: snapshot.roomName,
@@ -483,21 +510,41 @@ export const remoteMiningManagerSystem: System = {
               // 替代旧的 1000 energy/hauler 粗算。pathCost 缺失时回退保守粗算。
               const hasRoad = roadStatus[planReq.destination.room] ?? false;
               const pathCost = intel[planReq.destination.room]?.pathCost;
-              const haulerBodyForCalc = selectBody("remoteHauler", snapshot.energyCapacityAvailable, { hasRoad });
+              const haulerBodyForCalc = selectBody(
+                "remoteHauler",
+                snapshot.energyCapacityAvailable,
+                { hasRoad },
+              );
               const carryParts = haulerBodyForCalc.filter(p => p === CARRY).length;
-              const planHaulerNeed = pathCost !== undefined
-                ? Math.max(1, Math.min(
-                    CONFIG.remote.haulersMax,
-                    Math.ceil(planReq.amount / Math.max(0.01, computePerHaulerThroughput(carryParts, pathCost, hasRoad).throughput)),
-                  ))
-                : Math.max(1, Math.min(CONFIG.remote.haulersMax, Math.ceil(planReq.amount / 1000)));
+              const planHaulerNeed =
+                pathCost !== undefined
+                  ? Math.max(
+                      1,
+                      Math.min(
+                        CONFIG.remote.haulersMax,
+                        Math.ceil(
+                          planReq.amount /
+                            Math.max(
+                              0.01,
+                              computePerHaulerThroughput(carryParts, pathCost, hasRoad).throughput,
+                            ),
+                        ),
+                      ),
+                    )
+                  : Math.max(
+                      1,
+                      Math.min(CONFIG.remote.haulersMax, Math.ceil(planReq.amount / 1000)),
+                    );
               // A4.4：Plan 拥有 Decision Authority — 可增可减。
               if (planHaulerNeed !== (targetOp.haulerNeed ?? 0)) {
                 const oldNeed = targetOp.haulerNeed ?? 0;
                 targetOp.haulerNeed = planHaulerNeed;
                 const direction = planHaulerNeed > oldNeed ? "increase" : "decrease";
-                log.info("remote-mining-manager", `remote/plan-calibrate: ${snapshot.roomName} → ${planReq.destination.room}` +
-                  ` haulerNeed=${planHaulerNeed} (Plan ${direction} from ${oldNeed}, amount=${planReq.amount})`,);
+                log.info(
+                  "remote-mining-manager",
+                  `remote/plan-calibrate: ${snapshot.roomName} → ${planReq.destination.room}` +
+                    ` haulerNeed=${planHaulerNeed} (Plan ${direction} from ${oldNeed}, amount=${planReq.amount})`,
+                );
               }
             }
           }
@@ -511,11 +558,7 @@ export const remoteMiningManagerSystem: System = {
       }
 
       // 5. 回收过量远矿 creep（超过配置上限的旧 creep 标记回收，节省 CPU）。
-      recycleExcessRemoteCreeps(
-        snapshot.roomName,
-        remoteOps,
-        intel,
-      );
+      recycleExcessRemoteCreeps(snapshot.roomName, remoteOps, intel);
     }
   },
 };
@@ -558,9 +601,12 @@ function reevaluateActiveOps(
         op.lowScoreSince = tick; // 首次跌破 — 起算宽限期。
       } else if (tick - op.lowScoreSince > CONFIG.remote.lowScoreGrace) {
         op.state = "abandoned";
-        log.info("remote-mining-manager", `remote/${homeRoom}: 经济重估废弃 ${roomName}` +
-          `（netScore=${netScore.toFixed(1)} < ${CONFIG.remote.minNetScore}，` +
-          `持续 ${tick - op.lowScoreSince} tick）`,);
+        log.info(
+          "remote-mining-manager",
+          `remote/${homeRoom}: 经济重估废弃 ${roomName}` +
+            `（netScore=${netScore.toFixed(1)} < ${CONFIG.remote.minNetScore}，` +
+            `持续 ${tick - op.lowScoreSince} tick）`,
+        );
       }
     } else if (op.lowScoreSince !== undefined) {
       op.lowScoreSince = undefined; // 回升到门槛以上 — 清除低分计时。
@@ -636,10 +682,14 @@ function maintainExistingOps(
       const exits = Game.map.describeExits(roomName);
       if (exits) {
         const exitDirs = Object.keys(exits).map(Number);
-        if (exitDirs.length > 0 && exitDirs.every((d) => sealed.includes(d))) {
+        if (exitDirs.length > 0 && exitDirs.every(d => sealed.includes(d))) {
           op.state = "abandoned";
-          log.info("remote-mining-manager", "[" + tick + "] remote/" + (myUsername ?? "?") + ": 入口封死废弃 " + roomName +
-            "（sealedExits=[" + sealed.join(",") + "]，编队无法进入）",);
+          log.info(
+            "remote-mining-manager",
+            `[${tick}] remote/${myUsername ?? "?"}: 入口封死废弃 ${
+              roomName
+            }（sealedExits=[${sealed.join(",")}]，编队无法进入）`,
+          );
           continue;
         }
       }
@@ -760,8 +810,12 @@ function censusStalledOps(
         op.stallSince = tick;
       } else if (tick - op.stallSince > CONFIG.remote.stallAbandonTicks) {
         op.state = "abandoned";
-        log.info("remote-mining-manager", "[" + tick + "] remote/" + homeRoom + ": 空转止损废弃 " + roomName +
-          "（编队 " + entry.total + " 只全员空转持续 " + (tick - op.stallSince) + " tick）",);
+        log.info(
+          "remote-mining-manager",
+          `[${tick}] remote/${homeRoom}: 空转止损废弃 ${roomName}（编队 ${
+            entry.total
+          } 只全员空转持续 ${tick - op.stallSince} tick）`,
+        );
       }
     } else if (op.stallSince !== undefined) {
       op.stallSince = undefined;
@@ -805,7 +859,10 @@ export function recycleExcessRemoteCreeps(
   travelCosts?: Readonly<Record<string, { pathCost?: number }>>,
 ): void {
   // 收集每个 active 目标的远矿 creep，按角色分组。
-  const byTarget = new Map<string, { harvester: Creep[]; hauler: Creep[]; reserver: Creep[]; defender: Creep[] }>();
+  const byTarget = new Map<
+    string,
+    { harvester: Creep[]; hauler: Creep[]; reserver: Creep[]; defender: Creep[] }
+  >();
 
   for (const entry of querySquad({ home: homeRoom })) {
     const creep = Game.creeps[entry.name];
@@ -832,8 +889,10 @@ export function recycleExcessRemoteCreeps(
   // 替换窗口判定 — 与 demand 的 findReplacement 完全同口径。
   const inReplacementWindow = (c: Creep): boolean => {
     const pathCost = travelCosts?.[c.memory.remoteTarget ?? ""]?.pathCost;
-    return c.ticksToLive !== undefined &&
-      c.ticksToLive <= remoteReplacementThreshold(c.body.length, pathCost);
+    return (
+      c.ticksToLive !== undefined &&
+      c.ticksToLive <= remoteReplacementThreshold(c.body.length, pathCost)
+    );
   };
 
   // 组内标记：豁免垂死交接者后，健康成员超出配额的部分回收（保留最年轻）。
@@ -878,7 +937,14 @@ function collectRemoteCreeps(homeRoom: string): RemoteCreepSummary[] {
     if (creep.memory.recycle === true) continue;
     const role = creep.memory.role ?? "unknown";
     // 只收集远矿角色（dismantler = 外国前置 spawn 拆除任务编制，需计入挡重复孵化）。
-    if (role !== "remoteHarvester" && role !== "remoteHauler" && role !== "reserver" && role !== "remoteDefender" && role !== "coreClearer" && role !== "dismantler") {
+    if (
+      role !== "remoteHarvester" &&
+      role !== "remoteHauler" &&
+      role !== "reserver" &&
+      role !== "remoteDefender" &&
+      role !== "coreClearer" &&
+      role !== "dismantler"
+    ) {
       continue;
     }
     result.push({
@@ -896,7 +962,9 @@ function collectRemoteCreeps(homeRoom: string): RemoteCreepSummary[] {
  * 收集远矿房威胁信息 — 检测 active 运营的远矿房是否有 hostile creep。
  * 用于触发 remoteDefender 孵化需求。导出供接线测试验证 body-aware 口径。
  */
-export function collectRemoteThreats(remoteOps: Readonly<Record<string, RemoteOp>>): Record<string, boolean> {
+export function collectRemoteThreats(
+  remoteOps: Readonly<Record<string, RemoteOp>>,
+): Record<string, boolean> {
   const threats: Record<string, boolean> = {};
   for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") continue;
@@ -917,10 +985,7 @@ export function collectRemoteThreats(remoteOps: Readonly<Record<string, RemoteOp
  * - stronghold：大要塞（level≥1 或带守卫 creep/防御建筑），需规避等自然 decay。
  */
 export type RemoteBlockerState =
-  | { kind: "unknown" }
-  | { kind: "clear" }
-  | { kind: "lesser" }
-  | { kind: "stronghold" };
+  { kind: "unknown" } | { kind: "clear" } | { kind: "lesser" } | { kind: "stronghold" };
 
 /**
  * 纯函数：给定核心 + 守卫信息判定压制类型。导出供单测。
@@ -935,7 +1000,7 @@ export function classifyInvaderCores(input: {
   // 守卫判定：房内有任何敌对 creep 即视为被守卫（大要塞必带 NPC 护卫；次级核心无 creep）。
   // 次级(level 0)核心不刷护卫、不反击 —— 派轻量 clearer 拆；大要塞(level≥1)或带守卫 → 规避。
   const hasGuards = input.hostileCreepCount > 0;
-  const anyStronghold = input.cores.some((c) => (c.level ?? 1) >= 1);
+  const anyStronghold = input.cores.some(c => (c.level ?? 1) >= 1);
   return anyStronghold || hasGuards ? "stronghold" : "lesser";
 }
 
@@ -956,17 +1021,26 @@ export function collectRemoteBlockers(
   for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state !== "active") continue;
     const room = Game.rooms[roomName];
-    if (!room) { blockers[roomName] = { kind: "unknown" }; continue; }
+    if (!room) {
+      blockers[roomName] = { kind: "unknown" };
+      continue;
+    }
     const cores = room.find(FIND_HOSTILE_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_INVADER_CORE,
+      filter: s => s.structureType === STRUCTURE_INVADER_CORE,
     }) as StructureInvaderCore[];
-    if (cores.length === 0) { blockers[roomName] = { kind: "clear" }; continue; }
+    if (cores.length === 0) {
+      blockers[roomName] = { kind: "clear" };
+      continue;
+    }
     // C1-FINDING-07: 复用 collectRemoteThreats 已采集的 hostile 信息，避免重复 FIND_HOSTILE_CREEPS
-    const hostileCreepCount = remoteThreats && remoteThreats[roomName] !== undefined
-      ? (remoteThreats[roomName] ? 1 : 0)
-      : room.find(FIND_HOSTILE_CREEPS).length;
+    const hostileCreepCount =
+      remoteThreats && remoteThreats[roomName] !== undefined
+        ? remoteThreats[roomName]
+          ? 1
+          : 0
+        : room.find(FIND_HOSTILE_CREEPS).length;
     const kind = classifyInvaderCores({
-      cores: cores.map((c) => ({ level: c.level })),
+      cores: cores.map(c => ({ level: c.level })),
       hostileCreepCount,
     });
     blockers[roomName] = { kind };
@@ -1041,7 +1115,10 @@ export function fulfillContainerRequests(
     const sid = creep.memory.sourceId as string | undefined;
     if (!sid) continue;
     let arr = requestingByRemote.get(target);
-    if (!arr) { arr = []; requestingByRemote.set(target, arr); }
+    if (!arr) {
+      arr = [];
+      requestingByRemote.set(target, arr);
+    }
     arr.push(creep);
   }
 
@@ -1079,7 +1156,10 @@ export function fulfillContainerRequests(
       const sid = creep.memory.sourceId as string | undefined;
       if (!sid) continue;
       let group = requestingBySource.get(sid);
-      if (!group) { group = []; requestingBySource.set(sid, group); }
+      if (!group) {
+        group = [];
+        requestingBySource.set(sid, group);
+      }
       group.push(creep);
     }
 
@@ -1279,7 +1359,10 @@ export function selectRemoteRoadTiles(
     if (pos.x <= 0 || pos.x >= 49 || pos.y <= 0 || pos.y >= 49) continue; // 出口行留给通行
     let nearSource = false;
     for (const s of sources) {
-      if (Math.abs(s.x - pos.x) <= 1 && Math.abs(s.y - pos.y) <= 1) { nearSource = true; break; }
+      if (Math.abs(s.x - pos.x) <= 1 && Math.abs(s.y - pos.y) <= 1) {
+        nearSource = true;
+        break;
+      }
     }
     if (nearSource) continue;
     out.push(pos);
@@ -1289,7 +1372,11 @@ export function selectRemoteRoadTiles(
 
 /** 拆除任务结束（spawn 拆完 / 对方 claim）→ 仅回收该房的 dismantler，经济 creep 不动。 */
 function recycleRemoteDismantlers(homeRoom: string, targetRoom: string): void {
-  for (const entry of querySquad({ home: homeRoom, remoteTarget: targetRoom, role: "dismantler" })) {
+  for (const entry of querySquad({
+    home: homeRoom,
+    remoteTarget: targetRoom,
+    role: "dismantler",
+  })) {
     const creep = Game.creeps[entry.name];
     if (!creep || creep.memory.recycle) continue;
     creep.memory.recycle = true;
@@ -1319,7 +1406,8 @@ function planRemotePathRoads(
   for (const rn of Object.keys(remoteOps)) {
     const room = Game.rooms[rn];
     if (!room) continue;
-    empireRoadPending += room.find(FIND_MY_CONSTRUCTION_SITES)
+    empireRoadPending += room
+      .find(FIND_MY_CONSTRUCTION_SITES)
       .filter(s => s.structureType === STRUCTURE_ROAD).length;
   }
   let created = 0;
@@ -1348,12 +1436,21 @@ function planRemotePathRoads(
         filter: st => st.structureType === STRUCTURE_CONTAINER,
       })[0] as StructureContainer | undefined;
       const goal = container ? container.pos : source.pos;
-      const result = PathFinder.search(anchor.pos, { pos: goal, range: 1 }, {
-        maxRooms: 2,
-        plainCost: 2,
-        swampCost: 10,
-      });
-      const tiles = selectRemoteRoadTiles(result.path, rn, sources.map(s => ({ x: s.pos.x, y: s.pos.y })), blockedKeys);
+      const result = PathFinder.search(
+        anchor.pos,
+        { pos: goal, range: 1 },
+        {
+          maxRooms: 2,
+          plainCost: 2,
+          swampCost: 10,
+        },
+      );
+      const tiles = selectRemoteRoadTiles(
+        result.path,
+        rn,
+        sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
+        blockedKeys,
+      );
       for (const pos of tiles) {
         if (created >= CONFIG.remote.roadSitesPerRun) break;
         if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) break;
@@ -1384,10 +1481,7 @@ function planRemotePathRoads(
  * 失明时维持上一判定（不清除标记），防视野消失 → 清标 → 孵化恢复 → 路仍断 →
  * 新视野 → 重新标记的抖动循环。墙被拆除后（路径上无 wall）清除标记 + 回收 dismantler。
  */
-function detectPathWallBlockers(
-  homeRoom: string,
-  remoteOps: Record<string, RemoteOp>,
-): void {
+function detectPathWallBlockers(homeRoom: string, remoteOps: Record<string, RemoteOp>): void {
   const home = Game.rooms[homeRoom];
   if (!home) return;
   const anchor = home.storage ?? home.find(FIND_MY_SPAWNS)[0];
@@ -1419,11 +1513,15 @@ function detectPathWallBlockers(
         filter: st => st.structureType === STRUCTURE_CONTAINER,
       })[0] as StructureContainer | undefined;
       const goal = container ? container.pos : source.pos;
-      const result = PathFinder.search(anchor.pos, { pos: goal, range: 1 }, {
-        maxRooms: 2,
-        plainCost: 2,
-        swampCost: 10,
-      });
+      const result = PathFinder.search(
+        anchor.pos,
+        { pos: goal, range: 1 },
+        {
+          maxRooms: 2,
+          plainCost: 2,
+          swampCost: 10,
+        },
+      );
       for (const pos of result.path) {
         if (pos.roomName !== rn) continue;
         if (wallKeys.has(`${pos.x},${pos.y}`)) {
@@ -1467,11 +1565,20 @@ function detectRoadCoverage(
     if (s.structureType === STRUCTURE_ROAD) homeRoadKeys.add(`${s.pos.x},${s.pos.y}`);
   }
   for (const [rn, op] of Object.entries(remoteOps)) {
-    if (op.state !== "active") { result[rn] = false; continue; }
+    if (op.state !== "active") {
+      result[rn] = false;
+      continue;
+    }
     const room = Game.rooms[rn];
-    if (!room) { result[rn] = false; continue; }
+    if (!room) {
+      result[rn] = false;
+      continue;
+    }
     const sources = room.find(FIND_SOURCES);
-    if (sources.length === 0) { result[rn] = false; continue; }
+    if (sources.length === 0) {
+      result[rn] = false;
+      continue;
+    }
     const roadKeys = new Set<string>();
     for (const s of room.find(FIND_STRUCTURES)) {
       if (s.structureType === STRUCTURE_ROAD) roadKeys.add(`${s.pos.x},${s.pos.y}`);
@@ -1483,11 +1590,15 @@ function detectRoadCoverage(
         filter: st => st.structureType === STRUCTURE_CONTAINER,
       })[0] as StructureContainer | undefined;
       const goal = container ? container.pos : source.pos;
-      const searchResult = PathFinder.search(anchor.pos, { pos: goal, range: 1 }, {
-        maxRooms: 2,
-        plainCost: 2,
-        swampCost: 10,
-      });
+      const searchResult = PathFinder.search(
+        anchor.pos,
+        { pos: goal, range: 1 },
+        {
+          maxRooms: 2,
+          plainCost: 2,
+          swampCost: 10,
+        },
+      );
       for (const pos of searchResult.path) {
         if (pos.roomName !== rn && pos.roomName !== homeRoom) continue;
         const key = `${pos.x},${pos.y}`;

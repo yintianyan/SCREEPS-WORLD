@@ -212,7 +212,13 @@ describe("A5.3.1-REC-003: Recovery unavailable → escalation 而不是无限 re
     const action = mapAbortToRecoveryAction(signal)!;
 
     let record = createActionRecord(action, 1000, 3);
-    record = { ...record, attempts: 2, state: "failed" as const, updatedAt: 1500, failureReason: "test failure" };
+    record = {
+      ...record,
+      attempts: 2,
+      state: "failed" as const,
+      updatedAt: 1500,
+      failureReason: "test failure",
+    };
 
     const escalation = evaluateEscalation({
       failedRecord: record,

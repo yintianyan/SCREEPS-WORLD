@@ -19,8 +19,8 @@ describe("runMigrations — 降版保护", () => {
     try {
       expect(() => runMigrations()).not.toThrow();
       const warns = spy.mock.calls
-        .map((c) => String(c[0]))
-        .filter((s) => s.includes("schemaVersion=99"));
+        .map(c => String(c[0]))
+        .filter(s => s.includes("schemaVersion=99"));
       expect(warns).toHaveLength(1);
     } finally {
       spy.mockRestore();
@@ -36,7 +36,7 @@ describe("runMigrations — 降版保护", () => {
       runMigrations();
       runMigrations();
       runMigrations();
-      const warns = spy.mock.calls.filter((c) => String(c[0]).includes("schemaVersion=99"));
+      const warns = spy.mock.calls.filter(c => String(c[0]).includes("schemaVersion=99"));
       expect(warns).toHaveLength(1);
     } finally {
       spy.mockRestore();
@@ -48,7 +48,7 @@ describe("runMigrations — 降版保护", () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
       runMigrations();
-      const warns = spy.mock.calls.filter((c) => String(c[0]).includes("[schema]"));
+      const warns = spy.mock.calls.filter(c => String(c[0]).includes("[schema]"));
       expect(warns).toHaveLength(0);
     } finally {
       spy.mockRestore();

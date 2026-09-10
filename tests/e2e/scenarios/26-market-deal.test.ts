@@ -85,64 +85,70 @@ describe("E2E-026 市场交易链路 — NPC 订单注入 + deal 成交结算", 
     const creditsBefore = botUserBefore?.money ?? 0;
 
     // NPC terminal deal 前的 energy
-    const npcTerminalBefore = await db["rooms.objects"].findOne({ room: NPC_ROOM, type: "terminal" });
+    const npcTerminalBefore = await db["rooms.objects"].findOne({
+      room: NPC_ROOM,
+      type: "terminal",
+    });
     const npcTerminalEnergyBefore = npcTerminalBefore?.store?.energy ?? 0;
 
     // NPC 订单 deal 前的 remainingAmount
-    const [npcOrderBefore] = await db["market.orders"].find({ resourceType: "energy", type: "sell" });
+    const [npcOrderBefore] = await db["market.orders"].find({
+      resourceType: "energy",
+      type: "sell",
+    });
     const orderRemainingBefore = npcOrderBefore?.remainingAmount ?? 0;
 
     console.log(
       `[deal-before] botTerminalEnergy=${botTerminalEnergyBefore} ` +
-      `credits=${creditsBefore} npcTerminalEnergy=${npcTerminalEnergyBefore} ` +
-      `orderRemaining=${orderRemainingBefore}`,
+        `credits=${creditsBefore} npcTerminalEnergy=${npcTerminalEnergyBefore} ` +
+        `orderRemaining=${orderRemainingBefore}`,
     );
 
     // ── 运行 400 tick（terminal-manager interval=200，至少触发一次）──
     const snapshots = await runner.runTicks(400);
-    const logs = snapshots.flatMap((s) => s.consoleLogs);
+    const logs = snapshots.flatMap(s => s.consoleLogs);
     errorsSeen = logs.filter(isJsError).length;
 
     // 探针：通过 console 检查市场 API 可用性和订单可见性
     await runner.bot.sendConsole(
       'console.log("MKT t=" + Game.time + ' +
-      '" market=" + typeof Game.market.getAllOrders + ' +
-      '" credits=" + Game.market.credits + ' +
-      '" deal=" + typeof Game.market.deal)',
+        '" market=" + typeof Game.market.getAllOrders + ' +
+        '" credits=" + Game.market.credits + ' +
+        '" deal=" + typeof Game.market.deal)',
     );
     const probeSnaps = await runner.runTicks(2);
-    const probeLogs = probeSnaps.flatMap((s) => s.consoleLogs);
-    const mkProbe = probeLogs.find((l) => l.includes("MKT t="));
+    const probeLogs = probeSnaps.flatMap(s => s.consoleLogs);
+    const mkProbe = probeLogs.find(l => l.includes("MKT t="));
     if (mkProbe) console.log(`[market-probe] ${mkProbe}`);
 
     // 探针：检查 getAllOrders 返回的订单
     await runner.bot.sendConsole(
       'var orders = Game.market.getAllOrders({resourceType: "energy"}); ' +
-      'console.log("ORDERS t=" + Game.time + " count=" + orders.length + ' +
-      '" sell=" + orders.filter(o=>o.type==="sell").length + ' +
-      '" buy=" + orders.filter(o=>o.type==="buy").length)',
+        'console.log("ORDERS t=" + Game.time + " count=" + orders.length + ' +
+        '" sell=" + orders.filter(o=>o.type==="sell").length + ' +
+        '" buy=" + orders.filter(o=>o.type==="buy").length)',
     );
     const orderSnaps = await runner.runTicks(2);
-    const orderLogs = orderSnaps.flatMap((s) => s.consoleLogs);
-    const ordProbe = orderLogs.find((l) => l.includes("ORDERS t="));
+    const orderLogs = orderSnaps.flatMap(s => s.consoleLogs);
+    const ordProbe = orderLogs.find(l => l.includes("ORDERS t="));
     if (ordProbe) console.log(`[market-orders] ${ordProbe}`);
 
     // 探针：诊断 terminal-manager 执行条件
     await runner.bot.sendConsole(
-      'var term = Game.rooms["' + ROOM + '"] && Game.rooms["' + ROOM + '"].terminal;' +
-      'var stor = Game.rooms["' + ROOM + '"] && Game.rooms["' + ROOM + '"].storage;' +
-      'console.log("DIAG t=" + Game.time + ' +
-      '" tier=" + (typeof Memory.kernel !== "undefined" && Memory.kernel.cpuTier || "?") + ' +
-      '" bucket=" + Game.cpu.bucket + ' +
-      '" hasTerminal=" + !!term + ' +
-      '" terminalCooldown=" + (term ? term.cooldown : "?") + ' +
-      '" terminalEnergy=" + (term ? term.store.energy : "?") + ' +
-      '" storageEnergy=" + (stor ? stor.store.energy : "?") + ' +
-      '" credits=" + Game.market.credits)',
+      `var term = Game.rooms["${ROOM}"] && Game.rooms["${ROOM}"].terminal;` +
+        `var stor = Game.rooms["${ROOM}"] && Game.rooms["${ROOM}"].storage;` +
+        `console.log("DIAG t=" + Game.time + ` +
+        `" tier=" + (typeof Memory.kernel !== "undefined" && Memory.kernel.cpuTier || "?") + ` +
+        `" bucket=" + Game.cpu.bucket + ` +
+        `" hasTerminal=" + !!term + ` +
+        `" terminalCooldown=" + (term ? term.cooldown : "?") + ` +
+        `" terminalEnergy=" + (term ? term.store.energy : "?") + ` +
+        `" storageEnergy=" + (stor ? stor.store.energy : "?") + ` +
+        `" credits=" + Game.market.credits)`,
     );
     const diagSnaps = await runner.runTicks(2);
-    const diagLogs = diagSnaps.flatMap((s) => s.consoleLogs);
-    const diagProbe = diagLogs.find((l) => l.includes("DIAG t="));
+    const diagLogs = diagSnaps.flatMap(s => s.consoleLogs);
+    const diagProbe = diagLogs.find(l => l.includes("DIAG t="));
     if (diagProbe) console.log(`[terminal-diag] ${diagProbe}`);
 
     // ── 采集 deal 后快照 ──
@@ -152,10 +158,16 @@ describe("E2E-026 市场交易链路 — NPC 订单注入 + deal 成交结算", 
     const [botUserAfter] = await db.users.find({ username: "bot" });
     const creditsAfter = botUserAfter?.money ?? 0;
 
-    const npcTerminalAfter = await db["rooms.objects"].findOne({ room: NPC_ROOM, type: "terminal" });
+    const npcTerminalAfter = await db["rooms.objects"].findOne({
+      room: NPC_ROOM,
+      type: "terminal",
+    });
     const npcTerminalEnergyAfter = npcTerminalAfter?.store?.energy ?? 0;
 
-    const [npcOrderAfter] = await db["market.orders"].find({ resourceType: "energy", type: "sell" });
+    const [npcOrderAfter] = await db["market.orders"].find({
+      resourceType: "energy",
+      type: "sell",
+    });
     const orderRemainingAfter = npcOrderAfter?.remainingAmount ?? 0;
 
     // 检查 terminal 冷却
@@ -163,8 +175,8 @@ describe("E2E-026 市场交易链路 — NPC 订单注入 + deal 成交结算", 
 
     console.log(
       `[deal-after] botTerminalEnergy=${botTerminalEnergyAfter} ` +
-      `credits=${creditsAfter} npcTerminalEnergy=${npcTerminalEnergyAfter} ` +
-      `orderRemaining=${orderRemainingAfter} cooldown=${terminalCooldown}`,
+        `credits=${creditsAfter} npcTerminalEnergy=${npcTerminalEnergyAfter} ` +
+        `orderRemaining=${orderRemainingAfter} cooldown=${terminalCooldown}`,
     );
 
     // ── 断言 ──
@@ -202,10 +214,14 @@ describe("E2E-026 市场交易链路 — NPC 订单注入 + deal 成交结算", 
       }
       // 如果 order remaining 变化，应该是减少（订单被吃）
       if (orderRemainingAfter !== orderRemainingBefore) {
-        expect(orderRemainingAfter, "订单 remainingAmount 应减少").toBeLessThan(orderRemainingBefore);
+        expect(orderRemainingAfter, "订单 remainingAmount 应减少").toBeLessThan(
+          orderRemainingBefore,
+        );
       }
     } else {
-      console.log("[deal-skipped] 400 tick 内 terminal-manager 未触发 deal（可能因 tier/bucket/cooldown 前置条件）");
+      console.log(
+        "[deal-skipped] 400 tick 内 terminal-manager 未触发 deal（可能因 tier/bucket/cooldown 前置条件）",
+      );
     }
 
     // 5. Memory 有界
@@ -215,9 +231,9 @@ describe("E2E-026 市场交易链路 — NPC 订单注入 + deal 成交结算", 
 
     console.log(
       `[soak-evidence] market-deal binding: schemaVersion=43 ticks=400 ` +
-      `room=${ROOM} npcRoom=${NPC_ROOM} jsErrors=${errorsSeen} ` +
-      `dealExecuted=${dealExecuted} ` +
-      `collectedAt=${new Date().toISOString()}`,
+        `room=${ROOM} npcRoom=${NPC_ROOM} jsErrors=${errorsSeen} ` +
+        `dealExecuted=${dealExecuted} ` +
+        `collectedAt=${new Date().toISOString()}`,
     );
   }, 600000);
 });
