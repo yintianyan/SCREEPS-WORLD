@@ -7,7 +7,10 @@ import { selectBody } from "../../../src/config/bodies";
 const CARRY_CAPACITY = 50;
 
 describe("remote roadStatus — hasRoad 对 haulerNeed 的影响", () => {
-  it("有路时 perHauler 翻倍（effectivePathCost 减半）", () => {
+  it("有路无路 haulerNeed 相同（道路不影响速度，只影响 body 配比选择）", () => {
+    // 新模型：道路不改变 RTT（每 tick 最多 1 格），只影响 selectBody 选择
+    // 2:1 配比（有路，更多 CARRY）或 1:1 配比（无路，平原满速）。
+    // scoreRemoteCandidate 中 haulerCapacity 由调用方传入，hasRoad 不再折半 pathCost。
     const noRoad = scoreRemoteCandidate({
       pathCost: 100,
       linearDistance: 1,
@@ -22,13 +25,14 @@ describe("remote roadStatus — hasRoad 对 haulerNeed 的影响", () => {
       haulerCapacity: 800,
       hasRoad: true,
     });
-    expect(hasRoad.haulerNeed).toBeLessThanOrEqual(noRoad.haulerNeed);
-    if (noRoad.haulerNeed > 1) {
-      expect(hasRoad.haulerNeed).toBeLessThan(noRoad.haulerNeed);
-    }
+    // 同 haulerCapacity + 同 pathCost → 同 perHauler → 同 haulerNeed
+    expect(hasRoad.haulerNeed).toBe(noRoad.haulerNeed);
   });
 
-  it("近房有路时 haulerNeed 降到 1", () => {
+  it("近房 haulerNeed 降到 1-2", () => {
+    // 新模型：pathCost=50, RTT=100, perHauler=800/100=8, demand=10 → ceil(10/8)=2
+    // 旧模型错误地折半 pathCost → perHauler=16 → haulerNeed=1
+    // 新模型正确：pathCost=50 的房间需要 2 只 hauler
     const result = scoreRemoteCandidate({
       pathCost: 50,
       linearDistance: 1,
@@ -36,10 +40,10 @@ describe("remote roadStatus — hasRoad 对 haulerNeed 的影响", () => {
       haulerCapacity: 800,
       hasRoad: true,
     });
-    expect(result.haulerNeed).toBe(1);
+    expect(result.haulerNeed).toBe(2);
   });
 
-  it("远房有路仍可能需要多 hauler", () => {
+  it("远房仍可能需要多 hauler", () => {
     const result = scoreRemoteCandidate({
       pathCost: 200,
       linearDistance: 3,
@@ -98,16 +102,19 @@ describe("remote roadStatus — computePerHaulerThroughput 精确计算", () => 
     expect(throughput).toBeCloseTo(800 / 140, 2);
   });
 
-  it("有路时 roundTripTime = pathCost（速度翻倍）", () => {
+  it("有路时 roundTripTime = pathCost × 2（道路不改变速度）", () => {
+    // 新模型：道路不改变速度（每 tick 最多 1 格），RTT = pathCost × 2
+    // 有路和无路的 RTT 相同；差异在 carryCapacity（有路可用 2:1 配比，更多 CARRY）
     const { throughput, roundTripTime, carryCapacity } = computePerHaulerThroughput(24, 70, true);
     expect(carryCapacity).toBe(1200);
-    expect(roundTripTime).toBe(70);
-    expect(throughput).toBeCloseTo(1200 / 70, 2);
+    expect(roundTripTime).toBe(140); // pathCost × 2 = 70 × 2 = 140
+    expect(throughput).toBeCloseTo(1200 / 140, 2);
   });
 
-  it("有路吞吐量大于无路（同 carry 部件数）", () => {
+  it("有路无路同 carry 部件数时吞吐量相同", () => {
+    // 新模型：道路不影响 RTT，只影响 body 选择（外部 selectBody）
     const noRoad = computePerHaulerThroughput(16, 70, false);
     const hasRoad = computePerHaulerThroughput(16, 70, true);
-    expect(hasRoad.throughput).toBeGreaterThan(noRoad.throughput);
+    expect(hasRoad.throughput).toBe(noRoad.throughput);
   });
 });

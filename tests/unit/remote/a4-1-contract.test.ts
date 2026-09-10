@@ -460,11 +460,11 @@ describe("A4.1: Hauler Sizing", () => {
   it("should compute per-hauler throughput", () => {
     const result = computePerHaulerThroughput(4, 50, true);
     // carryCapacity = 4 × 50 = 200
-    // roundTripTime = ceil(50 × 2 / 2) = 50
-    // throughput = 200 / 50 = 4
+    // roundTripTime = ceil(50 × 2) = 100 (pathCost × 2, 道路不改变速度)
+    // throughput = 200 / 100 = 2
     expect(result.carryCapacity).toBe(200);
-    expect(result.roundTripTime).toBe(50);
-    expect(result.throughput).toBeCloseTo(4);
+    expect(result.roundTripTime).toBe(100);
+    expect(result.throughput).toBeCloseTo(2);
   });
 
   it("should compute required haulers", () => {
@@ -472,16 +472,16 @@ describe("A4.1: Hauler Sizing", () => {
       expectedProduction: 10,
       actualProduction: 10,
       pathCost: 50,
-      hasRoad: true,
+      roadCoverage: true,
       haulerCarryParts: 4,
       haulerMoveParts: 4,
       currentHaulers: 1,
       maxHaulers: 5,
     });
-    // throughput = 4 e/tick per hauler
-    // requiredHaulers = ceil(10 / 4) = 3
-    expect(result.requiredHaulers).toBe(3);
-    expect(result.isInsufficient).toBe(false); // 3×4=12 >= 10
+    // throughput = 2 e/tick per hauler (200/100)
+    // requiredHaulers = ceil(10 / 2) = 5
+    expect(result.requiredHaulers).toBe(5);
+    expect(result.isInsufficient).toBe(false); // 5×2=10 >= 10
   });
 
   it("should validate transport capacity", () => {

@@ -34,10 +34,10 @@ export interface RemoteDemandInput {
   remoteThreats?: Readonly<Record<string, boolean>>;
   /** 远矿通勤成本（来自 intel，运行时输入，不写入 RemoteOp）。 */
   travelCosts?: Readonly<Record<string, number | undefined>>;
-  /** 远矿路径道路覆盖状态（key = 目标房名，true = 有路）。
-   * 有路时 hauler body 走 2:1 道路满速配比（运力大），无路时走 1:1 平原满速配比（效率高）。
-   * 缺失时默认有路（保守：2:1 档运力更大优先选）。 */
-  roadStatus?: Readonly<Record<string, boolean | undefined>>;
+  /** 远矿路径道路覆盖率（key = 目标房名，0-1 连续值）。
+   * 覆盖率 ≥ 0.6 时 hauler body 走 2:1 道路满速配比（运力大），< 0.6 时走 1:1 平原满速配比。
+   * 缺失时默认 1（保守：2:1 档运力更大优先选）。 */
+  roadStatus?: Readonly<Record<string, number | undefined>>;
   /** 外国前置 spawn 拆除任务（key = 目标房名，value = 该房有非我方 spawn 且 controller
    * 仍 neutral）。系统层有视野时检测；claim 一旦发生任务即不成立（对等战争走 war
    * 战役路径，避免 safeMode 风险）。任务存在时该 op 孵 1 只 dismantler 拆除外国
@@ -268,7 +268,8 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
     //    公式：haulerNeed = ceil(source总产出 / 单只吞吐)。
     //    余量（运力 - 产出）超 10% 视为过配，但不在这里缩编（等 manager 重估）。
     const harvestersReady = (counts.remoteHarvester ?? 0) + pending.remoteHarvester;
-    const hasRoadForHauler = input.roadStatus?.[targetRoom] ?? true;
+    const roadCoverage = input.roadStatus?.[targetRoom] ?? 1;
+    const hasRoadForHauler = roadCoverage >= 0.6;
     const haulerBody = selectBody("remoteHauler", energyCapacityAvailable, {
       hasRoad: hasRoadForHauler,
     });
@@ -282,7 +283,7 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
             10, // reserved 单 source 10 e/tick
             haulerCarryParts,
             pathCostForHauler,
-            hasRoadForHauler,
+            roadCoverage,
           ).haulerNeed
         : op.haulerNeed;
     const haulerTarget = remoteHaulerTarget(op.sources, haulerNeed, harvestersReady);

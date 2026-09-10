@@ -96,7 +96,7 @@ export function scoreRemoteCandidate(input: {
   reserved?: boolean;
   /** 是否为该房配 defender（默认 CONFIG.remote.enableDefender）。 */
   withDefender?: boolean;
-  /** 是否有道路覆盖（有路速度 ×2，等价 pathCost 减半）。默认 false 保守。 */
+  /** 是否有道路覆盖（影响 body 配比选择，不直接影响速度）。默认 false 保守。 */
   hasRoad?: boolean;
 }): { netScore: number; haulerNeed: number } {
   const pathCost = input.pathCost ?? input.linearDistance * 70;
@@ -106,8 +106,11 @@ export function scoreRemoteCandidate(input: {
   const hasRoad = input.hasRoad ?? false;
   const perSource = reserved ? SOURCE_INCOME : SOURCE_INCOME_UNRESERVED;
   const demand = sources * perSource;
-  // 有路时 hauler 速度翻倍（道路 fatigue-free），等价 pathCost 减半。
-  const effectivePathCost = hasRoad ? Math.max(1, pathCost / 2) : pathCost;
+  // pathCost 与 tick 同量纲（PathFinder cost, plain=1/swamp=5），RTT = pathCost × 2。
+  // 道路不改变移动速度（每 tick 最多 1 格），但允许使用 2:1 CARRY:MOVE 配比档
+  // （更多 CARRY → 更大 haulerCapacity → 更高吞吐）。hasRoad 仅影响 body 选择，
+  // 此处 haulerCapacity 由调用方按 hasRoad 选对配比档后传入，不再折半 pathCost。
+  const effectivePathCost = pathCost;
   const perHauler = input.haulerCapacity / (2 * Math.max(1, effectivePathCost));
   const haulerNeed = Math.min(
     CONFIG.remote.haulersMax,
