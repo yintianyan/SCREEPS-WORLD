@@ -43,16 +43,19 @@ export interface RemoteTargetingInput {
 // 收益：reserve 后单 source 3000/300tick = 10 e/tick；未预定仅 1500/300 = 5。
 const SOURCE_INCOME = 10;
 const SOURCE_INCOME_UNRESERVED = 5;
-// 摊销：body 成本 / 寿命（e/tick）。harvester ~550/1500、hauler ~600/1500、
-// reserver 1300/600（CLAIM 寿命仅 600，是编队里最贵的门票）。
-const HARVESTER_UPKEEP = 0.4;
-const HAULER_UPKEEP = 0.4;
-const RESERVER_UPKEEP = 2.2;
-// A-2 账本补全：defender 摊销（[2A,2M] ~520/1500 ≈ 0.35 e/tick，enableDefender
-// 时计入 — 远矿房需常备/周期性防御）；道路维护随通勤里程缩放（road 每 tick 持续
-// 衰减，里程越长维护越贵；系数含沼泽路 5× 衰减的保守放大）。二者原缺失 →
-// 频繁被扰/远程房 netScore 虚高。
+// 摊销：body 成本 / 寿命（e/tick）。按实际 body 模板计算，非粗估。
+// harvester [5W,1C,3M]=750/1500=0.50；hauler [8C,8M]=800/1500=0.53（RCL4-5 标准档）；
+// reserver [CLAIM,MOVE]=650/600=1.08（CLAIM 寿命仅 600，是编队里最贵的门票）。
+const HARVESTER_UPKEEP = 0.5;
+const HAULER_UPKEEP = 0.53;
+const RESERVER_UPKEEP = 1.08;
+// defender [2A,2M]=520/1500=0.35 e/tick，enableDefender 时计入。
 const DEFENDER_UPKEEP = 0.35;
+// container 摊销：建造成本 1000（50×5+50×5+50×5+50×5+50×5=5×200=1000）
+// 实际 container=5000 hits，衰减 1 hit/tick → 寿命 5000 tick。
+// 摊销 1000/5000=0.2 e/tick。每 source 一个 container。
+const CONTAINER_UPKEEP_PER_SOURCE = 0.2;
+// 道路维护随通勤里程缩放（road 每 tick 持续衰减，里程越长维护越贵）。
 const ROAD_UPKEEP_PER_PATHCOST = 0.002;
 
 /** 房名解析坐标（纯函数，不依赖 Game.map）。 */
@@ -76,10 +79,13 @@ export function roomLinearDistance(a: string, b: string): number {
  * 候选净收益评分（纯函数）— 把「性价比」算成一个数。
  * pathCost 是通勤账本核心（PathFinder 实测，swampCost:5 折算沼泽）；intel 缺失
  * 回退线性距离 × 70（约一个房对角穿越 + 余量，偏保守 — 宁可低估陌生房）。
- * 吞吐 = min(需求, 编制 × 单 hauler 往返运力)；净分 = 吞吐 - 编队摊销。
- * A-2 账本补全：upkeep 计入 defender（enableDefender 时）与道路维护；
- * reserved=false（无 CLAIM body / 未启用 reserver）时单源收益减半（5 e/tick）
- * 且不计 reserver 摊销 —— 评估口径与实际执行一致（B-3）。
+ *
+ * 收入 = hauler 实际能拉回的速率 = min(source 产出, hauler 总运力)。
+ * 不是 source 产能上界——hauler 拉不回来的能量在 container 积压或衰减，
+ * 不算盈余。haulers 不足时收入受运力约束；haulers 足够时收入受产能约束。
+ *
+ * 开销 = harvester + hauler + reserver + defender 摊销 + container 摊销 + 道路维护。
+ * 净分 = 收入 - 开销。
  */
 export function scoreRemoteCandidate(input: {
   pathCost: number | undefined;
@@ -113,6 +119,7 @@ export function scoreRemoteCandidate(input: {
     HAULER_UPKEEP * haulerNeed +
     (reserved ? RESERVER_UPKEEP : 0) +
     (withDefender ? DEFENDER_UPKEEP : 0) +
+    CONTAINER_UPKEEP_PER_SOURCE * sources +
     ROAD_UPKEEP_PER_PATHCOST * pathCost;
   return { netScore: throughput - upkeep, haulerNeed };
 }

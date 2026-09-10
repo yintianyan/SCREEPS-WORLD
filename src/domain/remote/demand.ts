@@ -5,7 +5,7 @@ import { selectBody } from "../../config/bodies";
 import type { ColonyState } from "../../kernel/contracts";
 import type { RoomIntel } from "../intel";
 import { spawnKey, countPending } from "../spawn/queue";
-import { remoteHaulerTarget, remoteReplacementThreshold } from "./staffing";
+import { remoteHaulerTarget, remoteReplacementThreshold, computeHaulerNeed } from "./staffing";
 
 /** 远矿 creep 摘要（与本地 CreepSummary 对齐但精简）。 */
 export interface RemoteCreepSummary {
@@ -262,18 +262,44 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       }
     }
 
-    // 2. Remote Hauler — 每 source 最多 1 个 hauler。远矿是外入能量，
-    //    孵化成本 > 通勤损耗，hauler 多于 source 只会瓜分产出导致半载往返。
-    //    按就位 harvester 数收缩（爬坡期不配满），下限 1 保物流连通。
+    // 2. Remote Hauler — 按当前 body 运力 + pathCost 动态算出所需数量。
+    //    不依赖缓存的 haulerNeed，而是用孵化时实际选择的 body 重新算：
+    //    RCL 升级后 body 变大，单只吞吐可能覆盖全部 source，haulerNeed 降到 1。
+    //    公式：haulerNeed = ceil(source总产出 / 单只吞吐)。
+    //    余量（运力 - 产出）超 10% 视为过配，但不在这里缩编（等 manager 重估）。
     const harvestersReady = (counts.remoteHarvester ?? 0) + pending.remoteHarvester;
-    const haulerTarget = remoteHaulerTarget(op.sources, op.haulerNeed, harvestersReady);
+    const hasRoadForHauler = input.roadStatus?.[targetRoom] ?? true;
+    const haulerBody = selectBody("remoteHauler", energyCapacityAvailable, {
+      hasRoad: hasRoadForHauler,
+    });
+    const haulerCarryParts = haulerBody.filter(p => p === CARRY).length;
+    const pathCostForHauler = input.travelCosts?.[targetRoom];
+    // pathCost 缺失时用缓存 haulerNeed 回退（无 intel 时无法算）。
+    const haulerNeed =
+      pathCostForHauler !== undefined
+        ? computeHaulerNeed(
+            op.sources,
+            10, // reserved 单 source 10 e/tick
+            haulerCarryParts,
+            pathCostForHauler,
+            hasRoadForHauler,
+          ).haulerNeed
+        : op.haulerNeed;
+    const haulerTarget = remoteHaulerTarget(op.sources, haulerNeed, harvestersReady);
     const haulerTotal = (counts.remoteHauler ?? 0) + pending.remoteHauler;
     if (haulerTotal < haulerTarget && !economySuppressed) {
       const key = spawnKey("remoteHauler", homeRoom, haulerTotal, targetRoom);
-      const hasRoad = input.roadStatus?.[targetRoom] ?? true;
-      const body = selectBody("remoteHauler", energyCapacityAvailable, { hasRoad });
       requests.push(
-        createRemoteRequest("remoteHauler", homeRoom, targetRoom, haulerTotal, key, 1, body, tick),
+        createRemoteRequest(
+          "remoteHauler",
+          homeRoom,
+          targetRoom,
+          haulerTotal,
+          key,
+          1,
+          haulerBody,
+          tick,
+        ),
       );
     }
     if (haulerTotal >= haulerTarget || economySuppressed) {
@@ -283,8 +309,6 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
       if (replacement && healthy + pending.remoteHauler < haulerTarget) {
         // 稳定替补 key（同 harvester 分支）。
         const key = replacementKey("remoteHauler", homeRoom, targetRoom, replacement);
-        const hasRoad = input.roadStatus?.[targetRoom] ?? true;
-        const body = selectBody("remoteHauler", energyCapacityAvailable, { hasRoad });
         requests.push(
           createRemoteRequest(
             "remoteHauler",
@@ -293,7 +317,7 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
             haulerTotal,
             key,
             1,
-            body,
+            haulerBody,
             tick,
             replacement,
           ),

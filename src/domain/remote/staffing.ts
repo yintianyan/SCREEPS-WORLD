@@ -1,20 +1,70 @@
 import { CONFIG } from "../../config";
 
 /**
- * 远矿 hauler 的孵化编制。每 source 最多 1 个 hauler — 远矿是外入能量，
- * 孵化成本 > 0 且通勤有损耗，hauler 数量超过 source 数意味着多个 hauler
- * 瓜分同一 container 的产出，每次都半载而归（运力浪费）。
- * 1 hauler/source 保证每次满载往返；采集 > 运输时能量在 container 积攒，
- * 下一趟满载取走，不亏。
+ * 远矿 hauler 的孵化编制。hauler 数量 = ceil(source 总产出 / 单只 hauler 吞吐)。
+ *
+ * 单只吞吐 = carryCapacity / roundTripTime，
+ * roundTripTime = ceil(pathCost × 2 / speed)，有路 speed=2 无路 speed=1。
+ *
+ * 大 body 时单只吞吐可能覆盖多个 source，haulerNeed 可低至 1；
+ * 小 body 或远距离时可能需要 2-3 只。不做硬编码限制。
+ *
+ * 爬坡期按就位 harvester 数收缩（未到位不配满），下限 1 保物流连通。
+ *
+ * 纯函数。
  */
 export function remoteHaulerTarget(
   sources: number | undefined,
-  _haulerNeed: number | undefined,
+  haulerNeed: number | undefined,
   harvestersReady: number,
 ): number {
-  const sourcesTotal = Math.max(1, sources ?? CONFIG.remote.harvestersPerTarget);
-  const effectiveSources = Math.min(sourcesTotal, Math.max(1, harvestersReady));
-  return Math.max(1, effectiveSources);
+  const harvestersAvailable = Math.max(1, harvestersReady);
+
+  // haulerNeed 来自 scoreRemoteCandidate（按 pathCost、body 运力、source 产能算出）。
+  // 缺失时回退 1（最小可用，不假设 source 数）。
+  const target = Math.max(1, Math.min(CONFIG.remote.haulersMax, haulerNeed ?? 1));
+
+  // 爬坡期收缩：未到位的 harvester 意味着产能未满，不需要满配 hauler。
+  // 按 harvester 就位比例收缩，下限 1。
+  return Math.max(1, Math.min(target, harvestersAvailable));
+}
+
+/**
+ * 基于实际 body 配置精确计算 hauler 需求量。
+ *
+ * 不依赖缓存的 haulerNeed，而是用当前 body 的 carry 部件数、pathCost、
+ * 道路状态直接算出。RCL 升级后 body 变大时自动缩编。
+ *
+ * 收入 = hauler 实际拉回 storage 的速率 = min(source 产出, hauler 总运力)。
+ * 余量（运力 - 产出）超过 10% 视为过配，需缩编。
+ *
+ * 纯函数。
+ */
+export function computeHaulerNeed(
+  sources: number | undefined,
+  sourceIncomePerSource: number,
+  haulerCarryParts: number,
+  pathCost: number,
+  hasRoad: boolean,
+): { haulerNeed: number; perHaulerThroughput: number; totalThroughput: number; headroom: number } {
+  const sourcesTotal = Math.max(1, sources ?? 1);
+  const production = sourcesTotal * sourceIncomePerSource;
+
+  const { throughput: perHaulerThroughput } = computePerHaulerThroughput(
+    haulerCarryParts,
+    pathCost,
+    hasRoad,
+  );
+
+  const haulerNeed = Math.max(
+    1,
+    Math.min(CONFIG.remote.haulersMax, Math.ceil(production / Math.max(0.01, perHaulerThroughput))),
+  );
+
+  const totalThroughput = haulerNeed * perHaulerThroughput;
+  const headroom = totalThroughput > 0 ? (totalThroughput - production) / production : 0;
+
+  return { haulerNeed, perHaulerThroughput, totalThroughput, headroom };
 }
 
 /**

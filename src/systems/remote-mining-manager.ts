@@ -1317,11 +1317,12 @@ function collectEmpireEnergyReserve(): number {
 function estimateCreepInvestment(op: RemoteOp, energyCapacity: number): number {
   const harvesterBody = selectBody("remoteHarvester", energyCapacity);
   const haulerBody = selectBody("remoteHauler", energyCapacity, { hasRoad: false });
+  const reserverBody = selectBody("reserver", energyCapacity);
   const cost = (body: readonly BodyPartConstant[]): number =>
     body.reduce((sum, p) => sum + BODYPART_COST[p], 0);
   const harvesterCost = cost(harvesterBody) * (op.sources ?? 1);
   const haulerCost = cost(haulerBody) * (op.haulerNeed ?? 1);
-  const reserverCost = 600; // CLAIM body = 600 energy
+  const reserverCost = cost(reserverBody);
   return harvesterCost + haulerCost + reserverCost;
 }
 
