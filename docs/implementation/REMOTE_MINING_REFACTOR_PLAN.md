@@ -927,7 +927,43 @@ return Math.max(1, Math.ceil(need * readiness));
 | --- | --- |
 | E3 道路 / E4 container 维护 / E7 站桩 / E10 按交通热度铺路 | ✅ 早已实现 |
 | E5 reserver 按需续约 | ❌ **推导证明无收益**（见上） |
+| `RESERVER_UPKEEP` 通勤修正 | ✅ **已实施**（见下，属可推导的精确修正，非拍脑袋标定） |
 | E6 edge link | 待办：需 link 网络 + 布局支持，改动面大 |
 | E9 CPU 账 | 待办：蓝图 §7 要求，但需先用账本遥测校准 CPU 定价系数 |
-| `RESERVER_UPKEEP` 通勤修正 | 待办：属常数标定，需实测数据 |
 | P5 AgendaItem 收敛 | 待办：需 ADR |
+
+### P4 追加：reserver 摊销的通勤修正（可推导，非标定）
+
+**问题**：`scoreRemoteCandidate` 用 `RESERVER_UPKEEP = 650/600 = 1.08` 计 reserver 摊销，
+**完全忽略了通勤**。但 reserver 不返程，其寿命中 `pathCost` tick 花在去程路上 ——
+不在控制器旁就不产 reserve tick，**有效在岗时长 = 600 − pathCost**。
+
+**修正**（精确推导，非拟合）：
+
+```
+reserver 摊销 = 650 / (600 − pathCost)        e/tick
+
+推导：每次 reserver 产生 (600 − pathCost) 个 reserve tick，成本 650 能量；
+     维持预约需 1 reserve tick/tick → 摊销 = 650/(600 − pathCost)。
+```
+
+**影响量级**：
+
+| pathCost | 原摊销 | 修正后 | 低估幅度 |
+| --- | --- | --- | --- |
+| 0 | 1.08 | 1.08 | — |
+| 100 | 1.08 | 1.63 | 34% |
+| 200 | 1.08 | 3.25 | 67% |
+| 500 | 1.08 | 6.50 | 83% |
+| ≥ 600 | 1.08 | 到不了控制器 | 应剔除 |
+
+**这是远房被系统性高估收益的关键项**：`pathCost ≥ 600` 时 reserver 寿命耗尽在路上，
+预约根本无法维持，源产能永久减半 —— 原实现却仍按 1.08 计，把这类房算成划算。
+
+**实现**：抽出纯函数 `reserverUpkeepFor(pathCost)`（可直测），分母地板 `max(1, 600 − pathCost)`
+—— `pathCost ≥ 600` 时摊销趋于无穷，由 `minNetScore` 门槛自然剔除，**无需特判、绝不返回负摊销**
+（负摊销会让 netScore 被错误抬高）。
+
+**测试**：新增 `tests/unit/remote/reserver-cost.test.ts`（7 用例）：零通勤等于原常数、
+严格递增、关键点与手算一致、分母地板不为负、超远房被剔除、近房不受影响、同编制下远房评分更低。
+既有 `targeting.test.ts` **零修改全过**。

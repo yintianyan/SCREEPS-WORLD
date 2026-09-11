@@ -44,11 +44,16 @@ export interface RemoteTargetingInput {
 const SOURCE_INCOME = 10;
 const SOURCE_INCOME_UNRESERVED = 5;
 // 摊销：body 成本 / 寿命（e/tick）。按实际 body 模板计算，非粗估。
-// harvester [5W,1C,3M]=750/1500=0.50；hauler [8C,8M]=800/1500=0.53（RCL4-5 标准档）；
-// reserver [CLAIM,MOVE]=650/600=1.08（CLAIM 寿命仅 600，是编队里最贵的门票）。
+// harvester [5W,1C,3M]=750/1500=0.50；hauler [8C,8M]=800/1500=0.53（RCL4-5 标准档）。
 const HARVESTER_UPKEEP = 0.5;
 const HAULER_UPKEEP = 0.53;
-const RESERVER_UPKEEP = 1.08;
+// reserver [CLAIM,MOVE]=650 能量 / 寿命 600 tick —— 编队里最贵的门票。
+// 但摊销不能直接用 650/600：reserver 不返程，其中 pathCost tick 花在通勤上，
+// 不在岗就不产 reserve tick，有效在岗时长 = 600 − pathCost。
+// 用 650/600 会**低估远房成本**：pathCost 100 时真实 650/400=1.63 vs 1.08（低 34%），
+// pathCost 200 时 3.25（低 67%）—— 远房因此被系统性高估收益、错误开点。
+const RESERVER_BODY_COST = 650;
+const RESERVER_LIFESPAN = 600;
 // defender [2A,2M]=520/1500=0.35 e/tick，enableDefender 时计入。
 const DEFENDER_UPKEEP = 0.35;
 // container 摊销：建造成本 1000（50×5+50×5+50×5+50×5+50×5=5×200=1000）
@@ -57,6 +62,17 @@ const DEFENDER_UPKEEP = 0.35;
 const CONTAINER_UPKEEP_PER_SOURCE = 0.2;
 // 道路维护随通勤里程缩放（road 每 tick 持续衰减，里程越长维护越贵）。
 const ROAD_UPKEEP_PER_PATHCOST = 0.002;
+
+/**
+ * reserver 摊销（e/tick）。reserver 不返程，pathCost tick 花在通勤上、
+ * 不在岗就不产 reserve tick，故有效在岗时长 = 寿命 − pathCost。
+ * 分母地板 1：pathCost ≥ 寿命时它到不了控制器（摊销趋于无穷），
+ * 由 minNetScore 门槛自然剔除，无需在此特判。
+ * 纯函数。
+ */
+export function reserverUpkeepFor(pathCost: number): number {
+  return RESERVER_BODY_COST / Math.max(1, RESERVER_LIFESPAN - pathCost);
+}
 
 /** 房名解析坐标（纯函数，不依赖 Game.map）。 */
 function parseRoomCoord(roomName: string): { x: number; y: number } | undefined {
@@ -85,6 +101,8 @@ export function roomLinearDistance(a: string, b: string): number {
  * 不算盈余。haulers 不足时收入受运力约束；haulers 足够时收入受产能约束。
  *
  * 开销 = harvester + hauler + reserver + defender 摊销 + container 摊销 + 道路维护。
+ * 其中 reserver 摊销按**有效在岗时长**（600 − pathCost）计，含通勤损耗 ——
+ * 距离越远这张门票越贵，这是远房常被高估的关键项。
  * 净分 = 收入 - 开销。
  */
 export function scoreRemoteCandidate(input: {
@@ -103,7 +121,6 @@ export function scoreRemoteCandidate(input: {
   const sources = input.sources ?? 1; // 无视野保守估 1。
   const reserved = input.reserved ?? true;
   const withDefender = input.withDefender ?? CONFIG.remote.enableDefender;
-  const hasRoad = input.hasRoad ?? false;
   const perSource = reserved ? SOURCE_INCOME : SOURCE_INCOME_UNRESERVED;
   const demand = sources * perSource;
   // pathCost 与 tick 同量纲（PathFinder cost, plain=1/swamp=5），RTT = pathCost × 2。
@@ -120,7 +137,7 @@ export function scoreRemoteCandidate(input: {
   const upkeep =
     HARVESTER_UPKEEP * sources +
     HAULER_UPKEEP * haulerNeed +
-    (reserved ? RESERVER_UPKEEP : 0) +
+    (reserved ? reserverUpkeepFor(pathCost) : 0) +
     (withDefender ? DEFENDER_UPKEEP : 0) +
     CONTAINER_UPKEEP_PER_SOURCE * sources +
     ROAD_UPKEEP_PER_PATHCOST * pathCost;
