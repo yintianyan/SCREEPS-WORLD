@@ -929,7 +929,7 @@ return Math.max(1, Math.ceil(need * readiness));
 | E5 reserver 按需续约 | ❌ **推导证明无收益**（见上） |
 | `RESERVER_UPKEEP` 通勤修正 | ✅ **已实施**（见下，属可推导的精确修正，非拍脑袋标定） |
 | E6 edge link | 待办：需 link 网络 + 布局支持，改动面大 |
-| E9 CPU 账 | 待办：蓝图 §7 要求，但需先用账本遥测校准 CPU 定价系数 |
+| E9 CPU 账 | ✅ **测量半已实施**（`cpuPerTick` EMA + manager 均摊观测）；定价半仍待遥测校准 |
 | P5 AgendaItem 收敛 | 待办：需 ADR |
 
 ### P4 追加：reserver 摊销的通勤修正（可推导，非标定）

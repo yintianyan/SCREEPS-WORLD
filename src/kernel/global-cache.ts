@@ -743,6 +743,7 @@ function getRemoteOpLedger(home: string, target: string): RemoteOpLedger {
     spawnCost: 0,
     refund: 0,
     infraCost: 0,
+    cpuPerTick: 0,
     windowStart: tick,
     lastTick: tick,
   };

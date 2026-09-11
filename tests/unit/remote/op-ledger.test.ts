@@ -10,6 +10,7 @@ import {
   summarizeOpLedger,
   toOpLedgerSnapshot,
   fromOpLedgerSnapshot,
+  recordOpCpu,
   type RemoteOpLedger,
 } from "../../../src/domain/remote/op-ledger";
 
@@ -68,18 +69,57 @@ describe("RemoteOpLedger — 净营收口径", () => {
     expect(opNetRate(l, 0)).toBe(2000); // 窗口长度地板 1
   });
 
-  it("摘要含净营收、速率与各项分解", () => {
+  it("摘要含净营收、速率、CPU 与各项分解", () => {
     const s = summarizeOpLedger(
       "W1N1",
       "W1N2",
-      led({ delivered: 3000, spawnCost: 1000, refund: 200, infraCost: 100, windowStart: 0 }),
+      led({
+        delivered: 3000,
+        spawnCost: 1000,
+        refund: 200,
+        infraCost: 100,
+        windowStart: 0,
+        cpuPerTick: 0.123,
+      }),
       1000,
     );
     expect(s).toContain("W1N1->W1N2");
     expect(s).toContain("net=2100e");
     expect(s).toContain("+2.10e/t");
     expect(s).toContain("delivered=3000");
+    expect(s).toContain("cpu=0.123");
     expect(s).toContain("win=1000t");
+  });
+});
+
+describe("RemoteOpLedger — CPU 测量", () => {
+  it("首样本直接置位，不缓慢爬升", () => {
+    const l = led();
+    recordOpCpu(l, 0.5);
+    expect(l.cpuPerTick).toBe(0.5);
+  });
+
+  it("EMA 平滑：多次同值保持该值", () => {
+    const l = led();
+    recordOpCpu(l, 0.4);
+    for (let i = 0; i < 10; i++) recordOpCpu(l, 0.4);
+    expect(l.cpuPerTick).toBeCloseTo(0.4, 6);
+  });
+
+  it("EMA 向新稳态收敛", () => {
+    const l = led();
+    recordOpCpu(l, 1.0);
+    // 连续注入 0.0，约 30 tick 后应接近 0
+    for (let i = 0; i < 50; i++) recordOpCpu(l, 0.0);
+    expect(l.cpuPerTick).toBeLessThan(0.01);
+    expect(l.cpuPerTick).toBeGreaterThanOrEqual(0);
+  });
+
+  it("非法输入（NaN / 负值）静默忽略", () => {
+    const l = led({ cpuPerTick: 0.5 });
+    recordOpCpu(l, Number.NaN);
+    recordOpCpu(l, -1);
+    expect(l.cpuPerTick).toBe(0.5);
   });
 });
 

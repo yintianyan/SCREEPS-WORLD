@@ -20,6 +20,13 @@ export interface RemoteOpLedger {
   refund: number;
   /** 基建消耗：container / road 工地创建时一次性计入。 */
   infraCost: number;
+  /**
+   * 该 op 分摊到的 CPU 速率（CPU/tick，EMA 平滑）。**仪表值，非累计计数器**：
+   * 不随账本持久化（近期速率量，跨 reset 恢复无意义），也不参与 `opNetDelivered`
+   * ——CPU 定价系数尚无实测依据，硬编一个只会污染判据。此字段只供观测与人工校准：
+   * 把「净营收 e/t」与「CPU/t」并列呈现，由运营者判断哪条线值得占 CPU 预算。
+   */
+  cpuPerTick: number;
   /** 窗口起点 tick。 */
   windowStart: number;
   /** 最近一次记账 tick。 */
@@ -35,6 +42,7 @@ export function emptyOpLedger(tick: number): RemoteOpLedger {
     spawnCost: 0,
     refund: 0,
     infraCost: 0,
+    cpuPerTick: 0,
     windowStart: tick,
     lastTick: tick,
   };
@@ -67,6 +75,22 @@ export function opNetRate(l: RemoteOpLedger, nowTick: number): number {
 
 export function opProfitable(l: RemoteOpLedger): boolean {
   return opNetDelivered(l) > 0;
+}
+
+/**
+ * 记录一次 CPU 采样并更新 EMA。
+ * α = 0.1（约 10-tick 记忆半衰期），既平滑单次抖动，又能在负载变化后约 30 tick
+ * 内收敛到新稳态。非法输入（NaN / 负值）静默忽略，不污染历史。
+ */
+export function recordOpCpu(l: RemoteOpLedger, cpuUsed: number): void {
+  if (!Number.isFinite(cpuUsed) || cpuUsed < 0) return;
+  const alpha = 0.1;
+  if (l.cpuPerTick <= 0) {
+    // 首样本：直接置位，避免 EMA 从 0 缓慢爬升
+    l.cpuPerTick = cpuUsed;
+  } else {
+    l.cpuPerTick = l.cpuPerTick * (1 - alpha) + cpuUsed * alpha;
+  }
 }
 
 // ─── Memory 持久化（跨 global reset）─────────────────────
@@ -108,6 +132,7 @@ export function fromOpLedgerSnapshot(
     spawnCost: finiteOrZero(s.s),
     refund: finiteOrZero(s.r),
     infraCost: finiteOrZero(s.i),
+    cpuPerTick: 0,
     windowStart: Number.isFinite(s.w) ? s.w : tick,
     lastTick: tick,
   };
@@ -130,6 +155,7 @@ export function summarizeOpLedger(
     `(${rate >= 0 ? "+" : ""}${rate.toFixed(2)}e/t) ` +
     `delivered=${Math.round(l.delivered)} spawn=${Math.round(l.spawnCost)} ` +
     `refund=${Math.round(l.refund)} infra=${Math.round(l.infraCost)} ` +
+    `cpu=${l.cpuPerTick.toFixed(3)} ` +
     `win=${Math.max(0, nowTick - l.windowStart)}t`
   );
 }

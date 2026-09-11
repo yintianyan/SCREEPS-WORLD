@@ -30,6 +30,7 @@ import {
   toOpLedgerSnapshot,
   summarizeOpLedger,
   opNetRate,
+  recordOpCpu,
   type RemoteOpLedger,
   type RemoteOpLedgerSnapshot,
 } from "../domain/remote/op-ledger";
@@ -500,6 +501,7 @@ export const remoteMiningManagerSystem: System = {
       const crisisPaused =
         colonyState === "recovery" || colonyState === "bootstrap" || colonyState === "defense";
       if (!crisisPaused) {
+        const cpuBefore = Game.cpu.getUsed();
         const { requests } = evaluateRemoteDemand({
           homeRoom: snapshot.roomName,
           colonyState,
@@ -596,6 +598,18 @@ export const remoteMiningManagerSystem: System = {
           submitRequest(queue, req);
         }
         roomMem.spawnQueue = queue;
+
+        // E9：将本房 demand 评估 CPU 按 active op 数均摊，更新各 op 账本的 cpuPerTick EMA。
+        // 这是「观测期」测量——只记录、不定价，把 netRate 与 cpu/tick 并列供人工校准。
+        const cpuAfter = Game.cpu.getUsed();
+        if (activeRemoteCount > 0) {
+          const cpuPerOp = (cpuAfter - cpuBefore) / activeRemoteCount;
+          for (const [rn, op] of Object.entries(remoteOps)) {
+            if (op.state !== "active") continue;
+            const ledger = peekRemoteOpLedger(snapshot.roomName, rn);
+            if (ledger) recordOpCpu(ledger, cpuPerOp);
+          }
+        }
       }
 
       // 5. 回收过量远矿 creep（超过配置上限的旧 creep 标记回收，节省 CPU）。
