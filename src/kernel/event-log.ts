@@ -6,8 +6,11 @@ import { CONFIG } from "../config";
 
 // ─── 事件类型枚举 ────────────────────────────────────────────
 
-/** 事件种类 — 整数枚举以最小化序列化体积。 */
-export const enum EventKind {
+/** 事件种类 — 整数枚举以最小化序列化体积。
+ * 注意：历史条目编码已出现多次手动调整（非严格连续——见 28/37/44/45 的乱序与跳跃）。
+ * 新增事件应追加到末尾；编码稳定性由 tests/unit/.../event-kind-stability.test.ts 守卫——
+ * 改动任何已有条目的数值会导致守卫失败（防止历史事件语义漂移）。 */
+export enum EventKind {
   /** 殖民相位转换 (bootstrap→growth→crisis→recovery→steady)。 */
   PhaseTransition = 0,
   /** CPU Tier 降级 (如 healthy→guarded)。 */

@@ -126,8 +126,12 @@ package.json scripts 一致：typecheck / check:docs / test / test:unit / test:i
 
 ### 战争（`src/systems/war-planner.ts`、`src/domain/war/planning.ts`、`src/domain/strategy/posture.ts`）
 
-- `war` 姿态是进攻的唯一授权来源（持续被打 + 打得起）；war-planner 是唯一进攻执行
+- `war` 姿态是进攻的唯一授权来源（持续被打 + 打得起）；war-planner 是唯一战争进攻执行
   决策者，attacker 仅由它孵化。代码存在不等于战争开始。
+  **例外（第二孵化权威源）**：`power-farm-manager` 的 powerBank 野采编队（attacker/healer/pbCollector）
+  由它向 spawnQueue 直接提交，不经过 war-planner → 不落入 war 止损链（warBlacklist/casualtyMultiplier）。
+  该例外是既定设计（上线已久），审计止损条款时必须把 power-farm 视作独立编队路径，不能假设
+  "attacker 全部经 war-planner"。
 - 止损链不可绕过：spawned 超 `squadSize × casualtyMultiplier` 收摊；失败/unknown
   目标进 `warBlacklist` 冷却；war 姿态下经济压力持续超标经 `warPressureTicks` 退
   fortify。波次集结：attacker 在 build 相位经 hold 钩子归建待命，满编才 advance。

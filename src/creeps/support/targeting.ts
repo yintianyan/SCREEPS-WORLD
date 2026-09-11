@@ -1,6 +1,7 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
+import { classifyThreats } from "../../domain/defense/threat";
 import { getObjectById } from "./obj-cache";
 
 /** 掉落堆距离权重：score = amount − dist × 此值。20 使远处溢出大堆压过近处小堆，
@@ -31,6 +32,25 @@ export function getHostilesCached(room: Room): Creep[] {
   });
   g.__hostilesCache[room.name] = { tick: Game.time, creeps: hostiles };
   return hostiles;
+}
+
+/** 房间内「有威胁」的 hostile creep（body-aware）— per-tick per-room 共享缓存。
+ * 复用 getHostilesCached 的同一次白名单 find（不重复 FIND_HOSTILE_CREEPS），
+ * 再按 THREAT_PARTS 过滤出有威胁的编队，供 kernel 的 combat 旁路、flee 等消费。
+ * 与 lifecycle.getRoomThreats 语义一致（都是 body-aware 威胁判定），但后者自带
+ * 独立缓存；此处从同一 find 源派生，消除同房重复扫描。 */
+export function getRoomThreatsCached(room: Room): Creep[] {
+  const g = globalCache();
+  if (!g.__roomThreatsCache) g.__roomThreatsCache = {};
+  const cached = g.__roomThreatsCache[room.name];
+  if (cached && cached.tick === Game.time) {
+    return cached.creeps;
+  }
+  // 复用已缓存的全量 hostile（白名单已过滤）→ body-aware 威胁子集。
+  const hostiles = getHostilesCached(room);
+  const threats = classifyThreats(hostiles, CONFIG.defense.allies);
+  g.__roomThreatsCache[room.name] = { tick: Game.time, creeps: threats };
+  return threats;
 }
 
 /** 获取或分配 creep 的 source。将 sourceId 存入 memory。 */

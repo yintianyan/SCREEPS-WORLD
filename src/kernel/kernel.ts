@@ -1,5 +1,4 @@
 import {
-  isThreat,
   type Budget,
   type CreepRole,
   type CpuTier,
@@ -51,6 +50,10 @@ import { type Registry } from "./registry";
 //   100 tick 低频触发，无每 tick 耦合。为 1 个钩子引入 registry 维护钩子机制（接口+注册+遍历）属过度工程。
 // 演化条件：当出现 3+ 个周期性维护钩子时，提取为 registry 维护钩子机制（kernel 只遍历注册表）。
 import { pruneDeadCreepCache } from "../creeps/movement/pathfinding";
+// 复用 cache 层 body-aware 威胁判定（消除 kernel 内嵌 find/isThreat 与角色层重复扫描）。
+// 与 pruneDeadCreepCache 同类权衡：getRoomThreatsCached 是共享查询（白名单 find + THREAT_PARTS
+// 过滤），非经济策略/角色行为；kernel 只读结果集合不内嵌判定。演化见上条维护钩子机制。
+import { getRoomThreatsCached } from "../creeps/support/targeting";
 import { globalCache, type SquadIndexEntry, type CreepRef } from "./global-cache";
 import { CONFIG } from "../config";
 import { log } from "./log";
@@ -157,12 +160,16 @@ export class Kernel {
       safeRun("prune-path-cache", () => pruneDeadCreepCache());
     }
 
-    initTelemetry(Game.time);
+    // initTelemetry 也走错误边界：遥测初始化失败不得中断 tick。
+    safeRun("telemetry-init", () => initTelemetry(Game.time), true);
 
     const ctx = new Context(budget);
 
     // 房间快照（P0 — 必须在任何读取快照的系统之前运行）。
-    this.buildSnapshots(ctx);
+    // 用 safeRun 包裹：快照是全 tick 数据量最大、字段访问最密集的热点，
+    // 任何单个 creep/room 的异常都不能让整个 tick 的后续系统/角色停摆。
+    // safeRun 不吞副作用，失败时只是保住剩余 tick；critical 起用后永不冷却。
+    safeRun("snapshots", () => this.buildSnapshots(ctx), true);
 
     // room-state (P0) 在 spawn-manager (P0) 之前注册，先计算每房 ColonyState。
     this.runSystems(ctx);
@@ -252,90 +259,97 @@ export class Kernel {
     const creepRefs: CreepRef[] = [];
     const roleMap = this.roleMap;
     for (const creep of Object.values(Game.creeps)) {
-      creepLastSeen.set(creep.name, { r: creep.room.name, x: creep.pos.x, y: creep.pos.y });
-      const home = creep.memory.home;
-      if (home) {
-        // store 可选链防御：手工注入的 creep（e2e/mockup）可能无 store 字段，
-        // 引擎 Store 构造器会抛 TypeError 且本遍历在 safeRun 之外 —— 一只异常
-        // creep 不能杀死整个 tick（真机 store 恒存在，此守卫零行为差异）。
-        const carried = creep.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
-        if (carried > 0) {
-          globalCreepEnergy.set(home, (globalCreepEnergy.get(home) ?? 0) + carried);
+      // per-creep 防御：单只异常 creep 只损失它自己的索引条目，不拖垮整个
+      // 快照构建。个别字段异常（引擎 edge case、手工注入的 mock 缺字段）是
+      // 长期运行中的真实风险，而快照是全 tick 数据量最大的热点。
+      try {
+        creepLastSeen.set(creep.name, { r: creep.room.name, x: creep.pos.x, y: creep.pos.y });
+        const home = creep.memory.home;
+        if (home) {
+          const carried = creep.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+          if (carried > 0) {
+            globalCreepEnergy.set(home, (globalCreepEnergy.get(home) ?? 0) + carried);
+          }
         }
-      }
-      const roleName = creep.memory.role;
-      const roleDef = roleMap.get(roleName ?? "");
-      // 角色自报分类标签 — kernel 不硬编码角色名。
-      if (roleDef?.isRepairWorker) {
-        const repairHome = home ?? creep.room.name;
-        if (repairHome) globalRepairRooms.add(repairHome);
-      }
-      if (roleDef?.isDistributor) {
-        const pumpHome = home ?? creep.room.name;
-        if (pumpHome) globalDistributorRooms.add(pumpHome);
-      }
-      if (roleDef?.isHauler) {
-        const haulHome = home ?? creep.room.name;
-        if (haulHome) globalHaulerRooms.add(haulHome);
-      }
-      // P0-1：编队索引收录 — 有 remoteTarget 或 mission 标记的 creep 才入索引。
-      if (creep.memory.remoteTarget || creep.memory.mission) {
-        squadIndex.push({
+        const roleName = creep.memory.role;
+        const roleDef = roleMap.get(roleName ?? "");
+        // 角色自报分类标签 — kernel 不硬编码角色名。
+        if (roleDef?.isRepairWorker) {
+          const repairHome = home ?? creep.room.name;
+          if (repairHome) globalRepairRooms.add(repairHome);
+        }
+        if (roleDef?.isDistributor) {
+          const pumpHome = home ?? creep.room.name;
+          if (pumpHome) globalDistributorRooms.add(pumpHome);
+        }
+        if (roleDef?.isHauler) {
+          const haulHome = home ?? creep.room.name;
+          if (haulHome) globalHaulerRooms.add(haulHome);
+        }
+        // P0-1：编队索引收录 — 有 remoteTarget 或 mission 标记的 creep 才入索引。
+        if (creep.memory.remoteTarget || creep.memory.mission) {
+          squadIndex.push({
+            name: creep.name,
+            role: roleName ?? "unknown",
+            home: home ?? creep.room.name,
+            remoteTarget: creep.memory.remoteTarget,
+            mission: creep.memory.mission,
+            boosted: creep.body.some(p => p.boost !== undefined),
+            spawning: creep.spawning === true,
+          });
+        }
+        // 共享快照总线：push 当前 creep 的完整摘要。
+        const mem = creep.memory as unknown as Record<string, unknown>;
+        const a = mem.assignment as Record<string, unknown> | undefined;
+        creepRefs.push({
           name: creep.name,
           role: roleName ?? "unknown",
           home: home ?? creep.room.name,
-          remoteTarget: creep.memory.remoteTarget,
-          mission: creep.memory.mission,
-          boosted: creep.body.some(p => p.boost !== undefined),
           spawning: creep.spawning === true,
+          sourceId: creep.memory.sourceId,
+          spawnIndex: creep.memory.spawnIndex,
+          recycle: creep.memory.recycle === true,
+          ticksToLive: creep.ticksToLive,
+          bodyLength: creep.body.length,
+          body: creep.body,
+          remoteTarget: creep.memory.remoteTarget,
+          mode: typeof mem.mode === "string" ? mem.mode : undefined,
+          assignment: a
+            ? {
+                id: a.id as string,
+                kind: a.kind as string,
+                sourceId: a.sourceId ? (a.sourceId as string) : undefined,
+                targetId: a.targetId ? (a.targetId as string) : undefined,
+                leaseUntil: typeof a.leaseUntil === "number" ? a.leaseUntil : undefined,
+              }
+            : undefined,
+          lastActionTick: typeof mem.lastActionTick === "number" ? mem.lastActionTick : undefined,
+          roomName: creep.room.name,
+          x: creep.pos.x,
+          y: creep.pos.y,
+          energyCarried: creep.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
         });
-      }
-      // 共享快照总线：push 当前 creep 的完整摘要。
-      const mem = creep.memory as unknown as Record<string, unknown>;
-      const a = mem.assignment as Record<string, unknown> | undefined;
-      creepRefs.push({
-        name: creep.name,
-        role: roleName ?? "unknown",
-        home: home ?? creep.room.name,
-        spawning: creep.spawning === true,
-        sourceId: creep.memory.sourceId,
-        spawnIndex: creep.memory.spawnIndex,
-        recycle: creep.memory.recycle === true,
-        ticksToLive: creep.ticksToLive,
-        bodyLength: creep.body.length,
-        body: creep.body,
-        remoteTarget: creep.memory.remoteTarget,
-        mode: typeof mem.mode === "string" ? mem.mode : undefined,
-        assignment: a
-          ? {
-              id: a.id as string,
-              kind: a.kind as string,
-              sourceId: a.sourceId ? (a.sourceId as string) : undefined,
-              targetId: a.targetId ? (a.targetId as string) : undefined,
-              leaseUntil: typeof a.leaseUntil === "number" ? a.leaseUntil : undefined,
-            }
-          : undefined,
-        lastActionTick: typeof mem.lastActionTick === "number" ? mem.lastActionTick : undefined,
-        roomName: creep.room.name,
-        x: creep.pos.x,
-        y: creep.pos.y,
-        energyCarried: creep.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
-      });
-      if (!roleDef?.isSourceWorker) continue;
-      const sid = creep.memory.sourceId;
-      if (sid) {
-        globalSourceOccupancy.set(
-          sid as string,
-          (globalSourceOccupancy.get(sid as string) ?? 0) + 1,
-        );
-      } else {
-        const pendingHome = home ?? creep.room.name;
-        if (pendingHome) {
-          globalPendingHarvesters.set(
-            pendingHome,
-            (globalPendingHarvesters.get(pendingHome) ?? 0) + 1,
+        if (!roleDef?.isSourceWorker) continue;
+        const sid = creep.memory.sourceId;
+        if (sid) {
+          globalSourceOccupancy.set(
+            sid as string,
+            (globalSourceOccupancy.get(sid as string) ?? 0) + 1,
           );
+        } else {
+          const pendingHome = home ?? creep.room.name;
+          if (pendingHome) {
+            globalPendingHarvesters.set(
+              pendingHome,
+              (globalPendingHarvesters.get(pendingHome) ?? 0) + 1,
+            );
+          }
         }
+      } catch (err) {
+        // 仅限流记录：异常 creep 不进索引，但不阻断其余 creep 与房间快照。
+        safeRun(`snapshots/creep/${creep.name}`, () => {
+          log.warn("kernel", `snapshot index skip ${creep.name}: ${(err as Error)?.message}`);
+        });
       }
     }
 
@@ -798,15 +812,11 @@ export class Kernel {
     for (const roomName of combatRooms) {
       const room = Game.rooms[roomName];
       if (!room) continue;
-      // B1-FINDING-05: 使用 contracts 层共享的 isThreat 纯函数，消除内联 domain 逻辑。
-      const hostiles = room.find(FIND_HOSTILE_CREEPS);
-      const hasThreat = hostiles.some(c =>
-        isThreat(
-          { owner: c.owner?.username ?? "?", bodyParts: c.body.map(b => b.type) },
-          CONFIG.defense.allies,
-        ),
-      );
-      if (hasThreat) {
+      // 复用 cache 层 body-aware 威胁判定（getRoomThreatsCached），读同一份白名单
+      // find + THREAT_PARTS 过滤，消除 kernel 独立 find/isThreat 与角色层重复扫描。
+      // kernel 只读结果集合，不内嵌判定逻辑。
+      const threats = getRoomThreatsCached(room);
+      if (threats.length > 0) {
         liveThreatRooms.add(roomName);
       }
     }

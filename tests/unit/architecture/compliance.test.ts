@@ -199,6 +199,7 @@ describe("R9 Kernel 禁止 import 业务模块", () => {
   const kernelFiles = ALL_FILES.filter(f => layerOf(f) === "kernel");
   // 已登记白名单例外（ENGINEERING_BLUEPRINT §3.1 Dependencies 行）：
   // - pruneDeadCreepCache from creeps/movement/pathfinding（R9 例外，KERNEL §8）
+// - getRoomThreatsCached from creeps/support/targeting（共享 body-aware 威胁查询，kernel 只读结果集合）
   // - type-only 导入豁免（全局类型共享，无运行时副作用）
   // - global-cache.ts 的 TaskPool type import 豁免
   // - outcome-channel.ts 的 uoem-types type import 豁免
@@ -218,6 +219,10 @@ describe("R9 Kernel 禁止 import 业务模块", () => {
           continue;
         // 已登记白名单：pruneDeadCreepCache
         if (rel === "kernel/kernel.ts" && imp.resolved.includes("creeps/movement/pathfinding"))
+          continue;
+        // 已登记白名单：getRoomThreatsCached（共享 body-aware 威胁查询，
+        // 消除 kernel 内嵌 find/isThreat 与角色层重复扫描；kernel 只读结果集合）
+        if (rel === "kernel/kernel.ts" && imp.resolved.includes("creeps/support/targeting"))
           continue;
         const targetRel = relative(SRC, imp.resolved);
         const exemptKey = `${rel}:${targetRel}`;
