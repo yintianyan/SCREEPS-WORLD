@@ -30,6 +30,8 @@ coverage/
 .catpaw/
 .reasonix/
 .zcode/
+.workbuddy/
+.workbuddy-ai/
 
 # Screeps
 *.screeps
