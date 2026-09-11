@@ -1074,6 +1074,20 @@ declare global {
      * RemoteMiningOperationContext.budget.consumed。
      */
     budgetConsumed?: number;
+    /**
+     * 实测收支账本（v47+）— 口径见 domain/remote/op-ledger。heap 是实时累加器
+     * （creeps 层只写 heap），本字段是跨 global reset 的持久层，
+     * remote-mining-manager 唯一写者（每 managerInterval 回写一次）。
+     * 短字段：d=delivered / s=spawnCost / r=refund / i=infraCost / w=windowStart。
+     * 观测期数据，当前不参与任何开关决策。
+     */
+    ledger?: {
+      d: number;
+      s: number;
+      r: number;
+      i: number;
+      w: number;
+    };
   }
 
   interface Memory {

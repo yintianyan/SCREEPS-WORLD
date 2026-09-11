@@ -1,14 +1,15 @@
 /** Action 共享辅助 — 跨领域复用的 execute 层工具函数。 */
 import { moveToTarget } from "../../movement";
-import { bumpEnergyCounter } from "../../../kernel/global-cache";
+import { bumpEnergyCounter, bumpRemoteOpLedger } from "../../../kernel/global-cache";
 
 /**
  * P3 能量核算入账字段（intent 计量子集）。
  * harvested / upgraded / built 归房间级跨 tick 差分采样（economy 系统）—
  * 这三类流量用 creep 背包差值或 intent 推算都不可靠：官服引擎资源结算在
  * tick 末 intent 解析，同 tick 的 store 差值恒 0；房间状态差分是唯一实测口径。
+ * imported = 跨房导入（远矿返程交付），由调用方按 creep 是否属远矿编队判定。
  */
-export type CountedField = "pickedUp" | "repaired";
+export type CountedField = "pickedUp" | "repaired" | "imported";
 
 /**
  * 带 L1 核算的动作执行：intentAmount 在动作执行**前**求值（动作参数与目标
@@ -19,15 +20,27 @@ export type CountedField = "pickedUp" | "repaired";
 export function runCountedAction(
   creep: Creep,
   target: RoomPosition | { pos: RoomPosition },
-  field: CountedField,
+  field: CountedField | undefined,
   action: () => number,
   handlers?: ErrorHandlers,
   intentAmount?: () => number,
 ): number {
   const amount = intentAmount?.();
   const result = runAction(creep, target, action, handlers);
-  if (amount !== undefined && result === OK && amount > 0 && Number.isFinite(amount)) {
-    bumpEnergyCounter(creep.memory.home ?? creep.room.name, field, amount);
+  if (
+    field !== undefined &&
+    amount !== undefined &&
+    result === OK &&
+    amount > 0 &&
+    Number.isFinite(amount)
+  ) {
+    const home = creep.memory.home ?? creep.room.name;
+    bumpEnergyCounter(home, field, amount);
+    // 跨房导入同时记入 op 账本：房间计数器只回答「本房收了多少」，
+    // op 账本还要回答「这笔收入对应哪条远矿线、成本多少」。
+    if (field === "imported") {
+      bumpRemoteOpLedger(home, creep.memory.remoteTarget, "delivered", amount);
+    }
   }
   return result;
 }

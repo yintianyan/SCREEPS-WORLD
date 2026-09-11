@@ -1,4 +1,5 @@
 import type { TaskPool } from "../domain/assignment/task-pool";
+import type { RemoteOpLedger, RemoteOpLedgerField } from "../domain/remote/op-ledger";
 
 /** assignment-service 的单 tick 缓存。 */
 export interface AssignmentCache {
@@ -14,7 +15,15 @@ export interface ActionCpuEntry {
   maxCpu: number;
 }
 
-/** Screeps 沙箱 `global` 对象的形态 — 所有字段可选且可重建。 */
+/** Screeps 沙箱 `global` 对象的形态 — 所有字段可选且可重建。
+ * 字段按前缀约定分域维护：
+ *  - `__` 前缀：per-tick 共享缓存（hostiles/threats/sources/containers 等），tick 间可丢弃
+ *    （由 RoomSnapshot / building cache 重建），避免跨 tick 污染；
+ *  - 无前缀：跨 tick 或 per-tick 状态（errorLog/cooldowns/telemetry/CPU EMA 等）。
+ * 所有字段平铺在单一接口上是为了零运行时开销（字段即读即写）。当字段数量继续增长，
+ * 可演进为「接口按域拆 namespace + 运行时仍单对象」：类型层用 `combat: {...}`、`remote:
+ * {...}` 等子接口聚合，运行时访问成本不变，仅类型层面收拢命名 — 该重构不改变任何
+ * `g.xxx` 访问点，属纯类型增强，可工作在大批量、独立提交上进行。 */
 export interface GlobalCache {
   errorLog?: Map<string, number>;
   /** 每个 label 的连续错误计数（用于冷却跟踪）。 */
@@ -70,6 +79,10 @@ export interface GlobalCache {
   systemBudgetEma?: Map<string, number>;
   /** P3 能量核算 L1 计数器（bumpEnergyCounter 写入；economy 系统每窗滚动消费）。 */
   energyLedger?: { tick: number; rooms: Record<string, RoomEnergyCounters> };
+  /** 远矿每 op 收支账本（key = remoteOpKey(home, target)）。
+   * heap 存储：global reset 丢失可接受——重见 op 时按当前 tick 重新播种窗口，
+   * 只影响 reset 后首窗的净营收统计，不参与任何决策（观测期）。 */
+  remoteOpLedgers?: Map<string, RemoteOpLedger>;
   /** P3 物流请求池槽位（logistics 系统每 tick 重导出；assignment-service 同 tick 合并）。 */
   transportPool?: { tick: number; rooms: Record<string, unknown[]> };
   // 【F-DEAD-1 已删除】logisticsCounters — L1 物流指标从未落地，全库零引用。
@@ -417,6 +430,8 @@ export interface GlobalCache {
   __remoteDropped?: Record<string, { tick: number; list: Resource[] }>;
   /** 房间内 hostile creep 列表（targeting + remote-defender 共享）。 */
   __hostilesCache?: Record<string, { tick: number; creeps: Creep[] }>;
+  /** 房间内 body-aware 威胁 creep 缓存（targeting.getRoomThreatsCached 每 tick 写入）。 */
+  __roomThreatsCache?: Record<string, { tick: number; creeps: Creep[] }>;
   /** 远矿房 InvaderCore 列表（invader-core + core-clearer + reserver 共享）。 */
   __remoteInvaderCore?: Record<string, { tick: number; cores: StructureInvaderCore[] }>;
   /** 远矿房废墟列表（core-clearer + remote-hauler 共享）。 */
@@ -650,6 +665,13 @@ export interface RoomEnergyCounters {
   // pool 变化被 drift 捕获但不精确）。
   bought: number;
   sold: number;
+  /**
+   * 远矿等外部房导入本房的能量（hauler 交付到本房 sink 时计账）。
+   * 计入收入侧前须先确认不会与房内搬运重复计数：本字段只记「跨房导入」，
+   * 房内 container→storage 的搬运不计。当前仅观测，未并入 ledgerIncome——
+   * 并入会改变净流 EMA 进而改变门控行为，属独立变更。
+   */
+  imported: number;
 }
 
 export type EnergyCounterField = keyof RoomEnergyCounters;
@@ -684,8 +706,102 @@ export function bumpEnergyCounter(
     towerSpent: 0,
     bought: 0,
     sold: 0,
+    imported: 0,
   });
   entry[field] += amount;
+}
+
+// ─── 远矿 op 账本存储（观测期；净营收口径在 domain/remote/op-ledger）───
+// 键格式由 store 侧独占，调用方不自行拼接或解析。
+
+const OP_LEDGER_SEP = "|";
+
+function remoteOpLedgerKey(home: string, target: string): string {
+  return `${home}${OP_LEDGER_SEP}${target}`;
+}
+
+/** 读某 op 的账本；不存在时返回 undefined（不播种，供调用方判定 reset 后空壳）。 */
+export function peekRemoteOpLedger(home: string, target: string): RemoteOpLedger | undefined {
+  return globalCache().remoteOpLedgers?.get(remoteOpLedgerKey(home, target));
+}
+
+/** 写入（覆盖）某 op 的账本。跨 global reset 的恢复与播种走此入口。 */
+export function setRemoteOpLedger(home: string, target: string, ledger: RemoteOpLedger): void {
+  const g = globalCache();
+  if (!g.remoteOpLedgers) g.remoteOpLedgers = new Map();
+  g.remoteOpLedgers.set(remoteOpLedgerKey(home, target), ledger);
+}
+
+/** 取（或按当前 tick 播种）某 op 的账本。 */
+function getRemoteOpLedger(home: string, target: string): RemoteOpLedger {
+  const existing = peekRemoteOpLedger(home, target);
+  if (existing) return existing;
+  const tick = currentTick();
+  // 字面量须覆盖 RemoteOpLedger 全部字段——domain 侧加字段时此处编译失败，防漂移。
+  const created: RemoteOpLedger = {
+    delivered: 0,
+    spawnCost: 0,
+    refund: 0,
+    infraCost: 0,
+    windowStart: tick,
+    lastTick: tick,
+  };
+  setRemoteOpLedger(home, target, created);
+  return created;
+}
+
+/** 记一笔 op 收支。target 缺失（非远矿 creep）或金额非法时静默跳过。 */
+export function bumpRemoteOpLedger(
+  home: string,
+  target: string | undefined,
+  field: RemoteOpLedgerField,
+  amount: number,
+): void {
+  if (!target) return;
+  if (!(amount > 0) || !Number.isFinite(amount)) return;
+  const l = getRemoteOpLedger(home, target);
+  l[field] += amount;
+  l.lastTick = currentTick();
+}
+
+/** 遍历全部 op 账本（键解析集中在此，调用方拿结构化条目）。 */
+export function eachRemoteOpLedger(): {
+  home: string;
+  target: string;
+  ledger: RemoteOpLedger;
+}[] {
+  const map = globalCache().remoteOpLedgers;
+  if (!map || map.size === 0) return [];
+  const out: { home: string; target: string; ledger: RemoteOpLedger }[] = [];
+  for (const [key, ledger] of map) {
+    const sep = key.indexOf(OP_LEDGER_SEP);
+    if (sep < 0) continue;
+    out.push({
+      home: key.slice(0, sep),
+      target: key.slice(sep + OP_LEDGER_SEP.length),
+      ledger,
+    });
+  }
+  return out;
+}
+
+/**
+ * 丢弃某母房下不再存在的 op 账本（op 废弃/删除时调用）。
+ * 不清理会让重新开启同一目标房时继承旧计数，净营收从第一笔交付起就是错的。
+ */
+export function pruneRemoteOpLedgers(home: string, liveTargets: ReadonlySet<string>): void {
+  const map = globalCache().remoteOpLedgers;
+  if (!map || map.size === 0) return;
+  const prefix = `${home}${OP_LEDGER_SEP}`;
+  for (const key of Array.from(map.keys())) {
+    if (!key.startsWith(prefix)) continue;
+    if (liveTargets.has(key.slice(prefix.length))) continue;
+    map.delete(key);
+  }
+}
+
+function currentTick(): number {
+  return (globalThis as { Game?: { time?: number } }).Game?.time ?? 0;
 }
 /** Screeps 沙箱 `global` 对象的类型安全访问器。
  * 用 `globalThis` 避免与 `@types/node` 的 `global` 类型冲突（沙箱中二者同一作用域）。

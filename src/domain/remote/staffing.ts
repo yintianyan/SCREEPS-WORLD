@@ -11,7 +11,7 @@ import { CONFIG } from "../../config";
  * 大 body 时单只吞吐可能覆盖多个 source，haulerNeed 可低至 1；
  * 小 body 或远距离时可能需要 2-3 只。不做硬编码限制。
  *
- * 爬坡期按就位 harvester 数收缩（未到位不配满），下限 1 保物流连通。
+ * 爬坡期按就位**比例**收缩（未到位不配满），下限 1 保物流连通。
  *
  * 纯函数。
  */
@@ -20,15 +20,19 @@ export function remoteHaulerTarget(
   haulerNeed: number | undefined,
   harvestersReady: number,
 ): number {
-  const harvestersAvailable = Math.max(1, harvestersReady);
+  const sourcesTotal = Math.max(1, sources ?? CONFIG.remote.harvestersPerTarget);
 
-  // haulerNeed 来自 scoreRemoteCandidate（按 pathCost、body 运力、source 产能算出）。
+  // haulerNeed 来自 computeHaulerNeed（按 pathCost、body 运力、source 产能算出）。
   // 缺失时回退 1（最小可用，不假设 source 数）。
-  const target = Math.max(1, Math.min(CONFIG.remote.haulersMax, haulerNeed ?? 1));
+  const need = Math.max(1, Math.min(CONFIG.remote.haulersMax, haulerNeed ?? 1));
 
-  // 爬坡期收缩：未到位的 harvester 意味着产能未满，不需要满配 hauler。
-  // 按 harvester 就位比例收缩，下限 1。
-  return Math.max(1, Math.min(target, harvestersAvailable));
+  // 按就位**比例**收缩，而不是按 harvester 绝对数封顶。
+  // 封顶的后果：harvester 最多 harvestersMaxPerTarget(2) 只，而远房 haulerNeed
+  // 可达 haulersMax(4) —— 封顶后编制永远 ≤2，运力跟不上产出，container 溢出、
+  // 能量在地面衰减（距离越远亏得越多）；且回收侧按 op.haulerNeed 判超额（可达 4），
+  // 两侧口径分裂使 demand 永远够不到回收配额。
+  const readiness = Math.min(1, Math.max(0, harvestersReady) / sourcesTotal);
+  return Math.max(1, Math.ceil(need * readiness));
 }
 
 /**

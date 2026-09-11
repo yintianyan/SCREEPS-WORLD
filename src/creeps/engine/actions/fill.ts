@@ -1,7 +1,7 @@
 /** Fill actions — 向 fillTarget / storage / container 送能（与 dump 的区别： */
 import type { ActionCandidate } from "../action-types";
 import { globalCache } from "../../../kernel/global-cache";
-import { runAction } from "./helpers";
+import { runAction, runCountedAction } from "./helpers";
 import { updateMode } from "../lifecycle";
 import {
   findEmptiestContainer,
@@ -10,6 +10,22 @@ import {
   getHaulFillTarget,
 } from "../../support/targeting";
 import { getObjectById } from "../../support/obj-cache";
+
+/**
+ * 交付入账字段：只有远矿编队（带 remoteTarget）的交付算「跨房导入」。
+ * 本地搬运不计收入——本房 harvested 已记过 source 产能，再计一次是重复记账。
+ */
+function importedFieldFor(creep: Creep): "imported" | undefined {
+  return creep.memory.remoteTarget ? "imported" : undefined;
+}
+
+/** 交付意图量 = min(背包能量, 目标空余)。动作前求值，ERR_FULL 时归零。 */
+function transferIntent(creep: Creep, target: AnyOwnedStructure): number {
+  const carried = creep.store.getUsedCapacity(RESOURCE_ENERGY);
+  const store = (target as { store?: { getFreeCapacity(r?: ResourceConstant): number } }).store;
+  if (!store) return carried;
+  return Math.min(carried, store.getFreeCapacity(RESOURCE_ENERGY));
+}
 
 /** 向 fillTarget 送能（通用，使用 getFillTarget）。目标持久化消除等距目标摇摆。 */
 export function fillTarget(): ActionCandidate<AnyOwnedStructure> {
@@ -62,9 +78,14 @@ export function haulFillTarget(): ActionCandidate<AnyOwnedStructure> {
       return getHaulFillTarget(ac.creep, ac.snapshot);
     },
     execute: (ac, t) => {
-      runAction(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY), {
-        [ERR_FULL]: () => updateMode(ac.creep),
-      });
+      runCountedAction(
+        ac.creep,
+        t,
+        importedFieldFor(ac.creep),
+        () => ac.creep.transfer(t, RESOURCE_ENERGY),
+        { [ERR_FULL]: () => updateMode(ac.creep) },
+        () => transferIntent(ac.creep, t),
+      );
     },
   };
 }
@@ -147,7 +168,14 @@ export function fillStorage(): ActionCandidate<StructureStorage> {
       return ac.snapshot.storage;
     },
     execute: (ac, st) => {
-      runAction(ac.creep, st, () => ac.creep.transfer(st, RESOURCE_ENERGY));
+      runCountedAction(
+        ac.creep,
+        st,
+        importedFieldFor(ac.creep),
+        () => ac.creep.transfer(st, RESOURCE_ENERGY),
+        undefined,
+        () => transferIntent(ac.creep, st),
+      );
     },
   };
 }

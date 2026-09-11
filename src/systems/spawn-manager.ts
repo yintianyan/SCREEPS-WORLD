@@ -14,7 +14,7 @@ import { cleanQueue, removeRequestsByRole, sortQueue, submitRequest } from "../d
 import { selectRecycleCandidates } from "../domain/spawn/recycle";
 import { moveToTarget, moveTowardRoom } from "../creeps/movement";
 import { recordSkip } from "../kernel/memory";
-import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
+import { globalCache, bumpEnergyCounter, bumpRemoteOpLedger } from "../kernel/global-cache";
 import { recordExecution } from "../telemetry";
 import { log } from "../kernel/log";
 
@@ -303,7 +303,11 @@ function recyclePass(
       const storeBefore = spawn.store.getUsedCapacity(RESOURCE_ENERGY);
       if (spawn.recycleCreep(creep) === OK) {
         const refunded = spawn.store.getUsedCapacity(RESOURCE_ENERGY) - storeBefore;
-        if (refunded > 0) bumpEnergyCounter(home, "recycledRefund", refunded);
+        if (refunded > 0) {
+          bumpEnergyCounter(home, "recycledRefund", refunded);
+          // 远矿编队的回收返还冲销该 op 的孵化投入，否则「回收型轮换」会被记成亏损。
+          bumpRemoteOpLedger(home, creep.memory.remoteTarget, "refund", refunded);
+        }
       }
     } else {
       moveToTarget(creep, spawn);
@@ -475,6 +479,17 @@ export function trySpawn(
       if (queueIdx >= 0) queue.splice(queueIdx, 1);
       // P3 L1 核算：孵化成功即全额计费（gross；recycle 返还在回收通道冲销）。
       bumpEnergyCounter(snapshot.roomName, "spawned", bodyCost(body));
+      // 远矿编队：孵化成本记到该 op 名下（投资回收口径——一只 hauler 花 1800e，
+      // 必须运回 >1800e 才算回本）。房间计数器回答「本房花了多少」，
+      // op 账本回答「这条远矿线值不值」。
+      if (req.memory.remoteTarget) {
+        bumpRemoteOpLedger(
+          req.memory.home ?? snapshot.roomName,
+          req.memory.remoteTarget,
+          "spawnCost",
+          bodyCost(body),
+        );
+      }
       // P1 补位时延结算：匹配同角色死亡锚 → EMA（tick）。
       // B4-F08 修复：移除 (Memory as any) 类型绕过，使用类型安全访问。
       const stats = Memory.kernel?.stats;

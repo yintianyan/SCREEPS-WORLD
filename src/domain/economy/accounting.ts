@@ -26,6 +26,12 @@ export interface EnergyLedger {
   bought: number;
   /** 市场卖出能量（terminal.deal 付出的能量）。 */
   sold: number;
+  /**
+   * 跨房导入能量（远矿 hauler 交付到本房 sink）。只记「外部房→本房」，
+   * 房内搬运不计。当前**不计入 ledgerIncome**：并入会抬高本房净流 EMA，
+   * 进而改变门控与需求弹性——那是独立的行为变更，需单独评估后再接线。
+   */
+  imported: number;
 }
 
 export type LedgerField = keyof EnergyLedger;
@@ -53,6 +59,7 @@ export function emptyLedger(): EnergyLedger {
     towerSpent: 0,
     bought: 0,
     sold: 0,
+    imported: 0,
   };
 }
 

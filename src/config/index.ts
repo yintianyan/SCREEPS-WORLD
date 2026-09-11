@@ -39,7 +39,7 @@ export function getWallTargetHits(
 
 export const CONFIG = {
   memory: {
-    schemaVersion: 46,
+    schemaVersion: 47,
     /** 【F1/G-C】数据族 TTL 表（FREEZE §9）：每族 {maxAge, sweepPolicy}。
      * sweepPolicy: "ring"（定长环自动截断）| "hook"（由既有清理钩子执行）| "planned"（消费者落地前占位）。
      * 本表 v1 为治理登记：ring/hook 两类由既有机制兑现，"planned" 行不产生行为。 */
@@ -704,6 +704,26 @@ export const CONFIG = {
     /** 现役 op 经济重估宽限期（tick，A-3/B-6）— netScore 连续低于 minNetScore 超过
      * 此时长才废弃，抗路况/source 瞬时波动误撤边际 op（按 interval(10) 约 100 轮评估）。 */
     lowScoreGrace: 1000,
+    /** 实测净营收下限（e/tick）— 已开点、有实测数据的远矿线，净营收速率低于此值
+     * 判定为「运回来也不划算」，收缩停投。
+     *
+     * 与 minNetScore 的分工：minNetScore 是开点**前**的静态摊销预测（回答「稳态划不
+     * 划算」）；本值是开点**后**的实测投资回收口径（回答「这轮投资回本了吗」）。
+     * 静态模型永远看不到 container 溢出衰减、编队被反复击杀、道路迟迟不落地这些
+     * 实测损失，只有账本能。
+     *
+     * 取 0.5 而非 0：净营收刚好为 0 是「白干」，运维波动会把它推成负数；
+     * 留一点正裕量才值得占一个远矿名额与孵化位。 */
+    closeNetRate: 0.5,
+    /** 承诺期（tick）— 开点后至少运行这么久才允许因实测经济废弃。
+     * 必须覆盖「首笔孵化投入 → 首次交付回本」的时延：投入在开点瞬间付出、
+     * 交付要等通勤 + 采集，窗口未满时 netRate 必然为负，不设承诺期会把
+     * 每个新开的点都误杀（开→废抖动，每来回白烧一整套编队 body）。 */
+    minDuration: 5000,
+    /** 实测亏损废弃后的候选冷却（tick）— 不冷却的话静态门会立刻把同一房重新
+     * 选回来，形成开→废循环。取 10000：实测亏损多由距离/地形决定（结构性），
+     * 不会在几千 tick 内改变；但道路建成会显著改变运力，留出施工兑现窗口。 */
+    econCooldown: 10000,
     /** 是否启用 reserver（RCL3+ 才有意义，CLAIM 部件 600 能量）。 */
     enableReserver: true,
     /** 是否启用 remoteDefender（远矿防御者，杀 NPC reserver/Invader）。 */

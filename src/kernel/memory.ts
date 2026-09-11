@@ -1182,6 +1182,33 @@ const MIGRATIONS: ReadonlyArray<{
       delete kernel.powerFarm;
     },
   },
+  {
+    from: 46,
+    to: 47,
+    run: () => {
+      // v47：远矿 op 实测账本 RemoteOp.ledger（短字段 d/s/r/i/w）。可选、惰性写入，
+      // 实际值由 remote-mining-manager 每 managerInterval 回写，无需回填。
+      // 此处仅畸形自愈 —— 宁可丢一段观测，也不把 NaN/畸形结构喂进净营收计算。
+      // 有限性检查不能省：typeof NaN === "number"，只查类型会让 NaN 混进账本。
+      const isCount = (v: unknown): boolean => typeof v === "number" && Number.isFinite(v);
+      for (const roomName in Memory.rooms) {
+        const ops = Memory.rooms[roomName]?.remoteOps;
+        if (!ops) continue;
+        for (const op of Object.values(ops)) {
+          const raw: unknown = op.ledger;
+          if (raw === undefined) continue;
+          if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+            delete op.ledger;
+            continue;
+          }
+          const l = raw as Record<string, unknown>;
+          if (!isCount(l.d) || !isCount(l.s) || !isCount(l.r) || !isCount(l.i) || !isCount(l.w)) {
+            delete op.ledger;
+          }
+        }
+      }
+    },
+  },
 ];
 
 /**

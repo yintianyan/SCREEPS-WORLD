@@ -15,7 +15,24 @@ import { remoteReplacementThreshold, computePerHaulerThroughput } from "../domai
 import { classifyThreats } from "../domain/defense/threat";
 import { submitRequest } from "../domain/spawn/queue";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
-import { globalCache, querySquad } from "../kernel/global-cache";
+import {
+  globalCache,
+  querySquad,
+  peekRemoteOpLedger,
+  setRemoteOpLedger,
+  pruneRemoteOpLedgers,
+  bumpRemoteOpLedger,
+  eachRemoteOpLedger,
+} from "../kernel/global-cache";
+import {
+  emptyOpLedger,
+  fromOpLedgerSnapshot,
+  toOpLedgerSnapshot,
+  summarizeOpLedger,
+  opNetRate,
+  type RemoteOpLedger,
+  type RemoteOpLedgerSnapshot,
+} from "../domain/remote/op-ledger";
 import { intelPayloadView } from "./intelligence";
 import {
   assessThreat,
@@ -193,6 +210,9 @@ export const remoteMiningManagerSystem: System = {
             lastSeen: ctx.tick,
             ...(reservedByInvader ? { needCoreClear: true } : {}),
           };
+          // 账本窗口从开点 tick 起算：首笔交付前孵化成本就已发生，
+          // 若从首笔交付起算，投入会被漏计（窗口越长偏差越大）。
+          setRemoteOpLedger(snapshot.roomName, candidate.roomName, emptyOpLedger(ctx.tick));
         }
       }
 
@@ -200,6 +220,23 @@ export const remoteMiningManagerSystem: System = {
       if (Object.keys(remoteOps).length > 0) {
         roomMem.remoteOps = remoteOps;
       }
+
+      // 3b. 账本 GC：按「op 记录是否还存在」清理，而非「是否 active」。
+      //     废弃 op 的账本留到记录被删：既保留复盘数据，也避免其现役 creep 在
+      //     余命内继续交付时把账本反复删了又建（heap 空壳 → 计数丢失）。
+      //     重新开同一目标房时由开点播种显式重置，不会继承旧计数。
+      pruneRemoteOpLedgers(snapshot.roomName, new Set(Object.keys(remoteOps)));
+
+      // 3c. 账本 Memory ↔ heap 同步并回写。heap 是实时累加器（creeps 层只写 heap，
+      //     remoteOps 归本管理器唯一写入），Memory 负责跨 global reset 存活。
+      for (const [target, op] of Object.entries(remoteOps)) {
+        op.ledger = toOpLedgerSnapshot(
+          syncOpLedger(snapshot.roomName, target, op.ledger, ctx.tick),
+        );
+      }
+
+      // 3d. 实测经济门：账本已同步到本 tick，据此收缩实测亏损的远矿线。
+      enforceMeasuredEconomics(remoteOps, snapshot.roomName, ctx.tick);
 
       // 4. 评估远矿 spawn 需求。
       const colonyState: ColonyState = roomMem.colonyState ?? "normal";
@@ -564,8 +601,103 @@ export const remoteMiningManagerSystem: System = {
       // 5. 回收过量远矿 creep（超过配置上限的旧 creep 标记回收，节省 CPU）。
       recycleExcessRemoteCreeps(snapshot.roomName, remoteOps, intel);
     }
+
+    logRemoteLedgers(ctx.tick);
   },
 };
+
+/** 账本观测输出间隔（tick）——低频，避免刷屏与日志 CPU 开销。 */
+const LEDGER_LOG_INTERVAL = 1000;
+
+/**
+ * Memory ↔ heap 账本同步，返回权威（heap）账本。
+ *
+ * 窗口起点不一致即判定 heap 是 global reset 后重建的空壳 → 用持久化数据恢复。
+ * 这比「heap 缺失才恢复」可靠：reset 后首个 tick 若有交付先发生，heap 已被
+ * bump 出一个新条目，只按缺失判定就永远不会恢复。恢复会丢弃该 tick 的零星几笔，
+ * 远好于整窗观测被清零。
+ */
+export function syncOpLedger(
+  home: string,
+  target: string,
+  persisted: RemoteOpLedgerSnapshot | undefined,
+  tick: number,
+): RemoteOpLedger {
+  const heap = peekRemoteOpLedger(home, target);
+  if (heap && (!persisted || heap.windowStart === persisted.w)) return heap;
+  const restored = fromOpLedgerSnapshot(persisted, tick);
+  setRemoteOpLedger(home, target, restored);
+  return restored;
+}
+
+/**
+ * 实测经济门：用账本的真实净营收收缩「运回来也不划算」的远矿线。
+ *
+ * 与静态重估（reevaluateActiveOps 的 netScore）的分工：静态分是开点前的摊销
+ * 预测，永远看不到 container 溢出衰减、编队被反复击杀、道路迟迟不落地这些
+ * 实测损失；账本是唯一能回答「这轮投资回本了吗」的口径。
+ *
+ * 三道防误杀：
+ * 1. **承诺期**：投入在开点瞬间付出、交付要等通勤，窗口未满时净营收必为负，
+ *    不设承诺期会把每个新点都误杀。
+ * 2. **从未交付不判经济**：那是「运不回来」而非「运回来不划算」，归空转止损管，
+ *    本门重复处理会把物理受阻记成经济问题。
+ * 3. **废弃后打候选冷却**：静态门否则会立刻把同一房重新选回来（开→废抖动，
+ *    每来回白烧一整套编队 body）。
+ *
+ * 废弃只停投不杀现役（不回收 creep）：编队余命内继续交付仍是净收益，
+ * 提前回收反而浪费已付的 body 成本。与既有静态废弃路径同语义。
+ *
+ * @internal 导出仅供单元测试——业务代码唯一入口是 remoteMiningManagerSystem.run。
+ */
+export function enforceMeasuredEconomics(
+  remoteOps: Record<string, RemoteOp>,
+  homeRoom: string,
+  tick: number,
+): void {
+  for (const [target, op] of Object.entries(remoteOps)) {
+    if (op.state !== "active") continue;
+    if (tick - op.createdAt < CONFIG.remote.minDuration) continue;
+
+    const ledger = peekRemoteOpLedger(homeRoom, target);
+    if (!ledger) continue;
+    if (ledger.delivered <= 0) continue;
+
+    const rate = opNetRate(ledger, tick);
+    if (rate >= CONFIG.remote.closeNetRate) continue;
+
+    op.state = "abandoned";
+    op.dangerUntil = tick + CONFIG.remote.econCooldown;
+    log.info(
+      "remote-mining-manager",
+      `remote/${homeRoom}: 实测亏损收缩 ${target}` +
+        `（netRate=${rate.toFixed(2)} < ${CONFIG.remote.closeNetRate} e/t，` +
+        `delivered=${Math.round(ledger.delivered)} spawn=${Math.round(ledger.spawnCost)} ` +
+        `refund=${Math.round(ledger.refund)} infra=${Math.round(ledger.infraCost)}，` +
+        `运行 ${tick - op.createdAt} tick）`,
+    );
+  }
+}
+
+/**
+ * 结构建造成本（能量）。工地创建即视为承诺该笔投入——builder 后续只是兑现，
+ * 不重复计。CONSTRUCTION_COST 是引擎全局，精简测试环境可能缺失，按 0 兜底。
+ */
+function structureCost(type: BuildableStructureConstant): number {
+  const table = (globalThis as { CONSTRUCTION_COST?: Record<string, number> }).CONSTRUCTION_COST;
+  return table?.[type] ?? 0;
+}
+
+/**
+ * 低频输出各远矿 op 的净营收。观测期不参与任何决策：
+ * 先用真实数据看清「哪条线在赚钱」，再谈让实测接管开关。
+ */
+function logRemoteLedgers(tick: number): void {
+  if (tick % LEDGER_LOG_INTERVAL !== 0) return;
+  for (const { home, target, ledger } of eachRemoteOpLedger()) {
+    log.info("remote-ledger", summarizeOpLedger(home, target, ledger, tick));
+  }
+}
 
 /**
  * 现役 op 周期经济重估（A-3/B-6）。用当前 intel.pathCost + 当前 body 运力重算
@@ -1207,6 +1339,8 @@ export function fulfillContainerRequests(
         op.siteCount = 1;
         counters.markNormal();
         fulfilled = true;
+        // container 是这条远矿线的基建投入，记到 op 名下（净营收须扣除）。
+        bumpRemoteOpLedger(homeRoom, roomName, "infraCost", structureCost(STRUCTURE_CONTAINER));
       } else {
         // 持久失败（ERR_FULL / ERR_INVALID_TARGET）：写冷却让 resolve 放行 dropEnergy。
         for (const c of group) c.memory.containerSiteCooldown = Game.time + 100;
@@ -1467,6 +1601,9 @@ function planRemotePathRoads(
           roadSitesPending++;
           empireRoadPending++;
           blockedKeys.add(`${pos.x},${pos.y}`);
+          // 道路是运力倍增器（有路 hauler 速度 ×2），但也是实打实的能量投入，
+          // 记到 op 名下——否则「修路把远房变划算」的收益会被高估。
+          bumpRemoteOpLedger(homeRoom, rn, "infraCost", structureCost(STRUCTURE_ROAD));
         } else {
           // ERR_FULL / ERR_INVALID_TARGET（地形冲突等）：跳过该格，下轮重评。
           blockedKeys.add(`${pos.x},${pos.y}`);

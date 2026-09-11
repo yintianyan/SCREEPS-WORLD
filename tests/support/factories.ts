@@ -92,6 +92,8 @@ export function resetGlobals(): void {
   // P0-A：site 配额共享账本（construction-manager × remote-mining-manager）
   delete g.sitesCreatedThisTick;
   delete g.remoteSiteTotal;
+  // 远矿 op 账本（heap 累加器）— 漏清会让净营收断言跨用例污染。
+  delete g.remoteOpLedgers;
   // P1-E：每房每 tick 寻路预算计数器
   delete g.__pathSearchBudget;
   // P1-F：layout 4-stage 分片跨 tick 中间产物
