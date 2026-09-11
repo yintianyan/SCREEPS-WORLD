@@ -579,11 +579,26 @@ function collectSpawningSummaries(): SpawningSummary[] {
     const spawning = spawn.spawning;
     if (!spawning) continue;
     const mem = Memory.creeps[spawning.name];
-    if (!mem) continue;
+    if (mem) {
+      result.push({
+        name: spawning.name,
+        role: mem.role ?? "unknown",
+        home: mem.home ?? spawn.room.name,
+      });
+      continue;
+    }
+    // 孵化期 Memory.creeps[name] 尚不存在（引擎在 creep 出生时才写入 memory）。
+    // 若此处跳过会形成「计数黑洞」：孵化中的请求已从 spawnQueue 提货（countPending=0），
+    // 又不计入 counts → 替换门禁（maxCount/盈余检查）与编制评估全看不见它，
+    // 垂死者处于替换窗口的每个 tick 都会重复发请求，连孵多只替补
+    // （线上 W37S58 harvester 2→4→2 振荡根因，integration 振荡用例实锤）。
+    // 兜底：从 trySpawn 生成的名字解析（`${role}-${home}-${index}-${tick}-${rand}`，
+    // Screeps 房名与角色名均不含连字符，前两段可安全拆分）。
+    const parts = spawning.name.split("-");
     result.push({
       name: spawning.name,
-      role: mem.role ?? "unknown",
-      home: mem.home ?? spawn.room.name,
+      role: parts[0] || "unknown",
+      home: parts[1] || spawn.room.name,
     });
   }
   return result;

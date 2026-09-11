@@ -1677,7 +1677,12 @@ export class TestWorld {
     this._registerObject(hostile.id, hostile);
   }
 
-  /** 注入我方 creep（用于预设人口）。 */
+  /** 注入我方 creep（用于预设人口）。
+   *
+   * opts.ticksToLive / opts.energy 是引擎属性，不属于 memory — 与
+   * ScenarioBuilder.creep 的 opts 语义对齐。若调用方误把 ticksToLive 混进
+   * memoryOverrides（历史陷阱：被静默吞进 memory、TTL 仍为 1500，导致
+   * 「即将死亡」场景失效），此处自动提升为真实 TTL 并从 memory 剥离。 */
   addCreep(
     name: string,
     role: string,
@@ -1685,16 +1690,20 @@ export class TestWorld {
     y: number,
     body: Array<{ type: string }>,
     memoryOverrides?: Record<string, unknown>,
+    opts?: { energy?: number; ticksToLive?: number },
   ): void {
-    const memory = { role, home: this._room.name, ...memoryOverrides };
+    // 提升混入 memory 的引擎属性（防御历史调用习惯），再剥离避免污染 memory。
+    const { ticksToLive: memTTL, ...cleanOverrides } = memoryOverrides ?? {};
+    const ttl = opts?.ticksToLive ?? (typeof memTTL === "number" ? memTTL : 1500);
+    const memory = { role, home: this._room.name, ...cleanOverrides };
     const creep = new MockCreep(
       name,
       this._room._pos(x, y),
       body,
       this._room,
       this,
-      0,
-      1500,
+      opts?.energy ?? 0,
+      ttl,
       memory,
     );
     this._creeps.push(creep);

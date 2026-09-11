@@ -570,7 +570,11 @@ describe("Live Anomaly: Harvester 计数振荡", () => {
         { type: "carry" },
         { type: "move" },
       ],
-      { sourceId: "s2", mode: "work", ticksToLive: 100 },
+      { sourceId: "s2", mode: "work" },
+      // 「1 即将死亡」必须传引擎属性 opts — 旧写法混进 memory 后被
+      // TestWorld.addCreep 静默吞掉（TTL 仍 1500），h1/h2 于 t1500 同 tick
+      // 双死，替换+紧急复活叠加孵出 4 只，15c23c8 后暴露为 CI 失败。
+      { ticksToLive: 100 },
     );
     world.addCreep(
       "haul1",
