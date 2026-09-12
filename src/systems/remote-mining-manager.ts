@@ -211,6 +211,10 @@ export const remoteMiningManagerSystem: System = {
             lastSeen: ctx.tick,
             ...(reservedByInvader ? { needCoreClear: true } : {}),
           };
+          // 同 tick 双房去重：globalActiveTargets 在快照循环外构建，本轮新开的目标
+          // 不在集合里 —— 后续兄弟房同 tick 评选时会把它当未占用目标重复开点
+          // （双编队抢同一 source）。开点即加入，保证集合与新开动作同步。
+          globalActiveTargets.add(candidate.roomName);
           // 账本窗口从开点 tick 起算：首笔交付前孵化成本就已发生，
           // 若从首笔交付起算，投入会被漏计（窗口越长偏差越大）。
           setRemoteOpLedger(snapshot.roomName, candidate.roomName, emptyOpLedger(ctx.tick));

@@ -59,9 +59,9 @@ describe("EnergyLedger — L1 计数器", () => {
     expect(ledgerP0P1Consumption(l)).toBe(40);
   });
 
-  it("imported（跨房导入）已记账但不并入收入——并入会改变净流 EMA 与门控行为", () => {
+  it("imported（跨房导入）计入收入——远矿交付是本土房真实流入，与 ledgerConsumption 不含远矿采集侧对应，无双重计算", () => {
     const l = led({ harvested: 30, pickedUp: 20, imported: 500 });
-    expect(ledgerIncome(l)).toBe(50);
+    expect(ledgerIncome(l)).toBe(550);
     expect(ledgerConsumption(l)).toBe(0);
   });
 });

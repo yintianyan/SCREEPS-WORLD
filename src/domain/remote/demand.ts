@@ -382,6 +382,8 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
           const key = replacementKey("reserver", homeRoom, targetRoom, replacement);
           const body = selectBody("reserver", energyCapacityAvailable);
           if (body.includes("claim" as BodyPartConstant)) {
+            // P1：reserve 掉档 = 该远矿收入减半（10→5 e/tick/source），且重占窗口内
+            // 无收入。替补是对止损性支出的及时续费，不等同普通经济扩编（P2）。
             requests.push(
               createRemoteRequest(
                 "reserver",
@@ -389,7 +391,7 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
                 targetRoom,
                 reserverTotal,
                 key,
-                2,
+                1,
                 body,
                 tick,
                 replacement,

@@ -81,9 +81,11 @@ export function ledgerDelta(start: EnergyLedger, end: EnergyLedger): EnergyLedge
   return out;
 }
 
-/** 收入合计（harvest + pickup + bought）。 */
+/** 收入合计（harvest + pickup + bought + imported）。远矿 hauler 交付到本房 sink 是真实流入：
+ * 不并入则远矿支撑的本土房净流恒为负，帝国健康度/扩张就绪门（minNetFlow）被系统性压低。
+ * 与 ledgerConsumption 不含远矿房的 harvested 对应 —— 本房账本只收交付侧、不记远矿采集侧，无双重计算。 */
 export function ledgerIncome(l: EnergyLedger): number {
-  return l.harvested + l.pickedUp + l.bought;
+  return l.harvested + l.pickedUp + l.bought + l.imported;
 }
 
 /** 消费合计（gross，不含冲销；sold 为市场卖出能量，属消费侧）。 */

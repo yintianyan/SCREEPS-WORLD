@@ -45,10 +45,12 @@ export function runCountedAction(
   return result;
 }
 
-/** 维修 intent 计量：hits 补量 = min(REPAIR_POWER × WORK 部件数, 目标缺口)。 */
+/** 维修 intent 计量：能量消耗 = min(REPAIR_POWER × WORK 部件数, 目标缺口) ÷ REPAIR_POWER。
+ * 1 energy 修 100 hits/WORK — ledger.repaired 契约是能量口径，与 hits 口径差 100 倍
+ * （不一致时 ledgerConsumption/P0P1 速率把 hits 当 energy，消费与净流被高估百倍）。 */
 export function repairIntentAmount(creep: Creep, target: Structure): number {
   const work = creep.body.filter(p => p.type === WORK).length;
-  return Math.min(REPAIR_POWER * work, target.hitsMax - target.hits);
+  return Math.min(REPAIR_POWER * work, target.hitsMax - target.hits) / REPAIR_POWER;
 }
 
 /**
