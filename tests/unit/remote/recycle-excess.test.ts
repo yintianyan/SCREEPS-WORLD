@@ -142,3 +142,64 @@ describe("recycleExcessRemoteCreeps — 交接豁免", () => {
     expect(alive.memory.recycle).toBe(false); // 唯一在编者，不超额。
   });
 });
+
+describe("recycleExcessRemoteCreeps — 载货保留序", () => {
+  /** 带货 mock：cargo>0 表示满载归途中。 */
+  function loadedCreep(name: string, opts: { ttl: number; cargo: number }): any {
+    const c = remoteCreep(name, "remoteHauler", { ttl: opts.ttl });
+    c.store = { getUsedCapacity: () => opts.cargo };
+    return c;
+  }
+
+  it("配额 1 双超额：满载年轻者留场交付，空载年老者先回收（旧行为回收满载者）", () => {
+    // 线上实证形态：满载 1000e 的 hauler 被标回收，背着货走归途被 recycleCreep
+    // 销毁整包 cargo。修复后 keepWorthiness 载货优先于年轻。
+    (OPS.W7N5 as { haulerNeed?: number }).haulerNeed = 1;
+    const loaded = loadedCreep("h_loaded", { ttl: 1300, cargo: 1000 });
+    const empty = remoteCreep("h_empty", "remoteHauler", { ttl: 1400 });
+
+    runWith(loaded, empty);
+
+    expect(loaded.memory.recycle).toBe(false); // 载货优先保留。
+    expect(empty.memory.recycle).toBe(true); // 空载者先退场。
+    delete (OPS.W7N5 as { haulerNeed?: number }).haulerNeed;
+  });
+
+  it("两只都满载 → 回退到年轻优先（载货同层内按 TTL 排序）", () => {
+    (OPS.W7N5 as { haulerNeed?: number }).haulerNeed = 1;
+    const older = loadedCreep("h_old", { ttl: 900, cargo: 800 });
+    const younger = loadedCreep("h_young", { ttl: 1300, cargo: 800 });
+
+    runWith(older, younger);
+
+    expect(older.memory.recycle).toBe(true);
+    expect(younger.memory.recycle).toBe(false);
+    delete (OPS.W7N5 as { haulerNeed?: number }).haulerNeed;
+  });
+
+  it("三只超额配额 1：满载者保留，两只空载中更老的先标记", () => {
+    (OPS.W7N5 as { haulerNeed?: number }).haulerNeed = 1;
+    const loaded = loadedCreep("h_loaded", { ttl: 700, cargo: 1000 });
+    const emptyOld = remoteCreep("h_e1", "remoteHauler", { ttl: 800 });
+    const emptyYoung = remoteCreep("h_e2", "remoteHauler", { ttl: 1400 });
+
+    runWith(loaded, emptyOld, emptyYoung);
+
+    expect(loaded.memory.recycle).toBe(false);
+    expect(emptyOld.memory.recycle).toBe(true);
+    expect(emptyYoung.memory.recycle).toBe(true);
+    delete (OPS.W7N5 as { haulerNeed?: number }).haulerNeed;
+  });
+
+  it("无 store 的精简 mock（存量测试形态）不崩溃，按空载处理", () => {
+    (OPS.W7N5 as { haulerNeed?: number }).haulerNeed = 1;
+    const a = remoteCreep("h_a", "remoteHauler", { ttl: 900 });
+    const b = remoteCreep("h_b", "remoteHauler", { ttl: 1200 });
+
+    runWith(a, b);
+
+    expect(b.memory.recycle).toBe(false);
+    expect(a.memory.recycle).toBe(true);
+    delete (OPS.W7N5 as { haulerNeed?: number }).haulerNeed;
+  });
+});

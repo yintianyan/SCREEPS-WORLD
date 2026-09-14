@@ -160,3 +160,88 @@ describe("enforceMeasuredEconomics — 实测亏损收缩", () => {
     expect(picked.find(c => c.roomName === TARGET)).toBeUndefined();
   });
 });
+
+describe("enforceMeasuredEconomics — 零交付止损", () => {
+  it("过承诺期零交付且孵化投入烧穿门槛 → 废弃 + 冷却（线上 W36S58 形态）", () => {
+    const ops = { [TARGET]: makeOp() };
+    // 线上实证形态：delivered=0、spawnCost=150k、18k tick。
+    seedLedger({ delivered: 0, spawnCost: 150000 });
+
+    enforceMeasuredEconomics(ops, HOME, NOW);
+
+    expect(ops[TARGET]?.state).toBe("abandoned");
+    expect(ops[TARGET]?.dangerUntil).toBe(NOW + CONFIG.remote.econCooldown);
+  });
+
+  it("边界：孵化投入刚好差 1 达不到门槛 → 保留（仍给重启机会）", () => {
+    const ops = { [TARGET]: makeOp() };
+    seedLedger({ delivered: 0, spawnCost: CONFIG.remote.zeroDeliverySpawnCost - 1 });
+
+    enforceMeasuredEconomics(ops, HOME, NOW);
+
+    expect(ops[TARGET]?.state).toBe("active");
+  });
+
+  it("边界：投入达标但仍在承诺期内 → 保留（投入未付够不判死）", () => {
+    const ops = { [TARGET]: makeOp({ createdAt: NOW - CONFIG.remote.minDuration + 1 }) };
+    seedLedger({ delivered: 0, spawnCost: 150000 });
+
+    enforceMeasuredEconomics(ops, HOME, NOW);
+
+    expect(ops[TARGET]?.state).toBe("active");
+  });
+
+  it("异常：拆核救援任务在场（needCoreClear）→ 保留（救援期交付本应为 0）", () => {
+    const ops = { [TARGET]: makeOp({ needCoreClear: true }) };
+    seedLedger({ delivered: 0, spawnCost: 150000 });
+
+    enforceMeasuredEconomics(ops, HOME, NOW);
+
+    expect(ops[TARGET]?.state).toBe("active");
+  });
+
+  it("异常：拆墙救援任务在场（needWallClear）→ 保留", () => {
+    const ops = { [TARGET]: makeOp({ needWallClear: true }) };
+    seedLedger({ delivered: 0, spawnCost: 150000 });
+
+    enforceMeasuredEconomics(ops, HOME, NOW);
+
+    expect(ops[TARGET]?.state).toBe("active");
+  });
+
+  it("异常：威胁失明保持期内 → 保留（威胁期交付为 0，归威胁链管）", () => {
+    const ops = { [TARGET]: makeOp({ threatUntil: NOW + 100 }) };
+    seedLedger({ delivered: 0, spawnCost: 150000 });
+
+    enforceMeasuredEconomics(ops, HOME, NOW);
+
+    expect(ops[TARGET]?.state).toBe("active");
+  });
+
+  it("异常：危险冷却期内 → 保留", () => {
+    const ops = { [TARGET]: makeOp({ dangerUntil: NOW + 100 }) };
+    seedLedger({ delivered: 0, spawnCost: 150000 });
+
+    enforceMeasuredEconomics(ops, HOME, NOW);
+
+    expect(ops[TARGET]?.state).toBe("active");
+  });
+
+  it("异常：InvaderCore 压制冷却期内 → 保留", () => {
+    const ops = { [TARGET]: makeOp({ blockedUntil: NOW + 100 }) };
+    seedLedger({ delivered: 0, spawnCost: 150000 });
+
+    enforceMeasuredEconomics(ops, HOME, NOW);
+
+    expect(ops[TARGET]?.state).toBe("active");
+  });
+
+  it("冷却已过期的威胁标记不豁免（threatUntil 是过去时刻）→ 正常止损", () => {
+    const ops = { [TARGET]: makeOp({ threatUntil: NOW - 1 }) };
+    seedLedger({ delivered: 0, spawnCost: 150000 });
+
+    enforceMeasuredEconomics(ops, HOME, NOW);
+
+    expect(ops[TARGET]?.state).toBe("abandoned");
+  });
+});

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
+import { createEmptyPlan } from "../../../src/domain/logistics/transport-plan";
 import { CONFIG } from "../../../src/config";
 import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
 
@@ -94,5 +95,61 @@ describe("remote-mining-manager — 现役 op 周期经济重估", () => {
     const op = g.Memory.rooms[homeRoom].remoteOps[targetRoom];
     expect(op.state).toBe("active");
     expect(op.lowScoreSince).toBeUndefined(); // 回升清零。
+  });
+});
+
+describe("remote-mining-manager — haulerNeed 决策权回归（A4.4 authority 死锁）", () => {
+  it("Plan 存在且新鲜（不含 operation 请求）→ haulerNeed 仍被重算覆写（线上 18k tick 冻结回归）", () => {
+    // 线上形态：op.haulerNeed 冻结在 1（2 源），运力仅产出 12%。
+    // 旧代码 planActive 恒真 → 覆写被跳过；修复后重估是唯一决策源。
+    const g = globalThis as any;
+    const now = g.Game.time as number;
+    seed(
+      now,
+      {
+        [targetRoom]: {
+          state: "active",
+          sources: 2,
+          haulerNeed: 1, // 冻结的陈旧值。
+          createdAt: now - 100,
+          lastSeen: now,
+        },
+      },
+      { [targetRoom]: { kind: "normal", status: "normal", lastSeen: now, pathCost: 60 } },
+    );
+    // 模拟 planner 每 100t 刷新的新鲜 Plan（无 operation 请求 — 线上真实行为）。
+    globalCache().logisticsPlan = { tick: now, plan: createEmptyPlan(now, "test") };
+
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
+
+    const op = g.Memory.rooms[homeRoom].remoteOps[targetRoom];
+    // eCap 800 → 无路 hauler [8C,8M] 运力 400；pathCost 60 → perHauler=400/120≈3.33；
+    // demand=2×10=20 → need=ceil(6.0)=7 → clamp haulersMax(4)。
+    expect(op.haulerNeed).toBe(CONFIG.remote.haulersMax);
+  });
+
+  it("Plan 过期（plannedAt 超 100t）→ haulerNeed 正常重算（降级路径不回归）", () => {
+    const g = globalThis as any;
+    const now = g.Game.time as number;
+    seed(
+      now,
+      {
+        [targetRoom]: {
+          state: "active",
+          sources: 2,
+          haulerNeed: 1,
+          createdAt: now - 100,
+          lastSeen: now,
+        },
+      },
+      { [targetRoom]: { kind: "normal", status: "normal", lastSeen: now, pathCost: 60 } },
+    );
+    globalCache().logisticsPlan = { tick: now - 101, plan: createEmptyPlan(now - 101, "stale") };
+
+    remoteMiningManagerSystem.run(mockContext(mockSnapshot({ rcl: 5, spawns: [{} as never] })));
+
+    expect(g.Memory.rooms[homeRoom].remoteOps[targetRoom].haulerNeed).toBe(
+      CONFIG.remote.haulersMax,
+    );
   });
 });

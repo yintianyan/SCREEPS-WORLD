@@ -11,7 +11,7 @@ import {
 } from "../domain/remote/targeting";
 import { INVADER_USERNAME, isHostilePlayerReservation } from "../domain/intel";
 import { evaluateRemoteDemand, type RemoteCreepSummary } from "../domain/remote/demand";
-import { remoteReplacementThreshold, computePerHaulerThroughput } from "../domain/remote/staffing";
+import { remoteReplacementThreshold } from "../domain/remote/staffing";
 import { classifyThreats } from "../domain/defense/threat";
 import { submitRequest } from "../domain/spawn/queue";
 import { getRemoteSiteTotal, getTickSiteCounters } from "./site-quota";
@@ -152,13 +152,14 @@ export const remoteMiningManagerSystem: System = {
       // 现役 op 周期重估：用当前 pathCost + 当前 body 运力重算 netScore/haulerNeed。
       // 一次性快照的反面 —— 开点时勉强达标、后续变差（路况恶化/source 被抢）的
       // 边际 op 若不重估会永续；body 变大后 haulerNeed 也需缩编避免过配。
-      // A4.4 修复 DUPLICATE-003：Plan 存在时，reevaluateActiveOps 降级为 Capacity Signal。
-      // 旧逻辑：reevaluateActiveOps 独立计算 haulerNeed，Plan 只增不减 → 两个决策源冲突。
-      // 修复后：Plan 存在时，reevaluateActiveOps 仍然运行（采集 pathCost/body 变化信号），
-      // 但其 haulerNeed 结果只作为 Plan 的输入参考，不直接覆写。
-      // Plan 的 scope="operation" 请求拥有 Decision Authority（在下方 L295-316 消费）。
-      const planForRemote = globalCache().logisticsPlan?.plan;
-      const planIsActiveForRemote = planForRemote && planForRemote.plannedAt >= ctx.tick - 100;
+      // A4.4 决策权退休（2026-09 实测教训）：曾设计「Plan 的 scope="operation" 请求
+      // 拥有 haulerNeed 决策权、重估降级为信号」，但 planLogistics 实际只产
+      // "empire" scope（contracts/deficits 两源），operation 请求从未存在 ——
+      // 消费端永不触发，而重估被 planActive（planner 每 100t 刷新 → plannedAt
+      // 几乎恒新）永久哑火。双写端全部静默 = op.haulerNeed 冻结在开点值：
+      // W36S58 冻结在 1（2 源满产 20 e/t vs 单 hauler ~2.5 e/t 运力），
+      // container 长期溢出、18k tick 零交付、15 万孵化投入归零。
+      // 修复后重估是唯一决策源，每 interval 按实测 pathCost/body 重算。
       reevaluateActiveOps(
         remoteOps,
         intel,
@@ -167,14 +168,6 @@ export const remoteMiningManagerSystem: System = {
         roadStatus,
         ctx.tick,
       );
-
-      // A4.4：如果 Plan 有效，记录 reevaluateActiveOps 的 haulerNeed 信号到 Plan 消费日志。
-      // Plan 消费逻辑（L295-316）会用 Plan 的 haulerNeed 覆写，reevaluateActiveOps 的结果
-      // 作为降级 fallback（Plan 不存在时有效）。
-      if (planIsActiveForRemote) {
-        // Plan 存在 — reevaluateActiveOps 的 haulerNeed 作为 fallback signal。
-        // Plan 消费在 L295-316 中处理，此处不做额外操作。
-      }
 
       // 逐房就绪门（Phase 1b）：帝国姿态放行（newOpsAllowed）之外，本房还须自身经济
       // 成熟才「新开」远矿 — RCL≥roomMinRcl 且 colonyState=normal 且 storage 盈余，
@@ -531,72 +524,6 @@ export const remoteMiningManagerSystem: System = {
           ),
         });
 
-        // A4.3：从 logistics-planner 产出的 Transport Plan 中提取 operation-scope 请求，
-        // 作为远矿运力需求的补充信号。如果 Plan 指示某远矿房需要额外运力，
-        // 在 evaluateRemoteDemand 已产出的 requests 基础上不删除，只追加（不覆盖）。
-        // 这使远矿 hauler 编制不仅基于 container 积压信号，还基于 Plan 的主动规划。
-        // A4.4 修复 DUPLICATE-003：Plan 有效时拥有完整 Decision Authority（可增可减）。
-        // 旧逻辑：Plan 只增不减（if planHaulerNeed > existing），reevaluateActiveOps 的
-        //   缩编决策可能被 Plan 覆写。两个决策源冲突。
-        // 修复后：Plan 有效时，Plan 的 haulerNeed 直接覆写（可增可减）。
-        // Plan 不存在时，reevaluateActiveOps 的 haulerNeed 保持有效（DEGRADED MODE）。
-        const logisticsPlan = globalCache().logisticsPlan?.plan;
-        if (logisticsPlan && logisticsPlan.plannedAt >= ctx.tick - 100) {
-          const planOpReqs = logisticsPlan.requests.filter(
-            r => r.scope === "operation" && r.source.room === snapshot.roomName,
-          );
-          for (const planReq of planOpReqs) {
-            // Plan 指示的远矿目标房运力需求
-            const targetOp = remoteOps[planReq.destination.room];
-            if (targetOp && targetOp.state === "active") {
-              // 基于实际 body carry + pathCost + 道路状态精确计算单只 hauler 吞吐量，
-              // 替代旧的 1000 energy/hauler 粗算。pathCost 缺失时回退保守粗算。
-              const hasRoad = (roadStatus[planReq.destination.room] ?? 0) >= 0.6;
-              const pathCost = intel[planReq.destination.room]?.pathCost;
-              const haulerBodyForCalc = selectBody(
-                "remoteHauler",
-                snapshot.energyCapacityAvailable,
-                { hasRoad },
-              );
-              const carryParts = haulerBodyForCalc.filter(p => p === CARRY).length;
-              const planHaulerNeed =
-                pathCost !== undefined
-                  ? Math.max(
-                      1,
-                      Math.min(
-                        CONFIG.remote.haulersMax,
-                        Math.ceil(
-                          planReq.amount /
-                            Math.max(
-                              0.01,
-                              computePerHaulerThroughput(
-                                carryParts,
-                                pathCost,
-                                roadStatus[planReq.destination.room] ?? 0,
-                              ).throughput,
-                            ),
-                        ),
-                      ),
-                    )
-                  : Math.max(
-                      1,
-                      Math.min(CONFIG.remote.haulersMax, Math.ceil(planReq.amount / 1000)),
-                    );
-              // A4.4：Plan 拥有 Decision Authority — 可增可减。
-              if (planHaulerNeed !== (targetOp.haulerNeed ?? 0)) {
-                const oldNeed = targetOp.haulerNeed ?? 0;
-                targetOp.haulerNeed = planHaulerNeed;
-                const direction = planHaulerNeed > oldNeed ? "increase" : "decrease";
-                log.info(
-                  "remote-mining-manager",
-                  `remote/plan-calibrate: ${snapshot.roomName} → ${planReq.destination.room}` +
-                    ` haulerNeed=${planHaulerNeed} (Plan ${direction} from ${oldNeed}, amount=${planReq.amount})`,
-                );
-              }
-            }
-          }
-        }
-
         // 推入 spawnQueue。
         for (const req of requests) {
           submitRequest(queue, req);
@@ -655,16 +582,19 @@ export function syncOpLedger(
  * 预测，永远看不到 container 溢出衰减、编队被反复击杀、道路迟迟不落地这些
  * 实测损失；账本是唯一能回答「这轮投资回本了吗」的口径。
  *
- * 三道防误杀：
+ * 四道防误杀：
  * 1. **承诺期**：投入在开点瞬间付出、交付要等通勤，窗口未满时净营收必为负，
  *    不设承诺期会把每个新点都误杀。
- * 2. **从未交付不判经济**：那是「运不回来」而非「运回来不划算」，归空转止损管，
- *    本门重复处理会把物理受阻记成经济问题。
+ * 2. **从未交付不判净营收**：那是「运不回来」而非「运回来不划算」——但零交付
+ *    不等于免死：过承诺期仍零交付且孵化投入 ≥ zeroDeliverySpawnCost 时走
+ *    零交付止损（2026-09 实证：W36S58 运力冻结在产出 12%，18k tick 零交付
+ *    烧掉 15 万孵化，实测门/空转门/静态门三门全部漏接，见 CONFIG 注释）。
+ *    零交付止损要求无救援任务（拆核/拆墙 — 救援期交付本就为 0）且无威胁/
+ *    危险/压制冷却（威胁期交付同样为 0，归威胁链管）。
  * 3. **废弃后打候选冷却**：静态门否则会立刻把同一房重新选回来（开→废抖动，
  *    每来回白烧一整套编队 body）。
- *
- * 废弃只停投不杀现役（不回收 creep）：编队余命内继续交付仍是净收益，
- * 提前回收反而浪费已付的 body 成本。与既有静态废弃路径同语义。
+ * 4. **废弃只停投不杀现役**（不回收 creep）：编队余命内继续交付仍是净收益，
+ *    提前回收反而浪费已付的 body 成本。与既有静态废弃路径同语义。
  *
  * @internal 导出仅供单元测试——业务代码唯一入口是 remoteMiningManagerSystem.run。
  */
@@ -679,7 +609,27 @@ export function enforceMeasuredEconomics(
 
     const ledger = peekRemoteOpLedger(homeRoom, target);
     if (!ledger) continue;
-    if (ledger.delivered <= 0) continue;
+
+    if (ledger.delivered <= 0) {
+      // 零交付止损：承诺期已过、孵化投入烧穿门槛、且不在任何「交付本应为 0」
+      // 的合法窗口（救援任务/威胁冷却）—— 物流断链或目标实质不可达，停投。
+      const rescueActive = op.needCoreClear === true || op.needWallClear === true;
+      const threatHold =
+        (op.threatUntil !== undefined && tick < op.threatUntil) ||
+        (op.dangerUntil !== undefined && tick < op.dangerUntil) ||
+        (op.blockedUntil !== undefined && tick < op.blockedUntil);
+      if (ledger.spawnCost >= CONFIG.remote.zeroDeliverySpawnCost && !rescueActive && !threatHold) {
+        op.state = "abandoned";
+        op.dangerUntil = tick + CONFIG.remote.econCooldown;
+        log.info(
+          "remote-mining-manager",
+          `remote/${homeRoom}: 零交付止损 ${target}` +
+            `（零交付 ${tick - op.createdAt} tick，spawn=${Math.round(ledger.spawnCost)} ` +
+            `infra=${Math.round(ledger.infraCost)} ≥ ${CONFIG.remote.zeroDeliverySpawnCost}）`,
+        );
+      }
+      continue;
+    }
 
     const rate = opNetRate(ledger, tick);
     if (rate >= CONFIG.remote.closeNetRate) continue;
@@ -741,15 +691,10 @@ function reevaluateActiveOps(
       haulerCapacity,
       hasRoad,
     });
-    // B5b-F02 修复：Plan 有效时不覆写 op.haulerNeed（Plan 拥有 Decision Authority）。
-    // 仅在 Plan 不存在/过期时写入 haulerNeed 作为 fallback（DEGRADED MODE）。
-    const planActive = (() => {
-      const plan = globalCache().logisticsPlan?.plan;
-      return !!plan && plan.plannedAt >= tick - 100;
-    })();
-    if (!planActive) {
-      op.haulerNeed = haulerNeed;
-    }
+    // 唯一决策源（A4.4 决策权退休，见 run() 内注释）：无条件写入重算结果。
+    // 旧 planActive 门是 authority 死锁的根因 —— Plan 永不含 operation 请求，
+    // 门却几乎恒真，haulerNeed 被冻结在开点值直至 op 死亡。
+    op.haulerNeed = haulerNeed;
     if (netScore < CONFIG.remote.minNetScore) {
       if (op.lowScoreSince === undefined) {
         op.lowScoreSince = tick; // 首次跌破 — 起算宽限期。
@@ -1049,11 +994,19 @@ export function recycleExcessRemoteCreeps(
     );
   };
 
-  // 组内标记：豁免垂死交接者后，健康成员超出配额的部分回收（保留最年轻）。
+  // 组内标记：豁免垂死交接者后，健康成员超出配额的部分回收。
+  // 保留序「载货优先，其次年轻」（2026-09 实测教训）：被回收的 creep 由
+  // recyclePass 引导回 home 走 spawn.recycleCreep 消融，**随身货物一并销毁**
+  // ——满载归途中的 hauler 被标记 = 800-1200e 交付报废 + 白走一趟归途。
+  // 无货成员被回收只损失残值，载货成员被回收损失残值 + 整包 cargo，故
+  // keepWorthiness 把载货排前：满载者留场完成交付，空载且更老者先退场。
   const markExcess = (creeps: Creep[], quota: number): void => {
     const healthy = creeps.filter(c => !inReplacementWindow(c));
     if (healthy.length <= quota) return;
-    healthy.sort((a, b) => (b.ticksToLive ?? 0) - (a.ticksToLive ?? 0));
+    const keepWorthiness = (c: Creep): number =>
+      ((c.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0) > 0 ? Number.MAX_SAFE_INTEGER / 2 : 0) +
+      (c.ticksToLive ?? 0);
+    healthy.sort((a, b) => keepWorthiness(b) - keepWorthiness(a));
     for (let i = quota; i < healthy.length; i++) {
       healthy[i]!.memory.recycle = true;
     }
