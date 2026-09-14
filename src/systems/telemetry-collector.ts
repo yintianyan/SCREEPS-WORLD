@@ -15,7 +15,6 @@ import {
 import {
   sampleCpu,
   sampleEconomy,
-  type CpuSample,
   type PopulationSnapshot,
   type HeapSample,
 } from "../kernel/timeseries";
@@ -245,7 +244,7 @@ const MEMORY_SIZE_ALERT = 1_500_000;
 /** 采样 Memory 原始字符串体积并告警。RawMemory.get() 返回 Memory 的 JSON 字符串
  * [Fact: typings get(): string]，.length 是零成本属性读取（不解析 JSON）。
  * 写入 stats.memorySize 供 @TELEMETRY 外部采集器追踪体积趋势。 */
-function sampleMemorySize(tick: number): void {
+function sampleMemorySize(_tick: number): void {
   // safeRun 包裹：私服或测试环境可能无 RawMemory.get（typings 不保证所有环境）。
   try {
     const size = RawMemory.get().length;
@@ -333,7 +332,7 @@ function flushEventBufferOnly(): void {
  * 的显式事件 flush 到 segment 2。差分检测不修改现有系统 — 纯观察者，每次运行
  * 读取当前 Memory 状态与上次记录的「前值」对比。
  */
-function detectAndFlushEvents(tick: number, ctx: TickContext): void {
+function detectAndFlushEvents(_tick: number, ctx: TickContext): void {
   const g = globalCache() as any;
   if (!g.__telemetryPrevState) g.__telemetryPrevState = {};
 

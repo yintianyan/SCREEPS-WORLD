@@ -137,13 +137,6 @@ const HEALTH_RANK: Record<DimensionHealth, number> = {
   critical: 1,
 };
 
-const RANK_TO_HEALTH: Record<number, DimensionHealth> = {
-  4: "healthy",
-  3: "stable",
-  2: "degraded",
-  1: "critical",
-};
-
 // ─── 评估函数 ──────────────────────────────────────────────
 
 /**

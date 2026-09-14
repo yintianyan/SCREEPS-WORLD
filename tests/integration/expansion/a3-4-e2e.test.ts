@@ -1,7 +1,7 @@
 /** A3.4 E2E Tests — Colony Autonomy & Stability 端到端测试。 */
 
 import { describe, it, expect } from "vitest";
-import { evaluateAutonomyAge, AUTONOMY_MILESTONES } from "../../../src/domain/expansion/autonomy";
+import { evaluateAutonomyAge } from "../../../src/domain/expansion/autonomy";
 import { evaluateStabilityScore } from "../../../src/domain/expansion/stability-score";
 import {
   evaluateColonyFailure,

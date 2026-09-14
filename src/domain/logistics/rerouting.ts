@@ -1,7 +1,7 @@
 /** Dynamic Rerouting */
 
 import type { Route } from "./route";
-import { routeScore, isRouteUsable, makeRouteId } from "./route";
+import { routeScore, isRouteUsable } from "./route";
 import type { RouteCache } from "./route-cache";
 
 // ─── 重路由结果 ────────────────────────────────────────────
@@ -40,7 +40,7 @@ export interface ReroutingResult {
 export function findAlternateRoute(
   cache: RouteCache,
   blockedRoute: Route,
-  tick: number,
+  _tick: number,
 ): ReroutingResult {
   const from = blockedRoute.from;
   const to = blockedRoute.to;

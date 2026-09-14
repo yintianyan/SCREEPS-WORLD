@@ -1,5 +1,4 @@
 import { CONFIG, tierLimits, tierMaxPriority } from "../config";
-import { globalCache } from "./global-cache";
 import { log } from "./log";
 import { EventKind, recordEvent } from "./event-log";
 import type { Budget, CpuTier, Priority } from "./contracts";

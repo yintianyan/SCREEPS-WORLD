@@ -2,7 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { harvesterRole } from "../../../src/creeps/roles/harvester";
 import {
-  mockBudget,
   mockConstructionSite,
   mockContext,
   mockController,

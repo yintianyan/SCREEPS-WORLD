@@ -1,7 +1,7 @@
 /** RemoteHauler */
 import type { Priority } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
-import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
+import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { fillStorage, haulFillTarget } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";

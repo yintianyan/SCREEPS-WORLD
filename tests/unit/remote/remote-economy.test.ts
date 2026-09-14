@@ -18,7 +18,6 @@ import {
   serializeRemoteSource,
   deserializeRemoteSource,
   type RemoteSource,
-  type RemoteSourceStatus,
   type IntelForRemoteSource,
   type RemoteSourceInput,
 } from "../../../src/domain/remote/remote-source";
@@ -30,12 +29,9 @@ import {
   gradeValue,
   batchAssessValues,
   filterWorthInvesting,
-  DEFAULT_VALUE_CONFIG,
-  type ValueAssessmentConfig,
 } from "../../../src/domain/remote/remote-value";
 import {
   createOpportunity,
-  updateOpportunityStatus,
   approveOpportunity,
   rejectOpportunity,
   markExecuting,

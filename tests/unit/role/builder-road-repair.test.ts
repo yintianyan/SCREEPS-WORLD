@@ -1,13 +1,7 @@
 /** 道路维修链测试 — 危路急救提级与 hysteresis 修满放手。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { builderRole } from "../../../src/creeps/roles/builder";
-import {
-  mockContext,
-  mockCreep,
-  mockSnapshot,
-  mockStructure,
-  resetGlobals,
-} from "../../support/factories";
+import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../support/factories";
 
 function road(id: string, hits: number, hitsMax = 5000): any {
   return { id, hits, hitsMax, structureType: "road", pos: { x: 20, y: 20, getRangeTo: () => 1 } };

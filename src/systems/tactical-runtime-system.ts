@@ -20,13 +20,10 @@ import {
   type EnemySnapshot,
   type EnemyStructureSnapshot,
   type TacticalAbortSignal,
-  type ReinforcementDemand,
   type ForceShortage,
   type SupplyDemand,
-  type TacticalDecisionRecord,
   type TacticalDecisionEvent,
   type RoleActionIntent,
-  type ObjectiveLifecycleState,
   type TacticalObjectiveRecord,
   type LifecycleAssessmentInput,
   type FormationType,
@@ -266,7 +263,7 @@ function buildTacticalObjective(
  */
 function buildSquadPlan(
   plan: NonNullable<KernelMemory["warPlan"]>,
-  tick: number,
+  _tick: number,
 ): SquadPlan | null {
   const squadEntries = querySquad({
     home: plan.sponsor,
@@ -882,11 +879,11 @@ function recordTacticalEvent(
   operationId: string,
   objectiveId: string,
   squadId: string | undefined,
-  tick: number,
+  _tick: number,
   reason: string,
   evidence: string[],
   confidence: number,
-  rejected: readonly { action: string; reason: string }[],
+  _rejected: readonly { action: string; reason: string }[],
 ): void {
   // 写入 event buffer（供 telemetry-collector flush 到 segment）
   // 使用 WarPlanCreated 作为复用事件类型（暂无专用 TacticalEvent 枚举）
@@ -920,35 +917,3 @@ const EVENT_CODE_MAP: Record<TacticalDecisionEvent, number> = {
   REGROUP_DECIDED: 6,
   TACTICAL_ABORTED: 7,
 };
-
-// ═══════════════════════════════════════════════════════════
-// §12. 公共 API（供角色层查询）
-// ═══════════════════════════════════════════════════════════
-
-/**
- * 查询 creep 的战术指令（供角色层消费）。
-
- * 角色层（attacker/healer）在 RolePolicy 的 acquire/work 候选中调用此函数，
- * 获取当前 tick 的战术指令（移动方向 + 战斗目标）。
-
- * 如果返回 null，角色回退到原有行为（Legacy 兼容）。
- */
-export function getTacticalIntent(creepName: string): RoleActionIntent | null {
-  const g = globalCache() as unknown as GlobalCache & TacticalRuntimeCache;
-  const intents = g.tacticalRoleIntents;
-  if (!intents) return null;
-  return intents.get(creepName) ?? null;
-}
-
-/**
- * 查询是否有活跃的 TacticalObjective。
- */
-export function hasActiveTacticalObjective(): boolean {
-  const g = globalCache() as unknown as GlobalCache & TacticalRuntimeCache;
-  const table = g.tacticalObjectives;
-  if (!table || table.size === 0) return false;
-  for (const [, record] of table) {
-    if (isObjectiveActive(record.state)) return true;
-  }
-  return false;
-}

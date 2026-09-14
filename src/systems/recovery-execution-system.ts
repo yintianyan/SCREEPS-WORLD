@@ -356,9 +356,7 @@ function submitLogisticsFix(
 
 /**
  * ENERGY_REDIRECT：触发跨房能量调拨。
-
- * 翻译：RecoveryAction → 标记到 globalCache 供 agenda-manager 消费
- * 当前实现：通过 queueReplanEvent 通知 agenda-manager 重新规划
+ * 直接在目标房 spawn queue 提交 distributor 请求以加速能量分发（不等 agenda-manager 的 100t 重规划周期）。
  */
 function submitEnergyRedirect(
   action: RecoveryAction,
@@ -467,7 +465,7 @@ function submitRemoteStall(
  * 翻译：RecoveryAction → Memory.kernel.expansionPausedUntil = tick + cooldown
  */
 function submitExpansionPause(
-  action: RecoveryAction,
+  _action: RecoveryAction,
   ctx: TickContext,
   _correlationId: string,
 ): SubmitResult {

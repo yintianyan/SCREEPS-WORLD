@@ -75,20 +75,6 @@ export function addLost(flow: ResourceFlowSnapshot, amount: number): ResourceFlo
   return { ...flow, lost: flow.lost + Math.max(0, amount) };
 }
 
-/**
- * 累加消费。纯函数 — 返回新对象。
- */
-export function addConsumed(flow: ResourceFlowSnapshot, amount: number): ResourceFlowSnapshot {
-  return { ...flow, consumed: flow.consumed + Math.max(0, amount) };
-}
-
-/**
- * 更新 container 存量。纯函数 — 返回新对象。
- */
-export function setStored(flow: ResourceFlowSnapshot, amount: number): ResourceFlowSnapshot {
-  return { ...flow, stored: Math.max(0, amount) };
-}
-
 // ─── 分析 ──────────────────────────────────────────────
 
 /**
@@ -156,75 +142,4 @@ export function isUnderproducing(
 ): boolean {
   const actualRate = productionRate(flow);
   return actualRate < expectedRate * 0.5;
-}
-
-// ─── 合并 ──────────────────────────────────────────────
-
-/**
- * 合并两个资源流快照（同一 Operation 不同时间段）。
- * 纯函数。
- */
-export function mergeFlows(a: ResourceFlowSnapshot, b: ResourceFlowSnapshot): ResourceFlowSnapshot {
-  return {
-    operationId: a.operationId,
-    periodStart: Math.min(a.periodStart, b.periodStart),
-    periodEnd: Math.max(a.periodEnd, b.periodEnd),
-    produced: a.produced + b.produced,
-    transported: a.transported + b.transported,
-    delivered: a.delivered + b.delivered,
-    lost: a.lost + b.lost,
-    consumed: a.consumed + b.consumed,
-    stored: b.stored, // 取最新的快照值
-  };
-}
-
-// ─── 序列化 ──────────────────────────────────────────────
-
-/**
- * 资源流瘦快照（存入 Memory）。
- */
-export interface FlowSnapshotSerialized {
-  oi: string; // operationId
-  ps: number; // periodStart
-  pe: number; // periodEnd
-  pr: number; // produced
-  tr: number; // transported
-  de: number; // delivered
-  lo: number; // lost
-  co: number; // consumed
-  st: number; // stored
-}
-
-/**
- * 序列化资源流快照。纯函数。
- */
-export function serializeFlow(flow: ResourceFlowSnapshot): FlowSnapshotSerialized {
-  return {
-    oi: flow.operationId,
-    ps: flow.periodStart,
-    pe: flow.periodEnd,
-    pr: Math.round(flow.produced),
-    tr: Math.round(flow.transported),
-    de: Math.round(flow.delivered),
-    lo: Math.round(flow.lost),
-    co: Math.round(flow.consumed),
-    st: Math.round(flow.stored),
-  };
-}
-
-/**
- * 反序列化资源流快照。纯函数。
- */
-export function deserializeFlow(s: FlowSnapshotSerialized): ResourceFlowSnapshot {
-  return {
-    operationId: s.oi,
-    periodStart: s.ps,
-    periodEnd: s.pe,
-    produced: s.pr,
-    transported: s.tr,
-    delivered: s.de,
-    lost: s.lo,
-    consumed: s.co,
-    stored: s.st,
-  };
 }

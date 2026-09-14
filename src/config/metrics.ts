@@ -76,12 +76,3 @@ export const METRICS_CATALOG: readonly MetricEntry[] = [
     action: "audit",
   },
 ];
-
-/** 目录完整性自检用：全部 name 唯一。 */
-export function assertCatalogUnique(): void {
-  const seen = new Set<string>();
-  for (const m of METRICS_CATALOG) {
-    if (seen.has(m.name)) throw new Error(`duplicate metric in catalog: ${m.name}`);
-    seen.add(m.name);
-  }
-}

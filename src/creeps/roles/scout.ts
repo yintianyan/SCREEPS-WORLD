@@ -5,7 +5,7 @@
  * [MOVE]（50 能量），无战斗能力 — 到达即回收是正确生命周期。
  */
 import type { Priority } from "../../kernel/contracts";
-import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
+import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 
 /**

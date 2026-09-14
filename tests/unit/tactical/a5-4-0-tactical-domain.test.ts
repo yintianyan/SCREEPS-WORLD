@@ -7,30 +7,20 @@ import {
   type SquadPlan,
   type TacticalSnapshot,
   type TacticalAuthorization,
-  type TacticalAbortSignal,
   type EnemySnapshot,
-  type EnemyStructureSnapshot,
   type SquadMemberSnapshot,
-  type FormationType,
-  // Authorization
+  type FormationType, // Authorization
   validateAuthorization,
   buildAuthorization,
   validateTargetScope,
-  isOffensiveOperation,
-  // State Machine
+  isOffensiveOperation, // State Machine
   evaluateTacticalAction,
-  canTransitionTactical,
-  tacticalDecisionHash,
-  // Formation
+  canTransitionTactical, // Formation
   selectFormationForTerrain,
   evaluateFormationTransition,
   FORMATION_SEMANTICS,
 } from "../../../src/domain/tactical";
-import type {
-  CombatCapability,
-  AggregateCapability,
-  CombatPower,
-} from "../../../src/domain/combat/capability";
+import type { CombatCapability, AggregateCapability } from "../../../src/domain/combat/capability";
 import type {
   TerrainContext,
   EffectiveCombatModifier,
@@ -264,21 +254,6 @@ function makeEnemy(overrides: Partial<EnemySnapshot> = {}): EnemySnapshot {
     capability: makeCombatCapability({ attack: 60, effectiveHP: 300 }),
     lastSeenTick: DEFAULT_TICK,
     isNpc: false,
-    ...overrides,
-  };
-}
-
-function makeEnemyStructure(
-  overrides: Partial<EnemyStructureSnapshot> = {},
-): EnemyStructureSnapshot {
-  return {
-    id: "struct-001",
-    structureType: "spawn",
-    pos: 20 * 50 + 20,
-    room: "W2N2",
-    hits: 5000,
-    hitsMax: 5000,
-    valueTier: 4,
     ...overrides,
   };
 }

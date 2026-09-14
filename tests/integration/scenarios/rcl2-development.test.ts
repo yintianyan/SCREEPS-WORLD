@@ -79,8 +79,7 @@ describe("RCL2 Development — 基础建设", () => {
     const runner = new TickRunner();
     runner.setLoop(loop);
 
-    const initialHits = world.containers[0]?.hits ?? 0;
-    const result = runner.run(world, 200);
+    runner.run(world, 200);
 
     // container 不应该被摧毁（有修复行为）
     // 注意：如果 harvester 不修复，200 tick * 5000 = 1M 衰减会摧毁 200K hits 的 container
@@ -122,7 +121,7 @@ describe("RCL2 Development — 基础建设", () => {
     runner.setLoop(loop);
 
     // 运行足够长时间让 spawn 产生 creep
-    const result = runner.run(world, 500, {
+    runner.run(world, 500, {
       stopWhen: w => w.creeps.length > 0,
     });
 
@@ -191,7 +190,7 @@ describe("RCL2 Development — 基础建设", () => {
     world.room._recalcEnergy();
 
     // 继续运行 500 tick — 应该补充 harvester
-    const result = runner.run(world, 500, {
+    runner.run(world, 500, {
       stopWhen: w => w.creepsByRole("harvester").length > 0 || w.creepsByRole("worker").length > 0,
     });
 

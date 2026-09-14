@@ -1,7 +1,7 @@
 /** Resource Network Snapshot */
 
-import type { SupplyNode, sumSupplyTransferable } from "./supply-node";
-import type { DemandNode, sumDemandRemaining } from "./demand-node";
+import type { SupplyNode } from "./supply-node";
+import type { DemandNode } from "./demand-node";
 import type { AllocationPlan } from "./allocation";
 import type { OperationContext } from "./agenda-item";
 import type { ReservationTable } from "./reservation";

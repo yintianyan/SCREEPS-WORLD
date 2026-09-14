@@ -1,6 +1,6 @@
 /** Reserver */
 import type { Priority } from "../../kernel/contracts";
-import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
+import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { roomHasInvaderCore } from "../support/invader-core";
 import { CONFIG } from "../../config";

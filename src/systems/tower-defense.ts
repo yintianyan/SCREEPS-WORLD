@@ -14,7 +14,11 @@ import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
 
 /** P3 L1 核算：塔动作耗能按 intent 计（attack/heal/repair 每次 TOWER_ENERGY_COST）。
  * 不可用库存差值实测 — 引擎资源结算在 tick 末，同 tick 差值恒 0（官服实证）。 */
-function countedTowerAction(roomName: string, tower: StructureTower, action: () => number): number {
+function countedTowerAction(
+  roomName: string,
+  _tower: StructureTower,
+  action: () => number,
+): number {
   const result = action();
   if (result === OK) bumpEnergyCounter(roomName, "towerSpent", TOWER_ENERGY_COST);
   return result;

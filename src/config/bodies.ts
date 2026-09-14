@@ -1,7 +1,5 @@
 /** 孵化请求的 body 模板和生成约束。 */
 
-export type BodyTier = "recovery" | "basic" | "standard" | "extended";
-
 interface BodyTemplate {
   /** 有序 body 部件（Screeps 按数组顺序生成）。 */
   parts: BodyPartConstant[];

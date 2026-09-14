@@ -1,6 +1,6 @@
 /** Squad Formation & Tactical Movement */
 
-import type { FormationType, TacticalState, SquadPlan, SquadMemberSnapshot } from "./types";
+import type { FormationType, TacticalState, SquadPlan } from "./types";
 import type { TerrainContext } from "../defense/terrain-context";
 
 // ═══════════════════════════════════════════════════════════
@@ -810,7 +810,7 @@ export interface SquadMovementIntent {
 export function produceSquadMovementIntent(
   squad: SquadSnapshot,
   tacticalState: TacticalState,
-  terrain: TerrainContext,
+  _terrain: TerrainContext,
 ): SquadMovementIntent {
   // 1. 计算 Anchor
   const anchor = computeSquadAnchor(squad);
@@ -1010,7 +1010,7 @@ export type FormationDegradation =
  */
 export function assessFormationDegradation(
   cohesion: CohesionMetric,
-  squad: SquadSnapshot,
+  _squad: SquadSnapshot,
 ): FormationDegradation {
   if (cohesion.aliveCount === 0) return "FORMATION_BROKEN";
   if (cohesion.status === "CRITICAL") return "FORMATION_BROKEN";
@@ -1252,7 +1252,7 @@ export function detectSquadStuck(
   // 个别成员卡位检测
   const stuckMembers = squad.members
     .filter(m => m.alive && m.fatigue === 0)
-    .filter(m => {
+    .filter(_m => {
       // 简化：成员位置偏离 DesiredPosition 太远视为 stuck 候选
       // 真正的 individual stuck 检测在 movement 层已有（stuckTicks）
       // 这里只做编队级判断

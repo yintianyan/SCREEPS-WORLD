@@ -239,9 +239,6 @@ export function getIntelConfidence(
 // 来源可信度，再看新鲜窗。读侧派生（不落存储）实现「无视野随龄单调降级」，
 // 避免降级写风暴；物理清理只在超 expiry 后发生。
 
-/** 情报四域。市场域数据归市场系统所有，本模型只保留只读缓存位。 */
-export type IntelDomain = "rooms" | "players" | "static" | "market";
-
 /** 观测来源（IntelEntry.source）。ally/derived 永远是 inferred，不参与硬门槛。 */
 export type IntelSource = "passive" | "scout" | "observer" | "ally" | "derived";
 
@@ -256,8 +253,6 @@ const DIRECT_SOURCES: ReadonlySet<IntelSource> = new Set(["passive", "scout", "o
 export const ROOM_DYNAMIC_TTL = 10_000;
 /** 敌编队/威胁事实：可见期结束即降级（行情瞬变）。 */
 export const ROOM_THREAT_TTL = 200;
-/** 资源/估值字段 TTL（与估值刷新同频）。 */
-export const ROOM_RESOURCE_TTL = 20_000;
 /** expiry 抖动上限（防到期风暴：到期时间戳加 hash jitter）。 */
 export const EXPIRY_JITTER = 500;
 /** 房间域 heap 容量（超限按 observedAt 最旧环形覆盖）。 */

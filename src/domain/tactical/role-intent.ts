@@ -232,7 +232,7 @@ export function assessObjectiveLifecycle(
 ): LifecycleAssessmentResult {
   const {
     record,
-    currentTick,
+    currentTick: _currentTick,
     authorizationValid,
     targetExists,
     targetInScope,

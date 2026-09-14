@@ -29,7 +29,6 @@ import {
 import { collectFullInventory } from "../domain/industry/inventory";
 import { collectDemands, adjustMaxPrice } from "../domain/industry/procurement";
 import { globalCache, bumpEnergyCounter } from "../kernel/global-cache";
-import type { ProcurementDemand } from "../kernel/global-cache";
 import type { TransportPlan } from "../domain/logistics/transport-plan";
 import {
   computeDynamicBuyPrice,

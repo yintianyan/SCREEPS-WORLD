@@ -7,7 +7,7 @@ import { tacticalRuntimePipelineSystem } from "../../../src/systems/tactical-run
 // Mock safeRun to track calls and simulate errors
 let safeRunCalls: { label: string; error?: string }[] = [];
 vi.mock("../../../src/kernel/safe-run", () => ({
-  safeRun: (label: string, action: () => void, critical?: boolean) => {
+  safeRun: (label: string, action: () => void, _critical?: boolean) => {
     safeRunCalls.push({ label });
     try {
       action();

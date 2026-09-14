@@ -246,7 +246,7 @@ describe("RCL4 Automation — 自动化", () => {
     world.room._recalcEnergy();
 
     // 运行 600 tick — 应该补充 harvester
-    const result = runner.run(world, 600, {
+    runner.run(world, 600, {
       stopWhen: w => w.creepsByRole("harvester").length >= 2,
     });
 

@@ -262,7 +262,7 @@ function recycleSquad(targetRoom: string): void {
 
 /** 收摊（幂等）：回收编队 + 撤销寄宿请求 + 记录事件。
  * reason：0=done / 1=attrition / 2=timeout / 3=war-preempt。 */
-function concludeMission(mission: PowerFarmMission, tick: number, reason: number): void {
+function concludeMission(mission: PowerFarmMission, _tick: number, reason: number): void {
   recycleSquad(mission.targetRoom);
   const queue = Memory.rooms[mission.sponsor]?.spawnQueue;
   if (queue) {

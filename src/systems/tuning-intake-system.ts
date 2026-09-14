@@ -15,11 +15,8 @@
  */
 
 import type { Priority, System, TickContext } from "../kernel/contracts";
-import { CONFIG } from "../config";
 import { SEGMENT_L2_INTAKE } from "../kernel/segment-store";
 import { applyIntakeGuardrail } from "../domain/tuning/intake-guardrail";
-import type { IntakeAccepted } from "../domain/tuning/intake-guardrail";
-import type { StrategyOverrideEntry } from "../domain/strategy/strategy-reviewer";
 import { EventKind, recordEvent } from "../kernel/event-log";
 import { log } from "../kernel/log";
 import { safeRun } from "../kernel/safe-run";

@@ -5,7 +5,6 @@ import {
   type OperationType,
   type OperationStatus,
   type MilitaryOperation,
-  type AbortCondition,
   makeOperationId,
   isOffensive,
   isDefensive,
@@ -17,15 +16,12 @@ import {
 } from "../../../src/domain/military/operation";
 
 import {
-  type WarPosture,
   evaluateWarPosture,
   isOperationAuthorized,
 } from "../../../src/domain/military/war-posture";
 
 import {
   type RequiredCapability,
-  type CapabilityGap,
-  type ForceComposition,
   deriveRequiredCapability,
   computeCapabilityGap,
   deriveForceComposition,
@@ -38,7 +34,6 @@ import {
 
 import {
   type TargetCandidate,
-  type TargetScore,
   scoreTarget,
   selectTarget,
 } from "../../../src/domain/military/target-selection";

@@ -3,7 +3,6 @@
  * 以及 P3 长期冻结告警的正确行为。 */
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { sampleBaselineMetrics, trackP3Frozen } from "../../../src/kernel/kernel";
-import { globalCache } from "../../../src/kernel/global-cache";
 import { EventKind, drainEventBuffer } from "../../../src/kernel/event-log";
 
 const mockGame = {

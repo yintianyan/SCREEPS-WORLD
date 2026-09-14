@@ -10,8 +10,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { registry, kernel } from "../../../src/bootstrap";
-import type { System } from "../../../src/kernel/contracts";
+import { registry } from "../../../src/bootstrap";
 
 describe("Phase 4: 系统注册一致性", () => {
   describe("每个 system 只注册一次", () => {

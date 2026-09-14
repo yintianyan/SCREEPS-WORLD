@@ -816,7 +816,7 @@ function maintainExistingOps(
 
   // 清理长期废弃的运营（超过 staleThreshold * 3 且无 creep）。
   const abandonThreshold = CONFIG.remote.staleThreshold * 3;
-  for (const [roomName, op] of Object.entries(remoteOps)) {
+  for (const [_roomName, op] of Object.entries(remoteOps)) {
     if (op.state === "paused" && tick - op.lastSeen > abandonThreshold) {
       op.state = "abandoned";
     }
@@ -1503,7 +1503,7 @@ function recycleRemoteDismantlers(homeRoom: string, targetRoom: string): void {
 function planRemotePathRoads(
   homeRoom: string,
   remoteOps: Readonly<Record<string, RemoteOp>>,
-  ctx: TickContext,
+  _ctx: TickContext,
 ): void {
   const home = Game.rooms[homeRoom];
   if (!home) return;

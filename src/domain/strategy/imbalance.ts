@@ -97,7 +97,7 @@ export function computeDeficit(profile: RoomEconomicProfile): number {
  */
 export function detectImbalance(
   profiles: readonly RoomEconomicProfile[],
-  view: EmpireResourceView,
+  _view: EmpireResourceView,
   tick: number,
   exportRatio = 0.3,
 ): ResourceImbalanceResult {

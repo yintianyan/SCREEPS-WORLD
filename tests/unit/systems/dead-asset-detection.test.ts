@@ -4,7 +4,6 @@ import {
   computeDeadAssetSince,
   getDeadAssetLinks,
   clearDeadAssetLink,
-  DEAD_ASSET_THRESHOLD,
 } from "../../../src/systems/link-system";
 import { globalCache } from "../../../src/kernel/global-cache";
 import type { LinkInfo } from "../../../src/domain/economy/links";

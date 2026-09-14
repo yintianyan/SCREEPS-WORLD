@@ -1,8 +1,6 @@
 /** Execution Gate */
 
 import type { RemoteOpportunity } from "./remote-opportunity";
-import type { RemoteMiningOperationContext } from "../operation/remote-mining-op";
-import { hasActiveRemoteMiningOp } from "../operation/remote-mining-op";
 
 // ─── Gate 结果 ──────────────────────────────────────────
 
@@ -59,20 +57,6 @@ export type GateCheck =
   | "transport_cost"
   | "not_duplicate"
   | "budget_sufficient";
-
-/** 所有检查项。 */
-export const ALL_GATE_CHECKS: readonly GateCheck[] = [
-  "source_exists",
-  "source_mineable",
-  "room_accessible",
-  "route_valid",
-  "threat_clear",
-  "yield_reasonable",
-  "empire_demand",
-  "transport_cost",
-  "not_duplicate",
-  "budget_sufficient",
-] as const;
 
 // ─── Gate 输入 ──────────────────────────────────────────
 
@@ -274,38 +258,9 @@ export function isGatePassed(result: GateResult): boolean {
 }
 
 /**
- * 判定 Gate 结果是否为暂时等待（可重试）。
- * 纯函数。
- */
-export function isGateWaitable(result: GateResult): boolean {
-  return result.type === "wait" || result.type === "no_demand" || result.type === "no_budget";
-}
-
-/**
  * 判定 Gate 结果是否为永久拒绝（不可重试）。
  * 纯函数。
  */
 export function isGatePermanentFailure(result: GateResult): boolean {
   return result.type === "block" || result.type === "replan" || result.type === "duplicate";
-}
-
-/**
- * 判定 Gate 结果是否需要重新规划（Opportunity 过期/条件变化）。
- * 纯函数。
- */
-export function isGateReplan(result: GateResult): boolean {
-  return result.type === "replan";
-}
-
-/**
- * 从已有 RemoteMiningOperation 列表构建幂等性检查输入。
- * 辅助函数——封装 hasActiveRemoteMiningOp 调用。
- * 纯函数。
- */
-export function checkDuplicate(
-  ops: readonly RemoteMiningOperationContext[],
-  homeRoom: string,
-  targetRoom: string,
-): boolean {
-  return hasActiveRemoteMiningOp(ops, homeRoom, targetRoom);
 }

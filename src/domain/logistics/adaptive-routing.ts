@@ -67,7 +67,7 @@ const HISTORY_WINDOW = 20;
 export function adaptRouteScore(
   route: Route,
   recentTrips: readonly TripRecord[],
-  tick: number,
+  _tick: number,
 ): AdaptiveRoutingResult {
   const original = route.reliability;
 

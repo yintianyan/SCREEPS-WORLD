@@ -154,7 +154,7 @@ export function expandReactionDemands(
  * @returns 采购需求列表（配方的非 energy 原料缺口）。
  */
 export function expandCommodityDemands(
-  targetResource: string,
+  _targetResource: string,
   components: Readonly<Record<string, number>>,
   inventory: Readonly<Record<string, number>>,
   tick: number,

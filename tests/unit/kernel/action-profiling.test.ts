@@ -1,7 +1,6 @@
 /** Action 级 CPU profiling 测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { recordActionCpu, getActionCpuSnapshot } from "../../../src/kernel/safe-run";
-import { globalCache } from "../../../src/kernel/global-cache";
 import { defineRole } from "../../../src/creeps/engine/role-runner";
 import { CONFIG } from "../../../src/config";
 import type { ActionCandidate, RolePolicy } from "../../../src/creeps/engine/action-types";

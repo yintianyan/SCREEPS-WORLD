@@ -1,8 +1,8 @@
 /** Event-driven Replan */
 
-import type { OperationContext, OperationPriority } from "./agenda-item";
+import type { OperationContext } from "./agenda-item";
 import { isActive } from "./agenda-item";
-import { markCancelled, markBlocked, TransitionResult } from "./lifecycle";
+import { markCancelled, markBlocked } from "./lifecycle";
 
 /** 重规划事件类型。 */
 export type ReplanEvent =

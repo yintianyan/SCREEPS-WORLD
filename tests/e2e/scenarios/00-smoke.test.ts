@@ -36,7 +36,7 @@ describe("E2E 冒烟测试 — screeps-server-mockup + dist/main.js", () => {
 
   it("10 tick 内不产生 TypeError / ReferenceError", async () => {
     const snapshots = await runner.runTicks(10);
-    const lastSnap = snapshots.at(-1)!;
+    snapshots.at(-1)!;
 
     // 合并所有日志检查错误
     const allLogs = snapshots.flatMap(s => s.consoleLogs);

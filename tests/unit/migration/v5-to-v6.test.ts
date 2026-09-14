@@ -1,6 +1,6 @@
 /** v5 → v6 迁移测试（compact-core-v1 → v2 模板切换）。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { maintainMemory, runMigrations } from "../../../src/kernel/memory";
+import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";
 import { resetGlobals } from "../../support/factories";
 

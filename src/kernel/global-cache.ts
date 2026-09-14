@@ -340,9 +340,6 @@ export interface GlobalCache {
     tick: number;
     plan: import("../domain/military/war-planning").WarPlan | undefined;
   };
-  /** @deprecated FINDING-02 修复：ESM 状态已迁移到 Memory.kernel.emergencySurvival。
-   * 保留字段声明避免编译错误，但不再被 scheduler 使用。未来可安全删除。 */
-  // emergencySurvival?: boolean;
   /** 观察交接缓冲：room-observer 采集管线写入，intelligence 系统采用后清空。
    * heap 存储 — global reset 丢失可接受（情报按 TTL 重访重建）；写侧有界，
    * 超限丢弃最旧（观察可复采，无丢失风险）。 */

@@ -3,7 +3,6 @@
 import { registerMetricGauge, registerMetricCounter, registerMetricHistogram } from "../Telemetry";
 import { setGauge, incrementCounter, observeHistogram } from "../MetricRegistry";
 import { shouldCollect, markCollected } from "../TickAggregator";
-import type { GlobalCache } from "../../kernel/global-cache";
 import { globalCache } from "../../kernel/global-cache";
 
 // ─── Metric Registration ──────────────────────────────────

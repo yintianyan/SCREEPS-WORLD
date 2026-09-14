@@ -1,6 +1,6 @@
 /** Formation Model */
 
-import type { FormationType, TacticalSnapshot, TacticalState } from "./types";
+import type { FormationType, TacticalState } from "./types";
 import type { TerrainContext } from "../defense/terrain-context";
 
 // ═══════════════════════════════════════════════════════════

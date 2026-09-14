@@ -3,9 +3,6 @@
 import {
   buildMetricName,
   type AllowedLabel,
-  type CounterMetric,
-  type GaugeMetric,
-  type HistogramMetric,
   type LabelSet,
   type TelemetryDomain,
   type TimerHandle,

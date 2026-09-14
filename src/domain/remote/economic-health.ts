@@ -2,13 +2,7 @@
 
 import type { RemoteEconomicHealth } from "../operation/remote-mining-op";
 import type { ResourceFlowSnapshot } from "./flow-accounting";
-import {
-  productionRate,
-  deliveryRate,
-  transportEfficiency,
-  isOverproducing,
-  isUnderproducing,
-} from "./flow-accounting";
+import { transportEfficiency, isOverproducing } from "./flow-accounting";
 import type { EconomicAccountingResult } from "./economic-accounting";
 import type { ROIResult } from "./roi";
 import type { BudgetStatus } from "./operation-budget";
@@ -213,7 +207,7 @@ export function assessEconomicHealth(
  */
 export function canResume(
   input: RemoteEconomicHealthInput,
-  config: EconomicHealthConfig = DEFAULT_HEALTH_CONFIG,
+  _config: EconomicHealthConfig = DEFAULT_HEALTH_CONFIG,
 ): boolean {
   if (input.threatLevel >= 2) return false;
   if (input.budget.exhausted) return false;
@@ -264,20 +258,4 @@ export function isValidHealthTransition(
   to: RemoteEconomicHealth,
 ): boolean {
   return HEALTH_TRANSITIONS[from]?.includes(to) ?? false;
-}
-
-/**
- * 判定健康度是否为终态。
- * 纯函数。
- */
-export function isTerminalHealth(health: RemoteEconomicHealth): boolean {
-  return health === "failed";
-}
-
-/**
- * 判定健康度是否允许继续运营。
- * 纯函数。
- */
-export function isOperationalHealth(health: RemoteEconomicHealth): boolean {
-  return health === "healthy" || health === "degraded";
 }

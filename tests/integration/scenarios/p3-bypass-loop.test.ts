@@ -59,7 +59,7 @@ describe("P3 饥饿旁路（E2）— 自愈闭环", () => {
     const runner = new TickRunner();
     runner.setLoop(loop);
     runner.run(world, TOTAL, {
-      onTick: (w, t) => {
+      onTick: (_w, t) => {
         if (t === 1) {
           // TestWorld 预置 sv=4 + legacy phase 字符串会让迁移链每 tick 中断——
           // 本测试按当前 schema 起步，禁用迁移链。

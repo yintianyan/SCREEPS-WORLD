@@ -5,7 +5,7 @@ import { CONFIG } from "../../../src/config";
 import { mockBudget, mockSnapshot, resetGlobals } from "../../support/factories";
 
 /** 资源感知 store mock（方法不可枚举，与引擎 store 语义一致）。 */
-function resStore(resources: Record<string, number>, capacity = 5000): any {
+function resStore(resources: Record<string, number>, _capacity = 5000): any {
   const store: Record<string, number> = { ...resources };
   const total = Object.values(resources).reduce((a, b) => a + b, 0);
   Object.defineProperty(store, "getUsedCapacity", {

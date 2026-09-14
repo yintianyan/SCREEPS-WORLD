@@ -3,23 +3,14 @@ import type { TickContext, RoomSnapshot } from "../kernel/contracts";
 import { globalCache, type CreepRef } from "../kernel/global-cache";
 import { planLogistics, type PlannerInput } from "../domain/logistics/planner";
 import type { TransportPlan } from "../domain/logistics/transport-plan";
-import { createEmptyPlan } from "../domain/logistics/transport-plan";
-import {
-  planEmpireCapacity,
-  type RoomCapacityInput,
-  type EmpireCapacityResult,
-} from "../domain/logistics/capacity-planning";
+import { planEmpireCapacity, type RoomCapacityInput } from "../domain/logistics/capacity-planning";
 import { RouteCache } from "../domain/logistics/route-cache";
 import { createRoute } from "../domain/logistics/route";
 import type { SupplyContract } from "../domain/economy/supply-contract";
-import { isContractActive } from "../domain/economy/supply-contract";
 import type { SupplyNode } from "../domain/operation/supply-node";
 import type { DemandNode } from "../domain/operation/demand-node";
-import type { ResourceType, OperationPriority } from "../domain/operation/agenda-item";
-import {
-  computeLogisticsHealth,
-  type LogisticsHealthResult,
-} from "../domain/logistics/logistics-health";
+import type { OperationPriority } from "../domain/operation/agenda-item";
+import { computeLogisticsHealth } from "../domain/logistics/logistics-health";
 import {
   createAccounting,
   recordDelivered,
@@ -27,8 +18,6 @@ import {
   summarizeAccounting,
   type TransportAccounting,
 } from "../domain/logistics/transport-accounting";
-import { detectBottleneck } from "../domain/logistics/bottleneck";
-import { detectStarvation } from "../domain/logistics/starvation";
 import { detectIdleHaulers, type HaulerIdleSummary } from "../domain/logistics/idle-detection";
 import { log } from "../kernel/log";
 
@@ -75,9 +64,6 @@ function getCreepRefs(): CreepRef[] {
 const routeCache = new RouteCache();
 
 // ─── 空闲追踪（heap，跨 tick 持久） ─────────────────────────
-
-/** 房间 → 房间级运力规划结果（heap，每周期覆写）。 */
-let lastCapacityResult: EmpireCapacityResult | undefined;
 
 /** 房间 → hauler 闲置持续 tick 计数（heap，跨 tick 持续）。 */
 const idleTicksByRoom = new Map<string, number>();
@@ -170,7 +156,6 @@ export function runLogisticsPlanning(ctx: TickContext): void {
 
   // 1d. 执行运力规划
   const capacity = planEmpireCapacity(capacityInputs);
-  lastCapacityResult = capacity;
 
   // 1e. 更新路由缓存
   refreshRouteCache(snapshots, ctx.tick);
@@ -206,30 +191,6 @@ export function runLogisticsPlanning(ctx: TickContext): void {
   // A4.4 修复 BYPASS-011：Health 基于真实 Accounting 数据，不再全为 0。
   const avgLatency = computeAvgLatency();
   const health = computeLogisticsHealth(accounting, plan.requests, avgLatency, ctx.tick);
-
-  // ── 5. 检测瓶颈 ──
-  const bottlenecks = capacity.rooms.map(r => {
-    const input = capacityInputs.find(c => c.room === r.room);
-    return detectBottleneck(
-      input?.productionRate ?? 0, // productionRate
-      r.actualCapacity, // logisticsCapacity
-      0, // storageCapacity（由系统侧填充）
-      input?.consumptionRate ?? 0, // consumptionRate
-      r.room, // room
-    );
-  });
-
-  // ── 6. 检测饥饿 ──
-  const empireTotalSupply = surpluses.reduce((s, n) => s + n.transferable, 0);
-  const empireTotalDemand = deficits.reduce((s, n) => s + n.remaining, 0);
-  const starvationResults = snapshots.map(s =>
-    detectStarvation(
-      s.roomName,
-      0, // deficitDuration — 需跨 tick 追踪（Phase 8 测试验证）
-      empireTotalSupply,
-      empireTotalDemand,
-    ),
-  );
 
   // ── 7. 检测闲置 hauler ──
   const haulerSummaries = collectHaulerSummaries();
@@ -308,7 +269,7 @@ function collectContracts(): SupplyContract[] {
  */
 function collectCapacityInputs(
   snapshots: readonly RoomSnapshot[],
-  tick: number,
+  _tick: number,
 ): RoomCapacityInput[] {
   const result: RoomCapacityInput[] = [];
 
@@ -381,7 +342,7 @@ function collectCapacityInputs(
  * 刷新路由缓存：从 Game.map.describeExits 重建已知房间对的路由。
  * 仅对有 terminal 或有远矿/跨房 Operation 的房间对建路由。
  */
-function refreshRouteCache(snapshots: readonly RoomSnapshot[], tick: number): void {
+function refreshRouteCache(_snapshots: readonly RoomSnapshot[], tick: number): void {
   // 清理过期路由（> 5000 tick 未使用）
   const expired = routeCache.sweep(tick, 5000);
   if (expired.length > 0) {
@@ -477,7 +438,7 @@ function collectAccountingWithTracking(plan: TransportPlan, tick: number): Trans
  * Operation 的 deliveredAmount / requestedAmount 对应 Accounting 的 delivered / requested。
  * Operation 失败（status=failed）→ lost = requestedAmount - deliveredAmount。
  */
-function syncAccountingFromOperations(tick: number): void {
+function syncAccountingFromOperations(_tick: number): void {
   const operations = loadOperations();
 
   for (const op of operations) {
@@ -549,7 +510,7 @@ function findMatchingRequests(sourceRoom: string, targetRoom: string, resource: 
  * 清理已完成的 Accounting 条目（防止 Map 无限增长）。
  * 完成条件：delivered + lost >= requested 且超过 500 tick 未更新。
  */
-function cleanupCompletedAccounting(tick: number): void {
+function cleanupCompletedAccounting(_tick: number): void {
   // Accounting 不存储 tick，用 globalCache 的 logisticsPlan.tick 作为近似
   // 清理条件：Plan 中不再包含该 requestId，且 Accounting 的 remaining = 0
   const currentPlan = globalCache().logisticsPlan?.plan;
@@ -577,11 +538,7 @@ function cleanupCompletedAccounting(tick: number): void {
  * 计算平均延迟（从 logistics 系统的延迟样本环）。
  */
 function computeAvgLatency(): number {
-  // 复用 logistics 系统的延迟样本
-  // 通过动态 import 避免循环依赖
-  // 延迟样本由 logistics 系统的 logisticsLatencySamples() 导出函数提供。
-  // 此处通过 globalCache 的 logisticsLatency 字段读取（如 logistics 系统写入）。
-  // 当前使用 0 作为默认值——Phase 8 集成时接入 logistics 延迟样本。
+  // 占位实现：恒返回 0 — 延迟样本环的接入尚未完成（Phase 8 集成）。
   return 0;
 }
 
@@ -607,47 +564,3 @@ function collectHaulerSummaries(): HaulerIdleSummary[] {
 /**
  * 收集 hauler 运力信息（供 Dashboard）。
  */
-function collectHaulerCapacityInfo(snapshots: readonly RoomSnapshot[]) {
-  const haulers: { capacity: number; idle: boolean }[] = [];
-  // 此处需要 creep.store API（getCapacity/getUsedCapacity），CreepRef 不包含 — 直接遍历 Game.creeps。
-  for (const creep of Object.values(Game.creeps)) {
-    if (creep.spawning) continue;
-    const role = creep.memory.role;
-    if (role !== "hauler" && role !== "carrier" && role !== "remoteHauler") continue;
-    const capacity = creep.store.getCapacity(RESOURCE_ENERGY);
-    const used = creep.store.getUsedCapacity(RESOURCE_ENERGY);
-    haulers.push({ capacity, idle: used === 0 && !creep.memory.assignment });
-  }
-  return haulers;
-}
-
-/**
- * 检查 spawn 是否有余力（用于扩缩编决策）。
- */
-function checkSpawnAvailable(snap: RoomSnapshot | undefined): boolean {
-  if (!snap) return false;
-  // 有空闲 spawn 或孵化队列不满
-  const spawning = snap.spawns.filter(s => s.spawning).length;
-  return spawning < snap.spawns.length;
-}
-
-/**
- * 获取房间经济压力（0..1, 0=健康, 1=危机）。
- */
-function getEconomyPressure(roomName: string): number {
-  const econSnap = Memory.rooms[roomName]?.economy;
-  if (!econSnap) return 0;
-  // CR > 1 = 高压力
-  return Math.min(1, (econSnap.cr ?? 0) / 2);
-}
-
-// ─── 查询口（供其他系统消费） ─────────────────────────────
-
-/**
- * 获取最近的 Transport Plan（供 logistics / agenda-manager 消费）。
- */
-export function getLogisticsPlan(): TransportPlan | undefined {
-  const cached = globalCache().logisticsPlan;
-  if (!cached) return undefined;
-  return cached.plan;
-}

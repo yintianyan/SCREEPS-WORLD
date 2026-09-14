@@ -134,7 +134,7 @@ export function createRoute(
  * 标记路由不可达。
  * 纯函数 — 返回新对象。
  */
-export function markRouteBlocked(route: Route, tick: number, reason?: string): Route {
+export function markRouteBlocked(route: Route, tick: number, _reason?: string): Route {
   return { ...route, status: "blocked", lastEvaluated: tick };
 }
 

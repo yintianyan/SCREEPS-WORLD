@@ -82,13 +82,3 @@ export function runAction(
   }
   return result;
 }
-
-/** 对目标执行操作；ERR_NOT_IN_RANGE 时移动。返回操作结果码。
- * @deprecated 使用 `runAction` 替代 — 保留为无 handler 调用点的语义别名。 */
-export function actOrMove(
-  creep: Creep,
-  target: RoomPosition | { pos: RoomPosition },
-  action: () => number,
-): number {
-  return runAction(creep, target, action);
-}

@@ -3,8 +3,7 @@
 import { CONFIG } from "../../config";
 import { selectBody } from "../../config/bodies";
 import type { ColonyState } from "../../kernel/contracts";
-import type { RoomIntel } from "../intel";
-import { spawnKey, countPending } from "../spawn/queue";
+import { spawnKey } from "../spawn/queue";
 import { remoteHaulerTarget, remoteReplacementThreshold, computeHaulerNeed } from "./staffing";
 
 /** 远矿 creep 摘要（与本地 CreepSummary 对齐但精简）。 */

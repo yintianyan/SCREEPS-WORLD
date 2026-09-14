@@ -26,7 +26,6 @@ interface OutcomeEvent extends BaseEvent {
   readonly forcedAdvance: boolean;
   readonly milestoneHistory: readonly string[];
 }
-type UOEMEvent = OutcomeEvent | MilestoneEvent;
 
 class OutcomeChannel {
   private readonly queue: OutcomeEvent[] = [];

@@ -1,7 +1,7 @@
 /** Resource Reconciliation */
 
 import type { ResourceType } from "../operation/agenda-item";
-import type { ResourceLedger, ResourceStockSnapshot } from "./resource-ledger";
+import type { ResourceLedger } from "./resource-ledger";
 import { stockTotal } from "./resource-ledger";
 
 // ─── 对账结果 ──────────────────────────────────────────────

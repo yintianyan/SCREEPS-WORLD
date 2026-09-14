@@ -1,7 +1,6 @@
 /** Console Exporter — 将 flush package 导出为 @TELEMETRY 前缀的 JSON 行。 */
 
 import type { FlushPackage } from "../TelemetryBuffer";
-import type { MetricSnapshot } from "../MetricRegistry";
 
 /**
  * 将 flush package 导出为单行 @TELEMETRY JSON。

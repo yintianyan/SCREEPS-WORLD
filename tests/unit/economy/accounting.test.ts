@@ -8,8 +8,6 @@ import {
   ledgerConsumption,
   ledgerP0P1Consumption,
   emptyPools,
-  contractReserveOf,
-  trackedPoolsOf,
   rollupWindow,
   driftLimit,
   isDriftExcessive,

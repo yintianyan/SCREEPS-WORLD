@@ -10,7 +10,6 @@ import {
   type FocusFireMemberSnapshot,
   type TargetCandidate,
   type FocusFirePlan,
-  type EngagementState,
 } from "../../../src/domain/tactical/focus-fire";
 import {
   validateAuthorization,

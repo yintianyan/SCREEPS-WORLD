@@ -9,7 +9,6 @@ import {
 } from "../../../src/domain/expansion/economic-activation";
 import {
   transitionExecutionState,
-  type ExecutionState,
   type StateTransitionInput,
 } from "../../../src/domain/expansion/execution-state";
 import type { ExpansionPlan } from "../../../src/domain/expansion/plan";

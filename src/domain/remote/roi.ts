@@ -1,7 +1,5 @@
 /** Remote ROI */
 
-import type { EconomicAccountingResult } from "./economic-accounting";
-
 // ─── ROI 结果 ───────────────────────────────────────────
 
 /**
@@ -110,26 +108,6 @@ export function calculateROI(
   };
 }
 
-// ─── 从经济核算结果构建 ─────────────────────────────────
-
-/**
- * 从 EconomicAccountingResult 构建 Actual ROI 输入。
-
- * actualCost = totalCost × duration（将 e/tick 转为总量）。
-
- * 纯函数。
- */
-export function buildActualROIInput(accounting: EconomicAccountingResult): {
-  actualCost: number;
-  duration: number;
-} {
-  const duration = Math.max(1, accounting.periodEnd - accounting.periodStart);
-  return {
-    actualCost: accounting.totalCost * duration,
-    duration,
-  };
-}
-
 // ─── 判定 ──────────────────────────────────────────────
 
 /**
@@ -146,12 +124,4 @@ export function isPositiveROI(roi: number): boolean {
  */
 export function isNegativeROI(roi: number): boolean {
   return roi < 0;
-}
-
-/**
- * 判定实际 ROI 是否显著低于预期（差距超阈值）。
- * 纯函数。
- */
-export function isSignificantlyBelowExpectation(result: ROIResult, threshold: number): boolean {
-  return result.roiAchievement < threshold;
 }

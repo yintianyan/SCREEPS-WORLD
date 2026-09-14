@@ -1,6 +1,6 @@
 /** v7 → v8 迁移独立测试（清除 CreepMemory.working 遗留字段）。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { maintainMemory, runMigrations } from "../../../src/kernel/memory";
+import { runMigrations } from "../../../src/kernel/memory";
 import { CONFIG } from "../../../src/config";
 import { resetGlobals } from "../../support/factories";
 

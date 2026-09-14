@@ -1,7 +1,7 @@
 /** Defense Metrics — 防御指标。 */
 
 import { registerMetricGauge, registerMetricCounter } from "../Telemetry";
-import { setGauge, incrementCounter } from "../MetricRegistry";
+import { setGauge } from "../MetricRegistry";
 import { shouldCollect, markCollected } from "../TickAggregator";
 import type { RoomSnapshot } from "../../kernel/contracts";
 

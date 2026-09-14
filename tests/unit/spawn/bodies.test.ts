@@ -225,7 +225,7 @@ describe("Bodies — A1 大 body 档位（随 RCL 容量放大）", () => {
 
 describe("Bodies — RCL7/RCL8 高档模板补充", () => {
   it("所有模板部件数 ≤ 50（MAX_CREEP_SIZE）", () => {
-    for (const [role, templates] of Object.entries(BODY_TEMPLATES)) {
+    for (const [_role, templates] of Object.entries(BODY_TEMPLATES)) {
       for (const t of templates) {
         expect(t.parts.length).toBeLessThanOrEqual(50);
       }

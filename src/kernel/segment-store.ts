@@ -7,7 +7,6 @@ import type {
   LegacyTimeseriesData,
   CpuSample,
   EconomySample,
-  PopulationSnapshot,
 } from "./timeseries";
 import type { EventLogSegmentData, GameEvent } from "./event-log";
 import { createRingBuffer, ringToArray, ringPush, type RingBuffer } from "./ring-buffer";
@@ -32,8 +31,6 @@ export const SEGMENT_PROMETHEUS = segId("prometheus", 4);
 export const SEGMENT_INTEL_PLAYERS = segId("intelPlayers", 5);
 /** Segment 6: L2 体外建议写入区（外部 LLM 写入，tuning-intake-system 只读）。 */
 export const SEGMENT_L2_INTAKE = segId("l2Intake", 6);
-/** @deprecated 使用 SEGMENT_CPU。保留用于迁移期间的代码引用。 */
-export const SEGMENT_TIMESERIES = SEGMENT_CPU;
 
 // ─── 容量常量 ───────────────────────────────────────────────
 
@@ -219,24 +216,6 @@ export function readCpuSegment(): CpuSegmentData {
 /** 标记 CPU segment 为 dirty — tick 末尾 flush 时写回。 */
 export function markCpuDirty(): void {
   segCache().cpuDirty = true;
-}
-
-/** @deprecated 使用 readCpuSegment。保留用于过渡期兼容。 */
-export function readTimeseriesSegment(): CpuSegmentData & { economy: RingBuffer<EconomySample> } {
-  const cpuSeg = readCpuSegment();
-  const econSeg = readEconomySegment();
-  // 返回合并视图 — 消费方代码迁移后应直接使用各自 segment。
-  return {
-    cpu: cpuSeg.cpu,
-    population: cpuSeg.population,
-    economy: econSeg.economy,
-  };
-}
-
-/** @deprecated 使用 markCpuDirty + markEconomyDirty。 */
-export function markTimeseriesDirty(): void {
-  markCpuDirty();
-  markEconomyDirty();
 }
 
 /** 创建带空环形缓冲区的初始 CPU segment 数据。 */

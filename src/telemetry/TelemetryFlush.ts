@@ -1,6 +1,6 @@
 /** Telemetry Flush — flush 管线：从 buffer 收集 → 导出 → segment 写入。 */
 
-import { flush, shouldFlush, type FlushPackage } from "./TelemetryBuffer";
+import { flush, shouldFlush } from "./TelemetryBuffer";
 import { exportConsoleLine } from "./exporters/ConsoleExporter";
 import { exportPrometheusText } from "./exporters/PrometheusExporter";
 import { globalCache } from "../kernel/global-cache";

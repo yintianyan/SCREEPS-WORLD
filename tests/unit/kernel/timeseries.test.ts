@@ -1,10 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import {
-  sampleCpu,
-  sampleEconomy,
-  type CpuSample,
-  type EconomySample,
-} from "../../../src/kernel/timeseries";
+import { sampleCpu, sampleEconomy } from "../../../src/kernel/timeseries";
 
 // Mock Game object for sampleCpu
 const mockGame = {

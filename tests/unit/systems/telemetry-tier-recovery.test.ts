@@ -13,11 +13,7 @@
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { TickContext, CpuTier } from "../../../src/kernel/contracts";
-import {
-  evaluateExpectations,
-  P3_BOOT_GRACE_TICKS,
-  TELEMETRY_STALE_TICKS,
-} from "../../../src/kernel/expectations";
+import { evaluateExpectations, TELEMETRY_STALE_TICKS } from "../../../src/kernel/expectations";
 import { setLogSink } from "../../../src/kernel/log";
 
 // ── 模块 mock ──────────────────────────────────────────────
@@ -35,7 +31,7 @@ vi.mock("../../../src/kernel/segment-store", () => ({
       h: 0,
       c: 0,
       // 模拟 ringBuffer push
-      push: (entry: unknown) => {
+      push: (_entry: unknown) => {
         ringBufferPushCount++;
       },
     },
@@ -186,29 +182,6 @@ function runTelemetry(tier: CpuTier, tick: number, bucket: number): void {
 
 function getStatsLastSample(): number | undefined {
   return Memory.kernel?.stats?.lastSample;
-}
-
-function evaluateExpectationsFor(
-  tick: number,
-  p3LastRun: number | undefined,
-): {
-  e1: boolean;
-  e2: boolean;
-  p3Starved: boolean;
-} {
-  const statsLastSample = getStatsLastSample();
-  const result = evaluateExpectations({
-    tick,
-    statsLastSample,
-    bootTick: 0,
-    systemLastRun: p3LastRun !== undefined ? { "telemetry-collector": p3LastRun } : {},
-    p3Systems: [{ name: "telemetry-collector", interval: 10 }],
-  });
-  return {
-    e1: result.violations.some(v => v.id === "telemetryStale"),
-    e2: result.violations.some(v => v.id.startsWith("p3Starved:")),
-    p3Starved: result.p3Starved,
-  };
 }
 
 // ── 测试 ──────────────────────────────────────────────
@@ -477,7 +450,6 @@ describe("P3-2: conserve→healthy telemetry 恢复链路", () => {
       // 模拟 telemetry-collector 在 safeRun 中抛错
       // 在生产中 kernel.ts:171 用 safeRun 包裹，错误被隔离
       // 这里测试即使 telemetry 失败，Memory.kernel.stats 不会变坏
-      const originalStats = Memory.kernel?.stats;
       // 模拟 safeRun 吞掉错误
       // 由于 telemetryCollectorSystem.run 内部有守卫，不会直接抛错
       // 但如果 sampleCpu 抛错，safeRun 会隔离

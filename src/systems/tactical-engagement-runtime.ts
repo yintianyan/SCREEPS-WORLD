@@ -375,7 +375,7 @@ function buildCreepCapability(creep: Creep): CombatCapability {
 // §5. 目标候选采集 — 从 Game.rooms 采集敌方 creep
 // ═══════════════════════════════════════════════════════════
 
-function collectTargetCandidates(targetRoom: string, squad: SquadPlan): TargetCandidate[] {
+function collectTargetCandidates(targetRoom: string, _squad: SquadPlan): TargetCandidate[] {
   const room = Game.rooms[targetRoom];
   if (!room) return [];
 

@@ -12,7 +12,6 @@ import {
   computeOrderPrice,
   type PriceTable,
 } from "../../../src/domain/industry/market-pricing";
-import type { MarketPriceSnapshot } from "../../../src/kernel/global-cache";
 
 describe("market-pricing", () => {
   // ── computeDynamicBuyPrice ──────────────────────────────

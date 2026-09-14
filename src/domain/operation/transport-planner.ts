@@ -2,7 +2,6 @@
 
 import type { AllocationPlan } from "./allocation";
 import type { TransportRequest } from "../assignment/request-pool";
-import type { OperationPriority } from "./agenda-item";
 
 /** 路由结果（由系统侧执行 Game.map.findRoute 后注入）。 */
 export interface RouteResult {

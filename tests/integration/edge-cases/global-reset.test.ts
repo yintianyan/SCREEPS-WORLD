@@ -1,6 +1,6 @@
 /** Global Reset 恢复韧性集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
-import { TickRunner, Assertions, rcl3Economy, TestWorld, flatTerrain } from "../framework";
+import { TickRunner, Assertions, rcl3Economy } from "../framework";
 import type { RunResult } from "../framework";
 
 // 动态导入生产代码（确保全局对象已安装后再加载）
@@ -189,10 +189,6 @@ describe("Global Reset 冷启动 — 多房帝国首 tick 安全性 (P0-2)", () 
 
     // 建立稳态
     runner.run(world, 200, {});
-
-    // 记录 reset 前 segment 数据
-    const g = globalThis as any;
-    const segBefore = (globalThis as any).RawMemory?.segments?.[0];
 
     // Global Reset
     simulateGlobalReset();

@@ -1,6 +1,6 @@
 /** v3→v4 迁移的 segment 就绪门禁测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { maintainMemory, runMigrations } from "../../../src/kernel/memory";
+import { runMigrations } from "../../../src/kernel/memory";
 import { requestSegments, getRoomLayoutData } from "../../../src/kernel/segment-store";
 import { CONFIG } from "../../../src/config";
 

@@ -4,24 +4,20 @@ import { describe, it, expect } from "vitest";
 import {
   validateExecutionGate,
   type ExecutionGateInput,
-  type ExecutionGateResult,
 } from "../../../src/domain/expansion/execution-gate";
 import {
   transitionExecutionState,
   isValidTransition,
   getExecutionProgress,
   describeExecutionState,
-  type ExecutionState,
   type StateTransitionInput,
 } from "../../../src/domain/expansion/execution-state";
 import {
   evaluateCheckpoint,
-  createCheckpointRecord,
   createAllCheckpointRecords,
   getCheckpointProgress,
   getNextPendingCheckpoint,
   getPassedCount,
-  type CheckpointId,
   type CheckpointInput,
 } from "../../../src/domain/expansion/checkpoint";
 import {
@@ -46,7 +42,6 @@ import {
   isReservationExpired,
   cleanupExpiredReservations,
   getTotalReserved,
-  type ResourceReservation,
 } from "../../../src/domain/expansion/resource-reservation";
 import {
   createExpansionOperation,
@@ -57,12 +52,8 @@ import {
   failOperation,
   activateOperation,
   createColonizeFromClaim,
-  type ExpansionOperation,
 } from "../../../src/domain/expansion/execution-operation";
-import {
-  buildExecutionDashboard,
-  type ExecutionDashboard,
-} from "../../../src/domain/expansion/execution-dashboard";
+import { buildExecutionDashboard } from "../../../src/domain/expansion/execution-dashboard";
 import type { ExpansionPlan } from "../../../src/domain/expansion/plan";
 import type { TieredExpansionBudget } from "../../../src/domain/expansion/budget";
 

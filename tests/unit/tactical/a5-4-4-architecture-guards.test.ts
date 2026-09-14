@@ -37,12 +37,12 @@ function findFile(suffix: string): string {
 
 const FOCUS_FIRE_FILE = findFile("domain/tactical/focus-fire.ts");
 const AUTHORIZATION_FILE = findFile("domain/tactical/authorization.ts");
-const STATE_MACHINE_FILE = findFile("domain/tactical/state-machine.ts");
-const ROLE_INTENT_FILE = findFile("domain/tactical/role-intent.ts");
-const SQUAD_FORMATION_FILE = findFile("domain/tactical/squad-formation.ts");
+findFile("domain/tactical/state-machine.ts");
+findFile("domain/tactical/role-intent.ts");
+findFile("domain/tactical/squad-formation.ts");
 const SQUAD_MOVEMENT_RUNTIME_FILE = findFile("systems/squad-movement-runtime.ts");
-const FORMATION_FILE = findFile("domain/tactical/formation.ts");
-const TYPES_FILE = findFile("domain/tactical/types.ts");
+findFile("domain/tactical/formation.ts");
+findFile("domain/tactical/types.ts");
 const INDEX_FILE = findFile("domain/tactical/index.ts");
 const ENGAGEMENT_RUNTIME_FILE = findFile("systems/tactical-engagement-runtime.ts");
 const TACTICAL_RUNTIME_FILE = findFile("systems/tactical-runtime-system.ts");

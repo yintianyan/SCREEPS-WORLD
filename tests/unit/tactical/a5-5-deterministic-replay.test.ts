@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import {
   planCombatMicro,
   deriveBodyAwareState,
-  microPlanHash,
   type MicroSnapshot,
   type MicroMemberSnapshot,
   type MicroEnemySnapshot,

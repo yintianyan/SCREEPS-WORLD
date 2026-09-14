@@ -1,7 +1,6 @@
 /** 市场挂单 + pixel 出售测试（审计缺口 4+5）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { terminalManagerSystem } from "../../../src/systems/terminal-manager";
-import { CONFIG } from "../../../src/config";
 import {
   anchorSellPrice,
   planSellOrder,

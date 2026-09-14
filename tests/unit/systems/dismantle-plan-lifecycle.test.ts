@@ -1,5 +1,5 @@
 /** P1-4 受限拆改通道生命周期测试（staged link 拆改生命周期）。 */
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import {
   isDismantleOnCooldown as isDismantleOnCooldownDomain,
   transitionDismantlePlan as transitionDismantlePlanDomain,

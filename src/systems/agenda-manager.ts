@@ -42,29 +42,23 @@ import {
 } from "../domain/operation/reservation";
 import { shouldAbortVerification, shouldPartialComplete } from "../domain/operation/verification";
 import { hasActiveOperation, pruneTerminal } from "../domain/operation/dedup";
-import { processReplanEvent, type ReplanEvent } from "../domain/operation/replan";
 import { computeOperationMetrics, formatOperationMetrics } from "../domain/operation/metrics";
-import { recordPlanningDecision, recordExecution } from "../telemetry";
+import { recordExecution } from "../telemetry";
 import { submitRequest, hasRequest } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
 
 // A3.1 imports
-import { buildSupplyNodes, type SupplyNode } from "../domain/operation/supply-node";
-import { buildDemandNodes, type DemandNode } from "../domain/operation/demand-node";
-import { buildNetworkSnapshot, type NetworkSnapshot } from "../domain/operation/network-snapshot";
+import { buildSupplyNodes } from "../domain/operation/supply-node";
+import { buildDemandNodes } from "../domain/operation/demand-node";
+import { buildNetworkSnapshot } from "../domain/operation/network-snapshot";
 import {
   allocateNetwork,
   type RouteDistance,
   type ExplainableAllocationResult,
 } from "../domain/operation/allocation-policy";
 import { MAX_GLOBAL_OPERATIONS } from "../domain/operation/allocation-policy";
-import { computeNetworkHealth, type NetworkHealthResult } from "../domain/operation/network-health";
-import {
-  RebalanceState,
-  decideRebalance,
-  markRebalanced,
-  type RebalanceEvent,
-} from "../domain/operation/rebalance";
+import { computeNetworkHealth } from "../domain/operation/network-health";
+import { RebalanceState, decideRebalance, markRebalanced } from "../domain/operation/rebalance";
 import { log } from "../kernel/log";
 
 /** 默认 Operation 超时（tick）。2000 tick ≈ 运输 + 验证 + 重试。 */
@@ -83,31 +77,8 @@ const routeCache = new Map<
   { from: string; to: string; hops: number; reachable: boolean; cachedAt: number }
 >();
 
-/** pending 重规划事件（heap 缓冲，下次 planning cycle 消费）。 */
-let pendingEvents: ReplanEvent[] = [];
-
 /** Rebalance 状态（heap，跨 tick 持久 — 跟随 agenda-manager 生命周期）。 */
 const rebalanceState = new RebalanceState();
-
-/** 前次 Network Snapshot（用于 rebalance 判定）。 */
-let prevSnapshot: NetworkSnapshot | undefined;
-
-/** 前次 Network Health（用于可观测性）。 */
-let prevHealth: NetworkHealthResult | undefined;
-
-/**
- * 外部写入重规划事件（供其他系统注入：carrier 死亡、房间失守等）。
- */
-export function queueReplanEvent(event: ReplanEvent): void {
-  pendingEvents.push(event);
-}
-
-/**
- * 外部写入 rebalance 事件（供其他系统注入：新 Supply/Demand 等）。
- */
-export function queueRebalanceEvent(event: RebalanceEvent): void {
-  rebalanceState.addEvent(event);
-}
 
 /**
  * 执行 Game.map.findRoute 并缓存结果（带 TTL）。
@@ -252,14 +223,6 @@ export const agendaManagerSystem: System = {
     let operations = loadOperations();
     let reservations = loadReservations();
 
-    // ── 1. 处理 pending 重规划事件 ──
-    if (pendingEvents.length > 0) {
-      for (const event of pendingEvents) {
-        operations = processReplanEvent(operations, event, ctx.tick);
-      }
-      pendingEvents = [];
-    }
-
     // ── 2. 超时检查 ──
     operations = operations.map(op => {
       const expiry = checkExpiry(op, ctx.tick);
@@ -377,14 +340,6 @@ export const agendaManagerSystem: System = {
     const demandNodes = buildDemandNodes(deficitRooms, inTransitByTarget, ctx.tick);
 
     // ── 10. 构建 Network Snapshot ──
-    const snapshot = buildNetworkSnapshot(
-      ctx.tick,
-      supplyNodes,
-      demandNodes,
-      operations,
-      reservations,
-      [], // allocationPlans will be filled below
-    );
 
     // ── 11. Rebalance 判定（A3.1 新增）──
     const rebalanceDecision = decideRebalance(rebalanceState, ctx.tick);
@@ -729,9 +684,6 @@ export const agendaManagerSystem: System = {
     // 存储 A3.1 可观测性数据
     g.networkSnapshot = finalSnapshot;
     g.networkHealth = health;
-
-    prevSnapshot = finalSnapshot;
-    prevHealth = health;
 
     if (metrics.activeCount > 0 || health.level !== "healthy") {
       log.info("agenda-manager", formatOperationMetrics(metrics));

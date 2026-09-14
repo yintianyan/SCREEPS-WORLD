@@ -643,7 +643,7 @@ export interface EscalationResult {
  *   - 累计 3+ 次不同 Action 都失败 → 标记整个领域为 unviable
  */
 export function evaluateEscalation(input: EscalationInput): EscalationResult {
-  const { failedRecord, failureNode, tick } = input;
+  const { failedRecord, failureNode: _failureNode, tick: _tick } = input;
 
   // ── 1. 同一 Action 失败 ≥ 2 次 ──
   if (failedRecord.attempts >= 2 && failedRecord.state === "failed") {
@@ -772,7 +772,7 @@ export interface RecoveryStats {
  */
 export function computeRecoveryStats(
   table: RecoveryActionTable,
-  currentTick: number,
+  _currentTick: number,
 ): RecoveryStats {
   let activeCount = 0;
   let succeededCount = 0;

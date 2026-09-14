@@ -1,7 +1,7 @@
 /** Spawn Metrics — 孵化系统指标。 */
 
 import { registerMetricGauge, registerMetricCounter } from "../Telemetry";
-import { setGauge, incrementCounter } from "../MetricRegistry";
+import { setGauge } from "../MetricRegistry";
 import { shouldCollect, markCollected } from "../TickAggregator";
 
 let registered = false;

@@ -1,7 +1,7 @@
 /** Logistics Metrics — 物流指标。 */
 
 import { registerMetricGauge, registerMetricCounter } from "../Telemetry";
-import { setGauge, incrementCounter } from "../MetricRegistry";
+import { setGauge } from "../MetricRegistry";
 import { shouldCollect, markCollected } from "../TickAggregator";
 import { globalCache } from "../../kernel/global-cache";
 

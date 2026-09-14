@@ -1,7 +1,7 @@
 /** runAction 统一错误处理策略测试。 */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { resetGlobals, mockCreep, mockPos } from "../../support/factories";
-import { runAction, actOrMove } from "../../../src/creeps/engine/actions/helpers";
+import { runAction } from "../../../src/creeps/engine/actions/helpers";
 
 // Screeps 错误码常量（测试环境未全局注入）。
 const OK = 0;
@@ -54,7 +54,7 @@ describe("runAction — 基本行为", () => {
     expect(result).toBe(ERR_FULL);
   });
 
-  it("无 handlers 时退化为 actOrMove 行为", () => {
+  it("无 handlers 时直接返回动作结果", () => {
     const creep = mockCreep();
     const action = vi.fn(() => OK);
 
@@ -240,38 +240,5 @@ describe("runAction — handler 闭包捕获上下文", () => {
     );
 
     expect(creep.memory.targetId).toBeUndefined();
-  });
-});
-
-describe("actOrMove — 向后兼容", () => {
-  it("行为与无 handler 的 runAction 一致（OK）", () => {
-    const creep = mockCreep();
-    const action = vi.fn(() => OK);
-
-    const result = actOrMove(creep, target(), action);
-
-    expect(result).toBe(OK);
-    expect(creep.moveTo).not.toHaveBeenCalled();
-  });
-
-  it("行为与无 handler 的 runAction 一致（ERR_NOT_IN_RANGE）", () => {
-    const creep = mockCreep();
-    creep.pos.getRangeTo = vi.fn(() => 5);
-    const action = vi.fn(() => ERR_NOT_IN_RANGE);
-
-    const result = actOrMove(creep, farTarget(), action);
-
-    expect(result).toBe(ERR_NOT_IN_RANGE);
-    expect(creep.moveTo).toHaveBeenCalled();
-  });
-
-  it("非移动错误码不触发 moveTo", () => {
-    const creep = mockCreep();
-    const action = vi.fn(() => ERR_FULL);
-
-    const result = actOrMove(creep, target(), action);
-
-    expect(result).toBe(ERR_FULL);
-    expect(creep.moveTo).not.toHaveBeenCalled();
   });
 });

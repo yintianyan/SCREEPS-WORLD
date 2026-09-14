@@ -50,7 +50,6 @@ describe("A5.3.1 GAP-2: Legacy import 限制", () => {
       const src = readFileSync(f, "utf8");
       // 精确检测 import 语句中包含 selectWarTarget 的行
       const lines = src.split(NL);
-      let hasImport = false;
       for (const line of lines) {
         if (
           line.includes("selectWarTarget") &&
@@ -59,7 +58,6 @@ describe("A5.3.1 GAP-2: Legacy import 限制", () => {
         ) {
           // 如果是 import 块的一部分（以 import 开头或以逗号结尾或包含 from）
           if (/^\s*(import|selectWarTarget|\})/.test(line) || line.includes("from")) {
-            hasImport = true;
             break;
           }
           // 如果是实际调用也标记（需要检查是否是 import 语句的一部分）

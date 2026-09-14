@@ -63,7 +63,7 @@ describe("hauler — 顺路卸能（gate 伴随动作）", () => {
   });
 
   it("work 模式不经 gate 卸货（卸货由 work 链的 fillStorage 负责）", () => {
-    const { storage, snap } = scenario();
+    const { snap } = scenario();
     const creep = mockCreep({
       name: "hauler_1",
       role: "hauler",

@@ -1,12 +1,6 @@
 /** A3-020: Carrier Full Chain — 完整链路集成测试 */
 import { describe, expect, it } from "vitest";
-import {
-  createOperation,
-  makeOperationId,
-  isActive,
-  isTerminalStatus,
-  type OperationContext,
-} from "../../../src/domain/operation/agenda-item";
+import { createOperation, isTerminalStatus } from "../../../src/domain/operation/agenda-item";
 import {
   markReady,
   markRunning,

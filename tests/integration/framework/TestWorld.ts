@@ -4,12 +4,7 @@
 // 本文件此前手写的 RCL_PROGRESS / PART_COST / BUILD_COST / FIND_* 私有表已退役；
 // find() 的 case 值与 setup.ts 注入的全局常量同源，杜绝双表漂移。
 import { C } from "../../support/constants";
-import {
-  flatTerrain,
-  terrainWithSwamps,
-  terrainWithWalls,
-  type TerrainCell,
-} from "../../support/terrain";
+import { flatTerrain, terrainWithSwamps, terrainWithWalls } from "../../support/terrain";
 
 // ─── 类型定义 ───────────────────────────────────────────────
 
@@ -143,13 +138,11 @@ class MockRoomPosition {
   readonly x: number;
   readonly y: number;
   readonly roomName: string;
-  private _world: TestWorld;
 
-  constructor(x: number, y: number, roomName: string, world: TestWorld) {
+  constructor(x: number, y: number, roomName: string, _world: TestWorld) {
     this.x = x;
     this.y = y;
     this.roomName = roomName;
-    this._world = world;
   }
 
   getRangeTo(
@@ -748,7 +741,6 @@ class MockCreep {
     if (this.pos.getRangeTo(target) > 3) return -9;
     const carried = this.store.getUsedCapacity();
     if (carried <= 0) return -6;
-    const repairPower = workParts * 100;
     const energyUsed = Math.min(workParts, carried);
     const hitsGained = Math.min(energyUsed * 100, target.hitsMax - target.hits);
     target.hits += hitsGained;

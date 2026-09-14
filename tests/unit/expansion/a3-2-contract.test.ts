@@ -3,7 +3,6 @@
 import { describe, it, expect } from "vitest";
 import {
   evaluateExpansionPressure,
-  DEFAULT_PRESSURE_OPTIONS,
   type ExpansionPressureResult,
 } from "../../../src/domain/expansion/pressure";
 import {
@@ -13,10 +12,7 @@ import {
   type ExpansionCandidateV2,
 } from "../../../src/domain/expansion/candidate";
 import type { RoomIntel } from "../../../src/domain/intel";
-import {
-  discoverCandidates,
-  getEvaluableCandidates,
-} from "../../../src/domain/expansion/discovery";
+import { discoverCandidates } from "../../../src/domain/expansion/discovery";
 import { scoreCandidate, scoreCandidates } from "../../../src/domain/expansion/scoring";
 import { rankCandidates, getTopCandidate } from "../../../src/domain/expansion/ranking";
 import {
@@ -24,7 +20,7 @@ import {
   DEFAULT_COST_OPTIONS,
 } from "../../../src/domain/expansion/cost-model";
 import { evaluatePayback } from "../../../src/domain/expansion/payback";
-import { evaluateRisk, DEFAULT_RISK_OPTIONS } from "../../../src/domain/expansion/risk";
+import { evaluateRisk } from "../../../src/domain/expansion/risk";
 import {
   computeTieredBudget,
   isWithinBudget,
@@ -479,7 +475,7 @@ describe("A3.2 Tiered Budget", () => {
   });
 
   it("core invaded when reserves exceed total", () => {
-    const t = computeTieredBudget(
+    computeTieredBudget(
       makeBudget({
         totalEnergy: 1000,
         reserve: 200,

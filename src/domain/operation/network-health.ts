@@ -3,7 +3,6 @@
 import type { NetworkSnapshot } from "./network-snapshot";
 import type { OperationContext } from "./agenda-item";
 import { isActive } from "./agenda-item";
-import type { DemandNode } from "./demand-node";
 
 /** 网络健康度四档。 */
 export type NetworkHealthLevel = "healthy" | "constrained" | "degraded" | "critical";

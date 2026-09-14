@@ -1,6 +1,5 @@
 /** Expansion Planner 系统 */
 import type { Priority, System, TickContext } from "../kernel/contracts";
-import { CONFIG } from "../config";
 import { globalCache } from "../kernel/global-cache";
 import { queryEmpirePlannerInput } from "./empire-economy";
 import { queryRoomIntel } from "./intelligence";
@@ -16,7 +15,6 @@ import { createPlan, updatePlanStatus, type ExpansionPlan } from "../domain/expa
 import {
   deduplicatePlans,
   prunePlans,
-  getActivePlans,
   applyHysteresis,
   needsReevaluation,
   type PlanWithHysteresis,

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   assessThreat,
   inferThreatIntent,
-  analyzeHostileBody,
   type HostileSnapshot,
   type RoomContext,
   type DefenseContext,
@@ -12,9 +11,7 @@ import {
 } from "../../../src/domain/defense/threat-assessment";
 import {
   evaluateCombatCapability,
-  aggregateCombatCapability,
   computeCombatPower,
-  boostTier,
   ATTACK_POWER,
   RANGED_ATTACK_POWER,
   HEAL_POWER,
@@ -23,7 +20,6 @@ import {
   HITS_PER_PART,
   BOOST_MULTIPLIERS,
   type CreepSnapshot,
-  type CombatCapability,
 } from "../../../src/domain/combat/capability";
 import {
   decideRemoteDefenseAction,
@@ -33,7 +29,6 @@ import {
   type EmpireContext,
   type LogisticsContext,
   type MilitaryContext,
-  type RemoteDefenseDecision,
 } from "../../../src/domain/defense/remote-defense";
 
 // ═══════════════════════════════════════════════════════════
@@ -955,25 +950,7 @@ describe("§14 Decision Trace — 6 类 Decision 可记录性", () => {
   // 验证 6 类军事决策能够生成 DecisionRecord 格式的数据
   // DecisionRecord 需要：decisionId, tick, category, actor, scope, reasons, evidence,
   //   selectedAction, rejectedAlternatives, expectedOutcome, correlationId, severity,
-  //   decisionHash, createdAt, lifecycle
-
-  const traceFields = [
-    "decisionId",
-    "tick",
-    "category",
-    "actor",
-    "scope",
-    "reasons",
-    "evidence",
-    "selectedAction",
-    "rejectedAlternatives",
-    "expectedOutcome",
-    "correlationId",
-    "severity",
-    "decisionHash",
-    "createdAt",
-    "lifecycle",
-  ];
+  //   decisionHash, createdAt, lifecycle（原 traceFields 数组未被引用，随 noUnusedLocals 清理移除）
 
   it("1. Threat Assessment → 可生成 DEFENSE_PREP DecisionRecord", () => {
     const assessment = assessThreat(
@@ -1002,7 +979,7 @@ describe("§14 Decision Trace — 6 类 Decision 可记录性", () => {
       "SCOUTING",
       "UNKNOWN",
     ];
-    for (const intent of intents) {
+    for (const _intent of intents) {
       // 每种 intent 都应该有对应的 evidence 生成路径
       // 验证 inferThreatIntent 的输出格式
       const result = inferThreatIntent(

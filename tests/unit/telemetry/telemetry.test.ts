@@ -52,9 +52,7 @@ import {
 import {
   recordDecision,
   drainDecisions,
-  shouldFlushDecisions,
   decisionBufferSize,
-  totalDecisionsFlushed,
   recordOutcome,
   drainOutcomes,
 } from "../../../src/telemetry/DecisionRegistry";
@@ -66,12 +64,7 @@ import {
   resetFrequencyState,
 } from "../../../src/telemetry/TickAggregator";
 
-import {
-  flush,
-  shouldFlush,
-  bufferStatus,
-  collectFlushPackage,
-} from "../../../src/telemetry/TelemetryBuffer";
+import { flush, bufferStatus, collectFlushPackage } from "../../../src/telemetry/TelemetryBuffer";
 
 import { runFlush, initTelemetryFlush } from "../../../src/telemetry/TelemetryFlush";
 

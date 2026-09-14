@@ -1,16 +1,6 @@
 import type { CpuTier, Priority } from "../kernel/contracts";
 
 /**
- * 根据 RCL 返回每个 source 的目标 work parts 总数（约束 X-02）。
- * RCL1-3: 5 / RCL4-6: 6 / RCL7-8: 8。
- */
-export function getSourceTargetWorkParts(rcl: number): number {
-  if (rcl >= 7) return CONFIG.assignment.sourceTargetWorkPartsByRcl.high;
-  if (rcl >= 4) return CONFIG.assignment.sourceTargetWorkPartsByRcl.mid;
-  return CONFIG.assignment.sourceTargetWorkPartsByRcl.low;
-}
-
-/**
  * 根据 RCL 返回 wall/rampart 的目标维护血量（约束 G-DF-08）。
  * RCL3-4: 100K / RCL5-6: 1M / RCL7-8: 10M。
  */
@@ -343,12 +333,6 @@ export const CONFIG = {
     leaseDuration: 50,
     /** 每个 source 的目标 work parts 总数（向后兼容，优先使用分级配置）。 */
     sourceTargetWorkParts: 5,
-    /** 每个 source 的目标 work parts 总数，按 RCL 分级（约束 X-02）。 */
-    sourceTargetWorkPartsByRcl: {
-      low: 5, // RCL1-3
-      mid: 6, // RCL4-6
-      high: 8, // RCL7-8
-    },
     /** 能量低于此阈值时触发紧急抢占 — 释放普通任务转为 fill。 */
     emergencyFillThreshold: 300,
     /** 单个 source 最多可同时分配的矿工数（P2-6：maxWorkers 语义 = creep 数而非目标 WORK 数）。

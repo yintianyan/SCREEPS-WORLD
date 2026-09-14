@@ -8,14 +8,8 @@ import {
   makeOperationId,
   type ExpansionResult,
   type OutcomeEvent,
-  type MilestoneEvent,
 } from "../domain/expansion/uoem-types";
-import {
-  getOutcomeChannel,
-  enqueueOutcome,
-  makeEventId,
-  type OutcomeChannelMemory,
-} from "../kernel/outcome-channel";
+import { getOutcomeChannel, enqueueOutcome, makeEventId } from "../kernel/outcome-channel";
 import {
   decideBootstrapRooms,
   BOOTSTRAP_WORKER_BODY,
@@ -36,13 +30,9 @@ import { packPos } from "../domain/layout/types";
 import { COMPACT_CORE_V2 } from "../domain/layout/templates/compact-core-v2";
 import type { ExpansionPlan } from "../domain/expansion/plan";
 import type { ExecutionState } from "../domain/expansion/execution-state";
-import {
-  transitionExecutionState,
-  getExecutionProgress,
-  describeExecutionState,
-} from "../domain/expansion/execution-state";
+import { getExecutionProgress } from "../domain/expansion/execution-state";
 import { validateExecutionGate, type ExecutionGateInput } from "../domain/expansion/execution-gate";
-import { evaluateCheckpoint, type CheckpointId } from "../domain/expansion/checkpoint";
+import { evaluateCheckpoint } from "../domain/expansion/checkpoint";
 import {
   evaluateEconomicActivation,
   type EconomicActivationInput,
@@ -52,20 +42,11 @@ import {
   canHandover,
   type EmpireIntegrationInput,
 } from "../domain/expansion/empire-integration";
-import {
-  evaluateThreatEscalation,
-  type ThreatEscalationInput,
-} from "../domain/expansion/threat-escalation";
 import { tryReserve } from "../domain/expansion/resource-reservation";
 import {
   evaluateExpansionCooldown,
   DEFAULT_COOLDOWN_CONFIG,
 } from "../domain/expansion/expansion-cooldown";
-import { evaluateAutonomyAge } from "../domain/expansion/autonomy";
-import { evaluateStabilityScore } from "../domain/expansion/stability-score";
-import { evaluateColonyFailure } from "../domain/expansion/colony-failure";
-import { evaluateExpansionRoi, type EmpireSnapshot } from "../domain/expansion/roi-tracker";
-import { buildColonyStabilityDashboard } from "../domain/expansion/colony-dashboard";
 import {
   recordExpansionCompleted,
   recordExpansionFailed,
@@ -79,15 +60,6 @@ const OUTCOME_STOLEN = 1;
 const OUTCOME_TIMEOUT = 2;
 const OUTCOME_LOST = 3;
 const OUTCOME_ABORTED = 4;
-
-/** Checkpoint ID 列表（顺序执行）。 */
-const CHECKPOINT_IDS: CheckpointId[] = [
-  "CP1_CLAIMED",
-  "CP2_SPAWN_ACTIVE",
-  "CP3_ENERGY_LOOP",
-  "CP4_BASIC_INFRA",
-  "CP5_ECONOMIC_ACTIVATION",
-];
 
 /** 状态机认识的全部分支 — Memory 中不在此列的 state 为旧版残留值。 */
 const EXECUTION_STATES: ReadonlySet<string> = new Set([
@@ -887,10 +859,6 @@ let __uoemEventSeq = 0;
  * P1 claim 成功、P5 forced advance、P7 forced success 调用此函数。
  */
 function emitMilestone(expansion: ExpansionState, milestone: string, tick: number): void {
-  const operationId =
-    expansion.operationId ??
-    makeOperationId(expansion.target, expansion.openedAt ?? expansion.startedAt);
-
   // FORCED_ADVANCE 标志传播
   if (milestone === "FORCED_ADVANCE" && !expansion.forcedAdvance) {
     expansion.forcedAdvance = true;
@@ -903,16 +871,8 @@ function emitMilestone(expansion: ExpansionState, milestone: string, tick: numbe
     tick - expansion.startedAt,
   ]);
 
-  // MilestoneEvent 构造（不写 channel，不写 globalCache）
-  const _event: MilestoneEvent = {
-    kind: "MILESTONE",
-    milestone,
-    at: tick,
-    eventId: makeEventId(tick, ++__uoemEventSeq),
-    operationId,
-  };
-  // 可选：写入 eventLog 供 telemetry 追踪（不进 OutcomeChannel）
-  // 目前 eventLog 已通过 recordEvent 记录，MilestoneEvent 本身无需额外持久化
+  // 保留事件序号推进副作用（原 MilestoneEvent 构造为死代码已移除，seq 递增行为保持不变）
+  makeEventId(tick, ++__uoemEventSeq);
 }
 
 /**

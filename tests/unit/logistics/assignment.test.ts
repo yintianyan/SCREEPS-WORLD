@@ -9,7 +9,6 @@ import {
 } from "../../../src/domain/assignment/service";
 import { TaskPool } from "../../../src/domain/assignment/task-pool";
 import { globalCache } from "../../../src/kernel/global-cache";
-import { CONFIG } from "../../../src/config";
 import type { RoomSnapshot, ColonyState } from "../../../src/kernel/contracts";
 
 // ── mock 辅助函数 ──

@@ -1,6 +1,6 @@
 /** Confidence Model */
 
-import type { IntelConfidence, PlayerIntelRecord } from "./player-intel";
+import type { PlayerIntelRecord } from "./player-intel";
 import type { TerrainContext } from "./terrain-context";
 import { CONFIDENCE_VALUE } from "./player-intel";
 

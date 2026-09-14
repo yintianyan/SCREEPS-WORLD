@@ -68,7 +68,7 @@ export function registerRuntimeMetrics(): void {
  * @param tickStartTime tick 开始时间戳（用于计算 tick duration）
  */
 export function collectRuntimeMetrics(
-  budget: Budget,
+  _budget: Budget,
   tickSkipped: number = 0,
   tickErrors: number = 0,
   tickStartTime: number = 0,

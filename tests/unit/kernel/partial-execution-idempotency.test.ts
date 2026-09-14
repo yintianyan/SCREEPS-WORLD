@@ -9,14 +9,8 @@
  *
  * 实现方式：通过 mockBudget 在特定系统后返回 canStart=false 模拟 CPU 耗尽。
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  resetGlobals,
-  mockSnapshot,
-  mockBudget,
-  mockContext,
-  mockCreep,
-} from "../../support/factories";
+import { beforeEach, describe, expect, it } from "vitest";
+import { resetGlobals, mockSnapshot, mockBudget, mockContext } from "../../support/factories";
 import { CpuBudget } from "../../../src/kernel/scheduler";
 import type { Budget, TickContext } from "../../../src/kernel/contracts";
 
@@ -39,7 +33,7 @@ describe("D-FINDING-02: 部分执行幂等性", () => {
       get emergency() {
         return conserveBudget.emergency;
       },
-      canStart: (p: number) => {
+      canStart: (_p: number) => {
         callCount++;
         // 前 3 次允许（P0 系统跑完），之后拒绝（模拟 CPU 耗尽）
         return callCount <= 3;
@@ -98,7 +92,7 @@ describe("D-FINDING-02: 部分执行幂等性", () => {
     };
 
     // 所有系统都应该能运行
-    for (const sys of systems) {
+    for (const _sys of systems) {
       expect(ctx2.budget.canStart(2)).toBe(true);
     }
   });
@@ -106,17 +100,15 @@ describe("D-FINDING-02: 部分执行幂等性", () => {
   it("Memory 字段不半写入 — safeRun 错误隔离保证状态一致", () => {
     // 模拟一个系统在执行中途抛错
     const snap = mockSnapshot();
-    const ctx = mockContext(snap);
+    mockContext(snap);
 
     // 模拟半写入：系统在写入 Memory 中途抛错
     g().Memory.rooms = { W7N4: { spawnQueue: [], buildQueue: [] } };
 
-    let threw = false;
     try {
       // 模拟半写入场景
       g().Memory.rooms.W7N4.spawnQueue.push({ role: "harvester", priority: 0 });
       // 中途抛错
-      threw = true;
       throw new Error("CPU exhausted mid-write");
     } catch {
       // safeRun 应该捕获这个错误

@@ -145,16 +145,6 @@ export function scoreCandidate(
   const layoutFitness = layoutFitnessScore ?? 0.5;
 
   // ── 加权总分 ──
-  const total = clamp01(
-    options.w1 * sourceValue +
-      options.w2 * mineralValue +
-      options.w3 * distanceScore +
-      options.w4 * neighborSafety +
-      options.w5 * rivalProximity + // 正值，但在公式中是减项
-      options.w6 * defensibility +
-      options.w7 * layoutFitness,
-  );
-
   // 注意：公式中 rivalProximity 是减项，但在归一化时我们将其作为
   // "负面影响"处理：score = sum(positive) - w5 * rivalProximity
   // 但为了保持 [0,1] 范围，我们改为：

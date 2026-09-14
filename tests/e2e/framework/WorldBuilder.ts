@@ -97,7 +97,7 @@ export class WorldBuilder {
    */
   async linkRooms(roomNames: string[]): Promise<void> {
     // screeps-server-mockup 自动处理房间连接，这里只是确保房间都存在
-    for (const name of roomNames) {
+    for (const _name of roomNames) {
       // 房间应该已经通过 addRoom 创建
     }
   }

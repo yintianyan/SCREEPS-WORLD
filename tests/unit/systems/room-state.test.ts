@@ -265,7 +265,7 @@ describe("room-state system — TD-020 economyPressure 使用 CONFIG 常量", ()
 
   it("score=midpoint 时 economyPressure=0.5", () => {
     const mid = CONFIG.economy.economyPressure.midpoint;
-    const snapshot = makeSnapshot();
+    makeSnapshot();
     // 直接设置 phase 结果中的 drainScore 来间接控制 score
     // 由于 score = max(drainScore, liquidityScore)，我们通过 mock phase 计算
     // 更简单的方法：直接运行后手动验证映射公式

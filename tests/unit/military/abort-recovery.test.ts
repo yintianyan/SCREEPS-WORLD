@@ -13,7 +13,6 @@ import {
   createActionRecord,
   markSubmitted,
   markExecuting,
-  markSucceeded,
   markFailed,
   getRetryPolicy,
   type RecoveryActionTable,

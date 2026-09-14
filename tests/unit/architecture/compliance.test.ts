@@ -199,11 +199,10 @@ describe("R9 Kernel 禁止 import 业务模块", () => {
   const kernelFiles = ALL_FILES.filter(f => layerOf(f) === "kernel");
   // 已登记白名单例外（ENGINEERING_BLUEPRINT §3.1 Dependencies 行）：
   // - pruneDeadCreepCache from creeps/movement/pathfinding（R9 例外，KERNEL §8）
-// - getRoomThreatsCached from creeps/support/targeting（共享 body-aware 威胁查询，kernel 只读结果集合）
+  // - getRoomThreatsCached from creeps/support/targeting（共享 body-aware 威胁查询，kernel 只读结果集合）
   // - type-only 导入豁免（全局类型共享，无运行时副作用）
   // - global-cache.ts 的 TaskPool type import 豁免
   // - outcome-channel.ts 的 uoem-types type import 豁免
-  // - layout-metrics.ts 的 LayoutMetrics/DefenseCutInfo type re-export from domain/layout/metrics（纯函数已下沉，仅留 Memory 设施）
   // R9 已修复：buildRoomSnapshot 通过 Registry.registerWorldModelBuilder 注入，
   // classifyThreats 内联为 CONFIG.defense.threatParts 判定，
   // MINCUT_ALGO_VERSION 改为参数注入。豁免列表已清空。

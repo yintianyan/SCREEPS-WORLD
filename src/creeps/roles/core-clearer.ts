@@ -1,6 +1,6 @@
 /** CoreClearer */
 import type { Priority } from "../../kernel/contracts";
-import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
+import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { findInvaderCores } from "../support/invader-core";

@@ -9,14 +9,12 @@ import {
   getDismantlePlans,
   createDismantlePlan,
   isDismantleOnCooldown,
-  DISMANTLE_COOLDOWN,
   LINK_CONSTRAINED_RETRY_INTERVAL,
 } from "../../../src/systems/link-system";
 import type { LinkInfo } from "../../../src/domain/economy/links";
 import { layoutPlannerSystem } from "../../../src/systems/layout-planner";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { packPos } from "../../../src/domain/layout/types";
-import { CONFIG } from "../../../src/config";
 import {
   resetGlobals,
   mockSnapshot,

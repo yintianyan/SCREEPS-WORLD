@@ -26,15 +26,8 @@ import {
   canHandover,
   type EmpireIntegrationInput,
 } from "../../../src/domain/expansion/empire-integration";
-import {
-  evaluateThreatEscalation,
-  type ThreatEscalationInput,
-} from "../../../src/domain/expansion/threat-escalation";
-import {
-  tryReserve,
-  releaseReservation,
-  type ResourceReservation,
-} from "../../../src/domain/expansion/resource-reservation";
+import { evaluateThreatEscalation } from "../../../src/domain/expansion/threat-escalation";
+import { tryReserve, releaseReservation } from "../../../src/domain/expansion/resource-reservation";
 import {
   createExpansionOperation,
   completeStep,
@@ -223,7 +216,7 @@ function simulateExecutionPath(
 
 describe("A3.3 E2E — Success Path", () => {
   it("full chain: VALIDATING → PREPARING → CLAIMING → CLAIMED → BOOTSTRAPPING → ECONOMIC_STARTUP → INTEGRATING → COMPLETED", () => {
-    const { finalState, path } = simulateExecutionPath("VALIDATING", 1000, [
+    simulateExecutionPath("VALIDATING", 1000, [
       { gatePassed: true }, // → PREPARING
       { resourcesReserved: true, claimerCreated: true }, // → CLAIMING
       { controllerClaimed: true }, // → CLAIMED

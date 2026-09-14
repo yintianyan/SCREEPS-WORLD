@@ -11,7 +11,6 @@ import type {
   TacticalAbortSignal,
   TacticalAbortReason,
 } from "./types";
-import type { IntelConfidence } from "../defense/player-intel";
 import { validateAuthorization } from "./authorization";
 
 // ═══════════════════════════════════════════════════════════
@@ -56,8 +55,16 @@ export function canTransitionTactical(from: TacticalState, to: TacticalState): b
  * 确定性：相同 Snapshot 必须产生相同 Decision。
  */
 export function evaluateTacticalAction(snapshot: TacticalSnapshot): TacticalDecision {
-  const { tick, squad, objective, enemies, terrain, confidence, ourPower, ourCapability } =
-    snapshot;
+  const {
+    tick,
+    squad,
+    objective,
+    enemies: _enemies,
+    terrain: _terrain,
+    confidence: _confidence,
+    ourPower: _ourPower,
+    ourCapability: _ourCapability,
+  } = snapshot;
   const currentState = squad.state;
   const rejected: RejectedTacticalAlternative[] = [];
   const evidence: string[] = [];
@@ -529,7 +536,7 @@ function checkAbortConditions(snapshot: TacticalSnapshot): TacticalAbortSignal |
 function assessIntelFreshness(
   snapshot: TacticalSnapshot,
 ): "FRESH" | "RECENT" | "STALE" | "EXPIRED" {
-  const { enemies, tick, confidence } = snapshot;
+  const { enemies, tick } = snapshot;
 
   if (enemies.length === 0) return "FRESH"; // 无敌人不需要情报
 
@@ -543,7 +550,7 @@ function assessIntelFreshness(
 }
 
 function checkEnemyCapabilitySurge(snapshot: TacticalSnapshot): boolean {
-  const { enemies, ourPower, squad } = snapshot;
+  const { enemies, ourPower } = snapshot;
   if (enemies.length === 0) return false;
 
   const enemyTotalAttack = enemies.reduce(

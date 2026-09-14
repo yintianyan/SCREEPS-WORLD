@@ -4,15 +4,12 @@ import type { SupplyContract } from "../economy/supply-contract";
 import { isContractActive, computeCycleAmount } from "../economy/supply-contract";
 import type { DemandNode } from "../operation/demand-node";
 import type { SupplyNode } from "../operation/supply-node";
-import type { ResourceType, OperationPriority } from "../operation/agenda-item";
 import type { TransportRequestV2, TransportEndpoint } from "./transport-request";
 import { createRequest } from "./transport-request";
-import type { TransportAssignment } from "./transport-assignment";
 import type { Route } from "./route";
 import { routeScore, isRouteUsable } from "./route";
 import type { RouteCache } from "./route-cache";
 import type { TransportPlan } from "./transport-plan";
-import { createEmptyPlan } from "./transport-plan";
 import type { EmpireCapacityResult } from "./capacity-planning";
 
 // ─── Planner 输入 ─────────────────────────────────────────
@@ -51,7 +48,15 @@ export interface PlannerInput {
  * 纯函数。
  */
 export function planLogistics(input: PlannerInput): TransportPlan {
-  const { contracts, deficits, surpluses, capacity, routeCache, threats, tick } = input;
+  const {
+    contracts,
+    deficits,
+    surpluses,
+    capacity: _capacity,
+    routeCache,
+    threats: _threats,
+    tick,
+  } = input;
 
   const requests: TransportRequestV2[] = [];
   const routes: Route[] = [];

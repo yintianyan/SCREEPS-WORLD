@@ -22,7 +22,6 @@ import {
   confidenceAt,
   INVADER_USERNAME,
   type IntelEntry,
-  type IntelSource,
   type PlayerIntelEntry,
   type RoomIntel,
   INTEL_ROOMS_CAP,

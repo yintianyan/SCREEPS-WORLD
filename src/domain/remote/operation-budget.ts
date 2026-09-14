@@ -81,45 +81,6 @@ export function computeBudgetStatus(
   };
 }
 
-// ─── 成本记录 ──────────────────────────────────────────
-
-/**
- * Budget Consumption Record — 单次预算消耗记录。
- */
-export interface BudgetConsumptionRecord {
-  /** Operation ID。 */
-  operationId: string;
-  /** 消耗 tick。 */
-  tick: number;
-  /** 消耗金额（能量）。 */
-  amount: number;
-  /** 消耗类别。 */
-  category: BudgetConsumptionCategory;
-}
-
-/**
- * 预算消耗类别。
- */
-export type BudgetConsumptionCategory = "spawn" | "transport" | "infrastructure" | "risk" | "other";
-
-/**
- * 记录一次预算消耗。
- * 纯函数 — 返回新记录。
- */
-export function createConsumptionRecord(
-  operationId: string,
-  tick: number,
-  amount: number,
-  category: BudgetConsumptionCategory,
-): BudgetConsumptionRecord {
-  return {
-    operationId,
-    tick,
-    amount: Math.max(0, amount),
-    category,
-  };
-}
-
 // ─── 超支检测 ──────────────────────────────────────────
 
 /**
@@ -137,17 +98,6 @@ export function isBudgetOverrun(limit: number, consumed: number): boolean {
 export function isBudgetNearOverrun(limit: number, consumed: number, threshold: number): boolean {
   if (limit <= 0) return true;
   return consumed / limit >= threshold;
-}
-
-/**
- * 计算超支冷却到期 tick。
- * 纯函数。
- */
-export function computeExhaustionCooldown(
-  tick: number,
-  policy: BudgetPolicy = DEFAULT_BUDGET_POLICY,
-): number {
-  return tick + policy.exhaustionCooldown;
 }
 
 // ─── 预算分配 ──────────────────────────────────────────
@@ -178,48 +128,4 @@ export function allocateBudget(
   budget *= Math.max(0.5, 1 - riskLevel * 0.1);
 
   return Math.round(budget);
-}
-
-// ─── 批量查询 ──────────────────────────────────────────
-
-/**
- * 汇总多个 Operation 的预算消耗。
- * 纯函数。
- */
-export function aggregateBudgetConsumption(records: readonly BudgetConsumptionRecord[]): {
-  totalConsumed: number;
-  byCategory: Record<BudgetConsumptionCategory, number>;
-} {
-  const byCategory: Record<BudgetConsumptionCategory, number> = {
-    spawn: 0,
-    transport: 0,
-    infrastructure: 0,
-    risk: 0,
-    other: 0,
-  };
-  let totalConsumed = 0;
-  for (const r of records) {
-    byCategory[r.category] += r.amount;
-    totalConsumed += r.amount;
-  }
-  return { totalConsumed, byCategory };
-}
-
-/**
- * 按 Operation ID 分组消耗记录。
- * 纯函数。
- */
-export function groupConsumptionByOp(
-  records: readonly BudgetConsumptionRecord[],
-): Map<string, BudgetConsumptionRecord[]> {
-  const map = new Map<string, BudgetConsumptionRecord[]>();
-  for (const r of records) {
-    let arr = map.get(r.operationId);
-    if (!arr) {
-      arr = [];
-      map.set(r.operationId, arr);
-    }
-    arr.push(r);
-  }
-  return map;
 }

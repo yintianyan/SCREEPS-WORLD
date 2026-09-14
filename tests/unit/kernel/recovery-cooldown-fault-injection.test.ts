@@ -196,7 +196,7 @@ describe("P3-1 故障注入：recoveryEligible 与 safeRun cooldown", () => {
   describe("cooldown 语义边界", () => {
     it("cooldown 只对当前 system 生效", () => {
       failTimes("system/construction-manager", 3, false);
-      const cmCooldown = g().pluginCooldowns.get("system/construction-manager");
+      g().pluginCooldowns.get("system/construction-manager");
 
       // 其他系统不受影响
       g().Game.time += 1;

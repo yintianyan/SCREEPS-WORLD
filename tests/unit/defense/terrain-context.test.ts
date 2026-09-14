@@ -63,7 +63,7 @@ function makeDenseWallSnapshot(opts: Partial<TerrainSnapshot> = {}): TerrainSnap
 }
 
 function makeFortifiedSnapshot(opts: Partial<TerrainSnapshot> = {}): TerrainSnapshot {
-  const isWall = (x: number, y: number): boolean => false;
+  const isWall = (_x: number, _y: number): boolean => false;
   // 核心区 5x5 范围内放 rampart
   const corePos = 25 * 50 + 25;
   const ramparts: number[] = [];
@@ -146,7 +146,7 @@ describe("G3 — buildTerrainContext", () => {
 
   it("T04: Corridor — confined passage", () => {
     // 类似 chokepoint 但更长的通道
-    const isWall = (x: number, y: number): boolean => {
+    const isWall = (_x: number, y: number): boolean => {
       // y=20-22 之间留通道
       return y < 20 || y > 22;
     };

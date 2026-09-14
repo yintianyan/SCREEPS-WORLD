@@ -18,7 +18,6 @@ import {
   withdrawStorageCapped,
 } from "../engine/actions";
 import { releaseAssignment } from "../support/assignment-adapter";
-import { getObjectById } from "../support/obj-cache";
 import { defineRole } from "../engine/role-runner";
 
 /** recovery tier 门禁：释放 assignment（不建造）。 */

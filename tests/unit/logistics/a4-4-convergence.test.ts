@@ -6,7 +6,6 @@ import {
   effectiveRate,
   hasActiveContract,
   isContractActive,
-  type SupplyContract,
 } from "../../../src/domain/economy/supply-contract";
 import {
   bridgeToSupplyNode,
@@ -14,10 +13,7 @@ import {
   type ProducerSnapshot,
   type ConsumerSnapshot,
 } from "../../../src/domain/economy/contract-node-bridge";
-import {
-  createRequest,
-  type TransportRequestV2,
-} from "../../../src/domain/logistics/transport-request";
+import { createRequest } from "../../../src/domain/logistics/transport-request";
 import {
   createAccounting,
   recordAssigned,
@@ -28,7 +24,6 @@ import {
   lossRate,
   isComplete,
   hasLoss,
-  type TransportAccounting,
 } from "../../../src/domain/logistics/transport-accounting";
 import {
   validateDelivery,
@@ -39,7 +34,6 @@ import {
 import {
   createAssignment,
   type TransportAssignment,
-  type TransportRole,
 } from "../../../src/domain/logistics/transport-assignment";
 import { createRoute } from "../../../src/domain/logistics/route";
 import { RouteCache } from "../../../src/domain/logistics/route-cache";

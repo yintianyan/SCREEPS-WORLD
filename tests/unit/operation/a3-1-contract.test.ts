@@ -13,7 +13,6 @@ import {
   isFulfilled,
   isStarving,
   applyAging,
-  sumDemandRemaining,
   type DemandNode,
 } from "../../../src/domain/operation/demand-node";
 import {
@@ -24,25 +23,19 @@ import {
   allocateNetwork,
   MAX_GLOBAL_OPERATIONS,
   MAX_TARGETS_PER_SOURCE,
-  MAX_SOURCES_PER_TARGET,
-  type RouteDistance,
 } from "../../../src/domain/operation/allocation-policy";
 import {
   classifyPreemption,
   isPreemptable,
   attemptPreemption,
 } from "../../../src/domain/operation/preemption";
-import {
-  shouldCancelOperation,
-  shouldRebalance,
-  getStabilityParams,
-} from "../../../src/domain/operation/stability";
+import { shouldCancelOperation, getStabilityParams } from "../../../src/domain/operation/stability";
 import {
   RebalanceState,
   decideRebalance,
   markRebalanced,
 } from "../../../src/domain/operation/rebalance";
-import { createOperation, type OperationContext } from "../../../src/domain/operation/agenda-item";
+import { type OperationContext } from "../../../src/domain/operation/agenda-item";
 import type { RoomRegistryEntry } from "../../../src/domain/strategy/room-registry";
 import type { ReservationTable } from "../../../src/domain/operation/reservation";
 

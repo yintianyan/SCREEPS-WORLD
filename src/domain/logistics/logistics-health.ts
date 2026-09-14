@@ -1,7 +1,7 @@
 /** Logistics Health */
 
 import type { TransportAccounting } from "./transport-accounting";
-import { deliveryRate, lossRate, isComplete } from "./transport-accounting";
+import { isComplete } from "./transport-accounting";
 import type { TransportRequestV2 } from "./transport-request";
 import { isActiveRequest } from "./transport-request";
 
@@ -50,7 +50,7 @@ export function computeLogisticsHealth(
   accounting: readonly TransportAccounting[],
   activeRequests: readonly TransportRequestV2[],
   avgLatency: number,
-  tick: number,
+  _tick: number,
 ): LogisticsHealthResult {
   // 基本统计
   const totalRequested = accounting.reduce((s, a) => s + a.requested, 0);

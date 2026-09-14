@@ -4,7 +4,6 @@ import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-ma
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
-import type { RoomSnapshot } from "../../../src/kernel/contracts";
 
 const homeRoom1 = "W1N1";
 const homeRoom2 = "W3N3";

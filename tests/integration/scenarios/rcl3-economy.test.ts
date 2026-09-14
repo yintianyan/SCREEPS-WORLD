@@ -230,7 +230,7 @@ describe("RCL3 Economy — 经济形成", () => {
     runner.setLoop(loop);
 
     // 运行 800 tick — spawn 应该补充 hauler
-    const result = runner.run(world, 800, {
+    runner.run(world, 800, {
       stopWhen: w => w.creepsByRole("hauler").length >= 2,
     });
 

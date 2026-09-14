@@ -1,8 +1,7 @@
 /** A3.1 Simulation Tests — Multi-Room Resource Network Stability */
 import { describe, expect, it } from "vitest";
-import { buildSupplyNodes, type SupplyNode } from "../../../src/domain/operation/supply-node";
+import { type SupplyNode } from "../../../src/domain/operation/supply-node";
 import {
-  buildDemandNodes,
   updateFulfillment,
   applyAging,
   type DemandNode,
@@ -18,42 +17,10 @@ import {
   decideRebalance,
   markRebalanced,
 } from "../../../src/domain/operation/rebalance";
-import {
-  shouldCancelOperation,
-  shouldRebalance as stabilityShouldRebalance,
-} from "../../../src/domain/operation/stability";
-import {
-  createOperation,
-  isActive,
-  type OperationContext,
-} from "../../../src/domain/operation/agenda-item";
-import type { RoomRegistryEntry } from "../../../src/domain/strategy/room-registry";
+import { type OperationContext } from "../../../src/domain/operation/agenda-item";
 import type { ReservationTable } from "../../../src/domain/operation/reservation";
 
 const TICK = 1000;
-
-function makeEntry(overrides: Partial<RoomRegistryEntry> = {}): RoomRegistryEntry {
-  return {
-    roomName: "W1N1",
-    economicClass: "core" as any,
-    rcl: 6,
-    hasStorage: true,
-    hasTerminal: false,
-    storageEnergy: 200000,
-    storageCapacity: 300000,
-    storageRatio: 200000 / 300000,
-    netFlow: 10,
-    estimatedIncome: 15,
-    efficiency: 0.8,
-    riskBuffer: 1000,
-    isStruggling: false,
-    canExport: true,
-    needsAid: false,
-    transferable: 100000,
-    updatedAt: TICK,
-    ...overrides,
-  };
-}
 
 function makeSupply(room: string, transferable: number): SupplyNode {
   return {

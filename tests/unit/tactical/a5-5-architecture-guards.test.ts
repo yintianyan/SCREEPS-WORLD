@@ -17,7 +17,7 @@ function walk(dir: string): string[] {
   return out;
 }
 
-const ALL_FILES = walk(SRC);
+walk(SRC);
 
 function codeLines(src: string): string {
   return src
@@ -170,12 +170,6 @@ describe("A5.5 Architecture Guards", () => {
     // R10 ADR 合并后：combatMicroSystem 通过 tacticalRuntimePipelineSystem 注册
     expect(bootstrap).toMatch(/tacticalRuntimePipelineSystem/);
     expect(bootstrap).toMatch(/tactical-runtime-pipeline/);
-  });
-
-  // ── 额外：Runtime 公共 API 存在 ──
-  it("combat-micro-runtime.ts 应导出 getMicroDecision 和 getMicroPlan", () => {
-    expect(COMBAT_MICRO_RUNTIME).toMatch(/export\s+function\s+getMicroDecision/);
-    expect(COMBAT_MICRO_RUNTIME).toMatch(/export\s+function\s+getMicroPlan/);
   });
 
   // ── 额外：Domain 导出 planCombatMicro ──

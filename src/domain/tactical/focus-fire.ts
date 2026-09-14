@@ -389,7 +389,7 @@ export function planFocusFire(snapshot: FocusFireSnapshot): FocusFirePlan {
     squadId,
     objectiveId,
     tacticalState,
-    targetScope,
+    targetScope: _targetScope,
     warPosture,
     candidates,
     members,
@@ -655,7 +655,7 @@ function buildEmptyPlan(
   reason: string,
   evidence: string[],
   rejected: readonly RejectedTarget[],
-  prevPlan: FocusFirePlan | null,
+  _prevPlan: FocusFirePlan | null,
 ): FocusFirePlan {
   const plan: FocusFirePlan = {
     squadId,

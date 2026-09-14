@@ -384,7 +384,6 @@ export function detectRootCause(graph: FailureGraph, symptomId: string): RootCau
   // 选择置信度最高的路径
   allPaths.sort((a, b) => b.confidence - a.confidence);
   const best = allPaths[0]!;
-  const rootNode = nodes.find(n => n.id === best.path[0]);
 
   // 构建因果链描述
   const chainParts: string[] = [];

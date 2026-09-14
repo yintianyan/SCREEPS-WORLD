@@ -15,8 +15,6 @@ import {
   buildPlayerIntelRecord,
   makeObservedFact,
   makeCombatLogFact,
-  makeInference,
-  makePrediction,
 } from "../../../src/domain/defense/player-intel";
 
 // ─── 测试辅助 ────────────────────────────────────────────────

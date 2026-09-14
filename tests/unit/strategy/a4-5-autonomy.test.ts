@@ -14,7 +14,6 @@ import {
   detectRootCause,
   analyzeImpact,
   findRootCauses,
-  findSymptoms,
   computeFailureSeverity,
   type FailureNode,
 } from "../../../src/domain/strategy/failure-propagation";
@@ -24,8 +23,6 @@ import {
   isOnCooldown,
   recordRecoveryAttempt,
   remainingCooldown,
-  cooldownKey,
-  selectNextRecovery,
   type CooldownTable,
 } from "../../../src/domain/strategy/recovery-priority";
 import {

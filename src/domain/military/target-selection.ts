@@ -97,7 +97,7 @@ export interface TargetScore {
 
 export function scoreTarget(
   candidate: TargetCandidate,
-  objective: string,
+  _objective: string,
   maxDistance: number,
 ): TargetScore {
   // 价值评分
@@ -107,7 +107,6 @@ export function scoreTarget(
   const strategicValue = candidate.isCore ? 80 : candidate.isRemote ? 30 : 50;
   const roomValue = (candidate.rcl ?? 0) * 10;
   const futureValue = candidate.isRemote ? 10 : 20;
-  const replacementCost = (candidate.rcl ?? 0) * 5;
   const logisticsCost = candidate.distance * 5;
   const militaryCost = (candidate.towers ?? 0) * 15;
   const valueScore = Math.max(

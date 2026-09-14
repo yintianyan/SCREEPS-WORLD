@@ -3,7 +3,6 @@ import {
   evaluateBottleneck,
   identifyBottlenecks,
   getTopBottleneck,
-  DEFAULT_BOTTLENECK_OPTIONS,
 } from "../../../src/domain/economy/bottleneck";
 import { evaluateResourceHealth } from "../../../src/domain/economy/resource-health";
 import {
@@ -49,7 +48,7 @@ describe("Bottleneck", () => {
   describe("identifyBottlenecks", () => {
     it("返回排序的瓶颈列表", () => {
       const ledger = createResourceLedger();
-      const energy = getOrCreateEntry(ledger, "energy");
+      getOrCreateEntry(ledger, "energy");
       // energy: critical (no stock, no production)
 
       const mineral = getOrCreateEntry(ledger, "U" as never);
@@ -73,7 +72,7 @@ describe("Bottleneck", () => {
   describe("getTopBottleneck", () => {
     it("返回分数最高的瓶颈", () => {
       const ledger = createResourceLedger();
-      const energy = getOrCreateEntry(ledger, "energy");
+      getOrCreateEntry(ledger, "energy");
       const mineral = getOrCreateEntry(ledger, "U" as never);
       mineral.stock = { ...emptyStock(), storage: 50 };
       mineral.productionRate = 0;

@@ -6,7 +6,6 @@ import {
   type FocusFireSnapshot,
   type FocusFireMemberSnapshot,
   type TargetCandidate,
-  type FocusFirePlan,
 } from "../../../src/domain/tactical/focus-fire";
 import { buildTargetCandidate } from "../../../src/domain/tactical";
 import type { CombatCapability } from "../../../src/domain/combat/capability";

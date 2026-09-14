@@ -1,5 +1,5 @@
 /** defense-planner buildQueue 积压回归测试。 */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { resetGlobals } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
 

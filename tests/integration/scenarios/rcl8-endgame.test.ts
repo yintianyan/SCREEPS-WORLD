@@ -161,7 +161,7 @@ describe("RCL8 End Game — 终局", () => {
 
     // 性能不退化：最后 100 tick 平均耗时不超过前 100 tick 的 3 倍
     if (result.records.length >= 20) {
-      const early = result.records.slice(0, 5);
+      result.records.slice(0, 5);
       const late = result.records.slice(-5);
       // 简单验证：系统仍在运行
       expect(late[late.length - 1]!.tick).toBeGreaterThan(900);

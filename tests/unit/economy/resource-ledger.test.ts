@@ -247,7 +247,7 @@ describe("Resource Ledger", () => {
       const energyEntry = getOrCreateEntry(ledger, "energy");
       energyEntry.stock = { ...emptyStock(), storage: 1000 };
 
-      const mineralEntry = getOrCreateEntry(ledger, "U" as never);
+      getOrCreateEntry(ledger, "U" as never);
       // mineralEntry 无存量无流入
 
       const active = getActiveResources(ledger);

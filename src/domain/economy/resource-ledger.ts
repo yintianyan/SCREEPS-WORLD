@@ -1,7 +1,6 @@
 /** Resource Ledger */
 
 import type { ResourceType } from "../operation/agenda-item";
-import { getResourceCategory } from "./resource-definition";
 
 // ─── 资源五态 ──────────────────────────────────────────────
 

@@ -10,7 +10,6 @@ import {
   intelActionUsable,
   intelNeedsRescout,
   intelConfidence,
-  intelSize,
   queryRoomIntel,
 } from "../../../src/systems/intelligence";
 import { ROOM_DYNAMIC_TTL, ROOM_THREAT_TTL, type RoomIntel } from "../../../src/domain/intel";

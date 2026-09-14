@@ -1,7 +1,5 @@
 /** Boost 化合物分级库存上限 — 纯函数（无 Game API 依赖）。 */
 
-import type { Compound } from "./types";
-
 /** war 编队化合物集合（战时才消耗的战略储备）。 */
 export const WAR_BOOST_COMPOUNDS: ReadonlySet<string> = new Set([
   "XUH2O", // attacker — attack ×4

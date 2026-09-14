@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { roomStateSystem } from "../../../src/systems/room-state";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
-import { mockCapacityStore, mockRoomStateCtx } from "../../support/factories";
+import { mockRoomStateCtx } from "../../support/factories";
 
 /**
  * P1-3 defense 误触发修复 — lastHostileAt 过期失效机制单元测试。
@@ -14,8 +14,6 @@ import { mockCapacityStore, mockRoomStateCtx } from "../../support/factories";
  * 根因：旧逻辑每 tick 刷新 lastHostileAt（当 hasHostiles 时），导致旧威胁停留时
  * lastHostileAt 永远是"当前"，消费方（tower-defense siegeMemory 等）永不过期。
  */
-
-const makeStore = (energy: number) => mockCapacityStore(energy, 1000000);
 
 function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return {

@@ -1,29 +1,16 @@
 /** Empire Economy 链路单测 */
 import { describe, it, expect } from "vitest";
-import {
-  evaluateEconomicHealth,
-  DEFAULT_HEALTH_OPTIONS,
-  type EmpireEconomicHealth,
-} from "../../../src/domain/strategy/economic-health";
+import { evaluateEconomicHealth } from "../../../src/domain/strategy/economic-health";
 import {
   detectImbalance,
   computeSurplus,
   computeDeficit,
   candidatesToEmpireRequests,
 } from "../../../src/domain/strategy/imbalance";
-import { allocateEmpireBudget, DEFAULT_BUDGET_OPTIONS } from "../../../src/domain/strategy/budget";
-import {
-  evaluateExpansionReadiness,
-  DEFAULT_READINESS_OPTIONS,
-} from "../../../src/domain/strategy/readiness";
-import {
-  evaluateSafetyMargin,
-  DEFAULT_SAFETY_MARGIN_OPTIONS,
-} from "../../../src/domain/strategy/safety-margin";
-import {
-  buildEmpirePlannerInput,
-  formatEmpireSummary,
-} from "../../../src/domain/strategy/planner-input";
+import { allocateEmpireBudget } from "../../../src/domain/strategy/budget";
+import { evaluateExpansionReadiness } from "../../../src/domain/strategy/readiness";
+import { evaluateSafetyMargin } from "../../../src/domain/strategy/safety-margin";
+import { buildEmpirePlannerInput } from "../../../src/domain/strategy/planner-input";
 import { buildEmpireResourceView } from "../../../src/domain/strategy/resource-view";
 import type { RoomEconomicProfile } from "../../../src/domain/economy/room-profile";
 import type { RoomCapacityProfile } from "../../../src/domain/economy/capacity-profile";

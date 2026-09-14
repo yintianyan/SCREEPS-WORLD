@@ -13,15 +13,10 @@ import {
   createActionRecord,
   markSubmitted,
   markExecuting,
-  getRetryPolicy,
-  cleanupRecoveryTable,
-  computeRecoveryStats,
-  isActionActive,
   evaluateRecoveryResult,
   evaluateEscalation,
   evaluateRecoveryUnviability,
   type RecoveryActionTable,
-  type RecoveryActionRecord,
   type RecoveryWorldSnapshot,
 } from "../../../src/domain/strategy/recovery-lifecycle";
 import type { RecoveryAction } from "../../../src/domain/strategy/recovery-priority";

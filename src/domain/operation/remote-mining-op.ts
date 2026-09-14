@@ -1,7 +1,7 @@
 /** Remote Mining Operation */
 
 import type { OperationContext, OperationStatus, OperationPriority } from "./agenda-item";
-import { makeRemoteMiningOperationId, isTerminalStatus, isActive, isExpired } from "./agenda-item";
+import { makeRemoteMiningOperationId, isTerminalStatus, isActive } from "./agenda-item";
 
 // ─── 检查点 ─────────────────────────────────────────────
 

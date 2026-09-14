@@ -8,7 +8,6 @@ import {
   detectSquadStuck,
   type SquadMemberRuntimeSnapshot,
   type SquadMovementIntent,
-  type FormationAnchor,
   type FormationSlot,
   type SquadStuckDetection,
 } from "../domain/tactical";
@@ -275,7 +274,7 @@ function adjustMembersToSlots(slots: readonly FormationSlot[]): void {
  */
 function buildSquadPlanFromWarPlan(
   plan: NonNullable<KernelMemory["warPlan"]>,
-  tick: number,
+  _tick: number,
 ): SquadPlan | null {
   const squadEntries = querySquad({
     home: plan.sponsor,
@@ -485,24 +484,4 @@ export function getSquadMovementIntent(squadId: string): SquadMovementIntent | n
   const intents = g.squadMovementIntents;
   if (!intents) return null;
   return intents.get(squadId) ?? null;
-}
-
-/**
- * 查询 creep 的 Formation Slot（供角色层消费）。
-
- * 返回该 creep 在编队中的期望位置和移动指令。
- * 如果返回 null，角色回退到原有行为。
- */
-export function getCreepFormationSlot(
-  creepName: string,
-): { slot: FormationSlot; intent: SquadMovementIntent } | null {
-  const g = globalCache() as unknown as GlobalCache & SquadMovementCache;
-  const intents = g.squadMovementIntents;
-  if (!intents) return null;
-
-  for (const [, intent] of intents) {
-    const slot = intent.slots.find(s => s.creepName === creepName);
-    if (slot) return { slot, intent };
-  }
-  return null;
 }

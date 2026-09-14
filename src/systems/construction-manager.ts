@@ -284,7 +284,7 @@ export type ConstructionSkipReason =
 export function recordConstructionSkip(
   roomName: string,
   reason: ConstructionSkipReason,
-  queue: readonly BuildTask[],
+  _queue: readonly BuildTask[],
   snapshot: RoomSnapshot,
 ): void {
   const g = globalCache();

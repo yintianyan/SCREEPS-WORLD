@@ -160,7 +160,7 @@ describe("Economy Dynamics — 经济压力梯度", () => {
 
     // 核心不变量：harvester 始终存在（P1 不受压力缩减）
     // 即使经济危机，采矿不能停
-    const harvesters = world.creepsByRole("harvester");
+    world.creepsByRole("harvester");
     // harvester 可能因寿命死亡，但系统应该尝试补充
     // 验证：500 tick 内有采集发生
     expect(result.finalSnapshot.stats.totalHarvested).toBeGreaterThan(0);
@@ -304,8 +304,6 @@ describe("Economy Dynamics — Hauler 震荡防护", () => {
     for (const ext of world.extensions) ext.store.energy = 50;
     world.room._recalcEnergy();
 
-    const controllerContainer = world.containers.find(c => c.pos.x === 29 && c.pos.y === 34)!;
-
     const runner = new TickRunner();
     runner.setLoop(loop);
 
@@ -409,8 +407,6 @@ describe("Economy Dynamics — Hauler 震荡防护", () => {
 
     // 两个 container 都应该被消耗（两个 hauler 各取一个）
     // 如果两个 hauler 抢同一个，另一个 container 会溢满
-    const c1 = world.containers[0]!;
-    const c2 = world.containers[1]!;
     // 至少一个 container 被取过（能量低于初始 1800 或被 harvester 回填后仍低于满）
     // 核心：系统正常运转，无死锁
     expect(result.finalSnapshot.stats.totalHarvested).toBeGreaterThan(0);

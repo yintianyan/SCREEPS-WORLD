@@ -13,16 +13,11 @@ import {
   shouldPartialComplete,
   computeExpectedDelta,
 } from "../../../src/domain/operation/verification";
-import {
-  createOperation,
-  makeOperationId,
-  isActive,
-} from "../../../src/domain/operation/agenda-item";
+import { createOperation } from "../../../src/domain/operation/agenda-item";
 import {
   markReady,
   markRunning,
   markVerifying,
-  markCompleted,
   markFailed,
   markBlocked,
 } from "../../../src/domain/operation/lifecycle";
@@ -43,14 +38,12 @@ import {
   computeOperationMetrics,
   formatOperationMetrics,
 } from "../../../src/domain/operation/metrics";
-import type { RoomRegistryEntry } from "../../../src/domain/strategy/room-registry";
 import {
   makeRegistryEntry,
   getSurplusRooms,
   getDeficitRooms,
   getRoom,
   removeRoom,
-  pruneInactive,
   type RoomRegistry,
 } from "../../../src/domain/strategy/room-registry";
 import type { RoomEconomicProfile } from "../../../src/domain/economy/room-profile";

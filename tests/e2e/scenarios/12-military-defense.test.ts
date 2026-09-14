@@ -1,7 +1,7 @@
 /** E2E-012 Military & Defense */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
-import { standardRoom, rcl3RoomWithTower } from "../fixtures/rooms";
+import { rcl3RoomWithTower } from "../fixtures/rooms";
 import { injectHostile } from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
@@ -102,7 +102,6 @@ describe("E2E-012 Military & Defense", () => {
     expect(errors, `S2 检测到 JS 错误:\n${errors.slice(0, 3).join("\n")}`).toHaveLength(0);
 
     // 验证 decision-trace 系统运行（搜索 decision-trace 日志）
-    const traceLogs = allLogs.filter(l => l.includes("decision-trace"));
     // decision-trace interval=100，300t 内至少运行过
     // 即使没有 IMPORTANT 级别日志输出，系统应正常运行无错误
     const lastSnap = snaps.at(-1)!;

@@ -655,7 +655,7 @@ export class Kernel {
   /** E8: 采集路径失败快照（从 globalCache.pathFailureTracker 采集）。
    * 追踪器由 movement 系统在卡位/寻路失败时写入，这里只读取聚合。
    * 已死亡 creep 的条目会被清理，否则 lastSuccessTick 永不更新导致永久违例。 */
-  private collectPathFailureSnapshots(ctx: Context): PathFailureSnapshot[] {
+  private collectPathFailureSnapshots(_ctx: Context): PathFailureSnapshot[] {
     const tracker = globalCache().pathFailureTracker;
     if (!tracker || tracker.size === 0) return [];
     const result: PathFailureSnapshot[] = [];

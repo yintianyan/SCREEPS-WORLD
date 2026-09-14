@@ -175,41 +175,6 @@ function countOpenNeighbors(pos: number, isWall: (x: number, y: number) => boole
   return count;
 }
 
-/**
- * 计算某位置通过 4 邻接可达的非墙格数（BFS，限制深度）。
- * 用于判断 chokepoint：如果某个位置只有很少的邻居可达，它就是 chokepoint。
- */
-function computeConnectivity(
-  startPos: number,
-  isWall: (x: number, y: number) => boolean,
-  maxDepth: number,
-): number {
-  const visited = new Set<number>();
-  const queue: { pos: number; depth: number }[] = [{ pos: startPos, depth: 0 }];
-  visited.add(startPos);
-
-  while (queue.length > 0) {
-    const { pos, depth } = queue.shift()!;
-    if (depth >= maxDepth) continue;
-
-    const { x, y } = unpackPos(pos);
-    const neighbors: number[] = [];
-    // 4 邻接
-    if (x > 0 && !isWall(x - 1, y)) neighbors.push((x - 1) * 50 + y);
-    if (x < 49 && !isWall(x + 1, y)) neighbors.push((x + 1) * 50 + y);
-    if (y > 0 && !isWall(x, y - 1)) neighbors.push(x * 50 + (y - 1));
-    if (y < 49 && !isWall(x, y + 1)) neighbors.push(x * 50 + (y + 1));
-
-    for (const n of neighbors) {
-      if (visited.has(n)) continue;
-      visited.add(n);
-      queue.push({ pos: n, depth: depth + 1 });
-    }
-  }
-
-  return visited.size;
-}
-
 // ═══════════════════════════════════════════════════════════
 // §4. 特征计算函数
 // ═══════════════════════════════════════════════════════════

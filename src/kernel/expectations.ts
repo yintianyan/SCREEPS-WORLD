@@ -1,5 +1,4 @@
 /** 期望自检 — 帝国的「自我体感」：对运行时序不变式做周期性断言。 */
-import type { EventKind } from "./event-log";
 
 /** 遥测新鲜度阈值（采样间隔 10t，500t ≈ 50 个采样周期仍无更新即判停摆）。 */
 export const TELEMETRY_STALE_TICKS = 500;
@@ -32,8 +31,6 @@ export interface ExpectationResult {
 // ── E4: Memory 增长检测 ────────────────────────────────────────
 /** Memory 体积采样间隔（tick）。 */
 export const E4_SAMPLE_INTERVAL = 500;
-/** 历史采样窗口大小（保留多少个采样点）。 */
-export const E4_HISTORY_SIZE = 20;
 /** 环比增长阈值（%）。 */
 export const E4_GROWTH_THRESHOLD_PCT = 50;
 /** 线性增长斜率阈值（bytes/sample）。 */

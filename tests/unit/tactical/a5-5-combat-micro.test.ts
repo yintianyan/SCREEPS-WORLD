@@ -5,26 +5,17 @@ import {
   planCombatMicro,
   assessCombatPressure,
   deriveBodyAwareState,
-  microPlanHash,
-  microDecisionHash,
   type MicroSnapshot,
   type MicroMemberSnapshot,
   type MicroEnemySnapshot,
-  type CombatMovementDecision,
-  type CombatPressure,
 } from "../../../src/domain/tactical/combat-micro";
 import type { CombatCapability } from "../../../src/domain/combat/capability";
 import type {
   TerrainContext,
   EffectiveCombatModifier,
 } from "../../../src/domain/defense/terrain-context";
-import type { TacticalState } from "../../../src/domain/tactical/types";
-import type { FocusFirePlan, AttackIntent } from "../../../src/domain/tactical/focus-fire";
-import type {
-  CohesionMetric,
-  FormationSlot,
-  FormationAnchor,
-} from "../../../src/domain/tactical/squad-formation";
+import type { AttackIntent } from "../../../src/domain/tactical/focus-fire";
+import type { CohesionMetric, FormationSlot } from "../../../src/domain/tactical/squad-formation";
 
 // ─── 辅助构造函数 ───
 

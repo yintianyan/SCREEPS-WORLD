@@ -1,7 +1,6 @@
 /** RCL1 Survival — 新手生存集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
-import { ScenarioBuilder, TickRunner, Assertions, GameInspector } from "../framework";
-import type { TestWorld } from "../framework";
+import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 
 // 动态导入生产代码（确保全局对象已安装后再加载）
 let loop: () => void;
@@ -64,7 +63,7 @@ describe("RCL1 Survival — 新手生存", () => {
     const runner = new TickRunner();
     runner.setLoop(loop);
 
-    const result = runner.run(world, 300, {
+    runner.run(world, 300, {
       stopWhen: w => w.creeps.length > 0,
     });
 

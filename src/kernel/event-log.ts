@@ -211,11 +211,6 @@ export interface EventLogSegmentData {
 
 // ─── 事件 buffer（per-tick heap）──────────────────────────────
 
-/** per-tick 事件缓冲区接口（挂在 globalCache().eventBuffer 上）。 */
-export interface EventBuffer {
-  events: GameEvent[];
-}
-
 // ─── 公共 API ───────────────────────────────────────────────
 
 /** 记录一个离散事件：写入 globalCache().eventBuffer（heap），telemetry-collector 低频 flush 到 segment。

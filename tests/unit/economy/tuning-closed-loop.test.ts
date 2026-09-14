@@ -90,7 +90,7 @@ describe("D.8 pending-lock 竞态", () => {
   it("验证窗口内反向信号不触发反向调整（excludedParams 排除 + trend 置 none）", () => {
     // 场景：T=1000 时 hauler.maxCount 6→7 上调，pendingValidation 写入。
     // 之后 container 变空（反向信号），但因 pending-lock 不评估该参数。
-    const pending: Record<string, PendingValidation> = {
+    void {
       "hauler.maxCount": pendingHaulerUp(),
     };
     const bounds = boundsWithHaulerMax(7);
@@ -120,7 +120,7 @@ describe("D.8 pending-lock 竞态", () => {
   });
 
   it("冷却到期但验证未到期时，pending-lock 仍阻止反向 trend 积累", () => {
-    const pending: Record<string, PendingValidation> = {
+    void {
       "hauler.maxCount": pendingHaulerUp(),
     };
     const bounds = boundsWithHaulerMax(7);

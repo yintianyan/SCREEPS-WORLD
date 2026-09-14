@@ -611,7 +611,7 @@ export function assessThreat(input: ThreatAssessmentInput): ThreatAssessment {
     tick,
     hostiles,
     roomContext,
-    defenseContext,
+    defenseContext: _defenseContext,
     playerIntel,
     playerIntelRecord,
     remoteContext,

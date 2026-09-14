@@ -1,5 +1,5 @@
 import { CONFIG } from "../config";
-import { bodyCost, degradeBody, RECOVERY_BODY } from "../config/bodies";
+import { bodyCost, degradeBody } from "../config/bodies";
 import { getRoleBounds } from "../config/tuned";
 import type { Priority, System, TickContext } from "../kernel/contracts";
 import {

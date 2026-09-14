@@ -3,7 +3,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { ScenarioRunner } from "../framework";
 import { rcl3RoomWithTower } from "../fixtures/rooms";
 import { injectFriendlyTower, injectHostile } from "../fixtures/inject";
-import { debugSnapshot } from "../helpers/assertions";
 import { isJsError } from "../../support/errors";
 
 describe("E2E-004 Tower 防御", () => {
@@ -41,7 +40,7 @@ describe("E2E-004 Tower 防御", () => {
     await injectHostile(runner, "W0N1", 22, 22, ["attack", "move"], "Invader1", "invader");
 
     // 记录注入前的 Memory 状态
-    const memBefore = await runner.bot.getMemory();
+    await runner.bot.getMemory();
 
     // 跑 400 tick：塔初始空能量（0/1000），需先经经济链补能再开火 ——
     // 20 tick 只够崩不崩检查，不够火力真值（R20/T6 前提修正）。

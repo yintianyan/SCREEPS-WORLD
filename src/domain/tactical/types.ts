@@ -3,7 +3,7 @@
 import type { CombatCapability, AggregateCapability } from "../combat/capability";
 import type { TerrainContext, EffectiveCombatModifier } from "../defense/terrain-context";
 import type { MultiDimensionalConfidence } from "../defense/confidence";
-import type { PlayerIntelRecord, IntelConfidence } from "../defense/player-intel";
+import type { PlayerIntelRecord } from "../defense/player-intel";
 import type { AbortCondition } from "../military/operation";
 
 // ═══════════════════════════════════════════════════════════

@@ -10,7 +10,6 @@ import {
   type TargetCandidate,
   type FocusFirePlan,
   type EngagementState,
-  type AttackIntent,
 } from "../../../src/domain/tactical/focus-fire";
 import type { CombatCapability } from "../../../src/domain/combat/capability";
 import type { TacticalState, TargetScope } from "../../../src/domain/tactical/types";

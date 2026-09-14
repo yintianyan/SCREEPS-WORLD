@@ -184,7 +184,7 @@ export function markCompleted(a: TransportAssignment, tick: number): TransportAs
 export function markFailed(
   a: TransportAssignment,
   tick: number,
-  reason?: string,
+  _reason?: string,
 ): TransportAssignment {
   return { ...a, status: "failed", updatedAt: tick };
 }

@@ -12,7 +12,7 @@
  * 3. 半血撤退 → 标记 recycle，demand 孵接替者
  */
 import type { Priority } from "../../kernel/contracts";
-import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
+import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { getHostilesCached } from "../support/targeting";

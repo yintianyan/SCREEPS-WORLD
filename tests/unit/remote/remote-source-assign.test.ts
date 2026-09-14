@@ -172,7 +172,7 @@ describe("remote-harvester — v33-R11 绑定自愈", () => {
     };
   }
 
-  function makeRoom(creepsInRoom: any[], sources: any[]): any {
+  function makeRoom(_creepsInRoom: any[], sources: any[]): any {
     return {
       name: targetRoom,
       find: vi.fn((t: number) => {

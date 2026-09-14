@@ -309,9 +309,7 @@ describe("RCL7 Defense — 多威胁同时入侵 (P2-4)", () => {
     expect(towerEnergyLeft).toBeLessThan(3000); // 3 tower × 1000 初始 = 3000
 
     // 经济 creep 应进入 flee 模式（非战斗 creep 释放任务逃跑）
-    const nonFleeing = world.creeps.filter(
-      c => c.memory.mode !== "flee" && c.memory.role !== "defender",
-    );
+    world.creeps.filter(c => c.memory.mode !== "flee" && c.memory.role !== "defender");
     // 允许 harvester 留在 source（站桩采集是安全的），但 hauler/upgrader 应 flee
     const haulersAndUpgraders = world.creeps.filter(
       c => c.memory.role === "hauler" || c.memory.role === "upgrader",

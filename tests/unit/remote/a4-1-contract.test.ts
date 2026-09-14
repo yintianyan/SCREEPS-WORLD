@@ -4,17 +4,10 @@ import { describe, it, expect } from "vitest";
 import {
   createRemoteMiningOp,
   updateOpStatus,
-  advanceCheckpoint,
-  updateEconomicHealth,
-  recordProduction,
-  recordDelivery,
-  recordLoss,
   incrementActivationWindow,
   resetActivationWindow,
-  consumeOpBudget,
   isEconomicallyActive,
   hasActiveRemoteMiningOp,
-  filterActiveRemoteMiningOps,
   serializeRemoteMiningOp,
   deserializeRemoteMiningOp,
   type RemoteMiningOperationContext,
@@ -29,13 +22,10 @@ import {
 import {
   createContainerSnapshot,
   deriveContainerState,
-  isValidTransition,
   transitionContainerState,
-  isContainerUsable,
   isContainerTerminal,
   serializeContainerSnapshot,
   deserializeContainerSnapshot,
-  type ContainerSnapshot,
 } from "../../../src/domain/remote/container-lifecycle";
 import {
   createEmptyFlow,
@@ -46,8 +36,6 @@ import {
   productionRate,
   deliveryRate,
   transportEfficiency,
-  isOverproducing,
-  isUnderproducing,
 } from "../../../src/domain/remote/flow-accounting";
 import {
   calculateEconomicAccounting,
@@ -62,18 +50,11 @@ import {
   DEFAULT_BUDGET_POLICY,
 } from "../../../src/domain/remote/operation-budget";
 import {
-  assessEconomicHealth,
-  DEFAULT_HEALTH_CONFIG,
-} from "../../../src/domain/remote/economic-health";
-import {
   computePerHaulerThroughput,
   computeHaulerSizing,
   validateTransportCapacity,
 } from "../../../src/domain/remote/staffing";
-import {
-  createOpportunity,
-  approveOpportunity,
-} from "../../../src/domain/remote/remote-opportunity";
+import { createOpportunity } from "../../../src/domain/remote/remote-opportunity";
 import { createRemoteSource, makeRemoteSourceId } from "../../../src/domain/remote/remote-source";
 import { assessRemoteValue } from "../../../src/domain/remote/remote-value";
 
@@ -209,8 +190,8 @@ describe("A4.1-004: Operation Deduplication", () => {
 describe("A4.1-009: Container Lifecycle", () => {
   it("should have all 6 states", () => {
     const states = ["missing", "planned", "building", "active", "damaged", "destroyed"];
-    for (const s of states) {
-      const snap = createContainerSnapshot("src1", "W2N1", 1000);
+    for (const _s of states) {
+      createContainerSnapshot("src1", "W2N1", 1000);
       // 通过 deriveContainerState 测试各种状态
       expect(
         deriveContainerState({

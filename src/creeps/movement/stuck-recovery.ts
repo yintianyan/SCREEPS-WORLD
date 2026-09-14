@@ -1,6 +1,5 @@
 /** 卡位检测与脱困 — yield/pull 让路、渐进式脱困、目标清除、安全出口。 */
 
-import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
 import { releaseFromTask } from "../support/assignment-adapter";
 import { recordTraffic } from "./traffic";

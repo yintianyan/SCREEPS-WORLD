@@ -7,7 +7,6 @@ import {
 } from "../../../src/domain/spawn/demand";
 import {
   mockController,
-  mockCreep,
   mockHostile,
   mockSnapshot,
   mockSource,

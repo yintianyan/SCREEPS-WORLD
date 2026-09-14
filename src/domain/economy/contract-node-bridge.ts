@@ -1,10 +1,10 @@
 /** Contract-Node Bridge */
 
 import type { SupplyContract } from "./supply-contract";
-import { isContractActive, computeCycleAmount, effectiveRate } from "./supply-contract";
+import { isContractActive, computeCycleAmount } from "./supply-contract";
 import type { SupplyNode } from "../operation/supply-node";
 import type { DemandNode, Criticality } from "../operation/demand-node";
-import type { OperationPriority, ResourceType } from "../operation/agenda-item";
+import type { OperationPriority } from "../operation/agenda-item";
 
 // ─── Contract 节点扩展 ───────────────────────────────────
 

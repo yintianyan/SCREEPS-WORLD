@@ -277,7 +277,6 @@ describe("expectations — E3 spawn queue 持续非空", () => {
         spawning: false,
       },
     };
-    const beforeLen = JSON.stringify(e3Prev["W1N1"]).length;
     evaluateExpectations({
       tick: baseTick,
       bootTick: 0,

@@ -227,7 +227,7 @@ describe("Link 分配策略 — createSourceLinkTasks", () => {
   });
 
   describe("hasSourceLinkFeedStand — 可喂站桩格判定（W7N3 病灶回归）", () => {
-    const flat = { get: () => 0 } as unknown as RoomTerrain;
+    void { get: () => 0 } as unknown as RoomTerrain;
     const emptyOcc = new Set<number>();
     const noContainers = new Set<number>();
 

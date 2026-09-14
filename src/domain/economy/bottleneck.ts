@@ -2,10 +2,8 @@
 
 import type { ResourceType } from "../operation/agenda-item";
 import type { ResourceLedger } from "./resource-ledger";
-import { stockReserve } from "./resource-ledger";
 import type { ResourceHealthResult } from "./resource-health";
 import { evaluateResourceHealth } from "./resource-health";
-import { isCriticalResource, defaultSafetyReserve } from "./resource-definition";
 
 // ─── 瓶颈条目 ──────────────────────────────────────────────
 

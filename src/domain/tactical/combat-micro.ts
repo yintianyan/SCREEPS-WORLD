@@ -111,7 +111,7 @@ export interface BodyAwareTacticalState {
 
 export function deriveBodyAwareState(
   capability: CombatCapability,
-  role: string,
+  _role: string,
   enemyMobility: number,
 ): BodyAwareTacticalState {
   const hasAttack = capability.attack > 0;
@@ -464,9 +464,9 @@ function arbitrateMicro(
   pressure: CombatPressure,
   attackIntent: AttackIntent | undefined,
   kiteIntent: KiteIntent | null,
-  rangeIntent: RangeControlIntent | null,
+  _rangeIntent: RangeControlIntent | null,
   reformIntent: ReformIntent | null,
-  protectIntent: ProtectIntent | null,
+  _protectIntent: ProtectIntent | null,
   towerIntent: TowerAvoidanceIntent | null,
 ): CombatMovementDecision {
   const tick = snapshot.tick;
@@ -966,7 +966,7 @@ function buildDecision(
 function scoreTargetForMicro(
   enemy: MicroEnemySnapshot,
   member: MicroMemberSnapshot,
-  snapshot: MicroSnapshot,
+  _snapshot: MicroSnapshot,
 ): number {
   let score = 0;
   // healer 优先

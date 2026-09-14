@@ -1,7 +1,6 @@
 /** Edge Cases — 老玩家边界场景集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
-import type { TestWorld } from "../framework";
 
 let loop: () => void;
 

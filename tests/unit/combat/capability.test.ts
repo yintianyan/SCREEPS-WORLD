@@ -10,9 +10,7 @@ import {
   HEAL_POWER,
   DISMANTLE_POWER,
   HITS_PER_PART,
-  BOOST_MULTIPLIERS,
   type CreepSnapshot,
-  type CombatCapability,
 } from "../../../src/domain/combat/capability";
 
 // ─── 测试辅助 ────────────────────────────────────────────────
@@ -161,7 +159,6 @@ describe("G2 — effectiveHP 计算（含 TOUGH 减伤）", () => {
 
   it("C03d: 受损 creep effectiveHP 按比例降低", () => {
     const body = [{ type: ATTACK }, { type: ATTACK }, { type: MOVE }];
-    const hitsMax = 3 * HITS_PER_PART; // 300
     const creep = makeCreep(body, { hits: 150 }); // 半血
     const cap = evaluateCombatCapability(creep);
     // hitsRatio = 150/300 = 0.5

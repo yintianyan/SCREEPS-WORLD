@@ -1,7 +1,6 @@
 /** 参数自调优系统测试。 */
 import { describe, expect, it, beforeEach } from "vitest";
 import {
-  TUNING_BOUNDS,
   clampParam,
   isInCooldown,
   getStorageThresholds,

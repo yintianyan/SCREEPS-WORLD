@@ -1,14 +1,13 @@
 /** Multi-Resource Empire Health */
 
 import type { ResourceType } from "../operation/agenda-item";
-import type { ResourceLedger, ResourceLedgerEntry } from "../economy/resource-ledger";
+import type { ResourceLedger } from "../economy/resource-ledger";
 import {
   evaluateResourceHealth,
-  type ResourceHealthResult,
   type ResourceHealthStatus,
   type ResourceHealthOptions,
 } from "../economy/resource-health";
-import { isEnergy, isCriticalResource } from "../economy/resource-definition";
+import { isEnergy } from "../economy/resource-definition";
 
 // ─── 矿物资源摘要 ───────────────────────────────────────────
 

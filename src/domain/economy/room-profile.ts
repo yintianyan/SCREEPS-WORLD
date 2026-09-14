@@ -245,7 +245,7 @@ export function buildRoomEconomicProfile(
   snapshot: RoomSnapshot,
   roomMem: RoomEconomicMemory,
   economy: EconomyQueryInput | undefined,
-  tick: number,
+  _tick: number,
   /** A4.0：当前 empireRole（从 Role Stability 状态传入，默认 undefined=首次评估）。 */
   currentEmpireRole?: EmpireRoomRole,
 ): RoomEconomicProfile {

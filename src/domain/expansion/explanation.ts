@@ -3,9 +3,6 @@
 import type { ExpansionPlan } from "./plan";
 import type { ExpansionPressureResult } from "./pressure";
 import type { TieredExpansionBudget } from "./budget";
-import type { RiskResult } from "./risk";
-import type { PaybackResult } from "./payback";
-import type { ExpansionCostEstimate } from "./cost-model";
 import type { ExpansionReadinessResult } from "../strategy/readiness";
 
 /** 决策结论。 */
@@ -44,7 +41,7 @@ export function explainDecision(input: {
   readiness: ExpansionReadinessResult;
   tick: number;
 }): DecisionExplanation {
-  const { plan, pressure, budget, readiness, tick } = input;
+  const { plan, pressure, budget, readiness, tick: _tick } = input;
 
   const evidence: string[] = [];
   const blockers: string[] = [];

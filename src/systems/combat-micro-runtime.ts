@@ -12,8 +12,7 @@ import {
 } from "../domain/tactical";
 import type { CombatCapability } from "../domain/combat/capability";
 import type { TerrainContext, EffectiveCombatModifier } from "../domain/defense/terrain-context";
-import type { CohesionMetric, FormationSlot, FormationAnchor } from "../domain/tactical";
-import { getFocusFirePlan, getAttackIntent } from "./tactical-engagement-runtime";
+import { getFocusFirePlan } from "./tactical-engagement-runtime";
 import { getSquadMovementIntent } from "./squad-movement-runtime";
 
 // ═══════════════════════════════════════════════════════════
@@ -452,33 +451,4 @@ function getTerrainModifier(terrain: TerrainContext): EffectiveCombatModifier {
     retreatDifficulty: retreatMap[terrain.retreatQuality] ?? 1.0,
     approachFactor: Math.max(0.3, 1 - significantChokepoints * 0.2),
   };
-}
-
-// ═══════════════════════════════════════════════════════════
-// §5. 公共 API（供角色层查询）
-// ═══════════════════════════════════════════════════════════
-
-/**
- * 查询 creep 的微操决策（供角色层消费）。
-
- * 角色层在 RolePolicy 的 acquire/work 候选中调用此函数，
- * 获取当前 tick 的微操指令（动作 + 目标 + 移动方向）。
-
- * 如果返回 null，角色回退到 A5.4.3 FocusFire → A5.4.1 TacticalIntent → Legacy。
- */
-export function getMicroDecision(creepName: string): CombatMovementDecision | null {
-  const g = globalCache() as unknown as GlobalCache & CombatMicroCache;
-  const decisions = g.microDecisions;
-  if (!decisions) return null;
-  return decisions.get(creepName) ?? null;
-}
-
-/**
- * 查询编队的 MicroPlan（诊断观测用）。
- */
-export function getMicroPlan(squadId: string): MicroPlan | null {
-  const g = globalCache() as unknown as GlobalCache & CombatMicroCache;
-  const plans = g.microPlans;
-  if (!plans) return null;
-  return plans.get(squadId) ?? null;
 }

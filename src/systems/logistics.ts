@@ -291,11 +291,6 @@ export const logisticsSystem: System = {
   },
 };
 
-/** 查询口（观测用）：房间延迟样本环（只读副本）。 */
-export function logisticsLatencySamples(roomName: string): readonly number[] {
-  return poolRooms.get(roomName)?.latencyRing ?? [];
-}
-
 /** 查询口（观测用）：房间空载率快照。 */
 export function logisticsIdleRatio(roomName: string): number {
   return poolRooms.get(roomName)?.idleRatio ?? 0;

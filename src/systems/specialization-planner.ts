@@ -8,7 +8,6 @@ import {
   expireStaleOpportunities,
   approveOpportunity,
   rejectOpportunity,
-  isExpired,
   type RemoteOpportunity,
 } from "../domain/remote/remote-opportunity";
 import {
@@ -16,7 +15,6 @@ import {
   isGatePassed,
   isGatePermanentFailure,
   type ExecutionGateInput,
-  type GateResult,
 } from "../domain/remote/execution-gate";
 import type { RemoteMiningOperationContext } from "../domain/operation/remote-mining-op";
 import {
@@ -29,18 +27,10 @@ import {
   assessEconomicHealth,
   type RemoteEconomicHealthInput,
 } from "../domain/remote/economic-health";
-import {
-  computeEmpireBalance,
-  computeRemoteContribution,
-  type RemoteContribution,
-} from "../domain/strategy/empire-balance";
 // A4.4 修复 BYPASS-009：Supply Contract 系统层接入。
 import {
   createActiveSupplyContract,
   hasActiveContract,
-  filterActiveContracts,
-  filterTerminalContracts,
-  makeContractId,
   serializeContract,
   deserializeContract,
   type SupplyContract,
@@ -217,7 +207,7 @@ function buildGateInput(
  * 系统侧薄壳负责从 Game/Memory 采集数据注入 Health 评估。
  */
 function buildHealthInput(
-  op: RemoteMiningOperationContext,
+  _op: RemoteMiningOperationContext,
   _tick: number,
 ): RemoteEconomicHealthInput | undefined {
   // A4.1 阶段简化实现——完整实现需要从 flow-accounting 和 economic-accounting 获取数据
@@ -319,7 +309,7 @@ function loadContractsFromMemory(): SupplyContract[] {
 /**
  * 序列化并写入 Memory.kernel.supplyContracts（瘦快照）。
  */
-function saveContractsToMemory(contracts: SupplyContract[], tick: number): void {
+function saveContractsToMemory(contracts: SupplyContract[], _tick: number): void {
   if (!Memory.kernel) Memory.kernel = {};
   // 只保存非终态 Contract（终态的已被清理）
   const snapshots = contracts

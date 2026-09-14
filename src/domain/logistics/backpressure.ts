@@ -36,7 +36,7 @@ export interface BackpressureSignal {
 export function evaluateBackpressure(
   capacity: RoomCapacityResult,
   backlog: number,
-  tick: number,
+  _tick: number,
   backlogThreshold: number = 2000,
 ): BackpressureSignal {
   const { room, haulerGap, utilization } = capacity;

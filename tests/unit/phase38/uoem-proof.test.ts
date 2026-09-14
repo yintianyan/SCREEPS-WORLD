@@ -29,7 +29,6 @@ interface OutcomeEvent extends BaseEvent {
   readonly observation?: PairedObservation;
   readonly delta?: { succeededSinceOpen: number; failedSinceOpen: number };
 }
-type UOEMEvent = OutcomeEvent | MilestoneEvent;
 
 const TERMINAL_RESULTS: ReadonlySet<string> = new Set([
   "COMPLETED",

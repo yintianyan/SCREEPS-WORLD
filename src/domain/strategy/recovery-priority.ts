@@ -1,7 +1,7 @@
 /** Recovery Priority */
 
 import type { FailureNode, FailureSeverity, FailureDomain } from "./failure-propagation";
-import type { RootCauseResult, ImpactAnalysisResult } from "./failure-propagation";
+import type { ImpactAnalysisResult } from "./failure-propagation";
 
 // ─── 恢复动作 ──────────────────────────────────────────────
 

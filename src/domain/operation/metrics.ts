@@ -1,7 +1,7 @@
 /** Operation Metrics */
 
 import type { OperationContext } from "./agenda-item";
-import { isActive, isTerminalStatus } from "./agenda-item";
+import { isActive } from "./agenda-item";
 
 /** 操作运行时指标快照。 */
 export interface OperationMetrics {

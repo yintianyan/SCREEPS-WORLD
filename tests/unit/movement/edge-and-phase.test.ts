@@ -145,7 +145,7 @@ describe("v33 — stepOffEdge 内侧格占用感知", () => {
 
   it("全部内侧格被占用/阻挡：不盲移，返回 true 交还角色管线寻路绕行", () => {
     // 三个内侧候选全被 creep 占满 → stepOffEdge 放弃，管线用 PathFinder 绕行。
-    const creep = edgeCreepWithLook(0, 28, (type, tx, ty) => {
+    const creep = edgeCreepWithLook(0, 28, (type, tx, _ty) => {
       if (type === "creep" && tx === 1) return [{ name: "blocker" }];
       return [];
     });

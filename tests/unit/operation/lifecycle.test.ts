@@ -9,7 +9,6 @@ import {
   markBlocked,
   markFailed,
   markCancelled,
-  markExpired,
   retryFromBlocked,
   checkExpiry,
   reportDelivery,

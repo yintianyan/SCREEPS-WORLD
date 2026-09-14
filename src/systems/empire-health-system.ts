@@ -7,35 +7,24 @@ import {
   mapResourceHealth,
   mapLogisticsHealth,
   mapNetworkHealth,
-  mapColonyHealth,
   mapThreatHealth,
   mapCpuHealth,
   mapSpawnHealth,
   dimensionScore,
-  type EmpireHealthLevel,
   type DimensionHealth,
 } from "../domain/strategy/empire-health";
 import {
   buildFailureGraph,
   findRootCauses,
-  detectRootCause,
   analyzeImpact,
-  computeFailureSeverity,
   type FailureNode,
-  type FailureGraph,
 } from "../domain/strategy/failure-propagation";
-import {
-  prioritizeRecovery,
-  recordRecoveryAttempt,
-  type RecoveryAction,
-  type CooldownTable,
-} from "../domain/strategy/recovery-priority";
+import { prioritizeRecovery, type CooldownTable } from "../domain/strategy/recovery-priority";
 import {
   computeAutonomyScore,
   detectNoProgress,
   detectThrashing,
   evaluateAutonomyStatus,
-  type AutonomyStatus,
 } from "../domain/strategy/autonomy-metrics";
 import { log } from "../kernel/log";
 import { safeRun } from "../kernel/safe-run";
@@ -44,17 +33,6 @@ import { CONFIG } from "../config";
 import { EventKind, recordEvent } from "../kernel/event-log";
 
 // ─── 历史数据追踪（heap，跨 tick 持久）──────────────────
-
-interface HealthHistoryEntry {
-  tick: number;
-  level: string;
-  score: number;
-}
-
-interface PostureHistoryEntry {
-  tick: number;
-  posture: string;
-}
 
 // ─── 系统定义 ──────────────────────────────────────────────
 
@@ -307,7 +285,7 @@ interface DimensionResult {
   evidence: string;
 }
 
-function deriveEnergyHealth(g: ReturnType<typeof globalCache>): DimensionResult {
+function deriveEnergyHealth(_g: ReturnType<typeof globalCache>): DimensionResult {
   const econ = Memory.kernel?.empireEconomy;
   if (!econ) {
     return { level: "stable", score: 0.75, evidence: "no-economy-data" };
@@ -350,7 +328,7 @@ function deriveNetworkHealth(g: ReturnType<typeof globalCache>): DimensionResult
   return { level, score: dimensionScore(level), evidence: `network=${nh.level}` };
 }
 
-function deriveColonyHealth(g: ReturnType<typeof globalCache>, ctx: TickContext): DimensionResult {
+function deriveColonyHealth(_g: ReturnType<typeof globalCache>, ctx: TickContext): DimensionResult {
   // 聚合各 Colony 的 StabilityScore
   // 简化：用 ColonyState 推导
   let worstLevel: DimensionHealth = "healthy";
@@ -375,14 +353,14 @@ function deriveColonyHealth(g: ReturnType<typeof globalCache>, ctx: TickContext)
   };
 }
 
-function deriveThreatHealth(g: ReturnType<typeof globalCache>): DimensionResult {
+function deriveThreatHealth(_g: ReturnType<typeof globalCache>): DimensionResult {
   // 从 Memory.kernel.strategy 读取 posture
   const posture = Memory.kernel?.strategy?.posture ?? "develop";
   const level = mapThreatHealth(posture);
   return { level, score: dimensionScore(level), evidence: `posture=${posture}` };
 }
 
-function deriveSpawnHealth(g: ReturnType<typeof globalCache>, ctx: TickContext): DimensionResult {
+function deriveSpawnHealth(_g: ReturnType<typeof globalCache>, ctx: TickContext): DimensionResult {
   // 检查各房 spawn 状态
   let spawnAvailable = false;
   let starvationCount = 0;

@@ -7,7 +7,7 @@ import {
   type ValidationOptions,
 } from "../../../src/domain/layout/validation";
 import { packPos } from "../../../src/domain/layout/types";
-import { mockPos, mockSnapshot, mockStructure, resetGlobals } from "../../support/factories";
+import { mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {
   resetGlobals();

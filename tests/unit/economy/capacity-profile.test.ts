@@ -1,9 +1,6 @@
 /** Capacity Model + Empire Resource View 单测 */
 import { describe, it, expect } from "vitest";
-import {
-  buildRoomCapacityProfile,
-  type RoomCapacityProfile,
-} from "../../../src/domain/economy/capacity-profile";
+import { buildRoomCapacityProfile } from "../../../src/domain/economy/capacity-profile";
 import type { RoomEconomicProfile } from "../../../src/domain/economy/room-profile";
 import { NOMINAL_INCOME_PER_SOURCE } from "../../../src/domain/economy/accounting";
 import { buildEmpireResourceView } from "../../../src/domain/strategy/resource-view";

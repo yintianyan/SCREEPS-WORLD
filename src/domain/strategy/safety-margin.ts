@@ -84,7 +84,7 @@ function lerpScore(value: number, passMark: number, fullMark: number): number {
  */
 export function evaluateSafetyMargin(
   view: EmpireResourceView,
-  health: EmpireEconomicHealth,
+  _health: EmpireEconomicHealth,
   options: SafetyMarginOptions = DEFAULT_SAFETY_MARGIN_OPTIONS,
 ): SafetyMarginResult {
   // ── 1. Production Safety ──

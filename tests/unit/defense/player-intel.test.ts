@@ -6,13 +6,11 @@ import {
   applyFreshnessDecay,
   detectIntelConflict,
   aggregateIntelConfidence,
-  evaluatePlayerThreatIndex,
   gcIntelEvidence,
   makeObservedFact,
   makeCombatLogFact,
   makeInference,
   makePrediction,
-  FRESHNESS_THRESHOLDS,
   type IntelEvidence,
 } from "../../../src/domain/defense/player-intel";
 
@@ -147,7 +145,7 @@ describe("G5 — buildPlayerIntelRecord", () => {
   });
 
   it("T06: Multiple Sources → higher confidence than single", () => {
-    const singleSource = buildPlayerIntelRecord(
+    buildPlayerIntelRecord(
       "attacker6",
       [makeObservedFact(CURRENT_TICK - 100, CURRENT_TICK, "Observed attack")],
       CURRENT_TICK,
@@ -217,7 +215,7 @@ describe("G5 — aggregateIntelConfidence", () => {
       makeObservedFact(CURRENT_TICK - 100, CURRENT_TICK, "Player peaceful"),
       makeCombatLogFact(CURRENT_TICK - 50, CURRENT_TICK, "Player boosted attack"),
     ];
-    const noConflict = aggregateIntelConfidence(
+    aggregateIntelConfidence(
       [makeObservedFact(CURRENT_TICK - 100, CURRENT_TICK, "Player attack")],
       false,
     );

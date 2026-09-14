@@ -1,7 +1,6 @@
 /** System Lifecycle — 系统生命周期与跨系统交互集成测试。 */
 import { describe, it, expect, beforeAll } from "vitest";
-import { ScenarioBuilder, TickRunner, Assertions, GameInspector } from "../framework";
-import type { TestWorld } from "../framework";
+import { ScenarioBuilder, TickRunner, Assertions } from "../framework";
 
 let loop: () => void;
 

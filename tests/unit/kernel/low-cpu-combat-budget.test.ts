@@ -8,19 +8,11 @@
  * 3. 威胁在场时 combat 旁路生效（不被 colonyState 冻结）
  * 4. tower-defense（P2）在 conserve 下仍能运行
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  resetGlobals,
-  mockSnapshot,
-  mockBudget,
-  mockCreep,
-  mockHostile,
-} from "../../support/factories";
+import { beforeEach, describe, expect, it } from "vitest";
+import { resetGlobals, mockSnapshot, mockHostile } from "../../support/factories";
 import { CpuBudget } from "../../../src/kernel/scheduler";
-import type { Budget, CreepRole, Priority, TickContext } from "../../../src/kernel/contracts";
+import type { Budget, CreepRole, Priority } from "../../../src/kernel/contracts";
 import { isThreat } from "../../../src/kernel/contracts";
-
-const g = (): any => globalThis as any;
 
 describe("D-FINDING-05: 低 CPU + 威胁竞争预算", () => {
   beforeEach(() => {
@@ -61,7 +53,7 @@ describe("D-FINDING-05: 低 CPU + 威胁竞争预算", () => {
     const defenderRole: Partial<CreepRole> = { name: "defender", priority: 1, combat: true };
 
     // ESM 下仅 isLifeLine 运行
-    const ctx: TickContext = {
+    void {
       tick: 1000,
       budget,
       globalSiteCount: 0,
@@ -86,12 +78,7 @@ describe("D-FINDING-05: 低 CPU + 威胁竞争预算", () => {
     const budget = new CpuBudget("recovery");
     expect(budget.emergency).toBeFalsy(); // recovery 非 ESM: emergency 为 false/undefined
 
-    // 模拟 combat 角色在 recovery + 有威胁场景下
-    const combatRole: Partial<CreepRole> = {
-      name: "defender",
-      priority: 1,
-      combat: true,
-    };
+    // 模拟 combat 角色在 recovery + 有威胁场景下（combatRole 对象未被后续断言引用，随 noUnusedLocals 清理移除）
 
     // recovery 下 P1 允许（maxPriority=1），但 P2 被跳过
     expect(budget.canStart(1)).toBe(true);

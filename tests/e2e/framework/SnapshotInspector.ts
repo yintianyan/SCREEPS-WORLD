@@ -71,7 +71,6 @@ const STRUCTURE_TYPE_VALUES = new Set(
  */
 export class SnapshotInspector {
   private _bot: BotHarness;
-  private _lastTick: number = 0;
 
   constructor(bot: BotHarness) {
     this._bot = bot;
@@ -88,7 +87,7 @@ export class SnapshotInspector {
     const creepCountByRole: Record<string, number> = {};
     let totalCreeps = 0;
     if (mem.creeps && typeof mem.creeps === "object") {
-      for (const [creepName, creepMem] of Object.entries(mem.creeps)) {
+      for (const [_creepName, creepMem] of Object.entries(mem.creeps)) {
         const role = (creepMem as any)?.role ?? "unknown";
         creepCountByRole[role] = (creepCountByRole[role] ?? 0) + 1;
         totalCreeps++;

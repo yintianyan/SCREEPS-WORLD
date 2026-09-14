@@ -36,7 +36,6 @@ import {
   planLogisticsStage,
   planSpawnRebuild,
   GAP_RETRY_INTERVAL,
-  MAX_HUB_ROADS_PER_PLAN,
 } from "../domain/layout/planner";
 
 /**
@@ -533,7 +532,6 @@ function planStage3RoadsAndFinalize(
   if (!room) return;
 
   const queue = roomMem.buildQueue ?? [];
-  const tryAddTask = makeTryAddTask(data, queue);
   const { anchor, occupiedSet, existingKeys, existingPositions, segBlocked } = data;
   const isBlacklisted = (key: string): boolean => segBlocked[key] !== undefined;
 

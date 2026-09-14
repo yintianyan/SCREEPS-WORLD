@@ -11,11 +11,9 @@ import {
   type OperationType,
   type WarObjective,
   type MilitaryOperation,
-  type OperationConstraints,
   type AbortCondition,
   makeOperationId,
   isOffensive,
-  canTransition,
 } from "./operation";
 import { type WarPostureResult, evaluateWarPosture, isOperationAuthorized } from "./war-posture";
 import { type TargetCandidate, type TargetSelectionResult, selectTarget } from "./target-selection";
@@ -30,11 +28,7 @@ import {
 import { type WarCost, estimateWarCost, type WarCostInput } from "./war-cost";
 import { type RiskResult, assessOperationRisk, type RiskInput } from "./risk-model";
 import { type OperationValueResult, evaluateOperationValue } from "./operation-value";
-import {
-  type EconomicGuardResult,
-  checkEconomicGuard,
-  type EconomicGuardInput,
-} from "./economic-guard";
+import { type EconomicGuardResult, checkEconomicGuard } from "./economic-guard";
 
 // ═══════════════════════════════════════════════════════════
 // §1. 输入类型

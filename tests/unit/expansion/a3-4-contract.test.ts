@@ -1,11 +1,7 @@
 /** A3.4 Contract Tests — Colony Autonomy & Stability 合约测试。 */
 
 import { describe, it, expect } from "vitest";
-import {
-  evaluateAutonomyAge,
-  AUTONOMY_MILESTONES,
-  type AutonomyAgeInput,
-} from "../../../src/domain/expansion/autonomy";
+import { evaluateAutonomyAge, AUTONOMY_MILESTONES } from "../../../src/domain/expansion/autonomy";
 import {
   evaluateStabilityScore,
   type StabilityScoreInput,
@@ -18,7 +14,6 @@ import {
 import {
   evaluateExpansionCooldown,
   DEFAULT_COOLDOWN_CONFIG,
-  type CooldownInput,
 } from "../../../src/domain/expansion/expansion-cooldown";
 import {
   evaluateExpansionRoi,

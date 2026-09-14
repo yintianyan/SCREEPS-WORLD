@@ -20,7 +20,6 @@ import {
 import {
   blueprintToTasks,
   phaseAllowed,
-  filterValidCandidates,
   candidateToBuildTask,
   createSourceContainerTasks,
   createControllerContainerTask,

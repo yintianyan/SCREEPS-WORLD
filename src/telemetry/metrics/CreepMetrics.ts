@@ -1,7 +1,7 @@
 /** Creep Metrics — Creep 聚合指标。 */
 
 import { registerMetricGauge, registerMetricCounter, registerMetricHistogram } from "../Telemetry";
-import { setGauge, incrementCounter, observeHistogram } from "../MetricRegistry";
+import { setGauge } from "../MetricRegistry";
 import { shouldCollect, markCollected } from "../TickAggregator";
 import { globalCache } from "../../kernel/global-cache";
 

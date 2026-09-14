@@ -73,7 +73,7 @@ export function computeBodyCost(
 export function computeEnergyCost(
   amount: number,
   body: HaulerBodyConfig,
-  linearDistance: number,
+  _linearDistance: number,
   decayPerTrip: number = 0,
 ): number {
   if (body.capacity <= 0 || amount <= 0) return 0;

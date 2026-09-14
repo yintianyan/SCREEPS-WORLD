@@ -65,7 +65,7 @@ function transition(
   req: TransportRequestV2,
   to: TransportStatus,
   tick: number,
-  reason?: string,
+  _reason?: string,
 ): TransitionResult {
   if (!canTransition(req.status, to)) {
     return {

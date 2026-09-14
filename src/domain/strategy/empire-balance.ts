@@ -176,23 +176,13 @@ export interface EmpireBalanceConfig {
 }
 
 /**
- * 默认参数。
- */
-export const DEFAULT_EMPIRE_BALANCE_CONFIG: EmpireBalanceConfig = {
-  thrivingThreshold: 20,
-  stableThreshold: 5,
-  criticalReserveThreshold: 10000,
-  deliveryEfficiencyThreshold: 0.7,
-};
-
-/**
  * 判定帝国经济健康度。
  * 纯函数。
  */
 export function classifyEmpireHealth(
   netProduction: number,
   totalReserve: number,
-  activeRemoteOps: number,
+  _activeRemoteOps: number,
   config: EmpireBalanceConfig,
 ): EmpireEconomicHealth {
   if (

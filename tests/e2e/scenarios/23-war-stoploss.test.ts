@@ -25,12 +25,7 @@ import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
-import {
-  injectEnemyRoom,
-  injectHostileTower,
-  injectFriendlyCreep,
-  injectHostile,
-} from "../fixtures/inject";
+import { injectHostileTower, injectFriendlyCreep, injectHostile } from "../fixtures/inject";
 import { isJsError } from "../../support/errors";
 
 const HOME = "W0N1";
@@ -170,7 +165,6 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
     let invaderSeq = 0;
     const totalStages = 48;
     for (let i = 0; i < totalStages; i++) {
-      const tick = i * 250;
       // 每 500t（偶数 stage）补种 scout（视野 = fact 情报生命线，同 E2E-022）。
       if (i % 2 === 0) {
         const spot = scoutSpots[(i / 2) % scoutSpots.length] ?? [45, 25];

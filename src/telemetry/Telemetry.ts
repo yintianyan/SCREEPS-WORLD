@@ -6,7 +6,6 @@ import {
   registerHistogram,
   incrementCounter,
   setGauge,
-  observeHistogram,
   startTimer,
   metricCount,
 } from "./MetricRegistry";

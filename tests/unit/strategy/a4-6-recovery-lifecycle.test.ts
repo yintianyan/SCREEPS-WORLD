@@ -5,7 +5,6 @@ import {
   isActionActive,
   shouldSubmitAction,
   createActionRecord,
-  transitionAction,
   markSubmitted,
   markExecuting,
   markVerifying,
@@ -23,7 +22,6 @@ import {
   type RecoveryActionTable,
   type RecoveryActionRecord,
   type RecoveryWorldSnapshot,
-  type RecoveryVerificationInput,
 } from "../../../src/domain/strategy/recovery-lifecycle";
 import type { RecoveryAction } from "../../../src/domain/strategy/recovery-priority";
 import type { FailureNode } from "../../../src/domain/strategy/failure-propagation";
