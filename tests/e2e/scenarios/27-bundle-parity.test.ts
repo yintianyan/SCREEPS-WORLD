@@ -5,13 +5,26 @@
  * 防止"源码存在、测试存在、生产 bundle 不包含"的半激活状态：
  * 如果一个系统在 bootstrap.ts 注册但被 tree-shake 移除，
  * 或一个角色注册但 rollup 未包含，此测试会响亮失败。
+ *
+ * 依赖 dist/main.js 存在——由 test:e2e 脚本的 `npm run build` 前置保证
+ * （原位于 integration/framework，因 test:integration 无 build 前置导致
+ * 单独运行必红，迁入 e2e 流程使依赖关系成立）。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeAll } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { registry } from "../../../src/bootstrap";
+import { GAME_GLOBAL_CONSTANTS } from "../../support/constants";
 
 const BUNDLE_PATH = resolve(__dirname, "../../../dist/main.js");
+
+// e2e 进程不装 Screeps 全局常量（场景只跑 dist bundle），而源码模块链的
+// 模块级求值（如 movement/DIR_DELTA）依赖这些常量——动态 import 前先注入，
+// 常量值与 unit/integration 共用同一 SSOT（tests/support/constants.ts）。
+let registry: (typeof import("../../../src/bootstrap"))["registry"];
+beforeAll(async () => {
+  Object.assign(globalThis as Record<string, unknown>, GAME_GLOBAL_CONSTANTS);
+  ({ registry } = await import("../../../src/bootstrap"));
+});
 
 describe("生产 bundle parity — bootstrap 注册集合 vs dist/main.js", () => {
   it("dist/main.js 存在", () => {

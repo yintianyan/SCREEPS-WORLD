@@ -138,6 +138,19 @@ package.json scripts 一致：typecheck / check:docs / test / test:unit / test:i
 - 战后核验只信新鲜 intel（evaluateWarOutcome 纯函数），结论记录 WarOutcome 事件。
   → [MILITARY_ARCHITECTURE.md](docs/architecture/MILITARY_ARCHITECTURE.md) · [DEFENSE_ARCHITECTURE.md](docs/architecture/DEFENSE_ARCHITECTURE.md)
 
+### 测试分层（`tests/`）
+
+- 三层职责不可混：unit 守逻辑与边界；integration（TestWorld 内存模拟，全套约 50s）
+  守 kernel 状态机与调度决策，断言可白盒读 `world` 内部；e2e（screeps-server-mockup
+  真实引擎）守引擎物理敏感行为（寻路、结构衰减、schema 迁移、市场、存储进程）与长程 soak。
+- 场景放层标准：断言依赖真实引擎物理 → e2e；断言 kernel 内部决策 → integration；
+  事故复现放能最快复现的层——每个线上事故必须沉淀一个复现测试。
+- 房间布局唯一源：`tests/support/room-blueprints.ts` 的 `STANDARD_ROOM_LAYOUT`；
+  场景变体基于它派生（结构紧贴其服务对象），禁止重新发明一套绝对坐标。修改布局
+  常量必须 `npm run test:integration` 与 `npm run test:e2e:smoke` 双绿。
+- 依赖 `dist/main.js` 的测试（如 bundle parity）放 e2e 层——`test:e2e` 自带 build
+  前置，integration 无。
+
 ### LLM 与外部服务边界
 
 - LLM/外部控制平面不得进入 tick 执行路径；若引入，必须异步化、可超时、可降级，

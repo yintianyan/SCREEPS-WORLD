@@ -6,6 +6,7 @@ import {
   type WorldConfig,
   type WorldPos,
 } from "./TestWorld";
+import { STANDARD_ROOM_LAYOUT } from "../../support/room-blueprints";
 
 export class ScenarioBuilder {
   private _roomName: string;
@@ -237,62 +238,38 @@ export class ScenarioBuilder {
 
 // ─── 预设场景 ───────────────────────────────────────────────
 
-/** RCL1 开局：1 spawn, 2 source, 0 creep, 300 能量。 */
-export function rcl1Bootstrap(roomName = "W1N1"): ScenarioBuilder {
-  return new ScenarioBuilder(roomName)
-    .rcl(1)
-    .flat()
-    .spawn("Spawn1", 25, 25)
-    .controllerAt(30, 30)
-    .source("s1", 20, 20)
-    .source("s2", 35, 15)
-    .sourceRegen(10)
-    .cpu(10000);
-}
-
-/** RCL2 稳态：1 spawn + 5 extension, 2 source container, 基础人口。 */
-export function rcl2Steady(roomName = "W1N1"): ScenarioBuilder {
-  return new ScenarioBuilder(roomName)
-    .rcl(2, 10000)
-    .flat()
-    .spawn("Spawn1", 25, 25)
-    .controllerAt(30, 35)
-    .source("s1", 15, 15)
-    .source("s2", 35, 15)
-    .container(16, 15, 500)
-    .container(34, 15, 500)
-    .extensions([
-      { x: 24, y: 24 },
-      { x: 26, y: 24 },
-      { x: 24, y: 26 },
-      { x: 26, y: 26 },
-      { x: 25, y: 24 },
-    ])
-    .sourceRegen(10)
-    .containerDecay(5000)
-    .cpu(10000);
-}
-
-/** RCL3 经济：spawn + 10 ext + tower + storage site。 */
+/**
+ * RCL3 经济：spawn + 10 ext + tower + 3 container。
+ * 坐标取自共享蓝图 STANDARD_ROOM_LAYOUT；附加结构保持"紧贴服务对象"
+ * 的相对语义：采集 container 贴 source、controller 旁 container 贴
+ * controller、tower 贴 spawn。原布局（controller 30,35 / source 15,15
+ * 等）已随夹具同源迁移统一，避免两层测试空间拓扑漂移。
+ */
 export function rcl3Economy(roomName = "W1N1"): ScenarioBuilder {
-  return new ScenarioBuilder(roomName)
-    .rcl(3, 50000)
-    .flat()
-    .spawn("Spawn1", 25, 25)
-    .controllerAt(30, 35)
-    .source("s1", 15, 15)
-    .source("s2", 35, 15)
-    .container(16, 15, 1000)
-    .container(34, 15, 1000)
-    .container(29, 34, 500)
-    .tower(26, 25, 500)
-    .extensions(
-      Array.from({ length: 10 }, (_, i) => ({
-        x: 22 + (i % 5),
-        y: 23 + Math.floor(i / 5),
-      })),
-    )
-    .sourceRegen(10)
-    .containerDecay(5000)
-    .cpu(10000);
+  const L = STANDARD_ROOM_LAYOUT;
+  const [s1, s2] = L.sources;
+  return (
+    new ScenarioBuilder(roomName)
+      .rcl(3, 50000)
+      .flat()
+      .spawn(L.spawn.name, L.spawn.x, L.spawn.y)
+      .controllerAt(L.controller.x, L.controller.y)
+      .source(s1!.id, s1!.x, s1!.y)
+      .source(s2!.id, s2!.x, s2!.y)
+      // 采集 container：紧贴各自 source
+      .container(s1!.x + 1, s1!.y, 1000)
+      .container(s2!.x - 1, s2!.y, 1000)
+      // controller 侧供给 container：紧贴 controller
+      .container(L.controller.x + 1, L.controller.y, 500)
+      .tower(26, 25, 500)
+      .extensions(
+        Array.from({ length: 10 }, (_, i) => ({
+          x: 22 + (i % 5),
+          y: 23 + Math.floor(i / 5),
+        })),
+      )
+      .sourceRegen(10)
+      .containerDecay(5000)
+      .cpu(10000)
+  );
 }

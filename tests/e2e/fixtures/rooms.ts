@@ -1,6 +1,5 @@
 /** E2E 场景夹具 — 基于 Screeps 真实常量构建标准房间。 */
 import {
-  WorldBuilder,
   type RoomSetup,
   source,
   controller,
@@ -8,25 +7,28 @@ import {
   spawn,
   emptyTerrain,
 } from "../framework/WorldBuilder";
+import { STANDARD_ROOM_LAYOUT } from "../../support/room-blueprints";
 
 /**
  * 标准单房间：spawn + 2 source + 1 controller + 1 mineral。
  * 地形全平原，spawn 在中心 (25,25)。
+ * 坐标取自共享蓝图 STANDARD_ROOM_LAYOUT（与 integration 层同源）。
 
  * @param roomName 房间名
  * @param spawnEnergy spawn 初始能量（默认 300，灾后恢复用）
  * @param rcl controller 初始等级（默认 1）
  */
 export function standardRoom(roomName: string, spawnEnergy = 300, rcl = 1): RoomSetup {
+  const L = STANDARD_ROOM_LAYOUT;
   return {
     name: roomName,
     terrain: emptyTerrain(),
     objects: [
-      controller(10, 10, rcl),
-      source(10, 40),
-      source(40, 10),
-      mineral(40, 40),
-      spawn(25, 25, "Spawn1", spawnEnergy),
+      controller(L.controller.x, L.controller.y, rcl),
+      source(L.sources[0]!.x, L.sources[0]!.y),
+      source(L.sources[1]!.x, L.sources[1]!.y),
+      mineral(L.mineral.x, L.mineral.y),
+      spawn(L.spawn.x, L.spawn.y, L.spawn.name, spawnEnergy),
     ],
   };
 }
