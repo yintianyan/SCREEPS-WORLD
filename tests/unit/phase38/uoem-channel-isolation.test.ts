@@ -4,7 +4,6 @@ import {
   getOutcomeChannel,
   enqueueOutcome,
   OUTCOME_CHANNEL_CAPACITY,
-  type OutcomeChannelMemory,
 } from "../../../src/kernel/outcome-channel";
 import { makeOperationId } from "../../../src/domain/expansion/uoem-types";
 
@@ -19,17 +18,6 @@ describe("UOEM 生产 outcome channel", () => {
 
     expect(mem.kernel!.outcomeEvents).toBeDefined();
     expect(ch).toBe(mem.kernel!.outcomeEvents);
-  });
-
-  it("生产实现使用压缩字段名 q/s/dr/oe（Memory 体积纪律），无全名字段", () => {
-    const prodCh: OutcomeChannelMemory = { q: [], s: [], dr: 0, oe: 0 };
-
-    expect("q" in prodCh).toBe(true);
-    expect("s" in prodCh).toBe(true);
-    expect("dr" in prodCh).toBe(true);
-    expect("oe" in prodCh).toBe(true);
-    expect("entries" in prodCh).toBe(false);
-    expect("seq" in prodCh).toBe(false);
   });
 
   it("getOutcomeChannel 不创建全名字段结构", () => {

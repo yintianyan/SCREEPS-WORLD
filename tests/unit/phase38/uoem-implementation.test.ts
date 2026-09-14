@@ -183,20 +183,7 @@ describe("UOEM Implementation: Milestone 不进入 OutcomeChannel", () => {
   });
 });
 
-describe("UOEM Implementation: Duration 正确性 (TMP-1)", () => {
-  it("interval.openedAt 不变 → duration 是全生命周期", () => {
-    const ch = makeChannel();
-    const opId = makeOperationId("W6N4", 1000);
-
-    // openedAt=1000，经历多次状态转换（closedAt=31000）
-    enqueueOutcome(ch, makeOutcome(opId, "TIMED_OUT", 1000, 31000));
-
-    const [ev] = drainOutcomes(ch);
-    expect(ev?.interval.openedAt).toBe(1000);
-    expect(ev?.interval.closedAt).toBe(31000);
-    expect(ev!.interval.closedAt - ev!.interval.openedAt).toBe(30000);
-  });
-
+describe("UOEM Implementation: forcedAdvance 传播", () => {
   it("forcedAdvance 标志正确传播", () => {
     const ch = makeChannel();
     const opId = makeOperationId("W6N4", 1000);
@@ -209,58 +196,9 @@ describe("UOEM Implementation: Duration 正确性 (TMP-1)", () => {
   });
 });
 
-describe("UOEM Implementation: Paired Observation (A6-R/A6-SL)", () => {
-  it("recovery delta = after - before（不是累计值）", () => {
-    const openSnapshot = { succeeded: 98, failed: 2 };
-    const closeSnapshot = { succeeded: 98, failed: 4 };
-    const delta = {
-      succeededSinceOpen: closeSnapshot.succeeded - openSnapshot.succeeded, // 0
-      failedSinceOpen: closeSnapshot.failed - openSnapshot.failed, // 2
-    };
-    expect(delta.succeededSinceOpen).toBe(0);
-    expect(delta.failedSinceOpen).toBe(2);
-  });
-
-  it("OutcomeEvent 可携带 observation（paired before/after）", () => {
-    const ch = makeChannel();
-    const opId = makeOperationId("W5N5", 1000);
-
-    const ev: OutcomeEvent = {
-      kind: "OUTCOME",
-      domain: "expansion",
-      result: "COMPLETED",
-      operationId: opId,
-      eventId: makeEventId(4000, 1),
-      interval: { openedAt: 1000, closedAt: 4000 },
-      forcedAdvance: false,
-      observation: { before: 3, after: 0 },
-    };
-
-    enqueueOutcome(ch, ev);
-    const [drained] = drainOutcomes(ch);
-    expect(drained?.observation).toEqual({ before: 3, after: 0 });
-  });
-
-  it("无 before 冻结时不产生 observation（宁可缺不可造）", () => {
-    const ch = makeChannel();
-    const opId = makeOperationId("W8N8", 1000);
-
-    const ev: OutcomeEvent = {
-      kind: "OUTCOME",
-      domain: "expansion",
-      result: "COMPLETED",
-      operationId: opId,
-      eventId: makeEventId(5000, 1),
-      interval: { openedAt: 1000, closedAt: 5000 },
-      forcedAdvance: false,
-      // 无 observation
-    };
-
-    enqueueOutcome(ch, ev);
-    const [drained] = drainOutcomes(ch);
-    expect(drained?.observation).toBeUndefined();
-  });
-});
+// 说明：TMP-1（duration 全生命周期）、A6-R（delta 差分）、A6-SL（paired
+// observation）、A4（无 before 不造）的不变量由 uoem-proof.test.ts 以
+// ExpansionEventProducer 链路级测试覆盖，此处不再重复。
 
 describe("UOEM Implementation: Deterministic Replay", () => {
   it("eventId 格式确定性：E-{tick}-{seq}", () => {

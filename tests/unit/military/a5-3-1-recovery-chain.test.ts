@@ -13,9 +13,6 @@ import {
   createActionRecord,
   markSubmitted,
   markExecuting,
-  markSucceeded,
-  markFailed,
-  markBlocked,
   getRetryPolicy,
   cleanupRecoveryTable,
   computeRecoveryStats,
@@ -108,49 +105,9 @@ describe("A5.3.1-REC-001: WarPlan → Abort → warAbortSignals → Recovery Int
 // ─── REC-002: 重复 Abort 幂等 ───────────────────────────────
 
 describe("A5.3.1-REC-002: 重复 Abort → 不产生重复 Recovery 执行", () => {
-  it("相同 sponsor+reason 的信号只产生一个 idempotency key", () => {
-    const signal1 = makeAbortSignal({ tick: 1000 });
-    const signal2 = makeAbortSignal({ tick: 2000 }); // 不同 tick
-
-    const action1 = mapAbortToRecoveryAction(signal1)!;
-    const action2 = mapAbortToRecoveryAction(signal2)!;
-
-    // 相同 key（sponsor + reason 相同）
-    expect(recoveryIdempotencyKey(action1)).toBe(recoveryIdempotencyKey(action2));
-  });
-
-  it("活跃的 action 不被重复提交", () => {
-    const signal = makeAbortSignal();
-    const action = mapAbortToRecoveryAction(signal)!;
-    const table: RecoveryActionTable = new Map();
-
-    // 第一次提交
-    let record = createActionRecord(action, 1000, 3);
-    record = markSubmitted(record, 1000);
-    record = markExecuting(record, 1000);
-    table.set(recoveryIdempotencyKey(action), record);
-
-    // 第二次尝试 — 应该被去重
-    const check = shouldSubmitAction(table, action, 1010, 500);
-    expect(check.submit).toBe(false);
-    expect(check.reason).toContain("active");
-  });
-
-  it("cooldown 期内不重试", () => {
-    const signal = makeAbortSignal();
-    const action = mapAbortToRecoveryAction(signal)!;
-    const table: RecoveryActionTable = new Map();
-
-    let record = createActionRecord(action, 1000, 3);
-    record = markFailed(record, 1050, "test", true);
-    table.set(recoveryIdempotencyKey(action), record);
-
-    // population_rebuild cooldown=500
-    const policy = getRetryPolicy(action.type);
-    const check = shouldSubmitAction(table, action, 1100, policy.cooldownDuration);
-    expect(check.submit).toBe(false);
-  });
-
+  // 说明：idempotency key 生成、活跃 action 去重、cooldown 内不重试三个
+  // 断言与 abort-recovery.test.ts 的"幂等性 + Cooldown"块逐条等价，仅保留
+  // 批量入口独有的去重验证。
   it("批量信号去重：相同 sponsor 的多个信号只产生一个活跃 action", () => {
     const signals = [
       makeAbortSignal({ tick: 1000, reason: "ATTRITION" }),
@@ -167,26 +124,8 @@ describe("A5.3.1-REC-002: 重复 Abort → 不产生重复 Recovery 执行", () 
 // ─── REC-003: Recovery unavailable → escalation ───────────
 
 describe("A5.3.1-REC-003: Recovery unavailable → escalation 而不是无限 retry", () => {
-  it("maxAttempts 烧穿 → terminal 状态 → 不重试", () => {
-    const signal = makeAbortSignal({ reason: "ATTRITION" });
-    const action = mapAbortToRecoveryAction(signal)!;
-    const table: RecoveryActionTable = new Map();
-
-    // 模拟 maxAttempts 烧穿
-    let record = createActionRecord(action, 1000, 2);
-    record = markSubmitted(record, 1000);
-    record = markFailed(record, 1050, "fail 1", true);
-    record = markSubmitted(record, 1100);
-    record = markFailed(record, 1150, "fail 2", true);
-    // attempts=2 >= maxAttempts=2 → 下一次失败应该 terminal
-    record = markFailed(record, 1200, "fail 3", false);
-    table.set(recoveryIdempotencyKey(action), record);
-
-    // 应该不再提交
-    const check = shouldSubmitAction(table, action, 2000, 500);
-    expect(check.submit).toBe(false);
-  });
-
+  // 说明：maxAttempts 烧穿 → terminal 的状态机断言由 abort-recovery.test.ts
+  // 覆盖，此处保留本文件独有的 evaluateRecoveryUnviability / evaluateEscalation。
   it("terminal 状态 → evaluateRecoveryUnviability 标记不可恢复", () => {
     const signal = makeAbortSignal({ reason: "ATTRITION" });
     const action = mapAbortToRecoveryAction(signal)!;

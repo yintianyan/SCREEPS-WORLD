@@ -40,6 +40,7 @@ const AUTHORIZATION_FILE = findFile("domain/tactical/authorization.ts");
 const STATE_MACHINE_FILE = findFile("domain/tactical/state-machine.ts");
 const ROLE_INTENT_FILE = findFile("domain/tactical/role-intent.ts");
 const SQUAD_FORMATION_FILE = findFile("domain/tactical/squad-formation.ts");
+const SQUAD_MOVEMENT_RUNTIME_FILE = findFile("systems/squad-movement-runtime.ts");
 const FORMATION_FILE = findFile("domain/tactical/formation.ts");
 const TYPES_FILE = findFile("domain/tactical/types.ts");
 const INDEX_FILE = findFile("domain/tactical/index.ts");
@@ -135,13 +136,17 @@ describe("A5.4.4: Domain Purity (Guards 1-5)", () => {
   });
 
   // Guard 5: Domain 禁止 move / registerMove / spawnCreep
-  it("5. domain/tactical/*.ts 不调用 move / registerMove / spawnCreep", () => {
+  it("5. domain/tactical/*.ts 不调用 move / registerMove / spawnCreep / submitRequest / recycle / activateSafeMode", () => {
     const bad: string[] = [];
     for (const f of TACTICAL_DOMAIN_FILES) {
       const code = codeLines(readFileSync(f, "utf8"));
       const violations: string[] = [];
       if (/\bregisterMove\b/.test(code)) violations.push("registerMove");
       if (/\bspawnCreep\s*\(/.test(code)) violations.push("spawnCreep()");
+      // 收编自 a5-4-0-architecture：domain 层禁止触达执行/资源回收接口
+      if (/submitRequest\s*\(/.test(code)) violations.push("submitRequest()");
+      if (/\.recycle\s*\(/.test(code)) violations.push("recycle()");
+      if (/activateSafeMode\s*\(/.test(code)) violations.push("activateSafeMode()");
       if (
         /\b\.move\s*\(/.test(code) &&
         !/moveTo|movement|MovementIntent|moveDirective|MovementMode|MOVE/.test(code)
@@ -168,6 +173,12 @@ describe("A5.4.4: Tactical Runtime Boundary (Guards 6-8)", () => {
   it("6b. tactical-runtime-system.ts 不调用 spawnCreep", () => {
     const code = codeLines(readFileSync(TACTICAL_RUNTIME_FILE, "utf8"));
     expect(code).not.toMatch(/spawnCreep\s*\(/);
+  });
+
+  // 收编自 a5-4-1-architecture AG-5：runtime 系统禁止直接寻路
+  it("6c. tactical-runtime-system.ts 不调用 PathFinder.search", () => {
+    const code = codeLines(readFileSync(TACTICAL_RUNTIME_FILE, "utf8"));
+    expect(code).not.toMatch(/PathFinder\.search\s*\(/);
   });
 
   // Guard 7: Tactical 禁止 logistics
@@ -344,6 +355,36 @@ describe("A5.4.4: Role AttackIntent Priority (Guard 15)", () => {
     const enemiesPos = acquireList.indexOf("attackEnemies");
     expect(focusFirePos).toBeGreaterThanOrEqual(0);
     expect(enemiesPos).toBeGreaterThan(focusFirePos);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════
+// 收编自 a5-4-2-architecture：Squad Movement Runtime 边界
+// ═════════════════════════════════════════════════════════════
+
+describe("A5.4.2 收编: Squad Movement Runtime Boundary", () => {
+  it("squad-movement-runtime.ts 不引用 evaluateTacticalAction / state-machine 决策函数", () => {
+    const src = readFileSync(SQUAD_MOVEMENT_RUNTIME_FILE, "utf8");
+    // 系统层薄壳不应直接调用 evaluateTacticalAction（那是 tactical-runtime 的职责）
+    // squad-movement-runtime 只调用 squad-formation 的纯函数
+    expect(src).not.toContain("evaluateTacticalAction");
+    expect(src).not.toContain("assessObjectiveLifecycle");
+  });
+
+  it("squad-movement-runtime.ts 不直接调用 attack() / heal() / spawnCreep()", () => {
+    const code = codeLines(readFileSync(SQUAD_MOVEMENT_RUNTIME_FILE, "utf8"));
+    expect(code).not.toMatch(/\.attack\s*\(/);
+    expect(code).not.toMatch(/\.heal\s*\(/);
+    expect(code).not.toMatch(/\.rangedAttack\s*\(/);
+    expect(code).not.toMatch(/spawnCreep\s*\(/);
+  });
+
+  it("squadMovementSystem 已通过 pipeline 注册到 bootstrap", () => {
+    const bootstrapSrc = readFileSync(findFile("bootstrap.ts"), "utf8");
+    // R10 ADR 合并后：squadMovementSystem 通过 tacticalRuntimePipelineSystem 注册
+    expect(bootstrapSrc).toContain("tacticalRuntimePipelineSystem");
+    expect(bootstrapSrc).toContain("registerSystem(tacticalRuntimePipelineSystem)");
+    expect(bootstrapSrc).toContain("tactical-runtime-pipeline");
   });
 });
 
