@@ -1,6 +1,6 @@
 /** 跨 tick 房间流采样测试 — 官服 intent 延迟结算下唯一实测口径。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { economySystem } from "../../../src/systems/economy";
+import { economySystem } from "../../../src/systems/room/economy";
 import { diffRoomFlows, type RoomFlowSample } from "../../../src/domain/economy/accounting";
 import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 import { globalCache } from "../../../src/kernel/global-cache";

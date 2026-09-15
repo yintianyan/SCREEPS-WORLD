@@ -1,7 +1,7 @@
 /** 止损链场景测试（Batch 3 — 病理③「止损豁免缺失」修复回归）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
-import { expansionManagerSystem } from "../../../src/systems/expansion-manager";
+import { remoteMiningManagerSystem } from "../../../src/systems/remote/remote-mining-manager";
+import { expansionManagerSystem } from "../../../src/systems/empire/expansion-manager";
 import { evaluateRemoteDemand } from "../../../src/domain/remote/demand";
 import { evaluateDemand } from "../../../src/domain/spawn/demand";
 import { defenderRole } from "../../../src/creeps/roles/defender";

@@ -5,7 +5,7 @@ import { builderRole } from "../../../src/creeps/roles/builder";
 import { distributorRole } from "../../../src/creeps/roles/distributor";
 import { evaluateDemand } from "../../../src/domain/spawn/demand";
 import { getSource } from "../../../src/creeps/support/targeting";
-import { roomStateSystem } from "../../../src/systems/room-state";
+import { roomStateSystem } from "../../../src/systems/room/room-state";
 import {
   mockContext,
   mockController,

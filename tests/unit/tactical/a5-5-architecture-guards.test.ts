@@ -30,7 +30,10 @@ function codeLines(src: string): string {
 }
 
 const COMBAT_MICRO_DOMAIN = readFileSync(join(SRC, "domain/tactical/combat-micro.ts"), "utf-8");
-const COMBAT_MICRO_RUNTIME = readFileSync(join(SRC, "systems/combat-micro-runtime.ts"), "utf-8");
+const COMBAT_MICRO_RUNTIME = readFileSync(
+  join(SRC, "systems/military/combat-micro-runtime.ts"),
+  "utf-8",
+);
 const DOMAIN_CODE = codeLines(COMBAT_MICRO_DOMAIN);
 const RUNTIME_CODE = codeLines(COMBAT_MICRO_RUNTIME);
 

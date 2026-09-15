@@ -54,19 +54,19 @@ function layerOf(file: string | string): string {
 
 describe("A5.4.1 TAC-R01: tacticalRuntimeSystem 导出与结构", () => {
   it("tactical-runtime-system.ts 导出 tacticalRuntimeSystem", () => {
-    const f = resolve(SRC, "systems/tactical-runtime-system.ts");
+    const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const src = readFileSync(f, "utf8");
     expect(src).toContain("export const tacticalRuntimeSystem");
   });
 
   it("系统 name 为 'tactical-runtime'", () => {
-    const f = resolve(SRC, "systems/tactical-runtime-system.ts");
+    const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const src = readFileSync(f, "utf8");
     expect(src).toContain('name: "tactical-runtime"');
   });
 
   it("系统有 interval 和 priority 定义", () => {
-    const f = resolve(SRC, "systems/tactical-runtime-system.ts");
+    const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const src = readFileSync(f, "utf8");
     expect(src).toMatch(/interval:\s*\d+/);
     expect(src).toMatch(/priority:\s*\d+/);
@@ -77,7 +77,7 @@ describe("A5.4.1 TAC-R01: tacticalRuntimeSystem 导出与结构", () => {
 
 describe("A5.4.1 TAC-R02: TacticalRuntimeCache 字段定义", () => {
   it("TacticalRuntimeCache 接口包含所有必要字段", () => {
-    const f = resolve(SRC, "systems/tactical-runtime-system.ts");
+    const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const src = readFileSync(f, "utf8");
     expect(src).toContain("tacticalObjectives");
     expect(src).toContain("tacticalRoleIntents");
@@ -138,7 +138,7 @@ describe("A5.4.1 TAC-R04: healer.ts 不导入 systems 层", () => {
 
 describe("A5.4.1 TAC-R05: 不直接写 warAbortSignals", () => {
   it("tactical-runtime-system.ts 不写 warAbortSignals（只写 tacticalAbortSignals）", () => {
-    const f = resolve(SRC, "systems/tactical-runtime-system.ts");
+    const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const src = readFileSync(f, "utf8");
     const code = codeLines(src);
     // 允许在注释中提到 warAbortSignals，但代码行不得写入
@@ -153,14 +153,14 @@ describe("A5.4.1 TAC-R05: 不直接写 warAbortSignals", () => {
 
 describe("A5.4.1 TAC-R06: recovery-execution-system 消费 tacticalAbortSignals", () => {
   it("recovery-execution-system.ts 包含 consumeTacticalAbortSignals 函数", () => {
-    const f = resolve(SRC, "systems/recovery-execution-system.ts");
+    const f = resolve(SRC, "systems/room/recovery-execution-system.ts");
     const src = readFileSync(f, "utf8");
     expect(src).toContain("consumeTacticalAbortSignals");
     expect(src).toContain("tacticalAbortSignals");
   });
 
   it("recovery-execution-system 在 run 中调用 consumeTacticalAbortSignals", () => {
-    const f = resolve(SRC, "systems/recovery-execution-system.ts");
+    const f = resolve(SRC, "systems/room/recovery-execution-system.ts");
     const src = readFileSync(f, "utf8");
     expect(src).toContain("const tacticalActions = consumeTacticalAbortSignals");
   });
@@ -170,7 +170,7 @@ describe("A5.4.1 TAC-R06: recovery-execution-system 消费 tacticalAbortSignals"
 
 describe("A5.4.1 TAC-R07: logistics-planner 消费 tacticalSupplyDemands", () => {
   it("logistics-planner.ts 包含 tacticalSupplyDemands 消费逻辑", () => {
-    const f = resolve(SRC, "systems/logistics-planner.ts");
+    const f = resolve(SRC, "systems/room/logistics-planner.ts");
     const src = readFileSync(f, "utf8");
     expect(src).toContain("tacticalSupplyDemands");
     expect(src).toContain("tacSupplies");
@@ -248,7 +248,7 @@ describe("A5.4.1 TAC-R11: 全局 creeps 层不导入 systems 层", () => {
 
 describe("A5.4.1 TAC-R12: tactical-runtime-system 不直接调用 Creep API", () => {
   it("不调用 move() / attack() / heal() / spawnCreep()", () => {
-    const f = resolve(SRC, "systems/tactical-runtime-system.ts");
+    const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const code = codeLines(readFileSync(f, "utf8"));
     // 允许在 Game.getObjectById 中读取（数据采集），但不得直接执行动作
     expect(code).not.toMatch(/\.move\(/);
@@ -262,7 +262,7 @@ describe("A5.4.1 TAC-R12: tactical-runtime-system 不直接调用 Creep API", ()
 
 describe("A5.4.1 TAC-R13: SupplyDemand 检测只在 advance 相位", () => {
   it("detectSupplyDemand 函数存在且有 phase 检查", () => {
-    const f = resolve(SRC, "systems/tactical-runtime-system.ts");
+    const f = resolve(SRC, "systems/military/tactical-runtime-system.ts");
     const src = readFileSync(f, "utf8");
     expect(src).toContain("detectSupplyDemand");
     expect(src).toContain('plan.phase !== "advance"');

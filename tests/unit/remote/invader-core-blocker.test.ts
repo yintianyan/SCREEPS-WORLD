@@ -5,7 +5,7 @@ import {
   remoteMiningManagerSystem,
   collectRemoteBlockers,
   classifyInvaderCores,
-} from "../../../src/systems/remote-mining-manager";
+} from "../../../src/systems/remote/remote-mining-manager";
 import { roomHasInvaderCore } from "../../../src/creeps/roles/reserver";
 import type { ColonyState } from "../../../src/kernel/contracts";
 import {

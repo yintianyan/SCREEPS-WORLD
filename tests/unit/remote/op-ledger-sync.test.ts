@@ -1,6 +1,6 @@
 /** 远矿 op 账本 Memory ↔ heap 同步 — global reset 恢复语义。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { syncOpLedger } from "../../../src/systems/remote-mining-manager";
+import { syncOpLedger } from "../../../src/systems/remote/remote-mining-manager";
 import {
   bumpRemoteOpLedger,
   peekRemoteOpLedger,

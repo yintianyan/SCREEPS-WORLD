@@ -1,7 +1,7 @@
 /** Traffic Manager 系统测试 — 意图登记双模、tick 末集中解算与统一签发。 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CONFIG } from "../../../src/config";
-import { trafficManagerSystem } from "../../../src/systems/traffic-manager";
+import { trafficManagerSystem } from "../../../src/systems/room/traffic-manager";
 import { getIntentLedger, registerAnchor, registerMove } from "../../../src/creeps/movement/intent";
 import { mockContext, resetGlobals } from "../../support/factories";
 

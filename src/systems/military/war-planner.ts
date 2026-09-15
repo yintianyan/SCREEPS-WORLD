@@ -1,0 +1,526 @@
+/** War Planner */
+import { CONFIG } from "../../config";
+import type { Priority, System, TickContext } from "../../kernel/contracts";
+import { EventKind, recordEvent } from "../../kernel/event-log";
+import {
+  decideHealerCount,
+  decideSquadSize,
+  evaluateBoostGate,
+  evaluateWarOutcome,
+  isAttritionLost,
+  nextWavePhase,
+  NUKE_ENERGY_COST,
+  NUKE_GHODIUM_COST,
+  NUKE_LANDING_TIME,
+  selectWarTarget,
+  shouldLaunchNuke,
+  type WarOutcome,
+  type WarTargetCandidate,
+  type WarTargetInput,
+} from "../../domain/war/planning";
+import { roomLinearDistance } from "../../domain/remote/targeting";
+import { getRoomIntel, queryRoomIntel, intelActionUsable, intelConfidence } from "../intelligence";
+import {
+  countPending,
+  hasRequest,
+  removeRequestsByRole,
+  spawnKey,
+  submitRequest,
+  buildSpawnRequest,
+} from "../../domain/spawn/queue";
+import { selectBody } from "../../config/bodies";
+import { querySquad, globalCache } from "../../kernel/global-cache";
+import { recordExecution, recordPlanningDecision } from "../../telemetry";
+import { log } from "../../kernel/log";
+
+/** 收摊原因编码（WarOutcome 事件 d[2]）。 */
+const REASON_POSTURE = 0;
+const REASON_ATTRITION = 1;
+const REASON_NO_TARGET = 2;
+const REASON_PLAN_TIMEOUT = 3;
+
+/** 核验结论编码（WarOutcome 事件 d[0]）。 */
+const OUTCOME_CODES: Record<WarOutcome, number> = { success: 0, failure: 1, unknown: 2 };
+
+export const warPlannerSystem: System = {
+  name: "war-planner",
+  priority: 2 as Priority,
+  interval: CONFIG.war.interval,
+  // FINDING-08 修复：war 姿态下必须运行——编队补位/止损/核验不能因 Recovery tier 被跳过。
+  recoveryEligible: () => Memory.kernel?.strategy?.posture === "war",
+  run(ctx: TickContext): void {
+    pruneWarBlacklist(ctx.tick);
+
+    const posture = Memory.kernel?.strategy?.posture;
+    if (posture !== "war") {
+      // 战争结束：清休战闸（plan 已在收摊时清除）。
+      if (Memory.kernel) delete Memory.kernel.warStandDownUntil;
+      demobilize(ctx.tick, REASON_POSTURE);
+      return;
+    }
+
+    // R4 休战期：战损止损后整军休战 — 黑名单只挡单目标，
+    // 休战闸挡「A 止损 → 立刻打 B → 再止损 → 打 C」的跨目标添油循环。
+    if ((Memory.kernel?.warStandDownUntil ?? 0) > ctx.tick) return;
+    // 1. 维护战争计划：无计划 / 计划超期 → 重新选目标。
+    //    FINDING-08 修复：war-planning-system 现已声明 recoveryEligible（war 姿态下 Recovery tier
+    //    仍运行），会通过 writeCompatibleWarPlan 写入 Memory.kernel.warPlan + a5ForceReq。
+    //    以下 LEGACY_COMPATIBILITY_ONLY fallback 路径（selectWarTarget/decideSquadSize）
+    //    只在 war-planning-system 因异常/safeRun 报错跳过时作为最终安全网——
+    //    不再产生编制震荡（A5.3 下次运行会覆盖）。
+    //    退役条件：war-planning-system 稳定运行 + recoveryEligible 生效后，此块可安全删除。
+    const existing = Memory.kernel?.warPlan;
+    const needSelect = !existing || ctx.tick - existing.since > CONFIG.war.planTimeout;
+    if (needSelect) {
+      // 检查 war-planning-system 是否已在本 tick 产出了新鲜 WarPlan
+      const warPlanCache = globalCache().warPlanCache;
+      if (warPlanCache && warPlanCache.tick === ctx.tick && warPlanCache.plan) {
+        // A5.3 已产出 WarPlan 并通过 writeCompatibleWarPlan 写入 Memory.kernel.warPlan。
+        // 重新读取——existing 可能已被更新。
+        // 不走 Legacy fallback，直接进入编队维持逻辑。
+      } else {
+        // LEGACY_COMPATIBILITY_ONLY fallback：war-planning-system 未运行或未产出 WarPlan。
+        // 此路径产出的 squadSize 会被 A5.3 的 a5ForceReq 在运行时覆盖。
+        const next = selectWarTarget(buildTargetInput(ctx.tick));
+        if (!next) {
+          demobilize(ctx.tick, REASON_NO_TARGET);
+          return;
+        }
+        const keep = existing && existing.targetRoom === next.roomName;
+        if (!keep) demobilize(ctx.tick, REASON_PLAN_TIMEOUT);
+        if (!Memory.kernel) Memory.kernel = {};
+        Memory.kernel.warPlan = {
+          targetRoom: next.roomName,
+          sponsor: next.sponsor,
+          squadSize: decideSquadSize(
+            next.towersSeen,
+            CONFIG.war.squadBase,
+            CONFIG.war.squadPerTower,
+          ),
+          since: ctx.tick,
+          towersSeen: next.towersSeen,
+          phase: keep && existing!.phase ? existing!.phase : "build",
+          spawned: keep ? (existing!.spawned ?? 0) : 0,
+          spawnedKeys: keep ? existing!.spawnedKeys : undefined,
+        };
+      }
+      // T3: 声明战争期望 — 预期 500 tick 内达成目标或可探失
+    }
+
+    // NEW-01 修复：去掉双重非空断言，安全访问 warPlan。
+    const plan = Memory.kernel?.warPlan;
+    if (!plan) return;
+    const sponsor = plan.sponsor;
+    const queue = Memory.rooms[sponsor]?.spawnQueue;
+    if (!queue) return; // sponsor 失守/条目标丢 — 下轮 occupied 排除后会换目标
+
+    // 计划存续期间目标进黑名单（他处止损）→ 立即收摊，防绕过滤选回。
+    if (isBlacklisted(plan.targetRoom, ctx.tick)) {
+      demobilize(ctx.tick, REASON_NO_TARGET);
+      return;
+    }
+
+    // 2. 维持编队（heal-tank）：attacker 拆打 + healer 治疗，分 role 统计补位。
+    //    编制合计口径：满编/止损基数 = squadSize + healerCount（缺谁都不成编队）。
+    //    boost 完成度自下而上派生（body 任一部件带 boost 即计）— 不入 Memory，
+    //    与 healerCount 同理；编队成员由 lab-system 在 build 相位经 boost 链强化。
+    //    P0-1：从全局编队索引取子集，替代独立全量遍历 Game.creeps。
+    //
+    //    A5.3 集成：当 a5ForceReq 存在时（war-planning-system 写入），
+    //    使用 A5.3 能力推导的编队需求替代旧 decideSquadSize/decideHealerCount。
+    //    LEGACY_COMPATIBILITY_ONLY：当 a5ForceReq 不存在时（war-planning-system 未运行），
+    //    fallback 到 decideHealerCount(plan.squadSize)。
+    //    不产生新决策——plan.squadSize 已在 needSelect 块中由 Legacy 路径决定。
+    //    删除条件：当 war-planning-system 完全接管后，a5ForceReq 永远存在，
+    //    fallback 分支永远不会执行，可安全删除。
+    const a5 = plan.a5ForceReq;
+    const attackerTarget = a5 ? a5.attacker : plan.squadSize;
+    const healerCount = a5
+      ? a5.healer
+      : decideHealerCount(plan.squadSize, CONFIG.war.healerSquadRatio);
+    let attackerLive = 0;
+    let healerLive = 0;
+    let boostedLive = 0;
+    const squad = querySquad({ home: sponsor, remoteTarget: plan.targetRoom });
+    for (const e of squad) {
+      if (e.role === "attacker") attackerLive++;
+      else if (e.role === "healer") healerLive++;
+      else continue;
+      if (e.boosted) boostedLive++;
+    }
+    markSquadMaterialized(plan, squad, sponsor);
+    const pendingAttackers = countPending(queue, "attacker", sponsor);
+    const pendingHealers = countPending(queue, "healer", sponsor);
+    const sponsorSnapshot = ctx.getSnapshot(sponsor);
+    const cap = sponsorSnapshot?.energyCapacityAvailable ?? CONFIG.war.fallbackCapacity;
+
+    // live+pending < 编制时每轮至多补 1 个新 key — 队列被能量门禁卡住时
+    // pending 封顶编制，spawned 不会因空转膨胀。
+    // A5.3：attackerTarget 来自 a5ForceReq（attacker+ranged 合并编制）。
+    if (attackerLive + pendingAttackers < attackerTarget) {
+      submitSquadRequest(
+        queue,
+        plan,
+        sponsor,
+        "attacker",
+        attackerLive + pendingAttackers,
+        cap,
+        ctx.tick,
+      );
+    }
+    if (healerLive + pendingHealers < healerCount) {
+      submitSquadRequest(
+        queue,
+        plan,
+        sponsor,
+        "healer",
+        healerLive + pendingHealers,
+        cap,
+        ctx.tick,
+      );
+    }
+
+    // 3. 波次相位（迟滞，合计口径 + boost 门禁）：满编且全员强化才 advance，
+    //    被打残才回落 build 重组。门禁降级（无 lab / 宽限期过）→ undefined 豁免：
+    //    sponsor 缺基础矿时反应链产不出 T3，永久等待等于不打，裸攻由止损链兜底。
+    const liveTotal = attackerLive + healerLive;
+    // A5.3：满编阈值使用 attackerTarget + healerCount（与 a5ForceReq 一致）
+    const fullSquadSize = attackerTarget + healerCount;
+    const boostGate = evaluateBoostGate(
+      boostedLive,
+      liveTotal,
+      (sponsorSnapshot?.rcl ?? 0) >= 6 && (sponsorSnapshot?.labs.length ?? 0) > 0,
+      ctx.tick - plan.since > CONFIG.war.boostGraceTicks,
+    );
+    plan.phase = nextWavePhase(
+      plan.phase ?? "build",
+      liveTotal,
+      fullSquadSize,
+      CONFIG.war.waveRegroupRatio,
+      boostGate,
+    );
+
+    // 3.5 核弹威慑发射（nuker 战略威慑链）：war 姿态授权（本系统是唯一进攻
+    //     执行决策者）+ 塔数门槛 + 满装填无冷却 + 射程内 + 无在途 → 对目标房
+    //     中心（25,25）发射。intel 无结构坐标，中心是敌方基地密度期望最大点。
+    //     在途判定走台账（引擎无全局核弹查询 API，FIND_NUKES 需目标房视野 —
+    //     自发核弹只能自查）；发射成功后台账 push + cooldown 5000 双保险，
+    //     同目标在途期间不重复发射（重叠只是把当量堆在同一片废墟上）。
+    //     FINDING-14 修复：核弹 50k tick 不可取消。除当前扩张目标外，
+    //     还检查扩张候选计划列表（expansionPlans）——防止对即将扩张的房发射核弹。
+    pruneNukeLedger(ctx.tick);
+    const nuker = sponsorSnapshot?.nuker;
+    const kernel = Memory.kernel;
+    // 收集所有扩张相关目标（当前扩张 + WAITING_EXECUTION 计划），排除这些房
+    const expansionTargets = new Set<string>();
+    if (kernel?.expansion?.target) expansionTargets.add(kernel.expansion.target);
+    for (const p of kernel?.expansionPlans ?? []) {
+      if (p.st === "WAITING_EXECUTION") expansionTargets.add(p.rn);
+    }
+    if (nuker && kernel && !expansionTargets.has(plan.targetRoom)) {
+      const nukerReady =
+        nuker.store.getUsedCapacity(RESOURCE_ENERGY) >= NUKE_ENERGY_COST &&
+        (nuker.store.getUsedCapacity(RESOURCE_GHODIUM) ?? 0) >= NUKE_GHODIUM_COST &&
+        nuker.cooldown === 0;
+      const inFlight = (kernel.nukesInFlight?.[plan.targetRoom] ?? []).filter(
+        landAt => landAt > ctx.tick,
+      ).length;
+      const launch = shouldLaunchNuke({
+        nukerReady,
+        nukesInFlightToTarget: inFlight,
+        towersSeen: plan.towersSeen,
+        towerThreshold: CONFIG.nuker.launchTowerThreshold,
+        linearDistance: roomLinearDistance(sponsor, plan.targetRoom),
+        maxRange: CONFIG.nuker.maxRange,
+      });
+      if (launch) {
+        const pos = new RoomPosition(25, 25, plan.targetRoom);
+        if (nuker.launchNuke(pos) === OK) {
+          recordNukeLaunch(plan.targetRoom, ctx.tick);
+          recordEvent(EventKind.NukeLaunched, plan.targetRoom, [plan.towersSeen]);
+          log.info(
+            "war-planner",
+            `nuke-launch: ${sponsor} → ${plan.targetRoom} (towers=${plan.towersSeen})`,
+          );
+        }
+      }
+    }
+
+    // 4. 战损止损（合计基数）：投入超过编制 × 倍数仍未见效 → 判消耗战失败收摊。
+    //    A5.3：止损基数使用 fullSquadSize（attackerTarget + healerCount）。
+    if (isAttritionLost(plan.spawned ?? 0, fullSquadSize, CONFIG.war.casualtyMultiplier)) {
+      demobilize(ctx.tick, REASON_ATTRITION);
+      // 收摊后整军休战 — 下一轮评估前先让经济喘息，防止换目标立即再送。
+      Memory.kernel!.warStandDownUntil = ctx.tick + CONFIG.war.standDownTicks;
+    }
+  },
+};
+
+/**
+ * 编队补位请求（attacker/healer 同模式）：稳定 key 幂等提交，
+ * spawned 账本在提交新 key 时 +1（消耗战判定依据）。
+ */
+export function submitSquadRequest(
+  queue: NonNullable<RoomMemory["spawnQueue"]>,
+  plan: NonNullable<KernelMemory["warPlan"]>,
+  sponsor: string,
+  role: "attacker" | "healer",
+  index: number,
+  cap: number,
+  tick: number,
+): void {
+  const key = spawnKey(role, sponsor, index, plan.targetRoom);
+  if (hasRequest(queue, key)) return;
+  // 计数口径（修复 churn 虚增止损基数）：
+  //   - 首次见到的 key → 计入（初始编制承诺）；
+  //   - 前任已实际孵化（markSquadMaterialized 置位）的同键重提交 → 计入（战损替换）；
+  //   - 其余（前任从未孵化的 TTL 过期/重试烧穿重提交）→ 不计入 —— 能量紧张时
+  //     请求反复 churn 曾把没孵化出的请求也计入基数，提前误触 attrition 收摊。
+  const materialized = plan.spawnedKeys?.[key] === true;
+  const firstSubmit = plan.spawnedKeys?.[key] === undefined;
+  if (firstSubmit || materialized) {
+    plan.spawned = (plan.spawned ?? 0) + 1;
+  }
+  // 计数后一律归位：前任的兑现已消费，本任必须重新物化才能触发下一次替换计数
+  // （否则「兑现→替换请求又 churn→再重提交」会沿 true 旗标连续误计）。
+  if (!plan.spawnedKeys) plan.spawnedKeys = {};
+  plan.spawnedKeys[key] = false;
+  const body = selectBody(role, cap);
+  submitRequest(
+    queue,
+    buildSpawnRequest(tick, {
+      key,
+      role,
+      home: sponsor,
+      priority: 2,
+      body,
+      memory: {
+        role,
+        home: sponsor,
+        mode: "acquire",
+        spawnIndex: index,
+        remoteTarget: plan.targetRoom,
+      },
+    }),
+  );
+}
+
+/**
+ * 标记编队槽位的「已实际孵化」状态（Game.creeps 含 spawning 中的 creep，故
+ * 孵化一开始即算兑现）。供 submitSquadRequest 区分战损替换（计数）与纯
+ * churn 重提交（不计数）；只更新 log 中已存在的 key（计划建立前的存量
+ * 编队成员不入账）。导出仅供单元测试注入编队条目。
+ */
+export function markSquadMaterialized(
+  plan: NonNullable<KernelMemory["warPlan"]>,
+  squad: readonly { name: string; role: string }[],
+  sponsor: string,
+): void {
+  if (!plan.spawnedKeys) return;
+  for (const e of squad) {
+    const mem = Game.creeps[e.name]?.memory as { spawnIndex?: number } | undefined;
+    const idx = mem?.spawnIndex;
+    if (idx === undefined) continue;
+    const key = spawnKey(e.role, sponsor, idx, plan.targetRoom);
+    if (key in plan.spawnedKeys) plan.spawnedKeys[key] = true;
+  }
+}
+
+/**
+ * 收摊（幂等）：核验战果 → 失败/unknown 进黑名单 → 记录 WarOutcome 事件 →
+ * 回收在役 attacker（标记 recycle，spawn-manager 归航回收）→ 撤销寄宿请求 → 清除计划。
+ * reason：收摊原因编码（WarOutcome 事件 d[2]，黑匣子复盘用）。
+
+ * P0-2 核验盲区修复：unknown（intel 过期/无视野）用更短的黑名单冷却 —
+ * 区分「确定性打不赢」（failure，满额冷却）与「不知道打没打赢」（unknown，半额冷却）。
+ * 根因：战后 attacker 撤退路径不一定经过目标房 → sponsor 的 intel 可能在战前就过期。
+ * 将 unknown 与 failure 等同拉黑 20000 tick 会让一个「可能打赢了但没看到」的目标长期不可重选。
+ * 缩短 unknown 冷却让系统在 intel 自然刷新后有更早的重评窗口。
+ */
+export function demobilize(tick: number, reason: number): void {
+  const plan = Memory.kernel?.warPlan;
+  if (!plan) return;
+
+  // 战后核验：以 sponsor 记录的最新目标房 intel 判定战果。
+  const entry = getRoomIntel(plan.targetRoom);
+  let outcome = evaluateWarOutcome(
+    plan.towersSeen,
+    entry?.payload.towers,
+    entry?.payload.owner,
+    entry?.observedAt,
+    tick,
+    CONFIG.war.targetFreshness,
+  );
+  // 战后核验只信 fact 级复核：威胁短窗外（非 fact）的观察即使年龄未超
+  // freshness 也不可信 → 降级 unknown（两段式重验），防止陈旧 intel 误判战果。
+  if (
+    outcome !== "unknown" &&
+    entry !== undefined &&
+    intelConfidence(plan.targetRoom, tick) !== "fact"
+  ) {
+    outcome = "unknown";
+  }
+  if (outcome !== "success") {
+    // P0-2：unknown 用半额冷却 — intel 过期不是目标的错，缩短冷却让 intel 自然刷新后可重评。
+    // failure 是确定性「打不赢」，用满额冷却防重选循环。
+    const cooldown =
+      outcome === "unknown"
+        ? Math.floor(CONFIG.war.warBlacklistTicks / 2)
+        : CONFIG.war.warBlacklistTicks;
+    blacklistWarTarget(plan.targetRoom, tick + cooldown);
+    log.info(
+      "war-planner",
+      `war: demobilize ${plan.targetRoom} outcome=${outcome}` +
+        ` (intel_age=${entry?.observedAt !== undefined ? tick - entry.observedAt : "never"},` +
+        ` blacklist=${cooldown}t, reason=${reason})`,
+    );
+  }
+
+  // A5.3.1 GAP-1 修复：写入止损信号供 recovery-execution-system 消费。
+  // recovery-execution-system 通过纯函数 mapAbortSignalsToRecoveryActions 将信号
+  // 转换为 RecoveryAction，复用 A4.6 lifecycle 幂等机制（recoveryIdempotencyKey 去重）。
+  // Military 只产出 Signal，不执行 Recovery。A4.6 负责 Signal → Action → 执行。
+  const REASON_LABELS = ["POSTURE", "ATTRITION", "NO_TARGET", "PLAN_TIMEOUT"];
+  const g = globalCache();
+  // 读取 A5.3 operationId（如果 war-planning-system 已写入兼容字段）
+  const compatOp = plan as typeof plan & { operationId?: string };
+  g.warAbortSignals = {
+    tick,
+    reason: REASON_LABELS[reason] ?? `UNKNOWN(${reason})`,
+    targetRoom: plan.targetRoom,
+    sponsor: plan.sponsor,
+    spawned: plan.spawned ?? 0,
+    outcome,
+    operationId: compatOp.operationId,
+  };
+  recordEvent(EventKind.WarOutcome, plan.targetRoom, [
+    OUTCOME_CODES[outcome],
+    plan.spawned ?? 0,
+    reason,
+  ]);
+
+  // 遥测：战后核验 Decision→Outcome 闭环
+  if (outcome === "success") {
+    recordExecution("war", "completed");
+  } else {
+    recordExecution("war", "failed");
+  }
+  recordPlanningDecision("war", outcome === "success");
+
+  // P0-1：从全局编队索引取编队成员，按 name 精确定位 Creep 对象标记 recycle。
+  // 只需遍历编队子集（通常 ≤ 十几条），而非全量 Game.creeps。
+  const warSquad = querySquad({ home: plan.sponsor, remoteTarget: plan.targetRoom });
+  for (const e of warSquad) {
+    // heal-tank 编队双角色同收（healer 独存无意义 — 奶车不作战）。
+    if (e.role === "attacker" || e.role === "healer") {
+      const creep = Game.creeps[e.name];
+      if (creep) creep.memory.recycle = true;
+    }
+  }
+  const queue = Memory.rooms[plan.sponsor]?.spawnQueue;
+  if (queue) {
+    removeRequestsByRole(queue, "attacker", plan.sponsor);
+    removeRequestsByRole(queue, "healer", plan.sponsor);
+  }
+  delete Memory.kernel!.warPlan;
+}
+
+/** 目标是否处于战争黑名单冷却期内。 */
+function isBlacklisted(roomName: string, tick: number): boolean {
+  const bl = Memory.kernel?.warBlacklist;
+  if (!bl) return false;
+  return (bl[roomName] ?? 0) > tick;
+}
+
+/** 战争失败目标黑名单：房名 → 冷却到期 tick。唯一写者：本系统。 */
+function blacklistWarTarget(roomName: string, until: number): void {
+  if (!Memory.kernel) Memory.kernel = {};
+  Memory.kernel.warBlacklist ??= {};
+  Memory.kernel.warBlacklist[roomName] = until;
+}
+
+/** 清理到期黑名单条目（每次运行调用，O(条目数)，防膨胀）。 */
+function pruneWarBlacklist(tick: number): void {
+  const bl = Memory.kernel?.warBlacklist;
+  if (!bl) return;
+  for (const roomName in bl) {
+    if (bl[roomName]! <= tick) delete bl[roomName];
+  }
+  if (Object.keys(bl).length === 0) delete Memory.kernel!.warBlacklist;
+}
+
+/** 在途核弹台账登记一次发射（落地到期 = 当前 tick + 引擎飞行时长 50k）。 */
+function recordNukeLaunch(targetRoom: string, tick: number): void {
+  if (!Memory.kernel) Memory.kernel = {};
+  Memory.kernel.nukesInFlight ??= {};
+  const entries = Memory.kernel.nukesInFlight[targetRoom] ?? [];
+  entries.push(tick + NUKE_LANDING_TIME);
+  Memory.kernel.nukesInFlight[targetRoom] = entries;
+}
+
+/** 清理已落地的在途核弹台账条目（每次运行调用，O(条目数)，防膨胀）。 */
+function pruneNukeLedger(tick: number): void {
+  const ledger = Memory.kernel?.nukesInFlight;
+  if (!ledger) return;
+  for (const target in ledger) {
+    const live = ledger[target]!.filter(landAt => landAt > tick);
+    if (live.length === 0) delete ledger[target];
+    else ledger[target] = live;
+  }
+  if (Object.keys(ledger).length === 0) delete Memory.kernel!.nukesInFlight;
+}
+
+/** 从内存采集战争目标候选（世界可见态 → 纯函数输入）。 */
+function buildTargetInput(tick: number): WarTargetInput {
+  // 占用集合：我方殖民地 / 远矿运营目标 / 当前扩张目标 — 不打自己正在用的房。
+  const occupied = new Set<string>();
+  for (const rn of Object.keys(Game.rooms)) {
+    if (Game.rooms[rn]?.controller?.my) occupied.add(rn);
+  }
+  for (const rn of Object.keys(Memory.rooms)) {
+    const ops = Memory.rooms[rn]?.remoteOps;
+    if (ops) {
+      for (const target of Object.keys(ops)) {
+        if (ops[target] && ops[target]!.state !== "abandoned") occupied.add(target);
+      }
+    }
+  }
+  const expansionTarget = Memory.kernel?.expansion?.target;
+  if (expansionTarget) occupied.add(expansionTarget);
+
+  // 我方用户名（首个自有房 controller owner）— 用于排除假冒目标。
+  let myUsername = "";
+  for (const rn of Object.keys(Game.rooms)) {
+    const room = Game.rooms[rn];
+    if (room?.controller?.my && room.controller.owner) {
+      myUsername = room.controller.owner.username;
+      break;
+    }
+  }
+
+  const candidates: WarTargetCandidate[] = [];
+  for (const e of queryRoomIntel()) {
+    // 授权硬门槛（fact 级 + 年龄上限）：stale/inferred 不作为战争目标来源，
+    // 其合法用途是触发两段式侦察。freshness 内但超威胁短窗的 intel 同样拒绝。
+    if (!intelActionUsable(e.subject, tick, CONFIG.war.targetFreshness)) continue;
+    candidates.push({
+      roomName: e.subject,
+      home: e.observedBy,
+      kind: e.payload.kind,
+      owner: e.payload.owner,
+      lastSeen: e.observedAt,
+      towers: e.payload.towers,
+      pathCost: e.payload.pathCost,
+      occupied: occupied.has(e.subject),
+    });
+  }
+
+  return {
+    tick,
+    myUsername,
+    candidates,
+    freshness: CONFIG.war.targetFreshness,
+    maxTowers: CONFIG.war.maxTowers,
+    blacklist: Memory.kernel?.warBlacklist,
+  };
+}

@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { roomPhase, systemPhase } from "../../../src/kernel/phase";
 import { assessEmergencyRebuild, isEmergencyTask } from "../../../src/domain/construction/queue";
-import { layoutPlannerSystem } from "../../../src/systems/layout-planner";
+import { layoutPlannerSystem } from "../../../src/systems/room/layout-planner";
 import { CONFIG } from "../../../src/config";
 import { packPos } from "../../../src/domain/layout/types";
 import {

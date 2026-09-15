@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProtectedLayoutPositions,
   isMinCutPositionBuildable,
-} from "../../../src/systems/defense-planner";
+} from "../../../src/systems/military/defense-planner";
 import { COMPACT_CORE_V2 } from "../../../src/domain/layout/templates/compact-core-v2";
 
 /**

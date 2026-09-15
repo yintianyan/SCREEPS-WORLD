@@ -16,7 +16,7 @@ import {
   clearDismantlePlan,
   markLinkConstrained,
   clearDeadAssetLink,
-} from "../../../src/systems/link-system";
+} from "../../../src/systems/room/link-system";
 import { globalCache } from "../../../src/kernel/global-cache";
 import type { DismantlePlan } from "../../../src/kernel/global-cache";
 import { resetGlobals } from "../../support/factories";

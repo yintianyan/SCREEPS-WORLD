@@ -1,6 +1,6 @@
 /** Phase R2 验收加固 — 多房间建造公平性单元测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { constructionManagerSystem } from "../../../src/systems/construction-manager";
+import { constructionManagerSystem } from "../../../src/systems/room/construction-manager";
 import { resetGlobals } from "../../support/factories";
 import type { RoomSnapshot, TickContext } from "../../../src/kernel/contracts";
 

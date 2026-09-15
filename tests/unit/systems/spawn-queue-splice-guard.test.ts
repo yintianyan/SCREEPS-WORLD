@@ -45,7 +45,7 @@ function stripComments(source: string): string {
  * 故不在白名单内——若未来该文件开始读 Memory，则需在白名单补登记
  * 或重构为不读 Memory 的形态（设计上不应读）。
  */
-const ALLOWED_COMBINATION_FILES = new Set<string>(["systems/spawn-manager.ts"]);
+const ALLOWED_COMBINATION_FILES = new Set<string>(["systems/room/spawn-manager.ts"]);
 
 describe("P1-H 静态守卫 — spawnQueue 直 splice 仅在 spawn-manager", () => {
   it("src 全域无外模块同时引用 .spawnQueue 与调用 .splice(", () => {
@@ -77,7 +77,7 @@ describe("P1-H 静态守卫 — spawnQueue 直 splice 仅在 spawn-manager", () 
 
   it("白名单 spawn-manager 本身仍同时包含两者（守卫有效性自检）", () => {
     // 防止白名单条目被误删导致守卫恒真。
-    const file = join(SRC_DIR, "systems", "spawn-manager.ts");
+    const file = join(SRC_DIR, "systems", "room", "spawn-manager.ts");
     const code = stripComments(readFileSync(file, "utf-8"));
     expect(/\.spawnQueue\b/.test(code), "spawn-manager 应包含 .spawnQueue 引用").toBe(true);
     expect(/\.splice\s*\(/.test(code), "spawn-manager 应包含 .splice( 调用").toBe(true);

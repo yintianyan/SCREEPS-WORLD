@@ -1,6 +1,6 @@
 /** Power Creep Manager 系统测试 — GPL 消费 / 驻留分配 / 孵化 / 运营执行。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { powerCreepManagerSystem } from "../../../src/systems/power-creep-manager";
+import { powerCreepManagerSystem } from "../../../src/systems/empire/power-creep-manager";
 import { mockBudget, mockSnapshot, registerObject, resetGlobals } from "../../support/factories";
 
 /** 造一个 PowerCreep mock。 */

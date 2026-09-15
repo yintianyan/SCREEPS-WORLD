@@ -1,6 +1,6 @@
 /** computeControllerLinkTarget — 需求驱动的 controller link 供能水位。 */
 import { describe, expect, it } from "vitest";
-import { computeControllerLinkTarget } from "../../../src/systems/link-system";
+import { computeControllerLinkTarget } from "../../../src/systems/room/link-system";
 import { CONFIG } from "../../../src/config";
 
 const ctrl = (ttd: number) => ({ my: true, ticksToDowngrade: ttd }) as any;

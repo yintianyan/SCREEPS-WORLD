@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   computeSiteKeepRooms,
   cleanOrphanConstructionSites,
-} from "../../../src/systems/construction-manager";
+} from "../../../src/systems/room/construction-manager";
 import { resetGlobals } from "../../support/factories";
 
 beforeEach(() => {

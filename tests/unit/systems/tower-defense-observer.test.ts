@@ -1,6 +1,6 @@
 /** 塔防侦察兵修复测试（R7c）— 满能量塔对贴身侦察兵不开火的根因与修复。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { towerDefenseSystem } from "../../../src/systems/tower-defense";
+import { towerDefenseSystem } from "../../../src/systems/military/tower-defense";
 import {
   mockContext,
   mockPos,

@@ -1,6 +1,6 @@
 /** trySpawn 消费逻辑测试 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { trySpawn } from "../../../src/systems/spawn-manager";
+import { trySpawn } from "../../../src/systems/room/spawn-manager";
 import { CONFIG } from "../../../src/config";
 import { mockPos, mockSnapshot, resetGlobals } from "../../support/factories";
 

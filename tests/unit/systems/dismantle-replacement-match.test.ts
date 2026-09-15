@@ -1,6 +1,6 @@
 /** P1-4 findReplacementForDeadLink 单测（staged link 拆改）。 */
 import { describe, expect, it, beforeEach } from "vitest";
-import { findReplacementForDeadLink } from "../../../src/systems/layout-planner";
+import { findReplacementForDeadLink } from "../../../src/systems/room/layout-planner";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 import { resetGlobals } from "../../support/factories";
 

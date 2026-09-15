@@ -1,6 +1,6 @@
 /** A3 — tower-defense 维修权收窄测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { towerDefenseSystem } from "../../../src/systems/tower-defense";
+import { towerDefenseSystem } from "../../../src/systems/military/tower-defense";
 import {
   mockContext,
   mockSnapshot,

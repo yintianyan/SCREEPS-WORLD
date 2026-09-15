@@ -1,6 +1,6 @@
 /** assignment-service 紧急抢占接线测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { assignmentSystem } from "../../../src/systems/assignment-system";
+import { assignmentSystem } from "../../../src/systems/room/assignment-system";
 import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../support/factories";
 
 function upgradeAssignment(tick: number) {

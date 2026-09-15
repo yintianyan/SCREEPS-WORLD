@@ -1,6 +1,6 @@
 /** safe mode 保底判据测试 — 消耗性资源不因「打不出火力 + 近核」轻动用。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { towerDefenseSystem } from "../../../src/systems/tower-defense";
+import { towerDefenseSystem } from "../../../src/systems/military/tower-defense";
 import {
   mockContext,
   mockSnapshot,

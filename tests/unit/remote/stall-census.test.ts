@@ -1,6 +1,6 @@
 /** v33 远矿空转止损 + 入口封死废弃测试（remote-mining-manager）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
+import { remoteMiningManagerSystem } from "../../../src/systems/remote/remote-mining-manager";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { CONFIG } from "../../../src/config";

@@ -1,8 +1,8 @@
 /** 工业链接线测试（TD-023 ~ TD-028）。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { supplyLabs } from "../../../src/creeps/engine/actions/industry";
-import { computeLabDemands } from "../../../src/systems/lab-system";
-import { reclaimExpeditionCreeps } from "../../../src/systems/expansion-manager";
+import { computeLabDemands } from "../../../src/systems/room/lab-system";
+import { reclaimExpeditionCreeps } from "../../../src/systems/empire/expansion-manager";
 import { syncTaskStates } from "../../../src/domain/construction/queue";
 import { syncSquadIndex } from "../../support/factories";
 import type { LabPlan } from "../../../src/domain/industry/types";

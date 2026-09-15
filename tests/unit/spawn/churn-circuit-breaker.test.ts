@@ -4,7 +4,7 @@ import {
   computeQuarantineTtl,
   recordChurn,
   checkChurnCircuitBreaker,
-} from "../../../src/systems/spawn-manager";
+} from "../../../src/systems/room/spawn-manager";
 import { cleanQueue, spawnKey } from "../../../src/domain/spawn/queue";
 import { evaluateDemand } from "../../../src/domain/spawn/demand";
 import { CONFIG } from "../../../src/config";

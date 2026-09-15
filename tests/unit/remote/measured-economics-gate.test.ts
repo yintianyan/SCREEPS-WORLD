@@ -1,6 +1,6 @@
 /** 实测经济门测试（P3）— 用真实账本净营收收缩亏损远矿线。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { enforceMeasuredEconomics } from "../../../src/systems/remote-mining-manager";
+import { enforceMeasuredEconomics } from "../../../src/systems/remote/remote-mining-manager";
 import { setRemoteOpLedger } from "../../../src/kernel/global-cache";
 import { emptyOpLedger } from "../../../src/domain/remote/op-ledger";
 import { selectRemoteTargets } from "../../../src/domain/remote/targeting";

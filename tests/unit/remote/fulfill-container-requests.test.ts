@@ -1,6 +1,6 @@
 /** P0-A 单测 — remote-mining-manager.fulfillContainerRequests。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fulfillContainerRequests } from "../../../src/systems/remote-mining-manager";
+import { fulfillContainerRequests } from "../../../src/systems/remote/remote-mining-manager";
 import { getTickSiteCounters } from "../../../src/systems/site-quota";
 import { resetGlobals, mockContext, mockSource, syncSquadIndex } from "../../support/factories";
 import { CONFIG } from "../../../src/config";

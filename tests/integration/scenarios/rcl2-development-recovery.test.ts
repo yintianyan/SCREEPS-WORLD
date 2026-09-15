@@ -333,7 +333,7 @@ describe("Phase R2 — RCL2 建设闭环", () => {
   // ─── 场景 6：site 创建失败路径状态机 ─────────────────────
 
   it("场景6: ERR_RCL_NOT_ENOUGH / ERR_INVALID_TARGET / ERR_FULL 走正确状态机", async () => {
-    const { tryCreateSite } = await import("../../../src/systems/construction-manager");
+    const { tryCreateSite } = await import("../../../src/systems/room/construction-manager");
     const { assessEmergencyRebuild } = await import("../../../src/domain/construction/queue");
 
     const makeSnapshot = () =>

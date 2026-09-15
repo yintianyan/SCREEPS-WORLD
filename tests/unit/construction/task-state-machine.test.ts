@@ -1,6 +1,6 @@
 /** Phase R2 验收加固 — BuildTask 状态机完备性单元测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { tryCreateSite } from "../../../src/systems/construction-manager";
+import { tryCreateSite } from "../../../src/systems/room/construction-manager";
 import {
   syncTaskStates,
   cleanTasks,

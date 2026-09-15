@@ -1,6 +1,6 @@
 /** 敌方 reservation 运行时退出接线测试（组①-1c）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
+import { remoteMiningManagerSystem } from "../../../src/systems/remote/remote-mining-manager";
 import {
   mockContext,
   mockCreep,

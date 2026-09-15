@@ -1,6 +1,6 @@
 /** A5.3 Spawn 集成测试 — WarPlan → a5ForceReq → war-planner 消费。 */
 import { describe, expect, it } from "vitest";
-import { submitSquadRequest } from "../../../src/systems/war-planner";
+import { submitSquadRequest } from "../../../src/systems/military/war-planner";
 import { resetGlobals } from "../../support/factories";
 
 type Queue = NonNullable<RoomMemory["spawnQueue"]>;

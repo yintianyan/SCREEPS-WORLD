@@ -1,7 +1,7 @@
 /** spawn 请求撤销通道接线测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { CONFIG } from "../../../src/config";
-import { spawnManagerSystem } from "../../../src/systems/spawn-manager";
+import { spawnManagerSystem } from "../../../src/systems/room/spawn-manager";
 import { removeRequestsByRole } from "../../../src/domain/spawn/queue";
 import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 

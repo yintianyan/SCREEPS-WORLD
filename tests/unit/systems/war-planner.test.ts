@@ -1,6 +1,6 @@
 /** War Planner 系统测试（R3 战时闭环 + R4 自治升级）。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { demobilize, warPlannerSystem } from "../../../src/systems/war-planner";
+import { demobilize, warPlannerSystem } from "../../../src/systems/military/war-planner";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";

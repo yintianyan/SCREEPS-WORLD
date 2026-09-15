@@ -44,7 +44,7 @@ function importsOf(file: string): string[] {
 
 describe("A5.3.1 GAP-2: Legacy import 限制", () => {
   it("selectWarTarget 只能被 war-planner.ts import", () => {
-    const allowed = ["systems/war-planner.ts"];
+    const allowed = ["systems/military/war-planner.ts"];
     const bad: string[] = [];
     for (const f of ALL_FILES) {
       const src = readFileSync(f, "utf8");
@@ -82,7 +82,7 @@ describe("A5.3.1 GAP-2: Legacy import 限制", () => {
   });
 
   it("decideSquadSize 只能被 war-planner.ts import", () => {
-    const allowed = ["systems/war-planner.ts"];
+    const allowed = ["systems/military/war-planner.ts"];
     const bad: string[] = [];
     for (const f of ALL_FILES) {
       const src = readFileSync(f, "utf8");
@@ -120,7 +120,7 @@ describe("A5.3.1 GAP-2: 新 system 禁止 Legacy 路径", () => {
   it("systems/ 下只有 war-planner.ts 可以 import domain/war/planning", () => {
     // power-farm-manager.ts import decideHealerCount from domain/war/planning —
     // 这是已有复用，标记为 LEGACY_COMPATIBILITY_ONLY 允许
-    const allowed = ["systems/war-planner.ts", "systems/power-farm-manager.ts"];
+    const allowed = ["systems/military/war-planner.ts", "systems/military/power-farm-manager.ts"];
     const bad: string[] = [];
     for (const f of ALL_FILES) {
       const rel = relative(SRC, f);
@@ -211,7 +211,7 @@ describe("A5.3.1: spawnCreep 边界", () => {
 
 describe("A5.3.1 GAP-2: LEGACY_COMPATIBILITY_ONLY 标记", () => {
   it("war-planner.ts 中 selectWarTarget 调用处有 LEGACY 标记", () => {
-    const f = resolve(SRC, "systems/war-planner.ts");
+    const f = resolve(SRC, "systems/military/war-planner.ts");
     const src = readFileSync(f, "utf8");
     const lines = src.split(NL);
     let foundLegacyMark = false;
@@ -240,7 +240,7 @@ describe("A5.3.1 GAP-2: LEGACY_COMPATIBILITY_ONLY 标记", () => {
   });
 
   it("war-planner.ts 中 decideSquadSize 调用处有 LEGACY 标记", () => {
-    const f = resolve(SRC, "systems/war-planner.ts");
+    const f = resolve(SRC, "systems/military/war-planner.ts");
     const src = readFileSync(f, "utf8");
     const lines = src.split(NL);
     let foundLegacyMark = false;

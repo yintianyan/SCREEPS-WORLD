@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   developmentGate,
   isRuntimeDefenseWallTask,
-} from "../../../src/systems/construction-manager";
+} from "../../../src/systems/room/construction-manager";
 import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 
 beforeEach(() => {

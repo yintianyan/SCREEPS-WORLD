@@ -1,6 +1,6 @@
 /** D-FINDING-04: 多房远矿同时失守级联故障测试 — 验证多 remoteOps 同时失效时系统不崩溃。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
+import { remoteMiningManagerSystem } from "../../../src/systems/remote/remote-mining-manager";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";

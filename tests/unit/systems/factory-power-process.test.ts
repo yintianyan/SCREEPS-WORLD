@@ -1,6 +1,6 @@
 /** factory-manager processPower 接线测试 — 调度门禁（domain/economy/power-processing） */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { factoryManagerSystem } from "../../../src/systems/factory-manager";
+import { factoryManagerSystem } from "../../../src/systems/room/factory-manager";
 import { CONFIG } from "../../../src/config";
 import { mockBudget, mockSnapshot, resetGlobals } from "../../support/factories";
 

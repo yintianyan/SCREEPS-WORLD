@@ -1,6 +1,6 @@
 /** Tuning Engine 集成测试 — 测试 run() 完整链路。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { tuningEngineSystem } from "../../../src/systems/tuning-engine";
+import { tuningEngineSystem } from "../../../src/systems/empire/tuning-engine";
 import { CONFIG } from "../../../src/config";
 import {
   resetGlobals,

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { roomStateSystem } from "../../../src/systems/room-state";
+import { roomStateSystem } from "../../../src/systems/room/room-state";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 import { mockCapacityStore, mockRoomStateCtx } from "../../support/factories";
 

@@ -9,7 +9,7 @@ import {
   markLinkConstrained,
   clearLinkConstrained,
   LINK_CONSTRAINED_RETRY_INTERVAL,
-} from "../../../src/systems/link-system";
+} from "../../../src/systems/room/link-system";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { mockPos, resetGlobals } from "../../support/factories";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";

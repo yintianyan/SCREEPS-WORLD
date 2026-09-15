@@ -1,6 +1,6 @@
 /** 无害侦察观测测试（R7c）— room-state 记录「有人盯防」信号。 */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { roomStateSystem } from "../../../src/systems/room-state";
+import { roomStateSystem } from "../../../src/systems/room/room-state";
 import type { RoomSnapshot } from "../../../src/kernel/contracts";
 import { mockPos, mockRoomStateCtx } from "../../support/factories";
 

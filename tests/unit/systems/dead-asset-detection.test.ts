@@ -4,7 +4,7 @@ import {
   computeDeadAssetSince,
   getDeadAssetLinks,
   clearDeadAssetLink,
-} from "../../../src/systems/link-system";
+} from "../../../src/systems/room/link-system";
 import { globalCache } from "../../../src/kernel/global-cache";
 import type { LinkInfo } from "../../../src/domain/economy/links";
 import { resetGlobals } from "../../support/factories";

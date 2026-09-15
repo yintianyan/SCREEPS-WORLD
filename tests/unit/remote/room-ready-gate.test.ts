@@ -1,6 +1,6 @@
 /** 远矿逐房「新开」就绪门测试（Phase 1b）。 */
 import { describe, expect, it } from "vitest";
-import { roomReadyForNewRemote } from "../../../src/systems/remote-mining-manager";
+import { roomReadyForNewRemote } from "../../../src/systems/remote/remote-mining-manager";
 import { CONFIG } from "../../../src/config";
 import { mockSnapshot, mockStore } from "../../support/factories";
 

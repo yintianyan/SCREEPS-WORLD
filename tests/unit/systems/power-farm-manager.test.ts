@@ -1,6 +1,6 @@
 /** Power Farm Manager 系统生命周期测试（多任务并行版）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { powerFarmManagerSystem } from "../../../src/systems/power-farm-manager";
+import { powerFarmManagerSystem } from "../../../src/systems/military/power-farm-manager";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { CONFIG } from "../../../src/config";

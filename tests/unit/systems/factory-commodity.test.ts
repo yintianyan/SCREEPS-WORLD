@@ -1,6 +1,6 @@
 /** Factory Manager commodity 集成测试（审计缺口 6 执行层）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { factoryManagerSystem } from "../../../src/systems/factory-manager";
+import { factoryManagerSystem } from "../../../src/systems/room/factory-manager";
 import { mockBudget, mockSnapshot, resetGlobals } from "../../support/factories";
 
 /** 多资源 store mock（键值映射 + 容量方法）。 */

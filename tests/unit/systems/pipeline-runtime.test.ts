@@ -1,6 +1,6 @@
 /** Pipeline Runtime Tests — Phase 6 验证 pipeline 顺序和错误隔离。 */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { tacticalRuntimePipelineSystem } from "../../../src/systems/tactical-runtime-pipeline";
+import { tacticalRuntimePipelineSystem } from "../../../src/systems/military/tactical-runtime-pipeline";
 
 // ─── Mock ─────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ const squadMovementRun = vi.fn();
 const tacticalEngagementRun = vi.fn();
 const combatMicroRun = vi.fn();
 
-vi.mock("../../../src/systems/tactical-runtime-system", () => ({
+vi.mock("../../../src/systems/military/tactical-runtime-system", () => ({
   tacticalRuntimeSystem: {
     name: "tactical-runtime",
     priority: 2,
@@ -37,7 +37,7 @@ vi.mock("../../../src/systems/tactical-runtime-system", () => ({
     run: (ctx: unknown) => tacticalRuntimeRun(ctx),
   },
 }));
-vi.mock("../../../src/systems/squad-movement-runtime", () => ({
+vi.mock("../../../src/systems/military/squad-movement-runtime", () => ({
   squadMovementSystem: {
     name: "squad-movement",
     priority: 2,
@@ -45,7 +45,7 @@ vi.mock("../../../src/systems/squad-movement-runtime", () => ({
     run: (ctx: unknown) => squadMovementRun(ctx),
   },
 }));
-vi.mock("../../../src/systems/tactical-engagement-runtime", () => ({
+vi.mock("../../../src/systems/military/tactical-engagement-runtime", () => ({
   tacticalEngagementSystem: {
     name: "tactical-engagement",
     priority: 2,
@@ -53,7 +53,7 @@ vi.mock("../../../src/systems/tactical-engagement-runtime", () => ({
     run: (ctx: unknown) => tacticalEngagementRun(ctx),
   },
 }));
-vi.mock("../../../src/systems/combat-micro-runtime", () => ({
+vi.mock("../../../src/systems/military/combat-micro-runtime", () => ({
   combatMicroSystem: {
     name: "combat-micro",
     priority: 2,

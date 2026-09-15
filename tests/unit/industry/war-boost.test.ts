@@ -7,7 +7,7 @@ import {
   evaluateBoostRequests,
   isWithinBoostWindow,
 } from "../../../src/domain/industry/boost";
-import { labSystem } from "../../../src/systems/lab-system";
+import { labSystem } from "../../../src/systems/room/lab-system";
 import { mockContext, mockSnapshot, registerObject, resetGlobals } from "../../support/factories";
 
 const g = globalThis as Record<string, any>;

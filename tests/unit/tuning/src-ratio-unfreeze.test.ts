@@ -1,6 +1,6 @@
 /** P1-2 srcRatio 信号 + 危机解锁冻结 — 单元测试。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { tuningEngineSystem } from "../../../src/systems/tuning-engine";
+import { tuningEngineSystem } from "../../../src/systems/empire/tuning-engine";
 import { CONFIG } from "../../../src/config";
 import {
   resetGlobals,

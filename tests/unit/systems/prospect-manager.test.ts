@@ -1,6 +1,6 @@
 /** Prospect Manager 系统测试（R6b 主动情报 — 任务生命周期 + 止损链）。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { prospectManagerSystem } from "../../../src/systems/prospect-manager";
+import { prospectManagerSystem } from "../../../src/systems/empire/prospect-manager";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { mockBudget, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";

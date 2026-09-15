@@ -1,0 +1,180 @@
+/** Factory Manager */
+import { CONFIG } from "../../config";
+import { shouldProcessPower } from "../../domain/economy/power-processing";
+import { shouldDecompressBattery } from "../../domain/economy/battery-decompression";
+import {
+  missingComponents,
+  selectCommodityTarget,
+  type CommodityRecipe,
+  type StockView,
+} from "../../domain/industry/commodity";
+import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/contracts";
+import { globalCache, publishProcurementDemands } from "../../kernel/global-cache";
+import type { ProcurementDemand } from "../../kernel/global-cache";
+import { collectFullInventory } from "../../domain/industry/inventory";
+import { expandCommodityDemands } from "../../domain/industry/procurement";
+
+export const factoryManagerSystem: System = {
+  name: "factory-manager",
+  priority: 3 as Priority,
+  interval: CONFIG.factory.interval,
+  run(ctx: TickContext): void {
+    for (const snapshot of ctx.snapshots()) {
+      const powerSpawn = snapshot.powerSpawn;
+      if (powerSpawn && typeof powerSpawn.processPower === "function") {
+        if (
+          shouldProcessPower({
+            powerStored: powerSpawn.store.getUsedCapacity(RESOURCE_POWER),
+            energyStored: powerSpawn.store.getUsedCapacity(RESOURCE_ENERGY),
+            storageEnergy: snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY),
+            energyFloor: CONFIG.factory.processEnergyFloor,
+            warActive: Memory.kernel?.strategy?.posture === "war",
+          })
+        ) {
+          powerSpawn.processPower();
+        }
+      }
+
+      const factory = snapshot.factory;
+      if (!factory) continue;
+      // 测试/私服环境的 factory mock 可能无 produce — 安全跳过。
+      if (typeof factory.produce !== "function") continue;
+      if (factory.cooldown > 0) continue;
+
+      // ── battery 解压回能（危机优先于一切 factory 生产）──
+      // storage 能量低于危机线时，把 factory 内 battery 解压为能量。
+      // 比市场买入更优先：不消耗 credits、不付运费、无市场依赖。
+      // 解压产出能量在 factory 内，由 distributor 搬到 storage 供 spawn 使用。
+      if (tryDecompressBattery(snapshot, factory)) continue;
+
+      // ── commodity 升级链（审计缺口 6）──
+      // battery 之外的常规生产：非满仓也产（commodity 是正收益升级）。
+      tryProduceCommodity(snapshot, factory, ctx);
+
+      // ── battery 压缩（满仓止损，语义不变）──
+      // 仅在 storage 满仓（能量正在源头被浪费）时压缩 — 正常水位下
+      // 能量应流向 upgrade/build，压缩的 1/6 折损划不来。
+      if (Memory.rooms[snapshot.roomName]?.storageNearFull !== true) continue;
+      if (factory.store.getUsedCapacity(RESOURCE_ENERGY) < CONFIG.factory.batchEnergy) continue;
+      factory.produce(RESOURCE_BATTERY);
+    }
+  },
+};
+
+/**
+ * commodity 生产：选目标（梯度高者 + 原料充足）→ 缓存目标（distributor
+ * 补料锚点）→ factory 内原料齐时 produce。
+ * 配方源：引擎 COMMODITIES 常量（私服/旧 mock 未定义时静默跳过 —
+ * 与 FIND_NUKES 等引擎常量同防御口径）。battery/energy 之外的产出
+ * 即 commodity（能量是解压回退，battery 走满仓链）。
+ */
+function tryProduceCommodity(
+  snapshot: RoomSnapshot,
+  factory: StructureFactory,
+  ctx: TickContext,
+): void {
+  const recipes = collectRecipes(factory.level ?? 0);
+  if (recipes.length === 0) return;
+
+  const g = globalCache();
+  if (!g.factoryTargets) g.factoryTargets = {};
+
+  const factoryStoreView = toStockView(factory.store as unknown as Record<string, number>);
+  const storageStoreView = snapshot.storage
+    ? toStockView(snapshot.storage.store as unknown as Record<string, number>)
+    : {};
+
+  const target = selectCommodityTarget(
+    factoryStoreView,
+    storageStoreView,
+    factory.level ?? 0,
+    recipes,
+    CONFIG.factory.commodityEnergyReserve,
+  );
+  // 目标缓存：distributor 的 stockFactoryComponents 消费（undefined 时清锚）。
+  if (target) g.factoryTargets[snapshot.roomName] = target.resourceType;
+  else delete g.factoryTargets[snapshot.roomName];
+  if (!target) return;
+
+  // ── 阶段 1：发布 commodity 原料缺口需求 ──
+  // V1 边界（登记取舍）不变：只为凑料搬 storage 存量，不主动市场买入 —
+  // 但发布需求让 terminal-manager 知道“缺什么”，当价格合适时可买入。
+  // 需求有效期 = market.interval(200) + buffer(50) = 250 tick。
+  {
+    const inventory = collectFullInventory(snapshot);
+    const demands = expandCommodityDemands(
+      target.resourceType,
+      target.components,
+      inventory,
+      ctx.tick,
+      CONFIG.market.interval + 50,
+    );
+    if (demands.length > 0) {
+      // 合并语义：与 lab-system 的同房需求并存，不再整表覆写
+      // （旧实现 P3 后跑覆盖 P1 已发布的 lab 基础矿需求，信号最坏丢失 ~200t）。
+      publishProcurementDemands(snapshot.roomName, demands as ProcurementDemand[], ctx.tick);
+    }
+  }
+
+  // factory 内原料齐 → 生产（缺料由 distributor 补，下轮再产）。
+  const missing = missingComponents(factoryStoreView, target);
+  if (Object.keys(missing).length > 0) return;
+  factory.produce(target.resourceType as CommodityConstant);
+}
+
+/** 从引擎 COMMODITIES 裁剪配方表（梯度降序：T3 → T1；无 components 的跳过）。 */
+function collectRecipes(factoryLevel: number): CommodityRecipe[] {
+  const table = (
+    globalThis as {
+      COMMODITIES?: Record<string, { level?: number; components?: Record<string, number> }>;
+    }
+  ).COMMODITIES;
+  if (!table) return [];
+  const recipes: CommodityRecipe[] = [];
+  for (const [resourceType, def] of Object.entries(table)) {
+    if (!def?.components) continue; // 不可生产（原料类/能量解压等）
+    // battery 走满仓压缩链，commodity 链不重复处理。
+    if (resourceType === RESOURCE_BATTERY) continue;
+    if ((def.level ?? 0) > factoryLevel) continue;
+    recipes.push({ resourceType, level: def.level ?? 0, components: def.components });
+  }
+  // 梯度降序（level 高 = 高级 commodity 优先）。
+  recipes.sort((a, b) => b.level - a.level);
+  return recipes;
+}
+
+/** store 对象 → 纯视图（过滤方法键，仅数值项）。 */
+function toStockView(store: Record<string, number>): StockView {
+  const view: Record<string, number> = {};
+  for (const [k, v] of Object.entries(store)) {
+    if (typeof v === "number" && v > 0) view[k] = v;
+  }
+  return view;
+}
+
+/**
+ * battery 解压回能：storage 能量危机时，把 factory 内的 battery 逆向生产为能量。
+
+ * 官方配方（COMMODITIES[RESOURCE_ENERGY]）：5 battery → 50 energy，cooldown 10。
+ * 产出能量留在 factory.store 内 — distributor 需将其搬到 storage 供 spawn 使用。
+ * 与 reclaimFactoryOutput 配合：distributor 在 crisis 时优先搬 factory 能量到 storage。
+
+ * 返回 true = 已执行 produce（消耗 factory 本 tick 的 produce 窗口，跳过 commodity/压缩）。
+ * 返回 false = 条件不满足，继续后续 commodity/压缩链。
+ */
+function tryDecompressBattery(snapshot: RoomSnapshot, factory: StructureFactory): boolean {
+  const batteryInFactory = factory.store.getUsedCapacity(RESOURCE_BATTERY) ?? 0;
+  const storageEnergy = snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY);
+  if (
+    !shouldDecompressBattery({
+      storageEnergy,
+      batteryInFactory,
+      factoryCooldown: factory.cooldown,
+      energyCrisisFloor: CONFIG.energy.energyBuyFloor,
+    })
+  )
+    return false;
+
+  factory.produce(RESOURCE_ENERGY);
+  return true;
+}

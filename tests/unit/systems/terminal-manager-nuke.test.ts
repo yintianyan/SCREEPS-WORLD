@@ -1,6 +1,6 @@
 /** Terminal Manager nuke 资产抢救链测试（审计缺口 3）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { terminalManagerSystem } from "../../../src/systems/terminal-manager";
+import { terminalManagerSystem } from "../../../src/systems/trade/terminal-manager";
 import type { CpuTier } from "../../../src/kernel/contracts";
 import { mockBudget, mockSnapshot, resetGlobals } from "../../support/factories";
 

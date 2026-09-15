@@ -1,6 +1,6 @@
 /** 远矿威胁探测 body-aware 口径测试（组④ / F-2）。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { collectRemoteThreats } from "../../../src/systems/remote-mining-manager";
+import { collectRemoteThreats } from "../../../src/systems/remote/remote-mining-manager";
 import { resetGlobals } from "../../support/factories";
 
 const targetRoom = "W2N1";

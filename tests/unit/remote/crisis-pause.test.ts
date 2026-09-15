@@ -1,6 +1,6 @@
 /** P0-2 远矿 crisis 暂停测试 — 主房危机期停止远矿 spawn 推送。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
+import { remoteMiningManagerSystem } from "../../../src/systems/remote/remote-mining-manager";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { CONFIG } from "../../../src/config";

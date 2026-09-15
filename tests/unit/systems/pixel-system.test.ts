@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { pixelSystem } from "../../../src/systems/pixel-system";
+import { pixelSystem } from "../../../src/systems/empire/pixel-system";
 import { CONFIG } from "../../../src/config";
 import type { TickContext, CpuTier } from "../../../src/kernel/contracts";
 

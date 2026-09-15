@@ -41,7 +41,7 @@ describe("defense-planner — buildQueue 积压防护", () => {
 
   it("addCoreRampartCoverage 设置 queuedAt", async () => {
     // 直接验证 defense-planner 模块的入队行为
-    const { defensePlannerSystem } = await import("../../../src/systems/defense-planner");
+    const { defensePlannerSystem } = await import("../../../src/systems/military/defense-planner");
     const snapshot = makeSnapshot(7);
     (globalThis as any).Game.rooms = {
       W7N4: {
@@ -75,7 +75,7 @@ describe("defense-planner — buildQueue 积压防护", () => {
   });
 
   it("addCoreRampartCoverage 遵守 maxBackgroundQueuedPerRoom 上限", async () => {
-    const { defensePlannerSystem } = await import("../../../src/systems/defense-planner");
+    const { defensePlannerSystem } = await import("../../../src/systems/military/defense-planner");
     const snapshot = makeSnapshot(7);
     (globalThis as any).Game.rooms = {
       W7N4: {

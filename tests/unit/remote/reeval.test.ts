@@ -1,6 +1,6 @@
 /** 现役 op 周期经济重估测试（组③ / A-3 + B-6）。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { remoteMiningManagerSystem } from "../../../src/systems/remote-mining-manager";
+import { remoteMiningManagerSystem } from "../../../src/systems/remote/remote-mining-manager";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { createEmptyPlan } from "../../../src/domain/logistics/transport-plan";

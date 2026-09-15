@@ -1,6 +1,6 @@
 /** 扩张台账事件测试（R7a ExpansionOutcome）。 */
 import { beforeEach, describe, expect, it } from "vitest";
-import { expansionManagerSystem } from "../../../src/systems/expansion-manager";
+import { expansionManagerSystem } from "../../../src/systems/empire/expansion-manager";
 import { mockBudget, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
 
