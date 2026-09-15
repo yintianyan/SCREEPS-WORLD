@@ -48,6 +48,9 @@ describe("P1-G 静态守卫 — dangerUntil 写入点仅存在于 remote-mining-
       // 迁移文件允许写（搬运/畸形自愈逻辑）。
       if (rel === "kernel/memory.ts") continue;
       if (rel.startsWith("kernel/migrations/")) continue;
+      // op-lifecycle 是 remote-mining-manager 拆分出的实测经济止损模块，
+      // dangerUntil 冷却写入随拆分迁入（同一架构单元）。
+      if (rel === "systems/remote/op-lifecycle.ts") continue;
 
       const code = stripComments(readFileSync(file, "utf-8"));
       // 匹配 .dangerUntil = 的赋值（排除 === 和 !== 比较）。

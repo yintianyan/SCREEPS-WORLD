@@ -390,6 +390,16 @@ describe("R11 systems 间值导入审计", () => {
     "systems/expansion/state-machine.ts:systems/expansion/uoem-events.ts",
     "systems/expansion/plan-adapter.ts:systems/intelligence.ts",
     "systems/expansion/plan-adapter.ts:systems/expansion/uoem-events.ts",
+    // remote-mining-manager 拆分出的子模块：manager 编排四块，
+    // road-planner 复用账本结构成本（op-lifecycle）与 dismantle 回收（creep-recycle）
+    // 及共享账本 site-quota
+    "systems/remote-mining-manager.ts:systems/remote/op-lifecycle.ts",
+    "systems/remote-mining-manager.ts:systems/remote/creep-recycle.ts",
+    "systems/remote-mining-manager.ts:systems/remote/blocker-intel.ts",
+    "systems/remote-mining-manager.ts:systems/remote/road-planner.ts",
+    "systems/remote/road-planner.ts:systems/remote/op-lifecycle.ts",
+    "systems/remote/road-planner.ts:systems/remote/creep-recycle.ts",
+    "systems/remote/road-planner.ts:systems/site-quota.ts",
   ]);
 
   it("系统间值导入必须在白名单中", () => {
