@@ -374,6 +374,11 @@ describe("R11 systems 间值导入审计", () => {
     "systems/tactical-engagement-runtime.ts:systems/squad-movement-runtime.ts",
     "systems/combat-micro-runtime.ts:systems/tactical-engagement-runtime.ts",
     "systems/combat-micro-runtime.ts:systems/squad-movement-runtime.ts",
+    // terminal-manager 拆分出的子模块：manager 编排 market/selfaid，
+    // selfaid 复用 market 的库存查询（collectMineralInventory）
+    "systems/terminal-manager.ts:systems/terminal-market.ts",
+    "systems/terminal-manager.ts:systems/terminal-selfaid.ts",
+    "systems/terminal-selfaid.ts:systems/terminal-market.ts",
   ]);
 
   it("系统间值导入必须在白名单中", () => {
