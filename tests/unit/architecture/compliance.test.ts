@@ -379,9 +379,17 @@ describe("R11 systems 间值导入审计", () => {
     "systems/terminal-manager.ts:systems/terminal-market.ts",
     "systems/terminal-manager.ts:systems/terminal-selfaid.ts",
     "systems/terminal-selfaid.ts:systems/terminal-market.ts",
-    // expansion-manager 拆分出的子模块：manager 编排 UOEM 事件与自举车道
+    // expansion-manager 拆分出的子模块：manager 编排 Plan 消费/状态机/UOEM/自举车道
     "systems/expansion-manager.ts:systems/expansion/uoem-events.ts",
     "systems/expansion-manager.ts:systems/expansion/bootstrap-lane.ts",
+    "systems/expansion-manager.ts:systems/expansion/plan-adapter.ts",
+    "systems/expansion-manager.ts:systems/expansion/state-machine.ts",
+    // state-machine 编排 plan-adapter（预算查询）与 uoem-events（终态出口），
+    // plan-adapter 消费 IntelQuery（公开查询函数）
+    "systems/expansion/state-machine.ts:systems/expansion/plan-adapter.ts",
+    "systems/expansion/state-machine.ts:systems/expansion/uoem-events.ts",
+    "systems/expansion/plan-adapter.ts:systems/intelligence.ts",
+    "systems/expansion/plan-adapter.ts:systems/expansion/uoem-events.ts",
   ]);
 
   it("系统间值导入必须在白名单中", () => {
