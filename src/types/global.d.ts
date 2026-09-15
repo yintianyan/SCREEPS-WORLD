@@ -61,7 +61,7 @@ declare global {
     /** TD-001：abandonedTaskId 写入时的 tick，用于冷却判断。 */
     abandonedAt?: number;
     /**
-     * P1-E 档 2：上次 PathFinder.search 重寻路 tick（docs/architecture/DATA_FLOW.md）。
+     * 档 2：上次 PathFinder.search 重寻路 tick。
      * 两次重寻路间隔 ≥ dynamicRepathInterval，冷却内沿旧路径走一步；
      * absent=0 → 冷却不生效（与改造前一致）。per-creep 运行时状态，无需迁移。
      */

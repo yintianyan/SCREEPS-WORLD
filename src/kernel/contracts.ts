@@ -39,7 +39,7 @@ export interface System {
    * Recovery / 关键基建缺失豁免自报钩子（P1-F）。
    * 返回 true 时，kernel 在 budget 拦截前将其优先级等效提升为 P1，确保紧急重建
    * 路径在任何 CPU 档位下都能运行。kernel 只读此钩子，不硬编码系统名
-   * （docs/architecture/KERNEL_ARCHITECTURE.md：内核不感知具体业务）。
+   * （内核不感知具体业务）。
    * 典型实现：construction-manager（buildQueue 有 P0 queued 关键基建）/
    * layout-planner（任一 snapshot 命中 assessEmergencyRebuild().any）。
    */

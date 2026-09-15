@@ -8,7 +8,7 @@ import { moveToTarget } from "../movement";
 import {
   findDroppedEnergyCached,
   findMySitesCached,
-  findRemoteContainersCached,
+  findContainersCached,
   findRuinsCached,
   findTombstonesCached,
 } from "../support/room-scans";
@@ -140,7 +140,7 @@ function pickupRemoteDropped(minAmount = 0): ActionCandidate<Resource> {
  * 消除「角色禁止全房 find」硬约束违规。每 tick 重新评估目标——
  * 不缓存 containerId，实现取完近处即走、不停留等回填。 */
 export function findRemoteContainer(creep: Creep): StructureContainer | undefined {
-  const containers = findRemoteContainersCached(creep.room).filter(
+  const containers = findContainersCached(creep.room).filter(
     c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
   );
   if (containers.length === 0) return undefined;

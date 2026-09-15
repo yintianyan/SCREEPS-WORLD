@@ -181,7 +181,7 @@ export const spawnManagerSystem: System = {
         submitRequest(queue, req);
       }
       // P1-J：写回迟滞状态。undefined 表示「清除」语义（如需求回落重置），
-      // 用 delete 而非赋值 undefined 保持 Memory 体积精简（docs/architecture/CPU_EXECUTION_MODEL.md 性能优化）。
+      // 用 delete 而非赋值 undefined 保持 Memory 体积精简。
       if (nextHysteresis.distScaleUpSince === undefined) {
         delete roomMem.distScaleUpSince;
       } else {

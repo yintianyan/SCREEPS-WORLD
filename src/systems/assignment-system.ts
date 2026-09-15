@@ -8,6 +8,9 @@ import { TaskPool } from "../domain/assignment/task-pool";
 import { globalCache } from "../kernel/global-cache";
 import { CONFIG } from "../config";
 
+/** 无 creep 归属的房间共用的空摘要切片 — 避免每房每 tick 新建空数组。 */
+const EMPTY_REFS: readonly CreepAssignmentRef[] = [];
+
 /**
  * 任务分配服务 — P1 系统，在所有角色之前运行（plan §5.7.2）。
 
@@ -25,8 +28,18 @@ export const assignmentSystem: System = {
     // P1-1：在循环外预构建全量 creep 分配摘要，避免 O(rooms × creeps) 重复遍历。
     // 原先 generateRoomTasks 在每房间循环内遍历全部 Game.creeps，N 房间 × M creep = O(N×M)。
     const allCreepRefs = collectAllCreepRefs();
+    // 按 home 预分组：房间循环内直接取本房切片，避免每房再次过滤全量列表并新建对象。
+    const refsByHome = new Map<string, CreepAssignmentRef[]>();
+    for (const ref of allCreepRefs) {
+      const home = ref.home;
+      if (!home) continue;
+      const bucket = refsByHome.get(home);
+      if (bucket) bucket.push(ref);
+      else refsByHome.set(home, [ref]);
+    }
 
     for (const snapshot of ctx.snapshots()) {
+      const roomRefs = refsByHome.get(snapshot.roomName) ?? EMPTY_REFS;
       // 紧急抢占（plan §5.7.2 规则 5）：能量低于 fill 阈值或有敌对单位时，
       // 释放 priority >= 1 的普通任务，强制 creep 重新请求 P0 fill 或进入 flee。
       //
@@ -44,10 +57,10 @@ export const assignmentSystem: System = {
       // 导致 storage site 无人建造，经济中枢断裂。
       const needsStorage = snapshot.rcl >= 4 && snapshot.storage === undefined;
       if (needsStorage) {
-        releaseNonStorageBuilderAssignments(snapshot, allCreepRefs);
+        releaseNonStorageBuilderAssignments(snapshot, roomRefs);
       }
 
-      generateRoomTasks(pool, snapshot, ctx, allCreepRefs);
+      generateRoomTasks(pool, snapshot, ctx, roomRefs);
 
       // 抢占必须在 generateRoomTasks 之后执行 — TaskPool 每 tick 重建为空，
       // 任务写入前调用 invalidate 只会读到空列表、返回空 creep 名单，
@@ -125,25 +138,19 @@ function collectAllCreepRefs(): CreepAssignmentRef[] {
 
 /**
  * 适配：为房间生成任务列表并写入 TaskPool —
- * 从预构建的全量 creepRefs 中筛选本房 creep，从 Memory 读取房间标志位，
+ * 消费按 home 预分组的本房 creep 摘要，从 Memory 读取房间标志位，
  * 调用纯函数 buildRoomTasks 后将结果存入任务池。
  */
 function generateRoomTasks(
   pool: TaskPool,
   snapshot: RoomSnapshot,
   ctx: TickContext,
-  allCreepRefs: readonly CreepAssignmentRef[],
+  creepRefs: readonly CreepAssignmentRef[],
 ): void {
   if (pool.tick !== ctx.tick) return;
 
   const roomName = snapshot.roomName;
   const roomMem = Memory.rooms[roomName];
-
-  // 从预构建的全量摘要中筛选本房 creep。
-  const creepRefs: CreepAssignmentRef[] = [];
-  for (const ref of allCreepRefs) {
-    if (ref.home === roomName) creepRefs.push(ref);
-  }
 
   const flags: RoomTaskFlags = {
     colonyState: (roomMem?.colonyState ?? "normal") as ColonyState,
@@ -184,25 +191,22 @@ function invalidateAssignments(pool: TaskPool, roomName: string, minPriority: nu
 }
 
 /**
- * 适配：强制释放绑定在非 storage/extension site 的 builder assignment。
-
+ * 主动失效绑定在非 storage/extension site 的 builder assignment，强制 builder 重新选 storage。
+ * 消费本房 creep 摘要切片（roomRefs），不在房间循环内重复遍历全量 creep。
+ *
  * 触发条件：RCL4+ 无 storage 且存在 storage construction site。
  * storage 是经济中枢——haul 无处倒能、builder/upgrader 无中央能量源；
  * assignment-service 已将 storage site 标记 priority=1, maxWorkers=2，
  * 但 lease 机制（50 tick）让 builder 保持旧 assignment 不切换，故每 tick
  * 主动失效非 storage/extension build assignment，强制 builder 重新选 storage。
-
+ *
  * 不释放 extension site 上的 builder——extension 建成后提升 energyCapacityAvailable，
  * 解锁更大 builder body，整体建造速率翻倍；全压 storage 反而拖慢 extension 重建。
  * storage site 不存在（被 block 或未规划）时不释放——避免 builder 永久 idle。
  */
-/**
- * 主动失效非 storage/extension build assignment，强制 builder 重新选 storage。
- * B8-F04 修复：复用 allCreepRefs 避免在房间循环内重复遍历 Game.creeps。
- */
 function releaseNonStorageBuilderAssignments(
   snapshot: RoomSnapshot,
-  allCreepRefs: readonly CreepAssignmentRef[],
+  roomRefs: readonly CreepAssignmentRef[],
 ): void {
   // 必须存在 storage construction site 才释放——否则 builder 无 storage 可建。
   const hasStorageSite = snapshot.myConstructionSites.some(
@@ -210,8 +214,7 @@ function releaseNonStorageBuilderAssignments(
   );
   if (!hasStorageSite) return;
 
-  for (const ref of allCreepRefs) {
-    if (ref.home !== snapshot.roomName) continue;
+  for (const ref of roomRefs) {
     if (ref.role !== "builder") continue;
     const a = ref.assignment;
     if (!a || a.kind !== "build" || !a.targetId) continue;

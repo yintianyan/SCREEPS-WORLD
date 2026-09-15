@@ -33,7 +33,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        # 完整安装（R20/T2）：e2e 冒烟已进门槛（TEST_ARCHITECTURE §4），需要
+        # 完整安装：e2e 冒烟已进 CI 门禁，需要
         # screeps-server-mockup + isolated-vm（git 版 cb93efc 支持 Node24 编译，
         # e2e-verify CI 实证 6m4s 全绿）。旧 --ignore-scripts 规避编译的理由失效。
         run: npm ci
@@ -41,10 +41,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # 审计修复（P0）：此前 push 直推生产无任何门禁 —— plan.md §8 的
-      # 「typecheck+test+build 全绿」纯靠本地自觉。单测 7s 级耗时，不构成瓶颈。
+      # 此前 push 直推生产无任何门禁，「typecheck+test+build 全绿」
+      # 纯靠本地自觉。单测 7s 级耗时，不构成瓶颈。
       - name: Unit tests
         run: npm run test:unit
+
+      # 注释文档引用门禁：代码自足，注释不得引用已删除的文档路径。
+      - name: Comment doc-reference guard
+        run: npm run check:docs
 
       # Build 在 Integration 之前：bundle-parity.test.ts（be82be9 起的 parity 门禁）
       # 断言 dist/main.js 存在，CI 全新 checkout 无构建产物，必须先构建再跑集成。
@@ -54,7 +58,7 @@ jobs:
       - name: Integration tests
         run: npm run test:integration
 
-      # E2E 冒烟（TEST_ARCHITECTURE §4 门禁成员，R20/T2）—— 真实引擎跑
+      # E2E 冒烟（CI 门禁成员）—— 真实引擎跑
       # dist/main.js 基础链路；全套件（~15min）留在 e2e-verify/本地。
       - name: E2E smoke (real engine)
         run: npx vitest run tests/e2e/scenarios/00-smoke.test.ts --config vitest.e2e.config.ts

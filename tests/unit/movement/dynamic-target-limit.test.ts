@@ -1,4 +1,4 @@
-/** P1-E：动态目标寻路限频三档单测（docs/architecture/DATA_FLOW.md，remediation P1-E）。 */
+/** 动态目标寻路限频三档单测。 */
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { stepToward } from "../../../src/creeps/movement";
 import { preloadStructureCache } from "../../../src/creeps/movement";

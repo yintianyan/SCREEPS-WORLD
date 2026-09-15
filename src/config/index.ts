@@ -197,7 +197,7 @@ export const CONFIG = {
     distributorScaleUpDelay: 150,
     /**
      * 孵化请求 TTL：cleanQueue 按 expiresAt 清超期请求，防需求消失后的 stale 请求
-     * 永久排队。需求仍在时下一 tick 以同 key 重建（hasKey 守卫解除）。
+     * 永久排队。需求仍在时下一 tick 以同 key 重建（hasRequest 守卫解除）。
      * 硬约束：必须大于 trySpawn 的饥饿降级窗口（P1 饥饿 ≈100 tick、P2 ≈540 tick）—
      * 否则请求在降级触发前被清除重建、createdAt 重置，饥饿计时器永远归零 → 重新
      * 引入「等满配 → 永远凑不够」死锁（W37S58）。
@@ -235,7 +235,7 @@ export const CONFIG = {
       parked: 0,
     },
     /**
-     * P1-E：动态目标寻路限频（docs/architecture/DATA_FLOW.md）。根因：traffic 模式下
+     * 动态目标寻路限频。根因：traffic 模式下
      * registerStepViaPathfinder 的缓存 key = 目标精确格 + 路网 revision，
      * 动态目标（flee 逃逸点/追击 hostile/跟车目标）每 tick 变化 → 缓存必 miss →
      * 每 tick 每 creep 一次 PathFinder.search（战时 10 creep 同时 flee ≈ 10-30 CPU，

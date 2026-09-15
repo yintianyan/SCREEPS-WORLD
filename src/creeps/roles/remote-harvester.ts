@@ -350,7 +350,7 @@ type ContainerBuildTarget = { kind: "build"; site: ConstructionSite } | { kind: 
  * energy/WORK/tick 转进度，零衰减）；无 site → 写 needContainer=true 申请标记，由 manager 每
  * managerInterval tick 消费（创建 site / 失败写冷却）；申请期间走 dropEnergy 释放产能（最多等
  * 10 tick），避免满载停摆。建成后 findSourceContainer 缓存接手，hauler 倒能链自然激活。
- * 架构约束（docs/architecture/CONSTRUCTION_ARCHITECTURE.md）：角色层禁止调 createConstructionSite — site 创建的单一写者。
+ * 架构约束：角色层禁止调 createConstructionSite — site 创建的单一写者。
  */
 function buildSourceContainer(): ActionCandidate<ContainerBuildTarget> {
   return {

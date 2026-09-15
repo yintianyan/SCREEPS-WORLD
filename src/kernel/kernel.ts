@@ -411,9 +411,9 @@ export class Kernel {
         // skipHotspot 长期被百级 interval 计数淹没，真实信号不可见。
         continue;
       }
-      // Recovery / 关键基建缺失豁免（P1-F）：system 通过 recoveryEligible 钩子
-      // 自报是否需要 P1 等效优先级。kernel 只读钩子，不感知具体系统名
-      // （docs/architecture/KERNEL_ARCHITECTURE.md）；原硬编码 "construction-manager"/"layout-planner" 判断已移除。
+      // Recovery / 关键基建缺失豁免：system 通过 recoveryEligible 钩子
+      // 自报是否需要 P1 等效优先级。kernel 只读钩子，不感知具体系统名；
+      // 原硬编码 "construction-manager"/"layout-planner" 判断已移除。
       // - construction-manager: buildQueue 有 P0 queued 关键基建（hasCriticalStructureGap，在 domain/construction/queue.ts）
       // - layout-planner: 任一 snapshot 命中 assessEmergencyRebuild().any
       const isRecoveryExempt = system.recoveryEligible?.(ctx) === true;
@@ -480,8 +480,11 @@ export class Kernel {
         continue;
       }
       const oldest = queue[0]!;
+      // 优先消费已有快照（spawns/energyAvailable 均在其中），避免每房每 tick 重复
+      // room.find(FIND_MY_SPAWNS)；无快照（无视野房）时才回退到实时查询。
+      const snap = ctx.getSnapshot(roomName);
       const room = Game.rooms[roomName];
-      const spawns = room?.find?.(FIND_MY_SPAWNS) ?? [];
+      const spawns = snap?.spawns ?? room?.find?.(FIND_MY_SPAWNS) ?? [];
       spawnQueues.push({
         room: roomName,
         queueLength: queue.length,
@@ -489,8 +492,8 @@ export class Kernel {
         oldestRequestKey: oldest.key,
         oldestPriority: oldest.priority,
         oldestRole: oldest.role,
-        rcl: room?.controller?.level ?? roomMem?.lastRcl,
-        energyAvailable: room?.energyAvailable ?? 0,
+        rcl: snap?.controller?.level ?? roomMem?.lastRcl,
+        energyAvailable: snap?.energyAvailable ?? room?.energyAvailable ?? 0,
         spawning: spawns.some(s => s.spawning),
         colonyState: roomMem?.colonyState,
       });
@@ -587,14 +590,17 @@ export class Kernel {
   private collectBuildQueueSnapshots(ctx: Context): BuildQueueSnapshot[] {
     const result: BuildQueueSnapshot[] = [];
     // 消费共享快照总线，不独立遍历 Game.creeps。
+    // builder 普查预聚合为 Map：避免在房间循环内重复遍历全量 creepRefs（O(房间×creep)）。
     const refs = globalCache().creepRefs ?? [];
+    const buildersByHome = new Map<string, number>();
+    for (const r of refs) {
+      if (r.role !== "builder" || r.spawning) continue;
+      const home = r.home;
+      if (home) buildersByHome.set(home, (buildersByHome.get(home) ?? 0) + 1);
+    }
     for (const snap of ctx.snapshots()) {
       const roomMem = Memory.rooms[snap.roomName];
       const queue = roomMem?.buildQueue ?? [];
-      let builderCount = 0;
-      for (const r of refs) {
-        if (r.home === snap.roomName && r.role === "builder" && !r.spawning) builderCount++;
-      }
       result.push({
         room: snap.roomName,
         queueLength: queue.length,
@@ -602,7 +608,7 @@ export class Kernel {
           queue.length > 0 ? (queue[0] as { createdAt?: number }).createdAt : undefined,
         oldestTaskType: queue.length > 0 ? (queue[0] as { type?: string }).type : undefined,
         rcl: snap.rcl,
-        builderCount,
+        builderCount: buildersByHome.get(snap.roomName) ?? 0,
         colonyState: roomMem?.colonyState,
       });
     }

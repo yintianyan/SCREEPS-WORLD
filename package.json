@@ -11,6 +11,7 @@
     "build": "tsc --noEmit && rollup -c",
     "watch": "rollup -c -w",
     "typecheck": "tsc --noEmit",
+    "check:docs": "node scripts/check-docs.mjs",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration --testTimeout=60000",

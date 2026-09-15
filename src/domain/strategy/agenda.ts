@@ -1,4 +1,4 @@
-/** 帝国议程 — 主动自治的短期目标层（R6a，docs/architecture/GOAL_POLICY_PLAN_MODEL.md）。 */
+/** 帝国议程 — 主动自治的短期目标层。 */
 
 export type AgendaInitiative = "recovery" | "defense-readiness" | "rcl-push" | "develop";
 

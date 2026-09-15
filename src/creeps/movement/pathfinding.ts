@@ -535,7 +535,7 @@ function computeAndPersistPath(
   return fullPath;
 }
 
-// ─── P1-E：动态目标寻路限频（docs/architecture/DATA_FLOW.md，remediation P1-E）────
+// ─── 动态目标寻路限频（三档节流）────
 
 /**
  * 档 1：目标驻留量化 — 将精确格 packed key (x*50+y) 量化到 3×3 区块 key；

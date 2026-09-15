@@ -1,4 +1,4 @@
-/** 侦察目标选择 — 主动情报的纯决策层（R6b，docs/architecture/GOAL_POLICY_PLAN_MODEL.md）。 */
+/** 侦察目标选择 — 主动情报的纯决策层。 */
 import { roomLinearDistance } from "../remote/targeting";
 
 /**

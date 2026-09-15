@@ -259,7 +259,7 @@ export function isEmergencyTask(
  * 检测是否有房间的 buildQueue 存在 P0 queued 的关键基建任务（storage/tower/spawn）
  * — 这类结构缺失时经济链路断裂，必须让 construction-manager 在任何 budget tier
  * 下都能运行（以 P1 等效优先级）。P1-F：从 kernel.ts 搬来，作为 recoveryEligible
- * 钩子实现 — kernel 只读钩子不识系统名（docs/architecture/KERNEL_ARCHITECTURE.md）。
+ * 钩子实现 — kernel 只读钩子不识系统名。
  */
 export function hasCriticalStructureGap(
   rooms: Record<

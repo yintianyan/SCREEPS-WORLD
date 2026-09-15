@@ -2,7 +2,7 @@ import { CONFIG } from "../../config";
 import { degradeBody, minimalBodyFor, RECOVERY_BODY, selectBody } from "../../config/bodies";
 import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
-import { countPending, spawnKey } from "./queue";
+import { countPending, hasRequest, spawnKey } from "./queue";
 import { classifyLinkRole } from "../economy/links";
 import { demandElasticity, logisticsElasticity } from "../economy/energy-price";
 
@@ -303,7 +303,7 @@ export function evaluateDemand(
     // 先入队 P0 defender 清场，worker 同队跟进（同优先级按 createdAt，defender 先孵）。
     if (snapshot.threatCreeps.length > 0) {
       const defKey = spawnKey("defender", home, 0);
-      if (!hasKey(queue, defKey)) {
+      if (!hasRequest(queue, defKey)) {
         requests.push(
           createRequest(
             "defender",
@@ -373,7 +373,7 @@ export function evaluateDemand(
       const defenderPriority = squad ? 0 : 1;
       for (let i = defenderTotal; i < defenderTarget; i++) {
         const key = spawnKey("defender", home, i);
-        if (!hasKey(queue, key)) {
+        if (!hasRequest(queue, key)) {
           requests.push(
             createRequest(
               "defender",
@@ -432,7 +432,7 @@ export function evaluateDemand(
         localOccupancy.set(sourceId as string, (localOccupancy.get(sourceId as string) ?? 0) + 1);
       }
       const key = spawnKey("harvester", home, i, sourceId as string | undefined);
-      if (!hasKey(queue, key)) {
+      if (!hasRequest(queue, key)) {
         // 危机时 harvester 提为 P0：经济引擎优先于一切，尽快恢复采集。
         requests.push(
           createRequest(
@@ -578,7 +578,7 @@ export function evaluateDemand(
   if (haulerTotal < haulerTarget && hasLogistics) {
     for (let i = haulerTotal; i < haulerTarget; i++) {
       const key = spawnKey("hauler", home, i);
-      if (!hasKey(queue, key)) {
+      if (!hasRequest(queue, key)) {
         requests.push(
           createRequest(
             "hauler",
@@ -710,7 +710,7 @@ export function evaluateDemand(
   if (distTotal < distTarget && hasStorage) {
     for (let i = distTotal; i < distTarget; i++) {
       const key = spawnKey("distributor", home, i);
-      if (!hasKey(queue, key)) {
+      if (!hasRequest(queue, key)) {
         requests.push(
           createRequest(
             "distributor",
@@ -746,7 +746,7 @@ export function evaluateDemand(
     const minerTotal = (counts.mineralMiner ?? 0) + countPending(queue, "mineralMiner", home);
     for (let i = minerTotal; i < minerConfig.maxCount; i++) {
       const key = spawnKey("mineralMiner", home, i);
-      if (!hasKey(queue, key)) {
+      if (!hasRequest(queue, key)) {
         requests.push(
           createRequest(
             "mineralMiner",
@@ -872,7 +872,7 @@ export function evaluateDemand(
       const upgraderPriority: 0 | 1 | 2 | 3 | 4 = hasDowngradeRisk ? 1 : 2;
       for (let i = upgraderTotal; i < upgraderTarget; i++) {
         const key = spawnKey("upgrader", home, i);
-        if (!hasKey(queue, key)) {
+        if (!hasRequest(queue, key)) {
           requests.push(
             createRequest(
               "upgrader",
@@ -968,7 +968,7 @@ export function evaluateDemand(
       const builderPriority: 0 | 1 | 2 | 3 | 4 = inCrisis ? 1 : 2;
       for (let i = builderTotal; i < builderTarget; i++) {
         const key = spawnKey("builder", home, i);
-        if (!hasKey(queue, key)) {
+        if (!hasRequest(queue, key)) {
           requests.push(
             createRequest(
               "builder",
@@ -1030,7 +1030,7 @@ export function evaluateDemand(
     // 门禁 4：稳定 key — 不含 sourceId，防止 assignment 重分配导致 key 漂移。
     const index = creep.spawnIndex ?? 0;
     const key = spawnKey(role, home, index);
-    if (!hasKey(queue, key) && !requests.some(r => r.key === key)) {
+    if (!hasRequest(queue, key) && !requests.some(r => r.key === key)) {
       const priority = role === "harvester" || role === "worker" ? 1 : 2;
       // harvester 替补重选矿位：垂死者矿位视为已空出，按专职口径重挑 — 常态选回原矿位
       // （无缝接班语义不变）；历史错配（两只矿工挤同源）时替补自动纠偏到最空 source，
@@ -1063,10 +1063,6 @@ export function evaluateDemand(
   const result: DemandResult = { requests, nextHysteresis };
   if (haulerTarget !== undefined) result.haulerTarget = haulerTarget;
   return result;
-}
-
-function hasKey(queue: readonly SpawnRequest[], key: string): boolean {
-  return queue.some(r => r.key === key);
 }
 
 /** 创建孵化请求（纯函数）；energyAvailable/tick 显式传入，不读 Game/Memory。 */
@@ -1124,7 +1120,7 @@ function createRequest(
     memory,
     createdAt: tick,
     // 请求带 TTL：需求消失后的 stale 请求由 cleanQueue 清除；需求仍在时下一 tick 以同 key
-    // 重建（hasKey 守卫解除）并按当时容量重选 body，避免入队后 body 长期冻结。
+    // 重建（hasRequest 守卫解除）并按当时容量重选 body，避免入队后 body 长期冻结。
     // TTL(1000) > 饥饿降级窗口（见 CONFIG.spawn.requestTtl 注释），不干扰降级计时。
     expiresAt: tick + CONFIG.spawn.requestTtl,
     retries: 0,

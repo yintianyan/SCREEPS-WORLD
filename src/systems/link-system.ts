@@ -8,7 +8,7 @@ import {
 import { linkHasOutlet } from "../domain/economy/link-outlet";
 import {
   DEAD_ASSET_THRESHOLD,
-  DISMANTLE_COOLDOWN,
+  isDismantleOnCooldown as isDismantleOnCooldownPure,
   DISMANTLE_TTL,
   LINK_CONSTRAINED_RETRY_INTERVAL,
 } from "../domain/layout/dismantle";
@@ -181,12 +181,10 @@ export function clearLinkConstrained(roomName: string): void {
 /**
  * 检查房间是否处于拆改冷却期（1000t 内已启动过拆改）。
  * layout-planner 消费：冷却期内不再为该房的新死资产创建拆改计划。
+ * 判定逻辑下沉 domain 层（冷却常量单一真相源），此处仅注入全局冷却账本。
  */
 export function isDismantleOnCooldown(roomName: string, tick: number): boolean {
-  const cache = globalCache();
-  const lastTick = cache.lastDismantleTick?.get(roomName);
-  if (lastTick === undefined) return false;
-  return tick - lastTick < DISMANTLE_COOLDOWN;
+  return isDismantleOnCooldownPure(globalCache().lastDismantleTick, roomName, tick);
 }
 
 /**

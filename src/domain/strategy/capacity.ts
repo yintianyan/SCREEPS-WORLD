@@ -1,4 +1,4 @@
-/** 算力容量模型 — 规模规划的 CPU 前馈层（R7a，docs/architecture/GOAL_POLICY_PLAN_MODEL.md 延伸）。 */
+/** 算力容量模型 — 规模规划的 CPU 前馈层。 */
 
 export type CapacityTier = "abundant" | "comfortable" | "tight" | "constrained";
 

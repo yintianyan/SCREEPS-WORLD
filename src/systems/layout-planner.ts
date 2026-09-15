@@ -144,9 +144,8 @@ export const layoutPlannerSystem: System & {
    * 缺失：spawn/storage/tower/sourceContainer）时自报 true，让 kernel
    * 将本系统提升为 P1 等效优先级通过 budget 拦截。
 
-   * CTO 裁决（2026-08-01）：常规 50-tick 重规划不再享受 recovery 档豁免 —
-   * 仅在关键基建确实缺失时提升。kernel 只读此钩子，不再硬编码 layout-planner
-   * 名字（docs/architecture/KERNEL_ARCHITECTURE.md）。
+   * 常规 50-tick 重规划不享受 recovery 档豁免 —
+   * 仅在关键基建确实缺失时提升。kernel 只读此钩子，不再硬编码 layout-planner 名字。
    */
   recoveryEligible: (ctx: TickContext): boolean => {
     for (const snapshot of ctx.snapshots()) {

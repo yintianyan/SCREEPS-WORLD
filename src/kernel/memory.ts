@@ -1249,6 +1249,11 @@ export function maintainMemory(): void {
   // （战斗黑匣子 M9 — 这是死亡的唯一系统性检测点）。
   // B3-F02 修复：recordCreepDeath 加 try/catch — 单个 creep 死亡记录异常
   // 不应连坐失守房清理等后续逻辑。catch 中仍执行 delete 防止死者 Memory 滞留。
+  // deathAnchor 清理需要「存活角色集合」，与死亡清理共用同一次 Memory.creeps 遍历，
+  // 避免每 tick 两次全量遍历 Memory（Memory 访问成本高）。
+  // 循环前 deathAnchor 不存在 → 本 tick 新增的锚点必然新鲜、无需清理，集合可省。
+  const activeRoles = Memory.kernel.stats?.deathAnchor ? new Set<string>() : undefined;
+
   for (const name in Memory.creeps) {
     if (!Game.creeps[name]) {
       try {
@@ -1257,6 +1262,11 @@ export function maintainMemory(): void {
         // recordCreepDeath 失败不阻塞清理 — 死者 Memory 仍需删除。
       }
       delete Memory.creeps[name];
+      continue;
+    }
+    if (activeRoles) {
+      const role = name.split("-")[0];
+      if (role) activeRoles.add(role);
     }
   }
 
@@ -1301,13 +1311,9 @@ export function maintainMemory(): void {
   // E-FINDING-09: 清理 deathAnchor 中已灭绝角色的条目。
   // deathAnchor 由 recordCreepDeath 写入，记录最后死亡 tick 供 P1 补位 EMA 计算。
   // 当某角色不再存活且超过 2000 tick（长于最长寿命 1500+缓冲），清理过期锚点。
+  // activeRoles 来自上方死亡清理同一次遍历（未建集合时无过期锚点可清，直接跳过）。
   const stats = Memory.kernel.stats;
-  if (stats?.deathAnchor) {
-    const activeRoles = new Set<string>();
-    for (const name in Memory.creeps) {
-      const role = name.split("-")[0];
-      if (role) activeRoles.add(role);
-    }
+  if (stats?.deathAnchor && activeRoles) {
     const STALE_ANCHOR_TICKS = 2000;
     for (const role of Object.keys(stats.deathAnchor)) {
       if (!activeRoles.has(role) && Game.time - stats.deathAnchor[role]! > STALE_ANCHOR_TICKS) {

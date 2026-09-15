@@ -421,8 +421,6 @@ export interface GlobalCache {
   // 角色层 per-tick 共享缓存：同房多 creep 共享一次 room.find 结果。
   // 生命周期单 tick（tick 字段守卫）。global reset 后首 tick 重建。
 
-  /** 远矿房 container 列表（remote-hauler 共享）。 */
-  __remoteContainers?: Record<string, { tick: number; list: StructureContainer[] }>;
   /** 远矿房掉落能量列表（remote-hauler 共享）。 */
   __remoteDropped?: Record<string, { tick: number; list: Resource[] }>;
   /** 房间内 hostile creep 列表（targeting + remote-defender 共享）。 */

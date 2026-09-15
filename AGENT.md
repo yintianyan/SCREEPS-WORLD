@@ -1,7 +1,6 @@
 # AGENT.md — Agent 行为约束
 
-本文件约束所有在此仓库工作的 agent（以及人类协作者）。**只载规矩，不载索引与历史**：
-文档导航见 [docs/README.md](docs/README.md)。
+本文件约束所有在此仓库工作的 agent（以及人类协作者）。**只载规矩，不载索引与历史**。
 
 ## 项目信条与自治契约
 
@@ -11,25 +10,16 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 本项目演进目标是**完全自治**：零人工干预为常态。房间规模、扩张、远矿、PvP 响应都由
 系统自身按运行时 CPU 预算裁决并自我调节——预算充足则扩张/扩建/备战，预算紧张则收缩/
 降级/保命。没有任何手动 flag / console 指令是运营的前提；人工只保留发布与灾难接管两条边界。
-破坏性人工动作（线上拆墙、核心建筑拆改）**仅限灾难接管状态**且必须审计；分级动作清单见
-[CANARY_SOAK_PROCEDURE.md](docs/implementation/CANARY_SOAK_PROCEDURE.md) §6。
+破坏性人工动作（线上拆墙、核心建筑拆改）**仅限灾难接管状态**且必须审计。
 
-## 文档与代码的裁决规则（强制）
+## 真相源规则（强制）
 
-文档分两层（详见 [docs/README.md](docs/README.md)）：`docs/architecture/` 冻结蓝图、
-`docs/research/` 调研存档。
+架构文档已清理移除，**代码与测试是唯一真相源**：
 
-1. **蓝图与代码冲突时**：该领域蓝图已冻结 → 以蓝图为目标、代码为待迁移现状，新改动
-   必须朝蓝图收敛而非反向迁就现状（迁移路径见
-   [IMPLEMENTATION_PHASES.md](docs/architecture/IMPLEMENTATION_PHASES.md)）；
-   蓝图未覆盖（如存量 R/G 系列特性）→ 以代码与内联注释为准。
-2. 冻结契约的结构性修订必须走 ADR（登记进
-   [ARCHITECTURE_FREEZE.md](docs/architecture/ARCHITECTURE_FREEZE.md) §15 修订记录），
-   不得静默改契约文档。
-3. 已实现模块**不新增「记录已实现功能」的平行 doc**——实现说明写进内联注释与测试，
-   新代码必须让注释自足、不引用已删除的文档。
-4. 改动任何高风险区域前，**必读**其对应蓝图文档（映射表见 docs/README.md 速查）；
-   没读就改视为违规。
+1. 理解现状以代码与内联注释为准；行为契约以测试为准。
+2. 已实现模块**不新增「记录已实现功能」的平行 doc**——实现说明写进内联注释与测试，
+   注释必须自足、不引用任何外部文档路径（`npm run check:docs` 门禁强制）。
+3. 重大结构变更在 commit message 中说明动机与权衡，不另立文档。
 
 ## 编码注释约束（强制）
 
@@ -64,25 +54,23 @@ Screeps: World 的可扩展 TypeScript 框架，设计信条：**稳定内核 + 
 
 ## 质量门槛（合并前强制）
 
-执行 `npm run typecheck`、`npm test`、`npm run build` 全绿。命令清单与
+执行 `npm run typecheck`、`npm run check:docs`、`npm test`、`npm run build` 全绿。命令清单与
 package.json scripts 一致：typecheck / check:docs / test / test:unit / test:integration / test:e2e / test:e2e:smoke / test:all / build / watch。
-（TEST_ARCHITECTURE §2 口径：e2e 冒烟 = `test:e2e:smoke`，为 CI 门禁成员；
-`test:e2e` 全套件与 `test:all` 为本地全量验收入口。）
+（e2e 冒烟 = `test:e2e:smoke`，为 CI 门禁成员；`test:e2e` 全套件与 `test:all` 为本地全量验收入口。）
 
 ## 硬约束（不可妥协）
 
 ### 内核与调度（`src/kernel/`）
 
-- 内核只维护运行秩序，不感知具体角色或经济策略。→ [KERNEL_ARCHITECTURE.md](docs/architecture/KERNEL_ARCHITECTURE.md)
+- 内核只维护运行秩序，不感知具体角色或经济策略。
 - 四档 bucket 看门狗（Healthy/Guarded/Conserve/Recovery）：软/硬上限按
-  `Game.cpu.limit` 比例化；降级立即生效，恢复需滞回。→ [CPU_EXECUTION_MODEL.md](docs/architecture/CPU_EXECUTION_MODEL.md)
+  `Game.cpu.limit` 比例化；降级立即生效，恢复需滞回。
 - 所有系统与 creep 走 `safeRun`，单点错误不得中断整 tick；非关键连续失败 3 次进入
-  50–200 tick 冷却（P0 永不冷却）；相同错误每 25 tick 限流。→ [FAILURE_RECOVERY_ARCHITECTURE.md](docs/architecture/FAILURE_RECOVERY_ARCHITECTURE.md)
+  50–200 tick 冷却（P0 永不冷却）；相同错误每 25 tick 限流。
 
 ### 内存与迁移（`src/kernel/memory.ts`）
 
 - Memory 只存 ID、枚举、少量数字和短 key；禁止写入完整路径/历史/运行时索引。
-  → [MEMORY_ARCHITECTURE.md](docs/architecture/MEMORY_ARCHITECTURE.md) · [STATE_OWNERSHIP_MODEL.md](docs/architecture/STATE_OWNERSHIP_MODEL.md)
 - **迁移规范**：每次结构变更升版本；迁移必须幂等；先写新字段验证后删旧字段；所有
   步骤成功才更新 `schemaVersion`；大迁移按 cursor 分 tick。新增 Memory 字段须同时
   更新类型与迁移（以 `CONFIG.memory` 为单一真相源；数字仅为快照）。冷数据走
@@ -92,7 +80,6 @@ package.json scripts 一致：typecheck / check:docs / test / test:unit / test:i
 
 - `bootstrap.ts` 是唯一组合根；新增角色/系统只改此文件与新模块，**不改 Kernel**。
 - 名称全局唯一 kebab-case，重复注册启动即失败；模块顶层禁止访问 `Game`/`Memory`。
-  → [SYSTEM_BOUNDARIES.md](docs/architecture/SYSTEM_BOUNDARIES.md)
 
 ### Creep 行为（`src/creeps/`）
 
@@ -104,14 +91,14 @@ package.json scripts 一致：typecheck / check:docs / test / test:unit / test:i
   缓存 `targetId`。
 - 移动默认走 traffic-manager 后置系统：角色登记意图，tick 末按房仲裁统一签发
   `move`（意图仲裁仅覆盖移动，非移动动作由角色相位直发）；寻路带三档限频，
-  本地 `maxRooms: 1`。→ [DATA_FLOW.md](docs/architecture/DATA_FLOW.md)
+  本地 `maxRooms: 1`。
 
 ### Spawn（`src/systems/spawn-manager.ts`）
 
 - Spawn Manager 是**唯一**能调用 `spawnCreep` 的模块，角色不得自行孵化。
 - 请求按稳定 key 幂等合并，`spawning` 与已提交请求须计入人口；P0 灾后恢复优先，
   可用能量达 200 立即生成 `[WORK,CARRY,MOVE]`；队列带黑名单冷却、
-  请求撤销通道与 `recycle` 回收通道。→ [SPAWN_ARCHITECTURE.md](docs/architecture/SPAWN_ARCHITECTURE.md)
+  请求撤销通道与 `recycle` 回收通道。
 
 ### 建造与布局（`src/systems/construction-manager.ts`、`src/systems/remote-mining-manager.ts`、`src/domain/layout/`、`src/systems/layout-planner.ts`）
 
@@ -122,7 +109,6 @@ package.json scripts 一致：typecheck / check:docs / test / test:unit / test:i
   绝不预铺全房。
 - 布局是版本化蓝图 + 低频局部适配 + 队列化执行；核心结构建成后冲突只标 `blocked`，
   不自动拆改。模板改动须递增 `templateId`/`layout.version` 并写迁移。
-  → [CONSTRUCTION_ARCHITECTURE.md](docs/architecture/CONSTRUCTION_ARCHITECTURE.md)
 
 ### 战争（`src/systems/war-planner.ts`、`src/domain/war/planning.ts`、`src/domain/strategy/posture.ts`）
 
@@ -136,7 +122,6 @@ package.json scripts 一致：typecheck / check:docs / test / test:unit / test:i
   目标进 `warBlacklist` 冷却；war 姿态下经济压力持续超标经 `warPressureTicks` 退
   fortify。波次集结：attacker 在 build 相位经 hold 钩子归建待命，满编才 advance。
 - 战后核验只信新鲜 intel（evaluateWarOutcome 纯函数），结论记录 WarOutcome 事件。
-  → [MILITARY_ARCHITECTURE.md](docs/architecture/MILITARY_ARCHITECTURE.md) · [DEFENSE_ARCHITECTURE.md](docs/architecture/DEFENSE_ARCHITECTURE.md)
 
 ### 测试分层（`tests/`）
 
@@ -154,4 +139,4 @@ package.json scripts 一致：typecheck / check:docs / test / test:unit / test:i
 ### LLM 与外部服务边界
 
 - LLM/外部控制平面不得进入 tick 执行路径；若引入，必须异步化、可超时、可降级，
-  且外部服务不可用时帝国仍能安全运行。→ [LLM_BOUNDARY.md](docs/architecture/LLM_BOUNDARY.md)
+  且外部服务不可用时帝国仍能安全运行。

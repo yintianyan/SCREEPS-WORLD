@@ -1,4 +1,4 @@
-/** 扩张节奏自适应 — 从失败中学习怎么扩张（R7b，docs/architecture/GOAL_POLICY_PLAN_MODEL.md）。 */
+/** 扩张节奏自适应 — 从失败中学习怎么扩张。 */
 
 /** 扩张任务最终结果（每任务一条，收摊时追加）。 */
 export type ExpansionOutcomeKind = "success" | "stolen" | "timeout" | "lost" | "aborted";

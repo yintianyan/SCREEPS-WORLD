@@ -333,22 +333,22 @@ export const labSystem: System = {
         // 只处理有 boost 部件的 creep。
         if (!creep.body.some(p => p.boost !== undefined && p.boost !== null)) continue;
         // 找一个可用的 lab（无冷却、creep 相邻或在可达范围）。
+        // 快照元素即本 tick 的活对象，无需再经 Game.getObjectById 回查。
         for (const lab of snapshot.labs) {
-          const labObj = Game.getObjectById(lab.id as Id<StructureLab>);
-          if (!labObj || labObj.cooldown > 0) continue;
-          if (creep.pos.getRangeTo(labObj) <= 1) {
+          if (lab.cooldown > 0) continue;
+          if (creep.pos.getRangeTo(lab) <= 1) {
             // 相邻 — 可执行 unboost。
-            const result = labObj.unboostCreep(creep);
+            const result = lab.unboostCreep(creep);
             if (result === OK) {
               // unboost 成功 — 矿物掉落在 creep 脚下，hauler 会自动回收。
-              unboostLab = labObj;
+              unboostLab = lab;
               unboostCreep = creep;
             }
             break;
           }
           // 不相邻 — 记录为候选，引导 creep 前往（下方引导逻辑）。
           if (!unboostLab) {
-            unboostLab = labObj;
+            unboostLab = lab;
             unboostCreep = creep;
           }
         }

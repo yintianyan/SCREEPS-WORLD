@@ -75,11 +75,11 @@ export function resetGlobals(): void {
   delete g.__yieldRequests;
   delete g.__remoteThreats;
   delete g.__remoteDropped;
-  delete g.__remoteContainers;
   delete g.__remoteInvaderCore;
   delete g.__remoteRuins;
   delete g.__hostilesCache;
   delete g.__myCreepsCache;
+  delete g.__containersCache;
   delete g.__remoteHarvestersByTarget;
   delete g.__remoteSources;
   delete g.__warStructures;

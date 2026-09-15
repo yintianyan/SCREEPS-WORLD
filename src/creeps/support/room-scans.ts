@@ -55,21 +55,6 @@ export function findRemoteHarvestersByTarget(targetRoom: string): Creep[] {
   return creeps;
 }
 
-// ─── remote-hauler: container 列表 ──────────────────────────
-
-/** per-tick per-room 共享缓存：房间内全部 container（含 source container）。 */
-export function findRemoteContainersCached(room: Room): StructureContainer[] {
-  const g = globalCache();
-  if (!g.__remoteContainers) g.__remoteContainers = {};
-  const cached = g.__remoteContainers[room.name];
-  if (cached && cached.tick === Game.time) return cached.list;
-  const list = room.find(FIND_STRUCTURES, {
-    filter: s => s.structureType === STRUCTURE_CONTAINER,
-  }) as StructureContainer[];
-  g.__remoteContainers[room.name] = { tick: Game.time, list };
-  return list;
-}
-
 // ─── remote-hauler: 掉落能量列表 ────────────────────────────
 
 /** per-tick per-room 共享缓存：房间内全部掉落能量堆。 */
