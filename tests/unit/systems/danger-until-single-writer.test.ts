@@ -45,8 +45,9 @@ describe("P1-G 静态守卫 — dangerUntil 写入点仅存在于 remote-mining-
       const rel = relative(SRC_DIR, file);
       // 唯一允许的写者。
       if (rel === "systems/remote-mining-manager.ts") continue;
-      // 迁移文件允许写（搬运逻辑）。
+      // 迁移文件允许写（搬运/畸形自愈逻辑）。
       if (rel === "kernel/memory.ts") continue;
+      if (rel.startsWith("kernel/migrations/")) continue;
 
       const code = stripComments(readFileSync(file, "utf-8"));
       // 匹配 .dangerUntil = 的赋值（排除 === 和 !== 比较）。
