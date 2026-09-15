@@ -379,6 +379,9 @@ describe("R11 systems 间值导入审计", () => {
     "systems/terminal-manager.ts:systems/terminal-market.ts",
     "systems/terminal-manager.ts:systems/terminal-selfaid.ts",
     "systems/terminal-selfaid.ts:systems/terminal-market.ts",
+    // expansion-manager 拆分出的子模块：manager 编排 UOEM 事件与自举车道
+    "systems/expansion-manager.ts:systems/expansion/uoem-events.ts",
+    "systems/expansion-manager.ts:systems/expansion/bootstrap-lane.ts",
   ]);
 
   it("系统间值导入必须在白名单中", () => {
