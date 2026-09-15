@@ -1,6 +1,23 @@
 import type { TaskPool } from "../domain/assignment/task-pool";
 import type { RemoteOpLedger, RemoteOpLedgerField } from "../domain/remote/op-ledger";
 
+/**
+ * per-tick 共享缓存槽的标准生命周期：同 tick 同 key 命中直接返回条目，
+ * 未命中用 create 重建并写回。槽对象由调用方以 `??= {}` 就地创建，
+ * 条目形状保持 GlobalCache 各槽声明不变，消除各处手写的 tick 守卫样板。
+ */
+export function tickCacheEntry<E extends { tick: number }>(
+  slot: Record<string, E>,
+  key: string,
+  create: () => E,
+): E {
+  const cached = slot[key];
+  if (cached && cached.tick === Game.time) return cached;
+  const entry = create();
+  slot[key] = entry;
+  return entry;
+}
+
 /** assignment-service 的单 tick 缓存。 */
 export interface AssignmentCache {
   tick: number;

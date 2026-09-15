@@ -1,6 +1,5 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
-import { globalCache } from "../../kernel/global-cache";
 import {
   moveTowardRoom,
   stepToward,
@@ -9,7 +8,8 @@ import {
   registerAnchor,
 } from "../movement";
 import { releaseFromTask } from "../support/assignment-adapter";
-import { classifyThreats } from "../../domain/defense/threat";
+import { getRoomThreatsCached } from "../support/targeting";
+import { isThreatWithin } from "../../domain/defense/threat";
 
 /** 根据背包存储更新 creep 模式。仅在阈值跨越时写入。 */
 export function updateMode(creep: Creep): void {
@@ -38,30 +38,19 @@ export function updateMode(creep: Creep): void {
 /** P1-1 距离分级：仅当威胁在 fleeRange 范围内才触发逃跑，远端过境威胁不中断经济。 */
 export function shouldFlee(creep: Creep, snapshot: RoomSnapshot): boolean {
   if (snapshot.threatCreeps.length === 0) return false;
-  const range = CONFIG.defense.fleeRange;
-  return snapshot.threatCreeps.some(t => creep.pos.getRangeTo(t.pos) <= range);
+  return isThreatWithin(snapshot.threatCreeps, creep.pos, CONFIG.defense.fleeRange);
 }
 
 // ─── 远矿角色威胁检测 ───
 
 /**
- * 获取指定房间的 hostile creep 列表（per-tick per-room 缓存，globalCache 自动重置）。
+ * 获取指定房间的 hostile 威胁列表 — 委托 support 层的 body-aware 共享缓存
+ * （与 home 房威胁判定同一 classifyThreats 口径，避免两套探测器口径分裂）。
  * 用于远矿角色在无 snapshot 的房间（远矿房/过境中间房）检测威胁。
  */
 function getRoomThreats(roomName: string): Creep[] {
-  const g = globalCache() as any;
-  if (!g.__remoteThreats) g.__remoteThreats = {};
-  if (g.__remoteThreats[roomName]?.tick === Game.time) {
-    return g.__remoteThreats[roomName].creeps as Creep[];
-  }
   const room = Game.rooms[roomName];
-  if (!room) return [];
-  const hostiles = room.find(FIND_HOSTILE_CREEPS);
-  // body-aware 威胁判定 — 与远矿 manager 的 collectRemoteThreats 共用同一
-  // classifyThreats（同一 THREAT_PARTS），消除"两个威胁探测器口径分裂"（F-2）。
-  const threats = classifyThreats(hostiles, CONFIG.defense.allies);
-  g.__remoteThreats[roomName] = { tick: Game.time, creeps: threats };
-  return threats;
+  return room ? getRoomThreatsCached(room) : [];
 }
 
 /**
@@ -76,8 +65,7 @@ export function shouldFleeForeignRoom(creep: Creep): boolean {
   if (home && creep.room.name === home) return false;
   const threats = getRoomThreats(creep.room.name);
   if (threats.length === 0) return false;
-  const range = CONFIG.defense.fleeRange;
-  return threats.some(t => creep.pos.getRangeTo(t.pos) <= range);
+  return isThreatWithin(threats, creep.pos, CONFIG.defense.fleeRange);
 }
 
 /**

@@ -26,6 +26,7 @@ import {
   removeRequestsByRole,
   spawnKey,
   submitRequest,
+  buildSpawnRequest,
 } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
 import { querySquad, globalCache } from "../kernel/global-cache";
@@ -285,23 +286,23 @@ export function submitSquadRequest(
   if (!plan.spawnedKeys) plan.spawnedKeys = {};
   plan.spawnedKeys[key] = false;
   const body = selectBody(role, cap);
-  submitRequest(queue, {
-    key,
-    role,
-    home: sponsor,
-    priority: 2,
-    body,
-    memory: {
+  submitRequest(
+    queue,
+    buildSpawnRequest(tick, {
+      key,
       role,
       home: sponsor,
-      mode: "acquire",
-      spawnIndex: index,
-      remoteTarget: plan.targetRoom,
-    },
-    createdAt: tick,
-    expiresAt: tick + CONFIG.spawn.requestTtl,
-    retries: 0,
-  });
+      priority: 2,
+      body,
+      memory: {
+        role,
+        home: sponsor,
+        mode: "acquire",
+        spawnIndex: index,
+        remoteTarget: plan.targetRoom,
+      },
+    }),
+  );
 }
 
 /**

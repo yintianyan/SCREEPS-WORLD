@@ -3,7 +3,7 @@
 import { CONFIG } from "../../config";
 import { selectBody } from "../../config/bodies";
 import type { ColonyState } from "../../kernel/contracts";
-import { spawnKey } from "../spawn/queue";
+import { spawnKey, buildSpawnRequest } from "../spawn/queue";
 import { remoteHaulerTarget, remoteReplacementThreshold, computeHaulerNeed } from "./staffing";
 
 /** 远矿 creep 摘要（与本地 CreepSummary 对齐但精简）。 */
@@ -513,7 +513,7 @@ function createRemoteRequest(
   replaceBy?: string,
   sourceSlot?: number,
 ): SpawnRequest {
-  const req: SpawnRequest = {
+  const req = buildSpawnRequest(tick, {
     key,
     role,
     home,
@@ -527,12 +527,7 @@ function createRemoteRequest(
       remoteTarget: target,
       ...(sourceSlot !== undefined ? { sourceSlot } : {}),
     },
-    createdAt: tick,
-    // 请求带 TTL：需求消失（运营 paused/abandoned）后的 stale 请求
-    // 由 cleanQueue 按 expiresAt 清除，不会永久排队直至孵化。
-    expiresAt: tick + CONFIG.spawn.requestTtl,
-    retries: 0,
-  };
+  });
   if (replaceBy) {
     req.replaceBy = tick;
   }

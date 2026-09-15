@@ -1,10 +1,7 @@
 /** 威胁分类 — 纯函数，区分「威胁 creep」与「无害过客」。
- *  B1-FINDING-05: THREAT_PARTS 与 CONFIG.defense.threatParts / kernel/contracts.ts THREAT_PARTS 同口径。
- *  domain 不能值导入 kernel（R1 约束），因此保留本地副本。三处定义口径一致，
- *  配置变更时需同步。 */
+ *  威胁部件口径以 CONFIG.defense.threatParts 为单一真相源（域层值导入 config 合法）。 */
 
-/** 具备任一即视为威胁的部件类型。与 CONFIG.defense.threatParts 同口径。 */
-const THREAT_PARTS: readonly BodyPartConstant[] = [ATTACK, RANGED_ATTACK, HEAL, WORK, CLAIM];
+import { CONFIG } from "../../config";
 
 /** 威胁判定的最小输入（便于纯函数测试，无需构造完整 Creep）。 */
 export interface ThreatInput {
@@ -15,7 +12,7 @@ export interface ThreatInput {
 
 export function isThreat(input: ThreatInput, allies: readonly string[]): boolean {
   if (allies.includes(input.owner)) return false;
-  return input.bodyParts.some(p => THREAT_PARTS.includes(p));
+  return input.bodyParts.some(p => CONFIG.defense.threatParts.includes(p));
 }
 
 export function classifyThreats(hostiles: readonly Creep[], allies: readonly string[]): Creep[] {
@@ -27,6 +24,19 @@ export function classifyThreats(hostiles: readonly Creep[], allies: readonly str
       allies,
     ),
   );
+}
+
+/**
+ * 威胁近距判定：任一威胁（可选谓词过滤）距 pos ≤ range 返回 true。
+ * 收敛各处手写的 threats.some(...) 样板。
+ */
+export function isThreatWithin(
+  threats: readonly Creep[],
+  pos: RoomPosition,
+  range: number,
+  filter?: (t: Creep) => boolean,
+): boolean {
+  return threats.some(t => (filter ? filter(t) : true) && pos.getRangeTo(t.pos) <= range);
 }
 
 /**

@@ -6,6 +6,7 @@ import {
 } from "../domain/assignment/service";
 import { TaskPool } from "../domain/assignment/task-pool";
 import { globalCache } from "../kernel/global-cache";
+import { getObjectById } from "../creeps/support/obj-cache";
 import { CONFIG } from "../config";
 
 /** 无 creep 归属的房间共用的空摘要切片 — 避免每房每 tick 新建空数组。 */
@@ -219,7 +220,8 @@ function releaseNonStorageBuilderAssignments(
     const a = ref.assignment;
     if (!a || a.kind !== "build" || !a.targetId) continue;
 
-    const site = Game.getObjectById(a.targetId as Id<ConstructionSite>);
+    // 同 tick 多个 builder 指向同一 site 时由 obj-cache 去重引擎回查。
+    const site = getObjectById(a.targetId as Id<ConstructionSite>);
     // 保留 storage 和 extension site 上的 builder；释放其他（road/rampart/link 等）。
     if (
       site &&

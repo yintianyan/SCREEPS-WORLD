@@ -4,6 +4,7 @@ import { EventKind, recordEvent } from "../kernel/event-log";
 import { findCriticalRepair } from "../creeps/support";
 import { selectTowerTarget, type TowerThreat } from "../domain/defense/tower-target";
 import { assessEngagement, type TowerSummary } from "../domain/defense/tower-engagement";
+import { isThreatWithin } from "../domain/defense/threat";
 import {
   buildFortificationContext,
   classifyFortification,
@@ -267,8 +268,7 @@ function selectFocusTarget(
 function isCoreBreached(snapshot: RoomSnapshot): boolean {
   const anchor = snapshot.spawns[0] ?? snapshot.controller;
   if (!anchor) return true; // 既无 spawn 也无 controller — 无参考点，保守视为突破。
-  const range = CONFIG.defense.safeModeTriggerRange;
-  return snapshot.threatCreeps.some(c => c.pos.getRangeTo(anchor.pos) <= range);
+  return isThreatWithin(snapshot.threatCreeps, anchor.pos, CONFIG.defense.safeModeTriggerRange);
 }
 
 /** 威胁是否具备破坏能力（攻击 / 远程 / dismantle；纯 HEAL 侦察不构成拆毁威胁）。 */
@@ -289,18 +289,14 @@ const MAX_ATTACK_RANGE = 3;
 function isCoreBeingDestroyed(snapshot: RoomSnapshot): boolean {
   const threats = snapshot.threatCreeps as Creep[];
   const attackerNear = (pos: RoomPosition) =>
-    threats.some(t => hasOffensiveParts(t) && t.pos.getRangeTo(pos) <= MAX_ATTACK_RANGE);
+    isThreatWithin(threats, pos, MAX_ATTACK_RANGE, hasOffensiveParts);
   const core = [...snapshot.spawns, snapshot.storage, snapshot.terminal, ...snapshot.towers];
   if (core.some(s => s !== undefined && s.hits < s.hitsMax && attackerNear(s.pos))) return true;
   if (snapshot.towers.every(t => t.store.getUsedCapacity(RESOURCE_ENERGY) === 0)) {
     const anchor = snapshot.spawns[0] ?? snapshot.controller;
     if (
       anchor &&
-      threats.some(
-        t =>
-          hasOffensiveParts(t) &&
-          t.pos.getRangeTo(anchor.pos) <= CONFIG.defense.safeModeTriggerRange,
-      )
+      isThreatWithin(threats, anchor.pos, CONFIG.defense.safeModeTriggerRange, hasOffensiveParts)
     ) {
       return true;
     }

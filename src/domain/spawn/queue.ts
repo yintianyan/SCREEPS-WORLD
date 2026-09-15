@@ -1,5 +1,7 @@
 /** 孵化队列操作 — 管理 SpawnRequest 列表的纯函数。 */
 
+import { CONFIG } from "../../config";
+
 /** 通过稳定 key 将请求合并到队列。已有请求更新而非重复。 */
 export function submitRequest(queue: SpawnRequest[], request: SpawnRequest): void {
   const existing = queue.find(r => r.key === request.key);
@@ -15,6 +17,22 @@ export function submitRequest(queue: SpawnRequest[], request: SpawnRequest): voi
   } else {
     queue.push({ ...request });
   }
+}
+
+/**
+ * 构造孵化请求的统一入口：createdAt/expiresAt/retries 三个生命周期字段由本函数
+ * 统一赋值（TTL 以 CONFIG.spawn.requestTtl 为单一真相源），调用方只传业务字段。
+ */
+export function buildSpawnRequest(
+  tick: number,
+  req: Omit<SpawnRequest, "createdAt" | "expiresAt" | "retries">,
+): SpawnRequest {
+  return {
+    ...req,
+    createdAt: tick,
+    expiresAt: tick + CONFIG.spawn.requestTtl,
+    retries: 0,
+  };
 }
 
 /** 按 key 移除请求。 */

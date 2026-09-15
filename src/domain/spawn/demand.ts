@@ -2,7 +2,7 @@ import { CONFIG } from "../../config";
 import { degradeBody, minimalBodyFor, RECOVERY_BODY, selectBody } from "../../config/bodies";
 import { getRoleBounds, getAllRoleBounds } from "../../config/tuned";
 import type { ColonyState, RoomSnapshot } from "../../kernel/contracts";
-import { countPending, hasRequest, spawnKey } from "./queue";
+import { countPending, hasRequest, spawnKey, buildSpawnRequest } from "./queue";
 import { classifyLinkRole } from "../economy/links";
 import { demandElasticity, logisticsElasticity } from "../economy/energy-price";
 
@@ -1111,18 +1111,14 @@ function createRequest(
     ...(sourceId ? { sourceId } : {}),
   };
 
-  return {
+  // 生命周期字段（createdAt/expiresAt/retries）由 buildSpawnRequest 统一赋值 —
+  // TTL 语义见 CONFIG.spawn.requestTtl 注释（TTL > 饥饿降级窗口，不干扰降级计时）。
+  return buildSpawnRequest(tick, {
     key,
     role,
     home,
     priority,
     body,
     memory,
-    createdAt: tick,
-    // 请求带 TTL：需求消失后的 stale 请求由 cleanQueue 清除；需求仍在时下一 tick 以同 key
-    // 重建（hasRequest 守卫解除）并按当时容量重选 body，避免入队后 body 长期冻结。
-    // TTL(1000) > 饥饿降级窗口（见 CONFIG.spawn.requestTtl 注释），不干扰降级计时。
-    expiresAt: tick + CONFIG.spawn.requestTtl,
-    retries: 0,
-  };
+  });
 }

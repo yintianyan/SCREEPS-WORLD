@@ -1509,7 +1509,6 @@ export class TestWorld {
     delete g.__coreCenter;
     delete g.__creepPathCache;
     delete g.__yieldRequests;
-    delete g.__remoteThreats;
     delete g.__remoteDropped;
     delete g.boostAssignments;
 

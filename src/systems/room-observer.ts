@@ -10,6 +10,7 @@ import {
 import { getRoomIntel } from "./intelligence";
 import { globalCache } from "../kernel/global-cache";
 import { log } from "../kernel/log";
+import { findSourcesCached } from "../creeps/support/room-scans";
 
 /**
  * 相位诊断日志的固定打印间隔（tick）。
@@ -247,7 +248,7 @@ function collectRoomVision(room: Room): RoomVisionIntel {
     }
   }
   return {
-    sources: room.find(FIND_SOURCES).length,
+    sources: findSourcesCached(room).length,
     mineralType: room.find(FIND_MINERALS)[0]?.mineralType,
     owner: room.controller?.owner?.username,
     reservation: room.controller?.reservation?.username,

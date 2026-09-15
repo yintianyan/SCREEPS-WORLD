@@ -22,7 +22,12 @@ import {
   evaluateExpansionRhythm,
   type ExpansionOutcomeKind,
 } from "../domain/expansion/rhythm";
-import { cancelRequestsByHome, hasRequest, submitRequest } from "../domain/spawn/queue";
+import {
+  cancelRequestsByHome,
+  hasRequest,
+  submitRequest,
+  buildSpawnRequest,
+} from "../domain/spawn/queue";
 import { querySquad, globalCache } from "../kernel/global-cache";
 import { selectAnchors } from "../domain/layout/anchor-selection";
 import { computeDistanceField } from "../domain/layout/terrain-analysis";
@@ -1208,17 +1213,17 @@ function submitClaimer(sponsor: string, target: string, tick: number): void {
   if (hasRequest(queue, key)) return;
 
   const capacity = Game.rooms[sponsor]?.energyCapacityAvailable ?? 650;
-  submitRequest(queue, {
-    key,
-    role: "claimer",
-    home: sponsor,
-    priority: 2,
-    body: selectBody("claimer", capacity),
-    memory: { role: "claimer", home: sponsor, mode: "acquire", remoteTarget: target },
-    createdAt: tick,
-    expiresAt: tick + CONFIG.spawn.requestTtl,
-    retries: 0,
-  });
+  submitRequest(
+    queue,
+    buildSpawnRequest(tick, {
+      key,
+      role: "claimer",
+      home: sponsor,
+      priority: 2,
+      body: selectBody("claimer", capacity),
+      memory: { role: "claimer", home: sponsor, mode: "acquire", remoteTarget: target },
+    }),
+  );
   roomMem.spawnQueue = queue;
 }
 

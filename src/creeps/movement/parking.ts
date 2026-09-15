@@ -32,6 +32,19 @@ export interface ParkRoomData {
  * roads：道路格；blocking：不可站立的阻挡结构格（road/container/rampart 可站不算）。
  * 全部从 per-room 快照推导，导出供 traffic-manager 复用同一套「可站立/关键格」口径挑选推挤落格。
  */
+/** 房间连接带（距边界 ≤2 格）的 packed 格集合 — 纯静态几何，全房间恒同，惰性构建一次。 */
+let PORTAL_TILES: Set<number> | undefined;
+function getPortalTiles(): Set<number> {
+  if (PORTAL_TILES) return PORTAL_TILES;
+  const tiles = new Set<number>();
+  for (let x = 0; x < 50; x++) {
+    for (let y = 0; y < 50; y++) {
+      if (x <= 1 || x >= 48 || y <= 1 || y >= 48) tiles.add(x * 50 + y);
+    }
+  }
+  return (PORTAL_TILES = tiles);
+}
+
 export function getParkRoomData(snapshot: RoomSnapshot): ParkRoomData {
   const g = globalCache() as any;
   if (!g.__parkRoomData) g.__parkRoomData = {};
@@ -96,12 +109,7 @@ export function getParkRoomData(snapshot: RoomSnapshot): ParkRoomData {
     addIfBlocking(site.structureType, site.pos.x, site.pos.y);
 
   // 房间连接带：与 parkInForeignRoom 的走廊带同口径（距边界 ≤2 格）。
-  const portals = new Set<number>();
-  for (let x = 0; x < 50; x++) {
-    for (let y = 0; y < 50; y++) {
-      if (x <= 1 || x >= 48 || y <= 1 || y >= 48) portals.add(x * 50 + y);
-    }
-  }
+  const portals = getPortalTiles();
 
   const data: ParkRoomData = { critical, roads, blocking, portals };
   g.__parkRoomData[snapshot.roomName] = { tick: Game.time, data };

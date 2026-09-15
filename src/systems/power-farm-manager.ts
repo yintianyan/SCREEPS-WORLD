@@ -19,6 +19,7 @@ import {
   hasRequest,
   removeRequestsByMission,
   submitRequest,
+  buildSpawnRequest,
 } from "../domain/spawn/queue";
 import { selectBody } from "../config/bodies";
 import { querySquad } from "../kernel/global-cache";
@@ -224,24 +225,24 @@ function submitFarmRequest(
     mission.spawned = (mission.spawned ?? 0) + 1;
   }
   const body = selectBody(role, cap);
-  submitRequest(queue, {
-    key,
-    role,
-    home: mission.sponsor,
-    priority: 2,
-    body,
-    memory: {
+  submitRequest(
+    queue,
+    buildSpawnRequest(tick, {
+      key,
       role,
       home: mission.sponsor,
-      mode: "acquire",
-      spawnIndex: index,
-      remoteTarget: mission.targetRoom,
-      mission: role === "pbCollector" ? "powerCollect" : "powerBank",
-    },
-    createdAt: tick,
-    expiresAt: tick + CONFIG.spawn.requestTtl,
-    retries: 0,
-  });
+      priority: 2,
+      body,
+      memory: {
+        role,
+        home: mission.sponsor,
+        mode: "acquire",
+        spawnIndex: index,
+        remoteTarget: mission.targetRoom,
+        mission: role === "pbCollector" ? "powerCollect" : "powerBank",
+      },
+    }),
+  );
 }
 
 /** 统计指定角色的存活数（按 remoteTarget 过滤）。 */

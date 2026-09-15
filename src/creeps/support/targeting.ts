@@ -1,6 +1,6 @@
 import type { RoomSnapshot } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
-import { globalCache } from "../../kernel/global-cache";
+import { globalCache, tickCacheEntry } from "../../kernel/global-cache";
 import { classifyThreats } from "../../domain/defense/threat";
 import { getObjectById } from "./obj-cache";
 
@@ -13,44 +13,38 @@ const DROP_DISTANCE_WEIGHT = 20;
 const HAUL_CONTAINER_DISTANCE_WEIGHT = 10;
 
 /** 房间内所有敌对 creep（过滤联盟白名单）— per-tick per-room 共享缓存。
- * 与 lifecycle.getRoomThreats 的区别：后者按 body 过滤「有威胁」单位供 flee 用；
- * 本函数返回全部 hostile（remote-defender 需击杀无威胁 body 的 NPC reserver 释放占位）。
- * 同房多 defender 共享同数组，避免每只每 tick 全房 find；tick 内死亡者仍会被选中
- * 一次，attack 返回 ERR_INVALID_TARGET 由既有错误容忍处理。 */
+ * 与 getRoomThreatsCached 的区别：后者在白名单 find 之上再按 body 过滤「有威胁」单位
+ * 供 flee 用；本函数返回全部 hostile（remote-defender 需击杀无威胁 body 的 NPC
+ * reserver 释放占位）。同房多 defender 共享同数组，避免每只每 tick 全房 find；
+ * tick 内死亡者仍会被选中一次，attack 返回 ERR_INVALID_TARGET 由既有错误容忍处理。 */
 export function getHostilesCached(room: Room): Creep[] {
   const g = globalCache();
-  if (!g.__hostilesCache) g.__hostilesCache = {};
-  const cached = g.__hostilesCache[room.name];
-  if (cached && cached.tick === Game.time) {
-    return cached.creeps;
-  }
-  const allies = CONFIG.defense.allies;
-  // owner 缺失（私服注入/NPC 边缘形态）视为非盟友 → 敌对；不可让 filter 抛错
-  // （该缓存被 attacker/remote-defender 逐 tick 调用，抛错即战斗失能）。
-  const hostiles = room.find(FIND_HOSTILE_CREEPS, {
-    filter: c => !allies.includes(c.owner?.username ?? ""),
-  });
-  g.__hostilesCache[room.name] = { tick: Game.time, creeps: hostiles };
-  return hostiles;
+  return tickCacheEntry((g.__hostilesCache ??= {}), room.name, () => {
+    const allies = CONFIG.defense.allies;
+    // owner 缺失（私服注入/NPC 边缘形态）视为非盟友 → 敌对；不可让 filter 抛错
+    // （该缓存被 attacker/remote-defender 逐 tick 调用，抛错即战斗失能）。
+    return {
+      tick: Game.time,
+      creeps: room.find(FIND_HOSTILE_CREEPS, {
+        filter: c => !allies.includes(c.owner?.username ?? ""),
+      }),
+    };
+  }).creeps;
 }
 
 /** 房间内「有威胁」的 hostile creep（body-aware）— per-tick per-room 共享缓存。
  * 复用 getHostilesCached 的同一次白名单 find（不重复 FIND_HOSTILE_CREEPS），
- * 再按 THREAT_PARTS 过滤出有威胁的编队，供 kernel 的 combat 旁路、flee 等消费。
- * 与 lifecycle.getRoomThreats 语义一致（都是 body-aware 威胁判定），但后者自带
- * 独立缓存；此处从同一 find 源派生，消除同房重复扫描。 */
+ * 再按 THREAT_PARTS 过滤出有威胁的编队，供 kernel 的 combat 旁路、flee 等消费；
+ * lifecycle 的远矿威胁检测（shouldFleeForeignRoom）也经此函数，全仓单一口径。 */
 export function getRoomThreatsCached(room: Room): Creep[] {
   const g = globalCache();
-  if (!g.__roomThreatsCache) g.__roomThreatsCache = {};
-  const cached = g.__roomThreatsCache[room.name];
-  if (cached && cached.tick === Game.time) {
-    return cached.creeps;
-  }
-  // 复用已缓存的全量 hostile（白名单已过滤）→ body-aware 威胁子集。
-  const hostiles = getHostilesCached(room);
-  const threats = classifyThreats(hostiles, CONFIG.defense.allies);
-  g.__roomThreatsCache[room.name] = { tick: Game.time, creeps: threats };
-  return threats;
+  return tickCacheEntry((g.__roomThreatsCache ??= {}), room.name, () => {
+    // 复用已缓存的全量 hostile（白名单已过滤）→ body-aware 威胁子集。
+    return {
+      tick: Game.time,
+      creeps: classifyThreats(getHostilesCached(room), CONFIG.defense.allies),
+    };
+  }).creeps;
 }
 
 /** 获取或分配 creep 的 source。将 sourceId 存入 memory。 */

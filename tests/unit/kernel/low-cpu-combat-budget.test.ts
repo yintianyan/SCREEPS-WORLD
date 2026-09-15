@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetGlobals, mockSnapshot, mockHostile } from "../../support/factories";
 import { CpuBudget } from "../../../src/kernel/scheduler";
 import type { Budget, CreepRole, Priority } from "../../../src/kernel/contracts";
-import { isThreat } from "../../../src/kernel/contracts";
+import { isThreat } from "../../../src/domain/defense/threat";
 
 describe("D-FINDING-05: 低 CPU + 威胁竞争预算", () => {
   beforeEach(() => {
