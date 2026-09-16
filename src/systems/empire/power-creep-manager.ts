@@ -1,6 +1,7 @@
 /** Power Creep Manager */
 import { CONFIG } from "../../config";
 import { recordEvent, EventKind } from "../../kernel/event-log";
+import { getObjectById } from "../../creeps/support/obj-cache";
 import type { Priority, System, TickContext, RoomSnapshot } from "../../kernel/contracts";
 import {
   PWR,
@@ -233,7 +234,7 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
       return;
     case "operateTower":
     case "operateController": {
-      const target = Game.getObjectById(action.targetId as Id<Structure>);
+      const target = getObjectById(action.targetId as Id<Structure>);
       if (!target) return;
       if (pc.pos.getRangeTo(target) <= USE_POWER_RANGE) {
         pc.usePower(
@@ -249,7 +250,7 @@ function runSpawnedPc(pc: PowerCreep, home: RoomSnapshot, ctx: TickContext): voi
     case "operateExtension":
     case "operateStorage":
     case "operateFactory": {
-      const target = Game.getObjectById(action.targetId as Id<Structure>);
+      const target = getObjectById(action.targetId as Id<Structure>);
       if (!target) return;
       if (pc.pos.getRangeTo(target) <= USE_POWER_RANGE) {
         const power =

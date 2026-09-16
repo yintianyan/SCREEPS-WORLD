@@ -1,6 +1,11 @@
 /** Tactical Engagement Runtime */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
-import { globalCache, querySquad, type GlobalCache } from "../../kernel/global-cache";
+import {
+  globalCache,
+  querySquad,
+  tickCacheEntry,
+  type GlobalCache,
+} from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
 import {
   planFocusFire,
@@ -488,12 +493,10 @@ function getHostilesCached(room: Room): Creep[] {
   const g = globalCache() as {
     __tacticalHostiles?: Record<string, { tick: number; list: Creep[] }>;
   };
-  if (!g.__tacticalHostiles) g.__tacticalHostiles = {};
-  const cached = g.__tacticalHostiles[room.name];
-  if (cached && cached.tick === Game.time) return cached.list;
-  const list = room.find(FIND_HOSTILE_CREEPS) as Creep[];
-  g.__tacticalHostiles[room.name] = { tick: Game.time, list };
-  return list;
+  return tickCacheEntry((g.__tacticalHostiles ??= {}), room.name, () => ({
+    tick: Game.time,
+    list: room.find(FIND_HOSTILE_CREEPS) as Creep[],
+  })).list;
 }
 
 // ═══════════════════════════════════════════════════════════

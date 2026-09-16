@@ -1,6 +1,11 @@
 /** Combat Micro Runtime */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
-import { globalCache, querySquad, type GlobalCache } from "../../kernel/global-cache";
+import {
+  globalCache,
+  querySquad,
+  tickCacheEntry,
+  type GlobalCache,
+} from "../../kernel/global-cache";
 import {
   planCombatMicro,
   deriveBodyAwareState,
@@ -297,15 +302,10 @@ function collectEnemySnapshots(targetRoom: string): MicroEnemySnapshot[] {
   const g = globalCache() as {
     __tacticalHostiles?: Record<string, { tick: number; list: Creep[] }>;
   };
-  if (!g.__tacticalHostiles) g.__tacticalHostiles = {};
-  const cached = g.__tacticalHostiles[room.name];
-  let hostiles: Creep[];
-  if (cached && cached.tick === Game.time) {
-    hostiles = cached.list;
-  } else {
-    hostiles = room.find(FIND_HOSTILE_CREEPS) as Creep[];
-    g.__tacticalHostiles[room.name] = { tick: Game.time, list: hostiles };
-  }
+  const hostiles = tickCacheEntry((g.__tacticalHostiles ??= {}), room.name, () => ({
+    tick: Game.time,
+    list: room.find(FIND_HOSTILE_CREEPS) as Creep[],
+  })).list;
 
   const result: MicroEnemySnapshot[] = [];
   for (const hostile of hostiles) {

@@ -2,6 +2,7 @@ import { CONFIG, getWallTargetHits } from "../../config";
 import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/contracts";
 import { EventKind, recordEvent } from "../../kernel/event-log";
 import { findCriticalRepair } from "../../creeps/support";
+import { getObjectById } from "../../creeps/support/obj-cache";
 import { selectTowerTarget, type TowerThreat } from "../../domain/defense/tower-target";
 import { assessEngagement, type TowerSummary } from "../../domain/defense/tower-engagement";
 import { isThreatWithin } from "../../domain/defense/threat";
@@ -255,7 +256,7 @@ function selectFocusTarget(
     rangeToTower: referenceTower.pos.getRangeTo(c.pos),
   }));
   const targetId = selectTowerTarget(summaries);
-  const target = targetId ? Game.getObjectById<Creep>(targetId as Id<Creep>) : undefined;
+  const target = targetId ? getObjectById<Creep>(targetId as Id<Creep>) : undefined;
   // 回退：目标已消失或无法解析时退回最近目标。
   return target ?? referenceTower.pos.findClosestByRange(threats as Creep[]) ?? undefined;
 }

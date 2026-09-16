@@ -12,9 +12,8 @@ function getCreepCache(): Creep[] {
 }
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache, publishProcurementDemands } from "../../kernel/global-cache";
-import { CONFIG } from "../../config";
 import { RECOVERY_BODY, selectBody, degradeBody, minimalBodyFor } from "../../config/bodies";
-import { submitRequest, hasRequest, spawnKey } from "../../domain/spawn/queue";
+import { submitRequest, hasRequest, spawnKey, buildSpawnRequest } from "../../domain/spawn/queue";
 import { type RecoveryAction } from "../../domain/strategy/recovery-priority";
 import {
   recoveryIdempotencyKey,
@@ -279,23 +278,23 @@ function submitSpawnRecovery(
     "move",
   ]) ?? [...RECOVERY_BODY];
 
-  submitRequest(queue, {
-    key,
-    role: "worker",
-    home: room,
-    priority: 0,
-    body,
-    memory: {
+  submitRequest(
+    queue,
+    buildSpawnRequest(ctx.tick, {
+      key,
       role: "worker",
       home: room,
-      mode: "acquire",
-      // Correlation ID 供 A4.7 Decision Trace
-      recoveryCorrelationId: correlationId,
-    } as CreepMemory,
-    createdAt: ctx.tick,
-    expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
-    retries: 0,
-  });
+      priority: 0,
+      body,
+      memory: {
+        role: "worker",
+        home: room,
+        mode: "acquire",
+        // Correlation ID 供 A4.7 Decision Trace
+        recoveryCorrelationId: correlationId,
+      } as CreepMemory,
+    }),
+  );
   roomMem.spawnQueue = queue;
 
   return { submitted: true, executionRef: key, reason: "spawn request submitted" };
@@ -333,22 +332,22 @@ function submitLogisticsFix(
       "move",
     ]) ?? minimalBodyFor("hauler");
 
-  submitRequest(queue, {
-    key,
-    role: "hauler",
-    home: room,
-    priority: 1,
-    body,
-    memory: {
+  submitRequest(
+    queue,
+    buildSpawnRequest(ctx.tick, {
+      key,
       role: "hauler",
       home: room,
-      mode: "acquire",
-      recoveryCorrelationId: correlationId,
-    } as CreepMemory,
-    createdAt: ctx.tick,
-    expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
-    retries: 0,
-  });
+      priority: 1,
+      body,
+      memory: {
+        role: "hauler",
+        home: room,
+        mode: "acquire",
+        recoveryCorrelationId: correlationId,
+      } as CreepMemory,
+    }),
+  );
   roomMem.spawnQueue = queue;
 
   return { submitted: true, executionRef: key, reason: "hauler spawn request submitted" };
@@ -401,22 +400,22 @@ function submitEnergyRedirect(
     "move",
   ]) ?? [CARRY, CARRY, MOVE, MOVE];
 
-  submitRequest(queue, {
-    key,
-    role: "distributor",
-    home: room,
-    priority: 1,
-    body,
-    memory: {
+  submitRequest(
+    queue,
+    buildSpawnRequest(ctx.tick, {
+      key,
       role: "distributor",
       home: room,
-      mode: "acquire",
-      recoveryCorrelationId: correlationId,
-    } as CreepMemory,
-    createdAt: ctx.tick,
-    expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
-    retries: 0,
-  });
+      priority: 1,
+      body,
+      memory: {
+        role: "distributor",
+        home: room,
+        mode: "acquire",
+        recoveryCorrelationId: correlationId,
+      } as CreepMemory,
+    }),
+  );
   roomMem.spawnQueue = queue;
 
   return { submitted: true, executionRef: key, reason: "distributor spawn for energy redirect" };
@@ -574,22 +573,22 @@ function submitPopulationRebuild(
 
   // 提交 harvester 请求
   if (!hasRequest(queue, harvesterKey)) {
-    submitRequest(queue, {
-      key: harvesterKey,
-      role: "harvester",
-      home: room,
-      priority: 1,
-      body: harvesterBody,
-      memory: {
+    submitRequest(
+      queue,
+      buildSpawnRequest(ctx.tick, {
+        key: harvesterKey,
         role: "harvester",
         home: room,
-        mode: "acquire",
-        recoveryCorrelationId: correlationId,
-      } as CreepMemory,
-      createdAt: ctx.tick,
-      expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
-      retries: 0,
-    });
+        priority: 1,
+        body: harvesterBody,
+        memory: {
+          role: "harvester",
+          home: room,
+          mode: "acquire",
+          recoveryCorrelationId: correlationId,
+        } as CreepMemory,
+      }),
+    );
     submitted = true;
   }
 
@@ -701,22 +700,22 @@ function submitDefenseResponse(
       "move",
     ]) ?? [ATTACK, MOVE];
 
-    submitRequest(queue, {
-      key,
-      role: "defender",
-      home: room,
-      priority: 0, // P0 紧急——防御响应
-      body,
-      memory: {
+    submitRequest(
+      queue,
+      buildSpawnRequest(ctx.tick, {
+        key,
         role: "defender",
         home: room,
-        mode: "acquire",
-        recoveryCorrelationId: correlationId,
-      } as CreepMemory,
-      createdAt: ctx.tick,
-      expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
-      retries: 0,
-    });
+        priority: 0, // P0 紧急——防御响应
+        body,
+        memory: {
+          role: "defender",
+          home: room,
+          mode: "acquire",
+          recoveryCorrelationId: correlationId,
+        } as CreepMemory,
+      }),
+    );
     roomMem.spawnQueue = queue;
 
     log.info(
