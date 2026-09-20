@@ -6,11 +6,23 @@
  * 同时对主房持续注入 NPC invader（threatWindow 3000t 内保持 threatRecent）
  * → fortify 驻留 5000t → 自然升 war 姿态。
  *
- * 断言：war 姿态达成后，诱饵目标（stale intel）不得触发 warPlan——
- * 授权只认 fact 级目标（INTELLIGENCE §5；欺骗最多骗到侦察预算，骗不到战争授权）。
+ * 断言（两条契约，刻意分开判）：
+ *  ①**授权起点**必须有观测（fact 硬门槛的等价表述：无观测不得立项；有观测时授权是正确行为）。
+ *  ②**承诺不得长期越过证据**：立项之后，授权窗口里不得出现成片的零视野样本 ——
+ *     实测这条红：warPlan 存续期内完全不复核情报新鲜度，而 `planTimeout`(6000) ≫
+ *     `targetFreshness`(1500)，于是"最后一眼"之后还能继续烧 4500 tick 的兵。
+ *     修法属军事领域决策（存续期复核节律？planTimeout 上限？），未擅自改 src。
+ * 采样口径：授权窗口与视野配对一律逐 tick / 50t 批（授权窗口实测可短至 30~50 tick，
+ * 500t 网格会把整段采漏然后绿得毫无意义）；未覆盖窗口显式报 `uncovered=`。
+ *
+ * 为什么不是原来那句「诱饵永远不得被授权」：那条把"侦察会自然停"当成前提
+ * （种子 scout TTL 1500 死掉 → 视野消失 → 情报 stale）。经济一旦健康，AI 会**补孵
+ * scout 续住视野**，诱饵就成了货真价实的 fact 目标 —— 此时"绝不授权"是错的断言，
+ * 会把正确行为判成缺陷。fact 门槛的语义本来就是"信不信由观测决定"，不是"永远别打那间"。
  * 证据绑定：commit / schemaVersion / 姿态与授权时间线在输出登记。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { CONFIG } from "../../../src/config";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
@@ -26,6 +38,9 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
   let errorsSeen = 0;
   let warSeen = false;
   let decoyAuthorized = false;
+  /** fact 门槛被绕过的次数：对诱饵授权时该楼层零视野 —— 这才是真违规。 */
+  let staleAuthorizations = 0;
+  let samplesSeen = 0;
   const timeline: string[] = [];
 
   beforeAll(async () => {
@@ -128,30 +143,90 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
       remoteTarget: DECOY,
     });
 
-    const totalStages = 18;
-    for (let i = 0; i < totalStages; i++) {
-      const tick = i * 500;
+    // 采样密度：授权窗口实测可短至 30~50 tick（#22/#23 的逐 tick 序列量出来的），而本场景
+    // 原先按 500t 网格采样 —— 一整段"对诱饵授权"可以被完整采漏，然后绿得毫无意义。
+    // t<4500 仍用 500t（那会儿还没到 war 时点，省往返），之后收到 50t：任何 ≥50t 的授权
+    // 窗口至少撞上一次同 tick 视野配对；更短的窗口由逐 tick 序列登记为未覆盖并打 WARN。
+    let tick = 0;
+    let invaderSeq = 0;
+    let lastInject = -1000;
+    /** 逐 tick 的 warPlan 目标（rawMemory 自带，零额外往返）—— 用来量授权窗口的真实宽度。 */
+    const targetTicks: Array<{ tick: number; tgt?: string }> = [];
+    const probeTicks: number[] = [];
+    /** 与 target=DECOY 配对的同 tick 视野读数（授权合法性 = 该 tick 有没有人看着）。 */
+    const probeVision: Array<{ tick: number; vis: number }> = [];
+    while (tick < 9000) {
+      const batch = tick < 4500 ? 500 : 50;
       // 高频再注入：塔击杀保经济，目击刷新 lastHostileAt 维持 threatRecent——
-      // 「反复试探性攻击维持战争姿态」是生产语义。
-      if (tick >= 200 && tick <= 6000) {
-        await injectHostile(runner, HOME, 35, 35, ["attack", "move"], `invader-${i}`, "invader");
+      // 「反复试探性攻击维持战争姿态」是生产语义。加密采样后仍按 ~500t 节奏注入，
+      // 否则等于把入侵强度调高 10 倍，场景就不是原来那个场景了。
+      if (tick >= 200 && tick <= 6000 && tick - lastInject >= 500) {
+        lastInject = tick;
+        await injectHostile(
+          runner,
+          HOME,
+          35,
+          35,
+          ["attack", "move"],
+          `invader-${invaderSeq++}`,
+          "invader",
+        );
       }
 
       // war 门三条件探针：colonyState（anyRecovery）/ economyPressure（压力门）/
       // since（驻留基准）/ phase.phase（闪烁溯源：bootstrap vs crisis 带）。
       // economyPressure 在 RoomMemory 顶层（room-state.ts 每 tick 写入，
       // phase 子对象无此字段——上一版探针读错路径导致 p=undefined 假象）。
+      // 同一 tick 同时取「诱饵房内我方 creep 数」与 warPlan 目标 —— 授权合法性必须在
+      // 同一份快照里配对判定，分开取会因相位差误判（见头注释）。
+      await runner.bot.sendConsole(
+        `var v=0; for (var cn in Game.creeps) { if (Game.creeps[cn].room && Game.creeps[cn].room.name === "${ 
+          DECOY 
+          }") v++; }` +
+          `console.log("DECOYAUTH t=" + Game.time + " vis=" + v + " target=" + (Memory.kernel.warPlan ? Memory.kernel.warPlan.targetRoom : "-"));`,
+      );
       await runner.bot.sendConsole(
         'console.log("PROBE t=" + Game.time + " cs=" + Memory.rooms["W0N1"].colonyState + ' +
           '" ph=" + Memory.rooms["W0N1"].phase?.phase + ' +
           '" p=" + Memory.rooms["W0N1"].economyPressure + ' +
           '" since=" + Memory.kernel.strategy?.since + " post=" + Memory.kernel.strategy?.posture)',
       );
-      const snaps = await runner.runTicks(500);
+      const snaps = await runner.runTicks(batch);
+      tick += batch;
       const last = snaps.at(-1)!;
       errorsSeen += snaps.flatMap(s => s.consoleLogs).filter(isJsError).length;
       for (const l of snaps.flatMap(s => s.consoleLogs)) {
         if (l.includes("PROBE t=")) timeline.push(l.replace(/^.*PROBE /, "PROBE "));
+      }
+      // 同 tick 配对：DECOYAUTH 行与它所在快照的 rawMemory 是同一份状态。
+      for (const snap of snaps) {
+        const rm = snap.rawMemory as Record<string, any> | undefined;
+        targetTicks.push({
+          tick: snap.tick,
+          tgt: rm?.kernel?.warPlan?.targetRoom as string | undefined,
+        });
+        if (rm?.kernel?.strategy?.posture === "war") warSeen = true;
+        const line = snap.consoleLogs
+          .map(x => (x.includes("&#x22;") ? x.replace(/&#x22;/g, '"') : x))
+          .find(x => x.includes("DECOYAUTH t="));
+        if (!line) continue;
+        const mVis = line.match(/vis=(\d+)/);
+        const mTgt = line.match(/target=(\S+)/);
+        if (!mVis || !mTgt) continue;
+        const vis = Number(mVis[1]);
+        const target = mTgt[1];
+        samplesSeen++;
+        if (target === DECOY) {
+          decoyAuthorized = true;
+          probeTicks.push(snap.tick);
+          probeVision.push({ tick: snap.tick, vis });
+          if (vis === 0) {
+            staleAuthorizations++;
+            timeline.push(`VIOLATION@${snap.tick}: 对 ${DECOY} 授权但该楼层零视野`);
+          } else {
+            timeline.push(`OBSERVED@${snap.tick}: ${DECOY} 授权时有 ${vis} 只我方 creep 在场`);
+          }
+        }
       }
       const mem = await runner.bot.getMemory();
       const posture = mem?.kernel?.strategy?.posture;
@@ -163,13 +238,47 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
       );
     }
 
+    // 授权窗口 = 逐 tick 序列里 targetRoom===DECOY 的连续段；covered = 段内是否撞上一次
+    // 同 tick 视野配对。未覆盖段必须显式登记：绿不等于验过，采样网格漏掉的窗口里
+    // 完全可能藏着一段零视野授权。
+    const decoyWindows: Array<{ from: number; to: number; covered: boolean }> = [];
+    for (let i = 0; i < targetTicks.length; i++) {
+      if (targetTicks[i]!.tgt !== DECOY) continue;
+      let j = i;
+      while (j + 1 < targetTicks.length && targetTicks[j + 1]!.tgt === DECOY) j++;
+      decoyWindows.push({
+        from: targetTicks[i]!.tick,
+        to: targetTicks[j]!.tick,
+        covered: probeTicks.some(p => p >= targetTicks[i]!.tick && p <= targetTicks[j]!.tick),
+      });
+      i = j;
+    }
+    const uncovered = decoyWindows.filter(w => !w.covered);
+    // 两条不同的契约，必须分开判（原先一条断言把它们混成一句话，红起来指错地方）：
+    //  ①**授权门槛**（本场景的标题）：一个授权窗口的**起点**必须有观测 —— fact 硬门槛。
+    //  ②**承诺不得越过证据**（实测挖出的缺陷）：窗口存续期间可以因为通勤而瞬时零视野，
+    //     但**长期**零视野还在打 = 计划在自己证据过期之后继续烧命。实测窗口起点 t3901
+    //     授权合法，而 t6302 起连续 54 个同 tick 样本零视野仍在授权
+    //     （`CONFIG.war.planTimeout`=6000 ≫ `targetFreshness`=1500，且计划存续期内
+    //     完全不复核情报新鲜度 → 中间 4500 tick 是"没人看见却继续打"）。
+    const staleStarts: number[] = [];
+    let unobservedSamples = 0;
+    for (const w of decoyWindows) {
+      const inside = probeVision.filter(
+        s => s.tick >= w.from - 50 && s.tick <= (w.covered ? w.to : w.from + 50),
+      );
+      if (!inside.length) continue; // 未覆盖窗口不猜测，另列 uncovered
+      if (inside[0]!.vis === 0) staleStarts.push(inside[0]!.tick);
+      unobservedSamples += inside.filter(s => s.vis === 0).length;
+    }
+
     // ── 证据登记 ──
     console.log(`[soak-evidence] decoy probes: ${timeline.slice(-6).join(" | ")}`);
     console.log(
       `[soak-evidence] decoy: warSeen=${warSeen} decoyAuthorized=${decoyAuthorized} jsErrors=${errorsSeen}`,
     );
     console.log(
-      `[soak-evidence] decoy binding: schemaVersion=43 gcl=1 collectedAt=${new Date().toISOString()}`,
+      `[soak-evidence] decoy binding: schemaVersion=${CONFIG.memory.schemaVersion} gcl=1 collectedAt=${new Date().toISOString()}`,
     );
 
     // ── 断言 ──
@@ -178,9 +287,33 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
       warSeen,
       `8000 tick 内未达成 war 姿态（fortify 驻留 + 威胁维持应升 war）：\n${timeline.join(", ")}`,
     ).toBe(true);
-    // 核心断言：诱饵（stale intel）不得触发对 W1N1 的 warPlan。
-    expect(decoyAuthorized, `诱饵目标触发了授权——fact 硬门槛被绕过！\n${timeline.join(", ")}`).toBe(
-      false,
+    // 契约①（本场景的标题）：**授权起点**必须是观测支持的。这才是 fact 硬门槛的原意 ——
+    // 判据取窗口起点的第一次同 tick 配对，不取窗口全程（全程判据把②混进来，红起来指错原因）。
+    expect(
+      staleStarts,
+      `诱饵授权窗口的起点就零视野 ${staleStarts.join(",")} —— fact 硬门槛被绕过！\n${timeline.slice(-8).join(", ")}`,
+    ).toEqual([]);
+    // 契约②（实测挖出的缺陷，见 task #12）：承诺不得长期越过证据。
+    // **偶发捕获型断言**：只有 AI 的侦察链恰好断掉时才看得见 —— 同一份代码，全量跑复现过
+    // t6302 起连续 54 个同 tick 样本零视野仍在授权，单独复跑则全程有观测。所以它红的时候
+    // **不是回归**，是抓到了 #12；绿也不代表这条被验过（只代表这一次没人断线）。
+    // 缺陷本身有配置证据：warPlan 存续期内不复核情报，而 planTimeout(6000) ≫
+    // targetFreshness(1500) → "最后一眼"之后还有 4500 tick 的合法烧兵区间。
+    expect(
+      unobservedSamples,
+      `对诱饵的授权窗口内有 ${unobservedSamples} 个同 tick 样本零视野（连续 ${((50 * unobservedSamples) / Math.max(1, decoyWindows.length)).toFixed(0)} tick 量级）` +
+        `—— 计划已越过它的证据：授权之后没人再看过 W1N1，战争承诺却继续。` +
+        `\n授权窗口=${decoyWindows.map(w => `t${w.from}..${w.to}`).join(",")}` +
+        `\n（窗口起点都有观测 → 这不是 fact 门槛被绕过，是"承诺存续期内不复核情报"）`,
+    ).toBe(0);
+    console.log(
+      `[soak-evidence] decoy audit: samples=${samplesSeen} targetedDecoy=${decoyAuthorized} ` +
+        `staleAuthorizations=${staleAuthorizations} staleStarts=${staleStarts.length} ` +
+        `unobservedSamples=${unobservedSamples} decoyWindows=${decoyWindows.length} ` +
+        `uncovered=${uncovered.length}${ 
+        uncovered.length
+          ? ` (${uncovered.map(w => `t${w.from}..${w.to}`).join(",")} 无同 tick 视野配对)`
+          : ""}`,
     );
     // 全程无 JS 错误。
     expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);

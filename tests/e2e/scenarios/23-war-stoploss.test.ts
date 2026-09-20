@@ -1,7 +1,7 @@
 /**
  * E2E-023 止损链实测（Scenario F 验收 W4）— 超限收摊 / 黑名单冷却 / 满编才推进。
  *
- * 场景：主房同 E2E-022（RCL6+storage 60k+满编劳动力种子）；邻房敌对有主房，
+ * 场景：主房同 E2E-022（warRoom：RCL6 核心区含 extension + 塔 + 400k storage）；邻房敌对有主房，
  * **注册真实敌方 bot**（塔防 AI：塔主动射击入 roommate 侵者——真实战损源），
  * 塔 hits 100000 不可破（保证战果核验 = failure → 满额黑名单），塔能量 1000
  * （100 发，足够打出止损链）。scout 种在塔射程外（角落 ≥25 格）维持视野。
@@ -21,8 +21,9 @@
  *  4. warStandDownUntil 整军休战闸在收摊后置位。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { CONFIG } from "../../../src/config";
 import { ScenarioRunner } from "../framework";
-import { standardRoom } from "../fixtures/rooms";
+import { warRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
 import type { RoomSetup } from "../framework/WorldBuilder";
 import { injectHostileTower, injectFriendlyCreep, injectHostile } from "../fixtures/inject";
@@ -46,6 +47,14 @@ module.exports.loop = function() {
   }
 };
 `;
+
+/* ── 时间窗（相对立项时刻，不用绝对 tick —— 见主循环注释）──
+ * PLAN_DEADLINE：一直没立项就判"战争没发生"，这是场景前置而非跑道。
+ * RUNWAY_AFTER_PLAN：立项后留给「动员→战损累加→收摊→黑名单→冷却」这条链跑完的窗口。
+ * HARD_MAX_STAGES：保险丝，防止立项/时钟读数异常时无限跑。 */
+const PLAN_DEADLINE = 14000;
+const RUNWAY_AFTER_PLAN = 7000;
+const HARD_MAX_STAGES = 100;
 
 interface ProbeSample {
   tick: number;
@@ -96,28 +105,15 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
       terrain: emptyTerrain(),
       objects: [controller(10, 10, 1), source(10, 40), source(40, 10), mineral(40, 40)],
     };
-    const home = standardRoom(HOME, 300, 6);
-    home.objects!.push(
-      { type: "tower", x: 20, y: 20, props: { energy: 1000, energyCapacity: 1000 } },
-      { type: "storage", x: 24, y: 30, props: { store: { energy: 60000 } } },
-      // 10 个满能量 extension：spawn 口袋 300→800——孵化脉冲期 spendableRatio
-      // 不深跌 → drainScore 不升级 → anyRecovery 无闪烁 → war 姿态稳定
-      // （war→fortify 降级路径 anyRecovery && !liveThreat 被从经济侧封死）。
-      { type: "extension", x: 22, y: 22, props: { energy: 50, energyCapacity: 50 } },
-      { type: "extension", x: 28, y: 22, props: { energy: 50, energyCapacity: 50 } },
-      { type: "extension", x: 22, y: 28, props: { energy: 50, energyCapacity: 50 } },
-      { type: "extension", x: 28, y: 28, props: { energy: 50, energyCapacity: 50 } },
-      { type: "extension", x: 25, y: 20, props: { energy: 50, energyCapacity: 50 } },
-      { type: "extension", x: 20, y: 25, props: { energy: 50, energyCapacity: 50 } },
-      { type: "extension", x: 30, y: 25, props: { energy: 50, energyCapacity: 50 } },
-      { type: "extension", x: 21, y: 25, props: { energy: 50, energyCapacity: 50 } },
-      { type: "extension", x: 29, y: 25, props: { energy: 50, energyCapacity: 50 } },
-      { type: "extension", x: 25, y: 21, props: { energy: 50, energyCapacity: 50 } },
-    );
+    // 主房走 warRoom：RCL6 核心区带 40 个**蓝图槽位**上的 extension（口袋不再是 800 而是
+    // ~2300）+ 有能量塔 + 60k storage。原先手填的 10 个 extension 里有 6 个不在布局蓝图上
+    // （(25,20)/(20,25)/(30,25)/(21,25)/(29,25)/(25,21)），会被 orphanSweep 判成非布局结构，
+    // 注释里「口袋 300→800 → war 姿态稳定」的前提因此并不牢。夹具理由见 rooms.ts warRoom。
+    const home = warRoom(HOME);
     await runner.setup({
       roomName: HOME,
       rooms: [home, targetRoom],
-      maxTicks: 12200,
+      maxTicks: PLAN_DEADLINE + RUNWAY_AFTER_PLAN + 600,
       controllerLevel: 6,
     });
 
@@ -163,7 +159,14 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
       [45, 45],
     ];
     let invaderSeq = 0;
-    const totalStages = 48;
+    // 窗口以**立项时刻**为基准，不用绝对 tick 数：塔与 storage 真正生效后，入侵者被
+    // 更快清掉 → threatRecent/驻留计时改变 → war 立项时间大幅漂移（实测从 ~t5000 漂到
+    // t9001）。原来写死的 12000t 让止损链（动员→战损累加→收摊→黑名单→冷却）没有跑道，
+    // 于是"链没跑完"被误读成"链坏了"。立项后再给 RUNWAY_AFTER_PLAN，跑完即停。
+    const totalStages = HARD_MAX_STAGES;
+    /** 逐 tick 观测到的 warPlan 现场（探针 250t 采样会漏掉短命计划，见循环内注释）。 */
+    const planTicks: Array<{ tick: number; spawned: number; phase: string }> = [];
+    let firstPlanTick: number | undefined;
     for (let i = 0; i < totalStages; i++) {
       // 每 500t（偶数 stage）补种 scout（视野 = fact 情报生命线，同 E2E-022）。
       if (i % 2 === 0) {
@@ -221,6 +224,19 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
       );
       const snaps = await runner.runTicks(250);
       errorsSeen += snaps.flatMap(s => s.consoleLogs).filter(isJsError).length;
+      // 逐 tick 抓 warPlan：探针每 250t 才发一次，短命计划会**整个从采样缝里漏掉**
+      // （实测：demobilize 日志证明 t4401 前就有计划并收摊，而探针 `firstPlan=never`，
+      // 于是"链没跑完"被误判成"从未立项"）。立项时刻与战损基数只能逐 tick 取。
+      for (const snap of snaps) {
+        const wp = (snap.rawMemory as Record<string, any> | undefined)?.kernel?.warPlan;
+        if (wp?.targetRoom === TARGET) {
+          planTicks.push({
+            tick: snap.tick,
+            spawned: Number(wp.spawned ?? -1),
+            phase: String(wp.phase ?? "?"),
+          });
+        }
+      }
       for (const l of snaps.flatMap(s => s.consoleLogs)) {
         const sample = parseProbe(l);
         if (sample) probes.push(sample);
@@ -229,12 +245,33 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
       const last = snaps.at(-1)!;
       const mem = await runner.bot.getMemory();
       postureTimeline.push(`t${last.tick}:${mem?.kernel?.strategy?.posture ?? "?"}`);
+
+      // 立项时刻一旦被观测到就把终点改成「立项 + 跑道」；未立项则最多等到保险丝。
+      if (firstPlanTick === undefined && planTicks.length) firstPlanTick = planTicks[0]!.tick;
+      const deadline =
+        firstPlanTick === undefined ? PLAN_DEADLINE : firstPlanTick + RUNWAY_AFTER_PLAN;
+      if (last.tick >= deadline) break;
     }
 
     // ── 证据登记 ──
-    const firstPlan = probes.find(s => s.targetRoom === TARGET);
-    const maxSpawned = Math.max(...probes.map(s => s.spawned));
-    const advanceSamples = probes.filter(s => s.phase === "advance");
+    // 立项证据优先取逐 tick 现场；再退回 demobilize 日志（它能证明"曾有过计划"，
+    // 即使采样与逐 tick 都没赶上 —— 计划存在过是事实，不该因为看不见就判从未发生）。
+    const demobTicksFromLogs = warLogs
+      .map(l => l.match(/\[t(\d+)\]\[\w+\]\[war-planner\] war: demobilize (\S+)/))
+      .filter((m): m is RegExpMatchArray => !!m && m[2] === TARGET)
+      .map(m => Number(m[1]));
+    const firstPlan = planTicks.length
+      ? { tick: planTicks[0]!.tick, via: "tick" as const }
+      : probes.find(s => s.targetRoom === TARGET)
+        ? { tick: probes.find(s => s.targetRoom === TARGET)!.tick, via: "probe" as const }
+        : demobTicksFromLogs.length
+          ? { tick: demobTicksFromLogs[0]!, via: "log" as const }
+          : undefined;
+    const maxSpawned = planTicks.length
+      ? Math.max(...planTicks.map(s => s.spawned))
+      : Math.max(-1, ...probes.map(s => s.spawned));
+    const advanceSamples = planTicks.filter(s => s.phase === "advance");
+    if (firstPlanTick === undefined && firstPlan) firstPlanTick = firstPlan.tick;
     // 止损事件从 war-planner 日志解析（权威字段：reason/outcome/blacklist），
     // spawned 阈值采样会漏检（19→21+ 可发生在一个 250t 采样窗内）。
     const demobEvents = warLogs.flatMap(l => {
@@ -267,8 +304,13 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
       ? (afterStopLoss.find(s => s.standDown > 0)?.standDown ?? -1)
       : -1;
     console.log(
-      `[soak-evidence] w4-stoploss: firstPlan=${firstPlan?.tick ?? "never"} ` +
+      `[soak-evidence] w4-stoploss: firstPlan=${firstPlan?.tick ?? "never"} via=${firstPlan?.via ?? "-"} planTicks=${planTicks.length} ` +
         `maxSpawned=${maxSpawned} demobEvents=${JSON.stringify(demobEvents)}`,
+    );
+    console.log(
+      `[soak-evidence] w4-stoploss window: plannedAt=${firstPlanTick ?? "never"} runway=${RUNWAY_AFTER_PLAN} ` +
+        `deadline=${firstPlanTick === undefined ? PLAN_DEADLINE : firstPlanTick + RUNWAY_AFTER_PLAN} ` +
+        `lastProbeTick=${probes.at(-1)?.tick ?? "none"} stagesUsed=${probes.length}`,
     );
     console.log(
       `[soak-evidence] w4-stoploss: attrition=${JSON.stringify(attrition ?? null)} ` +
@@ -285,13 +327,13 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
       `[soak-evidence] w4-stoploss warLogs (${warLogs.length}):\n  ${warLogs.slice(0, 10).join("\n  ")}`,
     );
     console.log(
-      `[soak-evidence] w4-stoploss binding: schemaVersion=43 gcl=1 collectedAt=${new Date().toISOString()}`,
+      `[soak-evidence] w4-stoploss binding: schemaVersion=${CONFIG.memory.schemaVersion} gcl=1 collectedAt=${new Date().toISOString()}`,
     );
 
     // ── 前置：战争实际发生 ──
     expect(
       firstPlan,
-      `12000 tick 内未立项 warPlan（fortify 驻留 + 威胁维持应升 war 并授权）：\n${postureTimeline.join(", ")}`,
+      `${PLAN_DEADLINE} tick 内未立项 warPlan（fortify 驻留 + 威胁维持应升 war 并授权）：\n${postureTimeline.join(", ")}`,
     ).toBeDefined();
     expect(
       maxSpawned,
@@ -358,5 +400,5 @@ describe("E2E-023 止损链实测 — 超限收摊/黑名单冷却/满编才推�
 
     // 全程无 JS 错误。
     expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);
-  }, 1200000);
+  }, 2700000);
 });
