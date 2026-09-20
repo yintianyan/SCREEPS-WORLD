@@ -30,17 +30,19 @@ export function countedIntent<T extends number>(kind: string, invoke: () => T): 
  * 状态推算意图量），result===OK 才入账 — ERR_FULL / ERR_NOT_IN_RANGE 天然零账。
  * 不可用「执行前后背包差值」计量：官服结算延迟使差值恒 0（mockup 同步结算
  * 会掩盖此差异，测试绿但线上失真）。
+ * `workRange`/`handlers` 语义同 runAction（射程预判 + 错误码分派）。
  */
 export function runCountedAction(
   creep: Creep,
   target: RoomPosition | { pos: RoomPosition },
+  workRange: number,
   field: CountedField | undefined,
   action: () => number,
   handlers?: ErrorHandlers,
   intentAmount?: () => number,
 ): number {
   const amount = intentAmount?.();
-  const result = runAction(creep, target, action, handlers);
+  const result = runAction(creep, target, workRange, action, handlers);
   if (
     field !== undefined &&
     amount !== undefined &&
@@ -75,10 +77,14 @@ export function repairIntentAmount(creep: Creep, target: Structure): number {
 export type ErrorHandlers = Partial<Record<number, () => void>>;
 
 /**
- * 走 runAction 的动作最大射程：build/repair/upgradeController/dismantle 为 3，
- * harvest/transfer/withdraw/pickup 为 1 —— 距离 >3 对其中任何一种都必然被引擎拒绝。
+ * 引擎交互射程 —— 动作必被拒绝的判定线，不是可调参数。
+ *
+ * 引擎侧是两条不同的检查：build/repair/dismantle/upgradeController 用 inRangeTo(target, 3)，
+ * harvest/transfer/withdraw/pickup 用 isNearTo(target)（射程 1）。原先 runAction 对两者共用
+ * 一个 3 档预判，于是「邻接动作在距离 2~3 上作业」的每一 tick 都签发一次必被拒的意图。
  */
-const MAX_WORK_RANGE = 3;
+export const ACTION_RANGE_NEAR = 1;
+export const ACTION_RANGE_FAR = 3;
 
 /**
  * 执行操作并统一处理错误码（统一 30+ action 的错误处理模式）：
@@ -87,19 +93,20 @@ const MAX_WORK_RANGE = 3;
  * 消除各 action 裸写 `if (result === ERR_xxx)` 分支的六种不一致模式。
  *
  * 射程预判：一次意图首次签发实测 0.15 CPU（`move_B_firstIssue`），一次 getRangeTo
- * 0.0001 CPU —— 相差三个数量级。超出任何动作射程的调用必被引擎拒绝（引擎先做射程检查，
+ * 0.0001 CPU —— 相差三个数量级。超出 `workRange` 的调用必被引擎拒绝（引擎先做射程检查，
  * 因此 handlers 也不会因其他错误码被触发），而签发被拒意图的 CPU 已经花掉了。
  * 提前返回 ERR_NOT_IN_RANGE 与原行为等价：两条路径都以同样的参数调用 moveToTarget，
- * 只是不再为注定失败的调用买单。
+ * 只是不再为注定失败的调用买单。`workRange` 取该动作的真实射程（ACTION_RANGE_*）。
  * @returns Screeps 结果码（供调用方自行判断）
  */
 export function runAction(
   creep: Creep,
   target: RoomPosition | { pos: RoomPosition },
+  workRange: number,
   action: () => number,
   handlers?: ErrorHandlers,
 ): number {
-  if (creep.pos.getRangeTo(target) > MAX_WORK_RANGE) {
+  if (creep.pos.getRangeTo(target) > workRange) {
     moveToTarget(creep, target);
     return ERR_NOT_IN_RANGE;
   }

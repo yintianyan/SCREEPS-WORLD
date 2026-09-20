@@ -2,7 +2,7 @@
 import { CONFIG, getWallTargetHits } from "../../../config";
 import type { RoomSnapshot } from "../../../kernel/contracts";
 import type { ActionCandidate } from "../action-types";
-import { runCountedAction, repairIntentAmount } from "./helpers";
+import { ACTION_RANGE_FAR, repairIntentAmount, runCountedAction } from "./helpers";
 import { findCriticalRepair } from "../../support/targeting";
 import { getObjectById } from "../../support/obj-cache";
 import {
@@ -33,6 +33,7 @@ export function repairCritical(): ActionCandidate<AnyStructure> {
       runCountedAction(
         ac.creep,
         t,
+        ACTION_RANGE_FAR,
         "repaired",
         () => ac.creep.repair(t),
         undefined,
@@ -83,6 +84,7 @@ export function repairContainerDecay(): ActionCandidate<StructureContainer> {
       runCountedAction(
         ac.creep,
         worst,
+        ACTION_RANGE_FAR,
         "repaired",
         () => ac.creep.repair(worst),
         {
@@ -114,6 +116,7 @@ export function repairNearbyContainer(): ActionCandidate<StructureContainer> {
       runCountedAction(
         ac.creep,
         nearby,
+        ACTION_RANGE_FAR,
         "repaired",
         () => ac.creep.repair(nearby),
         undefined,
@@ -197,6 +200,7 @@ export function repairFortifications(): ActionCandidate<Fortification> {
       runCountedAction(
         ac.creep,
         t,
+        ACTION_RANGE_FAR,
         "repaired",
         () => ac.creep.repair(t),
         {
@@ -283,6 +287,7 @@ export function repairFreshRampart(): ActionCandidate<StructureRampart> {
       runCountedAction(
         ac.creep,
         t,
+        ACTION_RANGE_FAR,
         "repaired",
         () => ac.creep.repair(t),
         undefined,
@@ -367,6 +372,7 @@ function roadRepairAction(
       runCountedAction(
         ac.creep,
         worst,
+        ACTION_RANGE_FAR,
         "repaired",
         () => ac.creep.repair(worst),
         {

@@ -482,9 +482,9 @@ describe("builder — acquire 模式", () => {
       capacity: 50,
       mode: "acquire",
     });
-    // c1 更近（getRangeTo 默认返回 1）。
+    // c1 更近且已邻接（withdraw 的交互射程是 1，距离 2 的取能必被引擎拒绝）。
     creep.pos.getRangeTo.mockImplementation((target: any) => {
-      if (target.id === "c1") return 2;
+      if (target.id === "c1") return 1;
       if (target.id === "c2") return 8;
       return 5;
     });
@@ -492,8 +492,34 @@ describe("builder — acquire 模式", () => {
 
     builderRole.run(creep, ctx);
 
-    // 应选最近的 c1（距离 2）而非最满的 c2。
+    // 应选最近的 c1（距离 1）而非最满的 c2。
     expect(creep.withdraw).toHaveBeenCalledWith(c1, "energy");
+  });
+
+  it("最近的 container 够不着（距离 2）时先靠拢，不签发必被拒的 withdraw", () => {
+    const c1 = mockStructure("container", { id: "c1", energy: 500, capacity: 2000 });
+    const c2 = mockStructure("container", { id: "c2", energy: 800, capacity: 2000 });
+    c1.pos.getRangeTo.mockReturnValue(5);
+    c2.pos.getRangeTo.mockReturnValue(5);
+    const snap = mockSnapshot({ containers: [c1, c2] });
+    const creep = mockCreep({
+      name: "builder_2",
+      role: "builder",
+      used: 0,
+      capacity: 50,
+      mode: "acquire",
+    });
+    creep.pos.getRangeTo.mockImplementation((target: any) => {
+      if (target.id === "c1") return 2;
+      if (target.id === "c2") return 8;
+      return 5;
+    });
+
+    builderRole.run(creep, mockContext(snap));
+
+    // 射程预判：距离 2 的 withdraw 一律不会成功，签发省掉，改为靠拢。
+    expect(creep.withdraw).not.toHaveBeenCalled();
+    expect(creep.move.mock.calls.length + creep.moveTo.mock.calls.length).toBeGreaterThan(0);
   });
 
   it("无 container 时回退到 harvest", () => {

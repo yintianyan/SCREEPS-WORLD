@@ -1,6 +1,6 @@
 /** Industry actions — 矿物/化合物搬运（lab 供料、矿物回收）。 */
 import type { ActionCandidate } from "../action-types";
-import { runAction } from "./helpers";
+import { ACTION_RANGE_NEAR, runAction } from "./helpers";
 import { CONFIG } from "../../../config";
 import { globalCache } from "../../../kernel/global-cache";
 import { getObjectById } from "../../support/obj-cache";
@@ -44,7 +44,7 @@ export function haulMineralsToStorage(): ActionCandidate<MineralHaulTarget> {
       return undefined;
     },
     execute: (ac, t) => {
-      runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.mineral));
+      runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () => ac.creep.transfer(t.dest, t.mineral));
     },
   };
 }
@@ -87,7 +87,7 @@ export function haulMineralTopUp(): ActionCandidate<StructureContainer> {
         r => r !== RESOURCE_ENERGY && source.store[r]! > 0,
       );
       if (!mineral) return;
-      runAction(ac.creep, source, () => ac.creep.withdraw(source, mineral));
+      runAction(ac.creep, source, ACTION_RANGE_NEAR, () => ac.creep.withdraw(source, mineral));
     },
   };
 }
@@ -189,14 +189,18 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
     },
     execute: (ac, t) => {
       if (t.phase === "deposit" || t.phase === "dump") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resource));
+        runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () => ac.creep.transfer(t.dest, t.resource));
       } else if (t.phase === "unload") {
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resource));
+        runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+          ac.creep.withdraw(t.source, t.resource),
+        );
       } else {
         const available = t.source.store[t.resource] ?? 0;
         const amount = Math.min(t.amount, available, ac.creep.store.getFreeCapacity() ?? 0);
         if (amount <= 0) return;
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resource, amount));
+        runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+          ac.creep.withdraw(t.source, t.resource, amount),
+        );
       }
     },
   };
@@ -237,9 +241,13 @@ export function stockTerminalEnergy(): ActionCandidate<TerminalStockTarget> {
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, RESOURCE_ENERGY));
+        runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () =>
+          ac.creep.transfer(t.dest, RESOURCE_ENERGY),
+        );
       } else {
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, RESOURCE_ENERGY));
+        runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+          ac.creep.withdraw(t.source, RESOURCE_ENERGY),
+        );
       }
     },
   };
@@ -302,9 +310,13 @@ export function stockFactoryComponents(): ActionCandidate<FactoryComponentTarget
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resourceType));
+        runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () =>
+          ac.creep.transfer(t.dest, t.resourceType),
+        );
       } else {
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resourceType));
+        runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+          ac.creep.withdraw(t.source, t.resourceType),
+        );
       }
     },
   };
@@ -362,9 +374,13 @@ export function salvageStorageToTerminal(): ActionCandidate<SalvageTransferTarge
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resourceType));
+        runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () =>
+          ac.creep.transfer(t.dest, t.resourceType),
+        );
       } else {
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resourceType));
+        runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+          ac.creep.withdraw(t.source, t.resourceType),
+        );
       }
     },
   };
@@ -441,9 +457,13 @@ export function stockFactoryEnergy(): ActionCandidate<FactoryStockTarget> {
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, RESOURCE_ENERGY));
+        runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () =>
+          ac.creep.transfer(t.dest, RESOURCE_ENERGY),
+        );
       } else {
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, RESOURCE_ENERGY));
+        runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+          ac.creep.withdraw(t.source, RESOURCE_ENERGY),
+        );
       }
     },
   };
@@ -493,9 +513,13 @@ export function stockFactoryBattery(): ActionCandidate<FactoryBatteryTarget> {
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, RESOURCE_BATTERY));
+        runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () =>
+          ac.creep.transfer(t.dest, RESOURCE_BATTERY),
+        );
       } else {
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, RESOURCE_BATTERY));
+        runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+          ac.creep.withdraw(t.source, RESOURCE_BATTERY),
+        );
       }
     },
   };
@@ -594,9 +618,11 @@ export function reclaimFactoryOutput(): ActionCandidate<FactoryReclaimTarget> {
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resource));
+        runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () => ac.creep.transfer(t.dest, t.resource));
       } else {
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resource));
+        runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+          ac.creep.withdraw(t.source, t.resource),
+        );
       }
     },
   };
@@ -667,12 +693,14 @@ export function stockNuker(): ActionCandidate<NukerStockTarget> {
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resource));
+        runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () => ac.creep.transfer(t.dest, t.resource));
       } else {
         const available = t.source.store[t.resource] ?? 0;
         const amount = Math.min(available, ac.creep.store.getFreeCapacity() ?? 0);
         if (amount <= 0) return;
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resource, amount));
+        runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+          ac.creep.withdraw(t.source, t.resource, amount),
+        );
       }
     },
   };
@@ -727,12 +755,14 @@ export function stockPowerSpawn(): ActionCandidate<PowerSpawnStockTarget> {
     },
     execute: (ac, t) => {
       if (t.phase === "deposit") {
-        runAction(ac.creep, t.dest, () => ac.creep.transfer(t.dest, t.resource));
+        runAction(ac.creep, t.dest, ACTION_RANGE_NEAR, () => ac.creep.transfer(t.dest, t.resource));
       } else {
         const available = t.source.store[t.resource] ?? 0;
         const amount = Math.min(available, ac.creep.store.getFreeCapacity() ?? 0);
         if (amount <= 0) return;
-        runAction(ac.creep, t.source, () => ac.creep.withdraw(t.source, t.resource, amount));
+        runAction(ac.creep, t.source, ACTION_RANGE_NEAR, () =>
+          ac.creep.withdraw(t.source, t.resource, amount),
+        );
       }
     },
   };

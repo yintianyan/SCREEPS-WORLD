@@ -1,7 +1,7 @@
 /** Fill actions — 向 fillTarget / storage / container 送能（与 dump 的区别： */
 import type { ActionCandidate } from "../action-types";
 import { globalCache } from "../../../kernel/global-cache";
-import { runAction, runCountedAction } from "./helpers";
+import { ACTION_RANGE_NEAR, runAction, runCountedAction } from "./helpers";
 import { updateMode } from "../lifecycle";
 import {
   findEmptiestContainer,
@@ -47,7 +47,7 @@ export function fillTarget(): ActionCandidate<AnyOwnedStructure> {
       return target;
     },
     execute: (ac, t) => {
-      runAction(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY), {
+      runAction(ac.creep, t, ACTION_RANGE_NEAR, () => ac.creep.transfer(t, RESOURCE_ENERGY), {
         [ERR_FULL]: () => {
           ac.creep.memory.fillTargetId = undefined;
           updateMode(ac.creep);
@@ -81,6 +81,7 @@ export function haulFillTarget(): ActionCandidate<AnyOwnedStructure> {
       runCountedAction(
         ac.creep,
         t,
+        ACTION_RANGE_NEAR,
         importedFieldFor(ac.creep),
         () => ac.creep.transfer(t, RESOURCE_ENERGY),
         { [ERR_FULL]: () => updateMode(ac.creep) },
@@ -113,7 +114,7 @@ export function distributorFillTarget(): ActionCandidate<AnyOwnedStructure> {
       return getDistributorFillTarget(ac.creep, ac.snapshot, tier);
     },
     execute: (ac, t) => {
-      runAction(ac.creep, t, () => ac.creep.transfer(t, RESOURCE_ENERGY), {
+      runAction(ac.creep, t, ACTION_RANGE_NEAR, () => ac.creep.transfer(t, RESOURCE_ENERGY), {
         [ERR_FULL]: () => updateMode(ac.creep),
       });
     },
@@ -131,7 +132,7 @@ export function fillEmptiestContainer(): ActionCandidate<StructureContainer> {
       return best;
     },
     execute: (ac, best) => {
-      runAction(ac.creep, best, () => ac.creep.transfer(best, RESOURCE_ENERGY));
+      runAction(ac.creep, best, ACTION_RANGE_NEAR, () => ac.creep.transfer(best, RESOURCE_ENERGY));
     },
   };
 }
@@ -171,6 +172,7 @@ export function fillStorage(): ActionCandidate<StructureStorage> {
       runCountedAction(
         ac.creep,
         st,
+        ACTION_RANGE_NEAR,
         importedFieldFor(ac.creep),
         () => ac.creep.transfer(st, RESOURCE_ENERGY),
         undefined,

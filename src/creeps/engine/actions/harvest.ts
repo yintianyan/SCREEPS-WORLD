@@ -4,7 +4,7 @@
 import type { ActionCandidate, ActionContext } from "../action-types";
 import { CONFIG } from "../../../config";
 import { moveToTarget, registerAnchor } from "../../movement";
-import { runAction, countedIntent } from "./helpers";
+import { ACTION_RANGE_NEAR, countedIntent, runAction } from "./helpers";
 import { getSource } from "../../support/targeting";
 import { classifyLinkRole, computeControllerLinkTarget } from "../../../domain/economy/links";
 
@@ -24,7 +24,7 @@ export function harvestSource(): ActionCandidate<Source> {
     },
     execute: (ac, source) => {
       // 采集计量归 economy 的房间级差分采样 — creep 侧同 tick 背包差值在官服恒 0。
-      runAction(ac.creep, source, () => ac.creep.harvest(source));
+      runAction(ac.creep, source, ACTION_RANGE_NEAR, () => ac.creep.harvest(source));
     },
   };
 }
@@ -261,7 +261,7 @@ export function harvestMineral(): ActionCandidate<MineralTarget> {
       // 零穿梭），镜像 harvester.stationaryMine 的 container 站位，防「采↔倒」来回走格。
       const container = ac.snapshot.containers.find(c => c.pos.getRangeTo(mineral.pos) <= 1);
       const standTarget: RoomPosition | { pos: RoomPosition } = container ?? mineral;
-      runAction(ac.creep, standTarget, () => ac.creep.harvest(mineral), {
+      runAction(ac.creep, standTarget, ACTION_RANGE_NEAR, () => ac.creep.harvest(mineral), {
         [ERR_NOT_ENOUGH_RESOURCES]: () => {
           ac.creep.memory.mode = "idle";
         },

@@ -1,7 +1,7 @@
 /** runAction 统一错误处理策略测试。 */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { resetGlobals, mockCreep, mockPos } from "../../support/factories";
-import { runAction } from "../../../src/creeps/engine/actions/helpers";
+import { ACTION_RANGE_FAR, runAction } from "../../../src/creeps/engine/actions/helpers";
 
 // Screeps 错误码常量（测试环境未全局注入）。
 const OK = 0;
@@ -39,7 +39,7 @@ describe("runAction — 基本行为", () => {
     const action = vi.fn(() => OK);
     const handler = vi.fn();
 
-    const result = runAction(creep, target(), action, { [ERR_FULL]: handler });
+    const result = runAction(creep, target(), ACTION_RANGE_FAR, action, { [ERR_FULL]: handler });
 
     expect(result).toBe(OK);
     expect(handler).not.toHaveBeenCalled();
@@ -49,7 +49,7 @@ describe("runAction — 基本行为", () => {
     const creep = mockCreep();
     const action = vi.fn(() => ERR_FULL);
 
-    const result = runAction(creep, target(), action);
+    const result = runAction(creep, target(), ACTION_RANGE_FAR, action);
 
     expect(result).toBe(ERR_FULL);
   });
@@ -58,7 +58,7 @@ describe("runAction — 基本行为", () => {
     const creep = mockCreep();
     const action = vi.fn(() => OK);
 
-    const result = runAction(creep, target(), action);
+    const result = runAction(creep, target(), ACTION_RANGE_FAR, action);
 
     expect(result).toBe(OK);
     // 无 moveTo 调用（OK 不触发移动）。
@@ -67,27 +67,29 @@ describe("runAction — 基本行为", () => {
 });
 
 describe("runAction — ERR_NOT_IN_RANGE 自动移动", () => {
+  // 本组钉的是「动作自己被拒」这条路径，所以距离必须同时满足：≤ workRange（放过射程
+  // 预判，让调用真的发生）且 > 1（让 moveToTarget 走 moveTo 而不是邻接 move）。
   it("ERR_NOT_IN_RANGE 自动触发 moveToTarget", () => {
     const creep = mockCreep();
-    // 确保 creep.pos.getRangeTo 也返回 > 1，使 moveToTarget 走 moveTo 路径。
-    creep.pos.getRangeTo = vi.fn(() => 5);
+    creep.pos.getRangeTo = vi.fn(() => 2);
     const action = vi.fn(() => ERR_NOT_IN_RANGE);
 
-    runAction(creep, farTarget(), action);
+    runAction(creep, farTarget(), ACTION_RANGE_FAR, action);
 
-    // moveToTarget 在 range > 1 时调用 creep.moveTo。
+    expect(action).toHaveBeenCalled();
     expect(creep.moveTo).toHaveBeenCalled();
   });
 
   it("ERR_NOT_IN_RANGE 不查 handlers 表（内建优先）", () => {
     const creep = mockCreep();
-    creep.pos.getRangeTo = vi.fn(() => 5);
+    creep.pos.getRangeTo = vi.fn(() => 2);
     const action = vi.fn(() => ERR_NOT_IN_RANGE);
     const rangeHandler = vi.fn();
 
     // 即使声明了 ERR_NOT_IN_RANGE handler 也不会调用 — 移动是内建行为。
-    runAction(creep, farTarget(), action, { [ERR_NOT_IN_RANGE]: rangeHandler });
+    runAction(creep, farTarget(), ACTION_RANGE_FAR, action, { [ERR_NOT_IN_RANGE]: rangeHandler });
 
+    expect(action).toHaveBeenCalled();
     expect(rangeHandler).not.toHaveBeenCalled();
     expect(creep.moveTo).toHaveBeenCalled();
   });
@@ -99,7 +101,7 @@ describe("runAction — 错误码 handler 分发", () => {
     const action = vi.fn(() => ERR_FULL);
     const fullHandler = vi.fn();
 
-    runAction(creep, target(), action, { [ERR_FULL]: fullHandler });
+    runAction(creep, target(), ACTION_RANGE_FAR, action, { [ERR_FULL]: fullHandler });
 
     expect(fullHandler).toHaveBeenCalledTimes(1);
   });
@@ -109,7 +111,7 @@ describe("runAction — 错误码 handler 分发", () => {
     const action = vi.fn(() => ERR_INVALID_TARGET);
     const invalidHandler = vi.fn();
 
-    runAction(creep, target(), action, { [ERR_INVALID_TARGET]: invalidHandler });
+    runAction(creep, target(), ACTION_RANGE_FAR, action, { [ERR_INVALID_TARGET]: invalidHandler });
 
     expect(invalidHandler).toHaveBeenCalledTimes(1);
   });
@@ -119,7 +121,7 @@ describe("runAction — 错误码 handler 分发", () => {
     const action = vi.fn(() => ERR_NOT_ENOUGH_RESOURCES);
     const handler = vi.fn();
 
-    runAction(creep, target(), action, { [ERR_NOT_ENOUGH_RESOURCES]: handler });
+    runAction(creep, target(), ACTION_RANGE_FAR, action, { [ERR_NOT_ENOUGH_RESOURCES]: handler });
 
     expect(handler).toHaveBeenCalledTimes(1);
   });
@@ -129,7 +131,7 @@ describe("runAction — 错误码 handler 分发", () => {
     const action = vi.fn(() => ERR_TIRED);
     const handler = vi.fn();
 
-    runAction(creep, target(), action, { [ERR_TIRED]: handler });
+    runAction(creep, target(), ACTION_RANGE_FAR, action, { [ERR_TIRED]: handler });
 
     expect(handler).toHaveBeenCalledTimes(1);
   });
@@ -140,7 +142,7 @@ describe("runAction — 错误码 handler 分发", () => {
     const invalidHandler = vi.fn();
 
     // 只注册了 ERR_INVALID_TARGET，但返回 ERR_FULL。
-    runAction(creep, target(), action, { [ERR_INVALID_TARGET]: invalidHandler });
+    runAction(creep, target(), ACTION_RANGE_FAR, action, { [ERR_INVALID_TARGET]: invalidHandler });
 
     expect(invalidHandler).not.toHaveBeenCalled();
     // 非移动错误码也不触发 moveTo。
@@ -159,6 +161,7 @@ describe("runAction — 多 handler 共存", () => {
     runAction(
       creep,
       target(),
+      ACTION_RANGE_FAR,
       vi.fn(() => ERR_FULL),
       {
         [ERR_FULL]: fullHandler,
@@ -174,6 +177,7 @@ describe("runAction — 多 handler 共存", () => {
     runAction(
       creep,
       target(),
+      ACTION_RANGE_FAR,
       vi.fn(() => ERR_INVALID_TARGET),
       {
         [ERR_FULL]: fullHandler,
@@ -192,6 +196,7 @@ describe("runAction — 多 handler 共存", () => {
     runAction(
       creep,
       target(),
+      ACTION_RANGE_FAR,
       vi.fn(() => ERR_FULL),
       {
         [ERR_FULL]: () => {
@@ -213,6 +218,7 @@ describe("runAction — handler 闭包捕获上下文", () => {
     runAction(
       creep,
       target(),
+      ACTION_RANGE_FAR,
       vi.fn(() => ERR_FULL),
       {
         [ERR_FULL]: () => {
@@ -231,6 +237,7 @@ describe("runAction — handler 闭包捕获上下文", () => {
     runAction(
       creep,
       target(),
+      ACTION_RANGE_FAR,
       vi.fn(() => ERR_INVALID_TARGET),
       {
         [ERR_INVALID_TARGET]: () => {

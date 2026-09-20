@@ -1,6 +1,6 @@
 /** Dump actions — harvester 站桩倒能（向身边 range<=2 结构卸载能量/矿物）。 */
 import type { ActionCandidate } from "../action-types";
-import { runAction } from "./helpers";
+import { ACTION_RANGE_FAR, ACTION_RANGE_NEAR, runAction } from "./helpers";
 
 /** 向身边 link 倒能（range <= 2）。 */
 export function dumpToNearbyLink(): ActionCandidate<StructureLink> {
@@ -14,7 +14,7 @@ export function dumpToNearbyLink(): ActionCandidate<StructureLink> {
       return ac.creep.pos.findClosestByRange(candidates as StructureLink[]) ?? undefined;
     },
     execute: (ac, link) => {
-      runAction(ac.creep, link, () => ac.creep.transfer(link, RESOURCE_ENERGY));
+      runAction(ac.creep, link, ACTION_RANGE_NEAR, () => ac.creep.transfer(link, RESOURCE_ENERGY));
     },
   };
 }
@@ -31,7 +31,9 @@ export function dumpToNearbyContainer(): ActionCandidate<StructureContainer> {
       return ac.creep.pos.findClosestByRange(candidates as StructureContainer[]) ?? undefined;
     },
     execute: (ac, nearby) => {
-      runAction(ac.creep, nearby, () => ac.creep.transfer(nearby, RESOURCE_ENERGY));
+      runAction(ac.creep, nearby, ACTION_RANGE_NEAR, () =>
+        ac.creep.transfer(nearby, RESOURCE_ENERGY),
+      );
     },
   };
 }
@@ -63,7 +65,7 @@ export function dumpMineralsToNearbyContainer(): ActionCandidate<MineralDumpTarg
       return { container, mineral };
     },
     execute: (ac, target) => {
-      runAction(ac.creep, target.container, () =>
+      runAction(ac.creep, target.container, ACTION_RANGE_NEAR, () =>
         ac.creep.transfer(target.container, target.mineral),
       );
     },
@@ -85,7 +87,7 @@ export function buildNearbyContainerSite(): ActionCandidate<ConstructionSite> {
       return site;
     },
     execute: (ac, site) => {
-      runAction(ac.creep, site, () => ac.creep.build(site));
+      runAction(ac.creep, site, ACTION_RANGE_FAR, () => ac.creep.build(site));
     },
   };
 }

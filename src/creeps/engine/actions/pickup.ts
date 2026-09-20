@@ -1,6 +1,6 @@
 /** Pickup actions — 回收遗留能量（掉落堆/坟墓/废墟）。 */
 import type { ActionCandidate } from "../action-types";
-import { runCountedAction } from "./helpers";
+import { ACTION_RANGE_NEAR, runCountedAction } from "./helpers";
 import { selectDroppedEnergy } from "../../support/targeting";
 
 /**
@@ -25,6 +25,7 @@ export function pickupDroppedEnergy(minAmount = 0): ActionCandidate<Resource> {
       runCountedAction(
         ac.creep,
         resource,
+        ACTION_RANGE_NEAR,
         "pickedUp",
         () => ac.creep.pickup(resource),
         {
@@ -105,6 +106,7 @@ export function lootRemains(minAmount = 0): ActionCandidate<Tombstone | Ruin> {
       runCountedAction(
         ac.creep,
         remains,
+        ACTION_RANGE_NEAR,
         "pickedUp",
         () => ac.creep.withdraw(remains, resource, amount),
         {
@@ -135,6 +137,7 @@ export function pickupNearbyDroppedEnergy(range = 2): ActionCandidate<Resource> 
       runCountedAction(
         ac.creep,
         resource,
+        ACTION_RANGE_NEAR,
         "pickedUp",
         () => ac.creep.pickup(resource),
         {
