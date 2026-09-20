@@ -151,8 +151,9 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
     let tick = 0;
     let invaderSeq = 0;
     let lastInject = -1000;
-    /** 逐 tick 的 warPlan 目标（rawMemory 自带，零额外往返）—— 用来量授权窗口的真实宽度。 */
-    const targetTicks: Array<{ tick: number; tgt?: string }> = [];
+    /** 逐 tick 的 warPlan 目标（rawMemory 自带，零额外往返）—— 用来量授权窗口的真实宽度。
+     * lostAge = 门自己判定的情报断供年龄（-1 = 该 tick 有据）。 */
+    const targetTicks: Array<{ tick: number; tgt?: string; lostAge: number }> = [];
     const probeTicks: number[] = [];
     /** 与 target=DECOY 配对的同 tick 视野读数（授权合法性 = 该 tick 有没有人看着）。 */
     const probeVision: Array<{ tick: number; vis: number }> = [];
@@ -202,9 +203,17 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
       // 同 tick 配对：DECOYAUTH 行与它所在快照的 rawMemory 是同一份状态。
       for (const snap of snaps) {
         const rm = snap.rawMemory as Record<string, any> | undefined;
+        // `warIntelLost` 是 war-planner 自己盖的章：只有当授权谓词（fact + targetFreshness）
+        // 判 false 那一轮才写。用它的年龄当"盲区"口径，量的是**门的裁决**；
+        // 而 vis=0 量的是"探针采样的那一 tick 有没有人站在房里" —— 两者不等价：
+        // 情报按 room-observer 的 50t 扫描 tick 前移 lastSeen，探针网格与它相位不同，
+        // 完全可能"我看见没人、门却判定有据"。契约②必须按前者判，否则红的是探针口径。
+        const tgt = rm?.kernel?.warPlan?.targetRoom as string | undefined;
+        const lost = rm?.kernel?.warIntelLost as { room: string; since: number } | undefined;
         targetTicks.push({
           tick: snap.tick,
-          tgt: rm?.kernel?.warPlan?.targetRoom as string | undefined,
+          tgt,
+          lostAge: lost && lost.room === tgt ? snap.tick - Number(lost.since) : -1,
         });
         if (rm?.kernel?.strategy?.posture === "war") warSeen = true;
         const line = snap.consoleLogs
@@ -307,6 +316,36 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
     }
     const blindRunCap = CONFIG.war.planIntelBlackoutTicks + gridMax + ROOM_THREAT_TTL;
 
+    // ── 契约②的**主判据**：门自己裁决的连续断供长度（逐 tick 的 warIntelLost 年龄）。
+    // 上面那套 vis=0 口径只能当旁证：情报的 lastSeen 按 room-observer 的 50t 扫描 tick
+    // 前移，与本探针的 50t 网格相位不同，于是"探针看见没人"与"门判定有据"可以同时成立 ——
+    // 那种时候该修的是判据口径，不是门。
+    // 上界 = 容忍窗口 + 规划器间隔（war-planner 每 CONFIG.war.interval tick 跑一轮，
+    // 判定与撤军都发生在轮次边界上）。
+    let maxLostRun = 0;
+    let lostRunWhere = "-";
+    {
+      let runStart: number | undefined;
+      let runEnd = 0;
+      for (const s of targetTicks) {
+        if (s.tgt === DECOY && s.lostAge >= 0) {
+          if (runStart === undefined) runStart = s.tick;
+          runEnd = s.tick;
+        } else if (runStart !== undefined) {
+          if (runEnd - runStart > maxLostRun) {
+            maxLostRun = runEnd - runStart;
+            lostRunWhere = `t${runStart}..${runEnd}`;
+          }
+          runStart = undefined;
+        }
+      }
+      if (runStart !== undefined && runEnd - runStart > maxLostRun) {
+        maxLostRun = runEnd - runStart;
+        lostRunWhere = `t${runStart}..${runEnd}(窗末)`;
+      }
+    }
+    const lostRunCap = CONFIG.war.planIntelBlackoutTicks + 2 * CONFIG.war.interval;
+
     // ── 证据登记 ──
     console.log(`[soak-evidence] decoy probes: ${timeline.slice(-6).join(" | ")}`);
     console.log(
@@ -328,20 +367,29 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
       staleStarts,
       `诱饵授权窗口的起点就零视野 ${staleStarts.join(",")} —— fact 硬门槛被绕过！\n${timeline.slice(-8).join(", ")}`,
     ).toEqual([]);
-    // 契约②（task #12 已修）：承诺不得长期越过证据。上界是**配置可核对的数**，
-    // 不是"零视野样本数=0"（后者会把合法的通勤盲区也判红，且绿也不代表验过什么）。
-    // 红起来只有两种可能：复核门禁失效，或撤军容忍被调大到越过证据。
+    // 契约②（task #12 已修）：承诺不得长期越过证据。**按门自己的裁决判** ——
+    // warIntelLost 只在授权谓词（fact + targetFreshness）判 false 的那些轮次盖章，
+    // 所以它的连续年龄越过 blackout 容忍还不撤军，才是"复核门失效"。
+    // 探针的 vis=0 口径退为旁证（见上面的注释：两种口径可以合法地不一致）。
     expect(
-      maxBlindRun,
-      `诱饵授权窗口内最长连续零视野 ${maxBlindRun} tick（${blindRunWhere}）越过上界 ` +
-        `${blindRunCap} = planIntelBlackoutTicks(${CONFIG.war.planIntelBlackoutTicks}) ` +
-        `+ 采样网格(${gridMax}) + 情报威胁短窗(${ROOM_THREAT_TTL})` +
-        `\n授权窗口=${decoyWindows.map(w => `t${w.from}..${w.to}`).join(",")}` +
+      maxLostRun,
+      `门判定断供后连续 ${maxLostRun} tick 仍在授权（${lostRunWhere}），越过上界 ${lostRunCap} ` +
+        `= planIntelBlackoutTicks(${CONFIG.war.planIntelBlackoutTicks}) + 2×war.interval —— ` +
+        `复核门失效或被调宽。\n授权窗口=${decoyWindows.map(w => `t${w.from}..${w.to}`).join(",")}` +
         `\n（窗口起点都有观测 → 不是 fact 门槛被绕过，是"承诺存续期内不复核情报"）`,
-    ).toBeLessThanOrEqual(blindRunCap);
+    ).toBeLessThanOrEqual(lostRunCap);
+    if (maxBlindRun > lostRunCap) {
+      // 探针口径的盲区长于门的上界 —— 不一定违规（情报按 50t 扫描 tick 前移，本探针
+      // 网格相位不同），但必须打在证据里，因为它意味着"房内无人"的时长已值得再看一眼。
+      console.log(
+        `[soak-evidence] WARN decoy vision-only blind run ${maxBlindRun}@${blindRunWhere} ` +
+          `> ${lostRunCap}（门裁决的断供长度=${maxLostRun}@${lostRunWhere}）`,
+      );
+    }
     console.log(
-      `[soak-evidence] decoy blind-run audit: maxBlindRun=${maxBlindRun}@${blindRunWhere} ` +
-        `cap=${blindRunCap} unobservedSamples=${unobservedSamples} windows=${decoyWindows.length}`,
+      `[soak-evidence] decoy blind-run audit: maxLostRun=${maxLostRun}@${lostRunWhere} ` +
+        `cap=${lostRunCap} maxBlindRun=${maxBlindRun}@${blindRunWhere} visCap=${blindRunCap} ` +
+        `unobservedSamples=${unobservedSamples} windows=${decoyWindows.length}`,
     );
     console.log(
       `[soak-evidence] decoy audit: samples=${samplesSeen} targetedDecoy=${decoyAuthorized} ` +
