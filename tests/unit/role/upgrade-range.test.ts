@@ -30,7 +30,9 @@ describe("upgrade action — 按交互距离 range3 移动", () => {
 
     upgraderRole.run(creep, mockContext(snap));
 
-    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    // 射程预判：range 5 的 upgradeController 必被引擎拒绝，签发不再发生（见 upgrade.ts
+    // upgradeOrApproach）；本用例钉的是"靠拢用交互距离 3，不是默认 1"。
+    expect(creep.upgradeController).not.toHaveBeenCalled();
     expect(moveToTarget).toHaveBeenCalledWith(creep, controller, 3);
   });
 });

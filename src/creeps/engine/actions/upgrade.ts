@@ -7,6 +7,25 @@ import { countedIntent } from "./helpers";
 /** upgradeController 的交互距离（官方机制：range ≤ 3 可升级）。 */
 const UPGRADE_RANGE = 3;
 
+/**
+ * 升一次控制器，否则向控制器靠拢。
+ *
+ * 射程预判：射程外的 upgradeController 必被引擎拒绝（引擎先做射程检查），但注定失败
+ * 的签发已经付过钱 —— 实测 3 房发育世界里 upgrade 空签发 1.44/tick（同期成功签发仅
+ * 0.03/tick），按 0.21 CPU/签发 ≈ 0.30 CPU/tick。提前拦截与原行为等价：两条路径
+ * 都以同样参数调用 moveToTarget，只是不再为空签发买单。
+ * 保留返回码兜底：跨房 getRangeTo 的取值不作保证，引擎若仍拒就照旧走移动。
+ */
+function upgradeOrApproach(creep: Creep, ctrl: StructureController): void {
+  if (creep.pos.getRangeTo(ctrl.pos) > UPGRADE_RANGE) {
+    moveToTarget(creep, ctrl, UPGRADE_RANGE);
+    return;
+  }
+  if (countedIntent("upgrade", () => creep.upgradeController(ctrl)) === ERR_NOT_IN_RANGE) {
+    moveToTarget(creep, ctrl, UPGRADE_RANGE);
+  }
+}
+
 /** 升级控制器（无能量门禁）。 */
 export function upgradeController(): ActionCandidate<StructureController> {
   return {
@@ -16,11 +35,7 @@ export function upgradeController(): ActionCandidate<StructureController> {
       if (!ctrl || !ctrl.my) return undefined;
       return ctrl;
     },
-    execute: (ac, ctrl) => {
-      if (countedIntent("upgrade", () => ac.creep.upgradeController(ctrl)) === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, ctrl, UPGRADE_RANGE);
-      }
-    },
+    execute: (ac, ctrl) => upgradeOrApproach(ac.creep, ctrl),
   };
 }
 
@@ -87,10 +102,6 @@ export function upgradeControllerGated(): ActionCandidate<StructureController> {
       if (ac.snapshot.energyAvailable < CONFIG.economy.upgradeEnergyFloor) return undefined;
       return ctrl;
     },
-    execute: (ac, ctrl) => {
-      if (countedIntent("upgrade", () => ac.creep.upgradeController(ctrl)) === ERR_NOT_IN_RANGE) {
-        moveToTarget(ac.creep, ctrl, UPGRADE_RANGE);
-      }
-    },
+    execute: (ac, ctrl) => upgradeOrApproach(ac.creep, ctrl),
   };
 }

@@ -948,7 +948,8 @@ export function ensureHome(creep: Creep): boolean {
  * 移动到目标 — 带自适应路径缓存、走廊共享、渐进式脱困。
  * 路径缓存优先级：1. 跨 tick 持久化（per-creep，目标+结构不变）2. 走廊共享（同 tick 同区域主干）
  * 3. 同 tick 精确目标共享 4. 新 PathFinder + 持久化 5. 回退 moveTo（引擎内置缓存）。
- * 仅在操作返回 ERR_NOT_IN_RANGE 时调用。
+ * 仅在操作被（或预判会被）射程拒绝时调用 —— ERR_NOT_IN_RANGE 的实际返回码，或
+ * runAction/upgrade 那类射程预判判定的必然拒绝；其他错误码下调用它等于盲目走向目标。
  */
 export function moveToTarget(
   creep: Creep,
