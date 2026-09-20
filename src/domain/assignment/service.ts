@@ -16,8 +16,44 @@ export interface AssignmentTaskEntry {
   pos?: { x: number; y: number };
 }
 
-/** 各角色可接受的任务类型。
+/**
+ * 站桩/物流关键工地：controller 或任一 source 相邻的 container。
+ * 与 build 任务的 priority=1 判定**同一来源**（曾经两处各写一遍，改一处漏一处）。
+ */
+export function isPriorityContainerSite(
+  site: { structureType: string; pos: { x: number; y: number } },
+  snapshot: Pick<RoomSnapshot, "controller" | "sources">,
+): boolean {
+  if (site.structureType !== STRUCTURE_CONTAINER) return false;
+  const near = (a: { x: number; y: number } | undefined): boolean =>
+    a !== undefined && Math.abs(site.pos.x - a.x) <= 1 && Math.abs(site.pos.y - a.y) <= 1;
+  return near(snapshot.controller?.pos ?? undefined) || snapshot.sources.some(s => near(s.pos));
+}
 
+/**
+ * storage 抢占（RCL4+ 无 storage 时把 builder 从别的工地拽去建 storage）时**不该被赶走**的工地。
+ *
+ * 为什么 container 必须在内（实测）：抢占规则原先只留 storage/extension，于是
+ * 「controller 旁 container」上的 builder assignment 每 tick 被释放 —— 而它正是站桩升级链的
+ * 一期基建（`buildRoomTasks` 给它 priority=1、maxWorkers=2 全都会被这条抢占抹掉）。
+ * 量到的现象：单房 RCL6 世界里 `container@9,9` 在 4000 tick 里推进恰好 0，而离 spawn
+ * 2 格的 storage/tower 在涨；升级因此只剩 0.11 E/tick，站桩 body（2 MOVE）的 upgrader
+ * 走不到 controller（range 13~21 且疲劳）。storage 缺位期恰恰也是这段，两者同时成立。
+ *
+ * extension 保留的理由不变：建成即提升 energyCapacityAvailable、解锁更大 builder body。
+ */
+export function isStoragePreemptionExemptSite(
+  site: { structureType: string; pos: { x: number; y: number } },
+  snapshot: Pick<RoomSnapshot, "controller" | "sources">,
+): boolean {
+  return (
+    site.structureType === STRUCTURE_STORAGE ||
+    site.structureType === STRUCTURE_EXTENSION ||
+    isPriorityContainerSite(site, snapshot)
+  );
+}
+
+/** 各角色可接受的任务类型。
  * source 分配统一归 targeting.getSource()（sourceOccupancy 公平份额），不经过 assignment —
  * harvester/worker 采集均走 getSource，故无 "harvest" 任务类型，消除了旧实现
  * 「assignment harvest 槽位」与「targeting fairShare」的双轨制（P1-1）。
@@ -106,7 +142,6 @@ export function buildRoomTasks(
   // storage 取能，storage → sink 由 distributor 负责。
 
   // 3. build 任务 — 为每个 active site 生成。
-  const ctrl = snapshot.controller;
   const inCrisis = flags.colonyState === "recovery";
   // RCL4+ 无 storage = 无中央能量源（construction-manager 已将其标 emergency）—
   // assignment 对齐：集中 builder 工时优先完工，而非与 extension 平分。
@@ -116,19 +151,8 @@ export function buildRoomTasks(
       site.structureType === STRUCTURE_SPAWN || site.structureType === STRUCTURE_TOWER;
     const isStorageSite = needsStorage && site.structureType === STRUCTURE_STORAGE;
     // controller container 是站桩升级链路的核心基础设施 — 提升为 priority 1，
-    // 确保 builder 优先建造它而非远处的 extension。
-    const isControllerContainer =
-      site.structureType === STRUCTURE_CONTAINER &&
-      ctrl !== undefined &&
-      Math.abs(site.pos.x - ctrl.pos.x) <= 1 &&
-      Math.abs(site.pos.y - ctrl.pos.y) <= 1;
-    // source container 同样是关键物流基础设施。
-    const isSourceContainer =
-      site.structureType === STRUCTURE_CONTAINER &&
-      snapshot.sources.some(
-        s => Math.abs(site.pos.x - s.pos.x) <= 1 && Math.abs(site.pos.y - s.pos.y) <= 1,
-      );
-    const isPriorityContainer = isControllerContainer || isSourceContainer;
+    // 确保 builder 优先建造它而非远处的 extension。判定与抢占豁免共用同一函数。
+    const isPriorityContainer = isPriorityContainerSite(site, snapshot);
     const isPriority = isCritical || isPriorityContainer || isStorageSite;
     // 能量危机：仅暂停道路（纯效率投入，真正可推迟的 discretionary 建造）。
     const isRoad = site.structureType === STRUCTURE_ROAD;

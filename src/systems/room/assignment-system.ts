@@ -7,6 +7,7 @@ import type {
 } from "../../kernel/contracts";
 import {
   buildRoomTasks,
+  isStoragePreemptionExemptSite,
   type CreepAssignmentRef,
   type RoomTaskFlags,
 } from "../../domain/assignment/service";
@@ -198,7 +199,9 @@ function invalidateAssignments(pool: TaskPool, roomName: string, minPriority: nu
 }
 
 /**
- * 主动失效绑定在非 storage/extension site 的 builder assignment，强制 builder 重新选 storage。
+ * 主动失效绑定在**非豁免**工地上的 builder assignment，强制 builder 重新选 storage。
+ * 豁免集 = storage / extension / 站桩物流工地（controller 或 source 旁 container），
+ * 由 `isStoragePreemptionExemptSite` 单点定义（与 build 任务 priority 判定同源）。
  * 消费本房 creep 摘要切片（roomRefs），不在房间循环内重复遍历全量 creep。
  *
  * 触发条件：RCL4+ 无 storage 且存在 storage construction site。
@@ -209,6 +212,7 @@ function invalidateAssignments(pool: TaskPool, roomName: string, minPriority: nu
  *
  * 不释放 extension site 上的 builder——extension 建成后提升 energyCapacityAvailable，
  * 解锁更大 builder body，整体建造速率翻倍；全压 storage 反而拖慢 extension 重建。
+ * 也不释放站桩物流工地上的 builder（2026-09-20 实测修正）——见豁免函数注释。
  * storage site 不存在（被 block 或未规划）时不释放——避免 builder 永久 idle。
  */
 function releaseNonStorageBuilderAssignments(
@@ -228,12 +232,11 @@ function releaseNonStorageBuilderAssignments(
 
     // 同 tick 多个 builder 指向同一 site 时由 obj-cache 去重引擎回查。
     const site = getObjectById(a.targetId as Id<ConstructionSite>);
-    // 保留 storage 和 extension site 上的 builder；释放其他（road/rampart/link 等）。
-    if (
-      site &&
-      site.structureType !== STRUCTURE_STORAGE &&
-      site.structureType !== STRUCTURE_EXTENSION
-    ) {
+    // 豁免集与 build 任务判定同源（storage / extension / 站桩物流工地）：
+    // 曾经这里只认 storage+extension，于是 controller container 上的 builder 每 tick 被
+    // 释放，站桩升级链的一期基建在"无 storage 期"（正是最需要它的时候）永远建不起来 ——
+    // 实测 `container@9,9` 4000 tick 推进恰好 0，升级只剩 0.11 E/tick。
+    if (site && !isStoragePreemptionExemptSite(site, snapshot)) {
       const creep = Game.creeps[ref.name];
       if (creep) creep.memory.assignment = undefined;
     }

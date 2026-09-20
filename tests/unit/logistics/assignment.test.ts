@@ -4,6 +4,8 @@ import {
   validateAssignmentRules,
   chooseTaskForRole,
   getInvalidatedCreepNames,
+  isPriorityContainerSite,
+  isStoragePreemptionExemptSite,
   type CreepAssignmentRef,
   type RoomTaskFlags,
 } from "../../../src/domain/assignment/service";
@@ -832,5 +834,103 @@ describe("Assignment — haul task split (P2-5)", () => {
 
     const tasks = buildRoomTasks(snapshot, [], mockFlags());
     expect(tasks.filter(t => t.kind === "haul")).toHaveLength(0);
+  });
+});
+
+// ── storage 抢占豁免集（2026-09-20 实测修正）──
+// 现场：单房 RCL6 已开发世界里 `container@9,9`（controller 旁）在 4000 tick 里推进恰好 0，
+// 而离 spawn 2 格的 storage/tower 在涨。原因不是配额也不是排序 —— 是 storage 抢占
+// 每 tick 把 builder 从"非 storage/extension"工地上踢下来，站桩基建因此永远建不起来，
+// 升级链只剩 0.11 E/tick。豁免集现在由单点函数定义，且与 build 任务 priority 同源。
+describe("storage 抢占豁免集（isStoragePreemptionExemptSite）", () => {
+  const flags = (): RoomTaskFlags => ({
+    colonyState: "normal" as ColonyState,
+    controllerDowngradeRisk: false,
+  });
+  const snapWith = (sites: ConstructionSite[]): RoomSnapshot =>
+    mockSnapshot({
+      rcl: 6,
+      storage: undefined,
+      controller: {
+        my: true,
+        level: 6,
+        progress: 0,
+        ticksToDowngrade: 20000,
+        pos: { x: 10, y: 10 },
+      } as unknown as RoomSnapshot["controller"],
+      sources: [{ id: "s1", pos: { x: 40, y: 10 } } as unknown as RoomSnapshot["sources"][number]],
+      myConstructionSites: sites,
+      constructionSites: sites,
+    });
+  const site = (id: string, type: string, x: number, y: number): ConstructionSite =>
+    ({
+      id,
+      structureType: type,
+      pos: { x, y },
+      progress: 0,
+      progressTotal: 5000,
+    }) as unknown as ConstructionSite;
+
+  it("controller 1 格内的 container 豁免；同一条 container 拉远 2 格则不豁免", () => {
+    const s = snapWith([]);
+    const c = (x: number, y: number, type: string = STRUCTURE_CONTAINER) => ({
+      structureType: type,
+      pos: { x, y },
+    });
+    expect(isPriorityContainerSite(c(9, 9), s)).toBe(true);
+    expect(isPriorityContainerSite(c(11, 11), s)).toBe(true); // 对角 1 格也算
+    expect(isPriorityContainerSite(c(8, 10), s)).toBe(false); // range 2
+    // 类型也必须对：贴着 controller 的道路不算站桩工地（曾被漏掉，误判成豁免）
+    expect(isPriorityContainerSite(c(9, 9, STRUCTURE_ROAD), s)).toBe(false);
+  });
+
+  it("source 旁的 container 同样豁免（source container 是关键物流）", () => {
+    const s = snapWith([]);
+    expect(
+      isPriorityContainerSite({ structureType: STRUCTURE_CONTAINER, pos: { x: 40, y: 11 } }, s),
+    ).toBe(true);
+    expect(
+      isPriorityContainerSite({ structureType: STRUCTURE_CONTAINER, pos: { x: 25, y: 25 } }, s),
+    ).toBe(false);
+  });
+
+  it("豁免集 = storage + extension + 站桩 container；road/rampart 照旧可抢占", () => {
+    const s = snapWith([]);
+    const exempt = (type: string, x: number, y: number): boolean =>
+      isStoragePreemptionExemptSite({ structureType: type, pos: { x, y } }, s);
+    expect(exempt(STRUCTURE_STORAGE, 23, 25)).toBe(true);
+    expect(exempt(STRUCTURE_EXTENSION, 24, 24)).toBe(true);
+    expect(exempt(STRUCTURE_CONTAINER, 9, 9)).toBe(true); // controller 旁
+    expect(exempt(STRUCTURE_CONTAINER, 20, 20)).toBe(false); // 路中间的空 container
+    expect(exempt(STRUCTURE_ROAD, 9, 9)).toBe(false);
+    expect(exempt(STRUCTURE_RAMPART, 25, 25)).toBe(false);
+    expect(exempt(STRUCTURE_TERMINAL, 26, 26)).toBe(false);
+  });
+
+  it("不变量：build 任务里 priority=1 的 container 必在豁免集内（防两处判定漂移）", () => {
+    const sites = [
+      site("ctrl-c", STRUCTURE_CONTAINER, 9, 9),
+      site("src-c", STRUCTURE_CONTAINER, 40, 11),
+      site("mid-c", STRUCTURE_CONTAINER, 20, 20),
+      site("road", STRUCTURE_ROAD, 22, 22),
+      site("storage", STRUCTURE_STORAGE, 23, 25),
+    ];
+    const s = snapWith(sites);
+    const tasks = buildRoomTasks(s, [], flags());
+    for (const t of tasks.filter(
+      x => x.kind === "build" && x.structureType === STRUCTURE_CONTAINER,
+    )) {
+      const st = sites.find(x => x.id === t.targetId)!;
+      const exempt = isStoragePreemptionExemptSite(
+        { structureType: st.structureType, pos: st.pos },
+        s,
+      );
+      if (t.priority === 1) expect(exempt, `${st.id} priority=1 却被抢占规则赶走`).toBe(true);
+    }
+    // 具体到本用例：两个站桩 container 都是 priority=1 且豁免，中间那个不是。
+    const byId = new Map(tasks.filter(x => x.kind === "build").map(x => [x.targetId, x]));
+    expect(byId.get("ctrl-c")!.priority).toBe(1);
+    expect(byId.get("src-c")!.priority).toBe(1);
+    expect(byId.get("mid-c")!.priority).toBe(2);
   });
 });
