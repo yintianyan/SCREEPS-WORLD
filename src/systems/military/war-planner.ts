@@ -38,6 +38,8 @@ const REASON_POSTURE = 0;
 const REASON_ATTRITION = 1;
 const REASON_NO_TARGET = 2;
 const REASON_PLAN_TIMEOUT = 3;
+/** 情报断供超容忍：承诺不得长期越过证据（见 run() 内的存续期复核）。 */
+const REASON_INTEL_STALE = 4;
 
 /** 核验结论编码（WarOutcome 事件 d[0]）。 */
 const OUTCOME_CODES: Record<WarOutcome, number> = { success: 0, failure: 1, unknown: 2 };
@@ -120,6 +122,26 @@ export const warPlannerSystem: System = {
       return;
     }
 
+    // 存续期证据复核：授权时那道「fact 级 + targetFreshness」硬门槛必须在计划存续期内
+    // 继续成立。旧行为是「只有选目标时查一次」，而 planTimeout(6000) ≫ targetFreshness(1500)
+    // ⇒ 最后一眼之后还能合法烧 4500 tick 的兵（E2E-021 实测：断供后 2700+ tick 仍在打）。
+    // 分两级：断供即停补员（不再往看不见的地方送兵），但计划本身可再存续一个新鲜度周期
+    // 而不撤军 —— 远程征途中间隔性失明是常态，一断就撤等于把「暂时没看见」当成「打完了」。
+    const evidenceFresh = intelActionUsable(plan.targetRoom, ctx.tick, CONFIG.war.targetFreshness);
+    const kernelMem = Memory.kernel;
+    if (kernelMem) {
+      if (evidenceFresh || kernelMem.warIntelLost?.room !== plan.targetRoom) {
+        // 有据（或目标已换房 ⇒ 重新起算）：清掉断供计时。
+        delete kernelMem.warIntelLost;
+      } else if (ctx.tick - kernelMem.warIntelLost.since > CONFIG.war.planIntelBlackoutTicks) {
+        demobilize(ctx.tick, REASON_INTEL_STALE);
+        return;
+      }
+      if (!evidenceFresh && kernelMem.warIntelLost === undefined) {
+        kernelMem.warIntelLost = { room: plan.targetRoom, since: ctx.tick };
+      }
+    }
+
     // 2. 维持编队（heal-tank）：attacker 拆打 + healer 治疗，分 role 统计补位。
     //    编制合计口径：满编/止损基数 = squadSize + healerCount（缺谁都不成编队）。
     //    boost 完成度自下而上派生（body 任一部件带 boost 即计）— 不入 Memory，
@@ -157,7 +179,8 @@ export const warPlannerSystem: System = {
     // live+pending < 编制时每轮至多补 1 个新 key — 队列被能量门禁卡住时
     // pending 封顶编制，spawned 不会因空转膨胀。
     // A5.3：attackerTarget 来自 a5ForceReq（attacker+ranged 合并编制）。
-    if (attackerLive + pendingAttackers < attackerTarget) {
+    // evidenceFresh：断供期间停补员（在编的照打），这是"承诺不越过证据"的即时那一半。
+    if (evidenceFresh && attackerLive + pendingAttackers < attackerTarget) {
       submitSquadRequest(
         queue,
         plan,
@@ -168,7 +191,7 @@ export const warPlannerSystem: System = {
         ctx.tick,
       );
     }
-    if (healerLive + pendingHealers < healerCount) {
+    if (evidenceFresh && healerLive + pendingHealers < healerCount) {
       submitSquadRequest(
         queue,
         plan,
@@ -217,7 +240,7 @@ export const warPlannerSystem: System = {
     for (const p of kernel?.expansionPlans ?? []) {
       if (p.st === "WAITING_EXECUTION") expansionTargets.add(p.rn);
     }
-    if (nuker && kernel && !expansionTargets.has(plan.targetRoom)) {
+    if (evidenceFresh && nuker && kernel && !expansionTargets.has(plan.targetRoom)) {
       const nukerReady =
         nuker.store.getUsedCapacity(RESOURCE_ENERGY) >= NUKE_ENERGY_COST &&
         (nuker.store.getUsedCapacity(RESOURCE_GHODIUM) ?? 0) >= NUKE_GHODIUM_COST &&
@@ -360,7 +383,10 @@ export function demobilize(tick: number, reason: number): void {
   ) {
     outcome = "unknown";
   }
-  if (outcome !== "success") {
+  // 情报断供不判负：看不见目标房既不是「打赢了」也不是「打不赢」，把它写进黑名单
+  // 会让一次侦察中断变成 10000~20000 tick 的永久放弃。断供撤军后目标仍可被重新授权
+  // （前提是视野回来了 —— 授权本来就要过 fact + targetFreshness 那道门）。
+  if (outcome !== "success" && reason !== REASON_INTEL_STALE) {
     // P0-2：unknown 用半额冷却 — intel 过期不是目标的错，缩短冷却让 intel 自然刷新后可重评。
     // failure 是确定性「打不赢」，用满额冷却防重选循环。
     const cooldown =
@@ -374,13 +400,21 @@ export function demobilize(tick: number, reason: number): void {
         ` (intel_age=${entry?.observedAt !== undefined ? tick - entry.observedAt : "never"},` +
         ` blacklist=${cooldown}t, reason=${reason})`,
     );
+  } else if (reason === REASON_INTEL_STALE) {
+    // 断供撤军必须留痕：它不拉黑、不判负，日志是它唯一的外部可见信号
+    // （否则"战争为什么停在这一步"只能靠读代码反推）。
+    log.info(
+      "war-planner",
+      `war: recall ${plan.targetRoom} — 情报断供 ${CONFIG.war.planIntelBlackoutTicks}t+` +
+        ` (spawned=${plan.spawned ?? 0}, 不拉黑, reason=${reason})`,
+    );
   }
 
   // A5.3.1 GAP-1 修复：写入止损信号供 recovery-execution-system 消费。
   // recovery-execution-system 通过纯函数 mapAbortSignalsToRecoveryActions 将信号
   // 转换为 RecoveryAction，复用 A4.6 lifecycle 幂等机制（recoveryIdempotencyKey 去重）。
   // Military 只产出 Signal，不执行 Recovery。A4.6 负责 Signal → Action → 执行。
-  const REASON_LABELS = ["POSTURE", "ATTRITION", "NO_TARGET", "PLAN_TIMEOUT"];
+  const REASON_LABELS = ["POSTURE", "ATTRITION", "NO_TARGET", "PLAN_TIMEOUT", "INTEL_STALE"];
   const g = globalCache();
   // 读取 A5.3 operationId（如果 war-planning-system 已写入兼容字段）
   const compatOp = plan as typeof plan & { operationId?: string };
@@ -423,6 +457,9 @@ export function demobilize(tick: number, reason: number): void {
     removeRequestsByRole(queue, "healer", plan.sponsor);
   }
   delete Memory.kernel!.warPlan;
+  // 断供计时随计划一并清除：否则下次重新授权同一目标时，上一轮的黑洞年龄会被继承，
+  // 一进门就被判"断供超窗"撤军（战果核验还没做）。
+  delete Memory.kernel!.warIntelLost;
 }
 
 /** 目标是否处于战争黑名单冷却期内。 */

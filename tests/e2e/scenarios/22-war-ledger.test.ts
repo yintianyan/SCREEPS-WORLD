@@ -81,6 +81,8 @@ interface TickSample {
   bandTicks: number;
   srcStallTicks: number;
   warTarget?: string;
+  /** 情报断供年龄（-1 = 该 tick 有据）；见 tickSeries 处的说明。 */
+  intelLostAge: number;
   spawned: number;
   /** 编制读数：phase 的 bootstrap 判据输入（harvesterCount < max(1, sourceCount)）。 */
   harvesters: number;
@@ -277,6 +279,8 @@ describe("E2E-022 war 账本 — 战争全程经济不越红线（Scenario F · 
         const rm = snap.rawMemory as Record<string, any> | undefined;
         const room = rm?.rooms?.[HOME];
         const ph = room?.phase;
+        const warTarget = rm?.kernel?.warPlan?.targetRoom as string | undefined;
+        const lost = rm?.kernel?.warIntelLost as { room: string; since: number } | undefined;
         tickSeries.push({
           tick: snap.tick,
           posture: rm?.kernel?.strategy?.posture as string | undefined,
@@ -293,8 +297,12 @@ describe("E2E-022 war 账本 — 战争全程经济不越红线（Scenario F · 
           liquidityScore: Number(ph?.liquidityScore ?? -1),
           bandTicks: Number(ph?.bandTicks ?? -1),
           srcStallTicks: Number(ph?.srcStallTicks ?? -1),
-          warTarget: rm?.kernel?.warPlan?.targetRoom as string | undefined,
+          warTarget,
           spawned: Number(rm?.kernel?.warPlan?.spawned ?? -1),
+          /** 情报断供年龄（tick − Memory.kernel.warIntelLost.since；-1 = 有据）。
+           * 用来量「一场合法战争里证据到底断了多久」—— 断供即停补员，这个数就是
+           * 停补员的时长，也是判断「复核是否必须配侦察跟随」的唯一证据。 */
+          intelLostAge: lost && lost.room === warTarget ? snap.tick - Number(lost.since) : -1,
           harvesters: Number(ph?.harvesterCount ?? -1),
           sources: Number(ph?.sourceCount ?? -1),
         });
@@ -427,9 +435,9 @@ describe("E2E-022 war 账本 — 战争全程经济不越红线（Scenario F · 
         `war->fortify downgrades=${midWarDowngrades.join(",") || "none"}`,
     );
     console.log(
-      `[soak-evidence] war-ledger crisis-band runs (${bandRuns.length}, ${bandTicksTotal}t of ${tickSeries.length}t sampled): ${ 
-        bandRuns.length ? bandRuns.slice(0, 6).map(fmtOnset).join(" | ") : "none" 
-        } (investmentReserveFloor=50000; drain=偿付通道/liq=物流通道/stall=采集塌方通道)`,
+      `[soak-evidence] war-ledger crisis-band runs (${bandRuns.length}, ${bandTicksTotal}t of ${tickSeries.length}t sampled): ${
+        bandRuns.length ? bandRuns.slice(0, 6).map(fmtOnset).join(" | ") : "none"
+      } (investmentReserveFloor=50000; drain=偿付通道/liq=物流通道/stall=采集塌方通道)`,
     );
     console.log(
       `[soak-evidence] war-ledger entry resolution: warTick=${entryIdx >= 0 ? tickSeries[entryIdx]!.tick : "never"} ` +
@@ -538,10 +546,11 @@ describe("E2E-022 war 账本 — 战争全程经济不越红线（Scenario F · 
       .filter((r): r is BandRun => r !== undefined);
     expect(
       midWarDowngrades.length,
-      `war 达成后中途降级 ${midWarDowngrades.length} 次（war↔fortify 振荡，R-04）：${midWarDowngrades.join(",")}${ 
+      `war 达成后中途降级 ${midWarDowngrades.length} 次（war↔fortify 振荡，R-04）：${midWarDowngrades.join(",")}${
         downgradeCause.length
           ? `\n降级与危机带同刻（撤资路径），入带读数：\n${downgradeCause.map(fmtOnset).join("\n")}`
-          : "\n降级时刻没有对应的危机带 —— 不是撤资路径，另查（威胁窗/止损/授权链）"}`,
+          : "\n降级时刻没有对应的危机带 —— 不是撤资路径，另查（威胁窗/止损/授权链）"
+      }`,
     ).toBe(0);
 
     // 全程无 JS 错误。

@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { demobilize, warPlannerSystem } from "../../../src/systems/military/war-planner";
 import { intelligenceSystem, __resetIntelStateForTests } from "../../../src/systems/intelligence";
+import { mapAbortToRecoveryAction } from "../../../src/domain/military/abort-recovery";
 import { globalCache } from "../../../src/kernel/global-cache";
 import { mockContext, mockSnapshot, resetGlobals, syncSquadIndex } from "../../support/factories";
 import { CONFIG } from "../../../src/config";
@@ -484,5 +485,111 @@ describe("boost 战前强化 — advance 门禁接线", () => {
     warPlannerSystem.run(mockContext(mockSnapshot()));
 
     expect((globalThis as any).Memory.kernel.warPlan.phase).toBe("advance");
+  });
+});
+
+// ─── R5 — 存续期情报复核（#12：承诺不得长期越过证据）─────────────────
+// 旧行为：fact + targetFreshness 只在选目标时查一次，于是 planTimeout(6000) −
+// targetFreshness(1500) = 4500 tick 的「没人看见却继续烧兵」是合法的。
+// 现行为：断供即停补员；断供累计超 CONFIG.war.planIntelBlackoutTicks 才撤军，
+// 且撤军不写黑名单（看不见 ≠ 打不赢）。计时器住在 Memory.kernel.warIntelLost，
+// 不住在 warPlan 里 —— warPlan 有两个写者，A5.3 每轮整体重写它（见下面那条回归用例）。
+describe("R5 — 存续期情报复核", () => {
+  /** 在指定 tick 跑一轮（intel 的 observedAt 取 payload.lastSeen，与 Game.time 解耦）。 */
+  function runAt(tick: number): void {
+    const ctx = mockContext(mockSnapshot());
+    (ctx as any).tick = tick;
+    warPlannerSystem.run(ctx);
+  }
+
+  /** 建局：W6N4 为合法目标（towers:0 ⇒ 威胁短窗 TTL=200，lastSeen=900）。 */
+  function authorizeAt1000(): void {
+    (globalThis as any).Memory = { schemaVersion: 27, creeps: {}, rooms: {}, kernel: {} };
+    setupHome();
+    setPosture("war");
+    runAt(1000);
+  }
+
+  /** 模拟 A5.3 writeCompatibleWarPlan：用全新对象字面量整体替换 plan。 */
+  function rewritePlanObject(): void {
+    const k = (globalThis as any).Memory.kernel;
+    k.warPlan = {
+      targetRoom: "W6N4",
+      sponsor: "W7N4",
+      squadSize: 3,
+      since: k.warPlan.since,
+      towersSeen: 0,
+      phase: k.warPlan.phase,
+      spawned: k.warPlan.spawned,
+    };
+  }
+
+  it("断供当轮即停补员，计划本身继续存续", () => {
+    authorizeAt1000();
+    expect((globalThis as any).Memory.kernel.warPlan.spawned).toBe(2); // attacker + healer
+
+    // age = 1300 − 900 = 400 > ROOM_THREAT_TTL(200) ⇒ 非 fact，证据断了。
+    runAt(1300);
+
+    const k = (globalThis as any).Memory.kernel;
+    expect(k.warPlan).toBeDefined(); // 未超容忍窗口 ⇒ 不撤军
+    expect(k.warPlan.spawned).toBe(2); // 但不再添人
+    expect(k.warIntelLost).toEqual({ room: "W6N4", since: 1300 });
+  });
+
+  it("断供恰好等于容忍上限时不撤军（> 才触发）", () => {
+    authorizeAt1000();
+    runAt(1300); // stamp warIntelLost.since = 1300
+    runAt(1300 + CONFIG.war.planIntelBlackoutTicks); // 1500，不严格大于
+
+    const k = (globalThis as any).Memory.kernel;
+    expect(k.warPlan).toBeDefined();
+    expect(k.warIntelLost.since).toBe(1300); // 起点不被后续轮次推移
+  });
+
+  it("超容忍窗口 → 撤军 reason=INTEL_STALE，且不因『看不见』拉黑目标", () => {
+    authorizeAt1000();
+    runAt(1300); // 断供起点
+    runAt(1300 + CONFIG.war.planIntelBlackoutTicks + 1);
+
+    const k = (globalThis as any).Memory.kernel;
+    expect(k.warPlan).toBeUndefined();
+    // 收摊原因 = 4（INTEL_STALE），且计划超时（planTimeout=6000）没有背这个锅。
+    const events = warOutcomeEvents();
+    expect(events.length).toBe(1);
+    expect(events[0].d[2]).toBe(4);
+    // 断供不是战败判定 ⇒ 不写黑名单（写了就是一次侦察中断换来 1~2 万 tick 的永久放弃）。
+    expect(k.warBlacklist?.W6N4).toBeUndefined();
+    // 计时器随收摊清除：否则下次重新授权同一目标会一进门就被判断供超窗。
+    expect(k.warIntelLost).toBeUndefined();
+    // 信号可被 recovery 侧消费（新增 reason 必须进映射表，否则 mapAbortToRecoveryAction 返回 null）。
+    const signal = globalCache().warAbortSignals;
+    expect(signal?.reason).toBe("INTEL_STALE");
+    expect(mapAbortToRecoveryAction(signal!)).not.toBeNull();
+  });
+
+  it("A5.3 整体重写 warPlan 不得把断供计时冲零（计时器住在 kernel 而非 plan）", () => {
+    authorizeAt1000();
+    runAt(1300); // 断供起点
+    rewritePlanObject(); // 写者换了一个不带该字段的对象字面量
+    runAt(1300 + CONFIG.war.planIntelBlackoutTicks + 1);
+
+    // 若计时器挂在 plan 上，这里会被重新起算 ⇒ 永不撤军（E2E-021 实测 2700 tick 零视野）。
+    expect((globalThis as any).Memory.kernel.warPlan).toBeUndefined();
+    expect(warOutcomeEvents().at(-1)?.d[2]).toBe(4);
+  });
+
+  it("视野恢复 → 清断供计时并恢复补员", () => {
+    authorizeAt1000();
+    runAt(1300); // 断供，停补员
+    expect((globalThis as any).Memory.kernel.warPlan.spawned).toBe(2);
+
+    // 重新观测同一目标（age = 1310 − 1310 = 0 ⇒ fact）。
+    seedIntel({ W6N4: { owner: "Enemy", towers: 0, lastSeen: 1310 } });
+    runAt(1310);
+
+    const k = (globalThis as any).Memory.kernel;
+    expect(k.warIntelLost).toBeUndefined();
+    expect(k.warPlan.spawned).toBeGreaterThan(2); // 补员恢复
   });
 });

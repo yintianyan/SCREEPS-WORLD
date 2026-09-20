@@ -51,10 +51,11 @@ export interface WarAbortSignal {
  * - ATTRITION → population_rebuild：消耗战失败意味着大量 Creep 损失，需重建
  * - NO_TARGET → auto_resolve：无目标 = 自然收摊，无需特殊恢复
  * - PLAN_TIMEOUT → population_rebuild：计划超期可能有未完成投入，需重建
-
+ * - INTEL_STALE → population_rebuild：授权门槛（fact + 新鲜度）在计划存续期内不再成立，
+ *   召回编队撤军。不是战败判定（war-planner 对此原因不写黑名单），但投入已经花掉。
  * 注意：LOGISTICS_FAILURE / REINFORCEMENT_TIMEOUT / RECOVERY_UNAVAILABLE
  * 不是 war-planner 的止损原因——它们是 A5.3 operation.ts 的 AbortCondition，
- * 在当前架构中，war-planner 的 demobilize 只产生 4 种 reason。
+ * 在当前架构中，war-planner 的 demobilize 只产生上述 5 种 reason。
  * 如果未来 A5.3 完整 Operation lifecycle 接管止损，
  * AbortCondition 将通过本接口的 extendAbortReason 映射。
  */
@@ -102,6 +103,15 @@ const ABORT_REASON_MAP: Record<
     domain: "colony",
     description: "War plan timed out — rebuild population",
     recommendation: "rebuild population after plan timeout",
+    cost: 800,
+    time: 500,
+    urgent: false,
+  },
+  INTEL_STALE: {
+    actionType: "population_rebuild",
+    domain: "colony",
+    description: "War plan lost its evidence — recalled without a defeat verdict",
+    recommendation: "re-scout the target before re-authorizing; rebuild recalled squad",
     cost: 800,
     time: 500,
     urgent: false,

@@ -628,6 +628,13 @@ export const CONFIG = {
     healerSquadRatio: 2,
     /** 战争计划最长期限（tick）：超期重新选目标（目标可能已迁房/易主）。 */
     planTimeout: 6000,
+    /** 存续期情报断供容忍（tick）：warPlan 的授权门槛（fact 级 + targetFreshness）
+     * 必须在计划存续期内继续成立。看不到目标房时**立即停止补员/发射核弹**（不再往
+     * 看不见的地方送兵），但计划本身可再存续这么久而不撤军 —— 远程征途中视野本就
+     * 会阶段性中断，证据一断就撤等于把「暂时没看见」当成「打完了」。
+     * 刻意与 targetFreshness 同量级：越过证据的上限就是一个新鲜度周期，不是 planTimeout
+     * 那种 6000（旧值下 planTimeout − targetFreshness = 4500 tick 的空白承诺是合法的）。 */
+    planIntelBlackoutTicks: 1500,
     /** 低血撤退线：攻击者血量低于 hitsMax × 此比例 → 标记回收撤出战区。 */
     retreatRatio: 0.3,
     /** sponsor 快照缺失时的容量回退（测试/边缘态）— body 仍由 selectBody 约束。 */

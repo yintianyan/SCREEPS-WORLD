@@ -579,6 +579,15 @@ declare global {
      */
     warStandDownUntil?: number;
     /**
+     * 战争计划的情报断供计时（war-planner 写入/清除）：目标房最后一次通过授权那道
+     * fact + targetFreshness 门槛之后经过的起点 tick。
+     * **刻意不放在 warPlan 里**：warPlan 有两个写者（war-planner 的 legacy 路径与
+     * A5.3 的 writeCompatibleWarPlan），后者每轮用全新对象字面量整体重写 plan，
+     * 放在 plan 上的字段会被静默冲掉 —— 断供计时被冲零就等于永不撤军（实测 2700 tick
+     * 零视野仍在授权）。按房 keyed：换目标即视为重新起算，收摊时随 demobilize 清除。
+     */
+    warIntelLost?: { room: string; since: number };
+    /**
      * 帝国议程（v28+，empire-strategy 写入）— 短期目标真相源：
      * recovery（恢复）> defense-readiness（备战）> rcl-push（冲级）> develop（固本）。
      * 执行系统消费 initiative 协调优先级；决策纯函数见 domain/strategy/agenda。

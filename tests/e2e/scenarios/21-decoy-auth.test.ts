@@ -23,6 +23,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { CONFIG } from "../../../src/config";
+import { ROOM_THREAT_TTL } from "../../../src/domain/intel";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
@@ -180,9 +181,9 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
       // 同一 tick 同时取「诱饵房内我方 creep 数」与 warPlan 目标 —— 授权合法性必须在
       // 同一份快照里配对判定，分开取会因相位差误判（见头注释）。
       await runner.bot.sendConsole(
-        `var v=0; for (var cn in Game.creeps) { if (Game.creeps[cn].room && Game.creeps[cn].room.name === "${ 
-          DECOY 
-          }") v++; }` +
+        `var v=0; for (var cn in Game.creeps) { if (Game.creeps[cn].room && Game.creeps[cn].room.name === "${
+          DECOY
+        }") v++; }` +
           `console.log("DECOYAUTH t=" + Game.time + " vis=" + v + " target=" + (Memory.kernel.warPlan ? Memory.kernel.warPlan.targetRoom : "-"));`,
       );
       await runner.bot.sendConsole(
@@ -256,21 +257,55 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
     const uncovered = decoyWindows.filter(w => !w.covered);
     // 两条不同的契约，必须分开判（原先一条断言把它们混成一句话，红起来指错地方）：
     //  ①**授权门槛**（本场景的标题）：一个授权窗口的**起点**必须有观测 —— fact 硬门槛。
-    //  ②**承诺不得越过证据**（实测挖出的缺陷）：窗口存续期间可以因为通勤而瞬时零视野，
-    //     但**长期**零视野还在打 = 计划在自己证据过期之后继续烧命。实测窗口起点 t3901
-    //     授权合法，而 t6302 起连续 54 个同 tick 样本零视野仍在授权
+    //  ②**承诺不得越过证据**（原 task #12 缺陷，已修）：窗口存续期间可以因为通勤而瞬时
+    //     零视野，但长期零视野还在打 = 计划在自己证据过期之后继续烧命。修前实测窗口起点
+    //     t3901 授权合法，而 t6302 起连续 54 个同 tick 样本零视野仍在授权
     //     （`CONFIG.war.planTimeout`=6000 ≫ `targetFreshness`=1500，且计划存续期内
     //     完全不复核情报新鲜度 → 中间 4500 tick 是"没人看见却继续打"）。
+    //     修后判据从"零视野样本数=0"换成**可证伪的长度上界**：单个授权窗口内最长的
+    //     连续零视野段不得超过 planIntelBlackoutTicks（停补员是即时的，撤军给一个新鲜度
+    //     周期的容忍），再加两段观测盲区补偿 —— 采样网格（相邻样本的 tick 差）与
+    //     ROOM_THREAT_TTL（授权谓词本身允许 200 tick 前的目击仍算 fact）。
+    //     注意"零视野"是本探针的口径（该 tick 房内无我方 creep），比 intel 的"无视野"严：
+    //     盲刷不前移 lastSeen（domain/intel.ts 的无视野分支），所以两者不会互相掩盖。
     const staleStarts: number[] = [];
     let unobservedSamples = 0;
+    let maxBlindRun = 0;
+    let blindRunWhere = "-";
+    let gridMax = 0;
     for (const w of decoyWindows) {
-      const inside = probeVision.filter(
-        s => s.tick >= w.from - 50 && s.tick <= (w.covered ? w.to : w.from + 50),
-      );
+      const inside = probeVision
+        .filter(s => s.tick >= w.from - 50 && s.tick <= (w.covered ? w.to : w.from + 50))
+        .sort((a, b) => a.tick - b.tick);
       if (!inside.length) continue; // 未覆盖窗口不猜测，另列 uncovered
       if (inside[0]!.vis === 0) staleStarts.push(inside[0]!.tick);
       unobservedSamples += inside.filter(s => s.vis === 0).length;
+
+      // 最长连续零视野段（tick 口径）：零样本段从前一个样本起、到下一个有视野样本止，
+      // 窗口在段内结束就用窗口终点。
+      let runStart: number | undefined;
+      let runEnd = w.from;
+      let prev = w.from;
+      for (const s of inside) {
+        if (inside.length > 1) gridMax = Math.max(gridMax, s.tick - prev);
+        if (s.vis === 0) {
+          if (runStart === undefined) runStart = prev;
+          runEnd = s.tick;
+        } else if (runStart !== undefined) {
+          if (runEnd - runStart > maxBlindRun) {
+            maxBlindRun = runEnd - runStart;
+            blindRunWhere = `t${runStart}..${runEnd}`;
+          }
+          runStart = undefined;
+        }
+        prev = s.tick;
+      }
+      if (runStart !== undefined && Math.min(w.to, prev) - runStart > maxBlindRun) {
+        maxBlindRun = Math.min(w.to, prev) - runStart;
+        blindRunWhere = `t${runStart}..${Math.min(w.to, prev)}(窗口末)`;
+      }
     }
+    const blindRunCap = CONFIG.war.planIntelBlackoutTicks + gridMax + ROOM_THREAT_TTL;
 
     // ── 证据登记 ──
     console.log(`[soak-evidence] decoy probes: ${timeline.slice(-6).join(" | ")}`);
@@ -293,27 +328,30 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
       staleStarts,
       `诱饵授权窗口的起点就零视野 ${staleStarts.join(",")} —— fact 硬门槛被绕过！\n${timeline.slice(-8).join(", ")}`,
     ).toEqual([]);
-    // 契约②（实测挖出的缺陷，见 task #12）：承诺不得长期越过证据。
-    // **偶发捕获型断言**：只有 AI 的侦察链恰好断掉时才看得见 —— 同一份代码，全量跑复现过
-    // t6302 起连续 54 个同 tick 样本零视野仍在授权，单独复跑则全程有观测。所以它红的时候
-    // **不是回归**，是抓到了 #12；绿也不代表这条被验过（只代表这一次没人断线）。
-    // 缺陷本身有配置证据：warPlan 存续期内不复核情报，而 planTimeout(6000) ≫
-    // targetFreshness(1500) → "最后一眼"之后还有 4500 tick 的合法烧兵区间。
+    // 契约②（task #12 已修）：承诺不得长期越过证据。上界是**配置可核对的数**，
+    // 不是"零视野样本数=0"（后者会把合法的通勤盲区也判红，且绿也不代表验过什么）。
+    // 红起来只有两种可能：复核门禁失效，或撤军容忍被调大到越过证据。
     expect(
-      unobservedSamples,
-      `对诱饵的授权窗口内有 ${unobservedSamples} 个同 tick 样本零视野（连续 ${((50 * unobservedSamples) / Math.max(1, decoyWindows.length)).toFixed(0)} tick 量级）` +
-        `—— 计划已越过它的证据：授权之后没人再看过 W1N1，战争承诺却继续。` +
+      maxBlindRun,
+      `诱饵授权窗口内最长连续零视野 ${maxBlindRun} tick（${blindRunWhere}）越过上界 ` +
+        `${blindRunCap} = planIntelBlackoutTicks(${CONFIG.war.planIntelBlackoutTicks}) ` +
+        `+ 采样网格(${gridMax}) + 情报威胁短窗(${ROOM_THREAT_TTL})` +
         `\n授权窗口=${decoyWindows.map(w => `t${w.from}..${w.to}`).join(",")}` +
-        `\n（窗口起点都有观测 → 这不是 fact 门槛被绕过，是"承诺存续期内不复核情报"）`,
-    ).toBe(0);
+        `\n（窗口起点都有观测 → 不是 fact 门槛被绕过，是"承诺存续期内不复核情报"）`,
+    ).toBeLessThanOrEqual(blindRunCap);
+    console.log(
+      `[soak-evidence] decoy blind-run audit: maxBlindRun=${maxBlindRun}@${blindRunWhere} ` +
+        `cap=${blindRunCap} unobservedSamples=${unobservedSamples} windows=${decoyWindows.length}`,
+    );
     console.log(
       `[soak-evidence] decoy audit: samples=${samplesSeen} targetedDecoy=${decoyAuthorized} ` +
         `staleAuthorizations=${staleAuthorizations} staleStarts=${staleStarts.length} ` +
         `unobservedSamples=${unobservedSamples} decoyWindows=${decoyWindows.length} ` +
-        `uncovered=${uncovered.length}${ 
-        uncovered.length
-          ? ` (${uncovered.map(w => `t${w.from}..${w.to}`).join(",")} 无同 tick 视野配对)`
-          : ""}`,
+        `uncovered=${uncovered.length}${
+          uncovered.length
+            ? ` (${uncovered.map(w => `t${w.from}..${w.to}`).join(",")} 无同 tick 视野配对)`
+            : ""
+        }`,
     );
     // 全程无 JS 错误。
     expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);
