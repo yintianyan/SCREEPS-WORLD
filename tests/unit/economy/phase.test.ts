@@ -3,6 +3,7 @@ import {
   evaluateColonyPhase,
   phaseToColonyState,
   DEFAULT_PHASE_OPTIONS,
+  type ColonyPhase,
   type PhaseInput,
   type PhaseOptions,
   type PhaseState,
@@ -33,6 +34,13 @@ function opts(overrides: Partial<PhaseOptions> = {}): PhaseOptions {
 
 /** 关闭最短驻留的选项 — 用于只验证分数迟滞机制的用例。 */
 const NO_DWELL = opts({ minBandTicks: 0 });
+
+/**
+ * 关闭流动性驻留闸的选项 — 用于只验证 liquidityScore 步长/迟滞**机制**的用例。
+ * 闸门本身（陷阱需连续成立多久才开始计分）有专属用例，别让机制测试去趟它。
+ */
+const NO_LIQ_GATE = opts({ liquidityEnterTicks: 1 });
+const NO_GATE_NO_DWELL = opts({ liquidityEnterTicks: 1, minBandTicks: 0 });
 
 const FRESH: PhaseState = {
   phase: "growth",
@@ -240,11 +248,11 @@ describe("Phase — evaluateColonyPhase", () => {
 
   it("liquidity trap drives crisis even while reserve is growing (W37S58)", () => {
     // liquidityStep 15，enter 150 → 需 10 次持续陷阱。
-    const after9 = runLiquidityTrap(FRESH, 9); // 9 次 = 135
+    const after9 = runLiquidityTrap(FRESH, 9, NO_LIQ_GATE); // 9 次 = 135
     expect(after9.liquidityScore).toBe(135);
     expect(after9.drainScore).toBe(0); // 偿付维度健康（reserve 在涨）
     expect(after9.phase).not.toBe("crisis");
-    const after10 = runLiquidityTrap(FRESH, 10); // 10 次 = 150
+    const after10 = runLiquidityTrap(FRESH, 10, NO_LIQ_GATE); // 10 次 = 150
     expect(after10.liquidityScore).toBe(150);
     expect(after10.drainScore).toBe(0); // 关键：drainScore 仍为 0，纯靠流动性维度入危机
     expect(after10.phase).toBe("crisis");
@@ -271,7 +279,7 @@ describe("Phase — evaluateColonyPhase", () => {
   });
 
   it("exits liquidity crisis through recovery with hysteresis", () => {
-    const inCrisis = runLiquidityTrap(FRESH, 10);
+    const inCrisis = runLiquidityTrap(FRESH, 10, NO_GATE_NO_DWELL);
     expect(inCrisis.phase).toBe("crisis");
     // 物流恢复（hauler 补上了）：spendableRatio 回升 → 陷阱解除 → liquidityScore 递减。
     // liquidityRecoveryStep 50：150→100→50→0(脱离)。NO_DWELL 隔离分数机制。
@@ -288,8 +296,64 @@ describe("Phase — evaluateColonyPhase", () => {
   });
 
   it("clamps liquidityScore to [0, enterScore]", () => {
-    const trapped = runLiquidityTrap(FRESH, 20);
+    const trapped = runLiquidityTrap(FRESH, 20, NO_LIQ_GATE);
     expect(trapped.liquidityScore).toBe(DEFAULT_PHASE_OPTIONS.drainEnterScore);
+  });
+
+  // ── 流动性驻留闸（liquidityEnterTicks）──
+  // 实测校准依据（E2E-022 富室战争夹具、9000 tick 逐 tick 序列）：19 段陷阱全部在
+  // 3~25 tick 内自清，没有一段超过 30 tick；而步长配置下连踩 10 tick 就判 crisis，
+  // 于是"孵化脉冲的瞬时形状"换来 ≥100 tick 的强制危机带（minBandTicks）并撤掉了战争。
+
+  it("短于驻留门槛的瞬态陷阱完全不进危机带", () => {
+    // 25 tick = 实测最长瞬态。用默认选项（闸开着）跑，分数必须一直贴 0。
+    const s = runLiquidityTrap(FRESH, 25);
+    expect(s.liquidityTrapTicks).toBe(25);
+    expect(s.liquidityScore).toBe(0);
+    expect(s.phase).not.toBe("crisis");
+    // 同一串在闸关掉的对照下早已爆表 —— 证明红/绿差在闸，不在夹具输入。
+    const control = runLiquidityTrap(FRESH, 25, NO_LIQ_GATE);
+    expect(control.liquidityScore).toBe(DEFAULT_PHASE_OPTIONS.drainEnterScore);
+    expect(control.phase).toBe("crisis");
+  });
+
+  it("陷阱一断即重新计数：两段各 40 tick 的陷阱不等于一段 80 tick 的死锁", () => {
+    let s = runLiquidityTrap(FRESH, 40);
+    expect(s.liquidityTrapTicks).toBe(40);
+    // 中间插一 tick 正常物流（hauler 补上了口袋）—— 驻留归零。
+    s = evaluateColonyPhase(input({ reserve: 6500, spendableRatio: 0.8, frozenRatio: 0.2 }), s);
+    expect(s.liquidityTrapTicks).toBe(0);
+    s = runLiquidityTrap(s, 40);
+    expect(s.liquidityTrapTicks).toBe(40);
+    expect(s.liquidityScore).toBe(0);
+    expect(s.phase).not.toBe("crisis");
+  });
+
+  it("持续死锁穿过驻留闸后照旧判 crisis（灵敏度没有被关掉）", () => {
+    // 门槛 50 tick + 10 tick 打满 = 60 tick；W37S58 那种 0 hauler 的死锁会一直踩着，
+    // 60 tick 才进带相对"永久死锁"毫无损失，相对 25 tick 瞬态则是完全免疫。
+    const s = runLiquidityTrap(FRESH, DEFAULT_PHASE_OPTIONS.liquidityEnterTicks + 10);
+    expect(s.liquidityScore).toBe(DEFAULT_PHASE_OPTIONS.drainEnterScore);
+    expect(s.phase).toBe("crisis");
+  });
+
+  it("驻留闸只关流动性：偿付赤字与 srcRatio 强制 crisis 通道不受影响", () => {
+    // 陷阱 + 真赤字并存：drainScore 照样累加（它有自己的豁免体系，与闸无关）。
+    let s = FRESH;
+    for (let i = 0; i < 8; i++) {
+      s = evaluateColonyPhase(
+        input({ reserve: 2000 - i * 100, spendableRatio: 0.05, frozenRatio: 0.95 }),
+        s,
+      );
+    }
+    expect(s.drainScore).toBeGreaterThan(0);
+    expect(s.liquidityScore).toBe(0); // 8 tick 未过闸
+    // srcRatio 通道：与闸无关，按自己的驻留计数照样强制 crisis。
+    let t = FRESH;
+    for (let i = 0; i < DEFAULT_PHASE_OPTIONS.srcStallEnterTicks + 5; i++) {
+      t = evaluateColonyPhase(input({ srcRatio: 0.98, storageDrainRate: -800 }), t);
+    }
+    expect(t.phase).toBe("crisis");
   });
 
   it("solvency drain still works independently when liquidity is healthy", () => {
@@ -321,5 +385,188 @@ describe("Phase — phaseToColonyState", () => {
   it("returns normal when phase is growth or steady", () => {
     expect(phaseToColonyState("growth", false)).toBe("normal");
     expect(phaseToColonyState("steady", false)).toBe("normal");
+  });
+});
+
+// ── 绝对可支付豁免（investmentReserveFloor）──
+// 立论：既有的 spendableRatio 豁免会被「花钱的那一 tick」自己打掉 —— 大额孵化正是把口袋
+// 抽干的动作，于是「我选择花掉它」必然记成「我生产不出来」。军事动员期因此自造赤字，
+// 而 recovery 反过来收缩军事编制 = 动员掐死动员自己。故加一道绝对储备豁免。
+//
+// 写法上两条硬要求（都被变异检验抓出来过）：
+//   1. 豁免线必须显式传给用例，不能读 DEFAULT_PHASE_OPTIONS —— 否则变异该常量时用例里的
+//      储备水位跟着同倍缩放，「豁免关闭」也照样全绿（自证式测试）；
+//   2. 必须配同序列对照组（豁免关闭时确实入危机），否则只是步数不够造成的假阴。
+describe("Phase — 绝对可支付豁免（reserve 高水位下的消费不是危机）", () => {
+  const FLOOR = 50_000; // 用例自持的显式参照值，不跟随 CONFIG
+  const EXEMPT = opts({ investmentReserveFloor: FLOOR });
+  const NO_EXEMPT = opts({ investmentReserveFloor: Number.POSITIVE_INFINITY });
+  const START = FLOOR * 8;
+  const STEP = -FLOOR * 0.08;
+  const N = 24; // 23 步赤字 ×15 = 345 ≫ drainEnterScore(150)
+
+  it("同一串持续下降：豁免开启不入带，豁免关闭入危机（对照组）", () => {
+    const withExempt = runDrain(FRESH, START, STEP, N, EXEMPT);
+    expect(withExempt.drainScore).toBe(0);
+    expect(withExempt.phase).toBe("growth");
+
+    const without = runDrain(FRESH, START, STEP, N, NO_EXEMPT);
+    expect(without.drainScore).toBeGreaterThanOrEqual(DEFAULT_PHASE_OPTIONS.drainEnterScore);
+    expect(without.phase).toBe("crisis");
+  });
+
+  it("储备已在豁免线之下 → 同样的下降照计赤字（豁免只保护高水位）", () => {
+    const r = runDrain(FRESH, FLOOR * 0.8, STEP, N, EXEMPT);
+    expect(r.drainScore).toBeGreaterThanOrEqual(DEFAULT_PHASE_OPTIONS.drainEnterScore);
+    expect(r.phase).toBe("crisis");
+  });
+
+  it("豁免线临界：整串都在线上即免，整串都在线下即计", () => {
+    // 豁免按**当 tick 的 reserve** 判定，所以这里必须保证整串不跨线 ——
+    // 让序列从 50k 起步再大跌会先跌破线，那是正确的计分而不是漏判。
+    const above = runDrain(FRESH, FLOOR + 200, -20, 8, EXEMPT);
+    expect(above.drainScore).toBe(0);
+    const below = runDrain(FRESH, FLOOR - 200, -20, 8, EXEMPT);
+    expect(below.drainScore).toBeGreaterThan(0);
+  });
+
+  it("流动性陷阱不被高储备豁免（W37S58 通道独立，且穿过驻留闸）", () => {
+    let s: PhaseState = FRESH;
+    // 驻留闸之后，陷阱要连续成立 liquidityEnterTicks 才开始计分，再 10 次打满 ——
+    // 与 srcStall 通道同款写法（步长常量推导，不写死数字）。
+    for (let i = 0; i < DEFAULT_PHASE_OPTIONS.liquidityEnterTicks + 10; i++) {
+      s = evaluateColonyPhase(
+        input({ reserve: FLOOR * 6, spendableRatio: 0.05, frozenRatio: 0.95 }),
+        s,
+        EXEMPT,
+      );
+    }
+    expect(s.liquidityScore).toBeGreaterThanOrEqual(DEFAULT_PHASE_OPTIONS.drainEnterScore);
+    expect(s.drainScore).toBe(0);
+    expect(s.phase).toBe("crisis");
+  });
+
+  it("srcRatio 采集塌方的强制 crisis 不被高储备豁免（P0-1 通道独立）", () => {
+    let s: PhaseState = FRESH;
+    for (let i = 0; i < DEFAULT_PHASE_OPTIONS.srcStallEnterTicks + 5; i++) {
+      s = evaluateColonyPhase(
+        input({ reserve: FLOOR * 6, srcRatio: 0.98, storageDrainRate: -800 }),
+        s,
+        EXEMPT,
+      );
+    }
+    expect(s.phase).toBe("crisis");
+  });
+});
+
+/**
+ * 绝对破产兜底（bankruptReserveFloor）—— 把"家底见底"从次数计分数里拿出来。
+ *
+ * 复现的实测缺陷：一场净烧 6.3 万能量的战争（涓流 +20.8/tick 占 67% 的 tick、
+ * 脉冲 −88.6/tick 占 33%）在 97% 的 tick 上 drainScore=0、phase 全程 growth。
+ * 因此这里的序列刻意做成**对分数不利**的形状：赤字 tick 只占 30%（<50%），
+ * 但每步净流水为负 —— 让"分数看不见"成为前提而不是巧合。
+ */
+describe("Phase — 绝对破产兜底（reserve 水位即判据，不走分数）", () => {
+  const BANK = 0.05; // storageRatio 非 undefined 才算"有银行"
+  const FLOOR = DEFAULT_PHASE_OPTIONS.bankruptReserveFloor;
+  /** 10 步里 3 步大额流出、7 步小额流入：净 −120 E/10 步，赤字 tick 占比 30%。 */
+  const SAWTOOTH = [-89, 21, 21, -89, 21, 21, 21, -89, 21, 21];
+  // spendableRatio 0.3：低于 drainSpendableFloor(0.5) ⇒ 赤字 tick 真会被判 draining；
+  // 高于 liquiditySpendableRatio(0.15) ⇒ 物流通道不参与，本组只测兜底。
+  const withBank = (reserve: number): PhaseInput =>
+    input({ reserve, storageRatio: BANK, spendableRatio: 0.3 });
+  const NO_FLOOR = opts({ bankruptReserveFloor: 0 });
+  const START: PhaseState = { phase: "growth", drainScore: 0, liquidityScore: 0 };
+
+  /** 跑一串交替流水，记录是否进带、以及分数峰值（峰值证明"分数看不见"）。 */
+  function run(start: number, steps: number, options?: PhaseOptions) {
+    let s = START;
+    let reserve = start;
+    let firstCrisisAt = -1;
+    let maxDrain = 0;
+    for (let i = 0; i < steps; i++) {
+      reserve += SAWTOOTH[i % SAWTOOTH.length]!;
+      s = evaluateColonyPhase(withBank(reserve), s, options);
+      maxDrain = Math.max(maxDrain, s.drainScore);
+      if (firstCrisisAt < 0 && s.phase === "crisis") firstCrisisAt = i;
+    }
+    return { last: s, reserve, firstCrisisAt, maxDrain };
+  }
+
+  it("序列本身：净流水为负而赤字 tick 不过半（缺陷前提成立）", () => {
+    const net = SAWTOOTH.reduce((a, b) => a + b, 0);
+    const deficitShare = SAWTOOTH.filter(v => v < 0).length / SAWTOOTH.length;
+    expect(net).toBeLessThan(0);
+    expect(deficitShare).toBeLessThan(0.5);
+    // 没有兜底时，200 步（净 −2400 E）里分数峰值连退出迟滞带(30)都到不了。
+    const r = run(FLOOR * 4, 200, NO_FLOOR);
+    expect(r.maxDrain).toBeLessThan(DEFAULT_PHASE_OPTIONS.drainExitScore);
+    expect(r.firstCrisisAt).toBe(-1);
+  });
+
+  it("跌穿绝对水位即进 crisis，且此刻分数仍远低于迟滞带", () => {
+    // 200 步 × 净 −12 E/步 ≈ −2400 E，从 1.2× 兜底线走到线下。
+    const r = run(FLOOR * 1.2, 200);
+    expect(r.reserve).toBeLessThan(FLOOR);
+    expect(r.firstCrisisAt, "跌穿兜底线却没进危机带 = 兜底没生效").toBeGreaterThanOrEqual(0);
+    expect(r.maxDrain, "分数若已能打满，这条就没在复现那个缺陷").toBeLessThan(
+      DEFAULT_PHASE_OPTIONS.drainExitScore,
+    );
+    // 兜底的意义在这里：生存带映射成 ColonyState=recovery ⇒ 战争授权/扩张健康门一起关掉。
+    expect(phaseToColonyState("crisis", false)).toBe("recovery");
+  });
+
+  it("同一串关掉兜底后全程不进带（对照组：红绿差在兜底，不在夹具输入）", () => {
+    const r = run(FLOOR * 1.2, 200, NO_FLOOR);
+    expect(r.firstCrisisAt).toBe(-1);
+    expect(r.last.phase).not.toBe("crisis");
+  });
+
+  it("水位守在兜底线之上时不越权：同样净流水的序列不强制进带", () => {
+    const r = run(FLOOR * 10, 100);
+    expect(r.firstCrisisAt).toBe(-1);
+    expect(r.last.phase).not.toBe("crisis");
+  });
+
+  it("没有 storage 的房（RCL1-3）不被绝对线钉住 —— 早期游戏保护", () => {
+    let s = START;
+    for (let i = 0; i < 30; i++) {
+      // storageRatio 缺省 undefined = 无 storage；reserve 只有几百 E 是真实早期水位。
+      s = evaluateColonyPhase(input({ reserve: 400 + i, spendableRatio: 0.3 }), s);
+    }
+    expect(s.phase).not.toBe("crisis");
+    expect(s.phase).not.toBe("recovery");
+    expect(s.phase).toBe("growth");
+  });
+
+  it("欠员优先于破产：既欠员又见底的房标签是 bootstrap（不被 mask 成 crisis）", () => {
+    const r = evaluateColonyPhase(
+      input({
+        reserve: 500,
+        storageRatio: BANK,
+        spendableRatio: 0.3,
+        harvesterCount: 1,
+        sourceCount: 2,
+      }),
+      START,
+    );
+    expect(r.phase).toBe("bootstrap");
+  });
+
+  it("进场确定、出场仍迟滞：水位回线后必须经完 minBandTicks 驻留才回 growth", () => {
+    let s = evaluateColonyPhase(withBank(FLOOR - 100), START); // 跌穿 → 兜底进 crisis
+    expect(s.phase).toBe("crisis");
+    const phases: ColonyPhase[] = [];
+    for (let i = 0; i < DEFAULT_PHASE_OPTIONS.minBandTicks + 5; i++) {
+      s = evaluateColonyPhase(withBank(FLOOR * 6), s);
+      phases.push(s.phase);
+    }
+    const backToGrowth = phases.findIndex(p => p === "growth");
+    expect(phases[0], "回线第一 tick 就该停在 recovery，不能秒退").toBe("recovery");
+    expect(backToGrowth).toBeGreaterThanOrEqual(1);
+    // 分数全程为 0（当初就是它看不见），能拖住出场的只有驻留闸 —— 兜底没有拆掉防抖。
+    expect(s.drainScore).toBe(0);
+    expect(phases.slice(0, backToGrowth).every(p => p === "recovery")).toBe(true);
   });
 });

@@ -339,6 +339,12 @@ describe("P0-1 累积净流失 crisis 通道 — 异常情况", () => {
 });
 
 // ── P2-3 满仓豁免 ──
+// 注意 storageRatio 与 reserve 必须**自洽**：引擎 STORAGE_CAPACITY=1,000,000（扁平值），
+// 所以 ratio=0.9 意味着光 storage 里就躺着 90 万，reserve 不可能只有 5000。原先这组用例
+// 全都写成 `reserve: 5000 + storageRatio: 0.9`，是一个物理上不存在的世界 —— 它会与
+// 相位机的绝对水位判据（破产兜底 `bankruptReserveFloor`=10k）打架：那条判据按 reserve
+// 合法地把房间推进危机带，本组"不该触发 crisis"的断言就红了，而红的原因跟满仓豁免无关。
+// 更糟的是反过来用低水位输入"期望 crisis"的两条会变成**假绿**（兜底替它通过的）。
 describe("P2-3 forceCrisis 满仓豁免", () => {
   it("满仓（storageRatio > 0.8）时 srcRatio 高 + storage 流失 → 不触发 crisis", () => {
     // 用低阈值快速触发：accumThreshold=100, enterTicks=1
@@ -346,7 +352,7 @@ describe("P2-3 forceCrisis 满仓豁免", () => {
     let state = FRESH;
     // 累积流失到超阈值
     state = evaluateColonyPhase(
-      input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 5000, storageRatio: 0.9 }),
+      input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 900000, storageRatio: 0.9 }),
       state,
       o,
     );
@@ -361,7 +367,7 @@ describe("P2-3 forceCrisis 满仓豁免", () => {
     const o = opts({ storageDrainAccumThreshold: 100, srcStallEnterTicks: 1 });
     let state = FRESH;
     state = evaluateColonyPhase(
-      input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 5000, storageRatio: 0.5 }),
+      input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 500000, storageRatio: 0.5 }),
       state,
       o,
     );
@@ -391,7 +397,7 @@ describe("P2-3 forceCrisis 满仓豁免", () => {
     const o = opts({ storageDrainAccumThreshold: 100, srcStallEnterTicks: 1 });
     let state = FRESH;
     state = evaluateColonyPhase(
-      input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 5000, storageRatio: 0.8 }),
+      input({ srcRatio: 0.95, storageDrainRate: -800, reserve: 800000, storageRatio: 0.8 }),
       state,
       o,
     );

@@ -112,6 +112,7 @@ export const roomStateSystem: System = {
         prevReserve: roomMem.phase?.reserve,
         drainScore: roomMem.phase?.drainScore ?? 0,
         liquidityScore: roomMem.phase?.liquidityScore ?? 0,
+        liquidityTrapTicks: roomMem.phase?.liquidityTrapTicks ?? 0,
         bandTicks: roomMem.phase?.bandTicks ?? 0,
         srcStallTicks: roomMem.phase?.srcStallTicks ?? 0,
         storageDrainAccum: roomMem.phase?.storageDrainAccum,
@@ -143,6 +144,9 @@ export const roomStateSystem: System = {
         reserveDelta: phaseResult.reserveDelta,
         drainScore: phaseResult.drainScore,
         liquidityScore: phaseResult.liquidityScore,
+        // 流动性陷阱驻留计数：不持久化则每 tick 被当 0 重数，驻留闸永远开不了
+        // （等于静默关掉整条 liquidityScore 通道 —— 分数能涨但没人判它爆表）。
+        liquidityTrapTicks: phaseResult.liquidityTrapTicks,
         bandTicks: phaseResult.bandTicks,
         srcStallTicks: phaseResult.srcStallTicks,
         // P0-1：持久化当前 storage 能量供下一 tick 计算 drainRate。

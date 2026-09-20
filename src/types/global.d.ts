@@ -212,6 +212,12 @@ declare global {
       drainScore: number;
       /** 流动性危机分数 (0-100)，方案 C：检测能量冻在 container 的物流死锁。 */
       liquidityScore: number;
+      /**
+       * 流动性陷阱连续成立的评估次数（room-state 每 tick 写入）；陷阱一断即归零，
+       * 达 economy 的 liquidityEnterTicks 后 liquidityScore 才开始累加。
+       * 旧 Memory 无此字段按 0 处理（无需迁移）。
+       */
+      liquidityTrapTicks?: number;
       /** 危机带（crisis/recovery）驻留评估次数（v14+，最短驻留防极限环）。 */
       bandTicks?: number;
       /**

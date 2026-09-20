@@ -67,6 +67,12 @@ export interface PhaseState {
    * 但 liquidityScore 爆表。
    */
   liquidityScore: number;
+  /**
+   * 流动性陷阱连续成立的评估次数（{@link PhaseOptions.liquidityEnterTicks} 的驻留计数）。
+   * 陷阱一断即归零 —— 防两段互不相干的瞬时陷阱跨 tick 累加成"看起来持续"的死锁。
+   * 旧 Memory 无此字段按 0 处理（无需迁移：缺席即"还没开始踩"，不改变任何既有语义）。
+   */
+  liquidityTrapTicks?: number;
   /** 危机带（crisis/recovery）内已持续的评估次数 — 最短驻留时间用；进带从 1 起计，出带归 0。旧 Memory 无此字段按 0（v14 迁移回填）。 */
   bandTicks?: number;
   /** P0-1：srcRatio 满载 + storage 流失双条件持续的评估次数；任一条件不满足立即归零，达 srcStallEnterTicks 后强制 crisis 绕过迟滞。 */
@@ -108,6 +114,19 @@ export interface PhaseOptions {
   /** 流动性恢复时每次评估的分数减少量（> liquidityStep，非对称迟滞防振荡）。 */
   liquidityRecoveryStep: number;
   /**
+   * 流动性陷阱需**连续**成立多少次评估才开始计分（0 = 关闭驻留要求）。
+   *
+   * 为什么需要：陷阱判据（口袋占比低 + 最满 container 满）量的是一次孵化脉冲的瞬时形状，
+   * 而 `liquidityStep=15` 与 `drainEnterScore=150` 的组合意味着**连踩 10 tick 就判 crisis**，
+   * 紧接着 `minBandTicks=100` 又逼它在带里至少待 100 tick —— 10 tick 的观测噪声换
+   * ≥100 tick 的强制危机带。实测（E2E-022 富室战争夹具，逐 tick 序列）：19 段陷阱全部在
+   * **3~25 tick** 内自行结束（p50=10），没有一段超过 30 tick，却把一场已经打掉敌方塔的
+   * 战争按「危机撤资」取消了（动员掐死动员自己，与 drainScore 通道被 spendableRatio
+   * 打掉是同一个形状）。取 50 = 观测最长瞬态的 2 倍，而真正的物流死锁（W37S58：0 hauler，
+   * 持续数 tick 万级）照样在 50+10=60 tick 内被抓到 —— 只是把"闪一下就进带"改成"持续卡住才进带"。
+   */
+  liquidityEnterTicks: number;
+  /**
    * 偿付赤字计分门槛：仅当 spendableRatio 低于此值时，储备下降才累加 drainScore —
    * spawn 口袋健康（extension 基本满员）时的储备下降是升级/建造的主动投资，
    * 不是生产崩溃；两者同等计分正是 TD-003 极限环根因之一（normal 恢复支出 →
@@ -115,6 +134,51 @@ export interface PhaseOptions {
    * understaffed → bootstrap 兜底，不依赖本分数。
    */
   drainSpendableFloor: number;
+  /**
+   * 绝对可支付豁免线：总储备 ≥ 此值时，储备下降**不累加 drainScore**。
+   *
+   * 为什么上面那道（口袋健康）豁免在这里不够用：它的判据是 `spendableRatio`，而**一次大额
+   * 孵化本身就会把口袋抽干** —— 花几千能量孵攻击编队的那一 tick，spendableRatio 正好跌破
+   * 0.5，于是"我选择花掉它"被记成"我生产不出来"。战争动员期因此必然自造赤字（实测：
+   * warPressureTicks=0、storage 仍有余力，却因动员脉冲被判入 recovery 带；而 recovery 会
+   * 暂停远矿、降级 body、收缩 spawn 编制**含军事编制** = 动员掐死动员自己）。
+   *
+   * 用**绝对储备**而不是比例：RCL6 storage 容量 1,000,000，46k 只有 4.6%，永远够不着
+   * 0.8 的满仓豁免 —— 比例刻度把发展期房一律判成最低档，是本项目已踩过两次的同型错误
+   * （`distributorTiers` 当年由比例制改绝对制、builder 的 B-1 修复同理）。参照系沿用
+   * `CONFIG.economy.upgrade.sprintStorage`（"冲刺级盈余"，与项目同一绝对刻度参照系）。
+   *
+   * 真塌方不靠这条通道兜：采集者死绝由 `understaffed → bootstrap` 抓、采集塌方由
+   * `srcRatio + storageDrainAccum` 的 forceCrisis 抓、物流死锁由 liquidityScore 抓 ——
+   * 三者都不看 reserve 绝对值，所以本豁免不会把它们一并关掉（各有单测钉住）。
+   *
+   * 关键安全性质：**豁免自我终止**。判据是当 tick 的 `reserve ≥ 线`，所以一个把储备
+   * 往下花的房间一旦跌到 50k 之下就恢复计分 —— 塌方不是被关掉，而是被推迟到缓冲
+   * 真的变薄时才开始记账。富室乱花 200k 与穷室失血 2k 走的是同一条收口。
+   */
+  investmentReserveFloor: number;
+  /**
+   * 绝对破产兜底线：房里有 storage **且** 总储备低于此值时，直接判 crisis —— 不看分数、
+   * 不看交替比例、不看豁免。
+   *
+   * 为什么必须有：`drainScore` 是**次数计**（draining 一次 +15、不 draining 一次 −40），
+   * 与亏多少无关。实测一场净烧 6.3 万能量的战争（涓流 +20.8/tick 占 67% 的 tick、
+   * 脉冲 −88.6/tick 占 33%）在 97% 的 tick 上 drainScore=0、phase 全程 growth；
+   * 而同一份夹具另一次跑谷值更高（27,385 vs 5,833）却打满 150 并撤资 ——
+   * **判据取决于脉冲排布，那就不是迟滞而是随机**。兜底把"家底真的见底"这条从分数里拿出来，
+   * 变成只依赖水位的确定判据（出场仍走既有 minBandTicks 迟滞，所以只是进场确定）。
+   *
+   * 为什么只在**有 storage** 时生效：RCL1-3 的房压根没有银行，总储备天然只有几千
+   * （source container 2×2000 + 口袋几百 E），同一条绝对线会把整个早期游戏永久钉在危机带，
+   * 而它们真正的生存信号是 `understaffed → bootstrap`。本仓的绝对能量刻度
+   * （`sustainedStorage` / `sprintStorage`）一直就是 **storage 水位**口径（见 upgrader 取能档），
+   * 这里沿用同一口径，不新造尺度。
+   *
+   * 参照系取 `CONFIG.economy.upgrade.sustainedStorage`(10k) —— "可持续水位"，
+   * 与上面那道 50k 豁免线（sprintStorage）同一套刻度、区间不重叠：
+   * ≥50k 消费不计赤字；10k~50k 交给分数体系；<10k 无条件进带。
+   */
+  bankruptReserveFloor: number;
   /**
    * 危机带最短驻留评估次数：进入 crisis/recovery 后至少停留此久才能回 normal —
    * 打破极限环第二道闸（recovery 收缩支出后分数秒清，立即回 normal 则支出恢复、
@@ -154,9 +218,18 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   // 非对称步长：陷阱累积慢（15/tick），恢复快（50/tick）——交替场景下净 -35/tick。
   liquidityStep: 15,
   liquidityRecoveryStep: 50,
+  // 陷阱需连续成立 50 次评估才开始计分：实测富室战争房的瞬态全在 25 tick 内自清，
+  // 而真死锁（无 hauler/无搬运）会一直踩着 —— 50 tick 只杀前者。详见字段注释。
+  liquidityEnterTicks: 50,
   // 主动消费豁免：spendableRatio ≥ 0.5（spawn 口袋过半）时储备下降不计赤字。
   // 0.5 给 spawn 补能延迟留余量：孵化脉冲后 hauler 回填需数 tick，健康房常态在 0.5 以上。
   drainSpendableFloor: 0.5,
+  // 绝对可支付豁免线：沿用项目既有的绝对能量参照系（= upgrade.sprintStorage，冲刺级盈余）。
+  // 详见 PhaseOptions 注释：spendableRatio 那道豁免会被大额孵化本身打掉，比例制水位又永远
+  // 够不着发展期房 —— 两条都不足以把"选择花钱"与"生产崩溃"分开。
+  investmentReserveFloor: CONFIG.economy.upgrade.sprintStorage,
+  // 破产兜底线：同一套绝对刻度的下一档（"可持续水位"）。仅在房里有 storage 时生效。
+  bankruptReserveFloor: CONFIG.economy.upgrade.sustainedStorage,
   // 最短驻留 100 次评估（room-state 每 tick 评估 → 100 tick）：
   // 覆盖一轮 creep 孵化 + 通勤周期，让 recovery 期真正攒出缓冲，而非形式性过场。
   minBandTicks: 100,
@@ -210,7 +283,11 @@ export function evaluateColonyPhase(
   // ── 偿付能力维度：drainScore ──
   // 主动消费豁免（TD-003 根因 A）：spawn 口袋健康时的储备下降是升级/建造投资，
   // 只有「储备下降 且 可孵化能量吃紧」才视为生产端失血。
-  const draining = reserveDelta < 0 && input.spendableRatio < options.drainSpendableFloor;
+  // 第二道豁免（绝对可支付）：口袋那道会被大额孵化本身打掉（花钱的那一 tick 正是 spendable
+  // 最低的一 tick），所以再加「总储备绝对水位足够」也不算赤字 —— 见 PhaseOptions 注释。
+  const investing = input.reserve >= options.investmentReserveFloor;
+  const draining =
+    reserveDelta < 0 && input.spendableRatio < options.drainSpendableFloor && !investing;
   // P0-2：非对称步长 — 盈余时用 recoveryStep（> scoreStep）加速退出，打破临界振荡。
   const delta = draining ? options.scoreStep : -options.recoveryStep;
   const drainScore = Math.max(0, Math.min(options.drainEnterScore, prev.drainScore + delta));
@@ -222,7 +299,14 @@ export function evaluateColonyPhase(
   const liquidityTrap =
     input.spendableRatio < options.liquiditySpendableRatio &&
     input.frozenRatio > options.liquidityFrozenRatio;
-  const liquidityDelta = liquidityTrap ? options.liquidityStep : -options.liquidityRecoveryStep;
+  // 驻留闸（liquidityEnterTicks）：陷阱必须连续成立够久才开始计分，一断即归零。
+  // 上面那句判据的本意就是「同时**持续**」，但步长配置下连踩 10 tick 就满 150 进 crisis，
+  // 把一次孵化脉冲的瞬时形状当成永久死锁 —— 实测瞬态全在 25 tick 内自清（见字段注释）。
+  // 未达驻留时按"非陷阱"走回落分支：分数照旧 -recoveryStep 衰减，因此 economyPressure
+  // （由分数派生，供建造门禁/编制弹性消费）也不会再被一段 25 tick 的 lag 顶到 1.00。
+  const liquidityTrapTicks = liquidityTrap ? (prev.liquidityTrapTicks ?? 0) + 1 : 0;
+  const liquidityTrapped = liquidityTrapTicks >= options.liquidityEnterTicks;
+  const liquidityDelta = liquidityTrapped ? options.liquidityStep : -options.liquidityRecoveryStep;
   const prevLiquidity = prev.liquidityScore ?? 0;
   const liquidityScore = Math.max(
     0,
@@ -231,6 +315,23 @@ export function evaluateColonyPhase(
 
   // ── 合并双维度：任一爆表即危机 ──
   const crisisScore = Math.max(drainScore, liquidityScore);
+
+  // ── 绝对水位兜底（不进分数体系）──
+  // 分数是**次数计**：draining 一次 +scoreStep(15)、不 draining 一次 −recoveryStep(40)，
+  // 与亏多少无关。于是"小步进、大步出"的经济体（实测：采集涓流 +20.8/tick 占 67% 的 tick，
+  // 战争脉冲 −88.6/tick 占 33%，净流水 6.3 万能量）永远攒不满 150 —— 同一份夹具三次运行
+  // 给过 谷值 5,833 却全程 growth、谷值 27,385 反而打满撤资、谷值 11,611 平安过完 三种结论。
+  // **判据取决于脉冲排布**，这就不是"迟滞"而是"随机"。
+  // 兜底刻意做成**纯水位判据**：跌破线即进危机带，与交替比例、步长、豁免全都无关 → 进场确定。
+  // 出场仍走既有迟滞（下一 tick 起 inCrisisBand 成立，会停在 recovery 直到 minBandTicks 满），
+  // 所以它只把"该不该开始收缩"变成确定量，不把"可以恢复支出"的防抖拆掉。
+  // 它也不替代流量口径（那是另一件事：中位水位的慢性失血仍会看不见），只是保证
+  // "家底真的见底"这一条永远不可能被解释成健康。
+  // 有银行才谈得上破产：PhaseInput.storageRatio 为 undefined 即房里没有 storage（RCL1-3），
+  // 这类房的总储备天然只有几千，拿同一条绝对线会把整个早期游戏永久钉进危机带 ——
+  // 它们的生存信号本就是 `understaffed → bootstrap`。
+  const hasBank = input.storageRatio !== undefined;
+  const bankrupt = hasBank && input.reserve < options.bankruptReserveFloor;
 
   const understaffed = input.harvesterCount < Math.max(1, input.sourceCount);
   const inCrisisBand = prev.phase === "crisis" || prev.phase === "recovery";
@@ -248,6 +349,7 @@ export function evaluateColonyPhase(
       prevReserve: input.reserve,
       drainScore,
       liquidityScore,
+      liquidityTrapTicks,
       bandTicks: bandTicksSoFar + 1,
       reserveDelta,
       srcStallTicks: newStallTicks,
@@ -256,6 +358,10 @@ export function evaluateColonyPhase(
   }
 
   let phase: ColonyPhase;
+  // 顺序有意义：understaffed 排在绝对水位兜底**之前** —— 一个既欠员又见底的新房，
+  // "bootstrap"（该去孵采集者）是比"crisis"（该收缩一切支出）更有信息量的标签，
+  // 而两者都落进经济生存带（phaseToColonyState），生存门禁一个也不会因此松开。
+  // 兜底排在 steady 之前：RCL8 而储备只剩 1 万的房不配叫"稳态"。
   if (crisisScore >= options.drainEnterScore) {
     phase = "crisis";
   } else if (inCrisisBand && crisisScore >= options.drainExitScore) {
@@ -265,10 +371,12 @@ export function evaluateColonyPhase(
     // 支出立刻恢复、赤字重新累积的极限环；同时兜住 recoveryStep 过大
     // 导致分数从迟滞带直接跳 0、crisis 直切 normal 的路径。
     phase = "recovery";
-  } else if (input.rcl >= 8 && !understaffed) {
-    phase = "steady";
   } else if (understaffed) {
     phase = "bootstrap";
+  } else if (bankrupt) {
+    phase = "crisis";
+  } else if (input.rcl >= 8) {
+    phase = "steady";
   } else {
     phase = "growth";
   }
@@ -281,6 +389,7 @@ export function evaluateColonyPhase(
     prevReserve: input.reserve,
     drainScore,
     liquidityScore,
+    liquidityTrapTicks,
     bandTicks,
     reserveDelta,
     srcStallTicks: newStallTicks,
