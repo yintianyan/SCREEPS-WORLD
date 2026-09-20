@@ -13,6 +13,7 @@ export function initTelemetry(tick: number): void {
     roleCpu: {},
     skipped: 0,
     errors: 0,
+    intents: {},
   };
   // 初始化 per-room CPU 记账 Map — kernel.runCreeps 逐只 creep 写入。
   g.cpuByHome = new Map<string, number>();
@@ -28,6 +29,27 @@ export function initTelemetry(tick: number): void {
       g.eventBuffer.events = g.eventBuffer.events.slice(-200);
     }
   }
+}
+
+/**
+ * 记录一次引擎意图签发，按类别与返回码分桶。
+ *
+ * 依据实测：一次意图首次签发 0.15 CPU（沙箱）～0.23 CPU（`resolveTraffic` 实签，见
+ * E2E-029 的 `move_B_firstIssue` / `tmPerMove`），而一次 `find()` ≈0.0003 —— 整 tick
+ * 的成本几乎就是「签发了几次意图」。因此签发次数与各
+ * 类别的无效率（tired/busy/refused = 花了 CPU 却没产出）必须常驻可见。
+ * telemetry 未初始化（tick 首段之前、或异常环境）时静默跳过，绝不因记账拖垮主循环。
+ */
+export function recordIntent(kind: string, result: number): void {
+  const t = globalCache().telemetry;
+  if (!t) return;
+  let bucket = t.intents[kind];
+  if (!bucket) bucket = t.intents[kind] = { ok: 0, codes: {} };
+  if (result === OK) {
+    bucket.ok += 1;
+    return;
+  }
+  bucket.codes[result] = (bucket.codes[result] ?? 0) + 1;
 }
 
 /** 输出轻量的 tick 末尾摘要。仅在有值得关注的内容时才记录日志。 */
@@ -47,6 +69,15 @@ export function emitSummary(budget: Budget): void {
   ];
   if (t.errors > 0) parts.push(`errors=${t.errors}`);
   if (t.skipped > 0) parts.push(`skipped=${t.skipped}`);
+  // 引擎意图签发是本项目最贵的单点开销（首次签发实测 0.15–0.23 CPU/次），与 top 系统
+  // 同级呈现；括号内是各非 OK 返回码 × 次数 —— 返回码语义不同，必须分开看。
+  for (const [kind, b] of Object.entries(t.intents)) {
+    const errs = Object.entries(b.codes)
+      .map(([code, n]) => `${code}x${n}`)
+      .join(" ");
+    const issued = b.ok + Object.values(b.codes).reduce((a, n) => a + n, 0);
+    parts.push(`${kind}=${b.ok}/${issued}${errs ? `(${errs})` : ""}`);
+  }
   for (const [name, cpu] of topSystems) {
     parts.push(`${name}=${cpu.toFixed(1)}`);
   }

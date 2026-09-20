@@ -15,6 +15,7 @@ import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
+import { recordIntent } from "../../kernel/telemetry";
 import { getHostilesCached } from "../support/targeting";
 import { findContainersCached, findExitsCached, findSourcesCached } from "../support/room-scans";
 
@@ -79,7 +80,7 @@ function kiteAttackAction(): ActionCandidate<Creep> {
         // 向远离目标方向移动：找最远的出口方向。
         const safeDir = findKiteRetreatDir(creep, target.pos);
         if (safeDir) {
-          creep.move(safeDir);
+          recordIntent("move", creep.move(safeDir));
         }
       } else {
         // 在射程内（SAFE < dist <= KITE，或对方也有 ranged）— 原地对射。
@@ -88,7 +89,7 @@ function kiteAttackAction(): ActionCandidate<Creep> {
         if (targetHasRanged && creep.hits < creep.hitsMax * 0.7) {
           const safeDir = findKiteRetreatDir(creep, target.pos);
           if (safeDir) {
-            creep.move(safeDir);
+            recordIntent("move", creep.move(safeDir));
           }
         }
       }

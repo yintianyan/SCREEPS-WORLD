@@ -191,8 +191,10 @@ describe("harvester — work 模式优先级链", () => {
       myConstructionSites: [],
     });
     const creep = mockCreep({ used: 50, capacity: 50, mode: "work" });
-    // 让近距离检查（range<=2）失败，触发优先级 3 的 findEmptiestContainer。
-    creep.pos.getRangeTo.mockReturnValue(5);
+    // c1 放在射程外（真实引擎里对它 transfer 只会拿到 ERR_NOT_IN_RANGE），c2 相邻 ——
+    // 于是"倒进更空的 c2"这一结果是可达且可判定的。
+    c1.pos.x = 35;
+    c1.pos.y = 35;
     const ctx = mockContext(snap);
 
     harvesterRole.run(creep, ctx);
@@ -276,7 +278,8 @@ describe("harvester — flee 与恢复", () => {
   });
 
   it("远端威胁不触发 flee（P1-1 距离分级）", () => {
-    const hostile = mockHostile();
+    // 远端坐标 → 距离 > fleeRange(10)；source 保持相邻，采集照常。
+    const hostile = mockHostile("hostile_far", 5, 5);
     const snap = mockSnapshot({ hostileCreeps: [hostile] });
     const creep = mockCreep({
       used: 0,
@@ -284,8 +287,6 @@ describe("harvester — flee 与恢复", () => {
       mode: "acquire",
       sourceId: "s1",
     });
-    // 威胁在 fleeRange(10) 之外 — 不应逃跑。
-    creep.pos.getRangeTo.mockReturnValue(15);
     const ctx = mockContext(snap);
 
     harvesterRole.run(creep, ctx);

@@ -3,6 +3,7 @@
 import { CONFIG } from "../../config";
 import { globalCache } from "../../kernel/global-cache";
 import { packPos, recordTraffic } from "./traffic";
+import { recordIntent } from "../../kernel/telemetry";
 import { DIR_DELTA } from "./stuck-recovery";
 
 /** 账本条目：意图（想去的格）与锚定（声明不动、拒绝被推挤）。 */
@@ -71,6 +72,7 @@ export function registerMove(
 ): ScreepsReturnCode {
   if (!trafficEnabled()) {
     const result = creep.move(dir);
+    recordIntent("move", result);
     if (result === OK || result === ERR_TIRED) recordTraffic(creep);
     return result;
   }

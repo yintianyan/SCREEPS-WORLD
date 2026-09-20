@@ -4,7 +4,7 @@
 import type { ActionCandidate, ActionContext } from "../action-types";
 import { CONFIG } from "../../../config";
 import { moveToTarget, registerAnchor } from "../../movement";
-import { runAction } from "./helpers";
+import { runAction, countedIntent } from "./helpers";
 import { getSource } from "../../support/targeting";
 import { classifyLinkRole, computeControllerLinkTarget } from "../../../domain/economy/links";
 
@@ -86,14 +86,14 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
         container.hits < container.hitsMax * 0.8
       ) {
         if (ac.creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-          ac.creep.repair(container);
-        } else if (ac.creep.harvest(source) === ERR_NOT_IN_RANGE) {
+          countedIntent("repair", () => ac.creep.repair(container));
+        } else if (countedIntent("harvest", () => ac.creep.harvest(source)) === ERR_NOT_IN_RANGE) {
           moveToTarget(ac.creep, standTarget);
         }
         return;
       }
 
-      const harvestResult = ac.creep.harvest(source);
+      const harvestResult = countedIntent("harvest", () => ac.creep.harvest(source));
       if (harvestResult === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, standTarget);
         return;
@@ -123,11 +123,11 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
               ? container
               : undefined;
         if (sink) {
-          ac.creep.transfer(sink, RESOURCE_ENERGY);
+          countedIntent("transfer", () => ac.creep.transfer(sink, RESOURCE_ENERGY));
         } else if (ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
           // 采集空间耗尽且身边 sink 均满 → 原地 drop 保持在位继续采（P2-7），
           // 掉落能量由 hauler 的 pickupDroppedEnergy 回收，绝不离岗去 fill/build/upgrade。
-          ac.creep.drop(RESOURCE_ENERGY);
+          countedIntent("drop", () => ac.creep.drop(RESOURCE_ENERGY));
         }
       }
     },

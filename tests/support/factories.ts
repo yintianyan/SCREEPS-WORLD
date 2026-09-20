@@ -174,7 +174,15 @@ export function mockPos(x = 25, y = 25, roomName = "W7N4"): MockPos {
     x,
     y,
     roomName,
-    getRangeTo: vi.fn(() => 1),
+    // 距离按坐标真实算（切比雪夫），而不是回常量：一个常量同时承担「威胁有多远」与
+    // 「作业目标有多远」两种语义，会让 mock 编码出真实引擎里不成立的场景。
+    getRangeTo: vi.fn(
+      (tx: number | { x?: number; y?: number; pos?: { x: number; y: number } }, ty?: number) => {
+        const px = typeof tx === "number" ? tx : (tx.x ?? tx.pos?.x ?? x);
+        const py = typeof tx === "number" ? (ty ?? 0) : (tx.y ?? tx.pos?.y ?? y);
+        return Math.max(Math.abs(px - x), Math.abs(py - y));
+      },
+    ),
     getDirectionTo: vi.fn(() => 3), // RIGHT
     isEqualTo: vi.fn(
       (tx: number | { x?: number; y?: number; pos?: { x: number; y: number } }, ty?: number) => {
@@ -342,8 +350,13 @@ export function mockConstructionSite(type = "extension", opts: { id?: string } =
   return obj;
 }
 
-export function mockHostile(name = "hostile_1"): any {
-  return { id: name, name, pos: mockPos(10, 10), owner: { username: "enemy" } };
+/**
+ * 敌对 creep 替身。坐标默认贴在本房结构同一带（25,25）—— `mockPos.getRangeTo`
+ * 已改为按坐标算真实距离，故"威胁是否近身"必须由坐标表达，不能再靠常量距离。
+ * 需要远端威胁的用例显式传坐标（如 mockHostile("h", 5, 5)）。
+ */
+export function mockHostile(name = "hostile_1", x = 25, y = 25): any {
+  return { id: name, name, pos: mockPos(x, y), owner: { username: "enemy" } };
 }
 
 // ─── RoomSnapshot Mock ──────────────────────────────────────

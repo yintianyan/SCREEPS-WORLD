@@ -8,6 +8,7 @@ import {
   repairCritical,
   upgradeController,
 } from "../engine/actions";
+import { countedIntent } from "../engine/actions/helpers";
 import { moveToTarget } from "../movement";
 import { getObjectById } from "../support/obj-cache";
 import { releaseAssignment } from "../support";
@@ -34,7 +35,7 @@ function fillAssignmentTarget(): ActionCandidate<AnyOwnedStructure> {
       return target;
     },
     execute: (ac, t) => {
-      const result = ac.creep.transfer(t, RESOURCE_ENERGY);
+      const result = countedIntent("transfer", () => ac.creep.transfer(t, RESOURCE_ENERGY));
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, t);
       } else if (result === ERR_FULL || result === ERR_NOT_ENOUGH_RESOURCES) {

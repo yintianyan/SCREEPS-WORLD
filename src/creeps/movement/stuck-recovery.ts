@@ -3,6 +3,7 @@
 import { globalCache } from "../../kernel/global-cache";
 import { releaseFromTask } from "../support/assignment-adapter";
 import { recordTraffic } from "./traffic";
+import { recordIntent } from "../../kernel/telemetry";
 
 /** 方向 → (dx, dy) 偏移表。供 pathfinding 的前置绕路检测复用。 */
 export const DIR_DELTA: Record<number, [number, number]> = {
@@ -50,6 +51,7 @@ export function checkAndExecuteYield(creep: Creep): boolean {
   // 过期请求丢弃：方向已无意义，执行只会产生随机位移。
   if (Game.time - requestedAt > YIELD_REQUEST_TTL) return false;
   const result = creep.move(dir as DirectionConstant);
+  recordIntent("move", result);
   if (result === OK || result === ERR_TIRED) {
     recordTraffic(creep);
   }

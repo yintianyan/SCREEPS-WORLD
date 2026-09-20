@@ -13,6 +13,7 @@ import {
   stockTerminalEnergy,
   supplyLabs,
 } from "../engine/actions";
+import { countedIntent } from "../engine/actions/helpers";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget } from "../movement";
 import { computeDistributorTier, hasDistributorFillDemand } from "../support/targeting";
@@ -53,7 +54,9 @@ function withdrawStorageForDistribution(): ActionCandidate {
       const tier = (ac.creep.memory.distributorTier as 0 | 1 | 2 | 3) ?? 0;
       const cap = TIER_WITHDRAW_CAP[tier];
       const amount = Math.min(available, carryFree, cap);
-      const result = ac.creep.withdraw(st, RESOURCE_ENERGY, amount);
+      const result = countedIntent("withdraw", () =>
+        ac.creep.withdraw(st, RESOURCE_ENERGY, amount),
+      );
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, st);
       } else if (result === ERR_NOT_ENOUGH_RESOURCES) {

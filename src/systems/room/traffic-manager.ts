@@ -4,6 +4,7 @@ import type { RoomSnapshot, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { safeRun } from "../../kernel/safe-run";
 import { trafficEnabled } from "../../creeps/movement/intent";
+import { recordIntent } from "../../kernel/telemetry";
 import { recordTraffic } from "../../creeps/movement/traffic";
 import { invalidateCreepPath } from "../../creeps/movement/pathfinding";
 import { getParkRoomData } from "../../creeps/movement/parking";
@@ -94,6 +95,7 @@ export const trafficManagerSystem: System = {
               const dir = creep.pos.getDirectionTo(tx, ty);
               if (dir) {
                 const result = creep.move(dir);
+                recordIntent("move", result);
                 if (result === OK || result === ERR_TIRED) {
                   recordTraffic(creep);
                 } else if (result !== ERR_BUSY) {
@@ -174,6 +176,7 @@ function resolveAndDispatch(
     const dir = creep.pos.getDirectionTo(tx, ty);
     if (!dir) continue;
     const result = creep.move(dir);
+    recordIntent("move", result);
     if (result === OK || result === ERR_TIRED) {
       recordTraffic(creep);
     } else if (result !== ERR_BUSY) {

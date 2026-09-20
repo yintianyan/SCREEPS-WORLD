@@ -53,6 +53,13 @@ export interface GlobalCache {
     roleCpu: Record<string, number>;
     skipped: number;
     errors: number;
+    /** 本 tick 按类别统计的引擎意图签发（键 = 类别名，如 move/harvest/action）。
+     * 引擎意图签发实测 ≈0.1–0.22 CPU/次，是全项目最贵的原语 —— 成本模型就是
+     * 「每 tick 签发了几次」。`codes` 记录每个非 OK 返回码的次数：返回码语义必须
+     * 分开看（ERR_NOT_IN_RANGE 是「走向目标」的正常通勤路径，ERR_FULL/ERR_INVALID_TARGET
+     * 才是白花 CPU 的无效签发），混在一个「浪费」桶里会得出错误结论。
+     * 随 telemetry 每 tick 重建而归零。 */
+    intents: Record<string, { ok: number; codes: Record<number, number> }>;
   };
   roomTraffic?: Record<string, Record<string, number>>;
   /** 上一个采样窗口的交通数据（用于道路策略的双窗口检查）。 */

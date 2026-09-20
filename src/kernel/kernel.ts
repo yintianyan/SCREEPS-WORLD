@@ -169,7 +169,11 @@ export class Kernel {
     // 用 safeRun 包裹：快照是全 tick 数据量最大、字段访问最密集的热点，
     // 任何单个 creep/room 的异常都不能让整个 tick 的后续系统/角色停摆。
     // safeRun 不吞副作用，失败时只是保住剩余 tick；critical 起用后永不冷却。
-    safeRun("snapshots", () => this.buildSnapshots(ctx), true);
+    // measuredRun：快照与 tick 尾遥测/期望自检此前不计入任何 CPU 归因表。
+    // 标签走 system/* 以并入同一排名，让「无归因的余量」可被分解。
+    measuredRun("system/snapshots", () =>
+      safeRun("snapshots", () => this.buildSnapshots(ctx), true),
+    );
 
     // room-state (P0) 在 spawn-manager (P0) 之前注册，先计算每房 ColonyState。
     this.runSystems(ctx);
@@ -184,34 +188,40 @@ export class Kernel {
 
     // 相位⑨：遥测采集 — 各域 collect 函数内部有频率门控和 try/catch，
     // 失败不得影响 AI。safeRun 外层再加一道隔离。
-    safeRun("telemetry-collect", () => {
-      const g = globalCache();
-      const tel = g.telemetry;
-      const skipped = tel?.skipped ?? 0;
-      const errors = tel?.errors ?? 0;
-      // ctx.snapshots() 返回 Map iterator：被第一个消费者（RoomMetrics）耗尽后，
-      // EconomyMetrics/DefenseMetrics 拿到空流，遥测永久零样本。物化为数组供多消费者复用。
-      const snapshots = Array.from(ctx.snapshots());
+    measuredRun("system/telemetry-collect", () =>
+      safeRun("telemetry-collect", () => {
+        const g = globalCache();
+        const tel = g.telemetry;
+        const skipped = tel?.skipped ?? 0;
+        const errors = tel?.errors ?? 0;
+        // ctx.snapshots() 返回 Map iterator：被第一个消费者（RoomMetrics）耗尽后，
+        // EconomyMetrics/DefenseMetrics 拿到空流，遥测永久零样本。物化为数组供多消费者复用。
+        const snapshots = Array.from(ctx.snapshots());
 
-      collectRuntimeMetrics(budget, skipped, errors, 0);
-      collectKernelMetrics(skipped, errors);
-      collectSchedulerMetrics(budget, 0, 0, 0, 0, 0);
-      collectWorldMetrics();
-      collectRoomMetrics(snapshots);
-      collectCreepMetrics();
-      collectSpawnMetrics();
-      collectEconomyMetrics(snapshots);
-      collectLogisticsMetrics();
-      collectDefenseMetrics(snapshots);
-      collectEmpireMetrics();
-      collectExpansionMetrics();
-    });
+        collectRuntimeMetrics(budget, skipped, errors, 0);
+        collectKernelMetrics(skipped, errors);
+        collectSchedulerMetrics(budget, 0, 0, 0, 0, 0);
+        collectWorldMetrics();
+        collectRoomMetrics(snapshots);
+        collectCreepMetrics();
+        collectSpawnMetrics();
+        collectEconomyMetrics(snapshots);
+        collectLogisticsMetrics();
+        collectDefenseMetrics(snapshots);
+        collectEmpireMetrics();
+        collectExpansionMetrics();
+      }),
+    );
 
-    safeRun("telemetry-flush", () => {
-      runFlush(budget.tier);
-    });
+    measuredRun("system/telemetry-flush", () =>
+      safeRun("telemetry-flush", () => {
+        runFlush(budget.tier);
+      }),
+    );
 
-    safeRun("expectations", () => this.runExpectations(ctx));
+    measuredRun("system/expectations", () =>
+      safeRun("expectations", () => this.runExpectations(ctx)),
+    );
     safeRun("flush-skips", () => flushSkips(), true);
 
     safeRun("segments-flush", () => flushSegments(), true);
@@ -220,7 +230,9 @@ export class Kernel {
     // 即使 recovery tier 下 telemetry-collector 跳过、tuning-engine 冻结，
     // 也保证每 10 tick 采样一次关键指标写入 Memory.kernel.stats。
     // 确保"最需要诊断时有最基本的数据可查"。
-    safeRun("baseline-telemetry", () => sampleBaselineMetrics(ctx.tick, budget), true);
+    measuredRun("system/baseline-telemetry", () =>
+      safeRun("baseline-telemetry", () => sampleBaselineMetrics(ctx.tick, budget), true),
+    );
   }
 
   private buildSnapshots(ctx: Context): void {

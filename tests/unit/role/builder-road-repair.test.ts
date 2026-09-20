@@ -4,7 +4,7 @@ import { builderRole } from "../../../src/creeps/roles/builder";
 import { mockContext, mockCreep, mockSnapshot, resetGlobals } from "../../support/factories";
 
 function road(id: string, hits: number, hitsMax = 5000): any {
-  return { id, hits, hitsMax, structureType: "road", pos: { x: 20, y: 20, getRangeTo: () => 1 } };
+  return { id, hits, hitsMax, structureType: "road", pos: { x: 24, y: 24, getRangeTo: () => 1 } };
 }
 
 /** 注册到 obj-cache 供 repairTargetId 复用路径查询。 */
@@ -24,7 +24,7 @@ describe("危路急救 — 提级到建造之前", () => {
     const dying = road("r1", 200); // 4% — 濒临塌毁。
     const site = {
       id: "site1",
-      pos: { x: 30, y: 30, getRangeTo: () => 5 },
+      pos: { x: 28, y: 28, getRangeTo: () => 3 },
       structureType: "extension",
       progress: 0,
       progressTotal: 3000,
@@ -49,7 +49,7 @@ describe("危路急救 — 提级到建造之前", () => {
     const shabby = road("r2", 1500); // 30% — 破常规线但未到急救线。
     const site = {
       id: "site1",
-      pos: { x: 30, y: 30, getRangeTo: () => 5 },
+      pos: { x: 28, y: 28, getRangeTo: () => 3 },
       structureType: "extension",
       progress: 0,
       progressTotal: 3000,

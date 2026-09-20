@@ -15,6 +15,7 @@ import {
   withdrawCapped,
   withdrawStorageLink,
 } from "../engine/actions";
+import { countedIntent } from "../engine/actions/helpers";
 import { selectHaulSourceContainer, pickHaulFillTargetInRange } from "../support/targeting";
 import { defineRole } from "../engine/role-runner";
 import { moveToTarget, stepToward } from "../movement";
@@ -41,7 +42,9 @@ function withdrawAssignmentContainer(): ActionCandidate<StructureContainer> {
       const available = container.store.getUsedCapacity(RESOURCE_ENERGY);
       const carryFree = ac.creep.store.getFreeCapacity(RESOURCE_ENERGY);
       const amount = Math.min(available, carryFree);
-      const result = ac.creep.withdraw(container, RESOURCE_ENERGY, amount);
+      const result = countedIntent("withdraw", () =>
+        ac.creep.withdraw(container, RESOURCE_ENERGY, amount),
+      );
       if (result === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, container);
       } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
@@ -111,7 +114,7 @@ function haulerOnFlee(ac: ActionContext): boolean {
 
   const dist = creep.pos.getRangeTo(target.pos);
   if (dist <= 1) {
-    creep.transfer(target, RESOURCE_ENERGY);
+    countedIntent("transfer", () => creep.transfer(target, RESOURCE_ENERGY));
     return true;
   }
 
@@ -144,7 +147,7 @@ function haulerGate(ac: ActionContext): boolean {
   if (ac.snapshot.threatCreeps.length > 0) return true;
   const pumpRooms = globalCache().distributorRooms;
   if (pumpRooms && !pumpRooms.has(creep.memory.home ?? creep.room.name)) return true;
-  creep.transfer(st, RESOURCE_ENERGY);
+  countedIntent("transfer", () => creep.transfer(st, RESOURCE_ENERGY));
   return true;
 }
 

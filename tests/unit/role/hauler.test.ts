@@ -743,12 +743,13 @@ describe("hauler — HL-1 战时 tower 补给优先于囤积", () => {
       capacity: 50,
       mode: "work",
     });
-    creep.pos.getRangeTo = vi.fn(() => 15); // 威胁距离 15 > fleeRange 10
+    // 距离由坐标算：威胁放到远端坐标（见 mockHostile 调用点），作业结构保持相邻。
     return creep;
   }
 
   it("威胁在场且 tower 缺能 → 跳过 fillStorage 直填 tower", () => {
-    const hostile = mockHostile();
+    // 远端坐标 → 距离 > fleeRange(10)，满足"威胁在场但不触发 flee"的前提。
+    const hostile = mockHostile("hostile_far", 5, 5);
     const tower = mockStructure("tower", { id: "tw1", energy: 100, capacity: 1000 });
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({
@@ -768,7 +769,7 @@ describe("hauler — HL-1 战时 tower 补给优先于囤积", () => {
   });
 
   it("威胁在场但无缺能 tower → 照常囤 storage", () => {
-    const hostile = mockHostile();
+    const hostile = mockHostile("hostile_far", 5, 5);
     const storage = mockStructure("storage", { id: "sto1", energy: 1000, capacity: 100000 });
     const snap = mockSnapshot({
       rcl: 4,

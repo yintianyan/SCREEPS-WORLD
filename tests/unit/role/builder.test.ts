@@ -568,8 +568,9 @@ describe("builder — B3 防御工事维修（维修权从塔移交 creep）", (
   it("盈余门禁满足时修复血量最低的 rampart", () => {
     const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
     // 独立坐标（不与 storage 同格）→ 无 min-cut 情报时按 perimeter 全额维护。
-    rampart.pos.x = 40;
-    rampart.pos.y = 40;
+    // 同时必须落在维修射程内（≤3），否则真实引擎里只会拿到 ERR_NOT_IN_RANGE。
+    rampart.pos.x = 26;
+    rampart.pos.y = 26;
     // 和平期全额灌墙门槛为 sprintStorage(50k)。
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = mockSnapshot({
@@ -952,11 +953,11 @@ describe("builder — 防御工事分层维护", () => {
   it("container 叠盾（utility 档）只保地板：过线后不再灌注", () => {
     // rampart 与 container 同格 → utility 档，目标 = 急救地板 10k；50k 已远超 → 不修。
     const container = mockStructure("container", { id: "c1", energy: 0, capacity: 2000 });
-    container.pos.x = 30;
-    container.pos.y = 30;
+    container.pos.x = 27;
+    container.pos.y = 27;
     const rampart = mockStructure("rampart", { id: "r1", hits: 50000, hitsMax: 300000 });
-    rampart.pos.x = 30;
-    rampart.pos.y = 30;
+    rampart.pos.x = 27;
+    rampart.pos.y = 27;
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
     const snap = mockSnapshot({
       myConstructionSites: [],
@@ -981,11 +982,11 @@ describe("builder — 防御工事分层维护", () => {
   it("core 档（结构叠盾）按折扣目标维护：低于 30% 全额时修，高于则达标", () => {
     // rampart 与 storage 同格 → core 档。RCL3 全额 100k × 0.3 = 30k 目标。
     const storage = mockStructure("storage", { id: "st", energy: 60000, capacity: 1000000 });
-    storage.pos.x = 20;
-    storage.pos.y = 20;
+    storage.pos.x = 23;
+    storage.pos.y = 23;
     const belowCore = mockStructure("rampart", { id: "r1", hits: 20000, hitsMax: 300000 });
-    belowCore.pos.x = 20;
-    belowCore.pos.y = 20;
+    belowCore.pos.x = 23;
+    belowCore.pos.y = 23;
     const snap = mockSnapshot({
       myConstructionSites: [],
       fillTargets: [],
