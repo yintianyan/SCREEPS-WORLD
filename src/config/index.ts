@@ -274,8 +274,22 @@ export const CONFIG = {
     maxRampartSitesPerRoom: 2,
     /** 每房额外允许的关键 site 数。 */
     maxCriticalSitesPerRoom: 1,
-    /** 全局活跃 site 上限。7：容纳 3 extension + 2 road + 关键 container
-     * （source/controller）并行，避免被毁的 source container 重建被占满名额而阻塞。 */
+    /**
+     * 全局活跃 site 上限。7：容纳 3 extension + 2 road + 关键 container
+     * （source/controller）并行，避免被毁的 source container 重建被占满名额而阻塞。
+     *
+     * **它是 normal / development 车道的闸门，不是"帝国土地总数"的不变量** ——
+     * 生效点是 `domain/layout/validation.ts` 规则 6（`globalSiteCount >= maxGlobalSites
+     * → "site-limit"`，`globalSiteCount` 由 kernel 按各房 `myConstructionSites` 求和，
+     * 再加 remote 侧在挂数），而各独立车道（critical / storage / source container /
+     * road / wall / rampart）走**每房**配额、emergency 重建道完全不查本值。
+     * 所以帝国总 site 数可以合法地超过 7：实测 2 房 8 个（storage×2 + tower×2 +
+     * extension×2 + container×2），设计上的量级是 `7 + 房数 × 3`（额外车道各 1/房）。
+     * 曾有一条 e2e 断言把"总数 ≤ 7"当不变量而长红 —— 那是断言写错了对象，不是配额漏查
+     * （现由 `tests/e2e/scenarios/26-site-quota.test.ts` 按上面的真不变量钉住）。
+     * 不改成真全局上限的理由：把关键基建挤进同一个名额池，正是注释里那句"被毁的 source
+     * container 重建被占满名额而阻塞"要避免的事故形状。
+     */
     maxGlobalSites: 7,
     /** 永久位置冲突任务的黑名单冷却（tick）：blocked 任务连续 3 次 ERR_INVALID_TARGET
      * 被清除后其 key 入黑名单，冷却期内规划器不得重新入队 — 否则「入队 → blocked →
