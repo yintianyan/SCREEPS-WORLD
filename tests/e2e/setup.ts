@@ -3,6 +3,14 @@ import { existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve } from "node:path";
 import { afterAll, beforeAll } from "vitest";
+import { GAME_GLOBAL_CONSTANTS } from "../support/constants";
+
+/**
+ * 官方常量注入必须发生在**测试模块被装载之前**：`src/domain/layout` 的蓝图模块
+ * 在模块作用域读 STRUCTURE_* 常量，测试文件只要 import 它就会在缺失时拿到 undefined。
+ * setupFiles 正是这个时机（单个场景里再 Object.assign 已太晚，且会重复）。
+ */
+Object.assign(globalThis as Record<string, unknown>, GAME_GLOBAL_CONSTANTS);
 
 /**
  * 检测 @screeps/driver 的 runtime.snapshot.bin 是否与当前 Node 版本兼容。

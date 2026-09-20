@@ -111,6 +111,12 @@ export class ScenarioRunner {
     });
     await this._bot.registerTo(this._server.server);
 
+    // 夹具预置的结构此刻才真正属于 bot：注册前没有用户 id（见 assignStructuresTo 注释）。
+    await this._worldBuilder.assignStructuresTo(opts.botUsername ?? "bot", [
+      opts.roomName,
+      ...(opts.ownedRooms ?? []).map(r => r.name),
+    ]);
+
     // addBot 会把 controller 重置为 level=1；如有 controllerLevel 选项，
     // 在 server 启动前通过 DB 直接修正。
     const { db } = this._server.server.common.storage;

@@ -59,6 +59,36 @@ export interface RoomSetup {
   active?: boolean;
 }
 
+/** 带 Store 的结构：引擎会以 Object.entries(store) 构造 Store，缺字段即在访问时抛错。 */
+const STORE_BEARING_TYPES = new Set<string>([
+  "spawn",
+  "extension",
+  "tower",
+  "container",
+  "storage",
+  "link",
+  "lab",
+  "terminal",
+  "factory",
+]);
+
+/** 需要归属用户的结构类型（source/mineral/controller 不在此列 —— 控制器走 claim 流程）。 */
+const OWNER_BEARING_TYPES = new Set<string>([
+  "spawn",
+  "extension",
+  "tower",
+  "storage",
+  "container",
+  "link",
+  "lab",
+  "terminal",
+  "factory",
+  "observer",
+  "powerSpawn",
+  "nuker",
+  "road",
+]);
+
 /**
  * 世界构建器。封装 server.world 的房间/对象创建 API。
  */
@@ -80,6 +110,43 @@ export class WorldBuilder {
         await this.world.addRoomObject(setup.name, obj.type, obj.x, obj.y, obj.props ?? {});
       }
     }
+  }
+
+  /**
+   * 给指定房里**尚无归属**的结构补上用户 id。必须在 bot 用户注册之后调用
+   * （`addRooms` 早于 `registerTo`，那时查不到用户）。
+   *
+   * 为什么需要：引擎的结构归属 getter 读 `object.user`（用户 **id**），不认夹具里常见的
+   * `owner: "bot"` 字符串。缺这一步的预置结构是「存在但不属于我」——
+   * FIND_STRUCTURES 数得到，而 FIND_MY_STRUCTURES / energyCapacityAvailable 全部无视它
+   * （实测：预置 100 个 extension，容量仍恒 300）。与 addHostileTower 同源的道理。
+   */
+  async assignStructuresTo(username: string, roomNames: string[]): Promise<number> {
+    const { db } = await this.world.load();
+    const [user] = await db.users.find({ username });
+    if (!user) throw new Error(`assignStructuresTo: user ${username} not found`);
+    let stamped = 0;
+    for (const room of roomNames) {
+      const objects = await db["rooms.objects"].find({ room });
+      for (const o of objects ?? []) {
+        if (!OWNER_BEARING_TYPES.has(o.type) || o.user) continue;
+        const patch: Record<string, unknown> = { user: user._id };
+        // 补所有权会**激活**这些结构：引擎对 owning 用户访问 object.store 时走
+        // Store 构造器（Object.entries(object.store)）。夹具里 legacy 写法只给了
+        // energy/energyCapacity 而缺 store → 一被拥有就抛 TypeError，整房 tick 死
+        // （与 addFriendlyCreep 上那段注释同源的坑，实测踩过）。缺 store 时按 legacy
+        // 口径补齐，已有 store 的夹具不动。
+        if (STORE_BEARING_TYPES.has(o.type) && o.store === undefined) {
+          const energy = Number(o.energy ?? 0) || 0;
+          const capacity = Number(o.energyCapacity ?? 0) || 0;
+          patch.store = energy > 0 ? { energy } : {};
+          patch.storeCapacityResource = capacity > 0 ? { energy: capacity } : {};
+        }
+        await db["rooms.objects"].update({ _id: o._id }, { $set: patch });
+        stamped++;
+      }
+    }
+    return stamped;
   }
 
   /**
