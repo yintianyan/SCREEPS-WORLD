@@ -934,3 +934,102 @@ describe("storage 抢占豁免集（isStoragePreemptionExemptSite）", () => {
     expect(byId.get("mid-c")!.priority).toBe(2);
   });
 });
+
+// ── D1：同优先级内"先完工一个"（2026-09-20 实测）──
+// 现场：单房只有 1~2 只 builder，storage(30000)/tower(5000)/controller container(5000)
+// 同为 priority=1；纯距离感知让核心旁的 storage 长期独占 builder，
+// 距 spawn 16 格的站桩 container 4000 tick 推进恰好 0 → 站桩升级链趴窝。
+describe("chooseTaskForRole — 同优先级按剩余建造量（D1）", () => {
+  const t = (
+    id: string,
+    priority: number,
+    remaining: number,
+    pos: { x: number; y: number },
+    structureType: string = STRUCTURE_CONTAINER,
+    workers = 2,
+  ) => ({
+    id: `build:${id}`,
+    kind: "build",
+    targetId: id,
+    structureType,
+    priority,
+    maxWorkers: workers,
+    assignedCreeps: [] as string[],
+    pos,
+    remaining,
+  });
+
+  it("远但小(5000)的站桩工地赢过近但大(30000)的 storage", () => {
+    const storage = t("storage", 1, 30000, { x: 23, y: 25 }, STRUCTURE_STORAGE);
+    const station = t("ctrl-c", 1, 5000, { x: 9, y: 9 });
+    // builder 在核心旁：按旧规则（纯距离）必然选 storage。
+    const picked = chooseTaskForRole("builder", [storage, station], { x: 24, y: 25 });
+    expect(picked?.targetId).toBe("ctrl-c");
+  });
+
+  it("剩余量相同才回到距离感知（不是无限优先做远的）", () => {
+    const near = t("c-near", 1, 5000, { x: 24, y: 24 });
+    const far = t("c-far", 1, 5000, { x: 9, y: 9 });
+    const picked = chooseTaskForRole("builder", [far, near], { x: 24, y: 25 });
+    expect(picked?.targetId).toBe("c-near");
+  });
+
+  it("更高优先级仍然压倒剩余量（priority 不被 D1 篡位）", () => {
+    const p1Big = t("storage", 1, 30000, { x: 23, y: 25 });
+    const p2Small = t("road", 2, 100, { x: 24, y: 24 });
+    const picked = chooseTaskForRole("builder", [p2Small, p1Big], { x: 24, y: 25 });
+    expect(picked?.targetId).toBe("storage");
+  });
+
+  it("已排满 maxWorkers 的任务不参与选择（builder 稀缺时靠空位而非抢占）", () => {
+    const storageFull = {
+      ...t("storage", 1, 30000, { x: 23, y: 25 }),
+      assignedCreeps: ["b1", "b2"],
+    };
+    const station = t("ctrl-c", 1, 5000, { x: 9, y: 9 });
+    const picked = chooseTaskForRole("builder", [storageFull, station], { x: 24, y: 25 });
+    expect(picked?.targetId).toBe("ctrl-c");
+  });
+
+  it("buildRoomTasks 给 build 任务带上 remaining，且随进度递减", () => {
+    const sites = [
+      {
+        id: "s-half",
+        structureType: STRUCTURE_STORAGE,
+        pos: { x: 23, y: 25 },
+        progress: 20000,
+        progressTotal: 30000,
+      },
+      {
+        id: "s-ctrl",
+        structureType: STRUCTURE_CONTAINER,
+        pos: { x: 9, y: 9 },
+        progress: 0,
+        progressTotal: 5000,
+      },
+    ] as unknown as ConstructionSite[];
+    const snapshot = mockSnapshot({
+      rcl: 6,
+      storage: undefined,
+      controller: {
+        my: true,
+        level: 6,
+        pos: { x: 10, y: 10 },
+      } as unknown as RoomSnapshot["controller"],
+      sources: [{ id: "s1", pos: { x: 40, y: 10 } } as unknown as RoomSnapshot["sources"][number]],
+      myConstructionSites: sites,
+      constructionSites: sites,
+    });
+    const tasks = buildRoomTasks(snapshot, [], {
+      colonyState: "normal" as ColonyState,
+      controllerDowngradeRisk: false,
+    });
+    const half = tasks.find(x => x.targetId === "s-half");
+    const ctrl = tasks.find(x => x.targetId === "s-ctrl");
+    expect(half?.remaining).toBe(10000);
+    expect(ctrl?.remaining).toBe(5000);
+    // 两者同为 priority=1（storage 缺位期与站桩期），D1 让小的先完工
+    expect(half?.priority).toBe(1);
+    expect(ctrl?.priority).toBe(1);
+  });
+});

@@ -14,6 +14,11 @@ export interface AssignmentTaskEntry {
   assignedCreeps: string[];
   /** 任务代表位置（P2-4 距离感知选择用）：build=工地、haul=取能点、upgrade=controller；fill 无固定位置，为 undefined。 */
   pos?: { x: number; y: number };
+  /**
+   * 剩余建造量（仅 build 任务）：progressTotal - progress。
+   * 用于同优先级内的"先完工一个"选择 —— 半成品不产出任何功能。
+   */
+  remaining?: number;
 }
 
 /**
@@ -170,6 +175,8 @@ export function buildRoomTasks(
       maxWorkers: isStorageSite ? 2 : isPriority ? 2 : 1,
       assignedCreeps: taskToCreeps.get(`build:${roomName}:${site.id}`) ?? [],
       pos: { x: site.pos.x, y: site.pos.y },
+      // 剩余建造量 —— 供同优先级内"先完工一个"的 tie-break 使用（见 chooseTaskForRole）。
+      remaining: Math.max(0, (site.progressTotal ?? 0) - (site.progress ?? 0)),
     });
   }
 
@@ -265,12 +272,28 @@ export function chooseTaskForRole(
   }
   if (bestPriority === Infinity) return undefined;
 
-  // 2. 收集该优先级的所有候选，距离感知选最近。
+  // 2. 收集该优先级的所有候选。
   const candidates: AssignmentTaskEntry[] = [];
   for (const task of tasks) {
     if (!roleKinds.includes(task.kind)) continue;
     if (task.assignedCreeps.length >= task.maxWorkers) continue;
     if (task.priority === bestPriority) candidates.push(task);
+  }
+
+  // D1「同优先级先完工一个」：带剩余量的候选按剩余量升序，**同剩余量再按距离**。
+  // 为什么不能只看距离（实测）：单房只有 1~2 只 builder，而 storage(30000)、tower(5000)、
+  // controller container(5000) 同为 priority=1 —— 纯距离感知让核心旁 2 格内的 storage
+  // 长期独占唯一 builder，距 spawn 16 格的站桩 container **4000 tick 推进恰好 0**，
+  // 站桩升级链随之趴窝（升级仅 0.11 E/tick，upgrader 卡在 range 13~21 且疲劳）。
+  // 半成品不产出任何功能：builder 稀缺时，"最快能完工的那个"比"离得最近的那个"更该先做。
+  // 只有 build 任务带 remaining（builder 也只接 build），故本步不影响 fill/haul/upgrade。
+  const costed = candidates.filter(t => t.remaining !== undefined);
+  if (costed.length > 0) {
+    const least = Math.min(...costed.map(t => t.remaining!));
+    return closestTask(
+      costed.filter(t => t.remaining === least),
+      creepPos,
+    );
   }
   return closestTask(candidates, creepPos);
 }
