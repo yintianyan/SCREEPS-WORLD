@@ -3,6 +3,7 @@
  * 周期性 invader 注入（塔防击杀）→ 统计敌袭波次、恢复时间（编队回补）、Memory 有界。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { CONFIG } from "../../../src/config";
 import { ScenarioRunner } from "../framework";
 import { t0Base } from "../fixtures/base";
 import { injectHostile } from "../fixtures/inject";
@@ -48,7 +49,9 @@ describe("E2E-025 hostile/恢复长程统计", () => {
       `[soak-evidence] hostile-soak: waves=${waves} normalSamples=${recoveries} ` +
         `initialCreeps=${creepsBeforeFirst} jsErrors=${errorsSeen} collectedAt=${new Date().toISOString()}`,
     );
-    console.log(`[soak-evidence] hostile-soak binding: schemaVersion=43 room=W0N1 ticks=6000`);
+    console.log(
+      `[soak-evidence] hostile-soak binding: schemaVersion=${CONFIG.memory.schemaVersion} room=W0N1 ticks=6000`,
+    );
     expect(waves).toBeGreaterThanOrEqual(6);
     expect(recoveries, "敌袭间隙应回 normal 且编队存活").toBeGreaterThanOrEqual(4);
     expect(errorsSeen).toBe(0);

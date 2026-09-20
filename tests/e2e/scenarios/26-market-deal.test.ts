@@ -16,6 +16,7 @@
  * 证据绑定：schemaVersion / ticks / room / collectedAt 在输出登记。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { CONFIG } from "../../../src/config";
 import { ScenarioRunner } from "../framework";
 import { t0Base } from "../fixtures/base";
 import { injectMarketOrder, injectCredits } from "../fixtures/inject";
@@ -230,7 +231,7 @@ describe("E2E-026 市场交易链路 — NPC 订单注入 + deal 成交结算", 
     expect(memSize, `Memory 过大: ${memSize} bytes`).toBeLessThan(500_000);
 
     console.log(
-      `[soak-evidence] market-deal binding: schemaVersion=43 ticks=400 ` +
+      `[soak-evidence] market-deal binding: schemaVersion=${CONFIG.memory.schemaVersion} ticks=400 ` +
         `room=${ROOM} npcRoom=${NPC_ROOM} jsErrors=${errorsSeen} ` +
         `dealExecuted=${dealExecuted} ` +
         `collectedAt=${new Date().toISOString()}`,

@@ -8,6 +8,7 @@
  * 证据绑定：commit / schemaVersion / tick / 双房存活曲线在输出登记。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { CONFIG } from "../../../src/config";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
@@ -122,7 +123,7 @@ describe("E2E-017 多房 soak — 双自有房 + 故障隔离", () => {
     expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);
 
     console.log(
-      `[soak-evidence] multi-room binding: schemaVersion=43 ticks=5000 ` +
+      `[soak-evidence] multi-room binding: schemaVersion=${CONFIG.memory.schemaVersion} ticks=5000 ` +
         `rooms=${HOME}+${COLONY} collectedAt=${new Date().toISOString()}`,
     );
   }, 900000);

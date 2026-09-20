@@ -9,6 +9,7 @@
  * 证据绑定：commit / schemaVersion / 各状态转换 tick 在输出登记。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { CONFIG } from "../../../src/config";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
@@ -90,7 +91,7 @@ describe("E2E-020 claim 授权全链 — 立项→claim→bootstrap", () => {
         `milestones=${JSON.stringify(milestones)} jsErrors=${errorsSeen}`,
     );
     console.log(
-      `[claim-evidence] binding: schemaVersion=43 gcl=2 collectedAt=${new Date().toISOString()}`,
+      `[claim-evidence] binding: schemaVersion=${CONFIG.memory.schemaVersion} gcl=2 collectedAt=${new Date().toISOString()}`,
     );
 
     // 全程无 JS 错误。

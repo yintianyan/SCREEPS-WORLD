@@ -10,6 +10,7 @@
  * 需 planner 输入构造，登记为 CANARY §5.2 继续项。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { CONFIG } from "../../../src/config";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { emptyTerrain, controller, source, mineral } from "../framework/WorldBuilder";
@@ -104,7 +105,7 @@ describe("E2E-019 多房 energy 互济 — terminal 调拨", () => {
     expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);
 
     console.log(
-      `[soak-evidence] energy-aid binding: schemaVersion=43 rooms=${DONOR}(donor)+${RECIPIENT}(recipient) ` +
+      `[soak-evidence] energy-aid binding: schemaVersion=${CONFIG.memory.schemaVersion} rooms=${DONOR}(donor)+${RECIPIENT}(recipient) ` +
         `collectedAt=${new Date().toISOString()}`,
     );
   }, 900000);

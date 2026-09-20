@@ -9,6 +9,7 @@
  * 证据绑定：commit / schemaVersion / 注入时间线在输出登记。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { CONFIG } from "../../../src/config";
 import { ScenarioRunner } from "../framework";
 import { standardRoom } from "../fixtures/rooms";
 import { injectCpu } from "../fixtures/inject";
@@ -91,7 +92,7 @@ describe("E2E-018 Emergency Survival Mode — 进入/保持/退出", () => {
     expect(errorsSeen, `全程检测到 JS 错误 ${errorsSeen} 条`).toBe(0);
 
     console.log(
-      `[soak-evidence] esm binding: schemaVersion=43 sequence=50(enter)→400(band-hold)→800(exit) ` +
+      `[soak-evidence] esm binding: schemaVersion=${CONFIG.memory.schemaVersion} sequence=50(enter)→400(band-hold)→800(exit) ` +
         `ticks=800 collectedAt=${new Date().toISOString()}`,
     );
   }, 600000);

@@ -1,5 +1,9 @@
 /**
- * E2E-016 单房私服 soak（当前版本 sv=43 重跑）— CANARY §5.1。
+ * E2E-016 单房私服 soak — CANARY §5.1。
+ *
+ * 文件名里的 "sv43" 与日志前缀是历史标签（那次 Memory schema=43 时的重跑），**不随版本更新**；
+ * 真实版本只认输出里的 `schemaVersion=`（它读 CONFIG.memory.schemaVersion，不写死数字 ——
+ * 曾经写死 43 而配置已是 47，等于往长期登记表里刻了个假读数）。
  *
  * RCL1 起步长程运行：验证 RCL1→2 自然晋级、长程无 JS 错误、Memory 有界、
  * spawnQueue 不堆积、存活不死亡螺旋。深度按 20,000 tick 执行（CANARY §5.1
@@ -7,6 +11,7 @@
  * 证据绑定：commit / schemaVersion / tick / room / collectedAt 在输出登记。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { CONFIG } from "../../../src/config";
 import { ScenarioRunner } from "../framework";
 import { t0Base } from "../fixtures/base";
 import { isJsError } from "../../support/errors";
@@ -199,7 +204,7 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
       ).toBeLessThan(STAGES * 0.5);
 
       console.log(
-        `[soak-evidence] sv43-soak binding: schemaVersion=43 ticks=${TOTAL_TICKS} ` +
+        `[soak-evidence] sv43-soak binding: schemaVersion=${CONFIG.memory.schemaVersion} ticks=${TOTAL_TICKS} ` +
           `room=${ROOM} rclFinal=${finalRcl} jsErrors=${totalErrors} ` +
           `collectedAt=${new Date().toISOString()}`,
       );
