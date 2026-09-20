@@ -4,6 +4,7 @@ import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { getRoleBounds, TUNABLE_ROLES } from "../../config/tuned";
 import { classifyLinkRole } from "../../domain/economy/links";
+import { averageSourceFillRatio } from "../../domain/economy/phase";
 import {
   evaluateTuning,
   verifyPendingAdjustments,
@@ -615,15 +616,10 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
     ? roomMem.buildQueue.filter(t => t.state === "queued").length
     : 0;
 
-  // P1-2：srcRatio 信号（采集塌方检测）— 取最满 source 填充率
-  let srcRatio = 0;
-  for (const s of snapshot.sources) {
-    const cap = (s as Source).energyCapacity ?? 3000;
-    if (cap > 0) {
-      const fill = ((s as Source).energy ?? 0) / cap;
-      if (fill > srcRatio) srcRatio = fill;
-    }
-  }
+  // P1-2：srcRatio 信号（采集塌方检测）— **平均** source 填充率。
+  // 与 room-state 同一个口径（averageSourceFillRatio）：这里原先另写一份「取最满」，
+  // 于是 source 数 > harvester 数时恒 >0.9，FORCE_UNFREEZE 通道跟着 srcStallTicks 误触发。
+  const srcRatio = averageSourceFillRatio(snapshot.sources);
 
   return {
     avgReserveDelta,

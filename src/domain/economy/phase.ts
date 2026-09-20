@@ -11,6 +11,28 @@ import { CONFIG } from "../../config";
 
 export type ColonyPhase = "bootstrap" | "growth" | "crisis" | "recovery" | "steady";
 
+/**
+ * source 平均填充率（0..1）—— 「采集塌方」信号（PhaseInput.srcRatio）的口径定义。
+ *
+ * 为什么取平均而不是最满：source 数 > harvester 数时，没被分配的那颗**必然**满载，
+ * max 口径于是恒 >0.9 —— 实测 5-source 房 srcStall 常驻 8730/9000 tick，把「编制不满」
+ * 报成「采集塌方」，而 P0-1 通道是绕过迟滞直接进危机带的。真塌方（harvester 死绝、
+ * body 退化采不动）时所有 source 一起满，平均口径照样越过 0.9 抓到，灵敏度没被换掉。
+ */
+export function averageSourceFillRatio(
+  sources: readonly { energy?: number; energyCapacity?: number }[],
+): number {
+  let sum = 0;
+  let counted = 0;
+  for (const s of sources) {
+    const cap = s.energyCapacity ?? 3000;
+    if (cap <= 0) continue;
+    sum += Math.min(1, (s.energy ?? 0) / cap);
+    counted++;
+  }
+  return counted > 0 ? sum / counted : 0;
+}
+
 /** 单次评估的输入信号（由 room-observer 从快照 + creep 统计得出）。 */
 export interface PhaseInput {
   /** 总储备 = energyAvailable + 所有 container + storage 的能量。 */
@@ -200,6 +222,12 @@ export interface PhaseOptions {
   storageDrainAccumThreshold: number;
   /** P2-3：forceCrisis 满仓豁免阈值 — storageRatio 超过此值不触发（满仓时流失是正常消费，不是采集失败）。默认 0.8。 */
   forceCrisisStorageHigh: number;
+  /**
+   * 欠员判据的最低编制（= 采集端"站住人"的人数），与 spawn 侧 `roles.harvester.minCount`
+   * 同源。**不跟 source 数比** —— 见 evaluateColonyPhase 内 `understaffed` 的注释：
+   * 那样会让 source 多而编制自然的房永久停在生存带（反常激励）。
+   */
+  harvesterMinStaffing: number;
 }
 
 export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
@@ -241,6 +269,8 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   // P2-3：满仓豁免 — storage 80% 以上时 forceCrisis 不触发。
   // 满仓时 storage 流失是正常消费（upgrader 取能），不是采集失败。
   forceCrisisStorageHigh: 0.8,
+  // 欠员判据的最低编制：与 spawn 侧的 harvester 下限同源（两处脱钩就会重新制造永久 bootstrap）。
+  harvesterMinStaffing: CONFIG.roles.harvester.minCount,
 };
 
 /**
@@ -333,7 +363,16 @@ export function evaluateColonyPhase(
   const hasBank = input.storageRatio !== undefined;
   const bankrupt = hasBank && input.reserve < options.bankruptReserveFloor;
 
-  const understaffed = input.harvesterCount < Math.max(1, input.sourceCount);
+  // 欠员 = 采集端没站住人 —— 与 spawn 侧的**最低编制**同源，而不是跟世界给的 source 数比。
+  // 旧写法 `harvesterCount < sourceCount` 隐含「1 只 harvester 只能服务 1 个 source」，
+  // 撞上 maxCount=4 就让 source≥5 的房永远欠员、永久 bootstrap（实测 8730/9000 tick）。
+  // 只按上限截断（min(source, maxCount)）是不够的：实测同一套夹具里 2-source 房
+  // growth 2500/2500，而 5-source 房仍 bootstrap 2489/2500 —— 因为需求侧自然只保持 ~2 只，
+  // 于是"资源更好的房反而拿不到正常相位"这个反常激励原封不动。
+  // "采不动"（吞吐不足）这层含义不在这里判：那是 srcRatio(平均口径)+storage 流失的
+  // P0-1 通道，两者不重叠。
+  const staffingFloor = Math.max(1, Math.min(options.harvesterMinStaffing, input.sourceCount));
+  const understaffed = input.harvesterCount < staffingFloor;
   const inCrisisBand = prev.phase === "crisis" || prev.phase === "recovery";
   // 危机带驻留计数（TD-003 根因 B）：带内每次评估 +1，用于最短驻留判定。
   const bandTicksSoFar = inCrisisBand ? (prev.bandTicks ?? 0) : 0;

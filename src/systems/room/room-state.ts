@@ -1,6 +1,7 @@
 import { CONFIG } from "../../config";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import {
+  averageSourceFillRatio,
   evaluateColonyPhase,
   phaseToColonyState,
   computeClaimSecure,
@@ -75,19 +76,12 @@ export const roomStateSystem: System = {
       }
 
       // 2.6 P0-1：srcRatio 信号（病灶 1 — 采集塌方失明）。
-      // 取最满 source 的填充率：harvester body 退化导致单体采集能力塌方时，
-      // source 持续满载（3000/3000）但 spawn 口袋仍健康（hauler 持续补），
-      // drainScore 走主动消费豁免不计赤字 → colonyState 误判 normal/growth。
-      // srcRatio + storageDrainRate 双条件强制 crisis 通道绕过迟滞。
-      let srcRatio = 0;
-      for (const s of snapshot.sources) {
-        const src = s as Source;
-        const cap = src.energyCapacity ?? 3000;
-        if (cap > 0) {
-          const fill = (src.energy ?? 0) / cap;
-          if (fill > srcRatio) srcRatio = fill;
-        }
-      }
+      // **平均**填充率（口径定义见 averageSourceFillRatio）：harvester body 退化导致采集
+      // 能力塌方时所有 source 一起满载，平均照样 >0.9；而 source 数 > harvester 数时
+      // 「没被派人的那颗必然满」，取最满会让 P0-1 通道常驻（实测 5-source 房 stall
+      // 8730/9000 tick，把编制不满报成塌方）。srcRatio + storageDrainRate 双条件强制
+      // crisis 通道绕过迟滞。
+      const srcRatio = averageSourceFillRatio(snapshot.sources);
 
       // 2.6b RCL 变更锚点：lastRclChangeAt 记录等级变化的 tick（期望自检 E5
       // RCL 停滞检测的年龄基准；lastRclLevel 用于区分「变化」与「延续」）。
