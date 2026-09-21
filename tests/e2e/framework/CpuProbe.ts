@@ -54,6 +54,8 @@ export interface ProbeSample {
   issued: Record<string, IntentTally>;
   /** 本 tick 各角色在编 creep 数 —— 角色 CPU 必须除以它才是每 creep 成本。 */
   roleCounts: Record<string, number>;
+  //** 在孵 creep 数（引擎对它们的一切动作都回 ERR_BUSY）。 */
+  spawning: number;
   /** 台阶标签（`buildProbe({label})` 原样回显），用于把样本归属到某个人口台阶。 */
   step: string;
   /** 全帝国自有结构数 / 在建 site 数 / storage 能量 —— 人口台阶实验的协变量。 */
@@ -200,6 +202,12 @@ export function buildProbe(opts: ProbeOptions = {}): string {
   }
   var cpu = Game.cpu.getUsed();
   var nByRole = {};
+  var nSpawning = 0;
+  for (var sk in Game.creeps) {
+    // 在孵数：引擎对 spawning creep 的一切动作都回 ERR_BUSY（game/creeps.js move 分支），
+    // 所以它是我们这边 move BUSY 空签发的唯一可能来源 —— 用它做同刻相关性检验。
+    try { if (Game.creeps[sk].spawning) nSpawning++; } catch (e) {}
+  }
   for (var ck in Game.creeps) {
     var cm = Game.creeps[ck].memory;
     var r = cm && cm.role;
@@ -223,7 +231,7 @@ export function buildProbe(opts: ProbeOptions = {}): string {
     '|issued=' + iss +
     '|sys=' + flat(t.systemCpu || {}) +
     '|role=' + flat(t.roleCpu || {}) +
-    '|roleN=' + flat(nByRole) +
+    '|roleN=' + flat(nByRole) + '|spawning=' + nSpawning +
     '|step=${(opts.label ?? "none").replace(/[^A-Za-z0-9_-]/g, "")}' +
     '|structs=' + cov[0] +
     '|sites=' + cov[1] +
@@ -352,6 +360,7 @@ export function toProbeSample(rec: Record<string, string>): ProbeSample | null {
     moveIntents: num("intentsReg"),
     issued: parseIntentMap(rec.issued),
     roleCounts: parseNumMap(rec.roleN),
+    spawning: num("spawning"),
     step: rec.step ?? "none",
     structures: num("structs"),
     sites: num("sites"),

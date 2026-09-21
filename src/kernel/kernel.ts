@@ -777,6 +777,15 @@ export class Kernel {
 
     const creepEntries: Array<{ creep: Creep; role: CreepRole }> = [];
     for (const creep of Object.values(Game.creeps)) {
+      // 孵化中的 creep 不进角色管线：引擎对它的一切动作都回 ERR_BUSY，跑一整个
+      // 候选链只产生空签发（实测占 3 房发育世界全部无效签发的 82%：move BUSY
+      // 0.52/tick，且按 spawn 槽位数而非人口-scaling —— 6 房帝国会更贵）。
+      // 相关性实测：在孵数=0 的 437 tick 上 move BUSY 恰为 0.000/tick，
+      // 在孵 ≥1 的 763 tick 上是 0.824/tick。
+      if (creep.spawning) {
+        recordSkip("creep/spawning");
+        continue;
+      }
       const role = roleMap.get(creep.memory.role);
       if (!role) {
         // 自愈：清除未知角色的旧目标/分配；用稳定 label（按角色名而非 creep 名）限频。
