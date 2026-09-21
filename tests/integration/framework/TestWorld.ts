@@ -1049,6 +1049,16 @@ export class TestWorld {
   private _tickBase = allocateTickBase();
   private _tick = 0;
   private _cpuUsed = 0;
+  private _cpuUsedFloor = 0;
+
+  /** 把每 tick 的 `Game.cpu.getUsed()` 起点抬到 used（0=关闭）。
+   * 真实 tick 的 CPU 是逐阶段累加的，而 mock 里恒为 0 —— 于是「tick 走到某个
+   * 阶段时已经花了多少」这类预算语义在夹具内根本不存在（线上 telemetry-collector
+   * 被实时 softLimit 锁死数千 tick，e2e 全绿看不见正是此因）。 */
+  setCpuFloor(used: number): void {
+    this._cpuUsedFloor = used;
+    this._cpuUsed = used;
+  }
 
   constructor(config: WorldConfig) {
     this.config = config;
@@ -1333,7 +1343,7 @@ export class TestWorld {
   /** 推进一个 tick 的物理模拟（在 AI 代码运行之前调用）。 */
   advancePhysics(): void {
     this._tick++;
-    this._cpuUsed = 0;
+    this._cpuUsed = this._cpuUsedFloor;
 
     // Source 再生 — 引擎语义（ENERGY_REGEN_TIME=300t 脉冲补量，非逐 tick 连续）：
     // 房间级跨 tick 差分核算（economy 收入采样）依赖此口径，连续回能会把实采差分抵消掉。

@@ -220,6 +220,31 @@ describe("CpuBudget — 前馈预测 (P1-2)", () => {
     expect(budgetRecovery.canStart(3 as Priority)).toBe(false);
   });
 
+  it("旁路覆盖实时 softLimit 闸：post 段 P3 在 spent≥softLimit 时放行，P2 不豁免，安全层不动", () => {
+    // 线上工况（2026-09-21 telemetry 停摆根因）：post 段系统排在所有 creep 之后，
+    // 轮到它时 spent() 已≈本 tick 终值（实测 17.5~18.1）≥ softLimit(17.5) ——
+    // 实时软上限对它是恒真闸，旁路若只解前馈则逃生口对它要救的系统打不开。
+    const budget = new CpuBudget("healthy");
+    (globalThis as any).Game.time = 82450000;
+    (globalThis as any).Memory = {
+      kernel: { stats: { cpuMax10: 5, cpuAvg10: 5 }, p3StarveBypassUntil: 82450600 },
+    };
+    // spent 落在 (softLimit, hardLimit - cpuReserve/2) 之间：只有旁路能救。
+    const spent = (budget.softLimit + budget.hardLimit) / 2;
+    (globalThis as any).Game.cpu.getUsed = () => spent;
+    expect(budget.canStart(3 as Priority), "旁路内 P3 应越过实时软上限").toBe(true);
+    expect(budget.canStart(2 as Priority), "P2 不豁免 — 有产出的活仍让位").toBe(false);
+
+    // 豁免不吞安全层：spent 触到 hardLimit 仍拒（isExhausted 在最前）。
+    (globalThis as any).Game.cpu.getUsed = () => budget.hardLimit;
+    expect(budget.canStart(3 as Priority), "spent 达硬上限时旁路也不放行").toBe(false);
+
+    // 旁路关闭（未置位）→ 同一 spent 照旧被实时闸拒。
+    (globalThis as any).Game.cpu.getUsed = () => spent;
+    delete (globalThis as any).Memory.kernel.p3StarveBypassUntil;
+    expect(budget.canStart(3 as Priority), "无旁路时实时软上限语义不变").toBe(false);
+  });
+
   it("isExhausted 优先于前馈检查", () => {
     // Game.cpu.getUsed 已超 hardLimit → 所有优先级拒绝
     (globalThis as any).Game.cpu.getUsed = () => 100;

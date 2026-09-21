@@ -136,8 +136,27 @@ export class CpuBudget implements Budget {
     if (this.emergency && priority > 0) return false;
     const max = tierMaxPriority(this.tier);
     if (priority > max) return false;
+    // 自愈旁路（expectations E2 触发时由 kernel 设置）：P3 饥饿期间跳过前馈
+    // 拒绝，让冻结系统复活、窗口 max 自然回落打破自锁；硬上限不受影响。
+    // bucket 门限取 conserve tier 最低值：recovery tier（bucket < 1000）时
+    // 旁路不生效——此时 P2/P3 已被 tierMaxPriority 拒绝，旁路无意义；
+    // conserve tier（bucket ≥ 1000）时旁路生效，P2 不受冻结 stats 前馈限制
+    // （P3 仍被 tierMaxPriority 拒绝：conserve max=2 < 3=P3，属正确的降级）。
+    // ESM（bucket < 100）是独立最终保护层，不依赖此旁路。
+    const p3Escape =
+      (Memory.kernel?.p3StarveBypassUntil ?? 0) > Game.time &&
+      (Game.cpu.bucket ?? 0) >= TIER_BUCKET_MIN.conserve;
     // P0 始终尝试（必须保持廉价）。非 P0 遵守软上限。
-    if (priority > 0 && this.spent() >= this.softLimit) return false;
+    // 旁路对实时软上限同样放行，但**只放行 P3**：post 段系统（遥测采集）排在
+    // 所有 creep 之后，轮到它时 spent() 已≈本 tick 终值，而 softLimit 是"整 tick
+    // 上限"（= limit×0.875）—— 常态 CPU 一旦爬到 softLimit 附近（线上实测 cpu 17.5~18.1
+    // vs softLimit 17.5），这条闸对 post 段 P3 就**恒真**，E2 旁路只解开了前馈那一半、
+    // 解不开实时闸，逃生口对它要救的那个系统正好打不开 ⇒ telemetry-collector 停摆
+    // 数千 tick（采样间隔从 10 tick 劣化到千级，stats/事件环/经济环/Prometheus 全冻结）。
+    // P2 不豁免：它的活有真实产出，让位是调速器的本意；P3 里被救回的是观测与自调优。
+    if (priority > 0 && !(p3Escape && priority >= 3) && this.spent() >= this.softLimit) {
+      return false;
+    }
     // P1-2 前馈预测：历史 CPU 持续高位时收紧非 P0 任务的通过率。
     // cpuAvg10/cpuMax10 是最近 10 个采样点（~100 tick）的均值/峰值，
     // 非 real-time 但能反映本 tick 的基线 CPU 消耗水平。
@@ -152,16 +171,6 @@ export class CpuBudget implements Budget {
     // stats 冻结后前馈又以冻结值持续拒绝（本事故根因）。修正为：
     //   - 峰值判据仅在「上窗真实触顶」(max10 ≥ hardLimit) 时硬拒 P2+；
     //   - 基线压力由 avg 把守：avg ≥ softLimit 拒 P3+（P2 仍放行）。
-    // 自愈旁路（expectations E2 触发时由 kernel 设置）：P3 饥饿期间跳过前馈
-    // 拒绝，让冻结系统复活、窗口 max 自然回落打破自锁；软/硬上限仍生效。
-    // bucket 门限取 conserve tier 最低值：recovery tier（bucket < 1000）时
-    // 旁路不生效——此时 P2/P3 已被 tierMaxPriority 拒绝，旁路无意义；
-    // conserve tier（bucket ≥ 1000）时旁路生效，P2 不受冻结 stats 前馈限制
-    // （P3 仍被 tierMaxPriority 拒绝：conserve max=2 < 3=P3，属正确的降级）。
-    // ESM（bucket < 100）是独立最终保护层，不依赖此旁路。
-    const p3Escape =
-      (Memory.kernel?.p3StarveBypassUntil ?? 0) > Game.time &&
-      (Game.cpu.bucket ?? 0) >= TIER_BUCKET_MIN.conserve;
     if (priority >= 2 && !p3Escape) {
       const stats = Memory.kernel?.stats;
       if (stats && (stats.cpuMax10 ?? 0) > 0 && (stats.cpuAvg10 ?? 0) > 0) {
