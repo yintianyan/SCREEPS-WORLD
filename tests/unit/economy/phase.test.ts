@@ -75,9 +75,12 @@ describe("Phase — evaluateColonyPhase", () => {
   });
 
   it("reports bootstrap when harvesters are fewer than sources", () => {
+    // bootstrapEnterTicks=1：本用例钉的是"欠员判据的轴"（下限 vs source 数），
+    // 驻留闸另有专属用例，别让两者混在一起判。
     const r = evaluateColonyPhase(
       input({ harvesterCount: 1, sourceCount: 2, reserve: 2000 }),
       FRESH,
+      opts({ bootstrapEnterTicks: 1 }),
     );
     expect(r.phase).toBe("bootstrap");
   });
@@ -542,6 +545,7 @@ describe("Phase — 绝对破产兜底（reserve 水位即判据，不走分数�
   });
 
   it("欠员优先于破产：既欠员又见底的房标签是 bootstrap（不被 mask 成 crisis）", () => {
+    // bootstrapEnterTicks=1：本用例钉的是两条判据的**先后次序**，不是驻留闸（专属用例在下面）。
     const r = evaluateColonyPhase(
       input({
         reserve: 500,
@@ -551,6 +555,7 @@ describe("Phase — 绝对破产兜底（reserve 水位即判据，不走分数�
         sourceCount: 2,
       }),
       START,
+      opts({ bootstrapEnterTicks: 1 }),
     );
     expect(r.phase).toBe("bootstrap");
   });
@@ -641,5 +646,81 @@ describe("Phase — drainScore 流量口径（#11-A）", () => {
     expect(CAP).toBeLessThan(DEFAULT_PHASE_OPTIONS.drainEnterScore);
     // 但持续巨亏仍能进带：3 次即越过 150。
     expect(runDeltas([-3000, -3000, -3000]).phase).toBe("crisis");
+  });
+});
+
+// ─── bootstrap 驻留闸（#22 R-04 的闪断路径）───────────────────────
+// 判据是"瞬时人头数"，而 bootstrap 属经济生存带 —— posture 的危机撤资在它出现的
+// 第 1 tick 就把 war 降回 fortify。实测两类段长：闪断 1t / 12t，真替换窗 45t / 98t，
+// 所以闸取 20（bootstrapEnterTicks）：吃掉闪断，真欠员只延后 20 tick。
+describe("Phase — bootstrap 驻留闸", () => {
+  const DWELL = DEFAULT_PHASE_OPTIONS.bootstrapEnterTicks;
+
+  /** 连续 n 次评估，都保持欠员（harvesterCount 1 < 下限 2）。 */
+  function runUnderstaffed(n: number, from: PhaseState = FRESH) {
+    let state = from;
+    for (let i = 0; i < n; i++) {
+      state = evaluateColonyPhase(input({ harvesterCount: 1, sourceCount: 2 }), state);
+    }
+    return state;
+  }
+
+  it("闪断一 tick 不标 bootstrap，但计数已经在走", () => {
+    const r = runUnderstaffed(1);
+    expect(r.phase).toBe("growth"); // 旧行为：这里就是 bootstrap ⇒ 战争当场被撤资
+    expect(r.bootstrapTicks).toBe(1);
+  });
+
+  it("连续欠员满 20 tick 才标 bootstrap（真实的替换/开局窗口原样保留）", () => {
+    expect(runUnderstaffed(DWELL - 1).phase).toBe("growth");
+    const sustained = runUnderstaffed(DWELL);
+    expect(sustained.phase).toBe("bootstrap");
+    expect(sustained.bootstrapTicks).toBe(DWELL);
+    // 实测的真实窗口（45t / 98t）远在闸之外 —— 灵敏度没被换掉
+    expect(runUnderstaffed(45).phase).toBe("bootstrap");
+  });
+
+  it("一断即归零：两段 12 tick 的欠员不得跨间隙累加成 24", () => {
+    let state = runUnderstaffed(12);
+    expect(state.bootstrapTicks).toBe(12);
+    // 替补落地：一 tick 够员，计数必须清零（否则两次闪断就会攒开闸）
+    state = evaluateColonyPhase(input({ harvesterCount: 2, sourceCount: 2 }), state);
+    expect(state.bootstrapTicks).toBe(0);
+    state = runUnderstaffed(12, state);
+    expect(state.phase).toBe("growth");
+    expect(state.bootstrapTicks).toBe(12);
+  });
+
+  it("forceCrisis 的早退路径也必须带走 bootstrapTicks（漏一行 = 每走它就清一次零）", () => {
+    // 起点：欠员已踩 19 tick，且 srcRatio 通道正要触发（srcStallTicks 49 → 50）
+    let state: PhaseState = {
+      phase: "growth",
+      prevReserve: 2000,
+      drainScore: 0,
+      liquidityScore: 0,
+      bootstrapTicks: DWELL - 1,
+      srcStallTicks: 49,
+      storageDrainAccum: 1500,
+    };
+    const forced = evaluateColonyPhase(
+      input({
+        harvesterCount: 1,
+        sourceCount: 2,
+        srcRatio: 1,
+        storageRatio: 0.5,
+        storageDrainRate: -5,
+      }),
+      state,
+    );
+    expect(forced.phase).toBe("crisis"); // forceCrisis 绕过迟滞，优先于 bootstrap
+    expect(forced.bootstrapTicks).toBe(DWELL); // 计数必须被带走，不能被这条 return 丢掉
+
+    // 塌方信号消退后：欠员已持续够久 → 标签回到 bootstrap
+    state = forced;
+    const after = evaluateColonyPhase(
+      input({ harvesterCount: 1, sourceCount: 2, srcRatio: 0, storageRatio: 0.5 }),
+      state,
+    );
+    expect(after.bootstrapTicks).toBe(DWELL + 1);
   });
 });

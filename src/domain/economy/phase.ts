@@ -100,6 +100,13 @@ export interface PhaseState {
   /** P0-1：srcRatio 满载 + storage 流失双条件持续的评估次数；任一条件不满足立即归零，达 srcStallEnterTicks 后强制 crisis 绕过迟滞。 */
   srcStallTicks?: number;
   /**
+   * 欠员（`harvesterCount < 编制下限`）连续成立的评估次数 —— {@link PhaseOptions.bootstrapEnterTicks}
+   * 的驻留计数，一断即归零。同 liquidityTrapTicks：**不在 room-state 读写两侧都持久化，
+   * 就等于静默关掉这道闸**（每 tick 被当 0 重数，闸永远开不了）。
+   * 旧 Memory 无此字段按 0 处理（缺席即"还没开始踩"，无需 schema 迁移）。
+   */
+  bootstrapTicks?: number;
+  /**
    * P0-1：srcRatio>0.9 期间 storage 累积净流失量（正值=失血）。流失累加、
    * 回填抵消（max(0) 不为负）、srcRatio≤0.9 归零。替代旧单 tick 判定 —
    * 流失是稀疏大脉冲（每~235tick 一次 -800），单 tick 差分大部分=0，
@@ -251,6 +258,13 @@ export interface PhaseOptions {
    * 那样会让 source 多而编制自然的房永久停在生存带（反常激励）。
    */
   harvesterMinStaffing: number;
+  /**
+   * 欠员需连续成立多少个评估周期才把房间标成 bootstrap（一断即归零）。
+   * 取值 20 来自实测：真实的替换/开局窗口是 45t 与 98t，而"一只 harvester 刚死、
+   * 替补还没落地"的闪断是 1t 与 12t —— 阈值必须落在两者之间。默认撤资反应是即时的
+   * （bootstrap 属生存带），所以这道闸保护的是"战争不被一 tick 的排布掐掉"。
+   */
+  bootstrapEnterTicks: number;
 }
 
 export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
@@ -298,6 +312,8 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   forceCrisisStorageHigh: 0.8,
   // 欠员判据的最低编制：与 spawn 侧的 harvester 下限同源（两处脱钩就会重新制造永久 bootstrap）。
   harvesterMinStaffing: CONFIG.roles.harvester.minCount,
+  // 欠员驻留闸：实测闪断 1t/12t vs 真替换窗 45t/98t，取介于两者之间的 20。
+  bootstrapEnterTicks: 20,
 };
 
 /**
@@ -403,6 +419,14 @@ export function evaluateColonyPhase(
   // P0-1 通道，两者不重叠。
   const staffingFloor = Math.max(1, Math.min(options.harvesterMinStaffing, input.sourceCount));
   const understaffed = input.harvesterCount < staffingFloor;
+  // 驻留闸（bootstrapEnterTicks）：欠员需**连续**成立够久才把房间标成 bootstrap，一断即归零。
+  // 为什么必须有：bootstrap 属经济生存带，posture 的「危机撤资」在它出现的第 1 tick 就把
+  // war 降回 fortify —— 而这条判据是**瞬时人头数**，一只 harvester 阵亡、替补还没落地的
+  // 那一 tick 就够闪断一次。实测（warRoom 2 source / 下限 2）：闪断段长 1t 与 12t，
+  // 而真实的替换与开局窗口是 45t、98t ⇒ 阈值取 20：吃掉前者、原样保留后者
+  // （只延后 20 tick ≈ 一个孵化+通勤周期）。取 L1 那个 50 反而会把 45t 的真欠员整段抹掉。
+  const bootstrapTicks = understaffed ? (prev.bootstrapTicks ?? 0) + 1 : 0;
+  const understaffedSustained = bootstrapTicks >= options.bootstrapEnterTicks;
   const inCrisisBand = prev.phase === "crisis" || prev.phase === "recovery";
   // 危机带驻留计数（TD-003 根因 B）：带内每次评估 +1，用于最短驻留判定。
   const bandTicksSoFar = inCrisisBand ? (prev.bandTicks ?? 0) : 0;
@@ -423,6 +447,7 @@ export function evaluateColonyPhase(
       reserveDelta,
       srcStallTicks: newStallTicks,
       storageDrainAccum,
+      bootstrapTicks,
     };
   }
 
@@ -440,7 +465,7 @@ export function evaluateColonyPhase(
     // 支出立刻恢复、赤字重新累积的极限环；同时兜住盈余折算（recoveryBias）过大
     // 导致分数从迟滞带直接跳 0、crisis 直切 normal 的路径。
     phase = "recovery";
-  } else if (understaffed) {
+  } else if (understaffedSustained) {
     phase = "bootstrap";
   } else if (bankrupt) {
     phase = "crisis";
@@ -463,6 +488,7 @@ export function evaluateColonyPhase(
     reserveDelta,
     srcStallTicks: newStallTicks,
     storageDrainAccum,
+    bootstrapTicks,
   };
 }
 

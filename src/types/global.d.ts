@@ -225,6 +225,8 @@ declare global {
        * 任一条件不满足立即归零，达 srcStallEnterTicks 后强制 crisis。
        */
       srcStallTicks?: number;
+      /** 欠员连续成立的评估次数（bootstrapEnterTicks 的驻留计数）；一断归零。缺席容忍，无 schema 变更。 */
+      bootstrapTicks?: number;
       /**
        * P0-1：上一 tick storage 能量，用于跨 tick 算 storageDrainRate；
        * 无 storage/首次运行时 undefined（drainRate=0，不触发 srcRatio 通道）。

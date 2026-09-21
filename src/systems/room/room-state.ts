@@ -109,6 +109,7 @@ export const roomStateSystem: System = {
         liquidityTrapTicks: roomMem.phase?.liquidityTrapTicks ?? 0,
         bandTicks: roomMem.phase?.bandTicks ?? 0,
         srcStallTicks: roomMem.phase?.srcStallTicks ?? 0,
+        bootstrapTicks: roomMem.phase?.bootstrapTicks ?? 0,
         storageDrainAccum: roomMem.phase?.storageDrainAccum,
       };
       const phaseResult = evaluateColonyPhase(
@@ -143,6 +144,8 @@ export const roomStateSystem: System = {
         liquidityTrapTicks: phaseResult.liquidityTrapTicks,
         bandTicks: phaseResult.bandTicks,
         srcStallTicks: phaseResult.srcStallTicks,
+        // 欠员驻留计数必须在写侧也落盘：漏一行 = 静默关掉 bootstrapEnterTicks 这道闸。
+        bootstrapTicks: phaseResult.bootstrapTicks,
         // P0-1：持久化当前 storage 能量供下一 tick 计算 drainRate。
         // 无 storage 时记 0（下一 tick drainRate=0，srcRatio 通道永不触发）。
         storageEnergyPrev: currentStorageEnergy,

@@ -60,11 +60,23 @@ const GROWING: PhaseState = {
   liquidityScore: 0,
 };
 
+/**
+ * 本文件钉的是「欠员判据的轴」（下限 vs source 数）与 srcRatio 的口径，两者都与
+ * bootstrap 驻留闸无关 —— 而闸会让单次评估拿不到 bootstrap 标签。所以这里统一用
+ * `bootstrapEnterTicks: 1` 把闸拆开，驻留闸本身在 phase.test.ts 有专属用例。
+ */
+function evalOnce(input: PhaseInput, prev: PhaseState) {
+  return evaluateColonyPhase(input, prev, {
+    ...DEFAULT_PHASE_OPTIONS,
+    bootstrapEnterTicks: 1,
+  });
+}
+
 describe("欠员判据按编制上限截断（#10-a）", () => {
   it("顶格编制的 5-source 房拿得到 growth —— 旧判据在这里恒判 bootstrap", () => {
     // 这条就是当年那条「缺陷修好时会红」的反向引线，方向已翻正：
     // 若有人把判据改回「人头数 < source 数」，它立刻红。
-    const r = evaluateColonyPhase(healthy(), GROWING);
+    const r = evalOnce(healthy(), GROWING);
     expect(r.reserveDelta).toBeGreaterThan(0); // 经济在盈余，不是在失血
     expect(r.drainScore).toBe(0);
     expect(r.liquidityScore).toBe(0);
@@ -74,26 +86,20 @@ describe("欠员判据按编制上限截断（#10-a）", () => {
   });
 
   it("编制没到顶时仍判欠员 —— 截断不等于放弃这条生存判据", () => {
-    const r = evaluateColonyPhase(healthy({ harvesterCount: 1 }), GROWING);
+    const r = evalOnce(healthy({ harvesterCount: 1 }), GROWING);
     expect(r.phase).toBe("bootstrap");
   });
 
   it("欠员与 source 数脱钩：只看最低编制（反常激励的正解）", () => {
     // 2 source 的房（e2e 夹具的常态）：1 只 harvester 仍算欠员。
-    expect(evaluateColonyPhase(healthy({ sourceCount: 2, harvesterCount: 1 }), GROWING).phase).toBe(
+    expect(evalOnce(healthy({ sourceCount: 2, harvesterCount: 1 }), GROWING).phase).toBe(
       "bootstrap",
     );
-    expect(evaluateColonyPhase(healthy({ sourceCount: 2, harvesterCount: 2 }), GROWING).phase).toBe(
-      "growth",
-    );
+    expect(evalOnce(healthy({ sourceCount: 2, harvesterCount: 2 }), GROWING).phase).toBe("growth");
     // 单 source 房：下限被 source 数截断，1 只就算站住人。
-    expect(evaluateColonyPhase(healthy({ sourceCount: 1, harvesterCount: 1 }), GROWING).phase).toBe(
-      "growth",
-    );
+    expect(evalOnce(healthy({ sourceCount: 1, harvesterCount: 1 }), GROWING).phase).toBe("growth");
     // 9 source 的房：要的还是最低编制（CAP 只用来证明"顶格"这件事已无关）。
-    expect(evaluateColonyPhase(healthy({ sourceCount: 9, harvesterCount: 2 }), GROWING).phase).toBe(
-      "growth",
-    );
+    expect(evalOnce(healthy({ sourceCount: 9, harvesterCount: 2 }), GROWING).phase).toBe("growth");
   });
 
   it("下限与孵化侧同源（两处脱钩就会重新制造永久 bootstrap）", () => {
@@ -139,7 +145,7 @@ describe("srcRatio 改平均口径（#10-b：欠员不再被伪装成采集塌�
   it("forceCrisis 仍需要双条件：塌方但不流失 ⇒ 不进危机带", () => {
     // 平均口径放宽了 srcRatio，但 P0-1 通道本就是 srcRatio + storage 流失双条件；
     // 这条钉住"塌方信号单独不再足够"，防止改口径时被顺手放宽成单条件。
-    const r = evaluateColonyPhase(healthy({ srcRatio: 1, storageDrainRate: 0 }), GROWING);
+    const r = evalOnce(healthy({ srcRatio: 1, storageDrainRate: 0 }), GROWING);
     expect(r.srcStallTicks).toBe(0);
     expect(r.phase).toBe("growth");
   });
