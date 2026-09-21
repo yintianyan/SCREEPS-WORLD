@@ -5,7 +5,9 @@ import terser from "@rollup/plugin-terser";
 
 export default {
   input: "src/main.ts",
-  output: { file: "dist/main.js", format: "cjs", sourcemap: true },
+  // 不产出 sourcemap：官服 5MB 代码上限下 map 独占 3.6MB，而游戏内错误堆栈靠
+  // terser 的 keep_fnames/keep_classnames 已可读 —— 传上去只是占额度。
+  output: { file: "dist/main.js", format: "cjs", sourcemap: false },
   plugins: [
     resolve(),
     commonjs(),

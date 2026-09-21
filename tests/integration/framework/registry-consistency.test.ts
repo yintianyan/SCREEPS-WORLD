@@ -47,11 +47,12 @@ describe("Phase 4: 系统注册一致性", () => {
       }
     });
 
-    it("telemetry-collector 注册为 post 阶段", () => {
+    it("telemetry-collector 注册为观测层豁免（不再是 post 系统）", () => {
       const systems = registry.getSystems();
       const telemetry = systems.find(s => s.name === "telemetry-collector");
       expect(telemetry).toBeDefined();
-      expect(telemetry!.phase).toBe("post");
+      expect(telemetry!.budgetExempt).toBe(true);
+      expect(telemetry!.phase).toBeUndefined();
     });
 
     it("traffic-manager 注册为 post 阶段", () => {
@@ -70,15 +71,18 @@ describe("Phase 4: 系统注册一致性", () => {
   });
 
   describe("telemetry 执行路径不重复", () => {
-    it("telemetry-collector 在 post 系统中（不在 main 中）", () => {
+    it("telemetry-collector 只在观测层队列里（不在 main、不在 post）", () => {
       const systems = registry.getSystems();
-      const mainSystems = systems.filter(s => (s.phase ?? "main") === "main");
-      const postSystems = systems.filter(s => s.phase === "post");
+      const exempt = systems.filter(s => s.budgetExempt === true);
+      const mainSystems = systems.filter(
+        s => s.budgetExempt !== true && (s.phase ?? "main") === "main",
+      );
+      const postSystems = systems.filter(s => s.budgetExempt !== true && s.phase === "post");
 
-      // telemetry-collector 不在 main 中
+      // 豁免集当前只应有观测系统 —— 多一个是多一个不受闸的执行体，须显式承认。
+      expect(exempt.map(s => s.name)).toEqual(["telemetry-collector"]);
       expect(mainSystems.find(s => s.name === "telemetry-collector")).toBeUndefined();
-      // telemetry-collector 在 post 中
-      expect(postSystems.find(s => s.name === "telemetry-collector")).toBeDefined();
+      expect(postSystems.find(s => s.name === "telemetry-collector")).toBeUndefined();
     });
 
     it("kernel.ts 的 telemetry-collect 和 telemetry-flush 是独立于 telemetry-collector 的职责", () => {

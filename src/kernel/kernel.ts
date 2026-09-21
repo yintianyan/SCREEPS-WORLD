@@ -125,6 +125,8 @@ export class Kernel {
   private readonly roleMap: Map<string, CreepRole>;
   private readonly sortedSystems: readonly System[];
   private readonly postSystems: readonly System[];
+  /** 观测层系统（`System.budgetExempt`）—— 不经预算闸，见 runObservabilitySystems。 */
+  private readonly observabilitySystems: readonly System[];
   /** 【F1/G-A】cadence 治理表：系统名 → 生效间隔（覆盖层优先）。 */
   private readonly cadenceTable: CadenceTable;
 
@@ -135,8 +137,12 @@ export class Kernel {
     // 按执行阶段拆分：main 在角色之前，post 在所有角色之后
     // （post 系统消费角色执行期产出的 per-tick 数据，如移动意图账本）。
     const all = registry.getSystems();
-    this.sortedSystems = all.filter(s => (s.phase ?? "main") === "main");
-    this.postSystems = all.filter(s => s.phase === "post");
+    // 观测层先摘出去：它不进 main/post 两条队列（也就不进 E2 的 P3 饥饿扫描），
+    // 由 runObservabilitySystems 在 tick 尾无闸调用。
+    this.observabilitySystems = all.filter(s => s.budgetExempt === true);
+    const scheduled = all.filter(s => s.budgetExempt !== true);
+    this.sortedSystems = scheduled.filter(s => (s.phase ?? "main") === "main");
+    this.postSystems = scheduled.filter(s => s.phase === "post");
   }
 
   run(): void {
@@ -183,6 +189,10 @@ export class Kernel {
     // 后置系统 — 消费角色执行期产出的 per-tick 数据（如 traffic-manager
     // 集中解算移动意图并统一签发 move）。
     this.runPostSystems(ctx);
+
+    // 观测层 — 在所有角色/post 系统之后（采样要读 runCreeps 填出来的 roleCpu 与
+    // cpuByHome 归因），但**不经过 canStart**：让位闸对观测是自败回路。
+    this.runObservabilitySystems(ctx);
 
     emitSummary(budget);
 
@@ -769,6 +779,35 @@ export class Kernel {
       const gRun = globalCache();
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
       if (ctx.budget.isExhausted()) break;
+    }
+  }
+
+  /** 观测层系统（`System.budgetExempt`）— 在 tick 尾、所有角色之后运行，
+   * cadence 与 main/post 一致（同一 shouldRunSystem 相位门），但**不调 canStart**，
+   * 也不因 tick 耗尽而 break。
+   *
+   * 为什么不挂在预算闸上（线上实测两条证据）：
+   * - 观测单价 <0.5 CPU / 10 tick（它连 cpuBySystem 的 top10 都没进），
+   *   摊到每 tick <0.05 CPU —— 没有任何一档预算值得为这点钱让观测停摆；
+   * - 而挂上去就是自败回路：闸把观测关掉 → stats 冻结 → 闸拿冻结的 stats 继续拒；
+   *   自愈旁路的开启条件恰是「观测饥饿」，观测一恢复采样旁路就撤销 ⇒
+   *   实测占空比退化成约 1 样本 / grace(1530 tick)，采样值 18.5 > softLimit 17.5
+   *   正是被实时闸拒的那条带（2026-09-21 部署旁路豁免后的读数）。
+   *
+   * critical=true 同时意味着它不进 safeRun 失败冷却链 —— 观测被静默禁用正是本次
+   * 事故最难查的部分。代价：已耗尽的 tick 上也要再花它这一份（偶发把 tick 推过
+   * Game.cpu.limit，花的是 bucket）。 */
+  private runObservabilitySystems(ctx: Context): void {
+    for (const system of this.observabilitySystems) {
+      if (!this.shouldRunSystem(system, ctx)) continue;
+      const cpuCost = measuredRun(`system/${system.name}`, () =>
+        safeRun(`system/${system.name}`, () => system.run(ctx), true),
+      );
+      const gEma = globalCache();
+      const emaMap = gEma.systemBudgetEma ?? (gEma.systemBudgetEma = new Map<string, number>());
+      const prevEma = emaMap.get(system.name);
+      emaMap.set(system.name, prevEma === undefined ? cpuCost : prevEma * 0.8 + cpuCost * 0.2);
+      (gEma.systemLastRun ??= {})[system.name] = ctx.tick;
     }
   }
 

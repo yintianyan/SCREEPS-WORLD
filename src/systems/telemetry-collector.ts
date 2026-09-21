@@ -28,9 +28,11 @@ export const telemetryCollectorSystem: System = {
   name: "telemetry-collector",
   priority: 3 as Priority,
   interval: CONFIG.telemetry.cpuSampleInterval,
-  // post 阶段：在 runCreeps 之后运行，确保 cpuByHome 等 per-tick 累积数据
-  // 已被填充后再采样（main 阶段运行时 cpuByHome 是空 Map，采样无意义）。
-  phase: "post",
+  // 观测层豁免：由 kernel 在 tick 尾直接调用，不经过 canStart 预算闸
+  // （见 System.budgetExempt 与 kernel.runObservabilitySystems 的实测理由）。
+  // 位置仍在所有角色之后 —— 采样要读 runCreeps 填出来的 roleCpu 与 cpuByHome
+  // 归因（放进 main 段它们还是空 Map，采到的 top-role/每房 CPU 全是零，等于瞎采）。
+  budgetExempt: true,
   run(ctx: TickContext): void {
     // Recovery tier 低频 drain：仅 flush 事件缓冲区，跳过 CPU/经济采样。
     // 确保 recovery 期间关键事件不因 eventBuffer 截断而丢失。

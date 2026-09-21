@@ -31,6 +31,14 @@ export interface System {
   /** 执行阶段：main（缺省）在角色之前，post 在所有角色之后 —
    * 供「消费角色执行期产出的 per-tick 数据」的系统使用（如 traffic-manager 解算移动意图）。 */
   readonly phase?: "main" | "post";
+  /** 【观测层豁免】true = 该系统由 kernel 在 tick 尾直接调用，**不经过 canStart 预算闸**，
+   * 也不进 main/post 队列、不进 E2 的 P3 饥饿扫描（不受闸就不可能被闸饿死）。
+   * 只给"观测"用：把观测挂到让位闸上是一个自败控制回路 —— 闸关掉观测 → stats 冻结 →
+   * 闸拿冻结的 stats 继续拒绝；而自愈旁路的开启条件恰是"观测饥饿"，观测一恢复采样
+   * 旁路就撤销 ⇒ 占空比退化成约 1 样本 / grace。
+   * 代价是它会在已耗尽的 tick 上再花自己那一份（观测单价 ≪ 1 CPU / interval），
+   * 因此必须是低频、无副作用、只写的活。 */
+  readonly budgetExempt?: boolean;
   /** 【F1/G-B】单次调用 CPU 预算上限（EMA 平滑值，单位 CPU）。定义时生效：
    * 连续超支的系统被跳过并记 skipReason=budget-cap——局部截断不连坐整 tick。
    * 缺省 undefined = 不启用（零行为变更）。 */
