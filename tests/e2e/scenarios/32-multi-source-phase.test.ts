@@ -27,10 +27,12 @@ import { isJsError } from "../../support/errors";
 const HOME = "W0N1";
 /** 额外 source 数（默认补到 5 颗）；设 0 跑 2-source 对照组。 */
 const EXTRA_SOURCES = Number(process.env.MSRC_EXTRA ?? 3);
-/** 暖机：让编制爬到 harvester 上限（否则测的是一间还没人的房）。 */
-const WARMUP = 1500;
+/** 暖机目标/上限 tick 数：跑到编制爬到 harvester 上限为止（见用例内说明）。 */
+const WARMUP_MAX = 6000;
 const BATCH = 250;
 const SAMPLED = 2500;
+/** harvester 编制上限 —— 本场景的判据全部以它为轴。 */
+const CAP = CONFIG.roles.harvester.maxCount;
 
 /** 生存带相位 —— bootstrap/crisis/recovery 都会掐掉战争与扩张授权。 */
 const SURVIVAL = new Set(["bootstrap", "crisis", "recovery"]);
@@ -64,7 +66,7 @@ describe("E2E-032 多 source 房相位资格 — #10 回归", () => {
     await runner.setup({
       roomName: HOME,
       rooms: [room],
-      maxTicks: WARMUP + SAMPLED + BATCH,
+      maxTicks: WARMUP_MAX + SAMPLED + BATCH,
       controllerLevel: 5,
     });
   }, 180000);
@@ -74,7 +76,19 @@ describe("E2E-032 多 source 房相位资格 — #10 回归", () => {
   });
 
   it(`5-source 房在 ${SAMPLED} tick 采样窗里拿得到正常相位（不再被"欠员+最满 source"钉死）`, async () => {
-    await runner.runTicks(WARMUP);
+    // 暖机跑到「编制确实爬到 harvester 上限」为止（上限 WARMUP_MAX 兜底）。
+    // 为什么不能赌固定 tick 数：这间房有贫富两态（实测同一份构建两次跑法，
+    // 一次 reserve 8069、一次 348 且 harvesters 峰值只有 3），而 #10 的症状只在
+    // "顶格编制仍判欠员"时存在 —— 暖机不够就压根没走到那条路径，绿了也不代表验过。
+    let warmed = 0;
+    let reachedCap = false;
+    while (warmed < WARMUP_MAX && !reachedCap) {
+      const snaps = await runner.runTicks(BATCH);
+      warmed += BATCH;
+      const rm = snaps.at(-1)?.rawMemory as Record<string, any> | undefined;
+      reachedCap = Number(rm?.rooms?.[HOME]?.phase?.harvesterCount ?? 0) >= CAP;
+    }
+    console.log(`[msrc-evidence] warmup=${warmed} reachedCap=${reachedCap}`);
 
     let tick = 0;
     while (tick < SAMPLED) {
@@ -98,7 +112,7 @@ describe("E2E-032 多 source 房相位资格 — #10 回归", () => {
     }
 
     const n = series.length;
-    const cap = CONFIG.roles.harvester.maxCount;
+
     const maxHarvesters = Math.max(...series.map(s => s.harvesters));
     const sourcesSeen = Math.max(...series.map(s => s.sources));
     const survival = series.filter(s => SURVIVAL.has(s.phase));
@@ -107,7 +121,7 @@ describe("E2E-032 多 source 房相位资格 — #10 回归", () => {
      * 这是 #10-a 那条判据唯一能单独产生的症状 —— 房穷不穷（crisis/recovery）归 #11，
      * 不该混进来，否则这条断言会被真实经济吸走、变成测不出任何东西的比例游戏。 */
     const cappedBootstrap = series.filter(
-      s => s.harvesters >= cap && s.phase === "bootstrap",
+      s => s.harvesters >= CAP && s.phase === "bootstrap",
     ).length;
     // P0-1 通道的驻留计数：≥50 意味着"采集塌方"被当真事发（旧行为里它常驻 8730 tick）。
     const stallHits = series.filter(s => s.srcStallTicks >= 50).length;
@@ -116,7 +130,7 @@ describe("E2E-032 多 source 房相位资格 — #10 回归", () => {
 
     console.log(
       `[msrc-evidence] extra=${EXTRA_SOURCES} samples=${n} sources=${sourcesSeen} ` +
-        `maxHarvesters=${maxHarvesters}/${cap} cappedBootstrap=${cappedBootstrap} ` +
+        `maxHarvesters=${maxHarvesters}/${CAP} cappedBootstrap=${cappedBootstrap} ` +
         `stall≥50=${stallHits} survivalShare=${(survivalShare * 100).toFixed(1)}% ` +
         `reserve=${series.at(-1)?.reserve} hist=${JSON.stringify(phaseHist)}`,
     );
@@ -134,17 +148,17 @@ describe("E2E-032 多 source 房相位资格 — #10 回归", () => {
     ).toBe(2 + EXTRA_SOURCES);
     expect(
       maxHarvesters,
-      `harvesters 峰值 ${maxHarvesters} < 编制上限 ${cap}：暖机 ${WARMUP} tick 没让编制爬到顶，` +
+      `harvesters 峰值 ${maxHarvesters} < 编制上限 ${CAP}：暖机跑满 ${WARMUP_MAX} tick 仍没让编制爬到顶，` +
         `"顶格仍算欠员"这条路径未被走到（结论不可用）`,
-    ).toBeGreaterThanOrEqual(cap);
+    ).toBeGreaterThanOrEqual(CAP);
 
     // ── #10-a：欠员判据不得因 source 数 > 编制上限而永久成立（旧行为 8730/9000 tick）
     expect(
       cappedBootstrap,
-      `编制顶到 ${maxHarvesters}/${cap} 却仍被判 bootstrap 共 ${cappedBootstrap} tick ` +
-        `—— 判据又拿人头数跟 source 数比了（source=${sourcesSeen} > cap=${cap} 时该判据永久成立）。\n` +
+      `编制顶到 ${maxHarvesters}/${CAP} 却仍被判 bootstrap 共 ${cappedBootstrap} tick ` +
+        `—— 判据又拿人头数跟 source 数比了（source=${sourcesSeen} > cap=${CAP} 时该判据永久成立）。\n` +
         `样本=${series
-          .filter(s => s.harvesters >= cap && s.phase === "bootstrap")
+          .filter(s => s.harvesters >= CAP && s.phase === "bootstrap")
           .slice(0, 5)
           .map(s => `t${s.tick}`)
           .join(",")}`,

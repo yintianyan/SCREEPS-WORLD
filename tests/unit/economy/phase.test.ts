@@ -88,11 +88,12 @@ describe("Phase — evaluateColonyPhase", () => {
   });
 
   it("enters crisis after sustained reserve drain", () => {
-    // scoreStep 15, enter 150 → 需 10 次持续赤字。
-    const after9 = runDrain(FRESH, 2000, -100, 10); // 第1次 delta=0，之后 9 次赤字 = 135
+    // 流量口径：45 E/tick 的净流失 = 15 分（drainEnergyPerPoint=3），enter 150 → 需 10 次。
+    // 取 45 是为了让"一次典型赤字 tick 值 15 分"与旧次数计同量级，迟滞带的算绪不变。
+    const after9 = runDrain(FRESH, 2000, -45, 10); // 第1次 delta=0，之后 9 次赤字 = 135
     expect(after9.drainScore).toBe(135);
     expect(after9.phase).not.toBe("crisis");
-    const after10 = runDrain(FRESH, 2000, -100, 11); // 10 次赤字 = 150
+    const after10 = runDrain(FRESH, 2000, -45, 11); // 10 次赤字 = 150
     expect(after10.drainScore).toBe(150);
     expect(after10.phase).toBe("crisis");
   });
@@ -107,34 +108,34 @@ describe("Phase — evaluateColonyPhase", () => {
 
   it("exits crisis through recovery with hysteresis", () => {
     // 先进入 crisis。
-    const inCrisis = runDrain(FRESH, 2000, -100, 11);
+    const inCrisis = runDrain(FRESH, 2000, -45, 11);
     expect(inCrisis.phase).toBe("crisis");
-    // 非对称步长（recoveryStep=40 > scoreStep=15），恢复比进入更快。
+    // 非对称折算：45 E 盈余 = -40 分（×recoveryBias 2.67），恢复比进入更快。
     // drainScore 递减：150→110→70→30(crisis 迟滞)→0(exits)。
     // NO_DWELL：本用例只验证分数迟滞；驻留机制有专属用例。
-    const recover3 = runDrain(inCrisis, 1500, 100, 3, NO_DWELL); // →30, 仍在 crisis 迟滞带
+    const recover3 = runDrain(inCrisis, 1595, 45, 3, NO_DWELL); // →30, 仍在 crisis 迟滞带
     expect(recover3.drainScore).toBe(30);
     expect(recover3.phase).toBe("crisis");
-    const recover4 = runDrain(inCrisis, 1500, 100, 4, NO_DWELL); // →0, 退出
+    const recover4 = runDrain(inCrisis, 1595, 45, 4, NO_DWELL); // →0, 退出
     expect(recover4.drainScore).toBe(0);
     expect(recover4.phase).toBe("growth");
   });
 
   it("breaks oscillation with asymmetric recovery step (P0-2)", () => {
     // 交替赤字/盈余：旧对称步长下净变化=0，永远卡在 crisis。
-    // 非对称步长（recoveryStep=40 > scoreStep=15）每轮净 -25，最终退出。
-    let state = runDrain(FRESH, 2000, -100, 11); // 进入 crisis, drainScore=150
+    // 同一对赤字+盈余每轮净 -25 分（+15 / -40），最终退出。
+    let state = runDrain(FRESH, 2000, -45, 11); // 进入 crisis, drainScore=150
     expect(state.phase).toBe("crisis");
 
     // 交替 8 轮（1赤字+1盈余）— NO_DWELL 隔离分数机制。
     for (let i = 0; i < 8; i++) {
       state = evaluateColonyPhase(
-        input({ reserve: (state.prevReserve ?? 1500) - 100 }),
+        input({ reserve: (state.prevReserve ?? 1500) - 45 }),
         state,
         NO_DWELL,
       );
       state = evaluateColonyPhase(
-        input({ reserve: (state.prevReserve ?? 1400) + 100 }),
+        input({ reserve: (state.prevReserve ?? 1400) + 45 }),
         state,
         NO_DWELL,
       );
@@ -145,7 +146,7 @@ describe("Phase — evaluateColonyPhase", () => {
   });
 
   it("clamps drainScore to [0, enterScore]", () => {
-    const drained = runDrain(FRESH, 5000, -100, 20);
+    const drained = runDrain(FRESH, 5000, -45, 20);
     expect(drained.drainScore).toBe(DEFAULT_PHASE_OPTIONS.drainEnterScore);
   });
 
@@ -166,25 +167,25 @@ describe("Phase — evaluateColonyPhase", () => {
 
   it("falling reserve with strained spendableRatio still accumulates drainScore", () => {
     // 真实失血：储备下降且 spawn 口袋吃紧 — 豁免不得掩盖生产崩溃。
-    const drained = runDrain(FRESH, 2000, -100, 11); // input 默认 spendableRatio 0.3
+    const drained = runDrain(FRESH, 2000, -45, 11); // input 默认 spendableRatio 0.3
     expect(drained.drainScore).toBe(150);
     expect(drained.phase).toBe("crisis");
   });
 
   // ── TD-003 极限环治理：危机带最短驻留 ──
-  // 根因 B：recoveryStep(40) 快速清分后秒退回 normal，支出立刻恢复、赤字重新累积。
+  // 根因 B：盈余折算（45 E ⇒ -40 分）快速清分后秒退回 normal，支出立刻恢复、赤字重新累积。
 
   it("crisis band enforces minimum dwell before returning to normal", () => {
     const dwellOpts = opts({ minBandTicks: 8 });
-    let state = runDrain(FRESH, 2000, -100, 11, dwellOpts); // 进入 crisis，bandTicks=1
+    let state = runDrain(FRESH, 2000, -45, 11, dwellOpts); // 进入 crisis，bandTicks=1
     expect(state.phase).toBe("crisis");
 
     // 持续盈余：分数 150→110→70→30→0，第 4 次评估起分数已清，
     // 但驻留未满 → 停在 recovery 攒缓冲；驻留满后才回 growth。
     const phases: string[] = [];
-    let reserve = 1500;
+    let reserve = 1550;
     for (let i = 0; i < 8; i++) {
-      reserve += 100;
+      reserve += 45;
       state = evaluateColonyPhase(input({ reserve }), state, dwellOpts);
       phases.push(state.phase);
     }
@@ -201,23 +202,23 @@ describe("Phase — evaluateColonyPhase", () => {
   });
 
   it("crisis exit always passes through recovery band (no 30→0 direct-to-normal skip)", () => {
-    // 默认选项（minBandTicks=100）下，即使 recoveryStep 把分数从迟滞带直接打到 0，
+    // 默认选项（minBandTicks=100）下，即使盈余折算把分数从迟滞带直接打到 0，
     // 驻留未满仍停在 recovery — crisis 不再直切 normal。
-    const inCrisis = runDrain(FRESH, 2000, -100, 11);
-    const after4 = runDrain(inCrisis, 1500, 100, 4); // 分数 →0
+    const inCrisis = runDrain(FRESH, 2000, -45, 11);
+    const after4 = runDrain(inCrisis, 1595, 45, 4); // 分数 →0
     expect(after4.drainScore).toBe(0);
     expect(after4.phase).toBe("recovery");
   });
 
   it("bandTicks counts inside the band and resets to zero on exit", () => {
     const dwellOpts = opts({ minBandTicks: 2 });
-    let state = runDrain(FRESH, 2000, -100, 11, dwellOpts); // 入带
+    let state = runDrain(FRESH, 2000, -45, 11, dwellOpts); // 入带
     expect(state.bandTicks).toBe(1);
     state = evaluateColonyPhase(input({ reserve: 1600 }), state, dwellOpts);
     expect(state.bandTicks).toBe(2);
     // 分数清零 + 驻留满足 → 出带归零。
     for (let i = 0; i < 4; i++) {
-      state = evaluateColonyPhase(input({ reserve: 1700 + i * 100 }), state, dwellOpts);
+      state = evaluateColonyPhase(input({ reserve: 1600 + i * 45 }), state, dwellOpts);
     }
     expect(state.phase).toBe("growth");
     expect(state.bandTicks).toBe(0);
@@ -358,7 +359,7 @@ describe("Phase — evaluateColonyPhase", () => {
 
   it("solvency drain still works independently when liquidity is healthy", () => {
     // 偿付崩溃（reserve 持续下跌）但流动性健康 → 仍由 drainScore 驱动危机。
-    const drained = runDrain(FRESH, 2000, -100, 11);
+    const drained = runDrain(FRESH, 2000, -45, 11);
     expect(drained.drainScore).toBe(150);
     expect(drained.liquidityScore).toBe(0);
     expect(drained.phase).toBe("crisis");
@@ -568,5 +569,77 @@ describe("Phase — 绝对破产兜底（reserve 水位即判据，不走分数�
     // 分数全程为 0（当初就是它看不见），能拖住出场的只有驻留闸 —— 兜底没有拆掉防抖。
     expect(s.drainScore).toBe(0);
     expect(phases.slice(0, backToGrowth).every(p => p === "recovery")).toBe(true);
+  });
+});
+
+// ─── 修法 A：drainScore 按流量而非次数（#11）────────────────────────
+// 旧计分是「赤字 tick +15 / 其余 −40」，与亏多少无关 ⇒ 一间房进不进危机带取决于
+// 赤字脉冲怎么排布。实测依据（同一套 5-source 夹具连跑两次，同一份 dist）：
+// 一次 crisis+recovery 占 71.6%（而该局总账其实盈余：赤字合计 5519 vs 盈余 7230），
+// 一次 0%。判据取决于排布就不是迟滞而是随机。
+describe("Phase — drainScore 流量口径（#11-A）", () => {
+  /** 按显式 delta 序列喂若干次评估（reserve 从 base 起累加；可从既有状态续算）。 */
+  function runDeltas(
+    deltas: number[],
+    base = 2000,
+    options?: PhaseOptions,
+    from: PhaseState = FRESH,
+  ) {
+    let state = evaluateColonyPhase(input({ reserve: base }), from, options);
+    for (const d of deltas) {
+      base += d;
+      state = evaluateColonyPhase(input({ reserve: base }), state, options);
+    }
+    return state;
+  }
+
+  const CAP = DEFAULT_PHASE_OPTIONS.drainStepCap;
+
+  it("同样净亏的能量计同样的分：10×45 与 5×90 都进危机带", () => {
+    expect(runDeltas(Array(10).fill(-45)).drainScore).toBeCloseTo(150, 6);
+    expect(runDeltas(Array(5).fill(-90)).phase).toBe("crisis");
+    // 少一截就不进：360 E 净亏 = 120 分 < 150。
+    const partial = runDeltas(Array(4).fill(-90));
+    expect(partial.drainScore).toBeCloseTo(120, 6);
+    expect(partial.phase).toBe("growth");
+  });
+
+  it("零变化 tick 不再主动消分（慢性失血因此可见）", () => {
+    const built = runDeltas(Array(6).fill(-45)); // 90 分，reserve 落在 1730
+    const held = runDeltas([0, 0, 0, 0, 0], 1730, undefined, built);
+    // 旧次数计在这里会 −40×5 → 归零；流量口径下无赤字的 tick 不计分也不消分。
+    expect(held.drainScore).toBeCloseTo(90, 6);
+    expect(built.drainScore).toBeCloseTo(90, 6);
+  });
+
+  it("每 3 tick 一次的稀疏失血照样攒进危机带（旧口径的盲区）", () => {
+    // −30 E / 3 tick = 净 −10 E/tick 的慢性失血：流量计 +10 分/3tick → 45 tick 到 150。
+    const pattern = [-30, 0, 0];
+    const deltas: number[] = [];
+    for (let i = 0; i < 15; i++) deltas.push(...pattern);
+    const r = runDeltas(deltas);
+    expect(r.drainScore).toBeCloseTo(150, 6);
+    expect(r.phase).toBe("crisis");
+  });
+
+  it("赤字脉冲大但总账盈余的房不进危机带", () => {
+    // 每 3 tick：−100 后两次 +60 ⇒ 净 +20。次数计只看"有没有赤字 tick"，
+    // 流量计下盈余侧按 ×recoveryBias 抵得掉。
+    const pattern = [-100, 60, 60];
+    const deltas: number[] = [];
+    for (let i = 0; i < 12; i++) deltas.push(...pattern);
+    const r = runDeltas(deltas);
+    expect(r.drainScore).toBe(0);
+    expect(r.phase).toBe("growth");
+  });
+
+  it("单 tick 脉冲被 drainStepCap 封顶：一次巨亏不得独自判危机", () => {
+    // 实测战争房有 −22540 的单 tick（大额孵化）。不封顶 → 7513 分，一击定危机。
+    const one = runDeltas([-3000]);
+    expect(one.drainScore).toBeCloseTo(CAP, 6);
+    expect(one.phase).not.toBe("crisis");
+    expect(CAP).toBeLessThan(DEFAULT_PHASE_OPTIONS.drainEnterScore);
+    // 但持续巨亏仍能进带：3 次即越过 150。
+    expect(runDeltas([-3000, -3000, -3000]).phase).toBe("crisis");
   });
 });
