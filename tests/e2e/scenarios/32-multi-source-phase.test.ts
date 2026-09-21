@@ -31,8 +31,10 @@ const EXTRA_SOURCES = Number(process.env.MSRC_EXTRA ?? 3);
 const WARMUP_MAX = 6000;
 const BATCH = 250;
 const SAMPLED = 2500;
-/** harvester 编制上限 —— 本场景的判据全部以它为轴。 */
+/** harvester 编制上限 —— 报告用（判据区间以它为上端参照）。 */
 const CAP = CONFIG.roles.harvester.maxCount;
+/** 最低编制：新欠员判据的轴（`harvesterCount < clamp(minCount, 1, sourceCount)`）。 */
+const FLOOR = CONFIG.roles.harvester.minCount;
 
 /** 生存带相位 —— bootstrap/crisis/recovery 都会掐掉战争与扩张授权。 */
 const SURVIVAL = new Set(["bootstrap", "crisis", "recovery"]);
@@ -76,19 +78,20 @@ describe("E2E-032 多 source 房相位资格 — #10 回归", () => {
   });
 
   it(`5-source 房在 ${SAMPLED} tick 采样窗里拿得到正常相位（不再被"欠员+最满 source"钉死）`, async () => {
-    // 暖机跑到「编制确实爬到 harvester 上限」为止（上限 WARMUP_MAX 兜底）。
-    // 为什么不能赌固定 tick 数：这间房有贫富两态（实测同一份构建两次跑法，
-    // 一次 reserve 8069、一次 348 且 harvesters 峰值只有 3），而 #10 的症状只在
-    // "顶格编制仍判欠员"时存在 —— 暖机不够就压根没走到那条路径，绿了也不代表验过。
+    // 暖机跑到「采集端至少站住最低编制」为止（上限 WARMUP_MAX 兜底）。
+    // 判据不要求爬到 maxCount：这间房有贫富两态（实测同一份构建的三次跑法里
+    // harvester 峰值分别是 4、4、3），把前提钉在 4 上就会在穷分支里随机拒签；
+    // 而"顶格仍算欠员"只是「编制 ≥ 下限而 < source 数」这个区间的特例，
+    // 用整个区间当判据既覆盖它、又不赌世界长什么样。
     let warmed = 0;
-    let reachedCap = false;
-    while (warmed < WARMUP_MAX && !reachedCap) {
+    let reachedFloor = false;
+    while (warmed < WARMUP_MAX && !reachedFloor) {
       const snaps = await runner.runTicks(BATCH);
       warmed += BATCH;
       const rm = snaps.at(-1)?.rawMemory as Record<string, any> | undefined;
-      reachedCap = Number(rm?.rooms?.[HOME]?.phase?.harvesterCount ?? 0) >= CAP;
+      reachedFloor = Number(rm?.rooms?.[HOME]?.phase?.harvesterCount ?? 0) >= FLOOR;
     }
-    console.log(`[msrc-evidence] warmup=${warmed} reachedCap=${reachedCap}`);
+    console.log(`[msrc-evidence] warmup=${warmed} reachedFloor=${reachedFloor}`);
 
     let tick = 0;
     while (tick < SAMPLED) {
@@ -117,12 +120,13 @@ describe("E2E-032 多 source 房相位资格 — #10 回归", () => {
     const sourcesSeen = Math.max(...series.map(s => s.sources));
     const survival = series.filter(s => SURVIVAL.has(s.phase));
     const survivalShare = survival.length / Math.max(1, n);
-    /** 本场景的主判据：编制已顶到上限却仍被判「欠员 → bootstrap」的 tick 数。
-     * 这是 #10-a 那条判据唯一能单独产生的症状 —— 房穷不穷（crisis/recovery）归 #11，
-     * 不该混进来，否则这条断言会被真实经济吸走、变成测不出任何东西的比例游戏。 */
-    const cappedBootstrap = series.filter(
-      s => s.harvesters >= CAP && s.phase === "bootstrap",
-    ).length;
+    /** 反事实区间：采集端已站住最低编制（新判据下"够员"），但人头数仍小于 source 数
+     * （旧判据 `harvesterCount < sourceCount` 在这里一律判欠员 → bootstrap）。
+     * 主判据就在这个区间上取"被判 bootstrap 的 tick 数" —— 它同时覆盖了
+     * "顶格编制仍算欠员"（cap 只是区间的上端特例），又不要求这间房必须爬到某个特定编制，
+     * 所以贫富两态都验得到（实测峰值 4/4/3）。 */
+    const staffingWindow = series.filter(s => s.harvesters >= FLOOR && s.harvesters < s.sources);
+    const oldPredicateTicks = staffingWindow.filter(s => s.phase === "bootstrap").length;
     // P0-1 通道的驻留计数：≥50 意味着"采集塌方"被当真事发（旧行为里它常驻 8730 tick）。
     const stallHits = series.filter(s => s.srcStallTicks >= 50).length;
     const phaseHist: Record<string, number> = {};
@@ -130,8 +134,9 @@ describe("E2E-032 多 source 房相位资格 — #10 回归", () => {
 
     console.log(
       `[msrc-evidence] extra=${EXTRA_SOURCES} samples=${n} sources=${sourcesSeen} ` +
-        `maxHarvesters=${maxHarvesters}/${CAP} cappedBootstrap=${cappedBootstrap} ` +
-        `stall≥50=${stallHits} survivalShare=${(survivalShare * 100).toFixed(1)}% ` +
+        `maxHarvesters=${maxHarvesters}/${CAP} floor=${FLOOR} windowTicks=${staffingWindow.length} ` +
+        `oldPredicateTicks=${oldPredicateTicks} stall≥50=${stallHits} ` +
+        `survivalShare=${(survivalShare * 100).toFixed(1)}% ` +
         `reserve=${series.at(-1)?.reserve} hist=${JSON.stringify(phaseHist)}`,
     );
     mkdirSync("tmp", { recursive: true });
@@ -140,46 +145,45 @@ describe("E2E-032 多 source 房相位资格 — #10 回归", () => {
       JSON.stringify({ samples: series }, null, 0),
     );
 
-    // ── 前提：夹具与暖机都得先把"这确实是一间 5-source 且编制孵到顶的房"钉住，
-    //    否则后面的绿可能只是"还没长成人，所以没人欠员"。
+    // ── 前提钉（三条，缺一条这条绿就没有意义）：
+    //    ① 夹具真有 5 颗 source；② 采集端至少站住最低编制；③ 反事实区间真被走到过。
     expect(
       sourcesSeen,
       `夹具只给出 ${sourcesSeen} 颗 source（期望 ${2 + EXTRA_SOURCES}）—— 前提没成立，本场景在测空房`,
     ).toBe(2 + EXTRA_SOURCES);
     expect(
       maxHarvesters,
-      `harvesters 峰值 ${maxHarvesters} < 编制上限 ${CAP}：暖机跑满 ${WARMUP_MAX} tick 仍没让编制爬到顶，` +
-        `"顶格仍算欠员"这条路径未被走到（结论不可用）`,
-    ).toBeGreaterThanOrEqual(CAP);
-
-    // ── #10-a：欠员判据不得因 source 数 > 编制上限而永久成立（旧行为 8730/9000 tick）
+      `harvesters 峰值 ${maxHarvesters} < 最低编制 ${FLOOR}：暖机跑满 ${WARMUP_MAX} tick 采集端还没站住人，` +
+        `"欠员判据是否脱钩 source 数"这条路径未被走到（结论不可用）`,
+    ).toBeGreaterThanOrEqual(FLOOR);
     expect(
-      cappedBootstrap,
-      `编制顶到 ${maxHarvesters}/${CAP} 却仍被判 bootstrap 共 ${cappedBootstrap} tick ` +
-        `—— 判据又拿人头数跟 source 数比了（source=${sourcesSeen} > cap=${CAP} 时该判据永久成立）。\n` +
-        `样本=${series
-          .filter(s => s.harvesters >= CAP && s.phase === "bootstrap")
+      staffingWindow.length,
+      `反事实区间（编制 ≥${FLOOR} 且 < source 数）一个 tick 都没出现 —— 判据没被考到，绿无意义` +
+        `（maxHarvesters=${maxHarvesters} sources=${sourcesSeen}）`,
+    ).toBeGreaterThan(0);
+
+    // ── #10-a：欠员判据不得拿人头数跟 source 数比（旧行为 8730/9000 tick 永久 bootstrap）
+    expect(
+      oldPredicateTicks,
+      `编制已 ≥ 最低编制 ${FLOOR} 却因"人数 < source 数(${sourcesSeen})"被判 bootstrap ` +
+        `${oldPredicateTicks} tick（反事实区间共 ${staffingWindow.length} tick）` +
+        `—— 判据又跟 source 数挂钩了。\n` +
+        `样本=${staffingWindow
+          .filter(s => s.phase === "bootstrap")
           .slice(0, 5)
-          .map(s => `t${s.tick}`)
+          .map(s => `t${s.tick}:harv=${s.harvesters}`)
           .join(",")}`,
     ).toBe(0);
 
-    // ── 反常激励守卫：source 更多的房不得比 source 更少的房更难拿到正常相位。
-    // 修法前实测：2-source 房 growth 2500/2500，同一夹具补到 5-source 后
-    // bootstrap 2489/2500（99.6%）；只按编制上限截断也修不掉（bootstrap 2489 依旧）。
-    // 现在按最低编制判，实测 bootstrap 31/2500（1.2%）。
-    // 注意判据只看 bootstrap —— crisis/recovery 是这间房的真实经济（#11 的领地），
-    // 把它一起算进来就会让这条断言被经济噪声吸走、再也测不到判据本身。
-    // **实测佐证（同一份 dist 连跑两次，extra=3）**：一次 hist=
-    // {growth:690, crisis:885, recovery:894, bootstrap:31}（survivalShare 72.4%，reserve 2100），
-    // 一次 {growth:2500}（0%，reserve 6947）—— 危机/恢复占比本身在刀背上跳，
-    // 所以绝不要把这条断言改成 survivalShare 口径（那只会让它随机红，且测不到 #10）。
-    const bootstrapShare = (phaseHist["bootstrap"] ?? 0) / Math.max(1, n);
-    expect(
-      bootstrapShare,
-      `5-source 房有 ${(bootstrapShare * 100).toFixed(1)}% 的 tick 停在 bootstrap` +
-        `（hist=${JSON.stringify(phaseHist)}）—— 反常激励回来了：同一夹具 2-source 时是 0%`,
-    ).toBeLessThanOrEqual(0.05);
+    // 反常激励的守卫就是上面那条 oldPredicateTicks —— 它已经表达了
+    // "bootstrap 只允许出现在真的低于最低编制时"。这里只报告占比，不再当判据：
+    // 曾经写的 `bootstrapShare ≤ 5%` 判的是错的东西 —— 一间真缺人的房（实测某次跑法
+    // 有 128/2500 tick 只有 0~1 只 harvester，reserve 360）判 bootstrap 是**正确**的，
+    // 拿占比设卡等于要求房永不低于编制，那既不是 #10 的主张，也必然随世界贫富随机红。
+    // crisis/recovery 占比同理不判（#11 的领地，实测同一构建两次跑法 71.6%↔0%）。
+    console.log(
+      `[msrc-evidence] bootstrapShare=${(((phaseHist["bootstrap"] ?? 0) / Math.max(1, n)) * 100).toFixed(1)}%`,
+    );
 
     // ── #10-b：srcRatio 平均口径后，"没被派人的那颗 source 满载"不再算塌方
     expect(
