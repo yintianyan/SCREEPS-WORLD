@@ -391,6 +391,17 @@ describe("E2E-021 诱饵对抗 — 诱饵不触发授权（Scenario F）", () =>
         `cap=${lostRunCap} maxBlindRun=${maxBlindRun}@${blindRunWhere} visCap=${blindRunCap} ` +
         `unobservedSamples=${unobservedSamples} windows=${decoyWindows.length}`,
     );
+    // 契约②是上界判据（≤cap）⇒ maxLostRun=0 时它**没有输入**，绿不代表分支被覆盖。
+    // 实测对照：同一提交下 CPU 天花板不同，这个读数就在 0 与 849 之间整段搬家 ——
+    // 借用开启后 room-observer 不再每 tick 被拒，intel 根本不断供。所以这里必须
+    // 把"本轮不可证伪"打在证据里，否则会把"没触发"读成"通过"（同类坑第四次）。
+    if (maxLostRun === 0) {
+      console.log(
+        `[soak-evidence] WARN 契约②本轮不可证伪：门判定的断供长度 maxLostRun=0` +
+          `（探针盲样=${unobservedSamples}）—— intel 全程未断供，"断供后按期撤军"分支` +
+          `未被 e2e 覆盖，守卫只剩 war-planner 单测 R5。`,
+      );
+    }
     console.log(
       `[soak-evidence] decoy audit: samples=${samplesSeen} targetedDecoy=${decoyAuthorized} ` +
         `staleAuthorizations=${staleAuthorizations} staleStarts=${staleStarts.length} ` +
