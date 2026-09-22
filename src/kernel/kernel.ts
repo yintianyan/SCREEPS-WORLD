@@ -225,7 +225,10 @@ export class Kernel {
 
     measuredRun("system/telemetry-flush", () =>
       safeRun("telemetry-flush", () => {
-        runFlush(budget.tier);
+        // 传调度器的硬上限：bucket 借用生效时 tick 可以合法地花过 Game.cpu.limit，
+        // 守卫若写死 limit 就会把"贴顶但合法"的 tick 判成超限 —— 观测通道被
+        // 自己的额度模型关掉（telemetry-collector 那次冻结的同型错误）。
+        runFlush(budget.tier, budget.hardLimit);
       }),
     );
 

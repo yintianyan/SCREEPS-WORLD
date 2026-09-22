@@ -100,4 +100,15 @@ describe("TelemetryFlush — runFlush 成功路径", () => {
     expect(result.skipReason).toBe("cpu_near_limit");
     expect(writePrometheusSegmentMock).not.toHaveBeenCalled();
   });
+
+  it("同一 used 在 bucket 借用后的更高天花板下应当照 flush", () => {
+    // 守卫必须跟调度器的真值（budget.hardLimit），不能写死 Game.cpu.limit：
+    // 否则借用一生效，"贴顶但合法"的 tick 会被自己的额度模型判成超限，
+    // 观测通道再次被关掉 —— telemetry-collector 被 softLimit 锁死数千 tick 的同型错误。
+    mockCpuUsed = 19.5; // > limit×0.95=19，但 < 借用后 hardLimit×0.95≈23.7
+    (Game as any).time = 1000;
+    const result = runFlush("healthy", 24.96);
+    expect(result.flushed, `借用天花板下不应 skip: ${result.skipReason}`).toBe(true);
+    expect(writePrometheusSegmentMock).toHaveBeenCalled();
+  });
 });

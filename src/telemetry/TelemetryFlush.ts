@@ -24,9 +24,14 @@ export interface FlushResult {
  * 执行一次 flush 周期。
 
  * @param tier CPU tier（用于降级判断）
+ * @param cpuCeiling 本 tick 的硬上限（budget.hardLimit）。**必须传调度器的真值**：
+ *   守卫是 `getUsed() > 上限×0.95`，写死 Game.cpu.limit 会在 bucket 借用生效时
+ *   把"贴顶但合法"的 tick 全判成超限 —— 观测通道被自己的额度模型关掉，
+ *   与 telemetry-collector 曾被 softLimit 锁死数千 tick 同类（那次段环冻结就是这么来的）。
+ *   缺省回落到 min(limit, tickLimit)（旧语义，仅测试桩用）。
  * @returns flush 结果
  */
-export function runFlush(tier: string): FlushResult {
+export function runFlush(tier: string, cpuCeiling?: number): FlushResult {
   const tick = Game.time;
 
   // 降级守卫：Recovery/Conserve tier 下跳过
@@ -55,12 +60,12 @@ export function runFlush(tier: string): FlushResult {
     };
   }
 
-  // CPU 预算守卫：Telemetry 自身 CPU 开销不得超过 0.5% CPU limit
-  const cpuLimit = Game.cpu.limit ?? 500;
-  const budget = cpuLimit * TELEMETRY_CPU_BUDGET_RATIO;
+  // CPU 预算守卫：Telemetry 自身 CPU 开销不得超过 0.5% 本 tick 额度
+  const ceiling = cpuCeiling ?? Math.min(Game.cpu.limit ?? 500, Game.cpu.tickLimit ?? 500);
+  const budget = ceiling * TELEMETRY_CPU_BUDGET_RATIO;
 
   const cpuBefore = Game.cpu.getUsed();
-  if (Game.cpu.getUsed() > cpuLimit * 0.95) {
+  if (Game.cpu.getUsed() > ceiling * 0.95) {
     // 当前 CPU 已接近上限，跳过 flush 保命
     return {
       tick,

@@ -119,6 +119,9 @@ export interface Budget {
   readonly tier: CpuTier;
   readonly softLimit: number;
   readonly hardLimit: number;
+  /** 本 tick 从 bucket 借来的额外单 tick 额度（CPU）。
+   * 可选：测试桩与低层 Budget 实现可不感知（缺省视为 0）。 */
+  readonly cpuBorrow?: number;
   /** Emergency Survival Mode（Recovery 档内的紧急安全状态）：仅 P0 车道放行。
    * undefined = 该 Budget 实现不感知 ESM（测试桩）。 */
   readonly emergency?: boolean;

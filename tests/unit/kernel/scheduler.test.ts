@@ -127,12 +127,16 @@ describe("Scheduler — 自愿放血宽限（generatePixel 后 recovery 地板�
 describe("CpuBudget — 前馈预测 (P1-2)", () => {
   beforeEach(() => {
     // 重置 Game.cpu mock 和 Memory
+    // bucket 刻意压在 CONFIG.cpu.borrow.fromBucket(7200) 之下：本 describe 判的是
+    // 「前馈用 cpuMax10/cpuAvg10 拒 P2+/P3」，其阈值（19.5/17.5）按未借用的
+    // hard/soft = 19.2/17.5 标定；满仓会启用 bucket 借用把天花板抬到 24.96/22.75，
+    // 那些值就不再触顶（借用的行为由下面「bucket 借用」describe 自己覆盖）。
     (globalThis as any).Game = {
-      time: 1000,
+      time: 82450000,
       cpu: {
         limit: 20,
         tickLimit: 500,
-        bucket: 10000,
+        bucket: 6000,
         getUsed: () => 0,
       },
     };
@@ -289,5 +293,48 @@ describe("Emergency Survival Mode — Recovery 档内的紧急安全状态（非
     const tiers: CpuTier[] = ["healthy", "guarded", "conserve", "recovery"];
     expect(tiers).toHaveLength(4);
     expect(tiers).not.toContain("emergency" as unknown as CpuTier);
+  });
+});
+
+// ── bucket 借用（#16）──────────────────────────────────────
+
+describe("CpuBudget — bucket 借用", () => {
+  const setup = (bucket: number, tickLimit = 500): void => {
+    (globalThis as any).Game = {
+      time: 82450000,
+      cpu: { limit: 20, tickLimit, bucket, getUsed: () => 0 },
+    };
+    (globalThis as any).Memory = { kernel: { stats: { cpuMax10: 0, cpuAvg10: 0 } } };
+  };
+
+  it("满仓借满：hard 19.2→24.96、soft 17.5→22.75，spent=20 的 tick 不再拒 P2", () => {
+    setup(10000);
+    const budget = new CpuBudget("healthy");
+    expect(budget.cpuBorrow).toBe(6);
+    expect(Math.round(budget.hardLimit * 100) / 100).toBe(24.96);
+    expect(Math.round(budget.softLimit * 100) / 100).toBe(22.75);
+    // 20 CPU 正是线上实测常态（cpuAvg10=19.6）：旧天花板下 P2 整批被拒，借用后放行。
+    (globalThis as any).Game.cpu.getUsed = () => 20;
+    expect(budget.canStart(2 as Priority)).toBe(true);
+  });
+
+  it("线性中间点：bucket 8600 → 借 3", () => {
+    setup(8600);
+    expect(new CpuBudget("healthy").cpuBorrow).toBe(3);
+  });
+
+  it("低于水位不借；tickLimit 是引擎上界，借不到时回到旧语义", () => {
+    setup(5000);
+    const dry = new CpuBudget("healthy");
+    expect(dry.cpuBorrow).toBe(0);
+    expect(Math.round(dry.hardLimit * 100) / 100).toBe(19.2);
+
+    // bucket 满但 tickLimit 只有 20（引擎没给突发额度）→ 额度算得出、天花板借不动。
+    setup(10000, 20);
+    const capped = new CpuBudget("healthy");
+    expect(capped.cpuBorrow).toBe(6);
+    expect(Math.round(capped.hardLimit * 100) / 100).toBe(19.2);
+    (globalThis as any).Game.cpu.getUsed = () => 20;
+    expect(capped.canStart(2 as Priority)).toBe(false);
   });
 });

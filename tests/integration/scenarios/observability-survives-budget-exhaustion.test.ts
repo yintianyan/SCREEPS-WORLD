@@ -17,6 +17,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner } from "../framework";
 import type { TestWorld } from "../framework";
 import { CONFIG } from "../../../src/config";
+import { CpuBudget } from "../../../src/kernel/scheduler";
+import type { CpuTier } from "../../../src/kernel/contracts";
 
 let loop: () => void;
 
@@ -49,6 +51,7 @@ describe("观测层 — tick 预算耗尽时采样不得停", () => {
     const HOT = 80;
     let hotStartSample = 0;
     let hotStartCreeps = 0;
+    let exhaustedAt = 0;
 
     const runner = new TickRunner();
     runner.setLoop(loop);
@@ -59,8 +62,13 @@ describe("观测层 — tick 预算耗尽时采样不得停", () => {
           g().Memory.rooms.W1N1.lastRcl = g().Game.time;
         }
         if (t === WARM) {
-          // 抬到 hardLimit(19.2) 之上：isExhausted() 恒真 → 连 P0 系统都被拒。
-          world.setCpuFloor(19.6);
+          // 地板按调度器真值算：hardLimit + 1 ⇒ isExhausted() 恒真，连 P0 系统都被拒。
+          // 不写死数字：CONFIG.cpu.borrow 一调，写死的地板可能就不够耗尽，那样这条测试
+          // 会静默失去意义（下面 ① 条前提钉会失败并说明原因，但早算对更好）。
+          const tier = (g().Memory.kernel.tier ?? "healthy") as CpuTier;
+          const floor = Math.round((new CpuBudget(tier).hardLimit + 1) * 100) / 100;
+          exhaustedAt = floor;
+          world.setCpuFloor(floor);
           hotStartSample = g().Memory.kernel.stats.lastSample as number;
           hotStartCreeps = Object.keys(g().Game.creeps).length;
           expect(hotStartSample, "抬闸前遥测应已在采样").toBeGreaterThan(0);
@@ -75,7 +83,8 @@ describe("观测层 — tick 预算耗尽时采样不得停", () => {
     //    它也被拒 ⇒ 队列不动、creep 数不涨（只可能因寿命下降）。
     expect(
       Object.keys(g().Game.creeps).length,
-      `夹具前提未成立：耗尽期 creep 数仍在涨（${hotStartCreeps} → 现在），说明世界没真被锁`,
+      `夹具前提未成立：抬到耗尽地板 ${exhaustedAt} 后 creep 数仍在涨（${hotStartCreeps} → 现在），` +
+        `说明世界没真被锁死 —— 遥测能跑就不算证据`,
     ).toBeLessThanOrEqual(hotStartCreeps);
 
     // ② 判据按密度而非单 tick 快照：耗尽期最后一条样本应贴着 tick 走，

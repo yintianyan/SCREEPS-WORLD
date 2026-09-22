@@ -92,6 +92,9 @@ export class CpuBudget implements Budget {
   readonly tier: CpuTier;
   readonly softLimit: number;
   readonly hardLimit: number;
+  /** 本 tick 从 bucket 借来的额外单 tick 额度（CPU），0 = 未借用。
+   * 见 CONFIG.cpu.borrow 的注释：借用只存在于满仓区间，且只进调度器不进扩张 ROI。 */
+  readonly cpuBorrow: number;
   /** Emergency Survival Mode（Recovery 档内的紧急安全状态，非第五档 CpuTier）：
    * true 时仅 P0 车道放行。 */
   readonly emergency: boolean;
@@ -100,10 +103,18 @@ export class CpuBudget implements Budget {
     this.tier = tier;
     this.emergency = emergency;
     const ratios = tierLimits(tier);
-    // 有效 CPU 限制取 Game.cpu.limit 与 tickLimit 较小值：tickLimit 含 bucket 借用，
-    // bucket 低位时可能临时低于 limit — 取较小值不透支当前 tick 真实预算。
-    // Fallback 20 仅用于测试环境（Game.cpu 未注入）。
-    const effectiveLimit = Math.min(Game.cpu.limit ?? 20, Game.cpu.tickLimit ?? 20);
+    const baseLimit = Game.cpu.limit ?? 20;
+    const borrowCfg = CONFIG.cpu.borrow;
+    const borrowSpan = Math.max(1, borrowCfg.toBucket - borrowCfg.fromBucket);
+    const borrowRatio = Math.min(
+      1,
+      Math.max(0, ((Game.cpu.bucket ?? 0) - borrowCfg.fromBucket) / borrowSpan),
+    );
+    this.cpuBorrow = Math.round(borrowCfg.maxCpu * borrowRatio * 100) / 100;
+    // 有效 CPU 限制 = 本 tick 真实可用额度：Game.cpu.limit 加上按 bank 缩放的借用份额，
+    // 再取与 tickLimit 的较小值（tickLimit 是引擎给的上界；bucket 低位时它会临时低于
+    // limit，此时借不到东西，取小值自然把借用归零）。Fallback 20 仅用于测试环境。
+    const effectiveLimit = Math.min(baseLimit + this.cpuBorrow, Game.cpu.tickLimit ?? baseLimit);
     // 双重保护：比例上限（随 limit 自适应）+ 绝对余量（保护低 limit 服务器，
     // 如 10 CPU 下 0.8 reserve 占比更高，防止系统开销挤占关键环）。
     this.hardLimit = Math.min(

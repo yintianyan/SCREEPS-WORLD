@@ -134,6 +134,22 @@ export const CONFIG = {
       conserve: { softRatio: 0.7, hardRatio: 0.85 },
       recovery: { softRatio: 0.6, hardRatio: 0.775 },
     },
+    /** 【bucket 借用】bank 满时允许单 tick 超出 Game.cpu.limit 一截。
+     * 为什么需要：实测常态 cpuAvg10=19.6 / cpuMax10=20.4 贴着 limit=20，而 bucket
+     * 常年 10000 一分未动 —— 被拒的是 construction-manager / layout-planner /
+     * room-observer / tactical-pipeline 这类"整批被拒就完全不干活"的突发型系统
+     * （一个 500-tick 窗口里各 ≈262 次，即每 tick 都拒）。
+     * 额度按 bucket 线性：≤fromBucket 借 0，≥toBucket 借满 maxCpu。
+     * 下界 7200 > healthy 档地板 7000 —— 借用只存在于满仓区间；动用 bank 掉到 7000
+     * 以下会先降成 guarded（比例收紧 + 借用同时归零），tier 门仍是唯一兜底，
+     * 不再另造一层保护。上限只进调度器，**不进扩张/态势 ROI**（domain/strategy/
+     * capacity.ts 仍按 min(cpuLimit, tickLimit) 算）：借来的是冲刺额度，
+     * 不能当可持续产能去规划新房。maxCpu=0 即完全回到旧行为。 */
+    borrow: {
+      maxCpu: 6,
+      fromBucket: 7200,
+      toBucket: 10000,
+    },
     /** 各档位允许的最大优先级。 */
     maxPriority: {
       healthy: 4 as Priority,
