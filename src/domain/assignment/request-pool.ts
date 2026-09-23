@@ -24,6 +24,11 @@ export interface TransportRequest {
   scope?: RequestScope;
   /** 帝国级请求的目标房（scope="empire" 时由 Imbalance 检测填充）。 */
   targetRoom?: string;
+  /**
+   * 此刻已占用该源的 creep 名（来自有效租约）。转成任务条目后落进
+   * `AssignmentTaskEntry.assignedCreeps`，由选择器按 `maxWorkers` 挡下第二个认领者。
+   */
+  workers?: string[];
 }
 
 /** 供给侧登记项（「此处有多少可取」）。available 由调用方按库存给出。 */
@@ -37,6 +42,8 @@ export interface SupplySource {
 export interface LeaseSummary {
   sourceId?: string;
   valid: boolean;
+  /** 持有者名 —— 用于把并发占用写进任务条目的 assignedCreeps（见下）。 */
+  creepName?: string;
 }
 
 /**
@@ -89,15 +96,31 @@ export interface BuildInputs {
 
 /**
  * 生成本 tick 搬运请求集合（重导出＝dedup；聚合＝每源一请求）。
- * 防超卖：remainingSlots=0 的源不生成请求（并发上限封顶）。
+ * 防超卖由 `workers`（→ 任务条目 assignedCreeps）承担，**不是**由"把请求删掉"承担 ——
+ * 后者会把持有者的 assignment 自己判死（池同时是 AS-1 有效性判据），见函数内注释。
  */
 export function buildTransportRequests(input: BuildInputs): TransportRequest[] {
   const ledger = supplyLedger(input.supplies, input.leases, input.maxConcurrentPerSource);
+  // 占用该源的 creep（有效租约）—— 并发靠任务条目的 assignedCreeps/maxWorkers 表达。
+  const workersBySource = new Map<string, string[]>();
+  for (const l of input.leases) {
+    if (!l.valid || !l.sourceId || !l.creepName) continue;
+    const list = workersBySource.get(l.sourceId) ?? [];
+    list.push(l.creepName);
+    workersBySource.set(l.sourceId, list);
+  }
   const priority = input.towerStarving ? input.boostedPriority : input.basePriority;
   const reqs: TransportRequest[] = [];
   for (const s of input.supplies) {
     const e = ledger.get(s.id)!;
-    if (e.remainingSlots <= 0 || s.available <= 0) continue;
+    // 只有「源真的没货了」才出池。**不再因 remainingSlots<=0 删请求**：这张池同时是
+    // assignment 有效性（AS-1，assignment-adapter 的 taskAlive）的判据，删掉请求等于
+    // 让持有者用自己的租约把自己的任务抹掉 → 下一 tick 判「任务已出池」→ 释放 →
+    // 重挑别的源 → 每 tick 自我失效（线上实测：每 tick 一对 expire+assign，
+    // W37S58 两只 hauler 的一只在两个 container 间来回甩）。
+    // 超卖由选择器挡：assignedCreeps.length >= maxWorkers 的任务不会被再分给谁。
+    if (e.available <= 0) continue;
+    const workers = workersBySource.get(s.id);
     reqs.push({
       key: `collect:${input.roomName}:${s.id}`,
       resource: "energy",
@@ -105,6 +128,7 @@ export function buildTransportRequests(input: BuildInputs): TransportRequest[] {
       sourceId: s.id,
       pos: s.pos,
       priority,
+      ...(workers && workers.length > 0 ? { workers } : {}),
     });
   }
   return reqs;

@@ -62,7 +62,9 @@ function toTaskEntry(r: TransportRequest): AssignmentTaskEntry {
     sourceId: r.sourceId,
     priority: r.priority,
     maxWorkers: 1,
-    assignedCreeps: [],
+    // 占用者随请求一起下来（不是空数组！）：选择器按 assignedCreeps/maxWorkers 挡第二人。
+    // 若这里留空而改由"请求不出池"来表达并发，持有者会被 AS-1 判成任务消失而反复重分配。
+    assignedCreeps: r.workers ?? [],
     pos: r.pos,
   };
 }
@@ -93,6 +95,9 @@ export const logisticsSystem: System = {
 
     // 租约投影 + hauler 摘要：从共享快照消费，不再独立遍历。
     const leasesByRoom = new Map<string, LeaseSummary[]>();
+    /** 任务 id → 持有者名（V2 planner 请求与 buildRoomTasks 条目据此填 assignedCreeps，
+     * 让"谁占着这个任务"跟着任务一起进池，而不是靠把请求删掉来表达并发）。 */
+    const holdersByTask = new Map<string, string[]>();
     const claimsByRoom = new Map<string, Set<string>>();
     const haulerSummariesByRoom = new Map<
       string,
@@ -111,8 +116,12 @@ export const logisticsSystem: System = {
         leasesByRoom.set(home, leaseList);
       }
       if (a?.kind === "haul" && a.id) {
-        leaseList.push({ sourceId: a.sourceId, valid: !leaseExpired });
+        leaseList.push({ sourceId: a.sourceId, valid: !leaseExpired, creepName: ref.name });
         if (!leaseExpired) {
+          const holders = holdersByTask.get(a.id) ?? [];
+          holders.push(ref.name);
+          holdersByTask.set(a.id, holders);
+
           let claims = claimsByRoom.get(home);
           if (!claims) {
             claims = new Set();
@@ -255,7 +264,7 @@ export const logisticsSystem: System = {
           r => r.scope === "room" && r.destination.room === roomName,
         );
         for (const pr of planReqs) {
-          const taskEntry = planRequestToTaskEntry(pr);
+          const taskEntry = planRequestToTaskEntry(pr, holdersByTask);
           if (taskEntry) {
             g.transportPool.rooms[roomName]?.push(taskEntry);
           }
@@ -328,7 +337,10 @@ function buildTowerSupplyRequests(
 
  * source.structureId 若有则作为 sourceId；否则用 source.room 作为伪 ID。
  */
-function planRequestToTaskEntry(req: TransportRequestV2): AssignmentTaskEntry | undefined {
+function planRequestToTaskEntry(
+  req: TransportRequestV2,
+  holdersByTask: ReadonlyMap<string, string[]>,
+): AssignmentTaskEntry | undefined {
   // 只适配 scope="room" 的请求
   if (req.scope !== "room") return undefined;
 
@@ -338,7 +350,8 @@ function planRequestToTaskEntry(req: TransportRequestV2): AssignmentTaskEntry | 
     sourceId: req.source.structureId ?? req.source.room,
     priority: req.priority,
     maxWorkers: 1,
-    assignedCreeps: [],
+    // 同 V1：持有者随任务进池，选择器按 maxWorkers 挡第二人（见 toTaskEntry 注释）。
+    assignedCreeps: holdersByTask.get(req.requestId) ?? [],
     pos: req.source.pos,
   };
 }

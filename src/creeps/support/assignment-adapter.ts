@@ -47,6 +47,11 @@ function requestAssignment(creep: Creep, ctx: TickContext): CreepAssignment | un
     // container 被抽空后任务下 tick 消失，但持有者的校验仍通过
     // （container 对象还在）→ 每 tick 无条件续约 → 僵尸 assignment
     // 永不释放，占据 memory 且逃逸抢占（invalidate 只清池内任务）。
+    // 前提（勿破坏）：**池的准入口径只能是"条件还在不在"，不能是"还有没有空位"**。
+    // 并发占用由任务条目的 assignedCreeps/maxWorkers 表达（选择器挡第二人）。若改回
+    // "占满即不生成请求"，持有者会用自己的租约把自己的任务抹掉 → 下一 tick 被这条
+    // 规则判成失效 → 释放 → 重挑别的源，形成每 tick 自我失效的死循环
+    // （线上实测：每 tick 一对 AssignmentExpired(code4)+Assigned，一只 hauler 原地抖）。
     // 保守放行两种情况（防误杀）：pool 缺失（reset 首 tick）；
     // 本房任务列表整体缺失（单房快照构建失败 → 该房任务未生成，
     // 不代表任务真消失 — 审查修正，防单次快照异常放大为全房重分配）。

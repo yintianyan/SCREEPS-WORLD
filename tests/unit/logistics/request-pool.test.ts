@@ -58,17 +58,26 @@ describe("buildTransportRequests — 生成/去重/聚合/提级", () => {
     expect(reqs[0]!.priority).toBe(0);
   });
 
-  it("防超卖：并发占满的源不再生成请求；空源跳过", () => {
+  it("并发占满的源仍留在池里并带持有者；空源才出池", () => {
+    // 反直觉但关键：池同时是 assignment 有效性（AS-1）的判据。若"占满即不生成请求"，
+    // 持有者会用自己的租约把自己的任务抹掉 → 下一 tick 被判「任务已出池」→ 释放 →
+    // 重挑别的源 → 每 tick 自我失效。并发改由 workers→assignedCreeps 在**选择时**挡。
     const reqs = buildTransportRequests({
       roomName: "R",
       supplies: [src("busy", 800), src("empty", 0), src("free", 200)],
-      leases: [lease("busy")],
+      leases: [
+        { sourceId: "busy", valid: true, creepName: "hauler-R-1" },
+        { sourceId: "free", valid: false, creepName: "hauler-R-2" },
+      ],
       towerStarving: false,
       maxConcurrentPerSource: 1,
       basePriority: 1,
       boostedPriority: 0,
     });
-    expect(reqs.map(r => r.sourceId)).toEqual(["free"]);
+    expect(reqs.map(r => r.sourceId)).toEqual(["busy", "free"]);
+    expect(reqs[0]!.workers).toEqual(["hauler-R-1"]);
+    // 失效租约不算占用（僵尸不占槽）
+    expect(reqs[1]!.workers).toBeUndefined();
   });
 });
 
