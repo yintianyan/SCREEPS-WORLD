@@ -106,7 +106,13 @@ export const remoteMiningManagerSystem: System = {
       // 1. 评估现有运营：暂停过期、清理废弃、检测敌占/敌方预定、入口封死。
       //    RM-3：被自己 claim 的房 + 敌方预定的房 — 现役远矿 creep 一并回收。
       const { selfClaimed: selfClaimedRooms, hostileReserved: hostileReservedRooms } =
-        maintainExistingOps(remoteOps, intel, ctx.tick, snapshot.controller?.owner?.username);
+        maintainExistingOps(
+          remoteOps,
+          snapshot.roomName,
+          intel,
+          ctx.tick,
+          snapshot.controller?.owner?.username,
+        );
 
       // 1b. v33 空转止损：编队全员空转超时的 op 废弃（物理上无法作业或
       //     全员卡死 — 线上实证 W36S58 墙线困编队空转 44k tick 无产出）。

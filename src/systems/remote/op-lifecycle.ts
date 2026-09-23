@@ -21,9 +21,54 @@ import {
   roomLinearDistance,
 } from "../../domain/remote/targeting";
 import { isHostilePlayerReservation } from "../../domain/intel";
+import {
+  REMOTE_ABANDON,
+  REMOTE_ABANDON_LABEL,
+  pushTombstone,
+  type RemoteOpTombstone,
+} from "../../domain/remote/op-outcome";
 
 /** 账本观测输出间隔（tick）——低频，避免刷屏与日志 CPU 开销。 */
 const LEDGER_LOG_INTERVAL = 1000;
+
+/** 把一次废弃落进本房的定长墓地（诊断件，不参与任何决策）。 */
+function recordAbandon(homeRoom: string, rec: RemoteOpTombstone): void {
+  const home = Memory.rooms[homeRoom];
+  if (!home) return;
+  home.remoteGraveyard = pushTombstone(home.remoteGraveyard, rec, CONFIG.remote.graveyardCap);
+}
+
+/**
+ * 统一废弃入口：置 abandoned，并在**首次**废弃时落一块墓碑 + 一行带原因名的日志。
+ *
+ * 只在首次落碑：后续轮次里别的门还会反复命中同一个 abandoned op，若每次覆盖，
+ * 留下的就是"后到的解释"而不是真凶。
+ * 墓碑之所以必须存在：op 记录本身经 staleThreshold×6 会被卫生层整条 delete，
+ * 非自有房的 intel 又只活在 heap —— 没有这块碑，"少了哪个矿点、为什么"无从回答
+ * （线上实证：W37S55 的 remoteOps 从 4 掉到 2，事后查不到任何痕迹）。
+ */
+function abandonOp(
+  op: RemoteOp,
+  homeRoom: string,
+  target: string,
+  reason: number,
+  tick: number,
+  data?: number[],
+  who?: string,
+): void {
+  if (op.state === "abandoned") return;
+  op.state = "abandoned";
+  const rec: RemoteOpTombstone = { t: target, r: reason, at: tick };
+  if (data && data.length > 0) rec.d = data;
+  if (who) rec.w = who;
+  recordAbandon(homeRoom, rec);
+  log.info(
+    "remote-mining-manager",
+    `remote/${homeRoom}: ${REMOTE_ABANDON_LABEL[reason] ?? "废弃"} ${target}${ 
+      rec.d ? `（${rec.d.join(", ")}）` : "" 
+      }${rec.w ? ` by ${rec.w}` : ""}`,
+  );
+}
 
 /**
  * Memory ↔ heap 账本同步，返回权威（heap）账本。
@@ -92,14 +137,14 @@ export function enforceMeasuredEconomics(
         (op.dangerUntil !== undefined && tick < op.dangerUntil) ||
         (op.blockedUntil !== undefined && tick < op.blockedUntil);
       if (ledger.spawnCost >= CONFIG.remote.zeroDeliverySpawnCost && !rescueActive && !threatHold) {
-        op.state = "abandoned";
+        // d = [零交付时长, spawnCost, infraCost, 止损门槛]
+        abandonOp(op, homeRoom, target, REMOTE_ABANDON.ZeroDelivery, tick, [
+          tick - op.createdAt,
+          Math.round(ledger.spawnCost),
+          Math.round(ledger.infraCost),
+          CONFIG.remote.zeroDeliverySpawnCost,
+        ]);
         op.dangerUntil = tick + CONFIG.remote.econCooldown;
-        log.info(
-          "remote-mining-manager",
-          `remote/${homeRoom}: 零交付止损 ${target}` +
-            `（零交付 ${tick - op.createdAt} tick，spawn=${Math.round(ledger.spawnCost)} ` +
-            `infra=${Math.round(ledger.infraCost)} ≥ ${CONFIG.remote.zeroDeliverySpawnCost}）`,
-        );
       }
       continue;
     }
@@ -107,16 +152,15 @@ export function enforceMeasuredEconomics(
     const rate = opNetRate(ledger, tick);
     if (rate >= CONFIG.remote.closeNetRate) continue;
 
-    op.state = "abandoned";
+    // d = [netRate×100, delivered, spawnCost, infraCost, 运行时长]
+    abandonOp(op, homeRoom, target, REMOTE_ABANDON.NetRateLoss, tick, [
+      Math.round(rate * 100),
+      Math.round(ledger.delivered),
+      Math.round(ledger.spawnCost),
+      Math.round(ledger.infraCost),
+      tick - op.createdAt,
+    ]);
     op.dangerUntil = tick + CONFIG.remote.econCooldown;
-    log.info(
-      "remote-mining-manager",
-      `remote/${homeRoom}: 实测亏损收缩 ${target}` +
-        `（netRate=${rate.toFixed(2)} < ${CONFIG.remote.closeNetRate} e/t，` +
-        `delivered=${Math.round(ledger.delivered)} spawn=${Math.round(ledger.spawnCost)} ` +
-        `refund=${Math.round(ledger.refund)} infra=${Math.round(ledger.infraCost)}，` +
-        `运行 ${tick - op.createdAt} tick）`,
-    );
   }
 }
 
@@ -169,13 +213,14 @@ export function reevaluateActiveOps(
       if (op.lowScoreSince === undefined) {
         op.lowScoreSince = tick; // 首次跌破 — 起算宽限期。
       } else if (tick - op.lowScoreSince > CONFIG.remote.lowScoreGrace) {
-        op.state = "abandoned";
-        log.info(
-          "remote-mining-manager",
-          `remote/${homeRoom}: 经济重估废弃 ${roomName}` +
-            `（netScore=${netScore.toFixed(1)} < ${CONFIG.remote.minNetScore}，` +
-            `持续 ${tick - op.lowScoreSince} tick）`,
-        );
+        // d = [netScore×10, 低于门槛时长, haulerNeed, sources, 门槛×10]
+        abandonOp(op, homeRoom, roomName, REMOTE_ABANDON.LowScore, tick, [
+          Math.round(netScore * 10),
+          tick - op.lowScoreSince,
+          haulerNeed,
+          op.sources ?? info?.sources ?? 0,
+          Math.round(CONFIG.remote.minNetScore * 10),
+        ]);
       }
     } else if (op.lowScoreSince !== undefined) {
       op.lowScoreSince = undefined; // 回升到门槛以上 — 清除低分计时。
@@ -189,6 +234,7 @@ export function reevaluateActiveOps(
  */
 export function maintainExistingOps(
   remoteOps: Record<string, RemoteOp>,
+  homeRoom: string,
   intel: Record<string, import("../../domain/intel").RoomIntel> | undefined,
   tick: number,
   myUsername?: string,
@@ -209,7 +255,16 @@ export function maintainExistingOps(
     // reserver 对自有 controller 空耗 CLAIM 寿命 — 同样废弃并回收。
     const targetRoom = Game.rooms[roomName];
     if (targetRoom?.controller?.owner) {
-      op.state = "abandoned";
+      // d = [是否我方 claim(1/0), controller 等级]；w = owner 名
+      abandonOp(
+        op,
+        homeRoom,
+        roomName,
+        REMOTE_ABANDON.Claimed,
+        tick,
+        [targetRoom.controller.my ? 1 : 0, targetRoom.controller.level],
+        targetRoom.controller.owner.username,
+      );
       if (targetRoom.controller.my) selfClaimed.push(roomName);
       continue;
     }
@@ -231,7 +286,16 @@ export function maintainExistingOps(
     // active op 可派（线上 W37S57 实证）。
     const reservedBy = targetRoom?.controller?.reservation?.username;
     if (isHostilePlayerReservation(reservedBy, myUsername)) {
-      op.state = "abandoned";
+      // d 无（预定者名进 w）；这条以前只回收到调用方，不留原因
+      abandonOp(
+        op,
+        homeRoom,
+        roomName,
+        REMOTE_ABANDON.HostileReserved,
+        tick,
+        undefined,
+        reservedBy,
+      );
       hostileReserved.push(roomName);
       continue;
     }
@@ -248,13 +312,8 @@ export function maintainExistingOps(
       if (exits) {
         const exitDirs = Object.keys(exits).map(Number);
         if (exitDirs.length > 0 && exitDirs.every(d => sealed.includes(d))) {
-          op.state = "abandoned";
-          log.info(
-            "remote-mining-manager",
-            `[${tick}] remote/${myUsername ?? "?"}: 入口封死废弃 ${
-              roomName
-            }（sealedExits=[${sealed.join(",")}]，编队无法进入）`,
-          );
+          // d = 被封死的出口方向（ExitConstant：1=N 3=E 5=S 7=W）
+          abandonOp(op, homeRoom, roomName, REMOTE_ABANDON.SealedAllExits, tick, [...sealed]);
           continue;
         }
       }
@@ -282,9 +341,13 @@ export function maintainExistingOps(
 
   // 清理长期废弃的运营（超过 staleThreshold * 3 且无 creep）。
   const abandonThreshold = CONFIG.remote.staleThreshold * 3;
-  for (const [_roomName, op] of Object.entries(remoteOps)) {
+  for (const [roomName, op] of Object.entries(remoteOps)) {
     if (op.state === "paused" && tick - op.lastSeen > abandonThreshold) {
-      op.state = "abandoned";
+      // d = [距最后一次看见的时长, 转弃门槛]
+      abandonOp(op, homeRoom, roomName, REMOTE_ABANDON.PausedTimeout, tick, [
+        tick - op.lastSeen,
+        abandonThreshold,
+      ]);
     }
   }
 
@@ -374,13 +437,12 @@ export function censusStalledOps(
       if (op.stallSince === undefined) {
         op.stallSince = tick;
       } else if (tick - op.stallSince > CONFIG.remote.stallAbandonTicks) {
-        op.state = "abandoned";
-        log.info(
-          "remote-mining-manager",
-          `[${tick}] remote/${homeRoom}: 空转止损废弃 ${roomName}（编队 ${
-            entry.total
-          } 只全员空转持续 ${tick - op.stallSince} tick）`,
-        );
+        // d = [编队总数, 全员空转时长, 空转止损门槛]
+        abandonOp(op, homeRoom, roomName, REMOTE_ABANDON.Stalled, tick, [
+          entry.total,
+          tick - op.stallSince,
+          CONFIG.remote.stallAbandonTicks,
+        ]);
       }
     } else if (op.stallSince !== undefined) {
       op.stallSince = undefined;

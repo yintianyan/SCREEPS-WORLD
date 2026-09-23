@@ -319,6 +319,15 @@ declare global {
      */
     remoteOps?: Record<string, RemoteOp>;
     /**
+     * 远矿「废弃墓碑」（纯观测，不参与任何决策）：每次 op 废弃追加一条，
+     * 定长保留最新 CONFIG.remote.graveyardCap 条。
+     * 为什么不能只靠 remoteOps：abandoned 记录经 staleThreshold×6 会被卫生层整条
+     * delete，而非自有房的 intel 只活在 heap —— 没有这张碑，"少了哪个矿点、为什么被弃"
+     * 事后无从回答（线上实证 remoteOps 4→2 查无痕迹）。原因码见
+     * domain/remote/op-outcome.REMOTE_ABANDON。
+     */
+    remoteGraveyard?: import("../domain/remote/op-outcome").RemoteOpTombstone[];
+    /**
      * A5.1：防御状态标记（recovery-execution-system 写入，kernel/consumers 读取）。
      * heap 语义——不持久化到 RawMemory（global reset 丢失可接受，下 tick 重建）。
      */

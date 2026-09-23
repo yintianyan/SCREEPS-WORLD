@@ -802,6 +802,13 @@ export const CONFIG = {
     stallAbandonTicks: 1500,
     /** 远矿空转判定中的卡位阈值：stuckTicks 达到此值视为空转（卡住不动=不产出）。 */
     stallStuckTicks: 20,
+    /** 每房保留的「废弃墓碑」条数（Memory.rooms[home].remoteGraveyard，纯观测）。
+     * 为什么需要：op 一旦 abandoned，经 staleThreshold×6 就被卫生层整条 delete，
+     * 非自有房的 intel 又只在 heap —— 线上「remoteOps 从 4 掉到 2」事后完全无痕迹可查。
+     * 8 条废弃路径共用这张碑（原因码见 domain/remote/op-outcome.REMOTE_ABANDON）。
+     * 按条数不按时间清理：一个采集周期本身就可能长过任何合理 TTL。
+     * 体积上限 ≈10×(房名+3 字段) ≈ 每房几百字节，两房 <1KB，可忽略。 */
+    graveyardCap: 10,
   },
 
   expansion: {
