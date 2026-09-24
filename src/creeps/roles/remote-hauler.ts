@@ -16,25 +16,40 @@ import {
 /** 就近选择的「值得专程」阈值比例：低于背包空闲 30% 的 container 不值得专程跑。 */
 const REMOTE_WORTHWHILE_RATIO = 0.3;
 
+/** 脚下建路的射程上限 — 引擎 build 要求 range < 4（即 ≤ 3）。 */
+const UNDERFOOT_BUILD_RANGE_LIMIT = 4;
+
 /**
  * 通勤建路 — 走到哪建到哪：规划器在远矿路径铺 road site，通勤 hauler 路过
  * （build range 3）时顺手 build。build 是非移动动作、移动走意图仲裁，同 tick
  * 叠加不耽误赶路；能量从 carry 出（回程满载腿承担，一次性基建投入）。
  * 无 WORK 部件的 body build 会 ERR_NOT_ENOUGH_RESOURCES，无害跳过 — 但仍浪费
  * CPU 做 find+range 计算，前置 WORK 检查消除无效开销。
+ *
+ * 摊薄反例（线上实证 W37S54 tick 83188662→83200502）：一条 20 格的链上，11.8k tick 里
+ * 每个 site 只拿到 ~5 点进度、roads=0 —— 每趟「就近点一下」会把一次 build 摊到不同的格
+ * 子上，300 点永远凑不满，车道被一串永远建不成的 site 永久占住。判据改成射程内先建最
+ * 接近完工的那个：射程不变（不额外走路），progress 单调递增（选择稳定，不会来回换）。
+ *
+ * @internal 导出仅供单元测试 — 业务入口是 withRoadBuild 包裹的通勤候选。
  */
-function buildRoadSiteUnderfoot(creep: Creep): void {
+export function buildRoadSiteUnderfoot(creep: Creep): void {
   if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return;
   if (creep.getActiveBodyparts(WORK) === 0) return; // 无 WORK 部件，build 必失败
   const sites = findMySitesCached(creep.room);
   if (sites.length === 0) return;
   let best: ConstructionSite | undefined;
-  let bestRange = 4;
+  let bestRange = UNDERFOOT_BUILD_RANGE_LIMIT;
+  let bestProgress = -1;
   for (const site of sites) {
     const range = creep.pos.getRangeTo(site);
-    if (range >= bestRange) continue;
+    if (range >= UNDERFOOT_BUILD_RANGE_LIMIT) continue;
+    const progress = site.progress;
+    // 更近者优先；同射程内进度高者优先（先把脚下这条链的一格建完，再管下一格）。
+    if (range > bestRange || (range === bestRange && progress <= bestProgress)) continue;
     best = site;
     bestRange = range;
+    bestProgress = progress;
   }
   if (best) creep.build(best);
 }
