@@ -25,6 +25,35 @@ export function getRemoteSiteTotal(): number {
 }
 
 /**
+ * 本 tick 远矿 road site 跨主房总量（Σ 非 abandoned remoteOps[*].roadSiteCount）。
+ *
+ * 为什么求和走 Memory 而不是 room.find：roadSitesPerOpTotal 是「全帝国」帽，但旧实现
+ * 在 per-home 调用里用 `for (rn of Object.keys(remoteOps)) room.find(...)` 自行累加 ——
+ * 每个主房各算各的账，20 的帽实际变成 20×主房数（「一个数据结构两种语义」：名义全局、
+ * 实为每房）。此处按 op 记账求和，跨主房天然单一口径，且零 room.find（远矿房可达十几个）。
+ *
+ * 计数写者是 road-planner（每个有视野的 op 房实测校正；abandoned 写 0）。失明房的计数
+ * 维持上一次值（与 siteCount 同款保守偏差：偏多 → 少建，不会超帽）。
+ */
+export function getRemoteRoadSiteTotal(): number {
+  const g = globalCache();
+  if (g.remoteRoadSiteTotal && g.remoteRoadSiteTotal.tick === Game.time) {
+    return g.remoteRoadSiteTotal.count;
+  }
+  let count = 0;
+  for (const roomName in Memory.rooms) {
+    const ops = Memory.rooms[roomName]?.remoteOps;
+    if (!ops) continue;
+    for (const op of Object.values(ops)) {
+      if (op.state === "abandoned") continue;
+      count += op.roadSiteCount ?? 0;
+    }
+  }
+  g.remoteRoadSiteTotal = { tick: Game.time, count };
+  return count;
+}
+
+/**
  * 本 tick 全局 site 创建计数器（normal + emergency 两个独立槽位，per-tick 惰性初始化）。
  * 仲裁：normal 槽位 construction-manager 普通建造与远矿 container 先到先得；
  * emergency 槽位仅 construction-manager 紧急重建使用；远矿 site 让位 emergency

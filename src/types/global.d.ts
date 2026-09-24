@@ -1062,6 +1062,12 @@ declare global {
      */
     siteCount?: number;
     /**
+     * 本远矿房现存 road construction site 数（跨主房修路车道 roadSitesPerOpTotal 的记账位）。
+     * 与 siteCount 同理由 road-planner 每轮实测校正（会递减）— 只增不减会让零进度残骸
+     * 永久占满车道（线上实证 W37S54 挂 20/20 且 roads=0）。abandoned 直接写 0。
+     */
+    roadSiteCount?: number;
+    /**
      * v33 空转止损计时：编队全员空转（idle/flee 或 stuckTicks ≥ stallStuckTicks）
      * 的起始 tick；任一成员恢复工作立即清除。持续超过 CONFIG.remote.stallAbandonTicks
      * → 废弃运营。remote-mining-manager 唯一写者（managerInterval 采样）。

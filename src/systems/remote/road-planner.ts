@@ -2,7 +2,7 @@
 import { CONFIG } from "../../config";
 import type { TickContext } from "../../kernel/contracts";
 import { querySquad, bumpRemoteOpLedger } from "../../kernel/global-cache";
-import { getRemoteSiteTotal, getTickSiteCounters } from "../site-quota";
+import { getRemoteSiteTotal, getRemoteRoadSiteTotal, getTickSiteCounters } from "../site-quota";
 import { recycleRemoteDismantlers } from "./creep-recycle";
 import { structureCost } from "./op-lifecycle";
 
@@ -146,16 +146,36 @@ export function fulfillContainerRequests(
   }
 }
 
+/** 通勤 hauler 的建路半径 — buildRoadSiteUnderfoot 只 build range<4 的最近 site。 */
+const BUILD_EVIDENCE_RANGE = 3;
+
+/** 格子的切比雪夫距离判据：与 evidence 集合中任一格 range≤BUILD_EVIDENCE_RANGE 即为 true。 */
+function nearEvidence(keys: ReadonlySet<string>, a: { x: number; y: number }): boolean {
+  for (const key of keys) {
+    const comma = key.indexOf(",");
+    const x = +key.slice(0, comma);
+    const y = +key.slice(comma + 1);
+    if (Math.abs(x - a.x) <= BUILD_EVIDENCE_RANGE && Math.abs(y - a.y) <= BUILD_EVIDENCE_RANGE) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * 从跨房路径中筛选远矿房侧可铺路的格子（纯函数，供单测）。
  * 排除：已有 road / 任何工地 / container 等结构格 / source 近旁 1 格（采集位让给
  * container 与站桩 harvester）。sites/roads/structures 以 "x,y" key 集合传入。
+ *
+ * evidence 给出时，只保留「有施工证据」的格 —— 距已建成 road / progress>0 的 road site /
+ * container ≤ 3。缺省（undefined）不加此约束（新开局：一条证据都还没有）。
  */
 export function selectRemoteRoadTiles(
   path: RoomPosition[],
   targetRoom: string,
   sources: readonly { x: number; y: number }[],
   blockedKeys: ReadonlySet<string>,
+  evidence?: ReadonlySet<string>,
 ): RoomPosition[] {
   const out: RoomPosition[] = [];
   const seen = new Set<string>();
@@ -174,16 +194,31 @@ export function selectRemoteRoadTiles(
       }
     }
     if (nearSource) continue;
+    if (evidence && !nearEvidence(evidence, pos)) continue;
     out.push(pos);
   }
-  return out;
+  // 从目标端（container 侧）起铺：路径数组是「home 锚 → container」，正序即从边界往房内铺。
+  // 通勤 hauler 的建路半径 3 格，链路必须从「确定被走的一端」生长 —— container 旁每一格
+  // 都有 hauler 必经，边界那一端则取决于 creep 实际从哪个出口入境（见 planRemotePathRoads）。
+  return out.reverse();
 }
 
 /**
  * 远矿路径修路规划器 —— 每次运行对每个 active op：home 锚（storage 优先，退 spawn）
  * → 各 source container 的跨房路径，筛出远矿房侧可铺格，限速下 road site。
- * 施工不归本函数：通勤 hauler（1W body）经 buildRoadSiteUnderfoot 边走边建。
+ * 施工不归本函数：通勤 hauler（1W body）经 buildRoadSiteUnderfoot 边走边建（range≤3）。
  * 全部 site 写在远矿房（本系统是远矿房唯一 site 写者，架构合规）。
+ *
+ * 落点错配（线上实证 W37S57 tick 83188364）：本函数的锚是 home storage + 纯地形代价
+ * （PathFinder 无 cost matrix），而 creep 穿越边界用的是 moveTowardRoom 的
+ * findClosestByRange(exitDir) + 堆栈粘性出口缓存 —— 谁先把缓存打冷，全房对就用谁的落点。
+ * 两条线在边界处可以差十几格：x=28 列上 28,44/45/46 有进度（被走过）而紧邻的 28,47/48
+ * progress=0（hauler 从 x≈18 入境，从没踏上这两格）。因为施工只能「脚下」发生，
+ * 落在无人行走的线上的 site 永远不会建成，只会永久占着 roadSitesPerOpTotal 车道并触发
+ * E7 siteStale。对策分两步、顺序不能反：先用施工证据闸把「铺路」约束成只跟被走过的线
+ * 生长（并改从 container 端起铺），再回收零进度且无证据的残骸 —— 只有前者到位，回收才
+ * 收敛（否则规划器下一轮原地重建，变成建/删循环）。两者在同一函数体内，稳态是每轮 0 次
+ * remove、0 次新建，直到通勤线再次推进。
  */
 export function planRemotePathRoads(
   homeRoom: string,
@@ -196,33 +231,72 @@ export function planRemotePathRoads(
   if (!anchor) return;
   // 独立预算车道：远矿路径 road 不占 maxGlobalSites（自有房常规工地帽会被
   // lab/rampart 长周期大活顶满，道路基建被无限饿死 —— 线上实证 maxGlobalSites=7
-  // 全被占用）。上限 = 全帝国待建 road ≤ roadSitesPerOpTotal，叠加每轮限额与
-  // 单 op 上限，仍然有界。
-  let empireRoadPending = 0;
-  for (const rn of Object.keys(remoteOps)) {
-    const room = Game.rooms[rn];
-    if (!room) continue;
-    empireRoadPending += room
-      .find(FIND_MY_CONSTRUCTION_SITES)
-      .filter(s => s.structureType === STRUCTURE_ROAD).length;
-  }
+  // 全被占用）。上限 = 全帝国待建 road ≤ roadSitesPerOpTotal。求和口径必须跨主房：
+  // 旧实现在这段 per-home 调用里用 room.find 自行累加本主房的 op，于是 20 的帽实际
+  // 是 20×主房数 —— 名义全局、实为每房（详见 getRemoteRoadSiteTotal）。
+  const roadBudget = getRemoteRoadSiteTotal();
   let created = 0;
+  // 本轮清扫释放的车道额度 — roadBudget 是 tick 入口的快照（per-tick 缓存），不减掉
+  // 刚 remove 的残骸会让「被自己的残骸锁死」这条路径多等一个 manager 间隔才解开。
+  let released = 0;
   for (const [rn, op] of Object.entries(remoteOps)) {
     if (created >= CONFIG.remote.roadSitesPerRun) return;
-    if (empireRoadPending >= CONFIG.remote.roadSitesPerOpTotal) return;
-    if (op.state !== "active") continue;
+    // 车道已满不是跳过本房的理由 —— 残骸正占着车道，越满越要先扫。预算判定挪到清扫之后。
+    if (op.state === "abandoned") {
+      // 废弃房的 site 由 construction-manager 孤儿清扫收走，计数立即归零释放车道。
+      if (op.roadSiteCount !== 0) op.roadSiteCount = 0;
+      continue;
+    }
     const room = Game.rooms[rn];
-    if (!room) continue; // 需视野建站（有 creep 即有视野）。
+    if (!room) continue; // 需视野建站（有 creep 即有视野）；失明维持上一轮计数。
 
-    // 单 op 挂起 road site 数（含在建）超上限则跳过 —— 铺完自然回落。
     const allSites = room.find(FIND_MY_CONSTRUCTION_SITES);
     let roadSitesPending = allSites.filter(s => s.structureType === STRUCTURE_ROAD).length;
-    if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) continue;
+    if (op.state !== "active") {
+      // 暂停/侦察房也要校正：不校正就再也无人写这个字段，残骸会永久占着跨主房车道。
+      if (op.roadSiteCount !== roadSitesPending) op.roadSiteCount = roadSitesPending;
+      continue;
+    }
 
     // 阻挡集：已有 road / 任何工地 / 任何结构（container 等）。
+    // 施工证据集（同两轮遍历顺带收集，不额外 find）：已建成 road / container /
+    // progress>0 的 road site —— 通勤 hauler 确实踩过的位置。
     const blockedKeys = new Set<string>();
-    for (const s of room.find(FIND_STRUCTURES)) blockedKeys.add(`${s.pos.x},${s.pos.y}`);
-    for (const s of allSites) blockedKeys.add(`${s.pos.x},${s.pos.y}`);
+    const evidenceKeys = new Set<string>();
+    for (const s of room.find(FIND_STRUCTURES)) {
+      blockedKeys.add(`${s.pos.x},${s.pos.y}`);
+      if (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) {
+        evidenceKeys.add(`${s.pos.x},${s.pos.y}`);
+      }
+    }
+    for (const s of allSites) {
+      blockedKeys.add(`${s.pos.x},${s.pos.y}`);
+      if (s.structureType === STRUCTURE_ROAD && s.progress > 0) {
+        evidenceKeys.add(`${s.pos.x},${s.pos.y}`);
+      }
+    }
+    // 回收「零进度 + 拿不到施工证据」的 road site —— 这类格落在"规划线有人画、通勤线
+    // 没人走"的区段：出境点由 moveTowardRoom 的粘性出口缓存决定，与 home 锚的地形最短
+    // 路可以差十几格（线上实证 W37S57 28,47/48、W37S54 边界端 9 格）。progress=0 意味
+    // 一分能量都没投过，remove 零损失。加了施工证据闸之后新建 site 必然紧邻证据，故本
+    // 清扫的稳态是 0 次删除 —— 不是建/删循环。evidenceKeys 为空（这房连 container 都
+    // 没有）时跳过：此刻无从判断哪条线被走过，清扫会当场吃掉开局的第一段路。
+    if (evidenceKeys.size > 0) {
+      for (const s of allSites) {
+        if (s.structureType !== STRUCTURE_ROAD || s.progress > 0) continue;
+        if (nearEvidence(evidenceKeys, s.pos)) continue;
+        s.remove();
+        released++;
+        roadSitesPending--;
+      }
+    }
+    // 实测校正（本字段唯一写者）：与 op.siteCount 同款「会递减」，防只增不减锁死车道。
+    // 记清扫后的口径 —— 残骸当场释放，不必等下一轮再减。
+    if (op.roadSiteCount !== roadSitesPending) op.roadSiteCount = roadSitesPending;
+    // 清扫之后才判预算：本轮释放的额度当场可用（roadBudget 是 tick 入口快照）。
+    if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) continue;
+    // 单 op 挂起 road site 数（含在建）超上限则跳过 —— 铺完自然回落。
+    if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) continue;
     const sources = room.find(FIND_SOURCES);
 
     for (const source of sources) {
@@ -246,16 +320,17 @@ export function planRemotePathRoads(
         rn,
         sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
         blockedKeys,
+        // 开局（一条证据都没有）不设闸，否则永远铺不出第一段路。
+        evidenceKeys.size > 0 ? evidenceKeys : undefined,
       );
       for (const pos of tiles) {
         if (created >= CONFIG.remote.roadSitesPerRun) break;
         if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) break;
-        if (empireRoadPending >= CONFIG.remote.roadSitesPerOpTotal) return;
+        if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) return;
         const rc = room.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD);
         if (rc === OK) {
           created++;
           roadSitesPending++;
-          empireRoadPending++;
           blockedKeys.add(`${pos.x},${pos.y}`);
           // 道路是运力倍增器（有路 hauler 速度 ×2），但也是实打实的能量投入，
           // 记到 op 名下——否则「修路把远房变划算」的收益会被高估。

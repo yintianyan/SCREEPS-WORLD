@@ -144,6 +144,8 @@ export interface GlobalCache {
    * construction-manager 全局上限判定读此值（与 ctx.globalSiteCount 相加 < maxGlobalSites）。
    * 由 site-quota.ts 的 getRemoteSiteTotal() 惰性构建。 */
   remoteSiteTotal?: { tick: number; count: number };
+  /** 远矿 road site 跨主房总量缓存（Σ op.roadSiteCount）— 由 getRemoteRoadSiteTotal() 惰性构建。 */
+  remoteRoadSiteTotal?: { tick: number; count: number };
   /** R2：construction-manager 跳过原因 L1 计数（heap — 观测数据不上 Memory，
    * STATE_OWNERSHIP §3.10）。rooms 按窗口聚合，结构化日志输出后清零。 */
   constructionSkips?: {
