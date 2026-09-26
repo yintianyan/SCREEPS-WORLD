@@ -1024,6 +1024,25 @@ declare global {
     /** 最近可见 tick（creep 进入或 observer 扫描时更新）。 */
     lastSeen: number;
     /**
+     * 进入当前 `state` 的 tick —— 超时/废弃计时的**唯一**合法起点。
+     *
+     * 为什么不能拿 `lastSeen` 当这个起点：`lastSeen` 是"最后一次看见"（视野/creep
+     * 到达时刷新），而"暂停了多久"是另一件事。混用一次的后果是：恢复系统在能量危机
+     * 里暂停一个已经失明的 op 时，废弃计时（staleThreshold×3）是从很久以前那次
+     * "看见"起算的 —— 恰好在重新拿到视野、本可以恢复的那一刻把矿点判死。
+     * 旧 Memory 无此字段时消费端回退 `lastSeen`（保持既有行为，不迁移）。
+     */
+    stateSince?: number;
+    /**
+     * 恢复系统的节流请求（**意图**，不是状态）：到期前该 op 不孵化、不扩采。
+     *
+     * 单写者纪律：只有 recovery-execution-system 写这个字段，只有 op-lifecycle
+     * 依据它改 `state`。此前 recovery 直接写 `op.state = "paused"`，与属主的
+     * "超时暂停"共用一个状态值 + 一根时钟，结果两个系统逐周期互相撤销对方的写入
+     * （recovery 见 active 就暂停、属主见 creep 就恢复），且暂停即可能触发判死。
+     */
+    recoveryPauseUntil?: number;
+    /**
      * InvaderCore 压制冷却截止 tick：发现核心 → 回收 → 失明 → 孵化恢复 → 新 creep
      * 送死的循环靠持久化冷却打破。到期恢复孵化探测（核心仍在则新视野续期）；
      * 有视野且确认核心消失时立即清除。

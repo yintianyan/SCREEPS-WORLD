@@ -47,6 +47,19 @@ function recordAbandon(homeRoom: string, rec: RemoteOpTombstone): void {
  * 非自有房的 intel 又只活在 heap —— 没有这块碑，"少了哪个矿点、为什么"无从回答
  * （线上实证：W37S55 的 remoteOps 从 4 掉到 2，事后查不到任何痕迹）。
  */
+/**
+ * `op.state` 的唯一写入口 —— 顺带刷新 `stateSince`（进入该状态的时刻）。
+ *
+ * 之所以收成函数而不是各处 `op.state = ...`：超时/废弃计时必须以"进入该状态多久"
+ * 为起点，而各写点只记得改状态、不记得改计时起点 —— 漏一处就是把 `lastSeen`
+ * 当暂停时长用（恢复系统越权暂停时当场判死矿点，就是这么来的）。
+ */
+export function setRemoteOpState(op: RemoteOp, state: RemoteOp["state"], tick: number): void {
+  if (op.state === state) return;
+  op.state = state;
+  op.stateSince = tick;
+}
+
 function abandonOp(
   op: RemoteOp,
   homeRoom: string,
@@ -57,16 +70,16 @@ function abandonOp(
   who?: string,
 ): void {
   if (op.state === "abandoned") return;
-  op.state = "abandoned";
+  setRemoteOpState(op, "abandoned", tick);
   const rec: RemoteOpTombstone = { t: target, r: reason, at: tick };
   if (data && data.length > 0) rec.d = data;
   if (who) rec.w = who;
   recordAbandon(homeRoom, rec);
   log.info(
     "remote-mining-manager",
-    `remote/${homeRoom}: ${REMOTE_ABANDON_LABEL[reason] ?? "废弃"} ${target}${ 
-      rec.d ? `（${rec.d.join(", ")}）` : "" 
-      }${rec.w ? ` by ${rec.w}` : ""}`,
+    `remote/${homeRoom}: ${REMOTE_ABANDON_LABEL[reason] ?? "废弃"} ${target}${
+      rec.d ? `（${rec.d.join(", ")}）` : ""
+    }${rec.w ? ` by ${rec.w}` : ""}`,
   );
 }
 
@@ -325,27 +338,33 @@ export function maintainExistingOps(
       op.lastSeen = tick;
     }
 
-    // 过期暂停。
-    if (shouldPauseOperation(op, tick, CONFIG.remote.staleThreshold)) {
-      if (op.state === "active") {
-        op.state = "paused";
-      }
+    // 过期暂停 / 恢复。恢复系统可能留下一个有时限的节流请求（recoveryPauseUntil），
+    // 它在属主这边落地为 paused —— 但**不解锁**恢复条件，否则会出现"recovery 见
+    // active 就暂停、这里见 creep 就恢复"的逐周期互相撤销。
+    const recoveryHolds = tick < (op.recoveryPauseUntil ?? 0);
+    if (recoveryHolds) {
+      if (op.state === "active") setRemoteOpState(op, "paused", tick);
+    } else if (shouldPauseOperation(op, tick, CONFIG.remote.staleThreshold)) {
+      if (op.state === "active") setRemoteOpState(op, "paused", tick);
     } else if (op.state === "paused") {
       // 恢复：有新视野或 creep 到达时恢复 active。
       if (hasCreep) {
-        op.state = "active";
+        setRemoteOpState(op, "active", tick);
         op.lastSeen = tick;
       }
     }
   }
 
   // 清理长期废弃的运营（超过 staleThreshold * 3 且无 creep）。
+  // 计时起点是「进入 paused 的时刻」而非「最后一次看见」：后者会让一个早已失明、
+  // 刚被恢复系统主动暂停的 op 在重新可见的同一 tick 就被判死。
   const abandonThreshold = CONFIG.remote.staleThreshold * 3;
   for (const [roomName, op] of Object.entries(remoteOps)) {
-    if (op.state === "paused" && tick - op.lastSeen > abandonThreshold) {
-      // d = [距最后一次看见的时长, 转弃门槛]
+    const pausedFor = tick - (op.stateSince ?? op.lastSeen);
+    if (op.state === "paused" && pausedFor > abandonThreshold) {
+      // d = [距进入 paused 的时长, 转弃门槛]
       abandonOp(op, homeRoom, roomName, REMOTE_ABANDON.PausedTimeout, tick, [
-        tick - op.lastSeen,
+        pausedFor,
         abandonThreshold,
       ]);
     }

@@ -32,6 +32,7 @@ import {
   enforceMeasuredEconomics,
   syncOpLedger,
   logRemoteLedgers,
+  setRemoteOpState,
 } from "./op-lifecycle";
 import {
   collectRemoteCreeps,
@@ -146,7 +147,7 @@ export const remoteMiningManagerSystem: System = {
           .sort((a, b) => costOf(b[0], b[1]) - costOf(a[0], a[1]) || a[0].localeCompare(b[0]));
         for (let i = 0; i < activeCount - maxOpsWithCapacity; i++) {
           const [roomName, op] = active[i]!;
-          op.state = "abandoned";
+          setRemoteOpState(op, "abandoned", ctx.tick);
           log.info(
             "remote-mining-manager",
             `remote/${snapshot.roomName}: 超额收缩，废弃 ${roomName}` +
@@ -221,6 +222,7 @@ export const remoteMiningManagerSystem: System = {
             sources: candidate.sources,
             haulerNeed: candidate.haulerNeed,
             createdAt: ctx.tick,
+            stateSince: ctx.tick,
             lastSeen: ctx.tick,
             ...(reservedByInvader ? { needCoreClear: true } : {}),
           };
@@ -372,7 +374,7 @@ export const remoteMiningManagerSystem: System = {
             // ABORT → 标记 creep 回收 + op.state = "abandoned"。
             if (decision.action === "RETREAT" || decision.action === "ABORT") {
               recycleRemoteCreepsForRoom(snapshot.roomName, rn);
-              op.state = decision.action === "ABORT" ? "abandoned" : "paused";
+              setRemoteOpState(op, decision.action === "ABORT" ? "abandoned" : "paused", ctx.tick);
               op.dangerUntil = ctx.tick + CONFIG.remote.dangerCooldown;
               log.info(
                 "remote-mining-manager",

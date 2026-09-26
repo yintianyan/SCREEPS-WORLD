@@ -11,6 +11,7 @@ function getCreepCache(): Creep[] {
   return __creepCache.creeps;
 }
 import type { Priority, System, TickContext } from "../../kernel/contracts";
+import { CONFIG } from "../../config";
 import { globalCache, publishProcurementDemands } from "../../kernel/global-cache";
 import { RECOVERY_BODY, selectBody, degradeBody, minimalBodyFor } from "../../config/bodies";
 import { submitRequest, hasRequest, spawnKey, buildSpawnRequest } from "../../domain/spawn/queue";
@@ -424,11 +425,15 @@ function submitEnergyRedirect(
 /**
  * REMOTE_STALL：暂停远矿运营。
 
- * 翻译：RecoveryAction → RemoteOp.state = "paused"
+ * 翻译：RecoveryAction → RemoteOp.recoveryPauseUntil（有时限的节流请求）
+ *
+ * 不直接写 `op.state`：paused 属 op-lifecycle 所有，且它按 `lastSeen` 计废弃时长 ——
+ * 越权暂停会把"很久没看见"直接当成"已暂停很久"，在重新可见的那一 tick 判死矿点。
+ * 请求由属主在下个评估周期落地，并在到期后按自己的条件恢复。
  */
 function submitRemoteStall(
   action: RecoveryAction,
-  _ctx: TickContext,
+  ctx: TickContext,
   _correlationId: string,
 ): SubmitResult {
   // remote_stall 的目标房间从 failureId 提取
@@ -446,16 +451,23 @@ function submitRemoteStall(
   }
 
   const op = roomMem.remoteOps[targetRoom];
-  if (!op || op.state !== "active") {
+  if (!op || op.state === "abandoned") {
     return {
       submitted: true,
       executionRef: `${homeRoom}:${targetRoom}`,
-      reason: "already paused/abandoned (idempotent)",
+      reason: "already abandoned (idempotent)",
     };
   }
 
-  op.state = "paused";
-  return { submitted: true, executionRef: `${homeRoom}:${targetRoom}`, reason: "remote op paused" };
+  // 只留请求，不改状态：窗口取一个 staleThreshold，够覆盖一次恢复尝试，
+  // 又远短于 paused → abandoned 的 3×staleThreshold，不会把矿点拖进判死。
+  const until = ctx.tick + CONFIG.remote.staleThreshold;
+  op.recoveryPauseUntil = Math.max(op.recoveryPauseUntil ?? 0, until);
+  return {
+    submitted: true,
+    executionRef: `${homeRoom}:${targetRoom}`,
+    reason: "remote pause requested",
+  };
 }
 
 /**
