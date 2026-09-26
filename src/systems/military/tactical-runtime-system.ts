@@ -35,6 +35,7 @@ import type { TerrainContext, EffectiveCombatModifier } from "../../domain/defen
 import type { MultiDimensionalConfidence } from "../../domain/defense/confidence";
 import { validateAuthorization } from "../../domain/tactical/authorization";
 import { log } from "../../kernel/log";
+import { commitSquadState, pruneSquadStates, readSquadState, squadStateKey } from "./squad-state";
 
 // ═══════════════════════════════════════════════════════════
 // §1. GlobalCache 扩展 — Tactical Runtime 状态
@@ -158,6 +159,12 @@ export const tacticalRuntimeSystem: System = {
     const decision = evaluateTacticalAction(snapshot);
     g.tacticalDecisions!.push(decision);
 
+    // ── 6b. 回写 Squad 级战术状态 ──
+    //     A9 的原缺陷就在这儿：注释说要"存储 decision 的 newState 供下轮评估"，但从来没存。
+    //     状态无处落脚时，三个 stage runtime 各自从 warPlan.phase 现推，currentState 恒为
+    //     FORMING/MOVING，四道安全闸在转换表上永远判非法。
+    commitSquadState(squadStateKey(plan), squad.state, decision.newState, tick);
+
     // ── 7. 映射为 RoleActionIntent 并写入缓存 ──
     const intent = mapDecisionToRoleIntent(decision);
     for (const member of squad.members) {
@@ -198,6 +205,7 @@ export const tacticalRuntimeSystem: System = {
     // objectiveRecord 不存储 TacticalState（那是 Squad 级的），
     // 但存储 decision 的 newState 供下轮生命周期评估
 
+    pruneSquadStates(tick);
     g.tacticalLastRunTick = tick;
   },
 };
@@ -360,16 +368,9 @@ function buildSquadPlan(
       allowPursuit: false,
       maxPursuitDistance: 0,
     },
-    state: deriveTacticalStateFromPhase(plan.phase ?? "build"),
+    state: readSquadState(squadStateKey(plan)),
     createdTick: plan.since,
   };
-}
-
-/** 从 warPlan phase 推导初始 TacticalState。 */
-function deriveTacticalStateFromPhase(phase: string): TacticalState {
-  if (phase === "build") return "FORMING";
-  if (phase === "advance") return "MOVING";
-  return "FORMING";
 }
 
 // ═══════════════════════════════════════════════════════════

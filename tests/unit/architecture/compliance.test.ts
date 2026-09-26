@@ -376,6 +376,13 @@ describe("R11 systems 间值导入审计", () => {
     // 出口条件：两写者合并为单一 Operation 生命周期属主（W06 三.3 的方案 B / B7 接线
     // 裁决）后，此边应随 demobilize 一起迁进那个属主并从本表删除。
     "systems/military/war-planning-system.ts:systems/military/war-planner.ts",
+    // Squad 级战术状态的归属模块（A9 修复）：战术状态必须有单一读写口，
+    // 三个 stage runtime + combat-micro 原先各自从 warPlan.phase 现推（4 份副本）。
+    // 同 systems/remote/op-lifecycle.ts 的形状：从宿主系统里抽出来的生命周期属主。
+    "systems/military/tactical-runtime-system.ts:systems/military/squad-state.ts",
+    "systems/military/tactical-engagement-runtime.ts:systems/military/squad-state.ts",
+    "systems/military/squad-movement-runtime.ts:systems/military/squad-state.ts",
+    "systems/military/combat-micro-runtime.ts:systems/military/squad-state.ts",
     // pipeline 内子阶段间的数据传递
     "systems/military/tactical-engagement-runtime.ts:systems/military/squad-movement-runtime.ts",
     "systems/military/combat-micro-runtime.ts:systems/military/tactical-engagement-runtime.ts",

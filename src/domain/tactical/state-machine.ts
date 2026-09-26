@@ -29,6 +29,9 @@ const VALID_TACTICAL_TRANSITIONS: Record<TacticalState, readonly TacticalState[]
   ABORTED: [],
 };
 
+/** 全部战术状态 —— 由转换表的键集推导，避免另立一份会漂移的名单。 */
+export const ALL_TACTICAL_STATES = Object.keys(VALID_TACTICAL_TRANSITIONS) as TacticalState[];
+
 export function canTransitionTactical(from: TacticalState, to: TacticalState): boolean {
   const allowed = VALID_TACTICAL_TRANSITIONS[from];
   return allowed ? allowed.includes(to) : false;

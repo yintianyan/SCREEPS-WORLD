@@ -13,7 +13,7 @@ import {
   type SquadStuckDetection,
 } from "../../domain/tactical";
 import type { TerrainContext } from "../../domain/defense/terrain-context";
-import type { SquadPlan, TacticalState, FormationType } from "../../domain/tactical/types";
+import type { SquadPlan, FormationType } from "../../domain/tactical/types";
 import {
   registerMove,
   registerAnchor,
@@ -23,6 +23,7 @@ import {
 import { moveToTarget, moveTowardRoom } from "../../creeps/movement/pathfinding";
 import { recordSkip } from "../../kernel/memory";
 import { log } from "../../kernel/log";
+import { readSquadState, squadStateKey } from "./squad-state";
 
 // ═══════════════════════════════════════════════════════════
 // §1. GlobalCache 扩展 — Squad Movement Runtime 状态
@@ -378,16 +379,9 @@ function buildSquadPlanFromWarPlan(
       allowPursuit: false,
       maxPursuitDistance: 0,
     },
-    state: deriveTacticalStateFromPhase(plan.phase ?? "build"),
+    state: readSquadState(squadStateKey(plan)),
     createdTick: plan.since,
   };
-}
-
-/** 从 warPlan phase 推导初始 TacticalState。 */
-function deriveTacticalStateFromPhase(phase: string): TacticalState {
-  if (phase === "build") return "FORMING";
-  if (phase === "advance") return "MOVING";
-  return "FORMING";
 }
 
 // ═══════════════════════════════════════════════════════════

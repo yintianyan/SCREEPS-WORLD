@@ -598,6 +598,16 @@ declare global {
      * 战争失败目标黑名单（v27+，war-planner 写入）：核验结论 failure/unknown 的
      * 目标冷却期内不被 selectWarTarget 重选；到期由 war-planner 清理。
      */
+    /**
+     * Squad 级战术状态（唯一写者：systems/military/squad-state.commitSquadState）。
+     * key = `squad-<sponsor>-<target>@<warPlan.since>`：带 since 是有意的 —— 换一轮行动
+     * （换目标或重新立项）就从 FORMING 重来，不把上一支编队撤退时的状态继承给新仗。
+     * 为什么必须落 Memory 而不是每 tick 从 warPlan.phase 现推：phase 是波次相位
+     * （build/advance），不是战术状态；用它推 state 会让 evaluateTacticalAction 的
+     * currentState 恒为 FORMING/MOVING，四道安全闸（regroup / retreat / disengage×2）
+     * 在转换表上永远判非法（A9）。
+     */
+    tacticalSquadStates?: Record<string, { state: string; since: number; updatedAt: number }>;
     warBlacklist?: Record<string, number>;
     /**
      * 战损止损后的整军休战截止（v27+，war-planner 写入）：此 tick 前不创建新战争

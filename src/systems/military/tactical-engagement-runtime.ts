@@ -7,6 +7,7 @@ import {
   type GlobalCache,
 } from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
+import { readSquadState, squadStateKey } from "./squad-state";
 import {
   planFocusFire,
   buildTargetCandidate,
@@ -17,7 +18,7 @@ import {
   type TargetCandidate,
 } from "../../domain/tactical";
 import type { CombatCapability } from "../../domain/combat/capability";
-import type { SquadPlan, TacticalState, TargetScope } from "../../domain/tactical/types";
+import type { SquadPlan, TargetScope } from "../../domain/tactical/types";
 import { getSquadMovementIntent } from "./squad-movement-runtime";
 
 // ═══════════════════════════════════════════════════════════
@@ -91,8 +92,11 @@ export const tacticalEngagementSystem: System = {
     const anchorPos = movementIntent?.anchor.pos ?? 25 * 50 + 25;
     const anchorRoom = movementIntent?.anchor.room ?? targetRoom;
 
-    // ── 7. 推导当前 TacticalState ──
-    const tacticalState = deriveTacticalState(squadPlan, plan.phase ?? "build");
+    // ── 7. 取 Squad 级战术状态（归属见 systems/military/squad-state）──
+    //     原先这里是"ENGAGING/POSITIONING 才认 squad.state，其余从 warPhase 现推"，
+    //     等于在本已归属的状态上再开一个第二写者：RETREATING / REGROUPING /
+    //     DISENGAGING 会被悄悄改写回 FORMING/MOVING，撤退中的编队又被派去进攻。
+    const tacticalState = squadPlan.state;
 
     // ── 8. 推导 WarPosture / TargetScope ──
     const warPosture = Memory.kernel?.strategy?.posture ?? "develop";
@@ -246,25 +250,9 @@ function buildSquadPlanFromWarPlan(
       allowPursuit: false,
       maxPursuitDistance: 0,
     },
-    state: deriveTacticalStateFromPhase(plan.phase ?? "build"),
+    state: readSquadState(squadStateKey(plan)),
     createdTick: plan.since,
   };
-}
-
-function deriveTacticalStateFromPhase(phase: string): TacticalState {
-  if (phase === "build") return "FORMING";
-  if (phase === "advance") return "MOVING";
-  return "FORMING";
-}
-
-function deriveTacticalState(squad: SquadPlan, warPhase: string): TacticalState {
-  // 如果 squad 已有 state 用 squad state
-  if (squad.state === "ENGAGING" || squad.state === "POSITIONING") {
-    return squad.state;
-  }
-  // 否则从 warPhase 推导
-  if (warPhase === "advance") return "MOVING";
-  return "FORMING";
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -19,6 +19,7 @@ import type { CombatCapability } from "../../domain/combat/capability";
 import type { TerrainContext, EffectiveCombatModifier } from "../../domain/defense/terrain-context";
 import { getFocusFirePlan } from "./tactical-engagement-runtime";
 import { getSquadMovementIntent } from "./squad-movement-runtime";
+import { readSquadState, squadStateKey } from "./squad-state";
 
 // ═══════════════════════════════════════════════════════════
 // §1. GlobalCache 扩展 — Combat Micro Runtime 状态
@@ -178,8 +179,9 @@ function buildMicroSnapshot(
   const terrain = getTerrainContext(warPlan.targetRoom, tick);
   const terrainModifier = getTerrainModifier(terrain);
 
-  // 推导 TacticalState
-  const tacticalState = deriveTacticalState(warPlan.phase ?? "build");
+  // 取 Squad 级战术状态（归属见 ./squad-state）—— 原先这里从 warPlan.phase 现推，
+  // 是第 4 份同类副本：phase 是波次相位，不是战术状态。
+  const tacticalState = readSquadState(squadStateKey(warPlan));
 
   // 推导 WarPosture
   const warPosture = Memory.kernel?.strategy?.posture ?? "develop";
@@ -396,12 +398,6 @@ function inferRole(cap: CombatCapability): string {
   if (cap.attack > 0) return "attacker";
   if (cap.dismantle > 0) return "dismantler";
   return "unknown";
-}
-
-function deriveTacticalState(phase: string): import("../../domain/tactical/types").TacticalState {
-  if (phase === "build") return "FORMING";
-  if (phase === "advance") return "MOVING";
-  return "FORMING";
 }
 
 function getTerrainContext(roomName: string, tick: number): TerrainContext {
