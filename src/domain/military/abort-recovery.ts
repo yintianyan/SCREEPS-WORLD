@@ -147,6 +147,7 @@ export function mapAbortToRecoveryAction(signal: WarAbortSignal): RecoveryAction
     type: mapping.actionType,
     targetFailureId: `war-abort:${signal.sponsor}`,
     domain: mapping.domain,
+    room: signal.sponsor,
     priority: computePriority(signal, mapping.urgent),
     estimatedCost: mapping.cost,
     estimatedBenefit: computeBenefit(signal),

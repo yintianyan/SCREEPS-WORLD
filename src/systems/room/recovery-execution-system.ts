@@ -14,7 +14,7 @@ import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache, publishProcurementDemands } from "../../kernel/global-cache";
 import { RECOVERY_BODY, selectBody, degradeBody, minimalBodyFor } from "../../config/bodies";
 import { submitRequest, hasRequest, spawnKey, buildSpawnRequest } from "../../domain/spawn/queue";
-import { type RecoveryAction } from "../../domain/strategy/recovery-priority";
+import { type RecoveryAction, GLOBAL_ROOM } from "../../domain/strategy/recovery-priority";
 import {
   recoveryIdempotencyKey,
   shouldSubmitAction,
@@ -770,6 +770,7 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
       id: record.actionId,
       type: record.type,
       domain: record.domain,
+      room: record.room ?? GLOBAL_ROOM,
       targetFailureId: record.failureId,
     } as RecoveryAction);
 
@@ -797,6 +798,7 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
         type: record.type,
         targetFailureId: record.failureId,
         domain: record.domain,
+        room: record.room ?? GLOBAL_ROOM,
         priority: 0,
         estimatedCost: 0,
         estimatedBenefit: 0,

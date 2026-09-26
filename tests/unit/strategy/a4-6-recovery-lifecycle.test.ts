@@ -19,11 +19,12 @@ import {
   evaluateEscalation,
   cleanupRecoveryTable,
   computeRecoveryStats,
+  ACTIVE_STALL_TICKS,
   type RecoveryActionTable,
   type RecoveryActionRecord,
   type RecoveryWorldSnapshot,
 } from "../../../src/domain/strategy/recovery-lifecycle";
-import type { RecoveryAction } from "../../../src/domain/strategy/recovery-priority";
+import { GLOBAL_ROOM, type RecoveryAction } from "../../../src/domain/strategy/recovery-priority";
 import type { FailureNode } from "../../../src/domain/strategy/failure-propagation";
 
 const TICK = 1000;
@@ -36,6 +37,7 @@ function makeRecoveryAction(overrides: Partial<RecoveryAction> = {}): RecoveryAc
     type: "spawn_recovery",
     targetFailureId: "failure:spawn:W1N1:1000",
     domain: "spawn",
+    room: "W1N1",
     priority: 80,
     estimatedCost: 200,
     estimatedBenefit: 500,
@@ -169,6 +171,85 @@ describe("A4.6 E2E-002: Idempotency Key 稳定性", () => {
     const a1 = makeRecoveryAction({ domain: "spawn", targetFailureId: "failure:spawn:1000" });
     const a2 = makeRecoveryAction({ domain: "energy", targetFailureId: "failure:energy:1000" });
     expect(recoveryIdempotencyKey(a1)).not.toBe(recoveryIdempotencyKey(a2));
+  });
+
+  it("不同 room 产生不同 key —— 多房同类危机不得塌成一条记录", () => {
+    // 旧实现从 targetFailureId 里 split(":")[1] 取房间，而 colony 形状的 id 是
+    // `failure:colony:<room>:<tick>` → 取到的是维度名，三间房共用一个键，
+    // 第 2..N 间房的恢复永不发生（且这条用例此前不存在，所以塌键无法被证伪）。
+    const rooms = ["W1N1", "W2N1", "W3N1"];
+    const keys = rooms.map((room, i) =>
+      recoveryIdempotencyKey(
+        makeRecoveryAction({
+          id: `action-${room}`,
+          domain: "colony",
+          type: "population_rebuild",
+          room,
+          targetFailureId: `failure:colony:${room}:${TICK + i}`,
+        }),
+      ),
+    );
+    expect(new Set(keys).size).toBe(3);
+  });
+
+  it("无房间维度的全局失败共用一个键", () => {
+    const a1 = makeRecoveryAction({ domain: "network", room: GLOBAL_ROOM });
+    const a2 = makeRecoveryAction({ domain: "network", room: GLOBAL_ROOM, id: "other" });
+    expect(recoveryIdempotencyKey(a1)).toBe(recoveryIdempotencyKey(a2));
+  });
+});
+
+describe("A4.6 E2E-002b: 活跃记录租约（防恢复预算死锁）", () => {
+  it("executing 长期无推进 → 落成 failed，可被清理并可重试", () => {
+    const table: RecoveryActionTable = new Map();
+    table.set(
+      "colony:population_rebuild:W1N1",
+      makeRecord({ state: "executing", updatedAt: TICK }),
+    );
+    table.set(
+      "colony:population_rebuild:W2N1",
+      makeRecord({ state: "executing", updatedAt: TICK }),
+    );
+
+    // 租约内：活跃记录必须保留（正在做的事不能被当成失败）。
+    const within = cleanupRecoveryTable(table, TICK + ACTIVE_STALL_TICKS - 1);
+    expect(within.size).toBe(2);
+    expect(within.get("colony:population_rebuild:W1N1")?.state).toBe("executing");
+
+    // 超租约：卡死记录先降为 failed（不再占活跃名额），再按 failed 的 retention 出表。
+    const stalled = cleanupRecoveryTable(table, TICK + ACTIVE_STALL_TICKS + 1);
+    expect([...stalled.values()].every(r => !isActionActive(r))).toBe(true);
+    expect(stalled.get("colony:population_rebuild:W1N1")?.state).toBe("failed");
+    // retention 从降级那一刻重算（updatedAt 被刷新），所以要再走满 failed 档的 1000 tick。
+    const later = cleanupRecoveryTable(stalled, TICK + ACTIVE_STALL_TICKS + 1 + 1001);
+    expect(later.size).toBe(0);
+  });
+
+  it("卡死的 A 房不再挡住 B 房的新恢复", () => {
+    const table: RecoveryActionTable = new Map();
+    table.set(
+      "colony:population_rebuild:W1N1",
+      makeRecord({ state: "executing", updatedAt: TICK }),
+    );
+    const activeOf = (t: RecoveryActionTable): number =>
+      [...t.values()].filter(r => isActionActive(r)).length;
+
+    // 租约前：卡死记录仍占活跃名额（这正是 maxConcurrent 被占满的机制）。
+    expect(activeOf(cleanupRecoveryTable(table, TICK + 500))).toBe(1);
+    // 租约后：它被降为 failed，名额释放。
+    const after = cleanupRecoveryTable(table, TICK + ACTIVE_STALL_TICKS + 1);
+    expect(activeOf(after)).toBe(0);
+
+    const budget = evaluateRecoveryBudget({
+      tick: TICK + ACTIVE_STALL_TICKS + 1,
+      cpuBudget: 20000,
+      empireEnergyReserve: 100000,
+      activeRecoveryCount: activeOf(after),
+      maxCpuPerRecovery: 5,
+      maxEnergyPerRecovery: 1000,
+    });
+    expect(budget.allowed).toBe(true);
+    expect(budget.maxConcurrent).toBeGreaterThan(0);
   });
 });
 

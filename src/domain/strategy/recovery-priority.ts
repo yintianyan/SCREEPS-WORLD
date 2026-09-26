@@ -21,6 +21,9 @@ export type RecoveryActionType =
   | "auto_resolve"; // 自动恢复（无需特殊动作）
 
 /** 单个恢复动作。 */
+/** 无房间维度的全局失败在幂等键里占的位置。 */
+export const GLOBAL_ROOM = "global";
+
 export interface RecoveryAction {
   /** 唯一标识。 */
   id: string;
@@ -30,6 +33,13 @@ export interface RecoveryAction {
   targetFailureId: string;
   /** 目标领域。 */
   domain: FailureDomain;
+  /**
+   * 受影响的房间；无房间维度时传 GLOBAL_ROOM。
+   * 必填而非可选：幂等键要按房区分，而 targetFailureId 的形状在各生产者之间并不一致
+   * （`failure:<dim>:<tick>` 与 `failure:colony:<room>:<tick>` 并存），从 id 里按位置
+   * 解析会把房间分量读成维度名，导致多房同类危机塌成同一条记录。
+   */
+  room: string;
   /** 优先级分数（0..100，越高越优先）。 */
   priority: number;
   /** 预估成本（CPU/tick 或能量）。 */
@@ -297,6 +307,7 @@ export function computeRecoveryPriority(
     type: rec.type,
     targetFailureId: failure.id,
     domain: failure.domain,
+    room: failure.room ?? GLOBAL_ROOM,
     priority,
     estimatedCost,
     estimatedBenefit,

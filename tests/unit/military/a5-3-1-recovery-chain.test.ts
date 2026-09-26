@@ -207,6 +207,7 @@ describe("A5.3.1-REC-004: Logistics failure → Recovery 路径正确触发", ()
       id: "test",
       type: "population_rebuild",
       targetFailureId: "war-abort:W11N10",
+      room: "W11N10",
       domain: "colony",
       priority: 80,
       estimatedCost: 800,

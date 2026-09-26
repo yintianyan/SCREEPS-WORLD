@@ -55,6 +55,13 @@ export interface RecoveryActionRecord {
 /** Recovery Action 追踪表（heap Map，跨 tick 持久）。 */
 export type RecoveryActionTable = Map<string, RecoveryActionRecord>;
 
+/**
+ * 活跃记录的租约上限：超过这么久没有任何状态推进即判停滞。
+ * 取 failed 档的保留时长同量级（1000 tick），保证"卡死的活跃记录"不会比"已失败的记录"
+ * 活得更久 —— 后者本来就会在 1000 tick 后被清。
+ */
+export const ACTIVE_STALL_TICKS = 1000;
+
 // ─── Idempotency ──────────────────────────────────────────
 
 /**
@@ -67,10 +74,11 @@ export type RecoveryActionTable = Map<string, RecoveryActionRecord>;
  * @returns 稳定 key
  */
 export function recoveryIdempotencyKey(action: RecoveryAction): string {
-  const room = action.targetFailureId.includes(":")
-    ? (action.targetFailureId.split(":")[1] ?? "global")
-    : "global";
-  return `${action.domain}:${action.type}:${room}`;
+  // 房间来自 action.room，不从 targetFailureId 里按位置解析 —— 生产者的 id 形状并不
+  // 统一（`failure:<dim>:<tick>` / `failure:colony:<room>:<tick>` / `war-abort:<room>`
+  // 三种并存），旧实现固定取 split(":")[1]，在 colony 形状上拿到的是维度名，
+  // 于是「三间房同类危机」塌成同一个键：第 2..N 间房的恢复永不发生。
+  return `${action.domain}:${action.type}:${action.room}`;
 }
 
 /**
@@ -726,7 +734,17 @@ export function cleanupRecoveryTable(
   const newTable = new Map(table);
 
   for (const [key, record] of newTable) {
-    if (isActionActive(record)) continue;
+    if (isActionActive(record)) {
+      // 活跃租约：executing/verifying 之类状态本身没有出口 —— 执行引用消失、被别的
+      // 系统抢改、验证分支永不返回，都会让记录永久留在表里，而
+      // evaluateRecoveryBudget 的 maxConcurrent（≤5）按活跃记录数封顶，攒满即
+      // 拒绝一切新恢复 = 全帝国恢复能力死锁。长期无推进的一律落成 failed，
+      // 交回既有的 maxAttempts / cooldown 通道处理。
+      if (currentTick - record.updatedAt <= ACTIVE_STALL_TICKS) continue;
+      record.state = "failed";
+      record.failureReason = `stalled: no progress for ${ACTIVE_STALL_TICKS} ticks`;
+      record.updatedAt = currentTick;
+    }
 
     const retention = RETENTION[record.state as keyof typeof RETENTION] ?? 500;
     if (currentTick - record.updatedAt > retention) {
