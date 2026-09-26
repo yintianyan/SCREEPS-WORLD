@@ -45,6 +45,15 @@ export const GATE_PASS: GateResult = {
 
 /**
  * Execution Gate 的 10 项检查。
+ *
+ * **其中 3 项目前是纸面门**：`threat_clear` / `empire_demand` / `budget_sufficient`
+ * 的**唯一生产侧调用方**（specialization-planner.buildGateInput）把它们写死为 true，本函数
+ * 对它们的分支因此恒不进入（`no_demand` 等结论不可达）。往上还有一层：整条
+ * RemoteOpportunity 管线在 src 内没有生产者（`createOpportunity` 零调用），
+ * 所以这 10 项检查在当前架构下一次也不执行 —— 由
+ * tests/unit/architecture/remote-pipeline-producer.test.ts 钉住"无人接线"这一事实。
+ * 接线（写生产者）时**必须同时**把这三项换成真值，否则闸门只是把 10 这个数字
+ * 继续说给自己听。
  */
 export type GateCheck =
   | "source_exists"

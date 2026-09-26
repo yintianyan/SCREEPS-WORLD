@@ -168,6 +168,14 @@ function buildGateInput(
   const maxTransportCost = 5;
   const minBudget = 500;
 
+  // ⚠ 下面标了「纸面门」的三项输入是字面常量，不是采集到的事实：threatClear 恒 true、
+  // empireDemand 恒 true、budgetSufficient 因 budgetRemaining 恒 5000 > minBudget 恒 true。
+  // 往上还有一层：整条 RemoteOpportunity 管线在 src 内没有生产者（createOpportunity 零调用），
+  // 所以本函数连同 checkExecutionGate 当前一次也不执行 —— 这不是"待完善的活路径"，
+  // 而是"未接线的下一代"。接线（写生产者）时必须先把这三项换成真值：
+  // threat ← remoteOps/intel 的敌情，demand ← globalCache().networkSnapshot 的赤字对，
+  // budget ← operation-budget 账本。在那之前，
+  // tests/unit/architecture/remote-pipeline-producer.test.ts 钉住"无人接线"这件事。
   return {
     opportunity: opp,
     sourceExists: (intel.sources ?? 0) > 0,
@@ -176,11 +184,11 @@ function buildGateInput(
     routeValid: (intel.pathCost ?? 0) < maxPathCost,
     maxPathCost,
     pathCost: intel.pathCost ?? 0,
-    threatClear: true, // A4.1：threat 信息在 remoteOps 上，此处简化（后续集成时从 remoteOps 读取）
+    threatClear: true, // 纸面门
     yieldReasonable: opp.value.worthInvesting || opp.value.netValue > 0,
     netValue: opp.value.netValue,
     investmentThreshold: 3,
-    empireDemand: true, // A4.1 简化：默认有需求，后续接入 empire-balance
+    empireDemand: true, // 纸面门
     transportAcceptable: opp.value.transportCost < maxTransportCost,
     transportCost: opp.value.transportCost,
     maxTransportCost,
@@ -192,8 +200,8 @@ function buildGateInput(
         o.status !== "expired" &&
         o.status !== "failed",
     ),
-    budgetSufficient: true, // A4.1 简化：默认预算充足，后续接入 operation-budget
-    budgetRemaining: 5000,
+    budgetSufficient: true, // 纸面门
+    budgetRemaining: 5000, // 纸面门的常量分母
     minBudget,
     tick,
   };
