@@ -46,19 +46,38 @@ function makeProfile(overrides: Partial<RoomEconomicProfile> = {}): RoomEconomic
 
 describe("A3-002: computeTransferable", () => {
   it("正常 core 房间有正 transferable", () => {
-    const profile = makeProfile();
+    // 抬到 100000：原 fixture 的 50000 低于安全储备(60000)，这条顶着「有正
+    // transferable」的标题断的是 0 —— 标题与断言相反，扣减口径写错也永远测不到。
+    const profile = makeProfile({ storageEnergy: 100000, storageCapacity: 300000 });
     const result = computeTransferable(profile, 0);
-    // storageEnergy(50000) - contractReserve(5000) - safetyReserve(max(300000*0.2, 5000)=60000) - 0
-    // = 50000 - 5000 - 60000 = -15000 → max(0, -15000) = 0
-    // 但 storageEnergy=50000 < safetyReserve(60000) → 0
-    expect(result).toBe(0);
+    // 100000 - safetyReserve(max(300000*0.2, 5000)=60000) = 40000
+    expect(result).toBe(40000);
+  });
+
+  it("水位低于安全储备时不调拨", () => {
+    const profile = makeProfile(); // storageEnergy 50000 < safety 60000
+    expect(computeTransferable(profile, 0)).toBe(0);
+  });
+
+  it("contractReserve 按生产恒等式装配时仍可正调拨", () => {
+    // 生产中 contractReserve = storage + terminal + links（accounting.contractReserveOf），
+    // 即 storageEnergy 是它的子集。曾经 computeTransferable 把它当对外债权再减一次，
+    // 结果恒 ≤0 → 跨房调拨稳态零产出。而本文件旧 fixture 把两个字段脱钩
+    // （contractReserve=5000 / storageEnergy=50000），所以这个恒 0 在测试里不可见。
+    const storageEnergy = 200000;
+    const profile = makeProfile({
+      storageEnergy,
+      storageCapacity: 300000,
+      contractReserve: storageEnergy + 1000 + 500,
+    });
+    expect(computeTransferable(profile, 0)).toBe(140000);
   });
 
   it("高储备房有正 transferable", () => {
     const profile = makeProfile({ storageEnergy: 200000, storageCapacity: 300000 });
     const result = computeTransferable(profile, 0);
-    // 200000 - 5000 - 60000 - 0 = 135000
-    expect(result).toBe(135000);
+    // 200000 - 60000 = 140000
+    expect(result).toBe(140000);
   });
 
   it("struggling 房间 transferable = 0", () => {
@@ -76,8 +95,8 @@ describe("A3-002: computeTransferable", () => {
   it("activeReservations 扣减可调拨量", () => {
     const profile = makeProfile({ storageEnergy: 200000, storageCapacity: 300000 });
     const result = computeTransferable(profile, 50000);
-    // 200000 - 5000 - 60000 - 50000 = 85000
-    expect(result).toBe(85000);
+    // 200000 - 60000 - 50000 = 90000
+    expect(result).toBe(90000);
   });
 });
 
@@ -100,7 +119,7 @@ describe("A3-016: Safety Reserve Protection", () => {
   it("不抽干：即使有大量 reservation，结果不为负", () => {
     const profile = makeProfile({ storageEnergy: 200000, storageCapacity: 300000 });
     const result = computeTransferable(profile, 200000);
-    // 200000 - 5000 - 60000 - 200000 = -65000 → max(0, -65000) = 0
+    // 200000 - 60000 - 200000 = -60000 → max(0, -60000) = 0
     expect(result).toBe(0);
   });
 });
@@ -113,9 +132,9 @@ describe("computeTransferableBulk", () => {
     ];
     const reservations = new Map([["W1N1", 30000]]);
     const result = computeTransferableBulk(profiles, reservations);
-    // W1N1: 200000 - 5000 - 60000 - 30000 = 105000
-    expect(result.get("W1N1")).toBe(105000);
-    // W2N1: 50000 - 5000 - 60000 - 0 = -15000 → 0
+    // W1N1: 200000 - 60000 - 30000 = 110000
+    expect(result.get("W1N1")).toBe(110000);
+    // W2N1: 50000 - 60000 = -10000 → 0
     expect(result.get("W2N1")).toBe(0);
   });
 });

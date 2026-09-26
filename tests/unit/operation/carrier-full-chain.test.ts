@@ -250,9 +250,10 @@ describe("A3-020: Carrier Full Chain — 完整链路", () => {
         isStruggling: false,
       });
       const transferable = computeTransferable(profile, 0);
-      // 200000 - 5000 - max(300000*0.2, 5000) - 0 = 200000 - 5000 - 60000 = 135000
+      // 200000 - max(300000*0.2, 5000) - 0 = 200000 - 60000 = 140000
+      // （contractReserve 不参与扣减：它是供给侧总水位，不是对外债权）
       expect(transferable).toBeGreaterThan(0);
-      expect(transferable).toBe(135000);
+      expect(transferable).toBe(140000);
     });
 
     it("storage 低于安全线时不可调拨", () => {
@@ -263,7 +264,7 @@ describe("A3-020: Carrier Full Chain — 完整链路", () => {
         isStruggling: false,
       });
       const transferable = computeTransferable(profile, 0);
-      // 50000 - 5000 - 60000 = -15000 → max(0, -15000) = 0
+      // 50000 - 60000 = -10000 → max(0, -10000) = 0
       expect(transferable).toBe(0);
     });
 
@@ -285,8 +286,8 @@ describe("A3-020: Carrier Full Chain — 完整链路", () => {
         isStruggling: false,
       });
       const transferable = computeTransferable(profile, 50000);
-      // 200000 - 5000 - 60000 - 50000 = 85000
-      expect(transferable).toBe(85000);
+      // 200000 - 60000 - 50000 = 90000
+      expect(transferable).toBe(90000);
     });
   });
 

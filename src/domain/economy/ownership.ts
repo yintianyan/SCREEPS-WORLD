@@ -24,7 +24,7 @@ export function computeSafetyReserve(
 /**
  * 计算可调拨量 — 资源所有权的核心函数。
 
- * transferable = max(0, storageEnergy - reserve - safetyReserve - activeReservations)
+ * transferable = max(0, storageEnergy - safetyReserve - activeReservations)
 
  * 纯函数 — 不访问 Game/Memory。
 
@@ -42,8 +42,10 @@ export function computeTransferable(
   if (profile.isStruggling) return 0;
 
   const safety = computeSafetyReserve(profile.storageCapacity, safetyReserveRatio);
-  const reserve = profile.contractReserve;
-  const available = profile.storageEnergy - reserve - safety - activeReservations;
+  // 不再减 profile.contractReserve：它是 storage+terminal+link 的**供给侧总水位**
+  // （riskBuffer 的分子），不是欠下的债 —— storageEnergy 是它的子集，减下去恒 ≤0，
+  // 跨房调拨因此稳态零产出。真正的对外债权已由 activeReservations 表达。
+  const available = profile.storageEnergy - safety - activeReservations;
 
   return Math.max(0, Math.floor(available));
 }
