@@ -37,13 +37,14 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
   beforeEach(() => {
     originalGame = (globalThis as Record<string, unknown>).Game;
     generatePixelSpy = vi.fn(() => 0);
-    // 保留缓冲策略：门槛 = 10000 + bucketReserve（默认 3000）= 13000。
-    // beforeEach 默认设 bucket=13000 使「开关开启后放血」用例直接通过；
-    // 需要测试「未达门槛」的用例在自身内覆盖 bucket 值。
+    // 门槛 = 生成成本本身（CONFIG.pixel.cpuCost，引擎 PIXEL_CPU_COST=10000）。
+    // 旧实现是 `10000 + bucketReserve(3000) = 13000`，而 bucket 上限就是 10000 ——
+    // 门槛恒迈不过去，pixel 从未生成过；本文件当年用 mock bucket=13000 把这条
+    // 不可达路径钉成了绿灯。现在 beforeEach 用真上限，边界另设用例。
     (globalThis as Record<string, unknown>).Game = {
       time: 100,
       cpu: {
-        bucket: 13000,
+        bucket: 10000,
         generatePixel: generatePixelSpy,
       },
     };
@@ -68,12 +69,27 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
     expect(generatePixelSpy).not.toHaveBeenCalled();
   });
 
-  it("开关开启后：healthy + bucket >= 门槛(10000+reserve) 才放血，并记录 pixelAt", () => {
+  it("开关开启后：healthy + bucket >= 门槛(=生成成本) 才放血，并记录 pixelAt", () => {
     (CONFIG.pixel as { enabled: boolean }).enabled = true;
-    // bucket=13000（默认 beforeEach 已设），门槛 = 10000 + 3000 = 13000 → 放血。
+    // bucket=10000（默认 beforeEach 已设）= 引擎 PIXEL_CPU_COST → 达门槛，放血。
     pixelSystem.run(makeCtx("healthy"));
     expect(generatePixelSpy).toHaveBeenCalledTimes(1);
     expect((globalThis as any).Memory.kernel.pixelAt).toBe(100);
+  });
+
+  it("门槛边界：差 1 点不放血，正好满成本即放血", () => {
+    // 旧实现门槛是 13000，本用例（bucket=10000）会断"不放血"却把"永远不生成"
+    // 当成正确行为 —— 边界必须钉在成本上，而不是钉在一个不可达的数字上。
+    (CONFIG.pixel as { enabled: boolean }).enabled = true;
+    const cpu = (globalThis as unknown as { Game: { cpu: { bucket: number } } }).Game.cpu;
+
+    cpu.bucket = CONFIG.pixel.cpuCost - 1;
+    pixelSystem.run(makeCtx("healthy"));
+    expect(generatePixelSpy).not.toHaveBeenCalled();
+
+    cpu.bucket = CONFIG.pixel.cpuCost;
+    pixelSystem.run(makeCtx("healthy"));
+    expect(generatePixelSpy).toHaveBeenCalledTimes(1);
   });
 
   it("war 姿态：healthy + 满 bucket 也不放血（bucket 突发容量留给战时计算）", () => {
@@ -107,20 +123,6 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
   it("does NOT call generatePixel when recovery", () => {
     (CONFIG.pixel as { enabled: boolean }).enabled = true;
     pixelSystem.run(makeCtx("recovery"));
-    expect(generatePixelSpy).not.toHaveBeenCalled();
-  });
-
-  it("does NOT call generatePixel when healthy but bucket < 门槛(10000+reserve)", () => {
-    (CONFIG.pixel as { enabled: boolean }).enabled = true;
-    // 门槛 = 10000 + 3000 = 13000；bucket=12999 未达门槛 → 不放血。
-    (globalThis as Record<string, unknown>).Game = {
-      time: 100,
-      cpu: {
-        bucket: 12999,
-        generatePixel: generatePixelSpy,
-      },
-    };
-    pixelSystem.run(makeCtx("healthy"));
     expect(generatePixelSpy).not.toHaveBeenCalled();
   });
 

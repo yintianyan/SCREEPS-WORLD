@@ -351,7 +351,7 @@ export function evaluateDevelopmentGate(inputs: DevelopmentGateInputs): Developm
         : baseRatio + ((inputs.economyPressure - 0.3) / 0.5) * (maxRatio - baseRatio);
     const buildThreshold = Math.min(
       Math.floor(inputs.energyCapacityAvailable * ratio),
-      CONFIG.economy.buildEnergySurplus + CONFIG.spawn.recoveryEnergyReserve,
+      CONFIG.construction.maxEnergyFloor,
     );
     if (inputs.energyAvailable < buildThreshold) return "energy-floor";
 

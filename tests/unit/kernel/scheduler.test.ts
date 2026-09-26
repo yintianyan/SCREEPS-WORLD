@@ -338,3 +338,20 @@ describe("CpuBudget — bucket 借用", () => {
     expect(capped.canStart(2 as Priority)).toBe(false);
   });
 });
+
+describe("Scheduler — 自愿放血宽限（generatePixel 之后）", () => {
+  it("bucket 归零：无宽限判 recovery，宽限期内地板抬到 conserve", () => {
+    // pixel 此前从未生成过（门槛 13000 不可达），所以这条链是第一次被启用 ——
+    // 自愿清零 bucket 不该被看门狗当成失血性休克，但真实超支仍要能降到 recovery。
+    expect(resolveTier("healthy", 0, 0).tier).toBe("recovery");
+    expect(resolveTier("healthy", 0, 0, true).tier).toBe("conserve");
+  });
+
+  it("宽限只作用于 recovery：其它档位判定不变", () => {
+    for (const bucket of [8000, 5000, 3000, 1500]) {
+      const plain = resolveTier("healthy", 0, bucket);
+      const graced = resolveTier("healthy", 0, bucket, true);
+      if (plain.tier !== "recovery") expect(graced.tier).toBe(plain.tier);
+    }
+  });
+});

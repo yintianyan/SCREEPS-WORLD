@@ -65,9 +65,32 @@ describe("evaluateDevelopmentGate — 结构化原因码", () => {
   });
 
   it("能量低于梯度阈值 → energy-floor", () => {
-    // min(floor(800×0.6), 200+200) = min(480, 400) = 400 — 绝对上限封顶。
-    expect(evaluateDevelopmentGate(gateInputs({ energyAvailable: 399 }))).toBe("energy-floor");
-    expect(evaluateDevelopmentGate(gateInputs({ energyAvailable: 400 }))).toBe("ok");
+    // min(floor(800×0.6), maxEnergyFloor=1200) = 480 —— 比例主导。
+    // 旧实现的绝对上限是 buildEnergySurplus + recoveryEnergyReserve = 400，
+    // 于是这条用例里 399/400 才是边界，压力梯度整段白写。
+    expect(evaluateDevelopmentGate(gateInputs({ energyAvailable: 479 }))).toBe("energy-floor");
+    expect(evaluateDevelopmentGate(gateInputs({ energyAvailable: 480 }))).toBe("ok");
+  });
+
+  it("压力抬升能量门槛（梯度没被绝对上限夹成常数）", () => {
+    const at = (energyAvailable: number, economyPressure: number) =>
+      evaluateDevelopmentGate(
+        gateInputs({ energyCapacityAvailable: 1300, energyAvailable, economyPressure }),
+      );
+    // RCL6 容量 1300：压力 0 → 60% = 780；压力 0.8 → 90% = 1170（仍低于 1200 上限）。
+    expect(at(780, 0)).toBe("ok");
+    expect(at(1000, 0.8)).toBe("energy-floor");
+    expect(at(1170, 0.8)).toBe("ok");
+    // 大房才由绝对上限封顶：RCL8 容量 1800 在压力 0.8 时要 1620 → 夹到 1200。
+    expect(
+      evaluateDevelopmentGate(
+        gateInputs({
+          energyCapacityAvailable: 1800,
+          energyAvailable: 1200,
+          economyPressure: 0.8,
+        }),
+      ),
+    ).toBe("ok");
   });
 
   it("全局 site 满额 → global-site-cap", () => {

@@ -174,15 +174,14 @@ export const CONFIG = {
      * （线上实测 187+ tick 停摆）。开启前置：bundle 压缩后加载成本 ≪ 20 CPU，
      * 且接受放血后 ~600 tick 的 P3 降档窗口。 */
     enabled: true,
-    /** 生成后保留的 bucket 缓冲量。generatePixel 消耗 10000 bucket（清零），
-     * 但帝国不应触底归零——需要保留缓冲应对 global reset（bundle 加载）、
-     * 战时 CPU spike 等突发。生成门槛 = 10000 + bucketReserve：
-     * bucket 攒到此值才生成，生成后剩余 bucketReserve 的缓冲。
-     * 默认 3000：tier 不会跌到 recovery（1000 以下），P3 系统冻结窗口从
-     * ~700 tick 缩短到 ~300 tick（bucket 从 3000 恢复到 7000 healthy 门槛
-     * 约 364 tick @ 11/tick），调参/遥测更快恢复。
-     * 设为 0 即恢复旧行为（满 10000 即清零）。 */
-    bucketReserve: 3000,
+    /** 生成一个 pixel 的 bucket 成本 —— 引擎常量 PIXEL_CPU_COST（实测本服 10000，
+     * 取自 @screeps/common/lib/constants.js）。
+     *
+     * 这里不再提供 bucketReserve：bucket 上限就等于生成成本，"生成后仍保留 N 点缓冲"
+     * 在数学上不成立。旧配置 `门槛 = 10000 + 3000 = 13000` 恒不可达，pixel 从未生成过，
+     * 连带让"自愿放血宽限"整条链（pixelAt → scheduler tier 地板）零执行。
+     * 放血后的降档风险改由 CONFIG.cpu.pixelGraceTicks 承担。 */
+    cpuCost: 10000,
   },
 
   spawn: {
@@ -338,6 +337,16 @@ export const CONFIG = {
     /** R2 关键发展通道适用 RCL 上界（含）：RCL2-3 生效，RCL4+ 有 storage/emergency
      * 通道接管，extension 回归常规门禁。 */
     developmentLaneMaxRcl: 3,
+    /** 常规门禁能量地板的绝对上限（energyAvailable 达到它即可通过能量一项）。
+     *
+     * 门禁本身按容量比例随压力线性抬升（0.3 以下 60% → 0.8 以上 90%，见
+     * `domain/construction/queue.ts`），这个值只负责不让大房为了建房等到接近满仓：
+     * RCL8（容量 1800）在压力 0.8 时要 1620，比一次普通建造的成本还高。
+     * 旧写法是 `min(容量×比例, buildEnergySurplus + recoveryEnergyReserve)`，
+     * 那两项相加 = 400，于是容量 ≥ 667（RCL3 起）的房永远卡在 400，
+     * 压力梯度整段失效 —— 拿两个不相关的常量凑出一个上限，是它一直没被发现的原因。
+     * 1200 ≈ RCL6 容量(1300) 的 90%，即梯度对小中房全程有效，只在大房封顶。 */
+    maxEnergyFloor: 1200,
   },
   layout: {
     /** 布局模式：constraint = 约束推导放置（默认），template = 固定模板（compact-core-v2，fallback）。 */
