@@ -144,6 +144,27 @@ export interface PhaseOptions {
    */
   recoveryBias: number;
   /**
+   * 危机带出口之二：连续静止多少 tick 之后才开始慢消分（0 = 关闭该通道）。
+   *
+   * 为什么需要：旧实现里 `reserveDelta === 0` 既不加也不减，分数原地冻结 ——
+   * crisis 带**没有出口**。生产塌到极致的房（creep 全灭、收支都不再变动）会永远
+   * 停在 crisis，而 crisis 把 economyPressure 钉在 1.0、永久压住建造与升级，
+   * 恰恰是这种尸房最需要的恢复通道。
+   *
+   * 为什么要"已在带内 + 恰好静止"而不是每 tick 慢消：零变化 tick 不消分是**故意的**
+   * （见 `phase.test.ts`「零变化 tick 不再主动消分（慢性失血因此可见）」与
+   * 「每 3 tick 一次的稀疏失血照样攒进危机带」）—— 真实慢性失血表现为
+   * "大部分 tick 为 0、偶尔一个大赤字脉冲"，任何固定的每 tick 消分都会按比例削掉
+   * 这条通道的灵敏度（实测 0.5/tick 会把 45 tick 攒到 150 分的标定推出危机）。
+   * 而"爬向危机"阶段 bandTicks 还没开始计，间歇失血在带内又始终有 points>0，
+   * 两者都不受本通道影响；被消掉的只有"进了带、然后什么都不再发生"的房。
+   *
+   * 200 tick ≈ 4 个经济采样周期（50t），够长到不会把短暂平稳误判成尸房。
+   */
+  idleDecayTicks: number;
+  /** 超过 `idleDecayTicks` 的连续静止后，每 tick 消解的分数（进带 150 → 出带 30 需再 240 tick）。 */
+  idleRecoveryStep: number;
+  /**
    * 单 tick 积分上限（分）：一次异常大的支出脉冲不得独自把房推进危机带
    * （实测战争房有 −22540 的单 tick；60 分 = 180 E/tick 的计入上限）。
    * 持续失血仍可正常累积到 drainEnterScore。
@@ -278,6 +299,10 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   drainEnergyPerPoint: 3,
   // 沿用次数计时代的非对称比 40/15：盈余消分比赤字积分快，破临界振荡的设计不变。
   recoveryBias: 40 / 15,
+  // 连续静止 200 tick 后才开始以 0.5 分/tick 慢消分：给 crisis 带一个出口，
+  // 又不吃掉间歇性失血的计分灵敏度。理由详见字段注释。
+  idleDecayTicks: 200,
+  idleRecoveryStep: 0.5,
   // 单 tick 最多积 60 分（=180 E/tick）：一次脉冲不得独自判危机。
   drainStepCap: 60,
   // 流动性陷阱收紧：ec=300 时 spendableRatio<0.3 太容易触发（spawn 空=常态）。
@@ -365,7 +390,23 @@ export function evaluateColonyPhase(
   // 次数计 —— 一间房该不该收缩，取决于它在不在真失血，不取决于脉冲怎么排布。
   // 非对称性保留（盈余消分效力 ×recoveryBias），只是两边都按能量折算。
   const points = Math.abs(reserveDelta) / options.drainEnergyPerPoint;
-  const delta = draining ? Math.min(options.drainStepCap, points) : -points * options.recoveryBias;
+  // 危机带出口之一：已在带内待够 idleDecayTicks、且这一 tick 总储备**恰好没动**
+  // （既无赤字也无盈余）→ 慢消分。旧写法在此处既不加也不减，分数原地冻结，
+  // 塌到收支都不再变动的尸房会永久停在 crisis，而 crisis 把 economyPressure
+  // 钉在 1.0、永久压住它最需要的建造与升级通道。
+  // 用「已在带内 + 恰好静止」而不是"每 tick 固定消分"，是为了不吃掉间歇性失血
+  // 的灵敏度：爬向危机的阶段不在带内（不动那条 45 tick 标定），带内真实失血的
+  // 房每 tick 都有 points>0（不走这个分支），被抵消的只有"真的什么都没发生"。
+  const idleDecaying =
+    options.idleDecayTicks > 0 &&
+    points === 0 &&
+    !draining &&
+    (prev.bandTicks ?? 0) > options.idleDecayTicks;
+  const delta = draining
+    ? Math.min(options.drainStepCap, points)
+    : idleDecaying
+      ? -options.idleRecoveryStep
+      : -points * options.recoveryBias;
   const drainScore = Math.max(0, Math.min(options.drainEnterScore, prev.drainScore + delta));
 
   // ── 流动性维度：liquidityScore ──

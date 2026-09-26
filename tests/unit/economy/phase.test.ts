@@ -613,8 +613,47 @@ describe("Phase — drainScore 流量口径（#11-A）", () => {
     const built = runDeltas(Array(6).fill(-45)); // 90 分，reserve 落在 1730
     const held = runDeltas([0, 0, 0, 0, 0], 1730, undefined, built);
     // 旧次数计在这里会 −40×5 → 归零；流量口径下无赤字的 tick 不计分也不消分。
+    // 静止消分通道只在「已在危机带内 + 待够 idleDecayTicks」后才启动，
+    // 而这里还没进带（90 < 150），所以分数分毫不动 —— 正是本用例要守的语义。
     expect(held.drainScore).toBeCloseTo(90, 6);
     expect(built.drainScore).toBeCloseTo(90, 6);
+  });
+
+  it("危机带内完全静止必须有限 tick 内出带（旧实现分数原地冻结、永不退出）", () => {
+    let state = runDeltas(Array(10).fill(-45)); // 150 分 → crisis，reserve 落在 1550
+    expect(state.phase).toBe("crisis");
+
+    let ticks = 0;
+    while (state.phase === "crisis" && ticks < 700) {
+      state = evaluateColonyPhase(input({ reserve: 1550 }), state);
+      ticks++;
+    }
+    expect(state.phase).not.toBe("crisis");
+    // idleDecayTicks(200) + (150-30)/idleRecoveryStep(0.5) = 440，留余量。
+    expect(ticks).toBeGreaterThan(DEFAULT_PHASE_OPTIONS.idleDecayTicks);
+    expect(ticks).toBeLessThan(600);
+  });
+
+  it("出带前的静止宽限期不能被缩短成秒退（尸房不该反复进出危机带）", () => {
+    const idle = DEFAULT_PHASE_OPTIONS.idleDecayTicks;
+    let state = runDeltas(Array(10).fill(-45));
+    // 宽限期内一分不减：把"进带即退"这种秒退式修法挡在门外。
+    for (let i = 0; i < idle; i++) state = evaluateColonyPhase(input({ reserve: 1550 }), state);
+    expect(state.drainScore).toBeCloseTo(150, 6);
+    // 越过宽限期后按 idleRecoveryStep 慢消（判据是严格大于，故这一步才动）。
+    state = evaluateColonyPhase(input({ reserve: 1550 }), state);
+    expect(state.drainScore).toBeCloseTo(150 - DEFAULT_PHASE_OPTIONS.idleRecoveryStep, 6);
+  });
+
+  it("带内持续真实失血不会被静止通道抵消", () => {
+    let state = runDeltas(Array(10).fill(-45));
+    let reserve = 1550;
+    for (let i = 0; i < 400; i++) {
+      reserve -= 45; // 每 tick 净亏 45 E = +15 分/tick，静止消分只有 0.5/tick
+      state = evaluateColonyPhase(input({ reserve }), state);
+    }
+    expect(state.phase).toBe("crisis");
+    expect(state.drainScore).toBeCloseTo(150, 6);
   });
 
   it("每 3 tick 一次的稀疏失血照样攒进危机带（旧口径的盲区）", () => {
