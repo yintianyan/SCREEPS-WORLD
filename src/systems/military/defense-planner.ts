@@ -343,11 +343,11 @@ function planDefense(
   const validationOptions: ValidationOptions = {
     completedKeys: collectCompletedKeys(queue),
     // 审计修复：曾硬编码 0 —— 扇区防御路径完全绕过全局 site 配额
-    // （validation.ts 对 globalSiteCount >= maxGlobalSites 返回 "site-limit"
+    // （validation.ts 对 globalSiteCount >= maxNormalLaneSites 返回 "site-limit"
     // 拒绝候选），帝国接近上限时此路径仍无限入队。接通 kernel 逐 tick
     // 汇总的真实计数，与 construction-manager / remote-mining-manager 同一口径。
     globalSiteCount,
-    maxGlobalSites: CONFIG.construction.maxGlobalSites,
+    maxNormalLaneSites: CONFIG.construction.maxNormalLaneSites,
     minerals,
     structureCounts: precomputeStructureCounts(snapshot),
     occupiedSet,

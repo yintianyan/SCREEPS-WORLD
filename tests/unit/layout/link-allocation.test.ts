@@ -116,7 +116,7 @@ function optionsFor(snapshot: RoomSnapshot): ValidationOptions {
   return {
     completedKeys: new Set(),
     globalSiteCount: 0,
-    maxGlobalSites: 7,
+    maxNormalLaneSites: 7,
     obstacleSet: buildObstaclePositionSet(snapshot),
   };
 }

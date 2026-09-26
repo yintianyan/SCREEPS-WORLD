@@ -472,7 +472,7 @@ export const remoteMiningManagerSystem: System = {
       // 远矿路径修路（enableRoadPlanning）：PathFinder 规划 home 锚→source container
       // 跨房路径，在远矿房侧铺 road site；施工由通勤 hauler（1W body）边走边建。
       // 限速：每轮 ≤roadSitesPerRun 个新站，单 op 挂起 ≤maxRoadSitesPerOp，
-      // 全局工地预算（maxGlobalSites）共用判定 —— 一次性 9K 级基建投入换疲劳减半。
+      // 全局工地预算（maxNormalLaneSites）共用判定 —— 一次性 9K 级基建投入换疲劳减半。
       if (CONFIG.remote.enableRoadPlanning) {
         planRemotePathRoads(snapshot.roomName, remoteOps, ctx);
       }

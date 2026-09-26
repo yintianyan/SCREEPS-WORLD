@@ -9,7 +9,7 @@ export interface ValidationOptions {
   /** 当前全局活跃 site 数。 */
   globalSiteCount: number;
   /** 全局 site 上限。 */
-  maxGlobalSites: number;
+  maxNormalLaneSites: number;
   /** 房间 mineral 位置（可选）。 */
   minerals?: readonly { pos: { x: number; y: number } }[];
   /** 预计算结构计数（每规划周期构建一次，避免逐 cell 重复扫描）。 */
@@ -332,7 +332,7 @@ export function validateBuildCell(
   }
 
   // 6. 全局 site 上限。
-  if (options.globalSiteCount >= options.maxGlobalSites) return "site-limit";
+  if (options.globalSiteCount >= options.maxNormalLaneSites) return "site-limit";
 
   return "ok";
 }

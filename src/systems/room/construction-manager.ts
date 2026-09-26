@@ -98,7 +98,7 @@ export const constructionManagerSystem: System = {
         energyAvailable: snapshot.energyAvailable,
         energyCapacityAvailable: snapshot.energyCapacityAvailable,
         globalSiteCount: ctx.globalSiteCount + getRemoteSiteTotal(),
-        maxGlobalSites: CONFIG.construction.maxGlobalSites,
+        maxNormalLaneSites: CONFIG.construction.maxNormalLaneSites,
       };
       const normalGateReason = evaluateDevelopmentGate({
         ...strictGateInputs,
@@ -144,7 +144,7 @@ export const constructionManagerSystem: System = {
             energyAvailable: snapshot.energyAvailable,
             laneEnergyFloor: CONFIG.construction.developmentLaneEnergyFloor,
             globalSiteCount: ctx.globalSiteCount + getRemoteSiteTotal(),
-            maxGlobalSites: CONFIG.construction.maxGlobalSites,
+            maxNormalLaneSites: CONFIG.construction.maxNormalLaneSites,
             readyLaneTaskCount: queue.filter(
               t =>
                 t.state === "queued" &&
@@ -256,7 +256,7 @@ export function developmentGate(
       energyAvailable: snapshot.energyAvailable,
       energyCapacityAvailable: snapshot.energyCapacityAvailable,
       globalSiteCount: ctx.globalSiteCount + getRemoteSiteTotal(),
-      maxGlobalSites: CONFIG.construction.maxGlobalSites,
+      maxNormalLaneSites: CONFIG.construction.maxNormalLaneSites,
     }) === "ok"
   );
 }

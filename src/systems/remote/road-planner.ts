@@ -12,11 +12,11 @@ import { structureCost } from "./op-lifecycle";
  * 职责（每 managerInterval tick 运行一次）：
  *   1. **siteCount 实测校正**：用 room.find 统计该房现存 container
  *      construction site 数，写回 op.siteCount — site 建成（变结构）/被移除/失效时
- *      递减，防只增不减永久占满 maxGlobalSites 饿死自有房重建。
+ *      递减，防只增不减永久占满 maxNormalLaneSites 饿死自有房重建。
  *   2. **消费申请**：收集 needContainer=true 的 remoteHarvester，按 source 分组处理。
  *   3. **配额仲裁**：远矿 site 永远让位自有房 emergency（emergency > 0 → 跳过）；
  *      normal 槽位与 construction-manager 公平竞争（normal > 0 → 跳过）；
- *      总量 ctx.globalSiteCount + remoteSiteTotal < maxGlobalSites。
+ *      总量 ctx.globalSiteCount + remoteSiteTotal < maxNormalLaneSites。
  *   4. **创建 site**：在站桩位 creep 脚下创建 container site，成功后清标记 +
  *      递增 siteCount + 标记 normal 槽位已用；失败写 containerSiteCooldown 防重试。
 
@@ -109,9 +109,9 @@ export function fulfillContainerRequests(
     if (counters.emergency > 0) continue;
     if (!counters.canCreateNormal) continue;
 
-    // 6. 总量判定：自有房 site + 远矿 site < maxGlobalSites。
+    // 6. 总量判定：自有房 site + 远矿 site < maxNormalLaneSites。
     const remoteTotal = getRemoteSiteTotal();
-    if (ctx.globalSiteCount + remoteTotal >= CONFIG.construction.maxGlobalSites) continue;
+    if (ctx.globalSiteCount + remoteTotal >= CONFIG.construction.maxNormalLaneSites) continue;
 
     // 7. 处理第一个有效申请（找到站桩位 creep 创建 site）。
     let fulfilled = false;
@@ -229,8 +229,8 @@ export function planRemotePathRoads(
   if (!home) return;
   const anchor = home.storage ?? home.find(FIND_MY_SPAWNS)[0];
   if (!anchor) return;
-  // 独立预算车道：远矿路径 road 不占 maxGlobalSites（自有房常规工地帽会被
-  // lab/rampart 长周期大活顶满，道路基建被无限饿死 —— 线上实证 maxGlobalSites=7
+  // 独立预算车道：远矿路径 road 不占 maxNormalLaneSites（自有房常规工地帽会被
+  // lab/rampart 长周期大活顶满，道路基建被无限饿死 —— 线上实证 maxNormalLaneSites=7
   // 全被占用）。上限 = 全帝国待建 road ≤ roadSitesPerOpTotal。求和口径必须跨主房：
   // 旧实现在这段 per-home 调用里用 room.find 自行累加本主房的 op，于是 20 的帽实际
   // 是 20×主房数 —— 名义全局、实为每房（详见 getRemoteRoadSiteTotal）。

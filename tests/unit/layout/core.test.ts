@@ -83,7 +83,7 @@ function mockSnapshot(overrides?: Partial<RoomSnapshot>): RoomSnapshot {
 const defaultOptions: ValidationOptions = {
   completedKeys: new Set(),
   globalSiteCount: 0,
-  maxGlobalSites: 5,
+  maxNormalLaneSites: 5,
 };
 
 // ── types.ts ──
@@ -372,7 +372,7 @@ describe("Layout — validateBuildCell", () => {
     const options: ValidationOptions = {
       ...defaultOptions,
       globalSiteCount: 5,
-      maxGlobalSites: 5,
+      maxNormalLaneSites: 5,
     };
     const result = validateBuildCell(mockRoom(), cell, { x: 25, y: 25 }, snapshot, options);
     expect(result).toBe("site-limit");

@@ -264,9 +264,9 @@ export function buildStage0PlanData(input: {
   anchor: { x: number; y: number };
   queue: readonly BuildTask[];
   globalSiteCount: number;
-  maxGlobalSites: number;
+  maxNormalLaneSites: number;
 }): Stage0PlanData {
-  const { snapshot, anchor, queue, globalSiteCount, maxGlobalSites } = input;
+  const { snapshot, anchor, queue, globalSiteCount, maxNormalLaneSites } = input;
 
   const completedKeys = collectCompletedKeys(queue);
   for (const key of collectCompletedKeysFromStructures(
@@ -286,7 +286,7 @@ export function buildStage0PlanData(input: {
   const validationOptions: ValidationOptions = {
     completedKeys,
     globalSiteCount,
-    maxGlobalSites,
+    maxNormalLaneSites,
     minerals,
     structureCounts,
     occupiedSet,

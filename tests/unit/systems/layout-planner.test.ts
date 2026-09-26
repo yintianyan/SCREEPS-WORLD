@@ -459,7 +459,7 @@ describe("P1-F.4 — planStage 4-stage 分片状态机", () => {
         validationOptions: {
           completedKeys: new Set<string>(),
           globalSiteCount: 0,
-          maxGlobalSites: CONFIG.construction.maxGlobalSites,
+          maxNormalLaneSites: CONFIG.construction.maxNormalLaneSites,
           minerals: [],
           structureCounts: new Map<string, number>(),
           occupiedSet: new Set<number>(),

@@ -24,7 +24,7 @@ function options(obstacleSet: ReadonlySet<number>): ValidationOptions {
   return {
     completedKeys: new Set(),
     globalSiteCount: 0,
-    maxGlobalSites: 7,
+    maxNormalLaneSites: 7,
     obstacleSet,
   };
 }
@@ -155,7 +155,7 @@ describe("seal-guard — validateBuildCell 接入", () => {
     const opts: ValidationOptions = {
       completedKeys: new Set(),
       globalSiteCount: 0,
-      maxGlobalSites: 7,
+      maxNormalLaneSites: 7,
     };
 
     expect(validateBuildCell(room, extCell, { x: 25, y: 25 }, snap, opts)).toBe("ok");

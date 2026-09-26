@@ -5,13 +5,13 @@
  *   2. 引擎真实 site 总数不超过设计承诺的上界；
  *   3. `buildQueue` 的 "site" 记账与引擎真实 site 数在**同一次求值**里对得上。
  *
- * 此处原本的断言是「总 site 数 ≤ maxGlobalSites」，实测越限 9~10。查清后判定**该断言本身错**：
- * `maxGlobalSites` 是 normal / development-lane 两道的**创建闸门**
+ * 此处原本的断言是「总 site 数 ≤ maxNormalLaneSites」，实测越限 9~10。查清后判定**该断言本身错**：
+ * `maxNormalLaneSites` 是 normal / development-lane 两道的**创建闸门**
  * （`evaluateDevelopmentGate` / `evaluateDevelopmentLane` 的 `global-site-cap` 原因码），
  * 不是总量不变量。critical(tower/spawn)、storage、source container 各走**独立每房配额**
  * （`tryCreateSite` 分道计额），配置注释把 critical 明写作每房"**额外**允许的关键 site 数"，
  * emergency 道更完全不查全局帽（`construction-manager.ts:115`）。
- * 所以上界是 `maxGlobalSites + 房数 × 额外道数`，越出它才是真缺陷。
+ * 所以上界是 `maxNormalLaneSites + 房数 × 额外道数`，越出它才是真缺陷。
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { CONFIG } from "../../../src/config";

@@ -290,11 +290,12 @@ export const CONFIG = {
     /** 每房额外允许的关键 site 数。 */
     maxCriticalSitesPerRoom: 1,
     /**
-     * 全局活跃 site 上限。7：容纳 3 extension + 2 road + 关键 container
-     * （source/controller）并行，避免被毁的 source container 重建被占满名额而阻塞。
+     * normal / development 车道的活跃 site 上限（名字直说它管什么：7 个名额）。
+     * 取值理由：容纳 3 extension + 2 road + 关键 container（source/controller）并行，
+     * 避免被毁的 source container 重建被占满名额而阻塞。
      *
-     * **它是 normal / development 车道的闸门，不是"帝国土地总数"的不变量** ——
-     * 生效点是 `domain/layout/validation.ts` 规则 6（`globalSiteCount >= maxGlobalSites
+     * **它不是"帝国土地总数"的不变量** ——
+     * 生效点是 `domain/layout/validation.ts` 规则 6（`globalSiteCount >= maxNormalLaneSites
      * → "site-limit"`，`globalSiteCount` 由 kernel 按各房 `myConstructionSites` 求和，
      * 再加 remote 侧在挂数），而各独立车道（critical / storage / source container /
      * road / wall / rampart）走**每房**配额、emergency 重建道完全不查本值。
@@ -304,8 +305,9 @@ export const CONFIG = {
      * （现由 `tests/e2e/scenarios/26-site-quota.test.ts` 按上面的真不变量钉住）。
      * 不改成真全局上限的理由：把关键基建挤进同一个名额池，正是注释里那句"被毁的 source
      * container 重建被占满名额而阻塞"要避免的事故形状。
+     * （旧名 maxGlobalSites —— "global" 一词让人反复把 7 读成帝国总量，故改。）
      */
-    maxGlobalSites: 7,
+    maxNormalLaneSites: 7,
     /** 永久位置冲突任务的黑名单冷却（tick）：blocked 任务连续 3 次 ERR_INVALID_TARGET
      * 被清除后其 key 入黑名单，冷却期内规划器不得重新入队 — 否则「入队 → blocked →
      * 删除 → 再入队」无限空转。10000 给足冲突源（如玩家手工建筑）被移除的时间。 */
@@ -777,7 +779,7 @@ export const CONFIG = {
     roadSitesPerRun: 3,
     /** 单个远矿 op 同时挂起的 road site 上限（铺完自然回落）。 */
     maxRoadSitesPerOp: 20,
-    /** 全帝国待建 road site 总上限 —— 独立于 maxGlobalSites 的基建车道
+    /** 全帝国待建 road site 总上限 —— 独立于 maxNormalLaneSites 的基建车道
      * （自有房常规工地帽会被 lab/rampart 长周期大活顶满，道路被饿死）。 */
     roadSitesPerOpTotal: 20,
     /** 远矿目标过期 tick 数（lastSeen 超过此值则暂停运营）。 */

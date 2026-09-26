@@ -1076,8 +1076,8 @@ declare global {
     /**
      * P0-A：本远矿房我方创建的 container construction site 数量（v15+）。
      * remote-mining-manager 每 managerInterval tick 用 lookForAtArea 实测校正 —
-     * 只增不减会让几个远矿房永久占满 maxGlobalSites 饿死自有房重建；
-     * construction-manager 全局上限判定读此值（ctx.globalSiteCount + Σ siteCount < maxGlobalSites）。
+     * 只增不减会让几个远矿房永久占满 maxNormalLaneSites 饿死自有房重建；
+     * construction-manager 全局上限判定读此值（ctx.globalSiteCount + Σ siteCount < maxNormalLaneSites）。
      */
     siteCount?: number;
     /**

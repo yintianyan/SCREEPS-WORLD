@@ -329,7 +329,7 @@ function planStage0Prep(
     anchor,
     queue,
     globalSiteCount: ctx.globalSiteCount,
-    maxGlobalSites: CONFIG.construction.maxGlobalSites,
+    maxNormalLaneSites: CONFIG.construction.maxNormalLaneSites,
   });
 
   // 阻塞黑名单：清理过期条目。

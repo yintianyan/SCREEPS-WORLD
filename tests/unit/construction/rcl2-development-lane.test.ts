@@ -30,7 +30,7 @@ function gateInputs(overrides: Partial<DevelopmentGateInputs> = {}): Development
     energyAvailable: 500,
     energyCapacityAvailable: 800,
     globalSiteCount: 0,
-    maxGlobalSites: CONFIG.construction.maxGlobalSites,
+    maxNormalLaneSites: CONFIG.construction.maxNormalLaneSites,
     ...overrides,
   };
 }
@@ -97,7 +97,7 @@ describe("evaluateDevelopmentGate — 结构化原因码", () => {
     expect(
       evaluateDevelopmentGate(
         gateInputs({
-          globalSiteCount: CONFIG.construction.maxGlobalSites,
+          globalSiteCount: CONFIG.construction.maxNormalLaneSites,
         }),
       ),
     ).toBe("global-site-cap");
@@ -111,7 +111,7 @@ describe("evaluateDevelopmentGate — 结构化原因码", () => {
       claimSecure: true,
       hasP0SpawnRequest: true,
       energyAvailable: 0,
-      globalSiteCount: CONFIG.construction.maxGlobalSites,
+      globalSiteCount: CONFIG.construction.maxNormalLaneSites,
     };
     expect(evaluateDevelopmentGate(gateInputs(base))).toBe("ok");
   });
@@ -130,7 +130,7 @@ function laneInputs(overrides: Partial<DevelopmentLaneInputs> = {}): Development
     energyAvailable: CONFIG.construction.developmentLaneEnergyFloor,
     laneEnergyFloor: CONFIG.construction.developmentLaneEnergyFloor,
     globalSiteCount: 0,
-    maxGlobalSites: CONFIG.construction.maxGlobalSites,
+    maxNormalLaneSites: CONFIG.construction.maxNormalLaneSites,
     readyLaneTaskCount: 2,
     ...overrides,
   };
@@ -180,7 +180,7 @@ describe("evaluateDevelopmentLane — RCL2 关键发展通道", () => {
     expect(
       evaluateDevelopmentLane(
         laneInputs({
-          globalSiteCount: CONFIG.construction.maxGlobalSites,
+          globalSiteCount: CONFIG.construction.maxNormalLaneSites,
         }),
       ),
     ).toBe("global-site-cap");

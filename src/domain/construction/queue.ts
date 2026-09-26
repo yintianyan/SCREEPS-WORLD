@@ -318,8 +318,8 @@ export interface DevelopmentGateInputs {
   energyCapacityAvailable: number;
   /** 全局 site 占用 = 自有房 site + 远矿 site 账本。 */
   globalSiteCount: number;
-  /** 全局 site 上限（CONFIG.construction.maxGlobalSites）。 */
-  maxGlobalSites: number;
+  /** 全局 site 上限（CONFIG.construction.maxNormalLaneSites）。 */
+  maxNormalLaneSites: number;
 }
 
 /**
@@ -355,7 +355,7 @@ export function evaluateDevelopmentGate(inputs: DevelopmentGateInputs): Developm
     );
     if (inputs.energyAvailable < buildThreshold) return "energy-floor";
 
-    if (inputs.globalSiteCount >= inputs.maxGlobalSites) return "global-site-cap";
+    if (inputs.globalSiteCount >= inputs.maxNormalLaneSites) return "global-site-cap";
   }
 
   return "ok";
@@ -421,7 +421,7 @@ export interface DevelopmentLaneInputs {
   /** 全局 site 占用（自有 + 远矿账本）。 */
   globalSiteCount: number;
   /** 全局 site 上限。 */
-  maxGlobalSites: number;
+  maxNormalLaneSites: number;
   /** 队列中「可立即创建」的关键发展任务数（queued 且过 retryAt）。 */
   readyLaneTaskCount: number;
 }
@@ -444,7 +444,7 @@ export function evaluateDevelopmentLane(inputs: DevelopmentLaneInputs): Developm
   if (inputs.hasP0SpawnRequest) return "p0-spawn";
   if (inputs.survivalGapActive) return "survival-gap";
   if (inputs.energyAvailable < inputs.laneEnergyFloor) return "energy-floor";
-  if (inputs.globalSiteCount >= inputs.maxGlobalSites) return "global-site-cap";
+  if (inputs.globalSiteCount >= inputs.maxNormalLaneSites) return "global-site-cap";
   if (inputs.readyLaneTaskCount === 0) return "no-lane-task";
   return "ok";
 }

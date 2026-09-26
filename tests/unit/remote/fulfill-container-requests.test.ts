@@ -220,18 +220,18 @@ describe("fulfillContainerRequests — tick 配额", () => {
 });
 
 describe("fulfillContainerRequests — 总量判定", () => {
-  it("globalSiteCount + remoteTotal >= maxGlobalSites → 跳过", () => {
+  it("globalSiteCount + remoteTotal >= maxNormalLaneSites → 跳过", () => {
     const creep = requestingCreep({});
     const room = mockRemoteRoom({ existingSites: [], createResult: 0 });
     // siteCount 会被函数校正为实测值（existingSites=[] → 0），
-    // 因此用 globalSiteCount = maxGlobalSites 触发总量超限。
+    // 因此用 globalSiteCount = maxNormalLaneSites 触发总量超限。
     const remoteOps: Record<string, RemoteOp> = { W8N4: activeOp() };
 
     const { ctx } = setupWorld({
       creeps: [creep],
       rooms: { W8N4: room },
       remoteOps,
-      globalSiteCount: CONFIG.construction.maxGlobalSites,
+      globalSiteCount: CONFIG.construction.maxNormalLaneSites,
     });
 
     fulfillContainerRequests(remoteOps, ctx, "W7N4");
