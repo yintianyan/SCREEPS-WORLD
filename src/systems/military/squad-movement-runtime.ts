@@ -1,4 +1,5 @@
 /** Squad Movement Runtime */
+import { packPos } from "../../domain/layout/types";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache, querySquad, type GlobalCache } from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
@@ -20,7 +21,6 @@ import {
   trafficEnabled,
 } from "../../creeps/movement/intent";
 import { moveToTarget, moveTowardRoom } from "../../creeps/movement/pathfinding";
-import { packPos } from "../../creeps/movement/traffic";
 import { recordSkip } from "../../kernel/memory";
 import { log } from "../../kernel/log";
 
@@ -225,7 +225,7 @@ function adjustMembersToSlots(slots: readonly FormationSlot[]): void {
     if (creep.fatigue > 0) continue;
 
     // 成员已在 DesiredPosition — 锚定不动
-    const currentPacked = packPos(creep.pos);
+    const currentPacked = packPos(creep.pos.x, creep.pos.y);
     if (currentPacked === slot.desiredPosition && creep.pos.roomName === slot.desiredRoom) {
       // 锚定 — 拒绝被推挤
       if (trafficEnabled()) {
@@ -295,7 +295,7 @@ function buildSquadPlanFromWarPlan(
     return {
       name: entry.name,
       role: entry.role,
-      pos: creep ? creep.pos.y * 50 + creep.pos.x : 25 * 50 + 25,
+      pos: creep ? packPos(creep.pos.x, creep.pos.y) : packPos(25, 25),
       room: creep ? creep.pos.roomName : plan.sponsor,
       hits: creep ? creep.hits : 0,
       hitsMax: creep ? creep.hitsMax : 0,
@@ -422,7 +422,7 @@ function collectRuntimeMembers(squad: SquadPlan): SquadMemberRuntimeSnapshot[] {
     result.push({
       name: member.name,
       role: member.role,
-      pos: creep.pos.y * 50 + creep.pos.x,
+      pos: packPos(creep.pos.x, creep.pos.y),
       room: creep.pos.roomName,
       hits: creep.hits,
       hitsMax: creep.hitsMax,

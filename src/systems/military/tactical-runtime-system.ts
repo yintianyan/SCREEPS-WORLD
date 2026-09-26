@@ -1,4 +1,5 @@
 /** Tactical Runtime System */
+import { packPos } from "../../domain/layout/types";
 import type { Priority, System, TickContext } from "../../kernel/contracts";
 import { globalCache, querySquad, type GlobalCache } from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
@@ -290,7 +291,7 @@ function buildSquadPlan(
     members.push({
       name: entry.name,
       role: entry.role,
-      pos: creep.pos.y * 50 + creep.pos.x,
+      pos: packPos(creep.pos.x, creep.pos.y),
       room: creep.pos.roomName,
       hits: creep.hits,
       hitsMax: creep.hitsMax,
@@ -555,7 +556,7 @@ function collectEnemies(targetRoom: string, tick: number): EnemySnapshot[] {
   return hostiles.map(c => ({
     id: c.id,
     name: c.name,
-    pos: c.pos.y * 50 + c.pos.x,
+    pos: packPos(c.pos.x, c.pos.y),
     room: c.pos.roomName,
     hits: c.hits,
     hitsMax: c.hitsMax,
@@ -574,7 +575,7 @@ function collectEnemyStructures(targetRoom: string, _tick: number): EnemyStructu
   return structs.map(s => ({
     id: s.id,
     structureType: s.structureType,
-    pos: s.pos.y * 50 + s.pos.x,
+    pos: packPos(s.pos.x, s.pos.y),
     room: s.pos.roomName,
     hits: s.hits,
     hitsMax: s.hitsMax,
