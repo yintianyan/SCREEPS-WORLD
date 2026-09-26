@@ -40,6 +40,11 @@ const REASON_NO_TARGET = 2;
 const REASON_PLAN_TIMEOUT = 3;
 /** 情报断供超容忍：承诺不得长期越过证据（见 run() 内的存续期复核）。 */
 const REASON_INTEL_STALE = 4;
+/** A5 换了目标（由 war-planning-system 在覆写兼容计划前调用）。
+ * 与断供撤军同类：**主动撤换**，不是战败 —— 不收战果、不拉黑旧目标。
+ * 导出是因为「换目标」这个决策有两个产地（legacy 超期重选 / A5 改判），
+ * 而收摊义务只有 demobilize 一份实现。 */
+export const REASON_TARGET_SWITCH = 5;
 
 /** 核验结论编码（WarOutcome 事件 d[0]）。 */
 const OUTCOME_CODES: Record<WarOutcome, number> = { success: 0, failure: 1, unknown: 2 };
@@ -353,6 +358,7 @@ export function markSquadMaterialized(
  * 收摊（幂等）：核验战果 → 失败/unknown 进黑名单 → 记录 WarOutcome 事件 →
  * 回收在役 attacker（标记 recycle，spawn-manager 归航回收）→ 撤销寄宿请求 → 清除计划。
  * reason：收摊原因编码（WarOutcome 事件 d[2]，黑匣子复盘用）。
+ * INTEL_STALE / TARGET_SWITCH 是**主动撤换**：跳过核验、不拉黑（见函数内 recall）。
 
  * P0-2 核验盲区修复：unknown（intel 过期/无视野）用更短的黑名单冷却 —
  * 区分「确定性打不赢」（failure，满额冷却）与「不知道打没打赢」（unknown，半额冷却）。
@@ -364,29 +370,41 @@ export function demobilize(tick: number, reason: number): void {
   const plan = Memory.kernel?.warPlan;
   if (!plan) return;
 
-  // 战后核验：以 sponsor 记录的最新目标房 intel 判定战果。
-  const entry = getRoomIntel(plan.targetRoom);
-  let outcome = evaluateWarOutcome(
-    plan.towersSeen,
-    entry?.payload.towers,
-    entry?.payload.owner,
-    entry?.observedAt,
-    tick,
-    CONFIG.war.targetFreshness,
-  );
-  // 战后核验只信 fact 级复核：威胁短窗外（非 fact）的观察即使年龄未超
-  // freshness 也不可信 → 降级 unknown（两段式重验），防止陈旧 intel 误判战果。
-  if (
-    outcome !== "unknown" &&
-    entry !== undefined &&
-    intelConfidence(plan.targetRoom, tick) !== "fact"
-  ) {
+  // 主动撤换（断供撤军 / A5 改判换目标）不收战果：既没打赢也没打输，是我们自己走的。
+  // 判成 failure 会把旧目标拉黑 10000~20000t（换目标时旧目标可能仍是正确目标，威胁
+  // 回来就选不到了），并把恢复动作提成"战败重建"——而新计划的补员已经在路上。
+  const recall = reason === REASON_INTEL_STALE || reason === REASON_TARGET_SWITCH;
+
+  let outcome: WarOutcome;
+  let intelAge: number | "never" = "never";
+  if (recall) {
     outcome = "unknown";
+  } else {
+    // 战后核验：以 sponsor 记录的最新目标房 intel 判定战果。
+    const entry = getRoomIntel(plan.targetRoom);
+    intelAge = entry?.observedAt !== undefined ? tick - entry.observedAt : "never";
+    outcome = evaluateWarOutcome(
+      plan.towersSeen,
+      entry?.payload.towers,
+      entry?.payload.owner,
+      entry?.observedAt,
+      tick,
+      CONFIG.war.targetFreshness,
+    );
+    // 战后核验只信 fact 级复核：威胁短窗外（非 fact）的观察即使年龄未超
+    // freshness 也不可信 → 降级 unknown（两段式重验），防止陈旧 intel 误判战果。
+    if (
+      outcome !== "unknown" &&
+      entry !== undefined &&
+      intelConfidence(plan.targetRoom, tick) !== "fact"
+    ) {
+      outcome = "unknown";
+    }
   }
   // 情报断供不判负：看不见目标房既不是「打赢了」也不是「打不赢」，把它写进黑名单
   // 会让一次侦察中断变成 10000~20000 tick 的永久放弃。断供撤军后目标仍可被重新授权
   // （前提是视野回来了 —— 授权本来就要过 fact + targetFreshness 那道门）。
-  if (outcome !== "success" && reason !== REASON_INTEL_STALE) {
+  if (outcome !== "success" && !recall) {
     // P0-2：unknown 用半额冷却 — intel 过期不是目标的错，缩短冷却让 intel 自然刷新后可重评。
     // failure 是确定性「打不赢」，用满额冷却防重选循环。
     const cooldown =
@@ -397,16 +415,18 @@ export function demobilize(tick: number, reason: number): void {
     log.info(
       "war-planner",
       `war: demobilize ${plan.targetRoom} outcome=${outcome}` +
-        ` (intel_age=${entry?.observedAt !== undefined ? tick - entry.observedAt : "never"},` +
-        ` blacklist=${cooldown}t, reason=${reason})`,
+        ` (intel_age=${intelAge}, blacklist=${cooldown}t, reason=${reason})`,
     );
-  } else if (reason === REASON_INTEL_STALE) {
-    // 断供撤军必须留痕：它不拉黑、不判负，日志是它唯一的外部可见信号
+  } else if (recall) {
+    // 撤军必须留痕：它不拉黑、不判负，日志是它唯一的外部可见信号
     // （否则"战争为什么停在这一步"只能靠读代码反推）。
     log.info(
       "war-planner",
-      `war: recall ${plan.targetRoom} — 情报断供 ${CONFIG.war.planIntelBlackoutTicks}t+` +
-        ` (spawned=${plan.spawned ?? 0}, 不拉黑, reason=${reason})`,
+      `war: recall ${plan.targetRoom}${ 
+        reason === REASON_INTEL_STALE
+          ? ` — 情报断供 ${CONFIG.war.planIntelBlackoutTicks}t+`
+          : " — A5 改判新目标，旧编队收摊" 
+        } (spawned=${plan.spawned ?? 0}, 不拉黑, reason=${reason})`,
     );
   }
 
@@ -414,7 +434,14 @@ export function demobilize(tick: number, reason: number): void {
   // recovery-execution-system 通过纯函数 mapAbortSignalsToRecoveryActions 将信号
   // 转换为 RecoveryAction，复用 A4.6 lifecycle 幂等机制（recoveryIdempotencyKey 去重）。
   // Military 只产出 Signal，不执行 Recovery。A4.6 负责 Signal → Action → 执行。
-  const REASON_LABELS = ["POSTURE", "ATTRITION", "NO_TARGET", "PLAN_TIMEOUT", "INTEL_STALE"];
+  const REASON_LABELS = [
+    "POSTURE",
+    "ATTRITION",
+    "NO_TARGET",
+    "PLAN_TIMEOUT",
+    "INTEL_STALE",
+    "TARGET_SWITCH",
+  ];
   const g = globalCache();
   // 读取 A5.3 operationId（如果 war-planning-system 已写入兼容字段）
   const compatOp = plan as typeof plan & { operationId?: string };

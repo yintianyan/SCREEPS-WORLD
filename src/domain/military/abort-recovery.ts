@@ -12,7 +12,9 @@ export type WarAbortReason =
   | "POSTURE" // 姿态退出（非 war）
   | "ATTRITION" // 消耗战失败
   | "NO_TARGET" // 无合格目标
-  | "PLAN_TIMEOUT"; // 计划超期
+  | "PLAN_TIMEOUT" // 计划超期
+  | "INTEL_STALE" // 授权证据断供超窗 → 撤军（不判负）
+  | "TARGET_SWITCH"; // A5 改判新目标 → 旧编队收摊（不判负）
 
 /** 战后核验结果。 */
 export type WarOutcome = "success" | "failure" | "unknown";
@@ -53,9 +55,12 @@ export interface WarAbortSignal {
  * - PLAN_TIMEOUT → population_rebuild：计划超期可能有未完成投入，需重建
  * - INTEL_STALE → population_rebuild：授权门槛（fact + 新鲜度）在计划存续期内不再成立，
  *   召回编队撤军。不是战败判定（war-planner 对此原因不写黑名单），但投入已经花掉。
+ * - TARGET_SWITCH → auto_resolve：A5 改判换目标，旧编队收摊。投入确实花掉了，但帝国
+ *   并没有少一支要用的兵——新计划在同一 tick 就声明了自己的补员需求，再报"需重建"
+ *   只会和它抢同一份恢复预算（幂等键同为 war-abort:<sponsor>，两边互相屏蔽）。
  * 注意：LOGISTICS_FAILURE / REINFORCEMENT_TIMEOUT / RECOVERY_UNAVAILABLE
  * 不是 war-planner 的止损原因——它们是 A5.3 operation.ts 的 AbortCondition，
- * 在当前架构中，war-planner 的 demobilize 只产生上述 5 种 reason。
+ * 在当前架构中，war-planner 的 demobilize 只产生上述 6 种 reason。
  * 如果未来 A5.3 完整 Operation lifecycle 接管止损，
  * AbortCondition 将通过本接口的 extendAbortReason 映射。
  */
@@ -114,6 +119,15 @@ const ABORT_REASON_MAP: Record<
     recommendation: "re-scout the target before re-authorizing; rebuild recalled squad",
     cost: 800,
     time: 500,
+    urgent: false,
+  },
+  TARGET_SWITCH: {
+    actionType: "auto_resolve",
+    domain: "colony",
+    description: "War plan switched target — old squad recalled, new plan already commits",
+    recommendation: "no recovery needed — the new plan's own spawn requests carry the demand",
+    cost: 0,
+    time: 0,
     urgent: false,
   },
 };

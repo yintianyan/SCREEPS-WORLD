@@ -115,11 +115,14 @@ export interface WarPlan {
     transport: number;
     replacement: number;
   };
-  /** Spawn 需求。 */
+  /** 兵种需求清单（编制/数量/优先级）。 */
   spawnRequirement: {
     role: string;
     count: number;
     priority: number;
+    /** 编队的**作战目标房**，不是孵化它的 home 房 — domain 无世界视野，答不出"谁孵"。
+     *  sponsor 由 systems 层解析（war-planning-system.resolveSponsor）；读这里的值当
+     *  sponsor 用会把敌房/远矿写成 warPlan.sponsor，令 war-planner 整链停摆。 */
     home: string;
   }[];
   /** 风险。 */

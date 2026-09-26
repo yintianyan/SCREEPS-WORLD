@@ -17,6 +17,8 @@ import type { MultiDimensionalConfidence } from "../../domain/defense/confidence
 import type { CombatPower } from "../../domain/combat/capability";
 import { EventKind, recordEvent } from "../../kernel/event-log";
 import { log } from "../../kernel/log";
+import { roomLinearDistance } from "../../domain/remote/targeting";
+import { demobilize, REASON_TARGET_SWITCH } from "./war-planner";
 
 // ═══════════════════════════════════════════════════════════
 // §1. 系统定义
@@ -45,9 +47,20 @@ export const warPlanningSystem: System = {
     const g = globalCache();
     g.warPlanCache = { tick, plan };
 
-    // 3.5 写入 warLogisticsDemand 供 logistics-planner 消费
+    // 3.5 + 4. 有可执行的计划 → 解析 sponsor → 写物流需求 + 兼容 warPlan
     if (plan) {
-      const sponsor = plan.spawnRequirement[0]?.home ?? plan.operation.target.roomName;
+      // sponsor 只解析一次：demand 与 warPlan 两个落点各自推导会漂移。
+      const sponsor = resolveSponsor(plan.operation.target.roomName, ctx);
+      if (!sponsor) {
+        // 一个能孵兵的自有房都找不到（视野全丢）— 本轮不落笔，更不覆写既有计划：
+        // 目标房名当 sponsor 写进 warPlan 会让 war-planner 整链静默停摆（见 resolveSponsor）。
+        g.warLogisticsDemand = undefined;
+        log.warn(
+          "war-planning",
+          `no sponsor room for target=${plan.operation.target.roomName} — plan not published`,
+        );
+        return;
+      }
       g.warLogisticsDemand = {
         tick,
         sponsor,
@@ -57,13 +70,7 @@ export const warPlanningSystem: System = {
         transport: plan.logisticsRequirement.transport,
         replacement: plan.logisticsRequirement.replacement,
       };
-    } else {
-      g.warLogisticsDemand = undefined;
-    }
-
-    // 4. 兼容写入 Memory.kernel.warPlan（attacker/healer 无缝切换）
-    if (plan) {
-      writeCompatibleWarPlan(plan, tick);
+      writeCompatibleWarPlan(plan, tick, sponsor);
       recordEvent(EventKind.WarPlanCreated, plan.operation.target.roomName, [
         PLAN_EVENT_CODES[plan.operation.status] ?? 0,
         plan.operation.priority.score,
@@ -72,18 +79,16 @@ export const warPlanningSystem: System = {
         "war-planning-system",
         `war-planning: plan=${plan.operation.operationId}` +
           ` type=${plan.operation.type} target=${plan.operation.target.roomName}` +
+          ` sponsor=${sponsor}` +
           ` posture=${plan.posture.posture} risk=${plan.risk.level}` +
           ` econGuard=${plan.economicGuard.passed ? "PASS" : "FAIL"}` +
           ` netValue=${plan.expectedValue.netValue}`,
       );
     } else {
-      // 无计划（无威胁/未授权/经济护栏失败）— 清除旧兼容 Memory
-      // 但不调 demobilize（那是 war-planner 的职责）
-      // 只在 posture 非 war 时清，避免误清
-      const posture = Memory.kernel?.strategy?.posture;
-      if (posture !== "war" && Memory.kernel?.warPlan) {
-        // war-planner 会处理 demobilize，这里不重复
-      }
+      // 无计划（无威胁 / 未授权 / 经济护栏失败）：撤掉物流需求，但不清 warPlan —
+      // 收摊（recycle + 撤请求 + 核验）是 war-planner 的职责，它每轮自己复核授权证据，
+      // 断供超窗才撤军。这里抢着清 warPlan 会让旧编队变成没人回收的孤儿。
+      g.warLogisticsDemand = undefined;
     }
   },
 };
@@ -400,6 +405,43 @@ function computeOurPower(g: ReturnType<typeof globalCache>): CombatPower {
 // ═══════════════════════════════════════════════════════════
 
 /**
+ * 解析编队的孵化房（sponsor）= 「谁来出这支兵」。
+ *
+ * 这不是 domain 能回答的问题：`plan.spawnRequirement[].home` 填的是**目标房**
+ * （纯函数只有情报视野，没有"我方哪间房"的概念），把它当 sponsor 用会让
+ * war-planner 去读 `Memory.rooms[目标房].spawnQueue` —— 敌房/远矿恒无此条，
+ * :117 直接 return，编队维持/波次相位/核弹/止损整链静默停摆（防御型目标恰好
+ * 是同值才一直没暴露）。同理，止损信号的 `room` 也会记到一间不属于我们的房上。
+ *
+ * 推导次序（越靠前越确定）：
+ * 1. 目标就是自有房 → 就地防御，本房自孵；
+ * 2. 目标是某自有房的在运营远矿 → 由运营它的 host 出兵（谁受益谁付）；
+ * 3. 通勤最近的、有空闲孵化位的自有房。
+ */
+function resolveSponsor(targetRoom: string, ctx: TickContext): string | undefined {
+  if (Game.rooms[targetRoom]?.controller?.my === true) return targetRoom;
+
+  for (const [host, mem] of Object.entries(Memory.rooms)) {
+    const op = mem?.remoteOps?.[targetRoom];
+    if (op && op.state !== "abandoned" && Game.rooms[host]?.controller?.my === true) {
+      return host;
+    }
+  }
+
+  let best: string | undefined;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const snap of ctx.snapshots()) {
+    if (snap.spawns.length === 0) continue;
+    const distance = roomLinearDistance(snap.roomName, targetRoom);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = snap.roomName;
+    }
+  }
+  return best;
+}
+
+/**
  * 将新 WarPlan 兼容写入 Memory.kernel.warPlan，
  * 使 attacker/healer 角色无感知切换。
 
@@ -408,25 +450,37 @@ function computeOurPower(g: ReturnType<typeof globalCache>): CombatPower {
 
  * 新字段（A5.3 运行时字段，无 schema 变更）：
  *   operationId, warPosture, operationType
+
+ * sponsor 由调用方解析后传入（见 resolveSponsor）——本函数只负责投影，
+ * 不再自己猜孵化房。
  */
-function writeCompatibleWarPlan(plan: WarPlan, tick: number): void {
+function writeCompatibleWarPlan(plan: WarPlan, tick: number, sponsor: string): void {
   if (!Memory.kernel) Memory.kernel = {};
 
   const existing = Memory.kernel.warPlan;
   const targetRoom = plan.operation.target.roomName;
-  const sponsor = plan.spawnRequirement[0]?.home ?? plan.operation.target.roomName;
   const squadSize = plan.forceRequirement.total;
-  const towersSeen = plan.targetSelection.selected?.towers ?? 0;
+  const freshTowers = plan.targetSelection.selected?.towers ?? 0;
 
-  // 同目标续期：保留 spawned 和 spawnedKeys
-  const keep = existing && existing.targetRoom === targetRoom;
+  // 换目标必须先收摊（demobilize 是唯一实现）：旧目标的在役编队要标 recycle、
+  // 旧 sponsor 的在队 attacker/healer 请求要撤、止损信号要报给 recovery。
+  // 只重置 since/spawned 而不收摊 = 旧编队永久孤儿（squadIndex 按
+  // home+remoteTarget 键死，新计划再也不会查到它们）+ 旧房队列滞留。
+  const switching = existing !== undefined && existing.targetRoom !== targetRoom;
+  if (switching) demobilize(tick, REASON_TARGET_SWITCH);
+  // switching 后 warPlan 已被 demobilize 删除，此处必须用切换前的结论，不能再读 existing。
+  const keep = !switching && existing !== undefined;
 
   Memory.kernel.warPlan = {
     targetRoom,
     sponsor,
     squadSize: Math.max(1, squadSize),
     since: keep ? existing!.since : tick,
-    towersSeen,
+    // 恒 0，且这是正确值不是丢失：A5 只产防御型目标（受威胁的自有房/远矿房），
+    // deriveTarget 的合成候选 towers=undefined。towersSeen 的用途是「进去时要拆掉几座
+    // 塔」（核弹门槛 + 战后核验基线），对自家/远矿房本就无从谈起 —— 核弹门在防御型
+    // 计划上不发射是期望行为，真正的进攻型计划由 war-planner 的选目标路径给出塔数。
+    towersSeen: freshTowers,
     phase: keep && existing!.phase ? existing!.phase : "build",
     spawned: keep ? (existing!.spawned ?? 0) : 0,
     spawnedKeys: keep ? existing!.spawnedKeys : undefined,

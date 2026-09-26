@@ -117,6 +117,12 @@ export function resetGlobals(): void {
   delete g.remoteTargetRooms;
   // tower-defense 的威胁未决心跳限频（reportThreatUnhandled 写入）。
   delete g.threatUnhandledAt;
+  // 战争链的 heap 产出（war-planning-system 写 cache/demand，war-planner.demobilize 写信号）。
+  // 漏清会让"有没有发止损信号"这类断言被上一个用例写入的信号污染 ——
+  // war-planning-system-compat 首跑即踩到（同目标续期用例读到换目标用例的信号）。
+  delete g.warAbortSignals;
+  delete g.warPlanCache;
+  delete g.warLogisticsDemand;
 }
 
 /**

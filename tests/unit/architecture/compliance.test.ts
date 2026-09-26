@@ -370,6 +370,12 @@ describe("R11 systems 间值导入审计", () => {
     // 合并进父系统的规划模块（父系统内部门控调用，同架构单元编排）
     "systems/room/logistics.ts:systems/room/logistics-planner.ts",
     "systems/empire/empire-strategy.ts:systems/empire/specialization-planner.ts",
+    // 收摊义务的唯一实现：warPlan 有两个写者（A5 兼容投影 / legacy 选目标），而
+    // "换目标必须先清算旧编队（recycle + 撤请求 + 止损信号）"这条义务只有一份实现，
+    // 在 war-planner.demobilize。A5 换目标时调它，而不是抄第二份收摊。
+    // 出口条件：两写者合并为单一 Operation 生命周期属主（W06 三.3 的方案 B / B7 接线
+    // 裁决）后，此边应随 demobilize 一起迁进那个属主并从本表删除。
+    "systems/military/war-planning-system.ts:systems/military/war-planner.ts",
     // pipeline 内子阶段间的数据传递
     "systems/military/tactical-engagement-runtime.ts:systems/military/squad-movement-runtime.ts",
     "systems/military/combat-micro-runtime.ts:systems/military/tactical-engagement-runtime.ts",
