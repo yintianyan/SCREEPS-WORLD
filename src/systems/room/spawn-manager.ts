@@ -387,6 +387,11 @@ export function trySpawn(
     const spawn = freeSpawns[spawnIdx]!;
     if (!req) continue;
 
+    // 隔离名单在孵化口收口：过去只在属主重建需求时查（本文件 :185），于是外部生产者
+    // （recovery 的 REMOTE/DEFENSE/… 提交路径）用同名 key 直接 submitRequest 就能把
+    // 被封请求复活 —— 隔离对它们形同不存在。
+    if ((Memory.rooms[snapshot.roomName]?.spawnBlacklist?.[req.key] ?? 0) > Game.time) continue;
+
     // P0 阻塞：如果存在 P0 请求但暂时无法满足，不孵化非 P0 creep。
     if (hasP0 && req.priority > 0) {
       return;

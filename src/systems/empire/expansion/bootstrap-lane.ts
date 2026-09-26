@@ -9,7 +9,7 @@ import {
   BOOTSTRAP_DEFENDER_BODY,
 } from "../../../domain/expansion/bootstrap";
 import { roomLinearDistance } from "../../../domain/remote/targeting";
-import { submitRequest } from "../../../domain/spawn/queue";
+import { submitRequest, cancelRequestsByHome } from "../../../domain/spawn/queue";
 
 export function runBootstrapLane(ctx: TickContext): void {
   const kernel = Memory.kernel!;
@@ -80,7 +80,15 @@ export function runBootstrapLane(ctx: TickContext): void {
 
   for (const d of decisions) {
     if (d.action === "abandon") {
-      if (Memory.rooms[d.room]) Memory.rooms[d.room]!.spawnQueue = [];
+      // 车道请求写在 **sponsor** 的队列里、home 指向殖民地。旧写法清的是殖民地的
+      // 队列（且用 `spawnQueue = []` 整组覆盖，正好绕过 splice 守卫的判据），
+      // sponsor 里那批 `bootstrap.<room>.*` 一条没清 —— 失守之后 TTL 窗口内
+      // 继续孵拓荒者送往已放弃的房。
+      // 改为按 home 精确撤销（domain/spawn/queue 里属主认可的出口，覆盖所有宿主房，
+      // sponsor 自己的编制 home=sponsor 不受影响）。
+      for (const hostMem of Object.values(Memory.rooms)) {
+        if (hostMem?.spawnQueue) cancelRequestsByHome(hostMem.spawnQueue, d.room);
+      }
       log.info("expansion", `[${ctx.tick}] bootstrap: abandon ${d.room} — ${d.reason}`);
       recordEvent(EventKind.ExpansionOutcome, d.room, [1, 4, 0]);
       continue;

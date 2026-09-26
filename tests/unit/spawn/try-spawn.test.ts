@@ -35,6 +35,47 @@ beforeEach(() => {
   (globalThis as any).Memory.rooms.W7N4 = { colonyState: "normal", economyPressure: 0 };
 });
 
+describe("trySpawn — 隔离名单在孵化口生效", () => {
+  it("被隔离的 key 即使在队列里、能量充足也不得孵化", () => {
+    // 外部生产者（recovery 等）绕开属主重建路径直接 submitRequest 时，
+    // 只看 :185 的隔离名单等于没有名单 —— 收口必须落在孵化口。
+    const spawn = mockSpawn(800);
+    const queue = [makeRequest()];
+    (globalThis as any).Memory.rooms.W7N4!.spawnBlacklist = {
+      "hauler:W7N4:0": (globalThis as any).Game.time + 500,
+    };
+
+    trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 3);
+
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(queue).toHaveLength(1);
+  });
+
+  it("隔离冷却已过则照常孵化（闸不是永久封禁）", () => {
+    const spawn = mockSpawn(800);
+    const queue = [makeRequest()];
+    (globalThis as any).Memory.rooms.W7N4!.spawnBlacklist = {
+      "hauler:W7N4:0": (globalThis as any).Game.time - 1,
+    };
+
+    trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 3);
+
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+  });
+
+  it("同房内未被隔离的 key 不受影响", () => {
+    const spawn = mockSpawn(800);
+    const queue = [makeRequest({ key: "hauler:W7N4:1", role: "hauler" })];
+    (globalThis as any).Memory.rooms.W7N4!.spawnBlacklist = {
+      "hauler:W7N4:0": (globalThis as any).Game.time + 500,
+    };
+
+    trySpawn(mockSnapshot({ spawns: [spawn] }), queue, 3);
+
+    expect(spawn.spawnCreep).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("trySpawn — SP-1 recovery 能量预留", () => {
   it("采集者 ≤1 时非 P0 请求不得动用预留能量（cost > budget - reserve → 不孵化）", () => {
     // 能量 300，请求 200，预留 200 → 有效额度 100 < 200 → 排队等待。
