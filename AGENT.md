@@ -104,7 +104,9 @@ package.json scripts 一致：typecheck / check:docs / test / test:unit / test:i
 
 - site 创建仅两个写者：construction-manager（自有房）+ remote-mining-manager
   （远矿房）；角色层只写 `needContainer` 申请标记。
-- 全局存量上限 `CONFIG.construction.maxGlobalSites`；每房最多 3 normal + 2 road +
+- `CONFIG.construction.maxNormalLaneSites`（7）是 normal / development 车道的名额，
+  **不是帝国 site 总量**：critical / storage / container / road / wall / rampart 走每房
+  配额，emergency 重建道不查此值（理由见 config 注释）。每房最多 3 normal + 2 road +
   1 critical；自有房 emergency site 优先于远矿 site。道路依据实测交通热度逐段添加，
   绝不预铺全房。
 - 布局是版本化蓝图 + 低频局部适配 + 队列化执行；核心结构建成后冲突只标 `blocked`，
