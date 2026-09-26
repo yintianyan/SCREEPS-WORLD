@@ -861,8 +861,8 @@ declare global {
     rk: number;
     /** 风险等级。 */
     rl: string;
-    /** Plan 状态。 */
-    st: string;
+    /** Plan 状态（受约束的枚举，不是自由字符串 —— 状态词写错曾被当成"删除计划"）。 */
+    st: import("../domain/expansion/plan").PlanStatus;
     /** 创建 tick。 */
     ca: number;
     /** 更新 tick。 */

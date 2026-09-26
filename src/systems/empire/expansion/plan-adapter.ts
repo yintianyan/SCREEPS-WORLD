@@ -2,7 +2,7 @@
 import type { TickContext } from "../../../kernel/contracts";
 import { log } from "../../../kernel/log";
 import { makeOperationId } from "../../../domain/expansion/uoem-types";
-import type { ExpansionPlan } from "../../../domain/expansion/plan";
+import type { ExpansionPlan, PlanStatus } from "../../../domain/expansion/plan";
 import {
   validateExecutionGate,
   type ExecutionGateInput,
@@ -47,13 +47,16 @@ export function tryConsumePlan(ctx: TickContext): void {
       "expansion",
       `[${ctx.tick}] expansion-manager: Gate failed for ${plan.roomName}: ${gateResult.evidence}`,
     );
-    // 如果 Gate 持续失败，更新 Plan 状态为 CANCELLED
+    // 硬失败（计划本身不成立 / 目标根本不可 claim）→ 取消这条 Plan，让它进
+    // rebuildCooldown 冷却期。原写法是 "EXECUTING"：既与上一行注释的意图相反，
+    // 又因为"执行中"曾被 prunePlans 判为非在途而被当场删账 → 冷却从未生效，
+    // 同一个不可 claim 的目标被逐周期重新立项。
     if (
       gateResult.failedGates.includes("GATE_PLAN_VALID") ||
       gateResult.failedGates.includes("GATE_TARGET_CLAIMABLE") ||
       gateResult.failedGates.includes("GATE_NOT_OWNED")
     ) {
-      updatePlanStatus(plan.planId, "EXECUTING");
+      updatePlanStatus(plan.planId, "CANCELLED");
     }
     return;
   }
@@ -76,7 +79,9 @@ export function tryConsumePlan(ctx: TickContext): void {
     return;
   }
 
-  // 标记 Plan 为 EXECUTING
+  // 标记 Plan 为 EXECUTING —— 本条计划已被接管，之后的终态（COMPLETED / CANCELLED）
+  // 由 state-machine 按 planId 回写。它必须在 ACTIVE_STATUSES 里，否则这条记录会在
+  // 下一个 planner 周期被抹掉，终态回写全部落空（见 plan-lifecycle 的注释）。
   updatePlanStatus(plan.planId, "EXECUTING");
 
   // 初始化扩张状态
@@ -211,16 +216,7 @@ function deserializePlanMemory(m: ExpansionPlanMemory): ExpansionPlan | null {
     payback,
     risk,
     candidate,
-    status: m.st as
-      | "DISCOVERED"
-      | "EVALUATED"
-      | "READY"
-      | "APPROVED"
-      | "WAITING_EXECUTION"
-      | "EXECUTING"
-      | "COMPLETED"
-      | "CANCELLED"
-      | "BLACKLISTED",
+    status: m.st,
     createdAt: m.ca,
     updatedAt: m.ua ?? m.ca,
     approvedAt: m.aa,
@@ -232,7 +228,7 @@ function deserializePlanMemory(m: ExpansionPlanMemory): ExpansionPlan | null {
 }
 
 /** 更新 Plan 状态到 Memory。 */
-export function updatePlanStatus(planId: string, status: string): void {
+export function updatePlanStatus(planId: string, status: PlanStatus): void {
   if (!planId) return;
   const plans = Memory.kernel?.expansionPlans;
   if (!plans) return;

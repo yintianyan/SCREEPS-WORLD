@@ -10,6 +10,15 @@ const ACTIVE_STATUSES: ReadonlySet<PlanStatus> = new Set([
   "READY",
   "APPROVED",
   "WAITING_EXECUTION",
+  // "执行中"也是在生命周期内 —— prunePlans 的判据是"非 Active 且已过冷却即删"，
+  // 少了这一格，plan-adapter 每次标记 EXECUTING 都会在下一个 planner 周期被
+  // 连账本一起抹掉（expansion-planner 步 10/11 会把裁剪结果写回 Memory）。
+  // 后果不止观测：state-machine 的三处 COMPLETED 与一处 CANCELLED 都是按 planId
+  // 找记录写的，记录没了就全成空写 → 终态不留 rebuildCooldown → 同一片废墟被
+  // 反复重新立项（deduplicatePlans 的"同房不得有两个在途计划"同样瞎）。
+  // 它**不进** isRebuildBlocked（那是 CANCELLED/BLACKLISTED 的冷却语义）——
+  // "正在执行"≠"刚失败"，这条界线由用例钉住。
+  "EXECUTING",
 ]);
 
 /** 最大 Active Plan 数（有界列表）。 */
