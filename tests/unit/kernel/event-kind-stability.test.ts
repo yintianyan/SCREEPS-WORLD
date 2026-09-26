@@ -59,6 +59,7 @@ const EXPECTED: Record<string, number> = {
   StrategyReview: 43,
   L2Intake: 44,
   P3StarvationFrozen: 45,
+  LostRoomPurge: 46,
 };
 
 /** 从数字枚举对象提取 forward 映射（成员名 → 编码），忽略反向数值条目。 */

@@ -2,7 +2,7 @@
 
 import { CONFIG } from "../config";
 import { globalCache } from "./global-cache";
-import { recordCreepDeath } from "./event-log";
+import { EventKind, recordCreepDeath, recordEvent } from "./event-log";
 import { log } from "./log";
 import { MIGRATIONS } from "./migrations";
 
@@ -92,6 +92,7 @@ export function maintainMemory(): void {
     }
     const lostAt = (lostRooms[roomName] ??= Game.time);
     if (Game.time - lostAt > LOST_ROOM_GRACE) {
+      recordLostRoomPurge(roomName, Game.time - lostAt);
       delete Memory.rooms[roomName];
       delete lostRooms[roomName];
       if (Memory.kernel.tuning?.rooms[roomName]) {
@@ -115,6 +116,48 @@ export function maintainMemory(): void {
         delete stats.deathAnchor[role];
       }
     }
+  }
+}
+
+/** 失守房清盘的可见出口：删账前把"删了什么"记成一条事件 + 一行日志。
+ *
+ * 为什么值得记：调参账本随房间一起消失后，"这间房调过哪些参数、有没有因为反复回滚
+ * 被冻过、有没有在途验证"就再无处可查 —— TuningAdjust/Rollback/Freeze 记的是逐次
+ * 动作，不记"哪间房的覆盖被整体清过、清掉多少"。回收一间隔房重开运营时，线上只看到
+ * 调参从头再来，没有这条事件就只能靠读代码反推。
+ *
+ * 为什么不在这里保住冻结保护与在途 pending：LOST_ROOM_GRACE(20000) 大于
+ * FROZEN_DURATION(10000) 也大于 verifyDelay(1500)，能走到删这一步的账本里那份保护
+ * 必然早已过期 —— 保不住，只能记下来。
+ *
+ * 观测失败不阻塞清理（与 recordCreepDeath 同一条纪律，B3-F02）。 */
+function recordLostRoomPurge(roomName: string, lostFor: number): void {
+  const tuning = Memory.kernel?.tuning;
+  const state = tuning?.rooms?.[roomName];
+  const lastEval = tuning?.lastEval?.[roomName];
+  const remoteOps = Memory.rooms[roomName]?.remoteOps;
+  // 一间本来就没账的房间清空是日常，不发事件 —— 只记真正有东西被抹掉的那次。
+  if (!state && !lastEval && !remoteOps) return;
+
+  const count = (obj: Record<string, unknown> | undefined): number =>
+    obj ? Object.keys(obj).length : 0;
+  try {
+    recordEvent(EventKind.LostRoomPurge, roomName, [
+      0, // reasonCode：0 = 失守宽限期届满（目前唯一出口）
+      count(state?.roleBounds),
+      count(state?.pendingValidation),
+      count(state?.frozenParams),
+      count(remoteOps),
+      lostFor,
+    ]);
+    log.info(
+      "memory",
+      `lost-room purge ${roomName}: tuningOverrides=${count(state?.roleBounds)}` +
+        ` pending=${count(state?.pendingValidation)} frozen=${count(state?.frozenParams)}` +
+        ` remoteOps=${count(remoteOps)} lostFor=${lostFor}t (reason=LOST_ROOM_GRACE)`,
+    );
+  } catch {
+    // 事件/日志写不进去也不能让维护中断 — 删除本身照旧。
   }
 }
 

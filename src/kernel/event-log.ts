@@ -135,6 +135,13 @@ export enum EventKind {
    * 读取外部 LLM 建议包，经六层护栏校验后写入 intakePending。
    * d = [acceptedCount, rejectedCount]；r = ""。 */
   L2Intake = 44,
+  /** 失守房账本清盘（maintainMemory 的 LOST_ROOM_GRACE 届满）。
+   * d = [reasonCode(0=失守宽限期届满), tuningOverrideCount, pendingValidationCount,
+   *      frozenParamCount, remoteOpCount, lostForTicks]；r = 房名。
+   * 为什么需要它：调参账本一随房间删除，"这间房调过哪些参数、有没有因为反复回滚被冻过"
+   * 就再无处可查 —— TuningAdjust/Rollback/Freeze 记的是逐次动作，不记"哪间房的覆盖被
+   * 整体清过、清掉多少"。回收一间隔房重开运营时，这是唯一的解释来源。 */
+  LostRoomPurge = 46,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────
