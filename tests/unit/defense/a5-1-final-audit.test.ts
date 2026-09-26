@@ -1,5 +1,10 @@
 /** A5.1 FINAL AUDIT — Threat / Combat / Remote Defense 完整审计测试。 */
 import { describe, expect, it } from "vitest";
+import { createRequire } from "node:module";
+
+/** 引擎权威常量（@screeps/common 无类型声明，这里只取 BOOSTS 真值做对照）。 */
+const ENGINE_BOOSTS = createRequire(import.meta.url)("@screeps/common/lib/constants.js")
+  .BOOSTS as Record<string, Record<string, Record<string, number>>>;
 import {
   assessThreat,
   inferThreatIntent,
@@ -554,10 +559,13 @@ describe("§7 G2 Boost Reality — 引擎常量核对", () => {
     expect(t3.effectiveHP).toBeGreaterThan(400);
   });
 
-  it("WORK (dismantle) boost: T1=×1.5, T2=×1.8, T3=×2", () => {
-    expect(BOOST_MULTIPLIERS.dismantle[1]).toBe(1.5);
-    expect(BOOST_MULTIPLIERS.dismantle[2]).toBe(1.8);
-    expect(BOOST_MULTIPLIERS.dismantle[3]).toBe(2);
+  it("WORK (dismantle) boost: T1=×2, T2=×3, T3=×4", () => {
+    // 引擎 BOOSTS.work 的 ZH / ZH2O / XZH2O = 2 / 3 / 4。
+    // 这里曾写 1.5/1.8/2 —— 那是同表 LH 系（build/repair）的梯子被抄成了拆家梯子，
+    // 而本用例只对照本地 BOOST_MULTIPLIERS 抄本自证，所以错得稳定、错得长期存活。
+    expect(BOOST_MULTIPLIERS.dismantle[1]).toBe(2);
+    expect(BOOST_MULTIPLIERS.dismantle[2]).toBe(3);
+    expect(BOOST_MULTIPLIERS.dismantle[3]).toBe(4);
   });
 
   it("MOVE boost: T1=×2, T2=×3, T3=×4", () => {
@@ -565,10 +573,81 @@ describe("§7 G2 Boost Reality — 引擎常量核对", () => {
     expect(BOOST_MULTIPLIERS.move[3]).toBe(4);
   });
 
-  it("CLAIM boost: T1=×2, T2=×3, T3=×4", () => {
-    expect(BOOST_MULTIPLIERS.claim[1]).toBe(2);
-    expect(BOOST_MULTIPLIERS.claim[3]).toBe(4);
+  it("本引擎不存在 claim 家族 —— 不得凭空给 claim 部件算 boost", () => {
+    expect(ENGINE_BOOSTS.claim).toBeUndefined();
+    expect("claim" in BOOST_MULTIPLIERS).toBe(false);
+    const cap = evaluateCombatCapability(makeCreep([{ type: CLAIM, boost: "XUH2O" }]));
+    expect(cap.claim).toBe(1);
   });
+});
+
+// ═══════════════════════════════════════════════════════════
+// §7b 与引擎 BOOSTS 逐档对表（取代"抄本比抄本"式自证）
+// ═══════════════════════════════════════════════════════════
+
+/** 我们消费的每一档倍率，都要能在引擎表里找到同名家族与同值效果。 */
+const BOOST_CONTRACTS: ReadonlyArray<{
+  label: string;
+  table: readonly number[];
+  part: string;
+  effect: string;
+  compounds: readonly [string, string, string];
+}> = [
+  {
+    label: "attack",
+    table: BOOST_MULTIPLIERS.attack,
+    part: "attack",
+    effect: "attack",
+    compounds: ["UH", "UH2O", "XUH2O"],
+  },
+  {
+    label: "rangedAttack",
+    table: BOOST_MULTIPLIERS.rangedAttack,
+    part: "ranged_attack",
+    effect: "rangedAttack",
+    compounds: ["KO", "KHO2", "XKHO2"],
+  },
+  {
+    label: "heal",
+    table: BOOST_MULTIPLIERS.heal,
+    part: "heal",
+    effect: "heal",
+    compounds: ["LO", "LHO2", "XLHO2"],
+  },
+  {
+    label: "tough",
+    table: BOOST_MULTIPLIERS.tough,
+    part: "tough",
+    effect: "damage",
+    compounds: ["GO", "GHO2", "XGHO2"],
+  },
+  {
+    label: "dismantle",
+    table: BOOST_MULTIPLIERS.dismantle,
+    part: "work",
+    effect: "dismantle",
+    compounds: ["ZH", "ZH2O", "XZH2O"],
+  },
+  {
+    label: "move",
+    table: BOOST_MULTIPLIERS.move,
+    part: "move",
+    effect: "fatigue",
+    compounds: ["ZO", "ZHO2", "XZHO2"],
+  },
+];
+
+describe("§7b BOOST_MULTIPLIERS 逐档等于引擎 BOOSTS", () => {
+  for (const c of BOOST_CONTRACTS) {
+    it(`${c.label} ⇐ BOOSTS.${c.part}.${c.effect}`, () => {
+      c.compounds.forEach((compound, i) => {
+        const tier = (i + 1) as 1 | 2 | 3;
+        const engineValue = ENGINE_BOOSTS[c.part]?.[compound]?.[c.effect];
+        expect(engineValue, `引擎缺少 ${c.part}.${compound}.${c.effect}`).toBeDefined();
+        expect(c.table[tier], `${c.label} T${tier} 与引擎不符`).toBe(engineValue);
+      });
+    });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════

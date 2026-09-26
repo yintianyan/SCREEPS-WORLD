@@ -25,12 +25,12 @@ export const BOOST_MULTIPLIERS = {
   heal: [1, 2, 3, 4] as const,
   // TOUGH 减伤系数：T1=0.7, T2=0.5, T3=0.3（值越低减伤越多）
   tough: [1, 0.7, 0.5, 0.3] as const,
-  // WORK (dismantle) 倍率：×1.5/×1.8/×2
-  dismantle: [1, 1.5, 1.8, 2] as const,
-  // MOVE 倍率：×2/×3/×4（减少 fatigue）
+  // WORK (dismantle) 倍率：×2/×3/×4 —— 引擎 BOOSTS.work 的 ZH / ZH2O / XZH2O。
+  // 旧值 [1.5, 1.8, 2] 是同一 work 表里 LH 系（build/repair）的梯子，被当成分解抄了
+  // 过来：拆家威胁因此被系统性低估（最高档 4 → 2，少一半）。
+  dismantle: [1, 2, 3, 4] as const,
+  // MOVE 倍率：×2/×3/×4（引擎 BOOSTS.move 的 ZO/ZHO2/XZHO2，作用于 fatigue 恢复）
   move: [1, 2, 3, 4] as const,
-  // CLAIM 倍率：×2/×3/×4（不延长寿命）
-  claim: [1, 2, 3, 4] as const,
 } as const;
 
 /** Boost 矿物 → tier 映射（从矿物类型推断 boost 等级）。 */
@@ -147,8 +147,15 @@ export function boostTier(boost?: string): 0 | 1 | 2 | 3 {
   return BOOST_MINERAL_TIER[boost] ?? 0;
 }
 
-/** 获取部件的 boost 倍率（已校准引擎常量）。 */
-function boostMultiplier(partType: BodyPartConstant, tier: 0 | 1 | 2 | 3): number {
+/** 只有 ZH 家族给 WORK 部件拆家加成（引擎 BOOSTS.work 的 ZH / ZH2O / XZH2O）。 */
+const DISMANTLE_BOOST_FAMILY = new Set(["ZH", "ZH2O", "XZH2O"]);
+
+/**
+ * 获取部件的 boost 倍率（对照 @screeps/common/lib/constants.js 的 BOOSTS）。
+ * WORK 部件可有 4 个家族（UO 采集 / LH 建造 / ZH 拆解 / GH 升级），只按 tier 查表
+ * 会把一个采集 boost 的工人也算成带拆家加成 —— 故 WORK 分支需要化合物本身。
+ */
+function boostMultiplier(partType: BodyPartConstant, tier: 0 | 1 | 2 | 3, boost?: string): number {
   if (tier === 0) return 1;
   switch (partType) {
     case ATTACK:
@@ -160,13 +167,12 @@ function boostMultiplier(partType: BodyPartConstant, tier: 0 | 1 | 2 | 3): numbe
     case TOUGH:
       return BOOST_MULTIPLIERS.tough[tier];
     case WORK:
-      // dismantle 倍率（非 harvest/build 倍率——此处用于战斗能力评估）
-      return BOOST_MULTIPLIERS.dismantle[tier];
+      return boost && DISMANTLE_BOOST_FAMILY.has(boost) ? BOOST_MULTIPLIERS.dismantle[tier] : 1;
     case MOVE:
       return BOOST_MULTIPLIERS.move[tier];
-    case CLAIM:
-      return BOOST_MULTIPLIERS.claim[tier];
     default:
+      // CLAIM 不在此列：本引擎版本的 BOOSTS 没有 claim 家族（只有 work/attack/
+      // ranged_attack/heal/carry/move/tough），claim 部件无从被 boost。
       return 1;
   }
 }
@@ -204,7 +210,7 @@ export function evaluateCombatCapability(creep: CreepSnapshot): CombatCapability
     const tier = boostTier(part.boost);
     if (tier > maxBoostTier) maxBoostTier = tier;
 
-    const mult = boostMultiplier(part.type, tier);
+    const mult = boostMultiplier(part.type, tier, part.boost);
 
     switch (part.type) {
       case ATTACK:
@@ -218,9 +224,9 @@ export function evaluateCombatCapability(creep: CreepSnapshot): CombatCapability
         rangedHeal += RANGED_HEAL_POWER * mult;
         break;
       case WORK:
-        // WORK 部件双用途：dismantle（战斗）和 harvest/build/repair（辅助）
-        // dismantle 倍率与 harvest 倍率不同（1.5/1.8/2 vs 3/5/7）
-        // 此处 dismantle 用 BOOST_MULTIPLIERS.dismantle（已通过 boostMultiplier 应用）
+        // WORK 部件双用途：dismantle（战斗）和 harvest/build/repair（辅助）。
+        // 两族倍率不同且互不相干（ZH 系拆家 2/3/4，UO 系采集 3/5/7，LH 系建造 1.5/1.8/2）
+        // —— 非 ZH 家族的 boost 不贡献 dismantle，mult 已是 1。
         dismantle += DISMANTLE_POWER * mult;
         support += 1; // 辅助能力 = WORK 部件数（简化）
         break;
@@ -231,7 +237,7 @@ export function evaluateCombatCapability(creep: CreepSnapshot): CombatCapability
         toughReductionSum += mult;
         break;
       case CLAIM:
-        claim += mult;
+        claim += 1; // claim 部件不可 boost，计数即战力口径
         break;
       case MOVE:
         // mobility 在下方单独计算

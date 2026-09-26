@@ -125,10 +125,23 @@ describe("G2 — Boost 倍率计算", () => {
     expect(cap.heal).toBe(HEAL_POWER * 4); // 12 × 4 = 48
   });
 
-  it("C02e: T3 boost WORK (dismantle) → dismantle × 2", () => {
+  it("C02e: T3 boost WORK (ZH 家族) → dismantle × 4", () => {
+    // 引擎 BOOSTS.work = {ZH:{dismantle:2}, ZH2O:{dismantle:3}, XZH2O:{dismantle:4}}。
+    // 旧断言写 ×2，因为表里存的是 LH 系（build/repair 1.5/1.8/2）的梯子被抄成了拆家
+    // 梯子 —— 峰值战力被低估一半，且这条用例把它钉成了"期望"。
     const creep = makeCreep([{ type: WORK, boost: "XZH2O" }, { type: MOVE }]);
     const cap = evaluateCombatCapability(creep);
-    expect(cap.dismantle).toBe(DISMANTLE_POWER * 2); // 50 × 2 = 100
+    expect(cap.dismantle).toBe(DISMANTLE_POWER * 4); // 50 × 4 = 200
+  });
+
+  it("C02f: WORK 的非 ZH 家族 boost 不贡献拆家战力", () => {
+    // XUHO2 给 WORK 的是 harvest ×7，与 dismantle 无关；只看 tier 会把采集工人
+    // 误算成带拆家加成的威胁。
+    const creep = makeCreep([{ type: WORK, boost: "XUHO2" }, { type: MOVE }]);
+    const cap = evaluateCombatCapability(creep);
+    expect(cap.dismantle).toBe(DISMANTLE_POWER); // 基础 50，无倍率
+    expect(cap.maxBoostTier).toBe(3); // tier 本身仍要如实上报
+    expect(cap.boosted).toBe(true);
   });
 });
 
