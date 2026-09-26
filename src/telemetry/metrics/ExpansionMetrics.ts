@@ -16,7 +16,7 @@ export function registerExpansionMetrics(): void {
   registerMetricCounter("expansion", "completed", "Completed expansions", [], "total");
   registerMetricCounter("expansion", "failed", "Failed expansions", ["reason"], "total");
   registerMetricGauge("expansion", "duration", "Expansion duration in seconds", [], "seconds");
-  registerMetricGauge("expansion", "bootstrap_ticks", "Bootstrap phase ticks", [], "ticks");
+  registerMetricGauge("expansion", "bootstrap", "Bootstrap phase ticks", [], "ticks");
   registerMetricGauge("expansion", "energy_cost", "Expansion energy cost", []);
 }
 

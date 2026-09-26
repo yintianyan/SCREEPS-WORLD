@@ -21,7 +21,7 @@ export function registerRuntimeMetrics(): void {
   registerMetricGauge("runtime", "cpu_tick_ratio", "CPU used / CPU limit ratio", [], "");
 
   // Tick
-  registerMetricCounter("runtime", "tick_total", "Total ticks processed", [], "total");
+  registerMetricCounter("runtime", "tick", "Total ticks processed", [], "total");
   registerMetricGauge(
     "runtime",
     "tick_duration",

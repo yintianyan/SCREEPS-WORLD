@@ -79,6 +79,8 @@ import {
 } from "../../../src/telemetry/Telemetry";
 
 import { exportConsoleLine } from "../../../src/telemetry/exporters/ConsoleExporter";
+import { registerRuntimeMetrics } from "../../../src/telemetry/metrics/RuntimeMetrics";
+import { registerExpansionMetrics } from "../../../src/telemetry/metrics/ExpansionMetrics";
 import { exportPrometheusText } from "../../../src/telemetry/exporters/PrometheusExporter";
 
 // ── Tests ─────────────────────────────────────────────────
@@ -96,19 +98,39 @@ beforeEach(() => {
 });
 
 describe("Telemetry SDK — MetricRegistry", () => {
-  it("should register and increment a counter", () => {
-    registerMetricCounter("runtime", "tick_total", "Total ticks", [], "total");
-    expect(metricCount()).toBeGreaterThan(0);
+  it("counter 名由 domain+metric+unit 合成，生产写入必须命中同一个名字", () => {
+    // 约定：metric 段不带单位后缀，单位只由 unit 参数提供一次。
+    // 曾经注册写成 ("runtime","tick_total",…,"total") → 合成出 _total_total，
+    // 而生产写的是 screeps_runtime_tick_total，写入落不进注册表 → 这条"AI 还活着"
+    // 的信号长期为空，且从指标出口看不出来。
+    registerMetricCounter("runtime", "tick", "Total ticks", [], "total");
 
-    incrementCounter("screeps_runtime_tick_total_total", 1);
-    incrementCounter("screeps_runtime_tick_total_total", 2);
+    incrementCounter("screeps_runtime_tick_total", 1);
+    incrementCounter("screeps_runtime_tick_total", 2);
 
     const snap = snapshotMetrics();
-    const found = snap.find(m => m.name === "screeps_runtime_tick_total_total");
+    const found = snap.find(m => m.name === "screeps_runtime_tick_total");
     expect(found).toBeDefined();
     expect(found!.kind).toBe("counter");
     expect(found!.entries).toHaveLength(1);
     expect(found!.entries[0]!.value).toBe(3);
+  });
+
+  it("生产注册表必须包含生产写入的名字（曾两侧各写一遍单位后缀）", () => {
+    // 注册侧写成 ("runtime","tick_total",…,"total") → 合成 screeps_runtime_tick_total_total，
+    // 而 RuntimeMetrics 生产写的是 screeps_runtime_tick_total：写入命中不到注册项，
+    // 这条"AI 是否还活着"的信号从出口看就是从来没有。
+    registerRuntimeMetrics();
+    registerExpansionMetrics();
+
+    incrementCounter("screeps_runtime_tick_total", 7);
+    setGauge("screeps_expansion_bootstrap_ticks", 12);
+
+    const snap = snapshotMetrics();
+    const tick = snap.find(m => m.name === "screeps_runtime_tick_total");
+    const bootstrap = snap.find(m => m.name === "screeps_expansion_bootstrap_ticks");
+    expect(tick?.entries?.[0]?.value).toBe(7);
+    expect(bootstrap?.entries?.[0]?.value).toBe(12);
   });
 
   it("should register and set a gauge", () => {
@@ -193,11 +215,20 @@ describe("Telemetry SDK — MetricRegistry", () => {
     expect(found!.histogramEntries!.length).toBeGreaterThan(0);
   });
 
-  it("should silently skip unregistered metrics", () => {
+  it("未注册的写入不抛错，但必须留下可见记录（旧行为是纯静默丢弃）", () => {
     incrementCounter("screeps_nonexistent_metric", 1);
     setGauge("screeps_nonexistent_gauge", 42);
     observeHistogram("screeps_nonexistent_histogram", 0.1);
-    // No error thrown — telemetry must never crash
+
+    const store = mockGlobal.__telemetryMetrics as { unknownNames: Set<string> };
+    expect(store.unknownNames.has("screeps_nonexistent_metric")).toBe(true);
+    expect(store.unknownNames.has("screeps_nonexistent_gauge")).toBe(true);
+    expect(store.unknownNames.has("screeps_nonexistent_histogram")).toBe(true);
+
+    // 每个名字只记一次 — 否则每 tick 写一次就会把日志刷爆。
+    const before = store.unknownNames.size;
+    incrementCounter("screeps_nonexistent_metric", 1);
+    expect(store.unknownNames.size).toBe(before);
   });
 });
 

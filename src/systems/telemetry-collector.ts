@@ -38,7 +38,10 @@ export const telemetryCollectorSystem: System = {
     // 确保 recovery 期间关键事件不因 eventBuffer 截断而丢失。
     if (ctx.budget.tier === "recovery") {
       const tick = ctx.tick;
-      if (tick % CONFIG.telemetry.populationInterval === 0) {
+      // 相位修正：kernel 把本系统错峰到 tick ≡ phase (mod cpuSampleInterval)，
+      // 裸 `tick % N` 与运行 tick 没有交集 → recovery 档的事件 flush 一次也没执行过。
+      const phase = systemPhase("telemetry-collector", CONFIG.telemetry.cpuSampleInterval);
+      if ((tick - phase) % CONFIG.telemetry.populationInterval === 0) {
         flushEventBufferOnly();
       }
       return;

@@ -10,6 +10,7 @@ import {
 
 export type { TimerHandle };
 import { globalCache } from "../kernel/global-cache";
+import { log } from "../kernel/log";
 
 // ─── Label Key ────────────────────────────────────────────
 
@@ -67,6 +68,8 @@ interface MetricStore {
   histograms: Map<string, Map<string, HistogramInstance>>;
   /** Histogram bucket thresholds per metric */
   histogramBuckets: Map<string, number[]>;
+  /** 被写入但从未注册的名字 — 每个只告警一次。 */
+  unknownNames: Set<string>;
 }
 
 const DEFAULT_BUCKETS = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5];
@@ -80,9 +83,23 @@ function store(): MetricStore {
       gauges: new Map(),
       histograms: new Map(),
       histogramBuckets: new Map(),
+      unknownNames: new Set(),
     } as MetricStore;
   }
   return g.__telemetryMetrics as MetricStore;
+}
+
+/**
+ * 写入命中不到注册项时告警一次。
+ * 注册名由 buildMetricName(domain, metric, unit) 合成，而写入侧写的是最终全名 ——
+ * 两侧一旦漂移（如 metric 自带单位后缀、unit 又拼一遍），数据就永久静默丢弃，
+ * 且从指标出口看不出来（表现是"这条指标从来没有"）。留痕是为了让它看得见。
+ */
+function dropUnregistered(name: string): void {
+  const s = store();
+  if (s.unknownNames.has(name)) return;
+  s.unknownNames.add(name);
+  log.warn("telemetry", `write to unregistered metric "${name}" — dropped`);
 }
 
 // ─── Public API ────────────────────────────────────────────
@@ -160,7 +177,10 @@ export function registerHistogram(
 export function incrementCounter(name: string, value: number = 1, labels: LabelSet = {}): void {
   const s = store();
   const map = s.counters.get(name);
-  if (!map) return; // 未注册的 metric 静默跳过
+  if (!map) {
+    dropUnregistered(name);
+    return;
+  }
   const key = labelKey(labels);
   let inst = map.get(key);
   if (!inst) {
@@ -174,7 +194,10 @@ export function incrementCounter(name: string, value: number = 1, labels: LabelS
 export function setGauge(name: string, value: number, labels: LabelSet = {}): void {
   const s = store();
   const map = s.gauges.get(name);
-  if (!map) return;
+  if (!map) {
+    dropUnregistered(name);
+    return;
+  }
   const key = labelKey(labels);
   let inst = map.get(key);
   if (!inst) {
@@ -188,7 +211,10 @@ export function setGauge(name: string, value: number, labels: LabelSet = {}): vo
 export function observeHistogram(name: string, value: number, labels: LabelSet = {}): void {
   const s = store();
   const map = s.histograms.get(name);
-  if (!map) return;
+  if (!map) {
+    dropUnregistered(name);
+    return;
+  }
   const key = labelKey(labels);
   let inst = map.get(key);
   if (!inst) {
