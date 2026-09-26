@@ -1,7 +1,7 @@
 /** v3→v4 迁移的 segment 就绪门禁测试。 */
 import { beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../../src/kernel/memory";
-import { requestSegments, getRoomLayoutData } from "../../../src/kernel/segment-store";
+import { requestSegments, flushSegments, SEGMENT_LAYOUT } from "../../../src/kernel/segment-store";
 import { CONFIG } from "../../../src/config";
 
 const mockState = {
@@ -62,25 +62,44 @@ describe("memory — v4 迁移 segment 就绪门禁", () => {
     expect(mem.rooms.W1N1.layout.overrides).toEqual({ "ext.5.5": { structureType: "extension" } });
   });
 
-  it("次 tick segment 就绪：迁移续跑至最新版本，overrides 落入 segment", () => {
+  it("观察到送达后迁移续跑：overrides 真的落进 segment，且别房历史不被覆盖", () => {
     // 首 tick：门禁中断。
     requestSegments();
     runMigrations();
     expect((globalThis as any).Memory.schemaVersion).toBe(3);
 
-    // 次 tick：requestedAt !== Game.time → segment 视为可用（真空 = 全新服务器）。
+    // 次 tick：段已送达，且里面有别的房的历史冷数据 — 这正是"空覆盖"会毁掉的东西。
     mockState.time = 101;
+    mockState.segments[SEGMENT_LAYOUT] = JSON.stringify({
+      W9N9: { overrides: { "ext.1.1": { structureType: "extension" } }, blocked: {} },
+    });
     runMigrations();
 
     const mem = (globalThis as any).Memory;
     expect(mem.schemaVersion).toBe(CONFIG.memory.schemaVersion);
-    // 冷数据已迁入 segment，Memory 源字段已删除。
+    // Memory 源字段已删除 — 数据只剩 segment 一份。
     expect(mem.rooms.W1N1.layout.overrides).toBeUndefined();
-    const segData = getRoomLayoutData("W1N1");
-    expect(segData.overrides).toEqual({ "ext.5.5": { structureType: "extension" } });
+
+    // 关键：断落盘结果，不断堆缓存。旧写法用 getRoomLayoutData 读缓存，
+    // 于是"从未 flush / 覆盖历史"这两种失效都测不出来。
+    flushSegments();
+    const onDisk = JSON.parse(mockState.segments[SEGMENT_LAYOUT]!);
+    expect(onDisk.W1N1.overrides).toEqual({ "ext.5.5": { structureType: "extension" } });
+    expect(onDisk.W9N9.overrides).toEqual({ "ext.1.1": { structureType: "extension" } });
   });
 
-  it("非 reset 环境（未调用 requestSegments）：迁移直接完成，向后兼容", () => {
+  it("从未请求激活：状态未知，迁移暂缓而不是当成全新档直接跑完", () => {
+    // 没调用 requestSegments，也没观察到任何段送达 — 此时读到的空结构不可信。
+    runMigrations();
+    expect((globalThis as any).Memory.schemaVersion).toBe(3);
+    expect((globalThis as any).Memory.rooms.W1N1.layout.overrides).toEqual({
+      "ext.5.5": { structureType: "extension" },
+    });
+
+    // 请求并观察到送达 → 迁移续跑。
+    requestSegments();
+    mockState.time = 101;
+    mockState.segments[SEGMENT_LAYOUT] = "{}";
     runMigrations();
     expect((globalThis as any).Memory.schemaVersion).toBe(CONFIG.memory.schemaVersion);
   });

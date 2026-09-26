@@ -70,7 +70,6 @@ export interface IntelPlayersSegmentData {
 }
 
 // ─── 内部状态（挂在 globalCache 上）─────────────────────────
-
 interface SegmentCache {
   layout?: LayoutSegmentData;
   layoutDirty?: boolean;
@@ -86,11 +85,30 @@ interface SegmentCache {
   intelPlayersSeg?: IntelPlayersSegmentData;
   intelPlayersDirty?: boolean;
   requested?: boolean;
-  /** 首次请求激活 segment 的 tick（global reset 后重建）— 可用性守卫用。 */
+  /** 成功请求激活 segment 的 tick（global reset 后重建）— 可用性守卫用。 */
   requestedAt?: number;
+  /** 已就「从未观察到送达」的空白段放行过一次 — 防每 tick 重复告警。 */
+  blankAcceptedLogged?: boolean;
   /** 迁移是否已完成（防止重复迁移）。 */
   migrated?: boolean;
 }
+
+/** 本模块请求激活的全部段（守卫与请求共用一份清单，避免两处漂移）。 */
+const ALL_SEGMENT_IDS = [
+  SEGMENT_LAYOUT,
+  SEGMENT_CPU,
+  SEGMENT_EVENT_LOG,
+  SEGMENT_ECONOMY,
+  SEGMENT_PROMETHEUS,
+  SEGMENT_INTEL_PLAYERS,
+  SEGMENT_L2_INTAKE,
+];
+
+/**
+ * 激活宽限期：setActiveSegments 下一 tick 才生效 [Facts]，再留余量容忍服务端投递。
+ * 只有超过宽限仍未观察到任何段，才接受「这个号确实一段都没有」并放行首次写入。
+ */
+const ACTIVATION_GRACE_TICKS = 5;
 
 function segCache(): SegmentCache {
   const g = globalCache() as any;
@@ -98,17 +116,46 @@ function segCache(): SegmentCache {
   return g.__segStore as SegmentCache;
 }
 
+/** 本批请求是否已观察到送达：服务端一次性交付全部激活段，任一被请求的段有内容
+ *  就说明激活已发生 —— 此时其余 undefined 是「有历史但为空」而非「还没到」。
+ *  这是把"未加载"与"真空段"分开的唯一可靠信号（引擎不提供已激活段列表）。 */
+function activationObserved(): boolean {
+  for (const id of ALL_SEGMENT_IDS) {
+    if (RawMemory.segments[id] !== undefined) return true;
+  }
+  return false;
+}
+
 /**
- * P1-2 可用性守卫：setActiveSegments 下一 tick 才生效 [Facts] — global reset 后
- * 首 tick RawMemory.segments[N] 为 undefined（未激活），并非没有数据。
- * 此时若创建空结构并缓存，采样/写入会把空数据 flush 回 RawMemory，整体覆盖
- * 历史 segment（时序清零、layout 冷数据丢失）。
- * 判定：raw 为 undefined 且本 tick 恰是首次请求激活的 tick（requestedAt === Game.time）；
- * 下一 tick 起 undefined 视为「从未写入」（新服务器），照常初始化。
- * 未调用 requestSegments 的环境（单测）requestedAt 为 undefined，守卫不生效。
+ * P1-2 可用性守卫：本 tick 该段的内容是否「未知」。
+ *
+ * 未知时既不能缓存空结构、也不能 flush — 否则会把尚未送达的历史 segment
+ * 整体覆盖（时序清零、layout 冷数据丢失）。三态判定：
+ *   1. 本段已有内容 → 已送达，可用。
+ *   2. 同批别的段已有内容 → 激活确已发生，本段是真空 → 可用（新档靠这条写得出第一段）。
+ *   3. 一个都没观察到：从未成功请求激活 → 永久保守；请求后仍在宽限期内 → 保守；
+ *      超过宽限 → 接受"这个号一段都没有"，放行写入并告警一次（否则新档永远写不出段）。
+ * 旧实现用 `requestedAt === Game.time` 把未知压成恰好一个 tick，于是"服务端没送达"
+ * 与"段本来就是空的"不可区分，第二次读起就会拿空结构覆盖历史。
  */
 function segmentUnavailable(segmentId: number): boolean {
-  return RawMemory.segments[segmentId] === undefined && segCache().requestedAt === Game.time;
+  if (RawMemory.segments[segmentId] !== undefined) return false;
+  if (activationObserved()) return false;
+
+  const requestedAt = segCache().requestedAt;
+  if (requestedAt === undefined) return true;
+  if (Game.time - requestedAt < ACTIVATION_GRACE_TICKS) return true;
+
+  const cache = segCache();
+  if (!cache.blankAcceptedLogged) {
+    cache.blankAcceptedLogged = true;
+    log.warn(
+      "segment-store",
+      `no segment arrived within ${ACTIVATION_GRACE_TICKS} ticks of activation request — ` +
+        `treating blank segments as genuinely empty (id=${segmentId})`,
+    );
+  }
+  return false;
 }
 
 /**
@@ -122,21 +169,20 @@ export function layoutSegmentReady(): boolean {
 
 // ─── 公共 API ───────────────────────────────────────────────
 
-/** 在 tick 开始时调用 — 声明需要激活的 segment（4 个，在 10 个上限内 [Facts]）。 */
+/** 在 tick 开始时调用 — 声明需要激活的 segment（7 个，在 10 个上限内 [Facts]）。 */
 export function requestSegments(): void {
   const cache = segCache();
   if (cache.requested) return;
+  try {
+    RawMemory.setActiveSegments(ALL_SEGMENT_IDS);
+  } catch (err) {
+    // 不置位 — 置了就没有第二次机会：整个 global 生命周期不再重试，未加载的段会在
+    // 宽限期后被当成"真空"，随后任何一次脏写都用空结构覆盖历史。
+    log.error("segment-store", `setActiveSegments failed: ${String(err)}`);
+    return;
+  }
   cache.requested = true;
   cache.requestedAt = Game.time;
-  RawMemory.setActiveSegments([
-    SEGMENT_LAYOUT,
-    SEGMENT_CPU,
-    SEGMENT_EVENT_LOG,
-    SEGMENT_ECONOMY,
-    SEGMENT_PROMETHEUS,
-    SEGMENT_INTEL_PLAYERS,
-    SEGMENT_L2_INTAKE,
-  ]);
 }
 
 /** 读取 layout segment 数据（带缓存）。首次调用从 RawMemory.segments 解析；global reset 后自动重建。 */

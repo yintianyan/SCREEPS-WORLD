@@ -84,19 +84,75 @@ describe("segment-store — P1-2 可用性守卫", () => {
     expect(ringToArray(written.cpu)).toHaveLength(2);
   });
 
-  it("全新服务器：次 tick 起 undefined 视为真空 segment，写入不被永久阻塞", () => {
+  it("同批别的段已送达 → 本段确认为空，可写入（新档写得出第一段）", () => {
     requestSegments(); // tick 100
-    mockState.time = 101; // 次 tick，segment 已激活但从未写入（raw 仍 undefined）
+    mockState.time = 101;
+    // 服务端一次性交付全部激活段：只要有一段有内容，激活就确实发生了。
+    mockState.segments[SEGMENT_LAYOUT] = makeCpuRaw(90);
 
     const seg = readCpuSegment();
     ringPush(seg.cpu, makeSample(101));
     markCpuDirty();
     flushSegments();
 
-    // 守卫不再拦截 — 正常写入。
     expect(mockState.segments[SEGMENT_CPU]).toBeDefined();
     const written = JSON.parse(mockState.segments[SEGMENT_CPU]!);
     expect(ringToArray(written.cpu)).toHaveLength(1);
+  });
+
+  it("一个段都没送达：宽限期内不得写入，超期后放行（否则新档永久写不出段）", () => {
+    requestSegments(); // tick 100
+    for (const t of [101, 102, 103, 104]) {
+      mockState.time = t;
+      const seg = readCpuSegment();
+      ringPush(seg.cpu, makeSample(t));
+      markCpuDirty();
+      flushSegments();
+      // 状态未知 → 保守：不覆盖尚未送达的历史。
+      expect(mockState.segments[SEGMENT_CPU]).toBeUndefined();
+    }
+
+    mockState.time = 110; // 超出 ACTIVATION_GRACE_TICKS
+    const seg = readCpuSegment();
+    ringPush(seg.cpu, makeSample(110));
+    markCpuDirty();
+    flushSegments();
+    expect(mockState.segments[SEGMENT_CPU]).toBeDefined();
+  });
+
+  it("setActiveSegments 抛错：不得永久放弃重试，且期间一律不覆盖历史", () => {
+    const rm = (globalThis as unknown as { RawMemory: { setActiveSegments: () => void } })
+      .RawMemory;
+    rm.setActiveSegments = () => {
+      throw new Error("simulated activation failure");
+    };
+
+    expect(() => requestSegments()).not.toThrow();
+    readCpuSegment();
+    markCpuDirty();
+    flushSegments();
+    expect(mockState.segments[SEGMENT_CPU]).toBeUndefined();
+
+    // 下一 tick 请求恢复：若首帧就把 requested 置了位，这里永远不会再激活。
+    rm.setActiveSegments = () => undefined;
+    mockState.time = 101;
+    requestSegments();
+    mockState.segments[SEGMENT_LAYOUT] = makeCpuRaw(90); // 送达信号
+    const seg = readCpuSegment();
+    ringPush(seg.cpu, makeSample(101));
+    markCpuDirty();
+    flushSegments();
+    expect(mockState.segments[SEGMENT_CPU]).toBeDefined();
+  });
+
+  it("未调用 requestSegments 时状态未知 — 保守，不写（旧行为会直接覆盖历史）", () => {
+    // 不调用 requestSegments：既没请求过、也没观察到送达。
+    const seg = readCpuSegment();
+    ringPush(seg.cpu, makeSample(100));
+    markCpuDirty();
+    flushSegments();
+
+    expect(mockState.segments[SEGMENT_CPU]).toBeUndefined();
   });
 
   it("layout segment 同样受守卫保护：reset 首 tick 写入不覆盖", () => {
@@ -115,16 +171,5 @@ describe("segment-store — P1-2 可用性守卫", () => {
     });
     const loaded = readLayoutSegment();
     expect(loaded.W1N1!.overrides["core.ext.05"]).toBe(42);
-  });
-
-  it("未调用 requestSegments 的环境守卫不生效（单测向后兼容）", () => {
-    // 不调用 requestSegments — requestedAt 为 undefined。
-    const seg = readCpuSegment();
-    ringPush(seg.cpu, makeSample(100));
-    markCpuDirty();
-    flushSegments();
-
-    // 旧行为：正常缓存 + 写入。
-    expect(mockState.segments[SEGMENT_CPU]).toBeDefined();
   });
 });
