@@ -10,12 +10,18 @@ import {
   submitRequest,
 } from "../../../src/domain/spawn/queue";
 
-function makeRequest(key: string, priority: 0 | 1 | 2 | 3 | 4 = 1, createdAt = 0): SpawnRequest {
+function makeRequest(
+  key: string,
+  priority: 0 | 1 | 2 | 3 | 4 = 1,
+  createdAt = 0,
+  survival = priority === 0,
+): SpawnRequest {
   return {
     key,
     role: "harvester",
     home: "W1N1",
     priority,
+    survival,
     body: ["work", "carry", "move"] as BodyPartConstant[],
     memory: { role: "harvester", home: "W1N1", mode: "acquire" },
     createdAt,

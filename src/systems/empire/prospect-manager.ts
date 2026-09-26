@@ -137,6 +137,7 @@ function submitScoutRequest(
     role: "scout",
     home: mission.sponsor,
     priority: 3,
+    survival: false,
     body: selectBody("scout", cap),
     memory: {
       role: "scout",

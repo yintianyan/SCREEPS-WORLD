@@ -236,6 +236,7 @@ describe("remote demand — evaluateRemoteDemand", () => {
       role: "remoteHarvester",
       home: homeRoom,
       priority: 1,
+      survival: false,
       body: ["work", "carry", "move"],
       memory: {
         role: "remoteHarvester",

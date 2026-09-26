@@ -10,6 +10,9 @@ export function submitRequest(queue: SpawnRequest[], request: SpawnRequest): voi
     existing.role = request.role;
     existing.home = request.home;
     existing.priority = request.priority;
+    // 生存标记必须随更新携带：重提交（churn/TTL 续期）走的就是这条路径，漏一行就把
+    // 一间正在求生的房的否决权抹掉了 —— 而它看上去仍是 P0 请求。
+    existing.survival = request.survival;
     existing.body = request.body;
     existing.memory = request.memory;
     existing.expiresAt = request.expiresAt;
@@ -120,6 +123,17 @@ export function sortQueue(queue: SpawnRequest[]): SpawnRequest[] {
 /** 检查队列中是否已存在某 key 的请求。 */
 export function hasRequest(queue: readonly SpawnRequest[], key: string): boolean {
   return queue.some(r => r.key === key);
+}
+
+/**
+ * 队列所在这间房是否有"不孵就要出事"的生存请求。
+ *
+ * 所有跨层否决（停建、停孵本房其他请求、孵化饥饿计数）必须经本函数读，
+ * **不得**再用 `priority === 0` 代替 —— 那是排队权重，跨房编排（援运/远矿/战争编队）
+ * 也可能是 0，拿它当生存判据会让"被别的房求援"变成对自家基建的否决权。
+ */
+export function hasSurvivalRequest(queue: readonly SpawnRequest[]): boolean {
+  return queue.some(r => r.survival === true);
 }
 
 /** 移除过期请求（expiresAt 已过）和达到重试上限的请求。

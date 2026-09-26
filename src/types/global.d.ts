@@ -109,7 +109,22 @@ declare global {
     key: string;
     role: string;
     home: string;
+    /** 排队权重（0 最高）。只回答"先孵谁"，不回答"这间房会不会死"。 */
     priority: 0 | 1 | 2 | 3 | 4;
+    /**
+     * 本房生存需求：true = 不孵它，**队列所在这间房**就要出事（失守/崩经济）。
+     *
+     * 为什么必须与 priority 分开：跨房编排（agenda-manager 的运能请求、远矿编制、
+     * 战争编队）也能拿到 priority 0 —— 那是"帝国层面急着要"，不是"捐出这间房要死了"。
+     * 一个字段两种语义的后果：捐出方看见自己队列里有 0 就停建、停孵本房非 0 请求，
+     * 于是"被别人求援"变成对自家基建的否决权（construction-manager 的 site 闸、
+     * room-state 的孵化饥饿计数、spawn-manager 的孵化阻塞都读这一维）。
+     *
+     * 属主纪律：由**请求的产出方**声明，不由消费者猜。读取方一律经
+     * `domain/spawn/queue.hasSurvivalRequest()`，不得再各自比较 priority。
+     * 必填（不是可选）—— 缺省即 false 会让忘标的生产者静默失去生存否决。
+     */
+    survival: boolean;
     body: BodyPartConstant[];
     memory: CreepMemory;
     createdAt: number;

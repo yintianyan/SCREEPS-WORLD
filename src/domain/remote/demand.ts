@@ -518,6 +518,7 @@ function createRemoteRequest(
     role,
     home,
     priority,
+    survival: false, // 远矿编制断档疼的是矿点收益，不是队列所在房的生存
     body,
     memory: {
       role,

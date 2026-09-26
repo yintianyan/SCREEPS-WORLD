@@ -105,6 +105,7 @@ export function runBootstrapLane(ctx: TickContext): void {
       role: "worker",
       home: room,
       priority: 1,
+      survival: false, // 殖民地的拓荒者由 sponsor 代孵：慌的是那块新房，不是 sponsor 自己
       body: [...BOOTSTRAP_WORKER_BODY],
       memory: { role: "worker", home: room, mode: "acquire" },
       createdAt: ctx.tick,
@@ -117,6 +118,7 @@ export function runBootstrapLane(ctx: TickContext): void {
         role: "defender",
         home: room,
         priority: 1,
+        survival: false,
         body: [...BOOTSTRAP_DEFENDER_BODY],
         memory: { role: "defender", home: room, mode: "acquire" },
         createdAt: ctx.tick,

@@ -311,7 +311,7 @@ export interface DevelopmentGateInputs {
   /** 威胁 creep 数（snapshot.threatCreeps.length）。 */
   threatCount: number;
   /** 孵化队列是否有 P0 请求（RoomMemory.spawnQueue）。 */
-  hasP0SpawnRequest: boolean;
+  hasSurvivalSpawnRequest: boolean;
   /** 房间可用能量（snapshot.energyAvailable）。 */
   energyAvailable: number;
   /** 房间能量容量（snapshot.energyCapacityAvailable）。 */
@@ -339,7 +339,7 @@ export function evaluateDevelopmentGate(inputs: DevelopmentGateInputs): Developm
   if (inputs.threatCount > 0) return "threat";
 
   if (!inputs.emergencyAny) {
-    if (inputs.hasP0SpawnRequest) return "p0-spawn";
+    if (inputs.hasSurvivalSpawnRequest) return "p0-spawn";
 
     // 能量盈余梯度阈值：pressure 0.0–0.3 基础阈值（容量 60%），
     // 0.3–0.8 线性提高到容量 90%。
@@ -408,7 +408,7 @@ export interface DevelopmentLaneInputs {
   /** 威胁 creep 数。 */
   threatCount: number;
   /** 孵化队列是否有 P0 请求。 */
-  hasP0SpawnRequest: boolean;
+  hasSurvivalSpawnRequest: boolean;
   /** 生存级紧急缺口激活（spawn/tower/storage 缺失 — spawn 由 assessEmergencyRebuild
    *  的 spawn/tower/storage 字段 OR 而来）。source container 缺失是经济效率缺口
    *  而非生存缺口，不计入 — 它由 emergency 槽位并行处理，不应冻结发展通道
@@ -441,7 +441,7 @@ export function evaluateDevelopmentLane(inputs: DevelopmentLaneInputs): Developm
   if (inputs.rcl < 2 || inputs.rcl > inputs.laneMaxRcl) return "rcl-window";
   if (inputs.budgetTier === "recovery") return "recovery-tier";
   if (inputs.threatCount > 0) return "threat";
-  if (inputs.hasP0SpawnRequest) return "p0-spawn";
+  if (inputs.hasSurvivalSpawnRequest) return "p0-spawn";
   if (inputs.survivalGapActive) return "survival-gap";
   if (inputs.energyAvailable < inputs.laneEnergyFloor) return "energy-floor";
   if (inputs.globalSiteCount >= inputs.maxNormalLaneSites) return "global-site-cap";

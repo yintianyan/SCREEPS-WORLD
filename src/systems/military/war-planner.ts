@@ -321,6 +321,7 @@ export function submitSquadRequest(
       role,
       home: sponsor,
       priority: 2,
+      survival: false, // 编队补员：战争需求排序在最前，但不占用本房生存否决
       body,
       memory: {
         role,
@@ -422,11 +423,11 @@ export function demobilize(tick: number, reason: number): void {
     // （否则"战争为什么停在这一步"只能靠读代码反推）。
     log.info(
       "war-planner",
-      `war: recall ${plan.targetRoom}${ 
+      `war: recall ${plan.targetRoom}${
         reason === REASON_INTEL_STALE
           ? ` — 情报断供 ${CONFIG.war.planIntelBlackoutTicks}t+`
-          : " — A5 改判新目标，旧编队收摊" 
-        } (spawned=${plan.spawned ?? 0}, 不拉黑, reason=${reason})`,
+          : " — A5 改判新目标，旧编队收摊"
+      } (spawned=${plan.spawned ?? 0}, 不拉黑, reason=${reason})`,
     );
   }
 

@@ -232,6 +232,7 @@ function submitFarmRequest(
       role,
       home: mission.sponsor,
       priority: 2,
+      survival: false,
       body,
       memory: {
         role,

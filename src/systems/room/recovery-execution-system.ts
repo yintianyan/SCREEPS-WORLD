@@ -286,6 +286,7 @@ function submitSpawnRecovery(
       role: "worker",
       home: room,
       priority: 0,
+      survival: true, // 本房自救工
       body,
       memory: {
         role: "worker",
@@ -340,6 +341,7 @@ function submitLogisticsFix(
       role: "hauler",
       home: room,
       priority: 1,
+      survival: false, // 恢复链常规补位（P1）：不授停建否决（与拆分前的实际生效集一致）
       body,
       memory: {
         role: "hauler",
@@ -408,6 +410,7 @@ function submitEnergyRedirect(
       role: "distributor",
       home: room,
       priority: 1,
+      survival: false, // 同上
       body,
       memory: {
         role: "distributor",
@@ -592,6 +595,7 @@ function submitPopulationRebuild(
         role: "harvester",
         home: room,
         priority: 1,
+        survival: false, // 同上
         body: harvesterBody,
         memory: {
           role: "harvester",
@@ -719,6 +723,7 @@ function submitDefenseResponse(
         role: "defender",
         home: room,
         priority: 0, // P0 紧急——防御响应
+        survival: true, // 本房防御响应
         body,
         memory: {
           role: "defender",

@@ -1118,6 +1118,7 @@ function createRequest(
     role,
     home,
     priority,
+    survival: priority === 0, // 本房人口需求：P0 就是这间房在自救
     body,
     memory,
   });

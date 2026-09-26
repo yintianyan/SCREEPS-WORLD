@@ -26,7 +26,7 @@ function gateInputs(overrides: Partial<DevelopmentGateInputs> = {}): Development
     budgetTier: "healthy",
     claimSecure: false,
     threatCount: 0,
-    hasP0SpawnRequest: false,
+    hasSurvivalSpawnRequest: false,
     energyAvailable: 500,
     energyCapacityAvailable: 800,
     globalSiteCount: 0,
@@ -61,7 +61,7 @@ describe("evaluateDevelopmentGate — 结构化原因码", () => {
   });
 
   it("P0 孵化请求 → p0-spawn", () => {
-    expect(evaluateDevelopmentGate(gateInputs({ hasP0SpawnRequest: true }))).toBe("p0-spawn");
+    expect(evaluateDevelopmentGate(gateInputs({ hasSurvivalSpawnRequest: true }))).toBe("p0-spawn");
   });
 
   it("能量低于梯度阈值 → energy-floor", () => {
@@ -109,7 +109,7 @@ describe("evaluateDevelopmentGate — 结构化原因码", () => {
       economyPressure: 1,
       budgetTier: "recovery" as const,
       claimSecure: true,
-      hasP0SpawnRequest: true,
+      hasSurvivalSpawnRequest: true,
       energyAvailable: 0,
       globalSiteCount: CONFIG.construction.maxNormalLaneSites,
     };
@@ -125,7 +125,7 @@ function laneInputs(overrides: Partial<DevelopmentLaneInputs> = {}): Development
     laneMaxRcl: CONFIG.construction.developmentLaneMaxRcl,
     budgetTier: "healthy",
     threatCount: 0,
-    hasP0SpawnRequest: false,
+    hasSurvivalSpawnRequest: false,
     survivalGapActive: false,
     energyAvailable: CONFIG.construction.developmentLaneEnergyFloor,
     laneEnergyFloor: CONFIG.construction.developmentLaneEnergyFloor,
@@ -156,7 +156,7 @@ describe("evaluateDevelopmentLane — RCL2 关键发展通道", () => {
 
   it("威胁 → threat；P0 孵化缺口 → p0-spawn；生存级紧急缺口 → survival-gap", () => {
     expect(evaluateDevelopmentLane(laneInputs({ threatCount: 1 }))).toBe("threat");
-    expect(evaluateDevelopmentLane(laneInputs({ hasP0SpawnRequest: true }))).toBe("p0-spawn");
+    expect(evaluateDevelopmentLane(laneInputs({ hasSurvivalSpawnRequest: true }))).toBe("p0-spawn");
     expect(evaluateDevelopmentLane(laneInputs({ survivalGapActive: true }))).toBe("survival-gap");
   });
 

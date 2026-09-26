@@ -182,6 +182,9 @@ function submitCarrierSpawn(op: OperationContext, tick: number): void {
     role: "carrier",
     home: op.sourceRoom,
     priority: op.priority as 0 | 1 | 2 | 3 | 4,
+    // 跨房援运：急着要能量的是**别的房**。priority 沿用 op.priority 只表达排队顺序，
+    // 绝不能顺带拿到捐出方的停建/停孵否决权（A14 拆的就是这两件事）。
+    survival: false,
     body,
     memory: {
       role: "carrier",

@@ -21,6 +21,7 @@ function makeRequest(overrides: Partial<SpawnRequest> = {}): SpawnRequest {
     role: "hauler",
     home: "W7N4",
     priority: 1,
+    survival: false,
     // [carry,carry,move,move] = 200 能量。
     body: ["carry", "carry", "move", "move"] as BodyPartConstant[],
     memory: { role: "hauler", home: "W7N4", mode: "acquire" } as CreepMemory,
@@ -100,7 +101,7 @@ describe("trySpawn — SP-1 recovery 能量预留", () => {
     expect(queue).toHaveLength(0); // 成功后同 tick 出队。
   });
 
-  it("P0 请求豁免预留 — 恢复 body 可动用全部能量", () => {
+  it("生存请求豁免预留 — 恢复 body 可动用全部能量", () => {
     // 能量恰为 200：P0 请求 200 应立即孵化（预留是留给它的）。
     const spawn = mockSpawn(200);
     const queue = [
@@ -108,6 +109,7 @@ describe("trySpawn — SP-1 recovery 能量预留", () => {
         key: "worker:W7N4:0",
         role: "worker",
         priority: 0,
+        survival: true,
         body: ["work", "carry", "move"] as BodyPartConstant[], // 200 能量
         memory: { role: "worker", home: "W7N4", mode: "acquire" } as CreepMemory,
       }),
@@ -149,7 +151,7 @@ describe("trySpawn — SP-1 recovery 能量预留", () => {
 });
 
 describe("trySpawn — 管线本体基线（补测试债）", () => {
-  it("P0 请求待处理时阻塞所有低优先级请求", () => {
+  it("生存请求待处理时阻塞其他请求（阻塞读 survival，不读排队权重）", () => {
     // P0 请求 500 超出能量 100 且降级失败 → 后续 P1 也不孵化。
     const spawn = mockSpawn(100);
     const queue = [
@@ -157,6 +159,7 @@ describe("trySpawn — 管线本体基线（补测试债）", () => {
         key: "worker:W7N4:0",
         role: "worker",
         priority: 0,
+        survival: true,
         body: Array(10).fill("work") as BodyPartConstant[], // 1000 能量，无法降级到 100
       }),
       makeRequest(),
@@ -245,7 +248,7 @@ describe("trySpawn — SP-10 饥饿降级成本地板", () => {
     expect(queue).toHaveLength(0);
   });
 
-  it("P0 生存路径豁免地板：降级产物 200 < 300 也速出保命", () => {
+  it("生存路径豁免地板：降级产物 200 < 300 也速出保命", () => {
     // [3W,C,M] = 400，能量 250 → 降到 [W,C,M] = 200 < 地板，但 P0 豁免。
     const spawn = mockSpawn(250);
     const queue = [
@@ -253,6 +256,7 @@ describe("trySpawn — SP-10 饥饿降级成本地板", () => {
         key: "worker:W7N4:0",
         role: "worker",
         priority: 0,
+        survival: true,
         body: ["work", "work", "work", "carry", "move"] as BodyPartConstant[],
         memory: { role: "worker", home: "W7N4", mode: "acquire" } as CreepMemory,
       }),

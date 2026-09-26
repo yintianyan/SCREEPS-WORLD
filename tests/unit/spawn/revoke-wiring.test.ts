@@ -15,6 +15,7 @@ function makeRequest(
     role,
     home,
     priority: 1,
+    survival: false,
     body: ["attack", "move"] as BodyPartConstant[],
     memory: { role, home, mode: "acquire" } as CreepMemory,
     createdAt: 900,

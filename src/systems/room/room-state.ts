@@ -8,6 +8,7 @@ import {
   type PhaseState,
 } from "../../domain/economy/phase";
 import { computeEnergyPrice } from "../../domain/economy/energy-price";
+import { hasSurvivalRequest } from "../../domain/spawn/queue";
 import { EventKind, recordEvent } from "../../kernel/event-log";
 import { globalCache } from "../../kernel/global-cache";
 import {
@@ -335,12 +336,12 @@ export const roomStateSystem: System = {
       // （即有紧急孵化需求但能量不够孵最小 body），或所有 spawn 都在忙碌且队列有 P0。
       // 每 tick 条件满足则递增，条件不满足则归零。
       const queue = roomMem.spawnQueue ?? [];
-      const hasP0Request = queue.some(r => r.priority === 0);
+      const hasSurvivalPending = hasSurvivalRequest(queue);
       const allSpawnsBusy = snapshot.spawns.length > 0 && snapshot.spawns.every(s => s.spawning);
       const energyAvailable = snapshot.energyAvailable;
       // RECOVERY_BODY = [WORK, CARRY, MOVE] = 200 energy
       const minSpawnEnergy = 200;
-      const isStarving = hasP0Request && (energyAvailable < minSpawnEnergy || allSpawnsBusy);
+      const isStarving = hasSurvivalPending && (energyAvailable < minSpawnEnergy || allSpawnsBusy);
 
       if (isStarving) {
         const prev =

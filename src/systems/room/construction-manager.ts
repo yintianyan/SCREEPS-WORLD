@@ -1,4 +1,5 @@
 import { CONFIG } from "../../config";
+import { hasSurvivalRequest } from "../../domain/spawn/queue";
 import type { Priority, System, TickContext, RoomSnapshot } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import {
@@ -94,7 +95,7 @@ export const constructionManagerSystem: System = {
         budgetTier: ctx.budget.tier,
         claimSecure: roomMem.claimSecure ?? false,
         threatCount: snapshot.threatCreeps.length,
-        hasP0SpawnRequest: (roomMem.spawnQueue ?? []).some(r => r.priority === 0),
+        hasSurvivalSpawnRequest: hasSurvivalRequest(roomMem.spawnQueue ?? []),
         energyAvailable: snapshot.energyAvailable,
         energyCapacityAvailable: snapshot.energyCapacityAvailable,
         globalSiteCount: ctx.globalSiteCount + getRemoteSiteTotal(),
@@ -137,7 +138,7 @@ export const constructionManagerSystem: System = {
             laneMaxRcl: CONFIG.construction.developmentLaneMaxRcl,
             budgetTier: ctx.budget.tier,
             threatCount: snapshot.threatCreeps.length,
-            hasP0SpawnRequest: (roomMem.spawnQueue ?? []).some(r => r.priority === 0),
+            hasSurvivalSpawnRequest: hasSurvivalRequest(roomMem.spawnQueue ?? []),
             // 生存级缺口 = spawn/tower/storage 缺失；source container 缺失是
             // 经济效率缺口（由 emergency 槽位并行处理），不冻结发展通道。
             survivalGapActive: emergency.spawn || emergency.tower || emergency.storage,
@@ -252,7 +253,7 @@ export function developmentGate(
       budgetTier: ctx.budget.tier,
       claimSecure: roomMem?.claimSecure ?? false,
       threatCount: snapshot.threatCreeps.length,
-      hasP0SpawnRequest: (roomMem?.spawnQueue ?? []).some(r => r.priority === 0),
+      hasSurvivalSpawnRequest: hasSurvivalRequest(roomMem?.spawnQueue ?? []),
       energyAvailable: snapshot.energyAvailable,
       energyCapacityAvailable: snapshot.energyCapacityAvailable,
       globalSiteCount: ctx.globalSiteCount + getRemoteSiteTotal(),

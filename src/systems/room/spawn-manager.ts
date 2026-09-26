@@ -12,6 +12,7 @@ import {
 import type { ColonyState } from "../../kernel/contracts";
 import {
   cleanQueue,
+  hasSurvivalRequest,
   removeRequestsByRole,
   sortQueue,
   submitRequest,
@@ -377,8 +378,10 @@ export function trySpawn(
     reserve = Math.max(reserve, CONFIG.spawn.recoveryEnergyReserve);
   }
 
-  // 如果有待处理的 P0 请求，不处理更低优先级的请求。
-  const hasP0 = queue.some(r => r.priority === 0);
+  // 生存否决：本房有"不孵就要出事"的请求在排队时，不孵其他请求。
+  // 用 survival 而不是 priority === 0 —— 跨房援运/远矿/编队也可能是 P0（帝国层面急），
+  // 让它们取得否决权会让本房基建与自身编制一起停摆（A14）。
+  const hasSurvival = hasSurvivalRequest(queue);
 
   // 按优先级顺序处理请求（queue 已排序；splice 会改数组，倒序快照遍历不可行 —
   // 这里遍历副本，出队用 indexOf 定位）。
@@ -393,7 +396,7 @@ export function trySpawn(
     if ((Memory.rooms[snapshot.roomName]?.spawnBlacklist?.[req.key] ?? 0) > Game.time) continue;
 
     // P0 阻塞：如果存在 P0 请求但暂时无法满足，不孵化非 P0 creep。
-    if (hasP0 && req.priority > 0) {
+    if (hasSurvival && !req.survival) {
       return;
     }
 
@@ -410,8 +413,7 @@ export function trySpawn(
     // 拦住采集者扩编会让「1 采集者 + 满能量」的房间永远孵不出第二只
     // （rcl1-survival 回归：预留挡住 harvester → spawn 永久 idle）。
     const isCollectorRole = req.role === "harvester" || req.role === "worker";
-    const effectiveBudget =
-      req.priority === 0 || isCollectorRole ? energyBudget : energyBudget - reserve;
+    const effectiveBudget = req.survival || isCollectorRole ? energyBudget : energyBudget - reserve;
 
     // 降级策略（六层）：
     //   1. P0 始终降级（紧急恢复）。
@@ -438,7 +440,7 @@ export function trySpawn(
       const starvedP2 = req.priority === 2 && waitTicks >= spawnTime * 10 && economyPressure > 0.5;
       const pumpOutage = req.role === "distributor" && distributorCount === 0;
       const allowDegrade =
-        req.priority === 0 ||
+        req.survival ||
         (req.priority === 1 && (roomState === "bootstrap" || roomState === "recovery")) ||
         starvedP1 ||
         starvedP2 ||
@@ -456,8 +458,7 @@ export function trySpawn(
         }
         // 饥饿降级成本地板：starved 路径产物低于地板时继续排队等能量 — 等能量不是
         // 失败，不递增 retries（避免烧穿 maxRetries 进黑名单）；生存路径豁免。
-        const survivalPath =
-          req.priority === 0 || roomState === "bootstrap" || roomState === "recovery";
+        const survivalPath = req.survival || roomState === "bootstrap" || roomState === "recovery";
         if (!survivalPath && bodyCost(degraded) < CONFIG.spawn.starvationDegradeFloor) {
           continue;
         }
