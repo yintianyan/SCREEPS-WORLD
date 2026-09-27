@@ -155,6 +155,16 @@ describe("Bodies — BODY_TEMPLATES", () => {
       expect(lastTemplate?.parts).toEqual(["work", "carry", "move"]);
     }
   });
+
+  it("reserver 按产能选多 CLAIM 档 — 单 CLAIM 续期(+1)与衰减(−1)净为零，reservation 永远爬不起来", () => {
+    // 线上实证：三远矿房 reserver 全为 [claim,move]，resv 钉死 1（source 半容量）。
+    expect(bodyCost(selectBody("reserver", 650))).toBe(650);
+    expect(selectBody("reserver", 1300).filter(p => p === "claim")).toHaveLength(2);
+    expect(selectBody("reserver", 1950).filter(p => p === "claim")).toHaveLength(3);
+    expect(selectBody("reserver", 12900).filter(p => p === "claim")).toHaveLength(3);
+    // 多 CLAIM 档保持 MOVE 数 = CLAIM 数，平原满速通勤。
+    expect(selectBody("reserver", 1950).filter(p => p === "move")).toHaveLength(3);
+  });
 });
 
 describe("Bodies — A1 大 body 档位（随 RCL 容量放大）", () => {

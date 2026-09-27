@@ -1184,8 +1184,19 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
   ],
   reserver: [
-    // [CLAIM,MOVE] 最小占领：1 CLAIM=600 能量；reserveController 每 tick 续期 1 tick，
-    // 单 CLAIM 即满足需求。
+    // [3C,3M] @1950：reserveController 每 tick 续期 +3，reservation 每 tick 自然
+    // 衰减 −1，净 +2/tick —— 从 0 爬到满 5000 约 4 个 reserver 寿命（600t/个）。
+    // [2C,2M] @1300：净 +1/tick，可维持满预约（爬得慢）。
+    // 满预约 5000 是 reserver 死亡到替补到岗间隙的缓冲：按替补延迟 ~200t 计，
+    // 任一 ≥2 CLAIM 档都能让 source 全程不掉容量。
+    // 单 CLAIM 档（650）仅作低容量回退：续期 +1 与衰减 −1 净为零，reservation
+    // 只能钉死在当前值、reserver 一死即清零（线上实证：三远矿房 resv 长期 =1，
+    // source 半容量运转）。
+    {
+      parts: ["claim", "claim", "claim", "move", "move", "move"],
+      minCapacity: 1950,
+    },
+    { parts: ["claim", "claim", "move", "move"], minCapacity: 1300 },
     { parts: ["claim", "move"], minCapacity: 650 },
   ],
   claimer: [

@@ -342,18 +342,21 @@ describe("remote demand — evaluateRemoteDemand", () => {
     expect(requests.filter(r => r.role === "reserver")).toHaveLength(0);
   });
 
-  // ── reserver 不受 economySuppressed 冻结（reservation 断裂修复）──
+  // ── 威胁窗内 reserver 停发（原「reservation 断裂修复」豁免被线上实证推翻）──
+  // 原豁免的前提是单 CLAIM 即可续期；实际单 CLAIM 续期(+1)与衰减(−1)净为零，
+  // reservation 钉死在当前值、reserver 一死即清零，豁免买不到容量只买到损耗
+  // （W37S57 dangerUntil 窗口内 6 只 reserver 连续非自然死亡于同一边界格）。
 
-  it("威胁在场时 reserver 仍生成初始孵化请求（不因 economySuppressed 冻结）", () => {
+  it("威胁在场时 reserver 停发初始孵化请求（无战力纯 CLAIM 单位不送危险房）", () => {
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
       remoteThreats: { [targetRoom]: true },
     });
     const reserverReqs = requests.filter(r => r.role === "reserver");
-    expect(reserverReqs).toHaveLength(1);
+    expect(reserverReqs).toHaveLength(0);
   });
 
-  it("威胁在场时 reserver 濒死者仍生成替补请求（reservation 不能断）", () => {
+  it("威胁在场时 reserver 濒死者同样不补（替补送死同一条边界路径）", () => {
     const dying: RemoteCreepSummary = {
       name: "reserver-dying",
       role: "reserver",
@@ -367,11 +370,10 @@ describe("remote demand — evaluateRemoteDemand", () => {
       remoteThreats: { [targetRoom]: true },
     });
     const reserverReqs = requests.filter(r => r.role === "reserver");
-    expect(reserverReqs).toHaveLength(1);
-    expect(reserverReqs[0]!.replaceBy).toBe(tick);
+    expect(reserverReqs).toHaveLength(0);
   });
 
-  it("威胁在场时 harvester/hauler 仍被冻结（仅 reserver 豁免）", () => {
+  it("威胁在场时 harvester/hauler 扩编冻结且 reserver 停发（defender 照常）", () => {
     const { requests } = evaluateRemoteDemand({
       ...baseInput,
       remoteThreats: { [targetRoom]: true },
@@ -379,7 +381,9 @@ describe("remote demand — evaluateRemoteDemand", () => {
     const roles = requests.map(r => r.role);
     expect(roles).not.toContain("remoteHarvester");
     expect(roles).not.toContain("remoteHauler");
-    expect(roles).toContain("reserver");
+    expect(roles).not.toContain("reserver");
+    // 有威胁时 defender 先应战（车轮战），是威胁窗内唯一的孵化豁免。
+    expect(roles).toContain("remoteDefender");
   });
 
   it("creep 寿命充足时不生成替换请求", () => {

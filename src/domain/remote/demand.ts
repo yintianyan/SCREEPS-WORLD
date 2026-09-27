@@ -346,11 +346,16 @@ export function evaluateRemoteDemand(input: RemoteDemandInput): RemoteDemandResu
 
     // 3. Reserver — 每目标 1 个（RCL 门禁由系统层检查）。R3b：仅 normal 生成 —
     //    recovery 下 P2 角色被 kernel 门禁跳过，孵出即在 home 闲置白耗孵化窗。
-    //    reserver 不受 economySuppressed 冻结：它是无战力纯 CLAIM 单位，不参与战斗；
-    //    reservation 过期 → source 容量减半（3000→1500）→ 5W harvester 采集速率
-    //    10/tick > 再生 5/tick → source 被采空 → harvester 空窗，产能损失远大于
-    //    reserver 孵化成本（650 能量/600 tick）。
-    if (CONFIG.remote.enableReserver && colonyState === "normal") {
+    //    威胁窗（economySuppressed 口径：在房威胁 + 失明 hold + dangerUntil 冷却）内
+    //    停发（含替补）：reserver 是无战力纯 CLAIM 单位，威胁蹲守入口格时送一只死
+    //    一只（线上实证：W37S57 dangerUntil 窗口内 6 只 reserver + 1 只
+    //    remoteDefender 连续非自然死亡，全部落在同一边界格）。多 CLAIM body 撑起的
+    //    满预约 5000 buffer 足以覆盖 dangerCooldown(2000) + 通勤，窗口过后 reserver
+    //    以净 +2/tick 快速回爬，不须在窗内冒险续命。
+    //    （原「reserver 不受 economySuppressed 冻结」豁免的前提是单 CLAIM 即可续期；
+    //    实际 reservation 每 tick 衰减 −1，单 CLAIM 续期 +1 净为零——豁免买不到
+    //    容量，只买到连续损耗。）
+    if (CONFIG.remote.enableReserver && colonyState === "normal" && !economySuppressed) {
       const reserverTotal = (counts.reserver ?? 0) + pending.reserver;
       if (reserverTotal < 1) {
         const key = spawnKey("reserver", homeRoom, reserverTotal, targetRoom);

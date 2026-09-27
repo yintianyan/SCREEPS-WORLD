@@ -147,16 +147,16 @@ describe("evaluateRemoteDemand — 威胁在场暂停经济孵化", () => {
     spawnQueue: [],
   };
 
-  it("hasThreats：仅 defender + reserver，无 harvester/hauler", () => {
+  it("hasThreats：仅 defender，无 harvester/hauler/reserver", () => {
     const { requests } = evaluateRemoteDemand({ ...base, remoteThreats: { W8N4: true } });
     const roles = requests.map(r => r.role);
     expect(roles).toContain("remoteDefender");
     expect(roles).not.toContain("remoteHarvester");
     expect(roles).not.toContain("remoteHauler");
-    // reserver 不受 economySuppressed 冻结：它是无战力纯 CLAIM 单位，
-    // reservation 过期 → source 容量减半 → harvester 采集空窗，
-    // 产能损失远大于 reserver 孵化成本。
-    expect(roles).toContain("reserver");
+    // reserver 威胁窗内停发：无战力纯 CLAIM 单位送危险房是纯损耗（W37S57 实证
+    // 6 连死）。多 CLAIM body 的满预约 5000 buffer 覆盖 dangerCooldown + 通勤，
+    // 窗口过后 reserver 回爬，无须在窗内冒险续命。
+    expect(roles).not.toContain("reserver");
   });
 
   it("无威胁：经济孵化照常（回归保护）", () => {

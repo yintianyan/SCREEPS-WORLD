@@ -8,8 +8,8 @@ import {
 import { CONFIG } from "../../../src/config";
 
 describe("reserverUpkeepFor — 有效在岗时长 = 寿命 − pathCost", () => {
-  it("零通勤时等于原常数 650/600", () => {
-    expect(reserverUpkeepFor(0)).toBeCloseTo(650 / 600, 6);
+  it("零通勤时等于常数 1950/600（body 阶梯顶档 [3C,3M]）", () => {
+    expect(reserverUpkeepFor(0)).toBeCloseTo(1950 / 600, 6);
   });
 
   it("随 pathCost 严格递增（距离越远门票越贵）", () => {
@@ -19,15 +19,15 @@ describe("reserverUpkeepFor — 有效在岗时长 = 寿命 − pathCost", () =>
     expect(new Set(costs).size).toBe(costs.length);
   });
 
-  it("关键点与手算一致（原实现一律用 1.08，低估远房）", () => {
-    expect(reserverUpkeepFor(100)).toBeCloseTo(650 / 500, 6); // 1.30
-    expect(reserverUpkeepFor(200)).toBeCloseTo(650 / 400, 6); // 1.625
-    expect(reserverUpkeepFor(400)).toBeCloseTo(650 / 200, 6); // 3.25
+  it("关键点与手算一致（1950/有效在岗 tick）", () => {
+    expect(reserverUpkeepFor(100)).toBeCloseTo(1950 / 500, 6); // 3.9
+    expect(reserverUpkeepFor(200)).toBeCloseTo(1950 / 400, 6); // 4.875
+    expect(reserverUpkeepFor(400)).toBeCloseTo(1950 / 200, 6); // 9.75
   });
 
   it("pathCost ≥ 寿命（600）时摊销趋于无穷 → 由门槛自然剔除，不返回负数", () => {
-    expect(reserverUpkeepFor(600)).toBe(650);
-    expect(reserverUpkeepFor(900)).toBe(650); // 地板 1，绝不出现负摊销
+    expect(reserverUpkeepFor(600)).toBe(1950);
+    expect(reserverUpkeepFor(900)).toBe(1950); // 地板 1，绝不出现负摊销
     expect(reserverUpkeepFor(900)).toBeGreaterThan(0);
   });
 });

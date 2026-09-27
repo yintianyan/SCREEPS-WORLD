@@ -22,12 +22,15 @@ function makeIntel(overrides: Partial<RoomIntel> = {}): RoomIntel {
 }
 
 describe("remote targeting — selectRemoteTargets", () => {
+  // 多 CLAIM body 后 reserver 门票按真实成本计（1950/有效在岗），1-source 距离 2
+  // 的边际房 netScore 跌破 minNetScore(3) 被剔除 —— 用 2-source 数据让去重/入选
+  // 语义可观察（测的是去重行为，不是门槛边界）。
   it("跨房去重：兄弟房已运营的目标不入选（双编队抢矿是纯亏损）", () => {
     const result = selectRemoteTargets({
       homeRoom: "W38S58",
       intel: {
-        W37S57: makeIntel(), // 主房 W37S58 正在运营。
-        W36S58: makeIntel(),
+        W37S57: makeIntel({ sources: 2 }), // 主房 W37S58 正在运营。
+        W36S58: makeIntel({ sources: 2 }),
       },
       existingOps: undefined, // 本房无运营 — 修复前 W37S57 会被选中。
       tick,
@@ -41,7 +44,7 @@ describe("remote targeting — selectRemoteTargets", () => {
   it("跨房去重：兄弟房已 abandoned 的目标可入选（调用方只汇总非 abandoned）", () => {
     const result = selectRemoteTargets({
       homeRoom: "W38S58",
-      intel: { W36S58: makeIntel() },
+      intel: { W36S58: makeIntel({ sources: 2 }) },
       existingOps: undefined,
       tick,
       staleThreshold,
@@ -335,7 +338,7 @@ describe("remote targeting — 净收益评分与剔除", () => {
     expect(result).toHaveLength(0);
   });
 
-  it("中距 2-source（pathCost 150）：haulerNeed≥2 且排序低于近房", () => {
+  it("中距 2-source（pathCost 150）：票钱按 1950/有效在岗修正后跌破门槛被剔除，近房仍入选", () => {
     const result = selectRemoteTargets({
       homeRoom: "W1N1",
       intel: {
@@ -347,9 +350,10 @@ describe("remote targeting — 净收益评分与剔除", () => {
       staleThreshold,
       haulerCapacity: 800,
     });
-    expect(result[0]!.roomName).toBe("W1N2"); // 近房评分高，排前。
-    const mid = result.find(c => c.roomName === "W2N1")!;
-    expect(mid.haulerNeed).toBeGreaterThanOrEqual(2);
+    // 中距房 netScore = 10.67 − (1 + 2.12 + 1950/450 + 0.35 + 0.4 + 0.3) ≈ 2.2
+    // < minNetScore(3) —— 真实门票成本让"纸面盈利"的沼泽远房不再错误开点。
+    expect(result.map(c => c.roomName)).toEqual(["W1N2"]);
+    expect(result[0]!.haulerNeed).toBeGreaterThanOrEqual(2);
   });
 
   it("pathCost 缺失时回退线性估算，近邻房仍可入选（不抛错）", () => {

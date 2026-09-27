@@ -162,6 +162,15 @@ const ROLE_CODES: Record<string, number> = {
   remoteDefender: 11,
   mineralMiner: 12,
   attacker: 13,
+  // 追加：此前缺编的角色死亡事件全部落 99，战斗黑匣子无法归因（线上复盘
+  // W37S58 本家年轻死亡序列时 roleCode=99 不可读）。
+  carrier: 14,
+  coreClearer: 15,
+  scout: 16,
+  dismantler: 17,
+  healer: 18,
+  pbCollector: 19,
+  rangedAttacker: 20,
 };
 
 /** 角色名编码；未知角色返回 99。 */

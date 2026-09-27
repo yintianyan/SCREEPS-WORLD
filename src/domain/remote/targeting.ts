@@ -47,12 +47,14 @@ const SOURCE_INCOME_UNRESERVED = 5;
 // harvester [5W,1C,3M]=750/1500=0.50；hauler [8C,8M]=800/1500=0.53（RCL4-5 标准档）。
 const HARVESTER_UPKEEP = 0.5;
 const HAULER_UPKEEP = 0.53;
-// reserver [CLAIM,MOVE]=650 能量 / 寿命 600 tick —— 编队里最贵的门票。
-// 但摊销不能直接用 650/600：reserver 不返程，其中 pathCost tick 花在通勤上，
+// reserver body 阶梯顶档 [3C,3M]=1950 能量 / 寿命 600 tick —— 编队里最贵的门票。
+// RCL7+ 产能（≥1950）下 selectBody 稳定选中该档；单 CLAIM 档续期与衰减净为零，
+// reservation 钉死在当前值（线上实证），门票按实际选中档计。
+// 但摊销不能直接用 1950/600：reserver 不返程，其中 pathCost tick 花在通勤上，
 // 不在岗就不产 reserve tick，有效在岗时长 = 600 − pathCost。
-// 用 650/600 会**低估远房成本**：pathCost 100 时真实 650/400=1.63 vs 1.08（低 34%），
-// pathCost 200 时 3.25（低 67%）—— 远房因此被系统性高估收益、错误开点。
-const RESERVER_BODY_COST = 650;
+// 低产能房（1300 ≤ 容量 < 1950 → [2C,2M]=1300）按顶档计是保守高估 ——
+// 方向安全（宁可少开点），不为产能参数化而破坏纯函数签名。
+const RESERVER_BODY_COST = 1950;
 const RESERVER_LIFESPAN = 600;
 // defender [2A,2M]=520/1500=0.35 e/tick，enableDefender 时计入。
 const DEFENDER_UPKEEP = 0.35;
