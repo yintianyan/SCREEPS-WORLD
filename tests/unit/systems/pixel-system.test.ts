@@ -6,11 +6,14 @@ import type { TickContext, CpuTier } from "../../../src/kernel/contracts";
 /**
  * Pixel System 门禁回归测试。
 
- * 三层门禁：
+ * 四层门禁：
  *   1. CONFIG.pixel.enabled 总开关（默认关闭）— 放血清零 bucket 与 global reset
  *      撞车会触发 reload death loop（bundle 加载即被杀、bucket 永不回充）。
  *   2. tier 门禁 — 仅 healthy 且 bucket 满仓时放血。
  *   3. war 姿态门禁 — 战时 bucket 突发容量留给军事计算，不放血。
+ *   4. 借用互斥门禁 — 近 ~100 tick 的 CPU 峰值已达到每 tick 限额时不放血：
+ *      CONFIG.cpu.borrow 把满仓 bucket 当成突发额度在用，而放血代价 = bucket 上限，
+ *      两者互斥（线上实测一次放血后 1,618 tick 才回到借用下界，期间每 tick 拒 ~26 项）。
  */
 
 function makeCtx(tier: CpuTier): TickContext {
@@ -44,11 +47,14 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
     (globalThis as Record<string, unknown>).Game = {
       time: 100,
       cpu: {
+        limit: 20,
         bucket: 10000,
         generatePixel: generatePixelSpy,
       },
     };
-    (globalThis as Record<string, unknown>).Memory = { kernel: {} };
+    // cpuMax10 = 12 < limit ⇒ 借用额度没在被依赖，本文件其余用例才是在测"该放血时放血"。
+    // 借用互斥闸见文件头第 4 条。
+    (globalThis as Record<string, unknown>).Memory = { kernel: { stats: { cpuMax10: 12 } } };
   });
 
   afterEach(() => {
@@ -104,6 +110,37 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
         },
       },
     };
+    pixelSystem.run(makeCtx("healthy"));
+    expect(generatePixelSpy).not.toHaveBeenCalled();
+  });
+
+  it("借用互斥：cpuMax10 达到每 tick 限额 ⇒ 借来的额度在养常态负载，不放血", () => {
+    // 线上实测态：cpuMax10=22.3 对 limit=20（借用上限 26 之内）。
+    (CONFIG.pixel as { enabled: boolean }).enabled = true;
+    (globalThis as any).Memory.kernel.stats.cpuMax10 = 22.3;
+    pixelSystem.run(makeCtx("healthy"));
+    expect(generatePixelSpy).not.toHaveBeenCalled();
+  });
+
+  it("借用互斥边界：cpuMax10 正好等于 limit 即不放血（>= 语义，不留 1 点缝）", () => {
+    (CONFIG.pixel as { enabled: boolean }).enabled = true;
+    (globalThis as any).Memory.kernel.stats.cpuMax10 = 20;
+    pixelSystem.run(makeCtx("healthy"));
+    expect(generatePixelSpy).not.toHaveBeenCalled();
+
+    // 差 0.1 才算"没用满每 tick 限额" — 门槛是 limit 本身，不是 hardLimit。
+    (globalThis as any).Memory.kernel.stats.cpuMax10 = 19.9;
+    pixelSystem.run(makeCtx("healthy"));
+    expect(generatePixelSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("借用互斥：无负载历史（stats 缺失 / cpuMax10=0）按不放血处理", () => {
+    (CONFIG.pixel as { enabled: boolean }).enabled = true;
+    (globalThis as Record<string, unknown>).Memory = { kernel: {} };
+    pixelSystem.run(makeCtx("healthy"));
+    expect(generatePixelSpy).not.toHaveBeenCalled();
+
+    (globalThis as Record<string, unknown>).Memory = { kernel: { stats: { cpuMax10: 0 } } };
     pixelSystem.run(makeCtx("healthy"));
     expect(generatePixelSpy).not.toHaveBeenCalled();
   });
