@@ -159,7 +159,7 @@ describe("prospect-manager — 生命周期与止损", () => {
     (globalThis as any).Game.cpu.bucket = 10000;
   }
 
-  it("成功：目标 intel 新鲜且 sources 已知 → 收摊 + 事件 success + 无冷却", () => {
+  it("成功：目标 intel 新鲜且 sources 已知 → 收摊 + 事件 success + 短冷却（successCooldownTicks）", () => {
     missionFixture();
     __resetIntelStateForTests();
     globalCache().intelHandoff = [
@@ -184,9 +184,18 @@ describe("prospect-manager — 生命周期与止损", () => {
     prospectManagerSystem.run(makeContext());
 
     expect((globalThis as any).Memory.kernel.prospect).toBeUndefined();
-    expect((globalThis as any).Memory.kernel.prospectCooldown).toBeUndefined();
+    // SUCCESS 也必须挂短冷却：observer 覆盖重叠时（本用例 source 即 "observer"），
+    // intel 会在 cooldown 前再次过期，无冷却则同一目标每 intelFreshness(50t) 重选
+    // 一次、每轮孵出的 scout 都被下一轮 SUCCESS 回收（线上 50t 跑步机实证）。
+    expect((globalThis as any).Memory.kernel.prospectCooldown.W6N4).toBe(
+      TICK + CONFIG.prospect.successCooldownTicks,
+    );
     expect((globalThis as any).Game.creeps.s1.memory.recycle).toBe(true);
     expect(prospectEvents()[0]?.d?.[0]).toBe(0);
+  });
+
+  it("成功冷却远短于失败冷却（远房重探语义不被饿死）", () => {
+    expect(CONFIG.prospect.successCooldownTicks).toBeLessThan(CONFIG.prospect.cooldownTicks);
   });
 
   it("超时 → 收摊 + 目标冷却", () => {

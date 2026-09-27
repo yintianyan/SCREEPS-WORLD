@@ -64,14 +64,14 @@ export const prospectManagerSystem: System = {
     // （war/持续 develop）由 grace 兜底收摊。
     const liveThreat = [...ctx.snapshots()].some(s => (s.threatCreeps?.length ?? 0) > 0);
     if (liveThreat) {
-      completeMission(ctx.tick, OUTCOME_ABORTED, false);
+      completeMission(ctx.tick, OUTCOME_ABORTED, 0);
       return;
     }
     if (Memory.kernel.strategy?.expansionAllowed !== true) {
       // 瞬时翻转脱敏：累计非 expand 持续 tick，超过 grace 才中止。
       if (mission.postureExitSince === undefined) mission.postureExitSince = ctx.tick;
       if (ctx.tick - mission.postureExitSince >= CONFIG.prospect.postureGraceTicks) {
-        completeMission(ctx.tick, OUTCOME_ABORTED, false);
+        completeMission(ctx.tick, OUTCOME_ABORTED, 0);
         return;
       }
     } else {
@@ -80,19 +80,23 @@ export const prospectManagerSystem: System = {
     }
 
     // 成功判定：目标 intel 已新鲜且 sources 已知（决策就绪）。
+    // observer 覆盖重叠场景（目标房在 observer 轮刷半径内）下，intel 常由 observer
+    // 顺手刷新——此时在途 scout 已无增量价值，SUCCESS 收摊回收它是对的；但 SUCCESS
+    // 也必须给目标挂短冷却，否则 intel 一过期（50t）同一房立即再选，形成
+    // 「选中→observer 刷新→SUCCESS→回收→再选中」的 50t 跑步机（线上实证 W38S58）。
     const intel = getRoomIntel(mission.target);
     if (
       intel &&
       intel.payload.sources !== undefined &&
       ctx.tick - intel.observedAt <= CONFIG.prospect.intelFreshness
     ) {
-      completeMission(ctx.tick, OUTCOME_SUCCESS, false);
+      completeMission(ctx.tick, OUTCOME_SUCCESS, CONFIG.prospect.successCooldownTicks);
       return;
     }
 
     // 超时止损。
     if (ctx.tick - mission.startedAt > CONFIG.prospect.maxMissionTicks) {
-      completeMission(ctx.tick, OUTCOME_TIMEOUT, true);
+      completeMission(ctx.tick, OUTCOME_TIMEOUT, CONFIG.prospect.cooldownTicks);
       return;
     }
 
@@ -111,7 +115,7 @@ export const prospectManagerSystem: System = {
     const pending = queue ? countPending(queue, "scout", mission.sponsor) : 0;
     if (live + pending === 0) {
       if (mission.spawned >= CONFIG.prospect.maxSpawns) {
-        completeMission(ctx.tick, OUTCOME_DEATH, true);
+        completeMission(ctx.tick, OUTCOME_DEATH, CONFIG.prospect.cooldownTicks);
         return;
       }
       // 补派（侦察兵死在途中）：每轮至多补 1 只，spawned 累计封顶。
@@ -155,15 +159,15 @@ function submitScoutRequest(
   });
 }
 
-/** 收摊（幂等）：记事件 → 失败则目标冷却 → 回收侦察兵 → 撤请求 → 清任务。 */
-function completeMission(tick: number, outcome: number, cooldown: boolean): void {
+/** 收摊（幂等）：记事件 → 目标按给定时长冷却（0 = 不冷却）→ 回收侦察兵 → 撤请求 → 清任务。 */
+function completeMission(tick: number, outcome: number, cooldownTicks: number): void {
   const mission = Memory.kernel?.prospect;
   if (!mission) return;
 
   recordEvent(EventKind.ProspectOutcome, mission.target, [outcome, mission.spawned]);
-  if (cooldown) {
+  if (cooldownTicks > 0) {
     Memory.kernel!.prospectCooldown ??= {};
-    Memory.kernel!.prospectCooldown[mission.target] = tick + CONFIG.prospect.cooldownTicks;
+    Memory.kernel!.prospectCooldown[mission.target] = tick + cooldownTicks;
   }
 
   // P0-1：从全局编队索引取 scout，按 name 精确定位 Creep 对象标记 recycle。

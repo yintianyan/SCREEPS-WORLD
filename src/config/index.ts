@@ -1119,6 +1119,16 @@ export const CONFIG = {
     maxSpawns: 2,
     /** 失败/超时/死亡目标冷却：冷却期内不重选。 */
     cooldownTicks: 20000,
+    /**
+     * 成功目标冷却：SUCCESS 收摊后此期限内不重选同一目标。
+     * 为什么需要：room-observer 以 25t 节奏轮刷邻房 intel，而 SUCCESS 只要求
+     * intel 新鲜——observer 顺手刷新就能让刚开的任务提前收摊并回收在途 scout
+     * （线上实证：W38S58 每 50t 一只 scout 死于出生点 age≈40，ProspectOutcome
+     * [0,1] 每 50t 一条——「stale→选中→observer 刷新→SUCCESS→回收→再 stale」
+     * 跑步机，SUCCESS 无冷却时无限循环）。冷却值取「一次完整任务的自然周期」
+     * 量级（maxMissionTicks=1200），既打断跑步机又不饿死远房的重探。
+     */
+    successCooldownTicks: 2000,
     /** 侦察是纯发展投资：bucket 低于此值不开新任务（进行中任务不受影响）。 */
     minBucket: 5000,
     /**
