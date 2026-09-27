@@ -7,14 +7,21 @@ import type { TickContext, CpuTier } from "../../../src/kernel/contracts";
  * Pixel System 门禁回归测试。
 
  * 四层门禁：
- *   1. CONFIG.pixel.enabled 总开关（默认关闭）— 放血清零 bucket 与 global reset
- *      撞车会触发 reload death loop（bundle 加载即被杀、bucket 永不回充）。
+ *   1. CONFIG.pixel.enabled 总开关 — **出厂为关闭**，它才是真正拦住放血的那一层：
+ *      bucket 在本仓库首先是档位时钟（healthy≥7000/guarded≥3000/conserve≥1000），
+ *      一次放血把它清光 ⇒ 实测 1,500+ tick 才回得来，期间 P3 系统近乎每 tick 被拒；
+ *      另有 reload death loop 风险（清零时刻撞上 global reset ⇒ bundle 加载即被杀）。
  *   2. tier 门禁 — 仅 healthy 且 bucket 满仓时放血。
  *   3. war 姿态门禁 — 战时 bucket 突发容量留给军事计算，不放血。
- *   4. 借用互斥门禁 — 近 ~100 tick 的 CPU 峰值已达到每 tick 限额时不放血：
- *      CONFIG.cpu.borrow 把满仓 bucket 当成突发额度在用，而放血代价 = bucket 上限，
- *      两者互斥（线上实测一次放血后 1,618 tick 才回到借用下界，期间每 tick 拒 ~26 项）。
+ *   4. 借用互斥门禁 — 近 ~100 tick CPU 峰值达到每 tick 限额时不放血。**必要但不充分，
+ *      2026-09-27 线上判效失败**：放血前是 bucket=10000 + healthy + cpu 12.7~15.4（峰值
+ *      够不到 limit ⇒ 闸放行），同段却有 18~19 项/tick 被拒 ⇒ 不存在"产能用不满"的自洽
+ *      状态。现仅作纵深防御保留，判据正确性以第 1 层为准。
  */
+
+// 出厂默认值在模块加载时抓一次 — 用例会把 CONFIG.pixel.enabled 逐条翻转，
+// 事后必须恢复到这里（而不是硬编码 true/false，那样改默认值后就成假绿）。
+const SHIPPED_ENABLED = CONFIG.pixel.enabled;
 
 function makeCtx(tier: CpuTier): TickContext {
   return {
@@ -63,13 +70,23 @@ describe("Pixel System — 总开关与 tier 门禁", () => {
     } else {
       delete (globalThis as Record<string, unknown>).Game;
     }
-    // 恢复线上默认（enabled=true），避免污染其他测试。
-    (CONFIG.pixel as { enabled: boolean }).enabled = true;
+    // 恢复到**出厂默认**（SHIPPED_ENABLED，见模块顶部）而不是硬编码某个值 —
+    // 本文件的用例逐条翻转过 enabled，硬编码 true/false 都会在某次改默认值后变成假绿。
+    (CONFIG.pixel as { enabled: boolean }).enabled = SHIPPED_ENABLED;
+  });
+
+  /**
+   * 出厂值必须是关闭。立案依据（线上实测 2026-09-27）：bucket 在本仓库首先是**档位时钟**，
+   * 一次放血把它清光 ⇒ 1,500+ tick 回不来，期间 layout-planner/room-observer 实测
+   * 500 tick 窗口内被拒 478 次（≈每 tick）。而"只在真富余时放血"这道闸救不了它 ——
+   * 放血前那段是 bucket=10000 + healthy + cpu 12.7~15.4 却仍有 18~19 项/tick 被拒，
+   * 本帝国不存在"产能用不满"的自洽状态。重新开启要显式改 CONFIG 并说明这笔账。
+   */
+  it("出厂默认 enabled=false（放血会清掉档位时钟）", () => {
+    expect(SHIPPED_ENABLED).toBe(false);
   });
 
   it("开关关闭（enabled=false）：healthy + 满 bucket 也不放血 — 防 reload death loop", () => {
-    // 线上默认已切换为 enabled=true（自愿放血协议）；关闭态仍是回滚保险丝，
-    // 本用例显式设置 false 锁定关闭行为。
     (CONFIG.pixel as { enabled: boolean }).enabled = false;
     pixelSystem.run(makeCtx("healthy"));
     expect(generatePixelSpy).not.toHaveBeenCalled();

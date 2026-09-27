@@ -168,12 +168,22 @@ export const CONFIG = {
   },
 
   pixel: {
-    /** Pixel 收割总开关 — 默认关闭。generatePixel 吃光整个 bucket，若清零时刻
-     * 恰逢 global reset（部署/迁移），bundle 加载成本 > tickLimit 触发 reload
-     * death loop：每 tick 加载即被杀 → bucket 永不回充 → 主循环永久死亡
-     * （线上实测 187+ tick 停摆）。开启前置：bundle 压缩后加载成本 ≪ 20 CPU，
-     * 且接受放血后 ~600 tick 的 P3 降档窗口。 */
-    enabled: true,
+    /** Pixel 收割总开关 — **关闭**（2026-09-27 线上实测后重新关回）。
+     *
+     * 两条独立理由，任一都足以否决：
+     * 1. reload death loop：generatePixel 吃光整个 bucket，若清零时刻恰逢 global reset
+     *    （部署/迁移），bundle 加载成本 > tickLimit ⇒ 每 tick 加载即被杀、bucket 永不回充
+     *    （线上实测 187+ tick 停摆）。
+     * 2. 更贵的那条：bucket 在本仓库**首先是档位时钟**（healthy≥7000 / guarded≥3000 /
+     *    conserve≥1000），借用额度只是附带的 6 点。一次放血=10000 全清，按 ~1.2/tick 的回血
+     *    要 **1,500+ tick** 才爬回 healthy；这期间 layout-planner / room-observer 这类
+     *    P3 系统几乎每 tick 被拒（实测 500 tick 窗口内各 478 次）。
+     *
+     * 曾试过"只在真富余时放血"的闸（`pixel-system.ts` 的 cpuMax10 判据），**已被线上否定**：
+     * 放血前那段是 bucket=10000 + tier=healthy + cpu 12.7~15.4，峰值够不到 limit ⇒ 闸判"没在借用"
+     * 而放行；同一段却有 18~19 项/tick 被拒 ⇒ 本帝国不存在"用不满产能"的自洽状态，
+     * 拿被后果压下去的用量判富余是自证式读数。想要 pixel 收入，前提是先让 P3 不再被常态拒。 */
+    enabled: false,
     /** 生成一个 pixel 的 bucket 成本 —— 引擎常量 PIXEL_CPU_COST（实测本服 10000，
      * 取自 @screeps/common/lib/constants.js）。
      *
