@@ -38,6 +38,31 @@ describe("selectProspectTarget", () => {
     expect(t?.roomName).toBe("W6N4");
   });
 
+  it("重探门槛：age 超过 intelFreshness 但未到 rescoutThreshold → 不重探（observer 覆盖房零任务）", () => {
+    // 线上实证：observer 轮刷邻房使 intel 年龄在 0~150t 振荡，重探门槛=intelFreshness(50)
+    // 时每 ~100t 轮番产生空转任务。门槛提升后覆盖内的房不再被选中。
+    const t = selectProspectTarget([candidate({ sources: 2, lastSeen: TICK - 200 })], TICK, {
+      intelFreshness: 50,
+      rescoutThreshold: 2000,
+    });
+    expect(t).toBeUndefined();
+  });
+
+  it("重探门槛：age 超过 rescoutThreshold → 恢复重探（远房真过期语义保留）", () => {
+    const t = selectProspectTarget([candidate({ sources: 2, lastSeen: TICK - 2500 })], TICK, {
+      intelFreshness: 50,
+      rescoutThreshold: 2000,
+    });
+    expect(t?.roomName).toBe("W6N4");
+  });
+
+  it("重探门槛缺省回落 intelFreshness（旧调用方语义不变）", () => {
+    const t = selectProspectTarget([candidate({ sources: 2, lastSeen: TICK - 200 })], TICK, {
+      intelFreshness: 50,
+    });
+    expect(t?.roomName).toBe("W6N4");
+  });
+
   it("多候选选 pathCost 最近者", () => {
     const t = selectProspectTarget(
       [

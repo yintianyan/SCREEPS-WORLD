@@ -253,6 +253,17 @@ export interface PhaseOptions {
    */
   bankruptReserveFloor: number;
   /**
+   * 破产线的 Schmitt 边距（带内退出水位 = floor × 此值）。默认 1.5。
+   *
+   * 为什么需要：入带用裸线（reserve < floor）、出带若也用同一条线，总能量恰好贴线的房
+   * 每完成一轮支出/回血脉冲就穿过一次水位线 —— 恒温器极限环。线上实证：W37S55 总能量
+   * 在 9.6k-11k 贴着 10k 线，1400 tick 里 9 次 PhaseTransition（growth 段最短 10 tick），
+   * 姿态 fortify↔develop、agenda、P2 冻结全部被它带着抖。与分数带 150→30 的迟滞同构：
+   * 进带确定量，出带要求多攒出一截缓冲（1.5 × 10k = 15k，落在 sustained 与 sprint
+   * 两档之间，不新造刻度）。
+   */
+  bankruptExitMargin: number;
+  /**
    * 危机带最短驻留评估次数：进入 crisis/recovery 后至少停留此久才能回 normal —
    * 打破极限环第二道闸（recovery 收缩支出后分数秒清，立即回 normal 则支出恢复、
    * 赤字重积）。副作用：真危机恢复期至少 minBandTicks tick（刻意保守），且
@@ -324,6 +335,7 @@ export const DEFAULT_PHASE_OPTIONS: PhaseOptions = {
   investmentReserveFloor: CONFIG.economy.upgrade.sprintStorage,
   // 破产兜底线：同一套绝对刻度的下一档（"可持续水位"）。仅在房里有 storage 时生效。
   bankruptReserveFloor: CONFIG.economy.upgrade.sustainedStorage,
+  bankruptExitMargin: 1.5,
   // 最短驻留 100 次评估（room-state 每 tick 评估 → 100 tick）：
   // 覆盖一轮 creep 孵化 + 通勤周期，让 recovery 期真正攒出缓冲，而非形式性过场。
   minBandTicks: 100,
@@ -448,7 +460,12 @@ export function evaluateColonyPhase(
   // 这类房的总储备天然只有几千，拿同一条绝对线会把整个早期游戏永久钉进危机带 ——
   // 它们的生存信号本就是 `understaffed → bootstrap`。
   const hasBank = input.storageRatio !== undefined;
-  const bankrupt = hasBank && input.reserve < options.bankruptReserveFloor;
+  // 破产线带内退出用抬高后的水位（Schmitt 边距）—— 见 bankruptExitMargin 注释。
+  const inCrisisBand = prev.phase === "crisis" || prev.phase === "recovery";
+  const bankruptFloor = inCrisisBand
+    ? options.bankruptReserveFloor * options.bankruptExitMargin
+    : options.bankruptReserveFloor;
+  const bankrupt = hasBank && input.reserve < bankruptFloor;
 
   // 欠员 = 采集端没站住人 —— 与 spawn 侧的**最低编制**同源，而不是跟世界给的 source 数比。
   // 旧写法 `harvesterCount < sourceCount` 隐含「1 只 harvester 只能服务 1 个 source」，
@@ -468,7 +485,6 @@ export function evaluateColonyPhase(
   // （只延后 20 tick ≈ 一个孵化+通勤周期）。取 L1 那个 50 反而会把 45t 的真欠员整段抹掉。
   const bootstrapTicks = understaffed ? (prev.bootstrapTicks ?? 0) + 1 : 0;
   const understaffedSustained = bootstrapTicks >= options.bootstrapEnterTicks;
-  const inCrisisBand = prev.phase === "crisis" || prev.phase === "recovery";
   // 危机带驻留计数（TD-003 根因 B）：带内每次评估 +1，用于最短驻留判定。
   const bandTicksSoFar = inCrisisBand ? (prev.bandTicks ?? 0) : 0;
   const dwellSatisfied = bandTicksSoFar >= options.minBandTicks;

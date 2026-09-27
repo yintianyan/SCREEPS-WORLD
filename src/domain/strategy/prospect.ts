@@ -40,6 +40,17 @@ export interface ProspectCandidate {
 export interface ProspectOptions {
   /** 视野新鲜窗口：sources 已知且 lastSeen 距今 ≤ 此值 → 无需侦察。 */
   intelFreshness: number;
+  /**
+   * 已知房重探门槛：lastSeen 距今 ≤ 此值 → 不重探。缺省回落 intelFreshness。
+   *
+   * 为什么独立于成功判据的 intelFreshness：room-observer 以 25t 节奏轮刷邻房，
+   * 已知邻房的 intel 年龄永远在 0~150t 之间振荡 —— 若重探门槛 = intelFreshness(50t)，
+   * 每个邻房都会周期性「过期→选中→observer 顺手刷新→SUCCESS 回收在途 scout」
+   * （线上实证：6 个邻房轮流出 ProspectOutcome、间隔 ~100t，scout 全部死于出生点）。
+   * 重探门槛取远超 observer 轮刷周期的量级后，observer 覆盖内的房不再产生任务；
+   * observer 够不着的远房（intel 真过期）照常重探。前沿发现（known=false）路径不受影响。
+   */
+  rescoutThreshold?: number;
 }
 
 export interface ProspectTarget {
@@ -75,7 +86,10 @@ export function selectProspectTarget(
     if (c.owner && c.owner !== c.myUsername) continue;
     if (c.reservedBy && c.reservedBy !== c.myUsername) continue;
     // 视野已新鲜（sources 已知且未过期）→ 决策就绪，无需侦察。
-    if (c.sources !== undefined && tick - c.lastSeen <= options.intelFreshness) continue;
+    // 重探门槛独立于成功判据（见 rescoutThreshold 注释）：缺省回落 intelFreshness
+    // 保持旧语义，调用方传入更大值时 observer 覆盖内的邻房不再轮番产生任务。
+    const rescout = options.rescoutThreshold ?? options.intelFreshness;
+    if (c.sources !== undefined && tick - c.lastSeen <= rescout) continue;
     const distance = c.pathCost ?? roomLinearDistance(c.home, c.roomName);
     if (distance < bestDistance) {
       bestDistance = distance;

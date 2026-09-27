@@ -1129,6 +1129,15 @@ export const CONFIG = {
      * 量级（maxMissionTicks=1200），既打断跑步机又不饿死远房的重探。
      */
     successCooldownTicks: 2000,
+    /**
+     * 已知房重探门槛（selectProspectTarget 的 known 候选过滤用，独立于成功判据
+     * intelFreshness）。取值须远超 room-observer 的轮刷周期（25t/次，6 邻房 ≈
+     * 每 150t 一轮）：否则 observer 覆盖内的邻房 intel 在 50t 成功窗口边缘周期性
+     * 过期，每 ~100t 轮番产生一个「选中→observer 刷新→SUCCESS→回收在途 scout」
+     * 的空转任务（线上实证：ProspectOutcome 每 ~100t 一条、scout 死于出生点）。
+     * 2000 = 远房真过期才派 scout，observer 覆盖内靠 observer 自己维持新鲜。
+     */
+    rescoutTicks: 2000,
     /** 侦察是纯发展投资：bucket 低于此值不开新任务（进行中任务不受影响）。 */
     minBucket: 5000,
     /**

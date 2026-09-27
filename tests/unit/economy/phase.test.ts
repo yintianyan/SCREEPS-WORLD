@@ -533,6 +533,24 @@ describe("Phase — 绝对破产兜底（reserve 水位即判据，不走分数�
     expect(r.last.phase).not.toBe("crisis");
   });
 
+  it("带内退出用 Schmitt 边距：水位回到裸线之上但未到 floor×margin 时不放行 growth（恒温器极限环修复）", () => {
+    // 线上实证：W37S55 总能量 9.6k-11k 贴着 10k 线，1400t 里 9 次 PhaseTransition。
+    // 入带 <10k；带内（分数已清、驻留已满）reserve 回到 10k~15k 之间仍停留危机带。
+    let s = evaluateColonyPhase(withBank(FLOOR - 100), START); // 跌穿 → crisis
+    expect(s.phase).toBe("crisis");
+    // 驻留期把水位抬到裸线之上、边距之下（10k~15k），分数保持为 0。
+    for (let i = 0; i < DEFAULT_PHASE_OPTIONS.minBandTicks; i++) {
+      s = evaluateColonyPhase(withBank(FLOOR * 1.2), s);
+    }
+    expect(s.drainScore).toBe(0);
+    expect(s.phase === "crisis" || s.phase === "recovery").toBe(true);
+    // 灌过 floor×margin(1.5×) 后才真正放行。
+    for (let i = 0; i < DEFAULT_PHASE_OPTIONS.minBandTicks; i++) {
+      s = evaluateColonyPhase(withBank(FLOOR * 1.5), s);
+    }
+    expect(s.phase).toBe("growth");
+  });
+
   it("没有 storage 的房（RCL1-3）不被绝对线钉住 —— 早期游戏保护", () => {
     let s = START;
     for (let i = 0; i < 30; i++) {

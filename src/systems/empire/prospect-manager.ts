@@ -43,6 +43,7 @@ export const prospectManagerSystem: System = {
 
       const target = selectProspectTarget(buildCandidates(ctx.tick), ctx.tick, {
         intelFreshness: CONFIG.prospect.intelFreshness,
+        rescoutThreshold: CONFIG.prospect.rescoutTicks,
       });
       if (!target) return;
 
