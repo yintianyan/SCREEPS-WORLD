@@ -7,6 +7,7 @@ import { moveToTarget, registerAnchor } from "../../movement";
 import { ACTION_RANGE_NEAR, countedIntent, runAction } from "./helpers";
 import { getSource } from "../../support/targeting";
 import { classifyLinkRole, computeControllerLinkTarget } from "../../../domain/economy/links";
+import { resolveControllerDowngradeRisk } from "../../../domain/economy/downgrade-risk";
 
 /**
  * 从 source 采集（通用）。resolve 过滤空 source（再生期 energy===0），避免
@@ -161,6 +162,7 @@ function linkHasOutlet(ac: ActionContext, link: StructureLink): boolean {
     ctrl,
     snap.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
     ctrlLink.store.getCapacity(RESOURCE_ENERGY),
+    resolveControllerDowngradeRisk(Memory.rooms[snap.roomName]?.controllerDowngradeRisk, ctrl),
   );
   // target=0 表示 RCL8 满级且无降级风险 → controller link 不需要能量 → 死资产。
   // target>0 且有空闲容量 → true：修复了 target 低（如 320）时 OLD 代码误判 false 导致的

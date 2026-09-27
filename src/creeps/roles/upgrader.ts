@@ -1,5 +1,6 @@
 /** Upgrader */
 import { CONFIG } from "../../config";
+import { resolveControllerDowngradeRisk } from "../../domain/economy/downgrade-risk";
 import type { Priority } from "../../kernel/contracts";
 import type { ActionCandidate, ActionContext, RolePolicy } from "../engine/action-types";
 import {
@@ -72,19 +73,27 @@ function nudgeToStation(ac: ActionContext): void {
 }
 
 /**
+ * 降级风险判据统一走 `resolveControllerDowngradeRisk()`（与 room-state 的迟滞带同一把尺）。
+ * 本角色原先自判原始阈值（ttd<10000），与状态机的「10000 进 / 15000 出」互锁成两根钟 ——
+ * 现场经过与规则见该函数所在模块 `domain/economy/downgrade-risk.ts`。
+ */
+function downgradeRisk(ac: ActionContext): boolean {
+  return resolveControllerDowngradeRisk(
+    Memory.rooms[ac.snapshot.roomName]?.controllerDowngradeRisk,
+    ac.snapshot.controller,
+  );
+}
+
+/**
  * 能量地板门禁 — 仅阻止 acquire 模式取能，不阻止已满载的 upgrader 交付。
- * 紧急状态（ticksToDowngrade < threshold）时豁免。
+ * 降级风险时豁免；风险判据走 `downgradeRisk()`。
 
  * 关键修复：门禁只在 upgrader 需要直接采集时才阻止。
  * 如果 controller container / 任何 container 有能量，upgrader 不与 spawn 竞争，
  * 不应被 energyAvailable 地板阻止。
  */
 function upgraderGate(ac: ActionContext): boolean {
-  const controller = ac.snapshot.controller;
-  const isEmergency =
-    controller != null &&
-    controller.my &&
-    controller.ticksToDowngrade < CONFIG.economy.controllerDowngradeThreshold;
+  const isEmergency = downgradeRisk(ac);
 
   if (isEmergency) return true; // 紧急：不阻止
 
@@ -157,7 +166,7 @@ function upgraderGate(ac: ActionContext): boolean {
  *   - 复用 P0-1 写入的 roomMem.phase.storageEnergyPrev（room-state 每 tick 写入）。
  *   - 双门槛：低水位（< sustainedStorage*2）+ 流失（> drainRateLimit）→ 返回 0 停止取能。
  *     高水位期允许流失（盈余消化），低水位期流失即停抽让 storage 回血。
- *   - 降级风险豁免：ticksToDowngrade < threshold 时跳过门禁（保级优先于止血）。
+ *   - 降级风险豁免：`downgradeRisk()`（room-state 迟滞带）为真时跳过门禁（保级优先于止血）。
  *   - storage.store 读取异常防御：try/catch 退化为返回 0，role-runner 不感知。
  */
 function dynamicStorageLimit(ac: ActionContext): number {
@@ -178,11 +187,9 @@ function dynamicStorageLimit(ac: ActionContext): number {
   if (energy < cfg.upgradeEnergyFloorStorage) return 0;
 
   // P0-4 异常豁免：降级风险时保级优先，跳过流失率门禁。
-  // 与 upgraderGate 的 isEmergency 同一阈值（controllerDowngradeThreshold），
-  // 但 gate 已放行 acquire — 此处再豁免门禁确保 storage 取能不被拦截。
-  const ctrl = ac.snapshot.controller;
-  const hasDowngradeRisk =
-    ctrl?.my === true && ctrl.ticksToDowngrade < cfg.controllerDowngradeThreshold;
+  // 判据与 upgraderGate 同一个函数 —— 两处若各用一把尺，会出现
+  // "gate 放行取能、水位却按无风险节流"的带内自相矛盾。
+  const hasDowngradeRisk = downgradeRisk(ac);
   if (!hasDowngradeRisk) {
     // P0-4：storage 净流出率检查 — 跨 tick 跟踪
     // 复用 P0-1 写入的 roomMem.phase.storageEnergyPrev（room-state 每 tick 写入）。

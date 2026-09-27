@@ -108,6 +108,71 @@ describe("upgrader — RCL8 满级停烧（W7N4 存不下能量主因修复）",
   });
 });
 
+/**
+ * 立案依据（线上实测 2026-09-27，W37S58 RCL8）：角色侧曾用**原始阈值**自判紧急
+ * （ttd < 10000），而 controllerDowngradeRisk 标志由 room-state 以「10000 进 / 15000 出」
+ * 的迟滞带写入 —— 两根钟互锁：ttd 一爬回 10000 上沿，唯一的 upgrader 即停手，标志
+ * 就永远够不到 15000 的退出阈值。线上读数 9,976 / 10,043 / 10,062 / 10,086 贴着 10000
+ * 振荡（RCL8 上限 200,000 ⇒ 缓冲只有 5%），且该房稳定分被恒真的风险标志永久扣分。
+ * 判据：角色只认标志这一把尺。
+ */
+describe("upgrader — 降级风险与 room-state 共用一把尺（迟滞带内必须干完这一棒）", () => {
+  it("带内：ttd=12000 且标志已置位 → 继续保级（旧判据在此拍停手，把 ttd 钉死在 10000）", () => {
+    (globalThis as any).Memory.rooms.W7N4.controllerDowngradeRisk = true;
+    const controller = mockController({ level: 8, ticksToDowngrade: 12000 });
+    const snap = mockSnapshot({ rcl: 8, controller });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+    expect(creep.memory.mode).not.toBe("idle");
+  });
+
+  it("带内反向：ttd=12000 但标志已清零 → RCL8 停烧（标志说了算，不再回头看原始阈值）", () => {
+    (globalThis as any).Memory.rooms.W7N4.controllerDowngradeRisk = false;
+    const controller = mockController({ level: 8, ticksToDowngrade: 12000 });
+    const snap = mockSnapshot({ rcl: 8, controller });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    expect(creep.upgradeController).not.toHaveBeenCalled();
+    expect(creep.memory.mode).toBe("idle");
+  });
+
+  it("标志缺失（无该房记忆/首 tick）→ 退回原始阈值，宁可多干一拍不漏保级", () => {
+    const controller = mockController({ level: 8, ticksToDowngrade: 5000 });
+    const snap = mockSnapshot({ rcl: 8, controller });
+    const creep = mockCreep({
+      name: "upgrader_1",
+      role: "upgrader",
+      used: 50,
+      capacity: 50,
+      mode: "work",
+    });
+    const ctx = mockContext(snap);
+
+    upgraderRole.run(creep, ctx);
+
+    expect(creep.upgradeController).toHaveBeenCalledWith(controller);
+  });
+});
+
 describe("upgrader — 空闲归站（不在 spawn 出口石化挡路）", () => {
   it("controller container 存在但空 + 远离站桩位 → 移动到 container 待命", () => {
     // container 空 → withdraw 链落空；无 link/storage；source 由 gate 的

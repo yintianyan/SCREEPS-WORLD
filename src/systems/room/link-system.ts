@@ -6,6 +6,7 @@ import {
   computeControllerLinkTarget,
 } from "../../domain/economy/links";
 import { linkHasOutlet } from "../../domain/economy/link-outlet";
+import { resolveControllerDowngradeRisk } from "../../domain/economy/downgrade-risk";
 import {
   DEAD_ASSET_THRESHOLD,
   isDismantleOnCooldown as isDismantleOnCooldownPure,
@@ -75,6 +76,10 @@ function runRoomLinks(snapshot: RoomSnapshot, tick: number): void {
         snapshot.controller,
         snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0,
         controllerInfo.energyCapacity,
+        resolveControllerDowngradeRisk(
+          Memory.rooms[snapshot.roomName]?.controllerDowngradeRisk,
+          snapshot.controller,
+        ),
       )
     : undefined;
   const transfers = planLinkTransfers(infos, {

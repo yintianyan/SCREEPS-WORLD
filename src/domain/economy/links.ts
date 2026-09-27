@@ -30,19 +30,23 @@ export type LinkRole = "source" | "controller" | "storage" | "hub";
  * 满级停供、降级风险保级、RCL<8 按 storage 水位分级。放 domain 是
  * link-system 与 harvester 灌能出口判定共用，避免 creeps→systems 反向依赖。
  * controller 无/非我方 → 0；storageEnergy 无 storage → 0。
+ *
+ * `downgradeRisk` 由调用方用 `hasControllerDowngradeRisk()` 求出后传入（本函数保持纯数据）。
+ * 它原先在这里自判原始阈值，与 room-state 的迟滞带是两根钟 ⇒ 带内（10k~15k）会出现
+ * "upgrader 在保级、link 却按无风险停供"的错位；判据统一到单一真相源模块。
  */
 export function computeControllerLinkTarget(
   rcl: number,
   controller: { my: boolean; ticksToDowngrade: number } | undefined,
   storageEnergy: number,
   linkCapacity: number,
+  downgradeRisk: boolean,
 ): number {
   if (!controller || !controller.my) return 0;
   const upgradeCfg = CONFIG.economy.upgrade;
   const linkCfg = CONFIG.economy.link;
-  const risk = controller.ticksToDowngrade < CONFIG.economy.controllerDowngradeThreshold;
   // RCL8 满级：升级零收益 → 默认停供；降级风险时保级小水位。
-  if (rcl >= 8) return risk ? linkCfg.maintainTarget : 0;
+  if (rcl >= 8) return downgradeRisk ? linkCfg.maintainTarget : 0;
   // RCL<8：按 storage 水位分级（满功率冲刺 / 半供慢升 / 枯竭保级）。
   if (storageEnergy >= upgradeCfg.sustainedStorage) return linkCapacity;
   if (storageEnergy >= linkCfg.lowSupplyStorage) {
