@@ -1,6 +1,6 @@
 /** Agenda Manager 系统 */
 import type { Priority, System, TickContext } from "../../kernel/contracts";
-import { globalCache } from "../../kernel/global-cache";
+import { globalCache, querySquad } from "../../kernel/global-cache";
 import { queryEconomy, type EconomyQuery } from "../room/economy";
 import {
   buildRoomEconomicProfile,
@@ -217,7 +217,14 @@ function hasCarrierForOp(op: OperationContext): boolean {
     const spawnKey = `carrier:${op.id}`;
     if (hasRequest(roomMem.spawnQueue, spawnKey)) return true;
   }
-  return false;
+  // 按 role/home/remoteTarget 兜底匹配。assignment 租约会被 assignment-adapter 清除
+  // （操作直派任务不在任务池内 → failReason 4「任务已出池」），只认 carrierName 与
+  // 队列时，清租约后的在场 carrier 会「查无此人」→ 每 100t 重孵一只、满载旧 carrier
+  // 原地堆积（线上实证：单 op 叠出 6 只 1200/1200 满载 carrier）。carrier 与 op 的
+  // 稳定绑定是 spawn 时写入的 home/remoteTarget，租约清理不动它们。
+  return (
+    querySquad({ role: "carrier", home: op.sourceRoom, remoteTarget: op.targetRoom }).length > 0
+  );
 }
 
 export const agendaManagerSystem: System = {
@@ -571,7 +578,9 @@ export const agendaManagerSystem: System = {
         continue;
       }
 
-      // 记录 carrier name
+      // 记录 carrier name：优先按 assignment id 精确匹配；assignment 被租约清理后
+      // （操作直派任务不在池内），退回 role/home/remoteTarget 兜底匹配，否则
+      // op.carrierName 永不落账、hasCarrierForOp 持续误判缺员。
       if (!op.carrierName) {
         for (const [name, creep] of Object.entries(Game.creeps)) {
           if (creep.memory.assignment?.id === op.id) {
@@ -579,6 +588,22 @@ export const agendaManagerSystem: System = {
             if (idx >= 0) operations[idx]!.carrierName = name;
             break;
           }
+        }
+      }
+      if (!op.carrierName) {
+        const bound = querySquad({
+          role: "carrier",
+          home: op.sourceRoom,
+          remoteTarget: op.targetRoom,
+        });
+        const entry =
+          bound.find(e => {
+            const c = Game.creeps[e.name];
+            return c !== undefined && !c.spawning;
+          }) ?? bound[0];
+        if (entry) {
+          const idx = operations.indexOf(op);
+          if (idx >= 0) operations[idx]!.carrierName = entry.name;
         }
       }
 

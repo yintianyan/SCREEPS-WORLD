@@ -78,7 +78,16 @@ function carrierGate(ac: ActionContext): boolean {
 const policy: RolePolicy = {
   park: true,
   gate: carrierGate,
-  shouldIdleWhenNoCandidate: () => true,
+  // 仅当已站在「该在的房间」才允许无候选切 idle。恒 true 会造成满载停滞死锁：
+  // work 候选在非目标房失败 → 切 idle → 下一 tick ensureHome 把 mode=idle 的 carrier
+  // 判定「回 home」（已在家，直接放行）→ updateMode 翻回 work → 候选再失败 → 再 idle
+  // —— 跨房导航只发生在 ensureHome 返回 false 的 tick，而 mode 总在导航前被打回 idle
+  // （线上实证：6 只 1200/1200 满载 carrier 停在出生区耗完整段寿命）。
+  shouldIdleWhenNoCandidate: ac => {
+    const creep = ac.creep;
+    const dest = creep.memory.mode === "work" ? creep.memory.remoteTarget : creep.memory.home;
+    return creep.room.name === dest;
+  },
   acquire: [
     // 从 home 房 storage 取能。
     withdrawSourceStorage(),
