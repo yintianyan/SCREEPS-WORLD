@@ -202,6 +202,10 @@ export class Kernel {
     measuredRun("system/telemetry-collect", () =>
       safeRun("telemetry-collect", () => {
         const g = globalCache();
+        // 全帝国实测累计（本拍到此为止的 getUsed）：它是「谁在吃 CPU」这笔账的分母 ——
+        // 只有 systems/roles 两份归因而没有总量，就永远不知道还有多少是没被解释的剩余。
+        const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
+        cum.total += Game.cpu.getUsed();
         const tel = g.telemetry;
         const skipped = tel?.skipped ?? 0;
         const errors = tel?.errors ?? 0;

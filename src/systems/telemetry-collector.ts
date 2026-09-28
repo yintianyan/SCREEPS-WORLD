@@ -50,6 +50,42 @@ export function updateRoleCpuEma(
   return out;
 }
 
+/**
+ * 累计 CPU 账 → 每拍速率 + **未归因剩余**。
+ *
+ * 为什么要第三种口径：per-run EMA 要除以 cadence 才可比（除错一次就把低频系统读成大户），
+ * 环里的 top-3 只看得见当拍的三个名字。两者实测能差 4 倍 —— 而「帝国每小时吃多少 CPU、
+ * 还剩多少说不清」这个问题只能由 `累计 ÷ 观测拍数` 回答。`unexplained` 是这份账的关键产出：
+ * 它不为零就说明大头既不在系统榜也不在角色榜上，此时去优化榜上任何一个名字都是在猜。
+ */
+export function computeCpuRate(
+  cum: { total: number; systems: Record<string, number>; roles: Record<string, number> },
+  windowTicks: number,
+): {
+  windowTicks: number;
+  total: number;
+  unexplained: number;
+  bySystem: Record<string, number>;
+  byRole: Record<string, number>;
+} {
+  const w = Math.max(1, windowTicks);
+  const sum = (m: Record<string, number>): number => Object.values(m).reduce((a, b) => a + b, 0);
+  const perTick = (m: Record<string, number>): Record<string, number> =>
+    Object.fromEntries(
+      Object.entries(m)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([k, v]) => [k, round2(v / w)]),
+    );
+  return {
+    windowTicks: w,
+    total: round2(cum.total / w),
+    unexplained: round2((cum.total - sum(cum.systems) - sum(cum.roles)) / w),
+    bySystem: perTick(cum.systems),
+    byRole: perTick(cum.roles),
+  };
+}
+
 export const telemetryCollectorSystem: System = {
   name: "telemetry-collector",
   priority: 3 as Priority,
@@ -366,6 +402,15 @@ function sampleMemorySize(_tick: number): void {
         (Memory.kernel.stats as any).cpuRoleTotal = round2(
           roleEntries.reduce((sum, [, v]) => sum + v, 0),
         );
+      }
+    }
+    {
+      const cum = g.cpuCumulative as
+        | { total: number; systems: Record<string, number>; roles: Record<string, number> }
+        | undefined;
+      const boot = g.processBootTick as number | undefined;
+      if (cum && typeof boot === "number") {
+        (Memory.kernel.stats as any).cpuRate = computeCpuRate(cum, Game.time - boot);
       }
     }
     if (g.roadBuildLedger && Object.keys(g.roadBuildLedger).length > 0) {

@@ -126,6 +126,12 @@ export interface GlobalCache {
    * 但需要平滑 —— 单拍采样会把「某一拍恰好有人在重建」读成常态。
    */
   roleCpuEma?: Record<string, number>;
+  /**
+   * CPU 累计账（自本次进程起）：`total` 是全帝国实测，`systems`/`roles` 是被归因的部分。
+   * `total − Σsystems − Σroles` 就是「没被任何名字解释掉的剩余」—— 判「还有多少可省的」
+   * 之前必须先有这笔账，否则每次都在两份口径之间打架（EMA 与环读数实测差过 4 倍）。
+   */
+  cpuCumulative?: { total: number; systems: Record<string, number>; roles: Record<string, number> };
   /** P3 能量核算 L1 计数器（bumpEnergyCounter 写入；economy 系统每窗滚动消费）。 */
   energyLedger?: { tick: number; rooms: Record<string, RoomEnergyCounters> };
   /** 远矿每 op 收支账本（key = remoteOpKey(home, target)）。

@@ -146,10 +146,17 @@ function recordCpu(label: string, cost: number): void {
   if (label.startsWith("system/")) {
     const name = label.slice("system/".length);
     g.telemetry.systemCpu[name] = (g.telemetry.systemCpu[name] ?? 0) + cost;
+    // 累计口径：per-run EMA 要除以 cadence 才可比，而 cadence 只有注册处知道
+    // （除错一次就把低频系统读成大户）。累计值 ÷ 观测拍数是**自证**的速率，
+    // 不需要任何人再猜 interval —— 两份口径打架时（实测差 4 倍）它是最先该看的那一个。
+    const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
+    cum.systems[name] = (cum.systems[name] ?? 0) + cost;
   } else if (label.startsWith("creep/")) {
     const parts = label.split("/");
     const role = parts[2] ?? "unknown";
     g.telemetry.roleCpu[role] = (g.telemetry.roleCpu[role] ?? 0) + cost;
+    const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
+    cum.roles[role] = (cum.roles[role] ?? 0) + cost;
   }
 }
 
