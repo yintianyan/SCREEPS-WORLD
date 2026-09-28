@@ -35,6 +35,10 @@ export const territoryManagerSystem: System = {
     Memory.kernel ??= {};
     const kernel = Memory.kernel;
 
+    // 自检每轮都跑，且放在「没有释放指令就 return」之前 —— ghost 合同正是在这些没有在途
+    // 指令的轮次里活下来的。
+    voidContractsOutsideEmpire(kernel);
+
     // 事后清扫先跑：无家 creep 的冻结是「房没了」的第一后果，不该等在途指令之后。
     sweepHomelessCreeps(ctx);
 
@@ -257,6 +261,39 @@ function dropCrossRoomLedgersFor(kernel: KernelMemory, room: string): void {
       kernel.supplyContracts = kept;
     }
   }
+}
+
+/**
+ * 调拨合同自检：端点**确证**已不在帝国里的合同一律作废。
+ *
+ * 为什么不指望释放收尾那一次删除（`dropCrossRoomLedgersFor` 确实删）：合同的实际持有者是
+ * specialization-planner —— 它每轮从 Memory 读回全部非终态合同、再整表写回。于是任何一条
+ * 从别的路径活下来（收尾时那间房还不在 snapshots 里、迁移遗留、失守没经过本系统），都会被
+ * 这个"读回-写回"循环永久续写，而 logistics-planner 每轮照单收集合同去排运力。线上实证：
+ * W37S55 早已在 `releasedRooms` 里，`contract:W37S58:W37S55:energy` 却仍挂在 supplyContracts。
+ *
+ * 判「不在帝国里」刻意不用 `ctx.snapshots()`：快照要视野，自有房完全可能某一拍没有视野，
+ * 拿观测缺口当所有权口径会在一次失明时把该房相关的合同全删掉。这里只用两条确证证据：
+ * 进过重占排除表，或连房间记忆都没有（kernel 每拍为自有房保证 `Memory.rooms[x]` 存在，
+ * 失房清理要到 20k tick 宽限期之后才删）。字段读不懂的条目一律留给 planner 自己校验。
+ */
+function voidContractsOutsideEmpire(kernel: KernelMemory): void {
+  const contracts = kernel.supplyContracts as Array<{ s?: string; t?: string }> | undefined;
+  if (!Array.isArray(contracts) || contracts.length === 0) return;
+  const released = kernel.releasedRooms;
+  const outsideEmpire = (room: unknown): boolean => {
+    if (typeof room !== "string") return false;
+    if (released?.[room] !== undefined) return true;
+    return Memory.rooms[room] === undefined;
+  };
+  const kept = contracts.filter(c => !outsideEmpire(c?.s) && !outsideEmpire(c?.t));
+  if (kept.length === contracts.length) return;
+  kernel.supplyContracts = kept;
+  log.info(
+    "territory-manager",
+    `[${Game.time}] territory: voided ${contracts.length - kept.length} supply contract(s) ` +
+      `pointing outside the empire`,
+  );
 }
 
 /**

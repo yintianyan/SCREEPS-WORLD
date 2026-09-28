@@ -225,6 +225,8 @@ describe("territory-manager — 收尾清账", () => {
       "op-unrelated": { amount: 3000 },
     };
     // SupplyContract 是瘦快照（缩写字母字段），且**没有 deadline** —— 不摘就永久留着。
+    // W37S57 是仍然握在手里的第三间房（有房间记忆 = 帝国成员；调拨自检按这个口径判，不按视野）。
+    mem.rooms["W37S57"] = { spawnQueue: [], buildQueue: [] };
     mem.kernel.supplyContracts = [
       { i: "c-to", s: CORE, t: DOOMED },
       { i: "c-from", s: DOOMED, t: CORE },
@@ -369,5 +371,50 @@ describe("territory-manager — 事后清扫无家 creep", () => {
     territoryManagerSystem.run(makeCtx([CORE]));
 
     expect(creep.memory.home).toBe(DOOMED);
+  });
+});
+
+describe("supply contract 自检 —— 端点确证不在帝国里的合同一律作废", () => {
+  it("没有在途释放指令时也在跑（ghost 正是在这些轮次里活下来的）", () => {
+    installMemory();
+    const mem = (globalThis as any).Memory;
+    mem.kernel.roomRelease = undefined;
+    // 线上就是这个形状：房早已进重占排除表，合同却还挂着。
+    mem.kernel.releasedRooms = { [DOOMED]: 800 };
+    mem.kernel.supplyContracts = [
+      { i: "ghost", s: CORE, t: DOOMED, r: "E", st: "A" },
+      { i: "live", s: CORE, t: CORE, r: "E", st: "A" },
+    ];
+
+    territoryManagerSystem.run(makeCtx([CORE]));
+
+    expect(mem.kernel.supplyContracts.map((c: any) => c.i)).toEqual(["live"]);
+  });
+
+  it("判据不看视野：自有房这一拍没有快照，它的合同也不能被删", () => {
+    installMemory();
+    const mem = (globalThis as any).Memory;
+    mem.kernel.roomRelease = undefined;
+    mem.rooms["W37S57"] = { spawnQueue: [], buildQueue: [] };
+    mem.kernel.supplyContracts = [{ i: "blind-room", s: CORE, t: "W37S57" }];
+
+    territoryManagerSystem.run(makeCtx([CORE])); // W37S57 此刻无视野，不在 snapshots 里
+
+    expect(mem.kernel.supplyContracts.map((c: any) => c.i)).toEqual(["blind-room"]);
+  });
+
+  it("读不懂的条目不越权删（字段缺失交给 planner 自己的校验）", () => {
+    installMemory();
+    const mem = (globalThis as any).Memory;
+    mem.kernel.roomRelease = undefined;
+    mem.kernel.releasedRooms = { [DOOMED]: 800 };
+    mem.kernel.supplyContracts = [
+      { i: "odd", r: "E" },
+      { i: "one-sided", s: DOOMED, t: CORE },
+    ];
+
+    territoryManagerSystem.run(makeCtx([CORE]));
+
+    expect(mem.kernel.supplyContracts.map((c: any) => c.i)).toEqual(["odd"]);
   });
 });
