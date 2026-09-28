@@ -13,6 +13,7 @@ import {
 } from "../../domain/industry/terminal-policy";
 import { collectFullInventory } from "../../domain/industry/inventory";
 import { collectDemands, adjustMaxPrice } from "../../domain/industry/procurement";
+import { ensureTradeLedger } from "../../domain/industry/trade-ledger";
 import {
   computeDynamicBuyPrice,
   computeDynamicSellPrice,
@@ -187,7 +188,15 @@ export function tryBuyDeficit(
   terminal: StructureTerminal,
   ctx: TickContext,
 ): boolean {
-  if (Game.market.credits < CONFIG.market.creditFloor) return false;
+  // 采购侧只记账不决策：判「工业为什么买不到原料」需要的是「走到哪一步停住」的读数，
+  // 而不是第四次推理 —— 现场见 domain/industry/trade-ledger（10 座 lab 空转、计划要 X+GH2O、
+  // 本房矿是 GO，而 info 级日志在官服上根本看不到）。
+  const ledger = ensureTradeLedger(globalCache());
+  ledger.buyBlockedBy = "";
+  if (Game.market.credits < CONFIG.market.creditFloor) {
+    ledger.buyBlockedBy = "credits-floor";
+    return false;
+  }
 
   // ── 阶段 1：优先消费需求表 ──
   // 需求表时效：信道已持久化到各条目 deadline（publishProcurementDemands），
@@ -197,12 +206,14 @@ export function tryBuyDeficit(
   const demandsCache = globalCache().procurementDemands;
   if (demandsCache) {
     const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
+    ledger.demandsLive = allDemands.length;
     // 过滤出当前房间的需求（跨房需求不在此房买 — terminal.send 走互济通道）。
     // 实际上所有房的需求都汇入：任意房的缺口都可在任意 terminal 买入（买入后走互济送到位）。
     // 但为控制 getAllOrders 开销，只取 priority 最高的一个需求。
     for (const demand of allDemands) {
       if (demand.deadline <= ctx.tick) continue;
       if (demand.amount <= 0) continue;
+      ledger.demandTop = `${demand.resource}:${demand.amount}/p${demand.priority}/${demand.reason}`;
 
       // 价格门禁：基于行情快照的动态定价 + 优先级动态调整（阶段 5）。
       // 买入上限 = 市场最低卖价 × buyPremium（行情缺失时回退 fallback）。
@@ -218,6 +229,7 @@ export function tryBuyDeficit(
         fallback,
       );
       const maxPrice = adjustMaxPrice(basePrice, demand.priority);
+      ledger.buyGatePrice = maxPrice;
 
       const orders =
         getCachedOrders(ORDER_SELL, demand.resource) ??
@@ -228,7 +240,14 @@ export function tryBuyDeficit(
           }),
         );
       const best = pickBestSellOrder(orders, maxPrice);
-      if (!best) continue;
+      if (!best) {
+        // 「有需求、门禁价下一张单都没有」是这一路最常见的一次止步，也是唯一能区分
+        // "门禁太紧" 与 "市场真没货" 的那个数（后者要看 buyBestAsk 有没有非零历史）。
+        ledger.buyNoMatch++;
+        ledger.buyBestAsk = 0;
+        continue;
+      }
+      ledger.buyBestAsk = best.price;
 
       const affordable = Math.floor((Game.market.credits - CONFIG.market.creditFloor) / best.price);
       const amount = Math.min(demand.amount, best.amount, CONFIG.market.maxDealAmount, affordable);
@@ -238,7 +257,10 @@ export function tryBuyDeficit(
         "terminal",
         `[${Game.time}] terminal/${snapshot.roomName}: 买入 ${demand.resource} amount=${amount} priority=${demand.priority} reason=${demand.reason}`,
       );
-      return executeDeal(best, amount, terminal, snapshot.roomName);
+      ledger.buyTried++;
+      const ok = executeDeal(best, amount, terminal, snapshot.roomName);
+      if (ok) ledger.buyOk++;
+      return ok;
     }
     // 需求表有需求但全部买入失败（无卖单/价超门禁）— 不回退到硬编码目标，
     // 避免在已有明确需求时买不需要的东西。
@@ -248,11 +270,13 @@ export function tryBuyDeficit(
   // ── 向后兼容：无需求表时回退到硬编码 MINERAL_RESERVE_TARGET ──
   const inventory = collectMineralInventory(snapshot);
   const deficits = getMineralDeficits(inventory);
+  ledger.demandsLive = deficits.length;
   if (deficits.length === 0) return false;
 
   // 缺口最大者优先 — 反应链最先卡在存量最少的原料上。
   deficits.sort((a, b) => b.deficit - a.deficit);
   const target = deficits[0]!;
+  ledger.demandTop = `${target.mineral}:${target.deficit}/p?/reserve-target`;
   const prices = getMarketPrices();
   const fallback =
     CONFIG.market.fallbackMaxBuyPrice[target.mineral] ??
@@ -263,6 +287,7 @@ export function tryBuyDeficit(
     CONFIG.market.buyPremium,
     fallback,
   );
+  ledger.buyGatePrice = maxPrice;
   if (maxPrice <= 0) return false;
 
   const orders =
@@ -274,12 +299,20 @@ export function tryBuyDeficit(
       }),
     );
   const best = pickBestSellOrder(orders, maxPrice);
-  if (!best) return false;
+  if (!best) {
+    ledger.buyNoMatch++;
+    ledger.buyBestAsk = 0;
+    return false;
+  }
+  ledger.buyBestAsk = best.price;
 
   // 成交量受缺口、订单余量、单笔上限与 credits 余额四重约束。
   const affordable = Math.floor((Game.market.credits - CONFIG.market.creditFloor) / best.price);
   const amount = Math.min(target.deficit, best.amount, CONFIG.market.maxDealAmount, affordable);
-  return executeDeal(best, amount, terminal, snapshot.roomName);
+  ledger.buyTried++;
+  const ok = executeDeal(best, amount, terminal, snapshot.roomName);
+  if (ok) ledger.buyOk++;
+  return ok;
 }
 
 /**

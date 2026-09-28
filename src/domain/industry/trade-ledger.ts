@@ -36,6 +36,43 @@ export interface TradeLedger {
   terminalEnergy: number;
   /** 最近一次决策时各房 storage 里的能量（盈余规模）。 */
   storageEnergy: number;
+  // ── 采购侧（terminal-market.tryBuyDeficit 写）：判「工业买不到原料」卡在哪一道 ──
+  // 立这块账的现场证据（2026-09-28）：10 座 lab 全部空转（mineralType 无、reaction 无、
+  // cooldown 0），而计划的反应是 `X + GH2O → XGH2O` —— 本房矿是 GO，两个原料都得买。
+  // 买入这条道有四道可能的止步处（需求表空 / 价格门禁无匹配单 / 缺口算成 0 / deal 被拒），
+  // 每一道的动作完全不同，而 terminal-manager 的日志在官服上看不见（info 级不落 Memory）。
+  /** 最近一次运行时**活着的**采购需求条数。0 且有反应计划 ⇒ 问题在生产者（lab-system）。 */
+  demandsLive: number;
+  /** 最近一条被考虑的需求：`资源:数量/p优先级/来源`；空 = 一条都没有。 */
+  demandTop: string;
+  /** 采购在进入撮合前被什么挡住：`""` = 没被挡。 */
+  buyBlockedBy: "" | "credits-floor";
+  /** 累计：有需求但在价格门禁下找不到任何一张卖单（`buyGatePrice` 太低的直接证据）。 */
+  buyNoMatch: number;
+  /** 最近一次用的买入价门禁（每单位 credits）。 */
+  buyGatePrice: number;
+  /** 最近一次看到的最低卖价（每单位 credits）；0 = 没匹配到单。 */
+  buyBestAsk: number;
+  /** 累计：发出过多少次 deal。 */
+  buyTried: number;
+  /** 累计：deal 被引擎接受多少次（与 buyTried 的差 = 撮合成功但执行被拒）。 */
+  buyOk: number;
+  /**
+   * 本轮 buy-deficit 候选拿到的优先级（`DEFICIT_PRIORITY_BASE` = 需求表为空时的基线）。
+   * 与 `SELL_PRIORITY_CAP` 对照才知道买入有没有被日常卖出挤出 deal 窗口。
+   */
+  buyDeficitPriority: number;
+}
+
+/**
+ * 在宿主对象上取/建贸易账本。
+ *
+ * 建行只此一处：写者现在有两个（terminal-manager 记决策现场、terminal-market 记采购侧），
+ * 两边各自 `??=` 一份字面量的话，字段漂移不会被任何检查发现 —— 而这份账的全部意义就是
+ * 「线上看到的和代码写的是同一份」。
+ */
+export function ensureTradeLedger(host: { tradeLedger?: TradeLedger }): TradeLedger {
+  return (host.tradeLedger ??= createTradeLedger());
 }
 
 /** 造一份零值账本（字段齐全，读数时"没有"与"是 0"不会混）。 */
@@ -51,5 +88,14 @@ export function createTradeLedger(): TradeLedger {
     myOrders: 0,
     terminalEnergy: 0,
     storageEnergy: 0,
+    demandsLive: 0,
+    demandTop: "",
+    buyBlockedBy: "",
+    buyNoMatch: 0,
+    buyGatePrice: 0,
+    buyBestAsk: 0,
+    buyTried: 0,
+    buyOk: 0,
+    buyDeficitPriority: 0,
   };
 }

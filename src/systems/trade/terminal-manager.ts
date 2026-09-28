@@ -11,7 +11,7 @@ import {
 import { pickBestBuyOrder } from "../../domain/industry/terminal-policy";
 import { computeDynamicSellPrice } from "../../domain/industry/market-pricing";
 import { collectDemands } from "../../domain/industry/procurement";
-import { createTradeLedger, type TradeLedger } from "../../domain/industry/trade-ledger";
+import { ensureTradeLedger, type TradeLedger } from "../../domain/industry/trade-ledger";
 import { globalCache } from "../../kernel/global-cache";
 import type { TransportPlan } from "../../domain/logistics/transport-plan";
 import {
@@ -42,10 +42,9 @@ import {
 } from "./terminal-market";
 import { tryEmpireEnergyAid, tryEmpireMineralAid, tryNukeSalvage } from "./terminal-selfaid";
 
-/** 取（或建行）贸易决策账本 —— heap 单例，写者只有本系统，读者是 telemetry 快照。 */
+/** 取（或建行）贸易决策账本 —— heap 单例；建行走 domain 的同一处（采购侧字段由 terminal-market 写）。 */
 function tradeLedger(): TradeLedger {
-  const g = globalCache();
-  return (g.tradeLedger ??= createTradeLedger());
+  return ensureTradeLedger(globalCache());
 }
 
 export const terminalManagerSystem: System = {
@@ -196,12 +195,19 @@ export const terminalManagerSystem: System = {
         const demandsCache = globalCache().procurementDemands;
         if (demandsCache) {
           const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
+          // 采购侧读数写在**这里**（每轮都会走到），不是只写在 tryBuyDeficit 里：那个候选
+          // 可能被更高优先级的 deal 或 terminal 冷却挤掉，于是"没人发布需求"和"发布了但这个
+          // 候选没被执行"会读成同一个 0 —— 而这两种止步要修的是不同的模块。
+          ledger.demandsLive = allDemands.length;
           if (allDemands.length > 0) {
+            const top = allDemands[0]!;
+            ledger.demandTop = `${top.resource}:${top.amount}/p${top.priority}/${top.reason}`;
             // 需求表存在时，取最高 priority 但不低于 SELL_PRIORITY_CAP+1，
             // 确保买入在 deal 竞争中胜过卖出候选。
-            deficitPriority = Math.max(allDemands[0]!.priority, SELL_PRIORITY_CAP + 1);
+            deficitPriority = Math.max(top.priority, SELL_PRIORITY_CAP + 1);
           }
         }
+        ledger.buyDeficitPriority = deficitPriority;
         candidates.push({
           type: "buy-deficit",
           priority: deficitPriority,
