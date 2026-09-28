@@ -82,6 +82,8 @@ function seed(tick: number, ops: Record<string, any>, extraRooms: Record<string,
   game.rooms[HOME] = homeRoomMock();
   Object.assign(game.rooms, extraRooms);
   g().Memory.rooms[HOME] = { remoteOps: ops, colonyState: "normal" };
+  // 默认假设「本进程已跑满一个热度合并窗口」——合并另有 uptime 闸，见下面那组用例。
+  g().processBootTick = tick - CONFIG.remote.roadHeatMergeTicks - 1;
 }
 
 function activeOp(overrides: Record<string, unknown> = {}): any {
@@ -335,6 +337,23 @@ describe("planRemotePathRoads — 热度账跨进程续账", () => {
     expect(op.roadHeat[packed(21, 22)]).toBeUndefined();
     expect(Object.keys(g().roomTraffic[T])).toEqual([packed(21, 22)]); // heap 未被吃掉
     expect(room.createConstructionSite).toHaveBeenCalledWith(20, 22, STRUCTURE_ROAD);
+  });
+
+  it("部署打断积累时不合并 —— 半份增量不得把旧账衰减掉（那是自伤）", () => {
+    const op = activeOp({
+      roadHeat: { [packed(20, 22)]: 20 },
+      roadHeatAt: 7000 - CONFIG.remote.roadHeatMergeTicks, // 窗口闸：早已满足
+    });
+    const room = targetRoomMock([], [container(CONTAINER.x, CONTAINER.y)]);
+    seed(7000, { [T]: op }, { [T]: room });
+    seedHeat([[21, 22]]);
+    g().processBootTick = 6980; // 但本进程只活了 20 tick（刚被部署重启）
+
+    planRemotePathRoads(HOME, { [T]: op }, mockContext());
+
+    expect(op.roadHeat[packed(20, 22)]).toBe(20); // 旧账原样保留，没被 ×0.7
+    expect(op.roadHeat[packed(21, 22)]).toBeUndefined(); // 增量留着，等攒满一个窗口再入
+    expect(Object.keys(g().roomTraffic[T])).toHaveLength(1); // heap 也没被吃掉
   });
 
   it("合并即清空该房 heap —— 上一窗口的走动不会被重复计入", () => {

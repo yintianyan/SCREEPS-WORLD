@@ -263,10 +263,17 @@ export function planRemotePathRoads(
      */
     const live = globalCache().roomTraffic;
     const liveHeat = live?.[rn];
+    // 两个闸都要满：距上次合并 ≥ 一个窗口，**且本次进程已经跑了至少一个窗口**。
+    // 后者不是洁癖而是防自伤：部署/reset 打断了积累，但 op.roadHeatAt 是跨进程的记忆，
+    // 于是新进程第一次跑就"窗口已满"，拿一份只攒了几十 tick 的增量去合并 —— 合并会先把旧账
+    // 衰减 0.7 再叠加这点增量，等于**白扣一次遗忘**。部署比窗口还快时，这会把走廊热度一路衰减
+    // 到零，恰好复现它要修的那个病（改完落点却一个 site 没动）。
+    const bootTick = globalCache().processBootTick ?? ctx.tick;
     if (
       live &&
       liveHeat &&
       Object.keys(liveHeat).length > 0 &&
+      ctx.tick - bootTick >= CONFIG.remote.roadHeatMergeTicks &&
       ctx.tick - (op.roadHeatAt ?? 0) >= CONFIG.remote.roadHeatMergeTicks
     ) {
       op.roadHeat = mergeWalkHeat(op.roadHeat, liveHeat, {
