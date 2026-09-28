@@ -17,7 +17,8 @@ import {
   prunePlans,
   applyHysteresis,
   needsReevaluation,
-  type PlanWithHysteresis,
+  rehomePlanSponsors,
+  DEFAULT_LIFECYCLE_OPTIONS,
 } from "../../domain/expansion/plan-lifecycle";
 import { explainDecision } from "../../domain/expansion/explanation";
 import { buildExpansionDashboard } from "../../domain/expansion/dashboard";
@@ -25,9 +26,6 @@ import { evaluateExpansionReadinessExtended } from "../../domain/strategy/readin
 import type { ExpansionCandidateV2 } from "../../domain/expansion/candidate";
 import { dropReleasedRooms } from "../../domain/expansion/candidate";
 import type { RoomIntel } from "../../domain/intel";
-
-/** heap 缓存的 hysteresis 状态（Plan planId → PlanWithHysteresis）。 */
-const hysteresisCache: Map<string, PlanWithHysteresis> = new Map();
 
 /**
  * Expansion Planner 系统 — Intelligence 层薄壳。
@@ -145,6 +143,19 @@ export const expansionPlannerSystem: System = {
       return p;
     });
 
+    // ── 步 6.5：Sponsor 不在手里了的 Plan —— 改挂或撤销 ──
+    // 不做这一步，一张挂着已放弃主房的 Plan 会一路骗到执行层：submitClaimer 静默 return，
+    // claimer 永不入场，直到 6,000 tick 超时才被撤 —— 期间它还占着 MAX_ACTIVE_PLANS 名额。
+    const prevPlans = plans;
+    plans = rehomePlanSponsors(plans, ownedRoomNames, allCandidates, ctx.tick);
+    const rehomed = plans.filter((p, i) => p !== prevPlans[i]).length;
+    if (rehomed > 0) {
+      log.info(
+        "expansion-planner",
+        `expansion-planner: ${rehomed} 张 Plan 的 sponsor 已不在手里 —— 改挂在场房或撤销（sponsor-lost）`,
+      );
+    }
+
     // ── 步 7：Hysteresis 推进（EVALUATED → READY） ──
     const tieredBudget = computeTieredBudget(plannerInput.budget);
     const topCandidate = ranked[0]?.candidate;
@@ -168,20 +179,20 @@ export const expansionPlannerSystem: System = {
     );
     const isReady = extendedReadiness.allPassed && plannerInput.readiness.readiness !== "NOT_READY";
 
-    plans = plans.map(p => {
-      if (p.status !== "EVALUATED" && p.status !== "READY") return p;
+    plans = plans.map(p => applyHysteresis(p, isReady, ctx.tick));
 
-      let h = hysteresisCache.get(p.planId);
-      if (!h) {
-        h = { plan: p, hysteresis: { readyTicks: 0, notReadyTicks: 0, lastEvalTick: ctx.tick } };
-      } else {
-        h = { plan: p, hysteresis: h.hysteresis };
-      }
-
-      const result = applyHysteresis(h, isReady, ctx.tick);
-      hysteresisCache.set(p.planId, result);
-      return result.plan;
-    });
+    // 停摆可见性：EVALUATED 卡了多久是这道门唯一的外界证据 —— 旧实现把计数器放在 heap 里，
+    // 既不被任何读数看到，也在每次部署时清零，于是「扩张从不执行」这件事持续了 75 万 tick 无人察觉。
+    const stalled = plans.filter(p => p.status === "EVALUATED" && p.readySince !== undefined);
+    if (stalled.length > 0) {
+      const top = stalled[0]!;
+      log.info(
+        "expansion-planner",
+        `expansion-planner: ready 已累计 ${ctx.tick - (top.readySince ?? ctx.tick)}t / ${
+          DEFAULT_LIFECYCLE_OPTIONS.upgradeTicks
+        }t（isReady=${isReady}，等待中的 Plan ${stalled.length} 张，top=${top.roomName}）`,
+      );
+    }
 
     // ── 步 8：READY → APPROVED → WAITING_EXECUTION ──
     plans = plans.map(p => {
@@ -280,6 +291,8 @@ function serializePlan(plan: ExpansionPlan): ExpansionPlanMemory {
     ua: plan.updatedAt,
     aa: plan.approvedAt,
     cr: plan.cancelReason,
+    rd: plan.readySince,
+    nd: plan.notReadySince,
     ex: plan.explanation.slice(0, 200),
   };
 }
@@ -354,6 +367,8 @@ function deserializePlan(m: ExpansionPlanMemory): ExpansionPlan | null {
     updatedAt: m.ua ?? m.ca,
     approvedAt: m.aa,
     cancelReason: m.cr,
+    readySince: m.rd,
+    notReadySince: m.nd,
     cancelConditions: [
       "claim stolen / timeout",
       "spawn not built within pioneerTimeout",

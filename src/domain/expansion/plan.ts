@@ -54,6 +54,19 @@ export interface ExpansionPlan {
   updatedAt: number;
   /** 批准 tick。 */
   approvedAt?: number;
+  /**
+   * 最近一段「连续满足 ready」的起始 tick —— 防抖的唯一真相源。
+   *
+   * 为什么把它放进 Plan（而不是调用方的缓存）：升档判据写的是「持续 upgradeTicks 个 tick」，
+   * 而旧实现把计数器放在 heap Map 里、且**每次 planner 运行 +1**（运行间隔 100 tick）——
+   * 于是 500 的阈值实际要 50,000 个 tick 不间断，而任何一次 global reset（每次部署都会）
+   * 把它清零。线上后果：7 张 Plan 从 82,544,684 一直躺在 EVALUATED 到 83,290,000
+   * （75 万 tick）没有一张升过档 —— 扩张模块从未真正参与过。存进 Plan 之后，
+   * 计时口径是 tick、寿命是 Memory，重启不再清零。
+   */
+  readySince?: number;
+  /** 最近一段「连续不满足 ready」的起始 tick（READY → EVALUATED 的降档计时）。 */
+  notReadySince?: number;
   /** 取消原因。 */
   cancelReason?: string;
   /** 取消条件（自动执行，EXPANSION §5）。 */

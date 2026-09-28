@@ -433,4 +433,22 @@ export const LATE_MIGRATIONS: MigrationStep[] = [
       }
     },
   },
+  {
+    from: 48,
+    to: 49,
+    run: () => {
+      // v49：扩张 Plan 的防抖计时从 heap 计数器迁到 Plan 自身（rd = readySince、
+      // nd = notReadySince），因为旧口径按 planner 运行次数累加且重启清零，
+      // EVALUATED→READY 这道门实际永远过不去。字段可选、惰性写入，无需回填。
+      // 此处仅畸形自愈：非有限数字会让 `tick - rd` 变 NaN，NaN >= 阈值恒 false ⇒
+      // 该 Plan 永久停在 EVALUATED，正是这次要修的病不能再犯一遍。
+      const plans = Memory.kernel?.expansionPlans;
+      if (!plans) return;
+      for (const plan of plans) {
+        if (!plan || typeof plan !== "object") continue;
+        if (plan.rd !== undefined && !Number.isFinite(plan.rd)) delete plan.rd;
+        if (plan.nd !== undefined && !Number.isFinite(plan.nd)) delete plan.nd;
+      }
+    },
+  },
 ];

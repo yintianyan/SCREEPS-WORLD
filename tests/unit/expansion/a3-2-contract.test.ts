@@ -39,7 +39,7 @@ import {
   isRebuildBlocked,
   applyHysteresis,
   needsReevaluation,
-  type PlanWithHysteresis,
+  rehomePlanSponsors,
 } from "../../../src/domain/expansion/plan-lifecycle";
 import { explainDecision, explainShort } from "../../../src/domain/expansion/explanation";
 import { buildExpansionDashboard } from "../../../src/domain/expansion/dashboard";
@@ -571,22 +571,92 @@ describe("A3.2 Plan Lifecycle", () => {
     expect(isRebuildBlocked([p], "W5N5", 15000)).toBe(false);
   });
 
-  it("hysteresis upgrades EVALUATED→READY", () => {
-    let s: PlanWithHysteresis = {
-      plan: makeFullPlan(),
-      hysteresis: { readyTicks: 0, notReadyTicks: 0, lastEvalTick: 1000 },
-    };
-    for (let t = 1001; t <= 1500; t++) s = applyHysteresis(s, true, t);
-    expect(s.plan.status).toBe("READY");
+  it("hysteresis 按 **tick** 计时：每 tick 调一次，跨过 upgradeTicks 才升档", () => {
+    let p = makeFullPlan();
+    for (let t = 1000; t < 1500; t++) p = applyHysteresis(p, true, t);
+    expect(p.status).toBe("EVALUATED");
+    p = applyHysteresis(p, true, 1500);
+    expect(p.status).toBe("READY");
   });
 
-  it("hysteresis downgrades READY→EVALUATED", () => {
-    let s: PlanWithHysteresis = {
-      plan: updatePlanStatus(makeFullPlan(), "READY", 1000),
-      hysteresis: { readyTicks: 500, notReadyTicks: 0, lastEvalTick: 1500 },
-    };
-    for (let t = 1501; t <= 1700; t++) s = applyHysteresis(s, false, t);
-    expect(s.plan.status).toBe("EVALUATED");
+  it("回归：planner 每 100 tick 跑一次也要在 500 tick 内升档（旧实现按调用计数 = 要 50,000 tick）", () => {
+    let p = makeFullPlan();
+    // 5 次运行 = 500 tick 的真实节奏（interval=100）。旧口径此时 readyTicks=5，永不升档。
+    for (let t = 1000; t <= 1400; t += 100) p = applyHysteresis(p, true, t);
+    expect(p.readySince).toBe(1000);
+    expect(p.status).toBe("EVALUATED");
+    p = applyHysteresis(p, true, 1500);
+    expect(p.status).toBe("READY");
+  });
+
+  it("回归：计时存在 Plan 上 ⇒ global reset（heap 全清）后继续累计，不会被清零重来电", () => {
+    // 线上后果是「75 万 tick 零升级」：计数器活在 heap，每次部署归零。
+    // Plan 经 Memory 往返后 readySince 仍在，因此下一拍就能接上旧进度。
+    const revived: ExpansionPlan = { ...makeFullPlan(), readySince: 1200 };
+    expect(applyHysteresis(revived, true, 1700).status).toBe("READY");
+    expect(applyHysteresis(revived, true, 1699).status).toBe("EVALUATED");
+  });
+
+  it("ready 中断则重新起算（防抖的本来含义）", () => {
+    let p = applyHysteresis(makeFullPlan(), true, 1000);
+    p = applyHysteresis(p, true, 1400);
+    p = applyHysteresis(p, false, 1450);
+    expect(p.readySince).toBeUndefined();
+    expect(p.notReadySince).toBe(1450);
+    p = applyHysteresis(p, true, 1460);
+    expect(p.readySince).toBe(1460);
+    expect(applyHysteresis(p, true, 1900).status).toBe("EVALUATED");
+  });
+
+  it("hysteresis downgrades READY→EVALUATED（同样按 tick）", () => {
+    let p = updatePlanStatus(makeFullPlan(), "READY", 1000);
+    for (let t = 1500; t < 1700; t++) p = applyHysteresis(p, false, t);
+    expect(p.status).toBe("READY");
+    p = applyHysteresis(p, false, 1700);
+    expect(p.status).toBe("EVALUATED");
+  });
+
+  it("EXECUTING 的 Plan 不被防抖改写（升档/降档只管 EVALUATED 与 READY）", () => {
+    const p = updatePlanStatus(makeFullPlan(), "EXECUTING", 1000);
+    expect(applyHysteresis(p, true, 99999).status).toBe("EXECUTING");
+  });
+  // ── sponsor 丢失的善后（同属 lifecycle 契约）──
+  const owned = ["W37S58"];
+
+  it("sponsor 已不在手里、但候选已改挂在场房 → 计划改挂而不是作废", () => {
+    const plan = { ...makeFullPlan(), sponsorRoom: "W37S55" };
+    const [out] = rehomePlanSponsors(
+      [plan],
+      owned,
+      [{ roomName: plan.roomName, sponsorRoom: "W37S58" }],
+      5000,
+    );
+    expect(out!.sponsorRoom).toBe("W37S58");
+    expect(out!.status).toBe("EVALUATED");
+  });
+
+  it("挂不上任何在场 sponsor → CANCELLED + 可归因原因（不再占着名额骗到超时）", () => {
+    const plan = { ...makeFullPlan(), sponsorRoom: "W37S55" };
+    const [out] = rehomePlanSponsors([plan], owned, [], 5000);
+    expect(out!.status).toBe("CANCELLED");
+    expect(out!.cancelReason).toBe("sponsor-lost");
+  });
+
+  it("sponsor 仍在手里 → 原样返回（同引用，便于调用方统计变更数）", () => {
+    const plan = makeFullPlan();
+    expect(rehomePlanSponsors([plan], [plan.sponsorRoom], [], 5000)[0]).toBe(plan);
+  });
+
+  it("已交给执行层（EXECUTING）的不改挂 —— 半途换 sponsor 会把编队指向别的房", () => {
+    const plan = { ...makeFullPlan(), sponsorRoom: "W37S55", status: "EXECUTING" as const };
+    const [out] = rehomePlanSponsors(
+      [plan],
+      owned,
+      [{ roomName: plan.roomName, sponsorRoom: "W37S58" }],
+      5000,
+    );
+    expect(out!.status).toBe("EXECUTING");
+    expect(out!.sponsorRoom).toBe("W37S55");
   });
 
   it("needsReevaluation after interval", () => {

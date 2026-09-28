@@ -43,22 +43,6 @@ export const DEFAULT_LIFECYCLE_OPTIONS: LifecycleOptions = {
   reevalInterval: 500,
 };
 
-/** 防抖状态跟踪。 */
-export interface PlanHysteresis {
-  /** 持续满足 ready 条件的 tick 数。 */
-  readyTicks: number;
-  /** 持续不满足 ready 条件的 tick 数。 */
-  notReadyTicks: number;
-  /** 最近一次评估 tick。 */
-  lastEvalTick: number;
-}
-
-/** Plan + 防抖状态。 */
-export interface PlanWithHysteresis {
-  plan: ExpansionPlan;
-  hysteresis: PlanHysteresis;
-}
-
 /**
  * Plan 去重：同一 roomName 最多一个 Active Plan。
  * 如已有 Active Plan 则不新增。
@@ -122,48 +106,82 @@ export function isRebuildBlocked(
 }
 
 /**
- * 防抖判定：根据 ready 条件和持续时间决定 Plan 状态流转。
-
- * @param current 当前 Plan + 防抖状态
- * @param isReady 当前是否满足 ready 条件
- * @param tick 当前 tick
- * @param options 防抖选项
- * @returns 更新后的 Plan + 防抖状态
+ * 防抖判定：按 **tick 时长**决定 Plan 升/降档，计时状态就存在 Plan 上（持久化）。
+ *
+ * 口径必须是 tick：`upgradeTicks` / `downgradeTicks` 的语义写的是「持续多少 tick」，
+ * 而 planner 每 100 tick 才运行一次。旧实现按**调用次数**累加、且计数器活在 heap 里 ——
+ * 阈值 500 等于要 50,000 个 tick 不间断，任何一次 global reset（每次部署必然发生）都清零。
+ * 线上后果：7 张 Plan 在 75 万 tick 里一张都没升过档，扩张模块从未真正参与过决策。
+ *
+ * 返回值就是更新后的 Plan —— 不再有外部缓存副产物，调用方不必维护 hysteresisCache。
  */
 export function applyHysteresis(
-  current: PlanWithHysteresis,
+  plan: ExpansionPlan,
   isReady: boolean,
   tick: number,
   options: LifecycleOptions = DEFAULT_LIFECYCLE_OPTIONS,
-): PlanWithHysteresis {
-  const h = { ...current.hysteresis, lastEvalTick: tick };
+): ExpansionPlan {
+  if (plan.status !== "EVALUATED" && plan.status !== "READY") return plan;
 
   if (isReady) {
-    h.readyTicks++;
-    h.notReadyTicks = 0;
-
-    // 持续满足 → 升级到 READY
-    if (h.readyTicks >= options.upgradeTicks && current.plan.status === "EVALUATED") {
-      return {
-        plan: updatePlanStatus(current.plan, "READY", tick),
-        hysteresis: h,
-      };
+    const readySince = plan.readySince ?? tick;
+    const next =
+      plan.readySince === readySince && plan.notReadySince === undefined
+        ? plan
+        : { ...plan, readySince, notReadySince: undefined };
+    if (next.status === "EVALUATED" && tick - readySince >= options.upgradeTicks) {
+      return updatePlanStatus(next, "READY", tick);
     }
-  } else {
-    h.notReadyTicks++;
-    h.readyTicks = 0;
-
-    // 持续不满足 → 降级到 EVALUATED
-    if (h.notReadyTicks >= options.downgradeTicks && current.plan.status === "READY") {
-      return {
-        plan: updatePlanStatus(current.plan, "EVALUATED", tick, "hysteresis-downgrade"),
-        hysteresis: h,
-      };
-    }
+    return next;
   }
 
-  return { plan: current.plan, hysteresis: h };
+  const notReadySince = plan.notReadySince ?? tick;
+  const next = { ...plan, notReadySince, readySince: undefined as number | undefined };
+  if (next.status === "READY" && tick - notReadySince >= options.downgradeTicks) {
+    return updatePlanStatus(next, "EVALUATED", tick, "hysteresis-downgrade");
+  }
+  return next;
 }
+
+/**
+ * Sponsor 房已不在手里的 Plan：改挂到仍在场的 sponsor，挂不上就 CANCELLED。
+ *
+ * 为什么必须有：`plan.sponsorRoom` 创建时定死，而候选房会重新挂靠（discovery 每轮重算
+ * sponsor）。线上实测：一张 W37S56 的 Plan 仍挂着 `sr=W37S55`，而那间房已被我们主动放弃。
+ * 执行侧对「sponsor 不存在」毫无防御 —— state-machine 的 submitClaimer 见
+ * `Memory.rooms[sponsor]` 缺失就静默 return，claimer 永不入场，Plan 原地挂到
+ * claimTimeout(6,000 tick) 才被撤；这期间它占着 MAX_ACTIVE_PLANS 名额并挡住新计划进场。
+ *
+ * 只动「还没交给执行层」的状态：EXECUTING 的 sponsor 语义已由状态机与超时负责，
+ * 在这里改挂会让执行中的编队指向另一个房，那是更大的错。
+ */
+export function rehomePlanSponsors(
+  plans: readonly ExpansionPlan[],
+  ownedRoomNames: readonly string[],
+  candidates: readonly { roomName: string; sponsorRoom: string }[],
+  tick: number,
+): ExpansionPlan[] {
+  const owned = new Set(ownedRoomNames);
+  const sponsorByRoom = new Map(candidates.map(c => [c.roomName, c.sponsorRoom]));
+  return plans.map(plan => {
+    if (owned.has(plan.sponsorRoom)) return plan;
+    if (!PRE_EXECUTION_STATUSES.has(plan.status)) return plan;
+    const alt = sponsorByRoom.get(plan.roomName);
+    if (alt !== undefined && alt !== plan.sponsorRoom && owned.has(alt)) {
+      return { ...plan, sponsorRoom: alt, updatedAt: tick };
+    }
+    return updatePlanStatus(plan, "CANCELLED", tick, "sponsor-lost");
+  });
+}
+
+/** 尚未交给执行层的Plan状态（可安全改挂 sponsor）。 */
+const PRE_EXECUTION_STATUSES: ReadonlySet<PlanStatus> = new Set([
+  "DISCOVERED",
+  "EVALUATED",
+  "READY",
+  "APPROVED",
+  "WAITING_EXECUTION",
+]);
 
 /**
  * 判断是否需要重评（经济/Intel/Cost/Core Health 变化时触发）。

@@ -924,6 +924,10 @@ declare global {
     aa?: number;
     /** 取消原因。 */
     cr?: string;
+    /** 连续满足 ready 的起始 tick（防抖计时；旧档缺失即从本轮重新起算）。 */
+    rd?: number;
+    /** 连续不满足 ready 的起始 tick（READY 降档计时）。 */
+    nd?: number;
     /** 决策摘要。 */
     ex: string;
   }
