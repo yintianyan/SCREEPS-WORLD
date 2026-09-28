@@ -2,7 +2,7 @@
 
 /**
  * 废弃原因码。进 Memory 所以用数字；语义与 `systems/remote/op-lifecycle.ts` 里
- * 8 个 `state = "abandoned"` 赋值点一一对应。
+ * 各 `state = "abandoned"` 写点一一对应（含统一入口 abandonOp 的调用方）。
  *
  * 为什么必须有：线上实测 W37S55 的 remoteOps 从 4 掉到 2，事后**完全查不出**那两房
  * 叫什么、为什么被弃 —— abandoned 记录会被卫生层整条 delete（staleThreshold×6），
@@ -36,6 +36,8 @@ export const REMOTE_ABANDON = {
   PausedTimeout: 6,
   /** 编队全员空转超 stallAbandonTicks（吞吐反馈安全网）。 */
   Stalled: 7,
+  /** 主房被主动放弃（territory-manager 释放流程）—— 与目标房本身的质量无关。 */
+  HomeReleased: 8,
 } as const;
 
 /** 原因码 → 可读名（日志与墓地对照用；长度受控，只活在这份表里）。 */
@@ -48,6 +50,7 @@ export const REMOTE_ABANDON_LABEL: Record<number, string> = {
   [REMOTE_ABANDON.SealedAllExits]: "入口全被封死",
   [REMOTE_ABANDON.PausedTimeout]: "长期失明转弃",
   [REMOTE_ABANDON.Stalled]: "编队空转止损",
+  [REMOTE_ABANDON.HomeReleased]: "主房释放",
 };
 
 /** 一块墓碑：一次废弃事件的最小可归因记录。 */

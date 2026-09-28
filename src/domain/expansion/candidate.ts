@@ -109,8 +109,12 @@ export function buildCandidate(
   ownedRoomNames: readonly string[],
   tick: number,
   myUsername?: string,
+  releasedRoomNames?: readonly string[],
 ): ExpansionCandidateV2 {
   const owned = new Set(ownedRoomNames);
+  // 刚主动放弃的房：排除判定不能靠 intel 的 owner 字段 —— unclaim 之后它就是一个
+  // 无主、有工事（路/容器/link）的高分候选，评分模型会立刻把它重新排进扩张池。
+  const released = new Set(releasedRoomNames ?? []);
   const distance = 1; // 直接邻居 distance=1（多跳由 discovery 层递增）
 
   // 地形摘要
@@ -146,6 +150,7 @@ export function buildCandidate(
   else if ((intel.towers ?? 0) > 0) vetoReason = `towers=${intel.towers}`;
   else if ((intel.enemySpawns ?? 0) > 0) vetoReason = `enemySpawns=${intel.enemySpawns}`;
   else if (owned.has(roomName)) vetoReason = "already-owned";
+  else if (released.has(roomName)) vetoReason = "recently-released";
 
   // 初始状态
   let status: CandidateStatus = "DISCOVERED";
@@ -170,6 +175,21 @@ export function buildCandidate(
     discoveredAt: tick,
     vetoReason,
   };
+}
+
+/**
+ * 从重占排除表的候选池里剔掉命中的房。
+ *
+ * 为什么不能只靠 buildCandidate 的否决：候选只在 Intel 刷新时重建，一间「无主但留着
+ * 我们工事」的刚放弃房会顶着旧的 QUALIFIED 状态直接被排进扩张池 —— 而它的评分恰恰因为
+ * 那些工事而更高。排除判定必须作用在**候选池**上，而不是只作用在新建候选上。
+ */
+export function dropReleasedRooms<T extends { roomName: string }>(
+  candidates: readonly T[],
+  released: Readonly<Record<string, number>> | undefined,
+): T[] {
+  if (!released || Object.keys(released).length === 0) return [...candidates];
+  return candidates.filter(c => released[c.roomName] === undefined);
 }
 
 /**

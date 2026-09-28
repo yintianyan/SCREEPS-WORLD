@@ -141,6 +141,15 @@ export const spawnManagerSystem: System = {
       }
 
       // 2. 从 Game/Memory 收集数据，调用纯函数评估需求。
+      // 释放中的房不再补员：清空在途请求、跳过需求评估，只保留回收通道（步骤 5）。
+      // 为什么放在这里而不是 demand 里：demand 是纯函数、按房算编制，把「这房即将不属于
+      // 我们」塞进它的入参会让领土语义渗进人口模型；而回收通道恰恰是此时唯一还需要
+      // 为本房干活的路径，整轮 continue 会把它一起跳过。
+      if (roomMem.releaseAt !== undefined) {
+        if (queue.length > 0) roomMem.spawnQueue = [];
+        recyclePass(snapshot, creepsByRoom.get(snapshot.roomName) ?? [], undefined);
+        continue;
+      }
       // P1-J：迟滞状态（distScaleUpSince / builderPressureState）原本由 demand 直读写
       // Memory，现收敛为显式输入输出 — 适配层从 RoomMemory 读出 prevHysteresis 注入、
       // 将 nextHysteresis 写回；domain 恢复纯函数，单测不再需要 mock Memory。

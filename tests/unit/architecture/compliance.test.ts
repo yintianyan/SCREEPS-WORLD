@@ -411,6 +411,10 @@ describe("R11 systems 间值导入审计", () => {
     "systems/remote/remote-mining-manager.ts:systems/remote/blocker-intel.ts",
     "systems/remote/remote-mining-manager.ts:systems/remote/road-planner.ts",
     "systems/remote/road-planner.ts:systems/remote/op-lifecycle.ts",
+    // 主房释放必须走 op 生命周期属主的唯一废弃入口（墓碑 + 首次落碑 + 状态计时），
+    // 而不是在 territory-manager 里抄一份 `op.state = "abandoned"`。
+    // 出口条件：op 生命周期上收到统一的 Operation 属主后随其它 remote 边一起迁移。
+    "systems/empire/territory-manager.ts:systems/remote/op-lifecycle.ts",
     "systems/remote/road-planner.ts:systems/remote/creep-recycle.ts",
     "systems/remote/road-planner.ts:systems/site-quota.ts",
   ]);

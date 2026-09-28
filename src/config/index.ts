@@ -29,7 +29,7 @@ export function getWallTargetHits(
 
 export const CONFIG = {
   memory: {
-    schemaVersion: 47,
+    schemaVersion: 48,
     /** 【F1/G-C】数据族 TTL 表（FREEZE §9）：每族 {maxAge, sweepPolicy}。
      * sweepPolicy: "ring"（定长环自动截断）| "hook"（由既有清理钩子执行）| "planned"（消费者落地前占位）。
      * 本表 v1 为治理登记：ring/hook 两类由既有机制兑现，"planned" 行不产生行为。 */
@@ -830,6 +830,27 @@ export const CONFIG = {
      * 按条数不按时间清理：一个采集周期本身就可能长过任何合理 TTL。
      * 体积上限 ≈10×(房名+3 字段) ≈ 每房几百字节，两房 <1KB，可忽略。 */
     graveyardCap: 10,
+  },
+
+  territory: {
+    /** 领土处置（放弃自有房）运行间隔（tick）。无在途指令时本系统只做一次空判断。 */
+    interval: 10,
+    /** 排空截止（tick）：op 弃尽 + 编队进回收 + 队列清空 都在这个窗口内完成，
+     * 超期即强行 unclaim，残余无家 creep 交给 territory-manager 的事后清扫。
+     * 没有截止时，一只走不动的远程 creep 就能把整间房继续挂成自有房烧编制与 CPU。
+     * 1200 ≈ 跨 1-2 房归航（回收通道）+ 一个孵化周期的余量。 */
+    drainDeadlineTicks: 1200,
+    /** unclaim 连续未成交的最大喊话次数，超出则本轮 abort（保留指令、下轮重开计数）。 */
+    maxUnclaimAttempts: 5,
+    /** 事后清扫窗口（tick）：最近一次释放后在此窗口内才扫无家 creep，避免为历史事件
+     * 永久付出 Game.creeps 遍历成本。3000 > 最长 creep 寿命 1500 的两倍余量。 */
+    homelessSweepTicks: 3000,
+    /** 重占排除项有效期（tick）：期内扩张候选硬否决这间房。
+     * 不做永久排除 —— 房里的前置工事（路/容器/link）是真实价值，够久之后应由扩张
+     * 评估按当下条件重新判断，而不是被一次历史决定永久锁死。 */
+    releasedExclusionTicks: 50000,
+    /** 重占排除表条数帽（超出丢最旧）。 */
+    releasedRoomsCap: 16,
   },
 
   expansion: {

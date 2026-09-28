@@ -7,6 +7,8 @@ import { type ExpansionCandidateV2, buildCandidate, isEvaluable } from "./candid
 export interface DiscoveryInput {
   /** 当前拥有的房间名集合。 */
   ownedRoomNames: readonly string[];
+  /** 近期主动放弃的房（重占排除表）：命中即硬否决，见 candidate.buildCandidate。 */
+  releasedRoomNames?: readonly string[];
   /** sponsor 房名 → 其邻居情报映射。 */
   intelBySponsor: Readonly<Record<string, Readonly<Record<string, RoomIntel>>>>;
   /** 当前 tick。 */
@@ -40,7 +42,14 @@ export interface DiscoveryResult {
  * - 已有候选但不在新 Intel 中的 → 保留（可能 Intel 覆盖范围未变）
  */
 export function discoverCandidates(input: DiscoveryInput): DiscoveryResult {
-  const { ownedRoomNames, intelBySponsor, tick, myUsername, existingCandidates = [] } = input;
+  const {
+    ownedRoomNames,
+    releasedRoomNames,
+    intelBySponsor,
+    tick,
+    myUsername,
+    existingCandidates = [],
+  } = input;
 
   // 已有候选按 roomName 索引
   const candidateMap = new Map<string, ExpansionCandidateV2>();
@@ -67,6 +76,7 @@ export function discoverCandidates(input: DiscoveryInput): DiscoveryResult {
             ownedRoomNames,
             tick,
             myUsername,
+            releasedRoomNames,
           );
           refreshed.discoveredAt = existing.discoveredAt;
           // 如果旧候选已评分，保留评分直到重新评估
@@ -82,7 +92,15 @@ export function discoverCandidates(input: DiscoveryInput): DiscoveryResult {
         // Intel 未更新 → 保留旧候选
       } else {
         // 新候选
-        const candidate = buildCandidate(roomName, sponsor, info, ownedRoomNames, tick, myUsername);
+        const candidate = buildCandidate(
+          roomName,
+          sponsor,
+          info,
+          ownedRoomNames,
+          tick,
+          myUsername,
+          releasedRoomNames,
+        );
         candidateMap.set(roomName, candidate);
         newCount++;
       }

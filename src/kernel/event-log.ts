@@ -142,6 +142,13 @@ export enum EventKind {
    * 就再无处可查 —— TuningAdjust/Rollback/Freeze 记的是逐次动作，不记"哪间房的覆盖被
    * 整体清过、清掉多少"。回收一间隔房重开运营时，这是唯一的解释来源。 */
   LostRoomPurge = 46,
+  /** 主动放弃自有房收尾（territory-manager 写）。
+   * d = [reasonCode(0=人工指令/1=殖民地失败), involuntary(1=房已不在手里),
+   *      remoteOpsDropped, drainingTicks, unclaimAttempts, lastUnclaimCode]；r = 房名。
+   * 为什么需要它：释放收尾会把整条 RoomMemory 直接删掉（不等 lostRooms 的 20,000 tick
+   * 宽限），删完之后「这房什么时候走的、走之前弃了几个矿点、unclaim 成功没有」
+   * 只能靠这一条事件回答。 */
+  RoomReleased = 47,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

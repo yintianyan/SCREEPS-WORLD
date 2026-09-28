@@ -343,6 +343,12 @@ declare global {
      */
     remoteGraveyard?: import("../domain/remote/op-outcome").RemoteOpTombstone[];
     /**
+     * 本房正在被主动放弃（territory-manager 写，值为指令 startedAt）。
+     * 消费方的语义是「不要再为这房花钱」：spawn-manager 见之清空队列并跳过需求评估，
+     * construction-manager 见之不再开新 site。房一失主即随整条 RoomMemory 一起消失。
+     */
+    releaseAt?: number;
+    /**
      * A5.1：防御状态标记（recovery-execution-system 写入，kernel/consumers 读取）。
      * heap 语义——不持久化到 RawMemory（global reset 丢失可接受，下 tick 重建）。
      */
@@ -510,6 +516,17 @@ declare global {
      * maintainMemory 据此在宽限期后清除 Memory.rooms 条目。
      */
     lostRooms?: Record<string, number>;
+    /**
+     * 在途「放弃自有房」指令（territory-manager 唯一写者）：房名 → 指令。
+     * 排空 → unclaim → 清账 全程由系统执行，人工只下这一次命令。
+     */
+    roomRelease?: Record<string, import("../domain/empire/room-release").RoomReleaseDirective>;
+    /**
+     * 已主动放弃的房（重占排除表）：房名 → 释放 tick。
+     * 消费方：expansion-planner 候选硬否决、territory-manager 事后清扫与过期剪除。
+     * 为什么不永久：见 CONFIG.territory.releasedExclusionTicks。
+     */
+    releasedRooms?: Record<string, number>;
     /**
      * Power Creep 运营状态（v34+，power-creep-manager 唯一写者）。
      * homeAssignments：PC 名 → 驻留房名。PC 换房成本高（长途移动 +

@@ -23,6 +23,7 @@ import { explainDecision } from "../../domain/expansion/explanation";
 import { buildExpansionDashboard } from "../../domain/expansion/dashboard";
 import { evaluateExpansionReadinessExtended } from "../../domain/strategy/readiness";
 import type { ExpansionCandidateV2 } from "../../domain/expansion/candidate";
+import { dropReleasedRooms } from "../../domain/expansion/candidate";
 import type { RoomIntel } from "../../domain/intel";
 
 /** heap 缓存的 hysteresis 状态（Plan planId → PlanWithHysteresis）。 */
@@ -105,16 +106,22 @@ export const expansionPlannerSystem: System = {
 
     // 从 Memory 恢复已有候选
     const existingCandidates = deserializeCandidates(Memory.kernel?.expansionCandidates);
+    // 重占排除：刚主动放弃的房在排除期内不进候选池（含存量已评分记录，理由见
+    // candidate.dropReleasedRooms）。
+    const releasedRooms = Memory.kernel?.releasedRooms;
+    const releasedRoomNames = releasedRooms ? Object.keys(releasedRooms) : [];
     const discoveryResult = discoverCandidates({
       ownedRoomNames,
+      releasedRoomNames,
       intelBySponsor,
       tick: ctx.tick,
       myUsername: (Game as unknown as { username?: string }).username,
       existingCandidates,
     });
+    const candidatePool = dropReleasedRooms(discoveryResult.candidates, releasedRooms);
 
     // ── 步 3：Candidate Scoring (7-Factor) ──
-    const evaluable = discoveryResult.candidates.filter(
+    const evaluable = candidatePool.filter(
       c => c.status === "DISCOVERED" && c.sourceCount !== undefined && !c.vetoReason,
     );
     const scored = scoreCandidates(evaluable, {}, ctx.tick);
@@ -122,7 +129,7 @@ export const expansionPlannerSystem: System = {
     // 合并已评分和未评分候选
     const allCandidates = [
       ...scored,
-      ...discoveryResult.candidates.filter(
+      ...candidatePool.filter(
         c => c.status !== "DISCOVERED" || c.vetoReason || c.sourceCount === undefined,
       ),
     ];

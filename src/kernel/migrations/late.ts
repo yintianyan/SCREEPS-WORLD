@@ -395,4 +395,42 @@ export const LATE_MIGRATIONS: MigrationStep[] = [
       }
     },
   },
+  {
+    from: 47,
+    to: 48,
+    run: () => {
+      // v48：领土处置（主动放弃自有房）引入 kernel.roomRelease（在途指令）与
+      // kernel.releasedRooms（重占排除表，房名 → 释放 tick），以及 RoomMemory.releaseAt。
+      // 三者都可选、惰性写入，由 territory-manager 自己建行，无需回填。
+      // 此处仅畸形自愈：非数字的排除表项会让「过期剪除」陷入 NaN 比较而永不删除；
+      // 畸形指令条目会让释放流程每轮在同一处 throw —— 宁可丢一条指令，不能让
+      // territory-manager 永久故障，它一挂，一间半释放的房就永远占着全帝国的账本。
+      const kernel = Memory.kernel;
+      if (!kernel) return;
+      if (kernel.roomRelease) {
+        for (const [room, directive] of Object.entries(kernel.roomRelease)) {
+          if (
+            typeof directive !== "object" ||
+            directive === null ||
+            !Number.isFinite(directive.startedAt)
+          ) {
+            delete kernel.roomRelease[room];
+          }
+        }
+        if (Object.keys(kernel.roomRelease).length === 0) delete kernel.roomRelease;
+      }
+      if (kernel.releasedRooms) {
+        for (const [room, at] of Object.entries(kernel.releasedRooms)) {
+          if (!Number.isFinite(at)) delete kernel.releasedRooms[room];
+        }
+        if (Object.keys(kernel.releasedRooms).length === 0) delete kernel.releasedRooms;
+      }
+      for (const roomName in Memory.rooms) {
+        const roomMem = Memory.rooms[roomName];
+        if (roomMem?.releaseAt !== undefined && !Number.isFinite(roomMem.releaseAt)) {
+          delete roomMem.releaseAt;
+        }
+      }
+    },
+  },
 ];

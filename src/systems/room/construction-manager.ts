@@ -56,6 +56,11 @@ export const constructionManagerSystem: System = {
       const roomMem = Memory.rooms[snapshot.roomName];
       if (!roomMem) continue;
 
+      // 释放中的房不再开新 site：本房即将不属于我们，新 site 只是把 builder 的能量
+      // 和一个会反噬全帝国的 site 计数投进即将消失的房间（跳过整轮：队列同步、
+      // 状态清理、site 创建都停 —— 编队已在回收通道里，没有执行者了）。
+      if (roomMem.releaseAt !== undefined) continue;
+
       const queue = roomMem.buildQueue ?? [];
 
       // 1. 同步任务状态与实际 site（纯函数 — domain/construction/queue）。

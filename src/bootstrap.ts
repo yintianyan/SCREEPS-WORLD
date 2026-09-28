@@ -29,6 +29,7 @@ import { empireStrategySystem } from "./systems/empire/empire-strategy";
 import { empireEconomySystem } from "./systems/empire/empire-economy";
 import { expansionManagerSystem } from "./systems/empire/expansion-manager";
 import { expansionPlannerSystem } from "./systems/empire/expansion-planner";
+import { territoryManagerSystem } from "./systems/empire/territory-manager";
 import { factoryManagerSystem } from "./systems/room/factory-manager";
 import { powerCreepManagerSystem } from "./systems/empire/power-creep-manager";
 import { powerFarmManagerSystem } from "./systems/military/power-farm-manager";
@@ -118,6 +119,9 @@ export const registry = new Registry()
   .registerSystem(empireStrategySystem)
   // P1：帝国经济聚合（低频 100t——Empire Resource View / Health / Budget / Readiness）
   .registerSystem(empireEconomySystem)
+  // P1：领土处置（放弃自有房的排空→unclaim→清账）。P1 而非 P2：CPU 越紧张越需要
+  //   把「放下包袱」这条路走到底，半途挂住的释放会让一间房既不产出又继续占账本。
+  .registerSystem(territoryManagerSystem)
   // P1：Agenda Manager（低频 100t——跨房调拨 Operation 生命周期管理）
   .registerSystem(agendaManagerSystem)
   // P0：物流请求池（搬运 Demand 一等来源；先于 assignment-service 合并进任务槽）。

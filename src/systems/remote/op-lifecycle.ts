@@ -84,6 +84,32 @@ function abandonOp(
 }
 
 /**
+ * 主房即将被放弃时，一次弃掉该房名下所有在途 op。
+ *
+ * 为什么必须由释放流程主动弃、而不是等 op-lifecycle 的经济判据慢慢收敛：这些门全部
+ * 按「本房快照」遍历（`ctx.snapshots()` 只含 controller.my 的房），主房一失主就再没有
+ * 人走过它们的 op 记录 —— 记录以 active 状态留在 Memory 里，而 Memory 是全局账本的读数源。
+ *
+ * @returns 本轮新弃的条数。
+ */
+export function abandonOpsForReleasedHome(homeRoom: string, tick: number): number {
+  const ops = Memory.rooms[homeRoom]?.remoteOps;
+  if (!ops) return 0;
+  let abandonedCount = 0;
+  for (const [target, op] of Object.entries(ops)) {
+    if (op.state === "abandoned") continue;
+    abandonOp(op, homeRoom, target, REMOTE_ABANDON.HomeReleased, tick);
+    // 计数就地归零：site 计量的唯一清零者是 road-planner，而它只对自有主房的 op 跑 ——
+    // 主房释放的那一轮起它不再是自有主房。留着旧计数等于让一间不存在的房继续占住
+    // 全帝国的 roadSitesPerOpTotal / maxNormalLaneSites 名额。
+    op.siteCount = 0;
+    op.roadSiteCount = 0;
+    abandonedCount++;
+  }
+  return abandonedCount;
+}
+
+/**
  * Memory ↔ heap 账本同步，返回权威（heap）账本。
  *
  * 窗口起点不一致即判定 heap 是 global reset 后重建的空壳 → 用持久化数据恢复。
