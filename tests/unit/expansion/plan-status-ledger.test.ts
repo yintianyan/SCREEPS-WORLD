@@ -27,6 +27,7 @@ import {
   updatePlanStatus,
 } from "../../../src/systems/empire/expansion/plan-adapter";
 import { mockRoomStateCtx, resetGlobals } from "../../support/factories";
+import { CONFIG } from "../../../src/config";
 
 const TICK = 5000;
 const ROOM = "W0N1";
@@ -172,5 +173,58 @@ describe("B5-㉒ 硬失败必须落到 CANCELLED 并真的进冷却", () => {
     const plans = (globalThis as any).Memory.kernel.expansionPlans;
     expect(plans).toHaveLength(before);
     expect(plans[0].st).toBe("WAITING_EXECUTION");
+  });
+});
+
+/**
+ * 执行期的复检：入口判过的否决，出口必须再判一次。
+ *
+ * 起因（2026-09-28 读代码，扩张链摸排）：重占排除与失败黑名单都只作用在**候选池**，
+ * 而 Plan 另有一份持久化列表；消费这一侧把 candidateValid 写死成 `true`，于是
+ * "门一开就把我们主动放弃过的房再 claim 一次"是通得过的 —— 释放后的房没有 owner
+ * 也没有 reservation，GATE_TARGET_CLAIMABLE 拦不住它。
+ */
+describe("B5-㉓ 消费期的重占/黑名单复检", () => {
+  /** 目标房可见、controller 无主 ⇒ 唯一还能拦住它的就是复检表。 */
+  function claimableTarget(): any {
+    const G = globalThis as any;
+    G.Game.rooms[TARGET] = { controller: {} };
+    G.Game.gcl = { level: 3 };
+    return G;
+  }
+
+  it("房在立项之后才被放弃 → 拒绝并记 CANCELLED，绝不把它 claim 回来", () => {
+    setup([memoryPlan("WAITING_EXECUTION")]);
+    const G = claimableTarget();
+    G.Memory.kernel.releasedRooms = { [TARGET]: TICK - 1000 };
+
+    tryConsumePlan(mockRoomStateCtx([], TICK));
+
+    expect(G.Memory.kernel.expansionPlans[0].st).toBe("CANCELLED");
+    expect(G.Memory.kernel.expansion).toBeUndefined();
+  });
+
+  it("排除期已过 → 复检放行（这条判据不能变成永久否决）", () => {
+    setup([memoryPlan("WAITING_EXECUTION")]);
+    const G = claimableTarget();
+    G.Memory.kernel.releasedRooms = {
+      [TARGET]: TICK - CONFIG.territory.releasedExclusionTicks - 1,
+    };
+
+    tryConsumePlan(mockRoomStateCtx([], TICK));
+
+    expect(G.Memory.kernel.expansionPlans[0].st).toBe("EXECUTING");
+    expect(G.Memory.kernel.expansion).toBeDefined();
+  });
+
+  it("目标在失败黑名单冷却里 → 消费期同样拦住", () => {
+    setup([memoryPlan("WAITING_EXECUTION")]);
+    const G = claimableTarget();
+    G.Memory.kernel.expansionBlacklist = { [TARGET]: TICK + 1000 };
+
+    tryConsumePlan(mockRoomStateCtx([], TICK));
+
+    expect(G.Memory.kernel.expansionPlans[0].st).toBe("CANCELLED");
+    expect(G.Memory.kernel.expansion).toBeUndefined();
   });
 });

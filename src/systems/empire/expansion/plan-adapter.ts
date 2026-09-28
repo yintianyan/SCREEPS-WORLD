@@ -1,4 +1,5 @@
 /** Expansion Plan 适配层 — Plan 消费门禁、Gate 采集、Memory 瘦结构序列化。 */
+import { CONFIG } from "../../../config";
 import type { TickContext } from "../../../kernel/contracts";
 import { log } from "../../../kernel/log";
 import { makeOperationId } from "../../../domain/expansion/uoem-types";
@@ -38,7 +39,7 @@ export function tryConsumePlan(ctx: TickContext): void {
     intelStale: isIntelStale(plan.roomName, ctx.tick),
     threatEscalated: false, // 简化：检查威胁升级
     targetClaimable: isTargetClaimable(plan.roomName),
-    candidateValid: true, // 简化：候选仍然有效
+    candidateValid: isCandidateStillValid(plan.roomName, ctx.tick),
   };
 
   const gateResult = validateExecutionGate(gateInput);
@@ -54,6 +55,7 @@ export function tryConsumePlan(ctx: TickContext): void {
     if (
       gateResult.failedGates.includes("GATE_PLAN_VALID") ||
       gateResult.failedGates.includes("GATE_TARGET_CLAIMABLE") ||
+      gateResult.failedGates.includes("GATE_CANDIDATE_VALID") ||
       gateResult.failedGates.includes("GATE_NOT_OWNED")
     ) {
       updatePlanStatus(plan.planId, "CANCELLED");
@@ -106,6 +108,25 @@ export function tryConsumePlan(ctx: TickContext): void {
     "expansion",
     `[${ctx.tick}] expansion-manager: consuming plan ${plan.planId} for ${plan.roomName} (sponsor=${plan.sponsorRoom})`,
   );
+}
+
+/**
+ * 执行期的候选复检 —— 立项之后"我们改过主意"的那些信号。
+ *
+ * 重占排除（releasedRooms）与失败黑名单都只在**候选池**那一层生效
+ * （expansion-planner 的 dropReleasedRooms / discoverCandidates），而 Plan 是另有一份
+ * 持久化列表的：房在立项**之后**才被放弃 / 上一次尝试进了黑名单，那条 Plan 不会因此消失。
+ * 原先这里写死 `true`，等于"门一开就把我们主动放弃过的房再 claim 一次"——
+ * 释放后的房既没有 owner 也没有 reservation，`GATE_TARGET_CLAIMABLE` 是过得去的，
+ * 拦不住。（同一族错误：入口有判据、出口不复检。）
+ */
+function isCandidateStillValid(roomName: string, tick: number): boolean {
+  const releasedAt = Memory.kernel?.releasedRooms?.[roomName];
+  if (releasedAt !== undefined && tick - releasedAt < CONFIG.territory.releasedExclusionTicks) {
+    return false;
+  }
+  // pruneBlacklist 已在本函数前跑过：还在表里就说明冷却未过。
+  return Memory.kernel?.expansionBlacklist?.[roomName] === undefined;
 }
 
 /** 检查房间是否已被拥有。 */
