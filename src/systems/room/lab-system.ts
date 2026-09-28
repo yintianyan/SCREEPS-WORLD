@@ -422,6 +422,27 @@ export const labSystem: System = {
             undefined;
         }
 
+        // 需求发布必须在"不可执行 ⇒ 清空计划"**之前**。
+        //
+        // `getNextExecutableStep` 返回 null 有两种完全不同的原因 —— 链已完成 与 链缺料，
+        // 而这里把两者都当成"完成"来清 target/amount/plan。缺料正是采购需求唯一要救的
+        // 场景：一旦先清掉 plan，下面 `if (reactionPlan)` 的发布判据就永远不成立，于是
+        // 「缺基础矿 ⇒ 不发需求 ⇒ terminal 不买 ⇒ 永远缺料」自己锁死（线上 10 座 lab
+        // 全空、`stats.trade.demandsLive=0` 而 reactionPlan 明明在账上，就是这个形状）。
+        // 休眠分支早就为这件事加了"休眠期间仍发布需求"的旁路，非休眠分支漏了 —— 这里
+        // 把发布挪到决策之前，两条路径同一口径。
+        if (industryMem.reactionPlan) {
+          const demands = expandReactionDemands(
+            industryMem.reactionPlan,
+            inventory,
+            ctx.tick,
+            CONFIG.market.interval + 50,
+          );
+          if (demands.length > 0) {
+            publishProcurementDemands(snapshot.roomName, demands as ProcurementDemand[], ctx.tick);
+          }
+        }
+
         if (industryMem.reactionPlan) {
           const step = getNextExecutableStep(industryMem.reactionPlan, inventory);
           if (step) {
@@ -432,23 +453,6 @@ export const labSystem: System = {
             industryMem.reactionAmount = undefined;
             industryMem.reactionPlan = undefined;
           }
-        }
-      }
-
-      // ── 2.5 发布采购需求（阶段 1 改造）──
-      // 反应链计划存在时，展开基础矿物缺口写入 globalCache.procurementDemands，
-      // 供 terminal-manager 按 priority 排序后买入。旧实现硬编码 MINERAL_RESERVE_TARGET
-      // (500/200) 与实际消费速率无关 — 此处让需求信号从消费方传递到采购方。
-      // 需求有效期 = market.interval(200) + buffer(50) = 250 tick，确保跨终端冷却窗口。
-      if (industryMem.reactionPlan) {
-        const demands = expandReactionDemands(
-          industryMem.reactionPlan,
-          inventory,
-          ctx.tick,
-          CONFIG.market.interval + 50,
-        );
-        if (demands.length > 0) {
-          publishProcurementDemands(snapshot.roomName, demands as ProcurementDemand[], ctx.tick);
         }
       }
 
