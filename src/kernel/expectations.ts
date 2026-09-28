@@ -17,6 +17,43 @@ export const E3_RECORD_INTERVAL = 100;
 /** 违例恢复后清除标记所需的连续空队列 tick 数（滞回防抖动）。 */
 export const E3_RECOVERY_TICKS = 50;
 
+// ─── 期望违例事件的记账限流 ────────────────────────────────
+/**
+ * 同一组违例的心跳重报间隔（tick）。
+ *
+ * 为什么必须有：期望自检**每 tick** 跑，而 E3/E2 这类违例是「持续状态」—— 一条卡住的
+ * 孵化请求一旦被判定 stale，它会在接下来成千上万 tick 里每 tick 都进 violations。
+ * 线上实测一段 430 tick 的事件环里塞进 394 条 ExpectationViolation，把 CreepDeath、
+ * WarOutcome、ProspectOutcome 这些真正需要复盘的事件全部挤出环外 —— 自我诊断通道反过来
+ * 把观测系统打穿，等于没有观测。违例本身已由 `Memory.kernel.expectations` 保留可读快照，
+ * 事件只需要「出现/变化」两个时刻 + 一条慢心跳证明它还活着。
+ */
+export const EXPECTATION_EVENT_HEARTBEAT_TICKS = 500;
+
+/** 上一次期望违例事件的记账（heap，global reset 后重报一次无害）。 */
+export interface ExpectationEventMark {
+  /** 违例 id 集合的稳定签名（排序后 join）。 */
+  signature: string;
+  /** 上次真正记事件的 tick。 */
+  tick: number;
+}
+
+/**
+ * 判断这一次违例快照值不值得记一条事件。
+ *
+ * 规则：**变化即报**（新出现的 id、消失的 id、组合变化都算 —— 换凶手的瞬间必须可见），
+ * 同一种组合则按心跳节流。纯函数，签名由调用方从 violations 派生。
+ */
+export function shouldRecordExpectationEvent(
+  prev: ExpectationEventMark | undefined,
+  signature: string,
+  tick: number,
+): boolean {
+  if (!prev) return true;
+  if (prev.signature !== signature) return true;
+  return tick - prev.tick >= EXPECTATION_EVENT_HEARTBEAT_TICKS;
+}
+
 export interface ExpectationViolation {
   id: string;
   detail: string;

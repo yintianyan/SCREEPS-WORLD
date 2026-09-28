@@ -66,6 +66,8 @@ export interface GlobalCache {
   prevRoomTraffic?: Record<string, Record<string, number>>;
   /** 单 tick 内累加的跳过原因计数，tick 末尾低频刷入 Memory。 */
   skipBuffer?: Record<string, number>;
+  /** 期望违例事件的上次记账（签名 + tick）—— 同一组违例按心跳节流，防定长事件环被刷满。 */
+  expectationEvent?: import("./expectations").ExpectationEventMark;
   /** per-tick 事件缓冲区 — 任意系统可通过 recordEvent() 写入，telemetry-collector flush。 */
   eventBuffer?: { events: import("./event-log").GameEvent[] };
   assignment?: AssignmentCache;

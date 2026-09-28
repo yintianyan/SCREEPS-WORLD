@@ -16,6 +16,7 @@ import { createBudget } from "./scheduler";
 import {
   evaluateExpectations,
   P3_BYPASS_WINDOW_TICKS,
+  shouldRecordExpectationEvent,
   type P3SystemRef,
   type SpawnQueueSnapshot,
   type E3ViolationRecord,
@@ -550,7 +551,18 @@ export class Kernel {
         violations: res.violations.map(v => `${v.id}(${v.detail})`).slice(0, 10),
         e3: e3Prev as Record<string, unknown>,
       };
-      recordEvent(EventKind.ExpectationViolation, "kernel", [res.violations.length]);
+      // 事件记账限流：违例是持续状态，逐 tick 重报会把定长事件环整个占满，
+      // 把真正要复盘的 CreepDeath/WarOutcome 挤出去（判据与实证见 expectations 注释）。
+      // 可读的违例明细始终留在 Memory.kernel.expectations，这里只管「要不要再敲一次铃」。
+      const signature = res.violations
+        .map(v => v.id)
+        .sort()
+        .join(",");
+      const g = globalCache();
+      if (shouldRecordExpectationEvent(g.expectationEvent, signature, ctx.tick)) {
+        g.expectationEvent = { signature, tick: ctx.tick };
+        recordEvent(EventKind.ExpectationViolation, "kernel", [res.violations.length]);
+      }
       if (res.p3Starved) {
         kernelMem.p3StarveBypassUntil = ctx.tick + P3_BYPASS_WINDOW_TICKS;
         const bucket = Game.cpu.bucket ?? 0;
