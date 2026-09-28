@@ -1,7 +1,12 @@
 /** 远矿道路与工地 — container site 收编、路径修路规划、阻断墙检测、道路覆盖率。 */
 import { CONFIG } from "../../config";
 import type { TickContext } from "../../kernel/contracts";
-import { querySquad, bumpRemoteOpLedger, roadBuildCounters } from "../../kernel/global-cache";
+import {
+  querySquad,
+  bumpRemoteOpLedger,
+  roadBuildCounters,
+  globalCache,
+} from "../../kernel/global-cache";
 import { getRemoteSiteTotal, getRemoteRoadSiteTotal, getTickSiteCounters } from "../site-quota";
 import { recycleRemoteDismantlers } from "./creep-recycle";
 import { structureCost } from "./op-lifecycle";
@@ -163,72 +168,32 @@ function nearEvidence(keys: ReadonlySet<string>, a: { x: number; y: number }): b
 }
 
 /**
- * 从跨房路径中筛选远矿房侧可铺路的格子（纯函数，供单测）。
- * 排除：已有 road / 任何工地 / container 等结构格 / source 近旁 1 格（采集位让给
- * container 与站桩 harvester）。sites/roads/structures 以 "x,y" key 集合传入。
- *
- * evidence 给出时，只保留「有施工证据」的格 —— 距已建成 road / progress>0 的 road site /
- * container ≤ 3。缺省（undefined）不加此约束（新开局：一条证据都还没有）。
- */
-export function selectRemoteRoadTiles(
-  path: RoomPosition[],
-  targetRoom: string,
-  sources: readonly { x: number; y: number }[],
-  blockedKeys: ReadonlySet<string>,
-  evidence?: ReadonlySet<string>,
-): RoomPosition[] {
-  const out: RoomPosition[] = [];
-  const seen = new Set<string>();
-  for (const pos of path) {
-    if (pos.roomName !== targetRoom) continue;
-    const key = `${pos.x},${pos.y}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (blockedKeys.has(key)) continue;
-    if (pos.x <= 0 || pos.x >= 49 || pos.y <= 0 || pos.y >= 49) continue; // 出口行留给通行
-    let nearSource = false;
-    for (const s of sources) {
-      if (Math.abs(s.x - pos.x) <= 1 && Math.abs(s.y - pos.y) <= 1) {
-        nearSource = true;
-        break;
-      }
-    }
-    if (nearSource) continue;
-    if (evidence && !nearEvidence(evidence, pos)) continue;
-    out.push(pos);
-  }
-  // 从目标端（container 侧）起铺：路径数组是「home 锚 → container」，正序即从边界往房内铺。
-  // 通勤 hauler 的建路半径 3 格，链路必须从「确定被走的一端」生长 —— container 旁每一格
-  // 都有 hauler 必经，边界那一端则取决于 creep 实际从哪个出口入境（见 planRemotePathRoads）。
-  return out.reverse();
-}
-
-/**
- * 远矿路径修路规划器 —— 每次运行对每个 active op：home 锚（storage 优先，退 spawn）
- * → 各 source container 的跨房路径，筛出远矿房侧可铺格，限速下 road site。
- * 施工不归本函数：通勤 hauler（1W body）经 buildRoadSiteUnderfoot 边走边建（range≤3）。
+ * 远矿修路规划器 —— 每次运行对每个 active op：把**本次进程实测被踩过**的通勤格按热度降序
+ * 限速下 road site；零进度又不在被走过的那条线上的残骸当场回收，把车道还出来。
+ * 施工不归本函数：通勤 hauler 经 buildRoadSiteUnderfoot 边走边建（range≤3）。
  * 全部 site 写在远矿房（本系统是远矿房唯一 site 写者，架构合规）。
  *
- * 落点错配（线上实证 W37S57 tick 83188364）：本函数的锚是 home storage + 纯地形代价
- * （PathFinder 无 cost matrix），而 creep 穿越边界用的是 moveTowardRoom 的
- * findClosestByRange(exitDir) + 堆栈粘性出口缓存 —— 谁先把缓存打冷，全房对就用谁的落点。
- * 两条线在边界处可以差十几格：x=28 列上 28,44/45/46 有进度（被走过）而紧邻的 28,47/48
- * progress=0（hauler 从 x≈18 入境，从没踏上这两格）。因为施工只能「脚下」发生，
- * 落在无人行走的线上的 site 永远不会建成，只会永久占着 roadSitesPerOpTotal 车道并触发
- * E7 siteStale。对策分两步、顺序不能反：先用施工证据闸把「铺路」约束成只跟被走过的线
- * 生长（并改从 container 端起铺），再回收零进度且无证据的残骸 —— 只有前者到位，回收才
- * 收敛（否则规划器下一轮原地重建，变成建/删循环）。两者在同一函数体内，稳态是每轮 0 次
- * remove、0 次新建，直到通勤线再次推进。
+ * 为什么不再用「home 锚 → container 的 PathFinder 预测线」下 site（2026-09-28 换掉）：
+ * 预测线用纯地形代价，而 creep 真正出境用的是 moveTowardRoom 的 findClosestByRange(exitDir)
+ * 加堆栈粘性出口缓存 —— 谁先把缓存打冷，全房对就用谁的落点；两条线在边界处能差十几格。
+ * 而施工只能「脚下」发生，铺在无人走的线上的 site 永远不会建成，只会永久占着
+ * roadSitesPerOpTotal 车道并触发 E7 siteStale。线上量到的正是这个形状：W36S58 挂 14 格 site、
+ * 进度和 970、建成 0，而通勤腿到最近 site 的距离「6-10 格 / 11+ 格」占 18/22
+ * （建路账本，见 domain/logistics/road-build）。
+ *
+ * 上一版为此加过「紧邻已有结构 / 已建 site 才算证据」的闸，但它**自证**：site 就下在
+ * container 旁边 ⇒ 天然"有证据"，既建不成也扫不掉，14 格就这么挂着。所以现在的证据只有一个
+ * 来源 —— 被踩过的格子本身。稳态是每轮 0 次 remove、0 次新建，直到通勤线再次推进。
+ *
+ * 冷启动（本次进程还没有热度）既不建也不扫：无从知道哪条线被走过时，"猜一条线"恰恰是上面
+ * 那 14 格的成因；而通勤腿会在几小时内把热度重新铺出来，这不是永久停摆。
  */
 export function planRemotePathRoads(
   homeRoom: string,
   remoteOps: Readonly<Record<string, RemoteOp>>,
   _ctx: TickContext,
 ): void {
-  const home = Game.rooms[homeRoom];
-  if (!home) return;
-  const anchor = home.storage ?? home.find(FIND_MY_SPAWNS)[0];
-  if (!anchor) return;
+  if (!Game.rooms[homeRoom]) return;
   // 独立预算车道：远矿路径 road 不占 maxNormalLaneSites（自有房常规工地帽会被
   // lab/rampart 长周期大活顶满，道路基建被无限饿死 —— 线上实证 maxNormalLaneSites=7
   // 全被占用）。上限 = 全帝国待建 road ≤ roadSitesPerOpTotal。求和口径必须跨主房：
@@ -259,42 +224,55 @@ export function planRemotePathRoads(
     }
 
     // 阻挡集：已有 road / 任何工地 / 任何结构（container 等）。
-    // 施工证据集（同两轮遍历顺带收集，不额外 find）：已建成 road / container /
-    // progress>0 的 road site —— 通勤 hauler 确实踩过的位置。
     const blockedKeys = new Set<string>();
-    const evidenceKeys = new Set<string>();
     // 实测账本（只读世界、写 heap，不参与任何决策）：判「这条通勤线上到底有没有施工」
     // 需要的是建成数与进度和，而不是再一次推理 —— 立案见 domain/logistics/road-build。
     let roadsBuilt = 0;
     let roadProgressSum = 0;
     for (const s of room.find(FIND_STRUCTURES)) {
       blockedKeys.add(`${s.pos.x},${s.pos.y}`);
-      if (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) {
-        evidenceKeys.add(`${s.pos.x},${s.pos.y}`);
-      }
       if (s.structureType === STRUCTURE_ROAD) roadsBuilt++;
     }
     for (const s of allSites) {
       blockedKeys.add(`${s.pos.x},${s.pos.y}`);
-      if (s.structureType === STRUCTURE_ROAD && s.progress > 0) {
-        evidenceKeys.add(`${s.pos.x},${s.pos.y}`);
-      }
       if (s.structureType === STRUCTURE_ROAD) roadProgressSum += s.progress;
     }
-    // 回收「零进度 + 拿不到施工证据」的 road site —— 这类格落在"规划线有人画、通勤线
-    // 没人走"的区段：出境点由 moveTowardRoom 的粘性出口缓存决定，与 home 锚的地形最短
-    // 路可以差十几格（线上实证 W37S57 28,47/48、W37S54 边界端 9 格）。progress=0 意味
-    // 一分能量都没投过，remove 零损失。加了施工证据闸之后新建 site 必然紧邻证据，故本
-    // 清扫的稳态是 0 次删除 —— 不是建/删循环。evidenceKeys 为空（这房连 container 都
-    // 没有）时跳过：此刻无从判断哪条线被走过，清扫会当场吃掉开局的第一段路。
-    if (evidenceKeys.size > 0) {
-      for (const s of allSites) {
-        if (s.structureType !== STRUCTURE_ROAD || s.progress > 0) continue;
-        if (nearEvidence(evidenceKeys, s.pos)) continue;
-        s.remove();
-        released++;
-        roadSitesPending--;
-      }
+
+    /**
+     * 施工证据 = **本次进程实测被踩过的格子**（`globalCache().roomTraffic`）。
+     *
+     * 为什么不用「离已有结构 ≤3」当证据（旧口径）：那个集合永远满足得了它要防的东西 ——
+     * site 就下在 container 旁边 ⇒ 它天然"紧邻证据"，于是既建不掉也没人回收。线上把这条
+     * 账走了三次才量准（2026-09-28 建路账本）：W36S58 挂 14 格 site、970 点进度、建成 0，
+     * 而通勤腿到最近 site 的距离落在「中 6-10 格 / 远 11+ 格」占 18/22 —— 规划线（home 锚
+     * + 纯地形 PathFinder）与真实走的那条线压根不是一条，铺在无人走的线上的 site 永远建不成，
+     * 还永久占着 roadSitesPerOpTotal 车道。
+     *
+     * 热度按 `x*50+y` 记账（与引擎 CostMatrix 同序），只在**有热度**时判决：本服每次
+     * global reset 都会清空 heap，此刻无从知道哪条线被走过 —— 不设闸就退回到"猜一条线"，
+     * 而猜错的代价正是上面那 14 格。所以热度为空的这一房本轮既不建也不扫（稳态是几小时内
+     * 通勤腿把热度重新铺出来，不是永久停摆）。
+     */
+    const walked = walkedHeatKeys(globalCache().roomTraffic?.[rn], CONFIG.remote.roadMinTileWalks);
+    if (walked.size === 0) {
+      // 无实测证据：只校正计数与账本，不动 site、不铺新格。
+      if (op.roadSiteCount !== roadSitesPending) op.roadSiteCount = roadSitesPending;
+      const coldCounters = roadBuildCounters(rn);
+      coldCounters.roadProgressSum = roadProgressSum;
+      coldCounters.roadSitesPending = roadSitesPending;
+      coldCounters.roadsBuilt = roadsBuilt;
+      continue;
+    }
+
+    // 回收「零进度 + 不在被走过的线上」的 road site。progress=0 意味着一分能量都没投过，
+    // remove 零损失，且当场把车道还回来。新铺的格子必然落在热度上，故本清扫的稳态是 0 次删除
+    // —— 不是建/删循环（旧版正是"规划器每轮原地重建同一格"才不敢开这个闸）。
+    for (const s of allSites) {
+      if (s.structureType !== STRUCTURE_ROAD || s.progress > 0) continue;
+      if (nearEvidence(walked, s.pos)) continue;
+      s.remove();
+      released++;
+      roadSitesPending--;
     }
     // 实测校正（本字段唯一写者）：与 op.siteCount 同款「会递减」，防只增不减锁死车道。
     // 记清扫后的口径 —— 残骸当场释放，不必等下一轮再减。
@@ -310,49 +288,89 @@ export function planRemotePathRoads(
     if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) continue;
     const sources = room.find(FIND_SOURCES);
 
-    for (const source of sources) {
+    // 铺路只沿着被走过的格子生长：热度高的格先铺（同分按坐标定序，保证同一输入同一结果）。
+    const tiles = selectWalkedRoadTiles(
+      globalCache().roomTraffic?.[rn],
+      blockedKeys,
+      sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
+      CONFIG.remote.roadMinTileWalks,
+    );
+    for (const tile of tiles) {
       if (created >= CONFIG.remote.roadSitesPerRun) break;
       if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) break;
-      const container = source.pos.findInRange(FIND_STRUCTURES, 1, {
-        filter: st => st.structureType === STRUCTURE_CONTAINER,
-      })[0] as StructureContainer | undefined;
-      const goal = container ? container.pos : source.pos;
-      const result = PathFinder.search(
-        anchor.pos,
-        { pos: goal, range: 1 },
-        {
-          maxRooms: 2,
-          plainCost: 2,
-          swampCost: 10,
-        },
-      );
-      const tiles = selectRemoteRoadTiles(
-        result.path,
-        rn,
-        sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
-        blockedKeys,
-        // 开局（一条证据都没有）不设闸，否则永远铺不出第一段路。
-        evidenceKeys.size > 0 ? evidenceKeys : undefined,
-      );
-      for (const pos of tiles) {
-        if (created >= CONFIG.remote.roadSitesPerRun) break;
-        if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) break;
-        if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) return;
-        const rc = room.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD);
-        if (rc === OK) {
-          created++;
-          roadSitesPending++;
-          blockedKeys.add(`${pos.x},${pos.y}`);
-          // 道路是运力倍增器（有路 hauler 速度 ×2），但也是实打实的能量投入，
-          // 记到 op 名下——否则「修路把远房变划算」的收益会被高估。
-          bumpRemoteOpLedger(homeRoom, rn, "infraCost", structureCost(STRUCTURE_ROAD));
-        } else {
-          // ERR_FULL / ERR_INVALID_TARGET（地形冲突等）：跳过该格，下轮重评。
-          blockedKeys.add(`${pos.x},${pos.y}`);
-        }
+      if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) return;
+      const rc = room.createConstructionSite(tile.x, tile.y, STRUCTURE_ROAD);
+      if (rc === OK) {
+        created++;
+        roadSitesPending++;
+        blockedKeys.add(tile.key);
+        // 道路是运力倍增器（有路 hauler 速度 ×2），但也是实打实的能量投入，
+        // 记到 op 名下——否则「修路把远房变划算」的收益会被高估。
+        bumpRemoteOpLedger(homeRoom, rn, "infraCost", structureCost(STRUCTURE_ROAD));
+      } else {
+        // ERR_FULL / ERR_INVALID_TARGET（地形冲突等）：跳过该格，下轮重评。
+        blockedKeys.add(tile.key);
       }
     }
   }
+}
+
+/**
+ * 通勤热度 → 「被真正踩过的格子」集合（键 "x,y"，与 nearEvidence 同口径）。
+ *
+ * `roomTraffic` 的键是 `x*50+y` 的数字串（`creeps/movement/traffic.ts` 复用
+ * `domain/layout/types.packPos`），所以这里必须换算 —— 两套键形直接混用会静默判不出命中。
+ */
+export function walkedHeatKeys(
+  traffic: Readonly<Record<string, number>> | undefined,
+  minWalks: number,
+): Set<string> {
+  const keys = new Set<string>();
+  if (!traffic) return keys;
+  for (const [packed, count] of Object.entries(traffic)) {
+    if (!(count >= minWalks)) continue;
+    const n = Number(packed);
+    if (!Number.isFinite(n) || n < 0) continue;
+    keys.add(`${Math.floor(n / 50)},${n % 50}`);
+  }
+  return keys;
+}
+
+/**
+ * 从实测热度里挑可铺路的格子（纯函数，返回 "x,y" 键 + 坐标，按踩过的次数降序）。
+ *
+ * 排除项与旧口径一致：出口行（0/49 边）留给通行、source 旁 1 格让给 container 与站桩
+ * harvester、已有结构与任何工地所在格不重复下站。
+ */
+export function selectWalkedRoadTiles(
+  traffic: Readonly<Record<string, number>> | undefined,
+  blockedKeys: ReadonlySet<string>,
+  sources: readonly { x: number; y: number }[],
+  minWalks: number,
+): { x: number; y: number; key: string }[] {
+  if (!traffic) return [];
+  const picked: { x: number; y: number; key: string; walks: number }[] = [];
+  for (const [packed, count] of Object.entries(traffic)) {
+    if (!(count >= minWalks)) continue;
+    const n = Number(packed);
+    if (!Number.isFinite(n) || n < 0) continue;
+    const x = Math.floor(n / 50);
+    const y = n % 50;
+    const key = `${x},${y}`;
+    if (blockedKeys.has(key)) continue;
+    if (x <= 0 || x >= 49 || y <= 0 || y >= 49) continue;
+    let nearSource = false;
+    for (const s of sources) {
+      if (Math.abs(s.x - x) <= 1 && Math.abs(s.y - y) <= 1) {
+        nearSource = true;
+        break;
+      }
+    }
+    if (nearSource) continue;
+    picked.push({ x, y, key, walks: count });
+  }
+  picked.sort((a, b) => b.walks - a.walks || a.key.localeCompare(b.key));
+  return picked.map(({ x, y, key }) => ({ x, y, key }));
 }
 
 /**

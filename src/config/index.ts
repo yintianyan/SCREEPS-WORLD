@@ -787,6 +787,13 @@ export const CONFIG = {
     enableRoadPlanning: true,
     /** 每次 manager 运行最多新下的 road site 数（全帝国口径，限速防挤占工地预算）。 */
     roadSitesPerRun: 3,
+    /**
+     * 一格要被当作「通勤真的走过」的证据，需要本次进程里被踩的次数下限。
+     * 定标依据：一趟往返约 50-100 tick，hauler 每趟踩过同一片走廊 —— 3 次约等于
+     * 「不止一次偶然路过」，又不至于要等很久才铺第一段路。远矿修路的落点现在**只认这个**
+     * （预测线铺 site 的旧口径量出来是 14 格 site / 0 条建成路，见 road-planner 注释）。
+     */
+    roadMinTileWalks: 3,
     /** 单个远矿 op 同时挂起的 road site 上限（铺完自然回落）。 */
     maxRoadSitesPerOp: 20,
     /** 全帝国待建 road site 总上限 —— 独立于 maxNormalLaneSites 的基建车道

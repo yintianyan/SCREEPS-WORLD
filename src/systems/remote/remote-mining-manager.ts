@@ -64,7 +64,7 @@ export {
   collectRemoteBlockers,
   type RemoteBlockerState,
 } from "./blocker-intel";
-export { fulfillContainerRequests, selectRemoteRoadTiles } from "./road-planner";
+export { fulfillContainerRequests, selectWalkedRoadTiles, walkedHeatKeys } from "./road-planner";
 
 export const remoteMiningManagerSystem: System = {
   name: "remote-mining-manager",
