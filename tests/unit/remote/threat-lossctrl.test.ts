@@ -367,6 +367,10 @@ describe("C-1/C-2 — expansion 状态机止损豁免", () => {
       },
     };
     g().Memory.rooms.W7N4 = { spawnQueue: [] };
+    g().Game.creeps.pioneer_1 = {
+      name: "pioneer_1",
+      memory: { role: "worker", home: "W9N9" },
+    };
     g().Game.rooms.W9N9 = {
       name: "W9N9",
       controller: { my: true },
@@ -381,12 +385,13 @@ describe("C-1/C-2 — expansion 状态机止损豁免", () => {
           ];
           return opts?.filter ? hostiles.filter(opts.filter) : hostiles;
         }
+        if (type === FIND_MY_CREEPS) {
+          // 引擎口径：房间里的我方 creep 由 Game.creeps 归属决定。状态机问「编队还在不在」
+          // 读的就是这个（编队索引只收有 remoteTarget/mission 的编队，拓荒队不在里面）。
+          return (Object.values(g().Game.creeps) as any[]).filter(c => c.memory?.home === "W9N9");
+        }
         return [];
       }),
-    };
-    g().Game.creeps.pioneer_1 = {
-      name: "pioneer_1",
-      memory: { role: "worker", home: "W9N9" },
     };
     syncSquadIndex();
 

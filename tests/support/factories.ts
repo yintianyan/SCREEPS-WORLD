@@ -143,7 +143,10 @@ export function syncSquadIndex(): void {
   const creeps = (globalThis as any).Game?.creeps ?? {};
   for (const [name, creep] of Object.entries(creeps) as [string, any][]) {
     const mem = creep.memory ?? {};
-    if (!mem.remoteTarget && !mem.mission && !mem.home) continue;
+    // 收录条件必须与内核同一条（kernel.ts 的 `remoteTarget || mission`）：把 `home`
+    // 也算进来会让假索引比 production 更宽，于是「只按 home 归属的殖民编制在索引里
+    // 不存在」这类缺陷在单测里永远看不见（扩张状态机就栽在这里）。
+    if (!mem.remoteTarget && !mem.mission) continue;
     entries.push({
       name,
       role: mem.role ?? "unknown",

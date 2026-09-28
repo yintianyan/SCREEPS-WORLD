@@ -231,10 +231,16 @@ export function blacklistTarget(roomName: string, tick: number): void {
 }
 
 export function reclaimExpeditionCreeps(target: string, sponsor: string): void {
-  // 回收远征队：home===target 的所有 creep + remoteTarget===target 的 claimer
-  for (const entry of querySquad({ home: target })) {
-    const creep = Game.creeps[entry.name];
-    if (!creep) continue;
+  // 回收远征队：home===target 的所有 creep。
+  //
+  // 不用 querySquad({home: target})：那个索引只收 `remoteTarget || mission` 的 creep，
+  // 而拓荒队（worker/builder）只有 home ⇒ 在生产里一条都不在索引内，于是扩张失败时
+  // **一只拓荒者都不会被召回**：它们带着 `home=<已经不属于自己的房>` 留在原地，
+  // 正好落进 role-runner 的「home 存在但无 snapshot ⇒ 不工作不移动不 flee」分支，
+  // 站到自然死亡（最长 1500 tick）；territory-manager 的无家清扫也救不了它们，
+  // 因为那个清扫只处理「人站在自有房里」的 creep。
+  for (const creep of Object.values(Game.creeps)) {
+    if (creep.memory.home !== target) continue;
     creep.memory.home = sponsor;
     creep.memory.remoteTarget = undefined;
     creep.memory.assignment = undefined;
