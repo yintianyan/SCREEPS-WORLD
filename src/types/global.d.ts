@@ -852,6 +852,9 @@ declare global {
     expansionDashboard?: {
       tick: number;
       summary: string;
+      /** 本轮没过的 readiness 闸门名（`G0: posture expansionAllowed` / `G1…` / `G6…`）——
+       * 光有 `Readiness=NOT_READY` 判不出该去做哪件事。 */
+      failedGates?: string[];
     };
     /**
      * A4.1 远矿经济 Dashboard 快照（specialization-planner 每 100t 写入）—

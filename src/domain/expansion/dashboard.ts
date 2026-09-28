@@ -111,6 +111,10 @@ export function buildExpansionDashboard(input: {
     `Expansion Dashboard @${tick}`,
     `Pressure=${pressure.level}(${pressure.score.toFixed(2)})`,
     `Readiness=${readiness.readiness}`,
+    // 卡在哪几道闸要写进这一行：`Readiness=NOT_READY` 单独存在时不区分「正在打仗」
+    // （G0 posture）、「有活威胁」（G1）与「CPU 余量不足」（G6），而这三种 NOT_READY
+    // 要做的动作互相没有交集。取闸门名的代号前缀，整行仍是给人读的一行。
+    `Blocked=${failedGates.length ? failedGates.map(g => g.split(":")[0]?.trim() ?? g).join("+") : "none"}`,
     `Budget=${budget.availableExpansion}/${budget.totalEnergy}${budget.coreInvaded ? " INVADED" : ""}`,
     `Candidates=${candidates.length}(Q=${qualified},R=${rejected},U=${unknown})`,
     `Plans=${activePlans.length} active, ${waitingExecution.length} waiting`,

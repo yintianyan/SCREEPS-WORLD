@@ -264,6 +264,10 @@ export const expansionPlannerSystem: System = {
     Memory.kernel.expansionDashboard = {
       tick: ctx.tick,
       summary: dashboard.summary,
+      // 闸门明细本来就已经算出来了，只是从来没落盘：线上只看到 `Readiness=NOT_READY`
+      // 这一个词，而 G0（在打仗）/G1（有活威胁）/G6（CPU 余量）三种 NOT_READY 的动作
+      // 完全不同 —— 分不清就会去优化错的那一个。
+      failedGates: dashboard.readiness.failedGates,
     };
 
     log.info("expansion-planner", `expansion-planner: ${dashboard.summary}`);
