@@ -116,6 +116,11 @@ export interface GlobalCache {
   distributorRooms?: ReadonlySet<string>;
   /** 【F1/G-B】各系统 CPU 消耗 EMA（budgetCap 局部截断判据）。heap 存储，reset 后从零重建（EMA 快速收敛可接受）。 */
   systemBudgetEma?: Map<string, number>;
+  /**
+   * 系统单价的 per-tick 口径（EMA ÷ interval）—— 判「这个系统一天吃多少 CPU」只能用这个，
+   * 上面那份是 per-run 的，低频系统的 per-run 单价摊到每拍要小两个数量级。
+   */
+  systemCpuPerTick?: Record<string, number>;
   /** P3 能量核算 L1 计数器（bumpEnergyCounter 写入；economy 系统每窗滚动消费）。 */
   energyLedger?: { tick: number; rooms: Record<string, RoomEnergyCounters> };
   /** 远矿每 op 收支账本（key = remoteOpKey(home, target)）。

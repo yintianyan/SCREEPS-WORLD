@@ -306,6 +306,16 @@ function sampleMemorySize(_tick: number): void {
         [...g.systemBudgetEma.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10),
       );
     }
+    if (g.systemCpuPerTick && Object.keys(g.systemCpuPerTick).length > 0) {
+      // 同一份账的 per-tick 口径（÷interval，内核算）—— 与上面那份一起落，是为了让
+      // 「谁在吃产能」这个问题有唯一答案：EMA 排出来的榜会把低频系统错当成大户。
+      (Memory.kernel.stats as any).cpuPerTickBySystem = Object.fromEntries(
+        Object.entries(g.systemCpuPerTick as Record<string, number>)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([k, v]) => [k, Math.round(v * 100) / 100]),
+      );
+    }
     if (g.roadBuildLedger && Object.keys(g.roadBuildLedger).length > 0) {
       // 通勤建路账本快照（heap 累计值原样落一份，供体检脚本做差）：不参与任何决策。
       (Memory.kernel.stats as any).roadBuild = { ...g.roadBuildLedger };

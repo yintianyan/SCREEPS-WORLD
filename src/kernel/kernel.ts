@@ -465,15 +465,7 @@ export class Kernel {
           system.priority === 0 || isRecoveryExempt,
         ),
       );
-      {
-        const gEma = globalCache();
-        const emaMap = gEma.systemBudgetEma ?? (gEma.systemBudgetEma = new Map<string, number>());
-        const prevEma = emaMap.get(system.name);
-        emaMap.set(
-          system.name,
-          prevEma === undefined ? cpuCostSys : prevEma * 0.8 + cpuCostSys * 0.2,
-        );
-      }
+      this.recordSystemEma(system, cpuCostSys);
       const gRun = globalCache();
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
       if (ctx.budget.isExhausted()) break;
@@ -785,15 +777,7 @@ export class Kernel {
           system.priority === 0, // P0 系统是关键的 — 永不冷却。
         ),
       );
-      {
-        const gEma = globalCache();
-        const emaMap = gEma.systemBudgetEma ?? (gEma.systemBudgetEma = new Map<string, number>());
-        const prevEma = emaMap.get(system.name);
-        emaMap.set(
-          system.name,
-          prevEma === undefined ? cpuCostPost : prevEma * 0.8 + cpuCostPost * 0.2,
-        );
-      }
+      this.recordSystemEma(system, cpuCostPost);
       const gRun = globalCache();
       (gRun.systemLastRun ??= {})[system.name] = ctx.tick;
       if (ctx.budget.isExhausted()) break;
@@ -815,17 +799,31 @@ export class Kernel {
    * critical=true 同时意味着它不进 safeRun 失败冷却链 —— 观测被静默禁用正是本次
    * 事故最难查的部分。代价：已耗尽的 tick 上也要再花它这一份（偶发把 tick 推过
    * Game.cpu.limit，花的是 bucket）。 */
+  /**
+   * 记系统单价：per-run EMA（调度侧 budgetCap 用它）+ per-tick 归一值（扩张雄心用它）。
+   *
+   * 为什么要单独再算一份 per-tick：EMA 是「跑一次多少钱」，而 interval 相差 100 倍
+   * （spawn-manager=1 与 expansion-planner=100 同量级 EMA 完全不是一回事）。历史上这里
+   * 只出 EMA，于是拿它排 CPU 榜会把低频系统错当成大户 —— 定标一次就错过 1000 倍。
+   * 归一在写这里做，因为只有内核同时看得见单价与 cadence。
+   */
+  private recordSystemEma(system: System, cost: number): void {
+    const gEma = globalCache();
+    const emaMap = gEma.systemBudgetEma ?? (gEma.systemBudgetEma = new Map<string, number>());
+    const prevEma = emaMap.get(system.name);
+    const ema = prevEma === undefined ? cost : prevEma * 0.8 + cost * 0.2;
+    emaMap.set(system.name, ema);
+    (gEma.systemCpuPerTick ??= {})[system.name] = cpuPerTickOfRun(ema, system.interval);
+  }
+
   private runObservabilitySystems(ctx: Context): void {
     for (const system of this.observabilitySystems) {
       if (!this.shouldRunSystem(system, ctx)) continue;
       const cpuCost = measuredRun(`system/${system.name}`, () =>
         safeRun(`system/${system.name}`, () => system.run(ctx), true),
       );
-      const gEma = globalCache();
-      const emaMap = gEma.systemBudgetEma ?? (gEma.systemBudgetEma = new Map<string, number>());
-      const prevEma = emaMap.get(system.name);
-      emaMap.set(system.name, prevEma === undefined ? cpuCost : prevEma * 0.8 + cpuCost * 0.2);
-      (gEma.systemLastRun ??= {})[system.name] = ctx.tick;
+      this.recordSystemEma(system, cpuCost);
+      (globalCache().systemLastRun ??= {})[system.name] = ctx.tick;
     }
   }
 
@@ -1029,6 +1027,18 @@ const BASELINE_SAMPLE_INTERVAL = 10;
  * 为什么需要这层：recovery tier 下 telemetry-collector 被完全禁用（E-FINDING-02），
  * 如果没有保底采样，灾后恢复期间将完全没有可观测数据——"最需要诊断时最没诊断"。
  * 这个函数由 kernel 在 safeRun(critical=true) 中直接调用，不经过 scheduler。 */
+/**
+ * 单次单价 EMA → 每 tick 摊多少 CPU。
+ *
+ * 两份口径必须分开看：interval 相差 100 倍的系统，per-run 单价同量级也完全不是一回事
+ * （expansion-planner 跑一次 3 CPU / 100 tick = 0.03 每拍，traffic-manager 跑一次 1.9 CPU
+ * 每拍 = 1.9）。帝国级的产能判断（扩张雄心、档位）只能用后者 —— 拿前者排榜会把低频系统
+ * 错当成大户，这个单位错配本项目真付过一次学费。
+ */
+export function cpuPerTickOfRun(emaPerRun: number, interval: number | undefined): number {
+  return emaPerRun / Math.max(1, interval ?? 1);
+}
+
 export function sampleBaselineMetrics(tick: number, budget: Budget): void {
   if (tick % BASELINE_SAMPLE_INTERVAL !== 0) return;
 
