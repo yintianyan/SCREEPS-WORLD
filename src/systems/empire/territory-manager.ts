@@ -188,6 +188,11 @@ function finalizeRelease(
   if (tuning?.rooms) delete tuning.rooms[room];
   if (tuning?.lastEval) delete tuning.lastEval[room];
   if (kernel.lostRooms) delete kernel.lostRooms[room];
+  // 跨房调拨的两本账也按房名引用它，unclaim 后没人再清 —— 线上实证代价：释放 W37S55 后
+  // 留下一只 carrier remoteTarget=W37S55，取满能却无处卸（那间房已无我方 storage），
+  // 把整段寿命 idle 在源房烧掉编制；而 supplyContract 没有 deadline，会永久挂在账上被
+  // logistics-planner 每轮读。二者都只按「两端有一端是这间房」判，不猜语义。
+  dropCrossRoomLedgersFor(kernel, room);
   // 驻留该房的 power creep 换房：条目留着会让 power-creep-manager 指向一间已失去的房。
   if (kernel.powerCreeps?.homeAssignments) {
     for (const [pcName, assigned] of Object.entries(kernel.powerCreeps.homeAssignments)) {
@@ -217,6 +222,44 @@ function finalizeRelease(
 }
 
 /**
+ * 摘掉指向这间房的跨房调拨账：Operation（`agendas`）与 SupplyContract 各一份，
+ * 两端任一命中即算，顺带释放这些 Operation 名下的预留。
+ *
+ * 为什么不等各自的过期通道：Operation 的 `verifying` 确实会自己超时判失败，但
+ * SupplyContract 没有 deadline —— 它会永久留在账上被 logistics-planner 每轮读，
+ * 而 `releasedExclusionTicks` 只管得住「重占」，管不住账本。
+ */
+function dropCrossRoomLedgersFor(kernel: KernelMemory, room: string): void {
+  const operations = (kernel.agendas ?? []) as Array<{
+    id?: string;
+    sourceRoom?: string;
+    targetRoom?: string;
+  }>;
+  const droppedIds: string[] = [];
+  for (const op of operations) {
+    if (op.sourceRoom === room || op.targetRoom === room) {
+      if (typeof op.id === "string") droppedIds.push(op.id);
+    }
+  }
+  if (droppedIds.length > 0) {
+    kernel.agendas = operations.filter(
+      op => op.sourceRoom !== room && op.targetRoom !== room,
+    ) as unknown[];
+    if (kernel.reservations) {
+      for (const id of droppedIds) delete kernel.reservations[id];
+    }
+  }
+
+  const contracts = kernel.supplyContracts as Array<{ s?: string; t?: string }> | undefined;
+  if (Array.isArray(contracts)) {
+    const kept = contracts.filter(c => c.s !== room && c.t !== room);
+    if (kept.length !== contracts.length) {
+      kernel.supplyContracts = kept;
+    }
+  }
+}
+
+/**
  * 事后清扫：home 仍指向「已释放且不再属于我们」的房的 creep。
  *
  * 后果若不处理是永久性的：role-runner 见 `home && !snapshot` 直接 return —— 这些 creep
@@ -224,6 +267,13 @@ function finalizeRelease(
  * 都看不到它们（回收索引按 home 归桶，home 是一间已不在 snapshots 里的房）。
  * 修法是把 home 改到它**当前所在的自有房**并打上 recycle：home 落在自有房后，那间房的
  * recyclePass 就会正常接管（同房引导至最近 spawn 回收残值）。
+ *
+ * 第二类同族后果是 **carrier 的 remoteTarget**：carrier 只在自有房之间调拨（acquire 在
+ * home 取能、work 去 remoteTarget 卸能），目标房一旦不再是我们的，它就再没有任何可做的
+ * 动作 —— 取满能、导航到那间房、找不到我方 storage、回空、再取，把整段寿命烧成编制与 CPU。
+ * 线上实证：释放 W37S55 后留下一只 `carrier-W37S58-…` remoteTarget=W37S55、mode=idle。
+ * 只对 carrier 收，不对其它带 remoteTarget 的角色收 —— 远矿角色的目标本来就该是无主房，
+ * 且「把已放弃的房按远矿重新捡起来」是扩张路径的合法判断，不能在这里替它否决。
  */
 function sweepHomelessCreeps(ctx: TickContext): void {
   const released = Memory.kernel?.releasedRooms;
@@ -245,10 +295,24 @@ function sweepHomelessCreeps(ctx: TickContext): void {
     const creep = Game.creeps[name];
     if (!creep) continue;
     const home = creep.memory.home;
-    if (!home || released[home] === undefined || owned.has(home)) continue;
-    if (!owned.has(creep.room.name)) continue; // 身处远矿房：留给它自己走到有主的房
-    creep.memory.home = creep.room.name;
-    creep.memory.recycle = true;
+    const homeless = home !== undefined && released[home] !== undefined && !owned.has(home);
+    if (homeless) {
+      if (!owned.has(creep.room.name)) continue; // 身处远矿房：留给它自己走到有主的房
+      creep.memory.home = creep.room.name;
+      creep.memory.recycle = true;
+      continue;
+    }
+    // carrier 的调拨两端都必须是自有房：目标房被放弃后它再没有任何可做的动作
+    // （取满能 → 导航过去 → 无我方 storage → 回空 → 重复），留着就是白烧一段编制。
+    const target = creep.memory.remoteTarget;
+    if (
+      creep.memory.role === "carrier" &&
+      target !== undefined &&
+      released[target] !== undefined &&
+      !owned.has(target)
+    ) {
+      creep.memory.recycle = true;
+    }
   }
 }
 

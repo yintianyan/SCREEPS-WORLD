@@ -208,6 +208,38 @@ describe("territory-manager — 收尾清账", () => {
     expect(mem.rooms[DOOMED]).toBeDefined(); // 不再清第二次的账
   });
 
+  it("跨房调拨账里指向这间房的条目一并摘掉（Operation + SupplyContract + 预留）", () => {
+    installMemory();
+    installGame();
+    const mem = (globalThis as any).Memory;
+    // 三条 Operation： doomed 作目标 / doomed 作来源 / 与 doomed 无关（必须活着）。
+    mem.kernel.agendas = [
+      { id: "op-to-doomed", sourceRoom: CORE, targetRoom: DOOMED, status: "verifying" },
+      { id: "op-from-doomed", sourceRoom: DOOMED, targetRoom: CORE, status: "running" },
+      { id: "op-unrelated", sourceRoom: CORE, targetRoom: "W37S57", status: "running" },
+    ];
+    // 预留表按 opId 索引：只该摘掉上面两条的额度。
+    mem.kernel.reservations = {
+      "op-to-doomed": { amount: 1000 },
+      "op-from-doomed": { amount: 2000 },
+      "op-unrelated": { amount: 3000 },
+    };
+    // SupplyContract 是瘦快照（缩写字母字段），且**没有 deadline** —— 不摘就永久留着。
+    mem.kernel.supplyContracts = [
+      { i: "c-to", s: CORE, t: DOOMED },
+      { i: "c-from", s: DOOMED, t: CORE },
+      { i: "c-unrelated", s: CORE, t: "W37S57" },
+    ];
+
+    territoryManagerSystem.run(makeCtx([CORE, DOOMED])); // 先排空
+    installGame({ ownedHere: false });
+    territoryManagerSystem.run(makeCtx([CORE])); // 房已不在手里
+
+    expect(mem.kernel.agendas.map((o: any) => o.id)).toEqual(["op-unrelated"]);
+    expect(Object.keys(mem.kernel.reservations)).toEqual(["op-unrelated"]);
+    expect(mem.kernel.supplyContracts.map((c: any) => c.i)).toEqual(["c-unrelated"]);
+  });
+
   it("排除表过期即放手，不再无限期否决重占", () => {
     installMemory();
     installGame();
@@ -259,6 +291,64 @@ describe("territory-manager — 事后清扫无家 creep", () => {
     territoryManagerSystem.run(makeCtx([CORE]));
 
     expect((globalThis as any).Game.creeps["remoteHa-W37S55-c"].memory.home).toBe(DOOMED);
+  });
+
+  it("carrier 的 remoteTarget 指向已释放房：送回收（它两端都得是自有房才有的活干）", () => {
+    installMemory();
+    installGame();
+    const mem = (globalThis as any).Memory;
+    mem.kernel.releasedRooms = { [DOOMED]: (globalThis as any).Game.time - 10 };
+    mem.kernel.roomRelease = undefined;
+    // home 是自有房 ⇒ 走不到「无家」那条分支；这只 carrier 的浪费全部来自 remoteTarget。
+    (globalThis as any).Game.creeps = {
+      "carrier-home-ok": {
+        name: "carrier-home-ok",
+        memory: { home: CORE, role: "carrier", remoteTarget: DOOMED, mode: "idle" },
+        room: { name: CORE },
+      },
+    };
+
+    territoryManagerSystem.run(makeCtx([CORE]));
+
+    expect((globalThis as any).Game.creeps["carrier-home-ok"].memory.recycle).toBe(true);
+  });
+
+  it("远矿角色的 remoteTarget 指向已释放房：不动它 —— 无主房本就是远矿目标的常态", () => {
+    installMemory();
+    installGame();
+    const mem = (globalThis as any).Memory;
+    mem.kernel.releasedRooms = { [DOOMED]: (globalThis as any).Game.time - 10 };
+    mem.kernel.roomRelease = undefined;
+    (globalThis as any).Game.creeps = {
+      "rh-target-released": {
+        name: "rh-target-released",
+        memory: { home: CORE, role: "remoteHauler", remoteTarget: DOOMED },
+        room: { name: DOOMED },
+      },
+    };
+
+    territoryManagerSystem.run(makeCtx([CORE]));
+
+    expect((globalThis as any).Game.creeps["rh-target-released"].memory.recycle).toBeUndefined();
+  });
+
+  it("carrier 目标房仍在手里：不动它（正常调拨链路不能被清扫误伤）", () => {
+    installMemory();
+    installGame();
+    const mem = (globalThis as any).Memory;
+    mem.kernel.releasedRooms = { [DOOMED]: (globalThis as any).Game.time - 10 };
+    mem.kernel.roomRelease = undefined;
+    (globalThis as any).Game.creeps = {
+      "carrier-target-alive": {
+        name: "carrier-target-alive",
+        memory: { home: CORE, role: "carrier", remoteTarget: "W37S57" },
+        room: { name: CORE },
+      },
+    };
+
+    territoryManagerSystem.run(makeCtx([CORE, "W37S57"]));
+
+    expect((globalThis as any).Game.creeps["carrier-target-alive"].memory.recycle).toBeUndefined();
   });
 
   it("清扫窗口外不再遍历 Game.creeps（历史释放不构成长期成本）", () => {

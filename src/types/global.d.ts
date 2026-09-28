@@ -826,6 +826,12 @@ declare global {
      */
     reservations?: Record<string, unknown>;
     /**
+     * A5 跨房供给合同瘦快照（specialization-planner 写入，logistics-planner 每轮读）。
+     * 瘦快照字段是缩写字母（i/s/t/r/…），类型由各读者本地声明；此处只登记「存在且是数组」，
+     * 以便领土释放能按房名摘掉条目 —— 它没有 deadline，不摘就永久留在账上。
+     */
+    supplyContracts?: unknown[];
+    /**
      * A3.2 扩张计划列表（expansion-planner 每 interval tick 写入）— 有界列表，
      * 最多 MAX_ACTIVE_PLANS(5) 个 Active Plan + 终态 Plan 保留期内条目。
      * A3.2 只产出 Plan（到 WAITING_EXECUTION），不执行 Claim/Reserve/Bootstrap。
