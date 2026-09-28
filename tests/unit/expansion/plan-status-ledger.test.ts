@@ -116,6 +116,20 @@ describe("B5-㉒ EXECUTING 算在途", () => {
     expect(result.plans).toHaveLength(1);
   });
 
+  it("同一 planId 不允许记成两条：CANCELLED 孪生还在冷却期也不给重复身份留位置", () => {
+    // planId = roomName + discoveredAt；候选的 discoveredAt 会活过一轮取消，
+    // 于是同房重新立项会拿到同一个 id。终态回写按 planId 找第一条 —— 两条同 id 时
+    // COMPLETED 会写进那条早已终态的孪生记录，真在执行的那条永远停在 EXECUTING，
+    // 而同房互斥又把这间房永久挡死。
+    const twin = planWith(TARGET, "CANCELLED", TICK - 100);
+    const reborn = planWith(TARGET, "READY", TICK - 100);
+    const result = deduplicatePlans([twin], reborn);
+
+    expect(result.deduplicated).toBe(true);
+    expect(result.plans).toHaveLength(1);
+    expect(result.plans[0]?.status).toBe("CANCELLED");
+  });
+
   it("但「正在执行」不等于「刚失败」：EXECUTING 不进重建冷却", () => {
     // 界线要钉住：修上一条时若把 EXECUTING 塞进 isRebuildBlocked 的判据，
     // 一次成功的扩张就会把那片房锁 10000 tick。

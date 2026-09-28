@@ -57,6 +57,14 @@ export function deduplicatePlans(
   if (conflict) {
     return { plans: [...existing], deduplicated: true };
   }
+  // planId 是 roomName + discoveredAt 派生的，而 discoveredAt 跟着候选活下来 ——
+  // 于是"同一间房在 CANCELLED 孪生记录还在冷却期时被重新立项"会拿到**同一个 planId**。
+  // 终态回写 (`updatePlanStatus`) 是按 planId 找第一条，重复 id 会把 COMPLETED 写进那条
+  // 早已终态的孪生记录里，真正在执行的计划永远停在 EXECUTING —— 而 EXECUTING 算在途，
+  // 上面那条同房互斥就会把这间房永久挡死。身份唯一性在这里守，比在每个读者那里防便宜。
+  if (existing.some(p => p.planId === newPlan.planId)) {
+    return { plans: [...existing], deduplicated: true };
+  }
   return { plans: [...existing, newPlan], deduplicated: false };
 }
 
