@@ -310,6 +310,10 @@ function sampleMemorySize(_tick: number): void {
       // 通勤建路账本快照（heap 累计值原样落一份，供体检脚本做差）：不参与任何决策。
       (Memory.kernel.stats as any).roadBuild = { ...g.roadBuildLedger };
     }
+    if (g.tradeLedger) {
+      // 贸易决策现场快照（heap 原样落一份）：判"被闸挡掉"还是"跑了但决定不交易"。
+      (Memory.kernel.stats as any).trade = { ...g.tradeLedger };
+    }
     if (size > MEMORY_SIZE_ALERT) {
       log.warn(
         "telemetry-collector",

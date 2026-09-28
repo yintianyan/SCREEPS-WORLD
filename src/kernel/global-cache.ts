@@ -71,6 +71,8 @@ export interface GlobalCache {
   expectationEvent?: import("./expectations").ExpectationEventMark;
   /** 本次进程（global reset 后第一次 tick）的 tick —— 与同样活在 heap 的 systemLastRun 对齐。 */
   processBootTick?: number;
+  /** 贸易决策实测账本（写者 terminal-manager，读者 telemetry 快照）：为什么不动作的现场。 */
+  tradeLedger?: import("../domain/industry/trade-ledger").TradeLedger;
   /**
    * 通勤建路实测账本（heap，按房累加，自本次进程起）：远矿道路「建成 0」这件事查了三次
    * 定不了案，因为三种归因（代价参数、落点错配、身子没有 WORK）各自都能自圆其说，

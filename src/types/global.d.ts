@@ -422,6 +422,8 @@ declare global {
        * 存在的理由与字段语义见 domain/logistics/road-build —— 纯观测，无消费者做决策。
        */
       roadBuild?: Record<string, import("../domain/logistics/road-build").RoadBuildCounters>;
+      /** 贸易决策实测账本快照（terminal-manager 写 heap，本处落一份供体检读）。 */
+      trade?: import("../domain/industry/trade-ledger").TradeLedger;
       /** Memory 原始字符串体积（字符数），每 100 tick 采样。
        * RawMemory.get().length — 零 JSON 解析成本，只读字符串长度。
        * 官服上限 2MB（2*1024*1024）[Fact: typings 验证]；超 1.5MB 告警。 */

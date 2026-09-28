@@ -11,6 +11,7 @@ import {
 import { pickBestBuyOrder } from "../../domain/industry/terminal-policy";
 import { computeDynamicSellPrice } from "../../domain/industry/market-pricing";
 import { collectDemands } from "../../domain/industry/procurement";
+import { createTradeLedger, type TradeLedger } from "../../domain/industry/trade-ledger";
 import { globalCache } from "../../kernel/global-cache";
 import type { TransportPlan } from "../../domain/logistics/transport-plan";
 import {
@@ -41,20 +42,49 @@ import {
 } from "./terminal-market";
 import { tryEmpireEnergyAid, tryEmpireMineralAid, tryNukeSalvage } from "./terminal-selfaid";
 
+/** 取（或建行）贸易决策账本 —— heap 单例，写者只有本系统，读者是 telemetry 快照。 */
+function tradeLedger(): TradeLedger {
+  const g = globalCache();
+  return (g.tradeLedger ??= createTradeLedger());
+}
+
 export const terminalManagerSystem: System = {
   name: "terminal-manager",
   priority: 3 as Priority,
   interval: CONFIG.market.interval,
   run(ctx: TickContext): void {
+    // 决策实测账本（heap，由 telemetry 落到 stats.trade）：只记录，不参与任何判断。
+    // 存在的理由见 domain/industry/trade-ledger —— 贸易此前是唯一"线上看不见在想什么"的模块。
+    const ledger = tradeLedger();
+    ledger.runs++;
+    ledger.lastTick = ctx.tick;
+    ledger.gatedBy = "";
+    ledger.bucket = Game.cpu.bucket ?? 0;
+    ledger.credits = Game.market?.credits ?? 0;
+    ledger.myOrders = Game.market?.orders ? Object.keys(Game.market.orders).length : 0;
+    ledger.roomsWithTerminal = 0;
+    ledger.roomsOnCooldown = 0;
+    ledger.terminalEnergy = 0;
+    ledger.storageEnergy = 0;
+
     // nuke 资产抢救：生存动作 — 先于市场 API / tier / bucket
     // 门禁执行（send 不依赖市场 API；被 nuke 瞄准的房可能正处于战时 CPU 降档）。
     tryNukeSalvage(ctx);
 
     // 私服/测试环境无市场 API — 安全跳过。
-    if (typeof Game.market?.getAllOrders !== "function") return;
+    if (typeof Game.market?.getAllOrders !== "function") {
+      ledger.gatedBy = "no-market-api";
+      return;
+    }
     // 贸易不是生存关键：仅在 CPU 富余时运行。
-    if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") return;
-    if ((Game.cpu.bucket ?? 0) < CONFIG.market.minBucket) return;
+    if (ctx.budget.tier !== "healthy" && ctx.budget.tier !== "guarded") {
+      ledger.gatedBy = "cpu-tier";
+      return;
+    }
+    if ((Game.cpu.bucket ?? 0) < CONFIG.market.minBucket) {
+      ledger.gatedBy = "bucket";
+      return;
+    }
 
     // ── 行情快照采集 ──
     // 每 interval tick 运行时先采集当前市场行情（最低卖价/最高买价）写入
@@ -89,12 +119,18 @@ export const terminalManagerSystem: System = {
     for (const snapshot of ctx.snapshots()) {
       const terminal = snapshot.terminal;
       if (!terminal) continue;
+      ledger.roomsWithTerminal++;
+      ledger.terminalEnergy += terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+      ledger.storageEnergy += snapshot.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
 
       // 0.8 挂单生命周期管理：超龄撤单 + 大宗盈余挂 sell 单
       //（不占 terminal 冷却 — createOrder/cancelOrder 是账户操作）。
       tryManageSellOrders(snapshot);
 
-      if (terminal.cooldown > 0) continue;
+      if (terminal.cooldown > 0) {
+        ledger.roomsOnCooldown++;
+        continue;
+      }
 
       // Plan 驱动候选：如果本房 terminal 在 Plan 的请求中，注入 Plan 驱动的候选。
       // Plan 驱动的 terminal.send 优先级最高（Network 计划 > 自主市场决策）。
