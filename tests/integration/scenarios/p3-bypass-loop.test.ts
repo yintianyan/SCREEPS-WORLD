@@ -76,7 +76,11 @@ describe("P3 饥饿旁路（E2）— 自愈闭环", () => {
             cpuAvg10: 18,
           };
           // boot 宽限与 P3 停摆宽限均已远超（E2 立即生效）。
+          // E2 的计时基准是**本次进程**的启动 tick（heap），与 systemLastRun 同生命周期 ——
+          // 注入饥饿态时必须把它推到足够老，否则测出来的是「进程刚起还不到 1500 tick，
+          // 尚不judge」这条正确的保护，而不是饥饿本身。
           g().Memory.kernel.bootTick = (g().Game.time as number) - 6000;
+          globalCache().processBootTick = (g().Game.time as number) - 6000;
           const stale = globalCache().systemLastRun ?? {};
           for (const name of p3Names) stale[name] = (g().Game.time as number) - 9999;
           globalCache().systemLastRun = stale;

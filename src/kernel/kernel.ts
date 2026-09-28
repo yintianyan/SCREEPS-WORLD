@@ -528,6 +528,9 @@ export class Kernel {
       tick: ctx.tick,
       statsLastSample: kernelMem.stats?.lastSample,
       bootTick: kernelMem.bootTick,
+      // E2 用本次进程启动 tick（heap）：systemLastRun 也是 heap，两者必须同生共死，
+      // 否则每次部署后所有 P3 系统都会因「表被清空」被误判饥饿。
+      p3BootTick: (g.processBootTick ??= ctx.tick),
       systemLastRun: g.systemLastRun ?? {},
       p3Systems,
       spawnQueues,

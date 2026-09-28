@@ -1,13 +1,18 @@
 /**
- * 期望违例的事件记账限流 —— 自我诊断通道不能反过来把观测系统打穿。
- * 立案依据（线上实测）：一段约 430 tick 跨度的事件环里装了 394 条 ExpectationViolation，
- * CreepDeath / WarOutcome / ProspectOutcome 全被挤出环外；而违例本身是「持续状态」
- * （一条卡住的孵化请求会连续成千上万 tick 都在 violations 里）。
+ * 期望自检的两处「信号本身会骗人」的判据：
+ * ① 违例事件必须限流 —— 否则自我诊断通道把定长事件环刷满，其它观测全被挤出；
+ * ② E2 的计时基准必须与 heap 的 systemLastRun 同生命周期 —— 否则每次部署后所有 P3
+ *    系统都被判饥饿，而这个假信号会真的去续期饥饿旁路。
+ * 立案依据（线上实测）：一段约 430 tick 跨度的事件环里装了 389 条 ExpectationViolation；
+ * 部署后 8 分钟内 `p3Starved:tuning-engine(age=never)` 持续违例，而它只是还没轮到第一次执行。
  */
 import { describe, expect, it } from "vitest";
 import {
+  evaluateExpectations,
   EXPECTATION_EVENT_HEARTBEAT_TICKS,
+  P3_BOOT_GRACE_TICKS,
   shouldRecordExpectationEvent,
+  type P3SystemRef,
 } from "../../../src/kernel/expectations";
 
 const E3 = "spawnQueueStale:W37S58";
@@ -45,5 +50,46 @@ describe("expectations — 违例事件限流", () => {
     const prev = { signature: a, tick: 1000 };
     expect(b).toBe(a);
     expect(shouldRecordExpectationEvent(prev, b, 1001)).toBe(false);
+  });
+});
+
+describe("expectations — E2 P3 饥饿的计时基准（必须与 heap 的 systemLastRun 同生命周期）", () => {
+  const p3Systems: P3SystemRef[] = [{ name: "tuning-engine", interval: 500 }];
+  const TICK = 200000;
+
+  function run(overrides: Partial<Parameters<typeof evaluateExpectations>[0]> = {}) {
+    return evaluateExpectations({
+      tick: TICK,
+      statsLastSample: TICK,
+      bootTick: 1000, // Memory 里的启动 tick：跨 global reset 存活，已经很旧
+      systemLastRun: {}, // heap：部署/重置后是空的 —— 真实"从未跑过"与"表被清空"无法区分
+      p3Systems,
+      ...overrides,
+    });
+  }
+
+  it("回归：本次进程刚启动（processBootTick 新）时不得因表空而判饥饿", () => {
+    const res = run({ p3BootTick: TICK - P3_BOOT_GRACE_TICKS + 100 });
+    expect(res.violations.map(v => v.id)).not.toContain("p3Starved:tuning-engine");
+    expect(res.p3Starved).toBe(false);
+  });
+
+  it("同一份旧 bootTick 下，进程真的老了仍必须报饥饿（旁路不能被削弱成永不自检）", () => {
+    const res = run({ p3BootTick: TICK - P3_BOOT_GRACE_TICKS - 10000 });
+    expect(res.violations.map(v => v.id)).toContain("p3Starved:tuning-engine");
+    expect(res.p3Starved).toBe(true);
+  });
+
+  it("系统确实跑过就不报（与基准无关的正常态）", () => {
+    const res = run({
+      p3BootTick: TICK - P3_BOOT_GRACE_TICKS - 10000,
+      systemLastRun: { "tuning-engine": TICK - 10 },
+    });
+    expect(res.violations.map(v => v.id)).not.toContain("p3Starved:tuning-engine");
+  });
+
+  it("p3BootTick 缺失时回退到 Memory bootTick（旧调用方语义不变）", () => {
+    const res = run();
+    expect(res.violations.map(v => v.id)).toContain("p3Starved:tuning-engine");
   });
 });

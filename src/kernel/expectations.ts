@@ -231,6 +231,8 @@ export interface E3ViolationRecord {
 export function evaluateExpectations(input: {
   tick: number;
   bootTick?: number;
+  /** 本次进程（heap）启动 tick —— E2 的基准；缺失时回退 bootTick。 */
+  p3BootTick?: number;
   statsLastSample?: number;
   systemLastRun: Readonly<Record<string, number>>;
   p3Systems: readonly P3SystemRef[];
@@ -266,8 +268,13 @@ export function evaluateExpectations(input: {
     });
   }
 
-  // E2 P3 存活（boot 宽限后生效）。
-  if (bootAge >= P3_BOOT_GRACE_TICKS) {
+  // E2 P3 存活（**本次进程启动**宽限后生效）。
+  // 基准必须与 systemLastRun 同生命周期：那张表是 heap 的，global reset（部署）即清空，
+  // 而 Memory.kernel.bootTick 跨 reset 存活 —— 拿后者当基准的话，每次部署后所有 P3 系统
+  // 都会以「age=never」被判饥饿（线上实测：部署后 8 分钟内 tuning-engine /
+  // tuning-intake 两条持续违例，而它们只是还没轮到第一次执行）。误判不只是脏事件：
+  // p3Starved 会去续期 p3StarveBypassUntil 并写 p3FrozenSince，即一个假信号真的在改调度。
+  if (input.tick - (input.p3BootTick ?? input.bootTick ?? -Infinity) >= P3_BOOT_GRACE_TICKS) {
     for (const s of input.p3Systems) {
       const interval = Math.max(s.interval ?? 1, 1);
       const grace = interval * P3_GRACE_MULTIPLIER + P3_BOOT_GRACE_TICKS;

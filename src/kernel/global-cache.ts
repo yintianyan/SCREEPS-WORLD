@@ -68,6 +68,8 @@ export interface GlobalCache {
   skipBuffer?: Record<string, number>;
   /** 期望违例事件的上次记账（签名 + tick）—— 同一组违例按心跳节流，防定长事件环被刷满。 */
   expectationEvent?: import("./expectations").ExpectationEventMark;
+  /** 本次进程（global reset 后第一次 tick）的 tick —— 与同样活在 heap 的 systemLastRun 对齐。 */
+  processBootTick?: number;
   /** per-tick 事件缓冲区 — 任意系统可通过 recordEvent() 写入，telemetry-collector flush。 */
   eventBuffer?: { events: import("./event-log").GameEvent[] };
   assignment?: AssignmentCache;
