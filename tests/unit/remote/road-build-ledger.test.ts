@@ -9,7 +9,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRoadSiteUnderfoot } from "../../../src/creeps/roles/remote-hauler";
 import { roadBuildCounters } from "../../../src/kernel/global-cache";
-import { classifyRoadBuildAttempt } from "../../../src/domain/logistics/road-build";
+import {
+  classifyRoadBuildAttempt,
+  roadBuildRangeBucket,
+} from "../../../src/domain/logistics/road-build";
 import { resetGlobals } from "../../support/factories";
 
 const g = (): any => globalThis as any;
@@ -85,6 +88,9 @@ describe("road-build — classifyRoadBuildAttempt（唯一归因，按早退顺�
       noWork: 0,
       noSiteAtAll: 0,
       outOfRange: 0,
+      outOfRangeNear: 0,
+      outOfRangeMid: 0,
+      outOfRangeFar: 0,
       built: 0,
       buildRejected: 0,
       roadProgressSum: 0,
@@ -116,8 +122,22 @@ describe("buildRoadSiteUnderfoot — 账本按房归桶，且不改变执行侧�
     const creep = hauler({ sites: [site(9, 9), site(13, 2)] });
     buildRoadSiteUnderfoot(creep);
     expect(creep.build).not.toHaveBeenCalled();
-    expect(roadBuildCounters("W37S54").outOfRange).toBe(1);
-    expect(roadBuildCounters("W37S54").calls).toBe(1);
+    const counters = roadBuildCounters("W37S54");
+    expect(counters.outOfRange).toBe(1);
+    expect(counters.calls).toBe(1);
+    // 最近的一格是 (9,9) → range 9 → mid 桶（差 6-10 格 = 同一条走廊但铺错了段）。
+    expect(counters.outOfRangeMid).toBe(1);
+    expect(counters.outOfRangeNear).toBe(0);
+    expect(counters.outOfRangeFar).toBe(0);
+  });
+
+  it("只差 4 格与差 20 格记进不同桶 —— 这两个形状要的动作完全相反", () => {
+    buildRoadSiteUnderfoot(hauler({ sites: [site(4, 0)] }));
+    const b = hauler({ sites: [site(20, 1)] });
+    b.room.name = "W37S55";
+    buildRoadSiteUnderfoot(b);
+    expect(roadBuildCounters("W37S54").outOfRangeNear).toBe(1);
+    expect(roadBuildCounters("W37S55").outOfRangeFar).toBe(1);
   });
 
   it("引擎拒绝 build 时记 buildRejected（区别于「压根没发」）", () => {
@@ -138,5 +158,23 @@ describe("buildRoadSiteUnderfoot — 账本按房归桶，且不改变执行侧�
     expect(roadBuildCounters("W37S54").built).toBe(1);
     expect(roadBuildCounters("W36S58").noSiteAtAll).toBe(1);
     expect(roadBuildCounters("W36S58").built).toBe(0);
+  });
+});
+
+describe("road-build — outOfRange 的距离分桶边界", () => {
+  it("4-5 格算 near（放宽一点射程就能建）", () => {
+    expect(roadBuildRangeBucket(4)).toBe("outOfRangeNear");
+    expect(roadBuildRangeBucket(5)).toBe("outOfRangeNear");
+  });
+
+  it("6-10 格算 mid（同一条走廊但铺错了段）", () => {
+    expect(roadBuildRangeBucket(6)).toBe("outOfRangeMid");
+    expect(roadBuildRangeBucket(10)).toBe("outOfRangeMid");
+  });
+
+  it("11 格以上算 far（根本在另一条线上），Infinity 也归 far", () => {
+    expect(roadBuildRangeBucket(11)).toBe("outOfRangeFar");
+    expect(roadBuildRangeBucket(48)).toBe("outOfRangeFar");
+    expect(roadBuildRangeBucket(Number.POSITIVE_INFINITY)).toBe("outOfRangeFar");
   });
 });

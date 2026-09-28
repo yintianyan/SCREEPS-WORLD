@@ -2,7 +2,7 @@
 import type { Priority } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
 import { roadBuildCounters } from "../../kernel/global-cache";
-import { classifyRoadBuildAttempt } from "../../domain/logistics/road-build";
+import { classifyRoadBuildAttempt, roadBuildRangeBucket } from "../../domain/logistics/road-build";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { fillStorage, haulFillTarget } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
@@ -59,8 +59,10 @@ export function buildRoadSiteUnderfoot(creep: Creep): void {
   let bestRange = UNDERFOOT_BUILD_RANGE_LIMIT;
   let bestProgress = -1;
   let inRangeCount = 0;
+  let minRange = Infinity;
   for (const site of sites) {
     const range = creep.pos.getRangeTo(site);
+    if (range < minRange) minRange = range;
     if (range >= UNDERFOOT_BUILD_RANGE_LIMIT) continue;
     inRangeCount++;
     const progress = site.progress;
@@ -79,6 +81,7 @@ export function buildRoadSiteUnderfoot(creep: Creep): void {
   });
   if (outcome !== "proceed") {
     counters[outcome]++;
+    if (outcome === "outOfRange") counters[roadBuildRangeBucket(minRange)]++;
     return;
   }
   // build() 的资源结算发生在意图执行阶段（本 tick 读不到余额差），所以投入速率不由

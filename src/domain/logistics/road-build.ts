@@ -26,6 +26,19 @@ export interface RoadBuildCounters {
   noSiteAtAll: number;
   /** 有 site 但射程（range≤3）内一个都不在的次数（情形①的直接证据）。 */
   outOfRange: number;
+  /**
+   * 上面那些 outOfRange 里，「最近的自己的 site 有多远」的分桶（只在有能有人时统计）。
+   *
+   * 为什么必须再分一层：2026-09-28 的首轮账本实测 `outOfRange` 占绝对多数
+   * （W36S58 72 次里 59 次、W37S57 33 次里 28 次），这判死了「没 WORK 所以不建」和
+   * 「背包空」两条，但**判不了 ① 的具体形状** —— 差 4 格（把施工射程放宽就够）与
+   * 差 20 格（site 压根下在另一条线上，得按走过的路重下）是两个完全不同的动作。
+   */
+  outOfRangeNear: number;
+  /** 最近 site 在 6-10 格的次数。 */
+  outOfRangeMid: number;
+  /** 最近 site 在 11 格以外（含跨房/对角出口）的次数。 */
+  outOfRangeFar: number;
   /** 真正发出且被引擎接受的 build() 次数。 */
   built: number;
   /** 发出 build() 但引擎拒绝的次数（ERR_*）。 */
@@ -37,6 +50,19 @@ export interface RoadBuildCounters {
   roadSitesPending: number;
   /** **已建成**的 road 条数 —— 判「这条路有没有了」只看这个，progress 会骗人（路会衰减）。 */
   roadsBuilt: number;
+}
+
+/**
+ * 「最近的一个自己的 site 有多远」分桶 —— 把 outOfRange 拆成可行动的形状。
+ * 边界按施工可行性选：4-5 格是「放宽一点射程就能建」，6-10 格是「同一条走廊但铺错了段」，
+ * 11 格以上是「根本在另一条线上」。
+ */
+export function roadBuildRangeBucket(
+  minRange: number,
+): "outOfRangeNear" | "outOfRangeMid" | "outOfRangeFar" {
+  if (minRange <= 5) return "outOfRangeNear";
+  if (minRange <= 10) return "outOfRangeMid";
+  return "outOfRangeFar";
 }
 
 /**
