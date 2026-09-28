@@ -28,6 +28,20 @@ export function tryConsumePlan(ctx: TickContext): void {
   const plan = deserializePlanMemory(waitingPlan);
   if (!plan) return;
 
+  // 「看不见」不等于「不能 claim」。拓荒队出发之前目标房本来就多半不在视野里
+  // （候选是靠 observer/scout 的 intel 建立的，不是靠实时视野），而 `isTargetClaimable`
+  // 用 `Game.rooms[...]` 读数 —— 无视野时它只能返回 false。若让这个 false 走进门判，
+  // 一次信息缺失就会被当成事实否决：计划被记 CANCELLED 并吃下 10k tick 的重建冷却，
+  // 于是扩张在"该出发的那一刻"被它自己的可见性挡死（5 条计划轮流被绊）。
+  // 这里先短路：本轮不消费，也不取消任何东西，等可见性补齐。
+  if (!Game.rooms[plan.roomName]?.controller) {
+    log.info(
+      "expansion",
+      `[${ctx.tick}] expansion-manager: ${plan.roomName} 当前不可见，暂不消费（保持 WAITING_EXECUTION）`,
+    );
+    return;
+  }
+
   // 执行 Gate 验证（TOCTOU 防护）
   const gateInput: ExecutionGateInput = {
     plan,

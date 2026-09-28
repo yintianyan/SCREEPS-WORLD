@@ -80,6 +80,8 @@ function setup(memoryPlans: unknown[]): void {
     strategy: { posture: "expand", expansionAllowed: true },
     expansionPlans: memoryPlans,
   };
+  // setup() 只把主房放进视野，目标房缺席 —— 那正是"看不见"而不是"不能 claim"。
+  // 想测真正的不可 claim（有视野、controller 已有主），用 blockedTarget()。
 }
 
 beforeEach(() => {
@@ -124,8 +126,12 @@ describe("B5-㉒ EXECUTING 算在途", () => {
 });
 
 describe("B5-㉒ 硬失败必须落到 CANCELLED 并真的进冷却", () => {
-  it("目标不可 claim（GATE_TARGET_CLAIMABLE）→ 计划被记成 CANCELLED 而非 EXECUTING", () => {
+  it("有视野且 controller 已有主（真不可 claim）→ 计划记 CANCELLED 而非 EXECUTING", () => {
     setup([memoryPlan("WAITING_EXECUTION")]);
+    // 看得见却被别人占着：这才是 GATE_TARGET_CLAIMABLE 要拦的那种事实。
+    (globalThis as any).Game.rooms[TARGET] = {
+      controller: { owner: { username: "someone-else" }, my: false },
+    };
 
     tryConsumePlan(mockRoomStateCtx([], TICK));
 
@@ -140,6 +146,19 @@ describe("B5-㉒ 硬失败必须落到 CANCELLED 并真的进冷却", () => {
         TICK,
       ),
     ).toBe(true);
+  });
+
+  it("目标房看不见 ≠ 不可 claim：不消费，也绝不取消计划", () => {
+    // 回归钉：setup() 里目标房不在视野。旧实现在这里判 GATE_TARGET_CLAIMABLE 硬失败
+    // → CANCELLED + 10k tick 重建冷却，等于让"信息缺失"否决掉一次合法扩张。
+    setup([memoryPlan("WAITING_EXECUTION")]);
+    const G = globalThis as any;
+    G.Game.gcl = { level: 3 };
+
+    tryConsumePlan(mockRoomStateCtx([], TICK));
+
+    expect(G.Memory.kernel.expansionPlans[0].st).toBe("WAITING_EXECUTION");
+    expect(G.Memory.kernel.expansion).toBeUndefined();
   });
 
   it("成功接管 → 标 EXECUTING 的计划仍在账上，终态回写找得到它", () => {
