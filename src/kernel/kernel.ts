@@ -178,22 +178,27 @@ export class Kernel {
     // safeRun 不吞副作用，失败时只是保住剩余 tick；critical 起用后永不冷却。
     // measuredRun：快照与 tick 尾遥测/期望自检此前不计入任何 CPU 归因表。
     // 标签走 system/* 以并入同一排名，让「无归因的余量」可被分解。
-    measuredRun("system/snapshots", () =>
-      safeRun("snapshots", () => this.buildSnapshots(ctx), true),
+    measuredRun("phase/snapshots", () =>
+      measuredRun("system/snapshots", () =>
+        safeRun("snapshots", () => this.buildSnapshots(ctx), true),
+      ),
     );
 
     // room-state (P0) 在 spawn-manager (P0) 之前注册，先计算每房 ColonyState。
-    this.runSystems(ctx);
+    // 相位跨度：与 system/*、creep/* 两张榜是嵌套关系，单独成桶。相位的用途是让
+    // 「榜外剩余」可判定 —— 系统榜与角色榜合起来只解释得了一小半实测用量，
+    // 剩下那部分此前既不在任何榜上也不在拍尾合计里，等于没人知道它在哪。
+    measuredRun("phase/systems", () => this.runSystems(ctx));
 
-    this.runCreeps(ctx);
+    measuredRun("phase/creeps", () => this.runCreeps(ctx));
 
     // 后置系统 — 消费角色执行期产出的 per-tick 数据（如 traffic-manager
     // 集中解算移动意图并统一签发 move）。
-    this.runPostSystems(ctx);
+    measuredRun("phase/post", () => this.runPostSystems(ctx));
 
     // 观测层 — 在所有角色/post 系统之后（采样要读 runCreeps 填出来的 roleCpu 与
     // cpuByHome 归因），但**不经过 canStart**：让位闸对观测是自败回路。
-    this.runObservabilitySystems(ctx);
+    measuredRun("phase/observability", () => this.runObservabilitySystems(ctx));
 
     emitSummary(budget);
 
@@ -240,9 +245,13 @@ export class Kernel {
     measuredRun("system/expectations", () =>
       safeRun("expectations", () => this.runExpectations(ctx)),
     );
-    safeRun("flush-skips", () => flushSkips(), true);
-
-    safeRun("segments-flush", () => flushSegments(), true);
+    // 这两处此前完全不计费：segments-flush 每拍序列化整段 rawMemory（大字符串
+    // 构造 + 写 Memory 段），是全 tick 最贵的单次动作之一，却落在所有榜之外 ——
+    // 「六成 CPU 没有归属」里就有一份在这里。
+    measuredRun("phase/flush-skips", () => safeRun("flush-skips", () => flushSkips(), true));
+    measuredRun("phase/segments-flush", () =>
+      safeRun("segments-flush", () => flushSegments(), true),
+    );
 
     // 方向 3：保底可观测性层——不依赖任何 P3 系统运行，由 kernel 直接执行。
     // 即使 recovery tier 下 telemetry-collector 跳过、tuning-engine 冻结，

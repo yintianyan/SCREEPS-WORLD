@@ -131,7 +131,13 @@ export interface GlobalCache {
    * `total − Σsystems − Σroles` 就是「没被任何名字解释掉的剩余」—— 判「还有多少可省的」
    * 之前必须先有这笔账，否则每次都在两份口径之间打架（EMA 与环读数实测差过 4 倍）。
    */
-  cpuCumulative?: { total: number; systems: Record<string, number>; roles: Record<string, number> };
+  cpuCumulative?: {
+    total: number;
+    systems: Record<string, number>;
+    roles: Record<string, number>;
+    /** 相位跨度（`phase/*`）：与上面两张榜是**嵌套**关系，单独成桶、不与它们相加。 */
+    phases?: Record<string, number>;
+  };
   /** P3 能量核算 L1 计数器（bumpEnergyCounter 写入；economy 系统每窗滚动消费）。 */
   energyLedger?: { tick: number; rooms: Record<string, RoomEnergyCounters> };
   /** 远矿每 op 收支账本（key = remoteOpKey(home, target)）。

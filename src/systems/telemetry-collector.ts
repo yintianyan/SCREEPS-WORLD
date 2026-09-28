@@ -59,14 +59,21 @@ export function updateRoleCpuEma(
  * 它不为零就说明大头既不在系统榜也不在角色榜上，此时去优化榜上任何一个名字都是在猜。
  */
 export function computeCpuRate(
-  cum: { total: number; systems: Record<string, number>; roles: Record<string, number> },
+  cum: {
+    total: number;
+    systems: Record<string, number>;
+    roles: Record<string, number>;
+    phases?: Record<string, number>;
+  },
   windowTicks: number,
 ): {
   windowTicks: number;
   total: number;
   unexplained: number;
+  unphased: number;
   bySystem: Record<string, number>;
   byRole: Record<string, number>;
+  byPhase: Record<string, number>;
 } {
   const w = Math.max(1, windowTicks);
   const sum = (m: Record<string, number>): number => Object.values(m).reduce((a, b) => a + b, 0);
@@ -80,9 +87,13 @@ export function computeCpuRate(
   return {
     windowTicks: w,
     total: round2(cum.total / w),
+    // 两个「剩余」问的是两个不同问题：unexplained = 有多少 CPU 不属于任何具名单元；
+    // unphased = 有多少 CPU 不在任何已测相位里（预算/上下文/调度器自身的夹缝）。
     unexplained: round2((cum.total - sum(cum.systems) - sum(cum.roles)) / w),
+    unphased: round2((cum.total - sum(cum.phases ?? {})) / w),
     bySystem: perTick(cum.systems),
     byRole: perTick(cum.roles),
+    byPhase: perTick(cum.phases ?? {}),
   };
 }
 
@@ -406,7 +417,12 @@ function sampleMemorySize(_tick: number): void {
     }
     {
       const cum = g.cpuCumulative as
-        | { total: number; systems: Record<string, number>; roles: Record<string, number> }
+        | {
+            total: number;
+            systems: Record<string, number>;
+            roles: Record<string, number>;
+            phases?: Record<string, number>;
+          }
         | undefined;
       const boot = g.processBootTick as number | undefined;
       if (cum && typeof boot === "number") {

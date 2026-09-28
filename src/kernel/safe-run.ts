@@ -157,6 +157,14 @@ function recordCpu(label: string, cost: number): void {
     g.telemetry.roleCpu[role] = (g.telemetry.roleCpu[role] ?? 0) + cost;
     const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
     cum.roles[role] = (cum.roles[role] ?? 0) + cost;
+  } else if (label.startsWith("phase/")) {
+    // 相位账是「谁在吃 CPU」的另一半：systems/roles 两张榜只覆盖被逐个包裹的单元，
+    // 而实测有六成 CPU 落在那两张榜之外。相位跨度把一整拍切完，剩余才真正可判 ——
+    // 注意相位之间是嵌套包含关系，所以它单独成一份桶，绝不与系统/角色榜相加。
+    const name = label.slice("phase/".length);
+    const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
+    const phases = (cum.phases ??= {});
+    phases[name] = (phases[name] ?? 0) + cost;
   }
 }
 

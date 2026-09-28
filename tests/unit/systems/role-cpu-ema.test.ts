@@ -55,4 +55,14 @@ describe("computeCpuRate", () => {
     expect(r.total).toBe(50);
     expect(r.unexplained).toBe(25);
   });
+
+  it("相位账单独成桶：unphased 只减相位，不与系统/角色榜混算", () => {
+    const r = computeCpuRate(
+      { total: 100, systems: { a: 40 }, roles: { h: 10 }, phases: { systems: 60 } },
+      10,
+    );
+    expect(r.unexplained).toBe(5); // (100 − 40 − 10) ÷ 10
+    expect(r.unphased).toBe(4); // (100 − 60) ÷ 10：相位是嵌套跨度，不能再减一次榜
+    expect(r.byPhase.systems).toBe(6);
+  });
 });
