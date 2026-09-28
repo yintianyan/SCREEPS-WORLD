@@ -782,18 +782,43 @@ export const CONFIG = {
      * 仍 neutral 时派 dismantler 拆除（claim 前是唯一低成本拆除窗）。对方 claim 后
      * 任务自动不成立（对等战争走 war 战役路径）。 */
     enableDismantleForeignSpawn: true,
-    /** 是否启用远矿路径修路：PathFinder 规划 home 锚→source container 跨房路径，
-     * 在远矿房侧铺 road site，由通勤 hauler（1W body）边走边建。 */
+    /** 是否启用远矿路径修路：按实测通勤热度在远矿房侧铺 road site，
+     * 由通勤 hauler（1W body）边走边建。落点不预测（预测线与真正走的那条线不是一条）。 */
     enableRoadPlanning: true,
     /** 每次 manager 运行最多新下的 road site 数（全帝国口径，限速防挤占工地预算）。 */
     roadSitesPerRun: 3,
     /**
-     * 一格要被当作「通勤真的走过」的证据，需要本次进程里被踩的次数下限。
+     * 一格要被当作「通勤真的走过」的证据，需要累计被踩的次数下限。
      * 定标依据：一趟往返约 50-100 tick，hauler 每趟踩过同一片走廊 —— 3 次约等于
      * 「不止一次偶然路过」，又不至于要等很久才铺第一段路。远矿修路的落点现在**只认这个**
      * （预测线铺 site 的旧口径量出来是 14 格 site / 0 条建成路，见 road-planner 注释）。
+     * 累计口径见 roadHeatMergeTicks —— 只算本次进程的话，部署节奏会把它反复清零。
      */
     roadMinTileWalks: 3,
+    /**
+     * 通勤热度并入跨进程账本的窗口（tick）。
+     *
+     * heap 里的 roomTraffic 每次 global reset 归零，而部署/reset 的间隔可以短到几分钟 ——
+     * 门槛 3 次踩格在"每次重来"的节奏下几乎永远攒不满，规划器于是恒停在无证据分支。
+     * 每窗口把 heap 增量合并进 `op.roadHeat` 并清空该房 heap（合并即入账，不重复计）。
+     * 取 500 ≈ 5-10 趟往返：一次合并就够走廊成形，又不至于让 reset 丢掉太多。
+     */
+    roadHeatMergeTicks: 500,
+    /** 每次合并作用于旧热度的衰减系数（0-1）—— 遗忘才不会被偶然路过永久加热成"证据"。 */
+    roadHeatDecay: 0.7,
+    /** `op.roadHeat` 条目上限（只留最热的 N 格）—— 远矿房走廊量级几十格，此为硬护栏。 */
+    roadHeatCap: 96,
+    /**
+     * 线外 road site 的「冻多久才回收」窗口（tick）。
+     *
+     * 只删零进度是不够的：线上 W36S58 那 14 格进度和恒为 970（两次读数零增量），也就是说是
+     * 一批**有进度却不再长**的残骸占满了跨主房车道（14+6=20=roadSitesPerOpTotal），热度规划器
+     * 一格也铺不进去。有进度又不长的格恰恰是"另一条线、另一批 creep"留下的。
+     * 判据因此是时间而不是进度值：线外格的进度和连续这么多 tick 一点没变才收 —— 有变化说明
+     * 施工仍在发生（此刻可能只是热度还没攒够），不能删。取 2000 ≈ 一趟往返(~100 tick)的 20 倍，
+     * 真在建的格不可能 20 次经过都碰不到。
+     */
+    roadStaleReapTicks: 2000,
     /** 单个远矿 op 同时挂起的 road site 上限（铺完自然回落）。 */
     maxRoadSitesPerOp: 20,
     /** 全帝国待建 road site 总上限 —— 独立于 maxNormalLaneSites 的基建车道

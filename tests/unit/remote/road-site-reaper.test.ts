@@ -6,7 +6,8 @@
  * PathFinder）与 creep 真走的那条线（moveTowardRoom 的粘性出口缓存）不是一条，而施工只能
  * 「脚下」发生 ⇒ 铺在没人走的线上的 site 永远建不成，还永久占着 roadSitesPerOpTotal 车道。
  * 上一版的「紧邻已有结构/已建 site 才算证据」救不了它：site 就下在 container 旁，天然自证。
- * 现在证据只有一个来源 —— 本次进程实测被踩过的格子。
+ * 现在证据只有一个来源 —— 通勤实测被踩过的格子，而且这本账要跨得过 global reset（部署比
+ * 攒够门槛更快时，直读 heap 等于永远冷启动）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -14,6 +15,7 @@ import {
   selectWalkedRoadTiles,
   walkedHeatKeys,
 } from "../../../src/systems/remote/road-planner";
+import { mergeWalkHeat } from "../../../src/domain/logistics/walk-heat";
 import { CONFIG } from "../../../src/config";
 import { mockContext, resetGlobals } from "../../support/factories";
 
@@ -93,6 +95,17 @@ function seedHeat(tiles: [number, number][], walks = 5): void {
   g().roomTraffic = { [T]: traffic };
 }
 
+/**
+ * 把「线外格已经冻了多久」预置成已超窗 —— 回收判据是时间，不是第一次见到就删。
+ * 未预置的用例走的是「本轮起表、下轮才可能收」那条路。
+ */
+function frozen(sum: number, tick: number): Record<string, number> {
+  return {
+    roadStaleProgressSum: sum,
+    roadStaleSince: tick - CONFIG.remote.roadStaleReapTicks,
+  };
+}
+
 beforeEach(() => {
   resetGlobals();
   vi.clearAllMocks();
@@ -142,9 +155,27 @@ describe("walkedHeatKeys / selectWalkedRoadTiles（纯函数）", () => {
 });
 
 describe("planRemotePathRoads — 只沿被走过的线生长", () => {
-  it("零进度且不在热度线上的 site 被 remove；在线上的、或有进度的保留", () => {
+  it("首轮只起表：线外格没冻满窗口前不动手", () => {
     const sites = [roadSite(20, 40), roadSite(20, 21), roadSite(20, 30, 100)];
-    const ops = { [T]: activeOp() };
+    const op = activeOp();
+    const ops = { [T]: op };
+    seed(5001, ops, { [T]: targetRoomMock(sites, [container(CONTAINER.x, CONTAINER.y)]) });
+    seedHeat([
+      [20, 21],
+      [20, 22],
+    ]);
+
+    planRemotePathRoads(HOME, ops, mockContext());
+
+    for (const s of sites) expect(s.remove).not.toHaveBeenCalled();
+    expect(op.roadStaleProgressSum).toBe(100); // 线外 = 20,40(0) + 20,30(100)
+    expect(op.roadStaleSince).toBe(5001);
+  });
+
+  it("冻满窗口后线外格全收（有进度的也收），线上的保留", () => {
+    const sites = [roadSite(20, 40), roadSite(20, 21), roadSite(20, 30, 100)];
+    const op = activeOp(frozen(100, 5001));
+    const ops = { [T]: op };
     seed(5001, ops, { [T]: targetRoomMock(sites, [container(CONTAINER.x, CONTAINER.y)]) });
     seedHeat([
       [20, 21],
@@ -154,8 +185,26 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
     planRemotePathRoads(HOME, ops, mockContext());
 
     expect(sites[0]!.remove).toHaveBeenCalledTimes(1); // 20,40 — 没人走过
+    expect(sites[2]!.remove).toHaveBeenCalledTimes(1); // 20,30 — 有进度但冻住了：正是 970 那个形状
     expect(sites[1]!.remove).not.toHaveBeenCalled(); // 20,21 — 在热度线上
-    expect(sites[2]!.remove).not.toHaveBeenCalled(); // 20,30 — 有进度，正在被建
+    expect(op.roadReaped).toBe(2);
+  });
+
+  it("线外格的进度还在变 → 施工仍在发生，不回收且重新起表", () => {
+    const sites = [roadSite(20, 40, 100)];
+    const op = activeOp(frozen(50, 9000)); // 上轮记的是 50，这一轮长成 100 了
+    const ops = { [T]: op };
+    const room = targetRoomMock(sites, [container(CONTAINER.x, CONTAINER.y)]);
+    seed(9000, ops, { [T]: room });
+    seedHeat([[20, 22]]);
+
+    planRemotePathRoads(HOME, ops, mockContext());
+
+    expect(sites[0]!.remove).not.toHaveBeenCalled();
+    expect(op.roadStaleProgressSum).toBe(100);
+    expect(op.roadStaleSince).toBe(9000);
+    expect(op.roadReaped).toBe(0);
+    expect(room.createConstructionSite).toHaveBeenCalledWith(20, 22, STRUCTURE_ROAD);
   });
 
   it("新 site 下在热度格上（而不是预测线或结构旁）", () => {
@@ -174,7 +223,7 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
     expect(room.createConstructionSite).toHaveBeenCalledWith(20, 23, STRUCTURE_ROAD);
   });
 
-  it("本次进程没有热度时既不建也不扫 —— 无从判断走过哪条线时，猜线正是那 14 格的成因", () => {
+  it("还没有任何热度账时既不建也不扫 —— 无从判断走过哪条线时，猜线正是那 14 格的成因", () => {
     const sites = [roadSite(20, 40), roadSite(20, 41)];
     const ops = { [T]: activeOp() };
     const room = targetRoomMock(sites, [container(CONTAINER.x, CONTAINER.y)]);
@@ -188,6 +237,7 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
   });
 
   it("车道被残骸占满时：同一轮先扫后建（不被自己的残骸锁死）", () => {
+    // 9 格零进度块 + 11 格 x=21 列在建；热度线 20,22 的 range≤3 只罩住 21,22..21,25。
     const sites: any[] = [];
     for (const [x, y] of [
       [20, 40],
@@ -203,7 +253,8 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
       sites.push(roadSite(x, y));
     }
     for (let y = 22; y <= 32; y++) sites.push(roadSite(21, y, 50));
-    const op = activeOp({ roadSiteCount: sites.length });
+    // 线外 = 9 格零进度 + 21,26..32 那 7 格（7×50=350）—— 后者正是"有进度却不再长"的那批。
+    const op = activeOp({ roadSiteCount: sites.length, ...frozen(350, 5003) });
     const ops = { [T]: op };
     const room = targetRoomMock(sites, [container(CONTAINER.x, CONTAINER.y)]);
     seed(5003, ops, { [T]: room });
@@ -211,16 +262,17 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
 
     planRemotePathRoads(HOME, ops, mockContext());
 
-    expect(sites.filter(s => s.remove.mock.calls.length > 0)).toHaveLength(9);
+    expect(sites.filter(s => s.remove.mock.calls.length > 0)).toHaveLength(16);
     // 清扫释放的额度本轮即可用 → 热度线尽头直接建站。
     expect(room.createConstructionSite).toHaveBeenCalledWith(20, 22, STRUCTURE_ROAD);
     // 计数记「清扫后」口径：残骸当场让出车道。
-    expect(op.roadSiteCount).toBe(11);
+    expect(op.roadSiteCount).toBe(4);
+    expect(op.roadLaid).toBe(1);
   });
 
   it("帽是跨主房口径：别的 home 挂满 20 时本房不建（但仍清扫）", () => {
     const sites = [roadSite(20, 40), roadSite(20, 21)];
-    const ops = { [T]: activeOp({ roadSiteCount: 2 }) };
+    const ops = { [T]: activeOp({ roadSiteCount: 2, ...frozen(0, 5004) }) };
     const room = targetRoomMock(sites, [container(CONTAINER.x, CONTAINER.y)]);
     seed(5004, ops, { [T]: room });
     seedHeat([
@@ -236,7 +288,9 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
   });
 
   it("abandoned op → 计数归零让出车道，且不碰该房", () => {
-    const ops = { [T]: activeOp({ state: "abandoned", roadSiteCount: 7 }) };
+    const ops = {
+      [T]: activeOp({ state: "abandoned", roadSiteCount: 7, roadHeat: { "20,22": 9 } }),
+    };
     const room = targetRoomMock([roadSite(20, 40)], [container(CONTAINER.x, CONTAINER.y)]);
     seed(5005, ops, { [T]: room });
     seedHeat([[20, 22]]);
@@ -244,6 +298,83 @@ describe("planRemotePathRoads — 只沿被走过的线生长", () => {
     planRemotePathRoads(HOME, ops, mockContext());
 
     expect(ops[T].roadSiteCount).toBe(0);
+    expect(ops[T].roadHeat).toBeUndefined(); // 热度账随线一起摘，不留 Memory 体积
     expect(room.find).not.toHaveBeenCalled();
+  });
+});
+
+describe("planRemotePathRoads — 热度账跨进程续账", () => {
+  it("heap 被 reset 清空后，上一进程攒下的热度仍然有效（停摆由此解开）", () => {
+    const op = activeOp({
+      // 上一个进程留下的账：键形与 heap 一致（x*50+y 的字符串）。
+      roadHeat: { [packed(20, 40)]: 30, [packed(20, 21)]: 40 },
+      roadHeatAt: 5600, // 窗口未满 → 本轮不合并，而 heap 已经空了（刚 reset）
+      ...frozen(0, 5700),
+    });
+    const sites = [roadSite(35, 35)]; // 与热度线相距十几格的残骸
+    const room = targetRoomMock(sites, [container(CONTAINER.x, CONTAINER.y)]);
+    seed(5700, { [T]: op }, { [T]: room });
+    g().roomTraffic = undefined; // global reset 后的 heap
+
+    planRemotePathRoads(HOME, { [T]: op }, mockContext());
+
+    expect(op.roadHeatTiles).toBe(2);
+    expect(sites[0]!.remove).toHaveBeenCalledTimes(1); // 残骸照收 —— 证据不依赖本次进程
+    expect(room.createConstructionSite).toHaveBeenCalledWith(20, 21, STRUCTURE_ROAD);
+    expect(room.createConstructionSite).toHaveBeenCalledWith(20, 40, STRUCTURE_ROAD);
+  });
+
+  it("窗口未满时不合并、不清 heap（增量留着下次一起入账）", () => {
+    const op = activeOp({ roadHeat: { [packed(20, 22)]: 5 }, roadHeatAt: 5900 });
+    const room = targetRoomMock([], [container(CONTAINER.x, CONTAINER.y)]);
+    seed(5901, { [T]: op }, { [T]: room });
+    seedHeat([[21, 22]]);
+
+    planRemotePathRoads(HOME, { [T]: op }, mockContext());
+
+    expect(op.roadHeat[packed(21, 22)]).toBeUndefined();
+    expect(Object.keys(g().roomTraffic[T])).toEqual([packed(21, 22)]); // heap 未被吃掉
+    expect(room.createConstructionSite).toHaveBeenCalledWith(20, 22, STRUCTURE_ROAD);
+  });
+
+  it("合并即清空该房 heap —— 上一窗口的走动不会被重复计入", () => {
+    const op = activeOp();
+    const room = targetRoomMock([], [container(CONTAINER.x, CONTAINER.y)]);
+    seed(6001, { [T]: op }, { [T]: room });
+    seedHeat([[20, 22]]); // 本进程已攒 5 次
+
+    planRemotePathRoads(HOME, { [T]: op }, mockContext());
+    expect(op.roadHeat[packed(20, 22)]).toBe(5);
+    expect(Object.keys(g().roomTraffic[T])).toHaveLength(0);
+    expect(op.roadLaid).toBe(1);
+
+    g().roomTraffic[T][packed(20, 22)] = 1; // 新窗口里只又踩了 1 次
+    seed(6600, { [T]: op }, { [T]: room });
+    planRemotePathRoads(HOME, { [T]: op }, mockContext());
+
+    // floor(5×0.7)+1 = 4：旧账衰减后叠加增量，而不是把 5 再记一遍。
+    expect(op.roadHeat[packed(20, 22)]).toBe(Math.floor(5 * CONFIG.remote.roadHeatDecay) + 1);
+  });
+});
+
+describe("mergeWalkHeat（纯函数）", () => {
+  const opts = { decay: 0.7, minWalks: 3, cap: 4 };
+
+  it("旧账衰减 + 新增量叠加；不过门槛的格不入账", () => {
+    const merged = mergeWalkHeat({ a: 10, b: 4 }, { a: 1, c: 2 }, opts);
+    expect(merged).toEqual({ a: 8 }); // b: floor(4×0.7)=2 < 3 被淘汰；c 只踩了 2 次
+  });
+
+  it("超上限只留最热的 cap 格，同分按键定序（同一输入同一份账）", () => {
+    const merged = mergeWalkHeat(undefined, { 1: 5, 2: 9, 3: 9, 4: 3, 5: 3, 6: 3 }, opts);
+    // cap=4 → 淘汰 5/6（同分里键序靠后的那两个）；9/9 与 3/3 之间靠键序定胜负。
+    expect(merged).toEqual({ 1: 5, 2: 9, 3: 9, 4: 3 });
+    expect(mergeWalkHeat(undefined, { 1: 5, 2: 9, 3: 9, 4: 3, 5: 3, 6: 3 }, opts)).toEqual(merged);
+  });
+
+  it("不改写传入的旧账（调用方还拿着它做别的事）", () => {
+    const prev = { a: 10 };
+    mergeWalkHeat(prev, { a: 5 }, opts);
+    expect(prev.a).toBe(10);
   });
 });

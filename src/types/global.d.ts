@@ -1146,6 +1146,27 @@ declare global {
      */
     roadSiteCount?: number;
     /**
+     * 通勤热度跨进程账本：packed 格键（x*50+y 的字符串）→ 累计被踩次数（已衰减、已过门槛）。
+     * road-planner 每 roadHeatMergeTicks 合并一次 heap 增量并清空该房 heap。
+     * 为什么要落在 Memory：修路落点只认「被走过」，而 heap 每次 global reset 归零 ——
+     * 部署间隔短于「攒够 roadMinTileWalks 次」所需的通勤趟数时，证据永远攒不出来。
+     * 记在 op 上而非 `Memory.rooms[远矿房]`：后者不在 ownedRooms 集合内，会被失房清理整条删掉。
+     */
+    roadHeat?: Record<string, number>;
+    /** 上一次热度合并的 tick（roadHeat 的窗口时钟，与 roadHeat 同写者）。 */
+    roadHeatAt?: number;
+    /** 观测：最近一轮热度账里的合格格数、扫掉的残骸数、铺下的新格数（判"为什么没动工"用）。 */
+    roadHeatTiles?: number;
+    roadReaped?: number;
+    roadLaid?: number;
+    /**
+     * 线外 road site 的冻结计时器（roadStaleReapTicks 窗口）。
+     * roadStaleProgressSum = 上一轮「不在热度线上的 road site」进度和；本轮仍然相等即开始/继续
+     * 计时（冻满才回收），不等则重新起表。两者同为 undefined 表示上一轮线外没有格。
+     */
+    roadStaleProgressSum?: number;
+    roadStaleSince?: number;
+    /**
      * v33 空转止损计时：编队全员空转（idle/flee 或 stuckTicks ≥ stallStuckTicks）
      * 的起始 tick；任一成员恢复工作立即清除。持续超过 CONFIG.remote.stallAbandonTicks
      * → 废弃运营。remote-mining-manager 唯一写者（managerInterval 采样）。

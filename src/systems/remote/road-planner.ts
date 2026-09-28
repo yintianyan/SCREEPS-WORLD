@@ -8,6 +8,7 @@ import {
   globalCache,
 } from "../../kernel/global-cache";
 import { getRemoteSiteTotal, getRemoteRoadSiteTotal, getTickSiteCounters } from "../site-quota";
+import { mergeWalkHeat } from "../../domain/logistics/walk-heat";
 import { recycleRemoteDismantlers } from "./creep-recycle";
 import { structureCost } from "./op-lifecycle";
 
@@ -168,8 +169,8 @@ function nearEvidence(keys: ReadonlySet<string>, a: { x: number; y: number }): b
 }
 
 /**
- * 远矿修路规划器 —— 每次运行对每个 active op：把**本次进程实测被踩过**的通勤格按热度降序
- * 限速下 road site；零进度又不在被走过的那条线上的残骸当场回收，把车道还出来。
+ * 远矿修路规划器 —— 每次运行对每个 active op：把**通勤实测被踩过**的通勤格按热度降序
+ * 限速下 road site；不在那条线上、且进度已冻满 roadStaleReapTicks 的残骸当场回收，把车道还出来。
  * 施工不归本函数：通勤 hauler 经 buildRoadSiteUnderfoot 边走边建（range≤3）。
  * 全部 site 写在远矿房（本系统是远矿房唯一 site 写者，架构合规）。
  *
@@ -185,13 +186,17 @@ function nearEvidence(keys: ReadonlySet<string>, a: { x: number; y: number }): b
  * container 旁边 ⇒ 天然"有证据"，既建不成也扫不掉，14 格就这么挂着。所以现在的证据只有一个
  * 来源 —— 被踩过的格子本身。稳态是每轮 0 次 remove、0 次新建，直到通勤线再次推进。
  *
- * 冷启动（本次进程还没有热度）既不建也不扫：无从知道哪条线被走过时，"猜一条线"恰恰是上面
- * 那 14 格的成因；而通勤腿会在几小时内把热度重新铺出来，这不是永久停摆。
+ * 热度按窗口从 heap 合并进 `op.roadHeat` 再判决（见 domain/logistics/walk-heat）：直读 heap 的话
+ * 每次 global reset 都把它清零，而攒够门槛要几百 tick 的通勤 —— 部署/reset 比这更快时证据永远
+ * 长不出来，本函数恒停在冷启动分支，线上表现正是"换了落点判据也一个 site 没动"。
+ *
+ * 还没有任何热度时既不建也不扫：无从知道哪条线被走过时，"猜一条线"恰恰是上面那
+ * 14 格的成因；而通勤腿会在几个合并窗口内把热度重新铺出来，这不是永久停摆。
  */
 export function planRemotePathRoads(
   homeRoom: string,
   remoteOps: Readonly<Record<string, RemoteOp>>,
-  _ctx: TickContext,
+  ctx: TickContext,
 ): void {
   if (!Game.rooms[homeRoom]) return;
   // 独立预算车道：远矿路径 road 不占 maxNormalLaneSites（自有房常规工地帽会被
@@ -210,6 +215,9 @@ export function planRemotePathRoads(
     if (op.state === "abandoned") {
       // 废弃房的 site 由 construction-manager 孤儿清扫收走，计数立即归零释放车道。
       if (op.roadSiteCount !== 0) op.roadSiteCount = 0;
+      // 热度账是本房独有的 Memory 体积大户，而这条线不会再有通勤腿 → 随手摘掉。
+      if (op.roadHeat) delete op.roadHeat;
+      if (op.roadHeatAt) delete op.roadHeatAt;
       continue;
     }
     const room = Game.rooms[rn];
@@ -239,7 +247,7 @@ export function planRemotePathRoads(
     }
 
     /**
-     * 施工证据 = **本次进程实测被踩过的格子**（`globalCache().roomTraffic`）。
+     * 施工证据 = **通勤实测被踩过的格子**（`op.roadHeat`，见 domain/logistics/walk-heat）。
      *
      * 为什么不用「离已有结构 ≤3」当证据（旧口径）：那个集合永远满足得了它要防的东西 ——
      * site 就下在 container 旁边 ⇒ 它天然"紧邻证据"，于是既建不掉也没人回收。线上把这条
@@ -248,12 +256,29 @@ export function planRemotePathRoads(
      * + 纯地形 PathFinder）与真实走的那条线压根不是一条，铺在无人走的线上的 site 永远建不成，
      * 还永久占着 roadSitesPerOpTotal 车道。
      *
-     * 热度按 `x*50+y` 记账（与引擎 CostMatrix 同序），只在**有热度**时判决：本服每次
-     * global reset 都会清空 heap，此刻无从知道哪条线被走过 —— 不设闸就退回到"猜一条线"，
-     * 而猜错的代价正是上面那 14 格。所以热度为空的这一房本轮既不建也不扫（稳态是几小时内
-     * 通勤腿把热度重新铺出来，不是永久停摆）。
+     * 为什么热度要按窗口从 heap 合并进 Memory 而不是直读 heap：heap 的 roomTraffic 每次
+     * global reset 归零，而攒够门槛要 5-10 趟往返（几百 tick）—— 部署/reset 比这更快时，
+     * 证据永远长不出来，规划器就恒停在「无证据 → 既不铺也不扫」这一支（2026-09-28 实测正是
+     * 这个形状：换部落点上线后两次读数 sites 一个没变）。合并即清空该房 heap，不重复计。
      */
-    const walked = walkedHeatKeys(globalCache().roomTraffic?.[rn], CONFIG.remote.roadMinTileWalks);
+    const live = globalCache().roomTraffic;
+    const liveHeat = live?.[rn];
+    if (
+      live &&
+      liveHeat &&
+      Object.keys(liveHeat).length > 0 &&
+      ctx.tick - (op.roadHeatAt ?? 0) >= CONFIG.remote.roadHeatMergeTicks
+    ) {
+      op.roadHeat = mergeWalkHeat(op.roadHeat, liveHeat, {
+        decay: CONFIG.remote.roadHeatDecay,
+        minWalks: CONFIG.remote.roadMinTileWalks,
+        cap: CONFIG.remote.roadHeatCap,
+      });
+      op.roadHeatAt = ctx.tick;
+      live[rn] = {};
+    }
+    const walked = walkedHeatKeys(op.roadHeat, CONFIG.remote.roadMinTileWalks);
+    op.roadHeatTiles = walked.size;
     if (walked.size === 0) {
       // 无实测证据：只校正计数与账本，不动 site、不铺新格。
       if (op.roadSiteCount !== roadSitesPending) op.roadSiteCount = roadSitesPending;
@@ -264,16 +289,39 @@ export function planRemotePathRoads(
       continue;
     }
 
-    // 回收「零进度 + 不在被走过的线上」的 road site。progress=0 意味着一分能量都没投过，
-    // remove 零损失，且当场把车道还回来。新铺的格子必然落在热度上，故本清扫的稳态是 0 次删除
-    // —— 不是建/删循环（旧版正是"规划器每轮原地重建同一格"才不敢开这个闸）。
-    for (const s of allSites) {
-      if (s.structureType !== STRUCTURE_ROAD || s.progress > 0) continue;
-      if (nearEvidence(walked, s.pos)) continue;
-      s.remove();
-      released++;
-      roadSitesPending--;
+    // 回收「不在被走过的线上」的 road site。
+    //
+    // 只删 progress=0 是不够的，而且错得挺隐蔽：线上 W36S58 那 14 格的进度和恒为 970（两次
+    // 读数零增量），也就是说**一批有进度的残骸**同样在锁车道 —— 跨主房帽 roadSitesPerOpTotal=20
+    // 已被 14+6 占满，热度规划器于是铺不进任何一格。而有进度又不肯长的格，恰恰是最该走的：
+    // 它证明有人站到过射程内，但那已经是另一条线、另一批 creep 的事了。
+    //
+    // 于是判据换成「冻住多久」：线外格的进度和每轮比对一次，有变化说明施工还在发生（此刻的
+    // 热度可能只是没攒够，不能删），无变化才计时；连续冻满 roadStaleReapTicks 才收。删掉的
+    // 进度不退钱、也确实浪费，但 500 点封顶的成本换回的是整条通勤走廊的铺路权。
+    const offCorridor = allSites.filter(
+      s => s.structureType === STRUCTURE_ROAD && !nearEvidence(walked, s.pos),
+    );
+    const offProgressSum = offCorridor.reduce((sum, s) => sum + s.progress, 0);
+    let releasedNow = 0;
+    if (offCorridor.length === 0) {
+      if (op.roadStaleSince !== undefined) delete op.roadStaleSince;
+      if (op.roadStaleProgressSum !== undefined) delete op.roadStaleProgressSum;
+    } else if (offProgressSum !== op.roadStaleProgressSum) {
+      op.roadStaleProgressSum = offProgressSum;
+      op.roadStaleSince = ctx.tick;
+    } else if (ctx.tick - (op.roadStaleSince ?? ctx.tick) >= CONFIG.remote.roadStaleReapTicks) {
+      for (const s of offCorridor) {
+        s.remove();
+        releasedNow++;
+      }
+      // 计时随残骸一起清零：下一轮若又出现线外格，重新给一个冻结窗口。
+      op.roadStaleSince = ctx.tick;
+      op.roadStaleProgressSum = undefined;
     }
+    released += releasedNow;
+    roadSitesPending -= releasedNow;
+    op.roadReaped = releasedNow;
     // 实测校正（本字段唯一写者）：与 op.siteCount 同款「会递减」，防只增不减锁死车道。
     // 记清扫后的口径 —— 残骸当场释放，不必等下一轮再减。
     if (op.roadSiteCount !== roadSitesPending) op.roadSiteCount = roadSitesPending;
@@ -290,18 +338,20 @@ export function planRemotePathRoads(
 
     // 铺路只沿着被走过的格子生长：热度高的格先铺（同分按坐标定序，保证同一输入同一结果）。
     const tiles = selectWalkedRoadTiles(
-      globalCache().roomTraffic?.[rn],
+      op.roadHeat,
       blockedKeys,
       sources.map(s => ({ x: s.pos.x, y: s.pos.y })),
       CONFIG.remote.roadMinTileWalks,
     );
+    let laid = 0;
     for (const tile of tiles) {
       if (created >= CONFIG.remote.roadSitesPerRun) break;
       if (roadSitesPending >= CONFIG.remote.maxRoadSitesPerOp) break;
-      if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) return;
+      if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) break;
       const rc = room.createConstructionSite(tile.x, tile.y, STRUCTURE_ROAD);
       if (rc === OK) {
         created++;
+        laid++;
         roadSitesPending++;
         blockedKeys.add(tile.key);
         // 道路是运力倍增器（有路 hauler 速度 ×2），但也是实打实的能量投入，
@@ -312,14 +362,16 @@ export function planRemotePathRoads(
         blockedKeys.add(tile.key);
       }
     }
+    op.roadLaid = laid;
   }
 }
 
 /**
  * 通勤热度 → 「被真正踩过的格子」集合（键 "x,y"，与 nearEvidence 同口径）。
  *
- * `roomTraffic` 的键是 `x*50+y` 的数字串（`creeps/movement/traffic.ts` 复用
- * `domain/layout/types.packPos`），所以这里必须换算 —— 两套键形直接混用会静默判不出命中。
+ * 热度账的键是 `x*50+y` 的数字串（`creeps/movement/traffic.ts` 复用
+ * `domain/layout/types.packPos`，累计层见 `domain/logistics/walk-heat`），所以这里必须换算 ——
+ * 两套键形直接混用会静默判不出命中。
  */
 export function walkedHeatKeys(
   traffic: Readonly<Record<string, number>> | undefined,
