@@ -121,6 +121,11 @@ export interface GlobalCache {
    * 上面那份是 per-run 的，低频系统的 per-run 单价摊到每拍要小两个数量级。
    */
   systemCpuPerTick?: Record<string, number>;
+  /**
+   * 角色 CPU 的跨采样 EMA（每拍口径）。creep 逻辑每拍都跑，所以不需要像系统那样除 cadence，
+   * 但需要平滑 —— 单拍采样会把「某一拍恰好有人在重建」读成常态。
+   */
+  roleCpuEma?: Record<string, number>;
   /** P3 能量核算 L1 计数器（bumpEnergyCounter 写入；economy 系统每窗滚动消费）。 */
   energyLedger?: { tick: number; rooms: Record<string, RoomEnergyCounters> };
   /** 远矿每 op 收支账本（key = remoteOpKey(home, target)）。

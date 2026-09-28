@@ -24,6 +24,32 @@ import { log } from "../kernel/log";
 
 // ─── 系统定义 ───────────────────────────────────────────────
 
+const round2 = (v: number): number => Math.round(v * 100) / 100;
+
+/**
+ * 角色 CPU 的跨采样 EMA（每拍口径：creep 逻辑每拍都跑，不像系统需要除 cadence）。
+ *
+ * 为什么要单独一份账：角色侧此前只有环里的 top-3 可见（`s1/r1` 那种三元组），
+ * 而 22 只 creep 的逻辑恰好是帝国最大的单一开销块 —— 判「CPU 能不能省下来换第二房」
+ * 时，看得见系统榜却看不见角色榜等于只结了一半的账。
+ *
+ * 消失的角色必须按 0 参与平滑，不能直接留着：否则一个已经不再孵化的角色会把它的旧账
+ * 永久挂在榜上，而「某角色突然变贵」与「某角色已经不在了」读出来会是同一个数。
+ */
+export function updateRoleCpuEma(
+  prev: Readonly<Record<string, number>> | undefined,
+  current: Readonly<Record<string, number>>,
+  alpha = 0.2,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  const roles = new Set([...Object.keys(prev ?? {}), ...Object.keys(current)]);
+  for (const role of roles) {
+    const next = (prev?.[role] ?? 0) * (1 - alpha) + (current[role] ?? 0) * alpha;
+    if (next >= 0.005) out[role] = Math.round(next * 10000) / 10000;
+  }
+  return out;
+}
+
 export const telemetryCollectorSystem: System = {
   name: "telemetry-collector",
   priority: 3 as Priority,
@@ -315,6 +341,32 @@ function sampleMemorySize(_tick: number): void {
           .slice(0, 10)
           .map(([k, v]) => [k, Math.round(v * 100) / 100]),
       );
+      // 不截断的总量：榜单只看前 10，而"creep 侧 vs 系统侧 vs 剩余"这笔账要用全量才结得平。
+      (Memory.kernel.stats as any).cpuSystemTotal = round2(
+        Object.values(g.systemCpuPerTick as Record<string, number>).reduce((a, b) => a + b, 0),
+      );
+    }
+    {
+      const tel = g.telemetry;
+      if (tel && tel.tick === Game.time) {
+        // globalCache 是带索引签名的形状，取自己加的字段必须显式定型（与上面
+        // systemCpuPerTick 同一写法）—— 否则下游全部退化成 unknown。
+        const roleEma: Record<string, number> = updateRoleCpuEma(
+          g.roleCpuEma as Record<string, number> | undefined,
+          tel.roleCpu,
+        );
+        g.roleCpuEma = roleEma;
+        const roleEntries = Object.entries(roleEma);
+        (Memory.kernel.stats as any).cpuPerTickByRole = Object.fromEntries(
+          roleEntries
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([k, v]) => [k, round2(v)]),
+        );
+        (Memory.kernel.stats as any).cpuRoleTotal = round2(
+          roleEntries.reduce((sum, [, v]) => sum + v, 0),
+        );
+      }
     }
     if (g.roadBuildLedger && Object.keys(g.roadBuildLedger).length > 0) {
       // 通勤建路账本快照（heap 累计值原样落一份，供体检脚本做差）：不参与任何决策。
