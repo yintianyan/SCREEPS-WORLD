@@ -1,0 +1,65 @@
+/**
+ * 通勤建路账本 —— 「这条路到底有没有人施工」的六个计数。
+ *
+ * 为什么要有：远矿 road site 挂到全帝国车道上限（20）而**建成道路恒为 0**，这件事从
+ * 2026-09-23 查到现在定不了案。原因是现场只给了一个数（`site.progress`），而三种归因
+ * 都能解释它：① 落点与通勤线不相交（没机会施工）；② 有机会但每趟只点一下、进度被摊薄
+ * （施工强度不够）；③ 满载腿把能量先交出去了、轮到此格时背包已空（有力气没能量）。
+ * 三者要的动作完全不同（①改规划落点、②改车道数或选择键、③改施工时机），靠推理挑一个
+ * 已经错过三次 —— 这份账本就是用来把「推理」换成「读数」的。
+ *
+ * 纯数据契约 + 一个归因函数，不碰 Game/Memory（本层不得触运行时全局，也不被内核值导入，
+ * 所以这里只出类型与判据，**建行处唯一在 `kernel/global-cache.roadBuildCounters()`**）。
+ * 记数是 `creeps/roles/remote-hauler.ts` 的脚下建路，读者是 road-planner（建成侧）、
+ * telemetry 快照与体检脚本。
+ */
+
+/** 单房累计计数（heap，自本次进程启动起；global reset 归零）。 */
+export interface RoadBuildCounters {
+  /** 进入脚下建路的次数 ≈ 通勤 tick 数（分母）。 */
+  calls: number;
+  /** 因背包无能量早退的次数（情形③的直接证据）。 */
+  noEnergy: number;
+  /** 因 body 无 WORK 早退的次数（本次线上实测：应为 0 —— 该归因已被证伪）。 */
+  noWork: number;
+  /** 本房一个自己的 site 都没有的次数（规划器没铺，或视野/缓存为空）。 */
+  noSiteAtAll: number;
+  /** 有 site 但射程（range≤3）内一个都不在的次数（情形①的直接证据）。 */
+  outOfRange: number;
+  /** 真正发出且被引擎接受的 build() 次数。 */
+  built: number;
+  /** 发出 build() 但引擎拒绝的次数（ERR_*）。 */
+  buildRejected: number;
+  // ── 以下三个由 road-planner（有视野那一侧）写，不是 creep 侧计数 ──
+  /** 本房我方 road site 的 progress 之和（两次快照的差 = 真实施工速率）。 */
+  roadProgressSum: number;
+  /** 待建 road site 数（progress < 满额）。 */
+  roadSitesPending: number;
+  /** **已建成**的 road 条数 —— 判「这条路有没有了」只看这个，progress 会骗人（路会衰减）。 */
+  roadsBuilt: number;
+}
+
+/**
+ * 判一次脚下建路的结局 —— 纯函数，把「为什么这一拍没建成」归到唯一一个桶里。
+ *
+ * 早退顺序与执行侧一致（先看能量、再看 WORK），因为这就是代码真实的走向：
+ * 先判能才判人，`noEnergy` 会盖住「同一拍也无 WORK」这种双重缺陷 —— 可接受，
+ * 我们要的是「这一拍为什么不施工」的第一因，不是全部因。
+ *
+ * @param energyInStore 背包里的能量
+ * @param workParts body 的 WORK 部件数
+ * @param siteCount 本房我方 site 总数（含非 road）
+ * @param inRangeCount 射程（range≤3）内的 site 数
+ */
+export function classifyRoadBuildAttempt(input: {
+  energyInStore: number;
+  workParts: number;
+  siteCount: number;
+  inRangeCount: number;
+}): keyof RoadBuildCounters | "proceed" {
+  if (input.energyInStore <= 0) return "noEnergy";
+  if (input.workParts === 0) return "noWork";
+  if (input.siteCount === 0) return "noSiteAtAll";
+  if (input.inRangeCount === 0) return "outOfRange";
+  return "proceed";
+}

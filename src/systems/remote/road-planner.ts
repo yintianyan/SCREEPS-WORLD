@@ -1,7 +1,7 @@
 /** 远矿道路与工地 — container site 收编、路径修路规划、阻断墙检测、道路覆盖率。 */
 import { CONFIG } from "../../config";
 import type { TickContext } from "../../kernel/contracts";
-import { querySquad, bumpRemoteOpLedger } from "../../kernel/global-cache";
+import { querySquad, bumpRemoteOpLedger, roadBuildCounters } from "../../kernel/global-cache";
 import { getRemoteSiteTotal, getRemoteRoadSiteTotal, getTickSiteCounters } from "../site-quota";
 import { recycleRemoteDismantlers } from "./creep-recycle";
 import { structureCost } from "./op-lifecycle";
@@ -263,17 +263,23 @@ export function planRemotePathRoads(
     // progress>0 的 road site —— 通勤 hauler 确实踩过的位置。
     const blockedKeys = new Set<string>();
     const evidenceKeys = new Set<string>();
+    // 实测账本（只读世界、写 heap，不参与任何决策）：判「这条通勤线上到底有没有施工」
+    // 需要的是建成数与进度和，而不是再一次推理 —— 立案见 domain/logistics/road-build。
+    let roadsBuilt = 0;
+    let roadProgressSum = 0;
     for (const s of room.find(FIND_STRUCTURES)) {
       blockedKeys.add(`${s.pos.x},${s.pos.y}`);
       if (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) {
         evidenceKeys.add(`${s.pos.x},${s.pos.y}`);
       }
+      if (s.structureType === STRUCTURE_ROAD) roadsBuilt++;
     }
     for (const s of allSites) {
       blockedKeys.add(`${s.pos.x},${s.pos.y}`);
       if (s.structureType === STRUCTURE_ROAD && s.progress > 0) {
         evidenceKeys.add(`${s.pos.x},${s.pos.y}`);
       }
+      if (s.structureType === STRUCTURE_ROAD) roadProgressSum += s.progress;
     }
     // 回收「零进度 + 拿不到施工证据」的 road site —— 这类格落在"规划线有人画、通勤线
     // 没人走"的区段：出境点由 moveTowardRoom 的粘性出口缓存决定，与 home 锚的地形最短
@@ -293,6 +299,11 @@ export function planRemotePathRoads(
     // 实测校正（本字段唯一写者）：与 op.siteCount 同款「会递减」，防只增不减锁死车道。
     // 记清扫后的口径 —— 残骸当场释放，不必等下一轮再减。
     if (op.roadSiteCount !== roadSitesPending) op.roadSiteCount = roadSitesPending;
+    // 建成侧账本（判据是 roadsBuilt 与 progress 和，不是 site 数）：见 domain/logistics/road-build。
+    const counters = roadBuildCounters(rn);
+    counters.roadProgressSum = roadProgressSum;
+    counters.roadSitesPending = roadSitesPending;
+    counters.roadsBuilt = roadsBuilt;
     // 清扫之后才判预算：本轮释放的额度当场可用（roadBudget 是 tick 入口快照）。
     if (roadBudget + created - released >= CONFIG.remote.roadSitesPerOpTotal) continue;
     // 单 op 挂起 road site 数（含在建）超上限则跳过 —— 铺完自然回落。

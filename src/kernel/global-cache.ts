@@ -1,5 +1,6 @@
 import type { TaskPool } from "../domain/assignment/task-pool";
 import type { RemoteOpLedger, RemoteOpLedgerField } from "../domain/remote/op-ledger";
+import type { RoadBuildCounters } from "../domain/logistics/road-build";
 
 /**
  * per-tick 共享缓存槽的标准生命周期：同 tick 同 key 命中直接返回条目，
@@ -70,6 +71,14 @@ export interface GlobalCache {
   expectationEvent?: import("./expectations").ExpectationEventMark;
   /** 本次进程（global reset 后第一次 tick）的 tick —— 与同样活在 heap 的 systemLastRun 对齐。 */
   processBootTick?: number;
+  /**
+   * 通勤建路实测账本（heap，按房累加，自本次进程起）：远矿道路「建成 0」这件事查了三次
+   * 定不了案，因为三种归因（代价参数、落点错配、身子没有 WORK）各自都能自圆其说，
+   * 而现场只有一个 `site.progress`。这份账本记录的正是缺的那类事实：
+   * **有没有机会施工**（射程内有没有 site）、**有没有力气施工**（背包有没有能）、
+   * **施工成没成**（build() 的返回值与投进去的能量）。不参与任何决策，只留证据。
+   */
+  roadBuildLedger?: Record<string, import("../domain/logistics/road-build").RoadBuildCounters>;
   /** per-tick 事件缓冲区 — 任意系统可通过 recordEvent() 写入，telemetry-collector flush。 */
   eventBuffer?: { events: import("./event-log").GameEvent[] };
   assignment?: AssignmentCache;
@@ -828,6 +837,26 @@ export function pruneRemoteOpLedgers(home: string, liveTargets: ReadonlySet<stri
 
 function currentTick(): number {
   return (globalThis as { Game?: { time?: number } }).Game?.time ?? 0;
+}
+
+/** 取（或建行）某房的通勤建路账本。写者两处：creep 侧记「为什么没施工」，
+ * road-planner 侧记「实际建成什么」。这里的零值字面量是全仓唯一建行处 ——
+ * 类型契约在 domain/logistics/road-build，而内核不得值导入业务模块，所以零值在此就地构造。 */
+export function roadBuildCounters(room: string): RoadBuildCounters {
+  const g = globalCache();
+  const ledger = (g.roadBuildLedger ??= {});
+  return (ledger[room] ??= {
+    calls: 0,
+    noEnergy: 0,
+    noWork: 0,
+    noSiteAtAll: 0,
+    outOfRange: 0,
+    built: 0,
+    buildRejected: 0,
+    roadProgressSum: 0,
+    roadSitesPending: 0,
+    roadsBuilt: 0,
+  });
 }
 /** Screeps 沙箱 `global` 对象的类型安全访问器。
  * 用 `globalThis` 避免与 `@types/node` 的 `global` 类型冲突（沙箱中二者同一作用域）。

@@ -417,6 +417,11 @@ declare global {
        * 来自 kernel.runCreeps 按 memory.home 归集的 globalCache.cpuByHome。
        * 供 empire-strategy / capacity 评估每房真实 CPU 成本。 */
       cpuByHome?: Record<string, number>;
+      /**
+       * 通勤建路实测账本快照（heap 累计值，telemetry 每轮落一次）：房名 → 计数。
+       * 存在的理由与字段语义见 domain/logistics/road-build —— 纯观测，无消费者做决策。
+       */
+      roadBuild?: Record<string, import("../domain/logistics/road-build").RoadBuildCounters>;
       /** Memory 原始字符串体积（字符数），每 100 tick 采样。
        * RawMemory.get().length — 零 JSON 解析成本，只读字符串长度。
        * 官服上限 2MB（2*1024*1024）[Fact: typings 验证]；超 1.5MB 告警。 */

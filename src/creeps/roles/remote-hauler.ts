@@ -1,6 +1,8 @@
 /** RemoteHauler */
 import type { Priority } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
+import { roadBuildCounters } from "../../kernel/global-cache";
+import { classifyRoadBuildAttempt } from "../../domain/logistics/road-build";
 import type { ActionCandidate, RolePolicy } from "../engine/action-types";
 import { fillStorage, haulFillTarget } from "../engine/actions";
 import { defineRole } from "../engine/role-runner";
@@ -34,16 +36,33 @@ const UNDERFOOT_BUILD_RANGE_LIMIT = 4;
  * @internal 导出仅供单元测试 — 业务入口是 withRoadBuild 包裹的通勤候选。
  */
 export function buildRoadSiteUnderfoot(creep: Creep): void {
-  if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return;
-  if (creep.getActiveBodyparts(WORK) === 0) return; // 无 WORK 部件，build 必失败
+  // 实测账本（heap，不参与任何决策）：远矿路「建成 0」查到今天，缺的从来不是想法，
+  // 而是「这一拍到底为什么没施工」的分桶读数。立案与判据见 domain/logistics/road-build。
+  const counters = roadBuildCounters(creep.room.name);
+  counters.calls++;
+
+  // 早退顺序与成本口径都和改之前一致（先判能、再判人，最后才扫 site）——
+  // 账本不能改变 CPU 曲线，否则「加了观测之后行为变了」这笔账就分不清了。
+  const energyInStore = creep.store.getUsedCapacity(RESOURCE_ENERGY);
+  const workParts = creep.getActiveBodyparts(WORK);
+  if (energyInStore <= 0) {
+    counters.noEnergy++;
+    return;
+  }
+  if (workParts === 0) {
+    counters.noWork++;
+    return;
+  }
+
   const sites = findMySitesCached(creep.room);
-  if (sites.length === 0) return;
   let best: ConstructionSite | undefined;
   let bestRange = UNDERFOOT_BUILD_RANGE_LIMIT;
   let bestProgress = -1;
+  let inRangeCount = 0;
   for (const site of sites) {
     const range = creep.pos.getRangeTo(site);
     if (range >= UNDERFOOT_BUILD_RANGE_LIMIT) continue;
+    inRangeCount++;
     const progress = site.progress;
     // 更近者优先；同射程内进度高者优先（先把脚下这条链的一格建完，再管下一格）。
     if (range > bestRange || (range === bestRange && progress <= bestProgress)) continue;
@@ -51,7 +70,22 @@ export function buildRoadSiteUnderfoot(creep: Creep): void {
     bestRange = range;
     bestProgress = progress;
   }
-  if (best) creep.build(best);
+
+  const outcome = classifyRoadBuildAttempt({
+    energyInStore: creep.store.getUsedCapacity(RESOURCE_ENERGY),
+    workParts: creep.getActiveBodyparts(WORK),
+    siteCount: sites.length,
+    inRangeCount,
+  });
+  if (outcome !== "proceed") {
+    counters[outcome]++;
+    return;
+  }
+  // build() 的资源结算发生在意图执行阶段（本 tick 读不到余额差），所以投入速率不由
+  // creep 侧计量 —— 交给 road-planner 的 roadProgressSum 快照做差。
+  const code = creep.build(best!);
+  if (code === OK) counters.built++;
+  else counters.buildRejected++;
 }
 
 /** 包装通勤候选：执行前先建脚下的路（移动意图由内层 execute 照常登记）。 */

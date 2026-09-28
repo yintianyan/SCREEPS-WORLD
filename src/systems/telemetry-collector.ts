@@ -306,6 +306,10 @@ function sampleMemorySize(_tick: number): void {
         [...g.systemBudgetEma.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10),
       );
     }
+    if (g.roadBuildLedger && Object.keys(g.roadBuildLedger).length > 0) {
+      // 通勤建路账本快照（heap 累计值原样落一份，供体检脚本做差）：不参与任何决策。
+      (Memory.kernel.stats as any).roadBuild = { ...g.roadBuildLedger };
+    }
     if (size > MEMORY_SIZE_ALERT) {
       log.warn(
         "telemetry-collector",
