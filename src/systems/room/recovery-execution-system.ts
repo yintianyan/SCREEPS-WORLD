@@ -15,6 +15,7 @@ import { CONFIG } from "../../config";
 import { globalCache, publishProcurementDemands } from "../../kernel/global-cache";
 import { RECOVERY_BODY, selectBody, degradeBody, minimalBodyFor } from "../../config/bodies";
 import { submitRequest, hasRequest, spawnKey, buildSpawnRequest } from "../../domain/spawn/queue";
+import { energyBuyAmount } from "../../domain/economy/energy-logistics";
 import { type RecoveryAction, GLOBAL_ROOM } from "../../domain/strategy/recovery-priority";
 import {
   recoveryIdempotencyKey,
@@ -514,12 +515,44 @@ function submitTerminalTrade(
 
   // 从 action.recommendation 推断需要的资源
   // 当前简化：只处理能量交易
+  //
+  // 但"买多少"必须由缺口决定，不能是写死的 5000。这条通道原先对**任何** failure 都发
+  // energy:5000/p50 —— 实测那条需求就来自矿物故障（reason=`recovery:rcv-recovery:failure:mineral:…`），
+  // 而 p50 在采购侧还带 +50% 价格上浮。官服后果：storage=899,331 能量（买入地板是 5,000）时
+  // 仍按 29.9/单位成交，单笔 ≈150,000 credits 买回帝国已经有 180 倍的东西。
+  // "缺能量才买"这个语义原先只在 tryBuyCrisisEnergy 那一条路径上设防 ⇒ 这里复用同一把尺
+  // （energyBuyAmount），storage ≥ floor 时缺口为 0，没缺口就不发布需求。
+  let storageEnergy = 0;
+  for (const s of ctx.snapshots()) {
+    if (s.roomName === room) {
+      storageEnergy = s.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+      break;
+    }
+  }
+  // 按最高买价预算可负担量（保守：实际成交价只低不高）—— 与危机买能量同一算法。
+  const affordable = Math.floor(
+    ((Game.market?.credits ?? 0) - CONFIG.market.creditFloor) / CONFIG.energy.maxEnergyBuyPrice,
+  );
+  const amount = energyBuyAmount(
+    storageEnergy,
+    CONFIG.energy.energyBuyFloor,
+    CONFIG.market.maxDealAmount,
+    affordable,
+  );
+  if (amount <= 0) {
+    return {
+      submitted: true,
+      executionRef: "procurement:no-deficit",
+      reason: `energy not deficient (storage=${storageEnergy})`,
+    };
+  }
+
   publishProcurementDemands(
     room,
     [
       {
         resource: "energy",
-        amount: 5000,
+        amount,
         priority: 50,
         deadline: ctx.tick + 500,
         reason: `recovery:${correlationId}`,
