@@ -66,23 +66,6 @@ describe("bootstrap 车道的放掉判据", () => {
     expect(queued).toContain(COLONY);
   });
 
-  it("代孵必须**连 builder 一起派** —— 只有 builder 能领 build 任务，只派 worker 会让幼房失去建造能力", () => {
-    // 线上实证：W38S56 的 4 只 builder 陆续到期（ttl 46/46/200/222），而该房没有 spawn、
-    // 自己的队列里也没有任何 builder 请求 ⇒ spawn 工地永久停在 ~4400/15000。
-    roomMem(0, "normal");
-
-    runBootstrapLane(ctx());
-
-    const roles = (globalThis as any).Memory.rooms[SPONSOR].spawnQueue.map((r: any) => r.role);
-    expect(roles).toContain("builder");
-    expect(roles).toContain("worker");
-    // 且都归属殖民地，不是给 sponsor 自己补员。
-    for (const req of (globalThis as any).Memory.rooms[SPONSOR].spawnQueue) {
-      expect(req.memory.home).toBe(COLONY);
-      expect(req.survival).toBe(false);
-    }
-  });
-
   it("对照组：该房已有自己的 spawn ⇒ 放掉车道，绝不再代孵（这条规则不能被改成永久投喂）", () => {
     roomMem(2, "normal");
 

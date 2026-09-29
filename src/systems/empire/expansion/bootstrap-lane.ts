@@ -139,27 +139,6 @@ export function runBootstrapLane(ctx: TickContext): void {
       expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
       retries: 0,
     });
-    // ⚠️ 必须**连 builder 一起代孵** —— 只派 worker 会让殖民地的建造能力归零。
-    // 实测（2026-09-29 第一次自主扩张 W38S56，19:55:47）：
-    //   `ROLE_TASK_KINDS` 里 **只有 builder 能领 build 任务**（worker/harvester 只有 fill），
-    //   而殖民地自己没有 spawn ⇒ spawn-manager 不给它孵人 ⇒ 现有 builder 全灭
-    //   （ttl 46/46/200/222）之后，spawn 工地就永久停在 ~4400/15000 ——
-    //   第一次扩张正是差这一座 spawn 就能自养。
-    // 也别指望"把殖民地自己的队列镜像过来"能解决：那张队列里压根没有 builder 请求
-    //   （实测 hauler×2 / upgrader×3 / harvester×2，builder 0 条）。
-    // body 复用 BOOTSTRAP_WORKER_BODY（3W2C）：建造既要有 WORK 出工、也要有 CARRY 带料。
-    submitRequest(queue, {
-      key: `${base}.builder`,
-      role: "builder",
-      home: room,
-      priority: 1,
-      survival: false,
-      body: [...BOOTSTRAP_WORKER_BODY],
-      memory: { role: "builder", home: room, mode: "acquire" },
-      createdAt: ctx.tick,
-      expiresAt: ctx.tick + CONFIG.spawn.requestTtl,
-      retries: 0,
-    });
     if (hostile > 0) {
       submitRequest(queue, {
         key: `${base}.defender`,
