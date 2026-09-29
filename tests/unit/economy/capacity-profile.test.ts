@@ -257,10 +257,21 @@ describe("buildEmpireResourceView", () => {
     expect(v.empireSelfSufficiency).toBeCloseTo(1, 5);
   });
 
-  it("empireSelfSufficiency：净流远偏离 0 → 低自给度", () => {
+  it("empireSelfSufficiency：盈余不扣分（旧式绝对值把全额结余判成最不自给）", () => {
+    // 这个夹具净流=全部收入（100% 结余），旧断言要求它等于 0 —— 那是在给缺陷背书，
+    // 不是在校验行为。线上同形：产量≈20/t 而净流 17.7/t ⇒ 旧式 1−|nf|/prod=0.11
+    // ⇒ health 封顶 stable ⇒ 扩张 G3 恒红（2026-09-29 收成只剩这一道闸）。
     const p = makeProfile({ netFlow: 14, estimatedIncome: 14 });
     const v = buildEmpireResourceView([p], 1000);
-    expect(v.empireSelfSufficiency).toBeCloseTo(0, 5);
+    expect(v.empireSelfSufficiency).toBeCloseTo(1, 5);
+  });
+
+  it("empireSelfSufficiency：只有赤字扣分，按占产量的比例、下界 0", () => {
+    const half = makeProfile({ netFlow: -7, estimatedIncome: 14 });
+    expect(buildEmpireResourceView([half], 1000).empireSelfSufficiency).toBeCloseTo(0.5, 5);
+    // 倒贴超过产量 ⇒ 归零（不是负数），闸门照旧拦得住真正入不敷出的帝国。
+    const over = makeProfile({ netFlow: -20, estimatedIncome: 14 });
+    expect(buildEmpireResourceView([over], 1000).empireSelfSufficiency).toBe(0);
   });
 
   it("avgEfficiency 排除 estimatedIncome=0 + efficiency=0 的房", () => {

@@ -69,9 +69,15 @@ export interface EmpireResourceView {
    */
   empireNetFlowPositive: boolean;
   /**
-   * 帝国自给度（0..1）：totalProduction > 0 时 =
-   * clamp(1 - |totalNetFlow|/totalProduction)。
-   * 含义：帝国收支平衡度。净流接近 0 = 自给度高。
+   * 帝国收支平衡度（0..1）：totalProduction > 0 时 =
+   * clamp(1 − max(0, −totalNetFlow)/totalProduction) —— **只在赤字方向扣分**。
+   *
+   * 含义：净流 ≥ 0 ⇒ 1（账面不为负即视为平衡）；净流为负时按占产量的比例扣分。
+   * 旧式带绝对值，把"结余很大"也判成不平衡：官服实测 netFlow=17.7/t 而产量≈20/t ⇒
+   * 自给度 0.11 ⇒ health 封顶 stable ⇒ 扩张 G3 恒红（2026-09-29 收成只剩这一道闸）。
+   * 帝国能造出盈余正是对外扩张的前提，把它当病征是符号错误，不是经济问题。
+   * ⚠️ 这个名字仍然名不副实：它量的是**收支平衡**，不是"原料自产"。拆成两个字段属
+   * 单独一条码（改判决输入时不顺手做语义拆分），别把两者混为一谈。
    */
   empireSelfSufficiency: number;
 }
@@ -175,7 +181,7 @@ export function buildEmpireResourceView(
   const empireNetFlowPositive = totalNetFlow > 0;
   const empireSelfSufficiency =
     totalProduction > 0
-      ? Math.max(0, Math.min(1, 1 - Math.abs(totalNetFlow) / totalProduction))
+      ? Math.max(0, Math.min(1, 1 - Math.max(0, -totalNetFlow) / totalProduction))
       : 0;
 
   return {
