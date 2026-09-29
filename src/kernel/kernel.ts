@@ -985,11 +985,23 @@ export class Kernel {
       const inThreatArea =
         liveThreatRooms.has(home ?? "") || liveThreatRooms.has(creep.room?.name ?? "");
       const cadence = idleCadenceTicks(ctx.budget.tier);
+      // 跨房导航中的 idle creep 不跳过。
+      // 上面那句"idle 下一 tick 也不会突然有活干"只对**任务可得性**成立，对**导航**不成立：
+      // 把 home 设在别的房的 creep（殖民拓荒队）正是靠 ensureHome 一步步走到 home 的，
+      // 而 idle 恰恰是它在途中被 role-runner 打上的状态（`!ensureHome` ⇒ mode=idle）。
+      // 于是 cadence 每 5 tick 才放行一次 ⇒ 实际 0.2 格/tick，而 creep 寿命是扁平 1500 拍、
+      // 一房 50 格 ⇒ 单程要 250+ 拍/房，多数拓荒队死在路上 —— 线上实测（第一次自主扩张
+      // W38S56，20:18）：home 在该房的 7 只全部 idle 散落在 W37S58/W38S57/W38S58，
+      // `inRoom=0`，两个工地冻结在 4940/5000 与 4782/15000。
+      // 这不是新原则：下面的 remoteTarget 豁免就是同一个理由（"跨房通勤中 idle 可能需导航"），
+      // 只是当初只有远矿编队会跨房，殖民地把 home 设在另一间房是新出现的同形场景。
+      const commutingHome = home !== undefined && home !== creep.room?.name;
       if (
         mode === "idle" &&
         stuck === 0 &&
         !creep.memory.recycle &&
         !creep.memory.remoteTarget &&
+        !commutingHome &&
         !inThreatArea &&
         cadence > 1 &&
         (Game.time + hashCreepName(creep.name)) % cadence !== 0
