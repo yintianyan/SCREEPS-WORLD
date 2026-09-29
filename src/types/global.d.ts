@@ -572,6 +572,29 @@ declare global {
      */
     gateNetFlow?: Record<string, number>;
     /**
+     * 纯观测：自举车道每轮把"哪些房被哪一道筛子掉出去"落一次数（不参与任何判据）。
+     * 存在的理由 —— 堆里的 ctx.snapshots() 从 console 读不到（console 与上传的 module code
+     * 各有自己的 globalThis），想看只能落 Memory。线上出现过"有自有 spawn 判效未过"
+     * 却无从判断是车道没跑、房没进候选、还是 sponsor 池空。
+     */
+    bootstrapDiag?: {
+      tick: number;
+      /** ctx.snapshots() 里有几间自有房。 */
+      owned: number;
+      /** 没视野被跳过的。 */
+      noVision: number;
+      /** 有自有 spawn（= 不需代孵，同时是防重入的唯一正当判据）。 */
+      hasSpawn: number;
+      /** controller 不是自己的。 */
+      notMine: number;
+      /** 进入代孵候选集的房数。 */
+      pushed: number;
+      /** 可当 sponsor 的房数（有 spawn + rcl 够 + colonyState=normal）。 */
+      sponsor: number;
+      /** decideBootstrapRooms 给出的决策条数。 */
+      decisions: number;
+    };
+    /**
      * Power Creep 运营状态（v34+，power-creep-manager 唯一写者）。
      * homeAssignments：PC 名 → 驻留房名。PC 换房成本高（长途移动 +
      * 寿命消耗），粘性防每轮重算漂移；PC 消失/房失守时由系统清理条目。

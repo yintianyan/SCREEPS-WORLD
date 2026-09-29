@@ -24,11 +24,27 @@ export function runBootstrapLane(ctx: TickContext): void {
     sponsor?: { room: string; capacityAvailable: number };
   }[] = [];
   const sponsorPool: { room: string; capacityAvailable: number }[] = [];
+  // 纯观测：车道"看得见房却没接管"时唯一能分清是哪一道筛子的读数（不参与任何判据）。
+  const diag = {
+    tick: ctx.tick,
+    owned: 0,
+    noVision: 0,
+    hasSpawn: 0,
+    notMine: 0,
+    pushed: 0,
+    sponsor: 0,
+    decisions: 0,
+  };
 
   for (const snapshot of ctx.snapshots()) {
+    diag.owned++;
     const room = Game.rooms[snapshot.roomName] as Room | undefined;
-    if (!room || typeof room.find !== "function") continue;
+    if (!room || typeof room.find !== "function") {
+      diag.noVision++;
+      continue;
+    }
     if (room.find(FIND_MY_SPAWNS).length > 0) {
+      diag.hasSpawn++;
       delete kernel.bootstrap[snapshot.roomName];
       if (
         snapshot.rcl >= CONFIG.expansion.sponsorMinRcl &&
@@ -49,14 +65,24 @@ export function runBootstrapLane(ctx: TickContext): void {
     // "normal"，当时 `spawns=0`、两个工地 `progress=0`、拓荒队还在隔壁房通勤，
     // 于是 `kernel.bootstrap` 被清空 ⇒ 途中任何减员都不会有替补。
     // 防重入的真正判据在第一个分支里（有自有 spawn = 能自孵 = 不再代孵）。
-    if (snapshot.controller?.my !== true) continue;
+    if (snapshot.controller?.my !== true) {
+      diag.notMine++;
+      continue;
+    }
     rooms.push({
       room: snapshot.roomName,
       ttd: room.controller?.ticksToDowngrade,
       hostileCount: snapshot.threatCreeps.length,
     });
   }
-  if (rooms.length === 0) return;
+  if (rooms.length === 0) {
+    // 纯观测（不参与任何判据）：车道"看着有房却没接管"时，唯一能分清是哪一道筛子把房
+    // 掉出去的手段。堆里的 ctx.snapshots() 从 console 读不到（console 与 module code
+    // 各有 globalThis），所以落 Memory。
+    diag.sponsor = sponsorPool.length;
+    kernel.bootstrapDiag = diag;
+    return;
+  }
 
   for (const r of rooms) {
     let best: { room: string; capacityAvailable: number } | undefined;
@@ -132,4 +158,8 @@ export function runBootstrapLane(ctx: TickContext): void {
       `[${ctx.tick}] bootstrap: dispatch ${room} wave${wave} via ${d.sponsor} (hostile=${hostile})`,
     );
   }
+  diag.pushed = rooms.length;
+  diag.sponsor = sponsorPool.length;
+  diag.decisions = decisions.length;
+  kernel.bootstrapDiag = diag;
 }
