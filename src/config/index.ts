@@ -621,6 +621,9 @@ export const CONFIG = {
     // 矿物采集：RCL6+ 有 extractor 且 mineral 未采空时孵化（见 demand 矿工块）。
     // minCount=0 → 矿采空后自然停孵，存量矿工老死不补。
     mineralMiner: { minCount: 0, maxCount: 1 },
+    // 化合物 lab 供料专职（见 roles/lab-tender.ts：取料相在 distributor/hauler 上都结构性
+    // 不可达）。同时是 recyclePass 的在役白名单 — 漏配会让它孵出即被判废弃回收。
+    labTender: { minCount: 0, maxCount: 1 },
     // 跨房远征攻击者：仅 war 姿态时由 war-planner 孵化（CONFIG.roles 兼任
     // recyclePass「在役角色」白名单 — 漏配会让攻击者孵出即被判废弃回收）。
     // maxCount 8 覆盖 war 编队与 PB 野采编队（4）并行峰值。

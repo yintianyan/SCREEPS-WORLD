@@ -1277,6 +1277,52 @@ describe("hauler 积压信号接收端可达性闸门（无 storage 防移动仓
   });
 });
 
+describe("labTender 孵化门禁（反应链最后一公里的执行人）", () => {
+  const terminal = mockStructure("terminal", { id: "term1", energy: 10000, capacity: 300000 });
+  const labs = [1, 2, 3, 4].map(i => mockStructure("lab", { id: `lab${i}` }));
+
+  function labSnap(overrides = {}): never {
+    return stationSnapshot({
+      rcl: 8,
+      energyCapacityAvailable: 1300,
+      terminal,
+      labs: labs as never,
+      ...overrides,
+    }) as never;
+  }
+
+  function reqsFor(state: string, snap: never) {
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      state as never,
+      livingHarvester(),
+      [],
+      normalCtx(0),
+      1000,
+    );
+    return requests.filter(r => r.role === "labTender");
+  }
+
+  it("RCL8 + lab≥3 + terminal → 孵 1 个，且身子只有 carry+move（不参与能量分配）", () => {
+    const tenders = reqsFor("normal", labSnap());
+    expect(tenders).toHaveLength(1);
+    expect(tenders[0]!.body.every(p => p === "carry" || p === "move")).toBe(true);
+  });
+
+  it("lab 凑不出三元组（只有 2 座）→ 不孵化", () => {
+    expect(reqsFor("normal", labSnap({ labs: [labs[0], labs[1]] as never }))).toHaveLength(0);
+  });
+
+  it("无 terminal（化合物没有落点）→ 不孵化", () => {
+    expect(reqsFor("normal", labSnap({ terminal: undefined }))).toHaveLength(0);
+  });
+
+  it("recovery 态 → 不孵化：工业是投资，不是救生索", () => {
+    expect(reqsFor("recovery", labSnap())).toHaveLength(0);
+  });
+});
+
 describe("mineralMiner 孵化门禁（工业链第一环激活）", () => {
   const mineral = (amount: number) => [
     { id: "min1", mineralType: "Z", mineralAmount: amount, pos: { x: 7, y: 33 } },

@@ -1204,6 +1204,15 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["claim", "move", "move"], minCapacity: 700 },
     { parts: ["claim", "move"], minCapacity: 650 },
   ],
+  labTender: [
+    // 化合物搬运只需背包与腿：无 WORK（不采集不施工，不参与能量分配），
+    // 一趟 200 单位恰好是 REACTION_LOAD_TARGET 的分数批。低容量房降级 2C2M。
+    {
+      parts: ["carry", "carry", "carry", "carry", "move", "move", "move", "move"],
+      minCapacity: 650,
+    },
+    { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
+  ],
   mineralMiner: [
     // 站桩矿工：extractor 5-tick 冷却，1 WORK=1/tick、上限 10/tick 需 10 WORK；
     // 必须含 CARRY（harvestMineral 检查剩余容量>0，空 CARRY 永不触发）。按容量平滑降级。

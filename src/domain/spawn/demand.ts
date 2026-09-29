@@ -765,6 +765,44 @@ export function evaluateDemand(
     }
   }
 
+  // P2：Lab Tender — 化合物 storage/terminal → lab 的专职搬运（反应链最后一公里）。
+  // 必要性是实测出来的，不是设计偏好：线上 terminal 里 X=600/GH2O=300 到位、需求表每拍
+  // 新鲜（loads=4），而 10 座 lab 的 mineralType 连续数小时全空 —— 因为取料相在两个
+  // 现有角色上都结构性不可达（distributor 的背包被孵化能量常驻占用；hauler 的 work 态
+  // 要求满载，见 roles/lab-tender.ts 头注）。补一个只干这件事的角色，而不是把化合物
+  // 提到孵化能量之前 —— 后者会让工业压过生存侧不变量。
+  // 门禁：RCL6+（有 lab 才有意义）且 lab ≥ 3（能组成三元组）且有 terminal（买入化合物落点）；
+  // maxCount=1，无料可搬时它 park，成本是一个 4C4M 身子 + <0.1 CPU/tick。
+  // bootstrap 与 recovery 不开：保命孵化优先，工业是投资不是救生索。
+  if (
+    colonyState === "normal" &&
+    snapshot.rcl >= 6 &&
+    snapshot.labs.length >= 3 &&
+    snapshot.terminal !== undefined
+  ) {
+    const tenderConfig = getRoleBounds("labTender", home);
+    const tenderTotal = (counts.labTender ?? 0) + countPending(queue, "labTender", home);
+    for (let i = tenderTotal; i < tenderConfig.maxCount; i++) {
+      const key = spawnKey("labTender", home, i);
+      if (!hasRequest(queue, key)) {
+        requests.push(
+          createRequest(
+            "labTender",
+            home,
+            i,
+            key,
+            2,
+            energyCapacity,
+            roomCtx.energyAvailable,
+            colonyState,
+            snapshot.rcl,
+            tick,
+          ),
+        );
+      }
+    }
+  }
+
   // P2：Upgrader — 仅 normal；有降级风险时 recovery/bootstrap 也允许（P1 优先级）。
   const hasDowngradeRisk = roomCtx.controllerDowngradeRisk;
   // RCL8 满级后升级零收益（progress=0）：无降级风险时停孵/停替换；

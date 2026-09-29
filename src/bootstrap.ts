@@ -6,6 +6,7 @@ import { distributorRole } from "./creeps/roles/distributor";
 import { harvesterRole } from "./creeps/roles/harvester";
 import { haulerRole } from "./creeps/roles/hauler";
 import { mineralMinerRole } from "./creeps/roles/mineral-miner";
+import { labTenderRole } from "./creeps/roles/lab-tender";
 import { attackerRole } from "./creeps/roles/attacker";
 import { rangedAttackerRole } from "./creeps/roles/ranged-attacker";
 import { dismantlerRole } from "./creeps/roles/dismantler";
@@ -213,6 +214,8 @@ export const registry = new Registry()
   .registerRole(claimerRole)
   // P2：mineralMiner（RCL6+ 采矿→container→terminal）
   .registerRole(mineralMinerRole)
+  // P2：labTender（化合物 storage/terminal → lab 专职搬运，工业链最后一公里）
+  .registerRole(labTenderRole)
   // P2：attacker（仅 war-planner 孵化）
   .registerRole(attackerRole)
   // P2：healer（heal-tank 编队治疗端，仅 war-planner 孵化）

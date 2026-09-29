@@ -28,6 +28,7 @@ export const TUNABLE_ROLES = [
   "claimer",
   "scout",
   "mineralMiner",
+  "labTender",
   "attacker",
   "rangedAttacker",
   "dismantler",
