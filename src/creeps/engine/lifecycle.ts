@@ -22,7 +22,16 @@ export function updateMode(creep: Creep): void {
   const free = creep.store.getFreeCapacity();
   const mode = creep.memory.mode ?? "acquire";
 
-  if (mode === "acquire" && free === 0) {
+  // 工地是唯一消费者时，"攒满"没有意义：手里有货就该去卸。
+  // ⚠️ 作用域**严格限在 build 租约**上。`free === 0` 这根阈值是全体角色共用的时钟，
+  //    hauler/物流侧故意靠"装满才送"做批量 —— 放宽成通用规则会让全帝国运输变半载往返，
+  //    并把 EnergyPools.carry / imported 的跨窗结算一起搅乱。
+  // 线上实证（2026-09-29 第一次自主扩张 W38S56）：同拍四只 builder 持同一份 kind:"build"
+  // 租约，只有 e=200/200 的那只转 work，e=160/200 的仍停在 acquire 去补采 40 能量
+  // ⇒ 工地 progress 只能偶发跳一格，10 只在场的拓荒队一天盖不出一座 spawn。
+  const buildLease = creep.memory.assignment?.kind === "build" && used > 0;
+
+  if ((mode === "acquire" && (free === 0 || buildLease)) || (buildLease && mode === "idle")) {
     creep.memory.mode = "work";
   } else if (mode === "work" && used === 0) {
     creep.memory.mode = "acquire";
