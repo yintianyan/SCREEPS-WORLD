@@ -11,7 +11,7 @@ import {
   type RoomStrategyInput,
 } from "../../domain/strategy/posture";
 import { evaluateAgenda } from "../../domain/strategy/agenda";
-import { evaluateCapacity } from "../../domain/strategy/capacity";
+import { evaluateCapacity, pickCpuUsagePerTick } from "../../domain/strategy/capacity";
 import { evaluateEnvironment } from "../../domain/strategy/environment";
 import { CONFIG } from "../../config";
 import { EventKind, recordEvent } from "../../kernel/event-log";
@@ -151,12 +151,18 @@ export const empireStrategySystem: System = {
     };
 
     // ── R7a：算力容量 — 规模规划的前馈层（「养得起多大规模」）──
+    const cpuRate = Memory.kernel.stats?.cpuRate;
     const capacity = evaluateCapacity(
       {
         cpuLimit: Game.cpu.limit,
         tickLimit: Game.cpu.tickLimit,
         bucket: Game.cpu.bucket ?? 10000,
-        cpuAvg10: Memory.kernel.stats?.cpuAvg10 ?? 0,
+        cpuUsagePerTick: pickCpuUsagePerTick({
+          avg10: Memory.kernel.stats?.cpuAvg10 ?? 0,
+          rateTotal: cpuRate?.total,
+          rateWindowTicks: cpuRate?.windowTicks,
+          rateUnsampledTicks: cpuRate?.unsampledTicks,
+        }),
         cpuMax10: Memory.kernel.stats?.cpuMax10 ?? 0,
       },
       Memory.kernel.capacity,

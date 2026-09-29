@@ -8,10 +8,52 @@ export interface CapacityInput {
   /** Game.cpu.tickLimit（与 limit 取小者为有效上限）。 */
   tickLimit: number;
   bucket: number;
-  /** telemetry 的 10 采样平均 CPU（Memory.kernel.stats.cpuAvg10）。 */
-  cpuAvg10: number;
+  /**
+   * 每 tick 平均 CPU —— 必须是覆盖窗内每一拍的读数（用 pickCpuUsagePerTick 选）。
+   * 不要把 stats.cpuAvg10 直接接进来：它的采样点系统性偏高，见该函数注释。
+   */
+  cpuUsagePerTick: number;
   /** telemetry 的 10 采样峰值（供调用方观察，本函数不参与分档）。 */
   cpuMax10: number;
+}
+
+/** 两份 CPU 均值读数，交给 pickCpuUsagePerTick 裁决用哪一份。 */
+export interface CpuUsageMeasurement {
+  /** stats.cpuAvg10：最近 10 个采样点的均值。 */
+  avg10: number;
+  /** stats.cpuRate.total：窗内每拍拍尾都采的均值。窗未建立时 undefined。 */
+  rateTotal?: number;
+  rateWindowTicks?: number;
+  rateUnsampledTicks?: number;
+}
+
+/**
+ * 采信逐拍均量所需的最小窗长（拍）。
+ *
+ * 取 100 是为了和它替换掉的读数同量级：`cpuAvg10` 覆盖 10 个采样点 × 10 拍 ≈ 100 拍。
+ * 更要紧的是启动期 —— 第 1 拍时 `total = 那一拍的用量 / 1`，把一次冷启动的抖动当均值
+ * 喂给档位闸，比偏高读数更糟（档位会随单拍摆动，而驻留计数正是在这种摆动里清零的）。
+ */
+const MIN_RATE_WINDOW_TICKS = 100;
+
+/**
+ * 选喂给分档的「每 tick 平均 CPU」。
+ *
+ * 优先逐拍均量。cpuAvg10 的 10 个采样点恰好落在遥测+刷段都在跑的重活拍上，
+ * 官服实测稳定偏高约 2.6/t（同一帝国：avg10=13.2 vs 逐拍=10.6，unsampledTicks=0），
+ * 于是有 47% 余量的帝国被判成 tight，升档滞回只能在边界上被重置回 0 ——
+ * tier=tight 已持续约 9300 拍、upgradeTicks 读 0，而真实均值从未接近过门槛。
+ *
+ * 三种情况退回 avg10（偏高即保守）：窗还没建立（新 Memory／首次采样前）、窗长不足
+ * MIN_RATE_WINDOW_TICKS（启动期单拍噪声），或窗内存在漏采的拍 —— 那种 total 少算了
+ * 漏掉的消耗，偏低即不安全。
+ */
+export function pickCpuUsagePerTick(m: CpuUsageMeasurement): number {
+  const trustworthy =
+    m.rateTotal !== undefined &&
+    (m.rateWindowTicks ?? 0) >= MIN_RATE_WINDOW_TICKS &&
+    (m.rateUnsampledTicks ?? 0) === 0;
+  return trustworthy ? (m.rateTotal as number) : m.avg10;
 }
 
 export interface CapacityOptions {
@@ -59,7 +101,7 @@ export function evaluateCapacity(
   options: CapacityOptions = DEFAULT_CAPACITY_OPTIONS,
 ): CapacityResult {
   const limit = Math.max(1, Math.min(input.cpuLimit, input.tickLimit));
-  const usage = Math.min(Math.max(0, input.cpuAvg10), limit);
+  const usage = Math.min(Math.max(0, input.cpuUsagePerTick), limit);
   const headroom = 1 - usage / limit;
 
   let target: CapacityTier;

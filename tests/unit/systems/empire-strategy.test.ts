@@ -65,6 +65,27 @@ describe("empire-strategy — 容量发布（R7a）", () => {
     expect((globalThis as any).Memory.kernel.capacity?.since).toBe((globalThis as any).Game.time);
   });
 
+  it("接线：stats.cpuRate 存在时用它分档，不是 cpuAvg10", () => {
+    // 这条只守一个静默失效点：字段名写错时 pickCpuUsagePerTick 会「退回 cpuAvg10」并
+    // 照常出一个 tier —— 前一条（只有 cpuAvg10）看不出接错，必须让两份读数故意不同档。
+    (globalThis as any).Memory.kernel = {};
+    (globalThis as any).Memory.kernel.stats = {
+      cpuAvg10: 14, // 偏高读数 → tight
+      cpuMax10: 15,
+      cpuRate: { windowTicks: 420, sampledTicks: 420, unsampledTicks: 0, total: 10.56 }, // 真值 → comfortable
+    };
+    (globalThis as any).Game.cpu = {
+      limit: 20,
+      tickLimit: 500,
+      bucket: 10000,
+      getUsed: () => 0,
+    };
+    const snap = setupRoom({ hostileAgo: 99999 });
+    empireStrategySystem.run(makeContext(snap));
+
+    expect((globalThis as any).Memory.kernel.capacity?.tier).toBe("comfortable");
+  });
+
   it("有效上限取 min(cpuLimit, tickLimit)", () => {
     (globalThis as any).Memory.kernel = {};
     (globalThis as any).Memory.kernel.stats = { cpuAvg10: 4, cpuMax10: 4 };

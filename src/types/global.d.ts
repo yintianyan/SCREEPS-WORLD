@@ -405,6 +405,24 @@ declare global {
       lastSample: number;
       /** 最近 10 采样点平均 CPU。 */
       cpuAvg10: number;
+      /**
+       * 窗内逐拍均量的 CPU 速率账（telemetry 写）。
+       *
+       * `total` 是「每拍拍尾都采」的均值 —— 分档唯一该吃的读数；`cpuAvg10` 的采样点
+       * 落在遥测+刷段的重活拍上，官服实测稳定偏高约 2.6/t。见 pickCpuUsagePerTick。
+       */
+      cpuRate?: {
+        windowTicks: number;
+        sampledTicks: number;
+        unsampledTicks: number;
+        total: number;
+        unexplained?: number;
+        unphased?: number;
+        tail?: number;
+        bySystem?: Record<string, number>;
+        byRole?: Record<string, number>;
+        byPhase?: Record<string, number>;
+      };
       /** 最近 10 采样点峰值 CPU。 */
       cpuMax10: number;
       /** 最近 10 采样点最低 bucket。 */
