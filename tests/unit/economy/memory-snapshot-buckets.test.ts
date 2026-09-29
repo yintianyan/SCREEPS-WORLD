@@ -40,13 +40,17 @@ const window: AccountingWindow = {
   otherStart: 5_000,
   otherEnd: 4_960,
   looseDelta: -10,
+  // 在途背包：窗内涨了 400（hauler 在远矿装满但还没投递 ⇒ 没有 imported 计数器），
+  // 这正是 #23(2) 那类跨窗残差的来源 —— 落进 ce 之后，drift 的这部分可被单独减掉。
+  carryStart: 3_000,
+  carryEnd: 3_400,
   drift: -80,
   p0p1PerTick: 26,
   incomePerTick: 20,
 };
 
 describe("economy 瘦快照：落盘的数必须能点名 drift 的来源", () => {
-  it("bk 只记非零桶，pl 记五个池读数", () => {
+  it("bk 只记非零桶，pl 记五个池读数，ce 记在途背包两端", () => {
     const snap = toMemorySnapshot(1050, 11.85, 899_700, 100, -80, 20, 1, window);
     expect(snap.bk).toEqual({
       harvested: 900,
@@ -56,6 +60,7 @@ describe("economy 瘦快照：落盘的数必须能点名 drift 的来源", () =
       recycledRefund: 50,
     });
     expect(snap.pl).toEqual([900_000, 899_700, 5_000, 4_960, -10]);
+    expect(snap.ce).toEqual([3_000, 3_400]);
   });
 
   it("恒等式可复算：一个只读 Memory 的人能自己算出 drift（这才叫归因）", () => {

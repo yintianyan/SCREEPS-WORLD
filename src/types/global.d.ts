@@ -177,6 +177,8 @@ declare global {
       bk?: Record<string, number>;
       /** 最近一窗池快照 [trackedStart, trackedEnd, otherStart, otherEnd, looseDelta]。 */
       pl?: number[];
+      /** 最近一窗在途背包能量 [carryStart, carryEnd] —— 跨窗残差的判别量（见 #23(2)）。 */
+      ce?: number[];
     };
     /**
      * 经济压力梯度信号（0.0–1.0，从 drainScore 派生）：demand/construction/tower

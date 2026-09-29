@@ -179,7 +179,14 @@ export interface AccountingWindow {
   otherStart: number;
   otherEnd: number;
   looseDelta: number;
-  /** drift = Δtracked − flowBalance − Δother；超容差即核算缺陷信号。 */
+  /** 在途背包能量（tracked 的一部分，但它与 `imported` 结算在**不同侧**：carry 按
+   * memory.home 立刻计、imported 要等投递成功那刻才计）⇒ 跨窗残差恰为一只 hauler 满载。
+   * 单独落这两个数，是为了让那种噪声一眼可辨而不是被算成"账实不符"。 */
+  carryStart: number;
+  carryEnd: number;
+  /** drift = Δtracked − flowBalance − looseΔ **+ Δother**；超容差即核算缺陷信号。
+   * （旧版写的是 −Δother，而 `other` 不在 trackedPoolsOf 里 ⇒ 一次 storage→工业池的纯搬运
+   * 被算成两倍损失；`ba18a6b` 纠正。） */
   drift: number;
   /** 本窗 P0/P1 消费速率（能量/tick）。 */
   p0p1PerTick: number;
@@ -233,6 +240,8 @@ export function rollupWindow(
     trackedEnd,
     otherStart: startPools.other,
     otherEnd: endPools.other,
+    carryStart: startPools.carry,
+    carryEnd: endPools.carry,
     looseDelta,
     drift,
     p0p1PerTick: ledgerP0P1Consumption(d) / ticks,
@@ -338,6 +347,12 @@ export interface EconomyMemorySnapshot {
    * 与 bk 合起来才构成 drift 的完整恒等式：缺的是**记账项**还是**没被跟踪的池**，一眼可分。
    */
   pl?: number[];
+  /** 最近一窗在途背包能量 `[carryStart, carryEnd]`。
+   * 为什么单独给：carry 是存量面（creep 一装货就按 home 计入 tracked），
+   * imported 是流量面（投递成功那刻才计入收入）—— 两者跨窗边界错开一整个背包量，
+   * 于是"只装不走"的窗 drift 偏正、"只走不装"的窗偏负。有了这两个数，
+   * 残差 = Δcarry 与 Δimported 之差，一眼可辨，不必再猜是哪条远矿线在动。 */
+  ce?: number[];
 }
 
 export function toMemorySnapshot(
@@ -373,6 +388,7 @@ export function toMemorySnapshot(
       Math.round(w.otherEnd),
       Math.round(w.looseDelta),
     ];
+    snap.ce = [Math.round(w.carryStart), Math.round(w.carryEnd)];
   }
   return snap;
 }
