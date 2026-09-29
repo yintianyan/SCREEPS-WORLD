@@ -1205,10 +1205,27 @@ export const BODY_TEMPLATES: Readonly<Record<string, readonly BodyTemplate[]>> =
     { parts: ["claim", "move"], minCapacity: 650 },
   ],
   labTender: [
-    // 化合物搬运只需背包与腿：无 WORK（不采集不施工，不参与能量分配），
-    // 一趟 200 单位恰好是 REACTION_LOAD_TARGET 的分数批。低容量房降级 2C2M。
+    // 化合物搬运只需背包与腿：无 WORK（不采集不施工，不参与能量分配）。
+    // 顶档取 RCL8 的 12 部件上限 = 6C6M ⇒ 背包 300，**正好一趟填满一个 input lab
+    // （REACTION_LOAD_TARGET=300）**；此前的 4C4M 只有 200，每个装料目标要跑两趟。
+    // 实测依据（10:33）：反应产率约 90 单位/25 分钟 ≈ 理论值的 1.2%，瓶颈是 carrier 趟次
+    // 而不是 lab 或配方 ⇒ 加容量而非加 creep：**多孵一只 creep 会直接吃 creeps 相的 CPU，
+    // 而 G6（CPU 档）才是现在真正挡扩张的那道闸**，所以宁可把身子做大。
     {
-      parts: ["carry", "carry", "carry", "carry", "move", "move", "move", "move"],
+      parts: [
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "carry",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+        "move",
+      ],
       minCapacity: 650,
     },
     { parts: ["carry", "carry", "move", "move"], minCapacity: 200 },
