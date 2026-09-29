@@ -9,8 +9,15 @@ import { describe, expect, it } from "vitest";
 import { toMemorySnapshot, type AccountingWindow } from "../../../src/domain/economy/accounting";
 
 /** 一个自洽的核算窗：收入 1000、消费 1300、退还 50 ⇒ 流平衡 −250；
- *  跟踪池 900_000 → 899_700（−300），other 池 +40，loose −10
- *  ⇒ drift = Δtracked − 流平衡 − looseΔ − otherΔ = −300 +250 +10 −40 = −80 */
+ *  跟踪池 900_000 → 899_700（−300），other 池 5000 → 4960（−40，工业池内部烧掉而无计数器），
+ *  loose −10
+ *  ⇒ drift = Δtracked − 流平衡 − looseΔ **+ Δother** = −300 +250 +10 −40 = −80
+ *
+ * ⚠️ 符号是 `ba18a6b` 纠正过的：`other` 不在 `trackedPoolsOf` 里，所以它必须**加**。
+ *    写成减号会把一笔 "storage → 工业池" 的纯搬运算成两倍损失。
+ *    本用例 1197659 时用的正是减号（当时照着实现写的，等于给 bug 背书）——
+ *    教训写进注释：**恒等式类断言必须自己推导一遍，不能照抄被测实现**，否则测试只是复述 bug。
+ */
 const window: AccountingWindow = {
   t0: 1000,
   t1: 1050,
@@ -31,7 +38,7 @@ const window: AccountingWindow = {
   trackedStart: 900_000,
   trackedEnd: 899_700,
   otherStart: 5_000,
-  otherEnd: 5_040,
+  otherEnd: 4_960,
   looseDelta: -10,
   drift: -80,
   p0p1PerTick: 26,
@@ -48,7 +55,7 @@ describe("economy 瘦快照：落盘的数必须能点名 drift 的来源", () =
       upgraded: 600,
       recycledRefund: 50,
     });
-    expect(snap.pl).toEqual([900_000, 899_700, 5_000, 5_040, -10]);
+    expect(snap.pl).toEqual([900_000, 899_700, 5_000, 4_960, -10]);
   });
 
   it("恒等式可复算：一个只读 Memory 的人能自己算出 drift（这才叫归因）", () => {
@@ -74,7 +81,7 @@ describe("economy 瘦快照：落盘的数必须能点名 drift 的来源", () =
       trackedEnd -
       trackedStart -
       (inflow - outflow + refunds) -
-      looseDelta -
+      looseDelta +
       (otherEnd - otherStart);
     expect(recomputed).toBe(snap.dr);
   });
