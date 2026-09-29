@@ -104,8 +104,13 @@ export function buildExpansionDashboard(input: {
   const waitingExecution = plans.filter(p => p.status === "WAITING_EXECUTION");
   const topPlan = activePlans[0];
 
-  // Failed gates
-  const failedGates = readiness.gates.filter(g => !g.passed).map(g => g.name);
+  // Failed gates：除名字外必须带上**实测值与判据**。只有代号时 "G4: net flow" 分不清
+  // 「差一点」与「差一个数量级」，而这两者要做的动作没有交集（真实事故：扩张闸连续 7 小时
+  // 报 `Blocked=G3+G6`，而同一份 Memory 里的 failedGates 数组其实是 4 道 —— 读数的人
+  // 据此只查了 CPU 与健康度）。名字仍保持 `Gn:` 开头，summary 那一行按前缀取代号。
+  const failedGates = readiness.gates
+    .filter(g => !g.passed)
+    .map(g => `${g.name}(v=${g.value}|${g.condition})`);
 
   const summary = [
     `Expansion Dashboard @${tick}`,

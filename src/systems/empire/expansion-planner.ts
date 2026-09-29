@@ -73,6 +73,12 @@ export const expansionPlannerSystem: System = {
       Memory.kernel.expansionDashboard = {
         tick: ctx.tick,
         summary: `Expansion Dashboard @${ctx.tick} | Pressure=LOW(early-exit) | no candidates, no active plans`,
+        // 早退分支也要落 failedGates：它上面那份 heap 读数有，Memory 这份没有 ——
+        // 于是"低压早退"之后读到的数组是**上一轮全量**留下的，摘要与闸门明细分属两次运行。
+        // （本轮就差点因此把一个跨时刻的对照当成仪表说谎。）
+        failedGates: plannerInput.readiness.gates
+          .filter(g => !g.passed)
+          .map(g => `${g.name}(v=${g.value}|${g.condition})`),
       };
       const g0 = globalCache();
       g0.expansionDashboard = {
