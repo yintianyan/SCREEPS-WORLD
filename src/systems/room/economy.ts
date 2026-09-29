@@ -121,7 +121,14 @@ function collectPools(s: RoomSnapshot): EnergyPools {
   for (const r of s.ruins) loose += r.store.getUsedCapacity(RESOURCE_ENERGY);
   const other =
     (s.factory?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) +
-    (s.powerSpawn?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0);
+    (s.powerSpawn?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) +
+    // lab 储能归"解释项"而不是 tracked 池 —— 它与 factory/powerSpawn 同构：进出都没有
+    // 对应的消费桶（storage→lab 是搬运、反应每批 20 能量由引擎侧扣、boost 走 lab 自己的储量），
+    // 放进 tracked 就会让"给 lab 装料"看起来像能量凭空消失。
+    // 线上实证（09:0x，工业刚被 labTender 喂起来的那一刻）：lab 储能 1766 而池里没有它 ⇒
+    // 灌料的 1766 全部落进 drift（≈ −35/t 的一个 50 拍窗），与 `economy.dr=-1802..-2964` 同量级。
+    // 放进 other 后 drift 不再被装料污染；other 的变化在恒等式里被单独减掉，不影响账实校验。
+    s.labs.reduce((sum, l) => sum + l.store.getUsedCapacity(RESOURCE_ENERGY), 0);
   let towers = 0;
   for (const t of s.towers) towers += t.store.getUsedCapacity(RESOURCE_ENERGY);
   return {
