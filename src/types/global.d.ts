@@ -173,6 +173,10 @@ declare global {
       ei: number;
       /** 效率系数 ×100。 */
       ef: number;
+      /** 最近一窗各桶增量（能量，零值不入账）—— drift 点名哪个记账项缺/多。 */
+      bk?: Record<string, number>;
+      /** 最近一窗池快照 [trackedStart, trackedEnd, otherStart, otherEnd, looseDelta]。 */
+      pl?: number[];
     };
     /**
      * 经济压力梯度信号（0.0–1.0，从 drainScore 派生）：demand/construction/tower

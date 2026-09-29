@@ -315,6 +315,20 @@ export interface EconomyMemorySnapshot {
   ei: number;
   /** 效率系数 ×100。 */
   ef: number;
+  /**
+   * 最近一窗各桶增量（能量，零值不入账）。
+   *
+   * 为什么要落盘：drift 的符号只能告诉我们"账与存量不一致"，点名不了**哪一项**。
+   * 线上实测 `dr=-1802/50t`（≈ −36/t 持续超容差）而 `nf=+11.85`、环上净流 −27.9 ——
+   * 三份读数互相打脸，而 G3（经济健康）与 G4（净流）两道扩张闸就建在这个数上。
+   * 桶增量本来就在 `rollupWindow` 里算出来了（`byBucket`），此前被扔掉。
+   */
+  bk?: Record<string, number>;
+  /**
+   * 最近一窗的池快照 `[trackedStart, trackedEnd, otherStart, otherEnd, looseDelta]`。
+   * 与 bk 合起来才构成 drift 的完整恒等式：缺的是**记账项**还是**没被跟踪的池**，一眼可分。
+   */
+  pl?: number[];
 }
 
 export function toMemorySnapshot(
@@ -325,8 +339,9 @@ export function toMemorySnapshot(
   drift: number,
   estimatedIncome: number,
   effFactor: number,
+  w?: AccountingWindow,
 ): EconomyMemorySnapshot {
-  return {
+  const snap: EconomyMemorySnapshot = {
     t: tick,
     nf: Math.round((netFlowEma ?? 0) * 100),
     cr: Math.round(reserve),
@@ -335,6 +350,22 @@ export function toMemorySnapshot(
     ei: Math.round(estimatedIncome * 10),
     ef: Math.round(effFactor * 100),
   };
+  if (w) {
+    const buckets: Record<string, number> = {};
+    for (const [field, value] of Object.entries(w.byBucket)) {
+      const rounded = Math.round(value);
+      if (rounded !== 0) buckets[field] = rounded;
+    }
+    if (Object.keys(buckets).length > 0) snap.bk = buckets;
+    snap.pl = [
+      Math.round(w.trackedStart),
+      Math.round(w.trackedEnd),
+      Math.round(w.otherStart),
+      Math.round(w.otherEnd),
+      Math.round(w.looseDelta),
+    ];
+  }
+  return snap;
 }
 
 /** 从 Memory 快照恢复 heap 态（global reset 惰性重建路径；缺字段回退 undefined 语义）。 */

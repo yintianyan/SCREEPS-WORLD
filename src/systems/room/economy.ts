@@ -242,6 +242,7 @@ export const economySystem: System = {
         w.drift,
         estimateIncome(snapshot.sources.length, st.effFactor ?? INITIAL_EFFICIENCY_FACTOR),
         st.effFactor ?? INITIAL_EFFICIENCY_FACTOR,
+        w,
       );
 
       st.lastTick = ctx.tick;
