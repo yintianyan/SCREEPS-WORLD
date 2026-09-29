@@ -95,11 +95,31 @@ describe("AccountingWindow — 对账恒等式", () => {
     expect(w.drift).toBe(0);
   });
 
-  it("otherPool 变化（factory 解压产能量）不误报 drift", () => {
-    const sP = { ...emptyPools(), spawnExt: 100, other: 0 };
-    const eP = { ...emptyPools(), spawnExt: 600, other: 500 };
-    const w = rollupWindow(0, 50, led(), led({ harvested: 0 }), sP, eP);
-    expect(w.drift).toBe(0);
+  it("跨池搬运（storage → 工业池）不误报 drift；净增则必须报", () => {
+    // 本用例原先写作「factory 解压产能量不误报」，但它的夹具是自相矛盾的：
+    //   tracked +500 且 other +500，而计数器全 0 ⇒ 凭空出现 1000 能量。
+    // 旧符号 `− Δother` 恰好把这种"双双增长"抹成 0（因为它把搬运算了两次），
+    // 断言也就把 bug 固化成了期望。这里拆成两个各自说得通的情形：
+    // ① 纯搬运：tracked 少 X、other 多 X ⇒ drift = 0（能量既没产生也没消失）。
+    const transfer = rollupWindow(
+      0,
+      50,
+      led(),
+      led(),
+      { ...emptyPools(), storage: 5000, other: 0 },
+      { ...emptyPools(), storage: 4000, other: 1000 },
+    );
+    expect(transfer.drift).toBe(0);
+    // ② 池子在无计数器支持下双双上涨 ⇒ 就是账实不符，必须报 +1000（旧实现报 0）。
+    const appeared = rollupWindow(
+      0,
+      50,
+      led(),
+      led(),
+      { ...emptyPools(), spawnExt: 100, other: 0 },
+      { ...emptyPools(), spawnExt: 600, other: 500 },
+    );
+    expect(appeared.drift).toBe(1000);
   });
 
   it("loose 衰减单独报告且不影响 drift", () => {

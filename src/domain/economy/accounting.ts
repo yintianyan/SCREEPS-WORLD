@@ -210,8 +210,17 @@ export function rollupWindow(
   const looseDelta = endPools.loose - startPools.loose;
   // loose（dropped/tombstone/ruin）自然衰减不属于核算缺陷——单独报告 looseDelta，
   // 从 drift 中排除以避免误报（测试「loose 衰减单独报告且不影响 drift」验证此不变量）。
+  //
+  // Δother 的符号是**加**，不是减 —— 因为 `other`（factory/powerSpawn/lab 储能）
+  // 不在 `trackedPoolsOf` 里。一笔"storage → 工业池"的搬运会让 tracked 少 X、other 多 X：
+  // 减号把同一个 X 算两次损失（drift=−2X），于是**正常的工业装料每窗都谎报账实不符**；
+  // 加号才让纯搬运归零（Δtracked=−X 与 +Δother=+X 相消）。
+  // 代价（已知局限，别当成已修完）：工业池内部真正烧掉的能量（压缩 commodity、boost、
+  // 反应每批 20 能量）没有计数器，而池快照无法把它与"排回 storage"区分 ⇒ 那种消耗在这里
+  // 显示为 0 而不是负 drift。补法是加一个 `industrialSpend` 消费桶（见任务列表），
+  // 而不是把符号改回去 —— 改回去只会让 AccountingDrift 每窗空响。
   const drift =
-    trackedEnd - trackedStart - flowBalance - looseDelta - (endPools.other - startPools.other);
+    trackedEnd - trackedStart - flowBalance - looseDelta + (endPools.other - startPools.other);
   return {
     t0,
     t1,
