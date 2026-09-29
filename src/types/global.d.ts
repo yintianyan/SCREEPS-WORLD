@@ -559,6 +559,14 @@ declare global {
      */
     releasedRooms?: Record<string, number>;
     /**
+     * 扩张就绪度专用的「长视界净流」EMA（按房）。
+     *
+     * 必须住 Memory 而不是 heap：heap 版每次部署丢掉 ~2500 拍的收敛历史，
+     * 换码后 G3/G4 读到的是"拿当窗值播种"的假数 —— 14:43 实测因此把 plan 的
+     * readySince 打回起点（部署税本只该落在 G6 上，不该顺手把就绪度也清零）。
+     */
+    gateNetFlow?: Record<string, number>;
+    /**
      * Power Creep 运营状态（v34+，power-creep-manager 唯一写者）。
      * homeAssignments：PC 名 → 驻留房名。PC 换房成本高（长途移动 +
      * 寿命消耗），粘性防每轮重算漂移；PC 消失/房失守时由系统清理条目。

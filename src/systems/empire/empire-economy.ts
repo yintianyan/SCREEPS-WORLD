@@ -214,15 +214,8 @@ export function queryEmpirePlannerInput() {
   return cachedPlannerInput?.input;
 }
 
-/**
- * 扩张就绪度专用的「长视界」净流仪器（heap，按房）。
- *
- * 只喂 G3/G4（readiness），**不喂预算分配器** —— 后者必须用快的那台，
- * 理由与 A/B 实测见 CONFIG.economy.accounting.netFlowGateAlpha 的注释。
- * heap 而非 Memory：换码后重新收敛（τ≈2500 拍）；就绪度本来就是分钟级决策，
- * 且首见时用当窗值播种，不会在冷启动阶段给出虚假绿灯。
- */
-const gateNetFlowEma = new Map<string, number>();
+// 长视界净流仪器住在 Memory.kernel.gateNetFlow（见其类型注释）—— 曾经放 heap，
+// 结果每次部署把 ~2500 拍的收敛历史丢掉，把 G3/G4 连带 readySince 一起打回起点。
 
 export const empireEconomySystem: System = {
   name: "empire-economy",
@@ -286,11 +279,17 @@ export const empireEconomySystem: System = {
     // empireSelfSufficiency / deficit·struggling 分类 / core 判定）整体按长视界算，
     // 不会一半快一半慢地自相矛盾。预算与健康度仍用快的那台（步 5/7）。
     const gateAlpha = CONFIG.economy.accounting.netFlowGateAlpha;
+    if (!Memory.kernel) Memory.kernel = {};
+    const gateStore = (Memory.kernel.gateNetFlow ??= {});
     const gateProfiles = profiles.map(p => {
-      const smoothed = updateNetFlowEma(gateNetFlowEma.get(p.roomName), p.netFlow, gateAlpha);
-      gateNetFlowEma.set(p.roomName, smoothed);
+      const smoothed = updateNetFlowEma(gateStore[p.roomName], p.netFlow, gateAlpha);
+      gateStore[p.roomName] = smoothed;
       return { ...p, netFlow: smoothed };
     });
+    // 丢掉已不属于本帝国的房（失房/放弃后不留残值，免得下次同名房继承旧 EMA）。
+    for (const roomName of Object.keys(gateStore)) {
+      if (!profiles.some(p => p.roomName === roomName)) delete gateStore[roomName];
+    }
     const gateView = buildEmpireResourceView(gateProfiles, ctx.tick);
     const gateHealth = evaluateEconomicHealth(gateView);
 
