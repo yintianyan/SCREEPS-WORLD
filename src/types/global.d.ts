@@ -179,6 +179,11 @@ declare global {
       pl?: number[];
       /** 最近一窗在途背包能量 [carryStart, carryEnd] —— 跨窗残差的判别量（见 #23(2)）。 */
       ce?: number[];
+      /**
+       * 长视界 drift 累计 [Σdrift, ΣflowBalance, Σticks] —— 把"窗边界振荡"与"单向漏账"
+       * 分开的判别量，见 domain/economy/accounting.EconomyMemorySnapshot.ws。
+       */
+      ws?: number[];
     };
     /**
      * 经济压力梯度信号（0.0–1.0，从 drainScore 派生）：demand/construction/tower

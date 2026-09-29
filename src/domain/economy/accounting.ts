@@ -343,6 +343,17 @@ export interface EconomyMemorySnapshot {
    */
   bk?: Record<string, number>;
   /**
+   * 一个视界内的累计量 `[Σdrift, ΣflowBalance, Σticks]`（能量与拍）。
+   *
+   * 为什么必须有：单窗 `dr` 分不清"两窗来回摆"与"单向漏记"——线上正是这样：
+   * `dr` 依次 −6 / +221 / −196 / −1378 / −2126 / +1712 / −2695，而 `pl` 的
+   * `trackedEnd` 与下一窗的 `trackedStart` 接不上（933145 ≠ 934074），端点差分不能当积分用。
+   * 累计之后一次读数就能判：**Σdrift ≈ 0 而 Σ|dr| 大 ⇒ 振荡**（账可放心用）；
+   * **Σdrift 与 ΣflowBalance 同量级 ⇒ 单向漏记**（此时 `nf`/G4 不可信，必须先修账再谈扩张）。
+   * 视界到 `WS_HORIZON_TICKS` 就滚动重开；换码后从本字段续算，不随 heap 归零。
+   */
+  ws?: [number, number, number];
+  /**
    * 最近一窗的池快照 `[trackedStart, trackedEnd, otherStart, otherEnd, looseDelta]`。
    * 与 bk 合起来才构成 drift 的完整恒等式：缺的是**记账项**还是**没被跟踪的池**，一眼可分。
    */
@@ -364,6 +375,7 @@ export function toMemorySnapshot(
   estimatedIncome: number,
   effFactor: number,
   w?: AccountingWindow,
+  ws?: [number, number, number],
 ): EconomyMemorySnapshot {
   const snap: EconomyMemorySnapshot = {
     t: tick,
@@ -390,7 +402,37 @@ export function toMemorySnapshot(
     ];
     snap.ce = [Math.round(w.carryStart), Math.round(w.carryEnd)];
   }
+  if (ws) snap.ws = [Math.round(ws[0]), Math.round(ws[1]), Math.round(ws[2])];
   return snap;
+}
+
+/**
+ * `ws` 的累计视界（拍）。取 2000 ≈ 40 个核算窗：远矿投递周期约 50~130 拍，
+ * 视界必须跨十几个周期才压得住脉冲，否则"Σdrift≈0"可能只是撞上了相位。
+ */
+export const WS_HORIZON_TICKS = 2000;
+
+/** 一窗的收支流平衡（与 `summarizeWindow` 里的 `net` 同一口径）。 */
+export function flowBalanceOf(w: AccountingWindow): number {
+  return w.income - w.consumption + w.refunds;
+}
+
+/**
+ * 把一窗的 `drift` / 流平衡累进视界累计量。
+ *
+ * 视界到 `WS_HORIZON_TICKS` 就**滚动重开**（不是减去旧值——本字段只有三个数，
+ * 没有环形历史，减不动）；`prev` 缺失（首窗/该房首次核算）时从本窗起算。
+ */
+export function accumulateWs(
+  prev: readonly number[] | undefined,
+  w: AccountingWindow,
+): [number, number, number] {
+  const flowBalance = flowBalanceOf(w);
+  const [drift = 0, flow = 0, ticks = 0] = prev ?? [];
+  const nextTicks = ticks + w.ticks;
+  // 视界到点滚动重开：本字段只有三个数、没有环形历史，减不动旧值。
+  if (nextTicks > WS_HORIZON_TICKS) return [w.drift, flowBalance, w.ticks];
+  return [drift + w.drift, flow + flowBalance, nextTicks];
 }
 
 /** 从 Memory 快照恢复 heap 态（global reset 惰性重建路径；缺字段回退 undefined 语义）。 */

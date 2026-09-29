@@ -14,6 +14,7 @@ import {
   estimateIncome,
   contractReserveOf,
   toMemorySnapshot,
+  accumulateWs,
   diffRoomFlows,
   type EnergyLedger,
   type EnergyPools,
@@ -246,6 +247,10 @@ export const economySystem: System = {
         st.driftStreak = 0;
       }
 
+      // ws：视界内累计 [Σdrift, ΣflowBalance, Σticks] —— 用来分「两窗来回摆」与「单向漏记」。
+      // 从上一条快照续算（换码不清零），超过视界就滚动重开。
+      const ws = accumulateWs(roomMem.economy?.ws, w);
+
       roomMem.economy = toMemorySnapshot(
         ctx.tick,
         st.netFlowEma,
@@ -255,6 +260,7 @@ export const economySystem: System = {
         estimateIncome(snapshot.sources.length, st.effFactor ?? INITIAL_EFFICIENCY_FACTOR),
         st.effFactor ?? INITIAL_EFFICIENCY_FACTOR,
         w,
+        ws,
       );
 
       st.lastTick = ctx.tick;
