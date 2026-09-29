@@ -41,13 +41,14 @@ export function runBootstrapLane(ctx: TickContext): void {
       }
       continue;
     }
-    // 防重门禁：colonyState 为 "normal" 的房间不进入 Bootstrap
-    // — normal 意味着已通过 Economic Activation，不应重新 Bootstrap
-    const colonyState = Memory.rooms[snapshot.roomName]?.colonyState;
-    if (colonyState === "normal") {
-      delete kernel.bootstrap[snapshot.roomName];
-      continue;
-    }
+    // ⚠️ 这里**不要**拿 `colonyState === "normal"` 当"已激活、可以放掉"的证据。
+    // 走到这一行已经由上面那个分支证明：该房**没有自己的 spawn**（有的话早就 delete+continue 了）。
+    // 而"没有 spawn"恰恰就是需要代孵的唯一情形 ⇒ 旧门禁对它的**意图**永远是空转，
+    // 只做一件坏事：在补给通道还有用时把它关掉。
+    // 线上实证（2026-09-29 第一次自主扩张 W38S56）：claim 后 148 拍 colonyState 就被置成
+    // "normal"，当时 `spawns=0`、两个工地 `progress=0`、拓荒队还在隔壁房通勤，
+    // 于是 `kernel.bootstrap` 被清空 ⇒ 途中任何减员都不会有替补。
+    // 防重入的真正判据在第一个分支里（有自有 spawn = 能自孵 = 不再代孵）。
     if (snapshot.controller?.my !== true) continue;
     rooms.push({
       room: snapshot.roomName,
