@@ -212,6 +212,33 @@ describe("supplyLabs — 按需求表搬运（TD-023 回归 + TD-024）", () => 
     const ac = makeAc({ creepStore: { XUH2O: 100 } });
     expect(supplyLabs().resolve!(ac as never)).toBeUndefined();
   });
+
+  it("P0 回归：随身带能量不得否决化合物取料相（线上 10 座 lab 数小时空载的根因）", () => {
+    // 需求表里只有化合物装料（lab 不缺能量），creep 背包 200 容量装着 100 能量。
+    // distributor 的常态就是"随身带能量" —— 旧实现在 phase 2 之后无条件 return undefined，
+    // 于是取料相永不可达：线上 terminal 里 X=600/GH2O=300 躺着、需求表每拍 4 条 loads、
+    // 10 座 lab 的 mineralType 连续数小时全空。
+    setDemands([{ labId: "L1", resource: "X", amount: 300 }]);
+    const ac = makeAc({
+      creepStore: { energy: 100 },
+      storageStore: { energy: 9000 },
+      terminalStore: { X: 600 },
+    });
+    const target = supplyLabs().resolve!(ac as never) as Record<string, unknown>;
+    expect(target.phase).toBe("withdraw");
+    expect(target.resource).toBe("X");
+    expect((target.source as { id: string }).id).toBe("terminal1");
+  });
+
+  it("背包真的满了才让路：不返回一个会被 execute clamp 成 0 的取料目标占住动作", () => {
+    setDemands([{ labId: "L1", resource: "X", amount: 300 }]);
+    const ac = makeAc({
+      creepStore: { energy: 200 },
+      storageStore: { energy: 9000 },
+      terminalStore: { X: 600 },
+    });
+    expect(supplyLabs().resolve!(ac as never)).toBeUndefined();
+  });
 });
 
 describe("syncTaskStates — rampart/road 建成判定（TD-028）", () => {

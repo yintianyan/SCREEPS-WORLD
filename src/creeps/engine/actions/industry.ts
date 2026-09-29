@@ -147,6 +147,13 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
       }
 
       // 2. 携带能量且 lab 有能量缺口：直接投喂（boostCreep 每部件消耗 20 能量）。
+      //    **没有能量缺口时不能就此结束本动作** —— 旧写法在这里 `return undefined`，等于把
+      //    "随身带着能量"当成化合物取料相的硬否决；而 distributor 的职责就是随身带能量去填
+      //    spawn/extension，于是它永远不会空载。线上实证：需求表每拍都是新鲜的、挂着 4 条
+      //    loads（terminal 里 X=600 / GH2O=300 就取不到），10 座 lab 连续数小时 mineralType 全空、
+      //    产物 0 —— 反应链卡在这一个 return 上，不是卡在买料或布局。
+      //    背包余量由 execute 侧 `min(amount, available, freeCapacity)` 兜住；混装无害
+      //    （相 1 的 carriedCompound 先于本相命中，携着化合物就会去投喂或倒回 storage 解堵）。
       if (store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
         for (const load of table.loads) {
           if (load.resource !== RESOURCE_ENERGY) continue;
@@ -155,7 +162,9 @@ export function supplyLabs(): ActionCandidate<LabSupplyTarget> {
             return { dest: lab, resource: RESOURCE_ENERGY, phase: "deposit" as const };
           }
         }
-        return undefined;
+        // 满背包（无余量）时仍要退出：否则后面每一相都会返回一个 execute 里被 clamp 成 0
+        // 的取料目标，本动作"占着"却不产出意图，反而挡住链上更靠后的活。
+        if ((store.getFreeCapacity() ?? 0) <= 0) return undefined;
       }
 
       // 3. 空载：先清（错矿/产物回收）再装 — 清位不完成，装料就会 ERR_FULL 空转。
