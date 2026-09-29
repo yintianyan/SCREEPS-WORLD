@@ -25,6 +25,25 @@ describe("market-pricing", () => {
       expect(result).toBeCloseTo(0.55, 10);
     });
 
+    it("天价卖单必须被 ceiling 封顶 —— 有行情时上限也要生效", () => {
+      // 线上原样：GH2O 在位的唯一卖单 2260.78/t，ceiling 取表里最贵的 370。
+      // 旧实现在这里有行情就完全不套上限 ⇒ 门禁价 2486 ⇒ 一单 50 花掉 113,000 credits。
+      const prices: PriceTable = {
+        GH2O: { sellMin: 2260.78, buyMax: 0 },
+      };
+      expect(computeDynamicBuyPrice("GH2O", prices, 1.1, 370)).toBe(370);
+      // X 配的是 240，市场 325.75 —— 同样该被判为「太贵，不买」而不是成交。
+      const x: PriceTable = { X: { sellMin: 325.75, buyMax: 0 } };
+      expect(computeDynamicBuyPrice("X", x, 1.1, 240)).toBe(240);
+    });
+
+    it("行情价本就在上限内 → 上限不吃掉溢价（只封顶不改价）", () => {
+      const prices: PriceTable = {
+        H: { sellMin: 300, buyMax: 0 },
+      };
+      expect(computeDynamicBuyPrice("H", prices, 1.1, 370)).toBeCloseTo(330, 10);
+    });
+
     it("行情缺失 → 回退 fallback", () => {
       const prices: PriceTable = {};
       const result = computeDynamicBuyPrice("H", prices, 1.1, 10);

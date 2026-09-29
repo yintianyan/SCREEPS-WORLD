@@ -228,7 +228,7 @@ export function tryBuyDeficit(
         CONFIG.market.buyPremium,
         fallback,
       );
-      const maxPrice = adjustMaxPrice(basePrice, demand.priority);
+      const maxPrice = Math.min(adjustMaxPrice(basePrice, demand.priority), fallback);
       ledger.buyGatePrice = maxPrice;
 
       const orders =

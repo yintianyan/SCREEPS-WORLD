@@ -7,26 +7,32 @@ export type PriceTable = Readonly<Record<string, MarketPriceSnapshot>>;
 /**
  * 计算买入价格上限（用于 pickBestSellOrder 的 maxPrice 参数）。
 
- * 策略：取市场最低卖价 × buyPremium。无卖单时回退到 fallbackPrice。
- * fallbackPrice 为 CONFIG 中的静态值 — 仅在行情空窗期兜底，正常运行时不生效。
-
+ * 策略：市场最低卖价 × buyPremium，然后**无条件**再套一层 ceiling 硬上限。
+ *
+ * ceiling 同时扮演两个角色，而且这两件事本来就该是同一个数：行情空窗期照它定价、
+ * 行情在位时受它封顶。旧写法只在无行情时用 ceiling（文档原话「正常运行时不生效」），
+ * 于是「我们最多肯为一单位付多少」这条闸在有行情时等于不存在 —— 官服实测后果：
+ * GH2O 唯一在位的卖单 2260.78/t ⇒ 门禁价 2486 ⇒ 成交，一次 50 单花掉 113,000 credits；
+ * X 在 ceiling 配的是 240，却按 325.75 买过。两份读数的代价合起来是两小时 373K credits。
+ * 一个只有「无数据时才生效」的价格上限，语义上不是上限（家族：同一字段两种语义）。
+ *
  * @param resource 资源类型。
  * @param prices 行情快照表。
  * @param buyPremium 溢价系数（1.1 = 比最低卖价高 10% 确保吃到单子）。
- * @param fallbackPrice 行情缺失时的兜底价格（CONFIG 静态值）。
- * @returns 买入价格上限。0 = 无行情且无 fallback = 不买。
+ * @param ceiling 单单位愿意付的上限（CONFIG 静态值）：无行情时即价格上限，有行情时封顶。
+ * @returns 买入价格上限。0 = 无行情且无 ceiling = 不买。
  */
 export function computeDynamicBuyPrice(
   resource: string,
   prices: PriceTable,
   buyPremium: number,
-  fallbackPrice: number,
+  ceiling: number,
 ): number {
   const snapshot = prices[resource];
   if (snapshot && snapshot.sellMin > 0) {
-    return snapshot.sellMin * buyPremium;
+    return Math.min(snapshot.sellMin * buyPremium, ceiling);
   }
-  return fallbackPrice;
+  return ceiling;
 }
 
 /**
