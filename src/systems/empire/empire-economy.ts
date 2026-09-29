@@ -17,6 +17,7 @@ import { evaluateEconomicHealth } from "../../domain/strategy/economic-health";
 import { detectImbalance } from "../../domain/strategy/imbalance";
 import { allocateEmpireBudget } from "../../domain/strategy/budget";
 import { evaluateExpansionReadiness } from "../../domain/strategy/readiness";
+import { updateNetFlowEma } from "../../domain/economy/accounting";
 import { evaluateSafetyMargin } from "../../domain/strategy/safety-margin";
 import { buildEmpirePlannerInput } from "../../domain/strategy/planner-input";
 // A4.2 多资源链路
@@ -212,6 +213,16 @@ export function queryEmpirePlannerInput() {
   return cachedPlannerInput?.input;
 }
 
+/**
+ * 扩张就绪度专用的「长视界」净流仪器（heap，按房）。
+ *
+ * 只喂 G3/G4（readiness），**不喂预算分配器** —— 后者必须用快的那台，
+ * 理由与 A/B 实测见 CONFIG.economy.accounting.netFlowGateAlpha 的注释。
+ * heap 而非 Memory：换码后重新收敛（τ≈2500 拍）；就绪度本来就是分钟级决策，
+ * 且首见时用当窗值播种，不会在冷启动阶段给出虚假绿灯。
+ */
+const gateNetFlowEma = new Map<string, number>();
+
 export const empireEconomySystem: System = {
   name: "empire-economy",
   priority: 1 as Priority,
@@ -269,6 +280,19 @@ export const empireEconomySystem: System = {
     // ── 步 4：Empire Resource View ──
     const resourceView = buildEmpireResourceView(profiles, ctx.tick);
 
+    // ── 步 4b：就绪度专用的长视界视图（只给 G3/G4 用）──
+    // 同一批房态，但每房 netFlow 换成慢 EMA ⇒ 视图派生量（totalNetFlow /
+    // empireSelfSufficiency / deficit·struggling 分类 / core 判定）整体按长视界算，
+    // 不会一半快一半慢地自相矛盾。预算与健康度仍用快的那台（步 5/7）。
+    const gateAlpha = CONFIG.economy.accounting.netFlowGateAlpha;
+    const gateProfiles = profiles.map(p => {
+      const smoothed = updateNetFlowEma(gateNetFlowEma.get(p.roomName), p.netFlow, gateAlpha);
+      gateNetFlowEma.set(p.roomName, smoothed);
+      return { ...p, netFlow: smoothed };
+    });
+    const gateView = buildEmpireResourceView(gateProfiles, ctx.tick);
+    const gateHealth = evaluateEconomicHealth(gateView);
+
     // ── 步 5：Empire Economic Health ──
     const health = evaluateEconomicHealth(resourceView);
 
@@ -279,11 +303,15 @@ export const empireEconomySystem: System = {
     const budget = allocateEmpireBudget(resourceView, health.health, ctx.tick);
 
     // ── 步 8：Expansion Readiness ──
+    // ⚠️ 这里刻意用 gateView / gateHealth（长视界），而步 5/7/9 用快的 resourceView：
+    // 就绪度要求「连续 500 拍成立」才让 plan 晋升（plan-lifecycle.ts:41），
+    // 拿一台 100 拍就能翻符号的仪器去满足一个连续判据，等于把扩张交给采样相位决定。
+    // 实测：同一量在相隔 100 拍的读数里 17.7 → 0.4 → −2.8 → 12.1 → 17.2，Blocked 跟着翻。
     const cpuTier = Memory.kernel?.capacity?.tier ?? "comfortable";
     const postureExpansionAllowed = Memory.kernel?.strategy?.expansionAllowed ?? false;
     const readiness = evaluateExpansionReadiness(
-      resourceView,
-      health.health,
+      gateView,
+      gateHealth.health,
       budget,
       cpuTier as "abundant" | "comfortable" | "tight" | "constrained",
       postureExpansionAllowed,
