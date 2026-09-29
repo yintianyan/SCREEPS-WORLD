@@ -18,6 +18,7 @@ import { detectImbalance } from "../../domain/strategy/imbalance";
 import { allocateEmpireBudget } from "../../domain/strategy/budget";
 import { evaluateExpansionReadiness } from "../../domain/strategy/readiness";
 import { updateNetFlowEma } from "../../domain/economy/accounting";
+import { computeTieredBudget } from "../../domain/expansion/budget";
 import { evaluateSafetyMargin } from "../../domain/strategy/safety-margin";
 import { buildEmpirePlannerInput } from "../../domain/strategy/planner-input";
 // A4.2 多资源链路
@@ -309,12 +310,15 @@ export const empireEconomySystem: System = {
     // 实测：同一量在相隔 100 拍的读数里 17.7 → 0.4 → −2.8 → 12.1 → 17.2，Blocked 跟着翻。
     const cpuTier = Memory.kernel?.capacity?.tier ?? "comfortable";
     const postureExpansionAllowed = Memory.kernel?.strategy?.expansionAllowed ?? false;
+    // G7 用的可动用额：与 dashboard / explainDecision 同一口径（纯函数，重算一次很便宜；
+    // planner 那边自己再算一次并据其批准，两处不再是两套数）。
     const readiness = evaluateExpansionReadiness(
       gateView,
       gateHealth.health,
       budget,
       cpuTier as "abundant" | "comfortable" | "tight" | "constrained",
       postureExpansionAllowed,
+      computeTieredBudget(budget).availableExpansion,
     );
 
     // ── 步 9：Safety Margin ──

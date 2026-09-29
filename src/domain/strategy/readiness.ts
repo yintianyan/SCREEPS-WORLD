@@ -139,6 +139,11 @@ export function evaluateExpansionReadiness(
   budget: EmpireBudget,
   cpuTier: CapacityTier,
   postureExpansionAllowed: boolean,
+  /**
+   * 真正可动用的扩张额（`computeTieredBudget(budget).availableExpansion`）。
+   * G7 用它而不是 `budget.expansion` —— 理由见下方 G7 注释。缺省时退回旧语义。
+   */
+  availableExpansion?: number,
   options: ReadinessOptions = DEFAULT_READINESS_OPTIONS,
 ): ExpansionReadinessResult {
   const gates: ExpansionGate[] = [];
@@ -210,12 +215,23 @@ export function evaluateExpansionReadiness(
     condition: `tier ≤ ${options.minCpuTier}`,
   });
 
-  // G7: 扩张预算
-  const g7 = budget.expansion >= options.minExpansionBudget;
+  // G7: 扩张预算 —— 必须用**真正付得起这笔钱的那个数**。
+  //
+  // 原先读 `budget.expansion`（分配器按健康度切出的"扩张片"，健康度掉一档就是 0），
+  // 而批准执行的 `explainDecision` 与 dashboard 用的是 `computeTieredBudget` 的
+  // `availableExpansion`（总量扣掉应急/核心/运营后的可动用额，上限为 expansion+free）。
+  // ⇒ 同一个"扩张预算"存在两套公式，且**更严的那套在挡晋升**：
+  // 线上 14:16 实测同一条 dashboard 里 `Budget=198112/900503` 与
+  // `G7: expansion budget(v=0|expansion ≥ 2000)` 并存 —— 一边说没钱，一边说 198K，
+  // 而待批的 plan 成本只有 61,300。属于本仓「一个量两种语义 ⇒ 入口判据出口不复检」那一族。
+  //
+  // 传了 availableExpansion 就用它；没传（老的调用方/测试）保持原语义，不静默改变别处。
+  const expansionBudgetForGate = availableExpansion ?? budget.expansion;
+  const g7 = expansionBudgetForGate >= options.minExpansionBudget;
   gates.push({
     name: "G7: expansion budget",
     passed: g7,
-    value: String(budget.expansion),
+    value: String(expansionBudgetForGate),
     condition: `expansion ≥ ${options.minExpansionBudget}`,
   });
 
