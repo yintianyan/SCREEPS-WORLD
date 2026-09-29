@@ -261,3 +261,66 @@ describe("B5-㉓ 消费期的重占/黑名单复检", () => {
     expect(G.Memory.kernel.expansion).toBeUndefined();
   });
 });
+
+/**
+ * 队首阻塞（2026-09-29 16:54 线上实测立案）。
+ *
+ * `tryConsumePlan` 用 `plans.find(p => p.st === "WAITING_EXECUTION")` 取**第一条**，
+ * 而那一条正好撞上"目标房看不见就整轮 return"的短路。线上当时 5 条 WAITING_EXECUTION：
+ * 队首 W37S56 无视野，而 W38S56 / W38S58 **就在视野里且 controller 无人无预约**
+ * （可 claim），W36S58 / W37S57 被自己的 reserver 挡着。于是 G0–G7 全绿、扩张预算 33 万、
+ * GCL 5 > 实拥 1、黑名单空 —— 却没有一次 claim 开始。
+ *
+ * 上面那条"看不见 ≠ 不可 claim"的修复只解决了"别取消"，没解决"别挡住后面那条"。
+ */
+describe("队首不可见的计划不得钉住整条扩张管道", () => {
+  /** 看得见且 controller 无主无预约 ⇒ 唯一可 claim 的形态。 */
+  function makeClaimable(roomName: string): void {
+    (globalThis as any).Game.rooms[roomName] = { controller: {} };
+  }
+
+  it("按序试跑：跳过看不见的队首，消费第二条可 claim 的计划", () => {
+    setup([memoryPlan("WAITING_EXECUTION", "W1N1"), memoryPlan("WAITING_EXECUTION", "W2N2")]);
+    const G = globalThis as any;
+    G.Game.gcl = { level: 3 };
+    makeClaimable("W2N2"); // W1N1 依旧不在视野里
+
+    tryConsumePlan(mockRoomStateCtx([], TICK));
+
+    expect(G.Memory.kernel.expansion?.target).toBe("W2N2");
+    expect(G.Memory.kernel.expansionPlans[1].st).toBe("EXECUTING");
+    // 队首只是本轮缺信息，绝不顺手取消它。
+    expect(G.Memory.kernel.expansionPlans[0].st).toBe("WAITING_EXECUTION");
+  });
+
+  it("全部看不见 ⇒ 一条都不消费、一条都不取消（跳过不是否决）", () => {
+    setup([memoryPlan("WAITING_EXECUTION", "W1N1"), memoryPlan("WAITING_EXECUTION", "W2N2")]);
+    const G = globalThis as any;
+    G.Game.gcl = { level: 3 };
+
+    tryConsumePlan(mockRoomStateCtx([], TICK));
+
+    expect(G.Memory.kernel.expansion).toBeUndefined();
+    expect(G.Memory.kernel.expansionPlans.map((p: any) => p.st)).toEqual([
+      "WAITING_EXECUTION",
+      "WAITING_EXECUTION",
+    ]);
+  });
+
+  it("GCL 满员仍然一条都不消费（这条检查与是哪条计划无关，已提到循环外）", () => {
+    setup([memoryPlan("WAITING_EXECUTION", "W1N1"), memoryPlan("WAITING_EXECUTION", "W2N2")]);
+    const G = globalThis as any;
+    G.Game.gcl = { level: 1 };
+    makeClaimable("W2N2");
+    // 实拥 1 房 + GCL 1 ⇒ 无余量。
+    const owned = [{ roomName: ROOM, controller: { my: true } }] as any[];
+
+    tryConsumePlan(mockRoomStateCtx(owned, TICK));
+
+    expect(G.Memory.kernel.expansion).toBeUndefined();
+    expect(G.Memory.kernel.expansionPlans.map((p: any) => p.st)).toEqual([
+      "WAITING_EXECUTION",
+      "WAITING_EXECUTION",
+    ]);
+  });
+});

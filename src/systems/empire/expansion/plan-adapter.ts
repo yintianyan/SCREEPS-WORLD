@@ -14,6 +14,13 @@ import { pruneBlacklist } from "./uoem-events";
 /**
  * 从 expansionPlans[] 中消费 WAITING_EXECUTION Plan。
  * 退役 V1 Evaluator 的自主评选——统一以 Plan 为唯一真相源。
+ *
+ * 为什么要"按序试每一条"而不是"取第一条"（2026-09-29 16:54 线上实测）：5 条
+ * WAITING_EXECUTION 里队首 W37S56 无视野，而 W38S56 / W38S58 当时**就在视野里、
+ * controller 无人无预约**（可 claim）。`plans.find()` 只看第一条匹配就 return，
+ * 于是"一个信息缺失的队首"把整条扩张管道钉死——G0–G7 全绿、扩张预算 33 万、
+ * GCL 5 > 实拥 1、黑名单空，却没有一次 claim 开始。这里还藏着一个循环依赖：
+ * 视野要靠拓荒队走过去才拿得到，而放行条件却要求先有视野。
  */
 export function tryConsumePlan(ctx: TickContext): void {
   pruneBlacklist(ctx.tick);
@@ -21,26 +28,39 @@ export function tryConsumePlan(ctx: TickContext): void {
   // 从 Memory 读取 Plan 列表
   if (!Memory.kernel) Memory.kernel = {};
   const plans = Memory.kernel.expansionPlans ?? [];
-  const waitingPlan = plans.find(p => p.st === "WAITING_EXECUTION");
-  if (!waitingPlan) return;
 
-  // 反序列化 Plan 为可执行格式（简化版：直接用 Memory 瘦结构）
-  const plan = deserializePlanMemory(waitingPlan);
-  if (!plan) return;
+  // GCL 余量与"是哪条计划"无关，算一次即可（原先摊在每条计划的路径上）。
+  const gclLevel = Game.gcl?.level ?? 1;
+  const ownedCount = Array.from(ctx.snapshots()).filter(s => s.controller?.my).length;
+  if (gclLevel <= ownedCount) return;
 
-  // 「看不见」不等于「不能 claim」。拓荒队出发之前目标房本来就多半不在视野里
-  // （候选是靠 observer/scout 的 intel 建立的，不是靠实时视野），而 `isTargetClaimable`
-  // 用 `Game.rooms[...]` 读数 —— 无视野时它只能返回 false。若让这个 false 走进门判，
-  // 一次信息缺失就会被当成事实否决：计划被记 CANCELLED 并吃下 10k tick 的重建冷却，
-  // 于是扩张在"该出发的那一刻"被它自己的可见性挡死（5 条计划轮流被绊）。
-  // 这里先短路：本轮不消费，也不取消任何东西，等可见性补齐。
-  if (!Game.rooms[plan.roomName]?.controller) {
+  let invisible = 0;
+  for (const waiting of plans) {
+    if (waiting.st !== "WAITING_EXECUTION") continue;
+    // 「看不见」不等于「不能 claim」，更不等于「能挡住别人」——跳过即可：
+    // 既不取消、也不吃 10k tick 重建冷却，等可见性补齐（见函数头）。
+    if (!Game.rooms[waiting.rn]?.controller) {
+      invisible++;
+      continue;
+    }
+    if (attemptConsume(ctx, waiting)) return;
+  }
+  if (invisible > 0) {
     log.info(
       "expansion",
-      `[${ctx.tick}] expansion-manager: ${plan.roomName} 当前不可见，暂不消费（保持 WAITING_EXECUTION）`,
+      `[${ctx.tick}] expansion-manager: ${invisible} 条计划的目标房当前不可见，本轮跳过（保持 WAITING_EXECUTION）`,
     );
-    return;
   }
+}
+
+/**
+ * 尝试消费一条目标房已在视野里的 Plan。
+ * @returns true = 本条已被接管（停止扫描）；false = 本轮不消费，可继续看下一条。
+ */
+function attemptConsume(ctx: TickContext, waiting: ExpansionPlanMemory): boolean {
+  // 反序列化 Plan 为可执行格式（简化版：直接用 Memory 瘦结构）
+  const plan = deserializePlanMemory(waiting);
+  if (!plan) return false;
 
   // 执行 Gate 验证（TOCTOU 防护）
   const gateInput: ExecutionGateInput = {
@@ -74,13 +94,8 @@ export function tryConsumePlan(ctx: TickContext): void {
     ) {
       updatePlanStatus(plan.planId, "CANCELLED");
     }
-    return;
+    return false;
   }
-
-  // GCL 余量检查
-  const gclLevel = Game.gcl?.level ?? 1;
-  const ownedCount = Array.from(ctx.snapshots()).filter(s => s.controller?.my).length;
-  if (gclLevel <= ownedCount) return;
 
   // 在途核弹目标排除——核弹 50k tick 不可取消，
   // 对有在途核弹的房扩张 = 落地时自伤。排除所有在途核弹目标。
@@ -92,7 +107,7 @@ export function tryConsumePlan(ctx: TickContext): void {
       "expansion",
       `[${ctx.tick}] expansion: ${plan.roomName} has ${liveNukes.length} nuke(s) in flight, skipping`,
     );
-    return;
+    return false;
   }
 
   // 标记 Plan 为 EXECUTING —— 本条计划已被接管，之后的终态（COMPLETED / CANCELLED）
@@ -122,6 +137,7 @@ export function tryConsumePlan(ctx: TickContext): void {
     "expansion",
     `[${ctx.tick}] expansion-manager: consuming plan ${plan.planId} for ${plan.roomName} (sponsor=${plan.sponsorRoom})`,
   );
+  return true;
 }
 
 /**
