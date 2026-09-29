@@ -64,7 +64,11 @@ export function canExecuteStep(
   return (available[step.input1] ?? 0) >= need1 && (available[step.input2] ?? 0) >= need2;
 }
 
-/** 返回下一个可执行步骤；输出已满足或原料不足时返回 null。 */
+/** 返回下一个可执行步骤；输出已满足或原料不足时返回 null。
+ *
+ * ⚠️ 这个 null 有**两种互不相容的原因**（链已完成 / 原料未到），而调用方只有在前者时
+ * 才该清掉计划 —— 见 `evaluateReactionPlan`。新代码不要用本函数判"完成"。
+ */
 export function getNextExecutableStep(
   plan: ReactionPlan,
   available: Readonly<Record<string, number>>,
@@ -77,6 +81,40 @@ export function getNextExecutableStep(
     return null;
   }
   return null;
+}
+
+/** 反应计划相对当前库存的状态 —— 把 `getNextExecutableStep` 的两种 null 拆开。 */
+export type ReactionPlanState =
+  | { readonly status: "ready"; readonly step: ReactionStep }
+  | { readonly status: "waitingInput"; readonly step: ReactionStep }
+  | { readonly status: "complete" };
+
+/**
+ * 计划状态三态判定（纯函数）。
+ *
+ * 为什么必须有它（线上实证）：`lab-system` 原先把 `getNextExecutableStep()===null` 一律当成
+ * "反应链已完成"，于是**清掉 reactionTarget/amount/plan**。但同一个 null 也意味着
+ * "还差原料，等买/等采"—— 清计划的后果是采购需求从此没有生产者：
+ * `reactionPlan` 没了 ⇒ `if (reactionPlan)` 的发布判据不成立 ⇒ 刚花钱买来的 GH2O/X
+ * 用不完也不会再补，等到库存见底就永久停在"计划被清 ⇒ 不要料 ⇒ 永远凑不齐一批"的自锁里，
+ * 表现为反应每 500 拍左右占空一次、lab 反复空转。
+ *
+ * 三态各自的动作：
+ *   ready        ⇒ 执行这一步；
+ *   waitingInput ⇒ **保留计划**（继续要料、继续等料），只记下等待起点供归因；
+ *   complete     ⇒ 才是真正"这一轮做完了"，可以清目标让上层重新评估。
+ */
+export function evaluateReactionPlan(
+  plan: ReactionPlan,
+  available: Readonly<Record<string, number>>,
+): ReactionPlanState {
+  for (const step of plan.steps) {
+    if ((available[step.output] ?? 0) >= step.amount) continue;
+    return canExecuteStep(step, available)
+      ? { status: "ready", step }
+      : { status: "waitingInput", step };
+  }
+  return { status: "complete" };
 }
 
 /** 总生产 tick 估算（单 lab 对；用于优先级排序）。 */

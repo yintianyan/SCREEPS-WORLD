@@ -17,7 +17,7 @@ import {
 } from "../../domain/industry/boost";
 import { computeBoostSurplus } from "../../domain/industry/boost-stockpile";
 import {
-  getNextExecutableStep,
+  evaluateReactionPlan,
   planReactionChain,
   selectReactionTrios,
   LAB_REACTION_AMOUNT,
@@ -59,6 +59,9 @@ interface IndustryMemory {
   boostedCreeps?: string[];
   /** 原料断供休眠截止 tick — 休眠期内跳过本房 lab 规划（见 run 内注释）。 */
   idleUntil?: number;
+  /** 本轮"有计划但缺料"的起点 tick；能执行或已完成时清掉。
+   * 有这个字段是因为"缺料"与"完成"曾经共用一个 null，线上分不开到底在等谁。 */
+  reactionWait?: number;
 }
 
 function getIndustryMemory(roomName: string): IndustryMemory {
@@ -453,14 +456,21 @@ export const labSystem: System = {
         }
 
         if (industryMem.reactionPlan) {
-          const step = getNextExecutableStep(industryMem.reactionPlan, inventory);
-          if (step) {
-            reactionStep = step;
+          const state = evaluateReactionPlan(industryMem.reactionPlan, inventory);
+          if (state.status === "ready") {
+            reactionStep = state.step;
+            delete industryMem.reactionWait;
+          } else if (state.status === "waitingInput") {
+            // 缺料 ≠ 完成：**计划必须留着** —— 上面那段采购发布判据读的就是它。
+            // 旧写法在这里和"完成"共用一个 null，于是"还等料"被当成"这轮做完了"，
+            // 计划被清 ⇒ 需求不再发布 ⇒ 刚买来的料用不完也不再补 ⇒ 自锁。
+            if (industryMem.reactionWait === undefined) industryMem.reactionWait = ctx.tick;
           } else {
-            // 反应链完成，清除目标让下 tick 重新评估
+            // 反应链完成（产物已达批量目标），清除目标让下 tick 重新评估。
             industryMem.reactionTarget = undefined;
             industryMem.reactionAmount = undefined;
             industryMem.reactionPlan = undefined;
+            delete industryMem.reactionWait;
           }
         }
       }
