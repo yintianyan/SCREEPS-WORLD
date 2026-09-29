@@ -175,7 +175,11 @@ export function evaluateExpansionReadiness(
   gates.push({
     name: "G3: economic health",
     passed: g3,
-    value: health,
+    // 健康度本身是三个输入的折叠结果（netFlow / coreRooms / selfSufficiency）——只报
+    // "stable" 时读的人无法知道是哪一条把它压住，只能回源码重算（本轮就这么丢了两天）。
+    // selfSufficiency 不在这里重复计算：它 = 1 − |netFlow| / income，而 income 已在
+    // `Memory.rooms[r].economy.ei` 落盘 ⇒ 报出 netFlow 与 coreRooms 就完全可复算。
+    value: `${health}(netFlow=${view.totalNetFlow.toFixed(1)},core=${view.coreRooms})`,
     condition: `health ≥ ${options.minHealth}`,
   });
 
