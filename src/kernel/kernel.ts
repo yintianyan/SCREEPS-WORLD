@@ -210,7 +210,12 @@ export class Kernel {
         // 全帝国实测累计（本拍到此为止的 getUsed）：它是「谁在吃 CPU」这笔账的分母 ——
         // 只有 systems/roles 两份归因而没有总量，就永远不知道还有多少是没被解释的剩余。
         const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
-        cum.total += Game.cpu.getUsed();
+        // 拍中采样：只留作尾差的被减数。**累计总量不再用它** —— 这一刻之后还有
+        // flush-skips / segments-flush / baseline-telemetry / Memory 序列化要花钱，
+        // 拿拍中值 ÷ 拍数会得到一个"看起来自证、其实少了一段"的均值（线上实测
+        // cpuRate.total=10.7/t 而同一帝国独立采样的 cpuAvg10=14/t，差 3.3 无人解释）。
+        // 权威分子改由 run() 末尾的 cpu/tick-tail 拍尾采样累加。
+        cum.midLast = Game.cpu.getUsed();
         const tel = g.telemetry;
         const skipped = tel?.skipped ?? 0;
         const errors = tel?.errors ?? 0;
@@ -259,6 +264,24 @@ export class Kernel {
     // 确保"最需要诊断时有最基本的数据可查"。
     measuredRun("system/baseline-telemetry", () =>
       safeRun("baseline-telemetry", () => sampleBaselineMetrics(ctx.tick, budget), true),
+    );
+
+    // 拍尾实测 = 本拍真正的计费点。
+    // 累计总量在这里累加（拍中那次只留作被减数），于是 cpuRate.total 与 stats.cpuAvg10
+    // 量的终于是同一个东西：**两份独立采样的口径必须收敛，不收敛本身就是缺陷信号**，
+    // 而尾差单独成桶后，「榜外剩余」才真的是没归属的 CPU，不再等于"采样点之后的一切"。
+    measuredRun("cpu/tick-tail", () =>
+      safeRun(
+        "cpu/tick-tail",
+        () => {
+          const g = globalCache();
+          const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
+          const end = Game.cpu.getUsed();
+          cum.total += end;
+          cum.tail = (cum.tail ?? 0) + Math.max(0, end - (cum.midLast ?? end));
+        },
+        true,
+      ),
     );
   }
 

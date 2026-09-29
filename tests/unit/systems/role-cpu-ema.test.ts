@@ -65,4 +65,18 @@ describe("computeCpuRate", () => {
     expect(r.unphased).toBe(4); // (100 − 60) ÷ 10：相位是嵌套跨度，不能再减一次榜
     expect(r.byPhase.systems).toBe(6);
   });
+
+  it("拍尾差单独成桶：tail 是 unexplained 里「有名有姓」的那一段，不能再减一次", () => {
+    const r = computeCpuRate({ total: 140, systems: { a: 40 }, roles: { h: 10 }, tail: 30 }, 10);
+    expect(r.total).toBe(14);
+    expect(r.unexplained).toBe(9); // 拍尾花费仍算在榜外剩余里，只是被认出来了
+    expect(r.tail).toBe(3);
+    expect(r.tail).toBeLessThanOrEqual(r.unexplained);
+  });
+
+  it("没有 tail（reset 后首拍/旧 heap 记录）按 0 计，不得污染 total", () => {
+    const r = computeCpuRate({ total: 100, systems: {}, roles: {} }, 10);
+    expect(r.tail).toBe(0);
+    expect(r.total).toBe(10);
+  });
 });

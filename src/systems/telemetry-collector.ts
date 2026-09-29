@@ -64,6 +64,7 @@ export function computeCpuRate(
     systems: Record<string, number>;
     roles: Record<string, number>;
     phases?: Record<string, number>;
+    tail?: number;
   },
   windowTicks: number,
 ): {
@@ -71,6 +72,7 @@ export function computeCpuRate(
   total: number;
   unexplained: number;
   unphased: number;
+  tail: number;
   bySystem: Record<string, number>;
   byRole: Record<string, number>;
   byPhase: Record<string, number>;
@@ -89,8 +91,11 @@ export function computeCpuRate(
     total: round2(cum.total / w),
     // 两个「剩余」问的是两个不同问题：unexplained = 有多少 CPU 不属于任何具名单元；
     // unphased = 有多少 CPU 不在任何已测相位里（预算/上下文/调度器自身的夹缝）。
+    // tail = 拍尾−拍中的尾差（flush/segments/Memory 序列化），它是 unexplained 的一部分，
+    // 但已经有名有姓 —— 剩下的 unexplained 才需要继续找归属。
     unexplained: round2((cum.total - sum(cum.systems) - sum(cum.roles)) / w),
     unphased: round2((cum.total - sum(cum.phases ?? {})) / w),
+    tail: round2((cum.tail ?? 0) / w),
     bySystem: perTick(cum.systems),
     byRole: perTick(cum.roles),
     byPhase: perTick(cum.phases ?? {}),
