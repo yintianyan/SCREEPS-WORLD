@@ -46,6 +46,8 @@ describe("terminal-manager — 决策账本", () => {
         "demandTop",
         "demandsLive",
         "demandsPublished",
+        "demandsComputed",
+        "attemptedAt",
         "publishedAt",
         "gatedBy",
         "lastTick",

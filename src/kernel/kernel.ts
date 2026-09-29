@@ -279,6 +279,9 @@ export class Kernel {
           const end = Game.cpu.getUsed();
           cum.total += end;
           cum.tail = (cum.tail ?? 0) + Math.max(0, end - (cum.midLast ?? end));
+          // 只数「真的走到这一行的拍」。分母若用 Game.time − boot（数所有拍），
+          // 中途触顶离开 run() 的拍就白占分母、不进分子，均值被系统性拉低。
+          cum.ticks = (cum.ticks ?? 0) + 1;
         },
         true,
       ),

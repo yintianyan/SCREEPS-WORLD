@@ -49,6 +49,19 @@ export interface TradeLedger {
   demandsPublished: number;
   /** 上述发布的时刻（heap 值，global reset 后归零 —— 只与同窗口的 demandsLive 对照读）。 */
   publishedAt: number;
+  /**
+   * 生产者侧**第二道**指纹：本房最近一次「走到采购需求发布决策」时算出的条数。
+   * 与 `demandsPublished` 并存才成立：publish 写在 `if (demands.length > 0)` 里面，
+   * 所以「没走到那行」与「走到了但算出 0 条」在 published 上读成同一个 0
+   * （线上实证：1884 拍里 published=0，而同窗 demandsLive=1、buyOk=6 —— 那几条来自
+   * recovery-execution，它没被护栏包住，lab 这条一步都没留下痕迹）。
+   * 三态判读：`attemptedAt=0` ⇒ 没走到那块（查 lab 控制流/相位）；
+   * `computed=0` ⇒ 走到了、判定无需买（查 expandReactionDemands 的口径）；
+   * `computed>0` ⇒ 必然已发布，此时 demandsLive 仍 0 才是信道/消费侧的问题。
+   */
+  demandsComputed: number;
+  /** 上述「走到发布决策」的时刻（heap 值；0 = 本进程从没走到过那一行）。 */
+  attemptedAt: number;
   /** 采购在进入撮合前被什么挡住：`""` = 没被挡。 */
   buyBlockedBy: "" | "credits-floor";
   /** 累计：有需求但在价格门禁下找不到任何一张卖单（`buyGatePrice` 太低的直接证据）。 */
@@ -96,6 +109,8 @@ export function createTradeLedger(): TradeLedger {
     demandTop: "",
     demandsPublished: 0,
     publishedAt: 0,
+    demandsComputed: 0,
+    attemptedAt: 0,
     buyBlockedBy: "",
     buyNoMatch: 0,
     buyGatePrice: 0,

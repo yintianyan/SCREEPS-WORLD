@@ -65,10 +65,13 @@ export function computeCpuRate(
     roles: Record<string, number>;
     phases?: Record<string, number>;
     tail?: number;
+    ticks?: number;
   },
   windowTicks: number,
 ): {
   windowTicks: number;
+  sampledTicks: number;
+  unsampledTicks: number;
   total: number;
   unexplained: number;
   unphased: number;
@@ -77,7 +80,15 @@ export function computeCpuRate(
   byRole: Record<string, number>;
   byPhase: Record<string, number>;
 } {
-  const w = Math.max(1, windowTicks);
+  const window = Math.max(1, windowTicks);
+  // 分母必须是**真的走到拍尾采样那一行的拍数**，不是 `Game.time − boot`。
+  // 用后者会把中途 CPU 触顶、没跑到 run() 末尾的拍也算进分母，而分子里一分钱都没有 ——
+  // 线上实测：同一进程 A@1084 拍 total=9.82、B@1884 拍 total=9.76，而环里的独立采样
+  // cpuAvg10 同时刻是 12.3 / 12.7，稳定差 ~2.9/t（≈真值的 23%）。那些"丢掉的拍"恰恰是
+  // 最贵的拍，所以这个偏差方向永远朝着"看起来还有余量"—— 判要不要扩、要不要省都会读反。
+  // 首批没有 ticks 计数（旧 Memory / 本次改动刚部署）时退回 window，行为与改动前逐字一致；
+  // 一旦有计数就用它 —— 这才是"分子分母同一批拍"的那个分母。
+  const w = cum.ticks === undefined ? window : Math.max(1, cum.ticks);
   const sum = (m: Record<string, number>): number => Object.values(m).reduce((a, b) => a + b, 0);
   const perTick = (m: Record<string, number>): Record<string, number> =>
     Object.fromEntries(
@@ -87,7 +98,12 @@ export function computeCpuRate(
         .map(([k, v]) => [k, round2(v / w)]),
     );
   return {
-    windowTicks: w,
+    windowTicks: window,
+    // `sampledTicks=0` = 这个构建还没记 ticks（未知），不是"一拍都没采到"；
+    // 同理 `unsampledTicks=-1` = 未知。别让"没测"读成"没有黑洞"——那正是本案的成因。
+    sampledTicks: cum.ticks ?? 0,
+    // 这份"拍数黑洞"才是那两个读数打架的真正原因；它为 0 时两份口径才真的可比。
+    unsampledTicks: cum.ticks === undefined ? -1 : Math.max(0, window - cum.ticks),
     total: round2(cum.total / w),
     // 两个「剩余」问的是两个不同问题：unexplained = 有多少 CPU 不属于任何具名单元；
     // unphased = 有多少 CPU 不在任何已测相位里（预算/上下文/调度器自身的夹缝）。

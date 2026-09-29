@@ -142,6 +142,13 @@ export interface GlobalCache {
     midLast?: number;
     /** 尾差累计：拍尾 − 拍中 = 采样点之后才发生的花费（flush/segments/Memory 序列化）。 */
     tail?: number;
+    /**
+     * **真正跑到拍尾采样那一行的拍数**。与 `windowTicks`（= Game.time − boot，数所有拍）
+     * 是两回事：中途因 CPU 触顶而提前离开 run() 的拍，一分都没进 `total` 却占着分母 ——
+     * 于是「总=9.76/t」与「环读数=12.7/t」差的那 2.9/t 到底是谁错了，只有这个数能判。
+     * 线上实测（同一进程 A@1084 / B@1884）两份读数都稳定差 ~2.9/t，不是启动期噪声。
+     */
+    ticks?: number;
   };
   /** P3 能量核算 L1 计数器（bumpEnergyCounter 写入；economy 系统每窗滚动消费）。 */
   energyLedger?: { tick: number; rooms: Record<string, RoomEnergyCounters> };
@@ -250,6 +257,19 @@ export interface GlobalCache {
    * 与 demandsLive 分开的理由：`demandsLive=0` 同时是"没人发布"与"发布了但消费方看时已过期"
    * 的读数，而这两种止步要修的是不同的模块（生产者 vs 信道时效）。heap 存储，可丢。 */
   procurementPublished?: Record<string, { n: number; at: number }>;
+  /**
+   * 生产者侧**第二道**指纹：每房最近一次「走到发布决策那一行」的时刻与算出的条数。
+   *
+   * 为什么 `procurementPublished` 一个数不够：它写在 `publishProcurementDemands()` 内部，
+   * 而 lab-system 的两个调用点都被 `if (demands.length > 0)` 护栏包着
+   * （`:302` 休眠分支、`:441` 正常分支）。于是「压根没走到那块」与「走到了、但
+   * `expandReactionDemands` 算出 0 条」**都读成 published=0** —— 恰好是这把指纹被造出来
+   * 要分开的那两种止步，而前者要查 lab 的控制流/相位、后者要查需求展开的口径。
+   * 线上实证：1884 拍窗口里 `demandsPublished=0`，而同一次 `demandsLive=1`、`buyOk=6`
+   * （那几条来自 recovery-execution，它没被护栏包住）⇒ lab 这条确实一步都没留下痕迹。
+   * heap 存储，可丢。
+   */
+  procurementAttempted?: Record<string, { computed: number; at: number }>;
   /** factory commodity 目标缓存（factory-manager 写，distributor 的
    * stockFactoryComponents 读 — 补料锚点）。heap 存储，可丢。 */
   factoryTargets?: Record<string, string>;
@@ -575,6 +595,16 @@ export function publishProcurementDemands(
   // 这个数唯一要回答的问题是「发布这一行到底有没有被执行」。配合消费侧 demandsLive
   // 才能把「没人发布」与「发了但消费方看时已过期」分开店（两者此前都读成同一个 0）。
   (g.procurementPublished ??= {})[roomName] = { n: demands.length, at: tick };
+}
+
+/**
+ * 记「走到了采购需求的发布决策」这一事实本身，与随后是否真的发出无关。
+ * 调用点必须**在 `if (demands.length > 0)` 之外**——这行唯一的作用就是把
+ * 「没走到」与「走到但算出 0 条」分开，写在护栏里面就白记了。
+ */
+export function recordProcurementAttempt(roomName: string, computed: number, tick: number): void {
+  const g = globalCache();
+  (g.procurementAttempted ??= {})[roomName] = { computed, at: tick };
 }
 
 /** 市场行情快照 — 单种资源在采集时刻的最低卖价与最高买价。 */

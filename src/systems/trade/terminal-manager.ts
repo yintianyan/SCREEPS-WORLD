@@ -199,6 +199,11 @@ export const terminalManagerSystem: System = {
         const published = globalCache().procurementPublished?.[snapshot.roomName];
         ledger.demandsPublished = published?.n ?? 0;
         ledger.publishedAt = published?.at ?? 0;
+        // 第二道指纹：publish 在 `if (demands.length > 0)` 里面，所以 published=0 还分不清
+        // 「没走到发布决策」与「走到了但算出 0 条」—— 这两处要修的模块不同，只能各记一次。
+        const attempted = globalCache().procurementAttempted?.[snapshot.roomName];
+        ledger.demandsComputed = attempted?.computed ?? 0;
+        ledger.attemptedAt = attempted?.at ?? 0;
         if (demandsCache) {
           const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
           // 采购侧读数写在**这里**（每轮都会走到），不是只写在 tryBuyDeficit 里：那个候选

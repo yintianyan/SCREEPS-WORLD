@@ -5,7 +5,11 @@
  * （lab-system vs 信道时效）。消费方读的是合并过滤后的表，永远区分不了这两件事。
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { globalCache, publishProcurementDemands } from "../../../src/kernel/global-cache";
+import {
+  globalCache,
+  publishProcurementDemands,
+  recordProcurementAttempt,
+} from "../../../src/kernel/global-cache";
 import type { ProcurementDemand } from "../../../src/kernel/global-cache";
 import { resetGlobals } from "../../support/factories";
 
@@ -46,5 +50,41 @@ describe("生产者侧指纹 —— 发布这一行有没有被执行，必须�
     publishProcurementDemands("W2", [demand("H", 1_250), demand("O", 1_250)], 1_010);
     expect(globalCache().procurementPublished?.["W1"]).toEqual({ n: 1, at: 1_000 });
     expect(globalCache().procurementPublished?.["W2"]).toEqual({ n: 2, at: 1_010 });
+  });
+
+  // 上面那条「交零条也要留痕」在 lab-system 的真实调用路径里永远不会发生：
+  // 两个调用点都包在 `if (demands.length > 0)` 里。所以 published 单独一个数
+  // 分不清「没走到那块」与「走到了、算出 0 条」—— 线上一轮 1884 拍里 published=0
+  // 而同窗 demandsLive=1 / buyOk=6（那些来自没被护栏包住的 recovery-execution），
+  // lab 这条一步都没留下痕迹，就是撞在这两种止步共用一个读数上。
+  // 注：各用例用互不相同的房名，断言与「本房此前有没有痕迹」彻底无关
+  // （这两张表按房 key，历史上 resetGlobals 漏清过它们 —— 已在夹具里补上）。
+  it("发布决策的足迹与发布本身分开：算出 0 条也要留痕", () => {
+    recordProcurementAttempt("W10", 0, 1_000);
+    expect(globalCache().procurementAttempted?.["W10"]).toEqual({ computed: 0, at: 1_000 });
+    // 走到过 ≠ 发出过：护栏挡住了 publish，所以 published 一侧没有这一笔。
+    expect(globalCache().procurementPublished?.["W10"]).toBeUndefined();
+  });
+
+  it("三态可辨：没走到 / 走到算出 0 条 / 走到并发出", () => {
+    // ① 从没走到的房：两份指纹都不该有它的条目。
+    expect(globalCache().procurementAttempted?.["W11"]).toBeUndefined();
+    // ② 走到了但判定无需买 —— 只有 attempted，没有 published。
+    recordProcurementAttempt("W12", 0, 1_000);
+    expect(globalCache().procurementAttempted?.["W12"]).toEqual({ computed: 0, at: 1_000 });
+    expect(globalCache().procurementPublished?.["W12"]).toBeUndefined();
+    // ③ 走到了且发了 —— published 才出现，且条数与算出的一致。
+    recordProcurementAttempt("W13", 2, 1_010);
+    publishProcurementDemands("W13", [demand("X", 1_260), demand("GH2O", 1_260)], 1_010);
+    expect(globalCache().procurementAttempted?.["W13"]).toEqual({ computed: 2, at: 1_010 });
+    expect(globalCache().procurementPublished?.["W13"]).toEqual({ n: 2, at: 1_010 });
+  });
+
+  it("足迹按房分开，且同房被最新一次覆盖", () => {
+    recordProcurementAttempt("W14", 0, 1_000);
+    recordProcurementAttempt("W15", 1, 1_005);
+    recordProcurementAttempt("W14", 3, 1_050);
+    expect(globalCache().procurementAttempted?.["W14"]).toEqual({ computed: 3, at: 1_050 });
+    expect(globalCache().procurementAttempted?.["W15"]).toEqual({ computed: 1, at: 1_005 });
   });
 });

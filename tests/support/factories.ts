@@ -86,6 +86,14 @@ export function resetGlobals(): void {
   delete g.__powerBanks;
   delete g.__pbRoomCache;
   delete g.boostAssignments;
+  // 采购需求信道与两道生产者指纹 — 漏清会让「本房没走到那行」的断言被上一条用例的痕迹打穿
+  // （recordProcurementAttempt / publishProcurementDemands 都按房 key，共用房名即串味）。
+  delete g.procurementDemands;
+  delete g.procurementPublished;
+  delete g.procurementAttempted;
+  // CPU 累计账与通勤建路账本 — 两份都是跨拍累加的 heap 账，漏清会把上一条用例的总量带进来。
+  delete g.cpuCumulative;
+  delete g.roadBuildLedger;
   // action profiling 缓存
   delete g.actionCpu;
   delete g.actionCpuTick;

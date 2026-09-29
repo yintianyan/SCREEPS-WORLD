@@ -22,7 +22,11 @@ import {
   selectReactionTrios,
   LAB_REACTION_AMOUNT,
 } from "../../domain/industry/reactions";
-import { globalCache, publishProcurementDemands } from "../../kernel/global-cache";
+import {
+  globalCache,
+  publishProcurementDemands,
+  recordProcurementAttempt,
+} from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
 import { collectFullInventory } from "../../domain/industry/inventory";
 import { expandReactionDemands } from "../../domain/industry/procurement";
@@ -299,6 +303,9 @@ export const labSystem: System = {
             ctx.tick,
             CONFIG.market.interval + 50,
           );
+          // 发布决策的足迹要留在护栏**外面**：published=0 单独存在时，分不清
+          // 「这一行没走到」与「走到了但算出 0 条需求」，而这两种止步要修的是不同模块。
+          recordProcurementAttempt(snapshot.roomName, demands.length, ctx.tick);
           if (demands.length > 0) {
             publishProcurementDemands(snapshot.roomName, demands as ProcurementDemand[], ctx.tick);
           }
@@ -438,6 +445,8 @@ export const labSystem: System = {
             ctx.tick,
             CONFIG.market.interval + 50,
           );
+          // 同休眠分支：足迹写在护栏外面，否则 published=0 又变成两种止步共用一个读数。
+          recordProcurementAttempt(snapshot.roomName, demands.length, ctx.tick);
           if (demands.length > 0) {
             publishProcurementDemands(snapshot.roomName, demands as ProcurementDemand[], ctx.tick);
           }
