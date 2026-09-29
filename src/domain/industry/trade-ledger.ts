@@ -45,6 +45,10 @@ export interface TradeLedger {
   demandsLive: number;
   /** 最近一条被考虑的需求：`资源:数量/p优先级/来源`；空 = 一条都没有。 */
   demandTop: string;
+  /** 生产者侧指纹：本房最近一次 publishProcurementDemands 交出的条数（0=生产者从没走到那行）。 */
+  demandsPublished: number;
+  /** 上述发布的时刻（heap 值，global reset 后归零 —— 只与同窗口的 demandsLive 对照读）。 */
+  publishedAt: number;
   /** 采购在进入撮合前被什么挡住：`""` = 没被挡。 */
   buyBlockedBy: "" | "credits-floor";
   /** 累计：有需求但在价格门禁下找不到任何一张卖单（`buyGatePrice` 太低的直接证据）。 */
@@ -90,6 +94,8 @@ export function createTradeLedger(): TradeLedger {
     storageEnergy: 0,
     demandsLive: 0,
     demandTop: "",
+    demandsPublished: 0,
+    publishedAt: 0,
     buyBlockedBy: "",
     buyNoMatch: 0,
     buyGatePrice: 0,

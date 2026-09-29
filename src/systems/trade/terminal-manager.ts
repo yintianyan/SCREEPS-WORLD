@@ -193,6 +193,12 @@ export const terminalManagerSystem: System = {
         // 信道持久化（publishProcurementDemands）：条目活到各自 deadline，
         // 过期过滤在 collectDemands 内完成 —— 表级 age 门禁已无意义。
         const demandsCache = globalCache().procurementDemands;
+        // 生产者侧指纹放在 if 之外：demandsCache 整个不存在（从没发布过）时也要留下
+        // 「发布过几条」的证据 —— 否则「生产者没走到」与「走到了但消费时已过期」又会
+        // 读成同一个 0，而这两种止步要修的是不同的模块。
+        const published = globalCache().procurementPublished?.[snapshot.roomName];
+        ledger.demandsPublished = published?.n ?? 0;
+        ledger.publishedAt = published?.at ?? 0;
         if (demandsCache) {
           const allDemands = collectDemands(demandsCache.byRoom, ctx.tick);
           // 采购侧读数写在**这里**（每轮都会走到），不是只写在 tryBuyDeficit 里：那个候选

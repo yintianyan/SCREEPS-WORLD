@@ -246,6 +246,10 @@ export interface GlobalCache {
    * 使整表单 tick 存活，生产者/消费者相位错开时需求静默丢失。
    * heap 存储 — global reset 丢失可接受（生产者按自身 cadence 重发）。无 schema 变更。 */
   procurementDemands?: { tick: number; byRoom: Record<string, ProcurementDemand[]> };
+  /** 生产者侧指纹：每房最近一次「发布」的条数与时刻（publishProcurementDemands 就地记）。
+   * 与 demandsLive 分开的理由：`demandsLive=0` 同时是"没人发布"与"发布了但消费方看时已过期"
+   * 的读数，而这两种止步要修的是不同的模块（生产者 vs 信道时效）。heap 存储，可丢。 */
+  procurementPublished?: Record<string, { n: number; at: number }>;
   /** factory commodity 目标缓存（factory-manager 写，distributor 的
    * stockFactoryComponents 读 — 补料锚点）。heap 存储，可丢。 */
   factoryTargets?: Record<string, string>;
@@ -567,6 +571,10 @@ export function publishProcurementDemands(
   }
   for (const d of demands) merged.set(d.resource, { ...d });
   g.procurementDemands.byRoom[roomName] = Array.from(merged.values());
+  // 生产者侧指纹：记的是「生产者交出了几条」，与合并/过期过滤后的表内容无关 ——
+  // 这个数唯一要回答的问题是「发布这一行到底有没有被执行」。配合消费侧 demandsLive
+  // 才能把「没人发布」与「发了但消费方看时已过期」分开店（两者此前都读成同一个 0）。
+  (g.procurementPublished ??= {})[roomName] = { n: demands.length, at: tick };
 }
 
 /** 市场行情快照 — 单种资源在采集时刻的最低卖价与最高买价。 */
