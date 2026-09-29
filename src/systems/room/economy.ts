@@ -219,7 +219,12 @@ export const economySystem: System = {
       if (st.effFactor === undefined) st.effFactor = INITIAL_EFFICIENCY_FACTOR;
 
       const w = rollupWindow(st.lastTick, ctx.tick, st.lastLedger, cum, st.lastPools, pools);
-      const netPerTick = (w.income - w.consumption + w.refunds) / w.ticks;
+      // 净流的分子不能把 `sold` 当消耗。卖能量是「能量 → 信用」的**换算**，不是价值销毁：
+      // 池面确实少掉这部分（恒等式/drift 那侧照旧按流出算，一行没动），
+      // 但信用随时能买回能量与 boost，而扩张付的正是这些钱。把它记成消耗会造成
+      // **卖盈余越成功、G4 越红**的反向激励 —— 实测 14:4x：credits +142k 的同时 G4 被压到 −9.6/t。
+      const soldEnergy = Math.max(0, cum.sold - st.lastLedger.sold);
+      const netPerTick = (w.income - (w.consumption - soldEnergy) + w.refunds) / w.ticks;
       st.netFlowEma = updateNetFlowEma(st.netFlowEma, netPerTick, acc.netFlowAlpha);
       st.effFactor = updateEfficiencyFactor(
         st.effFactor,
