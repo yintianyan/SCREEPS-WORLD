@@ -17,6 +17,12 @@ import { RECOVERY_BODY, selectBody, degradeBody, minimalBodyFor } from "../../co
 import { submitRequest, hasRequest, spawnKey, buildSpawnRequest } from "../../domain/spawn/queue";
 import { energyBuyAmount } from "../../domain/economy/energy-logistics";
 import { type RecoveryAction, GLOBAL_ROOM } from "../../domain/strategy/recovery-priority";
+// 房名一律取 `action.room`，**不要**再从 `targetFailureId` 按位置解析。
+// 该 id 的形状在各生产者之间不一致（`failure:<dim>:<tick>` 与 `failure:colony:<room>:<tick>` 并存），
+// `split(":")[1]` 因此常把**维度名**当房名 —— 后果不是难看而是烧钱：按房查 storage 永远落空，
+// "缺能量才买"里的缺口于是恒等于整条买入地板。实测 13:0x→13:4x credits 457,666 → 331,398，
+// 买的是已有 90 万存量的能量（`energy:1000/p50` 挂在一条矿物故障上）。
+// 无房间维度的动作带 GLOBAL_ROOM：需要具体房才能行动的地方必须显式跳过，不能默认"买/建/孵"。
 import {
   recoveryIdempotencyKey,
   shouldSubmitAction,
@@ -257,7 +263,7 @@ function submitSpawnRecovery(
   ctx: TickContext,
   correlationId: string,
 ): SubmitResult {
-  const room = action.targetFailureId.split(":")[1] ?? action.targetFailureId;
+  const room = action.room;
   const roomMem = Memory.rooms[room];
   if (!roomMem) {
     return { submitted: false, reason: `room memory not found: ${room}` };
@@ -313,7 +319,7 @@ function submitLogisticsFix(
   ctx: TickContext,
   correlationId: string,
 ): SubmitResult {
-  const room = action.targetFailureId.split(":")[1] ?? action.targetFailureId;
+  const room = action.room;
   const roomMem = Memory.rooms[room];
   if (!roomMem) {
     return { submitted: false, reason: `room memory not found: ${room}` };
@@ -368,7 +374,7 @@ function submitEnergyRedirect(
 ): SubmitResult {
   // agenda-manager 有独立 100t 周期的重规划——Recovery System 不能等 100t。
   // 直接在目标房的 spawn queue 提交 distributor 请求以加速能量分发。
-  const room = action.targetFailureId.split(":")[1] ?? action.targetFailureId;
+  const room = action.room;
   const roomMem = Memory.rooms[room];
   if (!roomMem) {
     return { submitted: false, reason: `room memory not found: ${room}` };
@@ -511,7 +517,15 @@ function submitTerminalTrade(
   ctx: TickContext,
   correlationId: string,
 ): SubmitResult {
-  const room = action.targetFailureId.split(":")[1] ?? action.targetFailureId;
+  const room = action.room;
+  if (room === GLOBAL_ROOM) {
+    // 没有房间维度的故障买能量无处交付 ⇒ 显式空操作，不发不相干的需求。
+    return {
+      submitted: true,
+      executionRef: "procurement:no-room",
+      reason: "action has no room dimension (GLOBAL_ROOM)",
+    };
+  }
 
   // 从 action.recommendation 推断需要的资源
   // 当前简化：只处理能量交易
@@ -600,7 +614,7 @@ function submitPopulationRebuild(
   ctx: TickContext,
   correlationId: string,
 ): SubmitResult {
-  const room = action.targetFailureId.split(":")[1] ?? action.targetFailureId;
+  const room = action.room;
   const roomMem = Memory.rooms[room];
   if (!roomMem) {
     return { submitted: false, reason: `room memory not found: ${room}` };
@@ -668,7 +682,7 @@ function submitDefenseResponse(
   correlationId: string,
 ): SubmitResult {
   const g = globalCache();
-  const room = action.targetFailureId.split(":")[1] ?? action.targetFailureId;
+  const room = action.room;
   const roomMem = Memory.rooms[room];
   if (!roomMem) {
     return { submitted: false, reason: `room memory not found: ${room}` };

@@ -175,7 +175,10 @@ export function createActionRecord(
     correlationId: `rcv-${action.id}-${tick}`,
     type: action.type,
     domain: action.domain,
-    room: action.targetFailureId.split(":")[1] ?? undefined,
+    // 房间只取 action.room —— 幂等键（:81）也是这么算的。
+    // 从 targetFailureId 按位置解析会把房间分量读成**维度名**（id 形状在各生产者之间不一致，
+    // 见 RecoveryAction.room 的注释），于是记录里挂着一个不存在的房名，下游按房取数全部落空。
+    room: action.room,
     state: "proposed",
     attempts: 0,
     maxAttempts,
