@@ -52,14 +52,15 @@ describe("EnergyLedger — L1 计数器", () => {
       repaired: 5,
       upgraded: 100,
     });
-    expect(ledgerIncome(l)).toBe(50);
+    // pickedUp 不并入收入：采→掉→捡是同一度电的第二次流（散落池在恒等式两侧同时排除）。
+    expect(ledgerIncome(l)).toBe(30);
     expect(ledgerConsumption(l)).toBe(140);
     expect(ledgerP0P1Consumption(l)).toBe(40);
   });
 
   it("imported（跨房导入）计入收入——远矿交付是本土房真实流入，与 ledgerConsumption 不含远矿采集侧对应，无双重计算", () => {
     const l = led({ harvested: 30, pickedUp: 20, imported: 500 });
-    expect(ledgerIncome(l)).toBe(550);
+    expect(ledgerIncome(l)).toBe(530);
     expect(ledgerConsumption(l)).toBe(0);
   });
 });

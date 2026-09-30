@@ -81,11 +81,15 @@ export function ledgerDelta(start: EnergyLedger, end: EnergyLedger): EnergyLedge
   return out;
 }
 
-/** 收入合计（harvest + pickup + bought + imported）。远矿 hauler 交付到本房 sink 是真实流入：
- * 不并入则远矿支撑的本土房净流恒为负，帝国健康度/扩张就绪门（minNetFlow）被系统性压低。
- * 与 ledgerConsumption 不含远矿房的 harvested 对应 —— 本房账本只收交付侧、不记远矿采集侧，无双重计算。 */
+/** 收入合计（harvest + bought + imported）。
+ * `pickedUp` **不并入**：那度电在 `harvested` 记账的那一刻已经算过收入，掉在地上再捡起是
+ * 同一度电的第二次流 —— 而恒等式把 `loose`（散落池）在两侧同时排除
+ * （drift = Δtracked − flowBalance − looseΔ + Δother），所以「采→掉→捡」一圈的真实净贡献必须是 0。
+ * 线上实证：幼房 flowBalance +13.1/t 而 drift −13.3/t ⇒ 真实净增≈0，账面把整个净流算成了幻影。
+ * loot:remains（坟墓/废墟取能）同理：死者背包里的能量也早已在采集侧记过。
+ * 代价：拾取「从未记过账」的能量（例如击杀掉落）会漏记 —— 方向保守，且会以**正 drift** 显形。 */
 export function ledgerIncome(l: EnergyLedger): number {
-  return l.harvested + l.pickedUp + l.bought + l.imported;
+  return l.harvested + l.bought + l.imported;
 }
 
 /** 消费合计（gross，不含冲销；sold 为市场卖出能量，属消费侧）。 */
