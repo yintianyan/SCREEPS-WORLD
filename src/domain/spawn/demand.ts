@@ -917,7 +917,13 @@ export function evaluateDemand(
     }
 
     // 消费端弹性：价格信号缩放 upgrader 编制（保级/冲刺不受影响）。
-    if (!hasDowngradeRisk && !crisisNeedsGuard) {
+    // ⚠️早期房（无 storage）**不套这把闸**。下面那段 `!hasStorage` 豁免的本意是
+    //   "早期房不因 economyPressure 失去整条升级道"，但它只把结果兜到 minCount=1 ——
+    //   弹性仍会把 pressure 阶梯算出的 3 先砍成 1，等于把要保住的那条道又收走。
+    //   根因与 builder 同一条：`price = 0.5 + netFlow/(income×0.3)×0.5`，价格的分子就是净流；
+    //   早期房支出以"建/升级自己"为主，缩编制压低支出、再压低读数，形成自锁。
+    //   仍保留的压力阶梯（0.3/0.7 分段）、WORK 限速与保级覆盖不受影响。
+    if (hasStorage && !hasDowngradeRisk && !crisisNeedsGuard) {
       upgraderTarget = Math.round(upgraderTarget * demandFactor);
     }
 
