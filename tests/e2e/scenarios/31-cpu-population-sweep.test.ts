@@ -249,8 +249,15 @@ describe("E2E-031 台阶人口 — 固定房数下分离边际成本与房间固
       });
     }
     const baseIntentsPerCreep = mean(stats.map(s => s.intentsPerCreep));
+    // Δcpu 必须超过本测试自己的残差容差（下面 fitPlane 用的 0.25）才算有信号：
+    // 实测踩过 natural->mid —— Δcreeps=3.8、Δcpu=-0.01、Δintents=2.0，
+    // 三条旧判据全过（|Δintents|>2 恰好为真、busyDelta 0.53≥0.5×基准），
+    // 于是把噪声差分成 0.007 的负单价，报成「CPU 读数或签发口径坏了」。
+    // 噪声差分不能定价：定价边要求分子本身是正的、且大到可测。
     const usableEdge = (e: (typeof edges)[number]): boolean =>
-      Math.abs(e.dIntents) > 2 && (e.dCreeps <= 0 || e.busyDelta >= 0.5 * baseIntentsPerCreep);
+      e.dCpu > 0.25 &&
+      Math.abs(e.dIntents) > 2 &&
+      (e.dCreeps <= 0 || e.busyDelta >= 0.5 * baseIntentsPerCreep);
     const fixed = stats.map(s => s.fixedCost);
     const fixedSpread = Math.max(...fixed) - Math.min(...fixed);
     // 两参数模型 `cpu = a + p·签发` 在萎缩世界闭得掉，在发育世界闭不掉：creep 还带来与
