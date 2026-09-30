@@ -157,6 +157,23 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
         );
         if (criticalVios.length > 0) criticalViolations++;
         if (last.totalCreeps < 5) lowPopStages++;
+        // #37 取证：siteStale 命中时把「引擎侧 site」与「队列侧任务」两份账并排放出来。
+        // 要分的岔口：孤儿 site（引擎有、队列没有 ⇒ 没人负责它，进度恰好恒 0，
+        // 而别的一直在建，built 照常涨）vs 有队列条目但 builder 不选（消费侧口径）。
+        if (violations.some((v: string) => (v as string).includes("siteStale"))) {
+          // ⚠️ 场景内没有 `Game` 全局（世界跑在沙箱里）：取证只能走 Memory + 违例 id 本身
+          //    （id 形如 `siteStale:W0N1:<siteId>(type=extension prog=0/3000 age=.. noProg=..)`）。
+          //    要分的岔口：queue 里**没有**对应条目 ⇒ 孤儿 site（引擎有、无人负责，进度恰好恒 0）；
+          //    有且 state=site ⇒ 消费侧（builder 不选）问题。
+          const queueTasks = ((rm.buildQueue ?? []) as any[]).map(
+            t => `${t.key ?? "?"}:${t.state ?? "?"}:a${t.attempts ?? 0}:r${t.retryAt ?? 0}`,
+          );
+          console.log(
+            `[soak-stale] t=${last.tick} pop=${JSON.stringify(last.creepCountByRole)} ` +
+              `cap=${rm.phase?.energyCapacityAvailable ?? "?"} rcl=${rm.phase?.rcl ?? "?"} ` +
+              `vios=${JSON.stringify(violations)} queue=${JSON.stringify(queueTasks)}`,
+          );
+        }
         const topSkips = (sr?: Record<string, number>) =>
           sr
             ? Object.entries(sr)
