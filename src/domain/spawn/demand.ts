@@ -1040,7 +1040,16 @@ export function evaluateDemand(
       builderTarget = Math.max(builderTarget, builderConfig.minCount);
     }
     // 消费端弹性：价格信号缩放 builder 编制。
-    builderTarget = Math.max(0, Math.round(builderTarget * demandFactor));
+    // ⚠️无 storage 的早期房**不套这把闸**（与上面 upgrader 的 `!hasStorage` 豁免同源，同一理由）：
+    //   energyPrice 的分子就是 netFlow（`price = 0.5 + netFlow/(income×0.3)×0.5`），而早期房唯一的
+    //   出口正是"建自己" ⇒ 缩 builder 会压低消耗、进而压低净流读数，形成
+    //   「建房显得穷 ⇒ 少建房 ⇒ 一直穷」的自锁。线上实证：幼房容器与 spawn 池全满
+    //   （ea=ec=650）、6 个工地待建，price=0.2256 ⇒ elasticity=0.314 ⇒ 编制从 3 被砍到 1。
+    //   而且 #41 之后盈余已不会被倒在地上，这把闸原本要防的浪费不存在了。
+    //   仍留三重兜底不会超编：economyCap（harvester+1）、B-5 水位权限表、builderPressure 迟滞带。
+    if (snapshot.storage !== undefined) {
+      builderTarget = Math.max(0, Math.round(builderTarget * demandFactor));
+    }
     if (builderTotal < builderTarget) {
       // recovery 时提升为 P1（重建被毁基建是生存行为）；normal 时保持 P2（发展）。
       const builderPriority: 0 | 1 | 2 | 3 | 4 = inCrisis ? 1 : 2;
