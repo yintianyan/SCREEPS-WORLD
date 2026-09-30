@@ -186,3 +186,51 @@ describe("P1-1 — builder 编制纳入 buildQueue backlog", () => {
     expect(requests.filter(r => r.role === "builder")).toHaveLength(1);
   });
 });
+
+describe("早期房不套 builder 价格弹性闸（#46）", () => {
+  // 线上实证：幼房 energyPrice=0.2256 ⇒ demandElasticity=(0.2256−0.1)/0.4=0.314，
+  // dynamicBuilderTarget = min(maxCount=4, economyCap=2+0+1=3, max(minCount=1, site=3)) = 3
+  // ⇒ 旧口径 round(3×0.314)=1 只 builder（6 个工地、容器与 spawn 池全满时被砍到 1）。
+  // 价格的分子就是净流：早期房唯一出口是建自己 ⇒ 缩 builder 压低消耗再压低读数 = 自锁。
+  const sites3 = [
+    { id: "s1", structureType: "extension" },
+    { id: "s2", structureType: "extension" },
+    { id: "s3", structureType: "road" },
+  ] as unknown as ConstructionSite[];
+
+  it("无 storage：价格再低也不砍 builder ⇒ 3 只（弹性闸对本房不适用）", () => {
+    setBuildQueue(undefined);
+    const snap = mockSnapshot({ myConstructionSites: sites3, storage: undefined });
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvesters(2),
+      [],
+      { ...normalCtx(0, 0), energyPrice: 0.2256 },
+      1000,
+    );
+    expect(requests.filter(r => r.role === "builder")).toHaveLength(3);
+  });
+
+  it("有 storage：弹性闸照旧生效 ⇒ 同一价格下 3×0.314 缩到 1 只", () => {
+    setBuildQueue(undefined);
+    const snap = mockSnapshot({
+      myConstructionSites: sites3,
+      storage: {
+        id: "st1",
+        store: { getUsedCapacity: () => 1_000_000 },
+      } as unknown as StructureStorage,
+    });
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvesters(2),
+      [],
+      { ...normalCtx(0, 0), energyPrice: 0.2256 },
+      1000,
+    );
+    expect(requests.filter(r => r.role === "builder")).toHaveLength(1);
+  });
+});
