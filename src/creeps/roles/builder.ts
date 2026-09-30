@@ -14,6 +14,7 @@ import {
   repairFreshRampart,
   repairRoads,
   repairUrgentRoads,
+  withdrawClosestContainer,
   withdrawClosestNonSourceContainer,
   withdrawStorageCapped,
 } from "../engine/actions";
@@ -67,6 +68,14 @@ const policy: RolePolicy = {
     withdrawStorageCapped(builderStorageLimit),
     // 2. 取最近非物流 container 的能量（不抢 hauler/upgrader 的物流源）。
     withdrawClosestNonSourceContainer(),
+    // 2.5 别无选择时：从最近的**任意**有能量 container 取（含物流 container）。
+    //     幼房（RCL3，无 storage）的全部 container 都是 source/controller container ⇒ 第 2 步恒空，
+    //     原实现直接落到 harvest：builder 离开工位去源上自采，实测工地进度只有 **0.077/t**
+    //     （同房三只 2W1C2M builder 的能力是 40/t），三块 extension 各要 3000 进度 ⇒ 爬级被拖成上万拍。
+    //     这里的"礼让 hauler"并不成立：builder 在源上自采**消耗的是同一份源再生**，只是多绕几十拍，
+    //     而线上实测 source container 是 2000/2000 满载（hauler 自己也存不进去）⇒ 取走它反而解堵。
+    //     排在第 2 步之后 ⇒ 真有非物流 container 可用时，礼让语义原样保留。
+    withdrawClosestContainer(),
     // 3. 兜底：所有 container 无能量时直接采集。
     harvestSource(),
   ],
