@@ -27,11 +27,21 @@ export interface EnergyLedger {
   /** 市场卖出能量（terminal.deal 付出的能量）。 */
   sold: number;
   /**
-   * 跨房导入能量（远矿 hauler 交付到本房 sink）。只记「外部房→本房」，
-   * 房内搬运不计。当前**不计入 ledgerIncome**：并入会抬高本房净流 EMA，
-   * 进而改变门控与需求弹性——那是独立的行为变更，需单独评估后再接线。
+   * 跨房导入能量（外部房→本房的交付：远矿 hauler / 供给合同 / 终端输血的收端）。
+   * 房内搬运不计。计入 `ledgerIncome`（确实流入了一度电），它的**对偶项是 `exported`**。
    */
   imported: number;
+  /**
+   * 跨房「发出」侧对偶项：本房交给其他房的能量。收端记 `imported`∈income 而发端过去什么都不记
+   * ⇒ 帝国层面同一度电被记两次收入，发房只以 −drift 付账（`terminal.send` 与跨房交付同形）。
+   */
+  exported: number;
+  /**
+   * 交易运费：`calcTransactionCost` 从**本房 terminal** 烧掉的能量 —— 真销毁。
+   * ⚠️不可记进 `sold`：净流仪器（`systems/room/economy.ts`）故意把 `sold` 从消耗里摘掉，
+   * 理由是"卖是能量→信用的换算、随时能买回"；运费买不回来，所以必须留在消费侧。
+   */
+  tradeFee: number;
 }
 
 export type LedgerField = keyof EnergyLedger;
@@ -45,6 +55,8 @@ const CONSUMPTION_FIELDS: readonly LedgerField[] = [
   "repaired",
   "towerSpent",
   "sold",
+  "exported",
+  "tradeFee",
 ];
 
 export function emptyLedger(): EnergyLedger {
@@ -60,6 +72,8 @@ export function emptyLedger(): EnergyLedger {
     bought: 0,
     sold: 0,
     imported: 0,
+    exported: 0,
+    tradeFee: 0,
   };
 }
 

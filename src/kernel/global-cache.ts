@@ -766,6 +766,10 @@ export interface RoomEnergyCounters {
   // pool 变化被 drift 捕获但不精确）。
   bought: number;
   sold: number;
+  /** 跨房「发出」侧对偶项（与收端 imported 成对）—— 见 accounting.ts。 */
+  exported: number;
+  /** 交易运费：从本房 terminal 真烧掉的能量，进消费侧（不可记进 sold）。 */
+  tradeFee: number;
   /**
    * 远矿等外部房导入本房的能量（hauler 交付到本房 sink 时计账）。
    * 计入收入侧前须先确认不会与房内搬运重复计数：本字段只记「跨房导入」，
@@ -808,6 +812,8 @@ export function bumpEnergyCounter(
     bought: 0,
     sold: 0,
     imported: 0,
+    exported: 0,
+    tradeFee: 0,
   });
   entry[field] += amount;
 }

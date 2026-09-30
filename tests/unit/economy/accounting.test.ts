@@ -87,6 +87,30 @@ describe("AccountingWindow — 对账恒等式", () => {
     expect(w.drift).toBe(0);
   });
 
+  it("跨房互济两端对称入账：发端 exported、收端 imported ⇒ 两房 drift 都归零（#42）", () => {
+    // donor：storage 少 1100（货 1000 + 运费 100），账上记 exported 1000 + tradeFee 100
+    const donor = rollupWindow(
+      0,
+      50,
+      led(),
+      led({ exported: 1000, tradeFee: 100 }),
+      { ...emptyPools(), storage: 5000 },
+      { ...emptyPools(), storage: 3900 },
+    );
+    expect(ledgerConsumption(led({ exported: 1000, tradeFee: 100 }))).toBe(1100);
+    expect(donor.drift).toBe(0);
+    // recipient：terminal 多 1000，账上记 imported 1000
+    const recv = rollupWindow(
+      0,
+      50,
+      led(),
+      led({ imported: 1000 }),
+      { ...emptyPools() },
+      { ...emptyPools(), terminal: 1000 },
+    );
+    expect(recv.drift).toBe(0);
+  });
+
   it("采→掉→捡一圈只算一次收入：pickedUp 不得进 income（#40 回归闸）", () => {
     // 采 500 进背包 → 掉 200 在地上（loose）→ 被捡回并全部落进 storage。
     // 真实净增 = 500（同一度电只是换了地方），收入必须仍按 harvested 算一次。

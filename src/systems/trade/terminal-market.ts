@@ -75,6 +75,10 @@ export function executeDeal(
   if (cost > terminal.store.getUsedCapacity(RESOURCE_ENERGY)) return false;
   const result = Game.market.deal(order.id, amount, roomName);
   if (result === OK) {
+    // 运费从**本房 terminal** 烧掉，是真销毁（买不回来），必须进消费侧 —— 债单 #43。
+    // 记在这里而不是各 call site：让「每一笔成功的 deal 都计费」成为结构不变量，
+    // 而不是每个调用方各自记得；原先 cost 算完只进了日志，账上完全没有它。
+    bumpEnergyCounter(roomName, "tradeFee", cost);
     log.info(
       "terminal",
       `[${Game.time}] terminal/${roomName}: deal ${order.id} amount=${amount} price=${order.price} energyCost=${cost}`,
