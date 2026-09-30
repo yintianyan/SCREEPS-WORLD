@@ -227,7 +227,12 @@ export const spawnManagerSystem: System = {
 
       // 5. B1：回收通道 — 标记退役 creep，引导至最近 spawn 回收残值能量。
       //    P3-3：传入预建的本房 creep 子集，避免全量 Game.creeps 扫描。
-      recyclePass(snapshot, creepsByRoom.get(snapshot.roomName) ?? [], demandResult.haulerTarget);
+      recyclePass(
+        snapshot,
+        creepsByRoom.get(snapshot.roomName) ?? [],
+        demandResult.haulerTarget,
+        demandResult.sourceBacklog === true,
+      );
     }
   },
 };
@@ -259,11 +264,15 @@ function computeHaulerPendingTarget(roomName: string): number | undefined {
  *      （worker 是过渡角色，不是常备军 — 与 demand 的存在性门禁语义一致）。
  * 执行：被标记 creep 走向本房最近 spawn（role-runner 对其短路 idle，不抢移动权），
  * 相邻时 spawn.recycleCreep 回收残值能量；spawn 忙碌时等待下一 tick。
+ *
+ * `sourceBacklog`（来自 demand 的**事实**读数）为真时**跳过规则 3**：源侧 container 压着能量
+ * 意味着 hauler 不是富余而是被 sink 卡住，此时回收只会延长积压（线上实证见 recycle.ts 规则 3 注释）。
  */
 function recyclePass(
   snapshot: import("../../kernel/contracts").RoomSnapshot,
   roomCreeps: readonly CreepSummary[],
   haulerTarget?: number,
+  sourceBacklog = false,
 ): void {
   const home = snapshot.roomName;
 
@@ -284,6 +293,7 @@ function recyclePass(
     getRoleBounds("harvester", home).minCount,
     haulerTarget,
     haulerPendingDownTarget,
+    sourceBacklog,
   );
   const markedSet = new Set(marked);
   for (const name of marked) {

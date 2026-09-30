@@ -91,4 +91,60 @@ describe("recycle — selectRecycleCandidates", () => {
     // target=1 → keep=2 → 富余候选是最老（濒死）ha1 → 替换窗口内跳过 → 不回收。
     expect(marked).toHaveLength(0);
   });
+
+  /**
+   * 线上回归（2026-09-30 巡检 #47，W38S56 RCL3 无 storage）：demand 的 `canDeliver` 闸门在
+   * 「核心池刚好满 + 无 fillTargets」时关闭 ⇒ haulerTarget 回落 minCount ⇒ keep 变小 ⇒
+   * 这一条按 ttl 升序吃掉**最年轻**的 hauler，而当时 3 个 source container 各压 2000 能量。
+   * 1225 拍内 25 次 hauler 回收（age 中位 202、死亡位置全贴在 spawn 邻格）。
+   * 规则：源侧有积压 = 活干不出去，不是没活可干 ⇒ **否决销毁**（编制目标与阈值一个都没改）。
+   */
+  it("源侧 container 积压时，富余 hauler 一律不回收（sink 满 ≠ 运力过剩）", () => {
+    const haulers = [
+      summary("ha1", "hauler"),
+      summary("ha2", "hauler"),
+      summary("ha3", "hauler"),
+      summary("ha4", "hauler"),
+      summary("ha5", "hauler"),
+    ];
+    // target=2 → keep=3 → 无积压时应回收 2 只（TTL 最小者）。
+    expect(selectRecycleCandidates(haulers, "W7N4", KNOWN, 2, 2, undefined, false)).toHaveLength(2);
+    // 同一份编成，只要源侧压着能量，一条都不许动。
+    expect(selectRecycleCandidates(haulers, "W7N4", KNOWN, 2, 2, undefined, true)).toHaveLength(0);
+  });
+
+  it("sourceBacklog 省略（旧调用方）→ 行为不变，规则 3 照常执行", () => {
+    const haulers = [
+      summary("ha1", "hauler"),
+      summary("ha2", "hauler"),
+      summary("ha3", "hauler"),
+      summary("ha4", "hauler"),
+    ];
+    expect(selectRecycleCandidates(haulers, "W7N4", KNOWN, 2, 2)).toHaveLength(1);
+  });
+
+  it("积压否决只管 hauler：废弃角色与 worker 富余照常回收", () => {
+    const marked = selectRecycleCandidates(
+      [
+        summary("old_miner", "miner"),
+        summary("h1", "harvester"),
+        summary("h2", "harvester"),
+        summary("w1", "worker"),
+        summary("w2", "worker"),
+        summary("ha1", "hauler"),
+        summary("ha2", "hauler"),
+        summary("ha3", "hauler"),
+        summary("ha4", "hauler"),
+      ],
+      "W7N4",
+      KNOWN,
+      2,
+      2,
+      undefined,
+      true,
+    );
+    expect(marked).toContain("old_miner"); // 规则 1 不受影响
+    expect(marked).toContain("w2"); // 规则 2 不受影响
+    expect(marked).not.toContain("ha1"); // 规则 3 被否决
+  });
 });

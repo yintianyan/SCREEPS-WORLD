@@ -94,6 +94,12 @@ interface DemandResult {
   /** 本 tick hauler 编制目标（B3，2026-08-01）— 供回收通道判定「富余 hauler」：
    *  link 化后编制收缩不能只靠死亡不补（1500 tick/代）；无物流基建或 P0 短路时为 undefined。 */
   haulerTarget?: number;
+  /**
+   * 源侧 container 是否压着能量（>40% 且未被 source link 覆盖）—— **事实**，不是需求信号。
+   * 只供 spawn-manager 的回收通道否决「销毁富余 hauler」：容器满 ≠ 没活可干，
+   * 而是活干不出去；此时吃掉运力会把积压拖得更久。详见 domain/spawn/recycle.ts 规则 3。
+   */
+  sourceBacklog?: boolean;
 }
 
 /** 统计房间内各角色存活 creep 数（含孵化中；纯函数，接收预收集摘要）。 */
@@ -466,6 +472,7 @@ export function evaluateDemand(
   const haulerTotal = (counts.hauler ?? 0) + pending.hauler;
   const hasLogistics = snapshot.containers.length > 0 || snapshot.storage !== undefined;
   let dynamicHaulerTarget = 0;
+  let sourceBacklogSeen = false;
   if (hasLogistics) {
     // 接收端可达性闸门：有 storage 时它是无限 sink，container 堆积必为运力不足 → 加人正确；
     // 无 storage 且所有 sink（spawn/ext/tower/cc）均满时，堆积是消费瓶颈而非运力瓶颈 —
@@ -477,29 +484,52 @@ export function evaluateDemand(
     //    （link 满倒不进 / storage link 未排空），不是「需更多 hauler」；真需求由下方
     //    storage link 信号处理。不剔除会致编制不降反升（W7N3/W7N4：满 2000 计 +2/+2
     //    而 4 只 hauler 已有空载在晃）。
-    if (canDeliver) {
-      const sourceWithLink = new Set<string>();
-      for (const s of snapshot.sources) {
-        const hasLink = snapshot.links.some(
-          l =>
-            l.pos.getRangeTo(s.pos) <= CONFIG.economy.link.anchorRange &&
-            classifyLinkRole(
-              l.pos,
-              snapshot.sources.map(p => p.pos),
-              snapshot.controller?.pos,
-              snapshot.storage?.pos,
-              CONFIG.economy.link.anchorRange,
-            ) === "source",
-        );
-        if (hasLink) sourceWithLink.add(s.id);
+    // link 覆盖判定与「源侧积压事实」都必须在 canDeliver 闸门之外算 —— 闸门会把这段整个跳过，
+    // 而 sourceBacklog 恰恰要在闸门关闭时还有值（见下方注释）。
+    const sourceWithLink = new Set<string>();
+    for (const s of snapshot.sources) {
+      const hasLink = snapshot.links.some(
+        l =>
+          l.pos.getRangeTo(s.pos) <= CONFIG.economy.link.anchorRange &&
+          classifyLinkRole(
+            l.pos,
+            snapshot.sources.map(p => p.pos),
+            snapshot.controller?.pos,
+            snapshot.storage?.pos,
+            CONFIG.economy.link.anchorRange,
+          ) === "source",
+      );
+      if (hasLink) sourceWithLink.add(s.id);
+    }
+    const isLinkCovered = (c: (typeof snapshot.containers)[number]): boolean =>
+      snapshot.sources.some(s => sourceWithLink.has(s.id) && c.pos.getRangeTo(s.pos) <= 1);
+    const fillRatioOf = (c: (typeof snapshot.containers)[number]): number => {
+      const capacity = c.store.getCapacity(RESOURCE_ENERGY) || 1;
+      return c.store.getUsedCapacity(RESOURCE_ENERGY) / capacity;
+    };
+    /**
+     * 源侧积压**事实**（与「加人」信号同阈值 0.4，但不受 canDeliver 影响）。
+     *
+     * 它唯一的用途是**否决销毁性的 hauler 回收**（spawn-manager 的 recyclePass 规则 3）。
+     * 立案依据（线上实测 2026-09-30 巡检 #47，W38S56 RCL3 无 storage）：`canDeliver` 会因为
+     * 「核心池刚好满 (ea 550/550) 且没有 fillTargets」而关闭 ⇒ 目标塌回 minCount ⇒ keep 变小 ⇒
+     * recyclePass 按 ttl 升序把**最年轻**的 hauler 回收掉。sink 一开又得重孵。
+     * 实测代价：事件环 1225 拍内 25 次 `CreepDeath(hauler, natural=0)`，age 中位 202，
+     * 死亡位置全部贴在 spawn(26,12) 邻格，且 `EnemyCleared=83330705` 之后仍在继续 ⇒ 不是战损，是自家人杀的。
+     * ⚠️这个闸门对「孵化」是安全侧（不白孵），对「销毁」却不成立：**容器里压着 3×2000 能量时，
+     * 不是「没活可干」，而是「活干不出去」** —— 吃掉运力只会让积压更久。
+     */
+    for (const c of snapshot.containers) {
+      if (isLinkCovered(c)) continue;
+      if (fillRatioOf(c) > 0.4) {
+        sourceBacklogSeen = true;
+        break;
       }
+    }
+    if (canDeliver) {
       for (const c of snapshot.containers) {
-        const coveredByLink = snapshot.sources.some(
-          s => sourceWithLink.has(s.id) && c.pos.getRangeTo(s.pos) <= 1,
-        );
-        if (coveredByLink) continue;
-        const capacity = c.store.getCapacity(RESOURCE_ENERGY) || 1;
-        const fillRatio = c.store.getUsedCapacity(RESOURCE_ENERGY) / capacity;
+        if (isLinkCovered(c)) continue;
+        const fillRatio = fillRatioOf(c);
         if (fillRatio > 0.8) dynamicHaulerTarget += 2;
         else if (fillRatio > 0.4) dynamicHaulerTarget += 1;
       }
@@ -1110,6 +1140,7 @@ export function evaluateDemand(
 
   const result: DemandResult = { requests, nextHysteresis };
   if (haulerTarget !== undefined) result.haulerTarget = haulerTarget;
+  result.sourceBacklog = sourceBacklogSeen;
   return result;
 }
 

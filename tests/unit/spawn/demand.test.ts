@@ -1275,6 +1275,50 @@ describe("hauler 积压信号接收端可达性闸门（无 storage 防移动仓
     // 饱和态：堆积不计入 → 回落 minCount；可投放态：堆积计入 → 更多 hauler。
     expect(satHaulers).toBeLessThan(delHaulers);
   });
+
+  /**
+   * 线上回归（2026-09-30 巡检 #47）：这个闸门原本只是「别多孵」的刹车（安全、自愈），
+   * 但同一个 `haulerTarget` 被喂给回收通道当「销毁」的触发器 ⇒ sink 一满 keep 就变小，
+   * recyclePass 按 ttl 升序吃掉最年轻的 hauler（实测 W38S56 1225 拍内 25 次）。
+   * ⇒ demand 必须另外报一个**事实**：源侧 container 压着能量（`sourceBacklog`），
+   * 它不受 `canDeliver` 闸门影响，只用来否决销毁。阈值与编制目标一个都没改。
+   */
+  it("sink 全满时仍如实报 sourceBacklog（闸门关的是「加人」，不是「有没有活」）", () => {
+    const saturated = noStorageSnap([]);
+    const res = evaluateDemand(saturated, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    // container 各 1900/2000 = 95% > 40% ⇒ 积压事实成立…
+    expect(res.sourceBacklog).toBe(true);
+    // …而同一份积压下，加人信号被闸门关掉 ⇒ 目标比可投放态更低（两者必须能分开：
+    // 「不该多孵」仍然成立，「该销毁」不成立）。
+    const deliverable = noStorageSnap(["ft1", "ft2"] as any[]);
+    const del = evaluateDemand(
+      deliverable,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(0),
+      1000,
+    );
+    expect(del.sourceBacklog).toBe(true);
+    expect(res.haulerTarget ?? 0).toBeLessThan(del.haulerTarget ?? 0);
+  });
+
+  it("container 空（≤40%）→ sourceBacklog=false（link 化后的收缩道仍然可走）", () => {
+    const drained = mockSnapshot({
+      links: [],
+      containers: [
+        mockStructure("container", { id: "c0", energy: 600, capacity: 2000 }), // 30%
+        mockStructure("container", { id: "c1", energy: 800, capacity: 2000 }), // 40%，不严格大于
+      ],
+      fillTargets: [] as any[],
+      rcl: 3,
+      energyCapacityAvailable: 550,
+      controller: mockController({ level: 3 }),
+    });
+    const res = evaluateDemand(drained, [], "normal", livingHarvester(), [], normalCtx(0), 1000);
+    expect(res.sourceBacklog).toBe(false);
+  });
 });
 
 describe("labTender 孵化门禁（反应链最后一公里的执行人）", () => {
