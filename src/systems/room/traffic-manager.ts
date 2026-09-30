@@ -2,6 +2,7 @@
 
 import type { RoomSnapshot, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
+import { recordSkip } from "../../kernel/memory";
 import { safeRun } from "../../kernel/safe-run";
 import { trafficEnabled } from "../../creeps/movement/intent";
 import { recordIntent } from "../../kernel/telemetry";
@@ -160,7 +161,7 @@ function resolveAndDispatch(
     return scored.map(s => s.packed);
   };
 
-  const { moves } = resolveTraffic({
+  const { moves, shoveFails } = resolveTraffic({
     // 防御纵深：意图目标格是不可站立结构格（如 rampart 叠盾下的 spawn —
     // 路径矩阵一旦有洞，穿结构的意图会被解算器放行、引擎逐 tick 拒绝，
     // 车队在其身后永久冻结）时在入口剔除。被剔除的 creep 本 tick 原地，
@@ -171,6 +172,13 @@ function resolveAndDispatch(
     immovable: batch.immovable,
     shoveCandidates,
   });
+
+  // 推挤被拒分诊（#38）：线上「stuck 顶格优先级的 creep 被静止者挡死到老死」此前只读得到
+  // 结果（没签发），读不到原因 —— 不可动/锚定/无落格三种在观测上是同一个形状，修法无从裁决。
+  // 走既有 skip 通道 ⇒ observe 的 `skip(500t)` 行自动带出，不加新读数管线。
+  for (const [reason, count] of Object.entries(shoveFails)) {
+    for (let i = 0; i < count; i++) recordSkip(`traffic/shove:${reason}`);
+  }
 
   for (const [name, targetPacked] of moves) {
     const creep = Game.creeps[name];

@@ -27,9 +27,20 @@ export interface ResolveInput {
   shoveCandidates: (tile: number) => readonly number[];
 }
 
+/** 推挤被拒的原因（读数用 — 线上「顶格优先级的 creep 被静止者挡死」必须能分诊）。 */
+export type ShoveFailReason =
+  /** 占用者在不可动名单（疲劳的己方 creep / 敌方 creep）。 */
+  | "immovable"
+  /** 占用者的锚定优先级 >= 移动方优先级（站桩角色按设计不被推）。 */
+  | "anchor"
+  /** 8 邻域找不到合法落格（含链式推挤到 MAX_SHOVE_DEPTH 仍无解）⇒ 口袋死锁。 */
+  | "no-landing";
+
 /** 解算输出：creep 名 → 目标 packed 格（含被批准的意图与推挤指令）。 */
 export interface ResolveOutput {
   moves: Map<string, number>;
+  /** 本 tick 推挤被拒的次数，按原因分档（只计顶层尝试）。 */
+  shoveFails: Partial<Record<ShoveFailReason, number>>;
 }
 
 /** 推挤链最大深度：A 推 B、B 推 C 即到上限，再深的连环推放弃。 */
@@ -78,6 +89,12 @@ export function resolveTraffic(input: ResolveInput): ResolveOutput {
   const staticPriority = (name: string): number => anchors.get(name) ?? 0;
 
   /**
+   * 推挤被拒计数（只记顶层尝试）：嵌套链的失败会在同一格上重复计数，
+   * 而「一次被挡」才是移动方真正承受的事件 —— 深一层的读数没有决策价值。
+   */
+  const fails: Partial<Record<ShoveFailReason, number>> = {};
+
+  /**
    * 尝试把静止 creep（blockerName，位于 tile）推挤出去。
    * 成功时写入 moves/reservedTiles 并返回 true。
    */
@@ -87,10 +104,19 @@ export function resolveTraffic(input: ResolveInput): ResolveOutput {
     moverPriority: number,
     depth: number,
   ): boolean => {
+    const note = (reason: ShoveFailReason): void => {
+      if (depth === 1) fails[reason] = (fails[reason] ?? 0) + 1;
+    };
     if (depth > MAX_SHOVE_DEPTH) return false;
-    if (immovable.has(blockerName)) return false;
+    if (immovable.has(blockerName)) {
+      note("immovable");
+      return false;
+    }
     if (intentByName.has(blockerName)) return false; // 有意图者不推挤 — 由仲裁/跟车处理。
-    if (staticPriority(blockerName) >= moverPriority) return false; // 锚定豁免。
+    if (staticPriority(blockerName) >= moverPriority) {
+      note("anchor");
+      return false; // 锚定豁免。
+    }
 
     const candidates = shoveCandidates(tile);
     // 先找直接空格（跳过已预定格与仲裁胜者的目标格 — 后者即将有人落入）。
@@ -114,6 +140,7 @@ export function resolveTraffic(input: ResolveInput): ResolveOutput {
         return true;
       }
     }
+    note("no-landing");
     return false;
   };
 
@@ -168,5 +195,5 @@ export function resolveTraffic(input: ResolveInput): ResolveOutput {
     pending = next;
   }
 
-  return { moves };
+  return { moves, shoveFails: fails };
 }
