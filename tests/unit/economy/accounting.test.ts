@@ -87,6 +87,24 @@ describe("AccountingWindow — 对账恒等式", () => {
     expect(w.drift).toBe(0);
   });
 
+  it("采→掉→捡一圈只算一次收入：pickedUp 不得进 income（#40 回归闸）", () => {
+    // 采 500 进背包 → 掉 200 在地上（loose）→ 被捡回并全部落进 storage。
+    // 真实净增 = 500（同一度电只是换了地方），收入必须仍按 harvested 算一次。
+    // 旧口径 income = 500+200 = 700 ⇒ drift = 500−700 = −200，正是线上幼房
+    // 「账面 +13.1/t 而 drift −13.3/t」的形状。
+    const eL = led({ harvested: 500, pickedUp: 200 });
+    const w = rollupWindow(
+      0,
+      50,
+      led(),
+      eL,
+      { ...emptyPools() },
+      { ...emptyPools(), storage: 500 },
+    );
+    expect(w.income).toBe(500);
+    expect(w.drift).toBe(0);
+  });
+
   it("recycle 冲销进恒等式：孵化后回收一半不虚增消耗", () => {
     // 孵化 400、回收返还 200：净消费 200，池减 200
     const eL = led({ spawned: 400, recycledRefund: 200 });
