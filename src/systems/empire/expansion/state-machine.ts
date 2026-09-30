@@ -6,7 +6,7 @@ import { log } from "../../../kernel/log";
 import type { ExpansionResult } from "../../../domain/expansion/uoem-types";
 import type { ExecutionState } from "../../../domain/expansion/execution-state";
 import { getExecutionProgress } from "../../../domain/expansion/execution-state";
-import { evaluateCheckpoint } from "../../../domain/expansion/checkpoint";
+import { canSpawnEvidence, evaluateCheckpoint } from "../../../domain/expansion/checkpoint";
 import {
   evaluateEconomicActivation,
   type EconomicActivationInput,
@@ -282,12 +282,15 @@ function advanceBootstrapping(
   const spawns = targetRoom.find(FIND_MY_SPAWNS);
   if (spawns.length > 0) {
     // Spawn 已建成 → 检查是否能孵化
-    const spawnCanSpawn = targetRoom.energyAvailable >= 300;
+    const canSpawn = canSpawnEvidence(
+      targetRoom.energyAvailable,
+      spawns.some(s => s.spawning !== null),
+    );
     const cp2 = evaluateCheckpoint({
       checkpointId: "CP2_SPAWN_ACTIVE",
       controllerClaimed: true,
       spawnBuilt: spawns.length > 0,
-      spawnCanSpawn,
+      spawnCanSpawn: canSpawn,
       harvesterActive: false,
       transporterActive: false,
       extensionsBuilt: false,
@@ -400,7 +403,12 @@ function advanceEconomicStartup(ctx: TickContext, expansion: ExpansionState): vo
   );
 
   const spawns = targetRoom.find(FIND_MY_SPAWNS);
-  const spawnCanSpawn = spawns.length > 0 && targetRoom.energyAvailable >= 300;
+  const spawnCanSpawn =
+    spawns.length > 0 &&
+    canSpawnEvidence(
+      targetRoom.energyAvailable,
+      spawns.some(s => s.spawning !== null),
+    );
 
   // Checkpoint 3: Energy Loop
   const cp3 = evaluateCheckpoint({

@@ -122,6 +122,22 @@ const CHECKPOINT_DEFINITIONS: Record<
   },
 };
 
+/** 一次最低可用 body（1 WORK + 1 CARRY + 1 MOVE）的能量成本。 */
+const MIN_VIABLE_BODY_ENERGY = 300;
+
+/**
+ * 「这座 spawn 能孵化」的证据判定。
+ *
+ * 只看 `room.energyAvailable` 的瞬时水位会被采样节律骗掉：expansion-manager 的
+ * interval=100，而幼房在赶工期内每 ~16 拍就被一次孵化抽干一轮（实测进能 ~13/t、
+ * 单只 builder/hauler 抽走 300-400），于是 ≥300 只在 bay 的空档里存在几拍 —— 100 拍
+ * 一次的采样大概率错过，CP2/CP3 会在 spawn 正在正常孵化时判它"不能孵化"。
+ * bay 正在孵化是更强的证据：没有能量就不可能正在生一只 creep。
+ */
+export function canSpawnEvidence(energyAvailable: number, hatchInProgress: boolean): boolean {
+  return energyAvailable >= MIN_VIABLE_BODY_ENERGY || hatchInProgress;
+}
+
 /**
  * 评估单个 Checkpoint（纯函数）。
  */
