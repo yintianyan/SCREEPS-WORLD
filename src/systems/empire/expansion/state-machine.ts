@@ -8,6 +8,7 @@ import type { ExecutionState } from "../../../domain/expansion/execution-state";
 import { getExecutionProgress } from "../../../domain/expansion/execution-state";
 import { canSpawnEvidence, evaluateCheckpoint } from "../../../domain/expansion/checkpoint";
 import {
+  advancePositiveStreak,
   evaluateEconomicActivation,
   type EconomicActivationInput,
 } from "../../../domain/expansion/economic-activation";
@@ -532,12 +533,15 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
 
   const econResult = evaluateEconomicActivation(economicInput);
 
-  // 更新连续净流为正的 tick 数
-  if (econResult.netFlow > 0) {
-    expansion.consecutivePositiveTicks = (expansion.consecutivePositiveTicks ?? 0) + 1;
-  } else {
-    expansion.consecutivePositiveTicks = 0;
-  }
+  // 更新连续净流为正的 tick 数 —— 按拍累计：本系统 interval=100，按次数 +1 会把
+  // SELF_SUSTAINING_TICKS=500 变成 5 万拍不间断，见 advancePositiveStreak 的注释。
+  const elapsedSinceEval = Math.max(0, ctx.tick - (expansion.lastEconomicEvalTick ?? ctx.tick));
+  expansion.lastEconomicEvalTick = ctx.tick;
+  expansion.consecutivePositiveTicks = advancePositiveStreak(
+    expansion.consecutivePositiveTicks ?? 0,
+    elapsedSinceEval,
+    econResult.netFlow > 0,
+  );
 
   log.info(
     "expansion",

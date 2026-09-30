@@ -508,6 +508,8 @@ declare global {
       reservedEnergy?: number;
       /** A3.3：连续净流为正的 tick 数（经济激活判据）。 */
       consecutivePositiveTicks?: number;
+      /** 上一次经济激活评估的 tick —— 用于把 streak 按**拍**累计而非按采样次数累计。 */
+      lastEconomicEvalTick?: number;
       /** AI-2 修复：DecisionTrace 分配的 decisionId（D-{tick}-{seq}）。
        * 由 collectExpansionDecisions 在采集 DecisionRecord 时写入。
        * Phase 6 UOEM 后：decisionId 仅作为 DecisionTrace 内部引用，

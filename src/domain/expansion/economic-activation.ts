@@ -52,6 +52,24 @@ export interface EconomicActivationResult {
 const SELF_SUSTAINING_TICKS = 500;
 
 /**
+ * 累计「连续净流为正」的**拍数**。
+ *
+ * 单位必须是拍而不是评估次数：expansion-manager 每 CONFIG.expansion.interval(=100) 拍才走一次
+ * 这里。按次数 +1 的话，`SELF_SUSTAINING_TICKS = 500` 实际要求 500 次**连续**为正的采样
+ * = 50,000 拍不间断，而 integrating 的预算只有 pioneerTimeout×3 = 60,000 拍 —— 中间任何一次
+ * 采样落到孵化/施工的能量谷值就清零重算 ⇒ 自然完成路径（`activated` → `canHandover`）
+ * 按构造几乎走不到，扩张只能靠 6 万拍后的超时强推收成 COMPLETED_FORCED。
+ */
+export function advancePositiveStreak(
+  prev: number,
+  elapsedTicks: number,
+  netFlowPositive: boolean,
+): number {
+  if (!netFlowPositive) return 0;
+  return prev + Math.max(0, elapsedTicks);
+}
+
+/**
  * 评估经济激活状态（纯函数）。
 
  * 激活条件（三段全满足）：
