@@ -94,6 +94,9 @@ export function resolveTraffic(input: ResolveInput): ResolveOutput {
    */
   const fails: Partial<Record<ShoveFailReason, number>> = {};
 
+  /** 破环轮标记：只有"整轮零批准且仍有 pending"（环的形状）才会开启，见主循环。 */
+  let cyclePass = false;
+
   /**
    * 尝试把静止 creep（blockerName，位于 tile）推挤出去。
    * 成功时写入 moves/reservedTiles 并返回 true。
@@ -112,7 +115,10 @@ export function resolveTraffic(input: ResolveInput): ResolveOutput {
       note("immovable");
       return false;
     }
-    if (intentByName.has(blockerName)) return false; // 有意图者不推挤 — 由仲裁/跟车处理。
+    if (moves.has(blockerName)) return false; // 本轮已被批准移动 ⇒ 它自己会让位，不必推
+    // 正常轮里「有意图的占用者」交给跟车处理；只有**破环轮**才把它当静止者推开。
+    // 健康跟车链第一轮必有批准，走不到破环轮 ⇒ 多轮传播不被误伤。
+    if (intentByName.has(blockerName) && !cyclePass) return false;
     if (staticPriority(blockerName) >= moverPriority) {
       note("anchor");
       return false; // 锚定豁免。
@@ -145,10 +151,11 @@ export function resolveTraffic(input: ResolveInput): ResolveOutput {
   };
 
   // 迭代放行：跟车链（A 等 B 走、B 等 C 走）需要多轮传播。
-  // 每轮至少批准一条才继续，轮数受意图数约束，不会死循环。
+  // 每轮至少批准一条才继续；**整轮零批准**时只再开一轮「破环轮」，之后收摊 ⇒ 不会死循环。
   let pending = arbitrated;
   let progressed = true;
-  while (progressed && pending.length > 0) {
+  let cyclePassUsed = false;
+  while (pending.length > 0) {
     progressed = false;
     const next: MoveIntent[] = [];
     for (const it of pending) {
@@ -179,11 +186,17 @@ export function resolveTraffic(input: ResolveInput): ResolveOutput {
         continue;
       }
       // 占用者有意图但去别处 — 等下一轮看它是否被批准（跟车）。
-      if (occupantIntent) {
+      // ⚠️ 但「等」对**环**是永不止息的等待：A 踩 B 的格、B 踩 C 的格、C 踩 A 的格时，
+      // 每一轮三条意图都被挂到 next 而零批准 ⇒ while 循环因 progressed=false 直接收摊，
+      // 三方每拍重演同一幕（线上实测：W37S58 两只 remoteHauler + 一只 reserver 互相钉死
+      // stuck 380+ 拍、ttl 一路耗干 ⇒ 远矿收入直接停工）。
+      // 破环规则保持最小：占用者**本轮没被批准移动**就当它是静止者，走同一套推挤
+      // （仍受不可动名单 / 锚定豁免 / 必须有合法落格三道闸约束，推不动就照旧等待）。
+      if (occupantIntent && (moves.has(occupant) || !cyclePass)) {
         next.push(it);
         continue;
       }
-      // 占用者是静止者 — 走推挤。
+      // 占用者是静止者，或有意图但本轮未获批（环）— 走推挤。
       if (tryShove(occupant, it.to, it.priority, 1)) {
         moves.set(it.name, it.to);
         reservedTiles.add(it.to);
@@ -192,6 +205,17 @@ export function resolveTraffic(input: ResolveInput): ResolveOutput {
       }
       // 推不动（锚定/疲劳/无落格）— 本 tick 放弃，creep 原地。
     }
+    if (progressed || next.length === 0) {
+      pending = next;
+      if (!progressed) break;
+      continue;
+    }
+    // 走到这里 = 本轮零批准且仍有未决意图：占用者全都在"等同伴让位"，只剩**环**这一种形状。
+    // 再开一轮，且只开一轮：这一轮允许把"有意图但未获批"的占用者按静止者推开
+    // （落格/锚定/不可动三道闸一条不松；推不动就照旧原地，不制造新风险）。
+    if (cyclePassUsed) break;
+    cyclePassUsed = true;
+    cyclePass = true;
     pending = next;
   }
 
