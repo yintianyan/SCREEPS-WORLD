@@ -6,6 +6,7 @@ import { safeRun } from "../../kernel/safe-run";
 import { trafficEnabled } from "../../creeps/movement/intent";
 import { recordIntent } from "../../kernel/telemetry";
 import { recordTraffic } from "../../creeps/movement/traffic";
+import { recordPathSuccess } from "../../creeps/movement/stuck-recovery";
 import { invalidateCreepPath } from "../../creeps/movement/pathfinding";
 import { getParkRoomData } from "../../creeps/movement/parking";
 import { resolveTraffic, type MoveIntent } from "../../creeps/movement/traffic-resolver";
@@ -98,6 +99,9 @@ export const trafficManagerSystem: System = {
                 recordIntent("move", result);
                 if (result === OK || result === ERR_TIRED) {
                   recordTraffic(creep);
+                  // 快路径与完整解算路径是同一条判据的两个出口：两处都必须记成功，
+                  // 否则单意图房（最常见形态）里的 creep 永远没有成功记录 —— 见 #39。
+                  recordPathSuccess(creep);
                 } else if (result !== ERR_BUSY) {
                   invalidateCreepPath(intent.name);
                 }
@@ -179,6 +183,10 @@ function resolveAndDispatch(
     recordIntent("move", result);
     if (result === OK || result === ERR_TIRED) {
       recordTraffic(creep);
+      // 集中签发的这一拍就是该 creep 本轮的真实移动结果 —— 不记成功时，
+      // 被 traffic 仲裁的 creep 的 pathFailure 计数器只有一条「第一次失败后永不归零」
+      // 的路径（E8 因此在两间房、四类角色上批量报错警，实证见债单 #39）。
+      recordPathSuccess(creep);
     } else if (result !== ERR_BUSY) {
       // v33：引擎拒绝签发（目标格被静态阻挡 — 新墙/新落成结构/敌方结构）→
       // 立即失效该 creep 的持久化路径，下一 tick 强制重算绕行。陈旧路径每 tick

@@ -282,7 +282,10 @@ function issuePathStep(creep: Creep, path: readonly RoomPosition[]): ScreepsRetu
   }
   const result = creep.moveByPath(path as RoomPosition[]);
   if (result === ERR_NOT_FOUND || result === ERR_INVALID_ARGS) return undefined;
-  if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+  if (result === OK || result === ERR_TIRED) {
+    recordTraffic(creep);
+    recordPathSuccess(creep);
+  }
   return result;
 }
 
@@ -660,7 +663,10 @@ export function stepToward(
   const pos = "pos" in target ? target.pos : target;
   if (!trafficEnabled()) {
     const result = creep.moveTo(pos, { reusePath: 5, ignoreCreeps: false });
-    if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+    if (result === OK || result === ERR_TIRED) {
+      recordTraffic(creep);
+      recordPathSuccess(creep);
+    }
     return result;
   }
   return registerStepViaPathfinder(creep, pos, movePriorityFor(creep), false);
@@ -1012,7 +1018,10 @@ export function moveToTarget(
             swampCost: fatigueSwampCost(creep),
             costCallback: structureCostCallback,
           });
-          if (result === OK || result === ERR_TIRED) recordTraffic(creep);
+          if (result === OK || result === ERR_TIRED) {
+            recordTraffic(creep);
+            recordPathSuccess(creep);
+          }
           return result;
         }
       }

@@ -257,4 +257,80 @@ describe("traffic-manager — 解算与签发", () => {
 
     expect(g.__creepPathCache.c1).toBeDefined();
   });
+
+  // 债单 #39：traffic 开启后绝大多数移动由本系统集中签发，原先只有 pathfinding.ts
+  // 自己 move() 那条路径会 recordPathSuccess ⇒ 被仲裁的 creep 的 failAge 随年龄线性涨、
+  // 永不归零，E8 因此在两间房、四类角色上批量报「路径失败」假阳性。
+  it("正常签发（OK）：同时记一次路径成功，E8 的 failAge 归零", () => {
+    setTraffic(true);
+    const creep = trafficCreep("c1", 25, 25, undefined);
+    const room = flatRoom([creep]);
+    creep.room = room;
+    const g = globalThis as any;
+    g.Game.rooms.W7N4 = room;
+    g.Game.creeps.c1 = creep;
+
+    const tracker = new Map<string, { lastSuccessTick: number; consecutiveFailures: number }>();
+    tracker.set("W7N4:c1", { lastSuccessTick: 100, consecutiveFailures: 7 });
+    g.pathFailureTracker = tracker;
+
+    registerMove(creep, RIGHT as DirectionConstant, 60);
+    trafficManagerSystem.run(mockContext());
+
+    expect(creep.move).toHaveBeenCalled();
+    expect(tracker.get("W7N4:c1")!.consecutiveFailures).toBe(0);
+    expect(tracker.get("W7N4:c1")!.lastSuccessTick).toBe(g.Game.time);
+  });
+
+  it("完整解算路径（同房两意图）：同样记一次路径成功 — 两个签发出口必须一致", () => {
+    setTraffic(true);
+    const a = trafficCreep("ca", 25, 25, undefined);
+    const b = trafficCreep("cb", 30, 30, undefined);
+    const room = flatRoom([a, b]);
+    a.room = room;
+    b.room = room;
+    const g = globalThis as any;
+    g.Game.rooms.W7N4 = room;
+    g.Game.creeps.ca = a;
+    g.Game.creeps.cb = b;
+
+    const tracker = new Map<string, { lastSuccessTick: number; consecutiveFailures: number }>();
+    tracker.set("W7N4:ca", { lastSuccessTick: 100, consecutiveFailures: 4 });
+    tracker.set("W7N4:cb", { lastSuccessTick: 100, consecutiveFailures: 4 });
+    g.pathFailureTracker = tracker;
+
+    // 两个意图 ⇒ 不走单意图快路径，进 resolveAndDispatch（完整解算）。
+    registerMove(a, RIGHT as DirectionConstant, 60);
+    registerMove(b, TOP as DirectionConstant, 60);
+    trafficManagerSystem.run(mockContext());
+
+    expect(a.move).toHaveBeenCalled();
+    expect(b.move).toHaveBeenCalled();
+    expect(tracker.get("W7N4:ca")!.consecutiveFailures).toBe(0);
+    expect(tracker.get("W7N4:cb")!.consecutiveFailures).toBe(0);
+  });
+
+  it("引擎拒绝签发：不记成功（失败计数留给 recordPathFailure 那条道）", () => {
+    setTraffic(true);
+    const creep = trafficCreep("c1", 25, 25, undefined);
+    const room = flatRoom([creep]);
+    creep.room = room;
+    creep.move = vi.fn(() => ERR_INVALID_TARGET);
+    const g = globalThis as any;
+    g.Game.rooms.W7N4 = room;
+    g.Game.creeps.c1 = creep;
+    g.__creepPathCache = {
+      c1: { targetKey: 1, structRevision: 1, path: [{ x: 26, y: 25, roomName: "W7N4" }] },
+    };
+
+    const tracker = new Map<string, { lastSuccessTick: number; consecutiveFailures: number }>();
+    tracker.set("W7N4:c1", { lastSuccessTick: 100, consecutiveFailures: 7 });
+    g.pathFailureTracker = tracker;
+
+    registerMove(creep, RIGHT as DirectionConstant, 60);
+    trafficManagerSystem.run(mockContext());
+
+    expect(tracker.get("W7N4:c1")!.consecutiveFailures).toBe(7);
+    expect(tracker.get("W7N4:c1")!.lastSuccessTick).toBe(100);
+  });
 });
