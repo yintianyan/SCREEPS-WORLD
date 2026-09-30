@@ -10,6 +10,11 @@ import {
 import { RouteCache } from "../../domain/logistics/route-cache";
 import { createRoute } from "../../domain/logistics/route";
 import type { SupplyContract } from "../../domain/economy/supply-contract";
+import {
+  contractEndpointsHaveStorage,
+  deserializeContract,
+  type ContractMemorySnapshot,
+} from "../../domain/economy/supply-contract";
 import type { SupplyNode } from "../../domain/operation/supply-node";
 import type { DemandNode } from "../../domain/operation/demand-node";
 import type { OperationPriority } from "../../domain/operation/agenda-item";
@@ -256,9 +261,21 @@ export function runLogisticsPlanning(ctx: TickContext): void {
  * Contracts 由 supply-contract-manager（未来模块）或 empire-economy 写入。
  */
 function collectContracts(): SupplyContract[] {
-  const stored = (Memory.kernel as { supplyContracts?: SupplyContract[] })?.supplyContracts;
+  const stored = (Memory.kernel as { supplyContracts?: ContractMemorySnapshot[] })?.supplyContracts;
   if (!stored || !Array.isArray(stored)) return [];
-  return stored as SupplyContract[];
+  // 存的是 serializeContract 的瘦快照（缩写键 i/s/t/r/st/…），领域字段名是 id/sourceRoom/status/…：
+  // 过去这里直接 `as SupplyContract[]`，于是 `contract.status === undefined` ⇒ isContractActive 恒假
+  // ⇒ 每条合同都被读成"不存在"，整个跨房供给机制静默失效。
+  // 线上实证：contract:W37S58:W38S56:energy 自 83316316 起存活 16,300 拍，`td=0`、`li` 从未出现，
+  // 而同期幼房在能量低谷里饿着 builders（本仓那轮 bootstrap 停摆的供能侧根因之一）。
+  //
+  // 第二道 filter 是新接活路径的安全闸：派生请求的 endpoint 两端都写死 type:"storage"，
+  // 而合同常在目标还是幼房（storage 要 RCL4）时签发。今天唯一那条合同的 target 正是 W38S56（RCL3，
+  // 无 storage）⇒ 反序列化修好后它**仍然不发单**，等幼房到 RCL4 才真正生效 —— 这道闸保证"接对"
+  // 而不是"提前生成永远投递不到的请求"（那会让 carrier 白跑、consecutiveShortfall 空转，把刚接活的路径又耗成降级）。
+  return stored
+    .map(deserializeContract)
+    .filter(c => contractEndpointsHaveStorage(c, room => Game.rooms[room]?.storage !== undefined));
 }
 
 /**

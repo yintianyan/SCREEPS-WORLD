@@ -496,6 +496,25 @@ export function serializeContract(c: SupplyContract): ContractMemorySnapshot {
  * 从 Memory 瘦快照反序列化 SupplyContract。
  * 纯函数。
  */
+/**
+ * 合同的**两端都必须真的有 storage** 才能进物流规划。
+ *
+ * 为什么需要这道闸：`planLogistics` 从合同派生的 TransportRequest 两端 endpoint 都写死
+ * `type:"storage"`（见 domain/logistics/planner.ts 的步骤 1）。而合同是 specialization-planner
+ * 在「sponsor 盈余 + 目标赤字」时签发的 —— 目标常常是**还没有 storage 的幼房**（storage 要 RCL4）。
+ * 读方 logistics-planner 过去把瘦快照直接 cast 成领域对象，`status` 读出 undefined ⇒ 所有合同
+ * 一律不进规划 ⇒ 这个问题被掩盖着。反序列化修好后若不补这道闸，就会周期性生成"投递到不存在的
+ * storage"的请求：carrier 白跑、`consecutiveShortfall` 空转增长，把一条刚接活的路径又耗成降级。
+ *
+ * 纯函数：`hasStorage` 由调用方（系统层）提供，域层不碰 Game。
+ */
+export function contractEndpointsHaveStorage(
+  contract: SupplyContract,
+  hasStorage: (roomName: string) => boolean,
+): boolean {
+  return hasStorage(contract.sourceRoom) && hasStorage(contract.targetRoom);
+}
+
 export function deserializeContract(s: ContractMemorySnapshot): SupplyContract {
   const codeToRole = (c: string | undefined): EmpireRoomRole | undefined => {
     if (!c) return undefined;
