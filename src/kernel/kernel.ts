@@ -942,7 +942,10 @@ export class Kernel {
       }
     }
 
+    /** 已轮到的 roster 条目数（用于把 `break` 饿掉的后缀变成读数）。 */
+    let seen = 0;
     for (const { creep, role } of creepEntries) {
+      seen++;
       // ESM：紧急安全状态下仅生命线角色（isLifeLine 自报）运行，
       // 维持 spawn 能量线；其余角色全部让位。
       if (ctx.budget.emergency === true && !role.isLifeLine) {
@@ -1016,7 +1019,16 @@ export class Kernel {
         recordSkip(`creep/${role.name}/budget`);
         continue;
       }
-      if (ctx.budget.isExhausted()) break;
+      if (ctx.budget.isExhausted()) {
+        // 把「整拍饿掉」变成读数：这是 break 不是 continue —— roster 后缀上的 creep 本拍连评估都没有，
+        // 原先不留任何 skipReason，于是 `skippedPerTick` 少算，而「tight 档把谁整拍饿住」在线上是隐形的
+        // （实证：债单 #38 那只跨房 creep 的 stuck 冻结 63 拍期间既无 budget 计数也无移动意图）。
+        // 按只计数：skipBuffer 是 heap 自增，无 Memory 写放大。
+        for (let starved = creepEntries.length - seen; starved > 0; starved--) {
+          recordSkip("creep/budget-starved");
+        }
+        break;
+      }
 
       // Per-room CPU 记账：复用 measuredRun 返回的 CPU 消耗值，零额外 getUsed() 调用。
       // telemetry-collector 采样写入 Memory，供 empire-strategy 评估每房真实成本。
