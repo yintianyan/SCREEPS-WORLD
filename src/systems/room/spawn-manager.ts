@@ -455,9 +455,18 @@ export function trySpawn(
         const requiredParts = ROLE_REQUIRED_PARTS[req.role];
         const degraded = degradeBody(req.body, effectiveBudget, requiredParts);
         if (!degraded) {
-          // 降级失败说明能量连最小 body 都负担不起 — 必须递增 retries，否则请求
-          // 永远留在队列中不被 cleanQueue 清除，持续阻塞 P0 worker 恢复 → 永久死锁。
-          req.retries++;
+          // 连最小 body 都负担不起 = 能量低谷，不是配置错误 —— 与下方饥饿地板同一口径
+          // （:463-467 "等能量不是失败，不递增 retries"），这里原本无条件烧 retries。
+          // 线上幼房 W38S56 实测：ea 常年在 60~180 之间 ⇒ 每次尝试都走这一支烧 retries ⇒
+          // 烧穿 maxRetries → purge → 隔离 1000 拍，被封的键依次是
+          // `defender:W38S56:0`、`upgrader:W38S56:0/1/2`（83323375）、`builder:W38S56:3`（83323659）
+          // —— 恰是"能改变这个能量现状"的三条道（建造、升级到 RCL3 落 tower、无塔房防线）。
+          // 这正是 :76-81 记过的 hauler 死亡螺旋同构复发，只是换了角色。
+          //
+          // 原注释担心的"请求永久占位阻塞 P0 恢复"由两处既有机制兜住，不靠烧 retries：
+          //   · cleanQueue 的 TTL 分支（queue.ts:167）到期即出队；
+          //   · churn 熔断按 purge 计数（含 expired），200t 窗口 >20 次即冻 100t ——
+          //     真·配置错误仍会被刹住，见 :66-71 recordChurn 的两种 reason。
           continue;
         }
         // 饥饿降级成本地板：starved 路径产物低于地板时继续排队等能量 — 等能量不是
