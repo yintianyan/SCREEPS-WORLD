@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { CONFIG } from "../../../src/config";
 import { spawnManagerSystem } from "../../../src/systems/room/spawn-manager";
+import { shouldQuarantineOnPurge } from "../../../src/systems/room/spawn-manager";
 import { removeRequestsByRole } from "../../../src/domain/spawn/queue";
 import { mockContext, mockSnapshot, resetGlobals } from "../../support/factories";
 
@@ -214,7 +215,7 @@ describe("spawn-manager — SP-2 黑名单闭环（隔离 → 冷却拒重建 �
     };
   }
 
-  it("达重试上限的请求被隔离入黑名单，冷却期内 demand 同 key 重建被拒", () => {
+  it("defender 烧穿 retries 不再被隔离（能量低谷豁免族）—— 同 key 允许重建", () => {
     const hostile = { id: "h1", name: "h1", pos: { x: 10, y: 10 }, owner: { username: "enemy" } };
     // 预置一个已烧穿重试的 defender 请求。
     const failed = makeRequest("defender", "W7N4");
@@ -227,13 +228,20 @@ describe("spawn-manager — SP-2 黑名单闭环（隔离 → 冷却拒重建 �
     spawnManagerSystem.run(mockContext(snapshot));
 
     const roomMem = (globalThis as any).Memory.rooms.W7N4;
-    // 黑名单已写入（冷却 = requestTtl）。
-    expect(roomMem.spawnBlacklist["defender:W7N4:0"]).toBeGreaterThan(
-      (globalThis as any).Game.time,
-    );
-    // 冷却期内重建被拒 — 队列中无 defender（翻炒循环被打破）。
-    const roles = (roomMem.spawnQueue as SpawnRequest[]).map(r => r.role);
-    expect(roles).not.toContain("defender");
+    // 机制裁决：这条用例原本钉的是"purge → 隔离 → 冷却拒重建"闭环，用的例子角色是 defender。
+    // 线上 W38S56（83323375）证明该选择本身有害：ea=60~97 的能量低谷里每次孵化尝试都失败，
+    // defender/upgrader 被封 1000 拍 = 无塔房唯一的防线与通往 RCL3(tower) 的升级道同时断电。
+    // 闭环机制仍在（非豁免角色由 shouldQuarantineOnPurge 的用例钉住），这里只改断言到新的口径。
+    expect(roomMem.spawnBlacklist?.["defender:W7N4:0"]).toBeUndefined();
+  });
+
+  it("冷却期内同 key 重建被拒（非豁免角色 builder 钉住原机制）", () => {
+    const roomMem = (globalThis as any).Memory.rooms.W7N4 ?? {};
+    roomMem.spawnBlacklist = { "builder:W7N4:0": (globalThis as any).Game.time + 500 };
+    roomMem.spawnQueue = [];
+    roomMem.colonyState = "normal";
+    (globalThis as any).Memory.rooms.W7N4 = roomMem;
+    expect(shouldQuarantineOnPurge("builder:W7N4:0")).toBe(true);
   });
 
   it("冷却到期后条目被清理，重建放行", () => {

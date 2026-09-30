@@ -320,3 +320,32 @@ describe("P0-3 spawn churn 熔断 — 异常情况", () => {
     expect((globalThis as any).Memory.rooms[ROOM].churnFreezeUntil).toBeUndefined();
   });
 });
+
+import { shouldQuarantineOnPurge } from "../../../src/systems/room/spawn-manager";
+
+// 线上 W38S56（83323375）：`spawnBlacklist = {defender:W38S56:0, upgrader:W38S56:0/1/2}` 直到 83323771，
+// 同期 ea=60~97 而容器满能 4000、房内有敌人 ⇒ 这两条道每次尝试都因能量低谷烧 retries，
+// 然后被关 1000 拍 —— upgrader 被封就到不了 RCL3（布局 tower 门在 rcl3），defender 被封就没防线。
+describe("purge 隔离豁免：能量低谷不是配置错误", () => {
+  it("采集/物流四件套仍豁免（既有语义不回归）", () => {
+    for (const k of [
+      "harvester:W38S56:0",
+      "worker:W37S58:1",
+      "hauler:W38S56:2",
+      "distributor:W37S58:0",
+    ]) {
+      expect(shouldQuarantineOnPurge(k)).toBe(false);
+    }
+  });
+
+  it("upgrader / defender 同族豁免（本次实测被封的两条道）", () => {
+    expect(shouldQuarantineOnPurge("upgrader:W38S56:0")).toBe(false);
+    expect(shouldQuarantineOnPurge("defender:W38S56:0")).toBe(false);
+  });
+
+  it("对照：其余角色仍被隔离 ⇒ 这道保护没被拆掉", () => {
+    expect(shouldQuarantineOnPurge("builder:W38S56:0")).toBe(true);
+    expect(shouldQuarantineOnPurge("remoteHarvester:W36S58:0")).toBe(true);
+    expect(shouldQuarantineOnPurge("claimer:W37S58:W38S56")).toBe(true);
+  });
+});

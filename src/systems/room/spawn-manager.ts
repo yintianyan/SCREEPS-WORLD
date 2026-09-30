@@ -82,12 +82,7 @@ export const spawnManagerSystem: System = {
         // 失败只留队列重试，能量恢复即孵化（pre-1cca151 自愈语义）；真配置错误由独立的
         // churn 熔断（200t 窗口 >20 次 → 冻 100 tick）兜底，不会无限翻炒。
         for (const key of purgedKeys) {
-          const isLifeline =
-            key.startsWith("worker:") ||
-            key.startsWith("harvester:") ||
-            key.startsWith("hauler:") ||
-            key.startsWith("distributor:");
-          if (isLifeline) continue;
+          if (!shouldQuarantineOnPurge(key)) continue;
           const ttl = computeQuarantineTtl(key);
           roomMem.spawnBlacklist[key] = ctx.tick + ttl;
           log.info(
@@ -651,6 +646,31 @@ const CHURN_FREEZE_TICKS = 100;
 
  * @internal 导出仅供单元测试 — 业务代码通过 spawnManagerSystem.run 间接调用。
  */
+/**
+ * purge 后是否隔离该 key。
+ *
+ * 能量低谷（`ea < 最小 body 成本` ⇒ degradeBody 返回 undefined ⇒ retries 连烧）不是配置错误，
+ * 隔离它等于把"等能量"换成"这一整条道 1000 拍不许再提"。采集/物流四件套已按这个理由豁免
+ * （见调用点 P0-3 注释，1cca151 的死亡螺旋）。
+ * 这里补上同一族里被实测抓到的两个角色：幼房 W38S56 在 83323375 的
+ * `spawnBlacklist = {defender:W38S56:0, upgrader:W38S56:0/1/2 → 83323771}`，
+ * 而同期 `ea=60~97`、容器满能 4000、房里有敌人 ⇒
+ *   · upgrader 被封 = 到不了 RCL3，布局里那一格 tower（门在 rcl3）永远落不下来；
+ *   · defender 被封 = 无塔房唯一的防线（demand 的防御响应块）自己被判"暂不孵化"。
+ * 两条都恰好在"最缺能量"的那拍被要求孵化，失败原因与 hauler 当年一模一样。
+ * 真配置错误另有 churn 熔断（200t 窗口 >20 次 ⇒ 冻 100t）兜底，且孵化失败本身不耗能。
+ */
+export function shouldQuarantineOnPurge(key: string): boolean {
+  const exempt =
+    key.startsWith("worker:") ||
+    key.startsWith("harvester:") ||
+    key.startsWith("hauler:") ||
+    key.startsWith("distributor:") ||
+    key.startsWith("upgrader:") ||
+    key.startsWith("defender:");
+  return !exempt;
+}
+
 export function computeQuarantineTtl(key: string): number {
   const isCollector = key.startsWith("worker:") || key.startsWith("harvester:");
   return isCollector ? Math.floor(CONFIG.spawn.requestTtl / 2) : CONFIG.spawn.requestTtl;
