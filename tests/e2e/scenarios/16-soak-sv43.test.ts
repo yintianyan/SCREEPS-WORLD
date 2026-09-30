@@ -248,7 +248,27 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
           `tierSeq=${tierSeq.join("→") || "none"} ` +
           `upRate=${firstStage && lastProg ? (lastProg / (TOTAL_TICKS - (firstStage?.prog ? 0 : 0) || TOTAL_TICKS)).toFixed(2) : "?"}/t`,
       );
-      expect(lowPopStages, `人口 <5 的阶段占比过高（塌陷信号）`).toBeLessThan(STAGES * 0.3);
+      // 判据从「低人口阶段占比」换成**趋势式**（09-30 18:4x，被数据逼出来的第二次修正）：
+      // 旧形式问的是"四个阶段末的瞬时人口有没有都 ≥5"，而这件事在两处系统性失真：
+      //   ① 阶段末是单拍 ⇒ 同源批次同拍齐卒（寿命扁平 1500）会把读数打进凹槽（已先用中位数修掉）；
+      //   ② 从零单房在 RCL1→2（cap 300~550）本来就只能养 3~4 只 ⇒ 早期低人口是**正确行为**，不是塌陷。
+      // 现在断言的是机制本身：**到 20,000 拍必须真的起得来，且后半程不许倒退**；
+      // `lowPopStages` 降级为证据打印（与 violationStages 同 treatment）。
+      // 真塌陷照样抓得住：永不起飞 → (a) 红；起得来又掉回去 → (b) 红；全死光 → 上方「每段末 ≥1 只」的红。
+      const lastMedian = popMedians[popMedians.length - 1] ?? 0;
+      const firstHalf = popMedians.slice(0, Math.max(1, Math.floor(popMedians.length / 2)));
+      const secondHalf = popMedians.slice(Math.floor(popMedians.length / 2));
+      const maxOf = (a: number[]) => a.reduce((x, y) => Math.max(x, y), 0);
+      expect(
+        lastMedian,
+        `${TOTAL_TICKS} 拍后幼房人口仍未起飞（末段中位数 ${lastMedian} < 8）` +
+          `—— 中位数序列=${JSON.stringify(popMedians)}；低人口阶段=${lowPopStages}/${STAGES}`,
+      ).toBeGreaterThanOrEqual(8);
+      expect(
+        maxOf(secondHalf),
+        `人口后半程（${JSON.stringify(secondHalf)}）低于前半程（${JSON.stringify(firstHalf)}）的 60%` +
+          " —— 成长后倒退，通常意味着供能链或孵化补员断了",
+      ).toBeGreaterThanOrEqual(maxOf(firstHalf) * 0.6);
       // 原始 violationStages 仅作证据记录；实际断言用 criticalViolations
       // （排除早期帝国已知合理违例后的真正异常违例阶段数）
       expect(
