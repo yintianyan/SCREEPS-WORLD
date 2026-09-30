@@ -234,3 +234,32 @@ describe("早期房不套 builder 价格弹性闸（#46）", () => {
     expect(requests.filter(r => r.role === "builder")).toHaveLength(1);
   });
 });
+
+describe("早期房 upgrader 不套价格弹性闸（#47）", () => {
+  // 与 #46 同一条自锁，只是落在升级道上（G0 的实际度量）。
+  // 旧实现：压力阶梯给出 3 → 无条件 × elasticity(0.2256)=0.314 → round=1 → 再被 `!hasStorage`
+  // 兜到 minCount=1 —— 那段注释写的本意是"早期房不因 economyPressure 失去整条升级道"，实现却把道收到只剩 1。
+  it("无 storage 且有站桩 container：price=0.2256 仍给满 3 只 upgrader", () => {
+    setBuildQueue(undefined);
+    const cc = {
+      id: "cc1",
+      pos: { x: 12, y: 12, roomName: "W7N4" },
+      store: { getUsedCapacity: () => 2000, getFreeCapacity: () => 3000 },
+    } as unknown as StructureContainer;
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      controllerContainer: cc,
+      storage: undefined,
+    });
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvesters(2),
+      [],
+      { ...normalCtx(0, 0), energyPrice: 0.2256 },
+      1000,
+    );
+    expect(requests.filter(r => r.role === "upgrader")).toHaveLength(3);
+  });
+});
