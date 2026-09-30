@@ -31,6 +31,8 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
   let lastProg: number | undefined;
   let violationStages = 0;
   let lowPopStages = 0;
+  /** 每段人口中位数（判据用它，也用来把"稳定平台"与"塌陷"分开）。 */
+  const popMedians: number[] = [];
   const tierSet: Record<string, number> = {};
   const tierSeq: string[] = [];
   const stageProgLog: { prog: number; total: number }[] = [];
@@ -156,7 +158,15 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
           (v: string) => !KNOWN_EARLY_VIOLATION_PREFIXES.some(p => v.startsWith(p)),
         );
         if (criticalVios.length > 0) criticalViolations++;
-        if (last.totalCreeps < 5) lowPopStages++;
+        // 人口判据取**整段的中位数**而不是阶段末那一拍（与上方 spawnQueue 判据同一次纠正的写法）。
+        // 单点采样在本场景上是 knife-edge：同一份码两次跑，末拍分别把 3 个和 2 个阶段记成
+        // "低人口"，而阈值是 STAGES*0.3=1.2 ⇒ 判据卡在观测值上而不是机制上，红的可复现性为零。
+        // 中位数不豁免真实塌陷：人口滑向 0 的阶段中位数照样 <5（死亡螺旋另有 ≥1 的专属断言兜）。
+        const popSeries = snapshots.map(s => s.totalCreeps);
+        popSeries.sort((a, b) => a - b);
+        const popMedian = popSeries[Math.floor(popSeries.length / 2)] ?? 0;
+        popMedians.push(popMedian);
+        if (popMedian < 5) lowPopStages++;
         // #37 取证：siteStale 命中时把「引擎侧 site」与「队列侧任务」两份账并排放出来。
         // 要分的岔口：孤儿 site（引擎有、队列没有 ⇒ 没人负责它，进度恰好恒 0，
         // 而别的一直在建，built 照常涨）vs 有队列条目但 builder 不选（消费侧口径）。
@@ -234,7 +244,8 @@ describe("E2E-016 单房 soak（sv=43）— RCL1 起步长程稳定性", () => {
       const firstStage = stageProgLog[0];
       console.log(
         `[soak-evidence] anomalies: violationStages=${violationStages}/${STAGES} ` +
-          `lowPopStages=${lowPopStages}/${STAGES} tierSeq=${tierSeq.join("→") || "none"} ` +
+          `lowPopStages=${lowPopStages}/${STAGES} popMedians=${JSON.stringify(popMedians)} ` +
+          `tierSeq=${tierSeq.join("→") || "none"} ` +
           `upRate=${firstStage && lastProg ? (lastProg / (TOTAL_TICKS - (firstStage?.prog ? 0 : 0) || TOTAL_TICKS)).toFixed(2) : "?"}/t`,
       );
       expect(lowPopStages, `人口 <5 的阶段占比过高（塌陷信号）`).toBeLessThan(STAGES * 0.3);
