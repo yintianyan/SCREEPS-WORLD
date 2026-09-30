@@ -158,7 +158,12 @@ export function buildRoomTasks(
     // controller container 是站桩升级链路的核心基础设施 — 提升为 priority 1，
     // 确保 builder 优先建造它而非远处的 extension。判定与抢占豁免共用同一函数。
     const isPriorityContainer = isPriorityContainerSite(site, snapshot);
-    const isPriority = isCritical || isPriorityContainer || isStorageSite;
+    // 产能门槛任务（#37）：幼房（rcl≤4）里 extension 是唯一抬 `energyCapacityAvailable` 的活，
+    // 却与「可再生的最近小任务」（道路）同平 priority，而同档选择按曼哈顿距离取最近 ⇒ 被道路流
+    // 压住几千拍（soak 实测：cap=300、pop 3~4、extension 进度恰好 0 持续 5k~13k 拍，道路流干才解套）。
+    // 升成 priority=1 让容量先落地 — 与仓内既有口径同源：容量解锁更大 builder body，整体建造速率翻倍。
+    const isCapabilitySite = site.structureType === STRUCTURE_EXTENSION && snapshot.rcl <= 4;
+    const isPriority = isCritical || isPriorityContainer || isStorageSite || isCapabilitySite;
     // 能量危机：仅暂停道路（纯效率投入，真正可推迟的 discretionary 建造）。
     const isRoad = site.structureType === STRUCTURE_ROAD;
     if (inCrisis && isRoad) continue;
