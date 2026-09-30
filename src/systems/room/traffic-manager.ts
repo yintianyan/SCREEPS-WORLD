@@ -3,7 +3,7 @@
 import type { RoomSnapshot, System, TickContext } from "../../kernel/contracts";
 import { globalCache } from "../../kernel/global-cache";
 import { recordSkip } from "../../kernel/memory";
-import { safeRun } from "../../kernel/safe-run";
+import { safeRun, measuredRun } from "../../kernel/safe-run";
 import { trafficEnabled } from "../../creeps/movement/intent";
 import { recordIntent } from "../../kernel/telemetry";
 import { recordTraffic } from "../../creeps/movement/traffic";
@@ -116,7 +116,12 @@ export const trafficManagerSystem: System = {
       }
       safeRun(
         `room/${roomName}/traffic`,
-        () => resolveAndDispatch(roomName, batch, ctx.getSnapshot(roomName)),
+        // ⚠️必须套 measuredRun：safeRun 只管错误处理与冷却，**不记 CPU 跨度**，
+        //   所以只写 safeRun 标签时 cpuPerTickByRoom 永远是空的（#45 的仪器第一次就踩了这个）。
+        () =>
+          measuredRun(`room/${roomName}/traffic`, () =>
+            resolveAndDispatch(roomName, batch, ctx.getSnapshot(roomName)),
+          ),
         false,
       );
     }
