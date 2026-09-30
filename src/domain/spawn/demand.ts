@@ -891,6 +891,16 @@ export function evaluateDemand(
       upgraderTarget = Math.round(upgraderTarget * demandFactor);
     }
 
+    // 无 storage 的房（storage 要 RCL4，所以这覆盖的全部是早期房）不因 economyPressure 失去整条升级道。
+    // 早期房的 pressure 测的就是"它在建自己"的支出 —— 现场 W38S56：容器满能 4000、spawn 只剩 97、
+    // 三个工地在施，于是按定义它永远"很穷"。而上 RCL3 才能落布局里那一格 tower
+    // （compact-core-v2 `core.tower.01` 门在 rcl3），归零升级 ⇒ "建房显得穷 ⇒ 不许升级 ⇒
+    // 永远没有防御" 的自耗回路。这与本文件对 RCL1-3 既有的判断一致（"能量不升级也浪费"）。
+    // 有 storage 的成熟房不动：那里 pressure 保护的是攒下来的库存，是另一种取舍。
+    if (!hasStorage) {
+      upgraderTarget = Math.max(upgraderTarget, upgraderConfig.minCount);
+    }
+
     // WORK 部件限速：仅 RCL8 时生效（引擎硬限制 15 energy/tick）。
     // RCL<8 时无引擎上限——解除自限速策略，body 随容量放大（RCL7 可孵 40W body），
     // upgrader 数量由 storage 水位 + economyPressure 驱动的 demand 逻辑自然调节。

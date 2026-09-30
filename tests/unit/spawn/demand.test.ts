@@ -1552,3 +1552,64 @@ describe("P2-2 haulerPendingTarget — tuning pending 期间主动收敛 haulerT
     expect(result.haulerTarget).toBe(4);
   });
 });
+
+// 线上 W38S56（01:4x，tick 83323017）：RCL2、无 storage、controller container 还在施（2386/5000）、
+// 容器满能 4000 而 spawn 只剩 97，economyPressure=1 ⇒ 旧口径把整条升级道判成 0 只 upgrader。
+// 而布局的防御格 `core.tower.01` 门在 rcl3 ⇒ "建房显得穷 ⇒ 不许升级 ⇒ 永远没防御" 是自耗回路。
+describe("无 storage 的早期房：economyPressure 不得清零升级道", () => {
+  const youngRoom = () =>
+    mockSnapshot({
+      rcl: 2,
+      energyCapacityAvailable: 450,
+      storage: undefined,
+      controllerContainer: undefined,
+    });
+
+  it("幼房 pressure=1 且无 controller container ⇒ 仍保留 minCount 只 upgrader", () => {
+    const { requests } = evaluateDemand(
+      youngRoom(),
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(1),
+      1000,
+    );
+    expect(requests.filter(r => r.role === "upgrader").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("对照：有 storage 的成熟房 pressure=1（攒库存）仍归零 —— 现口径不受影响", () => {
+    const mature = mockSnapshot({
+      rcl: 5,
+      energyCapacityAvailable: 1300,
+      controllerContainer: undefined,
+      storage: mockStructure("storage", { id: "st", energy: 500, capacity: 1000000 }),
+    });
+    const { requests } = evaluateDemand(
+      mature,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(1),
+      1000,
+    );
+    expect(requests.filter(r => r.role === "upgrader")).toHaveLength(0);
+  });
+
+  it("幼房 healthy（pressure=0）不因这条改动翻倍：仍是 minCount 档，不是 maxCount", () => {
+    const { requests } = evaluateDemand(
+      youngRoom(),
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(0),
+      1000,
+    );
+    const upgraders = requests.filter(r => r.role === "upgrader");
+    expect(upgraders.length).toBeGreaterThanOrEqual(1);
+    // CONFIG.roles.upgrader.maxCount = 3 —— 这条只钉"地板抬到 minCount"，不许把早期房拉满冲刺档
+    expect(upgraders.length).toBeLessThanOrEqual(3);
+  });
+});
