@@ -400,6 +400,20 @@ function sampleMemorySize(_tick: number): void {
         [...g.systemBudgetEma.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10),
       );
     }
+    // 房间级 CPU（#45）：按房拆的跨度 ÷ 走到拍尾的拍数 —— 与 cpuPerTickBySystem 同一自证口径。
+    // ⚠️它是**下界**：单意图快路径（最常见形态）不在这个跨度里，建占位表也不算进来，
+    //   与 system 级 EMA 的差额就是那两部分。判"降哪间房"用它，判"总共多少"仍看 system 榜。
+    const cumRoom = g.cpuCumulative as
+      { rooms?: Record<string, number>; ticks?: number } | undefined;
+    if (cumRoom?.rooms && (cumRoom.ticks ?? 0) > 0) {
+      const denom = cumRoom.ticks ?? 1;
+      (Memory.kernel.stats as any).cpuPerTickByRoom = Object.fromEntries(
+        Object.entries(cumRoom.rooms)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 8)
+          .map(([k, v]) => [k, Math.round((v / denom) * 1000) / 1000]),
+      );
+    }
     if (g.systemCpuPerTick && Object.keys(g.systemCpuPerTick).length > 0) {
       // 同一份账的 per-tick 口径（÷interval，内核算）—— 与上面那份一起落，是为了让
       // 「谁在吃产能」这个问题有唯一答案：EMA 排出来的榜会把低频系统错当成大户。

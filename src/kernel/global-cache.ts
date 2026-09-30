@@ -138,6 +138,9 @@ export interface GlobalCache {
     roles: Record<string, number>;
     /** 相位跨度（`phase/*`）：与上面两张榜是**嵌套**关系，单独成桶、不与它们相加。 */
     phases?: Record<string, number>;
+    /** 房间级跨度（`room/*`）：同样与 systems/roles **嵌套**（#45）——
+     * 它回答的是「3.15/拍的 traffic-manager 里哪间房占多少」，system 级榜给不出这个答案。 */
+    rooms?: Record<string, number>;
     /** 本拍拍中采样值（拍尾用来减出尾差的被减数，每拍覆盖）。 */
     midLast?: number;
     /** 尾差累计：拍尾 − 拍中 = 采样点之后才发生的花费（flush/segments/Memory 序列化）。 */

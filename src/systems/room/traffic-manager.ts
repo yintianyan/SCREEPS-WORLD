@@ -115,7 +115,7 @@ export const trafficManagerSystem: System = {
         if (batch.intents.length === 0) continue;
       }
       safeRun(
-        `traffic-manager/${roomName}`,
+        `room/${roomName}/traffic`,
         () => resolveAndDispatch(roomName, batch, ctx.getSnapshot(roomName)),
         false,
       );

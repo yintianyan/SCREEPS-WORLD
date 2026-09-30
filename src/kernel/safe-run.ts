@@ -157,6 +157,13 @@ function recordCpu(label: string, cost: number): void {
     g.telemetry.roleCpu[role] = (g.telemetry.roleCpu[role] ?? 0) + cost;
     const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
     cum.roles[role] = (cum.roles[role] ?? 0) + cost;
+  } else if (label.startsWith("room/")) {
+    // 房间级账（#45）：system 榜只能说"traffic-manager 3.15/拍"，
+    // 而「要降哪间房、降完省多少」必须把同一份 getUsed 差按房拆开才答得出。
+    const roomName = label.split("/")[1] ?? "unknown";
+    const cum = (g.cpuCumulative ??= { total: 0, systems: {}, roles: {} });
+    cum.rooms ??= {};
+    cum.rooms[roomName] = (cum.rooms[roomName] ?? 0) + cost;
   } else if (label.startsWith("phase/")) {
     // 相位账是「谁在吃 CPU」的另一半：systems/roles 两张榜只覆盖被逐个包裹的单元，
     // 而实测有六成 CPU 落在那两张榜之外。相位跨度把一整拍切完，剩余才真正可判 ——
