@@ -60,3 +60,38 @@ describe("computeClaimSecure（带迟滞状态记忆）", () => {
     expect(computeClaimSecure(3, 14999, false)).toBe(true);
   });
 });
+
+/**
+ * RCL2 的降级缓冲上限只有 10000（引擎 CONTROLLER_DOWNGRADE，2026-09-30 线上与
+ * @screeps/driver 双向核对：{1:20000, 2:10000, 3:20000, …}）—— 比 RCL1/RCL3 还低。
+ * 用固定的 15000/20000 当阈值时，退出线在 RCL2 **按构造不可达**：
+ * 线上 W38S56 实测 `ttd=10000`（满缓冲、3 只 upgrader 在跑）却 `claimSecure=true` 恒真，
+ * developmentGate 于是对该房每条 road 永久返回 "claim-secure"（buildQueue 7 条全 attempts=0）。
+ * 传 levelCapTicks 之后：进入 7500 / 退出 10000，护栏回到「真的临近降级才拉闸」的语义。
+ */
+describe("computeClaimSecure / isClaimSecure — RCL2（本级 cap=10000）折带后可自愈", () => {
+  const CAP2 = 10000;
+
+  it("满缓冲（ttd == 本级上限）→ 不判风险（这条在改前恒真，就是线上那个假阳性）", () => {
+    expect(computeClaimSecure(2, CAP2, true, CAP2)).toBe(false);
+    expect(isClaimSecure(2, CAP2, CAP2)).toBe(false);
+  });
+
+  it("迟滞：进入线 7500，带内维持、带外触发", () => {
+    expect(computeClaimSecure(2, 7500, false, CAP2)).toBe(false); // 等于进入线不进入
+    expect(computeClaimSecure(2, 7499, false, CAP2)).toBe(true); // 跌破进入线
+    expect(computeClaimSecure(2, 9000, true, CAP2)).toBe(true); // 回升但 < 退出线 → 维持
+    expect(computeClaimSecure(2, 10000, true, CAP2)).toBe(false); // 回到满值 → 解除
+  });
+
+  it("不传 cap（等级未知 / 常量未注入）→ 退回旧阈值对，绝不放宽护栏", () => {
+    expect(computeClaimSecure(2, 10000, true)).toBe(true);
+    expect(isClaimSecure(2, 0)).toBe(true);
+  });
+
+  it("RCL1/RCL3（cap 20000 ≥ 退出线）→ 折带不动，逐字沿用旧行为", () => {
+    expect(computeClaimSecure(3, 19999, true, 20000)).toBe(true);
+    expect(computeClaimSecure(3, 20000, true, 20000)).toBe(false);
+    expect(computeClaimSecure(1, 14999, false, 20000)).toBe(true);
+  });
+});

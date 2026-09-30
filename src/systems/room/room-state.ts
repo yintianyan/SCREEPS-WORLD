@@ -8,6 +8,7 @@ import {
   type PhaseState,
 } from "../../domain/economy/phase";
 import { computeEnergyPrice } from "../../domain/economy/energy-price";
+import { downgradeRiskBand } from "../../domain/economy/downgrade-risk";
 import { hasSurvivalRequest } from "../../domain/spawn/queue";
 import { EventKind, recordEvent } from "../../kernel/event-log";
 import { globalCache } from "../../kernel/global-cache";
@@ -303,15 +304,24 @@ export const roomStateSystem: System = {
       // 6. 控制器降级风险（非对称迟滞带）：进入阈值 controllerDowngradeThreshold (10000)，
       // 退出阈值 controllerDowngradeExitThreshold (15000)；用 roomMem.controllerDowngradeRisk
       // 旧值作状态记忆，无需额外字段。
+      // ⚠️迟滞带必须先折进本级值域（levelCapTicks）：引擎的 CONTROLLER_DOWNGRADE 表非单调
+      // （RCL2 上限 10000 < RCL1/RCL3 的 20000），固定退出线 15000/20000 在 RCL2 按构造不可达
+      // ⇒ 每个 RCL2 房间永久「保级态」（线上实证 W38S56：ttd 恒等于上限，两个标志恒真）。
       const controller = snapshot.controller;
+      const levelCapTicks = CONTROLLER_DOWNGRADE[snapshot.rcl];
       if (controller != null && controller.my) {
         const ttd = controller.ticksToDowngrade;
+        const band = downgradeRiskBand(
+          levelCapTicks,
+          CONFIG.economy.controllerDowngradeThreshold,
+          CONFIG.economy.controllerDowngradeExitThreshold,
+        );
         if (roomMem.controllerDowngradeRisk) {
           // 已在风险状态：需回升到退出阈值以上才解除
-          roomMem.controllerDowngradeRisk = ttd < CONFIG.economy.controllerDowngradeExitThreshold;
+          roomMem.controllerDowngradeRisk = ttd < band.exit;
         } else {
           // 不在风险状态：低于进入阈值才触发
-          roomMem.controllerDowngradeRisk = ttd < CONFIG.economy.controllerDowngradeThreshold;
+          roomMem.controllerDowngradeRisk = ttd < band.enter;
         }
       } else {
         roomMem.controllerDowngradeRisk = false;
@@ -320,12 +330,14 @@ export const roomStateSystem: System = {
       // 6.5 脆弱新房护栏标记（claim-secure）：RCL<4 且 controller 临近降级时标记，
       // 供 construction-manager 抑制非必要建造、upgrader 放宽取能地板 —— 集中能量
       // 保住 controller（新房无 storage 缓冲，builder 抢能量致降级实证：W38S59）。
-      // 迟滞双门槛（enter/exit）防「保级/发展」在临界 ttd 高频振荡（ttd 最大重置值 20000）。
+      // 迟滞双门槛（enter/exit）防「保级/发展」在临界 ttd 高频振荡；退出线由 computeClaimSecure
+      // 折进本级值域（RCL2 上限 10000，固定 20000 会永久拉闸）。
       if (controller != null && controller.my) {
         roomMem.claimSecure = computeClaimSecure(
           snapshot.rcl,
           controller.ticksToDowngrade,
           roomMem.claimSecure ?? false,
+          levelCapTicks,
         );
       } else {
         roomMem.claimSecure = false;

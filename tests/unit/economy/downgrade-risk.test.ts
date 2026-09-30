@@ -10,7 +10,10 @@
  * 迟滞标志由调用方从房间记忆读出后传入（domain 不碰运行时全局 —— 架构守卫 R1 会拦）。
  */
 import { describe, expect, it } from "vitest";
-import { resolveControllerDowngradeRisk } from "../../../src/domain/economy/downgrade-risk";
+import {
+  resolveControllerDowngradeRisk,
+  downgradeRiskBand,
+} from "../../../src/domain/economy/downgrade-risk";
 import { CONFIG } from "../../../src/config";
 
 const ctrl = (ttd: number, my = true) => ({ my, ticksToDowngrade: ttd });
@@ -34,5 +37,60 @@ describe("resolveControllerDowngradeRisk — 迟滞标志优先，缺失才退�
   it("无控制器 / 非我方 → 无风险（不替别人的控制器保级）", () => {
     expect(resolveControllerDowngradeRisk(true, undefined)).toBe(false);
     expect(resolveControllerDowngradeRisk(true, ctrl(5000, false))).toBe(false);
+  });
+});
+
+/**
+ * downgradeRiskBand — 迟滞带必须落在本级 ticksToDowngrade 的值域内。
+ *
+ * 立案依据（线上实测 2026-09-30 07:4x，W38S56 RCL2）：引擎表 CONTROLLER_DOWNGRADE
+ * = {1:20000, 2:10000, 3:20000, 4:40000, 5:80000, 6:120000, 7:150000, 8:200000}
+ * —— **RCL2 的上限（10000）比 RCL1/RCL3（20000）还低**，而退出线写死 15000（risk）/ 20000
+ * （claimSecure）⇒ 退出条件按构造不可达：现场读数 `ttd=10000`（缓冲满值、升级道在跑）
+ * 而 `controllerDowngradeRisk=true`、`claimSecure=true` 同时恒真，后果是 developmentGate
+ * 对该房每条 road 永久返回 "claim-secure"（buildQueue 7 条 road 全部 attempts=0、road=0）。
+ */
+describe("downgradeRiskBand — 退出线高于本级上限时按 cap/exit 等比折带", () => {
+  it("RCL2（cap 10000 < exit 15000）：risk 对折带 → 进入 6666 / 退出 10000（可达）", () => {
+    expect(
+      downgradeRiskBand(
+        10000,
+        CONFIG.economy.controllerDowngradeThreshold,
+        CONFIG.economy.controllerDowngradeExitThreshold,
+      ),
+    ).toEqual({ enter: 6666, exit: 10000 });
+  });
+
+  it("RCL2：claimSecure 对（15000/20000）→ 进入 7500 / 退出 10000（缓冲回到满值即解除）", () => {
+    expect(
+      downgradeRiskBand(
+        10000,
+        CONFIG.economy.claimSecureEnterTtd,
+        CONFIG.economy.claimSecureExitTtd,
+      ),
+    ).toEqual({ enter: 7500, exit: 10000 });
+  });
+
+  it("cap ≥ exit 时逐字不变 ⇒ RCL1/RCL3+ 的行为一个都没动", () => {
+    expect(downgradeRiskBand(20000, 15000, 20000)).toEqual({ enter: 15000, exit: 20000 });
+    expect(downgradeRiskBand(200000, 10000, 15000)).toEqual({ enter: 10000, exit: 15000 });
+  });
+
+  it("cap 缺失（未知等级 / 常量未注入）→ 保守退回原始阈值，不放宽护栏", () => {
+    expect(downgradeRiskBand(undefined, 15000, 20000)).toEqual({ enter: 15000, exit: 20000 });
+    expect(downgradeRiskBand(0, 15000, 20000)).toEqual({ enter: 15000, exit: 20000 });
+  });
+
+  it("不变式：折带后 enter < exit ≤ cap（否则又是一个不可达的退出线）", () => {
+    for (const cap of [10000, 20000, 40000, 200000]) {
+      for (const [enter, exit] of [
+        [10000, 15000],
+        [15000, 20000],
+      ] as const) {
+        const band = downgradeRiskBand(cap, enter, exit);
+        expect(band.enter).toBeLessThan(band.exit);
+        expect(band.exit).toBeLessThanOrEqual(cap);
+      }
+    }
   });
 });

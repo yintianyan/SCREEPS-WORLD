@@ -1,5 +1,6 @@
 import type { ColonyState } from "../../kernel/contracts";
 import { CONFIG } from "../../config";
+import { downgradeRiskBand } from "./downgrade-risk";
 
 /**
  * 殖民相位（Colony Phase）— 每房经济状态的唯一权威来源，替代散落各处的
@@ -572,25 +573,44 @@ export function phaseToColonyState(phase: ColonyPhase, hasHostiles: boolean): Co
  * 用途：room-state 用 {@link computeClaimSecure} 带迟滞写入 roomMem.claimSecure；
  * construction-manager 据此抑制非必要建造、upgrader 据此放宽取能地板。
  */
-export function isClaimSecure(rcl: number, ticksToDowngrade: number | undefined): boolean {
+export function isClaimSecure(
+  rcl: number,
+  ticksToDowngrade: number | undefined,
+  levelCapTicks?: number,
+): boolean {
   if (rcl >= 4) return false;
   if (ticksToDowngrade === undefined) return false;
-  return ticksToDowngrade < CONFIG.economy.claimSecureEnterTtd;
+  const band = downgradeRiskBand(
+    levelCapTicks,
+    CONFIG.economy.claimSecureEnterTtd,
+    CONFIG.economy.claimSecureExitTtd,
+  );
+  return ticksToDowngrade < band.enter;
 }
 
 /**
  * 带迟滞的 claimSecure 状态记忆（供 room-state 每 tick 持久化到 roomMem.claimSecure）。
  * 进入阈值 claimSecureEnterTtd，退出阈值 claimSecureExitTtd — 双门槛防「保级/发展」
- * 在临界 ttd 高频振荡（与 controllerDowngradeRisk 同款迟滞；ttd 最大值为控制器升级
- * 重置值 20000，故退出阈值取 20000 确保 upgrader 一旦保住 controller 即解除护栏）。
+ * 在临界 ttd 高频振荡（与 controllerDowngradeRisk 同款迟滞）。
+ *
+ * ⚠️退出阈值必须落在**本级**的 ticksToDowngrade 值域内：引擎表里 RCL2 的上限是 10000
+ * （比 RCL1/RCL3 的 20000 低一半），用固定的 20000 当退出线就是按构造不可达 ⇒
+ * 每个 RCL2 房间会被永久判成「临近降级」，道路等非关键发展任务被 developmentGate 永久拉闸。
+ * 故 levelCapTicks（调用方从 `CONTROLLER_DOWNGRADE[rcl]` 取）进来先折带；缺省时行为不变。
  */
 export function computeClaimSecure(
   rcl: number,
   ticksToDowngrade: number | undefined,
   prev: boolean,
+  levelCapTicks?: number,
 ): boolean {
   if (rcl >= 4) return false;
   if (ticksToDowngrade === undefined) return false;
-  if (prev) return ticksToDowngrade < CONFIG.economy.claimSecureExitTtd;
-  return ticksToDowngrade < CONFIG.economy.claimSecureEnterTtd;
+  const band = downgradeRiskBand(
+    levelCapTicks,
+    CONFIG.economy.claimSecureEnterTtd,
+    CONFIG.economy.claimSecureExitTtd,
+  );
+  if (prev) return ticksToDowngrade < band.exit;
+  return ticksToDowngrade < band.enter;
 }

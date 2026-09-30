@@ -406,7 +406,11 @@ export const CONFIG = {
     buildEnergySurplus: 200,
     /** 触发紧急升级的控制器 ticksToDowngrade 阈值（迟滞进入阈值）。 */
     controllerDowngradeThreshold: 10000,
-    /** controllerDowngradeRisk 迟滞退出阈值 —— ticksToDowngrade 回升到此值以上才退出风险状态。 */
+    /** controllerDowngradeRisk 迟滞退出阈值 —— ticksToDowngrade 回升到此值以上才退出风险状态。
+     * ⚠️这是「高水位房间」的口径：引擎 CONTROLLER_DOWNGRADE 表非单调（RCL1/3=20000、
+     * RCL2=10000、RCL8=200000），所以 room-state 会把这对阈值按 `cap/exit` 折进本级值域
+     * （RCL2 ⇒ 进入 6667 / 退出 10000）。不折算的话退出线高于本级上限 ⇒ 按构造不可达，
+     * 每个 RCL2 房间永久「保级态」（线上实证 W38S56）。 */
     controllerDowngradeExitThreshold: 15000,
     /**
      * claim-secure 护栏「进入」阈值（controller ticksToDowngrade）：RCL<4 无 storage
@@ -416,7 +420,10 @@ export const CONFIG = {
     claimSecureEnterTtd: 15000,
     /**
      * claim-secure 护栏「退出」迟滞阈值：ttd 回升到此值以上才解除（双门槛防振荡）。
-     * = 控制器升级重置后的最大 ttd(20000)，确保 upgrader 一旦保住 controller 即解除护栏。
+     * ⚠️不是「所有房间的最大 ttd」：引擎 CONTROLLER_DOWNGRADE 表里 RCL1/RCL3 才是 20000，
+     * **RCL2 的上限只有 10000** ⇒ 直接用 20000 当退出线时，每个 RCL2 新房永久处于「保级优先」
+     * （developmentGate 对每条 road 返回 "claim-secure"，建造道被拉闸到 RCL3 才解）。
+     * 故 computeClaimSecure 收下 levelCapTicks 并按 `cap/exit` 折带（RCL2 ⇒ 进入 7500 / 退出 10000）。
      */
     claimSecureExitTtd: 20000,
     /** 升级功率控制（A2：storage 水位驱动 + WORK 部件限速）。 */
