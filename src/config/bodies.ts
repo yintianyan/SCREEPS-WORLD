@@ -1656,6 +1656,15 @@ export function selectBody(
   energyCapacityAvailable: number,
   options?: { rcl?: number; hasRoad?: boolean },
 ): BodyPartConstant[] {
+  // 可负担性必须按这份 body 的**真实成本**判：`minCapacity` 是模板自己声明的"档位下限"，
+  // 不等于 `bodyCost(parts)`。只看 minCapacity 时，一个容量刚好卡在某个数值上的房会拿到
+  // 永远付不起的 body —— 线上幼房 W38S56 `energyCapacityAvailable=450`，队列里却躺着
+  // cost 500 的 upgrader 与 cost 800 的 hauler：这种请求在 spawn-manager:478 每次尝试都
+  // `retries++`，烧穿 maxRetries(12) 即 purge → 隔离 1000 拍，于是"这条道孵不出人"被
+  // 当成配置错误反复惩罚（升级道/防线/建造力先后各中招一次）。
+  const affordable = (t: BodyTemplate): boolean =>
+    energyCapacityAvailable >= t.minCapacity && bodyCost(t.parts) <= energyCapacityAvailable;
+
   // 远矿 hauler 无路场景：跳过 2:1 配比档（第 0、2 档），选 1:1 平原满速档。
   // hasRoad 默认 true（保守：有路优先），仅远矿路径明确无路时传 false。
   if (role === "remoteHauler" && options?.hasRoad === false) {
@@ -1667,7 +1676,7 @@ export function selectBody(
       for (const idx of roadlessIndices) {
         if (idx >= templates.length) break;
         const t = templates[idx]!;
-        if (energyCapacityAvailable >= t.minCapacity) return [...t.parts];
+        if (affordable(t)) return [...t.parts];
       }
     }
   }
@@ -1676,7 +1685,7 @@ export function selectBody(
     const roadTiers = ROAD_OPTIMIZED_BODIES[role];
     if (roadTiers) {
       for (const t of roadTiers) {
-        if (energyCapacityAvailable >= t.minCapacity) return [...t.parts];
+        if (affordable(t)) return [...t.parts];
       }
     }
   }
@@ -1684,7 +1693,7 @@ export function selectBody(
   const templates = BODY_TEMPLATES[role];
   if (templates) {
     for (const t of templates) {
-      if (energyCapacityAvailable >= t.minCapacity) return [...t.parts];
+      if (affordable(t)) return [...t.parts];
     }
   }
   return [...RECOVERY_BODY];
