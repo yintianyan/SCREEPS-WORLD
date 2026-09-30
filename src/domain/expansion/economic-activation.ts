@@ -69,6 +69,23 @@ export function advancePositiveStreak(
   return prev + Math.max(0, elapsedTicks);
 }
 
+/** carrier 单趟往返的有效搬运率近似（energy/tick）。 */
+const CARRIER_FLOW_PER_LINE = 50;
+
+/**
+ * 外部输血率（energy/tick）—— 只算**持续的跨房搬运**。
+ *
+ * 这里曾经还有一项「幼房 worker/builder 的当前背包能量 × 25/t」，量纲是错的：
+ * 背包里此刻有多少能量是**存量**，且那份能量是本房自己采集的，与"是否还在被 sponsor 喂"
+ * 没有因果关系（写它的注释自己就承认是"一次性，不持续"）。它的量级 ≈7 只先锋 ⇒ 175/t，
+ * 比幼房整房流量（账本 `ws` 实测 +3.35/t）大两个数量级，于是 `selfSustaining` 在
+ * 幼房有施工队的整个期间恒假 —— CP5 的自然路径（→ COMPLETED）按构造走不到。
+ * 只有 carrier 线路（home=sponsor、remoteTarget=本房）才是真正的持续外部流。
+ */
+export function externalInflowPerTick(carrierLineCount: number): number {
+  return Math.max(0, carrierLineCount) * CARRIER_FLOW_PER_LINE;
+}
+
 /**
  * 评估经济激活状态（纯函数）。
 

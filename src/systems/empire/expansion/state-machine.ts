@@ -10,6 +10,7 @@ import { canSpawnEvidence, evaluateCheckpoint } from "../../../domain/expansion/
 import {
   advancePositiveStreak,
   evaluateEconomicActivation,
+  externalInflowPerTick,
   type EconomicActivationInput,
 } from "../../../domain/expansion/economic-activation";
 import {
@@ -832,37 +833,18 @@ function estimateEnergyConsumption(room: Room): number {
 }
 
 /**
- * 估算从 sponsor 到新房的外部能量流入。
+ * 估算从 sponsor 到新房的外部能量流入（energy/tick）。
 
- * 两条能量流入路径：
- *   1. Bootstrap 输血 — Pioneer（worker/builder）从 sponsor 带能量去 target
- *   2. Resource Network 正常调拨 — carrier 由 agenda-manager 的 supply Operation 创建
-
- * carrier 的特征：memory.role === "carrier" + memory.remoteTarget === targetRoom
- * Pioneer 的特征：memory.home === targetRoom + memory.role === worker/builder（在 sponsor 取能后跨房）
+ * 只算真正的**持续**流入：carrier 线路（memory.role === "carrier" + remoteTarget === targetRoom
+ * 且 home === sponsor，由 agenda-manager 的 supply Operation 创建）。
+ * 先锋（worker/builder）背包里的能量**不计**——那是存量不是流量，且是本房自己采集的；
+ * 它按人数×25/t 折算会在幼房施工期造出 ~175/t 的假输血（真实量级是先锋更替带进来的 ≈0.5/t），
+ * 把 `selfSustaining` 钉死为假 ⇒ CP5 自然完成路径不可达。见 externalInflowPerTick 的注释。
  */
 function estimateExternalInflow(targetRoom: string, sponsorRoom: string): number {
-  let inflow = 0;
-
-  // 1. Resource Network 正常调拨 — carrier 角色跨房搬运
-  //    carrier 的 home 是 sourceRoom（sponsor），remoteTarget 是 targetRoom
+  // Resource Network 正常调拨 — carrier 角色的 home 是 sourceRoom(sponsor)，remoteTarget 是 targetRoom
   const carriers = querySquad({ role: "carrier", remoteTarget: targetRoom })
     .map(e => Game.creeps[e.name])
     .filter((c): c is Creep => !!c && c.memory.home === sponsorRoom);
-  // 每个 carrier 的有效搬运量 ≈ carry capacity / 来回路程（简化 50/tick）
-  inflow += carriers.length * 50;
-
-  // 2. Bootstrap 输血 — Pioneer（worker/builder）从 sponsor 携带能量
-  //    Pioneer 的 home 是 targetRoom，但在 sponsor 房被孵化并取能
-  const pioneers = colonyCreeps(targetRoom).filter(
-    c =>
-      (c.memory.role === "worker" || c.memory.role === "builder") &&
-      c.store.getUsedCapacity(RESOURCE_ENERGY) > 0,
-  );
-  // 每个 pioneer 携带的能量（一次性，不持续）— 仅在有 carrier 缺位时计入
-  if (carriers.length === 0) {
-    inflow += pioneers.length * 25; // 简化：每个 pioneer 平均 25 energy/tick
-  }
-
-  return inflow;
+  return externalInflowPerTick(carriers.length);
 }
