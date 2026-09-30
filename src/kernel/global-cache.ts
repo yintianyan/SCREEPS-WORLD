@@ -774,10 +774,9 @@ export interface RoomEnergyCounters {
   /** 交易运费：从本房 terminal 真烧掉的能量，进消费侧（不可记进 sold）。 */
   tradeFee: number;
   /**
-   * 远矿等外部房导入本房的能量（hauler 交付到本房 sink 时计账）。
-   * 计入收入侧前须先确认不会与房内搬运重复计数：本字段只记「跨房导入」，
-   * 房内 container→storage 的搬运不计。当前仅观测，未并入 ledgerIncome——
-   * 并入会改变净流 EMA 进而改变门控行为，属独立变更。
+   * 跨房导入本房的能量（carrier 卸能 + 远矿 hauler 交付到本房 sink 时计）。
+   * **已并入 `ledgerIncome`**（见 accounting.ts），对偶项是 `exported`。
+   * 只记跨房：房内 container→storage 的搬运不计，否则同一度电记两次收入。
    */
   imported: number;
 }
