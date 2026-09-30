@@ -94,6 +94,22 @@ export function stationaryMine(): ActionCandidate<StationaryMineTarget> {
         return;
       }
 
+      // 无下游出口时不把背包倒在地上（债单 #41）。drop 只在「背包满 且 身边 sink 全满」时触发，
+      // 而那正是本房消化不了这度电的时候：落地即衰减，再被 hauler 捡回来走一趟（实测 W38S56
+      // 地上 1179、150 拍里 pickedUp=1250）。抱着不动既不衰减也不产生往返签发，container 一被
+      // 消费侧排空，同一判据自动放行。只封「无 storage」的房（RCL<4）——有库的房 container 满
+      // 是暂态，drop→捡 仍是正确的吞吐换损耗。锚已先于此处登记 ⇒ 站桩矿位不失。
+      const sinkOpen =
+        (container !== undefined && container.store.getFreeCapacity(RESOURCE_ENERGY) > 0) ||
+        (linkUsable && link !== undefined && link.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
+      if (
+        !sinkOpen &&
+        ac.snapshot.storage === undefined &&
+        ac.creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0
+      ) {
+        return;
+      }
+
       const harvestResult = countedIntent("harvest", () => ac.creep.harvest(source));
       if (harvestResult === ERR_NOT_IN_RANGE) {
         moveToTarget(ac.creep, standTarget);
