@@ -193,6 +193,28 @@ export function dropReleasedRooms<T extends { roomName: string }>(
 }
 
 /**
+ * R7b：按「扩张节奏自适应」算出的最低 source 数筛掉候选。
+ *
+ * 为什么需要这个函数：`evaluateExpansionRhythm` 的三个输出里，`blacklistMultiplier` 被
+ * `blacklistTarget` 消费、`expansionPausedUntil` 被 expansion-manager 消费，而 `minSources`
+ * 唯一的旧消费方 `domain/expansion/evaluator.ts` **在生产里零调用者**（只有它自己的测试在读）
+ * ⇒ 「最近被抢频发就只挑 ≥2 source 的目标」这条收紧从未生效过一次。
+ *
+ * 两条刻意的保守：
+ *   - `minSources ≤ 1` 原样返回（今天的实际值就是 1 ⇒ 接上它不改变当前行为，只是让
+ *     「连续被抢之后自动变保守」这件事真的存在）；
+ *   - `sourceCount === undefined` 一律保留 —— 那是「没看到」不是「不合格」，
+ *     把它筛掉会让低情报覆盖的房永远进不了池子（与 `isEvaluable` 同一口径）。
+ */
+export function dropInsufficientSources<T extends { sourceCount?: number }>(
+  candidates: readonly T[],
+  minSources: number,
+): T[] {
+  if (minSources <= 1) return [...candidates];
+  return candidates.filter(c => c.sourceCount === undefined || c.sourceCount >= minSources);
+}
+
+/**
  * 检查候选是否可评估（已侦察 + 非否决）。
  */
 export function isEvaluable(candidate: ExpansionCandidateV2): boolean {

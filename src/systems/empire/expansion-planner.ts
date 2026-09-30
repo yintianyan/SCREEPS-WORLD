@@ -24,7 +24,7 @@ import { explainDecision } from "../../domain/expansion/explanation";
 import { buildExpansionDashboard } from "../../domain/expansion/dashboard";
 import { evaluateExpansionReadinessExtended } from "../../domain/strategy/readiness";
 import type { ExpansionCandidateV2 } from "../../domain/expansion/candidate";
-import { dropReleasedRooms } from "../../domain/expansion/candidate";
+import { dropInsufficientSources, dropReleasedRooms } from "../../domain/expansion/candidate";
 import type { RoomIntel } from "../../domain/intel";
 
 /**
@@ -122,7 +122,14 @@ export const expansionPlannerSystem: System = {
       myUsername: (Game as unknown as { username?: string }).username,
       existingCandidates,
     });
-    const candidatePool = dropReleasedRooms(discoveryResult.candidates, releasedRooms);
+    // R7b 节奏自适应的第三路输出（minSources）此前无人消费：它唯一的旧调用方
+    // domain/expansion/evaluator.ts 在生产里零引用（只有自己的测试在读）⇒「连续被抢之后
+    // 只挑 ≥2 source 的目标」从未生效过一次。接在候选池上（与 releasedRooms 同一层），
+    // 值为默认 1 时原样返回 ⇒ 接线不改变今天的行为，只是让那条安全收紧真的存在。
+    const candidatePool = dropInsufficientSources(
+      dropReleasedRooms(discoveryResult.candidates, releasedRooms),
+      Memory.kernel?.expansionRhythm?.minSources ?? 1,
+    );
 
     // ── 步 3：Candidate Scoring (7-Factor) ──
     const evaluable = candidatePool.filter(
