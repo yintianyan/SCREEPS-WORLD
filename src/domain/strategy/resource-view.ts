@@ -145,7 +145,12 @@ export function buildEmpireResourceView(
     totalProduction += p.estimatedIncome;
     totalNetFlow += p.netFlow;
     totalReserve += p.contractReserve;
-    if (p.riskBuffer < minRiskBuffer) minRiskBuffer = p.riskBuffer;
+    // 短板效应照旧，但**没有 storage 的房不参与 min**：riskBuffer 的分子是 storageEnergy（RCL4 才有结构），
+    // 幼房的缓冲实际躺在 container 与 spawn 池里（线上实测 W38S56 `rb=0` 同时 ea=529/550、房内 7,085 能量）。
+    // 用一个"结构性 0"去当帝国的短板，会把 health 判成 stable ⇒ 扩张闸 G3 恒红，
+    // 而它红的原因与帝国真实储备无关（同刻 te=885,885、gate netFlow=+29.4/t）。
+    // 阈值一个没动：只是不再把"测不了的东西"当成最差的那一环；全部房都没有 storage 时行为逐字不变（min→0）。
+    if (p.hasStorage && p.riskBuffer < minRiskBuffer) minRiskBuffer = p.riskBuffer;
     if (p.estimatedIncome > 0 || p.efficiency > 0) {
       effSum += p.efficiency;
       effCount++;

@@ -208,7 +208,11 @@ describe("buildEmpireResourceView", () => {
     expect(v.maxPressure).toBeCloseTo(0.8, 2);
     expect(v.totalNetFlow).toBe(5 + 2 + 0 - 3); // 4
     expect(v.empireNetFlowPositive).toBe(true);
-    expect(v.minRiskBuffer).toBe(0); // cand 的 riskBuffer=0
+    // cand1 没有 storage ⇒ 它的 riskBuffer=0 是**结构性 0（测不到）**，不是"这一环要断供"。
+    // 2026-09-30 修正取值范围后，min 只在**有 storage 的房**里取最差的一环（线上后果：
+    // 结构性 0 把帝国 health 压成 stable ⇒ 扩张闸 G3 恒红，而同刻 te=885,885、gate netFlow=+29.4/t）。
+    // 这条断言原先钉的正是被修正的行为（`= 0 // cand 的 riskBuffer=0`），现按机制改写，不是删断言。
+    expect(v.minRiskBuffer).toBe(1000);
   });
 
   it("surplus + deficit 同时存在 → hasImbalance=true", () => {
