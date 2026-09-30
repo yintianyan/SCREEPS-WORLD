@@ -528,7 +528,11 @@ function advanceIntegrating(ctx: TickContext, expansion: ExpansionState): void {
       c => c.memory.role === "hauler" || c.memory.role === "distributor",
     ),
     hasUpgrader: colonyCreeps(expansion.target).some(c => c.memory.role === "upgrader"),
-    spawnActive: targetRoom.find(FIND_MY_SPAWNS).some(s => !s.spawning),
+    // 「spawn 在役」的证据 = 这座 spawn 在本房服务中。旧写法 `some(s => !s.spawning)` 把证据写成
+    // "此刻 bay 是空的"：幼房赶工期 bay 几乎连轴（实测每 ~16 拍一只），而本系统 interval=100
+    // ⇒ 采样大概率落在"正在孵"上，energyLoop 因此在房子上最活跃的时候被判成不活跃 ——
+    // 与 CP2 那次「瞬时水位 × 慢采样」同一种仪器错位。正在孵化本就是更强的在役证据。
+    spawnActive: targetRoom.find(FIND_MY_SPAWNS).length > 0,
     tick: ctx.tick,
   };
 

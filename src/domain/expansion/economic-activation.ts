@@ -16,7 +16,9 @@ export interface EconomicActivationInput {
   hasTransporter: boolean;
   /** 是否有活跃 upgrader（可选，非必需）。 */
   hasUpgrader: boolean;
-  /** Spawn 是否正在孵化（说明在自产自销）。 */
+  /** Spawn 是否在役（本房自有 spawn）。注意：**不要**写成"bay 此刻空闲"——
+   *  幼房赶工期 bay 几乎连轴，而本判据的消费方每 100 拍才采样一次，
+   *  那样会在房子最活跃的时候把经济环判成不活跃。 */
   spawnActive: boolean;
   /** 当前 tick。 */
   tick: number;
