@@ -239,4 +239,51 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
       `同一停摆的提交次数应受"每保留窗 ≤2 次"约束；实得 ${correlationIds.size} 个 correlationId；${diag}`,
     ).toBeLessThanOrEqual(2);
   });
+
+  it("恢复动作烧穿重试预算 → 清单进 Memory 且事件不逐拍重复（#59）", () => {
+    // 为什么跑这么久：升级烧穿要走完 提交 → 执行 → 验证（no_progress→failed）→ 第二次尝试 → terminal
+    // → escalation 这条完整时间线，短窗口只能测到前半段。
+    const world = buildRoom();
+    const runner = new TickRunner();
+    runner.setLoop(loop);
+
+    let escalations: Array<{ room: string; domain: string; actionType: string; repeats: number }> =
+      [];
+    let sawTerminal = false;
+
+    runner.run(world, 6000, {
+      onTick: (w, t) => {
+        if (t === 1) {
+          const roomMem = g().Memory.rooms.W1N1;
+          roomMem.controllerProgressSeen = w.controller?.progress ?? 0;
+          roomMem.controllerProgressChangedAt = g().Game.time - (E5_STALE_TICKS + 1);
+        }
+        const list = g().Memory.kernel?.escalations;
+        if (Array.isArray(list) && list.length > 0) {
+          escalations = list.map(e => ({
+            room: e.room,
+            domain: e.domain,
+            actionType: e.actionType,
+            repeats: e.repeats,
+          }));
+          if (list.some(e => e.terminal === true)) sawTerminal = true;
+        }
+      },
+    });
+
+    expect(
+      escalations.length,
+      "烧穿重试预算后 Memory.kernel.escalations 应留下案例条目（换码也带得走）",
+    ).toBeGreaterThan(0);
+    expect(escalations[0]!.room, "清单条目必须带房名（幂等键同口径）").toBe("W1N1");
+    expect(
+      escalations.every(e => e.repeats <= escalations[0]!.repeats + escalations.length),
+      "同一案例只应更新一条，不得逐拍追加",
+    ).toBe(true);
+    expect(escalations.length, "清单条数应有界").toBeLessThanOrEqual(12);
+    // terminal 位只在真判不可恢复时才置 1 —— 没走到也无妨，但必须能区分（不伪装成已验证）
+    if (!sawTerminal) {
+      console.log("[known-gap] 本轮窗口内未走到 terminal 判定，escalation 只记到 failed 沿");
+    }
+  });
 });

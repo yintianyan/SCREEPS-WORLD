@@ -848,3 +848,97 @@ export function computeRecoveryStats(
     avgRecoveryTime,
   };
 }
+
+// ─── 升级（escalation）清单：把"我自己修不好"变成跨部署的持久痕迹 ───
+
+/**
+ * 一条升级记录 = 一个「房 × 域 × 动作类型」的慢性失败案例，而不是一次失败。
+ *
+ * 为什么必须有：升级判定此前只变成一行 console log，而它读的 `recoveryActionTable` 是 heap
+ * —— 一次部署就把"哪项恢复失败了、试了几次、是否已判不可恢复"整个抹掉。日志会滚掉，
+ * Memory 里的这条清单不会。与 E5 修的是同一族问题：**信号存在但不留痕**。
+ */
+export interface EscalationEntry {
+  /** 受影响的房；无房间维度时为 GLOBAL_ROOM。 */
+  room: string;
+  /** 失败领域。 */
+  domain: string;
+  /** 烧穿重试预算的动作类型。 */
+  actionType: string;
+  /** 该案例首次被记录的 tick。 */
+  firstAt: number;
+  /** 最近一次重复出现的 tick。 */
+  lastAt: number;
+  /** 该案例被记录的次数（同一房同域同类型的累计，不是逐拍追加）。 */
+  repeats: number;
+  /** 最近一次的 attempts 计数。 */
+  attempts: number;
+  /** 是否已判不可恢复（terminal）。 */
+  terminal: boolean;
+}
+
+/** 清单条数上限（按 lastAt 淘汰最旧的案例）：宁可丢历史也不撑爆 Memory。 */
+export const ESCALATIONS_CAP = 12;
+
+/** 同一案例多久重报一次事件（防刷屏；清单条目本身每次都更新）。 */
+export const ESCALATION_EVENT_HEARTBEAT_TICKS = 2000;
+
+export interface EscalationUpsertInput {
+  room: string;
+  domain: string;
+  actionType: string;
+  tick: number;
+  attempts: number;
+  terminal: boolean;
+}
+
+export interface EscalationUpsertResult {
+  /** 新清单（不改入参，调用方负责写回 Memory）。 */
+  list: EscalationEntry[];
+  /** 是否值得记一条事件：新案例，或同一案例跨过心跳窗。 */
+  shouldEmit: boolean;
+}
+
+/**
+ * 更新升级清单（纯函数）。
+ *
+ * 同一「房 × 域 × 动作类型」只占一条：重复出现就更新（repeats+1、lastAt 前移），
+ * 不新增条目 —— 失败状态是持续性的，逐拍追加会在几十拍内挤爆清单，
+ * 正如期望自检违例曾经挤爆事件环（见 kernel/expectations 的事件心跳注释）。
+ */
+export function upsertEscalation(
+  prev: readonly EscalationEntry[] | undefined,
+  input: EscalationUpsertInput,
+): EscalationUpsertResult {
+  const list = (prev ?? []).slice();
+  const idx = list.findIndex(
+    e => e.room === input.room && e.domain === input.domain && e.actionType === input.actionType,
+  );
+
+  if (idx >= 0) {
+    const existing = list[idx]!;
+    const shouldEmit =
+      existing.terminal !== input.terminal ||
+      input.tick - existing.lastAt >= ESCALATION_EVENT_HEARTBEAT_TICKS;
+    list[idx] = {
+      ...existing,
+      lastAt: input.tick,
+      repeats: existing.repeats + 1,
+      attempts: input.attempts,
+      terminal: input.terminal,
+    };
+    return { list, shouldEmit };
+  }
+
+  list.unshift({
+    room: input.room,
+    domain: input.domain,
+    actionType: input.actionType,
+    firstAt: input.tick,
+    lastAt: input.tick,
+    repeats: 1,
+    attempts: input.attempts,
+    terminal: input.terminal,
+  });
+  return { list: list.slice(0, ESCALATIONS_CAP), shouldEmit: true };
+}

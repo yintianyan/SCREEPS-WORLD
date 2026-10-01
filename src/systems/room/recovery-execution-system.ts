@@ -42,6 +42,7 @@ import {
   cleanupRecoveryTable,
   computeRecoveryStats,
   isActionActive,
+  upsertEscalation,
   type RecoveryActionTable,
   type RecoveryActionRecord,
   type RecoveryWorldSnapshot,
@@ -999,11 +1000,30 @@ function verifyPendingActions(g: ReturnType<typeof globalCache>, ctx: TickContex
           });
 
           if (escalation.shouldEscalate) {
+            // 清单进 Memory、事件进环 —— 两者都是为了让这件事**活过下一次部署**：
+            // 判它的那张表是 heap，只写日志的话，换码之后"哪项恢复反复失败"就查无实据。
+            const escRoom = newRecord.room ?? GLOBAL_ROOM;
+            const esc = upsertEscalation(Memory.kernel?.escalations, {
+              room: escRoom,
+              domain: newRecord.domain,
+              actionType: newRecord.type,
+              tick,
+              attempts: newRecord.attempts,
+              terminal: newRecord.state === "terminal",
+            });
+            if (Memory.kernel) Memory.kernel.escalations = esc.list;
+            if (esc.shouldEmit) {
+              recordEvent(EventKind.RecoveryEscalation, escRoom, [
+                newRecord.attempts,
+                newRecord.state === "terminal" ? 1 : 0,
+                esc.list[0]?.repeats ?? 1,
+              ]);
+            }
             log.info(
               "recovery",
               `[${tick}] recovery: ESCALATION ${record.type}` +
                 ` domain=${record.domain} reason="${escalation.reason}"` +
-                ` corr=${record.correlationId}`,
+                ` corr=${record.correlationId} repeats=${esc.list[0]?.repeats ?? 1}`,
             );
           }
 

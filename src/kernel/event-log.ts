@@ -149,6 +149,11 @@ export enum EventKind {
    * 宽限），删完之后「这房什么时候走的、走之前弃了几个矿点、unclaim 成功没有」
    * 只能靠这一条事件回答。 */
   RoomReleased = 47,
+  /** 恢复动作烧穿重试预算（escalation）—— 帝国"这件事我自己修不好"的持久痕迹。
+   * d = [attempts, terminal(1=不可恢复/0=还可重试), repeats]；r = 房名（全局动作用 "global"）。
+   * 为什么需要它：此前这条路径只写一行 console log，而承载它的 `recoveryActionTable` 是 heap
+   * —— 一次部署就把"哪项恢复失败了、试了几次"整个抹掉。明细见 Memory.kernel.escalations。 */
+  RecoveryEscalation = 48,
 }
 
 // ─── 角色编码表（CreepDeath 事件的 roleCode）─────────────────

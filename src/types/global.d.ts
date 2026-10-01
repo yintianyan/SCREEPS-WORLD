@@ -778,6 +778,10 @@ declare global {
     };
     /** 本次 boot 首个 tick（maintainMemory 记录）—— E2 相对宽限基准。 */
     bootTick?: number;
+    /** 恢复动作烧穿重试预算的持久清单（recovery-execution 写，上限见 ESCALATIONS_CAP）。
+     * 为什么落 Memory：判定它的那张 `recoveryActionTable` 是 heap，换码即清 ——
+     * 不留这份清单，"哪项恢复反复失败"在部署之后就无人可查。 */
+    escalations?: import("../domain/strategy/recovery-lifecycle").EscalationEntry[];
     /** 期望自检结果（kernel 写）：最近一次核验的违例清单。 */
     expectations?: {
       tick: number;
