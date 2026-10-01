@@ -105,6 +105,7 @@ describe("TU-1 — tuning upgrader 降编不误伤无 storage 房间", () => {
       avgDrainScore: 0,
       crisisRatio: 0,
       avgStorageEnergy: 0,
+      hasStorage: false,
       containerFillRatio: 0.4,
       spawnFillRatio: 0.7,
       haulerCount: 2,
@@ -132,13 +133,29 @@ describe("TU-1 — tuning upgrader 降编不误伤无 storage 房间", () => {
 
   it("RCL4+ storage 枯竭（< 10k）：照常降编（原语义不回归）", () => {
     const result = evaluateTuning(
-      signals({ rcl: 5, avgStorageEnergy: 3000 }),
+      signals({ rcl: 5, hasStorage: true, avgStorageEnergy: 3000 }),
       bounds,
       {},
       5000,
       {},
     );
     expect(result.newTrend["upgrader.maxCount"]).toBe("down");
+  });
+
+  // TU-1b：线上实测的形状 —— 幼房 RCL4、storage 结构还在施工（site 10933/30000），
+  // avgStorageEnergy 恒 0，于是 `rcl>=4 && 能量低` 这条 TU-1 漏掉的入口继续每 cooldown 压一档，
+  // 而 ↑ 分支要求 storage 盈余 ⇒ 无结构时永不可满足 ⇒ 单向棘轮把升级产能钉在地板 1。
+  it("TU-1b：RCL4 但 storage 尚未建成（hasStorage=false, avgStorageEnergy=0）→ 不降编", () => {
+    // prevTrend 必须是 `{}`（首次观测）：传 "down" 会让趋势在本轮被消费掉并复位成 none，
+    // 于是断言在新旧两版代码下都通过 —— 这是我自己用反向实验抓到的空断言。
+    const result = evaluateTuning(
+      signals({ rcl: 4, hasStorage: false, avgStorageEnergy: 0 }),
+      bounds,
+      {},
+      5000,
+      {},
+    );
+    expect(result.newTrend["upgrader.maxCount"]).not.toBe("down");
   });
 
   it("经济高压：无论 RCL 照常降编", () => {

@@ -15,6 +15,12 @@ export interface TuningSignals {
   crisisRatio: number;
   /** 评估窗口内平均 storage 能量。无 storage 时为 0。 */
   avgStorageEnergy: number;
+  /**
+   * storage 结构是否在场（不是"是否解锁"）。
+   * 低位节流类规则必须读它：RCL4 但 storage 还在建成的房 avgStorageEnergy 恒 0，
+   * 只看能量值会把「已解锁未建成」当成「枯竭」，形成只能往下压的单向棘轮。
+   */
+  hasStorage: boolean;
 
   // ── 活快照信号（来自当前 TickContext）──
   /** 当前 container 平均填充率 (0.0–1.0)。无 container 时为 0。 */

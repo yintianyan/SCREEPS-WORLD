@@ -627,6 +627,7 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
     avgDrainScore,
     crisisRatio,
     avgStorageEnergy,
+    hasStorage: snapshot.storage !== undefined,
     containerFillRatio,
     spawnFillRatio: avgSpawnFillRatio,
     haulerCount: counts.hauler ?? 0,

@@ -30,6 +30,8 @@ function healthySignals(overrides: Partial<TuningSignals> = {}): TuningSignals {
     avgDrainScore: 5,
     crisisRatio: 0,
     avgStorageEnergy: 20000,
+    // 夹具基础值带 20k 库存能 ⇒ 语义上 storage 在场（TU-1b 后降编判据读结构在场与否，不再读 rcl）
+    hasStorage: true,
     containerFillRatio: 0.3,
     spawnFillRatio: 0.5, // 默认消费端未饱和
     haulerCount: 2,
