@@ -346,4 +346,42 @@ describe("补员方向：在编已有 builder/upgrader 时，低价格下早期�
     });
     expect(reqsFor(snap, living("upgrader", 1)).filter(r => r.role === "upgrader")).toHaveLength(0);
   });
+
+  // #55：recovery 掐掉的正是早期房唯一的消费出口。`allowUpgrader` 原先只看
+  // `colonyState === "normal"`，而早期房（无 storage）没有库存可保 —— 它的 reserve 负值
+  // 就是"正在建设自己"。相位机在 minBandTicks(=100) 带上每次抖动都会把这条道整段掐掉，
+  // 并阻止满寿 upgrader 的替换（线上实证：幼房 ColonyStateChange 以 normal↔recovery 横跳）。
+  const recoveryReqs = (snap: any, creeps: any[]) =>
+    evaluateDemand(
+      snap,
+      [],
+      "recovery",
+      creeps as never,
+      [],
+      {
+        ...normalCtx(0, 0),
+        energyPrice: px,
+      } as never,
+      1000,
+    ).requests;
+
+  it("upgrader：早期房在 recovery 相位仍要补员（无 storage ⇒ 没有库存可保）", () => {
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      controllerContainer,
+      storage: undefined,
+    });
+    const reqs = recoveryReqs(snap, living("upgrader", 1)).filter(r => r.role === "upgrader");
+    expect(reqs).toHaveLength(2);
+  });
+
+  it("upgrader：成熟房（有 storage）在 recovery 仍不补员 —— 保库存语义不变（对照组）", () => {
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      controllerContainer,
+      storage: storageFull,
+    });
+    const reqs = recoveryReqs(snap, living("upgrader", 1)).filter(r => r.role === "upgrader");
+    expect(reqs).toHaveLength(0);
+  });
 });

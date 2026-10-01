@@ -838,7 +838,19 @@ export function evaluateDemand(
   // RCL8 满级后升级零收益（progress=0）：无降级风险时停孵/停替换；
   // 存量由角色 gate 停烧（upgrader.ts）、老死不补。
   const rcl8NoUpgrade = snapshot.rcl >= 8 && !hasDowngradeRisk;
-  const allowUpgrader = (colonyState === "normal" || hasDowngradeRisk) && !rcl8NoUpgrade;
+  // 早期房（无 storage）**不因相位抖进 crisis/recovery 就失去整条升级道**。
+  // 理由不是"它更需要升级"这种偏好，而是这条闸对它**测的不是它声称测的东西**：
+  // recovery 的语义是"保库存"，而无 storage 的房没有库存可保 —— 它的 reserve 负值
+  // 恰恰是"正在建设自己"。于是相位机每在 minBandTicks(=100) 的带上抖一次，就把这房
+  // **唯一的消费出口**掐掉，顺带阻止满寿 upgrader 的替换。
+  // 线上实证：幼房 W38S56 的 ColonyStateChange 以 `normal↔recovery` 每 50~400 拍横跳
+  //（编码 2=normal/1=recovery），同时容器与 controller container 能量在涨、`ea` 顶满、
+  // 建造+升级消费归零 —— 掐的就是这条道。
+  // 真正的缺能保护不在这儿：下面的 `!hasStorage` 压力阶梯（pressure>0.7 ⇒ target 0）与
+  // spawn 侧 body 降级才是连续的、按实际能量说话的那把闸。
+  const earlyRoom = snapshot.storage === undefined;
+  const allowUpgrader =
+    (colonyState === "normal" || hasDowngradeRisk || earlyRoom) && !rcl8NoUpgrade;
 
   if (allowUpgrader && !frozenRoles.has("upgrader")) {
     const upgraderConfig = getRoleBounds("upgrader", home);
