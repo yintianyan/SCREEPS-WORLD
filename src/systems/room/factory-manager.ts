@@ -73,7 +73,12 @@ function tryProduceCommodity(
   factory: StructureFactory,
   ctx: TickContext,
 ): void {
-  const recipes = collectRecipes(factory.level ?? 0);
+  // 部分私服的 factory 不暴露 level（实测本服 `factory.level === undefined`）。
+  // 回退到 0 会让所有 r.level≥1 配方被静默筛光 —— 模块永久哑火；回退到 RCL 才是
+  // 引擎语义（工厂等级由房间等级给出）。真等级不足时 produce 自己返回 ERR 码、
+  // 不产资源，所以"回高"的代价是一次失败调用，而"回低"的代价是整条链不成立。
+  const factoryLevel = factory.level ?? snapshot.rcl;
+  const recipes = collectRecipes(factoryLevel);
   if (recipes.length === 0) return;
 
   const g = globalCache();
@@ -87,7 +92,7 @@ function tryProduceCommodity(
   const target = selectCommodityTarget(
     factoryStoreView,
     storageStoreView,
-    factory.level ?? 0,
+    factoryLevel,
     recipes,
     CONFIG.factory.commodityEnergyReserve,
   );

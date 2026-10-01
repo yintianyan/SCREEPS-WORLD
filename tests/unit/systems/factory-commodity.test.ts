@@ -66,6 +66,21 @@ describe("factory-manager — commodity 升级链", () => {
     expect(factory.produce).toHaveBeenCalledWith("circuit");
   });
 
+  // 本私服实测 `factory.level === undefined`（同拍 controller.level=8），旧实现 `?? 0`
+  // 会把 r.level≥1 的配方全部静默筛光 —— 无豁免则该例必红。
+  // 回退到 RCL 后等级判定交给引擎（真不够时 produce 自返 ERR、不产资源）。
+  it("factory.level 缺失（私服形态）→ 按 RCL 判档，仍产 T2 并写锚", () => {
+    const factory = Object.assign(factoryMock({ wire: 10, X: 10, energy: 6000 }, 1), {
+      level: undefined,
+    });
+    const snap = mockSnapshot({ roomName: "W7N4", factory }); // 默认 rcl=3 ≥ circuit 的 1
+
+    factoryManagerSystem.run(makeContext(snap));
+
+    expect(factory.produce).toHaveBeenCalledWith("circuit");
+    expect((globalThis as any).factoryTargets?.["W7N4"]).toBe("circuit");
+  });
+
   it("factory 原料不齐但 storage+factory 合计齐 → 不 produce（等 distributor 补料）但写锚", () => {
     const factory = factoryMock({ U: 5, energy: 6000 });
     const storage = { store: multiStore({ U: 5 }) } as any;
