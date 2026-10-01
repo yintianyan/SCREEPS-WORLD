@@ -316,6 +316,8 @@ export interface RecoveryWorldSnapshot {
   energyAvailable?: number;
   /** 房间总人口。 */
   population?: number;
+  /** 目标房 controller.progress（development_resume 的唯一验收量）。 */
+  controllerProgress?: number;
   /** 物流投递率（0..1）。 */
   deliveryRate?: number;
   /** 远矿活跃运营数。 */
@@ -376,6 +378,17 @@ export function evaluateRecoveryResult(
       if (beforeState.population !== undefined && afterState.population !== undefined) {
         const popDelta = afterState.population - beforeState.population;
         if (popDelta > 0) return "partial";
+      }
+      break;
+    case "development_resume":
+      // 发展恢复的验收只看一件事：controller 进度又开始动了。
+      // （人口/投递率这些间接量在"消费出口没了"的病灶下会一起好看，不能用来判它。）
+      if (
+        beforeState.controllerProgress !== undefined &&
+        afterState.controllerProgress !== undefined &&
+        afterState.controllerProgress > beforeState.controllerProgress
+      ) {
+        return "partial";
       }
       break;
     case "logistics_fix":
@@ -439,6 +452,9 @@ const DEFAULT_RETRY_POLICIES: Record<RecoveryActionType, RetryPolicy> = {
   energy_redirect: { maxAttempts: 2, cooldownDuration: 300, classification: "retryable" },
   defense_response: { maxAttempts: 5, cooldownDuration: 50, classification: "retryable" },
   population_rebuild: { maxAttempts: 2, cooldownDuration: 500, classification: "retryable" },
+  // 触发它的那条停摆本身要 10000 拍才成立，所以冷却给长（1000 拍）：
+  // 一次请求的孵化+通勤+开工闭环约几百拍，短冷却只会重复下单。
+  development_resume: { maxAttempts: 2, cooldownDuration: 1000, classification: "retryable" },
   route_fix: { maxAttempts: 3, cooldownDuration: 200, classification: "retryable" },
   remote_stall: { maxAttempts: 1, cooldownDuration: 0, classification: "non_retryable" },
   expansion_pause: { maxAttempts: 1, cooldownDuration: 0, classification: "non_retryable" },

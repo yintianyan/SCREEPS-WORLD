@@ -15,6 +15,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { ScenarioBuilder, TickRunner } from "../framework";
 import type { TestWorld } from "../framework";
 import { globalCache } from "../../../src/kernel/global-cache";
+import { E5_STALE_TICKS } from "../../../src/kernel/expectations";
 
 let loop: () => void;
 
@@ -182,5 +183,57 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
       `不在 recovery 带却有房级 colony 动作 ⇒ 上一条的通过不能归因于注入；` +
         `colonyState=${colonyStateLast} 动作集=${JSON.stringify(actionTypes)}`,
     ).toEqual([]);
+  });
+
+  it("发展停摆（锚点陈旧 + 不在 recovery 带）→ development_resume → 请求的是 upgrader 而非 harvester", () => {
+    // 这一例钉的是 #57 的全部主张：信号源是**跨部署的停滞锚点**（不是相位带抽样），
+    // 响应方向是**加消费出口**（升级/建造），而不是给花不出去的房子再加采集。
+    const world = buildRoom();
+    const runner = new TickRunner();
+    runner.setLoop(loop);
+
+    const devActionTypes = new Set<string>();
+    const requestedRoles = new Set<string>();
+    const correlationIds = new Set<string>();
+    let colonyStateLast: string | undefined;
+
+    runner.run(world, 240, {
+      onTick: (w, t) => {
+        if (t === 1) {
+          const roomMem = g().Memory.rooms.W1N1;
+          roomMem.controllerProgressSeen = w.controller?.progress ?? 0;
+          roomMem.controllerProgressChangedAt = g().Game.time - (E5_STALE_TICKS + 1);
+        }
+        const acts: ActionLite[] = heap().recoveryActions ?? [];
+        for (const a of acts) {
+          if (a.targetFailureId?.startsWith("failure:development:W1N1:"))
+            devActionTypes.add(a.type);
+        }
+        const queue: QueueItemLite[] = g().Memory.rooms.W1N1?.spawnQueue ?? [];
+        for (const item of queue) {
+          const corr = item.memory?.recoveryCorrelationId;
+          if (corr && item.role) {
+            correlationIds.add(corr);
+            requestedRoles.add(item.role);
+          }
+        }
+        colonyStateLast = g().Memory.rooms.W1N1?.colonyState;
+      },
+    });
+
+    const diag = `colonyState=${colonyStateLast} 房级development动作=${JSON.stringify([...devActionTypes])} 请求角色=${JSON.stringify([...requestedRoles])}`;
+    expect([...devActionTypes], `陈旧锚点应产出房级 development 定向动作；${diag}`).toContain(
+      "development_resume",
+    );
+    expect([...requestedRoles], `响应应落到升级产能上；${diag}`).toContain("upgrader");
+    expect([...requestedRoles], `不该给停摆房加采集（病灶是花不出去）；${diag}`).not.toContain(
+      "harvester",
+    );
+    // 防刷：节点每 100 拍重报一次，提交侧必须被 cooldown(1000)/maxAttempts(2)  bound 住。
+    // 240 拍里若按"每拍一条请求" accumulate，孵化队列会被一个慢性故障占满。
+    expect(
+      correlationIds.size,
+      `同一停摆的动作提交次数应受重试策略约束；实得 ${[...correlationIds].length} 个 correlationId；${diag}`,
+    ).toBeLessThanOrEqual(2);
   });
 });

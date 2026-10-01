@@ -244,6 +244,9 @@ function translateAndSubmit(
     case "population_rebuild":
       return submitPopulationRebuild(action, ctx, correlationId);
 
+    case "development_resume":
+      return submitDevelopmentResume(action, ctx, correlationId);
+
     case "defense_response":
       return submitDefenseResponse(action, ctx, correlationId);
 
@@ -666,6 +669,78 @@ function submitPopulationRebuild(
 }
 
 /**
+ * DEVELOPMENT_RESUME：房级发展停摆（controller 进度长时间不动）的定向响应。
+ *
+ * 只加出口、不动任何闸：往该房既有孵化队列请求 upgrader（真的有在建任务时再加 builder），
+ * body 选择/降级与去重都走 spawn-manager 那套（spawnKey + hasRequest），
+ * 所以这条请求与 demand.ts 自己发的请求同队同键 —— 不会多孵一只，只会把"该有人爬级"这件事说出口。
+ */
+function submitDevelopmentResume(
+  action: RecoveryAction,
+  ctx: TickContext,
+  correlationId: string,
+): SubmitResult {
+  const room = action.room;
+  const roomMem = Memory.rooms[room];
+  if (!roomMem) {
+    return { submitted: false, reason: `room memory not found: ${room}` };
+  }
+
+  const queue = roomMem.spawnQueue ?? [];
+  const gameRoom = Game.rooms[room];
+  const energyCapacity = gameRoom?.energyCapacityAvailable ?? 300;
+  const energyAvailable = gameRoom?.energyAvailable ?? 0;
+  const rcl = gameRoom?.controller?.level ?? 1;
+
+  const roles: string[] = ["upgrader"];
+  // builder 只在有活要建时才要：发展停摆的典型成因是"升级道被掐"，
+  // 无工地时多孵一只 builder 只会把能量挪去抢同一批 container。
+  if ((roomMem.buildQueue?.length ?? 0) > 0) roles.push("builder");
+
+  const requested: string[] = [];
+  for (const role of roles) {
+    const key = spawnKey(role, room, 1);
+    if (hasRequest(queue, key)) continue;
+    const body = degradeBody(selectBody(role, energyCapacity, { rcl }), energyAvailable, [
+      "work",
+      "carry",
+      "move",
+    ]) ?? [WORK, CARRY, MOVE];
+    submitRequest(
+      queue,
+      buildSpawnRequest(ctx.tick, {
+        key,
+        role,
+        home: room,
+        priority: 1,
+        survival: false,
+        body,
+        memory: {
+          role,
+          home: room,
+          mode: "acquire",
+          recoveryCorrelationId: correlationId,
+        } as CreepMemory,
+      }),
+    );
+    requested.push(role);
+  }
+  roomMem.spawnQueue = queue;
+
+  return requested.length > 0
+    ? {
+        submitted: true,
+        executionRef: `dev:${room}:${requested.join(",")}`,
+        reason: `development resume: ${requested.join(", ")} requested`,
+      }
+    : {
+        submitted: true,
+        executionRef: `dev:${room}`,
+        reason: "already in queue (idempotent)",
+      };
+}
+
+/**
  * DEFENSE_RESPONSE：基于 A5.1 威胁评估触发防御响应。
 
  * 翻译：RecoveryAction → 读取 globalCache.threatAssessments 获取威胁详情
@@ -1022,7 +1097,12 @@ function captureWorldSnapshot(
 ): RecoveryWorldSnapshot {
   const health = g.empireHealth;
   const failureGraph = g.failureGraph;
-  const room = action.targetFailureId.split(":")[1];
+  // 房名一律取 action.room。此前这里写的是 `action.targetFailureId.split(":")[1]`
+  // —— 也就是本文件头部注释明令禁止的那种按位置解析：id 的形状在生产者之间不一致
+  // （`failure:<dim>:<tick>` 与 `failure:colony:<room>:<tick>` 并存），split 拿到的其实是**维度名**，
+  // 于是 before/after 两侧的 room/energyAvailable/activeRemoteOps 永远取不到值，
+  // 验收只剩全局人口一个指标可用。
+  const room = action.room;
 
   // 目标领域的健康度
   const dim = health?.dimensions.find(d => d.name === action.domain);
@@ -1031,8 +1111,10 @@ function captureWorldSnapshot(
 
   // 房间级数据
   let energyAvailable: number | undefined;
+  let controllerProgress: number | undefined;
   if (room && Game.rooms[room]) {
     energyAvailable = Game.rooms[room]!.energyAvailable;
+    controllerProgress = Game.rooms[room]!.controller?.progress;
   }
 
   // 人口
@@ -1061,6 +1143,7 @@ function captureWorldSnapshot(
     room,
     energyAvailable,
     population,
+    controllerProgress,
     deliveryRate,
     activeRemoteOps,
   };

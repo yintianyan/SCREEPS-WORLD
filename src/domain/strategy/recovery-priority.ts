@@ -12,6 +12,7 @@ export type RecoveryActionType =
   | "energy_redirect" // 重定向能量（跨房调拨）
   | "defense_response" // 防御响应
   | "population_rebuild" // 人口重建
+  | "development_resume" // 发展恢复（controller 进度停摆：请求升级/建造产能）
   | "route_fix" // 路由修复
   | "remote_stall" // 远矿暂停
   | "expansion_pause" // 扩张暂停
@@ -164,6 +165,9 @@ const DOMAIN_WEIGHT: Record<FailureDomain, number> = {
   logistics: 1.3,
   spawn: 1.4,
   colony: 1.2,
+  // 发展停摆是慢性故障（触发要求 10000 拍无进度），排在 colony 之下：
+  // 一个正在挨饿/掉人的房应当先被救，再谈爬级。
+  development: 1.0,
   network: 1.1,
   threat: 1.3,
   cpu: 1.0,
@@ -202,6 +206,15 @@ const RECOVERY_RECOMMENDATIONS: Record<
     recommendation: "rebuild population via spawn priority adjustment",
     cost: 800,
     time: 500,
+  },
+  // 不复用 colony→population_rebuild：它的实做请求的是 harvester（见 recovery-execution
+  // submitPopulationRebuild），而发展停摆的典型病灶是"消费出口没了、能量在顶满溢出"
+  // （线上实测幼房 #54/#55）—— 给花不出去的房子再加采集能力是反向动作。
+  development: {
+    type: "development_resume",
+    recommendation: "request upgrader capacity (+ builder when the room has queued sites)",
+    cost: 600,
+    time: 400,
   },
   network: {
     type: "energy_redirect",

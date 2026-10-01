@@ -20,6 +20,7 @@ import {
   type FailureNode,
 } from "../../domain/strategy/failure-propagation";
 import { prioritizeRecovery, type CooldownTable } from "../../domain/strategy/recovery-priority";
+import { E5_STALE_TICKS } from "../../kernel/expectations";
 import {
   computeAutonomyScore,
   detectNoProgress,
@@ -425,6 +426,28 @@ function collectActiveFailures(
         detectedAt: tick,
       });
     }
+  }
+
+  // 发展停摆：controller.progress 长时间一动不动（复用 E5 的阈值与锚点，不新增阈值）。
+  // 为什么不能靠上面那条 colonyState==="recovery"：那是**每 100 拍的瞬时抽样**，
+  // 对一个在 normal↔recovery 之间每 50~400 拍横跳的房是概率性的，
+  // 而对"人口齐备但升级/建造角色被抑制"的房（线上实测幼房 #54/#55）压根不响。
+  // 锚点在 Memory（room-state 2.6c 维护），所以跨部署连续 —— 换码不会把这计时清零。
+  for (const snap of ctx.snapshots()) {
+    // 与 E5 同保护：满级房不判停摆（RCL8 由降级风险带那套迟滞自己管）。
+    if (snap.rcl >= 8) continue;
+    const changedAt = Memory.rooms[snap.roomName]?.controllerProgressChangedAt;
+    if (changedAt === undefined) continue;
+    const stall = tick - changedAt;
+    if (stall <= E5_STALE_TICKS) continue;
+    failures.push({
+      id: `failure:development:${snap.roomName}:${tick}`,
+      domain: "development",
+      severity: "error",
+      room: snap.roomName,
+      description: `Controller progress stalled ${stall} ticks at rcl=${snap.rcl} in ${snap.roomName}`,
+      detectedAt: tick,
+    });
   }
 
   // 从 logistics health 补充
