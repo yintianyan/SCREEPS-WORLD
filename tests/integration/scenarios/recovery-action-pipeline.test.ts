@@ -197,7 +197,7 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
     const correlationIds = new Set<string>();
     let colonyStateLast: string | undefined;
 
-    runner.run(world, 240, {
+    runner.run(world, 1300, {
       onTick: (w, t) => {
         if (t === 1) {
           const roomMem = g().Memory.rooms.W1N1;
@@ -229,11 +229,14 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
     expect([...requestedRoles], `不该给停摆房加采集（病灶是花不出去）；${diag}`).not.toContain(
       "harvester",
     );
-    // 防刷：节点每 100 拍重报一次，提交侧必须被 cooldown(1000)/maxAttempts(2)  bound 住。
-    // 240 拍里若按"每拍一条请求" accumulate，孵化队列会被一个慢性故障占满。
+    // 防刷：节点每 100 拍重报一次，但提交侧幂等键是 `domain:type:room`（**不含 tick**，
+    // recoveryIdempotencyKey），加 maxAttempts=2 / cooldown=1000 / 活跃租约（executing 期间不再提交）。
+    // 实测值 = 1（1300 拍里只成交一次：首条请求留在队列里，hasRequest 也把后续挡掉）。
+    // 上限给 2 是为了容忍"验证收口后再补一次"这条合法路径；若键真的按 node 实例（含 tick）去重，
+    // 这里会看到 ~13 次 —— 所以这条断言真的在盯那件事。
     expect(
       correlationIds.size,
-      `同一停摆的动作提交次数应受重试策略约束；实得 ${[...correlationIds].length} 个 correlationId；${diag}`,
+      `同一停摆的提交次数应受"每保留窗 ≤2 次"约束；实得 ${correlationIds.size} 个 correlationId；${diag}`,
     ).toBeLessThanOrEqual(2);
   });
 });
