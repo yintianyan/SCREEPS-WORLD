@@ -13,6 +13,33 @@ import { GAME_GLOBAL_CONSTANTS } from "../support/constants";
 Object.assign(globalThis as Record<string, unknown>, GAME_GLOBAL_CONSTANTS);
 
 /**
+ * `E2E_RANDOM_SEED=<整数>` 时把 Math.random 换成可复现序列（mulberry32）；未给则保持真随机。
+ *
+ * 动机（10-01 实测）：`src/domain/tuning/evaluator.ts:903-905` 的随机探索分支每次抽**一个随机参数
+ * + 一个随机方向**去改 roleBounds，`src/systems/room/spawn-manager.ts:505` 的 creep 名后缀也抽随机。
+ * 前者是**生产行为** ⇒ 9000 拍的 soak 世界每次都不同（同一份 dist 两次单跑 bandTicks 3 vs 0、
+ * finalSpawned 17 vs 20），于是任何"某个计数必须为 0"式断言都骑在随机相位上 —— E2E-022 那次红就是这么来的，
+ * 与被测改动无关。留开关不开默认，是因为服务器端口分配（ServerHarness.ts:25,30）需要真实变化。
+ *
+ * ⚠️生效前提：bot 与本进程同一个 JS realm。若 @screeps/driver 把 bot 放进 isolated-vm 沙箱，
+ * 这里改不到它 —— 判据：给定同一 seed 连跑两次场景，世界读数必须逐字相同；不一致就说明要改到 src 侧注入。
+ */
+function installDeterministicRandom(): void {
+  const raw = process.env.E2E_RANDOM_SEED;
+  if (raw === undefined || raw === "") return;
+  let state = Number(raw) >>> 0;
+  Math.random = () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  console.log(`[e2e setup] deterministic Math.random installed (seed=${raw})`);
+}
+installDeterministicRandom();
+
+/**
  * 检测 @screeps/driver 的 runtime.snapshot.bin 是否与当前 Node 版本兼容。
  * 委托 scripts/rebuild-driver-snapshot.js（postinstall 同源逻辑），避免双实现。
  */
