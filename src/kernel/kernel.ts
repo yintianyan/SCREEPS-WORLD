@@ -624,7 +624,6 @@ export class Kernel {
   /** E5: 采集每房 RCL 快照（从 snapshot + RoomMemory 读取）。 */
   private collectRCLSnapshots(ctx: Context): RCLSnapshot[] {
     const result: RCLSnapshot[] = [];
-    const tracker = (globalCache().rclProgressTracker ??= new Map());
     // upgrader 普查：消费共享快照总线（creepRefs），不再独立遍历 Game.creeps。
     // FINDING-01 修复：与 collectBuildQueueSnapshots 同口径。
     const upgradersByHome = new Map<string, number>();
@@ -636,20 +635,19 @@ export class Kernel {
     }
     for (const snap of ctx.snapshots()) {
       const roomMem = Memory.rooms[snap.roomName];
-      // 进度停滞检测：progress 与上 tick 相同 → 停滞计时延续；变化 → 归零重计。
-      // 用停滞时长替代「距上次升级的绝对时长」——RCL7→8 本来就要数十万 tick，
-      // 固定龄阈值会对正常冲级房永久误报。
-      const progress = snap.controller?.progress ?? 0;
-      const prev = tracker.get(snap.roomName);
-      const lastMoveTick = prev && prev.progress === progress ? prev.lastMoveTick : ctx.tick;
-      tracker.set(snap.roomName, { progress, lastMoveTick });
+      // 停滞时长取自 room-state 的 Memory 锚点（见 RoomMemory.controllerProgressChangedAt）：
+      // 基准必须跨部署连续，否则每次换码都把计时器归零 —— 而掐断升级道的改动本身就是一次部署。
+      // 锚点尚未建立（本房还没被 room-state 跑过）时**不评估**这一房：
+      // 回退到「距上次升级的绝对龄」会对 RCL7→8 这类正常慢冲级房永久误报。
+      const changedAt = roomMem?.controllerProgressChangedAt;
+      if (changedAt === undefined) continue;
       result.push({
         room: snap.roomName,
         rcl: snap.rcl,
-        progress,
+        progress: snap.controller?.progress ?? 0,
         progressTotal: snap.controller?.progressTotal ?? 0,
         lastRclChange: roomMem?.lastRclChangeAt,
-        progressStallTicks: ctx.tick - lastMoveTick,
+        progressStallTicks: ctx.tick - changedAt,
         hasUpgrader: (upgradersByHome.get(snap.roomName) ?? 0) > 0,
         storageEnergy: snap.storage?.store.energy ?? 0,
       });

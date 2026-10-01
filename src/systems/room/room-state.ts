@@ -92,6 +92,15 @@ export const roomStateSystem: System = {
         roomMem.lastRclChangeAt = ctx.tick;
       }
 
+      // 2.6c controller 进度锚点：progress 与上拍不同就刷新 changedAt，E5 的停滞时长 =
+      // tick - changedAt。基准落 Memory 而非 heap —— 会掐断升级道的改动本身就是一次部署，
+      // 部署把 heap 计时器归零后，10000 拍的阈值在迭代期永远够不到（真实停摆因此静默）。
+      const controllerProgress = snapshot.controller?.progress ?? 0;
+      if (roomMem.controllerProgressSeen !== controllerProgress) {
+        roomMem.controllerProgressSeen = controllerProgress;
+        roomMem.controllerProgressChangedAt = ctx.tick;
+      }
+
       // 2.7 P0-1：storageDrainRate — 跨 tick storage 净流出率（E/tick），负值 = 流失。
       // 符号语义对齐 PhaseInput.storageDrainRate 与 DEFAULT_PHASE_OPTIONS.storageDrainThreshold=-2。
       const currentStorageEnergy = snapshot.storage

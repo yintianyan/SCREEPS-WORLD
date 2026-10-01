@@ -294,6 +294,12 @@ declare global {
     lastRclLevel?: number;
     /** room-state 维护：RCL 等级变化 tick（期望自检 E5 停滞检测的年龄基准）。 */
     lastRclChangeAt?: number;
+    /** room-state 维护：上一次观测到的 controller.progress（「进度有没有动」的对照值）。 */
+    controllerProgressSeen?: number;
+    /** room-state 维护：controller.progress 最近一次变化的 tick（E5 停滞时长基准）。
+     * 必须落 Memory 而非 heap：掐断升级道的改动本身就是一次部署，而部署把 heap 计时器归零 ——
+     * 于是 10000 拍阈值在迭代期永远够不到（线上实测幼房 progress 冻结数小时，E5 一次未报）。 */
+    controllerProgressChangedAt?: number;
     /** C2：邻居房情报（room-observer 每 50 tick 刷新，M7 远矿/扩张选址数据源）。 */
     intel?: Record<string, import("../domain/intel").RoomIntel>;
     layout?: {
