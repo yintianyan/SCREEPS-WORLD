@@ -52,7 +52,10 @@
 ## 3. 优先级队列（数周 → 数月）
 
 **P0 — 让"发展"这件事不再静默失败**（依赖：无）
-1. ~~幼房升级道被相位抖动掐断~~ → `f28bbf5` 已上线，**判效待收**（见 §4）。
+1. ~~幼房升级道被相位抖动掐断~~ → `f28bbf5` **已线上判效**（18:24Z mark=C3：`colonyState=recovery` 的同一拍
+   `spawnQueue` 里出现 `upgrader:2`，`economyPressure=0`、`spawnBlacklist={}`、controller.progress 在动 29,334/405,000）。
+   ⚠️这条读数的边界要说清：它证明「相位不再没收需求」，**不证明补发延迟够短** —— 延迟要死亡事件前后的队列差分，
+   取证器已就位（`tmp/tools/official/replenish-watch.sh`），立案对象改成 #54 而不是 #55。
 2. **检出→响应闭环**（设计已定形，待一次前置核实后即可实施）：
    现状核查（读码，非推测）—— 期望自检 E1–E9 的违例**没有任何消费者**，唯一的例外是 E2 的 `p3Starved`
    会去续期前馈旁路窗口；而**响应 machinery 早就存在**：`empire-health`(P1/interval 100) 采 `collectActiveFailures`
@@ -182,11 +185,15 @@
 删除 heap 追踪器。**阈值、RCL8 保护、boot 宽限、绝对龄回退支一个都没动。**
 **验证**：typecheck 0 / unit 368 文件 5101 例 / integration 29 文件 235 例（含新增 3 例）/ build 均绿；
 反向实验：把 stall 钉回 0（=旧行为）时"陈旧锚点应报"转红、两条控制组（新鲜锚点不误报、进度在动不误报）仍绿。
-**部署**：**未推送**（攒批）——这笔是诊断类改动，上线后也需 10000 拍停摆才见效，不值得单独吃一次换码税（heap 清零 + ≈400 拍 G6 输入不采信）。
+**部署**：已随批次1 推送 —— `origin/dev=f28bbf5 → 57557db`（18:17Z，快进、无 force，pre-push 五门禁通过）。
+判效签名不是 sha 比对（push 时 pre-push 钩子把 dist 重建成 HEAD，含 #59，"本地 sha==线上 sha"这条锚被我自己覆盖了）
+⇒ 改用**功能签名**：18:20Z/18:24Z 两次实测 `controllerProgressChangedAt=null`（旧码无写者），上线后应变有值；
+跑 `tmp/tools/official/verify-batch1-landing.sh aac54fd34a5b 600`（要求线上 sha 从基线变走且连续两次一致）。
 
 **待收判效（下一轮第一件事）**：
-- #55（`f28bbf5`，boot `aac54fd34a5b` @15:52:10Z）：取样三条件——距 boot ≥200 拍、那一拍 `colonyState==="recovery"`、读回非 429。
-  最终指标是幼房 RCL 爬升回到 ≈+9/t。09:5x–16:1x 期间 Memory API 持续 429，`young-builder-watch.sh` 三轮全 FAILED（读失败≠未发生）。
+- ~~#55~~ **已收并已撤销指控**（见 §3 P0-1：18:24Z mark=C3 在 recovery 相同拍看到 `upgrader:2` 请求）。
+- **#54 改由差分承担**：`replenish-watch.sh`（每轮记 `role:live/queue/oldestReqAge`）跑满一个死亡-补员窗口后再立案；
+  单次快照在这类问题上结构性无力 —— 判据住在"从 0 到 1 的那段时间"，采样点落在两端就看不见它。
 - #48：判据已第三次更正（无 storage 前置）⇒ 恒 0 的含义是"没发生跨房卸能"，等一次真实补给事件。
 
 ## 5. 自主执行边界（照抄 L0 §1.5，落到本项目口径）
@@ -203,6 +210,9 @@
 - 2026-10-01 #60 实施（`2383551`）：调优 ↓ 分支改读 `hasStorage`，拆掉"已解锁未建成"这条单向棘轮；P0-3 的"第一次真停摆取证"改由上线后的锚点差分承担。
 - 2026-10-01 #59 实施（`3c0bbff`，批次2）：恢复烧穿重试预算 ⇒ 事件 + `Memory.kernel.escalations` 有界清单（P0-4 的"检出→响应"里"响应不上报"那一半）。
 - 2026-10-01 撤销我自己给 #58 加的后果推论（link 不入账 = 账本边界，非失真）。
-- **推送状态**：`origin/dev=f28bbf5`；批次1（≤`57557db`，含 #56/#57/#60）待 e2e 绿后按 sha 推；
-  批次2（`3c0bbff` #59）需 rebuild + 全量 e2e 后再推。判效命令与边界已封在
-  `tmp/tools/official/verify-batch-deploy.sh` + `tmp/observe/AGENT.lock` 17:51Z 段。
+- **推送状态（18:17Z 更新）**：`origin/dev=57557db` —— 批次1（#56 `c93f467` + #57 `0776a0d` + #60 `2383551`）已快进推送，
+  证据=全量 e2e `33 passed (33) / E2E_EXIT=0`，且被测 dist 内 `RecoveryEscalation=0` ⇒ 该次绿**恰好且仅**覆盖这批的可执行内容。
+  批次2（`3c0bbff` #59）**证据正在攒**：rebuild 后 dist 779,899B、`RecoveryEscalation=1`，全量 e2e 后台跑
+  （`tmp/observe/e2e-batch2.log`）；绿后按 sha 推。⚠️批次2 在跑期间不得再 push —— pre-push 钩子会重建 dist，
+  而 e2e 读的就是那个二进制（这次就是它把批次1 的 sha 锚覆盖掉的）。
+  判效：`tmp/tools/official/verify-batch1-landing.sh aac54fd34a5b 600`（功能签名 = 锚点 null→有值；null 的基线已实测两次）。
