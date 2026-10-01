@@ -263,3 +263,87 @@ describe("早期房 upgrader 不套价格弹性闸（#47）", () => {
     expect(requests.filter(r => r.role === "upgrader")).toHaveLength(3);
   });
 });
+
+describe("补员方向：在编已有 builder/upgrader 时，低价格下早期房仍补回满目标（#46/#47 的决定性签名）", () => {
+  // 为什么必须测"补员"而不是"目标算得对不对"：线上那把闸**从不裁编**，只决定"死一只后补不补"
+  // ⇒ 存活编制数在新旧两种代码下完全一样（goal 会话 22:30Z 的实测就是这个形状）。
+  // 唯一有鉴别力的读数 = 已有 living 时队列里会不会再出现替换请求。
+  // 价格取 0.116（demandElasticity=(0.116−0.1)/0.4=0.04）：旧口径 round(3×0.04)=**0** ⇒ 一只都不补。
+  const px = 0.116;
+  const sites3 = [
+    { id: "b1", structureType: "extension" },
+    { id: "b2", structureType: "extension" },
+    { id: "b3", structureType: "road" },
+  ] as unknown as ConstructionSite[];
+  const storageFull = {
+    id: "st1",
+    store: { getUsedCapacity: () => 1_000_000 },
+  } as unknown as StructureStorage;
+  const controllerContainer = {
+    id: "cc1",
+    pos: { x: 12, y: 12, roomName: "W7N4" },
+    store: {
+      getUsedCapacity: () => 2000,
+      getFreeCapacity: () => 3000,
+      getCapacity: () => 5000,
+    },
+  } as unknown as StructureContainer;
+
+  function living(role: string, n: number) {
+    return [
+      ...livingHarvesters(2),
+      ...Array.from({ length: n }, (_, i) => ({
+        name: `${role}_${i}`,
+        role,
+        home: "W7N4",
+        ticksToLive: 1200,
+        bodyLength: 7,
+        spawnIndex: 10 + i,
+      })),
+    ];
+  }
+
+  function reqsFor(snap: any, creeps: any[]) {
+    setBuildQueue(undefined);
+    return evaluateDemand(
+      snap,
+      [],
+      "normal",
+      creeps as never,
+      [],
+      {
+        ...normalCtx(0, 0),
+        energyPrice: px,
+      },
+      1000,
+    ).requests;
+  }
+
+  it("builder：无 storage 且已活着一只 ⇒ 仍补 2 只回满目标 3", () => {
+    const snap = mockSnapshot({ myConstructionSites: sites3, storage: undefined });
+    expect(reqsFor(snap, living("builder", 1)).filter(r => r.role === "builder")).toHaveLength(2);
+  });
+
+  it("builder：有 storage 同一价格 ⇒ 目标被弹性砍到 0 ⇒ 一只都不补（对照组）", () => {
+    const snap = mockSnapshot({ myConstructionSites: sites3, storage: storageFull });
+    expect(reqsFor(snap, living("builder", 1)).filter(r => r.role === "builder")).toHaveLength(0);
+  });
+
+  it("upgrader：无 storage 且有站桩 container，已活着一只 ⇒ 仍补 2 只回 3", () => {
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      controllerContainer,
+      storage: undefined,
+    });
+    expect(reqsFor(snap, living("upgrader", 1)).filter(r => r.role === "upgrader")).toHaveLength(2);
+  });
+
+  it("upgrader：有 storage 同一价格 ⇒ 弹性砍到 0 ⇒ 不补（对照组）", () => {
+    const snap = mockSnapshot({
+      myConstructionSites: [],
+      controllerContainer,
+      storage: storageFull,
+    });
+    expect(reqsFor(snap, living("upgrader", 1)).filter(r => r.role === "upgrader")).toHaveLength(0);
+  });
+});
