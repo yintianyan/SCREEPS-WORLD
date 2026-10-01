@@ -82,6 +82,11 @@
    但图侧的 `detectRootCause/analyzeImpact` 是否被这种重复带偏需要按数判。
 
 3. **E5 上线后的第一次真停摆取证**：确认它现在真的会报（反向用例在线上出现一次），否则判据仍是纸面。
+4. **恢复失败要留下可查的痕迹**（#59，下一批候选）：`recovery-execution-system.ts:985-1006` 的 escalation 只变成一行
+   `log.info`，既无事件也无 Memory 落点，而它踩着的 `g.recoveryActionTable` 是 heap ⇒ 一次部署就把"某项恢复失败了、
+   需要人介入"整个抹掉；`manual_intervention` 这个动作类型全仓**无生产者**（死枚举）。
+   与本轮修掉的 E5 同族：**信号存在但不留痕**。修法复用既有形状（`shouldRecordExpectationEvent` 的"变化即报 + 心跳节流"），
+   不新造机制、不放宽重试。
 
 **P1 — CPU 天花板（唯一挡住扩张的结构性成本）**
 - 现状：缺口 ≈3.1/t，负载随房数增长（幼房 0.97→3.40/t）；全量归因已结案为"无码级出路"（traffic+snapshots 占 64%，都是要参与的模块）。
