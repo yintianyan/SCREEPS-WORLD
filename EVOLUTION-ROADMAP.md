@@ -40,9 +40,29 @@
 
 **P0 — 让"发展"这件事不再静默失败**（依赖：无）
 1. ~~幼房升级道被相位抖动掐断~~ → `f28bbf5` 已上线，**判效待收**（见 §4）。
-2. **检出→响应闭环**：E5 `rclStale` 如今只是写进 `Memory.kernel.expectations`，没有任何消费者据此行动。
-   验收：一条停摆（≥阈值）能在无人工介入下产生一个可观察动作（孵化位重排 / 建造队列优先级提升 / 一次诊断事件），
-   且动作本身带防抖（不误触发）。**先做只进仪表的观测项，再动决策路径。**
+2. **检出→响应闭环**（设计已定形，待一次前置核实后即可实施）：
+   现状核查（读码，非推测）—— 期望自检 E1–E9 的违例**没有任何消费者**，唯一的例外是 E2 的 `p3Starved`
+   会去续期前馈旁路窗口；而**响应 machinery 早就存在**：`empire-health`(P1/interval 100) 采 `collectActiveFailures`
+   → `buildFailureGraph` → `prioritizeRecovery` → `recovery-execution`(P1/interval 10) 执行并按
+   `recovery-lifecycle.evaluateRecoveryResult` 验收。`domain:"colony"` 的推荐动作就是 `population_rebuild`
+   （maxAttempts 2 / cooldown 500，`recovery-execution-system.ts:244` 有实现分支）。
+   ⇒ 缺口不是"没有响应器"，而是**停摆这个事实没有进失败图**：失败图里唯一的发展信号是
+   采样瞬间的 `colonyState === "recovery"`（empire-health-system.ts:414-427），一个每 100 拍看的瞬时抽样
+   对一个每 50~400 拍横跳的房是概率性的，对"人口齐备但角色被抑制/建造位为空"的房则根本不响。
+   **动作**：把 E5 的停滞锚点（`Memory.rooms.*.controllerProgressChangedAt`，本轮 c93f467 已跨部署可信）
+   作为一条失败节点接入 `collectActiveFailures`，复用 `E5_STALE_TICKS` 与既有 domain 映射，不加新阈值。
+   **两条硬约束**：①不要从 `Memory.kernel.expectations.violations` 取输入 —— 那个数组是 `slice(0, 10)`
+   （kernel.ts:587）的人类读数，被截断就不是判据；②响应必须是"加出口"（补员/重排孵化优先级），
+   **不得**以放宽闸或降阈值的形式出现（L0 §1.5 + 本仓库红线）。
+   验收：一条真实停摆在一次 `empire-health` 采样后 ≤100 拍内产生一个可观察动作（spawn 请求或事件），
+   且该动作有防抖（同房同域在 cooldown 内不重复），控制组（进度在动的房）不产生动作。
+   **前置核实（阻塞实施）**：`recovery-execution` / `empire-health` 在线上是否真的在产出动作
+   （见 §2 待验证清单 + `tmp/observe/module-participation-audit.md`）—— 若管道本身是惰性的，
+   主目标就变成"让管道先被证明跑通"，接新信号没有意义。
+   另记一条待查形状（未定罪）：`failure:colony:<room>:<tick>` 的 id **含 tick**，
+   一个在 recovery 带里停 400 拍的房会产出 400 个不同节点；动作侧有 `cooldownKey(domain, room)` 去重，
+   但图侧的 `detectRootCause/analyzeImpact` 是否被这种重复带偏需要按数判。
+
 3. **E5 上线后的第一次真停摆取证**：确认它现在真的会报（反向用例在线上出现一次），否则判据仍是纸面。
 
 **P1 — CPU 天花板（唯一挡住扩张的结构性成本）**
