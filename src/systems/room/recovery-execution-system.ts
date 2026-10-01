@@ -672,8 +672,10 @@ function submitPopulationRebuild(
  * DEVELOPMENT_RESUME：房级发展停摆（controller 进度长时间不动）的定向响应。
  *
  * 只加出口、不动任何闸：往该房既有孵化队列请求 upgrader（真的有在建任务时再加 builder），
- * body 选择/降级与去重都走 spawn-manager 那套（spawnKey + hasRequest），
- * 所以这条请求与 demand.ts 自己发的请求同队同键 —— 不会多孵一只，只会把"该有人爬级"这件事说出口。
+ * body 选择/降级走既有 selectBody/degradeBody，去重走既有 spawnKey + hasRequest。
+ * key 形状与 demand 同构（`role:home:index`，见 demand.ts:970/1075 用的就是 slot 序号），
+ * 所以两种结果都是对的：demand 本来就排到那个 slot ⇒ hasRequest 命中，这条不额外孵；
+ * demand 排得少 ⇒ 这条把 slot 1 补上，等于"停摆期间强制保留第二个工位"，这是本动作的全部效果。
  */
 function submitDevelopmentResume(
   action: RecoveryAction,
