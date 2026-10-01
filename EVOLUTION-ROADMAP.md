@@ -28,13 +28,22 @@
 - **确认在场且生效**（线上读数能证明其在决策路径上）：room-state、spawn-manager、demand、assignment-service、
   logistics、construction-manager、traffic-manager、remote-mining-manager、expansion-planner/manager、
   factory-manager、terminal-manager、tower-defense、telemetry-collector、tuning-engine/intake、link-system(幼房无 link，待验证)。
-- **待验证参与**（已实现+已集成，但本会话没有取到"它这一轮真的产出了动作"的线上出处）：
-  power-creep-manager、power-farm-manager、pixel-generator、prospect-manager、territory-manager、
-  intelligence、war-planner/war-planning、squad-movement、tactical-engagement/tactical-runtime、
-  combat-micro、defense-planner、recovery-execution、empire-strategy/empire-economy/empire-health、economy、agenda-manager。
-  ⇒ **R-A 审计任务**：给每个"待验证"模块找一条可读数签名（计数器/事件/日志），无签名者按能力缺口处理而非按存在处理。
+- **参与状态已盘点**（子代理起草、我复验三条关键项，全文 `tmp/observe/module-participation-audit.md`）：
+  power-creep / power-farm / pixel / prospect / territory / war-planner / war-planning / squad-movement /
+  tactical-* / defense-planner / recovery-execution / empire-strategy / empire-economy / empire-health /
+  economy / agenda-manager / intelligence / link-system。要点（按类，不按房）：
+  - **SILENT-WORKER 3 条**（真干活、零发布）：`link-system`（每拍 `transferEnergy`，无计数、不经 intent 包装）、
+    `tactical-engagement`、`combat-micro`。核心房 RCL8 有 link ⇒ link 那条**今天就在静默工作**。
+  - **INERT-BY-PRECONDITION**（和平期/配置所限，进门即 return）：power 两条、pixel（`CONFIG.pixel.enabled=false`，已复验）、
+    prospect（`expansionAllowed!==true`）、territory（无 `roomRelease` 指令）、war 两条 + 军事 pipeline stage、recovery-execution。
+    ⇒ 这些"没参与"是前置条件与配置，**不是缺陷，别立案**（L0 §1.4 反向）。
+  - **VISIBLE-WHEN-ACTIVE**：intelligence、empire-strategy、empire-economy、economy、agenda-manager（和平期痕迹=空表）、defense-planner。
+- **`empire-health` 的可见性是弱的**（关键项，我复验过）：它的主结果 `global.empireHealth / failureGraph / recoveryActions /
+  autonomyStatus` 全在**未镜像的 heap**（`telemetry-collector.ts` 里 grep 这四个键零命中）⇒ 换码即失，
+  线上只能靠 `global.<key>` 现场 peek。这条直接约束 #57 的判效方式（见 §3 P0-2 的"响应签名"一项）。
 - **已知仪器盲区**：`CreepDeath.natural` 单维（战损/回收同读数）；`upgraded` 在 RCL8 恒 0（保级能量不入账）；
   E8 pathFailure 假阳性（并行会话在改）；跨房供给的 `imported/exported` 只在真实输送发生时才有数。
+
 
 ## 3. 优先级队列（数周 → 数月）
 
@@ -56,9 +65,14 @@
    **不得**以放宽闸或降阈值的形式出现（L0 §1.5 + 本仓库红线）。
    验收：一条真实停摆在一次 `empire-health` 采样后 ≤100 拍内产生一个可观察动作（spawn 请求或事件），
    且该动作有防抖（同房同域在 cooldown 内不重复），控制组（进度在动的房）不产生动作。
-   **前置核实（阻塞实施）**：`recovery-execution` / `empire-health` 在线上是否真的在产出动作
-   （见 §2 待验证清单 + `tmp/observe/module-participation-audit.md`）—— 若管道本身是惰性的，
-   主目标就变成"让管道先被证明跑通"，接新信号没有意义。
+   **前置核实已解除**（本轮做掉）：`tests/integration/scenarios/recovery-action-pipeline.test.ts` 用真实 kernel 跑通
+   `recovery 带 → 房级 colony 节点 → population_rebuild 动作 → 带 recoveryCorrelationId 的孵化请求 → actionTable 记录`，
+   并配了一条**同夹具不注入**的匹配对照组（房级节点不出现 ⇒ 上一条不能无条件通过）。
+   ⚠️两条判读知识：①失败图里 `colony` 有**两个生产者** —— colony *维度*（人口/健康度，id `failure:colony:<tick>`，不带房名）
+   与 `colonyState=recovery` 的**房级**节点（id `failure:colony:<room>:<tick>`），判效必须按 `targetFailureId` 形状区分，
+   否则会把人口故障误认成发展停摆；②`empire-health` 的 `recoveryActions` 只在 heap（telemetry 不镜像，已复验）
+   ⇒ 线上判效要认的持久签名是 recovery-execution 的 `SUBMITTED <type>` log 行（或这次顺带补一条镜像）。
+
    另记一条待查形状（未定罪）：`failure:colony:<room>:<tick>` 的 id **含 tick**，
    一个在 recovery 带里停 400 拍的房会产出 400 个不同节点；动作侧有 `cooldownKey(domain, room)` 去重，
    但图侧的 `detectRootCause/analyzeImpact` 是否被这种重复带偏需要按数判。
