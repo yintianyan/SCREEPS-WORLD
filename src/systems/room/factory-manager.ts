@@ -12,6 +12,7 @@ import type { Priority, RoomSnapshot, System, TickContext } from "../../kernel/c
 import { globalCache, publishProcurementDemands } from "../../kernel/global-cache";
 import type { ProcurementDemand } from "../../kernel/global-cache";
 import { collectFullInventory } from "../../domain/industry/inventory";
+import { commodityBatchRoi } from "../../domain/industry/market-pricing";
 import { expandCommodityDemands } from "../../domain/industry/procurement";
 
 export const factoryManagerSystem: System = {
@@ -99,7 +100,14 @@ function tryProduceCommodity(
   // 目标缓存：distributor 的 stockFactoryComponents 消费（undefined 时清锚）。
   if (target) g.factoryTargets[snapshot.roomName] = target.resourceType;
   else delete g.factoryTargets[snapshot.roomName];
-  if (!target) return;
+  if (!target) {
+    // 选不出可行目标 ≠ 不该报缺口。旧实现在这里直接 return，于是
+    // 「缺料 ⇒ 选不出目标 ⇒ 永不发布需求 ⇒ 贸易侧永远不知道要买什么 ⇒ 永远缺料」
+    // 是一条静默自锁（与 16.3k 拍 0 交付同族）。现在按「期望目标」上报缺口，
+    // 但必须过正 ROI 闸 —— 买中间品产商品在坏行情里是深度倒挂投资（实测回收率 1.7%）。
+    publishDesiredCommodityDemands(snapshot, recipes, ctx);
+    return;
+  }
 
   // ── 阶段 1：发布 commodity 原料缺口需求 ──
   // V1 边界（登记取舍）不变：只为凑料搬 storage 存量，不主动市场买入 —
@@ -125,6 +133,53 @@ function tryProduceCommodity(
   const missing = missingComponents(factoryStoreView, target);
   if (Object.keys(missing).length > 0) return;
   factory.produce(target.resourceType as CommodityConstant);
+}
+
+/**
+ * 「期望目标」的原料缺口上报（纯决策的外层包装）。
+ * 期望目标 = 等级允许的最高档配方（`recipes` 已由 collectRecipes 按等级筛过并梯度降序），
+ * **无视当前库存** —— 这正是它与 selectCommodityTarget 的唯一区别，也是自锁能被解开的地方。
+ * 上报前过 `commodityBatchRoi`：行情倒挂时一条需求都不发，等价于旧行为。
+ */
+function publishDesiredCommodityDemands(
+  snapshot: RoomSnapshot,
+  recipes: readonly CommodityRecipe[],
+  ctx: TickContext,
+): void {
+  const desired = recipes[0];
+  if (!desired) return;
+
+  const inventory = collectFullInventory(snapshot);
+  const missing: Record<string, number> = {};
+  for (const [res, need] of Object.entries(desired.components)) {
+    if (res === "energy") continue;
+    const gap = need - (inventory[res] ?? 0);
+    if (gap > 0) missing[res] = gap;
+  }
+  // 料齐却仍选不出目标 ⇒ 卡不在采购上（能量储备/等级），报需求只会制造噪声。
+  if (Object.keys(missing).length === 0) return;
+
+  const g = globalCache();
+  const table = (globalThis as { COMMODITIES?: Record<string, { amount?: number }> }).COMMODITIES;
+  const roi = commodityBatchRoi(
+    missing,
+    g.marketPrices?.prices ?? {},
+    desired.resourceType,
+    table?.[desired.resourceType]?.amount ?? 1,
+    CONFIG.factory.commodityRoiMargin,
+  );
+  if (!roi.profitable) return;
+
+  const demands = expandCommodityDemands(
+    desired.resourceType,
+    desired.components,
+    inventory,
+    ctx.tick,
+    CONFIG.market.interval + 50,
+  );
+  if (demands.length > 0) {
+    publishProcurementDemands(snapshot.roomName, demands as ProcurementDemand[], ctx.tick);
+  }
 }
 
 /** 从引擎 COMMODITIES 裁剪配方表（梯度降序：T3 → T1；无 components 的跳过）。 */

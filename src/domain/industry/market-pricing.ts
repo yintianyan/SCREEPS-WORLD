@@ -61,6 +61,41 @@ export function computeDynamicSellPrice(
 }
 
 /**
+ * commodity 批次正 ROI 判据（纯函数）—— factory 原料缺口的采购需求只有在
+ * 「买齐缺料的代价 ≤ 产物卖出额 ÷ (1 + margin)」时才允许上报。
+ *
+ * 为什么要这道闸：买中间品产商品在某些行情下是**深度倒挂**的投资
+ * （线上实测 @00:51Z：一批 wire 产 20 只需 20 utrium_bar(279.7) + 100 silicon(2973.639)
+ * = 302,958 credits，而 wire 最高买单 253.16 ⇒ 回收率 1.7%）。没有这道闸，
+ * 「缺料就上报需求」会把国库接到一条稳定亏损的通道上。
+ *
+ * 口径取舍（写清以免被误读成"完整成本核算"）：
+ * · 能量按自有产能计，**不计入买入成本**（配方能量由 distributor 从 storage 供）；
+ * · 任一缺料没有卖单（`sellMin===0`）或产物没有买单（`buyMax===0`）⇒ 判不可行：
+ *   前者买不到、后者卖了等于砸在手里；
+ * · margin 只近似覆盖运费/手续费/冷却机会成本 —— 跨房运费依赖目标房，这里不精确算，
+ *   用一个有余量的比例代替，宁可放过也不买错。
+ */
+export function commodityBatchRoi(
+  missingToBuy: Readonly<Record<string, number>>,
+  prices: Readonly<Record<string, MarketPriceSnapshot>>,
+  productType: string,
+  batchUnits: number,
+  margin: number,
+): { profitable: boolean; cost: number; revenue: number } {
+  let cost = 0;
+  for (const [res, qty] of Object.entries(missingToBuy)) {
+    if (res === "energy" || qty <= 0) continue;
+    const quote = prices[res];
+    if (!quote || quote.sellMin <= 0) return { profitable: false, cost: 0, revenue: 0 };
+    cost += quote.sellMin * qty;
+  }
+  const revenue = (prices[productType]?.buyMax ?? 0) * Math.max(1, batchUnits);
+  if (revenue <= 0) return { profitable: false, cost, revenue: 0 };
+  return { profitable: revenue >= cost * (1 + margin), cost, revenue };
+}
+
+/**
  * 从订单列表中采集行情快照（最低卖价 / 最高买价）。
 
  * terminal-manager 在每 interval tick 调用此函数刷新行情。

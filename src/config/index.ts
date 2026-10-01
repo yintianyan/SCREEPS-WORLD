@@ -972,6 +972,11 @@ export const CONFIG = {
     batchEnergy: 600,
     /** distributor 为 factory 维持的能量库存目标（5 批缓冲）。 */
     stockTarget: 3000,
+    /** commodity 采购需求的价格闸（比例，非绝对价）：只有
+     * `产物卖出额 ≥ 买齐缺料代价 × (1 + 本值)` 才上报需求（见 domain/industry/market-pricing
+     * 的 commodityBatchRoi）。0.35 的来由：跨房运费实测占货量 33%~79% 的量级 + 手续费 +
+     * 冷却机会成本 —— 取一个明显偏保守的下界，宁可少买不买错。 */
+    commodityRoiMargin: 0.35,
     /**
      * battery 回收阈值 — factory 内 battery 攒到此量即搬出到 terminal/storage。
      * factory 总容量 50k，产出无出路必堵死压缩链（投料 ERR_FULL 静默），此值是解堵开关。
