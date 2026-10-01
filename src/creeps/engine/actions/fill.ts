@@ -12,11 +12,21 @@ import {
 import { getObjectById } from "../../support/obj-cache";
 
 /**
- * 交付入账字段：只有远矿编队（带 remoteTarget）的交付算「跨房导入」。
- * 本地搬运不计收入——本房 harvested 已记过 source 产能，再计一次是重复记账。
+ * 交付入账字段：只有**能量真的离开采掘那一间房**时才算「跨房导入」。
+ * 两个排除项各有其重复记账的形状：
+ * ①本地搬运不计收入 —— 本房 harvested 已记过 source 产能，再计一次是重复记账；
+ * ②**交付落点就在采掘房（远矿 container 等）也不算** —— 那度电从未离开 remoteTarget，
+ *   而记账键是 home（helpers.runCountedAction 用 creep.memory.home），会把「A 房内环」
+ *   记成「home 房白收一笔」，凭空抬高 home 的净流（净流是扩张闸的输入）。
  */
-function importedFieldFor(creep: Creep): "imported" | undefined {
-  return creep.memory.remoteTarget ? "imported" : undefined;
+function importedFieldFor(
+  creep: Creep,
+  dest: RoomPosition | { pos: RoomPosition },
+): "imported" | undefined {
+  const source = creep.memory.remoteTarget;
+  if (!source) return undefined;
+  const destRoom = "pos" in dest ? dest.pos.roomName : dest.roomName;
+  return destRoom === source ? undefined : "imported";
 }
 
 /** 交付意图量 = min(背包能量, 目标空余)。动作前求值，ERR_FULL 时归零。 */
@@ -82,7 +92,7 @@ export function haulFillTarget(): ActionCandidate<AnyOwnedStructure> {
         ac.creep,
         t,
         ACTION_RANGE_NEAR,
-        importedFieldFor(ac.creep),
+        importedFieldFor(ac.creep, t),
         () => ac.creep.transfer(t, RESOURCE_ENERGY),
         { [ERR_FULL]: () => updateMode(ac.creep) },
         () => transferIntent(ac.creep, t),
@@ -173,7 +183,7 @@ export function fillStorage(): ActionCandidate<StructureStorage> {
         ac.creep,
         st,
         ACTION_RANGE_NEAR,
-        importedFieldFor(ac.creep),
+        importedFieldFor(ac.creep, st),
         () => ac.creep.transfer(st, RESOURCE_ENERGY),
         undefined,
         () => transferIntent(ac.creep, st),
