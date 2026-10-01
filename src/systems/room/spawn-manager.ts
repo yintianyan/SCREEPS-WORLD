@@ -335,6 +335,31 @@ function recyclePass(
   }
 }
 /**
+ * #54 拒因计数 — **只观测，不参与任何判定、不改任何阈值**。
+ *
+ * 为什么要五档而不是三档：`reserve` 被折进 `effectiveBudget`（:430），
+ * "被预留挡" 与 "被预算挡" 是同一条不等式（:447）的两组参数 —— 做成互斥三分支会把
+ * `reserveOnly` 吞进 `budget`，而那批恰恰是"要不要给交付角色豁免预留"的唯一论据。
+ * 另有一档在所有判定**之前**：:413 的 P0 生存否决是 `return`（不是 continue），
+ * 一次命中抹掉本轮所有非 P0 请求的尝试机会 ⇒ 三个后置计数器全为 0，而现象长得像"孵化无故空转"。
+ * 读数口径：**累计值，必须按差分读**（`peek rooms.<r>.spawnRejects`）。
+ */
+export type SpawnRejectReason = "survivalBlock" | "budget" | "reserveOnly" | "noDegrade" | "floor";
+export type SpawnRejectStats = Record<SpawnRejectReason, number>;
+function countSpawnReject(roomName: string, reason: SpawnRejectReason, amount = 1): void {
+  const mem = Memory.rooms[roomName] as
+    (RoomMemory & { spawnRejects?: SpawnRejectStats }) | undefined;
+  if (!mem) return;
+  const stats = (mem.spawnRejects ??= {
+    survivalBlock: 0,
+    budget: 0,
+    reserveOnly: 0,
+    noDegrade: 0,
+    floor: 0,
+  });
+  stats[reason] += amount;
+}
+/**
  * 尝试从队列孵化 creep — 遍历所有空闲 spawn，多 spawn 房间可同 tick 并行开工。
  * 能量记账：room.energyAvailable 是 tick 开始快照，同 tick 多次 spawnCreep 的扣费
  * 在意图执行阶段才结算 — 若都按快照校验，第二个意图可能超支失败；因此用本地
@@ -411,6 +436,11 @@ export function trySpawn(
 
     // P0 阻塞：如果存在 P0 请求但暂时无法满足，不孵化非 P0 creep。
     if (hasSurvival && !req.survival) {
+      // return 语义：本轮剩余的非 P0 一个都不会被尝试 ⇒ 记「被跳过的条数」而不是「发生次数」，
+      // 否则这一型停摆在计数里会被压成每拍 +1 的常数。
+      let skipped = 0;
+      for (const pending of queue) if (!pending.survival) skipped++;
+      countSpawnReject(snapshot.roomName, "survivalBlock", skipped);
       return;
     }
 
@@ -445,6 +475,10 @@ export function trySpawn(
     //      时 extension 无人填、满配永远凑不齐 — 等待即死锁，立即降级速出小泵重启循环。
     let body = req.body;
     if (cost > effectiveBudget) {
+      // 两档按「同一次判定算两个阈值」分：cost 越过**未扣预留**的预算 = 真液体不足；
+      // 只在扣了预留之后才越线 = 预留单独挡住的（这条差集就是"预留该不该豁免交付角色"的证据）。
+      // 单位是「请求·拍」：每拍对每个在途请求各计一次 ⇒ 差分 ÷ 拍数 = 该档平均挡住在途请求数。
+      countSpawnReject(snapshot.roomName, cost > energyBudget ? "budget" : "reserveOnly");
       const roomMem = Memory.rooms[snapshot.roomName];
       const roomState = roomMem?.colonyState ?? "normal";
       const economyPressure = roomMem?.economyPressure ?? 0;
@@ -477,12 +511,17 @@ export function trySpawn(
           //   · cleanQueue 的 TTL 分支（queue.ts:167）到期即出队；
           //   · churn 熔断按 purge 计数（含 expired），200t 窗口 >20 次即冻 100t ——
           //     真·配置错误仍会被刹住，见 :66-71 recordChurn 的两种 reason。
+          countSpawnReject(snapshot.roomName, "noDegrade");
           continue;
         }
         // 饥饿降级成本地板：starved 路径产物低于地板时继续排队等能量 — 等能量不是
         // 失败，不递增 retries（避免烧穿 maxRetries 进黑名单）；生存路径豁免。
         const survivalPath = req.survival || roomState === "bootstrap" || roomState === "recovery";
         if (!survivalPath && bodyCost(degraded) < CONFIG.spawn.starvationDegradeFloor) {
+          // ⚠️读数口径：地板在 bootstrap/recovery 被 survivalPath **豁免** ⇒ 这一档只在
+          //    colonyState=normal 时才涨。所以"floor=0" 既可能是"没被地板挡"，也可能是
+          //    "当时在带里（本来就不该挡）" —— 差分要和同窗的 colonyState 一起看。
+          countSpawnReject(snapshot.roomName, "floor");
           continue;
         }
         body = degraded;
