@@ -344,7 +344,18 @@ function recyclePass(
  * 一次命中抹掉本轮所有非 P0 请求的尝试机会 ⇒ 三个后置计数器全为 0，而现象长得像"孵化无故空转"。
  * 读数口径：**累计值，必须按差分读**（`peek rooms.<r>.spawnRejects`）。
  */
-export type SpawnRejectReason = "survivalBlock" | "budget" | "reserveOnly" | "noDegrade" | "floor";
+export type SpawnRejectReason =
+  | "survivalBlock"
+  | "budget"
+  | "reserveOnly"
+  | "noDegrade"
+  | "floor"
+  /** #64：**正交标签**，不是第六个互斥出口。只记"降级许可从未打开"（allowDegrade 五条件全假）这一型，
+   *  它与 :481 的 budget/reserveOnly 出自同一次判定 ⇒ 恒有 `degradeGateClosed ⊆ (budget ∪ reserveOnly)`。
+   *  为什么必须有它：`noDegrade` 只在**已进入降级分支**时才记，所以它为零有两种互斥解释
+   *  （"总能放行" vs "从没被允许进"），而 #61（预留语义）与 #73（扩张闸输入）的决策都押在这个区分上。
+   *  ⚠️旧不变式"五档之和 ≈ 尝试数"作废：加总只看前四档（survivalBlock/budget/reserveOnly/noDegrade/floor）。 */
+  | "degradeGateClosed";
 export type SpawnRejectStats = Record<SpawnRejectReason, number>;
 function countSpawnReject(roomName: string, reason: SpawnRejectReason, amount = 1): void {
   const mem = Memory.rooms[roomName] as
@@ -356,7 +367,12 @@ function countSpawnReject(roomName: string, reason: SpawnRejectReason, amount = 
     reserveOnly: 0,
     noDegrade: 0,
     floor: 0,
+    degradeGateClosed: 0,
   });
+  // `??=` 对**已存在**的对象不生效，而线上各房的 spawnRejects 是 #54 那批建的五键形状 ——
+  // 直接 `stats.degradeGateClosed += 1` 会得到 NaN（JSON 落成 null，计数器永久哑火）。
+  // 单测抓不到这一条：它每次新建 Memory，六键齐 ⇒ 补零必须写在产出侧。
+  if (stats.degradeGateClosed === undefined) stats.degradeGateClosed = 0;
   stats[reason] += amount;
 }
 /**
@@ -526,6 +542,10 @@ export function trySpawn(
         }
         body = degraded;
       } else {
+        // #64：上面已按 budget/reserveOnly 记过"付不起"，这一档答的是另一半问题——**会不会被允许出小 body**。
+        // 只有这一支能把"等能量"与"永远不会被允许等不到能量"分开；allowDegrade 的五个条件与
+        // 两个阈值（pressure>0.5、starvationDegradeFloor）一个都没动 —— 纯加出口。
+        countSpawnReject(snapshot.roomName, "degradeGateClosed");
         continue;
       }
     }

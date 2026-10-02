@@ -474,3 +474,16 @@
   ⇒ 自 83373482 起四条件同时成立，**tick ≈83374766 前后**应看到 `roleBounds.upgrader.maxCount` 1→2 且
   `lastAdjusted.upgrader.maxCount` 离开 83352766（若 `confirmAndBuild` 要两次同向观测，则 83376766 前）。
   到期不动 ⇒ 才是 #66 真案（届时按当场 signals 逐门槛复算，别按我这句推）。
+- 2026-10-02 07:4xZ **#64 实施（本地，随下一批推——不为一个观测档单独换码）**：第 6 档 `degradeGateClosed` 落在
+  `spawn-manager.ts:528` 那个此前**只 `continue` 不记任何东西**的出口（allowDegrade 五条件全假的那一支）。
+  三处改动：联合类型加档（含"正交标签、不参与加总"的口径注释）、初始化补第六键 **且补旧对象缺键的零**、出口计数。
+  **allowDegrade 的条件、`pressure>0.5`、`starvationDegradeFloor` 一个没动**（§5 边界：只加出口，不加闸也不松闸）。
+  两条**反向实验**（自改自测也要反着打）：
+    ① 撤掉"旧对象补零"那一行 ⇒ **恰好 1 例转红**（旧五键形状那条），其余 28 例绿 ⇒ 那条 NaN 陷阱由测试**真的**覆盖；
+      （这条坑的来历：`mem.spawnRejects ??= {…}` 对已存在对象不生效，线上各房的 spawnRejects 是 #54 建的五键形状，
+       直接 `+= 1` 得 NaN → JSON 落 null → 计数器上线即永久哑火；单测每次新建 Memory 六键齐，**抓不到**。）
+    ② 撤掉出口计数本身 ⇒ **恰好 2 例转红**（两条断言 `degradeGateClosed=1` 的），
+      而"许可打开时必须仍为 0"那条对照**不红**、#54 的 7 例与 `try-spawn` 19 例全绿 ⇒ 新键不是每拍常数，旧档口径没被打断。
+  `tsc --noEmit` 干净；全量 unit + integration 在跑（`tmp/observe/b64-unit.log` / `b64-integ.log`）。
+  **上线判据（按差分，带控制组）**：幼房 W38S56 这档应随"builder 1150 撞 cap−预留"同相位增长；
+  核心房 W37S58 同窗不应出现；旧四档（survivalBlock/budget/reserveOnly/noDegrade/floor）增速与上线前一致才算"只加出口"。

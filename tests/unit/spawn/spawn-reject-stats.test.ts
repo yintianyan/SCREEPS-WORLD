@@ -162,3 +162,57 @@ describe("#54 拒因计数 — P0 生存否决那条 return", () => {
     expect(rejects()).toBeUndefined(); // 没有任何拒绝发生 ⇒ 连对象都不该建
   });
 });
+
+/**
+ * #64 第 6 档 `degradeGateClosed` —— 它是**正交标签**（与 budget/reserveOnly 出自同一次判定），
+ * 所以本块的第一条用例故意断言"两档同时涨"，与上面五档的互斥口径不同；
+ * 而第三条对照用例（降级许可打开时它必须**不涨**）才是防止它退化成"每拍常数的"关键。
+ */
+describe("#64 降级许可从未打开 ⇒ 单独可计", () => {
+  const gatedBuilder = () =>
+    makeRequest({
+      key: "builder:W7N4:0",
+      role: "builder",
+      priority: 2,
+      body: ["work", "work", "carry", "move"] as BodyPartConstant[], // 300 能量
+      memory: { role: "builder", home: ROOM, mode: "acquire" } as CreepMemory,
+    });
+
+  it("P2 付不起且降级许可五条件全假 ⇒ budget 与 degradeGateClosed 同时 +1（正交，不互斥）", () => {
+    const spawn = mockSpawn(150);
+    const req = gatedBuilder();
+    trySpawn(mockSnapshot({ spawns: [spawn] }), [req], 3, 1, false);
+    expect(rejects()?.budget).toBe(1); // 300 > 未扣预留的 150
+    expect(rejects()?.reserveOnly).toBe(0);
+    expect(rejects()?.degradeGateClosed).toBe(1); // allowDegrade 从未为真
+    expect(rejects()?.noDegrade).toBe(0); // 没进降级分支 ⇒ 这一档不该涨（两档的分工就在这里）
+    expect(rejects()?.floor).toBe(0);
+    expect(spawn.spawnCreep).not.toHaveBeenCalled();
+    expect(req.retries).toBe(0); // 等能量不是失败（既有语义不被新计数带跑）
+  });
+
+  it("旧五键形状的 Memory ⇒ 新档补零后计数（否则 undefined+1=NaN，计数器上线即哑火）", () => {
+    // 线上各房的 spawnRejects 由 #54 那批建成，**没有第六键**；`??=` 对已存在对象不生效。
+    (Memory.rooms[ROOM] as any).spawnRejects = {
+      survivalBlock: 0,
+      budget: 3,
+      reserveOnly: 2,
+      noDegrade: 1,
+      floor: 0,
+    };
+    trySpawn(mockSnapshot({ spawns: [mockSpawn(150)] }), [gatedBuilder()], 3, 1, false);
+    expect(Number.isFinite(rejects()?.degradeGateClosed)).toBe(true);
+    expect(rejects()?.degradeGateClosed).toBe(1);
+    expect(rejects()?.budget).toBe(4); // 旧档继续按老口径走
+    expect(rejects()?.noDegrade).toBe(1); // 未被误记
+  });
+
+  it("控制组：同一次判定但降级许可打开 ⇒ degradeGateClosed 必须仍为 0，变化落在 noDegrade", () => {
+    const spawn = mockSpawn(50);
+    // starvedP1（wait ≥ 2×(4 件×3)=24）⇒ allowDegrade 为真 ⇒ 进得了分支就不该记"门没开"。
+    const req = makeRequest({ createdAt: (globalThis as any).Game.time - 60 });
+    trySpawn(mockSnapshot({ spawns: [spawn] }), [req], 3, 1, false);
+    expect(rejects()?.noDegrade).toBe(1);
+    expect(rejects()?.degradeGateClosed).toBe(0);
+  });
+});
