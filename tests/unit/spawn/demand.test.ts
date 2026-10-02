@@ -1682,3 +1682,80 @@ describe("无 storage 的早期房：economyPressure 不得清零升级道", () 
     expect(upgraders.length).toBeLessThanOrEqual(3);
   });
 });
+
+describe("#85 — upgraderClamp：需求阶梯当前把编制压在哪个结构上限", () => {
+  /** 只关心钳位字段，队列/存活态用最小可信场景（一台存活 harvester 避开 P0 短路）。 */
+  function clampOf(
+    storageEnergy: number,
+    opts: {
+      rcl?: number;
+      nearFull?: boolean;
+      downgradeRisk?: boolean;
+      capacity?: number;
+      noStation?: boolean;
+    } = {},
+  ) {
+    const storage = mockStructure("storage", {
+      id: "st",
+      energy: storageEnergy,
+      capacity: 1000000,
+    });
+    const ctx = {
+      ...normalCtx(0),
+      storageNearFull: opts.nearFull === true,
+      controllerDowngradeRisk: opts.downgradeRisk === true,
+    };
+    const r = evaluateDemand(
+      stationSnapshot({
+        storage,
+        rcl: opts.rcl ?? 6,
+        energyCapacityAvailable: opts.capacity ?? 5300,
+        // stationSnapshot 先摆好 controllerContainer 再展开 overrides ⇒ 这里传 undefined 就是真"无站桩"。
+        ...(opts.noStation ? { controllerContainer: undefined } : {}),
+      }),
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      ctx,
+      1000,
+    );
+    return r.upgraderClamp;
+  }
+
+  it("冲刺非满仓 ⇒ 钳位 = 2（`min(maxCount, 2)` 那一支；此时 maxCount=3 的那一份是惰性的）", () => {
+    expect(clampOf(60000)).toBe(2);
+  });
+
+  it("冲刺 + 满仓 ⇒ 无钳位（盈余必须被消化，maxCount 真的在用）", () => {
+    expect(clampOf(60000, { nearFull: true })).toBeUndefined();
+  });
+
+  it("维持档（≥ sustained 但 < sprint）⇒ 钳位 = 1", () => {
+    expect(clampOf(20000)).toBe(1);
+  });
+
+  it("低水位（< sustained）⇒ 钳位 = 1", () => {
+    expect(clampOf(5000)).toBe(1);
+  });
+
+  it("保级 ⇒ 无钳位（拉满 maxCount，且保级覆盖会把 target 抬回 minCount 之上）", () => {
+    expect(clampOf(20000, { downgradeRisk: true })).toBeUndefined();
+  });
+
+  it("无站桩 container ⇒ 钳位 = minCount（长途自采那条只维持最低编制）", () => {
+    expect(clampOf(60000, { noStation: true })).toBe(1);
+  });
+
+  it("RCL8 满级且无降级风险 ⇒ 钳位留空（整条阶梯被 rcl8NoUpgrade 关掉，读作'放行'）", () => {
+    // 这一条是本轮动手时把自己写的注释纠正过来的地方：原先以为"WORK 部件限速也是一支钳位"，
+    // 但那条 min() 只在 allowUpgrader 为真时才跑得到，而 RCL8 无风险时 allowUpgrader 就是假；
+    // 有风险时走的是保级分支（本来就不钳）⇒ 那一支按构造观测不到，删掉而不是留着当死码。
+    // 真正的拦截落在提案侧的 `upgraderCount >= current`（满级房里 upgrader 为 0，提案自然不成）。
+    expect(clampOf(60000, { rcl: 8 })).toBeUndefined();
+  });
+
+  it("钳位与弹性无关：同一场景只改容量档位不动水位 ⇒ 钳位仍是 2", () => {
+    expect(clampOf(60000, { capacity: 1800 })).toBe(2);
+  });
+});

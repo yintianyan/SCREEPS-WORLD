@@ -860,9 +860,12 @@ export function evaluateDemand(
 
   // #85：本 tick 需求阶梯对 upgrader **实际生效的结构钳位**（undefined = 该分支直接用 maxCount）。
   // 存在的理由：调优器只看"在场数 ≥ 当前上限"就提 upgrader.maxCount ↑，而很多分支根本不用 maxCount
-  // （冲刺非满仓只到 2、维持只到 1、RCL8 受 WORK 部件限速）⇒ 那些 ↑ 按构造落不了地，
+  // （冲刺非满仓只到 2、维持与低水位只到 1、无站桩 container 只到 minCount）⇒ 那些 ↑ 按构造落不了地，
   // 验证时 D.3 的 `roleCount >= pre+1` 必假 ⇒ 每 ~3×verifyDelay 被撤一次。
   // 报"事实"而不是让调优器复算这套分支，是为了不让同一个谓词活两处（#68 那类折叠错误的教训）。
+  // ⚠️RCL8 满级不在这张表里：那时 `rcl8NoUpgrade` 把整条阶梯关掉（target 恒 0）、钳位留空 ⇒ 读作"放行"，
+  // 但那时也不会有 upgrader 在场，提案侧的"编制已满"条件自己就把它拦下了 —— 两道条件叠出来的覆盖面，
+  // 别误以为钳位是唯一那道闸。
   let upgraderClamp: number | undefined;
 
   if (allowUpgrader && !frozenRoles.has("upgrader")) {
@@ -984,16 +987,10 @@ export function evaluateDemand(
       const maxWorkParts = upgradeCfg.maxWorkParts ?? upgradeCfg.rcl8MaxWorkParts;
       const maxCountByWork = Math.max(1, Math.floor(maxWorkParts / workPerBody));
       upgraderTarget = Math.min(upgraderTarget, maxCountByWork);
-      // WORK 部件限速同样是**结构**钳位（引擎硬上限，不是偏好）：body 越大能容纳的只数越少，
-      // 所以 RCL8 上把 maxCount 抬到 maxCountByWork 以上同样落不了地。
-      upgraderClamp =
-        upgraderClamp === undefined ? maxCountByWork : Math.min(upgraderClamp, maxCountByWork);
     }
     // 保级覆盖：控制器快降级时至少保留 minCount。
     if (crisisNeedsGuard || hasDowngradeRisk) {
       upgraderTarget = Math.max(upgraderTarget, upgraderConfig.minCount);
-      // 覆盖会把 target 抬到上面的 min() 之上 ⇒ 此刻没有任何结构上限在压 maxCount。
-      upgraderClamp = undefined;
     }
 
     if (upgraderTotal < upgraderTarget) {
