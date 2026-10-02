@@ -786,3 +786,9 @@
     （home=W37S58、现场 W36S58/W37S57），**没有一个"自有房→自有房"的交付** ⇒ **#48 的触发事件本窗仍未发生**，
     幼房 `bk` 是 `{harvested:1000, upgraded:800, towerSpent:500}`（自给中）⇒ #48 继续保持"挂在一次真实供给事件上"，
     不写 PASS 也不写 FAIL。
+  · **写者审计把 #74 的因果从"相关"抬成"唯一通路"**：`layout.nextPlanTick` 全仓只有一个运行期写者
+    （`layout-planner.ts:696`，`ctx.tick + interval + roomPhase`，`interval = gapsOpen ? 500 : 50`），
+    `nextGapPlanTick` 也只有 `:698` 一处且整体包在 `if (gapsOpen)` 里 ⇒ **`gapsOpen` 是节奏的唯一决定量**。
+    副作用：REFUTED 态在代码上几乎不可达，于是判效器新增**第四态"未上线"**——
+    "键还在 + 节奏没变"是新码没生效（要先 `check-code` 认 sha），**不能**当成我的机制被否证；
+    这条区分不写下来，我下一轮就会把一次部署失败读成一次科学否证。
