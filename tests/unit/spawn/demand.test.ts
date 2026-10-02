@@ -5,6 +5,7 @@ import {
   estimateTravelTicks,
   needsReplacement,
 } from "../../../src/domain/spawn/demand";
+import { bodyCost } from "../../../src/config/bodies";
 import {
   mockController,
   mockHostile,
@@ -91,6 +92,30 @@ describe("A2 — storage 水位驱动升级功率", () => {
     const upgraders = requests.filter(r => r.role === "upgrader");
     expect(upgraders).toHaveLength(1);
     expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(15);
+  });
+
+  it("维持档在低容量房被物理容量封顶：RCL4/cap1300 → body 付得起（线上 1650 恒拒的形状）", () => {
+    // 档位常量（1650/950）本来表达的是"维持档想要多大 body"，未封顶时它会越过本房
+    // energyCapacityAvailable —— 幼房 storage 已过 sustained(10k) 而 cap 只有 1300，
+    // 于是队列里躺着 cost 1650 的请求：任何能量都付不起，`budget` 拒因每拍烧一次，
+    // 升级道被请求本身锁死（controller.progress 实测冻结 2,473 拍）。
+    const storage = mockStructure("storage", { id: "st", energy: 20000, capacity: 1000000 });
+    const snap = stationSnapshot({ storage, rcl: 4, energyCapacityAvailable: 1300 });
+    const { requests } = evaluateDemand(
+      snap,
+      [],
+      "normal",
+      livingHarvester(),
+      [],
+      normalCtx(0),
+      1000,
+    );
+
+    const upgraders = requests.filter(r => r.role === "upgrader");
+    expect(upgraders).toHaveLength(1);
+    expect(bodyCost(upgraders[0]!.body)).toBeLessThanOrEqual(1300);
+    // 封顶后落到 8W 档（模板自己的注释：「RCL4(1300) 主力档」），不是把需求静默归零。
+    expect(upgraders[0]!.body.filter(p => p === "work")).toHaveLength(8);
   });
 
   it("低水位：storage < 10k 且 pressure > 0.5 → 停升级攒库存", () => {

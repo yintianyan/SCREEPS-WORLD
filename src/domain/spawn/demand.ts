@@ -888,8 +888,14 @@ export function evaluateDemand(
       (hasStorage && storageEnergy >= sprintStorageGate && pressure <= sprintPressureGate) ||
       !hasStorage;
     const isSustainedPhase = hasStorage && storageEnergy >= upgradeCfg.sustainedStorage;
-    const bodyEnergyCap =
-      snapshot.rcl >= 8 || !isSprintPhase ? (isSustainedPhase ? 1650 : 950) : energyCapacity;
+    // 档位常量必须被本房的物理容量封顶：1650 这档模板自己的注释是「RCL5(1800) 起可孵」，
+    // 而 RCL4 幼房 cap=1300（extension 还没建起来）——按 1650 出 body 就是造一把孵不出来的钥匙：
+    // 线上实测队列里 `upgrader:W38S56:0` 18 件/cost 1650 恒 `budget` 拒（1022 拍 +441），
+    // controller.progress 冻结 2,473 拍。收口成 min 只会降档不会升档，水位/压力门槛一个没动。
+    const bodyEnergyCap = Math.min(
+      snapshot.rcl >= 8 || !isSprintPhase ? (isSustainedPhase ? 1650 : 950) : energyCapacity,
+      energyCapacity,
+    );
     const workPerBody =
       selectBody("upgrader", bodyEnergyCap, { rcl: snapshot.rcl }).filter(p => p === "work")
         .length || 1;
