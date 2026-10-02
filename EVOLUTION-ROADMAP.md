@@ -562,3 +562,13 @@
     ⇒ 挂了 `tuning-rollback-watch.sh`（150 秒一发，盯 `TuningAdjust/TuningRollback/TuningFreeze`），
     下一次 ↑→撤销 循环被拍到就立案 #68 并修判据（**给 upgrader 补 builder 那条"按效果豁免"的出口，不动任何阈值/护栏**）。
     可检验预测：**只要 storage 仍在上行，每一次 upgrader ↑ 都会被撤销**；反之若哪次 ↑ 留住了，说明它当时真把库存烧下去了。
+- 2026-10-02 11:0xZ **#68 的第三支证据当场到手（不必等下一次循环）**：轮询器第 1 轮就读到
+  `Memory.kernel.tuning.rooms.W38S56.frozenParams["upgrader.maxCount"] = {frozenAt:0, frozenUntil:0, reason:"", rollbackCount: 1}`
+  ⇒ **这一项被闭环回滚过 1 次**（`hauler.maxCount` 同样 rollbackCount=1；两者都未冻结 ⇒ 冻结门槛 ≥2 次）。
+  加上"代码判据只认库存下跌"与"↑@83374266 / 回滚@83375766 而全程 `p=0`、se 一路上行"，三支齐 ⇒ **#68 成立**。
+  **代价量化**：progress 75,279/405,000，1 只 ≈+8/拍 ⇒ 约 **43 小时**解 G0；被允许 2 只 ⇒ 约 21.5 小时。
+  ⇒ **这一条把幼房到 RCL5 的时间翻倍，而且盈余越多越会被撤销**（不是"暂时没资源"）。
+  修法（下一步）：给 `upgrader.*` 补 builder `:665-669` 那条同构的**效果豁免**（编制到位且升速上升 = 改善）；
+  不动阈值、不动容差、不动 ↓ 方向的 D.4 护栏。政策邻近 ⇒ 改前把数摆清。
+  ⚠️自记一条探针形状错：轮询脚本里 WORK 加总用 `p=="work"`，线上 `creep.body` 是**对象数组**（要 `p.type`）⇒ 该列恒 0，
+  另两列（只数、progress）可用；**不去改正在运行的脚本**（编辑运行中的 bash 脚本比重复读数更危险）。
