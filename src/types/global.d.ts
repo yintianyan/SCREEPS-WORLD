@@ -329,6 +329,11 @@ declare global {
       /** @deprecated 已迁移到 segment，仅迁移期间存在。 */
       blocked?: Record<string, { code: number; retryAt: number }>;
     };
+    /**
+     * 累计拆改计划创建次数（#82）：`layoutMetrics.dismantleCount` 的真实来源。
+     * 没有它就只能给仪表写占位 0 —— 而"用 0 顶替测不出来"正是本模块上次变成化石的病。
+     */
+    dismantleCount?: number;
     /** min-cut 防御规划结果持久化（跨 Global Reset 存活）。 */
     minCut?: {
       /** 核心结构签名（检测是否需要重算）。 */
@@ -624,23 +629,17 @@ declare global {
      */
     layoutGaps?: Record<string, Record<string, number>>;
     /**
-     * 布局可观测性指标（v25+，layout-metrics 写，漏洞 #11）：房名 → 指标快照
-     * （字段见 LayoutMetrics）。仅变化时写入；消费方：deadAssetRate>0.5 触发拆改评估、
-     * linkUtilization<0.3 触发 link 审查、defenseWallRatio<0.7 防线弱点过多告警。
+     * 布局可观测性指标（房名 → 快照；字段定义只在 `LayoutMetrics` 一处，别在这里再抄一份 ——
+     * 上次这份内联副本与模块脱节，正配合"模块零调用点"把 `layoutMetrics` 变成了化石）。
+     *
+     * ⚠️ #82 的历史教训（写给下一个读到这行的人）：本通道曾长期**只有类型与数据、没有写者**
+     * （`computeLayoutMetrics` 零调用点、dist 里连 "layoutMetrics" 字样都没有），
+     * 而 Memory 里的旧值看起来像现值。所以：注释里**不再声称**"某阈值触发某评估"——
+     * 那些消费者并不存在；真正的拆改评估由 layout-planner 直接读 `getDeadAssetLinks`。
+     * 现在由 `recordLayoutMetrics()` 在每次规划收尾写入（只写有真实来源的字段，
+     * `defenseCutComplete=false` 时两个防御字段是占位，勿当测量）。
      */
-    layoutMetrics?: Record<
-      string,
-      {
-        deadAssetRate: number;
-        linkUtilization: number;
-        dismantleCount: number;
-        mvcGapCount: number;
-        linkConstrained: boolean;
-        defenseWallRatio: number;
-        defenseAlgoVersion: string;
-        defenseRampartWeakPoints: number;
-      }
-    >;
+    layoutMetrics?: Record<string, import("./domain/layout/metrics").LayoutMetrics>;
     /**
      * 帝国战争计划（v26+，war-planner 写入；v27 R4 扩展）：仅 war 姿态时存在，
      * 同一时刻至多一个攻击编队（不并行开多线）；姿态退出/目标失效/战损止损时

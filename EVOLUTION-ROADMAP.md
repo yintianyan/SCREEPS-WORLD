@@ -179,7 +179,7 @@
   **两个口径的差就是人的决定**。我已把分桶读数上线（`tradeFeeEnergySell/Buy`，纯观测），未定则不改价格。
 - **#75 核心房 2 只超配 controller 角色 link**（10,000 能量已沉没，实测能量 140/0/0）：
   拆掉=毁资产，挪建=再花能量，且 `upgrade.ts:69` 有 `energy>0` 门禁 ⇒ **它不饿到 upgrader**，没有紧迫损失。
-  未定则保持原样，我只补"超配无处可计"的观测（#75 尚未实施）。
+  未定则保持原样；观测侧已实施（#82：`auditLinkRoleSurplus` → `layoutMetrics.linkRoleSurplus`，只进仪表不进缺口）。
 
 ## 3.6 判等效外部事件（不是我的修没生效）
 
@@ -190,6 +190,8 @@
 - **#57 发展停摆响应**：等一次真停摆（`controllerProgressChangedAt` 已落 Memory 锚，取证器就位）。
 - **#68 调优闭环效果豁免**：等 tick 83381266 那一拍（两个错峰轮询器覆盖到 17:02Z）。
 - **#74 / #76**：判效器已备好，**但都排在批次 8 部署之后** —— 部署前的一切读数都是旧码。
+- **#82 观测通道**：判据是**键签名**而非数值——批次 11 部署后第一个规划窗，owned 房的 `layoutMetrics` 条目必须带上
+  `linkRoleSurplus`（化石条目按构造不可能带）；W38S58 那条化石应继续缺键（该房无规划器在跑）。两形相对即接通证据。
 
 ## 4. 当前迭代（最近三轮）
 
@@ -1117,3 +1119,30 @@
       代价是防线回归（44 只 rampart 血量会往 10k 地板掉）；
     ②给幼房一条远矿 ⇒ +10~20/t 新收入，防线与发展都不让步，但吃帝国 CPU（G6 已红）；
     ③维持现状。**我不自批**：默认仍是③，我只是现在把①②的代价写成了可核对的数。
+
+- **R104（10-02 19:1xZ）· #82 重新接线 layoutMetrics —— 一条"写在 Memory 里但从未被编译进去"的观测通道**
+  · **发现方式**：#74/#75 判效时去读 `Memory.kernel.layoutMetrics`，看到 W37S58/W38S58 两条形似完好的记录，
+    但 `grep -o "layoutMetrics" dist/main.js | wc -l` = **0**，而 `computeLayoutMetrics` 的调用点 `grep -rn` = **0**。
+    ⇒ **这条通道的写者不存在，Memory 里那两行是化石**（与 `overflow_loss` 全仓无写者、只被初始化成 0 完全同族）。
+    我上一轮差点把它当"已有仪器"用——**这次把"静态调用点 + 打包产物 grep"设成了新增写者的固定收尾检查**：
+    一条通道的证据必须出现在**要跑的那个二进制**里，不是出现在 src 里。
+  · **处置：重新接线而不是删掉**（删掉会连带丢掉 #75 的缺口，且所有输入都已存在：
+    `getDeadAssetLinks`、`isLinkConstrained`、`MINCUT_ALGO_VERSION`、`roomMem.minCut`）。
+    写点放在规划器收尾步 `recordLayoutMetrics(snapshot, gapsAfter, ctx.tick, roomMem)`，**只在内容变化时写 Memory**
+    （这条通道每次规划都会跑，无条件写会让 Memory 增量与 CPU 都白付）。
+  · **顺手把 #75 补上**：新增 `auditLinkRoleSurplus(snapshot, queue)` —— 把已建 link + `queued/blocked` 的 link
+    按 `classifyLinkRole` 归类，与 `expectedLinkRoleCounts` 逐角色比对，返回**超额数**。
+    缺陷 #75 的原始形状就是这个数：W37S58 六只 link 里 **3 只被归成 controller 角色 ⇒ surplus 2**，
+    而 `getDeadAssetLinks` 只看 `role=source`，所以**超配角色对死资产检测全盲**。现在它至少有读数。
+  · **一条不许越界的红线（写成用例钉住）**：surplus **只进 metrics，绝不进 `gaps` 字典**。
+    `gaps` 是 `shouldPlan` 的缺口强制输入，把 surplus 塞进去等于把 #74 刚拆掉的钉钉回去
+    （超配结构永远"补不满"⇒ 规划器永久钉在 500 拍慢速重试）。
+    用例直接断言 `mergeLinkRoleGaps(...)` 在那张快照上 `gaps === {}`。
+  · 新增字段：`linkRoleSurplus`、`defenseCutComplete`（后者的用途是区分"断点算法版本变更前后"的墙线，
+    让 #81 那类防线讨论有历史口径）；`roomMem.dismantleCount` 为新的持久计数。
+  · **可达性证明（这一轮的结论必须长这样）**：`dist/main.js` 内 `layoutMetrics` ×2、`linkRoleSurplus` ×3（改前都是 0），
+    `recordLayoutMetrics` 恰好 1 个调用点 + 1 个定义。门：typecheck 净；**单测 378 文件 / 5164 例**、
+    **集成 30 / 239** 全绿；新增用例文件 `tests/unit/layout/link-surplus-metrics.test.ts`（6 例）。
+  · **判效（部署后才读，按老规矩）**：owned 房的 `layoutMetrics` 条目必须**带 `linkRoleSurplus` 键**
+    —— 化石条目不可能带这个键，所以这是"写者真的在跑"的直接签名；同时 W38S58 那条化石应当**继续缺键**
+    （它没有规划器在跑），两形相对就是仪器接通的证据。化石本体属 #69 的残留，本轮不删（删 Memory 属破坏性动作）。

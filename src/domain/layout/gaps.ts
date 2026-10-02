@@ -144,3 +144,41 @@ export function mergeLinkRoleGaps(gaps: StructureGaps, linkRoleGaps: LinkRoleGap
   if (linkRoleGaps.storage > 0) gaps.linkStorage = linkRoleGaps.storage;
   if (linkRoleGaps.hub > 0) gaps.linkHub = linkRoleGaps.hub;
 }
+
+/**
+ * link **角色超配**审计（#75，纯函数）：某角色建得比期望多时的那部分数量之和。
+ *
+ * 为什么需要它：`auditLinkRoleGaps` 只报缺口（`Math.max(0, expected - have)`），
+ * 超配被截成 0 ⇒ "6 个名额建满、其中 3 只挤在 controller range≤2 内"这种现场形状
+ * 在缺口账上完全隐形，而 `#74` 摘掉虚期望之前，它还被误报成 `linkHub:2`。
+ * 只统计**有创建器的角色**（source/controller/storage）——hub 不是需求（无常驻消费者）。
+ *
+ * ⚠️输出只供仪表（layoutMetrics.linkRoleSurplus）：**不得**并进 shouldPlan 消费的缺口字典，
+ * 否则等于把 #74 刚拆掉的 gap-force 钉重新钉回去。
+ */
+export function auditLinkRoleSurplus(snapshot: RoomSnapshot, queue: readonly BuildTask[]): number {
+  const expected = expectedLinkRoleCounts(snapshot.rcl, snapshot.sources.length);
+  const sourcePoints = snapshot.sources.map(s => ({ x: s.pos.x, y: s.pos.y }));
+  const controllerPoint = snapshot.controller
+    ? { x: snapshot.controller.pos.x, y: snapshot.controller.pos.y }
+    : undefined;
+  const storagePoint = snapshot.storage
+    ? { x: snapshot.storage.pos.x, y: snapshot.storage.pos.y }
+    : undefined;
+  const have = { source: 0, controller: 0, storage: 0 };
+  const tally = (pos: { x: number; y: number }): void => {
+    const role = classifyLinkRole(pos, sourcePoints, controllerPoint, storagePoint);
+    if (role in have) have[role as keyof typeof have]++;
+  };
+  for (const link of snapshot.links) tally({ x: link.pos.x, y: link.pos.y });
+  for (const task of queue) {
+    if (task.structureType !== STRUCTURE_LINK) continue;
+    if (task.state !== "queued" && task.state !== "blocked") continue;
+    tally({ x: task.pos.x, y: task.pos.y });
+  }
+  return (
+    Math.max(0, have.source - expected.source) +
+    Math.max(0, have.controller - expected.controller) +
+    Math.max(0, have.storage - expected.storage)
+  );
+}

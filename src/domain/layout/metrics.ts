@@ -12,6 +12,15 @@ export interface LayoutMetrics {
   readonly dismantleCount: number;
   /** MVC 缺口数（当前，> 0 表示有未闭合的最小可用配置缺口）。 */
   readonly mvcGapCount: number;
+  /**
+   * link **角色超配数**（#75）：某角色建得比期望多时的那部分数量之和。
+   * 缺口审计按 `Math.max(0, …)` 把超配截掉 ⇒ "建多了/建错位置"在这套账上原本无处可计：
+   * W37S58 实测 6 只 link 里 3 只落进 controller range≤2（have={source:2,controller:3,storage:1}）
+   * ⇒ surplus=2，两只能量恒 0 的空位，而 `link-system` 的死资产检测只认 role=source ⇒ 全盲。
+   * ⚠️**只进仪表，绝不进 `shouldPlan` 的缺口集合** —— 否则就是把 #74 刚拆掉的那根钉再钉回去
+   * （超配是"要不要拆/迁"的人工排产，不是"还有结构没建"的规划触发器）。
+   */
+  readonly linkRoleSurplus: number;
   /** link 几何受限标记（controller+storage link 都放不下时为 true）。 */
   readonly linkConstrained: boolean;
   /** 防御完整性：min-cut 割集中 wall 占比（0-1）。< 0.7 防线弱点过多告警。 */
@@ -20,12 +29,19 @@ export interface LayoutMetrics {
   readonly defenseAlgoVersion: string;
   /** rampart 割集弱点数（共格/走廊路 rampart 割集，需 tower 火力覆盖）。> 5 告警。 */
   readonly defenseRampartWeakPoints: number;
+  /** 本行的防御两字段是否出自算完的割集（false ⇒ defenseWallRatio/WeakPoints 是占位，勿当测量）。 */
+  readonly defenseCutComplete: boolean;
 }
 
 /** 防御指标采集输入（从 Memory.rooms[roomName].minCut 读取后注入）。 */
 export interface DefenseCutInfo {
   /** min-cut 割集位置列表（complete=true 时有效）。空数组表示无缓存或未完成。 */
   readonly cutPositions: ReadonlyArray<{ x: number; y: number }>;
+  /**
+   * min-cut 是否算完（#82）。未完成时两个防御字段是**占位值**而非测量值 ——
+   * 没有这个戳，读者只能靠"数字看起来不像 0"猜它是不是化石，而化石正是本模块的病。
+   */
+  readonly complete: boolean;
 }
 
 /**
@@ -37,6 +53,7 @@ export interface DefenseCutInfo {
 export function computeLayoutMetrics(
   snapshot: RoomSnapshot,
   gaps: StructureGaps,
+  linkRoleSurplus: number,
   deadLinkCount: number,
   dismantleCount: number,
   linkConstrained: boolean,
@@ -65,10 +82,12 @@ export function computeLayoutMetrics(
     linkUtilization,
     dismantleCount,
     mvcGapCount,
+    linkRoleSurplus,
     linkConstrained,
     defenseWallRatio: wallRatio,
     defenseAlgoVersion,
     defenseRampartWeakPoints: rampartWeakPoints,
+    defenseCutComplete: defenseCut.complete,
   };
 }
 

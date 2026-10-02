@@ -17,10 +17,18 @@ import { assessEmergencyRebuild, isEmergencyTask } from "../../domain/constructi
 import {
   auditStructureGaps,
   auditLinkRoleGaps,
+  auditLinkRoleSurplus,
   mergeLinkRoleGaps,
   type StructureGaps,
 } from "../../domain/layout/gaps";
-import { getDeadAssetLinks, markLinkConstrained, createDismantlePlan } from "./link-system";
+import { computeLayoutMetrics } from "../../domain/layout/metrics";
+import { MINCUT_ALGO_VERSION } from "../../domain/layout/min-cut-defense";
+import {
+  getDeadAssetLinks,
+  markLinkConstrained,
+  createDismantlePlan,
+  isLinkConstrained,
+} from "./link-system";
 import {
   isLinkConstrained as isLinkConstrainedDomain,
   isDismantleOnCooldown as isDismantleOnCooldownDomain,
@@ -491,6 +499,7 @@ function planStage2Logistics(
         // 不会再创建新任务 → 无 queued 任务 → 不创建拆改计划 → 由 fallback 路径处理。
         const replacementTask = findReplacementForDeadLink(deadLink, snapshot, queue);
         if (!replacementTask) continue;
+        roomMem.dismantleCount = (roomMem.dismantleCount ?? 0) + 1;
         createDismantlePlan(
           deadLinkId,
           snapshot.roomName,
@@ -691,6 +700,10 @@ function planStage3RoadsAndFinalize(
   // link 角色感知（同 stage 0 入口）：合并角色缺口，暴露死资产/角色分布错。
   mergeLinkRoleGaps(gapsAfter, auditLinkRoleGaps(snapshot, roomMem.buildQueue));
   recordLayoutGaps(snapshot.roomName, gapsAfter);
+  // #82：布局可观测通道重新接线。metrics.ts 此前**零调用点**（dist 里连 "layoutMetrics" 字样都没有），
+  // 而 Memory.kernel.layoutMetrics 里躺着旧二进制留下的化石值 —— 读者（包括今天的我）会把它当现值。
+  // 只写在能拿到真输入的地方；minCut 未算完时靠 defenseCutComplete 标出"防御两格是占位"。
+  recordLayoutMetrics(snapshot, gapsAfter, ctx.tick, roomMem);
   const gapsOpen = Object.keys(gapsAfter).length > 0;
   const interval = gapsOpen ? GAP_RETRY_INTERVAL : CONFIG.layout.planInterval;
   layout.nextPlanTick = ctx.tick + interval + roomPhase(snapshot.roomName, interval);
@@ -835,4 +848,56 @@ export function findReplacementForDeadLink(
       Math.abs(t.pos.x - adjacentSource.pos.x) <= 1 &&
       Math.abs(t.pos.y - adjacentSource.pos.y) <= 1,
   );
+}
+
+// ─── #82 布局指标落盘（重新接线）─────────────────────────────
+
+/**
+ * 把布局可观测指标写进 `Memory.kernel.layoutMetrics[room]`。
+ * 全部输入都有真实来源：死资产 link 计时（link-system）、link 几何受限标记、
+ * 本房累计拆改次数、min-cut 割集。**没有任何字段用 0 顶替"测不出来"**——
+ * 那正是本模块上次变成化石时的样子。
+ */
+function recordLayoutMetrics(
+  snapshot: RoomSnapshot,
+  gaps: StructureGaps,
+  tick: number,
+  roomMem: RoomMemory,
+): void {
+  const minCut = roomMem.minCut;
+  const positions: Array<{ x: number; y: number }> = [];
+  if (minCut?.complete) {
+    for (let i = 0; i + 1 < minCut.positions.length; i += 2) {
+      positions.push({ x: minCut.positions[i]!, y: minCut.positions[i + 1]! });
+    }
+  }
+  const metrics = computeLayoutMetrics(
+    snapshot,
+    gaps,
+    auditLinkRoleSurplus(snapshot, roomMem.buildQueue ?? []),
+    getDeadAssetLinks(tick).length,
+    roomMem.dismantleCount ?? 0,
+    isLinkConstrained(snapshot.roomName, tick),
+    { cutPositions: positions, complete: !!minCut?.complete },
+    MINCUT_ALGO_VERSION,
+  );
+  Memory.kernel ??= {};
+  const store = (Memory.kernel.layoutMetrics ??= {});
+  const prev = store[snapshot.roomName];
+  // 仅变化时写（避免每 50 拍一次的序列化抖动）。
+  if (
+    prev === undefined ||
+    prev.deadAssetRate !== metrics.deadAssetRate ||
+    prev.linkUtilization !== metrics.linkUtilization ||
+    prev.mvcGapCount !== metrics.mvcGapCount ||
+    prev.linkRoleSurplus !== metrics.linkRoleSurplus ||
+    prev.dismantleCount !== metrics.dismantleCount ||
+    prev.linkConstrained !== metrics.linkConstrained ||
+    prev.defenseWallRatio !== metrics.defenseWallRatio ||
+    prev.defenseRampartWeakPoints !== metrics.defenseRampartWeakPoints ||
+    prev.defenseAlgoVersion !== metrics.defenseAlgoVersion ||
+    prev.defenseCutComplete !== metrics.defenseCutComplete
+  ) {
+    store[snapshot.roomName] = metrics;
+  }
 }
