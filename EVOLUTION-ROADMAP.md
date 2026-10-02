@@ -203,7 +203,28 @@
 
 ## 4. 当前迭代（最近三轮）
 
-### 4.0-pre 下一轮 L2 主目标（10-02 15:4xZ 改写）：**幼房补员道——`upgrader.maxCount=3` 却长期 `alive=2`**
+### 4.0-pre（10-02 19:3xZ 改写）下一轮 L2 主目标：**#83 —— 把 verify 那一拍的 `roleCount` 随回滚事件落盘**
+
+> 为什么是这条（三个理由都能核对）：
+> ①它是**纯观测**，不动阈值、不动安全语义、不动任何判据本体（对齐 §5 边界，不需要请示）；
+> ②它一次性解锁三条我目前只能记"不可判"的账 —— **#79 的上行护栏有没有真的被现场否证过一次**、
+> **#68 的单向棘轮**、以及 **#81 的二阶链条**（防线外壳经 reserve 压制升级编制）。
+> 判别量已经由读码确定：`evaluator.ts:661` 在 #79 前是 `return true` ⇒ "编制到位却被回滚"旧码按构造不可能，
+> 所以 **roleCount 落盘 = 归因本身**，成因字符串反而不必要；
+> ③改动面已知且极小：`tuning-engine.ts:309` 是唯一 `TuningRollback` 写点，
+> `verifyPendingAdjustments` 的 rollbacks 对象带出一个已有的瞬时值即可。
+>
+> **红线（写成用例钉住）**：新字段只准做诊断，**不得反过来参与决策** ⇒ 用例要断言"加字段前后 rollbacks 数组逐条相同"。
+> **本轮不做**：不动 upgrader/builder 的门槛，不借机给 #79 再打补丁（那条纪律在 a570e7c 里写过）。
+>
+> 顺带一件事（同批，工具侧、不占部署）：`upguard-verify.sh` 的 EXPR 补两列 ——
+> 一是**在场 upgrader 数**（按 `memory.home`+`memory.role` 现场数，与引擎 `countRolesByHome` 同口径），
+> 二是 **pendingValidation 的 `preAdjustValue`/`adjustTick`**（把"调整发生在哪一拍"从截断的 `la` 里解放出来）。
+> ⚠️事实更正：v1 那列 `upgrader` 取的是 **roleBounds 上限**，**在场数从来没被采过** ⇒ 分不清的是
+> "cap=3/在场=2 的补员缺口"与"cap=2/在场=2 的编制到位"这两型（R105 我就因此误读过一次）。
+> §4.0-pre 旧版那条"补员道"要靠这两列才继续得了。
+
+### 4.0-pre（10-02 15:4xZ 版，已被上面取代；保留作状态出处）**：幼房补员道——`upgrader.maxCount=3` 却长期 `alive=2`**
 
 > 换掉旧的 #62 主目标（#62 已结案并拿到教科书级 PASS）。选这条的理由是**它同时卡着三件事**：
 > ①#68 的效果豁免判据里，唯一可归因的 PASS 组合需要 `alive ≥ preAdjust+1 = 3`——补不上第三只，
@@ -1166,13 +1187,16 @@
     这正是"定价闸门不看距离"的代价形状。**价格/门槛我一个没动，仍待人定。**
   · **#79 上行护栏 = 仍不可判（但不是坏）**：幼房 `upgrader.maxCount` 出现一次完整闭环——
     `la` 由 83379766→83384266、`fr` 的 `upgrader.maxCount:rc0→rc1`、在场 upgrader 3→2 并稳定 4 个窗。
-    形状是 ↑(2→3) 后在 83384266（=83382766+1500，正好一个 verifyDelay）被回滚。
+    形状是 ↑ 后上限回落（v1 的 `upgrader` 列其实是 **roleBounds 上限**，不是在场数——我当场把它读成"在场 3→2"，
+    已在 R106 更正；verify 落在 83384266，与旧值 83379766 相差 4,500 拍 = 3×verifyDelay，
+    这本身就把"到底是哪个 push 点 fired"进一步推向不可定。）
     **问题是这条回滚事件区分不了两种成因**：旧判据（storage 必须转跌）与我新加的上行护栏
     （reserve 转负且更坏）走的是同一个 push 点、同一个 `reason` 文本
     （`evaluator.ts:848` "signal not improved"），而 `TuningRollback` 事件只带
     `[paramCode, rolledBackValue, preAdjustValue]`（`tuning-engine.ts:309`）——**带原因的 `log.info` 那句落不进 Memory**。
     幼房 reserve 近一小时实测 ≈−0.76/拍（R103），所以"护栏合法否证掉了这次 ↑"完全讲得通，
-    但"旧判据又把它撤销了"同样讲得通 ⇒ **我不写 PASS 也不写 FAIL**。
+    但"旧判据撤的"与"D.3 合同超时撤的"（`evaluator.ts:823` 那个独立 push 点，需要编制始终没到位）同样讲得通
+    ⇒ 三成因而非两成因，**我不写 PASS 也不写 FAIL**。
     改判用的**可否证预测**（仪器已在跑：`upguard-verify.sh` 的 `la`+`fr`+编制三列）：
     下一次 `upgrader.maxCount` ↑ 若在编制到位且 reserve 未恶化的情况下被 rc+1，则 #79 被否证；
     若 rc 不动而 `la` 前移，则闭环第一次拿到成功出口。
@@ -1187,8 +1211,8 @@
     （`room-state.ts:44-52`：reserve = energyAvailable + containers + storage + terminal + creepEnergy，
     `phase.ts:372`：`reserveDelta = reserve − prevReserve`）⇒ **塔修墙从 storage 出的每一笔能量都会把
     `avgReserveDelta` 往负方向推**，而 #79 的上行护栏正是拿这个数否证 ↑ 的。
-    连起来的链条是：**44 只 rampart 的维护 ⇒ 幼房 reserve 微跌（R103 实测 ≈−0.76/拍）⇒ 每一次
-    `upgrader.maxCount` ↑ 被自家护栏撤销 ⇒ 升级编制被防线外壳间接钉住。**
+    连起来的链条是：**44 只 rampart 的维护 ⇒ 幼房 reserve 微跌（R103 实测 ≈−0.76/拍）⇒ 每一次（若走护栏那条路）
+    `upgrader.maxCount` ↑ 被撤销 ⇒ 升级编制被防线外壳间接钉住。**
     ⇒ 防线的作用不止"吃掉一半收入"这一阶，它还**通过调优闭环压制编制上限**。
     ⚠️本轮**只算机制不算定罪**：19:0xZ 那次 ↑ 被回滚的成因无法归因（#83），
     所以这条链条目前是"读码成立 + 形状吻合"，等 #83 落成因码后才有第一发证据。
