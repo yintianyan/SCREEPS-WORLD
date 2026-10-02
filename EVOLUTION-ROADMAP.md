@@ -155,9 +155,19 @@
 
 ## 4. 当前迭代（最近三轮）
 
-### 4.0-pre 下一轮 L2 主目标（10-02 06:09Z 改写）：**给"为什么什么都没发生"补第 6 档出口**（#64）
+### 4.0-pre 下一轮 L2 主目标（10-02 08:0xZ 再改写）：**给 e2e 拿到可复现性**（#62 收口 = 命名的确定性）
 
-- **一句话**：`countSpawnReject` 现在有五档（`survivalBlock/budget/reserveOnly/noDegrade/floor`），但**降级许可从未打开**
+- **状态更新（免得下一轮把做完的事再排一次）**：下面这条 #64 已实施完毕（`785b671`，本地未推，随下一批；
+  三条新用例 + 两条反向实验 + tsc/unit/integration 全绿，全量 e2e 在 `tmp/observe/e2e-batch5.log` 正在跑）。
+  **下一轮的主目标换成 #62**：照抄 `tmp/observe/pending-62-patch.md`（名字形状不动、后缀换成 `Memory.kernel.creepSeq`，
+  先实测"连续整数进 `h*31+charCodeAt` 会不会退化"并把门槛写成数值，再配两条反向实验），
+  结案判据 = 孪生四态里的 **PASS**（`bash tmp/tools/official/e2e-seed-twin.sh tests/e2e/scenarios/17-multi-room-soak.test.ts 7 11`）。
+  ⚠️在 PASS 到手之前，**任何 soak 场景的红都不许当因果证据**（这条今天已经用过一次：E2E-016 那类"真停摆"要靠可复现才升得了级）。
+- **一条今天新立、约束所有后续修复的纪律（来自 #65 结案）**：**body/形状类改动对在途请求无效，要等 `expiresAt` 出队才见效**
+  ⇒ 判效窗必须 ≥ 一个 `CONFIG.spawn.requestTtl`（本仓 = 1000 拍），且**部署生效时刻要按功能签名定**
+  （`capacity.tier/since` 或"新形状首现那一拍"；`Memory.kernel.bootTick` 是历史值，不能用它给部署定日）。
+  批次4 的解冻正好在换码后一个 TTL 落地 —— 不是我原先说的"缺陷未修好"。
+- **一句话（#64，已做完）**：`countSpawnReject` 现在有五档（`survivalBlock/budget/reserveOnly/noDegrade/floor`），但**降级许可从未打开**
   这一型无处可计 —— 它今天只能靠"`reserveOnly` 在涨 + `noDegrade` 不涨 + `floor=0`"三件事**间接推断**，
   而这正是我这一整天反复用到的读法（幼房 builder 1150 撞 `cap−预留 1100` 那一条就落在这一型里）。
   **落点已读到**：`SpawnRejectReason` 在 `systems/room/spawn-manager.ts:347`（五档联合类型），
