@@ -782,6 +782,13 @@ declare global {
      * 为什么落 Memory：判定它的那张 `recoveryActionTable` 是 heap，换码即清 ——
      * 不留这份清单，"哪项恢复反复失败"在部署之后就无人可查。 */
     escalations?: import("../domain/strategy/recovery-lifecycle").EscalationEntry[];
+    /** 调优探索的确定性种子（`kernel/deterministic-random.ts`，由 tuning-engine 注入评估层）。
+     * **缺省即真随机 ⇒ 生产行为一字不变**；只有测试夹具显式写入时才切换到可复现序列。
+     * 走 Memory 而不是替换 `Math.random`：bot 在 @screeps/driver 的 isolated-vm isolate 里跑，
+     * isolate 有自己的内建对象，测试进程的替换到不了它（10-01 实测同 seed 两跑世界仍分叉）。 */
+    testRandomSeed?: number;
+    /** 与 `testRandomSeed` 配套的调用序号（仅落种子时读写）。 */
+    testRandomCalls?: number;
     /** 期望自检结果（kernel 写）：最近一次核验的违例清单。 */
     expectations?: {
       tick: number;

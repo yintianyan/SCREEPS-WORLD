@@ -5,6 +5,7 @@ import { CONFIG } from "../../config";
 import { getRoleBounds, TUNABLE_ROLES } from "../../config/tuned";
 import { classifyLinkRole } from "../../domain/economy/links";
 import { averageSourceFillRatio } from "../../domain/economy/phase";
+import { tuningRandom } from "../../kernel/deterministic-random";
 import {
   evaluateTuning,
   verifyPendingAdjustments,
@@ -201,6 +202,9 @@ function safeRunTuning(
       ctx.tick,
       roomTuning.lastTrend ?? {},
       excludedParams,
+      // #62：探索随机源走可复现通道 —— 没有 `Memory.kernel.testRandomSeed` 时它就是 Math.random，
+      // 生产行为不变；测试落种子才能拿到同一条探索序列（bot 在 isolate 里，替换不到 Math.random）。
+      tuningRandom,
     );
 
     // 8. [A] 应用 evaluation.adjustments + 写 pendingValidation + 事件日志

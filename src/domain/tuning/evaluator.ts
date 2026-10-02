@@ -77,6 +77,9 @@ export function evaluateTuning(
   currentTick: number,
   prevTrend: Record<string, TrendDirection> = {},
   excludedParams?: ReadonlySet<string>,
+  // 探索随机源由调用方注入：本模块的契约是"纯函数、无 Game/Memory"，而可复现性需要读 Memory
+  // （见 domain/tuning/deterministic-random.ts）。默认 Math.random ⇒ 现有调用方与生产行为一字不变。
+  random: () => number = Math.random,
 ): TuningEvaluation {
   const adjustments: TuningAdjustment[] = [];
   const newTrend: Record<string, TrendDirection> = {};
@@ -175,7 +178,7 @@ export function evaluateTuning(
   // 当本周期无任何调整（稳态信号）且不在探索冷却期内时，
   // 随机选一个参数做 ±1 step 探针，走同一 pendingValidation 闭环。
   if (adjustments.length === 0 && !excludedParams) {
-    const exploration = exploreParameter(signals, currentBounds, lastAdjusted, currentTick);
+    const exploration = exploreParameter(signals, currentBounds, lastAdjusted, currentTick, random);
     if (exploration) {
       adjustments.push(exploration.adjustment);
       if (!pendingValidations) pendingValidations = {};
@@ -872,6 +875,7 @@ export function exploreParameter(
   currentBounds: Record<string, { minCount: number; maxCount: number }>,
   lastAdjusted: Record<string, number>,
   currentTick: number,
+  random: () => number = Math.random,
 ): {
   adjustment: TuningAdjustment;
   pendingValidation: Omit<PendingValidation, "adjustTick">;
@@ -899,10 +903,11 @@ export function exploreParameter(
 
   if (candidates.length === 0) return null;
 
-  // 随机选一个参数 + 随机方向（up/down）
-  const param = candidates[Math.floor(Math.random() * candidates.length)]!;
+  // 随机选一个参数 + 随机方向（up/down）。随机源由调用方注入：无种子时它就是 Math.random，
+  // 有种子时 e2e 才能拿到同一条探索序列（bot 跑在 isolate 里，测试进程替换不到 Math.random）。
+  const param = candidates[Math.floor(random() * candidates.length)]!;
   const boundsDef = TUNING_BOUNDS[param]!;
-  const direction: "up" | "down" = Math.random() < 0.5 ? "up" : "down";
+  const direction: "up" | "down" = random() < 0.5 ? "up" : "down";
 
   // 获取当前值
   const [role, field] = parseParamPath(param);
