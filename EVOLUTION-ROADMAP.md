@@ -487,3 +487,10 @@
   `tsc --noEmit` 干净；全量 unit + integration 在跑（`tmp/observe/b64-unit.log` / `b64-integ.log`）。
   **上线判据（按差分，带控制组）**：幼房 W38S56 这档应随"builder 1150 撞 cap−预留"同相位增长；
   核心房 W37S58 同窗不应出现；旧四档（survivalBlock/budget/reserveOnly/noDegrade/floor）增速与上线前一致才算"只加出口"。
+- 2026-10-02 07:5xZ **#64 那条"旧对象补零"的守卫，在生产上拿到了直接证据**（mark=QPG，tick 83373907）：
+  线上 `Memory.rooms.W38S56.spawnRejects` 的键**就是五根**（`survivalBlock,budget,reserveOnly,noDegrade,floor`），
+  读 `degradeGateClosed` 得 **null**（undefined）⇒ "加第六键时 `??=` 不会补它"不是假想防御，是**必然发生**的形状。
+  下一批上线后这一档若为 NaN/null，先查的就是这行守卫有没有跑（别怀疑计数器有没有被调用）。
+  同读顺带把批次4 的②再续一拍：progress 39,919→**41,223**（+1,304/163 拍 = 又是精确 8.0/拍）、
+  `controllerProgressChangedAt==Game.time`（第三次同拍跟随）、`budget` **仍 2755**（连续 417 拍零增长）、
+  `colonyState=normal / pressure=0`。⇒ 解冻是**持续状态**而不是脉冲。
