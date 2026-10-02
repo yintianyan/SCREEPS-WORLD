@@ -253,10 +253,15 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
 
     runner.run(world, 6000, {
       onTick: (w, t) => {
-        if (t === 1) {
-          const roomMem = g().Memory.rooms.W1N1;
-          roomMem.controllerProgressSeen = w.controller?.progress ?? 0;
-          roomMem.controllerProgressChangedAt = g().Game.time - (E5_STALE_TICKS + 1);
+        // ⚠️**每拍**把锚点按回过去，而不是只在 t=1 注入一次：只在开头注入的停摆是**可自愈**的 ——
+        //   只要有 upgrader 把 progress 推动，`tick - changedAt` 归零，发展域失败节点消失，
+        //   `development_resume` 于是"成功"而非烧穿重试预算 ⇒ 本用例要测的那条留痕路径根本不触发。
+        //   （13:3xZ 实测：命名确定性改动换了 target hash ⇒ 该房自愈 ⇒ 清单里只剩全局那条 terminal_trade。）
+        //   让前提恒成立，而不是把断言改成"W1N1 条目有没有看运气"。
+        const stallMem = g().Memory.rooms.W1N1;
+        if (stallMem) {
+          if (t === 1) stallMem.controllerProgressSeen = w.controller?.progress ?? 0;
+          stallMem.controllerProgressChangedAt = g().Game.time - (E5_STALE_TICKS + 1);
         }
         const list = g().Memory.kernel?.escalations;
         if (Array.isArray(list) && list.length > 0) {
@@ -275,11 +280,23 @@ describe("恢复动作链 — 失败→优先级→执行→追踪", () => {
       escalations.length,
       "烧穿重试预算后 Memory.kernel.escalations 应留下案例条目（换码也带得走）",
     ).toBeGreaterThan(0);
-    expect(escalations[0]!.room, "清单条目必须带房名（幂等键同口径）").toBe("W1N1");
+    // ⚠️这里原先断言 `escalations[0].room === "W1N1"`，CI 上稳定失败（实测 'global' ≠ 'W1N1'），
+    //   而本地"整目录跑"是绿的、"单跑这个文件"是红的 ⇒ **位置断言 + 顺序依赖**，测的是列表实现的偶然顺序，
+    //   不是 #59 的性质。清单本身不承诺顺序：同一次跑里既可能有房级案例（W1N1/colony）也可能有全局案例
+    //   （GLOBAL_ROOM 域的动作），谁先入列取决于当时哪个先烧穿。
+    //   改判成按**幂等键**取条目：要证的是"我注入的那间房的停摆确实留了痕"，那就去找它那一键的条目。
+    const mine = escalations.filter(e => e.room === "W1N1");
+    expect(mine.length, "注入的停摆案例必须在清单里留下带房名的条目").toBeGreaterThan(0);
     expect(
-      escalations.every(e => e.repeats <= escalations[0]!.repeats + escalations.length),
-      "同一案例只应更新一条，不得逐拍追加",
+      mine.every(e => e.domain === "development" || e.domain === "colony"),
+      "房级条目必须落在发展/殖民域之一（幂等键的另一半）",
     ).toBe(true);
+    // "同一案例只应更新一条"这条性质本来就与顺序无关：按 (room,domain,actionType) 分组，每组必须恰好一条。
+    const keys = escalations.map(e => `${e.room}|${e.domain}|${e.actionType}`);
+    expect(
+      new Set(keys).size,
+      `同一案例被逐拍追加了：${keys.length} 条 / ${new Set(keys).size} 个唯一键`,
+    ).toBe(keys.length);
     expect(escalations.length, "清单条数应有界").toBeLessThanOrEqual(12);
     // terminal 位只在真判不可恢复时才置 1 —— 没走到也无妨，但必须能区分（不伪装成已验证）
     if (!sawTerminal) {
