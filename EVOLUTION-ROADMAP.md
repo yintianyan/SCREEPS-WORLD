@@ -694,3 +694,43 @@
   · 核心房那条 `linkHub:2` 是**真缺口**，不要顺手"清理"掉它。
   顺带：`expectations.violations=[]`、两房 `colonyState=normal`、stale site 计数 0、`lostRooms={}`、
   幼房 RCL4 满配 extension + storage + tower ⇒ 发展轴目前没有新伤，主要瓶颈仍是 RCL5（≈20 小时）与 CPU 档。
+
+- 2026-10-02 14:5xZ **#74 立案并本地修复：`linkHub:2` 不是真缺口，而是"把剩余容量当缺结构"的不可满足期望——它把核心房的布局规划器永久钉在 500 拍慢速重试**（全部带 mark，LH1/LH2/LH3/LH4）：
+  · **先撤上一条我写的话**：14:0xZ 那条"核心房 `linkHub:2` 是真缺口，不要顺手清理"——**撤的是"真缺口"这一支**，
+    "不要去 Memory 里手工删键"这条操作纪律保留（事实修正后依然不该手删）。
+  · **现场形状（LH1@83380289）**：W37S58 RCL8、`linkCnt=6`（CONTROLLER_STRUCTURES 的 link 名额在 RCL8 就是 6）
+    ⇒ **一个都不缺**；`buildQueue=[]`、`sites=0`、`state=building`、`revision=20`、`nptAhead=422`、`nextGapPlanTick` 存在。
+  · **机制（LH2@83380298，逐只实测到锚点的 Chebyshev 距）**：6 只 link 里 2 只贴 source（`minS=1`、能量 290/270 在流）、
+    1 只贴 storage（`dSt=1`）、**3 只全落在 controller range≤2 内**（`dC=2/2/2`，能量 140/0/0）。
+    `classifyLinkRole` 是"最近锚获胜"，所以这 3 只都叫 controller ⇒ `have={source:2,controller:3,storage:1,hub:0}`，
+    而 `expectedLinkRoleCounts(8,2)` 旧表给 `hub=2` ⇒ `auditLinkRoleGaps` 把三个有创建器的角色都算成 0 缺口
+    （`Math.max(0,…)` 把超配截掉），剩下的期望余额只能从 hub 这个**没有任何 actuator 的角色**冒出来。
+  · **hub 为什么不可满足（读码，不是推测）**：放置侧只有 `createSourceLinkTasks / createControllerLinkTask /
+    createStorageLinkTask` 三个创建器（`planner.ts:505-563`）；传输侧 `planLinkTransfers` 只路由 source→controller/storage
+    （`links.ts:100-102`，controller/storage 各 `find` 单只）；role "hub" 只出现在 `classifyLinkRole` 的兜底分支。
+    更要紧的是 `dumpToNearbyLink` 只按"距离+有空位"选目标 ⇒ 真建一只 hub link 会成**只进不出的能量陷阱**。
+    ⇒ 所以 `hub:2` 不是"待实现的能力"，是把 6 个名额里没被三个角色占走的**剩余容量**误登记成缺口。
+  · **代价的符号我一开始搞反了，实测定标**：我先假设"虚缺口⇒反复重规划⇒烧 CPU"，读了 `CONFIG.layout.planInterval=50`
+    才发现 `GAP_RETRY_INTERVAL=500` 比常态**慢 10 倍** ⇒ 这条 pin 是**降速**不是烧 CPU。真正的代价是延迟：
+    **核心房任何真实新缺口（塔被拆、controller link 被打掉）都要等 ~500 拍才被排产**，而设计意图是 ~50 拍。
+    控制组在同一次二进制里现成（LH3@83380337）：无缺口的幼房 W38S56 `nptAhead=79`、`nextGapPlanTick=null`；
+    有虚缺口的核心房 `nptAhead=422`。两个读数同拍取得 ⇒ 不是口径差。
+  · **严重度按第二发读数写，不夸**：`upgrade.ts:69` 取能带 `energy>0` 门禁 ⇒ 那 2 只超配 controller 角色 link **不会饿到 upgrader**，
+    只是 10,000 能量已沉没的空位 ⇒ 本条**不是物流事故**，是审计层的类目错 + 一次降速。**不做拆除/重建**（毁资产属人工排产）。
+  · **修法（`gaps.ts`，期望表一行）**：`expectedLinkRoleCounts` 的 `hub` 恒 0，注释写清"无创建器+无消费者⇒剩余容量≠缺口"
+    与这条虚期望曾经造成的降速。三个有创建器的角色的缺口口径**一行未动**，`shouldPlan`/阈值/`GAP_RETRY_INTERVAL` 都没碰。
+  · **测试**：拆掉两条给旧期望背书的夹具（`hub=2`），改成"RCL8 双/单 source 期望 hub=0" + "任意 RCL 都不期望 hub"，
+    把"远离锚点仍分类为 hub"的行为保留但断言**不产生缺口**；新增 **W37S58 指纹回归**（6 只 link、3 只 controller 角色 ⇒
+    `auditLinkRoleGaps` 全 0 且 merge 后 `gaps={}`，即 `shouldPlan` 实际消费的那个对象）。
+    **反向实验**：把期望临时改回 `rcl>=8?2:0` ⇒ 恰好 5 例转红（全是我新写的），24 例全绿——**其中含 W3N7 死资产那组**
+    ⇒ 证明角色感知审计仍能抓真缺口，我没有为了让计数器好看而把它弄瞎。
+    全量：unit 375 文件/5146 例、integration 30 文件/239 例、typecheck 干净。
+  · **判效三态（在部署之前写死）**：部署后取 `Game.time=T0`，看核心房下一次规划收尾（`revision` +1）那一刻——
+    ①**PASS**：`layoutGaps.W37S58` 条目**消失**（`recordLayoutGaps` 对空缺口删键）且 `nextGapPlanTick` 被删
+      且 `nptAhead ≤ ~100`（回到 50+相位带）；
+    ②**REFUTED**：键消失但 `nptAhead` 仍 ~400 ⇒ 我的"是 gap-force 在钉它"被否证，回去读 `shouldPlan` 的其它分支，**不改口径救它**；
+    ③**UNKNOWN**：`layoutGaps` 出现别的键（例如 `deadAssetLink` 或 #69 那类历史残值）⇒ 本例不区分，另案。
+    控制组：幼房 `nptAhead` 应继续 ≤~100、`ngpt` 仍为空 ⇒ 若它也变了，说明我动的不是核心房专属路径。
+  · **一笔要盯着的副作用（不粉饰）**：解钉后核心房规划频率 ×10 ⇒ 布局规划那部分的每拍成本会**上升**（幅度未测——
+    `Memory.kernel.cpuRate` 本次是空字典，仪器在 heap、被上一次换码清掉了）。G6 已经恒红，这笔不会翻任何闸，
+    但部署后要看一次 `tier`/`since` 与每房 CPU 读数，别把它写成"免费"。

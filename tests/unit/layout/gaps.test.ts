@@ -246,12 +246,19 @@ describe("expectedLinkRoleCounts — MVC link 角色期望表", () => {
     expect(expectedLinkRoleCounts(6, 2)).toEqual({ source: 1, controller: 1, storage: 1, hub: 0 });
   });
 
-  it("RCL8 双 source：source=2, hub=2", () => {
-    expect(expectedLinkRoleCounts(8, 2)).toEqual({ source: 2, controller: 1, storage: 1, hub: 2 });
+  it("RCL8 双 source：source=2，hub 恒 0（剩余槽位不是缺口）", () => {
+    // 旧表在此处要求 hub=2；W37S58 实证该要求不可满足且有害——见 gaps.ts 注释。
+    expect(expectedLinkRoleCounts(8, 2)).toEqual({ source: 2, controller: 1, storage: 1, hub: 0 });
   });
 
   it("RCL8 单 source：source 期望受 min(2, sources) 约束 → 1", () => {
-    expect(expectedLinkRoleCounts(8, 1)).toEqual({ source: 1, controller: 1, storage: 1, hub: 2 });
+    expect(expectedLinkRoleCounts(8, 1)).toEqual({ source: 1, controller: 1, storage: 1, hub: 0 });
+  });
+
+  it("任意 RCL 都不期望 hub 角色（无创建器也无消费者，故不得进期望表）", () => {
+    for (let rcl = 5; rcl <= 8; rcl++) {
+      expect(expectedLinkRoleCounts(rcl, 2).hub).toBe(0);
+    }
   });
 });
 
@@ -363,13 +370,35 @@ describe("auditLinkRoleGaps — link 角色缺口审计", () => {
     expect(gaps.controller).toBe(1);
   });
 
-  it("远离所有锚点的 link 分类为 hub（RCL8 hub 期望 2）", () => {
-    // (5,5) 远离 src(10,10)/ctrl(20,20)/stor(30,30) → hub
+  it("远离所有锚点的 link 分类为 hub → 不产生缺口（剩余槽位不是缺结构）", () => {
+    // (5,5) 远离 src(10,10)/ctrl(20,20)/stor(30,30) → classifyLinkRole 仍判 hub，
+    // 但期望表不再要求 hub：旧断言 gaps.hub===1 正是把容量当缺口的虚报本身。
     const hubLink = linkAt(5, 5, "link_hub");
     const snap = snapshotWithAnchors(8, [hubLink]);
     const gaps = auditLinkRoleGaps(snap, []);
-    // RCL8 期望 hub=2，已有 1 → 缺口 1
-    expect(gaps.hub).toBe(1);
+    expect(gaps.hub).toBe(0);
+  });
+
+  it("W37S58 指纹：6/6 槽位建满、controller 角色超配 → 缺口字典必须为空", () => {
+    // 现场实测（83380298，6 只 link 全建满）：2 只贴 source、1 只贴 storage、
+    // 3 只落在 controller range≤2 内 → have={source:2,controller:3,storage:1,hub:0}。
+    // 旧表期望 hub=2 → 虚报 linkHub:2 → gap-force 把规划器永久钉在 500 拍慢速重试。
+    const links = [
+      linkAt(10, 11, "l_src1"),
+      linkAt(40, 41, "l_src2"),
+      linkAt(30, 31, "l_stor"),
+      linkAt(22, 20, "l_ctrl1"),
+      linkAt(20, 18, "l_ctrl2"),
+      linkAt(18, 20, "l_ctrl3"),
+    ];
+    const snap = snapshotWithAnchors(8, links);
+    const roleGaps = auditLinkRoleGaps(snap, []);
+    expect(roleGaps).toEqual({ source: 0, controller: 0, storage: 0, hub: 0 });
+    // 这条是 shouldPlan 实际消费的形态：auditStructureGaps 的期望表不含 link
+    // （constraint-placer 排除 link），merge 后必须得到空字典。
+    const gaps: Record<string, number> = {};
+    mergeLinkRoleGaps(gaps, roleGaps);
+    expect(gaps).toEqual({});
   });
 });
 

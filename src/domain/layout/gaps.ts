@@ -18,18 +18,29 @@ export interface LinkRoleGaps {
  * MVC link 角色期望表。source 期望受真实 source 数约束
  * （min(MVC, sources.length)）：单 source 房不会因 MVC 表硬要
  * 2 个 source link 而虚报缺口。纯函数。
+ *
+ * hub 期望恒为 0（2026-10-02，W37S58 实证）：hub 不是"应有而未建"的结构，而是
+ * 「未被 source/controller/storage 占用的剩余槽位」——把容量当缺口是不可满足的虚报：
+ * 放置侧只有 source/controller/storage 三个创建器（planner.ts 的 planLogisticsStage），
+ * 传输侧只路由这三个角色（links.ts planLinkTransfers：源=role"source"，目标=单只
+ * controller/storage），role"hub" 既无创建器也无消费者，且 dumpToNearbyLink 会把能量
+ * 倒进一个永不排空的 link。旧表在 RCL8 硬要 hub=2，于是 6/6 槽位建满的核心房永远报
+ * `linkHub:2`；该虚缺口经 shouldPlan 的 gap-force 把布局规划器永久钉在
+ * GAP_RETRY_INTERVAL(500) 慢速重试（同二进制控制组：无缺口的幼房 nextPlanTick 仅 +79），
+ * 真实新缺口要等 ~450 拍才被排产，且 layoutGaps 恒红会淹掉同通道的真信号。
+ * 某角色建得比期望多（如 3 只 controller 角色 link）不由本表报缺口，
+ * 那是放置侧/死资产检测的口径，见 #75。
  */
 export function expectedLinkRoleCounts(rcl: number, sourceCount: number): LinkRoleGaps {
   if (rcl < 5) return { source: 0, controller: 0, storage: 0, hub: 0 };
   const sourceExpected = rcl >= 8 ? Math.min(2, sourceCount) : Math.min(1, sourceCount);
   const controllerExpected = 1; // RCL5+ 恒为 1
   const storageExpected = rcl >= 6 ? 1 : 0;
-  const hubExpected = rcl >= 8 ? 2 : 0;
   return {
     source: sourceExpected,
     controller: controllerExpected,
     storage: storageExpected,
-    hub: hubExpected,
+    hub: 0,
   };
 }
 
