@@ -87,6 +87,7 @@ export class ScenarioRunner {
       await this._bot.attachExisting(this._server.server, opts.botUsername ?? "bot");
       await this._server.start();
       this._inspector = new SnapshotInspector(this._bot);
+      await this.injectRandomSeed();
       return;
     }
     await this._server.reset(opts.stubWorld ?? false);
@@ -157,6 +158,29 @@ export class ScenarioRunner {
 
     await this._server.start();
     this._inspector = new SnapshotInspector(this._bot);
+    await this.injectRandomSeed();
+  }
+
+  /**
+   * #62：把调优探索的种子写进 bot 的 Memory（未给 `E2E_RANDOM_SEED` ⇒ 什么都不做）。
+   *
+   * 为什么只能走 bot 的 console：bot 代码由 `@screeps/driver` 在 **isolated-vm isolate** 里执行，
+   * 测试进程里替换 `Math.random` 到不了被测物（10-01 实测：同 seed 连跑两遍场景 22，
+   * firstWar 仍 5002 vs 5003）。console 命令在沙箱内执行 ⇒ 它是唯一能改 bot Memory 的通道。
+   *
+   * ⚠️时序边界：命令在**下一个 tick** 生效，所以种子自第 1~2 拍起可读，而消费方
+   *   （`kernel/deterministic-random.ts`，由 tuning-engine 注入 exploreParameter）读的就是 Memory。
+   *   "第一个调优周期一定晚于第 2 拍"这条不靠断言成立 —— E2E-036 会回读并钉住它。
+   */
+  private async injectRandomSeed(): Promise<void> {
+    const raw = process.env.E2E_RANDOM_SEED;
+    if (raw === undefined || raw === "" || !this._bot) return;
+    const seed = Number(raw) >>> 0;
+    await this._bot.sendConsole(
+      `Memory.kernel = Memory.kernel || {};` +
+        `Memory.kernel.testRandomSeed = ${seed};` +
+        `Memory.kernel.testRandomCalls = 0;`,
+    );
   }
 
   /**
