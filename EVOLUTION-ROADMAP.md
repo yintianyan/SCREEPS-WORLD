@@ -222,7 +222,25 @@
 
 ## 4. 当前迭代（最近三轮）
 
-### 4.0-pre（10-02 20:4xZ 再改写）下一轮 L2 主目标：**读那两条预约读数（#83 + #85 同一发数据），别急着再改码**
+### 4.0-pre（10-02 21:3xZ 改写）下一轮 L2 主目标：**收两条预约 verdict，按预写分支走**
+
+> 四路观察在跑（`verify-85-83.sh` / `upguard-verify.sh` / `tuning-events-watch.sh` / `fortification-trend.sh`）。
+> 第一件事 = 读 `tmp/observe/verify-85-83.log` 最后两行 verdict，然后**照分支走，不临场发明**：
+> - **c1 PASS**（`TuningRollback` 的 `d[3]=2 < pre+1=3`）⇒ #83 结案，#79/#68 的撤销归因钉死为 D.3；下一件转 #47 那族
+>   （px<0.2 的死亡补员签名），或把本地 docs 随下一个行为批带走。
+> - **c1 FAIL**（`d` 只有 3 元素）⇒ 先 grep `dist/main.js` 里 `roleCountAtVerify` 的出现次数（应为 ×3），
+>   再查 `tuning-engine.ts:309` 有没有被别的写点覆盖；**不许去改判据**。
+> - **c2 PASS**（`dc=2` 期间不再出现新 `pt`）⇒ #85 结案；**c2 FAIL**（`dc=2` 仍有新 `pt`）⇒
+>   查 `aggregateSignals` 是否真把 `Memory.kernel.demandClamps[room]` 读进 signals（一发 peek 就够），
+>   **仍不放宽提案条件**；**c2 UNASSESSABLE**（那一刻 `dc≠2`）⇒ 合法放行，既不算失败也不算通过。
+> - **PENDING 不是结论**（这一态是本轮特意加进判效器的，判效器自己的下班时刻也按 due tick 算）。
+> 本轮（R126-R128）另把**生存轴**清了两项：rampart 低地板是维修队列的队尾且 17 拍内在上抬（非缺口）；
+> 布局模板从不产出 wall（`grep -rn STRUCTURE_WALL src/domain/layout/` 零命中）⇒ "RCL8 0 walls" 是模板取舍，
+> 与 §3.5 的 #81 同族属人。**#87 不立案。**
+>
+> （下面保留 20:4xZ 那一版作状态出处。）
+
+### 4.0-pre（10-02 20:4xZ 版，已被上面取代）：**读那两条预约读数（#83 + #85 同一发数据），别急着再改码**
 >
 > **先更正一处会被 git log 带进你脑子的错**：提交 `f851b00` 的消息里写着"RCL8 的 WORK 限速也是结构钳位"——
 > 那句已在 R114 撤回（那一支只在 `allowUpgrader` 为真时跑得到，而 RCL8 无风险时它本就是假 ⇒ 不可观测的死码，已删）。
