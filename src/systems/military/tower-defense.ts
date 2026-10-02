@@ -16,13 +16,38 @@ import { globalCache, bumpEnergyCounter } from "../../kernel/global-cache";
 
 /** P3 L1 核算：塔动作耗能按 intent 计（attack/heal/repair 每次 TOWER_ENERGY_COST）。
  * 不可用库存差值实测 — 引擎资源结算在 tick 末，同 tick 差值恒 0（官服实证）。 */
+/**
+ * #80 用途分桶（纯观测，**不进** CONSUMPTION_FIELDS ⇒ 净流/风险缓冲口径不变）：
+ * 原先 attack 与「补被拆的墙」与「和平期把 rampart 维护到 RCL 分级血量」全挤在 `towerSpent`
+ * 一格，而 `ledgerP0P1Consumption` 把整格当**常供侧**消费 —— 于是"防线外壳吃掉多少收入"
+ * 这个发展期决策无法从账上读出（只能靠"此刻没有敌人"去推断）。
+ * 现场驱动读数（YD1/YD2@83383931/83383942）：幼房 2 个 source 的收入物理上限 ≈20/t，
+ * 实测 `ei=19.4/t` 已贴顶，而 `towerSpent≈10/t` ＝ **一半上限花在墙/盾上**；
+ * 同窗 `nf=-5.31/t`、storage 70K→54.9K 在掉、`upgraded≈8/t` 爬 405k 要 ~33 小时。
+ * 三桶是 `towerSpent` 的**精确划分**（每桶恰好一个调用点集合，和恒等于合计）。
+ * ⚠️"该不该为发展让路"是防御取向，属人工排产（§3.5）——本改动只把账做清楚，不动任何门。
+ */
+type TowerSpendBucket = "combat" | "structures" | "walls";
+
 function countedTowerAction(
   roomName: string,
   _tower: StructureTower,
   action: () => number,
+  bucket: TowerSpendBucket,
 ): number {
   const result = action();
-  if (result === OK) bumpEnergyCounter(roomName, "towerSpent", TOWER_ENERGY_COST);
+  if (result === OK) {
+    bumpEnergyCounter(roomName, "towerSpent", TOWER_ENERGY_COST);
+    bumpEnergyCounter(
+      roomName,
+      bucket === "combat"
+        ? "towerSpendCombat"
+        : bucket === "structures"
+          ? "towerSpendStructures"
+          : "towerSpendWalls",
+      TOWER_ENERGY_COST,
+    );
+  }
   return result;
 }
 
@@ -95,7 +120,7 @@ export const towerDefenseSystem: System = {
               let firedCount = 0;
               for (const tower of snapshot.towers) {
                 if (tower.store.getUsedCapacity(RESOURCE_ENERGY) === 0) continue;
-                countedTowerAction(snapshot.roomName, tower, () => tower.attack(target));
+                countedTowerAction(snapshot.roomName, tower, () => tower.attack(target), "combat");
                 firedCount++;
               }
               fired = firedCount > 0;
@@ -134,11 +159,19 @@ export const towerDefenseSystem: System = {
             for (const tower of snapshot.towers) {
               if (tower.store.getUsedCapacity(RESOURCE_ENERGY) < TOWER_ENERGY_COST) continue;
               if (threatRepairTarget) {
-                countedTowerAction(snapshot.roomName, tower, () =>
-                  tower.repair(threatRepairTarget),
+                countedTowerAction(
+                  snapshot.roomName,
+                  tower,
+                  () => tower.repair(threatRepairTarget),
+                  "structures",
                 );
               } else {
-                countedTowerAction(snapshot.roomName, tower, () => tower.repair(threatWallTarget!));
+                countedTowerAction(
+                  snapshot.roomName,
+                  tower,
+                  () => tower.repair(threatWallTarget!),
+                  "walls",
+                );
               }
             }
           }
@@ -211,7 +244,12 @@ export const towerDefenseSystem: System = {
 
         // ：维修优先级 spawn/extension → tower → container → wall/rampart。
         if (repairTarget) {
-          countedTowerAction(snapshot.roomName, tower, () => tower.repair(repairTarget));
+          countedTowerAction(
+            snapshot.roomName,
+            tower,
+            () => tower.repair(repairTarget),
+            "structures",
+          );
           continue;
         }
 
@@ -221,7 +259,12 @@ export const towerDefenseSystem: System = {
           const towerEnergyRatio =
             tower.store.getUsedCapacity(RESOURCE_ENERGY) / tower.store.getCapacity(RESOURCE_ENERGY);
           if (towerEnergyRatio > 0.7) {
-            countedTowerAction(snapshot.roomName, tower, () => tower.repair(wallRepairTarget));
+            countedTowerAction(
+              snapshot.roomName,
+              tower,
+              () => tower.repair(wallRepairTarget),
+              "walls",
+            );
           }
         }
       }

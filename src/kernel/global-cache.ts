@@ -760,6 +760,10 @@ export interface RoomEnergyCounters {
   built: number;
   repaired: number;
   towerSpent: number;
+  /** #80 用途分桶（纯观测，精确划分 towerSpent：三者之和恒等于合计；不进 CONSUMPTION_FIELDS）。 */
+  towerSpendCombat: number;
+  towerSpendStructures: number;
+  towerSpendWalls: number;
   // 【审计修复 Phase 4-5】市场交易能量入 L1 账本 — 买入/卖出的能量量。
   // 消除 drift 恒等式的市场交易缺口（之前 market.deal 的能量买卖未入账，
   // pool 变化被 drift 捕获但不精确）。
@@ -814,6 +818,9 @@ export function bumpEnergyCounter(
     built: 0,
     repaired: 0,
     towerSpent: 0,
+    towerSpendCombat: 0,
+    towerSpendStructures: 0,
+    towerSpendWalls: 0,
     bought: 0,
     sold: 0,
     imported: 0,

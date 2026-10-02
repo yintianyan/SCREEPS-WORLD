@@ -20,6 +20,15 @@ export interface EnergyLedger {
   repaired: number;
   /** 塔 attack/heal/repair 耗能（每次 10）。 */
   towerSpent: number;
+  /**
+   * #80 用途分桶（纯观测）：`towerSpent` 把开火、补被拆的结构、维护墙/盾混在一格，
+   * 而 `ledgerP0P1Consumption` 把整格当常供侧 ⇒ "防线外壳吃掉多少收入"读不出来。
+   * 恒等式：`towerSpent === combat + structures + walls`（每桶各对应固定调用点）。
+   * **不进** CONSUMPTION_FIELDS / ledgerP0P1Consumption ⇒ 净流与配给序口径不变。
+   */
+  towerSpendCombat: number;
+  towerSpendStructures: number;
+  towerSpendWalls: number;
   // 【审计修复 Phase 4-5】市场交易能量入 L1 账本。
   // bought = 市场买入的能量量（income 侧）；sold = 市场卖出的能量量（consumption 侧）。
   /** 市场买入能量（terminal.deal 收到的能量）。 */
@@ -77,6 +86,9 @@ export function emptyLedger(): EnergyLedger {
     built: 0,
     repaired: 0,
     towerSpent: 0,
+    towerSpendCombat: 0,
+    towerSpendStructures: 0,
+    towerSpendWalls: 0,
     bought: 0,
     sold: 0,
     imported: 0,
