@@ -673,3 +673,15 @@
       UNKNOWN=中途 storage 真跌超容差 ⇒ 本例不区分两种解释，等下一个实例，不判成败。
   · 顺带的健康读数：`degradeGateClosed=1,383` 持续涨、`tier` 已从部署税回到 `tight`、
     幼房 2 只 upgrader、升速 ≈+15/拍、progress 110,907 ⇒ **RCL5 ETA 约 20 小时**（清晨估的 43 小时已被这两批修复压缩掉一半以上）。
+- 2026-10-02 14:2xZ **一条被自己立起来又当场撤掉的 CPU 疑点（差分做对了才撤得掉）**：
+  14:15:33 读 `Memory.kernel.skipReasons` 见到 `system/construction-manager/budget`、`tactical-runtime-pipeline/budget`、
+  `layout-planner/budget`、`room-observer/budget` **四个都恰好 65** ⇒ 我按"四个系统每次到期都被 CPU 闸拒"读成了
+  一个真问题（那会直接压住施工与布局 = 发展轴）。**134 拍后再读，四个键全部消失（null）**
+  ⇒ `skipReasons` 是**会被清空/轮换的窗口计数**，不是自 boot 的累计量：那 65 属于 boot 窗（换码后不采信输入的那段），
+  当前窗零次 ⇒ **无系统被 CPU 闸持续拒绝**，疑点撤销。
+  ⚠️这条把已有口径收紧一层：`skipReasons` 这类"看起来像累计"的 map **连差分都不够**——键可能在两次采样之间被整体清掉，
+    差分会读出"负增长"。用之前必须先确认它的**生命周期**（谁清、多久清）。判"系统在被饿"要用**同一窗内**的
+    `system/<name>/budget` 与 `capacity.tier/since` 同时看，而不是跨窗比数。
+  另附当时的真读数（都是健康的）：`tier=tight@83379815`（部署税 ~21 分钟自解）、`bucket=10000`、`tickLimit=500`、
+  幼房 2 只 upgrader、progress 差分 **+16.0/拍**（编制上限已到 3，第三只待孵）、storage 70k 量级平稳。
+  #68 的判定点 `tick≈83381266`（约 15:4xZ）由 `upgrader-raise-verify.sh` 记录中，三态判据已预先写死。
