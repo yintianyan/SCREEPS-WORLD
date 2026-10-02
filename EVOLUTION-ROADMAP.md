@@ -1289,3 +1289,17 @@
   · 顺带结案：**#68/#79 那条"单向棘轮"在幼房的现场表现由此解释完** —— 不是判据太严，也不是护栏太松，
     是**提案条件与验证条件绑的不是同一个量**。#79 的护栏依然该留（它管的是"编制真到位却烧穿储备"那一型），
     只是这一房里它的前提从未成立。
+
+- **R108（10-02 19:5xZ）· #85 规格落地成可执行文件，并撤对我自己早前的一条"作废"判词**
+  · 规格写进 **`tmp/observe/pending-85-patch.md`**（下一步只差照着动手）：
+    需求侧 `demand.ts` 报出**结构钳位** `upgraderClamp`（`DemandResult` 已有同族先例 `haulerTarget`/`sourceBacklog`），
+    经 **heap**（`globalCache().demandClamps`，同仓惯例：`roomTraffic`/`repairRooms`/`roleCpuEma`…）
+    交给 `aggregateSignals` 填进 `TuningSignals`，↑ 门槛只加一条 `current+step <= clamp`（clamp 为 undefined=未钳位）。
+    关键取舍三条已写进注释要求：**弹性不进这个数**（浮动的数当资格会振荡）、**只闸 ↑ 不闸 ↓**（↓ 必然绑定）、
+    **字段缺失时默认许可**（宁可放行一次错误提案，也不把升级道焊死；这条有用例钉）。
+  · **撤销我早前的判词（撤的是哪一支要写清）**：`pending-79-patch.md` 里我写过"事前 binding 判据方向作废，
+    因为提案侧已经绑了（`evaluator.ts:232`）"。**`:232` 是 hauler 的提案门槛**（读 `containerFillRatio`/
+    `consumerSaturated`），不是 upgrader 的 —— upgrader 的门槛在 `:377`，里面没有任何绑定检查。
+    ⇒ 那条"作废"是**行号张冠李戴**造成的错杀，本规格把它复活。同族教训：**"因果句/作废句也要自己 grep 到具体行"**
+    —— 我用行号印象否证过自己的方向，这一次是同一个毛病的第二次发作。
+  · 唯一调用点当场核实：`evaluateDemand(` 全仓只有 `spawn-manager.ts:177` 一处 ⇒ 报事实只需改一处，不会漏第二家。
