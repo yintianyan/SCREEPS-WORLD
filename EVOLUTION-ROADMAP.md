@@ -685,3 +685,12 @@
   另附当时的真读数（都是健康的）：`tier=tight@83379815`（部署税 ~21 分钟自解）、`bucket=10000`、`tickLimit=500`、
   幼房 2 只 upgrader、progress 差分 **+16.0/拍**（编制上限已到 3，第三只待孵）、storage 70k 量级平稳。
   #68 的判定点 `tick≈83381266`（约 15:4xZ）由 `upgrader-raise-verify.sh` 记录中，三态判据已预先写死。
+- 2026-10-02 14:3xZ **一次"看着像 bug"的追查，最后收成两件小事**（mark LG2/LG3）：
+  `layoutGaps` 里有 `W38S58`（我们不拥有、不远矿、只在视野），幼房 W38S56 反而没条目。
+  · 我先提的假设是**键写错**（W38S56→W38S58 数字转置）—— 被自己的下一条读数**否证**：幼房 extension=20（RCL4 满）、
+    tower/storage 齐、**0 个在建 site** ⇒ 它本来就无缺口，"没条目"是正确状态；若真是错键，缺口内容会跑到 W38S58 名下且幼房该有条目。
+  · 真问题小得多但同样该修：`recordLayoutGaps` 只在"同一房再次产出空缺口"时回收键 ⇒ **永不规划的房把键留成历史残值**，
+    且值里没有 `tick`，消费者无法分辨新旧。**另立 #69**（修法：落盘带新鲜度 + 写时删掉非自有房名；不动 shouldPlan/缺口审计）。
+  · 核心房那条 `linkHub:2` 是**真缺口**，不要顺手"清理"掉它。
+  顺带：`expectations.violations=[]`、两房 `colonyState=normal`、stale site 计数 0、`lostRooms={}`、
+  幼房 RCL4 满配 extension + storage + tower ⇒ 发展轴目前没有新伤，主要瓶颈仍是 RCL5（≈20 小时）与 CPU 档。
