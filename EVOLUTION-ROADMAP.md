@@ -1412,3 +1412,24 @@
     会放过至多一次注定落空的 ↑。这是"宁可放行也不焊死"的定价，代价上限 = 每部署一次一发；
     若日后想收紧，正解是让 `TuningSignals` 区分"没钳位"与"还没测到钳位"两种 undefined，
     而不是把默认改成阻塞。本轮不动。
+
+- **R117（10-02 20:5xZ）· 新立 #86：自有房一直留在候选池里，还带着 `QUALIFIED` 状态**
+  · 观察（一次只读探针，mark EX7A3，t=83386099）：`expansionCandidates` 满 10 格里
+    **`W38S56 st=QUALIFIED`——那是我自己的幼房**（claim 成功在 8.5h 前，`lastExpansionCompletedTick=83328457`）。
+    同池里 `W37S56/W37S54 age=841,415 拍`（≈38 天）仍是 `UNKNOWN` ⇒ #77 那句"候选池含自有房 + 陈年记录"
+    第一次被当场证实（**plans 那半句仍未证实**：我第一次探针把字符串拼接写成了 `|`，读回 `[0,0,0,0]`，
+    改用数组键后仍没读到 `status` 字段名 ⇒ 那 4 条计划的状态本轮没有读数，别当成已核）。
+  · 根因（读码，不是猜）：`discovery.ts:55-58` 把 `existingCandidates` 原样灌进 `candidateMap`，
+    `ownedRoomNames` 只在"新建候选"那条路上用 ⇒ **占领成功不会让那条候选失效**（候选只在 Intel 刷新时重建）。
+    这与 `dropReleasedRooms` 注释里写的病理**是同一个洞的另一半**，所以修复也放在同一层。
+  · 处置：新增 `dropOwnedRooms(candidates, ownedRoomNames)`，接在 planner 步 2 的池子组合里
+    （`dropInsufficientSources(dropOwnedRooms(dropReleasedRooms(...)))`）。
+    语义**对状态不敏感是刻意的**——`QUALIFIED` 正是这条缺陷的载体，按状态豁免就等于留着它。
+    这不是"降闸"：自有房永远不是待占领目标，执行期本来也有自有房复检，这里只是不让池子说谎、
+    不白占 10 格中的一格、不让 dashboard 的 `candidateCount` 读高。
+  · 门实录：typecheck 净；unit `tests/unit/expansion/` **14 文件 / 262 例**（新增 5 例，含一条
+    "(e) 与重占排除叠加时两条语义互不吞掉"的交叉控制——单独走排除表时自有房仍在，
+    证明这两道闸确实是两件事）；**integration 30 / 239 全绿**。
+  · **本轮不部署**（刻意）：#83/#85 的两条预约读数在 ~85/175 分钟后才落地，再插一次换码会
+    清 heap、加 ~400 拍 G6 税，把判效窗搅浑。本地现压 **6 笔**（1 笔补测/死码删除 + 4 docs + 本批 #86），
+    随下一次没有判效在跑的批次一起走。

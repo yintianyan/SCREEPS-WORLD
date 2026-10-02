@@ -24,7 +24,11 @@ import { explainDecision } from "../../domain/expansion/explanation";
 import { buildExpansionDashboard } from "../../domain/expansion/dashboard";
 import { evaluateExpansionReadinessExtended } from "../../domain/strategy/readiness";
 import type { ExpansionCandidateV2 } from "../../domain/expansion/candidate";
-import { dropInsufficientSources, dropReleasedRooms } from "../../domain/expansion/candidate";
+import {
+  dropInsufficientSources,
+  dropOwnedRooms,
+  dropReleasedRooms,
+} from "../../domain/expansion/candidate";
 import type { RoomIntel } from "../../domain/intel";
 
 /**
@@ -127,7 +131,10 @@ export const expansionPlannerSystem: System = {
     // 只挑 ≥2 source 的目标」从未生效过一次。接在候选池上（与 releasedRooms 同一层），
     // 值为默认 1 时原样返回 ⇒ 接线不改变今天的行为，只是让那条安全收紧真的存在。
     const candidatePool = dropInsufficientSources(
-      dropReleasedRooms(discoveryResult.candidates, releasedRooms),
+      // 自有房复检（#86）：占领成功不会让那条候选失效（候选只在 Intel 刷新时重建），
+      // 于是它会顶着旧的 QUALIFIED 状态白占一格并把 candidateCount 读高。
+      // 线上实证 t=83386099：`W38S56 st=QUALIFIED` 而 W38S56 就是我自己的幼房。
+      dropOwnedRooms(dropReleasedRooms(discoveryResult.candidates, releasedRooms), ownedRoomNames),
       Memory.kernel?.expansionRhythm?.minSources ?? 1,
     );
 

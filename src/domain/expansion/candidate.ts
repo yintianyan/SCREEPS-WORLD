@@ -193,6 +193,29 @@ export function dropReleasedRooms<T extends { roomName: string }>(
 }
 
 /**
+ * 把「已经是我自己的房」从候选池里剔掉。
+ *
+ * 与 `dropReleasedRooms` 是同一个洞的另一半：候选只在 Intel 刷新时才重建，所以**占领成功之后
+ * 那条候选并不会随之失效** —— 它会顶着旧的 `QUALIFIED` 状态一直留在池子里，直到被排进计划生成。
+ * 线上实证（2026-10-02 20:5xZ，t=83386099）：`Memory.kernel.expansionCandidates` 里
+ * `W38S56 st=QUALIFIED`，而 W38S56 就是我 8.5 小时前claim 下的幼房（`lastExpansionCompletedTick`
+ * =83328457 那一笔）——池子满容 10 条，这条白占一格，还把 dashboard 的 `candidateCount`
+ * 读成"还有一个合格目标"（明明是我自己的房）。
+ * 必须作用在**候选池**上而不是只作用在新建候选上，理由与 `dropReleasedRooms` 完全一样。
+ *
+ * ⚠️对状态不敏感是刻意的：`QUALIFIED`/`UNKNOWN`/任何状态一律剔 —— 自有房永远不是"待占领目标"，
+ * 而旧状态恰恰是这条缺陷的载体。执行期本来也有自有房复检，这里不是补那道闸，是不让池子说谎。
+ */
+export function dropOwnedRooms<T extends { roomName: string }>(
+  candidates: readonly T[],
+  ownedRoomNames: readonly string[],
+): T[] {
+  if (ownedRoomNames.length === 0) return [...candidates];
+  const owned = new Set(ownedRoomNames);
+  return candidates.filter(c => !owned.has(c.roomName));
+}
+
+/**
  * R7b：按「扩张节奏自适应」算出的最低 source 数筛掉候选。
  *
  * 为什么需要这个函数：`evaluateExpansionRhythm` 的三个输出里，`blacklistMultiplier` 被
