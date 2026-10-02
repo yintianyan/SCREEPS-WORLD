@@ -652,16 +652,13 @@ function isImprovedMultiSignal(
   }
 
   if (param.startsWith("upgrader.")) {
-    // #68 效果豁免（与 builder 分支同构、同一证据标准）：**多出来的编制真的到位了就算改善**。
-    // 这不是放宽判据，是补一条漏写的成功出口 —— 盈余房收入 > 消耗，多养一只 upgrader 也**不可能**让
-    // avgStorageEnergy 转跌，于是原来唯一那条"库存必须下跌"的判据在这种房里按构造不可满足：
-    // 线上实测 ↑@83374266（当场两只在场、+16/拍）→ 1,500 拍后被回滚 @83375766，
-    // 期间 `p=0`、`se` 62k→66k 一路上行，且 ↑ 的人口合同（roleCount ≥ preAdjustValue+1）已满足
-    // ⇒ 撤销只可能来自本条改善判据 ⇒ 发展速率被钉死在"维持库存持平所需的最小值"，与盈余无关。
-    // 只加出口：D.3 人口合同、D.4 下调护栏、所有阈值与容差、失败路径的计数一字未动。
+    // #68/#79：人口到位（D.3 合同）是**必要条件但不是充分证据**。
+    // ⚠️这里原本写的是"人口到位 ⇒ 直接接受"，而该谓词与 D.3 `isContractMet` 逐字相同、且 D.3 先行，
+    //   于是凡能走到本行的 ↑ 必然为真 ⇒ 效果检验被折叠，↑ 再也无法被证据否决（单向棘轮）。
+    //   现改成：人口到位后仍要过**上行护栏**——只有"这次抬高确实被用掉、且没把经济压坏"才留下。
     if (isUp) {
       const roleCount = getRoleCount(param, currentSignals);
-      if (roleCount >= pv.preAdjustValue + 1) return true; // 人口到位即生效（与 builder 一致）
+      if (roleCount >= pv.preAdjustValue + 1) return !isUpwardHarmful(before, currentSignals);
     }
     const before_ = before.avgStorageEnergy;
     const after = currentSignals.avgStorageEnergy;
@@ -674,10 +671,11 @@ function isImprovedMultiSignal(
   }
 
   if (param.startsWith("builder.")) {
-    // builder up: backlog ↓ OR builderCount >= preAdjustValue+1（人口到位即生效）
+    // builder up: 人口到位（必要条件）→ 仍要过上行护栏；否则 backlog ↓ 为改善证据。
+    //   与 upgrader 同改，避免"同构但不同验证"的分叉再次出现。
     if (isUp) {
       const roleCount = getRoleCount(param, currentSignals);
-      if (roleCount >= pv.preAdjustValue + 1) return true; // 人口到位
+      if (roleCount >= pv.preAdjustValue + 1) return !isUpwardHarmful(before, currentSignals);
     }
     const before_ = before.buildQueueBacklog;
     const after = currentSignals.buildQueueBacklog;
@@ -690,6 +688,27 @@ function isImprovedMultiSignal(
   }
 
   return true; // 未知参数 → 不回滚（保守）
+}
+
+/**
+ * #79 上行护栏（D.4 的上行对偶）：抬高编制上限且**新编制确实到位**之后，仍要能回答
+ * "这次抬高有没有把经济压坏"。缺失这条时，↑ 一旦被人头合同放行就再也无法被证据否决
+ * （线上指纹：`upgrader.maxCount` 1→2→3、`rollbackCount=0`）。
+ *
+ * 判据只用**既有字段与既有容差**，不新增阈值：
+ *   储备增量转负（多出来的编制在抽干储备）**且**比调整前更坏（超出 `computeTolerance`）
+ *   ⇒ 判有害。"且更坏"沿用 D.4 的形状，避免把"调整前就已经坏"算成这次调整的账。
+ *
+ * ⚠️刻意不用的东西：`avgPressure` 不在 `AdjustSignalsSnapshot` 里（要用就得给持久化的
+ *   preAdjustSignals 加键，那是另一批该做的事）；`avgStorageEnergy` 的方向也不能当有害证据——
+ *   #68 的原始病灶正是"盈余房多养一只也不可能让库存下跌"，方向信号在这类房里按构造失效。
+ */
+function isUpwardHarmful(before: AdjustSignalsSnapshot, current: TuningSignals): boolean {
+  const rBefore = before.avgReserveDelta;
+  if (rBefore === undefined) return false; // 旧记录没有该快照 → 保守：不判有害
+  return (
+    current.avgReserveDelta < 0 && current.avgReserveDelta < rBefore - computeTolerance(rBefore)
+  );
 }
 
 /**
