@@ -770,6 +770,13 @@ export interface RoomEnergyCounters {
   /** 交易运费：从本房 terminal 真烧掉的能量，进消费侧（不可记进 sold）。 */
   tradeFee: number;
   /**
+   * 运费的通道分桶（纯观测，**不进** CONSUMPTION_FIELDS ⇒ 不改净流口径）：
+   * 合计格把买料/卖矿/互济/卖能量混在一起，而本服实测运费占货量 3%~87% 随对手房变化，
+   * 只有分桶后"卖能量是不是净亏"才可判。恒等式 `tradeFee ≥ sell桶 + buy桶`。
+   */
+  tradeFeeEnergySell: number;
+  tradeFeeEnergyBuy: number;
+  /**
    * 跨房导入本房的能量（carrier 卸能 + 远矿 hauler 交付到本房 sink 时计）。
    * **已并入 `ledgerIncome`**（见 accounting.ts），对偶项是 `exported`。
    * 只记跨房：房内 container→storage 的搬运不计，否则同一度电记两次收入。
@@ -812,6 +819,8 @@ export function bumpEnergyCounter(
     imported: 0,
     exported: 0,
     tradeFee: 0,
+    tradeFeeEnergySell: 0,
+    tradeFeeEnergyBuy: 0,
   });
   entry[field] += amount;
 }

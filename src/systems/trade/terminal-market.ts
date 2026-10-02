@@ -69,6 +69,7 @@ export function executeDeal(
   amount: number,
   terminal: StructureTerminal,
   roomName: string,
+  feeChannel?: "energySell" | "energyBuy",
 ): boolean {
   if (amount <= 0 || !order.roomName) return false;
   const cost = Game.market.calcTransactionCost(amount, roomName, order.roomName);
@@ -79,6 +80,15 @@ export function executeDeal(
     // 记在这里而不是各 call site：让「每一笔成功的 deal 都计费」成为结构不变量，
     // 而不是每个调用方各自记得；原先 cost 算完只进了日志，账上完全没有它。
     bumpEnergyCounter(roomName, "tradeFee", cost);
+    // 通道分桶（纯观测，**不进** CONSUMPTION_FIELDS ⇒ 不影响净流/风险缓冲口径）。
+    // 动机是实测：本服 calcTransactionCost(1000, 邻房)=33 而 (远房)=856~865，
+    // 即运费占货量 3%~87% 随对手房变化，而卖出闸门 `minEnergySellPrice` 是**不含运费项的定值**
+    // ⇒ 单看 `tradeFee`（买料/卖矿/互济全混在一格）无法回答"卖能量是不是在拿盈余买信用顺路烧盈余"。
+    if (feeChannel === "energySell") {
+      bumpEnergyCounter(roomName, "tradeFeeEnergySell", cost);
+    } else if (feeChannel === "energyBuy") {
+      bumpEnergyCounter(roomName, "tradeFeeEnergyBuy", cost);
+    }
     log.info(
       "terminal",
       `[${Game.time}] terminal/${roomName}: deal ${order.id} amount=${amount} price=${order.price} energyCost=${cost}`,
@@ -107,7 +117,7 @@ export function trySellSurplusEnergy(snapshot: RoomSnapshot, terminal: Structure
   const best = pickBestBuyOrder(orders, CONFIG.energy.minEnergySellPrice);
   if (!best) return false;
   // 【审计修复 Phase 4-5】卖出能量入 L1 账本 — 记 sold。
-  if (executeDeal(best, amount, terminal, snapshot.roomName)) {
+  if (executeDeal(best, amount, terminal, snapshot.roomName, "energySell")) {
     bumpEnergyCounter(snapshot.roomName, "sold", amount);
     return true;
   }
@@ -137,7 +147,7 @@ export function tryBuyCrisisEnergy(snapshot: RoomSnapshot, terminal: StructureTe
   const best = pickBestSellOrder(orders, CONFIG.energy.maxEnergyBuyPrice);
   if (!best) return false;
   // 【审计修复 Phase 4-5】买入能量入 L1 账本 — 记 bought。
-  if (executeDeal(best, amount, terminal, snapshot.roomName)) {
+  if (executeDeal(best, amount, terminal, snapshot.roomName, "energyBuy")) {
     bumpEnergyCounter(snapshot.roomName, "bought", amount);
     return true;
   }

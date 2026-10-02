@@ -760,3 +760,29 @@
   但记下来有两用：①G6 归因时这张表的分母含非自有房，别把它们当"帝国房成本"；②#69 的真正残留只有
   **`layoutGaps.W38S58` 与 `layoutMetrics.W38S58` 两格**（planRoom 需 `Memory.rooms.<r>.layout` 才写得进去，
   而该房 Memory 早被中止流程删掉 ⇒ 这两格是 471k 拍前的冻值，20 拍内两次读数一字不差亦相符）。
+
+- 2026-10-02 15:2xZ **#76 立案并本地修复：交易运费只有一个合计格 ⇒ "卖能量是不是净亏"在账上无法回答**（观察通道，阈值一个没动）（mark P48A/LH11）：
+  · **触发读数是误读出来的**：核心房本窗 `economy.bk = {harvested:1000, sold:1000, imported:490, tradeFee:841}` ⇒ 我脱口而出
+    "运费占货量 84%"。**分母不对**：`executeDeal` 有 **11 个调用点**（卖能量 1 / 买能量 1 / 卖 home mineral / 买缺口料 ×2 /
+    卖 compound / 卖 battery / 卖 commodity / 买 power / 买 ghodium）+ `terminal-selfaid` 3 处，全部只进 `tradeFee` 一格，
+    而 `sold` 只有卖能量那一格 ⇒ `tradeFee/sold` 是**混通道的比值**，当"卖能量的烧穿率"读就是错的。
+  · **但运费本身的量级是真的，而且是当场测的**（LH11@83380783，本服 `Game.market.calcTransactionCost(1000, …)`）：
+    **同房 0 / 邻房 W36S58 = 33 / 远房 W20N5 = 856 / 极远 W1N1 = 865** ⇒ 运费占货量 **0%~87% 随对手房变化**。
+    而闸门 `CONFIG.energy.minEnergySellPrice = 0.02`（买回上限 `maxEnergyBuyPrice = 0.05`，`maxDealAmount = 1000`）
+    **不含任何距离/运费项**。按"卖完再把烧掉的能量买回来"这个口径算：卖 1000 收 `1000·P` 信用、烧 `f` 能量，
+    买回 f 需 `0.05·f` 信用 ⇒ 净正要求 `P > 0.00005·f`；`f=865` 时门槛是 **0.043**，而现闸门放到 **0.02**
+    ⇒ **对远手的卖出可以在这个闸门口径下净亏近一倍**。**这不等于"该改阈值"**：如果那 865 能量本来只会堆在
+    `energySellFloor=100000` 之上无处可去，机会成本就近似 0，0.02 仍是白捡——**两种估价的差正是"该由人定"的部分**，
+    我只把可判的读数做出来，不动 `minEnergySellPrice`。
+  · **修法（纯观测）**：`RoomEnergyCounters`/`EnergyLedger` 新增 `tradeFeeEnergySell`、`tradeFeeEnergyBuy` 两格，
+    `executeDeal` 多一个可选 `feeChannel` 形参，卖能量/买能量两个调用点标上；**`tradeFee` 合计格的写入位置与语义一字未动**
+    （"每笔成功 deal 都计费"仍是结构不变量），两新键**不进** `CONSUMPTION_FIELDS` ⇒ `ledgerIncome`/`ledgerConsumption`
+    口径不变（这条我专门写了用例挡"同一笔运费被记两次"）。恒等式：`tradeFee ≥ sell桶 + buy桶`，只跑能量通道时取等。
+  · **测试**：新增 `tests/unit/trade/trade-fee-channel.test.ts` 6 例。**反向实验**：把两行分桶写入钉掉 ⇒
+    **恰好 3 例转红**（sell 桶 / buy 桶 / 不变式），3 例控制组全绿（未标通道仍进合计、deal 失败两格都不进、
+    新键不改收支合计）⇒ 新用例确实在测被改的那条分支。全量：unit 376 文件/**5152** 例（+1 文件 +6 例）、
+    integration 30/**239**、typecheck 干净。
+  · **同一窗读数的另一条副产品**：`imported=490` 而两房 `exported` 皆无 ⇒ 在场 9 只跨房 creep 全是远矿角色
+    （home=W37S58、现场 W36S58/W37S57），**没有一个"自有房→自有房"的交付** ⇒ **#48 的触发事件本窗仍未发生**，
+    幼房 `bk` 是 `{harvested:1000, upgraded:800, towerSpent:500}`（自给中）⇒ #48 继续保持"挂在一次真实供给事件上"，
+    不写 PASS 也不写 FAIL。

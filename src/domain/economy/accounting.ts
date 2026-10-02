@@ -42,6 +42,14 @@ export interface EnergyLedger {
    * 理由是"卖是能量→信用的换算、随时能买回"；运费买不回来，所以必须留在消费侧。
    */
   tradeFee: number;
+  /**
+   * 运费的**通道分桶**（纯观测）：`tradeFee` 是买卖/卖矿/互济的合计，而本服实测
+   * `calcTransactionCost(1000)` 邻房=33、远房=856~865 ⇒ 运费占货量 3%~87% 随对手房变化，
+   * 合计格无法回答"卖能量是否净亏"。恒等式：`tradeFee ≥ tradeFeeEnergySell + tradeFeeEnergyBuy`
+   * （只有能量买卖两通道时取等）。**不进** `CONSUMPTION_FIELDS` ⇒ 净流/风险缓冲口径不变。
+   */
+  tradeFeeEnergySell: number;
+  tradeFeeEnergyBuy: number;
 }
 
 export type LedgerField = keyof EnergyLedger;
@@ -74,6 +82,8 @@ export function emptyLedger(): EnergyLedger {
     imported: 0,
     exported: 0,
     tradeFee: 0,
+    tradeFeeEnergySell: 0,
+    tradeFeeEnergyBuy: 0,
   };
 }
 
