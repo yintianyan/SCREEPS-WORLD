@@ -55,8 +55,10 @@ export enum EventKind {
   /** 改进 A：tuning 参数调整。d = [paramCode, oldValue, newValue, adjustDirectionCode(0=up/1=down)]。
    * 由 tuning-engine 在 applyAdjustment 时记录，提供附录 C.1 缺失的 adjustHistory 审计源。 */
   TuningAdjust = 19,
-  /** 改进 A：tuning 参数回滚（验证失败）。d = [paramCode, rolledBackValue, preAdjustValue]。
-   * 验证 pass 发现调整未改善信号时触发回滚。 */
+  /** 改进 A：tuning 参数回滚（验证失败）。d = [paramCode, rolledBackValue, preAdjustValue, roleCountAtVerify]。
+   * 验证 pass 发现调整未改善信号时触发回滚。第 4 元素（#83）是验证那一拍的在场角色数，-1 = 未知；
+   * 它把"人口合同那条路"与"效果判据/#79 上行护栏那条路"分开 —— 两者都落在这个 kind 上，
+   * 光看 kind 与 reason 分不出来（环寿命 ~755 拍 < verifyDelay 1,500 拍 ⇒ 事后取证取不到）。 */
   TuningRollback = 20,
   /** 改进 A：tuning 参数冻结（连续回滚达阈值）。d = [paramCode, rollbackCount, frozenUntilDelta]。
    * 冻结时参数复位到 CONFIG 基线（附录 D.5），console.log 降级为运维提醒。 */

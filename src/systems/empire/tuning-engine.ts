@@ -294,7 +294,14 @@ function applyRollbacksAndClearPending(
   roomName: string,
   roomTuning: RoomTuningState,
   verifyResult: {
-    rollbacks: Array<{ param: string; oldValue: number; newValue: number; reason: string }>;
+    rollbacks: Array<{
+      param: string;
+      oldValue: number;
+      newValue: number;
+      reason: string;
+      /** #83：诊断字段，见 TuningAdjustment.roleCountAtVerify —— 本函数只把它抄进事件，不参与决策。 */
+      roleCountAtVerify?: number;
+    }>;
     clearedParams: string[];
   },
   pendingBefore: Record<string, PendingValidation>,
@@ -304,12 +311,16 @@ function applyRollbacksAndClearPending(
     applyAdjustment(roomName, rb.param, rb.newValue, ctx.tick);
     const pv = pendingBefore[rb.param];
     const preAdjustValue = pv?.preAdjustValue ?? rb.newValue;
-    // TuningRollback: d=[paramCode, rolledBackValue, preAdjustValue]
+    // TuningRollback: d=[paramCode, rolledBackValue, preAdjustValue, roleCountAtVerify]
     // rolledBackValue = 回滚到的值（冻结时为 CONFIG 基线，否则等于 preAdjustValue）
+    // #83：第 4 元素 = 验证那一拍的在场角色数（-1 = 旧记录或未知参数）。
+    // 为什么靠事件而不是靠采样器：verifyDelay=1,500 拍 > 事件环寿命(~755 拍)，且在场数是瞬时值
+    // ⇒ 事后取证按构造取不到那一拍。**纯诊断，任何判据都不读它。**
     recordEvent(EventKind.TuningRollback, roomName, [
       tuningParamCode(rb.param),
       rb.newValue,
       preAdjustValue,
+      rb.roleCountAtVerify ?? -1,
     ]);
     log.info(
       "tuning-engine",

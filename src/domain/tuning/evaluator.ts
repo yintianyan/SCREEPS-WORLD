@@ -821,6 +821,7 @@ export function verifyPendingAdjustments(
           oldValue: currentValue,
           newValue: pv.preAdjustValue,
           reason: `Contract blocked timeout: ${param} roleCount not reached after ${2 * bounds.verifyDelay} ticks`,
+          roleCountAtVerify: currentRoleCount,
         });
         clearedParams.push(param); // TTL 回滚 = 闭环结束，清空 pending
       } else {
@@ -846,6 +847,7 @@ export function verifyPendingAdjustments(
         oldValue: currentValue,
         newValue: pv.preAdjustValue,
         reason: `Effect verification failed: ${param} signal not improved after verifyDelay`,
+        roleCountAtVerify: currentRoleCount,
       });
     }
 

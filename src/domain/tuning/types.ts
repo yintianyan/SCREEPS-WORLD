@@ -151,6 +151,16 @@ export interface TuningAdjustment {
   newValue: number;
   /** 人类可读的调整原因（供控制台日志和诊断）。 */
   reason: string;
+  /**
+   * #83：仅回滚用。验证那一拍的**在场角色数**（`getRoleCount` 的瞬时值）。
+   * 为什么必须落盘而不是靠采样：调优的 verifyDelay = 1,500 拍，而段 2 的事件环只留 ~755 拍
+   * ⇒ 一次验证的因与果不可能同时在环里；在场数又是瞬时值，5 分钟级采样只能夹紧区间、取不到那一拍。
+   * 有了它，同一类回滚的两种成因才分得开：
+   * `roleCount >= preAdjustValue+1` 却仍被撤 ⇒ 只可能是效果判据或 #79 的上行护栏（旧码在编制到位时直接放行）；
+   * `roleCount < preAdjustValue+1` ⇒ 走的是人口合同那条路。
+   * ⚠️**纯诊断字段，任何判据都不许读它**（读它 = 把观测变成决策，见 §5 边界）。
+   */
+  roleCountAtVerify?: number;
 }
 
 /** 一次评估的完整结果。 */
