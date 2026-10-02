@@ -778,6 +778,12 @@ declare global {
     };
     /** 本次 boot 首个 tick（maintainMemory 记录）—— E2 相对宽限基准。 */
     bootTick?: number;
+    /** #62：creep 命名的帝国内单调序号 —— 后缀从 `Math.random` 换成它，长 soak 才可复现。
+     *  为什么必须是 Memory 而不是 heap：换码即清 heap，而名字会进目标选择的 hash
+     *  （`creeps/support/targeting.ts`）与远矿替补的队列键（`domain/remote/demand.ts`）——
+     *  一个跨部署归零的序号让"同初始状态 ⇒ 同名字序列"这条要求失效。
+     *  ⚠️Memory 被清时序号从头开始 ⇒ 与场上活 creep 撞名，写者侧留了"撞名再取一号"的兜底。 */
+    creepSeq?: number;
     /** 恢复动作烧穿重试预算的持久清单（recovery-execution 写，上限见 ESCALATIONS_CAP）。
      * 为什么落 Memory：判定它的那张 `recoveryActionTable` 是 heap，换码即清 ——
      * 不留这份清单，"哪项恢复反复失败"在部署之后就无人可查。 */

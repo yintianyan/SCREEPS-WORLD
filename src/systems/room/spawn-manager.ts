@@ -561,7 +561,20 @@ export function trySpawn(
 
     // 生成包含 spawnIndex 的唯一 creep 名以供追踪。
     const memSpawnIndex = req.memory.spawnIndex ?? 0;
-    const name = `${req.role}-${snapshot.roomName}-${memSpawnIndex}-${Game.time}-${Math.random().toString(36).slice(2, 6)}`;
+    // #62：后缀从 `Math.random` 换成帝国级单调序号 —— 名字不是装饰：
+    //   `creeps/support/targeting.ts` 按 `creep.name` 逐字符求 hash 来错开目标选择，
+    //   `domain/remote/demand.ts` 把濒死 creep 的名字当替补队列键 ⇒ 每孵一只抽一次真随机，直接分叉世界。
+    // 名字**形状一字未改**（role-room-spawnIndex-tick-后缀），按 `-` 解析名字的代码不受影响。
+    // 序号落 Memory：heap 换码即清，而"同一初始状态 ⇒ 同一名字序列"必须跨部署成立。
+    // 兜底不是装饰：Memory 被清 ⇒ 序号回到 1 ⇒ 可能与活 creep 撞名（Screeps 名字唯一，撞名则 spawnCreep 失败）。
+    const kernelMem = (Memory.kernel ??= {});
+    let nameSeq = (kernelMem.creepSeq ?? 0) + 1;
+    let name = `${req.role}-${snapshot.roomName}-${memSpawnIndex}-${Game.time}-${nameSeq.toString(36)}`;
+    while (Game.creeps[name] !== undefined) {
+      nameSeq += 1;
+      name = `${req.role}-${snapshot.roomName}-${memSpawnIndex}-${Game.time}-${nameSeq.toString(36)}`;
+    }
+    kernelMem.creepSeq = nameSeq;
 
     const result = spawn.spawnCreep(body, name, {
       memory: { ...req.memory },
