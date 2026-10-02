@@ -508,3 +508,15 @@
   而"部署时刻"必须按**功能签名**定，不按 CI/检出时间定（这是本仓第 N 次栽在同一条上）。
   另记一条 #73 的新现场证据：W38S56 `ColonyStateChange [2,3]@83373845 → [3,2]@83373895`（50 拍的 recovery 抖动，
   升级道刚解冻就发生）⇒ 幼房相位仍在瞬跳，而它同时是 G2 的 struggling 输入。
+- 2026-10-02 08:0xZ **#62 的收口规格落盘**（`tmp/observe/pending-62-patch.md`，机器空出来照抄），并把"名字只是装饰"这条彻底钉死：
+  随机后缀有**两类**决策路径消费者，不止 hash 一类 ——
+  ①`creeps/support/targeting.ts:107/:569` 按 `creep.name` 逐字符求 hash 来错开目标选择；
+  ②**`domain/remote/demand.ts:264` `replacementKey("remoteHarvester", homeRoom, targetRoom, replacement)`，
+  其中 `replacement` 就是濒死 creep 的名字**（:259 注释自陈"替补 key 绑定濒死 creep 名"）
+  ⇒ 队列键与 `submitRequest` 的幂等合并也跟着随机后缀走。
+  （`demand.ts:1151 buildHarvesterOccupancy(..., creep.name)` 只按名字**相等**排除自己，不消费随机性 ⇒ 不在改动面内。）
+  方案要点：**名字形状一字不改，只把后缀来源从 `Math.random` 换成帝国级单调序号 `Memory.kernel.creepSeq`**，
+  并同时保住"帝国内唯一（引擎约束）"与"hash 逐只不同（防抖机制）"两个前提 ——
+  ⚠️**连续整数进 `h*31+charCodeAt` 是否退化必须实测**，规格里把它写成一条带数值门槛的用例（先取随机基线再定门槛），
+  并把"后缀换回随机 ⇒ 恰好确定性那例红 / 换成常量 ⇒ 唯一性与 distinctness 两例红"两条反向实验配齐。
+  结案判据仍是孪生四态里的 **PASS**；若 PASS 拿不到而命名已确定 ⇒ 剩第三源（引擎侧按墙钟的 CPU/bucket 计量），另立案别再改随机源。
