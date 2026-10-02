@@ -184,6 +184,15 @@ export const spawnManagerSystem: System = {
         ctx.tick,
       );
       const { requests, nextHysteresis } = demandResult;
+      // #85：把需求阶梯的**结构钳位**抄进 Memory.kernel.demandClamps，供调优器判断
+      // "这个 ↑ 落得了地吗"。缺键 = 没有钳位在压 maxCount（不钳位）⇒ 只在有值时写、无值时删。
+      Memory.kernel ??= {};
+      const clamps = (Memory.kernel.demandClamps ??= {});
+      if (demandResult.upgraderClamp !== undefined) {
+        clamps[snapshot.roomName] = demandResult.upgraderClamp;
+      } else {
+        delete clamps[snapshot.roomName];
+      }
       for (const req of requests) {
         // ：黑名单冷却中的 key 不重建（比较到期 tick — prune 已在步骤 1 执行，
         // 此处防御同 tick 新写入的条目）。

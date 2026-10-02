@@ -373,11 +373,16 @@ function evaluateUpgraderMaxCount(
   let reason = "";
 
   // ↑ 增加：storage 持续高位 + 经济健康 + upgrader 已达上限
+  // ⚠️#85 的事前绑定判据：需求阶梯若正被结构钳位压着（非满仓冲刺=2、维持=1、RCL8 受 WORK 部件限速…），
+  // 那么把 maxCount 抬到钳位之上**不改变任何需求** —— 在场数永远到不了 preAdjustValue+1，
+  // 验证时 D.3 必判未达成 ⇒ 这次 ↑ 只是被撤之前的一次空转。宁可不提，也不提注定落不了地的。
+  // 钳位缺省（undefined）= 没有东西在压 maxCount ⇒ 照常放行（不把正常通路焊死）。
   if (
     s.avgStorageEnergy > storageSurplus &&
     economyHealthy &&
     s.upgraderCount >= current &&
-    current < boundsDef.ceiling
+    current < boundsDef.ceiling &&
+    (s.upgraderClamp === undefined || current + boundsDef.step <= s.upgraderClamp)
   ) {
     desired = "up";
     reason = `Storage ${s.avgStorageEnergy.toFixed(0)} energy (surplus ${storageSurplus}, RCL${s.rcl}) with upgraders at max ${current}, burning surplus`;

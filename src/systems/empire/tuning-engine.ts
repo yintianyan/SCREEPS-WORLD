@@ -638,6 +638,8 @@ function aggregateSignals(ctx: TickContext, roomName: string): TuningSignals | n
 
   return {
     avgReserveDelta,
+    // #85：需求阶梯的结构钳位（缺键 = 没在压 maxCount）。观测值，只在 ↑ 提案门槛里用一次。
+    upgraderClamp: Memory.kernel?.demandClamps?.[roomName],
     avgPressure,
     avgDrainScore,
     crisisRatio,

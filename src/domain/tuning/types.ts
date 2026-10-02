@@ -33,6 +33,14 @@ export interface TuningSignals {
   harvesterCount: number;
   /** 当前 upgrader 存活数。 */
   upgraderCount: number;
+  /**
+   * #85：需求阶梯当前对 upgrader 生效的**结构钳位**（undefined = 没有钳位在压 `maxCount`）。
+   * 来源 = `Memory.kernel.demandClamps[room]`（spawn-manager 每拍从 `evaluateDemand` 抄进来）。
+   * 用途只有一个：让 ↑ 的**提案**门槛别提出"物理上落不了地"的扩容 —— 那些 ↑ 在 D.3 的
+   * `roleCount >= preAdjustValue+1` 上必假，于是每轮都被撤销，调优器把自己的抖动当效果。
+   * ⚠️任何判据都不许反过来读它做回滚/冻结决策（观测不参与决策，见 §5 边界）。
+   */
+  upgraderClamp?: number;
   /** 当前 builder 存活数。 */
   builderCount: number;
   /** 当前 buildQueue 中 queued 状态的任务数。 */

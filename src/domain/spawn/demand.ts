@@ -100,6 +100,12 @@ interface DemandResult {
    * 而是活干不出去；此时吃掉运力会把积压拖得更久。详见 domain/spawn/recycle.ts 规则 3。
    */
   sourceBacklog?: boolean;
+  /**
+   * #85：本 tick 需求阶梯对 upgrader 生效的**结构钳位**（undefined = 该分支直接用 `maxCount`）。
+   * 只报事实，不做判断；消费者是调优器的 ↑ 提案门槛（见 `domain/tuning/evaluator.ts`）。
+   * ⚠️不含价格弹性的缩放 —— 弹性是逐拍浮动的，把"能不能扩容"挂在浮动值上会让提案振荡。
+   */
+  upgraderClamp?: number;
 }
 
 /** 统计房间内各角色存活 creep 数（含孵化中；纯函数，接收预收集摘要）。 */
@@ -852,6 +858,13 @@ export function evaluateDemand(
   const allowUpgrader =
     (colonyState === "normal" || hasDowngradeRisk || earlyRoom) && !rcl8NoUpgrade;
 
+  // #85：本 tick 需求阶梯对 upgrader **实际生效的结构钳位**（undefined = 该分支直接用 maxCount）。
+  // 存在的理由：调优器只看"在场数 ≥ 当前上限"就提 upgrader.maxCount ↑，而很多分支根本不用 maxCount
+  // （冲刺非满仓只到 2、维持只到 1、RCL8 受 WORK 部件限速）⇒ 那些 ↑ 按构造落不了地，
+  // 验证时 D.3 的 `roleCount >= pre+1` 必假 ⇒ 每 ~3×verifyDelay 被撤一次。
+  // 报"事实"而不是让调优器复算这套分支，是为了不让同一个谓词活两处（#68 那类折叠错误的教训）。
+  let upgraderClamp: number | undefined;
+
   if (allowUpgrader && !frozenRoles.has("upgrader")) {
     const upgraderConfig = getRoleBounds("upgrader", home);
     const upgraderTotal = (counts.upgrader ?? 0) + pending.upgrader;
@@ -904,22 +917,29 @@ export function evaluateDemand(
     if (hasDowngradeRisk || crisisNeedsGuard) {
       // 保级紧急：拉满（自采也要保级）。
       upgraderTarget = upgraderConfig.maxCount;
+      upgraderClamp = undefined; // 保级档直接用 maxCount ⇒ 抬上限可绑定
     } else if (!stationUpgradeOnline) {
       // 无 controller container：多 upgrader 长途自采，通勤浪费抵消数量优势，保持 minCount。
       upgraderTarget = pressure <= 0.7 ? upgraderConfig.minCount : 0;
+      upgraderClamp = upgraderConfig.minCount;
     } else if (hasStorage && storageEnergy >= sprintStorageGate && pressure <= sprintPressureGate) {
       // 冲刺：库存充足且经济健康，烧库存换 RCL 复利（2 个满 body 站桩）；
       // P0-1：storage 满仓时拉满 maxCount — 盈余必须被消化，否则在源头被浪费。
       upgraderTarget = storageNearFull
         ? upgraderConfig.maxCount
         : Math.min(upgraderConfig.maxCount, 2);
+      // ⚠️这一行就是 #85 的现场病灶：非满仓时需求封顶在 2，`maxCount` 里超出 2 的那部分是惰性的。
+      upgraderClamp = storageNearFull ? undefined : 2;
     } else if (hasStorage && storageEnergy >= upgradeCfg.sustainedStorage) {
       // 维持：1 个大 body 站桩 ≈ 15/tick，盈余全喂 controller。
       upgraderTarget = 1;
+      upgraderClamp = 1;
     } else if (!hasStorage) {
       // RCL1-3 早期猛冲（无 storage，能量不升级也是浪费）：pressure 0–0.3 满目标、
       // 0.3–0.7 线性缩到 minCount、0.7–1.0 缩到 0。
       const fullTarget = stationUpgradeOnline ? upgraderConfig.maxCount : upgraderConfig.minCount;
+      // 压力斜坡是"缩"不是"结构上限"⇒ 结构上限仍是 fullTarget。
+      upgraderClamp = stationUpgradeOnline ? undefined : upgraderConfig.minCount;
       if (pressure <= 0.3) {
         upgraderTarget = fullTarget;
       } else if (pressure <= 0.7) {
@@ -932,6 +952,7 @@ export function evaluateDemand(
     } else {
       // storage 低水位（< sustained）：最多 1 个大 body，pressure 高则停升级攒库存。
       upgraderTarget = pressure <= 0.5 ? 1 : 0;
+      upgraderClamp = 1;
     }
 
     // 消费端弹性：价格信号缩放 upgrader 编制（保级/冲刺不受影响）。
@@ -963,10 +984,16 @@ export function evaluateDemand(
       const maxWorkParts = upgradeCfg.maxWorkParts ?? upgradeCfg.rcl8MaxWorkParts;
       const maxCountByWork = Math.max(1, Math.floor(maxWorkParts / workPerBody));
       upgraderTarget = Math.min(upgraderTarget, maxCountByWork);
+      // WORK 部件限速同样是**结构**钳位（引擎硬上限，不是偏好）：body 越大能容纳的只数越少，
+      // 所以 RCL8 上把 maxCount 抬到 maxCountByWork 以上同样落不了地。
+      upgraderClamp =
+        upgraderClamp === undefined ? maxCountByWork : Math.min(upgraderClamp, maxCountByWork);
     }
     // 保级覆盖：控制器快降级时至少保留 minCount。
     if (crisisNeedsGuard || hasDowngradeRisk) {
       upgraderTarget = Math.max(upgraderTarget, upgraderConfig.minCount);
+      // 覆盖会把 target 抬到上面的 min() 之上 ⇒ 此刻没有任何结构上限在压 maxCount。
+      upgraderClamp = undefined;
     }
 
     if (upgraderTotal < upgraderTarget) {
@@ -1174,6 +1201,7 @@ export function evaluateDemand(
   const result: DemandResult = { requests, nextHysteresis };
   if (haulerTarget !== undefined) result.haulerTarget = haulerTarget;
   result.sourceBacklog = sourceBacklogSeen;
+  if (upgraderClamp !== undefined) result.upgraderClamp = upgraderClamp;
   return result;
 }
 

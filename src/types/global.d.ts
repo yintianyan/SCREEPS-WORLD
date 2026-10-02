@@ -641,6 +641,13 @@ declare global {
      */
     layoutMetrics?: Record<string, import("./domain/layout/metrics").LayoutMetrics>;
     /**
+     * #85：需求阶梯对 upgrader 生效的**结构钳位**（房名 → 钳位值；钳位不存在时删键，
+     * 保持"缺键 = 没在压 maxCount"的语义，与 `layoutGaps` 的删除惯例一致）。
+     * 写者 = spawn-manager（每拍从 `evaluateDemand` 的返回值抄一次），读者 = tuning-engine 的
+     * `aggregateSignals` ⇒ 调优器由此知道"这个 ↑ 物理上落得了地吗"，不必自己复算需求分支。
+     */
+    demandClamps?: Record<string, number>;
+    /**
      * 帝国战争计划（v26+，war-planner 写入；v27 R4 扩展）：仅 war 姿态时存在，
      * 同一时刻至多一个攻击编队（不并行开多线）；姿态退出/目标失效/战损止损时
      * 清除并回收在役 attacker。
