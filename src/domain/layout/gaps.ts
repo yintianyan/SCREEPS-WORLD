@@ -23,8 +23,12 @@ export interface LinkRoleGaps {
  * 「未被 source/controller/storage 占用的剩余槽位」——把容量当缺口是不可满足的虚报：
  * 放置侧只有 source/controller/storage 三个创建器（planner.ts 的 planLogisticsStage），
  * 传输侧只路由这三个角色（links.ts planLinkTransfers：源=role"source"，目标=单只
- * controller/storage），role"hub" 既无创建器也无消费者，且 dumpToNearbyLink 会把能量
- * 倒进一个永不排空的 link。旧表在 RCL8 硬要 hub=2，于是 6/6 槽位建满的核心房永远报
+ * controller/storage），role"hub" 既无创建器也无消费者。三只的排空通道各是：source link
+ * 由 planLinkTransfers 本身发出传输、controller link 由 withdrawControllerLink/站桩
+ * upgrader 取能、storage link 由 withdrawStorageLink（hauler）取能。真建出 hub link 的
+ * 坏处是潜在而非现行：harvester 站桩在 source（range≤2）而 hub 定义就是离三个锚都 >2，
+ * 碰不到；但 harvester 离岗移动时 dumpToNearbyLink（harvester.ts:36，只按距离+空位选目标）
+ * 会把能量倒进一个传输拓扑永不排空的 link。旧表在 RCL8 硬要 hub=2，于是 6/6 槽位建满的核心房永远报
  * `linkHub:2`；该虚缺口经 shouldPlan 的 gap-force 把布局规划器永久钉在
  * GAP_RETRY_INTERVAL(500) 慢速重试（同二进制控制组：无缺口的幼房 nextPlanTick 仅 +79），
  * 真实新缺口要等 ~450 拍才被排产，且 layoutGaps 恒红会淹掉同通道的真信号。
