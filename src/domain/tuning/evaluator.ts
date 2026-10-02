@@ -652,6 +652,17 @@ function isImprovedMultiSignal(
   }
 
   if (param.startsWith("upgrader.")) {
+    // #68 效果豁免（与 builder 分支同构、同一证据标准）：**多出来的编制真的到位了就算改善**。
+    // 这不是放宽判据，是补一条漏写的成功出口 —— 盈余房收入 > 消耗，多养一只 upgrader 也**不可能**让
+    // avgStorageEnergy 转跌，于是原来唯一那条"库存必须下跌"的判据在这种房里按构造不可满足：
+    // 线上实测 ↑@83374266（当场两只在场、+16/拍）→ 1,500 拍后被回滚 @83375766，
+    // 期间 `p=0`、`se` 62k→66k 一路上行，且 ↑ 的人口合同（roleCount ≥ preAdjustValue+1）已满足
+    // ⇒ 撤销只可能来自本条改善判据 ⇒ 发展速率被钉死在"维持库存持平所需的最小值"，与盈余无关。
+    // 只加出口：D.3 人口合同、D.4 下调护栏、所有阈值与容差、失败路径的计数一字未动。
+    if (isUp) {
+      const roleCount = getRoleCount(param, currentSignals);
+      if (roleCount >= pv.preAdjustValue + 1) return true; // 人口到位即生效（与 builder 一致）
+    }
     const before_ = before.avgStorageEnergy;
     const after = currentSignals.avgStorageEnergy;
     if (before_ === undefined) return true;

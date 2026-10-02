@@ -572,3 +572,13 @@
   不动阈值、不动容差、不动 ↓ 方向的 D.4 护栏。政策邻近 ⇒ 改前把数摆清。
   ⚠️自记一条探针形状错：轮询脚本里 WORK 加总用 `p=="work"`，线上 `creep.body` 是**对象数组**（要 `p.type`）⇒ 该列恒 0，
   另两列（只数、progress）可用；**不去改正在运行的脚本**（编辑运行中的 bash 脚本比重复读数更危险）。
+- 2026-10-02 11:1xZ **#68 修复落地（本地，待随批推）**：`evaluator.ts:654` 给 `upgrader.*` 的 ↑ 方向补上 builder 那条同构的
+  **效果豁免**（`roleCount >= preAdjustValue + 1` ⇒ 人口到位即算改善）。只加成功出口，D.3 人口合同 / D.4 下调护栏 / 全部阈值与容差未动。
+  三条用例（现场形状 (a) + 编制未到位仍走 blocked 的对照 (b) + hauler ↑ 未改善仍回滚的无连带 (c)）；
+  **反向实验**：撤掉豁免 ⇒ 恰好 (a) 红、(b)(c) 绿。unit 374 文件 5139 例 / integration 30 文件 239 例 / tsc 全绿。
+  ⚠️取证时也顺手抓出自己的两个口径错：①先前读 `pendingValidations||pending` 得到 `{}` 是**键名猜错**
+    （真键 `pendingValidation`）—— 那条"验证环没在跑"的读数是废的，重读后看到 `builder.maxCount` 正挂着一条
+    `adjustDirection:"down", preAdjustValue:2, adjustTick:83376766` 的待验证记录 ⇒ **builder 是被 ↓ 的**，与 upgrader 的回滚是两条路；
+  ②`... | tail -3; echo $?` 取的是 **tail 的退出码不是 tsc 的**（本仓老陷阱），改写成 `>log; TSC=$?` 才看见两笔真实 TS 错。
+  遗留（下一轮可选的更优解）：`TuningSignals` 里**没有 controller 升速信号**，所以这次只能沿用 builder 的"人口到位"证据标准；
+  若要把判据升级到"升速确实上升"，得先给 economy ring 加一个 progress-rate 字段（新仪器 ⇒ 新口径 ⇒ 另案）。
