@@ -3307,3 +3307,39 @@ round3→round4 打出 `tick 83401284 → 83401384`（墙钟 616 秒）⇒ 心�
 本轮审计的实际产出是三件：能力矩阵多了 §13/§14/§15、两道永真执行闸（#102）、防线"缺墙"被证为故意设计（R215）。
 
 边界：零 src、零 push、零 build、零 console；探针只有源码 Read/grep。判效器 pid=7182 继续盯 83405220。
+
+---
+
+## R220 · 2026-10-03 13:4xZ（#102 落了：`GATE_THREAT_UNCHANGED` 接上真数据——并把 A/B/C 的账改了一遍）
+
+R218 那份"要不要推"的分类里我数了**一笔**行为改动（#89）。本轮做完 #102 之后这个数字变了，写在这里更正：
+**现在未推批里有两笔改变判定行为的提交**（`1bc67c9` #89 松绑、`58b1efa` #102 收紧执行闸），
+纯仪表仍是 4 笔、注释级 3 笔、test-only 1 笔。⇒ 选项 B 的定义要跟着改：**"只推仪表与注释"现在必须同时排除 #89 与 #102**。
+
+**改了什么**：`plan-adapter.ts` 的 `threatEscalated` 从字面量 `false` 换成 `isTargetThreatEscalation(ctx, plan)`，
+它调用 domain 里一直备着、有单测、零产线调用者的 `evaluateThreatEscalation()`。生效的是三件 RED：
+目标房有威胁 creep / 目标房有敌方塔 / sponsor 正被打。
+
+**两个设计决定都不是凭口味，是从代码里读出来的**：
+① 判据取 `shouldAbort`（RED）而不是 `level!=="GREEN"`——预约这一路 YELLOW **已经被更硬的 `GATE_TARGET_CLAIMABLE` 取消整条计划**
+  （`isTargetClaimable`：`reservation && !my ⇒ false`，且它在硬失败名单里），在这层再判会把同一件事同时做成"取消"和"暂缓"；
+  而候选房周围有预约/过境单位是常态，要求 GREEN 等于造一把**几乎不可满足**的闸——那与"永真通过"是同等糟糕的另一种错。
+② 不给 `ExpansionPlanMemory` 加基线键：调用方 `tryConsumePlan` 已保证目标房此刻在视野内（不可见的直接 continue），
+  所以全部输入都是现拍世界读数。给已存在的持久对象补形状是我踩过的静默失效坑，而这里根本用不上它。
+  威胁口径用 `classifyThreats`（剔盟友与非战斗部件），不是裸 `hostileCreeps`。
+
+**验证**：`tsc` rc=0；`tests/unit` **386 文件/5229** 全绿（基线 385/5222 ⇒ +1 文件 +7 用例）；`tests/integration` 30/239；
+prettier/eslint 由 pre-commit 钩子跑过。**反向实验**（把 wiring 摘回 `false`）：恰好 4 条红（三条 RED + "同盟表为空"那条），
+两条控制组（干净目标必须消费、只有 move 的过境单位必须消费）**与既有 `plan-status-ledger` 全部仍绿**；
+摘除态 `tsc` 另报 `isTargetThreatEscalated` 未被引用 ⇒ 结构上证明这个 helper 只有那一个调用点。
+⚠️过程中我给 4 处旧夹具补了 `find: () => []`：**是夹具不完整而不是生产代码要防御**（引擎保证 Room 有 find），
+所以改测试不改代码去容忍残缺对象。另外我原本写的一条用例"盟友单位不算威胁"是**我的假设不是现场事实**
+（`CONFIG.defense.allies=[]`），当场改成"陌生名字的战斗单位就算威胁"。
+
+**没做的两件事，都有理由**：`hasConcurrentOp` 仍写死 `false`（语义与真读 `Memory.kernel.expansion` 的
+`hasOtherExpansion` 高度重叠 ⇒ 要么删闸要么补生产者，两种都是政策改动，属人）；`getExecutionProgress` 的大小写错配不动
+（`executionDashboard` 零消费者 ⇒ 不在决策路径，按量级结案）。
+
+边界：**未 push、未 build**（`dist/main.js` 仍 05:10/785,155B == 线上 `ea4c69da6f8b`）、零 console。
+判效器 pid=7182 仍盯 83405220；**若 A/B/C 选了含 #102 的推送，上线判据**：一次带敌情的窗口里读到
+`Gate failed … GATE_THREAT_UNCHANGED` 才算这道闸活了；和平期它恒不触发是正确读数，不是坏了。

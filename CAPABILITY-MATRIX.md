@@ -179,9 +179,16 @@
 - **执行期复检**：`plan-adapter.ts:66-98` 消费时重验 11 闸（TOCTOU）；在途**故意不再查** `posture/expansionAllowed`
   （`expansion-manager.ts:79-86`），只查视野/归属/威胁（`state-machine.ts:264-281,320-338,388-396,508-515`）
   ⇒ 开闸瞬间放行后，姿态回摆不会撤单（这是"长承诺"的设计代价，不是 bug）。
-- **⚠️两道闸按构造永真通过（#102，我逐行核过）**：`execution-gate.ts:136-142` 读 `hasConcurrentOp`、
-  `:160-166` 读 `threatEscalated`，而唯一产线调用点 `plan-adapter.ts:71/:74` **写死 `false`**（作者注释"简化"）。
-  `threat-escalation.ts` 无产线 importer ⇒ **帝国可以开进一间威胁刚升级的房而不会被拦**。
+- **⚠️两道闸按构造永真通过（#102，我逐行核过）—— 一道已于 R220 接上真数据（本地提交 `58b1efa`，未推）**：
+  `execution-gate.ts:136-142` 读 `hasConcurrentOp`、`:160-166` 读 `threatEscalated`，而唯一产线调用点
+  `plan-adapter.ts:71/:74` **写死 `false`**（作者注释"简化"）。
+  **现状**：`threatEscalated` 改由 `isTargetThreatEscalation(ctx, plan)` 提供 ⇒ 三件 RED 生效
+  （目标房威胁 creep / 目标房敌方塔 / sponsor 正被打），7 条用例钉住，含两条控制组（干净目标、只有 move 的
+  过境单位都必须是放行）。判据取 `shouldAbort`（RED）而不是 `level!=="GREEN"`，两条理由都来自读代码：
+  预约这类 YELLOW 已被更硬的 `GATE_TARGET_CLAIMABLE` **取消整条计划**（用例已断言），在这层再判会把同一件事
+  同时做成"取消"和"暂缓"；而候选房周围有预约/过境是常态，要求 GREEN 等于造一把几乎不可满足的闸。
+  **`hasConcurrentOp` 仍写死 `false`**：它的语义"同类 Operation"与真读 `Memory.kernel.expansion` 的
+  `hasOtherExpansion` 高度重叠 ⇒ 要么删闸要么补生产者，两种都是政策改动，**属人，我没顺手删**。
   同处第三件小事：`getExecutionProgress` 表键是大写而 Memory 状态是小写 ⇒ `progress` 恒 0，
   但 `executionDashboard` 除写者外**零消费者** ⇒ 按"不在决策路径上的读数"结案，不单独立部署。
 - **测试覆盖**：纯夹具（`tests/integration/expansion/a3-3/a3-4-e2e.test.ts`、`tests/unit/expansion/a3-*-contract.test.ts`
