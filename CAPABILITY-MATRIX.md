@@ -27,9 +27,16 @@
 - **机制依据**：扩张是长承诺投资，误判会触发死亡螺旋。
 - **实现状态**：`LIVE_VALIDATED`
 - **入口 / 链**：`readiness.ts` G0–G11 → `empire-economy.ts:308-321`（刻意用长视界视图）→ `kernel.expansionDashboard`；`posture.ts:150` 七个合取项 → `expansionAllowed` → **执行侧唯一认的门禁**（`plan-adapter.ts:67`，`execution-gate.ts` 里**没有** G4/G6）。
-- **线上验证**：**第一次自主扩张端到端自然完成**（`outcome=COMPLETED`，开单→完成 13,300 拍，债单 #32）；七合取项逐项现读唯一假项 `youngestMature`（R187）。
-- **已知缺陷**：**#88 属人**（G4 的 ≥5/拍 与 `youngestMature` 在同一能量预算上对冲，R185）；**#92 属人**（零活敌的 war 靠 `threatWindow=5,000` 记忆撑住 ⇒ 单次目击缴 ≈5 小时扩张税）；#94 上线前 `gclLevel`/`bucket` 两项不可事后归因。
+- **线上验证**：**第一次自主扩张端到端自然完成**（`outcome=COMPLETED`，开单→完成 13,300 拍，债单 #32）。
+  ⚠️R187 那句"七合取项逐项现读唯一假项 `youngestMature`"**已被 R212 取代**：RCL5 于 tick≈83400860 命中后
+  `youngestMature` 翻 true，而 `expansionAllowed` 仍 false —— 因为它是 `expandHealth && !liveThreat && posture!=="war"`
+  （`posture.ts:247`），**war 尾税是七项之外的独立合取项**。R212 现场逐项：bucket✓ allNormal✓ avgPressure=[0,0]✓
+  sponsorReady✓ youngestMature✓ cpuRatioOk✓(0.33<0.6) **gclHeadroom 未证** **posture=war ✗（唯一在挡）**。
+  ⚠️坑：dashboard 的 `Pressure=HIGH(0.65)` 不是 posture 吃的那个量（决策路径用 `rooms[].economyPressure` 均值）。
+- **已知缺陷**：**#88 属人**（G4 的 ≥5/拍 与 `youngestMature` 在同一能量预算上对冲，R185；RCL 侧现已满足，剩 G4 单挡）；**#92 属人**（零活敌的 war 靠 `threatWindow=5,000` 记忆撑住 ⇒ **每次目击**缴 ≈5 小时扩张税，R212 现场量到比值：波次在场 ≤45 拍 vs 税 5,000 拍 ≈ **110 倍**）；#94 上线前 `gclLevel`/`bucket` 两项不可事后归因。
 - **优先级**：P0。**验收标准**：解闸后必须真落地一次 claim（已满足一次）；**`STABLE` 缺口**：同一串闸的**第二次**端到端自然完成还没有。
+  **在飞的可驳预测（R212，判效器 pid=7182）**：尾税于 tick≈83405220 到期 ⇒ `expansionAllowed` 同拍翻 true（P-A），
+  执行闸只看这一个标志 ⇒ 会真去 claim W37S56；若不翻（P-B）⇒ 首查 `gclHeadroom`。
 
 ## 3. 跨房物流与成对入账（`creeps/roles/carrier.ts`、`actions/fill.ts`）
 
@@ -86,6 +93,16 @@
   **#96 上线前战损不可长程归因**（环 846 拍 / 保险丝 400 拍）、**#99 漏斗计数已实现但随批未推 ⇒ 线上还没有这份读数**。
 - **优先级**：P1。**`LIVE_VALIDATED` 的前置**：需要**真实敌情**，而我不制造敌人（L0 §1.5 + 我的既定禁令）。
 
+## 8b. 进攻性打击与选靶（`domain/military/target-selection.ts` + `war-planning.deriveTarget`）
+
+- **实现状态**：**`NOT_WIRED`**（domain 有完整实现与单测，**生产链上进不到** —— 这不是"未验证"，是"未接线"）
+- **入口 / 链**：`scoreTarget()`（7 维加权）+ `selectTarget()`（硬过滤 `occupied`/`blacklisted`/`intelAge>targetFreshness`/`towers>=maxTowers`/无主）→ 由 `deriveTarget()` 的**进攻支**调用，而进攻支的进入条件是 `isOffensive(opType)`。
+- **为什么进不到（R211 逐分支穷举）**：`deriveOperationType()` 对 10 个 `ThreatIntent` 在"核心房/远矿房"两条 switch 里**只返回 `DEFEND | ESCORT | RETREAT`**；`isOffensive()` 要求 `ASSAULT/RAID/SIEGE/CONTROLLER_ATTACK/REMOTE_DENIAL/CLAIM` ⇒ 恒 false。`war-posture.ts:226-228` 的授权表里**有**这些进攻类型（说明设计意图存在），但没有生产者会产它们。
+- **线上同向证据**：两波真进犯产出的计划都是 `operationType=DEFEND`、`targetRoom=` **自家受威胁房**（W38S56@83399844 squadSize=9；W37S58@83400214 squadSize=32；`spawned` 都是 0）。
+- **现有测试**：`tests/unit/military/war-planning-a5-3.test.ts` 手递进攻夹具 ⇒ 支路本身有覆盖，**但夹具不是产线调用者**；`tests/unit/military/war-funnel.test.ts`（#99）把"候选池为空仍出计划"钉成断言，防的就是我把这条链当成在跑。
+- **已知缺陷 / 待裁决**：**#100 属人**——要么给 `deriveOperationType` 增加进攻分支（=新增战争能力，L0 §1.5 需授权，会真改变对外行为并引入战损风险），要么承认它是储备并把状态标在这里。我不自批，也不为取证制造敌情。
+- **`LIVE_VALIDATED` 的前置**：出现一次 `warPlan.operationType ∈ {ASSAULT,RAID,…}` 且 `targetRoom` 非我方房。
+
 ## 9. 工业链（lab / factory / boost，`systems/industry*`）
 
 - **实现状态**：`LIVE_VALIDATED`（第一次跑通并入库：`storage.XGH2O=100`、累计 ≈195）
@@ -141,6 +158,7 @@
 
 ## 尚未入矩阵的能力 = 本文件的已知不完整性
 
-L0 §3.1–3.8 列出的覆盖面**远不止上面 11 条**（房间运营/基础设施、资源网络、殖民管理的全部子项、宣言/联盟/外交、符号与 boost 全链、CPU 调度本身、侦查与情报体系…）。
-**当前只登记了我今夜能引用证据的条目。**其余按 L0 的纪律**必须标 `NOT_STARTED/DESIGNED` 才诚实**，而我没有逐条核过代码入口与调用链 ⇒ 所以**不填**（填了就是伪造）。
-补齐次序建议（每轮 3–5 条，先核代码再落状态）：①殖民/房间运营子项 → ②侦查与情报（`segment 0/5`，它与 #95 的选靶闸直接相关）→ ③CPU 调度与预算（tier 与 `pick*` 已有底子）→ ④外交/宣言（很可能整块 `NOT_STARTED`，那本身就是重要结论）。
+L0 §3.1–3.8 列出的覆盖面**远不止上面 13 条**（§1–§12 加今夜补的 §8b；房间运营/基础设施、资源网络、殖民管理的全部子项、宣言/联盟/外交、符号与 boost 全链、CPU 调度本身…）。
+**当前只登记了我能引用证据的条目。**其余按 L0 的纪律**必须标 `NOT_STARTED/DESIGNED` 才诚实**，而我没有逐条核过代码入口与调用链 ⇒ 所以**不填**（填了就是伪造）。
+⚠️§8b 是第一条**状态为 `NOT_WIRED`** 的行——它是好消息式的诚实：不是"没测过"，是"产线上根本进不到"。后续若再核出这类，优先用它而不是 `TESTED`。
+补齐次序建议（每轮 3–5 条，先核代码再落状态）：①殖民/房间运营子项 → ②CPU 调度与预算（tier 与 `pick*` 已有底子）→ ③外交/宣言（很可能整块 `NOT_STARTED`，那本身就是重要结论）。（原第②条"侦查与情报"已在 §12 落地；它那句"#95 的选靶闸"已按 R211 更正——选靶链今天不在路径上。）
