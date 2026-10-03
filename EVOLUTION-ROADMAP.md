@@ -3564,3 +3564,26 @@ domain 侧 `planId` 与 Memory 侧 `pid` 由序列化层桥接，不存在"按 A
   planId 碰撞（本节）、"经验账无人读"（属无主仪表那族，已按量级结案，见 `silent-inert-mechanisms` 的 §八注）。
 
 边界：零 src、零 push、零 build、零 console；全量 e2e 仍在后台（34 张，`/tmp/e2e-full.log`）。
+
+---
+
+## R229 · 2026-10-03 14:4xZ（P-A 前置全部复核通过；工业链第一次发布了一条 GH2O 需求，但买入侧还没走）
+
+**① P-A 前置（约 1.9 小时后 tick≈83405220 到期）**：四张 `WAITING_EXECUTION` 的 sponsor 仍是 **W37S58 一间**
+（RCL8、自有 spawn、storage 889,323）⇒ §13 查到的那条"sponsor 不查 spawn/RCL"弱点**今天不构成风险**
+（没有哪张单挂在不孵兵的房上）。`ready` 从 87,231 涨到 89,391 拍（继续累加，未被 G0 复位 ⇒ 与"晋升门与执行门是两套"一致）。
+人口 34（W37S58 22 / W38S56 12）、`credits 13,125,191`（自 R211 的 12.82M ≈ **+304k/2,000 拍 ≈152/拍**）、
+storage 889,323（ratio 0.8893，仍在触发线 0.9 之下且方向朝下，与 R223 一致）。
+
+**② 新事实：工业链第一次发布了 lab-reaction 需求。** `trade` 账本读到
+`demandTop="GH2O:115/p20/lab-reaction"、demandsPublished=2、publishedAt=83402318` —— 这是 #44/#51 那条
+"缺料自锁已拆但行情合闸⇒行为零变化"之后，**第一次看到 lab 真的发需求**（爬 T2 经济线的动作，与 #49 的 `reactionTarget="G"` 同向）。
+⚠️但**不能说买入已跑**：同一份账本里 `buyTried=0 / buyOk=0 / buyBlockedBy=""` ⇒ 需求发布了、采购动作没执行。
+而 `demandsLive=0` **不是**"需求消失了"——那正是 `lab-system.ts:441` 注释点名过的读侧形状
+（"demandsLive=0 而 reactionPlan 明明在账上"），与 `demandTop` 非空自相矛盾 ⇒ 计数口径不可信，别用它下结论。
+⇒ 下一轮的读法：先看 `buyTried` 是否 >0 与 `buyGatePrice/buyBestAsk`（决定这条需求会不会真买到东西），
+再看 `factory-commodity` 有没有条目（#51 的判据是"看到条目要查行情是否翻正"）。**别用 demandsLive 判有无。**
+
+**③ 全量 e2e 仍在后台**（pid=32674，34 张，产物 md5 `51e4768a…`）；本轮没有结果可报，只有进度。
+
+边界：零 src、零 push、零 build、零 console；探针 = observe×1 + 源码 grep。属人 7 项未动。
