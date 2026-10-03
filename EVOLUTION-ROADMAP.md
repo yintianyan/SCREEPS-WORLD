@@ -4594,3 +4594,34 @@ CI run `37147430349` **exit 0**；线上 `modules:{main:<786453B sha=d2f0b0cd00a
 第三档（随成功单调 +1）改挂到"下一次有真实成功恢复时手工读一次"，不再交给争用中的轮询器。
 **⑦下一轮的第一读**：`posture-exit3.log` 尾部（看 EXIT_TICK=83412782 到点时 posture 是否离开 war）＋ `kernel.stats.deathByCause.combat` 是否仍 0。
 G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自达闸**。
+
+### R262（10-04 04:43Z，本会话）换码批的其余四台仪器全部 EXERCISED，三条立案当场拿到实数
+决策记录本身开始带条件字符串 ⇒ `kernel.expansionDashboard.failedGates` 现读：
+`G0: posture expansionAllowed(v=false|posture.expansionAllowed === true)`、`G6: CPU tier(v=tight|tier ≤ comfortable)`，
+`Readiness=NOT_READY / Pressure=HIGH(0.68) / Budget=356074/962359 / Candidates=12(Q=3,R=6,U=3) / Plans=5 active, 4 waiting / Top=W37S56(WAITING_EXECUTION)`，
+`kernel.capacity={tier:"tight", since:83387005, upgradeTicks:0}`。⇒ **G4 已从决策记录里消失**（与 watch3 独立同向），扩张现在只挡在
+"战争姿态"与"CPU 档位"两项上，而候选与计划都在队列里等着。
+
+**①#103 由推断升为现场证实，且带原因与次数**（`kernel.stats.recoveryRejections`，#105 那台跨部署仪器）：
+`defense_response:non_retryable ×5`、`logistics_fix ×3`、`energy_redirect ×2`，**三条的 lastReason 全是 `"room memory not found: global"`**。
+代码侧对应 `recovery-execution-system.ts:314/370/425/665/730/807` —— 六个下发动作各自先按房名取 room memory，
+帝国级节点带的是字面量 `"global"` ⇒ **每种动作都在同一个 guard 上死掉**，且被标成 `non_retryable`（不再重试）。
+⇒ 一个 boot 段内 10 次"检测到了、动作发不出去"。修法属人（要么把帝国级节点解析成真实 sponsor 房，要么给 global 一条专门通道），
+⚠️`non_retryable` 这一标会让"同一问题永不再试"，改时要一并核重试语义。
+
+**②#99 的战争漏斗第一次给出出口分布**：`intelEntries:7 → notFact:1 → unowned:6 → candidates:0 → plans:0`，另有 `noThreats:1`。
+⇒ 7 条情报里 6 条过了"非我方"这关却**没有任何一条成为候选**，而当前唯一记录的拒因只有 `noThreats:1` ⇒ 差额 5 条**落在哪一格还没读我的分桶实现**
+（不许把"桶里没有"读成"没发生"，这是我记过的截断/键序类错）。⇒ #100（只防不攻）第一次有了可定位的入口。
+
+**③#111 的根因被这台账本自己的判据钉死，且两房不同因**（`kernel.stats.roadBuild`）：
+- `W36S58`：`calls 1848 → outOfRange 1399（76%）`，其中 `near 176 / mid 635 / far 588` ⇒ 按 `road-build.ts` 自己的边界
+  （≤5 放宽射程即可、6–10 同走廊铺错段、≥11 根本在另一条线上）**87% 的落空在 6 格外**；`noEnergy 431（23%）`、`noWork 0`。
+  ⇒ 情形①「落点与通勤线不相交」是主因，**不是**"没派编制"（noWork=0 直接否证）也不是"没能量"（只占 23%）。
+- `W37S57`：`calls 926 → noEnergy 764（82%）`、`outOfRange 161` ⇒ **同帝国另一间房的主因是③有力气没能量**。
+⇒ 结论要按房下：任何"一刀切放宽施工射程"或"一刀切加车道"都会错一半；而这正是我给自己定的"取证在前、处置在后"的理由。
+- 另一条变化：`built 18 / roadsBuilt 16 / roadSitesPending 16 / roadProgressSum 944` ⇒ 与 2026-09-23 那次"建成道路恒为 0"相比**现在真的在建成**，
+  缺陷形状已从"永远建不成"变成"铺错段、建成速率远低于铺设计"。
+
+**④#96/#112 已记于 R261；#93/#94 的落盘键这次在 dashboard/capacity 侧可见**（`Budget`、`tier/since`），
+但 `gclLevel/bucket` 的专门键仍需在 `--keys` 全列里定位一次才能宣布 EXERCISED ⇒ 不当已验。
+**⑤本轮未动任何 src**（全在读与记）；e2e 首次对已部署的同一份码补跑，挂在后台。
