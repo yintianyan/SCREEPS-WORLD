@@ -98,6 +98,26 @@
 
 ---
 
+## 12. 侦查与情报体系（`domain/intel.ts`、`systems/room-observer.ts`、段 5）
+
+- **游戏机制依据**：视野外的房间不可判断；扩张与打击都建立在"这份情报还新不新"之上。
+- **实现状态**：`TESTED`（**线上未证实** —— 见下）
+- **代码入口 / 调用链**：`room-observer.ts`（每 50 拍刷新邻居情报，C2）→ `domain/intel.ts` 的 `getRoomIntel()`（**宿主我本轮没查到定义位置**，见"下一件事"）→ 两个消费者；另有 `segment-store.ts:31` `SEGMENT_INTEL_PLAYERS = segId("intelPlayers", 5)`，形状 `{epoch, players}`（`:337` 段不可用时退化成 `{epoch:0, players:{}}`）。
+- **⚠️两个新鲜度阈值，别混（口径纪律）**：
+  - **扩张执行侧**：`plan-adapter.ts:166-171` `isIntelStale()` 用**硬编码 10,000 拍**，且注释规定"**从未观测过 = 不算过期**"（把判断让给后面的 claim 闸）。
+  - **战争选靶侧**：`CONFIG.war.targetFreshness = 1,500 拍`。
+  ⇒ 同一条情报在两条链上"新鲜度"差 **6.7 倍**；引阈值必写消费者是谁。
+- **依赖模块**：`RawMemory` 段调度、`expansion/plan-adapter`（`GATE_INTEL_STALE`，`execution-gate.ts:155-156`）、`military/war-planning-system`（选靶）。
+- **现有测试**：`tests/unit/intel/intel-state.test.ts`、`tests/unit/intel/confidence.test.ts`、`tests/unit/systems/intelligence.test.ts`、`tests/unit/economy/intel.test.ts`（均在 `tests/unit` 5214 用例全绿内）。
+- **线上验证情况**：**未取得**。`peek rooms.W37S58.intel` ⇒ **不存在**；所以"Memory 路径"这个假设先被否掉（大概率在段 0/段 5，或该键已换名）。**不给 `LIVE_VALIDATED`。**
+- **已知缺陷 / 疑点**：**#95 的选靶闸正卡在这里** —— 若段 5 的 `players` 为空，则"war 却没有 warPlan"是**正确行为**（无合格玩家目标），而这条**只能读段 5 来定**。
+- **CPU 成本**：`room-observer` 每 50 拍一次（历史归因里不是大头项）。
+- **优先级**：**P1**（它是"作战"与"扩张"两条腿共同的上游；情报缺失会让两条腿同时静默，而静默看起来像健康）。
+- **验收标准 / 下一件事（写死，别靠记忆）**：
+  1. `grep -rn "getRoomIntel" src/domain/intel.ts` 找到**定义行**，确认它读的是段几（我本轮只确认了段 5 的名字与形状）。
+  2. 用一发**带标记 console 探针**读 `RawMemory.segments[5]` 的 `players` 键数（段不在 heap 里，`peek` 走 Memory 端点读不到）。
+  3. 若 `players` 非空 ⇒ 回 #95 查 war 选靶为何仍不产 `warPlan`；若为空 ⇒ #95 结为"正确行为"，本行升 `LIVE_VALIDATED` 的条件改成"观察到一次跨房情报被扩张或军事消费"。
+
 ## 尚未入矩阵的能力 = 本文件的已知不完整性
 
 L0 §3.1–3.8 列出的覆盖面**远不止上面 11 条**（房间运营/基础设施、资源网络、殖民管理的全部子项、宣言/联盟/外交、符号与 boost 全链、CPU 调度本身、侦查与情报体系…）。
