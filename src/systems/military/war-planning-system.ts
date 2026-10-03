@@ -233,7 +233,12 @@ function buildWarPlanningInput(ctx: TickContext, tick: number): WarPlanningInput
 // ═══════════════════════════════════════════════════════════
 
 /**
- * 从 Memory.rooms[].intel 采集战争目标候选。
+ * 采集战争目标候选。
+ *
+ * ⚠️数据源是 `queryRoomIntel()`（`systems/intelligence.ts` 的模块级 heap Map，**不是** `Memory.rooms[].intel`
+ * ——那个键并不存在）。旧注释曾把消费方引向空键，照着它排查会得出"战争系统读空键⇒永久无目标"这条**假根因**。
+ * 五道筛子（非 fact 级情报 / 无主或我方 / `kind!=='normal'` / `occupied` 与 blacklist / 下游
+ * `targetFreshness·maxTowers·maxDistance`）目前**全部静默 `continue`、零计数** ⇒ #99 要在这些出口各留一位。
  */
 function buildTargetCandidates(tick: number): TargetCandidate[] {
   const candidates: TargetCandidate[] = [];
