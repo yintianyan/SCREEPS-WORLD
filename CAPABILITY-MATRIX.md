@@ -319,10 +319,13 @@
 
 ## 17. 外交与敌我判定（L0 §3.5 的"竞争"面，R235 首次入矩阵）
 
-- **实现状态**：情报侧 `LIVE_VALIDATED`（按人归因**在写且在持久化**）/ 政策侧 **`NOT_WIRED`**（没有任何消费者读它）
+- **实现状态**：情报侧 heap **`LIVE_VALIDATED`（在写）**、**冷存侧 `UNEXERCISED`（线上段 5 为空，R238）** / 政策侧 **`NOT_WIRED`**（没有任何消费者读它）
 - **在跑的一半**：`domain/intel.ts:437 upsertPlayerObservation` 被产线调用两次 —— `systems/intelligence.ts:62`（活动信号）与
   `:80`（敌对信号 `hostile=true`）⇒ 每个玩家记 `{owner, lastSeenAt, lastHostileAt(单调前移), rooms{房→tick}}`，
-  经段 5 月级持久化。这是"谁在打我"的完整原料。
+  经代码设计应落段 5（`config/index.ts:54` id=5、在 `ALL_SEGMENT_IDS` 里）——
+  ⚠️**但线上段 5 为空**（R238：`api/user/memory-segment?segment=5` 返回 200 且无该键；同法读段 2 有数据，
+  且该读数器把 HTTP 失败与 EMPTY 分开报，所以 EMPTY 不是鉴权伪影）。
+  ⇒ 按人归因的敌意记忆**目前只活在 heap，每次部署归零**；"谁在打我"的原料是真的，但**不跨部署**。见 #109。
 - **缺的一半（逐条 grep 过，不是推断）**：**所有**威胁记忆消费者读的都是**房级、不认人**的 `Memory.rooms[].lastHostileAt` ——
   `empire-strategy.ts:57`（喂 posture ⇒ war 尾税）、`tower-defense.ts:223`、`fortification.ts:79-83`、`room-profile.ts:283`。
   **零个消费者**读 `PlayerIntelEntry.lastHostileAt`。⇒ 按人归因的数据写了、存了，然后没人用。

@@ -3867,3 +3867,32 @@ RCL6/7/8 分别 1/2/3 个 boost 位) → 报到拦截 `boost-report.ts` + `boost
 ⇒ 重开 pixel 需要两处同时成立，属人已定过一次的理由（187+ 拍 reload 停摆 + bucket 是档位时钟）仍然在。
 
 边界：零 src、零 push、零 build、零 console；只读 API 2 发 + 文档。看门狗 round 17/45、`newSighting` 自 round 9 后未再出现。
+
+## R238 · 2026-10-03 15:3xZ（撤我自己 R235 那句"段 5 月级持久化"：线上段 5 是空的 ⇒ 按人归因的敌意记忆**不跨部署**）
+
+**触发点**：我要为 #108 量"当前活跃行凶者有几个"，跑 `tmp/tools/official/intel-players.mjs` ⇒
+`EMPTY: 段 5 未写入 …（状态未知，不等于 players=0）`。
+
+**三条排除做完才敢撤自己的话**（这一步是本条的全部价值）：
+1. **不是鉴权伪影**：我另写一发临时脚本用 `Cookie: token=` 读段 2/3/5/6 ⇒ **全部 401**，
+   而对端可用工具用 **`X-Token`**（`ring-dump.mjs:35`）⇒ 我这发的 401 只证明**我的 header 错**，不证明服务器没数据。
+   `intel-players.mjs` 自己把 **`FAIL: HTTP n` 与 `EMPTY` 分成两条输出**（`:35` vs `:41`），它报的是 EMPTY ⇒ **HTTP 200 且该段缺席**。
+2. **不是读错段号**：`CONFIG.segments.intelPlayers.id = 5`（`config/index.ts:54`），且 5 在 `ALL_SEGMENT_IDS`（`segment-store.ts:95-103`）里被 `setActiveSegments` 请求。
+3. **不是"还没到节拍"**：boot 在 83386488、现读约 83403,500 ⇒ 已跑 ≈17,000 拍，`intelCoverage={rooms:7,players:2}` 每 100 拍在落 ⇒
+   heap 侧确有 2 个玩家，老化批处理（`intelligence.ts:183-192`，含 `persistPlayersToSegment()`）不可能一次没跑。
+
+**机制上为什么可能是空的（候选，未定罪）**：写回闸是 `if (cache.intelPlayersDirty && cache.intelPlayersSeg)`（`segment-store.ts:531`），
+而 `readIntelPlayersSegment()` 在 `segmentUnavailable()` 为真时**故意返回临时对象且不缓存**（`:337`，注释写明"防空数据覆盖历史"）⇒
+`persistPlayersToSegment()` 把数据写进临时对象、只把 dirty 置真，flush 那侧 `cache.intelPlayersSeg` 仍是 undefined ⇒ **整段跳过写入且不落缓存**。
+只要 `segmentUnavailable(5)` 持续为真（例如激活宽限/观察判据与实际投递不符），这条链就**每拍自我复读而不落地**。
+候选解释还有"服务端只投递了清单里的一部分段"。**我不在这里选一个当结论** —— 定罪需要一次能区分两者的读数（按 `#109` 的判据做）。
+
+**要撤的话（我自己上一轮写的）**：§17 那句"经段 5 月级持久化。这是'谁在打我'的完整原料"⇒ 已就地改成
+"按人归因**只在 heap、每次部署归零**；冷存路径存在但线上未落地（#109）"。
+**这条对 #108 的代价评估有直接影响**：按行凶者计的威胁记忆如果建在未落地的冷存上，
+那么"三个月前 X 路过一次"这类跨部署证据**根本不存在** ⇒ 任何"按人降税"的修法要么先把段 5 写通，要么换持久面（Memory 侧）。
+
+**同时成立、不必撤的两条**：`upsertPlayerObservation` 确有产线调用者（R235 的接线判定是对的）；
+四个威胁消费者仍读房级不认人的键（#108 的缺口判定也是对的）。撤的只有"持久化"那一半。
+
+边界：零 src、零 push、零 build、零 console；只读 API 若干 + 一发我自己的 header 错的探测（已记为伪影）。
