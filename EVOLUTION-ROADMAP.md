@@ -1812,3 +1812,28 @@ G4 红是**"要求继续积累"这一条在饱和库存上不可长期成立**�
 · 端到端未覆盖处（诚实记）：`resolveStrategyOverrides` 是模块私有函数，不为测试导出 ⇒
   "合并链末端真的回落基线"这一步靠代码走查 + 边界判别式，**没有**一条跑 `empire-strategy` 的集成用例。
   要补的话应该走 e2e/集成层，不要为此导出私有函数。
+
+### R144（10-03 02:3xZ）#89 的**机制说错了**，当场改：`warPatience` 管的是"进 war"，不是"退 war"
+· 我在 R141/#89 里写的是：「`expansionAllowed` 含 `posture!=="war"`，而『能否退出 war』由
+  `warPatience`/`minDwell` 决定 ⇒ 一条永不撤销的自改可长期钉住扩张授权」。把两个参数各自的消费者读完后：
+  - **`warPatience` 只出现在"升级"那一侧**：`posture.ts:183-188`，`prevPosture==="fortify" && dwellElapsed >= warPatience
+    && avgPressure <= warMaxPressure && !anyRecovery` ⇒ 它是**从 fortify 进入 war 的最短忍耐**。
+    调大它 = **更难宣战**（更 pacifist），不是更久作战。
+  - **退出 war 走的是另一条**：`posture.ts:173-178`，靠 `warExitPatienceTicks` + `warMaxPressure`（经济止损），
+    且注释明写"**不等 minDwell**"。⇒ `warPatience` 与"退不出 war"无关。**这句我说错了。**
+  - **真正能钉住 `posture==="war"` 的是 `minDwell`**：`posture.ts:193-197`（威胁消退分支）
+    `if (dwellElapsed < minDwell) return finalize(prevPosture …)` ⇒ 若上一态是 war 且驻留未满，
+    **敌人已经走了它还留在 war** ⇒ 这才是掐住 `expansionAllowed` 的那条路。
+· **严重度因此重排，不是取消**：
+  ①`minDwell`（线上现值 1400，写在 82,993,339）——机制成立，但**量级小**：1,400 拍 ≈ 1.5~2 小时（按实测拍长），
+    不至于"长期"。⇒ #89 的"长期钉住扩张"这句要降格成"**可延长 de-escalation 一段有界时间**"。
+  ②`warPatience`（现值 8000，写在 83,287,039）——不影响扩张，但**影响竞争轴**：
+    被反复骚扰时要 **8,000 拍 ≈ 8.5~17 小时**才授权宣战（防御侧 `threatRecent` 立即转 fortify，不受影响）。
+    ⇒ 真正该记的风险是"**一条永不撤销的自改让帝国系统性低升级**"，不是"扩张被钉死"。
+  ③两条都还在**有界**范围内：`bounds.ts:146-150` 给 `warPatience` 的 ceiling=10,000、floor=2,000
+    ⇒ 棘轮的"幅度"被边界卡住，问题只剩"**永久化**"这一维（这正是我 #89 的修法处理的那一维）。
+· **代码不用改**：`isStrategyOverrideLive` 的 TTL 处理的是"永久化"这一维，与上面哪条路径被影响无关 ⇒
+  `1bc67c9` 的修法仍然对症；**要改的是我给它的论证**（错论证会在下一轮把人引去查"退出 war"那侧，白跑一趟）。
+· 带走一条（同一族的第四次自我修正，规则已写在记忆里，这里只是又犯了一次）：
+  **写"参数 X 通过路径 Y 影响结果 Z"之前，必须把 X 的每个消费者读一遍**——我这次只读了 `finalize`
+  与合并链，没读 `warPatience` 的两处调用点，就把它安到了"退出"上。
