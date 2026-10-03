@@ -4421,3 +4421,22 @@ R250 落了 `buildersInRoom` 之后，我按自己刚写进记忆的规矩去穷
 **两房的 `bk` 是不同的 50 拍窗**。所以"A 房本窗 imported>0 ⇒ B 房本窗 exported>0"这种逐窗配对按构造不成立；
 我之前引的配对证据是**累计总量**（59,079 vs 50,400）那一支，仍然成立，但今后跨房配对必须先核两行的 `t` 是否同窗，
 否则就用累计差分。核心房这一窗出现 `imported:1000` 而幼房无 `exported` 键，正是这个错位的样子，**不是新流向的证据**。
+
+### R254（10-04 02:41Z，本会话）#104 撤案改判：不是"缺一个写者"，而是"一层按构造永不生效的重复阻尼"——我在写码前把方向读回来了
+**我上一轮留给自己的规格是"只差一次 grep 就能补 `recordRecoveryAttempt`"。按规矩先读消费方，结论反过来：**
+1. 表的两端都活着：`empire-health-system.ts:105` 读 `g.recoveryCooldowns ?? new Map()`、`:208` 原样写回 ⇒ **只回写空表**；
+   `recordRecoveryAttempt`（`recovery-priority.ts:129`）src 零调用者（只有 `tests/unit/strategy/a4-5-autonomy.test.ts`）⇒ 表恒空 ⇒ `isOnCooldown` 恒假。
+2. **真正的重试阻尼在别处且更完整**：`recovery-execution-system.ts:124-135` 用
+   `shouldSubmitAction(g.recoveryActionTable, action, tick, getRetryPolicy(action.type).cooldownDuration)` + `maxAttempts` +
+   `maxSubmitPerTick=3` 做**按动作类型**的冷却与尝试上限。⇒ 我先前把 #110 的"同一动作重复升级"分一半给 #104 是错的：那条已有阻尼。
+3. **方向核实（不写码就得改口的第二理由）**：`isOnCooldown` 的条件是
+   `currentTick < entry.lastAttemptTick + entry.cooldownDuration`（`:99-110`），**完全不看 `lastSuccess`**；
+   而 key 是 `domain:room` 不是动作 id ⇒ 一旦把写者接上，同一个 `domain:room` 下**任何**别的恢复动作都会被那个
+   硬编码 200 拍统一年轻抑制掉，叠在已有的按类型 policy 之上。那是在引入缺陷，不是修缺陷。
+4. 所以 #104 的正确处置是"**删或并**"：(a) 删掉 `CooldownTable` 这条支路（**今天行为零变化**，因为它按构造恒空），
+   让 `recoveryActionTable`+`getRetryPolicy` 当唯一真相；或 (b) 把执行侧的 policy 上收进 domain 表（大工程）。
+   两者都属 #107 那一类"接线 or 删除"的属人决定，**我没有动任何 src**。
+5. 顺带一条同类残骸：`selectNextRecovery`（`:401`）src 零调用者。
+**可复用的规矩（这次救了我一次改口成本）**：给"某机制没接线"立案要修之前，必须①找到**同职责的第二处实现**（这里是执行侧重试 policy），
+②读那个谓词自己的条件字符串核**方向**（`isOnCooldown` 不看成功与否），③确认 key 的**粒度**（domain:room vs 动作 id）。
+三条里任何一条跳过，"补写者"就会变成"叠第二道闸"。
