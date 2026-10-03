@@ -99,6 +99,10 @@ export const roomStateSystem: System = {
       if (roomMem.controllerProgressSeen !== controllerProgress) {
         roomMem.controllerProgressSeen = controllerProgress;
         roomMem.controllerProgressChangedAt = ctx.tick;
+        // #93：分母与分子同处刷新。`progressTotal`（升到下一级需要多少）只在进度动的那一拍读，
+        // 零额外成本；没有它就只能报速率、报不出「还有多久」——线上两个会话的 RCL5 ETA 因此差出 ~2,000 拍。
+        roomMem.controllerProgressTotalSeen =
+          snapshot.controller?.progressTotal ?? roomMem.controllerProgressTotalSeen ?? 0;
       }
 
       // 2.7 P0-1：storageDrainRate — 跨 tick storage 净流出率（E/tick），负值 = 流失。

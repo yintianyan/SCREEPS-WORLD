@@ -300,6 +300,11 @@ declare global {
      * 必须落 Memory 而非 heap：掐断升级道的改动本身就是一次部署，而部署把 heap 计时器归零 ——
      * 于是 10000 拍阈值在迭代期永远够不到（线上实测幼房 progress 冻结数小时，E5 一次未报）。 */
     controllerProgressChangedAt?: number;
+    /** room-state 维护：`controller.progressTotal`（升到下一级还需要的总进度），与 progress 同处刷新。
+     * 为什么要单独存：`progressTotal` 只在进度变化的那一拍读，零额外成本，而它是**唯一能把
+     * 「速率」变成「还有多久」的分母**。没有它时 RCL 距离只能报速率（线上实测：同一份读数下
+     * 两个会话的 RCL5 ETA 差出 ~2,000 拍，分歧全部来自这个读不到的值）。 */
+    controllerProgressTotalSeen?: number;
     /** C2：邻居房情报（room-observer 每 50 tick 刷新，M7 远矿/扩张选址数据源）。 */
     intel?: Record<string, import("../domain/intel").RoomIntel>;
     layout?: {
