@@ -17,6 +17,7 @@ import { CONFIG } from "../../config";
 import { EventKind, recordEvent } from "../../kernel/event-log";
 import { buildEmpireSituation, type SituationRoomInput } from "../../domain/strategy/situation";
 import { selectEnvBaseline } from "../../domain/strategy/posture-baseline";
+import { isStrategyOverrideLive } from "../../domain/strategy/strategy-reviewer";
 import { recordPlanningDecision, recordPlanningTime } from "../../telemetry";
 import { log } from "../../kernel/log";
 
@@ -87,7 +88,7 @@ export const empireStrategySystem: System = {
         ...DEFAULT_POSTURE_OPTIONS,
         ...CONFIG.posture,
         ...selectEnvBaseline(buildEnvBaselineInput(rooms)),
-        ...resolveStrategyOverrides(Memory.kernel?.tuning?.strategyOverrides),
+        ...resolveStrategyOverrides(Memory.kernel?.tuning?.strategyOverrides, ctx.tick),
       },
     );
 
@@ -326,14 +327,20 @@ function sumCpuByHome(): number {
  * 展开为 PostureOptions 部分覆盖对象。
  * key 格式 "posture.<paramName>" → 取 paramName 作为覆盖 key。
  * 畸形数据（value 非数字）静默跳过。
+ * #89：**过期条目也跳过** ⇒ 回落到 CONFIG/DEFAULT 基线。不撤销 Memory 里的条目本身——
+ * 条件若仍在，复盘会按 ≥1 冷却重写并自动续期；条件消失则到点失效。
+ * 必要性：复盘规则里有「No-Progress 且 netFlow 停滞 → 放宽 `expandMaxPressure`」，
+ * 也就是自进化层能改写**扩张闸的输入**；没有有效期的话，一次瞬时状态就能永久压低标准。
  */
 function resolveStrategyOverrides(
-  overrides?: Record<string, { value: number; adjustedAt: number; reason: string }>,
+  overrides: Record<string, { value: number; adjustedAt: number; reason: string }> | undefined,
+  currentTick: number,
 ): Partial<Record<string, number>> {
   if (!overrides) return {};
   const out: Record<string, number> = {};
   for (const [key, entry] of Object.entries(overrides)) {
     if (!entry || typeof entry.value !== "number") continue;
+    if (!isStrategyOverrideLive(entry, currentTick)) continue;
     const paramName = key.startsWith("posture.") ? key.slice("posture.".length) : key;
     out[paramName] = entry.value;
   }
