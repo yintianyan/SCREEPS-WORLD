@@ -4880,3 +4880,16 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 两拍后读：若 **hauler 专属热区** 覆盖 x2–5 ⇒ 是 (c)/正常链推进，#111 不是缺陷；若 hauler 热区只到 x9 ⇒ 是 (a)/(b)，
 **缺陷在"铺路器允许把 site 下到 hauler 回环之外"**，修法就变成"site 只能下在 hauler 专属热度上"（仍属人，但落点唯一）。
 ⚠️在此之前不许：加自动处置、放宽 `UNDERFOOT_BUILD_RANGE_LIMIT`、或按我任一旧假设去改 `roadHeat` 结构（我已经错过两次方向）。
+
+### R277（10-04 05:31Z，本会话）e2e 对**已部署那份码**跑完：34 files / 72 tests 全绿（E2E_EXIT=0）
+`tmp/observe/e2e-post-deploy.log`：`BUILD_EXIT=0` → `Test Files 34 passed (34)`、`Tests 72 passed (72)`、`Duration 2971s`、`E2E_EXIT=0`，
+失败/异常与 V8 snapshot 版本错配都为零（那条 `rebuild-driver-snapshot.js not found` 只是设置告警，没导致崩）。
+**口径要写准（这是本案的全部价值所在）**：这份 dist 是我在 20:4xZ 由 `1bcfae3` 建的，sha `d2f0b0cd00ad` **与线上逐字节相同**
+⇒ 所以这轮 e2e 证的是"**线上正在跑的引擎级行为**"，**不含**我之后那两笔未推 src（`27a8a51` #113、`b20a67b` #103）——
+那两笔目前只有 unit（43 例 + 全量 5487）与 integration（30/239）覆盖。
+⇒ 今晚"三层测试"的账因此第一次齐了，但**分层归属要写清**：
+线上码 = unit+integration+e2e 全绿；本地未推码 = unit+integration 绿、**e2e 未跑**（跑它要先重建 dist，
+那会把"本地==线上"这台免费仪器作废，而它正是我刚用来解释 sha 的那件东西）。
+另外一条环境事实（记下来免得下轮误判）：`npx vitest run`（全量 unit）现在会被 `tmp/observe/pending-62-files/creep-naming-determinism.test.ts`
+这个**搬进 gitignored `tmp/` 的在途文件**拖成"1 file failed / 5487 tests 全过"（套件加载失败，非断言红）。
+仓内测试是真绿的；那批文件是谁的、要不要归位，由对端或 owner 定，我不动。
