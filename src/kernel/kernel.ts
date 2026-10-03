@@ -17,6 +17,7 @@ import {
   evaluateExpectations,
   P3_BYPASS_WINDOW_TICKS,
   shouldRecordExpectationEvent,
+  mergeViolationTraces,
   type P3SystemRef,
   type SpawnQueueSnapshot,
   type E3ViolationRecord,
@@ -583,6 +584,7 @@ export class Kernel {
       kernelMem.expectations = {
         tick: ctx.tick,
         violations: res.violations.map(v => `${v.id}(${v.detail})`).slice(0, 10),
+        recent: mergeViolationTraces(kernelMem.expectations?.recent, res.violations, ctx.tick),
         e3: e3Prev as Record<string, unknown>,
       };
       // 事件记账限流：违例是持续状态，逐 tick 重报会把定长事件环整个占满，

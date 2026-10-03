@@ -4655,3 +4655,22 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 ·**#61 的 regime 摆动量级**：`budget +4 / reserveOnly +8 / degradeGateClosed +9` ⇒ ⊆ 成立（9 ≤ 12），**速率从 0.40/拍回落到 ≈0.009/拍**；四窗对照 `(0,+145)→(+51,0)→(+237,+8→)…` ⇒ **"预留掐人"的强度在几十倍之间摆 ⇒ 任何基于它写的请示都必须带"哪一窗"**。
 ·**其余**：`expansionAllowed=false`、`tier=tight@83387005`（部署 3 小时后仍未翻档，与 R188"翻档要驻留+采信输入"一致；`cpuRate.total` 本轮未读 ⇒ R128 补）；`errorsPerTick=0`；git `领先 3 / behind 0` ⇒ 无人再推码，部署仍是 83407220 那次。
 ·**边界**：零 src、零 push、零 build、零 console（对端 watch3 在飞、刚写 R262）；探针 observe×1 + `ring-dump`×1 + peek×1。**R128**：①Σ 是否守住（核心房 `nf` 继续为负则应回落，可反推均值）；②`cpuRate.total`+`tier/since` 的新基线真值；③是否再来目击（锚 83412782；`combat` 仍应 0）；④`dangerUntil=83415805` 到点后幼房 op 去向；⑤#61 只报 ⊆ 与增量。§3.5 属人 7 项未动。
+
+### R265（10-04 04:52Z，本会话）仪器账收尾：#94/#93 现场 EXERCISED、#102 窗口内未见、并补一件"检测也要留身份"
+**#94 现场 EXERCISED**：`kernel.strategy = {posture:"war", since:83397159, expansionAllowed:false, newRemoteOpsAllowed:true, warPressureTicks:0, gclLevel:5, bucket:10000}`
+⇒ 决策那拍的 `gclLevel/bucket` 落了盘，`expansionAllowed=false` 现在可归因到合取项。顺带一条独立结论：`gclLevel:5 > 拥有房数` ⇒ **GCL 不是挡扩张的那一项**，
+`posture:"war"` 才是（与 `failedGates` 里 `G0` 的自述条件字符串同向）。另 `warPressureTicks:0` 对 `posture:"war"` ⇒ **#92 的"零压力也打长仗"第一次有直接数**。
+**#93 现场 EXERCISED（带条件）**：`rooms.W38S56.controllerProgressTotalSeen = 1,215,000`（正是 RCL6 的分母 ⇒ RCL 余量可直接算）；
+而 `rooms.W37S58.controllerProgressSeen = 0` 且 `...TotalSeen` **不存在**。读写者即懂：`room-state.ts:99-105` 把 TotalSeen 的赋值放在
+`if (controllerProgressSeen !== controllerProgress)` **分支里面** ⇒ 进度不变的房（RCL8 顶格）永远不建这个键 ⇒ **"缺键≠坏了"**，
+这条按我自己的老规矩先证"被写过"再证"该房本来就不该有"。
+**#102 窗口内未观测**：事件环跨度 83406402→83408462（2,060 拍）的类型普查里**没有 GateThreatUnchanged** ⇒ 只能说"本窗口没发生"，不能据此判它坏。
+**顺带普查到的形状**：`AssignmentAssigned 236 / AssignmentExpired 182 / CreepDeath 59 / AccountingDrift 8 / TowerVolley 5 / WarPlanCreated 2 / ExpectationViolation 2 / ColonyStateChange 2 / ControllerDowngradeRisk 1(d=9991，RCL8 带内自救复证) / EnemyInvasion 1(d=[1,0,3,2]) / EnemyCleared 1 / L2Intake 1`。
+
+**新立缺陷并当场修（#113，可观测性）**：`ExpectationViolation` 事件**只带总数**（`kernel.ts:598` 记 `[res.violations.length]`，限流后逐拍不重报），
+而 `Memory.kernel.expectations.violations` 是**当前 pass 快照** ⇒ 我实测到的"83407125 那一发 8 条违例"**事后无法归因到 id**（现在 `violations:[]`）。
+注释里"可读的违例明细始终留在 Memory"这句**只对当下为真**，不留历史。
+修：`expectations.ts` 加纯函数 `mergeViolationTraces(prev, violations, tick, cap=24)`（按 id 累计 `seenAt/lastAt/count`，超容量淘汰 `lastAt` 最旧，畸形旧条目丢弃），
+`kernel.ts` 在写快照处调用，落 `kernel.expectations.recent`；只增可读性，**不改任何判据、不新增消费者**（违例清单在 src 内仍无按 id 消费者）。
+验证：`tsc` OK；新夹具 5 例 + `e7-e8-wiring` + `expectations` 共 **43 passed**；`tests/integration` **30/239 全绿**（与后台 e2e 并发跑的，
+并发只会带来假红风险而非假绿，故这条通过可用）。**未推**（owner 授权的批次是 `1bcfae3`，这笔新改动要单独批准；且 e2e 正在用当前 dist）。

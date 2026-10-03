@@ -537,3 +537,55 @@ export function evaluateExpectations(input: {
 
   return { violations, p3Starved };
 }
+
+// ── 违例身份留痕（R265）──────────────────────────────────────
+/** 一条违例身份的最近留痕。 */
+export interface ViolationTrace {
+  id: string;
+  /** 首次见到该 id 的 tick。 */
+  seenAt: number;
+  /** 最近一次见到该 id 的 tick。 */
+  lastAt: number;
+  /** 被观测到的次数（按 pass 计，非逐 tick）。 */
+  count: number;
+}
+
+export const VIOLATION_TRACE_CAP = 24;
+
+/**
+ * 把本 pass 的违例并入留痕表（纯函数）。
+ *
+ * 为什么需要：事件 `ExpectationViolation` 只带**总数**（限流后逐拍不重报），
+ * 而 `Memory.kernel.expectations.violations` 是**当前 pass 的快照**——瞬态违例
+ * （例：boot 窗里 P3 饥饿那几拍）会在被采到之前消失，事后只剩"有过 8 条"这个数，
+ * 无法归因到 id。留痕表让"检测"也留下身份。
+ *
+ * 淘汰：按 `lastAt` 最旧先出，容量 `cap`；不引入第二个存储键，随快照一起读写。
+ */
+export function mergeViolationTraces(
+  prev: ViolationTrace[] | undefined,
+  violations: readonly ExpectationViolation[],
+  tick: number,
+  cap: number = VIOLATION_TRACE_CAP,
+): ViolationTrace[] {
+  const byId = new Map<string, ViolationTrace>();
+  for (const t of prev ?? []) {
+    if (t && typeof t.id === "string") {
+      byId.set(t.id, { id: t.id, seenAt: t.seenAt, lastAt: t.lastAt, count: t.count });
+    }
+  }
+  for (const v of violations) {
+    const existing = byId.get(v.id);
+    if (existing) {
+      existing.lastAt = tick;
+      existing.count = (existing.count ?? 0) + 1;
+    } else {
+      byId.set(v.id, { id: v.id, seenAt: tick, lastAt: tick, count: 1 });
+    }
+  }
+  const merged = [...byId.values()];
+  if (merged.length <= cap) return merged;
+  // 超容量：淘汰 lastAt 最旧的（同刻按 seenAt 再比，稳定可测）。
+  merged.sort((a, b) => a.lastAt - b.lastAt || a.seenAt - b.seenAt);
+  return merged.slice(merged.length - cap);
+}

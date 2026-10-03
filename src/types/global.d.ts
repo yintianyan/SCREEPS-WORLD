@@ -840,6 +840,11 @@ declare global {
     expectations?: {
       tick: number;
       violations: string[];
+      /**
+       * R265：违例身份留痕。事件 `ExpectationViolation` 只带总数（限流后逐拍不重报），
+       * 而 `violations` 是当前 pass 快照 ⇒ 瞬态违例事后无法归因。这里按 id 跨 pass 累计。
+       */
+      recent?: import("../kernel/expectations").ViolationTrace[];
       e3?: Record<string, unknown>;
       memoryHistory?: { tick: number; bytes: number; roomCount: number }[];
     };
