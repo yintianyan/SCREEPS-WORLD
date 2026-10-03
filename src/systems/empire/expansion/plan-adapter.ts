@@ -9,6 +9,9 @@ import {
   type ExecutionGateInput,
 } from "../../../domain/expansion/execution-gate";
 import { getRoomIntel } from "../../intelligence";
+import { classifyThreats } from "../../../domain/defense/threat";
+import { getHostileStructuresCached } from "../../../creeps/support/room-scans";
+import { evaluateThreatEscalation } from "../../../domain/expansion/threat-escalation";
 import { pruneBlacklist } from "./uoem-events";
 
 /**
@@ -71,7 +74,7 @@ function attemptConsume(ctx: TickContext, waiting: ExpansionPlanMemory): boolean
     hasConcurrentOp: false, // 简化：检查是否有同类 Operation
     hasOtherExpansion: Memory.kernel!.expansion !== undefined,
     intelStale: isIntelStale(plan.roomName, ctx.tick),
-    threatEscalated: false, // 简化：检查威胁升级
+    threatEscalated: isTargetThreatEscalated(ctx, plan),
     targetClaimable: isTargetClaimable(plan.roomName),
     candidateValid: isCandidateStillValid(plan.roomName, ctx.tick),
   };
@@ -173,6 +176,49 @@ function isIntelStale(roomName: string, tick: number): boolean {
 }
 
 /** 检查目标房是否可 claim。 */
+/**
+ * #102 —— 把 `GATE_THREAT_UNCHANGED` 接上真数据。
+ *
+ * 原先这里写死 `false`（连同 `hasConcurrentOp`），于是十一道执行闸里"威胁未升级"这道
+ * **按构造永真通过**：帝国可以开进一间正被打的房。domain 的 `evaluateThreatEscalation()`
+ * 一直是零产线调用者的备着实现——不是缺判据，是判据没接。
+ *
+ * **取 `shouldAbort`（RED）而不是 `level !== "GREEN"`**，两个理由都是读代码得到的：
+ * ①YELLOW 的两个来源里，"controller 被预约"已经被更硬的 `GATE_TARGET_CLAIMABLE`
+ *   （`isTargetClaimable`：`controller.reservation && !my` ⇒ false）拒掉并**取消整条 plan**，
+ *   在这一层再判一次只会把同一件事变成"暂缓"，语义打架；剩下那个 YELLOW 来源是路径威胁，
+ *   本函数没有路径扫描（见下面 `hasPathThreat: false`）。
+ * ②候选房周围"有预约/有过境单位"是常态——按 GREEN 才放行会造出一把**几乎不可满足**的闸，
+ *   那与今天"永真通过"是同等糟糕的另一种错（本仓已多次栽在把有界条件说成按构造不可满足）。
+ * ⇒ 本闸的**独有**职责收敛成三件 RED：目标房有威胁 creep、目标房有敌方塔、sponsor 正被打。
+ *
+ * 数据源全是**现拍世界读数**，不需要任何持久基线（这也是我不给 `ExpansionPlanMemory` 加键的理由： * 给已存在的持久对象补形状是踩过的静默失效坑，而这里根本用不上它）。
+ * 调用方 `tryConsumePlan` 已保证目标房此刻在视野内（不可见的直接跳过），所以这些读数是免费的。
+ */
+function isTargetThreatEscalated(ctx: TickContext, plan: ExpansionPlan): boolean {
+  const target = Game.rooms[plan.roomName];
+  // 看不见 ⇒ 不判成危险：跳过发生在调用方，这里只兜底，绝不能把"信息缺失"读成"有敌情"。
+  if (!target) return false;
+  // threatCreeps 口径（classifyThreats 已剔盟友与非战斗部件）——过境 scout 不该冻结扩张。
+  const threatCreeps = classifyThreats(target.find(FIND_HOSTILE_CREEPS), CONFIG.defense.allies);
+  const hostileTower = getHostileStructuresCached(target).some(
+    s => s.structureType === STRUCTURE_TOWER,
+  );
+  const sponsorThreat = (ctx.getSnapshot(plan.sponsorRoom)?.threatCreeps.length ?? 0) > 0;
+
+  return evaluateThreatEscalation({
+    hasHostileCreep: threatCreeps.length > 0,
+    hasHostileReservation: Boolean(target.controller?.reservation),
+    hasPathThreat: false, // 未接：需要路径扫描。它只喂 YELLOW，而本判据不看 YELLOW ⇒ 不影响结论。
+    sponsorUnderAttack: sponsorThreat,
+    hasHostileTower: hostileTower,
+    // 消费点尚未建档（建档在 :123 之后）⇒ 恒在 claim 之前，ABORT 而非 EVACUATE。
+    executionState: "PREPARING",
+    tick: ctx.tick,
+  }).shouldAbort;
+}
+
+/** 目标房此刻是否可 claim。 */
 function isTargetClaimable(roomName: string): boolean {
   const room = Game.rooms[roomName];
   if (!room?.controller) return false;

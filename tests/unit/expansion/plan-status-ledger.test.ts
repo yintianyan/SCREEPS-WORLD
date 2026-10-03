@@ -145,6 +145,7 @@ describe("B5-㉒ 硬失败必须落到 CANCELLED 并真的进冷却", () => {
     // 看得见却被别人占着：这才是 GATE_TARGET_CLAIMABLE 要拦的那种事实。
     (globalThis as any).Game.rooms[TARGET] = {
       controller: { owner: { username: "someone-else" }, my: false },
+      find: () => [],
     };
 
     tryConsumePlan(mockRoomStateCtx([], TICK));
@@ -180,7 +181,7 @@ describe("B5-㉒ 硬失败必须落到 CANCELLED 并真的进冷却", () => {
     // 目标房可见且 controller 无主 → claimable 通过；GCL 余量不足（owned=1, gcl=1）会在
     // 标记 EXECUTING 之前 return，因此这里显式给足 GCL。
     const G = globalThis as any;
-    G.Game.rooms[TARGET] = { controller: {} };
+    G.Game.rooms[TARGET] = { controller: {}, find: () => [] };
     G.Game.gcl = { level: 3 };
 
     tryConsumePlan(mockRoomStateCtx([], TICK));
@@ -221,7 +222,7 @@ describe("B5-㉓ 消费期的重占/黑名单复检", () => {
   /** 目标房可见、controller 无主 ⇒ 唯一还能拦住它的就是复检表。 */
   function claimableTarget(): any {
     const G = globalThis as any;
-    G.Game.rooms[TARGET] = { controller: {} };
+    G.Game.rooms[TARGET] = { controller: {}, find: () => [] };
     G.Game.gcl = { level: 3 };
     return G;
   }
@@ -276,7 +277,7 @@ describe("B5-㉓ 消费期的重占/黑名单复检", () => {
 describe("队首不可见的计划不得钉住整条扩张管道", () => {
   /** 看得见且 controller 无主无预约 ⇒ 唯一可 claim 的形态。 */
   function makeClaimable(roomName: string): void {
-    (globalThis as any).Game.rooms[roomName] = { controller: {} };
+    (globalThis as any).Game.rooms[roomName] = { controller: {}, find: () => [] };
   }
 
   it("按序试跑：跳过看不见的队首，消费第二条可 claim 的计划", () => {
