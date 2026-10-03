@@ -96,3 +96,60 @@ describe("roleCode/roleName — 编码往返", () => {
     expect(roleName(99)).toBe("unknown");
   });
 });
+
+/**
+ * #96 — 跨部署存活的战损累计线 `Memory.kernel.stats.deathByCause`。
+ *
+ * 立案依据（线上实测 2026-10-03）：想回答"那两次目击到底有没有造成战损"时才发现
+ * `CreepDeath` 事件环按**事件总数** 500 计 ⇒ 实测只回溯 ~846 拍；M11 的
+ * `globalCache().recentCombatDeaths` 只保留 2×fleetLossFuse.windowTicks = 400 拍且住 heap（换码清零）。
+ * 两条都够不到 2,642/5,508 拍前的目击 ⇒ #90 判据的「持续战损」半边不可测。
+ *
+ * 这几条锁的是"累计线存在且分得清两类原因"，不参与任何判定。
+ */
+describe("recordCreepDeath — #96 deathByCause 累计线", () => {
+  const combatName = (offset: number): string =>
+    `hauler-W37S58-2-${(globalThis as any).Game.time - offset}-ab3x`;
+  const naturalName = (): string =>
+    `harvester-W37S58-0-${(globalThis as any).Game.time - 1495}-zz9q`;
+
+  const stats = () => (globalThis as any).Memory.kernel.stats;
+
+  it("非寿终 ⇒ combat +1、natural 不动", () => {
+    (globalThis as any).Memory.kernel = { stats: {} };
+    recordCreepDeath(combatName(400));
+    expect(stats().deathByCause).toEqual({ natural: 0, combat: 1 });
+  });
+
+  it("寿终 ⇒ natural +1、combat 不动", () => {
+    (globalThis as any).Memory.kernel = { stats: {} };
+    recordCreepDeath(naturalName());
+    expect(stats().deathByCause).toEqual({ natural: 1, combat: 0 });
+  });
+
+  it("混跑累计：2 战损 + 3 寿终（只增不减）", () => {
+    (globalThis as any).Memory.kernel = { stats: {} };
+    recordCreepDeath(combatName(300));
+    recordCreepDeath(combatName(400));
+    recordCreepDeath(naturalName());
+    recordCreepDeath(naturalName());
+    recordCreepDeath(naturalName());
+    expect(stats().deathByCause).toEqual({ natural: 3, combat: 2 });
+  });
+
+  it("旧形状（stats 在、deathByCause 缺）首拍即建，不写 NaN —— 这是加键到已存在持久对象那一族的靶心用例", () => {
+    (globalThis as any).Memory.kernel = { stats: { deathAnchor: { hauler: 81999000 } } };
+    recordCreepDeath(combatName(400));
+    expect(stats().deathByCause).toEqual({ natural: 0, combat: 1 });
+    expect(Number.isFinite(stats().deathByCause.combat)).toBe(true);
+    // 同处的既有对象被保留，但 deathAnchor 按设计**每拍刷成 Game.time**（它是 P1 补位时延的起点锚），
+    // 所以这里断言"锚被推进"而不是"锚没动" —— 写错这半边会把正确行为测成回归。
+    expect(stats().deathAnchor.hauler).toBe((globalThis as any).Game.time);
+  });
+
+  it("stats 不存在时不抛错（与 deathAnchor 同一条前置守卫）", () => {
+    (globalThis as any).Memory.kernel = {};
+    expect(() => recordCreepDeath(combatName(400))).not.toThrow();
+    expect(stats()).toBeUndefined();
+  });
+});

@@ -476,6 +476,12 @@ declare global {
       /** E-FINDING-09: P1 补位时延起点锚（同角色下次孵化成功时结算 EMA）。
        * 由 recordCreepDeath 写入，maintainMemory 清理已灭绝角色。 */
       deathAnchor?: Record<string, number>;
+      /** #96：死亡原因的累计计数（只增不减、跨部署存活）。
+       * 为什么单独存：`CreepDeath` 事件环容量按**事件总数** 500 计 ⇒ 实测只回溯 ~846 拍；
+       * M11 的 `globalCache().recentCombatDeaths` 只保留 2×`fleetLossFuse.windowTicks` = **400 拍**且住 heap（换码清零）。
+       * 两者都够不到"这场 war 之前那两次目击"，于是 #90 判据的「持续战损」半边不可测。
+       * `natural` = 寿终（age 达名义寿命线，reserver/claimer 600−60、其余 1500−60），`combat` = 非寿终（战损/事故/回收）。 */
+      deathByCause?: { natural: number; combat: number };
       /** B4-F08: P1 补位时延 EMA（按角色分桶），由 spawn-manager 写入。
        * replaceLatency[role] = prev * 0.8 + latency * 0.2。 */
       replaceLatency?: Record<string, number>;

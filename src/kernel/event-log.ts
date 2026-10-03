@@ -289,6 +289,11 @@ export function recordCreepDeath(name: string): void {
   if (stats) {
     if (!stats.deathAnchor) stats.deathAnchor = {};
     stats.deathAnchor[role] = Game.time;
+    // #96：跨部署存活的战损累计线。事件环只回溯 ~846 拍、M11 保险丝只 400 拍且住 heap（换码清零），
+    // 于是 #90 判据里「持续战损」那半边按现有仪器根本不可测。只增不减，不参与任何判定。
+    if (!stats.deathByCause) stats.deathByCause = { natural: 0, combat: 0 };
+    if (natural === 1) stats.deathByCause.natural += 1;
+    else stats.deathByCause.combat += 1;
   }
   const seen = globalCache().creepLastSeen?.get(name);
   recordEvent(EventKind.CreepDeath, seen?.r ?? "", [
