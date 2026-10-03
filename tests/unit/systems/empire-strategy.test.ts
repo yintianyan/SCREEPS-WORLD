@@ -148,3 +148,53 @@ describe("empire-strategy — 议程归因（R7a AgendaOutcome）", () => {
     expect(events(29)).toHaveLength(0);
   });
 });
+
+/**
+ * #94 — 决策那一拍的 `gclLevel` / `bucket` 必须随 `kernel.strategy` 落盘。
+ *
+ * 立案依据（线上实测 2026-10-03）：`expansionAllowed=false` 之后没人能回答"当时是哪一合取项在挡" ——
+ * 七个合取项里五项可从 Memory 复算（colonyState / economyPressure / rcl / storage / stats.cpuByHome），
+ * 偏偏喂给 `gclHeadroom` 与 `bucket ≥ expandMinBucket` 的那两个标量只活在 heap。
+ * 现场证据：`kernel.gcl` 与 `kernel.bucket` 两个键都**不存在**。
+ *
+ * 这三条锁的是**记录值必须等于判定值**（含缺失时的兜底），不是锁某个姿态结论。
+ */
+describe("empire-strategy — #94 决策标量落盘", () => {
+  function runWith(cpu: Record<string, unknown>, gcl: unknown): any {
+    (globalThis as any).Memory.kernel = {};
+    (globalThis as any).Memory.kernel.stats = { cpuAvg10: 2, cpuMax10: 4 };
+    (globalThis as any).Game.cpu = { limit: 20, tickLimit: 500, getUsed: () => 0, ...cpu };
+    (globalThis as any).Game.gcl = gcl;
+    const snap = setupRoom({ hostileAgo: 99999 });
+    empireStrategySystem.run(makeContext(snap));
+    return (globalThis as any).Memory.kernel.strategy;
+  }
+
+  it("两键都写，且等于本次判定实际用到的值", () => {
+    const strategy = runWith({ bucket: 4321 }, { level: 5 });
+    expect(strategy.gclLevel).toBe(5);
+    expect(strategy.bucket).toBe(4321);
+  });
+
+  it("Game.gcl 缺失 ⇒ 记 1（兜底值就是判定值，不留 undefined）", () => {
+    const strategy = runWith({ bucket: 8000 }, undefined);
+    expect(strategy.gclLevel).toBe(1);
+    expect(strategy.bucket).toBe(8000);
+  });
+
+  it("Game.cpu.bucket 缺失 ⇒ 记 10000，且不写 NaN", () => {
+    const strategy = runWith({}, { level: 3 });
+    expect(strategy.bucket).toBe(10000);
+    expect(Number.isFinite(strategy.bucket)).toBe(true);
+    expect(strategy.gclLevel).toBe(3);
+  });
+
+  it("既有字段不因加键而丢（posture/since/expansionAllowed 仍在）", () => {
+    const strategy = runWith({ bucket: 7000 }, { level: 4 });
+    expect(typeof strategy.expansionAllowed).toBe("boolean");
+    expect(typeof strategy.newRemoteOpsAllowed).toBe("boolean");
+    expect(strategy.posture).toBeDefined();
+    expect(strategy.since).toBeDefined();
+    expect(strategy.gclLevel).toBe(4);
+  });
+});

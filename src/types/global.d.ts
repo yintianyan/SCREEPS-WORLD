@@ -564,6 +564,15 @@ declare global {
        * 降级 fortify；压力恢复即清零 — 纯函数评估的滞回输入。
        */
       warPressureTicks?: number;
+      /**
+       * #94：`gclHeadroom` 那一项的**实际输入**（`Game.gcl.level`，缺失时按 1 判定）。
+       * 为什么要落盘：这两个标量原先只存在于决策那一拍的 heap，于是
+       * `expansionAllowed=false` 之后**没人能回答"当时是哪一合取项在挡"** ——
+       * 七个合取项里有五项可从 Memory 复算，恰好这两项不行（线上实测 `kernel.gcl`/`kernel.bucket` 均不存在）。
+       */
+      gclLevel?: number;
+      /** #94：`bucket ≥ expandMinBucket` 那一项的**实际输入**（`Game.cpu.bucket`，缺失时按 10000 判定）。 */
+      bucket?: number;
     };
     /**
      * 失守房间记录（v11+）：房名 → 首次检测到失守的 tick。

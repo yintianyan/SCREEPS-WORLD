@@ -66,12 +66,17 @@ export const empireStrategySystem: System = {
     if (!Memory.kernel) Memory.kernel = {};
     const prev = Memory.kernel.strategy;
 
+    // #94：这两个标量就是 `gclHeadroom`（GCL > 房数）与 `bucket ≥ expandMinBucket` 两项的**实际输入**。
+    // 取一次、既喂判定又落盘 ⇒ 事后能答出「当时到底是哪一合取项在挡」，而不是只看到 expansionAllowed=false。
+    const gclLevel = Game.gcl?.level ?? 1;
+    const cpuBucket = Game.cpu.bucket ?? 10000;
+
     const result = evaluateEmpirePosture(
       {
         tick: ctx.tick,
         rooms,
-        gclLevel: Game.gcl?.level ?? 1,
-        bucket: Game.cpu.bucket ?? 10000,
+        gclLevel,
+        bucket: cpuBucket,
         prev: prev ? { posture: prev.posture, since: prev.since } : undefined,
         // R4：war 可持续性计数跨 tick 回传（pressure 滞回输入）。
         warPressureTicks: prev?.warPressureTicks,
@@ -111,6 +116,9 @@ export const empireStrategySystem: System = {
       expansionAllowed: result.expansionAllowed,
       newRemoteOpsAllowed: result.newRemoteOpsAllowed,
       warPressureTicks: result.warPressureTicks,
+      // #94：判定实际用到的两个标量，随结果同拍落盘（零额外读盘；缺失时的兜底值=判定值）。
+      gclLevel,
+      bucket: cpuBucket,
     };
 
     // ── R6a：帝国议程 — 姿态回答状态，议程回答主动目标 ──
