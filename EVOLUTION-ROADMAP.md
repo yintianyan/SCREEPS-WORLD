@@ -4461,3 +4461,29 @@ R250 落了 `buildersInRoom` 之后，我按自己刚写进记忆的规矩去穷
 **④扩张链现状不变**：watch3 round5 18:34Z 仍 `posture=war / Blocked=G0+G4+G6 / newSighting=none / anchor=83409813`，
 G3 连续两轮不在列（R246 那次转绿保持）。⇒ 即便 G4 在几十分钟内自绿，仍剩 G0（尾税，≈21:1xZ–00:0xZ 带）+ G6（#50 属人）。
 幼房 `bk` 本轮 `built:150 / imported:429` ⇒ 建设与跨房导入同时在场，与 #111 的"工地没清空只是回落"一致。
+
+### R256（10-04 02:46Z，本会话）#112 立案：自治度指标（L0「长期自主」的自报数）有 60/100 权重按构造不反映事实
+读的是 `computeAutonomyScore`（`domain/strategy/autonomy-metrics.ts`）的**每一条输入的写者**，不是它的输出。三条独立结论：
+**①`recoveryRate` 的分子被快照重复累加（新缺陷，方向=偏乐观，最硬的一条）**
+- `recovery-execution-system.ts:203`：`g.__autoRecoveredFailures = (… ?? 0) + stats.succeededCount`，本系统 `interval: 10` ⇒ **每 10 拍执行一次**；
+- `stats.succeededCount` 来自 `computeRecoveryStats`（`recovery-lifecycle.ts:815-845`）里 `for (const record of table.values())` 的
+  **整表快照计数**（不是"本次新成功数"）；
+- `cleanupRecoveryTable`（同文件 `:747`）给 `succeeded` 的 `RETENTION = 500` ⇒ 一条成功记录在表里**存活 500 拍**。
+⇒ 同一次成功被累加 **≈500/10 = 50 次**；而分母 `__totalFailuresDetected += submittedThisTick` 每次提交只加 1。
+⇒ `recoveryRate = autoRecovered / totalDetected` 只要历史上有一次成功落在近 500 拍内就会饱和到 ≥1 ⇒
+`failureRecoveryScore = round(rate×100 − min(30, activeFailures×5))` **长期贴着上限**，这 **25 分权重不反映恢复能力**。
+**②`perturbationRecoveryScore` 的 15 分按构造恒为满分**：`__perturbationCount` 与 `__totalRecoveryTime` 在 src 里**只有读者**
+（`empire-health-system.ts:173-174`），零写者 ⇒ 永远 0 ⇒ 走 `autonomy-metrics.ts:185` 那支 `perturbationCount === 0 → 100`（作者自己的注释都写着"但可能意味着没有挑战"）。
+讽刺的是**恢复时长数据其实算得出来**：`recovery-lifecycle.ts:828` 已经在累加 `record.updatedAt − record.submittedAt`、`:839` 已有 `avgRecoveryTime`，
+只是从没写进那两个 heap 计数器 ⇒ 属 #106 那一族"**半接线**：生产侧算完落进别的形状，消费侧读一个永不写出的键"。
+**③`manualInterventionScore` 的 20 分是硬编码**：`:171` 传 `manualInterventions: 0`，旁注"自治框架不追踪人工干预（需要 console hook）"⇒ 声明式已知盲区，按原样保留但计入"未覆盖"。
+**合起来：25 + 15 + 20 = 60/100 的权重不携带证据。**等级映射 full≥90 / high≥70 ⇒ 真实 55 也能报成 "high"，
+而这是 L0 那句"长期自主生存"唯一的自报指标，也是我给 owner 写能力矩阵时会被引用的数 ⇒ 属**报表诚实度**缺陷。
+**边界（不夸大）**：`autonomyStatus` 的消费者只有 `empire-health-system.ts:219` 那行日志（grep 全 src 无闸读它）⇒
+**它不在决策路径上，不挡任何闸、不解任何 #88/#50**，所以别把它当成"修了就能扩张"的路；危害是它会误导 owner 与我的下轮判读。
+**修法形状（一次形参读取即可起手，我这轮没有码）**：把增量从"整表快照"改到"**状态跃迁那一处**"——
+`recovery-lifecycle.ts:243` 的 `transitionAction(record, "succeeded", …)` 是唯一的成功跃迁点，在那儿 `+1` 并顺手
+`__perturbationCount += 1; __totalRecoveryTime += record.updatedAt − record.submittedAt`，三个问题一次解决且不改语义。
+⚠️这是**行为改动**（改完 autonomy 数会**下降**，因为虚高被撤）⇒ 按我记过的"诚实化指标会缩下游消费者"纪律：
+改前写死阈值+控制组，且**先确认没有别的消费者**（现在只有日志，故风险低）。线上虚高的量级**未证**：那两个计数器住 heap，
+`__autoRecoveredFailures` 现值要一次 console 才读得到 ⇒ 本会话零 console，留给下轮一发取证。
