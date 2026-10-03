@@ -3587,3 +3587,32 @@ storage 889,323（ratio 0.8893，仍在触发线 0.9 之下且方向朝下，与
 **③ 全量 e2e 仍在后台**（pid=32674，34 张，产物 md5 `51e4768a…`）；本轮没有结果可报，只有进度。
 
 边界：零 src、零 push、零 build、零 console；探针 = observe×1 + 源码 grep。属人 7 项未动。
+
+### 巡检 R121（10-03 14:4xZ，不占 R 号）**工业腿第一次发需求，但它走的是没有 ROI 闸的那条路** ⇒ "`demandsPublished>0` = 行情翻正"这个读法是错的；G4 第四次回声、振幅量出（940 拍跌 4.04）；near-full 自己退回去（0.9 只是一次 <1,000 拍的越界）；**#90 的账现在算得齐**：对手 10 拍在场 + 我方 360 能量 ⇒ 我扩张冻 5,000 拍
+
+· **产地判读（重要，#51 的判据要改）**：现场 `demandTop="GH2O:115/p20/lab-reaction"`、`demandsPublished=2`、`publishedAt=83402318`、`buyGatePrice=370`、**`buyTried=0 / buyOk=0 / buyBestAsk=0`、`demandsLive=0`**。码侧：正 ROI 闸 `commodityBatchRoi` **只有 `factory-manager.ts:164` 一个调用者**（注释"行情倒挂时一条需求都不发"），而 `reason="lab-reaction"` 出自 **`procurement.ts:109-141 expandReactionDemands`**——那里只有 `deficit=need−have>0`，**没有价值闸**；价格侧只有 `terminal-market.ts:245` 的动态上限 `min(adjustMaxPrice(均价+premium, priority), fallbackMaxBuyPrice)`。⇒ **口径改为：只有 `reason=factory-commodity` 的需求发布才代表 ROI 过了；`lab-reaction` 只代表实验室缺料。** 买 GH2O 是否价值为正今天无从判断、且一分钱没花（`buyTried=0`）⇒ **只报形状不定罪、不动它**（工业/贸易属对端 + 政策侧）。矩阵记法建议：industry 行 = "需求已发布、成交未观测"，别跨到 LIVE_VALIDATED。
+· **G4**：`gateNetFlow={3.792, −1.743}` ⇒ Σ=**2.049** 再红（dashboard@83402784 `v=2.0`）。同段输入 `nf +14.14→−9.35`、Σ `5.850@83401935→2.049@83402875` ⇒ **940 拍跌 4.04**，与 α=0.02/100 拍自洽。⇒ **写 G4 必须同时给 Σ 与同拍 `nf`**；幼房那台连续恶化（−0.616→−1.743，其 RCL5 建设潮 storage −10.6k）⇒ 帝国余量全靠核心房一台（R185-D 逐轮可见）。
+· **near-full 退了**：`storageNearFull=false`（889,512，ratio 0.8895；峰值 902,298 只维持 <1,000 拍，核心房 storage 940 拍里 −12,786=−13.6/拍）⇒ ①我写死的"翻真当拍读响应"窗口关闭，**"饱和响应吃净流"至今 0 次现场检验**；②对 #88 是双向收敛：**停卖既不会很快顶满仓，"卖单是泄压阀"这个反对意见也站不住**，而收益侧（运费 3.67~4.38/拍）不变 ⇒ 决定仍属人，两边量级都已给实。
+· **#90 齐账**：第 5 次目击 `EnemyInvasion@83402215 → EnemyCleared@83402225`（**10 拍**、6 塔）；我用两发基线定价：核心房 `towerSpendCombat 2,460→2,820` ⇒ 本场 **+360 能量**（上场 30 拍 +1,800 ⇒ ≈60/拍，两处一致）。环覆盖含全部五场，`CreepDeath` 末位全 `1` ⇒ **五场零战损（可判的负结论）**。目击间隔实测 **380 / 1,995 拍 < 生效窗口 5,000**（`posture-baseline.ts:46` 的 "low" 档；交叉验证=`expandMinBucket 6000` 与 `expandMaxPressure 0.5`）⇒ `threatRecent` 永不清零 ⇒ war 已连续 ≈5,700 拍、退出时刻被推到 **83407214（≈16:0xZ）**（这是我第三次被新事件改写预测）。⇒ **给 owner 的一句话：下一把钥匙不在幼房（RCL5 已到手）、不在 CPU（执行门禁不看 G4/G6），而在"目击间隔 > 5,000 拍"**；免费可观测，我不制造敌情、不动任何战争闸。修法方向仍是给威胁记忆/宣战加"战损维"（#90，属对端+属人）。
+· **幼房自主成长第二发（带增量）**：`ec 1300→**1450**`（3 块 extension 落地）、`ea=1450/1450` 满、`queue=0/10`、仍有 3 块 extension `state=site` 在施；远矿 `W38S55 state=active ledger{d:7879,s:9700,i:5000}`、`roadHeatTiles=37`（24~56）而 `roadSiteCount=0`、`siteCount 1→0` ⇒ 路在算但还没有路工地（与核心房 `无site` 那一族同型，不是停摆）。
+· **边界**：零 src、零 push、零 build、零 console；探针 observe×1 + peek×3 + ring-dump×1。**R122**：①两房 `lastHostileAt` 间隔是否终于 >5,000（war 退 ⇒ G0 消失 ⇒ 第一次真 claim 窗口，核 `Memory.rooms` 是否 3 房）；②`buyTried/buyOk` 是否变、storage 是否出现 GH2O ⇒ 只有 `buyTried>0` 才谈得上这条无 ROI 路的花费；③G4 回绿必带同拍 `nf`；④幼房 `reserveOnly` 差分继续给 #61 供量。§3.5 属人 7 项未动。
+
+---
+
+## R230 · 2026-10-03 14:5xZ（R226 把证据说小了：21/22 两张是有断言的，但那不覆盖 #102 那条路）
+
+**纠正自己上一条的过度保守**：R226 我写"那三张只断言 无 JS 错误 + Memory 体积"——那是把 §13 里对 **20-claim-chain** 的观察
+错误地推广到全部三张。实读结果行显示：**E2E-021 断言"stale 诱饵情报不触发 warPlan、全程存活"、E2E-022 断言
+"war 授权真目标、编队孵化、全程经济不越红线"**，两张都在新产物上通过（185s / 252s）。
+⇒ 更正后的准确版本（**证据要按"覆盖了哪条路"分，不按"跑了几张"分**）：
+· **#99 / #105**（战争漏斗计数、恢复拒因表）：由 21/22 的**有断言**跑法背书 ⇒ 从"只有单测"升到"引擎级带断言不回归"。
+· **#102**（扩张执行闸）：仍然只有 **20-claim-chain** 那张薄断言覆盖（它走的是 claim 消费路径，21/22 走的是 war 授权路径，
+  **不经过 `GATE_THREAT_UNCHANGED`**）⇒ 等级维持 `TESTED + 引擎不炸`，不许升。
+⇒ 通用一条：**宣布"某改动被 e2e 覆盖了"之前，先说清哪张场景真的穿过那段代码**。
+
+**R229 那条 sponsor 判断从"间接"升成"原始"**：给 `peek.mjs` 加了 `PEEK_FULL=1`（关掉 700 字符截断），
+原文件默认行为**逐字不变**（对端看门狗按行 grep 这份输出，不能动默认）。用它直读 `kernel.expansionPlans`：
+四条 `"rn"/"sr"/"st"` 全列出 ⇒ **W37S56 / W36S58 / W37S57 / W38S58 的 sponsor 都是 W37S58，四张都是 WAITING_EXECUTION**
+（此前那句只来自 observe 的排版，现在是原始 Memory 读数）。⇒ #13 那条"sponsor 会不会是不孵兵的房"在 P-A 前排除。
+
+全量 e2e 仍在后台（其余 31 张）。边界：零 src、零 push、零 build、零 console；本轮唯一代码级改动在 `tmp/`（未跟踪）。
