@@ -3386,3 +3386,42 @@ prettier/eslint 由 pre-commit 钩子跑过。**反向实验**（把 wiring 摘�
 那是**过滤器形状不是红条**（本会话第 3 次把工具形状误读成结论的风险，记下来免得下轮再当成回归）。
 
 边界：零 push、零 build、零 console。#102 与 #89 都仍未推，等 A/B/C。
+
+---
+
+## R222 · 2026-10-03 14:1xZ（恢复腿审计：又一个"子代理说坏了、其实是设计"，但这次底下真有一个洞）
+
+派 Explore 审计 recovery/crisis 链，头号结论是"四种恢复动作永远过不了自己的第一道房名守卫 ⇒ 缺陷"。
+**逐行复看后又一次规范性反转**（继"防线缺墙""template 分支是死码"之后第三次）：
+`recovery-execution-system.ts:25` 的文件头注释明确写着
+"无房间维度的动作带 GLOBAL_ROOM：需要具体房才能行动的地方**必须显式跳过**，不能默认'买/建/孵'"，
+而 `:20-24` 记着这条政策的来历——上一版按 `targetFailureId.split(":")[1]` 取房名把**维度名当房名**，
+于是 storage 已有 90 万时照买能量，实测 credits 457,666 → 331,398（−126K/40 分钟）。
+⇒ **跳过是安全设计，不是 bug**；"half the actions die" 这种说法会把修法变成重开一个烧过钱的洞。
+
+**但设计合理不等于可以看不见**，这就是本轮真正落地的东西（#105）：
+`recoveryActionTable`（含 `attempts/maxAttempts`）**住 heap ⇒ 每次部署归零**，于是"某类动作一直被拒"
+在读数里从不显形，而且一个跨部署反复失败的动作**永远走不到** `non_retryable` 的告警面。
+⇒ 新增 `Memory.kernel.stats.recoveryRejections`（key=`type:classification`，值 `{count,lastAt,lastReason}`），
+写在拒绝分支里。**零判定影响、零消费者**，键集合有限（11 动作 × 5 分类）⇒ Memory 有界。
+读到的第一个问题就该是：物流/网络/健康维度这三类失败节点（`empire-health-system.ts:405/456/468` 三处 push 都不带 `room`）
+的动作是不是真的**一直在被跳过**——那是"帝国级故障到底产出过几次可执行动作"的第一份证据。
+
+**测试的形状**（7 例）：5 例测写入路径（建表/累加分键/截断/已有条目不被 `??=` 吞/stats 缺席不抛），
+外加 **2 例源码接线锁**——因为我先写完发现"摘掉调用点它们全绿"，那就是"绿色但什么也没断言"；
+本文件所属的系统没有系统级夹具（沿用 `recovery-record-room-source.test.ts` 的坦白写法），
+所以接线用源码形状作最强可得证据，语义复核留给线上读数。**反向实验证实了这个区分**：
+摘掉调用点 ⇒ 恰好接线那 1 例红（`expected 1 to be 2`），其余 6 例仍绿（正是我给它加锁的理由）。
+
+**顺带核出第二条真洞（#104）**：`g.recoveryCooldowns` 每轮都被读来判 `isOnCooldown`，
+但它唯一的写者 `recordRecoveryAttempt`（`recovery-priority.ts:129`）**全仓零调用者**
+⇒ 冷却门**按构造恒假**。这条与 #105 是同一族证据：上线后若同一 key 的 `count` 持续上涨，
+就同时证明了"重复尝试没有被冷却挡住"。修法（接上冷却 or 承认幂等表已够）涉及行为改动，**属人**。
+
+**没动的**：`roomMem.defenseState.safeModeRequested` 与 `stats.crisisCount` 都只有写者没有读者（注释还声称有消费者）
+——不在决策路径，按量级结案；heap 里的 5 个恢复计时器（`recoveryActionTable/recoveryBeforeStates/recoveryCooldowns/__consecutiveStableTicks` 等）
+是 #13 类老坑的又一实例，**要判效得先问它住哪**。
+
+验证：`tsc` rc=0；`tests/unit` **387 文件/5236** 全绿（基线 386/5229 ⇒ +1 文件 +7 例）；integration 30/239；
+**未 push、未 build**（`dist/main.js` 仍 05:10/785,155B == 线上 `ea4c69da6f8b`）、零 console。
+判效器 pid=7182 仍盯 war 退出 83405220。

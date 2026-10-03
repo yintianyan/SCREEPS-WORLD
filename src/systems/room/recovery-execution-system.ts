@@ -183,6 +183,9 @@ export const recoveryExecutionSystem: System = {
           record = markFailed(record, tick, execResult.reason, true);
         }
         (g.recoveryActionTable as RecoveryActionTable).set(recoveryIdempotencyKey(action), record);
+        // #105：拒因累计落 Memory。上面那张表住 heap ⇒ 每次部署归零，
+        // "哪类动作反复被拒、被拒了几次"此前不可归因（与 #96 战损、#99 漏斗同一族）。
+        recordRecoveryRejection(action.type, classification, execResult.reason, tick);
       }
     }
 
@@ -215,6 +218,39 @@ interface SubmitResult {
 
  * 这是本系统的核心——只做翻译和提交，不做执行。
  */
+/**
+ * #105 —— 恢复动作被拒的持久留痕。
+ *
+ * 为什么单独存：`recoveryActionTable` 住 heap ⇒ 每次部署归零，于是"某类动作一直在被拒"这种
+ * 结构性失效在本仓的读数里**从不显形**：`attempts/maxAttempts` 也一起被清零，
+ * 一个跨部署反复失败的动作永远走不到 `markFailed(non_retryable)` 的告警面。
+ * 更糟的是这一族里有**故意**的拒绝（`GLOBAL_ROOM` 的动作被显式跳过 —— 见文件头注释，
+ * 那是"不能默认买/建/孵"的安全设计），设计越合理，没有读数的后果越隐蔽：
+ * 物流/网络/健康维度这三类失败节点不带房名（`empire-health-system.ts` 的三处 push 都没 `room`），
+ * 于是它们的动作今天**按构造**全部落在 GLOBAL_ROOM 分支上被跳过。
+ * ⇒ 这张表回答的是那句此前无法回答的问题：**帝国级故障到底产出过几次可执行动作**。
+ *
+ * key = `type:classification`（有限集合：11 种动作 × 5 种分类 ⇒ Memory 有界），
+ * reason 截 120 字符防长串。零判定影响 —— 没有消费者读它做决策。
+ * 导出仅为可测：调用点在生产路径的拒绝分支里（本文件没有系统级夹具，接线靠线上读数复核）。
+ */
+export function recordRecoveryRejection(
+  type: RecoveryAction["type"],
+  classification: string,
+  reason: string,
+  tick: number,
+): void {
+  const stats = Memory.kernel?.stats;
+  if (!stats) return;
+  const table = (stats.recoveryRejections ??= {});
+  const key = `${type}:${classification}`;
+  const entry = table[key] ?? { count: 0, lastAt: 0, lastReason: "" };
+  entry.count += 1;
+  entry.lastAt = tick;
+  entry.lastReason = reason.slice(0, 120);
+  table[key] = entry;
+}
+
 function translateAndSubmit(
   action: RecoveryAction,
   ctx: TickContext,

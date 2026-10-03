@@ -504,6 +504,14 @@ declare global {
       baselineCreepCount?: number;
       baselineRoomCount?: number;
       baselineLastSample?: number;
+      /** #105：恢复动作被拒的累计计数（key = `动作类型:失败分类`，只增不减、跨部署存活）。
+       * 为什么单独存：`globalCache().recoveryActionTable` 住 heap ⇒ 每次部署归零，
+       * `attempts/maxAttempts` 一起被清，所以"某类动作一直被判拒"这类结构性失效此前**从不显形**；
+       * 而这一族里最值得关注的那条是故意的——GLOBAL_ROOM 的动作被显式跳过（不默认"买/建/孵"），
+       * 设计越合理、没有读数就越隐蔽：物流/网络/健康维度三类失败节点都不带房名，
+       * 它们的动作按构造全部走跳过分支。⇒ 本表回答"帝国级故障到底产出过几次可执行动作"。
+       * 零消费者做决策（纯观测）；键集合有限 ⇒ Memory 体积有界；`lastReason` 截 120 字符。 */
+      recoveryRejections?: Record<string, { count: number; lastAt: number; lastReason: string }>;
     };
     /** 方向 3 E-FINDING-04 补充：P3 长期冻结跟踪。
      * 当 P3 旁路因 bucket < conserve 最低值不生效时，记录冻结开始的 tick。
