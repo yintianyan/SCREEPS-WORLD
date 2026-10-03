@@ -401,3 +401,23 @@ L0 §3.1–3.8 列出的覆盖面**远不止上面 14 条**（§1–§14，含�
 只有记账与状态流转进不到，所以现场看起来"功能存在但台账恒 0"。这类形状的识别方法记在该节：**先 grep `src/` 里的调用者，
 零调用者 + tests 有导入 = `NOT_WIRED`，而不是"还没判效"**。
 补齐次序建议（每轮 3–5 条，先核代码再落状态）：①殖民后的**房间运营子项**（construction/layout/link/distributor 那一族，最大的一块空白）→ ②外交/宣言（很可能整块 `NOT_STARTED`，那本身就是重要结论）→ ③符号与 boost 全链。（原②"情报"已落 §12、原③"CPU 调度"已落 §14、殖民执行链已落 §13。）
+
+## 19. 自度量器的诚实性（R254/R256–R259 汇总，L0 §2.3 交付物的补角）
+状态标签一律按**写者/消费者**判，不按符号名或注释。
+- **自治度指标 = 60/100 权重此前不携带证据，已修一半**（`#112`，`37e7aa2`，`WIRED+TESTED` 非 `EXERCISED`）：
+  ①`__autoRecoveredFailures` 此前每 10 拍累加**整表快照** `succeededCount`（succeeded 记录保留 500 拍）⇒ 一次成功被计 ≈50 次，
+    `recoveryRate`（25 分）长期饱和；修复＝`computeRecoveryStats` 增 `succeededThisTick`/`recoveryTimeThisTick` 并让消费侧吃同拍增量。
+  ②`__perturbationCount`/`__totalRecoveryTime` 零写者 ⇒ `autonomy-metrics.ts:185` 恒走"无扰动=满分"（15 分）；**本修复首次给它们接上写者**。
+  ③`manualInterventions` 硬编码 0（需 console hook）⇒ 20 分仍按构造满，**未修**（作者声明的盲区，未起手）。
+  消费者只有 `empire-health-system.ts:219` 的日志 ⇒ **不挡任何闸**；改完自报自治度会**下降**（撤虚高），不可读成"恢复能力退步"。
+- **#104 的旧标签作废**（本文件 §10 仍带"恢复冷却唯一写者零调用者"那行，以本条为准）：
+  `recovery-priority` **在生产路径上**，执行侧已有 `shouldSubmitAction(…, getRetryPolicy(action.type).cooldownDuration)` + `maxAttempts` 的按类型阻尼；
+  那张 `CooldownTable` 是**第二处、且按构造恒空**的重复阻尼层。⇒ 处置是"删恒空支路（今天行为零变化）或上收 policy"，属人；
+  **接写者会引入缺陷**（`isOnCooldown` 不看 `lastSuccess`、key 是 `domain:room` 而非动作 id ⇒ 硬编码 200 拍会连带抑制同房同域的其他动作）。
+- **计量读数的两条通用护栏**（今夜各撞过一次）：
+  (a) `economy.bk` 每房是**各自的 50 拍窗**（看 `economy.t`），逐窗跨房配对按构造不成立 ⇒ 跨房成对只用累计差分；
+      `bk` 只列非零键 ⇒ **缺支出键的窗会把净流抬高**（核心房实测 6.57→13.66→27.94/拍，主因是采样窗换了）。
+  (b) **Memory 端点是 flush 门控的**：18:52 与 18:54 两次读 `kernel.gateNetFlow` 逐字节相同（其间 watch3 tick 已 +200）
+      ⇒ "读数没动"≠"仪器没在算"，凡慢仪判据都要按 flush 采样多次，别用一次相同值否证趋势。
+      推论：R258 那条"G4 ≈9~13 分钟带"**本会话无法确认**（会话只有几分钟），它只能由 `posture-exit3.log` 的 `Blocked=` 在往后一小时内免费记录；
+      我不把它当已证结论，也不在任何地方引用它当"已翻绿"。
