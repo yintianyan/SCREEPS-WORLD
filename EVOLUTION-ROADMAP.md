@@ -3227,3 +3227,27 @@ reserveDelta=+414` ⇒ 建造管线是**没活可干**，不是被什么卡住�
 20 文件 / 294 用例全绿 ｜ prettier 干净。判效器 `pid=7182` 仍在飞，退出预测仍按 **83405220**（`newSighting=no` 至今）。
 
 边界：零 push、零 build、零 console；探针 peek×4 + 源码 Read/grep。属人 7 项未动；`#100/#102` 仍等裁决。
+
+---
+
+## R216 · 2026-10-03 13:2xZ（§15 三条待核复看完：全是"看着像缺陷，其实是命名/历史残留"）
+
+**①`developmentGate()` 不是第二套门禁**：`construction-manager.ts:248` 那个导出函数在 `:255` 直接转调
+domain 纯函数 `evaluateDevelopmentGate`，`:242` 的注释自己写明"逻辑已下沉"；活路径（`:109`）本来就走 domain 那条。
+⇒ 只有**命名漂移**：全仓十余处注释（builder.ts:30/95、config:427、queue.ts:197/216、phase.ts:598、downgrade-risk.ts:31）
+仍以 `developmentGate` 称这道闸，照注释找真判据的人会先找不到。**不改代码**——改名牵动 10+ 处注释而零行为收益。
+
+**②`dismantleCount` 确实有两份宿主，但只有一份活着**：产线是 `roomMem.dismantleCount`
+（`layout-planner.ts:502` 写 ⇒ `:879` 读进 layoutMetrics，即 #82 那条 PASS 通道）；
+`link-system.ts:252` 写的 `globalCache().dismantleCount`（Map）**无任何读者**，而它自己的注释（`:244-248`）
+声称"layout-metrics 消费此计数"。⇒ 注释说谎 + 孤立仪表，不在决策路径 ⇒ 按量级结案（与 #17 的
+drift/industrialSpend 同处置）。**要清就清仪表，别把它当缺陷去改行为。**
+
+**③link "hub"** 那条与已结案 #74/#75 同族，留 `[未复看]` 标记并写明"下轮先读那两条再决定是不是新案"。
+
+⇒ 这一族的共同点值得单独记：**三个候选缺陷没有一个需要改代码**。审计的价值在于把"能力缺口"和
+"命名/历史残留"分开——前者要补，后者要忍（动了反而制造风险或纯 churn）。同轮另一例见 R215（"防线缺墙"
+其实是系统自己关掉的不可逆风险）。
+
+边界：零 src 改动（R215 那条注释改口的提交 `f1aef08` 是本轮唯一 src 侧文件，且零行为）、零 push、零 build、零 console。
+判效器 `pid=7182` 继续盯 83405220，`newSighting=no` 至今。

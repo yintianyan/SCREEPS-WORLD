@@ -237,9 +237,17 @@
   `result.overrideWrites` 写回 segment 并标脏；②"template 分支不可达⇒整套是死码"错——它是 mode 选中的备选实现。
   ⇒ 纪律再确认：**子代理的"无写者/无调用者"报告必须自己复看**，这是第二次它把活的说成死的（第一次是 #98 的 `intelStats` 内联写者）。
 - **已知缺陷 / 待办**：#69（`layoutGaps/layoutMetrics` 留着流产扩张的 471k 拍冻值）、#75（超配 link 只认 source 角色）、
-  #82（layoutMetrics 通道已重接线 PASS）。`[未复看]` 待核三条：link "hub" 类是可被填不可被排的（与已结案 #74/#75 同族，勿重复立案）；
-  `developmentGate()` 与 `evaluateDevelopmentGate` 疑似两制（前者只被测试引用）；
-  `globalCache().dismantleCount` 与 `roomMem.dismantleCount` 两份同名不同宿主。
+  #82（layoutMetrics 通道已重接线 PASS）。
+  **三条待核已复看结案（都是"看着像缺陷，其实是命名/历史残留"）**`[我核]`：
+  ①`developmentGate()` **不是第二套门禁**——它是对 domain 纯函数 `evaluateDevelopmentGate` 的薄封装
+  （`construction-manager.ts:248` 的 `:255` 就是转调，`:242` 的注释自己写明"逻辑已下沉"），
+  活路径直接调 domain 那条（`:109`）。⇒ 只有**命名漂移**：全仓十余处注释仍写 `developmentGate`，
+  读注释找门禁的人会先找不到真判据。不改代码（改名会牵动 10+ 处注释且零行为收益）。
+  ②`dismantleCount` 确有**两份宿主**：产线走的是 `roomMem.dismantleCount`（`layout-planner.ts:502` 写、`:879` 读进 layoutMetrics，
+  即 #82 那条 PASS 的通道）；而 `link-system.ts:252` 写的 `globalCache().dismantleCount`（Map）**无任何读者**，
+  它自己的注释（`:244-248`）却声称"layout-metrics 消费此计数"。⇒ **注释说谎 + 孤立仪表**，不在决策路径上，
+  按量级结案（与 #17 的 drift/industrialSpend 同一处置）。要清就清仪表，别把它当缺陷去改行为。
+  ③link "hub" 可被填不可被排那条与已结案 **#74/#75 同族**（`[未复看]`，下轮先读那两条再决定是不是新案）。
 - **优先级**：P2（管线本身活着；风险集中在"文档/配置与代码相反"这一族）。
 
 ## 尚未入矩阵的能力 = 本文件的已知不完整性
