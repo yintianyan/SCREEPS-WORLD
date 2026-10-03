@@ -58,7 +58,11 @@ export enum EventKind {
   /** 改进 A：tuning 参数回滚（验证失败）。d = [paramCode, rolledBackValue, preAdjustValue, roleCountAtVerify]。
    * 验证 pass 发现调整未改善信号时触发回滚。第 4 元素（#83）是验证那一拍的在场角色数，-1 = 未知；
    * 它把"人口合同那条路"与"效果判据/#79 上行护栏那条路"分开 —— 两者都落在这个 kind 上，
-   * 光看 kind 与 reason 分不出来（环寿命 ~755 拍 < verifyDelay 1,500 拍 ⇒ 事后取证取不到）。 */
+   * 光看 kind 与 reason 分不出来。
+   * ⚠️别把"环寿命"当常数（旧注释写过"~755 拍"，那是单发读数）：环按**事件数**封顶
+   * = `EVENT_RING_CAPACITY` 500 条（segment-store.ts:42），所以时间跨度 = 500 ÷ 事件密度。
+   * 实测两发：755 拍与 1,123 拍。⇒ 只有密度低于 ~0.33 条/拍时，才够从环里回看一整个 verifyDelay(1,500)；
+   * 事后取证能不能拿到，取决于**当时有多少别的事件在写**，不是取决于常数。 */
   TuningRollback = 20,
   /** 改进 A：tuning 参数冻结（连续回滚达阈值）。d = [paramCode, rollbackCount, frozenUntilDelta]。
    * 冻结时参数复位到 CONFIG 基线（附录 D.5），console.log 降级为运维提醒。 */
