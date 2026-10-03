@@ -3343,3 +3343,26 @@ prettier/eslint 由 pre-commit 钩子跑过。**反向实验**（把 wiring 摘�
 边界：**未 push、未 build**（`dist/main.js` 仍 05:10/785,155B == 线上 `ea4c69da6f8b`）、零 console。
 判效器 pid=7182 仍盯 83405220；**若 A/B/C 选了含 #102 的推送，上线判据**：一次带敌情的窗口里读到
 `Gate failed … GATE_THREAT_UNCHANGED` 才算这道闸活了；和平期它恒不触发是正确读数，不是坏了。
+
+### 巡检 R120（10-03 13:5xZ；按 R212 里那条编号隐患，我不占 R 号）**#61 的预留拒绝重新有量**（幼房 RCL5 落了 storage ⇒ `cr>0` ⇒ 预留那条支第一次有作用面：跨 ≈4,700 拍 `reserveOnly +482 / budget +7 / degradeGateClosed +489`，**1:1 包含式第十次成立**）；`storageNearFull` 终于翻真但**我写死的配套判据没兑现**；对端 `posture-exit` 那声 **STUCK 是假警报**（现算 ≈83405220，两个独立交叉验证都指向 "low" 档的 5,000）
+
+**一、#61（孵化预留语义）现场更新**
+· 幼房 `spawnRejects`：`{survivalBlock:0, budget:2763, reserveOnly:5976, noDegrade:234, floor:0, degradeGateClosed:2705}`；R116 基线 `{2756, 5494, 2216}` ⇒ 跨 ≈4,700 拍 **budget +7、reserveOnly +482、degradeGateClosed +489**，且 `489 = 482 + 7` **逐位相等**（批次 5 那个包含式第十次成立）。
+· **为什么停摆四天后又开始涨**：RCL5 之后幼房有 storage（`storage_se 63,847`）⇒ `economy.cr = round(reserve) > 0` ⇒ 预留的**触发条件 2**（`cr>0 && rb/10<400`）第一次具备资格。与我记忆里"storage 落地把 `cr` 从 0 抬起来 ⇒ 98% 的拒绝拍变成只有预留挡得住"同型。
+· **后果仍只是延迟不是饿死**（维持我当初把 `size-vs-reserve` 自降级为 latency 的判断）：同期幼房人口 8→**14**、`queue=1/19`、远矿点 W38S55 在跑、塔/extension 工地在施、`ea=1300/1300` 满。⇒ **#61 的账现在是**："RCL5 后 ≈每 10 拍 1 次预留拒绝（482/4,700），代价是建设与升级的排队时延，收益是孵化预留保住替补采集者；无饿死证据。" **我没动阈值、没动预留语义。**
+· ⚠️顺手记一条自误：我第一发读 `rooms.W37S58.spawnRejects` 拿到"不存在"，几乎去立"计数器丢了"。实际这套计数器 `??=` **惰性创建**，只在真发生过拒绝的房才有对象（幼房有、核心房从未有）⇒ 属"键不在≠没发生"的**反向**用法：这里等义于"没建过"，不是"丢了"。
+
+**二、`storageNearFull` 翻真了，但机制那一半没兑现**
+· `W37S58.storageNearFull = **true**`（storage 902,298 ≥ `0.9×1,000,000`）。这是我对同一事件的**第三次**拍号估计（83400250 → 83400615 → 实际 ≈83401935）⇒ 事件成立、**拍号连错三次 ⇒ 以后"贴线慢涨"类只登记方向、不登记拍号**（速率不是常数，第 7 族）。
+· 我写死的配套判据（"翻真那一拍同时读 `nf` 与 `demandsPublished`/factory 活动"）**当场没有响应可看**：同拍核心房 `nf = **+14.14/拍**`、`gateNetFlow.W37S58=6.466`（还在涨）、`demandsPublished=0`。⇒ **"饱和响应吃净流"（R184 补）至今既未证实也未否证**；下一轮先判 `near-full` 是否**还在 true**——掉回 false 就是判据窗口关了，要等下一次翻真。
+· **G4 的形状变硬了**：`gateNetFlow={W37S58:6.466, W38S56:**−0.616**}` ⇒ Σ=5.850，**幼房那台第一次转负**，整个门槛余量由核心房一台承担 ⇒ **R185-D 的对冲拿到最强形态**：RCL5 的建设潮把幼房变成净消耗者；若持续，G4 会自己再红，这比"要不要放宽门槛"更早发生。
+
+**三、war 退出：对端 STUCK 是假警报（算式与两处交叉验证）**
+· 现场：`posture=war`、`since=83397159`、`lastHostileAt` 核心 **83400220**／幼房 83399840（**无更新目击**）。
+· 链：`posture.ts:117-118` `threatRecent = 任一房 tick−lastHostileAt < threatWindow`；`CONFIG.posture.threatWindow=3000`（`config/index.ts:1151`）而 `posture-baseline.ts:46` 在 **neighborPressure="low"** 覆盖为 **5,000**。**"low" 是生效档**，两处独立交叉验证：`expandMinBucket=6000` 与 `expandMaxPressure=0.5`（R187 实测生效值恰好是这两个，只有 "low" 支会给）。
+· ⇒ 退出在 **83400220 + 5,000 = 83405220（≈14:2xZ）**；`minDwell=1000` 早已满足（dwell≈4,776）。对端 `posture-exit-watch` 在 83401784 判 STUCK 用的阈值 **83401612 无论按 3,000（83403220）还是 5,000（83405220）都算不出来** ⇒ 那一步（查 liveThreat 宿主 / anyRecovery / R4 止损）**现在不必做**；watch2（pid 7182）的判据应改为 83405220。
+· **#90 的口径钉牢**：一次目击 = **5,000 拍扩张税（≈5.2 小时 @3.75 秒/拍）**；今夜已 5 次目击。若骚扰间隔 <5,000 拍，扩张可被**永久**冻结 ⇒ 仍属观察项，我不动任何战争闸。
+
+**四、其余**：核心房 `controllerDowngradeRisk=true`（RCL8 保级带第 3 次进入，落在 83400995~83401935 之间；engage 准确拍号不落盘）⇒ 此刻 `spawnQueue` 只有 1 条 `reserver` 替补（`createdAt 83401945`），**这还不算偏差**；R121 的读法写死为**扫 `Memory.creeps` 的 `upgrader-W37S58-*` 键名（名字嵌出生拍）**，别读瞬时队列形状。`Blocked=G0+G6`@83401884、`tier=tight@83387005`、调度 healthy、300 拍环 CPU avg 17/max 26.3、`errors=0`；`credits 12,952,791`（差分 +88,436/1,240 拍 ⇒ **≈71/拍**，比前几发 130~240/拍低 3 倍 ⇒ 流入线速率极不稳，来源仍未证）、`runs=76`。幼房成长第二发样本：车道 `W38S56→W38S55 active/挂起0/热度41`、`ops=1/1`、`site=1`、人口 14、`rs 70,930→69,611`。
+
+**边界**：零 src、零 push、零 build、**零 console**（对端正持有未提交 src：`plan-adapter.ts`、`plan-status-ledger.test.ts`、新增 `threat-escalation-gate.test.ts` ⇒ 我没碰、没 stage、没 build）。探针 observe×1 + peek×4（含一次我自己读错房的空读）。**R121**：①`near-full` 是否仍在；②war 是否 ≈83405220 退出 ⇒ RCL5 后第一次真 claim 窗口（`Memory.rooms` 变 3 房 / 4 张 plan 被消费）；③保级带这轮有没有孵出 upgrader（键名法）；④幼房 `reserveOnly` 差分继续给 #61 供量。§3.5 属人 7 项未动。
