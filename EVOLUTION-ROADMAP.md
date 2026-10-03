@@ -2907,3 +2907,17 @@ R191 里我留了一句"另两笔我没重验、不替它们担保"。这笔账�
 
 ⇒ **#95 结案方式改为：不可归因（非缺陷、非健康，是盲区）**。矩阵 §8（军事）的 `LIVE_VALIDATED` 前置因此不是"等一场真仗"，而是**先有漏斗计数**。
 ⇒ 立 **#99**：把这五道闸各加一个**每拍清零、按 tick 落一次**的计数器（形如 `stats.warFunnel={intel,notFact,noOwner,notNormal,occupied,blacklisted,stale,tooManyTowers,candidates}`，写在与 `intelCoverage` 同一个 100 拍批处理里，成本≈0、零判定改动）。**这才是我今夜该立的那笔观测缺口**——它由读码得到、由现场数支持、且#95 的整条判断链都依赖它。
+
+### R209（10-03 11:4xZ）#95 的归因**不用改码也能先削两类**：blacklist 贡献 0，`occupied` 已吞掉我们自己的远矿房
+
+R207 说"五道闸零计数 ⇒ 不可归因"是对的，但其中**两道的答案本来就在 Memory 里**，不必等 #99：
+
+- **`kernel.warBlacklist` ⇒ 不存在** ⇒ 第 4 道里的 blacklist 这一支**贡献 0 个排除**。⇒ "**被黑名单挡光**"这条假设**当场排除**。
+- **`kernel.expansion` ⇒ 不存在**（CP5 字段已退役）⇒ `occupied` 里**没有扩张目标**这一支。
+- **`rooms.W37S58.remoteOps` 实读：`W37S57` state=active**（`createdAt 82983625`、`dangerUntil 83398545`、`roadSiteCount 3`、`ledger.d=3,930,341`）
+  ⇒ `occupied` **至少含 W37S57**（幼房的远矿列表被 700 字符截断，未计）。
+- 结合 `intelCoverage={rooms:7}`：漏斗粗算 **7 − 我方 2 − 自家远矿目标 ≥1** ⇒ 进入 owner/kind/fact 三道筛子的顶多 **3~4 个**，而那三道任一不过就归零。**这仍不是定罪**，但把"是不是被自己占掉了"从猜测变成了**有下界的算式**。
+
+**另一条不该被读成好消息的观察**：`W37S57` 那个 op 上挂着 **`dangerUntil=83398545`**，比 `lastHostileAt=83395412` 晚 **3,133 拍** ⇒ **敌意在"war 已挂起"之后仍在刷新**，而且刷的是远矿房。
+⇒ 这把 #92 的图景补全了：**我们挨打的是远矿线，而 war 的靶子却必须是玩家房**；`players=2` 说明"认识玩家"，但被打的那间房（W37S57）在我方 `occupied` 里 ⇒ **挨打的位置恰好是不可打击的位置**。#99 的计数会告诉我们这是全部原因还是部分原因。
+（`war-planner` 的存续期证据复核 `war-planner.ts:135` 也已读到：`planTimeout(6000) ≫ targetFreshness(1500)` 是**已修的**旧问题，不是本次嫌疑。）
