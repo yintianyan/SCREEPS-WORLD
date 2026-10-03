@@ -3251,3 +3251,24 @@ drift/industrialSpend 同处置）。**要清就清仪表，别把它当缺陷�
 
 边界：零 src 改动（R215 那条注释改口的提交 `f1aef08` 是本轮唯一 src 侧文件，且零行为）、零 push、零 build、零 console。
 判效器 `pid=7182` 继续盯 83405220，`newSighting=no` 至今。
+
+---
+
+## R217 · 2026-10-03 13:2xZ（一条口径更正：判效器那列 `tick=` 是量化过的，别拿它算拍长）
+
+round3→round4 打出 `tick 83401284 → 83401384`（墙钟 616 秒）⇒ 心算会得到 **6.16 秒/拍**，与今夜所有标定（3.58~3.93）差一倍。
+**是口径错，不是掉速**：那一列取 `kernel.expansionDashboard.tick`，而 dashboard 由扩张 planner 每
+`CONFIG.expansion.interval=100` 拍写一次 ⇒ 它**按 100 量化**，相邻两发的差只能是 100 或 200。
+独立时钟源复核（同一拍内两次取不同写者）：`rooms.W37S58.economy.t` 从 83400929@12:46:30Z 走到 **83401579@13:25:20Z**
+⇒ 650 拍 / 2,330 秒 = **3.58 秒/拍**，与 R184 那两发标定（3.61/3.80）同带。⇒ 拍长换算一律用
+`rooms.*.economy.t` 或 `kernel.stats.intelCoverage.tick`（老化批每 100 拍写，但它是 `ctx.tick` 现值，不受 planner 间隔影响）。
+**后果已核**：判效器把 `EXIT_TICK±600` 容差作用在这列上，量化误差 ≤100 被容差吸收 ⇒ 判据不用改；
+但**别用相邻两行的 tick 差推速率**（这是"拍长换算"那一类错的第 6 次，只是这次错源是自家工具的列选择）。
+
+顺带把等待中的那张 plan 读全了（P-A 那一刻要动的就是它）：
+`expansionPlans[0] = {pid:"W37S56@82544684", rn:W37S56, sr:W37S58, st:WAITING_EXECUTION, tc:61300, roi:4.08, rk:0.37, rl:MEDIUM, sc:0.6, ca:82544684, ua:83401184}`
+⇒ 这张单**开了 856,500 拍 ≈ 34 小时**（`ua` 每轮 planner 被刷，等于 dashboard 那一拍，不是"进展"），
+成本 61,300 能量、`empireEconomy.eb=143,572 / fb=210,573` 都盖得住。
+⇒ 对 P-A 的含义：解闸后**不缺预算、不缺候选**，缺的只有那一次 `expansionAllowed=true`。
+
+边界：零 src、零 push、零 build、零 console；探针 peek×2。看门狗 4 支在飞（含 pid=7182 盯 83405220）。
