@@ -2134,3 +2134,24 @@ G4 红是**"要求继续积累"这一条在饱和库存上不可长期成立**�
       与 **③无 container**（幼房 container 被打掉/未建时）。
 · ⚠️我**没有**为验证这些去制造条件（保级档靠它自然进出，container 不许去拆）；
   也**没有**因为"现在难采到"就宣布 #79 结案 —— 它已有单测 + 反向实验背书，线上复证只是加分项。
+
+### R163（10-03 04:4xZ）**撤回 R160 的机制**：我把两套同名 `tierRank` 当成了一套（正是我记过的那一族）
+· R160 我说"`exploreParameter` 的 `tierRank >= 2` ⇒ 因为 `capacity.tier=tight`（rank 2）⇒ 探索通道今天关着 ⇒ #85 窗不可归因"。
+  顺着消费者读下去才发现** scale 用错了**：
+  - `tuning-engine.ts:571` 的 `tierRank = round(avg(samples.ti))`，而 `ti` 由 `timeseries.ts:177-183` 写自
+    **`budget.tier ∈ {healthy=0, guarded=1, conserve=2, recovery=3}`**（调度器的 CPU 档，`scheduler.ts:54/86`）；
+  - `capacity.ts` 的 `TIER_RANK` 是**另一套**：`abundant=0, comfortable=1, tight=2, constrained=3`（扩张档位）。
+  ⇒ `tierRank>=2` 说的是"**运行期 CPU 预算进入 conserve/recovery**"，与 `capacity.tier=tight` **无关**。
+  ⇒ **R160 的"探索已被档位关掉"没有依据**（同理 `checkVerifyGate` 的 `>=2` 也是预算档，不是扩张档）。
+· **R160 里仍然活着的部分**：方法论那条没错——判效窗前必须确认**探索/确定性通道当时是活的**。
+  但共条件要换成**对的量**：`ti` 的评估窗均值（`EVAL_WINDOW_SIZE` 个采样，取自 `readCpuSegment()` 的 ring）
+  **< 2** ⇒ 探索通道活着；≥2 ⇒ 窗不可归因。
+  ⚠️我按这个去读时踩了第三个坑：**段号搞错**——探针读 `RawMemory.segments[3]` 只有 `economy` 一个键，
+  CPU ring 不在段 3（`segment-store.ts` 的 `cpuSeg` 另有段号）。⇒ **"读到空/缺键"第三次被我差点当成"没有"**，
+  这次是靠 `keys:[economy]` 的显式回读拦住的。
+· **当前判定**：`#85` 窗是否不可归因 = **未决**（既不是 R160 说的"必然不可"，也不是"必然可"）。
+  要收口只需两步：①`grep readCpuSegment` 定出段号；②对那一段算 `avg(ti)`（`EVAL_WINDOW_SIZE` 尾窗）。
+  **在拿到它之前，任何 PASS/FAIL 都不要宣布**——这一条已同步改到锁与 #85 任务里。
+· 给自己留的一句：**同名不同域的枚举是这个仓库的惯犯**（`nf` vs `gateNetFlow` vs `netFlowMean_d`、
+  `agenda.minDwell=200` vs `posture.minDwell=1000`、`consec` vs `consecutiveFailures`、这次的两套 `tierRank`）。
+  ⇒ 凡是"某个 rank/阈值 ⇒ 某结论"的句子，**先读写者那行代码确认它写的是哪套枚举**，再下结论。
