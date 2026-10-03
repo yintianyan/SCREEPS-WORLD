@@ -1589,3 +1589,36 @@
   **而不是**"证明没有闸就一定会提"。若①也整窗不出现，则这一轮连一致性都算不上证据，只能记 PENDING 继续等。
   （为什么不给核心房当正对照：核心房 RCL8 走 `rcl8NoUpgrade`、在场 upgrader=0 ⇒ 人口合同多半同样不满足，
   它"不提"不代表我的闸，拿它当对照会把两个不同的原因读成同一个。）
+
+### R137（10-03 02:0xZ）**撤回一条我 repeated 了很久的错误请示：G0 不是人给的开关**
+
+**触发**：趁 #85 窗在飞，回到挂着未结案 #34（"G0 要 RCL5"），去代码里核 `expansionAllowed` 到底由谁写。
+· `posture.ts:247`：`expansionAllowed = expandHealth && !liveThreat && posture !== "war"`；
+  `posture.ts:150`：`expandHealth` = 七个**机器每拍算出来的**合取项。
+  **没有任何人工开关写这个标志。**（人能给的是 CONFIG 阈值，不是这个布尔值。）
+  ⇒ 我在 R120 之后的路线图、#77 的结案语、以及 **20 分钟前刚写的 AGENT.lock 交接卡**里都写了
+  "G0 属人 / 等人类解锁 expansionAllowed" —— 那是**误归因**，而且方向有害：它把"能自主推进的一项"
+  登记成了"等人回复的东西"，于是没人去量它什么时候自己满足。**本文与锁都要更正。**
+· 现场量了七个合取项（探针 `mk=R136A/R136B`，读数里带标记、已回读确认是我自己的结果）：
+  bucket **10,000** ≥7000 ✓ ｜两房 `colonyState=normal` ⇒ `allNormal` ✓ ｜两房 `economyPressure=0`
+  ⇒ `avgPressure` 0 ≤0.4 ✓ ｜sponsor `W37S58` RCL8 + storage **882,314** ≥8,000 ✓ ｜GCL **5** > 自有房 **2** ✓
+  ｜`liveThreat=false`、`posture=fortify`（fortify 记忆不封锁扩张，代码注释明确）✓
+  ｜⚠️**`youngestMature` = 假**：`colonizeYoungestFloorRcl = 5`，而 `W38S56` 实测 **RCL4**。
+  `cpuRatioOk` 没单独测到（它要 `totalCreepCpu`，探针拿到的 12.9 是含系统的 `Game.cpu.getUsed()`，不是同一个量）——
+  **留作未验项**，别当已过关。
+· **RCL4→5 还差多少、多久**（两点差分，列序已从 `upgrader-raise-verify.sh` 源码核回：
+  `[tick, alive, storage, roleBounds, lastAdjusted, controller.progress, mark]`）：
+  `progress 131,867 @83381368` → `255,559 @83390897` ⇒ **Δ123,692 / 9,529 拍 ≈ 13.0/拍**；
+  其中 83381288→83381368 那 80 拍子窗是 **8.0/拍**（那一刻在场 upgrader=1、`maxCount=3` 还没被撤）。
+  门槛 `progressTotal = 405,000` ⇒ 余 **149,441** ⇒ 按 13.0/拍 ≈ 11,500 拍 ≈ **1.6 小时**，按 8.0/拍 ≈ **2.6 小时**。
+  ⚠️这两个速率是**同一段历史的两端**，中间经历过 `maxCount 3→2` 的撤销与人口变化 ⇒ 只当区间用，不当标定用。
+· **可否证预测（写死时刻，供下一轮直接判）**：`W38S56` 升 RCL5 应落在 **03:3xZ–04:4xZ**。
+  若 **05:0xZ** 仍未升 ⇒ 升级功率低于 8/拍，那才是 #81（幼房一半收入养 rampart、同窗升级零进账）的实锤输入；
+  若提前升了 ⇒ 说明 `dc=2` 这一档（冲刺档 2 只大 body）就够到 13/拍，#81 的"发展"侧代价比我报的小。
+· **请示面因此收窄**（这条是给人类看的，措辞改了）：
+  原来写"G0 + G6 属人"。现在：**G0 会自己满足**（唯一假项是幼房 RCL，几个小时内到 RCL5 就翻），
+  真正的阻塞只剩 **G6 `tier=tight`**（出路只有砍 `CONFIG.remote.maxOperations`，代价已算过：省 2.27 CPU/拍、
+  赔 19.9 能量/拍 + 已建 120 段路 ⇒ 属人的排产）与 **G4**（`netFlow 3.5 < 5`，但这台仪器三读三符号，
+  R134 已登记 ⇒ 判"买不起"不许用单发快照）。
+  ⚠️**不许**据此去降 `colonizeYoungestFloorRcl` 或任何 `expand*` 阈值——降门槛换绿灯是自败，且这一条根本不需要降：
+  它自己会在几小时内满足。
