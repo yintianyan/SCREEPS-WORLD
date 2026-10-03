@@ -4498,3 +4498,21 @@ G3 连续两轮不在列（R246 那次转绿保持）。⇒ 即便 G4 在几十�
 · **幼房第一次演示"危险退役 + 重选目标"**（自主成长第 4 种行为）：`remoteOps.W38S55={state:"abandoned", stateSince:83405805, dangerUntil:83415805, ledger.d:31,848, roadLaid:1}` ⇒ `dangerUntil=stateSince+10,000` ⇒ **走的是"危险"那条退役（对应 83404813 那次进犯），不是 `maxOperations` 超额收缩**；同拍开出 `W39S56 active`、车道 `W38S56→W39S56 合表@83406425`、`Plans 4→5`、候选 R 档 8。该 op 5,000 拍里交付 31,848（≈6.4/拍）= 幼房自己远矿的第一笔真实产出。⇒ 链条"开点→交付→被危险退役→重选"全程零人工；**R126 判别：83415805（≈UTC 22:2xZ）之后它回 W38S55 还是留在 W39S56**——别拿 `abandoned` 这个词推"永久放弃"（R188 已记它不自撤销）。
 · **其余**：采购第 5 次读数仍 `buyTried=0/buyOk=0/buyNoMatch=4/publishedAt=83402318`（距发布 ≈7,000 拍未花钱）；核心房 `risk=false`（保级带这圈已退出）；调度 healthy、`tier=tight@83387005`、300 拍环 CPU avg 20.7/max 25.6、`errorsPerTick=0`；两房 `imported` 都很大 ⇒ 跨房供给满负荷（配对不按同窗核，R231 定案）。
 · **边界**：零 src、零 push、零 build、零 console；探针 observe×1 + peek×3 + 脚本读×2；对端看门狗字段一律从日志代取（零 API）。**R126**：①Σ 是否 ≥5（时刻带在上，且同拍读核心房四个消费键，判"过线窗是不是空支出窗"）；②war 活锚 83409813（读 watch3）；③#61 三栏差分；④`dangerUntil` 到点后幼房 op 去向；⑤`buyTried>0`。§3.5 属人 7 项未动。
+
+### R257（10-04 02:51Z，本会话）#112 落码：恢复统计改吃"同拍增量"，并把两个零写者的 autonomy 键接上
+**先红后绿**（顺序即证据）：夹具先只对既有 API 断言 ⇒ 修复前实测 **1 failed / 1 passed**，失败值正是我 R256 推算的那个
+`- 1 / + 50`（= `RETENTION.succeeded 500` ÷ `interval 10`）。⇒ **虚高的倍率从推算升为实测**。
+**改动**（`recovery-lifecycle.ts` + `recovery-execution-system.ts:200-208`）：
+- `computeRecoveryStats` 新增 `succeededThisTick` / `recoveryTimeThisTick`（`record.updatedAt === currentTick` 的记录才算），
+  并把参数 `_currentTick`（此前**根本没被用**）改为真用；`succeededCount` **语义不动**、只把接口注释从"（累计）"改成
+  "**整表快照**，不能当事件增量累加"——那行写错的注释就是这次虚高的入口。
+- 消费侧三处：`__autoRecoveredFailures` 改吃 `succeededThisTick`；`__perturbationCount` / `__totalRecoveryTime`
+  **第一次获得写者**（此前恒 0 ⇒ `autonomy-metrics.ts:185` 一直走"无扰动=满分"那支）。
+**delta 口径的前提，已读码证**：`verifyPendingActions` 只在 `recovery-execution-system.ts` 内定义并被自己调用（88/112/193 三处），
+⇒ succeeded 跃迁必然发生在本系统自己的运行 tick 上 ⇒ `updatedAt === currentTick` 不会漏计。
+**复跑**：`tsc --noEmit` OK；新夹具 4 例 + 既有 `a4-5-autonomy` = **32 passed**；`tests/integration` **30 files / 239 tests 全绿**。
+**边界**：①这是**报表口径**改动，不改任何闸——`autonomyStatus` 的消费者仍只有那行日志；改完这个数会**下降**（撤虚高），
+按我记过的"诚实化指标会缩下游消费者"，这里没有下游消费者可缩，唯一影响是 owner 看到的自报自治度变低，这是**预期**。
+②`manualInterventions: 0` 那 20 分未动（需 console hook，作者已声明）。
+③仍未部署 ⇒ `WIRED+TESTED`，不是 `EXERCISED`；线上 `__autoRecoveredFailures` 现值住 heap，要一次 console 才能给出"今夜到底虚高了多少次"，
+本会话零 console，留给下轮（这一发也顺便是我这条修复的第二样本）。

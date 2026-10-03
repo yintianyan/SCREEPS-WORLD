@@ -199,8 +199,13 @@ export const recoveryExecutionSystem: System = {
     // 将 Recovery 统计反馈给 empire-health-system 的 Autonomy Score
     const stats = g.recoveryStats;
     if (stats) {
+      // ⚠️吃"同拍增量"不是整表快照：succeeded 记录保留 500 拍而本系统 interval=10，
+      // 快照口径会把一次成功累加成 ≈50 次（#112 的虚高来源）。
       g.__totalFailuresDetected = (g.__totalFailuresDetected ?? 0) + submittedThisTick;
-      g.__autoRecoveredFailures = (g.__autoRecoveredFailures ?? 0) + stats.succeededCount;
+      g.__autoRecoveredFailures = (g.__autoRecoveredFailures ?? 0) + stats.succeededThisTick;
+      // #112 另一半：这两个键此前零写者 ⇒ autonomy 分的扰动支路恒按"无扰动=满分"计。
+      g.__perturbationCount = (g.__perturbationCount ?? 0) + stats.succeededThisTick;
+      g.__totalRecoveryTime = (g.__totalRecoveryTime ?? 0) + stats.recoveryTimeThisTick;
     }
   },
 };

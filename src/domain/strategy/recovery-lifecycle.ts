@@ -790,8 +790,12 @@ export function cleanupRecoveryTable(
 export interface RecoveryStats {
   /** 活跃 Action 数。 */
   activeCount: number;
-  /** 成功 Action 数（累计）。 */
+  /** 成功 Action 数 —— **整表快照**：记录在保留期内每次调用都会被数到，不能当事件增量累加。 */
   succeededCount: number;
+  /** 本拍新跃迁到 succeeded 的次数（record.updatedAt === currentTick）。消费侧累计请用这个。 */
+  succeededThisTick: number;
+  /** 本拍新成功记录贡献的恢复时长之和（tick）。 */
+  recoveryTimeThisTick: number;
   /** 失败 Action 数（累计）。 */
   failedCount: number;
   /** 终态 Action 数。 */
@@ -809,10 +813,12 @@ export interface RecoveryStats {
  */
 export function computeRecoveryStats(
   table: RecoveryActionTable,
-  _currentTick: number,
+  currentTick: number,
 ): RecoveryStats {
   let activeCount = 0;
   let succeededCount = 0;
+  let succeededThisTick = 0;
+  let recoveryTimeThisTick = 0;
   let failedCount = 0;
   let terminalCount = 0;
   let blockedCount = 0;
@@ -827,6 +833,10 @@ export function computeRecoveryStats(
     } else if (record.state === "succeeded") {
       succeededCount++;
       totalRecoveryTime += record.updatedAt - record.submittedAt;
+      if (record.updatedAt === currentTick) {
+        succeededThisTick++;
+        recoveryTimeThisTick += record.updatedAt - record.submittedAt;
+      }
     } else if (record.state === "failed" || record.state === "retryable") {
       failedCount++;
     } else if (record.state === "terminal") {
@@ -841,6 +851,8 @@ export function computeRecoveryStats(
   return {
     activeCount,
     succeededCount,
+    succeededThisTick,
+    recoveryTimeThisTick,
     failedCount,
     terminalCount,
     blockedCount,
