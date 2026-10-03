@@ -4237,3 +4237,44 @@ watch2 只剩 15 轮 × ≈161 拍 ≈2,415 拍 ⇒ 覆盖到 ≈83408,000，**�
 ⇒ 归因句式"X 没被传"必须先问"**有没有东西生产 X**"，这是我今天第 N 次在同一族上受益。
 
 边界：零 src、零 push、零 build、零 console；只读 API 一发 + grep + 文档。
+
+## R248 · 2026-10-03 18:0xZ（审计「持续优化」：**调优环真的闭合（有现场回滚计数），期望环只检测不处置**；顺带抓到一条现场异常：活跃远矿里 8 个路 site 整 boot 零进度）
+
+### ① 好消息先说：调优（tuning-engine）这一环**不是摆设**，现场可证
+`kernel.tuning`（`lastTuned=83405766`）里三条独立读数构成一条完整闭环：
+- **回滚发生过**：`frozenParams` 中 `hauler.maxCount.rollbackCount=2`（W37S58）、`upgrader.maxCount=2`、`hauler.maxCount=1`（W38S56）
+  ⇒ 代码路径 `applyRollbacksAndClearPending`（`tuning-engine.ts:292-320`）+ `recordEvent(TuningRollback)` 确实被走到过；
+- **事前 binding 在跑**：W38S56 `pendingValidation["builder.maxCount"] = {preAdjustSignals:{roleCount:2,buildQueueBacklog:0}, expectedDirection:"worsen", adjustDirection:"down", preAdjustValue:2, adjustTick:83404766}`
+  ⇒ 这就是 **#85 的"事前绑定判据"**在线上的样子（提案前先把"预期会变差"记下来，验证时比对）；
+- **趋势有值**：`lastTrend["hauler.minCount"]="down"`（W38S56）。
+`frozenUntil` 全 0 ⇒ **冻结从未行使**（`rollbackCount` 最高 2）——这与 #79/#85 的口径一致：**护栏存在但未被触发**，
+不是"护栏坏了"。要判它有没有用，得等第 3 次回滚（阈值方向我不动）。
+
+### ② 期望自检（expectations）这一环**只检测、不处置**
+`E7 siteStale`（`expectations.ts:462-477`）在线上确实打中了东西（见 ③），但违例的全部去向是
+`kernel.ts:582-598`：写 `Memory.kernel.expectations.violations` + 按签名去重后 `recordEvent(ExpectationViolation, [条数])`。
+⇒ **没有任何按 id 的处置**：不生成失败节点、不删 site、不触发恢复。（对比：E2 有旁路、E3 有快照记录。）
+⇒ 与 #110 同族但**不是同一条**：#110 是"恢复判定不回流"，这条是"观测判定不回流"。
+
+### ③ 现场异常（可读、可复证，不是假想）
+`kernel.expectations.violations` 现有 8 条，全部同形：
+`siteStale:W36S58:<siteId>(type=road prog=0/300 age=19465 noProg=19465)`（8 个不同 siteId，age/noProg 完全相同）
+- **W36S58 不是废房**：`rooms.W37S58.remoteOps.W36S58 = {state:"active", sources:2, haulerNeed:3, lastSeen:83405955, roadSiteCount:17, roadHeatTiles:96, roadLaid:1, roadReaped:0, ledger:{d:4,824,691, s:3,277,550, i:90,700}}`
+  ⇒ 这是一个**正在产出的活跃远矿**（已收 482 万能量）。
+- 但 8 个路 site 自 **boot（≈83386488）以来零进度**（`noProg=19,465` ≈ 20 小时按 3.744 秒/拍），
+  且 `roadLaid=1 / roadReaped=0` 配 `roadSiteCount=17` ⇒ **路的"放置"远快于"建成"**。
+- ⚠️**我差点把这条说成"没人去建"**：`builderVisits` 的写者是 `kernel.ts:704-710`，
+  它是**从 `site.progress` 反推的**（`progress>0 ⇒ visits=1`）⇒ **`builderVisits===0` 与 `progress===0` 是同一件事的两种写法**，
+  不构成独立证据。所以 E7 的两个条件实际退化成一个，**分不开"没派人去建"与"人到了但干不动（缺能量/无路/被挡）"**。
+  ⇒ 这正是 R247 刚写进记忆的那条规矩的**第二次命中**：用"同源计数器"当第二条判据等于没有第二条。
+- **该判的下一步（取证，不改码）**：看 `remoteHauler`/`remoteHarvester`/`builder` 里到底谁有资格在**远矿房**建路
+  （`actions/build` 的房域限制 + `road-planner.ts:322 s.remove()` 的触发条件），
+  而不是先给 E7 加处置——**先确认这是"没编制"还是"有编制但取不到活"**。已写进 **#111** 的判据。
+
+### ④ 顺带一条与推送决策直接相关的读数
+`kernel.tuning.strategyOverrides` 里那两条自改仍在：`posture.minDwell=1400 (adjustedAt=82993339)`、`posture.warPatience=8000 (adjustedAt=83287039)`
+⇒ 已分别存在 **≈413,000 / ≈119,000 拍**，都 ≫ #89 的 TTL 15,000 ⇒ **#89 一上线这两条就会被读时过期**，
+即"推 #89"的**实际行为后果**是 `minDwell 1400→1000`、`warPatience 8000→5000`（**都等于松绑、更爱开战**）。
+这条不是我今天的发现（记忆里已记），但**第一次有了现场拍数**，写进推送风险单更硬。
+
+边界：零 src、零 push、零 build、零 console；只读 API 三发 + grep + 读码。
