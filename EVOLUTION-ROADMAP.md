@@ -5012,3 +5012,36 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 若是必经段 ⇒ 这段路对**去程（空载）**有用（省载重无关的移动成本？路只降移动代价，与载重无关 ⇒ 有价值），那 (B) 才有意义；
 若不是必经段 ⇒ (A) 直接收。⚠️在这一点定下来前不动铺路器、不动回收阈值。
 禁令继续：不放宽施工射程、不给 E7 加处置、不改 `roadHeat` 结构。
+
+---
+
+### 巡检 R130（2026-10-03 23:0xZ，本会话）#115 立案：第三次扩张的 W38S58 趴窝——**spawn 工地 670 拍零工时**，而门禁正拿"缺 spawn"当拒绝理由
+
+> 归并说明：**#115 尚未折进 §3 的 P0 列表**（并行会话今晚在同时改 §3/§4，避让编辑冲突），下一轮由先动 §3 的一方把它排进去；本节即出处。
+
+**现象（全部现场读数，时刻 83410375→83410537，拍长实测 2.62s/拍）**
+- 扩张时间线：`ExpansionOutcome W38S58 @83409757`（claim 成功）→ `ColonyStateChange [1→0]@83409845`、`[0→1]@83409865` ⇒ **`colonyStateSince=83409859` 起连续 ~650 拍停在 `recovery`**（编码 0=bootstrap/1=recovery/2=normal/3=defense，现读 `telemetry-collector.ts:799`）。RCL2 于 `lastRclChangeAt=83410102`，controller `472/45,000`。
+- 房内结构（console B3/B6）：`constructedWall 11`、`controller 1`、`storage 1`（**23 能量**）；**无 spawn / extension / tower / container**。工地只有 `container 128/5,000 @31,14` 与 **`spawn 0/15,000 @28,28`**（本服 spawn 造价 15,000）。
+- 房内 creep（两拍 83410515/83410537）：**`builder ×2`（body 14W4C12M，搬运容量 200）恒 `mode=acquire`、`store(ENERGY)=0`，且 assignment 完全相同 = 那个 container 工地**（`assignedAt=83410105` 432 拍未变、`leaseUntil=83410587` 在滚动）；`worker 3W3C3M e150 work`、`worker 2W1C2M e36 acquire`。**spawn 工地无任何 creep 指向。**
+- 门禁自述（heap `globalThis.constructionSkips.rooms.W38S58`）：`p0-spawn 81`、`lane:p0-spawn 81`、`per-room-site-cap:container 86`、`tick-quota 5`。⇒ **系统把"缺 spawn"认成 P0 阻塞并据此拒绝一切新 site，而那个已经存在的 spawn 工地拿不到工时**——这不是"闸太严"，是闸与工时分配互相不认识。
+- 仪器含义要更正一条：`spawnStarvationCount=689`（单调）判据在 `room-state.ts:362-369`＝`hasSurvivalPending && (ea<200 ‖ allSpawnsBusy)`；**对没有 spawn 的房按构造恒真**（`ea` 恒 0）。所以它此刻的含义是"**这房没有 spawn**"，不是"紧急 body 付不起"。它的消费方是 `empire-health-system.ts:373` ⇒ 会进 health/G3 输入，**不是纯观测**。
+
+**为什么这条值得单独立案（而不是并入 #111）**
+- 与 #111 是**同一物理形状的两条通道**：空载的腿 / 取不到能的 builder，都把工地停在半路。#115 只主张"自家新房 bootstrap"这一段，且它的后果是**扩张链整体**：这房现在正在供给 `G2 struggling=1` 与 `G3(core=1)`，`failedGates` 实测 `G0+G2+G3+G6`，`G0` 那行的条件串本轮是 `posture.expansionAllowed === true` 为假（`state=bootstrapping`）。⇒ **R129 的"下一次 claim 等 W38S58 长到 RCL5"要再降一级**：先要有个能用的 spawn。
+- 规模：15,000 ÷ 现场建造吞吐（container 670 拍推 128 ⇒ 上界 ≈0.19/拍）≈ **79,000 拍 ≈ 2~3 天**，而且这上界还全给了 container——**spawn 的实际吞吐是 0**。
+
+**两个候选限流器与预写判别（R131 一发 console 就够，不许临场发明）**
+- **L1 工位黏性**：`domain/assignment/service.ts:156-181` 把 spawn 与"source 相邻的 container"都判 `priority=1 / maxWorkers=2`，同档 tie-break 是 D1「剩余量升序先完工一个」(`:268-300`) ⇒ container 剩 4,872 恒压 spawn 剩 15,000。**但两 builder 已占满 container 工位** ⇒ 严格走 `chooseTaskForRole` 时新一次选择本该轮到 spawn；现场是租约滚动而 `assignedAt` 不动 ⇒ 真嫌疑是"**续约绕过选择函数**"。⚠️**这一条我没读码证实（W1）**，未闭合前不许写成"assignment 缺陷"。
+- **L2 取能地板**：`builder.ts:44-51` `builderStorageLimit` 按绝对阈值 `low=2,000` 给额，本房 storage 只有 23 ⇒ 限额 0（按设计拒绝）；房里没有已建成 container ⇒ 链尾只剩 `harvestSource()`，两拍连采都 `e0/acquire` ⇒ 交付环节确实断，**断在哪一步未测**。
+- 判别：spawn 仍 0 而 container 在涨 ⇒ **L1**；两者都冻 ⇒ **L2**；spawn 已 >0 ⇒ #115 降级为"慢"而非"停"，按 #111 口径重读。
+- 状态等级：**待验证**（现象=已验证，线上有出处；机制=两个候选都未定罪；修复=未设计，本会话不起手，多文件且属排产语义）。
+
+**本轮其余读数（不另立案，只登记）**
+- Σ=`kernel.gateNetFlow` 三房和 `6.424+1.305+0.003=7.732`（`economy.t=83410420`）对 R129 的 7.662@83410255 ⇒ Δ=+0.070/≈165 拍，按 α=0.02/100 拍反解 **I≈+9.8/拍**（R129 是 +4.4）。⚠️**两次都是单样本级反解，都不许当稳态**；#88 的措辞仍按 R128 那两种情形分开判。
+- 满仓：`storageNearFull=false` 与同窗 `se=898,837`（ratio 0.8988）**本轮同向** ⇒ R129 那对矛盾按"值自己掉回来"解释（−2,472/≈1,100 拍 ≈ −2.2/拍）；"滞后 vs 回落"仍没用同拍双读区分过（本轮两读差 65 拍），但已无需区分。**"满仓 imminent"继续作废**（第 5 次贴线不落）。
+- CPU：累计账 `window=3087t / total=15.24/拍` ⇒ 对 G6 门槛 12.00 **缺口 3.24/拍**；A 路线杠杆（remoteHarvester 1.95 + remoteHauler 0.85 + reserver≈0.3）≈ **2.8~3.1 ⇒ 仍差 0.1~0.4**。每房现读 `{W38S58:0.371, W37S58:3.956, W38S56:3.705}`。⚠️**§3.5 的 #50 框架本轮要换**：新房一旦有 spawn 就开始长编制，A 路线的取舍从"换不换"变成"**要不要在第三房开始花钱之前换**"。
+- `dangerUntil` 住在 `rooms.W38S56.remoteOps.W38S55`（该 op `abandoned`，`stateSince=83405805`）＝`83415805`，距今 ≈5,300 拍；到期后 abandoned 车道能否被重新选中**未验**（`targeting.ts:196`、`remote-mining-manager.ts:301-308` 只证窗口内不选/不孵）。
+- `spawnRejects` **绝对量**基线（今后一律记绝对值）：W38S56 `{survivalBlock 0, budget 2894, reserveOnly 7223, noDegrade 234, floor 0, degradeGateClosed 4074}`；W37S58/W38S58 **键不存在**（惰性创建）——单位仍是"请求-拍"。
+- 事件：W38S56 `defense` 窗 83410025→83410075（第 9 次目击，50 拍）；`RecoveryEscalation global@83410352` 属 `mineral/terminal_trade` 旧条目（`attempts=3 terminal=true`），**不是新房的**。`deathByCause.combat` 本轮未读。
+- 工具侧两条（省下轮一次撞墙）：本服 **`Room.lookFor()` 不存在**（`room.find(FIND_STRUCTURES)` 可用）；console 表达式（含包装）**约几百字符上限**，1,100 字符那发被 `expression size is too large` 拒 ⇒ 探针按 ≤500 字符起草。
+- 边界：零 src、零 push、零 build；探针 `observe×1 + peek×4 + ring-dump×1 + console-eval×4（成功 3 发，全只读，mark=B2/B3/B5/B6）`，取探针前 pgrep 确认零在飞；git 领先 23 / behind 0 未变。
