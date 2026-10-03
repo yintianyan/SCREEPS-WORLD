@@ -2673,3 +2673,22 @@ R172 说过"唯一假项是 `youngestMature`"，但那是**当时**的。我的�
   3. 层级口径：G6 判的是 `capacity.tier`（现 `tight` since **83387005** ⇒ 已紧 **~12,000 拍**），而 `tier` 的翻档要 `upgradeWindowTicks=300` 驻留 + `α` 那套，**不是**"降到 12.00 以下当拍就翻绿"。⇒ 报给 owner 的形态应该是：**这杠杆把均值压到 ≈12.05 或略低，翻档还要一段驻留**。
 - **归因侧仍无出路（复述以免下轮重查）**：`traffic-manager` 2.54/拍 与 `snapshots` 1.45/拍 已被逐条否证为**结构性成本**（五条"能省"嫌疑全否，`snapshots` 被 role-runner 每拍读、parking 跨拍缓存只占 1~2%），`post` 2.55/拍 也不是内核家务。**低于总负载 5% 的可省项不立案**这条仍在。
 - ⇒ **给人的一句话更新**：G6 的杠杆数量级现在对得上了（2.43+x 对 2.48），**决定点从"够不够"变成"要不要为 ≈2.4/拍的 CPU 余量放弃 19.9/拍的远矿能量与 120 段路"** —— 这纯属排产取舍，我不自批。
+
+### R190（10-03 10:5xZ）#94 落地：`expansionAllowed=false` 从此**能被归因到具体哪一合取项**（未部署）
+
+R187 的尾巴——七项里恰好喂给 `gclHeadroom` 与 `bucket` 的两个标量只活在决策那一拍的 heap，
+所以事后永远答不出"是哪一项在挡"。现在把**判定实际用到的那两个值**随结果同拍落进 `Memory.kernel.strategy`。
+
+- `src/systems/empire/empire-strategy.ts`：把 `Game.gcl?.level ?? 1` / `Game.cpu.bucket ?? 10000` **取一次存成局部量**，
+  同一份值既喂 `evaluateEmpirePosture` 的入参、又写进 `Memory.kernel.strategy` ⇒ **"记录值 = 判定值"是结构保证，不是两次读数碰巧一致**。
+  （这条比"再读一遍"重要：分两次读就可能记到一个和判定不同的值，而那正是这类仪表最容易被质疑的地方。）
+- `src/types/global.d.ts`：`StrategyMemory` 加 `gclLevel?` / `bucket?`，注释里写清**为什么偏偏是这两项要落盘**（其余五项已可从 `colonyState`/`economyPressure`/`rcl`/`storage`/`stats.cpuByHome` 复算）。
+- `tests/unit/systems/empire-strategy.test.ts`（扩到 9 条）：两键等于判定值、`Game.gcl` 缺失记 **1**（兜底值=判定值，不留 undefined）、
+  `bucket` 缺失记 **10000** 且有限、以及**加键不吞旧字段**（`posture/since/expansionAllowed/newRemoteOpsAllowed` 仍在）。
+- **反向实验（这次是带控制组的）**：只摘掉 `Memory.kernel.strategy` 里那两行 ⇒ **恰好 4 红 / 5 绿**。
+  比 #93 那次"全摘全红"更有说服力：控制组（既有 5 条）证明我没碰到判定路径以外的东西。
+- 回归：`tsc --noEmit` rc=0；**`tests/unit` 384 文件 / 5209 用例全绿**（日志里那些 `econGuard=FAIL` 是 war-planning 用例故意走的负路径，不是失败）。
+- **未 build、未 push**（`dist/main.js` 仍 05:10 / 785,155 B ⇒ #85 窗没断）。⇒ 待推的含 src 提交现在 **5 笔**：
+  `8980e00` / `1bc67c9` / `e4dae12` / `4087fc2`（#93）/ **本次**。
+- **上线判效口径**（写死）：第一次 `peek kernel.strategy` 必须看到 `gclLevel` 与 `bucket` 两键且有限；
+  **读不到 = 未上线，不是"没挡"**。核对口径：`expandMinBucket` 在此环境（"low" profile）是 **6,000**，不是 CONFIG 的 7,000 —— 拿错阈值会把"其实过了"读成"被挡着"。
