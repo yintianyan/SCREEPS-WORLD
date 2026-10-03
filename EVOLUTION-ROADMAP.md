@@ -4203,3 +4203,37 @@ watch2 只剩 15 轮 × ≈161 拍 ≈2,415 拍 ⇒ 覆盖到 ≈83408,000，**�
 这轮之后 #108 的取证就闭合了：政策侧确实零消费者，而**输入侧对 NPC 类根本没有键**——两个缺口叠加，不是"接一下就好"。
 
 边界：零 src、零 push、零 build、零 console；只读 API 两发（段 5 单段请求 + Memory peek）。
+
+## R247 · 2026-10-03 18:0xZ（审计"恢复"这条动词：**能检测、能升级、能宣告不可行，但三条判定都不回流到自己的行为** ⇒ 立 #110）
+
+矩阵 §10 之外的这条我一直没查到底：恢复子系统**判完不用**。逐条按"调用形状"grep（不是符号名），全部 `[我核]`：
+
+1. **有一条阈值按构造不可达。** `evaluateRecoveryUnviability`（`recovery-lifecycle.ts:626`）要求
+   `totalInvested > 5000 && totalRecoveryTime > 5000`，但**全仓没有任何"恢复投入能量"的测量者/累加者**——
+   `invested` 在整条恢复链里只有 4 处：接口字段 `:590`、阈值 `:626`、reason 文案 `:629`、
+   以及唯一调用方传的**字面量 `totalInvested: 0`**（`recovery-execution-system.ts:1072`）⇒ `0 > 5000` 恒假。
+   顺带一条注释与实现不一致：文档写"累计投入 > 5000 能量**且无改善**"，代码里**没有"无改善"这条**。
+2. **另一条阈值实际够不到。** `totalAttempts` 取自 **heap 决策表**（每次部署归零）；现场台账 `attempts` 只有 2 和 3，
+   而同一动作已经 `repeats=5` ⇒ 计数每 boot 从头再来，">10 次"这条基本不会命中（与记忆里"时长型判据的计时器住 heap"那一族同源）。
+3. **判定只落日志。** `if (unviability.unviable) log.info("recovery: UNVIABLE …")` —— 不写状态、不抑制后续、不持久化；
+   那句 `recommendation`（"abandon recovery for room:domain — mark as permanently degraded"）**没有任何消费者**。
+4. **台账零读者。** `Memory.kernel.escalations` 唯一写者是 `:1042/:1050`；`src/` 里没有任何地方读它
+   （唯一提到它的 `tmp/tools/official/batch2-gate-and-push.sh` 是我离线用的推送门，不是 bot）⇒ 与 #106 同族的"写了没人看"，
+   但这条更疼：它记的正是"哪项恢复反复失败"。
+
+**为什么这不是学术问题（现场代价，非假想）**：
+`kernel.escalations = [{W38S56, colony, population_rebuild, firstAt=83369862, attempts=2, terminal:true}, {global, mineral, terminal_trade, firstAt=83363952, lastAt=83403762, repeats=5, attempts=3, terminal:true}]`
+⇒ 同一个 `mineral` 域动作在 **≈39,800 拍**里被反复升级 5 次、从不被抑制；
+而 `TERMINAL_TRADE` 这条通道**正是历史上 credits −126K/40 分钟 那次烧钱事故的那条**（记忆 silent-inert-mechanisms §十一③）。
+那次事故之后落地的是"**按缺口闸收窄 amount**"，**不是**"按重复次数收窄提交"——本条补的正是后者这一面。
+
+**我没有直接修，这是方向性决策**：抑制恢复尝试本身就两头危险（抑制过头＝该救的不救；不抑制＝资源被拖死），属 L0 §1.5。
+但**最便宜的第一刀不需要任何新数据**：`repeats` 已经持久化在 Memory ⇒ "同 `(room,domain,actionType)` 的 `repeats ≥ N` 就不再提交"可直接实现。
+三种形态列在 **#110** 供选：①纯抑制（N 给你）；②先补"投入能量"计量再谈 ROI 型判据（工作量最大，且要让阈值跨部署可达就必须落 Memory）；
+③零行为变化——只把 `recommendation` 落进 `escalations` 供离线看。依赖 **#104**（冷却恒假是同族的另一半）、**#105**（拒因取证，未部署）、**#103**（GLOBAL_ROOM 类动作全跳过）。
+
+**顺带一条对上一轮的自我更正**：我在 #110 的草稿里一度把"投入为 0"写成"调用方忘了传参"。读完实现才知道
+**根本没有可传的数**（没有任何累加者）⇒ 那是**测量缺口**而不是**接线缺口**，修法与工作量都不同（②要新建计量）。
+⇒ 归因句式"X 没被传"必须先问"**有没有东西生产 X**"，这是我今天第 N 次在同一族上受益。
+
+边界：零 src、零 push、零 build、零 console；只读 API 一发 + grep + 文档。

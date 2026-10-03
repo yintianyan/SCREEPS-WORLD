@@ -144,7 +144,18 @@
   两者取证都靠新落的 **#105** `stats.recoveryRejections`（拒因跨部署存活，本地 `8cb8b5f` 未推）。/
   另记 5 个住 heap 的恢复计时器（`recoveryActionTable/recoveryBeforeStates/recoveryCooldowns/__consecutiveStableTicks/__totalFailuresDetected`）＝#13 类老坑又一实例。
 
-- **实现状态**：`TESTED` + 局部 `LIVE_VALIDATED`
+- **实现状态**：`TESTED` + 局部 `LIVE_VALIDATED`；**判定回流侧 `NOT_WIRED`（#110，R247）**
+- **⚠️"恢复的三条反馈全断"（R247 逐条 grep 到调用形状，全部 `[我核]`）**：能检测、能升级、能宣告"不可行"，但三条判定**都不回流到自己的行为**——
+  ①**阈值不可达（按构造）**：`evaluateRecoveryUnviability` 的"投入 > 5000"要求 `totalInvested > 5000`，而**全仓没有任何"投入能量"的测量者**：
+    `invested` 在恢复链只出现 4 处 = 接口字段(`recovery-lifecycle.ts:590`) + 阈值(`:626`) + reason 文案(`:629`) + 唯一调用方传的**字面量 `totalInvested: 0`**
+    (`recovery-execution-system.ts:1072`) ⇒ `0 > 5000` 恒假。且注释写"且无改善"、代码里没有"无改善"这条 ⇒ 注释与实现不一致。
+  ②**判定只落日志**：`if (unviability.unviable) log.info(…)` —— 不写状态、不抑制、不持久化；`recommendation`（"abandon recovery … mark as permanently degraded"）**零消费者**。
+  ③**台账零读者**：`Memory.kernel.escalations` 唯一写者 `:1042/:1050`，`src/` 里没有任何地方读它（只有我离线的 `batch2-gate-and-push.sh` 提到）。
+  ④**跨部署遗忘**：`totalAttempts` 取 heap 决策表（每 boot 归零）⇒ 阈值">10 次"实际够不到；现场 `attempts` 只有 2 和 3，而同一动作已 `repeats=5`。
+  **现场代价（非假想）**：`terminal_trade`（global/mineral）`firstAt=83363952 → lastAt=83403762, repeats=5` ⇒ ≈39,800 拍里重复升级同一动作从不被抑制；
+  而 `TERMINAL_TRADE` 正是那次 **credits −126K/40 分钟** 事故的通道（那次之后落地的是"按缺口闸收窄"，**不是**"按重复次数收窄"）。
+  **最便宜的第一刀不需要新数据**：`repeats` 已在 Memory 持久化 ⇒ "同 (room,domain,actionType) `repeats ≥ N` 就不再提交"可直接实现；
+  但**抑制恢复尝试本身是方向性安全决策**（抑制过头＝该救的不救），属人，我没动（三种形态列在 #110）。
 - **线上**：幼房被推平道路后从 crisis 自愈（#30/#37 判效）；`recoveryEligible` 让 war 下军事规划不被 CPU 档位筛掉（读码）。
 - **已知缺陷**：#55 已撤销（recovery 掐掉出口那判被现场反证）；#57 等一次真停摆收全判据。
 - **优先级**：P1（官服挨打是常态，恢复就是生存）。
