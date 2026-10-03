@@ -331,8 +331,10 @@ function sumCpuByHome(): number {
  * 条件若仍在，复盘会按 ≥1 冷却重写并自动续期；条件消失则到点失效。
  * 必要性：复盘规则里有「No-Progress 且 netFlow 停滞 → 放宽 `expandMaxPressure`」，
  * 也就是自进化层能改写**扩张闸的输入**；没有有效期的话，一次瞬时状态就能永久压低标准。
+ * （#89：导出只为让"过期即回落基线"这条消费侧行为落在单元测试里——系统级 e2e 里 `safeRun` 会吞错，
+ * 跑不出可比断言，别把那条路当覆盖。）
  */
-function resolveStrategyOverrides(
+export function resolveStrategyOverrides(
   overrides: Record<string, { value: number; adjustedAt: number; reason: string }> | undefined,
   currentTick: number,
 ): Partial<Record<string, number>> {
