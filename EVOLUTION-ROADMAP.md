@@ -4738,3 +4738,30 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 **判效已备好，不用再造条件**：动完之后只看三列 —— `roadSitesPending` 是否跌破 20、`near` 份额是否上升、
 `roadsBuilt` 是否开始按分钟级增长；同时 `roadProgressSum` 的差分是现成的施工速率。
 ⚠️仍然不许：把 `UNDERFOOT_BUILD_RANGE_LIMIT` 放宽（`far +121` 表示差 11+ 格，放宽射程治不了它，反而会让 hauler 绕路）。
+
+### R270（10-04 05:06Z，本会话）#114 归因：恒等式能逐位复现，但两台物理仪器对不上号——因此今晚"G4 绿了"这条要挂保留
+**①恒等式不是坏的**：用同拍的 `pl=[trackedStart,trackedEnd,otherStart,otherEnd,looseDelta]` 与 `bk` 手算 `drift = Δtracked − (income − consumption + refunds) − Δloose + Δother`
+- 幼房（t=83408718）：Δtracked = 76740−76596 = **+144**，`bk` income 980、consumption = spawned 1200 + upgraded 360 + repaired 12 + towerSpent 240 = **1812**
+  ⇒ flowBalance = −832 ⇒ drift = 144 −(−832) = **+976** == 现读 `dr:976` **逐位吻合**；
+- 核心房（t=83408679）：Δtracked = 935746−937682 = **−1936**，Δother = 4574−4524 = **+50**，
+  income = harvested 980 + imported 1000 = 1980（**`pickedUp:152` 不算收入**，#40 之后的口径），consumption = spawned 1800 + towerSpent 1800 = 3600
+  ⇒ flowBalance = −1620 ⇒ drift = −1936 + 1620 + 50 = **−266** == 现读 `dr:−266` **逐位吻合**。
+  两处都要小心：`towerSpendWalls`/`towerSpendStructures` 是 `towerSpent` 的**子拆分**（加进去就重复计），`pickedUp` 已不入收入。
+⇒ **drift 不是公式错，是"账与池确实不等"**：幼房账面说少 832，池子实际涨 144 ⇒ **有 976 能量进池而账面没有收入项**。
+
+**②但 `ws` 的滚动读数触发了代码自己写的警语**：核心房 `ws = [−9133, 7871, 950]` ⇒ Σdrift −9,133（**−9.6/拍**）对 ΣflowBalance 7,871（8.3/拍）**同量级**，
+而 `accounting.ts:390-395` 的明文规则是："**Σdrift 与 ΣflowBalance 同量级 ⇒ 单向漏记（此时 `nf`/G4 不可信，必须先修账再谈扩张）**"。
+⇒ 直接含义：**今晚 G4 转绿所吃的那个输入（`nf`/`gateNetFlow`），按这个系统自己的判据属于"不可信"状态**。这条不能反过来用成"G4 是假的"——见 ③。
+
+**③我自己拦住了这个结论：两台物理仪器方向不一致**
+段 3 `se`（写者 `snapshot.storageEnergy`，读码定过）给出核心房 `83408055→83408705` 的 storage **上涨** 899,474→905,984 = **+6,510 / 650 拍 ≈ +10.0/拍**；
+而 ②里 `pl` 的 Δtracked 在同一时间尺度上是 **负的**（−1936/窗）。`tracked` 含 spawnExt/containers/storage/terminal/links/carry/towers/loose，
+所以两者不同号只有两种解释：**(a) 非 storage 的池（links/terminal/containers/carry）在那一窗大幅回落**，或 **(b) 两台仪器的窗端点根本不对齐**
+（`pl` 是"最近一窗"的起止，econ-ring 是每 50 拍的采样，而我并没有 `pl` 的 t0/t1）。
+⇒ 在 (a)/(b) 分辨之前，**既不能说 G4 是账面假象，也不能说它是实物流**。这条保留必须写在这里，因为它是今晚最容易被顺手夸大的一句结论。
+
+**④下一次的单一分辨读法**（一次即可，无需 console）：取同一房的 `pl` 起止与 `ce`（carry 起止）+ 段 3 的 `se/cte/te`，
+把 Δtracked 拆成 `Δse + Δcontainers + Δcarry + Δlinks + Δterminal + Δtowers`；
+若拆出来的分项里非 storage 项确实回落 ⇒ (a)，drift 与实物**同号**、②的警语按字面成立（G4 输入不可信，须先修账）；
+若拆完仍不同号 ⇒ 窗端点错位 (b)，改读法为"同一拍内取 `pl` 与 `se`，再等下一拍"，并顺手量 `econ` 与 ring 的采样相位差。
+⚠️不许跳过这一步去动 `driftFloor/driftRatio` 或把 drift 接成闸（#114 的 (a) 出路仍是"先把注释与事件语义改诚实"）。
