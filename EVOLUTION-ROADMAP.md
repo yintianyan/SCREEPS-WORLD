@@ -2634,3 +2634,26 @@ CONFIG 基线是 `warPatience=5,000 / minDwell=1,000`（`config/index.ts:1164/11
   `peek rooms.W38S56.controllerProgressTotalSeen` 必须有值、`Number.isFinite` 为真、且 **> `controllerProgressSeen`**
   （同级内余量为正）；读不到键 = **未上线**，不是"没升级"。核心房 RCL8 那条预期是**保级带口径**（`[10000, >15000]` 是 `ticksToDowngrade` 的带，
   不是 progressTotal）⇒ **别拿那个带去验这个键**，引阈值必写口径。
+
+### R187（10-03 10:4xZ）扩张链**逐合取项重算一遍**：war 退出之后，`expansionAllowed` 只剩 `youngestMature` 一项为假（现场读数，不是沿用 R172 的断言）
+
+R172 说过"唯一假项是 `youngestMature`"，但那是**当时**的。我的规矩是"旧结论会引你去修已经修好的东西"⇒ 本轮用现场读数把七项全重算（出处：`empire-strategy.ts:48-64` 的 rooms 输入映射 + 各 `Memory` 键）：
+
+| 合取项（`posture.ts:150` 一带） | 现场输入（**全部读数**） | 判定 |
+|---|---|---|
+| `allNormal` | `colonyState`：核心房 `"normal"`、幼房 `"normal"` | ✅ |
+| `avgPressure ≤ expandMaxPressure` | `economyPressure`：两房都 **0**；生效上限在 "low" profile 下是 **0.5**（`posture-baseline.ts:47`） | ✅（余量极大） |
+| `sponsorReady` | 核心房 `rcl=8 ≥ 7`、`colonyState=normal`、storage **885,923 ≥ 8,000** | ✅ |
+| `cpuRatioOk < 0.6` | `kernel.stats.cpuByHome = {W38S56:2.976, W37S58:3.528}` ⇒ Σ=**6.504/拍**；`effectiveLimit=min(20, tickLimit)`=20 ⇒ ratio **0.325** | ✅ |
+| `youngestMature`（每房 RCL≥5） | W38S56 `lastRclLevel=4`（进度 375,591，现速 **8.00/拍**） | ❌ **唯一假项** |
+| `gclHeadroom`（GCL > 房数） | `kernel.gcl` **不在 Memory** ⇒ 读不到；靠 GCL 单调不降 + R172 当时核穿为真 | ⚠️ 沿用，非本次读数 |
+| `bucket ≥ 7000`（`expandMinBucket`，"low"=6,000） | `Game.cpu.bucket` 不落盘；proxy：`stats.trade.bucket=10000` @09:43Z | ⚠️ 间接 |
+
+**两个读数口径的坑，本轮抓到并写死**
+1. **`Pressure=HIGH(0.63)`（dashboard）≠ `economyPressure`（合取项用的那台）**。段 3 的 `p` 此刻是 **0**，`Memory.rooms.*.economyPressure` 也是 **0** ⇒ 那句 `0.63` 是另一个量（同名不同物的**第 5 例**）。**差点据此误判"压力项在挡扩张"。**
+2. `kernel.capacity.tier="tight"`（since 83387005）是 **G6 用的档位**，与 `cpuRatioOk` **不是同一个判据**——后者只看 creep CPU 占 limit 的比例（0.325），所以 **G6 红并不等于 `expansionAllowed` 的 CPU 项假**。
+
+**于是预测收紧成一句**：war 于 ≈83400412（≈12:05Z，R183 P1）自解之后，**`expansionAllowed` 的真假几乎只取决于幼房 RCL5**（现速 8.00/拍，需求值待 `rcl5-eta-watch` 观测）⇒ 一旦命中，那 4 张 `WAITING_EXECUTION` 的 Plan 应当被消费（执行门禁里没有 G4/G6，R182A）。
+**可驳的两条**：①若 war 已退出而 `expansionAllowed` 仍 false ⇒ 我上面某项判错了，优先复核 `gclHeadroom`/`bucket` 这两个"沿用而非读数"的项；②若 RCL5 命中后 Plan 仍未被消费 ⇒ 阻塞在执行侧（视野 `invisible` 跳过、`GATE_TARGET_CLAIMABLE`、或 `hasOtherExpansion`），那要去读 `plan-adapter.ts:39-51` 的按序试跑日志，**不要回来动 posture**。
+
+**顺手记一条与 #93 同族的观测缺口**（不新建单，写在 #93 的延长线上）：`GCL` 与 `Game.cpu.bucket` 都不落盘 ⇒ 凡是想**事后**回答"当时是哪一项在挡"的人，只能靠 posture 自己的当拍读数。修法同上：把**决策那一拍**用到的 `gclLevel`/`bucket` 两个标量随 `kernel.strategy` 一起落盘（零额外读盘，同处刷新），**属取证类、不改判定**；本轮没做（`#93` 已占掉这批改动的额度，且窗内不部署）。
