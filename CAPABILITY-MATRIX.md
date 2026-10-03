@@ -33,17 +33,43 @@
   （`posture.ts:247`），**war 尾税是七项之外的独立合取项**。R212 现场逐项：bucket✓ allNormal✓ avgPressure=[0,0]✓
   sponsorReady✓ youngestMature✓ cpuRatioOk✓(0.33<0.6) **gclHeadroom 未证** **posture=war ✗（唯一在挡）**。
   ⚠️坑：dashboard 的 `Pressure=HIGH(0.65)` 不是 posture 吃的那个量（决策路径用 `rooms[].economyPressure` 均值）。
-- **已知缺陷**：**#88 属人**（G4 的 ≥5/拍 与 `youngestMature` 在同一能量预算上对冲，R185；RCL 侧现已满足，剩 G4 单挡）；**#92 属人**（零活敌的 war 靠 `threatWindow=5,000` 记忆撑住 ⇒ **每次目击**缴 ≈5 小时扩张税，R212 现场量到比值：波次在场 ≤45 拍 vs 税 5,000 拍 ≈ **110 倍**）；#94 上线前 `gclLevel`/`bucket` 两项不可事后归因。
+- **已知缺陷**：**#88 属人**（G4 的 ≥5/拍 与 `youngestMature` 在同一能量预算上对冲，R185；RCL 侧现已满足，剩 G4 单挡）；**#92 属人**（零活敌的 war 靠 `threatWindow=5,000` 记忆撑住 ⇒ **每次目击**缴 ≈5 小时扩张税，R212 现场量到比值：波次在场 ≤45 拍 vs 税 5,000 拍 ≈ **110 倍**；**R231 升形：脉冲骚扰可让尾永不结束** —— 今晚两发目击 83400220 与 83402214 间隔 1,994 拍 < 5,000 ⇒ 锚被整个前移，第一发的 2,000 拍税作废重计）；#94 上线前 `gclLevel`/`bucket` 两项不可事后归因。
+  ⚠️**G0 口径（R232 读原文定死）**：`readiness.ts:151-158` 的 G0 = **`posture.expansionAllowed === true` 这一个布尔**，
+  **不是 RCL 项**。RCL 走 G3/G5（`coreRooms`，`resource-view.ts` 分类）。⇒ 我 R182 那句"RCL5 命中消掉 G0 假项"作废；
+  `Blocked=G0+G6` 的正确读法是"**war 尾 + CPU**"，与升到几级无关。
 - **优先级**：P0。**验收标准**：解闸后必须真落地一次 claim（已满足一次）；**`STABLE` 缺口**：同一串闸的**第二次**端到端自然完成还没有。
-  **在飞的可驳预测（R212，判效器 pid=7182）**：尾税于 tick≈83405220 到期 ⇒ `expansionAllowed` 同拍翻 true（P-A），
-  执行闸只看这一个标志 ⇒ 会真去 claim W37S56；若不翻（P-B）⇒ 首查 `gclHeadroom`。
+  **在飞的可驳预测（R212 立、R231 改锚，判效器 pid=7182）**：尾税原算 tick≈83405220 到期，但 round 9 出现新目击
+  （`W37S58:83402214`）⇒ **现算锚 = `max(rooms[].lastHostileAt) + 5000` = 83407214**；读判据时一律按当轮 hostileAt 现算，
+  不要引这两个字面值。到期 ⇒ `expansionAllowed` 同拍翻 true（P-A），执行闸只看这一个标志 ⇒ 会真去 claim W37S56；
+  若不翻（P-B）⇒ 首查 `gclHeadroom`。**命中前提：连续 5,000 拍无新目击。**
 
 ## 3. 跨房物流与成对入账（`creeps/roles/carrier.ts`、`actions/fill.ts`）
 
-- **实现状态**：`LIVE_VALIDATED`（入账）/ `TESTED`（供给合同触发）
-- **线上验证**：`exported == imported` 成对累计（#48 PASS：`3600==3600`）；R177 现场再见同窗 `imported:1200/exported:1200`。
-- **已知缺陷**：#35/#48 判据三次更正——幼房无 storage 前不发单是设计；跨房交付是**稀发事件**，不能按时间窗判"坏"。
-- **优先级**：P1。**`STABLE` 缺口**：一次真实跨房交付 + 一次回收的成对第二发。
+- **实现状态**：`LIVE_VALIDATED`（入账）/ 合同**读侧** `LIVE_VALIDATED`（`e50ef36`，2026-09-30 上线）/ 合同**写回链 `NOT_WIRED`**（见 §3b）
+- **线上验证**：累计账本 R231 一发（`kernel.stats.energyLedger.rooms`，boot tick=83386488）——幼房 `imported=59,079 / exported=0`，
+  核心房 `exported=50,400 / imported=403,457` ⇒ 两量同量级、方向与合同一致，成对入账判为在工作。
+  更早两发：#48 `3600==3600`、R177 同窗 `1200/1200`。
+- **⚠️判读纪律（第四次更正后定死）**：`exported` 与 `imported` **不是恒等式对**。写 `imported` 的
+  `fill.ts:22-29 importedFieldFor()` 只判"交付房≠来源房"⇒ 远矿流入天然计入；写 `exported` 的只有
+  `carrier.ts`/`terminal-selfaid.ts`（自家房流出）。所以"两房差额"（现 8,679）**不能**读成漏账，
+  要定罪必须逐笔拆到远矿 vs 核心房，且需有受害者。**也不许用合同台账判交付** —— 理由见 §3b。
+- **优先级**：P1。**`STABLE` 缺口**：一次真实跨房交付的**成对第二发**（同一窗口两侧同拍动），及交付落点是否 storage（Memory 读不出，待一发现场读数）。
+
+## 3b. 供给合同域（`domain/economy/supply-contract.ts` + `contract-lifecycle.ts` + `contract-node-bridge.ts`）
+
+- **实现状态**：**`NOT_WIRED`**（写回与状态机）/ `TESTED`（整个 domain 层单测覆盖）—— 与 §8b 同类：**不是"没测过"，是"产线上进不到"**。
+- **证据（R231，三次独立 grep 指向同一处）**：`recordDelivery` 在 `src/` **零调用者**（只有定义 `supply-contract.ts:291` 与
+  `contract-lifecycle.ts:284` 一处注释）；`contract-node-bridge.ts` 与 `contract-lifecycle.ts` 的导入者**只有 tests**
+  （`tests/unit/economy/supply-contract.test.ts`、`tests/unit/logistics/a4-4-convergence.test.ts`）。
+- **后果**：合同被创建时写入 `ca=ua=ac=<创建拍>`，此后**没有任何路径能改 `td/cs/ua/st`** ⇒ `Memory.kernel.supplyContracts`
+  是创建时刻的化石。线上实证：`contract:W37S58:W38S56:energy` `{"td":0,"cs":0,"ua":83316316}` 在 ≈86,900 拍里恒不变，
+  而同期物理面交付了 5 万量级能量 —— **两者同时为真、互不矛盾**。
+  ⇒ 任何以 `td/ua/cs/li` 为判据的验证**按构造失效**（我 R231 前挂的就是这条错判据）。
+- **仍在生效的部分**：`logistics-planner.ts:276-278` 读侧反序列化 + 两端-storage 安全闸；`planner.ts:68-104` 由合同派生
+  `scope:"empire"` 请求；`agenda-manager.ts:481-526` 把请求建成 Operation（含 `transferable ≥ amount` 的 TOCTOU 闸）。
+  ⇒ 合同**能发活**，只是**永不记账**，也没有降级/完成/取消状态流转。
+- **已知缺陷**：#106（接线 or 删除，**属人**；删前须确认无别的读者）。
+- **优先级**：P2。
 
 ## 4. 市场与运费分桶（`domain/market/*`、`accounting` 桶）
 
@@ -277,4 +303,7 @@
 L0 §3.1–3.8 列出的覆盖面**远不止上面 14 条**（§1–§14，含今夜补的 §8b 与 §13/§14；房间运营/基础设施、资源网络、宣言/联盟/外交、符号与 boost 全链…）。
 **当前只登记了我能引用证据的条目。**其余按 L0 的纪律**必须标 `NOT_STARTED/DESIGNED` 才诚实**，而我没有逐条核过代码入口与调用链 ⇒ 所以**不填**（填了就是伪造）。
 ⚠️§8b 是第一条**状态为 `NOT_WIRED`** 的行——它是好消息式的诚实：不是"没测过"，是"产线上根本进不到"。后续若再核出这类，优先用它而不是 `TESTED`。
+**§3b（供给合同写回链，R231/#106）是第二条**，且这一条比 §8b 更阴：它**半接线** —— 读侧与派单在产线上跑（合同能发活），
+只有记账与状态流转进不到，所以现场看起来"功能存在但台账恒 0"。这类形状的识别方法记在该节：**先 grep `src/` 里的调用者，
+零调用者 + tests 有导入 = `NOT_WIRED`，而不是"还没判效"**。
 补齐次序建议（每轮 3–5 条，先核代码再落状态）：①殖民后的**房间运营子项**（construction/layout/link/distributor 那一族，最大的一块空白）→ ②外交/宣言（很可能整块 `NOT_STARTED`，那本身就是重要结论）→ ③符号与 boost 全链。（原②"情报"已落 §12、原③"CPU 调度"已落 §14、殖民执行链已落 §13。）
