@@ -2615,3 +2615,22 @@ CONFIG 基线是 `warPatience=5,000 / minDwell=1,000`（`config/index.ts:1164/11
 - ⇒ 对 #88 的影响（比"门槛紧"更准的说法）：**门槛 5 与"幼房正在被鼓励做的事"方向相反**。可选面因此不是我之前列的那四个形状，而是"要不要为幼房的升级期单独算一笔投资豁免/或把 G4 的口径改成不含幼房升级"——**都属改策略，我不自批**；我只把对冲关系摆清楚，并给一个**可否证的观测钩子**：RCL5 命中之后（预计 ≈14:1xZ），若幼房 `bk.upgraded` 归零、`rs` 差分转负为正的速率跳上来，则 Σ 应显著越过 5 并稳住 ⇒ 本条对冲成立；若 Σ 仍贴 5 摆，则对冲不是主因，回头重读核心房的孵化脉冲（R178 实测 85/拍）。
 
 **E. 现场修正我上一条报告里的一处口径**：我说 W38S56 停 RCL4 是"无到期时间的阻塞"。改为：**有倒计时，量级 ~3.7 千拍，需求值待观测**。同时 `war` 那层临时顶盖预计 ≈12:05Z 自解（R183 P1）⇒ **今天 12:0xZ–14:1xZ 之间扩张可能连续解开两层**，届时 `GATE_EMPIRE_READY` 通过后是否还有第三层，由 `window2/3` 与 #85 之后的读数决定。零 src、零阈值、零 build、零 push。
+
+### R186（10-03 10:3xZ）#93 落地：**RCL 余量从此可直接算**（附反向实验，且**未部署**）
+
+改动很小但缺口是真的（R185 C 段）：`room-state` 只存 `controller.progress`，不存 `progressTotal`，
+于是现场只能报速率报不出"还有多久"——同一份读数下两个会话的 RCL5 ETA 差出 ~2,000 拍。
+
+- `src/systems/room/room-state.ts`：在**进度变化的那一拍**顺带落 `controllerProgressTotalSeen`
+  （`snapshot.controller` 就是活的 `StructureController`，`progressTotal` 已在手 ⇒ **零额外读盘**），
+  并保留旧值兜底（引擎没给分母时不写 `undefined`/NaN）。`src/types/global.d.ts` 加键 + 写明为什么单独存。
+- `tests/unit/systems/controller-progress-total.test.ts`（7 条）：写那一拍、余量可算（375,591/405,000 ⇒ 29,409，正是今天的现场数）、
+  **进度不动则不刷新**（锁"写在分支内"）、继续爬则跟随、无 controller / 无私服分母时**不得写 NaN**、新房首拍即有分母。
+- **反向实验**（这条必须做，否则"绿"不证明覆盖）：`grep -v controllerProgressTotalSeen` 临时摘掉改动 ⇒ **7/7 全红**；还原 ⇒ 全绿。
+  ⚠️诚实边界：这证的是"写入被覆盖到"，**不**单独证明第 ②/③ 条能抓住"把写挪到分支外"——那两条的靶心是**位置**，要靠那次挪动才会红。
+- 回归：`npx tsc --noEmit` rc=0；`tests/unit/systems` **42 文件 / 430 用例全绿**。
+- **部署状态：未 build、未 push**（`dist/main.js` mtime 仍是 05:10、785,155 B ⇒ #85 单二进制窗没被我打断）。
+  随下一个带行为批次走。**上线后的现场判效口径**（写死，免得下轮猜）：
+  `peek rooms.W38S56.controllerProgressTotalSeen` 必须有值、`Number.isFinite` 为真、且 **> `controllerProgressSeen`**
+  （同级内余量为正）；读不到键 = **未上线**，不是"没升级"。核心房 RCL8 那条预期是**保级带口径**（`[10000, >15000]` 是 `ticksToDowngrade` 的带，
+  不是 progressTotal）⇒ **别拿那个带去验这个键**，引阈值必写口径。
