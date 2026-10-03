@@ -4355,3 +4355,27 @@ watch2 只剩 15 轮 × ≈161 拍 ≈2,415 拍 ⇒ 覆盖到 ≈83408,000，**�
 若整窗只见 NoBuilder 不见 BuilderIdle ⇒ 支持"派遣/编制不足"那一侧；反之支持"到场干不动"。**这一读也顺手把 #111 的根因判掉。**
 
 边界：零 push、零 build、零 console；src 2 文件 + 测试 1 文件 + 文档。
+
+## R251 · 2026-10-03 18:2xZ（新仪器**自己**也带着我刚撤掉的那个错：只数 `builder` ⇒ 远矿会被误判"没派人"。撤前一轮的教训在 24 小时内复发一次）
+
+R250 落了 `buildersInRoom` 之后，我按自己刚写进记忆的规矩去穷举"谁能建"，结果 **推翻了我自己十分钟前那个字段**：
+`grep -rn "\.build(" src` 全量命中 6 处 —— `remote-hauler.ts:89`、`remote-harvester.ts:390`、`actions/dump.ts:90`、
+`actions/build.ts:38/81`、`assignment/service.ts:71`（注释还专门讲"builder 只收 build"的边界）。
+⇒ **能施工的角色不止 builder**，而我的字段按 `role === "builder"` 计数 ⇒ **远矿路 site 会被系统性误报成 `siteStaleNoBuilder`**
+（那里施工的是通勤 hauler），也就是把我上一轮撤掉的那个错，原封不动装进了新仪器里。
+
+**改法**：字段换成 **`workerCreepsInRoom`** =「该房内带 ≥1 个 `WORK` 部件的我方 creep 数」——**能力谓词**，不是角色名谓词；
+前缀随之改成 `siteStaleNoWorker` / `siteStaleWorkerIdle`。计数是 `Game.creeps` 一遍（O(creeps)，不是每 site 一遍）。
+
+**分工也当场划清**（避免与对端已有的仪器重复）：`domain/logistics/road-build`（每房每次尝试的分桶 `calls/noEnergy/noWork/noSiteAtAll/roadsBuilt`）
+**要有 creep 尝试施工才有读数**；`workerCreepsInRoom` **不需要有人尝试**，所以它补的正是 road-build 答不了的那一半：
+"这个 site 所在的房里，此刻**根本没有任何能施工的人**吗"。⇒ 两者合起来才把 #111 的两个分支（编制/派遣 vs 到场干不动）分开。
+
+**验证**：`npx tsc --noEmit` 干净；`npx vitest run tests/unit` 全量 **387 files / 5239 tests 全绿**；
+`grep -rn "buildersInRoom|NoBuilder|BuilderIdle" src tests` 零残留（改名是我自己那把 python 脚本做的，
+它顺手把三行 `it("…")` 的收尾引号删掉了 ⇒ 我分两次修回来，教训：**批量改名要么用 Edit 要么改完必跑 tsc**，别信脚本的"成功输出"）。
+
+**这条为什么值得单独一段**：我上一轮的结论错在"用我搜过的符号支撑全称命题"；这一轮的错是**同一个**——
+差别只在于这次我在**提交前**用穷举把它抓出来了。⇒ 规矩要长成一问：**"我刚定义的那个筛选谓词，是我搜过的集合，还是能力集合？"**
+
+边界：零 push、零 build、零 console；src 2 文件 + 测试 1 文件 + 文档。

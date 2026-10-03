@@ -138,16 +138,19 @@ export interface SiteProgressSnapshot {
   /**
    * builder 到达次数 —— ⚠️**由 `site.progress` 反推**（`kernel.ts` 的采集器），
    * 因此它与 `progress===0` **同源**，不能当第二件独立证据用。保留只为兼容旧读数。
-   * 独立的那一件是下面的 `buildersInRoom`。
+   * 独立的那一件是下面的 `workerCreepsInRoom`。
    */
   builderVisits: number;
   /**
-   * 该 site 所在房内**我方 builder 的实时数量**（一次遍历 Game.creeps 得到，每房一份）。
-   * 这是 E7 用来把"停滞"拆成两类**互斥可行动**读数的唯一独立观测量：
-   *   0 个 ⇒ 没派施工编制（要修的是编制/派遣）；≥1 个 ⇒ 人到了却没推进（要修的是能量/取活/可达）。
-   * 无视野的远矿房同样算得（builder 到场即计入），所以它也是"远矿到底有没有 builder 去过"的现场计数器。
+   * 该 site 所在房内**我方「能施工」的 creep 数**（= 带 ≥1 个 WORK 部件的我方 creep，实时）。
+   * ⚠️**不是**「role===builder 的数量」：远矿路是通勤 hauler 建的（`remote-hauler.ts:89 buildRoadSiteUnderfoot`），
+   *   只数 builder 会把所有远矿停滞误报成「没派人」。
+   * 与 `domain/logistics/road-build`（每房每次尝试的分桶：noEnergy/noWork/noSiteAtAll/roadsBuilt）的分工——
+   *   那张表**要有 creep 尝试施工才有读数**；本字段不需要，所以它能回答 road-build 答不了的那一半：
+   *   「这个 site 所在的房里，此刻**根本没有任何能施工的人**吗」。
+   * ⇒ E7 据此把停滞拆成两类互斥且各自可行动的读数（见 `evaluateExpectations` 的 E7 段）。
    */
-  buildersInRoom: number;
+  workerCreepsInRoom: number;
   /**
    * site 年龄（tick）。
    * ⚠️采集器给的其实是 `tick - lastProgressTick`（首次见到该 site 时为 0），
@@ -486,18 +489,17 @@ export function evaluateExpectations(input: {
   //    **"有进度但之后冻住"的残骸被这个条件整体豁免**（假阴性）。这一类不是假想：
   //    `road-planner.ts:300-307` 的注释就写着线上 W36S58 有"14 格进度和恒为 970"的残骸在锁车道，
   //    作者当时只能在回收侧自己绕。 ⇒ 停滞判据只看 `noProgressAge`，不再用同源量放行。
-  // 2) 用独立观测量 `buildersInRoom` 把"停滞"拆成两类**互斥且各自可行动**的读数：
-  //    `siteStaleNoBuilder`＝该房此刻没有我方 builder（编制/派遣侧要修）；
-  //    `siteStaleBuilderIdle`＝有 builder 在场却不推进（能量/取活/可达侧要修）。
-  //    这同时回答 #111 的取证问题：远矿房到底有没有 builder 去过，不必新写任何仪器。
+  // 2) 用独立观测量 `workerCreepsInRoom` 把"停滞"拆成两类**互斥且各自可行动**的读数：
+  //    `siteStaleNoWorker`＝该房此刻没有任何带 WORK 的我方 creep（编制/派遣侧要修）；
+  //    `siteStaleWorkerIdle`＝有能施工的人在场却不推进（能量/射程/取活侧要修，逐拍分桶见 road-build）。
   if (bootAge >= P3_BOOT_GRACE_TICKS && input.siteProgresses) {
     for (const sp of input.siteProgresses) {
       const noProgressAge = input.tick - sp.lastProgressTick;
       if (noProgressAge > E7_STALE_TICKS) {
-        const noBuilder = sp.buildersInRoom === 0;
+        const noWorker = sp.workerCreepsInRoom === 0;
         violations.push({
-          id: `${noBuilder ? "siteStaleNoBuilder" : "siteStaleBuilderIdle"}:${sp.room}:${sp.siteId}`,
-          detail: `type=${sp.structureType} prog=${sp.progress}/${sp.progressTotal} noProg=${noProgressAge} builders=${sp.buildersInRoom}`,
+          id: `${noWorker ? "siteStaleNoWorker" : "siteStaleWorkerIdle"}:${sp.room}:${sp.siteId}`,
+          detail: `type=${sp.structureType} prog=${sp.progress}/${sp.progressTotal} noProg=${noProgressAge} workers=${sp.workerCreepsInRoom}`,
         });
       }
     }

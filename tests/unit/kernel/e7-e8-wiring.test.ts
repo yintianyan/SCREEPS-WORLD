@@ -23,12 +23,12 @@ describe("E7 site progress — 真实接线", () => {
     progressTotal: 1000,
     lastProgressTick: staleAgo,
     builderVisits: 0,
-    buildersInRoom: 0,
+    workerCreepsInRoom: 0,
     siteAge: E7_STALE_TICKS + 1,
     ...over,
   });
 
-  it("停滞且该房无 builder ⇒ siteStaleNoBuilder（施工编制侧）", () => {
+  it("停滞且该房无「能施工的人」（带 WORK 的我方 creep）⇒ siteStaleNoWorker", () => {
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
@@ -36,7 +36,7 @@ describe("E7 site progress — 真实接线", () => {
       p3Systems,
       siteProgresses: [site({})],
     });
-    expect(res.violations.some(v => v.id === `siteStaleNoBuilder:W1N1:abc123`)).toBe(true);
+    expect(res.violations.some(v => v.id === `siteStaleNoWorker:W1N1:abc123`)).toBe(true);
   });
 
   /**
@@ -44,7 +44,7 @@ describe("E7 site progress — 真实接线", () => {
    * "有进度、之后冻住"的残骸线上真实存在（road-planner 注释里 W36S58 那 14 格进度和恒为 970），
    * 旧判据看不见它 ⇒ 假阴性。现在它必须被报出来。
    */
-  it("有进度但冻住且房内无 builder ⇒ 仍违例（旧判据在这里漏报）", () => {
+  it("有进度但冻住且房内无「能施工的人」⇒ 仍违例（旧判据在这里漏报）", () => {
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
@@ -52,21 +52,21 @@ describe("E7 site progress — 真实接线", () => {
       p3Systems,
       siteProgresses: [site({ structureType: "road", progress: 100, builderVisits: 3 })],
     });
-    expect(res.violations.some(v => v.id === `siteStaleNoBuilder:W1N1:abc123`)).toBe(true);
+    expect(res.violations.some(v => v.id === `siteStaleNoWorker:W1N1:abc123`)).toBe(true);
   });
 
-  /** 拆分依据的是独立观测量 buildersInRoom，不是从 progress 反推的 builderVisits。 */
-  it("停滞但房内有 builder ⇒ siteStaleBuilderIdle（能量/取活侧，而不是编制侧）", () => {
+  /** 拆分依据是独立观测量 workerCreepsInRoom（带 WORK 的我方 creep），不是从 progress 反推的 builderVisits。 */
+  it("停滞但房内有「能施工的人」⇒ siteStaleWorkerIdle（能量/取活侧，而不是编制侧）", () => {
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
       systemLastRun: {},
       p3Systems,
-      siteProgresses: [site({ buildersInRoom: 2, builderVisits: 5, progress: 100 })],
+      siteProgresses: [site({ workerCreepsInRoom: 2, builderVisits: 5, progress: 100 })],
     });
     const ids = res.violations.map(v => v.id);
-    expect(ids.some(v => v === `siteStaleBuilderIdle:W1N1:abc123`)).toBe(true);
-    expect(ids.some(v => v.startsWith("siteStaleNoBuilder:"))).toBe(false);
+    expect(ids.some(v => v === `siteStaleWorkerIdle:W1N1:abc123`)).toBe(true);
+    expect(ids.some(v => v.startsWith("siteStaleNoWorker:"))).toBe(false);
   });
 
   it("近期有进度变化 ⇒ 不违例", () => {
@@ -98,8 +98,8 @@ describe("E7 site progress — 真实接线", () => {
         }),
       ],
     });
-    expect(res.violations.some(v => v.id === "siteStaleNoBuilder:W1N1:stale")).toBe(true);
-    expect(res.violations.some(v => v.id.startsWith("siteStaleNoBuilder:W2N2"))).toBe(false);
+    expect(res.violations.some(v => v.id === "siteStaleNoWorker:W1N1:stale")).toBe(true);
+    expect(res.violations.some(v => v.id.startsWith("siteStaleNoWorker:W2N2"))).toBe(false);
   });
 
   it("boot 宽限期内不违例", () => {

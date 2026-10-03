@@ -687,22 +687,24 @@ export class Kernel {
   /** E7: 采集 site 进度快照（从 Game.constructionSites + globalCache 追踪）。
    * 遍历全局 construction sites（无需房间可见），对比上次进度判断是否停滞。
    * builderVisits 从 site.progress 推断（同源量，仅兼容保留）；
-   * buildersInRoom 是**独立**观测量：该房内我方 builder 的实时数量，
+   * workerCreepsInRoom 是**独立**观测量：该房内我方 builder 的实时数量，
    * 用来把"停滞"拆成"没派编制"与"人到了不推进"两类（E7 的判别式）。 */
   private collectSiteProgressSnapshots(ctx: Context): SiteProgressSnapshot[] {
     const result: SiteProgressSnapshot[] = [];
     const tracker = (globalCache().siteProgressTracker ??= new Map());
     if (Object.keys(Game.constructionSites).length === 0) return result;
 
-    // 一次遍历 creep 得到每房 builder 数（不是每 site 一次），避免 O(sites × creeps)。
-    const buildersByRoom: Record<string, number> = {};
+    // 一次遍历 creep 得到每房「能施工的人」（带 ≥1 个 WORK 部件的我方 creep）。
+    // ⚠️不按 role 筛：远矿路是通勤 hauler 建的（remote-hauler.ts:89），只数 builder 会把远矿停滞误判成"没派人"。
+    // O(creeps) 一遍，不是 O(sites × creeps)。
+    const workersByRoom: Record<string, number> = {};
     for (const name in Game.creeps) {
       const creep = Game.creeps[name];
       if (!creep || creep.my !== true) continue;
-      if (creep.memory.role !== "builder") continue;
       const roomName = creep.pos?.roomName;
       if (!roomName) continue;
-      buildersByRoom[roomName] = (buildersByRoom[roomName] ?? 0) + 1;
+      if ((creep.getActiveBodyparts(WORK) ?? 0) <= 0) continue;
+      workersByRoom[roomName] = (workersByRoom[roomName] ?? 0) + 1;
     }
 
     for (const id in Game.constructionSites) {
@@ -732,7 +734,7 @@ export class Kernel {
         progressTotal: total,
         lastProgressTick,
         builderVisits,
-        buildersInRoom: buildersByRoom[roomName] ?? 0,
+        workerCreepsInRoom: workersByRoom[roomName] ?? 0,
         siteAge: ctx.tick - (prev?.lastProgressTick ?? ctx.tick),
       });
     }
