@@ -111,6 +111,12 @@
 - **现有测试**：`tests/unit/intel/intel-state.test.ts`、`tests/unit/intel/confidence.test.ts`、`tests/unit/systems/intelligence.test.ts`、`tests/unit/economy/intel.test.ts`（均在 `tests/unit` 5214 用例全绿内）。
 - **线上验证情况**：**未取得**。`peek rooms.W37S58.intel` ⇒ **不存在**；所以"Memory 路径"这个假设先被否掉（大概率在段 0/段 5，或该键已换名）。**不给 `LIVE_VALIDATED`。**
 - **已知缺陷 / 疑点**：**#95 的选靶闸正卡在这里** —— 若段 5 的 `players` 为空，则"war 却没有 warPlan"是**正确行为**（无合格玩家目标），而这条**只能读段 5 来定**。
+- **⚠️本轮把这条推进了一大步，但结论是"不可诊断"，不是"没有敌人"**（11:3xZ，两处读码 + 一次实测）：
+  1. **房情报完全活在 heap**：`intelligence.ts:34` 是模块作用域的 `roomEntries`/`playerEntries` **Map**，由 `:54-58 adoptHandoff()` 从 `globalCache().intelHandoff` 采纳（`room-observer` 是生产者），`:187-188` 还会 `ageRooms` + `capRooms(INTEL_ROOMS_CAP)` 裁剪。
+     ⇒ 段表里**根本没有"房情报"这一段**（`segId` 序列：0=**layout**、1=cpu、2=eventLog、3=economy、4=prometheus、5=**intelPlayers**、6=l2Intake）⇒ **"段 0 存房情报"这个我此前一直在用的假设是错的**。
+  2. **`intelStats()`（`:149` 返回 `{rooms, players}`）不落盘、也没人调**（grep 只命中它自己的定义）⇒ `peek` 读不到（不在 Memory）、console 也读不到（模块作用域，同 `CONFIG` 那发 `ReferenceError`）。
+  3. **实测段 5：从未写入**（新工具 `intel-players.mjs`，失败形状与空值分开报）。⇒ **这既可能是"从没见过玩家房"**（`adoptHandoff` 只在 `payload.owner` 存在且非 `INVADER_USERNAME` 时才 upsert 玩家），**也可能是持久化路径从未触发**——**两者读数上不可区分，所以现在不能给 #95 定罪，也不能给它结案**。
+  ⇒ 净结论：**情报层没有任何事后观测能力**，而它是扩张候选池与 war 选靶的**共同上游**；一次部署就把它清零，之后多久恢复没人看得见。登记为 **#98**。
 - **CPU 成本**：`room-observer` 每 50 拍一次（历史归因里不是大头项）。
 - **优先级**：**P1**（它是"作战"与"扩张"两条腿共同的上游；情报缺失会让两条腿同时静默，而静默看起来像健康）。
 - **验收标准 / 下一件事（写死，别靠记忆）**：
