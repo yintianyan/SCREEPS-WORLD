@@ -2692,3 +2692,30 @@ R187 的尾巴——七项里恰好喂给 `gclHeadroom` 与 `bucket` 的两个�
   `8980e00` / `1bc67c9` / `e4dae12` / `4087fc2`（#93）/ **本次**。
 - **上线判效口径**（写死）：第一次 `peek kernel.strategy` 必须看到 `gclLevel` 与 `bucket` 两键且有限；
   **读不到 = 未上线，不是"没挡"**。核对口径：`expandMinBucket` 在此环境（"low" profile）是 **6,000**，不是 CONFIG 的 7,000 —— 拿错阈值会把"其实过了"读成"被挡着"。
+
+### R189（10-03 10:5xZ）**G4/G6 不在执行门禁里**（阻塞链路我自己走到底：R187 对、我 R183/R184 错）⇒ **#50 的回报要下调**；G4 红段实测 ≈2,900 拍，而"我上一条预测被推翻"是前提输、模型没输
+
+**一、撤我上一轮的说法。** 我在 R182/R183 写过"RCL5 命中即便消掉 G0 的 `youngestMature` 假项，G4（和 G6）仍会单独挡住扩张"。**逐行核完是错的**：
+- `plan-adapter.ts:69` ⇒ `isEmpireReady = Memory.kernel.strategy.expansionAllowed === true`；`execution-gate.ts:102-108` 的 `GATE_EMPIRE_READY` 吃的就是这个布尔，**不是** `evaluateExpansionReadiness` 的 G1..G11。
+- `posture.ts:247` `expansionAllowed = expandHealth && !freeze && posture!=="war"`；`expandHealth`（`:150-158`）= `gclHeadroom ∧ allNormal ∧ bucket≥expandMinBucket ∧ avgPressure≤expandMaxPressure ∧ sponsorReady ∧ youngestMature ∧ cpuRatioOk` ⇒ **没有净流项、没有 `capacity.tier` 项**（`cpuRatioOk` 是 creep CPU/limit，R187 现算 0.325 ✅）。
+⇒ 正确口径：**dashboard 的 `Blocked` 是"规划就绪度"；那 4 张 `WAITING_EXECUTION` 只等 `expansionAllowed`。**
+
+**二、`capacity.tier=tight` 究竟挡了什么（消费者逐个读，这决定 #50 值不值得做）**
+1. `empire-economy.ts:310-318` ⇒ 只喂 readiness 的 **G6** ⇒ 经 `plan-lifecycle.ts:126-150` `applyHysteresis` 挡 **EVALUATED→READY 晋升**（`upgradeTicks:500`）。但同函数 `:132` `if (status!=="EVALUATED" && status!=="READY") return plan` ⇒ **已到 `WAITING_EXECUTION` 的 Plan 不会被降档、也不受 G6 影响**。
+2. `remote-mining-manager.ts:131`：只有 **abundant** 才 +1 远矿点，注释明写"constrained/tight 不额外收紧"。
+3. 侦察 `prospect-manager.ts:39-40`：要 `expansionAllowed` + **`ctx.budget.tier` ∈ {healthy, guarded}** —— 那是**调度器 CPU 预算档**（同族 `builder.ts:26`/`repair.ts:142` 的 `recovery/conserve` 就是它），现场 observe 打 **"调度tier=healthy"** ⇒ **侦察并没有被 G6 冻住**。
+4. `empire-strategy.ts:230-241`：仅落盘/日志。
+⇒ **同族第 6 例：两个同名 `tier`**。我 prompt/旧轮那句"G6 与侦察同闸 ⇒ tight 时侦察与扩张一起冻"**机制写错**——一起停是因为**同一个 posture 标志**，不是容量档（R163 当年已为 `exploreParameter` 纠过同一把坑，这是第二处）。
+⇒ **#50 的回报按此重写**：砍远矿换来 `comfortable`，对**眼前这 4 张 Plan 的那一次 claim 零加速**；它买到的是"新候选晋升通道 + dashboard 少一条红 + 余额安全边际"，而 `abundant` 的 +1 工业/远矿槽要的是 abundance 不是 comfortable。**同时作废我自己 R111 加进 #50 的代价③**（"tight 冻结自进化可观测性"——探索门用的是调度档，现场 healthy）。⇒ 现在挡扩张的是 **`war`（≈12:0xZ 自解）与 `youngestMature`（RCL5）**，不是 CPU。
+
+**三、G4：我上一条预测的下场 + 红段时长换成实测**
+- 我 R184/R116 写"Σ 已见顶、83399000 前后应落回 1.0~1.9"，依据是一发 `nf=−14.99`。**现场**：`nf` 700 拍内翻到 `+11.92`、再到 `+30.06`；Σ `1.924@83398179 → 4.144@83398884 → 5.214@83399204` ⇒ dashboard@83399184 已回到 `Blocked=G0+G6`，**G4 转绿**。**错在把瞬时读数当稳态输入**（我记忆里那一族的又一发，这次是我自己的判效器）；模型的三条都活着：EMA 朝输入走、α=0.02/100 拍、**输入必须 >5 才够得到门槛**（这发正是输入先转正门才绿）。
+- **红段实测**：83396284（第一次记 G4 红）→ 83399184（转绿）= **≈2,900 拍 ≈ 2.6~3.0 小时**（拍长 3.6~3.8 秒）；最后那 1 千拍靠一次输入转正收尾。⇒ 以后 #88 的措辞按这个写，不要写"几小时不自回"这种无限期句子。
+- **更要的一条**：这次转绿**与停卖无关**（孵化潮过去 + 输入转正）。今晨净流实测摆幅 **−15 ~ +30/拍**，而门槛是 5 ⇒ **门槛 5 落在正常摆幅之内**，G4 注定红红绿绿。⇒ **#88 的问法要改**：不是"要不要放宽门槛"，而是"想让净流稳定在哪个分位、为此愿意少花多少投资"。（R184 那条"饱和响应会吃净流"同时得到反向复证：吃与喂都不需要人动手。）
+
+**四、两个 1 小时内到点的事件（判据现在就写死）**
+- **war 尾税 ≈83400412（≈12:0xZ）**：现场 `kernel.strategy.since=83397159`、核心房 `lastHostileAt=83395412`（06:5xZ 那次 **13 拍**目击）⇒ `83395412+5,000=83400412` **与预测时刻逐字相同** ⇒ 出处对上 R184 那笔"单次目击缴 5,000 拍记忆税（low profile）"。**判效**：`G0` 应在此刻前后从 `failedGates` 消失；若 83400412+300 仍在，查 `minDwell`/新目击，**不动 posture**。
+- **`storageNearFull` ≈83400250（≈11:5xZ）**：storage `882,323@09:45 → 890,827@10:49` = **+8.63/拍**，触发线 `0.9×1,000,000=900,000` ⇒ 余 **9,173** ⇒ ≈1,060 拍；现读 `false`（ratio 0.8908）。到点后看：①`factory-manager.ts:58`/`industry.ts:459` 的开工条件正好满足 ⇒ 工业线是否出现活动；②`demand.ts` 的"限采+加速消费"是否把 `nf`（+30/拍）压回去 ⇒ 若 G4 随之再红，就是 R184 那条机制的现场复现（不用停卖就能看到）。
+- **RCL5 两带并列（`REQ` 仍读不到）**：`controllerProgressSeen=380,599`、`changedAt=83399204` 同拍在动、段内 `+5,008/704 拍 = 7.11 进度/拍` ⇒ 若 `REQ=405,000` 命中 ≈**83402600**（≈13:2x–14:1xZ），若 REQ≈391,305 则 ≈83400570。**出处冲突照实记**：prompt 称"本服 @RCL4=405,000 已现场更正过"，而 R185 判同一数字为"`tower-defense.ts:26` 注释、与下界相容但不当事实" ⇒ 按"锁与路线图优先于 prompt"，本轮**不引 405k 为事实**，结案交给 `rcl5-eta-watch`（pid 82755）与 #93 上线后的 `controllerProgressTotalSeen`。
+
+**五、收尾与边界**：`sell-fee-duty` 30 发已 EXIT（有费窗 5/30 ⇒ 它自己的 `2.46/拍` 按 R116 的结构性漏采**是下界**，运费一律用 `kernel.stats.energyLedger` 差分 3.67~4.38/拍）⇒ **该采样器不要再续接**。#85 到点 ≈10:47Z 仍归对端宣布。本轮零 src、零 push、零 build、零 console（5 台看门狗在飞，全走 Memory API）；探针 observe×1 + peek×2。§3.5 那 7 项一个没动，但 **#50 与 #88 的表述都要按本条重写**。
