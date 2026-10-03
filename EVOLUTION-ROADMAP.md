@@ -2889,3 +2889,21 @@ R191 里我留了一句"另两笔我没重验、不替它们担保"。这笔账�
 **推进规则也写进文件头**：`TESTED` 要给出得绿的测试路径；`LIVE_VALIDATED` 要给 sha／读数时刻／判据；`STABLE` 额外要**同一现象的第二发独立复证** —— 这一条是今夜三次"只有一发读数就下结论"换来的。
 
 **顺带一条 L0 对账**：§1.5 明文把"生产代码部署、主动战争、改变外交关系"划入须授权行为 ⇒ 我今夜**没有** 自批推那批（含 #89）、没有下过/撤过市场单、没有制造敌情，边界与此前记忆一致。**该条不需要改代码，只需要一直守着。**
+
+### R207（10-03 11:4xZ）#95 到底了：**战争候选漏斗有五道闸，五道全不留痕** ⇒ 结案为"不可归因"，并立 **#99**
+
+先记一次差点踩到的坑：`war-planning-system.ts` §3 的**函数注释写着"从 `Memory.rooms[].intel` 采集候选"**，而我今夜实测过那个键**不存在**。照注释读就会得出"战争系统读的是一个空键 ⇒ 永久无目标"这条**假根因**。真实数据源是 `queryRoomIntel()`（heap，见 §12），注释是旧的。⇒ **注释只当线索，判数据源要读函数体。**
+
+**实际的闸（`buildTargetCandidates`，`:269-291`）**，逐条列出：
+1. `!intelActionUsable(entry.subject, tick)` ⇒ **非 fact 级情报直接不进候选**（注释引 `INTELLIGENCE §5`）；
+2. `!e.owner || e.owner === myUsername` ⇒ 无主房 / 我方房；
+3. `e.kind !== "normal"` ⇒ 非 normal 房；
+4. 结构化打标：`occupied`（= 我方房 ∪ **远矿目标** ∪ 扩张目标）、`blacklisted`；
+5. 下游阈值：`freshness=CONFIG.war.targetFreshness(1500)`、`maxTowers(3)`、`maxDistance(10)`。
+
+**关键观察：1/2/3/4 全是裸 `continue`，一行日志都不留。**
+⇒ 结合现场数（`intelCoverage={rooms:7, players:2}`，`combat=0`，段 5 从未写入，`Candidates=12(Q=2,R=6,U=4)` 是扩张侧），最可能的解释是：**我们能看见的房要么无主/NPC 占据（被 2、3 挡），要么正被我们自己当远矿用（被 4 挡）**，于是候选恒空。
+**但这仍然只是"最可能"，不是被证明的** —— 因为**五道闸都不计数**，事后谁也分不清是"没有情报"、"情报不是 fact 级"、"被 occupied 挡了"还是"tower 太多"。
+
+⇒ **#95 结案方式改为：不可归因（非缺陷、非健康，是盲区）**。矩阵 §8（军事）的 `LIVE_VALIDATED` 前置因此不是"等一场真仗"，而是**先有漏斗计数**。
+⇒ 立 **#99**：把这五道闸各加一个**每拍清零、按 tick 落一次**的计数器（形如 `stats.warFunnel={intel,notFact,noOwner,notNormal,occupied,blacklisted,stale,tooManyTowers,candidates}`，写在与 `intelCoverage` 同一个 100 拍批处理里，成本≈0、零判定改动）。**这才是我今夜该立的那笔观测缺口**——它由读码得到、由现场数支持、且#95 的整条判断链都依赖它。
