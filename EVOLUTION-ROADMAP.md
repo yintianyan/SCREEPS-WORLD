@@ -2086,3 +2086,33 @@ G4 红是**"要求继续积累"这一条在饱和库存上不可长期成立**�
   从纪律升级成**方法论必需**（且这一条要写进下一个类似判据窗的脚本头）。
   ⚠️两个未量的数：`EXPLORATION_STABLE_THRESHOLD` 的真值、以及那两次 ↑ 提案究竟来自探索通道还是确定性通道——
   后者若查清，可能让"换码污染"的影响面从"全部"缩到"仅探索型"。**别把本条当成已完全定量的结论。**
+
+### R160（10-03 04:3xZ）#85 的判据窗可能**按构造采不到反例**：探索通道被 `tier=tight` 硬性关掉
+· 刚读到的硬事实（`evaluator.ts:925-931`，`exploreParameter` 的前置）：
+  ```
+  if (explorationState.stableCount < EXPLORATION_STABLE_THRESHOLD) return null;   // =3
+  if (signals.tierRank >= 2) return null;      // ⚠️ TIER_RANK: comfortable=1 / tight=2 / constrained=3
+  if (signals.crisisRatio >= 0.1) return null;
+  ```
+  而现态 `Memory.kernel.capacity = {tier:"tight", since:83387005}` ⇒ **`tierRank=2` ⇒ 探索式提案今天根本不可能产生**，
+  与我 R159 担心的"换码归零"无关——它早就被档位关着了。
+· ⇒ **对 #85 判据的后果（这是今晚最该被抓到的一条）**：
+  我等的 PASS 证据是"基线 83390266 之后窗内不再出现 `code=3` 的 `TuningAdjust`"。
+  但在 `tier=tight` 期间，**就算我的 binding 闸不存在，探索通道也不会提案** ⇒
+  **空窗不能归因于闸** —— 这正是我自己记过的那一族（"别写被测机制自身前提永远满足不了的判效判据"）。
+· ⇒ **判据补一条必要共条件**（已写进 #79 任务，窗口的读者必须同时看它）：
+  只有当窗内**至少满足下列之一**时，"无 `code=3` 提案"才算我的闸的证据：
+  (a) `capacity.tier ∈ {comfortable, abundant}`（`tierRank < 2` ⇒ 探索通道活着）；
+  (b) 或确定性 ↑ 通道的前置成立过（同房同参数出现 `lastTrend="up"` 方向的连续确认，即 trend 侧真的想抬）。
+  否则 **一律记 `UNASSESSABLE-BY-CONSTRUCTION`**，**不是** PASS、也**不是** FAIL。
+· 一个反而说明问题的时间线：那次 ↑ 提在 `83385766`，而 `tight` 的 `since=83387005` ⇒
+  **提案发生在档位还是 comfortable 的时候，撤销发生在 tight 之后**。
+  所以"它当时能提、现在不会再提"里，**档位变化本身就足以解释**——我的闸是否起作用，这条窗回答不了。
+· ⇒ **#85 该怎么结案（诚实版）**：
+  ①**代码级证明已有**：`tests/unit/tuning/upgrader-proposal-binding.test.ts` 5 例含控制组（clamp 缺失时仍提案）；
+  ②**线上形状证据已有**：`kernel.demandClamps={"W38S56":2}` 与 `roleBounds.upgrader.maxCount` 同值 ⇒ 派生量在跑；
+  ③**自然实例复证 = 取不到**（本 regime 下按构造不可得）⇒ 结案写成
+  "**已上线 + 单测/控制组背书；线上复证在当前 `tight` 档位下不可观测，非否证**"，
+  并留一个**可观测的替代判据**：等 G6 解档（tier 回 comfortable）后跑一发同样例，或
+  在 `demandClamps=2` 且 `tierRank<2` 同时成立的那一刻盯 `lastAdjusted` 是否被顶到 3。
+  ⚠️**不要为了拿到证据去动档位/阈值**（那是自败），也不要因为"窗里没事"就宣布闸被线上证实。
