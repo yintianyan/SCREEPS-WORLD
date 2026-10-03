@@ -2537,3 +2537,30 @@ R172 那张表仍是入口，但**下面这几行以本表为准**（旧行不�
 > 原写"**G4 转红后几小时不会自回**（要 τ 级正净流才抬过 5）"。实测 **09:01Z Σ=0.438 → 10:13Z Σ=3.453**，1,100 拍抬了 **+3.0** ⇒ 约再 **600 拍（≈35~40 分钟）**就自己跨过门槛。
 > **错因**：我把"τ≈5,000 拍的 EMA"当成了"输入近似平稳"的滤波器；它的输入 `nf` 自己就是被 ±20~85/拍的孵化/卖单脉冲驱动的 EMA，脉冲串含大量低频成分，两级阻尼**滤不掉**。
 > ⇒ 给 owner 的口径改成：**红是"几十分钟"的税，不是"几小时"的税**；R180 同表"G3/G4 单次读数有意义"那一支方向仍成立，只是**代价那一侧作废**。
+
+### R182（10-03 10:2xZ）**扩张此刻被冻住的真正原因**：不是 G4/G6，是 `posture=war`；而把它撑到 war 的门槛，正是 #89 那条"永不过期的自改值"**（本轮最有价值的一条，且它打的是我上一轮的话）
+
+**A. 现场链（全部直读，零 console、零部署）**
+- `kernel.strategy = {posture:"war", since:83397159, expansionAllowed:false, warPressureTicks:0}`（现在 tick≈83398684 ⇒ **war 已持续 ≈1,525 拍**）。
+- `kernel.expansionPlans`：4 条 `st="WAITING_EXECUTION"`，`rd`(=readySince) **83313484** ⇒ **早就晋升过了**，队列不是空的。
+- `plan-adapter.ts:67` `isEmpireReady: Memory.kernel!.strategy?.expansionAllowed === true` ⇒ **执行侧的经济检查只有这一个标志**；
+  `execution-gate.ts` 的门禁集合是 `GATE_EMPIRE_READY / GATE_TARGET_CLAIMABLE / GATE_PLAN_VALID / GATE_CANDIDATE_VALID / GATE_NOT_OWNED / GATE_NO_CONCURRENT_OP …`——**里面没有 G4，也没有 G6**。
+- ⇒ 链条闭合：**war ⇒ `expansionAllowed=false` ⇒ `GATE_EMPIRE_READY` 失败 ⇒ 4 张已晋升的 Plan 原地不消费**。这是设计（`posture.ts:141` 注释："有活敌 / 战争中不打殖民"），**不是缺陷**。
+
+**B. 更正我上一轮给 owner 的话（这次错在归因）**
+我 10:1xZ 写的是"扩张被 **G0+G4+G6** 三钉"。对**待执行的 4 张 Plan** 而言这是错的：**G4/G6 根本不在执行门禁里**，它们只挡*新 Plan 的晋升*（以及 posture 自己的 expand 合取项）。
+⇒ 正确口径：**今天的扩张阻塞 = 战争姿态一条**（外加"若 G0/G6 恢复后仍需 Σ 净流 >5 才能晋升新 Plan"）。#88 的紧迫性因此**低于**我昨天夜里的描述——先把敌情这条读完再说。
+
+**C. #89 的下场第一次被量到（而且是反向的）**
+`kernel.tuning.strategyOverrides` 现值：
+- `posture.warPatience = 8000`，`adjustedAt=83287039` ⇒ **已经生效 111,645 拍**；
+- `posture.minDwell = 1400`，`adjustedAt=82993339` ⇒ **405,345 拍**（就是我单测里那条"397k 拍仍存活"的用例，今天证实它真的还挂在线上）。
+CONFIG 基线是 `warPatience=5,000 / minDwell=1,000`（`config/index.ts:1164/1168`）。
+⇒ 也就是说：**这场 war 是在"自己抬高的门槛"下仍然跨过去的**——fortify 必须在敌情新鲜（`threatWindow=3,000` 内有目击）的状态下**撑满 8,000 拍**才升 war。换算 ≈ **4.9~8.3 小时**（按 3.7~1.8… 取实测 3.71 秒/拍 ≈ **8.2 小时**）的持续设防压力。
+⇒ 与 R148 的预言对上了方向：**#89 上线 = 松绑 ⇒ 同样压力下 war 会提前 3,000 拍（≈3 小时）发生**。这条现在是**有现场实例的**，但 **#89 仍未部署**，我不自批。
+
+**D. 我读不到的那一个量（写给下一轮，别重复我的失败 peek）**
+`rooms.W37S58.phase.lastHostileAt` / `rooms.W38S56.phase.lastHostileAt` ⇒ **都不存在**（`kernel.stats.population` 同样不存在）。
+但 `posture.ts:117-122` 要求 war 必须 `threatRecent`（某房 `lastHostileAt` 距 `tick < 3,000`）⇒ 由"war 已在 83397159 成立"反推：**目击时刻 ≥ 83394159**（与台账早前那条 `lastHostileAt=83395412` 相容）。
+⇒ 这是**推导不是读数**。`lastHostileAt` 的真实宿主（snapshot/heap 还是别的 Memory 路径）需要下一轮先 grep 写者再读，**不要照我这两个路径试**。
+另外 `kernel.escalations` 里有 `mineral/terminal_trade repeats=3 lastAt=83396042` 与 `colony/population_rebuild terminal:true @83369862`——**与敌情同期**，这是 #51/#44 同族那条线，别混成战损。
