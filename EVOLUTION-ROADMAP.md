@@ -2938,3 +2938,86 @@ R207 说"五道闸零计数 ⇒ 不可归因"是对的，但其中**两道的答
 - 其余：`Blocked=G0+G6`@83399984、`tier=tight@83387005`（≈13,000 拍）、调度 tier=healthy、`Budget 355,293/960,248`、候选 Q2/R6/U4、`errorsPerTick=0`；`credits 12,642,148`（第五发差分 **+381,339/≈1,000 拍**）、`runs=67`、`terminalEnergy 10,343`。
 
 **边界**：零 src、零 push、零 build、**零 console**（对端 R207 刚写过 11:4xZ，我刻意不碰 `__evalResult`）；探针 observe×1 + `ring-dump`×2（段道）+ peek×1。§3.5 属人 7 项一个没动，也没为制造证据做任何事。**下一轮第一件事：war 按哪条退出（①/②）；第二：RCL5 是否命中 ≈83400800 并核 `expansionAllowed` 与那 4 张 WAITING_EXECUTION（执行门禁只认 expansionAllowed，见 R189）。**
+
+---
+
+## R211 · 2026-10-03 12:3xZ（#99 漏斗计数落地 + 一场真进犯把 #95 的前提改写了）
+
+### 本轮主目标：#99 战争候选漏斗计数（可自批的观测缺口）
+
+按锁里 11:47Z 的规格落地，**零门槛改动**（`CONFIG.war.maxTowers/targetFreshness/maxDistance` 一个没碰）。
+
+**计数点（`war-planning-system.ts`）**：`buildTargetCandidates(tick, funnel)` 里原先的三个裸 `continue` 各留一位，
+并按现场需要拆细——① `notFact`（`intelActionUsable` 拒）② `unowned` 与 ②′ `mine`（**规格里是一条 `noOwner`，我拆成两条**：
+"看不到归属"与"视野里只有自家"是两种相反的现场，合并会把"侦察不足"读成"没有敌人"）③ `notNormal`，
+外加 `intelEntries`（池子规模）与 `candidates`（活过前三道的条数）。终局四位数 `noInput|noThreats|noPlan|plans` 恰有一项为 1
+（闭合不变式，写进用例）；另加 `noSponsor`（有计划但孵主解析失败 ⇒ 计划不落笔）。
+**后四道闸不在这里计**：它们在 domain 的 `selectTarget` 里、拒因已随 `rejectedAlternatives` 进计划，
+在系统层复制一份判据只会与真判据漂移（规格里那"各留一位"我按这条撤了）。
+
+**落盘点**：`globalCache().warFunnelScratch`（每 pass 换新对象）→ `intelligence.ts` 老化批（100 拍）与
+`stats.intelCoverage` **同拍**快照进 `Memory.kernel.stats.warFunnel`（`{...funnel}` 拷贝）；
+`scratch` 为 undefined 时**不写** ⇒ 缺键是"war-planning 自 boot 没跑过"这一态，写成全零会被读成"跑过且每道筛子都空"。
+类型落 `global.d.ts`（含 `tick` 语义警告：**被计量那一拍**，不是快照时刻，也不是 `energyLedger.tick` 那种 boot 时刻）。
+`tests/support/factories.ts` 补 `delete g.warFunnelScratch`（漏清会让"本 pass 候选为 0"读到上一条用例的残影）。
+
+### 写单测时读码撞出来的结构事实（比计数器本身值钱）
+
+**`buildTargetCandidates()` 的产物今天根本不在决策路径上。** 链条逐环读死：
+`deriveOperationType()` 对 10 个 `ThreatIntent` 的全部分支只返回 `DEFEND | ESCORT | RETREAT` ⇒ `isOffensive()` 恒 false
+⇒ `deriveTarget()` 必走防御支、目标＝**受威胁房本身**（`roomName: threat.roomName`），
+`selectTarget()`（连同 `occupied/blacklist/targetFreshness:1500/maxTowers:3/maxDistance:10`）在生产链上**进不到**，
+唯一调用者是手递进攻夹具的 `tests/unit/military/war-planning-a5-3.test.ts`。
+三条推论：①**帝国今天没有进攻能力**（不会主动打任何一间房），这比 #95 更上游；②我 09-30 记在能力矩阵里的
+"层次错配（进 war 靠 NPC 目击、选靶要玩家房+新鲜情报）"**两边都不在路径上，咬不到** ⇒ 已当场在 §8/§12 更正；
+③#95 的"零计划"只可能由 `noThreats` 解释，"候选被筛光"不是它的解释。
+⇒ 用例里我把这条写成断言（候选池为空仍 `plans=1` 且 `warPlan.targetRoom===HOST`），不是写成注释。
+
+### 线上第一读（本轮零 console；observe×1 + ring-dump×1 + peek×1）
+
+**①#95 的前提被现场否证：计划不是零。** 事件环 83399850→83400720（870 拍）里 `WarPlanCreated=8`、`WarOutcome=2`。
+归属按写者逐条对上（同一 kind 三个写者 ⇒ 只按 kind 计数会混）：war-planning-system 7 条（W38S56×3、W37S58×3、
+一条被 tactical-runtime 复用的 `tac-W38S56-83399844`），`recovery-execution:1238` 用 `d[0]=-1` 那条是"止损被消费"不是战果。
+两条真 `WarOutcome` 全是 `d=[2,0,5]` ⇒ outcome=**unknown**、**spawned=0**、reason=**5=TARGET_SWITCH**。
+
+**②围困 30 拍，税 5,000 拍（167 倍），#92 第一次量到比值。** W38S56 目击@83399840（`EnemyCleared`@83399885）；
+W37S58 目击@83400215→`EnemyCleared`@83400245 ⇒ 两波现场各 **≤45 拍**，而 `hostileAt` 之后帝国要在
+`posture=war` 里挂 `threatWindow=5000` 拍。`strategy={posture:war since:83397159 expansionAllowed:false warPressureTicks:0}`。
+**我自己的预测要当场改**：R210 那发把退出时刻锚在 83395412+5000=83400412，实际 `posture-exit-watch` round13@83400684 仍 war
+——不是判据坏，是**新目击把计时器重置了**（现按 `max(hostileAt)=83400220` ⇒ 退出 **≈83405220，≈14:2xZ**）。
+⇒ 纪律进记忆：**"事件后 N 拍"型的预测，锚必须是同型事件的最新一发，且每次读数先复查锚点有没有被刷新**（这是第 6 类样本出处错）。
+
+**③零编队的机制读死（不算新案，留可检验预测）**：`warPlan={targetRoom:W37S58 sponsor:W37S58 operationType:DEFEND
+squadSize:32 a5ForceReq:{attacker:0,…,total:0} spawned:0 phase:advance since:83400214}`。
+`squadSize=32` 与 `a5ForceReq.total=0` 是 FINDING-08 注释里点名的那对两 producer（`decideSquadSize` vs A5 编制），
+`spawned=0` 与"波次只活 30~45 拍 < 一次孵化+通勤"两个解释同时成立 ⇒ 本轮不立案。
+**留下可驳预测**：下次出现**持续 >200 拍**的围困时读这两处——若 `a5ForceReq.total` 仍 0 而 `spawned` 仍 0，
+则两 producer 分歧是真的在挡补员（立案并查 war-planner 用哪一侧）；若 `spawned>0`，则 32/0 分裂只是和平期残影（结案）。
+
+**④战损**：环内 18 条 `CreepDeath` 末位全 `1`=寿终（`d[3]` 617/1523~1643 都贴着名义寿命线）⇒ **两波进犯 0 战损**，
+#90 的"持续战损"半边仍凑不齐；`deathByCause` 未推 ⇒ 线上无处可查（`peek kernel.stats.deathByCause = ?`）。
+
+**⑤其余**：`intelCoverage={rooms:7,players:2,tick:83400703}` 新鲜 ⇒ 老化批活着，#99 上线后 `warFunnel` 会紧挨着它出现，
+**判据：`warFunnel.tick` 落后读数 <20 拍**（超过即 war-planning 没跑）；`warBlacklist` 不存在=从未拉黑过任何房；
+G4=green@83400384（`g4-durable` round6，Σ=4.851+0.798=5.649 对门槛 5）**而同一拍核心房快仪 nf=−16.31/拍** ⇒
+这是 R184 说的"回声"第二发实例（慢 EMA 高于输入必回落，可驳）；`Blocked=G0+G6`、`tier=tight@83387005`（≈13,700 拍）、
+cpuRate.total=**14.44/拍** 对 12.00 ⇒ G6 缺口 2.44/拍未变；核心房 storage 891,913（R210 那发 896,514 ⇒ **在跌 −6.6/拍**）
+、幼房 `rcl=4` progress≈402.4k/405k、rate 16/拍 ⇒ **RCL5 落点 ≈83400900（≈12:3xZ，`rcl5-eta-watch` 在看）**；
+`credits 12,820,813`（自 R210 差分 **+178,665/≈700 拍 ≈255/拍**）、`runs=71`（+4）、`terminalEnergy 10,233`。
+
+### 交付与边界
+
+新增 `tests/unit/military/war-funnel.test.ts` 8 用例；`npx tsc --noEmit` rc=0；`tests/unit` **385 文件/5222** 全绿
+（基线 384/5214 ⇒ +1 文件 +8 用例）、`tests/integration` 30/239 全绿；`lint` 0 error、`format:check` 仅剩
+`tests/unit/movement/traffic-cost-scaling.test.ts` 一条**非本轮引入**（我没碰那文件，`git status` 干净）。
+**反向实验逐条剥除（`tmp/tools/official/rev-99.sh`）**：`notFact`/`unowned`/`mine`/`notNormal` 各 ⇒ 恰 1 条红；
+`candidates` ⇒ 3 条红；`intelEntries/noInput/noThreats` ⇒ 各 1 条红；`plans` ⇒ 2 条红；剥落盘快照 ⇒ 1 条红，
+而"未上线"那条**仍绿**（缺席断言的固有盲区，写在这里免得下轮把它当成有效判据）；全部还原后 8/8 绿。
+⚠️工具坑一条：**会把文件改坏的脚本别接 `head`/`tail`**——`rev-99.sh` 第二遍跑 `| head -28` 时被 SIGPIPE 在
+cleanup 之前杀掉，`funnel.candidates=…` 那一行留在被剥除状态（`  ;`）；是 `git diff` 抓出来的，已复原并复跑全绿。
+⇒ 纪律：**反向实验脚本自己也要"改完立刻 `git diff` 核对"**，判"改动生效"之前先判"工具没被半路杀死"。
+
+**零 push、零 build**（`dist/main.js` 不动，本轮 4 个 src 文件改动随批走；批仍等人对 #89 的裁决）、**零 console 探针**、
+§3.5 属人 7 项一个没动。#99 的状态改为"已实现+单测+反向实验·待随批推"，并新增两条待办：
+**#100 能力矩阵 §8 已改口但"进攻链未接线"要不要修属人**（要么给 `deriveOperationType` 增加进攻分支＝动战争能力，
+要么把 `selectTarget` 那 200 行判据标为"未接线的储备"），**#101 观察项：warPlan 两 producer 分歧（32 vs 0）**。

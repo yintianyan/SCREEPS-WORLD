@@ -73,8 +73,17 @@
 - **实现状态**：`TESTED`（**不是** LIVE_VALIDATED）
 - **现有测试**：引擎级 e2e —— 22-war-ledger（授权 + 战损界）、21-decoy-auth（拒诱饵）。
 - **线上验证**：塔在修墙被误判为"漏账"→ 已结案为设计（#53/#80）；**但**"能打仗"至今无现场证据：`posture=war` 挂 2,233 拍期间 `combat=0`、`warPlan` 不存在（`mk:R194B`，第二发复证，判为设计行为）。
-- **层次错配（真发现）**：进 war 靠 NPC 目击，选靶要玩家房 + 新鲜情报（`targetFreshness:1500`、`maxTowers:3`）。
-- **已知缺陷**：#95（复证中的设计行为）、#92（代价属人）、**#96 上线前战损不可长程归因**（环 846 拍 / 保险丝 400 拍）。
+- **层次错配（09-30 记）**：进 war 靠 NPC 目击，选靶要玩家房 + 新鲜情报（`targetFreshness:1500`、`maxTowers:3`）。
+  ⚠️**这条已被下一条取代**——错配要两边都在路径上才咬得到。
+- **⚠️进攻选靶链从生产链上进不到（#99 写单测时实证）**：`deriveOperationType()` 对 10 个 `ThreatIntent`
+  只返回 `DEFEND | ESCORT | RETREAT` ⇒ `isOffensive()` 恒 false ⇒ `deriveTarget()` 必走防御支、
+  目标＝**受威胁房本身**；`selectTarget()`（连同 `occupied/blacklist/targetFreshness:1500/maxTowers:3/maxDistance:10`
+  四道进攻闸）唯一调用者是手递进攻夹具的 `tests/unit/military/war-planning-a5-3.test.ts`。
+  推论三条：①上一条的"错配"今天咬不到，因为根本没有选靶发生；②帝国今天**没有进攻能力**
+  （不会主动打任何一间房）——这比 #95 更上游；③#95 的"零计划"只可能由 `noThreats` 解释，
+  "候选被筛光"不是它的解释。
+- **已知缺陷**：#95（复证中的设计行为；按上条更正后它连"选靶失败"这一支都没有）、#92（代价属人）、
+  **#96 上线前战损不可长程归因**（环 846 拍 / 保险丝 400 拍）、**#99 漏斗计数已实现但随批未推 ⇒ 线上还没有这份读数**。
 - **优先级**：P1。**`LIVE_VALIDATED` 的前置**：需要**真实敌情**，而我不制造敌人（L0 §1.5 + 我的既定禁令）。
 
 ## 9. 工业链（lab / factory / boost，`systems/industry*`）
@@ -110,7 +119,8 @@
 - **依赖模块**：`RawMemory` 段调度、`expansion/plan-adapter`（`GATE_INTEL_STALE`，`execution-gate.ts:155-156`）、`military/war-planning-system`（选靶）。
 - **现有测试**：`tests/unit/intel/intel-state.test.ts`、`tests/unit/intel/confidence.test.ts`、`tests/unit/systems/intelligence.test.ts`、`tests/unit/economy/intel.test.ts`（均在 `tests/unit` 5214 用例全绿内）。
 - **线上验证情况**：**未取得**。`peek rooms.W37S58.intel` ⇒ **不存在**；所以"Memory 路径"这个假设先被否掉（大概率在段 0/段 5，或该键已换名）。**不给 `LIVE_VALIDATED`。**
-- **已知缺陷 / 疑点**：**#95 的选靶闸正卡在这里** —— 若段 5 的 `players` 为空，则"war 却没有 warPlan"是**正确行为**（无合格玩家目标），而这条**只能读段 5 来定**。
+- **已知缺陷 / 疑点**：~~**#95 的选靶闸正卡在这里**~~ —— **已被 §8 下一条否证**（选靶链今天进不到，段 5 有主无主都不改变 warPlan 的有无）。
+  仍成立的一半：段 5 的 `players` 决定的是**扩张与侦察**侧对玩家房的判断，与 war 选靶无关。
 - **⚠️本轮把这条推进了一大步，但结论是"不可诊断"，不是"没有敌人"**（11:3xZ，两处读码 + 一次实测）：
   1. **房情报完全活在 heap**：`intelligence.ts:34` 是模块作用域的 `roomEntries`/`playerEntries` **Map**，由 `:54-58 adoptHandoff()` 从 `globalCache().intelHandoff` 采纳（`room-observer` 是生产者），`:187-188` 还会 `ageRooms` + `capRooms(INTEL_ROOMS_CAP)` 裁剪。
      ⇒ 段表里**根本没有"房情报"这一段**（`segId` 序列：0=**layout**、1=cpu、2=eventLog、3=economy、4=prometheus、5=**intelPlayers**、6=l2Intake）⇒ **"段 0 存房情报"这个我此前一直在用的假设是错的**。
