@@ -3981,3 +3981,38 @@ RCL6/7/8 分别 1/2/3 个 boost 位) → 报到拦截 `boost-report.ts` + `boost
 · war 现场（对端日志代取）：`posture=war`、`hostileAt=[83402214, 83399840]`、`newSighting=no` 连续 8 发 ⇒ 间隔累计 ≈1,550 拍（<5,000 仍冻），无目击则退出 ≈83407214；`pressure=[0,0]` 恒 0 ⇒ 与 R181 那型状态伪影无关。`Blocked=G0+G3+G4+G6`。批状态 `behind=0 / ahead=124` ⇒ **无人推码**，#102/#99/#96/#105/#93/#94 仍未部署（A/B/C 仍等你）。
 · **另一条探针纪律（从对端 R239 收回来的同族坑）**：一次请求带多个 `segment=` 会让每段退化成 1 字符桩 ⇒ **断言"某个存储为空"之前，必须用同一工具、同一请求形状先读通一个已知非空的邻居样本**。我本轮的 `deathByCause 不存在`、`byRole 不存在` 这类读数都按这条重验过（是"未部署/该房从未建过"，不是"空即没有"）。
 · **边界**：零 src、零 push、零 build、零 console；探针 peek×2 + 一次 grep（observe 的对端字段我从 `posture-exit2` 日志代取，省一次 API 也避开 429/竞争）。**R123**：①`built` 是否仍缺席 + 幼房 `nf` 是否回 ≥0；②`buyTried>0` 才谈花费；③#61 三键差分（1:1 破了立刻报）；④war 退出时刻按实测拍长换算。
+
+## R242 · 2026-10-03 15:5xZ（#108 的根因读到底：**按人敌意那一列对 NPC/Invader 按构造永远是 0** ⇒ 尾税是为 NPC 打的，而"按行凶者计"没有可挂的键）
+
+**读到的机制**（`intelligence.ts`，全部现读不靠记忆）：
+- `adoptPassiveThreats(ctx)` **确实在跑**（`run()` 里 `:177`，与 `adoptHandoff` 同批）；
+  它对自有房的 `snapshot.threatCreeps` 逐只取 `creep.owner?.username`，
+  **`if (!owner || owner === INVADER_USERNAME) continue;`**（`:79`）⇒ **Invader（NPC）与无 owner 的形态被有意跳过**，
+  剩下的真玩家一律 `hostile=true` 落 `lastHostileAt`。
+- `INVADER_USERNAME = "Invader"`（`domain/intel.ts:11`）。
+- 另一条 upsert 路径（`adoptHandoff`，`:62-68`）传的是 `isBlacklistedRoom(...)` —— 即**只有该房在战争黑名单里**才记敌对。
+
+**和现场读数对起来只有一个自洽解释**：段 5 里两个在册玩家 `lastHostileAt` 都是 0，
+而今天房级落了三次武装目击（83399840 / 83400220 / 83402214，其中一波在场 10 拍、3 RANGED + 2 ATTACK）
+⇒ **这些目击的 owner 不是"玩家"就是"无 owner"**（NPC/Invader 或被跳过的那一类）
+—— 也就是说：**挡着扩张的 war 尾税，是为按构造不进玩家域的那类单位打的。**
+
+**这条把 #108/#92 的支路筛掉了最被看好的那条**：
+- ❌ **"让威胁记忆按行凶者计"目前不可行** —— 不是数据没写，是**这类行凶者根本没有可挂的键**
+  （`Invader` 被有意排除，且排除是对的：把它当成一个"玩家"去记，会把所有 NPC 汇成一个假人）。
+- ✅ **剩下唯一不需要按人数据的支路：按在场时长/杀伤给尾税分档**
+  （`EnemyInvasion → EnemyCleared` 这对边沿事件已经在给在场拍数，R234 实测 10 拍；杀伤可由 `deathByCause.combat` 给，等 #96 上线）。
+  ⇒ **给 #92 的最终口径**：修法只剩"按强度分档"这一族，"按人降税"这条要先解决**键的存在性**而不是消费者的接线。
+
+**两条不许外推**：①这不是 bug —— 跳过 Invader 是 `intel.ts:11` 处的显式设计，我不动它；
+②"目击都是 NPC"目前只有**一次一致性推理**（读数与机制互洽）+ **一发消息（10 拍那波）的编队证据**，
+**没有** owner 级直接读数 ⇒ 定罪成"今天全是 NPC 打的"还不够，写成**强假设**、留免费复证：
+下次目击当窗读段 5 是否出现第三个键或非零 `lastHostileAt`（出现 ⇒ 真玩家也打过，本推论降级）。
+
+**工具债状态（诚实交代，别当成已修好）**：`intel-players.mjs` 我这轮改到
+`body.data` 字符串读法后**仍没跑通**（`PRESENT 191 字符` 却 `FAIL: incorrect header check`
+⇒ 它还在往 gunzip 分支走，说明这个文件里的解包顺序/残留与我手工那发不一致）。
+**可用路径是我手工那一发**：单段请求 `?segment=5&shard=…`、`X-Token`、`typeof body.data === "string"` 时直接 `JSON.parse(body.data)`。
+⇒ 规矩照旧：**这条读数器不进判据链**，段 5 的读数一律用手工那一发的形状。
+
+边界：零 src、零 push、零 build、零 console。
