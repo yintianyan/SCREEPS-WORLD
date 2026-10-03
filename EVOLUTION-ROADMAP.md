@@ -3796,3 +3796,41 @@ grep 确认**运行期无写者**，且 `resolveStrategyOverrides(...)` 只被 s
 ⇒ **"寻址不到"这类结构断言，必须读到那条合并链本身**，不能停在键的类型上。
 
 边界：零 src、零 push、零 build、零 console；只读 + grep + 文档。全量 e2e 仍在后台（31/34 那张长跑）。
+
+## R236 · 2026-10-03 15:3xZ（矩阵最后一行补齐：pixel 与 boost **两条链都接完线**，但"没在跑"的原因不同族）
+
+L0 §2.3 欠的两行进矩阵成 **§18**。**关键是别把两种"没发生"混成一种**（三分法来自 R231/#106）：
+
+**① Pixel = 配置切走（休眠实现），不是坏的。**
+`pixelSystem` 在 `bootstrap.ts:172` 注册、interval 10，四道闸齐全（`CONFIG.pixel.enabled`、
+`ctx.budget.tier === "healthy"`——用的是 **scheduler 那条 tier 轴**、`posture !== "war"`、`bucket ≥ CONFIG.pixel.cpuCost`）。
+但 `enabled` **自 2026-09-27 就是 false**，判决原文在 `config/index.ts:170` 那段注释里，两条独立理由：
+①放血吃光 bucket 时若逢 global reset ⇒ 每拍加载即被杀、bucket 永不回充（**线上实测 187+ 拍停摆**）；
+②bucket 在本仓**首先是档位时钟**（healthy≥7000/guarded≥3000/conserve≥1000），借用额度只是附带 6 点。
+**线上证据**：`kernel.pixelAt = 83270902` ⇒ 这链**真执行过**（≈132,000 拍前，按 3.06 秒/拍 ≈ 4.7 天），
+此后静默与 `enabled=false` 完全一致 ⇒ **`pixelAt` 读成"最后一次成功放血"，不是"待生成进度"**。
+顺手核了一个我差点误判的点：`stats.cpuMax10` **有写者**（`telemetry-collector.ts:731`）⇒ 那个闸不是 #106 那类化石。
+
+**② Boost = 接线完整、被前置条件拒绝。**
+全链我逐环 grep 过：`evaluateBoostRequests`(`lab-system.ts:385`) → `planLabs`(`:520`，boost 优先占 lab，
+RCL6/7/8 分别 1/2/3 个 boost 位) → 报到拦截 `boost-report.ts` + `boostAssignments`(`:543-557`，
+化合物与 lab 能量**都到位**才 `ready`) → `role-runner.ts:120`（在 flee 之后、正常工作之前等就位）→
+**`lab.boostCreep(creep, parts)` 真的在 `:585`**，且 `parts` 被三重约束封顶（矿物存量 / lab 能量 / 匹配部件数 ——
+注释写明不封顶必然 `ERR_NOT_ENOUGH_RESOURCES`），反向还有 `unboostCreep`(`:351`)。
+⇒ 我 grep 到"boostCreep 只出现在注释里"时**差点按 §8b/#106 的形状立案 NOT_WIRED**，
+区别在于我随后按 `boostCreep(` 带括号搜才命中调用点 ⇒ **"符号名命中"与"调用点命中"是两个不同的证据**，
+前者会把已接线的东西报成没接线（反向也成立：#106 那次是零调用者是真的）。
+当前不跑的卡点就是 **#49 那条算术**：`XGH2O = 0 < 门槛 130`、场上 **0 只战争角色**（没有可强化的 body）、
+反应线才刚爬到 `reactionTarget="G"` ⇒ **"boost 零赋值"是正确态，别去"修"它**。
+
+**③ 可否证预测（留给下一轮，不制造条件）**：首炉 T3（`GH2O`/`XGH2O`）进 lab **且**场上出现战争角色 ⇒
+`industryMem.boostedCreeps` 应开始变长、`creep.body[i].boost` 应非空。
+两者都在场而 `boostedCreeps` 仍空 ⇒ 才回到"接线缺口"这一族重查。
+
+**④ 措辞纪律进矩阵**：`WIRED`（调用者存在）与 `EXERCISED`（线上跑过）**不许互替**，
+所以本行标签是 `LIVE_WIRED_UNEXERCISED`（boost 当前）而不是 `TESTED`。
+
+**矩阵至此覆盖**：§1–§15 + §16（零生产导入者清单）+ §17（外交）+ §18（pixel/boost）。
+⇒ **#97 的逐条清单本体收口**（残留是每行的 `STABLE` 缺口，那是另一件事）。
+
+边界：零 src、零 push、零 build、零 console；只读 API 3 发 + grep + 文档。全量 e2e 仍在后台（31/34）。

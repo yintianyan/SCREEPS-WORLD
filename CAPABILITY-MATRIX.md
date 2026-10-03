@@ -337,6 +337,35 @@
   **且换任何一个别的玩家来打也一样计**。修法所需的数据已经在了，缺的只是一个消费者 —— 属人（#108）。
 - **优先级**：P1。
 
+## 18. Pixel 与 Boost 链（L0 §3.7/§3.8 的最后两行，R236 补齐）
+
+- **一句话**：**两条链都接完了线**，两条都不在当前活跃执行，而且**原因不同族**——
+  按 R231/#106 立的三分法：pixel = **配置切走（休眠实现）**，boost = **被前置条件拒绝（缺料 + 缺消费者）**。
+  两者都**不是**无写者、不是接线缺口。
+- **Pixel（`systems/empire/pixel-system.ts`，`bootstrap.ts:172` 已注册，interval 10）**：
+  `CONFIG.pixel.enabled` **自 2026-09-27 起为 false**（`config/index.ts:170` 那段注释就是判决原文）——
+  ①`generatePixel` 吃光 bucket 时若逢 global reset，bundle 加载成本 > tickLimit ⇒ 每拍加载即被杀、bucket 永不回充
+  （**线上实测 187+ 拍停摆**）；②bucket 在本仓**首先是档位时钟**（healthy≥7000 / guarded≥3000 / conserve≥1000），
+  借用额度只是附带的 6 点，一次放血 = 10000 全清。⇒ **这条"能力"是被有来历的决定关掉的，不是坏的**。
+  闸链本身还有四道：`tier === "healthy"`（用的是 **scheduler 那条 tier 轴**，见 §14）、`posture !== "war"`、
+  `stats.cpuMax10` 有写者（`telemetry-collector.ts:731`，不是化石）、`bucket ≥ CONFIG.pixel.cpuCost`。
+- **线上证据**：`Memory.kernel.pixelAt = 83270902` ⇒ 该链**曾真的执行过一次**（约 132,000 拍前，按 3.06 秒/拍 ≈ 4.7 天），
+  此后静默与 `enabled=false` 完全一致。⇒ `pixelAt` 是**最后一次成功放血的时刻**，不是"待生成"进度。
+  `kernel.stats.pixelSold` **键不存在** ⇒ 卖出侧（`terminal-market.ts:564-588`）在本 boot 段没有成交记录（缺键 ≠ 坏了，见 §3 判读纪律）。
+- **Boost（`lab-system.ts` 全链）**：请求 `evaluateBoostRequests`(`:385`) → `planLabs`(`:520`，
+  boost 优先占 lab，RCL6/7/8 = 1/2/3 个 boost 位) → 报到拦截 `boost-report.ts`（写 `globalCache().boostAssignments`，
+  `:543-557` 只在**化合物与 lab 能量都到位**时置 `ready`）→ `role-runner.ts:120` 让 creep 在 flee 之后、工作之前等就位 →
+  **`lab.boostCreep(creep, parts)`（`:585`）真的存在**，且 `parts` 被**三重约束封顶**（矿物存量 / lab 能量 / 匹配部件数）——
+  注释写明不封顶必然 `ERR_NOT_ENOUGH_RESOURCES`。反向还有 `unboostCreep`（`:351`）。
+  ⇒ **接线完整**。当前不跑的卡点是 **#49 那条算术**：库存 `XGH2O = 0 < 门槛 130`、场上 **0 只战争角色**（没有可强化的 body），
+  且反应线才刚爬到 `reactionTarget="G"`。**"boost 零赋值"是正确态**，别当缺陷去修。
+- **可否证预测（留给下一轮）**：首炉 T3 化合物（`GH2O`/`XGH2O`）进 lab 且场上出现战争角色 ⇒
+  `industryMem.boostedCreeps` 应开始变长、`creep.body[i].boost` 应非空。
+  若两者都在场而 `boostedCreeps` 仍空 ⇒ 才回到"接线缺口"这一族重查。
+- **状态标签**：两条均为 **`LIVE_VALIDATED`（曾执行）** / **`TESTED`+休眠（pixel 当前）** / **`LIVE_WIRED_UNEXERCISED`（boost 当前）**
+  —— 用 §16 的措辞纪律：`WIRED` 说的是调用者存在，`EXERCISED` 说的是线上跑过；两者不许互替。
+- **优先级**：P3（pixel 的开关属人已定过一次；boost 等首炉 T3）。
+
 ## 尚未入矩阵的能力 = 本文件的已知不完整性
 
 L0 §3.1–3.8 列出的覆盖面**远不止上面 14 条**（§1–§14，含今夜补的 §8b 与 §13/§14；房间运营/基础设施、资源网络、宣言/联盟/外交、符号与 boost 全链…）。
