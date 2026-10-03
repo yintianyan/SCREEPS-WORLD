@@ -190,9 +190,30 @@
   状态转换是打日志不是断言 ⇒ 与 e2e-known-red 那条纪律同源：**这条链的"能跑完"没有自动化作证，只作过一次现场自然完成**。
 - **优先级**：P0（扩张腿的执行半边）。**升级 `STABLE` 的前置**：第二次自然完成 + 把 `GATE_THREAT_UNCHANGED` 接上真数据（属人，且要等 P-A 实验落地后再动）。
 
+## 14. CPU 调度与预算：两条同名不同物的 tier 轴（`kernel/scheduler.ts` vs `domain/strategy/capacity.ts`）
+
+- **实现状态**：`LIVE_VALIDATED`（两条轴都在跑且读数可引）；**命名隐患记入本行，不单独立部署**。
+- **轴 A｜实时预算档** `ctx.budget.tier`：词汇 `healthy|guarded|conserve|recovery`（`contracts.ts:6`），
+  生产者是 `scheduler.ts`（阈值单一真相源 `CONFIG.cpu.tiers[*].min`，`:10-13`；`voluntaryDrain` 会把 recovery 抬成 conserve，`:39-40`）。
+  消费者是**动作级**与**恢复级**：`builder.ts:26`、`repair.ts:142/336-337`、`build.ts:22/26/57`、`telemetry-collector.ts:133/145/526`，
+  以及**扩张执行门** `expansion-manager.ts:56-57`（`∈{healthy,guarded}` + `bucket≥5000`）。
+- **轴 B｜帝国容量档** `Memory.kernel.capacity.tier`：词汇 `abundant|comfortable|tight|constrained`（`capacity.ts:3`）——
+  **与轴 A 一个字都不重叠**，所以混淆的后果是"查错档位"而不是"读错值"。
+  生产者 `empire-strategy.ts:169`（输入由 `pickCpuUsagePerTick` 选：优先 `cpuRate.total`，否则回退偏高的 `cpuAvg10`），
+  转换处 `:230-241` 会打日志。消费者：`empire-economy.ts:310` ⇒ **就绪度 G6 就是这一轴**、
+  `remote-mining-manager.ts:131/283`（远矿运营档）。
+- **为什么这条值得单独一行**：同一天里两条轴**正在取不同的值**（现场：轴 B `capacity=tight since=83387005` ≈13,700 拍，
+  轴 A `调度 tier=healthy`）。⇒ 任何"CPU 不够了，所以 X 被挡"的句子都必须写明是**哪一轴**：
+  G6 挡晋升用轴 B，plan 执行门用轴 A，远矿扩档也用轴 B。日志里裸写 "tier=" 的三处分属两轴。
+- **依赖模块**：`cpuRate`（拍尾每拍采样，`windowTicks/unsampledTicks` 决定可用性与累计口径）、bucket、`CONFIG.cpu.borrow`。
+- **已知缺陷 / 疑点**：①G6 的门槛是 `0.6×min(limit,tickLimit)=12.00` 定值，现场 `cpuRate.total=14.44/拍` ⇒ **缺 2.44/拍**，
+  而唯一杠杆 `CONFIG.remote.maxOperations` 约省 2.27–2.43/拍（#50 属人，代价＝19.9/拍远矿收入 + 120 段已建路）；
+  ②加第三房 ⇒ 固定项按房走 ⇒ 缺口变大（#45 的结构性成本结论）；③累计型读数必须**差分**（`cpuRate.total` 是 boot 以来累计，直接读会把趋势抹平——已踩过三次）。
+- **优先级**：P1。**`STABLE` 前置**：一次 G6 由红转绿的完整观测（tier 翻 + `since` 前进 + 缺口的独立差分核算三者同拍成立）。
+
 ## 尚未入矩阵的能力 = 本文件的已知不完整性
 
-L0 §3.1–3.8 列出的覆盖面**远不止上面 13 条**（§1–§12 加今夜补的 §8b；房间运营/基础设施、资源网络、殖民管理的全部子项、宣言/联盟/外交、符号与 boost 全链、CPU 调度本身…）。
+L0 §3.1–3.8 列出的覆盖面**远不止上面 14 条**（§1–§14，含今夜补的 §8b 与 §13/§14；房间运营/基础设施、资源网络、宣言/联盟/外交、符号与 boost 全链…）。
 **当前只登记了我能引用证据的条目。**其余按 L0 的纪律**必须标 `NOT_STARTED/DESIGNED` 才诚实**，而我没有逐条核过代码入口与调用链 ⇒ 所以**不填**（填了就是伪造）。
 ⚠️§8b 是第一条**状态为 `NOT_WIRED`** 的行——它是好消息式的诚实：不是"没测过"，是"产线上根本进不到"。后续若再核出这类，优先用它而不是 `TESTED`。
-补齐次序建议（每轮 3–5 条，先核代码再落状态）：①殖民/房间运营子项 → ②CPU 调度与预算（tier 与 `pick*` 已有底子）→ ③外交/宣言（很可能整块 `NOT_STARTED`，那本身就是重要结论）。（原第②条"侦查与情报"已在 §12 落地；它那句"#95 的选靶闸"已按 R211 更正——选靶链今天不在路径上。）
+补齐次序建议（每轮 3–5 条，先核代码再落状态）：①殖民后的**房间运营子项**（construction/layout/link/distributor 那一族，最大的一块空白）→ ②外交/宣言（很可能整块 `NOT_STARTED`，那本身就是重要结论）→ ③符号与 boost 全链。（原②"情报"已落 §12、原③"CPU 调度"已落 §14、殖民执行链已落 §13。）
