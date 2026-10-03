@@ -1645,3 +1645,15 @@
   `dc=2`（冲刺档 2 只大 body）正在跑满 16/拍，`economyPressure=0`、storage 61,238 且在涨。
   ⇒ #81 里"同窗升级零进账"那一半**不该再当作现状引用**，它当时是另一种档位/停摆态；
   要不要为防御再加投入，请按"RCL5 已在 ~1 小时内自达"来定价。
+
+· **R137 结案（02:04Z，零 console）：七个合取项全部量完，`cpuRatioOk` 也过了。**
+  `sumCpuByHome()` 读的是 `Memory.kernel.stats.cpuByHome` ⇒ 可直读：`{"W37S58":3.592,"W38S56":2.791}`
+  ⇒ `totalCreepCpu = 6.383`；`effectiveCpuLimit = min(limit=20, tickLimit)`（探针实测 `limit=20`）
+  ⇒ **ratio = 0.319 < 0.6 ✓**。至此 R137 那句"唯一假项 = `youngestMature`"从推断升为**逐项实测**。
+· **顺带量到一件结构差（这条比上面那条更值得记）**：G0 的 CPU 项和 G6 的 CPU 项**测的不是同一个量** ——
+  G0 只看 **creep CPU**（`cpuByHome` 加总 = 6.38/t），G6 看**每拍总负载**（`cpuAvg10=17.1`、
+  真实尾数口径 ~13–15/t）对 `comfortable ≤ 12`。两者差 ≈2.3 倍，差的那部分正是"模块/系统 CPU"，
+  而新房间主要增加的是 creep CPU。
+  ⇒ 含义：**幼房升到 RCL5 后 G0 会自己翻**，而 **G6 仍会红**；解 G6 的杠杆（砍 `CONFIG.remote.maxOperations`）
+  减的是系统侧不是 creep 侧 ⇒ 它跟 G0 不共享成因，别指望"顺手也把 G0 解了"。
+  ⚠️`cpuAvg10=17.1` 是老认识的偏高仪器（每 10 拍采一次、采到 flush 重活拍），只当上界读。
