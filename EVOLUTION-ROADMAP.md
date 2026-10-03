@@ -4625,3 +4625,23 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 **④#96/#112 已记于 R261；#93/#94 的落盘键这次在 dashboard/capacity 侧可见**（`Budget`、`tier/since`），
 但 `gclLevel/bucket` 的专门键仍需在 `--keys` 全列里定位一次才能宣布 EXERCISED ⇒ 不当已验。
 **⑤本轮未动任何 src**（全在读与记）；e2e 首次对已部署的同一份码补跑，挂在后台。
+
+### R263（10-04 04:45Z，本会话）#100 的缺口从"选靶链没接线"改指到**情报输入侧**——我先读反了一个谓词方向，当场纠
+读 `war-planning-system.ts:305-330` 的真实走向（不是桶名）：
+`intelEntries = queryRoomIntel().length` → 逐条
+`if (!intelActionUsable(...)) notFact++ / continue` → **`if (!e.owner) unowned++ / continue`** → `if (e.owner === myUsername) mine++ / continue`
+→ `if (e.kind !== "normal") notNormal++ / continue` → 否则 `candidates.push(...)`。
+⇒ **`unowned` 是"被剔除"不是"过了筛"**：战争目标必须是**有主且非我方**的房，`!e.owner` 直接跳过。
+第一版我把 R262 那句写成"6 条过了非我方这一关"，**方向读反**（同我记过的"引任何一把闸之前先读它那行的条件字符串"），当场纠在这里。
+
+**于是漏斗没有残差，且结论换了位置**：`intelEntries 7 = notFact 1 + unowned 6`，`mine/notNormal = 0`，`candidates 0`，`plans 0`。
+⇒ 帝国现在**手上没有任何"有主敌方房"的 fact 级情报**——`queryRoomIntel()` 给的 7 条全是无主房（远矿/中立观察对象）。
+⇒ **#100 的缺口在情报输入侧**（没有对他人有主房做 fact 级侦察这条能力），**不是**选靶/授权/ponsor 链没接线：
+那几级这次实测**按设计正确地把每一条都拒了**。`war-planning.ts:153` 也写明终局四项 `noInput|noThreats|noPlan|plans` 恰有一项为 1、
+每条计数只在本 pass 内有效（每次 pass 从零计）⇒ 读到的 `warFunnel` 是**最后一趟 pass 的快照**，不是累计量，别拿它做跨拍差分。
+
+顺带一条同类小事实（不当缺陷用）：这里读的 `Memory.kernel.warBlacklist` 在 `--keys kernel` 全列里**不存在** ⇒ 止损黑名单当前为空
+（可能是"从未写入"也可能是"没有事件时不建对象"，两者都还不足以立案；要立案得先按 R254 那三条读码规矩来）。
+
+**动作方向（属人，我不自批）**：要长出"竞争/作战"的攻击面，缺的第一步是**敌方有主房的 fact 级观察**（以及 #108 的按人归因域），
+而不是去动选靶阈值——动阈值会在**没有候选**的前提下把"只防不攻"读成"已能攻"。
