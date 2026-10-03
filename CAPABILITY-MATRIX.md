@@ -156,6 +156,40 @@
   2. 用一发**带标记 console 探针**读 `RawMemory.segments[5]` 的 `players` 键数（段不在 heap 里，`peek` 走 Memory 端点读不到）。
   3. 若 `players` 非空 ⇒ 回 #95 查 war 选靶为何仍不产 `warPlan`；若为空 ⇒ #95 结为"正确行为"，本行升 `LIVE_VALIDATED` 的条件改成"观察到一次跨房情报被扩张或军事消费"。
 
+## 13. 殖民执行链（`systems/empire/expansion/plan-adapter.ts` → `state-machine.ts`）
+
+- **实现状态**：`LIVE_VALIDATED`（**一次**端到端自然完成，#32：开单→`COMPLETED` 13,300 拍）；`STABLE` 缺口＝第二次没有。
+- **入口 / 链**：`expansionAllowed` 的唯一消费者是 `plan-adapter.ts:69` 的 `isEmpireReady`；执行侧一共 11 道闸
+  （`execution-gate.ts:7-19`：plan_valid / candidate_valid / target_claimable / empire_ready / budget≥cost / core_safe /
+  not_owned / no_concurrent_op / no_other_expansion / intel_fresh / threat_unchanged）。
+  ⚠️**G4（净流）与 G6（CPU 档）不参与执行** —— 它们只在 `readiness.ts:191-216` 挡晋升到 WAITING_EXECUTION
+  （`empire-economy.ts:314-321` → `expansion-planner.ts:200-202,228-231`）。⇒ "G6 红着也能执行已晋升的 plan"是设计，不是漏洞。
+  另一条独立的执行门：`expansion-manager.ts:56-57` 要求 `ctx.budget.tier ∈ {healthy,guarded}` 且 `bucket ≥ 5000`
+  （⚠️这与 G6 用的 `capacity.tier` 是**两个不同的 tier 轴**，别混）。
+- **状态机现场形状**（`state-machine.ts`）：`plan-adapter.ts:123` 直接以 `"preparing"` 建档 ⇒ `:51` 的 `validating` 分支无写者、不跑；
+  `:209-233` claiming→claimed 靠 `controller.my`，abort 走 STOLEN/TIMED_OUT(6000)；CP2 `:283-317` 要 `FIND_MY_SPAWNS`；
+  CP3/CP4 `:416-474` 要 harvester+hauler/distributor（由**新房自己的** spawn 出，`spawn-manager.ts:406`；
+  `submitPioneers:745-748` 只请求 worker/builder）；CP5+`canHandover` `:586-611`→completed。
+  `:153-160` 的 `reservedEnergy` **从不落账**（代码注释自己承认）⇒ 是个装饰数，不是预算承诺。
+- **sponsor 的真实弱点（本轮新证）**：sponsor = `plan.sponsorRoom` ← `discovery.ts:64-73` = **"哪个自有房的侦察兵持有这条 Intel"**，
+  没有 spawn/RCL 校验；`CONFIG.expansion.sponsorMinRcl:5`（`config/index.ts:935`）**只被 `bootstrap-lane.ts:50` 消费，claim 路径不查**。
+  失败形状：`state-machine.ts:672-673` 静默返回、`spawn-manager.ts:406` 无 spawn 直接返回 ⇒ **没有"sponsor 不能孵兵"这个信号**；
+  有记录的只有 `abortExpansion:645-668`（UOEM 事件 + 20,000 拍拉黑 + 3 次失败后节奏暂停）。
+  ⇒ 与 #13（已释放房当过 sponsor）同族，这条是它的机制解释。
+- **执行期复检**：`plan-adapter.ts:66-98` 消费时重验 11 闸（TOCTOU）；在途**故意不再查** `posture/expansionAllowed`
+  （`expansion-manager.ts:79-86`），只查视野/归属/威胁（`state-machine.ts:264-281,320-338,388-396,508-515`）
+  ⇒ 开闸瞬间放行后，姿态回摆不会撤单（这是"长承诺"的设计代价，不是 bug）。
+- **⚠️两道闸按构造永真通过（#102，我逐行核过）**：`execution-gate.ts:136-142` 读 `hasConcurrentOp`、
+  `:160-166` 读 `threatEscalated`，而唯一产线调用点 `plan-adapter.ts:71/:74` **写死 `false`**（作者注释"简化"）。
+  `threat-escalation.ts` 无产线 importer ⇒ **帝国可以开进一间威胁刚升级的房而不会被拦**。
+  同处第三件小事：`getExecutionProgress` 表键是大写而 Memory 状态是小写 ⇒ `progress` 恒 0，
+  但 `executionDashboard` 除写者外**零消费者** ⇒ 按"不在决策路径上的读数"结案，不单独立部署。
+- **测试覆盖**：纯夹具（`tests/integration/expansion/a3-3/a3-4-e2e.test.ts`、`tests/unit/expansion/a3-*-contract.test.ts`
+  —— 只 import domain 函数，**不跑系统**）；单拍系统级（`tests/unit/systems/expansion-outcome.test.ts` 等，手拼 Memory）；
+  **唯一真多拍引擎跑**是 `tests/e2e/scenarios/20-claim-chain.test.ts`，但它断言的只有"无 JS 错误 + Memory 体积"，
+  状态转换是打日志不是断言 ⇒ 与 e2e-known-red 那条纪律同源：**这条链的"能跑完"没有自动化作证，只作过一次现场自然完成**。
+- **优先级**：P0（扩张腿的执行半边）。**升级 `STABLE` 的前置**：第二次自然完成 + 把 `GATE_THREAT_UNCHANGED` 接上真数据（属人，且要等 P-A 实验落地后再动）。
+
 ## 尚未入矩阵的能力 = 本文件的已知不完整性
 
 L0 §3.1–3.8 列出的覆盖面**远不止上面 13 条**（§1–§12 加今夜补的 §8b；房间运营/基础设施、资源网络、殖民管理的全部子项、宣言/联盟/外交、符号与 boost 全链、CPU 调度本身…）。

@@ -3127,3 +3127,40 @@ L0 §2.3 的 #97 与 §3.5 的属人 7 项本轮未动。
 **四、其余**：`Blocked=G0+G6`@83400984（**RCL5 之后没有新增红项**）、`Pressure=HIGH(0.61)`、候选 `Q2/R7/U3`（R 档 +1，与幼房成熟相符）、`tier=tight@83387005`、调度 healthy、300 拍环 CPU avg 18.6/max 23.8（防御+建设潮，非新态势）、`errorsPerTick=0`；`credits 12,864,355`（第六发差分 **+43,541/≈700 拍**，远低于前几发的 130~240/拍 ⇒ **速率不是常数**，别拿来定势）、`runs=72`、`demandsPublished=0`；`kernel.stats.deathByCause` 仍不存在（#96 未上线，`ahead=89/behind=0`）。
 
 **边界**：零 src、零 push、零 build、零 console（对端 12:4xZ 刚写 R211，我不碰 `__evalResult`）；探针 observe×1 + peek×2。**下一轮**：①war 是否在 ≈83405220 退出 ⇒ 那才是 RCL5 之后第一次真 claim 的机会（看 `Memory.rooms` 是否变 3 房 / plan 被消费）；②幼房 W38S55 与塔工地的推进斜率（自主成长的第二发样本）；③再来围困且 >200 拍时，用键名前缀扫 defender 在场代替 `warPlan.spawned`。§3.5 属人 7 项未动，本轮唯一新增"待你拍"的是对端 #100（要不要给战争进攻支路接线），我补的事实是：**"打不到玩家房"是结构（选靶链无产线调用者），不是情报不够**。
+
+---
+
+## R213 · 2026-10-03 13:0xZ（扩张执行链整张图落进能力矩阵 §13，并核出两道永真闸）
+
+主目标是 L0 §2.3 的 #97：把 P0 的"扩张"腿的**执行半边**逐行核成可引用的能力行。
+派 Explore 出一张地图后，**三处关键论断我自己逐行复看**（子代理的死码报告默认不可信，这条纪律是踩过一次记下的）：
+
+**① G4/G6 不参与执行**（我只需确认，代码写得清楚）：`execution-gate.ts:7-19` 那 11 道闸里没有净流与 CPU 档，
+它们在 `readiness.ts:191-216` 只挡"晋升到 WAITING_EXECUTION"。⇒ 今天 `Blocked=G0+G6` 里那条 G6
+**挡不住已晋升的 4 张 plan 执行**——这条口径对 #88/#50 的读法有直接影响（G6 红 ≠ 解不了闸就不能动工）。
+另有一条**独立**执行门 `expansion-manager.ts:56-57`：`budget.tier ∈ {healthy,guarded}` + `bucket≥5000`
+——注意这是**另一条 tier 轴**，不是 G6 的 `capacity.tier`，混了就会得出错误结论。
+
+**② 两道执行闸按构造永真通过 ⇒ 新案 #102**：`execution-gate.ts:136-142` 读 `hasConcurrentOp`、
+`:160-166` 读 `threatEscalated`，而唯一产线调用点 `plan-adapter.ts:71/:74` 把它们**写成字面量 `false`**
+（作者自己的注释是"简化：检查…"）。`threat-escalation.ts` 全仓无产线 importer（只被同样没人引用的
+`execution-dashboard.ts` type-import）。⇒ **帝国可以开进一间威胁刚刚升级的房而不会被任何一道闸拦下**。
+**本轮故意不动手**，理由写进案里：P-A 实验（≈83405220 尾税到期 ⇒ `expansionAllowed` 翻 true ⇒ 真去 claim W37S56）
+是几小时难求的自然复证，而给一个执行闸喂真数据是**收紧**行为——喂错源就会把这次实验钉成"没开闸"，
+归因会错到我头上而不是系统。时序＝先拿 P-A/P-B 读数，再动这两道闸。修法规格已写到"只差一次形参读取"。
+
+**③ sponsor 的真实弱点（#13 的机制解释）**：sponsor = `discovery.ts:64-73` 的"哪个自有房的侦察兵持有这条 Intel"，
+**没有 spawn/RCL 校验**；`CONFIG.expansion.sponsorMinRcl:5` 只被 `bootstrap-lane.ts:50` 消费，claim 路径不查。
+失败时 `state-machine.ts:672-673` 与 `spawn-manager.ts:406` 都是**静默返回**——没有"sponsor 孵不出兵"这个信号。
+⇒ 若 P-A 那一次 claim 卡住，第一嫌疑就是这条（而不是"闸没开"）。
+
+顺带两处按量级结案（不单独立部署）：`getExecutionProgress` 的表键大写 vs Memory 状态小写 ⇒ `progress` 恒 0，
+但 `executionDashboard` 除写者外零消费者；`reservedEnergy` 从不落账（`:601-603/:653` 注释自认），是装饰数。
+
+**测试覆盖的真相**（这条最该被记住）：`tests/integration/expansion/a3-*/a3-4-e2e` 与 `tests/unit/expansion/a3-*-contract`
+**只 import domain 函数、从不跑系统**；唯一真多拍引擎跑 `tests/e2e/scenarios/20-claim-chain.test.ts`
+**断言的只有"无 JS 错误 + Memory 体积"**，状态转换是打日志。⇒ **殖民执行链的"能跑完"至今没有自动化作证**，
+只有一次现场自然完成（#32）。矩阵 §13 里我把这句写成了 `STABLE` 缺口的正式前置。
+
+边界：零 src、零 push、零 build、零 console；探针只有源码 grep/Read + 前面那 5 发 REST peek。
+在飞看门狗 4 支（41487/54116/82202/**7182**）。#97 前进 2 行（§8b 与 §13），余下待补次序不变。
