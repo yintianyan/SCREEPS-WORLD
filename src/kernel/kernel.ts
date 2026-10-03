@@ -692,7 +692,17 @@ export class Kernel {
   private collectSiteProgressSnapshots(ctx: Context): SiteProgressSnapshot[] {
     const result: SiteProgressSnapshot[] = [];
     const tracker = (globalCache().siteProgressTracker ??= new Map());
-    if (Object.keys(Game.constructionSites).length === 0) return result;
+    // 测试夹具（integration harness）里 Game.constructionSites 可能缺席；Object.keys(null) 抛错会被
+    // safeRun 吞掉并连带杀掉整条 expectations（E2/E7 全哑），所以这里自己兜住。
+    const sites = Game.constructionSites;
+    const siteIds = sites ? Object.keys(sites) : [];
+    if (siteIds.length === 0) {
+      // 无 site 时仍要清理追踪条目，否则消失的 site 永久留在 Map 里。
+      for (const trackedId of tracker.keys()) {
+        if (!sites || !sites[trackedId]) tracker.delete(trackedId);
+      }
+      return result;
+    }
 
     // 一次遍历 creep 得到每房「能施工的人」（带 ≥1 个 WORK 部件的我方 creep）。
     // ⚠️不按 role 筛：远矿路是通勤 hauler 建的（remote-hauler.ts:89），只数 builder 会把远矿停滞误判成"没派人"。
@@ -707,8 +717,8 @@ export class Kernel {
       workersByRoom[roomName] = (workersByRoom[roomName] ?? 0) + 1;
     }
 
-    for (const id in Game.constructionSites) {
-      const site = Game.constructionSites[id];
+    for (const id of siteIds) {
+      const site = sites[id];
       if (!site) continue;
       const roomName = site.pos.roomName;
       const prev = tracker.get(id);
@@ -740,7 +750,7 @@ export class Kernel {
     }
     // 清理已消失的 site 追踪条目（防 Map 无限增长）
     for (const trackedId of tracker.keys()) {
-      if (!Game.constructionSites[trackedId]) tracker.delete(trackedId);
+      if (!sites[trackedId]) tracker.delete(trackedId);
     }
     return result;
   }

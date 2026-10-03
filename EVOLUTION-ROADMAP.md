@@ -4379,3 +4379,23 @@ R250 落了 `buildersInRoom` 之后，我按自己刚写进记忆的规矩去穷
 差别只在于这次我在**提交前**用穷举把它抓出来了。⇒ 规矩要长成一问：**"我刚定义的那个筛选谓词，是我搜过的集合，还是能力集合？"**
 
 边界：零 push、零 build、零 console；src 2 文件 + 测试 1 文件 + 文档。
+
+### R252（10-04 02:30Z，本会话）integration 层抓到我自己写进去的回归，E7 的假阴性主张补上反向实验
+**①回归归因（我这几轮唯一的 src 缺陷，且只在测试层）**：`collectSiteProgressSnapshots` 里我加的
+`if (Object.keys(Game.constructionSites).length === 0) return result;` 在 integration 夹具里抛
+`TypeError: Cannot convert undefined or null to object (kernel.ts:695)`，抛出被 `safeRun("expectations")`
+吞掉 ⇒ 整条 expectations（E2+E7）静默死亡 ⇒ `npx vitest run tests/integration` = **5 files / 9 tests 红**
+（`p3-bypass-loop`：「E2 应检出 P3 饥饿，实际违例: []」＋ 4 个 `rcl2-*` 建造场景）。
+修法：先取 `sites`/`siteIds` 判空，空集分支里**仍然清理 tracker**（顺手补掉"全部 site 消失后条目永久留在 Map"的旧漏），
+循环改遍历 `siteIds`。复跑 `tsc --noEmit` 退出 0、integration **30 files / 239 tests 全绿**（9 红清零）。
+**边界（不外推）**：引擎线上 `Game.constructionSites` 恒为对象 ⇒ 这**不是**一次线上风险，E7 在产线一直在跑；
+它兑现的代价是"我用 unit 全绿冒充过门禁全绿"，而钩子只跑 unit + `tsc`。⇒ 记法不变：**"门禁全绿"必须自己补 integration**。
+
+**②E7 假阴性主张的反向实验（R251 欠的那一发）**：把条件临时改回旧式 `noProgressAge > E7_STALE_TICKS && sp.builderVisits === 0`，
+`e7-e8-wiring` + `expectations` 同跑 = **2 红 / 36 绿**。两条红恰好都钉在新覆盖的那一类
+（`siteStaleNoWorker`「有进度但冻住」与 `siteStaleWorkerIdle`），控制组（23 条 expectations 用例＋其余 E7/E8 用例）全绿
+⇒ "旧判据整体豁免了'有进度后冻住的残骸'"由推算升为实测。已当场改回，`git diff src/kernel/expectations.ts` 为空。
+
+**③状态**：#111 的仪器侧到 `WIRED+TESTED`（unit/integration 两层都绿）仍**未部署**，
+`EXERCISED`（线上真的按 `siteStaleNoWorker`/`siteStaleWorkerIdle` 分过桶）只能等一次换码批；
+零 src 行为改动、零 push、零 build、零 console。批 ahead=130 / behind=0，仍等 owner 对 A/B/C（含 `1bc67c9` #89）授权。
