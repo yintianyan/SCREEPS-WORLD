@@ -3763,3 +3763,36 @@ grep `src/` 里按 basename 的导入者，零命中即候选。225 个里 **33 
 
 边界：src 2 行级改动 + 测试；零 push、零 build、零 console（dist 不动，仍等于我上轮建的那版）；
 `npx tsc --noEmit` 干净、`creep-death-event.test.ts` 14/14。全量 e2e 仍在后台。
+
+## R235 · 2026-10-03 15:2xZ（外交首次入矩阵：**"谁在打我"已经算出来并持久化了，但没有任何消费者**）
+
+L0 §2.3 欠的那一行（外交/声明）补成矩阵 **§17**。结论不是"没有情报"，而是**情报齐、政策侧零接线**：
+
+**① 在跑的一半（逐条核到调用者，按 R231/#106 立的规矩）**：`domain/intel.ts:437 upsertPlayerObservation`
+被产线调两次 —— `systems/intelligence.ts:62`（活动信号）与 `:80`（`hostile=true`）⇒
+每玩家记 `{owner, lastSeenAt, lastHostileAt（单调前移）, rooms{房→tick}}`，段 5 月级持久化。
+**这不是化石计数器**：它有 `src/` 调用者，且写的是**按人归因**的敌意时刻。
+
+**② 缺的一半**：grep 全仓 `lastHostileAt` 的消费者，**四个读的全是房级、不认人的 `Memory.rooms[].lastHostileAt`** ——
+`empire-strategy.ts:57`（喂 posture ⇒ 就是那条 war 尾税）、`tower-defense.ts:223`、`fortification.ts:79-83`、`room-profile.ts:283`。
+**零个**读 `PlayerIntelEntry.lastHostileAt`。⇒ 按人归因的数据写了、存了、没人用。
+后果具体到今天的形状：一次 10 拍的武装访问（R234）缴 5,000 拍扩张税，而**换任何一个别的玩家来打也一样计**
+—— 系统无法区分"正在被 X 持续攻击"与"三个月前 X 路过一次"，尽管后者就在段 5 里。
+
+**③ 敌我名单是个人手编辑的空数组**：`CONFIG.defense.allies = []`（`config/index.ts:589`）是全帝国唯一的"非敌"机制，
+消费者 6 处（`targeting.ts:23`、`room-snapshot.ts:64`、`plan-adapter.ts:203`、`state-machine.ts:322`、`blocker-intel.ts:29`、`threat.ts:13`）。
+grep 确认**运行期无写者**，且 `resolveStrategyOverrides(...)` 只被 spread 进 posture options（`empire-strategy.ts:89-96`）
+⇒ **自进化 L1 寻址不到它**（我先把这条写成"不能覆盖"，再回去读了合并链才敢这么说）。
+⇒ 没有宣战/停战/中立声明，也没有"观察到长期和平的邻居"降级机制。
+
+**④ 为什么这条不是学术条目**：§8b（帝国无进攻能力 #100）+ 本条 = **L0 §3.5 的"竞争"面只剩被动挨打**；
+而 #92 的修法候选里**最便宜的一个恰好落在这里**：不是调 `threatWindow` 常数（那是把噪声和持续攻击一起放宽），
+而是**让威胁记忆按行凶者计** —— 需要的原料已经在段 5，缺的只是消费方与一条到 posture 输入的接线。
+**修法属人（#108）**，且我不自选：它会改变 war 的触发面（比 #89 更敏感），L0 §1.5 里"改变外交关系/主动战争"同族。
+
+**⑤ 一条自我约束记下来**：这轮我先在矩阵里写了"不在 strategyOverrides 的可寻址路径里"，
+那句话当时是**推断**（`strategyOverrides` 的类型确实是 `Record<string, ...>`，字面上像任意路径）。
+回去读 `empire-strategy.ts:89-96` 才拿到机制级理由（overrides 只 spread 进 posture options）。
+⇒ **"寻址不到"这类结构断言，必须读到那条合并链本身**，不能停在键的类型上。
+
+边界：零 src、零 push、零 build、零 console；只读 + grep + 文档。全量 e2e 仍在后台（31/34 那张长跑）。

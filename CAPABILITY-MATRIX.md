@@ -317,6 +317,26 @@
   像是后续阶段的设计前置。**接线 or 删除属人（#107）**；若删，按纪律先存 diff。
 - **优先级**：P3（真相维护），但**排在任何一次矩阵刷新之前** —— 不先剔掉这类标签，矩阵会继续对外冒充能力。
 
+## 17. 外交与敌我判定（L0 §3.5 的"竞争"面，R235 首次入矩阵）
+
+- **实现状态**：情报侧 `LIVE_VALIDATED`（按人归因**在写且在持久化**）/ 政策侧 **`NOT_WIRED`**（没有任何消费者读它）
+- **在跑的一半**：`domain/intel.ts:437 upsertPlayerObservation` 被产线调用两次 —— `systems/intelligence.ts:62`（活动信号）与
+  `:80`（敌对信号 `hostile=true`）⇒ 每个玩家记 `{owner, lastSeenAt, lastHostileAt(单调前移), rooms{房→tick}}`，
+  经段 5 月级持久化。这是"谁在打我"的完整原料。
+- **缺的一半（逐条 grep 过，不是推断）**：**所有**威胁记忆消费者读的都是**房级、不认人**的 `Memory.rooms[].lastHostileAt` ——
+  `empire-strategy.ts:57`（喂 posture ⇒ war 尾税）、`tower-defense.ts:223`、`fortification.ts:79-83`、`room-profile.ts:283`。
+  **零个消费者**读 `PlayerIntelEntry.lastHostileAt`。⇒ 按人归因的数据写了、存了，然后没人用。
+- **敌我名单**：`CONFIG.defense.allies = []`（`config/index.ts:589`）是全帝国唯一的"非敌"机制，
+  消费者 `room-scans/targeting.ts:23`、`room-snapshot.ts:64`、`plan-adapter.ts:203`、`state-machine.ts:322`、`blocker-intel.ts:29`、
+  `threat.ts:13` —— 但它**运行期无写者**（grep 只有读），也不在 `strategyOverrides` 的可寻址路径里 —— `resolveStrategyOverrides(...)` 只被 **spread 进 posture options**
+  （`empire-strategy.ts:89-96` 那条 DEFAULT→CONFIG.posture→环境基线→overrides），而 `allies` 是上面那六个消费者
+  **各自直接读 CONFIG** ⇒ 自进化 L1 没有任何路径能把某个玩家移出"敌对"集合（不是"还没学会"，是**寻址不到**）。
+  ⇒ **外交 = 人编辑一个空数组**：没有宣战/停战/中立声明，没有"观察到的和平邻居"降级机制。
+- **与本文件其它条的关系（为什么这条不是学术问题）**：§8b（无进攻能力 #100）+ 本条合起来 = **帝国的"竞争"只剩被动挨打**；
+  而 §2/#92 那条尾税的形状是"不认人"：一次 10 拍的武装访问（R234 实测）⇒ 5,000 拍扩张税，
+  **且换任何一个别的玩家来打也一样计**。修法所需的数据已经在了，缺的只是一个消费者 —— 属人（#108）。
+- **优先级**：P1。
+
 ## 尚未入矩阵的能力 = 本文件的已知不完整性
 
 L0 §3.1–3.8 列出的覆盖面**远不止上面 14 条**（§1–§14，含今夜补的 §8b 与 §13/§14；房间运营/基础设施、资源网络、宣言/联盟/外交、符号与 boost 全链…）。
