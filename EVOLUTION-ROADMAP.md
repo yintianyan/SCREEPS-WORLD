@@ -2155,3 +2155,19 @@ G4 红是**"要求继续积累"这一条在饱和库存上不可长期成立**�
 · 给自己留的一句：**同名不同域的枚举是这个仓库的惯犯**（`nf` vs `gateNetFlow` vs `netFlowMean_d`、
   `agenda.minDwell=200` vs `posture.minDwell=1000`、`consec` vs `consecutiveFailures`、这次的两套 `tierRank`）。
   ⇒ 凡是"某个 rank/阈值 ⇒ 某结论"的句子，**先读写者那行代码确认它写的是哪套枚举**，再下结论。
+
+### R165（10-03 04:4xZ）R163 留的【未决】当场关掉：`avg(ti)=0` ⇒ 探索通道**活着**，#85 窗**可归因**
+· 探针 `mk=R164A`（tick 83393504）：`SEGMENT_CPU = segId("cpu",1)` ⇒ 段 **1**（顶层键 `cpu, population, heap`；
+  段 0=房态、2=events、3=economy、5=epoch/players，顺手记下来免得再猜）。
+  取 `cpu.d` 尾窗 **20** 个采样（= `EVAL_WINDOW_SIZE`）的 `ti`：**avgTi = 0、maxTi = 0、n = 20**。
+  ⇒ `tuning-engine.ts:571` 的 `tierRank = round(avg(ti)) = 0 = healthy` ⇒ `exploreParameter` 的
+  `tierRank >= 2` **不成立**，`checkVerifyGate` 同理 ⇒ **探索与验证通道当时都是活的**。
+· ⇒ **对 #85 的判定**：R160 的"窗不可归因"作废（机制错，见 R163），但**共条件本身是对的、现在已被满足**。
+  所以 `window*/pass85` 到点打出的 **"无 `code=3` 提案 ⇒ binding 闸起作用"重新具备证据价值**，
+  条件是**读数时再测一次 `avg(ti)`**（<2）：`tierRank` 是 20 采样滚动窗，会随 CPU 压力变；
+  若那一刻 ≥2 ⇒ 那一段仍记 `UNASSESSABLE-BY-CONSTRUCTION`。
+  ⚠️另外两条不在 `ti` 管辖内的前提照旧：探索还要 `stableCount ≥ 3`（堆状态，**换码即归零**）与 `crisisRatio < 0.1`；
+  本窗内不换码（R150 的 `HEAD..origin/dev` 为空已确认），所以前者不受影响 —— 这一条仍是"本窗不部署"的方法论理由。
+· **带走的方法**（这次三步都算数）：①怀疑自己用错枚举 ⇒ 去读**写者那一行**（R163）；
+  ②不留【未决】给人，能测就测（R165）；③测之前先列**哪些段是活的**（`active:[0..6]`）再取数，
+  免得又拿"读不到"当"没有"（今晚第三次踩同一坑，前两次的教训都写在案）。
