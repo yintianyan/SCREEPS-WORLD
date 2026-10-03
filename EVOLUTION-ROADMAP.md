@@ -3689,3 +3689,37 @@ storage 889,323（ratio 0.8893，仍在触发线 0.9 之下且方向朝下，与
    下一轮要引它就先读 `resource-view.ts` 的分类阈值。
 
 边界：零 src、零 push、零 build、零 console；只读 API 一发 + 读码。
+
+## R233 · 2026-10-03 15:0xZ（把 #106 的识别法当筛子用一遍：domain 层 **33/225** 个模块在生产线上零导入者）
+
+`#106` 那条是"读现场读数读出来的"，这轮把它**反过来当筛查工具**：对 `src/domain/**` 每个非 `.d.ts` 模块，
+grep `src/` 里按 basename 的导入者，零命中即候选。225 个里 **33 个命中**，分两档（差在有没有单测）：
+
+**A. 有单测但产线进不到（16 个 = 真·"建了能力没接线"，与 §8b/§3b 同族）**
+`economy/contract-lifecycle`、`economy/contract-node-bridge`、
+`economy/resource-flow`、`economy/role-transition`、`economy/route-efficiency`、
+`expansion/colony-dashboard`、`expansion/execution-dashboard`、`expansion/execution-operation`、`expansion/roi-tracker`、
+`logistics/delivery-validation`、`operation/preemption`、`operation/replan`、`operation/stability`、
+`operation/transport-planner`、`remote/container-lifecycle`、`remote/opportunity-ranking`
+
+**B. 既没接线也没测试（17 个 = 纯死码）**
+`logistics/adaptive-routing`、`backpressure`、`batch-sizing`、`death-recovery`、`demand-batching`、`emergency`、
+`fairness`、`hauler-scaling`、`overdelivery`、`partial-delivery`、`reliability`、`request-lifecycle`、`rerouting`、
+`route-suspension`、`starvation`、`economy/reconciliation`、`strategy/empire-balance`
+
+**两条不许外推的方向**（我先把自己这一步按住）：
+1. **不成立为性能问题**：这些文件没有导入者 ⇒ 打包器（esbuild）根本不会把它们带进 `dist/main.js`
+   ⇒ 删与不删**对线上 CPU/内存零影响**。它们的代价是**维护与"验证真相"**：矩阵里任何一行如果把这类模块写成
+   `TESTED`/`LIVE_VALIDATED`，都是在给下一轮发假信号（我今天就是被 `td=0` 那块化石骗了一次）。
+2. **"零导入者"不等于"应该删"**：其中几组看起来是**故意留的下一阶段**（`expansion/execution-*` 与 `operation/*` 是殖民与运力执行的
+   零件，`logistics/*` 一整片像 A4.x 的设计前置）。**接线还是删，属人**（拆 `#107`）。
+
+**方法学留三条给下一轮（都是这次差点踩到的）**：
+- 筛子的假阳性来源要当场排：本仓 `src/domain` 只有一个 barrel（`tactical/index.ts`），且它**不是**任何候选的父目录；
+  另对 4 个候选（`route-suspension`/`backpressure`/`roi-tracker`/`container-lifecycle`）用**去后缀全文 grep** 复看，
+  在自己文件与 tests 之外**零提及** ⇒ 这轮的 33 不靠"只匹配 import 语句"活着。
+- 目录级 import（`from "../logistics"`）不会被 basename 匹配到 ⇒ 若哪天加了 barrel，这条筛子要一起改。
+- **别把"有单测"读成"在跑"**：A 档 16 个全有单测，`recordDelivery` 甚至被测试断言过交付累加逻辑 ——
+  它绿着，产线上却零调用者。**判 status 只看 `src/` 的调用者，不看 tests。**
+
+边界：零 src、零 push、零 build、零 console；纯 grep。全量 e2e 仍在后台（31/34 那张长跑）。

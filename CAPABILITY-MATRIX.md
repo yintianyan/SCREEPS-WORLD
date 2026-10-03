@@ -298,6 +298,25 @@
   回归立案条件：若读到某间房有 link 且 `role==="hub"` 且其能量长期非零，则 #75 从"无处可计"升级为"无处可计且真的在压能量"。
 - **优先级**：P2（管线本身活着；风险集中在"文档/配置与代码相反"这一族）。
 
+## 16. 零生产导入者的 domain 模块（R233 筛出的 33/225，状态标签的对照表）
+
+- **筛法**：对 `src/domain/**` 每个非 `.d.ts` 模块 grep `src/` 里按 basename 的导入者，零命中即候选。
+  假阳性当场排过两次：本仓 `src/domain` 只有一个 barrel（`tactical/index.ts`，不是任何候选的父目录），
+  且对 4 个候选做了"去后缀全文 grep"复看（自身与 tests 之外零提及）。
+- **A 档 · 有单测但产线进不到（16）**：`economy/contract-lifecycle`、`economy/contract-node-bridge`、`economy/resource-flow`、
+  `economy/role-transition`、`economy/route-efficiency`、`expansion/colony-dashboard`、`expansion/execution-dashboard`、
+  `expansion/execution-operation`、`expansion/roi-tracker`、`logistics/delivery-validation`、`operation/preemption`、
+  `operation/replan`、`operation/stability`、`operation/transport-planner`、`remote/container-lifecycle`、`remote/opportunity-ranking`
+- **B 档 · 未接线也未测试（17）**：`logistics/{adaptive-routing,backpressure,batch-sizing,death-recovery,demand-batching,emergency,fairness,hauler-scaling,overdelivery,partial-delivery,reliability,request-lifecycle,rerouting,route-suspension,starvation}`、
+  `economy/reconciliation`、`strategy/empire-balance`
+- **⚠️对矩阵本身的含义（这是本节的唯一用途）**：**判 status 只看 `src/` 调用者，不看 tests。**
+  A 档全部有单测、`recordDelivery` 甚至被断言过交付累加逻辑，但它绿着而产线零调用者 —— 写进矩阵就成了 `TESTED`，
+  给下一轮发假信号（R231 我就被这块化石骗了一次，见 §3b）。
+- **两条不许外推**：①**不是性能问题** —— 无导入者 ⇒ 打包器不带进 `dist/main.js` ⇒ 删与不删对线上 CPU/内存零影响，
+  代价只在维护与验证真相；②**"零导入者"≠"该删"** —— `expansion/execution-*`、`operation/*`、整片 `logistics/*`
+  像是后续阶段的设计前置。**接线 or 删除属人（#107）**；若删，按纪律先存 diff。
+- **优先级**：P3（真相维护），但**排在任何一次矩阵刷新之前** —— 不先剔掉这类标签，矩阵会继续对外冒充能力。
+
 ## 尚未入矩阵的能力 = 本文件的已知不完整性
 
 L0 §3.1–3.8 列出的覆盖面**远不止上面 14 条**（§1–§14，含今夜补的 §8b 与 §13/§14；房间运营/基础设施、资源网络、宣言/联盟/外交、符号与 boost 全链…）。
