@@ -3544,3 +3544,23 @@ R224 撤证据之后正确的顺序做了：**`npm run build` → 比对产物 �
 我倾向 (甲)，理由写在锁里：P-A 免费且稀缺，仪表读数每 100 拍就有新一份。**决定权在你，我只是把两种排法的代价摆平。**
 
 边界：零 src 改动、零 push、零 console；本轮唯一的线上侧动作是**读**（且都在 REST 上）。
+
+---
+
+## R228 · 2026-10-03 14:4xZ（#11 最后一处待核实核完：planId 只有一个生产者，但夹具形状与产线不同）
+
+**核完的三件**：① 产线只有一处造 id —— `plan.ts:107` `planId = \`${candidate.roomName}@${candidate.discoveredAt}\``，
+与现场实读的 `expansionPlans[0].pid = "W37S56@8254684"` 形状一致（**分隔符是 `@`**）；
+② 按 id 查找的两处字段名一致（`plan-adapter.ts:332` 用 `p.pid === planId`、`plan-lifecycle.ts:65` 用 `p.planId === newPlan.planId`），
+domain 侧 `planId` 与 Memory 侧 `pid` 由序列化层桥接，不存在"按 A 写按 B 查"；
+③ 同 id 孪生的危害（同房重新立项会拿到同一个 `discoveredAt` ⇒ 终态回写会写进那条早已终态的孪生、真在执行的永远停在 EXECUTING）
+**已有守卫**：`plan-lifecycle.deduplicatePlans` 的同房在途互斥 + `tests/unit/expansion/plan-status-ledger.test.ts` 里那条孪生用例。
+
+**顺带一条要写下来的偏差**：那份测试自建的 pid 用的是 `${roomName}#${tick}`（**`#`**），产线是 `@`
+⇒ 测试覆盖的是**相等匹配这段逻辑**（成立），但它造的形状产线永不发出。
+⇒ 别把 `#` 当现场形状去 grep；按现场形状排查时用 `@`。这正是"测自己手拼的夹具"那一族的轻量版，记一句免得下轮误判"产线 id 形状有两种"。
+
+⇒ **#11 的四项待核实到此全部有归属**：执行期复检（§13 已核）、视野依赖（`tryConsumePlan` 的 invisible-skip 已核）、
+  planId 碰撞（本节）、"经验账无人读"（属无主仪表那族，已按量级结案，见 `silent-inert-mechanisms` 的 §八注）。
+
+边界：零 src、零 push、零 build、零 console；全量 e2e 仍在后台（34 张，`/tmp/e2e-full.log`）。
