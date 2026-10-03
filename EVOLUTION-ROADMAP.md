@@ -4016,3 +4016,33 @@ RCL6/7/8 分别 1/2/3 个 boost 位) → 报到拦截 `boost-report.ts` + `boost
 ⇒ 规矩照旧：**这条读数器不进判据链**，段 5 的读数一律用手工那一发的形状。
 
 边界：零 src、零 push、零 build、零 console。
+
+## R243 · 2026-10-03 15:5xZ（工具债清掉：`intel-players.mjs` 三态验证通过 ⇒ 段 5 读数**可以进判据链**了）
+
+**两个自造的错**（都不是服务器状态）：
+①**多余的解包块**：`JSON.parse(content)` 已经成功之后，代码还**无条件**再跑一次
+`zlib.gunzipSync(Buffer.from(content.slice(3),"base64"))` ⇒ 拿"已解出的对象"去 gunzip 必抛
+`incorrect header check` ⇒ 工具把自己的**成功**读数打印成"解码异常"。删掉该块（载荷已证是裸 JSON）。
+②**暂时性死区**：我把 `const SEG` 放在 `fetch` **之后**，而 URL 模板里已经用它 ⇒ `ReferenceError: Cannot access 'SEG' before initialization`
+⇒ 整个工具跑不起来。把声明提到 `fetch` 之前。
+
+**三态验证（这是关键，之前缺的就是它）**——同一份代码路径、同一个请求形状：
+| 用例 | 输出 | 含义 |
+|---|---|---|
+| 段 5（目标） | `PRESENT 191 字符`、`topKeys=epoch,players`、`epoch=83403803 players 键数=2` | 玩家域冷存在落盘 |
+| 段 2（**阳性对照**，已知非空） | `PRESENT 22,486 字符`、`topKeys=events` | 证明这条路径**能取出内容**，EMPTY 不是因为读不出 |
+| 段 7（阴性对照，未使用） | `EMPTY: 段 7 未落盘` | 证明它**不会**把有数据的段报成空 |
+
+⇒ **"EMPTY"这个输出从这一刻起才有语义**。反过来说：R238 那次 EMPTY 之所以是假阴性，正是因为
+当时**既没有阳性对照也没有阴性对照**——只有我一个人信了它。这条已经补进记忆。
+
+**残留的一个已知小错（不许当已修好）**：逐玩家的打印行显示 `Aguia: rooms=1 lastAt=?` ——
+它的字段名与真实记录不符（真字段是 `lastSeenAt` / `lastHostileAt`，见 R241 的原始 JSON 读数）。
+⇒ **段 5 的存在性/键数/epoch 可以信这个工具；`lastAt` 那一列要读原始 JSON，别读这行打印。**
+
+**由此解锁的复证**（R242 留的那条）：下次房级 `lastHostileAt` 落锤后的下一个老化批窗口跑
+`node tmp/tools/official/intel-players.mjs 5` ⇒ 若 `players 键数` 变 3 或某玩家的 `lastHostileAt`（用原始 JSON 看）非零，
+则"今天的武装目击都来自被有意跳过的 NPC/Invader 类"这个强假设**降级**；保持 2 且全零 ⇒ **升级**为已证。
+这条不花部署、不造条件，是免费复证。
+
+边界：零 src、零 push、零 build、零 console；改动只在 `tmp/`（未跟踪）+ 文档。
