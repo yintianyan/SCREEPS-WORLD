@@ -111,6 +111,13 @@
 
 ## 10. 恢复（recovery / crisis / 灾后备建）
 
+- **R222 补（本轮审计）**：入口/出口都活着（`phaseToColonyState` + `Memory.rooms[].phase.bandTicks` 住 Memory ⇒ 部署安全），
+  但动作侧有两个洞：**#103** 物流/网络/健康维度三类失败节点不带 `room` ⇒ 它们的动作按构造全部走 `GLOBAL_ROOM` 显式跳过
+  （跳过本身是 `recovery-execution-system.ts:25` 写明的安全政策，来历是 :20-24 那次 −126K credits 的烧钱事故 ⇒ 别改守卫）；
+  **#104** 恢复冷却的唯一写者 `recordRecoveryAttempt` 零调用者 ⇒ `isOnCooldown` 恒假（缓解项是住 heap 的幂等表，部署归零）。
+  两者取证都靠新落的 **#105** `stats.recoveryRejections`（拒因跨部署存活，本地 `8cb8b5f` 未推）。/
+  另记 5 个住 heap 的恢复计时器（`recoveryActionTable/recoveryBeforeStates/recoveryCooldowns/__consecutiveStableTicks/__totalFailuresDetected`）＝#13 类老坑又一实例。
+
 - **实现状态**：`TESTED` + 局部 `LIVE_VALIDATED`
 - **线上**：幼房被推平道路后从 crisis 自愈（#30/#37 判效）；`recoveryEligible` 让 war 下军事规划不被 CPU 档位筛掉（读码）。
 - **已知缺陷**：#55 已撤销（recovery 掐掉出口那判被现场反证）；#57 等一次真停摆收全判据。
