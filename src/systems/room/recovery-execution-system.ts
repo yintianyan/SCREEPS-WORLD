@@ -311,7 +311,15 @@ function submitSpawnRecovery(
   const room = action.room;
   const roomMem = Memory.rooms[room];
   if (!roomMem) {
-    return { submitted: false, reason: `room memory not found: ${room}` };
+    return {
+      submitted: false,
+      // 故意跳过与查找失败必须分开记：GLOBAL_ROOM 的动作本就要求具体房才能行动（文件头安全政策），
+      // 把它们混在 "room memory not found" 里会让账本把设计读成故障。
+      reason:
+        room === GLOBAL_ROOM || room === undefined
+          ? "action has no room dimension (GLOBAL_ROOM)"
+          : `room memory not found: ${room}`,
+    };
   }
 
   const queue = roomMem.spawnQueue ?? [];
@@ -367,7 +375,15 @@ function submitLogisticsFix(
   const room = action.room;
   const roomMem = Memory.rooms[room];
   if (!roomMem) {
-    return { submitted: false, reason: `room memory not found: ${room}` };
+    return {
+      submitted: false,
+      // 故意跳过与查找失败必须分开记：GLOBAL_ROOM 的动作本就要求具体房才能行动（文件头安全政策），
+      // 把它们混在 "room memory not found" 里会让账本把设计读成故障。
+      reason:
+        room === GLOBAL_ROOM || room === undefined
+          ? "action has no room dimension (GLOBAL_ROOM)"
+          : `room memory not found: ${room}`,
+    };
   }
 
   const queue = roomMem.spawnQueue ?? [];
@@ -422,7 +438,15 @@ function submitEnergyRedirect(
   const room = action.room;
   const roomMem = Memory.rooms[room];
   if (!roomMem) {
-    return { submitted: false, reason: `room memory not found: ${room}` };
+    return {
+      submitted: false,
+      // 故意跳过与查找失败必须分开记：GLOBAL_ROOM 的动作本就要求具体房才能行动（文件头安全政策），
+      // 把它们混在 "room memory not found" 里会让账本把设计读成故障。
+      reason:
+        room === GLOBAL_ROOM || room === undefined
+          ? "action has no room dimension (GLOBAL_ROOM)"
+          : `room memory not found: ${room}`,
+    };
   }
 
   // 如果房间有 storage 但没有 distributor，提交 distributor 请求
@@ -662,7 +686,15 @@ function submitPopulationRebuild(
   const room = action.room;
   const roomMem = Memory.rooms[room];
   if (!roomMem) {
-    return { submitted: false, reason: `room memory not found: ${room}` };
+    return {
+      submitted: false,
+      // 故意跳过与查找失败必须分开记：GLOBAL_ROOM 的动作本就要求具体房才能行动（文件头安全政策），
+      // 把它们混在 "room memory not found" 里会让账本把设计读成故障。
+      reason:
+        room === GLOBAL_ROOM || room === undefined
+          ? "action has no room dimension (GLOBAL_ROOM)"
+          : `room memory not found: ${room}`,
+    };
   }
 
   const queue = roomMem.spawnQueue ?? [];
@@ -727,7 +759,15 @@ function submitDevelopmentResume(
   const room = action.room;
   const roomMem = Memory.rooms[room];
   if (!roomMem) {
-    return { submitted: false, reason: `room memory not found: ${room}` };
+    return {
+      submitted: false,
+      // 故意跳过与查找失败必须分开记：GLOBAL_ROOM 的动作本就要求具体房才能行动（文件头安全政策），
+      // 把它们混在 "room memory not found" 里会让账本把设计读成故障。
+      reason:
+        room === GLOBAL_ROOM || room === undefined
+          ? "action has no room dimension (GLOBAL_ROOM)"
+          : `room memory not found: ${room}`,
+    };
   }
 
   const queue = roomMem.spawnQueue ?? [];
@@ -804,7 +844,15 @@ function submitDefenseResponse(
   const room = action.room;
   const roomMem = Memory.rooms[room];
   if (!roomMem) {
-    return { submitted: false, reason: `room memory not found: ${room}` };
+    return {
+      submitted: false,
+      // 故意跳过与查找失败必须分开记：GLOBAL_ROOM 的动作本就要求具体房才能行动（文件头安全政策），
+      // 把它们混在 "room memory not found" 里会让账本把设计读成故障。
+      reason:
+        room === GLOBAL_ROOM || room === undefined
+          ? "action has no room dimension (GLOBAL_ROOM)"
+          : `room memory not found: ${room}`,
+    };
   }
 
   // 读取 A5.1 威胁评估结果

@@ -4813,3 +4813,15 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 
 **自我规矩再复述一遍**：**"没人做 X / X 恒被拒"先 grep 拒绝侧函数 + 文件头注释**，分清 无写者 / 被闸拒绝（设计）/ 配置切走 三种"没发生"；
 我这轮就是靠项目记忆而不是靠现场读数把方向扳回来的——**跨渠道冗余第二次救了我**。
+
+### R273（10-04 05:13Z，本会话）#103 那条"拒因字符串说谎"的最小修复落码（行为不变，只让账本分得清故意跳过与真坏）
+一处机械改动覆盖六个下发点（`recovery-execution-system.ts` 的 `:314/370/425/665/730/807`，六处文本完全相同 ⇒ 一次 `allow_multiple` 全替换）：
+`submitted:false` 的 reason 改为 `room === GLOBAL_ROOM || room === undefined ? "action has no room dimension (GLOBAL_ROOM)" : \`room memory not found: ${room}\``。
+- **行为严格不变**：两条分支都返回 `submitted:false`，跳过与否、幂等记录、`non_retryable` 归类一个没动；变的只有 reason 字符串。
+- **修的是可观测性**：此前 GLOBAL_ROOM 的动作在五条路径上是被"查不到房 memory"这条意外守卫兜住的，于是 `stats.recoveryRejections` 里
+  **设计性跳过**与**房名查找真坏了**长得一模一样（我 R262 就是这么读错方向的）。现在两句话分开，#110 要用的"帝国级失败反复出现却无人处置"
+  才有干净的计数可用。
+- 验证：`tsc --noEmit` OK；`tests/unit/strategy` + `tests/unit/systems` 共 **61 files / 752 tests 全绿**；`tests/integration` **30/239 全绿**。
+  `recovery-rejection-tally.test.ts` 里出现的旧字符串是**夹具输入**（喂给计数函数的一条 reason），不是对生产字符串的断言 ⇒ 不冲突、无需改。
+- **仍未推**。⚠️和 #113 一样：这是共享分支上的本地提交（`behind=0`），**任何人下一次 push 都会把它带上线**。
+  今晚未推的本地 src 提交累计三笔：`27a8a51`(#113 违例身份留痕)、本笔(#103 reason 分离)，加对端的混合提交一起排队。
