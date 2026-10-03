@@ -3616,3 +3616,76 @@ storage 889,323（ratio 0.8893，仍在触发线 0.9 之下且方向朝下，与
 （此前那句只来自 observe 的排版，现在是原始 Memory 读数）。⇒ #13 那条"sponsor 会不会是不孵兵的房"在 P-A 前排除。
 
 全量 e2e 仍在后台（其余 31 张）。边界：零 src、零 push、零 build、零 console；本轮唯一代码级改动在 `tmp/`（未跟踪）。
+
+## R231 · 2026-10-03 15:0xZ（#35/#48 定案：合同台账**按构造不可能**给出交付证据，我原先挂的判据测的是它自己测不到的东西）
+
+**这轮把最长的一条 pending（#35/#48 跨房供给）读到结案，结论是撤我自己的判据，不是判系统坏。**
+
+**① 读侧修复确实已上线**（不是"未部署"这一态）：`git log -S deserializeContract -- src/systems/room/logistics-planner.ts`
+= `e50ef36`（2026-09-30），`git merge-base --is-ancestor e50ef36 origin/dev` 通过，且 `origin/dev..HEAD` 里
+**没有任何一笔碰过这个文件** ⇒ 读侧反序列化在线上跑了 3 天。
+
+**② 但 `td=0 / ua 冻结` 不是交付失败的证据，而是"这条台账永远不动"**。三次 grep 各自独立指向同一处：
+`recordDelivery` 在 `src/` 只有定义（`supply-contract.ts:291`）+ 一处注释（`contract-lifecycle.ts:284`），**零调用者**；
+`contract-node-bridge.ts` 与 `contract-lifecycle.ts` 的导入者**只有 tests**（`tests/unit/economy/supply-contract.test.ts`、
+`tests/unit/logistics/a4-4-convergence.test.ts`），`src/` 里零导入 ⇒ 桥接与状态机（activate/degrade/complete/cancel）是
+**测过但从未接进产线**的代码。后果写死：合同被创建时写入 `ua=ac=ca=83316316`，此后没有任何路径能改 `td/cs/ua/st`
+⇒ 现场读数 `{"td":0,"cs":0,"ua":83316316}` 与"物理上交付了 5 万能量"可以同时为真，**互不矛盾**。
+这正是记忆里第 14 类错（判据里放了改动物理上碰不到的读数）的又一发：我为 #35 挂的判据是"看 `td` 涨"，
+而 `td` 的唯一写者不存在。撤这条判据，并把它换成下面 ③ 那条独立结构证据。
+
+**③ 物理面用累计账本读（一次成对、一次差分口径）**：`kernel.stats.energyLedger.rooms`（tick=83386488 是 boot 时刻，
+一律按"值 ÷ (Game.time − tick)"理解，不当时点值）
+- 幼房 W38S56：`imported=59,079`、`exported=0`
+- 核心房 W37S58：`exported=50,400`、`imported=403,457`
+⇒ 跨房供给**真的在跑**（两量同量级），只是不经过合同台账记账。成对入账机制（`07d0be4`）判为**在工作**。
+59,079 − 50,400 = **8,679 的差不立案为漏账**，因为有现成解释且方向对得上：写 `imported` 的
+`fill.ts:22-29 importedFieldFor()` 只比"交付房 ≠ 来源房"就记 `imported`，远矿流入天然算进去；
+而写 `exported` 的只有 `carrier.ts`/`terminal-selfaid.ts`（自家房流出）。⇒ 两键**不是恒等式对**，
+`exported == imported` 只在"两房之间的净配对"意义下成立（幼房 exported=0 ⇒ 全部 50,400 都可能是核心房那侧）。
+残留：8,679 未逐笔拆到"远矿 vs 配对"，不写成结论，也不配当缺陷（无受害者）。
+
+**④ 给 #35/#48 的最终口径**：#35 读侧半支 = 已上线已生效；**写回半支 = 从未接线，拆成新条 #106**。
+#48 = 判据换到物理配对（上面 ③），**任何以 `td/ua/cs` 为判据的验证一律作废**，包括我自己 R 系列里那句
+"看到合同 `li` 出现就算交付"。重开 #35 的条件也写死：只有当出现一个**能改合同键的写者**（新 PR 里 `recordDelivery`
+有 src 调用者）时，`td` 才重新成为证据；在那之前它是创建时刻的化石。
+
+**⑤ 顺带一条未决、且我明确不猜**：合同请求此刻到底发不发，取决于 `logistics-planner.ts:278` 那道
+"两端都有 storage"安全闸，而**幼房有没有 storage 从 Memory 读不出来**（`storageNearFull` 两分支都写、`rb` 是缓冲拍数
+×10 不是容量、`buildQueue` 里只有 extension/link/rampart 条目 ⇒ 只能说"没有在等的 storage 工地"）。
+本轮零 console，所以这条留给下一发读数，不写成"闸开着"也不写成"闸关着"。
+
+**⑥ 看门狗 ANCHOR-MOVED（#92 今晚第二次现场演示）**：`posture-exit2.log` round 9（14:09Z，tick 83402284）
+`newSighting=W37S58:83402214` ⇒ 退出锚从 `83400220+5000=83405220` 推到 **`83402214+5000=83407214`**。
+一次 ≤45 拍的目击又要走 5,000 拍，而且这次是**尾窗内第二次落锤**（第一次 83400220、第二次 83402214，间隔 1,994 拍 < 5,000）
+⇒ #92 的形状从今天早上说的"单次目击缴 5,000 拍税"变成"**脉冲骚扰可以让 war 尾永不结束**"：只要目击间隔 < threatWindow，
+锚就一直前移。这是观察结论、不改码（`threatWindow` 属人）。
+覆盖检查按纪律做过：pid 7182 在 round 13/45、每轮约 100–200 拍 ⇒ 末轮覆盖到 ≈83409,284 > 83407214，
+**不克隆、不编辑运行中的脚本**，读判据时按 `newSighting` 现算锚。
+
+**⑦ 一条待读、不待结论**：幼房 `lastRclLevel=5`（`lastRclChangeAt=83400802`）⇒ RCL5 已命中，但 round 10–13 仍
+`Blocked=G0+G4+G6`。这与 #34 那条"G0 要 RCL5"对不上，两种解释都还没证据（G0 的条件我本轮没重读，可能是 `coreRooms≥2 且 core=RCL≥6`
+那一支，也可能是 G0 根本不是 RCL 项）。**下一轮第一件事：读 `readiness.ts` 里 G0 的判据原文再判"到点没解"是不是伪命题**，
+不要在这里就把"G0 该绿"当成已证。
+
+边界：零 src、零 push、零 build、零 console；只读 API 8 发 + grep。全量 e2e 仍在后台（跑到 31/34）。
+
+## R232 · 2026-10-03 15:0xZ（R231 ⑦ 当场读结：G0 从来不是 RCL 项，"RCL5 命中消掉 G0 假项"是错的）
+
+读 `readiness.ts:151-158` 原文：**G0 = `postureExpansionAllowed`**，条件字面写着 `posture.expansionAllowed === true`，
+值就是布尔。RCL 走的是另两条：G3 的 evidence 里带 `core=${view.coreRooms}`，G5 = `coreRooms ≥ minCoreRooms`
+（`readiness.ts:200-207`），而 `coreRooms` 是 `resource-view.ts` 按房分类算出来的 —— 也就是说**升 RCL 影响 G3/G5，
+不直接动 G0**；G0 是**总授权**（posture 那七个合取项 + `!liveThreat` + `posture!=="war"` 折叠成的一个布尔）。
+
+后果三条，都要带走：
+1. **R182 那句"RCL5 命中消掉 G0 假项后 G4 仍单独挡"作废**，`3b7d7a3`（已推的 origin/dev head）里"请示面收窄到
+   G0/G6 本身"这句**符号仍然对但理由要换**：G0 不是"假项"，它是**唯一被 war 尾税直接钉住的那一项**，
+   所以今天 `Blocked=G0+G6` 的正确读法是"**war 尾 + CPU**"，两半都不是 RCL。
+2. 于是"到点没解"这个疑问从"预测失败"降级为"**预测用错了闸**"：幼房 `lastRclLevel=5`（`lastRclChangeAt=83400802`）
+   不欠任何 G0 账；G0 的解锁时刻**只由 `max(lastHostileAt)+threatWindow` 决定**，即 R231 ⑥ 那个 83407214
+   （且每次新目击都会把它前移）。这把 #92 从"观察项"升成**今天扩张的第一阻塞本身**，而 G6 是第二。
+3. 一条我没重读、因此不写成已证的：#34 那句"healthy 闸要 RCL6（coreRooms≥2 且 core=RCL≥6）"本轮**没有**再核常数。
+   它影响的是 G3/G5 与 posture 的 `youngestMature`，不影响上面 ①②，但影响"RCL6 之前 G5 会不会一直红"——
+   下一轮要引它就先读 `resource-view.ts` 的分类阈值。
+
+边界：零 src、零 push、零 build、零 console；只读 API 一发 + 读码。
