@@ -13,131 +13,104 @@ describe("E7 site progress — 真实接线", () => {
   const p3Systems: P3SystemRef[] = [];
   const baseTick = 10000;
   const bootTick = 0;
+  const staleAgo = baseTick - E7_STALE_TICKS - 1;
 
-  it("site 长期无进度且无 builder → 违例", () => {
-    const siteProgresses: SiteProgressSnapshot[] = [
-      {
-        room: "W1N1",
-        siteId: "abc123",
-        structureType: "spawn",
-        progress: 100,
-        progressTotal: 1000,
-        lastProgressTick: baseTick - E7_STALE_TICKS - 1,
-        builderVisits: 0,
-        siteAge: E7_STALE_TICKS + 1,
-      },
-    ];
-    const res = evaluateExpectations({
-      tick: baseTick,
-      bootTick,
-      systemLastRun: {},
-      p3Systems,
-      siteProgresses,
-    });
-    expect(res.violations.some(v => v.id.startsWith("siteStale:W1N1:abc123"))).toBe(true);
+  const site = (over: Partial<SiteProgressSnapshot>): SiteProgressSnapshot => ({
+    room: "W1N1",
+    siteId: "abc123",
+    structureType: "spawn",
+    progress: 0,
+    progressTotal: 1000,
+    lastProgressTick: staleAgo,
+    builderVisits: 0,
+    buildersInRoom: 0,
+    siteAge: E7_STALE_TICKS + 1,
+    ...over,
   });
 
-  it("有 builder 到达 → 不违例", () => {
-    const siteProgresses: SiteProgressSnapshot[] = [
-      {
-        room: "W1N1",
-        siteId: "abc123",
-        structureType: "extension",
-        progress: 100,
-        progressTotal: 1000,
-        lastProgressTick: baseTick - E7_STALE_TICKS - 1,
-        builderVisits: 1,
-        siteAge: E7_STALE_TICKS + 1,
-      },
-    ];
+  it("停滞且该房无 builder ⇒ siteStaleNoBuilder（施工编制侧）", () => {
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
       systemLastRun: {},
       p3Systems,
-      siteProgresses,
+      siteProgresses: [site({})],
     });
-    expect(res.violations.some(v => v.id.startsWith("siteStale:"))).toBe(false);
+    expect(res.violations.some(v => v.id === `siteStaleNoBuilder:W1N1:abc123`)).toBe(true);
   });
 
-  it("近期有进度变化 → 不违例", () => {
-    const siteProgresses: SiteProgressSnapshot[] = [
-      {
-        room: "W1N1",
-        siteId: "abc123",
-        structureType: "road",
-        progress: 500,
-        progressTotal: 1000,
-        lastProgressTick: baseTick - 100,
-        builderVisits: 0,
-        siteAge: 100,
-      },
-    ];
+  /**
+   * 这一条从前是被 `builderVisits === 0` 这个**同源量**豁免掉的一类：
+   * "有进度、之后冻住"的残骸线上真实存在（road-planner 注释里 W36S58 那 14 格进度和恒为 970），
+   * 旧判据看不见它 ⇒ 假阴性。现在它必须被报出来。
+   */
+  it("有进度但冻住且房内无 builder ⇒ 仍违例（旧判据在这里漏报）", () => {
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
       systemLastRun: {},
       p3Systems,
-      siteProgresses,
+      siteProgresses: [site({ structureType: "road", progress: 100, builderVisits: 3 })],
     });
-    expect(res.violations.some(v => v.id.startsWith("siteStale:"))).toBe(false);
+    expect(res.violations.some(v => v.id === `siteStaleNoBuilder:W1N1:abc123`)).toBe(true);
+  });
+
+  /** 拆分依据的是独立观测量 buildersInRoom，不是从 progress 反推的 builderVisits。 */
+  it("停滞但房内有 builder ⇒ siteStaleBuilderIdle（能量/取活侧，而不是编制侧）", () => {
+    const res = evaluateExpectations({
+      tick: baseTick,
+      bootTick,
+      systemLastRun: {},
+      p3Systems,
+      siteProgresses: [site({ buildersInRoom: 2, builderVisits: 5, progress: 100 })],
+    });
+    const ids = res.violations.map(v => v.id);
+    expect(ids.some(v => v === `siteStaleBuilderIdle:W1N1:abc123`)).toBe(true);
+    expect(ids.some(v => v.startsWith("siteStaleNoBuilder:"))).toBe(false);
+  });
+
+  it("近期有进度变化 ⇒ 不违例", () => {
+    const res = evaluateExpectations({
+      tick: baseTick,
+      bootTick,
+      systemLastRun: {},
+      p3Systems,
+      siteProgresses: [
+        site({ structureType: "road", progress: 500, lastProgressTick: baseTick - 100 }),
+      ],
+    });
+    expect(res.violations.some(v => v.id.startsWith("siteStale"))).toBe(false);
   });
 
   it("多房隔离 — 一房违例不影响其他房", () => {
-    const siteProgresses: SiteProgressSnapshot[] = [
-      {
-        room: "W1N1",
-        siteId: "stale",
-        structureType: "extension",
-        progress: 10,
-        progressTotal: 1000,
-        lastProgressTick: baseTick - E7_STALE_TICKS - 1,
-        builderVisits: 0,
-        siteAge: E7_STALE_TICKS + 1,
-      },
-      {
-        room: "W2N2",
-        siteId: "ok",
-        structureType: "spawn",
-        progress: 500,
-        progressTotal: 1000,
-        lastProgressTick: baseTick - 50,
-        builderVisits: 0,
-        siteAge: 50,
-      },
-    ];
     const res = evaluateExpectations({
       tick: baseTick,
       bootTick,
       systemLastRun: {},
       p3Systems,
-      siteProgresses,
+      siteProgresses: [
+        site({ siteId: "stale", structureType: "extension", progress: 10 }),
+        site({
+          siteId: "ok",
+          room: "W2N2",
+          progress: 500,
+          lastProgressTick: baseTick - 50,
+        }),
+      ],
     });
-    expect(res.violations.some(v => v.id === "siteStale:W1N1:stale")).toBe(true);
-    expect(res.violations.some(v => v.id === "siteStale:W2N2:ok")).toBe(false);
+    expect(res.violations.some(v => v.id === "siteStaleNoBuilder:W1N1:stale")).toBe(true);
+    expect(res.violations.some(v => v.id.startsWith("siteStaleNoBuilder:W2N2"))).toBe(false);
   });
 
   it("boot 宽限期内不违例", () => {
-    const siteProgresses: SiteProgressSnapshot[] = [
-      {
-        room: "W1N1",
-        siteId: "abc123",
-        structureType: "spawn",
-        progress: 0,
-        progressTotal: 1000,
-        lastProgressTick: 0,
-        builderVisits: 0,
-        siteAge: 5000,
-      },
-    ];
     const res = evaluateExpectations({
       tick: 500,
       bootTick: 0,
       systemLastRun: {},
       p3Systems,
-      siteProgresses,
+      siteProgresses: [site({ lastProgressTick: 0, siteAge: 5000 })],
     });
-    expect(res.violations.some(v => v.id.startsWith("siteStale:"))).toBe(false);
+    expect(res.violations.some(v => v.id.startsWith("siteStale"))).toBe(false);
   });
 });
 

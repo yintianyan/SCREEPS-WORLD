@@ -4314,3 +4314,44 @@ watch2 只剩 15 轮 × ≈161 拍 ≈2,415 拍 ⇒ 覆盖到 ≈83408,000，**�
 **依赖**：#110（期望/恢复都是"检测了不处置"那一族，本条是它在施工侧的实例）、#5（远矿道路账本判案的前作）。
 
 边界：零 src、零 push、零 build、零 console；读码 + 只读 API 若干。看门狗 round 2/40、锚未再移动。
+
+## R250 · 2026-10-03 18:1xZ（**撤我上一轮的根因**：远矿**有**施工编制 —— `remoteHauler` 边走边建；同时落一条真修：E7 的假阴性 + 同源判据）
+
+### ① 撤回 R249 的结论（那条说"只有 builder 会建 ⇒ 帝国没有远矿施工编制"）
+现读反证：`src/creeps/roles/remote-hauler.ts:38 buildRoadSiteUnderfoot(creep)`，**被自己的动作管线在 `:100` 调用**；
+`road-planner.ts:155` 有"通勤 hauler 的建路半径"常量、`:174` 注释直写"**施工不归本函数：通勤 hauler 经 buildRoadSiteUnderfoot 边走边建（range≤3）**"。
+⇒ **远矿路是有编制的**，R249 那句"没有以远矿施工为职责的工种"**作废**；#111 的根因回到**未定**。
+（对端的记忆册也独立记着同一口径：三把锁已线上判效过、`roadReaped=10` 后 W36S58 `roadsBuilt 0→1`，判别式同样是"隔 boot 段做 `coldCounters.roadsBuilt` 差分"。⇒ 我不与它争，把 #111 改回"停滞现场已记、根因待差分判定"。）
+
+### ② 我是**怎么**得出那个错结论的（这才是可复用的部分，两条）
+1. **用"我搜过的那几个符号"支撑了一句全称命题**：我搜的是 `buildNearestSite|buildAssignmentSite`，
+   得到"唯一使用者是 `roles/builder.ts`" —— 这个结论**在它搜的符号范围内成立**，我却说成了"谁都不能在远矿建"。
+   远矿走的是**第三个函数名**（`buildRoadSiteUnderfoot`），完全在我的检索词之外。
+   ⇒ 全称断言要么穷举"能做的动作"这一族（这次的正确搜法是 `\.build\(` / `ConstructionSite` 的消费方），要么把措辞降级成"这两个入口只被 builder 用"。
+2. **一条 grep 报错被我当成"查无"**：`grep ... src/creeps/roles/remoteHauler.ts` 返回 `No such file or directory`
+   （真文件名是 kebab 的 `remote-hauler.ts`），而我在下一步照常用了"roles 里没有远建动作"这个**由失败查询得到的空结果**。
+   ⇒ 同一条纪律的第二次命中：**空结果 ≠ 没有，尤其当命令本身报了错**；这一族我在 #36/#106 上都记过。
+
+### ③ 落一条**真修**（与上面那个错结论无关，独立成立）：E7 的两处仪器缺陷
+`src/kernel/expectations.ts` + `src/kernel/kernel.ts`，纯检测口径、**零行为变化**（违例清单在 `src/` 内没有任何按 id 的消费者 ⇒ 改它不可能改动作，这是本条的安全边界，也再次印证 #110"检测了不处置"）：
+1. **假阴性类**：旧条件带 `sp.builderVisits === 0`，而 `builderVisits` 是**从 `site.progress` 反推**的（`kernel.ts:704-706`）
+   ⇒ **"有进度后冻住"的残骸被整体豁免**。这一类线上真实存在：`road-planner.ts:300-307` 的注释写着 W36S58 曾有"14 格进度和恒为 970"的残骸在锁车道，
+   作者当时只能在回收侧自己绕。⇒ 停滞判据现在只看 `noProgressAge`。
+2. **同源当独立**：新增**独立观测量 `buildersInRoom`**（一次遍历 `Game.creeps` 得到每房我方 builder 数，O(creeps) 一遍、不是每 site 一遍），
+   E7 据此把停滞拆成互斥且各自可行动的读数：`siteStaleNoBuilder`（该房此刻没 builder ⇒ 编制/派遣侧）vs `siteStaleBuilderIdle`（有 builder 却不推进 ⇒ 能量/取活/可达侧）。
+   ⇒ 顺带给 #111 造出它缺的那条判别仪器：**"远矿到底有没有 builder 去过"从下一次部署起是直读的**（此前只有 progress 反推）。
+3. 另一条**当场发现并写进注释**：`siteAge` 实际是 `tick - lastProgressTick` 的副本（首次见到该 site 时为 0）
+   ⇒ 它**不能**用来推断"site 是哪一拍放下的"。我 R248 里那句"8 个 site 是 boot 时放下的"因此降级为**无依据**；
+   成立的只有 `noProg=19,465 拍`（≈20 小时按实测 3.744 秒/拍）。命名保留旧字段、语义在注释里写死，等真接入放置时刻再改。
+
+**测试**：`tests/unit/kernel/e7-e8-wiring.test.ts` 的 E7 段重写 —— 原来那条**给缺陷背书的用例**"有 builder 到达 ⇒ 不违例"
+（它断言的正是 `builderVisits>0` 豁免行为）拆成两条：①"有进度但冻住且无 builder ⇒ 仍违例（旧判据在这里漏报）"、
+②"停滞但房内有 builder ⇒ `siteStaleBuilderIdle`，且不得同时出现 NoBuilder"。其余夹具改为工厂函数 + `buildersInRoom`。
+⇒ `npx tsc --noEmit` 干净；`e7-e8-wiring + expectations + expectations-e4-e9 + expectation-event-rate` **63/63 通过**。
+反向对照内建在①里：把条件还原成带 `builderVisits===0` 的旧形，①必红。
+
+**部署边界**：这笔 src 改动**不单独换码**（一次部署＝清堆 + ≈400 拍 G6 税），随 130 笔那一批走；线上仍是 `ea4c69da6f8b`。
+判效方式（上线后第一读）：`kernel.expectations.violations` 里前缀应从 `siteStale:` 变成 `siteStaleNoBuilder:` / `siteStaleBuilderIdle:` 两类；
+若整窗只见 NoBuilder 不见 BuilderIdle ⇒ 支持"派遣/编制不足"那一侧；反之支持"到场干不动"。**这一读也顺手把 #111 的根因判掉。**
+
+边界：零 push、零 build、零 console；src 2 文件 + 测试 1 文件 + 文档。

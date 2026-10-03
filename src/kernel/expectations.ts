@@ -135,9 +135,25 @@ export interface SiteProgressSnapshot {
   progressTotal: number;
   /** 最近一次进度变化的 tick。 */
   lastProgressTick: number;
-  /** builder 到达次数（采样窗口内）。 */
+  /**
+   * builder 到达次数 —— ⚠️**由 `site.progress` 反推**（`kernel.ts` 的采集器），
+   * 因此它与 `progress===0` **同源**，不能当第二件独立证据用。保留只为兼容旧读数。
+   * 独立的那一件是下面的 `buildersInRoom`。
+   */
   builderVisits: number;
-  /** site 年龄（tick）。 */
+  /**
+   * 该 site 所在房内**我方 builder 的实时数量**（一次遍历 Game.creeps 得到，每房一份）。
+   * 这是 E7 用来把"停滞"拆成两类**互斥可行动**读数的唯一独立观测量：
+   *   0 个 ⇒ 没派施工编制（要修的是编制/派遣）；≥1 个 ⇒ 人到了却没推进（要修的是能量/取活/可达）。
+   * 无视野的远矿房同样算得（builder 到场即计入），所以它也是"远矿到底有没有 builder 去过"的现场计数器。
+   */
+  buildersInRoom: number;
+  /**
+   * site 年龄（tick）。
+   * ⚠️采集器给的其实是 `tick - lastProgressTick`（首次见到该 site 时为 0），
+   * 与 `noProg` 是同一个量 ⇒ 本字段**不能**用来推断"site 是哪一拍放下的"。
+   * 命名沿用旧读数，等真接入放置时刻再改语义。
+   */
   siteAge: number;
 }
 
@@ -462,15 +478,26 @@ export function evaluateExpectations(input: {
   }
 
   // E7 site 长期无进度（boot 宽限后生效）。
+  //
+  // ⚠️两个改动都是**检测口径**，不是行为：违例清单在 `src/` 内没有任何按 id 的消费者
+  //   （只有 `kernel.ts` 写 Memory + 发一条计数事件），所以这里改判据不会改bot 的动作。
+  //
+  // 1) 旧条件带 `sp.builderVisits === 0`，而 `builderVisits` 是从 `progress > 0` 反推的 ⇒
+  //    **"有进度但之后冻住"的残骸被这个条件整体豁免**（假阴性）。这一类不是假想：
+  //    `road-planner.ts:300-307` 的注释就写着线上 W36S58 有"14 格进度和恒为 970"的残骸在锁车道，
+  //    作者当时只能在回收侧自己绕。 ⇒ 停滞判据只看 `noProgressAge`，不再用同源量放行。
+  // 2) 用独立观测量 `buildersInRoom` 把"停滞"拆成两类**互斥且各自可行动**的读数：
+  //    `siteStaleNoBuilder`＝该房此刻没有我方 builder（编制/派遣侧要修）；
+  //    `siteStaleBuilderIdle`＝有 builder 在场却不推进（能量/取活/可达侧要修）。
+  //    这同时回答 #111 的取证问题：远矿房到底有没有 builder 去过，不必新写任何仪器。
   if (bootAge >= P3_BOOT_GRACE_TICKS && input.siteProgresses) {
     for (const sp of input.siteProgresses) {
       const noProgressAge = input.tick - sp.lastProgressTick;
-      if (noProgressAge > E7_STALE_TICKS && sp.builderVisits === 0) {
+      if (noProgressAge > E7_STALE_TICKS) {
+        const noBuilder = sp.buildersInRoom === 0;
         violations.push({
-          id: `siteStale:${sp.room}:${sp.siteId}`,
-          detail: `type=${sp.structureType} prog=${sp.progress}/${sp.progressTotal} age=${
-            sp.siteAge
-          } noProg=${noProgressAge}`,
+          id: `${noBuilder ? "siteStaleNoBuilder" : "siteStaleBuilderIdle"}:${sp.room}:${sp.siteId}`,
+          detail: `type=${sp.structureType} prog=${sp.progress}/${sp.progressTotal} noProg=${noProgressAge} builders=${sp.buildersInRoom}`,
         });
       }
     }
