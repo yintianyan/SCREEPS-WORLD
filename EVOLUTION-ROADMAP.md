@@ -3366,3 +3366,23 @@ prettier/eslint 由 pre-commit 钩子跑过。**反向实验**（把 wiring 摘�
 **四、其余**：核心房 `controllerDowngradeRisk=true`（RCL8 保级带第 3 次进入，落在 83400995~83401935 之间；engage 准确拍号不落盘）⇒ 此刻 `spawnQueue` 只有 1 条 `reserver` 替补（`createdAt 83401945`），**这还不算偏差**；R121 的读法写死为**扫 `Memory.creeps` 的 `upgrader-W37S58-*` 键名（名字嵌出生拍）**，别读瞬时队列形状。`Blocked=G0+G6`@83401884、`tier=tight@83387005`、调度 healthy、300 拍环 CPU avg 17/max 26.3、`errors=0`；`credits 12,952,791`（差分 +88,436/1,240 拍 ⇒ **≈71/拍**，比前几发 130~240/拍低 3 倍 ⇒ 流入线速率极不稳，来源仍未证）、`runs=76`。幼房成长第二发样本：车道 `W38S56→W38S55 active/挂起0/热度41`、`ops=1/1`、`site=1`、人口 14、`rs 70,930→69,611`。
 
 **边界**：零 src、零 push、零 build、**零 console**（对端正持有未提交 src：`plan-adapter.ts`、`plan-status-ledger.test.ts`、新增 `threat-escalation-gate.test.ts` ⇒ 我没碰、没 stage、没 build）。探针 observe×1 + peek×4（含一次我自己读错房的空读）。**R121**：①`near-full` 是否仍在；②war 是否 ≈83405220 退出 ⇒ RCL5 后第一次真 claim 窗口（`Memory.rooms` 变 3 房 / 4 张 plan 被消费）；③保级带这轮有没有孵出 upgrader（键名法）；④幼房 `reserveOnly` 差分继续给 #61 供量。§3.5 属人 7 项未动。
+
+---
+
+## R221 · 2026-10-03 13:5xZ（#102 补了一次真引擎跑，并把它的证明边界写死）
+
+顺手纠正一条我自己带错的口径：**e2e 并不读 dist 的内容**——`tests/e2e/setup.ts:110-112` 只断言
+`dist/main.js` **存在**（不存在就报错要求先 build），而场景本身 `import { CONFIG } from "../../../src/config"`，
+跑的是**源**。⇒ 我之前记的"e2e 跑 dist"是错的（准确说法：`npm run test:e2e` 脚本前面挂了 `&& npm run build`，
+所以日常跑法会重build，但**引擎里执行的是源**）。既然脚本里的 build 只是习惯而非必需，我用
+`npx vitest run <场景> --config vitest.e2e.config.ts` **跳过 build** 跑，`dist/main.js` 保持 05:10/785,155B
+⇒ 本地==线上这个免费仪器没被我自己弄丢（这是 #85 那类单二进制窗的根基）。
+
+**跑的结果**：`tests/e2e/scenarios/20-claim-chain.test.ts` rc=0、1 例通过。
+⚠️**它能证明的和不能证明的要写清**：该场景的断言只有"无 JS 错误 + Memory 体积"（§13 里我记过这条），
+状态转换是打日志。所以这一次跑**只证明"把 GATE_THREAT_UNCHANGED 接上真数据之后，15,200 拍的建城链不炸"**，
+不证明闸门语义——语义由 #102 的 7 条单测（含 2 条控制组与反向实验 4 红）负责。
+另注：`npx vitest run <路径>` 用默认 config 会命中 `exclude: tests/e2e/**` ⇒ "No test files found" + rc=1，
+那是**过滤器形状不是红条**（本会话第 3 次把工具形状误读成结论的风险，记下来免得下轮再当成回归）。
+
+边界：零 push、零 build、零 console。#102 与 #89 都仍未推，等 A/B/C。
