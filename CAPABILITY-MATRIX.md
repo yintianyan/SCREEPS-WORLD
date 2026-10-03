@@ -247,7 +247,15 @@
   即 #82 那条 PASS 的通道）；而 `link-system.ts:252` 写的 `globalCache().dismantleCount`（Map）**无任何读者**，
   它自己的注释（`:244-248`）却声称"layout-metrics 消费此计数"。⇒ **注释说谎 + 孤立仪表**，不在决策路径上，
   按量级结案（与 #17 的 drift/industrialSpend 同一处置）。要清就清仪表，别把它当缺陷去改行为。
-  ③link "hub" 可被填不可被排那条与已结案 **#74/#75 同族**（`[未复看]`，下轮先读那两条再决定是不是新案）。
+  ③**link "hub" 可被填不可被排——复看完，结案为 #75 的机制解释，不另立案**`[我核]`：
+  `classifyLinkRole`（`domain/economy/links.ts`）只在**距所有 source/controller/storage 锚都 >2** 时才回落到 `"hub"`；
+  传输规划 `planLinkTransfers` 按角色配对（source→controller/storage、storage→controller），**hub 既不在 from 也不在 to 名单**；
+  hauler 的排空动作是具名的 `withdrawStorageLink()`（`roles/hauler.ts:162` 那条"永远最先"），upgrader 抽的是 controller link
+  ⇒ **hub 没有任何排空消费者**。而灌入侧 `dumpToNearbyLink`（`actions/dump.ts:6-20`）**只看距离与空位、不看 role**
+  ⇒ 几何上矿工可以把它灌满。死资产检测又只认 `role==="source"`（`link-system.ts:113`）⇒ 这种 link 连"被判定为闲置"都不会发生。
+  ⇒ 这正是 **#75「超配 link 无处可计」**的下游机制（超配的 link 若落在 hub 类：不被路由、不被排空、不被检测），
+  所以**这是同一个案，不是新案**。今天两房是否存在这样的 link：**未证**（需要布局锚点数据或一次 console，本会话刻意不打）。
+  回归立案条件：若读到某间房有 link 且 `role==="hub"` 且其能量长期非零，则 #75 从"无处可计"升级为"无处可计且真的在压能量"。
 - **优先级**：P2（管线本身活着；风险集中在"文档/配置与代码相反"这一族）。
 
 ## 尚未入矩阵的能力 = 本文件的已知不完整性
