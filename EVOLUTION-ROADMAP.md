@@ -3021,3 +3021,26 @@ cleanup 之前杀掉，`funnel.candidates=…` 那一行留在被剥除状态（
 §3.5 属人 7 项一个没动。#99 的状态改为"已实现+单测+反向实验·待随批推"，并新增两条待办：
 **#100 能力矩阵 §8 已改口但"进攻链未接线"要不要修属人**（要么给 `deriveOperationType` 增加进攻分支＝动战争能力，
 要么把 `selectTarget` 那 200 行判据标为"未接线的储备"），**#101 观察项：warPlan 两 producer 分歧（32 vs 0）**。
+
+### R211 勘误与并案（写完才看见对端 `6c96aab` = 巡检 R208 已记同一场战斗）
+
+**我上面"③#95 的零计划被现场否证"那一条不是新发现**——对端 R208 已先记下，且比我多两半：
+第一个计划是 `warPlan={targetRoom:W38S56 squadSize:9 spawned:0 operationType:DEFEND}`@83399844
+（我读到的 32 是**第二个**计划 W37S58@83400214），以及幼房 `towerSpendCombat` 第一次非零 **900**（占 towerSpent 10.4%）。
+⇒ 按"同一现象先搜有没有第二家记"的纪律撤重复立案；留下的净收益是**一次独立复证**：
+两个计划（幼房 9、核心房 32）**都 `spawned=0`、都是 `DEFEND`、目标都是自家房** ⇒
+"只防不攻 + 兵力未落地"两条各有两发样本，比单发可信。
+
+**war 退出锚点现在有三个数，别再各引各的**：83400412（R210 用 83395412+5000）／83404840（对端用 83399840+5000）／
+83405220（我用 `max(hostileAt)=83400220`+5000）。判据统一成一句话：**退出时刻 = 最新一次 `hostileAt` + `threatWindow(5000)`**，
+读数前先从 `Memory.rooms.*.hostileAt`（或 observe 的 `hostileAt` 列）取最大值再算，不许沿用上一轮的锚。
+**按 `posture.ts:167-200` 核过没有附加项**：`threatRecent` 一 false 就走"威胁消退"分支，
+那里的 `minDwell=1000` 量的是**姿态驻留**（`since=83397159` ⇒ 到点已驻留 ≈8,000 拍，早已满足、不 binding），
+而 `warExitPatienceTicks=1000` 是另一条出口（`avgPressure > warMaxPressure` 才累加，现读 `warPressureTicks=0` ⇒ 从未累加）
+⇒ 若到 83405220 没退，只有两种解释：又有一次新目击（先看 `hostileAt`），或压力那条被踩到（那时 `warPressureTicks` 会非 0）。
+⇒ 这也把 #92 的代价口径钉成"每次目击把扩张再推 5,000 拍"，与对端"若挺到 83404840 则成立"的判别式是同一件事。
+
+本轮**独有**且未被记的：#99 计数落地（4 src+1 测试，反向实验逐条归因）、
+`deriveOperationType` 的 10 分支穷举 ⇒ 进攻选靶链**无产线调用者**（升 #100 请示）、
+`warPlan.squadSize` vs `a5ForceReq.total` 两 producer 分歧留 #101、
+以及工具坑一条（会改文件的脚本不接 `head`/`tail`，SIGPIPE 会在 restore 前杀死它）。
