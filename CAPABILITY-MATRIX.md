@@ -101,7 +101,7 @@
 ## 12. 侦查与情报体系（`domain/intel.ts`、`systems/room-observer.ts`、段 5）
 
 - **游戏机制依据**：视野外的房间不可判断；扩张与打击都建立在"这份情报还新不新"之上。
-- **实现状态**：`TESTED`（**线上未证实** —— 见下）
+- **实现状态**：`TESTED` + **采集/落盘侧已 `LIVE_VALIDATED`**（`stats.intelCoverage` 实测可读）；**消费侧仍 `TESTED`**（war 选靶与扩张候选池如何筛这份数据，线上无证据）
 - **代码入口 / 调用链**：`room-observer.ts`（每 50 拍刷新邻居情报，C2）→ `domain/intel.ts` 的 `getRoomIntel()`（**宿主我本轮没查到定义位置**，见"下一件事"）→ 两个消费者；另有 `segment-store.ts:31` `SEGMENT_INTEL_PLAYERS = segId("intelPlayers", 5)`，形状 `{epoch, players}`（`:337` 段不可用时退化成 `{epoch:0, players:{}}`）。
 - **⚠️两个新鲜度阈值，别混（口径纪律）**：
   - **扩张执行侧**：`plan-adapter.ts:166-171` `isIntelStale()` 用**硬编码 10,000 拍**，且注释规定"**从未观测过 = 不算过期**"（把判断让给后面的 claim 闸）。
@@ -116,7 +116,12 @@
      ⇒ 段表里**根本没有"房情报"这一段**（`segId` 序列：0=**layout**、1=cpu、2=eventLog、3=economy、4=prometheus、5=**intelPlayers**、6=l2Intake）⇒ **"段 0 存房情报"这个我此前一直在用的假设是错的**。
   2. **`intelStats()`（`:149` 返回 `{rooms, players}`）不落盘、也没人调**（grep 只命中它自己的定义）⇒ `peek` 读不到（不在 Memory）、console 也读不到（模块作用域，同 `CONFIG` 那发 `ReferenceError`）。
   3. **实测段 5：从未写入**（新工具 `intel-players.mjs`，失败形状与空值分开报）。⇒ **这既可能是"从没见过玩家房"**（`adoptHandoff` 只在 `payload.owner` 存在且非 `INVADER_USERNAME` 时才 upsert 玩家），**也可能是持久化路径从未触发**——**两者读数上不可区分，所以现在不能给 #95 定罪，也不能给它结案**。
-  ⇒ 净结论：**情报层没有任何事后观测能力**，而它是扩张候选池与 war 选靶的**共同上游**；一次部署就把它清零，之后多久恢复没人看得见。登记为 **#98**。
+  ⇒ **净结论（本块前半段作废，以这里为准）**：**情报层是有事后观测的** —— `intelligence.ts:183-196` 在老化批处理里每 **`AGING_INTERVAL=100` 拍**把 `{rooms, players, tick}` 写进 **`Memory.kernel.stats.intelCoverage`**。
+  现场实测（tick 83399903）：**`{rooms: 7, players: 2}`** ⇒ 这层**活着、在恢复、可读**。
+  ⚠️**我上一条("零事后观测")是错的，且错因值得记**：我 grep 的是 `intelStats()` 这个**函数名**（确实没人调），但持久化是**内联**写的（`const statsAny = (Memory as any).Kernel?.stats` 直接赋 `intelCoverage`）⇒ **"grep 函数名找不到调用者" ≠ "没有落盘"**。这与 `gateStore` 别名、`tmp/tools/` 观测器是同族第三次。
+  仍然成立的两点：①**房情报本体只在 heap**（模块级 Map + `ageRooms`/`capRooms` 裁剪 ⇒ 部署清零，只有 `intelCoverage` 这三个数跨部署）；②`segId` 序列里**没有房情报段**（0=layout、5=intelPlayers），所以我"段 0 存房情报"的旧假设确实错了。
+  一处小气味：这段落盘用的是 `(Memory as any)` 绕过类型（本仓别处已按 E-FINDING-09 清掉这种写法），且 `intelStats()` 成了**零调用者的重复实现** ⇒ 值得合并（不是缺陷，是债）。
+- **对 #95 的直接影响**：`players=2` ⇒ "**war 却没有 warPlan**"**不再能用"根本没玩家情报"解释**。剩下的候选收窄成三条具体筛子：`CONFIG.war.targetFreshness=1500` 内是否新鲜、`maxTowers:3` 是否超、以及那 2 个玩家的房是否在我们的可打集合里。⇒ #95 保持 open，但**方向从"数据缺失"改判为"选择谓词"**。
 - **CPU 成本**：`room-observer` 每 50 拍一次（历史归因里不是大头项）。
 - **优先级**：**P1**（它是"作战"与"扩张"两条腿共同的上游；情报缺失会让两条腿同时静默，而静默看起来像健康）。
 - **验收标准 / 下一件事（写死，别靠记忆）**：
