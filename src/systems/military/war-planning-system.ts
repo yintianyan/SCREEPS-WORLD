@@ -4,6 +4,8 @@ import { globalCache } from "../../kernel/global-cache";
 import { CONFIG } from "../../config";
 import {
   planMilitaryOperation,
+  newWarFunnel,
+  type WarFunnelCounters,
   type WarPlanningInput,
   type WarPlan,
 } from "../../domain/military/war-planning";
@@ -35,25 +37,36 @@ export const warPlanningSystem: System = {
 
   run(ctx: TickContext): void {
     const tick = ctx.tick;
+    const g = globalCache();
+
+    // #99：本 pass 的漏斗计量。scratch 每次换新对象 ⇒ Memory 里那份快照不会被后续 pass 改写；
+    // 由 intelligence 的老化批（每 100 拍）与 intelCoverage 同拍快照进 Memory。
+    const funnel = newWarFunnel(tick);
+    g.warFunnelScratch = funnel;
 
     // 1. 采集运行时状态，适配为 WarPlanningInput
-    const input = buildWarPlanningInput(ctx, tick);
-    if (!input) return;
+    const input = buildWarPlanningInput(ctx, tick, funnel);
+    if (!input) {
+      funnel.noInput = 1;
+      return;
+    }
+    if (input.threatAssessments.length === 0) funnel.noThreats = 1;
 
     // 2. 调用纯函数 planMilitaryOperation
     const plan = planMilitaryOperation(input);
 
     // 3. 写入 globalCache.warPlanCache
-    const g = globalCache();
     g.warPlanCache = { tick, plan };
 
     // 3.5 + 4. 有可执行的计划 → 解析 sponsor → 写物流需求 + 兼容 warPlan
     if (plan) {
+      funnel.plans = 1;
       // sponsor 只解析一次：demand 与 warPlan 两个落点各自推导会漂移。
       const sponsor = resolveSponsor(plan.operation.target.roomName, ctx);
       if (!sponsor) {
         // 一个能孵兵的自有房都找不到（视野全丢）— 本轮不落笔，更不覆写既有计划：
         // 目标房名当 sponsor 写进 warPlan 会让 war-planner 整链静默停摆（见 resolveSponsor）。
+        funnel.noSponsor = 1;
         g.warLogisticsDemand = undefined;
         log.warn(
           "war-planning",
@@ -88,6 +101,9 @@ export const warPlanningSystem: System = {
       // 无计划（无威胁 / 未授权 / 经济护栏失败）：撤掉物流需求，但不清 warPlan —
       // 收摊（recycle + 撤请求 + 核验）是 war-planner 的职责，它每轮自己复核授权证据，
       // 断供超窗才撤军。这里抢着清 warPlan 会让旧编队变成没人回收的孤儿。
+      // #99：无威胁单列一位，剩下的合并成 noPlan（domain 的三处 bail 在系统层不可分辨，
+      // 复制它的判据只会与真判据漂移）。
+      if (funnel.noThreats === 0) funnel.noPlan = 1;
       g.warLogisticsDemand = undefined;
     }
   },
@@ -107,10 +123,14 @@ export const warPlanningSystem: System = {
  * - globalCache.multiResourceHealth → empireEnergyReserve（近似）
  * - Memory.kernel.warBlacklist → blacklist
  * - ctx.snapshots() → spawnCapacity, ourPower
- * - Memory.rooms[].intel → targetCandidates
+ * - queryRoomIntel()（intelligence 的 heap 索引）→ targetCandidates
  * - CONFIG.war.* → freshnessThreshold, maxTowers, maxDistance
  */
-function buildWarPlanningInput(ctx: TickContext, tick: number): WarPlanningInput | undefined {
+function buildWarPlanningInput(
+  ctx: TickContext,
+  tick: number,
+  funnel: WarFunnelCounters,
+): WarPlanningInput | undefined {
   const g = globalCache();
 
   // 帝国姿态
@@ -182,7 +202,7 @@ function buildWarPlanningInput(ctx: TickContext, tick: number): WarPlanningInput
   const blacklist: Readonly<Record<string, number>> = Memory.kernel?.warBlacklist ?? {};
 
   // 目标候选（从 intel 采集）
-  const targetCandidates = buildTargetCandidates(tick);
+  const targetCandidates = buildTargetCandidates(tick, funnel);
 
   // 玩家情报（从 threatAssessments 中最高威胁房的 intelEvidence 推导）
   const maxThreat =
@@ -237,10 +257,20 @@ function buildWarPlanningInput(ctx: TickContext, tick: number): WarPlanningInput
  *
  * ⚠️数据源是 `queryRoomIntel()`（`systems/intelligence.ts` 的模块级 heap Map，**不是** `Memory.rooms[].intel`
  * ——那个键并不存在）。旧注释曾把消费方引向空键，照着它排查会得出"战争系统读空键⇒永久无目标"这条**假根因**。
- * 五道筛子（非 fact 级情报 / 无主或我方 / `kind!=='normal'` / `occupied` 与 blacklist / 下游
- * `targetFreshness·maxTowers·maxDistance`）目前**全部静默 `continue`、零计数** ⇒ #99 要在这些出口各留一位。
+ *
+ * ⚠️**本函数的产物今天不在决策路径上**（#99 计数时读码实证，写单测才撞出来的）：
+ * `deriveOperationType()` 的 10 个 ThreatIntent 分支只返回 `DEFEND | ESCORT | RETREAT`，
+ * `isOffensive()` 因此恒 false ⇒ `deriveTarget()` 必走防御支（目标＝受威胁房本身），
+ * `selectTarget()` 与它携带的 `occupied/blacklist/targetFreshness·maxTowers·maxDistance`
+ * 四道进攻闸**从生产链上进不到**（唯一调用者是 `tests/unit/military/war-planning-a5-3.test.ts` 手递的进攻夹具）。
+ * ⇒ 推论：#95 的"零计划零编队"只可能由 `noThreats` 解释，**不能**由候选被筛光解释；
+ * 反过来"候选表是空的"也不是缺陷证据。这些计数是为进攻链接线那天预备的仪器。
+ *
+ * #99 在此处计前三道出口（非 fact / 无主或我方 / `kind!=='normal'`）+ 池子规模 + 存活数；
+ * 后四道在 domain 的 `selectTarget` 里，其拒因随 `rejectedAlternatives` 落进计划，本处不重复计
+ * （复制一份判据只会与真判据漂移）。
  */
-function buildTargetCandidates(tick: number): TargetCandidate[] {
+function buildTargetCandidates(tick: number, funnel: WarFunnelCounters): TargetCandidate[] {
   const candidates: TargetCandidate[] = [];
   const occupied = new Set<string>();
 
@@ -273,13 +303,28 @@ function buildTargetCandidates(tick: number): TargetCandidate[] {
 
   // 从 intel 采集候选
   const blacklist = Memory.kernel?.warBlacklist ?? {};
-  for (const entry of queryRoomIntel()) {
+  const entries = queryRoomIntel();
+  funnel.intelEntries = entries.length;
+  for (const entry of entries) {
     // 授权硬门槛：非 fact 级情报不进入战争目标候选（INTELLIGENCE §5）。
-    if (!intelActionUsable(entry.subject, tick)) continue;
+    if (!intelActionUsable(entry.subject, tick)) {
+      funnel.notFact++;
+      continue;
+    }
     const e = entry.payload;
     // 只选有主非我方房
-    if (!e.owner || e.owner === myUsername) continue;
-    if (e.kind !== "normal") continue;
+    if (!e.owner) {
+      funnel.unowned++;
+      continue;
+    }
+    if (e.owner === myUsername) {
+      funnel.mine++;
+      continue;
+    }
+    if (e.kind !== "normal") {
+      funnel.notNormal++;
+      continue;
+    }
 
     candidates.push({
       roomName: entry.subject,
@@ -295,6 +340,7 @@ function buildTargetCandidates(tick: number): TargetCandidate[] {
     });
   }
 
+  funnel.candidates = candidates.length;
   return candidates;
 }
 

@@ -133,6 +133,8 @@ export function resetGlobals(): void {
   delete g.warAbortSignals;
   delete g.warPlanCache;
   delete g.warLogisticsDemand;
+  // #99 漏斗 scratch — 漏清会让"本 pass 候选为 0"的断言读到上一条用例的残影。
+  delete g.warFunnelScratch;
 }
 
 /**

@@ -142,6 +142,68 @@ export interface WarPlan {
 }
 
 // ═══════════════════════════════════════════════════════════
+// §2.5 候选漏斗计数（#99：纯观测，无决策消费者）
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 一次 war-planning pass 的候选漏斗出口计数。
+ *
+ * 存在的理由：#95「war 零计划零编队」原本不可归因 —— 选靶链路上的每道筛子都是裸
+ * `continue`/`return undefined`，跑了一千小时也答不出"是没敌人、没情报、还是情报不够格"。
+ * 每条计数只在**本 pass 内**有意义（每次 pass 从零计），终局四项 `noInput | noThreats |
+ * noPlan | plans` 恰有一项为 1。
+ *
+ * ⚠️这不是"累计量" ⇒ 读趋势要按 pass 采（`tick` 字段是被计量那一拍，不是快照时刻）。
+ */
+export interface WarFunnelCounters {
+  /** 本次计量所在的 pass tick。 */
+  tick: number;
+  /** `buildWarPlanningInput` 在 `empireHealth` 缺失处 bail ⇒ 本 pass 从未走到采集。 */
+  noInput: number;
+  /** `queryRoomIntel()` 交出的条目总数（情报池规模，0 = 采到的全是自家视野外）。 */
+  intelEntries: number;
+  /** 出口①：置信度非 fact（`intelActionUsable` 拒）。 */
+  notFact: number;
+  /** 出口②：payload 无 owner（看不到控制器归属）。 */
+  unowned: number;
+  /** 出口②′：owner 就是我方（自有房不该成为战争目标，但要能看见它占了多少池子）。 */
+  mine: number;
+  /** 出口③：`kind !== 'normal'`（毁房/中立区/同城房）。 */
+  notNormal: number;
+  /** 活过前三道出口、进候选表的条数（下游 `selectTarget` 的 occupied/blacklisted/
+   *  stale/tooManyTowers 四道在 domain 里，其拒因随 `rejectedAlternatives` 落进计划，本表不重复
+   *  计 —— 复制一份判据只会与真判据漂移。⚠️那条进攻支路今天从生产链进不到：
+   *  `deriveOperationType()` 只产 DEFEND/ESCORT/RETREAT ⇒ `isOffensive()` 恒 false。 */
+  candidates: number;
+  /** 域内第一道 bail：无威胁评估 ⇒ 不需要行动。 */
+  noThreats: number;
+  /** 有威胁但没产出计划（未授权 / 经济护栏失败；"选靶全拒"那一路今天进不到，见 `candidates` 注）。 */
+  noPlan: number;
+  /** 计划已产出。 */
+  plans: number;
+  /** 有计划但解析不出 sponsor ⇒ 计划未落笔（war-planner 收不到，编制为 0 的直接原因之一）。 */
+  noSponsor: number;
+}
+
+/** 新建一份全零漏斗计数（tick 由调用方给，计量与落笔必须同一拍）。 */
+export function newWarFunnel(tick: number): WarFunnelCounters {
+  return {
+    tick,
+    noInput: 0,
+    intelEntries: 0,
+    notFact: 0,
+    unowned: 0,
+    mine: 0,
+    notNormal: 0,
+    candidates: 0,
+    noThreats: 0,
+    noPlan: 0,
+    plans: 0,
+    noSponsor: 0,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
 // §3. 核心：从威胁推导 OperationType
 // ═══════════════════════════════════════════════════════════
 

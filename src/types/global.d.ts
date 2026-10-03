@@ -482,6 +482,13 @@ declare global {
        * 两者都够不到"这场 war 之前那两次目击"，于是 #90 判据的「持续战损」半边不可测。
        * `natural` = 寿终（age 达名义寿命线，reserver/claimer 600−60、其余 1500−60），`combat` = 非寿终（战损/事故/回收）。 */
       deathByCause?: { natural: number; combat: number };
+      /** #99：战争候选漏斗 —— 最近一次 war-planning pass 的各道筛子出口计数。
+       * 为什么单独存：#95「零计划零编队」的归因需要知道候选死在哪一道，而五道筛子全是裸
+       * `continue`（heap 里的 scratch 换码即清，且 pass 间隔 10 拍 ⇒ 现场永远追不上）。
+       * 由 intelligence 老化批每 100 拍与 `intelCoverage` 同拍写入（见 systems/intelligence.ts）。
+       * ⚠️`tick` 是**被计量的那一拍**，不是快照时刻 ⇒ 它落后当前 tick 超过 2×`CONFIG.war.interval`
+       * 就说明 war-planning 没在跑，这份计数是残影（与 `energyLedger.tick` 那种"创建时赋一次"的坑同类）。 */
+      warFunnel?: import("../domain/military/war-planning").WarFunnelCounters;
       /** B4-F08: P1 补位时延 EMA（按角色分桶），由 spawn-manager 写入。
        * replaceLatency[role] = prev * 0.8 + latency * 0.2。 */
       replaceLatency?: Record<string, number>;

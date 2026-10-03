@@ -431,6 +431,11 @@ export interface GlobalCache {
     tick: number;
     plan: import("../domain/military/war-planning").WarPlan | undefined;
   };
+  /** #99：最近一次 war-planning pass 的候选漏斗计数（每 pass 换新对象，不由老化批复用）。
+   * 由 intelligence 的老化批每 100 拍与 `intelCoverage` 同拍快照进 Memory —— 两道读数必须
+   * 同时刻才答得出「池子里有 7 间房，为什么候选是 0」。
+   * heap 存储 — global reset 丢失可接受（下一个 pass 即重建）。undefined = 本进程还没跑过 war-planning。 */
+  warFunnelScratch?: import("../domain/military/war-planning").WarFunnelCounters;
   /** 观察交接缓冲：room-observer 采集管线写入，intelligence 系统采用后清空。
    * heap 存储 — global reset 丢失可接受（情报按 TTL 重访重建）；写侧有界，
    * 超限丢弃最旧（观察可复采，无丢失风险）。 */

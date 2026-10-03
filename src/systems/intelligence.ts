@@ -195,6 +195,13 @@ export const intelligenceSystem: System = {
               players: playerEntries.size,
               tick: ctx.tick,
             };
+            // #99：战争候选漏斗（war-planning 每 pass 写 heap scratch）。落在这里的理由：
+            // 它与 intelCoverage 是同一个问题的两半（"池子里有房，为什么选不出靶"），
+            // 同拍写入 ⇒ 两份读数永远同时刻，不必猜谁更旧。
+            // scratch 为 undefined = war-planning 自 boot 起还没跑过 ⇒ **不写**（缺键是
+            // "未上线"这一态，写成全零会被读成"跑过且每道筛子都空"）。
+            const funnel = globalCache().warFunnelScratch;
+            if (funnel) statsAny.warFunnel = { ...funnel };
           }
           if (removed > 0) {
             log.info(
