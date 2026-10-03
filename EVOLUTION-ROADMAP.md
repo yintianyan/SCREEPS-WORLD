@@ -3044,3 +3044,64 @@ cleanup 之前杀掉，`funnel.candidates=…` 那一行留在被剥除状态（
 `deriveOperationType` 的 10 分支穷举 ⇒ 进攻选靶链**无产线调用者**（升 #100 请示）、
 `warPlan.squadSize` vs `a5ForceReq.total` 两 producer 分歧留 #101、
 以及工具坑一条（会改文件的脚本不接 `head`/`tail`，SIGPIPE 会在 restore 前杀死它）。
+
+---
+
+## R212 · 2026-10-03 12:4xZ（RCL5 命中——它没打开扩张闸，原因读死了）
+
+### 里程碑与它没兑现的那一半
+
+`rcl5-eta-watch` round19@12:37:46Z ⇒ **W38S56 level=5**，命中参考 tick=83400860，新级别已累 935 进度；脚本按 ROUNDS 正常下班（不是未到点退出）。这是 #88 那条对冲里"每房 RCL≥5"这一项**第一次为真**。
+
+但 24 拍后的现场读数（`kernel.expansionDashboard@83400884`）：`Readiness=NOT_READY`、
+`failedGates=["G0: posture expansionAllowed(v=false|posture.expansionAllowed === true)","G6: CPU tier(v=tight|tier ≤ comfortable)"]`
+⇒ **RCL5 落地对扩张没有任何即时效果**。根因是一条合取式（`posture.ts:247`，本轮读死）：
+
+```
+expansionAllowed = expandHealth && !liveThreat && posture !== "war"
+```
+
+### 七个合取项逐个对上现场读数（`expandHealth`，posture.ts:142-157）
+
+| 合取项 | 门槛（活 profile） | 现场 | 判定 |
+|---|---|---|---|
+| `gclHeadroom` | `gclLevel > rooms.length`（=2） | GCL 在 Memory 里**读不到**（`kernel.environment.gclProgress=6,174,486` 只是量级暗示，语义未证） | **未知** |
+| `allNormal` | 两房 colonyState=normal | observe@83400705 两房 normal | ✓ |
+| `bucket` | ≥ 7000（DEFAULT）／6000（low） | 10,000 | ✓ |
+| `avgPressure` | ≤ 0.4（DEFAULT）／0.5（low） | **`rooms.*.economyPressure=[0,0]`** | ✓ |
+| `sponsorReady` | RCL≥7、normal、无活敌、storage≥8000 | W37S58 RCL8 / 891,913 / Cleared@83400245 | ✓ |
+| `youngestMature` | 每房 RCL≥5 | 刚命中 | ✓ |
+| `cpuRatioOk` | `totalCreepCpu/20 < 0.6` | 角色 6.6/拍 ⇒ 0.33 | ✓ |
+| **`posture !== "war"`** | — | `posture=war since=83397159` | **✗ ← 唯一在挡的那一项** |
+
+⚠️**同名不同源第 5 次踩点，这次拦住了我**：dashboard 写 `Pressure=HIGH(0.65)`，第一眼像"压力项在挡"。
+但 `expandHealth` 吃的是 `rooms[].economyPressure` 的均值，observe 那列 `pressure=0` 才是决策路径上的量，
+一 peek 精确路径就证伪了（`rooms.W37S58.economyPressure=0`）。⇒ 纪律：**看到"Pressure"先问是哪一位消费者的**。
+
+### 由此得到一条很硬的可驳预测
+
+**到 tick ≈83405220（≈17:2xZ 本地 / 12:4xZ+4.6h）war 尾税自然到期，若 `gclHeadroom` 为真，`expansionAllowed` 会在同一拍翻 true，
+执行闸（`plan-adapter.ts:67` 只看 `expansionAllowed`）会真的去 claim 第一张 WAITING_EXECUTION 的 W37S56。**
+锚算法：`max(lastHostileAt)=83400220`（W37S58，EnemyInvasion@83400215）+ `threatWindow=5000`
+（`kernel.environment.neighborPressure="low"` ⇒ `posture-baseline.ts:46` 那条分支覆盖 DEFAULT 的 3000）。
+已核 `minDwell=1000` 不 binding（姿态已驻留 ≈3,700 拍且到期时 ≈8,000 拍），`warPressureTicks=0` ⇒ R4 止损那条也没走。
+判效器：**`posture-exit-watch2.sh` pid=7182**，GAP=600s、ROUNDS=45 ⇒ 覆盖 ≈7,290 拍（到 ≈83408300），
+每轮自带 `Blocked=` / `pressure=[…]` / `hostileAt=[…]` / `newSighting=` 四列，判据 P-A / P-B / G6-ALONE / STUCK / ANCHOR-MOVED。
+旧那支（pid=82202，EXIT_TICK=83400412）留着不动，但我已在其日志里手写一行 NOTE 标明**它的锚过期**——
+它随后打出的"超容差仍 war"不是预测失败，是计时器被 83400220 那次目击整段重置。
+
+**这条预测最锋利的下游**：七项里唯一未证的是 `gclHeadroom`，而那正是 **#94 要回答的问题**
+（`strategy.gclLevel` 落盘，未推）。⇒ 给"要不要推这批"添一条具体论据：
+P-B 若发生，第一个要排除的就是这项，而没有 #94 就只能靠 console 现抓（本会话已刻意不打 console）。
+
+### 其余现场
+
+`gateNetFlow={W37S58:5.146, W38S56:0.832}` ⇒ Σ=**5.978** 对门槛 5（G4 绿），而**同拍核心房 `economy.nf=−9.45/拍`**
+⇒ R184"回声"第三次实例：慢 EMA 高于输入必回落，回落前 G4 的绿不能当余量用。
+核心房 storage 891,913→**在跌**；`warPlan` 仍挂着 `targetRoom:W37S58 spawned:0 squadSize:32 a5ForceReq.total:0`（#101 的原样）。
+
+### 边界
+
+零 src、零 push、零 build、**零 console**；探针全走 REST：peek×5（精确 dotted path）+ 手工一发先验新判效器形状。
+新增 1 个看门狗（7182），旧 3 个在飞（41487/54116/82202）；`rcl5-eta`(82755) 与 `rcl5-watch`(69079) 已按 round 正常下班。
+L0 §2.3 的 #97 与 §3.5 的属人 7 项本轮未动。
