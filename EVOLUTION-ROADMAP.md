@@ -3196,3 +3196,34 @@ R212 写下"Σ=5.978 而核心房快仪 nf=−9.45/拍 ⇒ 这格绿不能当余
 退出预测仍按 **83405220** 走。pid=7182 存活确认。
 
 边界：零 src、零 push、零 build、零 console；本轮探针＝peek×3 + 源码 Read/grep。属人 7 项未动。
+
+---
+
+## R215 · 2026-10-03 13:2xZ（房间运营审计：子代理的头号结论是反的，我把它撤了）
+
+按 #97 的次序审计房间运营/防御工事族，落 `CAPABILITY-MATRIX.md §15`（那一行开始用**核验等级标注**：
+`[我核]` / `[注释自证]` / `[未复看]`——审计越深，把"我验过的"和"我听说过的"混在一起的风险越大，标注是给下一轮的免疫）。
+
+**被撤的两条过头结论（都是子代理报的，我自己复看源码后否掉）**
+① **"没有任何系统发 `STRUCTURE_WALL` 任务 ⇒ 防御线缺墙"是反的**：`construction-manager.ts` 的
+`isRuntimeDefenseWallTask` 把 `defense.mincut.*` 的墙任务**全部拒绝**，注释写明理由"防止不可逆围城继续扩大"；
+`defense-planner.ts` 现在发 `defense.mincut.rampart.<x>.<y>`，且自己注释"旧格式 wall 键由 construction-manager 阻断"。
+⇒ 不建墙是**故意的安全设计**，不是能力缺口。若照那份报告立案，我会去补一条"发墙任务"的功能，
+正好把系统刻意关掉的不可逆风险重新打开——这是本仓最贵的一类错（换个名字复发的"修法即破坏"）。
+② **"segment `overrides` 无产线写者"错**：`layout-planner.ts` 把 `planCoreStage` 的 `result.overrideWrites`
+写回 segment 并 `markLayoutDirty()`。同一条报告说 `template` 分支不可达所以"整套是死码"也不对：
+`domain/layout/planner.ts` 确实被 import，只是 `CONFIG.layout.mode="constraint"` 让那条分支按配置休眠。
+
+**核出来的真问题只有一条，而且是最便宜的那种**：`CONFIG.construction.maxWallSitesPerRoom` 的注释还写着
+"min-cut v3 割集顶点改用 wall（阻挡通行）"，与上面的代码**正好相反** ⇒ 照配置推理的人会得出"防御线用墙"。
+本轮把注释改成指向真实行为（并说明那个名额今天是**惰性的**：没有任务类能走到它）。
+**零行为改动**，按纪律不单独部署，随下一批走。⇒ 这一族的形状值得记：真正的风险不在代码里，在"两份真相互相矛盾"里。
+
+**现场静止态**（13:19Z peek）：`rooms.W37S58.buildQueue=[] spawnQueue=[] phase=steady rcl=8 reserve=924,215
+reserveDelta=+414` ⇒ 建造管线是**没活可干**，不是被什么卡住。这条对下一轮有用：如果之后读到 `buildQueue` 长期非空
+而 site 数为 0，那才是新问题（名额/优先级/能量），现在不是。
+
+**验证**：`tsc` rc=0 ｜ `check:docs` 通过（注释改的是代码行为，不引用文档路径）｜ construction+layout
+20 文件 / 294 用例全绿 ｜ prettier 干净。判效器 `pid=7182` 仍在飞，退出预测仍按 **83405220**（`newSighting=no` 至今）。
+
+边界：零 push、零 build、零 console；探针 peek×4 + 源码 Read/grep。属人 7 项未动；`#100/#102` 仍等裁决。

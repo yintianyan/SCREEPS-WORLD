@@ -291,8 +291,10 @@ export const CONFIG = {
     /** 每房道路专用 site 名额 — 独立于普通名额，保证走廊路能与 extension 并行建造，
      * 不被 priority 3 饥饿永久挤占。 */
     maxRoadSitesPerRoom: 2,
-    /** 每房 wall 专用 site 名额 — min-cut v3 割集顶点改用 wall（阻挡通行），
-     * 独立计额避免与 extension 竞争 normal 槽位导致防御线建不起来。 */
+    /** ⚠️这条已被代码推翻，留着只防有人照它推理：**运行时 min-cut 的硬墙任务一律被拒**
+     * （`construction-manager.ts` 的 `isRuntimeDefenseWallTask`，理由是"防止不可逆围城继续扩大"），
+     * 现网 min-cut 割集顶点改发 **rampart**（`defense-planner.ts` 发的 `defense.mincut.rampart.x.y` 键）。
+     * ⇒ 本名额对今天能产生的任务类是**惰性的**（只有历史/人工的墙任务才会走到它），不是"防御线用墙"。 */
     maxWallSitesPerRoom: 2,
     /** 每房 rampart 专用 site 名额 — 核心覆盖 rampart + min-cut 有结构位置的 rampart，
      * 与 wall 同类独立计额，不与 normal/road 竞争。 */

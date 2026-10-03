@@ -211,6 +211,37 @@
   ②加第三房 ⇒ 固定项按房走 ⇒ 缺口变大（#45 的结构性成本结论）；③累计型读数必须**差分**（`cpuRate.total` 是 boot 以来累计，直接读会把趋势抹平——已踩过三次）。
 - **优先级**：P1。**`STABLE` 前置**：一次 G6 由红转绿的完整观测（tier 翻 + `since` 前进 + 缺口的独立差分核算三者同拍成立）。
 
+## 15. 房间运营与防御工事（`construction-manager` / `layout-planner` / `defense-planner` / `repair`）
+
+> **核验等级标注**（本行的诚实口径）：`[我核]`=今夜逐行看过源码；`[注释自证]`=代码注释自己写明；
+> `[未复看]`=子代理报告、我未逐行验证 ⇒ 只可当线索，不可当结论。
+
+- **实现状态**：`LIVE_VALIDATED`（建造管线本身：幼房从 3 只到 RCL5 全程由它产出结构，#32/#37/#39 都经过它）；
+  防御工事半边是 `[我核]` 的**设计澄清**而非验证。
+- **入口 / 链**：任务由 `layout-planner`（核心/物流/道路）与 `defense-planner`（rampart）**两个作者**写入 `Memory.rooms[].buildQueue`；
+  唯一创建 site 的地方是 `construction-manager`（全仓只有它调 `createConstructionSite`）`[我核]`。
+  现场静止态：`rooms.W37S58.buildQueue=[] spawnQueue=[] phase=steady rcl=8`（13:19Z peek）⇒ 今天队列是空，不是被饿住。
+- **⚠️防御工事的关键事实：这个 bot 不建墙，只建 rampart，而且这是**故意的**（三条一起读）**`[我核 + 注释自证]`：
+  1. `construction-manager.ts` 的 `isRuntimeDefenseWallTask` 把**所有** `STRUCTURE_WALL` 且键以 `defense.mincut.` 开头的任务**拒绝创建**，
+     注释理由是"防止不可逆围城继续扩大"（把自己的通行权砌死是不可逆动作）。
+  2. `defense-planner.ts` 现在发的是 `defense.mincut.rampart.<x>.<y>` 键，并且自己的注释写明
+     "旧格式 `defense.mincut.wall.*` 也匹配前缀检查，由 construction-manager 阻断"。
+  3. 但 `CONFIG.construction.maxWallSitesPerRoom: 2` 的注释原本写着"min-cut v3 割集顶点改用 wall（阻挡通行）"
+     ⇒ **配置注释与代码相反**，照它推理会得出"防御线用墙"的错结论。今夜已把该注释改成指向真实行为（**零行为改动**，随批走，不单独部署）。
+  ⇒ 遗留的惰性面：墙名额仍在配额函数里按 `structureType===STRUCTURE_WALL` 生效，但今天没有任何任务类能走到它，
+  只有历史/人工留下的墙任务才会被它统计——**不是缺陷，是死名额**。
+- **布局模式**：`CONFIG.layout.mode="constraint"` 的**唯一消费者**是 `layout-planner.ts` 把它传进 `planCoreStage` `[我核]`
+  ⇒ `template` 那条分支（`domain/layout/planner.ts` 的固定模板路径）是**按配置休眠**，不是没接线：
+  `domain/layout/planner.ts` 确实被 `layout-planner.ts:47` import。
+  ⚠️我撤了子代理两条过头结论：①"segment `overrides` 无产线写者"错——系统侧 `layout-planner.ts` 会把
+  `result.overrideWrites` 写回 segment 并标脏；②"template 分支不可达⇒整套是死码"错——它是 mode 选中的备选实现。
+  ⇒ 纪律再确认：**子代理的"无写者/无调用者"报告必须自己复看**，这是第二次它把活的说成死的（第一次是 #98 的 `intelStats` 内联写者）。
+- **已知缺陷 / 待办**：#69（`layoutGaps/layoutMetrics` 留着流产扩张的 471k 拍冻值）、#75（超配 link 只认 source 角色）、
+  #82（layoutMetrics 通道已重接线 PASS）。`[未复看]` 待核三条：link "hub" 类是可被填不可被排的（与已结案 #74/#75 同族，勿重复立案）；
+  `developmentGate()` 与 `evaluateDevelopmentGate` 疑似两制（前者只被测试引用）；
+  `globalCache().dismantleCount` 与 `roomMem.dismantleCount` 两份同名不同宿主。
+- **优先级**：P2（管线本身活着；风险集中在"文档/配置与代码相反"这一族）。
+
 ## 尚未入矩阵的能力 = 本文件的已知不完整性
 
 L0 §3.1–3.8 列出的覆盖面**远不止上面 14 条**（§1–§14，含今夜补的 §8b 与 §13/§14；房间运营/基础设施、资源网络、宣言/联盟/外交、符号与 boost 全链…）。
