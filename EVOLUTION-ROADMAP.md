@@ -4278,3 +4278,39 @@ watch2 只剩 15 轮 × ≈161 拍 ≈2,415 拍 ⇒ 覆盖到 ≈83408,000，**�
 这条不是我今天的发现（记忆里已记），但**第一次有了现场拍数**，写进推送风险单更硬。
 
 边界：零 src、零 push、零 build、零 console；只读 API 三发 + grep + 读码。
+
+## R249 · 2026-10-03 18:1xZ（#111 取证收口：**只有 `builder` 会建**，而角色表里没有远建工种 ⇒ 远矿路 site 的进度全靠"家里来的 builder 恰好在场"）
+
+**证据链（全部现读，按调用形状）**
+1. 建造动作只有一个入口家族：`buildNearestSite` / `buildAssignmentSite`，
+   而它的**唯一使用者是 `src/creeps/roles/builder.ts`**（`:93`、`:96`）——`grep buildNearestSite|buildAssignmentSite src/creeps/roles` 只命中这一个文件 ⇒
+   **没有第二个工种能建**（remoteHauler / remoteHarvester / reserver / remoteDefender / dismantler 都不带建造动作）。
+2. 它的候选集是 `ac.snapshot.myConstructionSites`（`actions/build.ts:59-62`）⇒ **房域 = 该 creep 当下所在房的快照**。
+3. `ROLE_CODES`（`event-log.ts:168-183`）里**没有 remoteBuilder**：harvester/hauler/distributor/upgrader/builder/worker/defender/
+   remoteHarvester/remoteHauler/reserver/claimer/remoteDefender/mineralMiner/attacker。
+⇒ **三条合起来**：远矿房（本例 W36S58）里的 road site 要前进，必须有一个**家房 `builder` 恰好出现在那个远矿房**；
+   帝国**没有以"在远矿施工"为职责的工种**。这与现场症状自洽：8 个 site 整 boot `prog=0/300`。
+
+**为什么回收器也没救场（这条我原来猜错了，读完才改）**
+`road-planner.ts:295-330` 的回收判据不是"零进度"，而是**"冻住多久 + 是否在线外"**：
+`offCorridor = 路 site 且 `!nearEvidence(walked, pos)``，只有**线外**格才计时、连续冻满 `roadStaleReapTicks=2000` 才删（注释里点名的正是 W36S58 那 14 格历史残骸）。
+⇒ **热度走廊上的 site 被这条判据保护着**（设计意图：线外＝铺错了，线内＝还没轮到）；
+   而"线内却永远轮不到"这种形状**恰好落在回收器的保护伞下**，于是既不删也不建 ⇒ `roadReaped:0` 与 8 条 `siteStale` 并存。
+   注释里那句"500 点封顶的成本换回整条通勤走廊的铺路权"说明作者想解决的是**车道被占**，不是**车道没人铺**。
+
+**仍然没证完的那一件事（诚实标出来 + 给出判别式）**：**"从没派 builder 去过"还是"派去过但太少/被能量卡住"**。
+现有仪器分不开——`builderVisits` 是从 `progress>0` 反推的（`kernel.ts:704-710`），**同源**；
+`roadLaid:1 / roadReaped:0 / roadSiteCount:17` 只给总量不给"谁建的"。
+**可用的判别式（零新仪器）**：读 `domain/logistics/road-build` 那条"建成侧账本"（`coldCounters.roadsBuilt`，判据是 `roadsBuilt` 与 progress 和）
+——**隔一个 boot 段做差分**：`roadsBuilt` 在动 ⇒ 有 builder 到场、是"量不足"；整段为 0 而 `roadSiteCount>0` ⇒ **就是"没有编制"**。
+（本次读到的 `W36S58.roadLaid=1`、`roadReaped=0` 尚不足以判它——那是放置侧计数，不是建成侧。）
+
+**修法方向（属人，我不动）**：
+①给远矿配**施工编制**——最自然是让 `remoteHauler` 在"空载回程 + 现场有能量"时兼建路（它本来就在那条路上，边际成本最低），
+   代价是搬运量下降与 `traffic-manager` 的 CPU；
+②把 E7 的处置接上（`siteStale ≥ N` ⇒ 停止在该房铺新 site 或回收线内残骸）——**先做上面那条差分再决定**，
+   否则"有 builder 但太慢"的情形下加处置会**误删正在建的东西**；
+③接受现状：路铺不完＝远矿通勤成本高（这条要算钱：远矿 hauler 无路的移动代价 × 通勤次数，与①的成本对比）。
+**依赖**：#110（期望/恢复都是"检测了不处置"那一族，本条是它在施工侧的实例）、#5（远矿道路账本判案的前作）。
+
+边界：零 src、零 push、零 build、零 console；读码 + 只读 API 若干。看门狗 round 2/40、锚未再移动。
