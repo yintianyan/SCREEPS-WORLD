@@ -5045,3 +5045,39 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 - 事件：W38S56 `defense` 窗 83410025→83410075（第 9 次目击，50 拍）；`RecoveryEscalation global@83410352` 属 `mineral/terminal_trade` 旧条目（`attempts=3 terminal=true`），**不是新房的**。`deathByCause.combat` 本轮未读。
 - 工具侧两条（省下轮一次撞墙）：本服 **`Room.lookFor()` 不存在**（`room.find(FIND_STRUCTURES)` 可用）；console 表达式（含包装）**约几百字符上限**，1,100 字符那发被 `expression size is too large` 拒 ⇒ 探针按 ≤500 字符起草。
 - 边界：零 src、零 push、零 build；探针 `observe×1 + peek×4 + ring-dump×1 + console-eval×4（成功 3 发，全只读，mark=B2/B3/B5/B6）`，取探针前 pgrep 确认零在飞；git 领先 23 / behind 0 未变。
+
+---
+
+### 巡检 R131（2026-10-03 23:4xZ，本会话）#115 定罪到规则行：**D1「剩余量升序」对存在性阻塞工地没有豁免** ⇒ spawn 工地 1,380 拍零工时；同时核心房第一次真进满仓态，代价可标价了
+
+**判别按 R130 预注册的分支跑完，没有临场发明**
+- 现场读数：`spawn 0/15,000` 在 **83410489 / 83410515 / 83410537 / 83411233 / 83411242 五次恒 0**（跨 753 拍；工地自 `queuedAt=83409861` 已挂 ≈1,380 拍）；同窗 `container 128 → 288 /5,000`（+160/≈700 拍 ⇒ **≈0.23 进度/拍**）；两只 builder 仍同绑那个 container 工地、`assignedAt=83410105` **1,137 拍不动**，其中一只 `work e32` ⇒ **工时确实在交付，只是全给了 container**。
+- ⇒ 命中预写判别「**spawn 仍 0 而 container 在涨 ⇒ L1**」。L2（取能地板：storage 只有 23 < `builderStorageLimit.low=2,000`、无已建成 container ⇒ 自采 + 200 载重来回走）**解释速率，不解释"哪个工地拿到工时"** ⇒ 降级为次要项。
+
+**W1 闭合（读码，行级出处；两条都成立，而根因在第二条）**
+1. **续约绕过选择函数**：`assignment-adapter.ts:36-70` 对现有 assignment 只要 `validateAssignmentRules` 过就 `leaseUntil = tick + leaseDuration` 直接返回，**不走 `chooseTaskForRole`**；`service.ts:216-235` 的失效条件只有"lease 过期 / revision 变 / target·source 消失"⇒ 工地对象还在就永远续 ⇒ 与"assignedAt 恒旧 + leaseUntil 滚动"逐字对上。
+2. **但真根因更靠前**：`assignedAt=83410105` 恰是 RCL2 那次布局 revision 抬升（R130 读到 `revision:2`）⇒ **那一次是全新选择，仍然两只都选了 container**。因为 `service.ts:156-181` 把 spawn 与"source 相邻的 container"**同判 `priority=1 / maxWorkers=2`**（`isPriorityContainerSite:28-37`），同档 tie-break 是 D1「剩余量升序先完工一个」(`:268-300`) ⇒ `container 剩 4,872` 恒压 `spawn 剩 15,000`，而它那两个工位**正好把两只 builder 全吃掉**。
+- 佐证"代码本来就该认这件事"：`:241-245` 的道路预留注释里已写明触发条件是"**无 critical（spawn/tower，priority≤1）缺口**"⇒ critical 缺口是既有概念，**却没有任何规则把一个 0 工时的 critical 工地优先喂上**；storage 抢占（`assignment-system.ts:239`）也帮不上——它只在 RCL4+ 缺 storage 时拽人，且豁免集本身就含 priority-container（本例那个 4,872 的源旁 container 正在豁免集里）。
+- 状态等级：机制=**已验证（线上五次读数 + 行级读码）**；修复=**已设计，未实现，未排产顺序**。
+
+**修复规格（本轮刻意不起手：共享核心 + 对端 #111 同域，须随批带走）**
+- 最小改动：`chooseTaskForRole` 的候选排序里给 **`isCritical`（spawn/tower）开"存在性阻塞"豁免**——先按"critical 且 `assignedCreeps.length < maxWorkers`"取，其余仍走 D1。可选加强：续约时若存在"priority≤1 且 0 工时"的 build 任务，则**不续约、强制重选**（成本是重新排序的抖动，收益是租约不再能冻住错误选择）。
+- 验收：unit 造 `spawn 剩 15,000` + `源旁 container 剩 4,872`、两只 builder 的夹具 ⇒ 断言其中一只落到 spawn；**反向实验**=关掉豁免必须恰好红一例、控制组全绿；integration + e2e 全量（钩子只跑 unit）。**不动任何阈值**（这不是"调参数"能解的，是排序语义缺一列）。
+- 线上判效签名：`W38S58` 的 spawn 工地进度离开 0 **且** `assignedAt` 出现新值（只看到进度涨不够——container 本来就在校验通过的租约上爬）。
+
+**#115 的代价从今天起可标价：核心房第一次真进满仓态**
+- `rooms.W37S58.storageNearFull = **true**`（R130 及以前恒 false），`se=904,154` ⇒ **ratio 0.9041**，方向**在涨**（898,837@83410355 → 904,154@83411205 ⇒ **+5,317/≈850 拍 ≈ +6.3/拍**）⇒ 这次是"存不下"，不是 R113/R122 那种"标志翻了但库在掉"。**"满仓 imminent"这条我此前连续作废的预报，今天兑现了**（作废记录保留，别当我说错过）。
+- 满仓的消费方（现读，全部第一次上线跑）：`demand.ts:432`（harvester 限档）、`:931-935`（upgrader 目标/`upgraderClamp` 改档）、`factory-manager.ts:58` 与 `industry.ts:459`（**只在 near-full 才动作**）、`power-creeps.ts:303`（发电前提）。
+- 同框对照：新房只需 **15,000** 能量却零工时，`home=W38S58` 的人口 850 拍**一只没加**（仍 4），`spawnStarvationCount 689 → 1,533`（+844≈每拍 ⇒ R130 那条"无 spawn 的房按构造恒真"被二次证实）。⇒ **帝国正在"限采集"的同时把唯一能花钱的地方冻住**：15,000 ≈ 当前 +6.3/拍 累积的 ≈2,400 拍，而按现场 0.23/拍 的建造速率是 ≈65,000 拍。**这条比"G6 差 3.58/拍"更该进 §3.5 的请示正文。**
+- 顺带把 §3.5 的 #50 框架再挪一格：满仓态下关远矿（A 路线）省的是 CPU，但**收入已经存不下了** ⇒ A 路线此刻的代价侧不再只是"19.9/拍能量"，还包括"把正在涨的盈余源头掐掉"——两列数都要摆，取舍仍属人。
+
+**仪器口径纠正（新增一条，写死别再用错）**
+- heap `globalThis.constructionSkips` 是 **100 拍窗口计数、每次上报后清零**（`construction-manager.ts:322-324` + `skipReportInterval=100`@`config/index.ts:339`）⇒ **R130 写的"`p0-spawn` 81 次"正确读法是"某一个 ≤100 拍窗口内 ≤81 次"**，不是累计；本轮 32→40（9 拍）是同一窗口的增长，而两轮之间 86→43 的"变小"**不是部署**（独立证据：`cpuRate` 窗口 3087→3987=+900 对 Δtick 850、`tier=tight@83387005` 未动）。
+
+**其余读数（不另立案）**
+- Σ=`kernel.gateNetFlow` 三房和 `6.213+2.387+(−0.034)=8.566` 对 R130 的 7.732 ⇒ Δ+0.834/≈870 拍、n≈8.7 ⇒ **I≈+12.9/拍**，且**与物理面同向**（storage 绝对量 +5,317/≈850 拍）⇒ 按 #88 的定型措辞属"连续多窗 Σ 单调升且 I>5 ⇒ 真在攒"那一型；**仍不是稳态**（I 是 EMA 的输入均值）。
+- #61（单位=请求-拍，首次用绝对量基线做差分）：W38S56 `budget 2894→2936(+42) / reserveOnly 7223→7345(+122) / degradeGateClosed 4074→4236(+162)` ⇒ **⊆ 第十五次成立**（162 ≤ 164），≈**0.19 请求-拍/拍**；`noDegrade 234`、`floor 0`、`survivalBlock 0` 不动。
+- 扩张闸集合未变：`failedGates=G0+G2+G3+G6`、`state=bootstrapping target=W38S58`、`claimSecure=false`、W38S58 `pressure 0.1→0.6`、`ea/ec=0`。⚠️R129/R130 那句"下一次 claim 等 RCL5"仍不作数——**现在连"能自孵"都没成立**。
+- `dangerUntil=83415805`（`W38S56.remoteOps.W38S55`，op `abandoned`）到期的真实含义：`targeting.ts:190,196` ⇒ 到期后该房**重新可选**（注释明写"否则 abandoned 远矿永远重不开"），而 `shouldPauseOp:233-239` 仍按 abandoned 暂停 ⇒ **eligible≠selected，没有定时器会自己复活它**。同窗车道在动：`W38S56→W39S56` active→**abandoned**（挂起 2→0）、新开 `W38S56→W37S56`=active（W37S56 是 `WAITING_EXECUTION` 的下一个目标）；环内死亡 W39S56 reserver@83411207 / remoteHauler@83411213、W37S57 reserver@83411213。
+- CPU：`window=3987t / total=15.58/拍` ⇒ 缺口 **3.58/拍**（R130 3.24）；A 路线杠杆 remoteHarvester 2.01 + remoteHauler 0.88 +（10 拍板 reserver 0.4）≈ **3.3**，仍差 ≈0.3；每房 `W38S58 0.371→0.636` ⇒ "第三房开始花钱"已在数上。人口 46（26/16/4）、`skippedPerTick 9.4`、`errorsPerTick 0`。
+- 边界：**零 src、零 push、零 build、零 npm**；`observe×1 + peek×1 + console-eval×2`（mark=B7/B8，同值复采是为防我把读数记错，全只读）；取探针前 pgrep `console-eval/vitest/tsc/rollup` 全空（对端不在跑测试或构建，`dist/main.js` 仍是 20:41Z 本地产物）；git 领先 24 / behind 0。
