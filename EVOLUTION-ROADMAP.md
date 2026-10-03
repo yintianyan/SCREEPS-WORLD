@@ -2564,3 +2564,27 @@ CONFIG 基线是 `warPatience=5,000 / minDwell=1,000`（`config/index.ts:1164/11
 但 `posture.ts:117-122` 要求 war 必须 `threatRecent`（某房 `lastHostileAt` 距 `tick < 3,000`）⇒ 由"war 已在 83397159 成立"反推：**目击时刻 ≥ 83394159**（与台账早前那条 `lastHostileAt=83395412` 相容）。
 ⇒ 这是**推导不是读数**。`lastHostileAt` 的真实宿主（snapshot/heap 还是别的 Memory 路径）需要下一轮先 grep 写者再读，**不要照我这两个路径试**。
 另外 `kernel.escalations` 里有 `mineral/terminal_trade repeats=3 lastAt=83396042` 与 `colony/population_rebuild terminal:true @83369862`——**与敌情同期**，这是 #51/#44 同族那条线，别混成战损。
+
+### R183（10-03 10:2xZ）**我们现在处在"零活敌的战争姿态"**——把它撑住的是威胁记忆窗口，而且我能报出退出时刻（可驳）
+
+**读数（全部现取，`rooms.X.lastHostileAt` 的正确宿主是 `Memory.rooms[X]` 本身，不是 `phase`——我 R182 那两个路径是错的，已纠正）**
+| 量 | 值 | 距今（tick 83398684） |
+|---|---|---|
+| `rooms.W37S58.lastHostileAt` | **83395412** | **3,272 拍前** |
+| `rooms.W38S56.lastHostileAt` | **83393907** | **4,777 拍前** |
+| `kernel.strategy` | `posture=war, since=83397159, expansionAllowed=false, warPressureTicks=0` | war 已驻留 **1,525 拍** |
+
+**关键：`newRemoteOpsAllowed=true` 说明 `liveThreat` 现在是 false**（`posture.ts:120-122` 那条"零滞回、只读当下视线"，注释原话"敌人撤离即清零，自治立即恢复"）。
+⇒ **敌人已经走了，但帝国还泡在 war 里**。把 war 撑住的只剩 `threatRecent` 那条**记忆窗口**。
+
+**窗口有多长——不是我猜的，是被现场反推出来的**（合并链 `DEFAULT → CONFIG.posture → selectEnvBaseline → strategyOverrides`，`empire-strategy.ts:87-92`）：
+- 若 `threatWindow` 是 CONFIG 的 **3,000**（`config/index.ts:1162`）⇒ 核心房 3,272 拍已过期 ⇒ `threatRecent=false` ⇒ 走 `posture.ts:195-200`，而 dwell 1,525 ≥ `minDwell` 1,400（override 值）⇒ **早该回落 develop**。它没有。
+- ⇒ 生效的窗口必须 **> 4,777** ⇒ 环境画像只能是 `posture-baseline.ts:44-46` 的 **"low"（空旷安全区）：`threatWindow=5,000`**。
+- 同 profile 还给 `warPatience=3,000`、`expandMinBucket=6,000`、`expandMaxPressure=0.5`——但 `warPatience` 被自改值 **8,000** 覆盖（R182C）⇒ **进门槛被自己抬高，出门槛没被抬高**。
+
+**两条可驳预测（写死，别事后编）**
+- **P1**：`threatRecent` 变 false 的时刻 = `83395412 + 5,000 =` **tick 83400412**（核心房是较晚那一个；幼房 83398907 已过）。dwell 早已 ≥ `minDwell` ⇒ **posture 应在 ≈83400412 落回 `develop`**；按实测 3.71 秒/拍即 **≈12:05Z**。**若它更早翻 ⇒ 我的 "low" 反推错了**（窗口不是 5,000）；**若到点不翻 ⇒ 有一条我没读到的分支在维持 war**（下一站查 `warExitPatienceTicks`/`anyRecovery`/`liveThreat` 的宿主）。
+- **P2**：回落 `develop` **不等于解锁扩张**。`expansionAllowed` 由 `expandHealth` 七个合取项算（`posture.ts:150`），其中 `youngestMature` 要求每房 RCL≥5，而 W38S56 **RCL4 已持续 49,245 拍**（`lastRclChangeAt=83349339`）⇒ **扩张的真正长期阻塞是幼房 RCL5**，war 只是这 1,728 拍里的临时顶盖。
+  ⇒ 给 owner 的口径合并成一句：**今天挡住那 4 张已晋升 Plan 的，先是一个"零活敌的 war"（预计 ≈12:05Z 自解），随后是幼房没到 RCL5（无到期时间，rcl5-watch 在盯）**。G4/G6 在这条路上**都不在执行门禁里**（R182A）。
+
+**这条为什么值得记（不是八卦）**：设计注释（`config/index.ts:1162` 上方）明确说缩短窗口的理由是"窗口过长会令扩张近乎永久冻结"。但 **"low" 环境反而把窗口拉长到 5,000**，而 invader 目击在低压力区也会周期性发生 ⇒ **每次目击缴 5,000 拍的扩张税（≈5 小时）**，且其中大部分时间是**敌人已经不在场**的纯记忆税。这是 #90 那条"恐吓税/振荡驯化"家族的**同族新形状**（不是振荡，是**单次目击的尾税**），修法方向属人（改 profile 的窗口值 = 改策略），我只立案不改。
