@@ -3723,3 +3723,43 @@ grep `src/` 里按 basename 的导入者，零命中即候选。225 个里 **33 
   它绿着，产线上却零调用者。**判 status 只看 `src/` 的调用者，不看 tests。**
 
 边界：零 src、零 push、零 build、零 console；纯 grep。全量 e2e 仍在后台（31/34 那张长跑）。
+
+## R234 · 2026-10-03 15:2xZ（war 尾税量到**上界形状**500 倍，并拆掉 #96 里一个会把回收算成战损的标签）
+
+**① 尾税比值从 ≈110 倍改成 500 倍**：事件环里 `EnemyInvasion 83402215 → EnemyCleared 83402225` ⇒ 这一波在场 **恰好 10 拍**，
+而它把退出锚推到 83407214（= 目击 + `threatWindow` 5,000）⇒ **10 拍的在场换 5,000 拍的扩张税 = 500 倍**。
+方法学一条值得留：**在场时长不用新代码就能量** —— `telemetry-collector.ts:591-614` 这对事件是 `hadThreats` 的**边沿触发**
+（进/出各一条），成对相减就是在场拍数；我此前引的"≤45 拍"来自另一处读数，那是上界不是实测。
+
+**② 这一波不是"噪音"，是真武装单位**：payload 语义读自写者（`[threatCreeps, heals, ranged, melee]`）
+⇒ `d=[1,0,3,2]` = **1 只 creep、3 个 RANGED_ATTACK、2 个 ATTACK、0 个 heal**。按 `isSquadThreat`（armed≥2 或 armed+heal）
+它是**独狼**（单只带杀伤部件），所以"塔集火即可、不升级响应"这条分类也自洽。
+⇒ 我本来想验的假设**"尾税被 work/claim 这类无杀伤单位缴掉"这一发不成立**。但 `CONFIG.defense.threatParts`
+确实含 `work` 与 `claim`（`:589` 起：attack/ranged_attack/heal/work/claim），所以那支假设**只是未被本样本支持、没被否证**；
+要判它得攒多次 `d` 里 `ranged+melee==0` 的入侵，而环只回溯 2,393 拍（本段 1 发入侵）⇒ **样本不够，不结案**。
+顺带核掉一条我自己差点误立的"设计矛盾"：`threat.ts:42-46` 那句"纯 CLAIM 无杀伤"**属于 `isSquadThreat`**（窄判据），
+不是给 `isThreat` 的注释 ⇒ broad/narrow 两把尺是**故意的分级**，不是缺陷。
+
+**③ 计数按纪律全量重数**（不 tail）：环内 `CreepDeath` **65 条 = 63 寿终 + 2 非寿终**；两条非寿同签名
+`r=W38S56 d=[8,26,11,age,0]` ⇒ **同一角色（roleCode 8 = remoteHauler）、同一格 (26,11)**，age 182 与 407。
+
+**④ 由此发现 #96 的一个标签错，并在推之前拆掉它**：`natural` 的判据是"没活到寿终"（`event-log.ts:285`），
+而**早逝不等于战死** —— `spawn-manager.ts:333 recycleCreep` + `creep-recycle.ts:74`（回收连随身货物一起销毁）
+是**自家主动**的早逝通道，旧代码把它 `else` 记进 `deathByCause.combat`。#96 未推 ⇒ 现在改是免费的；
+一旦上线，#90 的"持续战损"判据会把回收读成敌方杀伤、**凭空多出受害者**（那正是"计数器变大要配受害者才算缺陷"的反面教材）。
+改法：三桶 `{natural, combat, recycled}`，`combat` 只收"早逝**且**未被 `memory.recycle` 标记"；
+`recycle` 标记在死亡检测时仍可读（`memory.ts:52-55` 清的是 `Memory.creeps[name]` 本身，那一拍对象还在 ⇒ 是 **CreepMemory 本体**）。
+增量一律 `?? 0` 写（加键到已存在持久对象那一族的靶心）。**它不参与任何判定**，只增不减。
+
+**⑤ 反向实验 + 一次 tsc 救场**：把回收分支判据钉成不可能值 ⇒ **恰好 2 条转红、12 条绿**（含控制组"未标记仍进 combat"），
+撤钉后 14/14 绿、`grep REV-EXPT` 无残留。⚠️过程中 tsc 先报错 `Property 'memory' does not exist on type 'CreepMemory'`
+⇒ 我第一版写成 `Memory.creeps[name]?.memory?.recycle`，而**我的测试夹具写成同一个错形状**（`{memory:{recycle:true}}`）
+⇒ 那条用例当时是**绿的**，但它测的是产线永远不会写的形状。**这是"测自己手拼的夹具"那一族的又一发，
+差别只在于这次是 tsc 而不是现场读数抓住的** —— 类型检查在跑单测之前跑，等于免费的夹具校验。
+
+**⑥ 对推批的影响（不改请示面）**：本笔属**纯仪表**（`deathByCause` 零消费者，已 grep 确认只有类型/写者/我的测试），
+所以选项 B（只推仪表与注释）**仍包含它**，行为改动仍是 2 笔（`1bc67c9` #89 松、`58b1efa` #102 紧）。
+但口径变了：**#96 的 `combat` 上线后才是"早逝且非回收"**，#90 的判据要按三桶读。
+
+边界：src 2 行级改动 + 测试；零 push、零 build、零 console（dist 不动，仍等于我上轮建的那版）；
+`npx tsc --noEmit` 干净、`creep-death-event.test.ts` 14/14。全量 e2e 仍在后台。

@@ -115,32 +115,60 @@ describe("recordCreepDeath — #96 deathByCause 累计线", () => {
 
   const stats = () => (globalThis as any).Memory.kernel.stats;
 
-  it("非寿终 ⇒ combat +1、natural 不动", () => {
+  it("非寿终且未标记回收 ⇒ combat +1、natural 不动", () => {
     (globalThis as any).Memory.kernel = { stats: {} };
+    (globalThis as any).Memory.creeps = {};
     recordCreepDeath(combatName(400));
-    expect(stats().deathByCause).toEqual({ natural: 0, combat: 1 });
+    expect(stats().deathByCause).toEqual({ natural: 0, combat: 1, recycled: 0 });
   });
 
   it("寿终 ⇒ natural +1、combat 不动", () => {
     (globalThis as any).Memory.kernel = { stats: {} };
+    (globalThis as any).Memory.creeps = {};
     recordCreepDeath(naturalName());
-    expect(stats().deathByCause).toEqual({ natural: 1, combat: 0 });
+    expect(stats().deathByCause).toEqual({ natural: 1, combat: 0, recycled: 0 });
+  });
+
+  /**
+   * 这一条是本键拆成三桶的**唯一理由**：`natural` 的判据是"没活到寿终"，而 recyclePass
+   * （spawn-manager:333 / creep-recycle.ts:74）消融掉的 creep 同样"早逝"。
+   * 两桶合一 ⇒ #90 的"持续战损"判据会把自家主动回收读成敌方杀伤，凭空多出受害者。
+   */
+  it("早逝但被标记回收 ⇒ 记 recycled 不记 combat（控制组见上一条：未标记仍进 combat）", () => {
+    const name = combatName(400);
+    (globalThis as any).Memory.kernel = { stats: {} };
+    (globalThis as any).Memory.creeps = { [name]: { recycle: true } };
+    recordCreepDeath(name);
+    expect(stats().deathByCause).toEqual({ natural: 0, combat: 0, recycled: 1 });
+  });
+
+  it("旧形状带 {natural,combat} 而无 recycled 键时不得写出 NaN（加键到已存在持久对象的靶心）", () => {
+    const name = combatName(400);
+    (globalThis as any).Memory.kernel = { stats: { deathByCause: { natural: 2, combat: 1 } } };
+    (globalThis as any).Memory.creeps = { [name]: { recycle: true } };
+    recordCreepDeath(name);
+    expect(stats().deathByCause.natural).toBe(2);
+    expect(stats().deathByCause.combat).toBe(1);
+    expect(Number.isFinite(stats().deathByCause.recycled)).toBe(true);
+    expect(stats().deathByCause.recycled).toBe(1);
   });
 
   it("混跑累计：2 战损 + 3 寿终（只增不减）", () => {
     (globalThis as any).Memory.kernel = { stats: {} };
+    (globalThis as any).Memory.creeps = {};
     recordCreepDeath(combatName(300));
     recordCreepDeath(combatName(400));
     recordCreepDeath(naturalName());
     recordCreepDeath(naturalName());
     recordCreepDeath(naturalName());
-    expect(stats().deathByCause).toEqual({ natural: 3, combat: 2 });
+    expect(stats().deathByCause).toEqual({ natural: 3, combat: 2, recycled: 0 });
   });
 
   it("旧形状（stats 在、deathByCause 缺）首拍即建，不写 NaN —— 这是加键到已存在持久对象那一族的靶心用例", () => {
     (globalThis as any).Memory.kernel = { stats: { deathAnchor: { hauler: 81999000 } } };
+    (globalThis as any).Memory.creeps = {};
     recordCreepDeath(combatName(400));
-    expect(stats().deathByCause).toEqual({ natural: 0, combat: 1 });
+    expect(stats().deathByCause).toEqual({ natural: 0, combat: 1, recycled: 0 });
     expect(Number.isFinite(stats().deathByCause.combat)).toBe(true);
     // 同处的既有对象被保留，但 deathAnchor 按设计**每拍刷成 Game.time**（它是 P1 补位时延的起点锚），
     // 所以这里断言"锚被推进"而不是"锚没动" —— 写错这半边会把正确行为测成回归。

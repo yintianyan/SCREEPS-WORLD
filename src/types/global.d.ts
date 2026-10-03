@@ -481,7 +481,7 @@ declare global {
        * M11 的 `globalCache().recentCombatDeaths` 只保留 2×`fleetLossFuse.windowTicks` = **400 拍**且住 heap（换码清零）。
        * 两者都够不到"这场 war 之前那两次目击"，于是 #90 判据的「持续战损」半边不可测。
        * `natural` = 寿终（age 达名义寿命线，reserver/claimer 600−60、其余 1500−60），`combat` = 非寿终（战损/事故/回收）。 */
-      deathByCause?: { natural: number; combat: number };
+      deathByCause?: { natural: number; combat: number; recycled?: number };
       /** #99：战争候选漏斗 —— 最近一次 war-planning pass 的各道筛子出口计数。
        * 为什么单独存：#95「零计划零编队」的归因需要知道候选死在哪一道，而五道筛子全是裸
        * `continue`（heap 里的 scratch 换码即清，且 pass 间隔 10 拍 ⇒ 现场永远追不上）。

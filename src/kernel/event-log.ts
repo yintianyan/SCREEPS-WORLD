@@ -291,9 +291,16 @@ export function recordCreepDeath(name: string): void {
     stats.deathAnchor[role] = Game.time;
     // #96：跨部署存活的战损累计线。事件环只回溯 ~846 拍、M11 保险丝只 400 拍且住 heap（换码清零），
     // 于是 #90 判据里「持续战损」那半边按现有仪器根本不可测。只增不减，不参与任何判定。
-    if (!stats.deathByCause) stats.deathByCause = { natural: 0, combat: 0 };
-    if (natural === 1) stats.deathByCause.natural += 1;
-    else stats.deathByCause.combat += 1;
+    // ⚠️`natural` 的判据是"没活到寿终"，而**早逝不等于战死**：spawn-manager 的 recyclePass 会把
+    // `memory.recycle=true` 的 creep 走向 spawn 消融（`creep-recycle.ts:74` 连随身货物一起销毁），
+    // 那种死亡同样落进"非寿终"。把它算进 combat，#90 的"持续战损"就会凭空多出受害者
+    // ⇒ 单列 `recycled`，combat 只收"早逝且未被标记回收"。
+    // 三键都按 `?? 0` 增量：加键到已存在的持久对象时旧形状缺键 ⇒ 直接 `+=` 会写成 NaN。
+    if (!stats.deathByCause) stats.deathByCause = { natural: 0, combat: 0, recycled: 0 };
+    const dc = stats.deathByCause;
+    if (natural === 1) dc.natural = (dc.natural ?? 0) + 1;
+    else if (Memory.creeps[name]?.recycle === true) dc.recycled = (dc.recycled ?? 0) + 1;
+    else dc.combat = (dc.combat ?? 0) + 1;
   }
   const seen = globalCache().creepLastSeen?.get(name);
   recordEvent(EventKind.CreepDeath, seen?.r ?? "", [
