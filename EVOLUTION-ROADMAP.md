@@ -2921,3 +2921,20 @@ R207 说"五道闸零计数 ⇒ 不可归因"是对的，但其中**两道的答
 **另一条不该被读成好消息的观察**：`W37S57` 那个 op 上挂着 **`dangerUntil=83398545`**，比 `lastHostileAt=83395412` 晚 **3,133 拍** ⇒ **敌意在"war 已挂起"之后仍在刷新**，而且刷的是远矿房。
 ⇒ 这把 #92 的图景补全了：**我们挨打的是远矿线，而 war 的靶子却必须是玩家房**；`players=2` 说明"认识玩家"，但被打的那间房（W37S57）在我方 `occupied` 里 ⇒ **挨打的位置恰好是不可打击的位置**。#99 的计数会告诉我们这是全部原因还是部分原因。
 （`war-planner` 的存续期证据复核 `war-planner.ts:135` 也已读到：`planTimeout(6000) ≫ targetFreshness(1500)` 是**已修的**旧问题，不是本次嫌疑。）
+
+### R208（10-03 11:5xZ，巡检侧 R118）**战争链第一次在现场出计划**：`kernel.warPlan` 落盘（DEFENSIVE／DEFEND／目标=被侵的自家幼房，`spawned=0`、`a5ForceReq.total=0`）⇒ R195/R196 的"零编队"不再是谜；幼房 `towerSpendCombat` 第一次非零；"零战损"这次是**可判的负结论**（环覆盖够住整场 44 拍的战斗）
+
+**现场（零 console）**：`EnemyInvasion@83399845 W38S56` → `TowerVolley` 38 发（单塔，83399840~83399862+）→ `EnemyCleared@83399888` ⇒ 在场 **≈44 拍**；`ColonyStateChange [2,3]@83399845` / `[3,2]@83399895` ⇒ defense 段 50 拍，与 R113 的 `defenseExitHysteresis=50` 自洽。今夜第 5 次目击、幼房第 3 次。
+
+- **计划侧读数**：`kernel.warPlan={targetRoom:W38S56, sponsor:W38S56, squadSize:9, since:83399844, towersSeen:0, phase:"advance", spawned:0, operationId:OP-83399874-0, warPosture:"DEFENSIVE", operationType:"DEFEND", warPlanHash:4e5d7372, a5ForceReq:{attacker:0,healer:0,tank:0,dismantler:0,total:0}}`；环里 `WarPlanCreated` 5 发 = **4 发战略**（`war-planning-system.ts:74`，payload=`[status码, priority.score]` ⇒ 0 与 ≈53）+ **1 发战术增援需求**（`tactical-runtime-system.ts:786`，payload=`[urgency,count]`=`[0,50]`，注释写明"只声明需求，孵化由 war-planner 的 submitSquadRequest 执行"）。
+- **对 R195/R196/#95 的补件（不是推翻）**：①**"零计划"被现场否证**——计划真落盘了，带 sponsor/hash/优先级 ≈53。②**"零编队"成立但原因可见**：`a5ForceReq.total=0`、`spawned=0`、`W38S56.spawnQueue=[]` ⇒ 战术喊了 `[urgency=0,count≈50]` 而战略没把它变成兵力请求；结合"敌 44 拍被塔清空 + urgency=0"，这是**威胁先于兵力消失的良性收敛**，不是断链。⚠️**要定罪得等一次"敌在场 > war-planner 一个 interval 而 `a5ForceReq` 仍 0"**——今天没有，我也不制造。③**"层次错配"被加强**：唯一一次真进犯产出的计划目标是**我们自己的幼房**（DEFEND），不是任何玩家房 ⇒ "把帝国推进 war 的东西打不到人"这句话现在有正面样本。
+- **代价与战损**：`W38S56.towerSpendCombat=900`（累计 `towerSpent=8,630` 的 10.4%）⇒ 幼房塔第一次有"打敌人"的能量记录。战损：环覆盖 `83399093→83400091` **包含整场战斗**，其间 `CreepDeath` 全 `natural=1` ⇒ **本场零战损是可判的负结论**（R198 抱怨的"环只回溯 846 拍"在此不构成障碍；也别把它推广成"目击零战损"，那是已撤的过头话）。`kernel.stats.deathByCause` **不存在** ⇒ #96 未上线（与 R201"未 build 未 push"自洽）。
+- **两问留给 #80 域（不立案）**：①`warPlan.towersSeen=0` 与同场 38 发 TowerVolley 的口径关系（敌塔 vs 自家塔可见数）——没读到写者不猜；②核心房 `towerSpendCombat=660` 从 07:47Z 到 11:4xZ 一字未动，而 06:5xZ 核心房有 6 塔 5 轮齐射 ⇒ **我没有战前基线，因此既不能说漏记也不能说记对**；要判只能抓下一次齐射的**前后两发**。
+
+**G4 / 满仓 / RCL5 当前位置**
+- **G4 绿，且核心房单房已过线**：`gateNetFlow={W37S58:5.5817, W38S56:0.4869}` ⇒ **Σ=6.069**@83400065（R189 那发 5.214@83399204）。⚠️**幼房那一台在跌**（0.719→0.487）而它的升级功率刚从 8 涨到 **16.00 进度/拍**（`rcl5-eta-watch` round8-11 四发同值）⇒ **R185-D 的对冲第一次在现场看得见**：幼房越认真爬级，对 Σ 的贡献越小，现在全靠核心房一台顶。
+- **`storageNearFull` 仍未翻**（false；storage 896,514 ⇒ ratio 0.8965，距 0.9 触发线余 **3,486**）。我 R189 预测 ≈83400250 翻真，按现涨速（+6.3/拍而非 +8.63）实际要到 **≈83400615** ⇒ **晚 ≈365 拍，错因是速率不是模型**。判据保留：翻真后看 `demand` 的"限采+加速消费"是否把 `nf`（现 +30/拍）压回去 = R184"饱和响应吃净流"的现场复现。
+- **RCL5 落在两个 war 退出时刻之间**：progress 392,247、rate 16.00 ⇒ 到 405,000 需 797 拍 ⇒ **≈83400800**（≈12:2xZ，前提 `REQ=405,000` 仍待 #93 上线后证实）。war：`strategy.since=83397159`，而 **83399840 又有一次目击** ⇒ 退出取决于窗口键：①首次目击 `83395412+5,000=83400412`（R189 押的就是它）②最近目击 `83399840+5,000=83404840`（≈14:5xZ）。**判别式**：若 ≈83400412 退 ⇒ 按首次/按房各自计；若挺到 ≈83404840 ⇒ 按 `max(lastHostileAt)`，则**每次目击把扩张再推 5,000 拍**，#90 的"骚扰税"就有定量口径（今天两次目击已足够把 RCL5 之后的门再推一次）。⚠️届时我这条预测被否**多半是前提变了而不是模型错**，按那一类写。
+- 其余：`Blocked=G0+G6`@83399984、`tier=tight@83387005`（≈13,000 拍）、调度 tier=healthy、`Budget 355,293/960,248`、候选 Q2/R6/U4、`errorsPerTick=0`；`credits 12,642,148`（第五发差分 **+381,339/≈1,000 拍**）、`runs=67`、`terminalEnergy 10,343`。
+
+**边界**：零 src、零 push、零 build、**零 console**（对端 R207 刚写过 11:4xZ，我刻意不碰 `__evalResult`）；探针 observe×1 + `ring-dump`×2（段道）+ peek×1。§3.5 属人 7 项一个没动，也没为制造证据做任何事。**下一轮第一件事：war 按哪条退出（①/②）；第二：RCL5 是否命中 ≈83400800 并核 `expansionAllowed` 与那 4 张 WAITING_EXECUTION（执行门禁只认 expansionAllowed，见 R189）。**
