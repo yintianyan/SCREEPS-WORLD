@@ -1741,3 +1741,34 @@ G4 红是**"要求继续积累"这一条在饱和库存上不可长期成立**�
 · 顺带把两条"读码结论"升级成"有用例背书"（同一轮里查的）：`tests/unit/economy/tuning-closed-loop.test.ts`
   `:537` 断言"连续 3 次回滚 → 冻结 + 复位 CONFIG 基线"、`:580` 断言"验证通过（cleared 无回滚）→ 重置 rollbackCount"
   ⇒ 我在 R135 讲的冻结后果与"计数会被一次成功验证清零"不再是读码推断。
+
+### R141（10-03 02:2xZ）两件：R137 补完最后一层，另开 **#89 自进化 L1 的 override 是单向的**
+
+· **R137 的阈值来源补核（我之前只读了 DEFAULT，这是一层漏核）**：`empire-strategy.ts:83-92` 的合并链是
+  `DEFAULT_POSTURE_OPTIONS → CONFIG.posture → selectEnvBaseline(...) → resolveStrategyOverrides(...)`。
+  逐层查：`CONFIG.posture` 里 `colonizeYoungestFloorRcl=5`、`colonizeSponsorRcl=7`（`config/index.ts:1179,1184`，与 DEFAULT 同值）；
+  全仓 `grep` 只有 `posture.ts` 与 `config/index.ts` 出现 `colonize*` 两个键 ⇒ **环境基线层不可能改它**；
+  运行时层实测 `kernel.tuning.strategyOverrides = {posture.minDwell:1400@82993339, posture.warPatience:8000@83287039}`
+  —— **没有任何 `colonize*`/`expand*` 键**。
+  ⇒ "唯一假项 = `youngestMature`（要 5、幼房 4）"这条现在是**四层全核过**的结论，不是默认值推断。
+  顺带把输入口径也核了：姿态的 `rcl`/`storageEnergy`/`hasLiveThreat` 取 **snapshot**、
+  `economyPressure`/`colonyState` 取 **Memory**（`empire-strategy.ts:47-62`）⇒ 我探针里那两处正是按这个分法读的，
+  没有"读的不是同一个量"。
+· **#89（新案，属自进化层的形状缺陷，不是阈值问题）**：`strategyOverrides` **只进不出**。
+  证据三条：①`StrategyOverrideEntry` 形状只有 `{value, adjustedAt, reason}`（`global.d.ts:1064-1071`）**没有到期字段**；
+  ②全仓唯一删除是 `migrations/late.ts:285`（一次性迁移），③`strategy-reviewer.ts` 里读 `currentOverrides` 的**两处**
+  （`:179`、`:191-193`）都只服务**冷却判断**（`STRATEGY_COOLDOWN_TICKS`，防重写），没有任何"复核后撤销/回退基线"的分支。
+  ⇒ 一个因"姿态 1000 拍内切换 4 次"而抬上去的 `minDwell`、或一个因"thrashing"而抬到 8000 的 `warPatience`，
+  **会永久生效**，即使造成它的那个瞬时状态早就没了。
+  ⚠️严重度按第二发读数说：**今天没有坏结果**（`posture=fortify`、`since=83389159` ⇒ 切换照常在发生），
+  立案的是**通路风险**——`expansionAllowed` 的三个合取项之一正是 `posture !== "war"`，
+  而"能不能退出 war"由 `warPatience`/`minDwell` 决定 ⇒ **一条永不撤销的自改可以让扩张授权长期为假**。
+  这与 `roleBounds` 不同：那套有 `pendingValidation` + verify + rollback + freeze；这套**只有护栏没有闭环**。
+  同一族的第三次（#60 产能棘轮、#68/#79 ↑ 棘轮、本条 override 棘轮）⇒ **值得在 L1 里升一条通则**：
+  凡自进化写的量，必须与"写它的哪个瞬时条件"同时被撤销；否则撤销条件要写进立案判据。
+  修法规格（**未动码**，按规矩不单独换码）：给 entry 加 `expiresAt`（或 `validWhile` 谓词的数值化条件），
+  在 `empire-health-system.ts:263-268` 写入循环之前做一次过期摘除；测试要有一条"过期后回落 DEFAULT/CONFIG 值"。
+· **一处记忆与实测冲突，标出来免得下一轮引用错的那条**：`design-lens-double-meaning-collapses` 案例 19
+  写的是"G4 仪器 τ≈2,500 拍 ⇒ 扩张期 G4 **永久显绿**"。今天读的是当前码：`α=0.02 × interval=100` ⇒ **τ=5,000 拍**，
+  且现读门 3.97 > 底层 −0.20 ⇒ **门在向下衰减、当前是红**。两说法不能同时成立（案例 19 早于 `6325d96` 那台长视界仪器）。
+  ⇒ 判 G4 一律以 R138/R141 为准；"扩张期它会滞后显绿"这个方向性提醒仍可保留，但**数字要按 5,000 拍重算**。
