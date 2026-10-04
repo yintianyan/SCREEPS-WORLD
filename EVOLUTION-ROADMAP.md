@@ -5179,3 +5179,47 @@ G6（14.5 vs 12.00/拍，#50）现在成了扩张链上**唯一还红的非自�
 - W38S58 状态：`ColonyStateChange [0,1]`@83413965（bootstrap→recovery）、`PhaseTransition [0,3]` 同拍、`ea/ec=0`、`queue=5/13`、`roomTotal_rs 275→127`、home 人口 3→4（**wave3 还没发**）。
 - 闸与贸易：`G0+G2+G3+G6` 未变、`Readiness=NOT_READY`、`Budget=170,039/988,594`、`Candidates=11(Q=1,R=7,U=3)`；`demandsPublished=0/demandsComputed=0`（满仓入口条件本轮又是假 ⇒ #51"继续不发需求"仍是正确态）、`credits=14,505,346`。
 - 边界：**零 src、零 push、零 build、零 npm**；探针 `observe×1 + console-eval×1`（mark=B12，payload 刻意压到 2 列 ⇒ 无截断）`+ peek×1`；`.gitignore` 未 stage、`git stash list` 空、git 领先 29 / behind 0；`tier=tight@83387005`、`errorsPerTick 0`。
+
+### R286（10-04 11:0xZ，本会话）#111 价值判断落地：(A) 回收被**否证**，(B) 是唯一与账本相容的方向——但它的收益今天无法定价，缺的那个数是我自己的观测口径挡住的
+先接 R284 留下的那一问（「西缘 x1–6 是不是出境口的必经段」）。当时我用 `Room.exitLeft/…` 取回全空并判为**不确定**，
+那是对的处置（那是惰性缓存）。本轮换了三个互不相干的仪器，方向一致：
+
+**一、落点身份（`mark=R286-A1`，t=83414261，零写）**
+- W36S58 的非路/非墙结构只有三个：`controller (22,14)`、`container (16,40)`、`container (23,16)` ⇒ **两口源容器，房内没有 storage/spawn** ⇒ 交付必须出房。
+- 待建 road site **15 格**（不是 16 格，有一条已被收掉），全部 `x∈1–5, y∈25–31`，progress 0–220。
+- `Game.map.getRoomTerrain('W36S58')` 边界可走列（`mark=R286C1`）：**西侧 x=0 在 y28–38 连续可走**（另有 T28–34/T41–45、B8–15/B29–46）。
+  自家核心房 W37S58 在本房的**西**侧 ⇒ 西侧那张口就是交付口。
+⇒ 这 15 格紧贴西口，是**交付车道的出口段**，不是"铺完主干剩下的尾巴"。
+
+**二、legs 全量重数（两日志 40 次采样 / 150 拍 / 80 条 hauler 观测，工具 `tmp/tools/official/analyze-legs.cjs`）**
+- 满载 n=62：`x≤6` 只有 4 次（6.5%）；空载 n=18：`x≤6` 有 5 次（28%）。方向与 R282 同向，样本量从 10/40 升到 18/62。
+- 西口附近实测到的坐标：满载 `(6,31)`、`(2,28)carry=1000`；空载 `(3,31)`、`(2,31)`、`(6,31)`。**满载确实带着满包经过 y28–31 这段**。
+
+**三、账本闭合（`Memory.kernel.stats.roadBuild.W36S58`，boot 以来累计，走 Memory API 零 console）**
+`calls 11,186 = noEnergy 3,216 + outOfRange 7,912 + built 58`；`noWork 0`、`noSiteAtAll 0`、`buildRejected 0`；
+射程分桶 `near(4–5)=633 / mid(6–10)=2,833 / far(≥11)=4,446`；`roadsBuilt 7 / pending 15 / progressSum 839`。
+⇒ **两项等式同时成立**：① `noWork=0` ⇒ 远矿 hauler 人人带 WORK；② 射程内且满载的那 58 次调用**全部**转成 `build OK`（`buildRejected=0`）
+⇒ 引擎侧没有暗闸、`classifyRoadBuildAttempt` 也没被绕过。**卡死的唯一事实是：满载调用里只有 0.73%（58/7,970）落在射程内。**
+
+**四、于是本轮要撤的正是我自己 R284 选的那一支**
+R284 写「第二个分支更可能是真的：主干已铺完，剩下西缘 16 格是低价值尾巴」。**被第三节的配对读数否证**：
+新工具 `tmp/tools/official/site-vs-legs.cjs` 把 15 格 site 与 80 条观测逐格配对，**15/15 的 `nearestLoaded ≤ 3`**（最低 0）。
+⇒ site 落在车道上、也落在施工射程内 ⇒ **(A) 回收没有依据**（路只降移动代价、与载重无关，而这段两条腿都走）。
+⚠️口径边界要说清：`nearestLoaded≤3` 是"样本里出现过"，账本说"这种时刻只占满载调用的 0.73%"。两者不矛盾（4/62 次采样 vs 按 creep-tick 计的 0.73%），
+但**它共同指向的图景是 R275 那条"摊薄反例"的另一种成因**：不是选择不稳定，而是**射程内事件太稀**——
+15 格 ×300 点 = 4,500 点，靠 0.73% 的调用密度要摊 ≈5,400 次满载调用才凑得满一格的零头，实测 11,186 次调用只攒出 `progressSum 839`。
+
+**五、修法排序（只排序，不起手）**
+- (A) 回收/停铺 ⇒ **否证**，不再列为选项。
+- (B) 让 hauler 在空载腿留 200–300 能量 ⇒ **唯一与账本相容**（空载 28% 走 `x≤6`、`nearestEmpty` 有 0，那 3,216 次 `noEnergy` 里落在射程内的部分可直接转成 built），
+  代价＝每趟交付量减 200–300（远矿 hauler 容量 ~1000 ⇒ 交付率约降 20–30%）⇒ **属物流排产，要你判**。
+- (C) 把 site 往满载密度高的位置挪 ⇒ 前提不成立：`recordTraffic` 与载重/角色无关（`creeps/movement/traffic.ts:15-24`），而热度已经把这 15 格落在了真实出口车道上；**热度语义"不该混入空载腿"是命名/口径层面的事，不是本案的因**。
+- **本案现在挡住的不是决定，是一个数**：`classifyRoadBuildAttempt` 先判能后判人（`road-build.ts:86-89`，注释自己就承认 `noEnergy` 会盖住双重缺陷），
+  所以 **3,216 次 `noEnergy` 里有多少本来在射程内，账本答不出来** ⇒ (B) 的收益无法定价。
+  规格（**行为严格不变的纯观测补丁**，等下一批随带走、不单独换码）：在 `energyInStore<=0` 那一支也做一次 site 扫描，
+  把 `minRange≤3` 的次数记成新桶 `noEnergyInRange`（复用已缓存的 `findMySitesCached`，成本＝一次数组遍历，不新开寻路）；
+  上线后第一次读数即可给出 `(B) 的收益 = noEnergyInRange × 每格 300 点的缺口`，届时要不要付那 20–30% 交付率才是有价格的取舍。
+  ⚠️这条与对端 #115 同域（都在 builder/road 施工侧），**我不在轮次不足时起手共享核心**；规格已细到"只差一次形参读取"。
+**禁令继续有效**：不动铺路器、不动回收阈值（`roadStaleReapTicks=2000`）、不放宽施工射程（`UNDERFOOT_BUILD_RANGE_LIMIT`）、不改 `roadHeat` 衰减结构。
+**边界**：单房（W36S58）；账本是 boot 以来累计、无窗口长度，所以只用于**同段内**的比例比较（R282 与本节同段，可比）；本轮零 src、零 push、零 build，
+用了 console×2（结构坐标、边界地形，均只读）+ Memory-API×1 + 本地重数×1。
