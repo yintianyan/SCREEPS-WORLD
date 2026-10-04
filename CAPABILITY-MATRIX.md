@@ -604,3 +604,25 @@ Observer 这一格的八项现在是：官方规则✔（docs：hits500/RCL8/造
 
 **§3.8 八项的完成度（把话说准）**：目前做成 **2 项**——Observer（§20，7/8 项有据、CPU 成本缺）与 Safe Mode（本节，6/8 项有据、资源成本与 CPU 成本缺）。
 `§3.1–3.8` 的**机制覆盖面**仍远未完成 ⇒ `#97` 继续挂着，本轮不宣布完成。
+
+---
+
+## §22 L0 §3.7「Power Creep 与高级实体」八项记录（R339，10-04 20:4xZ）：**机器全在、产出为零**——问题不是接线，是"链条从没跑通过一次"
+
+现场读数（只读探针 mark `R339P2`，t=83430632）：`Game.gpl.level = 0`、`Object.keys(Game.powerCreeps).length = 0`、**`W37S58(RCL8) 有 powerSpawn 1 座`**（另两房 0）。
+⇒ 顺带**作废代码里一句过期前提**：`power-creep-manager.ts:49` 注释写"帝国尚无 powerSpawn（RCL8 前）⇒ 全部运营无从谈起"——楼已经有了，那句话现在是**错的**（留着它会让下一轮把 gpl=0 归因成"没楼"，然后去等一个已经存在的东西）。
+
+| §3.8 | 记录（全部现读，含文件行号） |
+|---|---|
+| 官方规则 | 本地 `@types` 有常量而无数值语义：`POWER_CREEP_MAX_LEVEL 25`、`POWER_CREEP_LIFE_TIME 5000`、`POWER_CREEP_SPAWN_COOLDOWN 28,800,000`（8h 毫秒）、`POWER_CREEP_DELETE_COOLDOWN 86,400,000`（24h）、`POWER_LEVEL_MULTIPLY/POW`、`POWER_INFO`(:860)、`POWER_CLASS`(:805)、`GlobalPowerLevel`(:1900)、`POWER_SPAWN_*`(:356-359)。⚠️**GPL 的增长公式、processPower 的 1 power+50 energy 配比在 @types 里无数值**（代码注释 `industry.ts:720` 写的是"1 power + 50 energy/次"，属读来的口头数，未经 docs 复核 ⇒ 记为未核）。 |
+| 前置条件 | ①**结构**：powerSpawn（布局 `compact-core-v2.ts:157` 槽位、RCL8；`constraint-placer.ts:86` `phaseFor "rcl8"`）→ **已满足**（现场 1 座）。②**资源**：`RESOURCE_POWER` 库存（来源只有 Power Bank 掉落或市场买）→ **不满足（0）**。③**API 存在性守卫**：`power-creep-manager.ts:23` `!Game.powerCreeps \|\| typeof PowerCreep?.create !== "function"` → 私服安全，本服通过。④`Game.gpl.level` → **0**，而 create 需要 GPL ⇒ 链条从上游就断。 |
+| 输入与输出 | 输入：intel 的 `powerBank` 布尔（`room-observer.ts:267/292` 采集，随 `STRUCTURE_POWER_BANK` 存在性；TTL 走威胁窗 `intel.ts:307`）。输出：`processPower()`（`factory-manager.ts:25-35`，守卫 `typeof powerSpawn.processPower === "function"`）→ GPL → `PowerCreep.create(name,"operator")`(:37)/`pc.upgrade(power)`(:44) → 事件 `PowerCreepMilestone`（**编码可分**：`[0]`create、`[1,power]`upgrade、`[2]`spawn，见 :39/:46/:60）。 |
+| 资源成本 | POWER 本体（每房 `storage/terminal/powerSpawn` 三处库存由 `terminal-market.ts:487-489` 汇总）；`CONFIG.factory.powerSpawnPo…` 装填水位（`industry.ts:736`）；powerSpawn 能量地板 `config:987/992`（注释明说"GPL 是投资不是生存，余裕不足时让路"）。⚠️**买 POWER 的定价路径存在但优先级被置 0**（`terminal-selfaid.ts:85` `if (resourceType === RESOURCE_POWER) return 0;`，`terminal-market.ts:445` 在自采循环里 `continue` 掉 POWER）⇒ **市场这条腿是有意关着的**，不是漏接。 |
+| CPU 成本 | **未记录**（无实测；`cpuRate.bySystem` 里 `power-creep-manager` 未进前 10 ⇒ 现值低于 ~0.12/拍，属推论不是读数）。 |
+| 相关 API | `PowerCreep.create(`、`pc.upgrade(`、`pc.spawn(powerSpawn)`、`powerSpawn.processPower(`、`Game.gpl`、`Game.powerCreeps`、`STRUCTURE_POWER_BANK`、`RESOURCE_POWER`、`mission:"powerBank"/"powerCollect"`（`global.d.ts:105`）。⚠️名字全部取自现读代码或 `@types`；**没有一条是猜的**（§20 那三次假缺口的教训）。 |
+| 失败条件 | `create` 返回非 OK（GPL 不足／同名存在）⇒ 静默，只有 `=== OK` 才记事件；`upgrade` 对未孵化 PC 有效、失败"静默等下轮"（注释原文）；`spawn` 的 `ERR_TIRED`＝死亡冷却；`resolveHomes` 为空 ⇒ 整个 ③④ 段 early-return（:49）；`pb-collector.ts:18/48` 背包满/空即退出该动作。**这些返回码今天都不进计数**——与 #119 同族（发出去了但没人知道成没成）。 |
+| 与现有模块的关系 | 六段链条**都有消费者**：`power-farm-manager.ts:150` 据 `payload.powerBank` 选靶 → :196/:243 发 `attacker/healer`（mission=powerBank）与 `pbCollector`（powerCollect）→ `attacker.ts:207` PB 打击专用候选、`pb-collector.ts:33` 从 **ruin** 里 withdraw POWER（PB 被打死后落废墟，符合引擎语义）→ `industry.ts:755-760` 从 storage/terminal 取 POWER 装填 → `factory-manager.ts:35` 调 `processPower()`。战术层对 PB 编队**跳过集结语义**（`combat-micro-runtime.ts:125`、`tactical-runtime-system.ts:284/661`、`squad-movement-runtime.ts:289` 都显式过滤 `mission !== "powerBank"`）⇒ 这条链是被认真接过的，不是残骸。 |
+
+**分档**：`WIRED`（六段全接、有守卫、有事件编码）／**`EXERCISED = 否`**（`gpl=0` 是聚合证据：这条链一次都没交付过 GPL）。
+**因此 #3.7 的真问题被重新表述**（原来问"要不要接 Power Creep"）：链在，缺的是**第一次跑通**——上游是"帝国范围内有没有 Power Bank 可打"（外因，服务器刷）与"要不要开 POWER 的市场买入口"（现被 `terminal-selfaid:85`/`terminal-market:445` 显式关着，属人）。**两个都不是我能替的决定**，也不该为它造证据（去打 PB 会真发生战斗；开买入口会真花钱）。
+**可判读的下一次签名（零改动）**：`Game.gpl.level > 0` ⇒ 链条至少跑通一次；`kernel` 事件环出现 `PowerCreepMilestone` 任意编码 ⇒ 相应分支真被执行；`storage/terminal/powerSpawn` 三处 POWER 库存（`terminal-market.ts:487-489` 那个和式）由 0 变正 ⇒ 上游回收或买入开始流动。
