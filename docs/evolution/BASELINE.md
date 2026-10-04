@@ -111,9 +111,30 @@ node tmp/tools/official/peek.mjs kernel.stats.roadBuild.W36S58.built     # 逐�
 
 差分规则：**累计量必须差分**（`calls`/`built`/`noProg`/`roadProgressSum`）；`ea`/`storage_se` 是水位不是流量；判"某段有没有推进"用两次 `Game.time` 自己标定拍长（今天实测约 3.9 秒/拍，别用心算的 2 拍/秒）。
 
-## 9. 这份基线**还答不了**的问题（别把它当全量）
+## 9. CPU 面（同拍补采，20:1xZ，t≈83430000）
 
-- **CPU 负载与档位**：本文件没有 `cpuRate.total`／`tier`+`since` 的读数（那是 `CPU_BENCHMARKS.md` 该管的，仍缺件）。
-- **拍长**：未在本快照同窗标定，只有今天早些时候的约 3.9 秒/拍。
-- **每房 CPU 成本、storage 水位趋势、防御工事血量**：都没有采（需要各自的叶子路径，不在此抄录以免混入口径）。
-- 因此 `BASELINE` 目前是**部分基线**：领土/经济/扩张/贸易/远矿施工/调度/期望七面有锚，CPU 面与防御面没有。
+```
+kernel.capacity.tier   = "constrained"     since = 83425106   （⇒ 已持续约 4,900 拍）
+kernel.stats.cpuRate   = {"windowTicks":7823,"sampledTicks":7823,"unsampledTicks":0,
+                          "total":16.25,"unexplained":1.49,"unphased":1.02,"tail":0.47,
+                          "bySystem":{"traffic-manager":3.48,"snapshots":1.76,"spawn-manager":0.61,
+                            "remote-mining-manager":0.32,"tower-defense":0.32,"construction-manager":0.17,
+                            "expectations":0.17,"link-system":0.14,"room-state":0.14,"empire-strategy":0.12}}
+kernel.stats.cpuBySystem = {"terminal-manager":7.20,"remote-mining-manager":6.14,"traffic-manager":3.71,
+                             "expansion-planner":2.90,"empire-economy":2.83,"tuning-engine":2.65,
+                             "empire-health":2.56,"agenda-manager":2.56,"expansion-manager":1.33,"spawn-manager":0.63}
+```
+
+**要用的时候必须记住的四条口径**（都是踩过的）：
+1. **`cpuRate.total` 才是接近真值的每拍均值**（拍尾采样、`unsampledTicks=0`）；`cpuAvg10` 每 10 拍采一次且采到的恰是跑 flush 的重活拍 ⇒ **偏高**，两者不可互校。
+2. **`cpuRate.total` 与 `cpuBySystem` 是两台口径不同的仪器**（前者是每拍均值、后者含累计/窗口成分）⇒ **不要相加、不要拿一个去校另一个**；`traffic-manager` 在两处分别是 3.48 与 3.71 就是这个差别的表现，不是谁读错了。
+3. 扩张闸的 `comfortable` 门槛是 **`0.6 × min(cpuLimit 20, tickLimit 500) = 12.00` 定值** ⇒ 现读 **16.25 ⇒ 缺 4.25/拍**。这条比本仓早前记录的"缺 2.44~2.48"**恶化了约 1.7 倍**，且 `tier` 已连续 constrained 约 4,900 拍。⚠️判"档位翻没翻"只看 `tier`+`since`（`upgradeTicks` 在 `target===prevTier` 时恒 0 是设计）。
+4. `kernel.bootTick = 82414952` 是**跨部署存活**的 ⇒ 不能用来定"这次换码发生在何时"；本段的起点只能认 `83422285`（`energyLedger.tick` 归零那一拍）＋ sha 未变。定日只认功能签名，不认 `bootTick`。
+
+## 10. 这份基线**还答不了**的问题（别把它当全量）
+
+- **拍长未在本快照同窗标定**：只有今天早些时候实测的约 3.9 秒/拍（历史值 2.32/3.77/4.52 都出现过）⇒ 任何"多少拍＝多少小时"的换算都要写成区间。
+- **防御工事与库存结构**：wall/rampart 血量、tower 存弹、storage 里非能量资源，都没采。
+- **`CPU_BENCHMARKS.md` 仍是缺件**：本节是**水位快照**，不是标定（标定要的是"动作数 vs CPU"的斜率，见记忆 `cpu-calibration-harness`）。
+- 因此 `BASELINE` 目前是**近全量但非完备**：领土/经济/扩张/贸易/远矿施工/调度/期望/CPU 八面有锚，防御面与资源面没有。
+
