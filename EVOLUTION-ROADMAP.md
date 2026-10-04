@@ -410,6 +410,11 @@
     **裁决窗两版**（不静默改口）：R161 写死的是 **t≈83,434,100**（按 −1.058/拍）；本轮同斜率复测 **−1.000/拍**（`ttd` 5,788→5,193 用 595 拍，恰好 1:1）⇒ 新算 **83,434,421**，差 321 拍（≈21 分钟）。⇒ **裁决窗取 [83,434,100, 83,434,500]**；原始那一版仍是预报本体，窗内 `ttd` 未到 0 只记"未到期"，既不算命中也不算否证。
   · **同轮扩张 gate 现读**（`kernel.expansionDashboard@83429184`）：**`Blocked=G0+G2+G3+G4+G6`（五道）**，其中 **G2 红的直接原因是 `struggling=1`** ⇒ 幼房的 crisis 现在连"新扩张提案"也在挡（这是 #120/#122 的外溢面，从"本房发展"扩到"帝国新增"）。同屏 `Pressure=HIGH(0.62)` 与房级 `economyPressure=0` 是**两台同名仪器**，引用时分开（既有口径，别当矛盾）。
 
+- **#128 扩张 checkpoint 的重试/回退阶梯在调用点是惰性的：`retryCount` 五处全传字面量 0 ⇒ `maxRetries` 与 `fallbackTo` 永不生效（10-04 R164 补5 登记；低优先，属设计清理，不自办）**
+  `checkpoint.ts:216-217` 用 `shouldRetry = !passed && input.retryCount < def.maxRetries` 决定 `status = passed ? PASSED : shouldRetry ? PENDING : FAILED`，并在 `:226` 用同一条件产出 `fallbackTo`；而调用侧 **`state-machine.ts:304 / 429 / 462 / 583` 与 `checkpoint.ts:239` 五处一律传字面量 `retryCount: 0`** ⇒ `0 < maxRetries` 恒真 ⇒ **任何 checkpoint 在未通过时只会是 `PENDING`，永远不会 `FAILED`，`fallbackTo`（CP4→CP3、CP5→CP4）这条回退线从不触发**，`CHECKPOINT_DEFINITIONS` 里的 `maxRetries` 三/五是**装饰性常量**。
+  **对本次目标的意义（这是它被记在这里的唯一理由）**：不存在"CP4 长期不过关 → 判 FAILED → 系统按 `fallbackTo` 重排扩张"这条自动出路 ⇒ **等待是无限期的**；一次扩张的终态只能来自两支——超时支（`state-machine.ts:482-499`：`tick − startedAt > pioneerTimeout×2` 时 `cp3.passed` ⇒ `FORCED_ADVANCE`（`checkpointsPassed` 仍留 3），否则 `abortExpansion("TIMED_OUT")`）与所有权丢失支（`:508-514` `LOST`；**RCL 降级不改 `controller.my` ⇒ 降级本身不会让扩张被中止或重排**）。
+  **严重度如实降级**：今天它与"什么都不做"的结果相同（沉默等待），所以**不是当前任何读数的原因**；只有当有人指望"失败图里那些 checkpoint 失败态/回退"来表达系统行为时，它才会咬人（同族先例：`manual_intervention` 是无生产者的死枚举）。**两种清理都属设计**：把 `retryCount` 真接到 checkpoint 记录上让它有意义，或删掉这两组常量以免误导——**不自办**。
+
 ## 3.6 判等效外部事件（不是我的修没生效）
 
 - **#48 / #35 跨房交付成对入账**：本窗证据——两房 `exported` 皆空、在场 9 只跨房 creep **全是远矿角色**
