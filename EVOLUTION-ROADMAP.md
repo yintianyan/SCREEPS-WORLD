@@ -7292,3 +7292,20 @@ mem  : stats.energyLedger.rooms.W38S56 = { harvested 149,460 , imported 81,585 }
 `.gitignore` 仍未 stage（并行会话的未提交物）；`git stash list` 未新增。
 **唯一恢复动作仍然是一个字：「推」**——它触发的是既定的四步（push→CI 绿+check-code 认 sha→上表五件签名第一读→按命中/否证/未开始三态回报）。
 其余全部属人：#50（两条目标位 −0.25/拍出 constrained、−4.25/拍到 comfortable）、#111 (B)、#118+#78+#13、#106/#107/#104/#110（"这层要不要存在"）、#130、#88/#114、#97（八项记录 R344 时 2 项／R345 已 4 项：§20 Observer、§21 Safe Mode、§22 Power-PC、§23 衰减与遗留物回收）。
+
+## 巡检 R345 补（10-05 05:2xZ）新立 **#131**：寿命量在决策面缺席——`ticksToDecay` 四个来源、`src/` 零属性读；`Deposit` 整条未用。**立案时点是编号唯一性现取（最高已用 #130），且本轮先要读数、不要修法**
+
+**这条从哪来**：矩阵 §23（§3.1/§3.2 交点「衰减与遗留物回收」八项记录，`51571dc3`/`a93fe3a3`）的两条负向结论。
+现读证据两条都在：①`grep -n "ticksToDecay" src/` 只回到 `core-clearer.ts:31` 的一句**注释**（属性读 0 次），而 `@types` 把寿命交到了四个对象手上（`Resource`/`Ruin`/`Tombstone`/`Deposit`，另加 `StructurePortal.ticksToDecay: number | undefined`——稳定门是 `undefined`，"别把 undefined 读成 0"的既有坑位就在同一族）；
+②`grep -rn "FIND_DEPOSITS\|Deposit" src/` 命中 0（名字取自 `@types:1670-1682`）。
+
+**必须先声明的一条口径修正（否则 #107 会被读成矛盾）**：**#107 用过 `ticksToDecay`，而且用得对**——它是 **console 探针**（`mark=R107A1`，现读 14 段的 `(hits, ticksToDecay)` 分布、中位 555 拍）拿到的，不是代码里的属性读。
+⇒ 本条**不是**"我们不会用这个量"，而是"这个量在**离线分析**里救过一次案，在**在线决策**里一次都没参与"。两者别混，混了就会有人去拆 #107 的结论。
+
+**为什么现在只是立案、不是修法**：影响面**没有读数**。今天无法回答"该不该按寿命排序"，因为两个必要计数都不存在：
+- **C1 零头回收计数**：`lootRemains(minAmount)` 的"链尾无阈值实例顺手清理零头"这一支有没有真跑过（`pickup.ts:49` 注释是设计意图，不是执行证据）。⇒ 引擎定律 `ceil(amount/1000)/拍`（`@types:4501-4502`）是**相对速率与小堆成正比**的，"最多者优先"恰好把相对最紧急的排在后面；缓解是否存在，取决于 C1。
+- **C2 快照过滤掉的盲点**：`room-snapshot.ts:96-97` 先按 `store>0` 过滤 ⇒ "被选中后被他人取空/衰减殆尽"这类竞态在本仓**看不见**（零容量目标根本不入决策面）。⇒ 记 `UNOBSERVABLE`，不是"没发生"。
+两个计数都属**只加读数、零行为改动**那一档，形状照本轮批次里已上线的四件（`observeCounters`/`noWorkInRange`/`safeModeCounters`/`strayAssets`）：heap 账本 + 单一零行构造 + 自洽闭合式（C1 建议 `looted = lootedEnergy + lootedMineral`，且 `looted ≤ lootCalls`）。
+
+**归属**：C1/C2 的**读数**我可以自办（属观测，不动产线判定）；**"要不要为此花 CPU 做寿命感知排序"属人**，且必须先有 C1。
+本轮不起手改排序，也不起手加计数器——预算只够把这条立案到"只差一次形参读取"的程度，规格已经在这里。
