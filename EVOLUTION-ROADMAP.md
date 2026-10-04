@@ -388,6 +388,11 @@
 > · **wave7 带来的不是 builder**：车道派的是 `BOOTSTRAP_WORKER_BODY = 3W3C3M(600)` 与 `BOOTSTRAP_DEFENDER_BODY = 2RA2M(400)`（`:36-49`），而 `submitPioneers` 补的是 `worker×pioneerWorkers + builder×pioneerBuilders` ⇒ **83424757 之后若 `waves` 6→7，补的是 worker/defender，不是施工队**；别把"波次到了"读成"工地有人了"。
 > · **时序预期（照旧不许挪）**：长跨账本给 `built 0.81/拍` vs `upgraded 1.20/拍` ⇒ 最后 **391** 点按 0.81/拍 ≈480 拍 ⇒ 建成点 ≈**83424,700** 前后（与 wave7 同量级，两件事会在同一窗里撞车）；届时若条目仍在且无 `abandoned`，用 `bootstrapDiag.hasSpawn`（2→3）分开"已建成但没到 pass"与"仍未建成"。
 
+> ★**R158 补6（13:4xZ，读码；现场基线 `14,809/15,000@83424323`）：CP5 的"500 拍连续为正"不是按 pass 计数（这条代码已修），但它"一次不过就清零"**
+> · `state-machine.ts:541-549` 把量纲说死了：`elapsedSinceEval = ctx.tick − expansion.lastEconomicEvalTick` 交给 `advancePositiveStreak(prev, elapsed, netFlow>0)` ⇒ **按真实拍数累加**，注释原文写明"按次数 +1 会把 `SELF_SUSTAINING_TICKS=500` 变成 5 万拍不间断"。⇒ **别再把它当"低频系统按构造攒不满"立案**（症状已修；我自己 R153 那句"按拍累计"当时只是猜测，现在有了代码依据）。
+> · 但 `advancePositiveStreak`（`economic-activation.ts`）**非正即清零**（`if (!netFlowPositive) return 0`），而 pass 间隔实测 **100~400 拍** ⇒ 攒满 500 拍 ≈ **连续 2~5 次 pass 全部读到正**。本会话已实测该房净流按孵化/交付脉冲翻号（R143 E5：同区间 `se` 与 `rs` 反号；一次孵化 300~400 能量）⇒ **CP5 对采样相位高度敏感，一次不过就从头再来**。
+> · 与 R153 的结构性张力叠读：`selfSustaining` 要 `externalEnergyInflow === 0`（R158T9 现读 **2 只** `remoteTarget=W38S58` 的 carrier ⇒ 恒假），**且**要有连续 500 拍为正。⇒ `integrating` 的自然出口 `COMPLETED` 现在是"两道都要满足、第一道按构造不满足"⇒ **实际只剩 60,000 拍那一次 `COMPLETED_FORCED`**。**我不动验收语义（属人），也不会掐 carrier 线去凑一次"完成"。**
+
 ### 4.0-pre（10-04 10:4xZ 由 R142 为 R143 立的预期；**R143 当轮已收：三读数全否、带因拍长估错失效、CP2/CP3 判据已从代码原文读出**，保留作状态出处）下一轮主目标：**见证第三次扩张的终态：W38S58 自有 spawn 是否建成、`kernel.bootstrap` 条目是否被删、`kernel.expansion.state` 是否离开 `bootstrapping`，并把"进入下一态后第一道判据"在读完代码之后预先写下**
 
 > **为什么换目标**：上一条（核心房库存流失归因）**R142 当轮判完**——`ws` 视界累计给出"账面 −18.2/拍 vs 物理 −17.2/拍、残差 0.8%"⇒ 落在设计内消费（补员 30.6/拍 > 采集 19.0/拍），结案文与三条更正进 §3.5 #88。**照字面再读同一条就是空转**。
