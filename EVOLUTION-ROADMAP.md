@@ -266,6 +266,13 @@
   **预报（现在写死，不许事后改口径）**：工地还需 1,972、阈值 0.26/拍、到 `83429857` 剩 ≈7,400 拍 ≈5.4 小时，本轮实测 0.02~0.07/拍 ⇒ **预报 W38S58 在 83429857 那一拍 `abortExpansion(TIMED_OUT)`、第三次 claim 被放弃**。**反证形状**（任一成立即我错，当场撤）：①`progress` 差分持续 ≥0.26/拍；②`FIND_MY_SPAWNS≥1` 提前出现；③源旁 container 出现持续 >200 存量（说明确有角色在倒能）。
   **四条方向都属人，一条都不自办**：①车道编队加 `harvester`（改动最小，等于承认拓荒编队缺采集是设计缺陷）；②worker 链尾 fallback 由"升级"改"倒最空 container"（**影响所有 bootstrap 房**，把 controller 进度换工地进度，方向更激进）；③让车道真送能量（代价 = sponsor 库存）；④接受 TIMED_OUT 放弃这块 claim。⇒ 补一句量化：**这条环今天吃掉的不是"时间"，是第三次扩张本身。**
 
+- **#117 新房 storage 在本服返回 `null` 容量，而 carrier 的卸能守卫是 `<= 0` ⇒ 已到房的 2,400 能量永远卸不下来（10-04 R145 立案；修法属设计决策，我零改码）**
+  **现场**（`lock R145`，mark R145T3/T5，tick 83422694→83422721，全只读）：帝国全部 4 只 carrier 的台账里，**两只是 `home=W37S58 → remoteTarget=W38S58`、人已在 W38S58、背包 1200/1200 满载、mode=`idle`**，而该房 P0 spawn 工地只差 **1,930** 进度。同拍同表达式读三房 storage 做控制组：`W37S58=[used 794,905, free 202,675, cap 1,000,000]`、`W38S56=[119,355, free 880,270, cap 1,000,000]`、**`W38S58=[23, free null, cap null, my true, level null]`** ⇒ **只有新房那个 storage 的容量读数不是数字**（另两房一切正常：W38S56 的满载 carrier mode=`work` 且其 storage 30 分钟里 +3,461）。
+  **代码条件（原文）**：`carrier.ts:36-45` 卸能最后一关是 `if (storage.store.getFreeCapacity(RESOURCE_ENERGY) <= 0) return undefined;` ⇒ **JS 里 `null <= 0` 为 true** ⇒ resolve 恒空 ⇒ **一次 `transfer` 都不会发生**；`execute` 里还有 `Math.min(carryUsed, free)`，`free=null` ⇒ 得 0 ⇒ **就算绕过守卫，卸出的量也是无效的 0**。⇒ 与"`Game.rooms.W38S58.storage` 从 83422337 到 83422721（≈380 拍）冻结在 23"完全一致。
+  **顺带解释了一个我三轮当成怪形状的现象**：`carrierGate`（`:73-85`）见满载就置 `mode="work"`，work 链无候选 ⇒ `role-runner.ts:198-206`（"已在 `remoteTarget`"那一支）把 mode 置回 `idle` ⇒ 下一拍又 work…… ⇒ **"满载 + idle"就是这个每拍往返**，不是 creep 坏了、也不是它们在过境。
+  **为什么不自办**：修法要先回答 `getCapacity()=null` 的语义（"未知"还是"无限/不适用"），以及按什么口径决定卸多少（**`level` 同样返回 null ⇒ 没有可靠的 RCL→容量回退依据**）。两条出路都属设计决策：**①** 给 store 读数加显式 null 语义（null ⇒ 视为"未知但可卸"，按 `carryUsed` 全额尝试、靠 `ERR_FULL` 回退）；**②** 新房建成 spawn 前不依赖 storage 交付，改走 container 目标。**取舍等人；我不改码、不动任何阈值。**
+  **对既有各条的排序影响**：①**#116 那四条"要不要给拓荒编队加采集角色"的取舍，排在本条之后**——本条不修，加了角色也填不进这房；②§4.0 的"临界/掷硬币"要加限定：**carrier 一旦能卸能，1,930 的缺口被一次性超额满足**；③与 R141 那条"本服至少一种工业结构 `.store` 为 undefined"同族 ⇒ **本服对部分结构返回 null/undefined 读数**，凡按 `<= 0` 判"满/空"的代码都要按这条复检一遍（不是我该顺手改的范围）。
+
 ## 3.6 判等效外部事件（不是我的修没生效）
 
 - **#48 / #35 跨房交付成对入账**：本窗证据——两房 `exported` 皆空、在场 9 只跨房 creep **全是远矿角色**
