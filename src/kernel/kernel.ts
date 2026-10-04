@@ -615,6 +615,11 @@ export class Kernel {
       kernelMem.expectations = {
         tick: ctx.tick,
         violations: [],
+        // ⚠️这一行是修 bug，不是可选装饰：违例是**间歇状态**（工地被回收、饥饿一拍缓解都会让
+        // violations 变空），若这里不带走 `recent`，整块对象就被干净的一拍覆写掉，
+        // #113 的"事后归因"随之失效。线上实证（sha 649eb94b9784，boot 后 ~15k 拍）：
+        // `kernel.expectations={tick,violations:[],e3:{}}` —— `recent` 键整个不见。
+        recent: kernelMem.expectations?.recent,
         e3: e3Prev as Record<string, unknown>,
       };
       if (kernelMem.p3StarveBypassUntil !== undefined) delete kernelMem.p3StarveBypassUntil;
