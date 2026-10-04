@@ -343,6 +343,11 @@
 > · **`integrating` 超时 = `pioneerTimeout×3 = 60,000 拍 ≈46 小时`**：那一刻若 `netFlow>0 && integrated` ⇒ 强推 `completed` 并记 **`COMPLETED_FORCED`**（P9），否则 `abort(TIMED_OUT)`。正常完成记 **`COMPLETED`**（P8）。**两者都会 `Memory.kernel.expansion = undefined` 并落 `lastExpansionCompletedTick`（冷却门禁消费）** ⇒ 所以"`kernel.expansion` 消失"有**三种成因**（COMPLETED / COMPLETED_FORCED / TIMED_OUT abort），**必须与 `expansionBlacklist`、`expansionRhythm.ring`（0=success/2=timeout）合读才能定性，别只看一个键**。
 > · **★结构性张力（现行设计有意为之，不是我发现的新 bug）**：`externalInflowPerTick = carrierLineCount × 50`（`:75-89`）⇒ **只要 sponsor 还在向该房派 carrier，`selfSustaining` 恒假 ⇒ CP5 的自然路径（→`COMPLETED`）按构造不可满足**。本轮现读 `carrierLines = 1`（就是那只满载、按 #117 根本卸不进来的 carrier）。注释交代：以前还把"先锋背包 ×25/t"算进外部流，那一项量纲错、让 CP5 在"有施工队的整个期间"走不到，**已被删除**；现在只认真·持续外部流 ⇒ **"要宣告自主，必须先停止外部输血"是刻意的验收语义**。**但这房今天没有 carrier 就活不下去（自采 1.6~2.6/拍、还靠拾掉落），而那条 carrier 因 #117 又送不进任何东西** ⇒ 三重叠加：**①建成要人；②宣告自主前要断输血；③输血目前等于白跑。** ⇒ **#117 排最前的理由就在这里：它不修，第②③条永远解不开。** 我不动 `selfSustaining` 语义（那是改验收标准，属人），也**不会用"先掐断 carrier 线"去凑一次 `COMPLETED`**（那是自败）。
 > · **R154 预写**：`83424757` 之前 `progress` 应仍 ≈`14,423`；那一拍之后看 `waves` 6→7、builder 是否重现、工地是否恢复增长（同时判"拦车道的是 `spawningAllowed` 还是敌情"）；建成那一拍按两条签名分别对（正常 CP2 vs "②删③不动"）。
+> ★★★**R154：我 R153 把"补人"归错了机制，现在纠正；并发现一个更硬的问题（平台期可能不会自动结束）**
+> · **纠正**：`submitPioneers`（`state-machine.ts:732-766`）**不是波次驱动**——它按**数量**补：对 `worker×pioneerWorkers`、`builder×pioneerBuilders`，取 `living = colonyCreeps(target)` 在场数 + `pending = 该房该角色的队列请求数`，**只要 `living+pending < count` 就每 pass 重投**（`key = expansion:<role>:<target>:<i>`，投进 **sponsor 的 spawnQueue**）。`kernel.bootstrap` 的 `waves/until` 属于**另一条机制**（`bootstrap-lane.ts` 的代孵车道，房一有自己的 spawn 就撤销）⇒ **"下一波在 83424757"不是补人的条件**，我把两条机制混成一条了（正是 R139 我证过的"按物理在场计数 ⇒ 反复补"那条链的镜像错误）。
+> · **新事实（`R154T1@83423480`）**：`progress` 仍 `14,423`（**三连发不变**：3376/3437/3480）、该房在场 `worker+worker`、**builder=0**，而 **sponsor `W37S58.spawnQueue` 中 `expansion:*:W38S58:*` 请求数 = 0** ⇒ `living.builder=0 < 2` 本应立即重投，却既无在场也无 pending。三个解释都还活着：**H1** 周期性"投了被饿死"（`priority:2, survival:false` ⇒ 在 sponsor 自身需求后排队到过期，与 R140 看到的"请求持续创建又过期"同形；单次采样可能正好落在过期相位，pass 间隔 100 拍）；**H2** pass 门禁关着（`hostiles.length===0 && spawningAllowed`，`:358-361`；`spawningAllowed` 吃**预算档** `tier∈{healthy,guarded} + bucket≥5000`，`expansion-manager.ts:81-83` —— ⚠️**别与 G6 的容量档 tier 混**，本仓两套同名轴）；**H3** 我对 `pending` 的匹配形状读错（需同拍给 `queue.length` 对照）。
+> · **为什么值得记**：若 H1/H2 成立，**平台期不会在 `83424757` 自动结束**，而工地只差 **577**、死线剩 6,377 拍 ⇒ 这第三次扩张最可能的死法会变成**"只差 577 点能量、却没人去建"**。这与 #117（送能进不来）、#116（编队无采集）是**三件不同的事，不要并成一条风险**。
+> · **R155 判据（一次读数分开三个假设）**：同拍取 ①`progress`；②在场 builder 数；③sponsor 队列 `expansion:` 请求数**与 `queue.length` 一起给**；④当拍 `hostiles` + **预算档 tier** + `bucket`；⑤**隔 ≥1 个 pass（≥100 拍）再读一次 ③**——"有→无→有"循环 ⇒ **H1**；恒 0 且门条件为假 ⇒ **H2**；恒 0 且门条件为真 ⇒ **H3／我对 pass 节拍的理解错**，回去读 expansion-manager 调用间隔。
 > ★★**R147 修正（把"两条判据"改成三条出口；我前面写的"超时⇒abort"只在没建成时成立）**：读 `state-machine.ts:340-362` 原文——超时时先 `emitMilestone(FORCED_ADVANCE)`，**若 `spawns.length > 0` 就直接把 `state` 强推成 `economic_startup` 并重置 `startedAt`（不看 `ea≥300`，CP2 根本不是必要条件）**，只有 `spawns==0` 才 `abort(TIMED_OUT)`。⇒ 三条出口：**A** 正常 CP2（`spawnBuilt && (ea≥300 || 正在孵化)`）；**B** `83429857` 到且 spawn 在场 ⇒ **FORCED**，签名是 `Memory.kernel.expansion.forcedAdvance`（现读为 `false`、键存在）翻真 + `state="economic_startup"`，而 **`checkpointsPassed` 可能仍是 1**（注释原文：P5 是 Milestone、**不进 OutcomeChannel** ⇒ 不计失败、不改 blacklist 乘子）⇒ **"检查点数"与"状态"允许不一致，别拿它当闭环证据**；**C** `83429857` 到且 `spawns==0` ⇒ `abort(TIMED_OUT)`：`kernel.expansion` 消失 + `expansionBlacklist["W38S58"] = tick + 20,000 × 乘子(现算 0.5 ⇒ ≈10,000 拍)`。
 > ★**另两条此前漏写的分支**：**LOST/STOLEN**（`:262-280`，条件 `!targetRoom?.controller?.my`）—— 本轮核过**不是近期风险**（我在该房有自有结构：11 段墙 + 2 container + storage ⇒ 自有结构给视野，`Game.rooms.W38S58` 不会因"没 creep"消失；claim 衰减是"天"级）；**车道会被敌情掐停**（`:358-361`：`submitPioneers` 前提是 `hostiles.length === 0 && spawningAllowed`）⇒ **wave7 是否真发，要先看目标房有无敌对**（本轮 `R147T1` 实测 `hostile=0`、在场 4 只、工地 `13,238` 自 83422887 起 61 拍零推进）。
 > **禁令**：不改码、不动阈值/常量、不 push（`c58ff9d` 等批复）、不新建自动化、市场只读；幼房 `→bootstrap` 本轮已**自愈回 normal**、姿态 `fortify→develop` 属 threatWindow 有界自解，都只登记。
@@ -6522,3 +6527,26 @@ W37S58      994        0      0      0      0      0       0
 三个处置都属人，我不自办：**留着并让它可被管理**（要给该房补 Memory 条目＝状态改写）、**拆走回收**（本会话政策禁止我单方面拆除）、**忽略并接受其自衰减/被攻击**（不建 owner 的房没有维护链）。我只把它的存在与"看不见它的机制是哪些"记进台账。
 
 **边界**：探针 console-eval ×3（其中一发因我按记忆造名 `my(...)` 被 ReferenceError 拦下——本会话第 N 次同族，**表达式里只用引擎真名，未验证的名字不进探针**；该发零副作用）、全部只读；本轮**零 src、零 push、零 build、零 npm**；`roadBuild` 读数是 heap 本 boot 段累计（起点=对端 R143 那次部署 ≈83422285），跨段不可直接比；`.gitignore`(对端) 与两份未跟踪文档未 stage、stash 空、索引检查过为空；3 笔含 src 未推（`c76aad4`/`c2e3e30`/`994bf54`）。goal active。
+
+---
+
+## 巡检 R320（12:4xZ）——推送前的完整证据集：单元+集成+docs 全绿，**e2e 故意不跑**（跑它会毁掉对端正在用的那台免费仪器）
+
+**这一轮只做事实验证，零 src 改动**（三笔未推的代码就是 R317/R318 那两批 + `c76aad4`）。
+
+| 门禁 | 命令 | 结果 |
+|---|---|---|
+| 文档体检 | `npm run check:docs` | 通过（无注释引用文档路径） |
+| 单元 | `npx vitest run tests/unit` | **390 文件 / 5264 用例全绿**（45.7s） |
+| 集成 | `npx vitest run tests/integration` | **30 文件 / 239 用例全绿**（9.5s） |
+| 类型 | `tsc --noEmit` | 空输出 |
+| **e2e** | `npm run test:e2e` | **未跑 —— 有意为之**，理由见下 |
+
+**为什么故意不跑 e2e**：`test:e2e` 的 script 是 `npm run build && vitest run tests/e2e`，而 e2e 读的是 **dist**。本工作区多路会话共用同一份 dist，且"**本地 dist == 线上二进制**"是 A/B 判效窗里唯一免费的那台仪器（台账里已写过"单二进制 A/B 窗内故意不 build"）。对端此刻正跑 W38S58 的判效窗（`energyLedger.tick=83422285` 那次部署起算）⇒ 我 build 一次就会把该仪器清掉，且让他们的 sha 锚点读到"本地≠线上"而误判成有人换了码。**要么等他们的窗关（预写的自然观测点 `bootstrap.until=83424757`，wave7）之后再 build+跑 e2e，要么由我决定在窗内不跑。**
+另一个更糟的选项是"不 build 直接跑 e2e" ⇒ 那是在测旧二进制，绿灯是假绿（这条我 10-01 就写过：e2e 读 dist、terser 下要搜规则文本而不是变量名）。
+
+**因此这批的验证状态要说准**：`#113 修复`+`noWorkInRange`+`observeCounters` = **unit/integration/typecheck 已覆盖并全绿**，**e2e 未覆盖**（不是失败，是没跑）。三笔合起来对 dist 的净改动都是"新增列/新增计数/少抹一个键"，不新增系统、不改节拍。
+
+**推送侧的机械条件已核**：`git fetch` 后 `behind=0 / ahead=27`，且 origin 自 merge-base 起 `src/` 零改动 ⇒ 纯 fast-forward、不会连带对端未完成的东西。commit 前索引两次为空（共享索引检查过）。
+
+**边界**：本轮零 src、零 push、零 build、零 npm install、零 console 探针；`.gitignore`(对端) 与两份未跟踪文档未 stage、stash 空；新立案 **#118**（W37S55 两只无人认领 spawn）编号已数过全集、与对端 #115/#116/#117 不撞。goal 保持 active——三笔仪器仍是 WIRED+单测 EXERCISED、线上未 EXERCISED，终局未达成。
