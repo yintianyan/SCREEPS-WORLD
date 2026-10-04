@@ -402,6 +402,13 @@
 > · **三个反向分支预先写好，撞到哪个报哪个**：**A** 建成后 ≥300 拍 `ea` 仍 0 ⇒ "没人往 spawn 里放能量"，是 fill/assignment 侧新问题（不许用"再等等"顶）；**B** `ea` 到了 300 但 `state` 到下个 pass 仍 `bootstrapping` ⇒ 我 CP2 的合取项读漏了，回去重读 `evaluateCheckpoint` 的 CP2 分支再报；**C** `state` 前进但 `kernel.bootstrap` 条目**还在** ⇒ `FIND_MY_SPAWNS` 与车道遍历口径不一致（`ctx.snapshots()` 何时纳入新房），另立一条。
 > · **对"完成"要诚实**：即便 ②③ 到手，这条链离 `completed` 还差 **CP4（5 只 extension ≈15,000 能量）+ CP5（`selfSustaining` 按构造恒假，且 500 拍连续为正、一次不过清零）** ⇒ 本 objective 只要求"离开 bootstrapping ＋ 写下下一态第一道判据"，**不许把三读数到手写成"自主扩张闭环已验证"**。
 
+> ★★★**R158 补9（13:5xZ）★终态第一读数到手：`Spawn7` 已在 W38S58 建成**（objective 三读数里的 ①＝YES），并且我撞见了预写的"①已成立、②③未跟进"中间态
+> · **实读（`83424480`，mark R159T1）**：`site=NOSITE`（该房工地已空）＋ **`Game.spawns` 里出现 `Spawn7`，其 `room.name === "W38S58"`**（`Game.spawns` 只收录自有 spawn ⇒ 这条本身就是 ① 的判据，不靠 `progress=15,000` 反推）；`ea=60 / ec=300`（**bay 上限恰 300，与 R143 从代码算出的"RCL2 无 extension ⇒ 300"逐字对上**）；而 `state` 仍 `bootstrapping`、`cp=1`、`kernel.bootstrap` 条目**还在**、`diag.hasSpawn=2` 且 `diag.tick=83424357`、`systemLastRun["expansion-manager"]=83424357`。
+> · **⇒ 现场形态正是预写的"①先成立、②③要等一次 pass"**：建成发生在 `83424338~83424480` 之间，而 `expansion-manager` 上一次 pass 是 `83424357`（到读数时已过 **123 拍、≥1 个 interval 窗口**）⇒ **②③ 的读数天然滞后物理事件一个 pass**（补5 写过这条迟滞，本轮第一次实测到）。
+> · **★预写的分支 A 当场被否证（并且改写了我自己对 #117 作用域的推断）**：`Spawn7.store.getFreeCapacity("energy")` 返回 **`240`（数字，不是 null）**，且 `ea` 已从 0 涨到 **60** ⇒ 新房自己的 spawn **不受本服 null 读数影响** ⇒ "建成后 `fillTargets` 仍为空 ⇒ bay 永远填不满 ⇒ CP2 按构造过不了"这条**不成立**。⇒ 我补8 把 #117 作用域推到"getter 层（所有结构 store）"**说过头了**：null 是**逐结构**现象（同一房内 storage 返回 null、新 spawn 返回数字）⇒ **修法作用域要按结构类逐个核，不能一句"getter 层"概括**。
+> · **下一发（②③到手）的判据（照旧不许挪）**：下一次 pass 之后应见 `diag.hasSpawn 2→3` **且** `kernel.bootstrap` 里 W38S58 条目**消失**（车道只看 `FIND_MY_SPAWNS>0`，不看能否孵化）；**但 `state` 大概率仍 `bootstrapping`** —— CP2 还要 `ea≥300`（现 60）或正在孵（该房要孵的 3 部件 body 花 200，bay 得先攒到 200）。按收入 1.69/拍且 worker 已从"灌控制器"改道"喂 bay"：**预报 `ea` 在 ≈`83424480 + 142` 拍（=240/1.69）首次到 300，③ 在其后第一个 pass 前进**。反例照旧：**A′** `ea` 长期不涨 ⇒ 喂 bay 的能量被别的 sink 抢走（读 `bk.upgraded` 是否仍在涨）；**B′** `ea` 过了 300 但 `state` 不动 ⇒ 我的 CP2 合取项读漏。
+> · **仍不写成"闭环验证"**：①＝YES、②③ 待 pass；离 `completed` 还差 CP4（5 extension ≈15,000 能量）+ CP5（`selfSustaining` 恒假 + 500 拍连续为正）。
+
 ### 4.0-pre（10-04 10:4xZ 由 R142 为 R143 立的预期；**R143 当轮已收：三读数全否、带因拍长估错失效、CP2/CP3 判据已从代码原文读出**，保留作状态出处）下一轮主目标：**见证第三次扩张的终态：W38S58 自有 spawn 是否建成、`kernel.bootstrap` 条目是否被删、`kernel.expansion.state` 是否离开 `bootstrapping`，并把"进入下一态后第一道判据"在读完代码之后预先写下**
 
 > **为什么换目标**：上一条（核心房库存流失归因）**R142 当轮判完**——`ws` 视界累计给出"账面 −18.2/拍 vs 物理 −17.2/拍、残差 0.8%"⇒ 落在设计内消费（补员 30.6/拍 > 采集 19.0/拍），结案文与三条更正进 §3.5 #88。**照字面再读同一条就是空转**。
