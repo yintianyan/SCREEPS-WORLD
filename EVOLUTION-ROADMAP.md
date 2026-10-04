@@ -6550,3 +6550,37 @@ W37S58      994        0      0      0      0      0       0
 **推送侧的机械条件已核**：`git fetch` 后 `behind=0 / ahead=27`，且 origin 自 merge-base 起 `src/` 零改动 ⇒ 纯 fast-forward、不会连带对端未完成的东西。commit 前索引两次为空（共享索引检查过）。
 
 **边界**：本轮零 src、零 push、零 build、零 npm install、零 console 探针；`.gitignore`(对端) 与两份未跟踪文档未 stage、stash 空；新立案 **#118**（W37S55 两只无人认领 spawn）编号已数过全集、与对端 #115/#116/#117 不撞。goal 保持 active——三笔仪器仍是 WIRED+单测 EXERCISED、线上未 EXERCISED，终局未达成。
+
+---
+
+## 巡检 R322（12:5xZ）——#106 被我自己重述：不是"忘了调 `recordDelivery`"，是**整层合同生命周期从未接进产线**（而 §3.3 要的闭环另有一条活路）
+
+起因是我想按 L0 §3.3「需求→计划→实际运输→**接收确认**→经济记账形成闭环」把 #106 接上。读到底之后，**这个修法本身不成立**，证据如下（全部现读 `src/`，零探针、零改码）：
+
+**一、死的不是"一个调用"，是三个模块**
+```
+domain/economy/contract-lifecycle.ts   ← src 导入者：0
+domain/economy/route-efficiency.ts     ← src 导入者：0
+domain/economy/contract-node-bridge.ts ← src 导入者：0
+domain/economy/supply-contract.ts      ← src 导入者：2（logistics-planner / specialization-planner）
+```
+而这两个导入者只用了 `contractEndpointsHaveStorage()`（两端 storage 安全闸）+ `deserializeContract()`（#35 那条反序列化修复）+ `SupplyContract` 类型 ⇒ **`recordDelivery()`、状态机、路线效率判定全都不在任何调用路径上**。`logistics-planner.ts:261` 的注释自己写着："Contracts 由 supply-contract-manager（**未来模块**）或 empire-economy 写入"——那个 manager 从没被建。
+
+**二、按构造不可达的东西，现在能点名（这才是严重度，不是"台账是化石"）**
+- `supply-contract.ts:291 recordDelivery()` 是 `consecutiveShortfall` 与 `lastInjectionTick` 的**唯一写者**（`updatedAt` 同），零调用者 ⇒ 两字段自创建起恒 `0` / `undefined`。
+- `contract-lifecycle.ts:298/:311`：`ACTIVE→DEGRADED`、`DEGRADED→…` 都要 `consecutiveShortfall >= producerShortfallThreshold` ⇒ **按构造永不触发**。
+- `contract-lifecycle.ts:320`：`!producerShortfall && consecutiveShortfall === 0` 的"恢复"分支同理，只是它恰好恒真——**这条不是不可达，是恒可达**（`>=0` 那个判断也恒真，见 `:269`）：状态机一边有按构造不发生的转移，一边有按构造必发生的转移。
+- `route-efficiency.ts:210`：`grade==="fair" && consecutiveShortfall > 2` 的降级规则同样不可达。
+⇒ 所以「合同级」的接收确认与状态流转，今天**整片不在产线**；这与 #107（domain 层 33/225 零生产导入者）是同一件事，不是新缺陷。
+
+**三、重要的反向发现：§3.3 要的闭环并非全断，活的那条不叫 contract**
+`logistics-planner.ts:22-28` 导入 `domain/logistics/transport-accounting` 的 `createAccounting / recordDelivered / recordLost / summarizeAccounting`，并在 `:252` 真把 `req=…/del=…` 打进日志 ⇒ **运输级（Operation 级）的"投递确认+损耗记账"是活的**。合同级是设计过但没接线。
+⇒ 这条区分很关键：如果按"闭环断了"去大动，会拆掉一个本来在工作的机制；正确的问题只是「**合同这一层要不要存在**」。
+
+**四、为什么我这一轮不起手改码（不是求稳，是会引入缺陷）**
+1. 只把 `recordDelivery()` 接进某处**没有意义**：它的消费者（状态机、route-efficiency）本身零导入者 ⇒ 接完仍然没人读，且给一个"未来模块"补一份现在无人负责的行为。
+2. 真接法要先回答**归属口径**，而这是个设计决策：现场唯一的交付信号是 `carrier.ts:57 bumpEnergyCounter(room, "imported", amount)`（按**房**记账，且 #48 已证 `imported` 含**远矿流入**，不只合同交付）。把房级 `imported` 直接喂给某个合同的 `deliveredAmount` ⇒ **合同会拿到不是它送出的能量**，而那份读数今天会喂给 `producerShortfallThreshold` 与"consumer 自给自足"两把判定 ⇒ 一旦接线就把错账变成错决定。
+   出路两条都属人：**A 加一个按合同/Operation 归属的交付计数**（`recordDelivery(contract, opDelivered, tick)`，Operation 级才有正确分母——活着的 `transport-accounting` 正是这一级的数据源，接法是把合同的 `key` 与 operation 关联起来）；**B 删/休眠合同这一层**（承认 §3.3 由 transport-accounting 满足），并摘掉 `#35/#48` 挂在合同台账上的判据。
+3. 另外 `:269` 的 `consecutiveShortfall >= 0` 恒真、`:320` 恒可达这两处**是缺陷而不是设计**（注释自己说"简化：…调用方应自行追踪"）⇒ 真要接，得先修这两把恒真/恒假的判据。
+
+**边界**：零 src、零 push、零 build、零探针（本轮全在读码）；`#106` 的标题已按本轮结论重述，`#107` 的清单里可据此把这三本记为「同一族的合同层」；`.gitignore`(对端) 与两份未跟踪文档未 stage、commit 前索引为空、含 src 未推仍 3 笔。goal active。
